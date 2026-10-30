@@ -135,14 +135,18 @@ function listForKind(row: Production, kind: ReviewKind): Array<unknown> {
 function findRecord(list: Array<unknown>, id: string): Record<string, unknown> | null {
   for (const raw of list) {
     const rec = asRecord(raw);
-    if (rec?.id === id) return rec;
+    if (rec?.id === id) {
+      return rec;
+    }
   }
   return null;
 }
 
 async function loadRow(userId: string, projectId: string): Promise<Production> {
   const row = await productionRepository.getForUser(userId, projectId);
-  if (!row) throw new Error("该项目还没有生产数据（先在工坊产出内容再评审）");
+  if (!row) {
+    throw new Error("该项目还没有生产数据（先在工坊产出内容再评审）");
+  }
   return row;
 }
 
@@ -159,7 +163,9 @@ export async function reviewContent(
   const row = await loadRow(userId, projectId);
   const list = listForKind(row, kind);
   const rec = findRecord(list, targetId);
-  if (!rec) throw new Error(`找不到要评审的${KIND_LABEL[kind]}（id=${targetId}）`);
+  if (!rec) {
+    throw new Error(`找不到要评审的${KIND_LABEL[kind]}（id=${targetId}）`);
+  }
 
   const cfg = await getLLMConfig({ taskType: "review" });
   // 评审温度走 temperatureByTask 的 review 档（FR-QA-07 ③）：用户覆盖 → review 推荐
@@ -184,7 +190,9 @@ export async function reviewContent(
     ...(raw.scores ? { scores: raw.scores } : {}),
     ...(rubric ? { rubricVersion: rubric.version } : {}),
   });
-  if (!verdict) throw new Error("模型评审返回缺 pass 判据（无法归一成判定）");
+  if (!verdict) {
+    throw new Error("模型评审返回缺 pass 判据（无法归一成判定）");
+  }
   const nextList = applyReview(list, targetId, verdict);
   await productionRepository.patchContent(
     userId,
@@ -220,10 +228,15 @@ async function scoreShotImage(
   const characterNames: Array<string> = [];
   for (const raw of characters) {
     const c = asRecord(raw);
-    if (!c || !characterIds.includes(String(c.id))) continue;
-    if (typeof c.portraitUrl === "string" && c.portraitUrl.trim() !== "")
+    if (!c || !characterIds.includes(String(c.id))) {
+      continue;
+    }
+    if (typeof c.portraitUrl === "string" && c.portraitUrl.trim() !== "") {
       portraitUrls.push(c.portraitUrl);
-    if (typeof c.name === "string" && c.name.trim() !== "") characterNames.push(c.name);
+    }
+    if (typeof c.name === "string" && c.name.trim() !== "") {
+      characterNames.push(c.name);
+    }
   }
 
   const cfg = await getVisionLLMConfig({ taskType: "review" });
@@ -250,7 +263,9 @@ async function scoreShotImage(
     ...(raw.scores ? { scores: raw.scores } : {}),
     ...(rubric ? { rubricVersion: rubric.version } : {}),
   });
-  if (!verdict) throw new Error("模型视觉评审返回缺 pass 判据（无法归一成判定）");
+  if (!verdict) {
+    throw new Error("模型视觉评审返回缺 pass 判据（无法归一成判定）");
+  }
   return verdict;
 }
 
@@ -262,9 +277,13 @@ export async function reviewShotImage(
   const row = await loadRow(userId, projectId);
   const shots = listForKind(row, "shot");
   const rec = findRecord(shots, shotId);
-  if (!rec) throw new Error(`找不到要评审的镜头（id=${shotId}）`);
+  if (!rec) {
+    throw new Error(`找不到要评审的镜头（id=${shotId}）`);
+  }
   const imageUrl = str(rec, "imageUrl");
-  if (!imageUrl.trim()) throw new Error("该镜头还没有生成图（先在工坊生图，再视觉评审）");
+  if (!imageUrl.trim()) {
+    throw new Error("该镜头还没有生成图（先在工坊生图，再视觉评审）");
+  }
 
   const verdict = await scoreShotImage(row, rec, imageUrl);
   const nextShots = applyImageReview(shots, shotId, verdict);
@@ -309,12 +328,16 @@ export async function autoselectShotImage(
   const row = await loadRow(userId, projectId);
   const shots = listForKind(row, "shot");
   const rec = findRecord(shots, shotId);
-  if (!rec) throw new Error(`找不到要优选的镜头（id=${shotId}）`);
+  if (!rec) {
+    throw new Error(`找不到要优选的镜头（id=${shotId}）`);
+  }
 
   const seen = new Set<string>();
   const candidates: Array<AutoselectCandidate> = [];
   for (const taskId of taskIds) {
-    if (seen.has(taskId)) continue;
+    if (seen.has(taskId)) {
+      continue;
+    }
     seen.add(taskId);
     const task = await taskRepository.findByIdWithImages(taskId);
     /* 等价形态：`userId` 是必填 string，不存在「task 为 null 而 userId 也是
@@ -368,7 +391,9 @@ export async function reviewScript(
   projectId: string,
 ): Promise<ScriptReviewOutcome> {
   const row = await loadRow(userId, projectId);
-  if (!row.scriptMarkdown.trim()) throw new Error("该项目还没有剧本（先在工坊产出剧本再评审）");
+  if (!row.scriptMarkdown.trim()) {
+    throw new Error("该项目还没有剧本（先在工坊产出剧本再评审）");
+  }
 
   const cfg = await getLLMConfig({ taskType: "review" });
   const rubric = rubricFor("script");
@@ -390,7 +415,9 @@ export async function reviewScript(
     ...(raw.scores ? { scores: raw.scores } : {}),
     ...(rubric ? { rubricVersion: rubric.version } : {}),
   });
-  if (!verdict) throw new Error("模型评审返回缺 pass 判据（无法归一成判定）");
+  if (!verdict) {
+    throw new Error("模型评审返回缺 pass 判据（无法归一成判定）");
+  }
 
   const next = applyScriptReview(row.scriptReview, verdict);
   await productionRepository.patchContent(userId, projectId, {
@@ -410,9 +437,13 @@ export async function reviewScript(
  */
 export async function reviseScript(userId: string, projectId: string): Promise<string> {
   const row = await loadRow(userId, projectId);
-  if (!row.scriptMarkdown.trim()) throw new Error("该项目还没有剧本（先在工坊产出剧本再改写）");
+  if (!row.scriptMarkdown.trim()) {
+    throw new Error("该项目还没有剧本（先在工坊产出剧本再改写）");
+  }
   const state = normalizeScriptReviewState(row.scriptReview);
-  if (!state.review) throw new Error("这份剧本还没有评审判定（先评审、拿到低分维度再定向改写）");
+  if (!state.review) {
+    throw new Error("这份剧本还没有评审判定（先评审、拿到低分维度再定向改写）");
+  }
 
   const cfg = await getLLMConfig({ taskType: "review" });
   const md = (
@@ -429,7 +460,9 @@ export async function reviseScript(userId: string, projectId: string): Promise<s
       ),
     )
   ).trim();
-  if (!md) throw new Error("模型未返回改写后的剧本（保留原剧本，可重试）");
+  if (!md) {
+    throw new Error("模型未返回改写后的剧本（保留原剧本，可重试）");
+  }
 
   await productionRepository.patchContent(userId, projectId, {
     scriptMarkdown: md,
@@ -456,7 +489,9 @@ export async function regenerateShot(
   const row = await loadRow(userId, projectId);
   const shots = listForKind(row, "shot");
   const rec = findRecord(shots, shotId);
-  if (!rec) throw new Error(`找不到要重生成的镜头（id=${shotId}）`);
+  if (!rec) {
+    throw new Error(`找不到要重生成的镜头（id=${shotId}）`);
+  }
 
   if (mode === "gacha") {
     await productionRepository.patchContent(userId, projectId, {

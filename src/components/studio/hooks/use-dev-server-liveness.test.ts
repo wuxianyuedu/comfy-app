@@ -31,7 +31,9 @@ const EXIT_RECORD = {
 
 /** 取请求 URL（输入可能是字符串 / URL / Request 三种形态）。 */
 function urlOf(input: RequestInfo | URL): string {
-  if (typeof input === "string") return input;
+  if (typeof input === "string") {
+    return input;
+  }
   return input instanceof URL ? input.href : input.url;
 }
 
@@ -51,12 +53,7 @@ function stubFetch({
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (url.includes("/api/dev/server-id")) {
         calls.serverId += 1;
         return new Response(JSON.stringify({ bootId, runId }), { status: 200 });
@@ -187,16 +184,14 @@ describe("useDevServerLiveness：当前是哪一次启动（runId）", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         if (urlOf(input).includes("/api/dev/server-id")) {
-          if (!serverOk) throw new Error("probe timeout");
-          return new Response(
-            JSON.stringify({ bootId: "b1", runId: "a1b2c3" }),
-            { status: 200 },
-          );
+          if (!serverOk) {
+            throw new Error("probe timeout");
+          }
+          return new Response(JSON.stringify({ bootId: "b1", runId: "a1b2c3" }), { status: 200 });
         }
-        return new Response(
-          JSON.stringify({ record: null, currentRunId: "a1b2c3" }),
-          { status: 200 },
-        );
+        return new Response(JSON.stringify({ record: null, currentRunId: "a1b2c3" }), {
+          status: 200,
+        });
       }),
     );
     const { result } = renderHook(() => useDevServerLiveness());
@@ -229,15 +224,16 @@ describe("useDevServerLiveness：单拍抖动不算断开", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         if (urlOf(input).includes("/api/dev/server-id")) {
-          if (!serverOk) throw new Error("probe timeout");
+          if (!serverOk) {
+            throw new Error("probe timeout");
+          }
           return new Response(JSON.stringify({ bootId: "b1" }), {
             status: 200,
           });
         }
-        return new Response(
-          JSON.stringify({ record: null, currentRunId: "run-new" }),
-          { status: 200 },
-        );
+        return new Response(JSON.stringify({ record: null, currentRunId: "run-new" }), {
+          status: 200,
+        });
       }),
     );
     vi.useFakeTimers();
@@ -289,10 +285,7 @@ describe("useDevServerLiveness：探活端点 404（陈旧路由表）", () => {
         if (urlOf(input).includes("/api/dev/server-id")) {
           return new Response("{}", { status: 404 });
         }
-        return new Response(
-          JSON.stringify({ record: null, currentRunId: null }),
-          { status: 200 },
-        );
+        return new Response(JSON.stringify({ record: null, currentRunId: null }), { status: 200 });
       }),
     );
   }
@@ -316,10 +309,7 @@ describe("useDevServerLiveness：探活端点 404（陈旧路由表）", () => {
             ? new Response("{}", { status: 404 })
             : new Response(JSON.stringify({ bootId: "b1" }), { status: 200 });
         }
-        return new Response(
-          JSON.stringify({ record: null, currentRunId: null }),
-          { status: 200 },
-        );
+        return new Response(JSON.stringify({ record: null, currentRunId: null }), { status: 200 });
       }),
     );
     const { result } = renderHook(() => useDevServerLiveness());
@@ -336,16 +326,11 @@ describe("useDevServerLiveness：探活端点 404（陈旧路由表）", () => {
         if (urlOf(input).includes("/api/dev/server-id")) {
           throw new Error("ECONNREFUSED");
         }
-        return new Response(
-          JSON.stringify({ record: null, currentRunId: null }),
-          { status: 200 },
-        );
+        return new Response(JSON.stringify({ record: null, currentRunId: null }), { status: 200 });
       }),
     );
     const { result } = renderHook(() => useDevServerLiveness());
-    await expect
-      .poll(() => result.current.consecutiveFailures)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.consecutiveFailures).toBeGreaterThan(0);
     expect(result.current.routeTableStale).toBe(false);
   });
 });
@@ -366,9 +351,7 @@ describe("probeGapMs：这一拍之前没人在探测的那一段", () => {
   });
 
   it("停表 = 实际间隔扣掉本该走的那一拍（失焦两分钟就很明显）", () => {
-    expect(probeGapMs(1_000, 1_000 + 120_000)).toBe(
-      120_000 - DEV_SERVER_PROBE_MS,
-    );
+    expect(probeGapMs(1_000, 1_000 + 120_000)).toBe(120_000 - DEV_SERVER_PROBE_MS);
   });
 
   it("时钟回拨不产生负值", () => {

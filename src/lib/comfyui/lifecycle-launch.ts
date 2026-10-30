@@ -137,7 +137,9 @@ function applyCpuLimitAsync(input: {
   mode: CpuLimitMode;
   note: (msg: string) => void;
 }): void {
-  if (input.mode === "off") return;
+  if (input.mode === "off") {
+    return;
+  }
   fireAndForget(
     applyComfyCpuLimit({ pid: input.pid, mode: input.mode }).then((outcome) => {
       for (const r of outcome.results) {
@@ -177,7 +179,9 @@ async function resolveAndApplyCpuLimitForKeepAlive(input: {
   mode: CpuLimitMode;
   note: (msg: string) => void;
 }): Promise<void> {
-  if (input.mode === "off") return;
+  if (input.mode === "off") {
+    return;
+  }
   for (let attempt = 0; attempt < KEEPALIVE_CPU_PID_ATTEMPTS; attempt++) {
     if (attempt > 0) {
       await new Promise((r) => setTimeout(r, KEEPALIVE_CPU_PID_INTERVAL_MS));
@@ -189,7 +193,9 @@ async function resolveAndApplyCpuLimitForKeepAlive(input: {
       /* 查询本身抛错（极罕见）：当作这一轮没查到，下一轮再试。 */
       continue;
     }
-    if (!pid) continue;
+    if (!pid) {
+      continue;
+    }
     applyCpuLimitAsync({ pid, mode: input.mode, note: input.note });
     return;
   }
@@ -369,7 +375,9 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
     const lines: Array<string> = [];
     for (const file of [kaErrLog, kaOutLog]) {
       try {
-        if (!fs.existsSync(file)) continue;
+        if (!fs.existsSync(file)) {
+          continue;
+        }
         lines.push(...fs.readFileSync(file, "utf8").split(/\r?\n/));
       } catch {
         /* 读不到就当没有这一份证据，不影响判死本身 */
@@ -459,10 +467,16 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
   };
   const tailKeepAliveLog = (file: string, key: "out" | "err") => {
     try {
-      if (!fs.existsSync(file)) return;
+      if (!fs.existsSync(file)) {
+        return;
+      }
       const stat = fs.statSync(file);
-      if (stat.size < kaOffsets[key]) kaOffsets[key] = 0; // 文件被重置
-      if (stat.size <= kaOffsets[key]) return;
+      if (stat.size < kaOffsets[key]) {
+        kaOffsets[key] = 0;
+      } // 文件被重置
+      if (stat.size <= kaOffsets[key]) {
+        return;
+      }
       const len = stat.size - kaOffsets[key];
       const buf = Buffer.alloc(len);
       const fd = fs.openSync(file, "r");
@@ -476,11 +490,14 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
       kaCarry[key] = decoded.carry;
       for (const line of decoded.text.split(/\r?\n/)) {
         const trimmed = line.trimEnd();
-        if (isPortConflictLine(trimmed)) portConflict = true;
-        if (trimmed.trim())
+        if (isPortConflictLine(trimmed)) {
+          portConflict = true;
+        }
+        if (trimmed.trim()) {
           appendRuntimeLog(
             `[${key}] ${clampText(trimmed, { maxLength: INLINE_STDERR_MAX, marker: "" })}`,
           );
+        }
       }
     } catch {
       /* 文件尚未创建 / 读取抖动：下一轮再试 */
@@ -500,16 +517,19 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
       note(detail);
     },
     earlyExit: () => {
-      if (st.stopRequested)
+      if (st.stopRequested) {
         return {
           ok: false,
           base: null,
           detail: "已手动关闭 ComfyUI，停止等待启动",
         };
+      }
       /* 「端口被占」在重定向 stderr 里现身后，本次拉起的进程已经死了；
        * 再等下去，就绪判定只会被占端口的那个实例应答冒领。立即中止，
        * caller（runEnsureLaunch）据此转「等待已有实例就绪」。 */
-      if (portConflict) return { ok: false, base: null, detail: portConflictExitDetail() };
+      if (portConflict) {
+        return { ok: false, base: null, detail: portConflictExitDetail() };
+      }
       return null;
     },
     /* 每轮先把新输出跟进日志，再做就绪探测。 */
@@ -539,14 +559,18 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
       /* findPidForMainPyDetailed 区分「查不到」与「查询失败」：机器忙（ComfyUI
        * 出图）时 PowerShell 进程表查询会超时，那时不应误判成「保活进程已退出」。 */
       const lookup = await findPidForMainPyDetailed(plan.mainPy);
-      if (lookup.failed) return null;
+      if (lookup.failed) {
+        return null;
+      }
       if (lookup.pid) {
         everSeenProcess = true;
         missCount = 0;
         return null;
       }
       missCount += 1;
-      if (!isKeepAliveDead(missCount)) return null;
+      if (!isKeepAliveDead(missCount)) {
+        return null;
+      }
       const common =
         "详见 log/services/comfyui-runtime.log；也可暂时勾选「关闭应用时连带关闭 ComfyUI」改用直连启动，获得实时日志定位问题。";
       const head = everSeenProcess
@@ -628,7 +652,9 @@ function startKeepAliveWatch(params: {
  */
 function findLatestKeepAliveLogs(): { out?: string; err?: string } {
   try {
-    if (!fs.existsSync(SERVICES_LOG_DIR)) return {};
+    if (!fs.existsSync(SERVICES_LOG_DIR)) {
+      return {};
+    }
     const pick = (suffix: string): string | undefined => {
       const newest = fs
         .readdirSync(SERVICES_LOG_DIR)
@@ -638,7 +664,9 @@ function findLatestKeepAliveLogs(): { out?: string; err?: string } {
           mtime: fs.statSync(path.join(SERVICES_LOG_DIR, name)).mtimeMs,
         }))
         .sort((a, b) => b.mtime - a.mtime)[0];
-      if (!newest) return undefined;
+      if (!newest) {
+        return undefined;
+      }
       return path.join(SERVICES_LOG_DIR, newest.name);
     };
     return { out: pick(".out.log"), err: pick(".err.log") };
@@ -665,7 +693,9 @@ const KEEPALIVE_LOG_KEEP_LAUNCHES = 10;
  */
 export function pruneKeepAliveLogs(): void {
   try {
-    if (!fs.existsSync(SERVICES_LOG_DIR)) return;
+    if (!fs.existsSync(SERVICES_LOG_DIR)) {
+      return;
+    }
     const files = fs
       .readdirSync(SERVICES_LOG_DIR)
       .filter(
@@ -705,9 +735,13 @@ export function ensureKeepAliveWatchOnAdoption(input: {
   if (resolveLaunchPolicy(getExitPolicy().exitKillComfyui) !== "keepAlive") {
     return;
   }
-  if (keepAliveExitWatcher !== null) return;
+  if (keepAliveExitWatcher !== null) {
+    return;
+  }
   const plan = resolveComfyLaunchPlan(settings.comfyuiPath);
-  if ("error" in plan) return;
+  if ("error" in plan) {
+    return;
+  }
   startKeepAliveWatch({
     host,
     mainPy: plan.mainPy,
@@ -779,7 +813,9 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
       appendRuntimeLog,
       log: note,
       clearChild: () => {
-        if (st.child === child) st.child = undefined;
+        if (st.child === child) {
+          st.child = undefined;
+        }
       },
       context: () => ({
         pid: child.pid ?? null,
@@ -809,7 +845,9 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
     /* 子进程句柄被清掉（= 进程已退出）→ 用留底给出可行动的报错。 */
     isDead: async () => (st.child !== child ? buildEarlyExitDetail(ledger.lines) : null),
   });
-  if (!result.ok) note(result.detail);
+  if (!result.ok) {
+    note(result.detail);
+  }
   return result;
 }
 
@@ -822,13 +860,17 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
 export async function probeChildReady(child: ReturnType<typeof spawn>): Promise<string | null> {
   const childPid = child.pid;
   const listenPort = childPid ? await findPidListeningPort(childPid) : null;
-  if (!listenPort) return null;
+  if (!listenPort) {
+    return null;
+  }
   const base = comfyUiBaseUrl(listenPort);
   try {
     const r = await fetch(`${base}/system_stats`, {
       signal: AbortSignal.timeout(2000),
     });
-    if (r.ok) return base;
+    if (r.ok) {
+      return base;
+    }
   } catch {
     /* HTTP 探测失败——进程在但 /system_stats 还没响应，继续等 */
   }

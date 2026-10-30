@@ -125,7 +125,9 @@ export const LOG_MODAL_MAX_ROWS = 300;
  */
 export function tailWindow<T>(items: ReadonlyArray<T>, size: number): Array<T> {
   const n = safeSize(size);
-  if (n >= items.length) return items.slice();
+  if (n >= items.length) {
+    return items.slice();
+  }
   return items.slice(items.length - n);
 }
 
@@ -153,7 +155,9 @@ export function tailWindowAppend<T>(items: ReadonlyArray<T>, item: T, size: numb
   /* 窗口未满：复制 + 追加（必须换引用，见上）。这一支就是
    * `tailWindow([...items, item], n)` 本身 —— 归一口径不必在这里再算一遍，
    * 直接借 `tailWindow` 的那一处定义。 */
-  if (items.length < n) return tailWindow([...items, item], n);
+  if (items.length < n) {
+    return tailWindow([...items, item], n);
+  }
   /* 窗口已满：原数组长度就是上限，`shift` + `push` 后仍恰为 `n` 条，
    * 不必再切片。 */
   const next = /* SAFETY: 类型断言已复核 */ items as Array<T>;

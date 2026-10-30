@@ -218,7 +218,9 @@ export function useCharacterPortrait(opts: {
   const generate = React.useCallback(
     async (character: Character, overrides?: PortraitGenerateOverrides) => {
       /* 并发守卫用同步闸门，不读 session.busy（它是渲染态）：*/
-      if (!taskLock.tryEnter()) return;
+      if (!taskLock.tryEnter()) {
+        return;
+      }
       /* 拿到锁之后的每一条路径（含门禁早退）都必须走到 finally 归还 ——
        * 旧实现里「提示词为空 / 未选工作流」的门禁早退直接 return，锁被
        * 永久占住，之后所有生成 / 导入都静默无响应（点了没反应）。 */
@@ -287,13 +289,17 @@ export function useCharacterPortrait(opts: {
               onProgress: (pct) => {
                 /* 高频回调：节流判据与别处同源（规范 16 §16.2.4.68）；
                  * 「焦点还是不是这个角色」是本域的判据，留在调用处。 */
-                if (!progressGate.current.allow(character.id)) return;
+                if (!progressGate.current.allow(character.id)) {
+                  return;
+                }
                 setSession((prev) =>
                   prev.focusCharacterId === character.id ? { ...prev, progress: pct } : prev,
                 );
               },
               onLog: (entry) => {
-                if (entry.level === "progress") return;
+                if (entry.level === "progress") {
+                  return;
+                }
                 appendLog(makePortraitLog(entry.level === "error" ? "error" : "info", entry.msg));
               },
             },
@@ -309,7 +315,9 @@ export function useCharacterPortrait(opts: {
             },
             originProjectId,
           );
-          if (!attached) return;
+          if (!attached) {
+            return;
+          }
           setSession((prev) => ({
             ...prev,
             progress: 100,
@@ -332,7 +340,9 @@ export function useCharacterPortrait(opts: {
             },
             originProjectId,
           );
-          if (!attached) return;
+          if (!attached) {
+            return;
+          }
           setSession((prev) => ({
             ...prev,
             status: `已生成一张定妆照（${modelLabel}），可在下方候选里挑选`,
@@ -366,7 +376,9 @@ export function useCharacterPortrait(opts: {
   const importFile = React.useCallback(
     async (character: Character, file: File) => {
       /* 与生成共用同一把锁：导入与生成不允许叠加。 */
-      if (!taskLock.tryEnter()) return;
+      if (!taskLock.tryEnter()) {
+        return;
+      }
       /* 拿到锁之后的每一条路径（含「非图片文件」的门禁早退）都必须走到
        * finally 归还 —— 旧实现里类型检查失败直接 return，之后所有生成 /
        * 导入都被这把没还的锁静默挡死（同 generate 的回归口径）。 */
@@ -389,7 +401,9 @@ export function useCharacterPortrait(opts: {
           { url, source: "import", createdAt: Date.now() },
           originProjectId,
         );
-        if (!attached) return;
+        if (!attached) {
+          return;
+        }
         setSession((prev) => ({
           ...prev,
           status: `已导入 ${file.name}，可在下方候选里挑选`,

@@ -175,9 +175,13 @@ export function useFilmStudio(): FilmStudioController {
           const wfRows = Array.isArray(rawWorkflows) ? rawWorkflows : [];
           const pick = (category: "video" | "image") =>
             wfRows.flatMap((raw) => {
-              if (typeof raw !== "object" || raw === null) return [];
+              if (typeof raw !== "object" || raw === null) {
+                return [];
+              }
               const wf = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
-              if (typeof wf.id !== "string" || typeof wf.name !== "string") return [];
+              if (typeof wf.id !== "string" || typeof wf.name !== "string") {
+                return [];
+              }
               return wf.typeCategory === category ? [{ id: wf.id, name: wf.name }] : [];
             });
           // skill.list 返回 `{...record, tags}` 行（router 的 spread 丢了索引签名），
@@ -216,18 +220,24 @@ export function useFilmStudio(): FilmStudioController {
     setProjectShots(list);
     setProjectShotCount(list.length);
     // 用户未手动选过来源、且项目确有镜头 → 默认走项目镜头。
-    if (list.length > 0 && !sourceChosenRef.current) setShotSourceState("project");
+    if (list.length > 0 && !sourceChosenRef.current) {
+      setShotSourceState("project");
+    }
   }, []);
 
   const fetchProjectShots = useCallback(async (): Promise<Array<ShotListItem>> => {
-    if (!activeProjectId) return [];
+    if (!activeProjectId) {
+      return [];
+    }
     const prod = await fetchProduction(activeProjectId);
     const raw = prod && Array.isArray(prod.shots) ? prod.shots : [];
     return productionShotsToShotList(raw);
   }, [activeProjectId]);
 
   useEffect(() => {
-    if (!activeProjectId) return;
+    if (!activeProjectId) {
+      return;
+    }
     const guard = beginStaleRun();
     void (async () => {
       const list = await fetchProjectShots();
@@ -243,7 +253,9 @@ export function useFilmStudio(): FilmStudioController {
   /** 单镜「退回让 AI 重做」：写回项目 + 刷新左栏列表（画布/工坊镜头行的退回入口共用）。 */
   const redoShot = useCallback(
     async (shotId: string) => {
-      if (!activeProjectId) return;
+      if (!activeProjectId) {
+        return;
+      }
       await requestShotRedo(activeProjectId, shotId);
       await reloadProjectShots();
     },
@@ -340,7 +352,9 @@ export function useFilmStudio(): FilmStudioController {
   ]);
 
   const cancel = useCallback(async () => {
-    if (!film) return;
+    if (!film) {
+      return;
+    }
     await runAsyncAction(
       async () => {
         await vanillaApi.film.cancel.mutate({ id: film.id });
@@ -351,7 +365,9 @@ export function useFilmStudio(): FilmStudioController {
   }, [film, fetchDetail, reportInfo]);
 
   const recompose = useCallback(async () => {
-    if (!film) return;
+    if (!film) {
+      return;
+    }
     /* 成功静默：合成本身要几分钟，界面有进度与产物，多一句 toast 反而是噪声。 */
     await actionBusy.run(() =>
       runAsyncAction(
@@ -394,7 +410,9 @@ export function useFilmStudio(): FilmStudioController {
   const pollId = film?.id ?? null;
   useInterval(
     () => {
-      if (pollId) void fetchDetail(pollId);
+      if (pollId) {
+        void fetchDetail(pollId);
+      }
     },
     { ms: running ? FILM_POLL_MS : null, immediate: false },
   );

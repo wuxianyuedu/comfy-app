@@ -46,7 +46,9 @@ export type LogSourceKind =
 
 /** source 参数 → /api/logs/current 的 source 查询值。 */
 function sourceQuery(source: LogSourceKind): string {
-  if (source === "dev") return "dev-launcher";
+  if (source === "dev") {
+    return "dev-launcher";
+  }
   return source;
 }
 
@@ -71,7 +73,9 @@ export async function fetchFileLogSlice(
       bootId: bootId ?? undefined,
     }),
   );
-  if (!res.ok) return null;
+  if (!res.ok) {
+    return null;
+  }
   return /* SAFETY: 类型断言已复核 */ (await res.json()) as FileLogSlice;
 }
 
@@ -103,7 +107,9 @@ export async function fetchLogSessions(
   try {
     /* 会话 id 可选：空值由出口省略（不再自己 `if` 一次再 `set`）。 */
     const res = await fetch(withQuery("/api/logs/sessions", { source, session: sessionId }));
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as LogSessionsPayload;
   } catch {
     return null;

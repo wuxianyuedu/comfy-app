@@ -57,7 +57,9 @@ function groupByElement(
 
 export function DraftIntegrityHint({ issues, onGoTo }: DraftIntegrityHintProps) {
   const summary = describeDraftIssues(issues);
-  if (!summary) return null;
+  if (!summary) {
+    return null;
+  }
   const lines = groupByElement(issues);
   const shown = lines.slice(0, MAX_LINES);
   const hiddenCount = lines.length - shown.length;

@@ -27,35 +27,35 @@ vi.mock("~/lib/core/logger", async (importOriginal) => ({
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { seriesRouter } from "./series";
-import {
-  getTestDb,
-  seedUser,
-  seedProject,
-} from "../../../../tests/helpers/test-db";
+import { getTestDb, seedUser, seedProject } from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(seriesRouter);
 const tdb = getTestDb();
 const userCaller = () => createCaller(makeCtx());
 const otherCaller = () =>
-  createCaller(
-    makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }),
-  );
+  createCaller(makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }));
 
 /** 断言非空的种子 helper（create 类 procedure 返回 `T | undefined`）。 */
 async function addSeries(caller = userCaller(), title = "S") {
   const s = await caller.create({ title });
-  if (!s) throw new Error("seed series failed");
+  if (!s) {
+    throw new Error("seed series failed");
+  }
   return s;
 }
 async function addSeason(seriesId: string, caller = userCaller()) {
   const se = await caller.createSeason({ seriesId });
-  if (!se) throw new Error("seed season failed");
+  if (!se) {
+    throw new Error("seed season failed");
+  }
   return se;
 }
 async function addEpisode(seasonId: string, caller = userCaller()) {
   const ep = await caller.createEpisode({ seasonId });
-  if (!ep) throw new Error("seed ep failed");
+  if (!ep) {
+    throw new Error("seed ep failed");
+  }
   return ep;
 }
 
@@ -99,9 +99,9 @@ describe("series.update / delete", () => {
   });
   it("他人系列 → FORBIDDEN，且对方行不变", async () => {
     const s = await addSeries(otherCaller(), "别人的");
-    await expect(
-      userCaller().update({ id: s.id, title: "偷改" }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(userCaller().update({ id: s.id, title: "偷改" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
     await expect(userCaller().delete({ id: s.id })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
@@ -126,9 +126,7 @@ describe("season 列表 / 增改删", () => {
   });
   it("他人系列的季 → FORBIDDEN", async () => {
     const s = await addSeries(otherCaller(), "别人的");
-    await expect(
-      userCaller().createSeason({ seriesId: s.id }),
-    ).rejects.toMatchObject({
+    await expect(userCaller().createSeason({ seriesId: s.id })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });
@@ -155,9 +153,7 @@ describe("episode 列表 / 增改删", () => {
   it("他人季下的集 → FORBIDDEN", async () => {
     const s = await addSeries(otherCaller(), "别人的");
     const se = await addSeason(s.id, otherCaller());
-    await expect(
-      userCaller().createEpisode({ seasonId: se.id }),
-    ).rejects.toMatchObject({
+    await expect(userCaller().createEpisode({ seasonId: se.id })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });

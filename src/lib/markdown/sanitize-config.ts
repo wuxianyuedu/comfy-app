@@ -117,6 +117,8 @@ export function isAllowedUrl(value: string): boolean {
   const schemeEnd = normalized.indexOf(":");
   const scheme = schemeEnd === -1 ? "" : normalized.slice(0, schemeEnd + 1);
   /* scheme 里含 `/` 说明 `:` 出现在路径之中（`/a:b`），那仍是相对路径。 */
-  if (scheme.includes("/")) return ALLOWED_URL_SCHEMES.includes("");
+  if (scheme.includes("/")) {
+    return ALLOWED_URL_SCHEMES.includes("");
+  }
   return ALLOWED_URL_SCHEMES.includes(scheme);
 }

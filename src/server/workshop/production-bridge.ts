@@ -100,7 +100,9 @@ async function ensureProductionRow(
     .from(production)
     .where(eq(production.id, projectId))
     .limit(1);
-  if (rows[0]) return;
+  if (rows[0]) {
+    return;
+  }
   await workshopDb.insert(production).values({ id: projectId, userId: ownerId, title });
 }
 
@@ -149,7 +151,9 @@ export async function readProductionContent(projectId: string): Promise<SessionC
     .where(eq(production.id, projectId))
     .limit(1);
   const row: Production | undefined = rows[0];
-  if (!row) return null;
+  if (!row) {
+    return null;
+  }
   return {
     title: row.title,
     type: row.type,

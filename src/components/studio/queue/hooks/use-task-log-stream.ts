@@ -57,7 +57,9 @@ export function useTaskLogStream(taskId: string | null): TaskLogStreamState {
 
   useEffect(() => {
     stoppedRef.current = false;
-    if (taskId === null) return;
+    if (taskId === null) {
+      return;
+    }
 
     /* onProgress 是高频回调（SSE 每帧一次），经节流闸门再落 state ——
      * 出口与窗口收在 `ui/use-throttled-progress`（规范 16 §16.2.4.68）。
@@ -65,16 +67,24 @@ export function useTaskLogStream(taskId: string | null): TaskLogStreamState {
     const progressGate = createThrottleGate();
     const closer = watchTask(taskId, {
       onLog: (entry) => {
-        if (stoppedRef.current) return;
+        if (stoppedRef.current) {
+          return;
+        }
         setLogs((prev) => tailWindowAppend(prev, entry, STREAM_MAX_LOGS));
       },
       onProgress: () => {
-        if (stoppedRef.current) return;
-        if (!progressGate.allow()) return;
+        if (stoppedRef.current) {
+          return;
+        }
+        if (!progressGate.allow()) {
+          return;
+        }
         setStarted(true);
       },
       onSettled: (result) => {
-        if (stoppedRef.current) return;
+        if (stoppedRef.current) {
+          return;
+        }
         setSettled(result);
       },
     });

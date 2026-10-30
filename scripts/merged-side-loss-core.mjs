@@ -56,10 +56,16 @@ export function isGenerated(file) {
  * @returns {string | null} 命中的那个历史 sha；未命中给 `null`。
  */
 export function findEarlierVersion({ result, historyShas, blobAt }) {
-  if (!result) return null;
+  if (!result) {
+    return null;
+  }
   for (const older of historyShas) {
-    if (!older) continue;
-    if (blobAt(older) === result) return older;
+    if (!older) {
+      continue;
+    }
+    if (blobAt(older) === result) {
+      return older;
+    }
   }
   return null;
 }

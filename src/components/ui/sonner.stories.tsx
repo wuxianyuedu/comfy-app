@@ -48,11 +48,17 @@ function ToastDemo() {
   const fire = (kind: string) => {
     void import("sonner").then(({ toast }) => {
       const text = `这是一条 ${kind} 消息`;
-      if (kind === "success") toast.success(text);
-      else if (kind === "info") toast.info(text);
-      else if (kind === "warning") toast.warning(text);
-      else if (kind === "error") toast.error(text);
-      else toast(text);
+      if (kind === "success") {
+        toast.success(text);
+      } else if (kind === "info") {
+        toast.info(text);
+      } else if (kind === "warning") {
+        toast.warning(text);
+      } else if (kind === "error") {
+        toast.error(text);
+      } else {
+        toast(text);
+      }
     });
   };
   return (
@@ -60,12 +66,7 @@ function ToastDemo() {
       <Toaster />
       <div className="flex flex-wrap gap-2">
         {["default", "success", "info", "warning", "error"].map((kind) => (
-          <Button
-            key={kind}
-            size="sm"
-            variant="outline"
-            onClick={() => fire(kind)}
-          >
+          <Button key={kind} size="sm" variant="outline" onClick={() => fire(kind)}>
             {kind}
           </Button>
         ))}

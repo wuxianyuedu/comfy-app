@@ -31,7 +31,9 @@ export type WorkflowRunSource = "canvas-node" | "encapsulation-test";
 
 /** 运行来源的展示名（日志弹窗头部按它标注这次运行是从哪儿发起的）。 */
 export function runLogSourceLabel(source?: WorkflowRunSource): string {
-  if (source === "encapsulation-test") return "工坊封装 · 流程测试";
+  if (source === "encapsulation-test") {
+    return "工坊封装 · 流程测试";
+  }
   return "画布节点 · 就地运行";
 }
 
@@ -103,12 +105,16 @@ function persist(): void {
 
 function hydrate(): void {
   const raw = readStorageItem(STORAGE_KEY);
-  if (raw === null) return;
+  if (raw === null) {
+    return;
+  }
   try {
     const parsed: unknown = JSON.parse(raw);
     /* 坏数据静默丢弃、**不回落默认值** —— 本 store 的「默认值」是空表，
      * 回不回落在结果上一样（§16.2.4.28 的口径：回落与丢弃等价时就别装两套）。 */
-    if (!Array.isArray(parsed)) return;
+    if (!Array.isArray(parsed)) {
+      return;
+    }
     for (const item of parsed) {
       if (
         item &&
@@ -138,7 +144,9 @@ let pendingPersist: ReturnType<typeof setTimeout> | null = null;
  * 待办、紧接着一次 flush 又把**清空之后**的空表写回存储（把「删除」变成
  * 「写了个空数组」，虽然后果一样，但语义上那次写不该发生）。 */
 function flushPersist(): void {
-  if (pendingPersist === null) return;
+  if (pendingPersist === null) {
+    return;
+  }
   clearTimeout(pendingPersist);
   pendingPersist = null;
   persist();
@@ -146,7 +154,9 @@ function flushPersist(): void {
 
 /** 排一次落盘；窗口内已有待办时不重复排（合并成一次写）。 */
 function schedulePersist(): void {
-  if (pendingPersist !== null) return;
+  if (pendingPersist !== null) {
+    return;
+  }
   pendingPersist = setTimeout(() => {
     pendingPersist = null;
     persist();
@@ -156,7 +166,9 @@ function schedulePersist(): void {
 function notify() {
   version += 1;
   schedulePersist();
-  for (const l of listeners) l();
+  for (const l of listeners) {
+    l();
+  }
 }
 
 /* 窗口关掉前把待办的写落下去 —— 合并窗口是 250ms，恰好在它里面关窗口
@@ -180,7 +192,9 @@ function touch(meta: WorkflowRunMeta) {
         oldestKey = key;
       }
     }
-    if (oldestKey !== null && oldestKey !== meta.taskId) runs.delete(oldestKey);
+    if (oldestKey !== null && oldestKey !== meta.taskId) {
+      runs.delete(oldestKey);
+    }
   }
   notify();
 }
@@ -196,7 +210,9 @@ export function patchWorkflowRun(
   patch: Partial<Pick<WorkflowRunMeta, "status" | "resultUrl" | "errorMessage" | "progress">>,
 ): void {
   const prev = runs.get(taskId);
-  if (!prev) return;
+  if (!prev) {
+    return;
+  }
   touch({ ...prev, ...patch });
 }
 
@@ -211,7 +227,9 @@ export function patchWorkflowRun(
  *  避免「服务端已写过 ✗ 生成失败」+「客户端再补一条」出现两行一模一样的。 */
 export function failWorkflowRun(taskId: string, message: string): void {
   const prev = runs.get(taskId);
-  if (!prev) return;
+  if (!prev) {
+    return;
+  }
   const reason = message || "生成失败";
   const logs = prev.logs ?? [];
   const last = logs[logs.length - 1];
@@ -245,9 +263,13 @@ export function latestActiveWorkflowRun(): WorkflowRunMeta | null {
   let latest: WorkflowRunMeta | null = null;
   let latestActive: WorkflowRunMeta | null = null;
   for (const meta of runs.values()) {
-    if (!latest || meta.startedAt > latest.startedAt) latest = meta;
+    if (!latest || meta.startedAt > latest.startedAt) {
+      latest = meta;
+    }
     if (meta.status === "running" || !meta.status) {
-      if (!latestActive || meta.startedAt > latestActive.startedAt) latestActive = meta;
+      if (!latestActive || meta.startedAt > latestActive.startedAt) {
+        latestActive = meta;
+      }
     }
   }
   return latestActive ?? latest;
@@ -261,9 +283,15 @@ export function latestRunForWorkflow(
 ): WorkflowRunMeta | null {
   let found: WorkflowRunMeta | null = null;
   for (const meta of runs.values()) {
-    if (meta.workflowId !== workflowId) continue;
-    if (source && meta.source !== source) continue;
-    if (!found || meta.startedAt > found.startedAt) found = meta;
+    if (meta.workflowId !== workflowId) {
+      continue;
+    }
+    if (source && meta.source !== source) {
+      continue;
+    }
+    if (!found || meta.startedAt > found.startedAt) {
+      found = meta;
+    }
   }
   return found;
 }
@@ -281,14 +309,18 @@ export function appendWorkflowRunLog(
   entry: TaskLogEntry,
 ): Array<TaskLogEntry> | null {
   const prev = runs.get(taskId);
-  if (!prev) return null;
+  if (!prev) {
+    return null;
+  }
   const logs = prev.logs ?? [];
   // 与 GlobalStepLogPanel / stepLogCache 的 SSE 去重同款：(t, msg) 重复帧丢弃。
   // 只扫尾部 DEDUPE_WINDOW 条 —— 重复帧只会紧挨着原帧到达，扫满整个窗口是
   // 把 O(上限) 摊在每一行上。
   for (let index = Math.max(0, logs.length - DEDUPE_WINDOW); index < logs.length; index += 1) {
     const known = logs[index];
-    if (known?.t === entry.t && known?.msg === entry.msg) return logs;
+    if (known?.t === entry.t && known?.msg === entry.msg) {
+      return logs;
+    }
   }
   const next = tailWindowAppend(logs, entry, MAX_LOGS);
   touch({ ...prev, logs: next });
@@ -353,5 +385,7 @@ export function clearAllWorkflowRuns(): void {
   }
   removeStorageItem(STORAGE_KEY);
   version += 1;
-  for (const l of listeners) l();
+  for (const l of listeners) {
+    l();
+  }
 }

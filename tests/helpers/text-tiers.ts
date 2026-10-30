@@ -48,7 +48,9 @@ function parseLineRatio(raw: string, where: string): number {
     return Number.parseFloat(calc[1]) / Number.parseFloat(calc[2]);
   }
   const bare = /^([0-9.]+)$/.exec(raw.trim());
-  if (bare?.[1]) return Number.parseFloat(bare[1]);
+  if (bare?.[1]) {
+    return Number.parseFloat(bare[1]);
+  }
   throw new Error(
     `认不出的 --text-${where}--line-height 形状：${raw}（新增写法要同步这里的解法，不许静默跳过）`,
   );
@@ -94,9 +96,15 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
   ];
   for (const { text, fromProject } of sources) {
     for (const m of text.matchAll(TEXT_DECL_RE)) {
-      if (!m[1] || !m[2] || !m[3]) continue;
-      if (fromProject && !fromProjectIsUsable(m[1], tshirt, defaults)) continue;
-      if (!fromProject) defaults.add(m[1]);
+      if (!m[1] || !m[2] || !m[3]) {
+        continue;
+      }
+      if (fromProject && !fromProjectIsUsable(m[1], tshirt, defaults)) {
+        continue;
+      }
+      if (!fromProject) {
+        defaults.add(m[1]);
+      }
       collected.set(m[1], toPx(m[2], m[3]));
     }
   }
@@ -104,7 +112,9 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
   const lineRatios = new Map<string, number>();
   for (const { text } of sources) {
     for (const m of text.matchAll(LINE_HEIGHT_RE)) {
-      if (!m[1] || !m[2]) continue;
+      if (!m[1] || !m[2]) {
+        continue;
+      }
       lineRatios.set(m[1], parseLineRatio(m[2], m[1]));
     }
   }
@@ -113,7 +123,9 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
   const names: Array<string> = [];
   for (const [name, px] of [...collected].sort((a, b) => a[1] - b[1])) {
     names.push(name);
-    if (!byPx.has(px)) byPx.set(px, name);
+    if (!byPx.has(px)) {
+      byPx.set(px, name);
+    }
   }
   if (names.length === 0) {
     throw new Error(
@@ -139,7 +151,9 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
 export function renderedLineHeightPx(tiers: TextTiers, name: string): number | null {
   const ratio = tiers.lineRatios.get(name);
   const size = [...tiers.byPx].find(([, n]) => n === name)?.[0];
-  if (ratio === undefined || size === undefined) return null;
+  if (ratio === undefined || size === undefined) {
+    return null;
+  }
   return Math.round(size * ratio * 100) / 100;
 }
 

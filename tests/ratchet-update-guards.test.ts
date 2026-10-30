@@ -236,9 +236,13 @@ function discoveredBaselines(): Array<{ script: string; baseline: string }> {
     found.set(`${script}:${baseline}`, { script, baseline });
 
   for (const script of readdirSync(dir)) {
-    if (!/\.(cjs|mjs)$/.test(script)) continue;
+    if (!/\.(cjs|mjs)$/.test(script)) {
+      continue;
+    }
     const src = readFileSync(join(dir, script), "utf8");
-    if (!src.includes("--update")) continue;
+    if (!src.includes("--update")) {
+      continue;
+    }
 
     /**
      * `const LEDGER = path.join(<根变量>, …, ".x.json")` 这类声明。
@@ -255,22 +259,30 @@ function discoveredBaselines(): Array<{ script: string; baseline: string }> {
     )) {
       const name = m[1];
       const baseline = /"(\.[^"]+\.json)"/.exec(m[2] ?? "")?.[1];
-      if (name && baseline) declared.set(name, baseline);
+      if (name && baseline) {
+        declared.set(name, baseline);
+      }
     }
     /** 真被当作写入目标的变量名。 */
     const writeTargets = new Set<string>();
     for (const m of src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(\s*([A-Za-z0-9_$]+)/g)) {
-      if (m[1]) writeTargets.add(m[1]);
+      if (m[1]) {
+        writeTargets.add(m[1]);
+      }
     }
     for (const [name, baseline] of declared) {
-      if (writeTargets.has(name)) push(script, baseline);
+      if (writeTargets.has(name)) {
+        push(script, baseline);
+      }
     }
     /** 直接把路径拼在写入调用里的写法（不走变量）也算，别给静默漏登记留第二形状。 */
     for (const m of src.matchAll(
       /(?:fs\.)?write(?:File|FileSync)\(\s*path\.join\([^;]{0,300}?"(\.[^"]+\.json)"/g,
     )) {
       const baseline = m[1];
-      if (baseline) push(script, baseline);
+      if (baseline) {
+        push(script, baseline);
+      }
     }
   }
   return [...found.values()].sort((a, b) => a.baseline.localeCompare(b.baseline));

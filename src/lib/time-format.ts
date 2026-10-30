@@ -35,20 +35,27 @@ export interface RelativeTimeOptions {
  * 未来时间（时钟漂移、服务端时间超前）归到「刚刚」—— 不出现「-3 分钟前」。
  * 时间串无法解析时返回 `null`（调用方决定显示什么）。
  */
-export function timeAgo(
-  value: string | number,
-  opts: RelativeTimeOptions = {},
-): string | null {
+export function timeAgo(value: string | number, opts: RelativeTimeOptions = {}): string | null {
   const ts = typeof value === "number" ? value : new Date(value).getTime();
-  if (!Number.isFinite(ts)) return null;
+  if (!Number.isFinite(ts)) {
+    return null;
+  }
   const suffix = opts.suffix ?? "";
   const min = Math.floor((Date.now() - ts) / MINUTE);
-  if (min < 1) return `刚刚${suffix}`;
-  if (min < 60) return `${min} 分钟前${suffix}`;
+  if (min < 1) {
+    return `刚刚${suffix}`;
+  }
+  if (min < 60) {
+    return `${min} 分钟前${suffix}`;
+  }
   const hour = Math.floor(min / 60);
-  if (hour < 24) return `${hour} 小时前${suffix}`;
+  if (hour < 24) {
+    return `${hour} 小时前${suffix}`;
+  }
   const day = Math.floor(hour / 24);
-  if (opts.maxDays !== undefined && day > opts.maxDays) return null;
+  if (opts.maxDays !== undefined && day > opts.maxDays) {
+    return null;
+  }
   return `${day} 天前${suffix}`;
 }
 
@@ -70,10 +77,7 @@ const CLOCK_FORMAT: Intl.DateTimeFormatOptions = {
  * 「跨天时补 `MM-DD ` 前缀」是**另一件事**，留在 `logs/log-format.ts` 的
  * `formatTime`（它带同天判定）。本函数只负责时刻本身。
  */
-export function formatClock(
-  value: TimeInput,
-  opts: { millis?: boolean } = {},
-): string {
+export function formatClock(value: TimeInput, opts: { millis?: boolean } = {}): string {
   return toDate(value).toLocaleTimeString("zh-CN", {
     ...CLOCK_FORMAT,
     ...(opts.millis ? { fractionalSecondDigits: 3 } : {}),
@@ -92,8 +96,7 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 export type TimeInput = string | number | Date;
 
 /** 统一的入参归一 —— 调用处不必自己 `new Date(...)`。 */
-const toDate = (value: TimeInput): Date =>
-  value instanceof Date ? value : new Date(value);
+const toDate = (value: TimeInput): Date => (value instanceof Date ? value : new Date(value));
 
 /**
  * 日期 → `YYYY-MM-DD`（**只写日期**那一档）。
@@ -132,15 +135,10 @@ export function formatShortDate(value: TimeInput): string {
  * `toISOString()` 在 +8 时区会凭空差出 8 小时（这正是这些模块当年各自写
  * 一份 `localTimestamp` 的由来）。
  */
-export function formatLocalStamp(
-  value: TimeInput,
-  opts: { millis?: boolean } = {},
-): string {
+export function formatLocalStamp(value: TimeInput, opts: { millis?: boolean } = {}): string {
   const d = toDate(value);
   const base = `${formatDate(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-  return opts.millis
-    ? `${base}.${String(d.getMilliseconds()).padStart(3, "0")}`
-    : base;
+  return opts.millis ? `${base}.${String(d.getMilliseconds()).padStart(3, "0")}` : base;
 }
 
 /**
@@ -153,10 +151,7 @@ export function formatLocalStamp(
  * `millis` 给「同一秒内可能写多份」的落点（如远端媒体按次落盘：一次生成四张图
  * 时四次落盘完全可能落在同一秒，只到秒就会互相覆盖）。
  */
-export function formatCompactStamp(
-  value: TimeInput,
-  opts: { millis?: boolean } = {},
-): string {
+export function formatCompactStamp(value: TimeInput, opts: { millis?: boolean } = {}): string {
   const d = toDate(value);
   return (
     `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}` +
@@ -180,8 +175,12 @@ export function formatDurationMs(ms: number | null | undefined): string | null {
     return null;
   }
   const sec = Math.round(ms / 1000);
-  if (sec < 60) return `${sec}s`;
+  if (sec < 60) {
+    return `${sec}s`;
+  }
   const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m${pad2(sec % 60)}s`;
+  if (min < 60) {
+    return `${min}m${pad2(sec % 60)}s`;
+  }
   return `${Math.floor(min / 60)}h${pad2(min % 60)}m`;
 }

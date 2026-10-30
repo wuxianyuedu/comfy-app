@@ -23,8 +23,7 @@ import { PortHandle } from "~/components/studio/workflow-form/WorkflowPortHandle
 /** 三列节点的渲染内容（类型收在纯 `.ts` 里，hooks 层也要引用它）。 */
 export type { LibraryNodeContent };
 
-export const LibraryNodeContentContext =
-  createContext<LibraryNodeContent | null>(null);
+export const LibraryNodeContentContext = createContext<LibraryNodeContent | null>(null);
 
 /** 取三列的渲染内容；不在画布里（直接单测某个节点）时返回 null。 */
 function useLibraryNodeContent(): LibraryNodeContent | null {
@@ -36,19 +35,12 @@ function useLibraryNodeContent(): LibraryNodeContent | null {
  *  每张卡片的输出端口行挂一颗 **source** handle —— 拖它即「把这个对外参数连到
  *  宿主卡片的某一行」。handle id 取端口的 handle id（库里按端口名给圆点定位，
  *  一个候选一颗点），闸门据此反查契约条目。 */
-export const LibraryParamsNode = memo(function LibraryParamsNode(
-  _props: NodeProps,
-) {
+export const LibraryParamsNode = memo(function LibraryParamsNode(_props: NodeProps) {
   const content = useLibraryNodeContent()?.params;
-  if (!content) return null;
-  const {
-    cards,
-    canWire,
-    contractEntries,
-    selectedEntryId,
-    onSelect,
-    onReset,
-  } = content;
+  if (!content) {
+    return null;
+  }
+  const { cards, canWire, contractEntries, selectedEntryId, onSelect, onReset } = content;
   return (
     <div data-testid="wflib-canvas-node-params">
       <WorkflowParamCardColumn
@@ -82,11 +74,11 @@ export const LibraryParamsNode = memo(function LibraryParamsNode(
 
 /** 右列：对外输出参数卡片。每张卡片左缘一颗 **target** handle —— 宿主输出行的
  *  连线收在这里（方向的合法性由 `isValidConnection` 判）。 */
-export const LibraryOutputsNode = memo(function LibraryOutputsNode(
-  _props: NodeProps,
-) {
+export const LibraryOutputsNode = memo(function LibraryOutputsNode(_props: NodeProps) {
   const content = useLibraryNodeContent()?.outputs;
-  if (!content) return null;
+  if (!content) {
+    return null;
+  }
   const { cards, canWire, selectedOutputId, onSelect, onReset } = content;
   return (
     <div data-testid="wflib-canvas-node-outputs">
@@ -116,11 +108,11 @@ export const LibraryOutputsNode = memo(function LibraryOutputsNode(
 });
 
 /** 中间：宿主运行卡片（表单与输出行的端点由它自己渲染）。 */
-export const LibraryHostNode = memo(function LibraryHostNode(
-  _props: NodeProps,
-) {
+export const LibraryHostNode = memo(function LibraryHostNode(_props: NodeProps) {
   const content = useLibraryNodeContent()?.host;
-  if (!content) return null;
+  if (!content) {
+    return null;
+  }
   return <div data-testid="wflib-canvas-node-host">{content.host}</div>;
 });
 
@@ -133,16 +125,8 @@ export const LibraryHostNode = memo(function LibraryHostNode(
  *
  *  它**不是**背景色的来源：底色由容器与 `bg-canvas` 给，这里只负责撑尺寸，
  *  免得两处各画一层底色、深浅主题下互相盖。 */
-export const LibraryBackdropNode = memo(function LibraryBackdropNode(
-  _props: NodeProps,
-) {
-  return (
-    <div
-      className="h-full w-full"
-      data-testid="wflib-canvas-backdrop"
-      aria-hidden
-    />
-  );
+export const LibraryBackdropNode = memo(function LibraryBackdropNode(_props: NodeProps) {
+  return <div className="h-full w-full" data-testid="wflib-canvas-backdrop" aria-hidden />;
 });
 
 /** 契约条目类型（导出给编排层用，避免两处各写一套）。 */

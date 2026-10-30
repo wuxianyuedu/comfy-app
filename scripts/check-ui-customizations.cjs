@@ -92,7 +92,9 @@ function hasHeaderMarker(text) {
 function parseLedger(markdown) {
   const lines = markdown.split("\n");
   const start = lines.findIndex((l) => l.trim().startsWith(LEDGER_HEADING));
-  if (start === -1) return null;
+  if (start === -1) {
+    return null;
+  }
   const rest = lines.slice(start + 1);
   /* 找节尾时必须跳过**代码围栏内部**的行:bash 片段里的注释也以 `# ` 开头,
    * 会被当成标题 —— 实测 §16.8 的「覆盖前的标准动作」里就有一条
@@ -115,7 +117,9 @@ function parseLedger(markdown) {
   const names = new Set();
   for (const line of section) {
     const m = LEDGER_ROW_RE.exec(line.trim());
-    if (m) names.add(m[1].trim());
+    if (m) {
+      names.add(m[1].trim());
+    }
   }
   return names;
 }
@@ -162,18 +166,18 @@ function main() {
   const { unregistered, unmarked } = compareLedger(marked, ledger);
 
   if (REPORT_ONLY) {
-    console.log(
-      `[ui-customizations] 带标记 ${marked.size} 个 / 台账 ${ledger.size} 个`,
-    );
-    for (const n of [...marked].sort()) console.log(`  · 标记 ${n}`);
-    for (const n of [...ledger].sort()) console.log(`  · 台账 ${n}`);
+    console.log(`[ui-customizations] 带标记 ${marked.size} 个 / 台账 ${ledger.size} 个`);
+    for (const n of [...marked].sort()) {
+      console.log(`  · 标记 ${n}`);
+    }
+    for (const n of [...ledger].sort()) {
+      console.log(`  · 台账 ${n}`);
+    }
     return;
   }
 
   if (unregistered.length === 0 && unmarked.length === 0) {
-    console.log(
-      `[ui-customizations] ✓ ${marked.size} 个定制基元与台账一致（${LEDGER_DOC} §16.8）`,
-    );
+    console.log(`[ui-customizations] ✓ ${marked.size} 个定制基元与台账一致（${LEDGER_DOC} §16.8）`);
     return;
   }
 
@@ -210,4 +214,6 @@ module.exports = {
   listUiFiles,
 };
 
-if (require.main === module) main();
+if (require.main === module) {
+  main();
+}

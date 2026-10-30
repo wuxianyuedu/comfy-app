@@ -35,7 +35,9 @@ type FetchCall = readonly [RequestInfo | URL, RequestInit?];
 /** 记一次 fetch 的出口：拿到请求 URL 与init，并决定这一轮怎么回。 */
 function stubFetch(reply: { body?: unknown; ok?: boolean } | { throws: unknown }) {
   const spy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
-    if ("throws" in reply) throw reply.throws;
+    if ("throws" in reply) {
+      throw reply.throws;
+    }
     return new Response(JSON.stringify(reply.body ?? {}), {
       status: reply.ok === false ? 500 : 200,
     });

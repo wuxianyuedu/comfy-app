@@ -34,7 +34,9 @@ export const PROGRESS_MAX = 100;
  * 要「不确定」请用 `toPct` / `ProgressBar` 的 `value={null}`）。
  */
 export function clampPct(value: number): number {
-  if (!Number.isFinite(value)) return 0;
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
   return clamp(Math.round(value), 0, PROGRESS_MAX);
 }
 
@@ -55,8 +57,9 @@ export function clampPct(value: number): number {
  * 需要「下限可见宽度」时，把结果交给 `ProgressBar` 的 `minVisible`。
  */
 export function toPct(done: number, total: number): number | null {
-  if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0)
+  if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0) {
     return null;
+  }
   return clampPct((done / total) * PROGRESS_MAX);
 }
 
@@ -73,13 +76,14 @@ export function toPct(done: number, total: number): number | null {
  * pctToWidth(50, { minVisible: 4 })// 50
  * ```
  */
-export function pctToWidth(
-  pct: number | null,
-  options: { minVisible?: number } = {},
-): number {
-  if (pct === null) return 0;
+export function pctToWidth(pct: number | null, options: { minVisible?: number } = {}): number {
+  if (pct === null) {
+    return 0;
+  }
   const clamped = clampPct(pct);
-  if (clamped === 0) return 0;
+  if (clamped === 0) {
+    return 0;
+  }
   const minVisible = options.minVisible ?? 0;
   return clamp(minVisible, clamped, PROGRESS_MAX);
 }

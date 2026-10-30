@@ -37,7 +37,9 @@ describe("① 存量为零：router 里不许有裸 throw", () => {
   it("扫描面非空（路径写错时「零命中」是假绿，不是好消息）", () => {
     const files = routerSources();
     expect(files.length).toBeGreaterThan(5);
-    for (const f of files) expect(statSync(f).isFile()).toBe(true);
+    for (const f of files) {
+      expect(statSync(f).isFile()).toBe(true);
+    }
   });
 
   it("每个 router 源文件都没有 `throw new 非 TRPCError`", () => {

@@ -40,7 +40,9 @@ describe("createConsoleRunner", () => {
     const { events } = await runOnce(process.execPath, ["-e", "0"]);
     const start = events[0];
     expect(start?.type).toBe("start");
-    if (start?.type !== "start") return;
+    if (start?.type !== "start") {
+      return;
+    }
     expect(start.file).toBe(process.execPath);
     expect(start.args).toEqual(["-e", "0"]);
     expect(start.cwd).toBe(process.cwd());
@@ -57,7 +59,9 @@ describe("createConsoleRunner", () => {
     // 退出帧在最后，且带着用时。
     const last = events[events.length - 1];
     expect(last?.type).toBe("exit");
-    if (last?.type !== "exit") return;
+    if (last?.type !== "exit") {
+      return;
+    }
     expect(last.code).toBe(0);
     expect(last.killed).toBe(false);
     expect(last.truncatedNote).toBeNull();
@@ -142,9 +146,13 @@ describe("createConsoleRunner", () => {
         timeoutMs: 20_000,
       },
       (event) => {
-        if (event.type !== "out") return;
+        if (event.type !== "out") {
+          return;
+        }
         const m = /GRANDCHILD=(\d+)/.exec(event.text);
-        if (m) grandchildPid = Number(m[1]);
+        if (m) {
+          grandchildPid = Number(m[1]);
+        }
       },
     );
     /* 等孙进程的 PID 从 stdout 里出来（最多 5s）。 */
@@ -243,7 +251,9 @@ describe("createConsoleRunner", () => {
     const { events } = await runOnce("node", ["-e", "0"]);
     const start = events[0];
     expect(start?.type).toBe("start");
-    if (start?.type !== "start") return;
+    if (start?.type !== "start") {
+      return;
+    }
     // `node` 在 PATH 上 → 解析成绝对路径（不再是裸 `node`）。
     expect(start.file).toBe(process.execPath);
   });

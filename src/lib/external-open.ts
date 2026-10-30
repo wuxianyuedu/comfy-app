@@ -72,9 +72,7 @@ export function toExternalResult(raw: {
 }): ExternalOpenResult {
   const ok = raw.ok ?? raw.triggered ?? false;
   const detail =
-    raw.detail ??
-    raw.error ??
-    (ok ? "已交给外部程序" : "外部动作未能发起，请重试或手动处理");
+    raw.detail ?? raw.error ?? (ok ? "已交给外部程序" : "外部动作未能发起，请重试或手动处理");
   return { ok, detail };
 }
 
@@ -126,18 +124,22 @@ export function detectFolderHelper(
 ): { settle: () => Promise<FolderHelperState> } {
   let handled = false;
   const onBlur = () => {
-    if (handled) return;
+    if (handled) {
+      return;
+    }
     handled = true;
     onHandled?.();
-    if (typeof window !== "undefined")
+    if (typeof window !== "undefined") {
       window.removeEventListener("blur", onBlur);
+    }
   };
   if (typeof window !== "undefined") {
     window.addEventListener("blur", onBlur);
     // 兜底：即使 settle 从未被调用，超时后也移除监听器，避免泄漏（规范 §8.5）。
     setTimeout(() => {
-      if (typeof window !== "undefined")
+      if (typeof window !== "undefined") {
         window.removeEventListener("blur", onBlur);
+      }
     }, windowMs);
   }
   return {

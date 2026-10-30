@@ -72,7 +72,9 @@ function buildAspectOptions(
       : ASPECT_RATIO_LABEL_PRESETS.map((preset) => preset.value);
   return source.map((value) => {
     const known = ASPECT_RATIO_LABEL_PRESETS.find((preset) => preset.value === value);
-    if (known) return { value, label: known.label, ratio: known.ratio };
+    if (known) {
+      return { value, label: known.label, ratio: known.ratio };
+    }
     const ratio = parseRatioFromLabel(value);
     return { value, label: shortRatioLabel(value), ratio: ratio ?? 1 };
   });
@@ -180,12 +182,18 @@ export function AspectMegapixelControl({
   /** 反检测活跃章，好让手打的值也能高亮。 */
   const activeAspect = useMemo(() => {
     const exact = aspectOptions.find((option) => option.value === currentAspect);
-    if (exact) return exact;
+    if (exact) {
+      return exact;
+    }
     const ratio = parseRatioFromLabel(currentAspect);
-    if (ratio === null) return null;
+    if (ratio === null) {
+      return null;
+    }
     /* 候选可能为空（上游没给 COMBO 选项）—— 先取首项，缺席就当作没匹配。 */
     const [firstOption] = aspectOptions;
-    if (!firstOption) return null;
+    if (!firstOption) {
+      return null;
+    }
     return aspectOptions.reduce(
       (best, option) =>
         Math.abs(option.ratio - ratio) < Math.abs(best.ratio - ratio) ? option : best,
@@ -214,7 +222,9 @@ export function AspectMegapixelControl({
    * 系数。候选项优先用工作流自己的 options，否则给 8/16/32/64
    * （与尺寸表配置里的倍数候选同一份）。当前值不在候选里时动态补上。 */
   const currentMultiple = useMemo(() => {
-    if (!multiple) return DEFAULT_ALIGN_MULTIPLE;
+    if (!multiple) {
+      return DEFAULT_ALIGN_MULTIPLE;
+    }
     const raw = values[multiple.ioKey];
     const n = typeof raw === "number" ? raw : Number(raw);
     return Number.isFinite(n) && n > 0
@@ -285,7 +295,9 @@ export function AspectMegapixelControl({
         })),
         onChange: (label) => {
           const preset = clarityOptions.find((item) => item.label === label);
-          if (!preset) return;
+          if (!preset) {
+            return;
+          }
           /* 分辨率档：唯一解地换算成「百万像素 + 倍数」；百万像素档保持不变。 */
           apply(aspectValue, preset.megapixels, preset.multiple);
         },
@@ -310,7 +322,9 @@ export function AspectMegapixelControl({
               })),
               onChange: (label: string) => {
                 const hit = multipleOptions.find((option) => option.label === label);
-                if (!hit) return;
+                if (!hit) {
+                  return;
+                }
                 apply(aspectValue, currentMp, hit.value);
               },
             } satisfies SegmentSection<string>,
@@ -342,7 +356,9 @@ export function AspectMegapixelControl({
   /** 显示用：当前档位按比例换算出的宽高（百万像素档也一并算出，便于用户核对）。 */
   const currentDims = useMemo((): SizeDims | null => {
     const tier = resolutionTierOfLabel(mpLabel);
-    if (tier) return resolutionDims(scene, activeRatio, tier, table);
+    if (tier) {
+      return resolutionDims(scene, activeRatio, tier, table);
+    }
     return null;
   }, [mpLabel, scene, activeRatio, table]);
 

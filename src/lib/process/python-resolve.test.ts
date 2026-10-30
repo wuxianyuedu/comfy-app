@@ -121,7 +121,9 @@ describe("resolvePython：在候选里挑出第一个真能跑的", () => {
       probe: {
         access: () => undefined,
         spawn: (candidate, args) => {
-          if ((candidate.split(/[\\/]/).pop() ?? "") !== "py.EXE") return "ENOEXEC";
+          if ((candidate.split(/[\\/]/).pop() ?? "") !== "py.EXE") {
+            return "ENOEXEC";
+          }
           seen.push(args);
           // 只有带 `-3` 的探针才「起得来」—— 裸 `py` 的形态如实报非零。
           return args.includes("-3") ? null : "ENOEXEC";

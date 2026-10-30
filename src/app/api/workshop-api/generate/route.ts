@@ -15,11 +15,7 @@ import {
   submitVideoViaApi,
 } from "~/lib/workshop/api-channel.server";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
-import {
-  intField,
-  resolveMediaDataUrl,
-  strField,
-} from "~/lib/workshop/media-source.server";
+import { intField, resolveMediaDataUrl, strField } from "~/lib/workshop/media-source.server";
 import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
@@ -33,7 +29,9 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await readJsonRecord(req);
-  if (isErrorResponse(body)) return body;
+  if (isErrorResponse(body)) {
+    return body;
+  }
 
   const kind: unknown = body.kind;
   const model = strField(body, "model");
@@ -90,10 +88,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(result);
     }
 
-    return NextResponse.json(
-      { error: "kind 必须是 image 或 video" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "kind 必须是 image 或 video" }, { status: 400 });
   } catch (e) {
     return NextResponse.json(apiErrorBody(e, "API 生成失败"), { status: 502 });
   }

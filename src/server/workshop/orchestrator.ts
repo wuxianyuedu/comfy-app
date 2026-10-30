@@ -87,7 +87,9 @@ export function rebuildShotPrompts(
 }
 
 function extractRemoteTaskId(clipUrl: string | undefined): string | null {
-  if (!clipUrl) return null;
+  if (!clipUrl) {
+    return null;
+  }
   return clipUrl.startsWith("task:") ? clipUrl.slice("task:".length) : null;
 }
 
@@ -95,7 +97,9 @@ function extractRemoteTaskId(clipUrl: string | undefined): string | null {
 
 async function load(id: string): Promise<WorkshopSessionState> {
   const state = await repo.getSession(id);
-  if (!state) throw new Error(`工坊会话不存在：${id}`);
+  if (!state) {
+    throw new Error(`工坊会话不存在：${id}`);
+  }
   return state;
 }
 
@@ -138,7 +142,9 @@ export async function setIdea(id: string, idea: string) {
 
 export async function generateScript(id: string) {
   const state = await load(id);
-  if (!state.idea.trim()) throw new Error("请先设置 idea（灵感 / 梗概）再生成脚本");
+  if (!state.idea.trim()) {
+    throw new Error("请先设置 idea（灵感 / 梗概）再生成脚本");
+  }
   const cfg = await getWorkshopLLMConfig();
   const script = await completeWorkshopLLM(cfg, buildScriptMessages(state.idea, state.meta));
   const scenes = parseIdeaToScenes(script, {
@@ -178,7 +184,9 @@ export async function setScript(id: string, markdown: string, parse = true) {
 
 export async function extractCharacters(id: string) {
   const state = await load(id);
-  if (!state.meta.scriptMarkdown?.trim()) throw new Error("请先生成 / 设置脚本再提取角色");
+  if (!state.meta.scriptMarkdown?.trim()) {
+    throw new Error("请先生成 / 设置脚本再提取角色");
+  }
   const cfg = await getWorkshopLLMConfig();
   const text = await completeWorkshopLLM(
     cfg,
@@ -204,7 +212,9 @@ export async function setCharacters(id: string, characters: Array<Character>) {
 
 export async function buildStoryboard(id: string) {
   const state = await load(id);
-  if (!state.meta.scriptMarkdown?.trim()) throw new Error("请先生成 / 设置脚本再拆分分镜");
+  if (!state.meta.scriptMarkdown?.trim()) {
+    throw new Error("请先生成 / 设置脚本再拆分分镜");
+  }
   const names = state.characters.map((c) => c.name);
   const cfg = await getWorkshopLLMConfig();
   const text = await completeWorkshopLLM(
@@ -308,7 +318,9 @@ export interface SubmitVideoInput {
 export async function submitVideo(id: string, input: SubmitVideoInput) {
   const state = await load(id);
   const shot = state.shots.find((s) => s.id === input.shotId);
-  if (!shot) throw new Error(`镜头不存在：${input.shotId}`);
+  if (!shot) {
+    throw new Error(`镜头不存在：${input.shotId}`);
+  }
   if (input.channel === "comfyui") {
     let imageDataUrl: string | undefined;
     if (input.useFirstFrame && shot.imageUrl) {
@@ -352,7 +364,9 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
 export async function pollVideo(id: string, shotId: string) {
   const state = await load(id);
   const shot = state.shots.find((s) => s.id === shotId);
-  if (!shot) throw new Error(`镜头不存在：${shotId}`);
+  if (!shot) {
+    throw new Error(`镜头不存在：${shotId}`);
+  }
   const taskId = extractRemoteTaskId(shot.clipUrl);
   if (!taskId) {
     return {
@@ -396,7 +410,9 @@ export async function composeFinal(
   let renderNote: string | undefined;
   if (input.render) {
     const r = await renderComposition(plan, `${id}-final`);
-    if (r.ok && r.outputPath) outputPath = r.outputPath;
+    if (r.ok && r.outputPath) {
+      outputPath = r.outputPath;
+    }
     renderNote = r.note;
   }
   state.stage = "final_edit";

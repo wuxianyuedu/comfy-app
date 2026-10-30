@@ -95,6 +95,8 @@ describe("waitForComfyReady", () => {
 
     const r = await waitForComfyReady({ timeoutMs: 20, pollMs: 5 });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.pending).toBe(true);
+    if (!r.ok) {
+      expect(r.pending).toBe(true);
+    }
   });
 });

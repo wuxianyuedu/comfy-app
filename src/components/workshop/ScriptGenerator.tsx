@@ -55,7 +55,9 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
   const genSelectValue = channelSelectionDisplayValue(genSel, config);
 
   async function handleAI() {
-    if (!idea.trim()) return;
+    if (!idea.trim()) {
+      return;
+    }
     if (!config) {
       openSettings();
       return;
@@ -75,7 +77,9 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
         }),
       );
       const markdown = full.trim();
-      if (!markdown) throw new Error("AI 未返回有效内容");
+      if (!markdown) {
+        throw new Error("AI 未返回有效内容");
+      }
       onScriptChange(markdown);
       setIdea("");
       setAiStatus(

@@ -17,10 +17,14 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { normalizeControlFlow } from "./helpers/source-shape";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const code = (rel: string): string => stripComments(readFileSync(path.join(ROOT, rel), "utf-8"));
+/* 去注释之后还要把控制流花括号归一化：这些断言钉的是「这条判据在不在」，
+ * 而 oxlint `curly` 给单语句体补 `{}` 会让 `inFlight.has(id)) return` 变成多行。 */
+const code = (rel: string): string =>
+  normalizeControlFlow(stripComments(readFileSync(path.join(ROOT, rel), "utf-8")), rel);
 
 const ORCHESTRATOR = "src/server/film/orchestrator.ts";
 

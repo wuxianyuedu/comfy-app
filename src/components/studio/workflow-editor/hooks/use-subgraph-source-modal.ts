@@ -24,19 +24,27 @@ export function useSubgraphSourceModal(params: {
     source: unknown;
     isSubgraph: boolean;
   } | null>(() => {
-    if (!detail) return null;
+    if (!detail) {
+      return null;
+    }
     const isSubgraphView = subgraphStackLength > 0;
     const raw: unknown = (() => {
-      if (!isSubgraphView) return detail.rawJson ?? null;
+      if (!isSubgraphView) {
+        return detail.rawJson ?? null;
+      }
       /* sub 视图：源文件 = 父 rawJson 的 definitions.subgraphs[subUid]。 */
       const ctx = subgraphRawContext;
-      if (!ctx) return null;
+      if (!ctx) {
+        return null;
+      }
       const subs = /* SAFETY: 类型断言已复核 */ (
         ctx.parentRawJson as {
           definitions?: { subgraphs?: Record<string, unknown> };
         } | null
       )?.definitions?.subgraphs;
-      if (!subs) return null;
+      if (!subs) {
+        return null;
+      }
       return (
         subs[ctx.subUid] ??
         Object.values(subs).find(

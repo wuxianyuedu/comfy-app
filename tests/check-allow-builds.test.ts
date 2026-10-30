@@ -279,10 +279,14 @@ function dGroupSteps(hookText: string): Array<{ label: string; cmd: string }> {
 function readChecklistCommands(): Set<string> {
   const text = readFileSync(CHECKLIST_DOC, "utf8");
   const start = text.indexOf("本地提交前必须通过");
-  if (start < 0) return new Set();
+  if (start < 0) {
+    return new Set();
+  }
   const rest = text.slice(start);
   const close = rest.indexOf("```");
-  if (close < 0) return new Set();
+  if (close < 0) {
+    return new Set();
+  }
   return new Set(
     rest
       .slice(0, close)

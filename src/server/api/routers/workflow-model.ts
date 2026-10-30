@@ -14,10 +14,7 @@ export const workflowModelRouter = createTRPCRouter({
   create: authedProcedure
     .input(z.object({ name: z.string().trim().min(1).max(64) }))
     .mutation(async ({ ctx, input }) => {
-      const tag = await workflowModelTagRepository.upsertByName(
-        ctx.user.id,
-        input.name,
-      );
+      const tag = await workflowModelTagRepository.upsertByName(ctx.user.id, input.name);
       return { tag };
     }),
 
@@ -37,18 +34,17 @@ export const workflowModelRouter = createTRPCRouter({
         ctx.user.id,
         input.oldName,
       );
-      if (!existing)
+      if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "标签不存在" });
+      }
       const collision = await workflowModelTagRepository.findByUserAndName(
         ctx.user.id,
         input.newName,
       );
-      if (collision)
+      if (collision) {
         throw new TRPCError({ code: "CONFLICT", message: "标签名已存在" });
-      const tag = await workflowModelTagRepository.rename(
-        existing.id,
-        input.newName,
-      );
+      }
+      const tag = await workflowModelTagRepository.rename(existing.id, input.newName);
       return { ok: true, renamed: true, tag };
     }),
 
@@ -56,11 +52,10 @@ export const workflowModelRouter = createTRPCRouter({
   delete: authedProcedure
     .input(z.object({ name: z.string().trim().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const existing = await workflowModelTagRepository.findByUserAndName(
-        ctx.user.id,
-        input.name,
-      );
-      if (!existing) return { ok: true, deleted: false };
+      const existing = await workflowModelTagRepository.findByUserAndName(ctx.user.id, input.name);
+      if (!existing) {
+        return { ok: true, deleted: false };
+      }
       await workflowModelTagRepository.deleteById(existing.id);
       return { ok: true, deleted: true };
     }),

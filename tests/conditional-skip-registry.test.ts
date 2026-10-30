@@ -189,11 +189,16 @@ const ALIAS_DEF_RE = /^\s*const\s+(\w+)\s*=\s*(?:it|test)\.skipIf\(([^)]*)\)\s*;
 /** 测试文件的扫描面（`tests/**` 与 `src/**` 下的 `*.test.ts(x)`）。 */
 function testFiles(dir: string, found: Array<string> = []): Array<string> {
   const abs = path.join(ROOT, dir);
-  if (!existsSync(abs)) return found;
+  if (!existsSync(abs)) {
+    return found;
+  }
   for (const entry of readdirSync(abs, { withFileTypes: true })) {
     const rel = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) testFiles(rel, found);
-    else if (/\.test\.tsx?$/.test(entry.name)) found.push(rel);
+    if (entry.isDirectory()) {
+      testFiles(rel, found);
+    } else if (/\.test\.tsx?$/.test(entry.name)) {
+      found.push(rel);
+    }
   }
   return found;
 }
@@ -261,9 +266,11 @@ describe("条件性 skip 的登记表（§11.7 的「绿有两种含义」）", 
     const registry = new Map(REGISTERED.map((r) => [keyOf(r), r]));
     for (const [key, count] of measured) {
       const hit = registry.get(key);
-      if (!hit) problems.push(`未登记的 skip 站点：${key}（${count} 处）`);
-      else if (hit.count !== count)
+      if (!hit) {
+        problems.push(`未登记的 skip 站点：${key}（${count} 处）`);
+      } else if (hit.count !== count) {
         problems.push(`登记数量与实测不符：${key} 记 ${hit.count} 实测 ${count}`);
+      }
     }
     expect(problems).toEqual([]);
   });
@@ -276,8 +283,12 @@ describe("条件性 skip 的登记表（§11.7 的「绿有两种含义」）", 
   it("每条登记都要有档位与非空理由", () => {
     const bad: Array<string> = [];
     for (const r of REGISTERED) {
-      if (!TIERS.includes(r.tier)) bad.push(`${keyOf(r)} 档位非法：${r.tier}`);
-      if (r.why.trim().length < 8) bad.push(`${keyOf(r)} 理由太短或缺失`);
+      if (!TIERS.includes(r.tier)) {
+        bad.push(`${keyOf(r)} 档位非法：${r.tier}`);
+      }
+      if (r.why.trim().length < 8) {
+        bad.push(`${keyOf(r)} 理由太短或缺失`);
+      }
     }
     expect(bad).toEqual([]);
   });

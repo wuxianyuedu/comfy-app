@@ -45,9 +45,15 @@ const FOLDER_ICON_TINT =
 // p71-allow:end
 
 function KindIcon({ kind }: { kind: string }) {
-  if (kind === "image") return <ImageIcon size={18} strokeWidth={1.8} />;
-  if (kind === "video") return <Video size={18} strokeWidth={1.8} />;
-  if (kind === "audio") return <Music size={18} strokeWidth={1.8} />;
+  if (kind === "image") {
+    return <ImageIcon size={18} strokeWidth={1.8} />;
+  }
+  if (kind === "video") {
+    return <Video size={18} strokeWidth={1.8} />;
+  }
+  if (kind === "audio") {
+    return <Music size={18} strokeWidth={1.8} />;
+  }
   return <FileText size={18} strokeWidth={1.8} />;
 }
 
@@ -73,8 +79,7 @@ export function MaterialLibraryContent({
   /** 分类（文件夹）网格形态下的列数，同上。 */
   folderColsClass?: string;
 }) {
-  const { folders, items, loading, showItems, searching, enterFolder, remove } =
-    c;
+  const { folders, items, loading, showItems, searching, enterFolder, remove } = c;
 
   return (
     <div className="min-w-0 flex-1 overflow-y-auto px-2 pb-4">
@@ -94,11 +99,7 @@ export function MaterialLibraryContent({
           <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
             {/* 文件夹图标 */}
             <div className="border-border-strong bg-subtle mb-5 flex size-20 items-center justify-center rounded-2xl border">
-              <Folder
-                size={40}
-                strokeWidth={1.2}
-                className="text-ink-fainter"
-              />
+              <Folder size={40} strokeWidth={1.2} className="text-ink-fainter" />
             </div>
             <p className="text-ink-soft text-sm font-medium">
               {searching ? "没有匹配的素材" : "暂无内容"}
@@ -149,9 +150,7 @@ export function MaterialLibraryContent({
                     </div>
                   )}
                 </div>
-                <p className="text-ink-soft text-2xs truncate px-2 py-1.5">
-                  {item.name}
-                </p>
+                <p className="text-ink-soft text-2xs truncate px-2 py-1.5">{item.name}</p>
                 {/* hover 操作 */}
                 <div className="absolute top-1 right-1 hidden gap-1 group-hover:flex">
                   {onUse && (
@@ -162,11 +161,7 @@ export function MaterialLibraryContent({
                         onClick={() => onUse(item)}
                         className="text-ink-soft rounded bg-black/70 hover:bg-black/60 hover:text-white"
                       >
-                        <Plus
-                          data-icon="inline-start"
-                          size={12}
-                          strokeWidth={2.5}
-                        />
+                        <Plus data-icon="inline-start" size={12} strokeWidth={2.5} />
                       </Button>
                     </Hint>
                   )}
@@ -214,9 +209,7 @@ export function MaterialLibraryContent({
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-ink-bright truncate text-sm">
-                    {item.name}
-                  </p>
+                  <p className="text-ink-bright truncate text-sm">{item.name}</p>
                   <p className="text-ink-fainter text-2xs mt-0.5">
                     {searching ? `${item.folderName} ·` : ""}
                     {displayValue(fmtBytes(item.size))}
@@ -231,11 +224,7 @@ export function MaterialLibraryContent({
                         onClick={() => onUse(item)}
                         className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
                       >
-                        <Plus
-                          data-icon="inline-start"
-                          size={13}
-                          strokeWidth={2.5}
-                        />
+                        <Plus data-icon="inline-start" size={13} strokeWidth={2.5} />
                       </Button>
                     </Hint>
                   )}
@@ -282,9 +271,7 @@ export function MaterialLibraryContent({
                 {folder.name}
               </span>
               {folder.count > 0 && (
-                <span className="text-ink-fainter text-3xs tabular-nums">
-                  {folder.count}
-                </span>
+                <span className="text-ink-fainter text-3xs tabular-nums">{folder.count}</span>
               )}
             </Button>
           ))}
@@ -303,9 +290,7 @@ export function MaterialLibraryContent({
               >
                 <Folder size={18} strokeWidth={1.8} />
               </div>
-              <span className="text-ink-bright min-w-0 flex-1 truncate text-sm">
-                {folder.name}
-              </span>
+              <span className="text-ink-bright min-w-0 flex-1 truncate text-sm">{folder.name}</span>
               <span className="text-ink-fainter text-2xs shrink-0 tabular-nums">
                 {folder.count > 0 ? folder.count : ""}
               </span>

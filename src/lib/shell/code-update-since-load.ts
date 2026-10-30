@@ -41,7 +41,9 @@ export function hasCodeUpdated(signal: CodeUpdateSignal): boolean {
  * 建立基准时单独记录（见条件 ②）。
  */
 export function isBuildIdChange(baseline: string | null, next: string | null): boolean {
-  if (baseline === null || next === null) return false;
+  if (baseline === null || next === null) {
+    return false;
+  }
   return baseline !== next;
 }
 
@@ -52,7 +54,9 @@ export function isBuildIdChange(baseline: string | null, next: string | null): b
  * 不等于过期**，宁可漏报也不误报「页面是旧的」。
  */
 export function isPageOlderThanBuild(loadedAt: string | null, current: string | null): boolean {
-  if (loadedAt === null || current === null) return false;
+  if (loadedAt === null || current === null) {
+    return false;
+  }
   return loadedAt !== current;
 }
 
@@ -65,7 +69,9 @@ export function isPageOlderThanBuild(loadedAt: string | null, current: string | 
  * 任一侧取不到 bootId（端点未就绪 / 旧版壳）时返回 false：无法判定不等于重启。
  */
 export function isBootIdChange(prev: string | null, next: string | null): boolean {
-  if (prev === null || next === null) return false;
+  if (prev === null || next === null) {
+    return false;
+  }
   return prev !== next;
 }
 
@@ -116,7 +122,9 @@ export async function fetchBuildId(): Promise<BuildIdProbe> {
       cache: "no-store",
       signal: AbortSignal.timeout(BUILD_ID_TIMEOUT_MS),
     });
-    if (!res.ok) return empty;
+    if (!res.ok) {
+      return empty;
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       buildId?: unknown;
       bootId?: unknown;

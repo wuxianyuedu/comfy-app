@@ -27,9 +27,7 @@ import { RuntimeLogBox } from "./RuntimeLogBox";
 const FILE_NAME = "comfyui-runtime.log";
 const TITLE = `启动日志（${FILE_NAME}）`;
 
-function controller(
-  over: Partial<RuntimeLogController> = {},
-): RuntimeLogController {
+function controller(over: Partial<RuntimeLogController> = {}): RuntimeLogController {
   return {
     text: "[spawn] pid=1\n",
     segments: [{ text: "[spawn] pid=1\n" }],
@@ -119,19 +117,17 @@ describe("RuntimeLogBox", () => {
      * 抢满时就查不到（实测红在 `Unable to find an accessible element with the
      * role "option"`）—— 这里要的是「等到它出现」，不是「再快一点」。 */
     await user.click(trigger);
-    const labels = (await screen.findAllByRole("option")).map(
-      (option) => option.textContent,
-    );
+    const labels = (await screen.findAllByRole("option")).map((option) => option.textContent);
     expect(labels).toEqual(["09-30 10:01:03", "09-30 10:07:41"]);
 
     const first = (await screen.findAllByRole("option")).find((option) =>
       option.textContent?.startsWith("09-30 10:01:03"),
     );
-    if (!first) throw new Error("弹层里没有 10:01:03 那一档启动");
+    if (!first) {
+      throw new Error("弹层里没有 10:01:03 那一档启动");
+    }
     await user.click(first);
-    expect(log.selectSession).toHaveBeenCalledWith(
-      "comfyui-runtime-20260930-100103.log",
-    );
+    expect(log.selectSession).toHaveBeenCalledWith("comfyui-runtime-20260930-100103.log");
   });
 
   it("刷新按钮触发 refresh", () => {
@@ -143,16 +139,12 @@ describe("RuntimeLogBox", () => {
 
   it("正文为空时显示分区自己的空态引导", () => {
     renderBox(controller({ text: "", segments: [] }));
-    expect(
-      screen.getByText("暂无日志 —— 点「启动 ComfyUI」后这里会实时输出"),
-    ).toBeTruthy();
+    expect(screen.getByText("暂无日志 —— 点「启动 ComfyUI」后这里会实时输出")).toBeTruthy();
   });
 
   it("正文被截断时给出可见说明（不让用户以为日志本来就长这样）", () => {
     renderBox(controller({ truncated: true, windowed: true }));
-    expect(
-      screen.getByText("该次启动的输出过长，只显示最近一段。"),
-    ).toBeTruthy();
+    expect(screen.getByText("该次启动的输出过长，只显示最近一段。")).toBeTruthy();
   });
 
   it("列表被上限截断时说明「还有更早的几次」", () => {
@@ -160,9 +152,7 @@ describe("RuntimeLogBox", () => {
      * 不说出来的后果是用户以为「这个服务只启动过这些次」—— 而界面上看不出任何
      * 异常（硬规则 4：失败路径必须有用户可见出口）。 */
     renderBox(controller({ sessions: twoSessions(), total: 12 }));
-    expect(
-      screen.getByText("该服务一共启动过 12 次，下拉只列最近 2 次。"),
-    ).toBeTruthy();
+    expect(screen.getByText("该服务一共启动过 12 次，下拉只列最近 2 次。")).toBeTruthy();
   });
 
   it("全屏查看：铺满内容区的面板里带同一个下拉，退出后回到小窗口", () => {

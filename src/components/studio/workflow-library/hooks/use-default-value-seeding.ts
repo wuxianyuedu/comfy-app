@@ -9,11 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 
-import {
-  defaultInputValues,
-  mergeRefreshedDefaults,
-  type WorkflowIOMap,
-} from "../../workflow-io";
+import { defaultInputValues, mergeRefreshedDefaults, type WorkflowIOMap } from "../../workflow-io";
 
 export function useDefaultValueSeeding(params: {
   workflowId: string;
@@ -32,18 +28,16 @@ export function useDefaultValueSeeding(params: {
    * 用户覆盖值会被当成新工作流的覆盖值保留下来（ioKey 恰好同名时）。 */
   const activeSeedKey = `${workflowId ?? ""}|${effectiveMode ?? ""}`;
   useEffect(() => {
-    if (!workflowIO) return;
+    if (!workflowIO) {
+      return;
+    }
     const fresh = defaultInputValues(workflowIO, effectiveMode);
     if (seedRef.current === activeSeedKey) {
       /* 同一个工作流 + 同一个模式，IO 变了 = 作者在编辑器里改了默认值。
        *  此时不能整表覆盖（会吃掉用户已填的覆盖值），只把「仍等于旧默认值」
        *  的那一格刷新到新默认值；用户改过的格子原样保留。 */
       setValues((current) => {
-        const merged = mergeRefreshedDefaults(
-          current,
-          baselineRef.current,
-          fresh,
-        );
+        const merged = mergeRefreshedDefaults(current, baselineRef.current, fresh);
         return merged ?? current;
       });
       baselineRef.current = fresh;

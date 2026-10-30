@@ -55,8 +55,12 @@ export const PHASES = [
  * @returns {number} 合并后的进程退出码
  */
 export function combineShipCodes(codes) {
-  if (codes.includes(CODE.NOT_RUN)) return CODE.NOT_RUN;
-  if (codes.includes(CODE.RED)) return CODE.RED;
+  if (codes.includes(CODE.NOT_RUN)) {
+    return CODE.NOT_RUN;
+  }
+  if (codes.includes(CODE.RED)) {
+    return CODE.RED;
+  }
   return CODE.GREEN;
 }
 
@@ -204,11 +208,17 @@ export function decideCleanBranch({ requested, landedVerified, branch }) {
  */
 export function deriveTitle({ subjects = [], head = "", explicit = null }) {
   const flag = (explicit || "").trim();
-  if (flag) return { title: flag, source: "flag" };
+  if (flag) {
+    return { title: flag, source: "flag" };
+  }
   const first = subjects.map((s) => (s || "").trim()).filter(Boolean)[0] ?? "";
-  if (first) return { title: first, source: "branch-first" };
+  if (first) {
+    return { title: first, source: "branch-first" };
+  }
   const h = (head || "").trim();
-  if (h) return { title: h, source: "head" };
+  if (h) {
+    return { title: h, source: "head" };
+  }
   return { title: "", source: "none" };
 }
 
@@ -223,7 +233,9 @@ export function deriveTitle({ subjects = [], head = "", explicit = null }) {
  */
 export function parseSlug(remoteUrl) {
   const s = (remoteUrl || "").trim().replace(/\/+$/, "");
-  if (!s) return null;
+  if (!s) {
+    return null;
+  }
   const m = s.match(/[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
   return m ? (m[1] ?? null) : null;
 }
@@ -266,12 +278,7 @@ export function parseSlug(remoteUrl) {
  * }} input 四条读数（后两条可缺）
  * @returns {{remote: string | null, base: string | null, source: "upstream" | "remote-head" | "sole-remote" | "origin" | "none"}}
  */
-export function resolveUpstream({
-  upstream,
-  remotes = [],
-  localBranch = null,
-  remoteHead = null,
-}) {
+export function resolveUpstream({ upstream, remotes = [], localBranch = null, remoteHead = null }) {
   const named = remotes.map((r) => (r || "").trim()).filter(Boolean);
   const u = (upstream || "").trim();
   const slash = u.indexOf("/");
@@ -290,23 +297,23 @@ export function resolveUpstream({
       };
     }
     const trunk = trunkFromRemoteHead(remoteFromUpstream, remoteHead);
-    if (trunk)
+    if (trunk) {
       return { remote: remoteFromUpstream, base: trunk, source: "remote-head" };
+    }
     return {
       remote: remoteFromUpstream,
       base: `${remoteFromUpstream}/master`,
       source: "sole-remote",
     };
   }
-  const sole =
-    named.length === 1
-      ? (named[0] ?? null)
-      : named.includes("origin")
-        ? "origin"
-        : null;
-  if (!sole) return { remote: null, base: null, source: "none" };
+  const sole = named.length === 1 ? (named[0] ?? null) : named.includes("origin") ? "origin" : null;
+  if (!sole) {
+    return { remote: null, base: null, source: "none" };
+  }
   const trunk = trunkFromRemoteHead(sole, remoteHead);
-  if (trunk) return { remote: sole, base: trunk, source: "remote-head" };
+  if (trunk) {
+    return { remote: sole, base: trunk, source: "remote-head" };
+  }
   return {
     remote: sole,
     base: `${sole}/master`,
@@ -327,7 +334,9 @@ export function resolveUpstream({
 function trunkFromRemoteHead(remote, remoteHead) {
   const prefix = `refs/remotes/${remote}/`;
   const s = (remoteHead || "").trim();
-  if (!s.startsWith(prefix)) return null;
+  if (!s.startsWith(prefix)) {
+    return null;
+  }
   const branch = s.slice(prefix.length);
   return branch ? `${remote}/${branch}` : null;
 }
@@ -356,18 +365,26 @@ export function readFreshnessState(res) {
   } catch {
     return "unknown";
   }
-  if (!json || typeof json !== "object") return "unknown";
+  if (!json || typeof json !== "object") {
+    return "unknown";
+  }
   /* 判据自己的「没跑起来」压过一切（与它的退出码顺序同口径：环境不可信时
    * 红与绿都不构成结论）。 */
-  if (json.envBroken === true) return "env";
-  if (!("code" in json)) return "unknown";
+  if (json.envBroken === true) {
+    return "env";
+  }
+  if (!("code" in json)) {
+    return "unknown";
+  }
   const state = json.installDrift && json.installDrift.state;
   /* `no-install` 与「远端漂移」可能同时成立（没装 + 远端改过依赖）：那时要念的是**漂移**，
    * 因为它的出口（先 pull 再装）才是完整动作 —— 只说「没装」会让人在旧基线上装一套旧依赖。 */
   if (state === "no-install" && !(json.remoteDrifts || []).length) {
     return "no-install";
   }
-  if (Number(json.code) === 0) return "clean";
+  if (Number(json.code) === 0) {
+    return "clean";
+  }
   return "drift";
 }
 
@@ -403,11 +420,15 @@ export function readPullVerdict(json) {
  * @returns {{errcode: string, errmsg: string} | null} 两件都没有时 null（不编一个理由）
  */
 export function readPullCreateError(json) {
-  if (!json || typeof json !== "object") return null;
+  if (!json || typeof json !== "object") {
+    return null;
+  }
   const d = json.data && typeof json.data === "object" ? json.data : {};
   const errcode = json.errcode ?? d.errcode;
   const errmsg = json.errmsg ?? d.errmsg;
-  if (errcode === undefined && errmsg === undefined) return null;
+  if (errcode === undefined && errmsg === undefined) {
+    return null;
+  }
   return { errcode: String(errcode ?? ""), errmsg: String(errmsg ?? "") };
 }
 
@@ -433,7 +454,9 @@ export function pullRecordForBranch(json, branch) {
         : [];
   for (const p of list) {
     const ref = String((p && p.head && p.head.ref) || "");
-    if (ref === `refs/heads/${branch}`) return p;
+    if (ref === `refs/heads/${branch}`) {
+      return p;
+    }
   }
   return null;
 }
@@ -467,16 +490,18 @@ export function findPullForBranch(json, branch) {
  */
 export function findMergedPullForHeadSha(json, headSha) {
   const sha = String(headSha ?? "").trim();
-  if (!sha) return null;
+  if (!sha) {
+    return null;
+  }
   const raw = json && json.data;
-  const list = Array.isArray(raw)
-    ? raw
-    : raw && Array.isArray(raw.data)
-      ? raw.data
-      : [];
+  const list = Array.isArray(raw) ? raw : raw && Array.isArray(raw.data) ? raw.data : [];
   for (const p of list) {
-    if (p?.is_merged !== true) continue;
-    if (String(p?.head?.sha ?? "") === sha) return Number(p.number);
+    if (p?.is_merged !== true) {
+      continue;
+    }
+    if (String(p?.head?.sha ?? "") === sha) {
+      return Number(p.number);
+    }
   }
   return null;
 }
@@ -500,7 +525,9 @@ export function findMergedPullForHeadSha(json, headSha) {
  * @returns {boolean} 命中改写形状时为 true
  */
 export function looksNewlineMangled(msg) {
-  if (!msg) return false;
+  if (!msg) {
+    return false;
+  }
   return !msg.includes("\n") && msg.includes("\\n");
 }
 
@@ -522,7 +549,9 @@ export function planCommands(st) {
   const trunk = st.baseBranch || "master";
   /* 建分支排在最前面：它是 `--branch` 唯一能改变形状的一格（不在分支上时，后面每一跳
    * 的分支名都取自它）。给了旗标才出现 —— 与合并/关单同一档：默认那份计划里没有这一步。 */
-  if (st.createBranch) p.push(`git checkout -b ${st.createBranch}`);
+  if (st.createBranch) {
+    p.push(`git checkout -b ${st.createBranch}`);
+  }
   p.push("git rev-parse --abbrev-ref HEAD");
   p.push("git status --porcelain");
   /* 碎片那一查的**两条**取数都要在计划里出现：执行面是「分支相对主干已提交的 ∪
@@ -532,8 +561,12 @@ export function planCommands(st) {
   p.push(`git diff --name-only ${remote}/${trunk}...HEAD -- changelog.d`);
   p.push("git status --porcelain -- changelog.d");
   p.push("node scripts/check-deps-freshness.mjs");
-  for (const a of st.adds) p.push(`git add -- ${a}`);
-  if (st.hasMessage) p.push("git commit --message=<提交信息原文>");
+  for (const a of st.adds) {
+    p.push(`git add -- ${a}`);
+  }
+  if (st.hasMessage) {
+    p.push("git commit --message=<提交信息原文>");
+  }
   /* 远端名与主干分支都来自解析（`resolveUpstream`），不写死 `origin` / `master` ——
    * 两处都是每台克隆自己的事实，写死时计划与执行两头一起错。 */
   p.push(`git push -u ${remote} ${st.branch}`);
@@ -633,10 +666,11 @@ export function planCommands(st) {
     );
   }
   p.push(`cnb pulls get-pull --repo ${st.slug} --number <n> -v`);
-  if (st.merge)
+  if (st.merge) {
     p.push(
       `cnb pulls merge-pull --repo ${st.slug} --number <n> --merge-style squash --commit-title "… (#<n>)" -v`,
     );
+  }
   /* 阶段 7 也是**伸手改世界**的那一类，所以它在计划里必须看得见 —— 与合并同一档：
    * 不显式给 `--close-issue` 就不出现。`get-issue` 那一条是回读（独立一问），
    * 它不在 WRITE_SHAPES 里，但同样要出现在计划中，否则 dry-run 教的执行面是缺一块的。 */
@@ -645,10 +679,11 @@ export function planCommands(st) {
      * `is_merged`** 再决定关不关 —— 计划里必须看得见这一问，否则 dry-run 教的执行面
      * 又缺了一块（与下面那句 `get-issue` 是同一条理由：只写动作不写回读，就是把
      * 「回执即结论」教给读者）。 */
-    if (st.asMerged)
+    if (st.asMerged) {
       p.push(
         `cnb pulls get-pull --repo ${st.slug} --number ${st.asMerged} -v（认 data.is_merged 原值，不当结论直接用）`,
       );
+    }
     p.push(
       `cnb issues update-issue --repo ${st.slug} --number <n> --state closed --state-reason completed -v`,
     );
@@ -692,11 +727,11 @@ export function readProof(root, resolve = resolveGitDir) {
    * 注入只覆盖临时文件那一半，另一半点的是这台机器真实的 `.git` —— 「同一次跑里
    * git 目录指哪儿」就会有两套答案（用例里表现为本地绿、节点红）。 */
   const gitDir = resolve(root);
-  if (!gitDir) return null;
+  if (!gitDir) {
+    return null;
+  }
   try {
-    return JSON.parse(
-      fs.readFileSync(path.join(gitDir, "comfy-premerge-proof.json"), "utf8"),
-    );
+    return JSON.parse(fs.readFileSync(path.join(gitDir, "comfy-premerge-proof.json"), "utf8"));
   } catch {
     return null;
   }

@@ -48,7 +48,9 @@ export function ShotReviewDialog({
 
   /* 每次打开（或切到别的镜头）都重新评一次 —— 内容可能已被用户改过，旧判定不作数。 */
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     void review.review(shot.id);
     // 依赖只认「打开」与「目标镜头」；review 内部有作废守卫。
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -58,15 +60,17 @@ export function ShotReviewDialog({
   const busy = reviewing || regenerating;
 
   /* 校准读数（只读）：弹窗打开时拉一次本项目的「人评 ⇄ AI 评分」偏差。 */
-  const [calibration, setCalibration] = useState<CalibrationReport | null>(
-    null,
-  );
+  const [calibration, setCalibration] = useState<CalibrationReport | null>(null);
   useEffect(() => {
-    if (!open || !projectId) return;
+    if (!open || !projectId) {
+      return;
+    }
     let alive = true;
     fetchReviewCalibration(projectId)
       .then((r) => {
-        if (alive) setCalibration(r);
+        if (alive) {
+          setCalibration(r);
+        }
       })
       .catch(() => {
         /* 读数是点缀，拉不到就静默（不打断评审主流程）。 */
@@ -82,8 +86,7 @@ export function ShotReviewDialog({
         <DialogHeader>
           <DialogTitle>镜头评审 · {shot.name}</DialogTitle>
           <DialogDescription>
-            由 AI 对这一镜的文本内容（画面 /
-            提示词）做质检，不合格可抽卡或改提示词重生成。
+            由 AI 对这一镜的文本内容（画面 / 提示词）做质检，不合格可抽卡或改提示词重生成。
           </DialogDescription>
         </DialogHeader>
 
@@ -102,9 +105,7 @@ export function ShotReviewDialog({
           ) : error ? (
             <p className="text-destructive text-sm">{error}</p>
           ) : !verdict ? (
-            <p className="text-ink-fainter text-sm">
-              尚无评审结果，点「重新评审」开始。
-            </p>
+            <p className="text-ink-fainter text-sm">尚无评审结果，点「重新评审」开始。</p>
           ) : (
             <>
               <div className="flex items-center gap-2">
@@ -133,9 +134,7 @@ export function ShotReviewDialog({
               )}
 
               {verdict.suggestion && (
-                <p className="text-ink-fainter text-sm">
-                  建议：{verdict.suggestion}
-                </p>
+                <p className="text-ink-fainter text-sm">建议：{verdict.suggestion}</p>
               )}
             </>
           )}

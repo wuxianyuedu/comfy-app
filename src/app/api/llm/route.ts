@@ -58,13 +58,19 @@ const BodySchema = {
     const opts: LLMRequestOptions = {};
     // 原 `as any` 透传:非 "local"/"remote" 的值继续透传给 getLLMConfig(按非 remote 处理),
     // 加守卫反而会改变该退化行为,这里只恢复静态类型。
-    if (rec.provider) opts.provider = /* SAFETY: 类型断言已复核 */ rec.provider as LLMProviderType;
+    if (rec.provider) {
+      opts.provider = /* SAFETY: 类型断言已复核 */ rec.provider as LLMProviderType;
+    }
     if (rec.model) {
       const rawModel: unknown = rec.model;
       opts.model = String(rawModel);
     }
-    if (typeof rec.temperature === "number") opts.temperature = rec.temperature;
-    if (typeof rec.maxTokens === "number") opts.maxTokens = rec.maxTokens;
+    if (typeof rec.temperature === "number") {
+      opts.temperature = rec.temperature;
+    }
+    if (typeof rec.maxTokens === "number") {
+      opts.maxTokens = rec.maxTokens;
+    }
     if (typeof rec.taskType === "string" && rec.taskType in TASK_TYPES) {
       opts.taskType = /* SAFETY: 类型断言已复核 */ rec.taskType as TaskType;
     }
@@ -84,7 +90,9 @@ export async function POST(req: NextRequest) {
   /* 读体那一步走唯一出口（规范 16 §16.2.4.44）；**字段级**校验仍留给
    * `BodySchema` —— 它绑着 `LLMRequestOptions` 的语义，是这一域的判据。 */
   const body = await readJsonRecord(req);
-  if (isErrorResponse(body)) return body;
+  if (isErrorResponse(body)) {
+    return body;
+  }
 
   let parsed: Awaited<ReturnType<typeof BodySchema.parse>>;
   try {

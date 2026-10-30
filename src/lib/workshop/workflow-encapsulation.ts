@@ -108,7 +108,9 @@ export interface EncapsulatedInputs {
  *  只有一个「时长」口，落点由作者连线声明；单位是端口自己的事）。 */
 function durationPinUsesFrames(e: WorkflowIOEntry): boolean {
   const text = `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
-  if (/duration|seconds?|secs?|秒/.test(text)) return false;
+  if (/duration|seconds?|secs?|秒/.test(text)) {
+    return false;
+  }
   return /frames?|num_?frames|frame_?count|length|帧数/.test(text);
 }
 
@@ -125,7 +127,9 @@ function matchDurationOption(entry: WorkflowIOEntry, value: number): number | st
   const options = Array.isArray(entry.options)
     ? entry.options.filter((option): option is string => typeof option === "string")
     : [];
-  if (options.length === 0) return value;
+  if (options.length === 0) {
+    return value;
+  }
   const wanted = String(value);
   const exact = options.find((option) => option.trim() === wanted);
   if (exact !== undefined) {
@@ -137,7 +141,9 @@ function matchDurationOption(entry: WorkflowIOEntry, value: number): number | st
   let bestDist = Number.POSITIVE_INFINITY;
   for (const option of options) {
     const num = Number(option.trim());
-    if (option.trim() === "" || !Number.isFinite(num)) return undefined;
+    if (option.trim() === "" || !Number.isFinite(num)) {
+      return undefined;
+    }
     const dist = Math.abs(num - value);
     if (dist < bestDist) {
       best = num;
@@ -159,10 +165,14 @@ function durationValueFor(args: {
   const { io, resolved, values } = args;
   const target = resolved.duration;
   const port = target ? io[target] : undefined;
-  if (!port) return values.duration ?? values.frames;
+  if (!port) {
+    return values.duration ?? values.frames;
+  }
   const wantsFrames = durationPinUsesFrames(port);
   const raw = wantsFrames ? (values.frames ?? values.duration) : (values.duration ?? values.frames);
-  if (raw === undefined) return undefined;
+  if (raw === undefined) {
+    return undefined;
+  }
   const matched = matchDurationOption(port, raw);
   return typeof matched === "number" ? matched : undefined;
 }
@@ -183,8 +193,12 @@ function toContractValues(args: {
   const { io, mode, values, resolved, entries } = args;
   const out: Record<string, unknown> = {};
 
-  if (values.prompt !== undefined) out.prompt = values.prompt;
-  if (values.negativePrompt !== undefined) out.negative = values.negativePrompt;
+  if (values.prompt !== undefined) {
+    out.prompt = values.prompt;
+  }
+  if (values.negativePrompt !== undefined) {
+    out.negative = values.negativePrompt;
+  }
 
   /* 尺寸：工坊给的是「比例 + 档位（+ 倍数）」，映射层按**落点子口身份**派成各自
    *  认的形状（宽 / 高 / 比例标签 / 像素量 / 分辨率档 / 倍数）—— 换算只此一处，
@@ -201,23 +215,33 @@ function toContractValues(args: {
    *  那一行上。 */
   const refs = values.referenceImages ?? [];
   const firstFrame = values.firstFrame ?? refs[0];
-  if (firstFrame !== undefined) out["first-frame"] = firstFrame;
-  if (values.lastFrame !== undefined) out["last-frame"] = values.lastFrame;
+  if (firstFrame !== undefined) {
+    out["first-frame"] = firstFrame;
+  }
+  if (values.lastFrame !== undefined) {
+    out["last-frame"] = values.lastFrame;
+  }
   /* 参考图按契约顺序一一对应（第一张不带序号）。 */
   const referenceIds = entries
     .filter((entry) => entry.cls === "reference-image")
     .map((entry) => entry.id);
   referenceIds.forEach((id, index) => {
     const ref = refs[index];
-    if (ref !== undefined) out[id] = ref;
+    if (ref !== undefined) {
+      out[id] = ref;
+    }
   });
 
   const duration = durationValueFor({ io, resolved, values });
-  if (duration !== undefined) out.duration = duration;
+  if (duration !== undefined) {
+    out.duration = duration;
+  }
 
   /* 种子：调用方（如「抽卡重生成」）给一个 seed 值，落到作者连的「种子」口上；
    *  作者没连这一口 → applyParamMapping 如实报进 unmatched，工作流用其图内 seed。 */
-  if (values.seed !== undefined) out.seed = values.seed;
+  if (values.seed !== undefined) {
+    out.seed = values.seed;
+  }
 
   /* 自定义口：值已经是「契约口 id → 值」的形状，原样并入 —— 这些 id 只在生效
    *  契约里存在，没有业务语义可翻译（作者起的名字就是全部语义）。落不下去的
@@ -232,9 +256,13 @@ function toContractValues(args: {
 /** 契约口 id → 对外值里对应的参考图槽位（`reference-image` = 0，`-2` = 1…）。
  *  非参考图口返回 -1。 */
 function referenceSlotOf(id: string): number {
-  if (id === "reference-image") return 0;
+  if (id === "reference-image") {
+    return 0;
+  }
   const matched = /^reference-image-(\d+)$/.exec(id);
-  if (!matched) return -1;
+  if (!matched) {
+    return -1;
+  }
   return Math.max(0, Number(matched[1]) - 1);
 }
 
@@ -245,15 +273,29 @@ function referenceSlotOf(id: string): number {
  *  读写各写一遍会让「表单上显示的那一口」与「真正下发下去的值」对不上，
  *  所以两个方向共用这一份映射（尺寸 / 时长各有自己的控件，不走这里）。 */
 export function exposedValueOf(values: WorkshopExposedValues, id: string): string {
-  if (id === "prompt") return values.prompt ?? "";
-  if (id === "negative") return values.negativePrompt ?? "";
-  if (id === "first-frame") return values.firstFrame ?? "";
-  if (id === "last-frame") return values.lastFrame ?? "";
-  if (id === "seed") return values.seed === undefined ? "" : String(values.seed);
+  if (id === "prompt") {
+    return values.prompt ?? "";
+  }
+  if (id === "negative") {
+    return values.negativePrompt ?? "";
+  }
+  if (id === "first-frame") {
+    return values.firstFrame ?? "";
+  }
+  if (id === "last-frame") {
+    return values.lastFrame ?? "";
+  }
+  if (id === "seed") {
+    return values.seed === undefined ? "" : String(values.seed);
+  }
   /* 自定义口：值按 id 收在 `custom` 里（界面按文本显示它的当前内容）。 */
-  if (exposedCustomKindOf(id)) return String(values.custom?.[id] ?? "");
+  if (exposedCustomKindOf(id)) {
+    return String(values.custom?.[id] ?? "");
+  }
   const slot = referenceSlotOf(id);
-  if (slot < 0) return "";
+  if (slot < 0) {
+    return "";
+  }
   return values.referenceImages?.[slot] ?? "";
 }
 
@@ -271,10 +313,18 @@ export function withExposedValue(
     return { ...values, custom: { ...(values.custom ?? {}), [id]: next } };
   }
   const text = typeof next === "string" ? next : String(next);
-  if (id === "prompt") return { ...values, prompt: text };
-  if (id === "negative") return { ...values, negativePrompt: text };
-  if (id === "first-frame") return { ...values, firstFrame: text };
-  if (id === "last-frame") return { ...values, lastFrame: text };
+  if (id === "prompt") {
+    return { ...values, prompt: text };
+  }
+  if (id === "negative") {
+    return { ...values, negativePrompt: text };
+  }
+  if (id === "first-frame") {
+    return { ...values, firstFrame: text };
+  }
+  if (id === "last-frame") {
+    return { ...values, lastFrame: text };
+  }
   /* 种子是数值口：写数字（空串 / 非数字 → 清掉该值，回落工作流图内 seed）。 */
   if (id === "seed") {
     if (typeof next === "number") {
@@ -284,12 +334,16 @@ export function withExposedValue(
       };
     }
     const t = next.trim();
-    if (t === "") return { ...values, seed: undefined };
+    if (t === "") {
+      return { ...values, seed: undefined };
+    }
     const n = Number(t);
     return { ...values, seed: Number.isFinite(n) ? Math.trunc(n) : undefined };
   }
   const slot = referenceSlotOf(id);
-  if (slot < 0) return values;
+  if (slot < 0) {
+    return values;
+  }
   const refs = [...(values.referenceImages ?? [])];
   refs[slot] = text;
   return { ...values, referenceImages: refs };
@@ -305,22 +359,40 @@ export function pruneEmptyExposedValues(values: WorkshopExposedValues): Workshop
   const out: WorkshopExposedValues = {};
   const text = (v: string | undefined) => (v !== undefined && v.trim() !== "" ? v : undefined);
   const prompt = text(values.prompt);
-  if (prompt !== undefined) out.prompt = prompt;
+  if (prompt !== undefined) {
+    out.prompt = prompt;
+  }
   const negative = text(values.negativePrompt);
-  if (negative !== undefined) out.negativePrompt = negative;
+  if (negative !== undefined) {
+    out.negativePrompt = negative;
+  }
   const firstFrame = text(values.firstFrame);
-  if (firstFrame !== undefined) out.firstFrame = firstFrame;
+  if (firstFrame !== undefined) {
+    out.firstFrame = firstFrame;
+  }
   const lastFrame = text(values.lastFrame);
-  if (lastFrame !== undefined) out.lastFrame = lastFrame;
+  if (lastFrame !== undefined) {
+    out.lastFrame = lastFrame;
+  }
   const refs = (values.referenceImages ?? []).filter(
     (ref): ref is string => typeof ref === "string" && ref.trim() !== "",
   );
-  if (refs.length > 0) out.referenceImages = refs;
-  if (values.size !== undefined) out.size = values.size;
-  if (values.duration !== undefined) out.duration = values.duration;
-  if (values.frames !== undefined) out.frames = values.frames;
+  if (refs.length > 0) {
+    out.referenceImages = refs;
+  }
+  if (values.size !== undefined) {
+    out.size = values.size;
+  }
+  if (values.duration !== undefined) {
+    out.duration = values.duration;
+  }
+  if (values.frames !== undefined) {
+    out.frames = values.frames;
+  }
   /* 种子：数字，`0` 是有效值，不能按假值剪掉；只在给了的时候保留。 */
-  if (values.seed !== undefined) out.seed = values.seed;
+  if (values.seed !== undefined) {
+    out.seed = values.seed;
+  }
   /* 自定义口：空串当「没给」（与上面几条同一口径）；数字原样保留 —— `0` 是
    *  一个有效值，不能按「假值」剪掉。 */
   const custom: Record<string, string | number> = {};
@@ -330,9 +402,13 @@ export function pruneEmptyExposedValues(values: WorkshopExposedValues): Workshop
       continue;
     }
     const trimmed = value.trim();
-    if (trimmed !== "") custom[id] = trimmed;
+    if (trimmed !== "") {
+      custom[id] = trimmed;
+    }
   }
-  if (Object.keys(custom).length > 0) out.custom = custom;
+  if (Object.keys(custom).length > 0) {
+    out.custom = custom;
+  }
   return out;
 }
 
@@ -408,13 +484,17 @@ export function buildEncapsulatedInputs(args: {
   if (sizeIds.length > 0 && values.size !== undefined) {
     const landed = sizeIds.some((id) => resolved[id] !== undefined && !reported.has(id));
     sizeIds.forEach((id) => reported.delete(id));
-    if (!landed) reported.add("size");
+    if (!landed) {
+      reported.add("size");
+    }
   }
   /* 自定义口同理：给了值而**生效契约里没有这个口**（作者刚把它从契约里删掉，
    * 而调用方还在按旧清单给值）映射层看不见 —— 在这里补报，否则用户会以为值
    * 已经下发下去了。 */
   for (const id of Object.keys(values.custom ?? {})) {
-    if (!hasEntry(id)) reported.add(id);
+    if (!hasEntry(id)) {
+      reported.add(id);
+    }
   }
   return { workflowInputs: inputs, unmatched: [...reported] };
 }
@@ -451,12 +531,16 @@ function unmatchedLabel(id: string): string {
  *  静默就是「改了没反应」（规范 10 §10.3.1 降级不得静默）—— 调用方拿到
  *  非空结果必须展示给用户。 */
 export function describeUnmatchedInputs(unmatched: ReadonlyArray<string>): string | null {
-  if (unmatched.length === 0) return null;
+  if (unmatched.length === 0) {
+    return null;
+  }
   const seen = new Set<string>();
   const labels: Array<string> = [];
   for (const id of unmatched) {
     const label = unmatchedLabel(id);
-    if (seen.has(label)) continue;
+    if (seen.has(label)) {
+      continue;
+    }
     seen.add(label);
     labels.push(label);
   }

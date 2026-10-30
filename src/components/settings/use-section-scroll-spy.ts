@@ -112,16 +112,22 @@ export function useSectionScrollSpy<Id extends string>({
   const refsRef = useRef(new Map<Id, (el: HTMLElement | null) => void>());
   const registerSection = useCallback((sectionId: Id) => {
     const cached = refsRef.current.get(sectionId);
-    if (cached) return cached;
+    if (cached) {
+      return cached;
+    }
     const ref = (el: HTMLElement | null) => {
       const prev = nodesRef.current.get(sectionId);
       /* 判等：`ref` 回调在每次渲染后都会被 React 调一次（先 null 再元素），
        * 不判等会让 `revision` 每轮自增。 */
       if (el) {
-        if (prev === el) return;
+        if (prev === el) {
+          return;
+        }
         nodesRef.current.set(sectionId, el);
       } else {
-        if (prev === undefined) return;
+        if (prev === undefined) {
+          return;
+        }
         nodesRef.current.delete(sectionId);
         crossedRef.current.delete(prev);
       }
@@ -136,27 +142,35 @@ export function useSectionScrollSpy<Id extends string>({
     /* jsdom 与老浏览器没有 `IntersectionObserver`：不做跟随，导航仍可点
      *（点击走 `scrollToSection`，不依赖观察器）。与 `useElementBox` 对
      * `ResizeObserver` 的退化口径一致 —— 不假装跟随生效，也不报错。 */
-    if (!root || typeof IntersectionObserver === "undefined") return;
+    if (!root || typeof IntersectionObserver === "undefined") {
+      return;
+    }
 
     const byId = nodesRef.current;
     const crossed = crossedRef.current;
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (entry.isIntersecting)
+          if (entry.isIntersecting) {
             crossed.add(/* SAFETY: 类型断言已复核 */ entry.target as HTMLElement);
-          else crossed.delete(/* SAFETY: 类型断言已复核 */ entry.target as HTMLElement);
+          } else {
+            crossed.delete(/* SAFETY: 类型断言已复核 */ entry.target as HTMLElement);
+          }
         }
         /* 按**文档顺序**自己排一遍取最后一个：`entries` 的次序不保证，
          * 不能拿浏览器给的那一个当结论。 */
         let next: Id | null = null;
         for (const id of sectionIds) {
           const el = byId.get(id);
-          if (el && crossed.has(el)) next = id;
+          if (el && crossed.has(el)) {
+            next = id;
+          }
         }
         /* 没有任何分区越过顶线（整页刚滚到最顶、第一节还没到线）时保留当前值
          * —— 跟随的语义是「读到了哪一节」，不是「暂时没有」。 */
-        if (next === null || next === activeRef.current) return;
+        if (next === null || next === activeRef.current) {
+          return;
+        }
         activeRef.current = next;
         notifyRef.current(next);
       },
@@ -171,7 +185,9 @@ export function useSectionScrollSpy<Id extends string>({
 
     for (const id of sectionIds) {
       const el = byId.get(id);
-      if (el) observer.observe(el);
+      if (el) {
+        observer.observe(el);
+      }
     }
     return () => observer.disconnect();
   }, [containerRef, sectionIds, revision]);
@@ -179,7 +195,9 @@ export function useSectionScrollSpy<Id extends string>({
   const scrollToSection = useCallback(
     (sectionId: Id, behavior: ScrollBehavior = "smooth"): boolean => {
       const el = nodesRef.current.get(sectionId);
-      if (!el) return false;
+      if (!el) {
+        return false;
+      }
       /* 先改高亮再滚：滚动是动画的，等高亮跟着滚落定会有肉眼可见的滞后。 */
       if (sectionId !== activeRef.current) {
         activeRef.current = sectionId;

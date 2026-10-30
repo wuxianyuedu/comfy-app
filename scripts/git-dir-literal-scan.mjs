@@ -41,11 +41,15 @@ function collect(dir, out = []) {
     const full = path.join(dir, name);
     const st = fs.statSync(full);
     if (st.isDirectory()) {
-      if (name === "node_modules") continue;
+      if (name === "node_modules") {
+        continue;
+      }
       collect(full, out);
       continue;
     }
-    if (name.endsWith(".mjs")) out.push(full);
+    if (name.endsWith(".mjs")) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -57,10 +61,14 @@ function collect(dir, out = []) {
 const offenders = [];
 for (const file of collect(SCRIPTS)) {
   const rel = path.relative(ROOT, file).split(path.sep).join("/");
-  if (WHITELIST.has(rel)) continue;
+  if (WHITELIST.has(rel)) {
+    continue;
+  }
   const src = fs.readFileSync(file, "utf8");
   src.split("\n").forEach((line, i) => {
-    if (re.test(line)) offenders.push(`${rel}:${i + 1}: ${line.trim()}`);
+    if (re.test(line)) {
+      offenders.push(`${rel}:${i + 1}: ${line.trim()}`);
+    }
   });
 }
 
@@ -72,8 +80,7 @@ if (offenders.length) {
   process.exit(1);
 }
 
-const msg =
-  "[git-dir-literal-scan] OK：检出子目录字面量只存在于 scripts/git-dir.mjs";
+const msg = "[git-dir-literal-scan] OK：检出子目录字面量只存在于 scripts/git-dir.mjs";
 if (process.argv.includes("--json")) {
   process.stdout.write(JSON.stringify({ ok: true, offenders: [] }));
 } else {

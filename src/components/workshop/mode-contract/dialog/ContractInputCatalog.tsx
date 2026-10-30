@@ -66,7 +66,9 @@ export function ContractInputCatalog({
 
   const submitCustom = () => {
     const name = draftName.trim();
-    if (!name) return;
+    if (!name) {
+      return;
+    }
     onAddCustom(name, draftKind);
     setDraftName("");
     setAdding(false);
@@ -124,7 +126,9 @@ export function ContractInputCatalog({
                     event.currentTarget.value = def.label;
                     return;
                   }
-                  if (next !== def.label) onRenameCustom(def.id, next);
+                  if (next !== def.label) {
+                    onRenameCustom(def.id, next);
+                  }
                 }}
                 aria-label={`${def.label} 的名称`}
                 className="h-7 min-w-0 flex-1 border-none bg-transparent px-0 text-xs shadow-none"

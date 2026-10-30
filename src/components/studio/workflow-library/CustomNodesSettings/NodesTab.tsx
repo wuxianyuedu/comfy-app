@@ -120,7 +120,9 @@ function NodeCardList({
       >
         {virtualizer.getVirtualItems().map((vi) => {
           const ct = nodeTypeList[vi.index];
-          if (ct === undefined) return null;
+          if (ct === undefined) {
+            return null;
+          }
           return (
             <div
               key={vi.key}

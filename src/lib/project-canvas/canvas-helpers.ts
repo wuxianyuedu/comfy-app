@@ -122,10 +122,16 @@ export function applyPropagationToNodes(
   const { srcData: src, outEdges, importedFile } = opts;
 
   return nodes.map((node) => {
-    if (node.id === sourceId) return node;
-    if (!isCanvasNode(node)) return node;
+    if (node.id === sourceId) {
+      return node;
+    }
+    if (!isCanvasNode(node)) {
+      return node;
+    }
     const edge = outEdges.find((outEdge) => outEdge.target === node.id);
-    if (!edge) return node;
+    if (!edge) {
+      return node;
+    }
     const td = node.data;
 
     // 连线传入自定义工作流节点：按 ioKey 把上游输出写进 workflowInputs，
@@ -133,11 +139,13 @@ export function applyPropagationToNodes(
     if (td.kind === "workflow" && edge.targetHandle) {
       const key = edge.targetHandle;
       let stored: unknown = undefined;
-      if (src.kind === "text" && src.content?.trim()) stored = src.content;
-      else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath)
+      if (src.kind === "text" && src.content?.trim()) {
+        stored = src.content;
+      } else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath) {
         stored = src.mediaPath;
-      else if (src.resultPath && src.resultMediaType !== "video" && importedFile)
+      } else if (src.resultPath && src.resultMediaType !== "video" && importedFile) {
         stored = importedFile;
+      }
       if (stored !== undefined) {
         return {
           ...node,
@@ -182,22 +190,32 @@ export function applyPropagationToNodes(
       case "prompt":
         // 文本载体节点喂它自己的自由文本；其它节点则喂 prompt 字段。
         if (src.kind === "text") {
-          if (src.content?.trim()) next.prompt = src.content;
+          if (src.content?.trim()) {
+            next.prompt = src.content;
+          }
         } else if (src.prompt?.trim()) {
           next.prompt = src.prompt;
         }
         break;
       case "negative":
-        if (src.negative?.trim()) next.negative = src.negative;
+        if (src.negative?.trim()) {
+          next.negative = src.negative;
+        }
         break;
       case "steps":
-        if (src.steps != null) next.steps = src.steps;
+        if (src.steps != null) {
+          next.steps = src.steps;
+        }
         break;
       case "cfg":
-        if (src.cfg != null) next.cfg = src.cfg;
+        if (src.cfg != null) {
+          next.cfg = src.cfg;
+        }
         break;
       case "seed":
-        if (src.seed?.trim()) next.seed = src.seed;
+        if (src.seed?.trim()) {
+          next.seed = src.seed;
+        }
         break;
       case "inputImage":
       default:
@@ -205,15 +223,23 @@ export function applyPropagationToNodes(
           next.inputImage = importedFile;
           next.upstreamId = sourceId;
           // 自动切换消费端模式，让喂进来的图片真正被用上
-          if (next.kind === "image" && next.mode === "txt2img") next.mode = "img2img";
-          if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
+          if (next.kind === "image" && next.mode === "txt2img") {
+            next.mode = "img2img";
+          }
+          if (next.kind === "video" && next.mode === "t2v") {
+            next.mode = "i2v";
+          }
         } else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath) {
           // 内容载体本来就住在 ComfyUI 的 input 目录里，
           // 因此不必重新导入 —— 直接接上现成的文件名即可。
           next.inputImage = src.mediaPath;
           next.upstreamId = sourceId;
-          if (next.kind === "image" && next.mode === "txt2img") next.mode = "img2img";
-          if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
+          if (next.kind === "image" && next.mode === "txt2img") {
+            next.mode = "img2img";
+          }
+          if (next.kind === "video" && next.mode === "t2v") {
+            next.mode = "i2v";
+          }
         }
         break;
     }

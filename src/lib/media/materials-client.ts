@@ -53,7 +53,9 @@ const ENDPOINT = "/api/materials";
  * 自己声明了一份 `readMaterialError`，与 bgm / upload 两份**逐字相同**。 */
 
 function isItem(v: unknown): v is MaterialItem {
-  if (!isRecord(v)) return false;
+  if (!isRecord(v)) {
+    return false;
+  }
   return (
     typeof v.id === "string" &&
     typeof v.name === "string" &&
@@ -68,12 +70,16 @@ function isItem(v: unknown): v is MaterialItem {
 }
 
 function isFolder(v: unknown): v is MaterialFolder {
-  if (!isRecord(v)) return false;
+  if (!isRecord(v)) {
+    return false;
+  }
   return typeof v.id === "string" && typeof v.name === "string" && typeof v.count === "number";
 }
 
 function parseList(body: unknown): MaterialListResult {
-  if (!isRecord(body)) return { folders: [], items: [] };
+  if (!isRecord(body)) {
+    return { folders: [], items: [] };
+  }
   const foldersRaw = body.folders;
   const itemsRaw = body.items;
   return {
@@ -97,7 +103,9 @@ export async function fetchMaterials(query: MaterialListQuery): Promise<Material
     }),
   );
   const body = await readJsonBody(res);
-  if (!res.ok) throw new Error(readApiError(body) ?? `请求失败 (${res.status})`);
+  if (!res.ok) {
+    throw new Error(readApiError(body) ?? `请求失败 (${res.status})`);
+  }
   return parseList(body);
 }
 
@@ -109,12 +117,17 @@ async function postMaterial(
   const fd = new FormData();
   fd.append("file", file);
   fd.append("folder", opts.folder);
-  if (opts.projectId) fd.append("projectId", opts.projectId);
-  else fd.append("shared", "true");
+  if (opts.projectId) {
+    fd.append("projectId", opts.projectId);
+  } else {
+    fd.append("shared", "true");
+  }
 
   const res = await fetch(ENDPOINT, { method: "POST", body: fd });
   const body = await readJsonBody(res);
-  if (!res.ok) throw new Error(readApiError(body) ?? `上传失败 (${res.status})`);
+  if (!res.ok) {
+    throw new Error(readApiError(body) ?? `上传失败 (${res.status})`);
+  }
   return body;
 }
 
@@ -144,7 +157,9 @@ export async function uploadMaterialItem(
   const body = await postMaterial(file, opts);
   const item = isRecord(body) ? body.item : undefined;
   const url = isRecord(item) && typeof item.url === "string" ? item.url : "";
-  if (!url) throw new Error("上传成功但服务端未返回素材地址");
+  if (!url) {
+    throw new Error("上传成功但服务端未返回素材地址");
+  }
   return {
     url,
     id: isRecord(item) && typeof item.id === "string" ? item.id : url,
@@ -158,5 +173,7 @@ export async function deleteMaterial(id: string): Promise<void> {
     method: "DELETE",
   });
   const body = await readJsonBody(res);
-  if (!res.ok) throw new Error(readApiError(body) ?? `删除失败 (${res.status})`);
+  if (!res.ok) {
+    throw new Error(readApiError(body) ?? `删除失败 (${res.status})`);
+  }
 }

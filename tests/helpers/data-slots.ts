@@ -19,10 +19,15 @@ const SRC_DIR = fileURLToPath(new URL("../../src", import.meta.url));
 function walk(dir: string): Array<string> {
   const out: Array<string> = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name.startsWith(".")) continue;
+    if (entry.name.startsWith(".")) {
+      continue;
+    }
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...walk(full));
-    else if (/\.(tsx|ts)$/.test(entry.name)) out.push(full);
+    if (entry.isDirectory()) {
+      out.push(...walk(full));
+    } else if (/\.(tsx|ts)$/.test(entry.name)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -38,7 +43,9 @@ export function collectDataSlots(): { slots: Set<string>; files: number } {
   for (const file of files) {
     const text = readFileSync(file, "utf8");
     for (const m of text.matchAll(/data-slot="([^"]+)"/g)) {
-      if (m[1]) slots.add(m[1]);
+      if (m[1]) {
+        slots.add(m[1]);
+      }
     }
   }
   return { slots, files: files.length };

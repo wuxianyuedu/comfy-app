@@ -298,8 +298,9 @@ describe("决定写不写：②去重键是「格名」，不是整条标题", (
     const day1 = titleOf("每日单元测试", "cnb-aaa-111", "2026-10-24T11:40:05.000Z");
     const day2 = titleOf("每日单元测试", "cnb-bbb-222", "2026-10-25T16:00:22.000Z");
     expect(day2).not.toBe(day1);
-    for (const want of ["cnb-bbb-222", "crontab: 0 0 * * *", "2026-10-25T16:00:22.000Z"])
+    for (const want of ["cnb-bbb-222", "crontab: 0 0 * * *", "2026-10-25T16:00:22.000Z"]) {
       expect(day2).toContain(want);
+    }
     expect(day2).toContain(titleKey("每日单元测试"));
     const act = decideAction({
       state: "failed",
@@ -310,8 +311,9 @@ describe("决定写不写：②去重键是「格名」，不是整条标题", (
   });
 
   it("去重键里不含构建号 / 事件 / 时刻（它们只能进标题）", () => {
-    for (const part of ["cnb-", "crontab", "T11:40"])
+    for (const part of ["cnb-", "crontab", "T11:40"]) {
       expect(titleKey("每日单元测试")).not.toContain(part);
+    }
   });
 
   it("换了另一格红 ⇒ 新建一张（一格一单，不往别人的单上记）", () => {
@@ -461,9 +463,15 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
           stderr: "",
           error: null,
         });
-        if (key.includes("get-build-logs")) return json([build("sn-live")]);
-        if (key.includes("get-build-status")) return json(detail("failed").data);
-        if (key.includes("list-issues")) return json([]);
+        if (key.includes("get-build-logs")) {
+          return json([build("sn-live")]);
+        }
+        if (key.includes("get-build-status")) {
+          return json(detail("failed").data);
+        }
+        if (key.includes("list-issues")) {
+          return json([]);
+        }
         return json({});
       },
     });
@@ -530,17 +538,21 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
         const at = args.indexOf("--page");
         const n = Number(args[at + 1] ?? "1");
         const rows = input.pages[n];
-        if (rows === null || rows === undefined)
+        if (rows === null || rows === undefined) {
           return { status: 1, stdout: "", stderr: "boom", error: null };
+        }
         return json({ total: rows.length, data: rows });
       }
       if (key.includes("get-build-status")) {
         const sn = String(args[args.indexOf("--sn") + 1] ?? "");
         return json(detail(input.detailsBySn[sn] ?? "running").data);
       }
-      if (key.includes("list-issues")) return json(input.openIssues);
-      if (key.includes("list-issue-comments"))
+      if (key.includes("list-issues")) {
+        return json(input.openIssues);
+      }
+      if (key.includes("list-issue-comments")) {
         return json((input.comments ?? ["sn-prev"]).map((body) => ({ body })));
+      }
       return json({});
     };
     return { run, calls };
@@ -590,7 +602,9 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
   it("翻到上界仍盖不住窗口 ⇒ 一个字都不写，且那句是「没盖住」而不是「没有红」", () => {
     const live = build("sn-live");
     const pages: Record<number, Array<ListBuild> | null> = {};
-    for (let p = 1; p <= 20; p += 1) pages[p] = pageRows(60, 0.1, 8, [live]);
+    for (let p = 1; p <= 20; p += 1) {
+      pages[p] = pageRows(60, 0.1, 8, [live]);
+    }
     const { run, calls } = fakePlatform({
       pages,
       detailsBySn: { "sn-live": "running" },

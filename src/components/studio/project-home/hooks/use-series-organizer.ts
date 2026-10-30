@@ -75,7 +75,9 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const invalidateEpisodes = (sid: string) =>
     void qc.invalidateQueries(trpc.series.episodes.queryFilter({ seasonId: sid }));
   const invalidateCurrent = () => {
-    if (projectId) void qc.invalidateQueries(trpc.series.byProject.queryFilter({ projectId }));
+    if (projectId) {
+      void qc.invalidateQueries(trpc.series.byProject.queryFilter({ projectId }));
+    }
   };
 
   const createSeries = useMutation(
@@ -97,21 +99,27 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const createSeason = useMutation(
     trpc.series.createSeason.mutationOptions({
       onSuccess: () => {
-        if (seriesId) invalidateSeasons(seriesId);
+        if (seriesId) {
+          invalidateSeasons(seriesId);
+        }
       },
     }),
   );
   const updateSeason = useMutation(
     trpc.series.updateSeason.mutationOptions({
       onSuccess: () => {
-        if (seriesId) invalidateSeasons(seriesId);
+        if (seriesId) {
+          invalidateSeasons(seriesId);
+        }
       },
     }),
   );
   const deleteSeason = useMutation(
     trpc.series.deleteSeason.mutationOptions({
       onSuccess: () => {
-        if (seriesId) invalidateSeasons(seriesId);
+        if (seriesId) {
+          invalidateSeasons(seriesId);
+        }
         setSeasonId(null);
       },
     }),
@@ -120,21 +128,27 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const createEpisode = useMutation(
     trpc.series.createEpisode.mutationOptions({
       onSuccess: () => {
-        if (seasonId) invalidateEpisodes(seasonId);
+        if (seasonId) {
+          invalidateEpisodes(seasonId);
+        }
       },
     }),
   );
   const updateEpisode = useMutation(
     trpc.series.updateEpisode.mutationOptions({
       onSuccess: () => {
-        if (seasonId) invalidateEpisodes(seasonId);
+        if (seasonId) {
+          invalidateEpisodes(seasonId);
+        }
       },
     }),
   );
   const deleteEpisode = useMutation(
     trpc.series.deleteEpisode.mutationOptions({
       onSuccess: () => {
-        if (seasonId) invalidateEpisodes(seasonId);
+        if (seasonId) {
+          invalidateEpisodes(seasonId);
+        }
         setEpisodeId(null);
       },
     }),
@@ -172,7 +186,9 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     renameEpisode: (id, title) => updateEpisode.mutate({ id, title }),
     deleteEpisode: (id) => deleteEpisode.mutate({ id }),
     assignCurrentProject: (epid) => {
-      if (!projectId) return;
+      if (!projectId) {
+        return;
+      }
       assignProject.mutate({ episodeId: epid, projectId });
     },
   };

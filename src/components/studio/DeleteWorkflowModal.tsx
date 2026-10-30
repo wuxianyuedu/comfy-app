@@ -31,15 +31,13 @@ export function DeleteWorkflowModal({
       /* 确认中不许关：与旧实现「`deleting` 期间遮罩点击被阻断」同义 ——
          请求已经发出，中途撤掉弹窗会让结果无处落地。 */
       onClose={() => {
-        if (!deleting) onCancel();
+        if (!deleting) {
+          onCancel();
+        }
       }}
       danger
       title="删除工作流"
-      description={
-        pendingDelete
-          ? `确认删除「${pendingDelete.name}」？此操作不可撤销。`
-          : ""
-      }
+      description={pendingDelete ? `确认删除「${pendingDelete.name}」？此操作不可撤销。` : ""}
       confirmLabel="确认删除"
       cancelLabel="取消"
       pending={deleting}

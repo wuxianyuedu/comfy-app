@@ -84,9 +84,7 @@ function readLedger() {
   }
   const carriers = parsed?.carriers;
   if (!Array.isArray(carriers)) {
-    problems.push(
-      "索引里 `carriers` 不是数组（判据不许静默降级，见 §11.23.3）",
-    );
+    problems.push("索引里 `carriers` 不是数组（判据不许静默降级，见 §11.23.3）");
     return null;
   }
   if (carriers.length < MIN_CARRIERS) {
@@ -106,7 +104,9 @@ function hookStepLabels() {
   const src = fs.readFileSync(HOOK, "utf8");
   const out = new Set();
   // 步骤行形如：  run "标签" node scripts/x.cjs …
-  for (const m of src.matchAll(/^\s*run\s+"([^"]+)"/gm)) out.add(m[1]);
+  for (const m of src.matchAll(/^\s*run\s+"([^"]+)"/gm)) {
+    out.add(m[1]);
+  }
   return out;
 }
 
@@ -123,7 +123,9 @@ function hookStepLabels() {
 function fixedStructuralTests() {
   const src = fs.readFileSync(FIXED_LIST, "utf8");
   const at = src.search(/FIXED_STRUCTURAL_TESTS\s*=\s*\[/);
-  if (at < 0) return null;
+  if (at < 0) {
+    return null;
+  }
   const open = src.indexOf("[", at);
   let depth = 0;
   let quote = null;
@@ -131,13 +133,18 @@ function fixedStructuralTests() {
   for (let i = open; i < src.length; i++) {
     const ch = src[i];
     if (quote) {
-      if (ch === "\\") i++;
-      else if (ch === quote) quote = null;
+      if (ch === "\\") {
+        i++;
+      } else if (ch === quote) {
+        quote = null;
+      }
       continue;
     }
-    if (ch === '"' || ch === "'" || ch === "`") quote = ch;
-    else if (ch === "[") depth++;
-    else if (ch === "]") {
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+    } else if (ch === "[") {
+      depth++;
+    } else if (ch === "]") {
       depth--;
       if (depth === 0) {
         end = i;
@@ -145,7 +152,9 @@ function fixedStructuralTests() {
       }
     }
   }
-  if (end < 0) return null;
+  if (end < 0) {
+    return null;
+  }
   const body = src.slice(open + 1, end);
   return new Set([...body.matchAll(/"([^"\n]+)"/g)].map((x) => x[1]));
 }
@@ -170,7 +179,9 @@ function npmScripts() {
     return null;
   }
   const scripts = parsed?.scripts;
-  if (!scripts || typeof scripts !== "object") return null;
+  if (!scripts || typeof scripts !== "object") {
+    return null;
+  }
   return new Set(Object.keys(scripts));
 }
 
@@ -189,21 +200,19 @@ if (carriers) {
     );
   }
   if (scripts === null) {
-    problems.push(
-      "解析不出 `package.json` 的 `scripts` —— 判据不许静默降级（§11.23.3）",
-    );
+    problems.push("解析不出 `package.json` 的 `scripts` —— 判据不许静默降级（§11.23.3）");
   }
 
   const seen = new Set();
   for (const c of carriers) {
     const id = c?.id ?? "(缺 id)";
     if (!c?.id || !c?.name || !c?.reader || !c?.section || !c?.executor) {
-      problems.push(
-        `索引行 ${id} 字段不全（需要 id / name / reader / section / executor）`,
-      );
+      problems.push(`索引行 ${id} 字段不全（需要 id / name / reader / section / executor）`);
       continue;
     }
-    if (seen.has(c.id)) problems.push(`索引里 id 重复：${c.id}`);
+    if (seen.has(c.id)) {
+      problems.push(`索引里 id 重复：${c.id}`);
+    }
     seen.add(c.id);
 
     // ① 读者存在
@@ -242,9 +251,7 @@ if (carriers) {
         );
       }
     } else {
-      problems.push(
-        `「${c.name}」的 executor.kind 只能是 hook-step / fixed-test / npm-script`,
-      );
+      problems.push(`「${c.name}」的 executor.kind 只能是 hook-step / fixed-test / npm-script`);
     }
 
     report.push(
@@ -275,6 +282,4 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-process.stdout.write(
-  `声明 ⇄ 读者：${carriers.length} 种声明的读者与执行者都在场\n`,
-);
+process.stdout.write(`声明 ⇄ 读者：${carriers.length} 种声明的读者与执行者都在场\n`);

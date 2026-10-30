@@ -104,9 +104,13 @@ export function ExtractToolbar({
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [history, setHistory] = React.useState<Array<PersistableGenerationLog> | null>(null);
   const loadHistory = () => {
-    if (!logStage) return;
+    if (!logStage) {
+      return;
+    }
     setHistoryOpen(true);
-    if (history) return;
+    if (history) {
+      return;
+    }
     void fetchGenerationLogs(logStage, 100).then(setHistory);
   };
 

@@ -143,14 +143,18 @@ export function copyGateDeps(
   const seen = new Set<string>();
   while (pending.length > 0) {
     const abs = pending.shift()!;
-    if (seen.has(abs)) continue;
+    if (seen.has(abs)) {
+      continue;
+    }
     seen.add(abs);
     const src = readFileSync(abs, "utf8");
     const names = DEP_RES.flatMap((re) => [...src.matchAll(re)].map((m) => m[1]!));
     for (const name of names) {
       const source = path.join(REPO_ROOT, "scripts", name);
       const dest = path.join(destDir, name);
-      if (!existsSync(source)) continue;
+      if (!existsSync(source)) {
+        continue;
+      }
       /* 已存在的目标**不覆盖**（用例自己写的夹具 / `DEP` 那份优先），但仍然要**走进去**
        * 看它自己还有什么依赖 —— 只补「缺的文件」而不遍历已有文件，会在
        * 「脚本 A + 手工带上的 B」这种布局里漏掉 B 的传递依赖（实测就撞上过一次：
@@ -399,14 +403,18 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
   chmodSync(scriptDir, 0o777);
   copyFileSync(scriptSource, path.join(root, scriptRel));
   chmodSync(path.join(root, scriptRel), 0o755);
-  for (const d of dirs) mkdirSync(path.join(root, d), { recursive: true });
+  for (const d of dirs) {
+    mkdirSync(path.join(root, d), { recursive: true });
+  }
 
   const abs = (rel: string) => path.join(root, rel);
   const put = (rel: string, content: string) => {
     mkdirSync(path.dirname(abs(rel)), { recursive: true });
     writeFileSync(abs(rel), content);
   };
-  for (const [rel, content] of Object.entries(files ?? {})) put(rel, content);
+  for (const [rel, content] of Object.entries(files ?? {})) {
+    put(rel, content);
+  }
   /* 两条来路的源文件（用例声明的 `copy` + 按 import 追出来的同目录依赖）在这里
    * 一次落盘 —— **同一条路径只写一次**。
    *
@@ -432,7 +440,9 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
    * 再判归属 —— 坐标系没收在一处时，「同一个文件写两遍」就永远判不出来。 */
   const place = (destAbs: string, sourceAbs: string) => {
     const rel = path.relative(root, destAbs);
-    if (claimed.covers(rel)) return;
+    if (claimed.covers(rel)) {
+      return;
+    }
     claimed.add(rel);
     const dest = abs(rel);
     mkdirSync(path.dirname(dest), { recursive: true });
@@ -440,7 +450,9 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
     /* 只有文件要补权限位：`--update` 那条路会就地落盘基线（与上面 `scriptDir`
      * 同一条理由 —— 受限 umask 下 EACCES 会被误读成「门禁坏了」）；补到目录上是
      * `EACCES`，所以判一下类型。 */
-    if (statSync(dest).isFile()) chmodSync(dest, 0o755);
+    if (statSync(dest).isFile()) {
+      chmodSync(dest, 0o755);
+    }
   };
   for (const { from, to } of copy ?? []) {
     place(abs(to), path.join(REPO_ROOT, from));
@@ -514,7 +526,9 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
         ...overrides?.env,
       };
       for (const [k, v] of Object.entries(overrides?.env ?? {})) {
-        if (v === undefined) delete callEnv[k];
+        if (v === undefined) {
+          delete callEnv[k];
+        }
       }
       /* 沙箱 git 配置**最后**再落一次：调用方的 `overrides.env` 里若恰好也有
        * `GIT_CONFIG_*`（合法用法），不能把这一层挤掉 —— 少了它被测判据脚本内部

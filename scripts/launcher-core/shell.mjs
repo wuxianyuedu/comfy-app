@@ -129,8 +129,12 @@ export function spawnInGroup({
  * @returns {"ran" | "aborted"} `aborted` = 没量到（跑不起来 / 被预算或信号砍掉）
  */
 export function classifyOutcome(res) {
-  if (res.error) return "aborted";
-  if (res.status === null) return "aborted";
+  if (res.error) {
+    return "aborted";
+  }
+  if (res.status === null) {
+    return "aborted";
+  }
   /* 有信号、又拿到了退出码：`spawnSync` 只在被信号打死时给 `signal`，那种情况下
    * `status` 本来就是 null（上一条已经收了）。这里不再按 `signal` 二次判 ——
    * 多一条永远走不到的判据就是一条会静默失效的账。 */
@@ -337,9 +341,7 @@ export function runPnpmSync(
     shell: false,
     stdio: stdio === "pipe" ? ["ignore", "pipe", "pipe"] : stdio,
   });
-  const error = /** @type {NodeJS.ErrnoException | null} */ (
-    result.error ?? null
-  );
+  const error = /** @type {NodeJS.ErrnoException | null} */ (result.error ?? null);
   return {
     ok: !error && result.status === 0,
     stdout: String(result.stdout ?? ""),

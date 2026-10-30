@@ -36,13 +36,12 @@ export const MAX_LISTED = 200;
  * @returns {string} 要打到日志里的正文；不 quiet 时是空串
  */
 export function fileListReport(files, input) {
-  if (!input.quiet) return "";
+  if (!input.quiet) {
+    return "";
+  }
   /* 行数由调用点注入（用例给小的值就能钉住截断那一档）；不给或不合法就按封顶值。 */
   const raw = input.max;
-  const max =
-    typeof raw === "number" && Number.isInteger(raw) && raw > 0
-      ? raw
-      : MAX_LISTED;
+  const max = typeof raw === "number" && Number.isInteger(raw) && raw > 0 ? raw : MAX_LISTED;
   const total = files.length;
   if (total === 0) {
     /* 空清单在这条链上**本来就不许发生**（`main` 会拦住它）。真到了这一句，说明清单是在

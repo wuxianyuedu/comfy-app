@@ -26,7 +26,9 @@ function setViewport(width: number): void {
     writable: true,
   });
   act(() => {
-    for (const cb of listeners) cb();
+    for (const cb of listeners) {
+      cb();
+    }
   });
 }
 

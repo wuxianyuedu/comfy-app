@@ -568,8 +568,9 @@ describe("closeIssues：回执不算结论，独立回读三件原值才算", ()
     const run = (_cmd: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
       if (args[0] === "pulls" && args[1] === "get-pull") {
-        if (opts.pull === null || opts.pull === undefined)
+        if (opts.pull === null || opts.pull === undefined) {
           return { status: 0, stdout: "", stderr: "", error: null };
+        }
         return {
           status: 0,
           stdout: json({ number: 2487, ...opts.pull }),
@@ -586,7 +587,9 @@ describe("closeIssues：回执不算结论，独立回读三件原值才算", ()
         };
       }
       if (args[0] === "issues" && args[1] === "update-issue") {
-        if (opts.update === null) return { status: 0, stdout: "boom", stderr: "", error: null };
+        if (opts.update === null) {
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        }
         return {
           status: 0,
           stdout: opts.update ?? json({ number: 2070, state: "closed" }),
@@ -988,8 +991,9 @@ describe("#2491 --as-merged：凭据由人点名，合并与否仍由平台回�
     const log: Array<string> = [];
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
-      if (cmd === "cnb" && args[0] === "--version")
+      if (cmd === "cnb" && args[0] === "--version") {
         return { status: 0, stdout: "1.15.25", stderr: "", error: null };
+      }
       return { status: 0, stdout: "", stderr: "", error: null };
     };
     const code = await main({
@@ -1117,7 +1121,9 @@ describe("#2199 findMergedPullProofs：只认 is_merged，先剥尾数再找号"
     const calls: Array<string> = [];
     const run = (_c: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
-      if (opts.fail) return { status: 9, stdout: "", stderr: "", error: null };
+      if (opts.fail) {
+        return { status: 9, stdout: "", stderr: "", error: null };
+      }
       const page = Number(args[args.indexOf("--page") + 1]);
       const data = pages[page - 1] ?? [];
       return {
@@ -1240,14 +1246,24 @@ describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问�
     const run = (_cmd: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
       const key = args.join(" ");
-      if (key.startsWith("rev-parse --short")) return ok("dead123");
-      if (key.startsWith("push cnb --delete")) return ok("", opts.pushStatus ?? 0);
+      if (key.startsWith("rev-parse --short")) {
+        return ok("dead123");
+      }
+      if (key.startsWith("push cnb --delete")) {
+        return ok("", opts.pushStatus ?? 0);
+      }
       if (key.startsWith("ls-remote --heads")) {
-        if (opts.lsRemoteFails) return ok("", 128);
+        if (opts.lsRemoteFails) {
+          return ok("", 128);
+        }
         return ok(opts.remoteStillThere ? "abc123\trefs/heads/feat/x" : "", 0);
       }
-      if (key.startsWith("branch -D")) return ok("", opts.branchStatus ?? 0);
-      if (key.startsWith("show-ref --verify")) return ok("", opts.localStillThere ? 0 : 1);
+      if (key.startsWith("branch -D")) {
+        return ok("", opts.branchStatus ?? 0);
+      }
+      if (key.startsWith("show-ref --verify")) {
+        return ok("", opts.localStillThere ? 0 : 1);
+      }
       return ok("");
     };
     return { run, calls, log };
@@ -1744,7 +1760,9 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         };
       }
       if (args[0] === "issues" && args[1] === "get-issue") {
-        if (opts.getIssueFails) return { status: 0, stdout: "boom", stderr: "", error: null };
+        if (opts.getIssueFails) {
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        }
         return {
           status: 0,
           stdout: json({
@@ -1760,9 +1778,13 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       }
       if (args[0] === "issues" && args[1] === "post-issue-labels") {
         const name = arg(args, "--labels");
-        if (name) labels.push(name);
+        if (name) {
+          labels.push(name);
+        }
         // 竞态夹具：另一个会话在我之后也把它的处理人标签打了上来。
-        if (opts.writeExtraHandler) labels.push(`处理人:${opts.writeExtraHandler}`);
+        if (opts.writeExtraHandler) {
+          labels.push(`处理人:${opts.writeExtraHandler}`);
+        }
         return { status: 0, stdout: json({}), stderr: "", error: null };
       }
       if (args[0] === "issues" && args[1] === "delete-issue-label") {
@@ -1771,13 +1793,17 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         return { status: 0, stdout: json({}), stderr: "", error: null };
       }
       if (args[0] === "issues" && args[1] === "post-issue-comment") {
-        if (opts.postCommentFails) return { status: 0, stdout: "boom", stderr: "", error: null };
+        if (opts.postCommentFails) {
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        }
         const text = fs.readFileSync(arg(args, "--body-file"), "utf8");
         comments.unshift(text);
         return { status: 0, stdout: json({}), stderr: "", error: null };
       }
       if (args[0] === "issues" && args[1] === "list-issue-comments") {
-        if (opts.commentListFails) return { status: 0, stdout: "boom", stderr: "", error: null };
+        if (opts.commentListFails) {
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        }
         return {
           status: 0,
           stdout: json(comments.map((body) => ({ body }))),
@@ -1786,7 +1812,9 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         };
       }
       if (args[0] === "issues" && args[1] === "list-issues") {
-        if (opts.listFails) return { status: 0, stdout: "boom", stderr: "", error: null };
+        if (opts.listFails) {
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        }
         const page = Number(arg(args, "--page") || "1");
         const rows = opts.pages ? (opts.pages[page - 1] ?? []) : (opts.listRows ?? []);
         return {
@@ -2495,8 +2523,12 @@ describe("reapCheckoutInstances：只收 via port 那批，session 那一档不�
     let n = 0;
     const read = async (_root: string): Promise<Live> => {
       const one = n++ === 0 ? before : after;
-      if (one instanceof Error) throw one;
-      if (one === null) throw new Error("判据返回了空形状");
+      if (one instanceof Error) {
+        throw one;
+      }
+      if (one === null) {
+        throw new Error("判据返回了空形状");
+      }
       return one;
     };
     const run = (_cmd: string, args: Array<string>) => {
@@ -3524,7 +3556,9 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       diagnose: true,
     })) {
       const m = /^cnb (\w+) ([\w-]+)/.exec(line);
-      if (m) planned.add(`${m[1]} ${m[2]}`);
+      if (m) {
+        planned.add(`${m[1]} ${m[2]}`);
+      }
     }
     // 前置断言：提取本身要真的抓到东西（正则写漂会让两侧都成空集、于是恒绿）。
     expect(called.size, "从源码里一条 cnb 调用都没抽到 ⇒ 提取正则坏了").toBeGreaterThan(0);
@@ -3654,10 +3688,15 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     const run = (cmd: string, args: Array<string>): FakeResult => {
       const key = args.join(" ");
       calls.push(`${cmd} ${key}`);
-      if (cmd === "cnb" && key.includes("list-pulls")) return ok('{"status":200,"data":[]}');
-      if (cmd === "cnb" && key.includes("post-pull"))
+      if (cmd === "cnb" && key.includes("list-pulls")) {
+        return ok('{"status":200,"data":[]}');
+      }
+      if (cmd === "cnb" && key.includes("post-pull")) {
         return env.postPull ?? ok('{"status":201,"data":{"number":3002}}');
-      if (cmd === "git" && key.startsWith("diff --stat")) return ok(env.stat ?? "");
+      }
+      if (cmd === "git" && key.startsWith("diff --stat")) {
+        return ok(env.stat ?? "");
+      }
       return ok("");
     };
     const io = {
@@ -3789,10 +3828,12 @@ describe("ship 阶段 0：`.env` 缺键的读数与启动器同一份实现（IS
     const logs: Array<string> = [];
     const run = (cmd: string, args: Array<string>): FakeResult => {
       const key = args.join(" ");
-      if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD")
+      if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD") {
         return { status: 0, stdout: "feat/x\n", stderr: "", error: null };
-      if (cmd === "git" && key === "rev-parse HEAD")
+      }
+      if (cmd === "git" && key === "rev-parse HEAD") {
         return { status: 0, stdout: "abc1234\n", stderr: "", error: null };
+      }
       return { status: 0, stdout: "", stderr: "", error: null };
     };
     try {
@@ -3820,8 +3861,11 @@ describe("ship 阶段 0：`.env` 缺键的读数与启动器同一份实现（IS
       expect(res.codes).toContain(CODE.NOT_RUN);
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
-      if (savedSkip === undefined) delete process.env.SKIP_ENV_VALIDATION;
-      else process.env.SKIP_ENV_VALIDATION = savedSkip;
+      if (savedSkip === undefined) {
+        delete process.env.SKIP_ENV_VALIDATION;
+      } else {
+        process.env.SKIP_ENV_VALIDATION = savedSkip;
+      }
     }
   });
 });
@@ -3848,7 +3892,9 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   });
 
   it("干净 ⇒ clean", () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     expect(
       readFreshnessState(
         json({
@@ -3863,7 +3909,9 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   });
 
   it("远端漂移 ⇒ drift（唯一该念成「红了」的那一档）", () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     expect(
       readFreshnessState(
         json({
@@ -3878,7 +3926,9 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   });
 
   it("依赖没装 ⇒ no-install（不是漂移，更不是「跑不了门禁」）", () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     expect(
       readFreshnessState(
         json({
@@ -3893,7 +3943,9 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   });
 
   it("没装 + 远端也改过依赖 ⇒ drift：先 pull 再装才是完整动作", () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     // 只说「没装」会让人在旧基线上装一套旧依赖，出口漏掉前半步。
     expect(
       readFreshnessState(
@@ -3909,7 +3961,9 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   });
 
   it("envBroken 压过其余（环境不可信时红与绿都不构成结论）", () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     expect(
       readFreshnessState(
         json({
@@ -3924,7 +3978,9 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   });
 
   it("负控制：起不来 / 形状对不上 ⇒ unknown，既不念「红了」也不念「没问题」", () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     expect(readFreshnessState({ status: 1, stdout: "", stderr: "", error: null })).toBe("unknown");
     expect(
       readFreshnessState({
@@ -3950,18 +4006,23 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
     const logs: Array<string> = [];
     const run = (cmd: string, args: Array<string>): FakeResult => {
       const key = args.join(" ");
-      if (cmd === "node" && key.includes("check-deps-freshness")) return fresh;
-      if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD")
+      if (cmd === "node" && key.includes("check-deps-freshness")) {
+        return fresh;
+      }
+      if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD") {
         return { status: 0, stdout: "feat/x\n", stderr: "", error: null };
-      if (cmd === "git" && key === "rev-parse HEAD")
+      }
+      if (cmd === "git" && key === "rev-parse HEAD") {
         return { status: 0, stdout: "abc1234\n", stderr: "", error: null };
-      if (cmd === "git" && key.includes("status --porcelain -- changelog.d"))
+      }
+      if (cmd === "git" && key.includes("status --porcelain -- changelog.d")) {
         return {
           status: 0,
           stdout: "?? changelog.d/2390-x.md\n",
           stderr: "",
           error: null,
         };
+      }
       return { status: 0, stdout: "", stderr: "", error: null };
     };
     return { run, logs };
@@ -3988,7 +4049,9 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
   }
 
   it("依赖没装 ⇒ 落 2 并念「还没装」，而不是「红」，且后面的阶段照跑", async () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     const { res, text } = await stage({
       status: 1,
       stdout: JSON.stringify({
@@ -4013,7 +4076,9 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
   });
 
   it("真漂移 ⇒ 保持 1 且停在阶段 0（该拦的仍然拦）", async () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     const { res, text } = await stage({
       status: 1,
       stdout: JSON.stringify({
@@ -4032,7 +4097,9 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
   });
 
   it("envBroken ⇒ 2，出口指向 git 读数而不是 `pnpm install`", async () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     const { res, text } = await stage({
       status: 2,
       stdout: JSON.stringify({
@@ -4053,7 +4120,9 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
   });
 
   it("判据起不来（读数是空的）⇒ 2，既不念「红了」也不念「没问题」", async () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     const { res, text } = await stage({
       status: -1,
       stdout: "",
@@ -4081,16 +4150,30 @@ describe("main() 的单子动作：独立于主流程，在 master 上、没碎�
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
-      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-      if (cmd === "git" && key.includes("@{u}")) return ok("");
-      if (cmd === "git" && key === "remote") return ok("cnb\n");
-      if (cmd === "git" && key.includes("symbolic-ref")) return ok("refs/remotes/cnb/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-      if (cmd === "git" && key.includes("get-url"))
+      if (cmd === "cnb" && args[0] === "--version") {
+        return ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("@{u}")) {
+        return ok("");
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("cnb\n");
+      }
+      if (cmd === "git" && key.includes("symbolic-ref")) {
+        return ok("refs/remotes/cnb/master");
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok("master");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+        return ok("d02ec9");
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "list-issues")
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "list-issues") {
         return ok(JSON.stringify({ status: 200, data: rows }));
+      }
       return ok("");
     };
     return { run, calls, log };
@@ -4155,27 +4238,39 @@ describe("#2766 --dry-run 底下「只补关」：读面照跑，写面一条不
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
-      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-      if (cmd === "git" && key.includes("@{u}")) return ok("");
-      if (cmd === "git" && key === "remote") return ok("cnb\n");
-      if (cmd === "git" && key.includes("symbolic-ref"))
+      if (cmd === "cnb" && args[0] === "--version") {
+        return ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("@{u}")) {
+        return ok("");
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("cnb\n");
+      }
+      if (cmd === "git" && key.includes("symbolic-ref")) {
         return ok("refs/remotes/cnb/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-      if (cmd === "git" && key.includes("get-url"))
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok("master");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+        return ok("d02ec9");
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull")
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull") {
         return ok(
           JSON.stringify({
             status: 200,
             data: { number: 2069, is_merged: true, title: "fix(a): 那一格 (#2070)" },
           }),
         );
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "update-issue")
-        return ok(
-          JSON.stringify({ status: 200, data: { number: 2070, state: "closed" } }),
-        );
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue")
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "update-issue") {
+        return ok(JSON.stringify({ status: 200, data: { number: 2070, state: "closed" } }));
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue") {
         return ok(
           JSON.stringify({
             status: 200,
@@ -4190,12 +4285,12 @@ describe("#2766 --dry-run 底下「只补关」：读面照跑，写面一条不
             },
           }),
         );
+      }
       return ok("");
     };
     /** 写面那四条命令（读面是 get-issue / get-pull / list-*）。 */
     const WRITE = ["update-issue", "post-issue-comment", "post-issue-labels", "delete-issue-label"];
-    const writes = (list: Array<string>) =>
-      list.filter((c) => WRITE.some((w) => c.includes(w)));
+    const writes = (list: Array<string>) => list.filter((c) => WRITE.some((w) => c.includes(w)));
     return { run, calls, log, writes };
   }
 
@@ -4307,22 +4402,39 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
-      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-      if (cmd === "git" && key.includes("@{u}")) return ok("");
-      if (cmd === "git" && key === "remote") return ok("origin\n");
-      if (cmd === "git" && key.includes("symbolic-ref")) return ok("refs/remotes/origin/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("feat/x");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-      if (cmd === "git" && key.includes("get-url"))
+      if (cmd === "cnb" && args[0] === "--version") {
+        return ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("@{u}")) {
+        return ok("");
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("origin\n");
+      }
+      if (cmd === "git" && key.includes("symbolic-ref")) {
+        return ok("refs/remotes/origin/master");
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok("feat/x");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+        return ok("d02ec9");
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-      if (cmd === "git" && key.includes("rev-parse HEAD"))
+      }
+      if (cmd === "git" && key.includes("rev-parse HEAD")) {
         return ok(opts.headSha ?? "d02ec96364d5f3713b77c91b0d3fe789878f1747");
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs") {
         return ok(JSON.stringify({ status: 200, data: opts.builds ?? [] }));
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status") {
         return ok(JSON.stringify(opts.build ?? null));
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-stage")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-stage") {
         return ok(JSON.stringify(opts.stage ?? {}));
+      }
       return ok("");
     };
     return { run, calls, log };
@@ -4431,19 +4543,34 @@ describe("--new-issue：一步建单并回读", () => {
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
-      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-      if (cmd === "git" && key.includes("@{u}")) return ok("");
-      if (cmd === "git" && key === "remote") return ok("origin\n");
-      if (cmd === "git" && key.includes("symbolic-ref")) return ok("refs/remotes/origin/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-      if (cmd === "git" && key.includes("get-url"))
+      if (cmd === "cnb" && args[0] === "--version") {
+        return ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("@{u}")) {
+        return ok("");
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("origin\n");
+      }
+      if (cmd === "git" && key.includes("symbolic-ref")) {
+        return ok("refs/remotes/origin/master");
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok("master");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+        return ok("d02ec9");
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "create-issue")
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "create-issue") {
         return ok(JSON.stringify(opts.created ?? { data: { number: 2222 } }));
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "post-issue-labels")
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "post-issue-labels") {
         return ok(opts.labelsOk === false ? "{}" : "{}");
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue")
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue") {
         return ok(
           JSON.stringify(
             opts.readback ?? {
@@ -4457,6 +4584,7 @@ describe("--new-issue：一步建单并回读", () => {
             },
           ),
         );
+      }
       return ok("");
     };
     return { run, calls, log };
@@ -4770,73 +4898,104 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       /* ⚠️ 必须排在下面那条通用 `--abbrev-ref` **之前**：HEAD 那一查与上游那一查
        * 共用同一个前缀，顺序反了上游查询会拿到分支名，于是「远端解析」这一格
        * 判的是夹具自己的形状。 */
-      if (cmd === "git" && key.includes("@{u}"))
+      if (cmd === "git" && key.includes("@{u}")) {
         return ok(env.upstream === null ? "" : (env.upstream ?? "cnb/master"));
+      }
       /* 主干那一条有本地可读的权威事实：远端的 `HEAD` 符号引用。
        * 夹具默认给出（与真实克隆一致），`remoteHead: null` 那一格专门演「没有它」。 */
-      if (cmd === "git" && key.includes("symbolic-ref"))
+      if (cmd === "git" && key.includes("symbolic-ref")) {
         return env.remoteHead === null
           ? { status: 1, stdout: "", stderr: "", error: null }
           : ok(env.remoteHead ?? "refs/remotes/cnb/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok(branch);
-      if (cmd === "git" && key === "remote") return ok("cnb\n");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet"))
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok(branch);
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("cnb\n");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
         return env.baseExists === false
           ? { status: 1, stdout: "", stderr: "", error: null }
           : ok("d02ec96364d5f3713b77c91b0d3fe789878f1747");
+      }
       /* `show-ref --verify --quiet <ref>`：git 的语义是**查不到退 1**。默认答「查不到」，
        * 因为这一格在 --branch 那一跳判的是「这个名字有没有被占用」—— 拿通用兜底的
        * 退 0 当默认值，等于让夹具自己担保「名字都撞车了」，于是建分支那一格永远走不到。 */
-      if (cmd === "git" && key.startsWith("show-ref --verify --quiet"))
+      if (cmd === "git" && key.startsWith("show-ref --verify --quiet")) {
         return env.refExists
           ? ok("9b1bade9cafe9b5a4d76e0c0d0bfb1d1a3a4f9b2")
           : { status: 1, stdout: "", stderr: "", error: null };
-      if (cmd === "git" && key.includes("rev-parse HEAD"))
+      }
+      if (cmd === "git" && key.includes("rev-parse HEAD")) {
         return ok("d02ec96364d5f3713b77c91b0d3fe789878f1747");
+      }
       // ⚠️ 顺序要紧：碎片那一查也是 `status --porcelain`，只是多一个 `-- changelog.d`。
-      if (cmd === "git" && key.includes("status --porcelain -- changelog.d"))
+      if (cmd === "git" && key.includes("status --porcelain -- changelog.d")) {
         return ok(frags.map((f) => `?? ${f}`).join("\n"));
-      if (cmd === "git" && key.includes("status --porcelain"))
+      }
+      if (cmd === "git" && key.includes("status --porcelain")) {
         return ok(env.porcelain ?? dirty.map((f) => `M  ${f}`).join("\n"));
+      }
       /* 分支相对上游**已提交**的碎片（同一条分支上第二次跑就靠这一格不为空）。
        * 这里**不**按某个写死的基线名命中 —— 命中基线名等于替被测代码担保「它选的
        * 那条引用是对的」。改为照 git 的语义答：拿 HEAD 自己这条分支的远端副本当基线
        * 就是自己比自己 ⇒ 结果必空，这正是那条缺陷的现场。 */
       if (cmd === "git" && key.includes("diff --name-only") && key.includes("...HEAD")) {
         const base = key.replace("diff --name-only ", "").split("...")[0] ?? "";
-        if (base === `cnb/${branch}`) return ok("");
+        if (base === `cnb/${branch}`) {
+          return ok("");
+        }
         return ok((env.branchFrags ?? []).join("\n"));
       }
       /* 标题的取数面（`deriveTitle` 那一格）：`--no-merges --reverse` 给的是这条分支
        * **自己带进来的**那些提交，`log -1` 给的是当前顶端那一笔。默认把后者设成一个
        * 合并节点、前者设成主体那一笔 —— 缺陷正是拿后者当标题（#2057 在主干上留下的
        * 那行 `Merge branch 'master' into …` 就是这么来的）。 */
-      if (cmd === "git" && key.includes("log --no-merges"))
+      if (cmd === "git" && key.includes("log --no-merges")) {
         return ok((env.branchSubjects ?? ["fix(x): 主体的那一笔"]).join("\n"));
-      if (cmd === "git" && key.includes("log -1 --pretty=%s"))
+      }
+      if (cmd === "git" && key.includes("log -1 --pretty=%s")) {
         return ok(env.headSubject ?? "Merge branch 'master' into fix/x");
-      if (cmd === "git" && key.startsWith("commit"))
+      }
+      if (cmd === "git" && key.startsWith("commit")) {
         return {
           status: env.commitStatus ?? 0,
           stdout: "",
           stderr: env.commitStderr ?? "",
           error: null,
         };
-      if (cmd === "git" && key.includes("get-url"))
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
+      }
       /* 依赖新鲜度那一格读的是**判据自己的 `--json` 原值**（ISSUE #2390），
        * 所以夹具要答那份形状：只回一句 "OK" 会被读成「读数不完整」（`unknown` ⇒ 落 2）。 */
-      if (cmd === "node" && key.includes("check-deps-freshness")) return ok(FRESH_OK);
+      if (cmd === "node" && key.includes("check-deps-freshness")) {
+        return ok(FRESH_OK);
+      }
       /* ── 整链形状（`chain: true` 才答）───────────────────────────
        * 默认不答，是为了不惊动已有那些用例：它们中好几条判的正是「建 PR 那一跳的
        * 各种失败出口」，一旦 list-pulls 有了可解析的响应就会改走「复用」那条支路。 */
-      if (!env.chain) return ok("");
-      if (cmd === "git" && key.startsWith("rev-parse --short")) return ok("edda13b6");
-      if (cmd === "git" && key.startsWith("cat-file -e")) return ok("");
-      if (cmd === "git" && key.startsWith("push cnb --delete")) return ok("");
-      if (cmd === "git" && key.startsWith("ls-remote --heads")) return ok("");
-      if (cmd === "git" && key.startsWith("branch -D")) return ok("");
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs")
+      if (!env.chain) {
+        return ok("");
+      }
+      if (cmd === "git" && key.startsWith("rev-parse --short")) {
+        return ok("edda13b6");
+      }
+      if (cmd === "git" && key.startsWith("cat-file -e")) {
+        return ok("");
+      }
+      if (cmd === "git" && key.startsWith("push cnb --delete")) {
+        return ok("");
+      }
+      if (cmd === "git" && key.startsWith("ls-remote --heads")) {
+        return ok("");
+      }
+      if (cmd === "git" && key.startsWith("branch -D")) {
+        return ok("");
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs") {
         return ok(
           JSON.stringify({
             status: 200,
@@ -4852,9 +5011,11 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
             },
           }),
         );
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status") {
         return ok(JSON.stringify({ status: 200, data: { status: "success" } }));
-      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "list-pulls")
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "list-pulls") {
         return ok(
           JSON.stringify({
             status: 200,
@@ -4867,7 +5028,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
             ],
           }),
         );
-      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull")
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull") {
         return ok(
           JSON.stringify({
             status: 200,
@@ -4878,7 +5040,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
             },
           }),
         );
-      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "merge-pull")
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "merge-pull") {
         return ok(
           JSON.stringify({
             status: 200,
@@ -4888,6 +5051,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
             },
           }),
         );
+      }
       return ok("");
     };
     return { run, calls };
@@ -5959,13 +6123,16 @@ describe("--rerun-ci：空提交要说出自己的意图，否则 D0 把它读�
     const log: Array<string> = [];
     const run = (cmd: string, args: Array<string>, opts?: { env?: Record<string, string> }) => {
       seen.push({ cmd, args, opts });
-      if (args[0] === "commit")
+      if (args[0] === "commit") {
         return {
           status: env.commitStatus ?? 0,
           stdout: "",
           stderr: env.commitStatus ? "no changes added to commit" : "",
         };
-      if (args[0] === "rev-parse") return { status: 0, stdout: "abc123\n", stderr: "" };
+      }
+      if (args[0] === "rev-parse") {
+        return { status: 0, stdout: "abc123\n", stderr: "" };
+      }
       return { status: 0, stdout: "", stderr: "" };
     };
     const code = runRerunCiStage({
@@ -6092,22 +6259,39 @@ describe("--stage-log：只读取某一格的日志正文（绿跑也能用）",
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
-      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-      if (cmd === "git" && key.includes("@{u}")) return ok("");
-      if (cmd === "git" && key === "remote") return ok("origin\n");
-      if (cmd === "git" && key.includes("symbolic-ref")) return ok("refs/remotes/origin/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("feat/x");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-      if (cmd === "git" && key.includes("get-url"))
+      if (cmd === "cnb" && args[0] === "--version") {
+        return ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("@{u}")) {
+        return ok("");
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("origin\n");
+      }
+      if (cmd === "git" && key.includes("symbolic-ref")) {
+        return ok("refs/remotes/origin/master");
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok("feat/x");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+        return ok("d02ec9");
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-      if (cmd === "git" && key.includes("rev-parse HEAD"))
+      }
+      if (cmd === "git" && key.includes("rev-parse HEAD")) {
         return ok(opts.headSha ?? "d02ec96364d5f3713b77c91b0d3fe789878f1747");
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs") {
         return ok(JSON.stringify({ status: 200, data: opts.builds ?? [] }));
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status") {
         return ok(JSON.stringify(opts.build ?? null));
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-stage")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-stage") {
         return ok(JSON.stringify(opts.stage ?? {}));
+      }
       return ok("");
     };
     return { run, calls, log };

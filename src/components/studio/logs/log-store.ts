@@ -297,7 +297,9 @@ function capTimeline(logs: Array<LogEntry>): {
   logs: Array<LogEntry>;
   dropped: number;
 } {
-  if (logs.length <= LOG_STORE_MAX) return { logs, dropped: 0 };
+  if (logs.length <= LOG_STORE_MAX) {
+    return { logs, dropped: 0 };
+  }
   const cut = logs.length - LOG_STORE_MAX;
   const droppedEntries = logs.slice(0, cut);
   const kept = logs.slice(cut);
@@ -455,7 +457,9 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       const fresh = dropStaleEntries(entries, state.sessionStart);
       /* 空批次直接原样返回：计数/过滤结果不变（setState 浅合并，不覆盖
        * counts），与「追加空数组时状态保持不变」的既有契约一致。 */
-      if (fresh.length === 0) return { logs: state.logs };
+      if (fresh.length === 0) {
+        return { logs: state.logs };
+      }
       /* 走**索引复用版**：面板每 2s 一轮、六路各写一次，而「这次送来的一两行
        * 是不是新的」若靠就地建两张全表 Map 来判，实测 5000 条时每轮白花
        * 2.27ms（占整次合并的 97%，排序只占 0.11ms）。索引按数组引用缓存在
@@ -463,7 +467,9 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       const merged = mergeTimelineIndexed(state.logs, fresh, indexOfTimeline(state.logs));
       const logs = merged.logs;
       /* 全批是重复行（或全被会话起点裁掉）→ 时间线没变，什么都不推进。 */
-      if (logs === state.logs) return { logs: state.logs };
+      if (logs === state.logs) {
+        return { logs: state.logs };
+      }
       rememberTimelineIndex(logs, merged.index);
       /* mergeTimeline 返回新数组 ⟺ 至少一条新行真正落板 → 推进 revision。
        * 内存上限（LOG_STORE_MAX）的截断放在 mergeTimeline **之后**、独立于
@@ -497,7 +503,9 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
    * 页脚随后会显示新的标识。 */
   setBootId: (bootId) =>
     set((state) => {
-      if (state.bootId === bootId) return {};
+      if (state.bootId === bootId) {
+        return {};
+      }
       /* 只有「从无到有 / 换了一个」才算换进程：首次拿到标识时时间线里还没有
        * 旧进程的行，不必清。 */
       const changed = state.bootId !== null && state.bootId !== bootId;
@@ -702,7 +710,9 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
  * 无 DOM 环境（SSR / node 测试）下订阅同样安全：读不到 localStorage 就取默认开启，
  * 且订阅本身不触碰 DOM，只是一次状态重算。 */
 useLogCategoryStore.subscribe((state, prev) => {
-  if (state.enabled === prev.enabled) return;
+  if (state.enabled === prev.enabled) {
+    return;
+  }
   const s = useLogStore.getState();
   useLogStore.setState(applyView(derive(s.logs, s.search, s.revision), viewOf(s)));
 });
@@ -724,7 +734,9 @@ useLogCategoryStore.subscribe((state, prev) => {
  */
 function watermarkIds(entries: Array<LogEntry>): ReadonlySet<string> {
   const ids = new Set<string>();
-  for (const entry of entries) ids.add(entry.id);
+  for (const entry of entries) {
+    ids.add(entry.id);
+  }
   return ids;
 }
 
@@ -850,6 +862,8 @@ export function selectNewLogCount(state: {
   page: number;
   autoScroll: boolean;
 }): number {
-  if (!selectShouldPinToLatest(state.page, state.autoScroll)) return 0;
+  if (!selectShouldPinToLatest(state.page, state.autoScroll)) {
+    return 0;
+  }
   return Math.max(0, state.unseenAfterView - state.baselineAfterView);
 }

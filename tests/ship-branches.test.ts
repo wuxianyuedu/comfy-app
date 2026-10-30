@@ -145,19 +145,36 @@ function branchesMainIo(opts: { pulls: Array<unknown>; branchList: string }) {
   const run = (cmd: string, args: Array<string>): FakeResult => {
     calls.push([cmd, ...args].join(" "));
     const key = args.join(" ");
-    if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-    if (cmd === "git" && key.includes("@{u}")) return ok("cnb/master");
-    if (cmd === "git" && key === "remote") return ok("cnb\n");
-    if (cmd === "git" && key.includes("symbolic-ref")) return ok("refs/remotes/cnb/master");
-    if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
-    if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-    if (cmd === "git" && key.includes("get-url"))
+    if (cmd === "cnb" && args[0] === "--version") {
+      return ok("1.15.25");
+    }
+    if (cmd === "git" && key.includes("@{u}")) {
+      return ok("cnb/master");
+    }
+    if (cmd === "git" && key === "remote") {
+      return ok("cnb\n");
+    }
+    if (cmd === "git" && key.includes("symbolic-ref")) {
+      return ok("refs/remotes/cnb/master");
+    }
+    if (cmd === "git" && key.includes("--abbrev-ref")) {
+      return ok("master");
+    }
+    if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+      return ok("d02ec9");
+    }
+    if (cmd === "git" && key.includes("get-url")) {
       return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-    if (cmd === "git" && key.includes("for-each-ref")) return ok(opts.branchList);
-    if (cmd === "git" && key.includes("ls-remote --heads"))
+    }
+    if (cmd === "git" && key.includes("for-each-ref")) {
+      return ok(opts.branchList);
+    }
+    if (cmd === "git" && key.includes("ls-remote --heads")) {
       return ok("aaa\trefs/heads/fix/landed\n");
-    if (cmd === "cnb" && args[0] === "pulls" && args[1] === "list-pulls")
+    }
+    if (cmd === "cnb" && args[0] === "pulls" && args[1] === "list-pulls") {
       return ok(JSON.stringify({ data: opts.pulls }));
+    }
     return ok("");
   };
   return { run, calls, log };

@@ -45,7 +45,9 @@ function realEntryPaths(): Array<string> {
         walk(full);
         continue;
       }
-      if (!e.name.endsWith(".ps1")) continue;
+      if (!e.name.endsWith(".ps1")) {
+        continue;
+      }
       const rel = path.relative(process.cwd(), full).split(path.sep).join("/");
       // 与判据同口径：逻辑层不算入口。
       if (rel.startsWith("tools/scripts/") || rel.endsWith(".logic.ps1")) {
@@ -111,15 +113,18 @@ function runGuard(overrides: Record<string, string | null>): string {
     "scripts/db-push.mjs",
   ]) {
     const dst = path.join(dir, rel);
-    if (fs.existsSync(dst)) continue;
+    if (fs.existsSync(dst)) {
+      continue;
+    }
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.writeFileSync(dst, "");
   }
 
   for (const [rel, content] of Object.entries(overrides)) {
     const dst = path.join(dir, rel);
-    if (content === null) fs.rmSync(dst, { force: true });
-    else {
+    if (content === null) {
+      fs.rmSync(dst, { force: true });
+    } else {
       fs.mkdirSync(path.dirname(dst), { recursive: true });
       fs.writeFileSync(dst, content);
     }
@@ -144,7 +149,9 @@ function runGuard(overrides: Record<string, string | null>): string {
 
 const cleanup: Array<string> = [];
 afterEach(() => {
-  for (const dir of cleanup.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of cleanup.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("跨平台动作对照表（规范 §9.5）", () => {

@@ -50,7 +50,8 @@ const HINT_LINES = 120;
 /** 函数声明形态: `fn name(`, `pub fn name(`, `pub(crate) fn name(`,
  *  `pub async fn name(`, `unsafe fn name(` 等。刻意只认有名字的函数 ——
  *  闭包/匿名块不在本规则射程内(它们由所在函数的长度间接约束)。 */
-const DECLARATION = /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+"[^"]*"\s+)?fn\s+([A-Za-z_]\w*)/;
+const DECLARATION =
+  /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+"[^"]*"\s+)?fn\s+([A-Za-z_]\w*)/;
 
 /** 逐字符状态机: 计算每行结束时的括号深度,跳过字符串 / 字符字面量 / 注释
  *  里的括号(Rust 的 `"}"` / `'{'` / 注释里的括号若不跳过,函数尾会被切错)。
@@ -83,7 +84,9 @@ function bracketDepths(lines) {
           j += 2;
           continue;
         }
-        if (ch === '"') inStr = false;
+        if (ch === '"') {
+          inStr = false;
+        }
         j++;
         continue;
       }
@@ -92,11 +95,15 @@ function bracketDepths(lines) {
           j += 2;
           continue;
         }
-        if (ch === "'") inChar = false;
+        if (ch === "'") {
+          inChar = false;
+        }
         j++;
         continue;
       }
-      if (ch === "/" && nx === "/") break; // 行注释: 本行余下不参与
+      if (ch === "/" && nx === "/") {
+        break;
+      } // 行注释: 本行余下不参与
       if (ch === "/" && nx === "*") {
         inBlockComment = true;
         j += 2;
@@ -124,8 +131,11 @@ function bracketDepths(lines) {
         j++;
         continue;
       }
-      if (ch === "{" || ch === "(" || ch === "[") depth++;
-      else if (ch === "}" || ch === ")" || ch === "]") depth--;
+      if (ch === "{" || ch === "(" || ch === "[") {
+        depth++;
+      } else if (ch === "}" || ch === ")" || ch === "]") {
+        depth--;
+      }
       j++;
     }
     depthAtLine[i] = depth;
@@ -136,26 +146,36 @@ function bracketDepths(lines) {
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
-    if (e.isDirectory()) walk(p, out);
-    else out.push(p);
+    if (e.isDirectory()) {
+      walk(p, out);
+    } else {
+      out.push(p);
+    }
   }
   return out;
 }
 
 const relOf = (p) =>
-  p.split(path.sep).join("/").replace(ROOT.split(path.sep).join("/") + "/", "");
+  p
+    .split(path.sep)
+    .join("/")
+    .replace(ROOT.split(path.sep).join("/") + "/", "");
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
 const longFunctions = [];
 for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
   const rel = relOf(abs);
-  if (!SOURCE_EXT.test(rel) || isTestFile(rel)) continue;
+  if (!SOURCE_EXT.test(rel) || isTestFile(rel)) {
+    continue;
+  }
   const lines = fs.readFileSync(abs, "utf8").split("\n");
   const depthAtLine = bracketDepths(lines);
   for (let i = 0; i < lines.length; i++) {
     const m = lines[i].match(DECLARATION);
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     const name = m[1];
     const startDepth = depthAtLine[i - 1] ?? 0;
     let end = -1;
@@ -167,7 +187,9 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
     }
     /* 声明行本身不跨行(如 trait 方法签名 / 单行 fn)时 end === i,跳过,
      * 否则会把「下一行的第 1 行」误算成巨型函数。 */
-    if (end <= i) continue;
+    if (end <= i) {
+      continue;
+    }
     const size = end - i + 1;
     if (size < HINT_LINES) {
       i = end;
@@ -211,7 +233,5 @@ if (longFunctions.length) {
   process.exit(1);
 }
 
-console.log(
-  `[rust-function-length] 扫描 ${SCAN_DIR}/**：超过 ${HINT_LINES} 行的函数 0 个`,
-);
+console.log(`[rust-function-length] 扫描 ${SCAN_DIR}/**：超过 ${HINT_LINES} 行的函数 0 个`);
 console.log("[rust-function-length] OK");

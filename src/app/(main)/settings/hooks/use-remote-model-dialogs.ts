@@ -195,7 +195,9 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
   /* 弹窗打开期间每次状态变化都存入草稿仓库：这样无论点关闭 / ✕ / 点遮罩，
    * 关闭后的下次重开都能从仓库恢复已填内容与最近一次执行结果。 */
   useEffect(() => {
-    if (usageTest) rememberUsageTestDraft(usageTest);
+    if (usageTest) {
+      rememberUsageTestDraft(usageTest);
+    }
   }, [usageTest]);
 
   /* 字段行编辑器是一个自洽的交互面（只读写 usageTest.fields），已切到
@@ -254,7 +256,9 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
    *  探测只验证接口地址 / 密钥是否可达、可列出模型，不发起生成调用、不耗额度；
    *  结果内联展示在该条目下方。独立接口 / 独立密钥缺省时回落已保存的全局连接配置。 */
   async function runEntryConnectionTest(entry: RemoteModelEntry) {
-    if (rowProbe?.running && rowProbe.name === entry.name) return;
+    if (rowProbe?.running && rowProbe.name === entry.name) {
+      return;
+    }
     setRowProbe({ name: entry.name, running: true, msg: null });
     try {
       const out = await c.probeRemote({
@@ -336,7 +340,9 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
   }
 
   async function runUsageTest() {
-    if (!usageTest || usageTest.running) return;
+    if (!usageTest || usageTest.running) {
+      return;
+    }
     setUsageTest({ ...usageTest, running: true, result: null });
     /* 弹窗留空 → 用草稿条目里的密钥（未保存的条目也有）：
      * 只靠服务端按名字查已保存配置，会漏掉「加了条目还没点保存」的情况，
@@ -362,9 +368,13 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
   /** 对已提交但仍在生成的异步视频任务「继续等待」一轮（同一条目连接参数 +
    *  上次返回的 taskId）。只查既有任务，不重新提交、不重复扣费。 */
   async function continueUsageWait() {
-    if (!usageTest || usageTest.querying) return;
+    if (!usageTest || usageTest.querying) {
+      return;
+    }
     const taskId = usageTest.result?.taskId;
-    if (!taskId) return;
+    if (!taskId) {
+      return;
+    }
     setUsageTest({ ...usageTest, querying: true });
     const typedKey = usageTest.apiKey.trim();
     const out = await c.queryUsageTask({

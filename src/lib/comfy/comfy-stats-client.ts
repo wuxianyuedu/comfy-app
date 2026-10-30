@@ -30,7 +30,7 @@ export async function fetchComfyStats(): Promise<ComfyStatsPayload> {
       // nvidia-smi，正常回包可能 3~4s，卡太紧反而会制造「误离线」。
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok)
+    if (!res.ok) {
       return {
         online: false,
         vramUsed: 0,
@@ -39,6 +39,7 @@ export async function fetchComfyStats(): Promise<ComfyStatsPayload> {
         ramUsed: 0,
         ramTotal: 0,
       };
+    }
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as ComfyStatsPayload;
   } catch {
     return {

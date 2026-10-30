@@ -1,7 +1,4 @@
-import {
-  getLivenessSnapshot,
-  subscribeComfyExit,
-} from "~/lib/comfyui/liveness-signal";
+import { getLivenessSnapshot, subscribeComfyExit } from "~/lib/comfyui/liveness-signal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,9 +36,13 @@ export async function GET(): Promise<Response> {
       let unsubscribe: Cleanup = () => undefined;
 
       const cleanup: Cleanup = () => {
-        if (closed) return;
+        if (closed) {
+          return;
+        }
         closed = true;
-        if (heartbeat !== null) clearInterval(heartbeat);
+        if (heartbeat !== null) {
+          clearInterval(heartbeat);
+        }
         unsubscribe();
         try {
           controller.close();
@@ -51,11 +52,11 @@ export async function GET(): Promise<Response> {
       };
 
       const send = (obj: unknown): void => {
-        if (closed) return;
+        if (closed) {
+          return;
+        }
         try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(obj)}\n\n`),
-          );
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
         } catch {
           cleanup();
         }
@@ -64,11 +65,15 @@ export async function GET(): Promise<Response> {
       /* 补发当前快照：`seq === 0` 表示本进程一次退出都没记过，此时没有可发的
        * 事件（发一个 `seq:0` 的假事件会让客户端把「无事发生」当成一次崩溃）。 */
       const snap = getLivenessSnapshot();
-      if (snap.seq > 0 && snap.last !== null) send(snap.last);
+      if (snap.seq > 0 && snap.last !== null) {
+        send(snap.last);
+      }
 
       unsubscribe = subscribeComfyExit(send);
       heartbeat = setInterval(() => {
-        if (closed) return;
+        if (closed) {
+          return;
+        }
         try {
           controller.enqueue(encoder.encode(`: hb ${Date.now()}\n\n`));
         } catch {

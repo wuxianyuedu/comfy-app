@@ -113,7 +113,9 @@ export function resolveActiveMode(
   workflowId: string | null,
   defaultMode: string | null,
 ): string | null {
-  if (!workflowId || !override) return defaultMode;
+  if (!workflowId || !override) {
+    return defaultMode;
+  }
   return override.workflowId === workflowId ? override.mode : defaultMode;
 }
 
@@ -159,7 +161,9 @@ export function useWorkflowLibraryDetail(
   const handleTabChange = useCallback(
     (tab: DetailTab) => {
       setActiveTab(tab);
-      if (isCanvasTab(tab) && workflow) setCanvasVisitedFor(workflow.id);
+      if (isCanvasTab(tab) && workflow) {
+        setCanvasVisitedFor(workflow.id);
+      }
     },
     [workflow],
   );
@@ -172,7 +176,9 @@ export function useWorkflowLibraryDetail(
   } | null>(null);
   const setActiveMode = useCallback(
     (mode: string) => {
-      if (!workflow) return;
+      if (!workflow) {
+        return;
+      }
       setModeOverride({ workflowId: workflow.id, mode });
     },
     [workflow],
@@ -248,23 +254,33 @@ export function useWorkflowLibraryDetail(
   const actions = useMemo<WorkflowLibraryDetailActions>(
     () => ({
       use: () => {
-        if (!workflow) return;
+        if (!workflow) {
+          return;
+        }
         onUse(workflow.id, {
           name: workflow.name,
           taskType: workflow.taskType,
         });
       },
       edit: () => {
-        if (workflow) onEdit(workflow.id);
+        if (workflow) {
+          onEdit(workflow.id);
+        }
       },
       remove: () => {
-        if (workflow) onDelete(workflow.id, workflow.name);
+        if (workflow) {
+          onDelete(workflow.id, workflow.name);
+        }
       },
       download: () => {
-        if (workflow) onDownload(workflow.id, workflow.name);
+        if (workflow) {
+          onDownload(workflow.id, workflow.name);
+        }
       },
       resync: () => {
-        if (workflow) onResync(workflow.id, workflow.name);
+        if (workflow) {
+          onResync(workflow.id, workflow.name);
+        }
       },
     }),
     [workflow, onUse, onEdit, onDelete, onDownload, onResync],
@@ -283,19 +299,27 @@ export function useWorkflowLibraryDetail(
       allModelTags,
       busy: !!workflow && (isBundleBusy(workflow.id) || isResyncBusy(workflow.id)),
       patchModes: async (modes, defaultMode) => {
-        if (!workflow || !onPatchModes) return;
+        if (!workflow || !onPatchModes) {
+          return;
+        }
         await onPatchModes(workflow.id, modes, defaultMode);
       },
       patchModelTags: async (names) => {
-        if (!workflow || !onPatchModelTags) return;
+        if (!workflow || !onPatchModelTags) {
+          return;
+        }
         await onPatchModelTags(workflow.id, names);
       },
       patchParamMap: async (next) => {
-        if (!workflow || !onPatchParamMap) return;
+        if (!workflow || !onPatchParamMap) {
+          return;
+        }
         await onPatchParamMap(workflow.id, next);
       },
       patchSeedMode: async (ioKey, mode) => {
-        if (!workflow || !onPatchWorkflowIO) return;
+        if (!workflow || !onPatchWorkflowIO) {
+          return;
+        }
         /* 在模板原始 workflowIO 上只改目标条目的 seedMode，整体落库；
          * 其余字段原样透传，避免用富化视图覆盖原始数据。 */
         const raw = /* SAFETY: 类型断言已复核 */ (template?.workflowIO ?? {}) as Record<

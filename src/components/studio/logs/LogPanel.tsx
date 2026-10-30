@@ -62,14 +62,18 @@ function useVirtualWindow(input: {
   const cliJsonIds = useMemo(() => {
     const ids = new Set<string>();
     for (const entry of pageLogs) {
-      if (isCliJsonLine(entry.message)) ids.add(entry.id);
+      if (isCliJsonLine(entry.message)) {
+        ids.add(entry.id);
+      }
     }
     return ids;
   }, [pageLogs]);
   const expandedIds = useMemo(() => {
     const ids = new Set<string>();
     for (const key of Object.keys(expansionMap)) {
-      if (expansionMap[key]) ids.add(key);
+      if (expansionMap[key]) {
+        ids.add(key);
+      }
     }
     return ids;
   }, [expansionMap]);
@@ -272,7 +276,9 @@ export function LogPanel() {
   });
 
   useEffect(() => {
-    if (page !== safePage) setPage(safePage);
+    if (page !== safePage) {
+      setPage(safePage);
+    }
   }, [page, safePage, setPage]);
 
   /* 换页时把滚动位置收回头部，并同步 `scrollTop` 状态。
@@ -285,7 +291,9 @@ export function LogPanel() {
    * `safePage` 是钳过边界的真实页码（见 selectPageLogs），据此判定「真的换了页」。 */
   useEffect(() => {
     const el = bodyRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     el.scrollTop = 0;
     setScrollTop(0);
   }, [safePage]);
@@ -343,7 +351,9 @@ export function LogPanel() {
     .filter(Boolean)
     .join(" · ");
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前这里**既没接
      Esc、也没有遮罩点击关闭** —— 面板只能靠外壳的开关按钮关掉。层级仍由刻度表

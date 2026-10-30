@@ -64,11 +64,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 const { gateChainScripts } = require("./gate-chain-scripts.cjs");
 
 /** 扫描期间消失的 `tests/` 文件数（由 `executorSources` 累加，结论行打印）。 */
@@ -148,8 +144,12 @@ const PROSE_ONLY_SCRIPTS = [
  * @param {Set<string>} chain
  */
 function isGateScript(name, chain) {
-  if (!/\.(cjs|mjs)$/.test(name)) return false;
-  if (chain.has(name)) return true;
+  if (!/\.(cjs|mjs)$/.test(name)) {
+    return false;
+  }
+  if (chain.has(name)) {
+    return true;
+  }
   return GATE_NAME_PREFIXES.some((p) => name.startsWith(p));
 }
 
@@ -203,7 +203,9 @@ function executorSources() {
   const commandParts = [];
   for (const rel of EXECUTOR_SOURCES) {
     const full = path.join(ROOT, rel);
-    if (!fs.existsSync(full)) continue;
+    if (!fs.existsSync(full)) {
+      continue;
+    }
     commandParts.push(fs.readFileSync(full, "utf8"));
   }
   /** 只收「真的起了子进程」的测试文件。 */
@@ -233,7 +235,9 @@ function executorSources() {
  * @returns {boolean}
  */
 function hasExecutor(name, sources) {
-  if (sources.commandText.includes(name)) return true;
+  if (sources.commandText.includes(name)) {
+    return true;
+  }
   return sources.testSources.some((t) => t.text.includes(name));
 }
 
@@ -266,7 +270,9 @@ function claimsPreCommit(src) {
  * @returns {{onDemand: Record<string, {why: string, who: string}>, entrypoints: Record<string, Array<{flags: string[], judges: string, executors: string[]}>>}}
  */
 function readLedger() {
-  if (!fs.existsSync(LEDGER)) return { onDemand: {}, entrypoints: {} };
+  if (!fs.existsSync(LEDGER)) {
+    return { onDemand: {}, entrypoints: {} };
+  }
   const parsed = JSON.parse(fs.readFileSync(LEDGER, "utf8"));
   return { onDemand: parsed.onDemand ?? {}, entrypoints: parsed.entrypoints ?? {} };
 }
@@ -285,10 +291,14 @@ function readLedger() {
  */
 function ownFlags(line, scriptName) {
   const at = line.indexOf(scriptName);
-  if (at === -1) return null;
+  if (at === -1) {
+    return null;
+  }
   let rest = line.slice(at + scriptName.length);
   const sep = rest.search(/(?:^|\s)--(?:\s|$)/);
-  if (sep >= 0) rest = rest.slice(0, sep);
+  if (sep >= 0) {
+    rest = rest.slice(0, sep);
+  }
   return new Set([...rest.matchAll(/--[\w-]+/g)].map((m) => m[0]));
 }
 
@@ -302,7 +312,9 @@ function ownFlags(line, scriptName) {
  */
 function isCallLine(line) {
   const t = line.trim();
-  if (t === "") return false;
+  if (t === "") {
+    return false;
+  }
   return !(t.startsWith("#") || t.startsWith("//") || t.startsWith("*"));
 }
 
@@ -378,9 +390,7 @@ function checkEntrypoints(entrypoints, names) {
      *     当年收的是「无旗标 vs 带旗标」，把不变量写成了特例，带旗标形之间还开着）。
      * ⚠️ 别把它实现成「一行只能命中一形」的全局分配 —— 一条命令确实可能同时是
      * 两个**不同脚本**的执行者，那样改会把这条判据变成容易误报的那一类。 */
-    const declaredFlags = new Set(
-      entries.flatMap((e) => (Array.isArray(e?.flags) ? e.flags : [])),
-    );
+    const declaredFlags = new Set(entries.flatMap((e) => (Array.isArray(e?.flags) ? e.flags : [])));
     /* 登记时就拒掉「两形旗标有包含关系（含相等）」：允许它存在，等于让「超集那一行同时证两形」
      * 是错还是有意在规范里没有答案 —— 上面那条排除也就没有拦头。
      *
@@ -395,7 +405,9 @@ function checkEntrypoints(entrypoints, names) {
       for (let j = i + 1; j < entries.length; j += 1) {
         const a = new Set(entries[i]?.flags ?? []);
         const b = new Set(entries[j]?.flags ?? []);
-        if (a.size === 0 || b.size === 0) continue;
+        if (a.size === 0 || b.size === 0) {
+          continue;
+        }
         const contained = (x, y) => [...x].every((f) => y.has(f));
         const labelOf = (s) => [...s].join(" ");
         if (a.size === b.size && contained(a, b)) {
@@ -439,11 +451,10 @@ function checkEntrypoints(entrypoints, names) {
         const others = [...declaredFlags].filter((f) => !flags.includes(f));
         const hit = lines.some((line) => {
           const mine = ownFlags(line, script);
-          if (mine === null) return false;
-          return (
-            flags.every((f) => mine.has(f)) &&
-            others.every((f) => !mine.has(f))
-          );
+          if (mine === null) {
+            return false;
+          }
+          return flags.every((f) => mine.has(f)) && others.every((f) => !mine.has(f));
         });
         if (!hit) {
           problems.push(
@@ -494,10 +505,7 @@ for (const name of names) {
   const src = fs.readFileSync(path.join(scriptsDir, name), "utf8");
   const judge = hasExit(src);
   const referenced = hasExecutor(name, executors);
-  const registered = Object.prototype.hasOwnProperty.call(
-    ledger.onDemand,
-    name,
-  );
+  const registered = Object.prototype.hasOwnProperty.call(ledger.onDemand, name);
 
   if (judge) {
     if (referenced) {
@@ -577,18 +585,20 @@ if (REPORT_ONLY) {
       `（判定型判据共 ${report.judgeWithExecutor.length + report.judgeOrphaned.length} 份按名字有主 ——` +
       ` 多形而没登记的，这一行不会自动发现，见 §13.5.12 那条「不写启发式扫描器」的口径）`,
   );
-  if (report.judgeOrphaned.length > 0)
+  if (report.judgeOrphaned.length > 0) {
     console.log(`  无执行者：${report.judgeOrphaned.join("、")}`);
-  if (report.reportClaiming.length > 0)
+  }
+  if (report.reportClaiming.length > 0) {
     console.log(`  报告型自称在跑：${report.reportClaiming.join("、")}`);
+  }
   process.exit(0);
 }
 
 if (problems.length > 0) {
-  console.log(
-    `判据执行者台账：${problems.length} 处不一致（判据脚本共 ${names.length} 份）\n`,
-  );
-  for (const p of problems) console.log(`  ✗ ${p}`);
+  console.log(`判据执行者台账：${problems.length} 处不一致（判据脚本共 ${names.length} 份）\n`);
+  for (const p of problems) {
+    console.log(`  ✗ ${p}`);
+  }
   console.log(
     `\n规范 §13.5.12 的口径：判定型「要么有执行者、要么登记按需召唤」，` +
       `报告型不许自称供 pre-commit 调用，台账双向拦，` +

@@ -88,8 +88,7 @@ export function gitRun(args, deps = {}) {
       });
       return {
         ok: r.status === 0,
-        stdout:
-          r.status === 0 ? String(r.stdout ?? "") : String(r.stderr ?? ""),
+        stdout: r.status === 0 ? String(r.stdout ?? "") : String(r.stderr ?? ""),
       };
     });
   return runGit(args, cwd);
@@ -122,9 +121,7 @@ export function resolveBaseRef(deps = {}) {
   }
   /* ② 非 PR 事件 / 手工触发：退回「要并进去的那条」的 merge-base。 */
   const remoteRef =
-    deps.fallbackRef !== undefined
-      ? deps.fallbackRef
-      : resolveMergeBaseRef(deps.cwd ?? ROOT);
+    deps.fallbackRef !== undefined ? deps.fallbackRef : resolveMergeBaseRef(deps.cwd ?? ROOT);
   if (!remoteRef) {
     return {
       ok: false,
@@ -164,22 +161,13 @@ export function changedFilesForBaseRef(ref, deps = {}, dots = "...") {
    * 改动面里那一条与真实路径对不上 ⇒ 「改了文档源、镜像没同批带上」在平台上永远判不出来，
    * 而本机（全局配了 `core.quotepath=false`）看不出来 —— 同一份代码两种判决。 */
   const got = gitRun(
-    [
-      "-c",
-      "core.quotePath=false",
-      "diff",
-      "--name-status",
-      "-M",
-      `${ref}${dots}HEAD`,
-    ],
+    ["-c", "core.quotePath=false", "diff", "--name-status", "-M", `${ref}${dots}HEAD`],
     deps,
   );
   if (!got.ok) {
     return {
       ok: false,
-      reason:
-        `${ref} 的 diff 没跑起来` +
-        "（浅克隆 / 该 sha 不在本地对象库里；先 fetch 再跑）",
+      reason: `${ref} 的 diff 没跑起来` + "（浅克隆 / 该 sha 不在本地对象库里；先 fetch 再跑）",
     };
   }
   const parsed = changedPathsFromNameStatus(got.stdout);
@@ -229,7 +217,9 @@ export function changedFilesForBaseRef(ref, deps = {}, dots = "...") {
 export function reconcileSyntheticMergeFace(ref, deps = {}) {
   const env = deps.env ?? process.env;
   const baseRef = String(ref ?? "").trim();
-  if (baseRef === "") return { used: false, why: "没有基线可比" };
+  if (baseRef === "") {
+    return { used: false, why: "没有基线可比" };
+  }
   const source = String(env.CNB_COMMIT ?? "").trim();
   if (source === "") {
     /* 本地 / 手工触发时没有这个变量 ⇒ 无从对账（那边也没有合成提交）。 */
@@ -289,9 +279,7 @@ export function reconcileSyntheticMergeFace(ref, deps = {}) {
    *     拼不出那条等式（浅克隆最常见），此时不许相信减法。 */
   const crosses =
     theirs.files.some((f) => mineAll.has(f)) ||
-    mine.files.some((f) =>
-      new Set([...theirs.files, ...theirs.renamedFrom]).has(f),
-    );
+    mine.files.some((f) => new Set([...theirs.files, ...theirs.renamedFrom]).has(f));
   if (!crosses || !mine.files.every((f) => seenFiles.includes(f))) {
     return {
       used: false,
@@ -317,9 +305,13 @@ export function reconcileSyntheticMergeFace(ref, deps = {}) {
  */
 export function resolveChangedFiles(deps = {}) {
   const base = resolveBaseRef(deps);
-  if (!base.ok) return { ok: false, reason: base.reason };
+  if (!base.ok) {
+    return { ok: false, reason: base.reason };
+  }
   const got = changedFilesForBaseRef(base.ref, deps, base.dots);
-  if (!got.ok) return { ok: false, reason: got.reason };
+  if (!got.ok) {
+    return { ok: false, reason: got.reason };
+  }
   return {
     ok: true,
     files: got.files,

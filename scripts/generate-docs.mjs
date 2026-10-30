@@ -39,9 +39,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  */
 function runPnpm(script) {
   if (!fs.existsSync(path.join(ROOT, "node_modules", ".bin"))) {
-    console.error(
-      "[ERROR] 未检测到 node_modules/.bin，请先在项目根执行：pnpm install",
-    );
+    console.error("[ERROR] 未检测到 node_modules/.bin，请先在项目根执行：pnpm install");
     return null;
   }
   const result = runPnpmSync(["run", script], { cwd: ROOT, stdio: "inherit" });
@@ -49,9 +47,7 @@ function runPnpm(script) {
     console.error(
       `[ERROR] 起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}`,
     );
-    console.error(
-      `[INFO] 实际命令：${result.command} ${result.args.join(" ")}`,
-    );
+    console.error(`[INFO] 实际命令：${result.command} ${result.args.join(" ")}`);
     console.error("[INFO] 自查：pnpm check:toolchain");
     return null;
   }
@@ -61,24 +57,24 @@ function runPnpm(script) {
 function main() {
   console.log("[INFO] 步骤 1/2：文档引用一致性校验（pnpm doc:check）");
   const check = runPnpm("doc:check");
-  if (check === null) return 1;
+  if (check === null) {
+    return 1;
+  }
   if (check !== 0) {
     console.error(`[ERROR] 文档引用校验未通过（exit ${check}）。`);
-    console.log(
-      "[INFO] 请按上方报错，检查编辑文档里的占位符 / 裸值 / 路径是否与权威源一致。",
-    );
+    console.log("[INFO] 请按上方报错，检查编辑文档里的占位符 / 裸值 / 路径是否与权威源一致。");
     return check;
   }
   console.log("[OK]   文档引用一致性通过");
   console.log("");
   console.log("[INFO] 步骤 2/2：生成原文文档（pnpm doc:render）");
   const render = runPnpm("doc:render");
-  if (render === null) return 1;
+  if (render === null) {
+    return 1;
+  }
   if (render !== 0) {
     console.error(`[ERROR] 文档生成失败（exit ${render}）。`);
-    console.log(
-      "[INFO] 请确认权威源文件存在、doc-facts.cjs 的 extract 规则能读到值。",
-    );
+    console.log("[INFO] 请确认权威源文件存在、doc-facts.cjs 的 extract 规则能读到值。");
     return render;
   }
   console.log("[OK]   原文文档已生成到 docs/generated/");

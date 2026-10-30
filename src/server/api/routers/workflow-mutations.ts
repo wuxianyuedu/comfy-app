@@ -191,11 +191,12 @@ export const workflowMutationProcedures = {
     )
     .mutation(async ({ ctx, input }) => {
       const existing = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.id);
-      if (!existing)
+      if (!existing) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Workflow not found",
         });
+      }
 
       // patch 为显式字段构造（不含 ...rest 展开），故 mergePositions / groups /
       // notes 无需在此排除——它们的读取走下方具名变量。
@@ -262,19 +263,27 @@ export const workflowMutationProcedures = {
             /* 导轨坐标 `grp:bpin:*` 不属于任何数据节点，但它是顶层画布的布局
              *  一部分：顶层重置要清掉，子图重置不能顺手抹掉（那是外层视图的
              *  布局）。 */
-            if (key.startsWith("grp:bpin:")) continue;
+            if (key.startsWith("grp:bpin:")) {
+              continue;
+            }
             const inner = key.startsWith(prefix) ? key.slice(prefix.length) : "";
             /* 只保留「不属于本层」的键：不带前缀的裸键（原始/老数据）与更深一层
              *  的拼接键都要留着，「属于本层」的才丢。 */
-            if (inner && !inner.includes(":")) continue;
+            if (inner && !inner.includes(":")) {
+              continue;
+            }
             next[key] = value;
           }
         } else {
           for (const [key, value] of Object.entries(cur)) {
-            if (key.startsWith("grp:bpin:")) continue;
+            if (key.startsWith("grp:bpin:")) {
+              continue;
+            }
             /* 顶层只清「裸 id」：保留的必须是带冒号的键 —— 子图内部节点的
              *  `host:inner` 坐标属于下钻视图，顶层重置不该动。 */
-            if (!key.includes(":")) continue;
+            if (!key.includes(":")) {
+              continue;
+            }
             next[key] = value;
           }
         }
@@ -304,7 +313,9 @@ export const workflowMutationProcedures = {
           >;
           for (let i = 0; i < nodes.length; i++) {
             const nd = nodes[i];
-            if (!nd || typeof nd !== "object") continue;
+            if (!nd || typeof nd !== "object") {
+              continue;
+            }
             const rawId =
               nd && "id" in nd
                 ? /* SAFETY: 类型断言已复核 */ (nd as { id?: unknown }).id
@@ -316,9 +327,15 @@ export const workflowMutationProcedures = {
             }
           }
         }
-        if (groups !== undefined) nextRawJson.groups = groups;
-        if (notes !== undefined) nextRawJson.notes = notes;
-        if (nodes.length > 0) nextRawJson.nodes = nodes;
+        if (groups !== undefined) {
+          nextRawJson.groups = groups;
+        }
+        if (notes !== undefined) {
+          nextRawJson.notes = notes;
+        }
+        if (nodes.length > 0) {
+          nextRawJson.nodes = nodes;
+        }
         patch.rawJson = nextRawJson;
         if (writePositions) {
           if (mergePositions) {
@@ -372,11 +389,12 @@ export const workflowMutationProcedures = {
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const existing = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.id);
-      if (!existing)
+      if (!existing) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Workflow not found",
         });
+      }
       await workflowTemplateRepository.delete(input.id);
       return { ok: true };
     }),
@@ -384,11 +402,12 @@ export const workflowMutationProcedures = {
   /* POST /api/workflows/[id]/resync —— 新建 */
   resync: authedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
     const existing = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.id);
-    if (!existing)
+    if (!existing) {
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "Workflow not found",
       });
+    }
     const result = await reimportFromSource({
       sourcePath: existing.sourcePath ?? "",
       sourceMtime: existing.sourceMtime,

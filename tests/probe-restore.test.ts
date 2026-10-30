@@ -152,9 +152,11 @@ describe("口径要有执行者 —— 拿索引/HEAD 清工作区这种写法�
     const out: Array<string> = [];
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const abs = join(dir, e.name);
-      if (e.isDirectory()) out.push(...tsFiles(abs));
-      else if (e.isFile() && e.name.endsWith(".ts"))
+      if (e.isDirectory()) {
+        out.push(...tsFiles(abs));
+      } else if (e.isFile() && e.name.endsWith(".ts")) {
         out.push(abs.slice(REPO_ROOT.length + 1).replace(/\\/g, "/"));
+      }
     }
     return out;
   }

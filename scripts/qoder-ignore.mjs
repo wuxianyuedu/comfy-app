@@ -151,7 +151,9 @@ export function renderIgnore() {
 export function diffIgnore(current, wanted) {
   const a = current.split("\n");
   const b = wanted.split("\n");
-  if (a.join("\n") === b.join("\n")) return { same: true, added: [], removed: [] };
+  if (a.join("\n") === b.join("\n")) {
+    return { same: true, added: [], removed: [] };
+  }
   const setA = new Set(a);
   const setB = new Set(b);
   return {
@@ -201,9 +203,7 @@ export async function main(argv = process.argv.slice(2)) {
       typeof e === "object" && e !== null && "code" in e
         ? String(/** @type {{code: string}} */ (e).code)
         : "UNKNOWN";
-    process.stderr.write(
-      `${TAG} 写不进去（${code}）：${HERE} —— 这是「没跑成」，不是「已装好」\n`,
-    );
+    process.stderr.write(`${TAG} 写不进去（${code}）：${HERE} —— 这是「没跑成」，不是「已装好」\n`);
     return 2;
   }
   process.stdout.write(
@@ -213,9 +213,6 @@ export async function main(argv = process.argv.slice(2)) {
   return 0;
 }
 
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(await main());
 }

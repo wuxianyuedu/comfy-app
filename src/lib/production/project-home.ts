@@ -67,11 +67,15 @@ function stageDetail(stage: ProductionStage, view: ProductionRunView): string {
     case "storyboard":
       return total > 0 ? `${total} 镜` : "";
     case "shots": {
-      if (total === 0) return "";
+      if (total === 0) {
+        return "";
+      }
       return `${view.shots.filter((s) => s.hasImage).length}/${total} 镜`;
     }
     case "video": {
-      if (total === 0) return "";
+      if (total === 0) {
+        return "";
+      }
       return `${view.shots.filter((s) => s.hasClip).length}/${total} 镜`;
     }
     default:
@@ -147,6 +151,8 @@ export function deriveProjectOverview(
  * 永远为假，留着只会变成一行没人能覆盖、也没人能删的死代码。
  */
 export function overviewHeadline(overview: ProjectOverview): string {
-  if (overview.nextStage === null) return "全流程已完成";
+  if (overview.nextStage === null) {
+    return "全流程已完成";
+  }
   return `下一步：${STAGE_LABEL[overview.nextStage]}`;
 }

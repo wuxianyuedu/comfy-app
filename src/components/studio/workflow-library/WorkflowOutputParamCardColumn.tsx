@@ -57,7 +57,9 @@ export function WorkflowOutputParamCardColumn({
   onReset,
   endpoint,
 }: WorkflowOutputParamCardColumnProps) {
-  if (outputs.length === 0) return null;
+  if (outputs.length === 0) {
+    return null;
+  }
 
   return (
     <aside

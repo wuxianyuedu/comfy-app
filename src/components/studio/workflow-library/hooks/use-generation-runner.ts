@@ -17,23 +17,14 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 import { errorMessage } from "~/lib/error-message";
-import {
-  startLocalGenerate,
-  type TaskProgressNode,
-} from "~/lib/workshop/generation-client";
+import { startLocalGenerate, type TaskProgressNode } from "~/lib/workshop/generation-client";
 import {
   applyParamMapping,
   buildParamEntries,
   parseParamMapping,
 } from "~/lib/workflow/workflow-param-mapping";
-import {
-  appendWorkflowRunLog,
-  registerWorkflowRun,
-} from "~/lib/workflow/workflow-run-store";
-import {
-  toWorkflowInputsPayload,
-  type WorkflowIOMap,
-} from "~/components/studio/workflow-io";
+import { appendWorkflowRunLog, registerWorkflowRun } from "~/lib/workflow/workflow-run-store";
+import { toWorkflowInputsPayload, type WorkflowIOMap } from "~/components/studio/workflow-io";
 import { seedModeOverrides } from "~/components/studio/project-canvas/CanvasNode/helpers";
 
 import {
@@ -152,10 +143,7 @@ async function executeRun(
  *   这样「生效映射」等容器侧派生不必倒灌进本 hook（否则与 `useParamWiring`
  *   的回调依赖会互相成环）。
  */
-export function useGenerationRunner(params: {
-  workflowId: string;
-  enabled: boolean;
-}) {
+export function useGenerationRunner(params: { workflowId: string; enabled: boolean }) {
   const { workflowId, enabled } = params;
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   /* 节点相位的节流闸门（`~/components/ui/use-throttled-progress`）。
@@ -178,7 +166,9 @@ export function useGenerationRunner(params: {
     () => ({
       onProgress: (taskId, pct, node) => {
         /* 高频回调：按任务节流（规范 16 §16.2.4.68）。 */
-        if (!progressGate.current.allow(taskId)) return;
+        if (!progressGate.current.allow(taskId)) {
+          return;
+        }
         setPhase({ kind: "running", pct, ...(node ? { node } : {}) });
       },
       onLog: (taskId, entry) => {

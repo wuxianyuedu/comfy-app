@@ -266,12 +266,16 @@ function LogBody({
  */
 function LogHint({ log }: { log: RuntimeLogController }) {
   const parts: Array<string> = [];
-  if (log.truncated) parts.push("该次启动的输出过长，只显示最近一段。");
+  if (log.truncated) {
+    parts.push("该次启动的输出过长，只显示最近一段。");
+  }
   /* 列表被上限裁过：说清「还有更早的」而不是让用户以为「只启动过这些次」。
    * 一次启动一份文件之后同一天可能攒几十份，这条提示比过去更常出现。 */
   if (log.sessions.length < log.total) {
     parts.push(`该服务一共启动过 ${log.total} 次，下拉只列最近 ${log.sessions.length} 次。`);
   }
-  if (parts.length === 0) return null;
+  if (parts.length === 0) {
+    return null;
+  }
   return <p className="text-ink-fainter text-2xs px-3 pb-2 leading-relaxed">{parts.join("")}</p>;
 }

@@ -172,7 +172,9 @@ function useHandleInventoryRefresh(inventory: string) {
   const updateNodeInternals = useUpdateNodeInternals();
   const applied = useRef(inventory);
   useEffect(() => {
-    if (applied.current === inventory) return;
+    if (applied.current === inventory) {
+      return;
+    }
     applied.current = inventory;
     updateNodeInternals([LIB_NODE_PARAMS, LIB_NODE_HOST, LIB_NODE_OUTPUTS]);
   }, [inventory, updateNodeInternals]);
@@ -292,7 +294,9 @@ function WorkflowLibraryCanvasInner({
     (deleted: Array<Edge>) => {
       for (const edge of deleted) {
         const owner = libraryEdgeOwner(edge.id);
-        if (owner && onDeleteWire) onDeleteWire(owner.namespace, owner.entryId);
+        if (owner && onDeleteWire) {
+          onDeleteWire(owner.namespace, owner.entryId);
+        }
       }
       setSelectedEdgeIds(new Set());
     },
@@ -303,7 +307,9 @@ function WorkflowLibraryCanvasInner({
   const handleDeleteSelected = useCallback(() => {
     for (const id of selectedEdgeIds) {
       const owner = libraryEdgeOwner(id);
-      if (owner && onDeleteWire) onDeleteWire(owner.namespace, owner.entryId);
+      if (owner && onDeleteWire) {
+        onDeleteWire(owner.namespace, owner.entryId);
+      }
     }
     setSelectedEdgeIds(new Set());
   }, [selectedEdgeIds, onDeleteWire]);
@@ -336,12 +342,16 @@ function WorkflowLibraryCanvasInner({
   const backdropKey = `${backdropSize.width}x${backdropSize.height}`;
   const lastBackdropKey = useRef(backdropKey);
   useEffect(() => {
-    if (lastBackdropKey.current === backdropKey) return;
+    if (lastBackdropKey.current === backdropKey) {
+      return;
+    }
     lastBackdropKey.current = backdropKey;
     setNodes((current) =>
       current.map((node) => {
         const sized = flow.defaultNodes.find((item) => item.id === node.id);
-        if (!sized || node.width === sized.width) return node;
+        if (!sized || node.width === sized.width) {
+          return node;
+        }
         return { ...node, width: sized.width, height: sized.height };
       }),
     );
@@ -354,7 +364,9 @@ function WorkflowLibraryCanvasInner({
   const resetNodePositions = useCallback<OnNodeDrag<Node>>(
     (_event, dragged) => {
       const at = positionOf(dragged.id);
-      if (!at) return;
+      if (!at) {
+        return;
+      }
       setNodes((current) =>
         current.map((node) => (node.id === dragged.id ? { ...node, position: at } : node)),
       );

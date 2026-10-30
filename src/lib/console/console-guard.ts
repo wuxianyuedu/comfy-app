@@ -24,24 +24,30 @@
 
 /** 判定一个 host 串（可能带端口）是不是回环地址。 */
 export function isLoopbackHost(value: string | null | undefined): boolean {
-  if (!value) return false;
+  if (!value) {
+    return false;
+  }
   const raw = value.trim().toLowerCase();
-  if (!raw) return false;
+  if (!raw) {
+    return false;
+  }
   /* 逐条列全，不用「包含 127.」这种近似 —— `127.evil.com` 也会命中。 */
   const host = stripPort(raw);
-  if (host === "localhost" || host === "127.0.0.1" || host === "::1")
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
     return true;
-  if (host === "[::1]") return true;
+  }
+  if (host === "[::1]") {
+    return true;
+  }
   /* IPv6 映射的 IPv4 回环：`::ffff:127.0.0.1`（Node 在双栈监听下常见的形态）。 */
-  if (
-    host.startsWith("::ffff:") &&
-    host.slice("::ffff:".length) === "127.0.0.1"
-  ) {
+  if (host.startsWith("::ffff:") && host.slice("::ffff:".length) === "127.0.0.1") {
     return true;
   }
   /* 整个 127.0.0.0/8 都是回环（不是只有 .0.1）。 */
   const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (v4?.[1] === "127") return true;
+  if (v4?.[1] === "127") {
+    return true;
+  }
   return false;
 }
 
@@ -54,7 +60,9 @@ function stripPort(host: string): string {
   const colon = host.lastIndexOf(":");
   /* 多于一个冒号且不以 `[` 开头 —— 是未括起来的 IPv6 字面量，不能按端口切
    * （`::1` 会被切成 `:`，于是本机请求被判成非回环）。 */
-  if (colon > 0 && host.indexOf(":") === colon) return host.slice(0, colon);
+  if (colon > 0 && host.indexOf(":") === colon) {
+    return host.slice(0, colon);
+  }
   return host;
 }
 
@@ -75,9 +83,13 @@ export interface LoopbackHeadersLike {
  *     那种请求的 `Host` 是 `192.168.x.x:3100`，不是回环。
  */
 export function isLoopbackRequest(headers: LoopbackHeadersLike): boolean {
-  if (!isLoopbackHost(headers.get("host"))) return false;
+  if (!isLoopbackHost(headers.get("host"))) {
+    return false;
+  }
   const origin = headers.get("origin");
-  if (origin === null || origin.trim() === "") return true;
+  if (origin === null || origin.trim() === "") {
+    return true;
+  }
   return isLoopbackOrigin(origin);
 }
 

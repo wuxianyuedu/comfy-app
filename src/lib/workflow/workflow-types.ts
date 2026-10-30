@@ -422,7 +422,9 @@ const RETIRED_CODE_ALIASES = new Map<string, string>([["fl2v", "FLF2V"]]);
  */
 export function normalizeTaskType(raw: string): string {
   const trimmed = raw.trim();
-  if (!trimmed) return trimmed;
+  if (!trimmed) {
+    return trimmed;
+  }
   const lower = trimmed.toLowerCase();
   return CODE_BY_LOWER.get(lower) ?? RETIRED_CODE_ALIASES.get(lower) ?? trimmed;
 }
@@ -441,9 +443,13 @@ export function resolveWorkflowMode(args: {
     (mode): mode is string => typeof mode === "string" && mode.length > 0,
   );
   const declared = args.defaultMode;
-  if (declared && (modes.length === 0 || modes.includes(declared))) return declared;
+  if (declared && (modes.length === 0 || modes.includes(declared))) {
+    return declared;
+  }
   const [firstMode] = modes;
-  if (firstMode) return firstMode;
+  if (firstMode) {
+    return firstMode;
+  }
   if (typeof args.taskType === "string" && args.taskType) {
     return normalizeTaskType(args.taskType);
   }

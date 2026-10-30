@@ -111,7 +111,9 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  for (const dir of created) rmSync(dir, { recursive: true, force: true });
+  for (const dir of created) {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("脚本档判决面 —— 面必须是全量", () => {
@@ -244,7 +246,9 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       const abs = join(dir, e.name);
       const rel = abs.slice(REPO_ROOT.length + 1).replace(/\\/g, "/");
       if (e.isDirectory()) {
-        if (e.name.startsWith(".")) continue;
+        if (e.name.startsWith(".")) {
+          continue;
+        }
         walkMjs(abs, out);
       } else if (e.isFile() && e.name.endsWith(".mjs")) {
         out.push(rel);

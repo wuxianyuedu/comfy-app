@@ -98,7 +98,9 @@ describe("collectDependencyFloors：exports 隐藏 package.json 的包不静默�
       );
       const scanned = collectDependencyFloors(root);
       expect(scanned.ok, "应能从磁盘兜底读到 hidden 的 engines").toBe(true);
-      if (!scanned.ok) throw new Error("collectDependencyFloors 应成功");
+      if (!scanned.ok) {
+        throw new Error("collectDependencyFloors 应成功");
+      }
       const hit = scanned.floors.find((f) => f.pkg === "hidden");
       expect(hit, "hidden 不该静默退出扫描范围").toBeDefined();
       expect(hit?.range).toBe(">=22.12.0");

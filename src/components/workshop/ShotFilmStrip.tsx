@@ -35,7 +35,9 @@ export function ShotFilmStrip({
   /** 跳到某一镜（由调用处决定是滚动定位还是同时展开那张卡）。 */
   onJump: (shot: Shot) => void;
 }) {
-  if (shots.length === 0) return null;
+  if (shots.length === 0) {
+    return null;
+  }
 
   const doneCount = shots.filter((shot) => shot.status === "done").length;
   const failedCount = shots.filter((shot) => shot.status === "failed").length;

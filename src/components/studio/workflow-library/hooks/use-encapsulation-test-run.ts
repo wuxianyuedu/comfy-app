@@ -111,7 +111,9 @@ export function useEncapsulationTestRun({
       },
       onOutput: (taskId, output) => {
         setTaskId(taskId);
-        if (output.kind === "video") return;
+        if (output.kind === "video") {
+          return;
+        }
         setResultUrl(output.url);
       },
       onSettled: (taskId, result) => {
@@ -127,7 +129,9 @@ export function useEncapsulationTestRun({
 
   const run = useCallback<EncapsulationTestRunController["run"]>(
     (values) => {
-      if (!lock.tryEnter()) return;
+      if (!lock.tryEnter()) {
+        return;
+      }
       setRunning(true);
       resetProgress();
       setError("");
@@ -174,7 +178,9 @@ export function useEncapsulationTestRun({
                 },
                 onOutput: (_taskId, output) => {
                   /* 视频产物不进「生成一张图」那个结果位。 */
-                  if (output.kind === "video") return;
+                  if (output.kind === "video") {
+                    return;
+                  }
                   setResultUrl(output.url);
                 },
                 onSettled: (_taskId, result) => {
@@ -190,7 +196,9 @@ export function useEncapsulationTestRun({
           },
           {
             report: (kind, detail) => {
-              if (kind === "err") setError(detail);
+              if (kind === "err") {
+                setError(detail);
+              }
             },
             failureText: "流程测试失败",
             readResultEnvelope: false,

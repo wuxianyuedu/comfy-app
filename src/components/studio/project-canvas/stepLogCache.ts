@@ -80,13 +80,17 @@ function touch(id: string, next: StepLogPanelState) {
   cache.set(id, next);
   if (cache.size > MAX_ENTRIES) {
     const oldest = cache.keys().next().value;
-    if (oldest) cache.delete(oldest);
+    if (oldest) {
+      cache.delete(oldest);
+    }
   }
 }
 
 /* 载入某个 taskId 的持久化状态；没有则为 null。 */
 export function loadStepLogPanelState(taskId: string | null | undefined): StepLogPanelState | null {
-  if (!taskId) return null;
+  if (!taskId) {
+    return null;
+  }
   return cache.get(taskId) ?? null;
 }
 
@@ -94,14 +98,18 @@ export function loadStepLogPanelState(taskId: string | null | undefined): StepLo
  * 面板想主动重置时也用（例如用户选了新工作流 —— 目前没有这条路径，
  * 但把出口留着）。 */
 export function saveStepLogPanelState(taskId: string, next: StepLogPanelState): void {
-  if (!taskId) return;
+  if (!taskId) {
+    return;
+  }
   touch(taskId, next);
 }
 
 /* 丢掉某个 taskId 的条目。用于「任务真结束后，用户不希望下次点同一节点时
  * 又冒出旧界面状态」的场景 —— 目前还没这么做，但接口先备着。 */
 export function clearStepLogPanelState(taskId: string | null | undefined): void {
-  if (!taskId) return;
+  if (!taskId) {
+    return;
+  }
   cache.delete(taskId);
 }
 
@@ -111,7 +119,9 @@ export function appendStepLog(
   taskId: string | null | undefined,
   entry: StepLogEntry,
 ): StepLogPanelState | null {
-  if (!taskId) return null;
+  if (!taskId) {
+    return null;
+  }
   const prev = cache.get(taskId) ?? {
     logs: /* SAFETY: 类型断言已复核 */ [] as Array<StepLogEntry>,
     validationErrors: null,
@@ -129,7 +139,9 @@ export function appendStepLog(
       break;
     }
   }
-  if (duplicated) return prev;
+  if (duplicated) {
+    return prev;
+  }
 
   const logs = [...prev.logs, entry];
   const next: StepLogPanelState = {
@@ -147,7 +159,9 @@ export function setStepLogValidationErrors(
   taskId: string | null | undefined,
   errs: Array<ValidationError> | null,
 ): void {
-  if (!taskId) return;
+  if (!taskId) {
+    return;
+  }
   const prev = cache.get(taskId) ?? {
     logs: /* SAFETY: 类型断言已复核 */ [] as Array<StepLogEntry>,
     validationErrors: null,
@@ -163,7 +177,9 @@ export function patchStepLogMeta(
   taskId: string | null | undefined,
   meta: { workflowName?: string; status?: string; nodeId?: string },
 ): void {
-  if (!taskId) return;
+  if (!taskId) {
+    return;
+  }
   const prev = cache.get(taskId) ?? {
     logs: /* SAFETY: 类型断言已复核 */ [] as Array<StepLogEntry>,
     validationErrors: null,

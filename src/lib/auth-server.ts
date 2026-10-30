@@ -55,10 +55,7 @@ const DEMO_NAME = "体验用户";
 let demoUserEmail: string | null = null;
 
 /** 按 email 解析用户，不存在则建号（OAuth 用户首次登录即落库）。 */
-async function resolveUserByEmail(
-  email: string,
-  name: string | null,
-): Promise<ServerUser> {
+async function resolveUserByEmail(email: string, name: string | null): Promise<ServerUser> {
   let user = await userRepository.findByEmail(email);
   user ??= await userRepository.createUser({
     email,
@@ -84,11 +81,11 @@ async function getDemoUser(): Promise<ServerUser> {
  *
  * 调用方负责把会话读出来传进来（见 `~/server/auth/request-user`）。
  */
-export async function getServerUser(
-  session: SessionLike | null,
-): Promise<ServerUser> {
+export async function getServerUser(session: SessionLike | null): Promise<ServerUser> {
   const email = session?.user?.email;
-  if (email) return resolveUserByEmail(email, session?.user?.name ?? null);
+  if (email) {
+    return resolveUserByEmail(email, session?.user?.name ?? null);
+  }
   return getDemoUser();
 }
 
@@ -96,11 +93,13 @@ export async function getServerUser(
  * REST Route Handlers 的鉴权闸：`loginRequired` 打开时无会话返回 null
  * （调用方 401），否则与 `getServerUser` 一样回落演示用户。
  */
-export async function requireServerUser(
-  session: SessionLike | null,
-): Promise<ServerUser | null> {
+export async function requireServerUser(session: SessionLike | null): Promise<ServerUser | null> {
   const email = session?.user?.email;
-  if (email) return resolveUserByEmail(email, session?.user?.name ?? null);
-  if (!getSettingsSync().loginRequired) return getDemoUser();
+  if (email) {
+    return resolveUserByEmail(email, session?.user?.name ?? null);
+  }
+  if (!getSettingsSync().loginRequired) {
+    return getDemoUser();
+  }
   return null;
 }

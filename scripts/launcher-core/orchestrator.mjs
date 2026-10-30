@@ -44,9 +44,7 @@ export function writeLaunchStatus(
     startedAt = null,
   },
 ) {
-  const elapsed = startedAt
-    ? Math.round((Date.now() - startedAt) / 100) / 10
-    : 0;
+  const elapsed = startedAt ? Math.round((Date.now() - startedAt) / 100) / 10 : 0;
   const body = {
     phase,
     progress: Math.round(progress * 1000) / 1000,
@@ -62,11 +60,7 @@ export function writeLaunchStatus(
   try {
     const dir = path.join(root, "run");
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(
-      path.join(dir, "launch-status.json"),
-      JSON.stringify(body),
-      "utf8",
-    );
+    fs.writeFileSync(path.join(dir, "launch-status.json"), JSON.stringify(body), "utf8");
     return true;
   } catch {
     return false;
@@ -101,21 +95,22 @@ const SCHEMA_NOT_READY_DB = new Set(["empty", "unknown"]);
  * @param {{ port: number, host?: string, path?: string }} spec
  * @returns {Promise<"ready" | "not-up" | "route-404" | "schema-not-ready">}
  */
-export async function classifyProbe({
-  port,
-  host = "127.0.0.1",
-  path: probePath = "/api/health",
-}) {
+export async function classifyProbe({ port, host = "127.0.0.1", path: probePath = "/api/health" }) {
   try {
     const res = await fetch(`http://${host}:${port}${probePath}`, {
       cache: "no-store",
     });
-    if (res.ok) return "ready";
+    if (res.ok) {
+      return "ready";
+    }
     // 拿到了 HTTP 应答但不是 2xx：404 是「路由没进编译图」的确切签名。
-    if (res.status === 404) return "route-404";
+    if (res.status === 404) {
+      return "route-404";
+    }
     // 503 要看**响应体**才能定性：只有「表还没建」这一类不该被当成普通未就绪。
-    if (res.status === 503 && (await healthBodySaysSchemaNotReady(res)))
+    if (res.status === 503 && (await healthBodySaysSchemaNotReady(res))) {
       return "schema-not-ready";
+    }
     // 其余 4xx/5xx 不当成路由失效或建库问题（那是真故障，如 500），交回上层
     // 按普通未就绪继续等，避免把业务错误误读成缓存 / 建库问题。
     return "not-up";
@@ -168,11 +163,15 @@ export async function waitForReady({
 }) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (isAlive && !isAlive()) return false;
+    if (isAlive && !isAlive()) {
+      return false;
+    }
     if ((await classifyProbe({ port, host, path: probePath })) === "ready") {
       return true;
     }
-    if (onTick) onTick(Math.round((deadline - Date.now()) / 1000));
+    if (onTick) {
+      onTick(Math.round((deadline - Date.now()) / 1000));
+    }
     await new Promise((r) => setTimeout(r, 1000));
   }
   return false;
@@ -184,12 +183,7 @@ export async function waitForReady({
  */
 export function readTail(file, lines = 20) {
   try {
-    return fs
-      .readFileSync(file, "utf8")
-      .split("\n")
-      .slice(-lines)
-      .join("\n")
-      .trim();
+    return fs.readFileSync(file, "utf8").split("\n").slice(-lines).join("\n").trim();
   } catch {
     return "";
   }
@@ -206,10 +200,7 @@ export function readTail(file, lines = 20) {
  */
 export function fileHasMarker(file, marker) {
   try {
-    return fs
-      .readFileSync(file, "utf8")
-      .toLowerCase()
-      .includes(marker.toLowerCase());
+    return fs.readFileSync(file, "utf8").toLowerCase().includes(marker.toLowerCase());
   } catch {
     return false;
   }
@@ -232,10 +223,7 @@ export const NEXTJS_PANEL_LOG_PREFIX = "nextjs-panel-";
  * @param {string} dir @param {{ prefix?: string, since?: number }} [options]
  * @returns {string | null}
  */
-export function latestPanelTranscript(
-  dir,
-  { prefix = NEXTJS_PANEL_LOG_PREFIX, since = 0 } = {},
-) {
+export function latestPanelTranscript(dir, { prefix = NEXTJS_PANEL_LOG_PREFIX, since = 0 } = {}) {
   let best = null;
   let names;
   try {
@@ -251,8 +239,12 @@ export function latestPanelTranscript(
     } catch {
       continue; // 正在被轮转删掉
     }
-    if (mtimeMs < since) continue;
-    if (!best || mtimeMs > best.mtimeMs) best = { file, mtimeMs };
+    if (mtimeMs < since) {
+      continue;
+    }
+    if (!best || mtimeMs > best.mtimeMs) {
+      best = { file, mtimeMs };
+    }
   }
   return best ? best.file : null;
 }
@@ -281,13 +273,15 @@ export function readDiagnosticsTail({
   panelSince = 0,
   lines = 20,
 }) {
-  const panel = panelDir
-    ? latestPanelTranscript(panelDir, { since: panelSince })
-    : null;
+  const panel = panelDir ? latestPanelTranscript(panelDir, { since: panelSince }) : null;
   for (const file of [stderrFile, stdoutFile, panel]) {
-    if (!file) continue;
+    if (!file) {
+      continue;
+    }
     const tail = readTail(file, lines);
-    if (tail) return tail;
+    if (tail) {
+      return tail;
+    }
   }
   return "";
 }
@@ -323,8 +317,11 @@ export async function inspectPort(port, { listenPids, belongsToRoot, root }) {
   const ownPids = [];
   const foreignPids = [];
   for (const pid of pids) {
-    if (await belongsToRoot(pid, root)) ownPids.push(pid);
-    else foreignPids.push(pid);
+    if (await belongsToRoot(pid, root)) {
+      ownPids.push(pid);
+    } else {
+      foreignPids.push(pid);
+    }
   }
   return {
     ownership: ownPids.length > 0 ? PORT_OWNERSHIP.own : PORT_OWNERSHIP.foreign,
@@ -374,12 +371,7 @@ export const APP_START_SCRIPT_MARKER = "start.mjs";
  *           isAppProcess: (pid: number, cmdline: string) => boolean }} deps
  * @returns {Promise<{ ownership: string, ownPids: number[], foreignPids: number[], reclaimed: boolean }>}
  */
-export async function portOwnershipVerdict({
-  requestedPort,
-  verdict,
-  cmdlineOf,
-  isAppProcess,
-}) {
+export async function portOwnershipVerdict({ requestedPort, verdict, cmdlineOf, isAppProcess }) {
   // 空闲：没有占用者要裁。
   if (verdict.ownership === PORT_OWNERSHIP.free) {
     return {
@@ -414,8 +406,11 @@ export async function portOwnershipVerdict({
   const restPids = [];
   for (const pid of verdict.foreignPids ?? []) {
     const cmdline = await cmdlineOf(pid);
-    if (cmdline && isAppProcess(pid, cmdline)) appPids.push(pid);
-    else restPids.push(pid);
+    if (cmdline && isAppProcess(pid, cmdline)) {
+      appPids.push(pid);
+    } else {
+      restPids.push(pid);
+    }
   }
   if (appPids.length === 0) {
     return {

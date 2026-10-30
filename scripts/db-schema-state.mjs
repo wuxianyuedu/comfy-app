@@ -64,7 +64,9 @@ export function resolveSqlitePath(root, databaseUrl) {
  */
 export function probeSchemaSync(root, databaseUrl) {
   const file = resolveSqlitePath(root, databaseUrl);
-  if (!fs.existsSync(file)) return "unknown";
+  if (!fs.existsSync(file)) {
+    return "unknown";
+  }
   try {
     const db = new DatabaseSync(file, { readOnly: true, open: true });
     try {
@@ -105,7 +107,9 @@ export function schemaFingerprint(root) {
       .readdirSync(dir)
       .filter((name) => name.endsWith(".ts"))
       .sort();
-    if (files.length === 0) return null;
+    if (files.length === 0) {
+      return null;
+    }
     const bytes = Buffer.concat(files.map((name) => fs.readFileSync(path.join(dir, name))));
     const digest = Buffer.from(crypto.hash("sha256", bytes, "hex"), "hex");
     return digest.readUInt32BE(0) & 0x7fffffff;
@@ -126,7 +130,9 @@ export function schemaFingerprint(root) {
  */
 export function readSchemaFingerprint(root, databaseUrl) {
   const file = resolveSqlitePath(root, databaseUrl);
-  if (!fs.existsSync(file)) return null;
+  if (!fs.existsSync(file)) {
+    return null;
+  }
   try {
     const db = new DatabaseSync(file, { readOnly: true, open: true });
     try {
@@ -150,7 +156,9 @@ export function readSchemaFingerprint(root, databaseUrl) {
  */
 export function writeSchemaFingerprint(root, databaseUrl, value) {
   const file = resolveSqlitePath(root, databaseUrl);
-  if (!fs.existsSync(file)) return false;
+  if (!fs.existsSync(file)) {
+    return false;
+  }
   try {
     const db = new DatabaseSync(file, { open: true });
     try {
@@ -192,9 +200,13 @@ export function probeSchemaFresh(root, databaseUrl) {
     };
   }
   const want = schemaFingerprint(root);
-  if (want === null) return { state: "unknown", detail: "读不到 schema 源文件" };
+  if (want === null) {
+    return { state: "unknown", detail: "读不到 schema 源文件" };
+  }
   const have = readSchemaFingerprint(root, databaseUrl);
-  if (have === null) return { state: "unknown", detail: "读不到库里的指纹" };
+  if (have === null) {
+    return { state: "unknown", detail: "读不到库里的指纹" };
+  }
   /* `0` = 从没登记过（`PRAGMA user_version` 的初值，见 `readSchemaFingerprint`）。
    * 它与「登记过、但对不上」是两件事：**没有基线**时不构成「库落后了」的结论 ——
    * 与 `ensureSchemaCurrent` 对空库跳过指纹闸门同一条口径。 */
@@ -298,10 +310,16 @@ export function ensureSchemaCurrent(root, options = {}) {
   let want = null;
   if (tablesReady) {
     want = schemaFingerprint(root);
-    if (want === null) return { state: "unknown", detail: "读不到 schema 源文件" };
+    if (want === null) {
+      return { state: "unknown", detail: "读不到 schema 源文件" };
+    }
     const have = readSchemaFingerprint(root, databaseUrl);
-    if (have === null) return { state: "unknown", detail: "读不到库里的指纹" };
-    if (have === want) return { state: "ready" };
+    if (have === null) {
+      return { state: "unknown", detail: "读不到库里的指纹" };
+    }
+    if (have === want) {
+      return { state: "ready" };
+    }
 
     /* 同步前讲一句：drizzle 每次 diff 要十几秒，不说清楚的话用户看到的是
      * 「启动卡住了」。 */
@@ -340,7 +358,9 @@ export function ensureSchemaCurrent(root, options = {}) {
     /* 本来就没差异（点按钮与启动同步并发的窗口里另一个进程先做完了）：
      * 登记指纹、判 ready —— 用户没有需要做的事。 */
     if (applied.alreadyCurrent) {
-      if (want !== null) writeSchemaFingerprint(root, databaseUrl, want);
+      if (want !== null) {
+        writeSchemaFingerprint(root, databaseUrl, want);
+      }
       return { state: "ready" };
     }
     const after = schemaDigest(root, databaseUrl);
@@ -355,8 +375,12 @@ export function ensureSchemaCurrent(root, options = {}) {
     if (!applied.converged || after === null) {
       return notSynced(staleReason(applied));
     }
-    if (want === null) want = schemaFingerprint(root);
-    if (want !== null) writeSchemaFingerprint(root, databaseUrl, want);
+    if (want === null) {
+      want = schemaFingerprint(root);
+    }
+    if (want !== null) {
+      writeSchemaFingerprint(root, databaseUrl, want);
+    }
     return { state: "synced" };
   }
 
@@ -369,7 +393,9 @@ export function ensureSchemaCurrent(root, options = {}) {
   if (probe.converged) {
     /* 库本来就是对的，只是指纹没登记（登记失败，或上一个版本还没登记过）。
      * 不提示 —— 用户没有需要做的事。 */
-    if (want !== null) writeSchemaFingerprint(root, databaseUrl, want);
+    if (want !== null) {
+      writeSchemaFingerprint(root, databaseUrl, want);
+    }
     return { state: "ready" };
   }
 
@@ -377,7 +403,9 @@ export function ensureSchemaCurrent(root, options = {}) {
   if (!canAutoApply(pending)) {
     if (pending.length > 0) {
       forward("\n这批变更需要人工确认，启动链路不自动执行：\n");
-      for (const statement of pending) forward(`  ${statement}\n`);
+      for (const statement of pending) {
+        forward(`  ${statement}\n`);
+      }
       forward("\n");
     }
     if (pending.length === 0) {
@@ -422,8 +450,12 @@ export function ensureSchemaCurrent(root, options = {}) {
   }
   /* 空库这一档进来时 `want` 还没取过（闸门被跳过）—— 现在库已经建好了，
    * 取一次指纹登记上，下一次启动就走毫秒级的快路径。 */
-  if (want === null) want = schemaFingerprint(root);
-  if (want !== null) writeSchemaFingerprint(root, databaseUrl, want);
+  if (want === null) {
+    want = schemaFingerprint(root);
+  }
+  if (want !== null) {
+    writeSchemaFingerprint(root, databaseUrl, want);
+  }
   return { state: "synced" };
 }
 

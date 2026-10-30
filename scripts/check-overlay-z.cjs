@@ -97,7 +97,9 @@ function stripComments(text) {
       if (ch === "\n") {
         inLine = false;
         out += ch;
-      } else out += " ";
+      } else {
+        out += " ";
+      }
       i++;
       continue;
     }
@@ -146,7 +148,9 @@ const RULES = {
       const stripped = stripComments(t);
       let n = 0;
       for (const m of stripped.matchAll(/\bz-(\d+)\b/g)) {
-        if (!NAMED_TONES.includes(m[1])) n++;
+        if (!NAMED_TONES.includes(m[1])) {
+          n++;
+        }
       }
       return n;
     },
@@ -157,32 +161,45 @@ const RULES = {
 
 function walk(dir, out = []) {
   const abs = path.join(ROOT, dir);
-  if (!fs.existsSync(abs)) return out;
+  if (!fs.existsSync(abs)) {
+    return out;
+  }
   for (const e of fs.readdirSync(abs, { withFileTypes: true })) {
     const rel = `${dir}/${e.name}`;
     if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name === "__snapshots__") continue;
+      if (e.name === "node_modules" || e.name === "__snapshots__") {
+        continue;
+      }
       walk(rel, out);
-    } else out.push(rel);
+    } else {
+      out.push(rel);
+    }
   }
   return out;
 }
 
-const isTest = (r) =>
-  /\.test\.[cm]?[jt]sx?$/.test(r) || r.includes("/__tests__/");
+const isTest = (r) => /\.test\.[cm]?[jt]sx?$/.test(r) || r.includes("/__tests__/");
 
 /** 收集当前各文件违规计数：rel -> { Z1?, Z2?, Z3? }。 */
 function collect() {
   const files = {};
   for (const dir of SCAN_DIRS) {
     for (const rel of walk(dir)) {
-      if (!/\.[jt]sx?$/.test(rel) || rel.endsWith(".d.ts")) continue;
-      if (isTest(rel)) continue;
-      if (EXEMPT_DIRS.some((e) => e.re.test(rel))) continue;
+      if (!/\.[jt]sx?$/.test(rel) || rel.endsWith(".d.ts")) {
+        continue;
+      }
+      if (isTest(rel)) {
+        continue;
+      }
+      if (EXEMPT_DIRS.some((e) => e.re.test(rel))) {
+        continue;
+      }
       const text = fs.readFileSync(path.join(ROOT, rel), "utf8");
       for (const [id, rule] of Object.entries(RULES)) {
         const n = rule.count(text);
-        if (n > 0) (files[rel] ||= {})[id] = n;
+        if (n > 0) {
+          (files[rel] ||= {})[id] = n;
+        }
       }
     }
   }
@@ -191,7 +208,11 @@ function collect() {
 
 function total(map) {
   let n = 0;
-  for (const v of Object.values(map)) for (const c of Object.values(v)) n += c;
+  for (const v of Object.values(map)) {
+    for (const c of Object.values(v)) {
+      n += c;
+    }
+  }
   return n;
 }
 
@@ -210,13 +231,13 @@ function main() {
         .filter(([, c]) => c[id])
         .sort((a, b) => b[1][id] - a[1][id]);
       const sum = hits.reduce((n, [, c]) => n + c[id], 0);
-      console.log(
-        `[overlay-z] ${id} ${rule.label} —— ${sum} 处 / ${hits.length} 文件`,
-      );
+      console.log(`[overlay-z] ${id} ${rule.label} —— ${sum} 处 / ${hits.length} 文件`);
       for (const [rel, c] of hits.slice(0, 15)) {
         console.log(`  · ${rel}（${c[id]} 处）`);
       }
-      if (hits.length > 15) console.log(`  … 另 ${hits.length - 15} 个文件`);
+      if (hits.length > 15) {
+        console.log(`  … 另 ${hits.length - 15} 个文件`);
+      }
     }
     console.log("[overlay-z] --report 模式：只出清单，不判失败 ✓");
     process.exit(0);

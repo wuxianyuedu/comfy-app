@@ -393,6 +393,8 @@ function seedMessageScene(name: string): MessageScene {
  */
 export const withMessageScene: Decorator = (Story, context) => {
   const name = (context.parameters as { messageScene?: unknown }).messageScene;
-  if (typeof name === "string") seedMessageScene(name);
+  if (typeof name === "string") {
+    seedMessageScene(name);
+  }
   return <Story />;
 };

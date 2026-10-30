@@ -27,7 +27,9 @@ export function isDragRegionTarget(
   target: { closest?: (selector: string) => unknown } | null,
   markerAttr = "data-no-drag",
 ): boolean {
-  if (!target || typeof target.closest !== "function") return false;
+  if (!target || typeof target.closest !== "function") {
+    return false;
+  }
   return target.closest(`[${markerAttr}]`) === null;
 }
 
@@ -35,9 +37,7 @@ export function isDragRegionTarget(
 export type WindowButtonKind = "minimize" | "maximize" | "restore" | "close";
 
 /** 按当前最大化状态给出「最大化 / 还原」按钮语义。 */
-export function resolveMaximizeButtonKind(
-  maximized: boolean,
-): "maximize" | "restore" {
+export function resolveMaximizeButtonKind(maximized: boolean): "maximize" | "restore" {
   return maximized ? "restore" : "maximize";
 }
 

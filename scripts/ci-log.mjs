@@ -157,11 +157,17 @@ const COLOR_BAND = "90";
  * @returns {boolean}
  */
 export function colorEnabled({ env = process.env, isTTY } = {}) {
-  if (env.NO_COLOR !== undefined) return false;
-  if (env.FORCE_COLOR !== undefined) return true;
+  if (env.NO_COLOR !== undefined) {
+    return false;
+  }
+  if (env.FORCE_COLOR !== undefined) {
+    return true;
+  }
   const ciColor = env.COMFYAPP_CI_COLOR;
   /* 「0」按关算：这一枚是本仓私有的旗标，`X=0` 是它最自然的关法。 */
-  if (ciColor !== undefined && ciColor !== "" && ciColor !== "0") return true;
+  if (ciColor !== undefined && ciColor !== "" && ciColor !== "0") {
+    return true;
+  }
   return isTTY ?? Boolean(process.stdout.isTTY);
 }
 
@@ -174,7 +180,9 @@ export function colorEnabled({ env = process.env, isTTY } = {}) {
  * @returns {string}
  */
 export function paint(text, code, enabled) {
-  if (!enabled || !text) return text;
+  if (!enabled || !text) {
+    return text;
+  }
   return `\u001b[${code}m${text}\u001b[0m`;
 }
 
@@ -196,7 +204,9 @@ export function paint(text, code, enabled) {
  */
 export function bandLine(line, { enabled = true, color } = {}) {
   const own = color ?? tagColorOf(line) ?? COLOR_BAND;
-  if (!enabled) return { line, color: own };
+  if (!enabled) {
+    return { line, color: own };
+  }
   return { line: `${paint("▌", own, true)} ${line}`, color: own };
 }
 
@@ -209,7 +219,9 @@ export function bandLine(line, { enabled = true, color } = {}) {
 export function tagColorOf(line) {
   for (const m of String(line ?? "").matchAll(TAG_RE)) {
     const key = `[${m[1]}]`;
-    if (TAG_COLORS[key]) return TAG_COLORS[key];
+    if (TAG_COLORS[key]) {
+      return TAG_COLORS[key];
+    }
   }
   return null;
 }
@@ -227,9 +239,13 @@ export function tagColorOf(line) {
  */
 export function colorizeLine(line, enabled = true) {
   const text = String(line ?? "");
-  if (!enabled || text === "") return text;
+  if (!enabled || text === "") {
+    return text;
+  }
   const state = stateOfLine(text);
-  if (state) return paintByState(text, state);
+  if (state) {
+    return paintByState(text, state);
+  }
   return text.replace(TAG_RE, (whole, word) => {
     const code = TAG_COLORS[whole];
     return code && word ? paint(whole, code, true) : whole;
@@ -244,7 +260,9 @@ export function colorizeLine(line, enabled = true) {
  * @returns {string}
  */
 function paintByState(text, state) {
-  if (!state) return text;
+  if (!state) {
+    return text;
+  }
   return paint(text, COLORS[state], true);
 }
 
@@ -256,15 +274,27 @@ function paintByState(text, state) {
  */
 export function stateOfLine(line) {
   const text = String(line ?? "").trimStart();
-  if (text.startsWith(TAGS.ok)) return "ok";
-  if (text.startsWith(TAGS.skip)) return "skip";
-  if (text.startsWith(TAGS.red)) return "red";
+  if (text.startsWith(TAGS.ok)) {
+    return "ok";
+  }
+  if (text.startsWith(TAGS.skip)) {
+    return "skip";
+  }
+  if (text.startsWith(TAGS.red)) {
+    return "red";
+  }
   /* 判据自己的话：`✓`（CP936 有字形的是 `√`，`ci-cp936-glyphs.mjs` 会换）
    * 与 `OK` 结尾的结论行按绿算，`×` / `✗` / 「失败」「不合规」按红算。
    * 这一档只影响颜色，**不产生判决** —— 认错了最多是颜色不明显。 */
-  if (/^\[warn\]/.test(text)) return null;
-  if (/^[√✓]|\bOK\b/.test(text)) return "ok";
-  if (/^[×✗]|失败|不合规|违规/.test(text)) return "red";
+  if (/^\[warn\]/.test(text)) {
+    return null;
+  }
+  if (/^[√✓]|\bOK\b/.test(text)) {
+    return "ok";
+  }
+  if (/^[×✗]|失败|不合规|违规/.test(text)) {
+    return "red";
+  }
   return null;
 }
 
@@ -300,8 +330,9 @@ export function renderTally(tally, { enabled = true } = {}) {
     `${TAGS[state]} 合计 ${total} 条：判过 ${ok.length}、` +
     `没判 ${skip.length}、红 ${red.length}`;
   const lines = [head];
-  for (const name of red)
+  for (const name of red) {
     lines.push(`      ${paint("红", COLORS.red, enabled)}  ${name}`);
+  }
   /* 跳过的那几条用「没判」而不是「跳过」念：词要说明后果（它没有结论），
    * 而「跳过」在中文里读起来像「故意不做」，容易被当成放行。 */
   for (const name of skip) {
@@ -368,26 +399,13 @@ export function indentItems(items, width = 4) {
  * @param {number} [verdict.max] 证据最多打几条（超出写「另有 N 条」）
  * @returns {string[]} 要打印的行（第一行是判决本身）
  */
-export function renderVerdict({
-  state,
-  gate,
-  subject,
-  detail,
-  hint,
-  items,
-  max = 40,
-}) {
-  const list = (items ?? [])
-    .map((x) => String(x ?? ""))
-    .filter((x) => x.trim());
-  const resolved =
-    state ?? (list.length > 0 ? "red" : looksSkipped(detail) ? "skip" : "ok");
+export function renderVerdict({ state, gate, subject, detail, hint, items, max = 40 }) {
+  const list = (items ?? []).map((x) => String(x ?? "")).filter((x) => x.trim());
+  const resolved = state ?? (list.length > 0 ? "red" : looksSkipped(detail) ? "skip" : "ok");
   /* 红的默认读数是**条数**（`命中 N 条`）：读者第一眼要的是「有几处」，
    * 逐条证据在下面几行。调用方给了自己的读数就用它的（例如「超过 400 行 2 个」）。 */
   const resolvedDetail =
-    resolved === "red" && !String(detail ?? "").trim()
-      ? summarize(list)
-      : detail;
+    resolved === "red" && !String(detail ?? "").trim() ? summarize(list) : detail;
   const head = [gate, subject].filter((s) => s && String(s).trim()).join(" · ");
   const tail = String(resolvedDetail ?? "").trim();
   const out = [`${TAGS[resolved]} ${head}${tail ? `（${tail}）` : ""}`];
@@ -401,9 +419,7 @@ export function renderVerdict({
     const shown = max > 0 ? list.slice(0, max) : list;
     out.push(...indentItems(shown));
     if (max > 0 && list.length > max) {
-      out.push(
-        `    …另有 ${list.length - max} 条未展开（共 ${list.length} 条）`,
-      );
+      out.push(`    …另有 ${list.length - max} 条未展开（共 ${list.length} 条）`);
     }
   }
   return out;
@@ -422,10 +438,7 @@ export function renderVerdict({
  */
 export function gatePass(gate, detail, options = {}) {
   const state = looksSkipped(detail) ? "skip" : "ok";
-  emit(
-    renderVerdict({ state, gate, subject: options.subject, detail }),
-    options,
-  );
+  emit(renderVerdict({ state, gate, subject: options.subject, detail }), options);
   return state;
 }
 
@@ -505,12 +518,11 @@ export function summarize(items) {
  *   `enabled` 省略 ⇒ 按 `colorEnabled()` 判；`band` 省略 ⇒ 与 `enabled` 同值。
  * @returns {string}
  */
-export function paintLine(
-  line,
-  { enabled = colorEnabled(), color, band = enabled } = {},
-) {
+export function paintLine(line, { enabled = colorEnabled(), color, band = enabled } = {}) {
   const text = String(line ?? "");
-  if (!enabled) return bandLine(text, { enabled: band, color }).line;
+  if (!enabled) {
+    return bandLine(text, { enabled: band, color }).line;
+  }
   const painted = color ? paint(text, color, true) : colorizeLine(text, true);
   return bandLine(painted, { enabled: band, color }).line;
 }
@@ -535,7 +547,9 @@ export function paintLine(
 function emit(lines, options = {}) {
   const write = options.out;
   if (write) {
-    for (const line of lines) write(line);
+    for (const line of lines) {
+      write(line);
+    }
     return;
   }
   const enabled = options.color ?? colorEnabled();

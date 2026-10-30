@@ -23,24 +23,22 @@ const ALLOWED_MIME = new Set([
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
-  if (!(await requireRequestUser())) return unauthorizedResponse();
+  if (!(await requireRequestUser())) {
+    return unauthorizedResponse();
+  }
   const form = await req.formData().catch(() => null);
-  if (!form)
+  if (!form) {
     return NextResponse.json({ error: "表单解析失败" }, { status: 400 });
+  }
   const file = form.get("file");
-  if (!(file instanceof File))
+  if (!(file instanceof File)) {
     return NextResponse.json({ error: "未找到文件" }, { status: 400 });
+  }
   if (!ALLOWED_MIME.has(file.type)) {
-    return NextResponse.json(
-      { error: "仅支持 MP3 / WAV / M4A / OGG 音频" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "仅支持 MP3 / WAV / M4A / OGG 音频" }, { status: 400 });
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    return NextResponse.json(
-      { error: "音频大小不能超过 100MB" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "音频大小不能超过 100MB" }, { status: 400 });
   }
 
   const buf = Buffer.from(await file.arrayBuffer());

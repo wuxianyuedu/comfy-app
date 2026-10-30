@@ -60,20 +60,20 @@ export function rejectUnknownArgs({
   fail,
 }) {
   const unknown = argv.filter((arg) => !recognized.includes(arg));
-  if (unknown.length === 0) return unknown;
+  if (unknown.length === 0) {
+    return unknown;
+  }
   const lines = [`${command} 不接受参数，但收到了：${unknown.join(" ")}`, ""];
-  lines.push(
-    recognized.length > 0
-      ? `它认的只有：${recognized.join(" ")}`
-      : "它一个参数都不认。",
-  );
+  lines.push(recognized.length > 0 ? `它认的只有：${recognized.join(" ")}` : "它一个参数都不认。");
   lines.push("认不出的旗标在这里**不会被当成「已生效的开关」**。");
   lines.push("");
   lines.push(action);
   if (exits.length > 0) {
     lines.push("");
     lines.push("想要的东西对应哪一条：");
-    for (const exit of exits) lines.push(`  · ${exit}`);
+    for (const exit of exits) {
+      lines.push(`  · ${exit}`);
+    }
   }
   fail(lines.join("\n"));
   return unknown;

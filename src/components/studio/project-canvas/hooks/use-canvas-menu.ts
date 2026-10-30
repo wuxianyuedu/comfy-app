@@ -41,7 +41,9 @@ export function useCanvasMenu({
   /** 在右键位置放一个默认数据的节点（`placeCanvasNode` 是落点唯一出口）。 */
   const createNode = useCallback(
     (kind: NodeKind) => {
-      if (!menu) return;
+      if (!menu) {
+        return;
+      }
       setNodes((nds) =>
         placeCanvasNode({
           nodes: nds,
@@ -57,7 +59,9 @@ export function useCanvasMenu({
 
   /** 在右键位置放一个纯视觉的 Ardot 风工作流节点（无数据、无处理器）。 */
   const createTestWorkflowNode = useCallback(() => {
-    if (!menu) return;
+    if (!menu) {
+      return;
+    }
     setNodes((nds) =>
       placeCanvasNode({
         nodes: nds,

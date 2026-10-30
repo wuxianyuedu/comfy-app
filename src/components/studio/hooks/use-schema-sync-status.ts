@@ -142,7 +142,9 @@ const SYNCED_FRESH_MS = 120_000;
 /** 状态文件里的 `at`（ISO）距现在是否还在有效期内；解析不了当作过期。
  *  写成类型守卫：调用处据此把 `at` 收窄成非空，下面才敢落 sessionStorage。 */
 function isFresh(at: string | null): at is string {
-  if (at === null) return false;
+  if (at === null) {
+    return false;
+  }
   const t = Date.parse(at);
   return Number.isFinite(t) && Date.now() - t < SYNCED_FRESH_MS;
 }
@@ -182,9 +184,13 @@ export function useSchemaSyncStatus(): SchemaSyncStatus {
         cache: "no-store",
         signal: AbortSignal.timeout(2500),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        return;
+      }
       const data: unknown = await res.json();
-      if (stoppedRef.current) return;
+      if (stoppedRef.current) {
+        return;
+      }
       const record = isRecord(data) ? data : {};
       const phase = toPhase(record.phase);
       const at = typeof record.at === "string" ? record.at : null;
@@ -230,7 +236,9 @@ export function useSchemaSyncStatus(): SchemaSyncStatus {
    * 负担；仍有事要办（syncing / missing / stale / 刚探到）时才保持 2s。 */
   const schemaPollMs = useCallback<() => number | null>(() => {
     const phase = phaseRef.current;
-    if (phase === "ready") return SCHEMA_SYNC_IDLE_MS;
+    if (phase === "ready") {
+      return SCHEMA_SYNC_IDLE_MS;
+    }
     if (phase === "unknown") {
       return resolvedRef.current ? SCHEMA_SYNC_IDLE_MS : SCHEMA_SYNC_POLL_MS;
     }

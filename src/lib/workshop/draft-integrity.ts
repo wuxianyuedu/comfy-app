@@ -197,7 +197,9 @@ function auditOne(kind: DraftElementKind, index: number, value: unknown): Array<
   const label = id ? `${noun} #${String(index + 1)}「${id}」` : `${noun} #${String(index + 1)}`;
   const issues: Array<DraftElementIssue> = [];
   for (const field of check.fields) {
-    if (field.ok(source[field.key])) continue;
+    if (field.ok(source[field.key])) {
+      continue;
+    }
     issues.push({
       kind,
       index,
@@ -238,7 +240,9 @@ export function countAffectedElements(
     character: new Set(),
     shot: new Set(),
   };
-  for (const issue of issues) byKind[issue.kind].add(issue.index);
+  for (const issue of issues) {
+    byKind[issue.kind].add(issue.index);
+  }
   return {
     scene: byKind.scene.size,
     character: byKind.character.size,
@@ -248,7 +252,9 @@ export function countAffectedElements(
 
 /** 那句要出现在界面上的话。没有问题时返回 null，调用方直接不渲染。 */
 export function describeDraftIssues(issues: ReadonlyArray<DraftElementIssue>): string | null {
-  if (issues.length === 0) return null;
+  if (issues.length === 0) {
+    return null;
+  }
   const counts = countAffectedElements(issues);
   const parts = /* SAFETY: 类型断言已复核 */ (["scene", "character", "shot"] as const)
     .filter((kind) => counts[kind] > 0)

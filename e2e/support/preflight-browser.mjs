@@ -39,8 +39,7 @@
  * 全量拉下来（数百 MiB），而本仓库的 project 只跑 chromium。两个都写是因为
  * `chromium` 自己那一份也可能缺（headed / 断言截图一类路径要它）。
  */
-export const BROWSER_INSTALL_HINT =
-  "pnpm exec playwright install chromium chromium-headless-shell";
+export const BROWSER_INSTALL_HINT = "pnpm exec playwright install chromium chromium-headless-shell";
 
 /**
  * @typedef {{verdict: "ready" | "missing" | "unknown",
@@ -98,7 +97,9 @@ export async function checkBrowserReady(options = {}) {
      * 两种写法，都收进 missing 那一档。 */
     result = { ok: false, error: /** @type {Error} */ (error) };
   }
-  if (result.ok) return { verdict: "ready" };
+  if (result.ok) {
+    return { verdict: "ready" };
+  }
 
   const message = result.error?.message ?? "";
   const executablePath = parseMissingExecutable(message);
@@ -140,8 +141,6 @@ export function describeBrowserMissing(preflight) {
     lines.push(`[e2e]   Playwright 原话：${preflight.raw}`);
   }
   lines.push(`[e2e]   补它：${preflight.installHint}`);
-  lines.push(
-    "[e2e]   跑下去的下场：全档每一条都报同一个 launch 失败，看不出真正要修的是什么。",
-  );
+  lines.push("[e2e]   跑下去的下场：全档每一条都报同一个 launch 失败，看不出真正要修的是什么。");
   return lines.join("\n");
 }

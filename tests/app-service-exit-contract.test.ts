@@ -25,20 +25,26 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { launcherChainSource } from "./helpers/launcher-source";
+import { normalizeControlFlow } from "./helpers/source-shape";
 
 const ROOT = process.cwd();
-const EXIT_MJS = readFileSync(join(ROOT, "scripts", "app-service-exit.mjs"), "utf8");
+/* 形态断言只看控制流，不看括号：先过归一化，oxlint `curly` 补 `{}` 不改变判据结论
+ * （`normalizeControlFlow` 对 `.rs` / `.ts` 之外的非 JS 家族原样返回，这里只包 JS 家族）。 */
+const EXIT_MJS = normalizeControlFlow(
+  readFileSync(join(ROOT, "scripts", "app-service-exit.mjs"), "utf8"),
+  "app-service-exit.mjs",
+);
 /* 断的是**编排链路**（主文件 + 它顶层静态 import 的 `launcher-core/**`）而不是
  * 单份主文件：`concludeDownstreamExit` 随 R5 拆分搬进了
  * `launcher-core/downstream.mjs`，只读主文件时 `slice` 拿到空串、
  * `not.toContain` 则**静默恒真**（拆分的实现位置不是契约，契约是「收尾那一段
  * 里写不写记录」）。 */
-const LAUNCHER_MJS = launcherChainSource();
+const LAUNCHER_MJS = normalizeControlFlow(launcherChainSource(), "dev-launcher.mjs");
 // 「收尾定性」这一族的判据不在入口文件里（§12.6 R5 的姊妹档盯着入口长度），
 // 而在 launcher-core/downstream-exit.mjs。写入侧的成因取值要看**那个**函数体。
-const DOWNSTREAM_EXIT_MJS = readFileSync(
-  join(ROOT, "scripts", "launcher-core", "downstream-exit.mjs"),
-  "utf8",
+const DOWNSTREAM_EXIT_MJS = normalizeControlFlow(
+  readFileSync(join(ROOT, "scripts", "launcher-core", "downstream-exit.mjs"), "utf8"),
+  "downstream-exit.mjs",
 );
 const EXIT_TS = readFileSync(join(ROOT, "src", "lib", "shell", "app-service-exit.ts"), "utf8");
 const SHELL_LAUNCH_RS = readFileSync(join(ROOT, "src-tauri", "src", "shell_launch.rs"), "utf8");
@@ -47,7 +53,9 @@ const SHELL_LIB_RS = readFileSync(join(ROOT, "src-tauri", "src", "lib.rs"), "utf
 /** 从 TS 里抠出 `AppServiceExitKind` 的联合取值（写死的形态，改了这里就红）。 */
 function tsKindUnion(): Array<string> {
   const block = /export type AppServiceExitKind =([\s\S]*?);/.exec(EXIT_TS)?.[1];
-  if (!block) return [];
+  if (!block) {
+    return [];
+  }
   return [...block.matchAll(/"([a-z-]+)"/g)].map((m) => m[1]!);
 }
 

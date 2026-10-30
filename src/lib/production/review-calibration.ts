@@ -93,11 +93,17 @@ export function calibrateFromShots(shots: Array<unknown>): CalibrationReport {
   >();
 
   for (const raw of shots) {
-    if (!isRecord(raw)) continue;
+    if (!isRecord(raw)) {
+      continue;
+    }
     const verdict = getRecordImageReview(raw);
-    if (!verdict) continue;
+    if (!verdict) {
+      continue;
+    }
     const mean = reviewScoreMean(verdict);
-    if (mean === null) continue;
+    if (mean === null) {
+      continue;
+    }
     const rating = normalizeHumanRating(getRecordHumanRating(raw));
     const hasHuman = rating !== null;
 

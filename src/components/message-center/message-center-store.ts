@@ -185,12 +185,22 @@ const MESSAGE_KINDS: ReadonlyArray<MessageKind> = ["update", "restart", "offline
  * `runId` **容忍缺席**（升级前写入的历史消息没有这个字段）：缺了就按 null 处理，
  * 于是那些消息落到「未标记启动」那一组——不猜它属于哪一次，也不因此丢掉整条。 */
 function asMessageRecord(raw: unknown): MessageRecord | null {
-  if (typeof raw !== "object" || raw === null) return null;
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
   const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
-  if (typeof o.id !== "string" || o.id === "") return null;
-  if (typeof o.title !== "string" || typeof o.body !== "string") return null;
-  if (typeof o.time !== "number" || !Number.isFinite(o.time)) return null;
-  if (typeof o.read !== "boolean") return null;
+  if (typeof o.id !== "string" || o.id === "") {
+    return null;
+  }
+  if (typeof o.title !== "string" || typeof o.body !== "string") {
+    return null;
+  }
+  if (typeof o.time !== "number" || !Number.isFinite(o.time)) {
+    return null;
+  }
+  if (typeof o.read !== "boolean") {
+    return null;
+  }
   if (
     typeof o.kind !== "string" ||
     !MESSAGE_KINDS.includes(/* SAFETY: 类型断言已复核 */ o.kind as MessageKind)
@@ -211,7 +221,9 @@ function asMessageRecord(raw: unknown): MessageRecord | null {
 /** 从持久化里读回消息；没存过 / 存坏了 / 没有任何一条可用 → 空数组。 */
 function readPersistedMessages(): Array<MessageRecord> {
   const raw = readStorageJson<unknown>(MESSAGE_CENTER_STORAGE_KEY, null);
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   return raw
     .map(asMessageRecord)
     .filter((m): m is MessageRecord => m !== null)
@@ -223,7 +235,9 @@ function readPersistedMessages(): Array<MessageRecord> {
  *  刷新一次就会丢掉分组依据。 */
 function sameAsPersisted(current: Array<MessageRecord>): boolean {
   const persisted = readPersistedMessages();
-  if (persisted.length !== current.length) return false;
+  if (persisted.length !== current.length) {
+    return false;
+  }
   return persisted.every((m, i) => {
     const c = current[i];
     return (

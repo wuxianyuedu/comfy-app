@@ -49,14 +49,20 @@ export const WORKSPACE_VIEWS: Array<WorkspaceView> = [
 ];
 
 function readTabsState(): WorkspaceTabsState | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined") {
+    return null;
+  }
   const raw = sessionStorage.getItem(WS_TABS_KEY);
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   return parseWorkspaceTabs(raw, WORKSPACE_VIEWS);
 }
 
 function writeTabsState(state: WorkspaceTabsState): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") {
+    return;
+  }
   sessionStorage.setItem(WS_TABS_KEY, serializeWorkspaceTabs(state));
 }
 
@@ -105,7 +111,9 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
   useEffect(() => {
     /* 对账完成前一律不落盘（机制见上）：否则挂载这一轮会先把初始态（只有首页
        一页）写进 sessionStorage，把用户存好的列表冲掉，随后才读到空。 */
-    if (!hydrated) return;
+    if (!hydrated) {
+      return;
+    }
     writeTabsState(tabsState);
   }, [tabsState, hydrated]);
 

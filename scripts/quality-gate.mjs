@@ -32,10 +32,7 @@ import { spawnSync } from "node:child_process";
 
 import { renderDriftReport } from "./lockfile/render-lock-diff.mjs";
 import { lockfileDrift } from "./launcher-core/worktree.mjs";
-import {
-  echoCommandLine,
-  formatCommandLine,
-} from "./launcher-core/command-echo.mjs";
+import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 import { renderVerdict } from "./ci-log.mjs";
@@ -57,9 +54,15 @@ const ROOT = path.resolve(HERE, "..");
  */
 function emitVerdict({ before = [], after = [], ...verdict }) {
   const write = verdict.state === "red" ? console.error : console.log;
-  for (const line of before) write(line);
-  for (const line of renderVerdict(verdict)) write(line);
-  for (const line of after) write(line);
+  for (const line of before) {
+    write(line);
+  }
+  for (const line of renderVerdict(verdict)) {
+    write(line);
+  }
+  for (const line of after) {
+    write(line);
+  }
 }
 
 /**
@@ -74,10 +77,7 @@ function emitVerdict({ before = [], after = [], ...verdict }) {
  *   `gate` 判据名（缺省按本入口自己的名字念）；`before` / `after` 是同一条失败块的
  *   段头与出路 —— 跟着判决走同一条流，不许留在 stdout
  */
-function fail(
-  message,
-  { gate = "quality-gate", before = [], after = [] } = {},
-) {
+function fail(message, { gate = "quality-gate", before = [], after = [] } = {}) {
   emitVerdict({ state: "red", gate, detail: message, before, after });
 }
 
@@ -122,8 +122,7 @@ const GATES = {
     args: ["../scripts/check-format.cjs", "--changed"],
   },
   test: {
-    label:
-      "Vitest full run + coverage ratchet (excluding known baseline failures)",
+    label: "Vitest full run + coverage ratchet (excluding known baseline failures)",
     /* 覆盖率门槛此前是**死配置**：`vitest.config.ts` 的 `coverage.thresholds` 写了
      * 几十条按实测定的门槛，但门禁这一步是裸 `vitest run`，不带 `--coverage` ——
      * 于是没有任何自动化路径判定过它们，「覆盖率棘轮」只存在于配置文件里
@@ -157,8 +156,7 @@ const GATES = {
    * `--update` 只许降、每条基线必须有 reason）见 `check-dependency-audit.mjs` 文件头。
    */
   dependencyAudit: {
-    label:
-      "Dependency audit ratchet (high/critical; ledger keyed by package+advisory)",
+    label: "Dependency audit ratchet (high/critical; ledger keyed by package+advisory)",
     args: ["../scripts/check-dependency-audit.mjs"],
   },
   /**
@@ -250,14 +248,12 @@ const GATES = {
    * / `pnpm check:all --mode dailyAttendance`。
    */
   dailyAttendance: {
-    label:
-      "Daily tier attendance (did the last scheduled run actually execute)",
+    label: "Daily tier attendance (did the last scheduled run actually execute)",
     args: ["../scripts/check-daily-attendance.mjs"],
     run: false,
   },
   premerge: {
-    label:
-      "Pre-merge fixed action (base recompute + commit claims + merge side loss)",
+    label: "Pre-merge fixed action (base recompute + commit claims + merge side loss)",
     args: ["../scripts/premerge-check.mjs"],
     run: false,
   },
@@ -293,7 +289,9 @@ function parseArgs(argv) {
     }
     if (arg.startsWith("--mode=")) {
       out.mode = arg.slice("--mode=".length);
-      if (!out.mode) out.unknown.push(arg);
+      if (!out.mode) {
+        out.unknown.push(arg);
+      }
       continue;
     }
     out.unknown.push(arg);
@@ -313,10 +311,7 @@ function reportVerdict(gate, code) {
     state: code === 0 ? "ok" : "red",
     gate: gate.label,
     detail: code === 0 ? "通过" : `退出码 ${code}`,
-    hint:
-      code === 0
-        ? ""
-        : "先修这一档，再重跑 `pnpm check:all`（`--mode <档名>` 可以只重跑它）",
+    hint: code === 0 ? "" : "先修这一档，再重跑 `pnpm check:all`（`--mode <档名>` 可以只重跑它）",
   });
 }
 
@@ -329,15 +324,20 @@ function reportVerdict(gate, code) {
  */
 function dependencyDrift() {
   const nm = path.join(ROOT, "node_modules");
-  if (!fs.existsSync(nm))
+  if (!fs.existsSync(nm)) {
     return { drift: true, reason: "node_modules 完全没装过" };
+  }
   // 判据本身走 `lockfileDrift`（`launcher-core/worktree.mjs`）——**唯一出处**，
   // 与启动器 / `check-deps-freshness.mjs` 共用同一份"实质差异"口径。此前这里自己
   // 拼了一遍 `diffLockfiles`，"直接读安装时 lockfile"与"读不到时算不算漂移"
   // 这两个边界各写各的，已经在三处漂移（ISSUE #1569 收口）。
   const drift = lockfileDrift(ROOT);
-  if (drift.state === "fresh") return { drift: false, reason: "" };
-  if (drift.state === "no-lockfile") return { drift: false, reason: "" };
+  if (drift.state === "fresh") {
+    return { drift: false, reason: "" };
+  }
+  if (drift.state === "no-lockfile") {
+    return { drift: false, reason: "" };
+  }
   return {
     drift: true,
     reason:
@@ -362,8 +362,9 @@ function dependencyDrift() {
  */
 function resolvePnpm() {
   const invocation = pnpmInvocation([]);
-  if (invocation)
+  if (invocation) {
     return { command: invocation.command, prefixArgs: invocation.args };
+  }
   fail("PATH 上找不到可用的 pnpm —— 门禁无法运行。", {
     after: [
       "        自查：pnpm check:toolchain（会打印选中的形态与探测结果）",
@@ -434,19 +435,15 @@ function runGate(pnpm, key, gate) {
      * 也不是平台流水线（`grep quality-gate .cnb.yml .githooks/*` 当场核过：只有
      * `package.json` 的 `check:all` 与 `tools/**\/*.ps1` 起它）。
      * 只给 `test` 这一条带，别的条目原样继承 —— 它不是全局开关。 */
-    env:
-      key === "test"
-        ? { ...process.env, COMFY_COVERAGE_ENFORCE: "1" }
-        : process.env,
+    env: key === "test" ? { ...process.env, COMFY_COVERAGE_ENFORCE: "1" } : process.env,
   });
   // 「命令没起来」与「跑完但非零退出」分开报：前者 stderr 通常是空的，
   // `status ?? 1` 只给一个退出码等于没说原因（ISSUE #576 的形态）。
   if (result.error) {
     const spawnError = /** @type {NodeJS.ErrnoException} */ (result.error);
-    fail(
-      `起 ${command} 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}`,
-      { after: [`        实际命令：${formatCommandLine(command, argv)}`] },
-    );
+    fail(`起 ${command} 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}`, {
+      after: [`        实际命令：${formatCommandLine(command, argv)}`],
+    });
     return 1;
   }
   const code = result.status ?? 1;
@@ -484,9 +481,7 @@ function main() {
   for (const k of keys) {
     const gate = GATES[k];
     if (!gate) {
-      fail(
-        `未知门禁：${mode}（可选：${Object.keys(GATES).join(" / ")} / all）`,
-      );
+      fail(`未知门禁：${mode}（可选：${Object.keys(GATES).join(" / ")} / all）`);
       return 2;
     }
     plan.push({ key: k, gate });
@@ -516,7 +511,9 @@ function main() {
   }
 
   const pnpm = resolvePnpm();
-  if (!pnpm) return 1;
+  if (!pnpm) {
+    return 1;
+  }
 
   let exitCode = 0;
   const red = [];
@@ -533,10 +530,7 @@ function main() {
   emitVerdict({
     state: exitCode === 0 ? "ok" : "red",
     gate: "一键门禁",
-    detail:
-      exitCode === 0
-        ? `${keys.length} 档全绿`
-        : `${keys.length} 档里红 ${red.length} 档`,
+    detail: exitCode === 0 ? `${keys.length} 档全绿` : `${keys.length} 档里红 ${red.length} 档`,
     hint:
       exitCode === 0
         ? ""

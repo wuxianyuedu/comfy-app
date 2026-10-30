@@ -43,17 +43,23 @@ export const CATEGORY_COLORS: Record<string, string> = {
 
 function hashColor(s: string): string {
   let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  }
   const hue = h % 360;
   return `hsl(${hue} 70% 62%)`;
 }
 
 export function colorFor(category: string | undefined): string {
-  if (!category) return "#7C5CFC";
+  if (!category) {
+    return "#7C5CFC";
+  }
   const parts = category.replace(/\/$/, "").split("/");
   for (const p of parts) {
     const c = CATEGORY_COLORS[p.toLowerCase()];
-    if (c) return c;
+    if (c) {
+      return c;
+    }
   }
   return hashColor(category);
 }
@@ -147,7 +153,9 @@ function recordRegistry(next: { loaded: boolean; count: number; detail: string |
     registryState.loaded === next.loaded &&
     registryState.count === next.count &&
     registryState.detail === next.detail;
-  if (unchanged) return;
+  if (unchanged) {
+    return;
+  }
   registryState = {
     version: next.loaded ? registryState.version + 1 : registryState.version,
     count: next.count,
@@ -223,7 +231,9 @@ function buildInto(
 ): number {
   let count = 0;
   for (const [ct, n] of Object.entries(manifest.nodes ?? {})) {
-    if (!n) continue;
+    if (!n) {
+      continue;
+    }
     const inputs: Array<PortSpec> = (n.inputs ?? []).map((input) => ({
       name: input.name,
       type: input.type,
@@ -259,7 +269,9 @@ function buildInto(
     // 好让画布渲染 ComfyUI 原生的左下角页脚。
     // manifest 没给包名时（旧版解析器 / 手工改过的 manifest）
     // 回落到原始分类字符串。
-    if (packages && n.package) packages[ct] = n.package;
+    if (packages && n.package) {
+      packages[ct] = n.package;
+    }
     count++;
   }
   return count;
@@ -378,11 +390,15 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
     const nextPackages: Record<string, string> = {};
     const count = buildInto(next, manifest, nextPackages);
     // 就地替换对外导出的 const map 内容（消费方持有的是同一引用）。
-    for (const k of Object.keys(CUSTOM_NODE_TYPES)) delete CUSTOM_NODE_TYPES[k];
+    for (const k of Object.keys(CUSTOM_NODE_TYPES)) {
+      delete CUSTOM_NODE_TYPES[k];
+    }
     Object.assign(CUSTOM_NODE_TYPES, next);
     // 同步包来源映射，让 ComfyNode 不必重新解析 manifest
     // 就能渲染左下角页脚。
-    for (const k of Object.keys(CUSTOM_NODE_PACKAGE)) delete CUSTOM_NODE_PACKAGE[k];
+    for (const k of Object.keys(CUSTOM_NODE_PACKAGE)) {
+      delete CUSTOM_NODE_PACKAGE[k];
+    }
     Object.assign(CUSTOM_NODE_PACKAGE, nextPackages);
     /* 表已经换完：把结论记进可读状态并广播一次，让订阅侧（画布的页脚 / 渲染链标注）
      * 在没有整页刷新的情况下重渲染。`count` 为 0 也算灌入成功 —— 那是「解析器

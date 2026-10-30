@@ -113,26 +113,32 @@ export function parseArgs(argv) {
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i] ?? "";
-    if (a === "--merge") out.merge = true;
-    else if (a === "--whoami") out.whoami = true;
-    else if (a === "--claims") out.claims = true;
-    else if (a === "--branches") out.branches = true;
+    if (a === "--merge") {
+      out.merge = true;
+    } else if (a === "--whoami") {
+      out.whoami = true;
+    } else if (a === "--claims") {
+      out.claims = true;
+    } else if (a === "--branches") {
+      out.branches = true;
+    }
     /* `--diagnose` 的构建号是**可选**的：不给就按 HEAD 的 sha 归属（红灯现场最常用的
      * 那一形）。所以下一个 token 只在不像旗标时才当构建号收下。 */
     else if (a === "--diagnose") {
       out.diagnose = true;
       const tok =
-        i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")
-          ? String(argv[++i] ?? "")
-          : "";
-      if (tok !== "") out.diagnoseSn = tok;
+        i + 1 < argv.length && !String(argv[i + 1]).startsWith("-") ? String(argv[++i] ?? "") : "";
+      if (tok !== "") {
+        out.diagnoseSn = tok;
+      }
     } else if (a === "--new-issue") {
       const tok =
-        i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")
-          ? String(argv[++i] ?? "")
-          : "";
-      if (tok.trim() === "") out.newIssueBad.push("(缺标题)");
-      else out.newIssue = tok;
+        i + 1 < argv.length && !String(argv[i + 1]).startsWith("-") ? String(argv[++i] ?? "") : "";
+      if (tok.trim() === "") {
+        out.newIssueBad.push("(缺标题)");
+      } else {
+        out.newIssue = tok;
+      }
     } else if (a === "--issue-body-file") {
       out.issueBodyFile = argv[++i] ?? "";
     } else if (a === "--priority") {
@@ -140,16 +146,16 @@ export function parseArgs(argv) {
     } else if (a.startsWith("--diagnose=")) {
       out.diagnose = true;
       const tok = a.slice("--diagnose=".length);
-      if (tok !== "") out.diagnoseSn = tok;
+      if (tok !== "") {
+        out.diagnoseSn = tok;
+      }
     } else if (a === "--stage-log" || a.startsWith("--stage-log=")) {
       /* 紧跟的是**自由文本**（格名里有空格：`API 文档生成与自检`），所以把非旗标的 token
        * 全收进来再拼 —— 只取一个的话，未加引号的格名会被切成两截，反查必然落空，而落空
        * 那句「这一跑没有这一格」会把人引去怀疑单子，不是怀疑命令行。
        * 首段像构建号形状才当构建号（见 `BUILD_SN_SHAPE`）；否则整串都是格名 ⇒ 走按 HEAD 归属。 */
       out.stageLog = true;
-      const toks = a.startsWith("--stage-log=")
-        ? [a.slice("--stage-log=".length)]
-        : [];
+      const toks = a.startsWith("--stage-log=") ? [a.slice("--stage-log=".length)] : [];
       while (i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")) {
         toks.push(String(argv[++i] ?? ""));
       }
@@ -158,14 +164,20 @@ export function parseArgs(argv) {
         toks.shift();
       }
       const ref = toks.join(" ").trim();
-      if (ref === "") out.stageLogBad.push("(缺点名哪一格)");
-      else out.stageLogRef = ref;
+      if (ref === "") {
+        out.stageLogBad.push("(缺点名哪一格)");
+      } else {
+        out.stageLogRef = ref;
+      }
     } else if (a === "--rerun-ci") {
       out.rerunCi = true;
     } else if (a.startsWith("--new-issue=")) {
       const tok = a.slice("--new-issue=".length);
-      if (tok.trim() === "") out.newIssueBad.push("(缺标题)");
-      else out.newIssue = tok;
+      if (tok.trim() === "") {
+        out.newIssueBad.push("(缺标题)");
+      } else {
+        out.newIssue = tok;
+      }
     } else if (a.startsWith("--issue-body-file=")) {
       out.issueBodyFile = a.slice("--issue-body-file=".length);
     } else if (a.startsWith("--priority=")) {
@@ -173,22 +185,27 @@ export function parseArgs(argv) {
     } else if (a === "--claim" || a === "--release") {
       const isClaim = a === "--claim";
       const tok =
-        i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")
-          ? String(argv[++i] ?? "")
-          : "";
+        i + 1 < argv.length && !String(argv[i + 1]).startsWith("-") ? String(argv[++i] ?? "") : "";
       const n = parseIssueNumberToken(tok);
       if (n === null) {
-        if (isClaim) out.claimBad.push(tok || "(缺号)");
-        else out.releaseBad.push(tok || "(缺号)");
+        if (isClaim) {
+          out.claimBad.push(tok || "(缺号)");
+        } else {
+          out.releaseBad.push(tok || "(缺号)");
+        }
       } else if (isClaim) {
         /* 第二次 `--claim` 不静默覆盖第一张：那会把「领两张」读成「领最后那张」，
          * 而屏幕上不会有任何提示。记进 bad，由执行层点名后停手。 */
         if (out.claim !== null) {
           out.claimBad.push(`重复的 --claim（前一张 #${out.claim}）`);
-        } else out.claim = n;
+        } else {
+          out.claim = n;
+        }
       } else if (out.release !== null) {
         out.releaseBad.push(`重复的 --release（前一张 #${out.release}）`);
-      } else out.release = n;
+      } else {
+        out.release = n;
+      }
     } else if (a === "--close-issue") {
       out.closeIssue = true;
       while (i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")) {
@@ -204,61 +221,86 @@ export function parseArgs(argv) {
       /* 两种写法共用这一处（与 `--claim=` 同形）：分成两支的漂移形态是「空格写法能用、
        * 等号写法被当成未知旗标」，而屏幕上只会留下一句「没要那个动作」。
        * 它只给「只补关」那一路供证明，自己不做动作 ⇒ 没有 `--close-issue` 时由执行层拒掉。 */
-      const tok =
-        a === "--as-merged"
-          ? String(argv[++i] ?? "")
-          : a.slice("--as-merged=".length);
+      const tok = a === "--as-merged" ? String(argv[++i] ?? "") : a.slice("--as-merged=".length);
       const n = parseIssueNumberToken(tok);
-      if (n === null) out.asMergedBad.push(tok || "(缺号)");
-      else if (out.asMerged !== null)
-        /* 第二次不静默覆盖第一条：那会把「凭两条 PR 关」读成「凭最后那条」。 */
+      if (n === null) {
+        out.asMergedBad.push(tok || "(缺号)");
+      } else if (out.asMerged !== null)
+      /* 第二次不静默覆盖第一条：那会把「凭两条 PR 关」读成「凭最后那条」。 */
+      {
         out.asMergedBad.push(`重复的 --as-merged（前一条 #${out.asMerged}）`);
-      else out.asMerged = n;
-    } else if (a === "--clean-branch") out.cleanBranch = true;
-    else if (a === "--reap") out.reap = true;
-    else if (a === "--dry-run") out.dryRun = true;
-    else if (a === "--no-wait") out.wait = false;
-    else if (a === "--message" || a === "-m") out.message = argv[++i] ?? "";
-    else if (a === "--message-file") out.messageFile = argv[++i] ?? "";
-    else if (a === "--title") out.title = argv[++i] ?? "";
-    else if (a === "--branch") out.branch = argv[++i] ?? "";
-    else if (a === "--add") out.adds.push(argv[++i] ?? "");
-    else if (a.startsWith("--message="))
+      } else {
+        out.asMerged = n;
+      }
+    } else if (a === "--clean-branch") {
+      out.cleanBranch = true;
+    } else if (a === "--reap") {
+      out.reap = true;
+    } else if (a === "--dry-run") {
+      out.dryRun = true;
+    } else if (a === "--no-wait") {
+      out.wait = false;
+    } else if (a === "--message" || a === "-m") {
+      out.message = argv[++i] ?? "";
+    } else if (a === "--message-file") {
+      out.messageFile = argv[++i] ?? "";
+    } else if (a === "--title") {
+      out.title = argv[++i] ?? "";
+    } else if (a === "--branch") {
+      out.branch = argv[++i] ?? "";
+    } else if (a === "--add") {
+      out.adds.push(argv[++i] ?? "");
+    } else if (a.startsWith("--message=")) {
       out.message = a.slice("--message=".length);
-    else if (a.startsWith("--message-file="))
+    } else if (a.startsWith("--message-file=")) {
       out.messageFile = a.slice("--message-file=".length);
-    else if (a.startsWith("--title=")) out.title = a.slice("--title=".length);
-    else if (a.startsWith("--branch="))
+    } else if (a.startsWith("--title=")) {
+      out.title = a.slice("--title=".length);
+    } else if (a.startsWith("--branch=")) {
       out.branch = a.slice("--branch=".length);
-    else if (a.startsWith("--add=")) out.adds.push(a.slice("--add=".length));
-    else if (a.startsWith("--only=")) out.only = a.slice("--only=".length);
-    else if (a.startsWith("--claim=") || a.startsWith("--release=")) {
+    } else if (a.startsWith("--add=")) {
+      out.adds.push(a.slice("--add=".length));
+    } else if (a.startsWith("--only=")) {
+      out.only = a.slice("--only=".length);
+    } else if (a.startsWith("--claim=") || a.startsWith("--release=")) {
       const isClaim = a.startsWith("--claim=");
       const tok = a.slice(a.indexOf("=") + 1);
       const n = parseIssueNumberToken(tok);
       if (n === null) {
-        if (isClaim) out.claimBad.push(tok || "(缺号)");
-        else out.releaseBad.push(tok || "(缺号)");
+        if (isClaim) {
+          out.claimBad.push(tok || "(缺号)");
+        } else {
+          out.releaseBad.push(tok || "(缺号)");
+        }
       } else if (isClaim) {
         /* 第二次 `--claim` 不静默覆盖第一张：那会把「领两张」读成「领最后那张」，
          * 而屏幕上不会有任何提示。记进 bad，由执行层点名后停手。 */
         if (out.claim !== null) {
           out.claimBad.push(`重复的 --claim（前一张 #${out.claim}）`);
-        } else out.claim = n;
+        } else {
+          out.claim = n;
+        }
       } else if (out.release !== null) {
         out.releaseBad.push(`重复的 --release（前一张 #${out.release}）`);
-      } else out.release = n;
+      } else {
+        out.release = n;
+      }
     } else if (a.startsWith("--close-issue=")) {
       out.closeIssue = true;
-      for (const tok of (a.slice("--close-issue=".length) || "").split(
-        /[,\s]+/,
-      )) {
-        if (tok === "") continue;
+      for (const tok of (a.slice("--close-issue=".length) || "").split(/[,\s]+/)) {
+        if (tok === "") {
+          continue;
+        }
         const n = parseIssueNumberToken(tok);
-        if (n === null) out.closeIssueBad.push(tok);
-        else out.closeIssueNumbers.push(n);
+        if (n === null) {
+          out.closeIssueBad.push(tok);
+        } else {
+          out.closeIssueNumbers.push(n);
+        }
       }
-    } else out.unknown.push(a);
+    } else {
+      out.unknown.push(a);
+    }
   }
   return out;
 }

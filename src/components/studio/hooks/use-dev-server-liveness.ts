@@ -152,7 +152,9 @@ export interface DevServerLiveness {
  * 慢了」记成停表（超时那一拍尤其明显）。发起时刻与定时器的节拍是同一件事。
  */
 export function probeGapMs(previousStartedAt: number | null, startedAt: number): number {
-  if (previousStartedAt === null) return 0;
+  if (previousStartedAt === null) {
+    return 0;
+  }
   return Math.max(0, startedAt - previousStartedAt - DEV_SERVER_PROBE_MS);
 }
 
@@ -211,13 +213,14 @@ async function probeBootId(): Promise<ProbeResult> {
       cache: "no-store",
       signal: AbortSignal.timeout(2500),
     });
-    if (!res.ok)
+    if (!res.ok) {
       return {
         ok: false,
         bootId: null,
         runId: null,
         routeTableStale: res.status === 404,
       };
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       bootId?: unknown;
       runId?: unknown;
@@ -290,17 +293,23 @@ export function useDevServerLiveness(): DevServerLiveness {
     setUnprobedMs(probeGapMs(lastProbeStartedAtRef.current, startedAt));
     lastProbeStartedAtRef.current = startedAt;
     const result = await probeBootId();
-    if (stoppedRef.current) return;
+    if (stoppedRef.current) {
+      return;
+    }
 
     /* 连通性先落：无论后续是否判定重启，视图都要知道此刻进程可不可达。 */
     setProbeOk(result.ok);
     setRouteTableStale(!result.ok && result.routeTableStale);
     setConsecutiveFailures(result.ok ? 0 : (n) => n + 1);
-    if (result.ok) setEverOnline(true);
+    if (result.ok) {
+      setEverOnline(true);
+    }
     /* 启动标识只认成功那一拍：与 `setProbeOk` 同一批落，于是「服务刚恢复」的
      * 下一个渲染里拿到的已经是**新一次启动**的 runId —— 恢复那条消息因此盖在
      * 新组而不是旧组（若分成两次请求就会盖错）。 */
-    if (result.ok) setCurrentRunId(result.runId);
+    if (result.ok) {
+      setCurrentRunId(result.runId);
+    }
 
     if (result.ok) {
       const bootId = result.bootId;
@@ -315,9 +324,13 @@ export function useDevServerLiveness(): DevServerLiveness {
         /* 短暂置「刚重启」高亮，随后自动复位。 */
         setRestarting(true);
         setProcessIsNew(true);
-        if (recentTimerRef.current) clearTimeout(recentTimerRef.current);
+        if (recentTimerRef.current) {
+          clearTimeout(recentTimerRef.current);
+        }
         recentTimerRef.current = setTimeout(() => {
-          if (!stoppedRef.current) setRestarting(false);
+          if (!stoppedRef.current) {
+            setRestarting(false);
+          }
         }, RESTART_RECENT_MS);
       } else if (prevBootId === null) {
         /* 首探且**没有任何基准**（sessionStorage 里也没有）：这是一次冷启动，
@@ -339,7 +352,9 @@ export function useDevServerLiveness(): DevServerLiveness {
       if (exitFetchedForBootIdRef.current !== bootId) {
         exitFetchedForBootIdRef.current = bootId;
         const probe = await fetchAppServiceExit();
-        if (stoppedRef.current) return;
+        if (stoppedRef.current) {
+          return;
+        }
         const record = probe.record;
         /* 只认「说的是上一次运行」的记录：记录带着结束那一次的 runId，与当前
          * 进程的 runId 一致就说明它描写的不是过去那一次（判据见 lib）。 */
@@ -365,7 +380,9 @@ export function useDevServerLiveness(): DevServerLiveness {
     stoppedRef.current = false;
     return () => {
       stoppedRef.current = true;
-      if (recentTimerRef.current) clearTimeout(recentTimerRef.current);
+      if (recentTimerRef.current) {
+        clearTimeout(recentTimerRef.current);
+      }
     };
   }, []);
 

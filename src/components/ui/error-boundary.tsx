@@ -48,7 +48,9 @@ export class ErrorBoundary extends React.Component<
         const node = /* SAFETY: 类型断言已复核 */ (
           custom as (error: Error | null) => React.ReactNode
         )(this.state.error);
-        if (node !== null && node !== undefined) return node;
+        if (node !== null && node !== undefined) {
+          return node;
+        }
       } else if (custom) {
         return custom;
       }

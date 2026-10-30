@@ -40,12 +40,13 @@ export async function POST() {
   }
 
   const up = await probeComfyUi(1_500);
-  if (up)
+  if (up) {
     return NextResponse.json({
       ok: true,
       base: up,
       detail: "ComfyUI 已在运行",
     });
+  }
 
   try {
     const r = await ensureComfyUiReady({
@@ -54,8 +55,9 @@ export async function POST() {
       // 否则请求挂死、reaper 的启动窗口也会被一起拉长。
       onLog: (msg) => logger.info(`[comfyui-ensure] ${msg}`),
     });
-    if (r.ok)
+    if (r.ok) {
       return NextResponse.json({ ok: true, base: r.base, detail: r.detail });
+    }
     return NextResponse.json(
       {
         ok: false,
@@ -68,9 +70,6 @@ export async function POST() {
   } catch (e) {
     const detail = errorMessage(e, "启动失败");
     logger.error(`[comfyui-ensure] 启动失败：${detail}`);
-    return NextResponse.json(
-      { ok: false, pending: false, detail },
-      { status: 503 },
-    );
+    return NextResponse.json({ ok: false, pending: false, detail }, { status: 503 });
   }
 }

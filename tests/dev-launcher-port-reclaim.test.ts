@@ -41,7 +41,9 @@ function decidePort(script: string): unknown {
     encoding: "utf8",
     cwd: ROOT,
   });
-  if (out.status !== 0) throw new Error(out.stderr || out.stdout);
+  if (out.status !== 0) {
+    throw new Error(out.stderr || out.stdout);
+  }
   return JSON.parse(out.stdout);
 }
 

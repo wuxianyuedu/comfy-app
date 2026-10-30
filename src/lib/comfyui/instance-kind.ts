@@ -39,17 +39,16 @@ export type ComfyInstallClassify = {
 };
 
 /** 从目录里找出桌面标记文件路径（优先 .comfyui-desktop-*，作为实例 ID 源）。 */
-function pickDesktopFile(
-  dir: string,
-  exists: (p: string) => boolean,
-): string | null {
+function pickDesktopFile(dir: string, exists: (p: string) => boolean): string | null {
   const candidates = [
     path.join(dir, ".comfyui-desktop-2"),
     path.join(dir, ".comfyui-desktop-1"),
     path.join(dir, ".comfyui-desktop-3"),
   ];
   for (const c of candidates) {
-    if (exists(/*turbopackIgnore: true*/ c)) return c;
+    if (exists(/*turbopackIgnore: true*/ c)) {
+      return c;
+    }
   }
   // manifest.json 可作为存在标记，但它不是实例 ID 源，返回 null 让上层知道
   // 「没有可反查实例 ID 的文件」。
@@ -112,10 +111,7 @@ export function classifyComfyInstall(
   //                  canonical 运行时；注意与 root 直接放 main.py 的便携区分开）。
   //   便携版的解释器目录是 python_embeded；venv 的则是 .venv 或 venv。
   const desktopLayout =
-    hasSubMain &&
-    exists(
-      /*turbopackIgnore: true*/ path.join(root, "standalone-env", "python.exe"),
-    );
+    hasSubMain && exists(/*turbopackIgnore: true*/ path.join(root, "standalone-env", "python.exe"));
   if (desktopLayout) {
     return { kind: "desktop", instanceRoot: root, instanceIdFile: null };
   }
@@ -123,36 +119,14 @@ export function classifyComfyInstall(
   // 便携 / venv：解释器与 main.py 同层（源码根或其父级）。
   const bases = [root, path.dirname(root)];
   for (const base of bases) {
-    if (
-      exists(
-        /*turbopackIgnore: true*/ path.join(
-          base,
-          "python_embeded",
-          "python.exe",
-        ),
-      )
-    ) {
+    if (exists(/*turbopackIgnore: true*/ path.join(base, "python_embeded", "python.exe"))) {
       return { kind: "portable", instanceRoot: root, instanceIdFile: null };
     }
   }
   for (const base of bases) {
     if (
-      exists(
-        /*turbopackIgnore: true*/ path.join(
-          base,
-          ".venv",
-          "Scripts",
-          "python.exe",
-        ),
-      ) ||
-      exists(
-        /*turbopackIgnore: true*/ path.join(
-          base,
-          "venv",
-          "Scripts",
-          "python.exe",
-        ),
-      )
+      exists(/*turbopackIgnore: true*/ path.join(base, ".venv", "Scripts", "python.exe")) ||
+      exists(/*turbopackIgnore: true*/ path.join(base, "venv", "Scripts", "python.exe"))
     ) {
       return { kind: "venv", instanceRoot: root, instanceIdFile: null };
     }
@@ -192,8 +166,9 @@ export function describeComfyInstance(
   exists: (p: string) => boolean = fs.existsSync,
 ): ComfyInstanceView {
   const dir = (installDir ?? "").trim();
-  if (!dir)
+  if (!dir) {
     return { pathConfigured: false, instanceType: null, desktopManaged: false };
+  }
   const c = classifyComfyInstall(dir, exists);
   return {
     pathConfigured: true,

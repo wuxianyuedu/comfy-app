@@ -73,14 +73,30 @@ export function PortRow({
  * 「空值显示什么」由调用处经`displayValue` 决定 —— 这里只负责「有值时
  * 怎么成文本」，返回空串即表示「没值」。 */
 function widgetValueToText(v: unknown): string {
-  if (v == null) return "";
-  if (typeof v === "object") return JSON.stringify(v);
-  if (typeof v === "string") return v;
-  if (typeof v === "number") return String(v);
-  if (typeof v === "boolean") return v ? "true" : "false";
-  if (typeof v === "bigint") return v.toString();
-  if (typeof v === "symbol") return v.toString();
-  if (typeof v === "function") return v.toString();
+  if (v == null) {
+    return "";
+  }
+  if (typeof v === "object") {
+    return JSON.stringify(v);
+  }
+  if (typeof v === "string") {
+    return v;
+  }
+  if (typeof v === "number") {
+    return String(v);
+  }
+  if (typeof v === "boolean") {
+    return v ? "true" : "false";
+  }
+  if (typeof v === "bigint") {
+    return v.toString();
+  }
+  if (typeof v === "symbol") {
+    return v.toString();
+  }
+  if (typeof v === "function") {
+    return v.toString();
+  }
   return "";
 }
 

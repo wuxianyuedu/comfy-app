@@ -82,7 +82,10 @@ const SCAN_DIRS = ["src"];
 /* `--staged`（钩子用）＝ 输入面跳过，口径见 §13.5.8.2。
  * 短路点在 `require("typescript")` 之前 —— 那一步 ≈180ms，放后面就白跳过。 */
 if (STAGED && !REPORT_ONLY) {
-  require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[click-keyboard]" });
+  require("./gate-scan-read.cjs").skipUnlessStagedTouches({
+    roots: SCAN_DIRS,
+    tag: "[click-keyboard]",
+  });
 }
 
 const ts = require("typescript");
@@ -134,7 +137,9 @@ function walk(dir) {
   for (const e of entries) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name === ".next") continue;
+      if (e.name === "node_modules" || e.name === ".next") {
+        continue;
+      }
       out.push(...walk(p));
     } else if (FILE_RE.test(e.name)) {
       out.push(p);
@@ -145,9 +150,13 @@ function walk(dir) {
 
 /** `onClick` 体里只有 `stopPropagation` / `preventDefault` 调用 ⇒ 守卫，不是交互。 */
 function isGuardOnly(init) {
-  if (!init) return false;
+  if (!init) {
+    return false;
+  }
   const expr = ts.isJsxExpression(init) ? init.expression : null;
-  if (!expr) return false;
+  if (!expr) {
+    return false;
+  }
   // 箭头 / 函数表达式，体里只允许守卫调用
   let body;
   if (ts.isArrowFunction(expr) || ts.isFunctionExpression(expr)) {
@@ -164,11 +173,11 @@ function isGuardOnly(init) {
     ts.forEachChild(node, collect);
   };
   collect(body);
-  if (calls.length === 0) return false;
+  if (calls.length === 0) {
+    return false;
+  }
   return calls.every((c) =>
-    /^(e|ev|evt|event)?\.?(currentTarget|target)?\.?(stopPropagation|preventDefault)$/.test(
-      c,
-    ),
+    /^(e|ev|evt|event)?\.?(currentTarget|target)?\.?(stopPropagation|preventDefault)$/.test(c),
   );
 }
 
@@ -179,13 +188,7 @@ function isGuardOnly(init) {
  */
 function scanSource(fileName, src) {
   return scanTree(
-    ts.createSourceFile(
-      fileName,
-      src,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
-    ),
+    ts.createSourceFile(fileName, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX),
   );
 }
 
@@ -204,41 +207,39 @@ function scanTree(sf) {
   const sites = [];
   const visit = (node) => {
     let opening = null;
-    if (ts.isJsxElement(node)) opening = node.openingElement;
-    else if (ts.isJsxSelfClosingElement(node)) opening = node;
+    if (ts.isJsxElement(node)) {
+      opening = node.openingElement;
+    } else if (ts.isJsxSelfClosingElement(node)) {
+      opening = node;
+    }
     if (opening) {
       const tagName = opening.tagName.getText(sf);
       /* 首字母大写 = 组件：键语义在它的实现里，属 P1 的账。 */
       const isComponent = /^[A-Z]/.test(tagName) || tagName.includes(".");
       if (!isComponent && !NATIVE_INTERACTIVE.has(tagName)) {
         const attrs = opening.attributes.properties;
-        const hasClick = attrs.some(
-          (a) => ts.isJsxAttribute(a) && a.name.text === "onClick",
-        );
+        const hasClick = attrs.some((a) => ts.isJsxAttribute(a) && a.name.text === "onClick");
         if (hasClick) {
-          const hasKeyDown = attrs.some(
-            (a) => ts.isJsxAttribute(a) && a.name.text === "onKeyDown",
-          );
+          const hasKeyDown = attrs.some((a) => ts.isJsxAttribute(a) && a.name.text === "onKeyDown");
           /* 只认**键盘出口**的展开：`{...simpleKeyHandler(...)}`。其余展开
            *（`{...props}` / `{...hoverEvents}` / `{...mediaProps}`）不算覆盖。 */
           const hasKeyboardSpread = attrs.some((a) => {
-            if (!ts.isJsxSpreadAttribute(a)) return false;
+            if (!ts.isJsxSpreadAttribute(a)) {
+              return false;
+            }
             const expr = a.expression;
-            if (!ts.isCallExpression(expr)) return false;
+            if (!ts.isCallExpression(expr)) {
+              return false;
+            }
             const callee = expr.expression.getText(sf);
             return KEYBOARD_SPREAD_EXITS.includes(callee);
           });
           const hasDnd = attrs.some(
             (a) =>
-              ts.isJsxAttribute(a) &&
-              (a.name.text === "onDrop" || a.name.text === "onDragOver"),
+              ts.isJsxAttribute(a) && (a.name.text === "onDrop" || a.name.text === "onDragOver"),
           );
-          const clickAttr = attrs.find(
-            (a) => ts.isJsxAttribute(a) && a.name.text === "onClick",
-          );
-          const guardOnly = clickAttr
-            ? isGuardOnly(clickAttr.initializer)
-            : false;
+          const clickAttr = attrs.find((a) => ts.isJsxAttribute(a) && a.name.text === "onClick");
+          const guardOnly = clickAttr ? isGuardOnly(clickAttr.initializer) : false;
           if (!hasKeyDown && !hasKeyboardSpread && !hasDnd && !guardOnly) {
             const pos = sf.getLineAndCharacterOfPosition(opening.getStart(sf));
             sites.push({ line: pos.line + 1, tag: tagName, kind: "click" });
@@ -266,11 +267,17 @@ function collect(parsed) {
   const sites = new Map();
   for (const abs of SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)))) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    if (FIXTURE_SKIP.has(rel)) continue;
-    if (EXEMPT_SITES[rel]) continue;
+    if (FIXTURE_SKIP.has(rel)) {
+      continue;
+    }
+    if (EXEMPT_SITES[rel]) {
+      continue;
+    }
     const shared = parsed && parsed.get(abs);
     const hit = shared ? scanTree(shared) : scanFile(abs);
-    if (hit.length) sites.set(rel, hit);
+    if (hit.length) {
+      sites.set(rel, hit);
+    }
   }
   return sites;
 }
@@ -284,10 +291,14 @@ function collectExempt(parsed) {
   const out = new Map();
   for (const [rel, reason] of Object.entries(EXEMPT_SITES)) {
     const abs = path.join(ROOT, rel);
-    if (!fs.existsSync(abs)) continue;
+    if (!fs.existsSync(abs)) {
+      continue;
+    }
     const shared = parsed && parsed.get(abs);
     const hit = shared ? scanTree(shared) : scanFile(abs);
-    if (hit.length) out.set(rel, { reason, sites: hit });
+    if (hit.length) {
+      out.set(rel, { reason, sites: hit });
+    }
   }
   return out;
 }
@@ -305,10 +316,7 @@ function main(parsed) {
       );
     }
     const exempt = collectExempt(parsed);
-    const exemptTotal = [...exempt.values()].reduce(
-      (n, v) => n + v.sites.length,
-      0,
-    );
+    const exemptTotal = [...exempt.values()].reduce((n, v) => n + v.sites.length, 0);
     console.log(
       `\n[click-keyboard] 已登记豁免：${exemptTotal} 处 / ${exempt.size} 份文件（不进计数，逐条写明理由）：`,
     );
@@ -374,4 +382,6 @@ module.exports = {
   KEYBOARD_SPREAD_EXITS,
 };
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}

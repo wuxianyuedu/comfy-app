@@ -46,14 +46,15 @@ function resolveCiSlotCacheRoot() {
       encoding: "utf8",
     });
     const store = String(res.stdout ?? "").trim();
-    if (res.status !== 0 || !store) return null;
+    if (res.status !== 0 || !store) {
+      return null;
+    }
     const volumeRoot = path.parse(store).root;
     let name = "repo";
     try {
       name = String(
-        JSON.parse(
-          fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
-        ).name ?? "repo",
+        JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")).name ??
+          "repo",
       ).toLowerCase();
     } catch {
       /* 读不到包名用中性目录名，与 resolveCacheRoot 同口径 */

@@ -105,12 +105,18 @@ export function validateRemoteModelFields(
     apiKey: typeof values.apiKey === "string" ? values.apiKey : "",
     kind: isKind(values.kind) ? values.kind : "chat",
   });
-  if (parsed.success) return {};
+  if (parsed.success) {
+    return {};
+  }
   const out: Partial<Record<keyof RemoteModelFieldValues, string>> = {};
   for (const issue of parsed.error.issues) {
     const key = issue.path[0];
-    if (typeof key !== "string") continue;
-    if (out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues]) continue;
+    if (typeof key !== "string") {
+      continue;
+    }
+    if (out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues]) {
+      continue;
+    }
     out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues] = issue.message;
   }
   return out;

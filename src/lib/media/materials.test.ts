@@ -39,8 +39,7 @@ const { owners, findById } = vi.hoisted(() => {
   const owners = new Map<string, string>();
   return {
     owners,
-    findById: async (scope: string) =>
-      owners.has(scope) ? { userId: owners.get(scope)! } : null,
+    findById: async (scope: string) => (owners.has(scope) ? { userId: owners.get(scope)! } : null),
   };
 });
 vi.mock("~/lib/core/repository-project", () => ({
@@ -71,8 +70,11 @@ function put(
   const dir = path.join(root, scope, folder);
   fs.mkdirSync(dir, { recursive: true });
   const target = path.join(dir, name);
-  if (opts.asDir) fs.mkdirSync(target, { recursive: true });
-  else fs.writeFileSync(target, "x");
+  if (opts.asDir) {
+    fs.mkdirSync(target, { recursive: true });
+  } else {
+    fs.writeFileSync(target, "x");
+  }
   if (opts.mtimeMs !== undefined) {
     fs.utimesSync(target, opts.mtimeMs / 1000, opts.mtimeMs / 1000);
   }
@@ -85,9 +87,7 @@ afterAll(() => {
 
 describe("sanitizeScope —— scope 是目录名，不是路径片段", () => {
   it("项目 id 与共享区原样通过（先去空白）", () => {
-    expect(sanitizeScope("proj_17551234567890abcdef")).toBe(
-      "proj_17551234567890abcdef",
-    );
+    expect(sanitizeScope("proj_17551234567890abcdef")).toBe("proj_17551234567890abcdef");
     expect(sanitizeScope(`  ${SHARED_SCOPE}  `)).toBe(SHARED_SCOPE);
   });
 
@@ -184,8 +184,9 @@ describe("listFolderItems —— 目录里的每一项都要过形状与 stat �
     put(scope, "docs", "b.txt");
     const originalStat = fsp.stat;
     const stat = vi.spyOn(fsp, "stat").mockImplementation(async (p) => {
-      if (String(p).endsWith("b.txt"))
+      if (String(p).endsWith("b.txt")) {
         throw Object.assign(new Error("EBUSY"), { code: "EBUSY" });
+      }
       return originalStat(p);
     });
     const items = await listFolderItems(scope, "docs");
@@ -261,26 +262,15 @@ describe("归属三态 —— visibleMaterialScopes 与 canWriteMaterialScope", 
     });
     expect(scopes).toEqual(["proj_mine", SHARED_SCOPE]);
     const collected = await collectByFolder(scopes);
-    expect(collected.get("ref")?.map((i) => i.name)).toEqual([
-      "shared.png",
-      "mine.png",
-    ]);
+    expect(collected.get("ref")?.map((i) => i.name)).toEqual(["shared.png", "mine.png"]);
   });
 
   it("写 / 删许可：明确属于别人的才拒，库里没登记的放行（画布 id 镜像是尽力而为）", async () => {
     owners.set("proj_theirs", "user-b");
-    await expect(canWriteMaterialScope("user-a", "proj_theirs")).resolves.toBe(
-      false,
-    );
+    await expect(canWriteMaterialScope("user-a", "proj_theirs")).resolves.toBe(false);
     owners.set("proj_mine", "user-a");
-    await expect(canWriteMaterialScope("user-a", "proj_mine")).resolves.toBe(
-      true,
-    );
-    await expect(canWriteMaterialScope("user-a", SHARED_SCOPE)).resolves.toBe(
-      true,
-    );
-    await expect(
-      canWriteMaterialScope("user-a", "还没同步上来的项目"),
-    ).resolves.toBe(true);
+    await expect(canWriteMaterialScope("user-a", "proj_mine")).resolves.toBe(true);
+    await expect(canWriteMaterialScope("user-a", SHARED_SCOPE)).resolves.toBe(true);
+    await expect(canWriteMaterialScope("user-a", "还没同步上来的项目")).resolves.toBe(true);
   });
 });

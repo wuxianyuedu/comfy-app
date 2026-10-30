@@ -12,17 +12,10 @@ vi.mock("./db", async () => {
 
 import { eq } from "drizzle-orm";
 
-import {
-  getTestDb,
-  seedProject,
-  seedUser,
-} from "../../../tests/helpers/test-db";
+import { getTestDb, seedProject, seedUser } from "../../../tests/helpers/test-db";
 import { production, project, workshopSession } from "../db/schema";
 import { workshopDb } from "./db";
-import {
-  ensureProductionProject,
-  resolveOwnerUserId,
-} from "./production-bridge";
+import { ensureProductionProject, resolveOwnerUserId } from "./production-bridge";
 import * as repo from "./repository";
 
 const tdb = getTestDb();
@@ -35,9 +28,7 @@ describe("resolveOwnerUserId", () => {
   it("显式 userId 必须存在", async () => {
     seedUser(tdb, { id: "user-a", email: "a@test.dev" });
     await expect(resolveOwnerUserId("user-a")).resolves.toBe("user-a");
-    await expect(resolveOwnerUserId("user-missing")).rejects.toThrow(
-      /userId 不存在/,
-    );
+    await expect(resolveOwnerUserId("user-missing")).rejects.toThrow(/userId 不存在/);
   });
 
   it("缺省落本机最早创建的用户（确定性兜底）", async () => {
@@ -71,21 +62,16 @@ describe("ensureProductionProject", () => {
     expect(id).toBe("proj_ui");
     expect((await workshopDb.select().from(project)).length).toBe(1);
     // 画布项目原本没有 production 行 → 桥补建（标题不覆盖界面命名）
-    const prod = await workshopDb
-      .select()
-      .from(production)
-      .where(eq(production.id, "proj_ui"));
+    const prod = await workshopDb.select().from(production).where(eq(production.id, "proj_ui"));
     expect(prod[0]).toBeTruthy();
   });
 
   it("项目不存在 / 归属冲突 → 拒绝绑定（可行动错误）", async () => {
-    await expect(
-      ensureProductionProject("proj_missing", "user-a", "x"),
-    ).rejects.toThrow(/项目不存在/);
+    await expect(ensureProductionProject("proj_missing", "user-a", "x")).rejects.toThrow(
+      /项目不存在/,
+    );
     seedProject(tdb, { id: "proj_b", userId: "user-b", name: "别人的" });
-    await expect(
-      ensureProductionProject("proj_b", "user-a", "x"),
-    ).rejects.toThrow(/归属.*冲突/);
+    await expect(ensureProductionProject("proj_b", "user-a", "x")).rejects.toThrow(/归属.*冲突/);
   });
 });
 
@@ -104,11 +90,10 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
       .from(workshopSession)
       .where(eq(workshopSession.id, sessionId));
     const prodId = rows[0]?.projectId;
-    if (!prodId) throw new Error("绑定失败：会话行没有 projectId");
-    const prod = await workshopDb
-      .select()
-      .from(production)
-      .where(eq(production.id, prodId));
+    if (!prodId) {
+      throw new Error("绑定失败：会话行没有 projectId");
+    }
+    const prod = await workshopDb.select().from(production).where(eq(production.id, prodId));
     expect(prod[0]).toBeTruthy();
   });
 
@@ -135,11 +120,10 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
       .where(eq(workshopSession.id, sessionId));
     const row = rows[0]!;
     const prodId = row.projectId;
-    if (!prodId) throw new Error("绑定失败：会话行没有 projectId");
-    const prod = await workshopDb
-      .select()
-      .from(production)
-      .where(eq(production.id, prodId));
+    if (!prodId) {
+      throw new Error("绑定失败：会话行没有 projectId");
+    }
+    const prod = await workshopDb.select().from(production).where(eq(production.id, prodId));
     expect(prod[0]?.scriptMarkdown).toBe("# AI 写的剧本");
 
     // 界面侧直改 production（模拟人在界面编辑后保存）：
@@ -179,11 +163,10 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
       .from(workshopSession)
       .where(eq(workshopSession.id, "sess-legacy"));
     const prodId = rows[0]?.projectId;
-    if (!prodId) throw new Error("绑定失败：会话行没有 projectId");
-    const prod = await workshopDb
-      .select()
-      .from(production)
-      .where(eq(production.id, prodId));
+    if (!prodId) {
+      throw new Error("绑定失败：会话行没有 projectId");
+    }
+    const prod = await workshopDb.select().from(production).where(eq(production.id, prodId));
     expect(prod[0]?.scriptMarkdown).toBe("# 新剧本");
     const state = await repo.getSession("sess-legacy");
     expect(state?.stage).toBe("character");

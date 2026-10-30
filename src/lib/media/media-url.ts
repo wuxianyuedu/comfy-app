@@ -49,7 +49,9 @@ const IMAGES_ENDPOINT = "/api/images";
  */
 export function comfyImageUrl(ref: ComfyMediaRef): string | null {
   const filename = ref.filename?.trim() ?? "";
-  if (filename === "") return null;
+  if (filename === "") {
+    return null;
+  }
   return (
     IMAGES_ENDPOINT +
     "?" +
@@ -72,8 +74,12 @@ export function comfyImageUrl(ref: ComfyMediaRef): string | null {
  * IMAGE 输入选完图「看不到图」）。
  */
 export function mediaReferenceFilename(reference: unknown): string {
-  if (typeof reference === "string") return reference.trim();
-  if (reference == null || typeof reference !== "object") return "";
+  if (typeof reference === "string") {
+    return reference.trim();
+  }
+  if (reference == null || typeof reference !== "object") {
+    return "";
+  }
   const raw: unknown = Array.isArray(reference)
     ? /* SAFETY: 类型断言已复核 */ (reference as Array<unknown>)[0]
     : reference;
@@ -96,13 +102,19 @@ export function mediaReferenceFilename(reference: unknown): string {
  * `MediaThumbnail` 的 `src`（它本来就接受 `null`），调用处不必再包三元。
  */
 export function mediaPreviewUrl(reference: unknown): string | null {
-  if (reference == null) return null;
+  if (reference == null) {
+    return null;
+  }
 
   // 字符串：已渲染过的应用内绝对路径原样返回；否则按 input 文件名走代理。
   if (typeof reference === "string") {
     const value = reference.trim();
-    if (value === "") return null;
-    if (value.startsWith("/")) return value;
+    if (value === "") {
+      return null;
+    }
+    if (value.startsWith("/")) {
+      return value;
+    }
     return comfyImageUrl({ filename: value, type: "input" });
   }
 
@@ -120,7 +132,9 @@ export function mediaPreviewUrl(reference: unknown): string | null {
           type?: unknown;
         });
     const filename = typeof ref.filename === "string" ? ref.filename.trim() : "";
-    if (filename === "") return null;
+    if (filename === "") {
+      return null;
+    }
     const type = typeof ref.type === "string" && ref.type.trim() !== "" ? ref.type.trim() : "input";
     const subfolder =
       typeof ref.subfolder === "string" && ref.subfolder.trim() !== ""

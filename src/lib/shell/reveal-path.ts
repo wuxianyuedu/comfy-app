@@ -87,20 +87,30 @@ export function resolveExistingPath(
   exists: ExistsProbe = diskExists,
 ): string | null {
   const raw = candidate.trim();
-  if (raw === "") return null;
-  if (exists(raw)) return raw;
+  if (raw === "") {
+    return null;
+  }
+  if (exists(raw)) {
+    return raw;
+  }
 
   /* 最后一段的起点：最后一个分隔符之后。段内逐字符退。 */
   const sepIndex = Math.max(raw.lastIndexOf("/"), raw.lastIndexOf("\\"));
   for (let end = raw.length - 1; end >= sepIndex + 1; end -= 1) {
     const head = raw.slice(0, end);
-    if (head === "") continue;
+    if (head === "") {
+      continue;
+    }
     /* **退到「目录 + 尾分隔符」那一档就停**（`/a/b` 的候选退成 `/a/`）：它在磁盘上
      * 当然存在（父目录），认它就等于「点一个不存在的文件 → 打开了那个目录」——
      * 而用户点的是文件。这正是「跨段退」的坏味道从另一个口子漏回来的形态
      * （实测撞出来：`/workspace/no-such-file.txt` 被解析成 `/workspace/`）。 */
-    if (head.endsWith("/") || head.endsWith("\\")) continue;
-    if (exists(head)) return head;
+    if (head.endsWith("/") || head.endsWith("\\")) {
+      continue;
+    }
+    if (exists(head)) {
+      return head;
+    }
   }
   return null;
 }

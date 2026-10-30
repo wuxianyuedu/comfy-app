@@ -27,10 +27,7 @@ vi.mock("~/lib/poll-timer", () => ({
 }));
 
 import { useComfyStats } from "./use-comfy-stats";
-import {
-  refreshComfyStats,
-  resetComfyStatsStoreForTest,
-} from "~/lib/comfy/comfy-stats-store";
+import { refreshComfyStats, resetComfyStatsStoreForTest } from "~/lib/comfy/comfy-stats-store";
 
 const GIB = 1024 * 1024 * 1024;
 
@@ -147,7 +144,9 @@ describe("useComfyStats 进程级判活（与 /api/comfy/queue 同口径）", ()
     expect(result.current.online).toBe(true);
 
     fetchMock.mockResolvedValue(aliveButNoAnswer);
-    for (let i = 0; i < 5; i++) await tick(); // 远超离线阈值，也不该翻离线
+    for (let i = 0; i < 5; i++) {
+      await tick();
+    } // 远超离线阈值，也不该翻离线
 
     expect(result.current.online).toBe(true);
     expect(result.current.stats?.vramUsed).toBe(2 * GIB);
@@ -157,7 +156,9 @@ describe("useComfyStats 进程级判活（与 /api/comfy/queue 同口径）", ()
   it("从没读到过数据 + 进程在跑：online 为 true（连接中），不报未运行", async () => {
     fetchMock.mockResolvedValue(aliveButNoAnswer);
     const { result } = renderHook(() => useComfyStats());
-    for (let i = 0; i < 5; i++) await tick();
+    for (let i = 0; i < 5; i++) {
+      await tick();
+    }
 
     expect(result.current.online).toBe(true);
     expect(result.current.stats).toBeNull();

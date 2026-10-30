@@ -864,7 +864,9 @@ describe("formatOutcome：前缀可注入（ship 的 --diagnose 复用同一份�
       prefix: "[ship]",
     });
     expect(lines.length).toBeGreaterThan(0);
-    for (const line of lines) expect(line.startsWith("[ship]")).toBe(true);
+    for (const line of lines) {
+      expect(line.startsWith("[ship]")).toBe(true);
+    }
   });
 });
 
@@ -933,7 +935,9 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
     const idle = structuredClone(RUNNING_BUILD);
     const stage = idle.data.pipelinesStatus["b1-001"]?.stages?.[1];
     expect(stage, "夹具形状变了（找不到第二格）").toBeTruthy();
-    if (stage) stage.status = "pending";
+    if (stage) {
+      stage.status = "pending";
+    }
     const text = formatOutcome(classifyBuildOutcome(idle), {
       sn: "b1",
       json: idle,
@@ -992,7 +996,9 @@ function prepareStage(json: BuildJson, key = "cnb-9qi-1k5qojle1-001"): StageJson
   /* `noUncheckedIndexedAccess` 在本仓开着。样本是我们自己造的形状，取不到就是样本坏了 ——
      抛出比静默给出 `undefined` 更早暴露，且与「生产代码 0 处 `!`」那条判据不冲突。 */
   const stage = json.data.pipelinesStatus[key]?.stages[0];
-  if (!stage) throw new Error(`样本里没有 ${key} 的第一格`);
+  if (!stage) {
+    throw new Error(`样本里没有 ${key} 的第一格`);
+  }
   return stage;
 }
 

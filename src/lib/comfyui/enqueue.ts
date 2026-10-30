@@ -50,7 +50,9 @@ export function configureEnqueue(next: Partial<EnqueueDeps>): void {
 }
 
 async function resolveTaskRepo(): Promise<TaskRepoForEnqueue> {
-  if (depsOverride.taskRepo) return depsOverride.taskRepo;
+  if (depsOverride.taskRepo) {
+    return depsOverride.taskRepo;
+  }
   return loadRealTaskRepo();
 }
 
@@ -92,7 +94,9 @@ export async function cancelTask(taskId: string) {
 
   const task = await taskRepository.findStatusAndPromptById(taskId);
 
-  if (!task) return;
+  if (!task) {
+    return;
+  }
   /* 以前这里要求 `status === RUNNING || QUEUED`。现在改为接受**任何非终态**的
    * 状态（SUCCEEDED / FAILED / CANCELLED 会在下面被跳过），于是用户能取消掉一个
    * 卡住的 QUEUED 行 —— 哪怕内存态已经被清掉（例如 dev server 重启过、reaper
@@ -112,16 +116,22 @@ export async function cancelTask(taskId: string) {
   if (!isTerminal(task.status) && !claimFinalize(taskId)) {
     log(taskId, "warn", "任务终态已落库，取消请求不再改写终态");
 
-    if (task.promptId) store.promptToTask.delete(task.promptId);
+    if (task.promptId) {
+      store.promptToTask.delete(task.promptId);
+    }
 
     const hadSlot = isDispatchedHere(taskId) || cliProcs.has(taskId);
 
-    if (hadSlot) releaseDispatchSlot(taskId);
+    if (hadSlot) {
+      releaseDispatchSlot(taskId);
+    }
 
     await persistLogs(taskId);
     /* 归还了槽位就再领一次（同一条 pull）；纯数据库行（本进程没在飞）不动槽、
      * 也不 kick，免得白跑一次领取。 */
-    if (hadSlot) kickQueue();
+    if (hadSlot) {
+      kickQueue();
+    }
 
     return;
   }
@@ -159,7 +169,9 @@ export async function cancelTask(taskId: string) {
     log(taskId, "warn", `取消未改写终态（${outcome}），仅清理本进程记账`);
   }
 
-  if (task.promptId) store.promptToTask.delete(task.promptId);
+  if (task.promptId) {
+    store.promptToTask.delete(task.promptId);
+  }
 
   // 清掉本模块给这个任务加的记账，同一个 taskId 再入队时从干净状态开始。
 
@@ -173,7 +185,9 @@ export async function cancelTask(taskId: string) {
 
   const hadSlot = isDispatchedHere(taskId) || cliProcs.has(taskId);
 
-  if (hadSlot) releaseDispatchSlot(taskId);
+  if (hadSlot) {
+    releaseDispatchSlot(taskId);
+  }
   /* 把这个任务还没落盘的防抖日志刷出去：让「用户取消任务」这一行与在途的告警
    * 都先进数据库，再把行标成终态。否则「取消后立刻刷新」会看不到那条取消记录。
    *
@@ -186,5 +200,7 @@ export async function cancelTask(taskId: string) {
    * 所以取消这条收口也写一包原文（P3 §5 ADR §14 D1 的 4-B2）。 */
   await persistRawCli(taskId);
 
-  if (hadSlot) kickQueue();
+  if (hadSlot) {
+    kickQueue();
+  }
 }

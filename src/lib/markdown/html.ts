@@ -22,21 +22,15 @@ import { createSanitizeConfig, isAllowedUrl } from "./sanitize-config";
 type Purifier = ReturnType<typeof createDOMPurify>;
 
 /** 会带 URL 的属性 —— 逐个过协议白名单。 */
-const URL_ATTRS = [
-  "href",
-  "src",
-  "cite",
-  "action",
-  "formaction",
-  "poster",
-  "xlink:href",
-];
+const URL_ATTRS = ["href", "src", "cite", "action", "formaction", "poster", "xlink:href"];
 
 let cached: Purifier | null = null;
 
 /** 取（并缓存）配好的 DOMPurify 实例；宿主没有 DOM 时抛出可读的错误。 */
 function purifier(): Purifier {
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
   if (typeof window === "undefined") {
     throw new Error(
       "markdown/sanitize：DOMPurify 需要 DOM 宿主（浏览器或 jsdom）；" +
@@ -50,11 +44,17 @@ function purifier(): Purifier {
     /* 钩子的签名是 `Node`，但 DOMPurify 只对 Element 调它（属性挂在元素上）。
      *  类型侧用 `instanceof` 收窄而不是 `as Element` —— 断言不会做运行时检查，
      *  而这里真的需要一次检查（DOMPurify 的钩子签名将来若放宽，断言会静默放过）。 */
-    if (!(node instanceof Element)) return;
+    if (!(node instanceof Element)) {
+      return;
+    }
     for (const attr of URL_ATTRS) {
       const value = node.getAttribute(attr);
-      if (value === null) continue;
-      if (!isAllowedUrl(value)) node.removeAttribute(attr);
+      if (value === null) {
+        continue;
+      }
+      if (!isAllowedUrl(value)) {
+        node.removeAttribute(attr);
+      }
     }
   });
   cached = instance;

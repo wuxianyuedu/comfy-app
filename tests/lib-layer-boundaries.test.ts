@@ -87,7 +87,9 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
           walk(full);
           continue;
         }
-        if (!/\.tsx?$/.test(name) || /\.test\.tsx?$/.test(name)) continue;
+        if (!/\.tsx?$/.test(name) || /\.test\.tsx?$/.test(name)) {
+          continue;
+        }
         const src = readFileSync(full, "utf8");
         // 只匹配模块说明符，注释里提到的路径不算（规范 §18.3 的注释惯例）
         const matches = [
@@ -95,7 +97,9 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
           ...src.matchAll(/import\s*\(\s*["']([^"']+)["']\s*\)/g),
         ].map((m) => m[1]);
         for (const spec of matches) {
-          if (typeof spec !== "string") continue;
+          if (typeof spec !== "string") {
+            continue;
+          }
           if (/^((~|@)\/)(components|app)\//.test(spec)) {
             hits.push(`${relative(root, full)} → ${spec}`);
           }

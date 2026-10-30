@@ -78,7 +78,9 @@ export function effectiveModeContract(
 ): { contract: ModeContract; customized: boolean } {
   const code = upperToken(mode);
   const found = stored.find((c) => c.mode === code);
-  if (found) return { contract: found, customized: true };
+  if (found) {
+    return { contract: found, customized: true };
+  }
   return { contract: derivedModeContract(code), customized: false };
 }
 

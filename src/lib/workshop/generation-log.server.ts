@@ -33,9 +33,13 @@ export async function appendGenerationLogs(
   const lines: Array<string> = [];
   for (const raw of entries) {
     const entry = normalizeGenerationLogEntry(raw);
-    if (entry) lines.push(JSON.stringify({ stage, ...entry }));
+    if (entry) {
+      lines.push(JSON.stringify({ stage, ...entry }));
+    }
   }
-  if (lines.length === 0) return 0;
+  if (lines.length === 0) {
+    return 0;
+  }
   try {
     const file = path.join(WORKSHOP_LOG_DIR, generationLogFileName(new Date()));
     await fs.mkdir(path.dirname(file), { recursive: true });
@@ -73,18 +77,26 @@ export async function readGenerationLogs(
       }
       for (const line of text.split("\n")) {
         const trimmed = line.trim();
-        if (!trimmed) continue;
+        if (!trimmed) {
+          continue;
+        }
         try {
           const raw = /* SAFETY: 类型断言已复核 */ JSON.parse(trimmed) as Record<string, unknown>;
           // 行内 stage 由 append 写入；不匹配的环节直接跳过
-          if (raw.stage !== stage) continue;
+          if (raw.stage !== stage) {
+            continue;
+          }
           const entry = normalizeGenerationLogEntry(raw);
-          if (entry) collected.push(entry);
+          if (entry) {
+            collected.push(entry);
+          }
         } catch {
           // 坏行跳过，不影响其余日志
         }
       }
-      if (collected.length >= capped) break; // 已够最近 limit 条，不再回溯更早的天
+      if (collected.length >= capped) {
+        break;
+      } // 已够最近 limit 条，不再回溯更早的天
     }
     // 文件按新→旧遍历，collected 前段是新条目：取末尾 capped 条即「最近 limit 条」，
     // 并保持时间正序返回

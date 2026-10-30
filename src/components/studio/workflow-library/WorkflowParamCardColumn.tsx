@@ -77,7 +77,9 @@ export function WorkflowParamCardColumn({
   onReset,
   endpoint,
 }: WorkflowParamCardColumnProps) {
-  if (entries.length === 0) return null;
+  if (entries.length === 0) {
+    return null;
+  }
 
   return (
     <aside
@@ -95,7 +97,9 @@ export function WorkflowParamCardColumn({
          * 尺寸只显示一个节点」）。只在第一个子口的位置画这一张，其余跳过。 */
         if (SIZE_SUB_IDS.includes(entry.cls)) {
           const forms = entries.filter((item) => SIZE_SUB_IDS.includes(item.cls));
-          if (entry !== forms[0]) return null;
+          if (entry !== forms[0]) {
+            return null;
+          }
           const first = forms[0];
           const sizeLabel =
             contractEntries?.find((item) => item.id === "size")?.label ?? sizeSubLabel("size");

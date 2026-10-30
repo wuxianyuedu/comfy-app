@@ -91,10 +91,7 @@ export interface ExternalActionResult {
   ) => Promise<void>;
 }
 
-export function useExternalAction({
-  target,
-  report,
-}: ExternalActionOptions): ExternalActionResult {
+export function useExternalAction({ target, report }: ExternalActionOptions): ExternalActionResult {
   const [busy, setBusy] = useState(false);
   /* 重入判据收在唯一出口里（规范 16 §16.2.4.69）—— 用同步 ref 而不是读
    * `busy` 状态：同一次事件循环里连点两下时，`setBusy(true)` 还没提交，
@@ -104,10 +101,14 @@ export function useExternalAction({
 
   const run = useCallback<ExternalActionResult["run"]>(
     async (action, guard) => {
-      if (!lock.tryEnter()) return;
+      if (!lock.tryEnter()) {
+        return;
+      }
       setBusy(true);
       try {
-        if (guard && !(await guard())) return;
+        if (guard && !(await guard())) {
+          return;
+        }
         const raw = await action();
         const result = toExternalResult(raw);
         report(result.ok ? "ok" : "err", result.detail);

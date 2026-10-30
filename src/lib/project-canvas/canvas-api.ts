@@ -45,7 +45,9 @@ async function postUpload(file: File): Promise<UploadAttempt> {
   }
   const obj = asRecord(d);
   const name = typeof obj?.name === "string" ? obj.name : "";
-  if (name) return { ok: true, name };
+  if (name) {
+    return { ok: true, name };
+  }
   const errRaw = obj?.error;
   /* ComfyUI 未运行时的 503（`hint: comfyui-unreachable`）是可重试的：服务端
    * 此时会顺手把实例拉起来，调用方等一会儿再传就能成功（ISSUE #345）。 */
@@ -74,18 +76,26 @@ export async function uploadImageFile(
   } = {},
 ): Promise<string> {
   const first = await postUpload(file);
-  if (first.ok) return first.name;
-  if (!first.retryable) throw new Error(first.message);
+  if (first.ok) {
+    return first.name;
+  }
+  if (!first.retryable) {
+    throw new Error(first.message);
+  }
 
   opts.onProgress?.(first.message);
   const ready = await waitForComfyReady({
     timeoutMs: opts.readyTimeoutMs,
     onProgress: (message) => opts.onProgress?.(message),
   });
-  if (!ready.ok) throw new Error(ready.message);
+  if (!ready.ok) {
+    throw new Error(ready.message);
+  }
 
   const retry = await postUpload(file);
-  if (retry.ok) return retry.name;
+  if (retry.ok) {
+    return retry.name;
+  }
   throw new Error(retry.message);
 }
 
@@ -96,10 +106,14 @@ const importCache = new Map<string, string>();
 
 export async function importOutputAsInput(localPath: string): Promise<string> {
   const cached = importCache.get(localPath);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    return cached;
+  }
   const abs = localPath.startsWith("/") ? localPath : `/${localPath}`;
   const res = await fetch(abs);
-  if (!res.ok) throw new Error("读取上游输出失败");
+  if (!res.ok) {
+    throw new Error("读取上游输出失败");
+  }
   const blob = await res.blob();
   const fname = lastSegments(localPath, 1) || "input.png";
   const file = new File([blob], fname, { type: blob.type || "image/png" });
@@ -131,7 +145,9 @@ export async function uploadMediaFile(file: File): Promise<{ name: string; url: 
  */
 export async function startGenerate(input: GenerateInput): Promise<string> {
   const d = await vanillaApi.generate.generate.mutate(input);
-  if (!d.taskId) throw new Error("生成失败");
+  if (!d.taskId) {
+    throw new Error("生成失败");
+  }
   return d.taskId;
 }
 

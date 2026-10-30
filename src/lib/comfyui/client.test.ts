@@ -244,9 +244,13 @@ describe("getView — 取字节的地址组装与失败形状", () => {
     const seen: Array<string> = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/api/view") return new Response("{}", { status: 200 });
+      if (url.pathname !== "/api/view") {
+        return new Response("{}", { status: 200 });
+      }
       seen.push(url.search);
-      if (reply.status !== 200) return new Response("nope", { status: reply.status });
+      if (reply.status !== 200) {
+        return new Response("nope", { status: reply.status });
+      }
       return new Response(new Uint8Array(reply.bytes ?? [1, 2, 3]), {
         status: 200,
       });

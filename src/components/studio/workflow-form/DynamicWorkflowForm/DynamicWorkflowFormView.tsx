@@ -43,11 +43,7 @@ interface DynamicWorkflowFormViewProps {
    * seed 递增递减显示的是该模式的覆盖值。不传 = 按条目全局值（兼容旧场景）。 */
   mode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
-  onReorder?: (
-    fromKey: string,
-    targetKey: string | null,
-    position: WorkflowIODropPosition,
-  ) => void;
+  onReorder?: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
   /** 行尾附加的只读徽标（工作流库画布节点用它标出每个参数连到的「对外参数」）。 */
   rowTrailing?: (entry: EnrichedWidget) => ReactNode;
 }
@@ -70,8 +66,12 @@ export function DynamicWorkflowFormView({
   mode,
   rowTrailing,
 }: DynamicWorkflowFormViewProps) {
-  if (loading) return <LoadingSkeleton />;
-  if (controller.isEmpty) return <EmptyStateHint emptyHint={emptyHint} />;
+  if (loading) {
+    return <LoadingSkeleton />;
+  }
+  if (controller.isEmpty) {
+    return <EmptyStateHint emptyHint={emptyHint} />;
+  }
 
   const {
     values,
@@ -125,17 +125,13 @@ export function DynamicWorkflowFormView({
         uploading={uploading && uploadTarget === entry.ioKey}
         seedMode={seedModes?.[entry.ioKey]}
         onSeedModeChange={
-          onSeedModeChange
-            ? (mode: string) => onSeedModeChange(entry.ioKey, mode)
-            : undefined
+          onSeedModeChange ? (mode: string) => onSeedModeChange(entry.ioKey, mode) : undefined
         }
         onValueChange={(next: unknown) => set(entry.ioKey, next)}
         onPickFile={() => pickFile(entry.ioKey)}
         previewSrc={localPreviewUrl(entry.ioKey)}
         onLabelChange={
-          onLabelChange
-            ? (label: string) => onLabelChange(entry.ioKey, label)
-            : undefined
+          onLabelChange ? (label: string) => onLabelChange(entry.ioKey, label) : undefined
         }
         onRequiredChange={
           onRequiredChange
@@ -143,19 +139,14 @@ export function DynamicWorkflowFormView({
             : undefined
         }
         visible={
-          visibilityMode
-            ? (entry.modeOverrides?.[visibilityMode]?.visible ?? true)
-            : undefined
+          visibilityMode ? (entry.modeOverrides?.[visibilityMode]?.visible ?? true) : undefined
         }
         onVisibilityChange={
           onVisibilityChange && visibilityMode
             ? (visible: boolean) => onVisibilityChange(entry.ioKey, visible)
             : undefined
         }
-        dimmed={
-          !!visibilityMode &&
-          rowEntry.modeOverrides?.[visibilityMode]?.visible === false
-        }
+        dimmed={!!visibilityMode && rowEntry.modeOverrides?.[visibilityMode]?.visible === false}
         withHandle={withHandle}
         /* 画布上 handle id 必须唯一：同一个 pin 名可能同时出现在两个节点上（自定义
          * 节点重名很常见），用 ioKey 当 handle id 才会接到「那一行」而不是「同名的
@@ -192,13 +183,13 @@ export function DynamicWorkflowFormView({
         <div className="">
           {widgetSectionEntries.map((entry) => {
             const row = renderRow(entry, true);
-            if (!dragHandlers) return row;
+            if (!dragHandlers) {
+              return row;
+            }
 
             const isDragging = draggingKey === entry.ioKey;
             const isDropTarget =
-              dragOverKey === entry.ioKey &&
-              !!draggingKey &&
-              draggingKey !== entry.ioKey;
+              dragOverKey === entry.ioKey && !!draggingKey && draggingKey !== entry.ioKey;
 
             return (
               <div

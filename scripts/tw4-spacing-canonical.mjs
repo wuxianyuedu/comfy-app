@@ -107,22 +107,32 @@ const ds = await loadDesignSystem();
  */
 function canonicalize(token) {
   const match = TOKEN.exec(token);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   /* 三个捕获组都给了默认值：`TOKEN` 里它们都是必选的，但在 `noUncheckedIndexedAccess`
    * 下解构出来仍是 `string | undefined`，而这一串值要进 `PX_VALUE.exec(…)`、`Number(…)`
    * 与拼 `to` 的那个模板串 —— 留 undefined 进去就是往候选里写一串 "undefined"。 */
   const [, base = "", value = "", bang = ""] = match;
   const px = PX_VALUE.exec(value);
-  if (!px) return null;
+  if (!px) {
+    return null;
+  }
   const k = Number(px[1]) / BASE_SPACING_PX;
-  if (!Number.isFinite(k) || k <= 0) return null;
+  if (!Number.isFinite(k) || k <= 0) {
+    return null;
+  }
 
   const to = `${base}${Number(k.toFixed(4))}${bang}`;
   const [fromCss] = ds.candidatesToCss([token]);
   const [toCss] = ds.candidatesToCss([to]);
   // 原候选必须合法；换算后的裸数值必须**真能编出规则**且**挂在 spacing scale 上**。
-  if (!fromCss || !toCss) return null;
-  if (!toCss.includes("var(--spacing)")) return null;
+  if (!fromCss || !toCss) {
+    return null;
+  }
+  if (!toCss.includes("var(--spacing)")) {
+    return null;
+  }
   return { from: token, to };
 }
 
@@ -145,9 +155,13 @@ function rewriteStringContent(content, changes) {
   const pieces = content.split(/(\s+)/);
   for (let i = 0; i < pieces.length; i += 2) {
     const piece = pieces[i];
-    if (piece === undefined) continue;
+    if (piece === undefined) {
+      continue;
+    }
     const hit = canonicalize(piece);
-    if (!hit) continue;
+    if (!hit) {
+      continue;
+    }
     pieces[i] = hit.to;
     changes.push(hit);
   }
@@ -158,16 +172,24 @@ function rewriteStringContent(content, changes) {
     /* 取一次再判（第七次「补类型不是纯减法」：这两个 `.exec(…)` 此前喂的是
      * `pieces[i]`，而隐式 any 让「可能没取到」不报；上一步把参数类型指实之后才现形）。 */
     const piece = pieces[i];
-    if (piece === undefined) continue;
+    if (piece === undefined) {
+      continue;
+    }
     const w = W_TOKEN.exec(piece);
-    if (w) wSlots.set(w[1], i);
+    if (w) {
+      wSlots.set(w[1], i);
+    }
     const h = H_TOKEN.exec(piece);
-    if (h) hSlots.set(h[1], i);
+    if (h) {
+      hSlots.set(h[1], i);
+    }
   }
   let merged = false;
   for (const [key, wIndex] of wSlots) {
     const hIndex = hSlots.get(key);
-    if (hIndex === undefined) continue;
+    if (hIndex === undefined) {
+      continue;
+    }
     // 值相等才算「同一个 token 的两半」：`w-40 h-40` → `size-40`。中间隔着别的类
     // 也照样合并（`w-40 x h-40` → `size-40 x`）；`key` 已含 `!`，`w-40! h-40` 不匹配。
     pieces[wIndex] = `size-${key}`;
@@ -175,11 +197,15 @@ function rewriteStringContent(content, changes) {
     // `" size-40"`（前导空格）或 `"size-40 "`（尾随空格），而 `[ \t]{2,}` 压不掉
     // 单个空格 —— 那会让类名字符串里多出一个空白（`w-40 h-40` 在开头时最明显）。
     pieces[hIndex] = "";
-    if (hIndex > 0) pieces[hIndex - 1] = "";
+    if (hIndex > 0) {
+      pieces[hIndex - 1] = "";
+    }
     merged = true;
     changes.push({ from: `w-${key} + h-${key}`, to: `size-${key}` });
   }
-  if (!merged) return pieces.join("");
+  if (!merged) {
+    return pieces.join("");
+  }
   // 多行模板串的换行缩进原样保留（只压空格/制表符），并去掉收尾后的首尾空白。
   return pieces
     .join("")
@@ -209,15 +235,15 @@ function rewriteText(text, changes) {
 function* walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) yield* walk(full);
-    else if (/\.tsx?$/.test(entry.name)) yield full;
+    if (entry.isDirectory()) {
+      yield* walk(full);
+    } else if (/\.tsx?$/.test(entry.name)) {
+      yield full;
+    }
   }
 }
 
-const files =
-  targets.length > 0
-    ? targets.map((f) => path.resolve(ROOT, f))
-    : [...walk(SRC)];
+const files = targets.length > 0 ? targets.map((f) => path.resolve(ROOT, f)) : [...walk(SRC)];
 
 let total = 0;
 const touched = [];
@@ -227,17 +253,25 @@ for (const file of files) {
   /** @type {Change[]} */
   const changes = [];
   const after = rewriteText(before, changes);
-  if (after === before) continue;
+  if (after === before) {
+    continue;
+  }
   total += changes.length;
   touched.push({ file, changes });
-  if (shouldWrite) fs.writeFileSync(file, after);
+  if (shouldWrite) {
+    fs.writeFileSync(file, after);
+  }
 }
 
 for (const { file, changes } of touched) {
   const pairs = new Map();
-  for (const { from, to } of changes) pairs.set(from, to);
+  for (const { from, to } of changes) {
+    pairs.set(from, to);
+  }
   console.log(`${path.relative(ROOT, file)}`);
-  for (const [from, to] of pairs) console.log(`  ${from} → ${to}`);
+  for (const [from, to] of pairs) {
+    console.log(`  ${from} → ${to}`);
+  }
 }
 console.log(
   `\n${shouldWrite ? "已改写" : "待改写"} ${total} 处（${touched.length} 个文件）` +
@@ -256,15 +290,11 @@ console.log(
 
 if (shouldCheck) {
   if (total > 0) {
-    console.error(
-      `\nspacing canonical 硬闸：待改写 ${total} 处（须为 0）\n`,
-    );
+    console.error(`\nspacing canonical 硬闸：待改写 ${total} 处（须为 0）\n`);
     for (const { file, changes } of touched) {
       console.error(`  ✗ ${path.relative(ROOT, file)}：${changes.length} 处`);
     }
-    console.error(
-      `\n修法：node scripts/tw4-spacing-canonical.mjs --write 落盘改写。`,
-    );
+    console.error(`\n修法：node scripts/tw4-spacing-canonical.mjs --write 落盘改写。`);
     process.exit(1);
   }
   console.log("\nspacing canonical 硬闸：0 处 ✓");

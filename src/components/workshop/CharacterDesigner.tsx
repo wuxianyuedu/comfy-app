@@ -127,13 +127,17 @@ export function CharacterDesigner({
   function update(id: string, patch: Partial<Character>) {
     onCharactersChange(
       characters.map((character) => {
-        if (character.id !== id) return character;
+        if (character.id !== id) {
+          return character;
+        }
         const next = { ...character, ...patch };
         // Recompute prompts
         const style = styles.find((style) => style.slug === next.skillSlug);
         next.positivePrompt = buildCharacterPrompt(next, style);
         next.negativePrompt = buildCharacterNegative(next, style);
-        if (style?.defaultParams) next.params = { ...style.defaultParams };
+        if (style?.defaultParams) {
+          next.params = { ...style.defaultParams };
+        }
         return next;
       }),
     );
@@ -192,7 +196,9 @@ export function CharacterDesigner({
             /* Enter 触发 AI 生成（Shift+Enter 不触发）；生成中不响应。 */
             {...enterCommit({
               onCommit: () => {
-                if (!gen.busy) void handleAIGenerate();
+                if (!gen.busy) {
+                  void handleAIGenerate();
+                }
               },
               excludeShift: true,
             })}

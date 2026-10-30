@@ -92,13 +92,17 @@ function textUnder(absDir: string): string {
   const walk = (dir: string) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       if (e.isDirectory()) {
-        if (!skip.has(e.name)) walk(path.join(dir, e.name));
+        if (!skip.has(e.name)) {
+          walk(path.join(dir, e.name));
+        }
       } else if (/\.(ts|tsx|css|js|mjs|cjs)$/.test(e.name)) {
         out.push(readFileSync(path.join(dir, e.name), "utf8"));
       }
     }
   };
-  if (existsSync(absDir)) walk(absDir);
+  if (existsSync(absDir)) {
+    walk(absDir);
+  }
   return out.join("\n");
 }
 
@@ -107,7 +111,9 @@ function declaredRoots(css: string): Array<string> {
   const out: Array<string> = [];
   for (const m of css.matchAll(/^\s*@source\s+"([^"]+)"\s*;/gm)) {
     const target = m[1];
-    if (target && !target.startsWith("inline(")) out.push(target);
+    if (target && !target.startsWith("inline(")) {
+      out.push(target);
+    }
   }
   return out;
 }
@@ -118,7 +124,9 @@ function selectorParts(css: string): Set<string> {
   for (const selector of ruleSelectors(css)) {
     for (const part of selector.split(/(?<!\\),/)) {
       const p = part.trim();
-      if (p) out.add(p);
+      if (p) {
+        out.add(p);
+      }
     }
   }
   return out;

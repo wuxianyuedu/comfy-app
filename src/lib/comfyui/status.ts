@@ -164,7 +164,9 @@ export function launcherCommandCandidates(pythonExe: string): Array<string> {
  *  `.venv/Lib/site-packages/comfy_cli/.comfy-cli` 的 setup 节）。只在
  *  comfyuiPath 存在且是目录时读一次，读不到返回 null（纯尽力而为）。 */
 export function readRegisteredLauncher(comfyuiPath: string): string | null {
-  if (!comfyuiPath) return null;
+  if (!comfyuiPath) {
+    return null;
+  }
   const registry = path.join(
     ...tracingIgnoreArgs(),
     comfyuiPath,
@@ -188,9 +190,13 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
   // 取 setup 节的 cmds（形如 "cmds": "C:\...\python.exe main.py"）。走 JSON.parse
   // 而不是正则：cmds 内嵌的引号是 JSON 转义过的（`\"C:\\uv...\"`），正则抓不准。
   const cmds = extractSetupCmds(raw);
-  if (!cmds) return null;
+  if (!cmds) {
+    return null;
+  }
   const first = /^"([^"]+)"/.exec(cmds)?.[1] ?? cmds.trim().split(/\s+/)[0];
-  if (!first || !/\.exe$|python/i.test(first)) return null;
+  if (!first || !/\.exe$|python/i.test(first)) {
+    return null;
+  }
   return first;
 }
 
@@ -239,7 +245,9 @@ async function resolvePortFast(
   alreadyProbedPort: boolean | null = null,
 ): Promise<number | null> {
   const authoritative = findPidListeningPort(pid);
-  if (!configuredPort) return authoritative;
+  if (!configuredPort) {
+    return authoritative;
+  }
 
   if (alreadyProbedPort === false) {
     /* 配置端口刚被探过且没人应答 → 抢跑这一路已经出局，直接等权威查询。
@@ -255,7 +263,9 @@ async function resolvePortFast(
     authoritative.then((port) => ({ port })),
     guessed.then((port) => ({ port })),
   ]);
-  if (winner.port) return winner.port;
+  if (winner.port) {
+    return winner.port;
+  }
   // 抢跑没结论（配置端口没人应答）→ 仍以权威查询为准。
   return authoritative;
 }
@@ -317,7 +327,9 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
    * 把结论坐实成「未运行」。此前这里是 `return emptySnapshot()`（两项皆假但
    * `didQueryProcTable` 为假），于是状态行被永远按在「ComfyUI 状态检测中…」
    * 上：用户没配路径，却看着一个一直在转的探测（ISSUE #1900）。 */
-  if (!comfyuiPath) return { ...emptySnapshot(), didQueryProcTable: true };
+  if (!comfyuiPath) {
+    return { ...emptySnapshot(), didQueryProcTable: true };
+  }
 
   // 查询失败≠没在跑（高负载 / 冷启动时 PowerShell 常超时）：如实记下来，
   // 最终没命中任何判据时标 unverified，绝不在这里下「未运行」的结论。
@@ -340,7 +352,9 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
         source: "process",
       };
     }
-    if (lookup.failed) lookupFailed = true;
+    if (lookup.failed) {
+      lookupFailed = true;
+    }
   }
 
   // 3) 启动器形态：Comfy Desktop 的 standalone-env 由 uv 启动，命令行里没有
@@ -348,7 +362,9 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   const classify = classifyComfyInstall(comfyuiPath);
   const registered = readRegisteredLauncher(classify.instanceRoot ?? comfyuiPath);
   const candidates: Array<{ cmd: string; via: string }> = [];
-  if (registered) candidates.push({ cmd: registered, via: "setup 中登记的启动器" });
+  if (registered) {
+    candidates.push({ cmd: registered, via: "setup 中登记的启动器" });
+  }
   if (!("error" in plan)) {
     for (const cmd of launcherCommandCandidates(plan.cmd)) {
       candidates.push({ cmd, via: "配置路径的解释器" });
@@ -379,8 +395,12 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
    * 用 `entries()` 取候选、`lookups.at(i)` 取结果，省掉两处 `!`。 */
   for (const [i, candidate] of candidates.entries()) {
     const lookup = lookups.at(i);
-    if (!lookup) continue;
-    if (lookup.failed) lookupFailed = true;
+    if (!lookup) {
+      continue;
+    }
+    if (lookup.failed) {
+      lookupFailed = true;
+    }
     if (lookup.pid) {
       return {
         running: true,
@@ -405,8 +425,12 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
 
 /** 候选来路 → 快照来源标记（供诊断区分「配置路径命中」与「反查命中」）。 */
 function snapshotSourceFor(via: string): ComfyRuntimeSnapshot["source"] {
-  if (via === "setup 中登记的启动器") return "launcher";
-  if (via === "配置路径的解释器") return "process";
+  if (via === "setup 中登记的启动器") {
+    return "launcher";
+  }
+  if (via === "配置路径的解释器") {
+    return "process";
+  }
   // pyvenv.cfg / uv 托管解释器：都是「按环境反查」出来的解释器，即 any。
   return "any";
 }
@@ -433,7 +457,9 @@ export async function getComfyRuntimeSnapshot(
   /* 在途去重只在**非强制**那一档生效：`st.inflight` 回答的是「上一个问的人问的那件事」，
    * 而它可能是动作之前发出的 —— 用户点了启动、查状态、再点一次刷新，
    * 拿到的仍是启动前那一问（`force` 的口径见函数文档）。 */
-  if (!opts.force && st.inflight) return st.inflight;
+  if (!opts.force && st.inflight) {
+    return st.inflight;
+  }
   const task = snapshotOnce()
     .catch((err: unknown) => {
       logger.warn(`[comfyui] ${errorText(err, "运行态快照失败")}`);

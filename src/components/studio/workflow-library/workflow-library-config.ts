@@ -155,8 +155,12 @@ export function deriveSyncFlags(row: WorkflowRow): {
  *  （等宽字体 + 更亮的颜色），
  *  扫一眼就能读出来。 */
 export function isTechnicalName(name: string): boolean {
-  if (!name) return false;
-  if (name.length > 38) return false; // already a descriptive name
+  if (!name) {
+    return false;
+  }
+  if (name.length > 38) {
+    return false;
+  } // already a descriptive name
   return /^[a-z0-9_]+$/.test(name);
 }
 
@@ -183,7 +187,9 @@ export interface PendingRow {
  *  （占位行走独立的 `pending`），这里显式收拢是为了让「三档声明 → 两档筛选」
  *  这条映射写在类型旁边 —— 否则加档时筛选条件会静默漏掉它。 */
 function sourceOf(workflow: WorkflowRow): "local" | "online" {
-  if (workflow.source === "local-pending") return "local";
+  if (workflow.source === "local-pending") {
+    return "local";
+  }
   return workflow.source ?? (workflow.sourcePath ? "local" : "online");
 }
 
@@ -222,9 +228,13 @@ export function filterPending(
   pending: Array<PendingRow>,
   filters: { source: SourceFilter; search: string },
 ): Array<PendingRow> {
-  if (filters.source === "online") return [];
+  if (filters.source === "online") {
+    return [];
+  }
   const needle = normalizeNeedle(filters.search);
-  if (!needle) return pending;
+  if (!needle) {
+    return pending;
+  }
   return pending.filter((row) => matchesNeedle(needle, row.name));
 }
 

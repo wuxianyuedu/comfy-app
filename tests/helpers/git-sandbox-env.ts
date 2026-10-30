@@ -113,7 +113,9 @@ export function sandboxGitConfig(): Record<string, string> {
  * @returns 可直接交给子进程的 `env` */
 export function gitSandboxEnv(extra: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
-  for (const key of GIT_INHERITED_ENV_KEYS) delete env[key];
+  for (const key of GIT_INHERITED_ENV_KEYS) {
+    delete env[key];
+  }
   return withSandboxGitConfig(env);
 }
 
@@ -149,5 +151,7 @@ export function withSandboxGitConfig(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv 
  * 脚本**，脚本内部又自己起 git；逐个 spawn 传 `env` 要改的地方比这份清单长得多，
  * 漏一个就是漏一个只在钩子里才复现的污染。删一次 `process.env` 对两者同时生效。 */
 export function stripInheritedGitEnv(): void {
-  for (const key of GIT_INHERITED_ENV_KEYS) delete process.env[key];
+  for (const key of GIT_INHERITED_ENV_KEYS) {
+    delete process.env[key];
+  }
 }

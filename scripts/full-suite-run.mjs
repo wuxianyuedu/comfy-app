@@ -66,10 +66,7 @@ import { parseJunitXml, failingSuitesFromJunit } from "./precommit-timing.mjs";
  * （`tests/deps-freshness-gate.test.ts:166` 超时 30s）就把后面的
  * `每日生产构建` / `每日浏览器安装` / `每日全量E2E` 三格全部 skip 掉 ——
  * 而那次红是调度排不上，不是断言报错。 */
-import {
-  isTimeoutShaped,
-  waitForLoadToSettle,
-} from "./affected-launch-load-retry.mjs";
+import { isTimeoutShaped, waitForLoadToSettle } from "./affected-launch-load-retry.mjs";
 import { planLaunches } from "./run-affected-tests.mjs";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import {
@@ -114,11 +111,7 @@ export const TRACK = freshnessTrack("full");
  *   仓库内，就会被换成相对路径再交给 vitest（原因见 {@link toTransportSafePath}）。
  * @returns {{label: string, args: string[]}}
  */
-export function planRun(
-  extra = [],
-  workers = resolveCiWorkers().workers,
-  junitFile = "",
-) {
+export function planRun(extra = [], workers = resolveCiWorkers().workers, junitFile = "") {
   /* 读数参数只在「调用方给了落点」时才加（与钩子那侧 `--junit-dir` 没递到就一个字都不加
    * 同一条口径 —— 让人自己跑的那档形态与此前逐字相同）。 */
   const junitArg = junitFile ? toTransportSafePath(junitFile) : "";
@@ -135,11 +128,7 @@ export function planRun(
        * 两个 reporter 一起给：只给 junit 会把人类可读的输出顶掉（真红那一屏是唯一能读
        * 的东西）。 */
       ...(junitArg
-        ? [
-            "--reporter=default",
-            "--reporter=junit",
-            `--outputFile.junit=${junitArg}`,
-          ]
+        ? ["--reporter=default", "--reporter=junit", `--outputFile.junit=${junitArg}`]
         : []),
       ...extra,
     ],
@@ -234,8 +223,7 @@ function passthrough(argv) {
  * @returns {{enforce: boolean, reading: string}}
  */
 export function coverageGate(argv, env = process.env) {
-  const enforce =
-    argv.includes("--enforce-coverage") || env.COMFY_COVERAGE_ENFORCE === "1";
+  const enforce = argv.includes("--enforce-coverage") || env.COMFY_COVERAGE_ENFORCE === "1";
   return {
     enforce,
     reading: enforce
@@ -268,9 +256,7 @@ export function suiteRanking(xmlText, { limit = 10, file = "" } = {}) {
   const where = file ? `（落点 ${file}）` : "";
   const entries = parseJunitXml(String(xmlText ?? ""));
   if (entries.length === 0) {
-    return [
-      `[full-suite-run] 分文件耗时读数：**没有** —— junit 未落盘或这一跑没跑到收尾${where}`,
-    ];
+    return [`[full-suite-run] 分文件耗时读数：**没有** —— junit 未落盘或这一跑没跑到收尾${where}`];
   }
   const sorted = [...entries].sort((a, b) => b.ms - a.ms);
   const sum = entries.reduce((a, e) => a + e.ms, 0);
@@ -280,9 +266,7 @@ export function suiteRanking(xmlText, { limit = 10, file = "" } = {}) {
   return [
     `[full-suite-run] 分文件耗时：${entries.length} 份、合计 ${(sum / 1000).toFixed(1)}s` +
       `（**只算测试阶段**，用来排序、不当 stage 墙钟）${where}`,
-    ...head.map(
-      (e) => `  ${`${(e.ms / 1000).toFixed(1)}s`.padStart(8)}  ${e.name}`,
-    ),
+    ...head.map((e) => `  ${`${(e.ms / 1000).toFixed(1)}s`.padStart(8)}  ${e.name}`),
     `  中位 ${(mid / 1000).toFixed(1)}s ｜ 其余 ${Math.max(0, entries.length - head.length)} 份合计 ${(
       (sum - headSum) /
       1000
@@ -316,21 +300,25 @@ export function suiteRanking(xmlText, { limit = 10, file = "" } = {}) {
 export function parseJunitPhaseCosts(xml) {
   /** @type {{name: string, totalMs: number, testsMs: number, cases: number}[]} */
   const out = [];
-  for (const m of String(xml ?? "").matchAll(
-    /<testsuite\b([^>]*)>([\s\S]*?)<\/testsuite>/g,
-  )) {
+  for (const m of String(xml ?? "").matchAll(/<testsuite\b([^>]*)>([\s\S]*?)<\/testsuite>/g)) {
     const attrs = m[1] ?? "";
     const body = m[2] ?? "";
     const name = /\bname="([^"]*)"/.exec(attrs)?.[1];
     const total = /\btime="([^"]*)"/.exec(attrs)?.[1];
-    if (!name || total === undefined) continue;
+    if (!name || total === undefined) {
+      continue;
+    }
     const totalSecs = Number(total);
-    if (!Number.isFinite(totalSecs) || totalSecs < 0) continue;
+    if (!Number.isFinite(totalSecs) || totalSecs < 0) {
+      continue;
+    }
     let testsMs = 0;
     let cases = 0;
     for (const c of body.matchAll(/<testcase\b[^>]*?\btime="([0-9.eE+-]+)"/g)) {
       const secs = Number(c[1]);
-      if (!Number.isFinite(secs) || secs < 0) continue;
+      if (!Number.isFinite(secs) || secs < 0) {
+        continue;
+      }
       testsMs += secs * 1000;
       cases += 1;
     }
@@ -360,16 +348,11 @@ export function parseJunitPhaseCosts(xml) {
  * @param {{limit?: number, file?: string, wallMs?: number | null}} [opts]
  * @returns {string[]}
  */
-export function suitePhaseTax(
-  xmlText,
-  { limit = 10, file = "", wallMs = null } = {},
-) {
+export function suitePhaseTax(xmlText, { limit = 10, file = "", wallMs = null } = {}) {
   const where = file ? `（落点 ${file}）` : "";
   const entries = parseJunitPhaseCosts(String(xmlText ?? ""));
   if (entries.length === 0) {
-    return [
-      `[full-suite-run] 装载税读数：**没有** —— junit 未落盘或这一跑没跑到收尾${where}`,
-    ];
+    return [`[full-suite-run] 装载税读数：**没有** —— junit 未落盘或这一跑没跑到收尾${where}`];
   }
   const withTax = entries.map((e) => ({ ...e, taxMs: e.totalMs - e.testsMs }));
   const sorted = [...withTax].sort((a, b) => b.taxMs - a.taxMs);
@@ -445,8 +428,7 @@ export const RERUN_TIMEOUT_MS = 12 * 60_000;
  * 选 `node_modules/.cache/` 的理由（git 忽略面里、不与覆盖率的清理共用生命周期、
  * 且 CI 的一次性检出与本机 `pnpm test` 都能用同一份代码）写在 `main()` 那一段。
  */
-export const SUITE_JUNIT_RELATIVE =
-  "node_modules/.cache/comfy-full-suite-junit.xml";
+export const SUITE_JUNIT_RELATIVE = "node_modules/.cache/comfy-full-suite-junit.xml";
 
 /* 「被预算砍 vs 判据红」的分流在 `launcher-core/shell.mjs` 的 `classifyOutcome()` /
  * `abortedAdvice()` —— **那件事只有一份实现**（§12.12）：本档、`artifact-run` 与
@@ -511,7 +493,9 @@ export function planIsolatedRerun(input) {
  * @returns {"load-flake" | "unverified" | "real-red"}
  */
 export function classifyRerunOutcome(input) {
-  if (input.exitCode === 0) return "load-flake";
+  if (input.exitCode === 0) {
+    return "load-flake";
+  }
   return isTimeoutShaped(input.output) ? "unverified" : "real-red";
 }
 
@@ -532,7 +516,9 @@ export function classifyRerunOutcome(input) {
 export function rerunLaunches(input) {
   const { files } = input;
   const head = ["run", "--no-file-parallelism"];
-  if (files.length === 0) return [head];
+  if (files.length === 0) {
+    return [head];
+  }
   return planLaunches(files).map((chunk) => [...head, ...chunk]);
 }
 
@@ -542,7 +528,9 @@ async function main(argv) {
   /* 两条「不跑」的出路互斥地先处理：给了它们就不该再去起 vitest。 */
   for (const flag of /** @type {const} */ (["--skip", "--dirty"])) {
     const parsed = parseLedgerFlag(argv, flag);
-    if (parsed.mode === "run") continue;
+    if (parsed.mode === "run") {
+      continue;
+    }
     if (parsed.reason === null) {
       process.stderr.write(
         `[full-suite-run] ✗ 理由（"${String(argv[argv.indexOf(flag) + 1] ?? "").trim()}"）` +
@@ -585,7 +573,9 @@ async function main(argv) {
      * 真要在意的是「别拿上一轮冒充这一轮」，所以下面打印时把落点一起打出来。 */
   }
   const run = planRun(extra, load.workers, junitFile);
-  if (load.note) process.stderr.write(`[full-suite-run] ${load.note}\n`);
+  if (load.note) {
+    process.stderr.write(`[full-suite-run] ${load.note}\n`);
+  }
   const gate = coverageGate(argv);
   /* 先念档位再起子进程：这一档墙钟是分钟级，起完之后才念等于让读的人在十分钟里
    * 猜「门槛到底算了没有」（#2574 那条「几百 MB 那一跳长得像卡死」是同一件事的另一直角）。 */
@@ -612,9 +602,7 @@ async function main(argv) {
     command: cli,
     timeoutMs: FULL_SUITE_TIMEOUT_MS,
     /* 开关交给子进程（`vitest.config.ts` 末尾那一节读它），本进程不改任何配置文件。 */
-    env: gate.enforce
-      ? { ...process.env, COMFY_COVERAGE_ENFORCE: "1" }
-      : process.env,
+    env: gate.enforce ? { ...process.env, COMFY_COVERAGE_ENFORCE: "1" } : process.env,
   });
   const wallMs = Date.now() - wallStart;
   /* 榜打在**三态分流之前**：红的那一次与被预算砍的那一次，恰恰是最需要知道
@@ -681,7 +669,9 @@ async function main(argv) {
       /** @type {{status: number, output: string}} */
       const rerun = rerunLaunches({ files: plan.files }).reduce(
         (acc, args) => {
-          if (acc.status !== 0) return acc;
+          if (acc.status !== 0) {
+            return acc;
+          }
           const res2 = runPnpmSync(["exec", "vitest", ...args], {
             cwd: ROOT,
             stdio: "pipe",
@@ -771,20 +761,13 @@ async function main(argv) {
    * `FRESHNESS_LEDGER_PUSH=1` 时真正推，否则 no-op。 */
   const freshPush = pushFreshnessLedger({ root: ROOT, kinds: ["full"] });
   if (freshPush.pushed) {
-    process.stdout.write(
-      "[full-suite-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n",
-    );
+    process.stdout.write("[full-suite-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n");
   } else if (freshPush.reason && freshPush.reason !== "opt-out") {
-    process.stdout.write(
-      `[full-suite-run] （新鲜度账回写未执行：${freshPush.reason}）\n`,
-    );
+    process.stdout.write(`[full-suite-run] （新鲜度账回写未执行：${freshPush.reason}）\n`);
   }
   return 0;
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(await main(process.argv.slice(2)));
 }

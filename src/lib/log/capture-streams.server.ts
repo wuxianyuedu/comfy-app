@@ -38,7 +38,9 @@ let target: string | null = null;
 
 /** 面板读取本次运行转录文件的路径（服务端路由用）。 */
 export function panelCaptureLogPath(): string {
-  if (target) return target;
+  if (target) {
+    return target;
+  }
   let boot = "unknown";
   try {
     // 进程启动标识：与 log-store 的会话边界配合，文件按次命名不覆盖旧的。
@@ -91,7 +93,9 @@ export async function latestPanelLogFile(dir = NEXTJS_LOG_DIR): Promise<string |
     } catch {
       continue; // 正在被轮转删掉
     }
-    if (!best || mtimeMs > best.mtimeMs) best = { file, mtimeMs };
+    if (!best || mtimeMs > best.mtimeMs) {
+      best = { file, mtimeMs };
+    }
   }
   return best?.file ?? null;
 }
@@ -167,7 +171,9 @@ function flushBuffer(filePath: string): void {
     clearTimeout(flushTimer);
     flushTimer = null;
   }
-  if (!buffer) return;
+  if (!buffer) {
+    return;
+  }
   const text = buffer;
   buffer = "";
   safeAppend(filePath, text);
@@ -194,7 +200,9 @@ let installed = false;
  * redirect 文件 / 上一轮包装器）原样保留。重复调用幂等。
  */
 export function installStreamCapture(): void {
-  if (installed) return;
+  if (installed) {
+    return;
+  }
   installed = true;
 
   const filePath = panelCaptureLogPath();

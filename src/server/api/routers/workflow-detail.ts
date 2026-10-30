@@ -7,27 +7,20 @@ import { TRPCError } from "@trpc/server";
 
 import { authedProcedure } from "~/server/api/trpc";
 import { workflowTemplateRepository } from "~/lib/core/repository";
-import {
-  buildSubgraphDetail,
-  buildWorkflowDetailFull,
-} from "~/lib/comfyui/workflow-detail";
+import { buildSubgraphDetail, buildWorkflowDetailFull } from "~/lib/comfyui/workflow-detail";
 
 export const workflowDetailProcedures = {
   /* GET /api/workflows/[id] —— 读 */
-  detail: authedProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const template = await workflowTemplateRepository.findByIdForUser(
-        ctx.user.id,
-        input.id,
-      );
-      if (!template)
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Workflow not found",
-        });
-      return { template };
-    }),
+  detail: authedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const template = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.id);
+    if (!template) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Workflow not found",
+      });
+    }
+    return { template };
+  }),
 
   /* GET /api/workflows/[id] —— 完整派生详情（从旧的 REST GET 处理器移植：
    * rawJson 重新导入、COMBO 解析、rawView、
@@ -54,11 +47,6 @@ export const workflowDetailProcedures = {
       }),
     )
     .query(async ({ ctx, input }) => {
-      return buildSubgraphDetail(
-        ctx.user.id,
-        input.id,
-        input.uid,
-        input.hostId ?? "",
-      );
+      return buildSubgraphDetail(ctx.user.id, input.id, input.uid, input.hostId ?? "");
     }),
 };

@@ -6,7 +6,9 @@ import { createLogger, coreLogger } from "~/lib/core/logger";
 const streams: Array<PassThrough> = [];
 
 afterEach(() => {
-  while (streams.length > 0) streams.pop()?.destroy();
+  while (streams.length > 0) {
+    streams.pop()?.destroy();
+  }
 });
 
 /**

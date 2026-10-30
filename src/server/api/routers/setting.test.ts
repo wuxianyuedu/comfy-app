@@ -187,7 +187,9 @@ function installFakeChild() {
       kill: vi.fn(),
     };
     setTimeout(() => {
-      for (const cb of handlers.spawn ?? []) cb();
+      for (const cb of handlers.spawn ?? []) {
+        cb();
+      }
     }, 0);
     return handle;
   });

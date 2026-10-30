@@ -69,7 +69,9 @@ export function selectVisibleResourceMetrics(
   const out: Array<VisibleResourceMetric> = [];
   for (const descriptor of RESOURCE_METRICS) {
     const bar = view[descriptor.key];
-    if (bar) out.push({ descriptor, bar });
+    if (bar) {
+      out.push({ descriptor, bar });
+    }
   }
   return out;
 }

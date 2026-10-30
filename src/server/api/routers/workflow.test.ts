@@ -219,8 +219,11 @@ describe("workflow.create", () => {
   });
   afterEach(() => {
     vi.mocked(readEnvVar).mockReturnValue(null);
-    if (previousRoots === undefined) delete process.env.LOCAL_WORKFLOWS_PATH;
-    else process.env.LOCAL_WORKFLOWS_PATH = previousRoots;
+    if (previousRoots === undefined) {
+      delete process.env.LOCAL_WORKFLOWS_PATH;
+    } else {
+      process.env.LOCAL_WORKFLOWS_PATH = previousRoots;
+    }
   });
 
   it("RAW 原件导入：默认名、坐标与原件一起落库", async () => {

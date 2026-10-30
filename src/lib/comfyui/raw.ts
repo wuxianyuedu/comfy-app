@@ -48,9 +48,15 @@ export function asRawWorkflow(v: unknown): RawWorkflow | null {
  *  （普通对象即 Object.prototype.toString → "[object Object]"）。显式收窄
  *  只为满足 no-base-to-string（该规则把 String(unknown/{}) 一律视为误报）。 */
 export function toStringValue(v: unknown): string {
-  if (typeof v === "string") return v;
-  if (v === null) return "null";
-  if (v === undefined) return "undefined";
+  if (typeof v === "string") {
+    return v;
+  }
+  if (v === null) {
+    return "null";
+  }
+  if (v === undefined) {
+    return "undefined";
+  }
   return /* SAFETY: 类型断言已复核 */ (v as { toString(): string }).toString();
 }
 
@@ -216,7 +222,9 @@ export interface ApiWorkflowNode {
 
 export function extractPositions(raw: RawWorkflow): Record<string, [number, number]> {
   const out: Record<string, [number, number]> = {};
-  if (!Array.isArray(raw.nodes)) return out;
+  if (!Array.isArray(raw.nodes)) {
+    return out;
+  }
   for (const n of raw.nodes) {
     if (n && Array.isArray(n.pos) && n.pos.length >= 2) {
       const id = String(n.id);
@@ -238,8 +246,12 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
   const subs = raw.definitions?.subgraphs;
   if (subs && typeof subs === "object") {
     for (const wrapper of raw.nodes) {
-      if (!wrapper || typeof wrapper.type !== "string") continue;
-      if (!Array.isArray(wrapper.pos)) continue;
+      if (!wrapper || typeof wrapper.type !== "string") {
+        continue;
+      }
+      if (!Array.isArray(wrapper.pos)) {
+        continue;
+      }
       const wId = String(wrapper.id);
       let innerNodes: Array<RawNode> | undefined;
       for (const k of Object.keys(subs)) {
@@ -249,7 +261,9 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
           break;
         }
       }
-      if (!innerNodes) continue;
+      if (!innerNodes) {
+        continue;
+      }
       for (const inner of innerNodes) {
         if (inner && Array.isArray(inner.pos) && inner.pos.length >= 2) {
           const iId = String(inner.id);
@@ -299,15 +313,21 @@ function readInputSpec(spec: ObjectInfoInputSpec | undefined): {
     const head = spec[0];
     const options: Record<string, unknown> = spec[1] ?? {};
     // COMBO：候选值以数组形式直接放在首项
-    if (Array.isArray(head)) return { type: "COMBO", options };
+    if (Array.isArray(head)) {
+      return { type: "COMBO", options };
+    }
     return { type: typeof head === "string" ? head : null, options };
   }
   if (spec && typeof spec === "object") {
     const type = spec.type;
 
-    if (Array.isArray(type)) return { type: "COMBO", options: spec };
+    if (Array.isArray(type)) {
+      return { type: "COMBO", options: spec };
+    }
 
-    if (typeof type === "string") return { type: type, options: spec };
+    if (typeof type === "string") {
+      return { type: type, options: spec };
+    }
   }
 
   return { type: null, options: {} };
@@ -354,7 +374,9 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
        * 发生一次，放宽不影响常态响应。 */
       signal: AbortSignal.timeout(20000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     const parsed = ObjectInfoEnvelopeSchema.safeParse(await res.json());
     if (!parsed.success) {
       /* 形状不可用 ⇒ 与「拿不到」同一条降级路径（含负缓存），不让坏响应
@@ -392,7 +414,9 @@ function hasControlAfterGenerate(
   type: string,
   options: Record<string, unknown>,
 ): boolean {
-  if (type !== "INT") return false;
+  if (type !== "INT") {
+    return false;
+  }
   return SEED_WIDGET_NAMES.has(name) || options?.control_after_generate === true;
 }
 
@@ -419,7 +443,9 @@ export function pairWidgetValues(
   const order: Array<string> = [];
   for (const inp of inputs) {
     const wname = inp?.widget?.name;
-    if (typeof wname !== "string") continue;
+    if (typeof wname !== "string") {
+      continue;
+    }
     order.push(wname);
     if (SEED_WIDGET_NAMES.has(wname) && (inp.type === "INT" || inp.type === undefined)) {
       order.push(CONTROL_SENTINEL);
@@ -427,8 +453,12 @@ export function pairWidgetValues(
   }
   const map: Record<string, unknown> = {};
   order.forEach((name, i) => {
-    if (name === CONTROL_SENTINEL) return;
-    if (i < widgetsValues.length) map[name] = widgetsValues[i];
+    if (name === CONTROL_SENTINEL) {
+      return;
+    }
+    if (i < widgetsValues.length) {
+      map[name] = widgetsValues[i];
+    }
   });
   return map;
 }
@@ -450,7 +480,9 @@ export async function fetchWidgetOrderTable(): Promise<Record<string, Array<stri
       table[clsName] = resolveWidgetOrder(def);
     }
   } else {
-    for (const [clsName, list] of Object.entries(FALLBACK_WIDGETS)) table[clsName] = list;
+    for (const [clsName, list] of Object.entries(FALLBACK_WIDGETS)) {
+      table[clsName] = list;
+    }
   }
   return table;
 }
@@ -466,7 +498,9 @@ export function mapWidgetValuesByOrder(
   widgetOrder: Array<string> | undefined,
   widgetsValues: Array<unknown>,
 ): Array<{ name: string; value: unknown }> | null {
-  if (!widgetOrder || widgetOrder.length === 0 || widgetsValues.length === 0) return null;
+  if (!widgetOrder || widgetOrder.length === 0 || widgetsValues.length === 0) {
+    return null;
+  }
   const bare = widgetOrder.filter((name) => name !== CONTROL_SENTINEL);
   const names =
     widgetsValues.length === widgetOrder.length
@@ -474,17 +508,23 @@ export function mapWidgetValuesByOrder(
       : widgetsValues.length === bare.length
         ? bare
         : null;
-  if (!names) return null;
+  if (!names) {
+    return null;
+  }
   const out: Array<{ name: string; value: unknown }> = [];
   names.forEach((name, index) => {
-    if (name === CONTROL_SENTINEL) return;
+    if (name === CONTROL_SENTINEL) {
+      return;
+    }
     out.push({ name, value: widgetsValues[index] });
   });
   return out;
 }
 
 function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): Array<string> {
-  if (!cls) return [];
+  if (!cls) {
+    return [];
+  }
   const reqOrder = cls.input_order?.required ?? [];
   const optOrder = cls.input_order?.optional ?? [];
   const req = cls.input?.required ?? {};
@@ -492,20 +532,34 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): Array<string> 
   const out: Array<string> = [];
   const push = (name: string, defs: Record<string, ObjectInfoInputSpec>) => {
     const spec = defs[name];
-    if (!spec) return;
+    if (!spec) {
+      return;
+    }
     const { type, options } = readInputSpec(spec);
-    if (!type) return;
+    if (!type) {
+      return;
+    }
     // 连接类型的值来自 links，不在 widgets_values 里。
-    if (CONNECTION_TYPE_RE.test(type)) return;
+    if (CONNECTION_TYPE_RE.test(type)) {
+      return;
+    }
     // forceInput 的标量输入被渲染成插槽，同样不占 widgets_values 的位置。
-    if (options?.forceInput === true) return;
+    if (options?.forceInput === true) {
+      return;
+    }
     out.push(name);
-    if (hasControlAfterGenerate(name, type, options)) out.push(CONTROL_SENTINEL);
+    if (hasControlAfterGenerate(name, type, options)) {
+      out.push(CONTROL_SENTINEL);
+    }
   };
   // widgets_values = required 全部 widget + optional 全部 widget 按顺序扁平化，
   // 只取 required 会从第一个 optional 起错位（VHS_VideoCombine / SaveAnimatedWEBP / KJNodes）。
-  for (const k of reqOrder) push(k, req);
-  for (const k of optOrder) push(k, opt);
+  for (const k of reqOrder) {
+    push(k, req);
+  }
+  for (const k of optOrder) {
+    push(k, opt);
+  }
   return out;
 }
 

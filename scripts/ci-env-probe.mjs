@@ -118,8 +118,12 @@ export function ps7OnlySyntaxIn(text) {
       bodyIndent = null;
       return;
     }
-    if (!inScript) return;
-    if (trimmed === "") return;
+    if (!inScript) {
+      return;
+    }
+    if (trimmed === "") {
+      return;
+    }
     const indent = raw.length - raw.trimStart().length;
     if (bodyIndent === null) {
       if (indent === 0) {
@@ -167,7 +171,9 @@ export function parseVersionTriple(text) {
   /* 大版本可以单写（`3` / `Python 3`）—— 缺的那几段按 0 算，与
    * `ci-toolchain-selfcheck.mjs` 的 `cmpVersion` 同口径。 */
   const m = /(\d+)(?:\.(\d+))?(?:\.(\d+))?/.exec(String(text ?? ""));
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   return [Number(m[1]), Number(m[2] ?? 0), Number(m[3] ?? 0)];
 }
 
@@ -181,7 +187,9 @@ export function parseVersionTriple(text) {
  */
 export function pythonVersionMeetsFloor(text) {
   const triple = parseVersionTriple(text);
-  if (!triple) return { ok: false, triple: null };
+  if (!triple) {
+    return { ok: false, triple: null };
+  }
   const [maj, min] = PYTHON_MIN_VERSION;
   const [major = 0, minor = 0] = triple;
   return { ok: major > maj || (major === maj && minor >= min), triple };
@@ -262,19 +270,18 @@ export function stageBlockIn(text, name) {
       }
     }
   }
-  if (start < 0) return null;
+  if (start < 0) {
+    return null;
+  }
   const out = [strip(lines[start] ?? "")];
   for (let i = start + 1; i < lines.length; i += 1) {
     const raw = lines[i] ?? "";
     /* 下一个同级 stage 项（活的或注释态）/ 回到**未注释**的更浅键都算收尾
      * （空行不算 —— 配置里正文之间有空行）。⚠️ 判据不能写成「`^\S` 就收尾」：
      * 注释块里每一行都以 `#` 开头，那也是 `\S`。 */
-    if (
-      live.test(raw) ||
-      commented.test(raw) ||
-      (/^\S/.test(raw) && !raw.startsWith("#"))
-    )
+    if (live.test(raw) || commented.test(raw) || (/^\S/.test(raw) && !raw.startsWith("#"))) {
       break;
+    }
     out.push(strip(raw));
   }
   return out.join("\n");
@@ -310,11 +317,17 @@ export function stagesWithImage(text) {
   for (let i = 0; i < lines.length; i += 1) {
     const item = /^ {2}-\s+name:\s*(\S.*?)\s*$/.exec(lines[i] ?? "");
     const name = item?.[1];
-    if (name === undefined) continue;
+    if (name === undefined) {
+      continue;
+    }
     const block = stageBlockIn(text, name);
-    if (block === null) continue;
+    if (block === null) {
+      continue;
+    }
     const found = block.split("\n").some((raw) => /^ {4}image:\s*\S/.test(raw));
-    if (found && !out.includes(name)) out.push(name);
+    if (found && !out.includes(name)) {
+      out.push(name);
+    }
   }
   return out;
 }
@@ -345,7 +358,9 @@ export const BROWSER_INSTALL_STAGE = "每日浏览器安装";
  */
 export function stageEnvValue(text, stage, key) {
   const block = stageBlockIn(text, stage);
-  if (block === null) return null;
+  if (block === null) {
+    return null;
+  }
   /* `\s*` 而不是 `\s+`：**停用形态**里那一项的缩进已被压平（注释块按第 0 列读），
    * 键因此可能顶格出现。匹配面仍限在这一项自己的块内，不会串到别的 stage。 */
   const re = new RegExp(
@@ -353,7 +368,9 @@ export function stageEnvValue(text, stage, key) {
     "m",
   );
   const m = re.exec(block);
-  if (!m?.[1]) return null;
+  if (!m?.[1]) {
+    return null;
+  }
   const raw = m[1].trim().replace(/^["']|["']$/g, "");
   return raw === "" ? null : raw;
 }
@@ -388,12 +405,16 @@ function run(cmd, args) {
  */
 export function ensureDir(dir) {
   const target = String(dir ?? "").trim();
-  if (!target) return { ok: false, created: false, why: "路径是空的" };
+  if (!target) {
+    return { ok: false, created: false, why: "路径是空的" };
+  }
   if (!path.isAbsolute(target)) {
     return { ok: false, created: false, why: "不是绝对路径" };
   }
   try {
-    if (existsSync(target)) return { ok: true, created: false, why: "已在" };
+    if (existsSync(target)) {
+      return { ok: true, created: false, why: "已在" };
+    }
     mkdirSync(target, { recursive: true });
     return { ok: true, created: true, why: "刚补出来" };
   } catch (error) {
@@ -491,9 +512,7 @@ export function envProbe({
           "`node scripts/ci-image-plan.mjs`，别在流水线里声明它。",
       );
     } else {
-      notes.push(
-        "`.cnb.yml` 的 stage 一格都没带 `image:`（这条路径上没有 docker daemon）",
-      );
+      notes.push("`.cnb.yml` 的 stage 一格都没带 `image:`（这条路径上没有 docker daemon）");
     }
   }
 
@@ -504,9 +523,7 @@ export function envProbe({
   } catch {
     /* 探测本身出错时**不是这一条要答的问题**（那一格同样归 `Python 可用性`），
      * 如实记一条读数、不判红 —— 本步骤不做「探测失败」的第二份判据。 */
-    notes.push(
-      "解释器探测本身出错：本步不判它（缺件与探测失败归「Python 可用性」）",
-    );
+    notes.push("解释器探测本身出错：本步不判它（缺件与探测失败归「Python 可用性」）");
   }
   if (python) {
     const floor = pythonVersionMeetsFloor(python.version);
@@ -532,9 +549,7 @@ export function envProbe({
       );
     }
   } else {
-    notes.push(
-      "这台机器上没有可用解释器：缺件那一格归「Python 可用性」，本步不重复判",
-    );
+    notes.push("这台机器上没有可用解释器：缺件那一格归「Python 可用性」，本步不重复判");
   }
 
   /* ── ③ pnpm 能不能**真跑起仓库的脚本**（不是在不在）──
@@ -653,15 +668,9 @@ export function envProbe({
        * 名字加了前缀，写死的字符串会**静默**读不到根 ⇒ 这一步退回「量五个候选根」，
        * 于是它报的不再是「配置给的那一个到不到」，而它的全部职责就是回答那一句。 */
       const configuredHost = configText
-        ? stageEnvValue(
-            configText,
-            BROWSER_INSTALL_STAGE,
-            "PLAYWRIGHT_DOWNLOAD_HOST",
-          )
+        ? stageEnvValue(configText, BROWSER_INSTALL_STAGE, "PLAYWRIGHT_DOWNLOAD_HOST")
         : null;
-      const roots = configuredHost
-        ? [configuredHost]
-        : playwrightDownloadRoots(env);
+      const roots = configuredHost ? [configuredHost] : playwrightDownloadRoots(env);
       /* 没给根时用候选那一族；给了根就只量它（配置给的那一个优先于本步 env ——
        * 那才是这一步真正要回答的对象）。
        *
@@ -765,22 +774,20 @@ export function envProbe({
       );
     }
   } else {
-    notes.push(
-      "临时根没配（`TEMP` / `TMP` 都没设）—— 工具会退回系统默认的那个",
-    );
+    notes.push("临时根没配（`TEMP` / `TMP` 都没设）—— 工具会退回系统默认的那个");
   }
   notes.push(`浏览器落点 ${playwrightBrowsersRoot({ env })}`);
 
-  for (const note of notes) log(`（${note}）`);
+  for (const note of notes) {
+    log(`（${note}）`);
+  }
 
   if (problems.length > 0) {
-    logError(
-      "\n环境前提未满足（这些问题都**只要几秒**就能问出来，早问早改）：",
-    );
-    for (const p of problems) logError(`  ✗ ${p}`);
-    logError(
-      "\n背景与判读顺序见 docs/standards/13-提交与-code-review.md §13.5.3.9。",
-    );
+    logError("\n环境前提未满足（这些问题都**只要几秒**就能问出来，早问早改）：");
+    for (const p of problems) {
+      logError(`  ✗ ${p}`);
+    }
+    logError("\n背景与判读顺序见 docs/standards/13-提交与-code-review.md §13.5.3.9。");
     return 1;
   }
   log("\n环境前提通过 ✓");
@@ -793,9 +800,6 @@ export function envProbe({
  * 于是这一段一次都不跑、**退出码恒 0 且一行输出都没有**（`工具链自证` /
  * `Python 可用性` 在自托管节点上就栽在这上面：两步双双空转，缺 Python 一路滑到
  * 18 分钟后的 E2E 才暴露）。判据见 `tests/script-main-guard.test.ts`。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(envProbe());
 }

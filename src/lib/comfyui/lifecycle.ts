@@ -28,7 +28,6 @@
 // 成功取决于 `log-paths` 已摘 server-only（#1074）。
 // 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 import type { spawn } from "node:child_process";
-import fs from "node:fs";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { probeComfyBase, probeComfyAtPort } from "./client";
 import { logger } from "~/lib/core/logger";
@@ -48,20 +47,15 @@ import {
 } from "./status";
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 import { sleep } from "~/lib/with-timeout";
-import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
-import {
-  openRuntimeLogWriter,
-  pruneRuntimeLogFiles,
-  type RuntimeLogWriter,
-} from "~/lib/log/runtime-log-pack.server";
-import {
-  describeStaleSession,
-  type ComfyExitReport,
-  type ComfySessionMark,
-} from "./lifecycle-exit";
-import { formatLocalStamp } from "~/lib/time-format";
 import { COMFY_STOP_PROBE } from "../retry-policy";
-import { noteComfyExit } from "./liveness-signal";
+import {
+  appendRuntimeLog,
+  beginRuntimeSession,
+  localTimestamp,
+  markComfySessionEnd,
+  markComfySessionStart,
+  warnStaleComfySession,
+} from "./lifecycle-session-log";
 import {
   noteComfyLaunchSettled,
   noteComfyStartRequested,
@@ -168,12 +162,6 @@ export const COMFY_STARTING_WINDOW_MS = 12_000;
  *  的抖动打回。 */
 export const COMFY_NOT_RUNNING_HOLD_MS = 10_000;
 
-/** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的，
- *  toISOString 的 UTC 在 +8 时区会凭空差出 8 小时。 */
-function localTimestamp(): string {
-  return formatLocalStamp(new Date());
-}
-
 /** 探测 ComfyUI 是否可达；成功返回实际可用的 base（可能带端口偏移）。
  *
  * 走 `probeComfyBase()`（按次探测）而不是 `resolveComfyBase()`：后者是带会话
@@ -232,7 +220,9 @@ export async function stopComfyUiProcess(): Promise<{
   const stillUp = await probeComfyUi(1500);
   if (!pid && stillUp && !("error" in plan)) {
     pid = await findPidForMainPy(plan.mainPy);
-    if (pid) child = undefined; // 无句柄，仅用定位到的 PID
+    if (pid) {
+      child = undefined;
+    } // 无句柄，仅用定位到的 PID
   }
   const stopDecision = decideStop({
     hasChild: !!child,
@@ -249,7 +239,9 @@ export async function stopComfyUiProcess(): Promise<{
     ) {
       st.stoppingAt = undefined;
     }
-    if (stopDecision.kind !== "foreign-running") markComfyNotRunningProven();
+    if (stopDecision.kind !== "foreign-running") {
+      markComfyNotRunningProven();
+    }
     return stopDecision.kind === "foreign-running"
       ? {
           ok: false,
@@ -284,7 +276,9 @@ export async function stopComfyUiProcess(): Promise<{
     await sleep(COMFY_STOP_PROBE.baseMs);
     const probe = await probeComfyUi(800);
     stopProbes.push(probe);
-    if (!probe) break;
+    if (!probe) {
+      break;
+    }
   }
   const outcome = decideStopOutcome(stopProbes);
   // 进程树刚被改动过：快照必须失效，否则状态行会继续沿用关闭前的结论。
@@ -300,7 +294,9 @@ export async function stopComfyUiProcess(): Promise<{
     /* 非 bound（keepAlive / 接管场景）没有 `child.on("exit")` 会落退出行 ——
      * 这里补一条，让每一份启动日志都有自己的收尾（文件里读到的最后一行就是
      * 「为什么结束」）。 */
-    if (!child) appendRuntimeLog("■ ComfyUI 已手动关闭");
+    if (!child) {
+      appendRuntimeLog("■ ComfyUI 已手动关闭");
+    }
     clearComfyStopping();
     return outcome;
   }
@@ -455,7 +451,9 @@ export async function getComfyUiStatus(opts: { force?: boolean } = {}): Promise<
   }
   /* 在途去重：并发查询（tRPC 批处理 / 连点刷新）共享同一次判定，
    * force 也一样——「强制」的语义是「不吃已有结论」，不是「再起一次重复探测」。 */
-  if (cs.inflight) return cs.inflight;
+  if (cs.inflight) {
+    return cs.inflight;
+  }
   const task = computeComfyUiStatus().then((status) => {
     cs.entry = { at: Date.now(), status };
     cs.inflight = undefined;
@@ -469,7 +467,9 @@ export async function getComfyUiStatus(opts: { force?: boolean } = {}): Promise<
 function withTransientFlags(status: ComfyUiStatus): ComfyUiStatus {
   const starting = isComfyStarting();
   const stopping = isComfyStopping();
-  if (status.starting === starting && status.stopping === stopping) return status;
+  if (status.starting === starting && status.stopping === stopping) {
+    return status;
+  }
   return { ...status, starting, stopping };
 }
 
@@ -567,8 +567,9 @@ function deriveAndLatch(facts: {
     startingWindow: facts.startingWindow,
     notRunningHeld: facts.notRunningHeld,
   });
-  if (status.up) clearComfyDownLatch();
-  else if (status.probing) {
+  if (status.up) {
+    clearComfyDownLatch();
+  } else if (status.probing) {
     /* 「检测中…」= 事实不可信：既不能坐实「未运行」，也不该让上一笔「探明没在跑」
      * 提前过期（那正是相邻两轮结论相反的来源）。 */
   } else if (snap.running || facts.starting) {
@@ -582,100 +583,10 @@ function deriveAndLatch(facts: {
      * 启动…」，连「启动 ComfyUI」按钮都跟着一起锁死。窗口是给「拉起动作 →
      * 就绪」那段空窗的缓冲，它的寿命只由真实时间与这两条证据决定。 */
     st.startingAt = Date.now();
-  } else if (snap.didQueryProcTable && !snap.unverified) markComfyNotRunningProven();
+  } else if (snap.didQueryProcTable && !snap.unverified) {
+    markComfyNotRunningProven();
+  }
   return status;
-}
-
-/** 「上一次 ComfyUI 会话」的标记文件。
- *
- *  存在的理由：**应用/系统也一起没了**那一档（编排器退出时 Windows Job Object
- *  连带静默杀树、强制关机、任务管理器结束进程）没有任何活着的进程能写日志 ——
- *  只能在下一次启动时读这个文件反推「上次那家伙不是正常结束的」。
- *  「有开始没结束」就是那类情况的指纹。 */
-const COMFY_SESSION_MARK = `${SERVICES_LOG_DIR}/comfyui-last-session.json`;
-
-function readSessionMark(): ComfySessionMark | null {
-  try {
-    const parsed: unknown = JSON.parse(fs.readFileSync(COMFY_SESSION_MARK, "utf-8"));
-    if (parsed === null || typeof parsed !== "object") return null;
-    return /* SAFETY: 类型断言已复核 */ parsed as ComfySessionMark;
-  } catch {
-    return null;
-  }
-}
-
-function writeSessionMark(mark: ComfySessionMark): void {
-  try {
-    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
-    fs.writeFileSync(COMFY_SESSION_MARK, JSON.stringify(mark), "utf-8");
-  } catch {
-    /* 标记写不进去不该影响启动本身：最坏的结果只是下次启动少一条对账提示 */
-  }
-}
-
-function markComfySessionStart(info: { pid: number | null; mode: ComfySessionMark["mode"] }): void {
-  writeSessionMark({
-    pid: info.pid,
-    mode: info.mode,
-    startedAt: new Date().toISOString(),
-    exited: null,
-  });
-}
-
-function markComfySessionEnd(report: ComfyExitReport): void {
-  /* 先发信号、再落盘（ISSUE #1351）：退出事件的**唯一**客户端通路在这里 ——
-   * bound 的 `child.on("exit")` 与保活的窗口监督器都汇到这一步，所以只需要
-   * 一处就能把「毫秒级事件」推向浏览器。放在 `prev === null` 的早退之前：
-   * 「没有会话标记」是**对账**这件事无话可说，不是「没发生退出」——
-   * 把它一起吞掉会让客户端在最需要立刻知道的时候反而等下一拍轮询。 */
-  noteComfyExit(report);
-  const prev = readSessionMark();
-  if (prev === null) return;
-  writeSessionMark({
-    ...prev,
-    exited: { at: new Date().toISOString(), reason: report.reason },
-  });
-}
-
-/** 每进程只对一次账（启动尝试可能被 WS 重连反复触发，重复提示是噪音）。 */
-let staleSessionChecked = false;
-
-/** 下次启动时反推「上一次会话为什么没有结局」。
- *  @param comfyUp 这次启动时 ComfyUI 是否还活着（保活移交时据此闭嘴）。 */
-function warnStaleComfySession(note: (msg: string) => void, comfyUp: boolean): void {
-  if (staleSessionChecked) return;
-  staleSessionChecked = true;
-  const stale = describeStaleSession(readSessionMark(), comfyUp);
-  if (stale !== null) note(`⚠ ${stale}`);
-}
-
-/** 本次启动的 runtime 日志写入器（`comfyui-runtime-<时刻>.log`）。
- *
- * 一次启动一份文件（ISSUE #1326）：句柄**跟着这一次启动走**，启动时由
- * `beginRuntimeSession()` 换一份新的，因此「这个文件属于哪一次启动」不再需要
- * 靠行时刻或横幅去推断 —— 它就是文件本身。
- *
- * 为 null（还没启动过任何一次）时写日志静默跳过：状态行 / 启动流程本来就会
- * 各自 `note()` 到 logger 与面板，缺一份文件不该把流程带崩。 */
-let runtimeWriter: RuntimeLogWriter | null = null;
-
-/**
- * 开一次启动的日志：轮转旧文件 → 换上新的一份 → 落首行标题。
- *
- * **必须在写第一条业务行之前调用**（`runEnsureLaunch` 拉起前那一步）：
- * 顺序反了会把本次的头几行写进上一次的文件里，而那正是「日志看起来少了一次」
- * 的现场（没有报错、只是归属错了）。同秒内重复启动由写入器自己分叉
- * （`-2` / `-3`），不会覆盖前一次的现场。
- */
-export function beginRuntimeSession(at: Date = new Date()): string {
-  pruneRuntimeLogFiles();
-  runtimeWriter = openRuntimeLogWriter("comfyui-runtime", at);
-  appendRuntimeLog("▶ ComfyUI 启动会话");
-  return runtimeWriter.file;
-}
-
-function appendRuntimeLog(line: string): void {
-  runtimeWriter?.write(`${localTimestamp()} ${line}`);
 }
 
 /**

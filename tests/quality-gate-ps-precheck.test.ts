@@ -332,8 +332,11 @@ describe.skipIf(!hasPs)("所有 .ps1 必须可解析（补上「没人解析 Pow
       const walk = (dir: string): void => {
         for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
           const p = path.join(dir, e.name);
-          if (e.isDirectory()) walk(p);
-          else if (e.name.endsWith(".ps1")) files.push(p);
+          if (e.isDirectory()) {
+            walk(p);
+          } else if (e.name.endsWith(".ps1")) {
+            files.push(p);
+          }
         }
       };
       walk(path.join(ROOT, base));

@@ -137,14 +137,18 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
     void openSource(module.file);
   };
 
-  if (!debugMode || modules.length === 0) return null;
+  if (!debugMode || modules.length === 0) {
+    return null;
+  }
 
   /* 按 画布级/节点级 分组展示（scope 缺省视为 node） */
   const canvasModules = modules.filter((m) => (m.scope ?? "node") === "canvas");
   const nodeModules = modules.filter((m) => (m.scope ?? "node") === "node");
 
   const renderGroup = (title: string, group: Array<RenderChainModule>) => {
-    if (group.length === 0) return null;
+    if (group.length === 0) {
+      return null;
+    }
     return (
       <div
         style={{

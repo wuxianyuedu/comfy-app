@@ -100,7 +100,9 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
     const offenders: Array<string> = [];
     for (const item of NAV_ITEMS) {
       const extra = item.viewLabel;
-      if (extra === undefined) continue;
+      if (extra === undefined) {
+        continue;
+      }
       /* 判据：把全名剥掉短名与分隔符之后还剩多少实质内容。
          剩下 0 字 = 纯粹的第二套说法（「队列」vs「队列与运行」的「与运行」是
          4 个字，不是 0 —— 所以下面还要单独判「短名是全名的前缀」这一族）。 */
@@ -145,7 +147,9 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
     const hits: Array<string> = [];
     for (const match of text.matchAll(/<h[12]\b[^>]*>\s*([^\s<>{][^<>{]*?)\s*<\/h[12]>/g)) {
       const content = match[1]?.trim() ?? "";
-      if (known.has(content)) hits.push(content);
+      if (known.has(content)) {
+        hits.push(content);
+      }
     }
     return hits;
   }
@@ -185,8 +189,12 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
     ]) {
       const text = read(rel);
       for (const line of text.split("\n")) {
-        if (!/<h1\b/.test(line)) continue;
-        if (/[·・]/.test(line)) hits.push(`${rel}: ${line.trim()}`);
+        if (!/<h1\b/.test(line)) {
+          continue;
+        }
+        if (/[·・]/.test(line)) {
+          hits.push(`${rel}: ${line.trim()}`);
+        }
       }
     }
     expect(hits, "页头标题里又挂了一个屏名 —— 那是同一件事的第二个名字（ISSUE #1423）").toEqual([]);

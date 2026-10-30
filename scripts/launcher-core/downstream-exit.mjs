@@ -26,19 +26,22 @@ export const NONZERO_EXIT_MARKER = "exiting with non-zero code";
  * @param {{ shellExited: boolean, abandoned: boolean, shellCrashed: boolean }} input
  * @returns {"dev-server" | "abandoned" | "shell-self-exited" | "shell-terminated"} */
 export function downstreamExitKind({ shellExited, abandoned, shellCrashed }) {
-  if (!shellExited) return "dev-server";
-  if (abandoned) return "abandoned";
-  if (shellCrashed) return "shell-self-exited";
+  if (!shellExited) {
+    return "dev-server";
+  }
+  if (abandoned) {
+    return "abandoned";
+  }
+  if (shellCrashed) {
+    return "shell-self-exited";
+  }
   return "shell-terminated";
 }
 
 /** 取壳侧 stderr 的两个正标记（大小写不敏感）。
  * @param {string} [root] @returns {{ abandoned: boolean, crashed: boolean, file: string }} */
 export function readShellMarkers(root = ".") {
-  const file = path.join(
-    currentDirOf("launcher", root),
-    "dev-launcher-stderr.log",
-  );
+  const file = path.join(currentDirOf("launcher", root), "dev-launcher-stderr.log");
   return {
     abandoned: fileHasMarker(file, ABANDONED_MARKER),
     crashed: fileHasMarker(file, NONZERO_EXIT_MARKER),
@@ -113,14 +116,10 @@ export function describeDownstreamExit(kind, ctx) {
  * @returns {{ kind: string, code: number | null, signal: string | null,
  *             reason: string, port: number | null, runId: string | null } | null}
  */
-export function runtimeExitRecord({
-  who,
-  devCode,
-  devSignal = null,
-  port = null,
-  runId = null,
-}) {
-  if (who !== "dev") return null;
+export function runtimeExitRecord({ who, devCode, devSignal = null, port = null, runId = null }) {
+  if (who !== "dev") {
+    return null;
+  }
   return {
     kind: "dev-server",
     code: typeof devCode === "number" ? devCode : null,
@@ -128,8 +127,7 @@ export function runtimeExitRecord({
     reason:
       `运行中的 Next.js dev server 已退出（exit=${
         typeof devCode === "number" ? devCode : "?"
-      }${devSignal ? `, signal=${devSignal}` : ""}）` +
-      "，此后应用服务一直不可达，直到重新启动。",
+      }${devSignal ? `, signal=${devSignal}` : ""}）` + "，此后应用服务一直不可达，直到重新启动。",
     port,
     runId,
   };

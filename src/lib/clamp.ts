@@ -55,9 +55,15 @@
 export function clamp(value: number, min: number, max: number): number {
   /* `NaN` 与自身比较恒为 false，显式判一次（`Infinity` 不在此列：
    * 它比任何普通数都大，下面的两个比较就能给它正确的一端）。 */
-  if (Number.isNaN(value)) return min;
-  if (value < min) return min;
-  if (value > max) return max;
+  if (Number.isNaN(value)) {
+    return min;
+  }
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
   return value;
 }
 

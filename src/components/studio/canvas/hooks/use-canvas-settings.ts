@@ -43,7 +43,9 @@ const SETTINGS_LISTENERS = new Set<() => void>();
 let CURRENT_SETTINGS: CanvasSettings = DEFAULT_CANVAS_SETTINGS;
 
 function notifySettings() {
-  for (const listener of SETTINGS_LISTENERS) listener();
+  for (const listener of SETTINGS_LISTENERS) {
+    listener();
+  }
 }
 
 function applySettings(next: CanvasSettings) {
@@ -107,7 +109,9 @@ export function isCustomCanvasSettings(settings: CanvasSettings): boolean {
     Object.keys(DEFAULT_CANVAS_SETTINGS) as Array<keyof CanvasSettings>
   ).filter((key) => key !== "debugMode");
   for (const k of keys) {
-    if (settings[k] !== DEFAULT_CANVAS_SETTINGS[k]) return true;
+    if (settings[k] !== DEFAULT_CANVAS_SETTINGS[k]) {
+      return true;
+    }
   }
   return false;
 }

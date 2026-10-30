@@ -4,10 +4,7 @@ import type { LLMConfigView, LLMProviderType } from "~/lib/llm/types";
 export type ExtractChannel = "local" | "remote";
 
 /** 下拉选项值：local/remote 携带模型名 */
-export function channelOptionValue(
-  channel: ExtractChannel,
-  model: string,
-): string {
+export function channelOptionValue(channel: ExtractChannel, model: string): string {
   return `${channel}::${model}`;
 }
 
@@ -17,7 +14,9 @@ export function parseChannelOption(value: string): {
   model: string;
 } {
   const idx = value.indexOf("::");
-  if (idx === -1) return { channel: "local", model: "" };
+  if (idx === -1) {
+    return { channel: "local", model: "" };
+  }
   const channel = value.slice(0, idx);
   return {
     channel: channel === "remote" ? "remote" : "local",
@@ -39,11 +38,10 @@ export function resolveChannelSelection(
 }
 
 /** 生成类下拉的展示值：未手动选择时跟随全局配置，保证选中态与生效模型一致。 */
-export function channelSelectionDisplayValue(
-  value: string,
-  config: LLMConfigView | null,
-): string {
-  if (value) return value;
+export function channelSelectionDisplayValue(value: string, config: LLMConfigView | null): string {
+  if (value) {
+    return value;
+  }
   return config?.model ? channelOptionValue(config.provider, config.model) : "";
 }
 

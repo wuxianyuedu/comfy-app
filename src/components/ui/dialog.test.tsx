@@ -105,14 +105,18 @@ async function openDialog(user: ReturnType<typeof userEvent.setup>) {
      再把元素取回来（§11.14.3 的口径：等一个条件变成真一律写 `expect.poll`）。 */
   await expect.poll(() => document.querySelector(CONTENT_MARK)).not.toBeNull();
   const el = document.querySelector<HTMLElement>(CONTENT_MARK);
-  if (!el) throw new Error("点开后没有渲染出弹窗本体");
+  if (!el) {
+    throw new Error("点开后没有渲染出弹窗本体");
+  }
   return el;
 }
 
 /** 受控形态下弹窗一开始就是开的；此时触发器已被移出无障碍树（见下面那条用例）。 */
 function alreadyOpenPopup(): HTMLElement {
   const el = document.querySelector<HTMLElement>(CONTENT_MARK);
-  if (!el) throw new Error("受控 open 下应当直接渲染出弹窗本体");
+  if (!el) {
+    throw new Error("受控 open 下应当直接渲染出弹窗本体");
+  }
   return el;
 }
 
