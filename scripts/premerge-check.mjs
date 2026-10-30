@@ -46,10 +46,17 @@
  * ── 用法 ──────────────────────────────────────────────────────────────
  *
  *   pnpm check:premerge                 # 各段全跑（复算 = 钩子注册表的全套）
+ *   pnpm check:premerge --full          # 同上，**显式**写出「全套」这一档（行为与默认逐字相同）
  *   pnpm check:premerge --light         # 复算只跑本地形态档那几条（跳过条数会被打印出来）
  *   pnpm check:premerge --json          # 机器可读（逐段给结论）
  *   pnpm check:premerge --skip-claims   # 只跑复算 + 合并面（PR 里还没写合并信息时）
  *   pnpm check:premerge --only=base     # 只跑一段（排查用）
+ *
+ * 认不出的旗标**一律退 2 并点名**，不静默吞：吞掉的旗标在屏幕上不留痕迹，而「我加了
+ * 全套那一档」这句话就是这么变成假绿的（先例：`quality-gate.mjs` 的「未知门禁」同形）。
+ * `--full` 是**显式等价于默认**的那一枚（AGENTS.md / ship Skill 多处写着它，而入口曾经
+ * 静默吞掉它，于是那句话既没生效也没报错）；`--full` 与 `--light` 同时给 ⇒ 退 2
+ * （两个方向的口号同时出现 = 没人知道该跑哪一档）。
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
@@ -228,16 +235,31 @@ export function resolveForkBaseline(cwd = ROOT, env = process.env) {
 
 /**
  * @param {string[]} argv
- * @returns {{json: boolean, only: string | null, skip: Set<string>, light: boolean}}
+ * @returns {{json: boolean, only: string | null, skip: Set<string>, light: boolean, full: boolean, unknown: string[]}}
  */
 function parseArgs(argv) {
-  /** @type {{json: boolean, only: string | null, skip: Set<string>, light: boolean}} */
-  const out = { json: false, only: null, skip: new Set(), light: false };
+  /** @type {{json: boolean, only: string | null, skip: Set<string>, light: boolean, full: boolean, unknown: string[]}} */
+  const out = {
+    json: false,
+    only: null,
+    skip: new Set(),
+    light: false,
+    full: false,
+    unknown: [],
+  };
   for (const a of argv) {
     if (a === "--json") out.json = true;
     else if (a === "--light") out.light = true;
+    /* `--full` 是**显式**写出默认档的那一枚：行为与不给它逐字相同，但「我加了全套」这句话
+     * 从此有判据可依（AGENTS.md 与 ship Skill 多处写着它 —— 入口不认它却不报错，
+     * 是 #2764 的立案根因）。冲突与档位判定在 `main()` 里做。 */
+    else if (a === "--full") out.full = true;
     else if (a.startsWith("--only=")) out.only = a.slice("--only=".length);
     else if (a.startsWith("--skip-")) out.skip.add(a.slice("--skip-".length));
+    /* 没有 else 的那些年：一条拼错的旗标既不报错也不生效，于是「我跑的是全套」这句话
+     * 没有任何依据 —— 而这一档恰恰是被当作「本地全套凭证」用的。退 2 是这里唯一的
+     * 诚实读数：没跑起来 ≠ 跑了且绿。 */
+    else out.unknown.push(a);
   }
   return out;
 }
@@ -321,7 +343,31 @@ export function combineCodes(codes) {
  * @returns {number} 退出码
  */
 function main(argv) {
-  const { json, only, skip, light: lightRecompute } = parseArgs(argv);
+  const { json, only, skip, light: lightRecompute, full, unknown } =
+    parseArgs(argv);
+
+  /* 认不出的旗标 ⇒ 退 2 并**点名**（#2764）。与 `quality-gate.mjs` 的「未知门禁」
+   * 同形：拼错的那一枚在屏幕上不留任何痕迹，而这一档是被当作「本地全套凭证」用的 ——
+   * 「我加了全套那一档」这句话就是这么变成假绿的。2 的读法是「这一步没有结论」，
+   * 不是「跑过了且绿」。 */
+  if (unknown.length > 0) {
+    process.stderr.write(
+      `[premerge] 不认识的参数：${unknown.join(" / ")} —— 本入口认 ` +
+        "--json / --full / --light / --only=<段名> / --skip-<段名>；" +
+        "拼错的旗标不会生效，退 2 表示这一跳没有结论（不是「跑过了且绿」）\n",
+    );
+    return 2;
+  }
+
+  /* `--full` 与 `--light` 同时给 ⇒ 没有人在读的那一档不是「更全」：两个方向的口号
+   * 同时出现时，屏幕上无论跑哪一档，另一个口号都会留在执行者的记忆里当凭证。 */
+  if (full && lightRecompute) {
+    process.stderr.write(
+      "[premerge] `--full` 与 `--light` 同时给 —— 一个要全套、一个要跳重档，" +
+        "入口不替你挑（退 2）；只给其中一枚\n",
+    );
+    return 2;
+  }
 
   if (!isGitCheckout(ROOT)) {
     process.stderr.write(
