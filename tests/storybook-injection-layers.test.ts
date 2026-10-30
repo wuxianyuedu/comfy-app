@@ -63,7 +63,7 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
        等于没有被验过。 */
     expect(store).toContain("interface OriginBlock");
     expect(store).toContain("readonly origin:");
-    expect(store).toContain("readonly blocks: readonly OriginBlock[]");
+    expect(store).toContain("readonly blocks: ReadonlyArray<OriginBlock>");
     expect(store, "每块各自解析：`blocks.flatMap` 里要带 block.origin").toMatch(
       /blocks\.flatMap\(/,
     );
@@ -71,15 +71,10 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
   });
 
   it("React Flow 层：用真 provider + 真 ReactFlow，且场景名不认识时抛错", () => {
-    for (const required of [
-      "ReactFlowProvider",
-      "ReactFlow",
-      "@xyflow/react/dist/style.css",
-    ]) {
-      expect(
-        flow,
-        `画布注入层缺 ${required} —— 挂一个假 provider 得到的是假的端点几何`,
-      ).toContain(required);
+    for (const required of ["ReactFlowProvider", "ReactFlow", "@xyflow/react/dist/style.css"]) {
+      expect(flow, `画布注入层缺 ${required} —— 挂一个假 provider 得到的是假的端点几何`).toContain(
+        required,
+      );
     }
     expect(flow).toContain("export const CANVAS_SCENES");
     expect(flow).toContain("画布场景里没有叫");
@@ -113,20 +108,20 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
     expect(
       screen,
       "useSeededProjects 必须走 useState 的惰性初始化器（useState(() => seedProjects(…))）",
-    ).toMatch(/useState<[^>]*>\(\(\) => seedProjects\(/);
-    expect(
-      screen,
-      "用 useEffect 建项目 = 子组件先渲染、读到空 store",
-    ).not.toMatch(/useEffect\(\(\) => \{\s*const created = seedProjects/);
+      /* `[^>]*` 在 oxlint array-type 切泛形后不够用：泛型实参里出现了
+       `Array<CanvasProject>` 自己的 `>`，懒惰匹配会停在嵌套的闭尖括号上——
+       用 `[\s\S]*?>` 让回溯找到真正的收口。 */
+    ).toMatch(/useState<[\s\S]*?>\(\(\) => seedProjects\(/);
+    expect(screen, "用 useEffect 建项目 = 子组件先渲染、读到空 store").not.toMatch(
+      /useEffect\(\(\) => \{\s*const created = seedProjects/,
+    );
   });
 
   it("store 层：量大的场景用生成器产**原文**，不产条目", () => {
     /* 「手抄不够就编一段看着像日志的文本」与「手抄一份 LogEntry[]」是同一件事的
        两半：前者仍然过解析，后者跳过解析。所以量大的那两档（分页长线、同毫秒
        十几行）用生成器 —— 而生成器必须**交出文本**（`join("\n")`），不是数组。 */
-    expect(store, "长线 / 同毫秒场景要有生成器").toMatch(
-      /function (appLines|sameMsLines)\(/,
-    );
+    expect(store, "长线 / 同毫秒场景要有生成器").toMatch(/function (appLines|sameMsLines)\(/);
     /* 生成器只负责重复，解析仍归 `parseFileLogs`（上面那条已钉住整体口径）；
        这里钉的是生成器的**输出形状**：拼成一行文本给 `text` 字段用。 */
     expect(store, "生成器要拼成原文（join 出行文本），不是产条目数组").toMatch(
@@ -140,12 +135,8 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
        `defaultData(kind)` 的整套默认值 —— 少一项画布上就是另一种形态。
        生产代码建节点只有 `placeCanvasNode()` 一个入口（规范 16 §16.2.4.38），
        所以这里也走它。 */
-    expect(screen, "整屏层要有 placeCanvasNode 这条出口").toContain(
-      "placeCanvasNode(",
-    );
-    expect(screen, "场景里的节点数据要铺在 defaultData 之上").toContain(
-      "defaultData(",
-    );
+    expect(screen, "整屏层要有 placeCanvasNode 这条出口").toContain("placeCanvasNode(");
+    expect(screen, "场景里的节点数据要铺在 defaultData 之上").toContain("defaultData(");
   });
 
   it("画布层：场景里每条边引用的 handle，在该档真正的节点渲染器上真的挂着", () => {
@@ -189,39 +180,25 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
       flow.indexOf("export const CANVAS_SCENES = {"),
       flow.indexOf("} satisfies Record<string, CanvasScene>;"),
     );
-    const sceneHandles = [
-      ...sceneBlock.matchAll(/(?:source|target)Handle:\s*"([^"]+)"/g),
-    ].map((m) => m[1]);
-    expect(
-      sceneHandles.length,
-      "画布场景里一条边都没有 —— 这条判据在空跑",
-    ).toBeGreaterThan(0);
+    const sceneHandles = [...sceneBlock.matchAll(/(?:source|target)Handle:\s*"([^"]+)"/g)].map(
+      (m) => m[1],
+    );
+    expect(sceneHandles.length, "画布场景里一条边都没有 —— 这条判据在空跑").toBeGreaterThan(0);
 
     /* 渲染器侧：消费这些场景的 story 文件里，节点渲染器实际挂的 handle id。 */
     const storySrc = readFileSync(
-      join(
-        ROOT,
-        "src/components/studio/workflow-form/WorkflowPortHandle.stories.tsx",
-      ),
+      join(ROOT, "src/components/studio/workflow-form/WorkflowPortHandle.stories.tsx"),
       "utf8",
     );
     /* 渲染器挂的端口写在它的 `rows` 里（`useMemo` 那一份），锚在那一段上取 ——
        取整份文件会把 `PORT_ROWS`（画布**外**那一档的清单）也算进来，
        那就会把「画布外也挂得上」误当成「画布上挂着」。 */
     const nodeStart = storySrc.indexOf("function PortDemoNode()");
-    expect(
-      nodeStart,
-      "找不到 PortDemoNode —— 判据失去了被核对象",
-    ).toBeGreaterThan(-1);
+    expect(nodeStart, "找不到 PortDemoNode —— 判据失去了被核对象").toBeGreaterThan(-1);
     const rowsStart = storySrc.indexOf("const rows = useMemo(", nodeStart);
-    expect(
-      rowsStart,
-      "找不到 PortDemoNode 的 rows —— 判据在空跑",
-    ).toBeGreaterThan(-1);
+    expect(rowsStart, "找不到 PortDemoNode 的 rows —— 判据在空跑").toBeGreaterThan(-1);
     const nodeBlock = storySrc.slice(rowsStart, storySrc.indexOf("],", rowsStart));
-    const mountedHandles = [...nodeBlock.matchAll(/id: "([^"]+)"/g)].map(
-      (m) => m[1] ?? "",
-    );
+    const mountedHandles = [...nodeBlock.matchAll(/id: "([^"]+)"/g)].map((m) => m[1] ?? "");
     expect(
       mountedHandles.length,
       "解析不到节点渲染器挂的 handle —— 这条判据在空跑",
@@ -237,9 +214,9 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
     }
     /* 输出端必须真带 `out:` 前缀（前缀是 React Flow 找锚点的键的一部分，
        少了它就连不上任何真输出端口）。 */
-    const sceneSourceHandles = [
-      ...sceneBlock.matchAll(/sourceHandle:\s*"([^"]+)"/g),
-    ].map((m) => m[1] ?? "");
+    const sceneSourceHandles = [...sceneBlock.matchAll(/sourceHandle:\s*"([^"]+)"/g)].map(
+      (m) => m[1] ?? "",
+    );
     expect(
       sceneSourceHandles.length,
       "画布场景里没有 sourceHandle —— 这条判据在空跑",
@@ -260,31 +237,21 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
        `inputImage`」。 */
 
     const nodeSrc = readFileSync(
-      join(
-        ROOT,
-        "src/components/studio/project-canvas/CanvasNode/CanvasNode.tsx",
-      ),
+      join(ROOT, "src/components/studio/project-canvas/CanvasNode/CanvasNode.tsx"),
       "utf8",
     );
     /* 端口表从真组件里读出来，不在这里抄一份（抄了就会各自漂）。 */
     expect(nodeSrc, "真画布节点上要有右侧 output").toMatch(/id="output"/);
-    expect(
-      nodeSrc,
-      "真画布节点上要有 picture 专用的 inputImage",
-    ).toMatch(/id="inputImage"/);
+    expect(nodeSrc, "真画布节点上要有 picture 专用的 inputImage").toMatch(/id="inputImage"/);
 
     /* 场景里的 nodes / edges：只认本文件导出的那几档，逐档核。 */
     const sceneBlock = screen.slice(screen.indexOf("const PROJECT_SCENES"));
     const ids = [...sceneBlock.matchAll(/\bid:\s*"([^"]+)"/g)].map((m) => m[1]);
-    expect(ids.length, "解析不到任何节点 / 边 id —— 这条判据在空跑").toBeGreaterThan(
-      0,
-    );
+    expect(ids.length, "解析不到任何节点 / 边 id —— 这条判据在空跑").toBeGreaterThan(0);
 
     /* 边：`source` / `target` 指向节点，target 那条必须落到 `picture` 上。 */
     const edges = [
-      ...sceneBlock.matchAll(
-        /\{[^{}]*\bsource:\s*"([^"]+)"[^{}]*\btarget:\s*"([^"]+)"[^{}]*\}/g,
-      ),
+      ...sceneBlock.matchAll(/\{[^{}]*\bsource:\s*"([^"]+)"[^{}]*\btarget:\s*"([^"]+)"[^{}]*\}/g),
     ];
     for (const [, src, dst] of edges) {
       expect(src, `边 ${src}→${dst} 的源要为 output`).toBeTruthy();
@@ -292,10 +259,9 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
     }
     /* 有边就必须有 target 是 `picture` 的节点 —— 否则上面那条 loop 空转。 */
     if (edges.length > 0) {
-      expect(
-        sceneBlock,
-        "有连线却没有 picture 节点 —— 那些边在真画布上不会渲染",
-      ).toMatch(/kind:\s*"picture"/);
+      expect(sceneBlock, "有连线却没有 picture 节点 —— 那些边在真画布上不会渲染").toMatch(
+        /kind:\s*"picture"/,
+      );
     }
     /* 反向：场景里不许出现真画布上不存在的 handle id 形状。 */
     expect(
@@ -305,13 +271,10 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
   });
 
   it("三个注入层都挂在 preview.tsx 的装饰器链上", () => {
-    expect(preview, "少挂 withStoreScene = story 里 store 空着").toContain(
-      "withStoreScene",
+    expect(preview, "少挂 withStoreScene = story 里 store 空着").toContain("withStoreScene");
+    expect(preview, "少挂 withTrpcApp / withAppProviders = 组件在画布上抛（useToast 等）").toMatch(
+      /withTrpcApp|withAppProviders/,
     );
-    expect(
-      preview,
-      "少挂 withTrpcApp / withAppProviders = 组件在画布上抛（useToast 等）",
-    ).toMatch(/withTrpcApp|withAppProviders/);
   });
 
   it("三个模块都在 tsc / eslint 的扫描面里", () => {
