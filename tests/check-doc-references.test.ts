@@ -19,10 +19,23 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { restoreToSnapshot, snapshotPaths } from "./helpers/probe-restore.ts";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { snapshotPaths } from "./helpers/probe-restore.ts";
+import { createProbeTree } from "./helpers/probe-worktree.ts";
 
-const REPO_ROOT = process.cwd();
+/** 真实仓库根 —— 只用来**核对它没被写过**，本文件一次都不往它上面写（ISSUE #2665）。 */
+const REAL_ROOT = process.cwd();
+/**
+ * 探针用的那份一次性克隆（HEAD + 当前工作树里脏的那几份）。
+ *
+ * 为什么不是「每组探针一棵」：`git worktree add` 实测 4.81s（3156 份文件），本文件有十几组
+ * 探针 —— 每组一棵会把这一段从秒级抬到分钟级，而它换来的隔离量是零（同一棵树里的两组
+ * 探针本来就不并发，vitest 文件内是串行的）。**文件级一棵**就够了：要挡的是
+ * **别的用例文件**在同一时刻读同一份文档。
+ */
+const PROBE = createProbeTree(REAL_ROOT);
+/** 本文件的「仓库根」= 那份克隆：判据、渲染件、探针写盘全部落在它里面。 */
+const REPO_ROOT = PROBE.dir;
 const CHECK = join(REPO_ROOT, "scripts", "check-doc-references.cjs");
 
 /** 把脚本真正引入的内存态 FACTS 拿来做结构断言（与脚本同源，见 doc-facts.cjs）。 */
@@ -66,19 +79,16 @@ function runCheck(): { code: number; output: string } {
 
 const docText = (rel: string) => readFileSync(join(REPO_ROOT, rel), "utf8");
 
-/* ── 探针收尾的最后一道网（ISSUE #2415 → #2593 订正）──────────────────
- * 本文件多数组的现场是「真仓库文件上改 → 判 → 还原」（判据读的是整仓扫描面，
- * 夹具仓库喂不饱它们；autofix 组已改成夹具仓库，见文件尾）。还原靠重试式写入，
- * 但 Windows 上它仍可能八次全抛（实测 UNKNOWN）。这一网保证：**即便还原没做成，
- * 也不会把脏工作区悄悄留给下一个 `git add -A`** —— 然后把事故路径点名成红。
+/* ── 探针收尾的最后一道网（ISSUE #2415 → #2593 订正 → #2665 换形）─────────
+ * 本文件多数组的现场是「改一笔 → 判 → 收尾」。#2593 那一批把「收尾」从
+ * `git checkout --`（那吃过两次未提交的文档改动）换成「进本文件那一刻的字节快照」；
+ * #2665 这一批把**写的那一侧**整段搬进一次性克隆（`tests/helpers/probe-worktree.ts`），
+ * 于是真实工作树不再被写、并发读者那道口子上不再有人往里丢探针文本。
  *
- * ⚠️ 这一网**曾经**是「未跟踪的直接删、脏的从 git 索引拉回原样」。那句话把
- * 「脏 = 探针留脏了」当成了一个不成立的前提：`git status` 分不出探针留的脏与
- * **这条分支上正在做的未提交工作**，而处置逐字相同 —— 于是它吃掉过两次本单的
- * 文档改动（92 行，第二次靠 `docs/generated/` 的镜像才恢复）。现在还原只认
- * 进本文件那一刻的字节快照（`tests/helpers/probe-restore.ts` / 规范 §11.16.2），
- * 快照本身是脏的就照样带出去。红说的是「这一份没写回成快照那一版」，不是
- * 「工作区不干净」—— 后者可能是别人正在做的活，不该由这一档判定。 */
+ * 因此这道网的语义**跟着换了**：它以前是「还原」，现在是「核对真实树没被动过」——
+ * `PROBE_TARGETS` 这几份从模块加载到本文件跑完，字节必须与进来时逐字相同。
+ * 红的意思是「有探针绕过了克隆去写真实树」（= 本件被写坏了，或有人新加了直写真实树的一组），
+ * 不再是「工作区脏了」—— 后者可能是这条分支上正在做的活，不该由这一档判定。 */
 const PROBE_TARGETS = [
   "AGENTS.md",
   "docs/reference-facts.md",
@@ -90,25 +100,36 @@ const PROBE_TARGETS = [
 ];
 
 /**
- * 快照取在**模块加载时** —— 比本文件任何一条 `it` 都早，所以「进本文件之前就脏的那份
- * 工作」会被原样带出去（取晚了拍到的就是探针改过的那一版，还原于是把探针的脏固化成
- * 「原样」）。
+ * 快照取在**模块加载时**，且取的是**真实树**（`REAL_ROOT`，不是克隆）——
+ * 比本文件任何一条 `it` 都早，所以「进本文件之前就脏的那份工作」会被原样当作基准；
+ * 取晚了拍到的就是探针改过的那一版，核对于是把探针的脏固化成「原样」。
  */
-const PRISTINE = snapshotPaths(PROBE_TARGETS.map((rel) => join(REPO_ROOT, rel)));
+const PRISTINE = snapshotPaths(PROBE_TARGETS.map((rel) => join(REAL_ROOT, rel)));
 
 afterEach(() => {
-  const { failed } = restoreToSnapshot(PRISTINE);
-  /* 只有「还原做不成」才红，且点名是哪一份、为什么。这里**不再**拿 `git status` 判
-   * 「名单里还有脏文件」—— 那正是本单要拆掉的那个混淆：`git status` 说脏，可能是
-   * 探针留的脏，也可能是这条分支上正在做的活，而这一档没有能力分这两者，
-   * 于是它一响就必然要么误报、要么把人指去退回别人的工作（实测这格一开始就把
-   * 全部 59 条用例判红，因为工作区里正躺着一份未提交的文档改动）。 */
+  const touched: Array<string> = [];
+  for (const [abs, want] of PRISTINE) {
+    let now: Buffer | null;
+    try {
+      now = existsSync(abs) ? readFileSync(abs) : null;
+    } catch (e) {
+      /* 读不到也当成「被动过」交上去报：这里没有「静默跳过」那一档 —— 跳一次，
+       * 这道网就在不判任何东西而账面照样绿。 */
+      touched.push(`${abs} → 读当前内容失败：${String(e instanceof Error ? e.message : e)}`);
+      continue;
+    }
+    const same = now === null || want === null ? now === want : now.equals(want);
+    if (!same) touched.push(abs);
+  }
   expect(
-    failed.map((f) => `${f.abs} → ${f.why}`),
-    `探针没能把仓库文件还原成「进本文件之前的那一版」（写入已重试仍未成）：\n  ${failed
-      .map((f) => `${f.abs} → ${f.why}`)
-      .join("\n  ")}`,
+    touched,
+    "探针不该写真实工作树（ISSUE #2665）：下面这些真实入库文件在本文件跑的过程中被改过 —— " +
+      "写探针要落在克隆里（`REPO_ROOT`），不是 `REAL_ROOT`。\n  " + touched.join("\n  "),
   ).toEqual([]);
+});
+
+afterAll(() => {
+  PROBE.dispose();
 });
 
 /**
