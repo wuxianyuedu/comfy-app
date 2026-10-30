@@ -302,6 +302,12 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
    # 每一处不同都在 scripts/.a11y-rule-ledger.json 登记（关掉一条 / 就地豁免一个文件，
    # 都要答出「为什么」+「谁在守它」）；**官方两份配置谁都没提到、又没被标记废弃的**
    # 规则也要有一笔裁决（开着、或登记为不开）—— 台账双向拦
+✅ node scripts/check-eslint-exemptions.cjs # eslint 文件级豁免台账 ⇄ 真违例（见下 §13.5.31）：
+   # 台账里写着「这个文件这条规则豁免了」而跑起来其实没有违例 ⇒ 那笔豁免是**陈账**，红；
+   # 另一半方向（有命中却没登记）由 `pnpm run lint` 本体判，这一步**不重复判**（不跑第二遍
+   # eslint，复用 `check-a11y-rules.cjs` 那份 `loadEslintConfig()` 单飞）。
+   # 成本实测 10.4–11.6s（大头是 `eslint.config.js` 自己那次求值）⇒ 与 a11y 同档，
+   # 只在重档那一跑（`COMFY_HEAVY_GATES=1` / `pnpm check:all` / 平台固定结构用例）里付
 ```
 
 > **本地钩子没接的判据**（`test:coverage` / `build` / E2E `@critical` / `db:push`）：
