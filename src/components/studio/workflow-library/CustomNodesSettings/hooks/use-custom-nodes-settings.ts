@@ -133,6 +133,60 @@ function parseSettingsBlob(
     byPath: data.byPath || {},
   };
 }
+/**
+ * 跨所有已配置父目录的扁平子包列表（从 `useCustomNodesSettings` 拆出，§12.13）。
+ *
+ * 一个顶层包（如 Anima-Artist-Mixer）即便用户输入的是父 custom_nodes 路径也只显示
+ * 一次 —— 不渲染父卡片本身。按父目录分组，使用户能独立折叠/展开每个源目录；每个
+ * 子行通过对接到 manifest 的 `byPath` 映射携带自己的 state（loaded / outdated /
+ * unimported / error / missing）。
+ *
+ * 纯函数、不碰 React 状态：调用方的 `useMemo` 只负责记忆化。
+ */
+function groupParentBlocks(
+  savedPaths: Array<string>,
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>,
+  byPath: Record<string, SummaryPkg>,
+): {
+  parentBlocks: Array<ParentBlock>;
+  totalAcrossParents: {
+    loaded: number;
+    outdated: number;
+    unimported: number;
+    total: number;
+  };
+} {
+  const parentBlocks = savedPaths.map((parent) => {
+    const subs = discoveredByParent[parent] ?? [];
+    const enriched = subs.map((sub) => {
+      const saved = byPath[pathKey(sub.path)];
+      return { sub, saved, state: deriveRowState(sub, saved) };
+    });
+    const cnt = {
+      loaded: 0,
+      outdated: 0,
+      unimported: 0,
+      error: 0,
+      missing: 0,
+      empty: 0,
+    };
+    for (const e of enriched) {
+      cnt[e.state.kind] += 1;
+    }
+    return { parent, subs: enriched, cnt, total: enriched.length };
+  });
+  const totalAcrossParents = parentBlocks.reduce(
+    (acc, b) => ({
+      loaded: acc.loaded + b.cnt.loaded,
+      outdated: acc.outdated + b.cnt.outdated,
+      unimported: acc.unimported + b.cnt.unimported,
+      total: acc.total + b.total,
+    }),
+    { loaded: 0, outdated: 0, unimported: 0, total: 0 },
+  );
+  return { parentBlocks, totalAcrossParents };
+}
+
 async function consumeSettingsStream(
   res: Response,
   sinks: {
@@ -580,43 +634,10 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     await parseBusy.run(() => runParse(targets));
   }
 
-  // 跨所有已配置父目录的扁平子包列表。一个顶层包（如 Anima-Artist-Mixer）即便用户
-  // 输入的是父 custom_nodes 路径也只显示一次 —— 不渲染父卡片本身。
-  // 按父目录分组，使用户能独立折叠/展开每个源目录。每个子行通过对接到 manifest 的
-  // byPath 映射携带自己的 state（loaded / outdated / unimported / error / missing）。
-  const parentBlocks = useMemo(() => {
-    return savedPaths.map((parent) => {
-      const subs = discoveredByParent[parent] ?? [];
-      const enriched = subs.map((sub) => {
-        const saved = byPath[pathKey(sub.path)];
-        return { sub, saved, state: deriveRowState(sub, saved) };
-      });
-      const cnt = {
-        loaded: 0,
-        outdated: 0,
-        unimported: 0,
-        error: 0,
-        missing: 0,
-        empty: 0,
-      };
-      for (const e of enriched) {
-        cnt[e.state.kind] += 1;
-      }
-      return { parent, subs: enriched, cnt, total: enriched.length };
-    });
-  }, [savedPaths, discoveredByParent, byPath]);
-
-  const totalAcrossParents = useMemo(() => {
-    return parentBlocks.reduce(
-      (acc, b) => ({
-        loaded: acc.loaded + b.cnt.loaded,
-        outdated: acc.outdated + b.cnt.outdated,
-        unimported: acc.unimported + b.cnt.unimported,
-        total: acc.total + b.total,
-      }),
-      { loaded: 0, outdated: 0, unimported: 0, total: 0 },
-    );
-  }, [parentBlocks]);
+  const { parentBlocks, totalAcrossParents } = useMemo(
+    () => groupParentBlocks(savedPaths, discoveredByParent, byPath),
+    [savedPaths, discoveredByParent, byPath],
+  );
 
   return {
     open,

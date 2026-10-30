@@ -117,7 +117,8 @@ import {
 import { cleanBranch, createOrReusePull, reportVerdict } from "../scripts/ship-platform.mjs";
 import { pollUntilTerminal } from "../scripts/ship-poll.mjs";
 import { closeIssues } from "../scripts/ship-close.mjs";
-import { readIssueBody } from "../scripts/ship-issue-new.mjs";
+import { readIssueBody, runAppendIssueComment, runIssueComment } from "../scripts/ship-issue-new.mjs";
+import { sameCommentBody, stripTrailingNewline } from "../scripts/ship-comment.mjs";
 import { decideReap, instanceReading, reapCheckoutInstances } from "../scripts/ship-reap.mjs";
 import { runPreflightStage } from "../scripts/ship-preflight.mjs";
 import { DIAGNOSE_STALL_MINUTES, stallReadout } from "../scripts/ship-diagnose.mjs";
@@ -293,6 +294,19 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
   it("--no-wait 与 --only 各自独立", () => {
     expect(parseArgs(["--no-wait"]).wait).toBe(false);
     expect(parseArgs(["--only=poll"]).only).toBe("poll");
+  });
+
+  it("--comment 两种写法都收号；--body-file 与它各自独立（拼错不许静默）", () => {
+    expect(parseArgs([]).comment).toBeNull();
+    expect(parseArgs(["--comment", "2719"]).comment).toBe(2719);
+    expect(parseArgs(["--comment=#2719"]).comment).toBe(2719);
+    expect(parseArgs(["--comment", "abc"]).comment).toBeNull();
+    expect(parseArgs(["--comment", "abc"]).commentBad).toEqual(["abc"]);
+    /* 第二次不静默覆盖：那会把「写两张单」读成「写最后那张」。 */
+    expect(parseArgs(["--comment", "2719", "--comment", "2720"]).commentBad.length).toBe(1);
+    expect(parseArgs(["--body-file", ".git/c.md"]).bodyFile).toBe(".git/c.md");
+    expect(parseArgs(["--body-file=.git/c.md"]).bodyFile).toBe(".git/c.md");
+    expect(parseArgs(["--commentt"]).unknown).toEqual(["--commentt"]);
   });
 
   it("--close-issue 默认关，且不牵连 --merge（两个是各自独立的显式动作）", () => {
@@ -1731,6 +1745,10 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       getIssueFails?: boolean;
       postCommentFails?: boolean;
       commentListFails?: boolean;
+      /** 平台落评论时把末尾那个换行收掉（实测口径，ISSUE #2719 的 ⑤）。 */
+      stripCommentTail?: boolean;
+      /** 平台落下来的正文被别人改过（回读只剩「形似」，用于负控制）。 */
+      commentRewrite?: (text: string) => string;
       writeExtraHandler?: string | null;
       listFails?: boolean;
       listRows?: Array<{ number: number; priority: string; title: string }>;
@@ -1797,7 +1815,8 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
           return { status: 0, stdout: "boom", stderr: "", error: null };
         }
         const text = fs.readFileSync(arg(args, "--body-file"), "utf8");
-        comments.unshift(text);
+        const stored = opts.stripCommentTail ? text.replace(/\r?\n$/, "") : text;
+        comments.unshift(opts.commentRewrite ? opts.commentRewrite(stored) : stored);
         return { status: 0, stdout: json({}), stderr: "", error: null };
       }
       if (args[0] === "issues" && args[1] === "list-issue-comments") {
@@ -2510,6 +2529,202 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
     } finally {
       s.cleanup();
     }
+  });
+
+  /**
+   * `--comment`（ISSUE #2719）：正文只从文件读、写完独立回读、**逐字相同**才退 0。
+   *
+   * 与状态评论（`--claim` / `--release`）共用同一条「落盘 → post → 回读」实现
+   * （`scripts/ship-comment.mjs`）；这一组钉的是那层之上多出来的三件：
+   * ① 正文文件是唯一入口；② 回读比对先归一末尾换行；③ 不相等就是红，不是「差不多」。
+   */
+  describe("--comment：往单子上写一条读数（ISSUE #2719）", () => {
+    const bodyText = "读数：回执两条，逐字比对通过。\n";
+
+    function commentFixture(body = bodyText) {
+      const dir = mkdtempSync(path.join(os.tmpdir(), "ship-comment-test-"));
+      const bodyFile = path.join(dir, "comment.md");
+      fs.writeFileSync(bodyFile, body, "utf8");
+      return { dir, bodyFile };
+    }
+
+    function runComment(
+      f: ReturnType<typeof issueIo>,
+      s: ReturnType<typeof scratch>,
+      argv: Array<string>,
+    ) {
+      return runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(argv),
+        mkTmp: s.mkTmp,
+        commentIssue: runIssueComment,
+        dryRun: opts(argv).dryRun,
+      });
+    }
+
+    it("写成并逐字回读 ⇒ 0：先 post 再 list，评论首行是本检出的署名", () => {
+      const f = issueIo();
+      const s = scratch();
+      const { dir, bodyFile } = commentFixture();
+      try {
+        const code = runComment(f, s, ["--comment", "2187", "--body-file", bodyFile]);
+        expect(code).toBe(CODE.GREEN);
+        const said = f.calls.findIndex((c) => c.includes("post-issue-comment"));
+        expect(said).toBeGreaterThan(-1);
+        /* 写完之后必须再问平台一次（回执不是结论）。 */
+        expect(f.calls.slice(said + 1).some((c) => c.includes("list-issue-comments"))).toBe(true);
+        expect(f.comments()[0]?.startsWith(`${commentHeader(handle)}\n\n`)).toBe(true);
+        expect(f.comments()[0]).toContain("读数：回执两条");
+      } finally {
+        s.cleanup();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("平台收掉末尾换行（1818 ⇄ 1817 那一跑）⇒ 仍判 0：比对先归一", () => {
+      const f = issueIo({ stripCommentTail: true });
+      const s = scratch();
+      const { dir, bodyFile } = commentFixture();
+      try {
+        const code = runComment(f, s, ["--comment", "2187", "--body-file", bodyFile]);
+        expect(code).toBe(CODE.GREEN);
+        /* 回读里那条确实少了末尾换行 —— 判 0 是因为归一口径，不是因为平台原样存下。 */
+        expect(f.comments()[0]?.endsWith("\n")).toBe(false);
+      } finally {
+        s.cleanup();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("回读里没有逐字相同的那一条 ⇒ 1（不念「已评论」），且不重复投递", () => {
+      const f = issueIo({ commentRewrite: (t) => `${t}（平台改过）` });
+      const s = scratch();
+      const { dir, bodyFile } = commentFixture();
+      try {
+        const code = runComment(f, s, ["--comment", "2187", "--body-file", bodyFile]);
+        expect(code).toBe(CODE.RED);
+        expect(f.calls.filter((c) => c.includes("post-issue-comment")).length).toBe(1);
+      } finally {
+        s.cleanup();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("写动作失败 ⇒ 2；写成功但回读没跑起来 ⇒ 2（两件事话术分开）", () => {
+      const s = scratch();
+      const { dir, bodyFile } = commentFixture();
+      try {
+        const failed = issueIo({ postCommentFails: true });
+        expect(runComment(failed, s, ["--comment", "2187", "--body-file", bodyFile])).toBe(
+          CODE.NOT_RUN,
+        );
+        const halfDone = issueIo({ commentListFails: true });
+        expect(runComment(halfDone, s, ["--comment", "2187", "--body-file", bodyFile])).toBe(
+          CODE.NOT_RUN,
+        );
+      } finally {
+        s.cleanup();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("缺 --body-file / 空文件 ⇒ 2，且一条 cnb 都不发", () => {
+      const s = scratch();
+      const { dir, bodyFile } = commentFixture("");
+      try {
+        for (const argv of [
+          ["--comment", "2187"],
+          ["--comment", "2187", "--body-file", bodyFile],
+        ]) {
+          const f = issueIo();
+          expect(runComment(f, s, argv)).toBe(CODE.NOT_RUN);
+          expect(f.calls).toEqual([]);
+        }
+      } finally {
+        s.cleanup();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("与 --claim 同跑 / --body-file 单独出现 ⇒ 2，一次写动作都不发", () => {
+      const s = scratch();
+      const { dir, bodyFile } = commentFixture();
+      try {
+        const both = issueIo();
+        expect(
+          runComment(both, s, ["--comment", "2187", "--claim", "2187", "--body-file", bodyFile]),
+        ).toBe(CODE.NOT_RUN);
+        expect(both.calls).toEqual([]);
+        const orphan = issueIo();
+        expect(runComment(orphan, s, ["--body-file", bodyFile])).toBe(CODE.NOT_RUN);
+        expect(orphan.calls).toEqual([]);
+      } finally {
+        s.cleanup();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("--dry-run：只念计划，一条都不写", () => {
+      const f = issueIo();
+      const s = scratch();
+      const { dir, bodyFile } = commentFixture();
+      try {
+        const code = runComment(f, s, [
+          "--comment",
+          "2187",
+          "--body-file",
+          bodyFile,
+          "--dry-run",
+        ]);
+        expect(code).toBe(CODE.GREEN);
+        expect(f.calls).toEqual([]);
+      } finally {
+        s.cleanup();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("CI 那条链（runAppendIssueComment）改用同一份写+回读后，仍按 marker 认回读", () => {
+      const f = issueIo();
+      const s = scratch();
+      try {
+        const yes = runAppendIssueComment({
+          run: f.run,
+          log: (l) => f.log.push(l),
+          slug,
+          number: 2187,
+          body: "构建 cnb-x-1 读数。",
+          marker: "cnb-x-1",
+          mkTmp: s.mkTmp,
+        });
+        expect(yes).toBe(true);
+        const no = runAppendIssueComment({
+          run: f.run,
+          log: (l) => f.log.push(l),
+          slug,
+          number: 2187,
+          body: "另一条读数。",
+          marker: "cnb-y-2",
+          mkTmp: s.mkTmp,
+        });
+        expect(no).toBe(false);
+      } finally {
+        s.cleanup();
+      }
+    });
+
+    it("比对口径：只吃末尾那一个换行，正文里任何一处差异都不许被抹平", () => {
+      expect(sameCommentBody("a\n\nb\n", "a\n\nb")).toBe(true);
+      expect(sameCommentBody("a\n\nb\r\n", "a\n\nb")).toBe(true);
+      expect(sameCommentBody("a\n\nb", "a\n\nc")).toBe(false);
+      expect(sameCommentBody("a\n\nb\n\n", "a\n\nb")).toBe(false);
+      expect(stripTrailingNewline("x\r\n")).toBe("x");
+    });
   });
 });
 
@@ -3553,6 +3768,7 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       release: 2188,
       claims: true,
       newIssue: true,
+      comment: true,
       diagnose: true,
     })) {
       const m = /^cnb (\w+) ([\w-]+)/.exec(line);
@@ -4207,6 +4423,114 @@ describe("main() 的单子动作：独立于主流程，在 master 上、没碎�
     expect(code).toBe(CODE.NOT_RUN);
     expect(f.calls.some((c) => c.includes("issues"))).toBe(false);
     expect(f.log.join("\n")).toContain("不与");
+  });
+});
+
+/**
+ * `--dry-run` 与「只补关」那一路（ISSUE #2766）。
+ *
+ * 现场：`pnpm ship --close-issue=2748,2755 --dry-run` 念完「将要执行的命令」那几行，
+ * 然后**真的把两张单关掉了** —— 置 `closed/completed`、发「开发结束」评论、撤处理人标签，
+ * 三件写动作一件不落。根因不是「dry-run 这个机制不管关单」，而是装配层那一次调用
+ * **少传了一个字段**：同一个文件里 `--diagnose` / `--stage-log` / `--claim` 三条独立动作
+ * 都带了 `dryRun: opt.dryRun`，只有「只补关」那一条没带。
+ *
+ * 所以这两条用例**打在 `main()` 上**，不只在 `closeIssues` 上：只测被调方那一层，
+ * 「调用点漏传」这个真实回归形永远不会红（本仓反复收的那一型 —— 注入式单测看不见默认出口）。
+ * 两条是一对：dry-run 那条钉「写面一条都不发」，对照那条钉「不带它时确实发了一次」——
+ * 缺了对照，「整条链根本没跑起来」也会把前者读成绿。
+ */
+describe("#2766 --dry-run 底下「只补关」：读面照跑，写面一条不发", () => {
+  /** 只答这一族要的那几跳；`calls` 记下每一次伸手（含 git，写动作要从里面筛）。 */
+  function closeMainIo() {
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
+    const ok = (stdout: string): FakeResult => ({
+      status: 0,
+      stdout,
+      stderr: "",
+      error: null,
+    });
+    const run = (cmd: string, args: Array<string>): FakeResult => {
+      calls.push([cmd, ...args].join(" "));
+      const key = args.join(" ");
+      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
+      if (cmd === "git" && key.includes("@{u}")) return ok("");
+      if (cmd === "git" && key === "remote") return ok("cnb\n");
+      if (cmd === "git" && key.includes("symbolic-ref"))
+        return ok("refs/remotes/cnb/master");
+      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
+      if (cmd === "git" && key.includes("get-url"))
+        return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull")
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: { number: 2069, is_merged: true, title: "fix(a): 那一格 (#2070)" },
+          }),
+        );
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "update-issue")
+        return ok(
+          JSON.stringify({ status: 200, data: { number: 2070, state: "closed" } }),
+        );
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue")
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: {
+              number: 2070,
+              state: "closed",
+              state_reason: "completed",
+              closed_at: "2026-10-30T08:19:09Z",
+              /* 处理人标签**不在场**：这一族自己会念「不代发『开发结束』、不动标签」，
+               * 对照组因此只余「关单」这一件写动作要盯。 */
+              labels: [],
+            },
+          }),
+        );
+      return ok("");
+    };
+    /** 写面那四条命令（读面是 get-issue / get-pull / list-*）。 */
+    const WRITE = ["update-issue", "post-issue-comment", "post-issue-labels", "delete-issue-label"];
+    const writes = (list: Array<string>) =>
+      list.filter((c) => WRITE.some((w) => c.includes(w)));
+    return { run, calls, log, writes };
+  }
+
+  const ARGS = ["--close-issue", "2070", "--as-merged", "2069"];
+
+  it("带 --dry-run ⇒ 凭据照样回读，四件写动作一件不发，退 0（它跑起来了，结论是「可以关而这次没写」）", async () => {
+    const f = closeMainIo();
+    const code = await main({
+      args: [...ARGS, "--dry-run"],
+      env: { COMFYAPP_DEV_HANDLE: "yuedu-win" },
+      run: f.run,
+      log: (l) => f.log.push(l),
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(f.writes(f.calls)).toEqual([]);
+    // 读面照跑：落地证明仍取自平台回读，不是被 dry-run 跳过。
+    expect(f.calls.some((c) => c.includes("get-pull"))).toBe(true);
+    const all = f.log.join("\n");
+    expect(all).toContain("is_merged=true");
+    expect(all).toContain("#2070 将置 state=closed / state_reason=completed");
+    expect(all).toContain("一条写命令都没发");
+  });
+
+  it("同一组旗标不带 --dry-run ⇒ 确实发了一次 update-issue（对照：缺了它，上一条能被「整条没跑」冒充绿）", async () => {
+    const f = closeMainIo();
+    const code = await main({
+      args: ARGS,
+      env: { COMFYAPP_DEV_HANDLE: "yuedu-win" },
+      run: f.run,
+      log: (l) => f.log.push(l),
+    });
+    expect(code).toBe(CODE.GREEN);
+    const updates = f.calls.filter((c) => c.includes("update-issue"));
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toContain("--state closed --state-reason completed");
+    expect(f.log.join("\n")).not.toContain("一条写命令都没发");
   });
 });
 

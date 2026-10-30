@@ -178,6 +178,10 @@
  *                                              # 一步建单：create-issue（正文文件 + 开头署名）→
  *                                              #   补 `提单人:` 标签 → 独立 get-issue 回读；
  *                                              #   标题与正文是判断，脚本不代写
+ *   pnpm ship --comment 2719 --body-file .git/comment.md
+ *                                              # 往已有单子补一条读数：post-issue-comment（正文文件 +
+ *                                              #   开头署名）→ 独立 list-issue-comments 逐字回读；
+ *                                              #   正文只从文件来（`--issue-body-file` 是建单那格）
  *   pnpm ship --diagnose [sn]                  # 只读：CI 红了就看那一跑的失败格 + 失败行 +
  *                                              #   末 40 行 + 完整日志链接（不给号按 HEAD 归属）
  *   pnpm ship --diagnose --dry-run             # 只打印它会读的那三条命令
