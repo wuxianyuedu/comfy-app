@@ -31,7 +31,7 @@
  * 用法：
  *   pnpm gates:which                      按当前分支相对基线的改动面答三问
  *   pnpm gates:which --changed <路径>…    用显式名单（改名旧侧要自己一并给出）
- *   pnpm gates:which --help
+ *   pnpm gates:which --help               打出这段用法
  *
  * 退出码：0 = 三问都有读数；2 = 没有结论（改动面为空 / 取不到基线 / 用例链读不到 /
  * 不认识的参数）—— 2 不是绿，也不是「没有问题」。
