@@ -42,6 +42,13 @@
   [`.qoder/skills/ship/SKILL.md`](.qoder/skills/ship/SKILL.md)），本文件不抄旗标清单
   （抄一份旗标，下一个旗标加进来时这里就脱钩）。
 - 不确定读哪些 → 先读 `docs/standards/15-附录.md` §15.5「新成员 10 分钟速读路径」建立全局认知。
+- **不确定这次改动该跑哪几条门禁 / 哪份用例 / 读哪一节规范** → 跑 `pnpm gates:which`
+  （默认按当前分支相对基线取改动面，`--changed <路径…>` 给显式名单）。它只转述既有执行者的
+  登记：门禁分档取自钩子步骤行与 `ci-incremental-gates.mjs` 的收窄面、用例直接起
+  `scripts/affected-tests.mjs` 的判决链、规范读下方那张表的机器可读副本
+  `scripts/doc-reading-map.mjs`。**给的是「建议跑」不是「已跑」**（本地默认只有 D0）；
+  用例是静态 import 图的增量面、不是全量凭证；改动面为空 / 取不到基线 ⇒ 退 2 = 没有结论，
+  不是「什么都不用跑」。
 - **依赖版本可能落后于远端**（别人升过库、你还在旧的上面干活）→ 先跑
   `pnpm check:deps-freshness`，再读 `docs/guides/sync-after-pull.md`；判据口径见 §13.5.13。
 - 跨文件检索 / 代码图谱查询（`codegraph`、`zvec-grep` 两个本地只读 MCP，声明见 `.mcp.json`）→
@@ -60,6 +67,9 @@
 
 > 判断标准：改动被「强制先读规范文档的改动范围」表或本清单覆盖但未先读就动手 = 违规，
 > 提交会被拒或要求回滚。
+
+> 下面这张表有机器可读副本 `scripts/doc-reading-map.mjs`（`pnpm gates:which` 按改动面匹配它），
+> 两边由 `tests/gates-which.test.ts` 双向核对：改了表不加登记、或登记了不改表，都会当场红。
 
 ## 强制先读规范文档的改动范围
 

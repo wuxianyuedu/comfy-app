@@ -96,7 +96,7 @@ function fail(
  * @property {boolean} [run]
  */
 /** @type {Record<string, Gate>} */
-const GATES = {
+export const GATES = {
   typecheck: { label: "Typecheck (tsc --noEmit)", args: ["typecheck"] },
   lint: {
     label: "ESLint zero error / zero warning",
@@ -547,4 +547,12 @@ function main() {
   return exitCode;
 }
 
-process.exit(main());
+/* 只在被直接执行时跑 main：`gates-which.mjs` 要 import 这张表当它唯一的口径来源，
+ * import 一下就把整套门禁跑起来是另一种事故。判法取既有的 realpath 比较（ISSUE #1961：
+ * `file://` 拼接在 Windows 上恒不相等）。 */
+if (
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === import.meta.filename
+) {
+  process.exit(main());
+}
