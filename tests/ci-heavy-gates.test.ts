@@ -424,7 +424,9 @@ describe("复合档 —— 三态前缀带颜色区分（ISSUE #2748）", () => 
     main({
       cwd: ROOT,
       argv: ["--only=判据自身"],
-      env: { FORCE_COLOR: "1" },
+      /* 两枚旗标同时开着：注入 `io.log` 这一档要压过**任何一枚**（用例与抓文本的
+       * 调用方拿到的仍是干净行）。 */
+      env: { FORCE_COLOR: "1", COMFYAPP_CI_COLOR: "1" },
       log: (line: string) => lines.push(line),
       changedFiles: null,
     });
@@ -437,10 +439,15 @@ describe("复合档 —— 三态前缀带颜色区分（ISSUE #2748）", () => 
   /**
    * 真起一次子进程：`paintOn` 的判据里就有「有没有注入 log」这一条，
    * 在进程内怎么调都只会走干净那一路 —— 要证「带色号」只能打生产入口。
+   *
+   * 用 `COMFYAPP_CI_COLOR` 而不是 `FORCE_COLOR`：这里子进程的 stdout 是**管道**（非 TTY），
+   * 那正是平台那一档的拓扑，而这枚旗标就是为它开的（ISSUE #2755）。两条共识旗标都
+   * 从环境里摘掉，否则开发机上恰好有 `FORCE_COLOR` 时这条会**为错误的理由**通过。
    */
   function runHeavyChild(extraArgs: string[]) {
-    const env: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: "1" };
+    const env: NodeJS.ProcessEnv = { ...process.env, COMFYAPP_CI_COLOR: "1" };
     delete env.NO_COLOR;
+    delete env.FORCE_COLOR;
     return spawnSync(
       process.execPath,
       ["scripts/ci-heavy-gates.mjs", "--only=判据自身", ...extraArgs],
