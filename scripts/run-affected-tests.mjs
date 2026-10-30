@@ -134,7 +134,14 @@ import {
   readRetrySuiteFailures,
   writeFilesManifest,
 } from "./affected-launch-junit-io.mjs";
+import { collectFileTimings } from "./precommit-timing.mjs";
 export { junitReportArgs, writeFilesManifest };
+/* 逐份用时的**取数**也归账本那一侧（`collectFileTimings` 是布局的唯一读者，
+ * `parseJunitXml` 是解析的唯一出处）—— **转出**而不是在本层再 import 一次：那一对
+ * 是**共同模块**，两处各 import 一份的代价是「这一层带着它进 graph」，而下面
+ * `junitReadings` 的注里那句「读者只有一个」就不再成立。 */
+export { collectFileTimings };
+
 /* 复跑面（第 2 遍该跑哪几份）住在自己那份文件里 —— 与话术层同一刀，理由写在那份文件头：
  * 机制层再塞第五件事就会长到读不动，而读不动的那一层失效形态是「判据恒绿」。
  * 判决粒度（第 2 遍那份红按文件分开）住在隔壁那份里（`affected-launch-retry-verdict.mjs`）——
@@ -166,17 +173,17 @@ import {
 /* 收尾那两份账与「毫秒→秒」的格式住在**话术层**：本文件是机制层（清单 / 分块 / 起进程 /
  * 判超时指纹 / 定不退不退），那三段只把已经定完的结论排成给人读的账。拆开的理由不是「长」
  * 而是 §12.6 R5 那句 —— 读不动的那一层的失效形态是「判据恒绿」，不是报错。 */
-import {
-  fmtSec,
-  rerunReport,
-  unverifiedReport,
-} from "./affected-launch-rerun-report.mjs";
+import { fmtSec, rerunReport, unverifiedReport } from "./affected-launch-rerun-report.mjs";
 /* 日志预算那一格（reporter 选哪个）住在自己那份文件里 —— 与话术层、复跑面同一刀，
  * 理由写在那份文件头：机制层再塞第六件事就越过 900 行硬闸，而越闸的形态不是报错，
  * 是「那一层读不动了」（§12.6 R5）。判据一个字没改，换的只是它住哪儿。 */
 import { announceQuiet, reporterArgs } from "./affected-launch-log-budget.mjs";
 /* quiet 档的**另一半**：那档只打点，「跑了哪些用例」得单独念一遍（同一刀拆法）。 */
 import { fileListReport } from "./affected-launch-file-list.mjs";
+/* 清单的**另一半**：每份用例自己花了多久（#2683 第二笔）。用时一直在 junit 里，
+ * 而读它的那条链只有钩子的收尾账 —— 平台那一格没出口，于是「跑了哪些」与「那份多贵」
+ * 分住在两个读者面。这里补的是一个**读数**，不碰任何判据。 */
+import { fileTimingReport } from "./affected-launch-file-timing-report.mjs";
 /* 「改动面归因 ⇒ 拆小建议」那一格（归因 + 排成给人读的话，纯提示、不参与任何判决）
  * 整格住进自己那份文件里：本层已经贴住 900 行硬闸，而越闸的形态不是报错，是
  * 「那一层读不动了」（§12.6 R5 / §12.13）。 */
@@ -225,7 +232,6 @@ export const SAFE_ARGV_BUDGET = 24_000;
  */
 const PER_FILE_RERUN_MAX = 8;
 
-
 async function main(argv) {
   const dryRun = argv.includes("--dry-run");
   /* ── 显式全量档（`--full`）───────────────────────────────────────────────
@@ -252,9 +258,7 @@ async function main(argv) {
      * 「解析不到 vitest 入口」，而它的全部用途（对账清单份数、问一句跑得起来吗）
      * 一个都用不上。判据 `tests/affected-tests.test.ts` 的「干净检出」一条真起进程判这条顺序。 */
     if (dryRun) {
-      process.stdout.write(
-        "[affected-launch] --full：会跑全部用例（vitest 自行收集）\n",
-      );
+      process.stdout.write("[affected-launch] --full：会跑全部用例（vitest 自行收集）\n");
       return 0;
     }
     const entry = resolveVitestEntry();
@@ -290,9 +294,7 @@ async function main(argv) {
   try {
     chunks = planLaunches(files);
   } catch (e) {
-    process.stderr.write(
-      `[affected-launch] ${e instanceof Error ? e.message : String(e)}\n`,
-    );
+    process.stderr.write(`[affected-launch] ${e instanceof Error ? e.message : String(e)}\n`);
     return 1;
   }
   /* 同上：读数档不碰 `node_modules`。它要的信息（清单份数 / 启动次数 / 最长一块）
@@ -310,9 +312,7 @@ async function main(argv) {
     resolveCiWorkers().workers,
   );
   if (note) process.stderr.write(`[affected-launch] ${note}\n`);
-  const quiet = announceQuiet(process.env.COMFY_AFFECTED_QUIET, (t) =>
-    process.stderr.write(t),
-  );
+  const quiet = announceQuiet(process.env.COMFY_AFFECTED_QUIET, (t) => process.stderr.write(t));
   /* 分文件耗时的落点：钩子 `export` 出来的 `$LOGD`，或平台入口 `ci-affected-tests.mjs`
    * 自己造的一份（同一份布局，随本次跑清理 —— 那一格此前拿不到 junit，复跑面每次都
    * 退回整块，ISSUE #2074）。没有它（人自己跑这一档 / 不在执行者里）就一个字都不加 ——
@@ -340,9 +340,7 @@ async function main(argv) {
   /* 改动面归因只在**面大到值得说**时才去算：它是给「拆小」用的（见 `scopeAdvice`），
    * 而面小的时候那句话没有任何信息 —— 白算一次还会让每次提交多付约 220ms。
    * 判断用**已经拿到**的清单份数（`files.length - 固定清单份数`），不额外读一次 git。 */
-  const affectedCount = files.filter(
-    (f) => !FIXED_STRUCTURAL_TESTS.includes(f),
-  ).length;
+  const affectedCount = files.filter((f) => !FIXED_STRUCTURAL_TESTS.includes(f)).length;
   const wantAdvice = affectedCount >= SCOPE_ADVICE_MIN;
   /* 建议在**起 vitest 之前**打：它讲的是「这次的代价」，而一条真断言红会把收尾段
    * 整个截断（实测踩到过）—— 真红的时候恰恰更需要看到这个数。 */
@@ -361,22 +359,37 @@ async function main(argv) {
    * `deadline` 表示 —— 第一块等掉的时间，后面的块不会重新拿到一份。 */
   const waitBudget = { deadline: Date.now() + RETRY_BUDGET_MS };
   /* 跑也要有界：整次一份、跨块共享，与上面那份等待预算同形状（只管开不开下一遍）。 */
-  const wallClock = resolveWallClockMs(
-    process.env.COMFY_AFFECTED_WALL_CLOCK_MS,
-  );
-  if (wallClock.note)
-    process.stderr.write(`[affected-launch] ${wallClock.note}\n`);
+  const wallClock = resolveWallClockMs(process.env.COMFY_AFFECTED_WALL_CLOCK_MS);
+  if (wallClock.note) process.stderr.write(`[affected-launch] ${wallClock.note}\n`);
   const stageBudget = wallClockBudget({ budgetMs: wallClock.budgetMs });
   /** 这一档「没拿到可信读数」的文件（未校验 ≠ 绿，结束时要点名）。 */
   const unverified = [];
   /** 每一块一条判决记录，收尾那份账（`rerunReport`）读它。 */
   const attempts = [];
+  /**
+   * 从这一跑写出的 junit 里读回**逐份用时**（`fileTimingReport` 的唯一取数入口）。
+   *
+   * 取数走**账本那一侧的读者**（`collectFileTimings`，布局归 `precommit-timing.mjs`
+   * 所有，本文件只把它的出口转出来），不自己扫目录 —— 抄一份文件名正则的漂移形态是静默的：
+   * 改名那一侧照常跑、这一侧从此读不到，而「读不到」在这一格长得和「这一跑没有读数」
+   * 一模一样。
+   *
+   * 没有落点 / 目录里一份都没写出 ⇒ 回**空数组**，那一档在报告里是「读不到」，
+   * 不是「每份 0ms」（后者会让「这次没有读数」长得像「每份都秒过」）。
+   *
+   * @returns {{name: string, ms: number}[]}
+   */
+  const junitReadings = () => (junitDir ? collectFileTimings({ dir: junitDir }).files : []);
   /* 收尾两格合成一个函数，因为**两条路径都要打**：真红那次提前 return，而那一屏
    * 恰恰最需要「这次等了多久、哪几块没被校验过」（同上面 scopeAdvice 那条
    * 「真红时更该看到这个数」—— 放在 return 之后就是永不打字的死账）。 */
   const flush = () => {
-    if (unverified.length > 0)
-      process.stderr.write(unverifiedReport(unverified));
+    /* 逐份用时（`fileTimingReport`）：从这一跑写出的 junit 里读回来。它必须是**收尾**
+     * 那一段 —— 读数在第一遍跑完才存在，而「打了哪些用例」那张清单要早于起 vitest
+     * （起之前根本没有用时）。两份放在同一屏的两端是刻意的：清单回答「跑了什么」，
+     * 这里回答「各自多久」，两句都读完才算读完了这一格。 */
+    process.stderr.write(fileTimingReport(files, { quiet, read: junitReadings() }));
+    if (unverified.length > 0) process.stderr.write(unverifiedReport(unverified));
     process.stderr.write(rerunReport(attempts, { budgetMs: RETRY_BUDGET_MS }));
   };
   for (const [index, chunk] of chunks.entries()) {
@@ -526,8 +539,7 @@ export async function runChunk(chunk, deps) {
    * **不再决定退出码**（ISSUE #1747 —— 逐块等 5 分钟且最后仍拦下提交，是病）。
    * 预算由调用点给（多块共享一份 deadline）；不给就单块自己一份。 */
   const settle =
-    deps.settle ??
-    (() => waitForLoadToSettle({ budgetMs: remainingWaitMs(deps.waitBudget) }));
+    deps.settle ?? (() => waitForLoadToSettle({ budgetMs: remainingWaitMs(deps.waitBudget) }));
   const settled = await settle();
   /* 「等了多久」要说出口，而不是只说「在等」：它是**唯一**能区分
    * 「机器空了，所以第二遍与第一遍不同条件」与「一点没等，第二遍和第一遍同条件」的读数
@@ -538,9 +550,7 @@ export async function runChunk(chunk, deps) {
       ? `[affected-launch] 没等（第一读数就已回落：每核 ${settled.load.toFixed(2)}）` +
           " ⇒ 第二遍与第一遍几乎是同一条件，它只能证伪「真断言红」，不能证明负载已散\n"
       : `[affected-launch] 等了 ${fmtSec(settled.waitedMs)}${
-          settled.settled
-            ? `（每核负载回落到 ${settled.load.toFixed(2)}）`
-            : " 没等到回落"
+          settled.settled ? `（每核负载回落到 ${settled.load.toFixed(2)}）` : " 没等到回落"
         } —— 起第 2 遍：${scope.why}、--no-file-parallelism\n`,
   );
   /* 走「先量一份」那一支时，第 2 遍只跑它买得起的那几份，且**按读数挑**（`rerunFileList`
@@ -551,8 +561,7 @@ export async function runChunk(chunk, deps) {
   const retryFiles = rerunFileList({
     gate,
     files: scope.files,
-    readSuites: () =>
-      readRetrySuiteFailures({ junitDir, chunkId, read: deps.readJunit }),
+    readSuites: () => readRetrySuiteFailures({ junitDir, chunkId, read: deps.readJunit }),
     isTimeout: isTimeoutShaped,
   });
   const retry = spawn(entry, [
@@ -599,10 +608,7 @@ export async function runChunk(chunk, deps) {
     const measured = new Set(retryFiles);
     verdict = {
       ...verdict,
-      unknown: [
-        ...scope.files.filter((f) => !measured.has(f)),
-        ...verdict.unknown,
-      ],
+      unknown: [...scope.files.filter((f) => !measured.has(f)), ...verdict.unknown],
       kind: verdict.hardFail.length > 0 ? "hard-fail" : "unattributed",
     };
   }
