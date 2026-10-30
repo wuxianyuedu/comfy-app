@@ -417,6 +417,16 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 正是「下一次有人写收尾网时顺手敲 `git checkout`」—— 那种改动不会把这条带进受影响集
   // （它读的是别的文件的文本，import 图追不到），所以必须进固定清单。
   "tests/probe-restore.test.ts",
+  // 探针**隔离**那一半的口径（ISSUE #2665 / `tests/helpers/probe-worktree.ts`）：
+  // #2593 修的是「还原别拿 git 索引当凭据」，本件修的是「别写真实树」—— 写探针与
+  // 并发读者（`comment-language` 直读 `docs/reference-facts.md`）之间那段窗口是另一半。
+  // 三条各钉一格静默失效：脏的四种形状有没有都进克隆（少一种就是「克隆里没有这份」的
+  // 假结论）、`worktree add` 之后中途抛错有没有注销登记（第一版就把登记留在了仓库上）、
+  // 建不出来时有没有**退回真实树**（退回=隔离被静默关掉而账面全绿）。
+  // 为什么要进固定清单（与上面那条不同，别说错）：helper 被谁 import，改它就选得到；
+  // 但这三格防的是**运行期环境**的形状（CI 上 `worktree remove` 失败、临时目录被别的
+  // 进程占着），那种漂移不来自任何一次文件改动 ⇒ 只有每次都跑才看得见。
+  "tests/probe-worktree.test.ts",
   // 「`@theme` 声明的 token 清单」那份**文件快照**（规范 §11.9.1 / #1490 落地）：
   // `toMatchFileSnapshot` 把清单写成一份能独立打开、能单独 diff 的真文件，
   // 而它与源码之间的同步**没有任何机器判据** —— 它自己那条用例读的是
