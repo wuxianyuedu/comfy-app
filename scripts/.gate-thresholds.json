@@ -362,6 +362,24 @@
       "unit": "天（源码字面写 `7 * 24 * 60 * 60 * 1000`，判据按字面取头数）",
       "kind": "report",
       "why": "远端引用陈旧的宽限窗：超过它才打 [未校验] 而不是判红（#2383 扩扫描根后入账，入账动作本身就是那次判断）。"
+    },
+    {
+      "file": "scripts/ci-daily-bundle-escalation.mjs",
+      "const": "BUNDLE_BASELINE_STALE_COMMITS",
+      "value": 15,
+      "unit": "次提交",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "预算账陈旧度门限（ISSUE #2639）：基线之后又过去这么多次提交、还没人认账或压回 ⇒ 每日失败立案在正文里点名「该有人出面」。放宽（调大）= 账挂更久才催；收紧 = 更容易催。业主改这一条即可。"
+    },
+    {
+      "file": "scripts/ci-daily-bundle-escalation.mjs",
+      "const": "BUNDLE_GATE_RED_STREAK_DAYS",
+      "value": 2,
+      "unit": "天",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "预算闸连续判红的天数门限（ISSUE #2639）：治的是「每次都被重新签过账、但同一格同类账反复出现」那一形（#2639 那六次）。放宽（调大）= 要连续红更久才催；与陈旧度各判各的（2 就是「昨天 + 今天」）。"
     }
   ],
   "$notCovered": {

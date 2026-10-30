@@ -27,6 +27,16 @@ import {
   pickPreviousDaily,
   titleKey,
 } from "../scripts/ci-daily-failure-issue.mjs";
+import {
+  BUNDLE_BASELINE_STALE_COMMITS,
+  BUNDLE_GATE_MARKERS,
+  BUNDLE_GATE_RED_STREAK_DAYS,
+  BUNDLE_GATE_STAGE,
+  composeEscalation,
+  fetchBundleRedStreak,
+  judgeBundleEscalation,
+  readBundleAccount,
+} from "../scripts/ci-daily-bundle-escalation.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const ENTRY = path.join(ROOT, "scripts", "ci-daily-failure-issue.mjs");
@@ -610,5 +620,457 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
       calls.some((c) => c.includes("post-issue-comment") || c.includes("create-issue")),
       "盖不住窗口却写了平台",
     ).toBe(false);
+  });
+});
+
+/**
+ * 预算账陈旧度触发器（ISSUE #2639）：只认判据自己打的那两句判决行。
+ *
+ * 这一格最危险的失效形态是「把没测读成没事」—— 暂撤（#2634）、正文取不到、归因行读不出，
+ * 三种都必须落在「不升级」，且**各说各的**：混成一句，读的人就分不出「没事」与「没测」。
+ */
+describe("读预算账：只认判据自己的判决行", () => {
+  /** 判据现场那一形（`check-bundle-budget.cjs` 的归因行）。 */
+  const enforcedText =
+    "L1212 [bundle-budget] 违规（阻断）：总字节超预算\n" +
+    "基线修订号：dd8d4647（其后本检出上有 87 次提交）";
+
+  it("真红 + 归因行 ⇒ enforced，陈旧度读成 87 次提交", () => {
+    const a = readBundleAccount(enforcedText);
+    expect(a.marker).toBe("enforced");
+    expect(a.stale).toEqual({ kind: "commits", n: 87, rev: "dd8d4647" });
+  });
+
+  it("「读数（不参与判定）」⇒ suspended，不是红（#2634 的开发期暂撤）", () => {
+    const a = readBundleAccount(
+      `${BUNDLE_GATE_MARKERS.suspended}：总字节超 3.1%\n基线修订号：abc12345（其后本检出上有 9 次提交）`,
+    );
+    expect(a.marker).toBe("suspended");
+    expect(a.stale).toMatchObject({ kind: "commits", n: 9 });
+  });
+
+  it("两句判决行同时在（改稿中途的形态）⇒ unknown，不替你挑一句", () => {
+    const a = readBundleAccount(
+      `${BUNDLE_GATE_MARKERS.enforced}\n${BUNDLE_GATE_MARKERS.suspended}`,
+    );
+    expect(a.marker).toBe("unknown");
+    expect(a.note).toContain("两句判决行同时在");
+  });
+
+  it("日志里没有判决行 ⇒ none；正文取不到 ⇒ unknown（不是 none）", () => {
+    expect(readBundleAccount("全部通过").marker).toBe("none");
+    expect(readBundleAccount(null).marker).toBe("unknown");
+    expect(readBundleAccount("   ").note).toContain("没取到");
+  });
+
+  it("归因走「按日期」第二通道时认 source-commits；读不出时不是 0", () => {
+    const byDate = readBundleAccount(
+      `${BUNDLE_GATE_MARKERS.enforced}：总字节超预算\n` +
+        "改按基线日期 2026-08-14 归因：src/ 侧其后有 52 次主干提交",
+    );
+    expect(byDate.stale).toEqual({ kind: "source-commits", n: 52, rev: null });
+    const bare = readBundleAccount(`${BUNDLE_GATE_MARKERS.enforced}：总字节超预算`);
+    expect(bare.marker).toBe("enforced");
+    expect(bare.stale.kind).toBe("unknown");
+  });
+});
+
+describe("升级判不判：门限可注入，读不出不构成结论", () => {
+  const enforced = (n: number) =>
+    readBundleAccount(
+      `${BUNDLE_GATE_MARKERS.enforced}：总字节超预算\n` +
+        `基线修订号：dd8d4647（其后本检出上有 ${n} 次提交）`,
+    );
+  const noStreak = { days: "unknown" as const, note: "离线档不联网" };
+  const redStreak = (d: number) => ({ days: d, note: `连红 ${d} 天` });
+
+  it("陈旧度到门限 ⇒ 升，正文带两条出口", () => {
+    const j = judgeBundleEscalation({
+      account: enforced(BUNDLE_BASELINE_STALE_COMMITS),
+      streak: noStreak,
+    });
+    expect(j.fired).toBe(true);
+    expect(j.reason).toContain("基线已陈旧");
+    const section = String(j.section);
+    expect(section).toContain("该有人出面了");
+    expect(section).toContain("认账");
+    expect(section).toContain("压回");
+    expect(section).toContain("--allow-increase");
+  });
+
+  it("连续天数到门限（陈旧度读不出也算数）⇒ 升", () => {
+    const j = judgeBundleEscalation({
+      account: readBundleAccount(`${BUNDLE_GATE_MARKERS.enforced}：超预算`),
+      streak: redStreak(BUNDLE_GATE_RED_STREAK_DAYS),
+    });
+    expect(j.fired).toBe(true);
+    expect(j.reason).toContain("连续红");
+  });
+
+  it("两个门限都差一点 ⇒ 不升，念「还没到门限」而不是「没事」", () => {
+    const j = judgeBundleEscalation({
+      account: enforced(BUNDLE_BASELINE_STALE_COMMITS - 1),
+      streak: redStreak(BUNDLE_GATE_RED_STREAK_DAYS - 1),
+    });
+    expect(j.fired).toBe(false);
+    expect(j.reason).toContain("还没到门限");
+    expect(j.reason).toContain(`14/${BUNDLE_BASELINE_STALE_COMMITS}`);
+  });
+
+  it("暂撤 / 没红 / 认不出：三档都不升级，但三句话必须不同", () => {
+    const suspended = judgeBundleEscalation({
+      account: readBundleAccount(`${BUNDLE_GATE_MARKERS.suspended}：超预算`),
+      streak: noStreak,
+    });
+    const none = judgeBundleEscalation({
+      account: readBundleAccount("全部通过"),
+      streak: noStreak,
+    });
+    const unknown = judgeBundleEscalation({
+      account: readBundleAccount(null),
+      streak: noStreak,
+    });
+    for (const j of [suspended, none, unknown]) expect(j.fired).toBe(false);
+    expect(suspended.reason).toContain("#2634");
+    expect(none.reason).toContain("没有违规读数");
+    expect(unknown.reason).toContain("不构成结论");
+    expect(new Set([suspended.reason, none.reason, unknown.reason]).size).toBe(3);
+  });
+
+  it("判了红但两个门限都读不出 ⇒ 明说「不构成结论（不是「没过门限」）」", () => {
+    const j = judgeBundleEscalation({
+      account: readBundleAccount(`${BUNDLE_GATE_MARKERS.enforced}：超预算`),
+      streak: noStreak,
+    });
+    expect(j.fired).toBe(false);
+    expect(j.reason).toContain("两个门限都读不出");
+    expect(j.reason).toContain("不是「没过门限」");
+  });
+
+  it("门限以参数为准（注入值真的生效，边界钉在 >= 上）", () => {
+    const at = judgeBundleEscalation({
+      account: enforced(5),
+      streak: redStreak(8),
+      staleCommits: 5,
+      streakDays: 9,
+    });
+    expect(at.fired).toBe(true);
+    const below = judgeBundleEscalation({
+      account: enforced(4),
+      streak: redStreak(8),
+      staleCommits: 5,
+      streakDays: 9,
+    });
+    expect(below.fired).toBe(false);
+  });
+});
+
+describe("正文里的升级段：两种归因都要念成人话", () => {
+  const enforced = readBundleAccount(
+    `${BUNDLE_GATE_MARKERS.enforced}：总字节超预算\n` +
+      "基线修订号：dd8d4647（其后本检出上有 87 次提交）",
+  );
+  const byDate = readBundleAccount(
+    `${BUNDLE_GATE_MARKERS.enforced}：总字节超预算\n` +
+      "改按基线日期 2026-08-14 归因：src/ 侧其后有 52 次主干提交",
+  );
+  const section = composeEscalation({
+    account: enforced,
+    streak: { days: "unknown", note: "离线档不联网" },
+    why: ["基线已陈旧 87 次提交（门限 15）"],
+  });
+
+  it("修订号 + 次数念得出来；读不出的连续天数明说读不出", () => {
+    expect(section).toContain("`dd8d4647` 其后**87 次提交**");
+    expect(section).toContain("连续：**读不出**（离线档不联网）");
+    expect(section).toContain("触发原因：基线已陈旧 87 次提交（门限 15）");
+  });
+
+  it("按日期归因那一形带上「src/ 侧主干提交」的出处", () => {
+    const s = composeEscalation({
+      account: byDate,
+      streak: { days: 3, note: "连红 3 天" },
+      why: ["src/ 侧其后 52 次主干提交（门限 15）"],
+    });
+    expect(s).toContain("`(按日期归因)`");
+    expect(s).toContain("**52 次提交**（src/ 侧主干提交）");
+    expect(s).toContain("连续红 **3 天**");
+  });
+
+  it("带升级段时它插在读数与「根因未判定」之间；不带时一个字都不多", () => {
+    const base = {
+      slug: "moon-read/comfy-app-t3",
+      build: build("cnb-esc-1"),
+      sn: "cnb-esc-1",
+      stage: "每日生产构建",
+      skipped: [] as Array<string>,
+      readout: ["── 失败格：每日生产构建（stage-2）"],
+      handle: "ci-daily",
+    };
+    const withSection = composeBody({ ...base, escalation: section });
+    expect(withSection).toContain(section);
+    expect(withSection.indexOf(section)).toBeGreaterThan(
+      withSection.indexOf("## 当场读数"),
+    );
+    expect(withSection.indexOf(section)).toBeLessThan(
+      withSection.indexOf("## 根因：**未判定**"),
+    );
+    expect(composeBody(base)).not.toContain("该有人出面");
+  });
+});
+
+describe("判决行与判据那一侧对账（改词要两边一起改）", () => {
+  it("BUNDLE_GATE_MARKERS 的两句都能在 check-bundle-budget.cjs 的源码里找到", () => {
+    const src = fs.readFileSync(
+      path.join(ROOT, "scripts", "check-bundle-budget.cjs"),
+      "utf8",
+    );
+    for (const marker of Object.values(BUNDLE_GATE_MARKERS))
+      expect(src, `判据那侧没有这句判决行：${marker}`).toContain(marker);
+  });
+});
+
+/**
+ * 连续红天数：逐日回看，**读不出不是 0**。
+ *
+ * 这一格与主取数共用 `fetchBuildsCoveringWindow()`（窗口按门限天数算）——
+ * 用例喂的是同一份平台形状，测的是「哪几跑算看过」与「什么时候必须放弃结论」。
+ */
+describe("连续红天数：逐日回看，读不出不是 0", () => {
+  type FakeDay = { text: string; status?: string };
+
+  /** 假平台：列表按页答（`null` = 那一页取不到），逐格详情按 sn 答。 */
+  function fakePlatform(input: {
+    page: (n: number) => Array<ListBuild> | null;
+    days: Record<string, FakeDay>;
+  }) {
+    const calls: Array<string> = [];
+    const run = (_cmd: string, args: Array<string>) => {
+      const key = args.join(" ");
+      calls.push(key);
+      const json = (data: unknown) => ({
+        status: 0,
+        stdout: JSON.stringify({ status: 200, data }),
+        stderr: "",
+        error: null,
+      });
+      if (key.includes("get-build-logs")) {
+        const at = args.indexOf("--page");
+        const rows = input.page(Number(args[at + 1] ?? "1"));
+        if (rows === null) return { status: 1, stdout: "", stderr: "boom", error: null };
+        return json({ total: rows.length, data: rows });
+      }
+      if (key.includes("get-build-status")) {
+        const sn = String(args[args.indexOf("--sn") + 1] ?? "");
+        const day = input.days[sn] ?? { text: "" };
+        const stage = {
+          id: "stage-2",
+          name: BUNDLE_GATE_STAGE,
+          status: day.status ?? "error",
+        };
+        return json({
+          status: "error",
+          pipelinesStatus: {
+            p1: { id: "p1", name: BUNDLE_GATE_STAGE, status: "error", stages: [stage] },
+          },
+        });
+      }
+      if (key.includes("get-build-stage")) {
+        const sn = String(args[args.indexOf("--sn") + 1] ?? "");
+        return json({ status: "error", content: input.days[sn]?.text ?? "" });
+      }
+      return json({});
+    };
+    return { run, calls };
+  }
+
+  const red = `${BUNDLE_GATE_MARKERS.enforced}：总字节超预算`;
+  const off = `${BUNDLE_GATE_MARKERS.suspended}：总字节超预算`;
+  const green = "全部通过";
+  const sns = ["sn-d0", "sn-d1", "sn-d2"];
+  const list = () => sns.map((sn) => build(sn));
+
+  it("今天 + 昨天都判红 ⇒ 2 天（门限就是 2）", () => {
+    const { run } = fakePlatform({
+      page: () => list(),
+      days: {
+        "sn-d0": { text: red },
+        "sn-d1": { text: red },
+        "sn-d2": { text: green },
+      },
+    });
+    const r = fetchBundleRedStreak({
+      run,
+      slug: "s/x",
+      lanes: [BUNDLE_GATE_STAGE],
+      fromSn: "sn-d0",
+      need: 2,
+    });
+    expect(r.days).toBe(2);
+  });
+
+  it("昨天没红 ⇒ 连续在断点截断（1），不是「今天红所以 2」", () => {
+    const { run } = fakePlatform({
+      page: () => list(),
+      days: {
+        "sn-d0": { text: red },
+        "sn-d1": { text: off },
+        "sn-d2": { text: red },
+      },
+    });
+    const r = fetchBundleRedStreak({
+      run,
+      slug: "s/x",
+      lanes: [BUNDLE_GATE_STAGE],
+      fromSn: "sn-d0",
+      need: 2,
+    });
+    expect(r.days).toBe(1);
+    expect(r.note).toContain("断");
+  });
+
+  it("某一天读数认不出 ⇒ unknown（不拿它当绿也不当红）", () => {
+    const { run } = fakePlatform({
+      page: () => list(),
+      days: { "sn-d0": { text: red }, "sn-d1": { text: "" } },
+    });
+    const r = fetchBundleRedStreak({
+      run,
+      slug: "s/x",
+      lanes: [BUNDLE_GATE_STAGE],
+      fromSn: "sn-d0",
+      need: 2,
+    });
+    expect(r.days).toBe("unknown");
+    expect(r.note).toContain("认不出");
+  });
+
+  it("某一天那一格没跑（skipped）⇒ unknown，连续天数不猜", () => {
+    const { run } = fakePlatform({
+      page: () => list(),
+      days: {
+        "sn-d0": { text: red },
+        "sn-d1": { text: "", status: "skipped" },
+      },
+    });
+    const r = fetchBundleRedStreak({
+      run,
+      slug: "s/x",
+      lanes: [BUNDLE_GATE_STAGE],
+      fromSn: "sn-d0",
+      need: 2,
+    });
+    expect(r.days).toBe("unknown");
+    expect(r.note).toContain("skipped");
+  });
+
+  it("盖不住宽窗口 ⇒ unknown（不是 0）", () => {
+    const recent = (i: number): ListBuild => ({
+      sn: `pr-${i}`,
+      event: "pull_request",
+      createTime: new Date(Date.now() - 60_000).toISOString(),
+      status: "success",
+    });
+    const { run } = fakePlatform({
+      page: (n) => (n === 1 ? Array.from({ length: 60 }, (_, i) => recent(i)) : null),
+      days: {},
+    });
+    const r = fetchBundleRedStreak({
+      run,
+      slug: "s/x",
+      lanes: [BUNDLE_GATE_STAGE],
+      fromSn: "sn-d0",
+      need: 2,
+    });
+    expect(r.days).toBe("unknown");
+    expect(r.note).toContain("没盖住");
+  });
+
+  it("本档派发不足门限跑数 ⇒ unknown，不把「看到几跑」当成连续天数", () => {
+    const { run } = fakePlatform({
+      page: () => [build("sn-d0")],
+      days: { "sn-d0": { text: red } },
+    });
+    const r = fetchBundleRedStreak({
+      run,
+      slug: "s/x",
+      lanes: [BUNDLE_GATE_STAGE],
+      fromSn: "sn-d0",
+      need: 2,
+    });
+    expect(r.days).toBe("unknown");
+    expect(r.note).toContain("只有 1 跑");
+  });
+});
+
+/**
+ * 离线档（`--from`）把整条接线跑一遍：判决行来自 `stageLogs`，升级与否那句话必须打出来。
+ *
+ * 为什么钉这句日志：升级段只进正文，而离线档不打印正文 —— 「看不见」正是这一格唯一的失效形态。
+ */
+describe("离线档跑生产入口：升级与否必须念出来", () => {
+  function fixtureWithLogs(text: string) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "daily-escalation-"));
+    const file = path.join(dir, "read.json");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        list: [build("sn-esc")],
+        details: [d("sn-esc", "failed")],
+        stageLogs: { "sn-esc": text },
+      }),
+      "utf8",
+    );
+    return { dir, file };
+  }
+
+  const run = (args: Array<string>) =>
+    spawnSync(process.execPath, [ENTRY, ...args], { cwd: ROOT, encoding: "utf8" });
+
+  it("真红 + 基线其后 87 次提交 ⇒ 念「↑ 升级」且原因点名陈旧度", () => {
+    const f = fixtureWithLogs(
+      `${BUNDLE_GATE_MARKERS.enforced}：总字节超预算\n` +
+        "基线修订号：dd8d4647（其后本检出上有 87 次提交）",
+    );
+    try {
+      const r = run(["--from", f.file]);
+      const out = `${r.stdout}\n${r.stderr}`;
+      expect(r.status, out).toBe(CODE.DONE);
+      expect(out).toContain("格日志 1 份");
+      expect(out).toContain("预算账触发器：↑ 升级");
+      expect(out).toContain("基线已陈旧 87 次提交");
+    } finally {
+      fs.rmSync(f.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("暂撤那一跑（读数、不参与判定）⇒ 不升级，并说清是 #2634", () => {
+    const f = fixtureWithLogs(
+      `${BUNDLE_GATE_MARKERS.suspended}：总字节超 3.1%\n` +
+        "基线修订号：dd8d4647（其后本检出上有 87 次提交）",
+    );
+    try {
+      const r = run(["--from", f.file]);
+      const out = `${r.stdout}\n${r.stderr}`;
+      expect(r.status, out).toBe(CODE.DONE);
+      expect(out).toContain("预算账触发器：不升级");
+      expect(out).toContain("#2634");
+    } finally {
+      fs.rmSync(f.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("判了红但归因行读不出 ⇒ 「两个门限都读不出」，不冒充「没过门限」", () => {
+    const f = fixtureWithLogs(`${BUNDLE_GATE_MARKERS.enforced}：总字节超预算`);
+    try {
+      const r = run(["--from", f.file]);
+      const out = `${r.stdout}\n${r.stderr}`;
+      expect(r.status, out).toBe(CODE.DONE);
+      expect(out).toContain("预算账触发器：不升级");
+      expect(out).toContain("两个门限都读不出");
+      expect(out).toContain("不是「没过门限」");
+    } finally {
+      fs.rmSync(f.dir, { recursive: true, force: true });
+    }
   });
 });
