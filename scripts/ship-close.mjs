@@ -421,11 +421,16 @@ export function fetchPullMergeProof({ run, slug, prNumber }) {
  *   handle?: string | null,
  *   mkTmp?: ((name: string, text: string) => string | null) | null,
  *   asMerged?: number | null,
+ *   dryRun?: boolean,
  * }} ctx
  *   `handle` / `mkTmp` 是「关完之后补结束评论并撤处理人标签」那一格的执行面：
  *   未配留痕、或调用方没给临时文件落点时，那一格**跳过**（关单本身照常）。
  *   `asMerged` 是人点名的**凭据编号**（不是结论）—— 给了它就去回读那条 PR 的 `is_merged`，
  *   并**不再**扫「已合并 PR」那份列表（ISSUE #2491）。
+ *   `dryRun` 是「预览就是预览」（ISSUE #2766）：这一族的读面（落地证明的回读、
+ *   该不该关的判决、条目形态读数）照跑，**第一件写动作之前**停下并把要写什么念出来。
+ *   过去「只补关」那一路没把它传进来，于是 `--dry-run --close-issue=<号>` 三件写动作
+ *   （置 closed、发「开发结束」评论、撤处理人标签）一件不落 —— 预览一次就把单子真关了。
  * @returns {number} `CODE` 之一
  */
 export function closeIssues(ctx) {
@@ -439,6 +444,7 @@ export function closeIssues(ctx) {
     handle = null,
     mkTmp = null,
     asMerged = null,
+    dryRun = false,
   } = ctx;
   const landedVerified = landed?.verified === true;
   const title = landed?.title ?? "";
@@ -505,6 +511,21 @@ export function closeIssues(ctx) {
 
   /** @type {number[]} */
   const codes = [];
+  /* 预览就是预览（ISSUE #2766）。上面那些行全是**判决**：凭据从平台回读、该不该关由
+   * `decideCloseIssue` 判、不关的那几张逐张说明为什么没结论 —— 它们只发读命令，
+   * 所以 dry-run 底下照原样跑完，预览出来的结论与真跑那一次同一份来源。
+   * 从这里往下才是写面：一条也不发。返回 GREEN 而不是 NOT_RUN —— 这一格**跑起来了**，
+   * 它的结论就是「按这些凭据可以关，而这次没写」。 */
+  if (dryRun) {
+    for (const number of plan.numbers) {
+      log(
+        `[ship] --dry-run：#${number} 将置 state=closed / state_reason=completed，` +
+          `随后（处理人标签是我时）补「开发结束」评论并撤那枚标签` +
+          ` —— 这一跑一条写命令都没发。依据：${plan.sources.get(number) ?? "(未标注)"}`,
+      );
+    }
+    return CODE.GREEN;
+  }
   for (const number of plan.numbers) {
     const put = cnbJson(run, [
       "issues",
