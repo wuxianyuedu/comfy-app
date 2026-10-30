@@ -35,6 +35,29 @@ import {
 const SCRIPT = join(process.cwd(), "scripts", "premerge-check.mjs");
 
 /**
+/**
+ * 本检出 `HEAD` 的 sha —— 当**显式**的改动面基线（ISSUE #2799）。
+ *
+ * 为什么还要这一层（`run()` 已经过 `gitSandboxEnv()` 剥过平台那一族了，见下）：
+ * 剥完之后「哪一条是基线」就只剩「宿主有没有 `master` 引用」这一个来源 —— 那是**这台
+ * 机器的事实**，不是被测行为。平台节点只 fetch 协商后的单 ref（`.cnb.yml` 里那句注释
+ * 写得很清楚），于是本机绿、平台上整组红成 `expected 2 to be 0`（PR #2784 现场）。
+ *
+ * 传给 `HEAD` 的 sha 是刻意的：分叉点 == HEAD ⇒ 待审那一批为空 ⇒
+ * `check-commit-claims.mjs` 说「无可审，不是判过」并退 0（本仓对这一档的定义），
+ * 于是这一组判的是**编排**（筛段 / JSON / 旗标），不掺任何宿主状态。
+ *
+ * 判据行为一个字没动：取不到基线仍然退 2（「没判 ≠ 绿」，§13.6.2）—— 那条由
+ * 「算不出锚点时**退 2 并说明**」守着，两种机器上都照旧。
+ */
+function headBaseline(): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  }).trim();
+}
+
+/**
  * 跑一次入口脚本 —— **子进程里跑**，但不是「裸」跑。
  *
  * 这一份用例的每一段都在**真检出**上敲 git（`resolveForkBaseline` 与两段各自起的
@@ -53,17 +76,19 @@ const SCRIPT = join(process.cwd(), "scripts", "premerge-check.mjs");
  * 隔离」同一条口径。剥法复用 `gitSandboxEnv()`（唯一一份清单，§12.18），顺带把「禁签名
  * + 身份」也注入进去。
  *
+ * 基线与平台变量**一律显式给**：剥干净之后它们只剩「宿主恰好有什么」这一个来源，
+ * 而那正是 #2799 的症状。
+ *
  * @param args 交给入口的旗标
- * @param envOverrides 这一次要**额外给**的平台变量：把那一族当**被测输入**的用例
- *   自己显式给（见「没有 `master` 引用时目标 sha 从 env 进来」那一条）
+ * @param baseline 这一次的改动面基线（默认本检出 HEAD 的 sha）
  */
-function run(args: Array<string> = [], envOverrides: Record<string, string> = {}) {
+function run(args: Array<string> = [], baseline: string = headBaseline()) {
   try {
     const output = execFileSync(process.execPath, [SCRIPT, ...args], {
       cwd: process.cwd(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
-      env: gitSandboxEnv(envOverrides),
+      env: gitSandboxEnv({ CNB_PULL_REQUEST_TARGET_SHA: baseline }),
     });
     return { code: 0, output };
   } catch (err) {

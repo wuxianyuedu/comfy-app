@@ -115,7 +115,9 @@ describe("临时仓库夹具的 git 环境隔离", () => {
     const scratch = makeRepo("scratch");
     expect(indexPaths(victim)).toEqual(["tracked.txt"]);
 
-    /* 这就是钩子里的真实形态：`GIT_DIR` 指向调用方的仓库，cwd 在别处。 */
+    /* 这就是钩子里的真实形态：`GIT_DIR` 指向调用方的仓库，cwd 在别处。
+     * 它走**继承**那条路（`process.env` 那一档），不是 `gitSandboxEnv(extra)` ——
+     * 后者是「调用方显式要的」，剥完之后照传（口径见 `gitSandboxEnv()` 那段与 #2799）。 */
     const output = addProbeWithEnv(scratch, {
       ...process.env,
       GIT_DIR: join(victim, ".git"),
@@ -139,7 +141,25 @@ describe("临时仓库夹具的 git 环境隔离", () => {
     /* 清理**之前**那份环境里确实带着 `GIT_DIR`（否则这一档只是在判空气）。 */
     expect(poisoned.GIT_DIR).toBeTruthy();
 
-    addProbeWithEnv(scratch, gitSandboxEnv(poisoned));
+    /* 走「继承」那条路：把它放进 `process.env` 再让 `gitSandboxEnv()` 去剥 ——
+     * 这正是钩子里发生的事，也正是这一档要判的。 */
+    const saved = { dir: process.env.GIT_DIR, tree: process.env.GIT_WORK_TREE };
+    process.env.GIT_DIR = poisoned.GIT_DIR;
+    process.env.GIT_WORK_TREE = poisoned.GIT_WORK_TREE;
+    try {
+      addProbeWithEnv(scratch, gitSandboxEnv());
+    } finally {
+      if (saved.dir === undefined) {
+        delete process.env.GIT_DIR;
+      } else {
+        process.env.GIT_DIR = saved.dir;
+      }
+      if (saved.tree === undefined) {
+        delete process.env.GIT_WORK_TREE;
+      } else {
+        process.env.GIT_WORK_TREE = saved.tree;
+      }
+    }
 
     expect(indexPaths(victim), "清理无效：目标仓库索引被写进了探针").toEqual(["tracked.txt"]);
     /* 探针进的是**自己**的索引 —— 清理没有把命令变成空操作，只是换了归属。 */
@@ -212,18 +232,39 @@ describe("临时仓库夹具的 git 环境隔离", () => {
     for (const key of ["CNB_PULL_REQUEST_TARGET_SHA", "CNB_PULL_REQUEST_MERGE_SHA", "CNB_COMMIT"]) {
       expect(PLATFORM_RUN_ENV_KEYS, `清单里没有 ${key}`).toContain(key);
     }
-    const poisoned = {
-      ...process.env,
+    const poisoned: Record<string, string> = {
       CNB_PULL_REQUEST_TARGET_SHA: "deadbeef".repeat(5),
       CNB_PULL_REQUEST_MERGE_SHA: "feedface".repeat(5),
       CNB_COMMIT: "abad1dea".repeat(5),
     };
-    /* 前提：这三个键在 `process.env` 上确实会被读到（本机没有 ⇒ 只能靠注进去）。 */
-    expect(poisoned.CNB_PULL_REQUEST_TARGET_SHA).toBeTruthy();
-
-    const viaSpawn = gitSandboxEnv(poisoned);
+    /* 判的是**继承**那条路（`process.env` → `gitSandboxEnv()`），所以就地注入再剥。
+     * `gitSandboxEnv(extra)` 是另一件事：调用方显式给的要照传（#2799 现场就是它）。 */
+    const saved: Record<string, string | undefined> = {};
+    for (const [k, v] of Object.entries(poisoned)) {
+      saved[k] = process.env[k];
+      process.env[k] = v;
+    }
+    let viaSpawn: NodeJS.ProcessEnv;
+    try {
+      viaSpawn = gitSandboxEnv();
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = v;
+        }
+      }
+    }
     for (const key of PLATFORM_RUN_ENV_KEYS) {
-      expect(viaSpawn[key], `gitSandboxEnv() 没剥掉 ${key}`).toBeUndefined();
+      expect(viaSpawn[key], `gitSandboxEnv() 没剥掉继承来的 ${key}`).toBeUndefined();
+    }
+    /* 反向那一半：显式给的**照传** —— 剥的是继承，不是调用方的意图。
+     * 少了这条，`gitSandboxEnv({ CNB_PULL_REQUEST_TARGET_SHA })` 会被静默吞掉，
+     * 而「我明明传了」与「它说没有」可以同时成立（#2799 的第二个现场）。 */
+    const explicit = gitSandboxEnv(poisoned);
+    for (const [key, value] of Object.entries(poisoned)) {
+      expect(explicit[key], `显式给的 ${key} 被吞掉了`).toBe(value);
     }
     /* 另一条出口：`tests/setup.ts` 在 worker 启动时改的是 `process.env` 本身。
      * 两个出口剥的必须是**同一张清单** —— 只改一处时，另一处会静默漏掉新增的键。 */

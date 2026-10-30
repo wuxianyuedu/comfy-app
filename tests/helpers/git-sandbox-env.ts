@@ -151,15 +151,50 @@ export function sandboxGitConfig(): Record<string, string> {
   };
 }
 
-/** 给 `spawn` / `execFileSync` 用的、去掉了上述继承变量、并注入沙箱 git 配置的环境。
- * @param extra 追加的变量（在同名键处最后覆盖）
- * @returns 可直接交给子进程的 `env` */
-export function gitSandboxEnv(extra: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+/**
+ * 「剥掉继承的那一族，再落调用方显式给的那几项」—— 顺序是语义，收在这里只写一次。
+ *
+ * `extra` 里值为 `undefined` 的键表示**明确不要**（剥掉之后也别再加回来）。
+ *
+ * @param base 起始环境（通常是 `process.env`）
+ * @param extra 调用方显式给的项
+ * @returns 新环境（不改入参）
+ */
+function injectAfterStrip(
+  base: NodeJS.ProcessEnv,
+  extra: Record<string, string | undefined>,
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...base };
   for (const key of SANDBOX_STRIPPED_ENV_KEYS) {
     delete env[key];
   }
-  return withSandboxGitConfig(env);
+  for (const [key, value] of Object.entries(extra)) {
+    if (value === undefined) {
+      delete env[key];
+    } else {
+      env[key] = value;
+    }
+  }
+  return env;
+}
+
+/**
+ * 给 `spawn` / `execFileSync` 用的、去掉了上述继承变量、并注入沙箱 git 配置的环境。
+ *
+ * **`extra` 在剥之后落**（顺序是语义，ISSUE #2799）：用例有时要把某一族当**被测输入**
+ * 显式传进去（「目标 sha 只在 env 里」那类形状），而 `CNB_PULL_REQUEST_TARGET_SHA`
+ * 恰好在剥离清单里 —— 先合并再剥会把调用方刚给的那一份也删掉，于是「我明明传了」与
+ * 「它说没有」同时成立、README 里那句「在同名键处最后覆盖」也不再成立（实测：平台形态
+ * 下 3 条 `expected 2 to be 0`，本机因为恰好有 `origin/master` 而看不出来）。
+ *
+ * 剥的仍然是**继承来的**那一份：不传就没有。
+ *
+ * @param extra 追加的变量（剥完之后落，同名键由此覆盖）
+ * @returns 可直接交给子进程的 `env`
+ */
+export function gitSandboxEnv(extra: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
+  /* 顺序是语义：**先剥、后落 `extra`**（见上）。 */
+  return withSandboxGitConfig(injectAfterStrip(process.env, extra));
 }
 
 /**
