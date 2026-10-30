@@ -179,37 +179,6 @@ function injectAfterStrip(
 }
 
 /**
- * 「这一份沙箱**没有平台基座**」落在环境上的唯一写法（ISSUE #2797）。
- *
- * 为什么需要它：临时仓库是 `git init` 造的，平台那一跑给的 sha 在它里面根本不存在；
- * 而 `changed-scope.mjs` 的 `resolveBaseRef()` 优先认 `CNB_PULL_REQUEST_TARGET_SHA`
- * ⇒ 三点 diff 跑不动 ⇒ 判据 fail-closed 退 2。于是名字里写着「**本地那一档（没有平台
- * 旗标）**」的用例，在平台 PR 那一跑里验的其实是另一件事 —— 本机永远看不见
- * （本机没有那两个变量），平台上恒红。
- *
- * 为什么是**空串**而不是删键：判据那侧读的是 `env.X || 兜底链`。删键之后那个值本来就是
- * `undefined`，与「从没出现过」同形，而平台的环境会把它加回来；空串是一个**在场且
- * falsy** 的值，它说的是「这次运行确实没有平台基线」。
- *
- * `given` 里显式出现的键是**被测输入**，不许被这一档吃掉。
- *
- * @param env 目标环境（会被原地改写）
- * @param given 调用方显式给的变量（`gate-repo` 的 `overrides.env`）
- * @returns 同一份 `env`
- */
-export function withNoPlatformBaseline(
-  env: NodeJS.ProcessEnv,
-  given: Record<string, string | undefined> = {},
-): NodeJS.ProcessEnv {
-  for (const key of PLATFORM_RUN_ENV_KEYS) {
-    if (given[key] === undefined) {
-      env[key] = "";
-    }
-  }
-  return env;
-}
-
-/**
  * 给 `spawn` / `execFileSync` 用的、去掉了上述继承变量、并注入沙箱 git 配置的环境。
  *
  * **`extra` 在剥之后落**（顺序是语义，ISSUE #2799）：用例有时要把某一族当**被测输入**

@@ -83,7 +83,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test as base, expect } from "vitest";
 
-import { gitSandboxEnv, withNoPlatformBaseline, withSandboxGitConfig } from "./git-sandbox-env";
+import { gitSandboxEnv, withSandboxGitConfig } from "./git-sandbox-env";
 
 export { afterAll, afterEach, beforeAll, beforeEach, describe } from "vitest";
 
@@ -314,15 +314,10 @@ export interface GateRepo {
    * （用来造「沙箱里既没有接缝、也没有 node_modules」那一档 —— 见 `check-format`
    * 的 fail-closed 用例）。这不是顺手开的口子：判据脚本的**环境本身就是被测输入**，
    * 只给一个固定 env 就等于让「没设这个变量」那一档永远测不到。
-   *
-   * `overrides.local` 声明**这一份沙箱没有平台基座**（ISSUE #2797）：把平台那一跑的
-   * 改动面变量填成空串（见 `withNoPlatformBaseline()`）。名字里写着「本地那一档」的
-   * 用例**必须**带上它 —— 不带就只是「本机恰好是本地」，平台上它验的是另一件事
-   * （临时仓库里没有那个 sha ⇒ 判据 fail-closed 退 2）。
    */
   run: (
     args?: Array<string>,
-    overrides?: { env?: Record<string, string | undefined>; local?: boolean },
+    overrides?: { env?: Record<string, string | undefined> },
   ) => GateRunResult;
   /** 从工作区里读回一个文件（判据会就地改文件时用）。 */
   read: (rel: string) => string;
@@ -556,12 +551,6 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
         if (v === undefined) {
           delete callEnv[k];
         }
-      }
-      /* `local` 落在「删掉那批 undefined」之后：`undefined` 表达「这次不设它」（键缺席），
-       * 而这一档要的是**空值在场** —— 判据那侧 `||` 才会退兜底链。显式给了的键是被测输入，
-       * 由 `withNoPlatformBaseline()` 自己跳过。 */
-      if (overrides?.local === true) {
-        withNoPlatformBaseline(callEnv, overrides.env ?? {});
       }
       /* 沙箱 git 配置**最后**再落一次：调用方的 `overrides.env` 里若恰好也有
        * `GIT_CONFIG_*`（合法用法），不能把这一层挤掉 —— 少了它被测判据脚本内部

@@ -36,7 +36,6 @@ import {
   PLATFORM_RUN_ENV_KEYS,
   gitSandboxEnv,
   stripInheritedGitEnv,
-  withNoPlatformBaseline,
 } from "./helpers/git-sandbox-env";
 
 /** 本文件造出来的夹具仓库；收尾全删，用例中途失败也不把临时目录留在 `tmpdir`。 */
@@ -284,34 +283,6 @@ describe("临时仓库夹具的 git 环境隔离", () => {
       delete process.env.CNB_COMMIT;
       delete process.env.CNB_PULL_REQUEST_TARGET_SHA;
     }
-  });
-
-  it("⑤ `local` 档：平台基座填成空串（在场且 falsy，兜底链才会走）", () => {
-    /* ISSUE #2797：临时仓库里没有平台给的那个 sha，而 `resolveBaseRef()` 优先认它 ⇒
-     * 判据 fail-closed。名字里写着「本地那一档」的用例必须能**声明**自己的前提，
-     * 而不是指望环境恰好干净（本机干净、平台上不干净 —— 那是最难看见的一类）。
-     *
-     * 三向都钉：
-     *   · 没给 ⇒ 空串（不是删键：删键与「从没出现过」同形，平台的环境会把它加回来）；
-     *   · 显式给了的那一个是**被测输入**，不许被这一档吃掉；
-     *   · 不给 `local` 的那些调用不受影响（既有语义不动）。 */
-    const given: Record<string, string> = {
-      CNB_PULL_REQUEST_TARGET_SHA: "cafebabe".repeat(5),
-    };
-    const filled = withNoPlatformBaseline({ ...process.env }, {});
-    for (const key of PLATFORM_RUN_ENV_KEYS) {
-      expect(key in filled, `${key} 缺席了（要的是空串在场）`).toBe(true);
-      expect(filled[key], `${key} 不是空串`).toBe("");
-    }
-
-    /* `given` 里显式给了的那一个是**被测输入**：这一档只填 `given` 没声明的键，
-     * 所以它必须原样留着。 */
-    const kept = withNoPlatformBaseline(
-      { ...process.env, CNB_PULL_REQUEST_TARGET_SHA: "cafebabe".repeat(5) },
-      given,
-    );
-    expect(kept.CNB_PULL_REQUEST_TARGET_SHA).toBe("cafebabe".repeat(5));
-    expect(kept.CNB_COMMIT).toBe("");
   });
 
   it("全局那一档挂在 `tests/setup.ts` 上（否则 20 份自起仓库的用例各扫各的）", () => {
