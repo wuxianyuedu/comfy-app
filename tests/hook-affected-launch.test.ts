@@ -43,6 +43,7 @@ import {
   waitForLoadToSettle,
 } from "../scripts/affected-launch-load-retry.mjs";
 import {
+  collectFileTimings,
   planLaunches,
   resolveMaxWorkers,
   resolveVitestEntry,
@@ -60,6 +61,15 @@ import {
 /* 日志预算的**另一半**：quiet 那档只打点，「跑了哪些用例」必须另有一处出口 —— 否则
  * 平台那屏日志里一个文件名都没有，只剩 `Tests N passed`（这一格此前就长这样）。 */
 import { fileListReport, MAX_LISTED } from "../scripts/affected-launch-file-list.mjs";
+/* 清单的**另一半**：每份用例自己花了多久（ISSUE #2683 第二笔）。取数走的是
+ * `precommit-timing.mjs` 的 `parseJunitXml`（账本布局的唯一出处），本组用例只钉
+ * 「排成什么样」与「读不到时说什么」——判据一个字都没动，这一格买的是可读性。 */
+import {
+  fileTimingReport,
+  SLOWEST_MS,
+  SLOWEST_SHOWN,
+  TIMED_SHOWN,
+} from "../scripts/affected-launch-file-timing-report.mjs";
 /* 墙钟判点（ISSUE #2364）：等待有预算而**跑**没有上界，于是负载膨胀时那一格一路开到被
  * 平台掐掉（实测 3240105ms），连「未判定」那句话都没说出来。下面这几条钉两件事：
  * **界只划在「还开不开下一遍」**（已开跑的那一遍永远跑完），以及**「没开」不许长得像
@@ -86,11 +96,7 @@ import { junitReportArgs, writeFilesManifest } from "../scripts/affected-launch-
 /* 分文件读数的**两侧**要判的是同一个布局，所以判据同时 import 读的那一侧：只测写的
  * 一侧（"它传了某个文件名"）挡不住读的一侧改了前缀 —— 而那正会退化成「永远读不到，
  * 且看起来像这次没有读数」。 */
-import {
-  cFileXmlName,
-  collectFileTimings,
-  failingSuiteTextsFromJunit,
-} from "../scripts/precommit-timing.mjs";
+import { cFileXmlName, failingSuiteTextsFromJunit } from "../scripts/precommit-timing.mjs";
 /* 复跑面那一层同理：按它真实的落点 import（机制层拆出去之后不再转一层假出口）。 */
 import { retryScope } from "../scripts/affected-launch-retry-scope.mjs";
 /* 判决粒度那一层（第 2 遍的红按文件分开）—— #2225 之后它不再住在 runChunk 的那一句
@@ -1967,6 +1973,145 @@ describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
     /* `--full` 那一档没有清单可列（vitest 自己收集），但也不许静默：
      * 「这一档本来就不列」与「列清单这件事坏了」必须读得出区别。 */
     expect(launcher).toMatch(/全量档由 vitest 自行收集，故不逐份列出/);
+  });
+});
+
+/* ── 「每份跑了多久」这一格（ISSUE #2683 第二笔）──────────────────────────
+ *
+ * 现场（业主报的，第二问）：清单能读到 108 行文件名了，但**一个时长都没有** ——
+ * 用时其实一直在 junit 里（`junitReportArgs` 让 vitest 写的就是它），只是躺在账本
+ * 目录里、跑完就被删，而读它的那条链（钩子的收尾账）在平台那一格没有出口。
+ */
+describe("逐份用时：读数怎么排成给人那一段（ISSUE #2683）", () => {
+  const FILES = ["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"];
+
+  it("不 quiet ⇒ 一个字都不打（默认 reporter 已经逐文件打过）", () => {
+    expect(
+      fileTimingReport(FILES, {
+        quiet: false,
+        read: [{ name: "tests/a.test.ts", ms: 1200 }],
+      }),
+    ).toBe("");
+  });
+
+  it("quiet ⇒ 逐份带上自己的用时，且明说合计不是墙钟", () => {
+    const text = fileTimingReport(FILES, {
+      quiet: true,
+      read: [
+        { name: "tests/a.test.ts", ms: 5400 },
+        { name: "tests/b.test.ts", ms: 120 },
+        { name: "tests/c.test.ts", ms: 3000 },
+      ],
+    });
+    expect(text).toContain("读回 3 份");
+    /* 每份都要出现，且**与自己那个数挨着** —— 只断「出现过这个串」的话，
+     * 把 a 的用时配到 b 的行上照样过。 */
+    expect(text).toMatch(/5\.4s {2}tests\/a\.test\.ts/);
+    expect(text).toMatch(/0\.1s {2}tests\/b\.test\.ts/);
+    expect(text).toMatch(/3\.0s {2}tests\/c\.test\.ts/);
+    /* 并发下这几份是同时跑的 ⇒ 合计不等于墙钟。不说这一句，读的人会拿它当「这一格跑了多久」。 */
+    expect(text).toContain("不是墙钟");
+  });
+
+  it("按用时降序：最贵的那几份排在最前（「先跑最贵的」靠这一句）", () => {
+    const text = fileTimingReport(FILES, {
+      quiet: true,
+      read: [
+        { name: "tests/a.test.ts", ms: 100 },
+        { name: "tests/b.test.ts", ms: 9000 },
+        { name: "tests/c.test.ts", ms: 3000 },
+      ],
+    });
+    const order = ["tests/b.test.ts", "tests/c.test.ts", "tests/a.test.ts"].map((f) =>
+      text.indexOf(f),
+    );
+    expect(order).toEqual([...order].sort((x, y) => x - y));
+    expect(order.every((i) => i >= 0)).toBe(true);
+  });
+
+  it("超过封顶 ⇒ 截断并**念出省了多少行**（「少打一份」不许长得像「少跑一份」)", () => {
+    const many = Array.from({ length: 20 }, (_, i) => `tests/t${i}.test.ts`);
+    const text = fileTimingReport(many, {
+      quiet: true,
+      maxTimed: 3,
+      read: many.map((name, i) => ({ name, ms: (i + 1) * 100 })),
+    });
+    expect(text).toContain("其余 17 份合计");
+    expect(text).toMatch(/省了 17 行/);
+  });
+
+  it("封顶值：清单 200 行的预算已经花掉一半，这里只念 15 行 + 最慢 5 份", () => {
+    expect(TIMED_SHOWN).toBeLessThanOrEqual(20);
+    expect(SLOWEST_SHOWN).toBeLessThanOrEqual(8);
+    /* 门槛也钉住：几百毫秒的「最慢」不配占一行 —— 那一行是给人砍线用的。 */
+    expect(SLOWEST_MS).toBeGreaterThanOrEqual(500);
+  });
+
+  it("没有最慢的那几份时不打一个空标题（机器空转时每份都很快）", () => {
+    const text = fileTimingReport(["tests/a.test.ts"], {
+      quiet: true,
+      read: [{ name: "tests/a.test.ts", ms: 40 }],
+    });
+    expect(text).not.toContain("最慢：");
+    /* 40ms 也要读得出是个读数：`0.0s` 与「没有读数」在这一屏上长得一样。 */
+    expect(text).toContain("0.04s");
+  });
+
+  it("读不到 ⇒ 说「读不到」，不许打一张全 0 的表", () => {
+    /* 三种形状（全量档没有清单 / 账本目录没造出来 / junit 一份都没写出）在这里同形：
+     * 「这一跑没有读数」。静默或打 0 会让它长得像「每份都秒过」（§13.6.4.1 同一条口径）。 */
+    for (const read of [[], undefined]) {
+      const text = fileTimingReport(FILES, { quiet: true, read });
+      expect(text).toContain("读不到");
+      expect(text).toContain("不是「每份都很快」");
+      expect(text).not.toContain("0.0s");
+    }
+  });
+
+  it("清单里有、junit 里没有的那几份要点名（「少一行」不许长得像「很快」）", () => {
+    const text = fileTimingReport(FILES, {
+      quiet: true,
+      read: [{ name: "tests/a.test.ts", ms: 1200 }],
+    });
+    expect(text).toContain("读回 1 份");
+    expect(text).toContain("2 份**没有用时读数**");
+    expect(text).toContain("tests/b.test.ts");
+    expect(text).toContain("tests/c.test.ts");
+    expect(text).toContain("别读成「它们很快」");
+  });
+
+  it("读数来自 junit，且与清单对得上（真放进一条 `<testsuite time>` 走一遍取数）", () => {
+    /* 取数那一格不在这里重写：`collectFileTimings` 是账本布局的读者，
+     * `parseJunitXml` 是解析的唯一出处。这里只判「喂进去的东西排得出来」。 */
+    const dir = mkdtempSync(path.join(tmpdir(), "comfy-timing-"));
+    try {
+      writeFileSync(
+        path.join(dir, "comfy-c-0-1.xml"),
+        '<testsuites name="vitest tests"><testsuite name="tests/a.test.ts" ' +
+          'tests="1" failures="0" errors="0" time="2.5"><testcase name="x" /></testsuite>' +
+          "</testsuites>",
+        "utf8",
+      );
+      writeFileSync(path.join(dir, "comfy-c-files.txt"), "tests/a.test.ts\n", "utf8");
+      const { files, expected, missing } = collectFileTimings({ dir });
+      expect(files).toEqual([{ name: "tests/a.test.ts", ms: 2500 }]);
+      expect(expected).toBe(1);
+      expect(missing).toBe(0);
+      expect(fileTimingReport(["tests/a.test.ts"], { quiet: true, read: files })).toContain(
+        "2.5s  tests/a.test.ts",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("接在**收尾**那一段，且取数走账本读者（不是自己扫目录）", () => {
+    const launcher = readFileSync(LAUNCHER_PATH, "utf8");
+    /* 收尾才读：第一遍跑完才有 junit，而清单那一屏要早于起 vitest —— 两句各在各的位置。 */
+    expect(launcher).toMatch(/const flush = \(\) => \{[\s\S]{0,400}fileTimingReport\(files/);
+    expect(launcher).toMatch(/collectFileTimings\(\{ dir: junitDir \}\)/);
+    /* 没有落点 ⇒ 空读数（「读不到」），不是「每份 0ms」。 */
+    expect(launcher).toMatch(/junitDir \? collectFileTimings/);
   });
 });
 

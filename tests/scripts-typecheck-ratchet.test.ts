@@ -21,6 +21,7 @@ import { mkdtempSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { expectActionableRefusal } from "./helpers/ratchet-refusal";
 
 const REPO_ROOT = resolve(process.cwd());
@@ -375,8 +376,20 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
   });
 
   it("真 git 夹具：未入库那份被点名、不进面、它的红也不记账；提交之后就进账", () => {
+    /* 走 `gitSandboxEnv()` 而不是裸 `git`：宿主的全局 `.gitconfig` 常带
+     * `commit.gpgsign = true` + 一个平台专属签名器（本仓的构建容器就是），而临时仓库里
+     * 既没有可用密钥、签名器也不在 PATH 上 ⇒ 那三行 `git commit` 直接报
+     * `error: gpg failed to sign the data` / `fatal: failed to write commit object`。
+     * 报错一个字都不指向夹具 —— 实测本用例在 CNB 上就是这样整条红的。
+     * 这一层同时压掉 `core.autocrlf` 的 `LF will be replaced by CRLF` 噪音，
+     * 见 `tests/helpers/git-sandbox-env.ts` 文件头。 */
     const git = (args: Array<string>, cwd: string) =>
-      execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+      execFileSync("git", args, {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: gitSandboxEnv(),
+      });
     const repo = mkdtempSync(join(tmpdir(), "2681-repo-"));
     rmSync(repo, { recursive: true, force: true });
     mkdirSync(repo, { recursive: true });
