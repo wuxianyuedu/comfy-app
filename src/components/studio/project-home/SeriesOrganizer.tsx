@@ -13,7 +13,7 @@ import { Button } from "~/components/ui/button";
 import { textHandler } from "~/lib/form-props";
 import { cn } from "~/lib/utils";
 import { useSeriesOrganizer } from "./hooks/use-series-organizer";
-import { SeriesCharacterLibrary } from "./series-character-library";
+import { SeriesCharacterLibrary } from "./SeriesCharacterLibrary";
 
 interface SeriesOrganizerProps {
   /** 当前项目 id（来自 workspace 的活跃项目）。提供时展示「本项目归属」并支持一键归入某集。 */
