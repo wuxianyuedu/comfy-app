@@ -89,33 +89,28 @@ async function loadDesignSystem() {
 const ds = await loadDesignSystem();
 
 /**
- * 单个候选 → 规范化候选（不改写时返回 null）。
- * @param {string} token
-/**
- * 一条换算改写。
+ * 一条换算改写：`from` 原候选、`to` 规范化后的候选。
  *
- * `key` 只有 spacing 换算那一路给（`base + bang`，即「这条换算挂在哪个 spacing 槽位上」），
- * 同值 `w-K h-K → size-K` 那一路不给 ⇒ 写成可选是**如实**，不是放宽。
- *
- * ⚠️ 当场量到：**全文件没有一处读 `key`**（消费点只有 `from` / `to`，以及 `changes.length`）——
- * 与批 6 那次「`note` 写进对象而没人念」同一形，处置记在 ISSUE #2717：
- * 不在这支类型笔里顺手删字段（那是改输出，不是改类型）。
+ * 就这两格 —— 清单的消费点读的是它们与 `changes.length`。曾经还有一个 `key`
+ * （`base + bang`，即「这条换算挂在哪个 spacing 槽位上」）被写进清单而**全文件没有一处读它**，
+ * 同值 `w-K h-K → size-K` 那一路还压根不给它；撤掉了（ISSUE #2717）。
+ * 要按槽位分组，先给分组一个读者，别先把字段留在声明里让人以为它在承重。
  * @typedef {Object} Change
  * @property {string} from
  * @property {string} to
- * @property {string} [key]
  */
 
 /**
+ * 单个候选 → 规范化候选（不改写时返回 null）。
  * @param {string} token
- * @returns {{ from: string, to: string, key: string } | null}
+ * @returns {Change | null}
  */
 function canonicalize(token) {
   const match = TOKEN.exec(token);
   if (!match) return null;
   /* 三个捕获组都给了默认值：`TOKEN` 里它们都是必选的，但在 `noUncheckedIndexedAccess`
-   * 下解构出来仍是 `string | undefined`，而这一串值要进 `Number(…)`、模板串与
-   * `base + bang`（那个 key 是**下游按它分组**的，留 undefined 进去就是假分组）。 */
+   * 下解构出来仍是 `string | undefined`，而这一串值要进 `PX_VALUE.exec(…)`、`Number(…)`
+   * 与拼 `to` 的那个模板串 —— 留 undefined 进去就是往候选里写一串 "undefined"。 */
   const [, base = "", value = "", bang = ""] = match;
   const px = PX_VALUE.exec(value);
   if (!px) return null;
@@ -128,7 +123,7 @@ function canonicalize(token) {
   // 原候选必须合法；换算后的裸数值必须**真能编出规则**且**挂在 spacing scale 上**。
   if (!fromCss || !toCss) return null;
   if (!toCss.includes("var(--spacing)")) return null;
-  return { from: token, to, key: base + bang };
+  return { from: token, to };
 }
 
 /** P80 用到的两半：同一 className 里 `w-K` 与 `h-K` 同值就该写 `size-K`。
