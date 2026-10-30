@@ -480,7 +480,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(59 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(60 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里
@@ -893,6 +893,12 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 成本实测：读那份配置（要经 eslint-config-next 求值一遍 next 全配置）
   # ~1.1s，零网络、零子进程 —— 照 §13.5.4 的成本判据该进钩子。
   run "jsx-a11y 规则开关⇄判据（§6.12）" node scripts/check-a11y-rules.cjs
+  # eslint 的文件级豁免台账里「已经不需要的豁免」此前没有任何东西在读（ISSUE #2607 第 3 条 /
+  # 规范 §13.5.31）。另一半方向（有命中而没登记）由 `pnpm run lint` 本体执行，这里不重复判。
+  # 成本实测：端到端本机 10.4–11.6s，大头是 `eslint.config.js` 自己那一次求值
+  # （复用 a11y 那份件的 `loadEslintConfig()` 单飞，不另写第二份加载器）⇒ 与 a11y 同档，
+  # 只在重档那一跑（`COMFY_HEAVY_GATES=1` / `pnpm check:all` / 平台的固定结构用例）里付。
+  run "eslint 文件级豁免台账⇄真违例（§13.5.31）" node scripts/check-eslint-exemptions.cjs
   # 类型层「声明 ⇄ 执行者」（规范 §13.5.14 / ISSUE #1591）。立案现场：19 条 tsc 错落进
   # master，逐条扒下来**共同根因只有一个** —— 声明（JSDoc / 类型注解）落后于实现
   # （`FRESHNESS_TRACKS` 长出两栏、`freshnessRecord` 接上 `skippedReason`、
