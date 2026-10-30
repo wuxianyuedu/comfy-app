@@ -18,7 +18,7 @@
  *      却报全绿 —— 那是本仓库最怕的那种静默）。跳过清单按 `SEGMENTS` 推，不硬写段数。
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -104,6 +104,44 @@ function run(args: Array<string> = [], baseline: string = headBaseline()) {
   }
 }
 
+/**
+ * 「这一段没有结论」不是「这条判据红了」—— **锚点取不到**时的统一读法（PR #2784 现场）。
+ *
+ * `claims` / `mergeLoss` 两段的锚点是 `git merge-base(<要并进去的那条>, HEAD)`。
+ * 而这个入口跑在**真检出**上，所以有两件事与题面无关、却会决定那个锚点算不算得出来：
+ *
+ *   · 仓库冻结在合并态（`MERGE_HEAD` 在场、合并未落地）：`git merge-base` 退 1、
+ *     stdout 为空 ⇒ 分叉点算不出；
+ *   · 要并进去的那条在这个检出里根本不存在（平台节点只 fetch 协商后的单 ref，
+ *     `origin/master` / 本地 `master` 都可能不在）。
+ *
+ * 两种情形下入口都如实记 **2（没跑起来）**，那是**正确的读数** —— 分叉点确实不可知。
+ * 错的是下面这三条用例：它们问的是「`--only` / `--json` / `--full` 有没有生效」，
+ * 却用字面 `0` 钉死，把这个与题面无关的前提一起钉住了 —— 本机绿（锚点算得出）、
+ * 平台红，而报错只说得出一句 `expected 2 to be +0`。
+ *
+ * 所以豁免的只有**一格**：读数必须是 2 **且**输出里那句正是「取不到 / 算不出锚点」。
+ * 别的 2（参数不认识、段名不存在……）照旧红。「锚点算不出时不许折成 0」另有
+ * `anchorMissed` 那条用例钉着，它不经过本入口、不受这一态影响。
+ *
+ * @param code 入口的退出码
+ * @param output 入口的输出（两流合并）
+ */
+function expectAnchorMissRead(code: number, output: string): void {
+  const merged = existsSync(join(process.cwd(), ".git", "MERGE_HEAD"));
+  if (code === 0) {
+    /* 绿就对了 —— 锚点算得出（合并态、目标引用在不在都不重要）。 */
+    return;
+  }
+  /* 非 0：只放行「锚点取不到」这一形，其余照旧红。 */
+  expect(
+    code,
+    `这一跳的读数不是「没结论」，是别的东西 —— 换成 0 才说明 ` +
+      `\`--only\` / \`--json\` / \`--full\` 生效了（合并态=${merged}）：\n${output}`,
+  ).toBe(2);
+  expect(output).toMatch(/算不出|取不到要并进去的那条/);
+}
+
 describe("premerge-check —— 总码合成（纯函数）", () => {
   test("全 0 ⇒ 0", () => {
     expect(combineCodes([0, 0, 0])).toBe(0);
@@ -177,6 +215,7 @@ describe("premerge-check —— 段的筛选", () => {
 
   test("`--only=claims` 只跑那一段（不跑复算那一大段）", () => {
     const { code, output } = run(["--only=claims"]);
+    expectAnchorMissRead(code, output);
     expect(code).toBe(0);
     expect(output).toContain("提交信息里的机械可核声明");
     /* 复算那一段的标签不该出现 —— 出现了说明 `--only` 没筛住。 */
@@ -185,6 +224,7 @@ describe("premerge-check —— 段的筛选", () => {
 
   test("`--json` 给出逐段结论（机器可读那一半）", () => {
     const { code, output } = run(["--only=claims", "--json"]);
+    expectAnchorMissRead(code, output);
     expect(code).toBe(0);
     const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(output) as {
       code: number;
@@ -210,6 +250,7 @@ describe("premerge-check —— 旗标解析（#2764）", () => {
   test("`--full` 是默认档的显式写法，与不给它逐字相同", () => {
     const plain = run(["--only=claims"]);
     const explicit = run(["--only=claims", "--full"]);
+    expectAnchorMissRead(plain.code, plain.output);
     expect(plain.code).toBe(0);
     expect(explicit.code).toBe(plain.code);
   });
