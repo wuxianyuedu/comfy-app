@@ -209,7 +209,9 @@ function VirtualizedOutputGrid({
     >
       {virtualizer.getVirtualItems().map((vi) => {
         const row = rows[vi.index];
-        if (!row) return null;
+        if (!row) {
+          return null;
+        }
         return (
           <div
             key={vi.key}
@@ -243,7 +245,9 @@ function VirtualizedOutputGrid({
 
 function taskCover(images: Array<ProjectOutputImage>): ProjectOutputImage | null {
   const img = images.find((image) => image.mediaType === "image");
-  if (img) return img;
+  if (img) {
+    return img;
+  }
   return images[0] ?? null;
 }
 
@@ -283,13 +287,17 @@ export function ProjectOutputs() {
   const cover = useMemo(() => {
     for (const o of outputs) {
       const c = taskCover(o.images);
-      if (c) return c;
+      if (c) {
+        return c;
+      }
     }
     return null;
   }, [outputs]);
 
   const metaJson = useMemo(() => {
-    if (!selected) return "";
+    if (!selected) {
+      return "";
+    }
     return JSON.stringify(
       {
         id: selected.id,
@@ -332,12 +340,16 @@ export function ProjectOutputs() {
     onFailure: () => setCopyFailed(true),
   });
   const handleCopy = useCallback(() => {
-    if (!metaJson) return;
+    if (!metaJson) {
+      return;
+    }
     copy(metaJson);
   }, [metaJson, copy]);
 
   const handleExport = useCallback(() => {
-    if (!metaJson || !selected) return;
+    if (!metaJson || !selected) {
+      return;
+    }
     downloadText(metaJson, `output-${selected.id}.json`);
   }, [metaJson, selected]);
 

@@ -41,7 +41,9 @@ export function readComfyErrorMessage(body: unknown, fallback: string): string {
      * 文案，所以它优先于错误信封 —— 那不是第二套错误形状。
      * `{error}` 字符串与 `{error:{message}}` 交 `~/lib/api-error` 的唯一读法
      * （规范 16 §16.2.4.35）。 */
-    if (typeof rec.detail === "string" && rec.detail.trim()) return rec.detail;
+    if (typeof rec.detail === "string" && rec.detail.trim()) {
+      return rec.detail;
+    }
   }
   return readApiError(body) ?? fallback;
 }
@@ -104,14 +106,20 @@ export async function waitForComfyReady(
 
   for (;;) {
     const r = await ensureOnce();
-    if (r.ok) return r;
+    if (r.ok) {
+      return r;
+    }
     last = r;
-    if (!r.pending) return r;
+    if (!r.pending) {
+      return r;
+    }
     if (!announced) {
       announced = true;
       opts.onProgress?.(r.message);
     }
-    if (Date.now() + pollMs >= deadline) break;
+    if (Date.now() + pollMs >= deadline) {
+      break;
+    }
     await sleep(pollMs);
   }
   return {

@@ -54,9 +54,7 @@ export interface AgentRunController {
 
 export function useAgentRun(): AgentRunController {
   const [projectId] = useState<string>(() => getActiveId() ?? "");
-  const [run, setRun] = useState<ProductionRun>(() =>
-    normalizeProductionRun(null),
-  );
+  const [run, setRun] = useState<ProductionRun>(() => normalizeProductionRun(null));
   const [action, setAction] = useState<RunAction>({ kind: "idle" });
   const busyAction = useBusyAction();
   const [error, setError] = useState("");
@@ -71,7 +69,9 @@ export function useAgentRun(): AgentRunController {
 
   // 挂载拉一次；轮询在 useInterval 里独立驱动。
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId) {
+      return;
+    }
     const guard = beginStaleRun();
     void (async () => {
       try {
@@ -87,7 +87,9 @@ export function useAgentRun(): AgentRunController {
   const active = run.status === "running" || run.status === "awaiting_approval";
   useInterval(
     () => {
-      if (!projectId) return;
+      if (!projectId) {
+        return;
+      }
       void fetchRunStatus(projectId)
         .then(apply)
         .catch(() => undefined);
@@ -96,7 +98,9 @@ export function useAgentRun(): AgentRunController {
   );
 
   const report: ActionReport = useCallback((kind, detail) => {
-    if (kind === "err") setError(detail);
+    if (kind === "err") {
+      setError(detail);
+    }
   }, []);
 
   const act = useCallback(

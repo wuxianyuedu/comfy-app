@@ -60,24 +60,34 @@ type Path = ReadonlyArray<string | number>;
 /** 收集所有命中路径 (key / primitive value 都参与匹配, 大小写不敏感) */
 function collectHits(root: JsonValue, query: string): Array<Path> {
   const q = query.toLowerCase();
-  if (!q) return [];
+  if (!q) {
+    return [];
+  }
   const hits: Array<Path> = [];
 
   const visit = (node: JsonValue, path: Path) => {
     if (node === null) {
-      if ("null".includes(q)) hits.push(path);
+      if ("null".includes(q)) {
+        hits.push(path);
+      }
       return;
     }
     if (typeof node === "string") {
-      if (node.toLowerCase().includes(q)) hits.push(path);
+      if (node.toLowerCase().includes(q)) {
+        hits.push(path);
+      }
       return;
     }
     if (typeof node === "number") {
-      if (String(node).toLowerCase().includes(q)) hits.push(path);
+      if (String(node).toLowerCase().includes(q)) {
+        hits.push(path);
+      }
       return;
     }
     if (typeof node === "boolean") {
-      if (String(node).toLowerCase().includes(q)) hits.push(path);
+      if (String(node).toLowerCase().includes(q)) {
+        hits.push(path);
+      }
       return;
     }
     if (Array.isArray(node)) {
@@ -86,7 +96,9 @@ function collectHits(root: JsonValue, query: string): Array<Path> {
     }
     // object
     for (const [k, value] of Object.entries(node)) {
-      if (k.toLowerCase().includes(q)) hits.push([...path, k]);
+      if (k.toLowerCase().includes(q)) {
+        hits.push([...path, k]);
+      }
       visit(value, [...path, k]);
     }
   };
@@ -100,7 +112,9 @@ function collectHits(root: JsonValue, query: string): Array<Path> {
 /** 高亮 CSS 注入 (一次性 module-load) — 用 CSS 比 inline style 更稳 */
 let HIGHLIGHT_CSS_INJECTED = false;
 function ensureHighlightCss() {
-  if (HIGHLIGHT_CSS_INJECTED || typeof document === "undefined") return;
+  if (HIGHLIGHT_CSS_INJECTED || typeof document === "undefined") {
+    return;
+  }
   const style = document.createElement("style");
   style.dataset.jvHilite = "true";
   style.textContent = `
@@ -159,7 +173,9 @@ function clearPreviousHighlights(body: HTMLElement) {
 /** 把 hits 注入 DOM (行级 + substring) */
 function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number, query: string) {
   clearPreviousHighlights(body);
-  if (!query || hits.length === 0) return;
+  if (!query || hits.length === 0) {
+    return;
+  }
 
   const q = query.toLowerCase();
   // 提前统计每个 primitive text-node 的命中数, 用于将全局 activeIdx 映射到
@@ -170,9 +186,13 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
   const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement;
-      if (!parent) return NodeFilter.FILTER_REJECT;
+      if (!parent) {
+        return NodeFilter.FILTER_REJECT;
+      }
       const cls = parent.className;
-      if (typeof cls !== "string") return NodeFilter.FILTER_REJECT;
+      if (typeof cls !== "string") {
+        return NodeFilter.FILTER_REJECT;
+      }
       if (
         cls.includes("json-view--string") ||
         cls.includes("json-view--number") ||
@@ -199,11 +219,15 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
       let p = 0;
       while (true) {
         const j = lower.indexOf(q, p);
-        if (j < 0) break;
+        if (j < 0) {
+          break;
+        }
         count += 1;
         p = j + q.length;
       }
-      if (count > 0) targets.push({ node: t, count });
+      if (count > 0) {
+        targets.push({ node: t, count });
+      }
     }
     cur = walker.nextNode();
   }
@@ -237,11 +261,15 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
         frag.appendChild(document.createTextNode(orig.slice(i)));
         break;
       }
-      if (j > i) frag.appendChild(document.createTextNode(orig.slice(i, j)));
+      if (j > i) {
+        frag.appendChild(document.createTextNode(orig.slice(i, j)));
+      }
       const isActive = activeNode === t.node && globalIdx === hitIndex;
       const mark = document.createElement("mark");
       mark.className = "jv-hit-sub";
-      if (isActive) mark.dataset.jvActiveHit = "true";
+      if (isActive) {
+        mark.dataset.jvActiveHit = "true";
+      }
       mark.textContent = orig.slice(j, j + q.length);
       frag.appendChild(mark);
       globalIdx += 1;
@@ -296,12 +324,18 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
   useEffect(() => {
     ensureHighlightCss();
     const body = bodyRef.current;
-    if (!body) return;
+    if (!body) {
+      return;
+    }
     const needle = query.trim();
-    if (!needle && !paintedRef.current) return;
+    if (!needle && !paintedRef.current) {
+      return;
+    }
     // 折叠 state 引发的 DOM 变化先 settle, 再扫
     return onNextFrame(() => {
-      if (!bodyRef.current) return;
+      if (!bodyRef.current) {
+        return;
+      }
       applyHighlights(bodyRef.current, hits, hitIndex, needle);
       paintedRef.current = needle.length > 0 && hits.length > 0;
     });
@@ -309,12 +343,16 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
 
   // ── active hit 居中滚动 ──
   useEffect(() => {
-    if (!bodyRef.current || hits.length === 0) return;
+    if (!bodyRef.current || hits.length === 0) {
+      return;
+    }
     return onNextFrame(() => {
       const el = /* SAFETY: 类型断言已复核 */ bodyRef.current?.querySelector(
         "mark.jv-hit-sub[data-jv-active-hit]",
       ) as HTMLElement | null;
-      if (!el) return;
+      if (!el) {
+        return;
+      }
       el.scrollIntoView({ block: "center", behavior: "smooth" });
     });
   }, [hitIndex, hits]);
@@ -333,7 +371,9 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
 
   const nextHit = useCallback(
     (dir: 1 | -1) => {
-      if (hits.length === 0) return;
+      if (hits.length === 0) {
+        return;
+      }
       setHitIndex((index) => (index + dir + hits.length) % hits.length);
     },
     [hits.length],

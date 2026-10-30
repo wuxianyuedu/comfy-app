@@ -52,14 +52,19 @@ const DISPLACEMENT_SELECTORS = /* SAFETY: 类型断言已复核 */ [
  */
 function reduceBlockOf(text: string): string | null {
   const start = text.search(/@media[^{]*prefers-reduced-motion[^{]*\{/);
-  if (start < 0) return null;
+  if (start < 0) {
+    return null;
+  }
   let depth = 0;
   for (let i = text.indexOf("{", start); i < text.length; i += 1) {
     const ch = text[i];
-    if (ch === "{") depth += 1;
-    else if (ch === "}") {
+    if (ch === "{") {
+      depth += 1;
+    } else if (ch === "}") {
       depth -= 1;
-      if (depth === 0) return text.slice(text.indexOf("{", start) + 1, i);
+      if (depth === 0) {
+        return text.slice(text.indexOf("{", start) + 1, i);
+      }
     }
   }
   return null;
@@ -75,17 +80,22 @@ function collectConsumers(cls: string): Array<string> {
   const out: Array<string> = [];
   const walk = (dir: string) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".")) continue;
+      if (entry.name.startsWith(".")) {
+        continue;
+      }
       const full = join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (/\.tsx?$/.test(entry.name)) {
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (/\.tsx?$/.test(entry.name)) {
         const text = readFileSync(full, "utf8");
         /* 只认 `className` 里的写法，**并且先剥注释** —— 注释里提到类名
            不算消费（本仓库已有 18 份内联的剥注释实现，见
            `tests/strip-comments-single-source.test.ts`；这里按同口径内联一遍，
            它的判据是「不许再新增第 19 份」，而本文件是既有的一份）。 */
         const code = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-        if (code.includes(cls)) out.push(full);
+        if (code.includes(cls)) {
+          out.push(full);
+        }
       }
     }
   };

@@ -29,7 +29,9 @@ describe("resolveComfyLaunchPlan", () => {
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
     expect(plan).not.toHaveProperty("error");
-    if ("error" in plan) return;
+    if ("error" in plan) {
+      return;
+    }
     expect(plan.cmd).toBe(path.join(root, "python_embeded", "python.exe"));
     expect(plan.mainPy).toBe(path.join(root, "main.py"));
     expect(plan.cwd).toBe(root);
@@ -45,7 +47,9 @@ describe("resolveComfyLaunchPlan", () => {
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
     expect(plan).not.toHaveProperty("error");
-    if ("error" in plan) return;
+    if ("error" in plan) {
+      return;
+    }
     expect(plan.cmd).toBe(path.join(root, "standalone-env", "python.exe"));
     expect(plan.mainPy).toBe(path.join(root, "ComfyUI", "main.py"));
     expect(plan.cwd).toBe(path.join(root, "ComfyUI"));
@@ -62,7 +66,9 @@ describe("resolveComfyLaunchPlan", () => {
     const plan = resolveComfyLaunchPlan(srcDir, makeExists(fsSet));
 
     expect(plan).not.toHaveProperty("error");
-    if ("error" in plan) return;
+    if ("error" in plan) {
+      return;
+    }
     expect(plan.cmd).toBe(path.join(instRoot, "standalone-env", "python.exe"));
     expect(plan.mainPy).toBe(path.join(srcDir, "main.py"));
   });
@@ -77,7 +83,9 @@ describe("resolveComfyLaunchPlan", () => {
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
     expect(plan).not.toHaveProperty("error");
-    if ("error" in plan) return;
+    if ("error" in plan) {
+      return;
+    }
     expect(plan.cmd).toBe(path.join(root, ".venv", "Scripts", "python.exe"));
   });
 
@@ -92,7 +100,9 @@ describe("resolveComfyLaunchPlan", () => {
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
     expect(plan).not.toHaveProperty("error");
-    if ("error" in plan) return;
+    if ("error" in plan) {
+      return;
+    }
     // .venv 排在 standalone-env 之前（vendor 构建的 torch 在 .venv 里）
     expect(plan.cmd).toBe(path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"));
   });
@@ -110,7 +120,9 @@ describe("resolveComfyLaunchPlan", () => {
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
     expect(plan).not.toHaveProperty("error");
-    if ("error" in plan) return;
+    if ("error" in plan) {
+      return;
+    }
     // Desktop 实例 canonical 运行时是 standalone-env，即使源码内 .venv 存在也优先
     expect(plan.cmd).toBe(path.join(root, "standalone-env", "python.exe"));
     expect(plan.mainPy).toBe(path.join(root, "ComfyUI", "main.py"));
@@ -135,7 +147,9 @@ describe("resolveComfyLaunchPlan", () => {
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
     expect(plan).not.toHaveProperty("error");
-    if ("error" in plan) return;
+    if ("error" in plan) {
+      return;
+    }
     expect(plan.cmd).toBe(path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"));
     expect(plan.hasDeps).toBe(true);
   });
@@ -154,7 +168,9 @@ describe("resolveComfyLaunchPlan", () => {
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
     expect(plan).not.toHaveProperty("error");
-    if ("error" in plan) return;
+    if ("error" in plan) {
+      return;
+    }
     expect(plan.cmd).toBe(path.join(root, "standalone-env", "python.exe"));
     expect(plan.hasDeps).toBe(true);
   });

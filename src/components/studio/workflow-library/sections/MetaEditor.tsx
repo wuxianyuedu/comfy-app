@@ -22,9 +22,7 @@ import { enterCommit } from "~/components/ui/use-enter-commit";
 
 export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Set<string>>(
-    () => new Set(meta.modelTags),
-  );
+  const [draft, setDraft] = useState<Set<string>>(() => new Set(meta.modelTags));
   const [newName, setNewName] = useState("");
 
   // 只在关 → 开的跃迁上重置草稿，好让编辑中的重渲染
@@ -38,10 +36,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
     setPrevOpen(false);
   }
 
-  const knownNames = useMemo(
-    () => meta.allModelTags.map((tag) => tag.name),
-    [meta.allModelTags],
-  );
+  const knownNames = useMemo(() => meta.allModelTags.map((tag) => tag.name), [meta.allModelTags]);
   // 草稿里可能有尚未入库的新名字 —— 一并展示，避免已勾选项消失。
   const options = useMemo(() => {
     const set = new Set([...knownNames, ...draft]);
@@ -51,8 +46,11 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
   const toggle = (name: string) => {
     setDraft((prev) => {
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
       return next;
     });
   };
@@ -62,8 +60,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
     await meta.patchModelTags(Array.from(draft));
   };
 
-  const label =
-    meta.modelTags.length > 0 ? meta.modelTags.join("、") : "选择模型";
+  const label = meta.modelTags.length > 0 ? meta.modelTags.join("、") : "选择模型";
 
   return (
     <>
@@ -75,19 +72,12 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
           className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink text-2xs inline-flex h-auto max-w-65 gap-1.5 rounded-lg px-2.5 py-1.5"
         >
           <span className="truncate">{label}</span>
-          <span
-            className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-          >
-            ▾
-          </span>
+          <span className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
         </Button>
       </Hint>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent
-          showCloseButton={false}
-          className="bg-card border-border w-80 gap-0 p-3"
-        >
+        <DialogContent showCloseButton={false} className="bg-card border-border w-80 gap-0 p-3">
           <DialogHeader className="mb-2 gap-0">
             <DialogTitle className="text-ink-bright text-xs font-medium">
               绑定模型标签（{draft.size}）

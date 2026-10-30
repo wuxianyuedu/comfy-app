@@ -147,7 +147,9 @@ async function consumeSettingsStream(
   discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
 }> {
   const reader = res.body?.getReader();
-  if (!reader) throw new Error("服务器未返回流式响应");
+  if (!reader) {
+    throw new Error("服务器未返回流式响应");
+  }
   const decoder = new TextDecoder();
   let buf = "";
   let summary: SettingsResp["summary"] = null;
@@ -158,13 +160,17 @@ async function consumeSettingsStream(
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      break;
+    }
     buf += decoder.decode(value, { stream: true });
     let nl: number;
     while ((nl = buf.indexOf("\n")) >= 0) {
       const line = buf.slice(0, nl);
       buf = buf.slice(nl + 1);
-      if (!line.trim()) continue;
+      if (!line.trim()) {
+        continue;
+      }
       // 设置流的 ndjson 事件 —— 仅本对话框消费的字段；每行由 JSON.parse 自身校验。
       let ev: SettingsStreamEvent;
       try {
@@ -192,11 +198,21 @@ async function consumeSettingsStream(
             ...progress,
             parent: evParent.length > 0 ? evParent : progress.parent,
           };
-          if (ev.phase) next.phase = ev.phase;
-          if (ev.msg) next.msg = ev.msg;
-          if (ev.discovered !== undefined) next.discovered = ev.discovered;
-          if (ev.total !== undefined) next.total = ev.total;
-          if (ev.done !== undefined) next.done = ev.done;
+          if (ev.phase) {
+            next.phase = ev.phase;
+          }
+          if (ev.msg) {
+            next.msg = ev.msg;
+          }
+          if (ev.discovered !== undefined) {
+            next.discovered = ev.discovered;
+          }
+          if (ev.total !== undefined) {
+            next.total = ev.total;
+          }
+          if (ev.done !== undefined) {
+            next.done = ev.done;
+          }
           return next;
         });
       } else if (ev.type === "discover_done") {
@@ -271,7 +287,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
-      if (progressHideTimerRef.current) clearTimeout(progressHideTimerRef.current);
+      if (progressHideTimerRef.current) {
+        clearTimeout(progressHideTimerRef.current);
+      }
     };
   }, []);
 
@@ -289,22 +307,30 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   useEffect(() => {
     const stillParsing = parseBusy.busy || Object.values(perPkgParsing).some(Boolean);
     if (stillParsing) {
-      if (consoleRef.current) consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+      if (consoleRef.current) {
+        consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+      }
     } else if (logs.some((log) => log.level === "error" || log.msg.includes("✗"))) {
       const idx = logs.findIndex((log) => log.level === "error" || log.msg.includes("✗"));
       return onNextFrame(() => {
         const console_ = consoleRef.current;
-        if (!console_) return;
+        if (!console_) {
+          return;
+        }
         const row = console_.querySelectorAll<HTMLDivElement>("[data-log-row]");
         const target = row[idx];
-        if (!target) return;
+        if (!target) {
+          return;
+        }
         /* 相对面板自身的位置收在 `~/lib/dom-rect` 的 `offsetWithin`
          * （规范 16 §16.2.4.41）：`target.offsetTop` 量的是最近定位祖先，
          * 而本面板没有 `position:relative`，会回退到更高层的 `fixed` 包装，
          * 得到乱值 —— 正确的算式（两个 rect 相减 + 面板自身滚动偏移 + 8px
          * 留白）此前就地写在这一个文件里。 */
         const targetTop = offsetWithin(target, console_);
-        if (targetTop === null) return;
+        if (targetTop === null) {
+          return;
+        }
         console_.scrollTop = Math.max(0, console_.scrollTop + targetTop - 8);
       });
     }
@@ -372,9 +398,13 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       if (aliveRef.current) {
         setLoading(false);
         // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
-        if (progressHideTimerRef.current) clearTimeout(progressHideTimerRef.current);
+        if (progressHideTimerRef.current) {
+          clearTimeout(progressHideTimerRef.current);
+        }
         progressHideTimerRef.current = setTimeout(() => {
-          if (!aliveRef.current) return;
+          if (!aliveRef.current) {
+            return;
+          }
           setProgress({
             phase: "",
             done: 0,
@@ -404,7 +434,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   }, [fetchSettings]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     const timer = setTimeout(() => void fetchSettings(), 0);
     return () => clearTimeout(timer);
   }, [open, fetchSettings]);
@@ -413,15 +445,21 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   // 文件已在磁盘上、响应是小 JSON，开销低。
   const fetchManifest = useCallback(async () => {
     const manifest = await getCustomNodesManifest();
-    if (manifest) setManifestByNode(manifest.nodes || {});
+    if (manifest) {
+      setManifestByNode(manifest.nodes || {});
+    }
   }, []);
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     const timer = setTimeout(() => void fetchManifest(), 0);
     return () => clearTimeout(timer);
   }, [open, fetchManifest]);
   useEffect(() => {
-    if (!report) return;
+    if (!report) {
+      return;
+    }
     const timer = setTimeout(() => void fetchManifest(), 0);
     return () => clearTimeout(timer);
   }, [report, fetchManifest]);
@@ -440,13 +478,17 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     let buf = "";
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
       buf += decoder.decode(value, { stream: true });
       let nl: number;
       while ((nl = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, nl);
         buf = buf.slice(nl + 1);
-        if (!line.trim()) continue;
+        if (!line.trim()) {
+          continue;
+        }
         try {
           const obj = /* SAFETY: 类型断言已复核 */ JSON.parse(line) as ParseStreamEvent;
           if (obj.type === "log") {
@@ -557,7 +599,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         missing: 0,
         empty: 0,
       };
-      for (const e of enriched) cnt[e.state.kind] += 1;
+      for (const e of enriched) {
+        cnt[e.state.kind] += 1;
+      }
       return { parent, subs: enriched, cnt, total: enriched.length };
     });
   }, [savedPaths, discoveredByParent, byPath]);

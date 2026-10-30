@@ -22,7 +22,9 @@ const PROBE_TIMEOUT_MS = 6000;
  * 探测失败不是硬错误：一律 200 + { ok, detail }，前端按 detail 展示降级文案。
  */
 export async function POST(req: NextRequest) {
-  if (!(await requireRequestUser())) return unauthorizedResponse();
+  if (!(await requireRequestUser())) {
+    return unauthorizedResponse();
+  }
 
   const body: unknown = await req.json().catch(() => ({}));
   const rec = isRecord(body) ? body : {};
@@ -30,9 +32,7 @@ export async function POST(req: NextRequest) {
 
   const rawBaseUrl: unknown = rec.baseUrl;
   const baseUrl =
-    typeof rawBaseUrl === "string" && rawBaseUrl.trim() !== ""
-      ? rawBaseUrl.trim()
-      : cfg.baseUrl;
+    typeof rawBaseUrl === "string" && rawBaseUrl.trim() !== "" ? rawBaseUrl.trim() : cfg.baseUrl;
   const rawApiKey: unknown = rec.apiKey;
   const apiKey =
     typeof rawApiKey === "string" && rawApiKey.trim() !== ""
@@ -55,18 +55,14 @@ export async function POST(req: NextRequest) {
     try {
       const u = new URL(url);
       const segs = u.pathname.split("/").filter(Boolean);
-      if (segs.length === 0) return null;
+      if (segs.length === 0) {
+        return null;
+      }
       const last = segs[segs.length - 1]?.toLowerCase() ?? "";
       if (
-        ![
-          "images",
-          "videos",
-          "chat",
-          "completions",
-          "embeddings",
-          "audio",
-          "moderations",
-        ].includes(last)
+        !["images", "videos", "chat", "completions", "embeddings", "audio", "moderations"].includes(
+          last,
+        )
       ) {
         return null;
       }
@@ -80,7 +76,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const headers: Record<string, string> = {};
-    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
     const probe = (base: string) =>
       fetch(`${base.replace(/\/$/, "")}/models`, {
         headers,
@@ -118,9 +116,7 @@ export async function POST(req: NextRequest) {
     const rawList = isRecord(parsed) ? parsed.data : undefined;
     const models = Array.isArray(rawList)
       ? rawList
-          .map((m) =>
-            isRecord(m) && typeof m.id === "string" ? m.id.trim() : "",
-          )
+          .map((m) => (isRecord(m) && typeof m.id === "string" ? m.id.trim() : ""))
           .filter((n) => n !== "")
       : [];
     let detail = `连接成功，服务端共 ${models.length} 个模型`;

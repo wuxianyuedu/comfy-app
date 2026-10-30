@@ -56,7 +56,9 @@ export async function waitForDevReady(ctx, target) {
   let pollCount = 0;
   const readyDeadline = Date.now() + READY_TIMEOUT_MS;
   while (Date.now() < readyDeadline) {
-    if (devExited()) break;
+    if (devExited()) {
+      break;
+    }
     const state = await classifyProbe({ port, host });
     lastProbeState = state;
     if (state === "ready") {
@@ -72,12 +74,7 @@ export async function waitForDevReady(ctx, target) {
           "检测到路由表 404（服务已应答但 /api/health 未进编译图），判定为陈旧 .next 路由表：清缓存重启 dev server 一次。",
           "WARN",
         );
-        status(
-          "dev-server-starting",
-          0.35,
-          "检测到路由表不一致，清缓存重启中…",
-          { staleShell },
-        );
+        status("dev-server-starting", 0.35, "检测到路由表不一致，清缓存重启中…", { staleShell });
         await respawnDev("stale-route-table");
         log("dev server 已重启（清缓存后由编排器重新拉起）", "OK");
       }
@@ -88,10 +85,7 @@ export async function waitForDevReady(ctx, target) {
        * 或「跑一次 pnpm db:push」——这句话必须在他还盯着屏幕的时候说出来。 */
       consecutive404 = 0;
       consecutiveSchemaNotReady += 1;
-      if (
-        consecutiveSchemaNotReady >= READY_SCHEMA_NOTICE_THRESHOLD &&
-        !schemaNoticeSent
-      ) {
+      if (consecutiveSchemaNotReady >= READY_SCHEMA_NOTICE_THRESHOLD && !schemaNoticeSent) {
         schemaNoticeSent = true;
         log(
           "本地服务已应答，但数据库表还没建（/api/health 503，db=empty）。后台同步正在按 schema 建表（约 30 秒）；" +
@@ -106,8 +100,7 @@ export async function waitForDevReady(ctx, target) {
     }
     const left = Math.round((readyDeadline - Date.now()) / 1000);
     const progress =
-      0.3 +
-      Math.min(0.6, ((READY_TIMEOUT_MS - left * 1000) / READY_TIMEOUT_MS) * 0.6);
+      0.3 + Math.min(0.6, ((READY_TIMEOUT_MS - left * 1000) / READY_TIMEOUT_MS) * 0.6);
     /* 状态文件降频：就绪等待期每轮都写 launch-status.json（最多 180 次），
      * 而进度条以秒为粒度 —— 每 5 轮写一次足够顺滑；就绪 / 出错等关键状态
      * 变化仍在别处即时写。 */
@@ -126,11 +119,11 @@ export async function waitForDevReady(ctx, target) {
      * 写的纯浪费；就绪感知延迟只出现在冷启动后段（用户本来就在等编译）。
      * 总超时是墙钟 deadline（Date.now()），退避不会缩短它。 */
     pollCount += 1;
-    await new Promise((r) =>
-      setTimeout(r, pollCount < 10 ? 1000 : pollCount < 30 ? 2000 : 3000),
-    );
+    await new Promise((r) => setTimeout(r, pollCount < 10 ? 1000 : pollCount < 30 ? 2000 : 3000));
   }
-  if (ready) return { ready: true, lastProbeState, recovered };
+  if (ready) {
+    return { ready: true, lastProbeState, recovered };
+  }
 
   /* 诊断的取词顺序与理由见 orchestrator.readDiagnosticsTail：Next 的输出走
    * stdout，而这里过去只读 stderr（那里通常只有 pnpm 的一行脚本横幅），
@@ -159,10 +152,8 @@ export function describeReadyTimeout(r) {
   if (r.recovered) {
     return {
       level: "ERROR",
-      log:
-        `清缓存重启一次后 /api/health 仍持续 404，路由表异常未恢复（已停止自动重启，避免循环）。最后一次探测：${stateLine}。最近输出：\n${r.tail}`,
-      statusMessage:
-        "路由表持续异常（已自动清缓存重启一次仍未恢复），见 log/nextjs/",
+      log: `清缓存重启一次后 /api/health 仍持续 404，路由表异常未恢复（已停止自动重启，避免循环）。最后一次探测：${stateLine}。最近输出：\n${r.tail}`,
+      statusMessage: "路由表持续异常（已自动清缓存重启一次仍未恢复），见 log/nextjs/",
     };
   }
   return {

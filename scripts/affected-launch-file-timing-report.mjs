@@ -61,7 +61,9 @@ function secs(ms) {
  * @returns {string} 要打到日志里的正文；不 quiet 时是空串
  */
 export function fileTimingReport(files, input) {
-  if (!input.quiet) return "";
+  if (!input.quiet) {
+    return "";
+  }
   const timed = Array.isArray(input.read) ? input.read : [];
   const shownMax = pick(input.maxTimed, TIMED_SHOWN);
   const slowestMax = pick(input.maxSlowest, SLOWEST_SHOWN);
@@ -134,7 +136,11 @@ export function fileTimingReport(files, input) {
  * @returns {number}
  */
 function pick(raw, fallback, allowZero = false) {
-  if (typeof raw !== "number" || !Number.isInteger(raw)) return fallback;
-  if (raw < 0 || (raw === 0 && !allowZero)) return fallback;
+  if (typeof raw !== "number" || !Number.isInteger(raw)) {
+    return fallback;
+  }
+  if (raw < 0 || (raw === 0 && !allowZero)) {
+    return fallback;
+  }
   return raw;
 }

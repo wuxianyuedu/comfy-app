@@ -28,7 +28,9 @@ function tempDir(): string {
 afterEach(() => {
   while (tempDirs.length) {
     const dir = tempDirs.pop();
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
 

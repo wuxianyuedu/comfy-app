@@ -335,7 +335,9 @@ function WorkflowEditorBody({
    * 而整张图不会为没人碰的连线白白付交互开销。 */
   const onEdgeClick = useCallback(
     (_event: React.MouseEvent, edge: Edge) => {
-      if (edge.deletable === true && edge.reconnectable === true) return;
+      if (edge.deletable === true && edge.reconnectable === true) {
+        return;
+      }
       setEdges((eds) =>
         eds.map((e) => (e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e)),
       );

@@ -57,7 +57,9 @@ function mkRoot({ withHost = true } = {}) {
 afterEach(() => {
   while (tmpRoots.length) {
     const dir = tmpRoots.pop();
-    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   }
   vi.restoreAllMocks();
 });

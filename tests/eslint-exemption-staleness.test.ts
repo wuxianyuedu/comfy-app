@@ -28,11 +28,7 @@ interface FakeMessage {
   message?: string;
 }
 interface FakeLinter {
-  verify: (
-    code: string,
-    config: unknown,
-    opts: { filename: string },
-  ) => FakeMessage[];
+  verify: (code: string, config: unknown, opts: { filename: string }) => FakeMessage[];
 }
 
 /** 判据的导出面（与 `scripts/check-eslint-exemptions.cjs` 的 `module.exports` 对齐）。 */
@@ -79,8 +75,9 @@ interface JudgeInput {
 
 /* 与 `tests/helpers/a11y-effective-config.ts` 同一形状：`.cjs` 判据用 `createRequire` 拿，
  * 加载失败**抛**出去不吞（吞了就是把「判据没跑起来」读成「没有陈旧豁免」）。 */
-const { judge, isGlobEntry, readFileLevelExemptions, scanViolations } =
-  createRequire(__filename)(SCRIPT) as JudgeModule;
+const { judge, isGlobEntry, readFileLevelExemptions, scanViolations } = createRequire(__filename)(
+  SCRIPT,
+) as JudgeModule;
 
 const RULE = "no-control-regex";
 const CRITERION = "改用非正则方案就可以摘掉（夹具文案）";
@@ -128,7 +125,7 @@ test("⚠ 每一份都没判成 ⇒ 没结论（退 2 那一档），**不许**�
    * 「三条全陈旧」的那种可用形态 —— 它只是差集，不构成判决）。 */
   const failed = ["a.cjs", "b.ts", "c.mjs"].map((file) => ({
     file,
-    why: "verify 抛错：Key \"parser\": This appears to be in eslintrc format",
+    why: 'verify 抛错：Key "parser": This appears to be in eslintrc format',
   }));
   const v = judge(input({ violating: [], failed, scanned: 0 }));
   expect(v.state).toBe("inconclusive");
@@ -171,10 +168,12 @@ test("台账为空要分两种：规则从没出现过 = 无事可判（绿）�
   /* 这一格是本仓「读出 0 条」那一族的正解形状：同一个空集合，成因不同就必须给不同退出码。
    * 全判成绿 ⇒ 有人把那块改成规则级关停（`files` 没了）之后，本判据永远绿而台账确实消失了；
    * 全判成红 ⇒ 规则本来就没被文件级关过的那份配置会被无端拦住。 */
-  expect(judge(input({ entries: [], violating: [], scanned: 0, mentionedAnywhere: false })).state).toBe("pass");
-  expect(judge(input({ entries: [], violating: [], scanned: 0, mentionedAnywhere: true })).state).toBe(
-    "inconclusive",
-  );
+  expect(
+    judge(input({ entries: [], violating: [], scanned: 0, mentionedAnywhere: false })).state,
+  ).toBe("pass");
+  expect(
+    judge(input({ entries: [], violating: [], scanned: 0, mentionedAnywhere: true })).state,
+  ).toBe("inconclusive");
 });
 
 test("readFileLevelExemptions：只认「把这条规则关掉的块」的 files，且区分不出文件级与规则级时不混", () => {
@@ -211,12 +210,16 @@ test("scanViolations：命中 / 未命中 / 读不到 / 解析失败 四种形�
     root: REAL_ROOT,
     readFile: (abs: string) => {
       const key = Object.keys(CONTENT).find((k) => abs.endsWith(k));
-      if (!key) throw Object.assign(new Error("no such file"), { code: "ENOENT" });
+      if (!key) {
+        throw Object.assign(new Error("no such file"), { code: "ENOENT" });
+      }
       const text = CONTENT[key];
       /* 不是走过场：`noUncheckedIndexedAccess` 下按算出来的键取就是 `string | undefined`，
        * 而这里 undefined 只可能是夹具漏配 —— 那要炸得看得见，不能被 `?? ""` 折成
        * 「这份文件是空的、所以没命中」。 */
-      if (text === undefined) throw new Error(`夹具没配到这一份：${key}`);
+      if (text === undefined) {
+        throw new Error(`夹具没配到这一份：${key}`);
+      }
       return text;
     },
     makeLinter: () => ({
@@ -254,7 +257,9 @@ test(
     const m = /台账 (\d+) 条 · 判过 (\d+) 份 · 真违例 (\d+) 份/.exec(out);
     /* 用守卫而不是 `!`：拿不到那一行就是要失败，而且失败话里必须带上原文 ——
      * 「读数行没打出来」既可能是判据改了话术，也可能是它压根没跑起来，两种都要看得见。 */
-    if (!m) throw new Error(`读数行没打出来：\n${out}`);
+    if (!m) {
+      throw new Error(`读数行没打出来：\n${out}`);
+    }
     const [entries, scanned, violating] = m.slice(1).map(Number);
     expect(entries).toBeGreaterThan(0);
     expect(scanned).toBe(entries);

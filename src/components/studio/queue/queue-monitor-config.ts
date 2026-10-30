@@ -97,14 +97,18 @@ export function recentWithin(rows: ReadonlyArray<QueueRow>): Array<QueueRow> {
  * 宁缺毋滥：这一屏的数字是用户决定「要不要再提交一条」的依据。
  */
 export function estimateRemainingMs(elapsedMs: number, progressPct: number): number | null {
-  if (progressPct <= 0 || progressPct >= 100) return null;
+  if (progressPct <= 0 || progressPct >= 100) {
+    return null;
+  }
   const total = elapsedMs / (progressPct / 100);
   return Math.max(0, Math.round(total - elapsedMs));
 }
 
 /** 「剩余」那一格：算不出就明说在估算，不留空也不给假数。 */
 export function remainingText(remainingMs: number | null): string {
-  if (remainingMs === null) return "估算中";
+  if (remainingMs === null) {
+    return "估算中";
+  }
   return `约 ${formatElapsed(remainingMs)}`;
 }
 
@@ -115,7 +119,9 @@ export function remainingText(remainingMs: number | null): string {
  * `00:00` 会让人以为刚开跑，那是两种完全不同的状态。
  */
 export function runningElapsedText(elapsedMs: number | null): string {
-  if (elapsedMs === null) return "尚未开跑";
+  if (elapsedMs === null) {
+    return "尚未开跑";
+  }
   return formatElapsed(elapsedMs);
 }
 

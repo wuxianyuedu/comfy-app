@@ -30,7 +30,9 @@ function hasPathPiece(value: string): boolean {
 }
 
 export async function GET(req: NextRequest): Promise<Response> {
-  if (!(await requireRequestUser())) return unauthorizedResponse();
+  if (!(await requireRequestUser())) {
+    return unauthorizedResponse();
+  }
 
   /* 取查询串走 `new URL(req.url)`（与 `/api/materials` 同一写法），这样用例可以拿
    * 真 `Request` 顶替 `NextRequest`，不必伪造 `nextUrl`。 */
@@ -39,14 +41,18 @@ export async function GET(req: NextRequest): Promise<Response> {
   const subfolder = (query.get("subfolder") ?? "").trim();
   const type = query.get("type") ?? "input";
 
-  if (filename === "")
+  if (filename === "") {
     return NextResponse.json({ error: "缺少文件名" }, { status: 400 });
-  if (hasPathPiece(filename))
+  }
+  if (hasPathPiece(filename)) {
     return NextResponse.json({ error: "文件名不合法" }, { status: 400 });
-  if (subfolder !== "" && (hasPathPiece(subfolder) || subfolder === ".."))
+  }
+  if (subfolder !== "" && (hasPathPiece(subfolder) || subfolder === "..")) {
     return NextResponse.json({ error: "子目录不合法" }, { status: 400 });
-  if (!MEDIA_TYPES.has(type))
+  }
+  if (!MEDIA_TYPES.has(type)) {
     return NextResponse.json({ error: "媒体类别不合法" }, { status: 400 });
+  }
 
   let body: Buffer;
   try {
@@ -59,12 +65,10 @@ export async function GET(req: NextRequest): Promise<Response> {
      *    （壳起来而 ComfyUI 还没起来），所以带 `hint` 让调用方能显示「未连接」
      *    而不是把它当「图不存在」画成碎图标。 */
     if (e instanceof ComfyViewError) {
-      if (e.status === 404)
+      if (e.status === 404) {
         return NextResponse.json({ error: "素材不存在" }, { status: 404 });
-      return NextResponse.json(
-        { error: `ComfyUI 回 ${e.status}` },
-        { status: 502 },
-      );
+      }
+      return NextResponse.json({ error: `ComfyUI 回 ${e.status}` }, { status: 502 });
     }
     return NextResponse.json(
       { error: "无法连接 ComfyUI", hint: "comfyui-unreachable" },

@@ -31,7 +31,9 @@ function deriveKey(material: string): Buffer {
 }
 
 function loadOrCreateKey(): Buffer {
-  if (cachedKey !== undefined) return cachedKey;
+  if (cachedKey !== undefined) {
+    return cachedKey;
+  }
   // 优先持久化在本机 data/ 的密钥文件：Next server 与 Workshop MCP 进程都从
   // 项目根拉起，读同一文件即用同一密钥，加密 / 解密互通。文件不可用时再退回
   // 环境变量或进程内随机兜底。
@@ -61,7 +63,9 @@ export function isEncrypted(value: string): boolean {
 }
 
 export function encryptLlmKey(plaintext: string | null | undefined): string | null {
-  if (!plaintext) return null;
+  if (!plaintext) {
+    return null;
+  }
   const iv = randomBytes(12);
   const cipher = createCipheriv(ALGO, loadOrCreateKey(), iv);
   const ct = Buffer.concat([cipher.update(String(plaintext), "utf-8"), cipher.final()]);
@@ -70,12 +74,18 @@ export function encryptLlmKey(plaintext: string | null | undefined): string | nu
 }
 
 export function decryptLlmKey(enc: string | null | undefined): string | null {
-  if (!enc) return null;
-  if (!isEncrypted(enc)) return enc; // 兼容历史上遗留的明文值
+  if (!enc) {
+    return null;
+  }
+  if (!isEncrypted(enc)) {
+    return enc;
+  } // 兼容历史上遗留的明文值
   try {
     const body = enc.slice(PREFIX.length);
     const [ivB64, tagB64, ctB64] = body.split(":");
-    if (!ivB64 || !tagB64 || !ctB64) return null;
+    if (!ivB64 || !tagB64 || !ctB64) {
+      return null;
+    }
     const decipher = createDecipheriv(ALGO, loadOrCreateKey(), Buffer.from(ivB64, "base64"));
     decipher.setAuthTag(Buffer.from(tagB64, "base64"));
     const pt = Buffer.concat([decipher.update(Buffer.from(ctB64, "base64")), decipher.final()]);

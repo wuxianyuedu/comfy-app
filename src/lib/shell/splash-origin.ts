@@ -47,7 +47,9 @@ export const SPLASH_ORIGINS: ReadonlyArray<string> = [
  * 都可能让它们分叉 —— 收在本仓库的门禁 `check-non-null-assertions.cjs` 里。
  */
 export function isSplashOrigin(origin: string | null): origin is string {
-  if (!origin) return false;
+  if (!origin) {
+    return false;
+  }
   return SPLASH_ORIGINS.includes(origin);
 }
 
@@ -66,7 +68,9 @@ export function isSplashOrigin(origin: string | null): origin is string {
 export function corsHeadersFor(origin: string | null): Record<string, string> {
   /* 类型谓词在这里收窄：`origin` 过了这一关就必然是 `string`，调用点因此不需要
    * 再断言一次（那种写法就是「同一件事用两次」）。 */
-  if (!isSplashOrigin(origin)) return {};
+  if (!isSplashOrigin(origin)) {
+    return {};
+  }
   return {
     "Access-Control-Allow-Origin": origin,
     Vary: "Origin",

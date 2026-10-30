@@ -381,15 +381,23 @@ function isProductPathAllowed(allowedToplevel, relPosix) {
   const rel = String(relPosix ?? "")
     .replace(/\\/g, "/")
     .replace(/^\.?\//, "");
-  if (rel === "") return true;
+  if (rel === "") {
+    return true;
+  }
   const top = rel.split("/")[0] ?? "";
-  if (allowedToplevel.includes(top)) return true;
-  if (top !== "src") return false;
+  if (allowedToplevel.includes(top)) {
+    return true;
+  }
+  if (top !== "src") {
+    return false;
+  }
   // `src` 本身与其祖先目录要放行，否则 cpSync 走不到被放行那个文件；再逐条比对
   // RUNTIME_SRC（相对 src/ 的路径）。
   for (const allowed of RUNTIME_SRC) {
     const full = `src/${allowed}`;
-    if (rel === full || full.startsWith(`${rel}/`)) return true;
+    if (rel === full || full.startsWith(`${rel}/`)) {
+      return true;
+    }
   }
   return false;
 }
@@ -426,7 +434,9 @@ export function isStandalonePathAllowed(relPosix) {
 function pruneToAllowList(dir, isAllowed, onRemoved) {
   const removed = [];
   for (const entry of readdirSync(dir)) {
-    if (isAllowed(entry)) continue;
+    if (isAllowed(entry)) {
+      continue;
+    }
     // 落在链接上只删链接本身、不顺着递归（本机实测：对一个指向别处目录的链接执行
     // `rmSync(..., {recursive:true})`，链接没了、目标里的文件一个没动）。这一条是
     // 这条判据敢用在自己的产物上的前提——standalone 的 `node_modules/<pkg>` 就是
@@ -447,7 +457,9 @@ function pruneToAllowList(dir, isAllowed, onRemoved) {
         const childRel = rel ? `${rel}/${entry}` : entry;
         const childAbs = join(abs, entry);
         if (isAllowed(`src/${childRel}`)) {
-          if (statSync(childAbs).isDirectory()) walk(childAbs, childRel);
+          if (statSync(childAbs).isDirectory()) {
+            walk(childAbs, childRel);
+          }
           continue;
         }
         rmSync(childAbs, { recursive: true, force: true });
@@ -456,8 +468,9 @@ function pruneToAllowList(dir, isAllowed, onRemoved) {
       }
     };
     walk(srcDir, "");
-    if (readdirSync(srcDir).length === 0)
+    if (readdirSync(srcDir).length === 0) {
       rmSync(srcDir, { recursive: true, force: true });
+    }
   }
   return removed;
 }
@@ -496,10 +509,7 @@ export function pruneStandaloneToAllowList(dir, onRemoved) {
  * 源文件，按缺件失败会把人引向「清单漂了」这个错方向），改在组装完整树之后断言它们
  * 还在——真正的故障是「忘了跑 pnpm build 里的那一步」或「被剪枝误删」。
  */
-export const BUILT_RUNTIME_SCRIPTS = [
-  "executor-host.runtime.mjs",
-  "executor-host.build.json",
-];
+export const BUILT_RUNTIME_SCRIPTS = ["executor-host.runtime.mjs", "executor-host.build.json"];
 
 /** 产物根下不该随分发包出去的开发文件（相对产物根）。 */
 export const DEV_ARTIFACTS = [
@@ -629,22 +639,29 @@ function pruneShapeWalk(absDir, prefix, removed, onRemoved, reportLimit) {
     } catch {
       continue;
     }
-    if (st.isSymbolicLink()) continue;
+    if (st.isSymbolicLink()) {
+      continue;
+    }
     if (st.isDirectory()) {
       pruneShapeWalk(abs, rel, removed, onRemoved, reportLimit);
       try {
-        if (readdirSync(abs).length === 0)
+        if (readdirSync(abs).length === 0) {
           rmSync(abs, { recursive: true, force: true });
+        }
       } catch {
         /* 收不掉就留着：空目录无害，不值得为它把整趟剔除判成失败 */
       }
       continue;
     }
-    if (!ALL_SHAPES.some(([, re]) => re.test(rel))) continue;
+    if (!ALL_SHAPES.some(([, re]) => re.test(rel))) {
+      continue;
+    }
     rmSync(abs, { force: true });
     removed.push(rel);
     // 只回报名额内的几条：这类文件成百，全打会把构建输出淹掉
-    if (removed.length <= reportLimit) onRemoved?.(rel);
+    if (removed.length <= reportLimit) {
+      onRemoved?.(rel);
+    }
   }
 }
 
@@ -672,8 +689,9 @@ export function stripDevArtifacts(dir, onRemoved) {
   if (existsSync(scriptsDir)) {
     pruneNotWhitelisted(scriptsDir, "", RUNTIME_SCRIPTS, removed, onRemoved);
     // 全部被剔（未来 RUNTIME_SCRIPTS 变空）时不留空目录
-    if (readdirSync(scriptsDir).length === 0)
+    if (readdirSync(scriptsDir).length === 0) {
       rmSync(scriptsDir, { recursive: true, force: true });
+    }
   }
   // 形状级剔除（测试文件 / 变更碎片 / 依赖包文档）。量大：实测 standalone 有
   // 406 个测试文件、static 有 472 个依赖包文档，逐条打日志会把构建输出淹掉，
@@ -712,12 +730,18 @@ function pruneNotWhitelisted(absDir, prefix, allowed, removed, onRemoved) {
   const direct = new Set();
   const nested = new Set();
   for (const rel of allowed) {
-    if (prefix && !rel.startsWith(`${prefix}/`)) continue;
+    if (prefix && !rel.startsWith(`${prefix}/`)) {
+      continue;
+    }
     const rest = prefix ? rel.slice(prefix.length + 1) : rel;
     const [head] = rest.split("/");
-    if (!head) continue;
+    if (!head) {
+      continue;
+    }
     direct.add(head);
-    if (rest.includes("/")) nested.add(head);
+    if (rest.includes("/")) {
+      nested.add(head);
+    }
   }
   for (const name of readdirSync(absDir)) {
     const rel = prefix ? `${prefix}/${name}` : name;
@@ -732,8 +756,12 @@ function pruneNotWhitelisted(absDir, prefix, allowed, removed, onRemoved) {
       pruneNotWhitelisted(abs, rel, allowed, removed, onRemoved);
       continue;
     }
-    if (!isDir && direct.has(name)) continue;
-    if (isDir && nested.has(name)) continue;
+    if (!isDir && direct.has(name)) {
+      continue;
+    }
+    if (isDir && nested.has(name)) {
+      continue;
+    }
     rmSync(abs, { recursive: true, force: true });
     removed.push(`scripts/${rel}`);
     onRemoved?.(`scripts/${rel}`);
@@ -750,9 +778,7 @@ function main() {
     return 0;
   }
   const removed = stripPrivateInputs(standalone, (name) => {
-    console.log(
-      `[standalone-clean] 已剔除开发机私有输入 .next/standalone/${name}`,
-    );
+    console.log(`[standalone-clean] 已剔除开发机私有输入 .next/standalone/${name}`);
   });
   const devRemoved = stripDevArtifacts(standalone, (name) => {
     console.log(`[standalone-clean] 已剔除开发期文件 .next/standalone/${name}`);
@@ -781,9 +807,7 @@ function main() {
     );
   }
   if (removed.length === 0) {
-    console.log(
-      "[standalone-clean] ✓ 产物无开发机私有输入（.env / db.sqlite*）",
-    );
+    console.log("[standalone-clean] ✓ 产物无开发机私有输入（.env / db.sqlite*）");
   }
   if (devRemoved.length === 0) {
     console.log("[standalone-clean] ✓ 产物无开发期文件 / 内部门禁脚本");
@@ -796,6 +820,7 @@ function main() {
   return 0;
 }
 
-const invokedDirectly =
-  process.argv[1] && import.meta.filename === process.argv[1];
-if (invokedDirectly) process.exit(main());
+const invokedDirectly = process.argv[1] && import.meta.filename === process.argv[1];
+if (invokedDirectly) {
+  process.exit(main());
+}

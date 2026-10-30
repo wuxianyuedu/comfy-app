@@ -23,14 +23,11 @@
  * （`tests/strip-comments-single-source.test.ts` 那条台账判着：新出现的本地副本直接红），
  * 而那条判据的失败文案写的就是「它不满足你的形状就**给它加一个模式**，别再抄一份」。
  */
-export function stripComments(
-  src: string,
-  opts: { trailing?: boolean } = {},
-): string {
-  const stripped = src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^[ \t]*\/\/.*$/gm, "");
-  if (opts.trailing !== true) return stripped;
+export function stripComments(src: string, opts: { trailing?: boolean } = {}): string {
+  const stripped = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  if (opts.trailing !== true) {
+    return stripped;
+  }
   return stripped.split("\n").map(dropTrailingComment).join("\n");
 }
 
@@ -56,14 +53,18 @@ function dropTrailingComment(line: string): string {
         i += 1;
         continue;
       }
-      if (c === quote) quote = null;
+      if (c === quote) {
+        quote = null;
+      }
       continue;
     }
     if (c === "'" || c === '"' || c === "`") {
       quote = c;
       continue;
     }
-    if (c === "/" && line[i + 1] === "/") return line.slice(0, i);
+    if (c === "/" && line[i + 1] === "/") {
+      return line.slice(0, i);
+    }
   }
   return line;
 }

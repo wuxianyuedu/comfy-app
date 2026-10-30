@@ -12,9 +12,15 @@
 export function isDimWidth(e: { name?: string; label?: string }): boolean {
   const name = (e.name ?? "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
-  if (name.includes("width")) return true;
-  if (label === "宽度" || label === "横" || label === "横向") return true;
-  if (name === "宽") return true;
+  if (name.includes("width")) {
+    return true;
+  }
+  if (label === "宽度" || label === "横" || label === "横向") {
+    return true;
+  }
+  if (name === "宽") {
+    return true;
+  }
   return false;
 }
 export function isDimHeight(e: { name?: string; label?: string }): boolean {
@@ -23,33 +29,48 @@ export function isDimHeight(e: { name?: string; label?: string }): boolean {
   /* NOTE: a bare "高" inside a 画质 label like "高清" must NOT count as the
    *  height pin — we only accept the exact Chinese shape 高度/纵向/纵 or the
    *      *  英文名字，绝不能是某个无关标签的子串。 */
-  if (/height|heigth/.test(name)) return true;
-  if (label === "高度" || label === "纵" || label === "纵向") return true;
-  if (name === "高") return true;
+  if (/height|heigth/.test(name)) {
+    return true;
+  }
+  if (label === "高度" || label === "纵" || label === "纵向") {
+    return true;
+  }
+  if (name === "高") {
+    return true;
+  }
   return false;
 }
 export function isDimAspect(e: { name?: string; label?: string }): boolean {
   const name = (e.name ?? "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
-  if (/\baspect_ratio\b/.test(name) || /\baspect\b|\bratio\b/.test(name))
+  if (/\baspect_ratio\b/.test(name) || /\baspect\b|\bratio\b/.test(name)) {
     return true;
-  if (label === "宽高比" || label.includes("比例") || label.includes("纵横"))
+  }
+  if (label === "宽高比" || label.includes("比例") || label.includes("纵横")) {
     return true;
+  }
   return false;
 }
 export function isDimMegapixels(e: { name?: string; label?: string }): boolean {
   const name = (e.name ?? "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
-  if (name.includes("megapixel")) return true;
-  if (label.includes("百万像素") || label.includes("像素")) return true;
+  if (name.includes("megapixel")) {
+    return true;
+  }
+  if (label.includes("百万像素") || label.includes("像素")) {
+    return true;
+  }
   return false;
 }
 export function isDimMultiple(e: { name?: string; label?: string }): boolean {
   const name = (e.name ?? "").toLowerCase();
   const label = e.label ?? "";
-  if (/multiple|upscale_factor|upscale_by|upscale_amount/.test(name))
+  if (/multiple|upscale_factor|upscale_by|upscale_amount/.test(name)) {
     return true;
-  if (label.includes("倍数") || label.includes("倍率")) return true;
+  }
+  if (label.includes("倍数") || label.includes("倍率")) {
+    return true;
+  }
   return false;
 }
 export function isVideoLength(e: { name?: string; label?: string }): boolean {

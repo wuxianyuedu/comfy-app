@@ -60,10 +60,14 @@ export function ScriptMarkdownEditor({
   // 去行尾空白等,见 normalizeMarkdown)。编辑器内部编辑不经此路径,避免干扰
   // 用户输入(如行尾补空格)。lastEmittedRef 相等说明是编辑器自己发出的内容。
   React.useEffect(() => {
-    if (value === lastEmittedRef.current) return;
+    if (value === lastEmittedRef.current) {
+      return;
+    }
     const normalized = normalizeMarkdown(value);
     lastEmittedRef.current = normalized;
-    if (normalized === value) return;
+    if (normalized === value) {
+      return;
+    }
     pendingHistoryBaseRef.current = normalized;
     emitChange(normalized);
   }, [value, emitChange]);
@@ -72,7 +76,9 @@ export function ScriptMarkdownEditor({
   const previewHtml = React.useMemo(() => markdownToHtml(value), [value]);
 
   function pushHistory(nextValue: string, start: number, end: number) {
-    if (historyLockRef.current) return;
+    if (historyLockRef.current) {
+      return;
+    }
     const pendingBase = pendingHistoryBaseRef.current;
     if (pendingBase !== null) {
       // 外部内容刚被归一化:用归一化文本替换撤销历史基帧,避免 Ctrl+Z
@@ -92,7 +98,9 @@ export function ScriptMarkdownEditor({
     setHistory((prev) => {
       const sliced = prev.slice(0, historyIndex + 1);
       const next = [...sliced, { value: nextValue, selectionStart: start, selectionEnd: end }];
-      if (next.length > MAX_HISTORY) next.shift();
+      if (next.length > MAX_HISTORY) {
+        next.shift();
+      }
       return next;
     });
     setHistoryIndex((idx) => Math.min(idx + 1, MAX_HISTORY - 1));
@@ -101,9 +109,13 @@ export function ScriptMarkdownEditor({
   const restoreHistory = React.useCallback(
     (delta: number) => {
       const nextIndex = historyIndex + delta;
-      if (nextIndex < 0 || nextIndex >= history.length) return;
+      if (nextIndex < 0 || nextIndex >= history.length) {
+        return;
+      }
       const frame = history[nextIndex];
-      if (!frame) return;
+      if (!frame) {
+        return;
+      }
       historyLockRef.current = true;
       emitChange(frame.value);
       setHistoryIndex(nextIndex);
@@ -121,7 +133,9 @@ export function ScriptMarkdownEditor({
 
   function getSelection(): { start: number; end: number; text: string } {
     const el = textareaRef.current;
-    if (!el) return { start: value.length, end: value.length, text: "" };
+    if (!el) {
+      return { start: value.length, end: value.length, text: "" };
+    }
     return {
       start: el.selectionStart,
       end: el.selectionEnd,
@@ -131,7 +145,9 @@ export function ScriptMarkdownEditor({
 
   function replaceSelection(replacement: string, cursorOffset?: number, selectionLength?: number) {
     const el = textareaRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const { start, end } = getSelection();
     const nextValue = value.slice(0, start) + replacement + value.slice(end);
     const nextStart = start + (cursorOffset ?? replacement.length);
@@ -152,7 +168,9 @@ export function ScriptMarkdownEditor({
 
   function insertAtLineStart(prefix: string) {
     const el = textareaRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const { start, end } = getSelection();
     const lineStart = getLineStart(value, start);
     const lineEnd = getLineEnd(value, end);
@@ -184,7 +202,9 @@ export function ScriptMarkdownEditor({
 
   function insertList(ordered: boolean) {
     const el = textareaRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const { start, end } = getSelection();
     const lineStart = getLineStart(value, start);
     const lineEnd = getLineEnd(value, end);
@@ -229,14 +249,18 @@ export function ScriptMarkdownEditor({
     emitChange(value); // ensure focus sync
     setTimeout(() => {
       const el = textareaRef.current;
-      if (!el) return;
+      if (!el) {
+        return;
+      }
       el.focus();
       el.setSelectionRange(position, position);
       /* 行高估算与居中滚动收在 `~/lib/dom-rect`（规范 16 §16.2.4.41）：
        * 此前是就地写的 `el.scrollHeight / lines.length` —— 行数为 0 时给出
        * `Infinity`，会把 `scrollTo({ top: Infinity })` 交给浏览器。 */
       const lineHeight = readLineHeight(el, lines.length);
-      if (lineHeight === null) return;
+      if (lineHeight === null) {
+        return;
+      }
       el.scrollTo({
         top: centerLineScrollTop(line, lineHeight, el.clientHeight),
         behavior: "smooth",

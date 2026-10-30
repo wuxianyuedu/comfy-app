@@ -37,15 +37,13 @@ function StageIcon({ done, current }: { done: boolean; current: boolean }) {
 }
 
 function stageStateText(done: boolean, current: boolean): string {
-  if (done) return "已完成";
+  if (done) {
+    return "已完成";
+  }
   return current ? "进行中" : "未开始";
 }
 
-export function ProjectHomeStatus({
-  overview,
-  loading,
-  onNavigate,
-}: ProjectHomeStatusProps) {
+export function ProjectHomeStatus({ overview, loading, onNavigate }: ProjectHomeStatusProps) {
   /* 计数在「还没读到」时给占位符：`displayValue(null)` 给 `—`。
    * 直接写 0 会让用户在打开主页的一瞬间读到「剧本 0 字 / 0 镜」，而那是假的。 */
   const raw = (value: number): number | null => (loading ? null : value);
@@ -56,9 +54,7 @@ export function ProjectHomeStatus({
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="u-title">制作阶段</h2>
           <span className="text-ink-faint text-2xs tabular-nums">
-            {loading
-              ? ""
-              : `${overview.doneCount} / ${overview.totalCount} 完成`}
+            {loading ? "" : `${overview.doneCount} / ${overview.totalCount} 完成`}
           </span>
         </div>
 
@@ -102,11 +98,7 @@ export function ProjectHomeStatus({
           items={[
             {
               key: "剧本",
-              value: loading
-                ? displayValue(null)
-                : overview.hasScript
-                  ? "已就绪"
-                  : "未开始",
+              value: loading ? displayValue(null) : overview.hasScript ? "已就绪" : "未开始",
             },
             { key: "角色", raw: raw(overview.characterCount) },
             { key: "镜头", raw: raw(overview.shotCount) },
@@ -114,11 +106,7 @@ export function ProjectHomeStatus({
             { key: "视频片段", raw: raw(overview.clipDoneCount) },
             {
               key: "成片",
-              value: loading
-                ? displayValue(null)
-                : overview.filmRendered
-                  ? "已合成"
-                  : "未合成",
+              value: loading ? displayValue(null) : overview.filmRendered ? "已合成" : "未合成",
             },
           ]}
         />

@@ -288,14 +288,24 @@ export function judgmentScriptOf(argv) {
  * @returns {{skip: false} | {skip: true, stage: string, globs: readonly string[], script: string}}
  */
 export function narrowingDecision(step, changed) {
-  if (!changed) return { skip: false };
+  if (!changed) {
+    return { skip: false };
+  }
   const files = changed.files ?? [];
-  if (files.length === 0) return { skip: false };
+  if (files.length === 0) {
+    return { skip: false };
+  }
   const script = judgmentScriptOf(step?.argv ?? []);
-  if (!script) return { skip: false };
+  if (!script) {
+    return { skip: false };
+  }
   const entry = narrowingEntryForScript(script);
-  if (!entry) return { skip: false };
-  if (faceTouched(entry, files)) return { skip: false };
+  if (!entry) {
+    return { skip: false };
+  }
+  if (faceTouched(entry, files)) {
+    return { skip: false };
+  }
   return { skip: true, stage: entry.name, globs: entry.globs, script };
 }
 
@@ -410,7 +420,9 @@ const CONCLUSION_MAX = 90;
  */
 export function compact(line) {
   const s = String(line ?? "").trim();
-  if (s.length <= CONCLUSION_MAX) return s;
+  if (s.length <= CONCLUSION_MAX) {
+    return s;
+  }
   return `${s.slice(0, CONCLUSION_MAX)}…（又 ${s.length - CONCLUSION_MAX} 字）`;
 }
 
@@ -480,7 +492,9 @@ export function heavyGateRegistryProblems(hookSteps) {
   const stepArgvs = new Set(hookSteps.map((s) => s.argv.join(" ")));
   for (const gate of HEAVY_GATES) {
     const argv = gate.argv.join(" ");
-    if (stepArgvs.has(argv)) continue;
+    if (stepArgvs.has(argv)) {
+      continue;
+    }
     problems.push(
       `条目表里的「${gate.name}」（${argv}）在钩子的步骤行里找不到同一条命令 —— ` +
         "这一格跑的就是钩子的步骤，表上有而钩子里没有 = 这一格**不会跑它**，那条判据就此没有执行者。" +
@@ -491,8 +505,12 @@ export function heavyGateRegistryProblems(hookSteps) {
   const tableArgvs = new Set(HEAVY_GATES.map((g) => g.argv.join(" ")));
   for (const step of hookSteps) {
     const argv = step.argv.join(" ");
-    if (!argv.includes("--autofix")) continue;
-    if (tableArgvs.has(argv)) continue;
+    if (!argv.includes("--autofix")) {
+      continue;
+    }
+    if (tableArgvs.has(argv)) {
+      continue;
+    }
     problems.push(
       `钩子里的「${step.label}」带着自动修旗标，却不在条目表里 —— ` +
         "「哪一档会自己改工作区」必须只有一处出处（scripts/ci-autofix-duties.mjs 的登记表）",
@@ -560,7 +578,9 @@ export function main(io = {}) {
    * 结论静默变成放行」—— 那种红必须发生在跑之前，而不是跑完之后没人看见。 */
   const registryProblems = heavyGateRegistryProblems(hookSteps);
   if (registryProblems.length > 0) {
-    for (const p of registryProblems) log(`[重档] 注册表自证不通过：${p}`);
+    for (const p of registryProblems) {
+      log(`[重档] 注册表自证不通过：${p}`);
+    }
     log(
       "[重档] 本档**不构成证据**（成员表与执行面对不上）—— 判据在场、结论静默变成放行，" +
         "那种红必须先修这张表或钩子",
@@ -735,12 +755,16 @@ export function main(io = {}) {
     COLORS[tallyState],
   );
   if (red.length > 0) {
-    for (const r of red) log(`[重档] 下一动作：先修「${r.label}」这一条（上面有证据）`);
+    for (const r of red) {
+      log(`[重档] 下一动作：先修「${r.label}」这一条（上面有证据）`);
+    }
     return 1;
   }
   if (missing.length > 0) {
     // 127 单列一档并退 2：把它并进「红」就等于宣布「判据判出失败」，而事实是它没判。
-    for (const r of missing) log(`[重档] 下一动作：查「${r.label}」为什么没跑起来（不是通过）`);
+    for (const r of missing) {
+      log(`[重档] 下一动作：查「${r.label}」为什么没跑起来（不是通过）`);
+    }
     return 2;
   }
   if (notJudged.length > 0) {

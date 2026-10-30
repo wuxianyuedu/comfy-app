@@ -71,7 +71,9 @@ export function parseSubgraphPins(sub: RawSubgraphDef): {
 
   const normalizePin = (p: unknown): BoundaryPin | null => {
     const parsed = SubgraphPinSchema.safeParse(p);
-    if (!parsed.success) return null;
+    if (!parsed.success) {
+      return null;
+    }
     const rec = parsed.data;
     const id = rec.id;
     const posRaw: Array<unknown> = Array.isArray(rec.pos) ? rec.pos : [0, 0];
@@ -146,12 +148,16 @@ export function buildBoundaryLinks(
     /* 暴露口没有登记这条边（或哨兵边没有对应的暴露口）→ 不产出边界连线。
      * 产出也会在客户端落成一条指向不存在 handle 的边（React Flow 丢弃整条边
      * 并打 error#008），不如在这里就不产出。 */
-    if (!pinInfo || info.kind !== "input") continue;
+    if (!pinInfo || info.kind !== "input") {
+      continue;
+    }
     const innerSlotName = inputNameByNodeSlot[info.innerNodeId]?.[info.innerSlot] ?? "";
     /* 解析不出槽位名 → 整条边丢掉：handle id 只在这里产出，空槽位名到了画布上
      * 会退化成字面量 `"in"`，而那个 handle 并不存在（error#008 的成因）。
      * 丢掉的那条在下方 `reportDroppedBoundaryLinks` 里点名上报。 */
-    if (!innerSlotName) continue;
+    if (!innerSlotName) {
+      continue;
+    }
     boundaryLinks.push({
       linkId,
       kind: info.kind,
@@ -186,10 +192,14 @@ export function reportDroppedBoundaryLinks(
   }> = [];
   for (const [linkIdStr, info] of Object.entries(boundaryLinkInfoById)) {
     const linkId = Number(linkIdStr);
-    if (producedIds.has(linkId)) continue;
+    if (producedIds.has(linkId)) {
+      continue;
+    }
     const pinInfo = pinIdByLinkId[linkId];
     /* 没有对应暴露口的哨兵边不是「丢线」——它从来就不该在画布上有一条连线。 */
-    if (!pinInfo || info.kind !== "input") continue;
+    if (!pinInfo || info.kind !== "input") {
+      continue;
+    }
     dropped.push({
       linkId,
       pinId: pinInfo.pinId,
@@ -197,7 +207,9 @@ export function reportDroppedBoundaryLinks(
       innerSlot: info.innerSlot,
     });
   }
-  if (dropped.length === 0) return dropped;
+  if (dropped.length === 0) {
+    return dropped;
+  }
   const nodeIds = [...new Set(dropped.map((item) => item.innerNodeId))];
   const subgraphName =
     typeof sub.name === "string" && sub.name ? sub.name : typeof sub.id === "string" ? sub.id : "?";
@@ -224,9 +236,13 @@ export function reportDroppedBoundaryLinks(
  * 这里两种写法都接受（裸键用于历史 / 导入数据）。
  */
 export function runtimeInnerId(key: string, hostId: string): string {
-  if (!hostId) return "";
+  if (!hostId) {
+    return "";
+  }
   const prefix = `${hostId}:`;
-  if (!key.startsWith(prefix)) return "";
+  if (!key.startsWith(prefix)) {
+    return "";
+  }
   const inner = key.slice(prefix.length);
   /* 只剥本层宿主链：`4:5:1670` 相对 `4` 属于更深一层，不是本视图的键。 */
   return inner && !inner.includes(":") ? inner : "";
@@ -263,7 +279,9 @@ export function extractSubgraphAnnotations(
   if (Array.isArray(sub.groups)) {
     sub.groups.forEach((g: unknown, idx: number) => {
       const rec = asRecord(g);
-      if (!rec) return;
+      if (!rec) {
+        return;
+      }
 
       const bounds: Array<unknown> =
         Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
@@ -293,7 +311,9 @@ export function extractSubgraphAnnotations(
   }> = [];
   const innerNodes: Array<RawNode> = Array.isArray(sub.nodes) ? sub.nodes : [];
   for (const n of innerNodes) {
-    if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) continue;
+    if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) {
+      continue;
+    }
     const pos = Array.isArray(n.pos) && n.pos.length >= 2 ? n.pos : [0, 0];
     const size = Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
     const wv = Array.isArray(n.widgets_values) ? n.widgets_values[0] : "";
@@ -316,14 +336,20 @@ export function extractSubgraphAnnotations(
   );
   const draggedByInnerId: Record<string, [number, number]> = {};
   for (const [key, pos] of Object.entries(tplPositions)) {
-    if (!Array.isArray(pos) || pos.length < 2) continue;
+    if (!Array.isArray(pos) || pos.length < 2) {
+      continue;
+    }
     const innerId = innerNodeIdSet.has(key) ? key : runtimeInnerId(key, hostId);
-    if (!innerId || !innerNodeIdSet.has(innerId)) continue;
+    if (!innerId || !innerNodeIdSet.has(innerId)) {
+      continue;
+    }
     draggedByInnerId[innerId] = [Number(pos[0]) || 0, Number(pos[1]) || 0];
   }
   const positions: Record<string, [number, number]> = {};
   for (const rn of innerNodes) {
-    if (!rn?.id) continue;
+    if (!rn?.id) {
+      continue;
+    }
     const id = String(rn.id);
     /* 用 `!== undefined` 而不是真值判断：坐标为 `[0,0]` 的对象仍然为真，
      *  但一旦写成 `[0, 0]` 的裸数组比较、或改成取单值时，0 会被当成「没有

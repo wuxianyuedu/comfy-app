@@ -124,9 +124,13 @@ export function VirtualLogList<T>({
    * DOM——后者不触发窗口重算（虚拟化前无所谓，现在窗口是 `scrollTop` 算出来的）。
    * 不依赖 scroll 事件触发，jsdom 里也能正确落位。 */
   useEffect(() => {
-    if (!following) return;
+    if (!following) {
+      return;
+    }
     const el = containerRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const next = el.scrollHeight;
     el.scrollTop = next;
     setScrollTop(next);
@@ -134,9 +138,13 @@ export function VirtualLogList<T>({
 
   const setFollowing = useCallback(
     (next: boolean) => {
-      if (followingRef.current === next) return;
+      if (followingRef.current === next) {
+        return;
+      }
       followingRef.current = next;
-      if (controlled === undefined) setInternalFollowing(next);
+      if (controlled === undefined) {
+        setInternalFollowing(next);
+      }
       notifyRef.current?.(next);
     },
     [controlled],
@@ -144,7 +152,9 @@ export function VirtualLogList<T>({
 
   const onScroll = useCallback(() => {
     const el = containerRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     /* 滚动位置是渲染输入（决定窗口取哪一段），因此进 state 而非只留 ref。 */
     setScrollTop(el.scrollTop);
     /* 「用户有没有接管滚动」：离底超过阈值就退出跟随，给出可见出口（自动滚动

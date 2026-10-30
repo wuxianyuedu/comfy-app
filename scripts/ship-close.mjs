@@ -116,7 +116,9 @@ export function referencedNotClaimed(text) {
 export function pullTitleBody(title, prNumber) {
   const t = String(title ?? "");
   const n = String(prNumber ?? "");
-  if (!/^\d+$/.test(n)) return t;
+  if (!/^\d+$/.test(n)) {
+    return t;
+  }
   return t.replace(new RegExp(`\\s*\\(#${n}\\)\\s*$`), "");
 }
 
@@ -178,7 +180,9 @@ export function decideCloseIssue({
       numbers.push(n);
     }
     for (const n of explicit) {
-      if (!sources.has(n)) sources.set(n, "人点名的（本轮合并已验真）");
+      if (!sources.has(n)) {
+        sources.set(n, "人点名的（本轮合并已验真）");
+      }
       numbers.push(n);
     }
     const uniq = [...new Set(numbers)];
@@ -318,7 +322,9 @@ export function findMergedPullProofs(ctx) {
   const want = new Set(numbers);
   /** @type {{proofs: Map<number, {prNumber: number, title: string}>, scanned: number, ran: boolean}} */
   const nothing = { proofs, scanned: 0, ran: false };
-  if (!slug) return nothing;
+  if (!slug) {
+    return nothing;
+  }
   let scanned = 0;
   let ran = false;
   for (let p = 1; p <= pages; p += 1) {
@@ -335,12 +341,18 @@ export function findMergedPullProofs(ctx) {
       String(pageSize),
       "-v",
     ]);
-    if (!got) break;
+    if (!got) {
+      break;
+    }
     ran = true;
     const list = asArray(got.json);
-    if (!list || list.length === 0) break;
+    if (!list || list.length === 0) {
+      break;
+    }
     for (const item of list) {
-      if (item?.is_merged !== true) continue;
+      if (item?.is_merged !== true) {
+        continue;
+      }
       scanned += 1;
       const number = Number(item.number ?? 0);
       const body = pullTitleBody(String(item.title ?? ""), number);
@@ -350,7 +362,9 @@ export function findMergedPullProofs(ctx) {
         }
       }
     }
-    if (list.length < pageSize) break;
+    if (list.length < pageSize) {
+      break;
+    }
   }
   return { proofs, scanned, ran };
 }
@@ -376,7 +390,9 @@ export function findMergedPullProofs(ctx) {
 export function fetchPullMergeProof({ run, slug, prNumber }) {
   /** @type {{state: "merged" | "not-merged" | "unreadable", title: string, prNumber: number}} */
   const unreadable = { state: "unreadable", title: "", prNumber };
-  if (!slug || !prNumber) return unreadable;
+  if (!slug || !prNumber) {
+    return unreadable;
+  }
   const got = cnbJson(run, [
     "pulls",
     "get-pull",
@@ -387,13 +403,18 @@ export function fetchPullMergeProof({ run, slug, prNumber }) {
     "-v",
   ]);
   const d = got?.json?.data ?? null;
-  if (!d || typeof d !== "object") return unreadable;
+  if (!d || typeof d !== "object") {
+    return unreadable;
+  }
   /* 标题喂 `pullTitleBody` 剥掉平台末尾拼的 `(#<PR号>)` 再念：编号空间是共用的，
    * 原样念会把「这条 PR」与「同号的那张单子」混成一句话（与 `findMergedPullProofs` 同一条纪律）。 */
   const title = pullTitleBody(String(d.title ?? ""), prNumber);
-  if (d.is_merged === true) return { state: "merged", title, prNumber };
-  if (typeof d.is_merged === "boolean")
+  if (d.is_merged === true) {
+    return { state: "merged", title, prNumber };
+  }
+  if (typeof d.is_merged === "boolean") {
     return { state: "not-merged", title, prNumber };
+  }
   return unreadable;
 }
 
@@ -481,16 +502,16 @@ export function closeIssues(ctx) {
     return CODE.GREEN;
   }
   for (const number of plan.numbers) {
-    log(
-      `[ship] 关 #${number} —— 依据：${plan.sources.get(number) ?? "(未标注)"}`,
-    );
+    log(`[ship] 关 #${number} —— 依据：${plan.sources.get(number) ?? "(未标注)"}`);
   }
   /* 引用与认领是两件事（ISSUE #2646）：标题正文里裸写的 `#730` 不再算本单的认领凭证。
    * 这一行把「**没关**它」念出来 —— 静默不关与静默关掉，在读者那边是同一种
    * 「不知道处理过没有」；而那处引用本身有信息量（「这一格与那张单同源」），不该丢。 */
   const claimed = new Set(plan.numbers);
   for (const n of referencedNotClaimed(title)) {
-    if (claimed.has(n)) continue;
+    if (claimed.has(n)) {
+      continue;
+    }
     log(
       `[ship] 标题引用了 #${n}，它不在认领形态 (#号) 里 ⇒ **没关**` +
         `（人点名才算）：要关请 pnpm ship --close-issue ${n}`,
@@ -550,9 +571,7 @@ export function closeIssues(ctx) {
     /* 「回读里没有正文这一格」与「正文是空的」必须分开念：前者不能念成「零条」
      * （拿缺字段当结论，正是这一族反复在收的那一型）。 */
     if (typeof d?.body !== "string") {
-      log(
-        `[ship] #${number} 条目读数：正文没读到（回读缺这一格）⇒ **不念成「零条」**。`,
-      );
+      log(`[ship] #${number} 条目读数：正文没读到（回读缺这一格）⇒ **不念成「零条」**。`);
     } else {
       const s = issueItemShapes(d.body);
       log(

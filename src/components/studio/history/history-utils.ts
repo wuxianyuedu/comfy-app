@@ -102,8 +102,12 @@ export function dateBucket(iso: string): string {
   };
   const today = startOfDay(now).getTime();
   const task = startOfDay(date).getTime();
-  if (task === today) return "今天";
-  if (task === today - 86400000) return "昨天";
+  if (task === today) {
+    return "今天";
+  }
+  if (task === today - 86400000) {
+    return "昨天";
+  }
   return formatDate(date);
 }
 

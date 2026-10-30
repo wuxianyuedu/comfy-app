@@ -28,7 +28,9 @@ const REPO_ROOT = path.resolve(__dirname, "..");
 
 const handles: Array<GateRepoHandle> = [];
 afterEach(() => {
-  while (handles.length > 0) handles.pop()?.dispose();
+  while (handles.length > 0) {
+    handles.pop()?.dispose();
+  }
 });
 
 /** 建一个工作区，并把它记下来给 `afterEach` 收尾。 */

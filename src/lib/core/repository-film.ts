@@ -143,7 +143,9 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   async listByStatus(
     statuses: ReadonlyArray<string>,
   ): Promise<Array<{ id: string; status: string }>> {
-    if (statuses.length === 0) return [];
+    if (statuses.length === 0) {
+      return [];
+    }
     return db
       .select({ id: filmProject.id, status: filmProject.status })
       .from(filmProject)

@@ -121,8 +121,12 @@ function text(value: string | (() => string)): string {
  * 所以两份仍然分开：合成一份会让「外部动作」这个概念漏进通用动作层。
  */
 export function toActionResult(raw: RawActionResult, fallbackDetail: string): ActionResult {
-  if (raw === true) return { ok: true, detail: fallbackDetail };
-  if (raw === false) return { ok: false, detail: fallbackDetail };
+  if (raw === true) {
+    return { ok: true, detail: fallbackDetail };
+  }
+  if (raw === false) {
+    return { ok: false, detail: fallbackDetail };
+  }
   if (raw === null || raw === undefined) {
     /* `void` 返回值：tRPC 这类「不抛就是成功」的端点。 */
     return { ok: true, detail: fallbackDetail };
@@ -179,7 +183,9 @@ export async function runAsyncAction(
         typeof successText === "function"
           ? successText({ ok: true, detail: "" })
           : (successText ?? "");
-      if (detail) report("ok", detail);
+      if (detail) {
+        report("ok", detail);
+      }
       return { ok: true, detail };
     }
     /* 信封的成功判据在这里读一次：`{ok:false}` / `{triggered:false}`
@@ -192,7 +198,9 @@ export async function runAsyncAction(
        * `detail` 是端点自己探出来的结论，调用处不该把它抄一遍。 */
       const detail =
         typeof successText === "function" ? successText(result) : (successText ?? result.detail);
-      if (detail) report("ok", detail);
+      if (detail) {
+        report("ok", detail);
+      }
       return { ok: true, detail: detail ?? "" };
     }
     /* 服务端给了 `detail` / `error` 就用它（它比标题更能说明原因），

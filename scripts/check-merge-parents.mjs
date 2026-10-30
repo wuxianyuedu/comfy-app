@@ -50,8 +50,7 @@ import process from "node:process";
  * branch / tag / commit / 本地化前的英文）。`Merge pull request #N` 是平台侧
  * merge commit 合并时写下的形态。故意只认首行：正文里出现 "Merge branch" 不构成声明。
  */
-const MERGE_MESSAGE_RE =
-  /^Merge (?:branch|remote-tracking|tag|commit|pull request|ref)\b/;
+const MERGE_MESSAGE_RE = /^Merge (?:branch|remote-tracking|tag|commit|pull request|ref)\b/;
 
 /**
  * 在仓库内跑一条 git 命令；失败时回 ""（裸目录 / 浅克隆里取不到值）。
@@ -73,7 +72,9 @@ function git(args) {
 /** 本次提交将要落在几个父上：`HEAD` 一个，加上 `MERGE_HEAD` 的每一行（一个被合并的父）。 */
 function pendingParentCount() {
   const mergeHead = git(["rev-parse", "--verify", "--quiet", "MERGE_HEAD"]);
-  if (!mergeHead) return 1;
+  if (!mergeHead) {
+    return 1;
+  }
   // `git rev-parse MERGE_HEAD` 会把每一行都打出来（多父合并时不止一行）。
   return mergeHead.split(/\s+/).filter(Boolean).length + 1;
 }
@@ -140,23 +141,16 @@ export function evaluate({ messageFile, source }) {
   return {
     blocked: true,
     parents,
-    reason:
-      "提交信息声明是合并（Merge …），但本次提交只有一个父提交（MERGE_HEAD 不在）",
+    reason: "提交信息声明是合并（Merge …），但本次提交只有一个父提交（MERGE_HEAD 不在）",
   };
 }
 
 /** 阻断时打印人类可读的出口（怎么改），不只报错。 */
 function printBlockedTip() {
   console.error("");
-  console.error(
-    "[merge-parents] 阻断:提交信息声明是合并,但本次提交只有一个父(规范 §13.6.1)。",
-  );
-  console.error(
-    "[merge-parents] 常见根因:合并进行中执行了 git checkout / git checkout -b /",
-  );
-  console.error(
-    "[merge-parents]   git branch -f + checkout —— 它们会静默清掉 .git/MERGE_HEAD。",
-  );
+  console.error("[merge-parents] 阻断:提交信息声明是合并,但本次提交只有一个父(规范 §13.6.1)。");
+  console.error("[merge-parents] 常见根因:合并进行中执行了 git checkout / git checkout -b /");
+  console.error("[merge-parents]   git branch -f + checkout —— 它们会静默清掉 .git/MERGE_HEAD。");
   console.error(
     "[merge-parents] 后果:树是对的、拓扑是错的,平台侧认不出「已合并」,PR 会一直显示冲突。",
   );
@@ -204,9 +198,6 @@ function main() {
 // Windows 上（`file:///C:/…` vs `file://C:\…`）恒不相等 ⇒ `main()` 一次都不跑而
 // 退出码恒 0 —— 正是本仓库最怕的「判据在场、却什么都不做」。同族写法见
 // `scripts/check-deps-freshness.mjs`。
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   main();
 }

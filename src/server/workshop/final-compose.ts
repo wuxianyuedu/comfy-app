@@ -89,9 +89,15 @@ export async function writeCompositionPlan(
 }
 
 function localPathOf(ref: string | null): string | null {
-  if (!ref) return null;
-  if (ref.startsWith("file://")) return ref.slice("file://".length);
-  if (/^https?:\/\//i.test(ref)) return null; // 远程引用暂不处理
+  if (!ref) {
+    return null;
+  }
+  if (ref.startsWith("file://")) {
+    return ref.slice("file://".length);
+  }
+  if (/^https?:\/\//i.test(ref)) {
+    return null;
+  } // 远程引用暂不处理
   return ref;
 }
 
@@ -124,7 +130,9 @@ export async function renderComposition(
     const clip = localPathOf(s.clipUrl);
     const img = localPathOf(s.imageUrl);
     const src = clip ?? img;
-    if (!src) continue;
+    if (!src) {
+      continue;
+    }
     const tmp = path.join(tmpDir, `seg-${s.order}.mp4`);
     const scale = `scale=${COMPOSE_SCALE}`;
     const args = clip

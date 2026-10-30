@@ -96,7 +96,9 @@ export async function fetchHistoryEntry(promptId: string): Promise<ComfyHistoryE
  * 直接读共享状态而不引入新参数：本函数所有调用方都来自同一条执行链。
  */
 function taskTraceIdForPrompt(promptId: string): string | null {
-  if (!promptId) return null;
+  if (!promptId) {
+    return null;
+  }
   return state().promptToTask.get(promptId) ?? null;
 }
 

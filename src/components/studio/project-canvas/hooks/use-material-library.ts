@@ -61,7 +61,9 @@ export interface UseMaterialLibraryOptions {
 function errMsg(e: unknown, fallback: string): string {
   if (typeof e === "object" && e !== null && "message" in e) {
     const m: unknown = /* SAFETY: 类型断言已复核 */ (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
+    if (typeof m === "string") {
+      return m;
+    }
   }
   return fallback;
 }
@@ -149,7 +151,9 @@ export function useMaterialLibrary({
   /* ── 上传（分类列表页上传时默认丢进「参考素材」）── */
   const upload = useCallback(
     async (files: FileList | null) => {
-      if (!files || files.length === 0) return;
+      if (!files || files.length === 0) {
+        return;
+      }
       const target = folder ?? "ref";
       setActionError(null);
       try {

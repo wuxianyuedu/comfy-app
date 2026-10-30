@@ -88,13 +88,7 @@ export function stripBom(text) {
  * @param {{ script: string, args?: string[], cwd: string, timeoutMs?: number, verify?: (stdout: string, stderr: string) => boolean }} options
  * @returns {{ ok: boolean, exitCode: number | null, spawnError: string | null, detail: string, stdout: string, stderr: string }}
  */
-export function runNodeScript({
-  script,
-  args = [],
-  cwd,
-  timeoutMs = 600_000,
-  verify,
-}) {
+export function runNodeScript({ script, args = [], cwd, timeoutMs = 600_000, verify }) {
   const command = [nodeExecutable(), script, ...args].join(" ");
   let result;
   try {
@@ -119,7 +113,9 @@ export function runNodeScript({
   const verdict = interpretRunResult(result, command);
   const stdout = stripBom(result.stdout);
   const stderr = stripBom(result.stderr);
-  if (!verdict.ok) return { ...verdict, stdout, stderr };
+  if (!verdict.ok) {
+    return { ...verdict, stdout, stderr };
+  }
   if (verify && !verify(stdout, stderr)) {
     return {
       ok: false,
@@ -195,13 +191,15 @@ export const POSTINSTALL_FORBIDDEN = [
  */
 export function checkPostinstall(script) {
   const text = String(script ?? "").trim();
-  if (!text)
+  if (!text) {
     return { ok: false, reason: "postinstall 为空：钩子接线会被静默跳过" };
+  }
   // 先判具体语法（`sh x` / `||` / `&&` …）：它们给出的原因比「没以某字符串开头」
   // 具体得多，正是用户现场那句「'sh' 不是内部或外部命令」的机器形态。
   for (const { pattern, reason } of POSTINSTALL_FORBIDDEN) {
-    if (pattern.test(text))
+    if (pattern.test(text)) {
       return { ok: false, reason: `\`${text}\` — ${reason}` };
+    }
   }
   const entry = `node ${POSTINSTALL_SCRIPT}`;
   if (!text.startsWith(entry)) {

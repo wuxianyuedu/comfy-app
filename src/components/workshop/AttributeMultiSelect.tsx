@@ -52,11 +52,18 @@ export function AttributeMultiSelect({
 
   function toggle(opt: string) {
     const next = new Set(selected);
-    if (next.has(opt)) next.delete(opt);
-    else next.add(opt);
+    if (next.has(opt)) {
+      next.delete(opt);
+    } else {
+      next.add(opt);
+    }
     // 保持 value 原顺序（含自定义项），新选中项追加在末尾
     const ordered = value.filter((v) => next.has(v));
-    for (const v of next) if (!ordered.includes(v)) ordered.push(v);
+    for (const v of next) {
+      if (!ordered.includes(v)) {
+        ordered.push(v);
+      }
+    }
     onChange(ordered);
   }
 
@@ -66,8 +73,12 @@ export function AttributeMultiSelect({
 
   function addCustom() {
     const t = custom.trim();
-    if (!t) return;
-    if (!selected.has(t)) onChange([...value, t]);
+    if (!t) {
+      return;
+    }
+    if (!selected.has(t)) {
+      onChange([...value, t]);
+    }
     setCustom("");
     // 选中后保持展开，便于连续添加
   }
@@ -105,7 +116,9 @@ export function AttributeMultiSelect({
           open={open}
           onOpenChange={(next) => {
             setOpen(next);
-            if (next) setKeyword("");
+            if (next) {
+              setKeyword("");
+            }
           }}
         >
           <PopoverTrigger

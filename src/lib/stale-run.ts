@@ -78,7 +78,9 @@ export function beginStaleRun(): StaleRunGuard {
   return {
     isStale,
     commit(write) {
-      if (!stale) write();
+      if (!stale) {
+        write();
+      }
     },
     dispose() {
       stale = true;

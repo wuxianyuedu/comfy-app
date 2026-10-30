@@ -134,7 +134,9 @@ describe("空闲与锁：两条「不够就不做」的闸", () => {
     const free = statfsFreeBytes(job);
     // 读不到就当场把「量具没量到」说清楚：这一格失败意味着机制会在唯一需要它的地方
     // 静默退回普通装，而平台日志照样绿 —— 那不是「测试红」，那是「这次什么都没证明」。
-    if (free === null) throw new Error(`statfsFreeBytes 在 ${job} 上读不到数`);
+    if (free === null) {
+      throw new Error(`statfsFreeBytes 在 ${job} 上读不到数`);
+    }
     expect(Number.isFinite(free)).toBe(true);
     expect(free).toBeGreaterThan(0);
   });

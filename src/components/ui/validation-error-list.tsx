@@ -37,7 +37,9 @@ export function ValidationErrorList({
   errors: Array<ValidationError> | null | undefined;
   className?: string;
 }) {
-  if (!errors || errors.length === 0) return null;
+  if (!errors || errors.length === 0) {
+    return null;
+  }
   return (
     <ul className={cn("flex flex-col gap-1", className)}>
       {errors.map((error, index) => (

@@ -35,7 +35,9 @@
  * 与剪贴板的「两条通道」同款取舍。
  */
 export async function readFileAsText(file: File): Promise<string> {
-  if (typeof file.text === "function") return file.text();
+  if (typeof file.text === "function") {
+    return file.text();
+  }
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -49,8 +51,7 @@ export async function readFileAsText(file: File): Promise<string> {
       }
       resolve(result);
     };
-    reader.onerror = () =>
-      reject(new Error("读取文件失败", { cause: reader.error }));
+    reader.onerror = () => reject(new Error("读取文件失败", { cause: reader.error }));
     reader.readAsText(file);
   });
 }
@@ -82,8 +83,7 @@ export function readFileAsDataUrl(file: File): Promise<string> {
       }
       resolve(result);
     };
-    reader.onerror = () =>
-      reject(new Error("读取本地图片失败", { cause: reader.error }));
+    reader.onerror = () => reject(new Error("读取本地图片失败", { cause: reader.error }));
     reader.readAsDataURL(file);
   });
 }

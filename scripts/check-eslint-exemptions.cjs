@@ -99,11 +99,19 @@ function readFileLevelExemptions(config, ruleId) {
   const offLevel = JSON.stringify("off");
   for (const block of config) {
     const setting = block.rules ? block.rules[ruleId] : undefined;
-    if (setting !== undefined) mentionedAnywhere = true;
-    if (normalize(setting) !== offLevel) continue;
-    if (block.files === undefined) continue; // 规则级关停，不是文件级台账
+    if (setting !== undefined) {
+      mentionedAnywhere = true;
+    }
+    if (normalize(setting) !== offLevel) {
+      continue;
+    }
+    if (block.files === undefined) {
+      continue;
+    } // 规则级关停，不是文件级台账
     const list = Array.isArray(block.files) ? block.files : [block.files];
-    for (const one of list) entries.push(one);
+    for (const one of list) {
+      entries.push(one);
+    }
   }
   return { entries, mentionedAnywhere };
 }
@@ -128,9 +136,7 @@ function readFileLevelExemptions(config, ruleId) {
 function scanViolations({ files, ruleId, root, readFile, makeLinter }) {
   const linter = makeLinter ? makeLinter() : new Linter({ configType: "flat" });
   /** @type {(absPath: string) => string} */
-  const read =
-    readFile ??
-    ((absPath) => /** @type {string} */ (fs.readFileSync(absPath, "utf8")));
+  const read = readFile ?? ((absPath) => /** @type {string} */ (fs.readFileSync(absPath, "utf8")));
   /** @type {string[]} */
   const violating = [];
   /** @type {{file: string, why: string}[]} */
@@ -176,7 +182,9 @@ function scanViolations({ files, ruleId, root, readFile, makeLinter }) {
       continue;
     }
     scanned += 1;
-    if (messages.some((m) => m.ruleId === ruleId)) violating.push(rel);
+    if (messages.some((m) => m.ruleId === ruleId)) {
+      violating.push(rel);
+    }
   }
   return { violating, failed, scanned };
 }
@@ -273,7 +281,9 @@ function printVerdict(v, reportOnly) {
       console.error(`${TAG}   · ${f.file}：${f.why}`);
     }
     for (const g of v.unresolvable) {
-      console.error(`${TAG}   · ${g}：glob 形状条目，本判据只认逐字路径（要判它，先展开成逐份文件）`);
+      console.error(
+        `${TAG}   · ${g}：glob 形状条目，本判据只认逐字路径（要判它，先展开成逐份文件）`,
+      );
     }
     if (v.failed.length === 0 && v.unresolvable.length === 0) {
       console.error(
@@ -290,7 +300,9 @@ function printVerdict(v, reportOnly) {
     console.error(
       `${TAG} ✗ 有 ${v.stale.length} 条**陈旧豁免**：台账还关着这条规则，而那些文件里已经没有命中了。`,
     );
-    for (const s of v.stale) console.error(`${TAG}   · ${s}`);
+    for (const s of v.stale) {
+      console.error(`${TAG}   · ${s}`);
+    }
     console.error(
       `${TAG} 出口：从 ${ESLINT_CONFIG_REL} 的那块 files 数组里把上面这些摘掉（还在违例的那些留着）。`,
     );

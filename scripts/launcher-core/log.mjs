@@ -139,12 +139,7 @@ export function createLogSink(
   fs.mkdirSync(dir, { recursive: true });
   const target =
     file ??
-    path.join(
-      dir,
-      timestampInFileName
-        ? `dev-launcher-${runStamp()}.log`
-        : "dev-launcher.log",
-    );
+    path.join(dir, timestampInFileName ? `dev-launcher-${runStamp()}.log` : "dev-launcher.log");
   try {
     fs.writeFileSync(target, "", "utf8");
   } catch {
@@ -163,7 +158,9 @@ export function createLogSink(
       clearTimeout(flushTimer);
       flushTimer = null;
     }
-    if (!pending) return;
+    if (!pending) {
+      return;
+    }
     const text = pending;
     pending = "";
     try {

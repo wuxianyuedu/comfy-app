@@ -160,7 +160,9 @@ function headRev() {
     cwd: ROOT,
     encoding: "utf8",
   });
-  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  if (res.status !== 0 || typeof res.stdout !== "string") {
+    return null;
+  }
   return res.stdout.trim() || null;
 }
 
@@ -180,7 +182,9 @@ const REV_SHAPE = /^[0-9a-f]{40}$/;
  * @returns {{kind: "recorded", rev: string} | {kind: "missing"} | {kind: "stale"}}
  */
 function baselineRevState(rev) {
-  if (!rev || !REV_SHAPE.test(String(rev))) return { kind: "missing" };
+  if (!rev || !REV_SHAPE.test(String(rev))) {
+    return { kind: "missing" };
+  }
   const res = spawnSync("git", ["cat-file", "-e", `${rev}^{commit}`], {
     encoding: "utf8",
   });
@@ -207,13 +211,17 @@ function baselineRevState(rev) {
  * @returns {{count: number, recent: Array<{rev: string, title: string}>} | null}
  */
 function commitsSinceDateTouchingSource(dateStr, limit = 5) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr ?? ""))) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr ?? ""))) {
+    return null;
+  }
   const res = spawnSync(
     "git",
     ["log", "--since", `${dateStr} 00:00:00`, "--first-parent", "--format=%h\x1f%s", "--", "src/"],
     { cwd: ROOT, encoding: "utf8" },
   );
-  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  if (res.status !== 0 || typeof res.stdout !== "string") {
+    return null;
+  }
   const rows = res.stdout
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -245,7 +253,9 @@ function trunkReachableRev() {
     cwd: ROOT,
     encoding: "utf8",
   });
-  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  if (res.status !== 0 || typeof res.stdout !== "string") {
+    return null;
+  }
   const rev = res.stdout.trim();
   return REV_SHAPE.test(rev) ? rev : null;
 }
@@ -270,9 +280,13 @@ function headIsMergeCommit() {
     cwd: ROOT,
     encoding: "utf8",
   });
-  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  if (res.status !== 0 || typeof res.stdout !== "string") {
+    return null;
+  }
   const fields = res.stdout.trim().split(/\s+/).filter(Boolean);
-  if (fields.length < 2) return null;
+  if (fields.length < 2) {
+    return null;
+  }
   return fields.length > 2;
 }
 
@@ -293,11 +307,15 @@ function headIsMergeCommit() {
  * @returns {number|null}
  */
 function commitsSinceBaseline(rev) {
-  if (!rev) return null;
+  if (!rev) {
+    return null;
+  }
   const res = spawnSync("git", ["rev-list", "--count", `${rev}..HEAD`], {
     encoding: "utf8",
   });
-  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  if (res.status !== 0 || typeof res.stdout !== "string") {
+    return null;
+  }
   const n = Number(res.stdout.trim());
   return Number.isFinite(n) ? n : null;
 }
@@ -305,8 +323,11 @@ function commitsSinceBaseline(rev) {
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const abs = path.join(dir, e.name);
-    if (e.isDirectory()) walk(abs, out);
-    else out.push(abs);
+    if (e.isDirectory()) {
+      walk(abs, out);
+    } else {
+      out.push(abs);
+    }
   }
   return out;
 }
@@ -342,7 +363,9 @@ function measure() {
 }
 
 function readBaseline() {
-  if (!fs.existsSync(BASELINE)) return null;
+  if (!fs.existsSync(BASELINE)) {
+    return null;
+  }
   return JSON.parse(fs.readFileSync(BASELINE, "utf8"));
 }
 
@@ -409,7 +432,9 @@ function delta(n) {
  */
 function diagnose(cur, base) {
   const baseEntries = base?.entries;
-  if (!Array.isArray(baseEntries) || baseEntries.length === 0) return null;
+  if (!Array.isArray(baseEntries) || baseEntries.length === 0) {
+    return null;
+  }
 
   const baseBySha = new Map(baseEntries.map((e) => [e.sha, e]));
   const baseByName = new Map(baseEntries.map((e) => [e.name, e]));
@@ -423,12 +448,17 @@ function diagnose(cur, base) {
     const sameContent = baseBySha.get(e.sha);
     if (sameContent) {
       /* 内容一模一样 —— 变的只是名字。 */
-      if (sameContent.name !== e.name) renamed.push([sameContent.name, e.name]);
+      if (sameContent.name !== e.name) {
+        renamed.push([sameContent.name, e.name]);
+      }
       continue;
     }
     const sameName = baseByName.get(e.name);
-    if (sameName) grown.push([e.name, sameName.gzip, e.gzip]);
-    else added.push(e);
+    if (sameName) {
+      grown.push([e.name, sameName.gzip, e.gzip]);
+    } else {
+      added.push(e);
+    }
   }
   const gone = baseEntries.filter((e) => !curBySha.has(e.sha) && !curByName.has(e.name));
   const sumGzip = (list) => list.reduce((a, e) => a + (e.gzip ?? 0), 0);
@@ -529,7 +559,9 @@ function main() {
             (d.renamed.length > 3 ? " 等" : ""),
         );
       }
-      for (const line of deltaLines(d, 3, "    ")) console.log(line);
+      for (const line of deltaLines(d, 3, "    ")) {
+        console.log(line);
+      }
       if (d.grown.length) {
         console.log(`    · 同名且变大 ${d.grown.length} 个`);
       }
@@ -755,7 +787,9 @@ function main() {
           lines.push(`    · ${name}（gzip ${kb(b)} → ${kb(v)}）`);
         }
       }
-      if (lines.length) console.error(lines.join("\n"));
+      if (lines.length) {
+        console.error(lines.join("\n"));
+      }
     } else {
       console.error(
         "  （基线里没有逐文件指纹 —— 它是本轮之前生成的旧格式；判定不受影响，只影响这段诊断。\n" +

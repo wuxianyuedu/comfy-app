@@ -158,7 +158,9 @@ function openTag(name: string, rule: StyleRule, rest: string): string {
 export function applyElementStyles(html: string): string {
   return html.replace(OPEN_TAG, (whole, nameRaw: string, attrs: string) => {
     const ruleEntry = MARKDOWN_ELEMENT_STYLES[nameRaw.toLowerCase()];
-    if (!ruleEntry) return whole;
+    if (!ruleEntry) {
+      return whole;
+    }
     return openTag(nameRaw, ruleEntry, `${attrs}${ruleEntry.extra ?? ""}`);
   });
 }

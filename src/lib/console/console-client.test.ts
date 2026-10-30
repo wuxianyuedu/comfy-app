@@ -266,7 +266,9 @@ describe("runConsoleCommand", () => {
     /* ISSUE #1327 现场：面板结论条只写着 `Failed to fetch`，用户看不出是应用服务
      * 没起来还是命令写错。文案走 `~/lib/error-message` 的唯一出口翻成中文。 */
     expect(outcome.kind).toBe("failed");
-    if (outcome.kind !== "failed") return;
+    if (outcome.kind !== "failed") {
+      return;
+    }
     expect(outcome.reason).toContain("网络请求失败");
     expect(outcome.reason).not.toBe("Failed to fetch");
     restore();

@@ -45,11 +45,15 @@ function isGenerationLogStage(v: unknown): v is GenerationLogStage {
 
 /** 任意输入 → 可落盘条目；形状不合法（无摘要）返回 null，坏数据不炸文件。 */
 export function normalizeGenerationLogEntry(raw: unknown): GenerationLogEntry | null {
-  if (typeof raw !== "object" || raw === null) return null;
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
   const rec = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   const summary =
     typeof rec.summary === "string" ? rec.summary.trim().slice(0, MAX_LOG_SUMMARY_CHARS) : "";
-  if (!summary) return null;
+  if (!summary) {
+    return null;
+  }
   const ts =
     typeof rec.ts === "number" && Number.isFinite(rec.ts)
       ? rec.ts
@@ -71,7 +75,9 @@ export function normalizeGenerationLogEntry(raw: unknown): GenerationLogEntry | 
 /** 解析一行 JSONL（容错：坏行返回 null）。 */
 export function parseGenerationLogLine(line: string): GenerationLogEntry | null {
   const trimmed = line.trim();
-  if (!trimmed) return null;
+  if (!trimmed) {
+    return null;
+  }
   try {
     return normalizeGenerationLogEntry(JSON.parse(trimmed));
   } catch {

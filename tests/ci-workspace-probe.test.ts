@@ -65,7 +65,9 @@ const GIT_FACTS: Record<string, string> = {
 
 function fakeRun(facts: Record<string, string> = GIT_FACTS) {
   return (cmd: string, args: Array<string>) => {
-    if (cmd !== "git") return { ok: false, out: "" };
+    if (cmd !== "git") {
+      return { ok: false, out: "" };
+    }
     const key = args.join(" ");
     return key in facts ? { ok: true, out: facts[key] ?? "" } : { ok: false, out: "" };
   };
@@ -84,7 +86,9 @@ function fakeFs(tree: Record<string, { birth?: number; mtime?: number }>, ledger
   const fsLike = {
     statSync(target: string) {
       const hit = tree[target];
-      if (!hit) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      if (!hit) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
       return { birthtimeMs: hit.birth ?? 0, mtimeMs: hit.mtime ?? 0 };
     },
     readFileSync(target: string) {

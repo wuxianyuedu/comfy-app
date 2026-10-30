@@ -111,7 +111,9 @@ export function buildStartProcessArgumentList(args: Array<string>): string {
  * 每个可见字符间夹 \x00 的乱码。这里剥 BOM 后按 utf16le 解码。
  */
 export function decodePowerShellOutput(buf: Buffer): string {
-  if (!buf || buf.length === 0) return "";
+  if (!buf || buf.length === 0) {
+    return "";
+  }
   if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) {
     return buf.subarray(2).toString("utf16le");
   }
@@ -214,7 +216,9 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
     let errFd: number | undefined;
     const closeOpenedFds = (): void => {
       for (const fd of [outFd, errFd]) {
-        if (fd === undefined) continue;
+        if (fd === undefined) {
+          continue;
+        }
         try {
           closeSync(fd);
         } catch {
@@ -264,7 +268,9 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
   const shellExe = process.env.COMFYAPP_SHELL_EXE?.trim();
   if (shellExe) {
     const cliArgs = ["--spawn-detached", "--cmd", command, ...args.flatMap((a) => ["--arg", a])];
-    if (opts.cwd) cliArgs.push("--cwd", opts.cwd);
+    if (opts.cwd) {
+      cliArgs.push("--cwd", opts.cwd);
+    }
     if (opts.redirectStdoutFile && opts.redirectStderrFile) {
       cliArgs.push("--out", opts.redirectStdoutFile, "--err", opts.redirectStderrFile);
     }

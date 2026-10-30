@@ -69,10 +69,15 @@ const WILD = "*";
  *  报成没有落点（假红），而真正该报的那条反而被同一份盲区盖住。 */
 function collectTs(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules" || entry === ".next") continue;
+    if (entry === "node_modules" || entry === ".next") {
+      continue;
+    }
     const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) collectTs(full, out);
-    else if (/\.tsx?$/.test(entry)) out.push(full);
+    if (statSync(full).isDirectory()) {
+      collectTs(full, out);
+    } else if (/\.tsx?$/.test(entry)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -84,7 +89,9 @@ function collectTs(dir: string, out: Array<string> = []): Array<string> {
 function routeTable(appDir: string): Map<string, Array<RouteToken>> {
   const routes = new Map<string, Array<RouteToken>>();
   for (const file of collectTs(appDir)) {
-    if (!/(^|[\\/])route\.tsx?$/.test(path.basename(file))) continue;
+    if (!/(^|[\\/])route\.tsx?$/.test(path.basename(file))) {
+      continue;
+    }
     const dirs = path
       .relative(appDir, path.dirname(file))
       .split(/[\\/]+/)
@@ -92,10 +99,13 @@ function routeTable(appDir: string): Map<string, Array<RouteToken>> {
     const tokens: Array<RouteToken> = [];
     for (const seg of dirs) {
       // `[...x]` 与 `[[...x]]` 都算「吃掉剩下的全部」；`[x]` 只吃一段
-      if (/^\[\.{3}[\w-]+\]$/.test(seg) || /^\[\[\.{3}[\w-]+\]\]$/.test(seg))
+      if (/^\[\.{3}[\w-]+\]$/.test(seg) || /^\[\[\.{3}[\w-]+\]\]$/.test(seg)) {
         tokens.push({ kind: "many" });
-      else if (/^\[[\w-]+\]$/.test(seg)) tokens.push({ kind: "one" });
-      else tokens.push({ kind: "static", value: seg });
+      } else if (/^\[[\w-]+\]$/.test(seg)) {
+        tokens.push({ kind: "one" });
+      } else {
+        tokens.push({ kind: "static", value: seg });
+      }
     }
     routes.set(dirs.join("/"), tokens);
   }
@@ -125,14 +135,22 @@ function hasRouteFor(segments: Array<string>, routes: Map<string, Array<RouteTok
         matched = true;
         break;
       }
-      if (j >= segments.length) break;
+      if (j >= segments.length) {
+        break;
+      }
       const seg = segments[j]!;
-      if (seg !== WILD && token.kind === "static" && token.value !== seg) break;
+      if (seg !== WILD && token.kind === "static" && token.value !== seg) {
+        break;
+      }
       i++;
       j++;
     }
-    if (!matched && j === segments.length && i === tokens.length) matched = true;
-    if (matched) return true;
+    if (!matched && j === segments.length && i === tokens.length) {
+      matched = true;
+    }
+    if (matched) {
+      return true;
+    }
   }
   return false;
 }

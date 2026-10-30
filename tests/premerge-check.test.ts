@@ -193,7 +193,9 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
     /* 它要么绿（0）、要么真报「需要人工看」（1）；「没跑起来」（2）只允许由
      * 取不到 merge target / 浅克隆这一族原因给出，且必须在输出里说清原因。 */
     expect([0, 1, 2]).toContain(code);
-    if (code === 2) expect(output).toContain("[premerge] ");
+    if (code === 2) {
+      expect(output).toContain("[premerge] ");
+    }
   });
 
   test("`claims` 段的扫描面是**这批**，不是「最新那一笔」（ISSUE #2070）", () => {
@@ -248,9 +250,13 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
     const { code, output } = run(["--only=claims"]);
     expect(output).not.toContain("取不到要审的提交");
     expect([0, 1, 2]).toContain(code);
-    if (code === 2) expect(output).toContain("[premerge] ");
+    if (code === 2) {
+      expect(output).toContain("[premerge] ");
+    }
     /* 走到「审了几笔」这一层：绿的那一支必须说得出条数，或说得出「无可审」。 */
-    if (code === 0) expect(output).toMatch(/次提交|无可审/);
+    if (code === 0) {
+      expect(output).toMatch(/次提交|无可审/);
+    }
   });
 
   test("锚点 = **分叉点**（`merge-base` 要并进去的那条 vs HEAD），不是上游的尖端", async () => {
@@ -305,7 +311,9 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       const { resolveForkBaseline } = await import("../scripts/premerge-check.mjs");
       const got = resolveForkBaseline(repo);
       expect(got.ok).toBe(true);
-      if (!got.ok) return;
+      if (!got.ok) {
+        return;
+      }
       /* 关键：它得停在**分叉点**，不是上游尖端。 */
       expect(got.baseline).toBe(fork);
       expect(got.baseline).not.toBe(tip);
@@ -352,7 +360,9 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         CNB_PULL_REQUEST_TARGET_SHA: target,
       });
       expect(withEnv.ok).toBe(true);
-      if (!withEnv.ok) return;
+      if (!withEnv.ok) {
+        return;
+      }
       expect(withEnv.baseline).toBe(target);
       /* 交出去的那一批就是「PR 自己的提交」，不多不少一笔。 */
       const batch = execFileSync("git", ["log", "--format=%s", `${withEnv.baseline}..HEAD`], {
@@ -369,7 +379,9 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         CNB_PULL_REQUEST_TARGET_SHA: "f".repeat(40),
       });
       expect(bogus.ok).toBe(false);
-      if (!bogus.ok) expect(bogus.reason).toContain("CNB_PULL_REQUEST_TARGET_SHA");
+      if (!bogus.ok) {
+        expect(bogus.reason).toContain("CNB_PULL_REQUEST_TARGET_SHA");
+      }
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }

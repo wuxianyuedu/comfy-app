@@ -95,7 +95,9 @@ function makeRun(name: string, mtime?: Date): string {
   const dir = path.join(runs(), name);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "launcher.log"), "x");
-  if (mtime) fs.utimesSync(dir, mtime, mtime);
+  if (mtime) {
+    fs.utimesSync(dir, mtime, mtime);
+  }
   return dir;
 }
 
@@ -146,7 +148,9 @@ describe("目录名与路径", () => {
   });
 
   it("runId 是 6 位小写十六进制", () => {
-    for (let i = 0; i < 50; i++) expect(newRunId()).toMatch(/^[0-9a-f]{6}$/);
+    for (let i = 0; i < 50; i++) {
+      expect(newRunId()).toMatch(/^[0-9a-f]{6}$/);
+    }
   });
 
   it("路径常量全在 log/ 下，current 与 runs 是同级子目录", () => {
@@ -263,7 +267,9 @@ describe("保留策略", () => {
       makeRun(name);
       names.push(name);
     }
-    for (const run of listRuns(root)) alignMtimeToName(run);
+    for (const run of listRuns(root)) {
+      alignMtimeToName(run);
+    }
     // now 设在最后一个包的一个月后：25 包全部掉出 7 天窗口，只剩「最近 20」这条通道
     const now = new Date(2026, 9, 10, 12, 0, 0).getTime();
     const result = await pruneRuns(root, { now });

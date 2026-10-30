@@ -82,10 +82,14 @@ function runHolder(holdMs: number): Promise<void> {
     child.stdout.on("data", (chunk: Buffer) => {
       out += chunk.toString();
       /* 等它真拿到写位再让争用方开写，否则量的不是争用窗口。 */
-      if (out.includes("LOCKED")) resolve();
+      if (out.includes("LOCKED")) {
+        resolve();
+      }
     });
     child.on("exit", (code) => {
-      if (code !== 0) reject(new Error(`holder exited ${code}`));
+      if (code !== 0) {
+        reject(new Error(`holder exited ${code}`));
+      }
     });
   });
 }
@@ -251,7 +255,9 @@ describe("开机 PRAGMA 撞锁有界重试，当场量出来", () => {
         const r = await racePragmaBoot("bare");
         rounds.push(r);
         /* 见一次抛就收工：常态下第一轮就够（约 3s），只有「今天一直没抛」那种轮次才会跑满。 */
-        if (r.outcomes.some((o) => o !== "ok")) break;
+        if (r.outcomes.some((o) => o !== "ok")) {
+          break;
+        }
       }
       const threw = rounds.reduce((n, r) => n + r.outcomes.filter((o) => o !== "ok").length, 0);
       const desynced = rounds.filter((r) => r.arrived < RACE_PROCS);
@@ -325,7 +331,9 @@ async function bareLoop(
   target: { execute(sql: string): Promise<unknown> },
   pragmas: ReadonlyArray<string>,
 ): Promise<void> {
-  for (const pragma of pragmas) await target.execute(pragma);
+  for (const pragma of pragmas) {
+    await target.execute(pragma);
+  }
 }
 
 describe("撞锁重试的因果（单元层：注入 BUSY，不赌时机）", () => {
@@ -486,7 +494,9 @@ async function waitForArrivals(startFile: string, expectCount: number): Promise<
   let arrived = 0;
   while (Date.now() < deadline) {
     arrived = readdirSync(dir).filter((n) => n.startsWith(base)).length;
-    if (arrived >= expectCount) return arrived;
+    if (arrived >= expectCount) {
+      return arrived;
+    }
     await sleep(10);
   }
   return arrived;

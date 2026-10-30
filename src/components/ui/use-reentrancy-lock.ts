@@ -71,7 +71,9 @@ export function createReentrancyLock(): ReentrancyLock {
   let locked = false;
   return {
     tryEnter: () => {
-      if (locked) return false;
+      if (locked) {
+        return false;
+      }
       locked = true;
       return true;
     },
@@ -114,7 +116,9 @@ export function useReentrancyLock(): ReentrancyLock {
    * 同一次事件循环里读不到刚写进去的值（React 只在提交后才更新它）。 */
   const lockedRef = useRef(false);
   const tryEnter = useCallback(() => {
-    if (lockedRef.current) return false;
+    if (lockedRef.current) {
+      return false;
+    }
     lockedRef.current = true;
     return true;
   }, []);

@@ -369,8 +369,9 @@ describe("affected-tests：兜底方向", () => {
     expect(res.reasons.__skipped).toContain(RED);
     /* 同样按「该跑的那些」比：`src/a/leaf.ts` 不落在任何一条输入面里（面是各判各的，
      * 见 `tests/fixed-gate-input-faces.test.ts`），所以那几条工具自检此刻本就缺席。 */
-    for (const fixed of selectFixedByFace(FIXED_STRUCTURAL_TESTS, ["src/a/leaf.ts"]).keep)
+    for (const fixed of selectFixedByFace(FIXED_STRUCTURAL_TESTS, ["src/a/leaf.ts"]).keep) {
       expect(res.tests).toContain(fixed);
+    }
   });
 
   it("固定清单里的文件就算被登记为基线红也不剔除", () => {
@@ -685,7 +686,9 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
       const dry = after.indexOf("if (dryRun)");
       const entry = after.indexOf(CALL);
       expect(dry, `${anchor} 之后找不到 if (dryRun)`).toBeGreaterThan(-1);
-      if (entry < 0) continue; // 这一支根本不解析入口（更好）
+      if (entry < 0) {
+        continue;
+      } // 这一支根本不解析入口（更好）
       expect(
         dry,
         `${anchor} 那一支里 if (dryRun) 必须排在 resolveVitestEntry() 之前（否则读数档依赖 node_modules）`,

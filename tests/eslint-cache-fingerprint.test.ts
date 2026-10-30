@@ -41,7 +41,9 @@ const ROOT = process.cwd();
 const tmpDirs: Array<string> = [];
 
 afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tmpDirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** 造一个最小检出：三份指纹输入 + 一份「假装是缓存」的目录。 */
@@ -78,7 +80,9 @@ describe("指纹口径（ISSUE #1399）", () => {
     tmpDirs.push(dir);
     const fp = computeFingerprint(dir);
     // 跳过会让「lockfile 被删掉」这种拓扑变化哈希不变 —— 正是要拦的极端形态。
-    for (const rel of FINGERPRINT_INPUTS) expect(fp.inputs[rel]).toBe("<missing>");
+    for (const rel of FINGERPRINT_INPUTS) {
+      expect(fp.inputs[rel]).toBe("<missing>");
+    }
   });
 
   it("三份输入任一变化都判「变了」，并点名是哪一份", () => {
@@ -163,8 +167,9 @@ describe("postinstall 入口接线（ISSUE #1399）", () => {
     tmpDirs.push(dir);
     // 入口按自身位置找仓库根，所以把两个脚本放进同一个最小检出。
     fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
-    for (const f of ["install-git-hooks.mjs", "eslint-cache-fingerprint.mjs"])
+    for (const f of ["install-git-hooks.mjs", "eslint-cache-fingerprint.mjs"]) {
       fs.copyFileSync(path.join(ROOT, "scripts", f), path.join(dir, "scripts", f));
+    }
     fs.mkdirSync(path.join(dir, CACHE_DIR_REL), { recursive: true });
     fs.writeFileSync(path.join(dir, CACHE_DIR_REL, "probe.json"), "{}\n");
     fs.writeFileSync(path.join(dir, "tsconfig.json"), "{}\n");

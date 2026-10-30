@@ -92,7 +92,9 @@ export function useBusyAction(initial = false): BusyAction {
     };
   }, []);
   const set = useCallback((next: boolean) => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) {
+      return;
+    }
     setBusy(next);
   }, []);
   const run = useCallback(

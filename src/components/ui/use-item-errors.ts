@@ -78,12 +78,16 @@ export function useItemErrors(keys?: ReadonlyArray<string>): ItemErrors {
   const keyPrint = keys === undefined ? null : keys.join("\u0000");
 
   const visible = useMemo(() => {
-    if (keyPrint === null) return errors;
+    if (keyPrint === null) {
+      return errors;
+    }
     const allow = new Set(keyPrint === "" ? [] : keyPrint.split("\u0000"));
     const out: Record<string, string> = {};
     for (const [k, v] of Object.entries(errors)) {
       /* 无 key 那档（整表错误）不受收敛影响：它的作用域本来就是整块。 */
-      if (k === SCOPE_NONE || allow.has(k)) out[k] = v;
+      if (k === SCOPE_NONE || allow.has(k)) {
+        out[k] = v;
+      }
     }
     return out;
     /* `errors` 进依赖；`keyPrint` 是它的过滤器，故一并列出。 */
@@ -94,10 +98,15 @@ export function useItemErrors(keys?: ReadonlyArray<string>): ItemErrors {
     setErrors((prev) => {
       /* 清一条时若它本来就没错，返回原引用 —— 这个函数会被挂在 effect /
        * 回调里调用，多一次引用变化就多一次级联渲染。 */
-      if (detail === null && !(bucket in prev)) return prev;
+      if (detail === null && !(bucket in prev)) {
+        return prev;
+      }
       const next = { ...prev };
-      if (detail === null) delete next[bucket];
-      else next[bucket] = detail;
+      if (detail === null) {
+        delete next[bucket];
+      } else {
+        next[bucket] = detail;
+      }
       return next;
     });
   }, []);

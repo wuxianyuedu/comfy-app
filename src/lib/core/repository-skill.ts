@@ -32,7 +32,9 @@ export class SkillRepository extends DrizzleRepository<Skill> {
 
   async ensureBuiltIns(seeds: Array<SkillSeed>): Promise<void> {
     const [row] = await db.select({ v: count() }).from(skill).where(eq(skill.isBuiltIn, true));
-    if ((row?.v ?? 0) > 0) return;
+    if ((row?.v ?? 0) > 0) {
+      return;
+    }
     await db.insert(skill).values(
       seeds.map((s) => ({
         name: s.name,
@@ -59,9 +61,12 @@ export class SkillRepository extends DrizzleRepository<Skill> {
     includeInactive?: boolean;
   }): Promise<Array<Skill>> {
     const conditions = [];
-    if (!opts.includeInactive) conditions.push(eq(skill.isActive, true));
-    if (opts.category && opts.category !== "all")
+    if (!opts.includeInactive) {
+      conditions.push(eq(skill.isActive, true));
+    }
+    if (opts.category && opts.category !== "all") {
       conditions.push(eq(skill.category, opts.category));
+    }
     if (opts.q) {
       conditions.push(
         or(

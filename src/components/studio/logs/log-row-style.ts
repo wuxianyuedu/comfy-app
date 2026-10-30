@@ -124,7 +124,9 @@ interface StyledSpan {
 /** 一段命中文本 → 它的语义样式键；不命中任何一档回 `undefined`（按级别默认色渲染）。 */
 function styleOfToken(text: string): AnsiStyleKey | undefined {
   for (const token of TOKEN_STYLES) {
-    if (token.pattern.test(text)) return token.style;
+    if (token.pattern.test(text)) {
+      return token.style;
+    }
   }
   return undefined;
 }
@@ -146,9 +148,13 @@ function styledSpans(text: string): Array<StyledSpan> {
     const start = match.index;
     const end = start + match[0].length;
     const style = styleOfToken(match[0]);
-    if (style === undefined) continue;
+    if (style === undefined) {
+      continue;
+    }
     const inside = spans.some((span) => start < span.end && end > span.start);
-    if (inside) continue;
+    if (inside) {
+      continue;
+    }
     spans.push({ start, end, style });
   }
   return spans.sort((a, b) => a.start - b.start);
@@ -167,14 +173,18 @@ export function tokenizeRow(text: string): Array<RowToken> {
   for (const span of styledSpans(text)) {
     /* 同一段文本可能被两档同时命中（路径里带 `[OK]` 之类）；已消费的区间跳过，
      * 不把同一段文字画两遍。 */
-    if (span.start < cursor) continue;
+    if (span.start < cursor) {
+      continue;
+    }
     if (span.start > cursor) {
       parts.push({ text: text.slice(cursor, span.start) });
     }
     parts.push({ text: text.slice(span.start, span.end), style: span.style });
     cursor = span.end;
   }
-  if (cursor < text.length) parts.push({ text: text.slice(cursor) });
+  if (cursor < text.length) {
+    parts.push({ text: text.slice(cursor) });
+  }
   return parts;
 }
 

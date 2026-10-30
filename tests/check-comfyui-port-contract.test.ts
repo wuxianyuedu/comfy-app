@@ -76,7 +76,9 @@ function scanner(overrides: Record<string, string> = {}) {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("check-comfyui-port-contract", () => {

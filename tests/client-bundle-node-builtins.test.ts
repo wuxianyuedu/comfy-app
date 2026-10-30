@@ -83,7 +83,9 @@ function runScanOnFixture(files: Record<string, string>): Report {
     dirs: ["src"],
   });
   try {
-    for (const [rel, content] of Object.entries(files)) repo.write(rel, content);
+    for (const [rel, content] of Object.entries(files)) {
+      repo.write(rel, content);
+    }
     const r = repo.run(["--json"]);
     /* 先判「跑起来了」再判内容（拿不到测量不是判据红，§13.6.4）；
      * `--json` 那一档恒退 0，所以这一格退非 0 就是夹具或脚本坏了。 */

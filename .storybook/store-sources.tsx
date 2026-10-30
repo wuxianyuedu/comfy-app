@@ -361,7 +361,9 @@ function seedScene(name: string): void {
   useLogStore.getState().clear();
   useLogStore.setState({ sessionStart: null });
   const entries = sceneEntries(name);
-  if (entries.length === 0) return;
+  if (entries.length === 0) {
+    return;
+  }
   /* 一次 `appendFileLogs` 收全部块：合并、去重、分桶、计数都由 store 自己算
      （分多次写会让计数经过几个中间态，story 看到的末态相同、没意义）。 */
   useLogStore.getState().appendFileLogs(entries);
@@ -420,6 +422,8 @@ export function sceneEntries(name: string): Array<LogEntry> {
  */
 export const withStoreScene: Decorator = (Story, context) => {
   const name = (context.parameters as { storeScene?: unknown }).storeScene;
-  if (typeof name === "string") seedScene(name);
+  if (typeof name === "string") {
+    seedScene(name);
+  }
   return <Story />;
 };

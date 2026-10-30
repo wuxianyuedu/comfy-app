@@ -87,8 +87,7 @@ export const FULL_SCREEN_LAYER_CLASS = `fixed ${TITLE_BAR_TOP_CLASS} right-0 bot
  * **恰好**是内容区高度，多的部分自己滚。浏览器 / dev 形态下 `top-title-bar`
  * 由 `--spacing-title-bar`（`@theme` 全局定义）给出 36px 空档。
  */
-export const FULL_PAGE_CLEARANCE_CLASS =
-  "min-h-0 h-full overflow-y-auto " + TITLE_BAR_TOP_CLASS;
+export const FULL_PAGE_CLEARANCE_CLASS = "min-h-0 h-full overflow-y-auto " + TITLE_BAR_TOP_CLASS;
 
 /**
  * 底部状态栏（`BrowserStatusBar`）的让位 class：`bottom-6` = 状态栏的 24px（`h-6`）。
@@ -171,7 +170,9 @@ export const TITLE_BAR_BLOCKING_CLASS = "fixed inset-0";
  */
 export function blocksTitleBar(className: string): boolean {
   const normalized = className.replace(/\s+/g, " ").trim();
-  if (!normalized.startsWith(TITLE_BAR_BLOCKING_CLASS)) return false;
+  if (!normalized.startsWith(TITLE_BAR_BLOCKING_CLASS)) {
+    return false;
+  }
   const rest = normalized.slice(TITLE_BAR_BLOCKING_CLASS.length);
   return rest === "" || rest.startsWith(" ");
 }
@@ -221,7 +222,9 @@ export function anchoredOverlayBoundary(
   viewport: { width: number; height: number } | null,
   titleBarPx: number,
 ): ViewportRect | null {
-  if (!viewport || viewport.width <= 0 || viewport.height <= 0) return null;
+  if (!viewport || viewport.width <= 0 || viewport.height <= 0) {
+    return null;
+  }
   /* 让位量不得超出视口本身：极端窄高（比标题行还矮的窗口）下宁可退化成整视口，
    * 也不要给出负高度 —— 负高度的边界会让定位引擎算出一串无意义的偏移。 */
   const top = clamp(titleBarPx, 0, viewport.height);

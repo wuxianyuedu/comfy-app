@@ -112,14 +112,7 @@ export function lanePrefix(lane) {
 export const PRIORITY = "P1";
 
 /** 平台侧认不出的构建级状态（在跑 / 排队）：这些不去取逐格详情，先不判。 */
-const NOT_FINAL = new Set([
-  "pending",
-  "running",
-  "queued",
-  "created",
-  "waiting",
-  "",
-]);
+const NOT_FINAL = new Set(["pending", "running", "queued", "created", "waiting", ""]);
 
 /**
  * @param {string} stage 格名
@@ -147,7 +140,9 @@ export function issueTitle(stage, lane = "pr") {
  */
 export function prIidFromUrl(url) {
   const m = /\/pulls?\/(\d+)/.exec(String(url ?? ""));
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   const n = Number(m[1]);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
@@ -167,27 +162,19 @@ export function prIidFromUrl(url) {
  */
 export function resolveTarget({ env, list, sn, lane = null }) {
   const fromEnv = String(env.CNB_PULL_REQUEST_IID ?? "").trim();
-  const row = (Array.isArray(list) ? list : []).find(
-    (b) => String(b?.sn ?? "") === sn,
-  );
+  const row = (Array.isArray(list) ? list : []).find((b) => String(b?.sn ?? "") === sn);
   const event = String(row?.event ?? env.CNB_BUILD_EVENT ?? "");
   const eventUrl = String(row?.eventUrl ?? "");
-  const prIid = /^\d+$/.test(fromEnv)
-    ? Number(fromEnv)
-    : prIidFromUrl(eventUrl);
+  const prIid = /^\d+$/.test(fromEnv) ? Number(fromEnv) : prIidFromUrl(eventUrl);
   /* `--lane` 是「这一档的立案口就是我」的显式声明（ISSUE #2550）：给了它，非
    * `pull_request` 事件同样归本格管 —— 桌面成品包那一档（`crontab: 0 2 * * *` /
    * `web_trigger_package`）没有 PR 可挂，它的红今天是**一点都看不见**的
    * （PR 那一档是另一种形状：格子有、写不动 —— 令牌只有 `repo-code:r`，见 #2339）。
    * 没有 `--lane` 时那些跑仍然一律不写 —— 那一处才知道两种形状的区别。 */
-  const declaredLane =
-    lane !== null && String(lane).trim() !== "" ? String(lane).trim() : null;
+  const declaredLane = lane !== null && String(lane).trim() !== "" ? String(lane).trim() : null;
   const yesPR =
-    event.startsWith("pull_request") ||
-    prIid !== null ||
-    fromEnv !== "" ||
-    declaredLane !== null;
-  if (!yesPR)
+    event.startsWith("pull_request") || prIid !== null || fromEnv !== "" || declaredLane !== null;
+  if (!yesPR) {
     return {
       sn,
       event,
@@ -198,6 +185,7 @@ export function resolveTarget({ env, list, sn, lane = null }) {
         `这一跑的事件是「${event || "(取不到)"}」，不是 pull_request —— ` +
         "「PR 红了」这件事对 push / 定时那几跑不成立（它们的 sha 上没有 PR）",
     };
+  }
   return { sn, event, eventUrl, prIid, lane: declaredLane, why: null };
 }
 
@@ -209,29 +197,26 @@ export function resolveTarget({ env, list, sn, lane = null }) {
  * @returns {{action:"none"|"no-fact"|"recommend"|"write", reason?:string,
  *   stages:Array<{stage:string, number?:number}>}}
  */
-export function decideAction({
-  state,
-  failedNames,
-  prIid,
-  existing,
-  lane = null,
-}) {
-  if (state === "green")
+export function decideAction({ state, failedNames, prIid, existing, lane = null }) {
+  if (state === "green") {
     return { action: "none", stages: [], reason: "这一跑是绿的 ⇒ 无事可立" };
-  if (state === "cancelled")
+  }
+  if (state === "cancelled") {
     return {
       action: "none",
       stages: [],
       reason:
         "这一跑是被取消的 —— 它没有结论，**不是产物坏了**（把它写成红就是替平台编一个不存在的故障）",
     };
-  if (state !== "failed")
+  }
+  if (state !== "failed") {
     return {
       action: "no-fact",
       stages: [],
       reason: `判定是「${state}」，不构成结论 ⇒ 不写`,
     };
-  if (failedNames.length === 0)
+  }
+  if (failedNames.length === 0) {
     return {
       action: "no-fact",
       stages: [],
@@ -239,25 +224,26 @@ export function decideAction({
         "整跑判成真失败，却认不出是哪一格红的 ⇒ 不知道把红记在哪，先不动账" +
         "（认不出格名 = 判据没跑起来，不是「没有红」）",
     };
+  }
   /* 有 PR ⇒ 落点是那张 PR 的评论区（不去查「开着的单」：评论不需要去重，PR 本身就是那张单）。 */
-  if (prIid !== null)
+  if (prIid !== null) {
     return {
       action: "recommend",
       stages: failedNames.map((stage) => ({ stage })),
     };
-  if (!existing)
+  }
+  if (!existing) {
     return {
       action: "no-fact",
       stages: [],
       reason:
         "开着的单列表取不到 —— 「查不到已有单」不等于「没有已有单」，据它新建就是多一张重复单",
     };
+  }
   return {
     action: "write",
     stages: failedNames.map((stage) => {
-      const hit = existing.find((e) =>
-        e.title.includes(titleKey(stage, lane ?? undefined)),
-      );
+      const hit = existing.find((e) => e.title.includes(titleKey(stage, lane ?? undefined)));
       return hit ? { stage, number: hit.number } : { stage };
     }),
   };
@@ -357,8 +343,7 @@ export function commentPull(io, slug, iid, body, sn) {
 export function appendToIssue(io, slug, number, body, sn) {
   return runAppendIssueComment({
     run: io.run,
-    log: (line) =>
-      io.log(`[pr-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+    log: (line) => io.log(`[pr-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
     slug,
     number,
     body,
@@ -386,7 +371,9 @@ export function openIssues(run, slug) {
     "100",
     "-v",
   ]);
-  if (!res) return null;
+  if (!res) {
+    return null;
+  }
   const d = res.json?.data;
   const arr = Array.isArray(res.json)
     ? res.json
@@ -395,7 +382,9 @@ export function openIssues(run, slug) {
       : Array.isArray(d)
         ? d
         : null;
-  if (!arr) return null;
+  if (!arr) {
+    return null;
+  }
   return arr.map((/** @type {any} */ i) => ({
     number: Number(i?.number ?? 0),
     title: String(i?.title ?? ""),
@@ -410,10 +399,7 @@ export function openIssues(run, slug) {
  * @returns {any | null}
  */
 export function pickSelf(list, sn) {
-  return (
-    (Array.isArray(list) ? list : []).find((b) => String(b?.sn ?? "") === sn) ??
-    null
-  );
+  return (Array.isArray(list) ? list : []).find((b) => String(b?.sn ?? "") === sn) ?? null;
 }
 
 /**
@@ -468,9 +454,9 @@ export function main(io = {}) {
   }
   if (lane !== null && !(lane in LANE_PREFIX)) {
     log(
-      `[pr-failure-issue] 「${lane}」不在 LANE_PREFIX 那张表里（有：${Object.keys(
-        LANE_PREFIX,
-      ).join(" / ")}）⇒ 一次都不写。` +
+      `[pr-failure-issue] 「${lane}」不在 LANE_PREFIX 那张表里（有：${Object.keys(LANE_PREFIX).join(
+        " / ",
+      )}）⇒ 一次都不写。` +
         "新加一档要先在同一个常量里登记它，否则去重键会拆成两族 —— 那正是 #2399 记过的形状。",
     );
     return finish(CODE.NO_FACT, `--lane 未登记：${lane}`);
@@ -478,9 +464,7 @@ export function main(io = {}) {
 
   const slug = io.slug !== undefined ? io.slug : resolveRepoSlug(run);
   if (!slug) {
-    log(
-      "[pr-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。",
-    );
+    log("[pr-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。");
     return finish(CODE.NO_FACT, "推不出仓库 slug");
   }
   /* 同 `ci-daily`：机器自起的账用自己的名字，不取人的昵称（ISSUE #2355）。 */
@@ -510,11 +494,7 @@ export function main(io = {}) {
       );
       return finish(CODE.NO_FACT, "--from 读不了");
     }
-    list = Array.isArray(parsed)
-      ? parsed
-      : Array.isArray(parsed?.list)
-        ? parsed.list
-        : null;
+    list = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.list) ? parsed.list : null;
     details = Array.isArray(parsed?.details) ? parsed.details : [];
     sn = String(parsed?.sn ?? sn);
     log(
@@ -538,13 +518,7 @@ export function main(io = {}) {
      * 过滤条件：默认只查 `pull_request`（这一格的出身）；而给了 `--lane`（且不是 pr）
      * 时**不带事件过滤** —— 那一档没有 PR 事件可查，按 PR 过滤就等于查不到自己
      * （ISSUE #2550 的现场：事件念成 `(取不到)`、`self` 为 null，连终态那一道都跳过）。 */
-    list = fetchBuildList(
-      run,
-      slug,
-      lane && lane !== "pr" ? "" : "pull_request",
-      60,
-      { log },
-    );
+    list = fetchBuildList(run, slug, lane && lane !== "pr" ? "" : "pull_request", 60, { log });
     if (!list) {
       /* 这一句是这一格**唯一**的失效形态（它是 `endStages`，退出码不构成流水线结论），
        * 所以要把「下一次该谁做什么」也写在这里，而不是只留一句「取不到」。
@@ -569,11 +543,7 @@ export function main(io = {}) {
     log(`[pr-failure-issue] ${target.why} ⇒ 不写。`);
     return finish(CODE.DONE, target.why);
   }
-  if (
-    !offline &&
-    self &&
-    NOT_FINAL.has(String(self.status ?? "").toLowerCase())
-  ) {
+  if (!offline && self && NOT_FINAL.has(String(self.status ?? "").toLowerCase())) {
     log(
       `[pr-failure-issue] 列表里这一跑（${sn}）的状态是「${self.status}」⇒ 还没到终态，` +
         "这一次读到的不是结论（也不写）。",
@@ -581,7 +551,9 @@ export function main(io = {}) {
     return finish(CODE.NO_FACT, "还没到终态");
   }
 
-  if (!offline) details = fetchBuildDetails(run, slug, [self ?? { sn }]);
+  if (!offline) {
+    details = fetchBuildDetails(run, slug, [self ?? { sn }]);
+  }
   /* 详情取不到 ⇒ 拿**空读数**过同一个分类器（不是手搓一个形状像的「unknown」对象：
    * 那份判决只有一处实现，手搓一份就在下一个人改分类器时静默变成另一个答案）。 */
   const firstDetail = details[0];
@@ -590,12 +562,8 @@ export function main(io = {}) {
   const outcome = classifyBuildOutcome(
     firstDetail ? enrichStageErrors(run, slug, sn, firstDetail.json) : null,
   );
-  const failedNames = outcome.failed.map(
-    (/** @type {any} */ f) => f.name || f.id,
-  );
-  const skipped = downstreamSkipped(outcome).map(
-    (/** @type {any} */ s) => s.name || s.id,
-  );
+  const failedNames = outcome.failed.map((/** @type {any} */ f) => f.name || f.id);
+  const skipped = downstreamSkipped(outcome).map((/** @type {any} */ s) => s.name || s.id);
   log(
     `[pr-failure-issue] 这一跑 ${sn} · 事件 ${target.event || "(取不到)"} · ` +
       `档 ${target.lane ?? "pr"} · ` +
@@ -616,8 +584,7 @@ export function main(io = {}) {
     });
   }
 
-  const existing =
-    offline || target.prIid !== null ? [] : openIssues(run, slug);
+  const existing = offline || target.prIid !== null ? [] : openIssues(run, slug);
   const decision = decideAction({
     state: outcome.state,
     failedNames,
@@ -627,9 +594,7 @@ export function main(io = {}) {
   });
   if (decision.action === "none" || decision.action === "no-fact") {
     const why = decision.reason ?? "(没给出原因)";
-    log(
-      `[pr-failure-issue] ${why} ⇒ 不写（没结论既不许落成红字，也不许落成新建单）。`,
-    );
+    log(`[pr-failure-issue] ${why} ⇒ 不写（没结论既不许落成红字，也不许落成新建单）。`);
     return decision.action === "none" ? CODE.DONE : finish(CODE.NO_FACT, why);
   }
 
@@ -658,20 +623,16 @@ export function main(io = {}) {
       continue;
     }
     if (decision.action === "recommend") {
-      const ok = commentPull(
-        { run, log },
-        slug,
-        /** @type {number} */ (target.prIid),
-        body,
-        sn,
-      );
+      const ok = commentPull({ run, log }, slug, /** @type {number} */ (target.prIid), body, sn);
       log(
         ok
           ? `[pr-failure-issue] ✓ 已在 PR #${target.prIid} 留下一段读数并回读到`
           : `[pr-failure-issue] ✗ PR #${target.prIid} 的评论没写成或回读不到 ⇒ 手工出口：` +
               `cnb pulls post-pull-comment --repo ${slug} --number ${target.prIid} --body-file <正文文件> -v`,
       );
-      if (!ok) wrote = false;
+      if (!ok) {
+        wrote = false;
+      }
       continue;
     }
     if (s.number) {
@@ -682,7 +643,9 @@ export function main(io = {}) {
           : `[pr-failure-issue] ✗ #${s.number} 的评论没写成或回读不到 ⇒ 手工出口：` +
               `cnb issues post-issue-comment --repo ${slug} --number ${s.number} --body-file <正文文件> -v`,
       );
-      if (!ok) wrote = false;
+      if (!ok) {
+        wrote = false;
+      }
       continue;
     }
     const file = writeScratch(ROOT, "pr-failure-issue", body);
@@ -693,8 +656,7 @@ export function main(io = {}) {
     }
     const created = runNewIssue({
       run,
-      log: (line) =>
-        log(`[pr-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+      log: (line) => log(`[pr-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
       slug,
       handle,
       root: ROOT,
@@ -707,25 +669,20 @@ export function main(io = {}) {
       dryRun: false,
     });
     if (created !== CODE.DONE) {
-      log(
-        `[pr-failure-issue] ✗ 「${s.stage}」那张单没建成（runNewIssue 退 ${created}）`,
-      );
+      log(`[pr-failure-issue] ✗ 「${s.stage}」那张单没建成（runNewIssue 退 ${created}）`);
       wrote = false;
       continue;
     }
-    log(
-      `[pr-failure-issue] ✓ 「${s.stage}」已立案（建 → 补标签 → 独立回读全过）`,
-    );
+    log(`[pr-failure-issue] ✓ 「${s.stage}」已立案（建 → 补标签 → 独立回读全过）`);
   }
-  if (willWrite) return CODE.DONE;
+  if (willWrite) {
+    return CODE.DONE;
+  }
   return wrote ? CODE.DONE : finish(CODE.WRITE_FAILED, "该写的没写成");
 }
 
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const exit = main();
   if (exit !== CODE.DONE) {
     process.stderr.write(

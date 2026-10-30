@@ -28,9 +28,7 @@ describe("findNodeErrorsCarrier（深搜结构化校验错误）", () => {
   });
 
   it("命中 error.node_errors / 顶层 node_errors（防御性位置）", () => {
-    expect(findNodeErrorsCarrier({ error: { node_errors: { a: 1 } } })).toEqual(
-      { a: 1 },
-    );
+    expect(findNodeErrorsCarrier({ error: { node_errors: { a: 1 } } })).toEqual({ a: 1 });
     expect(findNodeErrorsCarrier({ node_errors: { b: 2 } })).toEqual({ b: 2 });
   });
 
@@ -58,8 +56,7 @@ describe("translateWorkflowUnknownNodesError（comfy-cli 校验错误翻中文�
               node_id: "459:452",
               field: "images",
               code: "autogrow_no_slots",
-              message:
-                "required autogrow input 'images' has no connected slots",
+              message: "required autogrow input 'images' has no connected slots",
               hint: "wire one key per connection: images.image_1, images.image_2",
             },
           ],
@@ -92,9 +89,7 @@ describe("envelopeErrorMessage（message → hint → 兜底）", () => {
 });
 
 describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
-  const mk = (
-    over: Partial<Parameters<typeof createCliEnvelopeParser>[0]> = {},
-  ) => {
+  const mk = (over: Partial<Parameters<typeof createCliEnvelopeParser>[0]> = {}) => {
     const onPromptId = vi.fn();
     const onProgress = vi.fn();
     const finish = vi.fn();
@@ -120,9 +115,7 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
 
   it("多个事件在一行里逐行分发（不丢行）", () => {
     const { p, onPromptId, onProgress } = mk();
-    p.sink(
-      '{"type":"queued","prompt_id":"p1"}\n{"type":"progress","completed":1,"total":4}\n',
-    );
+    p.sink('{"type":"queued","prompt_id":"p1"}\n{"type":"progress","completed":1,"total":4}\n');
     expect(onPromptId).toHaveBeenCalledWith("p1");
     // 事件不带 node：第二参为 undefined（3-C D1 的透传契约）
     expect(onProgress).toHaveBeenCalledWith(25, undefined);
@@ -182,18 +175,16 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
         '"title": "CLIP Text Encode (Positive Prompt)", "class_type": "CLIPTextEncode"}\n',
     );
 
-    expect(
-      lines.map((l) => l[2]).find((m) => m.includes("comfy-cli 节点")),
-    ).toBe("▶ comfy-cli 节点 [76:67] 编码提示词（CLIPTextEncode） 开始执行");
+    expect(lines.map((l) => l[2]).find((m) => m.includes("comfy-cli 节点"))).toBe(
+      "▶ comfy-cli 节点 [76:67] 编码提示词（CLIPTextEncode） 开始执行",
+    );
   });
 
   it("`progress` 事件不带类名 ⇒ 按 `patched` 那张图认（与 WS 帧同一个出口）", () => {
     const { p, onProgress } = mk({
       patched: { nodes: [{ id: 76, type: "SUBGRAPH_ID", inputs: [] }] },
     });
-    p.sink(
-      '{"schema":"event/1","type":"progress","node":"76","completed":1,"total":25}\n',
-    );
+    p.sink('{"schema":"event/1","type":"progress","node":"76","completed":1,"total":25}\n');
 
     expect(onProgress).toHaveBeenCalledWith(4, {
       id: "76",
@@ -217,9 +208,7 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
     p.sink('{"type":"execution_success","node":"3"}\n');
 
     // 只看这两行本身（parser 还会为每条原始行打一行「[comfy-cli 原始] …」）。
-    expect(
-      lines.map((l) => l[2]).filter((m) => m.includes("comfy-cli 节点")),
-    ).toEqual([
+    expect(lines.map((l) => l[2]).filter((m) => m.includes("comfy-cli 节点"))).toEqual([
       "▶ comfy-cli 节点 [3] 加载 LoRA（LoraLoader） 开始执行",
       "✓ comfy-cli 节点 [3] 加载 LoRA（LoraLoader） 执行完成",
     ]);
@@ -253,9 +242,9 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
 
     p.sink(CACHED_KSAMPLER);
 
-    expect(
-      lines.map((l) => l[2]).find((m) => m.includes("comfy-cli 节点")),
-    ).toBe("≡ comfy-cli 节点 [76:69] 采样去噪（KSampler） 命中缓存，跳过");
+    expect(lines.map((l) => l[2]).find((m) => m.includes("comfy-cli 节点"))).toBe(
+      "≡ comfy-cli 节点 [76:69] 采样去噪（KSampler） 命中缓存，跳过",
+    );
     // 「当前节点 + 步数」是 4-B2 给的契约，缓存轮没有「当前」—— 这里必须一次都不调。
     expect(onProgress).not.toHaveBeenCalled();
   });
@@ -275,9 +264,7 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
         '"title": "VAE Decode", "class_type": "VAEDecode"}\n',
     );
 
-    expect(
-      lines.map((l) => l[2]).filter((m) => m.includes("comfy-cli 节点")),
-    ).toEqual([
+    expect(lines.map((l) => l[2]).filter((m) => m.includes("comfy-cli 节点"))).toEqual([
       "≡ comfy-cli 节点 [76:69] 采样去噪（KSampler） 命中缓存，跳过",
       "▶ comfy-cli 节点 [76:65] VAE 解码（VAEDecode） 开始执行",
     ]);
@@ -299,9 +286,7 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
     );
     p.sink('{"type":"envelope","ok":true}\n');
 
-    expect(
-      lines.map((l) => l[2]).filter((m) => m.includes("全部命中")),
-    ).toEqual([
+    expect(lines.map((l) => l[2]).filter((m) => m.includes("全部命中"))).toEqual([
       "≡ 本轮 2 个节点全部命中 ComfyUI 执行缓存（未重算，因此没有按节点进度）",
     ]);
     expect(finish).toHaveBeenCalledWith(true, { type: "envelope", ok: true });
@@ -321,11 +306,11 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
         },
       });
       if (over.nodeCount !== undefined) {
-        p.sink(
-          `{"schema": "event/1", "type": "converted", "node_count": ${over.nodeCount}}\n`,
-        );
+        p.sink(`{"schema": "event/1", "type": "converted", "node_count": ${over.nodeCount}}\n`);
       }
-      for (let i = 0; i < over.cached; i++) p.sink(CACHED_KSAMPLER);
+      for (let i = 0; i < over.cached; i++) {
+        p.sink(CACHED_KSAMPLER);
+      }
       p.sink('{"type":"envelope","ok":true}\n');
 
       expect(
@@ -345,7 +330,9 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
   it("非 JSON 行超过上限后不再逐行进面板（只留一行省略提示）", () => {
     const { p } = mk();
     // 灌入上限 + 1 行非 JSON；断言不抛错即可（面板行数由 log 内部处理）
-    for (let i = 0; i < MAX_NON_JSON_LINES + 2; i++) p.sink(`noise-${i}\n`);
+    for (let i = 0; i < MAX_NON_JSON_LINES + 2; i++) {
+      p.sink(`noise-${i}\n`);
+    }
     expect(p.leftover()).toBe("");
   });
 
@@ -366,7 +353,9 @@ describe("createCliStderrSink（噪声过滤 + 限行 + 完整留底）", () => 
 
   it("raw 始终完整累积（不受 60 行上限影响）", () => {
     const s = createCliStderrSink({ taskId: "t1", log: noLog, trace: noTrace });
-    for (let i = 0; i < 100; i++) s.sink(`line-${i}\n`);
+    for (let i = 0; i < 100; i++) {
+      s.sink(`line-${i}\n`);
+    }
     expect(s.raw().split("\n").filter(Boolean)).toHaveLength(100);
   });
 });

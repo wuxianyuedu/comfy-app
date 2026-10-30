@@ -53,10 +53,7 @@ const FORBIDDEN = [
   // 自带 README / tsconfig.json / eslint.config.js 是正常且必需的，把它们算违规
   // 会让这条护栏变成噪声，进而被当成「反正都红」而忽略。
   ["开发期文件", /^(AGENTS|CHANGELOG|CHANGELOG-archive|README)\.md$/],
-  [
-    "开发期配置",
-    /^(eslint|playwright|prettier|drizzle|vitest)\.config\.[cm]?[jt]s$/,
-  ],
+  ["开发期配置", /^(eslint|playwright|prettier|drizzle|vitest)\.config\.[cm]?[jt]s$/],
   ["开发期配置", /^(components|tsconfig|typedoc)\.json$/],
   ["门禁锁文件", /^pnpm-(lock|workspace)\.ya?ml$/],
   ["TS 增量编译缓存", /^tsconfig\.tsbuildinfo$/],
@@ -224,9 +221,7 @@ const ALLOWED_SRC_FILES = [
 
 /** 该层允许的顶层条目。 */
 function allowedTopLevelFor(label) {
-  return label === "static"
-    ? STATIC_ALLOWED_TOPLEVEL
-    : STANDALONE_ALLOWED_TOPLEVEL;
+  return label === "static" ? STATIC_ALLOWED_TOPLEVEL : STANDALONE_ALLOWED_TOPLEVEL;
 }
 
 /**
@@ -275,10 +270,14 @@ const REQUIRED_PAYLOAD_FILES = [
  * 与剔除侧的 `RUNTIME_SRC` 同源；`rel` 形如 `src` / `src/lib` / `src/lib/…/x.ts`。
  */
 function isAllowedSrcPath(rel) {
-  if (rel === "src") return true;
+  if (rel === "src") {
+    return true;
+  }
   for (const allowed of ALLOWED_SRC_FILES) {
     const full = `src/${allowed}`;
-    if (rel === full || full.startsWith(`${rel}/`)) return true;
+    if (rel === full || full.startsWith(`${rel}/`)) {
+      return true;
+    }
   }
   return false;
 }
@@ -356,9 +355,7 @@ function collectFiles(dir, followLinks) {
  */
 function missingRequiredRuntimeFiles(dir) {
   const reachable = collectFiles(dir, true);
-  return REQUIRED_RUNTIME_FILES.filter(
-    (name) => !reachable.includes(`${RUNTIME_DIR}/${name}`),
-  );
+  return REQUIRED_RUNTIME_FILES.filter((name) => !reachable.includes(`${RUNTIME_DIR}/${name}`));
 }
 
 /**
@@ -415,9 +412,7 @@ function checkDir(dir, label) {
     console.error(
       `[${label}] 内部门禁脚本不该进产物，却发现 ${strayScripts.length} 个：\n  ` +
         strayScripts.slice(0, 8).join("\n  ") +
-        (strayScripts.length > 8
-          ? `\n  …（其余 ${strayScripts.length - 8} 个省略）`
-          : "") +
+        (strayScripts.length > 8 ? `\n  …（其余 ${strayScripts.length - 8} 个省略）` : "") +
         "\n  （runtime 真的会读的脚本靠 ALLOWED_SCRIPTS 白名单保留；" +
         "新增脚本默认应被剔除，要保留请登记并说明理由）",
     );
@@ -476,9 +471,7 @@ function checkDir(dir, label) {
    * 「祖先放行、叶子逐文件判」，叶子在下一条里单独判。
    */
   const allowedTop = allowedTopLevelFor(label);
-  const topEntries = fs
-    .readdirSync(dir, { withFileTypes: true })
-    .map((e) => e.name);
+  const topEntries = fs.readdirSync(dir, { withFileTypes: true }).map((e) => e.name);
   /* **只有真的是装配产物时才数顶层**（ISSUE #2629）：`src-tauri/static/` 由
    * `build-desktop.mjs` 装配，判据本仓里唯一能认出「装配过」的事实就是那一层有没有
    * `server.js` —— 上面那三条「缺件」检查早就是这道门（见 `files.includes("server.js")`
@@ -513,9 +506,7 @@ function checkDir(dir, label) {
     console.error(
       `[${label}] 顶层出现白名单外的条目 ${strayTop.length} 个：\n  ` +
         strayTop.slice(0, 12).join("\n  ") +
-        (strayTop.length > 12
-          ? `\n  …（其余 ${strayTop.length - 12} 个省略）`
-          : "") +
+        (strayTop.length > 12 ? `\n  …（其余 ${strayTop.length - 12} 个省略）` : "") +
         `\n  允许的就这些：${allowedTop.join(" / ")}（外加逐文件放行的 src/）。` +
         "\n  新增一项必须**同批**改两处：剔除侧 `standalone-private-inputs.mjs` 与这里" +
         "（两份清单逐字同源，由 tests/dist-artifact-hygiene.test.ts 核对），并写清" +
@@ -527,17 +518,13 @@ function checkDir(dir, label) {
   }
   // `src/` 的叶子逐文件判。只锚**产物根**那一份 `src/`：`node_modules/<pkg>/src/**` 是
   // 第三方包自己的源码，把它算成违规会让护栏变成噪声（与 FORBIDDEN 那批同一条理由）。
-  const straySrcFiles = files.filter(
-    (f) => f.startsWith("src/") && !isAllowedSrcPath(f),
-  );
+  const straySrcFiles = files.filter((f) => f.startsWith("src/") && !isAllowedSrcPath(f));
   if (straySrcFiles.length > 0) {
     failed = true;
     console.error(
       `[${label}] src/ 下出现未逐文件登记的条目 ${straySrcFiles.length} 个：\n  ` +
         straySrcFiles.slice(0, 8).join("\n  ") +
-        (straySrcFiles.length > 8
-          ? `\n  …（其余 ${straySrcFiles.length - 8} 个省略）`
-          : "") +
+        (straySrcFiles.length > 8 ? `\n  …（其余 ${straySrcFiles.length - 8} 个省略）` : "") +
         `\n  这一格是「祖先放行、叶子逐文件判」：允许的是 ${ALLOWED_SRC_FILES.join(" / ")}；` +
         "\n  运行期真要读别的源文件，请同批改剔除侧的 RUNTIME_SRC 与这里的 ALLOWED_SRC_FILES。",
     );
@@ -601,7 +588,9 @@ function main() {
  * 要把两份清单拿来**逐字比对**）绝不能顺手 `process.exit` —— 那会把测试进程带走，
  * 而「比对代码在、但一条都没真的比过」正是这类清单判据最难发现的失效形态。
  */
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}
 
 module.exports = {
   FORBIDDEN,

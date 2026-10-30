@@ -44,7 +44,9 @@ export const FIT_SCALE_CAP = 1;
  * 而夹取口径必须与 hook 内部同一份（两处各夹一次必然漂移）。
  */
 export function clampZoomScale(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 1;
+  if (!Number.isFinite(value) || value <= 0) {
+    return 1;
+  }
   return clamp(value, MIN_ZOOM_SCALE, MAX_ZOOM_SCALE);
 }
 
@@ -102,30 +104,22 @@ export function useImageZoom({
     }
     const usableWidth = viewportWidth - padding * 2;
     const usableHeight = viewportHeight - padding * 2;
-    if (usableWidth <= 0 || usableHeight <= 0) return null;
-    const ratio = Math.min(
-      usableWidth / naturalSize.width,
-      usableHeight / naturalSize.height,
-    );
+    if (usableWidth <= 0 || usableHeight <= 0) {
+      return null;
+    }
+    const ratio = Math.min(usableWidth / naturalSize.width, usableHeight / naturalSize.height);
     return clampZoomScale(Math.min(ratio, FIT_SCALE_CAP));
   }, [naturalSize, viewportWidth, viewportHeight, padding]);
 
-  const scale =
-    mode === "manual" ? manualScale : mode === "actual" ? 1 : (fitScale ?? 1);
+  const scale = mode === "manual" ? manualScale : mode === "actual" ? 1 : (fitScale ?? 1);
 
   const scaleTo = useCallback((next: number) => {
     setManualScale(clampZoomScale(next));
     setMode("manual");
   }, []);
 
-  const zoomIn = useCallback(
-    () => scaleTo(scale * ZOOM_STEP),
-    [scale, scaleTo],
-  );
-  const zoomOut = useCallback(
-    () => scaleTo(scale / ZOOM_STEP),
-    [scale, scaleTo],
-  );
+  const zoomIn = useCallback(() => scaleTo(scale * ZOOM_STEP), [scale, scaleTo]);
+  const zoomOut = useCallback(() => scaleTo(scale / ZOOM_STEP), [scale, scaleTo]);
   const fit = useCallback(() => setMode("fit"), []);
   const actualSize = useCallback(() => setMode("actual"), []);
   const toggleFitActual = useCallback(

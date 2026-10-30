@@ -97,12 +97,24 @@ export class ComfyProtocolAdapter {
 
   /** 执行器消息处理器调用的单点分类入口。 */
   classify(msg: ComfyWsMessage): ComfySignal {
-    if (this.isNodeStarted(msg)) return "node-started";
-    if (this.isNodeFinished(msg)) return "node-finished";
-    if (this.isProgress(msg)) return "progress";
-    if (this.isCompletion(msg)) return "completion";
-    if (this.isError(msg)) return "error";
-    if (this.isActivity(msg)) return "activity";
+    if (this.isNodeStarted(msg)) {
+      return "node-started";
+    }
+    if (this.isNodeFinished(msg)) {
+      return "node-finished";
+    }
+    if (this.isProgress(msg)) {
+      return "progress";
+    }
+    if (this.isCompletion(msg)) {
+      return "completion";
+    }
+    if (this.isError(msg)) {
+      return "error";
+    }
+    if (this.isActivity(msg)) {
+      return "activity";
+    }
     return "other";
   }
 }

@@ -52,9 +52,15 @@ function VideoControl({
   };
 
   const entries: Array<{ role: VideoRole; entry: EnrichedWidget }> = [];
-  if (group.length) entries.push({ role: "length", entry: group.length });
-  if (group.aspect) entries.push({ role: "aspect", entry: group.aspect });
-  if (group.quality) entries.push({ role: "quality", entry: group.quality });
+  if (group.length) {
+    entries.push({ role: "length", entry: group.length });
+  }
+  if (group.aspect) {
+    entries.push({ role: "aspect", entry: group.aspect });
+  }
+  if (group.quality) {
+    entries.push({ role: "quality", entry: group.quality });
+  }
 
   if (style === "split") {
     return (
@@ -100,7 +106,9 @@ function VideoControl({
         })),
         onChange: (lbl: string) => {
           const preset = presets.find((item) => item.label === lbl);
-          if (preset) set(entry.ioKey, preset.value);
+          if (preset) {
+            set(entry.ioKey, preset.value);
+          }
         },
       };
     }
@@ -116,7 +124,9 @@ function VideoControl({
         })),
         onChange: (lbl: string) => {
           const preset = presets.find((item) => item.label === lbl);
-          if (preset) set(entry.ioKey, preset.value);
+          if (preset) {
+            set(entry.ioKey, preset.value);
+          }
         },
       };
     }
@@ -144,7 +154,9 @@ function VideoControl({
       })),
       onChange: (lbl: string) => {
         const preset = presets.find((item) => item.label === lbl);
-        if (preset) set(entry.ioKey, preset.ratio);
+        if (preset) {
+          set(entry.ioKey, preset.ratio);
+        }
       },
     };
   });

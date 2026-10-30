@@ -16,10 +16,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
-import {
-  useAgentRun,
-  type AgentRunController,
-} from "~/components/agent-run/use-agent-run";
+import { useAgentRun, type AgentRunController } from "~/components/agent-run/use-agent-run";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { fetchProduction } from "~/lib/production/production-client";
 import {
@@ -72,7 +69,9 @@ export function useProjectHome(): ProjectHomeController {
   }, [projectId]);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId) {
+      return;
+    }
     const guard = beginStaleRun();
     void (async () => {
       const production = await fetchProduction(projectId);
@@ -88,8 +87,7 @@ export function useProjectHome(): ProjectHomeController {
   /* run 跑动 / 待确认时顺带刷新项目状态：引擎每一步都会改 production，
    * 不刷的话主页的阶段条会停在「启动前」的样子。停着的时候不轮询（无人看时
    * 不打服务端，与状态栏那格的订阅口径一致）。 */
-  const runActive =
-    run.run.status === "running" || run.run.status === "awaiting_approval";
+  const runActive = run.run.status === "running" || run.run.status === "awaiting_approval";
   useInterval(
     () => {
       void load();

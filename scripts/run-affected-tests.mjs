@@ -266,7 +266,9 @@ async function main(argv) {
       process.env.COMFY_PRECOMMIT_MAX_WORKERS,
       resolveCiWorkers().workers,
     );
-    if (note) process.stderr.write(`[affected-launch] ${note}\n`);
+    if (note) {
+      process.stderr.write(`[affected-launch] ${note}\n`);
+    }
     const quietFull = announceQuiet(process.env.COMFY_AFFECTED_QUIET, (t) =>
       process.stderr.write(t),
     );
@@ -311,7 +313,9 @@ async function main(argv) {
     process.env.COMFY_PRECOMMIT_MAX_WORKERS,
     resolveCiWorkers().workers,
   );
-  if (note) process.stderr.write(`[affected-launch] ${note}\n`);
+  if (note) {
+    process.stderr.write(`[affected-launch] ${note}\n`);
+  }
   const quiet = announceQuiet(process.env.COMFY_AFFECTED_QUIET, (t) => process.stderr.write(t));
   /* 分文件耗时的落点：钩子 `export` 出来的 `$LOGD`，或平台入口 `ci-affected-tests.mjs`
    * 自己造的一份（同一份布局，随本次跑清理 —— 那一格此前拿不到 junit，复跑面每次都
@@ -360,7 +364,9 @@ async function main(argv) {
   const waitBudget = { deadline: Date.now() + RETRY_BUDGET_MS };
   /* 跑也要有界：整次一份、跨块共享，与上面那份等待预算同形状（只管开不开下一遍）。 */
   const wallClock = resolveWallClockMs(process.env.COMFY_AFFECTED_WALL_CLOCK_MS);
-  if (wallClock.note) process.stderr.write(`[affected-launch] ${wallClock.note}\n`);
+  if (wallClock.note) {
+    process.stderr.write(`[affected-launch] ${wallClock.note}\n`);
+  }
   const stageBudget = wallClockBudget({ budgetMs: wallClock.budgetMs });
   /** 这一档「没拿到可信读数」的文件（未校验 ≠ 绿，结束时要点名）。 */
   const unverified = [];
@@ -389,7 +395,9 @@ async function main(argv) {
      * （起之前根本没有用时）。两份放在同一屏的两端是刻意的：清单回答「跑了什么」，
      * 这里回答「各自多久」，两句都读完才算读完了这一格。 */
     process.stderr.write(fileTimingReport(files, { quiet, read: junitReadings() }));
-    if (unverified.length > 0) process.stderr.write(unverifiedReport(unverified));
+    if (unverified.length > 0) {
+      process.stderr.write(unverifiedReport(unverified));
+    }
     process.stderr.write(rerunReport(attempts, { budgetMs: RETRY_BUDGET_MS }));
   };
   for (const [index, chunk] of chunks.entries()) {
@@ -529,7 +537,9 @@ export async function runChunk(chunk, deps) {
     firstPassMs,
     retryFiles: scope.files.length,
   });
-  if (gate.note !== "") process.stderr.write(gate.note);
+  if (gate.note !== "") {
+    process.stderr.write(gate.note);
+  }
   if (!gate.ok) {
     process.stderr.write(wallClockSkipReport({ ...gate, files: scope.files }));
     report({ outcome: "budget-skipped" });

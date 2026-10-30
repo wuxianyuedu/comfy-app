@@ -37,7 +37,9 @@ const tmpDirs: Array<string> = [];
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
-  for (const dir of tmpDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of tmpDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** fetch 替身：按路径分发。probe（/system_stats）与业务端点分开计数。 */
@@ -47,8 +49,12 @@ function stubFetch(handler: (url: URL) => Response | Promise<Response>) {
     const url =
       input instanceof URL ? input : new URL(typeof input === "string" ? input : input.url);
     const isProbe = url.pathname === "/system_stats";
-    if (isProbe) counts.probe += 1;
-    if (url.pathname === "/api/prompt") counts.prompt += 1;
+    if (isProbe) {
+      counts.probe += 1;
+    }
+    if (url.pathname === "/api/prompt") {
+      counts.prompt += 1;
+    }
     return await handler(url);
   });
   vi.stubGlobal("fetch", mock);
@@ -139,7 +145,9 @@ describe("base 缓存的失效语义（网络失败复位 / HTTP 失败不复位
     let promptShouldFailWithNetwork = false;
     const { counts } = stubFetch((url) => {
       if (url.pathname === "/api/prompt") {
-        if (promptShouldFailWithNetwork) throw connectionRefused();
+        if (promptShouldFailWithNetwork) {
+          throw connectionRefused();
+        }
         return Response.json({ prompt_id: "p1" });
       }
       return Response.json({}); // /system_stats：连上即存活（#685 口径）

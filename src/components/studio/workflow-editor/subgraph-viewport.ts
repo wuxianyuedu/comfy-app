@@ -93,15 +93,27 @@ export function normalizeBounds(
 
     const x = node.position.x;
     const y = node.position.y;
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      continue;
+    }
 
-    if (x < minX) minX = x;
-    if (x + width > maxX) maxX = x + width;
-    if (y < minY) minY = y;
-    if (y + height > maxY) maxY = y + height;
+    if (x < minX) {
+      minX = x;
+    }
+    if (x + width > maxX) {
+      maxX = x + width;
+    }
+    if (y < minY) {
+      minY = y;
+    }
+    if (y + height > maxY) {
+      maxY = y + height;
+    }
   }
 
-  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return null;
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+    return null;
+  }
   return { minX, maxX, minY, maxY };
 }
 
@@ -118,7 +130,9 @@ export function computeFitViewport(
     maxZoom?: number;
   },
 ): FitViewport | null {
-  if (!bounds) return null;
+  if (!bounds) {
+    return null;
+  }
   const padding = options?.padding ?? DEFAULT_VIEWPORT_PADDING;
   const minZoom = options?.minZoom ?? DEFAULT_MIN_FIT_ZOOM;
   const maxZoom = options?.maxZoom ?? DEFAULT_MAX_FIT_ZOOM;
@@ -227,7 +241,9 @@ export function createFitOnceScheduler(): FitOnceScheduler {
   return {
     isSettled: (key) => settled.has(key),
     markPending: (key) => {
-      if (settled.has(key)) return false;
+      if (settled.has(key)) {
+        return false;
+      }
       pending.add(key);
       return true;
     },

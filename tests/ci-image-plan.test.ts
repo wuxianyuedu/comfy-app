@@ -311,7 +311,9 @@ describe("tarball：权限位、符号链接、可复现", () => {
       cwd: TMP,
       encoding: "utf8",
     });
-    if (list.error) return null; // 这台机器上确实没有 tar（极简容器）—— 那一档不在这里红
+    if (list.error) {
+      return null;
+    } // 这台机器上确实没有 tar（极简容器）—— 那一档不在这里红
     expect(
       list.status,
       `tar 在盘上，却读不了这份包（退出码 ${list.status}）：` +
@@ -322,7 +324,9 @@ describe("tarball：权限位、符号链接、可复现", () => {
 
   it("宿主 tar 认得它（权限位与符号链接都在）", () => {
     const text = listTar();
-    if (text === null) return;
+    if (text === null) {
+      return;
+    }
     /* 期望的 mode 来自**盘上那个文件本身**，不是写死的 `rwxr-xr-x`。
      * 这一格判的是「`buildTarStream` 有没有把 stat 里的 mode 原样带进 header」，
      * 而 Windows 上那句 `spawnSync("chmod", ["755", …])` 是一条不存在的命令 ——
@@ -347,7 +351,9 @@ describe("tarball：权限位、符号链接、可复现", () => {
 
   it("不穿符号链接（链接的目标不被打成第二份内容）", () => {
     const text = listTar();
-    if (text === null) return;
+    if (text === null) {
+      return;
+    }
     const names = text.trim().split(/\r?\n/).map(nameOf);
     expect(names.filter((n) => n === "sub/link").length).toBe(1);
     expect(names).toContain("a.txt");
@@ -428,7 +434,9 @@ describe("`--dockerfile` 的正文里自带一条「落盘版是 --write」", ()
     const hintAt = lines.findIndex((l) => l.includes("不写文件"));
     expect(hintAt).toBeGreaterThan(-1);
     for (const line of lines.slice(0, hintAt + 4)) {
-      if (line === "") continue;
+      if (line === "") {
+        continue;
+      }
       expect(line.startsWith("#")).toBe(true);
     }
   });

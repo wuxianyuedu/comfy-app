@@ -61,10 +61,9 @@ describe("字形归一化：等义替换", () => {
   it("替代物**全部**落在 CP936 里 —— 否则替换完还要再被吃一次", () => {
     for (const [from, to] of GLYPH_REPLACEMENTS) {
       for (const ch of to) {
-        expect(
-          isCp936Encodable(ch),
-          `${from} 的替代写法里有 CP936 编不出来的字符：${ch}`,
-        ).toBe(true);
+        expect(isCp936Encodable(ch), `${from} 的替代写法里有 CP936 编不出来的字符：${ch}`).toBe(
+          true,
+        );
       }
     }
   });
@@ -127,7 +126,9 @@ describe("字形归一化：幂等与读数", () => {
     const line = describeGlyphReplacements(out.replaced);
     expect(line.length).toBeGreaterThan(0);
     for (const ch of line) {
-      if (ch.codePointAt(0)! < 0x80) continue;
+      if (ch.codePointAt(0)! < 0x80) {
+        continue;
+      }
       expect(
         isCp936Encodable(ch),
         `读数里有 CP936 编不出来的字符：${ch}（U+${(ch.codePointAt(0) ?? 0)
@@ -226,7 +227,7 @@ describe("转码外壳：接上了归一化", () => {
     expect(source).toContain("describeGlyphReplacements");
     const guards = source.match(/if \(said !== ""\)/g) ?? [];
     expect(guards.length, "两处调用点各要有一个「空串就不发」").toBe(2);
-    const summaryAt = source.indexOf('describeGlyphReplacements(\n');
+    const summaryAt = source.indexOf("describeGlyphReplacements(\n");
     expect(summaryAt, "认不出收尾那条调用；它的形状变了要同批改这里").toBeGreaterThan(-1);
     const summaryChunk = source.slice(summaryAt, summaryAt + 320);
     expect(summaryChunk).toContain("write(summary");

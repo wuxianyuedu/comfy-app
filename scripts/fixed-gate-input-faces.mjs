@@ -60,11 +60,7 @@
 export const INPUT_FACES = [
   {
     test: "tests/base-check.test.ts",
-    face: [
-      "scripts/base-check.mjs",
-      ".githooks/**",
-      "tests/base-check.test.ts",
-    ],
+    face: ["scripts/base-check.mjs", ".githooks/**", "tests/base-check.test.ts"],
     why: "它判的是「被门槛拦住时那条命令能不能复算归属」：被测面是 base-check 本体 + 钩子怎么点名判据（含 `commandTargetState` 认的那些命令行形状）",
   },
   {
@@ -118,9 +114,15 @@ export const INPUT_FACES = [
 export function faceMatches(file, pattern) {
   const f = String(file).replace(/\\/g, "/");
   const p = String(pattern).replace(/\\/g, "/");
-  if (p === "" || p === "**" || p === "*") return false;
-  if (p.endsWith("/**")) return f.startsWith(p.slice(0, -2));
-  if (!p.includes("*")) return f === p;
+  if (p === "" || p === "**" || p === "*") {
+    return false;
+  }
+  if (p.endsWith("/**")) {
+    return f.startsWith(p.slice(0, -2));
+  }
+  if (!p.includes("*")) {
+    return f === p;
+  }
   const re = new RegExp(
     `^${p
       .split("*")
@@ -139,9 +141,14 @@ export function faceMatches(file, pattern) {
  */
 export function faceHits(entry, changed) {
   for (const rel of changed) {
-    if (rel === entry.test) return true;
-    for (const pattern of entry.face)
-      if (faceMatches(rel, pattern)) return true;
+    if (rel === entry.test) {
+      return true;
+    }
+    for (const pattern of entry.face) {
+      if (faceMatches(rel, pattern)) {
+        return true;
+      }
+    }
   }
   return false;
 }

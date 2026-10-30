@@ -74,7 +74,9 @@ export function migrateLegacyArtifactRoot(
 
   let entries: Array<string>;
   try {
-    if (!fs.existsSync(legacy) || !fs.statSync(legacy).isDirectory()) return report;
+    if (!fs.existsSync(legacy) || !fs.statSync(legacy).isDirectory()) {
+      return report;
+    }
     entries = fs.readdirSync(legacy);
   } catch {
     // 读不到旧根（权限 / 正被删）：记成「留在原地」，让调用点有话可说，不阻断启动
@@ -91,8 +93,11 @@ export function migrateLegacyArtifactRoot(
         continue;
       }
       const outcome = moveEntry(path.join(legacy, name), to);
-      if (outcome.kind === "moved") report.moved.push(name);
-      else if (outcome.kind === "blocked") report.blocked.push({ name, code: outcome.code });
+      if (outcome.kind === "moved") {
+        report.moved.push(name);
+      } else if (outcome.kind === "blocked") {
+        report.blocked.push({ name, code: outcome.code });
+      }
     }
   }
   // 只有「一条都没留下」才试着收掉空壳；留着旧目录不是错误，而是下面这句话的

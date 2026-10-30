@@ -43,9 +43,13 @@ function FitHarness({
   schedulerRef.current ??= createFitOnceScheduler();
 
   useEffect(() => {
-    if (nodeCount === 0) return;
+    if (nodeCount === 0) {
+      return;
+    }
     const scheduler = schedulerRef.current;
-    if (!scheduler?.markPending(graphKey)) return;
+    if (!scheduler?.markPending(graphKey)) {
+      return;
+    }
     /* 与 WorkflowEditorInner 的同一条约定：视口下发后**且测量收敛**才记账。 */
     let raf = 0;
     const step = () => {
@@ -54,7 +58,9 @@ function FitHarness({
     };
     raf = requestAnimationFrame(step);
     return () => {
-      if (raf) cancelAnimationFrame(raf);
+      if (raf) {
+        cancelAnimationFrame(raf);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applied 是测试用的收集数组，身份稳定
   }, [graphKey, nodeCount]);

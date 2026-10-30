@@ -46,12 +46,7 @@ export class AppError extends Error {
   /** 可选的结构化附加信息（字段级错误等），仅用于日志/调试前端提示。 */
   public readonly details?: unknown;
 
-  constructor(
-    message: string,
-    code = "internal",
-    httpStatus = 500,
-    details?: unknown,
-  ) {
+  constructor(message: string, code = "internal", httpStatus = 500, details?: unknown) {
     super(message);
     this.name = new.target.name;
     this.code = code;
@@ -64,11 +59,7 @@ export class AppError extends Error {
 
 /** 未登录 / 会话失效 → 401。 */
 export class AuthError extends AppError {
-  constructor(
-    message = "未登录或会话已失效",
-    code = "auth.required",
-    details?: unknown,
-  ) {
+  constructor(message = "未登录或会话已失效", code = "auth.required", details?: unknown) {
     super(message, code, 401, details);
   }
 }
@@ -86,11 +77,7 @@ export class AuthError extends AppError {
  *（规范 16 §16.2.4.44 的入参收窄出口）—— 按本文件开头的裁决，这时才值得立类。
  */
 export class ValidationError extends AppError {
-  constructor(
-    message = "请求参数不合法",
-    code = "validation.invalid",
-    details?: unknown,
-  ) {
+  constructor(message = "请求参数不合法", code = "validation.invalid", details?: unknown) {
     super(message, code, 400, details);
   }
 }
@@ -108,7 +95,9 @@ export class NotFoundError extends AppError {
  * - 其余 → 包装为基类 `AppError`（保持 500，不泄露内部细节）。
  */
 export function normalizeError(err: unknown): AppError {
-  if (err instanceof AppError) return err;
+  if (err instanceof AppError) {
+    return err;
+  }
 
   const message = err instanceof Error ? err.message : "未知内部错误";
   return new AppError(message, "internal", 500);

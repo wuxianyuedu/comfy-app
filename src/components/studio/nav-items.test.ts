@@ -49,7 +49,9 @@ describe("globalNavItems", () => {
   it("只含全局项，不含任何项目页签与项目入口", () => {
     const ids = globalNavItems().map((i) => i.id);
     expect(ids).toEqual(GLOBAL_IDS);
-    for (const tab of PROJECT_TAB_IDS) expect(ids).not.toContain(tab);
+    for (const tab of PROJECT_TAB_IDS) {
+      expect(ids).not.toContain(tab);
+    }
     expect(ids).not.toContain(PROJECTS_ENTRY.id);
   });
 });
@@ -66,7 +68,9 @@ describe("projectTabs", () => {
 
 describe("isProjectTab", () => {
   it("项目页签为真，全局项与项目入口为假", () => {
-    for (const id of PROJECT_TAB_IDS) expect(isProjectTab(id)).toBe(true);
+    for (const id of PROJECT_TAB_IDS) {
+      expect(isProjectTab(id)).toBe(true);
+    }
     /* `home`（应用首页）与 `project`（项目主页）是两个层级，前者不是项目页签 ——
      * 混了会让侧栏「首页」在项目界面里也被高亮。 */
     expect(isProjectTab("home")).toBe(false);

@@ -510,7 +510,9 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
     const doc = readFileSync(join(REPO_ROOT, "docs/reference-facts.md"), "utf8");
     const row = doc.split("\n").find((l) => l.includes("comment.language.asciiOnly"));
     expect(row, "reference-facts 缺少 comment.language.asciiOnly 登记行").toBeTruthy();
-    for (const p of paths) expect(row).toContain(`\`${p}\``);
+    for (const p of paths) {
+      expect(row).toContain(`\`${p}\``);
+    }
   });
 
   test("事实已登记在 FACTS 里（有 key 才参与 doc:check 的核对）", async () => {

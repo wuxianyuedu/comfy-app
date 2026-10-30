@@ -167,7 +167,9 @@ describe("命令探测分四态，不许糊成布尔", () => {
   it("真的存在的解释器仍是 ok（四态没有把正常路径收窄）", () => {
     // python3 不在 PATH 上时这一格不成立 —— 那是机器的形状，不是判据的形状，
     // 所以只在探到 ok 时断言，没探到就跳过。
-    if (judge.probeCommand("python3", ["--version"]) !== "ok") return;
+    if (judge.probeCommand("python3", ["--version"]) !== "ok") {
+      return;
+    }
     expect(judge.probeCommand("python3", ["--version"])).toBe("ok");
   });
 });

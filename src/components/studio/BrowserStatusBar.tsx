@@ -10,10 +10,7 @@ import { MessageCenterButton } from "~/components/message-center/MessageCenterBu
 import { useAppServiceMessageLog } from "~/components/message-center/hooks/use-app-service-message-log";
 import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyReadiness } from "./hooks/use-comfy-readiness";
-import {
-  STALE_RESOURCE_NOTE,
-  selectVisibleResourceMetrics,
-} from "./comfy-resource-metrics";
+import { STALE_RESOURCE_NOTE, selectVisibleResourceMetrics } from "./comfy-resource-metrics";
 import { useDevServerStatus } from "./hooks/use-dev-server-status";
 import type { AppServiceExitNotice } from "~/lib/shell/app-service-exit";
 import {
@@ -24,17 +21,9 @@ import {
 } from "./hooks/use-schema-sync-status";
 import { useSchemaSyncPush } from "./hooks/use-schema-sync-push";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
-import {
-  comfyQueueNotice,
-  useComfyQueue,
-  type ComfyQueueView,
-} from "./hooks/use-comfy-queue";
+import { comfyQueueNotice, useComfyQueue, type ComfyQueueView } from "./hooks/use-comfy-queue";
 import { Hint } from "~/components/ui/hint";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { fmtBytes } from "~/lib/format-bytes";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { StatusDot } from "~/components/ui/status-dot";
@@ -151,7 +140,9 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
   const notice = schemaSyncNotice(status);
   const { push, pushing } = useSchemaSyncPush();
   const [confirming, setConfirming] = useState(false);
-  if (notice === null) return null;
+  if (notice === null) {
+    return null;
+  }
 
   const tone = SCHEMA_TONE_CLASS[notice.tone];
   if (notice.refreshable) {
@@ -214,7 +205,9 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
  */
 function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
   const notice = comfyQueueNotice(view);
-  if (notice === null) return null;
+  if (notice === null) {
+    return null;
+  }
   const detailLines = notice.title.split("\n");
   return (
     <Popover>
@@ -245,12 +238,10 @@ function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
  * 排版上只放**一句原因**（`why`），把「这一次具体是什么结束的」与「现在该做什么」
  * 留给 `title`：这一格是弹性的、旁边还有排队信息要共存，完整三句会把它们挤掉。
  */
-function DevServerExitItem({
-  notice,
-}: {
-  notice: AppServiceExitNotice | null;
-}) {
-  if (notice === null) return null;
+function DevServerExitItem({ notice }: { notice: AppServiceExitNotice | null }) {
+  if (notice === null) {
+    return null;
+  }
   return (
     <span
       className="text-destructive/90 max-w-60 shrink-0 truncate"
@@ -308,7 +299,9 @@ export function BrowserStatusBar() {
 
   const tone = fpsTone(fps);
 
-  if (activeTabId !== MAIN_TAB_ID) return null;
+  if (activeTabId !== MAIN_TAB_ID) {
+    return null;
+  }
 
   return (
     <div
@@ -319,10 +312,7 @@ export function BrowserStatusBar() {
       <div className="flex w-42.5 shrink-0 items-center gap-1.5">
         <Lock size={11} className="text-success-strong shrink-0" />
         <span className="text-ink-fainter shrink-0">安全</span>
-        <span
-          className="text-ink-soft truncate"
-          title={host ? `${host}${pathname}` : pathname}
-        >
+        <span className="text-ink-soft truncate" title={host ? `${host}${pathname}` : pathname}>
           {host ? `${host}${pathname}` : pathname}
         </span>
       </div>
@@ -345,18 +335,16 @@ export function BrowserStatusBar() {
       >
         {/* 三档资源的标签、口径 title 与「缺值整档隐藏」的判据都在
            `comfy-resource-metrics`（首页算力卡读同一份），这里只负责行内排版。 */}
-        {selectVisibleResourceMetrics({ cudaVram, smiVram, ram }).map(
-          ({ descriptor, bar }) => (
-            <UsageItem
-              key={descriptor.key}
-              label={descriptor.label}
-              title={descriptor.title}
-              used={bar.used}
-              total={bar.total}
-              pct={bar.pct}
-            />
-          ),
-        )}
+        {selectVisibleResourceMetrics({ cudaVram, smiVram, ram }).map(({ descriptor, bar }) => (
+          <UsageItem
+            key={descriptor.key}
+            label={descriptor.label}
+            title={descriptor.title}
+            used={bar.used}
+            total={bar.total}
+            pct={bar.pct}
+          />
+        ))}
 
         {/* 降级提示 */}
         {degradedNote && (
@@ -376,13 +364,8 @@ export function BrowserStatusBar() {
           className="hidden items-center gap-1 md:flex"
           title="全应用实时帧率：≥50 流畅，30~49 轻微掉帧，<30 明显卡顿"
         >
-          <span
-            aria-hidden
-            className={`inline-block size-1.5 rounded-full ${fpsDotColor[tone]}`}
-          />
-          <span className={`tabular-nums ${fpsTextColor[tone]}`}>
-            {displayValue(fps)}
-          </span>
+          <span aria-hidden className={`inline-block size-1.5 rounded-full ${fpsDotColor[tone]}`} />
+          <span className={`tabular-nums ${fpsTextColor[tone]}`}>{displayValue(fps)}</span>
           <span className="text-ink-soft">FPS</span>
         </span>
 
@@ -390,10 +373,7 @@ export function BrowserStatusBar() {
 
         {/* 纯图标按钮（只有图标与可选的错误计数徽标，没有可见文字）：按 ui/hint 的契约
             传 accessibleName，让提示文案同时成为 aria-label —— 否则读屏只报一颗匿名按钮。 */}
-        <Hint
-          label={`日志面板 (${isOpen ? "开" : "关"}) — Ctrl+Shift+L`}
-          accessibleName
-        >
+        <Hint label={`日志面板 (${isOpen ? "开" : "关"}) — Ctrl+Shift+L`} accessibleName>
           <Button
             variant="ghost"
             onClick={toggleOpen}
@@ -426,11 +406,7 @@ export function BrowserStatusBar() {
         >
           <StatusDot
             state={
-              devServer.state === "online"
-                ? "up"
-                : devServer.state === "starting"
-                  ? "busy"
-                  : "down"
+              devServer.state === "online" ? "up" : devServer.state === "starting" ? "busy" : "down"
             }
             sizeClass="size-1.5"
             pulse={devServer.state === "starting"}

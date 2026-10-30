@@ -32,7 +32,9 @@ import { GIT_INHERITED_ENV_KEYS, gitSandboxEnv } from "./helpers/git-sandbox-env
 const dirs: Array<string> = [];
 
 afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** 起一个夹具仓库：一次提交、干净工作区，返回根目录。 */
@@ -67,7 +69,9 @@ function makeRepo(name: string): string {
  */
 function bareEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const key of GIT_INHERITED_ENV_KEYS) delete env[key];
+  for (const key of GIT_INHERITED_ENV_KEYS) {
+    delete env[key];
+  }
   return env;
 }
 

@@ -38,7 +38,9 @@ export async function createWorkflowRunTask(
   input: RunWorkflowInput,
 ): Promise<{ taskId: string; workflowName: string; taskType: string }> {
   const tpl = await workflowTemplateRepository.findByIdForUser(input.userId, input.workflowId);
-  if (!tpl) throw new Error(`工作流不存在：${input.workflowId}`);
+  if (!tpl) {
+    throw new Error(`工作流不存在：${input.workflowId}`);
+  }
 
   const modes = parseModesJson(tpl.modes);
   const mode = tpl.defaultMode ?? tpl.taskType ?? modes[0] ?? null;

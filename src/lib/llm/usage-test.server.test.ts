@@ -92,7 +92,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 function reqOf(body: unknown, opts: { throw?: boolean } = {}): Request {
   return /* SAFETY: 类型断言已复核 */ {
     json: async () => {
-      if (opts.throw) throw new Error("bad json");
+      if (opts.throw) {
+        throw new Error("bad json");
+      }
       return body;
     },
   } as unknown as Request;

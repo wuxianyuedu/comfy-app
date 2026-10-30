@@ -30,7 +30,9 @@ async function assertSeriesOwner(ctx: Ctx, id: string) {
 async function assertSeasonOwner(ctx: Ctx, id: string) {
   const rows = await ctx.db.select().from(season).where(eq(season.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "季不存在" });
+  if (!row) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "季不存在" });
+  }
   await assertSeriesOwner(ctx, row.seriesId);
   return row;
 }
@@ -39,7 +41,9 @@ async function assertSeasonOwner(ctx: Ctx, id: string) {
 async function assertEpisodeOwner(ctx: Ctx, id: string) {
   const rows = await ctx.db.select().from(episode).where(eq(episode.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "集不存在" });
+  if (!row) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "集不存在" });
+  }
   await assertSeasonOwner(ctx, row.seasonId);
   return row;
 }
@@ -91,10 +95,18 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertSeriesOwner(ctx, input.id);
       const patch: Partial<typeof series.$inferInsert> = {};
-      if (input.title !== undefined) patch.title = input.title;
-      if (input.description !== undefined) patch.description = input.description;
-      if (input.coverUrl !== undefined) patch.coverUrl = input.coverUrl;
-      if (input.styleSlug !== undefined) patch.styleSlug = input.styleSlug;
+      if (input.title !== undefined) {
+        patch.title = input.title;
+      }
+      if (input.description !== undefined) {
+        patch.description = input.description;
+      }
+      if (input.coverUrl !== undefined) {
+        patch.coverUrl = input.coverUrl;
+      }
+      if (input.styleSlug !== undefined) {
+        patch.styleSlug = input.styleSlug;
+      }
       await ctx.db.update(series).set(patch).where(eq(series.id, input.id));
       return (await ctx.db.select().from(series).where(eq(series.id, input.id)).limit(1))[0];
     }),
@@ -152,8 +164,12 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertSeasonOwner(ctx, input.id);
       const patch: Partial<typeof season.$inferInsert> = {};
-      if (input.seasonNumber !== undefined) patch.seasonNumber = input.seasonNumber;
-      if (input.title !== undefined) patch.title = input.title;
+      if (input.seasonNumber !== undefined) {
+        patch.seasonNumber = input.seasonNumber;
+      }
+      if (input.title !== undefined) {
+        patch.title = input.title;
+      }
       await ctx.db.update(season).set(patch).where(eq(season.id, input.id));
       return (await ctx.db.select().from(season).where(eq(season.id, input.id)).limit(1))[0];
     }),
@@ -223,12 +239,24 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertEpisodeOwner(ctx, input.id);
       const patch: Partial<typeof episode.$inferInsert> = {};
-      if (input.projectId !== undefined) patch.projectId = input.projectId;
-      if (input.episodeNumber !== undefined) patch.episodeNumber = input.episodeNumber;
-      if (input.title !== undefined) patch.title = input.title;
-      if (input.synopsis !== undefined) patch.synopsis = input.synopsis;
-      if (input.targetDurationSec !== undefined) patch.targetDurationSec = input.targetDurationSec;
-      if (input.status !== undefined) patch.status = input.status;
+      if (input.projectId !== undefined) {
+        patch.projectId = input.projectId;
+      }
+      if (input.episodeNumber !== undefined) {
+        patch.episodeNumber = input.episodeNumber;
+      }
+      if (input.title !== undefined) {
+        patch.title = input.title;
+      }
+      if (input.synopsis !== undefined) {
+        patch.synopsis = input.synopsis;
+      }
+      if (input.targetDurationSec !== undefined) {
+        patch.targetDurationSec = input.targetDurationSec;
+      }
+      if (input.status !== undefined) {
+        patch.status = input.status;
+      }
       await ctx.db.update(episode).set(patch).where(eq(episode.id, input.id));
       return (await ctx.db.select().from(episode).where(eq(episode.id, input.id)).limit(1))[0];
     }),
@@ -250,11 +278,17 @@ export const seriesRouter = createTRPCRouter({
         .from(episode)
         .where(eq(episode.projectId, input.projectId))
         .limit(1);
-      if (!ep) return null;
+      if (!ep) {
+        return null;
+      }
       const [se] = await ctx.db.select().from(season).where(eq(season.id, ep.seasonId)).limit(1);
-      if (!se) return null;
+      if (!se) {
+        return null;
+      }
       const owner = await loadSeries(ctx, se.seriesId);
-      if (owner?.userId !== ctx.user.id) return null;
+      if (owner?.userId !== ctx.user.id) {
+        return null;
+      }
       return ep;
     }),
 
@@ -272,7 +306,9 @@ export const seriesRouter = createTRPCRouter({
         .from(episode)
         .where(eq(episode.id, input.episodeId))
         .limit(1);
-      if (!ep) throw new TRPCError({ code: "NOT_FOUND", message: "集不存在" });
+      if (!ep) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "集不存在" });
+      }
       await assertSeasonOwner(ctx, ep.seasonId);
       const [row] = await ctx.db
         .update(episode)

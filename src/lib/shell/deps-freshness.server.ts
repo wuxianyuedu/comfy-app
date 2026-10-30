@@ -53,11 +53,15 @@ export interface DepsFreshness {
 export function readDepsFreshness(root: string = process.cwd()): DepsFreshness | null {
   /* 只有 `next dev` 这一档判：生产形态的依赖面由打包链路负责，这里既没有动作
    * 出口、也会对一棵本就该由构建决定的依赖树误报。 */
-  if (process.env.NODE_ENV !== "development") return null;
+  if (process.env.NODE_ENV !== "development") {
+    return null;
+  }
 
   const drift = lockfileDrift(root);
   /* 仓库根没有 lockfile ⇒ 这不是一个源码检出（桌包 / 纯 web）。 */
-  if (drift.state === "no-lockfile") return null;
+  if (drift.state === "no-lockfile") {
+    return null;
+  }
   if (drift.state === "drift") {
     return { stale: true, state: "drift", missing: [] };
   }

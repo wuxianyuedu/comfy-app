@@ -18,7 +18,9 @@ export function parseIdeaToScenes(
   meta: Pick<ProjectMeta, "title" | "type" | "tone" | "logline">,
 ): Array<Scene> {
   const text = raw.trim();
-  if (!text) return [];
+  if (!text) {
+    return [];
+  }
 
   // 单句短想法 → 用简单的三幕模板扩写
   const hasStructure = /\n\s*\n/.test(text) || /场景\d|场\s*\d|SCENE/i.test(text);
@@ -125,9 +127,15 @@ function extractMeta(text: string): { location: string; time: string } {
 
 function estimateShots(text: string): number {
   const len = text.length;
-  if (len < 40) return 1;
-  if (len < 100) return 2;
-  if (len < 200) return 3;
+  if (len < 40) {
+    return 1;
+  }
+  if (len < 100) {
+    return 2;
+  }
+  if (len < 200) {
+    return 3;
+  }
   return 4;
 }
 

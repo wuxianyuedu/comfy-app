@@ -56,9 +56,15 @@ const PORT_DOT_SHADOW = "0 4px 4px rgba(0,0,0,0.25)";
 /** 端口类型 → 该类型的强调色（端点圆点 / chip 文字）。 */
 const portColor = (type?: string) => {
   const t = upperToken(type);
-  if (t === "IMAGE" || t === "MASK") return PORT_TYPE_COLORS.image;
-  if (t === "VIDEO" || t.startsWith("VHS") || t === "AUDIO") return PORT_TYPE_COLORS.video;
-  if (t === "BOOLEAN" || t === "BOOL") return PORT_TYPE_COLORS.boolean;
+  if (t === "IMAGE" || t === "MASK") {
+    return PORT_TYPE_COLORS.image;
+  }
+  if (t === "VIDEO" || t.startsWith("VHS") || t === "AUDIO") {
+    return PORT_TYPE_COLORS.video;
+  }
+  if (t === "BOOLEAN" || t === "BOOL") {
+    return PORT_TYPE_COLORS.boolean;
+  }
   return "var(--color-ink-muted)";
 };
 

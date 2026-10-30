@@ -54,8 +54,7 @@ export function NumberField({
   /* 「按某档小数位写数」走唯一出口（`~/lib/number-format`，规范 16 §16.2.4.54）——
    * 本基元只是把小数位当 props 传下去，不自己拼一份。 */
   const fmt = useCallback(
-    (v: number) =>
-      decimalPlaces > 0 ? (fixed(v, decimalPlaces) ?? "") : String(v),
+    (v: number) => (decimalPlaces > 0 ? (fixed(v, decimalPlaces) ?? "") : String(v)),
     [decimalPlaces],
   );
 
@@ -70,7 +69,9 @@ export function NumberField({
   const commitText = useCallback(
     (text: string) => {
       const n = parseFloat(text);
-      if (!isNaN(n)) onChange(clampToStep(n));
+      if (!isNaN(n)) {
+        onChange(clampToStep(n));
+      }
     },
     [clampToStep, onChange],
   );
@@ -113,7 +114,9 @@ export function NumberField({
           setDraft(text);
           /* 合法前缀实时上抛（clamp 只影响提交值，不打断击键回显） */
           const n = parseFloat(text);
-          if (!isNaN(n)) onChange(clampToStep(n));
+          if (!isNaN(n)) {
+            onChange(clampToStep(n));
+          }
         }}
         onBlur={() => {
           if (draft !== null) {

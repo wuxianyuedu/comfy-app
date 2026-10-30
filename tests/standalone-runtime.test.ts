@@ -169,7 +169,9 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
         .relative(path.join(ROOT, "src"), path.resolve(path.dirname(fromFile), spec))
         .split(path.sep)
         .join("/");
-      if (rel === "" || rel.startsWith("..")) return null;
+      if (rel === "" || rel.startsWith("..")) {
+        return null;
+      }
       return rel.replace(/\.ts$/, "");
     };
     /** 一份 TS 里 `./x.ts` / `./x` 两种写法都要认（本仓 TS 侧惯例是省略扩展名，
@@ -186,9 +188,13 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
       const queue = [...seeds];
       while (queue.length > 0) {
         const rel = queue.shift();
-        if (rel === undefined) break;
+        if (rel === undefined) {
+          break;
+        }
         const abs = path.join(ROOT, "src", `${rel}.ts`);
-        if (!existsSync(abs)) continue;
+        if (!existsSync(abs)) {
+          continue;
+        }
         for (const spec of relativeSpecifiers(abs)) {
           const next = toSrcRel(spec, abs);
           if (next !== null && !seen.has(next)) {
@@ -211,7 +217,9 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
       const code = stripCommentLines(readFileSync(abs, "utf8"));
       for (const m of code.matchAll(/"((?:\.\.\/)+src\/[^"]+)"/g)) {
         const rel = m[1] === undefined ? null : toSrcRel(m[1], abs);
-        if (rel !== null && !seeds.includes(rel)) seeds.push(rel);
+        if (rel !== null && !seeds.includes(rel)) {
+          seeds.push(rel);
+        }
       }
     }
     const reachable = closureFrom(seeds);
@@ -392,9 +400,13 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
    *  拷进来，不覆盖就会真起一个宿主）；给 `null` = 载荷里**没有**宿主入口。 */
   function stagePayload(serverBody: string, host?: string | null) {
     for (const name of registry.RUNTIME_SCRIPTS) {
-      if (registry.BUILT_RUNTIME_SCRIPTS.includes(name)) continue; // 构建期产物，桩里没有
+      if (registry.BUILT_RUNTIME_SCRIPTS.includes(name)) {
+        continue;
+      } // 构建期产物，桩里没有
       const src = path.join(ROOT, "scripts", name);
-      if (!existsSync(src)) continue; // 缺源由 §10.2 的断言负责，不在这里判
+      if (!existsSync(src)) {
+        continue;
+      } // 缺源由 §10.2 的断言负责，不在这里判
       const dest = path.join(workdir, "scripts", name);
       mkdirSync(path.dirname(dest), { recursive: true });
       cpSync(src, dest);
@@ -412,8 +424,11 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
       writeFileSync(path.join(workdir, "server.js"), serverBody, "utf8");
     }
     const hostPath = path.join(workdir, "scripts", "executor-host.mjs");
-    if (host === null) rmSync(hostPath, { force: true });
-    else if (host !== undefined) writeFileSync(hostPath, host, "utf8");
+    if (host === null) {
+      rmSync(hostPath, { force: true });
+    } else if (host !== undefined) {
+      writeFileSync(hostPath, host, "utf8");
+    }
   }
 
   const entryPath = () => path.join(workdir, "scripts", "standalone-runtime.mjs");
@@ -427,7 +442,9 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
   /** 宿主自己的输出通道内容（入口把这两份路径写在 `host pid=` 那一行里）。 */
   function hostStdout() {
     const dir = path.join(workdir, "log", "current", "services");
-    if (!existsSync(dir)) return "";
+    if (!existsSync(dir)) {
+      return "";
+    }
     return readdirSync(dir)
       .filter((n) => n.startsWith("executor-host-stdout-"))
       .map((n) => readFileSync(path.join(dir, n), "utf8"))

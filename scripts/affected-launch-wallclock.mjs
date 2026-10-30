@@ -74,10 +74,7 @@ export const SERIAL_RERUN_FACTOR = 2;
  * @param {{startMs?: number, budgetMs?: number}} [options]
  * @returns {{deadline: number, budgetMs: number}}
  */
-export function wallClockBudget({
-  startMs = Date.now(),
-  budgetMs = STAGE_WALL_CLOCK_MS,
-} = {}) {
+export function wallClockBudget({ startMs = Date.now(), budgetMs = STAGE_WALL_CLOCK_MS } = {}) {
   return { deadline: startMs + budgetMs, budgetMs };
 }
 
@@ -92,7 +89,9 @@ export function wallClockBudget({
  * @returns {number | null}
  */
 export function remainingWallClockMs(budget, nowMs = Date.now()) {
-  if (!budget) return null;
+  if (!budget) {
+    return null;
+  }
   return budget.deadline - nowMs;
 }
 
@@ -200,16 +199,17 @@ export function budgetAllows({
  * @param {{budget?: {deadline: number} | null, perFileMs: number, pending: number, nowMs?: number}} args
  * @returns {number} 还能跑的份数（0 = 剩下的退回既有那条「拿不到自己的读数 ⇒ 退 2 并点名」）
  */
-export function affordablePerFileCount({
-  budget,
-  perFileMs,
-  pending,
-  nowMs = Date.now(),
-}) {
+export function affordablePerFileCount({ budget, perFileMs, pending, nowMs = Date.now() }) {
   const remainingMs = remainingWallClockMs(budget, nowMs);
-  if (remainingMs === null) return pending;
-  if (remainingMs <= 0 || pending <= 0) return 0;
-  if (perFileMs <= 0) return Math.min(pending, 1);
+  if (remainingMs === null) {
+    return pending;
+  }
+  if (remainingMs <= 0 || pending <= 0) {
+    return 0;
+  }
+  if (perFileMs <= 0) {
+    return Math.min(pending, 1);
+  }
   return Math.min(pending, Math.floor(remainingMs / perFileMs));
 }
 
@@ -227,7 +227,9 @@ export function affordablePerFileCount({
  * @returns {string[]} 第 2 遍要跑的文件（`via: "block"` ⇒ 全部）
  */
 export function rerunFileList({ gate, files, readSuites, isTimeout }) {
-  if (gate.via !== "probe") return [...files];
+  if (gate.via !== "probe") {
+    return [...files];
+  }
   return probeFiles({
     files,
     count: gate.probeCount ?? 1,
@@ -261,16 +263,15 @@ export function rerunFileList({ gate, files, readSuites, isTimeout }) {
  *   `isTimeout` 默认取 `isTimeoutShaped`（由调用点注入，本文件不复制第二份指纹清单）
  * @returns {string[]} 挑出来的文件（`count` ≤ 0 ⇒ 空；`count ≥ 份数` ⇒ 原样）
  */
-export function probeFiles({
-  files,
-  count,
-  readSuites = [],
-  isTimeout = () => true,
-}) {
+export function probeFiles({ files, count, readSuites = [], isTimeout = () => true }) {
   const list = Array.isArray(files) ? files : [];
   const n = Math.max(0, Math.trunc(Number(count) || 0));
-  if (n <= 0 || list.length === 0) return [];
-  if (n >= list.length) return [...list];
+  if (n <= 0 || list.length === 0) {
+    return [];
+  }
+  if (n >= list.length) {
+    return [...list];
+  }
   /** @type {Map<string, string>} */
   const bodyByName = new Map();
   for (const s of readSuites) {
@@ -281,7 +282,9 @@ export function probeFiles({
   /** @param {string} file */
   const rank = (file) => {
     const body = bodyByName.get(file);
-    if (body === undefined) return 1;
+    if (body === undefined) {
+      return 1;
+    }
     return isTimeout(body) ? 1 : 0;
   };
   return list
@@ -329,7 +332,9 @@ export function perFileBudgetStopReport({ remainingMs, perFileMs, left }) {
  */
 export function resolveWallClockMs(raw) {
   const text = String(raw ?? "").trim();
-  if (text === "") return { budgetMs: STAGE_WALL_CLOCK_MS, note: null };
+  if (text === "") {
+    return { budgetMs: STAGE_WALL_CLOCK_MS, note: null };
+  }
   const value = Number(text);
   if (!Number.isInteger(value) || value < 1) {
     return {
@@ -357,12 +362,7 @@ export function resolveWallClockMs(raw) {
  *   `via` 说的是「开的是哪一种」（整块 / 逐文件补跑里的 n 份）；`note` 是要打到 stderr
  *   的那段正文（空串 = 这一档什么都不用说）。
  */
-export function gateRerunByWallClock({
-  budget,
-  firstPassMs,
-  retryFiles,
-  nowMs = Date.now(),
-}) {
+export function gateRerunByWallClock({ budget, firstPassMs, retryFiles, nowMs = Date.now() }) {
   const estimateMs = estimateSerialRerunMs(firstPassMs);
   const remainingMs = remainingWallClockMs(budget, nowMs);
   const gate = budgetAllows({

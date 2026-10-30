@@ -202,8 +202,7 @@ function runGit(args, cwd) {
 export function resolveForkBaseline(cwd = ROOT, env = process.env) {
   /** @param {string} ref @returns {boolean} 这个引用在本检出里指得动一个提交 */
   const isCommit = (ref) =>
-    runGit(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], cwd) !==
-    null;
+    runGit(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], cwd) !== null;
   /* ① 平台给的目标 sha：只在它**真的落在这份对象库里**时才用 —— 浅克隆 / 单 ref
    *    之外的那个 sha 会让 merge-base 直接失败，那种「用了但跑不动」比退回 ② 更难读。 */
   const fromEnv = String(env.CNB_PULL_REQUEST_TARGET_SHA ?? "").trim();
@@ -234,10 +233,15 @@ function parseArgs(argv) {
   /** @type {{json: boolean, only: string | null, skip: Set<string>, light: boolean}} */
   const out = { json: false, only: null, skip: new Set(), light: false };
   for (const a of argv) {
-    if (a === "--json") out.json = true;
-    else if (a === "--light") out.light = true;
-    else if (a.startsWith("--only=")) out.only = a.slice("--only=".length);
-    else if (a.startsWith("--skip-")) out.skip.add(a.slice("--skip-".length));
+    if (a === "--json") {
+      out.json = true;
+    } else if (a === "--light") {
+      out.light = true;
+    } else if (a.startsWith("--only=")) {
+      out.only = a.slice("--only=".length);
+    } else if (a.startsWith("--skip-")) {
+      out.skip.add(a.slice("--skip-".length));
+    }
   }
   return out;
 }
@@ -264,10 +268,7 @@ function runScript(script, args, extraEnv = {}) {
    * 由**两路输出全空**（脚本连一行都没打出来）兜一层，再归一成 2。
    * 这条与 `base-check.mjs` 的 `commandTargetState` 是同一族口径（§13.6.2）。 */
   const output = `${r.stdout ?? ""}${r.stderr ?? ""}`;
-  if (
-    typeof r.status !== "number" ||
-    (r.status !== 0 && output.trim() === "")
-  ) {
+  if (typeof r.status !== "number" || (r.status !== 0 && output.trim() === "")) {
     return {
       code: 2,
       output: output || `[premerge] ${script} 没有跑起来（无输出）\n`,
@@ -298,7 +299,9 @@ export function scriptsInCommands(commands) {
   for (const c of commands ?? []) {
     for (const a of c?.argv ?? []) {
       const text = String(a);
-      if (/\.(mjs|cjs|js)$/.test(text)) out.add(text);
+      if (/\.(mjs|cjs|js)$/.test(text)) {
+        out.add(text);
+      }
     }
   }
   return out;
@@ -311,8 +314,12 @@ export function scriptsInCommands(commands) {
  * @returns {number}
  */
 export function combineCodes(codes) {
-  if (codes.includes(2)) return 2;
-  if (codes.includes(1)) return 1;
+  if (codes.includes(2)) {
+    return 2;
+  }
+  if (codes.includes(1)) {
+    return 1;
+  }
   return 0;
 }
 
@@ -331,13 +338,13 @@ function main(argv) {
   }
 
   const wanted = Object.entries(SEGMENTS).filter(([key]) => {
-    if (only) return key === only;
+    if (only) {
+      return key === only;
+    }
     return !skip.has(key);
   });
   if (wanted.length === 0) {
-    process.stderr.write(
-      "[premerge] 各段全被跳过 —— 没有任何东西被复算（退 2）\n",
-    );
+    process.stderr.write("[premerge] 各段全被跳过 —— 没有任何东西被复算（退 2）\n");
     return 2;
   }
 
@@ -364,10 +371,7 @@ function main(argv) {
         });
         continue;
       }
-      const batch = resolveMergeBatch(
-        [],
-        path.join(ROOT, ".githooks", "pre-commit"),
-      );
+      const batch = resolveMergeBatch([], path.join(ROOT, ".githooks", "pre-commit"));
       if (!batch.ok) {
         results.push({
           key,
@@ -391,7 +395,9 @@ function main(argv) {
         : batch.commands;
       const skippedCount = batch.commands.length - commands.length;
       /* 记下这一段**实际**会跑的脚本名（`--light` 筛过之后那一半）。 */
-      for (const s of scriptsInCommands(commands)) ranInBase.add(s);
+      for (const s of scriptsInCommands(commands)) {
+        ranInBase.add(s);
+      }
       if (lightRecompute && skippedCount > 0) {
         process.stdout.write(
           `[premerge] --light：本段只复算本地档那几条，跳过 ${skippedCount} 条重档` +
@@ -417,13 +423,7 @@ function main(argv) {
       );
       const summary = lastSummary(captured.output);
       const code =
-        summary === "current-green"
-          ? 0
-          : summary === "inconclusive"
-            ? 2
-            : summary
-              ? 1
-              : 2;
+        summary === "current-green" ? 0 : summary === "inconclusive" ? 2 : summary ? 1 : 2;
       results.push({ key, label: seg.label, code, output: captured.output });
       continue;
     }
@@ -432,8 +432,7 @@ function main(argv) {
        * 「没跑起来」。早先 `claims` 是裸 `script` + `args: []` ⇒ 只审 HEAD（#2070），
        * 而 `mergeLoss` 取不到锚点时被折成 0 ⇒ 记成绿 —— 两种都是「没读到」被读成
        * 「读过了且没问题」，折算只留这一个出口（`anchorMissed`）。 */
-      const { script, shape } =
-        /** @type {{script: string, shape: "baseline" | "range"}} */ (seg);
+      const { script, shape } = /** @type {{script: string, shape: "baseline" | "range"}} */ (seg);
       /* **同一次跑里不判两遍**：`base` 段的第二个来源已经带着 `--range <base>..HEAD`
        * 跑过这份脚本了（`base-check/chained-steps.mjs`）。跳过时必须把「在哪儿判的」
        * 打在读数里 —— 安静地少跑一段，与少跑一段本身同形（§13.5.12 那条纪律）。
@@ -518,11 +517,7 @@ function main(argv) {
   /** @type {"ok" | "red" | "skip"} */
   const state = total === 0 ? "ok" : total === 1 ? "red" : "skip";
   const detail =
-    state === "ok"
-      ? "三段全绿"
-      : state === "red"
-        ? "有段红了"
-        : "有段没跑起来（不构成证据）";
+    state === "ok" ? "三段全绿" : state === "red" ? "有段红了" : "有段没跑起来（不构成证据）";
   for (const line of renderVerdict({ state, gate: "合并前复算", detail })) {
     process.stdout.write(`\n${line}\n`);
   }
@@ -580,18 +575,19 @@ export function lastSummary(output) {
     .split("\n")
     .reverse()
     .find((l) => l.trimStart().startsWith("[base-check] 结论："));
-  if (!line) return null;
+  if (!line) {
+    return null;
+  }
   const word = line.slice(line.indexOf("结论：") + "结论：".length).trim();
   for (const v of ["current-green", "inconclusive", "baseline-red", "yours"]) {
-    if (word.startsWith(v)) return /** @type {never} */ (v);
+    if (word.startsWith(v)) {
+      return /** @type {never} */ (v);
+    }
   }
   return null;
 }
 
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main(process.argv.slice(2)));
 }

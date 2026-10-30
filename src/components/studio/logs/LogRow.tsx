@@ -57,9 +57,13 @@ const SEARCH_HIT_CLASS = "rounded-sm bg-amber-400/30 px-0.5 text-amber-900 dark:
 
 function fragmentsOf(text: string): Array<RowToken> {
   const hit = FRAGMENT_CACHE.get(text);
-  if (hit) return hit;
+  if (hit) {
+    return hit;
+  }
   const out = rowFragments(text);
-  if (FRAGMENT_CACHE.size >= FRAGMENT_CACHE_MAX) FRAGMENT_CACHE.clear();
+  if (FRAGMENT_CACHE.size >= FRAGMENT_CACHE_MAX) {
+    FRAGMENT_CACHE.clear();
+  }
   FRAGMENT_CACHE.set(text, out);
   return out;
 }
@@ -85,7 +89,9 @@ function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
 
 /** 把一段文本按命中关键字切成 `<mark>` 与普通文本两种片段。 */
 function highlightNeedle(text: string, needle: string): React.ReactNode {
-  if (!needle) return <PathLinkedText text={text} />;
+  if (!needle) {
+    return <PathLinkedText text={text} />;
+  }
   const lower = text.toLowerCase();
   const parts: Array<React.ReactNode> = [];
   let cursor = 0;
@@ -136,11 +142,15 @@ function highlightNeedle(text: string, needle: string): React.ReactNode {
  */
 function PathLinkedText({ text }: { text: string }): React.ReactNode {
   const tokens = findLogPathTokens(text);
-  if (tokens.length === 0) return text;
+  if (tokens.length === 0) {
+    return text;
+  }
   const parts: Array<React.ReactNode> = [];
   let cursor = 0;
   for (const [index, token] of tokens.entries()) {
-    if (token.start > cursor) parts.push(text.slice(cursor, token.start));
+    if (token.start > cursor) {
+      parts.push(text.slice(cursor, token.start));
+    }
     parts.push(
       <RevealPathButton key={`p${index}`} path={token.text}>
         {token.text}
@@ -148,7 +158,9 @@ function PathLinkedText({ text }: { text: string }): React.ReactNode {
     );
     cursor = token.end;
   }
-  if (cursor < text.length) parts.push(text.slice(cursor));
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor));
+  }
   return parts;
 }
 
@@ -170,7 +182,9 @@ function RevealPathButton({ path, children }: { path: string; children: React.Re
   const feedback = useRevealLogPath(() => hint.flash());
 
   const onReveal = () => {
-    if (feedback.busy) return;
+    if (feedback.busy) {
+      return;
+    }
     feedback.reveal(path);
   };
 
@@ -438,7 +452,9 @@ export const LogRow = memo(function LogRow({
       <Disclosure
         open={expanded}
         onOpenChange={(next) => {
-          if (next !== expanded) onToggleExpand(entry.id);
+          if (next !== expanded) {
+            onToggleExpand(entry.id);
+          }
         }}
         marker="chevron"
         rootClassName="flex flex-wrap items-start gap-x-2.5 px-4 py-1"

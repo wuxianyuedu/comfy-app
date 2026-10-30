@@ -131,10 +131,7 @@ const RATCHET_TEST = path.join("tests", "ratchet-update-guards.test.ts");
  * 只收这两处：它们的形态是**确定命令**（`node scripts/x.cjs …`），不是沿革叙述。
  * `docs/**` 的其余部分与 `changelog.d/**` 大量如实记述「曾经带 --update」，纳入即误报。
  */
-const COMMAND_LISTS = [
-  ".githooks/pre-commit",
-  "docs/standards/13-提交与-code-review.md",
-];
+const COMMAND_LISTS = [".githooks/pre-commit", "docs/standards/13-提交与-code-review.md"];
 
 /**
  * 翻闸脚本的**两条正当落点**（④ 用）——「有人会跑它」这件事只有这两种机器形态：
@@ -169,10 +166,7 @@ const GATE_CHAIN_FILES = [
  */
 const GATE_AGGREGATORS = ["scripts/run-ast-gates.cjs"];
 
-const GATE_EXECUTOR_LEDGER = path.join(
-  "scripts",
-  ".gate-executor-ledger.json",
-);
+const GATE_EXECUTOR_LEDGER = path.join("scripts", ".gate-executor-ledger.json");
 
 /**
  * 门禁链里被按名字调起的脚本 basename 集合 —— 与 `check-gate-executors.cjs` 的
@@ -182,22 +176,20 @@ function gateChainScripts() {
   const out = new Set();
   for (const rel of [...GATE_CHAIN_FILES, ...GATE_AGGREGATORS]) {
     const abs = path.join(ROOT, rel);
-    if (!fs.existsSync(abs)) continue;
+    if (!fs.existsSync(abs)) {
+      continue;
+    }
     const src = fs.readFileSync(abs, "utf8");
     /* 形态一：`scripts/<x>`（钩子的 `run "…" node scripts/<x>`、`quality-gate` 的
      * `args: ["../scripts/<x>"]`、`$Blocks` 的 `Args`）—— 与 `check-gate-executors`
      * 的 `gateChainScripts()` 逐字同口径。 */
-    for (const m of src.matchAll(
-      /scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g,
-    )) {
+    for (const m of src.matchAll(/scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g)) {
       out.add(m[1]);
     }
     /* 形态二：聚合档表项里的裸 `script: "<x>"`（`run-ast-gates.cjs` 的 `GATES`）
      * —— 这里**没有** `scripts/` 前缀，因为聚合档按 basename import 它们。
      * 不收这一形态的后果实测过：经聚合档真在跑的两条被误报成「无落点」。 */
-    for (const m of src.matchAll(
-      /\bscript:\s*["'`]([A-Za-z0-9_.-]+\.(?:cjs|mjs))["'`]/g,
-    )) {
+    for (const m of src.matchAll(/\bscript:\s*["'`]([A-Za-z0-9_.-]+\.(?:cjs|mjs))["'`]/g)) {
       out.add(m[1]);
     }
   }
@@ -207,7 +199,9 @@ function gateChainScripts() {
 /** 按需召唤台账里登记的脚本名集合（读不出 ⇒ 空集，由 ④ 报「两条落点都没有」）。 */
 function onDemandScripts() {
   const abs = path.join(ROOT, GATE_EXECUTOR_LEDGER);
-  if (!fs.existsSync(abs)) return new Set();
+  if (!fs.existsSync(abs)) {
+    return new Set();
+  }
   try {
     const parsed = JSON.parse(fs.readFileSync(abs, "utf8"));
     return new Set(Object.keys(parsed.onDemand ?? {}));
@@ -245,15 +239,21 @@ function headComments(src) {
   for (const line of src.split("\n")) {
     const t = line.trim();
     /* shebang（`#!…`）在用法块之前，跳过它继续读。 */
-    if (!inBlock && t.startsWith("#!")) continue;
+    if (!inBlock && t.startsWith("#!")) {
+      continue;
+    }
     if (inBlock) {
       out.push(line);
-      if (t.includes("*/")) inBlock = false;
+      if (t.includes("*/")) {
+        inBlock = false;
+      }
       continue;
     }
     if (t.startsWith("/*")) {
       out.push(line);
-      if (!t.includes("*/")) inBlock = true;
+      if (!t.includes("*/")) {
+        inBlock = true;
+      }
       continue;
     }
     if (t.startsWith("//") || t === "") {
@@ -273,13 +273,15 @@ function headComments(src) {
  */
 function promisedFlags(scriptName, headText) {
   const out = new Set();
-  const self = new RegExp(
-    `(?:node\\s+)?(?:scripts/)?${escapeRe(scriptName)}(?![\\w.-])`,
-  );
+  const self = new RegExp(`(?:node\\s+)?(?:scripts/)?${escapeRe(scriptName)}(?![\\w.-])`);
   for (const line of headText.split("\n")) {
-    if (!self.test(line)) continue;
+    if (!self.test(line)) {
+      continue;
+    }
     for (const flag of FLIP_FLAGS) {
-      if (new RegExp(`${escapeRe(flag)}(?![\\w-])`).test(line)) out.add(flag);
+      if (new RegExp(`${escapeRe(flag)}(?![\\w-])`).test(line)) {
+        out.add(flag);
+      }
     }
   }
   return out;
@@ -305,7 +307,9 @@ function implementedFlags(src) {
       /* `--update` 作对象键（`{ "--update": handler }`） */
       new RegExp(`["'\`]${f}["'\`]\\s*:`),
     ];
-    if (patterns.some((re) => re.test(src))) out.add(flag);
+    if (patterns.some((re) => re.test(src))) {
+      out.add(flag);
+    }
   }
   return out;
 }
@@ -343,7 +347,9 @@ function scriptFiles() {
 function tableBody(name) {
   const src = fs.readFileSync(path.join(ROOT, RATCHET_TEST), "utf8");
   const at = src.indexOf(`const ${name}`);
-  if (at < 0) return "";
+  if (at < 0) {
+    return "";
+  }
   const end = src.indexOf("\n};", at);
   return src.slice(at, end < 0 ? undefined : end);
 }
@@ -374,23 +380,29 @@ function baselineOwners() {
       /(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=\s*path\.join\(([^;]{0,300}?)\)/g,
     )) {
       const name = baseName(m[2] ?? "");
-      if (m[1] && name) declared.set(m[1], name);
+      if (m[1] && name) {
+        declared.set(m[1], name);
+      }
     }
     /* 真被当写入目标的变量名。 */
     const written = new Set();
-    for (const m of src.matchAll(
-      /(?:fs\.)?write(?:File|FileSync)\(\s*([A-Za-z0-9_$]+)/g,
-    )) {
-      if (m[1]) written.add(m[1]);
+    for (const m of src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(\s*([A-Za-z0-9_$]+)/g)) {
+      if (m[1]) {
+        written.add(m[1]);
+      }
     }
     for (const [varName, name] of declared) {
-      if (written.has(varName)) map.set(name, file);
+      if (written.has(varName)) {
+        map.set(name, file);
+      }
     }
     /* 直接把路径拼在写入调用里的写法（不走变量）。 */
     for (const m of src.matchAll(
       /(?:fs\.)?write(?:File|FileSync)\(\s*path\.join\([^;]{0,300}?"(\.[^"]+\.json)"/g,
     )) {
-      if (m[1]) map.set(m[1], file);
+      if (m[1]) {
+        map.set(m[1], file);
+      }
     }
   }
   return map;
@@ -406,18 +418,15 @@ function baselineOwners() {
 function ratchetTableScripts() {
   const owners = baselineOwners();
   const out = new Set();
-  for (const table of [
-    "COVERED_LOCALLY",
-    "RETIRED_RATCHETS",
-    "NOT_A_RATCHET",
-  ]) {
+  for (const table of ["COVERED_LOCALLY", "RETIRED_RATCHETS", "NOT_A_RATCHET"]) {
     /* 键 = 基线文件名（表里就以它当键）。 */
-    for (const m of tableBody(table).matchAll(
-      /["'`](\.[^"'`]+\.json)["'`]\s*:/g,
-    )) {
+    for (const m of tableBody(table).matchAll(/["'`](\.[^"'`]+\.json)["'`]\s*:/g)) {
       const script = owners.get(m[1]);
-      if (script) out.add(script);
-      else out.add(`(基线 ${m[1]} 今天没有任何脚本写回去)`);
+      if (script) {
+        out.add(script);
+      } else {
+        out.add(`(基线 ${m[1]} 今天没有任何脚本写回去)`);
+      }
     }
   }
   /* `RATCHETS` 是数组、行里有显式 `script:` 字段。 */
@@ -519,31 +528,40 @@ const SOME_FLIP_FLAG = new RegExp(
  * 实测只收命令清单时，把那段回放回去**命中 0** —— 射程漏掉了最该管的一处。
  */
 function staleFlipCommands(flips) {
-  const targets = [
-    ...COMMAND_LISTS,
-    ...scriptFiles().map((f) => `${SCRIPT_DIR}/${f}`),
-  ];
+  const targets = [...COMMAND_LISTS, ...scriptFiles().map((f) => `${SCRIPT_DIR}/${f}`)];
   const matchers = commandMatchers(flips);
   const found = [];
   for (const rel of targets) {
     const abs = path.join(ROOT, rel);
-    if (!fs.existsSync(abs)) continue;
+    if (!fs.existsSync(abs)) {
+      continue;
+    }
     fs.readFileSync(abs, "utf8")
       .split("\n")
       .forEach((line, i) => {
-        if (RETIRED_WORDS.test(line)) return;
+        if (RETIRED_WORDS.test(line)) {
+          return;
+        }
         /* **本判据自己的文件头**是「立案现场的描述」，必然要点名那两个脚本与旗标
          * —— 它描述的是**过去发生的事**，不是教人跑。这条自豁免是有先例的形态
          * （`check-doc-references.cjs` 的 `EXEMPT` 同款），且只豁免这一份文件、
          * 不是「凡是描述历史就不判」。 */
-        if (rel === `${SCRIPT_DIR}/check-gate-flag-claims.cjs`) return;
+        if (rel === `${SCRIPT_DIR}/check-gate-flag-claims.cjs`) {
+          return;
+        }
         /* 下面两道前置门都是**原判定里就有的条件**，只是被挪到跑「翻闸脚本 × 旗标」
          * 那一圈正则之前：命中必须落在字符串字面量里（原式在 `re.test` 之后才看这个），
          * 而命令形态必然带旗标字面量。筛掉的是不可能命中的行，结论逐字不变。 */
-        if (!/["'`]/.test(line)) return;
-        if (!SOME_FLIP_FLAG.test(line)) return;
+        if (!/["'`]/.test(line)) {
+          return;
+        }
+        if (!SOME_FLIP_FLAG.test(line)) {
+          return;
+        }
         for (const m of matchers) {
-          if (!m.re.test(line)) continue;
+          if (!m.re.test(line)) {
+            continue;
+          }
           found.push({
             rel,
             line: i + 1,
@@ -567,13 +585,14 @@ function main() {
   for (const file of scriptFiles()) {
     const { promised, implemented } = inspectScript(file);
     for (const flag of promised) {
-      if (implemented.has(flag)) continue;
+      if (implemented.has(flag)) {
+        continue;
+      }
       violations.push({
         kind: "用法块承诺了实现里没有的旗标",
         where: `${SCRIPT_DIR}/${file}`,
         detail:
-          `用法块教人跑 \`${flag}\`，而实现里读不到它 —— ` +
-          "照它跑要么没反应、要么被读成别的档",
+          `用法块教人跑 \`${flag}\`，而实现里读不到它 —— ` + "照它跑要么没反应、要么被读成别的档",
       });
     }
   }
@@ -598,8 +617,12 @@ function main() {
       });
       continue;
     }
-    if (flips.includes(script)) continue; /* 翻闸那些由那一份的否定式判 */
-    if (inspectScript(script).implemented.has("--update")) continue;
+    if (flips.includes(script)) {
+      continue;
+    } /* 翻闸那些由那一份的否定式判 */
+    if (inspectScript(script).implemented.has("--update")) {
+      continue;
+    }
     violations.push({
       kind: "棘轮归类表断言它带 --update，而实现里没有",
       where: `${RATCHET_TEST} → ${SCRIPT_DIR}/${script}`,
@@ -635,9 +658,7 @@ function main() {
     `${flips.length} 条翻闸台账（落点缺失 ${flipsWithoutExecutor(flips).length}）`;
 
   if (REPORT_ONLY) {
-    console.log(
-      `[gate-flag-claims] 盘点：${scope}；命中 ${violations.length} 处`,
-    );
+    console.log(`[gate-flag-claims] 盘点：${scope}；命中 ${violations.length} 处`);
     for (const v of violations) {
       console.log(`  · [${v.kind}] ${v.where}\n      ${v.detail}`);
     }
@@ -662,7 +683,9 @@ function main() {
   console.log(`✓ 翻闸旗标没有残留的散文承诺（${scope}）`);
 }
 
-if (require.main === module) main();
+if (require.main === module) {
+  main();
+}
 
 module.exports = {
   FLIP_FLAGS,

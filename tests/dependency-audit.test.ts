@@ -33,7 +33,9 @@ const tempDirs: Array<string> = [];
 afterEach(() => {
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
 
@@ -112,7 +114,9 @@ function writeLedger(dir: string, ledger: LedgerFile): void {
 /** 用例里那几处「给台账每条补上原因」的公共动作。 */
 function explainAll(dir: string): void {
   const ledger = readLedger(dir);
-  for (const entry of ledger.entries) entry.reason = "上游无修复版，待跟进";
+  for (const entry of ledger.entries) {
+    entry.reason = "上游无修复版，待跟进";
+  }
   writeLedger(dir, ledger);
 }
 

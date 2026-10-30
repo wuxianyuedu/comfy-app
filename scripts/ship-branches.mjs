@@ -130,12 +130,10 @@ export function readLocalRefs(run, remote = "origin") {
   const remoteList = run("git", ["ls-remote", "--heads", remote]);
   const remoteRefs = new Set(
     remoteList.status === 0
-      ? remoteList.stdout
-          .split(/\r?\n/)
-          .flatMap((l) => {
-            const name = /refs\/heads\/(.+)$/.exec(l.trim())?.[1];
-            return name ? [name] : [];
-          })
+      ? remoteList.stdout.split(/\r?\n/).flatMap((l) => {
+          const name = /refs\/heads\/(.+)$/.exec(l.trim())?.[1];
+          return name ? [name] : [];
+        })
       : [],
   );
   return {
@@ -229,7 +227,9 @@ function oldestNumber(list) {
   let n = null;
   for (const p of list) {
     const v = Number(p?.number);
-    if (Number.isFinite(v) && (n === null || v < n)) n = v;
+    if (Number.isFinite(v) && (n === null || v < n)) {
+      n = v;
+    }
   }
   return n;
 }
@@ -268,12 +268,8 @@ export function runBranches(ctx) {
    * `origin/master`，狗食这一跑就是这么漏掉主干的），而清单里是裸分支名 ⇒ 先剥前缀再比。
    * 只剥一层：分支名自己可以带斜杠（`fix/2403-…`），第二层斜杠之后是名字的一部分。 */
   const rawTrunk = String(ctx.trunk ?? "").trim();
-  const trunk = rawTrunk.startsWith(`${remote}/`)
-    ? rawTrunk.slice(remote.length + 1)
-    : rawTrunk;
-  const candidates = trunk
-    ? refs.branches.filter((b) => b.name !== trunk)
-    : refs.branches;
+  const trunk = rawTrunk.startsWith(`${remote}/`) ? rawTrunk.slice(remote.length + 1) : rawTrunk;
+  const candidates = trunk ? refs.branches.filter((b) => b.name !== trunk) : refs.branches;
   if (trunk && refs.branches.length !== candidates.length) {
     log(
       `[ship] 已排除主干 \`${trunk}\`${rawTrunk !== trunk ? `（基线原值是 \`${rawTrunk}\`）` : ""}——它不是待删项。`,
@@ -283,19 +279,17 @@ export function runBranches(ctx) {
     log("[ship] 本地只有主干这一条，没有要看的东西。");
     return CODE.GREEN;
   }
-  if (refs.note) log(`[ship] ⚠ ${refs.note}`);
+  if (refs.note) {
+    log(`[ship] ⚠ ${refs.note}`);
+  }
   const fetched = fetchPullsForBranches(run, slug, { maxPages: ctx.maxPages });
   if (!fetched.ok) {
     log(`[ship] ${fetched.note} ⇒ 这一格没有结论（退 2 不是「都清了」）`);
     return CODE.NOT_RUN;
   }
-  const rows = branchLandingRows(
-    candidates,
-    fetched.pulls,
-    refs.remoteRefs,
-    refs.current,
-    { windowComplete: fetched.windowComplete },
-  );
+  const rows = branchLandingRows(candidates, fetched.pulls, refs.remoteRefs, refs.current, {
+    windowComplete: fetched.windowComplete,
+  });
   log(
     `[ship] 本地分支 ${rows.length} 条 · 判据只认 PR 的 \`is_merged\` 原值` +
       `（` +
@@ -327,15 +321,11 @@ export function runBranches(ctx) {
       `本地 \`git branch -D <名>\`，远端是共享动作、要单独说）。`,
   );
   if (blind.length > 0) {
-    log(
-      "[ship] 有分支落在窗口外 ⇒ 「我没取到」不等于「它没合并」，按没结论收（退 2）。",
-    );
+    log("[ship] 有分支落在窗口外 ⇒ 「我没取到」不等于「它没合并」，按没结论收（退 2）。");
     return CODE.NOT_RUN;
   }
   if (open.length > 0) {
-    log(
-      "[ship] 有分支的 PR 没合并或不存在 ⇒ 那些条不许删（退 1 是提醒，不是失败）。",
-    );
+    log("[ship] 有分支的 PR 没合并或不存在 ⇒ 那些条不许删（退 1 是提醒，不是失败）。");
     return CODE.RED;
   }
   return CODE.GREEN;

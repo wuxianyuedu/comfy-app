@@ -35,8 +35,12 @@ type FormValues = {
 
 /** 一份真校验：端口必须是数字。校验器是真的（不是手捏的 `errors` 对象）。 */
 function validatePort(value: string): string | true {
-  if (value.trim() === "") return "端口不能为空";
-  if (!/^\d+$/.test(value.trim())) return "端口只能是数字";
+  if (value.trim() === "") {
+    return "端口不能为空";
+  }
+  if (!/^\d+$/.test(value.trim())) {
+    return "端口只能是数字";
+  }
   return true;
 }
 
@@ -71,9 +75,7 @@ function RhfFormSample({ defaultName, defaultPort }: StoryArgs) {
               <FormControl>
                 <Input placeholder="例如 角色一致性 · 三视图" {...field} />
               </FormControl>
-              <FormDescription>
-                同名会被覆盖，保存在工作流库里。
-              </FormDescription>
+              <FormDescription>同名会被覆盖，保存在工作流库里。</FormDescription>
               <FormMessage />
             </FormItem>
           )}

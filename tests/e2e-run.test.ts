@@ -947,7 +947,9 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
     const { abort } = await runPreflightReadings({
       collect: async (step) => {
         touched.push(step);
-        if (step === "schema") return { abort: "库没建齐" };
+        if (step === "schema") {
+          return { abort: "库没建齐" };
+        }
         return { say: `[${step}]\n` };
       },
     });

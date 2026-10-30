@@ -64,10 +64,15 @@ const FORBIDDEN: ReadonlyArray<{ name: string; pattern: RegExp }> = [
 
 function collectSource(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules" || entry === ".next" || entry === "generated") continue;
+    if (entry === "node_modules" || entry === ".next" || entry === "generated") {
+      continue;
+    }
     const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) collectSource(full, out);
-    else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(full);
+    if (statSync(full).isDirectory()) {
+      collectSource(full, out);
+    } else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -85,7 +90,9 @@ function offendersOf(text: string): Array<string> {
  * 找不到赋值语句返回 `null` —— 由调用点判「落空」，不能让它悄悄变成「零段 = 不用比」。 */
 function allowedRootSegments(ps1: string): Array<string> | null {
   const start = ps1.search(/\$allowedRoot\s*=/);
-  if (start < 0) return null;
+  if (start < 0) {
+    return null;
+  }
   const rest = ps1.slice(start);
   const ends = rest.search(/\n\s*\$/);
   const statement = ends < 0 ? rest : rest.slice(0, ends);
@@ -205,7 +212,9 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
     /** 把一段 `.ps1` 片段按判据的方式判一次，返回它是否被照出来。 */
     const flagged = (ps1: string): boolean => {
       const segments = allowedRootSegments(ps1);
-      if (segments === null || segments.length === 0) return true; // 抠不到 = 落空 = 红
+      if (segments === null || segments.length === 0) {
+        return true;
+      } // 抠不到 = 落空 = 红
       return segments.some((segment) => /[\\/]/.test(segment));
     };
     /** 按判据的方式解析出允许根（用于断言「偏移会解析到别处」）。 */

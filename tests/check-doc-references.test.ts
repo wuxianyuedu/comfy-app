@@ -124,7 +124,9 @@ function writeText(abs: string, text: string): void {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
       writeFileSync(abs, text, "utf8");
-      if (readFileSync(abs, "utf8") === text) return;
+      if (readFileSync(abs, "utf8") === text) {
+        return;
+      }
       lastError = "写回后读回的内容与预期不一致";
     } catch (err) {
       lastError = /* SAFETY: 类型断言已复核 */ (err as Error).message;
@@ -286,8 +288,12 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
           walk(rel);
           continue;
         }
-        if (!name.endsWith(".md")) continue;
-        if (!scoped.has(rel) && !(rel in SCOPED_DOC_EXEMPTIONS)) offenders.push(rel);
+        if (!name.endsWith(".md")) {
+          continue;
+        }
+        if (!scoped.has(rel) && !(rel in SCOPED_DOC_EXEMPTIONS)) {
+          offenders.push(rel);
+        }
       }
     };
     SCOPED_DOC_DIRS.forEach(walk);
@@ -349,7 +355,9 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
     ]) {
       const lines = docText(doc).split("\n");
       lines.forEach((line, i) => {
-        if (!/(^|[\s`(（])(npm\s+run|npx)\b/.test(line)) return;
+        if (!/(^|[\s`(（])(npm\s+run|npx)\b/.test(line)) {
+          return;
+        }
         expect(
           /改为|修正|修正为|pnpm|禁止|违反|原记录|不要用|应使用/.test(line),
           `${doc}:${i + 1} 出现 npm/npx 可执行命令且未标注为说明：${line.trim()}`,
@@ -469,7 +477,9 @@ describe("用户面文档不许教跑不通的驱动（ISSUE #2580）", () => {
       "指南里必须有讲明「为什么不能用它」的散文，否则下面那条绿没有对象",
     ).toBeGreaterThan(0);
     for (const line of guide.split("\n")) {
-      if (!line.includes("better-sqlite3")) continue;
+      if (!line.includes("better-sqlite3")) {
+        continue;
+      }
       expect(line, "散文可以提名字，但不许留成能被复制粘贴执行的那一行").not.toMatch(
         /require\(\s*["']better-sqlite3["']\s*\)|from\s+["']better-sqlite3["']/,
       );
@@ -662,12 +672,16 @@ describe("文档不许用「第 N 步」引用门禁步骤（ISSUE #1374）", ()
     const docs = await gateDocs();
     let scanned = 0;
     for (const doc of docs) {
-      if (!existsSync(join(REPO_ROOT, doc))) continue;
+      if (!existsSync(join(REPO_ROOT, doc))) {
+        continue;
+      }
       scanned += 1;
       docText(doc)
         .split("\n")
         .forEach((line, i) => {
-          if (!STEP_RE.test(line) || !GATE_RE.test(line)) return;
+          if (!STEP_RE.test(line) || !GATE_RE.test(line)) {
+            return;
+          }
           expect(
             EXPLAIN_RE.test(line),
             `${doc}:${i + 1} 用「第 N 步」引用门禁步骤且未标注为说明：${line.trim().slice(0, 80)}`,
@@ -909,13 +923,19 @@ describe("门禁的步数也不许写进文档（ISSUE #1407，签字口径 (a)�
     const docs = await gateDocs();
     let scanned = 0;
     for (const doc of docs) {
-      if (!existsSync(join(REPO_ROOT, doc))) continue;
+      if (!existsSync(join(REPO_ROOT, doc))) {
+        continue;
+      }
       scanned += 1;
       docText(doc)
         .split("\n")
         .forEach((line, i) => {
-          if (ORDINAL_RE.test(line)) return; // 序号形态归 checkGateStepIndexRefs，不双报
-          if (!COUNT_RE.test(line) || !GATE_RE.test(line)) return;
+          if (ORDINAL_RE.test(line)) {
+            return;
+          } // 序号形态归 checkGateStepIndexRefs，不双报
+          if (!COUNT_RE.test(line) || !GATE_RE.test(line)) {
+            return;
+          }
           expect(
             EXPLAIN_RE.test(line),
             `${doc}:${i + 1} 写了门禁步数且未标注为说明：${line.trim().slice(0, 80)}`,
@@ -1061,7 +1081,9 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
   }
 
   afterEach(() => {
-    if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true });
+    if (fixtureRoot) {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
     fixtureRoot = "";
   });
 
@@ -1182,7 +1204,9 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
   }
 
   afterEach(() => {
-    if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true });
+    if (fixtureRoot) {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
     fixtureRoot = "";
   });
 

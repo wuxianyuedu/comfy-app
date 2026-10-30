@@ -34,18 +34,23 @@ vi.mock("fs", () => ({
     readdir: async (dir: string, opts?: { withFileTypes?: boolean }) => {
       disk.reads.push(`readdir:${dir}`);
       const entry = dirEntries.get(dir);
-      if (!entry) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
-      if (opts?.withFileTypes)
+      if (!entry) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
+      if (opts?.withFileTypes) {
         return (entry.subdirs ?? []).map((name) => ({
           name,
           isDirectory: () => true,
         }));
+      }
       return entry.names ?? [];
     },
     stat: async (p: string) => {
       disk.reads.push(`stat:${p}`);
       const f = fileStats.get(p);
-      if (!f) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      if (!f) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
       return { isFile: () => true, size: f.size, mtime: f.mtime };
     },
     mkdir: async (p: string) => {
@@ -55,11 +60,15 @@ vi.mock("fs", () => ({
       disk.writeFile.push(p);
     },
     unlink: async (p: string) => {
-      if (!fileStats.has(p)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      if (!fileStats.has(p)) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
       disk.unlink.push(p);
     },
     access: async (p: string) => {
-      if (!fileStats.has(p)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      if (!fileStats.has(p)) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
     },
   },
 }));
@@ -117,9 +126,15 @@ function uploadForm(init: {
   }
   const form = new FormData();
   form.set("file", file);
-  if (init.projectId !== undefined) form.set("projectId", init.projectId);
-  if (init.folder !== undefined) form.set("folder", init.folder);
-  if (init.shared !== undefined) form.set("shared", init.shared);
+  if (init.projectId !== undefined) {
+    form.set("projectId", init.projectId);
+  }
+  if (init.folder !== undefined) {
+    form.set("folder", init.folder);
+  }
+  if (init.shared !== undefined) {
+    form.set("shared", init.shared);
+  }
   return form;
 }
 
@@ -129,7 +144,9 @@ beforeEach(() => {
   tdb.$reset();
   dirEntries.clear();
   fileStats.clear();
-  for (const list of Object.values(disk)) list.length = 0;
+  for (const list of Object.values(disk)) {
+    list.length = 0;
+  }
   userMock.mockResolvedValue({ id: "user-a" });
   seedUser(tdb, { id: "user-a", email: "a@test.dev" });
   seedUser(tdb, { id: "user-b", email: "b@test.dev" });

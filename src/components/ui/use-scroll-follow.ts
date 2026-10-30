@@ -113,18 +113,26 @@ export function useScrollFollow({
   /* 贴底。`following` 进依赖数组是必须的：用户点「回到最新」把跟随态改回
    * true 之后，即使内容没变也要立刻贴一次（否则要等下一条日志才动）。 */
   useEffect(() => {
-    if (!following) return;
+    if (!following) {
+      return;
+    }
     const el = ref.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     el.scrollTop = el.scrollHeight;
   }, [ref, watch, following]);
 
   const setFollowing = useCallback(
     (next: boolean) => {
-      if (followingRef.current === next) return;
+      if (followingRef.current === next) {
+        return;
+      }
       followingRef.current = next;
       /* 受控模式下不自持状态：值由父级给回来，这里只通知。 */
-      if (controlled === undefined) setInternal(next);
+      if (controlled === undefined) {
+        setInternal(next);
+      }
       notifyRef.current?.(next);
     },
     [controlled],
@@ -132,17 +140,19 @@ export function useScrollFollow({
 
   const onScroll = useCallback(() => {
     const el = ref.current;
-    if (!el) return;
-    setFollowing(
-      el.scrollHeight - el.scrollTop - el.clientHeight < thresholdPx,
-    );
+    if (!el) {
+      return;
+    }
+    setFollowing(el.scrollHeight - el.scrollTop - el.clientHeight < thresholdPx);
   }, [ref, setFollowing, thresholdPx]);
 
   const jumpToLatest = useCallback(() => {
     const el = ref.current;
     /* 先动 DOM 再改状态：`following` 从 false 变 true 会触发上面那个 effect，
      * 那一轮贴底与这里的写入同解（都是滚到底），不会互相打架。 */
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
     setFollowing(true);
   }, [ref, setFollowing]);
 

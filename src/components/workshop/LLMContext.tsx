@@ -31,7 +31,9 @@ const LLMContext = React.createContext<LLMContextValue | null>(null);
 
 export function useLLM(): LLMContextValue {
   const ctx = React.useContext(LLMContext);
-  if (!ctx) throw new Error("useLLM 必须在 <LLMProvider> 内使用");
+  if (!ctx) {
+    throw new Error("useLLM 必须在 <LLMProvider> 内使用");
+  }
   return ctx;
 }
 

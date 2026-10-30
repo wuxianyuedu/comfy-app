@@ -26,24 +26,32 @@ function isChatModel(kind: RemoteModelKind | null | undefined): boolean {
 /** 候选模型条目（兼容旧字符串与新对象）→ 名字数组，供工坊切换选择。
  *  远端条目仅收文本生成(chat)类型；图片/视频模型不参与工坊文本链路。 */
 function toModelNames(raw: unknown): Array<string> {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const names: Array<string> = [];
   for (const item of raw) {
     if (typeof item === "string") {
-      if (item.trim() !== "") names.push(item);
+      if (item.trim() !== "") {
+        names.push(item);
+      }
     } else if (typeof item === "object" && item !== null) {
       const rec = /* SAFETY: 类型断言已复核 */ item as {
         name?: unknown;
         kind?: unknown;
       };
       const name = typeof rec.name === "string" ? rec.name.trim() : "";
-      if (name === "") continue;
+      if (name === "") {
+        continue;
+      }
       const kind =
         typeof rec.kind === "string" &&
         REMOTE_MODEL_KINDS.includes(/* SAFETY: 类型断言已复核 */ rec.kind as RemoteModelKind)
           ? /* SAFETY: 类型断言已复核 */ (rec.kind as RemoteModelKind)
           : null;
-      if (!isChatModel(kind)) continue;
+      if (!isChatModel(kind)) {
+        continue;
+      }
       names.push(name);
     }
   }
@@ -88,7 +96,9 @@ export function useLLMConfig(): LLMConfigController {
     split: ModelSplit;
   } => {
     const cfg = configQ.data?.config;
-    if (!cfg) return { config: null, split: EMPTY_SPLIT };
+    if (!cfg) {
+      return { config: null, split: EMPTY_SPLIT };
+    }
     /* 服务端的候选列表已条目化（本地=字符串、远端=带独立连接参数的对象），
        工坊下拉据此把「本地 / 远端」两组静态分开。
        注意：远端候选仅取 chat 类型——图片/视频模型不能执行文本生成。 */
@@ -110,7 +120,9 @@ export function useLLMConfig(): LLMConfigController {
     if (model && !local.includes(model) && !remote.includes(model)) {
       const entry = p.remoteEntries.find((e) => e.name === model);
       if (effectiveProvider === "remote") {
-        if (!entry || isChatModel(entry.kind)) remote.push(model);
+        if (!entry || isChatModel(entry.kind)) {
+          remote.push(model);
+        }
       } else {
         local.push(model);
       }

@@ -22,10 +22,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DOMAttributes } from "react";
 
 /** 节点元素上要用到的悬浮事件属性。 */
-type HoverHandlers = Pick<
-  DOMAttributes<HTMLElement>,
-  "onMouseEnter" | "onMouseLeave"
->;
+type HoverHandlers = Pick<DOMAttributes<HTMLElement>, "onMouseEnter" | "onMouseLeave">;
 
 /** React Flow 外壳的类名。CSS 选择器与它对齐（见 globals.css）。 */
 const NODE_WRAPPER_SELECTOR = ".react-flow__node";
@@ -60,10 +57,10 @@ export function useHoverElevation(): HoverElevation {
    *  的外壳所有，外壳被重挂（切图 / 重排）后 effect 会随 `hovered` 重新对齐，
    *  不会留下悬挂标记。 */
   useEffect(() => {
-    const wrapper = cardRef.current?.closest<HTMLElement>(
-      NODE_WRAPPER_SELECTOR,
-    );
-    if (!wrapper) return;
+    const wrapper = cardRef.current?.closest<HTMLElement>(NODE_WRAPPER_SELECTOR);
+    if (!wrapper) {
+      return;
+    }
     if (hovered) {
       wrapper.setAttribute(HOVER_ATTRIBUTE, "true");
       return () => wrapper.removeAttribute(HOVER_ATTRIBUTE);

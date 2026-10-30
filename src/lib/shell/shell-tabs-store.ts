@@ -77,9 +77,13 @@ const MAIN_TAB: ShellTab = {
 };
 
 function resolveTabId(tab: Omit<ShellTab, "id"> & { id?: string }): string {
-  if (tab.id) return tab.id;
+  if (tab.id) {
+    return tab.id;
+  }
   // 无显式 id 时按 type + url 保证唯一（同 URL 不会叠出重复页签）。
-  if (tab.url) return `${tab.label}:${tab.url}`;
+  if (tab.url) {
+    return `${tab.label}:${tab.url}`;
+  }
   return `${tab.label}:${Date.now()}`;
 }
 
@@ -124,9 +128,13 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
 
   closeTab: (id) =>
     set((state) => {
-      if (id === MAIN_TAB_ID) return state;
+      if (id === MAIN_TAB_ID) {
+        return state;
+      }
       const idx = state.tabs.findIndex((t) => t.id === id);
-      if (idx === -1) return state;
+      if (idx === -1) {
+        return state;
+      }
       const tabs = state.tabs.filter((t) => t.id !== id);
       // 关闭当前激活页签时，回退到相邻页签（或主应用）。
       const activeTabId =

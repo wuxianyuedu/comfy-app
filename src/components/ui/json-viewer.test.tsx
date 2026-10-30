@@ -20,7 +20,9 @@ afterEach(cleanup);
 /** 造一个 `keys` 项的扁平对象（键名 `k0…k{keys-1}`）。 */
 function wideObject(keys: number): Record<string, number> {
   const out: Record<string, number> = {};
-  for (let i = 0; i < keys; i += 1) out[`k${i}`] = i;
+  for (let i = 0; i < keys; i += 1) {
+    out[`k${i}`] = i;
+  }
   return out;
 }
 
@@ -30,9 +32,7 @@ function bodyText(): string {
 
 describe("JsonViewer 的首屏折叠", () => {
   it("项数超过阈值的容器首屏折成 …（叶子不渲染）", () => {
-    render(
-      <JsonViewer data={{ prompt: wideObject(400), small: { keep: 1 } }} />,
-    );
+    render(<JsonViewer data={{ prompt: wideObject(400), small: { keep: 1 } }} />);
 
     /* 小容器正常展开 —— 折叠不是「整棵树不渲染」。 */
     expect(bodyText()).toContain("keep");
@@ -41,12 +41,7 @@ describe("JsonViewer 的首屏折叠", () => {
   });
 
   it("initialCollapsedDepth=0 → 全部展开（该档位的语义不变）", () => {
-    render(
-      <JsonViewer
-        data={{ prompt: wideObject(400) }}
-        initialCollapsedDepth={0}
-      />,
-    );
+    render(<JsonViewer data={{ prompt: wideObject(400) }} initialCollapsedDepth={0} />);
 
     expect(bodyText()).toContain("k399");
   });

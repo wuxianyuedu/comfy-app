@@ -91,7 +91,9 @@ export function runAppendIssueComment({
     file,
     "-v",
   ]);
-  if (!res || res.code !== 0) return false;
+  if (!res || res.code !== 0) {
+    return false;
+  }
   const back = cnbJson(run, [
     onPull ? "pulls" : "issues",
     onPull ? "list-pull-comments" : "list-issue-comments",
@@ -107,9 +109,7 @@ export function runAppendIssueComment({
   ]);
   const d = back ? back.json?.data : null;
   const rows = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-  return rows.some((/** @type {any} */ c) =>
-    String(c?.body ?? "").includes(marker),
-  );
+  return rows.some((/** @type {any} */ c) => String(c?.body ?? "").includes(marker));
 }
 
 /**
@@ -265,9 +265,7 @@ export function runNewIssue({
     log(
       `[ship] --dry-run：将创建「${plan.title}」（正文 ${bodyFile}，长度 ${read.text.length} 字，` +
         `优先级 ${plan.priority ?? "平台默认"}）` +
-        (label
-          ? `，再按 ${label}，最后 get-issue 回读`
-          : "，不回读标签（未配留痕）") +
+        (label ? `，再按 ${label}，最后 get-issue 回读` : "，不回读标签（未配留痕）") +
         "；一条都没写。",
     );
     return CODE.GREEN;
@@ -289,11 +287,8 @@ export function runNewIssue({
     ...(plan.priority ? ["--priority", plan.priority] : []),
     "-v",
   ]);
-  const d =
-    got && got.json && typeof got.json === "object" ? got.json.data : null;
-  const number = Number(
-    d && typeof d === "object" ? (d.number ?? d?.issue?.number) : NaN,
-  );
+  const d = got && got.json && typeof got.json === "object" ? got.json.data : null;
+  const number = Number(d && typeof d === "object" ? (d.number ?? d?.issue?.number) : NaN);
   if (!Number.isInteger(number) || number <= 0) {
     log(
       "[ship] 建单的回执里没有可用的单号 ⇒ 不念「已建成」。" +
@@ -335,10 +330,7 @@ export function runNewIssue({
    * 只管**这个名稳不稳**。把「取的」念成「这次不带标签」会与下一行回读互相推翻，
    * 还给人一条错误指令（名字不空，标签已经在了）。 */
   const landed =
-    label &&
-    labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(
-      String(handle).trim(),
-    );
+    label && labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(String(handle).trim());
   if (label && !landed && explicitHandle) {
     /* 你填的却没落地 ⇒ 不念「留痕已补上」（ISSUE #2355）。 */
     log(

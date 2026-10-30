@@ -18,7 +18,9 @@ export async function uploadBgm(file: File): Promise<string> {
   form.append("file", file);
   const res = await fetch(ENDPOINT, { method: "POST", body: form });
   const body = await readJsonBody(res);
-  if (!res.ok) throw new Error(readApiError(body) ?? "BGM 上传失败");
+  if (!res.ok) {
+    throw new Error(readApiError(body) ?? "BGM 上传失败");
+  }
   const name = asRecord(body)?.name;
   if (typeof name !== "string" || name.length === 0) {
     throw new Error("BGM 上传失败：响应缺少文件名");

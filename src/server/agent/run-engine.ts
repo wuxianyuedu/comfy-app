@@ -131,7 +131,9 @@ async function execScript(
   const cfg = await getLLMConfig();
   const idea = run.goal.trim() || row.title;
   const md = (await completeLLM(cfg, buildScriptMarkdownMessages(projectMeta(row), idea))).trim();
-  if (!md) return { ok: false, error: "模型未返回剧本内容" };
+  if (!md) {
+    return { ok: false, error: "模型未返回剧本内容" };
+  }
   await productionRepository.patchContent(userId, projectId, {
     scriptMarkdown: md,
   });
@@ -143,7 +145,9 @@ async function execCharacters(
   projectId: string,
   row: Production,
 ): Promise<ExecResult> {
-  if (!row.scriptMarkdown.trim()) return { ok: false, error: "剧本为空，无法提取角色" };
+  if (!row.scriptMarkdown.trim()) {
+    return { ok: false, error: "剧本为空，无法提取角色" };
+  }
   const cfg = await getLLMConfig();
   const briefs = await completeLLMStructured(
     cfg,
@@ -179,7 +183,9 @@ async function execCharacters(
       negativePrompt: "",
       params: {},
     }));
-  if (created.length === 0) return { ok: false, error: "未从剧本解析出角色" };
+  if (created.length === 0) {
+    return { ok: false, error: "未从剧本解析出角色" };
+  }
   await productionRepository.patchContent(userId, projectId, {
     characters: created,
   });
@@ -192,7 +198,9 @@ async function execStoryboard(
   run: ProductionRun,
   row: Production,
 ): Promise<ExecResult> {
-  if (!row.scriptMarkdown.trim()) return { ok: false, error: "剧本为空，无法规划分镜" };
+  if (!row.scriptMarkdown.trim()) {
+    return { ok: false, error: "剧本为空，无法规划分镜" };
+  }
   const cfg = await getLLMConfig();
   const items = await completeLLMStructured(
     cfg,
@@ -228,7 +236,9 @@ async function execStoryboard(
       status: "idle",
       rev: 0,
     }));
-  if (shots.length === 0) return { ok: false, error: "未解析出分镜镜头" };
+  if (shots.length === 0) {
+    return { ok: false, error: "未解析出分镜镜头" };
+  }
   await productionRepository.patchContent(userId, projectId, { shots });
   // 记下「这次分镜是按哪版剧本拆的」：之后剧本变（AI 改写定稿 / 人手改）→
   // 规划器按指纹差把分镜重新纳入（#2478 ④ 的分镜联动）。
@@ -421,7 +431,7 @@ async function execReviewShots(
     }
     if (humanFresh && !human.pass) {
       pass = false;
-    } else
+    } else {
       try {
         const textVerdict = await reviewContent(userId, projectId, "shot", shotId);
         // 视觉裁判：仅镜头已出图时跑（没图就只看文本，退化回旧行为）。
@@ -442,6 +452,7 @@ async function execReviewShots(
         reviewed[shotId] = rev;
         continue;
       }
+    }
     if (pass) {
       reviewed[shotId] = rev;
       passed++;
@@ -457,14 +468,22 @@ async function execReviewShots(
   if (rerollIds.length > 0) {
     const fresh = await productionRepository.getForUser(userId, projectId);
     let shots: Array<unknown> = fresh && Array.isArray(fresh.shots) ? fresh.shots : [];
-    for (const id of rerollIds) shots = applyShotRedo(shots, id);
+    for (const id of rerollIds) {
+      shots = applyShotRedo(shots, id);
+    }
     await productionRepository.patchContent(userId, projectId, { shots });
   }
 
   const parts = [`${passed} 通过`];
-  if (rerollIds.length > 0) parts.push(`${rerollIds.length} 抽卡重出`);
-  if (exhausted > 0) parts.push(`${exhausted} 达上限保留`);
-  if (imageReviewed > 0) parts.push(`${imageReviewed} 已视觉评审`);
+  if (rerollIds.length > 0) {
+    parts.push(`${rerollIds.length} 抽卡重出`);
+  }
+  if (exhausted > 0) {
+    parts.push(`${exhausted} 达上限保留`);
+  }
+  if (imageReviewed > 0) {
+    parts.push(`${imageReviewed} 已视觉评审`);
+  }
   return {
     ok: true,
     summary: `逐镜评审：${parts.join(" / ")}`,
@@ -477,7 +496,9 @@ async function execFilm(
   projectId: string,
   run: ProductionRun,
 ): Promise<ExecResult> {
-  if (run.filmStartedAt) return { ok: true, skipLog: true, summary: "成片生成中（等待合成完成）" };
+  if (run.filmStartedAt) {
+    return { ok: true, skipLog: true, summary: "成片生成中（等待合成完成）" };
+  }
   // 服务端直接调成片编排（引擎在服务器上跑，不能用浏览器端的 render-film-client）。
   // createFilmFromProject→start：服务端 watchFilm 逐镜视频 + composeFilm 合成 + syncFilmToProject 回写。
   try {
@@ -507,14 +528,20 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
   try {
     for (let tick = 0; tick < MAX_TICKS; tick++) {
       const row = await productionRepository.getForUser(userId, projectId);
-      if (!row) return;
+      if (!row) {
+        return;
+      }
       let run = normalizeProductionRun(row.run);
       // 用户暂停 / 取消 / 待确认 / 已收尾 → 引擎让位（编辑改的内容靠 rev 在下次 resume 生效）。
-      if (run.status !== "running") return;
+      if (run.status !== "running") {
+        return;
+      }
 
       const view = toRunView(row);
       const action = planNextRunAction(view, run);
-      if (action.kind === "idle" || action.kind === "await_approval") return;
+      if (action.kind === "idle" || action.kind === "await_approval") {
+        return;
+      }
       if (action.kind === "done") {
         await saveRun(userId, projectId, {
           ...appendRunStep(run, {
@@ -557,7 +584,9 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
           break;
       }
 
-      if (res.run) run = res.run;
+      if (res.run) {
+        run = res.run;
+      }
       // 每执行一个动作追加一条执行日志（含成功/失败与产出摘要），随后续 saveRun 落库。
       // 纯等待步（skipLog）不追加，避免出片轮询把日志刷爆。
       if (!res.skipLog) {

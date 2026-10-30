@@ -170,14 +170,18 @@ export function ZoomIndicator({
 
   const commit = () => {
     const n = parseInt(draft, 10);
-    if (!Number.isNaN(n) && n > 0) applyZoom(n / 100);
+    if (!Number.isNaN(n) && n > 0) {
+      applyZoom(n / 100);
+    }
     setEditing(false);
   };
 
   // 微调：按住后上下拖拽，连续改变缩放。向上放大、向下缩小；
   // 用乘法（对数）映射，让每像素位移在任何缩放档下手感一致。
   const onScrubStart = (e: React.MouseEvent) => {
-    if (editing) return;
+    if (editing) {
+      return;
+    }
     e.preventDefault();
     justDraggedRef.current = false;
     dragRef.current = { startY: e.clientY, startZoom: zoom, moved: false };
@@ -185,9 +189,13 @@ export function ZoomIndicator({
 
     const onMove = (ev: MouseEvent) => {
       const st = dragRef.current;
-      if (!st) return;
+      if (!st) {
+        return;
+      }
       const dy = st.startY - ev.clientY; // up = positive
-      if (Math.abs(dy) > 4) st.moved = true;
+      if (Math.abs(dy) > 4) {
+        st.moved = true;
+      }
       applyZoom(st.startZoom * Math.exp(dy / 220));
     };
     const onUp = () => {
@@ -197,8 +205,11 @@ export function ZoomIndicator({
       const st = dragRef.current;
       dragRef.current = null;
       setDragging(false);
-      if (st?.moved) justDraggedRef.current = true;
-      else if (st) beginEdit();
+      if (st?.moved) {
+        justDraggedRef.current = true;
+      } else if (st) {
+        beginEdit();
+      }
     };
     scrubListenersRef.current = { onMove, onUp };
     window.addEventListener("mousemove", onMove);
@@ -265,23 +276,28 @@ export function CanvasRulers({
   const labelStep = useMemo(() => {
     const base = settings.gridGap * GRID_MAJOR_EVERY; // 100
     let s = base;
-    while (s * zoom < 48) s *= 2;
+    while (s * zoom < 48) {
+      s *= 2;
+    }
     return s;
   }, [zoom, settings.gridGap]);
 
   // 每条可见的主竖线的世界 X → 屏幕 X。
   const xLabels = useMemo(() => {
-    if (zoom <= 0.01 || !width)
+    if (zoom <= 0.01 || !width) {
       return /* SAFETY: 类型断言已复核 */ [] as Array<{
         world: number;
         screen: number;
       }>;
+    }
     const start = Math.floor(-tx / zoom / labelStep) * labelStep;
     const end = Math.ceil((width - tx) / zoom / labelStep) * labelStep;
     const out: Array<{ world: number; screen: number }> = [];
     for (let x = start; x <= end + 0.5; x += labelStep) {
       const sx = x * zoom + tx;
-      if (sx < -4 || sx > width + 4) continue;
+      if (sx < -4 || sx > width + 4) {
+        continue;
+      }
       out.push({ world: x, screen: sx });
     }
     return out;
@@ -289,23 +305,28 @@ export function CanvasRulers({
 
   // 每条可见的主横线的世界 Y → 屏幕 Y。
   const yLabels = useMemo(() => {
-    if (zoom <= 0.01 || !height)
+    if (zoom <= 0.01 || !height) {
       return /* SAFETY: 类型断言已复核 */ [] as Array<{
         world: number;
         screen: number;
       }>;
+    }
     const start = Math.floor(-ty / zoom / labelStep) * labelStep;
     const end = Math.ceil((height - ty) / zoom / labelStep) * labelStep;
     const out: Array<{ world: number; screen: number }> = [];
     for (let y = start; y <= end + 0.5; y += labelStep) {
       const sy = y * zoom + ty;
-      if (sy < -4 || sy > height + 4) continue;
+      if (sy < -4 || sy > height + 4) {
+        continue;
+      }
       out.push({ world: y, screen: sy });
     }
     return out;
   }, [ty, zoom, height, labelStep]);
 
-  if (!settings.showRulers) return null;
+  if (!settings.showRulers) {
+    return null;
+  }
 
   // 用 Unicode 负号统一排版（既有控件值用的是普通 `-`；
   // 标尺用 `−`，因为它的字号更大，负坐标下这点差异看得出来）。

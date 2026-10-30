@@ -136,7 +136,9 @@ export function useRuntimeLogSource({
         latest !== null &&
         latest.startedAt !== null &&
         latest.startedAt !== latestStartedAtRef.current;
-      if (isNewStart) latestStartedAtRef.current = latest.startedAt;
+      if (isNewStart) {
+        latestStartedAtRef.current = latest.startedAt;
+      }
       if (isNewStart && slice.selectedId !== latest.id) {
         /* 切过去并在同一次调用里把新会话的正文取回来（不走递归：
          * useCallback 的自引用过不了 react-hooks 的静态检查）。 */
@@ -144,7 +146,9 @@ export function useRuntimeLogSource({
         slice = await fetchLogSessions(source, latest.id);
       }
     }
-    if (!slice || seq !== seqRef.current) return;
+    if (!slice || seq !== seqRef.current) {
+      return;
+    }
     /* 服务端回落的选中项（请求的 id 已不在列表里时它会选最新）：以它为准。 */
     sessionRef.current = slice.selectedId;
     const text = slice.content.replace(CR_RE, "");

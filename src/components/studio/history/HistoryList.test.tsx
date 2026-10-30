@@ -81,9 +81,7 @@ describe("HistoryList 状态筛选（ISSUE #1925）", () => {
     const radios = screen.getAllByRole("radio");
     expect(radios).toHaveLength(FILTERS.length);
     // 当前筛选是 ALL —— 恰好一枚被勾选。
-    const checked = radios.filter(
-      (el) => el.getAttribute("aria-checked") === "true",
-    );
+    const checked = radios.filter((el) => el.getAttribute("aria-checked") === "true");
     expect(checked).toHaveLength(1);
     expect(checked[0]?.textContent).toContain("全部");
   });
@@ -112,8 +110,9 @@ describe("FILTERS 的配色只给语义键", () => {
     for (const f of FILTERS) {
       expect(f).not.toHaveProperty("dotCls");
       // 语义键只能是 status-dot 认识的那几档。
-      if (f.tone !== undefined)
+      if (f.tone !== undefined) {
         expect(["up", "busy", "probing", "down"]).toContain(f.tone);
+      }
     }
   });
 

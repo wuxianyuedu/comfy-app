@@ -79,7 +79,9 @@ function shotStatusToFilmStatus(status: unknown): ShotStatus {
 export function productionShotsToShotList(shots: Array<unknown>): Array<ShotListItem> {
   const list: Array<ShotListItem> = [];
   for (const raw of shots) {
-    if (!isRecord(raw) || typeof raw.id !== "string") continue;
+    if (!isRecord(raw) || typeof raw.id !== "string") {
+      continue;
+    }
     const name =
       (typeof raw.sceneHeading === "string" && raw.sceneHeading) ||
       (typeof raw.prompt === "string" && raw.prompt.slice(0, 24)) ||

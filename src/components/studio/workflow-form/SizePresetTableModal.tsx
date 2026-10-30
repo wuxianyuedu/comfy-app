@@ -80,7 +80,9 @@ export function SizePresetTableModal({
               value={[scene]}
               onValueChange={(vals) => {
                 const next = vals[0];
-                if (next === "image" || next === "video") setScene(next);
+                if (next === "image" || next === "video") {
+                  setScene(next);
+                }
               }}
               aria-label="尺寸档位场景"
               className="gap-1"

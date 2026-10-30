@@ -56,11 +56,7 @@ import process from "node:process";
 /* 容器计划的读数与**同一个事实**的另一个出口（ISSUE #1993）：哪几格进容器、它们挂的
  * 卷能不能让浏览器落点跨容器存活、runner 是不是自托管。本档只**打**它，判据在
  * `tests/ci-container-plan.test.ts` —— 分工与 `platformImageStages()` 一致。 */
-import {
-  containerStages,
-  describePlan,
-  stageLevelImages,
-} from "./ci-container-plan.mjs";
+import { containerStages, describePlan, stageLevelImages } from "./ci-container-plan.mjs";
 
 /** `.cnb.yml` 里本仓认得的那一档「Job 级镜像」—— 宿主机没 docker 之后容器仍从这一格来。 */
 const CNB_CONFIG = ".cnb.yml";
@@ -142,15 +138,21 @@ export function readImageDeclarations(text) {
  */
 export function imageTagVerdict(image) {
   const text = String(image ?? "").trim();
-  if (text === "") return { verdict: "missing", tag: null };
+  if (text === "") {
+    return { verdict: "missing", tag: null };
+  }
   /* 取最后一段的 `:` 之后 —— 前面可能带 registry 域名与端口（`host:5000/ns/r:tag`），
    * 所以不能按第一个 `:` 切（那会把端口当成标签）。`@sha256:` 形态没有标签，
    * 它本身就是钉死的，按 `pinned` 认（digest 比标签更硬）。 */
-  if (text.includes("@sha256:")) return { verdict: "pinned", tag: null };
+  if (text.includes("@sha256:")) {
+    return { verdict: "pinned", tag: null };
+  }
   const lastSegment = text.slice(text.lastIndexOf("/") + 1);
   const at = lastSegment.lastIndexOf(":");
   const tag = at < 0 ? null : lastSegment.slice(at + 1);
-  if (tag === null) return { verdict: "floating", tag: null };
+  if (tag === null) {
+    return { verdict: "floating", tag: null };
+  }
   return { verdict: tag === "latest" ? "floating" : "pinned", tag };
 }
 
@@ -163,7 +165,9 @@ export function imageTagVerdict(image) {
  */
 export function digestVerdict(digest) {
   const text = String(digest ?? "").trim();
-  if (text === "") return "missing";
+  if (text === "") {
+    return "missing";
+  }
   return /^sha256:[0-9a-f]{64}$/i.test(text) ? "ok" : "malformed";
 }
 
@@ -176,19 +180,16 @@ export function digestVerdict(digest) {
  * @param {{ exists?: (p: string) => boolean, readFile?: (p: string) => string }} [options]
  * @returns {string}
  */
-export function osRelease({
-  exists = existsSync,
-  readFile = (p) => readFileSync(p, "utf8"),
-} = {}) {
+export function osRelease({ exists = existsSync, readFile = (p) => readFileSync(p, "utf8") } = {}) {
   const file = "/etc/os-release";
-  if (!exists(file))
+  if (!exists(file)) {
     return `${process.platform} ${process.arch}（没有 /etc/os-release）`;
+  }
   try {
     const text = readFile(file);
     const pretty = /^PRETTY_NAME="?([^"\n]+)"?/m.exec(text)?.[1];
     const version = /^VERSION_ID="?([^"\n]+)"?/m.exec(text)?.[1];
-    const name =
-      pretty ?? (version ? `Linux ${version}` : "Linux（发行版名读不出）");
+    const name = pretty ?? (version ? `Linux ${version}` : "Linux（发行版名读不出）");
     return `${name} / ${process.platform} ${process.arch}`;
   } catch (error) {
     /* 读不到就如实说读不到 —— 那不是判据，别把一次 IO 失败写成「环境不对」。 */
@@ -229,12 +230,8 @@ export function imageIdentity({
   lines.push(`磁盘上的系统：${osReleaseImpl()}`);
   lines.push(`内核：${kernelImpl()}`);
   lines.push(`节点主机名：${os.hostname()}`);
-  lines.push(
-    `${IMAGE_ENV}：${tag.verdict === "missing" ? "（没有声明）" : String(image).trim()}`,
-  );
-  lines.push(
-    `${DIGEST_ENV}：${dig === "missing" ? "（没有声明）" : String(digest).trim()}`,
-  );
+  lines.push(`${IMAGE_ENV}：${tag.verdict === "missing" ? "（没有声明）" : String(image).trim()}`);
+  lines.push(`${DIGEST_ENV}：${dig === "missing" ? "（没有声明）" : String(digest).trim()}`);
 
   /* 本仓的容器格（Job 级 `image:`）—— 与上面「这台机长自哪版」是**两件事**：
    * 前者是宿主身份，后者是「这一跑哪几格换了环境」。放在同一处打，是因为它们
@@ -251,7 +248,9 @@ export function imageIdentity({
    * 而这一档最贵的失效形态恰恰在那一半：不挂卷 ⇒ 每一格都重下 120 MiB，
    * 不报错、只是慢。runner 那一行同理 —— 漏掉 `namespace: group` 会**静默**
    * 回落计费的平台池，而配置看起来一模一样。 */
-  for (const line of describePlan(readConfig())) lines.push(line);
+  for (const line of describePlan(readConfig())) {
+    lines.push(line);
+  }
 
   if (tag.verdict === "pinned") {
     lines.push(
@@ -275,12 +274,7 @@ export function imageIdentity({
         "      口径与「宿主侧怎么用起来」见 docs/standards/13-提交与-code-review.md §13.5.3.4.1。",
     );
   }
-  if (
-    image !== undefined &&
-    image !== null &&
-    String(image).trim() !== "" &&
-    dig === "missing"
-  ) {
+  if (image !== undefined && image !== null && String(image).trim() !== "" && dig === "missing") {
     lines.push(
       `读数：声明了镜像引用却没给 digest —— 标签会被移动，digest 不会（${DIGEST_ENV} 留空）`,
     );
@@ -290,7 +284,9 @@ export function imageIdentity({
     );
   }
 
-  for (const line of lines) log(line);
+  for (const line of lines) {
+    log(line);
+  }
   /* **恒 0**：本步没有判据面（理由见文件头）。返回值留 `0` 而不是 `undefined`，
    * 是为了让调用点（与用例）看见「这一档不退非零」是**决定**，不是漏写。 */
   return { lines, verdict: tag.verdict, digest: dig, exitCode: 0 };
@@ -299,10 +295,7 @@ export function imageIdentity({
 /* 只在被直接执行时跑 —— 判「是不是直接执行」用**两侧都过 `path.resolve` 的比较**
  * （`tests/script-main-guard.test.ts` 守着这一形态；拼 `file://${argv[1]}` 在 Windows
  * 上恒不相等，于是这一段一次都不跑、退出码恒 0 且零输出）。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   /* 本步要在**装依赖之前**跑（那时 `node_modules` 还没有），所以只走 `node:*`
    * —— 与 `ci-env-probe.mjs` 同口径，不起子进程、不 import 仓内模块。 */
   imageIdentity();

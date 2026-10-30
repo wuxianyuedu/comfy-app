@@ -374,30 +374,45 @@ export function allPresets(): Array<ConsolePreset> {
  */
 export function shellSyntaxWarning(line: string): string | null {
   const raw = (line ?? "").trim();
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   /** 命中片段（去重、保持首次出现顺序，便于文案里逐个点名）。 */
   const found: Array<string> = [];
   const hit = (fragment: string) => {
-    if (!found.includes(fragment)) found.push(fragment);
+    if (!found.includes(fragment)) {
+      found.push(fragment);
+    }
   };
   /* 逐字符扫一遍：每个控制符只需判一次，比叠一串互相干扰的正则好读也好测。
    * 引号**不参与**这里的判断 —— `echo "a|b"` 里的 `|` 确实是普通字符，
    * 而本函数是「提醒」不是「拒绝」，多提醒一句的代价远低于漏提醒。 */
   for (let i = 0; i < raw.length; i++) {
     const ch = raw[i];
-    if (ch === ";") hit(";");
-    else if (ch === "|") hit("|");
-    else if (ch === ">") hit(">");
-    else if (ch === "<") hit("<");
-    else if (ch === "&") hit("&");
-    else if (ch === "`") hit("`…`（命令替换）");
-    else if (ch === "$" && (raw[i + 1] === "(" || raw[i + 1] === "{"))
+    if (ch === ";") {
+      hit(";");
+    } else if (ch === "|") {
+      hit("|");
+    } else if (ch === ">") {
+      hit(">");
+    } else if (ch === "<") {
+      hit("<");
+    } else if (ch === "&") {
+      hit("&");
+    } else if (ch === "`") {
+      hit("`…`（命令替换）");
+    } else if (ch === "$" && (raw[i + 1] === "(" || raw[i + 1] === "{")) {
       hit("$(…) / ${…}（变量展开）");
+    }
   }
   /* Windows 形态的 `%VAR%`：必须成对出现才算（`git log --format=%H` 的单个
    * `%H` 不是变量展开，不该被点名）。 */
-  if (/%[A-Za-z_][A-Za-z0-9_]*%/.test(raw)) hit("%VAR%");
-  if (found.length === 0) return null;
+  if (/%[A-Za-z_][A-Za-z0-9_]*%/.test(raw)) {
+    hit("%VAR%");
+  }
+  if (found.length === 0) {
+    return null;
+  }
   return (
     `这行里有 ${found.join("、")} —— 控制台**不经过 shell**，它们会被当成普通参数` +
     `（例如 \`a && b\` 只会执行 a，退出码还可能是 0）。要串联多条命令请写进一个小脚本。`
@@ -437,7 +452,9 @@ export type ParsedConsoleLine =
  */
 export function parseConsoleLine(line: string): ParsedConsoleLine {
   const raw = (line ?? "").trim();
-  if (!raw) return { ok: false, reason: "命令为空" };
+  if (!raw) {
+    return { ok: false, reason: "命令为空" };
+  }
 
   const tokens: Array<string> = [];
   let current = "";
@@ -487,9 +504,15 @@ export function parseConsoleLine(line: string): ParsedConsoleLine {
     started = true;
   }
 
-  if (quote) return { ok: false, reason: `引号未闭合（缺少配对的 ${quote}）` };
-  if (started) tokens.push(current);
-  if (tokens.length === 0) return { ok: false, reason: "命令为空" };
+  if (quote) {
+    return { ok: false, reason: `引号未闭合（缺少配对的 ${quote}）` };
+  }
+  if (started) {
+    tokens.push(current);
+  }
+  if (tokens.length === 0) {
+    return { ok: false, reason: "命令为空" };
+  }
 
   const [file, ...args] = /* SAFETY: 类型断言已复核 */ tokens as [string, ...Array<string>];
   return { ok: true, file, args, display: [file, ...args].join(" ") };

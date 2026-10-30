@@ -63,7 +63,9 @@ function productFixture(extra: Record<string, string> = {}): string {
 
 afterEach(() => {
   // `temps.pop()` 在 `while (temps.length)` 下必然有值，用 `!` 比 `as` 更短且不撒谎
-  while (temps.length) rmSync(temps.pop()!, { recursive: true, force: true });
+  while (temps.length) {
+    rmSync(temps.pop()!, { recursive: true, force: true });
+  }
 });
 
 describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {

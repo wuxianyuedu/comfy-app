@@ -51,7 +51,9 @@ export function findInstallationById(
   data: unknown,
   instanceId: string,
 ): Record<string, unknown> | null {
-  if (!instanceId) return null;
+  if (!instanceId) {
+    return null;
+  }
   if (Array.isArray(data)) {
     for (const item of data) {
       if (
@@ -68,8 +70,9 @@ export function findInstallationById(
     const obj = /* SAFETY: 类型断言已复核 */ data as Record<string, unknown>;
     // 直接键值对应（形如 { "inst-...": {…} }）
     const direct = obj[instanceId];
-    if (direct && typeof direct === "object")
+    if (direct && typeof direct === "object") {
       return /* SAFETY: 类型断言已复核 */ direct as Record<string, unknown>;
+    }
     // 深搜：遍历对象/数组，找 id 字段匹配的节点。
     return deepFindById(obj, instanceId);
   }
@@ -77,20 +80,28 @@ export function findInstallationById(
 }
 
 function deepFindById(node: unknown, id: string, depth = 0): Record<string, unknown> | null {
-  if (depth > 12 || node == null) return null;
+  if (depth > 12 || node == null) {
+    return null;
+  }
   if (Array.isArray(node)) {
     for (const item of node) {
       const hit = deepFindById(item, id, depth + 1);
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
     return null;
   }
   if (typeof node === "object") {
     const obj = /* SAFETY: 类型断言已复核 */ node as Record<string, unknown>;
-    if (obj.id === id && typeof obj === "object") return obj;
+    if (obj.id === id && typeof obj === "object") {
+      return obj;
+    }
     for (const key of Object.keys(obj)) {
       const hit = deepFindById(obj[key], id, depth + 1);
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
   }
   return null;
@@ -103,7 +114,9 @@ function toArgList(launchArgs: unknown): Array<string> {
     const re = /"([^"]*)"|(\S+)/g;
     const out: Array<string> = [];
     let m: RegExpExecArray | null;
-    while ((m = re.exec(launchArgs))) out.push(m[1] ?? m[2] ?? "");
+    while ((m = re.exec(launchArgs))) {
+      out.push(m[1] ?? m[2] ?? "");
+    }
     return out;
   }
   if (Array.isArray(launchArgs)) {
@@ -148,9 +161,13 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
     /* 循环体里有「跳过端口值」的手动 `i++`，所以不能换成 `for...of`；
      * `at()` 的越界即 `undefined` 正好与循环判据同源。 */
     const token = argv.at(i);
-    if (token === undefined) break;
+    if (token === undefined) {
+      break;
+    }
     const lower = token.toLowerCase();
-    if (drop.has(lower)) continue;
+    if (drop.has(lower)) {
+      continue;
+    }
     // 提取 --port：`--port <n>` 或 `--port=<n>` 或 `-p <n>`。
     if (lower === "--port" || lower === "-p") {
       const next = argv[i + 1];
@@ -164,7 +181,9 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
     const eq = /^--port=(.+)$/.exec(lower) ?? /^-p=(.+)$/.exec(lower);
     if (eq) {
       const n = parseInt(eq[1] ?? "", 10);
-      if (!isNaN(n)) port = n;
+      if (!isNaN(n)) {
+        port = n;
+      }
       continue;
     }
     args.push(token);
@@ -181,7 +200,9 @@ function extractEnvVars(entry: Record<string, unknown> | null): Record<string, s
     for (const [k, v] of Object.entries(
       /* SAFETY: 类型断言已复核 */ ev as Record<string, unknown>,
     )) {
-      if (typeof v === "string" || typeof v === "number") out[k] = String(v);
+      if (typeof v === "string" || typeof v === "number") {
+        out[k] = String(v);
+      }
     }
     return out;
   }
@@ -200,7 +221,9 @@ export function parseDesktopLaunchArgs(
     return null;
   }
   const entry = findInstallationById(parsed, instanceId);
-  if (!entry) return null;
+  if (!entry) {
+    return null;
+  }
   const headless = launchArgsToHeadless(entry.launchArgs);
   return { ...headless, envVars: extractEnvVars(entry) };
 }
@@ -227,7 +250,9 @@ export async function resolveDesktopLaunchArgs(
     return null;
   }
   const instanceId = parseInstanceId(idContent);
-  if (!instanceId) return null;
+  if (!instanceId) {
+    return null;
+  }
 
   // Comfy Desktop 的数据目录：默认 %APPDATA%\Comfy Desktop。
   const configRoot =
@@ -238,7 +263,9 @@ export async function resolveDesktopLaunchArgs(
           "Comfy Desktop",
         )
       : null);
-  if (!configRoot) return null;
+  if (!configRoot) {
+    return null;
+  }
   const installsPath = path.join(configRoot, "installations.json");
   let raw: string;
   try {
@@ -254,7 +281,9 @@ export function splitArgTokens(s: string): Array<string> {
   const out: Array<string> = [];
   const re = /"([^"]*)"|(\S+)/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(s ?? ""))) out.push(m[1] ?? m[2] ?? "");
+  while ((m = re.exec(s ?? ""))) {
+    out.push(m[1] ?? m[2] ?? "");
+  }
   return out;
 }
 

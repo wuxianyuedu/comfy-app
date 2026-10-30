@@ -47,7 +47,9 @@ const SHELL_LIB_RS = readFileSync(join(ROOT, "src-tauri", "src", "lib.rs"), "utf
 /** 从 TS 里抠出 `AppServiceExitKind` 的联合取值（写死的形态，改了这里就红）。 */
 function tsKindUnion(): Array<string> {
   const block = /export type AppServiceExitKind =([\s\S]*?);/.exec(EXIT_TS)?.[1];
-  if (!block) return [];
+  if (!block) {
+    return [];
+  }
   return [...block.matchAll(/"([a-z-]+)"/g)].map((m) => m[1]!);
 }
 

@@ -67,12 +67,9 @@ describe("normalizeProductionRun", () => {
 
   it("processedShotRev 只收有限数字；非对象整体丢弃", () => {
     expect(
-      normalizeProductionRun({ processedShotRev: { a: 1, b: "x", c: NaN } })
-        .processedShotRev,
+      normalizeProductionRun({ processedShotRev: { a: 1, b: "x", c: NaN } }).processedShotRev,
     ).toEqual({ a: 1 });
-    expect(
-      normalizeProductionRun({ processedShotRev: "no" }).processedShotRev,
-    ).toEqual({});
+    expect(normalizeProductionRun({ processedShotRev: "no" }).processedShotRev).toEqual({});
   });
 
   it("字符串字段类型不符 → 回落空/默认，不抛", () => {
@@ -173,10 +170,7 @@ describe("planNextRunAction", () => {
 
   it("awaiting_approval 透出待确认阶段（缺省回落到游标阶段）", () => {
     expect(
-      planNextRunAction(
-        view(),
-        run({ status: "awaiting_approval", awaitingStage: "shots" }),
-      ),
+      planNextRunAction(view(), run({ status: "awaiting_approval", awaitingStage: "shots" })),
     ).toEqual({ kind: "await_approval", stage: "shots" });
     expect(
       planNextRunAction(
@@ -194,14 +188,11 @@ describe("planNextRunAction", () => {
     expect(planNextRunAction(view(), run({ status: "running" }))).toEqual({
       kind: "generate_script",
     });
+    expect(planNextRunAction(view({ hasScript: true }), run({ status: "running" }))).toEqual({
+      kind: "extract_characters",
+    });
     expect(
-      planNextRunAction(view({ hasScript: true }), run({ status: "running" })),
-    ).toEqual({ kind: "extract_characters" });
-    expect(
-      planNextRunAction(
-        view({ hasScript: true, characterCount: 2 }),
-        run({ status: "running" }),
-      ),
+      planNextRunAction(view({ hasScript: true, characterCount: 2 }), run({ status: "running" })),
     ).toEqual({ kind: "plan_storyboard" });
   });
 
@@ -234,10 +225,7 @@ describe("planNextRunAction", () => {
     const shots = [{ id: "a", rev: 1, hasImage: true, hasClip: true }];
     const base = { hasScript: true, characterCount: 1, shots };
     expect(
-      planNextRunAction(
-        view(base),
-        run({ status: "running", processedShotRev: { a: 1 } }),
-      ),
+      planNextRunAction(view(base), run({ status: "running", processedShotRev: { a: 1 } })),
     ).toEqual({ kind: "render_film" });
     expect(
       planNextRunAction(
@@ -290,7 +278,9 @@ describe("appendRunStep", () => {
   });
   it("超上限从头裁剪，只保留最近 RUN_LOG_LIMIT 条", () => {
     let r = run();
-    for (let i = 0; i < RUN_LOG_LIMIT + 5; i++) r = appendRunStep(r, step(i));
+    for (let i = 0; i < RUN_LOG_LIMIT + 5; i++) {
+      r = appendRunStep(r, step(i));
+    }
     expect(r.log).toHaveLength(RUN_LOG_LIMIT);
     expect(r.log[0]!.detail).toBe(`#5`); // 早期 5 条被裁掉
     expect(r.log.at(-1)!.detail).toBe(`#${RUN_LOG_LIMIT + 4}`);
@@ -324,10 +314,7 @@ describe("planNextRunAction · 自动评审", () => {
 
   it("autoReview 关：图齐直接 render_film（不评审）", () => {
     expect(
-      planNextRunAction(
-        view(base),
-        run({ status: "running", processedShotRev: { a: 1 } }),
-      ),
+      planNextRunAction(view(base), run({ status: "running", processedShotRev: { a: 1 } })),
     ).toEqual({ kind: "render_film" });
   });
 

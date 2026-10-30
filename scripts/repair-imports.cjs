@@ -14,7 +14,9 @@ const path = require("node:path");
 // 得到空结果（ISSUE #638）。判据模块是 ESM，.cjs 用动态 import() 拿。
 let runPnpmSync = null;
 async function loadShell() {
-  if (runPnpmSync) return runPnpmSync;
+  if (runPnpmSync) {
+    return runPnpmSync;
+  }
   ({ runPnpmSync } = await import("./launcher-core/shell.mjs"));
   return runPnpmSync;
 }
@@ -36,14 +38,19 @@ function fixLiteralForms() {
   (function walk(dir) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name).replace(/\\/g, "/");
-      if (e.isDirectory()) walk(p);
-      else if (/\.(tsx?|mjs|cjs|js)$/.test(e.name)) files.push(p);
+      if (e.isDirectory()) {
+        walk(p);
+      } else if (/\.(tsx?|mjs|cjs|js)$/.test(e.name)) {
+        files.push(p);
+      }
     }
   })("src");
   let n = 0;
   for (const f of files) {
     const file = f.replace(/\\/g, "/");
-    if (!fs.existsSync(file)) continue;
+    if (!fs.existsSync(file)) {
+      continue;
+    }
     const src = fs.readFileSync(file, "utf8");
     let out = src;
     // studio/undefined → 按导入符号映射
@@ -51,24 +58,22 @@ function fixLiteralForms() {
       /import \{ ([^}]+) \} from "@\/components\/studio\/undefined";/g,
       (m, sym) => {
         const target = SYMBOL_MAP[sym.trim()];
-        if (!target) return m;
+        if (!target) {
+          return m;
+        }
         const rel = path.posix.relative(
           path.posix.dirname(file),
           "src/components/studio/" + target,
         );
-        return (
-          "import { " +
-          sym +
-          ' } from "' +
-          (rel.startsWith(".") ? rel : "./" + rel) +
-          '";'
-        );
+        return "import { " + sym + ' } from "' + (rel.startsWith(".") ? rel : "./" + rel) + '";';
       },
     );
     // @// 畸形 → @/components/studio/
     out = out.split('"@//').join('"@/components/studio/');
     if (out !== src) {
-      if (apply) fs.writeFileSync(file, out);
+      if (apply) {
+        fs.writeFileSync(file, out);
+      }
       n++;
     }
   }
@@ -78,19 +83,18 @@ function fixLiteralForms() {
 function fixDynamicUndefined() {
   // workspace/page 的动态 import:按 mod.X 推断
   const f = "src/app/workspace/page.tsx";
-  if (!fs.existsSync(f)) return 0;
+  if (!fs.existsSync(f)) {
+    return 0;
+  }
   const src = fs.readFileSync(f, "utf8");
   const out = src.replace(
     /import\("@\/components\/studio\/undefined"\)\.then\(\(mod\) => mod\.(\w+)\)/g,
-    (m, sym) =>
-      'import("@/components/studio/' +
-      sym +
-      '").then((mod) => mod.' +
-      sym +
-      ")",
+    (m, sym) => 'import("@/components/studio/' + sym + '").then((mod) => mod.' + sym + ")",
   );
   if (out !== src) {
-    if (apply) fs.writeFileSync(f, out);
+    if (apply) {
+      fs.writeFileSync(f, out);
+    }
     return 1;
   }
   return 0;
@@ -105,41 +109,48 @@ function parseAndFixDepth() {
     });
     // 「命令没起来」不再塌成空 stdout：本脚本靠 tsc 的输出定位断链，
     // 空输出会被读成「没有断链」，于是整轮修复静默地什么都没做。
-    if (res.error)
-      throw new Error(
-        `起 pnpm 失败（${res.error.code ?? "UNKNOWN"}）：${res.error.message}`,
-      );
+    if (res.error) {
+      throw new Error(`起 pnpm 失败（${res.error.code ?? "UNKNOWN"}）：${res.error.message}`);
+    }
     out = res.stdout;
   } catch (e) {
     out = String(e.stdout || "");
   }
   const errs = [
-    ...out.matchAll(
-      /^(.+?)\((\d+),\d+\): error TS2307: Cannot find module '([^']+)'/gm,
-    ),
+    ...out.matchAll(/^(.+?)\((\d+),\d+\): error TS2307: Cannot find module '([^']+)'/gm),
   ];
-  if (!errs.length) return { broken: 0, fixed: 0 };
+  if (!errs.length) {
+    return { broken: 0, fixed: 0 };
+  }
   // 按 file+spec 去重;记录行号以定位该行文本
   const byFile = new Map();
   for (const [, file, line, mod] of errs) {
     const k = file;
-    if (!byFile.has(k)) byFile.set(k, []);
+    if (!byFile.has(k)) {
+      byFile.set(k, []);
+    }
     byFile.get(k).push({ line: Number(line), mod });
   }
   let fixed = 0;
   for (const [file, list] of byFile) {
-    if (!fs.existsSync(file)) continue;
+    if (!fs.existsSync(file)) {
+      continue;
+    }
     const lines = fs.readFileSync(file, "utf8").split("\n");
     let touched = false;
     for (const { line, mod } of list) {
       const idx = line - 1;
-      if (!lines[idx] || !lines[idx].includes(mod)) continue;
+      if (!lines[idx] || !lines[idx].includes(mod)) {
+        continue;
+      }
       // 沿该行找 spec 出现位置,尝试候选深度
       const depth = mod.startsWith("../") ? mod.match(/\.\.\//g).length : 0;
       const tail = mod.replace(/^(\.\.\/)+/, "");
       const candidates = [];
       for (const d of [depth, depth - 1, depth - 2, depth + 1]) {
-        if (d < 0) continue;
+        if (d < 0) {
+          continue;
+        }
         candidates.push("../".repeat(d) + tail);
       }
       if (mod.startsWith("@/")) {
@@ -153,17 +164,19 @@ function parseAndFixDepth() {
           : path.posix.normalize(path.posix.join(curDir, cand));
         if (exists(abs)) {
           if (cand !== mod) {
-            lines[idx] = lines[idx]
-              .split('"' + mod + '"')
-              .join('"' + cand + '"');
+            lines[idx] = lines[idx].split('"' + mod + '"').join('"' + cand + '"');
             touched = true;
           }
           break;
         }
       }
     }
-    if (touched && apply) fs.writeFileSync(file, lines.join("\n"));
-    if (touched) fixed++;
+    if (touched && apply) {
+      fs.writeFileSync(file, lines.join("\n"));
+    }
+    if (touched) {
+      fixed++;
+    }
   }
   return { broken: errs.length, fixed };
 }
@@ -173,14 +186,7 @@ async function main() {
   const a = fixLiteralForms();
   const b = fixDynamicUndefined();
   const r = parseAndFixDepth();
-  console.log(
-    "字面量修复:",
-    a + b,
-    "文件;断链:",
-    r.broken,
-    "→ 深度修复文件:",
-    r.fixed,
-  );
+  console.log("字面量修复:", a + b, "文件;断链:", r.broken, "→ 深度修复文件:", r.fixed);
 }
 
 main();

@@ -57,27 +57,14 @@
  *     屏名只在这一屏才出现，仍给可见标题；说明仍收掉（它读一次就够）。
  */
 
-import {
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  type ReactNode,
-} from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 
-import {
-  SETTINGS_SECTIONS,
-  type Section,
-} from "~/app/(main)/settings/hooks/use-settings-page";
+import { SETTINGS_SECTIONS, type Section } from "~/app/(main)/settings/hooks/use-settings-page";
 import { Button } from "~/components/ui/button";
 import { TreeChildren } from "~/components/ui/tree-rows";
 import { cn } from "~/lib/utils";
 
-import {
-  SETTINGS_SCROLL_ORDER,
-  TREE_GROUPS,
-  sectionSummary,
-} from "./settings-section-summary";
+import { SETTINGS_SCROLL_ORDER, TREE_GROUPS, sectionSummary } from "./settings-section-summary";
 import { useSectionScrollSpy } from "./use-section-scroll-spy";
 
 /**
@@ -185,8 +172,12 @@ export function SettingsShell({
    * 只有 `scrollToSection` 真的命中锚点（返回 true）才回调消费载荷 —— 三态壳
    * （加载 / 失败）没有分区节，那时不能把载荷吃掉，就绪壳挂上后再滚。 */
   useLayoutEffect(() => {
-    if (!jumpSection) return;
-    if (scrollToSection(jumpSection, "auto")) onJumpApplied?.();
+    if (!jumpSection) {
+      return;
+    }
+    if (scrollToSection(jumpSection, "auto")) {
+      onJumpApplied?.();
+    }
   }, [jumpSection, scrollToSection, onJumpApplied]);
 
   return (
@@ -258,9 +249,7 @@ export function sectionAnchorId(section: Section): string {
 
 /** 分区的可读名（`SETTINGS_SECTIONS` 是分区名的唯一定义处）。 */
 function sectionLabel(section: Section): string {
-  return (
-    SETTINGS_SECTIONS.find((item) => item.id === section)?.label ?? section
-  );
+  return SETTINGS_SECTIONS.find((item) => item.id === section)?.label ?? section;
 }
 
 /**
@@ -282,9 +271,7 @@ function SettingsSectionHeading({ section }: { section: Section }) {
   return (
     <h2 className="u-title-stage border-border-subtle mb-3 flex items-baseline gap-2 border-b pb-2">
       {sectionLabel(section)}
-      <span className="text-ink-muted text-xs font-normal">
-        {sectionSummary(section)}
-      </span>
+      <span className="text-ink-muted text-xs font-normal">{sectionSummary(section)}</span>
     </h2>
   );
 }
@@ -304,24 +291,18 @@ function SettingsSectionNav({
   onSelect: (section: Section) => void;
 }) {
   return (
-    <nav
-      aria-label="设置分区"
-      className="custom-scrollbar w-40 shrink-0 overflow-y-auto pb-2"
-    >
+    <nav aria-label="设置分区" className="custom-scrollbar w-40 shrink-0 overflow-y-auto pb-2">
       {TREE_GROUPS.map((group) => {
-        const items = SETTINGS_SECTIONS.filter((item) =>
-          group.sections.includes(item.id),
-        );
-        if (items.length === 0) return null;
+        const items = SETTINGS_SECTIONS.filter((item) => group.sections.includes(item.id));
+        if (items.length === 0) {
+          return null;
+        }
         return (
           <div key={group.label} className="mb-3 last:mb-0">
             {/* 分组名是父行：弱一档、不可点 —— 它只回答「这几项属于一类」，
                 不是导航目标（点了也不会切到某个分区）。读屏不进可访问名，
                 分区自身由子行的 `aria-current` 表达。 */}
-            <p
-              aria-hidden
-              className="text-ink-fainter px-2 text-xs font-medium"
-            >
+            <p aria-hidden className="text-ink-fainter px-2 text-xs font-medium">
               {group.label}
             </p>
             {/* 子行集合走 `TreeChildren`：缩进档 + 引导线一处给全（§16.2.4.39）。

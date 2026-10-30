@@ -17,16 +17,16 @@ const result = createBackup(root, {
   onRotateFail: (name, error) => {
     process.stderr.write(
       `[db:backup] 轮转时删不掉 ${name}（${
-        error && typeof error === "object" && "code" in error
-          ? String(error.code)
-          : String(error)
+        error && typeof error === "object" && "code" in error ? String(error.code) : String(error)
       }）—— 备份本身没受影响，只是多留了一份。\n`,
     );
   },
 });
 
 const notice = backupNotice(result);
-for (const line of notice?.lines ?? []) process.stdout.write(`${line}\n`);
+for (const line of notice?.lines ?? []) {
+  process.stdout.write(`${line}\n`);
+}
 
 if (result.ok) {
   process.stdout.write(

@@ -9,11 +9,7 @@
 import { ArrowDownToLine, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-} from "~/components/ui/pagination";
+import { Pagination, PaginationContent, PaginationItem } from "~/components/ui/pagination";
 import { FILTER_LABELS } from "./LogFilterBar";
 import { ORIGIN_TEXT } from "./LogPanelOriginSelect";
 import type { LogFilter, LogOriginFilter } from "./log-types";
@@ -26,7 +22,9 @@ function pageSummary(
   all: number,
   search: string,
 ): string {
-  if (total === 0) return search.trim() ? "无筛选命中的日志" : "无匹配日志";
+  if (total === 0) {
+    return search.trim() ? "无筛选命中的日志" : "无匹配日志";
+  }
   const head = `第 ${page} / ${totalPages} 页 · 每页最多 ${pageSize} 条`;
   const tail = `${search.trim() ? "筛选命中" : "匹配"} ${total} 条 · 面板共保留 ${all} 条`;
   return `${head} · ${tail}`;
@@ -74,9 +72,7 @@ export function LogPanelFooter(input: {
   return (
     <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-xs">
       <span className="flex items-center gap-2">
-        <span>
-          {pageSummary(safePage, totalPages, pageSize, total, totalAll, search)}
-        </span>
+        <span>{pageSummary(safePage, totalPages, pageSize, total, totalAll, search)}</span>
         {droppedTotal > 0 && (
           <span
             className="text-ink-fainter shrink-0"
@@ -100,9 +96,7 @@ export function LogPanelFooter(input: {
         {shouldPin && (
           <Button variant="primary-solid" size="xs" onClick={jumpToLatest}>
             <ArrowDownToLine size={12} />
-            {newLogCount > 0
-              ? `有 ${newLogCount} 条新的日志 · 回到最新`
-              : "回到最新"}
+            {newLogCount > 0 ? `有 ${newLogCount} 条新的日志 · 回到最新` : "回到最新"}
           </Button>
         )}
         {/* 翻页控件走 `ui/pagination`（规范 16 §16.2.4.6 / §16.2.4.72 的零引用
@@ -131,10 +125,7 @@ export function LogPanelFooter(input: {
             那一层筛选。此处用按钮而不是纯文本：页脚是「说出来我在看什么」
             的位置，回滚动作本来就该在这儿，不必让用户跑回顶部找。 */}
             <PaginationItem className="text-ink-soft flex items-center gap-1">
-              <Hint
-                label={origin && origin !== "all" ? "去掉来源筛选" : undefined}
-                wrap
-              >
+              <Hint label={origin && origin !== "all" ? "去掉来源筛选" : undefined} wrap>
                 <Button
                   variant="ghost"
                   size="xs"

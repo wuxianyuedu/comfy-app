@@ -92,7 +92,9 @@ function loadWorkshopDraftOnce(): WorkshopDraft | null {
   /* invalidateDraftCache() 卸载时把缓存置 null 标记「需从 localStorage 重读」，
    * 这里须用 ??=（null / undefined 都重读），否则重挂载读回旧缓存 → 切页签丢内容。 */
   const pid = getActiveId();
-  if (!pid) return null;
+  if (!pid) {
+    return null;
+  }
   workshopDraftCache ??= readDraft(pid);
   return workshopDraftCache;
 }
@@ -274,7 +276,9 @@ export function useExtractSession(
         ...prev,
         log: [...prev.log, entry].slice(-EXTRACT_LOG_MAX_ENTRIES),
       }));
-      if (stage) persistGenerationLogs(stage, [entry]);
+      if (stage) {
+        persistGenerationLogs(stage, [entry]);
+      }
     },
     [stage],
   );
@@ -417,10 +421,16 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   React.useEffect(() => {
     void (async () => {
       const activeId = activeProjectRef.current;
-      if (!activeId) return;
-      if (serverRecoveredIds.has(activeId)) return;
+      if (!activeId) {
+        return;
+      }
+      if (serverRecoveredIds.has(activeId)) {
+        return;
+      }
       serverRecoveredIds.add(activeId);
-      if (!draftIsEmpty(latestDraftRef.current)) return;
+      if (!draftIsEmpty(latestDraftRef.current)) {
+        return;
+      }
       try {
         const serverDraft = await fetchServerDraft(activeId);
         if (serverDraft && draftHasContent(serverDraft)) {
@@ -445,14 +455,20 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
    * 卸载即 dispose、结论不落地。 */
   React.useEffect(() => {
     const activeId = activeProjectRef.current;
-    if (!activeId) return;
+    if (!activeId) {
+      return;
+    }
     const guard = beginStaleRun();
     void (async () => {
       const progress = await fetchProductionProgress(activeId);
-      if (!progress) return;
+      if (!progress) {
+        return;
+      }
       guard.commit(() => {
         setRendered(progress.rendered);
-        if (tabRef.current === "script") setTab(progress.stage);
+        if (tabRef.current === "script") {
+          setTab(progress.stage);
+        }
       });
     })();
     return () => guard.dispose();

@@ -229,7 +229,9 @@ export function fetchUrlResumable(
     written += got;
     /* 一片顺利走完 ⇒ 片长**回长**（不超过初始档）：链路只是偶尔抖的时候别把自己
      * 永久钉在小片长上（那会把一次小抖动的代价留到剩下的每一步）。 */
-    if (size < chunkBytes) size = Math.min(chunkBytes, size * 2);
+    if (size < chunkBytes) {
+      size = Math.min(chunkBytes, size * 2);
+    }
     onChunk?.(written, total);
   }
   return {
@@ -270,14 +272,7 @@ export function fetchUrlResumable(
  * @param {{probeOnly?: boolean}} [options]
  * @returns {{bytes: number, total: number | null, out: string}}
  */
-export function fetchRangeToFile(
-  url,
-  dest,
-  offset,
-  size,
-  timeoutMs,
-  { probeOnly = false } = {},
-) {
+export function fetchRangeToFile(url, dest, offset, size, timeoutMs, { probeOnly = false } = {}) {
   const scratch = `${dest}.part`;
   const r = spawnSync(
     process.execPath,
@@ -484,10 +479,14 @@ export function fetchPlaywrightBrowser({
   }
   const zip = destZip ?? path.join(root, `${dirName}.zip`);
   const got = fetch(url, zip);
-  if (!got.ok) return { ok: false, out: got.out };
+  if (!got.ok) {
+    return { ok: false, out: got.out };
+  }
   mkdirSync(dir, { recursive: true });
   const failure = extract(zip, dir);
-  if (failure) return { ok: false, out: `解压失败：${failure}` };
+  if (failure) {
+    return { ok: false, out: `解压失败：${failure}` };
+  }
   const exe = findUnder(dir, exeName);
   if (!exe) {
     return { ok: false, out: `解出来没有 ${exeName}（落点：${dir}）` };
@@ -535,7 +534,9 @@ export function extractZipTo(zip, dir) {
     return `zip 读不出来：${e instanceof Error ? e.message : String(e)}`;
   }
   const entries = readCentralDirectory(buf);
-  if (typeof entries === "string") return entries;
+  if (typeof entries === "string") {
+    return entries;
+  }
   for (const e of entries) {
     const target = path.join(dir, ...e.name.split("/").filter((p) => p !== ""));
     /* **防目录穿越**：包里的名字不回退、不绝对 —— 它来自网上的文件，不该由它决定
@@ -551,9 +552,7 @@ export function extractZipTo(zip, dir) {
     try {
       data = e.stored
         ? buf.subarray(e.dataOffset, e.dataOffset + e.compressedSize)
-        : inflateRawSync(
-            buf.subarray(e.dataOffset, e.dataOffset + e.compressedSize),
-          );
+        : inflateRawSync(buf.subarray(e.dataOffset, e.dataOffset + e.compressedSize));
     } catch (err) {
       return `解压 ${e.name} 失败：${err instanceof Error ? err.message : String(err)}`;
     }
@@ -584,17 +583,15 @@ export function extractZipTo(zip, dir) {
 function readCentralDirectory(buf) {
   /* EOCD 在文件尾、后面最多 64 KiB 的注释（规格允许）。 */
   let eocd = -1;
-  for (
-    let i = buf.length - 22;
-    i >= Math.max(0, buf.length - 22 - 65535);
-    i -= 1
-  ) {
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i -= 1) {
     if (buf.readUInt32LE(i) === 0x06054b50) {
       eocd = i;
       break;
     }
   }
-  if (eocd < 0) return "不是 zip（找不到 EOCD）";
+  if (eocd < 0) {
+    return "不是 zip（找不到 EOCD）";
+  }
   const count = buf.readUInt16LE(eocd + 10);
   let p = buf.readUInt32LE(eocd + 16);
   const out = [];
@@ -616,10 +613,7 @@ function readCentralDirectory(buf) {
     const name = buf.toString("utf8", p + 46, p + 46 + nameLen);
     /* local header 的长度能变（`extra` 与 central directory 那份不一样），
      * 所以数据偏移必须**现读 local header**而不是照抄 central 的 extra 长度。 */
-    if (
-      localOffset + 30 > buf.length ||
-      buf.readUInt32LE(localOffset) !== 0x04034b50
-    ) {
+    if (localOffset + 30 > buf.length || buf.readUInt32LE(localOffset) !== 0x04034b50) {
       return `${name} 的 local header 读不动`;
     }
     const lName = buf.readUInt16LE(localOffset + 26);
@@ -702,16 +696,26 @@ export function playwrightExeName(platform = undefined) {
  * @returns {string | null}
  */
 function findUnder(dir, name, depth = 3) {
-  if (depth < 0) return null;
+  if (depth < 0) {
+    return null;
+  }
   const entries = listDir(dir);
-  if (!entries) return null;
+  if (!entries) {
+    return null;
+  }
   for (const e of entries) {
-    if (e.isSymbolicLink()) continue;
+    if (e.isSymbolicLink()) {
+      continue;
+    }
     const full = path.join(dir, e.name);
-    if (e.isFile() && e.name === name) return full;
+    if (e.isFile() && e.name === name) {
+      return full;
+    }
     if (e.isDirectory()) {
       const hit = findUnder(full, name, depth - 1);
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
   }
   return null;

@@ -96,7 +96,9 @@ export function UpdateCheckProvider() {
   const checkFromShortcut = useCallback(() => {
     void (async () => {
       const ok = await checkNow();
-      if (!ok) return;
+      if (!ok) {
+        return;
+      }
       const { dirty, groups } = useUpdateCheckStore.getState();
       if (!dirty) {
         toast.info(MANUAL_SHORTCUT, "本地文件无需重启的改动。");

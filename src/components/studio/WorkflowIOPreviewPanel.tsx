@@ -70,8 +70,12 @@ export function WorkflowIoPreviewPanel({
    * defaultMode → 第一个模式。没有模式 = 表单禁用（禁止配置参数）。 */
   const [activeMode, setActiveMode] = useState<string | null>(null);
   const effectiveMode = useMemo(() => {
-    if (activeMode && modes.includes(activeMode)) return activeMode;
-    if (defaultMode && modes.includes(defaultMode)) return defaultMode;
+    if (activeMode && modes.includes(activeMode)) {
+      return activeMode;
+    }
+    if (defaultMode && modes.includes(defaultMode)) {
+      return defaultMode;
+    }
     return modes[0] ?? null;
   }, [activeMode, modes, defaultMode]);
 
@@ -79,9 +83,13 @@ export function WorkflowIoPreviewPanel({
    * 详见文件头)。 */
   const previewIO = useMemo<WorkflowIOMap>(() => {
     const out: WorkflowIOMap = {};
-    if (!detailIOMap) return out;
+    if (!detailIOMap) {
+      return out;
+    }
     for (const [key, local] of Object.entries(workflowIO)) {
-      if (!local) continue;
+      if (!local) {
+        continue;
+      }
       const e = detailIOMap[key];
       if (e) {
         /* 本地条目整体覆盖在富化结果上（label 的兜底顺序见 io-exposure）。 */
@@ -116,8 +124,12 @@ export function WorkflowIoPreviewPanel({
    *  仅 widget 输入可调必填（与服务端富化迁移语义一致）。 */
   const setRequiredForMode = useCallback(
     (key: string, required: boolean) => {
-      if (!effectiveMode) return;
-      if (workflowIO[key]?.kind !== "widget") return;
+      if (!effectiveMode) {
+        return;
+      }
+      if (workflowIO[key]?.kind !== "widget") {
+        return;
+      }
       ioApi.getState().setIOModeOverride(key, effectiveMode, { required });
     },
     [effectiveMode, workflowIO, ioApi],
@@ -127,7 +139,9 @@ export function WorkflowIoPreviewPanel({
    * （modes[mode].seedMode），使不同模式可有独立的 seed 行为。 */
   const setSeedModeForMode = useCallback(
     (key: string, seedBehavior: string) => {
-      if (!effectiveMode) return;
+      if (!effectiveMode) {
+        return;
+      }
       ioApi.getState().setIOModeOverride(key, effectiveMode, { seedMode: seedBehavior });
     },
     [effectiveMode, ioApi],
@@ -142,10 +156,14 @@ export function WorkflowIoPreviewPanel({
    *  通用页签一并移除。只写真正变化的键，避免一进页签就给所有参数落满覆盖。 */
   const handleFormChange = useCallback(
     (next: Record<string, unknown>) => {
-      if (!effectiveMode) return;
+      if (!effectiveMode) {
+        return;
+      }
       const current = defaultInputValues(previewIO, effectiveMode);
       for (const [key, value] of Object.entries(next)) {
-        if (current[key] === value) continue;
+        if (current[key] === value) {
+          continue;
+        }
         ioApi.getState().setIOModeOverride(key, effectiveMode, { defaultValue: value });
       }
     },
@@ -154,7 +172,9 @@ export function WorkflowIoPreviewPanel({
 
   const toggleModeVisibility = useCallback(
     (key: string, visible: boolean) => {
-      if (!effectiveMode) return;
+      if (!effectiveMode) {
+        return;
+      }
       ioApi.getState().setIOModeOverride(key, effectiveMode, { visible });
     },
     [effectiveMode, ioApi],
@@ -162,7 +182,9 @@ export function WorkflowIoPreviewPanel({
 
   /* 恢复默认 = 清掉当前模式的全部覆盖（回到通用默认 + 默认可见）。 */
   const resetActiveModeOverrides = useCallback(() => {
-    if (!effectiveMode) return;
+    if (!effectiveMode) {
+      return;
+    }
     for (const key of Object.keys(workflowIO)) {
       ioApi.getState().setIOModeOverride(key, effectiveMode, null);
     }
@@ -180,7 +202,9 @@ export function WorkflowIoPreviewPanel({
   const seedModes: Record<string, string> = {};
   for (const entry of editableEntries) {
     const resolved = resolveEntrySeedMode(entry, effectiveMode);
-    if (resolved) seedModes[entry.ioKey] = resolved;
+    if (resolved) {
+      seedModes[entry.ioKey] = resolved;
+    }
   }
 
   return (

@@ -84,13 +84,21 @@ export function isCommitKey(
     excludeShift = true,
   }: Pick<EnterCommitOptions, "ignoreIme" | "excludeShift"> = {},
 ): boolean {
-  if (event.key !== "Enter") return false;
-  if (excludeShift && event.shiftKey) return false;
+  if (event.key !== "Enter") {
+    return false;
+  }
+  if (excludeShift && event.shiftKey) {
+    return false;
+  }
   if (ignoreIme) {
     /* 组字中（IME 候选词未上屏）：Enter 是「确认候选」，不是提交。
      * 历史上有 6 处没判它 —— 中文输入法下会把半截拼音发出去。 */
-    if (event.nativeEvent.isComposing === true) return false;
-    if (event.nativeEvent.keyCode === 229) return false;
+    if (event.nativeEvent.isComposing === true) {
+      return false;
+    }
+    if (event.nativeEvent.keyCode === 229) {
+      return false;
+    }
   }
   return true;
 }

@@ -44,7 +44,9 @@ const EXT_TO_LANG: Record<string, string> = {
 
 export function extToLanguage(filePath: string): string {
   const dot = filePath.lastIndexOf(".");
-  if (dot < 0) return "plaintext";
+  if (dot < 0) {
+    return "plaintext";
+  }
   return EXT_TO_LANG[filePath.slice(dot).toLowerCase()] ?? "plaintext";
 }
 
@@ -103,10 +105,16 @@ const CHUNK_LINES = 400;
 /** token 的 fontStyle 位掩码：1=italic，2=bold（shiki 约定） */
 function tokenInlineStyle(tok: ShikiToken): CSSProperties {
   const style: CSSProperties = {};
-  if (tok.color) style.color = tok.color;
+  if (tok.color) {
+    style.color = tok.color;
+  }
   if (tok.fontStyle != null) {
-    if ((tok.fontStyle & 1) !== 0) style.fontStyle = "italic";
-    if ((tok.fontStyle & 2) !== 0) style.fontWeight = 600;
+    if ((tok.fontStyle & 1) !== 0) {
+      style.fontStyle = "italic";
+    }
+    if ((tok.fontStyle & 2) !== 0) {
+      style.fontWeight = 600;
+    }
   }
   return style;
 }
@@ -143,16 +151,22 @@ export function CodeBlock({ code, language }: { code: string; language: string }
     void (async () => {
       /* 首帧提交纯文本行号，再异步进入高亮流程 */
       await Promise.resolve();
-      if (guard.isStale()) return;
+      if (guard.isStale()) {
+        return;
+      }
       setTokens(null);
       setError(null);
 
       /* 超大文件：跳过 shiki，保持纯文本行号（不阻塞主线程） */
-      if (code.length > MAX_HIGHLIGHT_CHARS) return;
+      if (code.length > MAX_HIGHLIGHT_CHARS) {
+        return;
+      }
 
       try {
         const hl = await getHighlighter();
-        if (guard.isStale()) return;
+        if (guard.isStale()) {
+          return;
+        }
         const allLines = code.split("\n");
         /* 分块的位置算术收在 `~/lib/page-window`（规范 16 §16.2.4.67）：
          * 此前 `chunkIndex * CHUNK_LINES` 与 `ceil(total / CHUNK_LINES)`
@@ -162,7 +176,9 @@ export function CodeBlock({ code, language }: { code: string; language: string }
         let chunkIndex = 0;
 
         const processChunk = () => {
-          if (guard.isStale()) return;
+          if (guard.isStale()) {
+            return;
+          }
           const range = chunkRange(allLines.length, CHUNK_LINES, chunkIndex);
           const slice = allLines.slice(range.start, range.end);
           const chunkTokens = hl.codeToTokensBase(slice.join("\n"), {

@@ -61,16 +61,22 @@ export function bracketDepthDelta(line: string): number {
       continue;
     }
     if (inString) {
-      if (ch === "\\") escaped = true;
-      else if (ch === '"') inString = false;
+      if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
       continue;
     }
     if (ch === '"') {
       inString = true;
       continue;
     }
-    if (ch === "{" || ch === "[") depth += 1;
-    else if (ch === "}" || ch === "]") depth -= 1;
+    if (ch === "{" || ch === "[") {
+      depth += 1;
+    } else if (ch === "}" || ch === "]") {
+      depth -= 1;
+    }
   }
   return depth;
 }
@@ -133,7 +139,9 @@ export function splitLogRecords(
   let headIsLogLine = false;
 
   const flush = () => {
-    if (head === "") return;
+    if (head === "") {
+      return;
+    }
     const text = lines.join("\n");
     records.push({
       head,

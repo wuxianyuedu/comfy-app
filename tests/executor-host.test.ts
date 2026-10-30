@@ -39,7 +39,9 @@ function mkTmp() {
 afterEach(() => {
   while (tmpDirs.length) {
     const d = tmpDirs.pop();
-    if (d) fs.rmSync(d, { recursive: true, force: true });
+    if (d) {
+      fs.rmSync(d, { recursive: true, force: true });
+    }
   }
 });
 
@@ -126,7 +128,9 @@ describe("scripts/executor-host.mjs 骨架", () => {
         expect(text).toContain("shutdown sig=SIGTERM");
       }
     } finally {
-      if (!child.killed) child.kill("SIGKILL");
+      if (!child.killed) {
+        child.kill("SIGKILL");
+      }
     }
   }, 20_000);
 

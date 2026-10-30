@@ -75,7 +75,9 @@ function read(rel: string): string {
 /** 解析一个**一定读得出来**的版本（读不出来就当场红，别让下面几条静默空转）。 */
 function requireVersion(text: string) {
   const v = parseVersion(text);
-  if (!v) throw new Error(`解析不出版本：${text}`);
+  if (!v) {
+    throw new Error(`解析不出版本：${text}`);
+  }
   return v;
 }
 
@@ -169,7 +171,9 @@ function crc32(buf: Buffer): number {
   let c = ~0;
   for (const b of buf) {
     c ^= b;
-    for (let k = 0; k < 8; k += 1) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+    for (let k = 0; k < 8; k += 1) {
+      c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+    }
   }
   return ~c >>> 0;
 }
@@ -177,7 +181,9 @@ function crc32(buf: Buffer): number {
 /** 从一段源码里抠出「按平台二选一」的候选表（两份文本，逐项对账）。 */
 function candidatesInSource(text: string, constName: string): Array<string> {
   const block = new RegExp(`const ${constName}\\s*=\\s*([\\s\\S]*?);\\n`).exec(text)?.[1];
-  if (!block) return [];
+  if (!block) {
+    return [];
+  }
   /* 只收**数组字面量里**的字符串：`process.platform === "win32"` 那句里的
    * `"win32"` 是平台判别式，不是候选名 —— 连它一起收就会把「候选表」多算一项。
    * `? [...] : [...]` 的出现顺序**不假定**，按顺序收，与
@@ -262,7 +268,9 @@ describe("工具链自证：engines.node 的区间", () => {
 
   it("读不到版本时 nodeAllowed 不假装通过", () => {
     const v = parseVersion("(node 不可用)");
-    if (v) throw new Error("这一格应当读不出版本");
+    if (v) {
+      throw new Error("这一格应当读不出版本");
+    }
   });
 });
 
@@ -534,7 +542,9 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
       run: (cmd, args) => {
         ran.push(`${cmd} ${args.join(" ")}`);
         // 只有 dnf 在盘上：其余两个连 `--version` 都不答。
-        if (cmd === "dnf") return { ok: true, out: "" };
+        if (cmd === "dnf") {
+          return { ok: true, out: "" };
+        }
         return { ok: false, out: "" };
       },
     });
@@ -780,7 +790,9 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
       hostFound: false,
     });
     const text = lines.join("\n");
-    for (const c of tried) expect(text).toContain(c);
+    for (const c of tried) {
+      expect(text).toContain(c);
+    }
     expect(text).toContain("在盘上但**没起起来**的候选");
     // 宿主不在时要把这条结论说全 —— 它是「不必再翻候选表」的那个出口。
     expect(text).toContain("没找到");
@@ -920,7 +932,9 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
       },
     });
     expect(seen[0]?.[0]).toBe("/host/pwsh.EXE");
-    for (const one of hostPrefix) expect(seen[0]?.[1]).toContain(one);
+    for (const one of hostPrefix) {
+      expect(seen[0]?.[1]).toContain(one);
+    }
   });
 
   it("pnpm 不可用时如实说，且**不去起**任何进程", () => {
@@ -2242,7 +2256,9 @@ function firstStdoutMatch(
     child.stdout?.on("data", (chunk: Buffer) => {
       buffered += String(chunk);
       const m = match.exec(buffered);
-      if (!m) return;
+      if (!m) {
+        return;
+      }
       clearTimeout(timer);
       resolve(m[1] ?? "");
     });
@@ -2620,7 +2636,9 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
             ) => {
               /* 只记**取数据**那几次：上面那次 `Range: bytes=0-0` 是「问总长」，
                * 它当然从 0 开始 —— 把它算进来会让这条判据永远看着像「重下了」。 */
-              if (!opts.probeOnly) offsets.push(offset);
+              if (!opts.probeOnly) {
+                offsets.push(offset);
+              }
               return fetchRangeToFile(url, d, offset, size, timeoutMs, opts);
             },
           });

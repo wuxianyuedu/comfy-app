@@ -57,7 +57,9 @@ export function ConsoleView() {
   const running = c.phase === "running";
 
   const submit = useCallback(() => {
-    if (c.canRun) c.run();
+    if (c.canRun) {
+      c.run();
+    }
   }, [c]);
 
   /* 回车提交走全库唯一出口（`ui/use-enter-commit`）：它同时判掉「输入法组字
@@ -125,10 +127,7 @@ export function ConsoleView() {
           {/* 输入行 */}
           <div className="border-border bg-bg flex shrink-0 flex-col gap-2 border-t px-4 py-3">
             <div className="flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                className="text-primary-strong shrink-0 font-mono text-sm"
-              >
+              <span aria-hidden="true" className="text-primary-strong shrink-0 font-mono text-sm">
                 $
               </span>
               <Input
@@ -139,22 +138,12 @@ export function ConsoleView() {
                 disabled={running}
                 aria-label="要执行的命令"
                 placeholder={
-                  running
-                    ? `正在运行：${c.runningCommand ?? ""}`
-                    : "pnpm exec tsc --noEmit"
+                  running ? `正在运行：${c.runningCommand ?? ""}` : "pnpm exec tsc --noEmit"
                 }
-                className={cn(
-                  "h-8 font-mono text-[12.5px]",
-                  "disabled:opacity-70",
-                )}
+                className={cn("h-8 font-mono text-[12.5px]", "disabled:opacity-70")}
               />
               {running ? (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={c.stop}
-                  className="shrink-0"
-                >
+                <Button variant="danger" size="sm" onClick={c.stop} className="shrink-0">
                   <Square data-icon="inline-start" size={13} />
                   停止
                 </Button>

@@ -72,10 +72,18 @@ export interface LivenessFacts {
  * 负载 —— 用出图档的 30s 会把「就绪」拖成半分钟。
  */
 export function classifyLivenessPhase(facts: LivenessFacts): LivenessPhase {
-  if (facts.verifying) return "verifying";
-  if (facts.hidden) return "hidden";
-  if (facts.starting) return "starting";
-  if (facts.busy) return "generating";
+  if (facts.verifying) {
+    return "verifying";
+  }
+  if (facts.hidden) {
+    return "hidden";
+  }
+  if (facts.starting) {
+    return "starting";
+  }
+  if (facts.busy) {
+    return "generating";
+  }
   return "idle";
 }
 

@@ -21,7 +21,9 @@ function stubFetchSequence(responses: Array<() => Response | Promise<Response>>)
    * vi.fn 推出的是空元组，`mock.calls[0][0]` 会被 TS 判越界）。 */
   const fetchMock = vi.fn(async (_input: string, _init?: RequestInit) => {
     const next = queue.shift();
-    if (!next) throw new Error("fetch 调用次数超出预期");
+    if (!next) {
+      throw new Error("fetch 调用次数超出预期");
+    }
     return next();
   });
   vi.stubGlobal("fetch", fetchMock);

@@ -87,8 +87,12 @@ export interface ConsoleController {
  *  手写 `toFixed` 会在不同落点给出不同的尾零口径（这里一位、别处两位），
  *  而「同一条命令在两处显示不同用时」是没人会去查的静默不一致。 */
 function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${fixed(ms / 1000, 1) ?? "0.0"}s`;
+  if (ms < 1000) {
+    return `${ms}ms`;
+  }
+  if (ms < 60_000) {
+    return `${fixed(ms / 1000, 1) ?? "0.0"}s`;
+  }
   const min = Math.floor(ms / 60_000);
   const sec = Math.round((ms % 60_000) / 1000);
   return `${min}m${sec}s`;
@@ -131,7 +135,9 @@ export function useConsole(): ConsoleController {
    */
   const startRun = useCallback(
     (line: string) => {
-      if (abortRef.current) return; // 已经有一条在跑
+      if (abortRef.current) {
+        return;
+      } // 已经有一条在跑
       setOutput("");
       setExitCode(null);
       setVerdict("");
@@ -152,7 +158,9 @@ export function useConsole(): ConsoleController {
         command: line,
         signal: controller.signal,
         onEvent: (event: ConsoleClientEvent) => {
-          if (!aliveRef.current) return;
+          if (!aliveRef.current) {
+            return;
+          }
           if (event.type === "start") {
             echoed = event.command || line;
             append(`$ ${echoed}\n`);
@@ -184,7 +192,9 @@ export function useConsole(): ConsoleController {
             );
             setVerdictOk(false);
           }
-          if (event.truncatedNote) append(`\n${event.truncatedNote}\n`);
+          if (event.truncatedNote) {
+            append(`\n${event.truncatedNote}\n`);
+          }
           append(`\n[进程已退出，退出码 ${event.code ?? "未知"}]\n`);
           finish({
             command: echoed,
@@ -198,7 +208,9 @@ export function useConsole(): ConsoleController {
           });
         },
       }).then((outcome) => {
-        if (!aliveRef.current) return;
+        if (!aliveRef.current) {
+          return;
+        }
         abortRef.current = null;
         setRunningCommand(null);
         if (outcome.kind === "ok") {

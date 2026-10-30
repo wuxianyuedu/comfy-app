@@ -63,7 +63,9 @@ export const MAX_RAW_JSON_LINES = 300;
  * 字段（它是 {code, message, hint, details}），于是 6 条逐字段清单从未渲染。
  */
 export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
-  if (!root || typeof root !== "object") return undefined;
+  if (!root || typeof root !== "object") {
+    return undefined;
+  }
   const seen = new WeakSet<object>();
   const stack: Array<{ node: JsonRecord; d: number }> = [
     { node: /* SAFETY: 类型断言已复核 */ root as JsonRecord, d: 0 },
@@ -71,9 +73,13 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
   while (stack.length) {
     /* 判据与取值同一处：`stack.pop()` 在非空循环里必然有值。 */
     const top = stack.pop();
-    if (!top) break;
+    if (!top) {
+      break;
+    }
     const { node, d } = top;
-    if (d > depth || seen.has(node)) continue;
+    if (d > depth || seen.has(node)) {
+      continue;
+    }
     seen.add(node);
     const ne = node.node_errors;
     if (
@@ -83,11 +89,12 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
       return ne;
     }
     for (const v of Object.values(node)) {
-      if (v && typeof v === "object")
+      if (v && typeof v === "object") {
         stack.push({
           node: /* SAFETY: 类型断言已复核 */ v as JsonRecord,
           d: d + 1,
         });
+      }
     }
   }
   return undefined;
@@ -99,7 +106,9 @@ export function extractEnvelopeValidationErrors(
   patched?: Record<string, unknown>,
 ): Array<ValidationError> | undefined {
   const carrier = findNodeErrorsCarrier(env);
-  if (!carrier) return undefined;
+  if (!carrier) {
+    return undefined;
+  }
   return extractValidationErrors(carrier, patched);
 }
 
@@ -110,7 +119,9 @@ export function envelopeErrorMessage(env: unknown): string {
       ? /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error
       : undefined;
   const str = (o: unknown, key: string): string | undefined => {
-    if (o == null || typeof o !== "object") return undefined;
+    if (o == null || typeof o !== "object") {
+      return undefined;
+    }
     const v = /* SAFETY: 类型断言已复核 */ (o as JsonRecord)[key];
     return typeof v === "string" ? v : undefined;
   };
@@ -126,11 +137,16 @@ export function envelopeErrorMessage(env: unknown): string {
  *
  *  返回 `null` 表示不是这种错误（交给下方兜底逻辑按原样落盘）。 */
 export function translateWorkflowUnknownNodesError(env: unknown): string | null {
-  if (env == null || typeof env !== "object") return null;
-  const err = /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error;
-  if (err == null || typeof err !== "object") return null;
-  if (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).code !== "workflow_unknown_nodes")
+  if (env == null || typeof env !== "object") {
     return null;
+  }
+  const err = /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error;
+  if (err == null || typeof err !== "object") {
+    return null;
+  }
+  if (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).code !== "workflow_unknown_nodes") {
+    return null;
+  }
   const details = /* SAFETY: 类型断言已复核 */ (err as JsonRecord).details;
   const list =
     details != null && typeof details === "object"
@@ -249,7 +265,9 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
   let cachedNodes = 0;
 
   const handleLine = (line: string): void => {
-    if (!line) return;
+    if (!line) {
+      return;
+    }
     let ev: unknown;
     try {
       ev = JSON.parse(line);
@@ -434,7 +452,9 @@ export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
     errBuf += d;
     for (const line of d.split(/\r?\n/)) {
       const trimmed = line.trim();
-      if (!trimmed) continue;
+      if (!trimmed) {
+        continue;
+      }
       if (NOISY_WARNING_RE.test(trimmed)) {
         noisy++;
         continue;
@@ -487,7 +507,9 @@ export type CliFinisher = (ok: boolean, env: unknown) => void;
 export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
   const { taskId, log } = deps;
   return (ok: boolean, env: unknown) => {
-    if (!deps.settle()) return;
+    if (!deps.settle()) {
+      return;
+    }
     if (ok) {
       deps.complete(taskId, deps.promptId() ?? "");
       return;

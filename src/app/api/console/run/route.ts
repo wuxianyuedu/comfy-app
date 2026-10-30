@@ -10,10 +10,7 @@ import { errorMessage } from "~/lib/error-message";
 import { MAX_COMMAND_CHARS, MAX_RUN_MS } from "~/lib/console/console-limits";
 import { parseConsoleLine } from "~/lib/console/console-catalog";
 import { isLoopbackRequest } from "~/lib/console/console-guard";
-import {
-  consoleSlot,
-  recordConsoleHistory,
-} from "~/lib/console/console-registry";
+import { consoleSlot, recordConsoleHistory } from "~/lib/console/console-registry";
 
 export const runtime = "nodejs";
 
@@ -66,14 +63,15 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await readJsonRecord(req);
-  if (isErrorResponse(body)) return body;
+  if (isErrorResponse(body)) {
+    return body;
+  }
 
   const rawCommand = typeof body.command === "string" ? body.command : "";
   if (rawCommand.length > MAX_COMMAND_CHARS) {
-    return NextResponse.json(
-      apiErrorBody(null, `命令过长（上限 ${MAX_COMMAND_CHARS} 字符）`),
-      { status: 400 },
-    );
+    return NextResponse.json(apiErrorBody(null, `命令过长（上限 ${MAX_COMMAND_CHARS} 字符）`), {
+      status: 400,
+    });
   }
   const parsed = parseConsoleLine(rawCommand);
   if (!parsed.ok) {
@@ -87,15 +85,9 @@ export async function POST(req: NextRequest) {
   if (running) {
     /* 忙时**拒绝**而不是排队：队列会让用户以为「点了没反应」，而控制台里最可
      * 疑的正是「它到底跑没跑」。回一句「是谁在跑、跑了多久」比排一条队有用。 */
-    const elapsedSec = Math.max(
-      0,
-      Math.round((Date.now() - running.startedAt) / 1000),
-    );
+    const elapsedSec = Math.max(0, Math.round((Date.now() - running.startedAt) / 1000));
     return NextResponse.json(
-      apiErrorBody(
-        null,
-        `已有一条命令在运行：${running.command}（已跑 ${elapsedSec}s）`,
-      ),
+      apiErrorBody(null, `已有一条命令在运行：${running.command}（已跑 ${elapsedSec}s）`),
       { status: 409 },
     );
   }
@@ -115,9 +107,7 @@ export async function POST(req: NextRequest) {
       /** 本路由对 SSE 帧的唯一出口（与其余流式路由同形：`data: <json>\n\n`）。 */
       const send = (payload: unknown) => {
         try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(payload)}\n\n`),
-          );
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
         } catch {
           /* 用户已经断开：`cancelOnClose` 那条路会回收命令，这里静默即可
            * （往已关的 controller 写会抛，而那是正常路径，不是错误）。 */
@@ -154,9 +144,7 @@ export async function POST(req: NextRequest) {
         cancelOnClose = false;
         const message = errorMessage(e, "控制台命令执行失败");
         send({ type: "error", message });
-        logger.error(
-          `[console] run 异常 command="${parsed.display}"：${message}`,
-        );
+        logger.error(`[console] run 异常 command="${parsed.display}"：${message}`);
       } finally {
         try {
           controller.close();

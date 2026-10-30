@@ -247,7 +247,9 @@ export function ModelAdaptersView() {
               <div className="border-border bg-bg mt-3 flex flex-col gap-3 rounded-xl border p-3">
                 {MODE_GROUPS.map((group) => {
                   const modes = availableModes.filter((t) => t.category === group.category);
-                  if (modes.length === 0) return null;
+                  if (modes.length === 0) {
+                    return null;
+                  }
                   return (
                     <div key={group.category}>
                       <p className="text-muted-foreground mb-1.5 text-xs font-medium">

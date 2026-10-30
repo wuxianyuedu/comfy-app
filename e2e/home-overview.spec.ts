@@ -20,7 +20,9 @@ test.describe("首页概览区 @critical", () => {
     const errors: Array<string> = [];
     page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
     page.on("console", (m) => {
-      if (m.type() === "error") errors.push(`console: ${m.text()}`);
+      if (m.type() === "error") {
+        errors.push(`console: ${m.text()}`);
+      }
     });
 
     await page.goto("/workspace");

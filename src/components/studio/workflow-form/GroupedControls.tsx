@@ -56,7 +56,9 @@ function GroupedControls({
   visibilityMode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
 }) {
-  if (!dimension && !video) return null;
+  if (!dimension && !video) {
+    return null;
+  }
   const count = (dimension ? 1 : 0) + (video ? 1 : 0);
 
   const set = (ioKey: string, v: unknown) => onChange({ ...values, [ioKey]: v });
@@ -66,7 +68,9 @@ function GroupedControls({
   const keys = new Set<string>();
   for (const group of [dimension, video]) {
     for (const entry of groupEntries(group)) {
-      if (entry?.ioKey) keys.add(entry.ioKey);
+      if (entry?.ioKey) {
+        keys.add(entry.ioKey);
+      }
     }
   }
   /* 画布 / 库内（`compact`）把组合控件**收窄成同一块控件** —— 控件本身照旧画出来
@@ -118,7 +122,9 @@ function GroupedControls({
 
 /** 组合控件覆盖到的端口（顺序 = 声明顺序，两端稳定）。 */
 function groupEntries(group: DimensionGroup | VideoGroup | null): Array<EnrichedWidget> {
-  if (!group) return [];
+  if (!group) {
+    return [];
+  }
   return [
     "width" in group ? group.width : undefined,
     "height" in group ? group.height : undefined,

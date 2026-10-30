@@ -56,9 +56,7 @@ export const COMFY_BASE_ENV_KEY = "COMFYUI_BASE";
  */
 export function resolveFakeComfyuiPort(env = process.env) {
   const raw = Number(env[FAKE_COMFY_PORT_ENV_KEY]);
-  return Number.isInteger(raw) && raw > 0 && raw <= 65535
-    ? raw
-    : FAKE_COMFYUI_DEFAULT_PORT;
+  return Number.isInteger(raw) && raw > 0 && raw <= 65535 ? raw : FAKE_COMFYUI_DEFAULT_PORT;
 }
 
 /**
@@ -138,11 +136,14 @@ export function fakeComfyuiEnv(overrides = {}) {
  * @returns {boolean}
  */
 export function isRealComfyuiPayload(payload) {
-  if (!payload || typeof payload !== "object") return false;
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
   const system = /** @type {Record<string, unknown>} */ (payload).system;
-  if (!system || typeof system !== "object") return false;
-  const version = /** @type {Record<string, unknown>} */ (system)
-    .comfyui_version;
+  if (!system || typeof system !== "object") {
+    return false;
+  }
+  const version = /** @type {Record<string, unknown>} */ (system).comfyui_version;
   return typeof version === "string" && version.trim() !== "";
 }
 
@@ -158,11 +159,17 @@ export function isRealComfyuiPayload(payload) {
  * @returns {boolean}
  */
 export function isFakeComfyuiPayload(payload) {
-  if (!payload || typeof payload !== "object") return false;
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
   const obj = /** @type {Record<string, unknown>} */ (payload);
-  if (isRealComfyuiPayload(obj)) return false;
+  if (isRealComfyuiPayload(obj)) {
+    return false;
+  }
   const system = obj.system;
-  if (!system || typeof system !== "object") return false;
+  if (!system || typeof system !== "object") {
+    return false;
+  }
   const ram = /** @type {Record<string, unknown>} */ (system).ram_total;
   return ram === 1 && Array.isArray(obj.devices) && obj.devices.length === 0;
 }
@@ -183,12 +190,18 @@ export function isFakeComfyuiPayload(payload) {
  * @returns {{verdict: "free" | "fake" | "real" | "unknown", ok: boolean}}
  */
 export function classifyFakeSlot(observed) {
-  if (observed.status === 0) return { verdict: "free", ok: true };
-  if (observed.status !== 200) return { verdict: "unknown", ok: false };
-  if (isFakeComfyuiPayload(observed.payload))
+  if (observed.status === 0) {
+    return { verdict: "free", ok: true };
+  }
+  if (observed.status !== 200) {
+    return { verdict: "unknown", ok: false };
+  }
+  if (isFakeComfyuiPayload(observed.payload)) {
     return { verdict: "fake", ok: true };
-  if (isRealComfyuiPayload(observed.payload))
+  }
+  if (isRealComfyuiPayload(observed.payload)) {
     return { verdict: "real", ok: false };
+  }
   return { verdict: "unknown", ok: false };
 }
 
@@ -245,10 +258,7 @@ export const COMFY_PROBE_WINDOW = { defaultPort: 8188, probeRange: 5 };
  * @returns {number[]}
  */
 export function comfyProbeWindowPorts(window = COMFY_PROBE_WINDOW) {
-  return Array.from(
-    { length: window.probeRange + 1 },
-    (_, i) => window.defaultPort + i,
-  );
+  return Array.from({ length: window.probeRange + 1 }, (_, i) => window.defaultPort + i);
 }
 
 /**

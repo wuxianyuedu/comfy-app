@@ -61,28 +61,46 @@ export type RawNodeView = {
  * saved 页签的降级文案）。纯派生（§17.1：删掉 JSX 也能测）。
  */
 function buildViewJson(nodeView: RawNodeView | null): RawNodeJson | null {
-  if (!nodeView) return null;
+  if (!nodeView) {
+    return null;
+  }
   if (nodeView.rawNode && typeof nodeView.rawNode === "object") {
     return nodeView.rawNode;
   }
   const out: RawNodeJson = {};
   const e = nodeView.entry;
   const r = nodeView.raw;
-  if (e && typeof e.class_type === "string") out.class_type = e.class_type;
+  if (e && typeof e.class_type === "string") {
+    out.class_type = e.class_type;
+  }
   if (e && typeof e === "object" && "inputs" in e && e.inputs && typeof e.inputs === "object") {
     out.inputs = e.inputs;
   }
-  if (e?._meta && Object.keys(e._meta).length) out._meta = e._meta;
-  if (r) {
-    if (r.mode !== 0) out.mode = r.mode;
-    if (r.widgets_values?.length) out.widgets_values = r.widgets_values;
-    if (r.outputs?.length) out.outputs = r.outputs;
-    const flagKeys = Object.keys(r.flags ?? {});
-    if (flagKeys.length) out.flags = r.flags;
-    const propKeys = Object.keys(r.properties ?? {});
-    if (propKeys.length) out.properties = r.properties;
+  if (e?._meta && Object.keys(e._meta).length) {
+    out._meta = e._meta;
   }
-  if (nodeView.pos) out.pos = nodeView.pos;
+  if (r) {
+    if (r.mode !== 0) {
+      out.mode = r.mode;
+    }
+    if (r.widgets_values?.length) {
+      out.widgets_values = r.widgets_values;
+    }
+    if (r.outputs?.length) {
+      out.outputs = r.outputs;
+    }
+    const flagKeys = Object.keys(r.flags ?? {});
+    if (flagKeys.length) {
+      out.flags = r.flags;
+    }
+    const propKeys = Object.keys(r.properties ?? {});
+    if (propKeys.length) {
+      out.properties = r.properties;
+    }
+  }
+  if (nodeView.pos) {
+    out.pos = nodeView.pos;
+  }
   return Object.keys(out).length ? out : null;
 }
 
@@ -105,13 +123,23 @@ export function NodeJsonPopover({
     if (tab === "saved") {
       return json ? JSON.stringify(json, null, 2) : "（节点详情尚未加载 — 等待 detail.ready）";
     }
-    if (viewObj) return JSON.stringify(viewObj, null, 2);
+    if (viewObj) {
+      return JSON.stringify(viewObj, null, 2);
+    }
     if (json) {
       const thin: RawNodeJson = {};
-      if (typeof json.class_type === "string") thin.class_type = json.class_type;
-      if (json.inputs && typeof json.inputs === "object") thin.inputs = json.inputs;
-      if (json._meta && Object.keys(json._meta).length) thin._meta = json._meta;
-      if (Object.keys(thin).length) return JSON.stringify(thin, null, 2);
+      if (typeof json.class_type === "string") {
+        thin.class_type = json.class_type;
+      }
+      if (json.inputs && typeof json.inputs === "object") {
+        thin.inputs = json.inputs;
+      }
+      if (json._meta && Object.keys(json._meta).length) {
+        thin._meta = json._meta;
+      }
+      if (Object.keys(thin).length) {
+        return JSON.stringify(thin, null, 2);
+      }
     }
     return "（节点详情尚未加载 — 等待 detail.ready）";
   }, [tab, json, viewObj]);

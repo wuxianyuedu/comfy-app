@@ -79,7 +79,9 @@ function noop(): void {
  *  有限数字 → 用该固定 seed（pin 住以复现）。 */
 function resolveSeed(raw: string): number {
   const trimmed = raw.trim();
-  if (trimmed === "") return randomSeed();
+  if (trimmed === "") {
+    return randomSeed();
+  }
   const n = Number(trimmed);
   return Number.isFinite(n) ? Math.trunc(n) : randomSeed();
 }
@@ -104,11 +106,15 @@ function useAutoFillPrompts(
   });
   React.useEffect(() => {
     const needsFill = shots.some((s) => !s.prompt.trim() && !editedRef.current.has(s.id));
-    if (!needsFill) return;
+    if (!needsFill) {
+      return;
+    }
     const { scenes, characters, styles } = inputsRef.current;
     onShotsChange((prev) =>
       prev.map((shot) => {
-        if (shot.prompt.trim() || editedRef.current.has(shot.id)) return shot;
+        if (shot.prompt.trim() || editedRef.current.has(shot.id)) {
+          return shot;
+        }
         const scene = scenes.find((sc) => sc.id === shot.sceneId);
         const chars = characters.filter((c) => shot.characterIds.includes(c.id));
         const style = styles.find((st) => st.slug === shot.skillSlug);
@@ -177,8 +183,11 @@ export function ShotStudio({
   function setShotError(id: string, message: string | undefined) {
     setErrors((prev) => {
       const next = { ...prev };
-      if (message) next[id] = message;
-      else delete next[id];
+      if (message) {
+        next[id] = message;
+      } else {
+        delete next[id];
+      }
       return next;
     });
   }
@@ -195,13 +204,17 @@ export function ShotStudio({
         close = watchTask(taskId, {
           onProgress: (p) => reportProgress(shotId, p),
           onOutput: (out) => {
-            if (out.kind !== "video") patchShot(shotId, { imageUrl: out.url });
+            if (out.kind !== "video") {
+              patchShot(shotId, { imageUrl: out.url });
+            }
           },
           onSettled: (r) => {
             /* 落定即写终值（见 VideoStudio 同处注释）。 */
             flushProgress(shotId, 100);
             patchShot(shotId, { status: r.ok ? "done" : "failed" });
-            if (!r.ok) setShotError(shotId, r.message ?? "生成失败");
+            if (!r.ok) {
+              setShotError(shotId, r.message ?? "生成失败");
+            }
             resolve();
           },
         });
@@ -263,7 +276,9 @@ export function ShotStudio({
         /* 没落到任何端口的口本次不生效（工作流用图内默认值）—— 静默就是
          * 「改了没反应」（规范 10 §10.3.1），走控制器提示条说清楚。 */
         const unmatchedWarning = describeUnmatchedInputs(built.unmatched);
-        if (unmatchedWarning) onNotice(unmatchedWarning);
+        if (unmatchedWarning) {
+          onNotice(unmatchedWarning);
+        }
         const input: GenerateInput = built.input;
 
         const taskId = await startLocalGenerate(
@@ -305,7 +320,9 @@ export function ShotStudio({
       const taskIds: Array<string> = [];
       for (let i = 0; i < count; i++) {
         const tid = await generateShot(shot);
-        if (tid) taskIds.push(tid);
+        if (tid) {
+          taskIds.push(tid);
+        }
       }
       if (taskIds.length < 2) {
         onNotice("有效候选不足 2 张（生成失败或无任务行），无法优选");
@@ -331,13 +348,17 @@ export function ShotStudio({
     });
 
   async function generateBatch() {
-    if (pending.length === 0) return;
+    if (pending.length === 0) {
+      return;
+    }
     await batch.run(() =>
       /* 有界并发（见 WORKSHOP_BATCH_CONCURRENCY）：在跑的与排队的同存，
        * 不再「await 一条到底再提交下一条」地空转。 */
       runWithConcurrency([...pending], WORKSHOP_BATCH_CONCURRENCY, async (shot) => {
         // 每轮重新检查存活 —— 用户可能在运行中编辑 / 删除。
-        if (shot.status === "running" || shot.imageUrl) return;
+        if (shot.status === "running" || shot.imageUrl) {
+          return;
+        }
         await generateShot(shot);
       }),
     );

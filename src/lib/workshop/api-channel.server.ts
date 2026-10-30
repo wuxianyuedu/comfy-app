@@ -49,7 +49,9 @@ let cache: WorkshopApiSettings | null = null;
 
 /* 读配置（进程内缓存）。全新安装也能直接用（空配置 = 未配置）。 */
 export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
-  if (cache) return cache;
+  if (cache) {
+    return cache;
+  }
   let stored: Partial<WorkshopApiSettings> = {};
   try {
     stored = /* SAFETY: 类型断言已复核 */ JSON.parse(
@@ -106,10 +108,14 @@ function bodyFromAdapter(
   const body: Record<string, unknown> = {};
   for (const { type, field } of adapter.inputs) {
     const value = unified[type];
-    if (value === undefined || value === "") continue;
+    if (value === undefined || value === "") {
+      continue;
+    }
     body[field] = value;
   }
-  if (model) body.model = model;
+  if (model) {
+    body.model = model;
+  }
   return body;
 }
 
@@ -128,11 +134,15 @@ async function resolveTarget(
   /* 返回体里带上 channel 是为了让调用方把「同一份配置」交给 callImageGeneration
    * 做端点的最终拼装（未配置时的可读错误也在那里判）。 */
   const wantedModel = (req.model ?? "").trim();
-  if (!wantedModel) return { target: fallbackTarget(channel), channel, adapter: null };
+  if (!wantedModel) {
+    return { target: fallbackTarget(channel), channel, adapter: null };
+  }
   try {
     const entries = await remoteModelRepository.list();
     const entry = entries.find((r) => r.name === wantedModel && r.baseUrl);
-    if (!entry) return { target: fallbackTarget(channel), channel, adapter: null };
+    if (!entry) {
+      return { target: fallbackTarget(channel), channel, adapter: null };
+    }
     // 模式适配器优先：条目配置了该模式的输入映射就按它翻译统一输入。
     const adapters = await remoteModelRepository.getWorkshopAdapters(wantedModel);
     const wantedMode = upperToken(req.mode);

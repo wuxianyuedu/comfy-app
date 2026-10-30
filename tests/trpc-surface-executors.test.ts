@@ -78,10 +78,15 @@ const ROUTER_DIR = "src/server/api/routers";
 /** 递归收集 `src` 与 `tests` 下的 `.ts` / `.tsx`（跳过构建产物与生成物）。 */
 function collect(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules" || entry === ".next" || entry === "generated") continue;
+    if (entry === "node_modules" || entry === ".next" || entry === "generated") {
+      continue;
+    }
     const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) collect(full, out);
-    else if (/\.(ts|tsx)$/.test(entry)) out.push(full);
+    if (statSync(full).isDirectory()) {
+      collect(full, out);
+    } else if (/\.(ts|tsx)$/.test(entry)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -97,7 +102,9 @@ function mountTable(source: string): Record<string, string> {
   const mounts: Record<string, string> = {};
   for (const m of source.matchAll(/^\s{2}(\w+):\s*(\w+),$/gm)) {
     const file = varToFile[m[2]!];
-    if (file) mounts[m[1]!] = file;
+    if (file) {
+      mounts[m[1]!] = file;
+    }
   }
   return mounts;
 }
@@ -109,13 +116,19 @@ function routerClosure(entry: string, sources: Map<string, string>): Set<string>
   const queue = [entry];
   while (queue.length) {
     const current = queue.shift()!;
-    if (closure.has(current)) continue;
+    if (closure.has(current)) {
+      continue;
+    }
     closure.add(current);
     const text = sources.get(current);
-    if (!text) continue;
+    if (!text) {
+      continue;
+    }
     for (const m of text.matchAll(/from\s+"(?:~\/server\/api\/routers|\.)\/?([\w-]+)"/g)) {
       const next = m[1]!;
-      if (next !== current && sources.has(next)) queue.push(next);
+      if (next !== current && sources.has(next)) {
+        queue.push(next);
+      }
     }
   }
   return closure;
@@ -126,9 +139,13 @@ function routerClosure(entry: string, sources: Map<string, string>): Set<string>
 function importsClosure(testText: string, closure: Set<string>): boolean {
   for (const m of testText.matchAll(/(?:from|import)\s*\(?\s*"([^"]+)"/g)) {
     const spec = m[1]!;
-    if (!/^(?:~\/server\/api\/routers|\.)/.test(spec)) continue;
+    if (!/^(?:~\/server\/api\/routers|\.)/.test(spec)) {
+      continue;
+    }
     const base = spec.split("/").pop()!;
-    if (closure.has(base)) return true;
+    if (closure.has(base)) {
+      return true;
+    }
   }
   return false;
 }
@@ -155,7 +172,9 @@ function proceduresWithoutExecutor(input: {
     const executed = input.tests.some(
       ({ text }) => importsClosure(text, closure) && callNeedle(proc).test(text),
     );
-    if (!executed) offenders.push(dotted);
+    if (!executed) {
+      offenders.push(dotted);
+    }
   }
   return offenders;
 }
@@ -166,7 +185,9 @@ function scanSurface() {
   const sources = new Map<string, string>();
   for (const f of collect(path.join(process.cwd(), ROUTER_DIR))) {
     const base = path.basename(f).replace(/\.tsx?$/, "");
-    if (base.endsWith(".test")) continue;
+    if (base.endsWith(".test")) {
+      continue;
+    }
     sources.set(base, readFileSync(f, "utf8"));
   }
   const rootText = readFileSync(path.join(process.cwd(), "src/server/api/root.ts"), "utf8");

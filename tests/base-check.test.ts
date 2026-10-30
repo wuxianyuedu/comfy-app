@@ -161,7 +161,9 @@ function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}
   );
   writeFileSync(join(work, "seed.txt"), "seed\n");
   /* 「违规已经落进主干」那一档：基线上就带着 marker ⇒ 两侧都红。 */
-  if (opts.markerOnBase) writeFileSync(join(work, "marker.txt"), "x\n");
+  if (opts.markerOnBase) {
+    writeFileSync(join(work, "marker.txt"), "x\n");
+  }
   /* 「基线侧一条用例都没收集到」那一档（ISSUE #1652）：判据脚本在**基线之后**被
    * 改成会收集用例的形态，于是基线那一版的 `node gate.cjs` 打印一段
    * vitest 形态的 `Tests  no tests` 并退 **1** —— 与「判据跑了且红」逐字同形。 */
@@ -226,7 +228,9 @@ function runBaseCheck(
   args: Array<string>,
 ): { code: number; stdout: string; stderr: string } {
   const first = runBaseCheckOnce(cwd, args);
-  if (first.code === 0 || first.stdout || first.stderr) return first;
+  if (first.code === 0 || first.stdout || first.stderr) {
+    return first;
+  }
   return runBaseCheckOnce(cwd, args);
 }
 
@@ -899,7 +903,9 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
   test("默认面 = 钩子里的全仓判据，且含 A 组的 tsc 与 B 组的 eslint", () => {
     const r = resolveMergeBatch([]);
     expect(r.ok).toBe(true);
-    if (!r.ok) return;
+    if (!r.ok) {
+      return;
+    }
     const labels = r.commands.map((c) => c.label);
     /* 这两条就是 ISSUE #1591 立案的那两条：它们在钩子里是 `run_group`（并行成组）、
      * 不是 `run "<标签>"`，所以只读 `run` 的解析器看不见它们 —— 只读 `run` 会让
@@ -952,7 +958,9 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
   test("默认面里不含任何「只在改动上作答」的判据", () => {
     const r = resolveMergeBatch([]);
     expect(r.ok).toBe(true);
-    if (!r.ok) return;
+    if (!r.ok) {
+      return;
+    }
     for (const c of r.commands) {
       expect(mayDecideOnCleanSnapshot(c.argv), c.label).toBe(true);
     }
@@ -1081,7 +1089,9 @@ describe("base-check --base —— 真仓库上的端到端", () => {
         "",
       ].join("\n"),
     );
-    if (opts.baselineRed) writeFileSync(join(work, "marker.txt"), "x\n");
+    if (opts.baselineRed) {
+      writeFileSync(join(work, "marker.txt"), "x\n");
+    }
     writeFileSync(join(work, "seed.txt"), "seed\n");
     git(work, "add", ".");
     git(work, "commit", "-qm", "chore: seed");

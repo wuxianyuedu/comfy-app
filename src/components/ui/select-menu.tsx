@@ -175,12 +175,16 @@ export function SelectMenu({
   /* 浮层可用区域：视口减去应用级标题行（壳态）—— 见 `useOverlayBoundary`。 */
   const boundary = useOverlayBoundary();
   const effectiveMinWidth = useMemo(() => {
-    if (!autoFitFromOptions) return popoverMinWidth;
+    if (!autoFitFromOptions) {
+      return popoverMinWidth;
+    }
     let longest = 0;
     for (const opt of options) {
       const node = labels?.[opt];
       const text = typeof node === "string" || typeof node === "number" ? String(node) : opt;
-      if (text.length > longest) longest = text.length;
+      if (text.length > longest) {
+        longest = text.length;
+      }
     }
     const approx = longest * POPOVER_PER_CHAR_PX + POPOVER_AUTO_HEADROOM;
     const bounded = Math.max(POPOVER_AUTO_MIN, approx);
@@ -203,7 +207,9 @@ export function SelectMenu({
        * 时 trigger 显示 placeholder）。 */
       value={value || null}
       onValueChange={(next) => {
-        if (typeof next === "string") onChange(next);
+        if (typeof next === "string") {
+          onChange(next);
+        }
       }}
       onOpenChange={(next) => onOpenChange?.(next)}
       disabled={disabled}

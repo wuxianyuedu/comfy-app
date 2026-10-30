@@ -20,21 +20,14 @@ export interface ImageFeedbackRowProps {
 }
 
 export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
-  const [rating, setRatingState] = useState<number | null>(
-    image.humanRating ?? null,
-  );
+  const [rating, setRatingState] = useState<number | null>(image.humanRating ?? null);
   const [fav, setFav] = useState(image.isFavorite);
   const [error, setError] = useState("");
 
   // 反馈通道（~/lib/async-action 的形状）：成功清掉行内错误块，失败落一句话。
-  const report: ActionReport = (kind, detail) =>
-    setError(kind === "err" ? detail : "");
+  const report: ActionReport = (kind, detail) => setError(kind === "err" ? detail : "");
 
-  const save = async (
-    nextRating: number | null,
-    nextFav: boolean,
-    rollback: () => void,
-  ) => {
+  const save = async (nextRating: number | null, nextFav: boolean, rollback: () => void) => {
     const result = await runAsyncAction(
       () =>
         setImageFeedback(image.id, {
@@ -43,7 +36,9 @@ export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
         }),
       { report, failureText: "保存失败", readResultEnvelope: false },
     );
-    if (!result.ok) rollback();
+    if (!result.ok) {
+      rollback();
+    }
   };
 
   const pickRating = (star: number) => {
@@ -84,9 +79,7 @@ export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
             />
           </Button>
         ))}
-        {rating !== null && (
-          <span className="text-ink-faintest text-2xs">{rating}</span>
-        )}
+        {rating !== null && <span className="text-ink-faintest text-2xs">{rating}</span>}
       </div>
       <Button
         type="button"

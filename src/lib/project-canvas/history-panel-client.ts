@@ -33,11 +33,15 @@ export const historyTaskRowSchema = z.object({
 
 /** 把 tRPC 响应里的行数组收窄成 HistoryTaskRow[]；非法行丢弃。 */
 function parseHistoryRows(raw: unknown): Array<HistoryTaskRow> {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const out: Array<HistoryTaskRow> = [];
   for (const item of raw) {
     const parsed = historyTaskRowSchema.safeParse(item);
-    if (parsed.success) out.push(parsed.data);
+    if (parsed.success) {
+      out.push(parsed.data);
+    }
   }
   return out;
 }

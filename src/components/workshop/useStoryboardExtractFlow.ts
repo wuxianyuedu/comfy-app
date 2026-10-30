@@ -185,7 +185,9 @@ export function useStoryboardExtractFlow(input: {
        * 而「读失败」与「文件为空」在它们那里压成同一个结果。 */
       const text = await readFileAsText(file);
       const trimmed = text.trim();
-      if (!trimmed) throw new Error("文件内容为空");
+      if (!trimmed) {
+        throw new Error("文件内容为空");
+      }
       if (looksLikeJson(trimmed)) {
         let entries: Array<ShotEntry>;
         try {

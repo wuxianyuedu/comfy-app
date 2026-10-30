@@ -47,7 +47,9 @@ export async function syncFilmToProject(
   filmShots: Array<FilmShotClip>,
 ): Promise<void> {
   const row = await productionRepository.getForUser(userId, projectId);
-  if (!row) return;
+  if (!row) {
+    return;
+  }
   const progress = normalizeProductionProgress(row.progress);
   const rawShots = Array.isArray(row.shots)
     ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>)
@@ -56,12 +58,16 @@ export async function syncFilmToProject(
   // 按 shotId 索引成片结果（只取有 videoPath 的镜头回写 clip）。
   const clipByShotId = new Map<string, FilmShotClip>();
   for (const fs of filmShots) {
-    if (fs.shotId && fs.videoPath) clipByShotId.set(fs.shotId, fs);
+    if (fs.shotId && fs.videoPath) {
+      clipByShotId.set(fs.shotId, fs);
+    }
   }
 
   const nextShots: Array<Shot> = rawShots.map((shot) => {
     const clip = clipByShotId.get(shot.id);
-    if (!clip) return shot;
+    if (!clip) {
+      return shot;
+    }
     return {
       ...shot,
       clipUrl: clip.videoPath ?? undefined,
@@ -86,7 +92,9 @@ export async function syncFilmToProject(
 // ── ffmpeg helpers ─────────────────────────────────────────
 let _ffmpegOk: boolean | null = null;
 export async function isFFmpegAvailable(): Promise<boolean> {
-  if (_ffmpegOk !== null) return _ffmpegOk;
+  if (_ffmpegOk !== null) {
+    return _ffmpegOk;
+  }
   try {
     await runFFmpeg(["-version"], undefined, 8000);
     _ffmpegOk = true;
@@ -122,8 +130,12 @@ function runFFmpeg(
 // ── compose ────────────────────────────────────────────────
 export async function composeFilm(id: string) {
   const film = await filmRepository.findById(id);
-  if (!film) return;
-  if (film.status === "COMPOSING" || film.status === "DONE") return;
+  if (!film) {
+    return;
+  }
+  if (film.status === "COMPOSING" || film.status === "DONE") {
+    return;
+  }
 
   await filmRepository.markComposing(id);
   await appendFilmLog(id, "info", "所有镜头完成，开始合成影片…");
@@ -226,10 +238,11 @@ export async function composeFilm(id: string) {
       ["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", concatPath],
       tmpDir,
     );
-    if (cres.code !== 0)
+    if (cres.code !== 0) {
       throw new Error(
         `拼接失败：${clampText(cres.stderr, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
       );
+    }
 
     const finalPath = path.join(filmsRoot(), `${id}.mp4`);
     /* 地址与磁盘同一处派生：写进 Film 行的这条就是前端 `<video src>` 拿到的那条，

@@ -90,7 +90,9 @@ async function ollamaUp(): Promise<boolean> {
  * 「杀整棵树」的一种，散在路由里就又是一处平台判据。
  */
 export async function POST(_req: NextRequest) {
-  if (!(await requireRequestUser())) return unauthorizedResponse();
+  if (!(await requireRequestUser())) {
+    return unauthorizedResponse();
+  }
   if (!(await ollamaUp())) {
     await appendOllamaLog("[state] Ollama 未在运行，跳过关闭");
     return NextResponse.json({ ok: true, detail: "Ollama 未在运行" });

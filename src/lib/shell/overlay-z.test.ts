@@ -18,7 +18,9 @@ const GLOBALS = join(process.cwd(), "src", "app", "globals.css");
 function readToken(name: string): number {
   const css = readFileSync(GLOBALS, "utf8");
   const m = new RegExp(`--z-index-${name}:\\s*(\\d+)`).exec(css);
-  if (!m) throw new Error(`globals.css 里找不到 --z-index-${name}`);
+  if (!m) {
+    throw new Error(`globals.css 里找不到 --z-index-${name}`);
+  }
   return Number(m[1]);
 }
 

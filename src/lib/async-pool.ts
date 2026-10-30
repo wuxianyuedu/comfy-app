@@ -36,7 +36,9 @@ export async function runWithConcurrency<T>(
       /* noUncheckedIndexedAccess 下索引访问返回 `T | undefined`；
        * `index < items.length` 时不会发生，守卫只为过判据。 */
       const item = items[index];
-      if (item === undefined) return;
+      if (item === undefined) {
+        return;
+      }
       await worker(item, index);
     }
   });

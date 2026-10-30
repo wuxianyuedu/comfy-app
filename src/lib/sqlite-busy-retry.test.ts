@@ -37,7 +37,9 @@ describe("runWithSqliteBusyRetry", () => {
     const result = await runWithSqliteBusyRetry(
       async () => {
         calls += 1;
-        if (calls <= 2) throw busy();
+        if (calls <= 2) {
+          throw busy();
+        }
         return calls;
       },
       { policy: POLICY, onBusy: (attempt) => void seen.push(attempt) },
@@ -90,7 +92,9 @@ describe("runWithSqliteBusyRetry", () => {
       runWithSqliteBusyRetry(
         async () => {
           calls += 1;
-          if (calls === 1) throw phraseOnly;
+          if (calls === 1) {
+            throw phraseOnly;
+          }
           return calls;
         },
         { policy: POLICY },

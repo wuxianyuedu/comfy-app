@@ -57,7 +57,9 @@ function wiredFor(list: Array<{ id: string; pins: Array<{ ioKey: string; name: s
   const out: Record<string, string> = {};
   for (const entry of list) {
     const pin = entry.pins.find((item) => item.name === SIZE_PIN_NAME[entry.id]) ?? entry.pins[0];
-    if (pin) out[entry.id] = pin.ioKey;
+    if (pin) {
+      out[entry.id] = pin.ioKey;
+    }
   }
   return out;
 }
@@ -69,7 +71,9 @@ describe("WorkflowParamCardColumn", () => {
     );
     for (const entry of entries) {
       /* 尺寸：六行形态共用一张卡（`param-node-size`），下面单独断言。 */
-      if (SIZE_SUB_IDS.includes(entry.cls)) continue;
+      if (SIZE_SUB_IDS.includes(entry.cls)) {
+        continue;
+      }
       const card = container.querySelector(`[data-testid="param-node-${entry.id}"]`);
       expect(card).toBeTruthy();
       /* 卡片头与端口行读的是同一个名字，所以按卡片作用域断言，不按全屏唯一文本查。 */

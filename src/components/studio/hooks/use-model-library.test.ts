@@ -332,7 +332,9 @@ describe("useModelLibrary 卸载后不再 setState", () => {
       // sleep-ok: 等一个「不会发生的事」——放行后不得再出现更新调度读取。
       await new Promise((r) => setTimeout(r, 150));
     } finally {
-      if (realWindow) Object.defineProperty(globalThis, "window", realWindow);
+      if (realWindow) {
+        Object.defineProperty(globalThis, "window", realWindow);
+      }
     }
 
     /* 判据：**回包之后**不得再出现更新调度读取。

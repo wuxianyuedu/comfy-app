@@ -164,20 +164,23 @@ export function issueTitle({ sn, event, at, stage }) {
  */
 export function pickPreviousDaily({ list, details, lanes = [] }) {
   const daily = (Array.isArray(list) ? list : []).filter(isDailyDispatch);
-  if (daily.length === 0)
+  if (daily.length === 0) {
     return { none: "列表里没有每日类派发（定时 / 手点 / API 三种事件都没有）" };
+  }
   const bySn = new Map((details ?? []).map((d) => [String(d.sn), d.json]));
   /** 与 `ci-pr-failure-issue` 的 `--lane` 同一口径：名单为空 = 不按档过滤。 */
-  const wanted = new Set(
-    (Array.isArray(lanes) ? lanes : []).map((l) => String(l ?? "").trim()),
-  );
+  const wanted = new Set((Array.isArray(lanes) ? lanes : []).map((l) => String(l ?? "").trim()));
   let stray = 0;
   for (const build of daily) {
     const sn = String(build.sn ?? "");
     const json = bySn.get(sn);
-    if (!json) continue;
+    if (!json) {
+      continue;
+    }
     const outcome = classifyBuildOutcome(json);
-    if (outcome.state === "running" || outcome.state === "unknown") continue;
+    if (outcome.state === "running" || outcome.state === "unknown") {
+      continue;
+    }
     if (wanted.size > 0 && !outcome.pipelines.some((p) => wanted.has(p.name))) {
       stray += 1;
       continue;
@@ -240,7 +243,9 @@ export function openDailyIssues(run, slug) {
     "100",
     "-v",
   ]);
-  if (!res) return null;
+  if (!res) {
+    return null;
+  }
   const d = res.json?.data;
   const arr = Array.isArray(res.json)
     ? res.json
@@ -249,7 +254,9 @@ export function openDailyIssues(run, slug) {
       : Array.isArray(d)
         ? d
         : null;
-  if (!arr) return null;
+  if (!arr) {
+    return null;
+  }
   return arr.map((/** @type {any} */ i) => ({
     number: Number(i?.number ?? 0),
     title: String(i?.title ?? ""),
@@ -263,35 +270,40 @@ export function openDailyIssues(run, slug) {
  * @returns {{action:"none"|"no-fact"|"write", reason?:string, stages:Array<{stage:string,number?:number}>}}
  */
 export function decideAction({ state, failedNames, existing }) {
-  if (state === "green")
+  if (state === "green") {
     return { action: "none", stages: [], reason: "上一跑是绿的 ⇒ 无事可立" };
-  if (state === "cancelled")
+  }
+  if (state === "cancelled") {
     return {
       action: "none",
       stages: [],
       reason:
         "上一跑是被取消的 —— 这一跑没有结论，**不是产物坏了**（把它写成红就是替平台编一个不存在的故障）",
     };
-  if (state !== "failed")
+  }
+  if (state !== "failed") {
     return {
       action: "no-fact",
       stages: [],
       reason: `判定是「${state}」，不构成结论 ⇒ 不写`,
     };
-  if (failedNames.length === 0)
+  }
+  if (failedNames.length === 0) {
     return {
       action: "no-fact",
       stages: [],
       reason:
         "整跑判成真失败，却认不出是哪一格红的 ⇒ 不知道往哪张单上记，先不动账（认不出格名 = 判据没跑起来，不是「没有红」）",
     };
-  if (!existing)
+  }
+  if (!existing) {
     return {
       action: "no-fact",
       stages: [],
       reason:
         "开着的单列表取不到 —— 「查不到已有单」不等于「没有已有单」，据它新建就是每天多一张重复单",
     };
+  }
   return {
     action: "write",
     stages: failedNames.map((stage) => {
@@ -308,15 +320,7 @@ export function decideAction({ state, failedNames, existing }) {
  *   readout:string[], handle:string}} input
  * @returns {string}
  */
-export function composeBody({
-  slug,
-  build,
-  sn,
-  stage,
-  skipped,
-  readout,
-  handle,
-}) {
+export function composeBody({ slug, build, sn, stage, skipped, readout, handle }) {
   return [
     commentHeader(handle),
     "",
@@ -370,8 +374,7 @@ export function composeBody({
 export function appendReading(io, slug, number, body, sn) {
   return runAppendIssueComment({
     run: io.run,
-    log: (line) =>
-      io.log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+    log: (line) => io.log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
     slug,
     number,
     body,
@@ -413,9 +416,7 @@ export function main(io = {}) {
 
   const slug = io.slug !== undefined ? io.slug : resolveRepoSlug(run);
   if (!slug) {
-    log(
-      "[daily-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。",
-    );
+    log("[daily-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。");
     return finish(CODE.NO_FACT, "推不出仓库 slug");
   }
   /* 机器自起的账用**自己的**名字，不取平台账号昵称（ISSUE #2355）：`gitUser()` 的第一顺位是
@@ -444,10 +445,15 @@ export function main(io = {}) {
      */
     /** @type {any[]} */
     let rows = [];
-    if (Array.isArray(parsed)) rows = parsed;
-    else if (Array.isArray(parsed?.list)) rows = parsed.list;
-    else if (Array.isArray(parsed?.data?.data)) rows = parsed.data.data;
-    else if (Array.isArray(parsed?.data)) rows = parsed.data;
+    if (Array.isArray(parsed)) {
+      rows = parsed;
+    } else if (Array.isArray(parsed?.list)) {
+      rows = parsed.list;
+    } else if (Array.isArray(parsed?.data?.data)) {
+      rows = parsed.data.data;
+    } else if (Array.isArray(parsed?.data)) {
+      rows = parsed.data;
+    }
     list = rows;
     details = Array.isArray(parsed?.details) ? parsed.details : [];
     log(
@@ -490,8 +496,9 @@ export function main(io = {}) {
     log(`[daily-failure-issue] ${why} ⇒ 不写。`);
     return finish(CODE.NO_FACT, why);
   }
-  if (lanes.length > 0)
+  if (lanes.length > 0) {
     log(`[daily-failure-issue] 这一档的流水线名：${lanes.join(" / ")}`);
+  }
   const picked = pickPreviousDaily({
     list: Array.isArray(list) ? list : [],
     details,
@@ -500,9 +507,7 @@ export function main(io = {}) {
   /* 判别靠**字段在不在**，不靠 cast 成 any：cast 会把联合的收窄整条弄丢，
    * 之后每一处 `.sn` / `.outcome` 都变成没人守的自由点。 */
   if ("none" in picked) {
-    log(
-      `[daily-failure-issue] ${picked.none} ⇒ 这一格没有可立的案，一次都不写。`,
-    );
+    log(`[daily-failure-issue] ${picked.none} ⇒ 这一格没有可立的案，一次都不写。`);
     return finish(CODE.NO_FACT, picked.none);
   }
   const { build, sn } = picked;
@@ -516,12 +521,7 @@ export function main(io = {}) {
   const outcome = offline
     ? picked.outcome
     : classifyBuildOutcome(
-        enrichStageErrors(
-          run,
-          slug,
-          sn,
-          details.find((d) => String(d.sn) === sn)?.json ?? null,
-        ),
+        enrichStageErrors(run, slug, sn, details.find((d) => String(d.sn) === sn)?.json ?? null),
       );
   const failedNames = outcome.failed.map((f) => f.name || f.id);
   const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
@@ -552,9 +552,7 @@ export function main(io = {}) {
   });
   if (decision.action === "none" || decision.action === "no-fact") {
     const why = decision.reason ?? "(没给出原因)";
-    log(
-      `[daily-failure-issue] ${why} ⇒ 不写（没结论既不许落成红字，也不许落成新建单）。`,
-    );
+    log(`[daily-failure-issue] ${why} ⇒ 不写（没结论既不许落成红字，也不许落成新建单）。`);
     return decision.action === "none" ? CODE.DONE : finish(CODE.NO_FACT, why);
   }
 
@@ -579,9 +577,7 @@ export function main(io = {}) {
     if (willWrite) {
       log(
         `[daily-failure-issue] ${offline ? "离线档" : "--dry-run"}：「${s.stage}」` +
-          (s.number
-            ? `→ 在 #${s.number} 下追加一条读数（不新建）`
-            : `→ 新建一张：${title}`) +
+          (s.number ? `→ 在 #${s.number} 下追加一条读数（不新建）` : `→ 新建一张：${title}`) +
           ` · 正文 ${body.length} 字 · 优先级 ${AUTO_PRIORITY} · 一条都没写`,
       );
       continue;
@@ -594,21 +590,20 @@ export function main(io = {}) {
           : `[daily-failure-issue] ✗ #${s.number} 的评论没写成或回读不到 ⇒ 手工出口：` +
               `cnb issues post-issue-comment --repo ${slug} --number ${s.number} --body-file <正文文件> -v`,
       );
-      if (!ok) wrote = false;
+      if (!ok) {
+        wrote = false;
+      }
       continue;
     }
     const file = writeScratch(ROOT, "daily-failure-issue", body);
     if (!file) {
-      log(
-        "[daily-failure-issue] ✗ 取不到 git 目录 ⇒ 正文没有落点，一条都不写。",
-      );
+      log("[daily-failure-issue] ✗ 取不到 git 目录 ⇒ 正文没有落点，一条都不写。");
       wrote = false;
       continue;
     }
     const code = runNewIssue({
       run,
-      log: (line) =>
-        log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+      log: (line) => log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
       slug,
       handle,
       root: ROOT,
@@ -623,25 +618,20 @@ export function main(io = {}) {
       dryRun: false,
     });
     if (code !== CODE.DONE) {
-      log(
-        `[daily-failure-issue] ✗ 「${s.stage}」那张单没建成（runNewIssue 退 ${code}）`,
-      );
+      log(`[daily-failure-issue] ✗ 「${s.stage}」那张单没建成（runNewIssue 退 ${code}）`);
       wrote = false;
       continue;
     }
-    log(
-      `[daily-failure-issue] ✓ 「${s.stage}」已立案（建 → 补标签 → 独立回读全过）`,
-    );
+    log(`[daily-failure-issue] ✓ 「${s.stage}」已立案（建 → 补标签 → 独立回读全过）`);
   }
-  if (willWrite) return CODE.DONE;
+  if (willWrite) {
+    return CODE.DONE;
+  }
   return wrote ? CODE.DONE : finish(CODE.WRITE_FAILED, "该写的没写成");
 }
 
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const exit = main();
   if (exit !== CODE.DONE) {
     process.stderr.write(

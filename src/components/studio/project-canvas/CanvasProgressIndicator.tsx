@@ -9,23 +9,18 @@
 // 标签，避免 studio→workshop 的跨特性耦合——画布只需表达「到哪一步 / 是否已合成」。
 
 import { ProgressBar } from "~/components/ui/progress-bar";
-import {
-  PRODUCTION_STAGES,
-  type ProductionProgress,
-} from "~/lib/production/progress";
+import { PRODUCTION_STAGES, type ProductionProgress } from "~/lib/production/progress";
 
 /** 由持久侧完成状态派生 0..100 的阶段百分比：rendered 记满，否则按阶段序。 */
 export function stageProgressPct(progress: ProductionProgress): number {
-  if (progress.rendered) return 100;
+  if (progress.rendered) {
+    return 100;
+  }
   const idx = PRODUCTION_STAGES.indexOf(progress.stage);
   return Math.round(((idx + 1) / PRODUCTION_STAGES.length) * 100);
 }
 
-export function CanvasProgressIndicator({
-  progress,
-}: {
-  progress: ProductionProgress;
-}) {
+export function CanvasProgressIndicator({ progress }: { progress: ProductionProgress }) {
   return (
     <div className="z-canvas-ui pointer-events-none absolute top-3 left-3">
       <div className="bg-card border-border-strong w-56 rounded-xl border px-3 py-2 shadow-lg">

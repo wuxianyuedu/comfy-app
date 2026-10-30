@@ -65,7 +65,9 @@ function relativeImportsOf(entryFile: string): Array<string> {
   const found = new Set<string>();
   for (const match of src.matchAll(/from\s+"(\.{1,2}\/[^"]+\.(?:mjs|cjs|ts|tsx))"/g)) {
     const spec = match[1];
-    if (spec !== undefined) found.add(spec);
+    if (spec !== undefined) {
+      found.add(spec);
+    }
   }
   return [...found];
 }
@@ -89,11 +91,17 @@ function copyScriptWithRelativeClosure(entryRel: string): string {
   const seen = new Set<string>();
   while (pending.length > 0) {
     const file = pending.shift();
-    if (file === undefined || seen.has(file)) continue;
+    if (file === undefined || seen.has(file)) {
+      continue;
+    }
     seen.add(file);
-    if (!fs.existsSync(file)) continue;
+    if (!fs.existsSync(file)) {
+      continue;
+    }
     const rel = path.relative(ROOT, file);
-    if (rel.startsWith("..")) continue; // 仓外依赖（node_modules 之类）不拷
+    if (rel.startsWith("..")) {
+      continue;
+    } // 仓外依赖（node_modules 之类）不拷
     const dest = path.join(tmp, rel);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(file, dest);
@@ -270,7 +278,9 @@ describe("预检判据与 src/env.js 同口径", () => {
     fs.writeFileSync(path.join(tmp, ".env"), content, "utf8");
     const problem = checkEnvFile(tmp, {});
     expect(problem, "空串必须被判为未就绪").not.toBeNull();
-    for (const key of REQUIRED_ENV_KEYS) expect(problem!.message).toContain(key);
+    for (const key of REQUIRED_ENV_KEYS) {
+      expect(problem!.message).toContain(key);
+    }
   });
 
   it("缺文件时报的是「找不到 .env」，并且不夹带任何 Windows 专属入口", () => {
@@ -497,11 +507,15 @@ describe("dev/start 在起 Next 之前预检", () => {
     ];
     for (const name of needed) {
       const src = path.join(ROOT, "scripts", name);
-      if (fs.existsSync(src)) fs.copyFileSync(src, path.join(scriptsDir, name));
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, path.join(scriptsDir, name));
+      }
     }
     for (const dir of ["lockfile"]) {
       const from = path.join(ROOT, "scripts", dir);
-      if (!fs.existsSync(from)) continue;
+      if (!fs.existsSync(from)) {
+        continue;
+      }
       const to = path.join(scriptsDir, dir);
       fs.mkdirSync(to, { recursive: true });
       for (const name of fs.readdirSync(from)) {
