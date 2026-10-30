@@ -18,7 +18,7 @@
  * | `check-reformat-only` | 166.7s | ❌ 走 import 图 | —— 已经是有条件的，不动它 |
  * | `ci-toolchain-selfcheck` | 67.0s | ❌ 走 import 图 | —— 同上 |
  *
- * ⚠️ 名单因此是**四条而不是六条**，而且那两条不是被「省略」的：它们不在固定清单里，
+ * ⚠️ 上面那张表只记当时的那几条，名单本身以 `INPUT_FACES` 为准；而且那两条不是被「省略」的：它们不在固定清单里，
  * 这次会跑是因为本次真的改了 `scripts/**`（import 图命中，属于该跑）。给它们写面没有
  * 任何效果，反而会把「图判它该跑」与「面判它该跑」混成两处各说各话 —— 判据
  * （`tests/fixed-gate-input-faces.test.ts`）要求每条登记都**在**固定清单里，正是为了
@@ -40,7 +40,7 @@
  *    文件它也命中 ⇒ 等于没筛；写窄一条，改了被测工具它不跑 ⇒ 那是**悄悄不跑**，本仓最狠的那族。
  * 2. **登记了就受审**：`tests/fixed-gate-input-faces.test.ts` 判「每条 face 的每个模式都至少
  *    命中仓库里一个现存路径」（写错路径的面 = 那条 test 永远不再跑，而日志上看不出区别），
- *    并判「开面的名单就是这 4 条」—— 加第 5 条要人来签字，不由这一层的代码自己扩张。
+ *    并判「开面的名单就是这一份」—— 加一条要人来签字，不由这一层的代码自己扩张。
  * 3. **跳过必须说出口**：`main()` 打「固定清单按输入面跳过 N 条：…」，而**放弃收窄那一档
  *    （`wide`）完全不过筛** —— 机器紧张或改了全局测试配置时，退回全跑固定清单，
  *    那时省的时间不是我们要的。
@@ -53,7 +53,7 @@
  */
 
 /**
- * 开了输入面的固定清单条目（**刻意只此 4 条**，判据钉住这条上限，也钉住「必须在固定清单里」）。
+ * 开了输入面的固定清单条目（**名单是封闭的**：判据钉住这份名单本身，也钉住「必须在固定清单里」）。
  *
  * @type {ReadonlyArray<GateFace>}
  */
@@ -102,6 +102,48 @@ export const INPUT_FACES = [
       "tests/a11y-rules-gate.test.ts",
     ],
     why: "被测输入里最贵的一件是真的 `eslint.config.js`（它 import 了整个配置图），其余是判据本体与两份台账；业务组件改多少都不会让「规则开关 ⇄ 台账」这条漂",
+  },
+  /* 下面四条是「拿真子进程 / 真 git / 真渲染」的判据自测：实测合计 988.4s（#2793 那跑
+   * 的分文件读数），而它们的触发面都窄到能写成面 —— 进固定清单的理由是 import 图追不到，
+   * 不是「必须每次跑」。`tests/affected-tests.test.ts` **刻意留在这里之外**：它守着
+   * 「增量层还在增量」这件事本身，筛它等于让解析器的缺陷把自己筛掉。
+   *
+   * 依赖面与全局配置（`package.json` / lockfile / `tsconfig*.json` / `tests/setup.ts`）
+   * **不往面里写**：它们自己就是 `WIDE_TRIGGERS`，一命中就退成整档全跑，根本到不了这一层
+   * 筛 —— 写进去只会长出一个永远不会被问到的模式。 */
+  {
+    test: "tests/eslint-gate-canary.test.ts",
+    face: [
+      "eslint.config.js",
+      "scripts/eslint-gate-canary.mjs",
+      "tests/eslint-gate-canary.test.ts",
+    ],
+    why: "样本文件写进 `tests/` 与 `scripts/` 的临时目录，再用**本仓的 `eslint.config.js`** 真跑 eslint；样本要落在 tsconfig 的项目里，所以配置、被测脚本或项目声明任一变判决都可能变（后两者与插件版本同属 wide 触发面，轮不到这一层）",
+  },
+  {
+    test: "tests/check-commit-claims.test.ts",
+    face: [
+      "scripts/check-commit-claims.mjs",
+      "tests/helpers/gate-repo.ts",
+      "tests/check-commit-claims.test.ts",
+    ],
+    why: "夹具是临时 `git init` 出来的仓库，真历史那一条钉的是不可变的提交 `ad81a912`：判据只读被测脚本、共享夹具与那份历史，后者不随新提交漂",
+  },
+  {
+    test: "tests/changed-scope.test.ts",
+    face: ["scripts/changed-scope.mjs", "tests/changed-scope.test.ts"],
+    why: "输入只有被测模块与临时 git 夹具（预置的 diff 形状与环境变量），不读仓库里任何别的文件 —— 「算法被改软」就是这份脚本被改",
+  },
+  {
+    test: "tests/a11y-axe-stories.test.ts",
+    face: [
+      "src/components/ui/**",
+      ".storybook/data-sources.tsx",
+      "scripts/.a11y-axe-known.json",
+      "tests/helpers/jsdom-capability.ts",
+      "tests/a11y-axe-stories.test.ts",
+    ],
+    why: "输入是 `src/components/ui/*.stories.tsx` 渲染出来的那棵树及其装饰器数据源：组件与故事的改动会改判决，负债台账与 jsdom 能力件同理（`tests/setup.ts` 与 axe / react 的版本是 wide 触发面，轮不到这一层）",
   },
 ];
 

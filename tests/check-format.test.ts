@@ -18,6 +18,7 @@ import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { defineGateRepo, describe } from "./helpers/gate-repo";
+import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { vi } from "vitest";
 
 /* 每条用例都要在临时工作区里真跑 git（init / add / commit）并**真起 prettier**
@@ -61,6 +62,15 @@ const DIRTY = "export const PROBE={a:1,\n\n\n  b:2};\n";
 const CLEAN = "export const PROBE = { a: 1, b: 2 };\n";
 /* 另一种干净形态（`--staged` 判面收窄那条用例要暂存一份**干净的**改动）。 */
 const CLEAN2 = "export const PROBE = { b: 2, a: 1 };\n";
+
+/**
+ * 「没有平台旗标」那一档的输入：**声明**不设它，而不是指望跑测试那一跳恰好没设。
+ *
+ * 平台的「受影响用例」运行器给每个 stage 进程都注入 `CNB_PULL_REQUEST_TARGET_SHA`
+ * （ISSUE #2795）：继承来的基线在临时夹具仓库里不存在 ⇒ 判据 fail-closed 退 2，
+ * 于是「本机绿、平台恒红」，而报错一个字都不指向「继承」这件事。
+ */
+const NO_PLATFORM_TARGET = { env: { CNB_PULL_REQUEST_TARGET_SHA: undefined } };
 
 /** 读工作区 HEAD 的 sha（`--changed` 用例拿它当 `CNB_PULL_REQUEST_TARGET_SHA`）。 */
 function gitSha(dir: string): string {
@@ -265,6 +275,141 @@ describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
     const r = repo.run(["--staged"]);
     expect(r.code, r.output).toBe(0);
     expect(r.output).not.toContain("src/lib/fresh.ts");
+  });
+});
+
+/**
+ * 合并态下的 `--staged` 输入面（ISSUE #2747）。
+ *
+ * 现场：PR 分支上 `git merge origin/master` 解冲突，`.githooks/pre-commit` 的 D0 这一步
+ * 把**主干带来的全部存量未格式化文件**当成本次提交点名（实测那次：`git diff --cached`
+ * 有 901 份、被点名 2 份，而那两份相对 `origin/master` 是零 diff），于是一次与本 PR
+ * 无关的解冲突被别人的旧账拦死。同一判据的 `--changed` 档对同一条链给出相反结论
+ * （「0 个在靶子内」）—— 两个入口不可能都对，错的是 `--staged` 这一头的输入面：
+ * 合并未提交时 `git diff --cached` 是**相对第一父提交**的全量差异，不是「本次改动」。
+ *
+ * 四条用例钉四件事，缺任何一条都能静默通过：
+ *   ① 收窄生效（主干存量不被点名）—— 平台基线那一档；
+ *   ② 同一个面在**本地那一档**（没有平台旗标、走 merge-base 兜底）也成立 —— 现场就是本地；
+ *   ③ 收窄**不是消音**：解冲突时动了「本分支自己面内」的文件，仍然被点名并阻断；
+ *   ④ 对照：合并状态一消失（`MERGE_HEAD` 不在），同一批文件立刻回到判据面内。
+ *      没有这一条，「把 `--staged` 实现成永远跳过」也能全绿。
+ *
+ * 一条边界（③ 的形状为什么要说清）：本分支**已提交**的改动，在合并那一刻不在
+ * `git diff --cached` 里（它们是 HEAD 自己的内容），所以也不在收窄后的面内 ——
+ * 它们由**自己那一次提交**的 `--staged` 判过，平台 `--changed` 那一档再按 merge-base
+ * 三点 diff 判一遍；两档合起来才是完整一条链（判据文件头那段话）。本单修的是
+ * 「合并那一刻把主干的账算进本次」这一格，不是把 `--staged` 扩成第二份全量。
+ */
+describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747）", () => {
+  /** 合并来源那条分支的 tip sha（`CNB_PULL_REQUEST_TARGET_SHA` 的形状）。 */
+  function shaOf(dir: string, ref: string): string {
+    return execFileSync("git", ["rev-parse", ref], { cwd: dir, encoding: "utf8" }).trim();
+  }
+
+  /**
+   * 夹具那份 `repo.git` / `repo.commit` 是 `stdio: "ignore"`（各自注释里写明了），
+   * 于是这一族用例里「造历史」那一步一失败，屏幕上只剩一句 `Command failed`，
+   * git 自己那句话读不到 —— 正是本文件反复在防的「报错指不到夹具」。
+   * 造合并现场要六步 git，这里自带 stderr：失败时把 git 的原话抛出来。
+   */
+  function gitOf(dir: string, args: Array<string>): string {
+    try {
+      return execFileSync("git", args, {
+        cwd: dir,
+        encoding: "utf8",
+        env: gitSandboxEnv(),
+      }).trim();
+    } catch (e) {
+      const err = e as { stderr?: string; message: string };
+      /* 空串 stderr 也算「没拿到那句话」（git 走 stdout-only 失败形态时就是这样），
+       * 所以这里判的是「有没有内容」而不是「是不是 undefined」—— 用 `??` 会把空串端出去。 */
+      const why = err.stderr && err.stderr.trim() !== "" ? err.stderr : err.message;
+      throw new Error(`git ${args.join(" ")} 失败：${why}`, { cause: e });
+    }
+  }
+
+  /**
+   * 造两条线并停在「合并已解完、提交未落地」那一态：
+   * master 上加一份**脏**文件（主干存量），分支上按 `mine` 加一份自己的文件。
+   *
+   * @returns 合并来源那一头的 sha（当 `CNB_PULL_REQUEST_TARGET_SHA` 用）
+   */
+  function toMergeState(
+    repo: {
+      dir: string;
+      write: (rel: string, content: string) => void;
+    },
+    mine: string,
+  ): string {
+    const dir = repo.dir;
+    repo.write("src/lib/keep.ts", CLEAN);
+    gitOf(dir, ["add", "-A"]);
+    gitOf(dir, ["commit", "-qm", "seed"]);
+    /* `branch -M master`：把当前分支钉成**字面名** `master`（夹具的 `git init -q` 用
+     * 宿主的默认分支名）。本地那一档要靠 `resolveMergeBaseRef` 的兜底链，而它认的是
+     * `master` 这个名字 —— 不钉住它，换一台机器（默认分支叫 `main`）就换一条断言。 */
+    gitOf(dir, ["branch", "-M", "master"]);
+    gitOf(dir, ["checkout", "-q", "-b", "feat/x"]);
+    repo.write("src/lib/mine.ts", mine);
+    gitOf(dir, ["add", "-A"]);
+    gitOf(dir, ["commit", "-qm", "mine"]);
+    gitOf(dir, ["checkout", "-q", "master"]);
+    repo.write("src/lib/legacy.ts", DIRTY);
+    gitOf(dir, ["add", "-A"]);
+    gitOf(dir, ["commit", "-qm", "legacy-on-master"]);
+    const target = shaOf(dir, "HEAD");
+    gitOf(dir, ["checkout", "-q", "feat/x"]);
+    /* `--no-commit`：把仓库停在合并态（`MERGE_HEAD` 在场）—— 这正是被拦那一刻的形状。 */
+    gitOf(dir, ["merge", "--no-commit", "--no-edit", "master"]);
+    return target;
+  }
+
+  test("平台基线那一档：主干带来的脏存量不再被点名，屏幕上念出收窄了多少", ({ repo }) => {
+    const target = toMergeState(repo, CLEAN2);
+    const r = repo.run(["--staged"], {
+      env: { CNB_PULL_REQUEST_TARGET_SHA: target },
+    });
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).toContain("合并态（MERGE_HEAD 在场）");
+    expect(r.output).toContain("暂存面 1 份 → 收窄到本分支带来的 0 份");
+    expect(r.output).not.toContain("src/lib/legacy.ts");
+  });
+
+  test("本地那一档（没有平台旗标，走 merge-base 兜底）给出同一个面", ({ repo }) => {
+    toMergeState(repo, CLEAN2);
+    const r = repo.run(["--staged"], NO_PLATFORM_TARGET);
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).toContain("暂存面 1 份 → 收窄到本分支带来的 0 份");
+    expect(r.output).not.toContain("src/lib/legacy.ts");
+  });
+
+  test("收窄不是消音：合并时动了本分支自己面内的文件，照样被点名", ({ repo }) => {
+    toMergeState(repo, CLEAN2);
+    /* 解冲突那一步顺手把**本 PR 自己带的那份**文件改脏了（这条正是要判的形状）：
+     * 它在「本分支相对目标带来的那一份」面内 ⇒ 收窄之后仍然留着它 ⇒ 阻断并点名。
+     * 用 git 直接造这一步（不走 `repo.commit`）：这次改的是**未提交的暂存内容**，
+     * 提交它就不是「合并那一刻」的形状了。 */
+    repo.write("src/lib/mine.ts", DIRTY);
+    gitOf(repo.dir, ["add", "src/lib/mine.ts"]);
+    const r = repo.run(["--staged"], NO_PLATFORM_TARGET);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("src/lib/mine.ts");
+    /* 只点名这一份 —— 主干那份仍不在面内（两条同时断言，才排除「整个跳过」与
+     * 「把两份都端上来」这两个相反的错误实现）。 */
+    expect(r.output).not.toContain("src/lib/legacy.ts");
+  });
+
+  test("对照：合并状态一消失，同一批主干文件回到判据面内", ({ repo }) => {
+    toMergeState(repo, CLEAN2);
+    gitOf(repo.dir, ["commit", "-qm", "merge-it"]);
+    /* 把合并提交退回第一父：索引不动 ⇒ 暂存面 = 主干那份 delta，而 `MERGE_HEAD` 已不在。
+     * 这一步之后判据必须**照旧**点名它 —— 收窄只绑在合并态，不是一副永久眼罩。 */
+    gitOf(repo.dir, ["reset", "-q", "--soft", "HEAD^"]);
+    const r = repo.run(["--staged"], NO_PLATFORM_TARGET);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("src/lib/legacy.ts");
+    expect(r.output).not.toContain("合并态（MERGE_HEAD 在场）");
   });
 });
 

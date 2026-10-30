@@ -47,7 +47,10 @@ const jsxA11y = (() => {
  *      `scripts/**` 那些 `.mjs` / `.cjs` 门禁脚本不套这里的 TS type-checked 规则，
  *      与改造前那两条「ts / tsx」glob 同口径 —— 列宽了会给它们套上 1600+ 个假错）；
  *   ② `package.json` 的 `lint` / `lint:fix` 脚本参数 —— 显式列出要扫的目录
- *      （`eslint src tests scripts e2e tools *.config.*`），**不是** `eslint .`。
+ *      （`eslint src tests scripts e2e tools .storybook *.config.{js,mjs,cjs,ts}`），**不是** `eslint .`。
+ *      ⚠️ 这一行只是**复述**，承重的那一份是 `package.json` 里的 `lint`；改那条脚本要同批改这里。
+ *      （ISSUE #2614 的现场就是这行抄漏了 `.storybook` ⇒ 有人照注释读出「`.storybook` 被扫却不判」，
+ *       而它一直在上面第 ① 处那份 `LINT_FILES` 里列着 —— 声明旧了会自己长出第二张单。）
  *      调用点只有一处口径：本地钩子 B 组、`scripts/quality-gate.mjs`、`quality-gate.ps1`、
  *      以及平台侧的 `ESLint 零警告` 那一格（它曾经写的是 `eslint .` —— 扫描面宽一圈、
  *      又没有 `--cache`，在全仓上跑满 20m 被平台掐断）。

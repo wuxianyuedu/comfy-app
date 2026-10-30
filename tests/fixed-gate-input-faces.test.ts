@@ -13,7 +13,7 @@
  *   ① 登记的每一条必须**真的在固定清单里** —— 给一条本来就走 import 图的判据写面，
  *      写出来的是一条永不生效的死面；
  *   ② 每个模式必须**至少命中仓库里一个被跟踪的路径** —— 这一条直接判死拼写错误；
- *   ③ 名单封闭（现在 4 条）—— 加第 5 条是一次签字，不是这一层代码能自己扩张的；
+ *   ③ 名单封闭 —— 加一条是一次签字，不是这一层代码能自己扩张的；
  *   ④ 两向都测：面没命中 ⇒ 缺席**且被点名**；命中 ⇒ 在场；
  *   ⑤ 放弃收窄那一档（`wide`）**完全不过筛** —— 那一刻的前提就是「不能信筛出来的结果」。
  */
@@ -66,11 +66,15 @@ describe("输入面登记的形状", () => {
     ).toEqual([]);
   });
 
-  it("名单是封闭的那 4 条：加一条要人来签字", () => {
+  it("名单是封闭的那一份：加一条要人来签字", () => {
     expect(INPUT_FACES.map((entry) => entry.test).sort()).toEqual([
+      "tests/a11y-axe-stories.test.ts",
       "tests/a11y-rules-gate.test.ts",
       "tests/base-check.test.ts",
+      "tests/changed-scope.test.ts",
       "tests/check-bundle-budget.test.ts",
+      "tests/check-commit-claims.test.ts",
+      "tests/eslint-gate-canary.test.ts",
       "tests/tw4-hardgate-behaviour.test.ts",
     ]);
     /* 每条都得说清「它读什么」—— 没有 why 的面，下一条只会照着猜着改宽。 */
@@ -128,6 +132,24 @@ describe("切分与接线", () => {
     expect(got.skipped.map((s) => s.test)).not.toContain("tests/base-check.test.ts");
     /* 其余三条不该被它带起来：面是各判各的。 */
     expect(got.skipped.map((s) => s.test)).toContain("tests/a11y-rules-gate.test.ts");
+  });
+
+  it("后补面的四条各按自己的触发面回来，且不互相带起（#2793）", () => {
+    const cases: Array<[string, string]> = [
+      ["eslint.config.js", "tests/eslint-gate-canary.test.ts"],
+      ["scripts/check-commit-claims.mjs", "tests/check-commit-claims.test.ts"],
+      ["scripts/changed-scope.mjs", "tests/changed-scope.test.ts"],
+      ["src/components/ui/button.tsx", "tests/a11y-axe-stories.test.ts"],
+    ];
+    for (const [changed, test] of cases) {
+      const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, [changed]);
+      expect(got.keep, `${changed} 应当把 ${test} 点回来`).toContain(test);
+      for (const other of cases.map(([, one]) => one).filter((one) => one !== test)) {
+        expect(got.skipped.map((s) => s.test), `${changed} 不该带起 ${other}`).toContain(other);
+      }
+    }
+    /* 自指那一条**不许**开面：它在清单里的理由是「解析器的缺陷只有它能发现」。 */
+    expect(INPUT_FACES.map((entry) => entry.test)).not.toContain("tests/affected-tests.test.ts");
   });
 
   it("增量档（subset）过筛，并把跳过记进 reasons.__faceSkipped", () => {
