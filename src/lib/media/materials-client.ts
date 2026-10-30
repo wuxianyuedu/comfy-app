@@ -31,8 +31,8 @@ export interface MaterialItem {
 
 /** GET /api/materials 的响应。 */
 export interface MaterialListResult {
-  folders: MaterialFolder[];
-  items: MaterialItem[];
+  folders: Array<MaterialFolder>;
+  items: Array<MaterialItem>;
 }
 
 /** 列表查询参数。 */
@@ -69,11 +69,7 @@ function isItem(v: unknown): v is MaterialItem {
 
 function isFolder(v: unknown): v is MaterialFolder {
   if (!isRecord(v)) return false;
-  return (
-    typeof v.id === "string" &&
-    typeof v.name === "string" &&
-    typeof v.count === "number"
-  );
+  return typeof v.id === "string" && typeof v.name === "string" && typeof v.count === "number";
 }
 
 function parseList(body: unknown): MaterialListResult {
@@ -87,9 +83,7 @@ function parseList(body: unknown): MaterialListResult {
 }
 
 /** 拉取素材列表（分类计数 + 当前视图条目）。 */
-export async function fetchMaterials(
-  query: MaterialListQuery,
-): Promise<MaterialListResult> {
+export async function fetchMaterials(query: MaterialListQuery): Promise<MaterialListResult> {
   /* 「搜索优先于分类」这条判据留在这里（它是本域的决定），但「哪些键进
    * 查询串、怎么编码」收在 `~/lib/query-string`（规范 16 §16.2.4.32）：
    * 空项目 / 空关键字由出口省略整个键 —— `URLSearchParams` 会把
@@ -103,8 +97,7 @@ export async function fetchMaterials(
     }),
   );
   const body = await readJsonBody(res);
-  if (!res.ok)
-    throw new Error(readApiError(body) ?? `请求失败 (${res.status})`);
+  if (!res.ok) throw new Error(readApiError(body) ?? `请求失败 (${res.status})`);
   return parseList(body);
 }
 
@@ -121,8 +114,7 @@ async function postMaterial(
 
   const res = await fetch(ENDPOINT, { method: "POST", body: fd });
   const body = await readJsonBody(res);
-  if (!res.ok)
-    throw new Error(readApiError(body) ?? `上传失败 (${res.status})`);
+  if (!res.ok) throw new Error(readApiError(body) ?? `上传失败 (${res.status})`);
   return body;
 }
 
@@ -156,8 +148,7 @@ export async function uploadMaterialItem(
   return {
     url,
     id: isRecord(item) && typeof item.id === "string" ? item.id : url,
-    name:
-      isRecord(item) && typeof item.name === "string" ? item.name : file.name,
+    name: isRecord(item) && typeof item.name === "string" ? item.name : file.name,
   };
 }
 
@@ -167,6 +158,5 @@ export async function deleteMaterial(id: string): Promise<void> {
     method: "DELETE",
   });
   const body = await readJsonBody(res);
-  if (!res.ok)
-    throw new Error(readApiError(body) ?? `删除失败 (${res.status})`);
+  if (!res.ok) throw new Error(readApiError(body) ?? `删除失败 (${res.status})`);
 }

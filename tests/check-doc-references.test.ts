@@ -30,15 +30,15 @@ type Fact = {
   key: string;
   kind: string;
   placeholder?: string;
-  onlyDocs?: string[];
-  otherDocs?: string[];
+  onlyDocs?: Array<string>;
+  otherDocs?: Array<string>;
   extract: () => unknown;
 };
 
-async function loadFacts(): Promise<Fact[]> {
+async function loadFacts(): Promise<Array<Fact>> {
   const mod =
     /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-      FACTS: Fact[];
+      FACTS: Array<Fact>;
     };
   return mod.FACTS;
 }
@@ -144,10 +144,10 @@ function restoreText(abs: string, text: string): void {
  * 门禁口径的扫描面，**与判据同源**：AGENTS.md + 两份索引 + 登记表 + SCOPED_DOCS。
  * 「哪条判据在哪跑」写在 SCOPED_DOCS 之外的那几份文件里，不显式并入就没人核（§13.5.10 第 ② 条）。
  */
-async function gateDocs(): Promise<string[]> {
+async function gateDocs(): Promise<Array<string>> {
   const mod =
     /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-      SCOPED_DOCS: string[];
+      SCOPED_DOCS: Array<string>;
     };
   return [
     ...new Set([
@@ -261,8 +261,8 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
    * 过期端口也没人报错——「全量纳管」只是人工承诺。 */
 
   type ScopeMod = {
-    SCOPED_DOCS: string[];
-    SCOPED_DOC_DIRS: string[];
+    SCOPED_DOCS: Array<string>;
+    SCOPED_DOC_DIRS: Array<string>;
     SCOPED_DOC_EXEMPTIONS: Record<string, string>;
   };
 
@@ -278,7 +278,7 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
     const scoped = new Set(SCOPED_DOCS);
     const { readdirSync, statSync } = await import("node:fs");
 
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     const walk = (dir: string) => {
       for (const name of readdirSync(join(REPO_ROOT, dir))) {
         const rel = `${dir}/${name}`;
@@ -498,7 +498,7 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
   it("AGENTS.md 由 checkLedgerCommands 显式并入遍历（不进 SCOPED_DOCS、避免生成冗余副本）", async () => {
     const mod =
       /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-        SCOPED_DOCS: string[];
+        SCOPED_DOCS: Array<string>;
       };
     // AGENTS.md 刻意不入 SCOPED_DOCS：进则被 render-doc-placeholders 复制成
     // docs/generated/AGENTS.md，产物里没有占位符替换、只是同一份内容，反而
@@ -752,13 +752,13 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
   const CHECKLIST_MARKER = "本地提交前必须通过";
 
   /** 与判据同源的两侧解析（写在测试里 = 双向对照：判据漏解析，这条用例会自己发现）。 */
-  function hookCommands(): string[] {
+  function hookCommands(): Array<string> {
     const text = docText(HOOK_REL);
     return [...text.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) =>
       (m[2] ?? "").replace(/\s+/g, " ").trim(),
     );
   }
-  function docCommands(): string[] {
+  function docCommands(): Array<string> {
     const text = docText(DOC_REL);
     const start = text.indexOf(CHECKLIST_MARKER);
     const rest = text.slice(start);
@@ -1011,7 +1011,7 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
   const editAbs = () => join(fixtureRoot, EDIT);
   const genAbs = () => join(fixtureRoot, "docs", "generated", "DEV-QUERIES.md");
 
-  function runRender(args: string[]): { code: number; output: string } {
+  function runRender(args: Array<string>): { code: number; output: string } {
     try {
       const output = execFileSync(process.execPath, [RENDER, ...args], {
         cwd: REPO_ROOT,
@@ -1131,7 +1131,7 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
   const editAbs = (rel: string) => join(fixtureRoot, rel);
   const genAbs = (name: string) => join(fixtureRoot, "docs", "generated", name);
 
-  function runRender(args: string[]): { code: number; output: string } {
+  function runRender(args: Array<string>): { code: number; output: string } {
     try {
       const output = execFileSync(process.execPath, [RENDER, ...args], {
         cwd: REPO_ROOT,

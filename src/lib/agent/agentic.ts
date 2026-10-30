@@ -75,7 +75,7 @@ function offlineIdea(text: string, kind: "image" | "video" = "image"): AgentSpec
   };
 }
 
-function detectKind(msgs: string[]): "image" | "video" | null {
+function detectKind(msgs: Array<string>): "image" | "video" | null {
   for (const m of msgs) {
     if (/视频|video|短片|动图|mv|影片|动漫短/.test(m)) return "video";
   }
@@ -86,7 +86,7 @@ function detectKind(msgs: string[]): "image" | "video" | null {
 }
 
 /* 没配 LLM 时用的脚本化多轮兜底。 */
-function offlineAgent(history: ChatMessage[]): AgentTurnResult {
+function offlineAgent(history: Array<ChatMessage>): AgentTurnResult {
   const userMsgs = history.filter((history) => history.role === "user").map((msg) => msg.content);
   if (userMsgs.length === 0) {
     return {
@@ -149,7 +149,7 @@ function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
  * @param history 截至目前完整对话（只含用户/助手消息；
  *                 系统提示词在内部注入）。
  */
-export async function chatAgent(history: ChatMessage[]): Promise<AgentTurnResult> {
+export async function chatAgent(history: Array<ChatMessage>): Promise<AgentTurnResult> {
   const sysMsg: ChatMessage = { role: "system", content: MULTITURN_SYSTEM };
   try {
     const res = await fetch("/api/llm", {

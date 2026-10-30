@@ -40,7 +40,7 @@ const ROOT_DIR = fileURLToPath(new URL("..", import.meta.url));
 const COLOR_TOKEN = /^--color-[a-z0-9-]+$/;
 
 /** 抽出「整个行内代码就是一颗 `--color-*`」的引用名（去重、排序）。 */
-function collectBareTokenCitations(text: string): string[] {
+function collectBareTokenCitations(text: string): Array<string> {
   const names = new Set<string>();
   for (const match of text.matchAll(/`(--color-[a-z0-9-]+)`/g)) {
     if (match[1]) names.add(match[1]);
@@ -49,7 +49,7 @@ function collectBareTokenCitations(text: string): string[] {
 }
 
 /** ①的判决：引用了但产物里没有声明的名字。 */
-function findUnknownTokens(cited: string[], exists: (name: string) => boolean): string[] {
+function findUnknownTokens(cited: Array<string>, exists: (name: string) => boolean): Array<string> {
   return cited.filter((name) => !exists(name));
 }
 
@@ -75,8 +75,8 @@ function parseHexCell(cell: string): string | null {
  * 解析 Colors 表的行。列序固定为「角色 | token | 浅色 | 深色 | 用在哪」。
  * 表头找不到就返回 null —— 让调用方判红，而不是「解析到 0 行」当成全绿空转。
  */
-function collectHexRows(section: string): HexRow[] {
-  const rows: HexRow[] = [];
+function collectHexRows(section: string): Array<HexRow> {
+  const rows: Array<HexRow> = [];
   for (const line of section.split(/\r?\n/)) {
     if (!line.trimStart().startsWith("|")) continue;
     const cells = line
@@ -122,10 +122,10 @@ function normalizeCssHex(value: string | undefined): string | null {
 
 /** ②的判决：文档值与产物值不一致的格。 */
 function findHexMismatch(
-  rows: HexRow[],
+  rows: Array<HexRow>,
   resolve: (name: string, state: "light" | "dark") => string | undefined,
-): string[] {
-  const bad: string[] = [];
+): Array<string> {
+  const bad: Array<string> = [];
   for (const row of rows) {
     for (const state of /* SAFETY: 类型断言已复核 */ ["light", "dark"] as const) {
       const doc = row[state];
@@ -228,7 +228,7 @@ const SKIP_DIRS = new Set(["node_modules", ".next", "dist", "coverage", "__snaps
 
 /** 产品代码面：`.stories.` 与 `.test.` 排除在外 —— 它们不是设计系统的消费者，
  *  拿像素契约绑住演示件与用例只会逼人往 story 里塞无意义的类名。 */
-function collectProductFiles(dir: string, out: string[] = []): string[] {
+function collectProductFiles(dir: string, out: Array<string> = []): Array<string> {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) {
@@ -248,8 +248,8 @@ function collectProductFiles(dir: string, out: string[] = []): string[] {
  *  行号不报：`stripComments` 会把块注释整段拿掉、行号随之漂移（它自己的文件头
  *  就写明不是词法分析器）。行尾 `// …` 注释也不去 —— 那需要真词法分析，
  *  代价是「行尾注释里写字面 px」会被算进棘轮，方向是保守的（只多计不少计）。 */
-function scanProduct(pattern: RegExp): { file: string; value: string }[] {
-  const hits: { file: string; value: string }[] = [];
+function scanProduct(pattern: RegExp): Array<{ file: string; value: string }> {
+  const hits: Array<{ file: string; value: string }> = [];
   for (const abs of collectProductFiles(SRC_DIR)) {
     const code = stripComments(readFileSync(abs, "utf8"));
     const rel = path.relative(ROOT_DIR, abs).split(path.sep).join("/");
@@ -292,8 +292,8 @@ const BELOW_BODY_TIERS = /\btext-(xs|2xs|3xs)\b/;
  * 认「4 行内第一个」而不是「4 行内任意一个」，是为了不让屏头之后的第三、四行
  * 正文段落把这条判据叫响 —— 那正是 ISSUE 里点名的「宽判据会误伤一片」。
  */
-function firstSubtitleViolation(text: string): number[] {
-  const hits: number[] = [];
+function firstSubtitleViolation(text: string): Array<number> {
+  const hits: Array<number> = [];
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     if (!/\bu-title-page\b/.test(lines[i] ?? "")) continue;
@@ -308,8 +308,8 @@ function firstSubtitleViolation(text: string): number[] {
 }
 
 /** 判据与它的负控制共用这一个出口 —— 否则负控制测的是另一套逻辑，红了也证明不了判据。 */
-function scanTitleSubtitleBelowBody(): { file: string; line: number }[] {
-  const hits: { file: string; line: number }[] = [];
+function scanTitleSubtitleBelowBody(): Array<{ file: string; line: number }> {
+  const hits: Array<{ file: string; line: number }> = [];
   for (const abs of collectProductFiles(SRC_DIR)) {
     const rel = path.relative(ROOT_DIR, abs).split(path.sep).join("/");
     for (const line of firstSubtitleViolation(stripComments(readFileSync(abs, "utf8")))) {
@@ -432,7 +432,7 @@ const GENERATE_BUTTON_MARKS = [
 
 /** 一族的标记在给定文本里是否算「同一枚形状」。`scope: "line"` 逐行判，其余整段判。
  *  判据与它的负控制共用这一个出口 —— 否则负控制测的是另一套逻辑，红了也证明不了判据。 */
-function familyHits(fam: { marks: RegExp[]; scope?: "file" | "line" }, text: string): boolean {
+function familyHits(fam: { marks: Array<RegExp>; scope?: "file" | "line" }, text: string): boolean {
   return fam.scope === "line"
     ? text.split(/\r?\n/).some((line) => fam.marks.every((re) => re.test(line)))
     : fam.marks.every((re) => re.test(text));
@@ -1017,14 +1017,14 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
      每族的 `sample` 是**一份手抄**：负控制拿它证明这组标记真的能抓到来抄的人 ——
      否则标记写漂了就永远全绿，那是比红更糟的失效形态。
      `scope: "line"` 的族把命中收窄到**同一枚 class 字符串**上（理由见下面那一族的注释）。 */
-  const FAMILIES: {
+  const FAMILIES: Array<{
     name: string;
     owner: string;
     use: string;
-    marks: RegExp[];
+    marks: Array<RegExp>;
     sample: string;
     scope?: "file" | "line";
-  }[] = [
+  }> = [
     {
       name: "序号圆",
       owner: "src/components/workshop/IndexDot.tsx",
@@ -1106,7 +1106,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   it(`被抽走的 ${FAMILIES.length} 族形状只许有一个出处`, () => {
     const files = collectProductFiles(SRC_DIR);
     for (const fam of FAMILIES) {
-      const owners: string[] = [];
+      const owners: Array<string> = [];
       for (const abs of files) {
         const code = stripComments(readFileSync(abs, "utf8"));
         /* 全部标记**全命中**才算同一枚 —— 少一个都不算。类名在源码里的先后
@@ -1126,7 +1126,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     /* #1514 落地上线、#1523 之后补齐的那条配方：**色相走 `--color-glow-*`（四颗、
        两态），强度由调用处 `color-mix(… N%)` 决定**。按**归零**判而不是棘轮 —— 这个
        形状今天在恰好用的是 0 处，留棘轮等于允许它长回去。 */
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const abs of collectProductFiles(SRC_DIR)) {
       const code = stripComments(readFileSync(abs, "utf8"));
       if (HALO_RAW.test(code) || SHADOW_HEX.test(code)) {
@@ -1204,7 +1204,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
        （`py-px` + `font-medium`）与胶囊那枚 11px 的图标方块（`grid size-9`、
        没有 h-5 / gap-1.25）各是其主自己的形状 —— 抓到了说明标记写得太松，
        判据就成了「拦下了一切」。 */
-    const lookalikes: [string, (typeof FAMILIES)[number]["name"]][] = [
+    const lookalikes: Array<[string, (typeof FAMILIES)[number]["name"]]> = [
       [
         'className="border-primary/30 bg-primary/10 text-primary-strong shrink-0 rounded-[3px] border px-1.5 py-px text-[9.5px] font-medium"',
         "类型 chip",

@@ -89,7 +89,7 @@ describe("downloadText / downloadJson", () => {
     vi.stubGlobal(
       "Blob",
       class {
-        constructor(parts: unknown[]) {
+        constructor(parts: Array<unknown>) {
           spy(parts[0]);
         }
       },

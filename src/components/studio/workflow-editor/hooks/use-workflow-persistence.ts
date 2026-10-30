@@ -7,18 +7,9 @@ import type { Node } from "@xyflow/react";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { errorMessage } from "~/lib/error-message";
 import { afterNextPaint } from "~/lib/next-frame";
-import type {
-  WorkflowDetail,
-  WorkflowIOParam,
-} from "~/components/studio/workflow-types";
-import {
-  NODE_TITLE_H,
-  extractNoteTitle,
-} from "~/components/studio/workflow-utils";
-import {
-  MODE_KEY_PREFIX,
-  runtimeNodeId,
-} from "~/lib/workflow/workflow-param-mapping";
+import type { WorkflowDetail, WorkflowIOParam } from "~/components/studio/workflow-types";
+import { NODE_TITLE_H, extractNoteTitle } from "~/components/studio/workflow-utils";
+import { MODE_KEY_PREFIX, runtimeNodeId } from "~/lib/workflow/workflow-param-mapping";
 import { useToast } from "../../ToastProvider";
 import type { WorkflowSaver } from "./use-workflow-save";
 
@@ -37,7 +28,7 @@ export interface WorkflowPersistenceArgs {
   workflowId: string;
   detail: WorkflowDetail | null;
   setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
-  setNodes: Dispatch<SetStateAction<Node[]>>;
+  setNodes: Dispatch<SetStateAction<Array<Node>>>;
   paramMap: Record<string, unknown>;
   workflowIO: Record<string, WorkflowIOParam>;
   fitToContent: () => void;
@@ -165,8 +156,7 @@ export function useWorkflowPersistence({
           ...node.data,
           assignedRole:
             Object.entries(paramMap).find(
-              ([key, value]) =>
-                value === node.data.nodeId && !key.startsWith(MODE_KEY_PREFIX),
+              ([key, value]) => value === node.data.nodeId && !key.startsWith(MODE_KEY_PREFIX),
             )?.[0] ?? null,
         },
       })),
@@ -203,16 +193,7 @@ export function useWorkflowPersistence({
     } finally {
       setSaving(false);
     }
-  }, [
-    workflowId,
-    paramMap,
-    workflowIO,
-    onSave,
-    savePatch,
-    setError,
-    setSaving,
-    toast,
-  ]);
+  }, [workflowId, paramMap, workflowIO, onSave, savePatch, setError, setSaving, toast]);
 
   /* 用户拖完节点后落盘它的位置。
    *  - 备注节点（`note:<id>`）→ 经 `notes` PATCH 字段写回
@@ -233,10 +214,7 @@ export function useWorkflowPersistence({
    *  锚点换算见下一段。 */
   const reportPositionSaveFailure = useCallback(
     (err: unknown) => {
-      console.error(
-        "[workflow-persistence] failed to persist node position",
-        err,
-      );
+      console.error("[workflow-persistence] failed to persist node position", err);
       /* 失败路径的文案统一走 `errorMessage`（`~/lib/async-action` 的口径）——
        * 收口前这里是自己拼的 `err instanceof Error ? err.message : "请重试"`，
        * 网络层原文没有经过 `errorMessage` 的翻译。 */
@@ -271,15 +249,9 @@ export function useWorkflowPersistence({
          *  `pos` 保持 ComfyUI 的卡片体顶点约定，因此落盘前
          *  **加上** NODE_TITLE_H。无标题备注无需反转，
          *  因为它们的 React Flow 盒子没有标题栏。 */
-        const noteMeta = (detail.notes ?? []).find(
-          (nn) => String(nn.id) === noteId,
-        );
-        const noteHasTitle = noteMeta
-          ? !!extractNoteTitle(noteMeta.text, noteMeta.title)
-          : false;
-        const noteY = Math.round(
-          node.position.y + (noteHasTitle ? NODE_TITLE_H : 0),
-        );
+        const noteMeta = (detail.notes ?? []).find((nn) => String(nn.id) === noteId);
+        const noteHasTitle = noteMeta ? !!extractNoteTitle(noteMeta.text, noteMeta.title) : false;
+        const noteY = Math.round(node.position.y + (noteHasTitle ? NODE_TITLE_H : 0));
         setDetail((prev) =>
           prev
             ? {
@@ -328,14 +300,7 @@ export function useWorkflowPersistence({
         );
       }
     },
-    [
-      detail,
-      setDetail,
-      workflowId,
-      savePatch,
-      hostNodeId,
-      reportPositionSaveFailure,
-    ],
+    [detail, setDetail, workflowId, savePatch, hostNodeId, reportPositionSaveFailure],
   );
 
   return { resetLayout, handleSave, onNodeDragStop };

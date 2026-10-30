@@ -47,7 +47,7 @@
 /** 单值的合法载荷（`null` / `undefined` 表示省略这个键）。 */
 export type QueryScalar = string | number | boolean | null | undefined;
 
-export type QueryValue = QueryScalar | readonly QueryScalar[];
+export type QueryValue = QueryScalar | ReadonlyArray<QueryScalar>;
 
 export interface BuildQueryOptions {
   /**
@@ -92,13 +92,13 @@ export function buildQueryString(
   params: Record<string, QueryValue>,
   { keepEmpty = false }: BuildQueryOptions = {},
 ): string {
-  const parts: string[] = [];
+  const parts: Array<string> = [];
   for (const [key, value] of Object.entries(params)) {
     if (value === null || value === undefined) continue;
     if (Array.isArray(value)) {
       /* 重复键：每个元素各出一段（`tag=a&tag=b`）。元素可能是 `null` /
        * `undefined`（调用处传的是稀疏数组），按单值口径省略。 */
-      for (const item of /* SAFETY: 类型断言已复核 */ value as readonly QueryScalar[]) {
+      for (const item of /* SAFETY: 类型断言已复核 */ value as ReadonlyArray<QueryScalar>) {
         if (item === null || item === undefined) continue;
         const part = encodeValue(item, keepEmpty, key);
         if (part !== null) parts.push(part);

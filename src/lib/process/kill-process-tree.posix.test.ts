@@ -27,14 +27,14 @@ const { execFileMock, execFileSyncMock, spawnMock } = vi.hoisted(() => ({
     vi.fn<
       (
         cmd: string,
-        args: string[],
+        args: Array<string>,
         options: unknown,
         cb: (err: Error | null, stdout: string) => void,
       ) => void
     >(),
-  execFileSyncMock: vi.fn<(cmd: string, args: string[], options: unknown) => string>(),
+  execFileSyncMock: vi.fn<(cmd: string, args: Array<string>, options: unknown) => string>(),
   spawnMock:
-    vi.fn<(cmd: string, args: string[], options: unknown) => EventEmitter & { pid: number }>(),
+    vi.fn<(cmd: string, args: Array<string>, options: unknown) => EventEmitter & { pid: number }>(),
 }));
 
 vi.mock("child_process", () => ({

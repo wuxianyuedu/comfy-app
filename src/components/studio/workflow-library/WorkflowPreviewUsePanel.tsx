@@ -20,14 +20,12 @@ interface Props {
   effectiveMode: string | null;
   taskType: string;
   /** 多模式工作流：提供时右上角变成模式切换下拉。 */
-  modes?: string[];
+  modes?: Array<string>;
   onModeChange?: (code: string) => void;
   effectiveModeLabel: string;
   values: Record<string, unknown>;
   onValuesChange: (
-    next:
-      | Record<string, unknown>
-      | ((prev: Record<string, unknown>) => Record<string, unknown>),
+    next: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>),
   ) => void;
   seedModes: Record<string, string>;
   onSeedModeChange?: (ioKey: string, mode: string) => void;
@@ -38,7 +36,7 @@ interface Props {
   run: () => void;
   pct: number;
   /** 缺参提示人性化后的展示标签（pos text 等，不是 ioKey）。 */
-  missingLabels: string[];
+  missingLabels: Array<string>;
   logViewTaskId: string | null;
   onOpenLog: () => void;
 }
@@ -69,9 +67,7 @@ export function WorkflowPreviewUsePanel({
     <div className="flex w-full max-w-120 flex-col gap-3">
       <div className="border-border bg-panel rounded-xl border p-4">
         <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
-          <span className="text-ink min-w-0 truncate text-sm font-semibold">
-            {workflowName}
-          </span>
+          <span className="text-ink min-w-0 truncate text-sm font-semibold">{workflowName}</span>
           <WorkflowRunLogButton
             workflowId={workflowId}
             source="canvas-node"
@@ -89,17 +85,13 @@ export function WorkflowPreviewUsePanel({
               value={effectiveMode ?? taskType}
               onChange={onModeChange}
               options={modes}
-              labels={Object.fromEntries(
-                modes.map((code) => [code, modeLabel(code)]),
-              )}
+              labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
               popoverMinWidth={150}
               autoFitFromOptions={false}
               className="border-border-strong! text-2xs shrink-0 bg-transparent!"
             />
           ) : (
-            <span className="text-ink-faint shrink-0 text-xs">
-              {effectiveModeLabel}
-            </span>
+            <span className="text-ink-faint shrink-0 text-xs">{effectiveModeLabel}</span>
           )}
         </div>
         <DynamicWorkflowForm
@@ -121,9 +113,7 @@ export function WorkflowPreviewUsePanel({
             disabled={!canRun}
             onClick={run}
             hint={
-              missingLabels.length > 0
-                ? `必填参数未填：${missingLabels.join("、")}`
-                : undefined
+              missingLabels.length > 0 ? `必填参数未填：${missingLabels.join("、")}` : undefined
             }
           />
         </div>

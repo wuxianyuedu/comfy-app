@@ -41,23 +41,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Maximize2, Minus, Plus, X, ZoomIn } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "~/components/ui/dialog";
-import {
-  MediaThumbnail,
-  type MediaFallback,
-} from "~/components/ui/media-thumbnail";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
+import { MediaThumbnail, type MediaFallback } from "~/components/ui/media-thumbnail";
 import { SelectChip } from "~/components/ui/select-chip";
 import { useElementBox } from "~/components/ui/use-element-box";
-import {
-  clampZoomScale,
-  useImageZoom,
-  ZOOM_STEP,
-} from "~/components/ui/use-image-zoom";
+import { clampZoomScale, useImageZoom, ZOOM_STEP } from "~/components/ui/use-image-zoom";
 import { readElementBox } from "~/lib/dom-rect";
 import { readNaturalSize, type NaturalSize } from "~/lib/media/natural-size";
 import { onNextFrame, type CancelNextFrame } from "~/lib/next-frame";
@@ -82,12 +70,7 @@ export interface ImageViewerProps {
 /**
  * 受控的图片查看器。渲染时 `src` 必须有值 —— 需要「关着」的调用处传 `null`。
  */
-export function ImageViewer({
-  src,
-  alt = "",
-  label,
-  onClose,
-}: ImageViewerProps) {
+export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps) {
   /* 已解码图片的尺寸与它对应的地址：地址换了旧尺寸立刻失效（否则新图会先按
    * 上一张的尺寸渲染一帧，尺寸差得远时肉眼可见地跳一下）。 */
   const [loaded, setLoaded] = useState<{
@@ -284,11 +267,7 @@ export function ImageViewer({
       ? "block max-h-full max-w-full object-contain select-none"
       : "block max-h-none max-w-none select-none";
   const modeLabel =
-    zoom.mode === "fit"
-      ? "适应窗口"
-      : zoom.mode === "actual"
-        ? "原始大小"
-        : "自定义缩放";
+    zoom.mode === "fit" ? "适应窗口" : zoom.mode === "actual" ? "原始大小" : "自定义缩放";
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
@@ -303,11 +282,7 @@ export function ImageViewer({
         >
           <div className="border-border-subtle flex h-11 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <ZoomIn
-                size={15}
-                className="text-ink-muted shrink-0"
-                aria-hidden="true"
-              />
+              <ZoomIn size={15} className="text-ink-muted shrink-0" aria-hidden="true" />
               <DialogTitle className="text-ink min-w-0 truncate text-sm font-semibold">
                 {title}
               </DialogTitle>
@@ -352,11 +327,7 @@ export function ImageViewer({
                   注意 `zoom.mode` 还有第三种 `manual`（滚轮 / ± 按钮缩出来的
                   自由倍数）—— 那时两枚都不选中，正是单选组「可以都不选」的
                   合法状态（双击画布的 toggle 会把它收回前两档）。 */}
-              <div
-                role="radiogroup"
-                aria-label="缩放档位"
-                className="flex items-center gap-0.5"
-              >
+              <div role="radiogroup" aria-label="缩放档位" className="flex items-center gap-0.5">
                 <SelectChip
                   shape="compact"
                   className="gap-1 px-2 py-1"
@@ -411,9 +382,7 @@ export function ImageViewer({
               <MediaThumbnail
                 src={src}
                 alt={alt}
-                fallback={
-                  <span className="text-ink-fainter text-xs">图片不可用</span>
-                }
+                fallback={<span className="text-ink-fainter text-xs">图片不可用</span>}
                 className={mediaClass}
                 style={mediaStyle}
                 draggable={false}
@@ -426,9 +395,7 @@ export function ImageViewer({
           </div>
 
           <div className="border-border-subtle text-ink-fainter text-2xs flex h-8 shrink-0 items-center justify-between gap-3 border-t px-4">
-            <span className="truncate">
-              滚轮缩放 · 按住拖拽平移 · 双击切换适应窗口 / 原始大小
-            </span>
+            <span className="truncate">滚轮缩放 · 按住拖拽平移 · 双击切换适应窗口 / 原始大小</span>
             <span className="shrink-0" data-testid="image-viewer-mode">
               {modeLabel}
             </span>
@@ -456,7 +423,7 @@ function clampNext(current: number, zoomIn: boolean): number {
  * 而 `label || alt` 会被 lint 判为「该用 `??`」—— 两者的差别恰好是这里
  * 要表达的语义，所以写成显式的筛选而不是二选一的运算符。
  */
-function firstText(...values: (string | undefined)[]): string | null {
+function firstText(...values: Array<string | undefined>): string | null {
   return values.find((value) => (value ?? "").trim() !== "") ?? null;
 }
 
@@ -500,20 +467,10 @@ export function ViewableImage({
            才撑得满；父级高度是 auto 时 `h-full` 计算为 auto，行为不变。 */
         className="h-full w-full cursor-zoom-in rounded-xl p-0 hover:bg-transparent"
       >
-        <MediaThumbnail
-          src={src}
-          alt={alt}
-          className={className}
-          fallback={fallback}
-        />
+        <MediaThumbnail src={src} alt={alt} className={className} fallback={fallback} />
       </Button>
       {open && (
-        <ImageViewer
-          src={src}
-          alt={alt}
-          label={name ?? undefined}
-          onClose={() => setOpen(false)}
-        />
+        <ImageViewer src={src} alt={alt} label={name ?? undefined} onClose={() => setOpen(false)} />
       )}
     </>
   );

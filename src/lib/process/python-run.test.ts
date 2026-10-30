@@ -31,7 +31,10 @@ describe("退避链：顺序与启动参数都取自那份判据", () => {
   });
 
   it("POSIX 上没有 py，也就不许凭空多出一个 -3", () => {
-    for (const platform of /* SAFETY: 类型断言已复核 */ ["linux", "darwin"] as NodeJS.Platform[]) {
+    for (const platform of /* SAFETY: 类型断言已复核 */ [
+      "linux",
+      "darwin",
+    ] as Array<NodeJS.Platform>) {
       const attempts = pythonAttempts(SCRIPT, platform);
       expect(attempts.map((a) => a.command)).toEqual(["python3", "python"]);
       expect(attempts.every((a) => !a.args.includes("-3"))).toBe(true);
@@ -39,7 +42,10 @@ describe("退避链：顺序与启动参数都取自那份判据", () => {
   });
 
   it("长度就是「全部试完」那条边界：调用点不再自写 length - 1", () => {
-    for (const platform of /* SAFETY: 类型断言已复核 */ ["win32", "linux"] as NodeJS.Platform[]) {
+    for (const platform of /* SAFETY: 类型断言已复核 */ [
+      "win32",
+      "linux",
+    ] as Array<NodeJS.Platform>) {
       expect(pythonAttempts(SCRIPT, platform)).toHaveLength(pythonCandidates(platform).length);
     }
     /* 最后一档必须还在链上（A14 的第二处旧形状：127 的退避写成 `< length - 1`，
@@ -93,7 +99,7 @@ describe("缺解释器那句用户可见出口", () => {
 describe("按行切分：半行要拼回来，末尾不足一行也要算一行", () => {
   /** 一条可编程的假流（与子进程 stdout 的监听面同形）。 */
   function fakeStream() {
-    const cbs: Record<string, ((arg: unknown) => void)[]> = {};
+    const cbs: Record<string, Array<(arg: unknown) => void>> = {};
     return {
       stream: /* SAFETY: 类型断言已复核 */ {
         on: (ev: string, cb: (arg: unknown) => void) => {
@@ -111,7 +117,7 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
 
   it("一次 data 不等于一行：跨 chunk 的行拼回来", () => {
     const { stream, push } = fakeStream();
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     forEachOutputLine(stream, (l) => lines.push(l));
     push("PROGRESS::scan|msg=前半");
     push("后半段\n第二行\n");
@@ -120,7 +126,7 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
 
   it("末尾不足一行的那一段在 end 时补发（解析器只在末尾打一次的结果 JSON 就是这一形）", () => {
     const { stream, push, end } = fakeStream();
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     forEachOutputLine(stream, (l) => lines.push(l));
     push('{"packages":[]}');
     expect(lines, "没到换行就还不该交出去").toEqual([]);
@@ -130,7 +136,7 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
 
   it("空行与只有空白的行不交出去（否则界面上会出现空进度）", () => {
     const { stream, push, end } = fakeStream();
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     forEachOutputLine(stream, (l) => lines.push(l));
     push("\n   \n留着\n\n");
     end();
@@ -138,8 +144,8 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
   });
 
   it("字符串 chunk 也接得住（流的编码由调用点决定，内核不许假设 Buffer）", () => {
-    const cbs: ((arg: unknown) => void)[] = [];
-    const lines: string[] = [];
+    const cbs: Array<(arg: unknown) => void> = [];
+    const lines: Array<string> = [];
     forEachOutputLine(
       /* SAFETY: 类型断言已复核 */ {
         on: (_ev: string, cb: (arg: unknown) => void) => cbs.push(cb),
@@ -153,7 +159,7 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
   it("只挂 `data` 与 `end` 两个监听（不替调用点多挂，也不许漏挂）", () => {
     /* 这一档是形态约束：内核只挂这两个，缺哪个就是哪个不触发，不许在这里抛 ——
      * 抛出去会把一次正常的解析变成「流内部起进程失败」。 */
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     const stream = /* SAFETY: 类型断言已复核 */ {
       on: (ev: string) => {
         seen.push(ev);

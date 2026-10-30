@@ -48,7 +48,11 @@ interface SseFrame {
 /** 把失败原因补成一条 error 日志行（横幅之外，时间线里也看得见，#378）。
  *  纯函数 + 显式 next：去重在 updater 之外完成，避免在 setState updater 里做副作用
  *  （StrictMode 下 updater 可能被调用两次）。 */
-function withFailureLogLine(prev: StepLogEntry[], reason: string, now: number): StepLogEntry[] {
+function withFailureLogLine(
+  prev: Array<StepLogEntry>,
+  reason: string,
+  now: number,
+): Array<StepLogEntry> {
   if (!reason) return prev;
   const text = `✗ 生成失败：${reason}`;
   const last = prev[prev.length - 1];
@@ -63,7 +67,7 @@ function withFailureLogLine(prev: StepLogEntry[], reason: string, now: number): 
 function appendFailureLogLine(
   taskId: string,
   reason: string,
-  setLogs: React.Dispatch<React.SetStateAction<StepLogEntry[]>>,
+  setLogs: React.Dispatch<React.SetStateAction<Array<StepLogEntry>>>,
 ): void {
   const t = Date.now();
   appendStepLog(taskId, {
@@ -76,8 +80,8 @@ function appendFailureLogLine(
 }
 
 export interface TaskStepLogStream {
-  logs: StepLogEntry[];
-  validationErrors: ValidationError[] | null;
+  logs: Array<StepLogEntry>;
+  validationErrors: Array<ValidationError> | null;
   status: string | null;
   progress: number;
   error: string | null;
@@ -89,8 +93,8 @@ export interface TaskStepLogStream {
 }
 
 export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
-  const [logs, setLogs] = useState<StepLogEntry[]>([]);
-  const [validationErrors, setValidationErrors] = useState<ValidationError[] | null>(null);
+  const [logs, setLogs] = useState<Array<StepLogEntry>>([]);
+  const [validationErrors, setValidationErrors] = useState<Array<ValidationError> | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +159,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
           });
         } else if (msg.type === "state") {
           if (Array.isArray(msg.validationErrors)) {
-            const ves = /* SAFETY: 类型断言已复核 */ msg.validationErrors as ValidationError[];
+            const ves = /* SAFETY: 类型断言已复核 */ msg.validationErrors as Array<ValidationError>;
             setStepLogValidationErrors(tid, ves);
             setValidationErrors(ves);
           }

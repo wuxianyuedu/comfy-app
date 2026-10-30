@@ -54,7 +54,7 @@ async function resolveTaskRepo(): Promise<TaskRepoForEnqueue> {
   return loadRealTaskRepo();
 }
 
-export function getLogs(taskId: string): LogEntry[] {
+export function getLogs(taskId: string): Array<LogEntry> {
   return state().logs.get(taskId) ?? [];
 }
 

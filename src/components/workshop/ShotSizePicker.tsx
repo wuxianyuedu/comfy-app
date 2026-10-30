@@ -63,13 +63,12 @@ export function ShotSizePicker({
    *  实际总像素** —— 用户点一下 +/- 就从眼前这个值开始调，而不是从 1M 跳一下
    *  （选了 4k 再点 + 却变成 1.1M 是说不通的）。 */
   const currentMegapixels = useMemo(
-    () =>
-      megapixelTierOfLabel(state.clarity) ?? sizeSpecMegapixels(state, scene),
+    () => megapixelTierOfLabel(state.clarity) ?? sizeSpecMegapixels(state, scene),
     [state, scene],
   );
 
-  const sections = useMemo<SegmentSection<string>[]>(() => {
-    const list: SegmentSection<string>[] = [
+  const sections = useMemo<Array<SegmentSection<string>>>(() => {
+    const list: Array<SegmentSection<string>> = [
       {
         label: "比例",
         value: state.ratio,
@@ -97,9 +96,7 @@ export function ShotSizePicker({
           <MegapixelStepper
             value={currentMegapixels}
             disabled={disabled}
-            onChange={(megapixels) =>
-              onChange({ ...state, clarity: megapixelLabel(megapixels) })
-            }
+            onChange={(megapixels) => onChange({ ...state, clarity: megapixelLabel(megapixels) })}
           />
         ),
       },
@@ -142,19 +139,12 @@ export function ShotSizePicker({
               尺寸表（{SIZE_SCENE_LABELS[scene]}场景）…
             </Button>
             <span className="text-ink-faint text-3xs">
-              {clarityKind === "megapixel"
-                ? "总像素预算，宽高按倍数对齐"
-                : "宽高按场景尺寸表取值"}
+              {clarityKind === "megapixel" ? "总像素预算，宽高按倍数对齐" : "宽高按场景尺寸表取值"}
             </span>
           </div>
         }
       />
-      {tableOpen && (
-        <SizePresetTableModal
-          scene={scene}
-          onClose={() => setTableOpen(false)}
-        />
-      )}
+      {tableOpen && <SizePresetTableModal scene={scene} onClose={() => setTableOpen(false)} />}
     </>
   );
 }

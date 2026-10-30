@@ -30,7 +30,7 @@ const REPO_ROOT = process.cwd();
 const SCAN_ROOTS = ["src", "tests"];
 
 /** bundler 会尝试的入口（够用的近似：显式后缀 + 目录 index）。 */
-function candidates(withoutExt: string): string[] {
+function candidates(withoutExt: string): Array<string> {
   return [
     withoutExt,
     `${withoutExt}.ts`,
@@ -49,14 +49,12 @@ function candidates(withoutExt: string): string[] {
  * `http://` 这类协议头。
  */
 function stripComments(text: string): string {
-  return text
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 }
 
 /** 递归收集 `*.test.ts(x)`（跳过 node_modules 与点目录）。 */
-function testFiles(dir: string): string[] {
-  const out: string[] = [];
+function testFiles(dir: string): Array<string> {
+  const out: Array<string> = [];
   for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
     if (item.name === "node_modules" || item.name.startsWith(".")) continue;
     const full = path.join(dir, item.name);
@@ -68,7 +66,7 @@ function testFiles(dir: string): string[] {
 
 describe("vi.mock 说明符必须解析到真实模块（死 mock 门禁）", () => {
   it("全仓可解析的 mock 目标都命中真实文件（失效的 mock 会静默退回真实 IO）", () => {
-    const dead: string[] = [];
+    const dead: Array<string> = [];
     let total = 0;
 
     for (const root of SCAN_ROOTS) {
@@ -78,8 +76,7 @@ describe("vi.mock 说明符必须解析到真实模块（死 mock 门禁）", ()
         let match: RegExpExecArray | null;
         while ((match = re.exec(text))) {
           const specifier = match[1]!;
-          if (!specifier.startsWith(".") && !specifier.startsWith("~/"))
-            continue;
+          if (!specifier.startsWith(".") && !specifier.startsWith("~/")) continue;
           total += 1;
           const base = specifier.startsWith("~/")
             ? path.join(REPO_ROOT, "src", specifier.slice(2))

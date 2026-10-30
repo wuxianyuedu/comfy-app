@@ -20,7 +20,7 @@ import {
 } from "./workspace-tabs";
 import { type WorkspaceView } from "./NavItems";
 
-const VIEWS: WorkspaceView[] = [
+const VIEWS: Array<WorkspaceView> = [
   "home",
   "project",
   "canvas",
@@ -40,7 +40,7 @@ const VIEWS: WorkspaceView[] = [
 ];
 
 function state(
-  tabs: [WorkspaceView, string | null][],
+  tabs: Array<[WorkspaceView, string | null]>,
   active: [WorkspaceView, string | null],
 ): WorkspaceTabsState {
   const built = tabs.map(([view, projectId]) => makeTab(view, projectId));

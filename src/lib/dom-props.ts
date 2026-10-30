@@ -60,7 +60,7 @@ export type OmitOwnProps<Base, Keys extends keyof Base | string> = Omit<
  * **不做值层面的改写**（不给默认值、不合并 `className`）：那些是调用处的域决定，
  * 放进这里会让「这个字段到底是不是被改过」只能去读实现。本函数只做「搬」。
  */
-export function splitDomProps<T extends object, const Keys extends readonly string[]>(
+export function splitDomProps<T extends object, const Keys extends ReadonlyArray<string>>(
   props: T,
   keys: Keys,
 ): {
@@ -97,11 +97,11 @@ export function splitDomProps<T extends object, const Keys extends readonly stri
  * ```
  */
 export function commonOwnProps<A extends string, B extends string>(
-  a: readonly A[],
-  b: readonly B[],
-): (A & B)[] {
-  const setB = new Set<string>(/* SAFETY: 类型断言已复核 */ b as readonly string[]);
-  return /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (a as readonly string[]).filter(
-    (k) => setB.has(k),
-  ) as (A & B)[];
+  a: ReadonlyArray<A>,
+  b: ReadonlyArray<B>,
+): Array<A & B> {
+  const setB = new Set<string>(/* SAFETY: 类型断言已复核 */ b as ReadonlyArray<string>);
+  return /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
+    a as ReadonlyArray<string>
+  ).filter((k) => setB.has(k)) as Array<A & B>;
 }

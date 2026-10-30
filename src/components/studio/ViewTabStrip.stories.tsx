@@ -25,7 +25,7 @@ const projectNameOf = (projectId: string | null): string | null =>
   projectId === null ? null : (PROJECTS[projectId] ?? null);
 
 /** 真机上一条典型的页签组合：两个全局视图 + 两个项目内视图。 */
-const TABS: ViewTab[] = [
+const TABS: Array<ViewTab> = [
   { key: tabKey("home", null), view: "home", projectId: null },
   { key: tabKey("models", null), view: "models", projectId: null },
   { key: tabKey("canvas", "p_8f2a1c"), view: "canvas", projectId: "p_8f2a1c" },
@@ -36,7 +36,7 @@ const TABS: ViewTab[] = [
   },
 ];
 
-const OPENABLE: OpenableView[] = [
+const OPENABLE: Array<OpenableView> = [
   { view: "home", label: "首页" },
   { view: "models", label: "模型库" },
   { view: "queue", label: "队列" },
@@ -44,11 +44,11 @@ const OPENABLE: OpenableView[] = [
 ];
 
 /** 适配件：页签条是受控组件（选中 / 关闭都要真发生），story 自己持状态。 */
-function InteractiveStrip({ inTitleBar, tabs }: { inTitleBar: boolean; tabs: ViewTab[] }) {
+function InteractiveStrip({ inTitleBar, tabs }: { inTitleBar: boolean; tabs: Array<ViewTab> }) {
   const [state, setState] = useState({
     tabs,
     activeKey: tabs[2]?.key ?? "",
-    closed: /* SAFETY: 类型断言已复核 */ [] as string[],
+    closed: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
   });
   return (
     <div className="flex flex-col gap-3">

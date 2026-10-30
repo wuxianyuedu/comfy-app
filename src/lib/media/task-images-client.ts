@@ -48,9 +48,7 @@ export const taskImageRowSchema = z.object({
  * 直接判空相册），与 `~/lib/media/video-queue-client` 的 `parseVideoRows` 同形。
  * 顺序不在这里重排：封面在前由服务端的 `orderBy(isCover desc, sortIndex asc)` 给。
  */
-export function parseTaskImageRows(
-  rows: readonly unknown[],
-): TaskGalleryImage[] {
+export function parseTaskImageRows(rows: ReadonlyArray<unknown>): Array<TaskGalleryImage> {
   return rows
     .map((row) => taskImageRowSchema.safeParse(row))
     .filter((parsed) => parsed.success)
@@ -62,9 +60,7 @@ export function parseTaskImageRows(
 }
 
 /** 拉取任务的产出图片列表。失败由调用方决定（相册场景是静默降级）。 */
-export async function fetchTaskImages(
-  taskId: string,
-): Promise<TaskGalleryImage[]> {
+export async function fetchTaskImages(taskId: string): Promise<Array<TaskGalleryImage>> {
   const task = await vanillaApi.task.detail.query({ id: taskId });
   return parseTaskImageRows(task.images ?? []);
 }

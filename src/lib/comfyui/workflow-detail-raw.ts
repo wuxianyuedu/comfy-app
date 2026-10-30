@@ -38,12 +38,12 @@ export type {
  * 以及喂给子图 UI 节点（它们需要 widget_values 给字段打标签）。
  * 便签节点排除在外。
  */
-export function buildRawNodeMeta(raw: RawWorkflow | null): RawNodeMeta[] {
-  const rawNodeMeta: RawNodeMeta[] = [];
+export function buildRawNodeMeta(raw: RawWorkflow | null): Array<RawNodeMeta> {
+  const rawNodeMeta: Array<RawNodeMeta> = [];
   if (raw && Array.isArray(raw.nodes)) {
     for (const rn of raw.nodes) {
       if (!rn || rn.type === "Note" || rn.type === "MarkdownNote") continue;
-      const outputs: RawOutputEntry[] = [];
+      const outputs: Array<RawOutputEntry> = [];
       if (Array.isArray(rn.outputs)) {
         for (const o of rn.outputs) {
           if (!o || typeof o.name !== "string") continue;
@@ -104,8 +104,10 @@ export function buildNodeTypeMap(raw: RawWorkflow | null): Record<string, string
  *
  *  键是内部节点 id 的字符串形式；同名节点在多个子图定义里重复出现时后者覆盖
  *  （ComfyUI 内部节点 id 在工作流内唯一，实际不会冲突）。 */
-export function buildInnerNodeInputs(raw: RawWorkflow | null): Record<string, RawInputEntry[]> {
-  const innerInputsById: Record<string, RawInputEntry[]> = {};
+export function buildInnerNodeInputs(
+  raw: RawWorkflow | null,
+): Record<string, Array<RawInputEntry>> {
+  const innerInputsById: Record<string, Array<RawInputEntry>> = {};
   const subgraphs = raw?.definitions?.subgraphs;
   if (!subgraphs) return innerInputsById;
   for (const subKey of Object.keys(subgraphs)) {
@@ -115,8 +117,10 @@ export function buildInnerNodeInputs(raw: RawWorkflow | null): Record<string, Ra
       if (node?.id == null) continue;
       const inputs = Array.isArray(node.inputs) ? node.inputs : [];
       if (inputs.length === 0) continue;
-      const widgetValues: unknown[] = Array.isArray(node.widgets_values) ? node.widgets_values : [];
-      const list: RawInputEntry[] = [];
+      const widgetValues: Array<unknown> = Array.isArray(node.widgets_values)
+        ? node.widgets_values
+        : [];
+      const list: Array<RawInputEntry> = [];
       for (const inp of inputs) {
         if (!inp || typeof inp.name !== "string") continue;
         const widgetName =
@@ -156,13 +160,13 @@ export function buildInnerNodeInputs(raw: RawWorkflow | null): Record<string, Ra
  * 也**不是**格式转换（见该模块文件头）。 */
 export function buildRawView(
   raw: RawWorkflow | null,
-  rawInputsById: Record<string, RawInputEntry[]>,
+  rawInputsById: Record<string, Array<RawInputEntry>>,
   sizeById: Record<string, [number, number]>,
 ): RawViewPacket | null {
   let rawView: RawViewPacket | null = null;
   if (raw && Array.isArray(raw.nodes)) {
     const rawGraph = buildRawViewGraph(raw);
-    const rawViewNodes: DetailNodeView[] = Object.entries(rawGraph).map(([nodeId, n]) => {
+    const rawViewNodes: Array<DetailNodeView> = Object.entries(rawGraph).map(([nodeId, n]) => {
       /* 与旧 `n?.class_type || (n?.type as string) || "?"` 语义逐值等价
        *  （`a || b` ≡ `a ? a : b`）：class_type/type 为空串时同样回退。 */
       const classType: string = n?.class_type

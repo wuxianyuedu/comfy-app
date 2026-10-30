@@ -112,9 +112,9 @@ let behavior: Behavior = {};
 /* comfyStatus 端点的调用次数：「事件到了要立刻重问一次」那条判据靠它数。 */
 let comfyStatusCalls = 0;
 /* 「运行态变了」那条长轮询通道收到的请求（`?since=…`）：判「有没有订阅」。 */
-const stateRequests: string[] = [];
+const stateRequests: Array<string> = [];
 /** 只给用例：这条通道此刻收到的查询串（每次用例前清空）。 */
-function comfyStateRequests(): string[] {
+function comfyStateRequests(): Array<string> {
   return [...stateRequests];
 }
 /* 「在浏览器打开」端点的调用计数：单独一个模块级变量，不放进 behavior ——

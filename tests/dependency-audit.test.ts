@@ -28,7 +28,7 @@ import {
 } from "../scripts/check-dependency-audit.mjs";
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-dependency-audit.mjs");
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 afterEach(() => {
   while (tempDirs.length > 0) {
@@ -96,7 +96,7 @@ type LedgerEntry = {
   patched?: string | null;
   reason?: string;
 };
-type LedgerFile = { ruleVersion: number; entries: LedgerEntry[] };
+type LedgerFile = { ruleVersion: number; entries: Array<LedgerEntry> };
 
 const LEDGER_REL = path.join("scripts", ".dependency-audit-baseline.json");
 
@@ -202,7 +202,7 @@ describe("与基线对账（三条形状各钉一条）", () => {
 
 describe("真脚本：--update 只许降（验收点名要求的形态）", () => {
   /** 用 `--fixture` 把固定的 registry 形状喂给真脚本（理由见脚本里那段注释）。 */
-  function runScript(dir: string, args: string[], auditJson?: string) {
+  function runScript(dir: string, args: Array<string>, auditJson?: string) {
     const full = [...args];
     if (auditJson !== undefined) {
       const fixture = path.join(dir, "fixture.json");

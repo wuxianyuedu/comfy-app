@@ -38,7 +38,7 @@ import {
 
 export interface LibraryParamCards {
   /** 对外参数条目（稳定顺序）。 */
-  entries: ParamEntry[];
+  entries: Array<ParamEntry>;
   /** 派生用的 IO 表（卡片列渲染端口类型读它）。 */
   io: WorkflowIOMap | null;
   /** 该对外参数在当前模式下是否被作者改过（决定卡片头 ↺ 的可用性）。 */
@@ -52,7 +52,7 @@ export interface LibraryParamCards {
    *  到的那一行之间）。连线一律是作者画的那条（库里不给「猜出来的」线），
    *  与编辑器画布同一套语义 —— 库里不画线的话，圆点就只是一颗装饰点，
    *  读者答不出它连到哪。 */
-  wires: ParamCardWire[];
+  wires: Array<ParamCardWire>;
   /** **真的画出了线**的那些卡片圆点（`<条目 id>?<handle id>`）。
    *
    *  与 `wires` 同一份事实的另一面：视图据此判断「这颗圆点该不该画成已连接」
@@ -97,7 +97,7 @@ export function deriveLibraryParamCards(args: {
    *
    *  卡片列必须与「模式契约」编辑器说同一份清单（用户报的就是两者的差集：
    *  画布按内置默认列出「时长」，而契约里那一口已被删掉）。 */
-  contractIds?: readonly string[];
+  contractIds?: ReadonlyArray<string>;
 }): LibraryParamCards {
   const { io, paramMap, mode, groupedKeys, contractIds } = args;
   /* 卡片列 = 该模式统一对外暴露的参数（提示词 / 负向提示词 / 尺寸 / 首帧…），
@@ -176,8 +176,8 @@ export function deriveLibraryParamCards(args: {
  *  画布上不再拿一条虚线表示「这是默认线」—— 未连过就是没有线。 */
 /** 对外**输出**参数卡片列与它的连线（`deriveLibraryOutputCards` 的产物）。 */
 export interface LibraryOutputCards {
-  outputs: (WorkflowIOEntry & { ioKey: string })[];
-  wires: ParamCardWire[];
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  wires: Array<ParamCardWire>;
   /** 输出口 ioKey → 当前取值的那一行 ioKey（`null` = 悬空 / 断开）。 */
   resolved: Record<string, string | null>;
   /** 某个输出口在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
@@ -197,7 +197,7 @@ export function deriveLibraryOutputCards(args: {
    *  配对谁是谁。 */
   const outputs = splitWorkflowIO(io).outputs;
   const resolved: Record<string, string | null> = {};
-  const wires: ParamCardWire[] = [];
+  const wires: Array<ParamCardWire> = [];
   /* 「取值行」必须是一叠真实存在的**输出**行：作者连到一个已经不存在的端口
    *  （工作流改版）或连成输入口（非法）时，按悬空处理 —— 画不出线也不谎报来源。 */
   const outputKeys = new Set(outputs.map((item) => item.ioKey));
@@ -213,8 +213,7 @@ export function deriveLibraryOutputCards(args: {
      * 用户口径：这是**编辑对外参数**的界面，未连过就不要连 —— 默认取值来源仍算在
      * `resolved` 里（卡片与运行期读它），但画布上不再画一条虚线占位。库里因此
      * 只剩作者真连过的实线（见 `LIBRARY_EDGE_STYLE`）。 */
-    if (manualOutputSource(paramMap, output.ioKey, mode) === undefined)
-      continue;
+    if (manualOutputSource(paramMap, output.ioKey, mode) === undefined) continue;
     wires.push({
       entryId: output.ioKey,
       targetIoKey: target,
@@ -230,8 +229,7 @@ export function deriveLibraryOutputCards(args: {
     outputs,
     wires,
     resolved,
-    isManual: (ioKey: string) =>
-      manualOutputSource(paramMap, ioKey, mode) !== undefined,
+    isManual: (ioKey: string) => manualOutputSource(paramMap, ioKey, mode) !== undefined,
     wired: outputs.length > 0,
   };
 }

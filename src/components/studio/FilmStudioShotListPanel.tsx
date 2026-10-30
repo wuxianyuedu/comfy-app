@@ -7,15 +7,11 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import type { FilmStudioController } from "./hooks/use-film-studio";
-import {
-  MODE_LABELS,
-  STATUS_BADGE,
-  type ShotListItem,
-} from "./film-studio-config";
+import { MODE_LABELS, STATUS_BADGE, type ShotListItem } from "./film-studio-config";
 
 interface FilmStudioShotListPanelProps {
   c: FilmStudioController;
-  listShots: ShotListItem[];
+  listShots: Array<ShotListItem>;
   selectedShotId: string;
   isProjectSource: boolean;
   onSelectShot: (id: string) => void;
@@ -38,18 +34,11 @@ export function FilmStudioShotListPanel({
       <div className="border-border-subtle flex h-11 items-center justify-between border-b px-4">
         <div className="flex items-center gap-2">
           <span className="text-ink-field text-sm font-semibold">分镜列表</span>
-          <span className="text-ink-fainter text-2xs">
-            {listShots.length} 镜头
-          </span>
+          <span className="text-ink-fainter text-2xs">{listShots.length} 镜头</span>
         </div>
         {!isProjectSource && (
           <Hint label="新增镜头" accessibleName>
-            <Button
-              variant="primary"
-              size="icon-xs"
-              onClick={onAddShot}
-              className="rounded-md"
-            >
+            <Button variant="primary" size="icon-xs" onClick={onAddShot} className="rounded-md">
               +
             </Button>
           </Hint>
@@ -101,13 +90,9 @@ export function FilmStudioShotListPanel({
                     {shot.name}
                   </p>
                   <div className="mt-1 flex items-center gap-2">
-                    <span className="text-ink-faintest text-3xs">
-                      {shot.duration}
-                    </span>
+                    <span className="text-ink-faintest text-3xs">{shot.duration}</span>
                     <span className="text-ink-faintest text-3xs">·</span>
-                    <span className="text-ink-fainter text-3xs">
-                      {MODE_LABELS[shot.mode]}
-                    </span>
+                    <span className="text-ink-fainter text-3xs">{MODE_LABELS[shot.mode]}</span>
                   </div>
                 </div>
 
@@ -122,10 +107,7 @@ export function FilmStudioShotListPanel({
               {/* 项目镜头才给「退回让 AI 重做」入口（与画布镜头节点同源 requestShotRedo）。 */}
               {isProjectSource && (
                 <>
-                  <Hint
-                    label="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）"
-                    accessibleName
-                  >
+                  <Hint label="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）" accessibleName>
                     <Button
                       variant="ghost"
                       size="icon-xs"

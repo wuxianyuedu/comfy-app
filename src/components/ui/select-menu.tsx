@@ -70,7 +70,7 @@ import { useOverlayBoundary } from "~/components/ui/use-overlay-boundary";
 interface SelectMenuProps {
   value: string;
   onChange: (value: string) => void;
-  options: string[];
+  options: Array<string>;
   /** 选项值 → 显示文案的映射；缺省时回退到原始值。 */
   labels?: Record<string, React.ReactNode>;
   placeholder?: string;
@@ -179,10 +179,7 @@ export function SelectMenu({
     let longest = 0;
     for (const opt of options) {
       const node = labels?.[opt];
-      const text =
-        typeof node === "string" || typeof node === "number"
-          ? String(node)
-          : opt;
+      const text = typeof node === "string" || typeof node === "number" ? String(node) : opt;
       if (text.length > longest) longest = text.length;
     }
     const approx = longest * POPOVER_PER_CHAR_PX + POPOVER_AUTO_HEADROOM;
@@ -196,9 +193,7 @@ export function SelectMenu({
    * base-ui 的 `<SelectPrimitive.Value>` 允许 children 为 ReactNode
    * （其 .d.ts 行 32）——不再需要 render prop。 */
   const display: React.ReactNode = value
-    ? (labels?.[value] ??
-      options.find((option) => option === value) ??
-      placeholder)
+    ? (labels?.[value] ?? options.find((option) => option === value) ?? placeholder)
     : placeholder;
 
   return (
@@ -255,21 +250,13 @@ export function SelectMenu({
           >
             <SelectPrimitive.List className={LIST_BASE}>
               {options.map((opt) => (
-                <SelectPrimitive.Item
-                  key={opt}
-                  value={opt}
-                  className={ITEM_BASE}
-                >
-                  <SelectPrimitive.ItemText>
-                    {labels?.[opt] ?? opt}
-                  </SelectPrimitive.ItemText>
+                <SelectPrimitive.Item key={opt} value={opt} className={ITEM_BASE}>
+                  <SelectPrimitive.ItemText>{labels?.[opt] ?? opt}</SelectPrimitive.ItemText>
                 </SelectPrimitive.Item>
               ))}
             </SelectPrimitive.List>
             {footer ? (
-              <div className="border-border-strong mt-1 border-t pt-1">
-                {footer}
-              </div>
+              <div className="border-border-strong mt-1 border-t pt-1">{footer}</div>
             ) : null}
           </SelectPrimitive.Popup>
         </SelectPrimitive.Positioner>

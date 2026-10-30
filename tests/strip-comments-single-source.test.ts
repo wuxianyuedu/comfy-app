@@ -63,7 +63,7 @@ const GUARD_MARK = "(" + "^";
  *（那是 `tests/helpers/strip-comments.ts`，纯 Node 的 `.cjs` 加载不到）。
  * 它的语义与 helper 等价（只去整块注释与整行 `//`），本批就按这一组登记。
  */
-const LEDGER: string[] = [
+const LEDGER: Array<string> = [
   // —— 与 helper 等价（只去整行注释）：换成 import 是零回归的那一批 ——
   "tests/client-bundle-node-builtins.test.ts",
   "tests/core-barrel-entry-discipline.test.ts",
@@ -96,13 +96,13 @@ const LEDGER: string[] = [
 ];
 
 /** 已经点名的缺陷形状，只准减不准增。 */
-const NAIVE_LEDGER: string[] = [
+const NAIVE_LEDGER: Array<string> = [
   "src/components/studio/workflow-editor/fit-viewport-source-guard.test.ts",
   "src/components/studio/workflow-editor/workflow-canvas-io-isolation-guard.test.ts",
 ];
 
-function sourceFiles(): string[] {
-  const out: string[] = [];
+function sourceFiles(): Array<string> {
+  const out: Array<string> = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir)) {
       const abs = path.join(dir, entry);
@@ -125,9 +125,7 @@ function sourceFiles(): string[] {
 /** 排除 helper 本人之后，仍然带着本地定义的文件。 */
 const definedIn = sourceFiles()
   .filter((rel) => rel !== CANONICAL)
-  .filter((rel) =>
-    readFileSync(path.join(ROOT, rel), "utf8").includes(DEFINITION_MARK),
-  );
+  .filter((rel) => readFileSync(path.join(ROOT, rel), "utf8").includes(DEFINITION_MARK));
 
 describe("stripComments 的唯一实现（§12.18 复用优先）", () => {
   it("helper 本人在位，且导出 stripComments", () => {

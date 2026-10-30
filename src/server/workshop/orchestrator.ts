@@ -61,7 +61,7 @@ function buildScriptMessages(
 // ── 纯函数：提示词重算（便于单测，无副作用）───────────────────
 
 /** 依据角色卡字段重算 positive / negative 提示词。 */
-export function rebuildCharacterPrompts(characters: Character[]): Character[] {
+export function rebuildCharacterPrompts(characters: Array<Character>): Array<Character> {
   return characters.map((c) => ({
     ...c,
     positivePrompt: buildCharacterPrompt(c),
@@ -71,10 +71,10 @@ export function rebuildCharacterPrompts(characters: Character[]): Character[] {
 
 /** 依据场景 / 角色重算每个镜头的 prompt / negativePrompt。 */
 export function rebuildShotPrompts(
-  shots: Shot[],
-  scenes: Scene[],
-  characters: Character[],
-): Shot[] {
+  shots: Array<Shot>,
+  scenes: Array<Scene>,
+  characters: Array<Character>,
+): Array<Shot> {
   return shots.map((shot) => {
     const scene = scenes.find((s) => s.id === shot.sceneId);
     const linked = characters.filter((c) => shot.characterIds.includes(c.id));
@@ -138,13 +138,9 @@ export async function setIdea(id: string, idea: string) {
 
 export async function generateScript(id: string) {
   const state = await load(id);
-  if (!state.idea.trim())
-    throw new Error("请先设置 idea（灵感 / 梗概）再生成脚本");
+  if (!state.idea.trim()) throw new Error("请先设置 idea（灵感 / 梗概）再生成脚本");
   const cfg = await getWorkshopLLMConfig();
-  const script = await completeWorkshopLLM(
-    cfg,
-    buildScriptMessages(state.idea, state.meta),
-  );
+  const script = await completeWorkshopLLM(cfg, buildScriptMessages(state.idea, state.meta));
   const scenes = parseIdeaToScenes(script, {
     title: state.meta.title,
     type: state.meta.type,
@@ -182,26 +178,21 @@ export async function setScript(id: string, markdown: string, parse = true) {
 
 export async function extractCharacters(id: string) {
   const state = await load(id);
-  if (!state.meta.scriptMarkdown?.trim())
-    throw new Error("请先生成 / 设置脚本再提取角色");
+  if (!state.meta.scriptMarkdown?.trim()) throw new Error("请先生成 / 设置脚本再提取角色");
   const cfg = await getWorkshopLLMConfig();
   const text = await completeWorkshopLLM(
     cfg,
     buildExtractCharactersMessages(state.meta.scriptMarkdown),
   );
   const drafts = parseExtractedCharacters(text);
-  const { list, added, skipped } = mergeCharacterDrafts(
-    state.characters,
-    drafts,
-    [],
-  );
+  const { list, added, skipped } = mergeCharacterDrafts(state.characters, drafts, []);
   state.characters = list;
   state.stage = "character";
   await repo.updateState(id, state);
   return { added, skipped, total: list.length, characters: list };
 }
 
-export async function setCharacters(id: string, characters: Character[]) {
+export async function setCharacters(id: string, characters: Array<Character>) {
   const state = await load(id);
   state.characters = rebuildCharacterPrompts(characters);
   state.stage = "character";
@@ -213,8 +204,7 @@ export async function setCharacters(id: string, characters: Character[]) {
 
 export async function buildStoryboard(id: string) {
   const state = await load(id);
-  if (!state.meta.scriptMarkdown?.trim())
-    throw new Error("请先生成 / 设置脚本再拆分分镜");
+  if (!state.meta.scriptMarkdown?.trim()) throw new Error("请先生成 / 设置脚本再拆分分镜");
   const names = state.characters.map((c) => c.name);
   const cfg = await getWorkshopLLMConfig();
   const text = await completeWorkshopLLM(
@@ -233,7 +223,7 @@ export async function buildStoryboard(id: string) {
   return { shotCount: shots.length, shots };
 }
 
-export async function setStoryboard(id: string, shots: Shot[]) {
+export async function setStoryboard(id: string, shots: Array<Shot>) {
   const state = await load(id);
   state.shots = rebuildShotPrompts(shots, state.scenes, state.characters);
   state.stage = "storyboard";
@@ -258,9 +248,7 @@ export async function generateImage(id: string, input: GenerateImageInput) {
   const channel = input.channel ?? "api";
   let prompt: string;
   let negative: string | undefined;
-  const shot = input.shotId
-    ? state.shots.find((s) => s.id === input.shotId)
-    : undefined;
+  const shot = input.shotId ? state.shots.find((s) => s.id === input.shotId) : undefined;
   const character = input.characterId
     ? state.characters.find((c) => c.id === input.characterId)
     : undefined;
@@ -402,10 +390,7 @@ export async function composeFinal(
   input: ComposeFinalInput = {},
 ): Promise<ComposeFinalResult> {
   const state = await load(id);
-  const plan = buildCompositionPlan(
-    input.title ?? state.meta.title,
-    state.shots,
-  );
+  const plan = buildCompositionPlan(input.title ?? state.meta.title, state.shots);
   const planPath = await writeCompositionPlan(id, plan);
   let outputPath: string | undefined;
   let renderNote: string | undefined;

@@ -44,13 +44,10 @@ const FACE = "a".repeat(64);
  * 落在**仓库所在卷**上：槽根那一侧有「同卷」的推导，而 `os.tmpdir()` 在 C:、
  * 本仓在 G: —— 拿 tmp 当槽根会让「同卷」那一档永远测不到。
  */
-const made: string[] = [];
-const slotRoots: string[] = [];
+const made: Array<string> = [];
+const slotRoots: Array<string> = [];
 function tmpDir(tag: string): string {
-  const onRepoVolume = path.join(
-    path.parse(ROOT).root,
-    `comfy-build-cache-${tag}`,
-  );
+  const onRepoVolume = path.join(path.parse(ROOT).root, `comfy-build-cache-${tag}`);
   let dir: string;
   try {
     dir = fs.mkdtempSync(onRepoVolume);
@@ -68,9 +65,7 @@ function fakeRepo(tag: string): string {
   for (const file of BUILD_FACE_FILES) {
     fs.writeFileSync(
       path.join(dir, file),
-      file === "package.json"
-        ? JSON.stringify({ name: "comfy-fake" })
-        : `content of ${file}\n`,
+      file === "package.json" ? JSON.stringify({ name: "comfy-fake" }) : `content of ${file}\n`,
       "utf8",
     );
   }
@@ -143,11 +138,7 @@ describe("构建面指纹：不含源码", () => {
     const repo = fakeRepo("src");
     const before = buildFaceFingerprint(repo);
     fs.mkdirSync(path.join(repo, "src"), { recursive: true });
-    fs.writeFileSync(
-      path.join(repo, "src", "app.tsx"),
-      "export const x = 1;\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(repo, "src", "app.tsx"), "export const x = 1;\n", "utf8");
     expect(buildFaceFingerprint(repo)).toBe(before);
     /* 而工具链变了 ⇒ 指纹要变（那是换一份槽目录的信号）。 */
     fs.writeFileSync(path.join(repo, "pnpm-lock.yaml"), "new lock", "utf8");
@@ -174,17 +165,13 @@ describe("接槽与收尾：链接摘掉，常驻目录还在", () => {
     expect(link.linked).toBe(true);
     const linkPath = path.join(repo, ".next", "cache");
     expect(fs.lstatSync(linkPath).isSymbolicLink()).toBe(true);
-    expect(fs.readFileSync(path.join(linkPath, "keep.txt"), "utf8")).toBe(
-      "must survive",
-    );
+    expect(fs.readFileSync(path.join(linkPath, "keep.txt"), "utf8")).toBe("must survive");
 
     link.restore();
     expect(fs.existsSync(linkPath)).toBe(false);
     /* ⚠️ 这一条是整份机制里最贵的一条边界：摘链摘的是「链接」，不是「它指着的目录」。 */
     expect(fs.existsSync(slot)).toBe(true);
-    expect(fs.readFileSync(path.join(slot, "keep.txt"), "utf8")).toBe(
-      "must survive",
-    );
+    expect(fs.readFileSync(path.join(slot, "keep.txt"), "utf8")).toBe("must survive");
   });
 
   it("接不上（`.next/cache` 已存在）⇒ 不接、且不动那个目录", () => {
@@ -196,9 +183,7 @@ describe("接槽与收尾：链接摘掉，常驻目录还在", () => {
 
     const link = linkBuildCache({ repoRoot: repo, slotDir: slot });
     expect(link.linked).toBe(false);
-    expect(fs.readFileSync(path.join(existing, "mine.txt"), "utf8")).toBe(
-      "keep",
-    );
+    expect(fs.readFileSync(path.join(existing, "mine.txt"), "utf8")).toBe("keep");
   });
 
   it("`.next/cache` 是个**悬空**链接 ⇒ 也算「那个路径上有东西」⇒ 不接槽", () => {
@@ -224,7 +209,7 @@ describe("withBuildCacheSlot：开关关着时与「没有这个机制」逐字�
 
   it("开关没开 ⇒ 不建 `.next`、不接槽，跑的东西照跑", () => {
     const repo = fakeRepo("off");
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const result = withBuildCacheSlot(() => "built", {
       cwd: repo,
       env: {},
@@ -242,7 +227,7 @@ describe("withBuildCacheSlot：开关关着时与「没有这个机制」逐字�
     const storeRoot = path.parse(repo).root;
     const slotRoot = path.join(storeRoot, "ci-build-cache", "comfy-fake");
     slotRoots.push(slotRoot);
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     let linkedDuringRun = false;
     const result = withBuildCacheSlot(
       () => {
@@ -296,9 +281,7 @@ describe("槽根：与依赖面那套槽同源、不同目录", () => {
     const build = resolveBuildCacheRoot({ cwd: ROOT, env: {}, run });
     expect(deps.root).not.toBeNull();
     expect(build.root).not.toBeNull();
-    expect(path.parse(String(build.root)).root).toBe(
-      path.parse(String(deps.root)).root,
-    );
+    expect(path.parse(String(build.root)).root).toBe(path.parse(String(deps.root)).root);
     expect(String(build.root)).not.toBe(String(deps.root));
     expect(String(build.root)).toContain("ci-build-cache");
   });
@@ -313,11 +296,7 @@ describe("槽根：与依赖面那套槽同源、不同目录", () => {
 
   it("问不出 store ⇒ 两边都答「不猜路径」（宁可不省，也不猜一个卷）", () => {
     const noStore = () => ({ status: 1, stdout: "" });
-    expect(
-      resolveBuildCacheRoot({ cwd: ROOT, env: {}, run: noStore }).root,
-    ).toBeNull();
-    expect(
-      resolveCacheRoot({ cwd: ROOT, env: {}, run: noStore }).root,
-    ).toBeNull();
+    expect(resolveBuildCacheRoot({ cwd: ROOT, env: {}, run: noStore }).root).toBeNull();
+    expect(resolveCacheRoot({ cwd: ROOT, env: {}, run: noStore }).root).toBeNull();
   });
 });

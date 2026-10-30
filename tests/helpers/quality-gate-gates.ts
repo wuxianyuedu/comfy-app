@@ -23,7 +23,7 @@ export interface GateEntry {
   /** 门禁名（两侧应当一致）。 */
   name: string;
   /** 入口脚本体现在 `args` 里出现的那些路径（`../scripts/x.mjs` 形态，未归一化）。 */
-  args: string[];
+  args: Array<string>;
   /** 只在该侧**显式点名**时才跑（`.mjs` 的 `run: false` / `.ps1` 的 `Run = $false`）。 */
   onDemand: boolean;
 }
@@ -55,7 +55,7 @@ function stripForParsing(src: string): string {
  * @param src `scripts/quality-gate.ps1` 的全文
  * @returns 每一块一条；名字取不到（形状不认识）的不返回
  */
-export function parsePs1Gates(src: string): GateEntry[] {
+export function parsePs1Gates(src: string): Array<GateEntry> {
   // **只在 `$Blocks` 数组里找**（与 `.mjs` 侧只在 `GATES` 里找同一条纪律）。
   // 不划范围会咬到两处：文件头的「怎么加一条门禁」示例块（`@{ Name="id"; … }`）与
   // 下面 `Get-*Drift` 那几个返回 `@{ state = …; report = … }` 的哈希表 ——
@@ -64,15 +64,11 @@ export function parsePs1Gates(src: string): GateEntry[] {
   const end = start < 0 ? -1 : src.indexOf("\n)", start);
   if (start < 0 || end < 0) return [];
   const region = src.slice(start, end);
-  const blocks = [...region.matchAll(/@\{([\s\S]*?)\}/g)].map((m) =>
-    stripForParsing(m[1] ?? ""),
-  );
+  const blocks = [...region.matchAll(/@\{([\s\S]*?)\}/g)].map((m) => stripForParsing(m[1] ?? ""));
   return blocks
     .map((block) => ({
       name: /Name\s*=\s*"([A-Za-z0-9_]+)"/.exec(block)?.[1] ?? "",
-      args: [...block.matchAll(/"([^"]*\.(?:mjs|cjs|js))"/g)].map(
-        (m) => m[1] ?? "",
-      ),
+      args: [...block.matchAll(/"([^"]*\.(?:mjs|cjs|js))"/g)].map((m) => m[1] ?? ""),
       onDemand: /Run\s*=\s*\$false\b/.test(block),
     }))
     .filter((e) => e.name.length > 0);
@@ -87,15 +83,13 @@ export function parsePs1Gates(src: string): GateEntry[] {
  * @param src `scripts/quality-gate.mjs` 的全文
  * @returns 每一项一条
  */
-export function parseMjsGates(src: string): GateEntry[] {
+export function parseMjsGates(src: string): Array<GateEntry> {
   const start = src.indexOf("const GATES = {");
   const end = src.indexOf("function parseArgs");
   if (start < 0 || end < 0 || end < start) return [];
   const block = src.slice(start, end);
   return [
-    ...block.matchAll(
-      /^ {2}([A-Za-z0-9_]+): \{([\s\S]*?)(?=^ {2}[A-Za-z0-9_]+: \{|^\};)/gm,
-    ),
+    ...block.matchAll(/^ {2}([A-Za-z0-9_]+): \{([\s\S]*?)(?=^ {2}[A-Za-z0-9_]+: \{|^\};)/gm),
   ].map((m) => {
     const body = stripForParsing(m[2] ?? "");
     const argsLiteral = /args:\s*\[([^\]]*)\]/.exec(body)?.[1] ?? "";
@@ -118,10 +112,7 @@ export function parseMjsGates(src: string): GateEntry[] {
  * @param scriptName 入口脚本的文件名，如 `shell-gate.mjs`
  * @returns 唯一命中的那一档；不唯一时 null
  */
-export function gateByEntry(
-  gates: GateEntry[],
-  scriptName: string,
-): GateEntry | null {
+export function gateByEntry(gates: Array<GateEntry>, scriptName: string): GateEntry | null {
   // `.ps1` 里的路径写的是反斜杠（`scripts\\shell-gate.mjs`），`.mjs` 里是正斜杠 ——
   // 先把两侧归一到 `/` 再比：不归一的表现是「同一档在一侧找得到、另一侧找不到」，
   // 而那会被读成「这一档没登记」，与实际相反。

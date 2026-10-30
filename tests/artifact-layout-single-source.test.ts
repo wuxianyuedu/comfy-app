@@ -33,7 +33,7 @@ import { generatedRoot } from "~/lib/media/output-paths";
 const ROOT_OF_TRUTH = "src/lib/media/output-paths.ts";
 
 /** 被禁的写法。每条都带「它在别的文件里长什么样」的实例，见反证用例。 */
-const FORBIDDEN: readonly { name: string; pattern: RegExp }[] = [
+const FORBIDDEN: ReadonlyArray<{ name: string; pattern: RegExp }> = [
   {
     // path.join(cwd, "public", "generated", …) —— 七份副本的共同形状
     name: "把 public 与 generated 拼成产物根",
@@ -62,24 +62,20 @@ const FORBIDDEN: readonly { name: string; pattern: RegExp }[] = [
   },
 ];
 
-function collectSource(dir: string, out: string[] = []): string[] {
+function collectSource(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules" || entry === ".next" || entry === "generated")
-      continue;
+    if (entry === "node_modules" || entry === ".next" || entry === "generated") continue;
     const full = path.join(dir, entry);
     if (statSync(full).isDirectory()) collectSource(full, out);
-    else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry))
-      out.push(full);
+    else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(full);
   }
   return out;
 }
 
 /** 扫描一段源码（先剥注释：判据针对代码，注释里正当会出现被禁的叙述本身）。 */
-function offendersOf(text: string): string[] {
+function offendersOf(text: string): Array<string> {
   const stripped = stripComments(text);
-  return FORBIDDEN.filter(({ pattern }) => pattern.test(stripped)).map(
-    ({ name }) => name,
-  );
+  return FORBIDDEN.filter(({ pattern }) => pattern.test(stripped)).map(({ name }) => name);
 }
 
 /** 从 `.ps1` 的 `$allowedRoot = …` 语句里抠出允许根的**各段**字面量。
@@ -87,7 +83,7 @@ function offendersOf(text: string): string[] {
  * 取到「紧跟其后的第一条以 `$` 开头的顶层行」为止，因此对单行 / 多行两种写法都成立
  * （不能按固定的 `Join-Path` 嵌套形状取：那是把写法当契约，改一次排版判据就静默返回空）。
  * 找不到赋值语句返回 `null` —— 由调用点判「落空」，不能让它悄悄变成「零段 = 不用比」。 */
-function allowedRootSegments(ps1: string): string[] | null {
+function allowedRootSegments(ps1: string): Array<string> | null {
   const start = ps1.search(/\$allowedRoot\s*=/);
   if (start < 0) return null;
   const rest = ps1.slice(start);
@@ -121,7 +117,7 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
   it("判据自身可反证：五种被禁写法都被照出来，收口后的写法都不被照", () => {
     /* 形状取自本批真删掉的那七份副本 —— 每种各造一个实例，凑不齐五条就说明
      * 有条判据命中不了任何真实形状（那是装饰，不是判据）。 */
-    const fixtures: readonly { body: string; expect: string }[] = [
+    const fixtures: ReadonlyArray<{ body: string; expect: string }> = [
       {
         body: `const dir = path.join(cwd, "public", "generated", "films");`,
         expect: "把 public 与 generated 拼成产物根",
@@ -144,9 +140,7 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
       },
     ];
     for (const { body, expect: name } of fixtures) {
-      expect(offendersOf(body), `「${name}」没能照出自己的实例`).toContain(
-        name,
-      );
+      expect(offendersOf(body), `「${name}」没能照出自己的实例`).toContain(name);
     }
     // 每条判据都得有一次命中（命中不了的判据 = 写着好看、什么都不挡）
     const fired = new Set(fixtures.map((f) => f.expect));
@@ -158,11 +152,7 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
     const onlyInComment = `// 以前这里是 path.join(cwd, "public", "generated")
       const dir = filmsRoot();`;
     expect(offendersOf(onlyInComment)).toEqual([]);
-    expect(
-      FORBIDDEN.some(({ pattern }) =>
-        pattern.test(onlyInComment.split("\n")[0]!),
-      ),
-    ).toBe(true);
+    expect(FORBIDDEN.some(({ pattern }) => pattern.test(onlyInComment.split("\n")[0]!))).toBe(true);
 
     // 收口后的两种写法都不该被照：从唯一出处取根、走 artifactUrl 拼地址
     expect(
@@ -174,10 +164,7 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
 
   it("comfyapp:// 的 PowerShell 允许根与 TS 的产物根同形（跨语言成对判据）", () => {
     const scriptsDir = path.join(process.cwd(), "scripts");
-    const ps1 = readFileSync(
-      path.join(scriptsDir, "comfyapp-open-folder.ps1"),
-      "utf8",
-    );
+    const ps1 = readFileSync(path.join(scriptsDir, "comfyapp-open-folder.ps1"), "utf8");
     /* 抠的是 `Join-Path` 的**各段**，不是一条拼好的相对路径。
      *
      * 为什么判据长这样（ISSUE #1348 的形态在前一版里是错的）：`.ps1` 原先写
@@ -191,14 +178,8 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
      * 各段分开写，`Join-Path` 用宿主自己的分隔符拼，判据也按段解析。 */
     const segments = allowedRootSegments(ps1);
     // 非空自证：那条允许根被删掉/改写时这里必须红，而不是「没找到 = 不用比」
-    expect(
-      segments,
-      "ps1 里找不到 comfyapp:// 的允许根赋值，成对判据落空",
-    ).not.toBeNull();
-    expect(
-      segments!.length,
-      "ps1 的允许根里抠不出任何路径段，成对判据落空",
-    ).toBeGreaterThan(0);
+    expect(segments, "ps1 里找不到 comfyapp:// 的允许根赋值，成对判据落空").not.toBeNull();
+    expect(segments!.length, "ps1 的允许根里抠不出任何路径段，成对判据落空").toBeGreaterThan(0);
     /* 各段必须是**不带分隔符**的单个名字 —— 这才是这条判据的判据本身：
      * 谁再把 `..\generated` 那种拼好的字面量写回去（在任一平台上它都只对
      * 一端有意义），这里当场红，而不是等 CI 上再红一次。 */
@@ -240,8 +221,7 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
     ).toBe(true);
 
     // ② 偏移一位：段都是干净的，只有真解析一次才露出来
-    const offset =
-      '$allowedRoot = (Join-Path (Join-Path $PSScriptRoot "..") "..")\n$sep = 1';
+    const offset = '$allowedRoot = (Join-Path (Join-Path $PSScriptRoot "..") "..")\n$sep = 1';
     expect(flagged(offset)).toBe(false);
     expect(
       resolveOf(offset),

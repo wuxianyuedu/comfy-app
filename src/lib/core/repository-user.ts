@@ -32,38 +32,22 @@ import type { DbExecutor } from "./repository-executor-types";
 
 export class UserRepository {
   async findByEmail(email: string): Promise<User | null> {
-    const rows = await db
-      .select()
-      .from(user)
-      .where(eq(user.email, email))
-      .limit(1);
+    const rows = await db.select().from(user).where(eq(user.email, email)).limit(1);
     return rows[0] ?? null;
   }
 
-  async createUser(input: {
-    email: string;
-    name: string | null;
-    password: string;
-  }): Promise<User> {
+  async createUser(input: { email: string; name: string | null; password: string }): Promise<User> {
     const rows = await db.insert(user).values(input).returning();
     return firstRowRequired(rows, "用户插入");
   }
 
   async updateEmail(id: string, email: string): Promise<User> {
-    const rows = await db
-      .update(user)
-      .set({ email })
-      .where(eq(user.id, id))
-      .returning();
+    const rows = await db.update(user).set({ email }).where(eq(user.id, id)).returning();
     return firstRowOfExisting(rows, `用户不存在: ${id}`);
   }
 
   async updatePassword(id: string, password: string): Promise<User> {
-    const rows = await db
-      .update(user)
-      .set({ password })
-      .where(eq(user.id, id))
-      .returning();
+    const rows = await db.update(user).set({ password }).where(eq(user.id, id)).returning();
     return firstRowOfExisting(rows, `用户不存在: ${id}`);
   }
 }
@@ -89,10 +73,10 @@ function decryptRow(row: LlmConfig): LlmConfig {
 /** 落库前加密：apiKey 字段 + 每个远端条目的独立 apiKey。 */
 function encryptInput(
   apiKey: string | null | undefined,
-  extraModels: RawExtraModel[] | null | undefined,
+  extraModels: Array<RawExtraModel> | null | undefined,
 ): {
   apiKey: string | null | undefined;
-  extraModels: RawExtraModel[] | null | undefined;
+  extraModels: Array<RawExtraModel> | null | undefined;
 } {
   const encKey = encryptLlmKey(apiKey ?? null);
   const encExtra = extraModels
@@ -100,9 +84,7 @@ function encryptInput(
         if (typeof item === "object" && item !== null && "apiKey" in item) {
           return {
             ...item,
-            apiKey: encryptLlmKey(
-              typeof item.apiKey === "string" ? item.apiKey : null,
-            ),
+            apiKey: encryptLlmKey(typeof item.apiKey === "string" ? item.apiKey : null),
           };
         }
         return item;
@@ -124,7 +106,7 @@ export interface LlmConfigPatch {
   baseUrl?: string;
   model?: string;
   /** 候选模型：旧纯名字字符串 / 新条目对象（远端条目可带独立 baseUrl、apiKey） */
-  extraModels?: RawExtraModel[] | null;
+  extraModels?: Array<RawExtraModel> | null;
   apiKey?: string | null;
   temperature?: number;
   temperatureByTask?: unknown;
@@ -146,10 +128,7 @@ export class LlmConfigRepository {
     return rows[0] ? decryptRow(rows[0]) : null;
   }
 
-  async upsertSingleton(
-    input: LlmConfigPatch,
-    executor?: DbExecutor,
-  ): Promise<LlmConfig> {
+  async upsertSingleton(input: LlmConfigPatch, executor?: DbExecutor): Promise<LlmConfig> {
     const exec = executor ?? db;
     const taskJson = input.temperatureByTask ?? null;
     const enc = encryptInput(input.apiKey, input.extraModels);
@@ -182,8 +161,7 @@ export class LlmConfigRepository {
     if (input.extraModels !== undefined) patch.extraModels = extraModelsJson;
     if (input.apiKey !== undefined) patch.apiKey = enc.apiKey ?? null;
     if (input.temperature !== undefined) patch.temperature = input.temperature;
-    if (input.temperatureByTask !== undefined)
-      patch.temperatureByTask = taskJson;
+    if (input.temperatureByTask !== undefined) patch.temperatureByTask = taskJson;
     if (input.maxTokens !== undefined) patch.maxTokens = input.maxTokens;
     const rows = await exec
       .update(llmConfig)
@@ -217,7 +195,7 @@ import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
  */
 async function syncRemoteModels(
   exec: DbExecutor,
-  entries: readonly RemoteModelEntry[],
+  entries: ReadonlyArray<RemoteModelEntry>,
 ): Promise<void> {
   /* 既有行在这里取：`workshopAdapters` 与 `apiKey` 都要从它继承。这个接口是
    * 「整份覆盖」，而调用点（设置页保存）手里的清单来自 `getConfigForClient` ——
@@ -226,10 +204,7 @@ async function syncRemoteModels(
    * 读放在事务**内**而不是让调用方在事务外先取一份快照：那份快照可以被另一次保存
    * 插队改掉，那时这里会按一份已经不存在的状态去继承（#2586 的期望 1 明确
    * 不许「只把两条写塞进事务、读仍留在外面」）。 */
-  const rows = await exec
-    .select()
-    .from(remoteModel)
-    .orderBy(remoteModel.createdAt);
+  const rows = await exec.select().from(remoteModel).orderBy(remoteModel.createdAt);
   const keyByName = new Map(rows.map((r) => [r.name, r.apiKey ?? null]));
   const seen = new Set<string>();
   const cleaned: Array<{
@@ -275,9 +250,7 @@ async function syncRemoteModels(
     /* 单条语句批量 upsert（P2：替代原先循环内逐条 update/insert）。
      * 以唯一索引 remoteModel_name_uniq 为冲突目标：已存在则更新、不存在则插入；
      * workshopAdapters 从既有行继承（本接口不覆盖它）。 */
-    const adaptersByName = new Map(
-      rows.map((r) => [r.name, r.workshopAdapters]),
-    );
+    const adaptersByName = new Map(rows.map((r) => [r.name, r.workshopAdapters]));
     await exec
       .insert(remoteModel)
       .values(
@@ -304,21 +277,14 @@ async function syncRemoteModels(
 
 export class RemoteModelRepository {
   /** 全部远端模型，按创建先后排序（配置视图稳定顺序）。 */
-  async list(): Promise<RemoteModel[]> {
-    const rows = await db
-      .select()
-      .from(remoteModel)
-      .orderBy(remoteModel.createdAt);
+  async list(): Promise<Array<RemoteModel>> {
+    const rows = await db.select().from(remoteModel).orderBy(remoteModel.createdAt);
     return rows;
   }
 
   /** 按名查找单个远端模型；不存在返回 null。 */
   async findByName(name: string): Promise<RemoteModel | null> {
-    const rows = await db
-      .select()
-      .from(remoteModel)
-      .where(eq(remoteModel.name, name))
-      .limit(1);
+    const rows = await db.select().from(remoteModel).where(eq(remoteModel.name, name)).limit(1);
     return rows[0] ?? null;
   }
 
@@ -336,9 +302,7 @@ export class RemoteModelRepository {
    * 设置页那条跨两张表的保存走 `saveLlmSettings`，它直接复用 `syncRemoteModels`
    * 那一份语句体、把事务开在更大的范围上 —— 两个入口共用实现，不各写一份。
    */
-  async replaceAll(
-    entries: readonly RemoteModelEntry[],
-  ): Promise<RemoteModel[]> {
+  async replaceAll(entries: ReadonlyArray<RemoteModelEntry>): Promise<Array<RemoteModel>> {
     /* 运行时这一侧本来就拿得到带写锁的事务：`db.transaction` 走 `drizzle-orm/libsql`
      * → `client.transaction()`，默认 mode 是 `write`（= `BEGIN IMMEDIATE`），且整条事务
      * 绑在连接池里的**同一条**连接上（正好避开 §7.6 那条「开机 PRAGMA 只覆盖当时借到的
@@ -364,7 +328,7 @@ export class RemoteModelRepository {
   }
 
   /** 保存某条远端模型的工坊模式适配器（整份覆盖）。模型不存在返回空数组。 */
-  async saveWorkshopAdapters(name: string, adapters: RemoteModeAdapter[]) {
+  async saveWorkshopAdapters(name: string, adapters: Array<RemoteModeAdapter>) {
     const row = await this.findByName(name);
     if (!row) return [];
     await db
@@ -379,7 +343,7 @@ export class RemoteModelRepository {
 }
 
 /** 解析 remoteModel.workshopAdapters JSON 列（坏数据按空处理）。 */
-export function parseAdaptersJson(raw: string | null): RemoteModeAdapter[] {
+export function parseAdaptersJson(raw: string | null): Array<RemoteModeAdapter> {
   if (!raw) return [];
   try {
     return parseRemoteModeAdapters(JSON.parse(raw));
@@ -415,10 +379,7 @@ export const remoteModelRepository = new RemoteModelRepository();
  *     不是这条链的诉求，搬进来只会把持锁时间再拉长。提交之后由调用点自己读。
  */
 export async function saveLlmSettings(input: LlmConfigPatch): Promise<void> {
-  const split =
-    input.extraModels === undefined
-      ? null
-      : splitExtraModels(input.extraModels);
+  const split = input.extraModels === undefined ? null : splitExtraModels(input.extraModels);
   await runWithSqliteBusyRetry(
     () =>
       db.transaction(async (tx) => {

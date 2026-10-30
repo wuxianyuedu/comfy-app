@@ -43,8 +43,8 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 /** 配置里的 glob 是转义形态，磁盘路径不是 —— 比之前先脱转义。 */
 const unescapeGlob = (glob: string) => glob.replace(/\\/g, "");
 
-function sourceFiles(): string[] {
-  const out: string[] = [];
+function sourceFiles(): Array<string> {
+  const out: Array<string> = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.name.startsWith(".")) continue;
@@ -64,7 +64,7 @@ function sourceFiles(): string[] {
 const coverage = /* SAFETY: 类型断言已复核 */ (
   vitestConfig as unknown as {
     test?: {
-      coverage?: { include?: string[] };
+      coverage?: { include?: Array<string> };
     };
   }
 ).test?.coverage;

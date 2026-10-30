@@ -46,7 +46,7 @@ describe("useItemErrors", () => {
   it("条目被删掉后，它挂着的错误随之消失", () => {
     const { result, rerender } = renderHook(({ keys }) => useItemErrors(keys), {
       initialProps: {
-        keys: /* SAFETY: 类型断言已复核 */ ["a", "b"] as readonly string[] | undefined,
+        keys: /* SAFETY: 类型断言已复核 */ ["a", "b"] as ReadonlyArray<string> | undefined,
       },
     });
     act(() => result.current.report("a")("err", "「a」失败了"));
@@ -60,7 +60,7 @@ describe("useItemErrors", () => {
      * 按引用比较会每次都重建错误表，从而让「上一次的错误闪一下」。 */
     const { result, rerender } = renderHook(({ keys }) => useItemErrors(keys), {
       initialProps: {
-        keys: /* SAFETY: 类型断言已复核 */ ["a"] as readonly string[] | undefined,
+        keys: /* SAFETY: 类型断言已复核 */ ["a"] as ReadonlyArray<string> | undefined,
       },
     });
     act(() => result.current.report("a")("err", "失败了"));
@@ -73,7 +73,7 @@ describe("useItemErrors", () => {
   it("无 key 那档不受条目收敛影响（它管的是整块）", () => {
     const { result, rerender } = renderHook(({ keys }) => useItemErrors(keys), {
       initialProps: {
-        keys: /* SAFETY: 类型断言已复核 */ ["a"] as readonly string[] | undefined,
+        keys: /* SAFETY: 类型断言已复核 */ ["a"] as ReadonlyArray<string> | undefined,
       },
     });
     act(() => result.current.report(null)("err", "读取列表失败"));

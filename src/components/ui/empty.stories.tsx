@@ -25,11 +25,9 @@ import {
  * `EmptyMedia` 是这一族**唯一有变体轴**的部件，枚举从 props 派生
  * （规范 16 §16.2.3.4）。
  */
-type EmptyMediaVariant = NonNullable<
-  React.ComponentProps<typeof EmptyMedia>["variant"]
->;
+type EmptyMediaVariant = NonNullable<React.ComponentProps<typeof EmptyMedia>["variant"]>;
 
-const MEDIA_VARIANTS: EmptyMediaVariant[] = ["default", "icon"];
+const MEDIA_VARIANTS: Array<EmptyMediaVariant> = ["default", "icon"];
 
 /* `variant` 这一轴住在 `EmptyMedia` 上（`Empty` 本体没有变体），
    所以 `component` 指向 `EmptyMedia` —— Args 面板的控件是按 `component` 的
@@ -57,9 +55,7 @@ export const Default: Story = {
           <FolderOpen />
         </EmptyMedia>
         <EmptyTitle>还没有工作流</EmptyTitle>
-        <EmptyDescription>
-          从磁盘导入一个工作流包，或者从模板新建一个。
-        </EmptyDescription>
+        <EmptyDescription>从磁盘导入一个工作流包，或者从模板新建一个。</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         <Button size="sm">导入工作流</Button>

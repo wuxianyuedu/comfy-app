@@ -30,7 +30,7 @@ import {
 } from "../scripts/fixed-gate-input-faces.mjs";
 
 /** 被跟踪路径的全集 —— ② 那一条的事实来源（本地 `git ls-files`，不走网络）。 */
-function trackedPaths(): string[] {
+function trackedPaths(): Array<string> {
   return execFileSync("git", ["ls-files"], { encoding: "utf8" })
     .split("\n")
     .map((line) => line.trim())
@@ -39,9 +39,9 @@ function trackedPaths(): string[] {
 
 describe("输入面登记的形状", () => {
   it("每一条都在固定清单里（不然那是一条永不生效的死面）", () => {
-    const orphans = INPUT_FACES.filter(
-      (entry) => !FIXED_STRUCTURAL_TESTS.includes(entry.test),
-    ).map((entry) => entry.test);
+    const orphans = INPUT_FACES.filter((entry) => !FIXED_STRUCTURAL_TESTS.includes(entry.test)).map(
+      (entry) => entry.test,
+    );
     expect(
       orphans,
       "这些登记不在 FIXED_STRUCTURAL_TESTS 里 —— 它们本来就走 import 图（有条件跑），" +
@@ -75,9 +75,7 @@ describe("输入面登记的形状", () => {
     ]);
     /* 每条都得说清「它读什么」—— 没有 why 的面，下一条只会照着猜着改宽。 */
     for (const entry of INPUT_FACES) {
-      expect(entry.why.length, `${entry.test} 缺「它读什么」`).toBeGreaterThan(
-        20,
-      );
+      expect(entry.why.length, `${entry.test} 缺「它读什么」`).toBeGreaterThan(20);
       expect(entry.face.length).toBeGreaterThan(1);
     }
   });
@@ -93,9 +91,7 @@ describe("模式匹配的三种形状", () => {
      * 不相干的判据一路点进来，面就悄悄变宽了。 */
     expect(faceMatches("scripts/x2/y", "scripts/x/**")).toBe(false);
     expect(faceMatches("scripts/tw4-a.json", "scripts/tw4-*.json")).toBe(true);
-    expect(faceMatches("scripts/deep/tw4-a.json", "scripts/tw4-*.json")).toBe(
-      false,
-    );
+    expect(faceMatches("scripts/deep/tw4-a.json", "scripts/tw4-*.json")).toBe(false);
   });
 
   it("空模式与「整仓库通配」一律不命中（那种写法等于没写面）", () => {
@@ -119,30 +115,19 @@ describe("切分与接线", () => {
       INPUT_FACES.map((entry) => entry.test).sort(),
     );
     for (const one of got.skipped) {
-      expect(
-        one.why.length,
-        `${one.test} 的跳过原因要说清它读什么`,
-      ).toBeGreaterThan(20);
+      expect(one.why.length, `${one.test} 的跳过原因要说清它读什么`).toBeGreaterThan(20);
     }
     expect(got.keep).toEqual(
-      FIXED_STRUCTURAL_TESTS.filter(
-        (t) => !INPUT_FACES.some((entry) => entry.test === t),
-      ),
+      FIXED_STRUCTURAL_TESTS.filter((t) => !INPUT_FACES.some((entry) => entry.test === t)),
     );
   });
 
   it("改了被测工具 ⇒ 那一条回到清单里", () => {
-    const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, [
-      "scripts/base-check.mjs",
-    ]);
+    const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, ["scripts/base-check.mjs"]);
     expect(got.keep).toContain("tests/base-check.test.ts");
-    expect(got.skipped.map((s) => s.test)).not.toContain(
-      "tests/base-check.test.ts",
-    );
+    expect(got.skipped.map((s) => s.test)).not.toContain("tests/base-check.test.ts");
     /* 其余三条不该被它带起来：面是各判各的。 */
-    expect(got.skipped.map((s) => s.test)).toContain(
-      "tests/a11y-rules-gate.test.ts",
-    );
+    expect(got.skipped.map((s) => s.test)).toContain("tests/a11y-rules-gate.test.ts");
   });
 
   it("增量档（subset）过筛，并把跳过记进 reasons.__faceSkipped", () => {
@@ -154,9 +139,7 @@ describe("切分与接线", () => {
     });
     expect(res.mode).toBe("subset");
     expect(res.tests).not.toContain("tests/base-check.test.ts");
-    expect(String(res.reasons.__faceSkipped ?? "")).toContain(
-      "tests/a11y-rules-gate.test.ts",
-    );
+    expect(String(res.reasons.__faceSkipped ?? "")).toContain("tests/a11y-rules-gate.test.ts");
   });
 
   it("改动清单为空 ⇒ 一条都不跳（「不知道」不等于「没变」，与装依赖那档同一口径）", () => {
@@ -169,9 +152,7 @@ describe("切分与接线", () => {
     expect(res.mode).toBe("subset");
     expect(res.reasons.__faceSkipped).toBeUndefined();
     for (const entry of INPUT_FACES) {
-      expect(res.tests, `${entry.test} 在拿不到清单时必须照跑`).toContain(
-        entry.test,
-      );
+      expect(res.tests, `${entry.test} 在拿不到清单时必须照跑`).toContain(entry.test);
     }
   });
 
@@ -186,9 +167,7 @@ describe("切分与接线", () => {
     expect(res.mode).toBe("all");
     expect(res.reasons.__faceSkipped).toBeUndefined();
     for (const entry of INPUT_FACES) {
-      expect(res.tests, `${entry.test} 在 wide 档必须照跑`).toContain(
-        entry.test,
-      );
+      expect(res.tests, `${entry.test} 在 wide 档必须照跑`).toContain(entry.test);
     }
   });
 });

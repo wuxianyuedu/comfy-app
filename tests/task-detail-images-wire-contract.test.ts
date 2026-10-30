@@ -36,9 +36,7 @@ import { makeCtx } from "./helpers/trpc";
 import { missingFromWire, throughJsonWire } from "./helpers/wire-contract";
 
 const { detailMock } = vi.hoisted(() => ({
-  detailMock: vi.fn<(input: { id: string }) => Promise<unknown>>(
-    async () => ({}),
-  ),
+  detailMock: vi.fn<(input: { id: string }) => Promise<unknown>>(async () => ({})),
 }));
 
 vi.mock("~/trpc/vanilla", () => ({
@@ -79,9 +77,9 @@ function image(id: string, localPath: string, over: Partial<Row> = {}): Row {
 }
 
 /** 真 handler 的返回过一次传输再取 `images`（少了这一步测的是进程内传对象）。 */
-async function wireImages(id = TASK_ID): Promise<Record<string, unknown>[]> {
+async function wireImages(id = TASK_ID): Promise<Array<Record<string, unknown>>> {
   const row = await createCaller(makeCtx()).detail({ id });
-  return throughJsonWire<{ images: Record<string, unknown>[] }>(row).images;
+  return throughJsonWire<{ images: Array<Record<string, unknown>> }>(row).images;
 }
 
 beforeEach(() => {
@@ -134,11 +132,7 @@ describe("task.detail 的 images ↔ 客户端镜像", () => {
 
   it("经真 handler 与一次传输之后，第一张是封面且顺序由服务端给", async () => {
     const got = await fetchTaskImages(TASK_ID);
-    expect(got.map((img) => img.id)).toEqual([
-      "img-cover",
-      "img-second",
-      "img-third",
-    ]);
+    expect(got.map((img) => img.id)).toEqual(["img-cover", "img-second", "img-third"]);
     expect(got[0]).toEqual({
       id: "img-cover",
       localPath: `${root}/img_0.png`,
@@ -156,9 +150,9 @@ describe("task.detail 的 images ↔ 客户端镜像", () => {
       ...rest,
       path: localPath,
     }));
-    expect(
-      missingFromWire(taskImageRowSchema.shape, Object.keys(drifted[0]!)),
-    ).toEqual(["localPath"]);
+    expect(missingFromWire(taskImageRowSchema.shape, Object.keys(drifted[0]!))).toEqual([
+      "localPath",
+    ]);
     expect(parseTaskImageRows(drifted)).toEqual([]);
   });
 
@@ -187,8 +181,6 @@ describe("task.detail 的 images ↔ 客户端镜像", () => {
     expect(await fetchTaskImages("task-empty")).toEqual([]);
     expect((await wireImages("task-empty")).length).toBe(0);
     /* 上一条没被污染：仍然三张。 */
-    expect((await fetchTaskImages(TASK_ID)).map((i) => i.id)).toContain(
-      "img-cover",
-    );
+    expect((await fetchTaskImages(TASK_ID)).map((i) => i.id)).toContain("img-cover");
   });
 });

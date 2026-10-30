@@ -16,15 +16,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
  * 枚举从 props 派生（不从 `tabsListVariants` 的返回值上取 —— `cva()` 返回函数、
  * 运行期没有 `.variants`，见 `button.stories.tsx` 的注释与规范 16 §16.2.3.4）。
  */
-type TabsListVariant = NonNullable<
-  React.ComponentProps<typeof TabsList>["variant"]
->;
-type TabsOrientation = NonNullable<
-  React.ComponentProps<typeof Tabs>["orientation"]
->;
+type TabsListVariant = NonNullable<React.ComponentProps<typeof TabsList>["variant"]>;
+type TabsOrientation = NonNullable<React.ComponentProps<typeof Tabs>["orientation"]>;
 
-const VARIANTS: TabsListVariant[] = ["default", "line"];
-const ORIENTATIONS: TabsOrientation[] = ["horizontal", "vertical"];
+const VARIANTS: Array<TabsListVariant> = ["default", "line"];
+const ORIENTATIONS: Array<TabsOrientation> = ["horizontal", "vertical"];
 
 /* `variant` 这一轴住在 `TabsList` 上（`Tabs` 本体只有 `orientation`），
    所以 `component` 指向 `TabsList` —— Args 面板的控件按 `component` 的 props 生成。 */
@@ -70,9 +66,7 @@ export const ListVariants: Story = {
     <div className="flex flex-col gap-6">
       {VARIANTS.map((variant) => (
         <Tabs key={variant} defaultValue="a" className="w-lg">
-          <span className="text-ink-muted font-mono text-[11px]">
-            TabsList variant={variant}
-          </span>
+          <span className="text-ink-muted font-mono text-[11px]">TabsList variant={variant}</span>
           <TabsList variant={variant}>
             <TabsTrigger value="a">概览</TabsTrigger>
             <TabsTrigger value="b">明细</TabsTrigger>
@@ -93,15 +87,8 @@ export const Orientations: Story = {
   render: () => (
     <div className="flex items-start gap-10">
       {ORIENTATIONS.map((orientation) => (
-        <Tabs
-          key={orientation}
-          orientation={orientation}
-          defaultValue="a"
-          className="w-64"
-        >
-          <span className="text-ink-muted font-mono text-[11px]">
-            orientation={orientation}
-          </span>
+        <Tabs key={orientation} orientation={orientation} defaultValue="a" className="w-64">
+          <span className="text-ink-muted font-mono text-[11px]">orientation={orientation}</span>
           <TabsList variant="line">
             <TabsTrigger value="a">参数</TabsTrigger>
             <TabsTrigger value="b">节点</TabsTrigger>

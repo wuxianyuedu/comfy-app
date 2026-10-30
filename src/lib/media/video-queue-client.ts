@@ -65,9 +65,9 @@ export interface VideoTask {
  * 「每个任务都没有视频」—— 那是**静默**的那种坏。列表变空看得见。
  * `id` 非法（比如是数字）同样整行丢掉，而不是把 `undefined` 硬塞给视图。
  */
-export function parseVideoRows(raw: unknown): VideoTask[] {
+export function parseVideoRows(raw: unknown): Array<VideoTask> {
   if (!Array.isArray(raw)) return [];
-  const out: VideoTask[] = [];
+  const out: Array<VideoTask> = [];
   for (const item of raw) {
     const parsed = videoTaskRowSchema.safeParse(item);
     if (!parsed.success) continue;
@@ -87,7 +87,7 @@ export function parseVideoRows(raw: unknown): VideoTask[] {
 }
 
 /** 拉取当前用户的 VIDEO 类任务（顺序由服务端按创建时间倒序给出）。 */
-export async function fetchVideoTasks(): Promise<VideoTask[]> {
+export async function fetchVideoTasks(): Promise<Array<VideoTask>> {
   const data = await vanillaApi.task.list.query({ take: 200 });
   return parseVideoRows(data.tasks);
 }

@@ -28,11 +28,7 @@ import { WorkflowImagePreview } from "../WorkflowImagePreview";
 import { useIOEditContext } from "./IOEditContext";
 import { useHoverElevation } from "../workflow-editor/HoverElevation";
 import { useFlowNodeEntries } from "./workflow-node-entries";
-import {
-  computeNodePalette,
-  DARK_PALETTE_BASE,
-  LIGHT_PALETTE_BASE,
-} from "./workflow-node-palette";
+import { computeNodePalette, DARK_PALETTE_BASE, LIGHT_PALETTE_BASE } from "./workflow-node-palette";
 import { FlowNodeHeader } from "./FlowNodeHeader";
 import { FlowNodeCollapsedAnchors } from "./FlowNodeCollapsedAnchors";
 import { FlowNodePinRows } from "./FlowNodePinRows";
@@ -40,12 +36,12 @@ import { FlowNodeWidgetRows } from "./FlowNodeWidgetRows";
 import type { WorkflowNodeData } from "../workflow-types";
 
 /** 节点角色配色定义（assignedRole → 标签 + 强调色）。 */
-export const PORT_ROLES: {
+export const PORT_ROLES: Array<{
   key: string;
   label: string;
   color: string;
   bg: string;
-}[] = [
+}> = [
   {
     key: "positiveNode",
     label: "正向提示词",
@@ -93,9 +89,7 @@ export const FlowNode = React.memo(function FlowNode({
   data: WorkflowNodeData;
   selected?: boolean;
 }) {
-  const role = PORT_ROLES.find(
-    (PORT_ROLES) => PORT_ROLES.key === data.assignedRole,
-  );
+  const role = PORT_ROLES.find((PORT_ROLES) => PORT_ROLES.key === data.assignedRole);
   const io = useIOEditContext();
   /* 自定义节点注册表被重新灌入时，这一格要重算：下面的包名页脚与调试态的渲染链
    * 标签读的是 `~/config/custom-nodes` 里就地替换的 map，而 FlowNode 是 memo 的。
@@ -127,9 +121,7 @@ export const FlowNode = React.memo(function FlowNode({
    *  标记只播下**初始**值；此后由用户开关接管状态
    *  （天真地写 `dataCollapsed || userCollapsed` 会让
    *  初始就折叠的节点永远展不开）。 */
-  const [userCollapsed, setUserCollapsed] = useState<boolean>(
-    data.flags?.collapsed === true,
-  );
+  const [userCollapsed, setUserCollapsed] = useState<boolean>(data.flags?.collapsed === true);
   const isCollapsed = userCollapsed;
 
   /* 显示标题优先用 zh-CN 友好映射 → ComfyUI 的原始 `title` →
@@ -158,11 +150,7 @@ export const FlowNode = React.memo(function FlowNode({
         // 折叠时缩回标题栏高度。
         width: hasSize ? data.size?.w : undefined,
         height: "auto",
-        minWidth: hasSize
-          ? data.size?.w
-          : entries.outputs.length > 0
-            ? 268
-            : 248,
+        minWidth: hasSize ? data.size?.w : entries.outputs.length > 0 ? 268 : 248,
         // data.size.h 是**卡片体内容**高度；外层 div 还包含
         // 钉住的 NODE_TITLE_H 标题栏，所以下限是内容 + 标题。
         minHeight: isCollapsed
@@ -211,31 +199,27 @@ export const FlowNode = React.memo(function FlowNode({
 
       {/* 顶部针脚区 —— 纯连接型输入与输出配在
        *  同一行。折叠时隐藏。 */}
-      {!isCollapsed &&
-        (entries.uniqueConnEntries.length > 0 ||
-          entries.outputs.length > 0) && (
-          <FlowNodePinRows
-            data={data}
-            io={io}
-            rawMeta={entries.rawMeta}
-            uniqueConnEntries={entries.uniqueConnEntries}
-            outputs={entries.outputs}
-          />
-        )}
+      {!isCollapsed && (entries.uniqueConnEntries.length > 0 || entries.outputs.length > 0) && (
+        <FlowNodePinRows
+          data={data}
+          io={io}
+          rawMeta={entries.rawMeta}
+          uniqueConnEntries={entries.uniqueConnEntries}
+          outputs={entries.outputs}
+        />
+      )}
 
       {/* Widget 输入区 —— 只有旋钮。Power Lora
        *  Loader 跳过（它自带堆栈），折叠时隐藏。 */}
-      {!isCollapsed &&
-        entries.visibleWidgetEntries.length > 0 &&
-        !isPowerLoraLoader && (
-          <FlowNodeWidgetRows
-            data={data}
-            io={io}
-            rawMeta={entries.rawMeta}
-            visibleWidgetEntries={entries.visibleWidgetEntries}
-            hasSize={hasSize}
-          />
-        )}
+      {!isCollapsed && entries.visibleWidgetEntries.length > 0 && !isPowerLoraLoader && (
+        <FlowNodeWidgetRows
+          data={data}
+          io={io}
+          rawMeta={entries.rawMeta}
+          visibleWidgetEntries={entries.visibleWidgetEntries}
+          hasSize={hasSize}
+        />
+      )}
 
       {/* rgthree Fast Groups Bypasser 运行时主体 —— 每个匹配 `matchTitle`
        *  的分组一行开关（PATCH → 写入 rawJson）。 */}
@@ -255,12 +239,7 @@ export const FlowNode = React.memo(function FlowNode({
 
       {/* rgthree Label 运行时主体 —— 按 `properties` 里的样式
        *  绘制标题，铺满这张（无头部的）卡片。 */}
-      {isLabel && (
-        <RgthreeLabelBody
-          text={data.title}
-          properties={data.properties ?? {}}
-        />
-      )}
+      {isLabel && <RgthreeLabelBody text={data.title} properties={data.properties ?? {}} />}
 
       {/* IMAGE 输入的内联缩略图预览 —— 每个带
        *  `preview: true` 的 rawInput（LoadImage 家族）都在卡片体
@@ -280,17 +259,16 @@ export const FlowNode = React.memo(function FlowNode({
        *  （各类 Loader / EmptyLatentImage …）本就没有入端口，左侧挂一颗
        *  孤零零的圆点看起来像渲染 bug。改为完全透明 + isConnectable=false：
        *  连线锚点能力保留（避免既有 fallback 边断开），视觉上不再出现。 */}
-      {entries.uniqueConnEntries.length === 0 &&
-        entries.uniqueWidgetEntries.length === 0 && (
-          <Handle
-            type="target"
-            position={Position.Left}
-            id="__default_in"
-            isConnectable={false}
-            className="size-2.5! border-0!"
-            style={{ left: -5, opacity: 0, pointerEvents: "none" }}
-          />
-        )}
+      {entries.uniqueConnEntries.length === 0 && entries.uniqueWidgetEntries.length === 0 && (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id="__default_in"
+          isConnectable={false}
+          className="size-2.5! border-0!"
+          style={{ left: -5, opacity: 0, pointerEvents: "none" }}
+        />
+      )}
 
       {/* 通用源句柄 —— 始终存在但不可见，好让解析不出精确
        *  "out:<name>" 句柄的边仍能锚定。 */}
@@ -316,9 +294,7 @@ export const FlowNode = React.memo(function FlowNode({
       {/* 调试模式 — 非折叠时在 PackageFooter 下方渲染渲染链路
        *  模块标签（仅 debugMode 开启时由 DebugChainFooter 自行显示）。 */}
       {!isCollapsed && debugMode && (
-        <DebugChainFooter
-          modules={getWorkflowRenderChainModules(data.classType)}
-        />
+        <DebugChainFooter modules={getWorkflowRenderChainModules(data.classType)} />
       )}
     </div>
   );

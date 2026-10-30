@@ -24,8 +24,8 @@ interface FlowNodePinRowsProps {
   data: WorkflowNodeData;
   io: IOEditContextValue | null;
   rawMeta: Record<string, RawInputMeta>;
-  uniqueConnEntries: [string, unknown][];
-  outputs: [string, string][];
+  uniqueConnEntries: Array<[string, unknown]>;
+  outputs: Array<[string, string]>;
 }
 
 export function FlowNodePinRows({
@@ -42,7 +42,7 @@ export function FlowNodePinRows({
   const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
   /* 一行两端的 Handle id 不同（输入名 / `out:<输出名>`），但观感要一致：两端的
    * 级别合成一档 —— focused > related > 「都无关」压暗。 */
-  const toneOf = (...handles: (string | undefined)[]): PortRowTone => {
+  const toneOf = (...handles: Array<string | undefined>): PortRowTone => {
     const roles = handles.map((handle) => readPortFocusRole(nodeData, handle));
     for (const role of roles) {
       const tone = resolvePortRowTone({ role, hasSelection: true });

@@ -44,21 +44,12 @@ export function parseNvidiaSmiOutput(raw: string): NvidiaSmiMem | null {
   return { usedMiB: Math.min(used, total), totalMiB: total };
 }
 
-function execFileP(
-  cmd: string,
-  args: string[],
-  timeoutMs = 3000,
-): Promise<string> {
+function execFileP(cmd: string, args: Array<string>, timeoutMs = 3000): Promise<string> {
   return new Promise((resolve) => {
-    execFile(
-      cmd,
-      args,
-      { timeout: timeoutMs, windowsHide: true },
-      (err, stdout) => {
-        if (err) resolve("");
-        else resolve(stdout.toString());
-      },
-    );
+    execFile(cmd, args, { timeout: timeoutMs, windowsHide: true }, (err, stdout) => {
+      if (err) resolve("");
+      else resolve(stdout.toString());
+    });
   });
 }
 

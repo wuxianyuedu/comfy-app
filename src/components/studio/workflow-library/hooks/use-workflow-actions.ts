@@ -33,18 +33,10 @@ export interface UseWorkflowActionsArgs {
   setActionError: (v: string) => void;
   /** 「哪一条在下载 / 在同步」的执行态由 `~/components/ui/use-item-action` 给
    *  （规范 16 §16.2.4.40）—— 这里只拿它的 `run`（忙标记 + 同步判重入一次给全）。 */
-  runBundle: <T>(
-    id: string,
-    action: () => Promise<T>,
-  ) => Promise<T | undefined>;
-  runResync: <T>(
-    id: string,
-    action: () => Promise<T>,
-  ) => Promise<T | undefined>;
-  setPendingLoading: (
-    fn: (s: Record<string, boolean>) => Record<string, boolean>,
-  ) => void;
-  setWorkflows: (fn: (prev: WorkflowRow[]) => WorkflowRow[]) => void;
+  runBundle: <T>(id: string, action: () => Promise<T>) => Promise<T | undefined>;
+  runResync: <T>(id: string, action: () => Promise<T>) => Promise<T | undefined>;
+  setPendingLoading: (fn: (s: Record<string, boolean>) => Record<string, boolean>) => void;
+  setWorkflows: (fn: (prev: Array<WorkflowRow>) => Array<WorkflowRow>) => void;
   load: () => Promise<void> | void;
   updateMut: MutateAsyncLike<
     RouterInputs["workflow"]["update"],
@@ -100,15 +92,12 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
        * 「文件被占用」反复失败的动作用户需要看着它改。反馈通道由调用处
        * 注入，所以这里换一个 `report`（出口只负责文案归一）。 */
       try {
-        const result = await runAsyncAction(
-          () => deleteMut.mutateAsync({ id }),
-          {
-            report: (kind, detail) => {
-              if (kind === "err") setActionError(detail);
-            },
-            failureText: "删除失败",
+        const result = await runAsyncAction(() => deleteMut.mutateAsync({ id }), {
+          report: (kind, detail) => {
+            if (kind === "err") setActionError(detail);
           },
-        );
+          failureText: "删除失败",
+        });
         if (result.ok) {
           setPendingDelete(null);
           void load();
@@ -124,7 +113,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
 
   /** 多模式持久化。乐观更新本地列表，失败则回滚（重新拉取列表）。 */
   const patchModes = useCallback(
-    async (id: string, modes: string[], defaultMode: string) => {
+    async (id: string, modes: Array<string>, defaultMode: string) => {
       setWorkflows((prev) =>
         prev.map((workflow) =>
           workflow.id === id
@@ -152,16 +141,14 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
 
   /** 模型标签绑定持久化。乐观更新本地列表，失败回滚。 */
   const patchModelTags = useCallback(
-    async (id: string, names: string[]) => {
+    async (id: string, names: Array<string>) => {
       setWorkflows((prev) =>
-        prev.map((workflow) =>
-          workflow.id === id ? { ...workflow, modelTags: names } : workflow,
-        ),
+        prev.map((workflow) => (workflow.id === id ? { ...workflow, modelTags: names } : workflow)),
       );
-      const result = await runAsyncAction(
-        () => updateMut.mutateAsync({ id, modelTags: names }),
-        { report, failureText: "更新模型标签失败" },
-      );
+      const result = await runAsyncAction(() => updateMut.mutateAsync({ id, modelTags: names }), {
+        report,
+        failureText: "更新模型标签失败",
+      });
       if (!result.ok) void load();
     },
     [setWorkflows, updateMut, report, load],
@@ -178,12 +165,8 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       await runAsyncAction(
         async () => {
           await updateMut.mutateAsync({ id, paramMap });
-          await queryClient.invalidateQueries(
-            trpc.workflow.detail.queryFilter({ id }),
-          );
-          await queryClient.invalidateQueries(
-            trpc.workflow.detailFull.queryFilter({ id }),
-          );
+          await queryClient.invalidateQueries(trpc.workflow.detail.queryFilter({ id }));
+          await queryClient.invalidateQueries(trpc.workflow.detailFull.queryFilter({ id }));
         },
         { report, failureText: "更新参数映射失败" },
       );
@@ -198,12 +181,8 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           await updateMut.mutateAsync({ id, workflowIO });
           /* detailFull 才是预览表单的数据源（它带服务端富化的 defaultValue），
            * 只失效 detail 的话富化 IO 的缓存查询不会重拉 → 默认值不刷新。 */
-          await queryClient.invalidateQueries(
-            trpc.workflow.detail.queryFilter({ id }),
-          );
-          await queryClient.invalidateQueries(
-            trpc.workflow.detailFull.queryFilter({ id }),
-          );
+          await queryClient.invalidateQueries(trpc.workflow.detail.queryFilter({ id }));
+          await queryClient.invalidateQueries(trpc.workflow.detailFull.queryFilter({ id }));
         },
         { report, failureText: "更新参数配置失败" },
       );
@@ -221,9 +200,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
          * 分支文案仍归调用处。抛错那一支仍走出口（`errorMessage` 兜底）。 */
         await runAsyncAction(
           async () => {
-            const d = await queryClient.fetchQuery(
-              trpc.workflow.detail.queryOptions({ id }),
-            );
+            const d = await queryClient.fetchQuery(trpc.workflow.detail.queryOptions({ id }));
             const tpl = d?.template;
             if (!tpl) {
               toast.error("获取工作流失败", "未知错误");
@@ -257,10 +234,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           async () => {
             const d = await resyncMut.mutateAsync({ id });
             if (d?.missing) {
-              toast.error(
-                "同步失败",
-                "磁盘文件已不存在，无法同步（请检查路径或重新载入）",
-              );
+              toast.error("同步失败", "磁盘文件已不存在，无法同步（请检查路径或重新载入）");
             } else if (d?.unchanged) {
               toast.info("磁盘文件未变化", name);
             } else if (d?.updated) {

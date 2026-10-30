@@ -83,8 +83,8 @@ const DEFAULT_EDGE_OPTIONS = {
 };
 
 export interface WorkflowEditorCanvasProps {
-  nodes: Node[];
-  edges: Edge[];
+  nodes: Array<Node>;
+  edges: Array<Edge>;
   onNodesChange: OnNodesChange<Node>;
   onEdgesChange: OnEdgesChange<Edge>;
   onNodeDragStop: (e: unknown, node: Node) => void;
@@ -102,11 +102,11 @@ export interface WorkflowEditorCanvasProps {
   /** 连线合法性闸门：无模式 / 落点不是宿主节点端口一律拒绝。 */
   isValidConnection?: (connection: Connection | Edge) => boolean;
   /** 删除连线（映射线 = 该对外参数在当前模式下断开）。 */
-  onEdgesDelete?: (edges: Edge[]) => void;
+  onEdgesDelete?: (edges: Array<Edge>) => void;
   /** 写回连线表：选中节点后由本画布把「相关连线」标记写进 edges（见 hook 注释）。 */
-  setEdges: (updater: (edges: Edge[]) => Edge[]) => void;
+  setEdges: (updater: (edges: Array<Edge>) => Array<Edge>) => void;
   /** 写回节点表：同一帧里把「相关端口行」标记写进节点 data（见 hook 注释）。 */
-  setNodes: (updater: (nodes: Node[]) => Node[]) => void;
+  setNodes: (updater: (nodes: Array<Node>) => Array<Node>) => void;
 }
 
 export function WorkflowEditorCanvas({

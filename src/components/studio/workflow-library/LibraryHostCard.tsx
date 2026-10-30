@@ -37,7 +37,7 @@ export interface LibraryHostCardProps {
   running: boolean;
   /** 运行阶段（决定状态点配色）。 */
   phaseKind: "idle" | "starting" | "running" | "done" | "failed";
-  modes?: string[];
+  modes?: Array<string>;
   effectiveMode: string | null;
   taskType: string;
   effectiveModeLabel: string;
@@ -47,8 +47,8 @@ export interface LibraryHostCardProps {
   /** 参数表单（`DynamicWorkflowForm` compact —— 端点由它自己渲染）。 */
   form: React.ReactNode;
   /** 工作流的输出行（`splitWorkflowIO` 的结果）。 */
-  outputs: readonly (WorkflowIOEntry & { ioKey: string })[];
-  inputs: readonly (WorkflowIOEntry & { ioKey: string })[];
+  outputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
+  inputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
   /** 生成按钮。 */
   actions: React.ReactNode;
 }
@@ -107,14 +107,10 @@ export function LibraryHostCard({
           <div className="flex h-7 min-w-0 items-center gap-1">
             <WorkflowStaticChip>
               <span className="bg-success-strong size-1.5 rounded-full" />
-              <span className="text-success-strong text-2xs font-semibold">
-                本机
-              </span>
+              <span className="text-success-strong text-2xs font-semibold">本机</span>
             </WorkflowStaticChip>
             <WorkflowStaticChip className="min-w-0 flex-1">
-              <span className="text-ink-bright text-2xs truncate font-semibold">
-                全部模型
-              </span>
+              <span className="text-ink-bright text-2xs truncate font-semibold">全部模型</span>
             </WorkflowStaticChip>
           </div>
           <div className="flex h-7 min-w-0 items-center gap-1">
@@ -129,9 +125,7 @@ export function LibraryHostCard({
                 value={effectiveMode ?? taskType}
                 onChange={(code) => onModeChange(code)}
                 options={modes}
-                labels={Object.fromEntries(
-                  modes.map((code) => [code, modeLabel(code)]),
-                )}
+                labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
                 popoverMinWidth={150}
                 autoFitFromOptions={false}
                 className="border-border-strong! text-2xs shrink-0 bg-transparent!"

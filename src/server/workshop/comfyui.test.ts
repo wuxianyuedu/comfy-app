@@ -33,12 +33,11 @@ import {
   resolveComfyBase,
 } from "./comfyui";
 
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
-  for (const dir of tmpDirs.splice(0))
-    rmSync(dir, { recursive: true, force: true });
+  for (const dir of tmpDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 /** fetch 替身：按路径分发。probe（/system_stats）与业务端点分开计数。 */
@@ -46,9 +45,7 @@ function stubFetch(handler: (url: URL) => Response | Promise<Response>) {
   const counts = { probe: 0, prompt: 0 };
   const mock = vi.fn(async (input: RequestInfo | URL) => {
     const url =
-      input instanceof URL
-        ? input
-        : new URL(typeof input === "string" ? input : input.url);
+      input instanceof URL ? input : new URL(typeof input === "string" ? input : input.url);
     const isProbe = url.pathname === "/system_stats";
     if (isProbe) counts.probe += 1;
     if (url.pathname === "/api/prompt") counts.prompt += 1;
@@ -163,10 +160,7 @@ describe("base 缓存的失效语义（网络失败复位 / HTTP 失败不复位
     let promptStatus = 200;
     const { counts } = stubFetch((url) => {
       if (url.pathname === "/api/prompt") {
-        return Response.json(
-          { error: "CUDA out of memory" },
-          { status: promptStatus },
-        );
+        return Response.json({ error: "CUDA out of memory" }, { status: promptStatus });
       }
       return Response.json({});
     });

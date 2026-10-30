@@ -37,9 +37,9 @@ function fieldOf(value: unknown, key: "code" | "message" | "name"): string {
 }
 
 /** 沿 cause 链收集 code / message（去重、保序）。 */
-function collect(error: unknown): { codes: string[]; messages: string[] } {
-  const codes: string[] = [];
-  const messages: string[] = [];
+function collect(error: unknown): { codes: Array<string>; messages: Array<string> } {
+  const codes: Array<string> = [];
+  const messages: Array<string> = [];
   let node: unknown = error;
   for (let depth = 0; depth < CAUSE_CHAIN_LIMIT && node != null; depth++) {
     const code = fieldOf(node, "code");

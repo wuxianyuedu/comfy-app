@@ -111,7 +111,7 @@ function buildResult(patch: Partial<LibraryWorkflowBuildResult> = {}): LibraryWo
 }
 
 interface RenderOptions {
-  shots?: Shot[];
+  shots?: Array<Shot>;
   workflowId?: string;
   apiChannels?: ApiChannelsView | null;
 }
@@ -140,10 +140,10 @@ function renderStudio(options: RenderOptions = {}) {
 }
 
 /** onShotsChange 是函数式补丁：把它折叠成「最终一条 patch 里的镜头列表」。 */
-function lastPatchedShot(mock: { mock: { calls: unknown[][] } }): Shot {
+function lastPatchedShot(mock: { mock: { calls: Array<Array<unknown>> } }): Shot {
   const last = /* SAFETY: 类型断言已复核 */ mock.mock.calls[mock.mock.calls.length - 1]![0] as (
-    prev: Shot[],
-  ) => Shot[];
+    prev: Array<Shot>,
+  ) => Array<Shot>;
   return last([makeShot()])[0]!;
 }
 
@@ -246,7 +246,7 @@ describe("ShotStudio 生图出口", () => {
     /* watchShot 的产物回写经 onShotsChange 的函数式补丁发生 */
     const calls = vi.mocked(onShotsChange).mock.calls;
     const wroteImage = calls.some((call) => {
-      const patch = /* SAFETY: 类型断言已复核 */ (call[0] as (prev: Shot[]) => Shot[])([
+      const patch = /* SAFETY: 类型断言已复核 */ (call[0] as (prev: Array<Shot>) => Array<Shot>)([
         makeShot(),
       ])[0]!;
       return patch.imageUrl === "/api/generated/1.png";

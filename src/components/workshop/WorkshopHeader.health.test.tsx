@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { WorkshopHeader } from "./WorkshopHeader";
 import { STAGE_DEFS, computeStageRatios, type HealthRow } from "./stage-config";
 
-function healthOf(overrides: Partial<Record<string, boolean | number>> = {}): HealthRow[] {
+function healthOf(overrides: Partial<Record<string, boolean | number>> = {}): Array<HealthRow> {
   const rows = computeStageRatios(
     {
       scriptReady: true,
@@ -24,7 +24,7 @@ function healthOf(overrides: Partial<Record<string, boolean | number>> = {}): He
     },
     true,
   );
-  return /* SAFETY: 类型断言已复核 */ (Object.keys(rows) as HealthRow["id"][]).map((id) => {
+  return /* SAFETY: 类型断言已复核 */ (Object.keys(rows) as Array<HealthRow["id"]>).map((id) => {
     const override = overrides[id];
     const ratio = typeof override === "number" ? override : override ? 1 : 0;
     /* 缩略与全名故意取不同值：写成一样就无法证明视图分别用了这两个字段。 */
@@ -38,7 +38,7 @@ function healthOf(overrides: Partial<Record<string, boolean | number>> = {}): He
   });
 }
 
-function renderHeader(health: HealthRow[]) {
+function renderHeader(health: Array<HealthRow>) {
   return render(<WorkshopHeader title="雾中来信" progressPct={40} health={health} />);
 }
 
@@ -69,10 +69,10 @@ describe("WorkshopHeader 的进度胶囊", () => {
 });
 
 describe("WorkshopHeader 的健康度分段条", () => {
-  function tracksOf(container: HTMLElement): Element[] {
+  function tracksOf(container: HTMLElement): Array<Element> {
     return [...container.querySelectorAll('[data-slot="progress-bar-track"]')];
   }
-  function fillsOf(container: HTMLElement): Element[] {
+  function fillsOf(container: HTMLElement): Array<Element> {
     return [...container.querySelectorAll('[data-slot="progress-bar-fill"]')];
   }
 

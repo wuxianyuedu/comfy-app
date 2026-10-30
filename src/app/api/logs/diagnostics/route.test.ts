@@ -49,7 +49,7 @@ const PYTHON_OK = hasPython();
  *
  * 解释器走共享的 `runPython()`：Windows 上没有 `python3` 这个名字，
  * 硬编码会让这条用例在自托管 Windows 构建节点上 ENOENT（见该 helper 文件头）。 */
-function unzipList(file: string): string[] {
+function unzipList(file: string): Array<string> {
   return runPython(
     `
 import sys, zipfile

@@ -20,7 +20,7 @@ const TAG_ICON_COLOR = "text-fuchsia-700 dark:text-fuchsia-300";
 
 interface ModelTagManagerProps {
   /** 初始标签（来自父级缓存的标签库列表）。 */
-  initialTags: TagItem[];
+  initialTags: Array<TagItem>;
   /** 任何创建 / 删除之后调用，好让父级刷新列表。 */
   onChanged: () => void;
   /** 用户关闭对话框时调用。 */
@@ -34,11 +34,7 @@ interface ModelTagManagerProps {
  *
  * 视图层（规范 17 §17.2 第③层）：列表合并与三个写动作在
  * hooks/use-model-tags.ts；本文件只渲染。对外 props 与导出名保持不变。 */
-export function ModelTagManager({
-  initialTags,
-  onChanged,
-  onClose,
-}: ModelTagManagerProps) {
+export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagManagerProps) {
   const c = useModelTags({ initialTags, onChanged });
 
   /* 内联重命名态是纯视觉状态（哪一行在编辑），留在视图层 */
@@ -115,16 +111,12 @@ export function ModelTagManager({
 
           {/* 无条目归属的那档（新增失败 / 列表刷新失败）—— 挂在新增框下方。 */}
           {c.errors.get(null) && (
-            <div className="text-danger-strong mb-3 text-xs">
-              {c.errors.get(null)}
-            </div>
+            <div className="text-danger-strong mb-3 text-xs">{c.errors.get(null)}</div>
           )}
 
           <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
             {c.tags.length === 0 && (
-              <div className="text-ink-muted py-6 text-center text-sm">
-                还没有模型标签
-              </div>
+              <div className="text-ink-muted py-6 text-center text-sm">还没有模型标签</div>
             )}
             {c.tags.map((tag) => {
               const isEditing = editingId === tag.id;
@@ -132,10 +124,7 @@ export function ModelTagManager({
                * 只有这一行标红，用户不必回忆上一条消息说的是哪一行。 */
               const rowError = c.errors.get(tag.name);
               return (
-                <div
-                  key={tag.id}
-                  className="border-border-strong bg-subtle rounded-lg border"
-                >
+                <div key={tag.id} className="border-border-strong bg-subtle rounded-lg border">
                   {rowError && (
                     <div className="border-danger/30 text-danger-strong text-2xs border-b px-3 py-1">
                       {rowError}
@@ -148,9 +137,7 @@ export function ModelTagManager({
                         value={editingDraft}
                         maxLength={64}
                         onFocus={(event) => event.currentTarget.select()}
-                        onChange={(event) =>
-                          setEditingDraft(event.target.value)
-                        }
+                        onChange={(event) => setEditingDraft(event.target.value)}
                         {...enterCommit({
                           onCommit: () => void commitEdit(tag.id, tag.name),
                           onCancel: cancelEdit,
@@ -174,9 +161,7 @@ export function ModelTagManager({
                         role="button"
                         tabIndex={0}
                         onDoubleClick={() => beginEdit(tag.id, tag.name)}
-                        {...simpleKeyHandler(["Enter", "F2"], () =>
-                          beginEdit(tag.id, tag.name),
-                        )}
+                        {...simpleKeyHandler(["Enter", "F2"], () => beginEdit(tag.id, tag.name))}
                         title="双击（或 Enter / F2）重命名"
                         className="text-ink-bright hover:bg-subtle hover:text-ink-bright focus-visible:ring-primary/40 cursor-text truncate rounded-sm px-0.5 text-sm select-none focus-visible:ring-2 focus-visible:outline-none"
                       >
@@ -203,11 +188,7 @@ export function ModelTagManager({
                           className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
                           aria-label={`删除 ${tag.name}`}
                         >
-                          <Icon
-                            data-icon="inline-start"
-                            name="trash"
-                            className="size-3.5"
-                          />
+                          <Icon data-icon="inline-start" name="trash" className="size-3.5" />
                         </Button>
                       </Hint>
                     </div>

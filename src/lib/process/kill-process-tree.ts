@@ -72,9 +72,7 @@ export interface KillProcessTreeResult {
 }
 
 /** 当前平台是否是 Windows（进程树机制的分叉点）。 */
-export function isWindowsPlatform(
-  platform: NodeJS.Platform = process.platform,
-): boolean {
+export function isWindowsPlatform(platform: NodeJS.Platform = process.platform): boolean {
   return platform === "win32";
 }
 
@@ -85,21 +83,13 @@ export function isWindowsPlatform(
  * 用 `ps -o pgid= -p <pid>`：`=` 去掉表头，输出只剩一个数字。
  * 这是 POSIX 必备命令，不像 `lsof` / `pstree` 属于发行版可选。
  */
-export function readPgid(
-  pid: number,
-  timeoutMs = 2000,
-): Promise<number | null> {
+export function readPgid(pid: number, timeoutMs = 2000): Promise<number | null> {
   return new Promise((resolve) => {
-    execFile(
-      "ps",
-      ["-o", "pgid=", "-p", String(pid)],
-      { timeout: timeoutMs },
-      (err, stdout) => {
-        if (err) return resolve(null);
-        const pgid = Number.parseInt(stdout.trim().split(/\s+/)[0] ?? "", 10);
-        resolve(Number.isInteger(pgid) && pgid > 0 ? pgid : null);
-      },
-    );
+    execFile("ps", ["-o", "pgid=", "-p", String(pid)], { timeout: timeoutMs }, (err, stdout) => {
+      if (err) return resolve(null);
+      const pgid = Number.parseInt(stdout.trim().split(/\s+/)[0] ?? "", 10);
+      resolve(Number.isInteger(pgid) && pgid > 0 ? pgid : null);
+    });
   });
 }
 
@@ -162,8 +152,7 @@ function planPosixKill(input: {
 }): PosixKillPlan {
   const { pid, pgid, ownPgid, detached, force } = input;
   const sig: PosixSignal = force ? "SIGKILL" : "SIGTERM";
-  const sharesCallerGroup =
-    pgid !== null && (ownPgid === null || ownPgid === pgid);
+  const sharesCallerGroup = pgid !== null && (ownPgid === null || ownPgid === pgid);
 
   const fallback: PosixKillPlan["fallback"] = sharesCallerGroup
     ? {
@@ -260,9 +249,7 @@ export interface KillHostedChildOptions {
  *  与 `killProcessTree` 同属硬规则 3 的执行面：散在业务路由里各写一遍平台判据
  *  与命令，才是历史「单杀留孤儿」反复出现的原因。
  */
-export async function killProcessTreeByImage(
-  image: string,
-): Promise<KillProcessTreeResult> {
+export async function killProcessTreeByImage(image: string): Promise<KillProcessTreeResult> {
   if (!image.trim()) return { ok: false, via: "无映像名（跳过）" };
   if (isWindowsPlatform()) {
     return { ok: true, via: spawnTaskkill(windowsKillArgs(image, "image")) };
@@ -297,13 +284,8 @@ export function windowsTaskkillPath(): string {
 }
 
 /** 构造 Windows 的回收命令参数（tree = `/PID <pid> /T /F`，image = `/IM <name> /T /F`）。 */
-export function windowsKillArgs(
-  target: string,
-  mode: KillProcessTreeMode,
-): string[] {
-  return mode === "image"
-    ? ["/IM", target, "/T", "/F"]
-    : ["/PID", target, "/T", "/F"];
+export function windowsKillArgs(target: string, mode: KillProcessTreeMode): Array<string> {
+  return mode === "image" ? ["/IM", target, "/T", "/F"] : ["/PID", target, "/T", "/F"];
 }
 
 /** 发起一次 taskkill（异步派发，不阻塞；调用方随后自行探测确认）。
@@ -311,10 +293,7 @@ export function windowsKillArgs(
  *  spawn 会**同步抛错**的情形（目标不是可执行映像，如注入了一个批处理；
  *  或命令名取不到）在这里一并收成 `onDone(false)`：本模块对外承诺「回收失败
  *  不抛错」，让调用方按同一条路径处理（记 via、走自己的探测兜底）。 */
-export function spawnTaskkill(
-  args: string[],
-  onDone?: (ok: boolean) => void,
-): string {
+export function spawnTaskkill(args: Array<string>, onDone?: (ok: boolean) => void): string {
   const exe = windowsTaskkillPath();
   const via = `${exe} ${args.join(" ")}`;
   try {
@@ -354,18 +333,9 @@ export async function killProcessTree(
  */
 export async function killProcessTreeWith(
   opts: KillProcessTreeOptions,
-  {
-    windows = isWindowsPlatform(),
-    image = "",
-  }: { windows?: boolean; image?: string },
+  { windows = isWindowsPlatform(), image = "" }: { windows?: boolean; image?: string },
 ): Promise<KillProcessTreeResult> {
-  const {
-    pid,
-    detached = false,
-    force = false,
-    mode = "tree",
-    wait = false,
-  } = opts;
+  const { pid, detached = false, force = false, mode = "tree", wait = false } = opts;
   if (!pid || pid <= 0) return { ok: false, via: "无有效 PID（跳过）" };
 
   if (windows) {
@@ -393,9 +363,7 @@ export async function killProcessTreeWith(
  * 同步版本：给「已经拿到子进程句柄、只差发一个信号」的收尾路径用
  * （如 spawn 之后立刻失败要清理）。
  */
-export function killProcessTreeSync(
-  opts: KillProcessTreeOptions,
-): KillProcessTreeResult {
+export function killProcessTreeSync(opts: KillProcessTreeOptions): KillProcessTreeResult {
   const { pid, detached = false, force = false, mode = "tree" } = opts;
   if (!pid || pid <= 0) return { ok: false, via: "无有效 PID（跳过）" };
   /* `mode: "image"` 在同步入口上**没法兑现**：这张签名里只有一个 pid，没有映像名。

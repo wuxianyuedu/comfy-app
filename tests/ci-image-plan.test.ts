@@ -361,7 +361,7 @@ describe("main：缺版本时不猜", () => {
   });
 
   it("给了版本时把三条命令都打出来（造镜像 / 装机 / 钉身份）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const out = main({
       log: (l) => lines.push(l),
       nodeVersion: "v24.22.0",

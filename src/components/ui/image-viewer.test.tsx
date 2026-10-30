@@ -233,7 +233,7 @@ describe("ImageViewer", () => {
     /* 这一条自己接管 rAF：默认 stub 是「同步执行」，那样看不出「合并」。
      * 帧队列里可能还有别的调用方（React / Dialog 的动画），所以按**增量**
      * 数帧，而不是数总数。 */
-    const frames: FrameRequestCallback[] = [];
+    const frames: Array<FrameRequestCallback> = [];
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
       frames.push(cb);
       return frames.length;

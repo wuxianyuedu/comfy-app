@@ -27,8 +27,8 @@ export interface CanvasProject {
   /* 形状取 `Persisted*` 而不是 `@xyflow/react` 的 `Node` / `Edge`（规范 §12.19）：
    * 本模块只做 localStorage 读写，不该为了两个类型把画布引擎钉进静态图 ——
    * 入口 `src/app/workspace/page.tsx` 静态 import 它（见 canvas-types 里的说明）。 */
-  nodes: PersistedNode[];
-  edges: PersistedEdge[];
+  nodes: Array<PersistedNode>;
+  edges: Array<PersistedEdge>;
 }
 
 const INDEX_KEY = "comfyapp.canvas.projects.v1";
@@ -43,19 +43,19 @@ function emitChanged() {
 /** 读项目索引（坏数据 / 没存过一律空表）。「能不能用 storage」与「坏数据怎么办」
  *  收在 `~/lib/browser-storage`（§16.2.4.28）—— 此前本文件 12 处各写一遍
  *  `typeof localStorage === "undefined"`，另有自己的 `safeParse`。 */
-function readIndex(): CanvasProject[] {
-  return readStorageJson<CanvasProject[]>(INDEX_KEY, [], (raw) => {
-    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as CanvasProject[];
+function readIndex(): Array<CanvasProject> {
+  return readStorageJson<Array<CanvasProject>>(INDEX_KEY, [], (raw) => {
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Array<CanvasProject>;
     return Array.isArray(parsed) ? parsed : [];
   });
 }
 
 /** 写回项目索引（写失败静默 —— 与 `writeStorageJson` 同口径）。 */
-function writeIndex(all: CanvasProject[]): void {
+function writeIndex(all: Array<CanvasProject>): void {
   writeStorageJson(INDEX_KEY, all);
 }
 
-export function listProjects(): CanvasProject[] {
+export function listProjects(): Array<CanvasProject> {
   const all = readIndex();
   return all.sort((left, right) => right.updatedAt - left.updatedAt);
 }
@@ -177,9 +177,9 @@ export interface ServerProjectRow {
  * 归一收在这里：服务端两路（tRPC 的 SuperJSON Date / REST 的 ISO 串）进来的是
  * 同一列的两个形状，调用方要的只是一个能比较的毫秒数。
  */
-export async function fetchServerProjects(): Promise<ServerProjectRow[]> {
+export async function fetchServerProjects(): Promise<Array<ServerProjectRow>> {
   const rows =
-    /* SAFETY: 类型断言已复核 */ (await vanillaApi.project.list.query()) as ServerProjectRow[];
+    /* SAFETY: 类型断言已复核 */ (await vanillaApi.project.list.query()) as Array<ServerProjectRow>;
   return Array.isArray(rows) ? rows : [];
 }
 
@@ -512,7 +512,7 @@ export interface ProjectListEntry {
  * 并给一句「服务端那份没拉到」的说法（不是把一个空列表端上去）。
  */
 export async function listProjectsWithServer(): Promise<{
-  entries: ProjectListEntry[];
+  entries: Array<ProjectListEntry>;
   ok: boolean;
 }> {
   const localAll = readIndex();
@@ -547,7 +547,7 @@ export async function listProjectsWithServer(): Promise<{
   }
 }
 
-function sortByUpdated<T extends { updatedAt: number }>(byId: Map<string, T>): T[] {
+function sortByUpdated<T extends { updatedAt: number }>(byId: Map<string, T>): Array<T> {
   return [...byId.values()].sort((left, right) => right.updatedAt - left.updatedAt);
 }
 

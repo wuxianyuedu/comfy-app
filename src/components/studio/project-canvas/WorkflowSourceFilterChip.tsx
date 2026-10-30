@@ -13,11 +13,11 @@ interface WorkflowSourceFilterChipProps {
   onChange: (v: WorkflowSourceFilter) => void;
 }
 
-const OPTIONS: {
+const OPTIONS: Array<{
   v: WorkflowSourceFilter;
   label: string;
   local: boolean;
-}[] = [
+}> = [
   { v: "all", label: "全部", local: false },
   { v: "local", label: "本机", local: true },
   { v: "online", label: "在线", local: false },

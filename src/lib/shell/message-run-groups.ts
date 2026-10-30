@@ -51,7 +51,7 @@ export interface MessageRunGroup<T extends RunScopedMessage> {
   /** 是否正是**当前**这一次启动（`currentRunId` 命中的那一组）。 */
   isCurrent: boolean;
   /** 组内消息，保持传入顺序（调用方传的是最新在前）。 */
-  messages: T[];
+  messages: Array<T>;
   /** 组内最新一条的时刻（组头「这一次启动发生在什么时候」用它）。 */
   latestAt: number;
   /** 组内条数（= `messages.length`，单列一个字段是为了视图不用再数）。 */
@@ -71,7 +71,7 @@ const LABEL_UNMARKED = "未标记启动";
 interface Draft<T extends RunScopedMessage> {
   runId: string | null;
   isCurrent: boolean;
-  messages: T[];
+  messages: Array<T>;
   latestAt: number;
 }
 
@@ -83,10 +83,10 @@ interface Draft<T extends RunScopedMessage> {
  * @returns 分组，顺序与输入一致（最新的组在前）。
  */
 export function groupMessagesByRun<T extends RunScopedMessage>(
-  messages: readonly T[],
+  messages: ReadonlyArray<T>,
   currentRunId: string | null,
-): MessageRunGroup<T>[] {
-  const drafts: Draft<T>[] = [];
+): Array<MessageRunGroup<T>> {
+  const drafts: Array<Draft<T>> = [];
   for (const m of messages) {
     const last = drafts[drafts.length - 1];
     /* 连续同一个 runId → 归进上一组。`last.runId === m.runId` 对两个 null 也成立，

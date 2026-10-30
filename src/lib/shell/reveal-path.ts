@@ -109,10 +109,7 @@ export function resolveExistingPath(
  *  `isDir` 决定「直接打开进入（目录）」还是「选中（文件）」——
  *  对目录若也用 `/select`，窗口会停在父层并选中该目录，用户看到的是
  *  上一层而非 `target` 里面的内容（实测即「打开了但没进到我点的文件夹」）。 */
-function revealCommand(
-  target: string,
-  isDir: boolean,
-): { cmd: string; args: string[] } {
+function revealCommand(target: string, isDir: boolean): { cmd: string; args: Array<string> } {
   const platform = process.platform;
   if (platform === "win32") {
     if (isDir) {
@@ -133,9 +130,7 @@ function revealCommand(
   }
   if (platform === "darwin") {
     /* 目录：`open "<目录>"` 直接进入；文件：`open -R` 在 Finder 里选中。 */
-    return isDir
-      ? { cmd: "open", args: [target] }
-      : { cmd: "open", args: ["-R", target] };
+    return isDir ? { cmd: "open", args: [target] } : { cmd: "open", args: ["-R", target] };
   }
   /* Linux：没有统一的「选中」协议（各文件管理器自定义）。目录直接打开；
    * 文件打开它的**父目录**而不是文件本身 —— 点一个日志文件的意图是「到它那儿
@@ -171,8 +166,7 @@ export async function revealPathInFileManager(
   /* 区分目录（直接打开进入）与文件（在父层选中）：`revealPath` 的探针只答
    * 「存不存在」，不答「是不是目录」，所以这里用一次 stat 补判据。stat 失败
    * （理论上 probe 已答存在，不该发生）按文件处理 —— 退回原来的「选中」语义。 */
-  const isDir =
-    statSync(target, { throwIfNoEntry: false })?.isDirectory() ?? false;
+  const isDir = statSync(target, { throwIfNoEntry: false })?.isDirectory() ?? false;
   const { cmd, args } = revealCommand(target, isDir);
   try {
     await new Promise<void>((resolve, reject) => {

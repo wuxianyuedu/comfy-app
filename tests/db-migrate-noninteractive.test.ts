@@ -84,7 +84,7 @@ afterEach(() => {
 });
 
 /** 在真仓库里跑迁移入口（`stdio` 全 pipe：无 TTY，正是要复现的环境）。 */
-function runMigrate(databaseUrl = `file:${dbFile}`, extraArgs: string[] = []) {
+function runMigrate(databaseUrl = `file:${dbFile}`, extraArgs: Array<string> = []) {
   return spawnSync(
     process.execPath,
     [path.join(process.cwd(), "scripts", "db-migrate.mjs"), ...extraArgs],
@@ -228,7 +228,7 @@ describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一�
      * 而盘符那一档要靠**内容里有没有冒号**复现 —— 临时绝对路径在 Windows 上就是
      * `C:\Users\…`，在 Linux 上是 `/tmp/…`，两种都必须被补成带 scheme 的地址。 */
     const abs = dbFile;
-    const cases: [string, string][] = [
+    const cases: Array<[string, string]> = [
       ["file:./db.sqlite", path.resolve(process.cwd(), "db.sqlite")],
       ["./db.sqlite", path.resolve(process.cwd(), "db.sqlite")],
       /* 空串这一档不是假想：`SKIP_ENV_VALIDATION=1` 时它就是会出现（`src/server/db.ts`
@@ -239,7 +239,7 @@ describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一�
       [abs, abs],
     ];
     const previous = process.env.DATABASE_URL;
-    const problems: string[] = [];
+    const problems: Array<string> = [];
     try {
       for (const [value, expectedFile] of cases) {
         process.env.DATABASE_URL = value;

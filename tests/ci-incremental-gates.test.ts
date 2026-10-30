@@ -64,7 +64,7 @@ const CONFIG = readCnbConfig();
  * @param globs glob 清单
  * @returns 是否被某一条罩住
  */
-function coveredBy(rel: string, globs: readonly string[]): boolean {
+function coveredBy(rel: string, globs: ReadonlyArray<string>): boolean {
   return globs.some((g) => globToRe(g).test(rel));
 }
 
@@ -106,7 +106,7 @@ function literalPrefixOf(re: RegExp): string | null {
  * 目录枚举的缓存 —— 同一次运行里同一个前缀只列一次（三根加起来 600 多个文件，
  * 而这条用例是**每次提交都跑**的固定清单成员）。
  */
-const filesUnderCache = new Map<string, string[]>();
+const filesUnderCache = new Map<string, Array<string>>();
 
 /**
  * 一条输入面正则命中的、**盘上真实存在**的文件清单。
@@ -118,7 +118,7 @@ const filesUnderCache = new Map<string, string[]>();
  * @param re 输入面正则
  * @returns 仓库相对路径清单
  */
-function filesMatchedBy(re: RegExp): string[] {
+function filesMatchedBy(re: RegExp): Array<string> {
   const prefix = literalPrefixOf(re);
   if (prefix === null || prefix === "") return [];
   const abs = path.join(process.cwd(), prefix);
@@ -353,7 +353,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fmt = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
       isScanned: (rel: string) => boolean;
-      IGNORE_GLOBS: readonly string[];
+      IGNORE_GLOBS: ReadonlyArray<string>;
     };
     for (const rel of ["src/lib/a.ts", "src/app/b.tsx", ".storybook/preview.tsx"]) {
       expect(fmt.isScanned(rel), `判据面应当包含 ${rel}`).toBe(true);
@@ -458,7 +458,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
      * 会被判成「$1 可能是 undefined」，而它在正则命中时必然存在（tsc 抓不到这层语义）。
      * 2026-10-28 起核对面是**三份档位清单的并集**（PR / push / 每日）：带 ifModify 的
      * 格子合法地活在哪个档都行，「死配置」指的是三份里都不在，不是「不在 PR 那份」。 */
-    const folded = (key: string): string[] => {
+    const folded = (key: string): Array<string> => {
       const body = new RegExp(
         `^[ \\t]*${key}:[ \\t]*>?-?[ \\t]*\\r?\\n((?:[ \\t]+(?!#)\\S[^\\n]*\\r?\\n)+)`,
         "m",

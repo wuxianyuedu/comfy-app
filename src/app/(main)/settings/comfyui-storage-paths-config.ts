@@ -12,7 +12,7 @@ export type StoragePathRow = {
   label: string;
   /** 目录被启动参数或 yaml 顶层 base_path 覆盖时的来源标注；否则 null。 */
   source: string | null;
-  dirs: StorageDirInfo[];
+  dirs: Array<StorageDirInfo>;
 };
 
 /** 六组目录的标签与顺序（模型 → 共享模型 → 输入 → 共享输入 → 输出 → 共享输出）。 */
@@ -26,10 +26,10 @@ const ROW_SPECS = /* SAFETY: 类型断言已复核 */ [
 ] as const;
 
 /** 把六组目录摊平成界面行；共享组为空时给空数组（组件渲染「未配置」而不是不显示）。 */
-export function buildStorageRows(storage: DesktopStoragePaths): StoragePathRow[] {
+export function buildStorageRows(storage: DesktopStoragePaths): Array<StoragePathRow> {
   const slots: Record<
     (typeof ROW_SPECS)[number]["key"],
-    { primary: StorageDirInfo; shared: StorageDirInfo[] }
+    { primary: StorageDirInfo; shared: Array<StorageDirInfo> }
   > = {
     models: { primary: storage.modelDir, shared: storage.sharedModelDirs },
     input: { primary: storage.inputDir, shared: storage.sharedInputDirs },

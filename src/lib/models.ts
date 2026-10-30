@@ -9,12 +9,7 @@ export function baseFromName(name: string): string {
 
   if (lower.includes("flux")) return "Flux";
 
-  if (
-    lower.includes("sd1.5") ||
-    lower.includes("sd_1.5") ||
-    lower.includes("sd15")
-  )
-    return "SD1.5";
+  if (lower.includes("sd1.5") || lower.includes("sd_1.5") || lower.includes("sd15")) return "SD1.5";
 
   if (lower.includes("pony")) return "Pony";
 
@@ -84,9 +79,7 @@ export async function syncModels(userId?: string): Promise<number> {
 
   /* 按目录**并发**拉取：原先是串行 await，目录一个接一个等，总耗时是所有目录
    * 的往返之和。目录数就是模型类型数（十几个），并发不会打爆本地 ComfyUI。 */
-  const enabledFolders = [...overrides]
-    .filter(([, ov]) => ov.enabled)
-    .map(([folder]) => folder);
+  const enabledFolders = [...overrides].filter(([, ov]) => ov.enabled).map(([folder]) => folder);
   const perFolder = await Promise.all(
     enabledFolders.map(async (folder) => ({
       folder,
@@ -94,7 +87,7 @@ export async function syncModels(userId?: string): Promise<number> {
     })),
   );
 
-  const scanned: ScannedFile[] = [];
+  const scanned: Array<ScannedFile> = [];
   for (const { folder, files } of perFolder) {
     for (const fileName of files) {
       const name = stripExt(fileName);
@@ -125,9 +118,7 @@ export async function syncModels(userId?: string): Promise<number> {
  * `/api/models/<folder>` 的原始条目 —— 例如
  * `waiIllustriousSDXL_v170.safetensors` 这样的文件名。
  */
-export async function localModelFileNames(
-  folders: string[],
-): Promise<string[]> {
+export async function localModelFileNames(folders: Array<string>): Promise<Array<string>> {
   if (!folders.length) return [];
   const enabled = await userModelConfigRepository.listEnabledFolders();
   const wanted = new Set(folders);

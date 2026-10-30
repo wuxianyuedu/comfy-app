@@ -182,10 +182,7 @@ export const UNPROBED_ANNOTATE_MS = 10_000;
 
 /**
  * 断开时长 → 「2 分 05 秒」这类人能读的写法；拿不到时间戳时返回 null。 */
-export function formatOfflineSpan(
-  offlineAt: number,
-  at: number,
-): string | null {
+export function formatOfflineSpan(offlineAt: number, at: number): string | null {
   const ms = at - offlineAt;
   /* 时钟漂移 / 跨机器写入的记录会算出负数：负时长说成「持续 -3 秒」比说没有更糟。 */
   if (!Number.isFinite(ms) || ms < 0) return null;
@@ -227,16 +224,11 @@ export function describeAppServiceDisconnect(
   at: number,
   notice: AppServiceExitNotice | null = null,
 ): AppServiceMessageText {
-  const head =
-    `断开时间 ${formatClock(at)}。` +
-    "断开期间页面里的查询、保存与任务提交都会失败。\n";
+  const head = `断开时间 ${formatClock(at)}。` + "断开期间页面里的查询、保存与任务提交都会失败。\n";
   if (notice) {
     return {
       title: "应用服务已断开",
-      body:
-        head +
-        `原因：${notice.why}。${notice.detail}。\n` +
-        `建议：${notice.action}。`,
+      body: head + `原因：${notice.why}。${notice.detail}。\n` + `建议：${notice.action}。`,
     };
   }
   return {
@@ -256,9 +248,7 @@ export function describeAppServiceDisconnect(
  * 是「用户事后唯一能翻回来的一次完整说明」——它要把「为什么是我该重启、而不是继续
  * 等」讲明白（页面还能打开，恰恰是最容易让人以为「再等等就好了」的地方）。
  */
-export function describeAppServiceRouteStale(
-  at: number,
-): AppServiceMessageText {
+export function describeAppServiceRouteStale(at: number): AppServiceMessageText {
   return {
     title: "应用服务路由异常",
     body:
@@ -304,14 +294,12 @@ export interface AppServiceStartInput {
  * 没有上一份进程结束的记录（读得到记录 = 确实有一份进程结束了），都没有才是
  * 「启动」。三档对三件事，不把「重启」说成「首次启动」。
  */
-export function describeAppServiceStart(
-  input: AppServiceStartInput,
-): AppServiceMessageText {
+export function describeAppServiceStart(input: AppServiceStartInput): AppServiceMessageText {
   const { at, offlineAt, exitAt, notice, unprobedMs } = input;
   const recovered = offlineAt !== null;
   const span = recovered ? formatOfflineSpan(offlineAt, at) : null;
 
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   if (recovered) {
     lines.push(
       `${formatClock(offlineAt)} 断开，${formatClock(at)} 恢复` +
@@ -340,9 +328,7 @@ export function describeAppServiceStart(
   if (notice) {
     const exitedAt = exitAt === null ? null : formatClock(exitAt);
     lines.push(
-      (exitedAt === null
-        ? "上一次它是怎么结束的："
-        : `上一次它在 ${exitedAt} 结束：`) +
+      (exitedAt === null ? "上一次它是怎么结束的：" : `上一次它在 ${exitedAt} 结束：`) +
         `${notice.why}。${notice.detail}。`,
     );
     lines.push(`建议：${notice.action}。`);

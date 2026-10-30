@@ -26,7 +26,7 @@ import { withTimeoutResult, sleep } from "~/lib/with-timeout";
 import { Button } from "~/components/ui/button";
 
 interface Props {
-  shots: Shot[];
+  shots: Array<Shot>;
   /** 选定的视频工作流 id：本地通道的唯一可执行来源（内置模板已移除）。
    * 按封装口径暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
   workflowId: string;
@@ -34,7 +34,7 @@ interface Props {
   projectId: string;
   apiChannels: ApiChannelsView | null;
   onOpenModelAdapters: () => void;
-  onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>;
+  onShotsChange: React.Dispatch<React.SetStateAction<Array<Shot>>>;
   /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
   onNotice: (message: string) => void;
   /** 取消一个进行中的本机视频任务（控制器统一出口）。 */
@@ -73,11 +73,7 @@ export function VideoStudio({
   const [fps, setFps] = React.useState(16);
   /* 多镜头同时在跑时的**按条目**进度表（节流 + 同值短路 + 卸载守卫都收在
    * 出口里，规范 16 §16.2.4.68）。此前这一行在两个文件里逐字相同。 */
-  const {
-    progress,
-    report: reportProgress,
-    flush: flushProgress,
-  } = useThrottledProgressMap();
+  const { progress, report: reportProgress, flush: flushProgress } = useThrottledProgressMap();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   /* 批处理的忙碌位走唯一出口（规范 16 §16.2.4.71）：复位此前写在循环之后，
    * 循环里抛错就永远停在「批处理中」。 */
@@ -86,15 +82,11 @@ export function VideoStudio({
   const apiReady = apiChannels?.video.configured === true;
   const doneCount = shots.filter((s) => !!s.clipUrl).length;
   const pending = shots.filter(
-    (s) =>
-      !s.clipUrl &&
-      (!s.clipStatus || s.clipStatus === "idle" || s.clipStatus === "failed"),
+    (s) => !s.clipUrl && (!s.clipStatus || s.clipStatus === "idle" || s.clipStatus === "failed"),
   );
 
   function patchShot(id: string, p: Partial<Shot>) {
-    onShotsChange((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...p } : s)),
-    );
+    onShotsChange((prev) => prev.map((s) => (s.id === id ? { ...s, ...p } : s)));
   }
 
   function setShotError(id: string, message: string | undefined) {
@@ -145,10 +137,7 @@ export function VideoStudio({
   }
 
   /** 轮询异步 API 视频任务直到 resolve 或超时（约 10 分钟）。 */
-  async function pollApiVideo(
-    shotId: string,
-    remoteTaskId: string,
-  ): Promise<void> {
+  async function pollApiVideo(shotId: string, remoteTaskId: string): Promise<void> {
     const deadline = Date.now() + 10 * 60 * 1000;
     while (Date.now() < deadline) {
       await sleep(3000);
@@ -188,9 +177,7 @@ export function VideoStudio({
     try {
       if (channel === "local") {
         // 生成出的图片 → ComfyUI 输入目录，好让 LoadImage 节点能用它。
-        const inputImage = shot.imageUrl
-          ? await prepareLocalInputImage(shot.imageUrl)
-          : undefined;
+        const inputImage = shot.imageUrl ? await prepareLocalInputImage(shot.imageUrl) : undefined;
         /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个视频工作流
          *（封装口径暴露 提示词 / 尺寸 / 首帧 / 时长，其余走工作流默认值）。
          * 见 generateClip 入口的门禁。 */
@@ -240,14 +227,10 @@ export function VideoStudio({
     if (pending.length === 0) return;
     await batch.run(() =>
       /* 有界并发（见 WORKSHOP_BATCH_CONCURRENCY）：同镜头生图批量。 */
-      runWithConcurrency(
-        [...pending],
-        WORKSHOP_BATCH_CONCURRENCY,
-        async (shot) => {
-          if (shot.clipUrl || shot.clipStatus === "running") return;
-          await generateClip(shot);
-        },
-      ),
+      runWithConcurrency([...pending], WORKSHOP_BATCH_CONCURRENCY, async (shot) => {
+        if (shot.clipUrl || shot.clipStatus === "running") return;
+        await generateClip(shot);
+      }),
     );
   }
 

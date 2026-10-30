@@ -45,11 +45,11 @@ function idOf(value: unknown): string {
 }
 
 /** 从一组节点里挑出 UI-only 的：返回保留的节点与被删的 id。 */
-function pickOutUiOnlyNodes(nodes: unknown[]): {
-  kept: unknown[];
+function pickOutUiOnlyNodes(nodes: Array<unknown>): {
+  kept: Array<unknown>;
   removedIds: Set<string>;
 } {
-  const kept: unknown[] = [];
+  const kept: Array<unknown> = [];
   const removedIds = new Set<string>();
   for (const n of nodes) {
     if (n == null || typeof n !== "object") {
@@ -124,7 +124,7 @@ export function stripUiOnlyNodes(raw: Record<string, unknown>): {
     defs != null && typeof defs === "object"
       ? /* SAFETY: 类型断言已复核 */ (defs as Record<string, unknown>).subgraphs
       : undefined;
-  const list: unknown[] = Array.isArray(subs)
+  const list: Array<unknown> = Array.isArray(subs)
     ? subs
     : subs != null && typeof subs === "object"
       ? Object.values(subs)

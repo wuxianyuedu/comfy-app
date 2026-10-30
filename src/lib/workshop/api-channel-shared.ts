@@ -53,11 +53,7 @@ const MAX_URL_LENGTH = 2048;
  * 用于归一化五花八门的上游 API 响应（OpenAI 图片、异步任务接口、
  * 各家特有的信封结构），而不必硬编码每种形状。
  */
-export function findStringUnderKeys(
-  value: unknown,
-  keys: string[],
-  depth = 0,
-): string | null {
+export function findStringUnderKeys(value: unknown, keys: Array<string>, depth = 0): string | null {
   if (depth > MAX_EXTRACT_DEPTH) return null;
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -69,8 +65,7 @@ export function findStringUnderKeys(
   if (!isRecord(value)) return null;
   for (const key of keys) {
     const v: unknown = value[key];
-    if (typeof v === "string" && v.length > 0 && v.length <= MAX_URL_LENGTH)
-      return v;
+    if (typeof v === "string" && v.length > 0 && v.length <= MAX_URL_LENGTH) return v;
   }
   for (const v of Object.values(value)) {
     if (isRecord(v) || Array.isArray(v)) {
@@ -99,15 +94,7 @@ const MEDIA_URL_KEYS = [
 ];
 
 /* 生成响应里常见「放异步任务标识」的键名。 */
-const TASK_ID_KEYS = [
-  "id",
-  "task_id",
-  "taskId",
-  "job_id",
-  "jobId",
-  "request_id",
-  "requestId",
-];
+const TASK_ID_KEYS = ["id", "task_id", "taskId", "job_id", "jobId", "request_id", "requestId"];
 
 /* 常见「放 base64 载荷」的键名（例如 OpenAI 图片的 b64_json）。 */
 const B64_KEYS = ["b64_json", "b64Json", "image_base64", "base64"];
@@ -126,10 +113,7 @@ export function extractRemoteTaskId(payload: unknown): string | null {
 }
 
 /* 取出 base64 媒体载荷并包装成 data URL；取不到则为 null。 */
-export function extractBase64DataUrl(
-  payload: unknown,
-  mime = "image/png",
-): string | null {
+export function extractBase64DataUrl(payload: unknown, mime = "image/png"): string | null {
   const b64 = findStringUnderKeys(payload, B64_KEYS, 2);
   if (!b64) return null;
   /* 有些上游直接内联一个 data URL。 */
@@ -156,9 +140,9 @@ export interface SavedOutput {
  * 历史上条目要么是纯 URL 字符串，要么是 executor-finalize 产出的
  * `{ localPath, mediaType }` 记录。
  */
-export function extractSavedOutputs(value: unknown): SavedOutput[] {
+export function extractSavedOutputs(value: unknown): Array<SavedOutput> {
   const list = Array.isArray(value) ? value : [value];
-  const out: SavedOutput[] = [];
+  const out: Array<SavedOutput> = [];
   for (const entry of list) {
     if (typeof entry === "string") {
       out.push({ url: entry, kind: guessMediaKind(entry) });

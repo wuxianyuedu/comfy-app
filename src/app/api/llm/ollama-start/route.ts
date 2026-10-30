@@ -102,7 +102,7 @@ async function resolveOllamaExe(): Promise<string> {
     process.env["ProgramFiles(x86)"]
       ? `${process.env["ProgramFiles(x86)"]}\\Ollama\\ollama.exe`
       : null,
-  ].filter(Boolean) as string[];
+  ].filter(Boolean) as Array<string>;
   const fs = await import("node:fs");
   for (const c of candidates) {
     try {

@@ -22,7 +22,7 @@ import { execFileSync } from "node:child_process";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 /** 读一条 git 命令的输出（夹具的 `git()` 只跑不返回 —— 这里要 sha）。 */
-function out(dir: string, ...args: string[]): string {
+function out(dir: string, ...args: Array<string>): string {
   return execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
 }
 
@@ -174,9 +174,7 @@ describe("check-merged-side-loss —— 整份退回的事后复算", () => {
     expect(output).toContain("src/b.ts");
   });
 
-  test("⑨ 退回成「只在被并进来的那条线上出现过」的版本 → 仍要认出来", ({
-    repo,
-  }) => {
+  test("⑨ 退回成「只在被并进来的那条线上出现过」的版本 → 仍要认出来", ({ repo }) => {
     /* 形状：侧线把 f 改成 v2 → 主线把 f 改成 v3 → 用 `merge -s ours` 并进来
      * （合并结果这一版与第一父本**逐字相同**，f 就是 v3）→ 之后某次提交把 f
      * 写回 v2。这是真退回，但**逐文件** `git log -- f` 看不见 v2：单路径遍历在
@@ -197,16 +195,7 @@ describe("check-merged-side-loss —— 整份退回的事后复算", () => {
     repo.write("src/f.ts", "export const f = 3;\n");
     repo.git("add", "-A");
     repo.git("commit", "-q", "-m", "feat: 主线把 f 改成 v3");
-    repo.git(
-      "merge",
-      "-q",
-      "--no-ff",
-      "-s",
-      "ours",
-      "side",
-      "-m",
-      "merge: 这一版整单取自己",
-    );
+    repo.git("merge", "-q", "--no-ff", "-s", "ours", "side", "-m", "merge: 这一版整单取自己");
     const baseline = out(repo.dir, "rev-parse", "HEAD");
 
     /* 盲区自证：逐文件那条读法里，v2 那次提交根本不在候选清单上。 */

@@ -4,11 +4,11 @@
  * 原文，供「查看完整输出」弹窗使用。 */
 
 export interface RawCliResponse {
-  lines: string[];
+  lines: Array<string>;
 }
 
 /** 拉取某次执行的 comfy-cli 完整原始输出（按行）。请求失败时返回空数组。 */
-export async function fetchRawCli(taskId: string): Promise<string[]> {
+export async function fetchRawCli(taskId: string): Promise<Array<string>> {
   try {
     const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}/raw-cli`, {
       cache: "no-store",

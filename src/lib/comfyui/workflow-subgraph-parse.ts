@@ -46,7 +46,7 @@ export interface BoundaryPin {
    *  输出条显示同一个名字。 */
   label?: string;
   pos: [number, number];
-  linkIds: number[];
+  linkIds: Array<number>;
 }
 
 /**
@@ -58,33 +58,25 @@ export interface BoundaryPin {
  * `pinIdByLinkId`，用来把哨兵连线表解析成 `boundaryLinks`。
  */
 export function parseSubgraphPins(sub: RawSubgraphDef): {
-  boundaryPins: { inputs: BoundaryPin[]; outputs: BoundaryPin[] };
+  boundaryPins: { inputs: Array<BoundaryPin>; outputs: Array<BoundaryPin> };
   pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }>;
 } {
-  const boundaryPins: { inputs: BoundaryPin[]; outputs: BoundaryPin[] } = {
+  const boundaryPins: { inputs: Array<BoundaryPin>; outputs: Array<BoundaryPin> } = {
     inputs: [],
     outputs: [],
   };
-  const pinIdByLinkId: Record<
-    number,
-    { pinId: string; kind: "input" | "output" }
-  > = {};
-  const rawSubInputs: unknown[] = Array.isArray(sub.inputs) ? sub.inputs : [];
-  const rawSubOutputs: unknown[] = Array.isArray(sub.outputs)
-    ? sub.outputs
-    : [];
+  const pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }> = {};
+  const rawSubInputs: Array<unknown> = Array.isArray(sub.inputs) ? sub.inputs : [];
+  const rawSubOutputs: Array<unknown> = Array.isArray(sub.outputs) ? sub.outputs : [];
 
   const normalizePin = (p: unknown): BoundaryPin | null => {
     const parsed = SubgraphPinSchema.safeParse(p);
     if (!parsed.success) return null;
     const rec = parsed.data;
     const id = rec.id;
-    const posRaw: unknown[] = Array.isArray(rec.pos) ? rec.pos : [0, 0];
-    const pos: [number, number] = [
-      Number(posRaw[0]) || 0,
-      Number(posRaw[1]) || 0,
-    ];
-    const linkIdsRaw: unknown[] = Array.isArray(rec.linkIds)
+    const posRaw: Array<unknown> = Array.isArray(rec.pos) ? rec.pos : [0, 0];
+    const pos: [number, number] = [Number(posRaw[0]) || 0, Number(posRaw[1]) || 0];
+    const linkIdsRaw: Array<unknown> = Array.isArray(rec.linkIds)
       ? rec.linkIds
       : rec.link !== undefined
         ? [rec.link]
@@ -95,8 +87,7 @@ export function parseSubgraphPins(sub: RawSubgraphDef): {
       id,
       name: typeof rec.name === "string" ? rec.name : "",
       type: typeof rec.type === "string" ? rec.type : "*",
-      localized:
-        typeof rec.localized_name === "string" ? rec.localized_name : undefined,
+      localized: typeof rec.localized_name === "string" ? rec.localized_name : undefined,
       label: typeof rec.label === "string" ? rec.label : undefined,
       pos,
       linkIds: linkIdsRaw.map((n) => Number(n) || 0).filter((n) => n > 0),
@@ -143,12 +134,12 @@ export interface BoundaryLink {
 export function buildBoundaryLinks(
   boundaryLinkInfoById: Record<number, BoundaryLinkInfo>,
   pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }>,
-  inputNameByNodeSlot: Record<string, string[]>,
+  inputNameByNodeSlot: Record<string, Array<string>>,
   /** 输出侧槽位表 —— 输出边界连线由别处组装，本函数只处理输入侧，保留参数以
    *  与调用方口径一致（不参与计算）。 */
-  _outputNameByNodeSlot: Record<string, string[]>,
-): BoundaryLink[] {
-  const boundaryLinks: BoundaryLink[] = [];
+  _outputNameByNodeSlot: Record<string, Array<string>>,
+): Array<BoundaryLink> {
+  const boundaryLinks: Array<BoundaryLink> = [];
   for (const [linkIdStr, info] of Object.entries(boundaryLinkInfoById)) {
     const linkId = Number(linkIdStr);
     const pinInfo = pinIdByLinkId[linkId];
@@ -156,8 +147,7 @@ export function buildBoundaryLinks(
      * 产出也会在客户端落成一条指向不存在 handle 的边（React Flow 丢弃整条边
      * 并打 error#008），不如在这里就不产出。 */
     if (!pinInfo || info.kind !== "input") continue;
-    const innerSlotName =
-      inputNameByNodeSlot[info.innerNodeId]?.[info.innerSlot] ?? "";
+    const innerSlotName = inputNameByNodeSlot[info.innerNodeId]?.[info.innerSlot] ?? "";
     /* 解析不出槽位名 → 整条边丢掉：handle id 只在这里产出，空槽位名到了画布上
      * 会退化成字面量 `"in"`，而那个 handle 并不存在（error#008 的成因）。
      * 丢掉的那条在下方 `reportDroppedBoundaryLinks` 里点名上报。 */
@@ -185,15 +175,15 @@ export function reportDroppedBoundaryLinks(
   sub: RawSubgraphDef,
   boundaryLinkInfoById: Record<number, BoundaryLinkInfo>,
   pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }>,
-  produced: readonly BoundaryLink[],
-): { linkId: number; pinId: string; innerNodeId: string; innerSlot: number }[] {
+  produced: ReadonlyArray<BoundaryLink>,
+): Array<{ linkId: number; pinId: string; innerNodeId: string; innerSlot: number }> {
   const producedIds = new Set(produced.map((link) => link.linkId));
-  const dropped: {
+  const dropped: Array<{
     linkId: number;
     pinId: string;
     innerNodeId: string;
     innerSlot: number;
-  }[] = [];
+  }> = [];
   for (const [linkIdStr, info] of Object.entries(boundaryLinkInfoById)) {
     const linkId = Number(linkIdStr);
     if (producedIds.has(linkId)) continue;
@@ -210,11 +200,7 @@ export function reportDroppedBoundaryLinks(
   if (dropped.length === 0) return dropped;
   const nodeIds = [...new Set(dropped.map((item) => item.innerNodeId))];
   const subgraphName =
-    typeof sub.name === "string" && sub.name
-      ? sub.name
-      : typeof sub.id === "string"
-        ? sub.id
-        : "?";
+    typeof sub.name === "string" && sub.name ? sub.name : typeof sub.id === "string" ? sub.id : "?";
   logger.warn(
     `[workflow] 子图 ${subgraphName} ` +
       `有 ${dropped.length} 条边界连线解析不出内层落点，已跳过绘制（不会画成指向不存在 handle 的边）：` +
@@ -251,38 +237,36 @@ export function extractSubgraphAnnotations(
   tplPositions: Record<string, [number, number]>,
   hostId = "",
 ): {
-  groups: {
+  groups: Array<{
     id: string;
     title: string;
     bounding: [number, number, number, number];
     color: string;
-  }[];
-  notes: {
+  }>;
+  notes: Array<{
     id: string;
     title: string;
     text: string;
     pos: [number, number];
     size: [number, number];
     color: string;
-  }[];
+  }>;
   positions: Record<string, [number, number]>;
 } {
   /* 内层的分组框。 */
-  const groups: {
+  const groups: Array<{
     id: string;
     title: string;
     bounding: [number, number, number, number];
     color: string;
-  }[] = [];
+  }> = [];
   if (Array.isArray(sub.groups)) {
     sub.groups.forEach((g: unknown, idx: number) => {
       const rec = asRecord(g);
       if (!rec) return;
 
-      const bounds: unknown[] =
-        Array.isArray(rec.bounding) && rec.bounding.length >= 4
-          ? rec.bounding
-          : [0, 0, 0, 0];
+      const bounds: Array<unknown> =
+        Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
 
       groups.push({
         id: toStringValue(rec.id ?? `g-${idx}`),
@@ -299,20 +283,19 @@ export function extractSubgraphAnnotations(
   }
 
   /* 内层的便签注释。 */
-  const notes: {
+  const notes: Array<{
     id: string;
     title: string;
     text: string;
     pos: [number, number];
     size: [number, number];
     color: string;
-  }[] = [];
-  const innerNodes: RawNode[] = Array.isArray(sub.nodes) ? sub.nodes : [];
+  }> = [];
+  const innerNodes: Array<RawNode> = Array.isArray(sub.nodes) ? sub.nodes : [];
   for (const n of innerNodes) {
     if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) continue;
     const pos = Array.isArray(n.pos) && n.pos.length >= 2 ? n.pos : [0, 0];
-    const size =
-      Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
+    const size = Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
     const wv = Array.isArray(n.widgets_values) ? n.widgets_values[0] : "";
     const text = typeof wv === "string" ? wv : toStringValue(wv ?? "");
     const title = typeof n.title === "string" ? n.title : "";

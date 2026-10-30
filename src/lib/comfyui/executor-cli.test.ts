@@ -47,7 +47,7 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
     const raw = rawJsonWith(JSON.parse(JSON.stringify(subgraphWrapperNode)));
     const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
       { nodeId: "76", name: "control_after_generate", value: "randomize" },
-    ]) as { nodes: { id: number; widgets_values: unknown[] }[] };
+    ]) as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> };
 
     const node = result.nodes.find((n) => n.id === 76)!;
     const seed = node.widgets_values[6];
@@ -82,7 +82,7 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
     const raw = rawJsonWith(JSON.parse(JSON.stringify(ksampler)));
     const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
       { nodeId: "69", name: "control_after_generate", value: "randomize" },
-    ]) as { nodes: { id: number; widgets_values: unknown[] }[] };
+    ]) as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> };
 
     const node = result.nodes.find((n) => n.id === 69)!;
     // 有哨兵槽 → 写入 seedSlot+1（随机化模式），seed 值保持不变
@@ -94,7 +94,7 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
     const raw = rawJsonWith(JSON.parse(JSON.stringify(subgraphWrapperNode)));
     const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
       { nodeId: "76", name: "control_after_generate", value: "fixed" },
-    ]) as { nodes: { id: number; widgets_values: unknown[] }[] };
+    ]) as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> };
 
     const node = result.nodes.find((n) => n.id === 76)!;
     expect(node.widgets_values[6]).toBe(276260017540259);
@@ -112,7 +112,7 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
       { nodeId: "35", name: "control_after_generate", value: "randomize" },
     ]);
     const node = /* SAFETY: 类型断言已复核 */ (
-      result as { nodes: { id: number; widgets_values: unknown[] }[] }
+      result as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> }
     ).nodes[0]!;
     expect(node.widgets_values).toEqual(["hello"]);
   });
@@ -294,11 +294,11 @@ function liblibSubgraphFixture() {
 }
 
 type FixtureResult = {
-  nodes: { id: number; widgets_values: unknown[] }[];
+  nodes: Array<{ id: number; widgets_values: Array<unknown> }>;
   definitions: {
-    subgraphs: {
-      nodes: { id: number; widgets_values: unknown[] }[];
-    }[];
+    subgraphs: Array<{
+      nodes: Array<{ id: number; widgets_values: Array<unknown> }>;
+    }>;
   };
 };
 
@@ -370,7 +370,7 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
         links: [],
       },
       [{ nodeId: "5", name: "text", value: "new" }],
-    ) as { nodes: { id: number; widgets_values: unknown[] }[] };
+    ) as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> };
     expect(raw.nodes[0]!.widgets_values[0]).toBe("new");
   });
 });

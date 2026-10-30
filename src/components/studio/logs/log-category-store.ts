@@ -64,7 +64,7 @@ export const useLogCategoryStore = create<LogCategoryState>((set, get) => ({
  * 当前被关闭（需从面板隐藏）的分类列表。供 `log-store` 的 `computeFiltered` 直接消费
  * （`bucketOf(entry)` 与 `LogCategoryFilter` 同域）。SSR / 无浏览器时返回空数组。
  */
-export function disabledCategories(): LogCategoryFilter[] {
+export function disabledCategories(): Array<LogCategoryFilter> {
   const enabled = useLogCategoryStore.getState().enabled;
   return LOG_CATEGORY_FILTERS.filter((category) => !enabled[category]);
 }

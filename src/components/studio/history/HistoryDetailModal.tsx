@@ -36,7 +36,7 @@ interface HistoryDetailModalProps {
   workflowIO: WorkflowIOMap;
   /** 模式契约注册表（只含用户改过的模式）：工坊参数按「任务模式 + 生效契约」枚举。
    * 为 null 时回落内置默认契约。 */
-  modeContracts?: readonly ModeContract[] | null;
+  modeContracts?: ReadonlyArray<ModeContract> | null;
   onClose: () => void;
 }
 

@@ -18,10 +18,7 @@ import { useRefreshTicket } from "~/components/ui/use-refresh-ticket";
 import { useInterval } from "~/components/ui/use-interval";
 import { errorMessage } from "~/lib/error-message";
 import { beginStaleRun } from "~/lib/stale-run";
-import {
-  fetchHistoryTasks,
-  probeGlobalTaskCount,
-} from "~/lib/project-canvas/history-panel-client";
+import { fetchHistoryTasks, probeGlobalTaskCount } from "~/lib/project-canvas/history-panel-client";
 import {
   countActive,
   type DisplayMode,
@@ -42,7 +39,7 @@ export interface UseHistoryPanelArgs {
 }
 
 export interface HistoryPanelController {
-  tasks: HistoryTaskRow[];
+  tasks: Array<HistoryTaskRow>;
   loading: boolean;
   error: string | null;
   scope: HistoryScope;
@@ -58,16 +55,12 @@ export interface HistoryPanelController {
   refresh: () => void;
 }
 
-export function useHistoryPanel({
-  projectId,
-}: UseHistoryPanelArgs): HistoryPanelController {
+export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPanelController {
   const [filter, setFilter] = useState<HistoryFilter>("all");
-  const [scope, setScope] = useState<HistoryScope>(
-    projectId ? "project" : "all",
-  );
+  const [scope, setScope] = useState<HistoryScope>(projectId ? "project" : "all");
   const [display, setDisplay] = useState<DisplayMode>("list");
 
-  const [tasks, setTasks] = useState<HistoryTaskRow[]>([]);
+  const [tasks, setTasks] = useState<Array<HistoryTaskRow>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /* 「按需求重跑一遍取数」走唯一出口（规范 16 §16.2.4.70）。 */
@@ -112,13 +105,7 @@ export function useHistoryPanel({
 
   /* ── 本项目为空时探一次全局，以便给出「查看全部」引导 ── */
   useEffect(() => {
-    if (
-      scope !== "project" ||
-      loading ||
-      tasks.length > 0 ||
-      globalCount !== null
-    )
-      return;
+    if (scope !== "project" || loading || tasks.length > 0 || globalCount !== null) return;
     const guard = beginStaleRun();
     void probeGlobalTaskCount().then((count) => {
       guard.commit(() => setGlobalCount(count));

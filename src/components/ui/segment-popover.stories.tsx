@@ -56,8 +56,8 @@ type StoryArgs = {
 };
 
 /** 按真机的拼法把段拼出来（`DimensionControl` 的 `sections` 同形）。 */
-function buildSections(count: 1 | 2 | 3): SegmentSection<string>[] {
-  const list: SegmentSection<string>[] = [
+function buildSections(count: 1 | 2 | 3): Array<SegmentSection<string>> {
+  const list: Array<SegmentSection<string>> = [
     {
       label: "比例",
       value: "16:9 横屏",
@@ -87,12 +87,7 @@ function buildSections(count: 1 | 2 | 3): SegmentSection<string>[] {
   return list;
 }
 
-function SegmentWithSummary({
-  summary,
-  sectionCount,
-  align,
-  disabled,
-}: StoryArgs) {
+function SegmentWithSummary({ summary, sectionCount, align, disabled }: StoryArgs) {
   return (
     <div className="w-72">
       <MultiSegmentPopover
@@ -162,12 +157,8 @@ export const WithFooter: Story = {
               align={args.align}
               footer={
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-ink-muted text-[11px]">
-                    打开尺寸表…
-                  </span>
-                  <span className="text-ink-faint text-[10px]">
-                    像素按长边给定
-                  </span>
+                  <span className="text-ink-muted text-[11px]">打开尺寸表…</span>
+                  <span className="text-ink-faint text-[10px]">像素按长边给定</span>
                 </div>
               }
             />

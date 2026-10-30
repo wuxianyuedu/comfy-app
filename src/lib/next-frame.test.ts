@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { afterNextPaint, onNextFrame } from "./next-frame";
 
-let frames: FrameRequestCallback[] = [];
+let frames: Array<FrameRequestCallback> = [];
 let nextId = 1;
 
 beforeEach(() => {

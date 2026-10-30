@@ -14,7 +14,7 @@ import {
 } from "./workflow-editor-topbar-config";
 
 /** class 串按空格切词，便于断言「含有某个工具类」而不受顺序影响。 */
-function tokens(cls: string): string[] {
+function tokens(cls: string): Array<string> {
   return cls.split(/\s+/).filter(Boolean);
 }
 

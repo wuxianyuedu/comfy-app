@@ -28,14 +28,8 @@ import {
   prepareLocalInputImage,
   startLocalGenerate,
 } from "~/lib/workshop/generation-client";
-import {
-  appendWorkflowRunLog,
-  registerWorkflowRun,
-} from "~/lib/workflow/workflow-run-store";
-import {
-  useWorkflowRunResume,
-  watchWorkflowRun,
-} from "./use-workflow-run-resume";
+import { appendWorkflowRunLog, registerWorkflowRun } from "~/lib/workflow/workflow-run-store";
+import { useWorkflowRunResume, watchWorkflowRun } from "./use-workflow-run-resume";
 import { readFileAsDataUrl } from "~/lib/file-io";
 import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
 
@@ -49,7 +43,7 @@ export interface EncapsulationTestRunArgs {
    *
    *  组载荷要按它认口：不传就等于只认内置契约，作者给自定义口填的值落不下去
    *  （会进 `unmatched`，不静默丢）。调用方请用 memo 稳住引用。 */
-  contractIds?: readonly string[];
+  contractIds?: ReadonlyArray<string>;
 }
 
 export interface EncapsulationTestRunController {

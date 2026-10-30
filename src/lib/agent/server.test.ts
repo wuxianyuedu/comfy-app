@@ -16,11 +16,11 @@ const completeLLMTools = vi.fn();
 const getLLMConfig = vi.fn();
 
 vi.mock("~/lib/llm/server", () => ({
-  completeLLM: (...args: unknown[]): Promise<string> =>
+  completeLLM: (...args: Array<unknown>): Promise<string> =>
     /* SAFETY: 类型断言已复核 */ completeLLM(...args) as Promise<string>,
-  completeLLMTools: (...args: unknown[]): Promise<unknown> =>
+  completeLLMTools: (...args: Array<unknown>): Promise<unknown> =>
     /* SAFETY: 类型断言已复核 */ completeLLMTools(...args) as Promise<unknown>,
-  getLLMConfig: (...args: unknown[]): Promise<unknown> =>
+  getLLMConfig: (...args: Array<unknown>): Promise<unknown> =>
     /* SAFETY: 类型断言已复核 */ getLLMConfig(...args) as Promise<unknown>,
 }));
 
@@ -191,7 +191,7 @@ describe("handleAgentChat：消息窄化", () => {
     );
     const [, msgs] = /* SAFETY: 类型断言已复核 */ completeLLMTools.mock.calls[0] as [
       unknown,
-      unknown[],
+      Array<unknown>,
     ];
     // 只剩 user 一条（system 由 server.ts 自己拼，不信调用方）
     expect(msgs).toHaveLength(2); // sysMessages = [system(自己拼), user]

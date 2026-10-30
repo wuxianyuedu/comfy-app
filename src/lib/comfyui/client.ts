@@ -47,7 +47,7 @@ const COMFY_WINDOW_PORT = 8000;
  *
  *  偏移 0 = 配置地址（我们拉起的实例照此监听，除非端口被占时 ComfyUI 自己 +1）；
  *  偏移 1..N = 就近偏移；末尾补一条窗口地址，只在前面全部落空时才轮得到。 */
-function probeTargets(configuredPort: number): { port: number; url: string }[] {
+function probeTargets(configuredPort: number): Array<{ port: number; url: string }> {
   const targets = Array.from({ length: PROBE_RANGE + 1 }, (_, offset) => {
     const port = configuredPort + offset;
     return { port, url: comfyUiBaseUrl(port) };
@@ -364,13 +364,13 @@ export async function getView(filename: string, subfolder: string, type: string)
 }
 
 // 返回某个模型目录在磁盘上的真实文件名列表。
-export async function listModels(folder: string): Promise<string[]> {
+export async function listModels(folder: string): Promise<Array<string>> {
   try {
     const res = await fetch(`${comfyBase()}/api/models/${encodeURIComponent(folder)}`, {
       signal: AbortSignal.timeout(5_000),
     });
     if (!res.ok) return [];
-    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as string[];
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as Array<string>;
     return Array.isArray(data) ? data : [];
   } catch {
     return [];
@@ -386,13 +386,13 @@ export async function listModels(folder: string): Promise<string[]> {
  *
  * ComfyUI 连不上时返回 `[]` —— 调用方据此显示空目录列表（只允许从真实目录配置）。
  */
-export async function listModelFolders(): Promise<string[]> {
+export async function listModelFolders(): Promise<Array<string>> {
   try {
     const res = await fetch(`${comfyBase()}/api/models`, {
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return [];
-    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as string[];
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as Array<string>;
     return Array.isArray(data)
       ? data.filter((datum) => typeof datum === "string" && datum.length > 0)
       : [];
@@ -476,7 +476,7 @@ interface ComfyDevice {
   vram_free?: number;
 }
 
-function pickGpu(devices: ComfyDevice[] | undefined): ComfyDevice | undefined {
+function pickGpu(devices: Array<ComfyDevice> | undefined): ComfyDevice | undefined {
   if (!Array.isArray(devices) || devices.length === 0) return undefined;
   return devices.find((d) => d.type !== "cpu" && (d.vram_total ?? 0) > 0) ?? devices[0];
 }
@@ -495,7 +495,7 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
     if (!res.ok) return null;
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       system?: { ram_total?: number; ram_free?: number };
-      devices?: ComfyDevice[];
+      devices?: Array<ComfyDevice>;
     };
     const dev = pickGpu(data.devices);
     const vramTotal = dev?.vram_total ?? 0;

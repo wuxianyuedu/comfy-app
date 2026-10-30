@@ -22,10 +22,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import {
-  checkRegistrations,
-  judgeStillFailing,
-} from "../scripts/check-known-failed-stale.mjs";
+import { checkRegistrations, judgeStillFailing } from "../scripts/check-known-failed-stale.mjs";
 import {
   main,
   resolveFace,
@@ -54,7 +51,7 @@ function dGroupSteps(hookText: string) {
  * 路径 —— 判决按绝对路径归一化后比对。夹具必须照这个真实形状给，否则喂出来的绿是假的
  * （这条曾经就是相对的，于是「清单多条时按整场退出码判」的粗糙口径一直没被照出来）。
  */
-function evidenceFor(entries: [rel: string, status: string][]) {
+function evidenceFor(entries: Array<[rel: string, status: string]>) {
   return {
     files: entries.map(([rel, status]) => ({
       name: path.join(ROOT, rel).replaceAll("\\", "/"),
@@ -75,24 +72,16 @@ const EVIDENCE_GREEN = evidenceFor([["tests/x.test.ts", "passed"]]);
 
 /** 一次跑完、有文件红着的结果（status 1 + 有执行证据）。 */
 const RAN_RED = { ...RAN_GREEN, status: 1 };
-const EVIDENCE_RED = evidenceFor([
-  ["tests/theme-dark-token-cascade.test.ts", "failed"],
-]);
+const EVIDENCE_RED = evidenceFor([["tests/theme-dark-token-cascade.test.ts", "failed"]]);
 
 describe("登记项的存在性判决（免费那一维）", () => {
   it("每个登记项都指向真实文件 ⇒ 放行", () => {
-    const res = checkRegistrations(
-      ["tests/a.test.ts", "tests/b.test.ts"],
-      () => true,
-    );
+    const res = checkRegistrations(["tests/a.test.ts", "tests/b.test.ts"], () => true);
     expect(res).toEqual({ exitCode: 0, problems: [] });
   });
 
   it("登记项指向不存在的文件 ⇒ 阻断并点出「排除项永远匹配不到」", () => {
-    const res = checkRegistrations(
-      ["tests/gone.test.ts"],
-      (rel) => rel !== "tests/gone.test.ts",
-    );
+    const res = checkRegistrations(["tests/gone.test.ts"], (rel) => rel !== "tests/gone.test.ts");
     expect(res.exitCode).toBe(1);
     expect(res.problems[0]).toContain("tests/gone.test.ts");
     // 话术要指出这是**静默失效**（排除项不匹配任何东西），否则读的人会以为
@@ -101,10 +90,7 @@ describe("登记项的存在性判决（免费那一维）", () => {
   });
 
   it("重复登记同一条 ⇒ 阻断（顺手又加一条也是这一族）", () => {
-    const res = checkRegistrations(
-      ["tests/a.test.ts", "tests/a.test.ts"],
-      () => true,
-    );
+    const res = checkRegistrations(["tests/a.test.ts", "tests/a.test.ts"], () => true);
     expect(res.exitCode).toBe(1);
     expect(res.problems.join("\n")).toContain("两次");
   });
@@ -173,12 +159,10 @@ describe("登记项「还红着吗」的判决（真跑那一维）", () => {
   });
 
   it("**反假绿**：结果文件在、但里面 0 条用例 ⇒ 同样判「没跑起来」", () => {
-    const res = judgeStillFailing(
-      ["tests/x.test.ts"],
-      { ...RAN_RED, status: 1 },
-      "vitest run …",
-      { files: [], numTotalTests: 0 },
-    );
+    const res = judgeStillFailing(["tests/x.test.ts"], { ...RAN_RED, status: 1 }, "vitest run …", {
+      files: [],
+      numTotalTests: 0,
+    });
     expect(res.exitCode).toBe(1);
     expect(res.problems.join("\n")).toContain("拿不到执行证据");
   });
@@ -186,8 +170,7 @@ describe("登记项「还红着吗」的判决（真跑那一维）", () => {
 
 describe("判据与仓库现状、提交链的接线", () => {
   it("当前登记表为空（这一条的常态，也是零耗时的前提）", async () => {
-    const { KNOWN_FAILED_FILES } =
-      await import("../scripts/quality-gate-shared.mjs");
+    const { KNOWN_FAILED_FILES } = await import("../scripts/quality-gate-shared.mjs");
     // 非空时本判据会真跑那几个文件 —— 那是设计如此，不是漂移。这里只钉住
     // 「空是常态、且空时不该有任何条目」，避免有人随手加一条而不去登记归属。
     expect(Array.isArray(KNOWN_FAILED_FILES)).toBe(true);
@@ -281,9 +264,7 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
     // 窄触发面是这一步的全部代价担保：宽一档就给无关提交加了 ~0.9s。
     expect(touchesMechanism(["scripts/run-tests.mjs"])).toBe(false);
     expect(touchesMechanism(["scripts/affected-tests.mjs"])).toBe(false);
-    expect(touchesMechanism(["docs/standards/11-测试与可观测性.md"])).toBe(
-      false,
-    );
+    expect(touchesMechanism(["docs/standards/11-测试与可观测性.md"])).toBe(false);
     for (const f of MECHANISM_INPUTS) {
       expect(touchesMechanism([f]), `${f} 应当算命中`).toBe(true);
     }
@@ -334,7 +315,7 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
  * （同一件事在 `tests/hook-affected-launch.test.ts` 里由一条判据钉着，这里按同一条口径做）。
  */
 function captureStreams<T>(fn: () => T): { value: T; text: string } {
-  const chunks: string[] = [];
+  const chunks: Array<string> = [];
   const originalWrite = process.stderr.write.bind(process.stderr);
   const originalLog = console.log;
   process.stderr.write = (s: string | Uint8Array) => {
@@ -378,10 +359,7 @@ describe("自证档的判决面（ISSUE #2265）", () => {
    * 下一个人把它改回 `resolveFace([])` 时没有任何东西会红。
    */
   it("清单可由调用方交进来 ⇒ 「索引被上一格弄脏」这个现场在进程内就造得出", () => {
-    const dirty = [
-      "scripts/.artifact-freshness.json",
-      "scripts/.e2e-freshness.json",
-    ];
+    const dirty = ["scripts/.artifact-freshness.json", "scripts/.e2e-freshness.json"];
     const dirtyFace = resolveFace([], { readStaged: () => dirty });
     expect(dirtyFace, JSON.stringify(dirtyFace)).toEqual({
       ok: true,
@@ -408,8 +386,7 @@ describe("自证档的判决面（ISSUE #2265）", () => {
         resolveFace(["--staged"], { readStaged: ambientReaderForbidden }),
       ).value;
     } finally {
-      if (saved === undefined)
-        delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
+      if (saved === undefined) delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
       else process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = saved;
     }
     expect(got.ok, JSON.stringify(got)).toBe(true);
@@ -426,14 +403,11 @@ describe("自证档的判决面（ISSUE #2265）", () => {
     let code;
     let out;
     try {
-      const ran = captureStreams(() =>
-        main(["--staged", "src/lib/x.ts", "tests/y.test.ts"]),
-      );
+      const ran = captureStreams(() => main(["--staged", "src/lib/x.ts", "tests/y.test.ts"]));
       code = ran.value;
       out = ran.text;
     } finally {
-      if (saved === undefined)
-        delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
+      if (saved === undefined) delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
       else process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = saved;
     }
     expect(out).toContain("旗标作废");
@@ -468,7 +442,7 @@ describe("自证档的判决面（ISSUE #2265）", () => {
   });
 
   it("没碰到机制 ⇒ **说一句话**（不再一个字都不打）", () => {
-    const said: string[] = [];
+    const said: Array<string> = [];
     const original = console.log;
     console.log = (line: string) => {
       said.push(line);

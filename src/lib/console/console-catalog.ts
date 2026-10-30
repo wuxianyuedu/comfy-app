@@ -24,7 +24,7 @@ export interface ConsolePresetGroup {
   label: string;
   /** 一句话说明这一组是干什么的（分组标题下方的灰字）。 */
   hint: string;
-  items: ConsolePreset[];
+  items: Array<ConsolePreset>;
 }
 
 /** 一条预设命令。 */
@@ -47,7 +47,7 @@ export interface ConsolePreset {
  * 不是教程。命令一律写成 `pnpm exec` / `node` 的显式形态，与 AGENTS 硬规则 1
  * 同源（本项目禁止 npx / npm run：npm 11.19 解析 typescript 别名链会崩）。
  */
-export const CONSOLE_PRESETS: ConsolePresetGroup[] = [
+export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
   {
     id: "quality",
     label: "质量门禁",
@@ -352,7 +352,7 @@ export const CONSOLE_PRESETS: ConsolePresetGroup[] = [
 ];
 
 /** 全部预设的展平表（按 id 取值用）。 */
-export function allPresets(): ConsolePreset[] {
+export function allPresets(): Array<ConsolePreset> {
   return CONSOLE_PRESETS.flatMap((group) => group.items);
 }
 
@@ -376,7 +376,7 @@ export function shellSyntaxWarning(line: string): string | null {
   const raw = (line ?? "").trim();
   if (!raw) return null;
   /** 命中片段（去重、保持首次出现顺序，便于文案里逐个点名）。 */
-  const found: string[] = [];
+  const found: Array<string> = [];
   const hit = (fragment: string) => {
     if (!found.includes(fragment)) found.push(fragment);
   };
@@ -411,7 +411,7 @@ export type ParsedConsoleLine =
       /** 交给 `spawn` 的可执行文件。 */
       file: string;
       /** 交给 `spawn` 的参数数组（逐项，**不经过 shell 二次解析**）。 */
-      args: string[];
+      args: Array<string>;
       /** 供界面回显与实际执行对齐的规范化命令行。 */
       display: string;
     }
@@ -439,7 +439,7 @@ export function parseConsoleLine(line: string): ParsedConsoleLine {
   const raw = (line ?? "").trim();
   if (!raw) return { ok: false, reason: "命令为空" };
 
-  const tokens: string[] = [];
+  const tokens: Array<string> = [];
   let current = "";
   /** 当前 token 是否已经「开过头」：空引号 `''` 也是一个合法空参数。 */
   let started = false;
@@ -491,6 +491,6 @@ export function parseConsoleLine(line: string): ParsedConsoleLine {
   if (started) tokens.push(current);
   if (tokens.length === 0) return { ok: false, reason: "命令为空" };
 
-  const [file, ...args] = /* SAFETY: 类型断言已复核 */ tokens as [string, ...string[]];
+  const [file, ...args] = /* SAFETY: 类型断言已复核 */ tokens as [string, ...Array<string>];
   return { ok: true, file, args, display: [file, ...args].join(" ") };
 }

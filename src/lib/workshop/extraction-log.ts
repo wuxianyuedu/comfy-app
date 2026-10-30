@@ -24,7 +24,7 @@ export interface ExtractLogEntry {
 }
 
 /** 空日志。 */
-export function emptyExtractLog(): ExtractLogEntry[] {
+export function emptyExtractLog(): Array<ExtractLogEntry> {
   return [];
 }
 
@@ -49,7 +49,7 @@ function messageText(content: LLMMessage["content"]): string {
 }
 
 /** 请求消息 → 适合放进日志正文的多行文本（截断超长剧本，避免面板过载）。 */
-export function formatRequestMessages(messages: LLMMessage[]): string {
+export function formatRequestMessages(messages: Array<LLMMessage>): string {
   const MAX_USER_CHARS = 4000;
   return messages
     .map((m) => {

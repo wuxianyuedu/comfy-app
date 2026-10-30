@@ -15,31 +15,28 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { ProjectOutputs } from "./ProjectOutputs";
 import type { ProjectOutputItem } from "./hooks/use-project-outputs";
 
-function makeOutputs(n: number): ProjectOutputItem[] {
-  return Array.from<ProjectOutputItem, ProjectOutputItem>(
-    { length: n },
-    (_, i) => ({
-      id: `o${i}`,
-      status: "SUCCEEDED",
-      prompt: `p${i}`,
-      workflowName: "wf",
-      type: "IMAGE",
-      seed: "1",
-      createdAt: new Date(0).toISOString(),
-      negativePrompt: null,
-      size: null,
-      sampler: null,
-      steps: null,
-      cfg: null,
-      checkpoint: null,
-      referenceImages: [],
-      parentId: null,
-      images: [],
-    }),
-  );
+function makeOutputs(n: number): Array<ProjectOutputItem> {
+  return Array.from<ProjectOutputItem, ProjectOutputItem>({ length: n }, (_, i) => ({
+    id: `o${i}`,
+    status: "SUCCEEDED",
+    prompt: `p${i}`,
+    workflowName: "wf",
+    type: "IMAGE",
+    seed: "1",
+    createdAt: new Date(0).toISOString(),
+    negativePrompt: null,
+    size: null,
+    sampler: null,
+    steps: null,
+    cfg: null,
+    checkpoint: null,
+    referenceImages: [],
+    parentId: null,
+    images: [],
+  }));
 }
 
-const outputsMock = vi.fn<() => ProjectOutputItem[]>(() => []);
+const outputsMock = vi.fn<() => Array<ProjectOutputItem>>(() => []);
 vi.mock("./hooks/use-project-outputs", () => ({
   useProjectOutputs: () => ({
     outputs: outputsMock(),

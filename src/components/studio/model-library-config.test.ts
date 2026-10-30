@@ -22,7 +22,7 @@ function row(partial: Partial<ModelRow> & { id: string }): ModelRow {
   };
 }
 
-const models: ModelRow[] = [
+const models: Array<ModelRow> = [
   row({
     id: "1",
     name: "dreamshaper-xl",
@@ -49,20 +49,13 @@ describe("filterModels", () => {
   });
 
   it("按类型过滤", () => {
-    expect(filterModels(models, "loras", "").map((m) => m.id)).toEqual([
-      "2",
-      "3",
-    ]);
+    expect(filterModels(models, "loras", "").map((m) => m.id)).toEqual(["2", "3"]);
   });
 
   it("关键字命中名称或文件名（大小写不敏感）", () => {
-    expect(filterModels(models, ALL_TYPES, "XL").map((m) => m.id)).toEqual([
-      "1",
-    ]);
+    expect(filterModels(models, ALL_TYPES, "XL").map((m) => m.id)).toEqual(["1"]);
     // sub/detail.safetensors —— 文件路径也算命中（用户常按文件名搜）
-    expect(filterModels(models, ALL_TYPES, "sub/").map((m) => m.id)).toEqual([
-      "2",
-    ]);
+    expect(filterModels(models, ALL_TYPES, "sub/").map((m) => m.id)).toEqual(["2"]);
   });
 
   it("类型与关键字是与关系", () => {
@@ -102,9 +95,7 @@ describe("fmtSize", () => {
   });
 });
 
-function folder(
-  partial: Partial<FolderConfigRow> & { folder: string },
-): FolderConfigRow {
+function folder(partial: Partial<FolderConfigRow> & { folder: string }): FolderConfigRow {
   return {
     type: partial.folder,
     label: partial.folder,
@@ -126,9 +117,7 @@ describe("filterFolders", () => {
   });
 
   it("目录名与展示标签都参与匹配", () => {
-    expect(filterFolders(rows, "check").map((r) => r.folder)).toEqual([
-      "checkpoints",
-    ]);
+    expect(filterFolders(rows, "check").map((r) => r.folder)).toEqual(["checkpoints"]);
     expect(filterFolders(rows, "lora").map((r) => r.folder)).toEqual(["loras"]);
   });
 });

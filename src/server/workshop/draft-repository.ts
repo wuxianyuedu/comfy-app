@@ -37,11 +37,13 @@ export function rowToDto(row: WorkshopDraftRow): WorkshopDraftDto {
       scriptMarkdown: row.scriptMarkdown,
     },
     scriptMarkdown: row.scriptMarkdown,
-    scenes: Array.isArray(row.scenes) ? /* SAFETY: 类型断言已复核 */ (row.scenes as Scene[]) : [],
-    characters: Array.isArray(row.characters)
-      ? /* SAFETY: 类型断言已复核 */ (row.characters as Character[])
+    scenes: Array.isArray(row.scenes)
+      ? /* SAFETY: 类型断言已复核 */ (row.scenes as Array<Scene>)
       : [],
-    shots: Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[]) : [],
+    characters: Array.isArray(row.characters)
+      ? /* SAFETY: 类型断言已复核 */ (row.characters as Array<Character>)
+      : [],
+    shots: Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>) : [],
   });
 }
 
@@ -63,7 +65,7 @@ export interface DraftSummary {
 }
 
 /** 按用户列出其所有服务端镜像摘要（用于在本地索引缺失时把云端项目找回来）。 */
-export async function listDraftsByUser(userId: string | null): Promise<DraftSummary[]> {
+export async function listDraftsByUser(userId: string | null): Promise<Array<DraftSummary>> {
   const rows = userId
     ? await workshopDb
         .select({

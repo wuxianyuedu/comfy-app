@@ -74,14 +74,8 @@ describe("OptionListPopover", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /FLUX/ }));
-    expect(screen.getByRole("option", { name: /FLUX/ })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(screen.getByRole("option", { name: /SDXL/ })).toHaveAttribute(
-      "aria-selected",
-      "false",
-    );
+    expect(screen.getByRole("option", { name: /FLUX/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("option", { name: /SDXL/ })).toHaveAttribute("aria-selected", "false");
   });
 
   it("点一项即回调该项值并收起面板", () => {
@@ -98,10 +92,7 @@ describe("OptionListPopover", () => {
     fireEvent.click(screen.getByRole("button", { name: /全部模型/ }));
     fireEvent.click(screen.getByRole("option", { name: /SDXL/ }));
     expect(onSelect).toHaveBeenCalledWith("sdxl");
-    expect(
-      screen.queryByRole("option", { name: /SDXL/ }),
-      "选中后应收起浮层",
-    ).toBeNull();
+    expect(screen.queryByRole("option", { name: /SDXL/ }), "选中后应收起浮层").toBeNull();
   });
 
   it("items 为空时显示 emptyHint", () => {
@@ -140,7 +131,7 @@ describe("OptionListPopover", () => {
   });
 
   it("onOpenChange 上报开合（画布变换后关闭的联动靠它）", () => {
-    const seen: boolean[] = [];
+    const seen: Array<boolean> = [];
     render(
       <OptionListPopover
         value="all"

@@ -48,20 +48,20 @@ import { Icon } from "~/components/ui/icon";
 const MemoJsonView = memo(JsonView);
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
-type JsonValue = null | boolean | number | string | JsonValue[] | { [k: string]: JsonValue };
+type JsonValue = null | boolean | number | string | Array<JsonValue> | { [k: string]: JsonValue };
 
 /** 命中路径 — `{[nodeId]: {class_type, inputs, widgets_values, ...}}` 这一层
  *  对应 `["nodes", "3", "widgets_values", "2"]`。在 我们用不到具体 path
  *  做 DOM 后处理, 留作 collectHits 返回类型 + 日后扩展 (例如 toggle 行级
  *  highlight) 时使用。 */
-type Path = readonly (string | number)[];
+type Path = ReadonlyArray<string | number>;
 
 // ─── 命中收集 ──────────────────────────────────────────────────────────────
 /** 收集所有命中路径 (key / primitive value 都参与匹配, 大小写不敏感) */
-function collectHits(root: JsonValue, query: string): Path[] {
+function collectHits(root: JsonValue, query: string): Array<Path> {
   const q = query.toLowerCase();
   if (!q) return [];
-  const hits: Path[] = [];
+  const hits: Array<Path> = [];
 
   const visit = (node: JsonValue, path: Path) => {
     if (node === null) {
@@ -157,7 +157,7 @@ function clearPreviousHighlights(body: HTMLElement) {
 }
 
 /** 把 hits 注入 DOM (行级 + substring) */
-function applyHighlights(body: HTMLElement, hits: Path[], hitIndex: number, query: string) {
+function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number, query: string) {
   clearPreviousHighlights(body);
   if (!query || hits.length === 0) return;
 
@@ -187,7 +187,7 @@ function applyHighlights(body: HTMLElement, hits: Path[], hitIndex: number, quer
   });
 
   type HitNode = { node: Text; count: number };
-  const targets: HitNode[] = [];
+  const targets: Array<HitNode> = [];
   let cur = walker.nextNode();
   while (cur) {
     const t = /* SAFETY: 类型断言已复核 */ cur as Text;

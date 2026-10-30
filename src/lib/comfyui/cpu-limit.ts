@@ -56,7 +56,7 @@ export interface CpuLimitFacts {
 export type CpuLimitMode = "off" | "yield" | "throttle";
 
 /** 档位的**取值集合**（设置页、校验、默认值三处共用一份，别各写一遍）。 */
-export const CPU_LIMIT_MODES: readonly CpuLimitMode[] = ["off", "yield", "throttle"];
+export const CPU_LIMIT_MODES: ReadonlyArray<CpuLimitMode> = ["off", "yield", "throttle"];
 
 /** 「限核」档留给 ComfyUI 的核数上限（占本机逻辑核的比例）。 */
 export const THROTTLE_CPU_RATIO = 0.5;
@@ -117,7 +117,7 @@ export interface CpuLimitCommand {
   /** 可执行文件。 */
   command: string;
   /** 参数数组。 */
-  args: string[];
+  args: Array<string>;
   /** 这一档实际做了什么（写进运行日志的一句话）。 */
   describe: string;
 }

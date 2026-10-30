@@ -56,7 +56,7 @@ function headersFor(cfg: WorkshopLLMConfig): Record<string, string> {
 /** 一次性（非流式）补全。 */
 export async function completeWorkshopLLM(
   cfg: WorkshopLLMConfig,
-  messages: LLMMessage[],
+  messages: Array<LLMMessage>,
 ): Promise<string> {
   if (!cfg.model?.trim()) {
     throw new Error(

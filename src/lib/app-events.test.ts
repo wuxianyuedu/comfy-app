@@ -47,13 +47,9 @@ describe("emitAppEvent / subscribeAppEvent", () => {
   });
 
   it("多个订阅者都收到（广播语义，不是单播）", () => {
-    const hits: string[] = [];
-    const off1 = subscribeAppEvent("canvas:produce", (p) =>
-      hits.push(`a:${p.id}`),
-    );
-    const off2 = subscribeAppEvent("canvas:produce", (p) =>
-      hits.push(`b:${p.id}`),
-    );
+    const hits: Array<string> = [];
+    const off1 = subscribeAppEvent("canvas:produce", (p) => hits.push(`a:${p.id}`));
+    const off2 = subscribeAppEvent("canvas:produce", (p) => hits.push(`b:${p.id}`));
     emitAppEvent("canvas:produce", { id: "t1", resultPath: "/x.png" });
     expect(hits.sort()).toEqual(["a:t1", "b:t1"]);
     off1();
@@ -73,7 +69,7 @@ describe("emitAppEvent / subscribeAppEvent", () => {
   });
 
   it("`workspace:navigate` 的载荷是 `{ view }`（跳视图请求方与订阅方各一层）", () => {
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     const off = subscribeAppEvent("workspace:navigate", (p) => {
       seen.push(p.view);
     });

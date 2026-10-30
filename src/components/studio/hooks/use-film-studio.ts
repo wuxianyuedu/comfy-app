@@ -49,13 +49,13 @@ export interface FilmStudioController {
   /** 该项目的镜头数（`production.shots.length`；无项目 / 无镜头为 0）。 */
   projectShotCount: number;
   /** 该项目镜头的真实列表（左栏渲染，含缩略图 / 状态）。 */
-  projectShots: ShotListItem[];
+  projectShots: Array<ShotListItem>;
   /** 工作流库里可选的视频工作流（逐镜生成用；本地链路唯一来源）。 */
-  videoWorkflows: { id: string; name: string }[];
+  videoWorkflows: Array<{ id: string; name: string }>;
   videoWorkflowId: string;
   setVideoWorkflowId: (value: string) => void;
   /** 工作流库里可选的图类工作流（文生视频镜头合成首帧用；可选）。 */
-  imageWorkflows: { id: string; name: string }[];
+  imageWorkflows: Array<{ id: string; name: string }>;
   imageWorkflowId: string;
   setImageWorkflowId: (value: string) => void;
   /** 成片画幅（尺寸表达：比例 + 分辨率 / 比例 + 百万像素 + 倍数）。 */
@@ -115,9 +115,9 @@ export function useFilmStudio(): FilmStudioController {
   const [frames] = useState(FILM_FRAMES_PER_SHOT);
 
   const [script, setScript] = useState(DEFAULT_SCRIPT);
-  const [videoWorkflows, setVideoWorkflows] = useState<{ id: string; name: string }[]>([]);
+  const [videoWorkflows, setVideoWorkflows] = useState<Array<{ id: string; name: string }>>([]);
   const [videoWorkflowId, setVideoWorkflowId] = useState("");
-  const [imageWorkflows, setImageWorkflows] = useState<{ id: string; name: string }[]>([]);
+  const [imageWorkflows, setImageWorkflows] = useState<Array<{ id: string; name: string }>>([]);
   const [imageWorkflowId, setImageWorkflowId] = useState("");
   const [subtitleOn, setSubtitleOn] = useState(true);
   const [bgmName, setBgmName] = useState<string | null>(null);
@@ -127,7 +127,7 @@ export function useFilmStudio(): FilmStudioController {
    * 用户没手动选过来源、且项目确有镜头时，默认切到「项目镜头」。 */
   const [activeProjectId] = useState<string | null>(() => getActiveId());
   const [projectShotCount, setProjectShotCount] = useState(0);
-  const [projectShots, setProjectShots] = useState<ShotListItem[]>([]);
+  const [projectShots, setProjectShots] = useState<Array<ShotListItem>>([]);
   const [shotSource, setShotSourceState] = useState<FilmShotSource>("script");
   const sourceChosenRef = useRef(false);
   const setShotSource = useCallback((source: FilmShotSource) => {
@@ -139,8 +139,8 @@ export function useFilmStudio(): FilmStudioController {
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）：两个动作此前复位都写在动作之后。 */
   const actionBusy = useBusyAction();
   /** 未消费的技能列表：先取回来用于后续开放风格选择，暂不渲染。 */
-  const [, setSkills] = useState<{ slug: string; name: string }[]>([]);
-  const [, setRecent] = useState<{ id: string; title: string; status: string }[]>([]);
+  const [, setSkills] = useState<Array<{ slug: string; name: string }>>([]);
+  const [, setRecent] = useState<Array<{ id: string; title: string; status: string }>>([]);
 
   /* 拉一次详情。轮询本身由 `useInterval` 按「是否在跑」驱动，这里不再自己
    * 起停定时器（规范 16 §16.2.4.15）—— 此前 `fetchDetail` 里 `??= setInterval`
@@ -212,14 +212,14 @@ export function useFilmStudio(): FilmStudioController {
 
   /* Phase 5/6：读活跃项目的镜头 → 左栏真实列表（production.shots）。挂载用 beginStaleRun
    * 守卫（卸载即不落地）；redoShot 退回某镜后重载列表。 */
-  const applyProjectShots = useCallback((list: ShotListItem[]) => {
+  const applyProjectShots = useCallback((list: Array<ShotListItem>) => {
     setProjectShots(list);
     setProjectShotCount(list.length);
     // 用户未手动选过来源、且项目确有镜头 → 默认走项目镜头。
     if (list.length > 0 && !sourceChosenRef.current) setShotSourceState("project");
   }, []);
 
-  const fetchProjectShots = useCallback(async (): Promise<ShotListItem[]> => {
+  const fetchProjectShots = useCallback(async (): Promise<Array<ShotListItem>> => {
     if (!activeProjectId) return [];
     const prod = await fetchProduction(activeProjectId);
     const raw = prod && Array.isArray(prod.shots) ? prod.shots : [];

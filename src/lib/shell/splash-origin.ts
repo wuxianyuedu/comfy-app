@@ -30,7 +30,7 @@
  */
 
 /** 壳里启动页可能出现的源（见文件头注：分平台，不分叉）。 */
-export const SPLASH_ORIGINS: readonly string[] = [
+export const SPLASH_ORIGINS: ReadonlyArray<string> = [
   "tauri://localhost",
   "http://tauri.localhost",
   "https://tauri.localhost",

@@ -16,7 +16,7 @@ import { errorMessage } from "~/lib/error-message";
 
 export interface RemoteModelCatalog {
   ok: boolean;
-  models: string[];
+  models: Array<string>;
   detail: string;
 }
 

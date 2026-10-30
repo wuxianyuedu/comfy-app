@@ -22,10 +22,7 @@ import { Hint } from "~/components/ui/hint";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { displayValue } from "~/lib/display-value";
 import { fixed } from "~/lib/number-format";
-import {
-  reviewScoreMean,
-  type ReviewVerdict,
-} from "~/lib/production/review-types";
+import { reviewScoreMean, type ReviewVerdict } from "~/lib/production/review-types";
 
 /** 一条判定里的维度分数条：key 有注入的人读名用名，没有（模型自造维度）就原样展示。 */
 function ScoreBars({
@@ -42,28 +39,20 @@ function ScoreBars({
     <div className="flex flex-col gap-1.5">
       {entries.map(([key, item]) => (
         <div key={key} className="flex items-center gap-2 text-xs">
-          <span className="text-ink-faint w-16 shrink-0 text-right">
-            {labels.get(key) ?? key}
-          </span>
+          <span className="text-ink-faint w-16 shrink-0 text-right">{labels.get(key) ?? key}</span>
           <ProgressBar
             value={(item.score / 5) * 100}
             showValue={false}
             ariaLabel={labels.get(key) ?? key}
             fillClassName={
-              item.score >= 4
-                ? "bg-success"
-                : item.score >= 3
-                  ? "bg-warning"
-                  : "bg-destructive"
+              item.score >= 4 ? "bg-success" : item.score >= 3 ? "bg-warning" : "bg-destructive"
             }
             trackClassName="h-1.5 flex-1"
             className="flex-1"
           />
           <span className="text-ink-subtle w-8 shrink-0">{item.score} 分</span>
           {item.note && (
-            <span className="text-ink-faintest min-w-0 flex-1 truncate">
-              {item.note}
-            </span>
+            <span className="text-ink-faintest min-w-0 flex-1 truncate">{item.note}</span>
           )}
         </div>
       ))}
@@ -72,7 +61,7 @@ function ScoreBars({
 }
 
 /** 轮次曲线（均分 / 过·不过），只有多于一轮才值得展示。 */
-function HistoryCurve({ history }: { history: ReviewVerdict[] }) {
+function HistoryCurve({ history }: { history: Array<ReviewVerdict> }) {
   if (history.length <= 1) return null;
   return (
     <div className="text-ink-faintest text-2xs">
@@ -81,11 +70,7 @@ function HistoryCurve({ history }: { history: ReviewVerdict[] }) {
         .map((item, index) => {
           const mean = reviewScoreMean(item);
           return `第${index + 1}轮 ${
-            mean === null
-              ? item.pass
-                ? "过"
-                : "不过"
-              : displayValue(fixed(mean, 1))
+            mean === null ? (item.pass ? "过" : "不过") : displayValue(fixed(mean, 1))
           }`;
         })
         .join(" → ")}
@@ -97,7 +82,7 @@ function HistoryCurve({ history }: { history: ReviewVerdict[] }) {
 export interface ReviewVerdictController {
   verdict: ReviewVerdict | null;
   /** 完整分数曲线（旧→新含本轮）；不给 = 该场景不展示曲线。 */
-  history?: ReviewVerdict[];
+  history?: Array<ReviewVerdict>;
   /** 评审 / 改写任一在途（busy 时弹窗与按钮整体禁动）。 */
   busy: boolean;
   error: string;
@@ -171,9 +156,7 @@ export function ReviewVerdictDialogButton({
             ) : error ? (
               <p className="text-destructive text-sm">{error}</p>
             ) : !verdict ? (
-              <p className="text-ink-fainter text-sm">
-                尚无评审结果，点「重新评审」开始。
-              </p>
+              <p className="text-ink-fainter text-sm">尚无评审结果，点「重新评审」开始。</p>
             ) : (
               <>
                 <div className="flex items-center gap-2">
@@ -206,9 +189,7 @@ export function ReviewVerdictDialogButton({
                   </ul>
                 )}
                 {verdict.suggestion && (
-                  <p className="text-ink-fainter text-sm">
-                    建议：{verdict.suggestion}
-                  </p>
+                  <p className="text-ink-fainter text-sm">建议：{verdict.suggestion}</p>
                 )}
                 {history && <HistoryCurve history={history} />}
               </>

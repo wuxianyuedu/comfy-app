@@ -165,7 +165,7 @@ describe("自定义口：id 形状与序号", () => {
 
   it("序号在整个自定义口空间里递增（不是每种类型各排一列）", () => {
     expect(nextCustomInputId([], "text")).toBe("custom-text-1");
-    const first: ModeContractInputId[] = ["prompt", "custom-text-1"];
+    const first: Array<ModeContractInputId> = ["prompt", "custom-text-1"];
     /* 下一个图片口拿 2 —— 与文本口共用序号空间，删掉一个再加不会立刻复用
      *  同一个 id（映射表按 id 存，复用会让旧落点线落到新口上）。 */
     expect(nextCustomInputId(first, "image")).toBe("custom-image-2");
@@ -180,7 +180,7 @@ describe("自定义口：往返与归一化", () => {
       "prompt",
       "custom-text-1",
       "size",
-    ] as ModeContractInputId[],
+    ] as Array<ModeContractInputId>,
     output: /* SAFETY: 类型断言已复核 */ "image" as const,
     customInputs: [
       {
@@ -250,7 +250,7 @@ describe("自定义口：往返与归一化", () => {
 });
 
 describe("调序：顺序就是工坊对外的参数顺序", () => {
-  const inputs: ModeContractInputId[] = ["prompt", "negative", "size"];
+  const inputs: Array<ModeContractInputId> = ["prompt", "negative", "size"];
 
   it("上移 / 下移交换相邻两项", () => {
     expect(moveContractInput(inputs, "negative", -1)).toEqual(["negative", "prompt", "size"]);

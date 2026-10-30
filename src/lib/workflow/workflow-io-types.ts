@@ -24,7 +24,7 @@ export interface WorkflowIOEntry {
   /** 把某个由控件支撑的输入标为必填。 */
   required?: boolean;
   /** 由 ComfyUI /object_info 解析出的 COMBO 候选项列表。 */
-  options?: string[];
+  options?: Array<string>;
   /** 用户自定义的展示顺序。 */
   displayOrder?: number;
   /** seed 类参数的「控件后行为」（fixed / increment / decrement / random），
@@ -187,7 +187,7 @@ export function resolveEntrySeedMode(
 }
 
 /** 收集整张 IO 表里出现过的全部模式码（去重、保持稳定顺序）。 */
-export function collectModeCodes(io: WorkflowIOMap | null | undefined): string[] {
+export function collectModeCodes(io: WorkflowIOMap | null | undefined): Array<string> {
   const seen = new Set<string>();
   for (const entry of Object.values(io ?? {})) {
     if (!entry || typeof entry !== "object") continue;

@@ -60,8 +60,8 @@ export function WirePortRows({
   onPortDragStart,
   onPortDragEnd,
 }: {
-  wireInputs: (WorkflowIOEntry & { ioKey: string; control: ControlKind })[];
-  outputs: (WorkflowIOEntry & { ioKey: string })[];
+  wireInputs: Array<WorkflowIOEntry & { ioKey: string; control: ControlKind }>;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
   values: Record<string, unknown>;
   set: (ioKey: string, v: unknown) => void;
   pickFile: (ioKey: string) => void;

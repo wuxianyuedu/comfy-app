@@ -25,23 +25,23 @@ const READERS = path.join(REAL_ROOT, "scripts", ".declaration-readers.json");
 /** 真台账的一份深拷贝（用例里改完必须还原的那份）。 */
 const REAL_LEDGER = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(LEDGER, "utf8")) as Ledger;
 const REAL_READERS = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(READERS, "utf8")) as {
-  carriers: { id: string; reader: string }[];
+  carriers: Array<{ id: string; reader: string }>;
 };
 
 interface Entry {
   id: string;
   name: string;
-  paths: string[];
-  markers?: string[];
+  paths: Array<string>;
+  markers?: Array<string>;
   reader: string;
   executor: { kind: string; test?: string; label?: string };
   baseline: Record<string, number>;
   section: string;
   /** 条目声称**执行者逐条核过**的面（选填；写了就要核，见判据的 ①′）。 */
-  verifiedSurfaces?: string[];
+  verifiedSurfaces?: Array<string>;
 }
 interface Ledger {
-  entries: Entry[];
+  entries: Array<Entry>;
 }
 
 const { test, expect } = defineGateRepo({
@@ -466,7 +466,7 @@ test("--update 收紧变短的基线 → 退 0 且真的写回台账", ({ repo }
   expect(code).toBe(0);
   const written = /* SAFETY: 类型断言已复核 */ JSON.parse(
     repo.read("scripts/.tsc-diagnostic-executors.json"),
-  ) as { entries: { baseline: Record<string, number> }[] };
+  ) as { entries: Array<{ baseline: Record<string, number> }> };
   expect(written.entries[0]!.baseline["scripts/check-type-assertion-executor.cjs"]).toBe(30);
 });
 
@@ -488,7 +488,7 @@ test("--update 遇到基线**上涨**时拒绝写入并退 2", ({ repo }) => {
   /* 台账必须原样不动 —— 「顺手把上涨记进基线」正是零增量那一档的失效形态。 */
   const written = /* SAFETY: 类型断言已复核 */ JSON.parse(
     repo.read("scripts/.tsc-diagnostic-executors.json"),
-  ) as { entries: { baseline: Record<string, number> }[] };
+  ) as { entries: Array<{ baseline: Record<string, number> }> };
   expect(written.entries[0]!.baseline["scripts/check-type-assertion-executor.cjs"]).toBe(57);
 });
 

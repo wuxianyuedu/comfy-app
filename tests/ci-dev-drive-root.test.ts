@@ -136,7 +136,7 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
 
   it("这三行**只**在流水线级出现（挪进某一格 ⇒ 装了但探不到）", () => {
     const text = readCnb();
-    const offLevel: string[] = [];
+    const offLevel: Array<string> = [];
     for (const line of text.split(/\r?\n/)) {
       const m = /^([ \t]*)(TEMP|TMP|PLAYWRIGHT_BROWSERS_PATH):/.exec(line);
       if (!m) continue;

@@ -89,15 +89,15 @@ async function listPackSourceFiles(
   packDir: string,
   sourceDir: string,
   source: RuntimeLogSource,
-): Promise<PackLogFile[]> {
+): Promise<Array<PackLogFile>> {
   const dir = path.join(/*turbopackIgnore: true*/ packDir, sourceDir);
-  let names: string[];
+  let names: Array<string>;
   try {
     names = await fs.promises.readdir(/*turbopackIgnore: true*/ dir);
   } catch {
     return []; // 这一包没有该来源的目录：那次运行没启动过这个服务
   }
-  const out: PackLogFile[] = [];
+  const out: Array<PackLogFile> = [];
   for (const name of names) {
     if (!name.endsWith(".log")) continue;
     if (name === legacyRuntimeLogFileName(source)) {
@@ -129,11 +129,11 @@ async function listPackSourceFiles(
  * `sortPackNames` 的次序就是判据本身，并发完成顺序会把它打乱。
  */
 export async function scanRunPacks(options: ScanRunPacksOptions): Promise<{
-  packs: RunPack[];
+  packs: Array<RunPack>;
   total: number;
 }> {
   const { runsDir, sourceDir, runJsonName, maxPacks, source } = options;
-  let names: string[];
+  let names: Array<string>;
   try {
     names = (
       await fs.promises.readdir(/*turbopackIgnore: true*/ runsDir, {
@@ -148,7 +148,7 @@ export async function scanRunPacks(options: ScanRunPacksOptions): Promise<{
     return { packs: [], total: 0 };
   }
 
-  const packs: RunPack[] = [];
+  const packs: Array<RunPack> = [];
   let total = 0;
   for (const name of sortPackNames(names)) {
     const dir = path.join(/*turbopackIgnore: true*/ runsDir, name);

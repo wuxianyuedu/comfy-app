@@ -19,10 +19,7 @@ import {
   usageTestDraftKey,
   type UsageField,
 } from "~/lib/llm/usage-test-config";
-import type {
-  UsageTestKind,
-  UsageTestResult,
-} from "~/lib/llm/usage-test-client";
+import type { UsageTestKind, UsageTestResult } from "~/lib/llm/usage-test-client";
 import type { RemoteModelEntry, RemoteModelKind } from "~/lib/llm/types";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import {
@@ -57,7 +54,7 @@ export interface UsageTestDialogState {
   prompt: string;
   size: string;
   /** 请求体额外字段（结构化编辑，替代原先手填整段 JSON）。 */
-  fields: UsageField[];
+  fields: Array<UsageField>;
   running: boolean;
   /** 是否正在「继续等待」一个已提交的异步视频任务（区别于首次提交的 running） */
   querying: boolean;
@@ -75,7 +72,7 @@ export interface UsageTestDialogSnapshot {
   apiKey: string;
   prompt: string;
   size: string;
-  fields: UsageField[];
+  fields: Array<UsageField>;
   result: UsageTestResult | null;
 }
 
@@ -102,10 +99,7 @@ function rememberUsageTestDraft(state: UsageTestDialogState): void {
 }
 
 /** 若存在对应草稿快照则返回，否则返回 null（调用方按默认值新建弹窗）。 */
-function restoreUsageTestDraft(
-  kind: UsageTestKind,
-  name: string,
-): UsageTestDialogSnapshot | null {
+function restoreUsageTestDraft(kind: UsageTestKind, name: string): UsageTestDialogSnapshot | null {
   return usageTestDrafts.get(usageTestDraftKey(kind, name)) ?? null;
 }
 
@@ -134,7 +128,7 @@ export interface RemoteModelDialogs {
   testing: boolean;
   testMsg: { kind: "ok" | "err"; text: string } | null;
   /** 测试连接成功后返回的服务端模型清单（供点选）。 */
-  suggestions: string[];
+  suggestions: Array<string>;
   /** 提交添加 / 编辑（即时落库；失败留在弹窗报错）。 */
   submitDialog: () => Promise<void>;
   /** 打开「添加模型」弹窗，按用途预选用途。 */
@@ -169,7 +163,7 @@ export interface RemoteModelDialogs {
   setVideoMode: (mode: string) => void;
   rescueMediaFromMode: (index: number, url: string) => void;
   /** 随请求发送的字段行（视频 mode=text 时剔除已隐藏的媒体字段）。 */
-  usageFieldsToSend: (state: UsageTestDialogState) => UsageField[];
+  usageFieldsToSend: (state: UsageTestDialogState) => Array<UsageField>;
 }
 
 /**
@@ -177,9 +171,7 @@ export interface RemoteModelDialogs {
  *
  * @param c 设置页 controller（网络侧动作都在它上面）
  */
-export function useRemoteModelDialogs(
-  c: ReadySettingsPageController,
-): RemoteModelDialogs {
+export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteModelDialogs {
   const [dialog, setDialog] = useState<ModelDialog>(null);
   const [addForm, setAddForm] = useState<ModelDialogForm>({
     baseUrl: "",
@@ -193,11 +185,9 @@ export function useRemoteModelDialogs(
     kind: "ok" | "err";
     text: string;
   } | null>(null);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<Array<string>>([]);
   const [addError, setAddError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<
-    Partial<Record<ModelDialogField, string>>
-  >({});
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<ModelDialogField, string>>>({});
   const [clearKey, setClearKey] = useState(false);
   const [usageTest, setUsageTest] = useState<UsageTestDialogState | null>(null);
   const [rowProbe, setRowProbe] = useState<RowProbe | null>(null);
@@ -246,8 +236,7 @@ export function useRemoteModelDialogs(
     setTestMsg(null);
     try {
       /* 编辑态 API Key 留空 = 沿用该条目已保存的密钥去测（「留空不改」） */
-      const savedKey =
-        dialog?.mode === "edit" ? dialog.entry.apiKey : undefined;
+      const savedKey = dialog?.mode === "edit" ? dialog.entry.apiKey : undefined;
       const typedKey = addForm.apiKey.trim();
       const out = await c.probeRemote({
         baseUrl: addForm.baseUrl.trim() || undefined,
@@ -358,14 +347,12 @@ export function useRemoteModelDialogs(
       name: usageTest.entry.name,
       baseUrl: usageTest.baseUrl.trim(),
       path: usageTest.path.trim(),
-      apiKey:
-        typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
+      apiKey: typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
       prompt: usageTest.prompt,
       size: usageTest.size.trim() || undefined,
       /* 由结构化字段行生成请求体 JSON（替代原先手填整段 JSON）；
        * 视频且 mode=text 时媒体字段已被界面隐藏，这里同样排除，避免 invalid mode */
-      extraJson:
-        usageFieldsToJson(editor.usageFieldsToSend(usageTest)) || undefined,
+      extraJson: usageFieldsToJson(editor.usageFieldsToSend(usageTest)) || undefined,
     });
     setUsageTest((prev) =>
       prev ? { ...prev, running: false, querying: false, result: out } : prev,
@@ -384,13 +371,10 @@ export function useRemoteModelDialogs(
       name: usageTest.entry.name,
       baseUrl: usageTest.baseUrl.trim(),
       path: usageTest.path.trim(),
-      apiKey:
-        typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
+      apiKey: typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
       taskId,
     });
-    setUsageTest((prev) =>
-      prev ? { ...prev, querying: false, result: out } : prev,
-    );
+    setUsageTest((prev) => (prev ? { ...prev, querying: false, result: out } : prev));
   }
 
   /** 添加 / 编辑提交即落库（远端模型清单已无单独的保存按钮）；
@@ -433,10 +417,7 @@ export function useRemoteModelDialogs(
 
   /** 把集合级（要看列表的）失败错位到具体字段上：重名 → `model` 字段。
    *  其余（配置未就绪 / 条目已不存在）没有对应字段，仍走横幅。 */
-  function markCollectionError(
-    error: string | undefined,
-    fallback: string,
-  ): void {
+  function markCollectionError(error: string | undefined, fallback: string): void {
     const text = error ?? fallback;
     if (text.includes("已在列表中")) {
       setFieldErrors((prev) => ({ ...prev, model: text }));

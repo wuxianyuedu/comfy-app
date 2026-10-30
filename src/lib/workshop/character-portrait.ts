@@ -33,9 +33,9 @@ export function makePortraitLog(level: PortraitLogEntry["level"], text: string):
 
 /** 追加一条日志；超上限丢最旧的一条。 */
 export function appendPortraitLog(
-  list: PortraitLogEntry[],
+  list: Array<PortraitLogEntry>,
   entry: PortraitLogEntry,
-): PortraitLogEntry[] {
+): Array<PortraitLogEntry> {
   const next = [...list, entry];
   return next.length > MAX_PORTRAIT_LOG ? next.slice(next.length - MAX_PORTRAIT_LOG) : next;
 }
@@ -64,10 +64,10 @@ export function normalizePortrait(raw: unknown): CharacterPortrait | null {
 }
 
 /** 角色当前的候选列表（按时间倒序，最新在前；脏数据被剔除）。 */
-export function portraitCandidates(character: Character): CharacterPortrait[] {
+export function portraitCandidates(character: Character): Array<CharacterPortrait> {
   const raw = character.portraits;
   if (!Array.isArray(raw)) return [];
-  const out: CharacterPortrait[] = [];
+  const out: Array<CharacterPortrait> = [];
   for (const entry of raw) {
     const candidate = normalizePortrait(entry);
     if (candidate) out.push(candidate);

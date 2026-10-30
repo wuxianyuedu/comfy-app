@@ -13,16 +13,7 @@ import {
 } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
-import {
-  eq,
-  and,
-  asc,
-  count,
-  inArray,
-  exists,
-  sql,
-  type SQL,
-} from "drizzle-orm";
+import { eq, and, asc, count, inArray, exists, sql, type SQL } from "drizzle-orm";
 
 export interface WorkflowModelTagView {
   id: string;
@@ -35,7 +26,7 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
     super(workflowModelTag, workflowModelTag.id);
   }
 
-  async listByUser(userId: string): Promise<WorkflowModelTagView[]> {
+  async listByUser(userId: string): Promise<Array<WorkflowModelTagView>> {
     const rows = await db
       .select({
         id: workflowModelTag.id,
@@ -47,10 +38,7 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
       .from(workflowModelTag)
       .leftJoin(
         workflowModelTagToWorkflowTemplate,
-        eq(
-          workflowModelTagToWorkflowTemplate.workflowModelTag,
-          workflowModelTag.id,
-        ),
+        eq(workflowModelTagToWorkflowTemplate.workflowModelTag, workflowModelTag.id),
       )
       .where(eq(workflowModelTag.userId, userId))
       .groupBy(workflowModelTag.id)
@@ -62,19 +50,11 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
     }));
   }
 
-  async upsertByName(
-    userId: string,
-    name: string,
-  ): Promise<WorkflowModelTagView> {
+  async upsertByName(userId: string, name: string): Promise<WorkflowModelTagView> {
     const existing = await db
       .select()
       .from(workflowModelTag)
-      .where(
-        and(
-          eq(workflowModelTag.userId, userId),
-          eq(workflowModelTag.name, name),
-        ),
-      )
+      .where(and(eq(workflowModelTag.userId, userId), eq(workflowModelTag.name, name)))
       .limit(1);
     const row =
       existing[0] ??
@@ -93,19 +73,14 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
    *  每个标签 2~3 次往返（查 → 插 → 计数）。批量版一次 `IN` 查出已有的、
    *  一条多值 INSERT 补齐缺的，最后按**输入顺序**返回 id（与逐个版同样确定；
    *  count 视图不需要，`setModelTags` 只吃 id）。 */
-  async upsertByNames(userId: string, names: string[]): Promise<string[]> {
+  async upsertByNames(userId: string, names: Array<string>): Promise<Array<string>> {
     if (!names.length) return [];
     const wanted = [...new Set(names)];
     const idByName = new Map<string, string>();
     const existing = await db
       .select({ id: workflowModelTag.id, name: workflowModelTag.name })
       .from(workflowModelTag)
-      .where(
-        and(
-          eq(workflowModelTag.userId, userId),
-          inArray(workflowModelTag.name, wanted),
-        ),
-      );
+      .where(and(eq(workflowModelTag.userId, userId), inArray(workflowModelTag.name, wanted)));
     for (const row of existing) idByName.set(row.name, row.id);
     const missing = wanted.filter((name) => !idByName.has(name));
     if (missing.length > 0) {
@@ -115,24 +90,14 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
         .returning({ id: workflowModelTag.id, name: workflowModelTag.name });
       for (const row of inserted) idByName.set(row.name, row.id);
     }
-    return names
-      .map((name) => idByName.get(name))
-      .filter((id): id is string => id !== undefined);
+    return names.map((name) => idByName.get(name)).filter((id): id is string => id !== undefined);
   }
 
-  async findByUserAndName(
-    userId: string,
-    name: string,
-  ): Promise<{ id: string } | null> {
+  async findByUserAndName(userId: string, name: string): Promise<{ id: string } | null> {
     const rows = await db
       .select({ id: workflowModelTag.id })
       .from(workflowModelTag)
-      .where(
-        and(
-          eq(workflowModelTag.userId, userId),
-          eq(workflowModelTag.name, name),
-        ),
-      )
+      .where(and(eq(workflowModelTag.userId, userId), eq(workflowModelTag.name, name)))
       .limit(1);
     return rows[0] ?? null;
   }
@@ -159,26 +124,18 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
     await db.delete(workflowModelTag).where(eq(workflowModelTag.id, id));
   }
 
-  async listIdsByNames(
-    userId: string,
-    names: string[],
-  ): Promise<{ id: string }[]> {
+  async listIdsByNames(userId: string, names: Array<string>): Promise<Array<{ id: string }>> {
     if (!names.length) return [];
     return db
       .select({ id: workflowModelTag.id })
       .from(workflowModelTag)
-      .where(
-        and(
-          eq(workflowModelTag.userId, userId),
-          inArray(workflowModelTag.name, names),
-        ),
-      );
+      .where(and(eq(workflowModelTag.userId, userId), inArray(workflowModelTag.name, names)));
   }
 
   /** 批量取出模板→模型标签名映射，替代 router 内裸写 join。 */
   async getTemplateTagRows(
-    templateIds: string[],
-  ): Promise<{ templateId: string; name: string }[]> {
+    templateIds: Array<string>,
+  ): Promise<Array<{ templateId: string; name: string }>> {
     if (!templateIds.length) return [];
     return db
       .select({
@@ -188,35 +145,21 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
       .from(workflowModelTagToWorkflowTemplate)
       .innerJoin(
         workflowModelTag,
-        eq(
-          workflowModelTagToWorkflowTemplate.workflowModelTag,
-          workflowModelTag.id,
-        ),
+        eq(workflowModelTagToWorkflowTemplate.workflowModelTag, workflowModelTag.id),
       )
-      .where(
-        inArray(
-          workflowModelTagToWorkflowTemplate.workflowTemplate,
-          templateIds,
-        ),
-      );
+      .where(inArray(workflowModelTagToWorkflowTemplate.workflowTemplate, templateIds));
   }
 
   /** 返回 WHERE 条件：模板关联到给定 tagIds 中任意一个（供 router 组合 where）。 */
-  templateHasTagIdsWhere(tagIds: string[]): SQL {
+  templateHasTagIdsWhere(tagIds: Array<string>): SQL {
     return exists(
       db
         .select({ one: sql`1` })
         .from(workflowModelTagToWorkflowTemplate)
         .where(
           and(
-            eq(
-              workflowModelTagToWorkflowTemplate.workflowTemplate,
-              workflowTemplate.id,
-            ),
-            inArray(
-              workflowModelTagToWorkflowTemplate.workflowModelTag,
-              tagIds,
-            ),
+            eq(workflowModelTagToWorkflowTemplate.workflowTemplate, workflowTemplate.id),
+            inArray(workflowModelTagToWorkflowTemplate.workflowModelTag, tagIds),
           ),
         ),
     );

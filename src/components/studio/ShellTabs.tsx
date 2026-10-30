@@ -49,7 +49,7 @@ interface ShellTabsProps {
    * 视图页签（首页 / 模型 / 工坊·项目名 …）。不传时本组件行为与从前一致：
    * 只渲染 iframe 页签，主应用是唯一的「主应用」页签。
    */
-  viewTabs?: ViewTab[];
+  viewTabs?: Array<ViewTab>;
   /** 当前视图页签 key。 */
   activeViewKey?: string;
   /** 项目 id → 项目名（页签标题用「工坊·雾中来信」区分同视图多页）。 */
@@ -59,7 +59,7 @@ interface ShellTabsProps {
   /** 关闭某个视图页签。 */
   onCloseViewTab?: (key: string) => void;
   /** 「+」菜单里可打开的视图（页面知识，见 ViewTabStrip）。 */
-  openableViews?: OpenableView[];
+  openableViews?: Array<OpenableView>;
   /** 从「+」菜单里选了一个视图。 */
   onOpenView?: (view: WorkspaceView) => void;
 }
@@ -92,9 +92,7 @@ function TabBlockedNotice({
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
       <div className="max-w-xl gap-3 text-center">
-        <p className="text-ink-bright text-base font-medium">
-          无法在此页签中显示 {label}
-        </p>
+        <p className="text-ink-bright text-base font-medium">无法在此页签中显示 {label}</p>
         <p className="text-ink-muted text-sm leading-relaxed">{reason}</p>
         <p className="text-ink-fainter text-xs leading-relaxed">
           通常重启 ComfyUI 即可恢复（应用会自动以放行内嵌的参数拉起它）。
@@ -189,11 +187,7 @@ export function ShellTabs({
        */}
       <div className="relative min-h-0 flex-1">
         {/* 主应用页签（恒挂载，用 CSS 显隐） */}
-        <div
-          className={
-            activeTabId !== MAIN_TAB_ID ? "hidden h-full pb-6" : "h-full pb-6"
-          }
-        >
+        <div className={activeTabId !== MAIN_TAB_ID ? "hidden h-full pb-6" : "h-full pb-6"}>
           {children}
         </div>
 
@@ -205,11 +199,7 @@ export function ShellTabs({
             aria-hidden={activeTabId !== tab.id}
           >
             {tab.blockedReason ? (
-              <TabBlockedNotice
-                label={tab.label}
-                reason={tab.blockedReason}
-                url={tab.blockedUrl}
-              />
+              <TabBlockedNotice label={tab.label} reason={tab.blockedReason} url={tab.blockedUrl} />
             ) : tab.url ? (
               <iframe
                 src={tab.url}

@@ -67,7 +67,7 @@ function resolveSpec(spec: string): string | null {
   return null;
 }
 
-function walk(dir: string, out: string[] = []): string[] {
+function walk(dir: string, out: Array<string> = []): Array<string> {
   for (const name of readdirSync(dir)) {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) {
@@ -116,11 +116,9 @@ type Edge = { from: string; to: string };
 const key = (e: Edge) => `${e.from} -> ${e.to}`;
 
 /** 已登记的边集合（由 `REGISTERED` 展开）。 */
-const REGISTERED_EDGES = new Set(
-  Object.entries(REGISTERED).map(([from, to]) => key({ from, to })),
-);
+const REGISTERED_EDGES = new Set(Object.entries(REGISTERED).map(([from, to]) => key({ from, to })));
 
-function collectEdges(): Edge[] {
+function collectEdges(): Array<Edge> {
   const edges = new Map<string, Edge>();
   for (const file of walk(join(ROOT, "src", "lib"))) {
     const rel = relative(ROOT, file).split("\\").join("/");
@@ -169,13 +167,9 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
     // 用纯数据复现那个谓词，锁住「新边必须算未登记」。
     // 合成一张登记表（与 REGISTERED 现状解耦：这条守的是**判定谓词**，
     // 不是清单内容），只用于复现「同一文件上新增的依赖必须算未登记」。
-    const registered = new Map([
-      ["src/lib/comfyui/client.ts", "src/server/lib/logger.ts"],
-    ]);
-    const registeredEdges = new Set(
-      [...registered].map(([from, to]) => key({ from, to })),
-    );
-    const sample: Edge[] = [
+    const registered = new Map([["src/lib/comfyui/client.ts", "src/server/lib/logger.ts"]]);
+    const registeredEdges = new Set([...registered].map(([from, to]) => key({ from, to })));
+    const sample: Array<Edge> = [
       { from: "src/lib/comfyui/client.ts", to: "src/server/lib/logger.ts" }, // 已登记
       { from: "src/lib/comfyui/client.ts", to: "src/server/lib/brand-new.ts" }, // 未登记
     ];
@@ -197,15 +191,11 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
       // 曾经这样写：import { logger } from "~/server/lib/logger";
     `;
     const specs = [...stripComments(probe).matchAll(SPECIFIER_RE)].map((m) => m[1]);
-    expect(specs, "解析器必须能认出 from 说明符").toEqual([
-      "~/server/better-auth/server",
-    ]);
+    expect(specs, "解析器必须能认出 from 说明符").toEqual(["~/server/better-auth/server"]);
     // 整行 `//` 注释被剥掉（否则说明性路径会被误判成依赖）
     expect(specs).not.toContain("~/server/lib/logger");
     // 说明符能解析到仓库内的真实文件（不是「永远返回 null」）
-    expect(resolveSpec("~/server/better-auth/server")).toBe(
-      "src/server/better-auth/server.ts",
-    );
+    expect(resolveSpec("~/server/better-auth/server")).toBe("src/server/better-auth/server.ts");
     // 数据层同层引用（`lib/core/**` → `~/server/db/schema`）被 SERVER_OWNED_RE 排除，
     // 不入清单 —— 这条守的是「判据不是一律禁止」
     expect(SERVER_OWNED_RE.test("src/server/db/schema.ts")).toBe(false);

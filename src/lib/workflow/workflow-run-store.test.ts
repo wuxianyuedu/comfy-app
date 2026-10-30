@@ -375,7 +375,7 @@ describe("workflow-run-store", () => {
       taskType: "t",
       startedAt: 1,
     });
-    let slow: { t: number; level: "info"; msg: string }[] = [];
+    let slow: Array<{ t: number; level: "info"; msg: string }> = [];
     for (let i = 0; i < 400; i += 1) {
       const entry = {
         t: i,

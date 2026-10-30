@@ -114,7 +114,7 @@ describe("resolvePython：在候选里挑出第一个真能跑的", () => {
     const dir = freshDir();
     writeCandidate(path.join(dir, "py.EXE"));
     /** 真收参数的那一档：只有拿到 `-3` 才算「这个候选可用」。 */
-    const seen: string[][] = [];
+    const seen: Array<Array<string>> = [];
     const hit = resolvePython({
       env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
       platform: "win32",

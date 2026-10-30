@@ -179,8 +179,8 @@ function standaloneDir(): string {
  * 拷进 `src-tauri/static` 之后 —— 那一层由 `check-standalone-contents.cjs` 用同一份
  * 口径数（它在那里实测到 472 个真文档）。
  */
-function listFiles(dir: string, prefix = ""): string[] {
-  const out: string[] = [];
+function listFiles(dir: string, prefix = ""): Array<string> {
+  const out: Array<string> = [];
   for (const name of readdirSync(dir)) {
     const abs = join(dir, name);
     const rel = prefix ? `${prefix}/${name}` : name;

@@ -54,7 +54,7 @@ export function stripComments(text: string): string {
 }
 
 /** 一份源码里作为字符串字面量出现的仓库路径（已去重）。 */
-export function quotedRepoPaths(text: string): string[] {
+export function quotedRepoPaths(text: string): Array<string> {
   const out = new Set<string>();
   for (const m of stripComments(text).matchAll(PATH_RE)) {
     if (m[1]) out.add(m[1]);
@@ -76,7 +76,7 @@ export function quotedRepoPaths(text: string): string[] {
  * （少扫自然不报），于是这条判据的覆盖面静默缩掉六成半，而账面全绿。这正是本条
  * 用例里那句「永远返回空的扫描器会让断言全绿」的同族，只是这次不是全空、是缩水。
  */
-function gateScripts(): string[] {
+function gateScripts(): Array<string> {
   const roots = readdirSync(SCRIPTS_DIR)
     .filter((f) => /^check-.*\.cjs$/.test(f))
     .map((f) => `scripts/${f}`);

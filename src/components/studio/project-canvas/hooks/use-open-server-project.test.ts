@@ -14,7 +14,7 @@ import { cleanup, renderHook } from "@testing-library/react";
 
 import { useOpenServerProject } from "./use-open-server-project";
 
-const calls: string[] = [];
+const calls: Array<string> = [];
 const { hydrateProjectFromServer } = vi.hoisted(() => ({
   hydrateProjectFromServer: vi.fn(),
 }));
@@ -42,11 +42,7 @@ describe("useOpenServerProject", () => {
 
     /* 等的是「这一跳落定」这个条件变成真 ⇒ `expect.poll`（§11.14.3）。 */
     await expect.poll(() => navigate.mock.calls.length).toBe(1);
-    expect(calls).toEqual([
-      "hydrate:proj_server",
-      "setActive:proj_server",
-      "navigate:project",
-    ]);
+    expect(calls).toEqual(["hydrate:proj_server", "setActive:proj_server", "navigate:project"]);
   });
 
   it("服务端拉不到这一行（离线 / 服务端也没有）→ 仍然落到闸门，不抛", async () => {

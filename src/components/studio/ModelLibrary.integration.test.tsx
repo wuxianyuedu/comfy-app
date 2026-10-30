@@ -21,7 +21,7 @@ interface ModelRow {
   fileSize?: number | null;
 }
 interface Behavior {
-  models: ModelRow[];
+  models: Array<ModelRow>;
   /** 非空时 list 抛错 → 覆盖组件错误态 */
   listError?: string;
   /** 弹层里那条连接状态行的数据源（缺省 true = 历史行为）。 */
@@ -87,23 +87,16 @@ describe("ModelLibrary · 前端集成（MSW 数据态流转）", () => {
 
     // loading 态：未回包前是首屏骨架（与真实行同形，不是一行「加载中…」），
     // 且它只等 list —— 后台 sync 的全目录扫描不再挡在首屏前面。
-    expect(
-      screen.getByRole("status", { name: "正在加载模型列表" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "正在加载模型列表" })).toBeInTheDocument();
 
     // data 态：MSW 返回后出现模型文件名行（等 DOM 用 waitFor，见 §11.14）
     await waitFor(
-      () =>
-        expect(
-          screen.getByText("dreamshaper-xl.safetensors"),
-        ).toBeInTheDocument(),
+      () => expect(screen.getByText("dreamshaper-xl.safetensors")).toBeInTheDocument(),
       { timeout: 3000 },
     );
     // 骨架让位给真列表（不是叠在上面）。按 name 查：`Spinner` 的
     // 「同步中」指示同样是 role="status"，同名不同义，不能光靠角色区分。
-    expect(
-      screen.queryByRole("status", { name: "正在加载模型列表" }),
-    ).toBeNull();
+    expect(screen.queryByRole("status", { name: "正在加载模型列表" })).toBeNull();
     // 页头标题：与侧栏 / 页签同一个出处（注册表里这一项叫「模型」，
     // 不再是此前那个裸字面量「模型库」—— ISSUE #1673）。
     expect(screen.getByText(pageHeaderTitle("models"))).toBeInTheDocument();
@@ -119,16 +112,11 @@ describe("ModelLibrary · 前端集成（MSW 数据态流转）", () => {
     renderWithProviders(<ModelLibrary />);
 
     await waitFor(
-      () =>
-        expect(
-          screen.getByText("dreamshaper-xl.safetensors"),
-        ).toBeInTheDocument(),
+      () => expect(screen.getByText("dreamshaper-xl.safetensors")).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
-    expect(
-      screen.getByRole("radiogroup", { name: "按类型筛选模型" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "按类型筛选模型" })).toBeInTheDocument();
 
     // 「全部」这一枚默认选中 —— 它必须自带四层（底色 / 字色 / 描边 / 字重），
     // 且悬停值钉回常态，否则划过已选中项时会被 Button 的默认悬停档改写。
@@ -158,10 +146,9 @@ describe("ModelLibrary · 前端集成（MSW 数据态流转）", () => {
     renderWithProviders(<ModelLibrary />);
 
     fireEvent.click(screen.getByRole("button", { name: "模型目录配置" }));
-    await waitFor(
-      () => expect(screen.getByText("● ComfyUI 未连接")).toBeInTheDocument(),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(screen.getByText("● ComfyUI 未连接")).toBeInTheDocument(), {
+      timeout: 3000,
+    });
     expect(screen.queryByText(/ComfyUI 已连接/)).toBeNull();
   });
 });

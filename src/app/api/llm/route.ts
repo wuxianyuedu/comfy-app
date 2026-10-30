@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 
 const BodySchema = {
   parse(body: unknown): {
-    messages: LLMMessage[];
+    messages: Array<LLMMessage>;
     stream: boolean;
     opts: LLMRequestOptions;
   } {
@@ -26,8 +26,8 @@ const BodySchema = {
     if (!Array.isArray(rec.messages) || rec.messages.length === 0) {
       throw new Error("messages 不能为空");
     }
-    const rawMessages: unknown[] = rec.messages;
-    const messages: LLMMessage[] = rawMessages.map((m: unknown) => {
+    const rawMessages: Array<unknown> = rec.messages;
+    const messages: Array<LLMMessage> = rawMessages.map((m: unknown) => {
       // 逐元素断言为最小形状;null/undefined 元素在属性访问处抛 TypeError → 400,与原 any 版一致。
       const entry = /* SAFETY: 类型断言已复核 */ m as {
         role?: unknown;

@@ -99,7 +99,7 @@ function seedChunks(repo: { write: (r: string, c: string) => void }, extra = 0):
  * 而去改文件里的常量，测的是「改代码之后代码还在」，那种判据下一次一定漂。
  * 撤档那一半的行为单独开一个 describe 钉（见下面「开发期暂撤」那组）。
  */
-const enforce = (args: string[] = []): string[] => ["--enforce-totals", ...args];
+const enforce = (args: Array<string> = []): Array<string> => ["--enforce-totals", ...args];
 
 describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
   test("产物不存在时跳过并不报错（守的是构建结果，不是构建本身）", ({ repo }) => {
@@ -406,7 +406,7 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
 describe("check-bundle-budget.cjs（开发期暂撤两条总量判据，ISSUE #2634）", () => {
   /** 造一份「超出基线」的现场：先按默认档落基线，再往 gzip 与文件数两边都加。 */
   const growBeyondBaseline = (repo: {
-    run: (a?: string[]) => { code: number; output: string };
+    run: (a?: Array<string>) => { code: number; output: string };
     write: (r: string, c: string) => void;
   }) => {
     seedChunks(repo);

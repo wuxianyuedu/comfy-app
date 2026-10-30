@@ -92,7 +92,7 @@ function output(name: string): WorkflowIOEntry {
   return { direction: "output", kind: "param", nodeId: "9", name, label: name };
 }
 
-function ioMap(...entries: WorkflowIOEntry[]): WorkflowIOMap {
+function ioMap(...entries: Array<WorkflowIOEntry>): WorkflowIOMap {
   const map: WorkflowIOMap = {};
   for (const e of entries) {
     map[`${e.nodeId}::${e.kind}::${e.name}`] = e;

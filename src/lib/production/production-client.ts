@@ -14,9 +14,9 @@ export interface ProductionPayload {
   tone: string;
   logline: string;
   scriptMarkdown: string;
-  scenes: unknown[];
-  characters: unknown[];
-  shots: unknown[];
+  scenes: Array<unknown>;
+  characters: Array<unknown>;
+  shots: Array<unknown>;
   /** 完成状态单一来源（Phase 4 / 设计 §7）：阶段游标 + rendered。 */
   progress: ProductionProgress;
 }

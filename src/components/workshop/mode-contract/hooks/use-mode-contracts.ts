@@ -12,10 +12,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { useBusyAction } from "~/components/ui/use-busy-action";
 
-import {
-  parseModeContracts,
-  type ModeContract,
-} from "~/lib/workshop/model-mode-contract";
+import { parseModeContracts, type ModeContract } from "~/lib/workshop/model-mode-contract";
 import { useTRPC } from "~/trpc/react";
 
 export function useModeContracts() {
@@ -24,14 +21,12 @@ export function useModeContracts() {
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const saveBusy = useBusyAction();
 
-  const contracts: ModeContract[] = parseModeContracts(query.data?.contracts);
+  const contracts: Array<ModeContract> = parseModeContracts(query.data?.contracts);
 
-  const saveMutation = useMutation(
-    trpc.llm.modeContractsSave.mutationOptions(),
-  );
+  const saveMutation = useMutation(trpc.llm.modeContractsSave.mutationOptions());
 
   const save = useCallback(
-    async (contracts: ModeContract[]) => {
+    async (contracts: Array<ModeContract>) => {
       await saveBusy.run(async () => {
         await saveMutation.mutateAsync({ contracts });
         await query.refetch();

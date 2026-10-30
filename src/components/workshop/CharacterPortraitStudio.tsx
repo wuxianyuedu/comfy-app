@@ -39,7 +39,7 @@ export interface CharacterPortraitContext {
   /** API 直连通道的脱敏配置（远端通道的门禁） */
   apiChannels: ApiChannelsView | null;
   /** 工作流库可选项（本地通道按模型标签挑选已封装的生图工作流）。 */
-  workflows: WorkshopWorkflowOption[];
+  workflows: Array<WorkshopWorkflowOption>;
   onOpenModelAdapters: () => void;
 }
 
@@ -92,7 +92,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
 
   /* 生成日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
   const [historyOpen, setHistoryOpen] = React.useState(false);
-  const [history, setHistory] = React.useState<PersistableGenerationLog[] | null>(null);
+  const [history, setHistory] = React.useState<Array<PersistableGenerationLog> | null>(null);
   const loadHistory = () => {
     setHistoryOpen(true);
     if (history) return;

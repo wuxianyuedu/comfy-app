@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { completeLLM, completeLLMStructured, getLLMConfig } = vi.hoisted(() => ({
   completeLLM: vi.fn(async (_cfg: unknown, _msgs: unknown) => "# 生成的剧本"),
   completeLLMStructured: vi.fn<
-    (cfg: unknown, msgs: unknown, schema: unknown) => Promise<unknown[]>
+    (cfg: unknown, msgs: unknown, schema: unknown) => Promise<Array<unknown>>
   >(async () => []),
   getLLMConfig: vi.fn(async () => ({})),
 }));
@@ -40,7 +40,7 @@ const reviewContent = vi.hoisted(() =>
       _id: string,
     ): Promise<{
       pass: boolean;
-      issues: string[];
+      issues: Array<string>;
       suggestion: string;
       scoredAt: string;
     }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
@@ -54,7 +54,7 @@ const reviewShotImage = vi.hoisted(() =>
       _id: string,
     ): Promise<{
       pass: boolean;
-      issues: string[];
+      issues: Array<string>;
       suggestion: string;
       scoredAt: string;
     }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
@@ -68,11 +68,11 @@ const reviewScript = vi.hoisted(() =>
     ): Promise<{
       verdict: {
         pass: boolean;
-        issues: string[];
+        issues: Array<string>;
         suggestion: string;
         scoredAt: string;
       };
-      history: unknown[];
+      history: Array<unknown>;
     }> => ({
       verdict: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
       history: [],
@@ -112,8 +112,8 @@ const PROJ = "proj_run";
 async function seed(
   content: Partial<{
     scriptMarkdown: string;
-    characters: unknown[];
-    shots: unknown[];
+    characters: Array<unknown>;
+    shots: Array<unknown>;
     rendered: boolean;
   }>,
   run: Partial<ProductionRun>,
@@ -178,7 +178,9 @@ describe("advanceRunLoop", () => {
     await seed({ scriptMarkdown: "# 剧本" }, { status: "running", approvalMode: "stage" });
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    expect(/* SAFETY: 类型断言已复核 */ (row!.characters as { name: string }[])[0]).toMatchObject({
+    expect(
+      /* SAFETY: 类型断言已复核 */ (row!.characters as Array<{ name: string }>)[0],
+    ).toMatchObject({
       name: "阿宁",
     });
     expect(normalizeProductionRun(row!.run).awaitingStage).toBe("character");
@@ -195,12 +197,12 @@ describe("advanceRunLoop", () => {
     );
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    const shots = /* SAFETY: 类型断言已复核 */ row!.shots as {
+    const shots = /* SAFETY: 类型断言已复核 */ row!.shots as Array<{
       index: number;
       prompt: string;
       status: string;
       rev: number;
-    }[];
+    }>;
     expect(shots).toHaveLength(2);
     expect(shots[0]).toMatchObject({
       index: 0,
@@ -231,7 +233,7 @@ describe("advanceRunLoop", () => {
     expect(typeof firstSeed).toBe("number");
     expect(Number.isFinite(firstSeed)).toBe(true);
     const shot = /* SAFETY: 类型断言已复核 */ (
-      row!.shots as { imageUrl?: string; status: string }[]
+      row!.shots as Array<{ imageUrl?: string; status: string }>
     )[0];
     expect(shot).toMatchObject({
       status: "done",
@@ -527,10 +529,10 @@ describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () =
     expect(reviewScript).toHaveBeenCalledTimes(1);
     expect(scriptDigestOf(revised)).not.toBe(scriptDigestOf("# 旧剧本"));
     const row = await readRow();
-    const shots = /* SAFETY: 类型断言已复核 */ row!.shots as {
+    const shots = /* SAFETY: 类型断言已复核 */ row!.shots as Array<{
       id: string;
       prompt: string;
-    }[];
+    }>;
     expect(shots.some((s) => s.id === "old")).toBe(false); // 旧分镜被新剧本的分镜覆盖
     const run = normalizeProductionRun(row!.run);
     expect(run.storyboardScriptDigest).toBe(scriptDigestOf(revised));

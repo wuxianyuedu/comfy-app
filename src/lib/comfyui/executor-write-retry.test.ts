@@ -38,7 +38,7 @@ function busyError(): Error {
   return e;
 }
 
-const linesOf = (taskId: string): string[] =>
+const linesOf = (taskId: string): Array<string> =>
   (state().logs.get(taskId) ?? []).map((l) => `${l.level}: ${l.msg}`);
 
 describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () => {

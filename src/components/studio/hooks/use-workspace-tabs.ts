@@ -26,7 +26,7 @@ import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 
 /** 合法视图白名单：持久化恢复与「请求切视图」的应用事件都按它收敛。 */
-export const WORKSPACE_VIEWS: WorkspaceView[] = [
+export const WORKSPACE_VIEWS: Array<WorkspaceView> = [
   "home",
   "project",
   "canvas",
@@ -76,8 +76,7 @@ export interface WorkspaceTabsController {
 }
 
 export function useWorkspaceTabs(): WorkspaceTabsController {
-  const [tabsState, setTabsState] =
-    useState<WorkspaceTabsState>(initialWorkspaceTabs);
+  const [tabsState, setTabsState] = useState<WorkspaceTabsState>(initialWorkspaceTabs);
   const activateShellTab = useShellTabs((s) => s.activateTab);
 
   /* ── 恢复：把上次离开时的页签从 sessionStorage 播回来 ─────────────────────
@@ -113,8 +112,7 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
   /* 当前视图 id —— 判据只认「视图」，同一视图的两个项目页签算同一屏。
    * 「界面打开」的日志（含耗时）不在这里写：它要等这一屏**内容真的挂载**才算
    * 数，落在 `WorkspaceViewStack` + `ViewOpenReport`（见那两处的说明）。 */
-  const viewMode: WorkspaceView =
-    findTab(tabsState.tabs, tabsState.activeKey)?.view ?? HOME_VIEW;
+  const viewMode: WorkspaceView = findTab(tabsState.tabs, tabsState.activeKey)?.view ?? HOME_VIEW;
 
   const navigateTo = useCallback((view: WorkspaceView) => {
     /* 绑的是 store 的同步读数，不是组件里那个 `activeProjectId` React 状态：

@@ -32,7 +32,7 @@ import {
 /* 槽位→名字映射用的兜底「完整输入顺序」（控件 + 连线）。
  *  Raw 节点没有 `inputs[]` 时（老导出 / 被裁过的节点）只能按槽位序号查这张表
  *  拿名字；有 `inputs[]` 时一律以节点自带的名字为准。 */
-const FALLBACK_FULL: Record<string, string[]> = {
+const FALLBACK_FULL: Record<string, Array<string>> = {
   KSampler: [
     "model",
     "positive",
@@ -87,8 +87,8 @@ interface IndexedNode {
   virtual: boolean;
   raw: RawNode;
   /** 按槽位顺序排列，索引即 slot index */
-  inputs: NodeInputSlot[];
-  outputTypes: string[];
+  inputs: Array<NodeInputSlot>;
+  outputTypes: Array<string>;
 }
 
 interface LinkRef {
@@ -122,7 +122,7 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
   for (const n of raw.nodes) {
     const id = String(n.id);
     const type = String(n.type);
-    const slots: NodeInputSlot[] = [];
+    const slots: Array<NodeInputSlot> = [];
 
     if (Array.isArray(n.inputs) && n.inputs.length) {
       for (const inp of n.inputs) {
@@ -154,9 +154,7 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
       raw: n,
       inputs: slots,
       outputTypes: Array.isArray(n.outputs)
-        ? n.outputs.map((output) =>
-            output && typeof output.type === "string" ? output.type : "",
-          )
+        ? n.outputs.map((output) => (output && typeof output.type === "string" ? output.type : ""))
         : [],
     });
   }
@@ -170,9 +168,7 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
  * 不含任何「转成 API 提交」的语义：控件值不由这里映射
  *（画布的参数值走 `rawInputsById` 与 rawNodes 的 `widgets_values` 两处）。
  */
-export function buildRawViewGraph(
-  raw: RawWorkflow,
-): Record<string, ApiWorkflowNode> {
+export function buildRawViewGraph(raw: RawWorkflow): Record<string, ApiWorkflowNode> {
   const graph: Record<string, ApiWorkflowNode> = {};
   if (!Array.isArray(raw.nodes)) return graph;
 
@@ -197,10 +193,7 @@ export function buildRawViewGraph(
     if (idx.mode !== NODE_MODE_ALWAYS) meta.mode = idx.mode;
     if (idx.virtual) meta.virtual = true;
 
-    const inactive =
-      idx.virtual ||
-      idx.mode === NODE_MODE_NEVER ||
-      idx.mode === NODE_MODE_BYPASS;
+    const inactive = idx.virtual || idx.mode === NODE_MODE_NEVER || idx.mode === NODE_MODE_BYPASS;
     if (inactive) {
       meta.inputOrder = idx.inputs.map((input) => input.name);
       const types: Record<string, string> = {};
@@ -208,9 +201,7 @@ export function buildRawViewGraph(
       if (Object.keys(types).length) meta.inputTypes = types;
       if (idx.outputTypes.length) meta.outputTypes = idx.outputTypes;
       if (idx.type === "PrimitiveNode") {
-        const value = Array.isArray(idx.raw.widgets_values)
-          ? idx.raw.widgets_values[0]
-          : undefined;
+        const value = Array.isArray(idx.raw.widgets_values) ? idx.raw.widgets_values[0] : undefined;
         if (value !== undefined) meta.value = value;
       }
     }

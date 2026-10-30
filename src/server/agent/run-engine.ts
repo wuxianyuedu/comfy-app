@@ -164,7 +164,7 @@ async function execCharacters(
       }),
     ),
   );
-  const created: Character[] = briefs
+  const created: Array<Character> = briefs
     .filter((c) => c.name.trim() !== "")
     .map((c) => ({
       id: workshopUid("char"),
@@ -212,7 +212,7 @@ async function execStoryboard(
       }),
     ),
   );
-  const shots: Shot[] = items
+  const shots: Array<Shot> = items
     .filter((it) => it.description.trim() !== "")
     .map((it, i) => ({
       id: workshopUid("shot"),
@@ -245,7 +245,7 @@ async function execImages(
   run: ProductionRun,
   row: Production,
   view: ProductionRunView,
-  shotIds: string[],
+  shotIds: Array<string>,
 ): Promise<ExecResult> {
   if (!run.imageWorkflowId) {
     return {
@@ -253,9 +253,11 @@ async function execImages(
       error: "缺少图类工作流（imageWorkflowId），无法逐镜生图",
     };
   }
-  const shots = Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[]) : [];
+  const shots = Array.isArray(row.shots)
+    ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>)
+    : [];
   const want = new Set(shotIds);
-  const next: Shot[] = [];
+  const next: Array<Shot> = [];
   for (const shot of shots) {
     if (!want.has(shot.id)) {
       next.push(shot);
@@ -392,12 +394,12 @@ async function execReviewShots(
   projectId: string,
   run: ProductionRun,
   view: ProductionRunView,
-  shotIds: string[],
+  shotIds: Array<string>,
 ): Promise<ExecResult> {
   const reviewed = { ...run.reviewedShotRev };
   const attempts = { ...run.reviewAttempts };
   const revById = new Map(view.shots.map((s) => [s.id, s.rev]));
-  const rerollIds: string[] = [];
+  const rerollIds: Array<string> = [];
   let passed = 0;
   let exhausted = 0;
   let imageReviewed = 0;
@@ -454,7 +456,7 @@ async function execReviewShots(
 
   if (rerollIds.length > 0) {
     const fresh = await productionRepository.getForUser(userId, projectId);
-    let shots: unknown[] = fresh && Array.isArray(fresh.shots) ? fresh.shots : [];
+    let shots: Array<unknown> = fresh && Array.isArray(fresh.shots) ? fresh.shots : [];
     for (const id of rerollIds) shots = applyShotRedo(shots, id);
     await productionRepository.patchContent(userId, projectId, { shots });
   }

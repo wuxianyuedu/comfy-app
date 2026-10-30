@@ -40,7 +40,7 @@ export interface DepsFreshness {
   /** 陈旧的形态（供文案分流），取值与客户端共用一个定义。 */
   state: DepsFreshnessState;
   /** 解析不到的包名；仅 `state === "unresolved"` 时非空（供文案点名）。 */
-  missing: string[];
+  missing: Array<string>;
 }
 
 /**
@@ -50,9 +50,7 @@ export interface DepsFreshness {
  * `{ stale: false }` = 判定为新鲜。两者是不同的事实，不可合流 —— 合并会把
  * 「不知道」显示成「没事」，那正是本条目要消灭的那类静默。
  */
-export function readDepsFreshness(
-  root: string = process.cwd(),
-): DepsFreshness | null {
+export function readDepsFreshness(root: string = process.cwd()): DepsFreshness | null {
   /* 只有 `next dev` 这一档判：生产形态的依赖面由打包链路负责，这里既没有动作
    * 出口、也会对一棵本就该由构建决定的依赖树误报。 */
   if (process.env.NODE_ENV !== "development") return null;

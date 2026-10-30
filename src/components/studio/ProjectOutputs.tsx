@@ -20,15 +20,8 @@ import { downloadText } from "~/lib/browser-io";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { timeAgo } from "~/lib/time-format";
 import { StatusBadge } from "~/components/ui/status-badge";
-import {
-  ProjectOutputsMetadataSheet,
-  TYPE_CHIP,
-} from "./ProjectOutputsMetadataSheet";
-import {
-  getActiveId,
-  listProjects,
-  type CanvasProject,
-} from "~/lib/project-canvas/canvas-store";
+import { ProjectOutputsMetadataSheet, TYPE_CHIP } from "./ProjectOutputsMetadataSheet";
+import { getActiveId, listProjects, type CanvasProject } from "~/lib/project-canvas/canvas-store";
 import {
   type ProjectOutputItem,
   type ProjectOutputImage,
@@ -75,13 +68,7 @@ function OutputCard({
 
         {isVideoOut && (
           <span className="ring-border-strong bg-primary/90 absolute top-1/2 left-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full ring-2">
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="white"
-              aria-hidden
-            >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="white" aria-hidden>
               <path d="M6 4 L16 10 L6 16 Z" />
             </svg>
           </span>
@@ -103,9 +90,7 @@ function OutputCard({
           {TYPE_CHIP[output.type] ?? output.type} ·{""}
           {displayValue(output.seed)}
         </p>
-        <p className="text-ink-fainter text-2xs mt-1">
-          {displayValue(timeAgo(output.createdAt))}
-        </p>
+        <p className="text-ink-fainter text-2xs mt-1">{displayValue(timeAgo(output.createdAt))}</p>
       </div>
     </Button>
   );
@@ -135,7 +120,7 @@ function VirtualizedOutputGrid({
   selectedId,
   onSelect,
 }: {
-  outputs: ProjectOutputItem[];
+  outputs: Array<ProjectOutputItem>;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
@@ -163,7 +148,7 @@ function VirtualizedOutputGrid({
   const rowH = cardW + CARD_TEXT_H;
 
   const rows = useMemo(() => {
-    const out: { start: number; items: ProjectOutputItem[] }[] = [];
+    const out: Array<{ start: number; items: Array<ProjectOutputItem> }> = [];
     for (let i = 0; i < outputs.length; i += cols) {
       out.push({ start: i, items: outputs.slice(i, i + cols) });
     }
@@ -256,7 +241,7 @@ function VirtualizedOutputGrid({
   );
 }
 
-function taskCover(images: ProjectOutputImage[]): ProjectOutputImage | null {
+function taskCover(images: Array<ProjectOutputImage>): ProjectOutputImage | null {
   const img = images.find((image) => image.mediaType === "image");
   if (img) return img;
   return images[0] ?? null;
@@ -264,7 +249,7 @@ function taskCover(images: ProjectOutputImage[]): ProjectOutputImage | null {
 
 export function ProjectOutputs() {
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [projects, setProjects] = useState<CanvasProject[]>([]);
+  const [projects, setProjects] = useState<Array<CanvasProject>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /* 「已复制 ✓」的一次性反馈：亮 1.5s 自动复位（连点/卸载由 hook 收口）。 */
   const copied = useFlashState();
@@ -282,11 +267,7 @@ export function ProjectOutputs() {
     return subscribeAppEvent("comfyapp:canvas-store-changed", sync);
   }, [refreshProjects]);
 
-  const {
-    outputs,
-    loading,
-    refetch: refetchOutputs,
-  } = useProjectOutputs(projectId);
+  const { outputs, loading, refetch: refetchOutputs } = useProjectOutputs(projectId);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === projectId) ?? null,
@@ -368,9 +349,7 @@ export function ProjectOutputs() {
         backdrop={<AuroraBackground />}
       >
         <div>
-          <p className="text-ink-soft text-lg font-medium">
-            还没有打开任何画布项目
-          </p>
+          <p className="text-ink-soft text-lg font-medium">还没有打开任何画布项目</p>
           <p className="text-ink-muted mt-2 text-sm">
             请先在「画布」中创建或打开一个项目，生成结果会自动归档到项目目录并在这里展示。
           </p>
@@ -403,9 +382,7 @@ export function ProjectOutputs() {
               value={projectId}
               onChange={setProjectId}
               options={projects.map((p) => p.id)}
-              labels={Object.fromEntries(
-                projects.map((p) => [p.id, p.name ?? "未命名项目"]),
-              )}
+              labels={Object.fromEntries(projects.map((p) => [p.id, p.name ?? "未命名项目"]))}
             />
             <Button
               variant="outline"
@@ -455,11 +432,7 @@ export function ProjectOutputs() {
           minHeightClass="min-h-70"
         />
       ) : (
-        <VirtualizedOutputGrid
-          outputs={outputs}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-        />
+        <VirtualizedOutputGrid outputs={outputs} selectedId={selectedId} onSelect={setSelectedId} />
       )}
 
       <ProjectOutputsMetadataSheet

@@ -15,7 +15,7 @@ export class ProjectRepository extends DrizzleRepository<Project> {
     super(project, project.id);
   }
 
-  async listByUser(userId: string): Promise<Project[]> {
+  async listByUser(userId: string): Promise<Array<Project>> {
     return db
       .select()
       .from(project)
@@ -27,11 +27,7 @@ export class ProjectRepository extends DrizzleRepository<Project> {
     userId: string,
     data: { id: string; name: string; nodes?: unknown; edges?: unknown },
   ): Promise<Project> {
-    const existing = await db
-      .select()
-      .from(project)
-      .where(eq(project.id, data.id))
-      .limit(1);
+    const existing = await db.select().from(project).where(eq(project.id, data.id)).limit(1);
     if (!existing[0]) {
       const rows = await db
         .insert(project)
@@ -59,9 +55,7 @@ export class ProjectRepository extends DrizzleRepository<Project> {
   }
 
   async deleteForUser(userId: string, id: string): Promise<void> {
-    await db
-      .delete(project)
-      .where(and(eq(project.id, id), eq(project.userId, userId)));
+    await db.delete(project).where(and(eq(project.id, id), eq(project.userId, userId)));
   }
 }
 

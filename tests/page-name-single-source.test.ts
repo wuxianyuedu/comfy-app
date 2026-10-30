@@ -97,7 +97,7 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
   });
 
   it("`viewLabel` 不许只是 `label` 的同义扩写（`· X` / `-X` / 「与X」那一族）", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const item of NAV_ITEMS) {
       const extra = item.viewLabel;
       if (extra === undefined) continue;
@@ -132,7 +132,7 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
    * （P82 那次粗锚漏计 79 处的教训，规范 16 §16.2.4.72 末段）。下面第三条用例
    * 喂进真实的历史形状断言它被数到。
    */
-  function bareScreenNameHeadings(text: string): string[] {
+  function bareScreenNameHeadings(text: string): Array<string> {
     const known = new Set([
       /* 注册表里**当前**的每一个屏名。 */
       ...NAV_ITEMS.flatMap((item) => [item.label, item.viewLabel ?? item.label]),
@@ -142,7 +142,7 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
        * 一份只认得新名字的守卫，等价于没有守卫。 */
       ...RETIRED_SCREEN_NAMES,
     ]);
-    const hits: string[] = [];
+    const hits: Array<string> = [];
     for (const match of text.matchAll(/<h[12]\b[^>]*>\s*([^\s<>{][^<>{]*?)\s*<\/h[12]>/g)) {
       const content = match[1]?.trim() ?? "";
       if (known.has(content)) hits.push(content);
@@ -177,7 +177,7 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
     /* 形态：`<h1>` 的属性段之后，紧跟「项目名 + 分隔点 + 另一段中文」。
        判据收窄到 `h1` 的**同一行**内出现 `·` 或 `・` —— 标题右侧挂副名正是
        FilmStudioTopBar 收口前那个形状。 */
-    const hits: string[] = [];
+    const hits: Array<string> = [];
     for (const rel of [
       "src/components/studio/FilmStudioTopBar.tsx",
       "src/components/studio/ProjectOutputs.tsx",

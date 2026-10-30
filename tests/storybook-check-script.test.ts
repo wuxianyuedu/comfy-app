@@ -25,7 +25,7 @@ import { symlinkDir } from "./helpers/symlink-dir";
 const ROOT = path.resolve(__dirname, "..");
 const SCRIPT_REL = "scripts/storybook-check.mjs";
 const CHECK_DIR_REL = "scripts/storybook-checks";
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 const COMPONENT = `import { cva } from "class-variance-authority";
 

@@ -22,7 +22,7 @@ afterEach(cleanup);
  * 现在整排交给 `ui/select-chip`。这里钉的是**形态**：
  * 单选语义 + 选中档四层俱在 + 悬停值回钉。
  */
-const logs: TaskLogEntry[] = [
+const logs: Array<TaskLogEntry> = [
   { t: 1, level: "info", msg: "开始" },
   { t: 2, level: "warn", msg: "慢" },
 ];
@@ -30,15 +30,11 @@ const logs: TaskLogEntry[] = [
 describe("任务日志级别筛选 chip（ISSUE #1925）", () => {
   it("是单选语义的 radiogroup（不再手搓 aria-pressed 按钮）", () => {
     render(<TaskLogTimeline logs={logs} />);
-    expect(
-      screen.getByRole("radiogroup", { name: "日志级别筛选" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "日志级别筛选" })).toBeTruthy();
     const chips = screen.getAllByRole("radio");
     expect(chips.length).toBeGreaterThan(1);
     /* 默认筛「全部」——恰好一枚勾选。 */
-    expect(
-      chips.filter((c) => c.getAttribute("aria-checked") === "true"),
-    ).toHaveLength(1);
+    expect(chips.filter((c) => c.getAttribute("aria-checked") === "true")).toHaveLength(1);
   });
 
   it("选中档四层俱在，且悬停值钉回常态", () => {

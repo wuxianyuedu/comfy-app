@@ -31,7 +31,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
     super(filmProject, filmProject.id);
   }
 
-  async listByUser(userId: string): Promise<FilmSummary[]> {
+  async listByUser(userId: string): Promise<Array<FilmSummary>> {
     const rows = await db
       .select({
         id: filmProject.id,
@@ -126,7 +126,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       .from(filmProject)
       .where(eq(filmProject.id, id))
       .limit(1);
-    const arr = /* SAFETY: 类型断言已复核 */ (film[0]?.logs as unknown[] | null) ?? [];
+    const arr = /* SAFETY: 类型断言已复核 */ (film[0]?.logs as Array<unknown> | null) ?? [];
     arr.push(entry);
     await db
       .update(filmProject)
@@ -140,7 +140,9 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
    *  刻意**不带 userId**：这条查询的语义是「本机这份库里还有哪些行该有人推进」，
    *  扫描者不知道也不该关心归属；本应用是单用户本地应用，多一层归属条件只会让
    *  「重启后没人续跑」的窗口更难解释。排序与领取队列同口径（先起先续）。 */
-  async listByStatus(statuses: readonly string[]): Promise<Array<{ id: string; status: string }>> {
+  async listByStatus(
+    statuses: ReadonlyArray<string>,
+  ): Promise<Array<{ id: string; status: string }>> {
     if (statuses.length === 0) return [];
     return db
       .select({ id: filmProject.id, status: filmProject.status })

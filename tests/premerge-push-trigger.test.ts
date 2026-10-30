@@ -12,13 +12,7 @@
  * 引用的那份里就等于「本该拦住它的那一次一条都不跑」。
  */
 import { spawnSync } from "node:child_process";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -273,9 +267,7 @@ describe("归属决定：别线的红不挡路，其余一律挡（§13.6.2 / §
   it("归属读不出 / 段报红而逐条里没有红项 ⇒ 都按「不构成证据」拦下", () => {
     expect(decideBaseAttribution(null).allowed).toBe(false);
     expect(decideBaseAttribution({ rows: [] }).allowed).toBe(false);
-    expect(decideBaseAttribution({ rows: [] }).reason).toContain(
-      "两份读数不一致",
-    );
+    expect(decideBaseAttribution({ rows: [] }).reason).toContain("两份读数不一致");
   });
 
   it("红项没有 label 时不写出 undefined", () => {
@@ -305,11 +297,7 @@ describe("证明的读写（本机、不入库；红着不许记）", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "comfy-premerge-proof-"));
     try {
       expect(readProof(dir)).toBeNull();
-      writeFileSync(
-        path.join(dir, "comfy-premerge-proof.json"),
-        '{"headSha":',
-        "utf8",
-      );
+      writeFileSync(path.join(dir, "comfy-premerge-proof.json"), '{"headSha":', "utf8");
       expect(readProof(dir)).toBeNull();
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -327,12 +315,8 @@ describe("接线在位（判据要有人跑，也要有人守那条线）", () =
 
   it("stdin 只读一次、再分喂两处 —— 少一处就会有一方拿到空输入且不报错", () => {
     expect(hook).toMatch(/^cat >"\$refs_in" \|\| exit 1$/m);
-    expect(hook).toMatch(
-      /^git lfs pre-push "\$@" <"\$refs_in" \|\| exit \$\?$/m,
-    );
-    expect(hook).toMatch(
-      /^node scripts\/premerge-proof\.mjs <"\$refs_in" \|\| exit \$\?$/m,
-    );
+    expect(hook).toMatch(/^git lfs pre-push "\$@" <"\$refs_in" \|\| exit \$\?$/m);
+    expect(hook).toMatch(/^node scripts\/premerge-proof\.mjs <"\$refs_in" \|\| exit \$\?$/m);
   });
 
   it("LFS 那一跳没有被这次接线挤掉", () => {
@@ -346,9 +330,7 @@ describe("接线在位（判据要有人跑，也要有人守那条线）", () =
   });
 
   it("复算本体只有一处实现 —— 钩子里不许长出第二套编排（§12.12）", () => {
-    expect(hook).not.toMatch(
-      /base-check|check-commit-claims|check-merged-side-loss/,
-    );
+    expect(hook).not.toMatch(/base-check|check-commit-claims|check-merged-side-loss/);
     expect(hook).toContain("premerge-proof.mjs");
   });
 });
@@ -365,7 +347,7 @@ describe("接线在位（判据要有人跑，也要有人守那条线）", () =
  * 直接过」，而它一个字节都没回答「并进 master 会不会红」。
  */
 describe("上游 sha 的取法：远端名不假定叫 origin，上游也不许是自己的分支", () => {
-  const git = (args: string[], cwd: string) => {
+  const git = (args: Array<string>, cwd: string) => {
     const r = spawnSync(
       "git",
       [
@@ -442,9 +424,7 @@ describe("上游 sha 的取法：远端名不假定叫 origin，上游也不许�
       git(["commit", "--quiet", "-m", "on topic"], f.work);
       git(["push", "--quiet", "--set-upstream", "cnb", "feat/x"], f.work);
       // 前提成立：@{u} 已经是自己的分支，不是 master
-      expect(git(["rev-parse", "--abbrev-ref", "@{u}"], f.work)).toBe(
-        "cnb/feat/x",
-      );
+      expect(git(["rev-parse", "--abbrev-ref", "@{u}"], f.work)).toBe("cnb/feat/x");
       const topicSha = git(["rev-parse", "HEAD"], f.work);
       const rev = readRevisions(f.gitDir, f.work);
       expect(rev.headSha).toBe(topicSha);
@@ -464,9 +444,7 @@ describe("上游 sha 的取法：远端名不假定叫 origin，上游也不许�
     git(["commit", "--quiet", "-m", "base"], work);
     try {
       // 前提：本地 master 在场 —— 这一测的就是「base-check 那档本地兜底被这里刻意关掉」
-      expect(
-        git(["rev-parse", "--verify", "--quiet", "master"], work),
-      ).toBeTruthy();
+      expect(git(["rev-parse", "--verify", "--quiet", "master"], work)).toBeTruthy();
       const rev = readRevisions(path.join(work, ".git"), work);
       expect(rev.upstreamSha).toBeNull();
       const verdict = decidePremergePush({

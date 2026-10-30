@@ -69,8 +69,8 @@ interface FreshnessReport {
   code: number;
   remoteChecked: boolean;
   remoteAgeMs: number | null;
-  remoteDrifts: { file: string; kind: string }[];
-  installDrift: { state: string; unresolved?: string[] } | null;
+  remoteDrifts: Array<{ file: string; kind: string }>;
+  installDrift: { state: string; unresolved?: Array<string> } | null;
   /** 环境不可信（拿不到 git 状态）—— ① ② 都没判，结论不成立。 */
   envBroken: boolean;
 }
@@ -350,7 +350,7 @@ describe("check-deps-freshness 契约", () => {
     // （§12.16 的同款教训：一个永远返回空数组的解析器会让所有断言全绿）。
     const facts =
       /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-        FACTS: { key: string; extract: () => unknown }[];
+        FACTS: Array<{ key: string; extract: () => unknown }>;
       };
     const probesFact = facts.FACTS.find((f) => f.key === "deps.resolveProbes");
     expect(probesFact, "FACTS 里缺 deps.resolveProbes 登记项").toBeDefined();
@@ -358,7 +358,7 @@ describe("check-deps-freshness 契约", () => {
     expect(Array.isArray(declared)).toBe(true);
     const worktree =
       /* SAFETY: 类型断言已复核 */ (await import("../scripts/launcher-core/worktree.mjs")) as unknown as {
-        RESOLVE_PROBES: string[];
+        RESOLVE_PROBES: Array<string>;
       };
     expect(worktree.RESOLVE_PROBES).toEqual(declared);
     // 清单非空也是判据的一部分：空的探针清单会让解析层**永远判绿**，

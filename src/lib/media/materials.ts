@@ -144,9 +144,9 @@ export async function materialScopeOwnership(
 export async function visibleMaterialScopes(
   userId: string,
   opts: { cross: boolean; projectId: string | null },
-): Promise<string[]> {
+): Promise<Array<string>> {
   if (opts.cross) {
-    const out: string[] = [];
+    const out: Array<string> = [];
     for (const scope of await listScopes()) {
       if (scope === SHARED_SCOPE) continue; // 末尾统一补，避免重复
       if ((await materialScopeOwnership(userId, scope)) !== "foreign") {
@@ -188,16 +188,16 @@ export interface MaterialItem {
 }
 
 /** 列出单个 scope/folder 下的素材。目录不存在时返回空数组（不是错误）。 */
-export async function listFolderItems(scope: string, folder: string): Promise<MaterialItem[]> {
+export async function listFolderItems(scope: string, folder: string): Promise<Array<MaterialItem>> {
   const dir = folderDir(scope, folder);
   if (!dir) return [];
-  let entries: string[];
+  let entries: Array<string>;
   try {
     entries = await fs.readdir(dir);
   } catch {
     return []; // 尚未创建过该分类
   }
-  const items: MaterialItem[] = [];
+  const items: Array<MaterialItem> = [];
   for (const name of entries) {
     if (name.startsWith(".")) continue; // 跳过 .DS_Store 之类
     try {
@@ -228,7 +228,7 @@ export async function listFolderItems(scope: string, folder: string): Promise<Ma
 }
 
 /** 列出素材库里所有已存在的 scope 目录（用于「跨项目」聚合）。 */
-export async function listScopes(): Promise<string[]> {
+export async function listScopes(): Promise<Array<string>> {
   try {
     const entries = await fs.readdir(materialsRoot(), { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).map((dir) => dir.name);
@@ -242,8 +242,10 @@ export async function listScopes(): Promise<string[]> {
  * 返回 Map<folderId, MaterialItem[]>，7 个分类恒定存在（可能为空数组），
  * 这样前端不必自己补齐缺失分类。
  */
-export async function collectByFolder(scopes: string[]): Promise<Map<string, MaterialItem[]>> {
-  const map = new Map<string, MaterialItem[]>();
+export async function collectByFolder(
+  scopes: Array<string>,
+): Promise<Map<string, Array<MaterialItem>>> {
+  const map = new Map<string, Array<MaterialItem>>();
   for (const f of MATERIAL_FOLDERS) map.set(f.id, []);
   for (const scope of scopes) {
     for (const f of MATERIAL_FOLDERS) {

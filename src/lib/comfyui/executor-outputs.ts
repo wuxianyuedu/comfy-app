@@ -18,11 +18,11 @@ export type CollectedOutputFile = {
 };
 
 export type CollectedOutputs = {
-  images: CollectedOutputFile[];
-  videos: CollectedOutputFile[];
-  audios: CollectedOutputFile[];
-  others: CollectedOutputFile[];
-  texts: string[];
+  images: Array<CollectedOutputFile>;
+  videos: Array<CollectedOutputFile>;
+  audios: Array<CollectedOutputFile>;
+  others: Array<CollectedOutputFile>;
+  texts: Array<string>;
 };
 
 /**
@@ -30,24 +30,24 @@ export type CollectedOutputs = {
  * 纯函数，便于单测（P2：补齐 audio/text/3D，避免只认 images/videos 导致的死锁）。
  */
 export function collectOutputs(outputs: Record<string, unknown>): CollectedOutputs {
-  const images: CollectedOutputFile[] = [];
-  const videos: CollectedOutputFile[] = [];
-  const audios: CollectedOutputFile[] = [];
-  const others: CollectedOutputFile[] = [];
-  const texts: string[] = [];
+  const images: Array<CollectedOutputFile> = [];
+  const videos: Array<CollectedOutputFile> = [];
+  const audios: Array<CollectedOutputFile> = [];
+  const others: Array<CollectedOutputFile> = [];
+  const texts: Array<string> = [];
   for (const nodeOut of Object.values(outputs)) {
     if (!nodeOut || typeof nodeOut !== "object") continue;
     const node = /* SAFETY: 类型断言已复核 */ nodeOut as Record<string, unknown>;
     if (Array.isArray(node.images))
-      images.push(.../* SAFETY: 类型断言已复核 */ (node.images as CollectedOutputFile[]));
+      images.push(.../* SAFETY: 类型断言已复核 */ (node.images as Array<CollectedOutputFile>));
     if (Array.isArray(node.videos))
-      videos.push(.../* SAFETY: 类型断言已复核 */ (node.videos as CollectedOutputFile[]));
+      videos.push(.../* SAFETY: 类型断言已复核 */ (node.videos as Array<CollectedOutputFile>));
     // VHS_VideoCombine 把文件发在 `gifs` 下（实际是 mp4/gif/webm）。
     if (Array.isArray(node.gifs))
-      videos.push(.../* SAFETY: 类型断言已复核 */ (node.gifs as CollectedOutputFile[]));
+      videos.push(.../* SAFETY: 类型断言已复核 */ (node.gifs as Array<CollectedOutputFile>));
     // SaveAudio 与 AudioComposite 把文件发在 `audios` 下。
     if (Array.isArray(node.audios))
-      audios.push(.../* SAFETY: 类型断言已复核 */ (node.audios as CollectedOutputFile[]));
+      audios.push(.../* SAFETY: 类型断言已复核 */ (node.audios as Array<CollectedOutputFile>));
     // ShowText / 任意文本输出节点：保留渲染文本（无文件）.
     if (typeof node.text === "string" && node.text.trim()) texts.push(node.text);
     else if (Array.isArray(node.text))
@@ -68,7 +68,7 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
               "string",
         )
       )
-        others.push(.../* SAFETY: 类型断言已复核 */ (v as CollectedOutputFile[]));
+        others.push(.../* SAFETY: 类型断言已复核 */ (v as Array<CollectedOutputFile>));
     }
   }
   return { images, videos, audios, others, texts };
@@ -114,7 +114,7 @@ export type RuntimeParams = {
   samplerNodeId?: string;
   samplerClassType?: string;
   /** graph 里全部采样节点（按出现顺序）；只有一个时也是长度 1 的数组。 */
-  samplers?: SamplerRuntime[];
+  samplers?: Array<SamplerRuntime>;
 };
 
 /** 采样节点类名判定：KSamplerAdvanced 用 noise_seed，KSampler / SamplerCustom 用 seed。 */
@@ -155,7 +155,7 @@ export function extractRuntimeParams(entry: unknown): RuntimeParams {
   )?.[2];
   if (!graphRaw || typeof graphRaw !== "object") return out;
   const graph = /* SAFETY: 类型断言已复核 */ graphRaw as Record<string, unknown>;
-  const samplers: SamplerRuntime[] = [];
+  const samplers: Array<SamplerRuntime> = [];
   for (const [nid, nodeRaw] of Object.entries(graph)) {
     const node = /* SAFETY: 类型断言已复核 */ nodeRaw as Record<string, unknown> | undefined;
     const t = typeof node?.class_type === "string" ? node.class_type : "";

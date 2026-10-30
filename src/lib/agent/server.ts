@@ -18,7 +18,7 @@ import {
 import { workshopOpenAITools } from "./tools";
 
 /** 把 messages 数组窄化为 LLMMessage 形状并透传 tool_calls / tool_call_id。 */
-function narrowMessages(raw: AgentChatRequest["messages"]): LLMMessage[] {
+function narrowMessages(raw: AgentChatRequest["messages"]): Array<LLMMessage> {
   return raw
     .filter((m) => m && typeof m === "object")
     .map((m) => {
@@ -51,8 +51,8 @@ function narrowMessages(raw: AgentChatRequest["messages"]): LLMMessage[] {
 /** 走 OpenAI 兼容 tools 协议调用模型，返回 content 与 tool_calls。 */
 async function callWithTools(
   cfg: LLMConfig,
-  messages: LLMMessage[],
-  tools: LLMTool[],
+  messages: Array<LLMMessage>,
+  tools: Array<LLMTool>,
 ): Promise<{
   content: string;
   toolCalls: Array<{
@@ -64,7 +64,7 @@ async function callWithTools(
 }
 
 /** 普通对话调用（不带 tools / response_format）。 */
-async function callPlain(cfg: LLMConfig, messages: LLMMessage[]): Promise<string> {
+async function callPlain(cfg: LLMConfig, messages: Array<LLMMessage>): Promise<string> {
   return completeLLM(cfg, messages);
 }
 
@@ -76,7 +76,7 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
   const context = formatDraftContext(req.draft);
 
   // 构造给模型的系统消息 + 项目状态上下文
-  const sysMessages: LLMMessage[] = [
+  const sysMessages: Array<LLMMessage> = [
     {
       role: "system",
       content: `${AGENT_SYSTEM_PROMPT}\n\n${context}`,
@@ -108,7 +108,7 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
   }
 
   // 方案 2：JSON 指令序列回退（lightweight MVP）
-  const fallbackMessages: LLMMessage[] = [
+  const fallbackMessages: Array<LLMMessage> = [
     {
       role: "system",
       content: `${AGENT_FALLBACK_SYSTEM_PROMPT}\n\n${context}`,

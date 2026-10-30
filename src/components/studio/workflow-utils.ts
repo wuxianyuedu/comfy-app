@@ -134,7 +134,7 @@ export function inferOutputTypeAll(classType: string): Record<string, string> {
   // ComfyUI 允许节点自己给输出命名；离线下我们没有这份信息，
   // 因此改用按槽位的名字。CheckpointLoaderSimple 这类就是 MODEL/CLIP/VAE，
   // 与 ComfyUI 的默认显示一致。
-  const KNOWN_NAMES: Record<string, string[]> = {
+  const KNOWN_NAMES: Record<string, Array<string>> = {
     CheckpointLoaderSimple: ["MODEL", "CLIP", "VAE"],
     CheckpointLoader: ["MODEL", "CLIP", "VAE"],
     UNETLoader: ["MODEL"],
@@ -382,7 +382,7 @@ export function mixHex(colorA: string, colorB: string, ratio: number): string {
  * 以及新的「API 布局」视图模式（不管导入的 rawJson 布局如何，
  * 强制按执行图拓扑排布）。 */
 export function computeKahnLayout(
-  realNodes: ComfyGraphNode[],
+  realNodes: Array<ComfyGraphNode>,
   graph: Record<string, unknown>,
   colW: number,
   rowH: number,
@@ -410,7 +410,7 @@ export function computeKahnLayout(
     }
   }
   const remaining = new Map(Object.entries(incoming).map(([key, links]) => [key, links.size]));
-  const queue: string[] = [];
+  const queue: Array<string> = [];
   for (const [id, deg] of remaining) {
     if (deg === 0) {
       level[id] = 0;
@@ -429,7 +429,7 @@ export function computeKahnLayout(
   }
   for (const node of realNodes) if (!(node.id in level)) level[node.id] = 0;
 
-  const byLevel: Record<number, string[]> = {};
+  const byLevel: Record<number, Array<string>> = {};
   for (const node of realNodes) {
     const lv = level[node.id] ?? 0;
     (byLevel[lv] ||= []).push(node.id);
@@ -448,9 +448,9 @@ export function computeKahnLayout(
 
 export function buildEdges(
   detail: WorkflowDetail | null,
-  _nodes: Node[],
-  outSlotNameById?: Record<string, string[]>,
-): Edge[] {
+  _nodes: Array<Node>,
+  outSlotNameById?: Record<string, Array<string>>,
+): Array<Edge> {
   if (!detail) return [];
   // 只有真实的图节点才带边；分组框 / 便签永远不会。
   const known = new Set(detail.nodes.map((node) => node.id));
@@ -459,13 +459,13 @@ export function buildEdges(
 
   /* 每个节点的原始 outputs[] —— 当某个 class 不在静态 `inferOutputTypeAll`
    * 表里时，Flow 节点回落的也是这里。存成 map，让下面的逐边查找保持 O(1)。 */
-  const rawOutById = new Map<string, RawOutputMeta[]>();
+  const rawOutById = new Map<string, Array<RawOutputMeta>>();
   for (const rawNode of detail.rawNodes ?? []) {
     if (!rawNode?.id) continue;
     rawOutById.set(rawNode.id, Array.isArray(rawNode.outputs) ? rawNode.outputs : []);
   }
 
-  const edges: Edge[] = [];
+  const edges: Array<Edge> = [];
   let i = 0;
   for (const [nodeId, raw] of Object.entries(detail.graph ?? {})) {
     if (!raw || typeof raw !== "object") continue;
@@ -611,13 +611,13 @@ export function buildConnectedOutputs(
   rawMetaById: Record<
     string,
     {
-      widgets_values: unknown[];
-      outputs: RawOutputMeta[];
+      widgets_values: Array<unknown>;
+      outputs: Array<RawOutputMeta>;
       flags?: Record<string, unknown>;
       properties?: Record<string, unknown>;
     }
   >,
-  outSlotNameById?: Record<string, string[]>,
+  outSlotNameById?: Record<string, Array<string>>,
 ): Record<string, Set<string>> {
   const map: Record<string, Set<string>> = {};
   for (const raw of Object.values(detail.graph ?? {})) {
@@ -661,13 +661,13 @@ export function inferSourceOutNames(
   rawMetaById: Record<
     string,
     {
-      widgets_values: unknown[];
-      outputs: RawOutputMeta[];
+      widgets_values: Array<unknown>;
+      outputs: Array<RawOutputMeta>;
       flags?: Record<string, unknown>;
     }
   >,
-): Record<string, string[]> {
-  const out: Record<string, string[]> = {};
+): Record<string, Array<string>> {
+  const out: Record<string, Array<string>> = {};
   for (const [nodeId, node] of Object.entries(nodesById)) {
     const staticNames = Object.keys(inferOutputTypeAll(node.class_type));
     if (staticNames.length > 0) {
@@ -681,7 +681,7 @@ export function inferSourceOutNames(
     }
 
     // 静态 + raw 都没有，从消费者（下游节点）的输入键反推
-    const bySlot: Record<number, string[]> = {};
+    const bySlot: Record<number, Array<string>> = {};
     for (const consumerRaw of Object.values(detail.graph ?? {})) {
       const inp = asRecord(asRecord(consumerRaw)?.inputs) ?? {};
       for (const [inputKey, value] of Object.entries(inp)) {
@@ -694,7 +694,7 @@ export function inferSourceOutNames(
       }
     }
     const slotCount = Math.max(1, ...Object.keys(bySlot).map(Number), 0);
-    const slotNames: string[] = [];
+    const slotNames: Array<string> = [];
     for (let i = 0; i <= slotCount; i++) {
       const candidates = bySlot[i] ?? [];
       slotNames.push(candidates[0] ?? `out${i + 1}`);
@@ -706,7 +706,7 @@ export function inferSourceOutNames(
 
 /* 按包围盒包含关系算出每个分组的嵌套深度。分组深度 = 有多少个其它分组
  * 直接或间接地包含它 —— 子框据此画在父框**之上**，嵌套分组才读得对。 */
-export function computeGroupDepths(groups: WorkflowGroup[]): Record<string, number> {
+export function computeGroupDepths(groups: Array<WorkflowGroup>): Record<string, number> {
   if (groups.length === 0) return {};
   const inside = (inner: WorkflowGroup, outer: WorkflowGroup) => {
     const [ix, iy, iw, ih] = inner.bounding;

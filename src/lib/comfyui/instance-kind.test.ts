@@ -6,7 +6,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { classifyComfyInstall, describeComfyInstance } from "./instance-kind";
 
-function fakeFs(...paths: string[]): Set<string> {
+function fakeFs(...paths: Array<string>): Set<string> {
   return new Set(paths.map((p) => path.normalize(p)));
 }
 function makeExists(set: Set<string>) {

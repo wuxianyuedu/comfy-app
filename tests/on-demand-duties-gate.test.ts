@@ -60,9 +60,9 @@ interface DutyRow {
 }
 
 /** 一份「最小但双向都成立」的索引：六条按需档（下限是 5，留一格余量）。 */
-function ledgerDuties(overrides: { extra?: DutyRow[] } = {}): {
+function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
   why: string;
-  duties: DutyRow[];
+  duties: Array<DutyRow>;
 } {
   return {
     why: "测试夹具",
@@ -146,7 +146,7 @@ function ledgerDuties(overrides: { extra?: DutyRow[] } = {}): {
 /** 真实仓库里的三份事实读数 —— 夹具的断言按它来，避免写死会漂的数字。 */
 const REAL = /* SAFETY: 类型断言已复核 */ JSON.parse(
   readFileSync(join(process.cwd(), "scripts", ".on-demand-duties.json"), "utf8"),
-) as { duties: unknown[] };
+) as { duties: Array<unknown> };
 
 describe("on-demand-duties —— 双向", () => {
   test("索引与实际机器事实一致 ⇒ 通过", ({ repo }) => {

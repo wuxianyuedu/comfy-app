@@ -88,7 +88,7 @@ export function bucketOf(entry: Pick<LogEntry, "origin">): LogOriginFilter {
 export type LogCategoryFilter = Exclude<LogOriginFilter, "all">;
 
 /** 分类的展示顺序（设置页开关与未来任何枚举都按它排列）。 */
-export const LOG_CATEGORY_FILTERS: LogCategoryFilter[] = [
+export const LOG_CATEGORY_FILTERS: Array<LogCategoryFilter> = [
   "app-runtime",
   "app",
   "dev",

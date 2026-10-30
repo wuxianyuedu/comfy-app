@@ -16,10 +16,7 @@
  * 写入是**合并式**的：paramMap 里 `source` 之外的命名空间原样保留。
  */
 
-import {
-  parseParamMapping,
-  serializeParamMapping,
-} from "~/lib/workflow/workflow-param-mapping";
+import { parseParamMapping, serializeParamMapping } from "~/lib/workflow/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 /** 一条连线动作：把某个对外参数在这个模式下连到 `ioKey`（`null` = 断开）。 */
@@ -135,7 +132,7 @@ export interface DOMRectLike {
  *  隔壁行上）。容差随坐标系由调用方按需缩放，这里不做二次换算。 */
 export function resolveDropTarget(
   point: { x: number; y: number },
-  candidates: readonly { ioKey: string; rect: DOMRectLike }[],
+  candidates: ReadonlyArray<{ ioKey: string; rect: DOMRectLike }>,
 ): string | null {
   let hit: { ioKey: string; height: number } | null = null;
   for (const candidate of candidates) {

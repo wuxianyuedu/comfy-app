@@ -225,7 +225,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     );
   }
 
-  const msgs: unknown[] = entry.status?.messages ?? [];
+  const msgs: Array<unknown> = entry.status?.messages ?? [];
   const errored = msgs.some((msg) => statusMessageTypeOf(msg) === "execution_error");
   if (errored || entry.status?.status_str === "error") {
     const ex = msgs.find((msg) => statusMessageTypeOf(msg) === "execution_error");
@@ -279,7 +279,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     );
   }
 
-  const parts: string[] = [];
+  const parts: Array<string> = [];
   if (images.length) parts.push(`${images.length} 张图像`);
   if (videos.length) parts.push(`${videos.length} 个视频`);
   if (audios.length) parts.push(`${audios.length} 个音频`);
@@ -296,7 +296,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     throw new Error(`产物目录越界，已拒绝落盘：taskId=${taskId} projectId=${projectId ?? "(无)"}`);
   }
   await fs.mkdir(dir, { recursive: true });
-  const saved: { localPath: string; mediaType: string }[] = [];
+  const saved: Array<{ localPath: string; mediaType: string }> = [];
 
   /* 这批循环都靠 `entries()` 同时拿下标与元素：写 `images[i]` 就得多一次 `!`
    * 把 `noUncheckedIndexedAccess` 加上的 `undefined` 抹掉，而 `i` 只用于
@@ -436,7 +436,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     seed: actualSeed !== undefined ? String(actualSeed) : (reqSeed ?? null),
     size: sizeStr || null,
     referenceImages:
-      /* SAFETY: 类型断言已复核 */ (taskRow?.referenceImages as string[] | null) ?? [],
+      /* SAFETY: 类型断言已复核 */ (taskRow?.referenceImages as Array<string> | null) ?? [],
     params: taskParams,
     createdAt: taskRow?.createdAt ?? null,
     files: saved,
@@ -487,7 +487,7 @@ export async function fail(
   taskId: string,
   promptId: string,
   error: unknown,
-  validationErrors?: ValidationError[],
+  validationErrors?: Array<ValidationError>,
 ) {
   if (!claimSettle(taskId)) return;
   await finalizeFailure(taskId, promptId, error, validationErrors);
@@ -501,7 +501,7 @@ export async function finalizeFailure(
   taskId: string,
   promptId: string,
   error: unknown,
-  validationErrors?: ValidationError[],
+  validationErrors?: Array<ValidationError>,
 ) {
   // 与 completeInner 同一套 lazy 依赖，只取本函数用到的两条（getView 在成功分支
   // 才用，这里不 resolve）。taskRepository 是关键路径（拿不到 → reject 让 caller

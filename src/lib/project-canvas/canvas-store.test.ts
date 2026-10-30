@@ -8,14 +8,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const projectListQuery = vi.fn();
-const projectUpsertMutate = vi.fn<(...args: unknown[]) => unknown>();
-const projectDeleteMutate = vi.fn<(...args: unknown[]) => unknown>();
+const projectUpsertMutate = vi.fn<(...args: Array<unknown>) => unknown>();
+const projectDeleteMutate = vi.fn<(...args: Array<unknown>) => unknown>();
 
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     project: {
       list: {
-        query: (...args: unknown[]) =>
+        query: (...args: Array<unknown>) =>
           /* SAFETY: 类型断言已复核 */ projectListQuery(...args) as never,
       },
       /* `Promise.resolve().then(() => …)` 而不是 `Promise.resolve(…)`：
@@ -23,10 +23,12 @@ vi.mock("~/trpc/vanilla", () => ({
        * 于是「服务端拒收这一份」这条路上永远测不到 —— 而这条镜像链的
        * 缺陷恰恰长在失败分支上（台账 A3 装上归属闸之后才有的那一格）。 */
       upsert: {
-        mutate: (...args: unknown[]) => Promise.resolve().then(() => projectUpsertMutate(...args)),
+        mutate: (...args: Array<unknown>) =>
+          Promise.resolve().then(() => projectUpsertMutate(...args)),
       },
       delete: {
-        mutate: (...args: unknown[]) => Promise.resolve().then(() => projectDeleteMutate(...args)),
+        mutate: (...args: Array<unknown>) =>
+          Promise.resolve().then(() => projectDeleteMutate(...args)),
       },
     },
   },
@@ -73,7 +75,7 @@ function trpcError(code: string, message: string): unknown {
   });
 }
 
-function noticesFor(id: string): string[] {
+function noticesFor(id: string): Array<string> {
   return listSyncNotices()
     .filter((notice) => notice.projectId === id)
     .map((notice) => notice.detail);

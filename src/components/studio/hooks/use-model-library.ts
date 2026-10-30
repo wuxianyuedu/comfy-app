@@ -19,15 +19,10 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { useTRPC } from "~/trpc/react";
 
-import {
-  ALL_TYPES,
-  type ModelRow,
-  countByType,
-  filterModels,
-} from "../model-library-config";
+import { ALL_TYPES, type ModelRow, countByType, filterModels } from "../model-library-config";
 
 export interface ModelLibraryController {
-  models: ModelRow[];
+  models: Array<ModelRow>;
   /** 列表首次加载中（尚无数据）—— 驱动首屏骨架，不等后台同步。 */
   loading: boolean;
   /** 后台同步 / 刷新进行中：不挡首屏，只在筛选行给轻指示。 */
@@ -39,7 +34,7 @@ export interface ModelLibraryController {
   filter: string;
   setFilter: (filter: string) => void;
   /** 筛选后的行（视图直接渲染）。 */
-  filtered: ModelRow[];
+  filtered: Array<ModelRow>;
   /** 数据里出现过的类型及其数量，驱动筛选 chips。 */
   typeChips: Array<[string, number]>;
   /** 目录配置弹层开关。 */
@@ -109,15 +104,9 @@ export function useModelLibrary(): ModelLibraryController {
    * 单靠「字段名与类型逐项对上」就能过编译。此前写的 `as unknown as ModelRow[]`
    * 是双跳断言，它把这份兼容性检查也一起丢掉了：服务端哪天把 `fileName` 改名，
    * 这里不会红，只会在渲染时静默变 `undefined`。 */
-  const models: ModelRow[] = useMemo(
-    () => listQ.data?.models ?? [],
-    [listQ.data],
-  );
+  const models: Array<ModelRow> = useMemo(() => listQ.data?.models ?? [], [listQ.data]);
 
-  const filtered = useMemo(
-    () => filterModels(models, filter, q),
-    [models, filter, q],
-  );
+  const filtered = useMemo(() => filterModels(models, filter, q), [models, filter, q]);
   const typeChips = useMemo(() => countByType(models), [models]);
 
   return {

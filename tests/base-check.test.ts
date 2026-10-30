@@ -67,7 +67,7 @@ const SCRIPT = join(REPO_ROOT, "scripts", "base-check.mjs");
  * @param cwd 工作目录
  * @param args git 的子命令与参数
  * @returns stdout */
-function git(cwd: string, ...args: string[]): string {
+function git(cwd: string, ...args: Array<string>): string {
   /* 走 `gitSandboxEnv()`：本文件的夹具仓库里 `git add` 几十次，而宿主若开着
    * `core.autocrlf=true`，每一次都往 stderr 打一行 `LF will be replaced by CRLF`
    * —— 那批噪音会盖满 CI 日志，且与任何判据结论无关（见 `git-sandbox-env.ts` 文件头）。 */
@@ -98,7 +98,7 @@ function git(cwd: string, ...args: string[]): string {
  */
 function runBaseCheckOnce(
   cwd: string,
-  args: string[],
+  args: Array<string>,
 ): {
   code: number;
   stdout: string;
@@ -223,7 +223,7 @@ function dropRepo(r: { work: string; bare: string }): void {
  */
 function runBaseCheck(
   cwd: string,
-  args: string[],
+  args: Array<string>,
 ): { code: number; stdout: string; stderr: string } {
   const first = runBaseCheckOnce(cwd, args);
   if (first.code === 0 || first.stdout || first.stderr) return first;

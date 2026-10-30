@@ -107,7 +107,7 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
       ) : inp.type === "COMBO" &&
         Array.isArray(/* SAFETY: 类型断言已复核 */ (inp as ComboInputMeta).comboOptions) &&
         /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
-          (inp as ComboInputMeta).comboOptions as unknown[]
+          (inp as ComboInputMeta).comboOptions as Array<unknown>
         ).length > 0 ? (
         /* 工作流画布上的 COMBO widget 渲染成只读的
          *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
@@ -119,7 +119,7 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
           onChange={() => undefined}
           options={
             /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (inp as ComboInputMeta)
-              .comboOptions as string[]
+              .comboOptions as Array<string>
           }
           disabled
           fullWidth

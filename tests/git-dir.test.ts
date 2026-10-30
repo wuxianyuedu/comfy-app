@@ -29,7 +29,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { gitScratchPath, resolveGitDir } from "../scripts/git-dir.mjs";
 
 /** 跑一次 git（静默，失败时把 stderr 带进断言消息）。 */
-function git(args: string[], cwd: string): string {
+function git(args: Array<string>, cwd: string): string {
   const r = spawnSync("git", args, { cwd, encoding: "utf8" });
   if (r.status !== 0) {
     throw new Error(`git ${args.join(" ")} 失败：${r.stderr || r.status}`);

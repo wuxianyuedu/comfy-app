@@ -33,7 +33,7 @@ import {
 const SCRIPT = join(process.cwd(), "scripts", "premerge-check.mjs");
 
 /** 跑一次入口脚本。 */
-function run(args: string[] = []) {
+function run(args: Array<string> = []) {
   try {
     const output = execFileSync(process.execPath, [SCRIPT, ...args], {
       cwd: process.cwd(),
@@ -207,7 +207,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
      * `tests/check-commit-claims.test.ts` 的 ①b 那组（同一夹具里「较早那笔说谎」）。 */
     /* 段表是 `Record<string, 联合>`，取数形状那一格在各成员上键不同 —— 这里按判据
      * 要问的三样取一个视图，而不是往生产类型里塞可选键。 */
-    const claims: { kind: string; shape?: string; args?: string[] } = SEGMENTS.claims!;
+    const claims: { kind: string; shape?: string; args?: Array<string> } = SEGMENTS.claims!;
     expect(claims.kind).toBe("anchored");
     expect(claims.shape).toBe("range");
     /* 反向那半：这一段不许再带回「空 args」的旧形态 —— 那就是缺陷本身。 */
@@ -263,7 +263,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
      * 也能通过 —— 那是一条**看起来在判、实际判不出**的用例。 */
     const repo = mkdtempSync(join(tmpdir(), "premerge-anchor-"));
     try {
-      const g = (...args: string[]) =>
+      const g = (...args: Array<string>) =>
         execFileSync(
           "git",
           [
@@ -322,7 +322,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
      * （`CNB_PULL_REQUEST_TARGET_SHA`，`ci-affected-tests.mjs` 用的同一个）。 */
     const repo = mkdtempSync(join(tmpdir(), "premerge-envtarget-"));
     try {
-      const g = (...args: string[]) =>
+      const g = (...args: Array<string>) =>
         execFileSync(
           "git",
           ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args],
@@ -381,7 +381,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
      * 就没人看了，而真正的故障正好被那层噪声淹没。 */
     const repo = mkdtempSync(join(tmpdir(), "premerge-noanchor-"));
     try {
-      const g = (...args: string[]) =>
+      const g = (...args: Array<string>) =>
         execFileSync(
           "git",
           ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args],

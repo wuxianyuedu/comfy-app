@@ -16,8 +16,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 const { userMock, writes } = vi.hoisted(() => ({
   userMock: vi.fn<() => Promise<{ id: string } | null>>(),
   writes: {
-    mkdir: /* SAFETY: 类型断言已复核 */ [] as string[],
-    writeFile: /* SAFETY: 类型断言已复核 */ [] as string[],
+    mkdir: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    writeFile: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
   },
 }));
 

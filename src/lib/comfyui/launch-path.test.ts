@@ -10,7 +10,7 @@ import { resolveComfyLaunchPlan } from "./launch-path";
 
 type Fs = Set<string>;
 /** 构造一组「存在」的路径，用于注入 exists 回调。 */
-function fakeFs(...paths: string[]): Fs {
+function fakeFs(...paths: Array<string>): Fs {
   return new Set(paths.map((p) => path.normalize(p)));
 }
 

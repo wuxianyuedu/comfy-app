@@ -37,7 +37,7 @@ export interface ContextMenuItem {
   danger?: boolean;
 }
 
-const DEFAULT_CONTEXT_MENU: ContextMenuItem[] = [
+const DEFAULT_CONTEXT_MENU: Array<ContextMenuItem> = [
   { id: "upload", label: "上传", icon: <MenuIconUpload /> },
   { id: "text-node", label: "添加文本节点", icon: <MenuIconText /> },
   { id: "image-node", label: "添加图片节点", icon: <MenuIconImage /> },
@@ -53,7 +53,7 @@ const DEFAULT_CONTEXT_MENU: ContextMenuItem[] = [
 export interface CanvasAreaProps {
   children: React.ReactNode;
   /** 自定义上下文菜单项 */
-  contextItems?: ContextMenuItem[];
+  contextItems?: Array<ContextMenuItem>;
   /** 点上下文菜单项时 */
   onContextAction?: (id: string) => void;
   /** Zoom level (0-100) */
@@ -152,52 +152,34 @@ export function CanvasArea({
       <div className="z-canvas-ui absolute bottom-3 left-1/2 -translate-x-1/2">
         <div className="border-border-strong bg-panel flex items-center gap-0.5 rounded-xl border px-1.5 py-1 shadow-lg shadow-black/10">
           {/* 发送 / 运行按钮 */}
-          <ToolbarButton
-            hint="执行"
-            onClick={() => onContextAction?.("run")}
-            active
-          >
+          <ToolbarButton hint="执行" onClick={() => onContextAction?.("run")} active>
             <ArrowRight size={14} strokeWidth={2.5} />
           </ToolbarButton>
 
           <ToolbarDivider />
 
           {/* Zoom out */}
-          <ToolbarButton
-            hint="缩小"
-            onClick={() => onZoomChange?.(Math.max(10, zoom - 10))}
-          >
+          <ToolbarButton hint="缩小" onClick={() => onZoomChange?.(Math.max(10, zoom - 10))}>
             −
           </ToolbarButton>
 
           {/* Zoom level */}
-          <span className="text-ink-muted min-w-12 text-center text-xs tabular-nums">
-            {zoom}%
-          </span>
+          <span className="text-ink-muted min-w-12 text-center text-xs tabular-nums">{zoom}%</span>
 
           {/* Zoom in */}
-          <ToolbarButton
-            hint="放大"
-            onClick={() => onZoomChange?.(Math.min(400, zoom + 10))}
-          >
+          <ToolbarButton hint="放大" onClick={() => onZoomChange?.(Math.min(400, zoom + 10))}>
             +
           </ToolbarButton>
 
           <ToolbarDivider />
 
           {/* Fit screen */}
-          <ToolbarButton
-            hint="适应屏幕"
-            onClick={() => onContextAction?.("fit-view")}
-          >
+          <ToolbarButton hint="适应屏幕" onClick={() => onContextAction?.("fit-view")}>
             <Maximize size={13} />
           </ToolbarButton>
 
           {/* Toggle visibility */}
-          <ToolbarButton
-            hint="显示/隐藏"
-            onClick={() => onContextAction?.("toggle-visibility")}
-          >
+          <ToolbarButton hint="显示/隐藏" onClick={() => onContextAction?.("toggle-visibility")}>
             <Eye size={13} />
           </ToolbarButton>
 

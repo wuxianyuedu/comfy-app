@@ -28,11 +28,9 @@ import {
  * 3. `has-[>[data-slot=button-group]]:gap-2`：**嵌套**时外层改用 `gap`，
  *    不再做接缝合并（否则两组的接缝会互相吃掉）。
  */
-type ButtonGroupOrientation = NonNullable<
-  React.ComponentProps<typeof ButtonGroup>["orientation"]
->;
+type ButtonGroupOrientation = NonNullable<React.ComponentProps<typeof ButtonGroup>["orientation"]>;
 
-const ORIENTATIONS: ButtonGroupOrientation[] = ["horizontal", "vertical"];
+const ORIENTATIONS: Array<ButtonGroupOrientation> = ["horizontal", "vertical"];
 
 const meta = {
   title: "UI/ButtonGroup",
@@ -76,9 +74,7 @@ export const TwoButtons: Story = {
           <Redo2 /> 重做
         </Button>
       </ButtonGroup>
-      <span className="text-ink-muted text-xs">
-        两档之间那条边只出现一次（这就是本件做的事）
-      </span>
+      <span className="text-ink-muted text-xs">两档之间那条边只出现一次（这就是本件做的事）</span>
     </div>
   ),
 };
@@ -90,9 +86,7 @@ export const Orientations: Story = {
     <div className="flex items-start gap-8">
       {ORIENTATIONS.map((orientation) => (
         <div key={orientation} className="flex flex-col gap-1.5">
-          <span className="text-ink-muted font-mono text-[11px]">
-            orientation={orientation}
-          </span>
+          <span className="text-ink-muted font-mono text-[11px]">orientation={orientation}</span>
           <ButtonGroup orientation={orientation}>
             <Button variant="outline" size="sm">
               上

@@ -26,24 +26,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  GIT_INHERITED_ENV_KEYS,
-  gitSandboxEnv,
-} from "./helpers/git-sandbox-env";
+import { GIT_INHERITED_ENV_KEYS, gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 /** 本文件造出来的夹具仓库；收尾全删，用例中途失败也不把临时目录留在 `tmpdir`。 */
-const dirs: string[] = [];
+const dirs: Array<string> = [];
 
 afterEach(() => {
-  for (const dir of dirs.splice(0))
-    rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 /** 起一个夹具仓库：一次提交、干净工作区，返回根目录。 */
 function makeRepo(name: string): string {
   const dir = mkdtempSync(join(tmpdir(), `git-sandbox-${name}-`));
   dirs.push(dir);
-  const git = (args: string[]) => {
+  const git = (args: Array<string>) => {
     const r = spawnSync("git", args, {
       cwd: dir,
       encoding: "utf8",
@@ -87,12 +83,11 @@ function addProbeWithEnv(scratch: string, env: NodeJS.ProcessEnv): string {
 }
 
 /** 读那份仓库**索引**里的路径（按 `--git-dir` 指名，不依赖环境）。 */
-function indexPaths(repoDir: string): string[] {
-  const r = spawnSync(
-    "git",
-    ["--git-dir", join(repoDir, ".git"), "ls-files", "--stage"],
-    { encoding: "utf8", env: gitSandboxEnv() },
-  );
+function indexPaths(repoDir: string): Array<string> {
+  const r = spawnSync("git", ["--git-dir", join(repoDir, ".git"), "ls-files", "--stage"], {
+    encoding: "utf8",
+    env: gitSandboxEnv(),
+  });
   expect(r.status, `读索引失败: ${r.stderr}`).toBe(0);
   return (r.stdout ?? "")
     .split("\n")
@@ -132,9 +127,7 @@ describe("临时仓库夹具的 git 环境隔离", () => {
 
     addProbeWithEnv(scratch, gitSandboxEnv(poisoned));
 
-    expect(indexPaths(victim), "清理无效：目标仓库索引被写进了探针").toEqual([
-      "tracked.txt",
-    ]);
+    expect(indexPaths(victim), "清理无效：目标仓库索引被写进了探针").toEqual(["tracked.txt"]);
     /* 探针进的是**自己**的索引 —— 清理没有把命令变成空操作，只是换了归属。 */
     expect(indexPaths(scratch)).toContain("probe.txt");
   });
@@ -204,8 +197,6 @@ describe("临时仓库夹具的 git 环境隔离", () => {
      * 这里判的是**接线**：那一档一旦被删，本文件 ② 的清理仍绿、而 20 份用例全部回到
      * 污染状态 —— 单靠行为用例看不见这件事。 */
     const setup = readFileSync("tests/setup.ts", "utf8");
-    expect(setup, "tests/setup.ts 里没有那次全局剥离").toContain(
-      "stripInheritedGitEnv();",
-    );
+    expect(setup, "tests/setup.ts 里没有那次全局剥离").toContain("stripInheritedGitEnv();");
   });
 });

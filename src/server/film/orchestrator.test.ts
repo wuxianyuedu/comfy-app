@@ -30,7 +30,7 @@ const filmRepo = vi.hoisted(() => ({
   appendLog: vi.fn(async (_id: string, _entry: { level: string; msg: string }) => undefined),
   /** 恢复扫描用的按状态查询（5-A）。默认「库里没有未收尾的影片」。 */
   listByStatus: vi.fn<
-    (_statuses: readonly string[]) => Promise<Array<{ id: string; status: string }>>
+    (_statuses: ReadonlyArray<string>) => Promise<Array<{ id: string; status: string }>>
   >(async () => []),
 }));
 type ShotRow = { id: string; taskId: string | null };
@@ -44,9 +44,11 @@ type CreatedShot = {
 };
 
 const shotRepo = vi.hoisted(() => ({
-  createMany: vi.fn<(filmId: string, shots: CreatedShot[]) => Promise<void>>(async () => undefined),
-  listByFilm: vi.fn<() => Promise<unknown[]>>(async () => []),
-  listActiveWithTask: vi.fn<() => Promise<ShotRow[]>>(async () => []),
+  createMany: vi.fn<(filmId: string, shots: Array<CreatedShot>) => Promise<void>>(
+    async () => undefined,
+  ),
+  listByFilm: vi.fn<() => Promise<Array<unknown>>>(async () => []),
+  listActiveWithTask: vi.fn<() => Promise<Array<ShotRow>>>(async () => []),
   markAllActiveFailed: vi.fn(async (_filmId: string) => undefined),
   markQueued: vi.fn(async (_shotId: string, _taskId: string) => undefined),
   markFailed: vi.fn(async (_shotId: string) => undefined),
@@ -57,7 +59,9 @@ const taskRepo = vi.hoisted(() => ({
   findExecutionProgress: vi.fn(async (_taskId: string) => null),
   /** 监看一轮**只发一次**批量进度查询（`watchLoop` 无条件调它，空数组由仓储侧
    *  早退）；缺这个键的话循环会在这一行 reject，把「收没收到口」演成「静默死掉」。 */
-  findExecutionProgressMany: vi.fn<(_ids: string[]) => Promise<unknown[]>>(async () => []),
+  findExecutionProgressMany: vi.fn<(_ids: Array<string>) => Promise<Array<unknown>>>(
+    async () => [],
+  ),
 }));
 const skillRepo = vi.hoisted(() => ({
   findBySlug: vi.fn(async (_slug: string) => null),
@@ -111,7 +115,7 @@ vi.mock("~/lib/workshop/script-parser", () => ({
   parseIdeaToScenes: vi.fn(() => []),
 }));
 const llmConfig = vi.hoisted(() => vi.fn(async () => ({})));
-const llmStructured = vi.hoisted(() => vi.fn<() => Promise<unknown[]>>(async () => []));
+const llmStructured = vi.hoisted(() => vi.fn<() => Promise<Array<unknown>>>(async () => []));
 vi.mock("~/lib/llm/server", () => ({
   getLLMConfig: llmConfig,
   completeLLMStructured: llmStructured,

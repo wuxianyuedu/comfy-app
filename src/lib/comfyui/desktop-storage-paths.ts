@@ -24,14 +24,14 @@ export type ExtraModelPathEntry = {
   /** 该条目的根目录。 */
   basePath: string;
   /** 该条目要并进来的相对路径列表（`models/` `input/` …）。 */
-  paths: string[];
+  paths: Array<string>;
 };
 
 /** `extra_model_paths.yaml` 的解析结果。 */
 export type ExtraModelPathsFile = {
   /** 顶层 `base_path:` —— ComfyUI 允许它覆盖主 base 目录；没有这一行时为 null。 */
   basePath: string | null;
-  entries: ExtraModelPathEntry[];
+  entries: Array<ExtraModelPathEntry>;
 };
 
 /** 目录项归属哪一侧：除 input / output 外都是模型侧（ComfyUI 的真实语义）。 */
@@ -56,11 +56,11 @@ export type DesktopStoragePaths = {
   /** 实际读到的 extra_model_paths.yaml 路径；该文件不存在时为 null。 */
   extraModelPathsFile: string | null;
   modelDir: StorageDirInfo;
-  sharedModelDirs: StorageDirInfo[];
+  sharedModelDirs: Array<StorageDirInfo>;
   inputDir: StorageDirInfo;
-  sharedInputDirs: StorageDirInfo[];
+  sharedInputDirs: Array<StorageDirInfo>;
   outputDir: StorageDirInfo;
-  sharedOutputDirs: StorageDirInfo[];
+  sharedOutputDirs: Array<StorageDirInfo>;
 };
 
 /** 启动参数里的目录覆盖（值都可能为 null = 未给）。 */
@@ -93,7 +93,7 @@ function stripScalar(raw: string): string {
 }
 
 /** 行内数组 `[models/, input/]` → `["models/", "input/"]`。 */
-function parseInlineList(raw: string): string[] {
+function parseInlineList(raw: string): Array<string> {
   const inner = raw.trim().replace(/^\[/, "").replace(/\]$/, "");
   return inner
     .split(",")
@@ -112,9 +112,7 @@ function slotHead(entry: string): string {
     .split("/")
     .filter((part) => part.length > 0);
   if (segments.length === 0) return "";
-  return isAbsoluteLike(entry)
-    ? (segments[segments.length - 1] ?? "")
-    : (segments[0] ?? "");
+  return isAbsoluteLike(entry) ? (segments[segments.length - 1] ?? "") : (segments[0] ?? "");
 }
 
 /**
@@ -233,10 +231,7 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
 }
 
 /** 目录参数名 → 覆盖字段名；只认 ComfyUI argparse 声明的三个。 */
-const OVERRIDE_FLAG_TO_FIELD: Record<
-  string,
-  keyof StorageDirOverrides | undefined
-> = {
+const OVERRIDE_FLAG_TO_FIELD: Record<string, keyof StorageDirOverrides | undefined> = {
   "--base-directory": "baseDir",
   "--input-directory": "inputDir",
   "--output-directory": "outputDir",
@@ -246,9 +241,7 @@ const OVERRIDE_FLAG_TO_FIELD: Record<
  * 从启动参数里取三个目录覆盖值。支持 `--x <值>` 与 `--x=<值>` 两种写法，
  * 与 `desktop-instance.ts` 的端口解析同口径。
  */
-export function parseStorageDirArgs(
-  args: readonly string[],
-): StorageDirOverrides {
+export function parseStorageDirArgs(args: ReadonlyArray<string>): StorageDirOverrides {
   const overrides: StorageDirOverrides = {
     baseDir: null,
     inputDir: null,
@@ -264,8 +257,7 @@ export function parseStorageDirArgs(
     const next = args[i + 1] ?? "";
     // 下一个 token 是另一个 flag 时说明这个目录参数没给值：把它当路径会得到
     // 「D: --listen」这种根本不存在的目录，而真值只能来自 launchArgs 本身。
-    const value =
-      inlineValue || (next.startsWith("-") ? "" : stripScalar(next));
+    const value = inlineValue || (next.startsWith("-") ? "" : stripScalar(next));
     if (!value) continue;
     overrides[field] = value;
     if (!inlineValue) i++;
@@ -280,10 +272,8 @@ export function parseStorageDirArgs(
  * 与 nargs='+' 的多个值（空格分隔，遇到下一个 flag 截止）。这些文件会与主
  * `extra_model_paths.yaml` 叠加，逐份解析失败按「没有这一份」处理。
  */
-export function parseExtraModelPathsConfigArgs(
-  args: readonly string[],
-): string[] {
-  const out: string[] = [];
+export function parseExtraModelPathsConfigArgs(args: ReadonlyArray<string>): Array<string> {
+  const out: Array<string> = [];
   for (let i = 0; i < args.length; i++) {
     const token = args[i] ?? "";
     const eq = token.indexOf("=");

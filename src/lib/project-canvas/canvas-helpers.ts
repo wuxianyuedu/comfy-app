@@ -64,7 +64,7 @@ export function placeCanvasNode(opts: {
    *  而出口**只做追加**、不读节点结构的任何字段 —— 收成 `CanvasNodeType[]`
    *  会逼着每个调用处写一句断言（eslint 又会把「不必要的断言」拦回去，
    *  两边互相打架）。 */
-  nodes: Node[];
+  nodes: Array<Node>;
   /** 落点（**屏幕**坐标）；缺省落在视口中心。 */
   point?: DropPoint | null;
   /** **已经在画布坐标里**的落点 —— 当坐标本身来自画布（如「源节点右侧 340px」）
@@ -77,7 +77,7 @@ export function placeCanvasNode(opts: {
   /** 显式指定 id —— 只在**调用处需要提前拿到它**时给（自动连线要用同一个
    *  id 建边：工作流跑完自动孵化下游节点时就是这种情形）。缺省由出口生成。 */
   id?: string;
-}): CanvasNodeType[] {
+}): Array<CanvasNodeType> {
   const position =
     opts.flowPosition ?? opts.flow.screenToFlowPosition(opts.point ?? viewportCenter());
   const node: CanvasNodeType = {
@@ -86,7 +86,7 @@ export function placeCanvasNode(opts: {
     position,
     data: opts.data,
   };
-  return /* SAFETY: 类型断言已复核 */ [...opts.nodes, node] as CanvasNodeType[];
+  return /* SAFETY: 类型断言已复核 */ [...opts.nodes, node] as Array<CanvasNodeType>;
 }
 
 /** 双 rAF 的 fitView 调度器：等 ReactFlow 完成本轮布局后再 fit，
@@ -111,14 +111,14 @@ export function makeFitViewScheduler(
  *  - 其余节点：按 targetHandle 分派 prompt/negative/steps/cfg/seed/inputImage
  *  workflowArdot 纯视觉节点无数据，直接跳过。 */
 export function applyPropagationToNodes(
-  nodes: CanvasNodeType[],
+  nodes: Array<CanvasNodeType>,
   sourceId: string,
   opts: {
     srcData: CanvasNodeData;
-    outEdges: Edge[];
+    outEdges: Array<Edge>;
     importedFile: string | null;
   },
-): CanvasNodeType[] {
+): Array<CanvasNodeType> {
   const { srcData: src, outEdges, importedFile } = opts;
 
   return nodes.map((node) => {

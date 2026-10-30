@@ -80,7 +80,7 @@ export interface RawNodeOutput {
   /** 槽位序号（新版 ComfyUI 写入；旧版按数组序） */
   idx?: number;
   /** 下游 link id 列表 */
-  links?: number[];
+  links?: Array<number>;
   [k: string]: unknown;
 }
 
@@ -90,9 +90,9 @@ export interface RawNode {
   /** 节点类名（raw 格式没有 class_type） */
   type?: string;
   /** 画布坐标 [x, y]（LiteGraph 绝对坐标） */
-  pos?: number[];
+  pos?: Array<number>;
   /** 节点盒尺寸 [w, h] */
-  size?: number[];
+  size?: Array<number>;
   /**
    * LiteGraph 执行模式：0=ALWAYS(正常) 1=ON_EVENT 2=NEVER(静音) 3=ON_TRIGGER 4=BYPASS。
    * ComfyUI 前端在导出 prompt 时会剔除 2/4 的节点，4 还要把连线「穿透」过去。
@@ -100,10 +100,10 @@ export interface RawNode {
    */
   mode?: number;
   /** 节点控件值的有序数组，含义由 class_type 决定 */
-  widgets_values?: unknown[];
+  widgets_values?: Array<unknown>;
   /** 部分工作流的 raw 节点也会显式包含 inputs/outputs（用于嵌套连接） */
-  inputs?: RawNodeInput[];
-  outputs?: RawNodeOutput[];
+  inputs?: Array<RawNodeInput>;
+  outputs?: Array<RawNodeOutput>;
   /** 节点属性，如 title / proxyWidgets */
   properties?: Record<string, unknown>;
   title?: string;
@@ -116,10 +116,10 @@ export interface RawNode {
 export interface RawWorkflow {
   last_node_id?: number;
   last_link_id?: number;
-  nodes: RawNode[];
+  nodes: Array<RawNode>;
   /** 每条 link 是 [link_id, src_id, src_slot, dst_id, dst_slot, type]（元素动态） */
-  links?: unknown[][];
-  groups?: unknown[];
+  links?: Array<Array<unknown>>;
+  groups?: Array<unknown>;
   config?: Record<string, unknown>;
   extra?: Record<string, unknown>;
   /** ComfyUI ≥ v0.7 的子图定义（subgraph wrapper） */
@@ -142,15 +142,15 @@ export interface RawSubgraphDef {
   /** 子图显示名（wrapper 卡片标题） */
   name?: unknown;
   /** 内部节点（与顶层 nodes 同构） */
-  nodes?: RawNode[];
+  nodes?: Array<RawNode>;
   /** 对象形式连线：{ id, origin_id, origin_slot, target_id, target_slot, type } */
-  links?: unknown[];
+  links?: Array<unknown>;
   /** 边界输入 pin 定义 */
-  inputs?: unknown[];
+  inputs?: Array<unknown>;
   /** 边界输出 pin 定义 */
-  outputs?: unknown[];
+  outputs?: Array<unknown>;
   /** 内部分组框 */
-  groups?: unknown[];
+  groups?: Array<unknown>;
   [k: string]: unknown;
 }
 
@@ -194,11 +194,11 @@ export interface ApiNodeMeta {
   /** PrimitiveNode 的字面量取值，执行期直接内联给下游 */
   value?: unknown;
   /** 入参名的槽位顺序（bypass 穿透时按槽位匹配） */
-  inputOrder?: string[];
+  inputOrder?: Array<string>;
   /** 入参名 → 类型（bypass 穿透时按类型匹配） */
   inputTypes?: Record<string, string>;
   /** 出参槽位 → 类型（bypass 穿透时确定目标类型） */
-  outputTypes?: string[];
+  outputTypes?: Array<string>;
 }
 
 export interface ApiWorkflowNode {
@@ -241,7 +241,7 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
       if (!wrapper || typeof wrapper.type !== "string") continue;
       if (!Array.isArray(wrapper.pos)) continue;
       const wId = String(wrapper.id);
-      let innerNodes: RawNode[] | undefined;
+      let innerNodes: Array<RawNode> | undefined;
       for (const k of Object.keys(subs)) {
         const def = subs[k];
         if (def?.id === wrapper.type && Array.isArray(def.nodes)) {
@@ -282,7 +282,7 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
 export type ObjectInfoInputSpec = [unknown, Record<string, unknown>?] | Record<string, unknown>;
 
 export interface ObjectInfoClassDef {
-  input_order?: { required?: string[]; optional?: string[] };
+  input_order?: { required?: Array<string>; optional?: Array<string> };
   input?: {
     required?: Record<string, ObjectInfoInputSpec>;
     optional?: Record<string, ObjectInfoInputSpec>;
@@ -410,13 +410,13 @@ function hasControlAfterGenerate(
  * 两个 route 共用），避免重复实现导致再次错位。
  */
 export function pairWidgetValues(
-  inputs: RawNodeInput[],
-  widgetsValues: unknown[],
+  inputs: Array<RawNodeInput>,
+  widgetsValues: Array<unknown>,
 ): Record<string, unknown> {
   // 规范 widget 顺序：按 raw inputs[] 顺序收集 widget 名，并在每个
   // seed/noise_seed INT 控件后插入 CONTROL_SENTINEL（正是 ComfyUI 序列化
   // widgets_values 时的顺序）。
-  const order: string[] = [];
+  const order: Array<string> = [];
   for (const inp of inputs) {
     const wname = inp?.widget?.name;
     if (typeof wname !== "string") continue;
@@ -442,9 +442,9 @@ export function pairWidgetValues(
  *  画布之前只按 raw 节点 `inputs[]` 里的 `widget` 标记配对控件值，
  *  而 ComfyUI **默认不会把未「转成输入」的控件写进 inputs[]** —— 于是
  *  CLIPTextEncode 的提示词、各类 Loader 的模型名整段丢失，节点上一个参数都不显示。 */
-export async function fetchWidgetOrderTable(): Promise<Record<string, string[]>> {
+export async function fetchWidgetOrderTable(): Promise<Record<string, Array<string>>> {
   const info = await fetchObjectInfo();
-  const table: Record<string, string[]> = {};
+  const table: Record<string, Array<string>> = {};
   if (info) {
     for (const [clsName, def] of Object.entries(info)) {
       table[clsName] = resolveWidgetOrder(def);
@@ -463,9 +463,9 @@ export async function fetchWidgetOrderTable(): Promise<Record<string, string[]>>
  *  顺序未知 / 长度仍对不上（自定义节点动态控件）→ 返回 null，调用方退回
  *  旧的游标配对，保证不引入新的错位。 */
 export function mapWidgetValuesByOrder(
-  widgetOrder: string[] | undefined,
-  widgetsValues: unknown[],
-): { name: string; value: unknown }[] | null {
+  widgetOrder: Array<string> | undefined,
+  widgetsValues: Array<unknown>,
+): Array<{ name: string; value: unknown }> | null {
   if (!widgetOrder || widgetOrder.length === 0 || widgetsValues.length === 0) return null;
   const bare = widgetOrder.filter((name) => name !== CONTROL_SENTINEL);
   const names =
@@ -475,7 +475,7 @@ export function mapWidgetValuesByOrder(
         ? bare
         : null;
   if (!names) return null;
-  const out: { name: string; value: unknown }[] = [];
+  const out: Array<{ name: string; value: unknown }> = [];
   names.forEach((name, index) => {
     if (name === CONTROL_SENTINEL) return;
     out.push({ name, value: widgetsValues[index] });
@@ -483,13 +483,13 @@ export function mapWidgetValuesByOrder(
   return out;
 }
 
-function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): string[] {
+function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): Array<string> {
   if (!cls) return [];
   const reqOrder = cls.input_order?.required ?? [];
   const optOrder = cls.input_order?.optional ?? [];
   const req = cls.input?.required ?? {};
   const opt = cls.input?.optional ?? {};
-  const out: string[] = [];
+  const out: Array<string> = [];
   const push = (name: string, defs: Record<string, ObjectInfoInputSpec>) => {
     const spec = defs[name];
     if (!spec) return;
@@ -512,7 +512,7 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): string[] {
 /* 拿不到 /object_info 时，给常见节点类用的控件映射兜底表。
  * 这里的顺序只按「控件输入」的显示顺序排（不含连接），
  * 与 `widgets_values` 在磁盘上的序列化顺序一致。 */
-const FALLBACK_WIDGETS: Record<string, string[]> = {
+const FALLBACK_WIDGETS: Record<string, Array<string>> = {
   KSampler: ["seed", CONTROL_SENTINEL, "steps", "cfg", "sampler_name", "scheduler", "denoise"],
   KSamplerAdvanced: [
     "add_noise",

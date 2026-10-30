@@ -36,10 +36,10 @@ export interface WorkflowTypeDefinition {
   /** 是否为「生成模式」（true）还是「后处理模式」（false，如 Upscale/Outpaint） */
   isGenerative: boolean;
   /** 该类型在 ComfyUI 中常用的节点特征（用于自动推断） */
-  hints?: string[];
+  hints?: Array<string>;
 }
 
-export const IMAGE_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
+export const IMAGE_WORKFLOW_TYPES: Array<WorkflowTypeDefinition> = [
   {
     code: "T2I",
     fullName: "Text-to-Image",
@@ -161,7 +161,7 @@ export const IMAGE_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
 ];
 
 /* ── 视频侧（动态） ── */
-export const VIDEO_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
+export const VIDEO_WORKFLOW_TYPES: Array<WorkflowTypeDefinition> = [
   {
     code: "T2V",
     fullName: "Text-to-Video",
@@ -309,7 +309,7 @@ export const VIDEO_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
 ];
 
 /* ── 音频 / 语音侧 ── */
-export const AUDIO_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
+export const AUDIO_WORKFLOW_TYPES: Array<WorkflowTypeDefinition> = [
   {
     code: "T2A",
     fullName: "Text-to-Audio",
@@ -376,7 +376,7 @@ export const AUDIO_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
 ];
 
 /* ── 全量合并表 ── */
-export const ALL_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
+export const ALL_WORKFLOW_TYPES: Array<WorkflowTypeDefinition> = [
   ...IMAGE_WORKFLOW_TYPES,
   ...VIDEO_WORKFLOW_TYPES,
   ...AUDIO_WORKFLOW_TYPES,
@@ -390,7 +390,7 @@ export function getWorkflowType(code: string): WorkflowTypeDefinition | undefine
 }
 
 /** 按分类查找 */
-export function getWorkflowTypesByCategory(cat: WorkflowCategory): WorkflowTypeDefinition[] {
+export function getWorkflowTypesByCategory(cat: WorkflowCategory): Array<WorkflowTypeDefinition> {
   return ALL_WORKFLOW_TYPES.filter((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.category === cat);
 }
 
@@ -433,7 +433,7 @@ export function normalizeTaskType(raw: string): string {
  *  优先级：声明的 defaultMode（且必须仍在 modes 里）→ modes[0] → taskType。
  *  都为空 = 该工作流确实没有模式（此时才谈得上「未声明模式」）。 */
 export function resolveWorkflowMode(args: {
-  modes?: readonly string[] | null;
+  modes?: ReadonlyArray<string> | null;
   defaultMode?: string | null;
   taskType?: string | null;
 }): string | null {
@@ -455,7 +455,7 @@ export function resolveWorkflowMode(args: {
  * JSON 字符串（与 Skill.tags 同构）。下面两个函数统一在「DB 列 ↔
  * TS 数组」之间转换，并在任何畸形输入下都安全降级为空数组 / 合法
  * JSON，绝不抛错（路由层吞异常比崩溃更安全）。 */
-export function parseModesJson(raw: unknown): string[] {
+export function parseModesJson(raw: unknown): Array<string> {
   if (Array.isArray(raw)) {
     return raw.filter((x): x is string => typeof x === "string");
   }
@@ -472,6 +472,6 @@ export function parseModesJson(raw: unknown): string[] {
   return [];
 }
 
-export function serializeModesJson(modes: string[]): string {
+export function serializeModesJson(modes: Array<string>): string {
   return JSON.stringify(Array.isArray(modes) ? modes : []);
 }

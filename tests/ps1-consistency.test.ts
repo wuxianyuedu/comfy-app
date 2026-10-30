@@ -35,9 +35,9 @@ const TOOLS_INDEX = path.join("tools", "README.md");
  * 而临时仓库里若一个入口都没有，那半边就恒为空、**永远不响** —— 正是这道判据
  * 要防的「静默失效」。所以从真仓库现读，而不是在用例里手抄一份。
  */
-function realEntryPaths(): string[] {
+function realEntryPaths(): Array<string> {
   const tools = path.join(process.cwd(), "tools");
-  const out: string[] = [];
+  const out: Array<string> = [];
   const walk = (dir: string) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, e.name);
@@ -142,7 +142,7 @@ function runGuard(overrides: Record<string, string | null>): string {
   }
 }
 
-const cleanup: string[] = [];
+const cleanup: Array<string> = [];
 afterEach(() => {
   for (const dir of cleanup.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });

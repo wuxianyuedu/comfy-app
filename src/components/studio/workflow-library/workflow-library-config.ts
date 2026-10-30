@@ -8,10 +8,7 @@
 import type { WorkflowPreview as WorkflowPreviewT } from "~/lib/comfyui/workflow";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
-import {
-  getWorkflowType,
-  normalizeTaskType,
-} from "~/lib/workflow/workflow-types";
+import { getWorkflowType, normalizeTaskType } from "~/lib/workflow/workflow-types";
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 /** 工作流库页头右侧动作按钮的**统一形态基类**：三处只差配色（渐变 vs outline），
@@ -40,7 +37,7 @@ export interface LocalWorkflowRoot {
  *  取服务端一直在返回、前端此前丢弃的 localRoots——没有它，空态只能笼统地说
  *  「还没有工作流」，用户看到的是「工作流全没了」。 */
 export function deriveLocalRootsHint(
-  roots: readonly LocalWorkflowRoot[] | null | undefined,
+  roots: ReadonlyArray<LocalWorkflowRoot> | null | undefined,
 ): string | null {
   if (!roots || roots.length === 0) {
     return "没有解析到本地工作流目录：到「设置 → 创作后端」配置 ComfyUI 安装路径，或用上层目录 .env 里的 LOCAL_WORKFLOWS_PATH 指定目录。";
@@ -63,7 +60,7 @@ export interface WorkflowRow {
    *  UI 退回用 `[taskType]` 展示（兼容老数据）。`modes` 与
    *  `defaultMode` 由 GET /api/workflows 下发，落库在
    *  `WorkflowTemplate` 的 `modes` / `defaultMode` 两列。 */
-  modes?: string[];
+  modes?: Array<string>;
   /** 规范默认模式码；必须出现在 `modes` 里。
    *  与 `taskType` 保持同步，供旧版单值筛选用。 */
   defaultMode?: string | null;
@@ -84,7 +81,7 @@ export interface WorkflowRow {
   /** 挂在这条工作流上的模型标签名（来自用户级全局标签库，
    *  例如 ["z-image","wan2.2"]）。由 GET /api/workflows 下发。
    *  驱动库卡片的标签与模型筛选。 */
-  modelTags?: string[];
+  modelTags?: Array<string>;
   /** RAW 原件列有没有内容 —— **只用于如实标注**，不判可执行性（见下 `usable`）。 */
   hasRaw?: boolean;
   /** 这条工作流有没有可执行内容 —— **RAW 原件有内容即可**。
@@ -190,22 +187,20 @@ function sourceOf(workflow: WorkflowRow): "local" | "online" {
   return workflow.source ?? (workflow.sourcePath ? "local" : "online");
 }
 
-function categoryOf(
-  workflow: Pick<WorkflowRow, "taskType">,
-): string | undefined {
+function categoryOf(workflow: Pick<WorkflowRow, "taskType">): string | undefined {
   return getWorkflowType(normalizeTaskType(workflow.taskType ?? ""))?.category;
 }
 
 /** 三级筛选：来源 → 类型 → 模型标签，最后是名称子串（不区分大小写）。 */
 export function filterWorkflows(
-  workflows: WorkflowRow[],
+  workflows: Array<WorkflowRow>,
   filters: {
     source: SourceFilter;
     type: TypeFilter;
     model: string;
     search: string;
   },
-): WorkflowRow[] {
+): Array<WorkflowRow> {
   const needle = normalizeNeedle(filters.search);
   return workflows.filter((workflow) => {
     if (filters.source !== "all" && sourceOf(workflow) !== filters.source) {
@@ -214,10 +209,7 @@ export function filterWorkflows(
     if (filters.type !== "all" && categoryOf(workflow) !== filters.type) {
       return false;
     }
-    if (
-      filters.model !== "all" &&
-      !workflow.modelTags?.includes(filters.model)
-    ) {
+    if (filters.model !== "all" && !workflow.modelTags?.includes(filters.model)) {
       return false;
     }
     /* 本域只搜名称（不搜路径 / 标签）—— 归一化与命中判决走出口。 */
@@ -227,9 +219,9 @@ export function filterWorkflows(
 
 /** 待载入行：切到「在线工作流」时不该出现本地待载入项。 */
 export function filterPending(
-  pending: PendingRow[],
+  pending: Array<PendingRow>,
   filters: { source: SourceFilter; search: string },
-): PendingRow[] {
+): Array<PendingRow> {
   if (filters.source === "online") return [];
   const needle = normalizeNeedle(filters.search);
   if (!needle) return pending;
@@ -251,24 +243,18 @@ export interface TypeCounts {
 
 /** 来源页签计数。待载入项全部计入 local（它们本来就来自磁盘）。 */
 export function countBySource(
-  workflows: WorkflowRow[],
-  pending: PendingRow[],
+  workflows: Array<WorkflowRow>,
+  pending: Array<PendingRow>,
 ): SourceCounts {
   return {
     all: workflows.length + pending.length,
-    local:
-      workflows.filter((workflow) => sourceOf(workflow) === "local").length +
-      pending.length,
-    online: workflows.filter((workflow) => sourceOf(workflow) === "online")
-      .length,
+    local: workflows.filter((workflow) => sourceOf(workflow) === "local").length + pending.length,
+    online: workflows.filter((workflow) => sourceOf(workflow) === "online").length,
   };
 }
 
 /** 类型页签计数。待载入项没有 taskType，计入 all 但不进具体分类。 */
-export function countByType(
-  workflows: WorkflowRow[],
-  pending: PendingRow[],
-): TypeCounts {
+export function countByType(workflows: Array<WorkflowRow>, pending: Array<PendingRow>): TypeCounts {
   const counts: TypeCounts = {
     all: workflows.length + pending.length,
     image: 0,

@@ -56,11 +56,7 @@ import { TypeChip } from "~/components/studio/TypeChip";
 import { MegapixelStepper } from "./MegapixelStepper";
 import { useSizePresetTable } from "./hooks/use-size-preset-table";
 import { PortHandle } from "./WorkflowFormControls";
-import {
-  RequiredChips,
-  SizeTableFooter,
-  type AspectMegaGroup,
-} from "./DimensionControlParts";
+import { RequiredChips, SizeTableFooter, type AspectMegaGroup } from "./DimensionControlParts";
 
 /* ── 三个纯派生（§17.1：删掉 JSX 也能测）──
  * 从组件体提出：入参全是显式事实，输出是选项清单。useMemo 只保留调用。 */
@@ -68,16 +64,14 @@ import {
 /** 比例段候选：优先用工作流自己的 options，否则给内置预设表；未知标签按
  *  「宽:高」解析比例，解析不出按 1:1（只影响图标的形状，不影响写回的值）。 */
 function buildAspectOptions(
-  options: string[] | undefined,
-): { value: string; label: string; ratio: number }[] {
+  options: Array<string> | undefined,
+): Array<{ value: string; label: string; ratio: number }> {
   const source =
     Array.isArray(options) && options.length > 0
       ? options
       : ASPECT_RATIO_LABEL_PRESETS.map((preset) => preset.value);
   return source.map((value) => {
-    const known = ASPECT_RATIO_LABEL_PRESETS.find(
-      (preset) => preset.value === value,
-    );
+    const known = ASPECT_RATIO_LABEL_PRESETS.find((preset) => preset.value === value);
     if (known) return { value, label: known.label, ratio: known.ratio };
     const ratio = parseRatioFromLabel(value);
     return { value, label: shortRatioLabel(value), ratio: ratio ?? 1 };
@@ -90,19 +84,19 @@ function buildClarityOptions(input: {
   activeRatio: number;
   table: ReturnType<typeof useSizePresetTable>["table"];
   currentMultiple: AlignMultiple;
-}): {
+}): Array<{
   label: string;
   subgroup: string;
   megapixels: number;
   multiple: AlignMultiple;
-}[] {
+}> {
   const { scene, activeRatio, table, currentMultiple } = input;
-  const rows: {
+  const rows: Array<{
     label: string;
     subgroup: string;
     megapixels: number;
     multiple: AlignMultiple;
-  }[] = [];
+  }> = [];
   for (const tier of RESOLUTION_TIERS) {
     const size = resolutionDims(scene, activeRatio, tier, table);
     rows.push({
@@ -128,15 +122,13 @@ function buildClarityOptions(input: {
 function buildMultipleOptions(input: {
   multiple: EnrichedWidget | undefined;
   currentMultiple: AlignMultiple;
-}): { value: number; label: string }[] {
+}): Array<{ value: number; label: string }> {
   const { multiple, currentMultiple } = input;
   const source =
     multiple && Array.isArray(multiple.options) && multiple.options.length > 0
       ? multiple.options
       : ALIGN_MULTIPLE_OPTIONS.map((option) => String(option));
-  const parsed = source
-    .map((item) => Number(item))
-    .filter((n) => Number.isFinite(n) && n > 0);
+  const parsed = source.map((item) => Number(item)).filter((n) => Number.isFinite(n) && n > 0);
   if (multiple && !parsed.some((n) => n === currentMultiple)) {
     parsed.push(currentMultiple);
     parsed.sort((a, b) => a - b);
@@ -180,20 +172,14 @@ export function AspectMegapixelControl({
       : typeof rawAspect === "number"
         ? String(rawAspect)
         : "";
-  const currentMp =
-    Number(values[megapixels.ioKey] ?? megapixels.defaultValue ?? 1) || 1;
+  const currentMp = Number(values[megapixels.ioKey] ?? megapixels.defaultValue ?? 1) || 1;
 
   /** 候选章：节点自己的 COMBO 选项（可用时）。 */
-  const aspectOptions = useMemo(
-    () => buildAspectOptions(aspect.options),
-    [aspect.options],
-  );
+  const aspectOptions = useMemo(() => buildAspectOptions(aspect.options), [aspect.options]);
 
   /** 反检测活跃章，好让手打的值也能高亮。 */
   const activeAspect = useMemo(() => {
-    const exact = aspectOptions.find(
-      (option) => option.value === currentAspect,
-    );
+    const exact = aspectOptions.find((option) => option.value === currentAspect);
     if (exact) return exact;
     const ratio = parseRatioFromLabel(currentAspect);
     if (ratio === null) return null;
@@ -202,9 +188,7 @@ export function AspectMegapixelControl({
     if (!firstOption) return null;
     return aspectOptions.reduce(
       (best, option) =>
-        Math.abs(option.ratio - ratio) < Math.abs(best.ratio - ratio)
-          ? option
-          : best,
+        Math.abs(option.ratio - ratio) < Math.abs(best.ratio - ratio) ? option : best,
       firstOption,
     );
   }, [aspectOptions, currentAspect]);
@@ -212,9 +196,7 @@ export function AspectMegapixelControl({
   /** 当前比例（用于把「分辨率」档换算成宽高 → 百万像素）。 */
   const activeRatio = useMemo(
     () =>
-      activeAspect?.ratio ??
-      parseRatioFromLabel(currentAspect) ??
-      DEFAULT_DIM_RATIO_PRESET.ratio,
+      activeAspect?.ratio ?? parseRatioFromLabel(currentAspect) ?? DEFAULT_DIM_RATIO_PRESET.ratio,
     [activeAspect, currentAspect],
   );
 
@@ -223,10 +205,7 @@ export function AspectMegapixelControl({
    * 三个写入口（比例 / 像素 / 倍数 / 自定义百万像素）都要它，各写一遍会分叉
    * （任一处漏了末级兜底，用户没选过比例时就会被写成空串，节点静默清空）。 */
   const aspectValue = useMemo(
-    () =>
-      activeAspect?.value ??
-      currentAspect ??
-      DEFAULT_ASPECT_RATIO_LABEL_PRESET.value,
+    () => activeAspect?.value ?? currentAspect ?? DEFAULT_ASPECT_RATIO_LABEL_PRESET.value,
     [activeAspect, currentAspect],
   );
 
@@ -258,9 +237,7 @@ export function AspectMegapixelControl({
    * 触发器会显示成「2k」，用户看着像「我填的 2.5 没了」。命不中档位就按自由值
    * 显示（`2.5M`）。 */
   const mpLabel = useMemo(() => {
-    const exact = clarityOptions.find(
-      (option) => Math.abs(option.megapixels - currentMp) < 0.01,
-    );
+    const exact = clarityOptions.find((option) => Math.abs(option.megapixels - currentMp) < 0.01);
     return exact?.label ?? megapixelLabel(currentMp);
   }, [clarityOptions, currentMp]);
 
@@ -269,10 +246,7 @@ export function AspectMegapixelControl({
     [multiple, currentMultiple],
   );
 
-  const multipleLabel = useMemo(
-    () => String(currentMultiple),
-    [currentMultiple],
-  );
+  const multipleLabel = useMemo(() => String(currentMultiple), [currentMultiple]);
 
   /* 用户只改百万像素数时，保留工作流自己的写法 ——
    * 往一个把选项写成别的拼法的节点里写预设串
@@ -282,15 +256,13 @@ export function AspectMegapixelControl({
       setMany({
         [aspect.ioKey]: nextAspect,
         [megapixels.ioKey]: nextMp,
-        ...(multiple && nextMultiple !== undefined
-          ? { [multiple.ioKey]: nextMultiple }
-          : {}),
+        ...(multiple && nextMultiple !== undefined ? { [multiple.ioKey]: nextMultiple } : {}),
       });
     },
     [aspect.ioKey, megapixels.ioKey, multiple, setMany],
   );
 
-  const sections: SegmentSection<string>[] = useMemo(
+  const sections: Array<SegmentSection<string>> = useMemo(
     () => [
       {
         label: "比例",
@@ -323,9 +295,7 @@ export function AspectMegapixelControl({
           <MegapixelStepper
             value={currentMp}
             disabled={disabled}
-            onChange={(megapixels) =>
-              apply(aspectValue, megapixels, currentMultiple)
-            }
+            onChange={(megapixels) => apply(aspectValue, megapixels, currentMultiple)}
           />
         ),
       },
@@ -339,9 +309,7 @@ export function AspectMegapixelControl({
                 label: option.label,
               })),
               onChange: (label: string) => {
-                const hit = multipleOptions.find(
-                  (option) => option.label === label,
-                );
+                const hit = multipleOptions.find((option) => option.label === label);
                 if (!hit) return;
                 apply(aspectValue, currentMp, hit.value);
               },
@@ -385,9 +353,7 @@ export function AspectMegapixelControl({
         onOpen={() => setTableOpen(true)}
         extra={
           <span className="text-ink-faint text-3xs">
-            {currentDims
-              ? `${currentDims.width}×${currentDims.height}`
-              : resolutionHint}
+            {currentDims ? `${currentDims.width}×${currentDims.height}` : resolutionHint}
           </span>
         }
       />
@@ -453,9 +419,7 @@ export function AspectMegapixelControl({
               </span>
               <div className="mt-1 w-42 min-w-0">
                 <MultiSegmentPopover
-                  ariaLabel={
-                    multiple ? "选择比例、像素与倍数" : "选择比例与像素"
-                  }
+                  ariaLabel={multiple ? "选择比例、像素与倍数" : "选择比例与像素"}
                   triggerContent={`${activeAspect?.label ?? "自定义"} / ${mpLabel}${multiple ? ` / ${multipleLabel}` : ""}`}
                   sections={sections}
                   align="right"
@@ -480,9 +444,7 @@ export function AspectMegapixelControl({
               </span>
               <div className="min-w-0 flex-1">
                 <MultiSegmentPopover
-                  ariaLabel={
-                    multiple ? "选择比例、像素与倍数" : "选择比例与像素"
-                  }
+                  ariaLabel={multiple ? "选择比例、像素与倍数" : "选择比例与像素"}
                   triggerContent={`${activeAspect?.label ?? "自定义"} / ${mpLabel}${multiple ? ` / ${multipleLabel}` : ""}`}
                   sections={sections}
                   align="right"
@@ -502,12 +464,7 @@ export function AspectMegapixelControl({
         )}
       </div>
 
-      {tableOpen && (
-        <SizePresetTableModal
-          scene={scene}
-          onClose={() => setTableOpen(false)}
-        />
-      )}
+      {tableOpen && <SizePresetTableModal scene={scene} onClose={() => setTableOpen(false)} />}
     </div>
   );
 }

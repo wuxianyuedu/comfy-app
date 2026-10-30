@@ -73,7 +73,7 @@ function toFiniteNumber(value: unknown): number | null {
  * 再退到节点声明的 `style`，两者都没有则用兜底尺寸。
  */
 export function normalizeBounds(
-  nodes: readonly FitBoundsNode[],
+  nodes: ReadonlyArray<FitBoundsNode>,
   fallbackSize: { width: number; height: number },
 ): Bounds | null {
   let minX = Infinity;
@@ -82,24 +82,14 @@ export function normalizeBounds(
   let maxY = -Infinity;
 
   for (const node of nodes) {
-    const measuredW =
-      toFiniteNumber(node.measured?.width) ?? toFiniteNumber(node.width);
-    const measuredH =
-      toFiniteNumber(node.measured?.height) ?? toFiniteNumber(node.height);
+    const measuredW = toFiniteNumber(node.measured?.width) ?? toFiniteNumber(node.width);
+    const measuredH = toFiniteNumber(node.measured?.height) ?? toFiniteNumber(node.height);
     const styleW = toFiniteNumber(node.style?.width);
     const styleH = toFiniteNumber(node.style?.height);
     const width =
-      measuredW && measuredW > 0
-        ? measuredW
-        : styleW && styleW > 0
-          ? styleW
-          : fallbackSize.width;
+      measuredW && measuredW > 0 ? measuredW : styleW && styleW > 0 ? styleW : fallbackSize.width;
     const height =
-      measuredH && measuredH > 0
-        ? measuredH
-        : styleH && styleH > 0
-          ? styleH
-          : fallbackSize.height;
+      measuredH && measuredH > 0 ? measuredH : styleH && styleH > 0 ? styleH : fallbackSize.height;
 
     const x = node.position.x;
     const y = node.position.y;
@@ -162,7 +152,7 @@ export function computeFitViewport(
  */
 export interface FitSettleStepper {
   /** 推进一帧：`sample()` 返回当前这一帧真实量到的节点。 */
-  next(sample: () => readonly FitBoundsNode[]): {
+  next(sample: () => ReadonlyArray<FitBoundsNode>): {
     bounds: Bounds | null;
     done: boolean;
   };
@@ -179,9 +169,7 @@ export interface FitSettleOptions {
   maxAttempts: number;
 }
 
-export function createFitSettleStepper(
-  options: FitSettleOptions,
-): FitSettleStepper {
+export function createFitSettleStepper(options: FitSettleOptions): FitSettleStepper {
   let lastSpan = -1;
   let settleCount = 0;
   let attempts = 0;
@@ -199,8 +187,7 @@ export function createFitSettleStepper(
       } else {
         settleCount += 1;
       }
-      const done =
-        settleCount >= options.settleRounds || attempts >= options.maxAttempts;
+      const done = settleCount >= options.settleRounds || attempts >= options.maxAttempts;
       return { bounds: bounds ?? lastBounds, done };
     },
     rounds: () => attempts,

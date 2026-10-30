@@ -72,7 +72,7 @@ function openComfyTab(patch: {
 /* 剪贴板桩：说明里那颗「复制地址」会经 `~/lib/browser-io` 的 `copyText` 写剪贴板，
  * 而它在 jsdom 里的兜底路径会往 `document.body` 挂一个临时 `textarea`（handle 残留）。
  * 用例不必真碰剪贴板，给一份成功实现即可 —— 本文件因此也**不用**那条兜底路径。 */
-const written: string[] = [];
+const written: Array<string> = [];
 
 beforeEach(() => {
   written.length = 0;

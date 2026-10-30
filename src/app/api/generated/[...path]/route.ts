@@ -55,7 +55,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ path?: string[] }> },
+  { params }: { params: Promise<{ path?: Array<string> }> },
 ): Promise<Response> {
   const user = await requireRequestUser();
   if (!user) return new Response("Unauthorized", { status: 401 });

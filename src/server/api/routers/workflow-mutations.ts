@@ -295,7 +295,7 @@ export const workflowMutationProcedures = {
       if (writePositions || groups !== undefined || notes !== undefined) {
         nextRawJson = nextRawJson ? { ...nextRawJson } : {};
         const nodes = Array.isArray(nextRawJson.nodes)
-          ? [.../* SAFETY: 类型断言已复核 */ (nextRawJson.nodes as unknown[])]
+          ? [.../* SAFETY: 类型断言已复核 */ (nextRawJson.nodes as Array<unknown>)]
           : [];
         if (writePositions) {
           const posMap = /* SAFETY: 类型断言已复核 */ input.positions as Record<

@@ -20,7 +20,7 @@ export interface FieldDef {
   key: string; // input key in ComfyUI inputs object
   label: string; // display name
   type: FieldType;
-  options?: string[]; // for select type
+  options?: Array<string>; // for select type
   placeholder?: string;
   multiline?: boolean; // for text type
   hidden?: boolean; // don't show in editor (e.g. internal wiring)
@@ -39,7 +39,7 @@ export interface PortSpec {
   name: string; // input/output name
   type: string; // e.g. "FLOAT" | "IMAGE" | "COMBO" ...
   widget?: FieldType; // editor widget (absent for pure connection ports)
-  options?: string[]; // for COMBO
+  options?: Array<string>; // for COMBO
   default?: unknown; // default value (for value chip / placeholder)
   required: boolean;
 }
@@ -58,14 +58,14 @@ export interface NodeTypeConfig {
     | "latent"
     | "image"
     | "custom";
-  defaultFields: FieldDef[];
+  defaultFields: Array<FieldDef>;
   width: number; // node card width in px
   height: number; // min height
   /* 自定义节点支持（从 customNodes manifest 填充） */
   custom?: boolean;
   rawCategory?: string; // original ComfyUI category string
-  inputsSpec?: PortSpec[];
-  outputsSpec?: PortSpec[];
+  inputsSpec?: Array<PortSpec>;
+  outputsSpec?: Array<PortSpec>;
   /** OUTPUT_NODE === true：终端节点（后端仍执行，只是不向下游传值）。 */
   outputNode?: boolean;
   /** properties.frontend_only === true：纯前端节点（后端不执行）。与 outputNode 是两回事。 */

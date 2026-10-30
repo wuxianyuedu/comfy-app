@@ -3,11 +3,7 @@
  * 收起开关 + 状态圆点 + 标题 + 按节点 IO 复选框 + #id 章
  * + 角色徽标。与 ComfyUI 标题栏一样钉在 NODE_TITLE_H。 */
 import { colorToRgba, NODE_TITLE_H } from "../workflow-utils";
-import {
-  IoCheckbox,
-  NodeIdChip,
-  type IOEditContextValue,
-} from "./IOEditContext";
+import { IoCheckbox, NodeIdChip, type IOEditContextValue } from "./IOEditContext";
 import { Button } from "~/components/ui/button";
 import type { WorkflowNodeData, IoRef } from "../workflow-types";
 import type { NodePalette } from "./workflow-node-palette";
@@ -24,7 +20,7 @@ interface FlowNodeHeaderProps {
   data: WorkflowNodeData;
   role?: FlowNodeRole;
   io: IOEditContextValue | null;
-  outputs: [string, string][];
+  outputs: Array<[string, string]>;
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
   palette: Pick<NodePalette, "headerBg" | "titleColor" | "dotBg">;
@@ -100,9 +96,7 @@ export function FlowNodeHeader({
       <span
         className="flex-1 truncate text-xs font-medium tracking-wide"
         style={{ color: palette.titleColor }}
-        title={
-          data.title && data.title !== displayTitle ? data.title : displayTitle
-        }
+        title={data.title && data.title !== displayTitle ? data.title : displayTitle}
       >
         {displayTitle}
       </span>

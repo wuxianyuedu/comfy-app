@@ -59,7 +59,7 @@ export function makeUsageField(key: string, value: string): UsageField {
 
 /** 视频「请求体额外字段」的预填模板：mode 是大多数视频接口的必填项，
  *  一打开弹窗就可见可改，避免首次执行就因缺 mode 被 400。 */
-export function defaultVideoFields(): UsageField[] {
+export function defaultVideoFields(): Array<UsageField> {
   return [makeUsageField("mode", "text")];
 }
 
@@ -74,7 +74,7 @@ export const VIDEO_MEDIA_FIELD_KEYS = /* SAFETY: 类型断言已复核 */ [
 
 /** 视频 mode=text 时是否应隐藏媒体字段行：text 只靠提示词生成，
  *  带媒体字段会被提供方拒绝（invalid mode）。 */
-export function videoModeHidesMedia(fields: UsageField[]): boolean {
+export function videoModeHidesMedia(fields: Array<UsageField>): boolean {
   const mode =
     fields
       .find((f) => f.key.trim() === "mode")
@@ -85,7 +85,7 @@ export function videoModeHidesMedia(fields: UsageField[]): boolean {
 
 /** 判断某行是不是媒体行：字段名命中媒体字段集合（first_frame / images 等）。 */
 export function isMediaField(key: string): boolean {
-  return /* SAFETY: 类型断言已复核 */ (VIDEO_MEDIA_FIELD_KEYS as readonly string[]).includes(
+  return /* SAFETY: 类型断言已复核 */ (VIDEO_MEDIA_FIELD_KEYS as ReadonlyArray<string>).includes(
     key.trim(),
   );
 }
@@ -97,7 +97,7 @@ export const MEDIA_URL_NOTICE =
 
 /** 视频请求缺媒体字段时（mode 与已填字段明显不匹配）给出的人文提示。
  *  仅做「该传什么」的引导，不做硬校验——各家接口规则不一，以服务端报错为准。 */
-export function videoModeMissingHint(fields: UsageField[]): string | null {
+export function videoModeMissingHint(fields: Array<UsageField>): string | null {
   const mode = fields.find((f) => f.key.trim() === "mode")?.value.trim() ?? "";
   const keys = new Set(fields.map((f) => f.key.trim()));
   if (mode === "keyframe" && !keys.has("first_frame") && !keys.has("last_frame")) {
@@ -122,7 +122,7 @@ export const MEDIA_ARRAY_FIELD_KEYS = /* SAFETY: 类型断言已复核 */ ["imag
 
 /** 判断字段是不是数组型媒体字段（命中 images / audios 等，含首尾空白）。 */
 export function isMediaArrayField(key: string): boolean {
-  return /* SAFETY: 类型断言已复核 */ (MEDIA_ARRAY_FIELD_KEYS as readonly string[]).includes(
+  return /* SAFETY: 类型断言已复核 */ (MEDIA_ARRAY_FIELD_KEYS as ReadonlyArray<string>).includes(
     key.trim(),
   );
 }
@@ -132,7 +132,7 @@ export function isMediaArrayField(key: string): boolean {
  * 否则按字符串处理——这样 seed=42 是数字、图片 data-URL 是字符串都对。
  * 特例：images / audios 这类数组媒体字段，若拿到的是单个 URL 字符串（裸地址
  *  或带引号的 "…"）会自动包成数组，避免服务端期望 []string 却收到 string 而 400。 */
-export function usageFieldsToJson(fields: UsageField[]): string {
+export function usageFieldsToJson(fields: Array<UsageField>): string {
   const out: Record<string, unknown> = {};
   for (const f of fields) {
     const key = f.key.trim();
@@ -217,7 +217,7 @@ export const USAGE_FIELD_PRESETS: ReadonlyArray<{
 ];
 
 /** 判断某个固定名是否已被作为字段行加入（避免一键预设时重复堆空行）。 */
-export function hasUsageFieldKey(fields: UsageField[], key: string): boolean {
+export function hasUsageFieldKey(fields: Array<UsageField>, key: string): boolean {
   return fields.some((f) => f.key.trim() === key.trim());
 }
 

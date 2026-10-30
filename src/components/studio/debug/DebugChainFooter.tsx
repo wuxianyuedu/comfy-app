@@ -17,19 +17,11 @@
 import { useCallback, useState, type CSSProperties } from "react";
 import { CodeBlock, extToLanguage } from "~/components/ui/code-block";
 import { Hint } from "~/components/ui/hint";
-import {
-  copyFailureText,
-  useCopyFeedback,
-} from "~/components/ui/use-copy-feedback";
+import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { fetchDebugSource } from "~/lib/workflow/debug-source-client";
 import { useDebugStore } from "./debug-store";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { PageLoading } from "~/components/ui/page-loading";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { lastSegments } from "~/lib/path-display";
@@ -73,11 +65,7 @@ interface SourcePayload {
   modifiedAt: string;
 }
 
-export function DebugChainFooter({
-  modules,
-}: {
-  modules: RenderChainModule[];
-}) {
+export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule> }) {
   const debugMode = useDebugStore((state) => state.debugMode);
 
   const [openFile, setOpenFile] = useState<string | null>(null);
@@ -155,7 +143,7 @@ export function DebugChainFooter({
   const canvasModules = modules.filter((m) => (m.scope ?? "node") === "canvas");
   const nodeModules = modules.filter((m) => (m.scope ?? "node") === "node");
 
-  const renderGroup = (title: string, group: RenderChainModule[]) => {
+  const renderGroup = (title: string, group: Array<RenderChainModule>) => {
     if (group.length === 0) return null;
     return (
       <div
@@ -223,10 +211,7 @@ export function DebugChainFooter({
         {renderGroup("节点级", nodeModules)}
       </div>
 
-      <Dialog
-        open={openFile !== null}
-        onOpenChange={(next) => !next && closeModal()}
-      >
+      <Dialog open={openFile !== null} onOpenChange={(next) => !next && closeModal()}>
         <DialogContent
           showCloseButton={false}
           className="border-border-strong bg-panel w-[min(860px,92vw)] gap-0 p-0"
@@ -245,20 +230,14 @@ export function DebugChainFooter({
               <span aria-hidden className="text-warning-strong/90 text-sm">
                 ◈
               </span>
-              <code
-                className="text-ink-bright truncate font-mono text-xs"
-                title={viewedFile}
-              >
+              <code className="text-ink-bright truncate font-mono text-xs" title={viewedFile}>
                 {/* 路径的语义在尾部（哪个文件）—— CSS `truncate` 只留头部，
                     恰好把它切掉，故显式取末几段。 */}
                 {lastSegments(viewedFile, 3)}
               </code>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <Hint
-                label="在 Visual Studio Code 中打开该文件（需已安装 VSCode）"
-                wrap
-              >
+              <Hint label="在 Visual Studio Code 中打开该文件（需已安装 VSCode）" wrap>
                 <Button
                   variant="info"
                   size="xs"
@@ -280,17 +259,10 @@ export function DebugChainFooter({
                       : "border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
                   }`}
                 >
-                  {copyFailed
-                    ? "复制失败"
-                    : copyOutcome.on
-                      ? "已复制"
-                      : "复制路径"}
+                  {copyFailed ? "复制失败" : copyOutcome.on ? "已复制" : "复制路径"}
                 </Button>
               </Hint>
-              <Hint
-                label={copyFailed ? copyFailureText() : "复制全部源码"}
-                wrap
-              >
+              <Hint label={copyFailed ? copyFailureText() : "复制全部源码"} wrap>
                 <Button
                   variant="warning"
                   size="xs"
@@ -298,11 +270,7 @@ export function DebugChainFooter({
                   disabled={!source}
                   className="h-auto rounded-md px-2.5 py-1"
                 >
-                  {copyFailed
-                    ? "复制失败"
-                    : copyOutcome.on
-                      ? "已复制"
-                      : "复制代码"}
+                  {copyFailed ? "复制失败" : copyOutcome.on ? "已复制" : "复制代码"}
                 </Button>
               </Hint>
               <Button
@@ -318,13 +286,9 @@ export function DebugChainFooter({
           </div>
           {/* 内容区 */}
           <div className="bg-canvas-deep min-h-0 flex-1 overflow-auto p-0">
-            {sourceBusy.busy && (
-              <PageLoading label="正在读取源码…" className="py-10 text-xs" />
-            )}
+            {sourceBusy.busy && <PageLoading label="正在读取源码…" className="py-10 text-xs" />}
             {!sourceBusy.busy && loadError && (
-              <div className="text-destructive px-4 py-6 text-xs">
-                读取失败：{loadError}
-              </div>
+              <div className="text-destructive px-4 py-6 text-xs">读取失败：{loadError}</div>
             )}
             {!sourceBusy.busy && source && (
               <div className="flex flex-col">

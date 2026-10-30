@@ -22,7 +22,7 @@
 import { clamp } from "~/lib/clamp";
 
 export async function runWithConcurrency<T>(
-  items: readonly T[],
+  items: ReadonlyArray<T>,
   limit: number,
   worker: (item: T, index: number) => Promise<void>,
 ): Promise<void> {

@@ -272,13 +272,13 @@ export function CanvasRulers({
   // 每条可见的主竖线的世界 X → 屏幕 X。
   const xLabels = useMemo(() => {
     if (zoom <= 0.01 || !width)
-      return /* SAFETY: 类型断言已复核 */ [] as {
+      return /* SAFETY: 类型断言已复核 */ [] as Array<{
         world: number;
         screen: number;
-      }[];
+      }>;
     const start = Math.floor(-tx / zoom / labelStep) * labelStep;
     const end = Math.ceil((width - tx) / zoom / labelStep) * labelStep;
-    const out: { world: number; screen: number }[] = [];
+    const out: Array<{ world: number; screen: number }> = [];
     for (let x = start; x <= end + 0.5; x += labelStep) {
       const sx = x * zoom + tx;
       if (sx < -4 || sx > width + 4) continue;
@@ -290,13 +290,13 @@ export function CanvasRulers({
   // 每条可见的主横线的世界 Y → 屏幕 Y。
   const yLabels = useMemo(() => {
     if (zoom <= 0.01 || !height)
-      return /* SAFETY: 类型断言已复核 */ [] as {
+      return /* SAFETY: 类型断言已复核 */ [] as Array<{
         world: number;
         screen: number;
-      }[];
+      }>;
     const start = Math.floor(-ty / zoom / labelStep) * labelStep;
     const end = Math.ceil((height - ty) / zoom / labelStep) * labelStep;
-    const out: { world: number; screen: number }[] = [];
+    const out: Array<{ world: number; screen: number }> = [];
     for (let y = start; y <= end + 0.5; y += labelStep) {
       const sy = y * zoom + ty;
       if (sy < -4 || sy > height + 4) continue;

@@ -47,7 +47,7 @@ export const { TRPCProvider, useTRPC } = createTRPCContext<AppRouter>();
  * `createTRPCClient<AppRouter>` 就得各自 import `AppRouter`（而 `src/**` 的测试
  * import 服务端根是有边界判据的），一处类型参数换七处重复。
  */
-export function createTrpcClient(options: { links: TRPCLink<never>[] }) {
+export function createTrpcClient(options: { links: Array<TRPCLink<never>> }) {
   return createTRPCClient<AppRouter>(options);
 }
 

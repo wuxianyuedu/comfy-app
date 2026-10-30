@@ -42,7 +42,7 @@ type DetailJson = {
     status: string;
     pipelinesStatus: Record<
       string,
-      { id: string; name: string; status: string; stages: StageRow[] }
+      { id: string; name: string; status: string; stages: Array<StageRow> }
     >;
   };
 };
@@ -76,7 +76,7 @@ const build = (sn: string, event = "crontab: 0 0 * * *"): ListBuild => ({
  * 这件事上红，而不是在「夹具写错了」上红。
  */
 function detail(state: Verdict): DetailJson {
-  const stages: StageRow[] =
+  const stages: Array<StageRow> =
     state === "green"
       ? [
           { id: "stage-1", name: "每日工具链自证", status: "success" },
@@ -370,14 +370,14 @@ describe("正文只含读数，不含因果", () => {
 
 describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
   /** 写一份离线读数，返回它的路径与目录（每份用例自带目录，别往仓库里落东西）。 */
-  function fixture(list: ListBuild[], details: Array<{ sn: string; json: DetailJson }>) {
+  function fixture(list: Array<ListBuild>, details: Array<{ sn: string; json: DetailJson }>) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "daily-failure-issue-"));
     const file = path.join(dir, "read.json");
     fs.writeFileSync(file, JSON.stringify({ list, details }), "utf8");
     return { dir, file };
   }
 
-  const run = (args: string[]) =>
+  const run = (args: Array<string>) =>
     spawnSync(process.execPath, [ENTRY, ...args], {
       cwd: ROOT,
       encoding: "utf8",
@@ -446,13 +446,13 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
    */
   it("--dry-run 走完整条读链，一次 create-issue / post-issue-comment 都不发", () => {
     /** @type {string[]} */
-    const calls: string[] = [];
-    const heard: string[] = [];
+    const calls: Array<string> = [];
+    const heard: Array<string> = [];
     const code = main({
       argv: ["--dry-run"],
       slug: "moon-read/comfy-app-t3",
       log: (s: string) => heard.push(s),
-      run: (cmd: string, args: string[]) => {
+      run: (cmd: string, args: Array<string>) => {
         const key = args.join(" ");
         calls.push(`${cmd} ${key}`);
         const json = (data: unknown) => ({
@@ -494,8 +494,8 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
   const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
 
   /** 造一整页（新→旧）：默认全是 PR 事件，`extra` 排在最前。 */
-  function pageRows(count: number, newestH: number, oldestH: number, extra: ListBuild[] = []) {
-    const rows: ListBuild[] = [...extra];
+  function pageRows(count: number, newestH: number, oldestH: number, extra: Array<ListBuild> = []) {
+    const rows: Array<ListBuild> = [...extra];
     for (let i = rows.length; i < count; i += 1) {
       const h = newestH + ((oldestH - newestH) * i) / Math.max(1, count - 1);
       rows.push({
@@ -510,14 +510,14 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
 
   /** 一整条假平台：列表按页答，详情按 sn 答，写命令记下来。 */
   function fakePlatform(input: {
-    pages: Record<number, ListBuild[] | null>;
+    pages: Record<number, Array<ListBuild> | null>;
     detailsBySn: Record<string, Verdict>;
     openIssues: Array<{ number: number; title: string }>;
-    comments?: string[];
+    comments?: Array<string>;
   }) {
     /** @type {string[]} */
-    const calls: string[] = [];
-    const run = (_cmd: string, args: string[]) => {
+    const calls: Array<string> = [];
+    const run = (_cmd: string, args: Array<string>) => {
       const key = args.join(" ");
       calls.push(key);
       const json = (data: unknown) => ({
@@ -562,7 +562,7 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
       detailsBySn: { "sn-live": "running", "sn-prev": "failed" },
       openIssues: [{ number: 2344, title: `${titleKey("每日生产构建")}—— 人工开的那张` }],
     });
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const code = main({
       argv: [],
       slug: "moon-read/comfy-app-t3",
@@ -589,14 +589,14 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
 
   it("翻到上界仍盖不住窗口 ⇒ 一个字都不写，且那句是「没盖住」而不是「没有红」", () => {
     const live = build("sn-live");
-    const pages: Record<number, ListBuild[] | null> = {};
+    const pages: Record<number, Array<ListBuild> | null> = {};
     for (let p = 1; p <= 20; p += 1) pages[p] = pageRows(60, 0.1, 8, [live]);
     const { run, calls } = fakePlatform({
       pages,
       detailsBySn: { "sn-live": "running" },
       openIssues: [],
     });
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const code = main({
       argv: [],
       slug: "moon-read/comfy-app-t3",

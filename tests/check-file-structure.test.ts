@@ -85,7 +85,7 @@ function run(): { code: number; output: string } {
  */
 
 /** 带参数的调用（R5 的翻闸断头用例要传 `--update` 正面证明它不存在，规范 §12.6）。 */
-function runWith(args: string[]): { code: number; output: string } {
+function runWith(args: Array<string>): { code: number; output: string } {
   try {
     const output = execFileSync(
       process.execPath,
@@ -681,7 +681,7 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
   // 桩件查自身时如实回 `$PID`，查父进程时回 `opts.parent`。
   const guardScript = (
     procsJson: string,
-    opts: { parent?: string; processes?: unknown[] } = {},
+    opts: { parent?: string; processes?: Array<unknown> } = {},
   ): string => `
 $ErrorActionPreference = "Stop"
 function Log { param([string]$Msg) Write-Output $Msg }
@@ -1264,7 +1264,7 @@ describe("release 壳构建的地雷（ISSUE #730）", () => {
     // `.oxfmtrc.json`。
     const config = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(join(process.cwd(), ".oxfmtrc.json"), "utf8"),
-    ) as { ignorePatterns?: string[] };
+    ) as { ignorePatterns?: Array<string> };
     expect(
       config.ignorePatterns ?? [],
       "`.oxfmtrc.json` 的 `ignorePatterns` 必须含 `src-tauri/target/`：漏掉它，" +
@@ -1391,12 +1391,12 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
   } => {
     const conf = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(CONF, "utf8")) as {
       app: {
-        windows: {
+        windows: Array<{
           label?: string;
           width: number;
           height: number;
           decorations?: boolean;
-        }[];
+        }>;
       };
     };
     const win = conf.app.windows.find((w) => w.label === "splash") ?? conf.app.windows[0];

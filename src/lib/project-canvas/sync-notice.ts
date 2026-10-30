@@ -191,6 +191,6 @@ export function reportMirrorFailure(
 }
 
 /** 当前所有「确定被拒」的画布（读侧挂载时先读一次，见文件头那条承诺）。 */
-export function listSyncNotices(): SyncNotice[] {
+export function listSyncNotices(): Array<SyncNotice> {
   return [...notices.values()];
 }

@@ -17,11 +17,11 @@ export interface UpdateCheckState {
   /** 是否有「需重启才生效」的本地文件在运行期被改过 */
   dirty: boolean;
   /** 最近一次检测结果里脏的分组（供主动检测展示明细） */
-  groups: UpdateGroup[];
+  groups: Array<UpdateGroup>;
   /** 手动检测进行中标记（避免连点） */
   checking: boolean;
   setEnabled: (value: boolean) => void;
-  applyResult: (groups: UpdateGroup[], dirty: boolean) => void;
+  applyResult: (groups: Array<UpdateGroup>, dirty: boolean) => void;
   setChecking: (value: boolean) => void;
   /**
    * 跑一次手动检测：置忙 → 跑 → **无论如何**复位（规范 16 §16.2.4.71）。

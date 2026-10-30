@@ -1,10 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { WorkshopPipeline } from "~/components/workshop/WorkshopPipeline";
-import {
-  projectScene,
-  useSeededProjects,
-} from "../../../.storybook/screen-frame";
+import { projectScene, useSeededProjects } from "../../../.storybook/screen-frame";
 
 /**
  * 工坊管线 —— 整屏容器这一族里**子件最多**的一屏（第三层注入）。
@@ -41,11 +38,7 @@ export default meta;
 type Story = StoryObj<typeof WorkshopPipelineHarness>;
 
 /** 适配件：备好真项目，再把整屏摆出来。 */
-function WorkshopPipelineHarness({
-  extraNames = [],
-}: {
-  extraNames?: readonly string[];
-}) {
+function WorkshopPipelineHarness({ extraNames = [] }: { extraNames?: ReadonlyArray<string> }) {
   useSeededProjects({
     primary: projectScene("namedProject"),
     extraNames,
@@ -75,8 +68,6 @@ export const Default: Story = {
  */
 export const WithOtherProjects: Story = {
   render: () => (
-    <WorkshopPipelineHarness
-      extraNames={["城市夜景", "首帧 → 逐镜生成", "片头试验"]}
-    />
+    <WorkshopPipelineHarness extraNames={["城市夜景", "首帧 → 逐镜生成", "片头试验"]} />
   ),
 };

@@ -43,7 +43,7 @@ import {
 
 /** 造一个「git 调用」替身：按参数给出退出码与 stdout。 */
 const gitStub =
-  (byArgs: Record<string, { status: number; stdout: string }>) => (args: string[]) => {
+  (byArgs: Record<string, { status: number; stdout: string }>) => (args: Array<string>) => {
     /* 剥掉**全局旗标**那一对（`-c core.quotePath=false`，ISSUE #2272）：它是 git 的
      * 全局配置，不属于「这条 diff 是什么形状」⇒ 键要按形状算，替身才不会被
      * 「多了一个旗标」这件事顶掉。 */
@@ -368,7 +368,7 @@ function makeInstalledRoot(): string {
 describe("接槽执行档的三条出口", () => {
   /** 收齐打印的替身。 */
   function collector() {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     return {
       write: (s: string) => lines.push(s),
       get text() {
@@ -503,7 +503,7 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
       [native11]: { ok: true },
     });
     const env = { ...baseEnv(), PATH: bin };
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const r = ensurePnpmOnPath({
       platform: "win32",
       env,

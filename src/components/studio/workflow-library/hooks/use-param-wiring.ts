@@ -37,7 +37,7 @@ export interface ParamWiringController {
    *  必须是一次计算 + 一次落库：逐个调 `resetToAuto` 时每一次都基于同一份**旧**
    *  值算新表，后一次会把前一次的删除覆盖回去 —— 表现就是「重置清不掉」
    *  （用户口径：尺寸那三项线变成固定连线，重置也清不掉）。 */
-  resetMany: (entryIds: readonly string[]) => void;
+  resetMany: (entryIds: ReadonlyArray<string>) => void;
   /** **生效的 paramMap** = 已落库的那一份叠上本轮本地改动。
    *
    *  卡片列与连线必须都读这一份：只读落库那份的话，用户刚拖出来的线要等一次
@@ -115,7 +115,7 @@ export function useParamWiring({
    *  会各自从同一份 `effective` 出发，后一次把前一次的结果覆盖掉（只清掉最后一
    *  条目）—— 用户看到的正是「重置清不掉」。 */
   const resetMany = useCallback(
-    (entryIds: readonly string[]) => {
+    (entryIds: ReadonlyArray<string>) => {
       if (!activeMode || entryIds.length === 0) return;
       let next = effective;
       for (const entryId of entryIds) {

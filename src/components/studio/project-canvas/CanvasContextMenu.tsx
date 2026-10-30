@@ -77,7 +77,7 @@ export function CanvasContextMenu({ x, y, onPick, onPickTest, onClose }: CanvasC
             创建节点
           </DropdownMenuLabel>
           {
-            /* SAFETY: 类型断言已复核 */ (Object.keys(NODE_META) as NodeKind[]).map((kind) => {
+            /* SAFETY: 类型断言已复核 */ (Object.keys(NODE_META) as Array<NodeKind>).map((kind) => {
               const meta = NODE_META[kind];
               return (
                 <DropdownMenuItem

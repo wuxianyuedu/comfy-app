@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { copyGateDeps } from "./helpers/gate-repo";
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-changelog-fragments.cjs");
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 /**
  * 造一个只含被测碎片的临时仓库（脚本按自身位置解析仓库根，故必须把脚本

@@ -34,12 +34,7 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 /** 工坊控件形态：尺寸在工坊里是「比例 + 分辨率 / 比例 + 百万像素 + 倍数」组合控件，
  *  时长是秒数选择。`number` 是自定义口的「数字」类型（普通数值输入框）。 */
-export type EncapsulationControl =
-  | "text"
-  | "size"
-  | "image"
-  | "duration"
-  | "number";
+export type EncapsulationControl = "text" | "size" | "image" | "duration" | "number";
 
 export interface EncapsulationEntryStatus {
   /** 契约内稳定键（prompt / negative / size / first-frame / reference-image…）。 */
@@ -57,7 +52,7 @@ export interface EncapsulationEntryStatus {
 }
 
 export interface EncapsulationStatus {
-  entries: EncapsulationEntryStatus[];
+  entries: Array<EncapsulationEntryStatus>;
   /** **该模式的必备口全部已有落点** → 工坊可直接驱动这条工作流。
    *
    *  必备口随模式契约配置（见 `ModeContract.required`）；没配任何必备口的模式
@@ -65,9 +60,9 @@ export interface EncapsulationStatus {
   ready: boolean;
   /** 还没落到端口的必备口名（徽标 tooltip / 未配置提示用）。
    *  未配置的非必备口不算「不能跑」，不在这里 —— 那是提示，不是闸门。 */
-  missingRequired: string[];
+  missingRequired: Array<string>;
   /** 还没落到端口的**全部**口子名（含非必备），供「未配置」清单一览。 */
-  missingLabels: string[];
+  missingLabels: Array<string>;
   resolvedCount: number;
 }
 
@@ -76,11 +71,7 @@ export interface EncapsulationStatus {
 function controlFor(id: string): EncapsulationControl {
   if (id === "size") return "size";
   if (id === "duration") return "duration";
-  if (
-    id.startsWith("reference-image") ||
-    id === "first-frame" ||
-    id === "last-frame"
-  ) {
+  if (id.startsWith("reference-image") || id === "first-frame" || id === "last-frame") {
     return "image";
   }
   return "text";
@@ -117,7 +108,7 @@ export function deriveEncapsulationStatus(args: {
     label: string;
     control: EncapsulationControl;
   }>;
-  requiredInputs?: readonly string[];
+  requiredInputs?: ReadonlyArray<string>;
 }): EncapsulationStatus {
   const { io, paramMap, mode, contractEntries, requiredInputs } = args;
   /* 调用方（封装面板 / 库列表 / 生成前预检）传的是**存库原始形状**
@@ -179,7 +170,7 @@ export function deriveEncapsulationStatus(args: {
     )
   ).filter((id) => canonicalIds.has(id));
   const requiredSet = new Set<string>(required);
-  const mapped: EncapsulationEntryStatus[] = canonical.map((slot) => {
+  const mapped: Array<EncapsulationEntryStatus> = canonical.map((slot) => {
     const manual = manualTargetFor(mapping, slot.id, mode ?? null);
     const isSizeSlot = slot.id === "size";
     const target = isSizeSlot
@@ -208,11 +199,7 @@ export function deriveEncapsulationStatus(args: {
    *  图内的默认值兜底），把它算成「不能跑」会让「非必填参数不必连到工作流」这条
    *  口径失效（用户口径，ISSUE #720 第 2 条）。 */
   const sizeSlot = ordered.find((e) => e.id === "size");
-  if (
-    sizeSlot?.required &&
-    !sizeDetermined &&
-    !missingRequired.includes(sizeSlot.label)
-  ) {
+  if (sizeSlot?.required && !sizeDetermined && !missingRequired.includes(sizeSlot.label)) {
     missingRequired.push(sizeSlot.label);
   }
   return {
@@ -220,8 +207,6 @@ export function deriveEncapsulationStatus(args: {
     ready: missingRequired.length === 0,
     missingRequired,
     resolvedCount,
-    missingLabels: ordered
-      .filter((e) => e.targetIoKey === null)
-      .map((e) => e.label),
+    missingLabels: ordered.filter((e) => e.targetIoKey === null).map((e) => e.label),
   };
 }

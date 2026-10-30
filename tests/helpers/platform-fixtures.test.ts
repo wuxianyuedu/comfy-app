@@ -18,10 +18,8 @@ import { test } from "./platform-fixtures";
  * 两头都是本文件头那条纪律的形状：「不可能红的绿」比 skip 更糟。
  * 平台维度要的从来是「与宿主不同」，那这个「不同」就必须由宿主推出来。
  */
-function foreignPair(
-  real: NodeJS.Platform,
-): [NodeJS.Platform, NodeJS.Platform] {
-  const pool: NodeJS.Platform[] = ["win32", "linux", "darwin"];
+function foreignPair(real: NodeJS.Platform): [NodeJS.Platform, NodeJS.Platform] {
+  const pool: Array<NodeJS.Platform> = ["win32", "linux", "darwin"];
   const rest = pool.filter((p) => p !== real);
   const [first = "win32", second = "linux"] = rest;
   return [first, second];
@@ -34,10 +32,7 @@ describe("asPlatform", () => {
     expect(process.platform).toBe(other);
   });
 
-  test("两次切换后读到的是最后一次（可以切多段）", ({
-    asPlatform,
-    realPlatform,
-  }) => {
+  test("两次切换后读到的是最后一次（可以切多段）", ({ asPlatform, realPlatform }) => {
     const [first, second] = foreignPair(realPlatform);
     asPlatform(first);
     expect(process.platform).toBe(first);
@@ -49,10 +44,7 @@ describe("asPlatform", () => {
     expect(second).not.toBe(realPlatform);
   });
 
-  test("正常结束时平台已恢复（否则会污染同文件后面的用例）", ({
-    asPlatform,
-    realPlatform,
-  }) => {
+  test("正常结束时平台已恢复（否则会污染同文件后面的用例）", ({ asPlatform, realPlatform }) => {
     asPlatform(foreignPair(realPlatform)[0]);
     expect(process.platform).not.toBe(realPlatform);
     /* 收尾是 vitest 在用例返回之后跑的，所以这里只能靠**下一条**用例来看；
@@ -95,10 +87,7 @@ describe("throw 之后仍恢复", () => {
   /* 「用例中途 throw 时收尾照样跑」是 `test.extend` 相对手写 try/finally 的唯一实质
    * 收益，它有自己的执行者：`platform-fixtures.failure.test.ts`（用 `test.fails`
    * 故意抛一条，于是整份套件仍然绿、而恢复逻辑被删掉时当场红）。这里不重复。 */
-  test("正常路径下 asPlatform 生效，下一条读到干净平台", ({
-    asPlatform,
-    realPlatform,
-  }) => {
+  test("正常路径下 asPlatform 生效，下一条读到干净平台", ({ asPlatform, realPlatform }) => {
     asPlatform("linux");
     expect(process.platform).toBe("linux");
     expect(realPlatform).not.toBe("lost");

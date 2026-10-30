@@ -13,7 +13,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-comfyui-port-contract.cjs");
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 /** 与真实仓库保持一致的四个判据文件（只保留被判据读到的部分）。 */
 const BASELINE_FILES: Record<string, string> = {

@@ -26,7 +26,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 const SCRIPT = path.resolve(import.meta.dirname, "../scripts/merge-changelog-fragments.mjs");
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 /** 造一个临时「仓库」：脚本 + CHANGELOG.md + 若干碎片，并 `git init` 出一次提交。 */
 function fixture(
@@ -34,7 +34,7 @@ function fixture(
   fragments: Record<string, string>,
 ): {
   root: string;
-  run: (args?: string[]) => { ok: boolean; output: string };
+  run: (args?: Array<string>) => { ok: boolean; output: string };
   read: (rel: string) => string;
   exists: (rel: string) => boolean;
   head: string;
@@ -48,7 +48,7 @@ function fixture(
   for (const [name, body] of Object.entries(fragments)) {
     writeFileSync(path.join(root, "changelog.d", name), body);
   }
-  const git = (...args: string[]) =>
+  const git = (...args: Array<string>) =>
     execFileSync("git", args, {
       cwd: root,
       encoding: "utf8",
@@ -71,7 +71,7 @@ function fixture(
   return {
     root,
     head,
-    run: (args: string[] = []) => {
+    run: (args: Array<string> = []) => {
       try {
         return {
           ok: true,

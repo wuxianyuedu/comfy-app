@@ -34,9 +34,9 @@ export type RawNodeJson = {
   id?: string;
   type?: string;
   mode?: number;
-  widgets_values?: unknown[];
+  widgets_values?: Array<unknown>;
   inputs?: Record<string, unknown>;
-  outputs?: unknown[];
+  outputs?: Array<unknown>;
   _meta?: Record<string, unknown>;
   flags?: Record<string, unknown>;
   properties?: Record<string, unknown>;

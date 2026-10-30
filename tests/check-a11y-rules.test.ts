@@ -79,12 +79,16 @@ test("真加载：求值的是仓库根那份 `eslint.config.js`，且只求值�
    * 它**只**作为下面那条话术的读数，不当断言：首次求值的墙钟是机器读数，
    * 不是判据的性质（热检出 3.4s、冷检出 40s+、`.next/` 命中 1.1–1.7s）。 */
   const first = Date.now();
-  const flat = /* SAFETY: 类型断言已复核 */ (await loadEslintConfig()) as { rules?: unknown }[];
+  const flat = /* SAFETY: 类型断言已复核 */ (await loadEslintConfig()) as Array<{
+    rules?: unknown;
+  }>;
   const firstMs = Date.now() - first;
 
   // 第二次必须是「同一份」且是常数时间 —— 共进程的全部收益都在这一条上。
   const second = Date.now();
-  const again = /* SAFETY: 类型断言已复核 */ (await loadEslintConfig()) as { rules?: unknown }[];
+  const again = /* SAFETY: 类型断言已复核 */ (await loadEslintConfig()) as Array<{
+    rules?: unknown;
+  }>;
   const secondMs = Date.now() - second;
 
   expect(Array.isArray(flat)).toBe(true);

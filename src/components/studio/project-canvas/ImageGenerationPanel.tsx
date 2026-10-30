@@ -41,14 +41,14 @@ export interface ImageGenerationPanelProps {
   kind: "image" | "video" | "picture";
   d: CanvasNodeData;
   patch: (p: Partial<CanvasNodeData>) => void;
-  wfList: {
+  wfList: Array<{
     id: string;
     name: string;
     taskType?: string | null;
     sourcePath?: string | null;
-    modelTags?: string[];
-  }[];
-  modelTagLib: { id: string; name: string; count: number }[];
+    modelTags?: Array<string>;
+  }>;
+  modelTagLib: Array<{ id: string; name: string; count: number }>;
   wfIO: WorkflowIOMap | null;
   wfIOLoading: boolean;
   /** 工作流列表是否仍在加载。为 true 时工作流/模型选择区显示"加载中"而非空态。 */
@@ -122,10 +122,8 @@ export function ImageGenerationPanel({
     if (/VR2V|VRC2V/.test(up)) return "VR2V";
     if (/视频|VIDEO/.test(rawName) || up.includes("VIDEO")) return "T2V"; // 中文"视频"或VIDEO兜底
     // ── IMAGE 类
-    if (/文生图|T2I|TXT2IMG/.test(rawName) || /T2I|TXT2IMG/.test(up))
-      return "T2I";
-    if (/图生图|局部重绘|I2I|IMG2IMG/.test(rawName) || /I2I|IMG2IMG/.test(up))
-      return "I2I";
+    if (/文生图|T2I|TXT2IMG/.test(rawName) || /T2I|TXT2IMG/.test(up)) return "T2I";
+    if (/图生图|局部重绘|I2I|IMG2IMG/.test(rawName) || /I2I|IMG2IMG/.test(up)) return "I2I";
     if (up.includes("INPAINT")) return "Inpaint";
     if (up.includes("OUTPAINT")) return "Outpaint";
     if (up.includes("UPSCAL")) return "Upscale";
@@ -151,15 +149,11 @@ export function ImageGenerationPanel({
   const typeOptions = typeList.filter((typeOption) =>
     wfList.some((wfList) => effectiveTaskType(wfList) === typeOption.code),
   );
-  const typeKnown = typeOptions.some(
-    (typeOption) => typeOption.code === d.mode,
-  );
+  const typeKnown = typeOptions.some((typeOption) => typeOption.code === d.mode);
   const genTag = d.genModelTag ?? "";
   /* 模型 dropdown 列表只受「类型」影响，不受当前
    * 已选 genModelTag 影响 —— 否则选了 z-Anime 后下拉只剩一项。 */
-  const typeFilteredWorkflows = wfList.filter(
-    (workflow) => effectiveTaskType(workflow) === d.mode,
-  );
+  const typeFilteredWorkflows = wfList.filter((workflow) => effectiveTaskType(workflow) === d.mode);
   // Q2=A：工作流同时按 taskType + 模型标签 严格匹配
   const workflowOptions = typeFilteredWorkflows.filter((workflow) =>
     genTag ? (workflow.modelTags ?? []).includes(genTag) : true,
@@ -182,9 +176,7 @@ export function ImageGenerationPanel({
     setWfModes(null);
     /* 切类型时若当前模型标签在新类型下没有工作流
      * 也清掉，避免 SelectMenu 残留「幽灵选项」。如仍匹配则保留。 */
-    const newTypeWfs = wfList.filter(
-      (wfList) => effectiveTaskType(wfList) === code,
-    );
+    const newTypeWfs = wfList.filter((wfList) => effectiveTaskType(wfList) === code);
     const newAvailTags = new Set<string>();
     for (const w of newTypeWfs) {
       for (const tag of w.modelTags ?? []) newAvailTags.add(tag);
@@ -210,9 +202,7 @@ export function ImageGenerationPanel({
     // 多点一次。注意保持与显式换工作流等同的清空（workflowInputs/sinkId），
     // 并与下面 selectWorkflow 的字段集合完全一致；否则会出现「自动选的 wf
     // 比用户手动选的 wf 字段少一截」的诡异状态。
-    const newTypeWfs = wfList.filter(
-      (wfList) => effectiveTaskType(wfList) === d.mode,
-    );
+    const newTypeWfs = wfList.filter((wfList) => effectiveTaskType(wfList) === d.mode);
     const candidateWfs = newTypeWfs.filter((workflow) =>
       name ? (workflow.modelTags ?? []).includes(name) : true,
     );
@@ -275,10 +265,7 @@ export function ImageGenerationPanel({
             onChange={selectType}
             options={typeOptions.map((typeOption) => typeOption.code)}
             labels={Object.fromEntries(
-              typeOptions.map((typeOption) => [
-                typeOption.code,
-                typeOption.label,
-              ]),
+              typeOptions.map((typeOption) => [typeOption.code, typeOption.label]),
             )}
             placeholder="选择类型"
           />
@@ -297,12 +284,7 @@ export function ImageGenerationPanel({
               <SelectMenu
                 value={genTag}
                 onChange={selectModelTag}
-                options={[
-                  "",
-                  ...modelTagOptions.map(
-                    (modelTagOption) => modelTagOption.name,
-                  ),
-                ]}
+                options={["", ...modelTagOptions.map((modelTagOption) => modelTagOption.name)]}
                 labels={{
                   "": <span className="text-ink-muted">全部模型</span>,
                   ...Object.fromEntries(
@@ -316,11 +298,7 @@ export function ImageGenerationPanel({
               />
             ) : (
               <div className="text-ink-muted text-2xs">
-                {wfListLoading
-                  ? "加载中…"
-                  : genTag
-                    ? "当前模型下无工作流"
-                    : "该类型暂无工作流"}
+                {wfListLoading ? "加载中…" : genTag ? "当前模型下无工作流" : "该类型暂无工作流"}
               </div>
             )}
           </Field>
@@ -331,24 +309,15 @@ export function ImageGenerationPanel({
               <SelectMenu
                 value={d.workflowId ?? ""}
                 onChange={selectWorkflow}
-                options={workflowOptions.map(
-                  (workflowOption) => workflowOption.id,
-                )}
+                options={workflowOptions.map((workflowOption) => workflowOption.id)}
                 labels={Object.fromEntries(
-                  workflowOptions.map((workflowOption) => [
-                    workflowOption.id,
-                    workflowOption.name,
-                  ]),
+                  workflowOptions.map((workflowOption) => [workflowOption.id, workflowOption.name]),
                 )}
                 placeholder="选择工作流"
               />
             ) : (
               <div className="text-ink-muted text-2xs">
-                {wfListLoading
-                  ? "加载中…"
-                  : genTag
-                    ? "模型「" + genTag + "」下"
-                    : ""}
+                {wfListLoading ? "加载中…" : genTag ? "模型「" + genTag + "」下" : ""}
                 {wfListLoading ? "" : "暂无该类型工作流"}
               </div>
             )}

@@ -27,7 +27,7 @@ export interface RawInputEntry {
   __comboClass?: string;
   __comboField?: string;
   /** COMBO 候选列表（object_info 解析成功时写入，随 detail 下发） */
-  comboOptions?: string[];
+  comboOptions?: Array<string>;
   /** 子工作流封装节点暴露口背后的「内部真实字段」。
    *
    *  wrapper 的 `inputs[]` 里那一条是本层生成的别名槽位（ComfyUI 为
@@ -50,15 +50,15 @@ export interface RawOutputEntry {
   localized?: string;
   label?: string;
   type: string;
-  links: number[];
+  links: Array<number>;
   isBoundary?: boolean;
 }
 
 /** sparse raw-node 元数据（detail.rawNodes / subgraph rawNodeMeta）。 */
 export interface RawNodeMeta {
   id: string;
-  widgets_values: unknown[];
-  outputs: RawOutputEntry[];
+  widgets_values: Array<unknown>;
+  outputs: Array<RawOutputEntry>;
   flags: Record<string, unknown>;
   /** 自定义节点 properties（rgthree Fast Groups Bypasser 等）；子图路径未采集 */
   properties?: Record<string, unknown>;
@@ -71,7 +71,7 @@ export interface DetailNodeView {
   class_type: string;
   title: string;
   is_subgraph: boolean;
-  raw_inputs: RawInputEntry[];
+  raw_inputs: Array<RawInputEntry>;
   size?: [number, number];
   is_input_endpoint?: boolean;
   is_output_endpoint?: boolean;
@@ -83,7 +83,7 @@ export interface DetailNodeView {
 
 /** RAW 视图数据包（从 rawJson 派生、保留 subgraph wrapper）。 */
 export interface RawViewPacket {
-  nodes: DetailNodeView[];
+  nodes: Array<DetailNodeView>;
   positions: Record<string, [number, number]>;
   graph: Record<string, ApiWorkflowNode>;
 }

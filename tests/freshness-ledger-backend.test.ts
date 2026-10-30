@@ -172,8 +172,8 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
 
   /** 记账式 git：按脚本给的回执依次返回，并把每次的参数留下来。 */
   function fakeGit(script: Array<{ status: number; stdout?: string; stderr?: string }>) {
-    const calls: string[][] = [];
-    const run = (args: string[]) => {
+    const calls: Array<Array<string>> = [];
+    const run = (args: Array<string>) => {
       const step = script[calls.length] ?? { status: 0 };
       calls.push(args);
       return { ...step, stdout: step.stdout ?? "", stderr: step.stderr ?? "" };
@@ -186,7 +186,8 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
     return fs.mkdtempSync(path.join(os.tmpdir(), "freshness-push-"));
   }
 
-  const resetArgs = (calls: string[][]) => calls.find((a) => a[0] === "reset" && a[1] === "-q");
+  const resetArgs = (calls: Array<Array<string>>) =>
+    calls.find((a) => a[0] === "reset" && a[1] === "-q");
 
   it("commit 被拒 ⇒ 原因带 git 的 stderr 原文，并把 add 撤回", () => {
     const { run, calls } = fakeGit([

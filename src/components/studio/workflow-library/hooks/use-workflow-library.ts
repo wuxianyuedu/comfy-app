@@ -42,13 +42,13 @@ export const LIST_STALL_MS = 8_000;
 
 export interface WorkflowLibraryController {
   /** 过滤后的已载入工作流。 */
-  workflows: WorkflowRow[];
+  workflows: Array<WorkflowRow>;
   /** 过滤后的本地待载入项。 */
-  pendingRows: PendingRow[];
+  pendingRows: Array<PendingRow>;
   sourceCounts: ReturnType<typeof countBySource>;
   typeCounts: ReturnType<typeof countByType>;
   /** 模型标签（用于模型筛选页签）。 */
-  modelTags: { id: string; name: string; count: number }[];
+  modelTags: Array<{ id: string; name: string; count: number }>;
   /* 筛选 / 搜索状态 */
   search: string;
   setSearch: (value: string) => void;
@@ -105,9 +105,9 @@ export interface WorkflowLibraryController {
   loadModelTags: () => void;
   handleUse: (id: string, meta?: { name: string; taskType: string }) => void;
   /** 持久化工作流类型（modes + defaultMode，defaultMode 回写 taskType）。 */
-  patchModes: (id: string, modes: string[], defaultMode: string) => Promise<void>;
+  patchModes: (id: string, modes: Array<string>, defaultMode: string) => Promise<void>;
   /** 持久化模型标签绑定。 */
-  patchModelTags: (id: string, names: string[]) => Promise<void>;
+  patchModelTags: (id: string, names: Array<string>) => Promise<void>;
   /** 整体落库 workflowIO（详情预览的 seed「控件后行为」等参数级配置）。 */
   patchWorkflowIO: (id: string, workflowIO: Record<string, unknown>) => Promise<void>;
   /** 整体落库 paramMap（详情预览拖线改对外参数落点）。 */
@@ -146,8 +146,8 @@ export function useWorkflowLibrary(
   const deleteMut = useMutation(trpc.workflow.delete.mutationOptions());
   const resyncMut = useMutation(trpc.workflow.resync.mutationOptions());
 
-  const [workflows, setWorkflows] = useState<WorkflowRow[]>([]);
-  const [localPending, setLocalPending] = useState<PendingRow[]>([]);
+  const [workflows, setWorkflows] = useState<Array<WorkflowRow>>([]);
+  const [localPending, setLocalPending] = useState<Array<PendingRow>>([]);
   const [search, setSearch] = useState("");
 
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
@@ -256,11 +256,11 @@ export function useWorkflowLibrary(
 
   const modelTags = useMemo(
     () =>
-      /* SAFETY: 类型断言已复核 */ (tagsQ.data?.tags ?? []) as {
+      /* SAFETY: 类型断言已复核 */ (tagsQ.data?.tags ?? []) as Array<{
         id: string;
         name: string;
         count: number;
-      }[],
+      }>,
     [tagsQ.data],
   );
 

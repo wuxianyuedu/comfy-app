@@ -35,11 +35,7 @@ import { disabledCategories, useLogCategoryStore } from "./log-category-store";
 
 /* 格式化口径落在 log-format（视图与 store 共用一份）；这里按原路径转出，
  * 既有导入（测试、面板）逐字不变。 */
-export {
-  formatEntryForClipboard,
-  formatForClipboard,
-  formatTime,
-} from "./log-format";
+export { formatEntryForClipboard, formatForClipboard, formatTime } from "./log-format";
 /* 类型与共享叶子（`log-types`）+ 采集 / 解析 / 过滤纯函数（`log-analysis`）
  * 都从这里进入；主文件只留 store state / actions / selector。类型与函数
  * 通过底部 `export * from` 一并 re-export，消费者
@@ -80,14 +76,14 @@ function welcomeEntry(): LogEntry {
 }
 
 export interface LogStoreState {
-  logs: LogEntry[];
+  logs: Array<LogEntry>;
   /**
    * 因内存上限（`LOG_STORE_MAX`）被折叠掉的更早日志**累计**条数。上限是刻意
    * 恢复的（见 appendFileLogs：真新行才推进 revision、截断不推进，满足文件早先
    * 「将来若恢复上限须恢复身份判据」的约束）。面板据此显示「更早 N 条已折叠」。
    */
   droppedTotal: number;
-  filteredLogs: LogEntry[];
+  filteredLogs: Array<LogEntry>;
   filter: LogFilter;
   /** 来源筛选（#262：启动日志与应用运行日志混在一屏，需要能分开看）。 */
   origin: LogOriginFilter;
@@ -211,7 +207,7 @@ export interface LogStoreState {
   /** 用户点击「回到最新」：解绑贴底基线并回到第 1 页（见 jumpToLatest）。 */
   jumpToLatest: () => void;
   addEntry: (entry: Omit<LogEntry, "id" | "time" | "seq">) => void;
-  appendFileLogs: (entries: LogEntry[]) => void;
+  appendFileLogs: (entries: Array<LogEntry>) => void;
   setSessionStart: (sessionStart: number | null) => void;
   /** 记录当前服务端进程标识；变化时清掉时间线（跨进程的行不可比）。 */
   setBootId: (bootId: string | null) => void;
@@ -247,7 +243,7 @@ export type LogPanelState = LogStoreState;
  * 是为了让「面板读哪些状态」这件事只写一遍、只在一个文件里（视图层零状态拼装）。
  */
 export interface LogPanelSlice {
-  filteredLogs: LogEntry[];
+  filteredLogs: Array<LogEntry>;
   filter: LogFilter;
   origin: LogOriginFilter;
   search: string;
@@ -297,8 +293,8 @@ export const LOG_STORE_MAX = 5000;
  *
  * 摘键是 O(被折叠条数)，与「重建整张表」的 O(时间线) 差一个量级。
  */
-function capTimeline(logs: LogEntry[]): {
-  logs: LogEntry[];
+function capTimeline(logs: Array<LogEntry>): {
+  logs: Array<LogEntry>;
   dropped: number;
 } {
   if (logs.length <= LOG_STORE_MAX) return { logs, dropped: 0 };
@@ -310,7 +306,7 @@ function capTimeline(logs: LogEntry[]): {
   return { logs: kept, dropped: cut };
 }
 
-function derive(logs: LogEntry[], search: string, revision: number) {
+function derive(logs: Array<LogEntry>, search: string, revision: number) {
   return {
     logs,
     counts: computeCounts(logs, search),
@@ -444,19 +440,12 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       /* 与 `appendFileLogs` 走**同一支**索引复用版合并：`addEntry` 是
        * 控制台 / 系统行的入口，同样是「一条一条来」，同样不该每轮建两张全表
        * Map（见 `appendFileLogs` 的说明）。 */
-      const merged = mergeTimelineIndexed(
-        state.logs,
-        [full],
-        indexOfTimeline(state.logs),
-      );
+      const merged = mergeTimelineIndexed(state.logs, [full], indexOfTimeline(state.logs));
       const logs = merged.logs;
       rememberTimelineIndex(logs, merged.index);
       const capped = capTimeline(logs);
       return {
-        ...applyView(
-          derive(capped.logs, state.search, state.revision + 1),
-          viewOf(state),
-        ),
+        ...applyView(derive(capped.logs, state.search, state.revision + 1), viewOf(state)),
         droppedTotal: state.droppedTotal + capped.dropped,
       };
     }),
@@ -471,11 +460,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
        * 是不是新的」若靠就地建两张全表 Map 来判，实测 5000 条时每轮白花
        * 2.27ms（占整次合并的 97%，排序只占 0.11ms）。索引按数组引用缓存在
        * `log-analysis` 里，因此这里只取不建。 */
-      const merged = mergeTimelineIndexed(
-        state.logs,
-        fresh,
-        indexOfTimeline(state.logs),
-      );
+      const merged = mergeTimelineIndexed(state.logs, fresh, indexOfTimeline(state.logs));
       const logs = merged.logs;
       /* 全批是重复行（或全被会话起点裁掉）→ 时间线没变，什么都不推进。 */
       if (logs === state.logs) return { logs: state.logs };
@@ -487,10 +472,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
        * 旧行累计进 droppedTotal，面板据此显示「更早 N 条已折叠」。 */
       const capped = capTimeline(logs);
       return {
-        ...applyView(
-          derive(capped.logs, state.search, state.revision + 1),
-          viewOf(state),
-        ),
+        ...applyView(derive(capped.logs, state.search, state.revision + 1), viewOf(state)),
         droppedTotal: state.droppedTotal + capped.dropped,
       };
     }),
@@ -504,11 +486,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       return {
         sessionStart,
         ...applyView(
-          derive(
-            logs,
-            state.search,
-            changed ? state.revision + 1 : state.revision,
-          ),
+          derive(logs, state.search, changed ? state.revision + 1 : state.revision),
           viewOf(state),
         ),
       };
@@ -619,13 +597,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
          * 第 1 页恒为 0（窗口就是最新一段，其后本来就没有东西），否则用户一停下
          * 就会被报「有 200 条新的日志」——而那 200 条是他自己刚翻过去的。 */
         viewBaselineAfter:
-          nextPage === 1
-            ? 0
-            : countAfterPage(
-                state.filteredLogs.length,
-                nextPage,
-                state.pageSize,
-              ),
+          nextPage === 1 ? 0 : countAfterPage(state.filteredLogs.length, nextPage, state.pageSize),
         followBaseline: Math.max(0, state.filteredLogs.length - 1),
         followResetAt: 0,
         ...anchorOf(state),
@@ -718,8 +690,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
    * 只是不受分页窗口限制——「全部日志」指的是一整类，不是一页。 */
   copyAll: () => copyLogText(formatForClipboard(get().filteredLogs)),
   download: () => downloadLogText(formatForClipboard(get().filteredLogs)),
-  saveExport: (label) =>
-    saveLogExport(label, formatForClipboard(get().filteredLogs)),
+  saveExport: (label) => saveLogExport(label, formatForClipboard(get().filteredLogs)),
   saveDiagnostics: () => saveDiagnosticsPackage(),
 }));
 
@@ -733,9 +704,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
 useLogCategoryStore.subscribe((state, prev) => {
   if (state.enabled === prev.enabled) return;
   const s = useLogStore.getState();
-  useLogStore.setState(
-    applyView(derive(s.logs, s.search, s.revision), viewOf(s)),
-  );
+  useLogStore.setState(applyView(derive(s.logs, s.search, s.revision), viewOf(s)));
 });
 
 /* ── 已读水位与贴底基线 ─────────────────────────────────────────────── */
@@ -753,7 +722,7 @@ useLogCategoryStore.subscribe((state, prev) => {
  * 身份口径下，新条目（id 新）天然不在水位里，被挤掉多少条旧行都不影响计数，
  * 因此贴底位置也不会被截断反复拉动。
  */
-function watermarkIds(entries: LogEntry[]): ReadonlySet<string> {
+function watermarkIds(entries: Array<LogEntry>): ReadonlySet<string> {
   const ids = new Set<string>();
   for (const entry of entries) ids.add(entry.id);
   return ids;
@@ -807,10 +776,10 @@ function headOfFirstPage(state: LogStoreState): string | null {
  * 「最新一页」总在 page=1，与 `counts.all` 无关。
  */
 export function selectPageLogs(
-  logs: LogEntry[],
+  logs: Array<LogEntry>,
   page: number,
   pageSize: number,
-): { entries: LogEntry[]; page: number; totalPages: number } {
+): { entries: Array<LogEntry>; page: number; totalPages: number } {
   /* 倒序分页的算式收在 `~/lib/page-window`（规范 16 §16.2.4.67）——
    * 同一份账（越界页码钳回、`pageSize` 为 0 不许给出 `Infinity` 页）
    * 此前在这里与视图侧各算一遍。 */
@@ -830,10 +799,10 @@ export function selectPageLogs(
  * DOM 节点不重建，选区自然留住。
  */
 export function selectFirstPageWindow(
-  logs: LogEntry[],
+  logs: Array<LogEntry>,
   anchorId: string | null,
   pageSize: number,
-): { entries: LogEntry[]; truncatedFromEnd: number } {
+): { entries: Array<LogEntry>; truncatedFromEnd: number } {
   const size = Math.max(1, pageSize);
   if (anchorId !== null) {
     const at = logs.findIndex((entry) => entry.id === anchorId);
@@ -849,10 +818,7 @@ export function selectFirstPageWindow(
  * 面板是否「已经不在最新」：不在第 1 页，或用户手动上滚离开了底部。
  * 两者都必须给「回到最新」出口，否则用户会以为日志不再刷新（ISSUE #262）。
  */
-export function selectShouldPinToLatest(
-  page: number,
-  autoScroll: boolean,
-): boolean {
+export function selectShouldPinToLatest(page: number, autoScroll: boolean): boolean {
   return page !== 1 || !autoScroll;
 }
 

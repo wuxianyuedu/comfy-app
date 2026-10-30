@@ -48,13 +48,13 @@ const vectors = /* SAFETY: 类型断言已复核 */ (
 ).vectors;
 
 const original = process.env[EXECUTOR_ENV_KEY];
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 
 /* 去注释后再比对：判据针对的是**代码**，而注释里正当会出现「漏了 `trim()`」
  * 这类叙述（解释为什么要收口），拿原文去匹配会自打自。实现全仓只写一次，
  * 见 `./helpers/strip-comments`（§12.18）。 */
 
-function tempEnvFile(lines: string[]): string {
+function tempEnvFile(lines: Array<string>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "executor-mode-"));
   tmpDirs.push(dir);
   const file = path.join(dir, ".env");

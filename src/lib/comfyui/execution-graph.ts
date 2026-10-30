@@ -48,7 +48,7 @@ export function isVirtualNodeType(type: string): boolean {
 export interface ExecutionPrep {
   graph: Record<string, ApiWorkflowNode>;
   /** 被剔除的节点 id（bypass / 静音 / 纯前端节点） */
-  removed: string[];
+  removed: Array<string>;
   /** 因上游被静音而彻底断链、只能丢弃的入参数量 */
   droppedInputs: number;
 }
@@ -78,7 +78,7 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
   }
   const graph: Record<string, PrepEntry> = {};
 
-  const removed: string[] = [];
+  const removed: Array<string> = [];
   for (const [id, n] of Object.entries(input ?? {})) {
     const rec = asRecord(n);
     if (!rec) continue;
@@ -115,7 +115,7 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
     if (literal !== undefined) return { kind: "value", value: literal };
 
     const orderRaw = meta.inputOrder;
-    const order: string[] = Array.isArray(orderRaw)
+    const order: Array<string> = Array.isArray(orderRaw)
       ? orderRaw.map((x: unknown) => String(x))
       : Object.keys(node.inputs);
     const types = asRecord(meta.inputTypes) ?? {};
@@ -127,7 +127,7 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
 
     // ComfyUI 的顺序：先试与输出槽同序号的入参，再遍历其余入参做类型匹配。
     const seen = new Set<string>();
-    const candidates: string[] = [];
+    const candidates: Array<string> = [];
     const sameSlot = order[originSlot];
     if (sameSlot) {
       candidates.push(sameSlot);

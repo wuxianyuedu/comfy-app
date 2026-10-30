@@ -9,7 +9,7 @@
 import type { LLMTool } from "~/lib/llm/types";
 
 /** 工坊 Agent 的全部工具定义（OpenAI function calling 格式）。 */
-export const WORKSHOP_AGENT_TOOL_DEFS: LLMTool[] = [
+export const WORKSHOP_AGENT_TOOL_DEFS: Array<LLMTool> = [
   {
     type: "function",
     function: {
@@ -31,14 +31,7 @@ export const WORKSHOP_AGENT_TOOL_DEFS: LLMTool[] = [
           title: { type: "string", description: "项目标题" },
           type: {
             type: "string",
-            enum: [
-              "short_video",
-              "micro_film",
-              "animation",
-              "ad",
-              "comic",
-              "other",
-            ],
+            enum: ["short_video", "micro_film", "animation", "ad", "comic", "other"],
             description: "项目类型",
           },
           tone: { type: "string", description: "基调/情绪" },
@@ -73,8 +66,7 @@ export const WORKSHOP_AGENT_TOOL_DEFS: LLMTool[] = [
         properties: {
           instruction: {
             type: "string",
-            description:
-              "对现有剧本的修改要求（如『扩写第三场景』『把基调改更轻松』）",
+            description: "对现有剧本的修改要求（如『扩写第三场景』『把基调改更轻松』）",
           },
         },
         required: ["instruction"],
@@ -94,8 +86,7 @@ export const WORKSHOP_AGENT_TOOL_DEFS: LLMTool[] = [
     type: "function",
     function: {
       name: "add_character",
-      description:
-        "手动添加或让对话模型设计一个新角色并加入角色列表。提供角色名与简要描述。",
+      description: "手动添加或让对话模型设计一个新角色并加入角色列表。提供角色名与简要描述。",
       parameters: {
         type: "object",
         properties: {
@@ -157,7 +148,7 @@ export const WORKSHOP_AGENT_TOOL_DEFS: LLMTool[] = [
 ];
 
 /** 工坊全部工具 → OpenAI 兼容的 tools 请求数组。 */
-export function workshopOpenAITools(): LLMTool[] {
+export function workshopOpenAITools(): Array<LLMTool> {
   return WORKSHOP_AGENT_TOOL_DEFS;
 }
 

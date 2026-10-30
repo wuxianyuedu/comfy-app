@@ -25,12 +25,12 @@ type WfListItem = {
   name: string;
   taskType?: string;
   sourcePath?: string | null;
-  modelTags?: string[];
+  modelTags?: Array<string>;
 };
 type TagLibItem = { id: string; name: string; count: number };
 let sharedListsInflight: Promise<{
-  wfList: WfListItem[];
-  modelTagLib: TagLibItem[];
+  wfList: Array<WfListItem>;
+  modelTagLib: Array<TagLibItem>;
 }> | null = null;
 
 export interface UseWorkflowIoArgs {
@@ -44,12 +44,12 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
    *  磁盘上的本地导入与用户上传的在线工作流（选项标签里的圆点 +
    *  「本机 / 在线」徽标）。DB 查询本来就
    *  暴露了它；缺的只是客户端类型。 */
-  const [wfList, setWfList] = useState<WfListItem[]>([]);
+  const [wfList, setWfList] = useState<Array<WfListItem>>([]);
   // 工作流列表加载完成前一直是 true。列表还在途时下拉
   // **不得**渲染「暂无工作流」。
   const [wfListLoading, setWfListLoading] = useState(true);
   // 用户级模型标签库（全局），供 WorkflowNode 的模型筛选 chip 使用
-  const [modelTagLib, setModelTagLib] = useState<TagLibItem[]>([]);
+  const [modelTagLib, setModelTagLib] = useState<Array<TagLibItem>>([]);
   // 画布节点内的会话级模型筛选（不写 patch，仅当前节点 lifespan 生效）
   const [modelFilter, setModelFilter] = useState<string>("all");
   useEffect(() => {
@@ -60,7 +60,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
      *  模块级 in-flight 去重让并发挂载只发 2 次,且不做 TTL 缓存(不会把
      *  新建工作流的变更挡在过期列表外)。 */
     let alive = true;
-    const apply = (data: { wfList: WfListItem[]; modelTagLib: TagLibItem[] }) => {
+    const apply = (data: { wfList: Array<WfListItem>; modelTagLib: Array<TagLibItem> }) => {
       if (!alive) return;
       setWfList(data.wfList);
       setModelTagLib(data.modelTagLib);
@@ -72,7 +72,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
       });
     } else {
       const p = (async () => {
-        const data: { wfList: WfListItem[]; modelTagLib: TagLibItem[] } = {
+        const data: { wfList: Array<WfListItem>; modelTagLib: Array<TagLibItem> } = {
           wfList: [],
           modelTagLib: [],
         };

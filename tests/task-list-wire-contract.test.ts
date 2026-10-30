@@ -38,9 +38,7 @@ import {
 } from "~/lib/media/video-queue-client";
 
 const { queryMock, mutateMock } = vi.hoisted(() => ({
-  queryMock: vi.fn<(input: { take?: number }) => Promise<unknown>>(
-    async () => ({ tasks: [] }),
-  ),
+  queryMock: vi.fn<(input: { take?: number }) => Promise<unknown>>(async () => ({ tasks: [] })),
   mutateMock: vi.fn<(input: unknown) => Promise<unknown>>(async () => ({
     taskId: "gen-1",
   })),
@@ -90,9 +88,9 @@ const COVER = (id: string, localPath: string, mediaType = "image"): Row => ({
  *  `./helpers/wire-contract`（第二份契约判据动手时抽的，不在调用点重抄）。 */
 async function wireRows(
   input: { take?: number } = { take: 200 },
-): Promise<Record<string, unknown>[]> {
+): Promise<Array<Record<string, unknown>>> {
   const rows = await createCaller(makeCtx()).list(input);
-  const viaWire = throughJsonWire<{ tasks: Record<string, unknown>[] }>(rows);
+  const viaWire = throughJsonWire<{ tasks: Array<Record<string, unknown>> }>(rows);
   return viaWire.tasks;
 }
 
@@ -146,9 +144,7 @@ describe("task.list 的列名 ↔ 两份前端镜像", () => {
   it("反向：线上发的列并不全在镜像里（镜像是收窄，不是逐字复制）", async () => {
     const rows = await wireRows();
     const mirrored = new Set(Object.keys(videoTaskRowSchema.shape));
-    const unmirrored = Object.keys(rows[0]!).filter(
-      (key) => !mirrored.has(key),
-    );
+    const unmirrored = Object.keys(rows[0]!).filter((key) => !mirrored.has(key));
     expect(unmirrored).toContain("cover");
     expect(unmirrored).toContain("mediaType");
   });
@@ -229,9 +225,7 @@ describe("fetchVideoTasks（真 router → 传输 → 客户端）", () => {
 
 describe("parseVideoRows 的缺省口径", () => {
   it("prompt / workflowName 缺省补空串、error 缺省补 null（视图可直接 .trim()）", () => {
-    const [row] = parseVideoRows([
-      { id: "t1", type: "VIDEO", status: "QUEUED", videoPath: null },
-    ]);
+    const [row] = parseVideoRows([{ id: "t1", type: "VIDEO", status: "QUEUED", videoPath: null }]);
     expect(row).toEqual({
       id: "t1",
       status: "QUEUED",

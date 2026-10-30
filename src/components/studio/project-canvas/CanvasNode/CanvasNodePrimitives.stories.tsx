@@ -31,7 +31,7 @@ import {
 const STATUSES = /* SAFETY: 类型断言已复核 */ Object.keys(STATUS_LABEL) as Array<
   keyof typeof STATUS_LABEL
 >;
-const KINDS = /* SAFETY: 类型断言已复核 */ Object.keys(NODE_META) as NodeKind[];
+const KINDS = /* SAFETY: 类型断言已复核 */ Object.keys(NODE_META) as Array<NodeKind>;
 
 const meta = {
   title: "Studio/CanvasNodePrimitives",

@@ -46,7 +46,7 @@ import type { TaskRepoDb } from "./repository-task-impl-types";
  * 且**判据的唯一定义**在 `../task-state` 的 `TERMINAL_TASK_STATUSES`，
  * 两边只是各自的 `[...tuple]`，语义与来源同步。
  */
-const TERMINAL_STATES: string[] = [...TERMINAL_TASK_STATUSES];
+const TERMINAL_STATES: Array<string> = [...TERMINAL_TASK_STATUSES];
 
 /** `claimedBy` 列的值域（ADR §6 的两种执行器归属）。提交侧（tRPC `generate`，
  *  3-B 接线）按 `COMFY_EXECUTOR` env 决定写哪个值；NULL 语义归 inline。 */
@@ -65,7 +65,7 @@ function ownedBy(owner: TaskClaimMode) {
 /** 已知的归属片（值域同上）。回收器要用它的**补集**：一条 `QUEUED` 行只要属于
  *  任何一片，就是「还在等自己那片的领取循环」，不是死信——`ownedBy()` 是正向形态，
  *  这里是反向形态，两者必须一起改。 */
-const KNOWN_CLAIM_MODES: string[] = ["inline", "host"];
+const KNOWN_CLAIM_MODES: Array<string> = ["inline", "host"];
 
 /** `ownedBy()` 的内存侧同判据（行已经在手里、只需分类「为什么没写进去」时用）。
  *  两条必须同步改：SQL 侧漏一行、内存侧多认一行，就会把别人的行判成「归我」。 */
@@ -103,7 +103,7 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
     /** 排队行的只读窥视（P3 §5 ADR §14 D1 的第二刀）：领取循环在「本进程现在还
      *  跑不动」时需要告诉用户它在等什么，而**不能**为此就把行领走（领了不跑正是
      *  这一刀要消灭的形态）。只取 id、按提交序、不改任何状态。 */
-    async listQueuedIds(owner: TaskClaimMode, take: number): Promise<string[]> {
+    async listQueuedIds(owner: TaskClaimMode, take: number): Promise<Array<string>> {
       const rows = await db
         .select({ id: task.id })
         .from(task)
@@ -127,7 +127,7 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
      * 未带归属的建行）与 `'inline'`。领取时把 `claimedBy` 覆写为 `mode`，NULL
      * 行由此转为显式归属；reaper 分片（`listStale*` 的 `owner`）用同一归属谓词。
      */
-    async claimNextQueued(mode: TaskClaimMode, take: number): Promise<string[]> {
+    async claimNextQueued(mode: TaskClaimMode, take: number): Promise<Array<string>> {
       const candidates = db
         .select({ id: task.id })
         .from(task)
@@ -486,7 +486,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
     async finalizeFailure(
       taskId: string,
       error: string,
-      validationErrors?: unknown[],
+      validationErrors?: Array<unknown>,
     ): Promise<TaskWriteOutcome> {
       const updated = await db
         .update(task)
@@ -555,7 +555,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
      *
      *  只带归属守卫、**不带终态守卫**：收口之后仍会有尾随日志（耗时、产物路径、
      *  取消原因），按终态挡掉就等于把失败原因从面板上抹掉——那条正是排障要看的。 */
-    async replaceLogs(taskId: string, logs: unknown[]): Promise<void> {
+    async replaceLogs(taskId: string, logs: Array<unknown>): Promise<void> {
       await db
         .update(task)
         .set({ logs })
@@ -570,7 +570,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
      *  与 `replaceLogs` 分开而不是并成一条 UPDATE：日志走 200ms 防抖、每几秒一次，
      *  原文整包可以到几千行，跟着防抖重写等于白写几十遍。这里不吞错——`persistRawCli`
      *  那一层统一决定失败怎么露出来。 */
-    async replaceRawCli(taskId: string, lines: string[]): Promise<void> {
+    async replaceRawCli(taskId: string, lines: Array<string>): Promise<void> {
       await db
         .update(task)
         .set({ rawCli: lines })
@@ -579,14 +579,14 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
 
     /** 「查看完整输出」入口的行读（跨归属：这是给用户看的读，不是执行侧的写）。
      *  只取这一列，别的字段调用方一个都不需要。 */
-    async findRawCli(taskId: string): Promise<string[] | null> {
+    async findRawCli(taskId: string): Promise<Array<string> | null> {
       const rows = await db
         .select({ rawCli: task.rawCli })
         .from(task)
         .where(eq(task.id, taskId))
         .limit(1);
       const value = rows[0]?.rawCli;
-      return Array.isArray(value) ? /* SAFETY: 类型断言已复核 */ (value as string[]) : null;
+      return Array.isArray(value) ? /* SAFETY: 类型断言已复核 */ (value as Array<string>) : null;
     },
   };
 }

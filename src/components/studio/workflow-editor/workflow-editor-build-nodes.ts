@@ -58,7 +58,7 @@ export interface BuildInitialNodesCtx {
   detail: WorkflowDetail | null;
   scopeDetail: WorkflowDetail | null;
   rawMetaById: Record<string, RawNodeMeta>;
-  outSlotNameById: Record<string, string[]>;
+  outSlotNameById: Record<string, Array<string>>;
   paramMap: Record<string, unknown>;
   onEnterSubgraph?: (
     id: string,
@@ -201,7 +201,7 @@ const buildBoundaryGroup = (
 function layoutBoundaryPins(
   detail: WorkflowDetail,
   middlePos: Record<string, { x: number; y: number }>,
-): Node[] {
+): Array<Node> {
   if (!detail.boundaryPins) return [];
   const mIds = Object.keys(middlePos);
   if (mIds.length === 0) return [];
@@ -242,7 +242,7 @@ function layoutBoundaryPins(
    *  让最上面那个 pin 落在标题栏 + 约 GROUP_PAD_X 之内。
    *  输入与输出是「朝内」的，所以左侧取 minX、右侧取 maxX。 */
   const computeGroupDefault = (
-    list: ([number, number] | null)[],
+    list: Array<[number, number] | null>,
     side: "left" | "right",
   ): { x: number; y: number } | null => {
     let anchorX = side === "left" ? Infinity : -Infinity;
@@ -290,12 +290,12 @@ function layoutBoundaryPins(
     return r ? r[1] - outputsGroupPos.y : stackRel(i);
   });
   const minHeight = GROUP_TITLE_BAR + GROUP_PAD_Y_BOTTOM;
-  const computedHeight = (relYs: number[]): number => {
+  const computedHeight = (relYs: Array<number>): number => {
     if (relYs.length === 0) return 0;
     return Math.max(minHeight, Math.max(...relYs) + IO_PORT_HEIGHT + GROUP_PAD_Y_BOTTOM);
   };
 
-  const out: Node[] = [];
+  const out: Array<Node> = [];
 
   const inputsGroup = buildBoundaryGroup(
     "grp:bpin:inputs",
@@ -333,7 +333,7 @@ function layoutBoundaryPins(
   return out;
 }
 
-export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
+export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   const {
     detail,
     scopeDetail,
@@ -356,7 +356,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   for (const n of scopeDetail.nodes) nodesById[n.id] = n;
 
   /* 按 id 取每个节点的原始输入元数据（画布视图用） */
-  const rawById: Record<string, RawInputMeta[]> = {};
+  const rawById: Record<string, Array<RawInputMeta>> = {};
   for (const n of scopeDetail.nodes) rawById[n.id] = n.raw_inputs ?? [];
 
   /* 「本节点的 OUTPUT 槽馈入了子图边界」的**独立**视图 —— 直接从
@@ -524,7 +524,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
    *  `groupDepth`（以原始 g.id 为键）与 WfGroupNode 的 data.title/color
    *  都不受影响。 */
   const usedGroupIds = new Set<string>();
-  const groupNodes: Node[] = groups
+  const groupNodes: Array<Node> = groups
     .filter((group) => group.bounding[2] > 0 && group.bounding[3] > 0)
     .map((group) => {
       const [x, y, w, h] = group.bounding;
@@ -551,7 +551,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
 
   /* ── 便签 / MarkdownNote 注释节点 ── */
   const notes = detail.notes ?? [];
-  const noteNodes: Node[] = notes.map((note) => {
+  const noteNodes: Array<Node> = notes.map((note) => {
     const title = extractNoteTitle(note.text, note.title);
     /* 锚点约定（与图节点相同）：React Flow 的 `position` 是卡片顶部
      *  （标题栏顶部），主体在它下面 NODE_TITLE_H 处。要让**主体**顶部落在

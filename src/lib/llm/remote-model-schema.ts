@@ -119,6 +119,6 @@ export function validateRemoteModelFields(
 function isKind(value: unknown): value is RemoteModelKind {
   return (
     typeof value === "string" &&
-    /* SAFETY: 类型断言已复核 */ (REMOTE_MODEL_KINDS as readonly string[]).includes(value)
+    /* SAFETY: 类型断言已复核 */ (REMOTE_MODEL_KINDS as ReadonlyArray<string>).includes(value)
   );
 }

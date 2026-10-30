@@ -26,7 +26,7 @@ import { createTestQueryClient } from "../helpers/renderWithProviders";
 
 /* ---------- 可控 behavior ---------- */
 interface Behavior {
-  tags: string[];
+  tags: Array<string>;
   listError?: string;
   delayMs?: number;
 }

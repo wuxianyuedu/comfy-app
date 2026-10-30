@@ -71,7 +71,7 @@ export interface WorkflowRunScene {
   /** 登记进 store 的运行名（弹窗头部按它标注这次运行）。 */
   readonly workflowName: string;
   /** 步骤序列（时刻由生成器按序算）。 */
-  readonly steps: readonly LogStep[];
+  readonly steps: ReadonlyArray<LogStep>;
   /** 真机上这条链路里逐帧推进的进度（0–100）；不给则不 patch。 */
   readonly progress?: number;
   /** 非空则结尾调 `failWorkflowRun(reason)`（横幅 + error 日志行）。 */
@@ -84,7 +84,7 @@ export interface WorkflowRunScene {
  *（`[阶段] 动作`、带 `src` 的客户端行、以 `✓` / `✗` 收尾的结果行）。抄错的表现
  * 不是报错 —— 是画布上少一行、或级别徽标串了档，而这正是「story 是假的」的现场。
  */
-const SUBMIT_STEPS: readonly LogStep[] = [
+const SUBMIT_STEPS: ReadonlyArray<LogStep> = [
   { level: "info", msg: "[client] 已提交任务 task_7f21c8", src: "client" },
   { level: "info", msg: "[comfyui] 上传 3 个输入文件完成" },
   { level: "progress", msg: "[comfyui] prompt 3f2a… 入队（前面 2 个任务）" },
@@ -96,14 +96,14 @@ const SUBMIT_STEPS: readonly LogStep[] = [
   { level: "success", msg: "✓ 生成完成（用时 38.6s）" },
 ];
 
-const FAILING_STEPS: readonly LogStep[] = [
+const FAILING_STEPS: ReadonlyArray<LogStep> = [
   { level: "info", msg: "[client] 已提交任务 task_91ab03", src: "client" },
   { level: "progress", msg: "[comfyui] prompt 91ab… 入队（前面 0 个任务）" },
   { level: "warn", msg: "[comfyui] 显存占用 11.8/12.0 GB，接近上限" },
   { level: "error", msg: "[comfyui] 执行失败：OOM（显存不足）" },
 ];
 
-const LONG_STEPS: readonly LogStep[] = Array.from({ length: 340 }, (_, i) => {
+const LONG_STEPS: ReadonlyArray<LogStep> = Array.from({ length: 340 }, (_, i) => {
   const n = i + 1;
   if (n % 40 === 0) {
     return { level: "info", msg: `[comfyui] 分段完成 ${n}/340`, src: "client" };
@@ -196,7 +196,7 @@ const STEP_MS = 1400;
  * `clearAllWorkflowRuns()`**，第二次是在空 store 上重建（store 是同一个单例，但
  * 内容被清干净了），末态与第一次逐字相同。全局重放也由那一句 `clear()` 兜住。
  */
-export function runSceneLogs(name: string, baseMs: number): TaskLogEntry[] {
+export function runSceneLogs(name: string, baseMs: number): Array<TaskLogEntry> {
   const scene = requireScene(name);
   return scene.steps.map((step, index) => ({
     t: baseMs + index * STEP_MS,
@@ -218,8 +218,7 @@ export function runSceneError(name: string): string | undefined {
 
 /** 按名字取场景；写错就抛（`parameters` 里那个名字是不可信输入）。 */
 function requireScene(name: string): WorkflowRunScene {
-  const scene: WorkflowRunScene | undefined =
-    WORKFLOW_RUN_SCENES[name as RunSceneName];
+  const scene: WorkflowRunScene | undefined = WORKFLOW_RUN_SCENES[name as RunSceneName];
   if (scene === undefined) {
     throw new Error(
       `运行场景里没有叫「${name}」的那种。现有的：${WORKFLOW_RUN_SCENE_NAMES.join(" / ")}`,

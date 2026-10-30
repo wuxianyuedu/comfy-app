@@ -162,7 +162,7 @@ let behavior: Behavior = {};
  * ISSUE #1900），但仍要在默认 handler 里记账：设置页一挂载，客户端那条链是否
  * 还会连过来 —— 这一条正是「运行态真的走干净了，没有第二个消费方」的现场证据
  * （见下方「设置页不再订阅运行态通道」那条用例）。 */
-const stateRequests: string[] = [];
+const stateRequests: Array<string> = [];
 /* `comfyStatus` 端点的调用次数：设置页一次都不该调到它（见对应用例）。 */
 let comfyStatusCalls = 0;
 
@@ -557,7 +557,7 @@ describe("useSettingsPage", () => {
    * 日志面板里什么也没有。现在失败会主动落 app-runtime 错误日志（面板轮询可见）。 */
   it("查询失败时把错误落 app-runtime 日志且同一错误只记一次", async () => {
     behavior.llmError = "数据库被锁";
-    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as unknown[]).length = 0;
+    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<unknown>).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
@@ -653,7 +653,7 @@ describe("useSettingsPage", () => {
    * 拿着「请求被中断」的提示无从排查。 */
   it("补记 app-runtime 时带上原始报错（raw 字段）", async () => {
     behavior.llmError = "no such table: llmConfig";
-    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as unknown[]).length = 0;
+    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<unknown>).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
@@ -682,7 +682,7 @@ describe("useSettingsPage", () => {
   it("两个查询都失败时，日志字段记全两条查询名", async () => {
     behavior.llmError = "llm 炸了";
     behavior.settingsError = "settings 炸了";
-    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as unknown[]).length = 0;
+    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<unknown>).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });

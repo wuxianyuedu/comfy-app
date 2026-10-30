@@ -29,10 +29,7 @@ export function isSameDay(a: Date, b: Date): boolean {
  * `alwaysDate` 用于**离开面板上下文**的文本（复制/导出）：贴进 issue 或发给人看时
  * 没有日期就说不清是哪天的事，所以导出文本一律带全日期。
  */
-export function formatTime(
-  ts: number,
-  opts?: { alwaysDate?: boolean },
-): string {
+export function formatTime(ts: number, opts?: { alwaysDate?: boolean }): string {
   const time = formatClock(ts, { millis: true });
   if (opts?.alwaysDate || !isSameDay(new Date(ts), new Date())) {
     /* 短日期前缀（`MM-DD`）走 `~/lib/time-format` 的 `formatShortDate`。 */
@@ -76,6 +73,6 @@ export function formatEntryForClipboard(entry: FormattableLog): string {
  *
  * 「复制当前筛选」与「下载/保存到本地」共用它；行内复制按钮直接用上面那条单行口径。
  */
-export function formatForClipboard(entries: FormattableLog[]): string {
+export function formatForClipboard(entries: Array<FormattableLog>): string {
   return entries.map(formatEntryForClipboard).join("\n");
 }

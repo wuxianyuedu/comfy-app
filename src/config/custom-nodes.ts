@@ -191,7 +191,7 @@ interface ManifestInput {
   name: string;
   type: string;
   widget?: string | null;
-  options?: string[] | null;
+  options?: Array<string> | null;
   /** 控件的默认值（字符串 / 数字 / 布尔 … 原始 JSON 值），对本模块不透明。 */
   default?: unknown;
   required?: boolean;
@@ -205,7 +205,7 @@ interface ManifestNode {
   frontend_only?: boolean;
   function?: string | null;
   description?: string | null;
-  inputs?: ManifestInput[];
+  inputs?: Array<ManifestInput>;
   outputs?: Array<{ type: string; name: string }>;
   /** 磁盘上的源文件（仅供参考）。 */
   source?: string;
@@ -224,7 +224,7 @@ function buildInto(
   let count = 0;
   for (const [ct, n] of Object.entries(manifest.nodes ?? {})) {
     if (!n) continue;
-    const inputs: PortSpec[] = (n.inputs ?? []).map((input) => ({
+    const inputs: Array<PortSpec> = (n.inputs ?? []).map((input) => ({
       name: input.name,
       type: input.type,
       widget: isFieldType(input.widget) ? input.widget : undefined,
@@ -232,7 +232,7 @@ function buildInto(
       default: input.default,
       required: !!input.required,
     }));
-    const outputs: PortSpec[] = (n.outputs ?? []).map((output) => ({
+    const outputs: Array<PortSpec> = (n.outputs ?? []).map((output) => ({
       name: output.name,
       type: output.type,
       required: true,
@@ -301,7 +301,7 @@ export interface ManifestNodeRaw {
     name: string;
     type: string;
     widget?: string | null;
-    options?: string[] | null;
+    options?: Array<string> | null;
     /** 控件的默认值（字符串 / 数字 / 布尔 … 原始 JSON 值），对本模块不透明。 */
     default?: unknown;
     required?: boolean;

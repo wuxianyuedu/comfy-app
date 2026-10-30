@@ -13,7 +13,7 @@
 export interface AnsiSegment {
   text: string;
   /** 活动样式（前景/背景/字重等可同时生效）；空 = 默认样式 */
-  styles?: AnsiStyleKey[];
+  styles?: Array<AnsiStyleKey>;
 }
 
 export type AnsiStyleKey =
@@ -74,8 +74,7 @@ const BG: Record<number, AnsiStyleKey> = {
 };
 
 /** 非 SGR 的转义序列：光标移动、清屏、窗口标题等，渲染无意义直接丢弃。 */
-const NON_SGR_RE =
-  /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b\[?[0-9;]*[A-HJKSTfhlmsu]/g;
+const NON_SGR_RE = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b\[?[0-9;]*[A-HJKSTfhlmsu]/g;
 
 /* ── 「剥掉 SGR / 问有没有 SGR」的唯一出口 ───────────────────────────
  *
@@ -149,8 +148,8 @@ export function stripAnsi(text: string): string {
  * 把含 ANSI SGR 序列的日志文本切成带样式片段。
  * 当前活动样式跨片段延续（与终端语义一致），\x1b[0m 复位。
  */
-export function parseAnsiSegments(text: string): AnsiSegment[] {
-  const segments: AnsiSegment[] = [];
+export function parseAnsiSegments(text: string): Array<AnsiSegment> {
+  const segments: Array<AnsiSegment> = [];
   let bold = false;
   let dim = false;
   let italic = false;
@@ -162,9 +161,7 @@ export function parseAnsiSegments(text: string): AnsiSegment[] {
   const flush = () => {
     if (plain) {
       const styles = composeStyles({ bold, dim, italic, underline, fg, bg });
-      segments.push(
-        styles.length > 0 ? { text: plain, styles } : { text: plain },
-      );
+      segments.push(styles.length > 0 ? { text: plain, styles } : { text: plain });
       plain = "";
     }
   };
@@ -210,8 +207,8 @@ function composeStyles(state: {
   underline: boolean;
   fg?: AnsiStyleKey;
   bg?: AnsiStyleKey;
-}): AnsiStyleKey[] {
-  const styles: AnsiStyleKey[] = [];
+}): Array<AnsiStyleKey> {
+  const styles: Array<AnsiStyleKey> = [];
   if (state.fg) styles.push(state.fg);
   if (state.bg) styles.push(state.bg);
   if (state.bold) styles.push("bold");
@@ -230,11 +227,7 @@ interface SgrState {
   bg?: AnsiStyleKey;
 }
 
-function applySgr(
-  codes: string,
-  set: (state: SgrState) => void,
-  get: () => SgrState,
-): void {
+function applySgr(codes: string, set: (state: SgrState) => void, get: () => SgrState): void {
   const parts = codes
     .split(/[;:]/)
     .map((p) => (p === "" ? 0 : Number.parseInt(p, 10)))
@@ -304,16 +297,15 @@ const LOGRUS_LEVEL_STYLE: Record<string, AnsiStyleKey> = {
 const LOGRUS_DIM_PREFIX_RE = /^(\[[^\]]*\]\s*)*(time=\S+\s+)?/;
 
 /** 单行 logrus 文本 → 带样式片段；行内没有 level= 字段时返回 null（交回 ANSI 解析）。 */
-export function colorizeLogrusLine(line: string): AnsiSegment[] | null {
+export function colorizeLogrusLine(line: string): Array<AnsiSegment> | null {
   const matched = LOGRUS_LEVEL_RE.exec(line);
   if (!matched) return null;
   const levelToken = `level=${matched[1]}`;
   const levelIdx = line.indexOf(levelToken);
   const head = line.slice(0, levelIdx);
-  const segments: AnsiSegment[] = [];
+  const segments: Array<AnsiSegment> = [];
   const dimLen = LOGRUS_DIM_PREFIX_RE.exec(head)?.[0].length ?? 0;
-  if (dimLen > 0)
-    segments.push({ text: head.slice(0, dimLen), styles: ["dim"] });
+  if (dimLen > 0) segments.push({ text: head.slice(0, dimLen), styles: ["dim"] });
   if (head.length > dimLen) segments.push({ text: head.slice(dimLen) });
   segments.push({
     text: levelToken,
@@ -326,9 +318,9 @@ export function colorizeLogrusLine(line: string): AnsiSegment[] | null {
 
 /** Ollama 启动日志整段文本 → 片段：含 level= 的行走 logrus 语义上色，
  *  其余行（spawn 参数、空行等）走原 ANSI 解析。 */
-export function parseOllamaLogText(text: string): AnsiSegment[] {
+export function parseOllamaLogText(text: string): Array<AnsiSegment> {
   const lines = text.split("\n");
-  const segments: AnsiSegment[] = [];
+  const segments: Array<AnsiSegment> = [];
   lines.forEach((line, index) => {
     const colored = colorizeLogrusLine(line);
     segments.push(...(colored ?? parseAnsiSegments(line)));

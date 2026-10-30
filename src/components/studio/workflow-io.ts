@@ -277,7 +277,7 @@ function isMachineAliasName(name: string | undefined): boolean {
  *
  * 不传 `allEntries` 时，函数返回的仍是全应用早已依赖的 `label || name` 行为，
  * CreatePanel / CanvasNode 里的既有调用方不受影响。 */
-export function ioLabel(e: WorkflowIOEntry, allEntries?: readonly WorkflowIOEntry[]): string {
+export function ioLabel(e: WorkflowIOEntry, allEntries?: ReadonlyArray<WorkflowIOEntry>): string {
   const candidate = e.label?.trim() ?? e.name;
   if (allEntries && allEntries.length > 1) {
     for (const entry of allEntries) {
@@ -321,35 +321,45 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
   /** 没有 widget 的输入 —— 必须从别的节点输出接过来。ComfyUI 里这类是
    *  「只认类型」的端口（positive_prompt、MODEL、CLIP 等），
    *  渲染成只读芯片。 */
-  wireInputs: (WorkflowIOEntry & {
-    ioKey: string;
-    control: ControlKind;
-    controlInferred?: boolean;
-  })[];
+  wireInputs: Array<
+    WorkflowIOEntry & {
+      ioKey: string;
+      control: ControlKind;
+      controlInferred?: boolean;
+    }
+  >;
   /** 带 widget 值的输入（下拉 / 数字 / 布尔 / 多行字符串等）——
    *  用户不连线也能直接编辑。 */
-  widgetInputs: (WorkflowIOEntry & {
-    ioKey: string;
-    control: ControlKind;
-    controlInferred?: boolean;
-  })[];
+  widgetInputs: Array<
+    WorkflowIOEntry & {
+      ioKey: string;
+      control: ControlKind;
+      controlInferred?: boolean;
+    }
+  >;
   /** 向后兼容的扁平化：[wireInputs, widgetInputs]，顺序稳定。 */
-  inputs: (WorkflowIOEntry & {
-    ioKey: string;
-    control: ControlKind;
-    controlInferred?: boolean;
-  })[];
-  outputs: (WorkflowIOEntry & { ioKey: string })[];
+  inputs: Array<
+    WorkflowIOEntry & {
+      ioKey: string;
+      control: ControlKind;
+      controlInferred?: boolean;
+    }
+  >;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
 } {
-  const wireInputs: (WorkflowIOEntry & {
-    ioKey: string;
-    control: ControlKind;
-  })[] = [];
-  const widgetInputs: (WorkflowIOEntry & {
-    ioKey: string;
-    control: ControlKind;
-  })[] = [];
-  const outputs: (WorkflowIOEntry & { ioKey: string })[] = [];
+  const wireInputs: Array<
+    WorkflowIOEntry & {
+      ioKey: string;
+      control: ControlKind;
+    }
+  > = [];
+  const widgetInputs: Array<
+    WorkflowIOEntry & {
+      ioKey: string;
+      control: ControlKind;
+    }
+  > = [];
+  const outputs: Array<WorkflowIOEntry & { ioKey: string }> = [];
   for (const [ioKey, entry] of Object.entries(io ?? {})) {
     if (!entry || typeof entry !== "object") continue;
     if (entry.direction === "output") {
@@ -406,7 +416,7 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
  *  隐藏只是不打扰用户，不代表这个值不需要下发给工作流。 */
 export function filterVisibleInMode<
   T extends { modeOverrides?: Record<string, WorkflowIOModeOverride> },
->(entries: T[], mode?: string | null): T[] {
+>(entries: Array<T>, mode?: string | null): Array<T> {
   if (!mode) return entries;
   return entries.filter((entry) => isVisibleInMode(entry, mode));
 }
@@ -546,9 +556,9 @@ export function mergeRefreshedDefaults(
 export function toWorkflowInputsPayload(
   io: WorkflowIOMap | undefined | null,
   values: Record<string, unknown>,
-): { nodeId: string; name: string; value: unknown }[] {
+): Array<{ nodeId: string; name: string; value: unknown }> {
   const { inputs } = splitWorkflowIO(io);
-  const payload: { nodeId: string; name: string; value: unknown }[] = [];
+  const payload: Array<{ nodeId: string; name: string; value: unknown }> = [];
   for (const entry of inputs) {
     // 项目级产出：连线传入的 wire-input（link 控件）值也一并下发。
     // 这类 key 仅在用户真正连线时才会写进 values（reconcile 会丢弃无值的 link key），
@@ -591,9 +601,9 @@ export function getMissingRequiredInputs(
   io: WorkflowIOMap | undefined | null,
   values: Record<string, unknown>,
   mode?: string | null,
-): string[] {
+): Array<string> {
   if (!io) return [];
-  const out: string[] = [];
+  const out: Array<string> = [];
   for (const [key, entry] of Object.entries(io)) {
     if (!entry || typeof entry !== "object") continue;
     if (entry.direction !== "input") continue;

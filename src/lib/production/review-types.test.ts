@@ -137,10 +137,9 @@ describe("applyReview", () => {
       { id: "a", prompt: "p" },
       { id: "b", name: "角色" },
     ];
-    const out = /* SAFETY: 类型断言已复核 */ applyReview(entities, "b", verdict) as Record<
-      string,
-      unknown
-    >[];
+    const out = /* SAFETY: 类型断言已复核 */ applyReview(entities, "b", verdict) as Array<
+      Record<string, unknown>
+    >;
     expect(out[0]).toBe(entities[0]);
     expect(out[1]).not.toBe(entities[1]);
     expect(out[1]!.review).toEqual(verdict);
@@ -179,25 +178,25 @@ describe("applyReview", () => {
     // history 只存「本轮之前」的判定；曲线 = [...reviewHistory, review]（旧→新）
     expect(out[0]?.reviewHistory).toEqual([first]);
     expect([
-      .../* SAFETY: 类型断言已复核 */ (out[0]?.reviewHistory as ReviewVerdict[]),
+      .../* SAFETY: 类型断言已复核 */ (out[0]?.reviewHistory as Array<ReviewVerdict>),
       second,
     ]).toEqual([first, second]);
   });
 
   it("轮次历史：旧判定无效（缺 pass）时不塞垃圾；历史超上限从头裁剪", () => {
-    let entities: unknown[] = [{ id: "a", review: { nope: true } }];
+    let entities: Array<unknown> = [{ id: "a", review: { nope: true } }];
     entities = applyReview(entities, "a", verdict);
     expect(
       /* SAFETY: 类型断言已复核 */ (entities[0] as Record<string, unknown>).reviewHistory,
     ).toBeUndefined();
 
-    let chain: unknown[] = [{ id: "a" }];
+    let chain: Array<unknown> = [{ id: "a" }];
     for (let i = 0; i < 12; i++) {
       chain = applyReview(chain, "a", { ...verdict, scoredAt: `t${i}` });
     }
     const history = /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
       chain[0] as Record<string, unknown>
-    ).reviewHistory as ReviewVerdict[];
+    ).reviewHistory as Array<ReviewVerdict>;
     expect(history).toHaveLength(9); // REVIEW_HISTORY_LIMIT
     expect(history[0]?.scoredAt).toBe("t2"); // 最早的 2 轮被裁掉
     expect(/* SAFETY: 类型断言已复核 */ (chain[0] as Record<string, unknown>).review).toMatchObject(

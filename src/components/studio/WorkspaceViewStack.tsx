@@ -45,10 +45,7 @@ import {
   withViewOpenReport,
   type ViewOpenedAtLookup,
 } from "./ViewOpenReport";
-import {
-  registerLazyViewLoader,
-  startLazyViewPrefetch,
-} from "./lazy-view-prefetch";
+import { registerLazyViewLoader, startLazyViewPrefetch } from "./lazy-view-prefetch";
 
 /**
  * 懒加载视图的**统一出口**：所有 `next/dynamic` 声明都经它，好让「分块加载失败」
@@ -114,9 +111,7 @@ const SettingsView = lazyView("settings", () =>
 
 /* 模型适配 / 模式契约：与设置同一族（项目无关的全局配置视图）。 */
 const ModelAdaptersView = lazyView("model-adapters", () =>
-  import("~/components/workshop/ModelAdaptersView").then(
-    (mod) => mod.ModelAdaptersView,
-  ),
+  import("~/components/workshop/ModelAdaptersView").then((mod) => mod.ModelAdaptersView),
 );
 const ModeContractView = lazyView("mode-contract", () =>
   import("~/components/workshop/mode-contract/ModeContractView").then(
@@ -126,9 +121,7 @@ const ModeContractView = lazyView("mode-contract", () =>
 
 /* 资源库：整页素材管理（分类 / 搜索 / 上传 / 删除），与画布那块抽屉同源取数。 */
 const ResourceLibrary = lazyView("library", () =>
-  import("~/components/studio/library/ResourceLibrary").then(
-    (mod) => mod.ResourceLibrary,
-  ),
+  import("~/components/studio/library/ResourceLibrary").then((mod) => mod.ResourceLibrary),
 );
 
 /* 项目主页：进入项目后的落点。懒加载 —— 它与画布 / 工坊一样只在进项目后需要，
@@ -139,18 +132,14 @@ const ProjectHomePage = lazyView("project", () =>
 
 /* 队列与运行：与历史同族（都在看「机器现在在干什么」），只在进入该视图时才拉。 */
 const QueueMonitor = lazyView("queue", () =>
-  import("~/components/studio/queue/QueueMonitor").then(
-    (mod) => mod.QueueMonitor,
-  ),
+  import("~/components/studio/queue/QueueMonitor").then((mod) => mod.QueueMonitor),
 );
 
 /* ComfyUI 运行页（ISSUE #1900）：与历史 / 队列同族（「项目无关的全局视图」，
  * 都在看本机后端现在在干什么）。它带着状态查询的事件订阅与启动日志轮询，
  * 懒加载 —— 不该摊到别的视图首屏。 */
 const ComfyuiControl = lazyView("comfyui", () =>
-  import("~/components/studio/comfyui/ComfyuiControl").then(
-    (mod) => mod.ComfyuiControl,
-  ),
+  import("~/components/studio/comfyui/ComfyuiControl").then((mod) => mod.ComfyuiControl),
 );
 
 /* 控制台（ISSUE #1327）：与历史 / 队列同族（都是「项目无关的全局视图」）。 */
@@ -169,7 +158,7 @@ const ProjectCanvas = lazyView("canvas", () =>
 /** 页面侧交给视图栈的全部接线 —— 每一屏要用什么都在这里，栈自己不取数。 */
 export interface WorkspaceViewStackProps {
   /** 打开的页签（顺序即叠放顺序；`ViewTab.key` 当 React key 与锚点）。 */
-  tabs: ViewTab[];
+  tabs: Array<ViewTab>;
   /** 当前页签 key。 */
   activeKey: string;
   /** 当前页签对应的**视图**（同一视图两个页签算同一屏）—— 打开耗时按它归属。 */
@@ -177,7 +166,7 @@ export interface WorkspaceViewStackProps {
   /** 活跃项目 id —— 项目类视图与「项目优先闸门」判据。 */
   activeProjectId: string | null;
   /** 最近项目（项目主页取名字用）。 */
-  recentProjects: RecentProject[];
+  recentProjects: Array<RecentProject>;
   /** 项目页签无活跃项目时，闸门的两个出口。 */
   onEnterProject: () => void;
   onExitProject: () => void;
@@ -191,10 +180,7 @@ export interface WorkspaceViewStackProps {
   onShowAllProjects: () => void;
   /** 队列屏的离线出口：切到侧栏「ComfyUI」页。 */
   onOpenComfyui: () => void;
-  onUseWorkflow: (
-    id: string,
-    meta?: { name: string; taskType: string },
-  ) => void;
+  onUseWorkflow: (id: string, meta?: { name: string; taskType: string }) => void;
   /** 画布：开一个新命名项目 / 消费这两枚一次性载荷。 */
   canvasSeedNew: boolean;
   onConsumeCanvasSeed: () => void;
@@ -255,10 +241,7 @@ export function WorkspaceViewStack({
       case "project":
         return (
           <ProjectHomePage
-            projectName={
-              recentProjects.find((p) => p.id === activeProjectId)?.name ??
-              "未命名项目"
-            }
+            projectName={recentProjects.find((p) => p.id === activeProjectId)?.name ?? "未命名项目"}
             onNavigate={onNavigate}
             projectId={activeProjectId ?? ""}
           />
@@ -266,10 +249,7 @@ export function WorkspaceViewStack({
 
       case "works":
         return (
-          <WorksGallery
-            onOpenTask={onOpenProject}
-            onOpenCanvasProject={onOpenCanvasProject}
-          />
+          <WorksGallery onOpenTask={onOpenProject} onOpenCanvasProject={onOpenCanvasProject} />
         );
 
       case "models":
@@ -375,9 +355,7 @@ export function WorkspaceViewStack({
         const content = LAZY_VIEWS.has(tab.view) ? (
           renderView(tab.view)
         ) : (
-          <ViewOpenReport view={tab.view}>
-            {renderView(tab.view)}
-          </ViewOpenReport>
+          <ViewOpenReport view={tab.view}>{renderView(tab.view)}</ViewOpenReport>
         );
         return (
           <div
@@ -393,9 +371,7 @@ export function WorkspaceViewStack({
             {/* 「这一屏是不是当前页」：所有开过的屏都活着、也都会往顶栏的动作槽里
                 送按钮，不按页签过滤就会「四屏的按钮挤在同一条顶栏里」（见
                 `ViewActions` 里 `ViewTabActiveContext` 那段）。 */}
-            <ViewTabActiveProvider active={isActive}>
-              {content}
-            </ViewTabActiveProvider>
+            <ViewTabActiveProvider active={isActive}>{content}</ViewTabActiveProvider>
           </div>
         );
       })}

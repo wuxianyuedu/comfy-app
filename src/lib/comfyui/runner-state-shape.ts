@@ -45,7 +45,7 @@ export type Job = {
   rawJson?: unknown;
 
   /** 执行前注入到原始 JSON 里的画布 `workflowInputs`。 */
-  overrides?: RawWorkflowOverride[];
+  overrides?: Array<RawWorkflowOverride>;
 };
 
 export type LogEntry = {
@@ -86,21 +86,21 @@ export type RunnerState = {
   /** taskId → 这一轮的日志缓冲。落库是整包 `replaceLogs`（不是追加），所以这一份
    *  就是「库里那一列接下来会变成什么」的草稿，进程内活着的轮次都攒在这里，由
    *  `LOGS_MAX_TASKS` 的 LRU 收干。 */
-  logs: Map<string, LogEntry[]>;
+  logs: Map<string, Array<LogEntry>>;
 
   /** taskId → **本轮排队期**写下的行（等待原因那类）。领取会重开 `logs`（重跑不混
    *  上一轮的尾巴），这份登记让领取那一刻把本轮已经写过、且已经落库的行接回去，
    *  否则「⏳ 等待 ComfyUI WebSocket 连接就绪…」会被抹掉——回收器不再兜底判死排队
    *  行之后，那句是唯一说明「这条在等什么」的出口（ISSUE #1206）。
    *  由 `logWhileQueued` 写、`takeQueuedEntries` 取走即清。 */
-  queuedEntries: Map<string, LogEntry[]>;
+  queuedEntries: Map<string, Array<LogEntry>>;
 
   /** comfy-cli 完整原始输出（按行、不截断）：供前端「查看完整输出」入口按需
    *  拉取。面板的 `[comfy-cli 原始]`/`stdout`/`stderr` 行出于防刷屏做了单行与
    *  行数截断（executor-cli-stream 的 MAX_*），但排障常要看被截掉的完整 JSON
    *  与完整 traceback，故这里单独以「不截断」方式留存，行数上限见
    *  RAW_CLI_MAX_LINES，任务数上限见 LOGS_MAX_TASKS。 */
-  rawCli: Map<string, string[]>;
+  rawCli: Map<string, Array<string>>;
 
   lastLogPct: Map<string, number>;
 

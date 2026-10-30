@@ -15,7 +15,7 @@ function jsonRes(status: number, body: unknown): Response {
 }
 
 /** 按顺序响应 fetch：先上传、再 ensure 轮询、最后重传。 */
-function stubFetchSequence(responses: (() => Response | Promise<Response>)[]) {
+function stubFetchSequence(responses: Array<() => Response | Promise<Response>>) {
   const queue = [...responses];
   /* 形参声明成 (input, init)，调用记录才有可断言的元组类型（只写 () 时
    * vi.fn 推出的是空元组，`mock.calls[0][0]` 会被 TS 判越界）。 */

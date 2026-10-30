@@ -140,8 +140,8 @@ function allowsReferenceImages(code: string | null | undefined): boolean {
  *
  *  模式为空（工作流没声明模式）时退到最保守的一套（提示词 + 尺寸），
  *  与工作流无关 —— 「对外参数只跟模式有关」，没有模式就只说最通用的两样。 */
-export function exposedParamsForMode(code: string | null | undefined): ExposedParamDef[] {
-  const out: ExposedParamDef[] = [
+export function exposedParamsForMode(code: string | null | undefined): Array<ExposedParamDef> {
+  const out: Array<ExposedParamDef> = [
     { cls: "prompt", id: "prompt", label: EXPOSED_PARAM_DISPLAY_LABEL.prompt },
     {
       cls: "negative",

@@ -35,7 +35,7 @@ const SCRIPT = path.resolve(__dirname, "../scripts/check-test-waitfor.cjs");
  * 这个时刻（造得出就只能靠删文件，那是一次概率窗口，不是判据）。
  */
 const { scanFile } = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(SCRIPT) as {
-  scanFile: (abs: string) => unknown[] | null;
+  scanFile: (abs: string) => Array<unknown> | null;
 };
 
 const { test, expect } = defineGateRepo({

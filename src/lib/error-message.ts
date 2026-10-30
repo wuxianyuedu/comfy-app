@@ -18,7 +18,7 @@ import { LOG_DETAIL_MAX, clampText } from "~/lib/text-clamp";
  * 信息量，且这类错误的真实原因（服务端此刻不可用）在原文里完全看不出来。
  * 在取值出口统一翻译成人话，各调用方无需各自判断。
  */
-const NETWORK_ERROR_TRANSLATIONS: [RegExp, string][] = [
+const NETWORK_ERROR_TRANSLATIONS: Array<[RegExp, string]> = [
   [
     /Unexpected token '?.<'?.*is not valid JSON/i,
     "服务返回了非预期内容（通常是应用服务正在重启或未就绪），请稍候重试",
@@ -169,7 +169,7 @@ export function errorCode(e: unknown): string | null {
  */
 export function rawErrorDetail(e: unknown, maxLen = LOG_DETAIL_MAX): string {
   if (e === null || e === undefined) return "";
-  const parts: string[] = [];
+  const parts: Array<string> = [];
   if (typeof e === "string") {
     parts.push(e);
   } else if (typeof e === "object") {

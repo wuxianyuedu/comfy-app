@@ -32,11 +32,7 @@ import {
  * 实际值**打出来（这里就是还活着的 PID 列表），而手搓版本只会给一句「超时」——
  * 「孤儿没被收走」的现场恰恰是「剩下哪几个 PID」，那正是要打的东西。
  */
-async function waitFor(
-  check: () => boolean,
-  timeoutMs = 4000,
-  stepMs = 50,
-): Promise<void> {
+async function waitFor(check: () => boolean, timeoutMs = 4000, stepMs = 50): Promise<void> {
   await expect.poll(check, { timeout: timeoutMs, interval: stepMs }).toBe(true);
 }
 
@@ -50,14 +46,14 @@ function isAlive(pid: number): boolean {
 }
 
 /** 递归收集某 PID 的整棵子孙树（ppid 邻接表，不依赖 pstree）。 */
-function descendantPids(root: number): number[] {
+function descendantPids(root: number): Array<number> {
   let out: string;
   try {
     out = execSync("ps -eo pid,ppid", { encoding: "utf8" });
   } catch {
     return [];
   }
-  const byParent = new Map<number, number[]>();
+  const byParent = new Map<number, Array<number>>();
   for (const line of out.split("\n").slice(1)) {
     const [pidStr, ppidStr] = line.trim().split(/\s+/);
     const pid = Number(pidStr);
@@ -67,7 +63,7 @@ function descendantPids(root: number): number[] {
     arr.push(pid);
     byParent.set(ppid, arr);
   }
-  const acc: number[] = [];
+  const acc: Array<number> = [];
   const stack = [...(byParent.get(root) ?? [])];
   while (stack.length) {
     const p = stack.pop()!;
@@ -215,9 +211,7 @@ posixOnly("killProcessTree POSIX 行为", () => {
     // 以 OS 读到的 PGID 为准，绝不走「按 pid 猜」的组路径。
     const child = spawn("sh", ["-c", "sleep 300 & wait"], { stdio: "ignore" });
     const pid = child.pid!;
-    await expect
-      .poll(() => pgidOf(pid), { timeout: 4000 })
-      .toBe(pgidOf(process.pid));
+    await expect.poll(() => pgidOf(pid), { timeout: 4000 }).toBe(pgidOf(process.pid));
     const r = await killProcessTree({ pid, detached: true });
     expect(r.via).toContain("禁杀组");
     await expect.poll(() => isAlive(pid)).toBe(false);

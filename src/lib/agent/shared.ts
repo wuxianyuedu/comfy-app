@@ -15,7 +15,7 @@ export type AgentMessageLike =
 
 /** 客户端 → 服务端的 Agent 请求体。 */
 export interface AgentChatRequest {
-  messages: AgentMessageLike[];
+  messages: Array<AgentMessageLike>;
   draft: WorkshopDraftDto;
   useTools?: boolean;
 }

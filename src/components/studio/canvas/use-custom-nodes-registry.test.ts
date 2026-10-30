@@ -25,11 +25,9 @@ function fetchManifest(manifest: unknown): void {
   );
 }
 
-function manifestOf(classTypes: string[]): unknown {
+function manifestOf(classTypes: Array<string>): unknown {
   return {
-    nodes: Object.fromEntries(
-      classTypes.map((ct) => [ct, { classType: ct, displayName: ct }]),
-    ),
+    nodes: Object.fromEntries(classTypes.map((ct) => [ct, { classType: ct, displayName: ct }])),
   };
 }
 
@@ -44,7 +42,7 @@ const spyOnRemove = () => vi.spyOn(window, "removeEventListener");
 let addSpy: ReturnType<typeof spyOnAdd>;
 let removeSpy: ReturnType<typeof spyOnRemove>;
 
-const countOn = (calls: Array<[string, ...unknown[]]>): number =>
+const countOn = (calls: Array<[string, ...Array<unknown>]>): number =>
   calls.filter((call) => call[0] === REGISTRY_EVENT).length;
 const addCalls = (): number => countOn(addSpy.mock.calls);
 const removeCalls = (): number => countOn(removeSpy.mock.calls);
@@ -128,8 +126,8 @@ describe("灌入 → memo 掉的读方被叫醒", () => {
     await act(async () => {
       await refreshCustomNodes();
     });
-    const seenA: number[] = [];
-    const seenB: number[] = [];
+    const seenA: Array<number> = [];
+    const seenB: Array<number> = [];
     const a = renderHook(() => {
       const version = useCustomNodesRegistryVersion();
       seenA.push(version);

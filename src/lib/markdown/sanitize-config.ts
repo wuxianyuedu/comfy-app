@@ -24,7 +24,7 @@
  */
 
 /** 用户内容里**禁止出现**的标签。 */
-export const FORBIDDEN_TAGS: readonly string[] = [
+export const FORBIDDEN_TAGS: ReadonlyArray<string> = [
   /* 表单：钓鱼面。`<input>` 不在其中（GFM 任务列表要用）。 */
   "form",
   "button",
@@ -48,7 +48,7 @@ export const FORBIDDEN_TAGS: readonly string[] = [
 ];
 
 /** 用户内容里**禁止出现**的属性。 */
-export const FORBIDDEN_ATTRS: readonly string[] = [
+export const FORBIDDEN_ATTRS: ReadonlyArray<string> = [
   "style",
   "action",
   "formaction",
@@ -72,7 +72,7 @@ export const FORBIDDEN_ATTRS: readonly string[] = [
  * 前缀匹配发生在 DOMPurify 剥掉控制字符与首尾空白**之后**（它的 `.data` 钩子挂在
  * 剪枝之后），因此 `java\tscript:` 这类绕过面不需要在这里再挡一次。
  */
-export const ALLOWED_URL_SCHEMES: readonly string[] = [
+export const ALLOWED_URL_SCHEMES: ReadonlyArray<string> = [
   "http:",
   "https:",
   "mailto:",
@@ -88,8 +88,8 @@ export const ALLOWED_URL_SCHEMES: readonly string[] = [
 /** 消毒配置：喂给 `DOMPurify.sanitize` 的第三个参数。 */
 export interface SanitizeConfig {
   USE_PROFILES: { html: true };
-  FORBID_TAGS: string[];
-  FORBID_ATTR: string[];
+  FORBID_TAGS: Array<string>;
+  FORBID_ATTR: Array<string>;
 }
 
 /** 配置的**唯一出口**。调用方不要就地拼一份自己的。 */

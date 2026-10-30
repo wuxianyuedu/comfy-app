@@ -124,16 +124,16 @@ function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
     ...(apiKey === undefined ? {} : { apiKey }),
     kind:
       typeof kind === "string" &&
-      /* SAFETY: 类型断言已复核 */ (REMOTE_MODEL_KINDS as readonly string[]).includes(kind)
+      /* SAFETY: 类型断言已复核 */ (REMOTE_MODEL_KINDS as ReadonlyArray<string>).includes(kind)
         ? /* SAFETY: 类型断言已复核 */ (kind as RemoteModelKind)
         : null,
   };
 }
 
 /** 把 DB / 请求载荷里的 extraModels 归一化成条目数组（丢弃无名与空白项）。 */
-export function normalizeExtraModels(raw: unknown): RemoteModelEntry[] {
+export function normalizeExtraModels(raw: unknown): Array<RemoteModelEntry> {
   if (!Array.isArray(raw)) return [];
-  const out: RemoteModelEntry[] = [];
+  const out: Array<RemoteModelEntry> = [];
   for (const item of raw) {
     if (typeof item === "string") {
       // 字符串形态只带了名字，对连接参数**不提供意见**（挂 null 会被读成「清空」）
@@ -154,9 +154,9 @@ export function extraModelName(entry: RawExtraModel): string {
 /** option C 的拆分结果：本地 ollama 候选（纯名字，无 apiKey）与远端独立模型分开。 */
 export interface ExtraModelSplit {
   /** 本地 Ollama 候选模型名（无 apiKey）。 */
-  localNames: string[];
+  localNames: Array<string>;
   /** 远端独立模型条目（可带独立 baseUrl / apiKey）。 */
-  remoteEntries: RemoteModelEntry[];
+  remoteEntries: Array<RemoteModelEntry>;
 }
 
 /**
@@ -165,8 +165,8 @@ export interface ExtraModelSplit {
  * 用于设置页保存时的写入分派与工坊分组下拉的静态来源。
  */
 export function splitExtraModels(raw: unknown): ExtraModelSplit {
-  const localNames: string[] = [];
-  const remoteEntries: RemoteModelEntry[] = [];
+  const localNames: Array<string> = [];
+  const remoteEntries: Array<RemoteModelEntry> = [];
   if (!Array.isArray(raw)) return { localNames, remoteEntries };
   for (const item of raw) {
     if (typeof item === "string") {
@@ -210,12 +210,12 @@ export function isMisplacedLocalOllama(
  *  误存的本地 ollama 折回本地候选名，真远端条目保留。调用点据此重建下发给客户端的
  *  候选清单（字符串=本地、对象=远端），也让设置页保存时能把误存条目顺带清出远端表。 */
 export function foldRemoteToLocal(
-  remoteEntries: RemoteModelEntry[],
-  localNames: string[],
+  remoteEntries: Array<RemoteModelEntry>,
+  localNames: Array<string>,
   llmBaseUrl: string | null | undefined,
 ): ExtraModelSplit {
   const locals = localNames.slice();
-  const remotes: RemoteModelEntry[] = [];
+  const remotes: Array<RemoteModelEntry> = [];
   for (const e of remoteEntries) {
     if (isMisplacedLocalOllama(e, llmBaseUrl)) {
       if (!locals.includes(e.name)) locals.push(e.name);
@@ -267,7 +267,7 @@ export interface LLMConfig {
   baseUrl: string;
   model: string;
   /** 候选模型（设置页可配置多个）：本地 Ollama 为纯名字；远端条目可带独立 baseUrl / apiKey */
-  extraModels?: RemoteModelEntry[] | null;
+  extraModels?: Array<RemoteModelEntry> | null;
   /** remote 提供方的密钥；与 RemoteModelEntry.apiKey 一样只在服务端参与请求 */
   apiKey?: string | null;
   /** 全局默认温度（未区分任务类型的调用的 fallback） */
@@ -283,7 +283,7 @@ export interface LLMConfigView {
   baseUrl: string;
   model: string;
   /** 候选模型名（条目已归一成名字下发，供工坊内切换；连接参数不下发） */
-  extraModels?: string[] | null;
+  extraModels?: Array<string> | null;
   temperature: number;
   temperatureByTask?: Record<TaskType, number> | null;
   maxTokens: number;
@@ -303,7 +303,7 @@ export type LLMContentPart =
 export interface LLMMessage {
   role: "system" | "user" | "assistant" | "tool";
   /** 纯文本（历史用法）或多模态内容块数组（带图时用）。两者都合法。 */
-  content: string | LLMContentPart[];
+  content: string | Array<LLMContentPart>;
   /** 仅 role === "assistant" 时可能出现：携带 tool_calls 的消息回灌。 */
   tool_calls?: Array<{
     id: string;
@@ -352,7 +352,7 @@ export interface LLMRequestOptions {
   /** 调用方指定的任务类型，用于查找 temperatureByTask 覆盖 */
   taskType?: TaskType;
   /** OpenAI 兼容 function calling 的工具列表（可选，Agent 指挥用）。 */
-  tools?: LLMTool[];
+  tools?: Array<LLMTool>;
   /**
    * 视觉评审专用模型（P8-2）：不传时回落到「远端候选里 kind=image 的那条」或主 `model`。
    * 多模态评审需要的模型往往与文本对话模型不同（如 Ollama 的 llava / 远端 gpt-4o），

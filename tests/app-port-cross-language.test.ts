@@ -30,7 +30,7 @@ function readIfExists(rel: string): string | null {
 }
 
 /** 命令是否可用（用于决定「可执行层」是否真跑）。 */
-function hasCommand(cmd: string, args: string[]): boolean {
+function hasCommand(cmd: string, args: Array<string>): boolean {
   try {
     execFileSync(cmd, args, { stdio: "pipe", timeout: 10_000 });
     return true;
@@ -43,8 +43,8 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
   const fixture = /* SAFETY: 类型断言已复核 */ JSON.parse(
     fs.readFileSync(path.join(ROOT, VECTORS), "utf8"),
   ) as {
-    vectors: { input: string; normalized: string; fnv1a32: number; port: number }[];
-    envVectors: { content: string; port: number | null; note: string }[];
+    vectors: Array<{ input: string; normalized: string; fnv1a32: number; port: number }>;
+    envVectors: Array<{ content: string; port: number | null; note: string }>;
   };
 
   it("向量文件存在且至少 5 条（防止误删后全绿）", () => {

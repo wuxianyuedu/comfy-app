@@ -84,20 +84,16 @@ export function titleOf(task: HistoryTaskRow): string {
 }
 
 /** 进行中（需要轮询）的任务数。 */
-export function countActive(tasks: HistoryTaskRow[]): number {
-  return tasks.filter(
-    (task) => task.status === "RUNNING" || task.status === "QUEUED",
-  ).length;
+export function countActive(tasks: Array<HistoryTaskRow>): number {
+  return tasks.filter((task) => task.status === "RUNNING" || task.status === "QUEUED").length;
 }
 
 /** 只有图片/视频封面可拖拽到画布；音频没有可视封面。 */
 export function isDraggableCover(task: HistoryTaskRow): boolean {
-  return (
-    !!task.cover && (task.mediaType === "image" || task.mediaType === "video")
-  );
+  return !!task.cover && (task.mediaType === "image" || task.mediaType === "video");
 }
 
-export const FILTER_TABS: { id: HistoryFilter; label: string }[] = [
+export const FILTER_TABS: Array<{ id: HistoryFilter; label: string }> = [
   { id: "all", label: "全部" },
   { id: "image", label: "图片" },
   { id: "video", label: "视频" },

@@ -94,7 +94,7 @@ describe("comfy state 的信封：生产侧那一笔 == 消费侧那一笔", () 
     wireClientToRealRoute();
     const produced = noteComfyStateChange("ready", "ComfyUI 已就绪", 1234);
 
-    const delivered: ComfyStateChange[] = [];
+    const delivered: Array<ComfyStateChange> = [];
     const off = subscribeComfyStateChanges((change) => delivered.push(change));
     expect(await settleUntil(() => delivered.length === 1)).toBe(true);
 
@@ -115,7 +115,7 @@ describe("comfy state 的信封：生产侧那一笔 == 消费侧那一笔", () 
     }));
     noteComfyStateChange("ready", "ComfyUI 已就绪", 1234);
 
-    const delivered: ComfyStateChange[] = [];
+    const delivered: Array<ComfyStateChange> = [];
     const off = subscribeComfyStateChanges((change) => delivered.push(change));
     await settle(6);
     expect(delivered).toEqual([]);
@@ -126,7 +126,7 @@ describe("comfy state 的信封：生产侧那一笔 == 消费侧那一笔", () 
     wireClientToRealRoute();
     const first = noteComfyStateChange("start", "启动动作落了锁", 1000);
 
-    const delivered: ComfyStateChange[] = [];
+    const delivered: Array<ComfyStateChange> = [];
     const off = subscribeComfyStateChanges((change) => delivered.push(change));
     expect(await settleUntil(() => delivered.length === 1)).toBe(true);
 
@@ -149,7 +149,7 @@ describe("comfy state 的信封：生产侧那一笔 == 消费侧那一笔", () 
     const produced = noteComfyStateChange("config", "配置写入", 3000);
     expect(Object.keys(produced).sort()).toEqual(["at", "detail", "kind", "seq"]);
 
-    const delivered: ComfyStateChange[] = [];
+    const delivered: Array<ComfyStateChange> = [];
     const off = subscribeComfyStateChanges((change) => delivered.push(change));
     expect(await settleUntil(() => delivered.length === 1)).toBe(true);
     expect(Object.keys(delivered[0]!).sort()).toEqual(["at", "detail", "kind", "seq"]);

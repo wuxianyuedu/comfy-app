@@ -23,22 +23,10 @@
  * 全部条目，与改动前行为一致（LogPanel 同款兜底）。
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useElementBox } from "~/components/ui/use-element-box";
 import { NEAR_BOTTOM_PX } from "~/components/ui/use-scroll-follow";
-import {
-  layoutRows,
-  LOG_ROW_SINGLE,
-  scrollHeightOf,
-  visibleRange,
-} from "./log-virtual";
+import { layoutRows, LOG_ROW_SINGLE, scrollHeightOf, visibleRange } from "./log-virtual";
 
 /** 渲染某一条日志行的回调：`entry` 是原始条目，`index` 是它在 `entries` 里的
  * **绝对下标**（同一行在窗口滑动后下标不变，便于稳定 key 与测试断言）。 */
@@ -46,7 +34,7 @@ export type RenderLogRow<T> = (entry: T, index: number) => ReactNode;
 
 export interface VirtualLogListProps<T> {
   /** 全部（已裁剪 / 已过滤）的日志条目；本组件只渲染视口内的那一小段。 */
-  entries: readonly T[];
+  entries: ReadonlyArray<T>;
   /** 取用于折行估高的文本（行高估算依赖它；与 `LogPanel` 的 `entry.message` 同义）。 */
   getMessage: (entry: T) => string;
   /** 稳定 id（可选）：展开 / 单行特判用；缺省时按绝对下标。 */
@@ -161,9 +149,7 @@ export function VirtualLogList<T>({
     setScrollTop(el.scrollTop);
     /* 「用户有没有接管滚动」：离底超过阈值就退出跟随，给出可见出口（自动滚动
      * 开关会相应取消勾选）。阈值复用 `use-scroll-follow` 的唯一定义。 */
-    setFollowing(
-      el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX,
-    );
+    setFollowing(el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX);
   }, [setFollowing]);
 
   return (
@@ -184,10 +170,7 @@ export function VirtualLogList<T>({
       ) : (
         /* 外层撑出估算总高（滚动条长度与真实内容一致），内层 `translateY` 到当前
          * 窗口起点——只挂视口内的几十行。 */
-        <div
-          style={{ height: `${scrollHeight}px` }}
-          className="relative w-full"
-        >
+        <div style={{ height: `${scrollHeight}px` }} className="relative w-full">
           <div
             style={{
               transform: `translateY(${rows[rowWindow.start]?.start ?? 0}px)`,

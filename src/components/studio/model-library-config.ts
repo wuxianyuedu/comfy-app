@@ -30,11 +30,7 @@ export interface FolderConfigRow {
 export const ALL_TYPES = "ALL";
 
 /** 关键字 + 类型筛选：命中「名称 或 文件名（含路径）」任一即保留。 */
-export function filterModels(
-  models: ModelRow[],
-  filter: string,
-  q: string,
-): ModelRow[] {
+export function filterModels(models: Array<ModelRow>, filter: string, q: string): Array<ModelRow> {
   const term = normalizeNeedle(q);
   return models.filter((model) => {
     if (filter !== ALL_TYPES && model.type !== filter) return false;
@@ -48,7 +44,7 @@ export function filterModels(
  * 按类型统计数量，按「数量降序 → 类型名字典序」排序。
  * 每个类型就是 ComfyUI 的一个目录名（目录名即类型名）。
  */
-export function countByType(models: ModelRow[]): Array<[string, number]> {
+export function countByType(models: Array<ModelRow>): Array<[string, number]> {
   const counts = new Map<string, number>();
   for (const m of models) counts.set(m.type, (counts.get(m.type) ?? 0) + 1);
   return Array.from(counts.entries()).sort(
@@ -77,22 +73,17 @@ export function fmtSize(n?: number | null): string {
 }
 
 /** 目录行的关键字筛选（命中目录名或展示标签）。 */
-export function filterFolders(
-  folders: FolderConfigRow[],
-  q: string,
-): FolderConfigRow[] {
+export function filterFolders(folders: Array<FolderConfigRow>, q: string): Array<FolderConfigRow> {
   const term = normalizeNeedle(q);
   if (!term) return folders;
-  return folders.filter((row) =>
-    matchesNeedle(term, `${row.folder} ${row.label}`),
-  );
+  return folders.filter((row) => matchesNeedle(term, `${row.folder} ${row.label}`));
 }
 
 /** 目录行拆成「已启用 / 可添加」两组（原组件里的两个 useMemo）。 */
 export function splitFolders(
-  folders: FolderConfigRow[],
+  folders: Array<FolderConfigRow>,
   q: string,
-): { enabled: FolderConfigRow[]; available: FolderConfigRow[] } {
+): { enabled: Array<FolderConfigRow>; available: Array<FolderConfigRow> } {
   const matched = filterFolders(folders, q);
   return {
     enabled: matched.filter((row) => row.enabled),

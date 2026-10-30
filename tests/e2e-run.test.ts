@@ -714,7 +714,7 @@ describe("开跑前的三档前置（ISSUE #1948）", () => {
   it("空库 ⇒ `ensure`：本档自己建齐，且复核它真的落地了", () => {
     /* 两个方向都要钉：建成了才放行；没建成（`missing` / `stale`）要**阻断**并
      * 给出人的出口 —— 否则「空库」会退化成「跑下去，让冒烟档去红」。 */
-    const calls: string[] = [];
+    const calls: Array<string> = [];
     const synced = ensureSchemaBeforeRun({
       root: ROOT,
       ensure: () => {
@@ -928,7 +928,7 @@ describe("起 Playwright 的那一跳：不缓存输出（ISSUE #1998）", () =>
  * `makePreflightCollectors` 的三份判决用注入的假判决喂进来。
  */
 describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () => {
-  const touched: string[] = [];
+  const touched: Array<string> = [];
 
   it("三步各说一句；全绿时一条都不拦", async () => {
     touched.length = 0;

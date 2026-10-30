@@ -40,7 +40,7 @@ function fakeState(
   };
 }
 
-function cli(ids: string[]) {
+function cli(ids: Array<string>) {
   return (taskId: string) => ids.includes(taskId);
 }
 

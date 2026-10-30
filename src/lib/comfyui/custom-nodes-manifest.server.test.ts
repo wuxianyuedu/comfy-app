@@ -48,15 +48,11 @@ describe("路径：解析器与读取侧共用同一个字面量", () => {
     expect(CUSTOM_NODES_MANIFEST_REL).toBe(
       path.join("src", "generated", "customNodes.manifest.json"),
     );
-    expect(customNodesManifestPath("/repo")).toBe(
-      path.join("/repo", CUSTOM_NODES_MANIFEST_REL),
-    );
+    expect(customNodesManifestPath("/repo")).toBe(path.join("/repo", CUSTOM_NODES_MANIFEST_REL));
   });
 
   it("默认根是 process.cwd()（生产调用不传参）", () => {
-    expect(customNodesManifestPath()).toBe(
-      path.join(process.cwd(), CUSTOM_NODES_MANIFEST_REL),
-    );
+    expect(customNodesManifestPath()).toBe(path.join(process.cwd(), CUSTOM_NODES_MANIFEST_REL));
   });
 });
 
@@ -185,7 +181,7 @@ describe("相 3 · unreadable —— 文件在但读不出来，是真故障", (
 
 describe("三相互斥：同一份磁盘只可能给出一个结论", () => {
   it("kind 只可能是 missing / ok / unreadable 三者之一", () => {
-    const cases: string[] = [];
+    const cases: Array<string> = [];
     // 空根 → missing
     cases.push(readCustomNodesManifest(root).kind);
     // 正常文件 → ok

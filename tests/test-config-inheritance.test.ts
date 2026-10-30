@@ -114,7 +114,7 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       const cfg = /* SAFETY: 类型断言已复核 */ project.config as unknown as Record<string, unknown>;
       const prefix = `[${project.name}]`;
       // setupFiles 在解析后是**绝对路径**，所以比形状（落在仓库根之下、名字对）。
-      const setupFiles = /* SAFETY: 类型断言已复核 */ cfg.setupFiles as string[];
+      const setupFiles = /* SAFETY: 类型断言已复核 */ cfg.setupFiles as Array<string>;
       /* 比较前归一分隔符：`path.relative()` 在 win32 上给出 `tests\setup.ts`，而期望
          值按配置源码写成 POSIX 形式 —— 不归一的话这条判据在每台 Windows 上都红，
          且红的原因与它要判的事（共享项有没有落到每一档）毫无关系。 */
@@ -188,9 +188,9 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       expect(declared, `共享项 \`${key}\` 该声明在根 \`test\` 上`).toContain(key);
     }
 
-    const projects = /* SAFETY: 类型断言已复核 */ rootTest.projects as {
+    const projects = /* SAFETY: 类型断言已复核 */ rootTest.projects as Array<{
       test: Record<string, unknown> & { name?: string };
-    }[];
+    }>;
     for (const entry of projects) {
       const duplicated = Object.keys(entry.test).filter((k) =>
         Object.keys(SHARED_EXPECTATIONS).includes(k),

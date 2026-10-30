@@ -37,7 +37,7 @@ import { launcherChainSource } from "./helpers/launcher-source";
 type RunMeta = {
   runId?: string;
   mode?: string;
-  args?: string[];
+  args?: Array<string>;
   crashed?: boolean;
   exitCode?: number | null;
   endedAt?: string | null;
@@ -111,7 +111,7 @@ function alignMtimeToName(run: { name: string; dir: string }): void {
  *
  * 解释器走共享的 `runPython()`：Windows 上官方安装器落的是 `python.exe`，
  * 硬编码 `"python3"` 在自托管 Windows 构建节点上直接 ENOENT（见该 helper 的文件头）。 */
-function unzip(paths: string[]): string[] {
+function unzip(paths: Array<string>): Array<string> {
   return runPython(
     `
 import sys, zipfile
@@ -257,7 +257,7 @@ describe("崩溃补做（下次启动）", () => {
 
 describe("保留策略", () => {
   it("只留最近 20 包（更早的删掉）", async () => {
-    const names: string[] = [];
+    const names: Array<string> = [];
     for (let i = 1; i <= 25; i++) {
       const name = `2026-09-${String(i).padStart(2, "0")}_000000-aaaaaa`;
       makeRun(name);
@@ -277,7 +277,7 @@ describe("保留策略", () => {
   it("7 天内的包即使超过 20 个也留着（两条通道各管一头）", async () => {
     // 同一天里 25 包（高频调试的真实形态）—— 全部落在 7 天窗口内，
     // 若只剩「20 包上限」这一条通道生效，最早的 5 包会被删。
-    const names: string[] = [];
+    const names: Array<string> = [];
     for (let i = 0; i < 25; i++) {
       const name = `2026-09-10_00000${String(i).padStart(2, "0")}-aaaaaa`;
       makeRun(name, new Date(2026, 8, 10, 12, 0, i));

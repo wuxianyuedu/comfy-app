@@ -76,7 +76,7 @@ function forceGitQuotePath(on: boolean): void {
 /** 临时仓：一份中文名的文档源 + 它的镜像。 */
 function makeRepo(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "git-path-quoting-"));
-  const git = (...args: string[]) =>
+  const git = (...args: Array<string>) =>
     execFileSync("git", args, { cwd: dir, encoding: "utf8", env: gitSandboxEnv() });
   git("init", "-q");
   mkdirSync(path.join(dir, "docs", "standards"), { recursive: true });
@@ -189,8 +189,8 @@ function hasGuard(slice: string): boolean {
  * 这种形态里，旗标与守卫必须在**同一个**数组里 —— 而外层那个数组（`attempts = [ … ]`）
  * 装着好几条命令，不该替其中一条背书。
  */
-function unguardedSites(source: string): string[] {
-  const out: string[] = [];
+function unguardedSites(source: string): Array<string> {
+  const out: Array<string> = [];
   for (const token of PATH_FLAG_TOKENS) {
     const needle = `"${token}"`;
     let at = source.indexOf(needle);
@@ -210,7 +210,7 @@ function unguardedSites(source: string): string[] {
 }
 
 /** `scripts/**` 下的源码文件清单（跳过依赖与产物）。 */
-function scriptFiles(dir: string, found: string[] = []): string[] {
+function scriptFiles(dir: string, found: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (["node_modules", ".git", ".next", "target", "dist", "build"].includes(entry.name)) {
       continue;
@@ -224,7 +224,7 @@ function scriptFiles(dir: string, found: string[] = []): string[] {
 
 describe("静态：读 git 路径的调用必须带守卫（防复发）", () => {
   it("每一处读路径的 git 调用都带 `-c core.quotePath=false` 或 `-z`", () => {
-    const problems: string[] = [];
+    const problems: Array<string> = [];
     for (const abs of scriptFiles(path.join(ROOT, "scripts"))) {
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");
       const exempt = EXEMPT.find((e) => e.file === rel);
@@ -249,7 +249,7 @@ describe("静态：读 git 路径的调用必须带守卫（防复发）", () =>
   });
 
   it("豁免登记里不许有失效的旧账（那一处已经带上守卫了就撤掉）", () => {
-    const stale: string[] = [];
+    const stale: Array<string> = [];
     for (const e of EXEMPT) {
       const abs = path.join(ROOT, e.file);
       if (!existsSync(abs)) {

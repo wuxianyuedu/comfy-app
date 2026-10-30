@@ -10,17 +10,12 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  resetComfyStateClientForTest,
-  subscribeComfyStateChanges,
-} from "./comfy-state-client";
+import { resetComfyStateClientForTest, subscribeComfyStateChanges } from "./comfy-state-client";
 
-const fetches: string[] = [];
+const fetches: Array<string> = [];
 
 /** 装一个「按脚本逐次回答」的 fetch 替身。 */
-function stubFetch(
-  answers: Array<{ status: number; body?: unknown }>,
-): () => number {
+function stubFetch(answers: Array<{ status: number; body?: unknown }>): () => number {
   let i = 0;
   vi.stubGlobal(
     "fetch",
@@ -95,7 +90,7 @@ describe("subscribeComfyStateChanges", () => {
 
   it("拿到变化 → 通知订阅者，且下一轮带上新的 since", async () => {
     stubFetch([{ status: 200, body: change() }, { status: 204 }]);
-    const seen: number[] = [];
+    const seen: Array<number> = [];
     const off = subscribeComfyStateChanges((c) => seen.push(c.seq));
     await settle(2);
     expect(seen).toEqual([1]);
@@ -104,12 +99,8 @@ describe("subscribeComfyStateChanges", () => {
   });
 
   it("同一个 seq 再发一遍不再通知（重连补发不算新事件）", async () => {
-    stubFetch([
-      { status: 200, body: change() },
-      { status: 200, body: change() },
-      { status: 204 },
-    ]);
-    const seen: number[] = [];
+    stubFetch([{ status: 200, body: change() }, { status: 200, body: change() }, { status: 204 }]);
+    const seen: Array<number> = [];
     const off = subscribeComfyStateChanges((c) => seen.push(c.seq));
     await settle(3);
     expect(seen).toEqual([1]);
@@ -118,7 +109,7 @@ describe("subscribeComfyStateChanges", () => {
 
   it("坏帧不把链拖死：解析不了就继续下一轮", async () => {
     stubFetch([{ status: 200, body: { nope: true } }, { status: 204 }]);
-    const seen: number[] = [];
+    const seen: Array<number> = [];
     const off = subscribeComfyStateChanges((c) => seen.push(c.seq));
     await settle(3);
     expect(seen).toEqual([]);
@@ -133,7 +124,7 @@ describe("subscribeComfyStateChanges", () => {
         throw new Error("ECONNREFUSED");
       }),
     );
-    const seen: number[] = [];
+    const seen: Array<number> = [];
     const off = subscribeComfyStateChanges((c) => seen.push(c.seq));
     await settle(2);
     expect(seen).toEqual([]);
@@ -152,8 +143,8 @@ describe("subscribeComfyStateChanges", () => {
 
   it("多个订阅者共用一条链（同一次变化人人有份）", async () => {
     stubFetch([{ status: 200, body: change() }, { status: 204 }]);
-    const a: number[] = [];
-    const b: number[] = [];
+    const a: Array<number> = [];
+    const b: Array<number> = [];
     const offA = subscribeComfyStateChanges((c) => a.push(c.seq));
     const offB = subscribeComfyStateChanges((c) => b.push(c.seq));
     await settle(2);

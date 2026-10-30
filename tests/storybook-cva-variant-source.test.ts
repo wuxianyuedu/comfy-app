@@ -46,7 +46,7 @@ const ROOT = resolve(".");
 const COMPONENTS = join(ROOT, "src", "components");
 
 /** 递归收集 `*.stories.tsx`（不只看 `ui/`：故事的后继落点可能在业务目录）。 */
-function collectStories(dir: string, out: string[] = []): string[] {
+function collectStories(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
@@ -102,7 +102,7 @@ describe("故事文件的枚举来源（ISSUE #1381）", () => {
   });
 
   it("没有任何一份 story 从 cva 的返回值上取变体表", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const story of STORIES) {
       for (const hit of findCvaVariantAccess(parse(story))) {
         offenders.push(`${rel(story)}:${hit.line} → ${hit.text}`);
@@ -117,7 +117,7 @@ describe("故事文件的枚举来源（ISSUE #1381）", () => {
   });
 
   it("argTypes 的 options 指向的清单在文件里真的存在", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const story of STORIES) {
       const source = parse(story);
       const declared = new Set(
@@ -142,7 +142,7 @@ describe("故事文件的枚举来源（ISSUE #1381）", () => {
 
   it("组件的每个变体轴在故事里都有候选清单（整条轴漏掉 = 那一档没人验）", () => {
     expect(PAIRABLE.length, "一条都没比对到 = 判据在空转").toBeGreaterThan(0);
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const { story, component, axes } of PAIRABLE) {
       const refs = controlOptionsByAxis(parse(story));
       for (const axis of axes) {
@@ -155,7 +155,7 @@ describe("故事文件的枚举来源（ISSUE #1381）", () => {
   });
 
   it("手写的候选清单覆盖该轴的每一档（漏档是这条账的日常失效形态）", () => {
-    const checked: string[] = [];
+    const checked: Array<string> = [];
     for (const { story, component, axes } of PAIRABLE) {
       const source = parse(story);
       const refs = controlOptionsByAxis(source);

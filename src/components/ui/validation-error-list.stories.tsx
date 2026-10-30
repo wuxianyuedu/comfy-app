@@ -8,7 +8,7 @@ import type { ValidationError } from "~/lib/comfyui/validation";
  * 画布错误面板给玫红、历史卡给红。所以这里的几张展示的是「同一份数据在不同
  * 容器里长什么样」，不是组件自己的变体。
  */
-const ERRORS: ValidationError[] = [
+const ERRORS: Array<ValidationError> = [
   { nodeId: "10", classType: "KSampler", field: "cfg", message: "不是数字" },
   { nodeId: "10", classType: "KSampler", field: "steps", message: "超出范围" },
   { nodeId: "23", classType: "CLIPTextEncode", field: "text", message: "为空" },
@@ -53,9 +53,7 @@ export const InHistoryCard: Story = {
  */
 export const WithoutClassType: Story = {
   args: {
-    errors: [
-      { nodeId: "7", classType: "", field: "seed", message: "必须是整数" },
-    ],
+    errors: [{ nodeId: "7", classType: "", field: "seed", message: "必须是整数" }],
   },
 };
 

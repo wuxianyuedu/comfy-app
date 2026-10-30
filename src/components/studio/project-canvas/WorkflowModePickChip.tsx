@@ -11,9 +11,9 @@ import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import { OptionListPopover } from "~/components/ui/option-list-popover";
 
 interface WorkflowModePickChipProps {
-  modes: string[];
+  modes: Array<string>;
   defaultMode: string | null;
-  onChange: (modes: string[], defaultMode: string) => void;
+  onChange: (modes: Array<string>, defaultMode: string) => void;
   disabled?: boolean;
 }
 
@@ -47,9 +47,7 @@ export function WorkflowModePickChip({
    * 好决定 `PopoverAutoClose` 挂不挂。 */
   const [open, setOpen] = useState(false);
 
-  const defType = ALL_WORKFLOW_TYPES.find(
-    (workflowType) => workflowType.code === defaultMode,
-  );
+  const defType = ALL_WORKFLOW_TYPES.find((workflowType) => workflowType.code === defaultMode);
   const triggerLabel = defType?.label ?? defaultMode ?? "未选";
   const hasModes = modes.length > 0;
 
@@ -97,14 +95,10 @@ export function WorkflowModePickChip({
             prefix: (
               <span
                 className={`flex size-3.5 shrink-0 items-center justify-center rounded-full border ${
-                  isDef
-                    ? "border-primary bg-primary-soft"
-                    : "border-border-strong bg-subtle"
+                  isDef ? "border-primary bg-primary-soft" : "border-border-strong bg-subtle"
                 }`}
               >
-                {isDef && (
-                  <span className="bg-primary-strong size-1.5 rounded-full" />
-                )}
+                {isDef && <span className="bg-primary-strong size-1.5 rounded-full" />}
               </span>
             ),
             suffix: (

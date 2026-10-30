@@ -16,17 +16,15 @@ interface EntryRow {
   id: string;
   name: string;
   updatedAt: number;
-  nodes: unknown[];
-  edges: unknown[];
+  nodes: Array<unknown>;
+  edges: Array<unknown>;
   origin: "server" | "local" | "both";
 }
 
 const listProjectsWithServerMock = vi.hoisted(() =>
-  vi.fn<() => Promise<{ entries: EntryRow[]; ok: boolean }>>(),
+  vi.fn<() => Promise<{ entries: Array<EntryRow>; ok: boolean }>>(),
 );
-const deleteProjectEverywhereMock = vi.hoisted(() =>
-  vi.fn<(id: string, name?: string) => void>(),
-);
+const deleteProjectEverywhereMock = vi.hoisted(() => vi.fn<(id: string, name?: string) => void>());
 const reapAllEmptyDraftsMock = vi.hoisted(() => vi.fn(() => 0));
 
 /* 拒收出口（`useSyncRefusalNotice`）要 `useToast` —— 这里替换掉，本文件断言的
@@ -37,8 +35,7 @@ vi.mock("../../project-canvas/hooks/use-sync-refusal-notice", () => ({
 
 vi.mock("~/lib/project-canvas/canvas-store", () => ({
   listProjectsWithServer: () => listProjectsWithServerMock(),
-  deleteProjectEverywhere: (id: string, name?: string) =>
-    deleteProjectEverywhereMock(id, name),
+  deleteProjectEverywhere: (id: string, name?: string) => deleteProjectEverywhereMock(id, name),
   reapAllEmptyDrafts: () => reapAllEmptyDraftsMock(),
 }));
 
@@ -104,10 +101,7 @@ describe("useWorksGallery", () => {
       name = await result.current.confirmDelete();
     });
 
-    expect(deleteProjectEverywhereMock).toHaveBeenCalledWith(
-      "proj_orphan",
-      "未命名",
-    );
+    expect(deleteProjectEverywhereMock).toHaveBeenCalledWith("proj_orphan", "未命名");
     expect(name).toBe("未命名");
     // 确认框关掉、该行从列表里摘掉（不让用户以为没删掉、又点一次）。
     expect(result.current.pendingDelete).toBeNull();
@@ -134,8 +128,6 @@ describe("useWorksGallery", () => {
     await expect.poll(() => result.current.loading).toBe(false);
     expect(listProjectsWithServerMock).toHaveBeenCalledTimes(1);
     act(() => result.current.refresh());
-    await expect
-      .poll(() => listProjectsWithServerMock)
-      .toHaveBeenCalledTimes(2);
+    await expect.poll(() => listProjectsWithServerMock).toHaveBeenCalledTimes(2);
   });
 });

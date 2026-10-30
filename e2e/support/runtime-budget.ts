@@ -132,13 +132,13 @@ export function readNavigationSample(page: Page): Promise<{
  * @returns 稳态段最小值；判不了时 `null`
  */
 export function steadyMin(
-  samples: (number | null)[],
+  samples: Array<number | null>,
   discard: number = DISCARD_ROUNDS,
 ): number | null {
   if (samples.length <= discard) return null;
   const kept = samples.slice(discard);
   if (kept.some((v) => v === null || !Number.isFinite(v))) return null;
-  return Math.min(.../* SAFETY: 类型断言已复核 */ (kept as number[]));
+  return Math.min(.../* SAFETY: 类型断言已复核 */ (kept as Array<number>));
 }
 
 /**
@@ -158,8 +158,8 @@ export function steadyMin(
 export async function collectSamples(
   context: BrowserContext,
   url: string,
-): Promise<NavigationSample[]> {
-  const out: NavigationSample[] = [];
+): Promise<Array<NavigationSample>> {
+  const out: Array<NavigationSample> = [];
   for (let i = 0; i < ROUNDS; i++) {
     const page = await context.newPage();
     try {
@@ -182,7 +182,7 @@ export async function collectSamples(
  * @param samples 逐轮读数
  * @returns `{ loadEventEnd, firstContentfulPaint }`（稳态段 `min`，判不了时 `null`）
  */
-export function summarize(samples: NavigationSample[]): {
+export function summarize(samples: Array<NavigationSample>): {
   loadEventEnd: number | null;
   firstContentfulPaint: number | null;
 } {

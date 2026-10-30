@@ -23,7 +23,7 @@ afterEach(cleanup);
 import { FilePicker, FilePickerButton, useFilePicker, type FilePickerHandle } from "./file-picker";
 
 /** 把文件塞进 input 的 `files` 并派发 `change`（jsdom 不允许直接赋值）。 */
-function pick(input: HTMLInputElement, ...files: File[]) {
+function pick(input: HTMLInputElement, ...files: Array<File>) {
   const list = /* SAFETY: 类型断言已复核 */ {
     ...files,
     length: files.length,
@@ -120,7 +120,7 @@ describe("useFilePicker（命令式）", () => {
   });
 
   it("Input 身份稳定：多次渲染不重建 input（否则会打断正开着的文件对话框）", () => {
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     function Probe() {
       const [, force] = useState(0);
       const picker = useFilePicker({ onPick: noop });

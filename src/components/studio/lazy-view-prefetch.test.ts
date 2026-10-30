@@ -52,7 +52,7 @@ async function freshModule() {
 describe("lazy-view-prefetch — 懒加载分块的空闲预热", () => {
   it("空闲后才逐个要 loader，顺序即登记顺序", async () => {
     const mod = await freshModule();
-    const order: string[] = [];
+    const order: Array<string> = [];
     for (const name of ["settings", "queue", "mode-contract"]) {
       mod.registerLazyViewLoader(() => {
         order.push(name);
@@ -91,7 +91,7 @@ describe("lazy-view-prefetch — 懒加载分块的空闲预热", () => {
 
   it("一个 loader 失败不挡住后面的，也不留未处理拒绝", async () => {
     const mod = await freshModule();
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     mod.registerLazyViewLoader(() => Promise.reject(new Error("分块没了")));
     mod.registerLazyViewLoader(() => {
       seen.push("after");
@@ -106,7 +106,7 @@ describe("lazy-view-prefetch — 懒加载分块的空闲预热", () => {
 
   it("重复启动只排一次（幂等）", async () => {
     const mod = await freshModule();
-    const calls: number[] = [];
+    const calls: Array<number> = [];
     mod.registerLazyViewLoader(() => {
       calls.push(1);
       return Promise.resolve();
@@ -124,7 +124,7 @@ describe("lazy-view-prefetch — 懒加载分块的空闲预热", () => {
     vi.stubGlobal("requestIdleCallback", undefined);
     vi.useFakeTimers();
     const mod = await freshModule();
-    const calls: number[] = [];
+    const calls: Array<number> = [];
     mod.registerLazyViewLoader(() => {
       calls.push(1);
       return Promise.resolve();

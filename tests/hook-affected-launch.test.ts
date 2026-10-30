@@ -129,7 +129,7 @@ const SPAWN_LAYER_PATH = "scripts/affected-launch-spawn.mjs";
  * 「不许有漏掉的调用点」由本文件末尾那条判据钉住（针尖的构造方式见它里面的说明）。
  */
 async function captureStderr<T>(fn: () => Promise<T>): Promise<{ value: T; text: string }> {
-  const chunks: string[] = [];
+  const chunks: Array<string> = [];
   const realWrite = process.stderr.write.bind(process.stderr);
   process.stderr.write = (s: string | Uint8Array) => {
     chunks.push(String(s));
@@ -143,7 +143,7 @@ async function captureStderr<T>(fn: () => Promise<T>): Promise<{ value: T; text:
 }
 
 /** 造一份「n 个用例」的合成清单，单条长度接近真实值（约 60 字符）。 */
-function syntheticFiles(count: number): string[] {
+function syntheticFiles(count: number): Array<string> {
   return Array.from(
     { length: count },
     (_, i) => `src/components/studio/feature-${Math.floor(i / 100)}/hooks/use-thing-${i}.test.ts`,
@@ -323,7 +323,7 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
      * `mine.length > 0` 当场红 —— 这条断言的意义正在这里，别为了它把清单抄回来。 */
     const launcherLayer = readFileSync("scripts/affected-launch-load-retry.mjs", "utf8");
     const baseCheck = readFileSync("scripts/base-check/verdict.mjs", "utf8");
-    const pick = (text: string): string[] => {
+    const pick = (text: string): Array<string> => {
       const block = /const TIMEOUT_SIGNATURES = \[([\s\S]*?)\n\];/.exec(text);
       return (block?.[1] ?? "")
         .split("\n")
@@ -581,8 +581,8 @@ describe("受影响用例的启动器 —— 等待负载回落（有界、不�
      * 第一个 `await` 就交还控制权 —— 边跑边断只会看到第一跳（实测踩到过：
      * 断言报「只睡了 1 次」，而函数是对的）。 */
     const queue = [40, 30, 2];
-    const reads: number[] = [];
-    const sleeps: number[] = [];
+    const reads: Array<number> = [];
+    const sleeps: Array<number> = [];
     const { value: res } = await captureStderr(() =>
       waitForLoadToSettle({
         probe: {
@@ -661,15 +661,15 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   /** 一次假 spawn 的结果（与 launcher 里 `spawnVitest` 的返回形状同构）。 */
   type SpawnResult = { status: number | null; output: string };
   /** 一次假 spawn 的调用记录。 */
-  type SpawnCall = { entry: string; args: string[] };
+  type SpawnCall = { entry: string; args: Array<string> };
 
   /** 造一个假 spawn：按调用次序回放预设的结果。 */
-  function fakeSpawn(results: SpawnResult[]): {
-    spawn: (entry: string, args: string[]) => SpawnResult;
-    calls: SpawnCall[];
+  function fakeSpawn(results: Array<SpawnResult>): {
+    spawn: (entry: string, args: Array<string>) => SpawnResult;
+    calls: Array<SpawnCall>;
   } {
-    const calls: SpawnCall[] = [];
-    const spawn = (entry: string, args: string[]): SpawnResult => {
+    const calls: Array<SpawnCall> = [];
+    const spawn = (entry: string, args: Array<string>): SpawnResult => {
       calls.push({ entry, args: [...args] });
       return results[Math.min(calls.length - 1, results.length - 1)]!;
     };
@@ -690,7 +690,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
    * 它不是「把整块再测一遍」，而是把第 2 遍那份块级红**拆回文件级**的那一步 ——
    * 不拆的话，同块里一份超时会把别人的真断言红一起降级成「未校验」并退 0。
    */
-  const noThirdWholeBlock = (calls: SpawnCall[]) => {
+  const noThirdWholeBlock = (calls: Array<SpawnCall>) => {
     const blocks = calls.filter(
       (c) => c.args.filter((a) => String(a).endsWith(".test.ts")).length > 1,
     );
@@ -710,14 +710,14 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   async function runCapturing(deps: {
     entry: string;
     workers?: number;
-    spawn?: (entry: string, args: string[]) => SpawnResult;
+    spawn?: (entry: string, args: Array<string>) => SpawnResult;
     settle?: () => Promise<{
       settled: boolean;
       load: number;
       waitedMs: number;
     }>;
     waitBudget?: { deadline: number };
-    onUnverified?: (files: string[]) => void;
+    onUnverified?: (files: Array<string>) => void;
     onAttempt?: (record: { outcome: string; waitedMs?: number; settled?: boolean }) => void;
   }): Promise<{ code: number; text: string }> {
     /* 委托给模块级那一份：抓取的**机制**只许有一处，各写一份就会漂成
@@ -776,12 +776,12 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
    * 旧口径（负载没回落就阻断）把「机器忙」变成了提交者无法修的失败。 */
   it("两遍都只是超时形态 ⇒ **未校验、放行**（并逐条点名哪几份没被校验）", async () => {
     const { spawn, calls } = fakeSpawn([TIMEOUT, TIMEOUT]);
-    const unverified: string[][] = [];
+    const unverified: Array<Array<string>> = [];
     const { code, text } = await runCapturing({
       entry: "vitest.mjs",
       spawn,
       settle: unsettledHigh,
-      onUnverified: (files: string[]) => unverified.push([...files]),
+      onUnverified: (files: Array<string>) => unverified.push([...files]),
     });
     expect(code, "未校验不是红：提交继续").toBe(0);
     noThirdWholeBlock(calls);
@@ -808,7 +808,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
       load: 0.2,
       waitedMs: 0,
     };
-    const codes: number[] = [];
+    const codes: Array<number> = [];
     for (const s of [settledLow, () => Promise.resolve(settled)]) {
       const { spawn } = fakeSpawn([TIMEOUT, TIMEOUT]);
       const { code } = await runCapturing({
@@ -884,9 +884,9 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   });
 
   it("每一块的判决都进收尾那份账：五种结局各记一条，且不影响退出码", async () => {
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     const onAttempt = (r: { outcome: string }) => seen.push(r.outcome);
-    const once = async (results: SpawnResult[], settle = settledLow) =>
+    const once = async (results: Array<SpawnResult>, settle = settledLow) =>
       runCapturing({
         entry: "vitest.mjs",
         spawn: fakeSpawn(results).spawn,
@@ -906,8 +906,8 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
       "real-red",
     ]);
     // 记账只喂读数：未校验那两块照样放行（0），真红那两块照样阻断（非 0）。
-    const codes: number[] = [];
-    const cases: SpawnResult[][] = [
+    const codes: Array<number> = [];
+    const cases: Array<Array<SpawnResult>> = [
       [GREEN],
       [TIMEOUT, GREEN],
       [TIMEOUT, TIMEOUT],
@@ -1169,7 +1169,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
 });
 
 describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一个布局", () => {
-  const dirs: string[] = [];
+  const dirs: Array<string> = [];
   afterEach(() => {
     for (const dir of dirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true });
@@ -1212,14 +1212,14 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
 
   it("quiet + 账本：两遍的 reporter 都是 dot + junit，且没有 default", async () => {
     const dir = tempDir();
-    const calls: string[][] = [];
+    const calls: Array<Array<string>> = [];
     await captureStderr(() =>
       runChunk(["tests/a.test.ts"], {
         entry: "vitest.mjs",
         quiet: true,
         junitDir: dir,
         chunkId: 3,
-        spawn: (_e: string, args: string[]) => {
+        spawn: (_e: string, args: Array<string>) => {
           calls.push(args);
           return calls.length === 1
             ? { status: 1, output: "Test timed out in 30000ms" }
@@ -1240,13 +1240,13 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
 
   it("runChunk 真的把这两段拼进两次 spawn，清单仍在最后", async () => {
     const dir = tempDir();
-    const calls: { entry: string; args: string[] }[] = [];
+    const calls: Array<{ entry: string; args: Array<string> }> = [];
     await captureStderr(() =>
       runChunk(["tests/a.test.ts"], {
         entry: "vitest.mjs",
         junitDir: dir,
         chunkId: 7,
-        spawn: (_entry: string, args: string[]) => {
+        spawn: (_entry: string, args: Array<string>) => {
           calls.push({ entry: _entry, args });
           return calls.length === 1
             ? { status: 1, output: "Test timed out in 30000ms" }
@@ -1326,14 +1326,14 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
         status: 1,
         output: "Error: Test timed out in 30000ms.",
       };
-      const calls: string[][] = [];
-      const outcomes: string[] = [];
+      const calls: Array<Array<string>> = [];
+      const outcomes: Array<string> = [];
       const { value: code, text } = await captureStderr(() =>
         runChunk(CHUNK, {
           entry: "vitest.mjs",
           junitDir: dir,
           chunkId: 0,
-          spawn: (_entry: string, args: string[]) => {
+          spawn: (_entry: string, args: Array<string>) => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             return TIMEOUT;
           },
@@ -1369,8 +1369,8 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
         output: "Error: Test timed out in 30000ms.",
       };
       const GREEN = { status: 0, output: "Test Files 1 passed" };
-      const calls: string[][] = [];
-      const outcomes: string[] = [];
+      const calls: Array<Array<string>> = [];
+      const outcomes: Array<string> = [];
       /* 首遍墙钟由假 spawn 决定：`Date.now()` 在假进程里不会走，所以要让「整块估计」
        * （首遍 ×2）真的**大于**剩余量 —— 否则这一条测的是「界还够」那一支。 */
       let fakeNow = 0;
@@ -1381,7 +1381,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
           entry: "vitest.mjs",
           junitDir: dir,
           chunkId: 0,
-          spawn: (_entry: string, args: string[]) => {
+          spawn: (_entry: string, args: Array<string>) => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             /* 首遍「耗时」16 分钟（现场读数），第 2 遍只花 0.4 秒。 */
             fakeNow += calls.length === 1 ? 16 * 60_000 : 400;
@@ -1421,14 +1421,14 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
         output: "Error: Test timed out in 30000ms.",
       };
       const GREEN = { status: 0, output: "Test Files 2 passed" };
-      const calls: string[][] = [];
-      const outcomes: string[] = [];
+      const calls: Array<Array<string>> = [];
+      const outcomes: Array<string> = [];
       const { value: code } = await captureStderr(() =>
         runChunk(CHUNK, {
           entry: "vitest.mjs",
           junitDir: dir,
           chunkId: 0,
-          spawn: (_entry: string, args: string[]) => {
+          spawn: (_entry: string, args: Array<string>) => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             return calls.length === 1 ? TIMEOUT : GREEN;
           },
@@ -1494,19 +1494,19 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
         output: "Error: Test timed out in 30000ms.\nIf this is a long-running test...",
       };
       const GREEN = { status: 0, output: "Test Files 1 passed" };
-      const calls: string[][] = [];
-      const unverified: string[][] = [];
+      const calls: Array<Array<string>> = [];
+      const unverified: Array<Array<string>> = [];
       const { value: code } = await captureStderr(() =>
         runChunk(CHUNK, {
           entry: "vitest.mjs",
           junitDir: dir,
           chunkId: 0,
-          spawn: (_entry: string, args: string[]) => {
+          spawn: (_entry: string, args: Array<string>) => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             return calls.length === 1 ? TIMEOUT : GREEN;
           },
           settle: () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_200 }),
-          onUnverified: (files: string[]) => unverified.push([...files]),
+          onUnverified: (files: Array<string>) => unverified.push([...files]),
         }),
       );
       expect(code).toBe(0);
@@ -1528,7 +1528,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
         status: 1,
         output: "Error: Test timed out in 30000ms.",
       };
-      const unverified: string[][] = [];
+      const unverified: Array<Array<string>> = [];
       const { value: code } = await captureStderr(() =>
         runChunk(CHUNK, {
           entry: "vitest.mjs",
@@ -1536,7 +1536,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
           chunkId: 0,
           spawn: () => TIMEOUT,
           settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 800 }),
-          onUnverified: (files: string[]) => unverified.push([...files]),
+          onUnverified: (files: Array<string>) => unverified.push([...files]),
         }),
       );
       /* 未校验 ⇒ 放行（退 0），但名单必须只有那一份。 */
@@ -1580,17 +1580,17 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
   }
 
   /** 第 1 遍的读数：`fails` 里点名的那些文件算失败（复跑面由它决定）。 */
-  const firstFails = (...fails: string[]) =>
+  const firstFails = (...fails: Array<string>) =>
     CHUNK.map((f) => suiteWith(f, fails.includes(f) ? 1 : 0, fails.includes(f) ? "x" : "")).join(
       "",
     );
 
   /** 按次序回放结果的假 spawn，同时把每次的清单记下来（补跑发生过没有要看它）。 */
-  function scripted(results: { status: number; output: string }[]) {
-    const lists: string[][] = [];
+  function scripted(results: Array<{ status: number; output: string }>) {
+    const lists: Array<Array<string>> = [];
     return {
       lists,
-      spawn: (_entry: string, args: string[]) => {
+      spawn: (_entry: string, args: Array<string>) => {
         const at = Math.min(lists.length, results.length - 1);
         lists.push(args.filter((a) => String(a).endsWith(".test.ts")));
         return results[at]!;
@@ -1639,7 +1639,7 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
         suiteWith("tests/a.test.ts", 1, TIMEOUT_BODY) +
           suiteWith("tests/b.test.ts", 1, "Timeout waiting for worker to respond"),
       );
-      const unverified: string[][] = [];
+      const unverified: Array<Array<string>> = [];
       const { value: code } = await captureStderr(() =>
         runChunk(CHUNK, {
           entry: "vitest.mjs",
@@ -1647,7 +1647,7 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
           chunkId: 0,
           spawn: () => TIMEOUT,
           settle: settledLow,
-          onUnverified: (files: string[]) => unverified.push([...files]),
+          onUnverified: (files: Array<string>) => unverified.push([...files]),
         }),
       );
       expect(code).toBe(0);
@@ -1685,7 +1685,7 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
     try {
       writeXml(dir, 1, firstFails("tests/a.test.ts", "tests/b.test.ts"));
       const s = scripted([TIMEOUT, TIMEOUT, GREEN, TIMEOUT]);
-      const unverified: string[][] = [];
+      const unverified: Array<Array<string>> = [];
       const { value: code } = await captureStderr(() =>
         runChunk(CHUNK, {
           entry: "vitest.mjs",
@@ -1693,7 +1693,7 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
           chunkId: 0,
           spawn: s.spawn,
           settle: settledLow,
-          onUnverified: (files: string[]) => unverified.push([...files]),
+          onUnverified: (files: Array<string>) => unverified.push([...files]),
         }),
       );
       expect(code).toBe(0);
@@ -1795,15 +1795,15 @@ describe("第 1 遍就没跑起来（装载 / 运行时级错误）", () => {
 
   /** 起一次 `runChunk` 并把 stderr 收在手里（与上面那节同一个抓取通道）。 */
   async function runWith(
-    results: { status: number; output: string }[],
+    results: Array<{ status: number; output: string }>,
     extra: Partial<Parameters<typeof runChunk>[1]> = {},
   ) {
-    const calls: string[][] = [];
-    const seen: string[] = [];
+    const calls: Array<Array<string>> = [];
+    const seen: Array<string> = [];
     const { value: code, text } = await captureStderr(() =>
       runChunk(CHUNK, {
         entry: "vitest.mjs",
-        spawn: (_entry: string, args: string[]) => {
+        spawn: (_entry: string, args: Array<string>) => {
           calls.push(args);
           return results[Math.min(calls.length - 1, results.length - 1)]!;
         },
@@ -1872,10 +1872,10 @@ describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
     /* 这一档没生效时**不报错**：表现是平台日志又被截断，而那时读的人只会看到
      * `The log length exceeds the limit` —— 正是这一档要治的病。所以「用的哪个
      * reporter」必须是一句读得到的话，不能只存在于代码里（§11.23）。 */
-    const said: string[] = [];
+    const said: Array<string> = [];
     expect(announceQuiet("1", (t) => said.push(t))).toBe(true);
     expect(said.join("")).toContain("dot");
-    const off: string[] = [];
+    const off: Array<string> = [];
     expect(announceQuiet(undefined, (t) => off.push(t))).toBe(false);
     expect(off.join("")).toContain("默认");
     /* 两档的话术必须**读得出区别**（否则这一格在日志里等于没有）。 */
@@ -1894,12 +1894,12 @@ describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
   it("quiet 真的接进了**两遍**（复跑那一遍的打印量更大）", async () => {
     const TIMEOUT = { status: 1, output: "Error: Test timed out in 30000ms." };
     const GREEN = { status: 0, output: "Test Files 1 passed" };
-    const calls: string[][] = [];
+    const calls: Array<Array<string>> = [];
     await captureStderr(() =>
       runChunk(["tests/a.test.ts"], {
         entry: "vitest.mjs",
         quiet: true,
-        spawn: (_e: string, args: string[]) => {
+        spawn: (_e: string, args: Array<string>) => {
           calls.push(args);
           return calls.length === 1 ? TIMEOUT : GREEN;
         },

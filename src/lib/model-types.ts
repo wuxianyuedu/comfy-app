@@ -28,7 +28,7 @@ export function prettyFolder(folder: string): string {
  * 键是 ComfyUI 加载器里的规范字段名；数组列出这些字段真正读取的
  * `folder_paths` 目录。
  */
-export const FIELD_TO_FOLDERS: Record<string, string[]> = {
+export const FIELD_TO_FOLDERS: Record<string, Array<string>> = {
   ckpt_name: ["checkpoints"],
   unet_name: ["unet", "diffusion_models"],
   vae_name: ["vae"],
@@ -69,8 +69,8 @@ export const FIELD_TO_FOLDERS: Record<string, string[]> = {
 };
 
 /* 反向映射：目录名 → 从它读取的字段名（用于提示气泡）。 */
-const FOLDER_TO_FIELDS: Record<string, string[]> = (() => {
-  const m: Record<string, string[]> = {};
+const FOLDER_TO_FIELDS: Record<string, Array<string>> = (() => {
+  const m: Record<string, Array<string>> = {};
   for (const [field, folders] of Object.entries(FIELD_TO_FOLDERS)) {
     for (const f of folders) (m[f] ??= []).push(field);
   }
@@ -82,7 +82,7 @@ const FOLDER_TO_FIELDS: Record<string, string[]> = (() => {
  * 再不精确地按归一化后的子串兜底，好让变体字段名也能解析出来。
  * 返回目录名（它们**就是**模型类型）。
  */
-export function modelFoldersForField(field: string): string[] {
+export function modelFoldersForField(field: string): Array<string> {
   if (!field) return [];
 
   const exact = FIELD_TO_FOLDERS[field];
@@ -91,7 +91,7 @@ export function modelFoldersForField(field: string): string[] {
 
   const lowerField = field.toLowerCase();
 
-  const rules: [RegExp, string[]][] = [
+  const rules: Array<[RegExp, Array<string>]> = [
     [/ckpt/, ["checkpoints"]],
 
     [/unet|diffusion/, ["unet", "diffusion_models"]],
@@ -120,10 +120,7 @@ export function modelFoldersForField(field: string): string[] {
 
     [/instantid/, ["instantid"]],
 
-    [
-      /animatediff|motion_model/,
-      ["animatediff_models", "animatediff_motion_lora"],
-    ],
+    [/animatediff|motion_model/, ["animatediff_models", "animatediff_motion_lora"]],
 
     [/insightface/, ["insightface"]],
 
@@ -251,7 +248,7 @@ const FOLDER_META: Record<string, { label: string; color: string }> = {
 };
 
 /* 非空数组：模运算取下标时用 `.at()`，缺席有兜底项（见 `folderMeta`）。 */
-const FALLBACK_PALETTE: [string, ...string[]] = [
+const FALLBACK_PALETTE: [string, ...Array<string>] = [
   "text-violet-700 dark:text-violet-300 bg-violet-500/15",
   "text-emerald-700 dark:text-emerald-300 bg-emerald-500/15",
   "text-sky-700 dark:text-sky-300 bg-sky-500/15",
@@ -278,9 +275,7 @@ export function folderMeta(folder: string): { label: string; color: string } {
   if (curated) return curated;
   return {
     label: prettyFolder(folder),
-    color:
-      FALLBACK_PALETTE.at(hashString(folder) % FALLBACK_PALETTE.length) ??
-      FALLBACK_PALETTE[0],
+    color: FALLBACK_PALETTE.at(hashString(folder) % FALLBACK_PALETTE.length) ?? FALLBACK_PALETTE[0],
   };
 }
 

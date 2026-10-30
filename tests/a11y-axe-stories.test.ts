@@ -152,7 +152,7 @@ function reasonOf(error: unknown): string {
 }
 
 /** 一份逐字可粘的清单（判红时必须打印它 —— 红话要给得出下一步）。 */
-function asLedger(findings: Finding[], unrenderable: string[]): string {
+function asLedger(findings: Array<Finding>, unrenderable: Array<string>): string {
   const byPair = new Map<string, Finding>();
   for (const f of findings) {
     const key = `${f.component}|${f.rule}`;
@@ -200,15 +200,15 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
       `探针拿到了 ${probeColor || "（空）"} —— 环境的 CSS 现在生效了，第 ⑤ 条的前提变了：重算 PAINT_SCOPE_RULES_OFF 那三条还该不该关着`,
     ).not.toBe("rgb(255, 255, 255)");
 
-    const findings: Finding[] = [];
+    const findings: Array<Finding> = [];
     /* 每条**新**违规留一个命中节点的 HTML（只第一条、截断）。登记表里只有
      * `(组件, 规则, 节点数)`，那三样不足以回答「凭什么报我」—— 而这一档最常见的
      * 争议正是「这是组件的缺陷，还是这一档渲出来的形态」。有了节点原文，
      * 定性不必再跑一遍去加探针。 */
     const nodeSamples = new Map<string, string>();
-    const unrenderable: string[] = [];
+    const unrenderable: Array<string> = [];
     const reasons = new Map<string, string>();
-    const argTypeDefaultHits: string[] = [];
+    const argTypeDefaultHits: Array<string> = [];
     let rendered = 0;
 
     for (const [path, mod] of Object.entries(files)) {
@@ -315,12 +315,15 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
 
     const actual = asLedger(findings, unrenderable);
     const registered = asLedger(
-      /* SAFETY: 类型断言已复核 */ (KNOWN.violations as Finding[]).map((v) => ({ ...v, nodes: 0 })),
+      /* SAFETY: 类型断言已复核 */ (KNOWN.violations as Array<Finding>).map((v) => ({
+        ...v,
+        nodes: 0,
+      })),
       KNOWN.unrenderable,
     );
     const actualPairs = /* SAFETY: 类型断言已复核 */ JSON.parse(actual) as {
-      violations: { component: string; rule: string }[];
-      unrenderable: string[];
+      violations: Array<{ component: string; rule: string }>;
+      unrenderable: Array<string>;
     };
     const registeredPairs = /* SAFETY: 类型断言已复核 */ JSON.parse(
       registered,
