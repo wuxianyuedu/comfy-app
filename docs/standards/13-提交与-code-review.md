@@ -9159,10 +9159,15 @@ into …` 字样，所以 `check-merge-parents`（§13.6.1）在 squash 之后�
 
   ```bash
   pnpm check:premerge                 # 三段全跑，人眼看的报告
+  pnpm check:premerge --full          # 同上；「全套」这一档的显式写法（与默认逐字相同）
   pnpm check:premerge --json          # 机器可读（逐段给结论）
   pnpm check:premerge --skip-claims   # PR 里还没写合并信息时
   pnpm check:premerge --only=base     # 只跑一段（排查用）
   ```
+
+  认不出的旗标**退 2 并点名**（ISSUE #2764）：拼错的旗标既不生效也不报错的那些年里，
+  「我加了全套那一档」这句话没有任何依据 —— 2 的读法是「这一跳没有结论」，不是「跑过了且绿」。
+  `--full` 与 `--light` 同时给同样退 2（两个方向的口号同时出现时，入口不替人挑档）。
 
   **执行者不再是「人的记性」：这一跳现在挂在 push 上**（`.githooks/pre-push` →
   `scripts/premerge-proof.mjs`）。本地看不到平台侧那次 squash 合并，而 push 是本地最后一个

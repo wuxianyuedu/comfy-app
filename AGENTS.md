@@ -13,6 +13,9 @@
 1. `README.md` — 项目是什么、技术栈、目录结构、常用命令与入口。
 2. `docs/README.md` — 文档中心统一索引：主规范与 standards 文档集（01~18 章）、
    各指南、冲突裁决链与「改动前先看对应章节」的定位方法。
+   - 规范章节体量大、别整篇读：`pnpm doc:toc <章节> [关键词]` 打出「标题 → 行号」目录
+     （可选过滤），并给出可直接照抄的 `Read(offset, limit)` 区间；默认读源，
+     `--rendered` 才读 `docs/generated/**` 镜像（行号不同）。单一出处：`scripts/doc-toc.mjs` 文件头。
 3. 本文件（`AGENTS.md`）全文——尤其下方「硬规则」与「强制先读规范文档的改动范围」表。
 
 按改动范围快速定位规范章节：
@@ -39,6 +42,13 @@
   [`.qoder/skills/ship/SKILL.md`](.qoder/skills/ship/SKILL.md)），本文件不抄旗标清单
   （抄一份旗标，下一个旗标加进来时这里就脱钩）。
 - 不确定读哪些 → 先读 `docs/standards/15-附录.md` §15.5「新成员 10 分钟速读路径」建立全局认知。
+- **不确定这次改动该跑哪几条门禁 / 哪份用例 / 读哪一节规范** → 跑 `pnpm gates:which`
+  （默认按当前分支相对基线取改动面，`--changed <路径…>` 给显式名单）。它只转述既有执行者的
+  登记：门禁分档取自钩子步骤行与 `ci-incremental-gates.mjs` 的收窄面、用例直接起
+  `scripts/affected-tests.mjs` 的判决链、规范读下方那张表的机器可读副本
+  `scripts/doc-reading-map.mjs`。**给的是「建议跑」不是「已跑」**（本地默认只有 D0）；
+  用例是静态 import 图的增量面、不是全量凭证；改动面为空 / 取不到基线 ⇒ 退 2 = 没有结论，
+  不是「什么都不用跑」。
 - **依赖版本可能落后于远端**（别人升过库、你还在旧的上面干活）→ 先跑
   `pnpm check:deps-freshness`，再读 `docs/guides/sync-after-pull.md`；判据口径见 §13.5.13。
 - 跨文件检索 / 代码图谱查询（`codegraph`、`zvec-grep` 两个本地只读 MCP，声明见 `.mcp.json`）→
@@ -47,7 +57,8 @@
   这里只保留那条红线：**门禁判据只在 `scripts/check-*.cjs` 与 `.githooks/pre-commit`**——MCP
   不替代机器判据，也不作为提交前的独立校验源。第二条红线同样属于本文件：**索引未初始化时
   语义检索返回空而不报错**，所以「MCP 查不到」**不等于**「仓库里没有」——要下「没有现成实现」
-  的结论（硬规则 24 的复用优先），必须再用 Grep / Read 复核一遍。
+  的结论（硬规则 24 的复用优先），必须再用 Grep / Read 复核一遍。用之前先跑
+  `pnpm agent:index` 拿两个工具自己的就绪读数（默认只读；`--init` 才建索引）。
 - **不确定某个第三方库在「本仓锁定的那个大版本」上 API 长什么样**（训练数据滞后于
   Next 16 / React 19 / drizzle 0.45 / tRPC 11 / better-auth 1.7 / Tauri 2）→ 用 `context7` MCP
   查官方文档，**别凭记忆写**。用法与那条边界（它治 API 漂移、不治依赖版本漂移，也不回答
@@ -56,6 +67,9 @@
 
 > 判断标准：改动被「强制先读规范文档的改动范围」表或本清单覆盖但未先读就动手 = 违规，
 > 提交会被拒或要求回滚。
+
+> 下面这张表有机器可读副本 `scripts/doc-reading-map.mjs`（`pnpm gates:which` 按改动面匹配它），
+> 两边由 `tests/gates-which.test.ts` 双向核对：改了表不加登记、或登记了不改表，都会当场红。
 
 ## 强制先读规范文档的改动范围
 
@@ -103,7 +117,7 @@
    `shellStaleWarning()` 把「没重编就提交」拦下，并在改了 `src-tauri/src/*.rs` 时跑
    `cargo test`（壳内全部 `#[test]` 唯一的执行者——条数随源码变动，别在这里写死，以
    `cargo test` 自己的输出为准）；触发面与 mtime 边界见规范 §11.10.4。
-6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492）：两层防线 = 平台**分支保护设置**（拦 push、放行 PR 合并）+ `.githooks/pre-commit` 开头的组 0「master 分支提交守卫」`scripts/check-branch-guard.cjs`（拦本地提交）。**判据是 HEAD 父提交数**：`master` 上 ≤ 1 = 直连主干阻断，> 1 = PR 合并放行（只查分支名会把合并一起拦掉）。`check-branch-guard.cjs` 的 `--pr-check` / `--merge-commit` 两个服务端形态由仓库根 `.cnb.yml` 调用（§13.5.3）——**它取自源分支、跑的是另一份清单**，不能替代本地这一层。**平台层禁用 `git create-branch-lock`**（锁整分支写入会把 PR 合并一起拦死）。误提交到本地 `master` 时：`git branch feat/<描述>` → `git reset --hard origin/master` → `git checkout feat/<描述>` → 推送开 PR。三种拓扑回归见 §13.6.1。**推送那一跳有机器执行者**：`.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑 `pnpm check:premerge`（证明写 `.git/comfy-premerge-proof.json` 不入库，同仓并行检出不许互相作证），口径与边界见 §13.6.2.1。**它默认只复算「本地档那几条」**（同一份注册表，边界由 `localTierLabels()` 取，不另立名单），并打印跳过了几条重档；要全套 `pnpm check:premerge --full`。
+6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492）：两层防线 = 平台**分支保护设置**（拦 push、放行 PR 合并）+ `.githooks/pre-commit` 开头的组 0「master 分支提交守卫」`scripts/check-branch-guard.cjs`（拦本地提交）。**判据是 HEAD 父提交数**：`master` 上 ≤ 1 = 直连主干阻断，> 1 = PR 合并放行（只查分支名会把合并一起拦掉）。`check-branch-guard.cjs` 的 `--pr-check` / `--merge-commit` 两个服务端形态由仓库根 `.cnb.yml` 调用（§13.5.3）——**它取自源分支、跑的是另一份清单**，不能替代本地这一层。**平台层禁用 `git create-branch-lock`**（锁整分支写入会把 PR 合并一起拦死）。误提交到本地 `master` 时：`git branch feat/<描述>` → `git reset --hard origin/master` → `git checkout feat/<描述>` → 推送开 PR。三种拓扑回归见 §13.6.1。**推送那一跳有机器执行者**：`.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑 `pnpm check:premerge`（证明写 `.git/comfy-premerge-proof.json` 不入库，同仓并行检出不许互相作证），口径与边界见 §13.6.2.1。**这一跳默认跑全套**（复算那一批的边界由 `localTierLabels()` 从钩子文本取，不另立名单）；要减到只跑本地形态档那几条用 `pnpm check:premerge --light`（它会打印跳过了几条重档——降档永远要被读出来），`--full` 是这套默认的显式写法。
 7. **提交必须通过 `.githooks/pre-commit`，而这一档现在是「形态档」**（分支守卫 + **形态前置档
    D0**：判「这次提交自身的形态」那几条，串行跑完再进其余档，见 §13.5.8.2.1）。
    **tsc / eslint / 其余静态判据默认不在每次提交上跑**（ISSUE #2022 / 规范

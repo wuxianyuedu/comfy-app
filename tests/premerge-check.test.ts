@@ -146,6 +146,32 @@ describe("premerge-check —— 段的筛选", () => {
   });
 });
 
+describe("premerge-check —— 旗标解析（#2764）", () => {
+  test("拼错的旗标 ⇒ 退 2 并**点名**那一枚（不许静默吞）", () => {
+    /* 立案形状：`--full` 在 AGENTS.md 与 ship Skill 里被写成「全套那一档」，而入口的
+     * `parseArgs` 没有 else 分支 —— 拼错的旗标既不生效也不报错，于是「我跑的是全套」
+     * 这句话没有任何依据。退 2 是这一格唯一的诚实读数：没跑起来 ≠ 跑了且绿。 */
+    const { code, output } = run(["--fulll"]);
+    expect(code).toBe(2);
+    expect(output).toContain("--fulll");
+    expect(output).toContain("不认识");
+  });
+
+  test("`--full` 是默认档的显式写法，与不给它逐字相同", () => {
+    const plain = run(["--only=claims"]);
+    const explicit = run(["--only=claims", "--full"]);
+    expect(plain.code).toBe(0);
+    expect(explicit.code).toBe(plain.code);
+  });
+
+  test("`--full` 与 `--light` 同时给 ⇒ 退 2（入口不替人挑档）", () => {
+    const { code, output } = run(["--full", "--light", "--only=claims"]);
+    expect(code).toBe(2);
+    expect(output).toContain("--full");
+    expect(output).toContain("--light");
+  });
+});
+
 describe("premerge-check —— 不发明第二套实现（面的来源）", () => {
   test("`base` 段走 base-check 的既有实现，不自己建快照 / 不自己算四态", () => {
     /* 这条是**形态判据**、不是文本判据：本入口必须 `import` 既有实现。
