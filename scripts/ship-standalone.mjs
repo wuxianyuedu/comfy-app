@@ -332,6 +332,7 @@ export function runStandaloneAction(io) {
           handle,
           mkTmp,
           asMerged: opt.asMerged,
+          dryRun: opt.dryRun,
         }),
       ]),
     };

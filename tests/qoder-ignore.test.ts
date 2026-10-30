@@ -51,6 +51,10 @@ const MUST_COVER = [
   "/log/",
   "/data/",
   "/docs/api/",
+  /* 入库的那两条：正文与源逐字重复（镜像）或纯历史（归档），它们在检索面里常驻
+   * 就等于让每一次文档检索都命中两份 —— 见 ISSUE #2761。 */
+  "/docs/generated/",
+  "/CHANGELOG-archive.md",
 ];
 
 function diskIgnore(): string {
@@ -87,6 +91,31 @@ describe("渲染出的形状：每条排除都带着它的理由", () => {
     expect(head).toContain("pnpm qoder:ignore");
     expect(head).toContain("--check");
     expect(head).toContain("重启 Qoder CN");
+  });
+
+  it("头注不许自称「列出的目录本来都被 .gitignore 忽略着」—— 入库那一组会推翻它", () => {
+    /* 那句话在这份表只有构建产物时是真的，而它的失效方式很坏：读者拿它当结论，
+     * 看到一条 git 跟踪的路径被排除，就判成「漏配」并删掉那条。所以头注现在要
+     * 显式回答「入库但只出索引」这件事，而不是一句话把两组混成一组。 */
+    const head = WANTED.split("\n").slice(0, 14).join("\n");
+    expect(head).not.toContain("本来也都被 .gitignore 忽略着");
+    expect(head).toContain("只出索引");
+  });
+
+  it("入库那一组的「入库」是事实：git 确实跟踪这些路径", () => {
+    /* 反向也判：若它们哪天不再入库（镜像出库、归档被拆走），这条排除就是在藏一份
+     * 不存在的产物，该整条删掉 —— 而不是留一句会过期的理由占着排除面。 */
+    for (const one of ["docs/generated", "CHANGELOG-archive.md"]) {
+      const out = execFileSync(
+        "git",
+        ["-c", "core.quotePath=false", "ls-files", "-z", "--", one],
+        { cwd: ROOT, encoding: "utf8" },
+      );
+      expect(
+        out.split("\0").filter(Boolean).length,
+        `${one} 并不入库 —— 那这一条排除该归到「构建产物」那一组，或直接删掉`,
+      ).toBeGreaterThan(0);
+    }
   });
 
   it("产物里没有绝对体积读数（那是「这台机器、这一刻」的数）", () => {
