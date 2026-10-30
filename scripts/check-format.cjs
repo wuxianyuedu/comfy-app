@@ -90,6 +90,8 @@
  *   node scripts/check-format.cjs --changed   # 只判改动面 ∩ 扫描面 —— 平台侧与 check:all 用这一档
  *   node scripts/check-format.cjs --report    # 只出清单不判失败(盘点用,照旧全库)
  *   node scripts/check-format.cjs --staged    # 判暂存面(人的动作:提交前自查)
+ *                                           #   合并态(MERGE_HEAD 在场)下暂存面 = 相对第一父的
+ *                                           #   全量差异,会收窄到本分支带来的那份(ISSUE #2747)
  *
  * ── `--staged`：全库扫描的「白付」与它的输入面 ────────────────────────────────
  *
@@ -253,6 +255,37 @@ function isIgnored(rel) {
  */
 function isScanned(rel) {
   return GLOB_RES.some((re) => re.test(rel)) && !isIgnored(rel);
+}
+
+/** 本次提交是不是一个**待落地的合并提交**（`$GIT_DIR/MERGE_HEAD` 在场）。
+ * 判据只有一份：`git-dir.mjs` 的 `hasInProgressMerge` —— 那里写清了为什么只有这一个
+ * 信号算数（`merge-base` / `--is-ancestor` 都看不出来，HEAD 还没动），以及为什么
+ * 不能硬拼 `<根>/.git/MERGE_HEAD`（链接工作树里 `.git` 是个文件，拼出来的路径永远读不到）。
+ * `require(esm)` 与下面 `--changed` 那一档同形（Node 24 认得了），而 `git-dir.mjs`
+ * 只依赖 node 内置 —— 沙箱夹具那份依赖抄得动。 */
+function mergeInProgress() {
+  const { hasInProgressMerge } = require("./git-dir.mjs");
+  return hasInProgressMerge(ROOT);
+}
+
+/**
+ * 改动面先算（这是 git 的事，与 oxfmt 装没装无关）：拿不到 ⇒ exit 2，
+ * 「没判」不冒充「干净」—— 与 ci-affected-tests 同一口径（§13.6.2）。
+ * 判据实现只有一份出处：`changed-scope.mjs`（基线选取 / 三点 diff / quotePath
+ * / 改名两侧都收），这里不抄第二份（§12.18）。`require(esm)` 与
+ * `check-doc-mirror-pairing.cjs` 同形，`copyGateDeps` 按这一形态补沙箱依赖。
+ */
+function changedFaceOrExit() {
+  const { resolveChangedFiles } = require("./changed-scope.mjs");
+  const changed = resolveChangedFiles({ cwd: ROOT });
+  if (!changed.ok) {
+    console.error(
+      `[format] 改动面没算出来：${changed.reason}\n` +
+        "[format]   按 fail-closed 判「没判」，以 exit 2 结束（不冒充「未触及扫描面」）。",
+    );
+    process.exit(2);
+  }
+  return changed;
 }
 
 /** 暂存改动清单(仓库根相对 POSIX 路径)。git 拿不到时返回 null —— 由调用方 fail-closed。 */
@@ -456,10 +489,32 @@ async function main() {
       );
       process.exit(2);
     }
-    const hits = files.filter(isScanned);
+    /* 合并态下的暂存面**不是**「本次改动」（ISSUE #2747）：`git merge` 解完冲突、
+     * 提交还没落地时，`git diff --cached` 是**相对第一父提交（合并前的自己）**的全量
+     * 差异 —— 也就是整份主干的改动面（现场：901 份）。于是主干上任何存量未格式化文件
+     * 都会被点名为「本次带来的」而阻断一次与本 PR 无关的解冲突（被点名的两份相对
+     * `origin/master` 是**零 diff**）。同一判据的 `--changed` 档对此给出相反结论
+     * （「0 个在靶子内」）—— 两个入口不可能都对，错的是这一头的输入面。
+     *
+     * 收窄到「本条分支相对目标分支带来的那一份」，与 `--changed` **同一个口径**
+     * （`changedFaceOrExit()`，基线只有一份）。收窄后的面仍然**逐份判**：这不是降档，
+     * 而是把面修回它自称的那个东西（「本次提交带进来的改动」）。剔掉多少必须念出来。 */
+    let face = files;
+    if (mergeInProgress()) {
+      const changed = changedFaceOrExit();
+      const mine = new Set(changed.files);
+      face = files.filter((f) => mine.has(f));
+      console.log(
+        `[format] 合并态（MERGE_HEAD 在场）：暂存面 ${files.length} 份 → 收窄到本分支带来的` +
+          ` ${face.length} 份（基线：${changed.via}）。被剔掉的 ${files.length - face.length} 份` +
+          "是主干那边的改动，不随本次提交走 —— 判据没降，只是不再让主干存量替这次解冲突背书" +
+          "（ISSUE #2747）。",
+      );
+    }
+    const hits = face.filter(isScanned);
     if (!hits.length) {
       console.log(
-        `[format] ✓ 本次提交未触及扫描面（${files.length} 个暂存文件中 0 个在 prettier 靶子内），跳过。`,
+        `[format] ✓ 本次提交未触及扫描面（${face.length} 个暂存文件中 0 个在 prettier 靶子内），跳过。`,
       );
       process.exit(0);
     }
@@ -475,20 +530,9 @@ async function main() {
   }
 
   if (CHANGED && !REPORT_ONLY) {
-    /* 改动面先算（这是 git 的事，与 oxfmt 装没装无关）：拿不到 ⇒ exit 2，
-     * 「没判」不冒充「干净」—— 与 ci-affected-tests 同一口径（§13.6.2）。
-     * 判据实现只有一份出处：`changed-scope.mjs`（基线选取 / 三点 diff / quotePath
-     * / 改名两侧都收），这里不抄第二份（§12.18）。`require(esm)` 与
-     * `check-doc-mirror-pairing.cjs` 同形，`copyGateDeps` 按这一形态补沙箱依赖。 */
-    const { resolveChangedFiles } = require("./changed-scope.mjs");
-    const changed = resolveChangedFiles({ cwd: ROOT });
-    if (!changed.ok) {
-      console.error(
-        `[format] 改动面没算出来：${changed.reason}\n` +
-          "[format]   按 fail-closed 判「没判」，以 exit 2 结束（不冒充「未触及扫描面」）。",
-      );
-      process.exit(2);
-    }
+    /* 改动面走共通壳（`changedFaceOrExit()`：基线选取 / 三点 diff / quotePath /
+     * 改名两侧都收都在 `changed-scope.mjs` 那一份里，这里不抄第二份，§12.18）。 */
+    const changed = changedFaceOrExit();
     const hits = changed.files.filter(isScanned);
     if (!hits.length) {
       console.log(

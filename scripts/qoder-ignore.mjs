@@ -89,6 +89,14 @@ export const IGNORE_SECTIONS = [
         why: "TypeDoc 的生成物（几千份 .md；判据那一格会自己重新生成，不进 git）",
       },
       { pattern: "/.qoder/cache/", why: "Qoder 自己的缓存，不需要被索引" },
+      {
+        pattern: "/.codegraph/",
+        why: "codegraph 的本地索引目录（`pnpm agent:index` 里由 `codegraph init` 生成；本机缓存，不入库）",
+      },
+      {
+        pattern: "/.zvec-grep/",
+        why: "zvec-grep 的工作区索引目录（`zg index` 生成；本机缓存，不入库）",
+      },
       { pattern: "*.tsbuildinfo", why: "tsc 的增量构建信息文件" },
     ],
   },
