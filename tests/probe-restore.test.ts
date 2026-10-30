@@ -148,8 +148,8 @@ describe("口径要有执行者 —— 拿索引/HEAD 清工作区这种写法�
     return DESTRUCTIVE.test(stripComments(src)) ? `  · ${label}` : null;
   }
 
-  function tsFiles(dir: string): string[] {
-    const out: string[] = [];
+  function tsFiles(dir: string): Array<string> {
+    const out: Array<string> = [];
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const abs = join(dir, e.name);
       if (e.isDirectory()) out.push(...tsFiles(abs));

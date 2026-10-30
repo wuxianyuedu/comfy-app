@@ -62,10 +62,10 @@ export function mergeExposedEntry<T extends WorkflowIOEntry>(
  *  只补「服务端富化查不到」的字段，不覆盖已有值。 */
 export function enrichFromViewNodes(
   nodes:
-    | {
+    | Array<{
         id: string;
         class_type?: string;
-        raw_inputs?: {
+        raw_inputs?: Array<{
           name: string;
           label?: string;
           localized?: string;
@@ -73,8 +73,8 @@ export function enrichFromViewNodes(
           defaultValue?: unknown;
           multiline?: boolean;
           widgetValue?: unknown;
-        }[];
-      }[]
+        }>;
+      }>
     | null
     | undefined,
 ): Record<string, WorkflowIOEntry> {
@@ -84,9 +84,7 @@ export function enrichFromViewNodes(
     for (const input of node.raw_inputs ?? []) {
       if (!input?.name) continue;
       const label =
-        sanitizeComboLabel(input.label) ||
-        sanitizeComboLabel(input.localized) ||
-        input.name;
+        sanitizeComboLabel(input.label) || sanitizeComboLabel(input.localized) || input.name;
       const value = input.defaultValue ?? input.widgetValue;
       out[`${node.id}::widget::${input.name}`] = {
         direction: "input",
@@ -95,9 +93,7 @@ export function enrichFromViewNodes(
         name: input.name,
         label,
         type: input.type ?? "*",
-        ...(input.multiline !== undefined
-          ? { multiline: input.multiline }
-          : {}),
+        ...(input.multiline !== undefined ? { multiline: input.multiline } : {}),
         ...(value !== undefined ? { defaultValue: value } : {}),
       };
     }

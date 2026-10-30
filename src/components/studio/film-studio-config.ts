@@ -44,8 +44,8 @@ export interface Film {
   progress: number;
   finalVideo: string | null;
   error: string | null;
-  logs: { t: number; level: string; msg: string }[] | null;
-  shots: FilmShot[];
+  logs: Array<{ t: number; level: string; msg: string }> | null;
+  shots: Array<FilmShot>;
 }
 
 /** 时间轴编辑器的镜头条目（当前为设计稿样例数据，未接后端）。 */
@@ -76,8 +76,8 @@ function shotStatusToFilmStatus(status: unknown): ShotStatus {
 }
 
 /** 把统一项目的 `production.shots`（unknown 记录）映射为成片左栏的镜头列表（纯函数）。 */
-export function productionShotsToShotList(shots: unknown[]): ShotListItem[] {
-  const list: ShotListItem[] = [];
+export function productionShotsToShotList(shots: Array<unknown>): Array<ShotListItem> {
+  const list: Array<ShotListItem> = [];
   for (const raw of shots) {
     if (!isRecord(raw) || typeof raw.id !== "string") continue;
     const name =
@@ -85,9 +85,7 @@ export function productionShotsToShotList(shots: unknown[]): ShotListItem[] {
       (typeof raw.prompt === "string" && raw.prompt.slice(0, 24)) ||
       `镜头 ${list.length + 1}`;
     const duration =
-      typeof raw.duration === "number"
-        ? `${fixed(raw.duration, 1)}s`
-        : EMPTY_PLACEHOLDER;
+      typeof raw.duration === "number" ? `${fixed(raw.duration, 1)}s` : EMPTY_PLACEHOLDER;
     list.push({
       id: raw.id,
       name,
@@ -139,7 +137,7 @@ export function formatShotDuration(seconds: number): string {
 
 /* 标成**非空数组**：`MOCK_SHOTS[0]` 用作「没选中任何镜头」时的兜底项
  *（`FilmStudio` 的 `selectedShot`），类型上直接是元素而非 `| undefined`。 */
-export const MOCK_SHOTS: [ShotListItem, ...ShotListItem[]] = [
+export const MOCK_SHOTS: [ShotListItem, ...Array<ShotListItem>] = [
   {
     id: "shot-1",
     name: "开场 · 城市全景",
@@ -164,7 +162,7 @@ export const MOCK_SHOTS: [ShotListItem, ...ShotListItem[]] = [
   },
 ];
 
-export const VIDEO_CLIPS: TimelineClip[] = [
+export const VIDEO_CLIPS: Array<TimelineClip> = [
   {
     id: "vc-1",
     label: "开场全景",
@@ -189,10 +187,7 @@ export const MODE_LABELS: Record<ShotMode, string> = {
   transition: "自动转场",
 };
 
-export const STATUS_BADGE: Record<
-  ShotStatus,
-  { bg: string; text: string; label: string }
-> = {
+export const STATUS_BADGE: Record<ShotStatus, { bg: string; text: string; label: string }> = {
   IDLE: { bg: "bg-subtle", text: "text-ink-fainter", label: "待处理" },
   QUEUED: {
     bg: "bg-info/15",
@@ -227,7 +222,5 @@ export const STAGE_LABEL: Record<FilmStatus, string> = {
 
 /** 成片是否仍在推进（决定进度条与「取消」按钮的显隐）。 */
 export function isFilmRunning(status: FilmStatus): boolean {
-  return (
-    status === "GENERATING" || status === "COMPOSING" || status === "PARSING"
-  );
+  return status === "GENERATING" || status === "COMPOSING" || status === "PARSING";
 }

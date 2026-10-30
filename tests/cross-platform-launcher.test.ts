@@ -65,7 +65,7 @@ async function waitUntil(check: () => boolean, timeoutMs = 5000): Promise<boolea
 }
 
 describe("跨平台启动编排（dev-launcher.mjs）", () => {
-  const tmpDirs: string[] = [];
+  const tmpDirs: Array<string> = [];
 
   function makeTmp(): string {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "comfyapp-launcher-"));
@@ -151,7 +151,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
     const session = {
       launcher_pid: process.pid,
-      child_pids: /* SAFETY: 类型断言已复核 */ [] as number[],
+      child_pids: /* SAFETY: 类型断言已复核 */ [] as Array<number>,
       app_port: 3311,
       mode: "web",
       started_at: new Date().toISOString(),
@@ -480,8 +480,8 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
     return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
   }
 
-  function scriptFiles(dir: string): string[] {
-    const out: string[] = [];
+  function scriptFiles(dir: string): Array<string> {
+    const out: Array<string> = [];
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) out.push(...scriptFiles(full));
@@ -491,7 +491,7 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
   }
 
   it("都指向真实存在的文件（模块换子域时必须跟着改）", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     let checked = 0;
     for (const abs of scriptFiles(path.join(ROOT, "scripts"))) {
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");
@@ -595,7 +595,7 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
 });
 
 describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
-  const tmpDirs: string[] = [];
+  const tmpDirs: Array<string> = [];
 
   function makeTmp(): string {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "comfyapp-diag-"));

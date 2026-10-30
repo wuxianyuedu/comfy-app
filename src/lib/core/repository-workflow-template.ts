@@ -53,7 +53,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
     super(workflowTemplate, workflowTemplate.id);
   }
 
-  async listByUser(userId: string): Promise<WorkflowTemplate[]> {
+  async listByUser(userId: string): Promise<Array<WorkflowTemplate>> {
     return db
       .select()
       .from(workflowTemplate)
@@ -102,8 +102,8 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
    *  收窄、在行为层只影响读了多少 —— 见 `repository.test.ts` 的断言。 */
   async listForUser(
     userId: string,
-    opts: { where?: SQL; orderBy?: SQL[] } = {},
-  ): Promise<WorkflowTemplateListRow[]> {
+    opts: { where?: SQL; orderBy?: Array<SQL> } = {},
+  ): Promise<Array<WorkflowTemplateListRow>> {
     return db
       .select(LIST_ROW_COLUMNS)
       .from(workflowTemplate)
@@ -121,7 +121,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
     sourcePath?: string | null;
     sourceChecksum?: string | null;
     sourceMtime?: number | null;
-    modes?: string[];
+    modes?: Array<string>;
     defaultMode?: string | null;
   }): Promise<WorkflowTemplate> {
     const rows = await db
@@ -153,7 +153,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
       .where(eq(workflowTemplate.id, id));
   }
 
-  async setModelTags(id: string, tagIds: string[]): Promise<void> {
+  async setModelTags(id: string, tagIds: Array<string>): Promise<void> {
     await db
       .delete(workflowModelTagToWorkflowTemplate)
       .where(eq(workflowModelTagToWorkflowTemplate.workflowTemplate, id));

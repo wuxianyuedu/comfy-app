@@ -2,11 +2,7 @@
 import { useId, useRef, useState } from "react";
 import { textHandler } from "~/lib/form-props";
 import { Check, ChevronDown, Search, X } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
@@ -28,10 +24,10 @@ import type { OptionGroup } from "~/lib/workshop/character-options";
  */
 interface AttributeMultiSelectProps {
   label: string;
-  groups: OptionGroup[];
+  groups: Array<OptionGroup>;
   /** 当前已选中值（源即 Character 对应字段） */
-  value: string[];
-  onChange: (value: string[]) => void;
+  value: Array<string>;
+  onChange: (value: Array<string>) => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
@@ -121,15 +117,10 @@ export function AttributeMultiSelect({
             className="border-border text-muted-foreground hover:border-primary hover:text-primary ml-1 inline-flex h-auto items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-xs transition-colors disabled:opacity-40"
           >
             + 选择
-            <ChevronDown
-              size={11}
-              className={`transition-transform ${open ? "rotate-180" : ""}`}
-            />
+            <ChevronDown size={11} className={`transition-transform ${open ? "rotate-180" : ""}`} />
           </PopoverTrigger>
           {value.length === 0 && (
-            <span className="text-muted-foreground/60 text-2xs px-1">
-              {placeholder}
-            </span>
+            <span className="text-muted-foreground/60 text-2xs px-1">{placeholder}</span>
           )}
 
           {/* 下拉面板 */}
@@ -188,20 +179,14 @@ export function AttributeMultiSelect({
                            * 行可聚焦，Enter/Space 由 `simpleKeyHandler` 给
                            *（§16.2.4.57 的唯一出口：ARIA 的 `checkbox` 承诺「Space 可
                            * 切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」）。 */
-                          {...simpleKeyHandler(["Space", "Enter"], () =>
-                            toggle(opt),
-                          )}
+                          {...simpleKeyHandler(["Space", "Enter"], () => toggle(opt))}
                           className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs transition-colors ${
-                            on
-                              ? "bg-primary-soft text-primary"
-                              : "text-ink/80 hover:bg-subtle"
+                            on ? "bg-primary-soft text-primary" : "text-ink/80 hover:bg-subtle"
                           }`}
                         >
                           <span
                             className={`grid size-3.5 shrink-0 place-items-center rounded border ${
-                              on
-                                ? "border-primary bg-primary text-white"
-                                : "border-border bg-bg"
+                              on ? "border-primary bg-primary text-white" : "border-border bg-bg"
                             }`}
                           >
                             {on && <Check size={10} />}

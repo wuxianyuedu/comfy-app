@@ -167,7 +167,7 @@ export interface MissingItem {
  * 唯一的「目标」是镜头数（由场景的 `shotCount` 汇总派生），不是常数。
  * 颜色不在这里给：视图按 `done` 取语义档（规范 03 §3.6.2），本模块不再带色值。
  */
-export function buildMissingSummary(ctx: StageViewContext): MissingItem[] {
+export function buildMissingSummary(ctx: StageViewContext): Array<MissingItem> {
   const shotGap = ctx.shotTarget > 0 ? Math.max(ctx.shotTarget - ctx.shotCount, 0) : null;
   return [
     {
@@ -211,7 +211,7 @@ export interface HealthRow {
  * 判定不掺任何写死目标：ratio 来自 stageRatios（其入参全是草稿/生成态的真实计数），
  * pending 就是「这一段还没做完」，不接受「应该有几个」这类外部常数。
  */
-export function buildHealthSnapshot(ratios: StageRatios, _ctx: StageViewContext): HealthRow[] {
+export function buildHealthSnapshot(ratios: StageRatios, _ctx: StageViewContext): Array<HealthRow> {
   return STAGE_DEFS.map((stage) => {
     const ratio = ratios[stage.id];
     return {
@@ -225,6 +225,6 @@ export function buildHealthSnapshot(ratios: StageRatios, _ctx: StageViewContext)
 }
 
 /** 还差几段没做完（屏顶胶囊的唯一数据源，替代各处自行数 ratio）。 */
-export function countPendingStages(rows: readonly HealthRow[]): number {
+export function countPendingStages(rows: ReadonlyArray<HealthRow>): number {
   return rows.filter((row) => row.pending).length;
 }

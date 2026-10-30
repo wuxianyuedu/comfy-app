@@ -48,7 +48,7 @@ const ANSI_STYLE_CLASS: Record<AnsiStyleKey, string> = {
 };
 // p71-allow:end
 
-export function AnsiLogText({ segments }: { segments: AnsiSegment[] }) {
+export function AnsiLogText({ segments }: { segments: Array<AnsiSegment> }) {
   return (
     <>
       {segments.map((seg, i) =>

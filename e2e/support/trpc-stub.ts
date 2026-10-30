@@ -52,9 +52,9 @@ import superjson from "superjson";
  * URL `continue()` 会把请求直接放去网络，先注册那条根本没机会应答）：所有过程一次
  * 登记在同一个 map 里，不要分两次调用。
  */
-export function trpcJsonlBody(results: unknown[]): string {
+export function trpcJsonlBody(results: Array<unknown>): string {
   const head: Record<string, unknown> = {};
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   let chunkId = 0;
 
   /* 每一行都是 `superjson.serialize(整行)` 的外壳 —— 服务端 `jsonlStreamProducer`
@@ -74,12 +74,8 @@ export function trpcJsonlBody(results: unknown[]): string {
 
     /* 槽位 → `result`：服务端把 `{result: Promise.resolve({data: iterable})}`
      * 的两层 promise 也 encode 成了异步值，所以这里同样要递进两段。 */
-    lines.push(
-      line([chunkId, 0, [[{ result: 0 }], ["result", 0, chunkId + 1]]]),
-    );
-    lines.push(
-      line([chunkId + 1, 0, [[{ data: 0 }], ["data", 0, chunkId + 2]]]),
-    );
+    lines.push(line([chunkId, 0, [[{ result: 0 }], ["result", 0, chunkId + 1]]]));
+    lines.push(line([chunkId + 1, 0, [[{ data: 0 }], ["data", 0, chunkId + 2]]]));
     /* 最后一段是真数据。`[[data]]` 是 「值 + 零个 asyncProp」的形状
      * （消费端 `decode(value)` 取 `value[0][0]` 当数据、余下当挂载项）。 */
     lines.push(line([chunkId + 2, 0, [[result]]]));
@@ -102,7 +98,7 @@ export function trpcJsonlBody(results: unknown[]): string {
  * @param rawUrl 请求的完整 URL
  * @returns 过程名列表（不在 `/api/trpc/` 下返回空数组）
  */
-function proceduresOf(rawUrl: string): string[] {
+function proceduresOf(rawUrl: string): Array<string> {
   const { pathname } = new URL(rawUrl);
   const prefix = "/api/trpc/";
   if (!pathname.startsWith(prefix)) return [];
@@ -128,12 +124,11 @@ function proceduresOf(rawUrl: string): string[] {
 export function planStubResults(
   rawUrl: string,
   handlers: Record<string, unknown>,
-): unknown[] | null {
+): Array<unknown> | null {
   const procedures = proceduresOf(rawUrl);
   if (procedures.length === 0) return null;
   const results = procedures.map(
-    (procedure) =>
-      Object.entries(handlers).find(([name]) => procedure.includes(name))?.[1],
+    (procedure) => Object.entries(handlers).find(([name]) => procedure.includes(name))?.[1],
   );
   if (results.some((result) => result === undefined)) return null;
   return results;
@@ -152,19 +147,13 @@ export function planStubResults(
  * `continue()`** —— 半桩的批请求比不桩更坏（另一个过程拿到的是 `undefined` 槽位，
  * 静默、不报错，与文件头那两条同源）。
  */
-export async function stubTrpc(
-  page: Page,
-  handlers: Record<string, unknown>,
-): Promise<void> {
+export async function stubTrpc(page: Page, handlers: Record<string, unknown>): Promise<void> {
   await page.route("**/api/trpc/**", async (route: Route) => {
     const url = route.request().url();
     const procedures = proceduresOf(url);
     /* 每个过程都要有主：缺一个就整条继续打到真实服务端（见函数头）。 */
     const results = procedures.map(
-      (procedure) =>
-        Object.entries(handlers).find(([name]) =>
-          procedure.includes(name),
-        )?.[1],
+      (procedure) => Object.entries(handlers).find(([name]) => procedure.includes(name))?.[1],
     );
     if (results.length === 0 || results.some((r) => r === undefined)) {
       await route.continue();

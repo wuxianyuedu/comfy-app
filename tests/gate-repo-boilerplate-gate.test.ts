@@ -38,7 +38,7 @@ const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
 const SCRIPT = path.join(SCRIPTS_DIR, "check-gate-repo-boilerplate.cjs");
 
 /** 临时仓库列表，用例结束统一清掉。 */
-const roots: string[] = [];
+const roots: Array<string> = [];
 afterEach(() => {
   while (roots.length) {
     const r = roots.pop();
@@ -54,7 +54,7 @@ afterEach(() => {
  */
 function gate(
   files: Record<string, string>,
-  args: string[] = [],
+  args: Array<string> = [],
 ): { ok: boolean; output: string; root: string } {
   const root = mkdtempSync(path.join(tmpdir(), "gate-repo-boilerplate-"));
   roots.push(root);

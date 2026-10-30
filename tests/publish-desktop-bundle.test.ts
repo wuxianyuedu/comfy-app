@@ -37,7 +37,7 @@ import {
 } from "../scripts/publish-desktop-bundle.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
-const made: string[] = [];
+const made: Array<string> = [];
 
 function tmpDir(tag: string): string {
   const onRepoVolume = path.join(path.parse(ROOT).root, `comfy-publish-${tag}`);
@@ -154,7 +154,7 @@ describe("轮转（留 N 份）", () => {
   });
 
   it("读不到 builtAt 时按 mtime 退档，但必须把这件事念出来", () => {
-    const said: string[] = [];
+    const said: Array<string> = [];
     const plan = planRotation([release("r1", null)], 2, (line) => said.push(line));
     expect(plan.unstamped).toEqual(["r1"]);
     expect(said.join("\n")).toContain("读不到 manifest 的 builtAt");
@@ -166,11 +166,11 @@ describe("发布那一跑（main）", () => {
   function runPublish(opts: {
     repo?: string;
     root?: string;
-    argv?: string[];
+    argv?: Array<string>;
     env?: Record<string, string>;
     runStore?: () => { status: number; stdout?: string };
   }) {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const code = main({
       argv: opts.argv ?? ["--label", "r1"],
       cwd: opts.repo ?? fakeBundleRepo("main"),
@@ -195,7 +195,7 @@ describe("发布那一跑（main）", () => {
     expect(manifest.sha).toBe("cafe1234567890");
     expect(manifest.keep).toBe(DEFAULT_KEEP);
     expect(
-      /* SAFETY: 类型断言已复核 */ (manifest.files as { path: string }[]).map((f) => f.path),
+      /* SAFETY: 类型断言已复核 */ (manifest.files as Array<{ path: string }>).map((f) => f.path),
     ).toEqual(["msi/app.msi", "nsis/app-setup.exe"]);
     expect(fs.readFileSync(path.join(root, LATEST_POINTER_FILE), "utf8").trim()).toBe("r1");
     /* 指针是**文件**：`<root>/latest` 长成一个目录就是本单禁掉的那个形态。 */
@@ -215,7 +215,7 @@ describe("发布那一跑（main）", () => {
 
   it("超出 keep 的那一份被删掉，永远留 DEFAULT_KEEP 份", () => {
     const root = tmpDir("rotate");
-    const sink: string[] = [];
+    const sink: Array<string> = [];
     for (const label of ["a1", "a2", "a3"]) {
       expect(
         main({
@@ -245,7 +245,7 @@ describe("发布那一跑（main）", () => {
     expect(empty.log).toContain("没有安装包");
     expect(fs.readdirSync(emptyRoot)).toEqual([]);
 
-    const log: string[] = [];
+    const log: Array<string> = [];
     const code = main({
       argv: ["--label", "r1"],
       cwd: fakeBundleRepo("noroot"),

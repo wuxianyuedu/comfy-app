@@ -24,10 +24,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test, vi } from "vitest";
-import {
-  historyByFile,
-  resolveBlobs,
-} from "../scripts/merged-side-loss-git.mjs";
+import { historyByFile, resolveBlobs } from "../scripts/merged-side-loss-git.mjs";
 
 /* 这些用例全是纯函数 + 假 run，最贵的一条是拼字符串；30s 的全局预算用不到，
  * 但本文件的夹具仓库类兄弟文件都显式钉过，这里同样就地钉死，避免随全局漂移。 */
@@ -41,9 +38,7 @@ const SHA_C = "c".repeat(40);
 
 describe("resolveBlobs —— 一次批量解析换掉逐条 rev-parse", () => {
   test("① 每个请求一行、逐条对齐；路径在那个版本不存在给 null", () => {
-    const run = vi.fn(() =>
-      [line(SHA_A), line(SHA_B), "HEAD:gone.ts missing"].join("\n"),
-    );
+    const run = vi.fn(() => [line(SHA_A), line(SHA_B), "HEAD:gone.ts missing"].join("\n"));
     const out = resolveBlobs(run, ["HEAD:a.ts", "HEAD:b.ts", "HEAD:gone.ts"]);
     expect(out).toBeInstanceOf(Map);
     expect(out!.get("HEAD:a.ts")).toBe(SHA_A);
@@ -52,7 +47,7 @@ describe("resolveBlobs —— 一次批量解析换掉逐条 rev-parse", () => {
   });
 
   test("① 重复请求只解析一次（喂给 git 的行数 = 去重后的条数）", () => {
-    const run = vi.fn((args: string[], input?: string) => {
+    const run = vi.fn((args: Array<string>, input?: string) => {
       expect(args).toEqual(["cat-file", "--batch-check"]);
       expect(input!.trim().split("\n")).toEqual(["HEAD:a.ts"]);
       return line(SHA_A);
@@ -84,9 +79,7 @@ describe("resolveBlobs —— 一次批量解析换掉逐条 rev-parse", () => {
 
   test("② 某行读不懂 ⇒ null，且不带出半份结论", () => {
     const run = vi.fn(() => [line(SHA_A), "??????", line(SHA_B)].join("\n"));
-    expect(
-      resolveBlobs(run, ["HEAD:a.ts", "HEAD:b.ts", "HEAD:c.ts"]),
-    ).toBeNull();
+    expect(resolveBlobs(run, ["HEAD:a.ts", "HEAD:b.ts", "HEAD:c.ts"])).toBeNull();
   });
 });
 
@@ -104,7 +97,7 @@ describe("historyByFile —— 一次遍历换掉逐文件 git log", () => {
   ].join("\n");
 
   test("③ 每个被关心的文件一条清单，序为 git 的日志序（新 → 旧）", () => {
-    const run = vi.fn((..._args: unknown[]) => log);
+    const run = vi.fn((..._args: Array<unknown>) => log);
     const out = historyByFile(run, {
       ref: "baseline",
       files: ["src/a.ts", "src/deep/nested file.ts"],

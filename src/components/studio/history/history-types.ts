@@ -13,19 +13,13 @@ export interface TaskItem {
   error?: string | null;
   /** 结构化的 ComfyUI /prompt 校验错误，
    *  在 FAILED 任务上存在，好让卡片显示逐字段清单。 */
-  validationErrors?: ValidationError[] | null;
+  validationErrors?: Array<ValidationError> | null;
   createdAt: string;
   cover: string | null;
   coverIsCover?: boolean;
 }
 
-export type FilterKey =
-  | "ALL"
-  | "SUCCEEDED"
-  | "RUNNING"
-  | "FAILED"
-  | "CANCELLED"
-  | "QUEUED";
+export type FilterKey = "ALL" | "SUCCEEDED" | "RUNNING" | "FAILED" | "CANCELLED" | "QUEUED";
 
 export type SortKey = "newest" | "oldest";
 
@@ -45,7 +39,7 @@ export interface FilterDef {
   tone?: StatusDotState;
 }
 
-export const FILTERS: FilterDef[] = [
+export const FILTERS: Array<FilterDef> = [
   { key: "ALL", label: "全部" },
   { key: "SUCCEEDED", label: "已完成", tone: "up" },
   { key: "RUNNING", label: "进行中", tone: "probing" },

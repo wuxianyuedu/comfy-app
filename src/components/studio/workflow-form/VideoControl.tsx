@@ -14,12 +14,7 @@ import {
   RatioIcon,
   type SegmentSection,
 } from "~/components/ui/segment-popover";
-import {
-  StyleSwitcher,
-  loadGroupStyle,
-  saveGroupStyle,
-  type GroupStyle,
-} from "./StyleSwitcher";
+import { StyleSwitcher, loadGroupStyle, saveGroupStyle, type GroupStyle } from "./StyleSwitcher";
 import {
   DEFAULT_VIDEO_DURATION_PRESET,
   DEFAULT_VIDEO_QUALITY_PRESET,
@@ -50,28 +45,20 @@ function VideoControl({
    * 与宽版表单的区别**只是宽度**：录入能力、下拉、落点锚点全部一致。 */
   narrow?: boolean;
 }) {
-  const [style, setStyle] = useState<GroupStyle>(() =>
-    loadGroupStyle(workflowId, group.groupId),
-  );
+  const [style, setStyle] = useState<GroupStyle>(() => loadGroupStyle(workflowId, group.groupId));
   const onStyle = (newStyle: GroupStyle) => {
     setStyle(newStyle);
     saveGroupStyle(workflowId, group.groupId, newStyle);
   };
 
-  const entries: { role: VideoRole; entry: EnrichedWidget }[] = [];
+  const entries: Array<{ role: VideoRole; entry: EnrichedWidget }> = [];
   if (group.length) entries.push({ role: "length", entry: group.length });
   if (group.aspect) entries.push({ role: "aspect", entry: group.aspect });
   if (group.quality) entries.push({ role: "quality", entry: group.quality });
 
   if (style === "split") {
     return (
-      <div
-        className={
-          narrow
-            ? "flex w-fit max-w-full flex-col gap-2"
-            : "flex flex-col gap-2"
-        }
-      >
+      <div className={narrow ? "flex w-fit max-w-full flex-col gap-2" : "flex flex-col gap-2"}>
         <StyleSwitcher
           style={style}
           onChange={onStyle}
@@ -99,13 +86,11 @@ function VideoControl({
   }
 
   // Preset paradigm → one unified multi-section popover (参考图风格).
-  const sections: SegmentSection<string>[] = entries.map(({ role, entry }) => {
+  const sections: Array<SegmentSection<string>> = entries.map(({ role, entry }) => {
     const cur = values[entry.ioKey];
     if (role === "length") {
       const presets = VIDEO_DURATION_PRESETS;
-      const value = Number(
-        cur ?? entry.defaultValue ?? DEFAULT_VIDEO_DURATION_PRESET.value,
-      );
+      const value = Number(cur ?? entry.defaultValue ?? DEFAULT_VIDEO_DURATION_PRESET.value);
       return {
         label: "时长",
         value: videoDurationLabel(value),
@@ -121,9 +106,7 @@ function VideoControl({
     }
     if (role === "quality") {
       const presets = VIDEO_QUALITY_PRESETS;
-      const value = Number(
-        cur ?? entry.defaultValue ?? DEFAULT_VIDEO_QUALITY_PRESET.value,
-      );
+      const value = Number(cur ?? entry.defaultValue ?? DEFAULT_VIDEO_QUALITY_PRESET.value);
       return {
         label: "画质",
         value: videoQualityLabel(value),
@@ -139,16 +122,9 @@ function VideoControl({
     }
     /* role ==="aspect" —— COMBO 比例用自己的选项，否则用
      * 友好比例预设把浮点比值写回 widget。 */
-    if (
-      entry.control === "select" &&
-      Array.isArray(entry.options) &&
-      entry.options.length > 0
-    ) {
+    if (entry.control === "select" && Array.isArray(entry.options) && entry.options.length > 0) {
       const opts = entry.options;
-      const val =
-        typeof cur === "string" && opts.includes(cur)
-          ? cur
-          : (opts.at(0) ?? "");
+      const val = typeof cur === "string" && opts.includes(cur) ? cur : (opts.at(0) ?? "");
       return {
         label: "比例",
         value: val,
@@ -157,9 +133,7 @@ function VideoControl({
       };
     }
     const presets = DIM_RATIO_PRESETS;
-    const value = Number(
-      cur ?? entry.defaultValue ?? DEFAULT_DIM_RATIO_PRESET.ratio,
-    );
+    const value = Number(cur ?? entry.defaultValue ?? DEFAULT_DIM_RATIO_PRESET.ratio);
     return {
       label: "比例",
       value: videoAspectLabel(value),
@@ -178,11 +152,7 @@ function VideoControl({
   const summary = sections.map((section) => section.value).join(" ·");
 
   return (
-    <div
-      className={
-        narrow ? "flex w-fit max-w-full flex-col gap-2" : "flex flex-col gap-2"
-      }
-    >
+    <div className={narrow ? "flex w-fit max-w-full flex-col gap-2" : "flex flex-col gap-2"}>
       <StyleSwitcher
         style={style}
         onChange={onStyle}

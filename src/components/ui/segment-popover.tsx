@@ -71,7 +71,7 @@ export interface SegmentSection<T extends string = string> {
   /** 当前选中的选项值（必须是 `options.value` 之一）。 */
   value: T;
   /** 本分组的可选项。 */
-  options: {
+  options: Array<{
     value: T;
     label: string;
     render?: React.ReactNode;
@@ -79,7 +79,7 @@ export interface SegmentSection<T extends string = string> {
      *  分组会把它们渲染到不同行，并在行间插一条小号大写标签；
      *  不带子分组的选项默认落在同一行、不加标签。 */
     subgroup?: string;
-  }[];
+  }>;
   /** 用户在本分组中改选其他选项时调用。 */
   onChange: (value: T) => void;
   /** 可选：渲染在本分组**所有子分组之后**的自由控件。
@@ -117,7 +117,7 @@ export function MultiSegmentPopover({
   disabled,
 }: {
   triggerContent: React.ReactNode;
-  sections: SegmentSection<string>[];
+  sections: Array<SegmentSection<string>>;
   align?: "left" | "right";
   ariaLabel?: string;
   /** 所属表单禁用时，置灰并阻止打开。 */
@@ -180,7 +180,7 @@ const Section = React.memo(function Section({
     if (!hasSubgroups) {
       return [{ key: "_", label: undefined, options: section.options }];
     }
-    const order: string[] = [];
+    const order: Array<string> = [];
     const map = new Map<string, { key: string; label?: string; options: typeof section.options }>();
     for (const option of section.options) {
       const key = option.subgroup ?? "_";

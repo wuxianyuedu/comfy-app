@@ -113,14 +113,14 @@ export interface StrictCanvasNodeData {
   /** 结构化的 ComfyUI /prompt 校验错误（摊平后的 `node_errors`），
    *  在画布错误面板里以精确到字段的列表呈现，方便用户定位是哪个输入不对。
    *  数据来自 `pollTask().validationErrors`。 */
-  validationErrors?: ValidationError[];
+  validationErrors?: Array<ValidationError>;
 
   // script node
   theme: string;
   scriptText?: string;
 
   // agent node
-  agentHistory: { role: "user" | "assistant"; content: string }[];
+  agentHistory: Array<{ role: "user" | "assistant"; content: string }>;
   agentReply?: string;
   agentReady?: boolean;
   agentSpec?: {

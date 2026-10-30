@@ -70,22 +70,20 @@ export function decideEnsureLaunch(facts: EnsureFacts): EnsureDecision {
  * 注意开关只在**拉起那一刻**生效：桌面壳退出是整树强制关闭，
  * 退出时没有机会再改决定。
  */
-export function resolveLaunchPolicy(
-  exitKillComfyui: boolean | undefined,
-): LaunchPolicy {
+export function resolveLaunchPolicy(exitKillComfyui: boolean | undefined): LaunchPolicy {
   return exitKillComfyui === true ? "bound" : "keepAlive";
 }
 
 /** spawn 参数计算所需的已探明事实。 */
 export interface SpawnArgsFacts {
   /** 解析出的基础参数（解释器 + main.py + 用户额外参数之外的部分）。 */
-  baseArgs: string[];
+  baseArgs: Array<string>;
   /** 有效端口；0 / undefined 表示未指定（用默认端口）。 */
   effectivePort: number | undefined;
   /** 默认端口常量（由调用方从 app-settings 注入，避免本模块依赖配置层）。 */
   defaultPort: number;
   /** 桌面实例带来的附加参数。 */
-  extraArgs: string[];
+  extraArgs: Array<string>;
 }
 
 /**
@@ -95,11 +93,9 @@ export interface SpawnArgsFacts {
  * ComfyUI 传一个等于默认值的参数，白白污染日志与「界面显示端口 = 实际
  * 监听端口」的对照关系。
  */
-export function buildSpawnArgs(facts: SpawnArgsFacts): string[] {
+export function buildSpawnArgs(facts: SpawnArgsFacts): Array<string> {
   const port =
-    facts.effectivePort && facts.effectivePort > 0
-      ? facts.effectivePort
-      : facts.defaultPort;
+    facts.effectivePort && facts.effectivePort > 0 ? facts.effectivePort : facts.defaultPort;
   const args = [
     ...facts.baseArgs,
     ...(port !== facts.defaultPort ? ["--port", String(port)] : []),
@@ -131,10 +127,7 @@ export interface ProcessCheckFacts {
  * 早查会误判「没起来」）；②距上次查询够久（限频，避免每轮轮询都全表扫描）。
  */
 export function shouldCheckKeepAliveProcess(facts: ProcessCheckFacts): boolean {
-  return (
-    facts.sinceSpawnMs > facts.graceMs &&
-    facts.sinceLastCheckMs > facts.intervalMs
-  );
+  return facts.sinceSpawnMs > facts.graceMs && facts.sinceLastCheckMs > facts.intervalMs;
 }
 
 /**
@@ -148,7 +141,7 @@ export function isKeepAliveDead(missCount: number): boolean {
 }
 
 /** 进程秒退时从输出里提取缺失依赖的可行动报错。 */
-export function extractMissingModule(outputLines: string[]): string | null {
+export function extractMissingModule(outputLines: Array<string>): string | null {
   const m = /No module named '([^']+)'/.exec(outputLines.join("\n"));
   return m?.[1] ?? null;
 }
@@ -159,7 +152,7 @@ export function extractMissingModule(outputLines: string[]): string | null {
  * 两种成因的用户动作完全不同（装依赖 vs 看日志），所以必须分开说——
  * 只报「启动后立即退出」会让用户不知道该动哪个环境。
  */
-export function buildEarlyExitDetail(outputLines: string[]): string {
+export function buildEarlyExitDetail(outputLines: Array<string>): string {
   const missing = extractMissingModule(outputLines);
   if (missing) {
     return `ComfyUI 进程启动后立即退出：解释器缺少依赖（No module named '${missing}'）——请确认 comfyuiPath 指向装了依赖的环境，或为该环境安装依赖（详见 log/services/comfyui-runtime.log）`;
@@ -193,9 +186,7 @@ const PIP_UV_MISSING_PATTERN =
  * @param outputLines ComfyUI 的 stdout+stderr（顺序任意，按 `\n` 拼接后匹配）
  * @returns 可行动诊断句；识别不出返回 null（caller 据此回落通用文案）
  */
-export function diagnoseComfyStartupFailure(
-  outputLines: string[],
-): string | null {
+export function diagnoseComfyStartupFailure(outputLines: Array<string>): string | null {
   const text = outputLines.join("\n");
   if (PIP_UV_MISSING_PATTERN.test(text)) {
     return (
@@ -291,7 +282,7 @@ export function isWithinStoppingWindow(facts: {
  * 关闭流程的最终结论：等待若干个 500ms 探测窗口后的判定。
  * `probeResults` 按时间顺序给出每轮探测结果（null = 不可达）。
  */
-export function decideStopOutcome(probeResults: (string | null)[]): {
+export function decideStopOutcome(probeResults: Array<string | null>): {
   ok: boolean;
   detail: string;
 } {
@@ -330,12 +321,10 @@ export function decideStopOutcome(probeResults: (string | null)[]): {
 export const COMFY_EMBED_FLAG = "--enable-cors-header";
 
 /** 该参数是否已存在（兼容 `--enable-cors-header` 与 `--enable-cors-header=ORIGIN`）。 */
-export function hasEmbedClearanceFlag(args: string[]): boolean {
+export function hasEmbedClearanceFlag(args: Array<string>): boolean {
   return args.some((a) => {
     const lower = a.toLowerCase();
-    return (
-      lower === COMFY_EMBED_FLAG || lower.startsWith(`${COMFY_EMBED_FLAG}=`)
-    );
+    return lower === COMFY_EMBED_FLAG || lower.startsWith(`${COMFY_EMBED_FLAG}=`);
   });
 }
 
@@ -349,7 +338,7 @@ export function hasEmbedClearanceFlag(args: string[]): boolean {
  * @param args        已组装好的 spawn 参数（含 baseArgs / --port / 用户额外参数）
  * @returns 追加了开关的新数组；已有则不重复注入（原数组原样返回新副本）
  */
-export function withEmbedClearanceFlag(args: string[]): string[] {
+export function withEmbedClearanceFlag(args: Array<string>): Array<string> {
   if (hasEmbedClearanceFlag(args)) return [...args];
   return [...args, COMFY_EMBED_FLAG];
 }
@@ -409,9 +398,7 @@ export interface ComfyStatusVerdict {
 }
 
 /** 两份事实 → 一条状态结论（纯组装，无 IO、无全局状态）。 */
-export function deriveComfyUiStatus(
-  facts: ComfyStatusFacts,
-): ComfyStatusVerdict {
+export function deriveComfyUiStatus(facts: ComfyStatusFacts): ComfyStatusVerdict {
   const { starting, stopping, probe, snap } = facts;
   const fallbackPid = facts.fallbackPid;
 
@@ -473,10 +460,7 @@ export function deriveComfyUiStatus(
     base: null,
     starting: startingNow,
     stopping,
-    probing:
-      !startingNow &&
-      !facts.notRunningHeld &&
-      (!snap.didQueryProcTable || snap.unverified),
+    probing: !startingNow && !facts.notRunningHeld && (!snap.didQueryProcTable || snap.unverified),
     pid: fallbackPid,
     port: null,
     via: null,

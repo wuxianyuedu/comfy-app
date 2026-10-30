@@ -56,7 +56,7 @@ export function RequiredChips({
   visibilityMode,
   onVisibilityChange,
 }: {
-  pins: (EnrichedWidget | undefined)[];
+  pins: Array<EnrichedWidget | undefined>;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
   /** 多模式作者态：按该模式解析必填（未设模式覆盖时回退条目级）。 */
   mode?: string | null;
@@ -65,15 +65,13 @@ export function RequiredChips({
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
 }) {
   const live = pins.filter((pin): pin is EnrichedWidget => !!pin);
-  const showAny =
-    !!onRequiredChange || (!!onVisibilityChange && !!visibilityMode);
+  const showAny = !!onRequiredChange || (!!onVisibilityChange && !!visibilityMode);
   if (!showAny || live.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center justify-end gap-1 pt-1">
       {live.map((pin) => {
         const required = !!resolveEntryRequired(pin, mode);
-        const visible =
-          visibilityMode == null ? true : isVisibleInMode(pin, visibilityMode);
+        const visible = visibilityMode == null ? true : isVisibleInMode(pin, visibilityMode);
         return (
           <span
             key={pin.ioKey}
@@ -87,20 +85,12 @@ export function RequiredChips({
               {pin.label ?? pin.name}
             </span>
             {onRequiredChange && (
-              <Hint
-                label={
-                  required
-                    ? "已标记为必填，点击切换为可选"
-                    : "点击将其标记为必填"
-                }
-              >
+              <Hint label={required ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}>
                 <Button
                   variant={required ? "danger" : "ghost"}
                   onClick={() => onRequiredChange(pin.ioKey, !required)}
                   className={`nodrag nopan text-3xs h-auto rounded px-1.5 py-px font-medium ${
-                    required
-                      ? ""
-                      : "border-border-strong bg-subtle text-ink-muted border"
+                    required ? "" : "border-border-strong bg-subtle text-ink-muted border"
                   }`}
                 >
                   {required ? "必填" : "可选"}

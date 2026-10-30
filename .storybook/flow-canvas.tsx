@@ -46,8 +46,8 @@ export type FlowNodeSpec = Node;
 export interface CanvasScene {
   /** 这个场景解决什么、真数据长什么样（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
-  readonly nodes: readonly FlowNodeSpec[];
-  readonly edges: readonly Edge[];
+  readonly nodes: ReadonlyArray<FlowNodeSpec>;
+  readonly edges: ReadonlyArray<Edge>;
   /**
    * 初始视口（受控）。`zoom` 会真的进转换矩阵 —— 「细网格在 0.3 以下淡出」
    * 这类判据看的就是它。
@@ -317,9 +317,7 @@ export type CanvasSceneName = keyof typeof CANVAS_SCENES;
 export function canvasScene(name: string): CanvasScene {
   const scene: CanvasScene | undefined = CANVAS_SCENES[name as CanvasSceneName];
   if (scene === undefined) {
-    throw new Error(
-      `画布场景里没有叫「${name}」的那种。现有的：${CANVAS_SCENE_NAMES.join(" / ")}`,
-    );
+    throw new Error(`画布场景里没有叫「${name}」的那种。现有的：${CANVAS_SCENE_NAMES.join(" / ")}`);
   }
   return scene;
 }

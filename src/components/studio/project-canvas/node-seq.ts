@@ -15,15 +15,12 @@
  * 只保留最新一份数组引用，因此不随帧数增长；映射表是纯派生数据，丢了下一帧
  * 会重新算，不需要失效逻辑。 */
 let cached: {
-  nodes: readonly { id: string }[];
+  nodes: ReadonlyArray<{ id: string }>;
   seqById: Map<string, number>;
 } | null = null;
 
 /** 取节点短序号（1 起）；节点不在当前数组里返回 null。 */
-export function nodeSeqOf(
-  nodes: readonly { id: string }[],
-  id: string,
-): number | null {
+export function nodeSeqOf(nodes: ReadonlyArray<{ id: string }>, id: string): number | null {
   if (cached?.nodes !== nodes) {
     cached = {
       nodes,

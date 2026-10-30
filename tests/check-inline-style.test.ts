@@ -15,7 +15,7 @@ import { copyGateDeps } from "./helpers/gate-repo";
 import { afterEach, describe, expect, it } from "vitest";
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-inline-style.cjs");
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 function scanner(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), "inline-style-"));

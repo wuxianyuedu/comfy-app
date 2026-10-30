@@ -55,7 +55,7 @@ export type ParamClass =
   | "other";
 
 /** 统一「尺寸」在契约里的落点形态 —— 一个对外参数可以落在其中任一类端口上。 */
-export const SIZE_CLASSES: readonly ParamClass[] = [
+export const SIZE_CLASSES: ReadonlyArray<ParamClass> = [
   "size-width",
   "size-height",
   "size-aspect",
@@ -70,7 +70,7 @@ export const SIZE_CLASSES: readonly ParamClass[] = [
  *  `workflow-exposed-params`）；但落点形态由**作者连到哪个子口**声明 ——
  *  `width` / `aspect_ratio` / `resolution_preset` 这类名字猜形态会静默落错形状
  *  （把像素串写进比例口），所以形态不再从端口名推。 */
-export const SIZE_SUB_IDS: readonly ParamClass[] = SIZE_CLASSES;
+export const SIZE_SUB_IDS: ReadonlyArray<ParamClass> = SIZE_CLASSES;
 
 /** 某个尺寸子口的显示名（`尺寸 · 宽高比`）。
  *
@@ -103,7 +103,7 @@ export interface ParamEntry {
   label: string;
   /** 该契约口子在当前工作流里的候选端口（ioKey 保持 workflowIO 的原始键）。
    *  作者从这些候选里拖一条线选中一个作为落点。 */
-  pins: { ioKey: string; name: string; type: string; defaultValue: unknown }[];
+  pins: Array<{ ioKey: string; name: string; type: string; defaultValue: unknown }>;
 }
 
 /** 端口所属的节点 id（ioKey 形如 `<nodeId>::<kind>::<name>`）。
@@ -157,7 +157,7 @@ export function sizeSubLabel(cls: ParamClass): string {
  *  卡片列把它渲染成**一张卡**（六行形态各一颗圆点，见 `WorkflowParamCardColumn`），
  *  而连线、落点、↺ 恢复默认都按子口走 —— 这层换算就是两者的桥：
  *  `sizeGroupIds("size")` 给出全部六个键，`sizeGroupIds(<子口 id>)` 回它自己。 */
-export function sizeGroupIds(id: string | null | undefined): readonly ParamClass[] {
+export function sizeGroupIds(id: string | null | undefined): ReadonlyArray<ParamClass> {
   if (!id) return [];
   return id === "size" ? SIZE_SUB_IDS : [/* SAFETY: 类型断言已复核 */ id as ParamClass];
 }
@@ -256,7 +256,7 @@ export function pinAcceptsEntry(
  *
  *  旧键按当时的名字分类写下来，所以只回它自己那一类 —— 多回几类会把别的口子
  *  当年连过的线读到本口上来。 */
-export function candidateClasses(cls: ParamClass): readonly ParamClass[] {
+export function candidateClasses(cls: ParamClass): ReadonlyArray<ParamClass> {
   return [cls];
 }
 
@@ -351,7 +351,7 @@ const NUMERIC_PORT_TYPES = /* SAFETY: 类型断言已复核 */ ["INT", "FLOAT", 
  *    （用户口径：「这是不行的」）。
  *
  *  类型未知（缺省 / `*`）的端口一律放行：拿不到事实时不替作者做决定。 */
-const SIZE_SUB_SPEC: Record<string, { display: string; accepts: readonly string[] }> = {
+const SIZE_SUB_SPEC: Record<string, { display: string; accepts: ReadonlyArray<string> }> = {
   "size-width": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
   "size-height": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
   "size-megapixels": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
@@ -366,7 +366,7 @@ export function sizeSubTypeDisplay(cls: ParamClass): string {
 }
 
 /** 尺寸子口接受的端口类型（`undefined` = 不是尺寸子口，闸门按类型族判即可）。 */
-function acceptedPinTypesFor(cls: ParamClass): readonly string[] | undefined {
+function acceptedPinTypesFor(cls: ParamClass): ReadonlyArray<string> | undefined {
   return SIZE_SUB_SPEC[cls]?.accepts;
 }
 
@@ -409,7 +409,7 @@ export function paramOutputPorts(
    *  展示名覆盖 `entry.label`，见 ISSUE #596）—— 两处各取一份会让同一张卡片的
    *  标题与端口行说两个名字。缺省 = `entry.label`。 */
   displayName?: string,
-): ParamOutputPort[] {
+): Array<ParamOutputPort> {
   const target = resolvedTarget ?? null;
   const rawTarget = target ? io?.[target] : undefined;
   return [
@@ -448,7 +448,7 @@ export function paramOutputPorts(
 export function wiredTargetsForEntry(args: {
   /** 当前模式下这个条目的落点（`resolveMapping` 的结果；`null` = 未连线/断开）。 */
   target: string | null | undefined;
-}): { ioKey: string; active: boolean }[] {
+}): Array<{ ioKey: string; active: boolean }> {
   /* 只报作者连上的那一条 —— 候选圆点由 `paramOutputPorts` 照给，两件事分开。 */
   return args.target ? [{ ioKey: args.target, active: true }] : [];
 }

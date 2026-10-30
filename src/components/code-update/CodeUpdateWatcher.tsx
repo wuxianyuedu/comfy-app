@@ -122,8 +122,7 @@ export function describeDepsStale(state: DepsFreshnessState): {
 
 /** 依赖面各形态的「为什么」（与 `DepsFreshnessState` 一一对应）。 */
 const DEPS_STALE_WHY: Record<DepsFreshnessState, string> = {
-  drift:
-    "安装时的依赖清单与仓库 pnpm-lock.yaml 已不一致（多半是刚拉到的新代码动了依赖面）",
+  drift: "安装时的依赖清单与仓库 pnpm-lock.yaml 已不一致（多半是刚拉到的新代码动了依赖面）",
   "no-install": "本地依赖没有装好（缺安装记录）",
   unresolved: "本地依赖树里有个别声明的依赖解析不到（树停在它们被加入之前）",
   fresh: "依赖面与代码一致",
@@ -139,7 +138,7 @@ const DEPS_STALE_WHY: Record<DepsFreshnessState, string> = {
 const SELF_HEAL_MERGE_WINDOW_MS = 120_000;
 
 /** 「断开 / 恢复」这两档只有 `use-app-service-message-log` 在生产（见 store 注释）。 */
-const HEAL_PAIR_KINDS: readonly MessageKind[] = ["offline", "restart"];
+const HEAL_PAIR_KINDS: ReadonlyArray<MessageKind> = ["offline", "restart"];
 
 /**
  * 撤掉同一场自愈留下的「断开 / 恢复」两条。

@@ -28,13 +28,13 @@ export interface AdapterCandidate {
 
 export interface ModelAdaptersController {
   /** 可配置适配器的远端模型（kind=image / video）。 */
-  candidates: AdapterCandidate[];
+  candidates: Array<AdapterCandidate>;
   loading: boolean;
   /** 模式契约注册表（每种模式的统一输入 / 输出）。 */
   modeContracts: ReturnType<typeof useModeContracts>;
   /** 当前选中模型的适配器草稿（选中变化时自动播种）。 */
-  draft: RemoteModeAdapter[];
-  setDraft: React.Dispatch<React.SetStateAction<RemoteModeAdapter[]>>;
+  draft: Array<RemoteModeAdapter>;
+  setDraft: React.Dispatch<React.SetStateAction<Array<RemoteModeAdapter>>>;
   selectModel: (name: string) => void;
   selectedModel: string;
   /** 给选中模型追加一个模式的适配器草稿（预填该模式的默认输入清单）。 */
@@ -49,7 +49,7 @@ export function useModelAdapters(): ModelAdaptersController {
   const configQ = useQuery(trpc.llm.configGet.queryOptions());
   const modeContracts = useModeContracts();
   const [selectedModel, setSelectedModel] = useState("");
-  const [draft, setDraft] = useState<RemoteModeAdapter[]>([]);
+  const [draft, setDraft] = useState<Array<RemoteModeAdapter>>([]);
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const saveBusy = useBusyAction();
   const [message, setMessage] = useState<{
@@ -57,12 +57,12 @@ export function useModelAdapters(): ModelAdaptersController {
     text: string;
   } | null>(null);
 
-  const candidates: AdapterCandidate[] = React.useMemo(() => {
+  const candidates: Array<AdapterCandidate> = React.useMemo(() => {
     const raw: unknown = configQ.data?.config;
     if (typeof raw !== "object" || raw === null) return [];
     const extra = /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>).extraModels;
     if (!Array.isArray(extra)) return [];
-    const out: AdapterCandidate[] = [];
+    const out: Array<AdapterCandidate> = [];
     for (const item of extra) {
       if (typeof item !== "object" || item === null) continue;
       const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;

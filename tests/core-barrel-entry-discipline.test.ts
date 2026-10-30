@@ -29,7 +29,7 @@ const requireCjs = createRequire(import.meta.url);
 const reader = /* SAFETY: 类型断言已复核 */ requireCjs("../scripts/gate-scan-read.cjs") as {
   dirExists: (dir: string) => boolean;
   readForScan: (abs: string) => string | null;
-  walkForScan: (dir: string, fileRe: RegExp, opts?: { skipDirs?: Set<string> }) => string[];
+  walkForScan: (dir: string, fileRe: RegExp, opts?: { skipDirs?: Set<string> }) => Array<string>;
   vanishedNote: (count: number) => string;
 };
 
@@ -142,14 +142,14 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
  * `readdirSync` + `statSync`：后者在「列到名字 → 取类型」之间还有一次消失窗口
  * （CI 上崩的是读取那一跳，枚举这一跳同形）。本仓早就为这件事写过唯一一份实现，
  * 在这里留第二份弱化版只会让下一次竞态换个栈再崩一次。 */
-function walkAll(dir: string): string[] {
+function walkAll(dir: string): Array<string> {
   return reader.walkForScan(dir, /\.(ts|tsx|mjs|cjs)$/, {
     skipDirs: new Set([".git", ".next", "node_modules"]),
   });
 }
 
 /** 有向图环检测（DFS + 递归栈）。 */
-function hasCycle(graph: Map<string, string[]>): boolean {
+function hasCycle(graph: Map<string, Array<string>>): boolean {
   const state = new Map<string, 1 | 2>();
   const visit = (node: string): boolean => {
     if (state.get(node) === 1) return true;

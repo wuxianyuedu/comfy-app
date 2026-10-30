@@ -101,9 +101,9 @@ export function buildParamEntries(
      *  必须传的情形：模式契约被用户改过（契约编辑器里标「已改」）。内置默认只是
      *  「没改过时」的回落 —— 拿它当口径会让画布多列出契约里没有的口（用户报的
      *  「画布上有时长，模式契约里没有」），也会漏掉用户在契约里**新增**的口。 */
-    contractIds?: readonly string[];
+    contractIds?: ReadonlyArray<string>;
   },
-): ParamEntry[] {
+): Array<ParamEntry> {
   /* 只有一条构造路径：契约（按模式 / 按该模式生效的契约清单）。没有模式语境时退
    *  到最保守的一套（提示词 + 尺寸）。旧版「按节点 + 端口名分类聚类」那条路已删除
    *  —— 对外有哪些参数只由契约决定，工作流里的内部参数（步数 / CFG…）不再是
@@ -116,8 +116,8 @@ function buildContractEntries(
   io: WorkflowIOMap | null | undefined,
   labels: Record<string, string> | undefined,
   mode: string | null,
-  contractIds?: readonly string[],
-): ParamEntry[] {
+  contractIds?: ReadonlyArray<string>,
+): Array<ParamEntry> {
   const pinsByClass = classifyPins(io);
 
   /* 口子的来源：调用方给的**生效契约**优先；没给才回落内置默认。两边都只提供
@@ -126,7 +126,7 @@ function buildContractEntries(
     ? contractIds.map((id) => ({ id, cls: exposedClassOf(id) }))
     : exposedParamsForMode(mode).map((def) => ({ id: def.id, cls: def.cls }));
 
-  const out: ParamEntry[] = [];
+  const out: Array<ParamEntry> = [];
   for (const def of defs) {
     /* 认不出的 id（历史脏数据 / 别的键空间）不列：映射层没有它的分类，也就没有
      *  任何可落点的候选，列出来只会是一张永远「未配置」的卡。 */
@@ -134,7 +134,7 @@ function buildContractEntries(
     /* 「尺寸」在映射层摊成四个子口（`SIZE_SUB_IDS`）：形态由作者连到哪个子口
      * 声明，不再从端口名里猜。对外契约仍是那一个「尺寸」口 —— 工坊送来的
      * `values.size` 由运行期按子口身份派成各自认的形状（见 sizeValueForPin）。 */
-    const ids: readonly string[] = def.cls === "size" ? SIZE_SUB_IDS : [def.id];
+    const ids: ReadonlyArray<string> = def.cls === "size" ? SIZE_SUB_IDS : [def.id];
     for (const id of ids) {
       if (out.some((entry) => entry.id === id)) continue;
       const cls = /* SAFETY: 类型断言已复核 */ (def.cls === "size" ? id : def.cls) as ParamClass;
@@ -191,7 +191,7 @@ function classifyPins(io: WorkflowIOMap | null | undefined): Map<ParamClass, Par
     });
   }
   const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
-  for (const klass of /* SAFETY: 类型断言已复核 */ Object.keys(CLASS_FAMILY) as ParamClass[]) {
+  for (const klass of /* SAFETY: 类型断言已复核 */ Object.keys(CLASS_FAMILY) as Array<ParamClass>) {
     /* 聚合值 `size` 不单独摆候选：契约层把它摊成六个子口。 */
     if (klass === "size") continue;
     const family = CLASS_FAMILY[klass];
@@ -207,7 +207,7 @@ function classifyPins(io: WorkflowIOMap | null | undefined): Map<ParamClass, Par
  * 聚类」时代的产物。现在键变成契约口子（`size` / `prompt`…），作者当年连过的
  * 线若只按新键去查会落空，表现就是「改了落点没生效」（不报错，静默显示成「未配置」）。
  * 因此解析映射时把旧键一并当作候选：只读、不写，落库一律用新键。 */
-function legacyEntryIds(entry: ParamEntry): string[] {
+function legacyEntryIds(entry: ParamEntry): Array<string> {
   const nodeIds = new Set<string>();
   if (entry.nodeId) nodeIds.add(entry.nodeId);
   for (const pin of entry.pins) {
@@ -215,7 +215,7 @@ function legacyEntryIds(entry: ParamEntry): string[] {
     if (raw) nodeIds.add(raw);
   }
   const classes = candidateClasses(entry.cls);
-  const out: string[] = [];
+  const out: Array<string> = [];
   for (const nodeId of nodeIds) {
     for (const klass of classes) out.push(`${nodeId}|${klass}`);
   }
@@ -267,7 +267,7 @@ export interface ParamMapping {
  *  `io` 只用于**校验落点仍然存在**（端口被改名 / 移除后，一条指向不存在端口的
  *  线会让运行期静默落不到值 —— 这种线按未配置处理，与画布上画不出线一致）。 */
 export function resolveMapping(
-  entries: readonly ParamEntry[],
+  entries: ReadonlyArray<ParamEntry>,
   io: WorkflowIOMap | null | undefined,
   mapping: ParamMapping | null | undefined,
   mode?: string | null,
@@ -454,7 +454,7 @@ export function ioKeyForHandle(
  *  消费方（后端 buildCustomWorkflow）据此把「该端口的实参来自哪个对外参数」
  *  解析出来，从而不覆盖工作流图上原有的连线。null 表示作者显式断开了这条线。 */
 export function buildSourceOverrides(
-  entries: readonly ParamEntry[],
+  entries: ReadonlyArray<ParamEntry>,
   io: WorkflowIOMap | null | undefined,
   mapping: ParamMapping | null | undefined,
   mode?: string | null,
@@ -560,15 +560,15 @@ function sizeValueForPin(
  *    兜底 —— 与「未连线的口就用工作流自己的默认值」一致。 */
 export function applyParamMapping(args: {
   io: WorkflowIOMap | null | undefined;
-  entries: readonly ParamEntry[];
+  entries: ReadonlyArray<ParamEntry>;
   mapping: ParamMapping | null | undefined;
   values: Record<string, unknown>;
   mode?: string | null;
-}): { inputs: MappedInput[]; unmatched: string[] } {
+}): { inputs: Array<MappedInput>; unmatched: Array<string> } {
   const { io, entries, mapping, values, mode } = args;
   const resolved = resolveMapping(entries, io, mapping, mode);
-  const inputs: MappedInput[] = [];
-  const unmatched: string[] = [];
+  const inputs: Array<MappedInput> = [];
+  const unmatched: Array<string> = [];
   const seen = new Set<string>();
 
   const push = (ioKey: string, value: unknown) => {

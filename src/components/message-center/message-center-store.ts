@@ -63,7 +63,7 @@ export interface MessageCenterState {
   /** 全屏消息面板是否打开 */
   open: boolean;
   /** 最新在前 */
-  messages: MessageRecord[];
+  messages: Array<MessageRecord>;
   /** 是否已经从持久化里恢复过（只恢复一次，见 `hydrate`）。 */
   hydrated: boolean;
   /**
@@ -178,7 +178,7 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
  * 而这个面板记的正是故障，丢历史等于把唯一的留底抹掉。 */
 export const MESSAGE_CENTER_STORAGE_KEY = "comfyapp:message-center:v1";
 
-const MESSAGE_KINDS: readonly MessageKind[] = ["update", "restart", "offline", "info"];
+const MESSAGE_KINDS: ReadonlyArray<MessageKind> = ["update", "restart", "offline", "info"];
 
 /** 一条记录是否可用（字段齐、类型对、kind 认识）。
  *
@@ -209,7 +209,7 @@ function asMessageRecord(raw: unknown): MessageRecord | null {
 }
 
 /** 从持久化里读回消息；没存过 / 存坏了 / 没有任何一条可用 → 空数组。 */
-function readPersistedMessages(): MessageRecord[] {
+function readPersistedMessages(): Array<MessageRecord> {
   const raw = readStorageJson<unknown>(MESSAGE_CENTER_STORAGE_KEY, null);
   if (!Array.isArray(raw)) return [];
   return raw
@@ -221,7 +221,7 @@ function readPersistedMessages(): MessageRecord[] {
 /** 当前内存里的消息是否已经等于持久化里那一份（避免恢复时空跑一次渲染）。
  *  `runId` 也参与比较：它是分组键，内存里盖了戳而持久化里没有时若不换引用，
  *  刷新一次就会丢掉分组依据。 */
-function sameAsPersisted(current: MessageRecord[]): boolean {
+function sameAsPersisted(current: Array<MessageRecord>): boolean {
   const persisted = readPersistedMessages();
   if (persisted.length !== current.length) return false;
   return persisted.every((m, i) => {
@@ -237,7 +237,7 @@ function sameAsPersisted(current: MessageRecord[]): boolean {
 }
 
 /** 恢复：与当前内容相同就原样返回（不给 store 塞一份等值的新数组）。 */
-function restoreMessages(current: MessageRecord[]): MessageRecord[] {
+function restoreMessages(current: Array<MessageRecord>): Array<MessageRecord> {
   return sameAsPersisted(current) ? current : readPersistedMessages();
 }
 

@@ -11,7 +11,7 @@ import { resetComfyLivenessClientForTest, subscribeComfyCrashes } from "./comfy-
 
 /** 最小的 EventSource 替身：只留 `onmessage` / `close`。 */
 class FakeEventSource {
-  static instances: FakeEventSource[] = [];
+  static instances: Array<FakeEventSource> = [];
   onmessage: ((ev: MessageEvent<string>) => void) | null = null;
   closed = false;
   url: string;

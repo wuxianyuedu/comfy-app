@@ -35,7 +35,7 @@ export interface WorkshopGenerationDeps {
   /** 本地链路的唯一可执行来源（空串 = 未选工作流）。 */
   workflowId: string;
   /** 角色卡表：镜头相关角色选了定妆照时，按它取参考图下发（流程 §4）。 */
-  characters: Character[];
+  characters: Array<Character>;
   /**
    * 当前项目 id（空串 = 还没有活跃项目）。与镜头号一起写进任务行，让「这一镜出过图吗」
    * 能由数据库回答，而不是只信草稿里那个 `imageUrl` 字符串。
@@ -45,7 +45,7 @@ export interface WorkshopGenerationDeps {
    */
   projectId: string;
   /** 回写目标镜头的 status / taskId / imageUrl —— 镜头数据仍归主管线持有。 */
-  setShots: React.Dispatch<React.SetStateAction<Shot[]>>;
+  setShots: React.Dispatch<React.SetStateAction<Array<Shot>>>;
   /** 需要引起用户注意的失败/阻断文案通道（由主管线决定怎么渲染，不用 alert）。 */
   notify: (message: string | null) => void;
 }
@@ -56,11 +56,7 @@ export interface WorkshopGenerationApi {
   generateShot: (shot: Shot) => Promise<void>;
   /** 观察一个本地任务直到落定，结果回写对应镜头（生图 / 视频共用）。
    *  主管线的「恢复失联任务」也走它 —— 重挂载后要有人重新订阅那条 SSE。 */
-  watchShotTask: (
-    shotId: string,
-    taskId: string,
-    target?: "image" | "video",
-  ) => Promise<void>;
+  watchShotTask: (shotId: string, taskId: string, target?: "image" | "video") => Promise<void>;
 }
 
 export function useWorkshopGeneration({
@@ -90,22 +86,15 @@ export function useWorkshopGeneration({
    *  （宽高由 size-presets 按场景现算）。没落到任何端口的口随结果以提示文案
    *  返回 —— 「给了值却没生效」必须让用户知道（规范 10 §10.3.1），不静默丢。 */
   const buildShotInput = React.useCallback(
-    async (
-      shot: Shot,
-    ): Promise<{ input: GenerateInput; unmatchedWarning: string | null }> => {
+    async (shot: Shot): Promise<{ input: GenerateInput; unmatchedWarning: string | null }> => {
       /* 草稿里存的是尺寸表达（老数据可能是 "832x1216" 字符串，回读时归一）。 */
       const sizeSpec = parseShotSize(shot.params.size);
       /* 定妆照 → 参考图（流程 §4 的口径）：镜头相关角色选了定妆照就带上下发，
        * 落到作者连给参考图口的行上；工作流没连参考图口时进 unmatched，由
        * 下面的提示条告知。上传失败不拖垮生成，只有失败数需要提示。 */
-      const refs = await preparePortraitReferences(
-        characters,
-        shot.characterIds,
-      );
+      const refs = await preparePortraitReferences(characters, shot.characterIds);
       if (refs.failedCount > 0) {
-        notify(
-          `${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`,
-        );
+        notify(`${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`);
       }
       const { input, unmatched } = await buildLibraryWorkflowInput(workflowId, {
         prompt: shot.prompt,
@@ -126,11 +115,7 @@ export function useWorkshopGeneration({
    *  30 分钟无响应按失败收尾并退订（与 ShotStudio / VideoStudio 的安全阀
    *  同口径、同常量）：批量循环永不卡死在一条沉默的流上。 */
   const watchShotTask = React.useCallback(
-    (
-      shotId: string,
-      taskId: string,
-      target: "image" | "video" = "image",
-    ): Promise<void> => {
+    (shotId: string, taskId: string, target: "image" | "video" = "image"): Promise<void> => {
       /* 订阅句柄 —— watchTask 返回前先给一个空实现，超时路径上一定已赋值。 */
       let close: () => void = () => undefined;
       /** 回写只认「仍归属本任务」的镜头（生图与视频的归属字段不同）。 */
@@ -138,10 +123,7 @@ export function useWorkshopGeneration({
         setShots((prev) =>
           prev.map((item) => {
             if (item.id !== shotId) return item;
-            const owned =
-              target === "video"
-                ? item.clipTaskId === taskId
-                : item.taskId === taskId;
+            const owned = target === "video" ? item.clipTaskId === taskId : item.taskId === taskId;
             return owned ? { ...item, ...p } : item;
           }),
         );
@@ -162,16 +144,9 @@ export function useWorkshopGeneration({
             },
             onOutput: (out) => {
               /* 生图只要图片产物、视频只要视频产物（另一种是别的阶段的）。 */
-              const wanted =
-                target === "video"
-                  ? out.kind !== "image"
-                  : out.kind !== "video";
+              const wanted = target === "video" ? out.kind !== "image" : out.kind !== "video";
               if (!wanted) return;
-              patchIfOwned(
-                target === "video"
-                  ? { clipUrl: out.url }
-                  : { imageUrl: out.url },
-              );
+              patchIfOwned(target === "video" ? { clipUrl: out.url } : { imageUrl: out.url });
             },
             onSettled: (result) => {
               setShotProgress((prev) => {
@@ -210,11 +185,7 @@ export function useWorkshopGeneration({
               delete next[shotId];
               return next;
             });
-            patchIfOwned(
-              target === "video"
-                ? { clipStatus: "failed" }
-                : { status: "failed" },
-            );
+            patchIfOwned(target === "video" ? { clipStatus: "failed" } : { status: "failed" });
             notify("任务超时（30 分钟无响应），已按失败收尾");
           },
         },
@@ -232,9 +203,7 @@ export function useWorkshopGeneration({
       }
       setGeneratingDepth((depth) => depth + 1);
       setShots((prev) =>
-        prev.map((item) =>
-          item.id === shot.id ? { ...item, status: "running" } : item,
-        ),
+        prev.map((item) => (item.id === shot.id ? { ...item, status: "running" } : item)),
       );
       try {
         const { input, unmatchedWarning } = await buildShotInput(shot);
@@ -246,17 +215,11 @@ export function useWorkshopGeneration({
         const taskId = await startLocalGenerate(
           withGenerationAttribution(input, { projectId, shotId: shot.id }),
         );
-        setShots((prev) =>
-          prev.map((item) =>
-            item.id === shot.id ? { ...item, taskId } : item,
-          ),
-        );
+        setShots((prev) => prev.map((item) => (item.id === shot.id ? { ...item, taskId } : item)));
         await watchShotTask(shot.id, taskId);
       } catch (err: unknown) {
         setShots((prev) =>
-          prev.map((item) =>
-            item.id === shot.id ? { ...item, status: "failed" } : item,
-          ),
+          prev.map((item) => (item.id === shot.id ? { ...item, status: "failed" } : item)),
         );
         const message = errorMessage(err, "生成失败");
         console.error(message);

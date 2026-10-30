@@ -109,8 +109,8 @@ function norm(p: string): string {
  * @returns {Buffer}
  */
 function makeZip(files: Array<{ name: string; data: Buffer }>): Buffer {
-  const locals: Buffer[] = [];
-  const centrals: Buffer[] = [];
+  const locals: Array<Buffer> = [];
+  const centrals: Array<Buffer> = [];
   let offset = 0;
   for (const f of files) {
     const name = Buffer.from(f.name, "utf8");
@@ -175,7 +175,7 @@ function crc32(buf: Buffer): number {
 }
 
 /** 从一段源码里抠出「按平台二选一」的候选表（两份文本，逐项对账）。 */
-function candidatesInSource(text: string, constName: string): string[] {
+function candidatesInSource(text: string, constName: string): Array<string> {
   const block = new RegExp(`const ${constName}\\s*=\\s*([\\s\\S]*?);\\n`).exec(text)?.[1];
   if (!block) return [];
   /* 只收**数组字面量里**的字符串：`process.platform === "win32"` 那句里的
@@ -367,7 +367,7 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
      * 落点会得出「这台机真的没装」，可 PATH 里明明带着 `D:\...`。判据是
      * 「取证必须覆盖这台机实际用的盘符，以及**其他账号** profile 里的按用户安装」
      * （`D:\Users\yuedu\...` 正是「yuedu 会话有、SYSTEM 构建账号没有」的那一格）。 */
-    const probed: string[] = [];
+    const probed: Array<string> = [];
     pythonForensics({
       env: {
         // 只用分号当分隔符（Windows 形态）—— 这里的 env 是合成的 PATH，不是本机的。
@@ -405,7 +405,7 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
   });
 
   it("四个安装根都覆盖（含别人装的那两个），不只是「我们指望它装在哪」", () => {
-    const roots: string[] = [];
+    const roots: Array<string> = [];
     pythonForensics({
       env: {
         PATH: "/a",
@@ -528,7 +528,7 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     /* Linux：apt-get / dnf / apk 里挑**第一个 `--version` 答得上的**那一档
      * （`apt-get` 排在最前，所以模拟「只有 dnf 在」时 apt-get 会先被问一次、
      * 答不上来才轮到 dnf —— 顺序本身是判据）。 */
-    const ran: string[] = [];
+    const ran: Array<string> = [];
     const linux = installPython({
       platform: "linux",
       run: (cmd, args) => {
@@ -562,7 +562,7 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     expect(mac.reason).toContain("brew");
 
     // 有 brew 就真去装（装成与否无所谓，判据只钉「跑了哪条」）。
-    const brewRan: string[] = [];
+    const brewRan: Array<string> = [];
     installPython({
       platform: "darwin",
       run: (cmd, args) => {
@@ -579,7 +579,7 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     /* 现场（#1959 第三轮）：Runner 以 `NT AUTHORITY\SYSTEM` 跑、用的是机器 PATH，
      * 而 `--scope user` 把包装进当前用户的配置目录 —— 那条路对 SYSTEM 要么装不上、
      * 要么装到一个这次构建之后的会话也看不见的地方。所以两个 scope 都要试。 */
-    const scopes: string[] = [];
+    const scopes: Array<string> = [];
     installPython({
       ...noExternalAction,
       /* 「装完找解释器」必须注入成**一定找不到**：真实现扫安装根读真 fs，
@@ -656,8 +656,8 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
   };
 
   it("winget 与 scoop 都不在盘上时，落到官方 embed 包（下载 → 解压 → 复判都走过）", () => {
-    const downloaded: string[] = [];
-    const unzipped: string[] = [];
+    const downloaded: Array<string> = [];
+    const unzipped: Array<string> = [];
     const r = installPython({
       ...win,
       /* 一个干净的 cwd：embed 包解在 `<cwd>/python-embeded`，指到仓库根会让这条
@@ -879,7 +879,7 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
   const hostPrefix = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "/bin/pnpm.PS1"];
 
   it("真命令里**不带**探针参数 `-v`（带上就变成「只打版本、什么都不装」）", () => {
-    const calls: string[][] = [];
+    const calls: Array<Array<string>> = [];
     const r = runPlaywrightInstall({
       find: () => ({
         command: "/host/pwsh.EXE",
@@ -905,7 +905,7 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
   });
 
   it("宿主前缀一件不少（少了就变成「拿 .ps1 当可执行文件起」）", () => {
-    const seen: Array<[string, string[]]> = [];
+    const seen: Array<[string, Array<string>]> = [];
     runPlaywrightInstall({
       find: () => ({
         command: "/host/pwsh.EXE",
@@ -950,7 +950,7 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
      *     120 MB —— 实测这台节点把前者拉到 120s 超时收场（`cnb-g9d-1k515kvrq`），
      *     于是「多下一件以防万一」变成了这一步红、`E2E 关键流程` 一步都跑不到的唯一原因。
      * 本仓 `playwright.config.ts` 只有一个 headless project，所以只需要后者。 */
-    let args: string[] = [];
+    let args: Array<string> = [];
     runPlaywrightInstall({
       find: () => ({
         command: "pnpm",
@@ -1246,13 +1246,13 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
     const onDisk = new Set([ps1.toLowerCase(), hostExe.toLowerCase()]);
     // 模拟 NTFS：不敏感大小写。
     const isFile = (p: string): boolean => onDisk.has(p.toLowerCase());
-    const started: Array<[string, string[]]> = [];
+    const started: Array<[string, Array<string>]> = [];
     const r = findPnpm({
       platform: "win32",
       env: winEnv(dir),
       isFile,
       host: () => hostExe,
-      probeRun: (cmd: string, args: string[]) => {
+      probeRun: (cmd: string, args: Array<string>) => {
         started.push([cmd, args]);
         return { command: cmd, args, out: "12.4.1" };
       },
@@ -1282,7 +1282,7 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
     const ps1 = path.join(dir, "pnpm.PS1");
     const hostExe = path.join("/host", "pwsh.EXE");
     const onDisk = new Set([ps1.toLowerCase(), hostExe.toLowerCase()]);
-    const calls: Array<[string, string[]]> = [];
+    const calls: Array<[string, Array<string>]> = [];
     const r = findPnpm({
       platform: "win32",
       env: winEnv(dir),
@@ -1290,7 +1290,7 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
       host: () => hostExe,
       /* 复刻真垫片的语义：**没收到 `-v` 就退非零**（`pnpm` 裸跑打 usage）。
        * 少了这条模拟，探针参数丢了也照绿 —— 那正是这次漏网的原因。 */
-      probeRun: (cmd: string, args: string[]) => {
+      probeRun: (cmd: string, args: Array<string>) => {
         calls.push([cmd, args]);
         return args.includes("-v") ? { command: cmd, args, out: "12.4.1" } : null;
       },
@@ -1334,13 +1334,13 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
       ps1.toLowerCase(),
       hostExe.toLowerCase(),
     ]);
-    const probed: string[] = [];
+    const probed: Array<string> = [];
     const r = findPnpm({
       platform: "win32",
       env: winEnv(dir),
       isFile: (p: string) => onDisk.has(p.toLowerCase()),
       host: () => hostExe,
-      probeRun: (cmd: string, args: string[]) => {
+      probeRun: (cmd: string, args: Array<string>) => {
         probed.push(cmd);
         return { command: cmd, args, out: "12.4.1" };
       },
@@ -1374,7 +1374,7 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
       env: { PATH: dir },
       isFile: (p: string) => p === shim,
       host: () => null,
-      probeRun: (cmd: string, args: string[]) => ({
+      probeRun: (cmd: string, args: Array<string>) => ({
         command: cmd,
         args,
         out: "12.4.1",
@@ -1482,8 +1482,8 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
      * 这与 `executable-resolve.ts` 那句「大小写不敏感只按目标平台」是同一条口径。 */
     /* 包成箭头函数：直接传 `path.win32.join` 会被 `unbound-method` 判为「方法与
      * 自己的对象分了家」（`path.join` 本身不读 `this`，但规则看不出来）。 */
-    const win = (...parts: string[]) => path.win32.join(...parts);
-    const posix = (...parts: string[]) => path.posix.join(...parts);
+    const win = (...parts: Array<string>) => path.win32.join(...parts);
+    const posix = (...parts: Array<string>) => path.posix.join(...parts);
     expect(
       playwrightBrowsersRoot({
         platform: "win32",
@@ -1857,7 +1857,7 @@ describe("工具链自证：装过的就不装（ISSUE #1961）", () => {
     const dir = readyEnv();
     try {
       /** @type {string[][]} */
-      const spawned: string[][] = [];
+      const spawned: Array<Array<string>> = [];
       const code = playwrightOnly({
         env: { PLAYWRIGHT_BROWSERS_PATH: dir },
         find: () => ({
@@ -2157,7 +2157,7 @@ describe("工具链自证：下载失败时当场量「到得了哪」（ISSUE #
 
   it("装失败时它真的被打印（不是写了没人调）", () => {
     /** @type {string[]} */
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const code = playwrightOnly({
       env: { PLAYWRIGHT_DOWNLOAD_HOST: "https://x" },
       find: () => ({
@@ -2605,7 +2605,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
         const TOTAL = 128 * 1024;
         await withStallingLink(TOTAL, 16 * 1024, async (base) => {
           /** @type {number[]} */
-          const offsets: number[] = [];
+          const offsets: Array<number> = [];
           const res = fetchUrlResumable(`${base}/x.zip`, dest, {
             chunkBytes: 64 * 1024,
             chunkTimeoutMs: 200,
@@ -2713,7 +2713,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     const dir = mkdtempSync(path.join(tmpdir(), "pw-seedfail-"));
     try {
       /** @type {string[]} */
-      const printed: string[] = [];
+      const printed: Array<string> = [];
       /** @type {boolean} */
       let installCalled = false;
       const code = playwrightOnly({
@@ -2770,7 +2770,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
       const exe =
         process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
       /** @type {string[]} */
-      const printed: string[] = [];
+      const printed: Array<string> = [];
       /** @type {boolean} */
       let installCalled = false;
       const code = playwrightOnly({

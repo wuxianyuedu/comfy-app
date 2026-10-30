@@ -28,7 +28,7 @@ import {
 
 export interface WorksGalleryController {
   /** 要渲染的全部项目行（并集，倒序）。 */
-  projects: ProjectListEntry[];
+  projects: Array<ProjectListEntry>;
   /** 首次取数完成前为真（视图显示加载态，而不是「还没有项目」）。 */
   loading: boolean;
   /** 服务端列表这一轮拉到了没有。false ⇒ 视图给一句降级说明。 */
@@ -48,10 +48,8 @@ export interface WorksGalleryController {
   refresh: () => void;
 }
 
-export function useWorksGallery(
-  onOpenProject?: (id: string) => void,
-): WorksGalleryController {
-  const [projects, setProjects] = useState<ProjectListEntry[]>([]);
+export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGalleryController {
+  const [projects, setProjects] = useState<Array<ProjectListEntry>>([]);
   const [loading, setLoading] = useState(true);
   const [serverOk, setServerOk] = useState(true);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -124,8 +122,7 @@ export function useWorksGallery(
     }
   }, [pendingDeleteId, projects]);
 
-  const pendingDelete =
-    projects.find((project) => project.id === pendingDeleteId) ?? null;
+  const pendingDelete = projects.find((project) => project.id === pendingDeleteId) ?? null;
 
   return {
     projects,

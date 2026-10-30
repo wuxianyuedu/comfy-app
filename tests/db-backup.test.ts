@@ -283,7 +283,7 @@ describe("pruneBackups：删不动不改变结论，但要说话", () => {
       e.code = "EBUSY";
       throw e;
     });
-    const failures: string[] = [];
+    const failures: Array<string> = [];
     const removed = pruneBackups(root, 1, (name) => failures.push(name));
     unlink.mockRestore();
     expect(removed).toEqual([]);
@@ -401,7 +401,7 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     seedDb(["老数据"]);
     /* 造满保留份数，让「被恢复的那一份」正好是最老的 —— 不保护时它会被
      * 「紧接着做的退路备份」的轮转删掉，而下一次 `copyFileSync` 就 ENOENT。 */
-    const names: string[] = [];
+    const names: Array<string> = [];
     for (let i = 0; i < BACKUP_KEEP; i++) {
       const r = createBackup(root, {
         databaseUrl,
@@ -508,7 +508,7 @@ describe("恢复：只写标记，换文件在下次启动", () => {
 describe("启动链出口：结果必落一句话，且不抛", () => {
   it("空转什么都不说（绝大多数启动是这一支）", () => {
     seedDb();
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const result = applyPendingRestoreAtBoot(root, {
       write: (l) => lines.push(l),
     });
@@ -522,7 +522,7 @@ describe("启动链出口：结果必落一句话，且不抛", () => {
     if (!made.ok) throw new Error("备份失败");
     requestRestore(root, made.name);
 
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const result = applyPendingRestoreAtBoot(root, {
       write: (l) => lines.push(l),
     });
@@ -540,7 +540,7 @@ describe("启动链出口：结果必落一句话，且不抛", () => {
       path.join(backupDir(root), "restore-request.json"),
       JSON.stringify({ file: "db-backup-20261010-120000.sqlite" }),
     );
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const result = applyPendingRestoreAtBoot(root, {
       write: (l) => lines.push(l),
     });

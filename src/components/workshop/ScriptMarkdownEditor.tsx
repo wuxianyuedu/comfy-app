@@ -3,17 +3,8 @@
 import React from "react";
 import { X, FileText } from "lucide-react";
 import { markdownToHtml } from "~/lib/markdown";
-import {
-  normalizeMarkdown,
-  buildOutline,
-  getLineStart,
-  getLineEnd,
-} from "./script-markdown-utils";
-import {
-  EditorToolbar,
-  OutlineSidebar,
-  EditorBody,
-} from "./ScriptMarkdownEditor.parts";
+import { normalizeMarkdown, buildOutline, getLineStart, getLineEnd } from "./script-markdown-utils";
+import { EditorToolbar, OutlineSidebar, EditorBody } from "./ScriptMarkdownEditor.parts";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 import { Button } from "~/components/ui/button";
 import { zClass } from "~/lib/shell/overlay-z";
@@ -45,7 +36,7 @@ export function ScriptMarkdownEditor({
 }: ScriptMarkdownEditorProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const [showPreview, setShowPreview] = React.useState(false);
-  const [history, setHistory] = React.useState<HistoryFrame[]>([
+  const [history, setHistory] = React.useState<Array<HistoryFrame>>([
     { value, selectionStart: value.length, selectionEnd: value.length },
   ]);
   const [historyIndex, setHistoryIndex] = React.useState(0);
@@ -100,10 +91,7 @@ export function ScriptMarkdownEditor({
     }
     setHistory((prev) => {
       const sliced = prev.slice(0, historyIndex + 1);
-      const next = [
-        ...sliced,
-        { value: nextValue, selectionStart: start, selectionEnd: end },
-      ];
+      const next = [...sliced, { value: nextValue, selectionStart: start, selectionEnd: end }];
       if (next.length > MAX_HISTORY) next.shift();
       return next;
     });
@@ -141,18 +129,13 @@ export function ScriptMarkdownEditor({
     };
   }
 
-  function replaceSelection(
-    replacement: string,
-    cursorOffset?: number,
-    selectionLength?: number,
-  ) {
+  function replaceSelection(replacement: string, cursorOffset?: number, selectionLength?: number) {
     const el = textareaRef.current;
     if (!el) return;
     const { start, end } = getSelection();
     const nextValue = value.slice(0, start) + replacement + value.slice(end);
     const nextStart = start + (cursorOffset ?? replacement.length);
-    const nextEnd =
-      selectionLength === undefined ? nextStart : nextStart + selectionLength;
+    const nextEnd = selectionLength === undefined ? nextStart : nextStart + selectionLength;
     emitChange(nextValue);
     pushHistory(nextValue, nextStart, nextEnd);
     setTimeout(() => {
@@ -164,11 +147,7 @@ export function ScriptMarkdownEditor({
   function wrapSelection(before: string, after: string, placeholder = "文本") {
     const { text } = getSelection();
     const wrapped = text || placeholder;
-    replaceSelection(
-      `${before}${wrapped}${after}`,
-      before.length,
-      wrapped.length,
-    );
+    replaceSelection(`${before}${wrapped}${after}`, before.length, wrapped.length);
   }
 
   function insertAtLineStart(prefix: string) {
@@ -192,8 +171,7 @@ export function ScriptMarkdownEditor({
         return prefix + " " + trimmed;
       })
       .join("\n");
-    const nextValue =
-      value.slice(0, lineStart) + transformed + value.slice(lineEnd);
+    const nextValue = value.slice(0, lineStart) + transformed + value.slice(lineEnd);
     const nextStart = lineStart;
     const nextEnd = lineStart + transformed.length;
     emitChange(nextValue);
@@ -218,8 +196,7 @@ export function ScriptMarkdownEditor({
         return `${marker} ${line.replace(/^(\d+\.|-)\s+/, "")}`;
       })
       .join("\n");
-    const nextValue =
-      value.slice(0, lineStart) + transformed + value.slice(lineEnd);
+    const nextValue = value.slice(0, lineStart) + transformed + value.slice(lineEnd);
     emitChange(nextValue);
     pushHistory(nextValue, lineStart, lineStart + transformed.length);
     setTimeout(() => {
@@ -229,8 +206,7 @@ export function ScriptMarkdownEditor({
   }
 
   function insertTable() {
-    const sample =
-      "| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| 内容 | 内容 | 内容 |";
+    const sample = "| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| 内容 | 内容 | 内容 |";
     replaceSelection(`\n${sample}\n`, 1, sample.length);
   }
 
@@ -279,14 +255,8 @@ export function ScriptMarkdownEditor({
     filterInput: false,
     target: document,
   });
-  const undoHotkey = React.useCallback(
-    () => restoreHistory(1),
-    [restoreHistory],
-  );
-  const redoHotkey = React.useCallback(
-    () => restoreHistory(-1),
-    [restoreHistory],
-  );
+  const undoHotkey = React.useCallback(() => restoreHistory(1), [restoreHistory]);
+  const redoHotkey = React.useCallback(() => restoreHistory(-1), [restoreHistory]);
   useHotkey({ key: "z", mod: true }, undoHotkey, {
     filterInput: false,
     target: document,
@@ -299,10 +269,7 @@ export function ScriptMarkdownEditor({
   return (
     /* 全屏编辑弹层:底部 padding-bottom 6(24px) 为全局常驻的 BrowserStatusBar
        (fixed bottom-0 z-[100] h-6) 让位,避免底部「取消/保存」按钮被它盖住(ISSUE #35)。 */
-    <FullScreenLayer
-      zClass={zClass("modal")}
-      className="bg-canvas flex flex-col pb-6"
-    >
+    <FullScreenLayer zClass={zClass("modal")} className="bg-canvas flex flex-col pb-6">
       {/* Header */}
       <header className="border-border flex h-14 items-center justify-between border-b px-5">
         <div className="flex items-center gap-3">
@@ -361,8 +328,7 @@ export function ScriptMarkdownEditor({
       {/* Footer */}
       <footer className="border-border bg-panel flex h-16 items-center justify-end gap-3 border-t px-6">
         <span className="text-ink-fainter mr-auto text-xs">
-          {value.split("\n").filter((line) => line.trim()).length} 行 ·{" "}
-          {value.trim().length} 字符
+          {value.split("\n").filter((line) => line.trim()).length} 行 · {value.trim().length} 字符
         </span>
         <Button
           variant="outline"

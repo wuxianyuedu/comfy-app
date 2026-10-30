@@ -46,10 +46,7 @@ export function useToast(): ToastContextValue {
   return ctx;
 }
 
-const KIND_STYLE: Record<
-  ToastKind,
-  { ring: string; icon: string; iconColor: string }
-> = {
+const KIND_STYLE: Record<ToastKind, { ring: string; icon: string; iconColor: string }> = {
   success: {
     ring: "border-success-strong/30",
     icon: "check",
@@ -75,7 +72,7 @@ const KIND_STYLE: Record<
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<ToastItem[]>([]);
+  const [items, setItems] = useState<Array<ToastItem>>([]);
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   /* 卸载时清掉所有挂起的自动收起定时器：Provider 卸载后这些 setTimeout 仍会
@@ -127,9 +124,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const update = useCallback(
     (id: string, patch: Partial<Omit<ToastItem, "id">>) => {
-      setItems((prev) =>
-        prev.map((prev) => (prev.id === id ? { ...prev, ...patch } : prev)),
-      );
+      setItems((prev) => prev.map((prev) => (prev.id === id ? { ...prev, ...patch } : prev)));
       if (patch.duration !== undefined) schedule(id, patch.duration);
     },
     [schedule],
@@ -142,10 +137,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         toast({ kind: "success", title, description, duration }),
       error: (title, description, duration) =>
         toast({ kind: "error", title, description, duration }),
-      info: (title, description, duration) =>
-        toast({ kind: "info", title, description, duration }),
-      loading: (title, description) =>
-        toast({ kind: "loading", title, description, duration: 0 }),
+      info: (title, description, duration) => toast({ kind: "info", title, description, duration }),
+      loading: (title, description) => toast({ kind: "loading", title, description, duration: 0 }),
       update,
       dismiss,
     }),
@@ -171,13 +164,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-ink-bright text-sm font-semibold">
-                  {item.title}
-                </p>
+                <p className="text-ink-bright text-sm font-semibold">{item.title}</p>
                 {item.description && (
-                  <p className="text-ink-soft mt-0.5 text-xs wrap-break-word">
-                    {item.description}
-                  </p>
+                  <p className="text-ink-soft mt-0.5 text-xs wrap-break-word">{item.description}</p>
                 )}
               </div>
               <Button

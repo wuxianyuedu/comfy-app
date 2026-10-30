@@ -19,12 +19,7 @@ import {
   SidebarRail,
 } from "~/components/ui/sidebar";
 
-import {
-  sidebarNavItems,
-  isProjectTab,
-  PROJECTS_ENTRY,
-  type WorkspaceView,
-} from "./NavItems";
+import { sidebarNavItems, isProjectTab, PROJECTS_ENTRY, type WorkspaceView } from "./NavItems";
 import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
 import { ViewTabStrip, type OpenableView } from "./ViewTabStrip";
@@ -81,7 +76,7 @@ export interface AppShellProps {
   /** 首帧侧栏展开态。由服务端读 `sidebar_state` cookie 传来（见 `ui/sidebar` 里那段说明）；不传按展开。 */
   defaultSidebarOpen?: boolean;
   /** 底部「项目」分组列出的项目（来自 canvas-store）。 */
-  projects: SidebarProject[];
+  projects: Array<SidebarProject>;
   /** 当前活跃项目 id。
    *
    *  ⚠️ 它是**存储里那一格活跃 id**，不等于「用户此刻在这个项目里」—— 两者
@@ -100,12 +95,12 @@ export interface AppShellProps {
    * 视图页签（浏览器 / dev 形态下由外壳渲染在内容列最顶端的栏，位于 TopBar 之上）。
    * 不传时外壳行为与从前一致。
    */;
-  viewTabs?: ViewTab[];
+  viewTabs?: Array<ViewTab>;
   activeViewKey?: string;
   projectNameOf?: (projectId: string | null) => string | null | undefined;
   onSelectViewTab?: (key: string) => void;
   onCloseViewTab?: (key: string) => void;
-  openableViews?: OpenableView[];
+  openableViews?: Array<OpenableView>;
   onOpenView?: (view: WorkspaceView) => void;
 }
 
@@ -177,10 +172,7 @@ export function AppShell({
     /* 视图动作槽的宿主在 `TopBar`、使用者是各视图（它的后代）—— 提供者因此
        必须裹住两者。见 `ViewActions` 里那段「为什么是槽不是注册表」。 */
     <ViewActionsProvider>
-      <SidebarProvider
-        defaultOpen={defaultSidebarOpen}
-        className="h-full min-h-0"
-      >
+      <SidebarProvider defaultOpen={defaultSidebarOpen} className="h-full min-h-0">
         <Sidebar collapsible="icon">
           <SidebarContent>
             <SidebarGroup>
@@ -195,9 +187,7 @@ export function AppShell({
                         <SidebarMenuButton
                           isActive={active === item.id}
                           disabled={!enabled}
-                          tooltip={
-                            enabled ? item.label : `${item.label}（即将推出）`
-                          }
+                          tooltip={enabled ? item.label : `${item.label}（即将推出）`}
                           onClick={() => {
                             if (enabled) onSelect(item.id);
                           }}
@@ -250,9 +240,7 @@ export function AppShell({
                           <SidebarMenuItem key={project.id}>
                             <SidebarMenuButton
                               size="sm"
-                              isActive={
-                                insideProject && project.id === activeProjectId
-                              }
+                              isActive={insideProject && project.id === activeProjectId}
                               tooltip={project.name}
                               onClick={() => onOpenProject(project.id)}
                             >
@@ -274,11 +262,7 @@ export function AppShell({
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                         <SidebarMenuItem>
-                          <SidebarMenuButton
-                            size="sm"
-                            tooltip="新建项目"
-                            onClick={onNewProject}
-                          >
+                          <SidebarMenuButton size="sm" tooltip="新建项目" onClick={onNewProject}>
                             <Plus />
                             <span>新建项目</span>
                           </SidebarMenuButton>
@@ -321,9 +305,7 @@ export function AppShell({
             onOpenSearch={() => setCommandOpen(true)}
           />
 
-          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-            {children}
-          </div>
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
         </SidebarInset>
 
         <CommandPalette

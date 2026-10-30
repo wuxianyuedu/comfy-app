@@ -83,8 +83,8 @@ async function seedProduction(
   id: string,
   over: Partial<{
     scriptMarkdown: string;
-    characters: unknown[];
-    shots: unknown[];
+    characters: Array<unknown>;
+    shots: Array<unknown>;
   }> = {},
 ) {
   await productionRepository.upsertForUser("user-a", {

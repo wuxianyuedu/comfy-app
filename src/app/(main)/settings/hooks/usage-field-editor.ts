@@ -32,7 +32,7 @@ import {
  *  拦下。这里按「我需要什么」声明，主 hook 的完整状态**结构上**满足它。 */
 export interface UsageFieldEditorState {
   kind: RemoteModelKind;
-  fields: UsageField[];
+  fields: Array<UsageField>;
 }
 
 /** 字段行编辑器的动作集合（挂在 `RemoteModelDialogs` 上透给视图）。 */
@@ -44,7 +44,7 @@ export interface UsageFieldEditor {
   pickFieldImage: (index: number, file: File | undefined) => Promise<void>;
   setVideoMode: (mode: string) => void;
   rescueMediaFromMode: (index: number, url: string) => void;
-  usageFieldsToSend: (state: UsageFieldEditorState) => UsageField[];
+  usageFieldsToSend: (state: UsageFieldEditorState) => Array<UsageField>;
 }
 
 /** 造出字段行编辑器的动作集合。`update` 即 `setUsageTest`。 */
@@ -56,17 +56,13 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
   function patchField(index: number, patch: Partial<UsageField>) {
     update((prev) => {
       if (!prev) return prev;
-      const fields = prev.fields.map((f, i) =>
-        i === index ? { ...f, ...patch } : f,
-      );
+      const fields = prev.fields.map((f, i) => (i === index ? { ...f, ...patch } : f));
       return { ...prev, fields };
     });
   }
   function addField(key = "") {
     update((prev) =>
-      prev
-        ? { ...prev, fields: [...prev.fields, makeUsageField(key, "")] }
-        : prev,
+      prev ? { ...prev, fields: [...prev.fields, makeUsageField(key, "")] } : prev,
     );
   }
   /** 一键添加固定名称字段（images / first_frame / seed 等预设）：
@@ -80,9 +76,7 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
   }
   function removeField(index: number) {
     update((prev) =>
-      prev
-        ? { ...prev, fields: prev.fields.filter((_, i) => i !== index) }
-        : prev,
+      prev ? { ...prev, fields: prev.fields.filter((_, i) => i !== index) } : prev,
     );
   }
   async function pickFieldImage(index: number, file: File | undefined) {
@@ -96,12 +90,9 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
   }
   /** 随请求发送的字段行：视频 mode=text 时媒体字段已被隐藏（不渲染也不发送），
    *  其余场景原样保留。过滤逻辑读 usage-test-config 的纯函数，视图不重复实现。 */
-  function usageFieldsToSend(state: UsageFieldEditorState): UsageField[] {
-    const hideMedia =
-      state.kind === "video" && videoModeHidesMedia(state.fields);
-    return hideMedia
-      ? state.fields.filter((f) => !isMediaField(f.key))
-      : state.fields;
+  function usageFieldsToSend(state: UsageFieldEditorState): Array<UsageField> {
+    const hideMedia = state.kind === "video" && videoModeHidesMedia(state.fields);
+    return hideMedia ? state.fields.filter((f) => !isMediaField(f.key)) : state.fields;
   }
 
   /** 设置视频 mode 快捷值：已有 mode 行则改其值，否则在末尾追加一行。
@@ -112,9 +103,7 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
       if (!prev) return prev;
       const idx = prev.fields.findIndex((f) => f.key === "mode");
       if (idx >= 0) {
-        const fields = prev.fields.map((f, i) =>
-          i === idx ? { ...f, value: mode } : f,
-        );
+        const fields = prev.fields.map((f, i) => (i === idx ? { ...f, value: mode } : f));
         return { ...prev, fields };
       }
       return {

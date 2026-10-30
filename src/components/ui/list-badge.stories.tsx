@@ -7,17 +7,9 @@ import { ListBadge } from "~/components/ui/list-badge";
  * 变体表的返回值上取枚举）。`title` 是**悬停说明**，不是可访问名 ——
  * 徽标本身有可见文字，名字该由文字自己给（规范 §6.1）。
  */
-type ListBadgeTone = NonNullable<
-  React.ComponentProps<typeof ListBadge>["tone"]
->;
+type ListBadgeTone = NonNullable<React.ComponentProps<typeof ListBadge>["tone"]>;
 
-const TONES: ListBadgeTone[] = [
-  "neutral",
-  "success",
-  "warning",
-  "danger",
-  "primary",
-];
+const TONES: Array<ListBadgeTone> = ["neutral", "success", "warning", "danger", "primary"];
 
 const meta = {
   title: "UI/ListBadge",

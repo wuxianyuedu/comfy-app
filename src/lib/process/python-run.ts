@@ -20,7 +20,7 @@ import { pythonCandidates, pythonProbeArgs } from "./python-candidates";
 /** 退避链上的一次尝试：解释器候选名 + 该候选所需的完整参数（脚本及其参数在后）。 */
 export interface PythonAttempt {
   command: string;
-  args: string[];
+  args: Array<string>;
 }
 
 /**
@@ -34,9 +34,9 @@ export interface PythonAttempt {
  * 让最后一句原因变成不可达的）。
  */
 export function pythonAttempts(
-  scriptArgs: readonly string[],
+  scriptArgs: ReadonlyArray<string>,
   platform: NodeJS.Platform = process.platform,
-): PythonAttempt[] {
+): Array<PythonAttempt> {
   return pythonCandidates(platform).map((command) => ({
     command,
     args: pythonProbeArgs(command, [...scriptArgs]),
@@ -63,9 +63,7 @@ export function isInterpreterMiss(signal: InterpreterMissSignal): boolean {
  * 候选名取自判据，不在文案里抄第二份表 —— 这句是用户唯一能看到「为什么是 0 个」的出口
  * （硬规则 4），所以它必须与退避链**真的试过的那些名字**一致，而不是写死的一句旧顺序。
  */
-export function missingInterpreterMessage(
-  platform: NodeJS.Platform = process.platform,
-): string {
+export function missingInterpreterMessage(platform: NodeJS.Platform = process.platform): string {
   return `未找到 Python 解释器（已尝试 ${pythonCandidates(platform).join(" / ")}）`;
 }
 

@@ -22,7 +22,7 @@ const { scan, comfy } = vi.hoisted(() => ({
   },
   comfy: {
     listModelFolders: vi.fn(
-      async () => /* SAFETY: 类型断言已复核 */ ["vae", "checkpoints"] as string[],
+      async () => /* SAFETY: 类型断言已复核 */ ["vae", "checkpoints"] as Array<string>,
     ),
     comfyBase: vi.fn(() => "http://127.0.0.1:8188"),
   },

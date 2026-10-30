@@ -155,7 +155,7 @@ export interface TaskFailure {
   params?: unknown;
   /** 结构化的 ComfyUI /prompt 校验错误（摊平后的 `node_errors`），
    *  好让界面渲染出精确到字段的列表，而不是去解析 `error` 里那句英文摘要。 */
-  validationErrors?: ValidationError[];
+  validationErrors?: Array<ValidationError>;
 }
 
 /* 轮询一个任务，直到它有结果、失败或超时。
@@ -186,7 +186,7 @@ export async function pollTask(
       if (onProgress && typeof task?.progress === "number") {
         onProgress(clampPct(task.progress));
       }
-      const imgs: TaskResult[] = task?.images ?? [];
+      const imgs: Array<TaskResult> = task?.images ?? [];
       if (imgs.length) {
         const v = imgs.find((img) => img.mediaType === "video") ?? imgs[0];
         // `imgs.length > 0` 已在上一行判据，`imgs[0]` 必然存在；这里用 `if (v)`

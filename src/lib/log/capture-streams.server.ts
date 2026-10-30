@@ -73,7 +73,7 @@ export function panelCaptureLogPath(): string {
  */
 export async function latestPanelLogFile(dir = NEXTJS_LOG_DIR): Promise<string | null> {
   let best: { file: string; mtimeMs: number } | null = null;
-  let names: string[];
+  let names: Array<string>;
   try {
     names = await fs.promises.readdir(/*turbopackIgnore: true*/ dir);
   } catch {
@@ -110,7 +110,7 @@ const KEEP_FILES = 5;
  * 「取错最新一份」的机会就越大（见 `latestPanelLogFile`）。
  */
 function pruneOldFiles(): void {
-  let entries: { file: string; mtimeMs: number }[];
+  let entries: Array<{ file: string; mtimeMs: number }>;
   try {
     entries = fs
       .readdirSync(/*turbopackIgnore: true*/ NEXTJS_LOG_DIR)

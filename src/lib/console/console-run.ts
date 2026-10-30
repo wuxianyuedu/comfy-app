@@ -48,7 +48,7 @@ export type ConsoleEvent =
       command: string;
       /** 实际可执行文件与参数（排障时「到底跑的是谁」的唯一答案）。 */
       file: string;
-      args: string[];
+      args: Array<string>;
       /** 工作目录（项目根）。 */
       cwd: string;
       startedAt: number;
@@ -79,7 +79,7 @@ export interface StartRunOptions {
   runId: string;
   command: string;
   file: string;
-  args: string[];
+  args: Array<string>;
   cwd: string;
   /** 看门狗上限（毫秒）。超时走 `killProcessTree` 掐整棵树。 */
   timeoutMs: number;
@@ -90,10 +90,7 @@ export interface ConsoleRunner {
   /** 当前是否有命令在跑；忙时回「是谁、跑了多久」（界面据此禁用输入）。 */
   busy: () => { runId: string; command: string; startedAt: number } | null;
   /** 起一条命令，逐事件推给 `onEvent`。返回收尾事实。 */
-  run: (
-    opts: StartRunOptions,
-    onEvent: (event: ConsoleEvent) => void,
-  ) => Promise<ConsoleRunResult>;
+  run: (opts: StartRunOptions, onEvent: (event: ConsoleEvent) => void) => Promise<ConsoleRunResult>;
   /** 取消当前命令（杀整棵树）。没有在跑的命令时返回 false。 */
   cancel: () => Promise<boolean>;
 }
@@ -229,37 +226,36 @@ export function createConsoleRunner(): ConsoleRunner {
      * （同「硬规则 4：日志要有上限」的口气）。 */
     let emitted = 0;
     let truncated = false;
-    const forward =
-      (stream: "stdout" | "stderr") => (chunk: Buffer | string) => {
-        const text = String(chunk);
-        if (truncated) return;
-        const remaining = MAX_OUTPUT_CHARS - emitted;
-        if (remaining <= 0) {
-          truncated = true;
-          onEvent({
-            type: "out",
-            stream: "stderr",
-            text: `\n… 输出已达 ${MAX_OUTPUT_CHARS} 字符上限，后续内容不再转发（命令仍在运行，可在下方「完整输出」文件里看尾部）\n`,
-          });
-          return;
-        }
-        if (text.length > remaining) {
-          onEvent({ type: "out", stream, text: text.slice(0, remaining) });
-          emitted += remaining;
-          truncated = true;
-          /* 单个 chunk 就撞上限时必须补一句说明：否则用户看到的是「输出到一半
-           * 戛然而止」，而 exit 帧那句 `truncatedNote` 只有界面读得懂字段名的人
-           * 才看得见（硬规则 4：失败/降级路径要有**用户可见**的出口）。 */
-          onEvent({
-            type: "out",
-            stream: "stderr",
-            text: `\n… 输出已达 ${MAX_OUTPUT_CHARS} 字符上限，后续内容不再转发（命令仍在运行）\n`,
-          });
-          return;
-        }
-        emitted += text.length;
-        onEvent({ type: "out", stream, text });
-      };
+    const forward = (stream: "stdout" | "stderr") => (chunk: Buffer | string) => {
+      const text = String(chunk);
+      if (truncated) return;
+      const remaining = MAX_OUTPUT_CHARS - emitted;
+      if (remaining <= 0) {
+        truncated = true;
+        onEvent({
+          type: "out",
+          stream: "stderr",
+          text: `\n… 输出已达 ${MAX_OUTPUT_CHARS} 字符上限，后续内容不再转发（命令仍在运行，可在下方「完整输出」文件里看尾部）\n`,
+        });
+        return;
+      }
+      if (text.length > remaining) {
+        onEvent({ type: "out", stream, text: text.slice(0, remaining) });
+        emitted += remaining;
+        truncated = true;
+        /* 单个 chunk 就撞上限时必须补一句说明：否则用户看到的是「输出到一半
+         * 戛然而止」，而 exit 帧那句 `truncatedNote` 只有界面读得懂字段名的人
+         * 才看得见（硬规则 4：失败/降级路径要有**用户可见**的出口）。 */
+        onEvent({
+          type: "out",
+          stream: "stderr",
+          text: `\n… 输出已达 ${MAX_OUTPUT_CHARS} 字符上限，后续内容不再转发（命令仍在运行）\n`,
+        });
+        return;
+      }
+      emitted += text.length;
+      onEvent({ type: "out", stream, text });
+    };
 
     child.stdout?.on("data", forward("stdout"));
     child.stderr?.on("data", forward("stderr"));
@@ -313,9 +309,7 @@ export function createConsoleRunner(): ConsoleRunner {
       code: exit.code,
       signal: exit.signal,
       killed,
-      truncatedNote: truncated
-        ? `输出超过 ${MAX_OUTPUT_CHARS} 字符已截断`
-        : null,
+      truncatedNote: truncated ? `输出超过 ${MAX_OUTPUT_CHARS} 字符已截断` : null,
       durationMs,
     });
     return {

@@ -30,7 +30,7 @@ export function StyleSwitcher({
 }: {
   style: GroupStyle;
   onChange: (s: GroupStyle) => void;
-  options: { value: GroupStyle; label: string }[];
+  options: Array<{ value: GroupStyle; label: string }>;
   /** 画布 / 库内的紧凑版式：下拉按内容收窄，不再拽满整行。 */
   narrow?: boolean;
 }) {

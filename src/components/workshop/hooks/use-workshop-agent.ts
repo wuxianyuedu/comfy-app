@@ -38,11 +38,11 @@ export type WorkshopAgentToolHandlers = AgentToolHandlers;
 /** Agent hook 返回给视图的 controller。 */
 export interface WorkshopAgentController {
   open: boolean;
-  messages: AgentPanelMessage[];
+  messages: Array<AgentPanelMessage>;
   input: string;
   busy: boolean;
   error: string;
-  toolRuns: AgentToolRun[];
+  toolRuns: Array<AgentToolRun>;
   openAgent: () => void;
   closeAgent: () => void;
   setInput: (value: string) => void;
@@ -67,11 +67,11 @@ const AGENT_TOOLRUN_MAX = 2000;
 
 export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopAgentController {
   const [open, setOpen] = React.useState(false);
-  const [messages, setMessages] = React.useState<AgentPanelMessage[]>([]);
+  const [messages, setMessages] = React.useState<Array<AgentPanelMessage>>([]);
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
-  const [toolRuns, setToolRuns] = React.useState<AgentToolRun[]>([]);
+  const [toolRuns, setToolRuns] = React.useState<Array<AgentToolRun>>([]);
 
   const handlersRef = React.useRef(handlers);
   // 与 messagesRef 同理：ref 同步放进 effect，渲染期写 ref 会触发
@@ -80,7 +80,7 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
     handlersRef.current = handlers;
   }, [handlers]);
 
-  const messagesRef = React.useRef<AgentPanelMessage[]>([]);
+  const messagesRef = React.useRef<Array<AgentPanelMessage>>([]);
   React.useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
@@ -170,13 +170,13 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
     };
     pushMsg(userMsg);
 
-    const wireOf = (): AgentMessageLike[] =>
+    const wireOf = (): Array<AgentMessageLike> =>
       [...messagesRef.current, userMsg]
         .filter((m) => m.role !== "tool-run")
         .map((m) => ({ role: m.role, content: m.content }));
 
     const runLoop = async (): Promise<void> => {
-      let currentMessages: AgentMessageLike[] = wireOf();
+      let currentMessages: Array<AgentMessageLike> = wireOf();
       const maxRounds = 10;
 
       for (let round = 0; round < maxRounds; round++) {
@@ -214,7 +214,7 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
               tool_calls: response.tool_calls,
             } satisfies AgentMessageLike,
           ];
-          const toolMessages: AgentMessageLike[] = [];
+          const toolMessages: Array<AgentMessageLike> = [];
           for (const call of response.tool_calls) {
             const toolMsg = await executeOneTool(call);
             toolMessages.push(toolMsg);

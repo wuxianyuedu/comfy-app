@@ -27,11 +27,7 @@
 
 import type { Decorator } from "@storybook/nextjs";
 
-import {
-  parseFileLogs,
-  useLogStore,
-  type LogEntry,
-} from "~/components/studio/logs/log-store";
+import { parseFileLogs, useLogStore, type LogEntry } from "~/components/studio/logs/log-store";
 
 /**
  * 一路文件通道的原文。
@@ -57,7 +53,7 @@ export interface LogStoreScene {
   /** 这个场景解决什么、真数据长什么样（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
   /** 按通道分块的原文（每块一个真实来源通道）。 */
-  readonly blocks: readonly OriginBlock[];
+  readonly blocks: ReadonlyArray<OriginBlock>;
 }
 
 /* ── 真格式的日志原文 ──────────────────────────────────────────────────────
@@ -116,12 +112,12 @@ function appLines(spec: {
   count: number;
   baseMs: number;
   stepMs: number;
-  levels?: readonly string[];
+  levels?: ReadonlyArray<string>;
   message: (index: number) => string;
 }): string {
   const levels = spec.levels ?? ["INFO", "INFO", "WARN"];
   const pad = (value: number, width = 2) => String(value).padStart(width, "0");
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   for (let index = 0; index < spec.count; index += 1) {
     const at = new Date(spec.baseMs + index * spec.stepMs);
     const stamp =
@@ -195,8 +191,7 @@ export const LOG_STORE_SCENES = {
    *  · 一条 error 级别的 tRPC 失败行。
    */
   rowShapes: {
-    about:
-      "comfy-cli 原文行（可展开的 JSON 容器）+ 本机路径 + 调用位置，一次看全 LogRow 的分叉",
+    about: "comfy-cli 原文行（可展开的 JSON 容器）+ 本机路径 + 调用位置，一次看全 LogRow 的分叉",
     blocks: [
       {
         origin: "app-runtime",
@@ -224,8 +219,7 @@ export const LOG_STORE_SCENES = {
         text: sameMsLines({
           count: 14,
           atMs: new Date("2026-10-05T08:31:00").getTime() + 214,
-          message: (index) =>
-            `[comfyui] 节点 ${index + 1}/14 提交完成（同一毫秒）`,
+          message: (index) => `[comfyui] 节点 ${index + 1}/14 提交完成（同一毫秒）`,
         }),
       },
     ],
@@ -246,8 +240,7 @@ export const LOG_STORE_SCENES = {
    * 原文**逐字相同**（身份判据吃正文与时刻），这里只换通道名。
    */
   duplicatedOrigins: {
-    about:
-      "同一批启动行躺在两份文件里（按身份去重：只落一份，来源取先落板的那条）",
+    about: "同一批启动行躺在两份文件里（按身份去重：只落一份，来源取先落板的那条）",
     blocks: [
       { origin: "launcher", text: LAUNCHER_TEXT },
       { origin: "shell-launch", text: LAUNCHER_TEXT },
@@ -281,8 +274,7 @@ export const LOG_STORE_SCENES = {
           baseMs: new Date("2026-10-05T07:00:00").getTime(),
           stepMs: 1200,
           levels: ["INFO", "INFO", "INFO", "WARN", "INFO", "ERROR"],
-          message: (index) =>
-            `[trpc] poll.tick #${index + 1} 完成（${180 + (index % 40)}ms）`,
+          message: (index) => `[trpc] poll.tick #${index + 1} 完成（${180 + (index % 40)}ms）`,
         }),
       },
     ],
@@ -304,11 +296,8 @@ export const LOG_STORE_SCENES = {
       {
         origin: "app-runtime",
         text: Array.from({ length: 5 }, (_, index) => {
-          const at = new Date(
-            new Date("2026-10-05T08:40:00").getTime() + index * 1500,
-          );
-          const pad = (value: number, width = 2) =>
-            String(value).padStart(width, "0");
+          const at = new Date(new Date("2026-10-05T08:40:00").getTime() + index * 1500);
+          const pad = (value: number, width = 2) => String(value).padStart(width, "0");
           const stamp =
             `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ` +
             `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}` +
@@ -390,7 +379,7 @@ function seedScene(name: string): void {
  * 所以取值这一侧也只留一条路：原文进 `parseFileLogs()`，输出既给 store
  * （`withStoreScene`）也给纯 props 的 story（这里）。
  */
-export function sceneEntries(name: string): LogEntry[] {
+export function sceneEntries(name: string): Array<LogEntry> {
   /* `parameters` 里那个名字是不可信输入（story 里手写的字符串），所以按
      `string` 查、查不到就抛 —— 与值源的 `load()` 同一条口径。 */
   const scene: LogStoreScene | undefined = LOG_STORE_SCENES[name as SceneName];
@@ -401,9 +390,7 @@ export function sceneEntries(name: string): LogEntry[] {
   }
   /* 每块按**自己那条通道的格式**解析（三个正则各不相同），再按时刻合并 ——
      合并归 store 的 `appendFileLogs`（`mergeTimeline`）。 */
-  return scene.blocks.flatMap((block) =>
-    parseFileLogs(block.text, undefined, block.origin),
-  );
+  return scene.blocks.flatMap((block) => parseFileLogs(block.text, undefined, block.origin));
 }
 
 /**

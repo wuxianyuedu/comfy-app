@@ -26,9 +26,7 @@ function readEnabledDefault(): boolean {
   return readStorageItem(STORAGE_KEY) !== "0";
 }
 
-function summaryOf(
-  groups: { key: string; label: string; files?: string[] }[],
-): string {
+function summaryOf(groups: Array<{ key: string; label: string; files?: Array<string> }>): string {
   return groups
     .map((g) => {
       const detail =
@@ -41,7 +39,7 @@ function summaryOf(
 }
 /** 生成全屏消息正文：逐组列出改动的文件清单（比 toast 概要更全）。 */
 function bodyOf(
-  groups: { key: string; label: string; hint?: string; files?: string[] }[],
+  groups: Array<{ key: string; label: string; hint?: string; files?: Array<string> }>,
 ): string {
   const parts = groups.map((g) => {
     const head = `${g.label}${g.hint ? `（${g.hint}）` : ""}`;
@@ -63,10 +61,7 @@ export function UpdateCheckProvider() {
   const { checkNow } = useUpdateCheck({
     onDirty: useCallback(
       (groups) => {
-        toast.info(
-          "检测到本地更新",
-          `${summaryOf(groups)}。需重启应用才生效。`,
-        );
+        toast.info("检测到本地更新", `${summaryOf(groups)}。需重启应用才生效。`);
         // 同步收进消息中心，未读计数 +1，避免 toast 一闪而过无处回看
         useMessageCenterStore.getState().push({
           kind: "update",

@@ -47,7 +47,7 @@ export interface WorkflowListRow extends DiskSyncFlags, ExecutionFlags {
   name: string;
   taskType: string;
   /** 一条工作流可以同时声明多个模式；为空时 UI 退回用 `[taskType]` 展示。 */
-  modes: string[];
+  modes: Array<string>;
   /** 默认模式码；必须出现在 `modes` 里。 */
   defaultMode: string | null;
   /** 落库时间。**是 `Date`**（superjson 保真，见文件头）。 */
@@ -71,7 +71,7 @@ export interface WorkflowListRow extends DiskSyncFlags, ExecutionFlags {
   /** 用户维护的对外 IO。 */
   workflowIO: WorkflowIOMap;
   /** 挂在这条工作流上的模型标签名。 */
-  modelTags: string[];
+  modelTags: Array<string>;
   /** 服务端检测到来源文件被改名并已自动重指。 */
   diskRenamed: boolean;
   /** 给人读的 `old.json → new.json` 摘要；没改名时为 null。 */

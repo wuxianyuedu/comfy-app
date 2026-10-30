@@ -52,7 +52,7 @@ export interface UseSectionScrollSpyOptions<Id extends string = string> {
   /** 滚动容器（分区节在它里面滚动）。 */
   containerRef: React.RefObject<HTMLElement | null>;
   /** 分区 id 列表（**顺序即文档顺序** —— 「最后一条」靠它定序）。 */
-  sectionIds: readonly Id[];
+  sectionIds: ReadonlyArray<Id>;
   /** 当前分区（受控：点击导航要立刻改高亮，不必等滚动落定）。 */
   activeId: Id;
   /** 滚动把当前分区改掉了时通知调用方（同步导航高亮与摘要行）。 */

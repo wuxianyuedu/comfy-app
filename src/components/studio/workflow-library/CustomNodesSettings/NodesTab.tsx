@@ -73,7 +73,7 @@ function NodeCardList({
   manifestByNode,
   nodeCardExpansion,
 }: {
-  nodeTypeList: string[];
+  nodeTypeList: Array<string>;
   manifestByNode: CustomNodesSettingsController["manifestByNode"];
   nodeCardExpansion: CustomNodesSettingsController["nodeCardExpansion"];
 }) {

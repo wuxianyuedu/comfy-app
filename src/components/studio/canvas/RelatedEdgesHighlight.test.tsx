@@ -51,7 +51,7 @@ beforeAll(() => {
 
 afterEach(cleanup);
 
-const asNodes = (ids: readonly string[]): Node[] =>
+const asNodes = (ids: ReadonlyArray<string>): Array<Node> =>
   ids.map((id, index) => ({
     id,
     position: { x: index * 200, y: 0 },
@@ -59,13 +59,13 @@ const asNodes = (ids: readonly string[]): Node[] =>
   }));
 
 /** 1 → 2 → 3：选中 2 时，e-1-2 是上游、e-2-3 是下游。 */
-const EDGES: Edge[] = [
+const EDGES: Array<Edge> = [
   { id: "e-1-2", source: "1", target: "2" },
   { id: "e-2-3", source: "2", target: "3" },
 ];
 
 /** 折叠锚点场景：连线挂在锚点 id 上，节点本体用业务 id 渲染。 */
-const ANCHOR_EDGES: Edge[] = [
+const ANCHOR_EDGES: Array<Edge> = [
   { id: "e-anchor-in", source: "anchor:1", target: "anchor:2" },
   { id: "e-anchor-out", source: "anchor:2", target: "anchor:3" },
 ];
@@ -74,9 +74,9 @@ const ANCHOR_EDGES: Edge[] = [
  *  用对象字面量持有可变字段（而不是改 hook 参数），避免踩 React 19 的
  *  immutability 规则；写入放在 usePublish 的 effect 里，不在渲染期。 */
 interface Sink {
-  edges: Edge[];
+  edges: Array<Edge>;
   /** 最新节点表（带端口关注标记的那一份）。 */
-  nodes: Node[];
+  nodes: Array<Node>;
   select: (nodeId: string, selected: boolean) => void;
   /** 删掉一条连线（模拟作者断开映射 / 上游节点被删）。 */
   dropEdge: (edgeId: string) => void;
@@ -89,8 +89,8 @@ function Stage({
   resolveNodeId,
 }: {
   sink: Sink;
-  nodeIds: readonly string[];
-  edges: Edge[];
+  nodeIds: ReadonlyArray<string>;
+  edges: Array<Edge>;
   resolveNodeId?: (visualNodeId: string) => string | null;
 }) {
   const [nodes, setNodes] = useNodesState(asNodes(nodeIds));
@@ -99,13 +99,13 @@ function Stage({
   /* useEdgesState / useNodesState 的 setter 本身稳定，包一层是为了满足 hook
    * 依赖写法（且让「未传 setNodes」的老调用方行为不变）。 */
   const applyEdges = useCallback(
-    (updater: (current: Edge[]) => Edge[]) => {
+    (updater: (current: Array<Edge>) => Array<Edge>) => {
       setEdges(updater);
     },
     [setEdges],
   );
   const applyNodes = useCallback(
-    (updater: (current: Node[]) => Node[]) => {
+    (updater: (current: Array<Node>) => Array<Node>) => {
       setNodes(updater);
     },
     [setNodes],
@@ -142,12 +142,7 @@ function Stage({
 
   return (
     <div style={{ width: 800, height: 600, position: "relative" }}>
-      <ReactFlow
-        nodes={nodes}
-        edges={currentEdges}
-        onEdgesChange={onEdgesChange}
-        fitView={false}
-      >
+      <ReactFlow nodes={nodes} edges={currentEdges} onEdgesChange={onEdgesChange} fitView={false}>
         <div data-testid="canvas-ready" />
       </ReactFlow>
     </div>
@@ -156,8 +151,8 @@ function Stage({
 
 function renderStage(
   options: {
-    nodeIds?: readonly string[];
-    edges?: Edge[];
+    nodeIds?: ReadonlyArray<string>;
+    edges?: Array<Edge>;
     resolveNodeId?: (visualNodeId: string) => string | null;
   } = {},
 ): Sink {
@@ -203,18 +198,10 @@ describe("readEdgeFocusRole", () => {
   it("未标记 / 非法值都归零，只认三种关注级别", () => {
     expect(readEdgeFocusRole({ data: undefined })).toBe("none");
     expect(readEdgeFocusRole({ data: {} })).toBe("none");
-    expect(
-      readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "nonsense" } }),
-    ).toBe("none");
-    expect(
-      readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "upstream" } }),
-    ).toBe("upstream");
-    expect(
-      readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "downstream" } }),
-    ).toBe("downstream");
-    expect(
-      readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "related" } }),
-    ).toBe("related");
+    expect(readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "nonsense" } })).toBe("none");
+    expect(readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "upstream" } })).toBe("upstream");
+    expect(readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "downstream" } })).toBe("downstream");
+    expect(readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "related" } })).toBe("related");
   });
 });
 
@@ -246,9 +233,7 @@ describe("useRelatedEdgesHighlight 写回端口行级别", () => {
       edges: [{ id: "e-1-2", source: "1", target: "2", targetHandle: "seed" }],
     });
     toggleSelected(sink, "2", true);
-    expect(readPortFocusRole(nodeById(sink, "2").data, "seed")).toBe(
-      "upstream",
-    );
+    expect(readPortFocusRole(nodeById(sink, "2").data, "seed")).toBe("upstream");
 
     toggleSelected(sink, "2", false);
     for (const node of sink.nodes) {
@@ -263,9 +248,7 @@ describe("useRelatedEdgesHighlight 写回端口行级别", () => {
       edges: [{ id: "e-1-2", source: "1", target: "2", targetHandle: "seed" }],
     });
     toggleSelected(sink, "2", true);
-    expect(readPortFocusRole(nodeById(sink, "2").data, "seed")).toBe(
-      "upstream",
-    );
+    expect(readPortFocusRole(nodeById(sink, "2").data, "seed")).toBe("upstream");
 
     act(() => {
       sink.dropEdge("e-1-2");
@@ -322,13 +305,10 @@ describe("useRelatedEdgesHighlight", () => {
       /* 锚点 `anchor:2` 归位到节点 2；`anchor:1` / `anchor:3` 刻意解析不出去 ——
        * 正是折叠态下那些「看似没有对应节点」的端点，判据必须仍能靠剩下的一端
        * 认出相关性。 */
-      resolveNodeId: (visualNodeId) =>
-        visualNodeId === "anchor:2" ? "2" : null,
+      resolveNodeId: (visualNodeId) => (visualNodeId === "anchor:2" ? "2" : null),
     });
     toggleSelected(sink, "2", true);
     expect(readEdgeFocusRole(edgeById(sink, "e-anchor-in"))).toBe("upstream");
-    expect(readEdgeFocusRole(edgeById(sink, "e-anchor-out"))).toBe(
-      "downstream",
-    );
+    expect(readEdgeFocusRole(edgeById(sink, "e-anchor-out"))).toBe("downstream");
   });
 });

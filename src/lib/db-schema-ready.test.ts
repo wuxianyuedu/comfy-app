@@ -79,7 +79,7 @@ function useTempCwd(): { restore: () => void } {
  */
 function sweepStaleTempDirs(): void {
   const base = os.tmpdir();
-  let names: string[];
+  let names: Array<string>;
   try {
     names = fs.readdirSync(base);
   } catch {

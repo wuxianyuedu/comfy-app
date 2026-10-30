@@ -113,7 +113,7 @@ describe("收的方式与边界", () => {
      * 这条同时钉住「不自己拼 taskkill / process.kill」——本档只调那个唯一出口。 */
     expect(reap).toHaveBeenCalledTimes(1);
     const reaped = /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
-      reap.mock.calls as unknown[][]
+      reap.mock.calls as Array<Array<unknown>>
     )[0]?.[0] as {
       pid: number;
       force: boolean;
@@ -323,7 +323,7 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
     });
     expect(result.reclaimed).toEqual([4242]);
     const reaped = /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
-      reap.mock.calls as unknown[][]
+      reap.mock.calls as Array<Array<unknown>>
     )[0]?.[0] as {
       pid: number;
       force: boolean;

@@ -24,9 +24,9 @@ import { describe, expect, it } from "vitest";
 const mod = /* SAFETY: 类型断言已复核 */ require("../scripts/check-tsc-artifact-hint.cjs") as {
   classifyTscErrors: (text: string) => {
     total: number;
-    files: string[];
-    artifactFiles: string[];
-    codeFiles: string[];
+    files: Array<string>;
+    artifactFiles: Array<string>;
+    codeFiles: Array<string>;
     artifactOnly: boolean;
   };
   buildHint: (v: unknown) => string;

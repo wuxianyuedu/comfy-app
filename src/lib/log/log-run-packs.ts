@@ -38,8 +38,7 @@ import type { LogSessionMeta } from "./log-sessions";
 const PACK_SEP = "/";
 
 /** 包目录名里的日期与时分秒（形态与 `run.mjs` 的 `runDirName` 同源）。 */
-const PACK_NAME_RE =
-  /^(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})-([0-9a-f]+)$/;
+const PACK_NAME_RE = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})-([0-9a-f]+)$/;
 
 /**
  * 运行包目录名 → 毫秒时刻（本地时区）；形态不符返回 null。
@@ -68,9 +67,7 @@ export function packScopedId(packName: string, fileName: string): string {
 }
 
 /** 解析归档份 id（不是这个形态时返回 null —— `current/` 的份就是裸文件名）。 */
-export function parsePackScopedId(
-  id: string,
-): { packName: string; fileName: string } | null {
+export function parsePackScopedId(id: string): { packName: string; fileName: string } | null {
   const at = id.indexOf(PACK_SEP);
   if (at <= 0) return null;
   const packName = id.slice(0, at);
@@ -92,7 +89,7 @@ export interface RunPack {
   /** `run.json` 的 `crashed` —— 崩溃现场恰恰最值得看，界面上要标出来。 */
   crashed: boolean;
   /** 这一包里该来源的份（新→旧）；空数组 = 那次运行没启动过这个服务。 */
-  files: PackLogFile[];
+  files: Array<PackLogFile>;
 }
 
 /** 包内的一份启动日志。 */
@@ -136,12 +133,12 @@ export interface RunScopedOption extends LogSessionMeta {
  * @param total 该来源跨包一共有几份（不受 `max` 影响；界面据此说明被截断）
  */
 export function buildRunScopedOptions(
-  current: PackLogFile[],
-  packs: RunPack[],
+  current: Array<PackLogFile>,
+  packs: Array<RunPack>,
   max: number,
   total: number,
-): { sessions: RunScopedOption[]; total: number } {
-  const out: RunScopedOption[] = [];
+): { sessions: Array<RunScopedOption>; total: number } {
+  const out: Array<RunScopedOption> = [];
   /* 本次运行：倒序（最新那次启动在最上面，与整条列表同向）。 */
   for (const file of current.slice().reverse()) {
     out.push({
@@ -186,9 +183,7 @@ export function formatScopedLabel(
   exitPart: string,
   runId: string | null,
 ): string {
-  const parts = [timePart, exitPart, runId ?? ""].filter(
-    (part) => part.length > 0,
-  );
+  const parts = [timePart, exitPart, runId ?? ""].filter((part) => part.length > 0);
   return parts.length > 0 ? parts.join(" · ") : "—";
 }
 
@@ -220,6 +215,6 @@ export function formatFileTime(startedAt: number | null): string {
  * 不用 `startedAt`：`.zip` 包或缺 `run.json` 时它是 null，而名字永远在。
  * 比较器走 `~/lib/ordered-set` 的唯一出口（§16.2.4.57 P51）。
  */
-export function sortPackNames(names: string[]): string[] {
+export function sortPackNames(names: Array<string>): Array<string> {
   return names.slice().sort(compareText);
 }

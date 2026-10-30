@@ -18,7 +18,7 @@ import { Input } from "~/components/ui/input";
 import { framesFor, videoPrompt } from "./video-studio-utils";
 
 const FPS_OPTIONS = ["8", "12", "16", "24"];
-const MOTIONS: MotionLevel[] = ["low", "medium", "high"];
+const MOTIONS: Array<MotionLevel> = ["low", "medium", "high"];
 
 type Channel = "local" | "api";
 

@@ -40,7 +40,7 @@ const TIMING_SH = join(REPO_ROOT, ".githooks", "timing.sh");
  * @param {string} [cwd]
  * @returns {{code: number, out: string, err: string}}
  */
-function run(args: string[], cwd = REPO_ROOT) {
+function run(args: Array<string>, cwd = REPO_ROOT) {
   const r = spawnSync(process.execPath, [SCRIPT, ...args], {
     cwd,
     encoding: "utf8",
@@ -57,10 +57,10 @@ function run(args: string[], cwd = REPO_ROOT) {
 type LedgerRun = {
   totalMs: number;
   stagedFiles: number;
-  groups: { name: string; ms: number }[];
-  steps: { name: string; ms: number }[];
+  groups: Array<{ name: string; ms: number }>;
+  steps: Array<{ name: string; ms: number }>;
   /** 组 C 的分文件读数（后加的一格，旧记录里没有 —— 报表那侧不许为它打空表）。 */
-  files?: { name: string; ms: number }[];
+  files?: Array<{ name: string; ms: number }>;
   filesExpected?: number;
   filesMissing?: number;
 };
@@ -73,8 +73,8 @@ type LedgerRun = {
  * @param {{out: string}} result
  * @returns {LedgerRun[]}
  */
-function readLedger(result: { out: string }): LedgerRun[] {
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(result.out) as LedgerRun[];
+function readLedger(result: { out: string }): Array<LedgerRun> {
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(result.out) as Array<LedgerRun>;
 }
 
 /**
@@ -95,7 +95,7 @@ function firstRun(result: { out: string }): LedgerRun {
 }
 
 /** 临时仓库（真的 `git init`）—— 账本落点由 `git rev-parse --absolute-git-dir` 定。 */
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 afterEach(() => {
   for (const dir of tmpDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
@@ -357,7 +357,7 @@ describe("pre-commit 耗时账：钩子的接线", () => {
  *
  * @param {[string, number][]} rows `[文件, 秒]`
  */
-function junitXml(rows: [string, number][]) {
+function junitXml(rows: Array<[string, number]>) {
   const suites = rows
     .map(
       ([name, secs]) =>
@@ -380,7 +380,7 @@ function junitXml(rows: [string, number][]) {
  * @param {string[]} files 这次要跑的清单
  * @param {Record<string, [string, number][]>} xmls 文件名 → 该文件里的 suite
  */
-function makeCDir(files: string[], xmls: Record<string, [string, number][]>): string {
+function makeCDir(files: Array<string>, xmls: Record<string, Array<[string, number]>>): string {
   const dir = mkdtempSync(join(tmpdir(), "precommit-c-"));
   tmpDirs.push(dir);
   writeFileSync(join(dir, "comfy-c-files.txt"), `${files.join("\n")}\n`, "utf8");

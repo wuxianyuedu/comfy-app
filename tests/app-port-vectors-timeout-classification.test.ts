@@ -54,11 +54,11 @@ const SCRIPT_SOURCE = readFileSync(
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const judge = /* SAFETY: 类型断言已复核 */ require("../scripts/check-app-port-vectors.cjs") as {
   isTimeoutLike: (e: unknown) => boolean;
-  probeCommand: (cmd: string, args: string[]) => ProbeState;
+  probeCommand: (cmd: string, args: Array<string>) => ProbeState;
   decidePythonVerdict: (
     first: Measure,
     second: Measure | null,
-  ) => { problems: string[]; unverified: string[] };
+  ) => { problems: Array<string>; unverified: Array<string> };
 };
 
 /**
@@ -74,10 +74,10 @@ type ProbeState = "ok" | "timeout" | "missing" | "present-but-nonzero";
 interface Measure {
   state: "answered" | "timeout" | "missing" | "malformed";
   python: string | null;
-  problems: string[];
+  problems: Array<string>;
 }
 
-const answered = (problems: string[] = []): Measure => ({
+const answered = (problems: Array<string> = []): Measure => ({
   state: "answered",
   python: "python3",
   problems,

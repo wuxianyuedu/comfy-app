@@ -16,7 +16,7 @@ interface FlowNodeWidgetRowsProps {
   data: WorkflowNodeData;
   io: IOEditContextValue | null;
   rawMeta: Record<string, RawInputMeta>;
-  visibleWidgetEntries: [string, unknown][];
+  visibleWidgetEntries: Array<[string, unknown]>;
   hasSize: boolean;
 }
 

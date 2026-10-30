@@ -31,7 +31,7 @@ function makeDetail(over: Partial<WorkflowDetail> = {}): WorkflowDetail {
   };
 }
 
-function nodesOf(ids: string[]): WorkflowDetail["nodes"] {
+function nodesOf(ids: Array<string>): WorkflowDetail["nodes"] {
   return ids.map((id) => ({
     id,
     class_type: "KSampler",

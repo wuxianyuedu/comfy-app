@@ -20,7 +20,7 @@ import { SeedModeButton } from "~/components/ui/seed-mode-button";
  */
 type SeedMode = "fixed" | "increment" | "decrement" | "random";
 
-const MODES: SeedMode[] = ["fixed", "increment", "decrement", "random"];
+const MODES: Array<SeedMode> = ["fixed", "increment", "decrement", "random"];
 
 const meta = {
   title: "UI/SeedModeButton",

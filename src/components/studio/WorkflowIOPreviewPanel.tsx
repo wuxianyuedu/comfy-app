@@ -47,10 +47,10 @@ export interface WorkflowIoPreviewPanelProps {
   workflowIO: Record<string, WorkflowIOParam>;
   detailIOMap: WorkflowIOMap | null;
   /** 工作流支持的模式（模板 modes 列，与库详情「类型」同源）。 */
-  modes: string[];
+  modes: Array<string>;
   defaultMode: string | null;
   /** 模式集合 / 默认模式变更（编辑器落库并同步本地 detail）。 */
-  onModesChange: (modes: string[], defaultMode: string) => void;
+  onModesChange: (modes: Array<string>, defaultMode: string) => void;
   onClose: () => void;
 }
 
@@ -96,10 +96,7 @@ export function WorkflowIoPreviewPanel({
     return out;
   }, [workflowIO, detailIOMap]);
 
-  const editableEntries = useMemo(
-    () => splitWorkflowIO(previewIO).inputs,
-    [previewIO],
-  );
+  const editableEntries = useMemo(() => splitWorkflowIO(previewIO).inputs, [previewIO]);
 
   /* 当前模式是否落过覆盖（驱动「恢复默认」按钮）。 */
   const hasModeOverrides = useMemo(
@@ -131,18 +128,13 @@ export function WorkflowIoPreviewPanel({
   const setSeedModeForMode = useCallback(
     (key: string, seedBehavior: string) => {
       if (!effectiveMode) return;
-      ioApi
-        .getState()
-        .setIOModeOverride(key, effectiveMode, { seedMode: seedBehavior });
+      ioApi.getState().setIOModeOverride(key, effectiveMode, { seedMode: seedBehavior });
     },
     [effectiveMode, ioApi],
   );
   const reorderIO = useCallback(
-    (
-      fromKey: string,
-      targetKey: string | null,
-      position: WorkflowIODropPosition,
-    ) => ioApi.getState().reorderIO(fromKey, targetKey, position),
+    (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) =>
+      ioApi.getState().reorderIO(fromKey, targetKey, position),
     [ioApi],
   );
 
@@ -154,9 +146,7 @@ export function WorkflowIoPreviewPanel({
       const current = defaultInputValues(previewIO, effectiveMode);
       for (const [key, value] of Object.entries(next)) {
         if (current[key] === value) continue;
-        ioApi
-          .getState()
-          .setIOModeOverride(key, effectiveMode, { defaultValue: value });
+        ioApi.getState().setIOModeOverride(key, effectiveMode, { defaultValue: value });
       }
     },
     [effectiveMode, ioApi, previewIO],
@@ -200,17 +190,13 @@ export function WorkflowIoPreviewPanel({
         <div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="size-2 shrink-0 rounded-full bg-sky-400" />
-            <span className="text-ink-bright truncate text-xs font-semibold">
-              IO 预览
-            </span>
+            <span className="text-ink-bright truncate text-xs font-semibold">IO 预览</span>
             <span className="bg-subtle text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">
               {Object.keys(workflowIO).length}
             </span>
           </div>
           {hasModeOverrides && (
-            <Hint
-              label={`把模式「${modeLabel(effectiveMode ?? "")}」的全部参数恢复到通用默认值`}
-            >
+            <Hint label={`把模式「${modeLabel(effectiveMode ?? "")}」的全部参数恢复到通用默认值`}>
               <Button
                 variant="outline"
                 size="xs"
@@ -248,10 +234,7 @@ export function WorkflowIoPreviewPanel({
                 </Button>
               </Hint>
               {modes.length > 1 && (
-                <Hint
-                  label={`从工作流模式中移除「${modeLabel(code)}」`}
-                  accessibleName
-                >
+                <Hint label={`从工作流模式中移除「${modeLabel(code)}」`} accessibleName>
                   <Button
                     variant="ghost"
                     size="icon-xs"
@@ -286,13 +269,11 @@ export function WorkflowIoPreviewPanel({
             </div>
           ) : modes.length === 0 ? (
             <div className="border-warning/30 bg-warning/5 text-warning-strong/80 text-2xs rounded-lg border border-dashed px-3 py-4 text-center leading-relaxed">
-              该工作流还没有配置模式 —— 请先在上方「模式」里勾选 （文生图 /
-              图生图 / …），之后才能在这里配置参数。
+              该工作流还没有配置模式 —— 请先在上方「模式」里勾选 （文生图 / 图生图 /
+              …），之后才能在这里配置参数。
             </div>
           ) : (
-            <div
-              className={effectiveMode ? "" : "pointer-events-none opacity-50"}
-            >
+            <div className={effectiveMode ? "" : "pointer-events-none opacity-50"}>
               <DynamicWorkflowForm
                 io={previewIO}
                 values={defaultInputValues(previewIO, effectiveMode)}
@@ -318,8 +299,7 @@ export function WorkflowIoPreviewPanel({
         </div>
         <div className="border-border-strong text-ink-muted text-3xs shrink-0 border-t px-3 py-1.5">
           <span className="opacity-80">
-            点击变量名称即可重命名；👁 按当前模式保留可见性；「必填 /
-            可选」切换是否在运行时强校验。
+            点击变量名称即可重命名；👁 按当前模式保留可见性；「必填 / 可选」切换是否在运行时强校验。
           </span>
           <RequiredSummary io={previewIO} mode={effectiveMode} />
         </div>

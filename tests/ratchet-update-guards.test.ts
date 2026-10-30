@@ -55,7 +55,7 @@ interface Ratchet {
    * **报告**、永远退 0：用默认档判第 ②/③ 步会得到「加第二条违规仍然绿」，
    * 而那判的是「我没把判定档打开」，不是棘轮。
    */
-  judgeArgs?: string[];
+  judgeArgs?: Array<string>;
   /**
    * 这条棘轮的单次预算（毫秒）。
    *
@@ -70,7 +70,7 @@ interface Ratchet {
 /** AST 类判据在临时工作区旁边没有 node_modules，靠 NODE_PATH 指回源码仓库。 */
 const AST_ENV = { NODE_PATH: join(process.cwd(), "node_modules") };
 
-const RATCHETS: Ratchet[] = [
+const RATCHETS: Array<Ratchet> = [
   {
     script: "check-void-floats.cjs",
     baseline: "scripts/.void-floats-baseline.json",

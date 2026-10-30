@@ -123,7 +123,7 @@ export function KeyValueRows({
   keyClassName,
   valueClassName,
 }: {
-  items: readonly KeyValueItem[];
+  items: ReadonlyArray<KeyValueItem>;
   /** 布局语言，见文件头。 */
   layout?: KeyValueLayout;
   /** `stacked` 的列数（`rows` / `inline` 忽略）。 */
@@ -147,23 +147,11 @@ export function KeyValueRows({
         {items.map((item) => (
           <span
             key={item.id ?? itemLabelText(item)}
-            className={cn(
-              "inline-flex items-center gap-1",
-              itemClassName,
-              item.itemClassName,
-            )}
+            className={cn("inline-flex items-center gap-1", itemClassName, item.itemClassName)}
             title={item.title}
           >
-            <span className={cn("text-ink-muted", keyClassName)}>
-              {item.key}
-            </span>
-            <span
-              className={cn(
-                "text-ink-bright",
-                valueClassName,
-                item.valueClassName,
-              )}
-            >
+            <span className={cn("text-ink-muted", keyClassName)}>{item.key}</span>
+            <span className={cn("text-ink-bright", valueClassName, item.valueClassName)}>
               {renderValue(item, mono)}
             </span>
           </span>
@@ -174,26 +162,16 @@ export function KeyValueRows({
 
   if (layout === "stacked") {
     const colClass =
-      columns === 1
-        ? "grid-cols-1"
-        : columns === 3
-          ? "grid-cols-2 sm:grid-cols-3"
-          : "grid-cols-2";
+      columns === 1 ? "grid-cols-1" : columns === 3 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2";
     return (
       <div className={cn("grid gap-x-4 gap-y-3", colClass, className)}>
         {items.map((item) => (
           <div
             key={item.id ?? itemLabelText(item)}
-            className={cn(
-              "flex min-w-0 flex-col gap-0.5",
-              itemClassName,
-              item.itemClassName,
-            )}
+            className={cn("flex min-w-0 flex-col gap-0.5", itemClassName, item.itemClassName)}
             title={item.title}
           >
-            <span className={cn("text-ink-fainter text-3xs", keyClassName)}>
-              {item.key}
-            </span>
+            <span className={cn("text-ink-fainter text-3xs", keyClassName)}>{item.key}</span>
             <span
               className={cn(
                 "text-ink-field truncate text-sm font-medium",
@@ -204,9 +182,7 @@ export function KeyValueRows({
               {renderValue(item, false)}
             </span>
             {item.hint !== undefined && (
-              <span className="text-ink-muted/80 text-3xs leading-tight">
-                {item.hint}
-              </span>
+              <span className="text-ink-muted/80 text-3xs leading-tight">{item.hint}</span>
             )}
           </div>
         ))}
@@ -219,21 +195,13 @@ export function KeyValueRows({
      * 声明行表头，读屏器读得出「哪个标签对应哪个值」—— 此前手写的两列
      * `<table>` 用的是 `<td>`，语义是空的。 */
     return (
-      <div
-        className={cn(
-          "border-border-subtle overflow-hidden rounded-lg border",
-          className,
-        )}
-      >
+      <div className={cn("border-border-subtle overflow-hidden rounded-lg border", className)}>
         <table className="text-2xs w-full">
           <tbody>
             {items.map((item) => (
               <tr
                 key={item.id ?? itemLabelText(item)}
-                className={cn(
-                  "border-border-subtle border-b last:border-b-0",
-                  item.itemClassName,
-                )}
+                className={cn("border-border-subtle border-b last:border-b-0", item.itemClassName)}
               >
                 <th
                   scope="row"

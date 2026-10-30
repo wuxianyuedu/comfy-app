@@ -350,7 +350,7 @@ describe("入口：三档各退各的码", () => {
     stage?: unknown,
   ): (
     cmd: string,
-    args: string[],
+    args: Array<string>,
   ) => {
     status: number;
     stdout: string;
@@ -379,7 +379,7 @@ describe("入口：三档各退各的码", () => {
   }
 
   it("绿 ⇒ 0；真失败 ⇒ 1；被取消 ⇒ 2（那是「没有结论」，不是「红」）", () => {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const green = main({
       argv: ["--repo", "org/repo", "--sn", "b1"],
       run: fakeRun(GREEN_BUILD),
@@ -420,7 +420,7 @@ describe("入口：三档各退各的码", () => {
   });
 
   it("参数认不出 ⇒ 2，并打印用法", () => {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const code = main({
       argv: ["--nope"],
       run: fakeRun(GREEN_BUILD),
@@ -442,7 +442,7 @@ describe("入口：三档各退各的码", () => {
  */
 describe("inFlightStages：这一刻有没有一格在飞", () => {
   /** 造一份「一条 pipeline、几格各有各状态」的读数。 */
-  const build = (statuses: string[]) => ({
+  const build = (statuses: Array<string>) => ({
     status: 200,
     data: {
       status: "pending",
@@ -569,9 +569,9 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
    * （现场：事件念成 `(取不到)`、`self` 为 null，连「还没到终态」那一道都跳过了）。
    */
   it("`event` 为空 ⇒ 命令里不带 `--event`（查得到自己那一跑）", () => {
-    const seen: string[][] = [];
+    const seen: Array<Array<string>> = [];
     const got = fetchBuildList(
-      (cmd: string, args: string[]) => {
+      (cmd: string, args: Array<string>) => {
         seen.push([cmd, ...args]);
         return {
           status: 0,
@@ -590,7 +590,7 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
     /* 而给了事件名时**必须**带上 —— 那一侧的过滤是「只挑这一族」的意思，不能悄悄松开。 */
     seen.length = 0;
     fetchBuildList(
-      (cmd: string, args: string[]) => {
+      (cmd: string, args: Array<string>) => {
         seen.push([cmd, ...args]);
         return {
           status: 0,
@@ -612,7 +612,7 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
    * 三种原因的下一个动作完全不同）。这里判的是**念出声**，结论仍是 `null`。
    */
   it("取不到时把原因念出来（退码 + stderr 首行 + 信封的顶层键），结论仍是 null", () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const got = fetchBuildList(
       () => ({
         status: 1,
@@ -642,7 +642,7 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
   });
 
   it("命令根本没起来 ⇒ 念的是「没起来」，不是退码", () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     fetchBuildList(
       () => ({ status: -1, stdout: "", stderr: "", error: "ENOENT" }),
       "a/b",
@@ -751,7 +751,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
   };
 
   function fakeRun(detail: unknown) {
-    return (_cmd: string, args: string[]) => {
+    return (_cmd: string, args: Array<string>) => {
       if (args[0] === "build" && args[1] === "get-build-stage") {
         return {
           status: 0,
@@ -765,7 +765,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
   }
 
   it("念出格名 / status / 耗时，失败行带行号，尾部与完整链接都在", () => {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const outcome = classifyBuildOutcome(FAILED_BUILD);
     const noted = describeFailedStages(fakeRun(STAGE_DETAIL), {
       slug: "org/repo",
@@ -792,7 +792,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
   });
 
   it("当场那份读数：930916 毫秒念成 15m31s，不念成 930916s（≈10.7 天）", () => {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const detail = {
       ...STAGE_DETAIL,
       data: { ...STAGE_DETAIL.data, duration: 930_916 },
@@ -809,7 +809,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
   });
 
   it("夹具噪声不占失败行清单，只念一句计数（ISSUE #2443）", () => {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const detail = {
       ...STAGE_DETAIL,
       data: {
@@ -837,7 +837,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
   });
 
   it("取不到正文 ⇒ 念「没有结论」，不念「日志里没有失败行」", () => {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const noted = describeFailedStages(fakeRun({}), {
       slug: "org/repo",
       sn: "b1",
@@ -973,7 +973,7 @@ interface BuildJson {
     status?: string;
     pipelinesStatus: Record<
       string,
-      { id?: string; name?: string; status?: string; stages: StageJson[] }
+      { id?: string; name?: string; status?: string; stages: Array<StageJson> }
     >;
   };
 }
@@ -1145,8 +1145,8 @@ describe("cancelledCause：被终止与真失败在原话上分得开（ISSUE #2
 
 describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须先补", () => {
   /** 假执行者：`get-build-stage` 回那一格的详情，别的一概不答。 */
-  function stageRun(detail: unknown, asked: string[][] = []) {
-    return (_cmd: string, args: string[]) => {
+  function stageRun(detail: unknown, asked: Array<Array<string>> = []) {
+    return (_cmd: string, args: Array<string>) => {
       if (args[1] === "get-build-stage") {
         asked.push(args);
         return {
@@ -1174,7 +1174,7 @@ describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须
   });
 
   it("绿格与 skipped 格不去问平台（一次请求都不多花）", () => {
-    const asked: string[][] = [];
+    const asked: Array<Array<string>> = [];
     enrichStageErrors(stageRun({ data: {} }, asked), "org/repo", "b1", {
       data: {
         status: "success",
@@ -1223,7 +1223,7 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
   });
 
   it("补上原话之后 ⇒ cancelled，并点名「谁抢了锁」与「下面那几格根本没跑」", () => {
-    const run = (_cmd: string, args: string[]) => ({
+    const run = (_cmd: string, args: Array<string>) => ({
       status: 0,
       stdout: args[1] === "get-build-stage" ? JSON.stringify(KILLED_AT_PREPARE_STAGE) : "",
       stderr: "",
@@ -1251,7 +1251,7 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
   });
 
   it("真失败那一跑照旧 ⇒ failed，一个字都不许被挪进「被取消」", () => {
-    const run = (_cmd: string, args: string[]) => ({
+    const run = (_cmd: string, args: Array<string>) => ({
       status: 0,
       stdout:
         args[1] === "get-build-stage"
@@ -1356,10 +1356,10 @@ describe("findStageMatches：格名反查只认逐字，认不出就停手", () 
 describe("resolveBuildSn：点名照点名，没点名按 HEAD 逐字归属（两个入口共用）", () => {
   const SHA = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
   const fake = (rows: unknown) => {
-    const calls: string[] = [];
+    const calls: Array<string> = [];
     return {
       calls,
-      run: (cmd: string, args: string[]) => {
+      run: (cmd: string, args: Array<string>) => {
         calls.push([cmd, ...args].join(" "));
         return {
           status: 0,
@@ -1371,7 +1371,7 @@ describe("resolveBuildSn：点名照点名，没点名按 HEAD 逐字归属（�
     };
   };
   const hear = () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     return { lines, log: (l: string) => lines.push(l) };
   };
 

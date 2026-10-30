@@ -116,10 +116,7 @@ describe("灌入成功：表 + 状态 + 广播三件一起对齐", () => {
     const before = getCustomNodesRegistryVersion();
     await expect(refreshCustomNodes()).resolves.toBe(2);
 
-    expect(Object.keys(CUSTOM_NODE_TYPES)).toEqual([
-      "ComfyMath.Add",
-      "DaSiWa.Foo",
-    ]);
+    expect(Object.keys(CUSTOM_NODE_TYPES)).toEqual(["ComfyMath.Add", "DaSiWa.Foo"]);
     expect(isCustomNode("ComfyMath.Add")).toBe(true);
     expect(getCustomNodesRegistryState()).toMatchObject({
       loaded: true,
@@ -206,9 +203,7 @@ describe("失败三相：哪一档该说话", () => {
   });
 
   it("请求压根没出去（离线 / dev server 刚重启）→  detail 带连不上", async () => {
-    fetchRejects(
-      new Error("connect ECONNREFUSED 127.0.0.1:3100 (mock: 请求没出去)"),
-    );
+    fetchRejects(new Error("connect ECONNREFUSED 127.0.0.1:3100 (mock: 请求没出去)"));
     await expect(refreshCustomNodes()).resolves.toBe(0);
     expect(getCustomNodesRegistryState().detail).toContain("连不上");
     expect(errors).toHaveBeenCalledTimes(1);
@@ -281,11 +276,7 @@ describe("清单里的形状边角（灌入侧的三条回落）", () => {
     });
     const count = await refreshCustomNodes();
     expect(count).toBe(3);
-    expect(Object.keys(CUSTOM_NODE_TYPES)).toEqual([
-      "P.Load",
-      "P.NoPorts",
-      "P.Widget",
-    ]);
+    expect(Object.keys(CUSTOM_NODE_TYPES)).toEqual(["P.Load", "P.NoPorts", "P.Widget"]);
     // 分类命中色表；displayName 缺席时按 classType 显示
     expect(CUSTOM_NODE_TYPES["P.Load"]?.color).toBe("#F59E0B");
     expect(CUSTOM_NODE_TYPES["P.Load"]?.label).toBe("P.Load");
@@ -329,15 +320,7 @@ describe("清单里的形状边角（灌入侧的三条回落）", () => {
     /* 两个落点都保留原值：`inputsSpec`（纯连接那一侧）与 `defaultFields`（编辑器）。 */
     const specWidgets = (known?.inputsSpec ?? []).map((p) => p.widget);
     const fieldTypes = (known?.defaultFields ?? []).map((f) => f.type);
-    const expected = [
-      "string",
-      "number",
-      "select",
-      "toggle",
-      "image",
-      "latent",
-      "text",
-    ];
+    const expected = ["string", "number", "select", "toggle", "image", "latent", "text"];
     expect(specWidgets).toEqual(expected);
     expect(fieldTypes).toEqual(expected);
     /* `hidden` 的判据是「有没有控件」：七个都有 ⇒ 都不是纯连接手柄。 */
@@ -387,9 +370,11 @@ describe("清单里的形状边角（灌入侧的三条回落）", () => {
     expect(fields.map((f) => f.type)).toEqual(["string", "string", "string"]);
     /* 纯连接那一侧的回落：`inputsSpec` 里的 `widget` 认不出 ⇒ `undefined`
      * （而 `defaultFields` 那处是 `"string"`）—— 两处落点不同是刻意的。 */
-    expect(
-      (CUSTOM_NODE_TYPES["P.Unknown"]?.inputsSpec ?? []).map((p) => p.widget),
-    ).toEqual([undefined, undefined, undefined]);
+    expect((CUSTOM_NODE_TYPES["P.Unknown"]?.inputsSpec ?? []).map((p) => p.widget)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
   });
 
   it("清单里一个 nodes 字段都没有（只有 packages）→ 灌入成功但 0 个类型", async () => {
@@ -449,7 +434,7 @@ describe("预览卡那一路（getCustomNodesManifest）", () => {
 
 describe("地址与载荷形状", () => {
   it("两条出口都打同一个地址 /api/custom-nodes/manifest", async () => {
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: unknown) => {
@@ -459,14 +444,11 @@ describe("地址与载荷形状", () => {
     );
     await refreshCustomNodes();
     await getCustomNodesManifest();
-    expect(seen).toEqual([
-      "/api/custom-nodes/manifest",
-      "/api/custom-nodes/manifest",
-    ]);
+    expect(seen).toEqual(["/api/custom-nodes/manifest", "/api/custom-nodes/manifest"]);
   });
 
   it("传了 base 就拼在地址前（非同源部署时仍是一条链）", async () => {
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: unknown) => {
@@ -482,7 +464,7 @@ describe("地址与载荷形状", () => {
    * 名字对不上时两边各自都「工作正常」，而画布的页脚永远不会重渲染 ——
    * 静态那一半由 `tests/app-event-pairing.test.ts` 判，这一条判的是真跑得通。 */
   it("广播走的是 comfyapp:custom-nodes-updated 这个名字", async () => {
-    const names: string[] = [];
+    const names: Array<string> = [];
     const listener = (event: Event) => names.push(event.type);
     window.addEventListener("comfyapp:custom-nodes-updated", listener);
     fetchReturns(200, TWO_NODES);

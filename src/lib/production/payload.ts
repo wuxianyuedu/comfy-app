@@ -51,10 +51,10 @@ export const CHARACTER_DERIVED_FIELDS = /* SAFETY: 类型断言已复核 */ ["hu
 /** 按同 id 继承机器衍生字段：入参缺键的位从 existing 同 id 记录取现值。
  *  纯函数、不可变；无 id 的入参记录原样保留。 */
 export function inheritDerivedFields(
-  incoming: unknown[],
-  existing: unknown[],
-  fields: readonly string[],
-): unknown[] {
+  incoming: Array<unknown>,
+  existing: Array<unknown>,
+  fields: ReadonlyArray<string>,
+): Array<unknown> {
   const byId = new Map<string, Record<string, unknown>>();
   for (const raw of existing) {
     if (!isRecord(raw)) continue;

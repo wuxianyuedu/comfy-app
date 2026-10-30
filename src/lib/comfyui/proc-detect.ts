@@ -22,19 +22,14 @@ import { readdirSync, readlinkSync, readFileSync } from "node:fs";
  *  「进程不存在」的证据。 */
 async function execFilePTried(
   cmd: string,
-  args: string[],
+  args: Array<string>,
   timeoutMs = 3000,
 ): Promise<{ ok: boolean; out: string }> {
   return new Promise((resolve) => {
-    execFile(
-      cmd,
-      args,
-      { timeout: timeoutMs, windowsHide: true },
-      (err, stdout) => {
-        if (err) resolve({ ok: false, out: "" });
-        else resolve({ ok: true, out: stdout.toString() });
-      },
-    );
+    execFile(cmd, args, { timeout: timeoutMs, windowsHide: true }, (err, stdout) => {
+      if (err) resolve({ ok: false, out: "" });
+      else resolve({ ok: true, out: stdout.toString() });
+    });
   });
 }
 
@@ -64,9 +59,7 @@ export type PidLookup = {
  * probeComfyUi 随之整体跳过 HTTP 探测——设置页状态行显示「未运行」，
  * 但进程和端口都活着（ISSUE #114：点「打开查看」后状态回退）。
  */
-export async function findPidForMainPyDetailed(
-  mainPy: string,
-): Promise<PidLookup> {
+export async function findPidForMainPyDetailed(mainPy: string): Promise<PidLookup> {
   if (!mainPy) return { pid: null, failed: false };
   // 规范化路径用于命令行匹配（Windows 大小写不敏感）
   const normalized = mainPy.replace(/[\\/]+/g, "/").toLowerCase();
@@ -147,7 +140,7 @@ export function parseProcNetTcpListeners(content: string): Map<string, number> {
  *  `socket:[<inode>]`）。拿不到（进程已退 / 权限不足 / 非 Linux）时返回空集。 */
 export function socketInodesOfPid(pid: number): Set<string> {
   const set = new Set<string>();
-  let entries: string[];
+  let entries: Array<string>;
   try {
     entries = readdirSync(`/proc/${pid}/fd`);
   } catch {
@@ -198,10 +191,7 @@ export function findListeningPortViaProc(pid: number): number | null {
  *  `TCP    127.0.0.1:8188    0.0.0.0:0    LISTENING    12345`
  *  IPv6 行为 `TCP    [::1]:8188   [::]:0  LISTENING  12345` —— 端口分隔符是
  *  **最后一个冒号**，两种形态都靠它切出来。 */
-export function parseNetstatListeningPort(
-  content: string,
-  pid: number,
-): number | null {
+export function parseNetstatListeningPort(content: string, pid: number): number | null {
   for (const line of content.split(/\r?\n/)) {
     const cols = line.trim().split(/\s+/);
     if (cols.length < 5) continue;
@@ -215,9 +205,7 @@ export function parseNetstatListeningPort(
 }
 
 /** 找到指定 PID 正在监听的 TCP 端口号（取第一个 LISTEN 端口）。 */
-export async function findPidListeningPort(
-  pid: number,
-): Promise<number | null> {
+export async function findPidListeningPort(pid: number): Promise<number | null> {
   if (!pid || pid <= 0) return null;
 
   try {
@@ -231,11 +219,7 @@ export async function findPidListeningPort(
        *
        * 与启动器侧同一口径：`scripts/launcher-core/procs.mjs` 的
        * `listeningPidsOnPort()` 也用 `netstat -ano`，理由相同。 */
-      const { ok, out } = await execFilePTried(
-        "netstat.exe",
-        ["-ano", "-p", "TCP"],
-        4000,
-      );
+      const { ok, out } = await execFilePTried("netstat.exe", ["-ano", "-p", "TCP"], 4000);
       if (!ok) return null;
       return parseNetstatListeningPort(out, pid);
     } else {

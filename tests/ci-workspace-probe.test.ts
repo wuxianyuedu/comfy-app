@@ -33,7 +33,7 @@ const NOW = 1_800_000_000_000;
  */
 const CP936_UNENCODABLE = [0x21d2, 0x26a0, 0xfe0f];
 
-function expectCp936Safe(lines: string[]) {
+function expectCp936Safe(lines: Array<string>) {
   const text = lines.join("\n");
   const hits = CP936_UNENCODABLE.filter((code) => text.includes(String.fromCharCode(code))).map(
     (code) => `U+${code.toString(16).toUpperCase().padStart(4, "0")}`,
@@ -64,7 +64,7 @@ const GIT_FACTS: Record<string, string> = {
 };
 
 function fakeRun(facts: Record<string, string> = GIT_FACTS) {
-  return (cmd: string, args: string[]) => {
+  return (cmd: string, args: Array<string>) => {
     if (cmd !== "git") return { ok: false, out: "" };
     const key = args.join(" ");
     return key in facts ? { ok: true, out: facts[key] ?? "" } : { ok: false, out: "" };
@@ -80,7 +80,7 @@ function fakeRun(facts: Record<string, string> = GIT_FACTS) {
 function fakeFs(tree: Record<string, { birth?: number; mtime?: number }>, ledgerBody?: string) {
   const written = new Map<string, string>();
   /** 记「为账本建过哪些目录」—— 这一档要把账本写在工作区之外，建父目录那一跳得能判。 */
-  const made: string[] = [];
+  const made: Array<string> = [];
   const fsLike = {
     statSync(target: string) {
       const hit = tree[target];

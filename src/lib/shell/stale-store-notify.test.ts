@@ -17,7 +17,7 @@ afterEach(() => {
 
 describe("stale-store-notify 送达通道", () => {
   it("代码更新过 + 观测到动作缺失 → 送达一次，带完整「怎么办」", () => {
-    const seen: unknown[] = [];
+    const seen: Array<unknown> = [];
     registerStaleStoreDeliver((n) => seen.push(n));
     reportCodeUpdatedSinceLoad();
 

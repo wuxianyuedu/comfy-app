@@ -23,7 +23,7 @@ type ProgressRow = {
  * 队列空时回一条 RUNNING，让「继续等」这条分支也可断言。桩件收在 hoisted 句柄
  * 上，断言直接对着句柄写——从模块对象上取方法会踩 `unbound-method` 判据。 */
 const mocks = vi.hoisted(() => {
-  const rows: unknown[] = [];
+  const rows: Array<unknown> = [];
   return {
     rows,
     progress: vi.fn(async () => {
@@ -81,9 +81,7 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
   it("SUCCEEDED 带图：读本地文件、上传进 ComfyUI 的 input 目录", async () => {
     mocks.rows.push(succeeded("/api/generated/ff-task/img_0.png"));
 
-    await expect(mod.synthesizeFirstFrame(opts)).resolves.toBe(
-      "ff_ff-task.png",
-    );
+    await expect(mod.synthesizeFirstFrame(opts)).resolves.toBe("ff_ff-task.png");
 
     expect(mocks.readFile).toHaveBeenCalledWith(
       // 精确到整条绝对路径：这一句就是在断言「地址 → 磁盘」走的是共用解析
@@ -99,9 +97,7 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
     // 表现必须是一句指明「哪一条」的错误，而不是 readFile 的 ENOENT 栈噪声。
     mocks.rows.push(succeeded("/api/other/ff-task/img_0.png"));
 
-    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow(
-      "首帧的产物地址不合法",
-    );
+    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow("首帧的产物地址不合法");
     expect(mocks.readFile).not.toHaveBeenCalled();
     expect(mocks.upload).not.toHaveBeenCalled();
   });
@@ -109,9 +105,7 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
   it("终态里只有视频：判「无图像输出」，不把视频当首帧上传", async () => {
     mocks.rows.push(succeeded(null));
 
-    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow(
-      "首帧无图像输出",
-    );
+    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow("首帧无图像输出");
     expect(mocks.upload).not.toHaveBeenCalled();
   });
 
@@ -123,9 +117,7 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
       error: "CUDA out of memory",
     });
 
-    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow(
-      "CUDA out of memory",
-    );
+    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow("CUDA out of memory");
   });
 
   it("CANCELLED 且库里没有原因：退化成带状态的说明，不许抛 undefined", async () => {
@@ -136,9 +128,7 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
       error: null,
     });
 
-    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow(
-      "首帧生成失败（CANCELLED）",
-    );
+    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow("首帧生成失败（CANCELLED）");
   });
 
   it("RUNNING → SUCCEEDED：一轮没到终态就再问一次（不是订阅一次就等）", async () => {
@@ -158,8 +148,6 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
   it("任务行消失：立刻说明原因，不把它拖成一次超时", async () => {
     mocks.rows.push(null);
 
-    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow(
-      "首帧任务已不存在",
-    );
+    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow("首帧任务已不存在");
   });
 });

@@ -31,8 +31,13 @@ import {
 type InputGroupAddonAlign = NonNullable<React.ComponentProps<typeof InputGroupAddon>["align"]>;
 type InputGroupButtonSize = NonNullable<React.ComponentProps<typeof InputGroupButton>["size"]>;
 
-const ALIGNS: InputGroupAddonAlign[] = ["inline-start", "inline-end", "block-start", "block-end"];
-const BUTTON_SIZES: InputGroupButtonSize[] = ["xs", "sm", "icon-xs", "icon-sm"];
+const ALIGNS: Array<InputGroupAddonAlign> = [
+  "inline-start",
+  "inline-end",
+  "block-start",
+  "block-end",
+];
+const BUTTON_SIZES: Array<InputGroupButtonSize> = ["xs", "sm", "icon-xs", "icon-sm"];
 
 const meta = {
   title: "UI/InputGroup",
@@ -56,7 +61,7 @@ const meta = {
       },
       options: BUTTON_SIZES,
     },
-  } as Record<string, { control: { type: "select" }; options: string[] }>,
+  } as Record<string, { control: { type: "select" }; options: Array<string> }>,
 } satisfies Meta<typeof InputGroupAddon>;
 
 export default meta;

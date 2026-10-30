@@ -41,7 +41,7 @@ import { displayValue } from "~/lib/display-value";
 
 type Level = StepLogEntry["level"];
 
-const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
+const FILTER_LABELS: Array<{ label: string; value: Level | "all" }> = [
   { label: "全部", value: "all" },
   { label: "错误", value: "error" },
   { label: "警告", value: "warn" },
@@ -82,21 +82,15 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
   /* 监听该任务的执行日志流：SSE 建连 / 帧解析 / 关流 / 播种 / 空闲卡住检测
    * 全收在 `hooks/use-task-step-log-stream`，视图零 IO（规范 17 / 硬规则 10）。 */
-  const {
-    logs,
-    validationErrors,
-    status,
-    progress,
-    error,
-    connected,
-    setError,
-    clear,
-  } = useTaskStepLogStream(taskId);
+  const { logs, validationErrors, status, progress, error, connected, setError, clear } =
+    useTaskStepLogStream(taskId);
 
   /* 从面板内部取消当前查看的任务。
    * 「取消中…」态与失败文案都在 useCancelTask 里（视图零 IO）。 */
-  const { cancelling: cancellingFromPanel, cancel: cancelFromPanel } =
-    useCancelTask({ taskId, onFailed: setError });
+  const { cancelling: cancellingFromPanel, cancel: cancelFromPanel } = useCancelTask({
+    taskId,
+    onFailed: setError,
+  });
   const onCancelFromPanel = () => {
     // 无任务时按钮本就禁用（下方 disabled），这里只是防重复点击的兜底。
     if (!taskId) return;
@@ -129,10 +123,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   /* 弹窗里的行数是一处界面预算，不是「倒数 300 条」这段算式各写一遍 ——
    * 尾部窗口收在`~/lib/page-window`（规范 16 §16.2.4.67）。 */
   const visibleAll = tailWindow(logs, LOG_MODAL_MAX_ROWS);
-  const visible =
-    filter === "all"
-      ? visibleAll
-      : visibleAll.filter((log) => log.level === filter);
+  const visible = filter === "all" ? visibleAll : visibleAll.filter((log) => log.level === filter);
   const valErrs = validationErrors ?? [];
   /* 文案在这里（运行中带实时百分比，是业务信息），配色走`ui/status-badge`
    * 的同一份状态 → 语义 token 映射（规范 16 §16.2.4.5）。 */
@@ -187,9 +178,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             <div className="border-border-strong bg-surface-1 flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
               <div className="flex min-w-0 items-center gap-2">
                 <FileText size={16} className="text-primary-strong shrink-0" />
-                <span className="text-ink-bright truncate text-[15px] font-semibold">
-                  执行日志
-                </span>
+                <span className="text-ink-bright truncate text-[15px] font-semibold">执行日志</span>
                 <StatusBadge
                   status={status ?? "IDLE"}
                   label={statusLabel}
@@ -259,17 +248,12 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 `hover:bg-muted hover:text-foreground` 会把「已选中」在悬停期间
                 改写成「未选中」的样子（与全局日志面板的级别筛选同源）。 */}
             <div className="border-border-strong bg-surface-1 flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
-              <div
-                role="radiogroup"
-                aria-label="日志级别筛选"
-                className="flex items-center gap-1"
-              >
+              <div role="radiogroup" aria-label="日志级别筛选" className="flex items-center gap-1">
                 {FILTER_LABELS.map((option) => {
                   const count =
                     option.value === "all"
                       ? visibleAll.length
-                      : visibleAll.filter((l) => l.level === option.value)
-                          .length;
+                      : visibleAll.filter((l) => l.level === option.value).length;
                   return (
                     <SelectChip
                       key={option.value}
@@ -280,9 +264,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                       className="px-2.5 py-1 text-sm"
                     >
                       {option.label}
-                      <span className="text-ink-fainter text-2xs ml-1">
-                        {count}
-                      </span>
+                      <span className="text-ink-fainter text-2xs ml-1">{count}</span>
                     </SelectChip>
                   );
                 })}
@@ -327,9 +309,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
                   {!valErrs.length && error && (
                     <div className="border-destructive/30 bg-destructive/6 text-destructive/90 mb-2 flex flex-col gap-1 rounded border p-2 text-sm">
-                      <div className="wrap-break-word whitespace-pre-wrap">
-                        {error}
-                      </div>
+                      <div className="wrap-break-word whitespace-pre-wrap">{error}</div>
                     </div>
                   )}
                 </>
@@ -338,9 +318,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <EmptyState
                   variant="panel"
                   icon={FileText}
-                  title={
-                    taskId ? "等待日志…" : "运行生成后此处会显示执行步骤日志"
-                  }
+                  title={taskId ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
                 />
               }
             />

@@ -57,8 +57,8 @@ interface SourceFile {
   text: string;
 }
 
-function collectSources(): SourceFile[] {
-  const out: SourceFile[] = [];
+function collectSources(): Array<SourceFile> {
+  const out: Array<SourceFile> = [];
   const walk = (dir: string): void => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.isDirectory()) {
@@ -83,11 +83,11 @@ function collectSources(): SourceFile[] {
 }
 
 /** 表里的事件名（键带引号或不带引号都认）。 */
-function readEventTable(source: string): string[] {
+function readEventTable(source: string): Array<string> {
   const start = source.indexOf("export interface AppEvents");
   if (start < 0) return [];
   const block = source.slice(start, source.indexOf("\n}", start));
-  const names: string[] = [];
+  const names: Array<string> = [];
   for (const match of block.matchAll(/^\s{2}(?:"([^"]+)"|([A-Za-z_$][\w$]*))\s*:/gm)) {
     const name = match[1] ?? match[2];
     if (name) names.push(name);
@@ -100,7 +100,7 @@ function readEventTable(source: string): string[] {
  *
  * 派发侧完全可以传常量（库里就有一处这么写），只认字面量的判据会把它判成「没派发」。
  */
-function readNameConstants(sources: SourceFile[]): Map<string, string> {
+function readNameConstants(sources: Array<SourceFile>): Map<string, string> {
   const map = new Map<string, string>();
   for (const file of sources) {
     for (const match of file.text.matchAll(
@@ -136,9 +136,9 @@ function resolveEventName(
 function sidesOf(
   file: SourceFile,
   names: Map<string, string>,
-): { emitted: string[]; subscribed: string[] } {
-  const emitted: string[] = [];
-  const subscribed: string[] = [];
+): { emitted: Array<string>; subscribed: Array<string> } {
+  const emitted: Array<string> = [];
+  const subscribed: Array<string> = [];
   for (const [fn, bucket] of /* SAFETY: 类型断言已复核 */ [
     ["emitAppEvent", emitted],
     ["subscribeAppEvent", subscribed],
@@ -155,8 +155,8 @@ function sidesOf(
 
 interface PairingRow {
   event: string;
-  emitters: string[];
-  subscribers: string[];
+  emitters: Array<string>;
+  subscribers: Array<string>;
 }
 
 /**
@@ -172,7 +172,7 @@ function isUnpaired(row: PairingRow): boolean {
   );
 }
 
-function judge(sources: SourceFile[], tableSource: string): PairingRow[] {
+function judge(sources: Array<SourceFile>, tableSource: string): Array<PairingRow> {
   /* 剥注释这一步放在 `judge` 里面而不是采集时：真实扫描与合成反证必须吃同一条
    * 口径，否则「注释里提到某个事件名不算端」这条承诺只是文件头的一句话，
    * 没有任何东西保证它真的生效。 */
@@ -182,8 +182,8 @@ function judge(sources: SourceFile[], tableSource: string): PairingRow[] {
   }));
   const names = readNameConstants(clean);
   const table = readEventTable(stripComments(tableSource));
-  const emitters = new Map<string, string[]>();
-  const subscribers = new Map<string, string[]>();
+  const emitters = new Map<string, Array<string>>();
+  const subscribers = new Map<string, Array<string>>();
   for (const file of clean) {
     const sides = sidesOf(file, names);
     for (const event of sides.emitted) {
@@ -234,7 +234,7 @@ describe("AppEvents 表的两端成对", () => {
       '  "mixed:ends": undefined;',
       "}",
     ].join("\n");
-    const synthetic: SourceFile[] = [
+    const synthetic: Array<SourceFile> = [
       {
         rel: "virtual/a.ts",
         /* 常量间接形态也必须认到：`ONLY_EMIT_EVENT` 解成 `only:emit`。 */

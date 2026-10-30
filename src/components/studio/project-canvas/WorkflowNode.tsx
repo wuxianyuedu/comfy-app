@@ -43,14 +43,8 @@ import {
   ioLabel,
   typeDisplay,
 } from "~/components/studio/workflow-io";
-import {
-  type CanvasNodeData,
-  NODE_META,
-} from "~/lib/project-canvas/canvas-types";
-import {
-  type WorkflowSourceFilter,
-  type WorkflowModesState,
-} from "./workflow-node-types";
+import { type CanvasNodeData, NODE_META } from "~/lib/project-canvas/canvas-types";
+import { type WorkflowSourceFilter, type WorkflowModesState } from "./workflow-node-types";
 import { WorkflowSourceFilterChip } from "./WorkflowSourceFilterChip";
 import { WorkflowModelFilterChip } from "./WorkflowModelFilterChip";
 import { WorkflowPickChip } from "./WorkflowPickChip";
@@ -63,10 +57,7 @@ import {
 } from "~/components/studio/workflow-form/WorkflowNodeParts";
 
 /* 共享类型下沉到叶子模块（断环，规范 12.7/18）；按原样 re-export 保住既有导入路径。 */
-export type {
-  WorkflowSourceFilter,
-  WorkflowModesState,
-} from "./workflow-node-types";
+export type { WorkflowSourceFilter, WorkflowModesState } from "./workflow-node-types";
 
 export interface WorkflowNodeProps {
   id: string;
@@ -77,19 +68,19 @@ export interface WorkflowNodeProps {
   /** 工作流列表是否仍在加载。为 true 时工作流选择区显示"加载中"而非空态。 */
   workflowListLoading?: boolean;
   /** 完整工作流列表（含 sourcePath / taskType）。 */
-  workflowList: {
+  workflowList: Array<{
     id: string;
     name: string;
     taskType?: string;
     sourcePath?: string | null;
-    modelTags?: string[];
-  }[];
+    modelTags?: Array<string>;
+  }>;
   /** 当前工作流的 modes 配置（来自 /api/workflows/[id] 的 modes/defaultMode）。 */
   workflowModes?: WorkflowModesState | null;
   /** 父级（CanvasNode）持的来源筛选 — 影响 chip2 列表。 */
   sourceFilter?: WorkflowSourceFilter;
   /** 用户级模型标签库（全局），驱动 chip4 的模型筛选列表。 */
-  modelTagLib?: { id: string; name: string; count: number }[];
+  modelTagLib?: Array<{ id: string; name: string; count: number }>;
   /** 画布节点会话级模型筛选值（"all" 或某标签名）。 */
   modelFilter?: string;
   onPatch: (p: Partial<CanvasNodeData>) => void;
@@ -99,7 +90,7 @@ export interface WorkflowNodeProps {
   onSelectWorkflow: (v: string) => void;
   onFormChange: (next: Record<string, unknown>) => void;
   onSeedModeChange: (ioKey: string, mode: string) => void;
-  onModesChange: (modes: string[], defaultMode: string) => void;
+  onModesChange: (modes: Array<string>, defaultMode: string) => void;
 }
 
 /* 节点序号 chip 文字色——`bg-overlay-accent-surface`（语义底）上的**装饰**
@@ -182,17 +173,12 @@ export function WorkflowNode({
             {meta.label}
           </span>
         </div>
-        <WorkflowNodePill
-          className="bg-overlay-accent-surface"
-          title={`项目画布节点 Id：${id}`}
-        >
+        <WorkflowNodePill className="bg-overlay-accent-surface" title={`项目画布节点 Id：${id}`}>
           <span
             className={`text-3xs font-mono font-semibold ${NODE_SEQ_CHIP_TEXT}`}
             style={{ fontFamily: "var(--font-mono)" }}
           >
-            {nodeSeq !== null
-              ? `#${nodeSeq}`
-              : `#${id.length > 10 ? id.slice(0, 9) + "…" : id}`}
+            {nodeSeq !== null ? `#${nodeSeq}` : `#${id.length > 10 ? id.slice(0, 9) + "…" : id}`}
           </span>
         </WorkflowNodePill>
       </div>
@@ -208,10 +194,7 @@ export function WorkflowNode({
       <div className="flex flex-col gap-1 pr-3.5 pb-1.5 pl-3.5">
         {/* Row 1 — 高优先级筛选 chip：来源 + 模型 */}
         <div className="flex h-7 min-w-0 items-center gap-1">
-          <WorkflowSourceFilterChip
-            value={sourceFilter}
-            onChange={onSourceFilterChange}
-          />
+          <WorkflowSourceFilterChip value={sourceFilter} onChange={onSourceFilterChange} />
           <WorkflowModelFilterChip
             value={modelFilter}
             tags={modelTagLib}

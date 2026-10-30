@@ -34,7 +34,7 @@ const SCRIPT = path.join(SCRIPTS_DIR, "check-form-field-wiring.cjs");
  */
 function gate(
   files: Record<string, string>,
-  args: string[] = [],
+  args: Array<string> = [],
   baseline?: { total: number; files: Record<string, number> },
 ): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "form-field-wiring-"));

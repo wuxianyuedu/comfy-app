@@ -151,9 +151,9 @@ export function outputKindForMode(mode: string): "image" | "video" | "audio" {
 }
 
 /** 归一化适配器数组（丢弃非法项：无模式 / 无字段映射）。 */
-export function parseRemoteModeAdapters(raw: unknown): RemoteModeAdapter[] {
+export function parseRemoteModeAdapters(raw: unknown): Array<RemoteModeAdapter> {
   if (!Array.isArray(raw)) return [];
-  const out: RemoteModeAdapter[] = [];
+  const out: Array<RemoteModeAdapter> = [];
   const seen = new Set<string>();
   for (const item of raw) {
     if (typeof item !== "object" || item === null) continue;
@@ -314,7 +314,7 @@ export function isModeContractInputId(v: unknown): v is ModeContractInputId {
  *  各排一列）——不同类型的口共用序号，删掉一个口再加不会立刻复用同一个 id，指向
  *  已删口的落点线因此不会「复活成新口」（映射表按 id 存）。 */
 export function nextCustomInputId(
-  inputs: readonly ModeContractInputId[],
+  inputs: ReadonlyArray<ModeContractInputId>,
   kind: ModeContractCustomKind,
 ): ModeContractInputId {
   let max = 0;
@@ -331,10 +331,10 @@ export function nextCustomInputId(
  *  `inputs` 数组上，而不是在视图层另存一份顺序 —— 两份顺序一定会走散。越界时
  *  返回原数组（调用方据此维持按钮可用性，见视图里的首尾禁用）。 */
 export function moveContractInput(
-  inputs: readonly ModeContractInputId[],
+  inputs: ReadonlyArray<ModeContractInputId>,
   id: ModeContractInputId,
   delta: number,
-): ModeContractInputId[] {
+): Array<ModeContractInputId> {
   const from = inputs.indexOf(id);
   if (from < 0) return [...inputs];
   const to = from + delta;
@@ -361,7 +361,7 @@ export function referenceImageSlotIndex(id: string): number {
  *  不会显示成「提示词」这类张冠李戴的措辞。 */
 export function modeContractInputIdLabel(
   id: ModeContractInputId,
-  customInputs?: readonly ModeContractCustomInput[],
+  customInputs?: ReadonlyArray<ModeContractCustomInput>,
 ): string {
   const custom = customInputs?.find((item) => item.id === id);
   return custom ? custom.label : exposedParamDisplayLabel(id);
@@ -369,7 +369,9 @@ export function modeContractInputIdLabel(
 
 /* 下一个可追加的参考图口 id —— 参考图不设数量上限，每次追加下一个序号槽
  *（`reference-image` 之后是 `reference-image-2`、`-3`，依次递增）。 */
-export function nextReferenceImageId(inputs: readonly ModeContractInputId[]): ModeContractInputId {
+export function nextReferenceImageId(
+  inputs: ReadonlyArray<ModeContractInputId>,
+): ModeContractInputId {
   let max = 0;
   for (const id of inputs) {
     const slot = id === "reference-image" ? 1 : referenceImageSlotIndex(id);
@@ -391,14 +393,14 @@ export type ModeContractOutput = "image" | "video" | "audio";
  *  在「模式契约」编辑器里按模式勾选。
  *
  *  没勾任何口 = 这条模式没有必备口（工坊不因缺某个口而判它不可用）。 */
-export type ModeContractRequired = ModeContractInputId[];
+export type ModeContractRequired = Array<ModeContractInputId>;
 
 /** 一种模式的统一输入 / 输出契约（工坊对外口径）。 */
 export interface ModeContract {
   /** 工作流库定义的模式码（T2I / I2I / D2I … T2V / I2V …）。 */
   mode: string;
   /** 统一输入口（有序；取值为 ModeContractInputId）。 */
-  inputs: ModeContractInputId[];
+  inputs: Array<ModeContractInputId>;
   /** 统一输出类别。 */
   output: ModeContractOutput;
   /** 必备口（有序子集；缺省 = 内置默认，见 `requiredInputsFor`）。
@@ -411,7 +413,7 @@ export interface ModeContract {
    *
    *  `inputs` 里的自定义口必须在其中有定义：没有定义的口下游读不出名字与类型
    *  （归一化时直接丢弃那个口，见 `parseModeContracts`）。 */
-  customInputs?: ModeContractCustomInput[];
+  customInputs?: Array<ModeContractCustomInput>;
 }
 
 /** 内置的必备口判定（一份契约没显式列必备口时用它）。
@@ -420,7 +422,7 @@ export interface ModeContract {
  *  没有承载提示词的端口，这条工作流在工坊里根本驱动不起来。其余口不预设必备
  *  —— 它们是可选的补充（负向 / 首尾帧 / 参考图 / 尺寸由工作流默认值兜底）。 */
 export function builtInRequiredInputs(
-  inputs: readonly ModeContractInputId[],
+  inputs: ReadonlyArray<ModeContractInputId>,
 ): ModeContractRequired {
   return inputs.filter((id) => id === "prompt");
 }
@@ -431,8 +433,8 @@ export function builtInRequiredInputs(
  *  来自展示派生（`ContractEntryDisplay[]` 的 `id: string`），为了一次判空去反向
  *  断言类型没有意义 —— 非契约 id 本来就落不进必备判据（会被 `inputs` 过滤掉）。 */
 export function requiredInputsFor(contract: {
-  inputs: readonly string[];
-  required?: readonly string[];
+  inputs: ReadonlyArray<string>;
+  required?: ReadonlyArray<string>;
 }): ModeContractRequired {
   const source =
     contract.required ??
@@ -477,8 +479,8 @@ export function derivedModeContract(mode: string): ModeContract {
  *  `workflow-types` 这张大表拖进每个读者）；调用点见
  *  `mode-contract-config.ts` 的 `CONTRACT_MODES`（= 生成类模式）。 */
 export function configuredModeContracts(
-  modes: readonly string[] = ALL_CONTRACT_MODES,
-): ModeContract[] {
+  modes: ReadonlyArray<string> = ALL_CONTRACT_MODES,
+): Array<ModeContract> {
   return modes.map((mode) => derivedModeContract(mode));
 }
 
@@ -493,7 +495,7 @@ export function configuredModeContracts(
  *  编辑器、封装视图、适配器多处读，引整张工作流类型表会把「口清单」这件事
  *  与「工作流有哪些类型」耦合在一起（后者已经由 `outputKindForMode` 用到一次，
  *  那处是**按模式查**、不是**摊平全集**）。 */
-export const ALL_CONTRACT_MODES: readonly string[] = [
+export const ALL_CONTRACT_MODES: ReadonlyArray<string> = [
   "T2I",
   "I2I",
   "TI2I",
@@ -522,9 +524,9 @@ export const ALL_CONTRACT_MODES: readonly string[] = [
  *  口的合法性用 isModeContractInputId —— 与 modeContractsSave 的入参校验同源。
  *  历史教训：这里用 isModeContractInputType（基础 6 口）时，内置默认契约里带序号的
  *  参考图口会被**静默丢掉**，用户存完再读回来就少一口。 */
-export function parseModeContracts(raw: unknown): ModeContract[] {
+export function parseModeContracts(raw: unknown): Array<ModeContract> {
   if (!Array.isArray(raw)) return [];
-  const out: ModeContract[] = [];
+  const out: Array<ModeContract> = [];
   const seen = new Set<string>();
   for (const item of raw) {
     if (typeof item !== "object" || item === null) continue;
@@ -570,9 +572,9 @@ export function parseModeContracts(raw: unknown): ModeContract[] {
  *
  *  类型以 **id 里编的那个**为准：`kind` 字段只是落库后便于人读的冗余，被篡改时
  *  不能让它与 id 走散 —— 走散就等于控件形态与端口族各认一个类型。 */
-function parseCustomInputs(raw: unknown): ModeContractCustomInput[] {
+function parseCustomInputs(raw: unknown): Array<ModeContractCustomInput> {
   if (!Array.isArray(raw)) return [];
-  const out: ModeContractCustomInput[] = [];
+  const out: Array<ModeContractCustomInput> = [];
   for (const item of raw) {
     if (typeof item !== "object" || item === null) continue;
     const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
@@ -603,7 +605,7 @@ export interface ContractEntryDisplay {
  *  不从 id 之外的任何地方推。 */
 function contractControlFor(
   id: string,
-  customInputs?: readonly ModeContractCustomInput[],
+  customInputs?: ReadonlyArray<ModeContractCustomInput>,
 ): ContractEntryDisplay["control"] {
   const custom = customInputs?.find((item) => item.id === id);
   if (custom) return custom.kind;
@@ -618,8 +620,8 @@ function contractControlFor(
  *  调 `exposedParamsForMode` / 自己解析 `storedContracts`。 */
 export function modeContractEntries(
   mode: string | null | undefined,
-  storedContracts?: readonly ModeContract[] | null,
-): ContractEntryDisplay[] {
+  storedContracts?: ReadonlyArray<ModeContract> | null,
+): Array<ContractEntryDisplay> {
   const code = upperToken(mode);
   const stored = storedContracts?.find((c) => c.mode === code);
   if (stored) return contractToStatusEntries(stored);
@@ -635,7 +637,7 @@ export function modeContractEntries(
  *  自定义口的展示名与类型只此一处可取（契约里存着），所以这里必须把
  *  `contract.customInputs` 一起带上 —— 不带的话下游只会拿到一条中性兜底名，
  *  作者起的名字在画布 / 封装页签上全都看不见。 */
-export function contractToStatusEntries(contract: ModeContract): ContractEntryDisplay[] {
+export function contractToStatusEntries(contract: ModeContract): Array<ContractEntryDisplay> {
   const customInputs = contract.customInputs;
   return contract.inputs.map((type) => ({
     id: type,

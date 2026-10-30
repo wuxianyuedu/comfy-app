@@ -17,9 +17,9 @@ export const DEFAULT_META: ProjectMeta = emptyProject();
 export interface WorkshopDraft {
   meta: ProjectMeta;
   scriptMarkdown: string;
-  scenes: Scene[];
-  characters: Character[];
-  shots: Shot[];
+  scenes: Array<Scene>;
+  characters: Array<Character>;
+  shots: Array<Shot>;
   /** 工坊「生图」阶段选定用来生成的「工作流库工作流」id（ISSUE #145）。
    *  仅本地持久化（服务端镜像不含此字段）。 */
   workflowId: string;

@@ -1,9 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
 
 /**
  * `ui/native-select` 是**原生 `<select>` 的样式化封装**（不是 base-ui Select），
@@ -20,11 +17,9 @@ import {
  *    `select` 自己已经是 `w-full`，给错层的话看起来没反应；
  * 2. 两档 `size` 同时改高度与圆角（`sm` 走 `rounded-[min(var(--radius-md),10px)]`）。
  */
-type NativeSelectSize = NonNullable<
-  React.ComponentProps<typeof NativeSelect>["size"]
->;
+type NativeSelectSize = NonNullable<React.ComponentProps<typeof NativeSelect>["size"]>;
 
-const SIZES: NativeSelectSize[] = ["sm", "default"];
+const SIZES: Array<NativeSelectSize> = ["sm", "default"];
 
 const meta = {
   title: "UI/NativeSelect",

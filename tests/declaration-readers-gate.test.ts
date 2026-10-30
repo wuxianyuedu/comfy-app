@@ -55,7 +55,7 @@ function selfRow(): Record<string, unknown> {
  * 表现是同一文件里靠后的那一格红、而它测的与被改坏的原因毫无关系 ——
  * 与 §11.19 那条「并发档把共享状态从「各自持有一份」变成「互相踩」」同族。
  */
-function carriers(n = 8): Record<string, unknown>[] {
+function carriers(n = 8): Array<Record<string, unknown>> {
   return [
     selfRow(),
     ...Array.from({ length: n - 1 }, (_, i) => ({

@@ -10,7 +10,7 @@ describe("runWithConcurrency", () => {
   it("并发峰值不超 limit，且全部条目都被处理", async () => {
     let inFlight = 0;
     let peak = 0;
-    const processed: number[] = [];
+    const processed: Array<number> = [];
 
     await runWithConcurrency([1, 2, 3, 4, 5, 6], 2, async (item) => {
       inFlight += 1;
@@ -26,7 +26,7 @@ describe("runWithConcurrency", () => {
   });
 
   it("limit=1 退化为串行：严格按序执行", async () => {
-    const processed: number[] = [];
+    const processed: Array<number> = [];
     await runWithConcurrency([3, 1, 2], 1, async (item) => {
       // sleep-ok: mock 内部延迟：同上，limit=1 时用「慢」暴露严格串行的顺序语义。
       await new Promise((resolve) => setTimeout(resolve, 5));
@@ -36,7 +36,7 @@ describe("runWithConcurrency", () => {
   });
 
   it("limit 被夹取：0 按串行处理，超出条数的 limit 不空转", async () => {
-    const counts: number[] = [];
+    const counts: Array<number> = [];
     await runWithConcurrency([1, 2], 0, async (item) => {
       counts.push(item);
     });
@@ -50,7 +50,7 @@ describe("runWithConcurrency", () => {
   });
 
   it("worker 抛错：整个池立即 reject，其余 runner 仍跑完各自队列", async () => {
-    const processed: number[] = [];
+    const processed: Array<number> = [];
     await expect(
       runWithConcurrency([1, 2, 3, 4], 2, async (item) => {
         if (item === 1) throw new Error("第一条炸了");

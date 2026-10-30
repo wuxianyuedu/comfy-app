@@ -177,10 +177,10 @@ const tdb = getTestDb();
 
 /** 假子进程：注册完就延一拍发 `spawn`（= 命令已交给 OS）。 */
 function installFakeChild() {
-  const handlers: Record<string, ((...a: unknown[]) => void)[]> = {};
+  const handlers: Record<string, Array<(...a: Array<unknown>) => void>> = {};
   spawnMock.mockImplementation(() => {
     const handle = {
-      on: (ev: string, cb: (...a: unknown[]) => void) => {
+      on: (ev: string, cb: (...a: Array<unknown>) => void) => {
         (handlers[ev] ??= []).push(cb);
       },
       unref: vi.fn(),
@@ -290,7 +290,7 @@ describe("setting.openExternal —— 交给系统浏览器之前的协议闸（
       url: "https://example.com/out.mp4",
     });
     expect(res.ok).toBe(true);
-    const args = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0]?.[1] as string[];
+    const args = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0]?.[1] as Array<string>;
     expect(args.at(-1)).toBe("https://example.com/out.mp4");
   });
 
@@ -446,7 +446,10 @@ describe("setting.revealPath —— 打开本机路径之前的存在性 + 检�
     });
     expect(res.ok).toBe(true);
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    const [cmd, args] = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0] as [string, string[]];
+    const [cmd, args] = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0] as [
+      string,
+      Array<string>,
+    ];
     if (process.platform === "win32") {
       /* `/select,"<路径>"` 必须是**一个**参数：拆成两个时 explorer 会把含空格的
        * 路径截断，表现是「打开了资源管理器但什么都没选中」。 */

@@ -30,9 +30,9 @@ export interface SessionContent {
   tone: string;
   logline: string;
   scriptMarkdown: string;
-  scenes: Scene[];
-  characters: Character[];
-  shots: Shot[];
+  scenes: Array<Scene>;
+  characters: Array<Character>;
+  shots: Array<Shot>;
 }
 
 /** 解析会话内容的归属用户：显式 id 必须存在；缺省取本机最早的账号（确定性）。 */
@@ -156,10 +156,12 @@ export async function readProductionContent(projectId: string): Promise<SessionC
     tone: row.tone,
     logline: row.logline,
     scriptMarkdown: row.scriptMarkdown,
-    scenes: Array.isArray(row.scenes) ? /* SAFETY: 类型断言已复核 */ (row.scenes as Scene[]) : [],
-    characters: Array.isArray(row.characters)
-      ? /* SAFETY: 类型断言已复核 */ (row.characters as Character[])
+    scenes: Array.isArray(row.scenes)
+      ? /* SAFETY: 类型断言已复核 */ (row.scenes as Array<Scene>)
       : [],
-    shots: Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[]) : [],
+    characters: Array.isArray(row.characters)
+      ? /* SAFETY: 类型断言已复核 */ (row.characters as Array<Character>)
+      : [],
+    shots: Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>) : [],
   };
 }

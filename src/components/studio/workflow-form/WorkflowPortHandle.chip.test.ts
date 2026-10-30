@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest";
 import { portChipStyle } from "./WorkflowPortHandle";
 
-const CASES: [string, string][] = [
+const CASES: Array<[string, string]> = [
   ["IMAGE", "var(--color-chip-type-image-bg)"],
   ["MASK", "var(--color-chip-type-image-bg)"],
   ["VIDEO", "var(--color-chip-type-video-bg)"],

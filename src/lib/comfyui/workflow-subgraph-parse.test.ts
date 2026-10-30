@@ -194,7 +194,7 @@ describe("buildSubgraphGraph — 节点作者标题", () => {
  * 用户以为「位置没保存 / 重置后全乱」。
  */
 describe("extractSubgraphAnnotations — 宿主链坐标", () => {
-  function subWith(nodes: unknown[]): RawSubgraphDef {
+  function subWith(nodes: Array<unknown>): RawSubgraphDef {
     return /* SAFETY: 类型断言已复核 */ {
       id: "uid",
       nodes,
@@ -279,7 +279,7 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
     /* 前两行是纯连接口，中间补若干占位槽 —— 让「控件序号空间」与「数组位置
      * 空间」在下标上真的错开，测试才有区分度。 */
     const seedAt = opts.seedArrayIndex ?? 2;
-    const slots: RawNodeInput[] = [];
+    const slots: Array<RawNodeInput> = [];
     for (let index = 0; index <= Math.max(seedAt, 2); index++) {
       if (index === seedAt) {
         slots.push({

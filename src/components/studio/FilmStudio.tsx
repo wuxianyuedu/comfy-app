@@ -48,7 +48,7 @@ export function FilmStudio() {
   const c = useFilmStudio();
 
   /* ── 时间轴编辑器状态：纯视觉、无网络副作用，故留在视图层 ── */
-  const [shots, setShots] = useState<ShotListItem[]>(MOCK_SHOTS);
+  const [shots, setShots] = useState<Array<ShotListItem>>(MOCK_SHOTS);
   const [selectedShotId, setSelectedShotId] = useState<string>("shot-1");
   const [isPlaying, setIsPlaying] = useState(false);
   const [playheadPos] = useState(180); /* px from timeline left */
@@ -58,19 +58,14 @@ export function FilmStudio() {
   /* 三档兜底：选中的 → 列表首项 → 样例首项（列表可能被删空，
    * `MOCK_SHOTS` 是常量、必有首项）。 */
   const selectedShot =
-    shots.find((shot) => shot.id === selectedShotId) ??
-    shots.at(0) ??
-    MOCK_SHOTS[0];
+    shots.find((shot) => shot.id === selectedShotId) ?? shots.at(0) ?? MOCK_SHOTS[0];
   /* 项目来源且该项目确有镜头 → 左栏显示真实镜头（缩略图/时长/状态）；否则维持样例时间轴。 */
-  const isProjectSource =
-    c.shotSource === "project" && c.projectShots.length > 0;
+  const isProjectSource = c.shotSource === "project" && c.projectShots.length > 0;
   const listShots = isProjectSource ? c.projectShots : shots;
 
   const handleSelectShot = useCallback((id: string) => {
     setSelectedShotId(id);
-    setShots((prev) =>
-      prev.map((prev) => ({ ...prev, selected: prev.id === id })),
-    );
+    setShots((prev) => prev.map((prev) => ({ ...prev, selected: prev.id === id })));
   }, []);
 
   const handleAddShot = useCallback(() => {
@@ -82,18 +77,13 @@ export function FilmStudio() {
       mode: "img2video",
       status: "IDLE",
     };
-    setShots((prev) => [
-      ...prev.map((prev) => ({ ...prev, selected: false })),
-      newShot,
-    ]);
+    setShots((prev) => [...prev.map((prev) => ({ ...prev, selected: false })), newShot]);
     setSelectedShotId(newId);
   }, [shots.length]);
 
   /* 属性面板对样例镜头字段的回写（名称 / 时长）。 */
   const patchShot = useCallback((id: string, patch: Partial<ShotListItem>) => {
-    setShots((prev) =>
-      prev.map((shot) => (shot.id === id ? { ...shot, ...patch } : shot)),
-    );
+    setShots((prev) => prev.map((shot) => (shot.id === id ? { ...shot, ...patch } : shot)));
   }, []);
 
   const handleTogglePlay = useCallback(() => {
@@ -115,10 +105,7 @@ export function FilmStudio() {
       style={{ fontFamily: "var(--font-sans)" }}
     >
       {/* ── 极光背景光斑 ───────────────── */}
-      <div
-        className="pointer-events-none absolute inset-0 overflow-hidden"
-        aria-hidden
-      >
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <AuroraGlow
           tone="violet"
           alpha={0.42}
@@ -155,11 +142,7 @@ export function FilmStudio() {
 
         {/* ═══ 中：预览 + 时间线 ═══ */}
         <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden p-5 pb-3">
-          <FilmStudioPreviewPanel
-            c={c}
-            isPlaying={isPlaying}
-            onTogglePlay={handleTogglePlay}
-          />
+          <FilmStudioPreviewPanel c={c} isPlaying={isPlaying} onTogglePlay={handleTogglePlay} />
           <FilmStudioTimeline playheadPos={playheadPos} bgmName={c.bgmName} />
         </main>
 

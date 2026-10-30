@@ -25,14 +25,11 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 
-const REPO_ROOT = path.resolve(
-  import.meta.dirname,
-  "..",
-);
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const HOST_SCRIPT = path.join(REPO_ROOT, "scripts", "executor-host.mjs");
 
 /** 每次用例自己的 tmpdir 承接日志文件，测试结束 rmSync。 */
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 function mkTmp() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "executor-host-"));
   tmpDirs.push(dir);
@@ -46,7 +43,7 @@ afterEach(() => {
   }
 });
 
-function runHost(args: string[], logPath: string) {
+function runHost(args: Array<string>, logPath: string) {
   return new Promise<{ code: number | null; stderr: string }>((resolve) => {
     const child = spawn(process.execPath, [HOST_SCRIPT, ...args], {
       cwd: REPO_ROOT,
@@ -110,9 +107,7 @@ describe("scripts/executor-host.mjs 骨架", () => {
     });
     try {
       await waitFor(
-        () =>
-          fs.existsSync(logPath) &&
-          fs.readFileSync(logPath, "utf-8").includes("heartbeat"),
+        () => fs.existsSync(logPath) && fs.readFileSync(logPath, "utf-8").includes("heartbeat"),
         "executor-host 应该打出至少一次 heartbeat",
       );
       child.kill("SIGTERM");
@@ -168,13 +163,12 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
         claimedAt TEXT
       )`,
     );
-    const staleAt = new Date(Date.now() - 120_000)
-      .toISOString()
-      .replace("T", " ")
-      .slice(0, 23);
-    db.prepare(
-      "INSERT INTO task (id,status,createdAt,workflowName) VALUES (?,'QUEUED',?,?)",
-    ).run("inline-queued-1", staleAt, "w");
+    const staleAt = new Date(Date.now() - 120_000).toISOString().replace("T", " ").slice(0, 23);
+    db.prepare("INSERT INTO task (id,status,createdAt,workflowName) VALUES (?,'QUEUED',?,?)").run(
+      "inline-queued-1",
+      staleAt,
+      "w",
+    );
     db.close();
     return { dbPath, rowId: "inline-queued-1" };
   }
@@ -256,7 +250,7 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
 
   /** 用指定 args/env 跑一次 host 子进程，回 exit code（stderr 一并带回防哑）。 */
   function runHostWith(
-    args: string[],
+    args: Array<string>,
     extraEnv: Record<string, string>,
     logPath: string,
   ): Promise<{ code: number | null; stderr: string }> {
@@ -297,14 +291,8 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
   it("--claim-once 在骨架形态（显式 COMFY_EXECUTOR=inline）被拒 → exit 1（骨架没有可领取的运行时）", async () => {
     const tmp = mkTmp();
     const logPath = path.join(tmp, "claim-skel.log");
-    const { code } = await runHostWith(
-      ["--claim-once"],
-      { COMFY_EXECUTOR: "inline" },
-      logPath,
-    );
+    const { code } = await runHostWith(["--claim-once"], { COMFY_EXECUTOR: "inline" }, logPath);
     expect(code).toBe(1);
-    expect(fs.readFileSync(logPath, "utf-8")).toContain(
-      "--claim-once 需要 COMFY_EXECUTOR=host",
-    );
+    expect(fs.readFileSync(logPath, "utf-8")).toContain("--claim-once 需要 COMFY_EXECUTOR=host");
   }, 60_000);
 });

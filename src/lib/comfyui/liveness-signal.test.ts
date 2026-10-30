@@ -42,14 +42,12 @@ describe("noteComfyExit", () => {
   });
 
   it("「用户主动关闭」被标出来：客户端据此跳过崩溃复核", () => {
-    expect(noteComfyExit(report({ reason: "用户主动关闭" })).userStopped).toBe(
-      true,
-    );
+    expect(noteComfyExit(report({ reason: "用户主动关闭" })).userStopped).toBe(true);
     expect(noteComfyExit(report()).userStopped).toBe(false);
   });
 
   it("订阅者拿到这次事件；退订后不再收到", () => {
-    const seen: number[] = [];
+    const seen: Array<number> = [];
     const off = subscribeComfyExit((s) => seen.push(s.seq));
     noteComfyExit(report());
     off();

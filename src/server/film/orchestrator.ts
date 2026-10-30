@@ -132,7 +132,7 @@ async function parseScriptToShots(
   type: string,
   stylePrompt?: string,
   styleNegative?: string,
-): Promise<FilmShotInput[]> {
+): Promise<Array<FilmShotInput>> {
   let scenes: Array<{ heading: string; action: string; shotCount: number }>;
   try {
     const expanded = await expandScriptLLM(raw);
@@ -156,7 +156,7 @@ async function parseScriptToShots(
     }));
   }
 
-  const shots: FilmShotInput[] = [];
+  const shots: Array<FilmShotInput> = [];
   let order = 0;
   for (const sc of scenes) {
     for (let i = 0; i < sc.shotCount; i++) {
@@ -194,7 +194,7 @@ async function persistFilmWithShots(args: {
   bgmName?: string | null;
   videoWorkflowId: string;
   imageWorkflowId: string;
-  shotInputs: FilmShotInput[];
+  shotInputs: Array<FilmShotInput>;
 }): Promise<string> {
   const film = await filmRepository.create({
     userId: args.userId,
@@ -296,7 +296,7 @@ export interface CreateFilmFromProjectInput {
 export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
   const row = await productionRepository.getForUser(input.userId, input.projectId);
   const rawShots =
-    row && Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[]) : [];
+    row && Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>) : [];
   const shots = [...rawShots].sort((a, b) => a.index - b.index);
   if (!shots.length) {
     throw new Error("该项目还没有镜头，请先在工坊产出镜头再成片");
@@ -306,7 +306,7 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
   const fps = input.fps ?? 16;
   const framesPerShot = input.framesPerShot ?? 49;
 
-  const shotInputs: FilmShotInput[] = shots.map((shot, i) => ({
+  const shotInputs: Array<FilmShotInput> = shots.map((shot, i) => ({
     order: i,
     shotId: shot.id,
     heading: shot.sceneHeading || undefined,
@@ -491,7 +491,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
     /* 先把「不用再问数据库」的镜头结清（没有 taskId 的、已终态的），剩下的
      * **一次性**批量取进度：原先是逐镜头 `await findExecutionProgress`，一轮
      * 就是 2N 次往返（N = 镜头数），跑满 240 轮是上万次查询。 */
-    const awaiting: (typeof shots)[number][] = [];
+    const awaiting: Array<(typeof shots)[number]> = [];
     for (const shot of shots) {
       /* **先判终态、再判有没有 taskId**，顺序是判据不是风格：这一趟原先是
        * `if (!shot.taskId) { pending++; continue }` 打头，于是「已终态但没有任务」
@@ -513,7 +513,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
       awaiting.push(shot);
     }
 
-    const taskIds: string[] = [];
+    const taskIds: Array<string> = [];
     for (const shot of awaiting) {
       if (shot.taskId) taskIds.push(shot.taskId);
     }
@@ -605,8 +605,8 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
  * 用，调用方不据它做决策。
  */
 export async function resumeStalledFilms(): Promise<{
-  resumed: string[];
-  abandoned: string[];
+  resumed: Array<string>;
+  abandoned: Array<string>;
 }> {
   /* 表还没建就整轮跳过，与回收器同一口径（`sweepOnce` 也判这一条）。哨兵表是
    * `task`，而首启是一次把整套 DDL 应用上去的 ⇒ `task` 在时 `filmProject` 也在。
@@ -619,8 +619,8 @@ export async function resumeStalledFilms(): Promise<{
     return { resumed: [], abandoned: [] };
   }
 
-  const resumed: string[] = [];
-  const abandoned: string[] = [];
+  const resumed: Array<string> = [];
+  const abandoned: Array<string> = [];
 
   try {
     for (const film of await filmRepository.listByStatus(["GENERATING"])) {

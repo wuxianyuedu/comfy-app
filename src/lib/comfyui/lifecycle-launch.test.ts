@@ -203,7 +203,7 @@ describe("pruneKeepAliveLogs —— 按次命名的保活日志只建不删会�
     }
   }
 
-  function keepAliveFiles(): string[] {
+  function keepAliveFiles(): Array<string> {
     if (!fs.existsSync(SERVICES_LOG_DIR)) return [];
     return fs.readdirSync(SERVICES_LOG_DIR).filter((name) => name.startsWith("comfyui-keepalive-"));
   }
@@ -277,7 +277,7 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
     );
 
     const { runEnsureLaunch } = await import("./lifecycle-launch");
-    const notes: string[] = [];
+    const notes: Array<string> = [];
     /* 探针编排：等待循环第 1 轮（还没读到冲突行之前）应答 null → 置冲突标记；
      * 第 2 轮 earlyExit 中止并转接管 —— 此后实例应答，接管成功。 */
     const host: LaunchHost = {

@@ -10,7 +10,7 @@ type BadgeVariant = NonNullable<React.ComponentProps<typeof Badge>["variant"]>;
 type BadgeTone = NonNullable<React.ComponentProps<typeof Badge>["tone"]>;
 type BadgeSize = NonNullable<React.ComponentProps<typeof Badge>["size"]>;
 
-const VARIANTS: BadgeVariant[] = [
+const VARIANTS: Array<BadgeVariant> = [
   "default",
   "secondary",
   "destructive",
@@ -18,14 +18,8 @@ const VARIANTS: BadgeVariant[] = [
   "ghost",
   "link",
 ];
-const TONES: BadgeTone[] = [
-  "success",
-  "warning",
-  "danger",
-  "primary",
-  "neutral",
-];
-const SIZES: BadgeSize[] = ["default", "sm", "xs", "pill-sm", "pill-md"];
+const TONES: Array<BadgeTone> = ["success", "warning", "danger", "primary", "neutral"];
+const SIZES: Array<BadgeSize> = ["default", "sm", "xs", "pill-sm", "pill-md"];
 
 const meta = {
   title: "UI/Badge",

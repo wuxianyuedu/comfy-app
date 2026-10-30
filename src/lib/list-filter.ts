@@ -76,17 +76,18 @@ export function matchesNeedle(needle: string, haystack: string): boolean {
  * 返回新对象数组，原数组不动 —— 调用处直接 `map` 是安全的。
  */
 export function filterGroups<G extends { title: string }, K extends keyof G>(
-  groups: G[],
+  groups: Array<G>,
   needle: string,
   /** 条目数组的字段名（`items` / `options` / …）。 */
   field: K,
   /** 单条是否命中。默认对 `String(item)` 子串匹配（小写化在出口内做）。 */
   hit?: (item: ItemOf<G, K>) => boolean,
-): G[] {
+): Array<G> {
   if (!needle) return groups;
-  const out: G[] = [];
+  const out: Array<G> = [];
   for (const group of groups) {
-    const all = /* SAFETY: 类型断言已复核 */ (group[field] as ItemOf<G, K>[] | undefined) ?? [];
+    const all =
+      /* SAFETY: 类型断言已复核 */ (group[field] as Array<ItemOf<G, K>> | undefined) ?? [];
     const keep = hit ?? ((item: ItemOf<G, K>) => matchesNeedle(needle, String(item)));
     const kept = all.filter(keep);
     if (kept.length === 0) continue;
@@ -96,7 +97,7 @@ export function filterGroups<G extends { title: string }, K extends keyof G>(
 }
 
 /** `G[K]` 的元素类型（`G[K]` 必须是数组）。 */
-export type ItemOf<G, K extends keyof G> = G[K] extends readonly (infer I)[] ? I : never;
+export type ItemOf<G, K extends keyof G> = G[K] extends ReadonlyArray<infer I> ? I : never;
 
 /**
  * 「先归一化、再分组过滤」的一步式入口（`AttributeMultiSelect` 那个形态）。
@@ -106,10 +107,10 @@ export type ItemOf<G, K extends keyof G> = G[K] extends readonly (infer I)[] ? I
  * （如先按别的条件筛、最后再按关键字）直接用上面的函数。
  */
 export function filterGroupsByKeyword<G extends { title: string }, K extends keyof G>(
-  groups: G[],
+  groups: Array<G>,
   rawKeyword: string,
   field: K,
   hit?: (item: ItemOf<G, K>) => boolean,
-): G[] {
+): Array<G> {
   return filterGroups(groups, normalizeNeedle(rawKeyword), field, hit);
 }

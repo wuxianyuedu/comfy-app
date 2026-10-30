@@ -44,8 +44,7 @@ describe("useScrollFollow", () => {
     const el = makeScroller();
     const box = makeRef(el);
     const { rerender } = renderHook(
-      ({ text }: { text: string }) =>
-        useScrollFollow({ containerRef: box, watch: text }),
+      ({ text }: { text: string }) => useScrollFollow({ containerRef: box, watch: text }),
       { initialProps: { text: "a" } },
     );
 
@@ -55,9 +54,7 @@ describe("useScrollFollow", () => {
 
   it("用户上滚超过阈值即退出跟随（不再被拽回底部）", () => {
     const el = makeScroller();
-    const { result } = renderHook(() =>
-      useScrollFollow({ containerRef: makeRef(el), watch: 0 }),
-    );
+    const { result } = renderHook(() => useScrollFollow({ containerRef: makeRef(el), watch: 0 }));
 
     /* 距底 100px > 阈值 32px → 退出跟随。 */
     el.scrollTop = 700;
@@ -67,9 +64,7 @@ describe("useScrollFollow", () => {
 
   it(`距底 ${NEAR_BOTTOM_PX}px 以内仍算跟随（上滚一点不该掉出跟随态）`, () => {
     const el = makeScroller();
-    const { result } = renderHook(() =>
-      useScrollFollow({ containerRef: makeRef(el), watch: 0 }),
-    );
+    const { result } = renderHook(() => useScrollFollow({ containerRef: makeRef(el), watch: 0 }));
 
     el.scrollTop = 1000 - 200 - (NEAR_BOTTOM_PX - 1);
     act(() => result.current.onScroll());
@@ -80,8 +75,7 @@ describe("useScrollFollow", () => {
     const el = makeScroller();
     const box = makeRef(el);
     const { result, rerender } = renderHook(
-      ({ text }: { text: string }) =>
-        useScrollFollow({ containerRef: box, watch: text }),
+      ({ text }: { text: string }) => useScrollFollow({ containerRef: box, watch: text }),
       { initialProps: { text: "a" } },
     );
 
@@ -93,9 +87,7 @@ describe("useScrollFollow", () => {
 
   it("jumpToLatest 立刻回到底部并把跟随态置回 true", () => {
     const el = makeScroller();
-    const { result } = renderHook(() =>
-      useScrollFollow({ containerRef: makeRef(el), watch: 0 }),
-    );
+    const { result } = renderHook(() => useScrollFollow({ containerRef: makeRef(el), watch: 0 }));
 
     el.scrollTop = 100;
     act(() => result.current.onScroll());
@@ -107,7 +99,7 @@ describe("useScrollFollow", () => {
   });
 
   it("受控模式下不自持状态：跟随态由父级给，只回传变化", () => {
-    const changes: boolean[] = [];
+    const changes: Array<boolean> = [];
     const el = makeScroller();
     const box = makeRef(el);
     const { result, rerender } = renderHook(

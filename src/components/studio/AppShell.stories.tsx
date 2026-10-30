@@ -2,10 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { AppShell } from "~/components/studio/AppShell";
 import { WorksGallery } from "~/components/studio/WorksGallery";
-import {
-  projectScene,
-  useSeededProjects,
-} from "../../../.storybook/screen-frame";
+import { projectScene, useSeededProjects } from "../../../.storybook/screen-frame";
 import { tabKey, type ViewTab } from "~/components/studio/workspace-tabs";
 
 /**
@@ -50,7 +47,7 @@ function ShellHarness({
   withTabs = false,
   children = <WorksGallery />,
 }: {
-  extraProjects: readonly string[];
+  extraProjects: ReadonlyArray<string>;
   withTabs?: boolean;
   /** 壳里装的那一屏（默认给真视图 `WorksGallery`）。 */
   children?: React.ReactNode;
@@ -60,7 +57,7 @@ function ShellHarness({
     extraNames: extraProjects,
   });
   const activeProject = projects[0];
-  const tabs: ViewTab[] = [
+  const tabs: Array<ViewTab> = [
     { key: tabKey("works", null), view: "works", projectId: null },
     {
       key: tabKey("canvas", activeProject?.id ?? null),
@@ -106,9 +103,7 @@ export const SingleProject: Story = {
 /** 五个项目：分组展开后侧栏会不会被吃掉（那是这一屏最常出问题的地方）。 */
 export const ManyProjects: Story = {
   render: () => (
-    <ShellHarness
-      extraProjects={["城市夜景", "首帧 → 逐镜生成", "角色设定集", "片头试验"]}
-    />
+    <ShellHarness extraProjects={["城市夜景", "首帧 → 逐镜生成", "角色设定集", "片头试验"]} />
   ),
 };
 

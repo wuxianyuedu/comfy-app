@@ -22,11 +22,10 @@ import { describe, expect, it } from "vitest";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const code = (rel: string): string =>
-  stripComments(readFileSync(path.join(ROOT, rel), "utf-8"));
+const code = (rel: string): string => stripComments(readFileSync(path.join(ROOT, rel), "utf-8"));
 
 /** 全仓（src + scripts）里出现 `startDispatchLoop(` **调用**的文件。 */
-function loopCallSites(): string[] {
+function loopCallSites(): Array<string> {
   const files = [
     "src/instrumentation.ts",
     "src/lib/comfyui/executor-dispatch.ts",
@@ -47,8 +46,7 @@ function loopCallSites(): string[] {
       .split("\n")
       .some(
         (line) =>
-          line.includes("startDispatchLoop(") &&
-          !line.includes("function startDispatchLoop"),
+          line.includes("startDispatchLoop(") && !line.includes("function startDispatchLoop"),
       ),
   );
 }
@@ -59,12 +57,8 @@ describe("派发循环的启动点：每宿主一处，且只一处", () => {
     const starts = src.match(/m\.startDispatchLoop\(\)/g) ?? [];
     expect(starts, "Next 侧必须有且仅有一处 startDispatchLoop").toHaveLength(1);
     // 顺序也有意义：先转录 stdout、再起 reaper、再起领取循环。
-    expect(src.indexOf("installStreamCapture")).toBeLessThan(
-      src.indexOf("startReaper"),
-    );
-    expect(src.indexOf("startReaper")).toBeLessThan(
-      src.indexOf("startDispatchLoop"),
-    );
+    expect(src.indexOf("installStreamCapture")).toBeLessThan(src.indexOf("startReaper"));
+    expect(src.indexOf("startReaper")).toBeLessThan(src.indexOf("startDispatchLoop"));
     // Edge runtime 的分支里不许出现（Node-only 模块进 Edge 图会构建失败）。
     const edge = src.slice(src.indexOf('process.env.NEXT_RUNTIME === "edge"'));
     expect(edge).not.toMatch("startDispatchLoop");
@@ -77,9 +71,7 @@ describe("派发循环的启动点：每宿主一处，且只一处", () => {
      * Next 一条 + host 一条，双执行的成因。 */
     expect(host.includes("startDispatchLoop(")).toBe(false);
     expect(host).toMatch("claimAndDispatchOnce");
-    expect(host).toMatch(
-      /configureDispatch\(\{ taskRepo: hostRepo, owner: "host" \}\)/,
-    );
+    expect(host).toMatch(/configureDispatch\(\{ taskRepo: hostRepo, owner: "host" \}\)/);
   });
 
   it("全仓只有 Next 那一处调用 startDispatchLoop", () => {
@@ -101,17 +93,12 @@ describe("只有一条 pull：内存队列不再长回来", () => {
       expect(src, `${rel} 不该再维护活跃计数器`).not.toMatch(/s\.active\b/);
       expect(src).not.toMatch(/processQueue/);
     }
-    expect(code("src/lib/comfyui/executor.ts")).not.toMatch(
-      /executor-scheduler/,
-    );
+    expect(code("src/lib/comfyui/executor.ts")).not.toMatch(/executor-scheduler/);
   });
 
   it("调度层文件已删除、barrel 不再导出出队函数", () => {
     expect(() =>
-      readFileSync(
-        path.join(ROOT, "src/lib/comfyui/executor-scheduler.ts"),
-        "utf-8",
-      ),
+      readFileSync(path.join(ROOT, "src/lib/comfyui/executor-scheduler.ts"), "utf-8"),
     ).toThrow();
     const barrel = code("src/lib/comfyui/executor.ts");
     expect(barrel).not.toMatch(/processQueue/);

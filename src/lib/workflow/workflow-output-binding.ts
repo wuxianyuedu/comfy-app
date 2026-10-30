@@ -34,7 +34,7 @@ export const OUTPUT_BINDING_NAMESPACE = "output";
  *  刻意不给「每个输出口自动挑一个」的启发式：输出没有运行期语义，硬凑一个默认
  *  落点只会在作者没连过时凭空挪动取值来源。 */
 export function defaultOutputSource(
-  outputs: readonly { ioKey: string; displayOrder?: number }[],
+  outputs: ReadonlyArray<{ ioKey: string; displayOrder?: number }>,
 ): string | null {
   const [firstOutput] = outputs;
   if (!firstOutput) return null;
@@ -51,7 +51,7 @@ export function defaultOutputSource(
 /** 该输出口的 default 落点是否就是它自己（没有任何手工覆盖时的判定依据）。 */
 export function isDefaultOutputBinding(
   output: { ioKey: string; displayOrder?: number },
-  outputs: readonly { ioKey: string; displayOrder?: number }[],
+  outputs: ReadonlyArray<{ ioKey: string; displayOrder?: number }>,
 ): boolean {
   return defaultOutputSource(outputs) === output.ioKey;
 }
@@ -108,7 +108,7 @@ export function hasManualOutputBinding(
 export function resolveOutputSource(
   paramMap: unknown,
   output: { ioKey: string; displayOrder?: number },
-  outputs: readonly { ioKey: string; displayOrder?: number }[],
+  outputs: ReadonlyArray<{ ioKey: string; displayOrder?: number }>,
   mode: string | null | undefined,
   io?: WorkflowIOMap | null,
 ): string | null {

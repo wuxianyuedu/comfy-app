@@ -80,7 +80,7 @@ function portFocusEquals(
  *  （工作流节点 `WorkflowNodeData` / 项目画布 `CanvasNodeData`），而这里写入的
  *  只是 data 上的一个旁路字段（结构上兼容）。调用方若拿着更窄的 setter，需要显式
  *  说明这次写入不改变节点类型 —— 见 ProjectCanvas 的传参处。 */
-export type NodeTableWriter = (updater: (nodes: Node[]) => Node[]) => void;
+export type NodeTableWriter = (updater: (nodes: Array<Node>) => Array<Node>) => void;
 
 /** 从边 data 读回关注级别（没标记过 → "none"）。 */
 export function readEdgeFocusRole(edge: Pick<Edge, "data">): EdgeFocusRole {
@@ -97,7 +97,7 @@ export interface UseRelatedEdgesHighlightOptions {
 }
 
 export function useRelatedEdgesHighlight(
-  setEdges: (updater: (edges: Edge[]) => Edge[]) => void,
+  setEdges: (updater: (edges: Array<Edge>) => Array<Edge>) => void,
   options: UseRelatedEdgesHighlightOptions = {},
 ) {
   const store = useStoreApi();
@@ -239,7 +239,7 @@ export function useRelatedEdgesHighlight(
      * 先比一个轻量签名再决定是否重算，拖动节点时位置更新不会反复重写边表。 */
     const signature = () => {
       const state = store.getState();
-      const ids: string[] = [];
+      const ids: Array<string> = [];
       state.nodeLookup.forEach((internal, nodeId) => {
         const userNode = /* SAFETY: 类型断言已复核 */ internal.internals.userNode as
           | Node

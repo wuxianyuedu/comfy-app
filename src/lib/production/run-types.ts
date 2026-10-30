@@ -90,7 +90,7 @@ export interface ProductionRun {
    */
   storyboardScriptDigest: string;
   /** 执行日志（引擎每步追加，有界；见 appendRunStep）。 */
-  log: RunStep[];
+  log: Array<RunStep>;
   error: string | null;
   updatedAt: string;
 }
@@ -136,7 +136,7 @@ export function appendRunStep(run: ProductionRun, step: RunStep): ProductionRun 
   return { ...run, log: tailWindow([...run.log, step], RUN_LOG_LIMIT) };
 }
 
-const RUN_STATUSES: readonly RunStatus[] = [
+const RUN_STATUSES: ReadonlyArray<RunStatus> = [
   "idle",
   "running",
   "awaiting_approval",
@@ -145,7 +145,7 @@ const RUN_STATUSES: readonly RunStatus[] = [
   "failed",
   "cancelled",
 ];
-const APPROVAL_MODES: readonly ApprovalMode[] = ["auto", "stage", "shot"];
+const APPROVAL_MODES: ReadonlyArray<ApprovalMode> = ["auto", "stage", "shot"];
 
 /** 宽容解析一个 `id → 有限数字` 的映射（rev 快照类字段共用）；非对象 / 非法值丢弃。 */
 function parseRevMap(raw: unknown): Record<string, number> {
@@ -170,7 +170,7 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
   )
     ? /* SAFETY: 类型断言已复核 */ (obj.approvalMode as ApprovalMode)
     : "stage";
-  const log: RunStep[] = [];
+  const log: Array<RunStep> = [];
   if (Array.isArray(obj.log)) {
     for (const raw of obj.log) {
       const rec = asRecord(raw);
@@ -231,7 +231,7 @@ export interface ProductionRunView {
   /** 当前剧本的指纹（`scriptDigestOf`）：剧本变了指纹就变，是「基于改动续跑」的剧本侧判据。 */
   scriptDigest: string;
   characterCount: number;
-  shots: ShotRunView[];
+  shots: Array<ShotRunView>;
   filmRendered: boolean;
   /** 剧本人工裁决（#2480）：`digest` 快照与当前剧本指纹相等才新鲜（有效）。没裁决过 → null/缺省。 */
   scriptHumanVerdict?: HumanVerdict | null;
@@ -261,7 +261,7 @@ export function scriptDigestOf(markdown: string): string {
 /** 把 production 行归一成规划视图（无行 → 全空，等价「连剧本都还没有」）。 */
 export function toRunView(production: ProductionLike | null): ProductionRunView {
   const shotsRaw = production && Array.isArray(production.shots) ? production.shots : [];
-  const shots: ShotRunView[] = [];
+  const shots: Array<ShotRunView> = [];
   for (const item of shotsRaw) {
     const rec = asRecord(item);
     if (!rec || typeof rec.id !== "string") continue;
@@ -298,8 +298,8 @@ export type RunAction =
   | { kind: "revise_script" }
   | { kind: "extract_characters" }
   | { kind: "plan_storyboard" }
-  | { kind: "render_images"; shotIds: string[] }
-  | { kind: "review_shots"; shotIds: string[] }
+  | { kind: "render_images"; shotIds: Array<string> }
+  | { kind: "review_shots"; shotIds: Array<string> }
   | { kind: "render_film" };
 
 /**

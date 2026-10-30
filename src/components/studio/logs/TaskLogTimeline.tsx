@@ -61,7 +61,7 @@ function fmtTime(t: number): string {
   return formatClock(t, { millis: true });
 }
 
-const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
+const FILTER_LABELS: Array<{ label: string; value: Level | "all" }> = [
   { label: "全部", value: "all" },
   { label: "错误", value: "error" },
   { label: "警告", value: "warn" },
@@ -72,7 +72,7 @@ const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
 
 export interface TaskLogTimelineProps {
   /** 全量日志（组件内部按「保留最近 300 条」截尾）。 */
-  logs: TaskLogEntry[];
+  logs: Array<TaskLogEntry>;
   /** 默认行渲染器的 testid（如 `wflib-modal-log-line`）；自定义 `renderRow` 时忽略。 */
   rowTestId?: string;
   /** 列表顶部插的内容（错误摘要卡等），滚动跟随的判定把它算在内。 */
@@ -102,10 +102,7 @@ export function TaskLogTimeline({
   const [autoscroll, setAutoscroll] = useState(true);
 
   const visibleAll = tailWindow(logs, LOG_MODAL_MAX_ROWS);
-  const visible =
-    filter === "all"
-      ? visibleAll
-      : visibleAll.filter((l) => l.level === filter);
+  const visible = filter === "all" ? visibleAll : visibleAll.filter((l) => l.level === filter);
 
   return (
     <>
@@ -117,11 +114,7 @@ export function TaskLogTimeline({
           行头底色同值（`log-row-style.ts` 记过同一件事），选中本来就弱。
           整排交给基元后选中态四层俱在、悬停值钉回常态。 */}
       <div className="border-border bg-card flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
-        <div
-          role="radiogroup"
-          aria-label="日志级别筛选"
-          className="flex items-center gap-1"
-        >
+        <div role="radiogroup" aria-label="日志级别筛选" className="flex items-center gap-1">
           {FILTER_LABELS.map((option) => {
             const count =
               option.value === "all"
@@ -155,10 +148,7 @@ export function TaskLogTimeline({
       <VirtualLogList
         entries={visible}
         getMessage={(log) => log.msg}
-        renderRow={
-          renderRow ??
-          ((log) => <DefaultLogRow log={log} rowTestId={rowTestId} />)
-        }
+        renderRow={renderRow ?? ((log) => <DefaultLogRow log={log} rowTestId={rowTestId} />)}
         following={autoscroll}
         onFollowingChange={setAutoscroll}
         watch={`${logs.length}:${filter}`}
@@ -179,13 +169,7 @@ export function TaskLogTimeline({
 }
 
 /** 标准行：时刻 + 级别徽章 + 正文 + 来源。两处弹窗的行形态一致，收在这里。 */
-function DefaultLogRow({
-  log,
-  rowTestId,
-}: {
-  log: TaskLogEntry;
-  rowTestId?: string;
-}) {
+function DefaultLogRow({ log, rowTestId }: { log: TaskLogEntry; rowTestId?: string }) {
   return (
     <div
       data-testid={rowTestId}

@@ -1,10 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { WorksGallery } from "~/components/studio/WorksGallery";
-import {
-  projectScene,
-  useSeededProjects,
-} from "../../../.storybook/screen-frame";
+import { projectScene, useSeededProjects } from "../../../.storybook/screen-frame";
 
 /**
  * 「项目」页 —— 整屏容器这一族里最省前提的一屏（真读 `canvas-store`、零 tRPC）。
@@ -33,7 +30,7 @@ export default meta;
 type Story = StoryObj<typeof GallerHarness>;
 
 /** 适配件：真项目 + 真 `WorksGallery`；`count` 决定摆几屏。 */
-function GallerHarness({ projectNames }: { projectNames: readonly string[] }) {
+function GallerHarness({ projectNames }: { projectNames: ReadonlyArray<string> }) {
   const projects = useSeededProjects({
     primary: projectScene("namedProject"),
     extraNames: projectNames,
@@ -42,10 +39,7 @@ function GallerHarness({ projectNames }: { projectNames: readonly string[] }) {
     <div className="bg-bg h-180 w-full overflow-hidden">
       {/* `projects` 是 story 侧准备的真项目（真 action 建的），这里给的是
           「有几个」这个事实 —— 视图自己会从 canvas-store 读回同一批。 */}
-      <WorksGallery
-        onOpenCanvasProject={() => undefined}
-        onOpenTask={() => undefined}
-      />
+      <WorksGallery onOpenCanvasProject={() => undefined} onOpenTask={() => undefined} />
       <span className="sr-only">{projects.length} 个真项目</span>
     </div>
   );
@@ -59,9 +53,7 @@ export const SingleProject: Story = {
 /** 五个项目：网格排布 + 卡片 hover 删除的那一档现场。 */
 export const ManyProjects: Story = {
   render: () => (
-    <GallerHarness
-      projectNames={["城市夜景", "首帧 → 逐镜生成", "角色设定集", "片头试验"]}
-    />
+    <GallerHarness projectNames={["城市夜景", "首帧 → 逐镜生成", "角色设定集", "片头试验"]} />
   ),
 };
 

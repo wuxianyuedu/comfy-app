@@ -27,7 +27,7 @@ export interface ConsoleHistoryEntry {
 
 export interface ConsoleSlot {
   runner: ConsoleRunner;
-  history: ConsoleHistoryEntry[];
+  history: Array<ConsoleHistoryEntry>;
 }
 
 /** 单例挂载点。键名带语义版本：`history` 的形状变化时要换名字。 */

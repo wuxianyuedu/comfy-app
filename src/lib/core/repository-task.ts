@@ -55,7 +55,7 @@ function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
  * query 表达不了无 limit 的 offset），但对外仍要返回带 images 的行 —— 与其在
  * 两处分头拼 `with`，不如把「按 id 装载」收到这里，保证两种取法给出同一形状。
  */
-async function attachImages(rows: Task[]): Promise<TaskWithCover[]> {
+async function attachImages(rows: Array<Task>): Promise<Array<TaskWithCover>> {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
   const images = await db
@@ -127,37 +127,39 @@ export class TaskRepository extends DrizzleRepository<Task> {
       projectId?: string;
       take?: number;
       skip?: number;
-      statusList?: string[];
+      statusList?: Array<string>;
       includeImages: true;
     },
-  ): Promise<Array<TaskCardRow & { images: TaskImage[] }>>;
+  ): Promise<Array<TaskCardRow & { images: Array<TaskImage> }>>;
   async listByUser(
     userId: string,
     opts?: {
       projectId?: string;
       take?: number;
       skip?: number;
-      statusList?: string[];
+      statusList?: Array<string>;
       includeImages?: boolean;
     },
-  ): Promise<Task[]>;
+  ): Promise<Array<Task>>;
   async listByUser(
     userId: string,
     opts?: {
       projectId?: string;
       take?: number;
       skip?: number;
-      statusList?: string[];
+      statusList?: Array<string>;
       includeImages?: boolean;
     },
-  ): Promise<Task[] | TaskWithCover[] | Array<TaskCardRow & { images: TaskImage[] }>> {
+  ): Promise<
+    Array<Task> | Array<TaskWithCover> | Array<TaskCardRow & { images: Array<TaskImage> }>
+  > {
     const where = and(
       eq(task.userId, userId),
       opts?.projectId ? eq(task.projectId, opts.projectId) : undefined,
       opts?.statusList?.length ? inArray(task.status, opts.statusList) : undefined,
     );
     if (opts?.includeImages) {
-      const withImages = (rows: Task[]) => attachImages(rows);
+      const withImages = (rows: Array<Task>) => attachImages(rows);
       // 分页口径与下面普通 select 分支**必须一致**：drizzle 的 relational
       // query 只认 `limit`（`limit: -1` 会被整个丢掉，实测），所以「只给 skip」
       // 那条路走不了它 —— 先用普通 select 取到这一页的 id，再按 id 装载图片。
@@ -293,7 +295,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
    * 往返（N = 镜头数），跑满 240 轮是上万次查询；批量版一轮只发一条 `IN`。
    * 这里连 `resultImages` 一起取（成片镜头要从中挑视频路径），避免调用方
    * 为拿它再查一遍。 */
-  async findExecutionProgressMany(taskIds: string[]): Promise<
+  async findExecutionProgressMany(taskIds: Array<string>): Promise<
     Array<{
       id: string;
       status: string;

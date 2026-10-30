@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { resolveDesktopStoragePaths } from "./desktop-storage-paths.server";
 
 /** 用一份目录清单造 exists 注入点。 */
-function existsOf(dirs: string[]) {
+function existsOf(dirs: Array<string>) {
   const set = new Set(dirs.map((dir) => path.resolve(dir)));
   return (target: string) => set.has(path.resolve(target));
 }
@@ -35,7 +35,7 @@ function baseDeps(overrides: Record<string, unknown> = {}) {
   return {
     exists: existsOf(DESKTOP_DIRS),
     readFile: async () => SHARED_YAML,
-    resolveArgs: async () => /* SAFETY: 类型断言已复核 */ [] as string[],
+    resolveArgs: async () => /* SAFETY: 类型断言已复核 */ [] as Array<string>,
     ...overrides,
   };
 }

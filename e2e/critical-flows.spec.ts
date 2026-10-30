@@ -1013,7 +1013,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
           const nodes = /* SAFETY: 类型断言已复核 */ [
             el,
             ...Array.from(el.children),
-          ] as HTMLElement[];
+          ] as Array<HTMLElement>;
           return nodes.map((n) => n.scrollWidth - n.clientWidth);
         });
         for (const px of overflow) expect(px).toBeLessThanOrEqual(1);

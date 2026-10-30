@@ -16,10 +16,7 @@ import { describe, expect, it } from "vitest";
 
 import { readHookSteps } from "../scripts/base-check/hook-steps.mjs";
 import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
-import {
-  parseStageScripts,
-  readCnbConfig,
-} from "../scripts/ci-autofix-duties.mjs";
+import { parseStageScripts, readCnbConfig } from "../scripts/ci-autofix-duties.mjs";
 import {
   commentedStageNames,
   gateNameExecutorProblems,
@@ -30,9 +27,9 @@ import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
 
 /** 造一份配置夹具（形状与 `.cnb.yml` 的 env 段同款）。 */
 function fakeCnb(opts: {
-  gates: string[];
-  disabled?: string[];
-  elsewhere?: string[];
+  gates: Array<string>;
+  disabled?: Array<string>;
+  elsewhere?: Array<string>;
   commented?: boolean;
 }): string {
   const lines = [
@@ -56,16 +53,9 @@ function fakeCnb(opts: {
       "    # 「执行者在别处」的说明注释。",
     );
   }
-  lines.push(
-    "  pull_request:",
-    "    - name: 活的",
-    "      script: node scripts/live.cjs",
-  );
+  lines.push("  pull_request:", "    - name: 活的", "      script: node scripts/live.cjs");
   if (opts.commented) {
-    lines.push(
-      "  # - name: 注释形态",
-      "  #   script: node scripts/commented.cjs",
-    );
+    lines.push("  # - name: 注释形态", "  #   script: node scripts/commented.cjs");
   }
   return lines.join("\n");
 }
@@ -73,9 +63,7 @@ function fakeCnb(opts: {
 /** 一份「执行面」：复合档条目 + 固定清单用例 + 钩子步骤。 */
 const SURFACE = {
   liveStages: ["活的"],
-  heavyGates: [
-    { argv: ["node", "scripts/check-reformat-only.cjs", "--staged"] },
-  ],
+  heavyGates: [{ argv: ["node", "scripts/check-reformat-only.cjs", "--staged"] }],
   fixedTests: ["tests/core-spine-single-source.test.ts"],
   hookSteps: [{ argv: ["node", "scripts/live.cjs"] }],
 };
@@ -88,15 +76,13 @@ describe("ci-gate-names —— 解析", () => {
         elsewhere: ["core 骨架单一事实源=tests/core-spine-single-source.test.ts"],
       }),
     );
-    expect(got.get("core 骨架单一事实源")).toEqual([
-      "tests/core-spine-single-source.test.ts",
-    ]);
+    expect(got.get("core 骨架单一事实源")).toEqual(["tests/core-spine-single-source.test.ts"]);
   });
 
   it("注释形态的 stage 名能被列出来（停用形态与换执行者形态都是它）", () => {
-    expect([
-      ...commentedStageNames(fakeCnb({ gates: ["活的"], commented: true })),
-    ]).toEqual(["注释形态"]);
+    expect([...commentedStageNames(fakeCnb({ gates: ["活的"], commented: true }))]).toEqual([
+      "注释形态",
+    ]);
   });
 
   it("入口路径只认执行面那三处（脚本 / 入口 / 用例）", () => {

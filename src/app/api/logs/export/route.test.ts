@@ -42,7 +42,7 @@ vi.mock("~/server/auth/request-user", () => ({
 
 const { POST } = await import("./route");
 
-function exportFiles(): string[] {
+function exportFiles(): Array<string> {
   try {
     return fs.readdirSync(exportDir);
   } catch {

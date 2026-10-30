@@ -109,10 +109,10 @@ export async function GET(req: NextRequest) {
       count: byFolder.get(MATERIAL_FOLDERS.id)?.length ?? 0,
     }));
 
-    let items: MaterialItem[] = [];
+    let items: Array<MaterialItem> = [];
     if (q) {
       // 搜索优先于 folder：跨所有分类找名字匹配的
-      const pool: MaterialItem[] = [];
+      const pool: Array<MaterialItem> = [];
       for (const f of MATERIAL_FOLDERS) pool.push(...(byFolder.get(f.id) ?? []));
       items = pool.filter((it) => matchesNeedle(q, it.name));
     } else if (folder) {

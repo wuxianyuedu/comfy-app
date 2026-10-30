@@ -135,7 +135,7 @@ export const EXE_PROBE_TIMEOUT_MS = 30_000;
  */
 export function probeExecutable(
   candidate: string,
-  args: string[],
+  args: Array<string>,
   timeoutMs: number = EXE_PROBE_TIMEOUT_MS,
   /** 注入点：缺省真起进程。单测用它钉「不带码」那一格（真机上造不出来）。 */
   spawn: typeof spawnSync = spawnSync,
@@ -172,7 +172,7 @@ export function probeExecutable(
 /** `firstRunnable()` 的入参（候选表 + 每个候选要喂的参数 + 探测预算）。 */
 export interface FirstRunnableOptions {
   /** 依次试的候选名，顺序即优先级。 */
-  candidates: readonly string[];
+  candidates: ReadonlyArray<string>;
   /**
    * 每个候选要喂的参数：**必须与真跑那一跳同形**。
    *
@@ -180,13 +180,13 @@ export interface FirstRunnableOptions {
    * 而它旁边的 `python` 不能带 —— 「同一个命令的可用判据不是统一的」这件事在这一层
    * 收口（同 `pythonProbeArgs()` 的理由）。
    */
-  probeArgs: (candidate: string) => string[];
+  probeArgs: (candidate: string) => Array<string>;
   /** 人读的名字（`PowerShell` / `Python`）：只在「探不到」那一句话里出现。 */
   label: string;
   /** 这一次探测的预算（缺省 `EXE_PROBE_TIMEOUT_MS`）。 */
   timeoutMs?: number;
   /** 注入点：缺省真起进程（单测用它钉两个平台的候选顺序，不必装两套解释器）。 */
-  probe?: (candidate: string, args: string[]) => ProbeOutcome;
+  probe?: (candidate: string, args: Array<string>) => ProbeOutcome;
   /**
    * 探不到时那一行的**第二只眼睛**（缺省不打）。
    *
@@ -212,7 +212,8 @@ export interface FirstRunnableOptions {
 export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
   const probe =
     options.probe ??
-    ((candidate: string, args: string[]) => probeExecutable(candidate, args, options.timeoutMs));
+    ((candidate: string, args: Array<string>) =>
+      probeExecutable(candidate, args, options.timeoutMs));
   const got = firstRunnable(options.candidates, options.probeArgs, probe);
   if (got.hit) return got.hit;
   /* 一行读数走**两条出口**，它们答的是两件不同的事：
@@ -254,8 +255,8 @@ export interface ProbedCandidate {
  * @returns `ProbedCandidate[]`（`command` → `candidate`）
  */
 export function toProbedCandidates(
-  missed: readonly { command: string; failure: ProbeFailure }[],
-): ProbedCandidate[] {
+  missed: ReadonlyArray<{ command: string; failure: ProbeFailure }>,
+): Array<ProbedCandidate> {
   return missed.map((m) => ({ candidate: m.command, failure: m.failure }));
 }
 
@@ -272,16 +273,16 @@ export function toProbedCandidates(
  * @returns 命中的候选与「试过但起不来」的那些（后者供一次性话术用）
  */
 export function firstRunnable(
-  candidates: readonly string[],
-  probeArgs: (candidate: string) => string[],
-  probe: (candidate: string, args: string[]) => ProbeOutcome = probeExecutable,
+  candidates: ReadonlyArray<string>,
+  probeArgs: (candidate: string) => Array<string>,
+  probe: (candidate: string, args: Array<string>) => ProbeOutcome = probeExecutable,
 ): {
   hit: string | null;
-  missed: ProbedCandidate[];
-  timeouts: ProbedCandidate[];
+  missed: Array<ProbedCandidate>;
+  timeouts: Array<ProbedCandidate>;
 } {
-  const missed: ProbedCandidate[] = [];
-  const timeouts: ProbedCandidate[] = [];
+  const missed: Array<ProbedCandidate> = [];
+  const timeouts: Array<ProbedCandidate> = [];
   for (const candidate of candidates) {
     const outcome = probe(candidate, probeArgs(candidate));
     if (outcome.ok) return { hit: candidate, missed, timeouts };
@@ -305,10 +306,10 @@ export function firstRunnable(
  * @returns 一行一句话；两者都空时给出「没试过任何候选」（那是调用方的形状问题）
  */
 export function describeProbeMisses(
-  missed: readonly ProbedCandidate[],
-  timeouts: readonly ProbedCandidate[] = [],
+  missed: ReadonlyArray<ProbedCandidate>,
+  timeouts: ReadonlyArray<ProbedCandidate> = [],
 ): string {
-  const parts: string[] = [];
+  const parts: Array<string> = [];
   for (const { candidate, failure } of missed) {
     parts.push(`${candidate}：${describeProbeFailure(failure)}`);
   }

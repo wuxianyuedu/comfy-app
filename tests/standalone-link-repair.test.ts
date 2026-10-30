@@ -45,7 +45,7 @@ afterEach(() => {
 });
 
 /** 在夹具里造 `<root>/<…>` 这条路径（并返回它）。 */
-function dir(...rel: string[]): string {
+function dir(...rel: Array<string>): string {
   const p = path.join(root, ...rel);
   mkdirSync(p, { recursive: true });
   return p;
@@ -177,8 +177,8 @@ interface FakeLink {
  * @param input.targetExists 目标在不在（默认在 —— 这才是本条发现ing的形状）
  */
 function fake(input: {
-  links: FakeLink[];
-  brokenRels?: string[];
+  links: Array<FakeLink>;
+  brokenRels?: Array<string>;
   rebuildResult?: { ok: boolean; error: string };
   targetExists?: boolean;
   dirExists?: boolean;

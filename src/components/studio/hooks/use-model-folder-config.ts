@@ -19,10 +19,10 @@ import { useTRPC } from "~/trpc/react";
 import { type FolderConfigRow, splitFolders } from "../model-library-config";
 
 /** 「还没有答案」时复用的空列表 —— 引用必须稳定，理由见 hook 内那一行。 */
-const EMPTY_FOLDERS: FolderConfigRow[] = [];
+const EMPTY_FOLDERS: Array<FolderConfigRow> = [];
 
 export interface ModelFolderConfigController {
-  folders: FolderConfigRow[];
+  folders: Array<FolderConfigRow>;
   comfyReachable: boolean;
   loading: boolean;
   /** 扫描中（全量重新扫描 ComfyUI 目录）。 */
@@ -36,8 +36,8 @@ export interface ModelFolderConfigController {
   onlyEnabled: boolean;
   setOnlyEnabled: (value: boolean) => void;
   /** 筛选后的已启用 / 可添加两组。 */
-  enabledRows: FolderConfigRow[];
-  availableRows: FolderConfigRow[];
+  enabledRows: Array<FolderConfigRow>;
+  availableRows: Array<FolderConfigRow>;
   totalCount: number;
   toggle: (folder: string, enabled: boolean) => Promise<void>;
   add: (folder: string) => Promise<void>;
@@ -129,13 +129,11 @@ export function useModelFolderConfig(): ModelFolderConfigController {
   );
 
   const toggle = useCallback(
-    (folder: string, enabled: boolean) =>
-      runMutate(() => saveMut.mutateAsync({ folder, enabled })),
+    (folder: string, enabled: boolean) => runMutate(() => saveMut.mutateAsync({ folder, enabled })),
     [runMutate, saveMut],
   );
   const add = useCallback(
-    (folder: string) =>
-      runMutate(() => saveMut.mutateAsync({ folder, enabled: true })),
+    (folder: string) => runMutate(() => saveMut.mutateAsync({ folder, enabled: true })),
     [runMutate, saveMut],
   );
   const remove = useCallback(
@@ -156,10 +154,7 @@ export function useModelFolderConfig(): ModelFolderConfigController {
     await load();
   }, [load, scanBusy, syncMut]);
 
-  const { enabled, available } = useMemo(
-    () => splitFolders(folders, q),
-    [folders, q],
-  );
+  const { enabled, available } = useMemo(() => splitFolders(folders, q), [folders, q]);
 
   return {
     folders,

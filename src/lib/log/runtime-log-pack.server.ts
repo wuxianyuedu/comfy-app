@@ -44,11 +44,7 @@ const MAX_ORDINAL = 100;
  * （端口被占、依赖缺失、用户连点两下），覆盖会让第一次的失败现场直接消失 ——
  * 而那次恰恰是最该看的。
  */
-export function allocateRuntimeLogFile(
-  source: RuntimeLogSource,
-  dir: string,
-  at: Date,
-): string {
+export function allocateRuntimeLogFile(source: RuntimeLogSource, dir: string, at: Date): string {
   for (let ordinal = 1; ordinal <= MAX_ORDINAL; ordinal += 1) {
     const file = path.join(dir, runtimeLogFileName(source, at, ordinal));
     if (!fs.existsSync(/*turbopackIgnore: true*/ file)) return file;
@@ -86,8 +82,8 @@ export interface RuntimeLogFileEntry {
 export async function listRuntimeLogFiles(
   source: RuntimeLogSource,
   dir: string = SERVICES_LOG_DIR,
-): Promise<RuntimeLogFileEntry[]> {
-  let names: string[];
+): Promise<Array<RuntimeLogFileEntry>> {
+  let names: Array<string>;
   try {
     names = await fs.promises.readdir(/*turbopackIgnore: true*/ dir);
   } catch {
@@ -107,9 +103,9 @@ export async function listRuntimeLogFiles(
 function toRuntimeLogEntries(
   source: RuntimeLogSource,
   dir: string,
-  names: string[],
-): RuntimeLogFileEntry[] {
-  const out: RuntimeLogFileEntry[] = [];
+  names: Array<string>,
+): Array<RuntimeLogFileEntry> {
+  const out: Array<RuntimeLogFileEntry> = [];
   for (const name of names) {
     if (!name.endsWith(".log")) continue;
     if (name === legacyRuntimeLogFileName(source)) {
@@ -143,13 +139,9 @@ function toRuntimeLogEntries(
 function listRuntimeLogFilesSync(
   source: RuntimeLogSource,
   dir: string = SERVICES_LOG_DIR,
-): RuntimeLogFileEntry[] {
+): Array<RuntimeLogFileEntry> {
   try {
-    return toRuntimeLogEntries(
-      source,
-      dir,
-      fs.readdirSync(/*turbopackIgnore: true*/ dir),
-    );
+    return toRuntimeLogEntries(source, dir, fs.readdirSync(/*turbopackIgnore: true*/ dir));
   } catch {
     return [];
   }

@@ -31,7 +31,7 @@ const ORCH = JSON.stringify(
 );
 const ROOT = process.cwd();
 
-function join(...parts: string[]): string {
+function join(...parts: Array<string>): string {
   return parts.join("/");
 }
 
@@ -48,7 +48,7 @@ function decidePort(script: string): unknown {
 /** 直接问「显式端口 + 这份进程表会得到什么结论」。 */
 function verdictFor(
   requestedPort: number | null,
-  foreignPids: number[],
+  foreignPids: Array<number>,
   cmds: Record<number, string>,
 ) {
   const script = `
@@ -66,8 +66,8 @@ function verdictFor(
   `;
   return /* SAFETY: 类型断言已复核 */ decidePort(script) as {
     ownership: string;
-    ownPids: number[];
-    foreignPids: number[];
+    ownPids: Array<number>;
+    foreignPids: Array<number>;
   };
 }
 

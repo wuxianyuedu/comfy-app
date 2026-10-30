@@ -40,7 +40,7 @@ import { paramClassStyle } from "./workflow-param-mapping-ui";
 const CARD_WIDTH = 220;
 
 export interface WorkflowParamCardColumnProps {
-  entries: readonly ParamEntry[];
+  entries: ReadonlyArray<ParamEntry>;
   /** 契约口清单（`modeContractEntries` / `exposedParamsForMode` 的产物）。
    *
    *  卡片头必须与「工坊封装」页签说同一句话（ISSUE #596：同一页面的两个页签，
@@ -49,7 +49,7 @@ export interface WorkflowParamCardColumnProps {
    *  清单是产品对用户承诺的那几个口，名字只该有一套。
    *
    *  形状只要求 id + label（消费方不必 import 契约模块的类型）。 */
-  contractEntries?: readonly { id: string; label: string }[];
+  contractEntries?: ReadonlyArray<{ id: string; label: string }>;
   /** 当前模式下「条目 → 目标 ioKey」的生效落点。 */
   resolved: Record<string, string | null>;
   io: WorkflowIOMap | null;
@@ -94,21 +94,16 @@ export function WorkflowParamCardColumn({
          * 每行一颗圆点，不再并排六张卡（用户口径：「尺寸这里不要显示这么多节点，
          * 尺寸只显示一个节点」）。只在第一个子口的位置画这一张，其余跳过。 */
         if (SIZE_SUB_IDS.includes(entry.cls)) {
-          const forms = entries.filter((item) =>
-            SIZE_SUB_IDS.includes(item.cls),
-          );
+          const forms = entries.filter((item) => SIZE_SUB_IDS.includes(item.cls));
           if (entry !== forms[0]) return null;
           const first = forms[0];
           const sizeLabel =
-            contractEntries?.find((item) => item.id === "size")?.label ??
-            sizeSubLabel("size");
+            contractEntries?.find((item) => item.id === "size")?.label ?? sizeSubLabel("size");
           return (
             <WorkflowParamCard
               key="size"
               /* 选中的可能是这张卡（`size`）或它的某一条线（子口 id）：两种都点亮。 */
-              selected={sizeGroupIds(selectedEntryId).some((id) =>
-                SIZE_SUB_IDS.includes(id),
-              )}
+              selected={sizeGroupIds(selectedEntryId).some((id) => SIZE_SUB_IDS.includes(id))}
               onSelect={onSelect ? () => onSelect("size") : undefined}
               entryId="size"
               cls="size"
@@ -154,8 +149,7 @@ export function WorkflowParamCardColumn({
          * `outputPorts` 的 `displayName`）—— 两处各取一份会让同一张卡片说
          * 两个名字（标题「提示词」、行上却写着工作流里的端口名）。 */
         const cardLabel =
-          contractEntries?.find((item) => item.id === entry.id)?.label ??
-          entry.label;
+          contractEntries?.find((item) => item.id === entry.id)?.label ?? entry.label;
         return (
           <WorkflowParamCard
             key={entry.id}
@@ -181,12 +175,7 @@ export function WorkflowParamCardColumn({
             onReset={canWire ? () => onReset?.(entry.id) : undefined}
             /* **一个口一颗点**：卡片只说「这个口对外是什么」（名字 + 类型），
              *  落点由线的另一端声明（拖到宿主哪一行就是哪一行）。 */
-            outputPorts={paramOutputPorts(
-              entry,
-              io,
-              resolved[entry.id],
-              cardLabel,
-            )}
+            outputPorts={paramOutputPorts(entry, io, resolved[entry.id], cardLabel)}
             /* 右侧小圆点端点：**每个候选一颗圆点**（与编辑器画布同口径）。
              *
              * 端点由消费方注入 —— 库里那层给的是 React Flow 的 `<Handle>`

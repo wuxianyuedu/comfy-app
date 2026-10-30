@@ -62,19 +62,19 @@ const SCRIPTS_DIR = fileURLToPath(new URL("../scripts", import.meta.url));
 
 type ScanReader = {
   readForScan: (abs: string) => string | null;
-  readdirForScan: (dir: string) => Dirent[] | null;
+  readdirForScan: (dir: string) => Array<Dirent> | null;
   walkForScan: (
     dir: string,
     fileRe: RegExp,
     opts?: { skipDirs?: Set<string>; skipHiddenDirs?: boolean },
-  ) => string[];
+  ) => Array<string>;
   vanishedNote: (count: number) => string;
 };
 
 const reader = /* SAFETY: 类型断言已复核 */ requireCjs(READER_PATH) as ScanReader;
 
 /** 每格自己建、自己拆：这些用例只在临时目录里活动，不碰工作树。 */
-const made: string[] = [];
+const made: Array<string> = [];
 
 function tempDir(prefix = "gate-scan-read-"): string {
   const dir = mkdtempSync(path.join(tmpdir(), prefix));
@@ -206,7 +206,7 @@ describe("vanishedNote —— 消失数必须进结论", () => {
 /* ── 回潮判据 ────────────────────────────────────────────────────────── */
 
 /** 全仓 `scripts/check-*.cjs`（不含共用件本身）。 */
-function gateScripts(): string[] {
+function gateScripts(): Array<string> {
   return readdirSync(SCRIPTS_DIR)
     .filter((n) => /^check-.*\.cjs$/.test(n))
     .map((n) => path.join(SCRIPTS_DIR, n));

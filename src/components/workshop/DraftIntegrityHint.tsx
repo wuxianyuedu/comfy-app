@@ -33,18 +33,15 @@ const KIND_TAB: Record<DraftElementKind, Tab> = {
 };
 
 interface DraftIntegrityHintProps {
-  issues: DraftElementIssue[];
+  issues: Array<DraftElementIssue>;
   onGoTo: (tab: Tab) => void;
 }
 
 /** 把「一条元素的多个字段问题」并成一行：`镜头 #2 · 缺 id；镜号不是数字`。 */
 function groupByElement(
-  issues: readonly DraftElementIssue[],
-): Array<{ label: string; reasons: string[]; tab: Tab }> {
-  const lines = new Map<
-    string,
-    { label: string; reasons: string[]; tab: Tab }
-  >();
+  issues: ReadonlyArray<DraftElementIssue>,
+): Array<{ label: string; reasons: Array<string>; tab: Tab }> {
+  const lines = new Map<string, { label: string; reasons: Array<string>; tab: Tab }>();
   for (const issue of issues) {
     const key = `${issue.kind}:${String(issue.index)}`;
     const line = lines.get(key) ?? {
@@ -58,10 +55,7 @@ function groupByElement(
   return [...lines.values()];
 }
 
-export function DraftIntegrityHint({
-  issues,
-  onGoTo,
-}: DraftIntegrityHintProps) {
+export function DraftIntegrityHint({ issues, onGoTo }: DraftIntegrityHintProps) {
   const summary = describeDraftIssues(issues);
   if (!summary) return null;
   const lines = groupByElement(issues);
@@ -90,10 +84,7 @@ export function DraftIntegrityHint({
         {shown.map((line) => (
           <li key={line.label} className="list-disc">
             <span className="font-medium">{line.label}</span>
-            <span className="text-muted-foreground">
-              {" "}
-              · {line.reasons.join("；")}
-            </span>
+            <span className="text-muted-foreground"> · {line.reasons.join("；")}</span>
           </li>
         ))}
         {hiddenCount > 0 && (

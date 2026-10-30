@@ -36,7 +36,7 @@ class FakeEventSource {
   }
 }
 
-let instances: FakeEventSource[] = [];
+let instances: Array<FakeEventSource> = [];
 
 beforeEach(() => {
   instances = [];

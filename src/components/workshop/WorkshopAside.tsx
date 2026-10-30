@@ -39,7 +39,7 @@ function WorkshopWorkflowSelect({
   label: string;
   placeholder: string;
   category: WorkshopWorkflowCategory;
-  options: WorkshopWorkflowOption[];
+  options: Array<WorkshopWorkflowOption>;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -48,10 +48,7 @@ function WorkshopWorkflowSelect({
     <FieldLabel className="mt-3 block">
       <span className="text-muted-foreground text-2xs mb-1 block">{label}</span>
       <Select value={value} onValueChange={(next) => onChange(next ?? "")}>
-        <SelectTrigger
-          size="sm"
-          className="border-border bg-bg text-ink w-full text-xs"
-        >
+        <SelectTrigger size="sm" className="border-border bg-bg text-ink w-full text-xs">
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
@@ -76,10 +73,10 @@ function WorkshopWorkflowSelect({
 }
 
 interface WorkshopAsideProps {
-  missing: MissingItem[];
+  missing: Array<MissingItem>;
   /** 工作流库里的可选工作流（ISSUE #145）：本地通道的唯一可执行来源。
    * 按内容类别分栏：面板只列出当前阶段对应的那一栏。 */
-  workflowOptions: WorkshopWorkflowOption[];
+  workflowOptions: Array<WorkshopWorkflowOption>;
   workflowId: string;
   onWorkflowChange: (value: string) => void;
   /** 视频通道选定的工作流 id。 */
@@ -106,8 +103,7 @@ export function WorkshopAside({
   onGoScript,
 }: WorkshopAsideProps) {
   const anyChannelConfigured =
-    apiChannels?.image.configured === true ||
-    apiChannels?.video.configured === true;
+    apiChannels?.image.configured === true || apiChannels?.video.configured === true;
 
   /**
    * 只列**真有计数**的行。此前这里还摆着「剧本大纲.md / 分镜脚本.json」两行
@@ -129,23 +125,16 @@ export function WorkshopAside({
           <span className="bg-amber/20 text-amber grid size-5.5 place-items-center rounded-lg text-sm font-bold">
             !
           </span>
-          <span className="text-ink text-sm font-semibold">
-            缺失素材 / 下一步
-          </span>
+          <span className="text-ink text-sm font-semibold">缺失素材 / 下一步</span>
         </div>
         <div className="flex-col gap-2.5">
           {missing.map((item) => (
             <div key={item.label} className="flex items-center gap-3">
               <span
-                className={cn(
-                  "size-2.5 rounded-full",
-                  item.done ? "bg-success" : "bg-warning",
-                )}
+                className={cn("size-2.5 rounded-full", item.done ? "bg-success" : "bg-warning")}
                 aria-hidden
               />
-              <span className="text-ink flex-1 text-[12.5px]">
-                {item.label}
-              </span>
+              <span className="text-ink flex-1 text-[12.5px]">{item.label}</span>
               <span className="text-faint text-2xs">
                 {item.done
                   ? "已完成"
@@ -201,12 +190,8 @@ export function WorkshopAside({
               <span className="bg-elevated grid size-8 place-items-center rounded-lg">
                 <Icon name="file" size={14} className="text-muted-foreground" />
               </span>
-              <span className="text-ink flex-1 truncate text-[12.5px]">
-                {name}
-              </span>
-              <span className="text-faint bg-subtle text-2xs rounded-md px-2 py-1">
-                {tag}
-              </span>
+              <span className="text-ink flex-1 truncate text-[12.5px]">{name}</span>
+              <span className="text-faint bg-subtle text-2xs rounded-md px-2 py-1">{tag}</span>
             </div>
           ))}
         </div>
@@ -216,9 +201,7 @@ export function WorkshopAside({
         <Button
           type="button"
           variant="ghost"
-          onClick={() =>
-            emitAppEvent("workspace:navigate", { view: "library" })
-          }
+          onClick={() => emitAppEvent("workspace:navigate", { view: "library" })}
           className="text-muted-foreground bg-subtle hover:bg-surface-2 mt-3 w-full rounded-lg py-2.5 text-xs"
         >
           在资源库中打开 →

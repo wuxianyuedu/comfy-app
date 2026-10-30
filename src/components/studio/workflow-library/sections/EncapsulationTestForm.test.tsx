@@ -29,7 +29,7 @@ function entry(over: Partial<EncapsulationEntryStatus> & { id: string }): Encaps
 }
 
 /** 文生图契约口：提示词已落点，负向 / 尺寸都没落点。 */
-const T2I_ENTRIES: EncapsulationEntryStatus[] = [
+const T2I_ENTRIES: Array<EncapsulationEntryStatus> = [
   entry({
     id: "prompt",
     label: "提示词",
@@ -41,7 +41,7 @@ const T2I_ENTRIES: EncapsulationEntryStatus[] = [
 ];
 
 /** 图生视频契约口：多出首帧与时长。 */
-const I2V_ENTRIES: EncapsulationEntryStatus[] = [
+const I2V_ENTRIES: Array<EncapsulationEntryStatus> = [
   entry({
     id: "prompt",
     label: "提示词",
@@ -54,7 +54,7 @@ const I2V_ENTRIES: EncapsulationEntryStatus[] = [
 ];
 
 function renderForm(
-  entries: EncapsulationEntryStatus[],
+  entries: Array<EncapsulationEntryStatus>,
   over: Partial<React.ComponentProps<typeof EncapsulationTestForm>> = {},
 ) {
   const onRun = vi.fn<(values: WorkshopExposedValues) => void>();

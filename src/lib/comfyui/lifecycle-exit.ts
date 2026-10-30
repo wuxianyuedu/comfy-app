@@ -302,7 +302,7 @@ export function describeStaleSession(
  * 原始字节（通常 UTF-8）；个别回退路径（powershell `Start-Process`）会是 UTF-16LE，
  * 这里统一识别 BOM 后按对应编码读。
  */
-function readTailLines(filePath: string, maxLines = 40, maxLineLen = 600): string[] {
+function readTailLines(filePath: string, maxLines = 40, maxLineLen = 600): Array<string> {
   try {
     if (!fs.existsSync(filePath)) return [];
     const buf = fs.readFileSync(filePath);

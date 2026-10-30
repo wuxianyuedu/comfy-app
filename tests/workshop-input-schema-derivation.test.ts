@@ -102,10 +102,10 @@ describe("工坊写侧 schema ⇄ 派生类型：同读数且可选性方向一�
       clipStatus: ShotStatus | undefined;
     }>();
     expectTypeOf<Pick<Character, "portraits">>().toEqualTypeOf<{
-      portraits?: CharacterPortrait[];
+      portraits?: Array<CharacterPortrait>;
     }>();
     expectTypeOf<Pick<Character, "portraits">>().not.toEqualTypeOf<{
-      portraits: CharacterPortrait[] | undefined;
+      portraits: Array<CharacterPortrait> | undefined;
     }>();
     /* 补值那一侧的语义要留住：输入可缺、输出必有。 */
     expectTypeOf<Pick<CharacterPortrait, "createdAt">>().toEqualTypeOf<{
@@ -117,7 +117,7 @@ describe("工坊写侧 schema ⇄ 派生类型：同读数且可选性方向一�
     const json = /* SAFETY: 类型断言已复核 */ z4mini.toJSONSchema(characterPortraitInputSchema, {
       target: "draft-7",
       io: "input",
-    }) as { required?: string[]; properties?: Record<string, unknown> };
+    }) as { required?: Array<string>; properties?: Record<string, unknown> };
 
     expect(json.properties?.createdAt).toBeDefined();
     expect(json.required ?? []).not.toContain("createdAt");

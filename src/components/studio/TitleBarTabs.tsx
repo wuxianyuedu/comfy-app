@@ -29,21 +29,14 @@ import { ViewTabStrip } from "./ViewTabStrip";
 import { type ViewTab } from "./workspace-tabs";
 import { type OpenableView } from "./ViewTabStrip";
 import { type WorkspaceView } from "./NavItems";
-import {
-  TITLE_BAR_CHROME_CLASS,
-  TITLE_BAR_HEIGHT_CLASS,
-} from "~/lib/full-screen-layer";
+import { TITLE_BAR_CHROME_CLASS, TITLE_BAR_HEIGHT_CLASS } from "~/lib/full-screen-layer";
 import { useStartupForeground } from "./hooks/use-startup-foreground";
-import {
-  useTitleBarDrag,
-  useWindowMaximized,
-  WindowControls,
-} from "./WindowControls";
+import { useTitleBarDrag, useWindowMaximized, WindowControls } from "./WindowControls";
 import { Button } from "~/components/ui/button";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 
 interface TitleBarTabsProps {
-  tabs: ShellTab[];
+  tabs: Array<ShellTab>;
   activeTabId: string;
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
@@ -52,13 +45,13 @@ interface TitleBarTabsProps {
    * 「应用内视图」与「iframe 外部页面」，不再另起第二条（#1324 决策 ④(a)）。
    * 不传时行为与从前一致。
    */
-  viewTabs?: ViewTab[];
+  viewTabs?: Array<ViewTab>;
   activeViewKey?: string;
   projectNameOf?: (projectId: string | null) => string | null | undefined;
   onSelectViewTab?: (key: string) => void;
   onCloseViewTab?: (key: string) => void;
   /** 「+」菜单里可打开的视图（由 ShellTabs 透传）。 */
-  openableViews?: OpenableView[];
+  openableViews?: Array<OpenableView>;
   onOpenView?: (view: WorkspaceView) => void;
 }
 
@@ -89,9 +82,7 @@ function TitleBarTab({
       className={`group border-border-subtle relative flex h-full max-w-52 min-w-0 cursor-pointer items-center gap-2 border-r px-3 text-sm transition-colors ${
         /* 与同一条标题行里的「应用内视图页签」共用 `.u-tab-active`：
            两类页签并列在同一横条上，选中态长两张脸就是漂移。 */
-        active
-          ? "u-tab-active"
-          : "text-ink-muted hover:bg-subtle/70 hover:text-ink-strong"
+        active ? "u-tab-active" : "text-ink-muted hover:bg-subtle/70 hover:text-ink-strong"
       }`}
     >
       <span className="truncate">{tab.label}</span>
@@ -134,9 +125,7 @@ export function TitleBarTabs({
   /* 有视图页签时，「主应用」那一个伪页签由它们代表 —— 同一条横条里出现
      「主应用」+「首页」+「模型」这种并列，用户分不清哪个才是当前页。 */
   const hasViewTabs = !!viewTabs && viewTabs.length > 0;
-  const shellTabs = hasViewTabs
-    ? tabs.filter((tab) => tab.id !== MAIN_TAB_ID)
-    : tabs;
+  const shellTabs = hasViewTabs ? tabs.filter((tab) => tab.id !== MAIN_TAB_ID) : tabs;
   /* 最大化状态与拖拽判据走 `./WindowControls` 的共享实现（与整屏路由页自带的
      精简标题行 `WindowTitleBar` 同一份 —— 两处各写一遍就是孪生）。 */
   const [maximized, setMaximized] = useWindowMaximized();
@@ -173,11 +162,7 @@ export function TitleBarTabs({
           />
         ) : null}
         {shellTabs.length > 0 ? (
-          <div
-            role="tablist"
-            aria-label="应用页签"
-            className="flex items-stretch"
-          >
+          <div role="tablist" aria-label="应用页签" className="flex items-stretch">
             {shellTabs.map((tab) => (
               <TitleBarTab
                 key={tab.id}

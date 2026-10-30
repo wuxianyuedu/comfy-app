@@ -45,7 +45,7 @@ function purgeStaleCache(): void {
 /** 强制重载时清掉本应用命名空间下的全部缓存键（不再清整个 origin 的 storage）。 */
 function clearWorkflowCache(): void {
   try {
-    const keys: string[] = [];
+    const keys: Array<string> = [];
     for (let i = sessionStorage.length - 1; i >= 0; i--) {
       const k = sessionStorage.key(i);
       if (k?.startsWith("wfdetail:")) keys.push(k);
@@ -89,7 +89,7 @@ export interface WorkflowDetailLoaderArgs {
       | Record<string, WorkflowIOParam>
       | ((prev: Record<string, WorkflowIOParam>) => Record<string, WorkflowIOParam>),
   ) => void;
-  setSubgraphStack: Dispatch<SetStateAction<WorkflowSubgraphStackEntry[]>>;
+  setSubgraphStack: Dispatch<SetStateAction<Array<WorkflowSubgraphStackEntry>>>;
   setRootWorkflowName: Dispatch<SetStateAction<string>>;
   setSubgraphLoading: Dispatch<SetStateAction<boolean>>;
   setSubgraphRawContext: Dispatch<
@@ -121,12 +121,12 @@ export function useWorkflowDetailLoader({
   /* 子图栈的镜像引用：用于在 state updater 之外读取最新值（避免在 updater 里
    *  排副作用 —— React StrictMode 会双调用 updater，导致重复发请求）。所有栈
    *  变更都走 updateStack，保证镜像与 state 同步。 */
-  const stackRef = useRef<WorkflowSubgraphStackEntry[]>([]);
+  const stackRef = useRef<Array<WorkflowSubgraphStackEntry>>([]);
   const updateStack = useCallback(
     (
       updater:
-        | WorkflowSubgraphStackEntry[]
-        | ((prev: WorkflowSubgraphStackEntry[]) => WorkflowSubgraphStackEntry[]),
+        | Array<WorkflowSubgraphStackEntry>
+        | ((prev: Array<WorkflowSubgraphStackEntry>) => Array<WorkflowSubgraphStackEntry>),
     ) => {
       setSubgraphStack((prev) => {
         const next = typeof updater === "function" ? updater(prev) : updater;

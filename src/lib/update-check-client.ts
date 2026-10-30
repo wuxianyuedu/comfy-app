@@ -9,7 +9,7 @@ export interface UpdateGroup {
   label: string;
   hint: string;
   /** 相对仓库根的文件路径（改动或删除） */
-  files: string[];
+  files: Array<string>;
   dirty: boolean;
 }
 
@@ -18,7 +18,7 @@ export interface UpdateCheckPayload {
   /** 基线是否已建立；首轮请求前为 false（前端应跳过，不做任何提示） */
   armed: boolean;
   dirty: boolean;
-  groups: UpdateGroup[];
+  groups: Array<UpdateGroup>;
 }
 
 const EMPTY: UpdateCheckPayload = {

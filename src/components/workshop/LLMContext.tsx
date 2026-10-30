@@ -15,11 +15,11 @@ import { SelectChip } from "~/components/ui/select-chip";
 interface LLMContextValue {
   config: LLMConfigView | null;
   /** 静态配置下的本地候选模型名（工坊下拉「本地」组读它，不实时探测）。 */
-  localModels: string[];
+  localModels: Array<string>;
   /** 静态配置下的远端独立模型名（工坊下拉「远端」组读它，不实时探测）。 */
-  remoteModels: string[];
+  remoteModels: Array<string>;
   /** 静态配置下的远端生图模型名（kind=image，定妆照远端通道挑选用）。 */
-  remoteImageModels: string[];
+  remoteImageModels: Array<string>;
   loading: boolean;
   settingsOpen: boolean;
   openSettings: () => void;

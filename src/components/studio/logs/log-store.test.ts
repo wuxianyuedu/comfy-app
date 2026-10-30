@@ -91,7 +91,7 @@ function resetStore() {
    * 重置会导致不同用例造出同名条目（时间线去重会误判成重复行）。 */
 }
 
-function idsOf(entries: LogEntry[]): (string | undefined)[] {
+function idsOf(entries: Array<LogEntry>): Array<string | undefined> {
   return entries.map((e) => e.id);
 }
 
@@ -559,7 +559,7 @@ describe("时间线在上限内不裁剪（分页可翻历史）", () => {
     /* 夹具的 seq 跨用例共享且单调递增：先造 1995 条「旧」的、再造 10 条
      * 「新」的，两批的时间戳与 seq 都天然有序。 */
     const baseSeq = seq;
-    const oldLogs: LogEntry[] = Array.from({ length: 1995 }, (_, i) =>
+    const oldLogs: Array<LogEntry> = Array.from({ length: 1995 }, (_, i) =>
       makeEntry({
         id: `old-${i}`,
         message: `old-${i}`,
@@ -569,7 +569,7 @@ describe("时间线在上限内不裁剪（分页可翻历史）", () => {
     );
     seq = baseSeq + 1995;
     useLogStore.setState({ logs: oldLogs });
-    const fresh: LogEntry[] = Array.from({ length: 10 }, (_, i) =>
+    const fresh: Array<LogEntry> = Array.from({ length: 10 }, (_, i) =>
       makeEntry({
         id: `new-${i}`,
         message: `new-${i}`,
@@ -589,7 +589,7 @@ describe("时间线在上限内不裁剪（分页可翻历史）", () => {
   });
 
   it("addEntry 只追加、不挤出旧行", () => {
-    const oldLogs: LogEntry[] = Array.from({ length: 2001 }, (_, i) =>
+    const oldLogs: Array<LogEntry> = Array.from({ length: 2001 }, (_, i) =>
       makeEntry({ id: `old-${i}`, time: i, seq: i - 2001 }),
     );
     useLogStore.setState({ logs: oldLogs });
@@ -638,7 +638,7 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
     const baseSeq = seq;
     /* 不用 makeEntry：它会递增共享计数器并**覆盖**这里显式给出的 seq，
      * 让「时间线里谁在前谁在后」变得不可预测（用例要的是确定性顺序）。 */
-    const full: LogEntry[] = Array.from({ length: 2000 }, (_, i) => ({
+    const full: Array<LogEntry> = Array.from({ length: 2000 }, (_, i) => ({
       id: `full-${i}`,
       message: `full-${i}`,
       time: 1_700_000_000_000 + i,
@@ -712,7 +712,7 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
     const baseline = useLogStore.getState().followBaseline;
 
     const baseSeq = seq;
-    const overflow: LogEntry[] = Array.from({ length: 5 }, (_, i) =>
+    const overflow: Array<LogEntry> = Array.from({ length: 5 }, (_, i) =>
       makeEntry({
         id: `ov-${i}`,
         message: `ov-${i}`,
@@ -788,7 +788,7 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
 
 describe("computeFiltered 级别过滤与搜索", () => {
   function seedFixture() {
-    const fixture: LogEntry[] = [
+    const fixture: Array<LogEntry> = [
       makeEntry({
         id: "e1",
         level: "info",
@@ -975,7 +975,7 @@ describe("日志分类开关过滤", () => {
       "all",
       "",
       "all",
-      /* SAFETY: 类型断言已复核 */ ["app"] as LogCategoryFilter[],
+      /* SAFETY: 类型断言已复核 */ ["app"] as Array<LogCategoryFilter>,
     );
     expect(idsOf(open)).toEqual(["x1", "x2"]);
     expect(idsOf(hidden)).toEqual(["x1"]);
@@ -2308,7 +2308,7 @@ describe("内存上限 LOG_STORE_MAX：时间线折叠更旧行 + droppedTotal �
 describe("时间线去重索引：跨轮复用（ISSUE #1869 性能轮次）", () => {
   it("索引复用版与「每轮重建」在整段序列上逐字一致", () => {
     // 混入乱序时刻、同秒副本行、跨来源同一行，把去重两条规则都走到
-    const freshBatches: LogEntry[][] = [
+    const freshBatches: Array<Array<LogEntry>> = [
       [entry("a", 300)],
       [entry("b", 100)],
       [
@@ -2320,7 +2320,7 @@ describe("时间线去重索引：跨轮复用（ISSUE #1869 性能轮次）", (
     ];
 
     // 路径①：索引复用
-    let reused: LogEntry[] = [];
+    let reused: Array<LogEntry> = [];
     let index = buildTimelineIndex(reused);
     for (const batch of freshBatches) {
       const out = mergeTimelineIndexed(reused, batch, index);
@@ -2329,7 +2329,7 @@ describe("时间线去重索引：跨轮复用（ISSUE #1869 性能轮次）", (
     }
 
     // 路径②：每轮从零重建（等价对照）
-    let rebuilt: LogEntry[] = [];
+    let rebuilt: Array<LogEntry> = [];
     for (const batch of freshBatches) {
       rebuilt = mergeTimeline(rebuilt, batch);
     }

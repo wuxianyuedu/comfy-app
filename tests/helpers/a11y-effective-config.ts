@@ -50,19 +50,19 @@ export const REAL_ROOT = path.resolve(__dirname, "../..");
 /** 判据的导出面（`scripts/check-a11y-rules.cjs` 的 `module.exports`）。 */
 /** 判据归一的台账形状（`readLedger` 的产物，也是 `judge` 的入参）。 */
 export interface Ledger {
-  dialect: { rule: string; decision: string; why: string; keeper: string }[];
-  inlineExemptions: {
+  dialect: Array<{ rule: string; decision: string; why: string; keeper: string }>;
+  inlineExemptions: Array<{
     rule: string;
     file: string;
     why: string;
     keeper: string;
-  }[];
+  }>;
 }
 
 /** `judge()` 的判决结果（bin 形态再把它翻成退出码）。 */
 export interface JudgeVerdict {
   /** 问题清单（空 = 通过）。 */
-  problems: string[];
+  problems: Array<string>;
   /** 那句一行汇总。 */
   summary: string;
   /** 生效的 jsx-a11y 规则表（`--report` 那一支要逐条打印它）。 */
@@ -77,7 +77,7 @@ export interface A11yJudgeModule {
   /** 规则档位的归一（`"error"` 与 `["error"]` 同义、`["error", 5]` 不同）。 */
   normalize: (setting: unknown) => string;
   /** 读一次真的 `eslint.config.js`（扁平配置数组）。 */
-  loadEslintConfig: () => Promise<unknown[]>;
+  loadEslintConfig: () => Promise<Array<unknown>>;
   /** 生效的 jsx-a11y 规则表（规则名 → 档位）。 */
   effectiveRules: () => Promise<Record<string, unknown>>;
   /** 官方 recommended 的有效集合（去 off，带每条 options）。 */
@@ -85,7 +85,7 @@ export interface A11yJudgeModule {
   /** 插件全部规则 + 废弃标记。 */
   officialRuleMap: () => Promise<Map<string, { deprecated: boolean }>>;
   /** 官方两份配置都没提到的规则名。 */
-  rulesInNeitherConfig: () => Promise<string[]>;
+  rulesInNeitherConfig: () => Promise<Array<string>>;
   /** 本脚本对外公开的面（键 = 上面的函数名），用来核「导出面 ⇄ 执行者」。 */
   VERIFIED_SURFACES: Record<string, string>;
 }

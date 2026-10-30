@@ -10,13 +10,7 @@
  * • hooks/use-io-modes-commit.ts        IO 模式集合变更的落库编排
  * 过渡屏与画布浮层在 WorkflowEditorCanvasOverlays.tsx。 */
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  useNodesState,
-  useEdgesState,
-  useReactFlow,
-  type Node,
-  type Edge,
-} from "@xyflow/react";
+import { useNodesState, useEdgesState, useReactFlow, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "~/config/custom-nodes";
 import { SourceModal } from "../SourceModal";
@@ -116,11 +110,7 @@ export function WorkflowEditorInner({
   }));
   return (
     <WFStoresProvider stores={stores}>
-      <WorkflowEditorBody
-        workflowId={workflowId}
-        onClose={onClose}
-        onSave={onSave}
-      />
+      <WorkflowEditorBody workflowId={workflowId} onClose={onClose} onSave={onSave} />
     </WFStoresProvider>
   );
 }
@@ -193,7 +183,7 @@ function WorkflowEditorBody({
   /* 子工作流导航栈。查看顶层工作流时为空。
    *  每一项是 {uid, name}，供面包屑显示；点某一级会退回到那一层。 */
   const [subgraphStack, setSubgraphStack] = useState<
-    { uid: string; name: string; nodeId: string }[]
+    Array<{ uid: string; name: string; nodeId: string }>
   >([]);
   /* 根工作流的显示名在**第一次**顶层拉取时记下，之后跨越子工作流导航一直保留，
    *  于是面包屑总能渲染成「<根工作流> / <子工作流 1> / <子工作流 2> …」。
@@ -287,18 +277,17 @@ function WorkflowEditorBody({
   /* 派生管线：raw meta / 按视图范围的详情 / 输出槽位名 / IO 富化数据源 /
    * 图节点；派生结果同时发布进 viewer / rgthree store
    * （详见 use-workflow-graph-derivation）。 */
-  const { scopeDetail, outSlotNameById, ioDetailMap, graphNodes } =
-    useWorkflowGraphDerivation({
-      detail,
-      paramMap,
-      onEnterSubgraph,
-      viewHostNodeId,
-      workflowId,
-      viewerApi,
-      rgthreeApi,
-      subgraphRawContext,
-      subgraphStackLength: subgraphStack.length,
-    });
+  const { scopeDetail, outSlotNameById, ioDetailMap, graphNodes } = useWorkflowGraphDerivation({
+    detail,
+    paramMap,
+    onEnterSubgraph,
+    viewHostNodeId,
+    workflowId,
+    viewerApi,
+    rgthreeApi,
+    subgraphRawContext,
+    subgraphStackLength: subgraphStack.length,
+  });
 
   /* ── 对外参数映射：编辑器不碰 ──
    *
@@ -320,7 +309,7 @@ function WorkflowEditorBody({
    * （`buildInitialNodes` / `buildEdges`）。对外参数卡片与其映射线已从编辑器移除
    * —— 它们会浮在图节点之上挡掉一片，且落点编辑已收敛到工作流库的「画布节点」
    * 页签（用户口径：「彻底不显示」）。 */
-  const initialNodes: Node[] = graphNodes;
+  const initialNodes: Array<Node> = graphNodes;
 
   /* 图或映射变化时同步节点与连线。useNodesState 只在挂载时取初始值，
    * 所以工作流详情异步到达（或作者改了某条线）时，
@@ -329,14 +318,7 @@ function WorkflowEditorBody({
     setNodes(initialNodes);
     /* 连线只有一种来源：工作流图自身的 `buildEdges`。 */
     setEdges(buildEdges(scopeDetail, graphNodes, outSlotNameById));
-  }, [
-    initialNodes,
-    graphNodes,
-    scopeDetail,
-    outSlotNameById,
-    setNodes,
-    setEdges,
-  ]);
+  }, [initialNodes, graphNodes, scopeDetail, outSlotNameById, setNodes, setEdges]);
 
   /* 视口贴合：自动聚焦的排程 / 收敛 / 「居中」出口收在
    * use-workflow-viewport-fit（聚焦路径的容器尺寸口径判据也随迁到那里）。 */
@@ -355,9 +337,7 @@ function WorkflowEditorBody({
     (_event: React.MouseEvent, edge: Edge) => {
       if (edge.deletable === true && edge.reconnectable === true) return;
       setEdges((eds) =>
-        eds.map((e) =>
-          e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e,
-        ),
+        eds.map((e) => (e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e)),
       );
     },
     [setEdges],
@@ -407,10 +387,7 @@ function WorkflowEditorBody({
   }
 
   return (
-    <FullScreenLayer
-      zClass={zClass("modal")}
-      className="bg-canvas flex flex-col pb-6"
-    >
+    <FullScreenLayer zClass={zClass("modal")} className="bg-canvas flex flex-col pb-6">
       {/* ── Top bar ── */}
       <WorkflowEditorTopBar
         onClose={onClose}
@@ -434,10 +411,7 @@ function WorkflowEditorBody({
         {subgraphLoading && <SubgraphLoadingOverlay />}
         {ioEditMode && <IoEditModeBanner />}
         {subgraphError && (
-          <SubgraphErrorToast
-            error={subgraphError}
-            onDismiss={() => setSubgraphError("")}
-          />
+          <SubgraphErrorToast error={subgraphError} onDismiss={() => setSubgraphError("")} />
         )}
         {/* IO 预览侧栏。渲染 CreatePanel / 画布工作流节点
          *  消费的同一个 DynamicWorkflowForm，数据来自**实时的**
@@ -512,10 +486,7 @@ function WorkflowEditorBody({
                 definitions.subgraphs[uid] 这一项
             关闭则清空 viewJsonOpen。 */}
         {viewJsonOpen && sourceModalData && (
-          <SourceModal
-            data={sourceModalData}
-            onClose={() => setViewJsonOpen(false)}
-          />
+          <SourceModal data={sourceModalData} onClose={() => setViewJsonOpen(false)} />
         )}
       </div>
     </FullScreenLayer>

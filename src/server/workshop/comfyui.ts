@@ -359,7 +359,7 @@ export function substitutePlaceholders(
 }
 
 export interface ComfyRunResult {
-  files: string[];
+  files: Array<string>;
 }
 
 /**
@@ -391,7 +391,7 @@ export async function runComfyWorkflow(
     | { outputs?: Record<string, unknown> }
     | undefined;
   const outputs = entry?.outputs ?? {};
-  const files: string[] = [];
+  const files: Array<string> = [];
   const outDir = outputDirForSession(opts?.sessionId);
   await fs.mkdir(outDir, { recursive: true });
   for (const nodeOut of Object.values(outputs)) {

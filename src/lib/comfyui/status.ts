@@ -151,7 +151,7 @@ function boundChildPid(): number | null {
 
 /** 从进程表里找「命令行含 main.py 的解释器」。仓库里三处启动路径的候选顺序
  *  一致（便携 → venv → 桌面 standalone-env），这里作为兜底再放宽一层。 */
-export function launcherCommandCandidates(pythonExe: string): string[] {
+export function launcherCommandCandidates(pythonExe: string): Array<string> {
   const dir = path.dirname(pythonExe);
   const exts = process.platform === "win32" ? ["pythonw.exe", "python.exe"] : ["pythonw", "python"];
   // 去重：便携版解释器本身就叫 python.exe，枚举结果与候选重复时不必查两遍。
@@ -347,7 +347,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   //    main.py（步骤 2 必然落空）；先试 setup 登记的启动器，再试解释器候选。
   const classify = classifyComfyInstall(comfyuiPath);
   const registered = readRegisteredLauncher(classify.instanceRoot ?? comfyuiPath);
-  const candidates: { cmd: string; via: string }[] = [];
+  const candidates: Array<{ cmd: string; via: string }> = [];
   if (registered) candidates.push({ cmd: registered, via: "setup 中登记的启动器" });
   if (!("error" in plan)) {
     for (const cmd of launcherCommandCandidates(plan.cmd)) {

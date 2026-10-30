@@ -53,14 +53,10 @@ const SIZE_PIN_NAME: Record<string, string> = {
 
 /** 作者画过的线（尺寸按形态连、其余连第一个候选）—— 落点只由作者画的线决定，
  *  没有线就是「未配置」，所以这里必须显式给（不再是自动判定）。 */
-function wiredFor(
-  list: { id: string; pins: { ioKey: string; name: string }[] }[],
-) {
+function wiredFor(list: Array<{ id: string; pins: Array<{ ioKey: string; name: string }> }>) {
   const out: Record<string, string> = {};
   for (const entry of list) {
-    const pin =
-      entry.pins.find((item) => item.name === SIZE_PIN_NAME[entry.id]) ??
-      entry.pins[0];
+    const pin = entry.pins.find((item) => item.name === SIZE_PIN_NAME[entry.id]) ?? entry.pins[0];
     if (pin) out[entry.id] = pin.ioKey;
   }
   return out;
@@ -69,30 +65,22 @@ function wiredFor(
 describe("WorkflowParamCardColumn", () => {
   it("每个对外参数一张卡片（尺寸的六行形态合成一张），卡片头是它的名字", () => {
     const { container } = render(
-      <WorkflowParamCardColumn
-        entries={entries}
-        resolved={wiredFor(entries)}
-        io={io}
-      />,
+      <WorkflowParamCardColumn entries={entries} resolved={wiredFor(entries)} io={io} />,
     );
     for (const entry of entries) {
       /* 尺寸：六行形态共用一张卡（`param-node-size`），下面单独断言。 */
       if (SIZE_SUB_IDS.includes(entry.cls)) continue;
-      const card = container.querySelector(
-        `[data-testid="param-node-${entry.id}"]`,
-      );
+      const card = container.querySelector(`[data-testid="param-node-${entry.id}"]`);
       expect(card).toBeTruthy();
       /* 卡片头与端口行读的是同一个名字，所以按卡片作用域断言，不按全屏唯一文本查。 */
       expect(card!.textContent).toContain(entry.label);
     }
     /* 一张「尺寸」卡 + 卡内六行形态；六个子口不再各占一张卡。 */
-    expect(
-      container.querySelector('[data-testid="param-node-size"]'),
-    ).toBeTruthy();
+    expect(container.querySelector('[data-testid="param-node-size"]')).toBeTruthy();
     for (const [index, form] of SIZE_SUB_IDS.entries()) {
-      expect(
-        screen.getByTestId(`param-node-out-size-${index}`).textContent,
-      ).toContain(sizeSubLabel(form));
+      expect(screen.getByTestId(`param-node-out-size-${index}`).textContent).toContain(
+        sizeSubLabel(form),
+      );
     }
     for (const form of SIZE_SUB_IDS) {
       expect(screen.queryByTestId(`param-node-${form}`)).toBeNull();
@@ -122,9 +110,9 @@ describe("WorkflowParamCardColumn", () => {
     );
     /* 标题与端口行都用契约口清单的展示名；工作流里那个名字一处都不出现。 */
     expect(screen.getAllByText("提示词").length).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText("尺寸（比例 + 分辨率 / (百万像素 + 倍数)）").length,
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByText("尺寸（比例 + 分辨率 / (百万像素 + 倍数)）").length).toBeGreaterThan(
+      0,
+    );
     expect(screen.queryByText("工作流里的端口名")).toBeNull();
   });
 
@@ -133,16 +121,10 @@ describe("WorkflowParamCardColumn", () => {
      * 说的是同一件事（那一行已经写出落点名，还贴着端点圆点）。单端口条目因此
      * 不再在行尾重复标注 —— 只留端口自己的类型。 */
     const { container } = render(
-      <WorkflowParamCardColumn
-        entries={entries}
-        resolved={wiredFor(entries)}
-        io={io}
-      />,
+      <WorkflowParamCardColumn entries={entries} resolved={wiredFor(entries)} io={io} />,
     );
     const promptCard = entries.find((entry) => entry.cls === "prompt")!;
-    const card = container.querySelector(
-      `[data-testid="param-node-${promptCard.id}"]`,
-    )!;
+    const card = container.querySelector(`[data-testid="param-node-${promptCard.id}"]`)!;
     expect(card.textContent).not.toContain("→ positive_prompt");
     /* 端口行只说「这个对外参数是什么、出去是什么类型」；**落到工作流的哪一行**
      *  退到行的 title 提示里可查（`ioKey`）—— 行上不写工作流内部键。 */
@@ -154,13 +136,7 @@ describe("WorkflowParamCardColumn", () => {
   });
 
   it("端口行显示对外参数自己的名字，落点 pin 名只在 title 里可查", () => {
-    render(
-      <WorkflowParamCardColumn
-        entries={entries}
-        resolved={wiredFor(entries)}
-        io={io}
-      />,
-    );
+    render(<WorkflowParamCardColumn entries={entries} resolved={wiredFor(entries)} io={io} />);
     /* 尺寸合成一张卡：行 = 形态（「尺寸 · 高度」）；ComfyUI 内部的 pin 名
      * （`height`）不落在行文字上，只作为「落到哪一行」的提示留在 title。 */
     const row = screen.getByTestId("param-node-out-size-1");
@@ -170,23 +146,13 @@ describe("WorkflowParamCardColumn", () => {
   });
 
   it("卡片带**有类型**的输出端口（提示词 → STRING）—— ISSUE #355 复审", () => {
-    render(
-      <WorkflowParamCardColumn
-        entries={entries}
-        resolved={wiredFor(entries)}
-        io={io}
-      />,
-    );
+    render(<WorkflowParamCardColumn entries={entries} resolved={wiredFor(entries)} io={io} />);
     const promptCard = entries.find((entry) => entry.cls === "prompt")!;
-    expect(
-      screen.getByTestId(`param-node-out-type-${promptCard.id}-0`).textContent,
-    ).toBe("STRING");
+    expect(screen.getByTestId(`param-node-out-type-${promptCard.id}-0`).textContent).toBe("STRING");
     /* 尺寸合成一张卡后，类型**恒为该形态自己的类型**、不随落点变（用户口径：
      *  「尺寸上是什么类型就显示什么类型，不要跟连接的参数类型变换」）——
      *  第 2 行是「尺寸 · 高度」，即使它连到 INT 的 height 那一格，也显示 FLOAT。 */
-    expect(screen.getByTestId("param-node-out-type-size-1").textContent).toBe(
-      "FLOAT",
-    );
+    expect(screen.getByTestId("param-node-out-type-size-1").textContent).toBe("FLOAT");
   });
 
   it("每张卡片右侧有一颗小圆点端点（可与宿主卡片上的参数相连）", () => {
@@ -200,10 +166,7 @@ describe("WorkflowParamCardColumn", () => {
         resolved={wiredFor(entries)}
         io={io}
         endpoint={(port) => (
-          <span
-            data-testid="probe-endpoint"
-            data-endpoint-handle={port.handleId}
-          />
+          <span data-testid="probe-endpoint" data-endpoint-handle={port.handleId} />
         )}
       />,
     );
@@ -250,11 +213,9 @@ describe("WorkflowParamCardColumn", () => {
       />,
     );
     for (const cardId of ["prompt", "negative"]) {
-      const card = container.querySelector(
-        `[data-testid="param-node-${cardId}"]`,
-      )!;
-      const handles = [...card.querySelectorAll("[data-endpoint-handle]")].map(
-        (el) => el.getAttribute("data-endpoint-handle"),
+      const card = container.querySelector(`[data-testid="param-node-${cardId}"]`)!;
+      const handles = [...card.querySelectorAll("[data-endpoint-handle]")].map((el) =>
+        el.getAttribute("data-endpoint-handle"),
       );
       /* 一个口一颗点：每张卡一颗，锚点就是它自己的条目 id —— 两卡不再共用候选 id。 */
       expect(handles, `${cardId} 卡应有一颗端点`).toEqual([cardId]);
@@ -283,12 +244,8 @@ describe("WorkflowParamCardColumn", () => {
   });
 
   it("库里没有对外参数时不渲染卡片列", () => {
-    const { container } = render(
-      <WorkflowParamCardColumn entries={[]} resolved={{}} io={io} />,
-    );
-    expect(
-      container.querySelector('[data-testid="workflow-param-card-column"]'),
-    ).toBeNull();
+    const { container } = render(<WorkflowParamCardColumn entries={[]} resolved={{}} io={io} />);
+    expect(container.querySelector('[data-testid="workflow-param-card-column"]')).toBeNull();
   });
 });
 
@@ -300,8 +257,6 @@ describe("ParamOwnerTag", () => {
 
   it("没有归属时不渲染任何东西", () => {
     const { container } = render(<ParamOwnerTag />);
-    expect(
-      container.querySelector('[data-testid="wflib-param-owner"]'),
-    ).toBeNull();
+    expect(container.querySelector('[data-testid="wflib-param-owner"]')).toBeNull();
   });
 });

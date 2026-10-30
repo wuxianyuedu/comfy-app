@@ -242,9 +242,9 @@ const PURE_NODE_HOSTS = [
 ];
 
 type Report = {
-  unguarded: string[];
-  libOnlyReachable: { module: string; chain: string[] }[];
-  clientReachable: { module: string; chain: string[] }[];
+  unguarded: Array<string>;
+  libOnlyReachable: Array<{ module: string; chain: Array<string> }>;
+  clientReachable: Array<{ module: string; chain: Array<string> }>;
   counts: Record<string, number>;
 };
 

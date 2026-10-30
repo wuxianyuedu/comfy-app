@@ -208,7 +208,7 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
   const hook = (): string => readFileSync(join(REPO_ROOT, ".githooks", "pre-commit"), "utf8");
 
   /** D 组步骤 = `  run "<标签>" <命令>`（与同族用例同款解析，不许 toContain）。 */
-  const steps = (): { label: string; cmd: string }[] =>
+  const steps = (): Array<{ label: string; cmd: string }> =>
     [...hook().matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
       label: m[1] ?? "",
       cmd: m[2] ?? "",
@@ -274,7 +274,7 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
  */
 describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", () => {
   /** 在**真仓库根**跑判据（不经临时区）。 */
-  const runInRepo = (args: string[] = []): string =>
+  const runInRepo = (args: Array<string> = []): string =>
     execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME), ...args], {
       cwd: REPO_ROOT,
       encoding: "utf8",
@@ -285,7 +285,7 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
    * 门禁链「步骤位置」里出现的 `scripts/<x>` basename（三个来源，与判据同口径）。
    * 只读步骤位置、不读全文 —— 全文会把散文里的 `x.cjs` 占位符也带进来。
    */
-  const chainScripts = (): string[] => {
+  const chainScripts = (): Array<string> => {
     const out = new Set<string>();
     const collect = (text: string): void => {
       for (const mm of text.matchAll(/scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g)) {
@@ -567,7 +567,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     // 而那些正是入口那一层的执行者来源 —— 这里要证的是「此刻这份账对得上」。
     const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
-    ) as { entrypoints?: Record<string, Array<{ flags?: string[] }>> };
+    ) as { entrypoints?: Record<string, Array<{ flags?: Array<string> }>> };
     const entrypoints = ledger.entrypoints ?? {};
     const forms = Object.values(entrypoints).reduce((n, list) => n + list.length, 0);
     expect(forms, "入口这层一条都没登记，就是 #2530 没办").toBeGreaterThan(0);
@@ -597,7 +597,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     expect(code).toBe(0);
     const after = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(join(repo.dir, "scripts", ".gate-executor-ledger.json"), "utf8"),
-    ) as { entrypoints?: Record<string, unknown[]> };
+    ) as { entrypoints?: Record<string, Array<unknown>> };
     expect(after.entrypoints?.[PROBE]?.length, "--update 之后入口条目必须原样还在").toBe(2);
   });
 

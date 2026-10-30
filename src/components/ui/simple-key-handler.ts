@@ -76,7 +76,7 @@ export interface SimpleKeyHandlerOptions {
  *  e.key === " ") { e.preventDefault(); onSelect(id); } }}`。
  */
 export function simpleKeyHandler(
-  keys: readonly string[],
+  keys: ReadonlyArray<string>,
   action: SimpleKeyAction,
   { preventDefault = true, ignoreRepeat = true }: SimpleKeyHandlerOptions = {},
 ): { onKeyDown: (event: SimpleKeyEvent) => void } {

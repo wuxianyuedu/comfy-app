@@ -41,7 +41,7 @@ export interface PendingRestore {
 }
 
 export interface UseSettingsBackup {
-  backups: BackupEntry[];
+  backups: Array<BackupEntry>;
   pending: PendingRestore | null;
   /** 备份清单首次加载完成前为 true（视图据此避免把「还没读到」当「一份都没有」）。 */
   loading: boolean;

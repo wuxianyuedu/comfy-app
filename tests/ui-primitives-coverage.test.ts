@@ -99,7 +99,7 @@ const REQUIRED_CONSUMERS: Record<string, string> = {
 };
 
 /** 逐文件收集业务侧（非 ui/ 自身、非测试）的 import 说明符。 */
-function collectImports(dir: string, out: string[] = []): string[] {
+function collectImports(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
@@ -123,9 +123,9 @@ function collectImports(dir: string, out: string[] = []): string[] {
  * （实测出现过一次「Test timed out」的 flake，重跑即过：是成本问题，不是判据问题）。
  * 快照只读一次，判据一个字没改。
  */
-let businessSnapshot: { rel: string; text: string }[] | null = null;
+let businessSnapshot: Array<{ rel: string; text: string }> | null = null;
 
-function businessSources(): { rel: string; text: string }[] {
+function businessSources(): Array<{ rel: string; text: string }> {
   businessSnapshot ??= collectImports(SRC)
     .map((abs) => ({
       rel: relative(SRC, abs).split(sep).join("/"),

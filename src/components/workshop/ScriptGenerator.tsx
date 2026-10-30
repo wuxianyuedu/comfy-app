@@ -26,7 +26,7 @@ interface Props {
   onScriptChange: (markdown: string) => void;
 }
 
-const PROJECT_TYPES: ProjectType[] = [
+const PROJECT_TYPES: Array<ProjectType> = [
   "short_video",
   "micro_film",
   "animation",

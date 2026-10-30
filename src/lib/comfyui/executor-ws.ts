@@ -260,7 +260,7 @@ function scheduleReconnect() {
 const unownedFrameTypes = new Set<string>();
 const UNOWNED_FRAME_TYPE_MAX = 32;
 
-function noteUnownedFrame(type: string, dataKeys: string[]): void {
+function noteUnownedFrame(type: string, dataKeys: Array<string>): void {
   if (unownedFrameTypes.has(type)) return;
   if (unownedFrameTypes.size >= UNOWNED_FRAME_TYPE_MAX) return;
   unownedFrameTypes.add(type);

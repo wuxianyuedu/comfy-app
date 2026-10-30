@@ -13,7 +13,7 @@ afterEach(cleanup);
  *      `bg-emerald-400` / `bg-amber-400` / `bg-rose-400`）；
  *   ③ `pulse` 只在传的时候出现（`animate-pulse` 是 P3 判据的计数对象）。
  */
-const STATES: StatusDotState[] = ["up", "busy", "probing", "down"];
+const STATES: Array<StatusDotState> = ["up", "busy", "probing", "down"];
 
 function dotOf(props: Parameters<typeof StatusDot>[0]): HTMLElement {
   const { container } = render(<StatusDot {...props} />);

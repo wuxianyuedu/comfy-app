@@ -54,7 +54,7 @@ export function deriveComfyuiSubdir(
  *  只有旧源码布局才是 `<root>/workflows`：只认后者时，明明配好了 ComfyUI 路径
  *  却一个本地工作流都扫不到，而扫描器把「根不存在」当「没有工作流」，界面上
  *  完全看不出原因。 */
-const COMFYUI_WORKFLOW_SUBDIRS: readonly (readonly string[])[] = [
+const COMFYUI_WORKFLOW_SUBDIRS: ReadonlyArray<ReadonlyArray<string>> = [
   ["user", "default", "workflows"],
   ["workflows"],
 ];

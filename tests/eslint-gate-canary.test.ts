@@ -45,7 +45,7 @@ const CANARY = "scripts/eslint-gate-canary.mjs";
  * 不给「受影响用例」格再添一个重夹具（同族教训见 ISSUE #2606）。 */
 const CASE_TIMEOUT = 600_000;
 
-function runCanary(args: string[] = []) {
+function runCanary(args: Array<string> = []) {
   return spawnSync(process.execPath, [CANARY, ...args], {
     cwd: ROOT,
     encoding: "utf8",
@@ -54,22 +54,34 @@ function runCanary(args: string[] = []) {
 }
 
 describe("scripts/eslint-gate-canary.mjs", () => {
-  it("本仓开着的那几条规则真的会拦下违例（全仓 0 警 ≠ 闸在工作）", () => {
-    const r = runCanary();
-    expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(0);
-    const n = Number(/samples=(\d+)/.exec(r.stdout ?? "")?.[1] ?? "0");
-    // 样本被删空却还退 0，是这条判据自己的失效形态（恒绿）
-    expect(n, `样本数不达标，实际：${r.stdout ?? ""}`).toBeGreaterThanOrEqual(11);
-  }, CASE_TIMEOUT);
+  it(
+    "本仓开着的那几条规则真的会拦下违例（全仓 0 警 ≠ 闸在工作）",
+    () => {
+      const r = runCanary();
+      expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(0);
+      const n = Number(/samples=(\d+)/.exec(r.stdout ?? "")?.[1] ?? "0");
+      // 样本被删空却还退 0，是这条判据自己的失效形态（恒绿）
+      expect(n, `样本数不达标，实际：${r.stdout ?? ""}`).toBeGreaterThanOrEqual(11);
+    },
+    CASE_TIMEOUT,
+  );
 
-  it("闸会红：临时关掉一条在守的规则 ⇒ 必须非零退出（恒绿的对照不是对照）", () => {
-    const r = runCanary(["--sabotage", "unicorn/no-new-array"]);
-    expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(1);
-    expect(`${r.stderr ?? ""}${r.stdout ?? ""}`).toContain("unicorn/no-new-array");
-  }, CASE_TIMEOUT);
+  it(
+    "闸会红：临时关掉一条在守的规则 ⇒ 必须非零退出（恒绿的对照不是对照）",
+    () => {
+      const r = runCanary(["--sabotage", "unicorn/no-new-array"]);
+      expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(1);
+      expect(`${r.stderr ?? ""}${r.stdout ?? ""}`).toContain("unicorn/no-new-array");
+    },
+    CASE_TIMEOUT,
+  );
 
-  it("闸门不误伤：关掉一条不相干的规则 ⇒ 其余对照照旧命中（退 0）", () => {
-    const r = runCanary(["--sabotage", "no-console"]);
-    expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(0);
-  }, CASE_TIMEOUT);
+  it(
+    "闸门不误伤：关掉一条不相干的规则 ⇒ 其余对照照旧命中（退 0）",
+    () => {
+      const r = runCanary(["--sabotage", "no-console"]);
+      expect(r.status, `stdout=${r.stdout ?? ""}\nstderr=${r.stderr ?? ""}`).toBe(0);
+    },
+    CASE_TIMEOUT,
+  );
 });

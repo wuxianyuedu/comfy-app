@@ -46,11 +46,11 @@ const FIXTURE_CONFIG = {
   exclude: ["node_modules"],
 };
 
-const created: string[] = [];
+const created: Array<string> = [];
 let fixture = "";
 
 /** 起真脚本（与 `runCheck` 同一条口径：子进程 + 原样退出码 + 两端输出都收回来）。 */
-function runCheck(args: string[], root = fixture): { code: number; output: string } {
+function runCheck(args: Array<string>, root = fixture): { code: number; output: string } {
   try {
     const output = execFileSync(process.execPath, [CHECK, ...args], {
       cwd: REPO_ROOT,
@@ -238,7 +238,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
    * 用例自己走一遍盘（与判据的「TS glob 引擎展开」是两套独立实现）——
    * 只在一套上对账等于让被测件自己给自己打分。
    */
-  function walkMjs(dir: string, out: string[]): string[] {
+  function walkMjs(dir: string, out: Array<string>): Array<string> {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const abs = join(dir, e.name);
       const rel = abs.slice(REPO_ROOT.length + 1).replace(/\\/g, "/");
@@ -259,7 +259,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
    * 「谁新加了一份没记账」还是「磁盘上多了一份没入库的产物」—— 而这两者的修法相反
    * （前者记账、后者归到 exclude 或删掉）。ISSUE #2572 撞的就是第二种形态。
    */
-  function driftReading(face: string[]): string {
+  function driftReading(face: Array<string>): string {
     let tracked: Set<string>;
     try {
       tracked = new Set(
@@ -288,16 +288,19 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     ) as {
       configFace: (ts: unknown) => {
         ok: boolean;
-        mjs?: string[];
-        excludes?: string[];
+        mjs?: Array<string>;
+        excludes?: Array<string>;
         reason?: string;
       };
-      diskFace: (list: string[], excludes: string[]) => { all: string[]; missed: string[] };
+      diskFace: (
+        list: Array<string>,
+        excludes: Array<string>,
+      ) => { all: Array<string>; missed: Array<string> };
       trackedMjs: (root: string) => Set<string> | null;
       splitTrackedFace: (
-        mjs: string[],
+        mjs: Array<string>,
         tracked: Set<string> | null,
-      ) => { face: string[]; untracked: string[]; filtered: boolean };
+      ) => { face: Array<string>; untracked: Array<string>; filtered: boolean };
     };
     /* `require("typescript")` 的返回是 `any` —— 这里只把它当**不透明句柄**交给判据
      * （判据那边只调 `readConfigFile` / `parseJsonConfigFileContent` 两件事），
@@ -354,9 +357,9 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
   const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {
     trackedMjs: (root: string) => Set<string> | null;
     splitTrackedFace: (
-      mjs: string[],
+      mjs: Array<string>,
       tracked: Set<string> | null,
-    ) => { face: string[]; untracked: string[]; filtered: boolean };
+    ) => { face: Array<string>; untracked: Array<string>; filtered: boolean };
   };
 
   it("求交给出两侧；取不到 git 清单时明写「没筛」而不是「都不算」", () => {
@@ -372,7 +375,7 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
   });
 
   it("真 git 夹具：未入库那份被点名、不进面、它的红也不记账；提交之后就进账", () => {
-    const git = (args: string[], cwd: string) =>
+    const git = (args: Array<string>, cwd: string) =>
       execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     const repo = mkdtempSync(join(tmpdir(), "2681-repo-"));
     rmSync(repo, { recursive: true, force: true });

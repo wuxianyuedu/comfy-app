@@ -50,12 +50,7 @@ function args() {
   };
 }
 
-function refusal(
-  id: string,
-  name: string,
-  message: string,
-  code = "FORBIDDEN",
-): void {
+function refusal(id: string, name: string, message: string, code = "FORBIDDEN"): void {
   recordSyncFailure(
     "这份画布没能存进服务端",
     { id, name },
@@ -79,10 +74,8 @@ afterEach(() => {
 /** 登记表是模块级单例（它的语义就是「这一页还活着的拒收」），用例之间会互相看见。
  *  所以断言一律按**本用例那条画布的名字**筛调用，而不是比全局次数 ——
  *  比次数会把「上一条用例留的记录在挂载时被读出来」算成这条用例的失败。 */
-function errorCallsMentioning(name: string): unknown[][] {
-  return toast.error.mock.calls.filter((call) =>
-    String(call[0]).includes(name),
-  );
+function errorCallsMentioning(name: string): Array<Array<unknown>> {
+  return toast.error.mock.calls.filter((call) => String(call[0]).includes(name));
 }
 
 describe("镜像被拒的提示", () => {
@@ -109,9 +102,7 @@ describe("镜像被拒的提示", () => {
   });
 
   it("挂载之后新出现的拒收靠广播提示，同一条原因不重复刷屏", () => {
-    const { rerender, unmount } = renderHook(() =>
-      useProjectPersistence(args()),
-    );
+    const { rerender, unmount } = renderHook(() => useProjectPersistence(args()));
     expect(errorCallsMentioning("乙板")).toHaveLength(0);
 
     refusal("proj_toast_b", "乙板", "该项目 id 已属于其他用户");
@@ -127,9 +118,7 @@ describe("镜像被拒的提示", () => {
   });
 
   it("说法变了要再说一次（同一条画布换了另一种拒收原因）", () => {
-    const { rerender, unmount } = renderHook(() =>
-      useProjectPersistence(args()),
-    );
+    const { rerender, unmount } = renderHook(() => useProjectPersistence(args()));
     refusal("proj_toast_c", "丙板", "该项目 id 已属于其他用户");
     rerender();
     expect(errorCallsMentioning("丙板")).toHaveLength(1);

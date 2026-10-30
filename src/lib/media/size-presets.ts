@@ -28,7 +28,7 @@ export interface SizeRatioPreset {
  *  类型是**非空数组**（`[T, ...T[]]`）：首项即默认档，各处「`find` 没命中就
  *  回退首档」的写法靠它直接拿到 `T`，不必再补 `as T` / `!`
  *  （`noUncheckedIndexedAccess` 下普通 `T[]` 的 `[0]` 恒为 `T | undefined`）。 */
-export const SIZE_RATIO_PRESETS: [SizeRatioPreset, ...SizeRatioPreset[]] = [
+export const SIZE_RATIO_PRESETS: [SizeRatioPreset, ...Array<SizeRatioPreset>] = [
   { label: "1:1 正方", ratio: 1 },
   { label: "4:3", ratio: 4 / 3 },
   { label: "3:2", ratio: 3 / 2 },
@@ -352,7 +352,7 @@ export interface SizeClarityPreset {
 
 /** 清晰度档位目录。类型是非空数组，同 {@link SIZE_RATIO_PRESETS}
  *  ——首项即默认档，调用点不必再补 `!`。 */
-export const SIZE_CLARITY_PRESETS: [SizeClarityPreset, ...SizeClarityPreset[]] = [
+export const SIZE_CLARITY_PRESETS: [SizeClarityPreset, ...Array<SizeClarityPreset>] = [
   {
     kind: "resolution",
     label: RESOLUTION_TIERS[0],
@@ -690,7 +690,7 @@ export function toSizeSpec(raw: unknown): SizeSpec {
 export function aspectLabelForDims(
   width: number,
   height: number,
-  options?: readonly string[],
+  options?: ReadonlyArray<string>,
 ): string | null {
   if (!(width > 0) || !(height > 0)) return null;
   const target = width / height;

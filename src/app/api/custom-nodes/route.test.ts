@@ -30,11 +30,11 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { customNodesManifestPath } from "~/lib/comfyui/custom-nodes-manifest.server";
 import { pythonCandidates } from "~/lib/process/python-candidates";
 
-type Cb = (...args: unknown[]) => void;
+type Cb = (...args: Array<unknown>) => void;
 interface FakeChild {
-  proc: Record<string, Cb[]>;
-  out: Record<string, Cb[]>;
-  err: Record<string, Cb[]>;
+  proc: Record<string, Array<Cb>>;
+  out: Record<string, Array<Cb>>;
+  err: Record<string, Array<Cb>>;
 }
 
 /**
@@ -161,18 +161,18 @@ const MANIFEST = customNodesManifestPath();
 const REPORT = path.join(process.cwd(), "src/generated/customNodes.report.json");
 
 /** 每次 spawn 记录的 argv 与假子进程的事件袋（按调用顺序）。 */
-const children: FakeChild[] = [];
+const children: Array<FakeChild> = [];
 /** 下一批假子进程要吐的 stdout；空串 = 「这个解释器没结果」，用于换解释器的路径。 */
 let nextStdout = "";
 
 function installFakeChild() {
   spawnMock.mockImplementation(() => {
     const child: FakeChild = { proc: {}, out: {}, err: {} };
-    const reg = (bag: Record<string, Cb[]>) => (ev: string, cb: Cb) => {
+    const reg = (bag: Record<string, Array<Cb>>) => (ev: string, cb: Cb) => {
       (bag[ev] ??= []).push(cb);
     };
     // `spawnCapture` 会先 `setEncoding("utf8")` 再挂 data —— 假流必须两样都有。
-    const stream = (bag: Record<string, Cb[]>) => ({
+    const stream = (bag: Record<string, Array<Cb>>) => ({
       on: reg(bag),
       setEncoding: (): void => undefined,
       resume: (): void => undefined,
@@ -212,8 +212,8 @@ async function post(body: unknown) {
 }
 
 /** 取 argv（spawn 的第二个入参）。 */
-function argv(i = 0): string[] {
-  return /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[i]?.[1] as string[];
+function argv(i = 0): Array<string> {
+  return /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[i]?.[1] as Array<string>;
 }
 
 /**
@@ -286,8 +286,8 @@ describe("POST /api/custom-nodes —— 鉴权与请求体", () => {
     });
     expect(res.status).toBe(200);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      paths: string[];
-      localWorkflowPaths: string[];
+      paths: Array<string>;
+      localWorkflowPaths: Array<string>;
     };
     expect(body.paths).toEqual(["C:/ComfyUI/custom_nodes"]);
     expect(body.localWorkflowPaths).toEqual(["C:/ComfyUI/workflows"]);
@@ -463,7 +463,7 @@ describe("POST parse —— 解释器退避与收尾归属（台账 A14）", () 
      * 又抄一份顺序（POSIX 上根本没有 `py` 这一档，那条断言会莫名其妙地空过）。 */
     for (const [command, args] of spawnMock.mock.calls) {
       if (String(command) !== "py") continue;
-      expect(/* SAFETY: 类型断言已复核 */ (args as string[])[0]).toBe("-3");
+      expect(/* SAFETY: 类型断言已复核 */ (args as Array<string>)[0]).toBe("-3");
     }
   });
 });
@@ -581,7 +581,7 @@ function readsOf(p: string): number {
 }
 
 /** GET 的一次往返（流式形态会被读到底，返回按行解析出来的事件）。 */
-async function getEvents(): Promise<Record<string, unknown>[]> {
+async function getEvents(): Promise<Array<Record<string, unknown>>> {
   if (!armed) coldRoot();
   const res = await GET();
   expect(res.status).toBe(200);
@@ -589,7 +589,7 @@ async function getEvents(): Promise<Record<string, unknown>[]> {
   return eventsOf(res);
 }
 
-function eventOf(events: Record<string, unknown>[], type: string): Record<string, unknown> {
+function eventOf(events: Array<Record<string, unknown>>, type: string): Record<string, unknown> {
   const hit = events.find((e) => e.type === type);
   if (!hit) {
     throw new Error(`事件流里没有 ${type}，实到：[${events.map((e) => String(e.type)).join(",")}]`);
@@ -599,7 +599,7 @@ function eventOf(events: Record<string, unknown>[], type: string): Record<string
 
 /** 给假子进程排一批 stdout 行（逐行吐完再发 close），用于流式探测那几档。 */
 function scriptDiscover(
-  lines: string[],
+  lines: Array<string>,
   opts: { code?: number; spawnThrows?: boolean } = {},
 ): void {
   spawnMock.mockImplementationOnce(() => {
@@ -607,10 +607,10 @@ function scriptDiscover(
       throw Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" });
     }
     const child: FakeChild = { proc: {}, out: {}, err: {} };
-    const reg = (bag: Record<string, Cb[]>) => (ev: string, cb: Cb) => {
+    const reg = (bag: Record<string, Array<Cb>>) => (ev: string, cb: Cb) => {
       (bag[ev] ??= []).push(cb);
     };
-    const stream = (bag: Record<string, Cb[]>) => ({
+    const stream = (bag: Record<string, Array<Cb>>) => ({
       on: reg(bag),
       setEncoding: (): void => undefined,
     });
@@ -676,7 +676,7 @@ async function payloadOf(): Promise<Record<string, unknown>> {
 }
 
 /** 把流式响应读到底，按行解析成事件数组。 */
-async function eventsOf(res: Response): Promise<Record<string, unknown>[]> {
+async function eventsOf(res: Response): Promise<Array<Record<string, unknown>>> {
   const text = await res.text();
   return text
     .split("\n")
@@ -738,8 +738,8 @@ describe("GET 摘要：清单的六种坏法", () => {
     const summary = eventOf(events, "summary");
     expect(summary.summary).toBeNull();
     const settings = /* SAFETY: 类型断言已复核 */ summary.settings as {
-      paths: string[];
-      localWorkflowPaths: string[];
+      paths: Array<string>;
+      localWorkflowPaths: Array<string>;
     };
     // 两个伴随字段都得指向**同一个安装根**（对话框靠它们在同一屏里配对显示）。
     expect(settings.paths).toEqual([parent]);
@@ -1068,10 +1068,10 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
  */
 type ChildPlan = {
   /** 逐行吐（自动补 `\n`），与 `scriptDiscover` 同义。 */
-  lines?: string[];
+  lines?: Array<string>;
   /** 逐 chunk 原样吐（**不**补换行）—— 用来造「一行被切断」。 */
-  chunks?: string[];
-  errChunks?: string[];
+  chunks?: Array<string>;
+  errChunks?: Array<string>;
   /** 异步 `error` 事件（真机上缺解释器就是这一形）。给了它默认不再发 close。 */
   error?: { code: string; message?: string };
   closeCode?: number | null;
@@ -1082,10 +1082,10 @@ type ChildPlan = {
 function queueChild(plan: ChildPlan): void {
   spawnMock.mockImplementationOnce(() => {
     const child: FakeChild = { proc: {}, out: {}, err: {} };
-    const reg = (bag: Record<string, Cb[]>) => (ev: string, cb: Cb) => {
+    const reg = (bag: Record<string, Array<Cb>>) => (ev: string, cb: Cb) => {
       (bag[ev] ??= []).push(cb);
     };
-    const stream = (bag: Record<string, Cb[]>) => ({
+    const stream = (bag: Record<string, Array<Cb>>) => ({
       on: reg(bag),
       setEncoding: (): void => undefined,
       resume: (): void => undefined,
@@ -1098,7 +1098,7 @@ function queueChild(plan: ChildPlan): void {
       pid: 9,
     };
     children.push(child);
-    const fire = (bag: Record<string, Cb[]>, ev: string, arg: unknown): void => {
+    const fire = (bag: Record<string, Array<Cb>>, ev: string, arg: unknown): void => {
       for (const cb of bag[ev] ?? []) cb(arg);
     };
     /* 延后一拍：注册必须先于触发（与被测代码同步挂监听这一段配对）。 */
@@ -1141,7 +1141,10 @@ function msgOf(ev: Record<string, unknown>): string {
  * 不能取「第一条 progress」：外层流自己会先吐一条 `📂 [1/1] <扫描根>`，
  * 拿第一条会把外层那条当成解析器发来的进度（实测就是这四条一开始红的原因）。
  */
-function progressWith(events: Record<string, unknown>[], substr: string): Record<string, unknown> {
+function progressWith(
+  events: Array<Record<string, unknown>>,
+  substr: string,
+): Record<string, unknown> {
   const hit = events.find((e) => e.type === "progress" && msgOf(e).includes(substr));
   if (!hit) {
     throw new Error(
@@ -1153,7 +1156,7 @@ function progressWith(events: Record<string, unknown>[], substr: string): Record
 }
 
 /** 本次起的每个子进程用的是哪个解释器候选（按调用顺序）。 */
-function interpreterNames(): string[] {
+function interpreterNames(): Array<string> {
   return spawnMock.mock.calls.map((call) => String(call[0]));
 }
 
@@ -1296,9 +1299,10 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
       lines: [JSON.stringify({ packages: [{ name: "Old", path: "/tmp/a" }] }), ONE_PKG_LINE],
     });
     const events = await getEvents();
-    const packages = /* SAFETY: 类型断言已复核 */ eventOf(events, "discover_done").packages as {
+    const packages = /* SAFETY: 类型断言已复核 */ eventOf(events, "discover_done")
+      .packages as Array<{
       name: string;
-    }[];
+    }>;
     expect(packages.map((p) => p.name)).toEqual(["Foo"]);
   });
 

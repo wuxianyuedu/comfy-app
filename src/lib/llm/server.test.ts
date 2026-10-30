@@ -58,7 +58,7 @@ function jsonResponse(body: unknown, init: { status?: number; ok?: boolean } = {
 }
 
 /** 流式响应替身：按给定 chunk 逐次吐出 `reader.read()` 的结果。 */
-function streamResponse(chunks: string[]): Response {
+function streamResponse(chunks: Array<string>): Response {
   const encoder = new TextEncoder();
   let i = 0;
   return /* SAFETY: 类型断言已复核 */ {
@@ -461,7 +461,7 @@ describe("streamLLM（流式补全）", () => {
         'data: {"choices":[{"delta":{"content":"！"}}]}\n\n',
       ]),
     );
-    const tokens: string[] = [];
+    const tokens: Array<string> = [];
     const full = await streamLLM(CFG(), [], (t) => tokens.push(t));
     expect(tokens).toEqual(["你", "好", "！"]);
     expect(full).toBe("你好！");
@@ -550,7 +550,7 @@ describe("completeLLMTools（tools 协议）", () => {
         ],
       }),
     );
-    const tools: LLMTool[] = [
+    const tools: Array<LLMTool> = [
       {
         type: "function",
         function: { name: "search", description: "搜索" },

@@ -557,15 +557,15 @@ describe("closeIssues：回执不算结论，独立回读三件原值才算", ()
     stateReason?: string | null;
     closedAt?: string | null;
     body?: string;
-    merged?: { number: number; is_merged: boolean; title: string }[];
+    merged?: Array<{ number: number; is_merged: boolean; title: string }>;
     /** `--as-merged` 那条凭据 PR 的回读形状（ISSUE #2491）：`null` = 取不到（非 JSON）。 */
     pull?: { is_merged?: boolean; title?: string } | null;
   }) {
-    const calls: string[] = [];
-    const log: string[] = [];
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
     const json = (data: unknown) =>
       JSON.stringify({ status: 200, contentType: "application/json", data });
-    const run = (_cmd: string, args: string[]): FakeResult => {
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
       if (args[0] === "pulls" && args[1] === "get-pull") {
         if (opts.pull === null || opts.pull === undefined)
@@ -984,9 +984,9 @@ describe("#2491 --as-merged：凭据由人点名，合并与否仍由平台回�
   });
 
   it("`--as-merged` 没带 `--close-issue` ⇒ 退 2：它没有执行者，不能留一句沉默", async () => {
-    const calls: string[] = [];
-    const log: string[] = [];
-    const run = (cmd: string, args: string[]): FakeResult => {
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
+    const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       if (cmd === "cnb" && args[0] === "--version")
         return { status: 0, stdout: "1.15.25", stderr: "", error: null };
@@ -1113,9 +1113,9 @@ describe("#2199 pullTitleBody：先剥掉平台追加的 PR 尾数，再提号",
 });
 
 describe("#2199 findMergedPullProofs：只认 is_merged，先剥尾数再找号", () => {
-  function io(pages: unknown[][], opts: { fail?: boolean } = {}) {
-    const calls: string[] = [];
-    const run = (_c: string, args: string[]): FakeResult => {
+  function io(pages: Array<Array<unknown>>, opts: { fail?: boolean } = {}) {
+    const calls: Array<string> = [];
+    const run = (_c: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
       if (opts.fail) return { status: 9, stdout: "", stderr: "", error: null };
       const page = Number(args[args.indexOf("--page") + 1]);
@@ -1229,15 +1229,15 @@ describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问�
       branchStatus?: number;
     } = {},
   ) {
-    const calls: string[] = [];
-    const log: string[] = [];
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
     const ok = (stdout = "", status = 0): FakeResult => ({
       status,
       stdout,
       stderr: "",
       error: null,
     });
-    const run = (_cmd: string, args: string[]): FakeResult => {
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
       const key = args.join(" ");
       if (key.startsWith("rev-parse --short")) return ok("dead123");
@@ -1710,29 +1710,29 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
   function issueIo(
     opts: {
       state?: string;
-      labels?: string[];
-      comments?: string[];
+      labels?: Array<string>;
+      comments?: Array<string>;
       getIssueFails?: boolean;
       postCommentFails?: boolean;
       commentListFails?: boolean;
       writeExtraHandler?: string | null;
       listFails?: boolean;
-      listRows?: { number: number; priority: string; title: string }[];
-      pages?: { number: number; priority: string; title: string }[][];
+      listRows?: Array<{ number: number; priority: string; title: string }>;
+      pages?: Array<Array<{ number: number; priority: string; title: string }>>;
     } = {},
   ) {
     let state = opts.state ?? "open";
     let labels = [...(opts.labels ?? [])];
     const comments = [...(opts.comments ?? [])];
-    const calls: string[] = [];
-    const log: string[] = [];
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
     const json = (data: unknown) =>
       JSON.stringify({ status: 200, contentType: "application/json", data });
-    const arg = (args: string[], name: string) => {
+    const arg = (args: Array<string>, name: string) => {
       const i = args.indexOf(name);
       return i >= 0 ? String(args[i + 1] ?? "") : "";
     };
-    const run = (_cmd: string, args: string[]): FakeResult => {
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
       if (args[0] === "issues" && args[1] === "update-issue") {
         state = "closed";
@@ -1823,7 +1823,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
 
   const slug = "moon-read/comfy-app-t3";
   const handle = "yuedu-win";
-  const opts = (argv: string[]) => parseArgs(argv);
+  const opts = (argv: Array<string>) => parseArgs(argv);
 
   it("评论文案：第一行是粗体署名，正文那句人话在下面 —— 领取 / 结束各一条", () => {
     /* 尾部那个换行来自 `withCommentHeader` 的统一收口（正文类文字以换行结尾）；
@@ -2486,12 +2486,12 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
 });
 
 describe("reapCheckoutInstances：只收 via port 那批，session 那一档不归它收", () => {
-  type Live = { running?: boolean; pids?: number[]; via?: string | null };
+  type Live = { running?: boolean; pids?: Array<number>; via?: string | null };
 
   /** 「判据 + 执行者」的替身：`before` 是收尾那一格第一次读到的形状。 */
   function io(before: Live | null | Error, after: Live | null | Error, reapStatus = 0) {
-    const calls: string[] = [];
-    const log: string[] = [];
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
     let n = 0;
     const read = async (_root: string): Promise<Live> => {
       const one = n++ === 0 ? before : after;
@@ -2499,7 +2499,7 @@ describe("reapCheckoutInstances：只收 via port 那批，session 那一档不�
       if (one === null) throw new Error("判据返回了空形状");
       return one;
     };
-    const run = (_cmd: string, args: string[]) => {
+    const run = (_cmd: string, args: Array<string>) => {
       calls.push(args.join(" "));
       return {
         status: reapStatus,
@@ -2652,11 +2652,11 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
 
   function io(opts: {
     /** 每次 get-build-status 的 data.status；用完后重复最后一个。 */
-    statuses?: string[];
+    statuses?: Array<string>;
     /** 每次的 pipeline 计数（"0-1" 这种 `完成-总`），与 statuses 同长。 */
-    progress?: string[];
+    progress?: Array<string>;
     /** 每次的 stage 计数（"12/33" 这种 `完成/总`）；不给就造不出 stages 字段。 */
-    stageProgress?: string[];
+    stageProgress?: Array<string>;
     /** false = 列表里没有这条 sha（平台还没开跑）。 */
     found?: boolean;
     /** `pulls get-pull` 回读的 mergeable_state；不给则这一问回空（读不到）。 */
@@ -2664,10 +2664,10 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
     /** `pulls get-pull` 回读的 blocked_on。 */
     blockedOn?: string;
   }) {
-    const log: string[] = [];
-    const calls: string[] = [];
+    const log: Array<string> = [];
+    const calls: Array<string> = [];
     let i = 0;
-    const run = (_cmd: string, args: string[]): FakeResult => {
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
       if (args[1] === "get-build-logs") {
         const builds =
@@ -2705,35 +2705,35 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
           string,
           {
             status: string;
-            stages?: {
+            stages?: Array<{
               status: string;
               duration: number;
               name: string;
               id: string;
-            }[];
+            }>;
           }
         > = {};
         for (let p = 0; p < Number(total); p += 1) {
           const pipeline: {
             status: string;
-            stages?: {
+            stages?: Array<{
               status: string;
               duration: number;
               name: string;
               id: string;
-            }[];
+            }>;
           } = { status: p < Number(done) ? "success" : "running" };
           pipelinesStatus[`p${p}`] = pipeline;
           if (stage) {
             /* 只有第一条 pipeline 带 stages（与本仓的真实拓扑一致：一条流水线，
              * 里面几十格）。运行中那一格的 `duration` 是占位 0 —— 平台按格缓冲。 */
             const [sDone, sTotal] = stage.split("/");
-            const stages: {
+            const stages: Array<{
               status: string;
               duration: number;
               name: string;
               id: string;
-            }[] = [];
+            }> = [];
             for (let s = 0; s < Number(sTotal); s += 1) {
               stages.push({
                 status: s < Number(sDone) ? "success" : "start",
@@ -3047,8 +3047,8 @@ describe("被取消的那一跑：结论是「没有结论」，不是「CI 红�
   };
 
   function io() {
-    const log: string[] = [];
-    const run = (_cmd: string, args: string[]): FakeResult => {
+    const log: Array<string> = [];
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
       if (args[1] === "get-build-logs") {
         return ok(
           JSON.stringify({
@@ -3648,10 +3648,10 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
 
   /** 直调 `createOrReusePull` 的量具：记下每一次命令，以及交给 `mkTmp` 的那份正文。 */
   function pullHarness(env: { stat?: string; postPull?: FakeResult } = {}) {
-    const calls: string[] = [];
-    const bodies: string[] = [];
-    const heard: string[] = [];
-    const run = (cmd: string, args: string[]): FakeResult => {
+    const calls: Array<string> = [];
+    const bodies: Array<string> = [];
+    const heard: Array<string> = [];
+    const run = (cmd: string, args: Array<string>): FakeResult => {
       const key = args.join(" ");
       calls.push(`${cmd} ${key}`);
       if (cmd === "cnb" && key.includes("list-pulls")) return ok('{"status":200,"data":[]}');
@@ -3786,8 +3786,8 @@ describe("ship 阶段 0：`.env` 缺键的读数与启动器同一份实现（IS
       'BETTER_AUTH_SECRET=""\nCOMFYAPP_DEV_HANDLE=""\n',
       "utf8",
     );
-    const logs: string[] = [];
-    const run = (cmd: string, args: string[]): FakeResult => {
+    const logs: Array<string> = [];
+    const run = (cmd: string, args: Array<string>): FakeResult => {
       const key = args.join(" ");
       if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD")
         return { status: 0, stdout: "feat/x\n", stderr: "", error: null };
@@ -3947,8 +3947,8 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
 
   /** 阶段 0 需要的几跳：分支 / sha / 一份碎片；依赖判据那一跳由用例给。 */
   function preflightIo(fresh: FakeResult) {
-    const logs: string[] = [];
-    const run = (cmd: string, args: string[]): FakeResult => {
+    const logs: Array<string> = [];
+    const run = (cmd: string, args: Array<string>): FakeResult => {
       const key = args.join(" ");
       if (cmd === "node" && key.includes("check-deps-freshness")) return fresh;
       if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD")
@@ -4069,16 +4069,16 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
 
 describe("main() 的单子动作：独立于主流程，在 master 上、没碎片时也能跑", () => {
   /** 只答单子动作需要的那几跳 —— 别的一律空响应（走了就是用例失败）。 */
-  function issueMainIo(rows: { number: number; priority: string; title: string }[]) {
-    const calls: string[] = [];
-    const log: string[] = [];
+  function issueMainIo(rows: Array<{ number: number; priority: string; title: string }>) {
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
     const ok = (stdout: string): FakeResult => ({
       status: 0,
       stdout,
       stderr: "",
       error: null,
     });
-    const run = (cmd: string, args: string[]): FakeResult => {
+    const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
       if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
@@ -4185,18 +4185,18 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
   function diagnoseIo(opts: {
     build?: unknown;
     stage?: unknown;
-    builds?: unknown[];
+    builds?: Array<unknown>;
     headSha?: string;
   }) {
-    const calls: string[] = [];
-    const log: string[] = [];
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
     const ok = (stdout: string): FakeResult => ({
       status: 0,
       stdout,
       stderr: "",
       error: null,
     });
-    const run = (cmd: string, args: string[]): FakeResult => {
+    const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
       if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
@@ -4220,7 +4220,7 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
     return { run, calls, log };
   }
 
-  const runMain = (f: ReturnType<typeof diagnoseIo>, args: string[]) =>
+  const runMain = (f: ReturnType<typeof diagnoseIo>, args: Array<string>) =>
     main({
       args,
       run: f.run,
@@ -4312,15 +4312,15 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
  */
 describe("--new-issue：一步建单并回读", () => {
   function newIssueIo(opts: { created?: unknown; readback?: unknown; labelsOk?: boolean }) {
-    const calls: string[] = [];
-    const log: string[] = [];
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
     const ok = (stdout: string): FakeResult => ({
       status: 0,
       stdout,
       stderr: "",
       error: null,
     });
-    const run = (cmd: string, args: string[]): FakeResult => {
+    const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
       if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
@@ -4391,7 +4391,7 @@ describe("--new-issue：一步建单并回读", () => {
 
   const runMain = (
     f: ReturnType<typeof newIssueIo>,
-    args: string[],
+    args: Array<string>,
     tmp: { dir: string },
     env: Record<string, string | undefined> = {
       COMFYAPP_DEV_HANDLE: "yuedu-win",
@@ -4608,17 +4608,17 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   /** 现场形状。 */
   type FakeEnv = {
     branch?: string;
-    frags?: string[];
+    frags?: Array<string>;
     cnbMissing?: boolean;
     /** 假 `git commit` 往 **stderr** 写的话（钩子的输出面）。 */
     commitStderr?: string;
     commitStatus?: number;
     /** 本次要暂存的文件（触发真提交那一支）。 */
-    dirty?: string[];
+    dirty?: Array<string>;
     /** 直接覆盖 `git status --porcelain` 的返回（喂非默认形状，见 #2073 那格）。 */
     porcelain?: string;
     /** 这条分支相对上游基线**已提交**的碎片（第二次跑那一向）。 */
-    branchFrags?: string[];
+    branchFrags?: Array<string>;
     /** HEAD 的上游（`git rev-parse --abbrev-ref --symbolic-full-name @{u}`）。 */
     upstream?: string | null;
     /** 那条上游引用在不在本地（验不验得过）。false = `rev-parse --verify` 退非 0。 */
@@ -4627,7 +4627,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
      *  `null` = 这台克隆没有它（那样就只能推 `<远端>/master`，且要读得出是推的）。 */
     remoteHead?: string | null;
     /** 这条分支相对主干**自己带进来的**提交 subject（`log --no-merges --reverse`）。 */
-    branchSubjects?: string[];
+    branchSubjects?: Array<string>;
     /** `show-ref --verify` 查得到那个 ref（--branch 那一跳的「名字已被占用」形态）。 */
     refExists?: boolean;
     /** 答齐全链（轮询 / 合并 / 清理）那几跳 —— 默认关，见 `fake()` 里那段注释。 */
@@ -4641,7 +4641,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
    * 记录才是这一组的核心：断言的不是返回值，而是「它有没有伸手去改世界」。
    */
   function fake(env: FakeEnv = {}) {
-    const calls: string[] = [];
+    const calls: Array<string> = [];
     const branch = env.branch ?? "feat/x";
     const frags = env.frags ?? ["changelog.d/0-x.md"];
     const dirty = env.dirty ?? [];
@@ -4651,7 +4651,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       stderr,
       error: null,
     });
-    const run = (cmd: string, args: string[]): FakeResult => {
+    const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
       if (cmd === "cnb" && args[0] === "--version") {
@@ -4835,7 +4835,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   });
 
   it("--dry-run + --branch：念出「不建分支」并把那一跳印进计划，一条 ref 都不动", async () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run, calls } = fake({ branch: "master" });
     const code = await main({
       root: process.cwd(),
@@ -4858,7 +4858,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   });
 
   it("真跑 + --branch：建分支那一跳真的执行，后面 push 用的就是新名字", async () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run, calls } = fake({ branch: "master" });
     await main({
       root: process.cwd(),
@@ -4875,7 +4875,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   });
 
   it("名字已被占用 ⇒ 退 2 且不 checkout（「建分支」不等于「覆盖别人的分支」）", async () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run, calls } = fake({ branch: "master", refExists: true });
     const code = await main({
       root: process.cwd(),
@@ -4890,7 +4890,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   });
 
   it("--only=clean-branch 不能单跑：它要的是合并那一段的验真结果", async () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run, calls } = fake();
     const code = await main({
       root: process.cwd(),
@@ -4913,7 +4913,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
      * 这条第一版就是这样「本地绿、节点红」（同形先例见本文件 `proofRoot` 那段）。 */
     const { tmpRoot, gitDir } = proofRoot("chain-clean");
     try {
-      const heard: string[] = [];
+      const heard: Array<string> = [];
       const { run, calls } = fake({ chain: true });
       const code = await main({
         root: tmpRoot,
@@ -4948,7 +4948,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   });
 
   it("负控制：同一轮没给 --clean-branch ⇒ 那句「没删」照旧要念（边界声明不许被删掉）", async () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run, calls } = fake({ chain: true });
     await main({
       root: process.cwd(),
@@ -4972,7 +4972,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     /* 根因：`status --porcelain` 的 `XY <路径>` 两列，先 trim 就把行首空格吃掉，
      * 未暂存的 ` M file` 塌成 `M file` 被数成已暂存 —— 读数谎报，且「还有未暂存的
      * 改动」那句提醒永不触发。这里喂一组真实形状，断言分类按列、且提醒会触发。 */
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run } = fake({
       frags: [],
       porcelain: [
@@ -5000,7 +5000,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   it("阶段 0 念出「单子」那一行，而它是读数：退码不因它改变", async () => {
     /* 默认夹具那份 `changelog.d/0-x.md` 不在盘上 ⇒ 只念「无号碎片 1 份」，
      * **不**指控没立案（首行读不到就不判）。这一条钉的两件事：读数在场、闸不在场。 */
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run } = fake();
     const code = await main({
       root: process.cwd(),
@@ -5016,7 +5016,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
 
   it("盘上真有「## Fixed + 0-」那份碎片时点名先立案 —— 仍然退 0（这条不是闸）", async () => {
     const root = fragRoot({ "0-lazy-chunk.md": "## Fixed\n\n- 条目\n" });
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     try {
       const { run } = fake({ frags: ["changelog.d/0-lazy-chunk.md"] });
       const code = await main({
@@ -5040,7 +5040,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
      * 把两件事混成一件的：远端名写死 `origin`，`origin/master...HEAD` 那条 git 直接失败、
      * stdout 为空，于是 preflight 报「没有 changelog.d 碎片」（一条正当的假结论），
      * 而真原因是「这条比对没有事实源」。 */
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run } = fake({ frags: [], branchFrags: [], baseExists: false });
     const code = await main({
       root: process.cwd(),
@@ -5087,7 +5087,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     /* 这一条是本轮最重的回归。钩子把全部原因写在 **stderr**，而第一版只接 stdout ——
      * 屏幕上就只剩一句「提交被门槛拦下」而一个理由都没有。
      * 一个职责是「如实转述执行者」的工具，把执行者的话弄丢了，比没有这个工具更糟。 */
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run } = fake({
       dirty: ["src/a.ts"],
       commitStatus: 1,
@@ -5109,7 +5109,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   it("「单 PR 单变更」数的是本次带来的碎片，不是目录里躺着的全部", async () => {
     /* 第一版用 `git ls-files changelog.d` 数出了 118 份 —— 那条守卫于是恒真、
      * 等于没有，而它看起来像在判什么。现在只数本次工作树里新增/改动的。 */
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run } = fake({ frags: ["changelog.d/0-only-this.md"] });
     await main({
       root: process.cwd(),
@@ -5127,7 +5127,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
      * 实际一段都没跑。实测（拆分之前的同一入口）：
      * `node scripts/ship.mjs --only=commit --dry-run` 只打印那一句结论、退 0。 */
     for (const phase of ["commit", "push", "pull-request"]) {
-      const heard: string[] = [];
+      const heard: Array<string> = [];
       const { run, calls } = fake();
       expect(
         await main({
@@ -5158,7 +5158,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
      * 第一次跑提交了碎片 ⇒ 工作树干净 ⇒ 只看工作树就恒假 ⇒
      * `pnpm ship --merge` 在 preflight 被拒（实测：exit 1「没有 changelog.d 碎片」）。
      * 正确的面是「分支相对上游已提交的 ∪ 还没提交的」，所以这一格必须读到 1 份。 */
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run } = fake({
       frags: [],
       branchFrags: ["changelog.d/0-already-committed.md"],
@@ -5184,7 +5184,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
      * 碎片那一查报 0 份 ⇒ 「单 PR 单变更不成立」⇒ 每次推送之后重新跑都会被拒，
      * 且理由听起来完全正当。上一那条用例只覆盖了「上游是主干」的形状，
      * 所以这一格当时没有被抓到。 */
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run } = fake({
       frags: [],
       branchFrags: ["changelog.d/0-already-committed.md"],
@@ -5204,7 +5204,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   });
 
   it("远端没有 HEAD 符号引用时，退回 <远端>/master 并读得出是推的", async () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run } = fake({
       frags: [],
       branchFrags: ["changelog.d/0-already-committed.md"],
@@ -5265,7 +5265,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
      * `git log -1 --pretty=%s` ⇒ 那样一份标题被平台拒（响应可解析、`data` 里没有号）。
      * 断言重点是**伸手之前**就停：`git add` 与 `git commit` 一条都不该出现 —— 既然这条
      * 信息不能原样进历史，就不该先把暂存面动过。 */
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const { run, calls } = fake({ dirty: ["src/a.ts"] });
     const code = await main({
       root: process.cwd(),
@@ -5317,7 +5317,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
    *  先 `base.run` 再覆盖 —— 反过来写会绕过记录，于是「断言它有没有伸出这条手」
    *  拿到的是空数组，看起来像「没伸手」，实际是我的量具没接上（这一格错过一次）。 */
   function overrideRun(base: ReturnType<typeof fake>, answers: Record<string, string>) {
-    return (cmd: string, args: string[]): FakeResult => {
+    return (cmd: string, args: Array<string>): FakeResult => {
       const r = base.run(cmd, args);
       const key = args.join(" ");
       for (const [needle, stdout] of Object.entries(answers)) {
@@ -5357,7 +5357,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
      * 都从它取。夹具默认把顶端设成 `Merge branch 'master' into fix/x`。 */
     const { tmpRoot, gitDir } = proofRoot("title");
     try {
-      const heard: string[] = [];
+      const heard: Array<string> = [];
       const base = fake();
       const run = overrideRun(base, {
         "list-pulls": '{"status":200,"data":[]}',
@@ -5386,7 +5386,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
      * 压上来的，断言就成了空转。 */
     const { tmpRoot, gitDir } = proofRoot("no-title");
     try {
-      const heard: string[] = [];
+      const heard: Array<string> = [];
       const base = fake({ branchSubjects: [], headSubject: "" });
       const run = overrideRun(base, {
         "list-pulls": '{"status":200,"data":[]}',
@@ -5418,7 +5418,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
      * （主干落重复提交），还白烧一轮 CI。夹具的 HEAD 是 `d02ec96…`，这里就让它逐字命中。 */
     const { tmpRoot, gitDir } = proofRoot("landed");
     try {
-      const heard: string[] = [];
+      const heard: Array<string> = [];
       const base = fake();
       const run = overrideRun(base, {
         "--state open": '{"status":200,"data":[]}',
@@ -5487,7 +5487,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
      * 一条正常的 PR 就发不出去，而屏幕上看不出任何区别。 */
     const { tmpRoot, gitDir } = proofRoot("landed-unknown");
     try {
-      const heard: string[] = [];
+      const heard: Array<string> = [];
       const base = fake();
       const run = overrideRun(base, {
         "--state open": '{"status":200,"data":[]}',
@@ -5515,7 +5515,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   it("显式 `--title` 压过推导，且来源读得出是 flag", async () => {
     const { tmpRoot, gitDir } = proofRoot("flag-title");
     try {
-      const heard2: string[] = [];
+      const heard2: Array<string> = [];
       const base2 = fake();
       const run2 = overrideRun(base2, {
         "list-pulls": '{"status":200,"data":[]}',
@@ -5544,9 +5544,9 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
      * 而上一版先打印 `✓ 已建 PR #null` 再回来看值 —— 平台上根本没有那个 PR，
      * 屏幕上写着成功。所以这一格把「念出口」排在「验到有号」之后，并把响应原文
      * 与 stderr 一起转述出来：这一族宁可说一句「没跑起来」，也不许替执行者总结。 */
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const base = fake();
-    const run = (cmd: string, args: string[]): FakeResult => {
+    const run = (cmd: string, args: Array<string>): FakeResult => {
       if (cmd === "cnb" && args.join(" ").includes("post-pull")) {
         return {
           status: 0,
@@ -5576,7 +5576,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   it("建 PR 后打 dev 标签，并**独立回读**才念成功（回执不算结论，ISSUE #2204）", async () => {
     const { tmpRoot, gitDir } = proofRoot("author-label");
     try {
-      const heard: string[] = [];
+      const heard: Array<string> = [];
       const base = fake();
       const run = overrideRun(base, {
         "list-pulls": '{"status":200,"data":[]}',
@@ -5615,7 +5615,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   it("回执 200 但回读里没有那个标签 ⇒ 不念「已回读」，也不改退码", async () => {
     const { tmpRoot, gitDir } = proofRoot("author-label-missing");
     try {
-      const heard: string[] = [];
+      const heard: Array<string> = [];
       const base = fake();
       const run = overrideRun(base, {
         "list-pulls": '{"status":200,"data":[]}',
@@ -5649,7 +5649,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   it("复用已有 PR 而没人填过名字 ⇒ 用取来的短名打标签，并念「这是取的」", async () => {
     const { tmpRoot, gitDir } = proofRoot("author-label-reuse");
     try {
-      const heard: string[] = [];
+      const heard: Array<string> = [];
       const base = fake();
       const run = overrideRun(base, {
         "list-pulls":
@@ -5690,7 +5690,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   it("复用已有 PR 且配了 handle ⇒ 同样打标签并回读", async () => {
     const { tmpRoot, gitDir } = proofRoot("author-label-reuse-ok");
     try {
-      const heard: string[] = [];
+      const heard: Array<string> = [];
       const base = fake();
       const run = overrideRun(base, {
         "list-pulls":
@@ -5718,7 +5718,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   });
 
   it("--whoami：只读自查，一次也不碰 cnb，也不受 master 守卫影响", async () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const base = fake({ branch: "master" });
     const code = await main({
       root: process.cwd(),
@@ -5842,14 +5842,14 @@ describe("stallReadout：慢、没推进、没派发起来 是三件事（#2304�
 describe("--rerun-ci：空提交要说出自己的意图，否则 D0 把它读成「取不到面」", () => {
   type RunCall = {
     cmd: string;
-    args: string[];
+    args: Array<string>;
     opts?: { env?: Record<string, string> };
   };
 
   function rerunIo(env: { branch?: string; commitStatus?: number; dryRun?: boolean }) {
-    const seen: RunCall[] = [];
-    const log: string[] = [];
-    const run = (cmd: string, args: string[], opts?: { env?: Record<string, string> }) => {
+    const seen: Array<RunCall> = [];
+    const log: Array<string> = [];
+    const run = (cmd: string, args: Array<string>, opts?: { env?: Record<string, string> }) => {
       seen.push({ cmd, args, opts });
       if (args[0] === "commit")
         return {
@@ -5970,18 +5970,18 @@ describe("--stage-log：只读取某一格的日志正文（绿跑也能用）",
   function stageIo(opts: {
     build?: unknown;
     stage?: unknown;
-    builds?: unknown[];
+    builds?: Array<unknown>;
     headSha?: string;
   }) {
-    const calls: string[] = [];
-    const log: string[] = [];
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
     const ok = (stdout: string): FakeResult => ({
       status: 0,
       stdout,
       stderr: "",
       error: null,
     });
-    const run = (cmd: string, args: string[]): FakeResult => {
+    const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
       if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
@@ -6005,7 +6005,7 @@ describe("--stage-log：只读取某一格的日志正文（绿跑也能用）",
     return { run, calls, log };
   }
 
-  const runStage = (f: ReturnType<typeof stageIo>, args: string[]) =>
+  const runStage = (f: ReturnType<typeof stageIo>, args: Array<string>) =>
     main({
       args,
       run: f.run,

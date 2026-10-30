@@ -18,16 +18,13 @@ import { addEdge, type Connection, type Edge } from "@xyflow/react";
 import { applyPropagationToNodes } from "~/lib/project-canvas/canvas-helpers";
 import { uniqueStamp } from "~/lib/unique-id";
 import { importOutputAsInput } from "~/lib/project-canvas/canvas-api";
-import {
-  isCanvasNode,
-  type CanvasNodeType,
-} from "~/lib/project-canvas/canvas-types";
+import { isCanvasNode, type CanvasNodeType } from "~/lib/project-canvas/canvas-types";
 
 export interface UseCanvasConnectionsArgs {
-  nodesRef: { current: CanvasNodeType[] };
-  edgesRef: { current: Edge[] };
-  setNodes: Dispatch<SetStateAction<CanvasNodeType[]>>;
-  setEdges: Dispatch<SetStateAction<Edge[]>>;
+  nodesRef: { current: Array<CanvasNodeType> };
+  edgesRef: { current: Array<Edge> };
+  setNodes: Dispatch<SetStateAction<Array<CanvasNodeType>>>;
+  setEdges: Dispatch<SetStateAction<Array<Edge>>>;
 }
 
 export function useCanvasConnections({
@@ -37,14 +34,8 @@ export function useCanvasConnections({
   setEdges,
 }: UseCanvasConnectionsArgs) {
   const propagateFrom = useCallback(
-    async (
-      sourceId: string,
-      resultPathOverride?: string,
-      edgesOverride?: Edge[],
-    ) => {
-      const srcNode = nodesRef.current.find(
-        (current) => current.id === sourceId,
-      );
+    async (sourceId: string, resultPathOverride?: string, edgesOverride?: Array<Edge>) => {
+      const srcNode = nodesRef.current.find((current) => current.id === sourceId);
       if (!srcNode || !isCanvasNode(srcNode)) return;
       const src = srcNode.data;
       const rPath = resultPathOverride ?? src.resultPath;
@@ -57,9 +48,7 @@ export function useCanvasConnections({
       // 当某个连线输入是 IMAGE 类型针脚时，工作流目标也需要
       // 这个导入文件（导入只做一次，下面复用）。
       const needsImage = outEdges.some((outEdge) => {
-        const t = nodesRef.current.find(
-          (current) => current.id === outEdge.target,
-        );
+        const t = nodesRef.current.find((current) => current.id === outEdge.target);
         return (
           !outEdge.targetHandle ||
           outEdge.targetHandle === "inputImage" ||
@@ -108,7 +97,7 @@ export function useCanvasConnections({
         ),
       );
       if (c.source) {
-        const withNew: Edge[] = [
+        const withNew: Array<Edge> = [
           ...edgesRef.current,
           {
             /* 连线 id 走全库唯一出口（规范 16 §16.2.4.36）—— 收口前这里是
@@ -133,9 +122,7 @@ export function useCanvasConnections({
     (_event: ReactMouseEvent, edge: Edge) => {
       if (edge.deletable === true && edge.reconnectable === true) return;
       setEdges((eds) =>
-        eds.map((e) =>
-          e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e,
-        ),
+        eds.map((e) => (e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e)),
       );
     },
     [setEdges],

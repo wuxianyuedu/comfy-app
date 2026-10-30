@@ -27,13 +27,7 @@ export const SCHEMA_SYNC_POLL_MS = 2000;
 export const SCHEMA_SYNC_IDLE_MS = 30_000;
 
 /** 与 `scripts/db-schema-state.mjs` 的 `ensureSchemaCurrent` 返回值一一对应。 */
-export type SchemaSyncPhase =
-  | "syncing"
-  | "ready"
-  | "synced"
-  | "missing"
-  | "stale"
-  | "unknown";
+export type SchemaSyncPhase = "syncing" | "ready" | "synced" | "missing" | "stale" | "unknown";
 
 export interface SchemaSyncStatus {
   phase: SchemaSyncPhase;
@@ -68,9 +62,7 @@ export interface SchemaSyncNotice {
  *   · `ready`（指纹一致，最常见）/ `unknown`（还没探到）不占位 —— 状态栏不该
  *     常驻一个「一切正常」的格子。
  */
-export function schemaSyncNotice(
-  status: SchemaSyncStatus,
-): SchemaSyncNotice | null {
+export function schemaSyncNotice(status: SchemaSyncStatus): SchemaSyncNotice | null {
   switch (status.phase) {
     case "syncing":
       return {
@@ -120,7 +112,7 @@ export function schemaSyncNotice(
   }
 }
 
-const PHASES: readonly SchemaSyncPhase[] = [
+const PHASES: ReadonlyArray<SchemaSyncPhase> = [
   "syncing",
   "ready",
   "synced",

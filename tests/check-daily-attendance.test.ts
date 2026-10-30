@@ -85,7 +85,7 @@ function detail(
   sn: string,
   event: string,
   createTime: string,
-  stages: StageFixture[],
+  stages: Array<StageFixture>,
   pipelineStatus = "success",
 ) {
   let seq = 0;
@@ -250,7 +250,7 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
 describe("daily-attendance：命令行那一跳", () => {
   /** 真起进程，读一份落在临时目录里的 JSON —— 不碰网络，但走的是生产入口本身。 */
   function runCli(
-    args: string[],
+    args: Array<string>,
     files?: Record<string, string>,
     /* 「现在」默认钉在 NOW 上：夹具里的派发时刻是**绝对时刻**，而窗口比的是「距现在多久」
      * ⇒ 不钉住，这条离线用例会随真实时间推移自己变红（2026-10-24 现场：真实时间到
@@ -373,7 +373,7 @@ type PageRow = {
 describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
   /** 造一整页（新→旧）：第一条在 `newestH` 小时前，最后一条在 `oldestH` 小时前。 */
   function pageRows(newestH: number, oldestH: number, count = FETCH_PAGE_SIZE) {
-    const rows: PageRow[] = [];
+    const rows: Array<PageRow> = [];
     for (let i = 0; i < count; i += 1) {
       const h = newestH + ((oldestH - newestH) * i) / Math.max(1, count - 1);
       rows.push(
@@ -384,10 +384,10 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
   }
 
   /** 按 `--page N` 回答的执行者；`pages` 里没点名的页一律回 `null`（取不到）。 */
-  function pagerByPage(pages: Record<number, PageRow[] | null>) {
+  function pagerByPage(pages: Record<number, Array<PageRow> | null>) {
     /** @type {string[]} */
-    const calls: string[] = [];
-    const run = (_cmd: string, args: string[]) => {
+    const calls: Array<string> = [];
+    const run = (_cmd: string, args: Array<string>) => {
       calls.push(args.join(" "));
       const at = args.indexOf("--page");
       const n = Number(args[at + 1] ?? "1");
@@ -443,7 +443,7 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
   });
 
   it("每页都只盖 10 小时 ⇒ 撞页数上界，covered=false（不是「窗口内没有」）", () => {
-    const pages: Record<number, PageRow[] | null> = {};
+    const pages: Record<number, Array<PageRow> | null> = {};
     for (let p = 1; p <= FETCH_MAX_PAGES + 2; p += 1) pages[p] = pageRows(1, 10);
     const { run } = pagerByPage(pages);
     const win = fetchBuildsCoveringWindow({
@@ -515,10 +515,10 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
   });
 
   it("在线那一跳：条数够而时间不够 ⇒ 退「未校验」而不是退「缺勤」（假缺勤的负控制）", () => {
-    const pages: Record<number, PageRow[] | null> = {};
+    const pages: Record<number, Array<PageRow> | null> = {};
     for (let p = 1; p <= FETCH_MAX_PAGES; p += 1) pages[p] = pageRows(1, 10);
     const { run, calls } = pagerByPage(pages);
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const log = (s: string) => heard.push(s);
     const originalLog = console.log;
     console.log = log;
@@ -543,7 +543,7 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
     );
     const first = [daily, ...pageRows(1, 10, FETCH_PAGE_SIZE - 1)];
     const { run } = pagerByPage({ 1: first, 2: pageRows(10, 40) });
-    const statusRun = (cmd: string, args: string[]) => {
+    const statusRun = (cmd: string, args: Array<string>) => {
       if (args.includes("get-build-status")) {
         const one = detail("sn-daily", daily.event, daily.createTime, [...GREEN_STAGES]);
         return {
@@ -555,7 +555,7 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
       }
       return run(cmd, args);
     };
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const originalLog = console.log;
     console.log = (s: string) => heard.push(s);
     let code;

@@ -34,7 +34,7 @@ import {
   walk,
 } from "../scripts/check-docs-api.cjs";
 
-const temps: string[] = [];
+const temps: Array<string> = [];
 
 function tempDir(prefix: string): string {
   const dir = mkdtempSync(path.join(tmpdir(), prefix));

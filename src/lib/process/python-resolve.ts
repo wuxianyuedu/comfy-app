@@ -32,9 +32,9 @@ export interface PythonResolution {
   /** PATH 上的绝对路径（Windows 上已按磁盘实际大小写改写）。 */
   path: string;
   /** 启动它要带的**宿主参数**（`py` 的 `-3`；非 `py` 为空）。 */
-  args: string[];
+  args: Array<string>;
   /** 探针里候选的可读顺序，失败话术要照着它说「试过哪些」。 */
-  tried: string[];
+  tried: Array<string>;
 }
 
 /** 一个候选**为什么没被选中**（`findPython` 那一格要把它念出来）。 */
@@ -51,7 +51,7 @@ export interface PythonMiss {
 /** `resolvePython()` 的入参 —— 与 `WhichCommandOptions` 同形，探针可注入。 */
 export interface ResolvePythonOptions extends WhichCommandOptions {
   /** 候选名（默认按平台取 `pythonCandidates()`）；单测用来钉住顺序。 */
-  candidates?: string[];
+  candidates?: Array<string>;
 }
 
 /**
@@ -71,8 +71,7 @@ export function resolvePython({
   probe,
   candidates,
 }: ResolvePythonOptions = {}): PythonResolution | null {
-  return findPython({ env, platform, ...(probe ? { probe } : {}), candidates })
-    .hit;
+  return findPython({ env, platform, ...(probe ? { probe } : {}), candidates }).hit;
 }
 
 /**
@@ -95,10 +94,10 @@ export function findPython({
   candidates,
 }: ResolvePythonOptions = {}): {
   hit: PythonResolution | null;
-  missed: PythonMiss[];
+  missed: Array<PythonMiss>;
 } {
   const tried = candidates ?? pythonCandidates(platform);
-  const missed: PythonMiss[] = [];
+  const missed: Array<PythonMiss> = [];
   for (const name of tried) {
     const found = whichCommand(name, {
       env,

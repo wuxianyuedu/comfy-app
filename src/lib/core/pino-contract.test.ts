@@ -30,8 +30,8 @@ import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
  */
 
 /** 造一个可捕获输出的 Writable 目标流。 */
-function capture(): { dest: Writable; lines: () => string[] } {
-  const chunks: string[] = [];
+function capture(): { dest: Writable; lines: () => Array<string> } {
+  const chunks: Array<string> = [];
   const dest = new Writable({
     write(chunk, _enc, cb) {
       chunks.push(String(chunk));

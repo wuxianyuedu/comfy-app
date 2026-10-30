@@ -74,9 +74,9 @@ function read(rel: string): string {
 }
 
 /** 一份源码里的静态 `import … from "<spec>"` / `require(<字面量>)`（剥注释后）。 */
-function staticSpecifiers(source: string): string[] {
+function staticSpecifiers(source: string): Array<string> {
   const code = stripComments(source);
-  const specs: string[] = [];
+  const specs: Array<string> = [];
   for (const m of code.matchAll(/from\s+["']([^"']+)["']/g)) {
     if (m[1]) specs.push(m[1]);
   }
@@ -128,7 +128,7 @@ function withoutModuleExt(spec: string): string {
  * `incremental: false` 是必须的：真配置开着 incremental，缓存命中时这一跑可以什么都不
  * 检查就退 0 —— 判据会静默空转。宁可每次都真算。
  */
-function narrowTsconfigText(root: string, envDts: string, inheritedExclude: string[]): string {
+function narrowTsconfigText(root: string, envDts: string, inheritedExclude: Array<string>): string {
   const abs = (p: string) => path.join(root, p).split(path.sep).join("/");
   return JSON.stringify(
     {
@@ -221,13 +221,13 @@ async function writeNarrowTsconfig(): Promise<{
  * 行注释与尾逗号，手搓的剥离器是第三个事实来源。用 `tsc6` 那份包（与 `resolveTscBin`
  * 解出的可执行同源）—— 拿到的是**解析后**的清单，`extends` 链也一并展开。
  */
-function repoExclude(): string[] {
+function repoExclude(): Array<string> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ts = /* SAFETY: 类型断言已复核 */ require("typescript") as {
     readConfigFile: (
       file: string,
       read: (p: string) => string | undefined,
-    ) => { config?: { exclude?: string[] } };
+    ) => { config?: { exclude?: Array<string> } };
   };
   const parsed = ts.readConfigFile("tsconfig.json", (f) => fs.readFileSync(f, "utf8"));
   const exclude = parsed.config?.exclude;
@@ -245,7 +245,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     /* 三处都可能去读它：注入层（值源）、preview（缺省 origin 与旋钮）、
        main（把值注入浏览器 bundle）。**一处都不许静态 import** —— 生成件不在
        检出里，静态说明符会让类型程序去解析一个不存在的文件。 */
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const rel of [CONSUMER_REL, PREVIEW_REL, MAIN_REL]) {
       for (const spec of staticSpecifiers(read(rel))) {
         if (spec === OLD_MODULE_SPEC || spec.includes("generated/app-origin")) {
@@ -531,7 +531,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
         path.join(dir, "entry.tsx"),
         `import "./src/app/globals.css";\nexport const Y = 1;\n`,
       );
-      const writeCfg = (include: string[]): void => {
+      const writeCfg = (include: Array<string>): void => {
         fs.writeFileSync(
           path.join(dir, "tsconfig.json"),
           JSON.stringify(
@@ -715,8 +715,8 @@ function restoreGeneratedFile(
  *  `typescript`（实为 `@typescript/typescript6`）的 `tsc6`），顶层 `node_modules/`
  *  下只是链接 —— 按包名 + `bin` 字段解，别按路径猜。 */
 function resolveTscBin(): {
-  run: (args: string[]) => { status: number | null; output: string };
-  runIn: (cwd: string, args: string[]) => { status: number | null; output: string };
+  run: (args: Array<string>) => { status: number | null; output: string };
+  runIn: (cwd: string, args: Array<string>) => { status: number | null; output: string };
 } | null {
   for (const [pkg, binName] of /* SAFETY: 类型断言已复核 */ [
     ["@typescript/native", "tsc"],
@@ -735,7 +735,7 @@ function resolveTscBin(): {
     if (!bin) continue;
     const file = path.resolve(path.dirname(pkgJson), bin);
     if (!fs.existsSync(file)) continue;
-    const runIn = (cwd: string, args: string[]) => {
+    const runIn = (cwd: string, args: Array<string>) => {
       /* bin 是带 shebang 的 node 脚本垫片 —— Windows 的 spawnSync 不认
        * shebang，直接 exec 会 ENOENT（本机实测），必须经 node 启动。 */
       const r = spawnSync(process.execPath, [file, ...args], {

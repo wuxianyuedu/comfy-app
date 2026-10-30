@@ -9,10 +9,7 @@
  *  `inputs`（裸名，子图 data）同源，`rawJson` 同理。别只认其中一个名字。 */
 import type { ApiWorkflowNode } from "~/lib/comfyui/raw";
 import type { AnchorRect } from "~/lib/dom-rect";
-import type {
-  WorkflowIOModeOverride,
-  IOParamSlot,
-} from "~/lib/workflow/workflow-io-types";
+import type { WorkflowIOModeOverride, IOParamSlot } from "~/lib/workflow/workflow-io-types";
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 /* ── 类型定义 ── */
@@ -89,7 +86,7 @@ export interface ComfyGraphNode {
   /** class_type 是 UUID 时为真（ComfyUI 子图封装节点）。 */
   is_subgraph?: boolean;
   /** 每个输入的显示元数据，来自原始 JSON（localized_name + type）。 */
-  raw_inputs?: RawInputMeta[];
+  raw_inputs?: Array<RawInputMeta>;
   /** ComfyUI / litegraph 节点的精确外框尺寸 [宽, 高]。原件里没有该节点的尺寸
    *  时为 undefined —— 客户端回落到按内容驱动的布局。
    *  `h` **只算主体**：30px 的标题栏画在外框之上，不含在这里面。 */
@@ -221,11 +218,7 @@ export interface IOEditContextValue {
    *  猜插入点、指示线却永远画在行顶，两者打架时用户看到「拖了但顺序没变」）。
    *  会重排受影响分组的 `displayOrder` 并即时 PATCH 服务端，让排列能扛过
    *  一次刷新。密集编号策略与分组隔离契约见 `reorderIO` 的实现。 */
-  reorderIO: (
-    fromKey: string,
-    targetKey: string | null,
-    position: WorkflowIODropPosition,
-  ) => void;
+  reorderIO: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
 }
 export interface RgthreeGroupsContextValue {
   /** 某个分组 id 的**生效**旁路状态（本地覆盖 > detail）。 */
@@ -265,11 +258,7 @@ export interface NodeJsonViewerContextValue {
   /** 打开浮层。`anchorEl` 应是那个 `#id` 芯片元素（只用于定位 ——
    *  指针事件是在浮层挂载**之后**才落到它上面的，
    *  因此这里同步抓一次矩形）。 */
-  requestShow: (
-    anchorEl: HTMLElement,
-    nodeId: string,
-    kind: "node" | "subgraph",
-  ) => void;
+  requestShow: (anchorEl: HTMLElement, nodeId: string, kind: "node" | "subgraph") => void;
   /** 手动关闭。ESC 与点击外部都会调它。 */
   dismiss: () => void;
   /** 实时浮层状态 —— Provider 只把它暴露给浮层组件本身；
@@ -280,8 +269,8 @@ export interface NodeJsonViewerContextValue {
  *  `flags` / `properties` / `mode` 在原件里可能缺失（并非每个节点都写全），
  *  因此按可选对待 —— 与 `rawNodes` 口径一致；`getNodeView().raw` 也复用它。 */
 export type RawMetaEntry = {
-  widgets_values: unknown[];
-  outputs: RawOutputMeta[];
+  widgets_values: Array<unknown>;
+  outputs: Array<RawOutputMeta>;
   flags?: Record<string, unknown>;
   properties?: Record<string, unknown>;
   mode?: number;
@@ -297,7 +286,7 @@ export interface BoundaryPin {
   localized?: string;
   label?: string;
   pos: [number, number];
-  linkIds: number[];
+  linkIds: Array<number>;
 }
 
 export interface WorkflowDetail {
@@ -308,19 +297,19 @@ export interface WorkflowDetail {
    *  「类型」同源；IO 预览面板的模式页签从这里取。子图变体缺省。改名 `availableModes`
    *  是为了和 `WorkflowIOParam.modeOverrides`（按模式码的覆盖层）区分开 —— 两者
    *  同名 `modes` 是历史命名地雷。 */
-  availableModes?: string[];
+  availableModes?: Array<string>;
   defaultMode?: string | null;
   graph: Record<string, ApiWorkflowNode>;
   /** 从 `/api/workflows/:id` 返回的原始导入格式 (LiteGraph
    *  JSON)；canvas 顶部「📋 查看 JSON」modal 直接读这里喂给 SourceModal。
    *  这是唯一的存库原件 —— `graph` / `nodes` 都由它派生。 */
   rawJson?: unknown;
-  nodes: ComfyGraphNode[];
+  nodes: Array<ComfyGraphNode>;
   /** RAW 视图专用数据包（从 rawJson 派生、保留 subgraph
    *  wrapper），供 RAW 布局渲染原始 ComfyUI 节点（含 wrapper 紫色整卡）。
    *  null = 无 rawJson。 */
   rawView?: {
-    nodes: ComfyGraphNode[];
+    nodes: Array<ComfyGraphNode>;
     positions: Record<string, [number, number]> | null;
     graph: Record<string, ApiWorkflowNode>;
   } | null;
@@ -335,44 +324,42 @@ export interface WorkflowDetail {
   /** { nodeId: [x, y] } —— 只在原始导入时设置；只给了 API JSON 时为 null。 */
   positions: Record<string, [number, number]> | null;
   /** ComfyUI 分组框（原始 UI 格式）。bounding = [x, y, w, h]。 */
-  groups: WorkflowGroup[] | null;
+  groups: Array<WorkflowGroup> | null;
   /** 便签 / MarkdownNote 注释节点（原始 UI 格式）。 */
-  notes: WorkflowNote[] | null;
+  notes: Array<WorkflowNote> | null;
   /** 稀疏的原始节点元数据 —— 只有 `id`、`widgets_values` 与 `outputs[]`。
    *  WorkflowSubgraphNode 用它取 widget 值；WorkflowNode 与
    *  WorkflowSubgraphNode 在离线类型表不认得该类时用它渲染 OUTPUT 端口条
    *  （例如 ResolutionSelector 这类自定义节点，或输出只能从原始 JSON 里
    *  发现的子图 UUID）。 */
-  rawNodes:
-    | {
-        id: string;
-        widgets_values: unknown[];
-        outputs: RawOutputMeta[];
-        /** 每个节点的 LiteGraph 标记（如 `collapsed`）。原件里没有该字段时为空。
-         *  Flow 侧原本经 `(rn as any).flags` 消费它们；
-         *  在这里声明是为了让 JSON 浮层能在合成的「节点视图」页签里展示。 */
-        flags?: Record<string, unknown>;
-        /** 自定义节点属性（例如 rgthree 的 `Fast Groups Bypasser`
-         *  从这里读 `matchTitle`）。原始数据缺失时为空。 */
-        properties?: Record<string, unknown>;
-        mode?: number;
-      }[]
-    | null;
+  rawNodes: Array<{
+    id: string;
+    widgets_values: Array<unknown>;
+    outputs: Array<RawOutputMeta>;
+    /** 每个节点的 LiteGraph 标记（如 `collapsed`）。原件里没有该字段时为空。
+     *  Flow 侧原本经 `(rn as any).flags` 消费它们；
+     *  在这里声明是为了让 JSON 浮层能在合成的「节点视图」页签里展示。 */
+    flags?: Record<string, unknown>;
+    /** 自定义节点属性（例如 rgthree 的 `Fast Groups Bypasser`
+     *  从这里读 `matchTitle`）。原始数据缺失时为空。 */
+    properties?: Record<string, unknown>;
+    mode?: number;
+  }> | null;
   /** 边界 pin 实体（来自 ComfyUI 原始的 subgraph.inputs/outputs）。
    *  每个 pin 有自己的 UUID、名字、类型、保存位置，以及指向跨边界连线的
    *  linkIds。它们在内层画布里渲染成一列整洁的紧凑 wfIoPort 节点
    *  —— 左侧放输入、右侧放输出。 */
-  boundaryPins?: { inputs: BoundaryPin[]; outputs: BoundaryPin[] };
+  boundaryPins?: { inputs: Array<BoundaryPin>; outputs: Array<BoundaryPin> };
   /** 把带哨兵的连线翻译成 (pin ↔ 内部节点槽位) 配对 —— `buildEdges` 用它
    *  在边界 pin 的 handle 与内部节点对应的输入/输出 handle 之间生成
    *  React Flow 边。 */
-  boundaryLinks?: {
+  boundaryLinks?: Array<{
     linkId: number;
     kind: "input" | "output";
     pinId: string;
     innerNodeId: string;
     innerSlotName: string;
-  }[];
+  }>;
   /** 该工作流由本地文件支撑（经「本机路径」导入）时的绝对路径。
    *  文件一变，界面就会显示「磁盘文件有更新」等用户点「同步」。 */
   sourcePath?: string | null;
@@ -396,7 +383,7 @@ export interface RawOutputMeta {
   label?: string;
   type: string;
   /** 从这个输出出去的源连线 id（用来推导连线）。 */
-  links: number[];
+  links: Array<number>;
   /** 至少有一条出边指向边界哨兵 `-20` 时为真（该输出被父级子图封装节点
    *  暴露出去）。由 /api/workflows/[id]/subgraph 盖章。外层工作流恒为 false。 */
   isBoundary?: boolean;
@@ -437,12 +424,9 @@ export interface WorkflowNodeData {
   assignedRole: string | null;
   /** 对每个「连线型」输入（[srcId, slot]），记录源节点的 title 与
    *  class_type。用于渲染 "← <源节点> #xx" 标签，并推断线上流动的数据类型。 */
-  inputSources: Record<
-    string,
-    { id: string; title: string; slot: number; classType?: string }
-  >;
+  inputSources: Record<string, { id: string; title: string; slot: number; classType?: string }>;
   /** 每个输入的显示元数据，来自原始 JSON（localized_name + type）。 */
-  rawInputs?: RawInputMeta[];
+  rawInputs?: Array<RawInputMeta>;
   /** 该节点是当前子图的 INPUT 端点时为真（它的输入槽从子图 -10 哨兵
    *  接收）。由 /api/workflows/[id]/subgraph 盖章。外层工作流恒为 false。
    *  客户端据此把这簇节点包进一个 INPUTS wfGroup，
@@ -454,7 +438,7 @@ export interface WorkflowNodeData {
   /** 每个输出的显示元数据，来自原始 JSON（localized_name + type +
    *  下游连线 id）。inferOutputTypeAll 认不出该类时用它
    *  （例如 ResolutionSelector 这类自定义节点）。 */
-  rawOutputs?: RawOutputMeta[];
+  rawOutputs?: Array<RawOutputMeta>;
   /** 馈入子图边界的输出槽**名字**集合 —— 从 `detail.boundaryLinks`
    *  （kind === "output"）推导。与 `rawOutputs[].isBoundary` **各自独立**：
    *  sessionStorage 缓存未命中、拿不到最新 detail 形状时，
@@ -469,7 +453,7 @@ export interface WorkflowNodeData {
    *  节点（导入管线把自定义节点的 widget 值存在 rawJson.widgets_values 里，
    *  而不是折进 `graph[id].inputs`）。设置之后，WorkflowNode 以 rawInputs
    *  作为输入来源，并按位置从这个数组取值。 */
-  rawWidgetValues?: unknown[];
+  rawWidgetValues?: Array<unknown>;
   /** 在本工作流里至少有一条下游边的输出**名字**（与
    *  `inferOutputTypeAll(classType)` 的键或 `rawOutputs[i].name` 对应）。
    *  WorkflowNode 只为名字出现在这里的输出行渲染 source Handle ——
@@ -498,7 +482,7 @@ export interface WorkflowNodeData {
    *  的运行期主体不必重新拉取就能与实时分组列表比对。这里是**只读**的 ——
    *  切换分组旁路要走 `RgthreeGroupsContext.setBypass` → PATCH，
    *  而不是直接改。 */
-  groups?: WorkflowGroup[];
+  groups?: Array<WorkflowGroup>;
   /** ComfyUI 的精确外框尺寸 { w, h }（只算主体，不含标题栏）。
    *  有值时卡片被强制成这个尺寸，不再走按内容驱动的 min/max 宽度布局。
    *  undefined → 按内容驱动。 */
@@ -558,11 +542,11 @@ export interface WorkflowSubgraphData {
   nodeId: string;
   title: string;
   uid: string; // class_type 的前 8 个字符 —— 用作副标题
-  inputs: RawInputMeta[];
+  inputs: Array<RawInputMeta>;
   /** 每个输出的显示元数据，来自原始 JSON（例如子图暴露的 IMAGE 输出）。
    *  子图没有输出时为空。 */
-  outputs?: RawOutputMeta[];
-  widgetValues: unknown[];
+  outputs?: Array<RawOutputMeta>;
+  widgetValues: Array<unknown>;
   /** 进入子图内部图的回调。 */
   onEnter?: () => void;
   /** 语义与 WorkflowNodeData.connectedOutputs 相同 ——

@@ -53,7 +53,7 @@ export interface CalibrationReport {
   /** 判定一致率：AI pass ↔ 人评 ≥ `HUMAN_PASS_THRESHOLD` 的吻合比例（0~1）。 */
   decisionAgreement: number | null;
   /** 按维度聚合：每个 rubric 维度的 AI 均分 vs 人评均分（偏差大的维度先调）。 */
-  perDimension: DimensionCalibration[];
+  perDimension: Array<DimensionCalibration>;
 }
 
 /** 空读数（没样本时的回落，各读数 null 不硬造）。 */
@@ -68,10 +68,8 @@ export function emptyCalibrationReport(): CalibrationReport {
   };
 }
 
-function avg(values: number[]): number | null {
-  return values.length === 0
-    ? null
-    : values.reduce((sum, value) => sum + value, 0) / values.length;
+function avg(values: Array<number>): number | null {
+  return values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 /**
@@ -79,15 +77,15 @@ function avg(values: number[]): number | null {
  * （`humanRating`）」都齐全的镜头收进样本，出总体偏差与按维度偏差。
  * 没有视觉判定 / 没有人评分的镜头不进样本（各算各的会假对齐）。
  */
-export function calibrateFromShots(shots: unknown[]): CalibrationReport {
-  const aiMeans: number[] = [];
+export function calibrateFromShots(shots: Array<unknown>): CalibrationReport {
+  const aiMeans: Array<number> = [];
   /** 有人评分的样本对（MAE 与判定一致率只在这上面算——两个均值要对齐才可比）。 */
-  const pairs: {
+  const pairs: Array<{
     ai: number;
     human: number;
     rating: number;
     aiPass: boolean;
-  }[] = [];
+  }> = [];
   /** 维度 key → { ai 总分, ai 样本数, 人映射分累计, 人样本数 }。 */
   const dimAcc = new Map<
     string,
@@ -130,7 +128,7 @@ export function calibrateFromShots(shots: unknown[]): CalibrationReport {
   }
 
   const samples = pairs.length;
-  const perDimension: DimensionCalibration[] = [...dimAcc.entries()]
+  const perDimension: Array<DimensionCalibration> = [...dimAcc.entries()]
     .map(([key, acc]) => ({
       key,
       aiAvg: acc.aiSum / acc.aiCount,
@@ -146,8 +144,7 @@ export function calibrateFromShots(shots: unknown[]): CalibrationReport {
     mae: samples > 0 ? avg(pairs.map((p) => Math.abs(p.ai - p.human))) : null,
     decisionAgreement:
       samples > 0
-        ? pairs.filter((p) => p.rating >= HUMAN_PASS_THRESHOLD === p.aiPass)
-            .length / samples
+        ? pairs.filter((p) => p.rating >= HUMAN_PASS_THRESHOLD === p.aiPass).length / samples
         : null,
     perDimension,
   };

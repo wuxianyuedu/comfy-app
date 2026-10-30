@@ -35,11 +35,7 @@
 import { errorText } from "~/lib/error-message";
 import { HISTORY_READ } from "../retry-policy";
 import { lastSegments } from "~/lib/path-display";
-import {
-  createEmptyState,
-  type LogEntry,
-  type RunnerState,
-} from "./runner-state-shape";
+import { createEmptyState, type LogEntry, type RunnerState } from "./runner-state-shape";
 
 export const CLIENT_ID = process.env.COMFY_CLIENT_ID ?? "comfy-app-web";
 
@@ -81,12 +77,7 @@ export const WS_PATHS = ["/api/ws", "/ws"];
 /* 类型族与「不含 IO 的初始化工厂」在 `./runner-state-shape.ts`；这里保留同名
  * 再导出，让 enqueue / reaper / executor-* / queue-status / SSE 路由等既有消费方
  * 保持原样的 `from "./runner-state"` 入口（零 import-graph 变化，见 P3 方案第 1 期）。 */
-export type {
-  Job,
-  LogEntry,
-  RawWorkflowOverride,
-  RunnerState,
-} from "./runner-state-shape";
+export type { Job, LogEntry, RawWorkflowOverride, RunnerState } from "./runner-state-shape";
 
 /* 名字里带版本：**给 `RunnerState` 加字段时必须一起升版**。`??=` 只认键名，
  *  旧单例不会被补全，热重载后新字段就是 `undefined`——读它是 TypeError，写判据的
@@ -186,12 +177,7 @@ export const LOGS_MAX_TASKS = 64;
 /** 写入并把该任务标记为「最近使用」，再淘汰超出 `maxTasks` 的最久未用项。
  *  Map 的迭代序是插入序、对已存在的键 `set` 不改变位置 —— 所以标记最近
  *  使用要 delete 后再 set，淘汰时取迭代器的第一个键即得最旧项。 */
-function touchAndEvict<V>(
-  map: Map<string, V>,
-  taskId: string,
-  value: V,
-  maxTasks: number,
-): void {
+function touchAndEvict<V>(map: Map<string, V>, taskId: string, value: V, maxTasks: number): void {
   map.delete(taskId);
   map.set(taskId, value);
   while (map.size > maxTasks) {
@@ -201,11 +187,7 @@ function touchAndEvict<V>(
   }
 }
 
-export function log(
-  taskId: string,
-  level: LogEntry["level"],
-  msg: string,
-): LogEntry {
+export function log(taskId: string, level: LogEntry["level"], msg: string): LogEntry {
   const store = state();
 
   const entry: LogEntry = { t: Date.now(), level, msg, src: callerLoc() };
@@ -234,11 +216,7 @@ const QUEUED_KEEP_MAX = 8;
  *  看到「这条在等什么」的地方（ISSUE #1206）。边界不能整体挪到收口：收口之后
  *  还会再打「✓ 全部完成」这类行，先删缓冲就让它带着整包 `replaceLogs` 把现场
  *  覆盖成一两行（实测过，比原缺陷更糟）。所以只把「排队期的行」单独保住。 */
-export function logWhileQueued(
-  taskId: string,
-  level: LogEntry["level"],
-  msg: string,
-): void {
+export function logWhileQueued(taskId: string, level: LogEntry["level"], msg: string): void {
   const store = state();
   const kept = store.queuedEntries.get(taskId) ?? [];
   kept.push(log(taskId, level, msg));
@@ -255,7 +233,7 @@ export function logWhileQueued(
 }
 
 /** 领取时取回本轮排队期写下的行，并结束这份登记（一个 taskId 只用一次）。 */
-export function takeQueuedEntries(taskId: string): LogEntry[] {
+export function takeQueuedEntries(taskId: string): Array<LogEntry> {
   const store = state();
   const kept = store.queuedEntries.get(taskId) ?? [];
   store.queuedEntries.delete(taskId);
@@ -492,10 +470,10 @@ export function forgetTaskClaimEntirely(taskId: string): void {
  */
 export type RunnerDeps = {
   taskRepo: {
-    replaceLogs(taskId: string, entries: LogEntry[]): Promise<void>;
+    replaceLogs(taskId: string, entries: Array<LogEntry>): Promise<void>;
     /** comfy-cli 完整原文整包落库（P3 §5 ADR §14 D1 的 4-B2）：「查看完整输出」
      *  这个排障入口此前只有执行进程自己看得见。 */
-    replaceRawCli(taskId: string, lines: string[]): Promise<void>;
+    replaceRawCli(taskId: string, lines: Array<string>): Promise<void>;
   };
   log: {
     warn(msg: string): void;
@@ -520,8 +498,7 @@ async function resolveDeps(): Promise<RunnerDeps> {
   const cur: Partial<RunnerDeps> = deps ?? {};
   const taskRepo: RunnerDeps["taskRepo"] =
     cur.taskRepo ?? (await import("../core/repository")).taskRepository;
-  const log: RunnerDeps["log"] =
-    cur.log ?? (await import("~/lib/core/logger")).logger;
+  const log: RunnerDeps["log"] = cur.log ?? (await import("~/lib/core/logger")).logger;
   deps = { taskRepo, log };
   return { taskRepo, log };
 }
@@ -559,10 +536,7 @@ export async function persistLogs(taskId: string) {
     const { taskRepo } = await resolveDeps();
     await taskRepo.replaceLogs(taskId, arr);
   } catch (e) {
-    const message = `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(
-      e,
-      "unknown",
-    )}`;
+    const message = `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(e, "unknown")}`;
     // 兜底 warn：若 resolveDeps 已经拉起了 log，走注入侧；否则再试一次 dynamic
     // import。这一句本身在纯 Node + 未 configure 的失败路径下也会抛（server-only），
     // 但那时上面 catch 里已经没有别的兜底手段可依赖了（logger 都没起来），
@@ -600,7 +574,7 @@ export function appendRawCli(taskId: string, line: string): void {
 /** 读取某次执行累积的 comfy-cli 完整原文（无记录返回空数组）。
  *  刻意**不导出**：唯一的读者是下面的 `persistRawCli`，对外入口是
  *  `/api/tasks/[id]/raw-cli`，它读库而不是读本进程的内存。 */
-function getRawCli(taskId: string): string[] {
+function getRawCli(taskId: string): Array<string> {
   return state().rawCli.get(taskId) ?? [];
 }
 
@@ -617,10 +591,7 @@ export async function persistRawCli(taskId: string): Promise<void> {
     const { taskRepo } = await resolveDeps();
     await taskRepo.replaceRawCli(taskId, lines);
   } catch (e) {
-    const message = `[comfyui] persistRawCli(${taskId}) 落库失败：${errorText(
-      e,
-      "unknown",
-    )}`;
+    const message = `[comfyui] persistRawCli(${taskId}) 落库失败：${errorText(e, "unknown")}`;
     try {
       const { log: hostLog } = await resolveDeps();
       hostLog.warn(message);

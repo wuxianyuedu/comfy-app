@@ -27,7 +27,7 @@ type Entry = {
 };
 
 /** 一条 A 档阻断阈值 + 一条 B 档地板 + 一条 report，构成最小可判的账。 */
-const baseEntries = (): Entry[] => [
+const baseEntries = (): Array<Entry> => [
   {
     file: "scripts/check-a.cjs",
     const: "SPLIT_LINES",
@@ -56,7 +56,7 @@ const baseEntries = (): Entry[] => [
  * 按 `file` 定点改一条。刻意不写下标访问：`noUncheckedIndexedAccess` 下
  * `entries[0]` 是 `Entry | undefined`，而这里的用例点名的都是唯一的那条。
  */
-const patch = (list: Entry[], file: string, over: Partial<Entry>): Entry[] =>
+const patch = (list: Array<Entry>, file: string, over: Partial<Entry>): Array<Entry> =>
   list.map((e) => (e.file === file ? { ...e, ...over } : e));
 
 /** 按账造一份源码：默认与账一致，`over` 里点名的那条改成别的值。 */
@@ -71,7 +71,7 @@ function sources(over: Record<string, string> = {}) {
 }
 
 const run = (
-  entries: Entry[],
+  entries: Array<Entry>,
   over: Record<string, string> = {},
   masterEntries: Map<string, { value: number }> | null = null,
 ) =>
@@ -240,7 +240,7 @@ describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）
   });
 
   it("出路真的能走通：给它补一条 report 条目 ⇒ 绿", () => {
-    const entries: Entry[] = [
+    const entries: Array<Entry> = [
       ...baseEntries(),
       {
         file: NEW_FILE,
@@ -275,7 +275,7 @@ describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）
     const root = path.resolve(__dirname, "..");
     const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
-    ) as { entries: Entry[] };
+    ) as { entries: Array<Entry> };
     /* glob 写错的失效形态是「面为空 ⇒ 整格恒绿」，所以这里按磁盘自己数一遍：
        扫描根必须非空、必须含这份判据自己（`MIN_ENTRIES` 那条自证的下限在账里），
        否则「覆盖面」这句话只是断言里的一个装饰。 */
@@ -317,7 +317,7 @@ describe("账的覆盖面：export 前缀不是挡箭牌", () => {
     kind: "threshold",
     strictness: "larger-is-looser",
   };
-  const runWith = (src: string, entries: Entry[]) =>
+  const runWith = (src: string, entries: Array<Entry>) =>
     analyze({
       entries,
       readSource: sources({ [NEW_FILE]: src }),
@@ -352,7 +352,7 @@ describe("真仓自证：这本账现在必须与源码一致", () => {
     const root = path.resolve(__dirname, "..");
     const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
-    ) as { entries: Entry[] };
+    ) as { entries: Array<Entry> };
     const r = analyze({
       entries: ledger.entries,
       readSource: (f: string) => {

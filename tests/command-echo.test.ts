@@ -16,21 +16,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  echoCommandLine,
-  formatCommandLine,
-} from "../scripts/launcher-core/command-echo.mjs";
+import { echoCommandLine, formatCommandLine } from "../scripts/launcher-core/command-echo.mjs";
 import { runSync, spawnInGroup } from "../scripts/launcher-core/shell.mjs";
 
 /** 捕获这段时间里写到 stdout 的全部文本（回显缺省就写 stdout）。 */
 async function captureStdout(run: () => void | Promise<void>): Promise<string> {
-  const chunks: string[] = [];
-  const spy = vi
-    .spyOn(process.stdout, "write")
-    .mockImplementation((chunk: unknown): boolean => {
-      chunks.push(String(chunk));
-      return true;
-    });
+  const chunks: Array<string> = [];
+  const spy = vi.spyOn(process.stdout, "write").mockImplementation((chunk: unknown): boolean => {
+    chunks.push(String(chunk));
+    return true;
+  });
   try {
     await run();
   } finally {
@@ -42,10 +37,7 @@ async function captureStdout(run: () => void | Promise<void>): Promise<string> {
 /** 读 shell.mjs 的源码，剥掉行注释（注释里会引用函数名，判据只看代码）。 */
 function shellSourceCode(): string {
   return fs
-    .readFileSync(
-      path.join(process.cwd(), "scripts", "launcher-core", "shell.mjs"),
-      "utf8",
-    )
+    .readFileSync(path.join(process.cwd(), "scripts", "launcher-core", "shell.mjs"), "utf8")
     .split("\n")
     .map((line) => line.replace(/^\s*\/\/.*$/, ""))
     .join("\n");
@@ -62,24 +54,18 @@ function functionBody(source: string, name: string): string {
 
 describe("命令行回显：格式化", () => {
   it("普通参数不加引号（可整行复制粘贴）", () => {
-    expect(formatCommandLine("pnpm", ["exec", "vitest", "run"])).toBe(
-      "pnpm exec vitest run",
-    );
+    expect(formatCommandLine("pnpm", ["exec", "vitest", "run"])).toBe("pnpm exec vitest run");
   });
 
   it("含空白 / shell 元字符的参数才加引号", () => {
-    expect(
-      formatCommandLine("node", ["C:\\Program Files\\nodejs\\node.exe"]),
-    ).toBe('node "C:\\Program Files\\nodejs\\node.exe"');
-    expect(formatCommandLine("git", ["commit", "-m", "a b;c"])).toBe(
-      'git commit -m "a b;c"',
+    expect(formatCommandLine("node", ["C:\\Program Files\\nodejs\\node.exe"])).toBe(
+      'node "C:\\Program Files\\nodejs\\node.exe"',
     );
+    expect(formatCommandLine("git", ["commit", "-m", "a b;c"])).toBe('git commit -m "a b;c"');
   });
 
   it('空参数不丢（写成 ""，否则命令行会少一个位置参数）', () => {
-    expect(formatCommandLine("git", ["commit", "-m", ""])).toBe(
-      'git commit -m ""',
-    );
+    expect(formatCommandLine("git", ["commit", "-m", ""])).toBe('git commit -m ""');
   });
 
   it("参数里的双引号转义，且输出保持单行", () => {
@@ -92,7 +78,7 @@ describe("命令行回显：格式化", () => {
 
 describe("命令行回显：输出出口", () => {
   it("打印 `>>> ` 前缀，并返回该行", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const line = echoCommandLine("pnpm", ["install"], {
       sink: (text) => lines.push(text),
     });
@@ -101,7 +87,7 @@ describe("命令行回显：输出出口", () => {
   });
 
   it("可加短标记（同一命令在不同位置有不同角色时用）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     echoCommandLine("app.exe", ["--mode", "prebuilt"], {
       label: "桌面壳",
       sink: (text) => lines.push(text),
@@ -110,7 +96,7 @@ describe("命令行回显：输出出口", () => {
   });
 
   it("COMFYAPP_ECHO_COMMANDS=0 时整体静默（给机器解析输出的场景留出口）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const line = echoCommandLine("pnpm", ["install"], {
       sink: (text) => lines.push(text),
       env: { COMFYAPP_ECHO_COMMANDS: "0" },

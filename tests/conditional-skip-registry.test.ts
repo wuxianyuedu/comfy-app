@@ -52,7 +52,7 @@ type Registration = {
  * `artifact` 那两条最需要盯：它们不是「这台机器没装东西」，而是「没构建就整块不判」，
  * 报覆盖率与报「全绿」时都得把它单独说一句。
  */
-const REGISTERED: Registration[] = [
+const REGISTERED: Array<Registration> = [
   {
     file: "tests/log-common-invoke.test.ts",
     guard: "!hasPs",
@@ -187,7 +187,7 @@ const DIRECT_SITE_RE = /^\s*\w+\.skip(?:If\(([^)]*)\))?\(/;
 const ALIAS_DEF_RE = /^\s*const\s+(\w+)\s*=\s*(?:it|test)\.skipIf\(([^)]*)\)\s*;?\s*$/;
 
 /** 测试文件的扫描面（`tests/**` 与 `src/**` 下的 `*.test.ts(x)`）。 */
-function testFiles(dir: string, found: string[] = []): string[] {
+function testFiles(dir: string, found: Array<string> = []): Array<string> {
   const abs = path.join(ROOT, dir);
   if (!existsSync(abs)) return found;
   for (const entry of readdirSync(abs, { withFileTypes: true })) {
@@ -257,7 +257,7 @@ describe("条件性 skip 的登记表（§11.7 的「绿有两种含义」）", 
   const measured = measuredSites();
 
   it("每个站点都已登记，且数量一致", () => {
-    const problems: string[] = [];
+    const problems: Array<string> = [];
     const registry = new Map(REGISTERED.map((r) => [keyOf(r), r]));
     for (const [key, count] of measured) {
       const hit = registry.get(key);
@@ -274,7 +274,7 @@ describe("条件性 skip 的登记表（§11.7 的「绿有两种含义」）", 
   });
 
   it("每条登记都要有档位与非空理由", () => {
-    const bad: string[] = [];
+    const bad: Array<string> = [];
     for (const r of REGISTERED) {
       if (!TIERS.includes(r.tier)) bad.push(`${keyOf(r)} 档位非法：${r.tier}`);
       if (r.why.trim().length < 8) bad.push(`${keyOf(r)} 理由太短或缺失`);

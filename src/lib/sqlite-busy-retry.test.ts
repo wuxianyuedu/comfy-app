@@ -32,7 +32,7 @@ describe("runWithSqliteBusyRetry", () => {
   });
 
   it("撞锁两次后成功 ⇒ 共三次，onBusy 收到 attempt 0 与 1", async () => {
-    const seen: number[] = [];
+    const seen: Array<number> = [];
     let calls = 0;
     const result = await runWithSqliteBusyRetry(
       async () => {

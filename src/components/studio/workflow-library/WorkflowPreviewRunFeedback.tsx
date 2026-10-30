@@ -20,7 +20,7 @@ interface Props {
   workflowName: string;
   viewMode: "edit" | "use";
   running: boolean;
-  missingLabels: string[];
+  missingLabels: Array<string>;
   /** 素材上传的可见出口：ComfyUI 未运行 / 正在启动 / 启动超时都落在这里。
    *  上传位自身没有错误区，只记 console 用户看不到任何原因（ISSUE #345）。 */
   uploadNotice: string | null;

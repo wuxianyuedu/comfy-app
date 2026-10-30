@@ -22,7 +22,7 @@ export type ProductionStage = (typeof PRODUCTION_STAGES)[number];
 export function isProductionStage(value: unknown): value is ProductionStage {
   return (
     typeof value === "string" &&
-    /* SAFETY: 类型断言已复核 */ (PRODUCTION_STAGES as readonly string[]).includes(value)
+    /* SAFETY: 类型断言已复核 */ (PRODUCTION_STAGES as ReadonlyArray<string>).includes(value)
   );
 }
 

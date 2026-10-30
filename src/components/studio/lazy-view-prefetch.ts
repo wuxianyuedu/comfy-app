@@ -26,7 +26,7 @@
 export type LazyViewLoader = () => Promise<unknown>;
 
 /** 已登记、还没预热的 loader（`lazyView` 追加，预热队列逐个消费）。 */
-const pending: LazyViewLoader[] = [];
+const pending: Array<LazyViewLoader> = [];
 
 /** 预热是否已排过（幂等闸：StrictMode 双跑 effect / 重复挂载只排一次）。 */
 let scheduled = false;

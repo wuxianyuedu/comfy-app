@@ -82,7 +82,7 @@ const edgeTypes = /* SAFETY: 类型断言已复核 */ {
  * MiniMap 只在绘制时调用它，不会因为拖拽 / 状态抖动期间回调换了引用
  * 而重新渲染。 */
 const MINIMAP_COLOR_BY_KIND = new Map(
-  /* SAFETY: 类型断言已复核 */ (Object.keys(NODE_META) as NodeKind[]).map((k) => [
+  /* SAFETY: 类型断言已复核 */ (Object.keys(NODE_META) as Array<NodeKind>).map((k) => [
     k,
     NODE_META[k].color,
   ]),
@@ -109,12 +109,14 @@ type PlaceFlowFn = Parameters<typeof placeCanvasNode>[0]["flow"]["screenToFlowPo
  *  已有镜头节点（data.shotId 命中）合并补丁，缺失的新建；非镜头节点原样保留。
  *  独立于 CanvasInner，避免其超过函数长度棘轮（§12.13）。 */
 function materializeProductionShots(
-  nodes: CanvasNodeType[],
+  nodes: Array<CanvasNodeType>,
   prod: ProductionData | null,
   screenToFlowPosition: PlaceFlowFn,
-): CanvasNodeType[] {
+): Array<CanvasNodeType> {
   const shots =
-    prod && Array.isArray(prod.shots) ? /* SAFETY: 类型断言已复核 */ (prod.shots as Shot[]) : [];
+    prod && Array.isArray(prod.shots)
+      ? /* SAFETY: 类型断言已复核 */ (prod.shots as Array<Shot>)
+      : [];
   if (shots.length === 0) return nodes;
   const existingShotIds = new Set(
     nodes
@@ -221,7 +223,7 @@ function CanvasInner({
     /* 节点表的 setter 声明的是 CanvasNodeType[]，而这里只改节点 data 上的端口
      *  关注字段（结构上仍是同一批节点）—— 收窄成 Node[] 会挡在类型门口。 */
     setNodes: /* SAFETY: 类型断言已复核 */ setNodes as unknown as (
-      updater: (nodes: FlowNode[]) => FlowNode[],
+      updater: (nodes: Array<FlowNode>) => Array<FlowNode>,
     ) => void,
   });
 

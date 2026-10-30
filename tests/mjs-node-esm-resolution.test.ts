@@ -52,8 +52,8 @@ const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "coverage"]);
 const TS_SPEC = /\.(ts|tsx|mts|cts)$/;
 
 /** 抽出一个模块里**相对**的静态说明符（只认 `from "…"` 与裸 `import "…"`）。 */
-export function relativeSpecifiers(source: string): string[] {
-  const out: string[] = [];
+export function relativeSpecifiers(source: string): Array<string> {
+  const out: Array<string> = [];
   const fromRe = /\bfrom\s+["']([^"']+)["']/g;
   const bareRe = /(?:^|\n)\s*import\s+["']([^"']+)["']/g;
   for (const re of [fromRe, bareRe]) {
@@ -67,7 +67,7 @@ export function relativeSpecifiers(source: string): string[] {
 }
 
 /** 递归列出 `dir` 下的文件（跳过 `SKIP_DIRS`）。 */
-function listFiles(dir: string, out: string[] = []): string[] {
+function listFiles(dir: string, out: Array<string> = []): Array<string> {
   for (const name of readdirSync(dir)) {
     if (SKIP_DIRS.has(name)) continue;
     const full = path.join(dir, name);
@@ -97,7 +97,7 @@ export function extensionlessTsSpecifiers(root: string = ROOT): Array<{
 }> {
   const offenders: Array<{ file: string; spec: string }> = [];
   const seen = new Set<string>();
-  const queue: string[] = [];
+  const queue: Array<string> = [];
 
   // 入口：三个目录下的 .mjs / .cjs（它们是「Node 直接跑」的形态）。
   for (const dir of ENTRY_DIRS) {
@@ -160,9 +160,7 @@ describe("`.mjs` 入口 → `src/**` 的 Node ESM 路径：相对说明符必须
     const mjsImportingSrc = files.filter((f) => {
       if (!/\.(mjs|cjs)$/.test(f)) return false;
       return relativeSpecifiers(readFileSync(f, "utf8")).some(
-        (s) =>
-          s.includes("/src/") ||
-          path.resolve(path.dirname(f), s).includes("/src/"),
+        (s) => s.includes("/src/") || path.resolve(path.dirname(f), s).includes("/src/"),
       );
     });
     expect(

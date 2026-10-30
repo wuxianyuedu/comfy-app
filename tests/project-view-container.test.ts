@@ -72,8 +72,8 @@ function codeOf(rel: string): string {
 }
 
 /** 该文件里每一处 `<DocumentFrame …>` 传进去的 `className`（没传则跳过）。 */
-function frameClassNamesOf(rel: string): string[] {
-  const out: string[] = [];
+function frameClassNamesOf(rel: string): Array<string> {
+  const out: Array<string> = [];
   for (const m of codeOf(rel).matchAll(/<DocumentFrame\b([\s\S]{0,400}?)>/g)) {
     const className = /className="([^"]*)"/.exec(m[1] ?? "")?.[1];
     if (className !== undefined) out.push(className);
@@ -102,7 +102,7 @@ describe("统一容器的接入约定（文档型）", () => {
   );
 
   it("传给容器的 className 里没有第二份宽度", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const rel of DOCUMENT_VIEWS) {
       if (frameClassNamesOf(rel).some((c) => c.includes("max-w-"))) {
         offenders.push(rel);
@@ -114,7 +114,7 @@ describe("统一容器的接入约定（文档型）", () => {
   it("传给容器的 className 都带无变体的左右内边距（px-*）", () => {
     /* 只认无变体的 `px-`：`sm:px-8` 在断点以下不生效，而贴边恰恰发生在窗口变窄
        的那一侧 —— 只写带变体的那一半等于没写。 */
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const rel of DOCUMENT_VIEWS) {
       const classNames = frameClassNamesOf(rel);
       /* 前置断言：抽不到 className 时上面那个循环会「没人可判」而假绿 —— 那等于

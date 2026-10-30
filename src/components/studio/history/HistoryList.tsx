@@ -31,7 +31,7 @@ function HistoryGroupTaskList({
   onRetry,
   onRemove,
 }: {
-  items: TaskItem[];
+  items: Array<TaskItem>;
   progressMap: Record<string, number>;
   /** 「这一条在重试吗」的判据由导出它的出口给（规范 16 §16.2.4.40）——
    * 视图不再自己写`retryingId === task.id`。 */

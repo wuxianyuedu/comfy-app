@@ -59,9 +59,7 @@ export function parseRadiusScale(css: string): RadiusScale {
     throw new Error("globals.css 里找不到 --radius 基数");
   }
   const basePx =
-    baseMatch[2] === "rem"
-      ? Number.parseFloat(baseMatch[1]) * 16
-      : Number.parseFloat(baseMatch[1]);
+    baseMatch[2] === "rem" ? Number.parseFloat(baseMatch[1]) * 16 : Number.parseFloat(baseMatch[1]);
 
   return { basePx, derivations: parseDerivations(css) };
 }
@@ -72,8 +70,6 @@ export function renderRadiusPx(d: RadiusDerivation, basePx: number): number {
 }
 
 /** 整张表渲染出来的 px 值集合（含 `--radius-node` 这类非档位）。 */
-export function renderedRadiusValues(scale: RadiusScale): number[] {
-  return [...scale.derivations.values()].map((d) =>
-    renderRadiusPx(d, scale.basePx),
-  );
+export function renderedRadiusValues(scale: RadiusScale): Array<number> {
+  return [...scale.derivations.values()].map((d) => renderRadiusPx(d, scale.basePx));
 }

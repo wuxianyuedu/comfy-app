@@ -36,7 +36,7 @@ export interface ParsedCharacterDraft {
   costume: string;
   personality: string;
   temperament: string;
-  styleTags: string[];
+  styleTags: Array<string>;
   /** 角色卡 JSON 导入时可携带;工具解析产生的草稿为 undefined */
   skillSlug?: string;
   /** 角色卡 JSON 导入时可携带;工具解析产生的草稿为 undefined */
@@ -48,7 +48,7 @@ export interface ShotEntry {
   sceneHeading: string;
   shotType: ShotType;
   description: string;
-  characterNames: string[];
+  characterNames: Array<string>;
   dialogue: string;
 }
 
@@ -59,7 +59,7 @@ export interface ParsedShotDraft {
   time: string;
   description: string;
   dialogue: string;
-  characterNames: string[];
+  characterNames: Array<string>;
   /** 是否为该场景的第一镜(组件层用于给开场镜默认远景) */
   firstInScene: boolean;
 }
@@ -69,7 +69,7 @@ export interface ParsedShotDraft {
  * 这个导出名比类型早存在，去掉会让所有引用点一起改；留一层薄别名比留一份
  * 第二个真相便宜。
  */
-export const VALID_SHOT_TYPES: readonly ShotType[] = SHOT_TYPES;
+export const VALID_SHOT_TYPES: ReadonlyArray<ShotType> = SHOT_TYPES;
 
 function asStr(v: unknown): string {
   return typeof v === "string" ? v : "";
@@ -92,9 +92,7 @@ const ENTRY_SPLIT_RE = /[、;；]/;
  * 每条目形如「名字(年龄/性别)——外貌描述」,也支持「名字 描述」;
  * 同名角色去重(后条仅在前条外貌为空时补齐)。
  */
-export function parseCharacterEntries(
-  markdown: string,
-): ParsedCharacterDraft[] {
+export function parseCharacterEntries(markdown: string): Array<ParsedCharacterDraft> {
   const byName = new Map<string, ParsedCharacterDraft>();
   for (const line of markdown.split(/\r?\n/)) {
     const m = CHARACTER_LINE_RE.exec(line.trim());
@@ -162,7 +160,7 @@ function parseCharacterEntry(raw: string): ParsedCharacterDraft | null {
 }
 
 /** 在 text 中出现的已知角色名(保持传入顺序,去重) */
-export function matchCharacterNames(text: string, names: string[]): string[] {
+export function matchCharacterNames(text: string, names: Array<string>): Array<string> {
   const out = new Set<string>();
   for (const raw of names) {
     const name = raw.trim();
@@ -211,9 +209,7 @@ export function matchSceneHeading(line: string): SceneHeadingInfo | null {
     };
   }
   // B:「场景N」或「场景·」(必须带序号或分隔符,防误伤普通句子)
-  const b = /^(场\s*景|场|SCENE)\s*(?:(\d{1,3})|([:：·.\-–—、]))\s*(.*)$/i.exec(
-    s,
-  );
+  const b = /^(场\s*景|场|SCENE)\s*(?:(\d{1,3})|([:：·.\-–—、]))\s*(.*)$/i.exec(s);
   if (b) {
     return { heading: s, marker: "", tail: (b[4] ?? "").trim() };
   }
@@ -234,10 +230,7 @@ const TIME_WORDS_RE =
   /(清晨|早晨|早上|上午|中午|正午|午后|下午|黄昏|傍晚|晚上|夜晚|夜里|深夜|午夜|凌晨|黎明|白天|月夜)/;
 
 /** 从场景标题尾部提取地点/时间:优先「地点(时间)」括号,其次时间词扫描 */
-function extractLocationTime(
-  marker: string,
-  tailRaw: string,
-): { location: string; time: string } {
+function extractLocationTime(marker: string, tailRaw: string): { location: string; time: string } {
   const tail = tailRaw.trim();
   if (!tail) return { location: normalizeLocation(marker, ""), time: "" };
 
@@ -282,16 +275,16 @@ const DIALOGUE_LINE_RE = /^\*{0,2}[Vv]\s*(\d{1,3})\s*[:：.]?\s*(.+?)\*{0,2}$/;
  */
 export function parseShotDrafts(
   markdown: string,
-  knownCharacterNames: string[] = [],
-): ParsedShotDraft[] {
+  knownCharacterNames: Array<string> = [],
+): Array<ParsedShotDraft> {
   interface Block {
     heading: string;
     location: string;
     time: string;
-    items: { description: string; dialogue: string[] }[];
-    leadingDialogue: string[];
+    items: Array<{ description: string; dialogue: Array<string> }>;
+    leadingDialogue: Array<string>;
   }
-  const blocks: Block[] = [];
+  const blocks: Array<Block> = [];
   let cur: Block | null = null;
 
   const lines = markdown.split(/\r?\n/);
@@ -338,16 +331,12 @@ export function parseShotDrafts(
     }
   }
 
-  const drafts: ParsedShotDraft[] = [];
+  const drafts: Array<ParsedShotDraft> = [];
   for (const b of blocks) {
     if (b.items.length === 0 && b.leadingDialogue.length === 0) continue;
-    const items =
-      b.items.length > 0
-        ? b.items
-        : [{ description: "", dialogue: b.leadingDialogue }];
+    const items = b.items.length > 0 ? b.items : [{ description: "", dialogue: b.leadingDialogue }];
     items.forEach((item, i) => {
-      const own =
-        i === 0 ? [...b.leadingDialogue, ...item.dialogue] : item.dialogue;
+      const own = i === 0 ? [...b.leadingDialogue, ...item.dialogue] : item.dialogue;
       const dialogue = own.join("\n");
       drafts.push({
         sceneHeading: b.heading,
@@ -389,7 +378,7 @@ export const EXTRACT_CHARACTERS_SYSTEM = `你是剧本分析师。用户给出�
 { "name": "角色名", "ageGender": "年龄/性别(未知填空字符串)", "appearance": "外貌特征(发型/五官/身材,具象)", "costume": "服装(含颜色与材质)", "personality": "性格/气质关键词(逗号分隔)", "styleTags": ["画面风格标签,可空数组"] }
 只提取剧本中实际出现或被描述的角色,顺序按出场先后,全程使用中文。`;
 
-export function buildExtractCharactersMessages(script: string): LLMMessage[] {
+export function buildExtractCharactersMessages(script: string): Array<LLMMessage> {
   return [
     { role: "system", content: EXTRACT_CHARACTERS_SYSTEM },
     {
@@ -406,8 +395,8 @@ export const EXTRACT_SHOTS_SYSTEM = `你是分镜师。用户给出一段漫剧�
 
 export function buildExtractShotsMessages(
   script: string,
-  characterNames: string[] = [],
-): LLMMessage[] {
+  characterNames: Array<string> = [],
+): Array<LLMMessage> {
   const names = characterNames.filter((n) => n.trim()).join("、");
   return [
     { role: "system", content: EXTRACT_SHOTS_SYSTEM },
@@ -422,9 +411,9 @@ export function buildExtractShotsMessages(
  * 解析「本地/API」通道返回的角色卡 JSON(容忍代码围栏与前后杂文)。
  * 无有效元素时返回 [];JSON 无法解析时抛错,由组件层降级提示。
  */
-export function parseExtractedCharacters(text: string): ParsedCharacterDraft[] {
+export function parseExtractedCharacters(text: string): Array<ParsedCharacterDraft> {
   const arr = extractJsonArray(text);
-  const out: ParsedCharacterDraft[] = [];
+  const out: Array<ParsedCharacterDraft> = [];
   for (const item of arr) {
     if (!isRecord(item)) continue;
     const name = asStr(item.name).trim();
@@ -451,9 +440,9 @@ export function parseExtractedCharacters(text: string): ParsedCharacterDraft[] {
  * 景别非法时回退 medium;缺 sceneHeading 与 description 的条目跳过
  * (避免把角色卡等无关 JSON 误拆成空镜头)。
  */
-export function parseExtractedShots(text: string): ShotEntry[] {
+export function parseExtractedShots(text: string): Array<ShotEntry> {
   const arr = extractJsonArray(text);
-  const out: ShotEntry[] = [];
+  const out: Array<ShotEntry> = [];
   for (const item of arr) {
     if (!isRecord(item)) continue;
     const sceneHeading = asStr(item.sceneHeading).trim();
@@ -483,16 +472,14 @@ export function parseExtractedShots(text: string): ShotEntry[] {
  * 导入角色卡 JSON:支持数组、单对象、{ "characters": [...] } 包装。
  * 缺 name 的条目跳过;全部无效时抛错。字段与既有 Character 结构对齐。
  */
-export function parseImportedCharacterCards(
-  raw: string,
-): ParsedCharacterDraft[] {
+export function parseImportedCharacterCards(raw: string): Array<ParsedCharacterDraft> {
   let data: unknown;
   try {
     data = JSON.parse(raw);
   } catch {
     throw new Error("文件不是有效的 JSON");
   }
-  let items: unknown[];
+  let items: Array<unknown>;
   if (Array.isArray(data)) {
     items = data;
   } else if (isRecord(data) && Array.isArray(data.characters)) {
@@ -502,7 +489,7 @@ export function parseImportedCharacterCards(
   } else {
     throw new Error("角色卡 JSON 结构无法识别");
   }
-  const out: ParsedCharacterDraft[] = [];
+  const out: Array<ParsedCharacterDraft> = [];
   for (const item of items) {
     if (!isRecord(item)) continue;
     const name = asStr(item.name).trim();
@@ -536,10 +523,10 @@ export function parseImportedCharacterCards(
 
 /** 草稿并入角色列表:重名跳过;提示词按既有 buildCharacterPrompt 链路重算 */
 export function mergeCharacterDrafts(
-  existing: Character[],
-  drafts: ParsedCharacterDraft[],
-  styles: StyleRef[],
-): { list: Character[]; added: number; skipped: number } {
+  existing: Array<Character>,
+  drafts: Array<ParsedCharacterDraft>,
+  styles: Array<StyleRef>,
+): { list: Array<Character>; added: number; skipped: number } {
   const seen = new Set(existing.map((c) => c.name.trim()).filter(Boolean));
   const list = [...existing];
   let added = 0;
@@ -566,13 +553,11 @@ export function mergeCharacterDrafts(
       negativePrompt: "",
       params: {},
     };
-    const style =
-      styles.find((st) => st.slug === character.skillSlug) ?? styles[0];
+    const style = styles.find((st) => st.slug === character.skillSlug) ?? styles[0];
     character.positivePrompt = buildCharacterPrompt(character, style);
     character.negativePrompt = buildCharacterNegative(character, style);
     if (style?.defaultParams) character.params = { ...style.defaultParams };
-    if (draft.params)
-      character.params = { ...character.params, ...draft.params };
+    if (draft.params) character.params = { ...character.params, ...draft.params };
     list.push(character);
     added += 1;
   }
@@ -580,34 +565,28 @@ export function mergeCharacterDrafts(
 }
 
 /** 按标题匹配既有场景:先精确匹配,再做双向包含匹配 */
-export function matchSceneByHeading(
-  heading: string,
-  scenes: Scene[],
-): Scene | undefined {
+export function matchSceneByHeading(heading: string, scenes: Array<Scene>): Scene | undefined {
   const h = heading.trim();
   if (!h) return undefined;
   return (
     scenes.find((sc) => sc.heading === h) ??
-    scenes.find(
-      (sc) => sc.heading && (sc.heading.includes(h) || h.includes(sc.heading)),
-    )
+    scenes.find((sc) => sc.heading && (sc.heading.includes(h) || h.includes(sc.heading)))
   );
 }
 
 /** 条目 → Shot(复用既有 prompt 重算链路;场景按标题匹配,匹配不到则留空 sceneId) */
 export function buildShotsFromEntries(
-  entries: ShotEntry[],
+  entries: Array<ShotEntry>,
   startIndex: number,
-  scenes: Scene[],
-  characters: Character[],
-): Shot[] {
-  const shots: Shot[] = [];
+  scenes: Array<Scene>,
+  characters: Array<Character>,
+): Array<Shot> {
+  const shots: Array<Shot> = [];
   entries.forEach((entry, i) => {
     const scene = matchSceneByHeading(entry.sceneHeading, scenes);
     const names = entry.characterNames.map((n) => n.trim()).filter(Boolean);
     const linked = characters.filter((c) => c.name && names.includes(c.name));
-    const heading =
-      entry.sceneHeading.trim() || (scene?.heading ?? "") || "未命名场景";
+    const heading = entry.sceneHeading.trim() || (scene?.heading ?? "") || "未命名场景";
     const shot: Shot = {
       id: workshopUid("shot"),
       index: startIndex + i + 1,

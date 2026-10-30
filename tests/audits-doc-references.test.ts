@@ -69,7 +69,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const AUDITS_DIR = path.join(ROOT, "docs", "audits");
 
 /** 台账目录下参与判定的文件（`.md` 一份文件一份台账；`.dot` 是图，无路径引用形态）。 */
-function auditFiles(): string[] {
+function auditFiles(): Array<string> {
   return readdirSync(AUDITS_DIR)
     .filter((f) => f.endsWith(".md"))
     .map((f) => path.join("docs", "audits", f))
@@ -90,9 +90,9 @@ function auditFiles(): string[] {
  * 会让「台账干净」恒真）。
  */
 /** 模块级 memo：整份文件最多走一趟 git（每条用例都重算是白付 I/O）。 */
-let retiredCache: string[] | null = null;
+let retiredCache: Array<string> | null = null;
 
-function retiredBaselineNames(): string[] {
+function retiredBaselineNames(): Array<string> {
   if (retiredCache) return retiredCache;
   let out;
   try {
@@ -144,11 +144,9 @@ const HISTORICAL_MARKERS = [
  * 归一化成**带前导点**的 basename，与 `retiredBaselineNames()` 同一把尺子 ——
  * 不归一的话「`scripts/.a-baseline.json`」会被自己的分组吃掉那个点，两边对不上而静默出网。
  */
-function citedBaselineNames(line: string): string[] {
+function citedBaselineNames(line: string): Array<string> {
   const out = new Set<string>();
-  for (const m of line.matchAll(
-    /(\.?[A-Za-z0-9_-]*baseline[A-Za-z0-9_-]*\.json)/g,
-  )) {
+  for (const m of line.matchAll(/(\.?[A-Za-z0-9_-]*baseline[A-Za-z0-9_-]*\.json)/g)) {
     const name = m[1];
     if (name) out.add(name.startsWith(".") ? name : `.${name}`);
   }
@@ -164,10 +162,10 @@ type Finding = { file: string; line: number; baseline: string; text: string };
  * 再用合成文本跑「该红则红 / 带历史口径则该绿」。
  */
 function findRetiredBaselineClaims(
-  files: { rel: string; text: string }[],
+  files: Array<{ rel: string; text: string }>,
   retired: Set<string>,
-): Finding[] {
-  const found: Finding[] = [];
+): Array<Finding> {
+  const found: Array<Finding> = [];
   for (const { rel, text } of files) {
     text.split(/\r?\n/).forEach((line, i) => {
       if (HISTORICAL_MARKERS.some((m) => line.includes(m))) return;
@@ -202,10 +200,7 @@ describe("docs/audits/** 的台账引用不许漂到已删的棘轮基线上", (
       }));
       const bad = findRetiredBaselineClaims(files, retired);
       expect(
-        bad.map(
-          (b) =>
-            `${b.file}:${b.line} 点名已删基线 ${b.baseline}（同一行没有历史口径）`,
-        ),
+        bad.map((b) => `${b.file}:${b.line} 点名已删基线 ${b.baseline}（同一行没有历史口径）`),
       ).toEqual([]);
     },
   );

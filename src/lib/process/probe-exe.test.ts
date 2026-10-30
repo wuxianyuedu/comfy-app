@@ -104,7 +104,7 @@ describe("firstRunnable：候选顺序与「试过哪些」", () => {
   });
 
   it("每个候选都喂各自的参数（`py` 的 `-3` 是候选级的，不是调用点的记性）", () => {
-    const seen: Array<[string, string[]]> = [];
+    const seen: Array<[string, Array<string>]> = [];
     firstRunnable(
       ["python", "py"],
       (candidate) => (candidate === "py" ? ["-3", "-c", "x"] : ["-c", "x"]),
@@ -247,7 +247,7 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
   /* 那行读数走 `elevateLogLevel()` 注入的出口（默认是裸 Node 的 `console`，见实现文件头）。
    * 这里注入一个收集器而不是拦 `console`：出口是可换的，拦 `console` 会在换过之后
    * **静默收到空**，于是断言失败却说不出是「没打」还是「没收到」。 */
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   let restore: () => void = () => undefined;
   beforeEach(() => {
     lines.length = 0;
@@ -332,7 +332,7 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
      * `~/lib/core/logger`，落 `log/` 面板），而跑用例的人在终端上看得见的是 `report`
      * 那一行。少任何一条都不行 —— 只留前者时 CI 日志里读不到它；只留后者时判据判你
      * 直接写 console（或绕过脱敏）。 */
-    const reported: string[] = [];
+    const reported: Array<string> = [];
     firstRunnableOrEmpty({
       candidates: ["comfyapp-no-such-command-2316"],
       probeArgs: () => ["--version"],
@@ -361,7 +361,7 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
  */
 describe("谁都没注入时：读数落进缺省空转（ISSUE #2408）", () => {
   it("不抛、结论照旧（那个空串），而调用方那只眼睛照样收到读数", () => {
-    const reported: string[] = [];
+    const reported: Array<string> = [];
     expect(
       firstRunnableOrEmpty({
         candidates: ["comfyapp-no-such-command-2408"],

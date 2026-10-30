@@ -33,12 +33,7 @@ import { defineGateRepo } from "./helpers/gate-repo";
 const ROOT = resolve(".");
 const HOOK = join(ROOT, ".githooks", "pre-commit");
 const GATE_SCRIPT = join(ROOT, "scripts", "check-allow-builds.cjs");
-const CHECKLIST_DOC = join(
-  ROOT,
-  "docs",
-  "standards",
-  "13-提交与-code-review.md",
-);
+const CHECKLIST_DOC = join(ROOT, "docs", "standards", "13-提交与-code-review.md");
 const GATE_CMD = "node scripts/check-allow-builds.cjs --staged";
 const GATE_LABEL = "依赖构建脚本与 allowBuilds 对账（只判动了依赖面的提交）";
 
@@ -67,7 +62,7 @@ const { test, expect } = defineGateRepo({
 });
 
 /** 造一份最小 `pnpm-workspace.yaml`，`entries` 是 allowBuilds 块的整行内容。 */
-function workspace(entries: string[]): string {
+function workspace(entries: Array<string>): string {
   return [
     "minimumReleaseAge: 0",
     "",
@@ -80,11 +75,7 @@ function workspace(entries: string[]): string {
 }
 
 /** pnpm 隔离布局里一个已安装条目的 package.json 落点。 */
-function installed(
-  dirName: string,
-  name: string,
-  scripts?: Record<string, string>,
-) {
+function installed(dirName: string, name: string, scripts?: Record<string, string>) {
   return {
     path: `node_modules/.pnpm/${dirName}/node_modules/${name}/package.json`,
     body: JSON.stringify({
@@ -184,9 +175,7 @@ test("allowBuilds 块整档消失 ⇒ 红（名单没了正是根状态）", ({ 
   expect(output).toContain("没有 `allowBuilds:` 块");
 });
 
-test("pnpm-workspace.yaml 不在 ⇒ 红，不把读不到输入读成没有问题", ({
-  repo,
-}) => {
+test("pnpm-workspace.yaml 不在 ⇒ 红，不把读不到输入读成没有问题", ({ repo }) => {
   const one = installed("esbuild@0.28.2", "esbuild", {
     postinstall: "node install.js",
   });
@@ -246,10 +235,7 @@ test("暂存命中依赖面 → 真扫，未登记的包照旧阻断", ({ repo }
     postinstall: "node install.js",
   });
   repo.write(one.path, one.body);
-  repo.write(
-    "package.json",
-    JSON.stringify({ name: "probe", version: "1.0.0" }),
-  );
+  repo.write("package.json", JSON.stringify({ name: "probe", version: "1.0.0" }));
   repo.git("add", "package.json");
   const { code, output } = repo.run(["--staged"]);
   expect(code, output).toBe(1);
@@ -302,18 +288,14 @@ function readChecklistCommands(): Set<string> {
       .slice(0, close)
       .split("\n")
       .filter((line) => line.startsWith("✅ "))
-      .map((line) =>
-        (line.slice(2).split(/ +# /)[0] ?? "").replace(/\s+/g, " ").trim(),
-      ),
+      .map((line) => (line.slice(2).split(/ +# /)[0] ?? "").replace(/\s+/g, " ").trim()),
   );
 }
 
 describe("allow-builds 判据的接线（判据在场 ≠ 判据在跑）", () => {
   it("钩子 D 组真的执行这一步（被注释掉的行不算在场）", () => {
     const steps = dGroupSteps(readFileSync(HOOK, "utf8"));
-    const hit = steps.find((s) =>
-      s.cmd.includes("scripts/check-allow-builds.cjs"),
-    );
+    const hit = steps.find((s) => s.cmd.includes("scripts/check-allow-builds.cjs"));
     expect(
       hit,
       `D 组 ${steps.length} 步里没有这一步 —— 摘掉它，硬规则 8 就又回到「零执行者」`,
@@ -329,8 +311,6 @@ describe("allow-builds 判据的接线（判据在场 ≠ 判据在跑）", () =
 
   it("脚本头承诺「供 .githooks/pre-commit」，与钩子里的在场一致", () => {
     expect(existsSync(GATE_SCRIPT), "判据脚本本体不在了").toBe(true);
-    expect(readFileSync(GATE_SCRIPT, "utf8")).toContain(
-      "供 .githooks/pre-commit",
-    );
+    expect(readFileSync(GATE_SCRIPT, "utf8")).toContain("供 .githooks/pre-commit");
   });
 });

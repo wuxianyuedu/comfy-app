@@ -37,9 +37,9 @@ function paramsOf(detail: TaskDetail | null): Record<string, unknown> {
 }
 
 /** 取 params.workflowInputs，非数组时给空数组。 */
-export function workflowInputsOf<T extends { name: string }>(detail: TaskDetail | null): T[] {
+export function workflowInputsOf<T extends { name: string }>(detail: TaskDetail | null): Array<T> {
   const raw: unknown = paramsOf(detail).workflowInputs;
-  return Array.isArray(raw) ? /* SAFETY: 类型断言已复核 */ (raw as T[]) : [];
+  return Array.isArray(raw) ? /* SAFETY: 类型断言已复核 */ (raw as Array<T>) : [];
 }
 
 /**
@@ -85,7 +85,7 @@ export interface WorkshopParamRow {
 
 /** 契约口 id → params 顶层键的别名。工坊对外值落库时用的是 generate 入参名，
  *  与契约口 id 不完全同名（first-frame ↔ firstFrame、duration ↔ frames…）。 */
-const PORT_TO_PARAM_KEYS: Record<string, readonly string[]> = {
+const PORT_TO_PARAM_KEYS: Record<string, ReadonlyArray<string>> = {
   prompt: ["prompt"],
   negative: ["negative"],
   "first-frame": ["firstFrame"],
@@ -117,7 +117,7 @@ interface RawWorkflowInput {
 function resolvePortValue(
   portId: string,
   params: Record<string, unknown>,
-  inputs: RawWorkflowInput[],
+  inputs: Array<RawWorkflowInput>,
   io: WorkflowIOMap | null | undefined,
 ): unknown {
   const keys = PORT_TO_PARAM_KEYS[portId] ?? [portId];
@@ -141,9 +141,9 @@ function resolvePortValue(
 export function deriveWorkshopParams(
   detail: TaskDetail | null,
   mode: string | null | undefined,
-  contracts: readonly ModeContract[] | null | undefined,
+  contracts: ReadonlyArray<ModeContract> | null | undefined,
   io: WorkflowIOMap | null | undefined,
-): WorkshopParamRow[] {
+): Array<WorkshopParamRow> {
   const params = paramsOf(detail);
   const inputs = workflowInputsOf<RawWorkflowInput>(detail);
   return modeContractEntries(mode, contracts).map((port) => ({
@@ -211,7 +211,7 @@ export function deriveWorkflowParams(
   detail: TaskDetail | null,
   io: WorkflowIOMap | null | undefined,
 ): {
-  rows: WorkflowParamRow[];
+  rows: Array<WorkflowParamRow>;
   topLevelEntries: Array<[string, unknown]>;
   hasAny: boolean;
 } {

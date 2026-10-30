@@ -50,10 +50,10 @@ export interface StepLogEntry {
 
 export interface StepLogPanelState {
   /** 该 taskId 的面板首次打开以来推入的全部日志条目。 */
-  logs: StepLogEntry[];
+  logs: Array<StepLogEntry>;
   /** 最近一次看到的结构化失败（来自 pollTask 的 `d.validationErrors`，
    *  或 SSE 的 `state` 事件）。任务仍在跑、或从未标记失败时为 null。 */
-  validationErrors: ValidationError[] | null;
+  validationErrors: Array<ValidationError> | null;
   /* 任务级元数据，好让任务切换下拉框显示「工作流名 · 状态」，
    *  而不是一串被截断的 id。由 GlobalStepLogPanel 在每次 SSE `state` 事件时填充。 */
   workflowName?: string;
@@ -113,7 +113,7 @@ export function appendStepLog(
 ): StepLogPanelState | null {
   if (!taskId) return null;
   const prev = cache.get(taskId) ?? {
-    logs: /* SAFETY: 类型断言已复核 */ [] as StepLogEntry[],
+    logs: /* SAFETY: 类型断言已复核 */ [] as Array<StepLogEntry>,
     validationErrors: null,
   };
   // 按 (时间, 消息) 去重 —— 与 ImageGenerationPanel 里的 SSE 去重口径一致。
@@ -145,11 +145,11 @@ export function appendStepLog(
 /* 更新某个 taskId 缓存的 `validationErrors`（条目不存在则新建）。 */
 export function setStepLogValidationErrors(
   taskId: string | null | undefined,
-  errs: ValidationError[] | null,
+  errs: Array<ValidationError> | null,
 ): void {
   if (!taskId) return;
   const prev = cache.get(taskId) ?? {
-    logs: /* SAFETY: 类型断言已复核 */ [] as StepLogEntry[],
+    logs: /* SAFETY: 类型断言已复核 */ [] as Array<StepLogEntry>,
     validationErrors: null,
   };
   touch(taskId, { logs: prev.logs, validationErrors: errs });
@@ -165,7 +165,7 @@ export function patchStepLogMeta(
 ): void {
   if (!taskId) return;
   const prev = cache.get(taskId) ?? {
-    logs: /* SAFETY: 类型断言已复核 */ [] as StepLogEntry[],
+    logs: /* SAFETY: 类型断言已复核 */ [] as Array<StepLogEntry>,
     validationErrors: null,
   };
   touch(taskId, {
@@ -184,7 +184,7 @@ export function stepLogCacheSize(): number {
 
 /* 返回缓存当前持有的 taskId，最近触碰的排在最前。
  * 全局日志面板的任务选择器用它，让用户能在历史运行之间来回切，而不必重跑。 */
-export function listCachedTaskIds(): string[] {
+export function listCachedTaskIds(): Array<string> {
   return Array.from(cache.keys());
 }
 

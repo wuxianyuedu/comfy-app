@@ -56,10 +56,10 @@ type ExecJobRow = {
 /** 注入用的假仓储：四条读写的调用都记下来，断言不依赖实现细节。 */
 function fakeRepo(overrides: Record<string, unknown> = {}) {
   return {
-    claimNextQueued: vi.fn(async () => /* SAFETY: 类型断言已复核 */ [] as string[]),
+    claimNextQueued: vi.fn(async () => /* SAFETY: 类型断言已复核 */ [] as Array<string>),
     findExecJob: vi.fn(async () => /* SAFETY: 类型断言已复核 */ null as ExecJobRow),
     finalizeFailure: vi.fn(async () => /* SAFETY: 类型断言已复核 */ "written" as const),
-    listQueuedIds: vi.fn(async () => /* SAFETY: 类型断言已复核 */ [] as string[]),
+    listQueuedIds: vi.fn(async () => /* SAFETY: 类型断言已复核 */ [] as Array<string>),
     ...overrides,
   };
 }
@@ -84,7 +84,7 @@ function resetRunnerState() {
   s.lastLogPct.clear();
 }
 
-function logsOf(taskId: string): string[] {
+function logsOf(taskId: string): Array<string> {
   return (state().logs.get(taskId) ?? []).map((e) => e.msg);
 }
 

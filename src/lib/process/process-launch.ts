@@ -55,7 +55,7 @@ export type ManagedSpawnResult =
 
 export interface ManagedSpawnOptions {
   command: string;
-  args: string[];
+  args: Array<string>;
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   /** keepAlive 生效时恒忽略；bound 模式下透传给 spawn。 */
@@ -101,7 +101,7 @@ function toStartProcessElement(arg: string): string {
  * 多个位置参数导致绑定失败（实测报「找不到接受实际参数 … 的位置形式参数」，
  * Start-Process 完全不执行，目标进程根本不会被拉起）。
  */
-export function buildStartProcessArgumentList(args: string[]): string {
+export function buildStartProcessArgumentList(args: Array<string>): string {
   return `@(${args.map(toStartProcessElement).join(",")})`;
 }
 
@@ -158,7 +158,7 @@ export function waitForDetachMediator(
   child: DetachMediatorHandle,
   timeoutMs = 5000,
 ): Promise<DetachMediatorOutcome> {
-  const chunks: Buffer[] = [];
+  const chunks: Array<Buffer> = [];
   child.stderr?.on("data", (d: Buffer) => chunks.push(d));
   const readSoFar = (): string => decodePowerShellOutput(Buffer.concat(chunks));
   /* 兜底必须**在超时那一刻**算，不能在这一行算：`withTimeoutResult` 的 fallback
@@ -226,7 +226,7 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
     try {
       // 有重定向文件时把文件描述符直接交给 stdio（脱离进程树后依然落盘），
       // 父进程侧的副本用完即关。
-      let stdio: ("ignore" | number)[] = ["ignore", "ignore", "ignore"];
+      let stdio: Array<"ignore" | number> = ["ignore", "ignore", "ignore"];
       if (opts.redirectStdoutFile && opts.redirectStderrFile) {
         outFd = openSync(opts.redirectStdoutFile, "w");
         errFd = openSync(opts.redirectStderrFile, "w");
@@ -263,20 +263,10 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
    * 两侧契约一致：中介立即退出，退出码非 0 表示拉起被拒，stderr 带原因。 */
   const shellExe = process.env.COMFYAPP_SHELL_EXE?.trim();
   if (shellExe) {
-    const cliArgs = [
-      "--spawn-detached",
-      "--cmd",
-      command,
-      ...args.flatMap((a) => ["--arg", a]),
-    ];
+    const cliArgs = ["--spawn-detached", "--cmd", command, ...args.flatMap((a) => ["--arg", a])];
     if (opts.cwd) cliArgs.push("--cwd", opts.cwd);
     if (opts.redirectStdoutFile && opts.redirectStderrFile) {
-      cliArgs.push(
-        "--out",
-        opts.redirectStdoutFile,
-        "--err",
-        opts.redirectStderrFile,
-      );
+      cliArgs.push("--out", opts.redirectStdoutFile, "--err", opts.redirectStderrFile);
     }
     try {
       // 不传 env：与下面的 powershell 中介同语义（继承本进程环境，目标再由它继承）。
@@ -306,9 +296,7 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
 
   // 退回：powershell Start-Process 孤儿中介。stderr 用 pipe 带出
   // （调用方经 waitForDetachMediator 读），拉起被拒时才有可行动的报错。
-  const cwdArg = opts.cwd
-    ? ` -WorkingDirectory ${escapePwshSingle(opts.cwd)}`
-    : "";
+  const cwdArg = opts.cwd ? ` -WorkingDirectory ${escapePwshSingle(opts.cwd)}` : "";
   const redirectArg =
     opts.redirectStdoutFile && opts.redirectStderrFile
       ? ` -RedirectStandardOutput ${escapePwshSingle(opts.redirectStdoutFile)}` +
@@ -319,11 +307,10 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
     ` -ArgumentList ${buildStartProcessArgumentList(args)}` +
     ` -WindowStyle Hidden${redirectArg}${cwdArg}; exit`;
   try {
-    const mediator = spawn(
-      "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", ps],
-      { windowsHide: true, stdio: ["ignore", "ignore", "pipe"] },
-    );
+    const mediator = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", ps], {
+      windowsHide: true,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
     mediator.unref();
     // 中介是立即退出的 powershell；返回它仅供调用方持有引用，pid 不代表目标。
     return { child: mediator };

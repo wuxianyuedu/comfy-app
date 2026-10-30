@@ -157,7 +157,7 @@ function StepRow({
 }: {
   label: string;
   hint: string;
-  steps: AppearanceStep[];
+  steps: Array<AppearanceStep>;
   value: string;
   onChange: (id: string) => void;
 }) {

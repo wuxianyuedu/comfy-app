@@ -16,23 +16,14 @@
  *
  * 反向验证：把 `windowsKillArgs` 的 `/T` 去掉，本文件立刻失败。
  */
-import {
-  chmodSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 /* 平台切换改由 fixture 提供（`tests/helpers/platform-fixtures.ts`）：原来是本文件
  * 手写的 `withWindows()` + try/finally。fixture 的收益是**用例中途 throw 也照样
  * 恢复**，且「这条依赖哪个平台」在用例签名里看得见而不是散在包装函数里。 */
-import {
-  ON_WINDOWS,
-  test as platformTest,
-} from "../../../tests/helpers/platform-fixtures";
+import { ON_WINDOWS, test as platformTest } from "../../../tests/helpers/platform-fixtures";
 
 import {
   killProcessTreeByImage,
@@ -44,31 +35,19 @@ import {
 } from "./kill-process-tree";
 
 /** 造一个假 taskkill：把收到的参数写进文件，退出码可控。 */
-function fakeTaskkill(
-  dir: string,
-  exitCode = 0,
-): { exe: string; logFile: string } {
-  const exe = join(
-    dir,
-    process.platform === "win32" ? "taskkill.cmd" : "taskkill",
-  );
+function fakeTaskkill(dir: string, exitCode = 0): { exe: string; logFile: string } {
+  const exe = join(dir, process.platform === "win32" ? "taskkill.cmd" : "taskkill");
   const logFile = join(dir, "args.txt");
   if (process.platform === "win32") {
-    writeFileSync(
-      exe,
-      `@echo off\r\necho %* > "${logFile}"\r\nexit /b ${exitCode}\r\n`,
-    );
+    writeFileSync(exe, `@echo off\r\necho %* > "${logFile}"\r\nexit /b ${exitCode}\r\n`);
   } else {
-    writeFileSync(
-      exe,
-      `#!/bin/sh\nprintf '%s' "$*" > "${logFile}"\nexit ${exitCode}\n`,
-    );
+    writeFileSync(exe, `#!/bin/sh\nprintf '%s' "$*" > "${logFile}"\nexit ${exitCode}\n`);
     chmodSync(exe, 0o755);
   }
   return { exe, logFile };
 }
 
-const dirs: string[] = [];
+const dirs: Array<string> = [];
 function tempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), "comfyapp-taskkill-"));
   dirs.push(dir);
@@ -77,8 +56,7 @@ function tempDir(): string {
 
 afterEach(() => {
   delete process.env.COMFYAPP_TASKKILL;
-  for (const dir of dirs.splice(0))
-    rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 /**
@@ -98,9 +76,7 @@ async function readArgs(logFile: string, timeoutMs = 3000): Promise<string> {
     }
   };
   try {
-    await expect
-      .poll(() => readOnce().length > 0, { timeout: timeoutMs, interval: 25 })
-      .toBe(true);
+    await expect.poll(() => readOnce().length > 0, { timeout: timeoutMs, interval: 25 }).toBe(true);
   } catch {
     /* 超时：交给调用点断言（读到的就是空串）。 */
   }
@@ -109,21 +85,11 @@ async function readArgs(logFile: string, timeoutMs = 3000): Promise<string> {
 
 describe("Windows 回收命令构造（唯一出处）", () => {
   it("tree 模式是 /PID <pid> /T /F（杀整棵树，硬规则 3 的原始要求）", () => {
-    expect(windowsKillArgs("4321", "tree")).toEqual([
-      "/PID",
-      "4321",
-      "/T",
-      "/F",
-    ]);
+    expect(windowsKillArgs("4321", "tree")).toEqual(["/PID", "4321", "/T", "/F"]);
   });
 
   it("image 模式是 /IM <name> /T /F（按映像名杀整棵树）", () => {
-    expect(windowsKillArgs("ollama.exe", "image")).toEqual([
-      "/IM",
-      "ollama.exe",
-      "/T",
-      "/F",
-    ]);
+    expect(windowsKillArgs("ollama.exe", "image")).toEqual(["/IM", "ollama.exe", "/T", "/F"]);
   });
 
   it("默认走系统自带 taskkill；COMFYAPP_TASKKILL 只作为显式注入口", () => {
@@ -149,21 +115,15 @@ describe("Windows 分支真跑（注入同名可执行文件）", () => {
    * ⚠️ 跳过的那几条在本机**就是零执行者**（台账 E7 记的形状）。这里不动它们，
    * 是因为它们问的是「命令真的被 spawn 出去了吗」——那件事没有注入形态；
    * 而「该构造什么命令」这一半已经由上面的纯函数用例在两端判过。 */
-  platformTest.skipIf(ON_WINDOWS)(
-    "真的以 /PID <pid> /T /F 调起 taskkill",
-    async () => {
-      const dir = tempDir();
-      const { exe, logFile } = fakeTaskkill(dir);
-      process.env.COMFYAPP_TASKKILL = exe;
-      const result = await killProcessTreeWith(
-        { pid: 4321 },
-        { windows: true },
-      );
-      expect(result.ok).toBe(true);
-      expect(result.via).toContain("/PID 4321 /T /F");
-      expect(await readArgs(logFile)).toBe("/PID 4321 /T /F");
-    },
-  );
+  platformTest.skipIf(ON_WINDOWS)("真的以 /PID <pid> /T /F 调起 taskkill", async () => {
+    const dir = tempDir();
+    const { exe, logFile } = fakeTaskkill(dir);
+    process.env.COMFYAPP_TASKKILL = exe;
+    const result = await killProcessTreeWith({ pid: 4321 }, { windows: true });
+    expect(result.ok).toBe(true);
+    expect(result.via).toContain("/PID 4321 /T /F");
+    expect(await readArgs(logFile)).toBe("/PID 4321 /T /F");
+  });
 
   platformTest.skipIf(ON_WINDOWS)(
     "image 模式真的以 /IM <name> /T /F 调起 taskkill（Ollama 走这条）",
@@ -184,9 +144,7 @@ describe("Windows 分支真跑（注入同名可执行文件）", () => {
     const dir = tempDir();
     const { exe, logFile } = fakeTaskkill(dir);
     process.env.COMFYAPP_TASKKILL = exe;
-    expect((await killProcessTreeWith({ pid: 0 }, { windows: true })).ok).toBe(
-      false,
-    );
+    expect((await killProcessTreeWith({ pid: 0 }, { windows: true })).ok).toBe(false);
     expect(await readArgs(logFile, 300)).toBe("");
   });
 });
@@ -210,7 +168,7 @@ describe("Windows 命令行在两端都判得到", () => {
 
   it("命令以 0 退出时回调收到 true（派发成功与失败不许混成一句话）", async () => {
     process.env.COMFYAPP_TASKKILL = process.execPath;
-    const outcomes: boolean[] = [];
+    const outcomes: Array<boolean> = [];
     const via = spawnTaskkill(["--version"], (ok) => outcomes.push(ok));
     await expect
       .poll(() => outcomes, { message: "taskkill 退出回调收到的成败序列" })
@@ -239,16 +197,13 @@ describe("另外两个 Windows 落点（映像名回收 / 同步入口）", () =
     },
   );
 
-  platformTest(
-    "同步入口在 Windows 上同样是 /PID <pid> /T /F，且不等命令结束",
-    ({ asPlatform }) => {
-      asPlatform("win32");
-      process.env.COMFYAPP_TASKKILL = process.execPath;
-      const result = killProcessTreeSync({ pid: 4321 });
-      expect(result.ok).toBe(true);
-      expect(result.via).toBe(`${process.execPath} /PID 4321 /T /F`);
-    },
-  );
+  platformTest("同步入口在 Windows 上同样是 /PID <pid> /T /F，且不等命令结束", ({ asPlatform }) => {
+    asPlatform("win32");
+    process.env.COMFYAPP_TASKKILL = process.execPath;
+    const result = killProcessTreeSync({ pid: 4321 });
+    expect(result.ok).toBe(true);
+    expect(result.via).toBe(`${process.execPath} /PID 4321 /T /F`);
+  });
 
   platformTest(
     "映像名回收在 Windows 上也拒绝空名字（`/IM ` 加空格名会杀到整台机器）",
@@ -272,10 +227,7 @@ describe("回收命令的派发与等待（`wait`）", () => {
    */
   it("wait=true 时等到命令结束，并把退出码写进 via", async () => {
     process.env.COMFYAPP_TASKKILL = process.execPath;
-    const result = await killProcessTreeWith(
-      { pid: 4321, wait: true },
-      { windows: true },
-    );
+    const result = await killProcessTreeWith({ pid: 4321, wait: true }, { windows: true });
     expect(result.via).toContain("/PID 4321 /T /F");
     expect(result.via).toContain("非 0");
     expect(result.ok).toBe(false);
@@ -289,10 +241,7 @@ describe("回收命令的派发与等待（`wait`）", () => {
 
   it("命令起不来时返回 ok=false，不抛错（回收失败不打断调用方）", async () => {
     process.env.COMFYAPP_TASKKILL = join(tempDir(), "not-a-taskkill");
-    const result = await killProcessTreeWith(
-      { pid: 4321, wait: true },
-      { windows: true },
-    );
+    const result = await killProcessTreeWith({ pid: 4321, wait: true }, { windows: true });
     expect(result.ok).toBe(false);
     expect(result.via).toContain("not-a-taskkill /PID 4321 /T /F");
   });
@@ -309,10 +258,7 @@ describe("回收命令的派发与等待（`wait`）", () => {
     /* 故意**不** chmod：让它存在但不可执行。 */
     writeFileSync(exe, "@echo off\r\nexit /b 0\r\n");
     process.env.COMFYAPP_TASKKILL = exe;
-    const result = await killProcessTreeWith(
-      { pid: 4321, wait: true },
-      { windows: true },
-    );
+    const result = await killProcessTreeWith({ pid: 4321, wait: true }, { windows: true });
     expect(result.ok).toBe(false);
     expect(result.via).toContain("非 0");
   });

@@ -32,7 +32,7 @@ import { clamp } from "~/lib/clamp";
 
 /** 一页 / 一个窗口的条目数与它在原列表里的位置（左闭右开）。 */
 export interface PageWindow<T> {
-  entries: T[];
+  entries: Array<T>;
   /** 钳回有效区间之后的页码（从 1 起）。 */
   page: number;
   /** 总页数，**至少 1**（空列表也是「1 页」，只是这一页有 0 条）。 */
@@ -68,7 +68,11 @@ function normalizeIndex(value: number, fallback: number): number {
  * 页码越界时**钳回**（不是返回空页）：用户在 3 页时把日志清到只剩 1 页，
  * 期望的是落回末页那一档，而不是看到一片空白。
  */
-export function tailPages<T>(items: readonly T[], page: number, pageSize: number): PageWindow<T> {
+export function tailPages<T>(
+  items: ReadonlyArray<T>,
+  page: number,
+  pageSize: number,
+): PageWindow<T> {
   const size = safeSize(pageSize);
   const total = items.length;
   const totalPages = Math.max(1, Math.ceil(total / size));
@@ -119,7 +123,7 @@ export const LOG_MODAL_MAX_ROWS = 300;
  * 「第 N 页是哪一段」（要能往前翻），本函数回答「最新的 N 条是哪几条」。
  * 硬合成一支会需要一个「有没有页码」的开关，而那是调用处该说的事。
  */
-export function tailWindow<T>(items: readonly T[], size: number): T[] {
+export function tailWindow<T>(items: ReadonlyArray<T>, size: number): Array<T> {
   const n = safeSize(size);
   if (n >= items.length) return items.slice();
   return items.slice(items.length - n);
@@ -144,7 +148,7 @@ export function tailWindow<T>(items: readonly T[], size: number): T[] {
  * 只在放入得下时复制、只在放不下时原地搬，两条合起来就是「每次追加恰好一趟
  * O(size) 搬移」的最小写法。
  */
-export function tailWindowAppend<T>(items: readonly T[], item: T, size: number): T[] {
+export function tailWindowAppend<T>(items: ReadonlyArray<T>, item: T, size: number): Array<T> {
   const n = safeSize(size);
   /* 窗口未满：复制 + 追加（必须换引用，见上）。这一支就是
    * `tailWindow([...items, item], n)` 本身 —— 归一口径不必在这里再算一遍，
@@ -152,7 +156,7 @@ export function tailWindowAppend<T>(items: readonly T[], item: T, size: number):
   if (items.length < n) return tailWindow([...items, item], n);
   /* 窗口已满：原数组长度就是上限，`shift` + `push` 后仍恰为 `n` 条，
    * 不必再切片。 */
-  const next = /* SAFETY: 类型断言已复核 */ items as T[];
+  const next = /* SAFETY: 类型断言已复核 */ items as Array<T>;
   next.shift();
   next.push(item);
   return next;

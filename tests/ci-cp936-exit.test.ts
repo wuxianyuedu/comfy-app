@@ -118,7 +118,7 @@ describe("CP936 出口：写字节（只读、失败不抛）", () => {
   });
 
   it("Windows 上走 PowerShell + `-NoProfile`（配置脚本不许进这条链）", () => {
-    const calls: Array<{ cmd: string; args: string[]; input: string }> = [];
+    const calls: Array<{ cmd: string; args: Array<string>; input: string }> = [];
     const r = writeCp936("中文一二三", {
       platform: "win32",
       run: (cmd, args, input) => {
@@ -181,7 +181,7 @@ describe("CP936 出口：写字节（只读、失败不抛）", () => {
     const calls: Array<{ cmd: string; encoding: unknown; input: unknown }> = [];
     writeCp936("中文一二三", {
       platform: "win32",
-      spawnImpl: /* SAFETY: 类型断言已复核 */ ((cmd: string, _args: string[], opts: never) => {
+      spawnImpl: /* SAFETY: 类型断言已复核 */ ((cmd: string, _args: Array<string>, opts: never) => {
         const o = /* SAFETY: 类型断言已复核 */ opts as { encoding: unknown; input: unknown };
         calls.push({ cmd, encoding: o.encoding, input: o.input });
         return { status: 0 };
@@ -240,7 +240,7 @@ describe("CP936 出口：参数解析（`--` 是分界，不是可选）", () =>
 describe("CP936 出口：编排与退出码", () => {
   /** 解析口的「原样放行」形态：不关心解析的那几条用它，免得去碰真 PATH。
    *  形状必须与 production 同（`{command, args, resolved}`）。 */
-  const passthroughResolve = (cmd: string, args: string[]) => ({
+  const passthroughResolve = (cmd: string, args: Array<string>) => ({
     command: cmd,
     args,
     resolved: true,
@@ -279,7 +279,7 @@ describe("CP936 出口：编排与退出码", () => {
      * 判据只能落在「这一跳有没有被显式钉住」这个形状上：真 `spawn` 出来的流有
      * `setEncoding`，判它被以 `"utf8"` 调过（`ci-console-encoding.mjs` 钉的是
      * 控制台那一半，这里钉的是抓子进程这一半）。 */
-    const pinned: string[] = [];
+    const pinned: Array<string> = [];
     const mkStream = (out: string) => ({
       setEncoding(enc: string) {
         pinned.push(enc);
@@ -343,7 +343,7 @@ describe("CP936 出口：编排与退出码", () => {
      *
      * 与 §13.6.4.1 那句「拿不到测量 ≠ 测量结果是红的」是同一条区分，只是方向相反：
      * 拿到的既不是红，**也不许被念成绿**。 */
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const child = fakeChild("半行输出", null, "SIGTERM");
     const code = await runWithCp936Exit(["--", "做点事"], {
       platform: "linux",
@@ -365,7 +365,7 @@ describe("CP936 出口：编排与退出码", () => {
     /* 只把「有 signal」当非零，剩下的漏网形态是**两个都拿不到**（宿主给的终止信息
      * 被截断、`close` 在 stdio 排空前就触发的那一类）。那一档同样「没有跑到结论」，
      * 落回 0 就是上面那一格的同一个 bug 换了个触发条件。 */
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const child = fakeChild("x\n", null, null);
     const code = await runWithCp936Exit(["--", "做点事"], {
       platform: "linux",
@@ -382,7 +382,7 @@ describe("CP936 出口：编排与退出码", () => {
   it("干净退出**照旧不念**那句「外壳退出」—— 成功路径不许被写成一条像红的提示", async () => {
     /* 反向那一半：新加的这行出声如果无条件打，每一次正常 stage 末尾都多一条
      * 「退出 0」，读的人要在里面找真红 —— 与 ISSUE #2326（只在该出声时才出声）同一条口径。 */
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const child = fakeChild("正常收尾\n", 0, null);
     const code = await runWithCp936Exit(["--", "做点事"], {
       platform: "linux",
@@ -400,8 +400,8 @@ describe("CP936 出口：编排与退出码", () => {
      * 里会变乱码（ISSUE #1977）。这一格判「新加的那句有没有跟着同一条口径」——
      * 写错的形态是**本地全绿、平台上那行读不出中文**，所以两边都要钉：`write` 收到它、
      * `emit` 没收到它。 */
-    const written: string[] = [];
-    const printed: string[] = [];
+    const written: Array<string> = [];
+    const printed: Array<string> = [];
     const child = fakeChild("x\n", null, "SIGKILL");
     const code = await runWithCp936Exit(["--", "做点事"], {
       platform: "win32",
@@ -431,7 +431,11 @@ describe("CP936 出口：编排与退出码", () => {
       {
         platform: "linux",
         resolve: passthroughResolve,
-        spawnProc: /* SAFETY: 类型断言已复核 */ ((cmd: string, args: string[], opts: never) => {
+        spawnProc: /* SAFETY: 类型断言已复核 */ ((
+          cmd: string,
+          args: Array<string>,
+          opts: never,
+        ) => {
           handle = spawn(cmd, args, opts);
           setTimeout(() => handle?.kill("SIGTERM"), 300);
           return handle;
@@ -458,7 +462,7 @@ describe("CP936 出口：编排与退出码", () => {
   });
 
   it("非 Windows：原样转出（不假装转过一次 CP936）", async () => {
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const child = fakeChild("中文一二三\n", 0);
     await runWithCp936Exit(["--", "echo"], {
       platform: "linux",
@@ -475,7 +479,7 @@ describe("CP936 出口：编排与退出码", () => {
   });
 
   it("Windows：转码那一步没做成时**原文照打**，并且说明「日志可能仍是乱码」", async () => {
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const child = fakeChild("中文一二三\n", 0);
     await runWithCp936Exit(["--", "echo"], {
       platform: "win32",
@@ -495,7 +499,7 @@ describe("CP936 出口：编排与退出码", () => {
   });
 
   it("Windows 且转码成功 ⇒ 不再把原文照打一遍（否则日志里两份）", async () => {
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const child = fakeChild("中文一二三\n", 0);
     await runWithCp936Exit(["--", "echo"], {
       platform: "win32",
@@ -518,7 +522,7 @@ describe("CP936 出口：编排与退出码", () => {
      * （`spawn("pnpm.cmd")` 同样，因为 `.cmd` 只有 cmd.exe 会解释）。§2.1.1 已经为
      * 这件事收了一个唯一出口，所以本外壳**必须**过它，而不是自己写一个
      * 「Windows 用 pnpm.cmd」——那正是第四次踩同一个坑。 */
-    const seen: Array<{ cmd: string; args: string[] }> = [];
+    const seen: Array<{ cmd: string; args: Array<string> }> = [];
     const child = fakeChild("ok\n", 0);
     await runWithCp936Exit(["--", "pnpm", "install", "--frozen-lockfile"], {
       platform: "win32",
@@ -535,7 +539,7 @@ describe("CP936 出口：编排与退出码", () => {
         ],
         resolved: true,
       }),
-      spawnProc: /* SAFETY: 类型断言已复核 */ ((cmd: string, args: string[]) => {
+      spawnProc: /* SAFETY: 类型断言已复核 */ ((cmd: string, args: Array<string>) => {
         seen.push({ cmd, args });
         queueMicrotask(() => child.emitClose());
         return child;
@@ -559,7 +563,7 @@ describe("CP936 出口：编排与退出码", () => {
      * 正确的那一层是 `resolveCommandInvocation()`：收名字、交 `{command, args,
      * resolved}`。这条用例把那个口径钉住 —— 生产解析口必须是后者，注入面也必须
      * 交出这个形状。 */
-    const seen: Array<{ cmd: string; args: string[] }> = [];
+    const seen: Array<{ cmd: string; args: Array<string> }> = [];
     const child = fakeChild("ok\n", 0);
     await runWithCp936Exit(["--", "some-thing", "x"], {
       platform: "win32",
@@ -568,7 +572,7 @@ describe("CP936 出口：编排与退出码", () => {
         args: ["x"],
         resolved: true,
       }),
-      spawnProc: /* SAFETY: 类型断言已复核 */ ((cmd: string, args: string[]) => {
+      spawnProc: /* SAFETY: 类型断言已复核 */ ((cmd: string, args: Array<string>) => {
         seen.push({ cmd, args });
         queueMicrotask(() => child.emitClose());
         return child;
@@ -681,7 +685,7 @@ describe("CP936 出口：编排与退出码", () => {
     const fake = path.join(dir, process.platform === "win32" ? "pnpm.EXE" : "pnpm");
     fs.copyFileSync(process.execPath, fake);
     fs.chmodSync(fake, 0o755);
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     const handlers: Record<string, (arg: unknown) => void> = {};
     const child = {
       stdout: { on: () => child.stdout },
@@ -728,7 +732,7 @@ describe("CP936 出口：编排与退出码", () => {
     /* `resolved: false` 是「找不到」，不是「再试一次」。裸名字丢给 spawn 只会拿回
      * 一句信息量很低的 ENOENT（那正是平台上那一格的形态），而用户需要知道的是
      * 「找过了、它不在盘上」。 */
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const child = fakeChild("", 0);
     let spawned = false;
     const code = await runWithCp936Exit(["--", "不存在的命令", "x"], {
@@ -755,7 +759,7 @@ describe("CP936 出口：编排与退出码", () => {
   });
 
   it("命令起不来 ⇒ 非零退出码 + 一条能读的说明（不是静默退 0）", async () => {
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const handlers: Record<string, (arg: unknown) => void> = {};
     const child = {
       stdout: { on: () => child.stdout },
@@ -833,7 +837,7 @@ describe("CP936 出口：编排与退出码", () => {
     /* 上一条判「措辞」，这条判「这条出口在真 spawn 上真的走得到」——
      * `spawnSync` 在 Linux 上起一条不存在的**相对路径**同样是 `ENOENT`
      * （与 Windows 上的现场同一个错误码），所以这一格本地判得动。 */
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const code = await runWithCp936Exit(["--", "node_modules/.bin/npx-根本没有这个文件", "tsc"], {
       platform: "linux",
       resolve: passthroughResolve,
@@ -868,7 +872,11 @@ describe("CP936 出口：编排与退出码", () => {
     const calls: Array<{ stdio: unknown }> = [];
     writeCp936("中文一二三", {
       platform: "win32",
-      spawnImpl: /* SAFETY: 类型断言已复核 */ ((_cmd: string, _args: string[], opts: never) => {
+      spawnImpl: /* SAFETY: 类型断言已复核 */ ((
+        _cmd: string,
+        _args: Array<string>,
+        opts: never,
+      ) => {
         calls.push({ stdio: /* SAFETY: 类型断言已复核 */ (opts as { stdio: unknown }).stdio });
         return { status: 0 };
       }) as never,
@@ -893,7 +901,11 @@ describe("CP936 出口：编排与退出码", () => {
     const calls: Array<{ timeout: unknown }> = [];
     writeCp936("中文一二三", {
       platform: "win32",
-      spawnImpl: /* SAFETY: 类型断言已复核 */ ((_cmd: string, _args: string[], opts: never) => {
+      spawnImpl: /* SAFETY: 类型断言已复核 */ ((
+        _cmd: string,
+        _args: Array<string>,
+        opts: never,
+      ) => {
         calls.push({
           timeout: /* SAFETY: 类型断言已复核 */ (opts as { timeout: unknown }).timeout,
         });
@@ -908,7 +920,7 @@ describe("CP936 出口：编排与退出码", () => {
   it('编排把 `stdio: "inherit"` 传给写字节那一层（形状：不然生产那条路仍是 pipe）', async () => {
     /* 上一条判「默认值对不对」，这条判「编排有没有把它带上」——
      * 少了这一句，`writeCp936` 又退回默认的 `pipe`，输出照旧进 Buffer 丢掉。 */
-    const seen: unknown[] = [];
+    const seen: Array<unknown> = [];
     const child = fakeChild("中文一二三\n", 0);
     await runWithCp936Exit(["--", "echo"], {
       platform: "win32",
@@ -957,7 +969,7 @@ describe("CP936 出口：编排与退出码", () => {
 describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日志不再随 kill 一起消失）", () => {
   /** 解析口的「原样放行」形态 —— 与上面那一组同形（`{command, args, resolved}`）。
    *  这些用例判的是「什么时候发」，不想让「这条命令在不在 PATH 上」掺进来。 */
-  const passthroughResolve = (cmd: string, args: string[]) => ({
+  const passthroughResolve = (cmd: string, args: Array<string>) => ({
     command: cmd,
     args,
     resolved: true,
@@ -1028,7 +1040,7 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
      * 攒了多少就丢多少。
      *
      * 这条用例**刻意不触发 `close`**：只要第一块到了，日志里就必须已经有它。 */
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const child = streamingChild();
     const done = runWithCp936Exit(["--", "长跑"], {
       platform: "linux",
@@ -1045,7 +1057,7 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
   });
 
   it("一块里**半行**不算一行 —— 剩下那半截留到下一块，拼齐了才发", async () => {
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const child = streamingChild();
     const done = runWithCp936Exit(["--", "长跑"], {
       platform: "linux",
@@ -1062,7 +1074,7 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
   });
 
   it("`close` 时**补发**行尾残余（最后一行常常没有换行符收尾）", async () => {
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const child = streamingChild();
     const done = runWithCp936Exit(["--", "长跑"], {
       platform: "linux",
@@ -1107,7 +1119,7 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
   it("Windows：转码失败那条提示**只说一次**，但每一行的原文都照打", async () => {
     /* 提示原来是「跑完收尾一句」，现在按行发 —— 每行重复一遍会把真输出埋掉。
      * 而**原文**照打这件事不能省：它是转码没做成时唯一还能读的东西。 */
-    const printed: string[] = [];
+    const printed: Array<string> = [];
     const child = streamingChild();
     const done = runWithCp936Exit(["--", "长跑"], {
       platform: "win32",

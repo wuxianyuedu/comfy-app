@@ -163,7 +163,7 @@ export async function claimAndDispatchOnce(options?: {
   }
   if (s.pendingDispatch.size >= MAX_CONCURRENCY) return null;
 
-  let claimed: string[];
+  let claimed: Array<string>;
   try {
     claimed = await repo.claimNextQueued(owner, 1);
   } catch (err) {

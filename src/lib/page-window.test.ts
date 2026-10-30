@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  chunkRange,
-  countAfterPage,
-  tailPages,
-  tailWindow,
-  tailWindowAppend,
-} from "./page-window";
+import { chunkRange, countAfterPage, tailPages, tailWindow, tailWindowAppend } from "./page-window";
 
 const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
@@ -134,8 +128,8 @@ describe("page-window —— 尾部窗口的增量追加", () => {
 
   it("同一形态：与「先展开再取尾部窗口」逐字等价", () => {
     const size = 4;
-    let fast: number[] = [];
-    let slow: number[] = [];
+    let fast: Array<number> = [];
+    let slow: Array<number> = [];
     for (let i = 0; i < 12; i++) {
       fast = tailWindowAppend(fast, i, size);
       slow = tailWindow([...slow, i], size);
@@ -159,8 +153,8 @@ describe("page-window —— 尾部窗口的增量追加", () => {
      * 是「上限 2 时攒下来的」，而 `[1,2,3]` 是「上限 3 时攒下来的」——
      * 两个窗口拿同一个 size 去追加，本就该得出不同结果。 */
     for (const size of [0, -3, 1, 2, 5, NaN, Infinity]) {
-      let fast: number[] = [];
-      let slow: number[] = [];
+      let fast: Array<number> = [];
+      let slow: Array<number> = [];
       for (let i = 0; i < 10; i++) {
         fast = tailWindowAppend(fast, i, size);
         slow = tailWindow([...slow, i], size);
@@ -170,7 +164,7 @@ describe("page-window —— 尾部窗口的增量追加", () => {
   });
 
   it("封顶后长度恒定（不会一边 shift 一边长胖）", () => {
-    let logs: number[] = [];
+    let logs: Array<number> = [];
     for (let i = 0; i < 100; i++) logs = tailWindowAppend(logs, i, 10);
     expect(logs).toHaveLength(10);
     expect(logs).toEqual([90, 91, 92, 93, 94, 95, 96, 97, 98, 99]);

@@ -65,7 +65,7 @@ function commitAll(repo: Repo, message: string): void {
 }
 
 /** 规范文档的最小骨架：判据只认 `#… <号> ` 这个标题形态。 */
-function docWith(...sections: string[]): string {
+function docWith(...sections: Array<string>): string {
   return sections.map((n) => `### ${n} 某节标题\n\n正文。\n`).join("\n");
 }
 

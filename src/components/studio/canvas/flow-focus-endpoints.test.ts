@@ -17,7 +17,7 @@ const identity = (visualNodeId: string) => visualNodeId;
 
 function focusOf(
   endpoints: { source: string | null; target: string | null },
-  selected: readonly string[],
+  selected: ReadonlyArray<string>,
 ) {
   const selectedSet = new Set(selected);
   return resolveEdgeFocus({
@@ -66,11 +66,7 @@ describe("resolveEdgeFocus", () => {
     const focus = resolveEdgeFocus({
       endpoints: { source: "collapse:7", target: "9" },
       resolveNodeId: (visualNodeId) =>
-        visualNodeId === "collapse:7"
-          ? "7"
-          : visualNodeId === "9"
-            ? null
-            : null,
+        visualNodeId === "collapse:7" ? "7" : visualNodeId === "9" ? null : null,
       isSelected: (nodeId) => nodeId === "7",
     });
     expect(focus).toBe("downstream");
@@ -89,12 +85,8 @@ describe("shouldDimEdge", () => {
   });
 
   it("有选中项但这条线相关 → 不降噪", () => {
-    expect(shouldDimEdge({ focus: "upstream", hasSelection: true })).toBe(
-      false,
-    );
-    expect(shouldDimEdge({ focus: "downstream", hasSelection: true })).toBe(
-      false,
-    );
+    expect(shouldDimEdge({ focus: "upstream", hasSelection: true })).toBe(false);
+    expect(shouldDimEdge({ focus: "downstream", hasSelection: true })).toBe(false);
     expect(shouldDimEdge({ focus: "related", hasSelection: true })).toBe(false);
   });
 

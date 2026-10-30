@@ -44,9 +44,7 @@ function stripOf(page: Page) {
 async function openFromSidebar(page: Page, label: string): Promise<void> {
   const strip = stripOf(page);
   await expect(strip).toBeVisible({ timeout: 30_000 });
-  const entry = page
-    .getByRole("button", { name: label, exact: true })
-    .first();
+  const entry = page.getByRole("button", { name: label, exact: true }).first();
   await expect(entry, `侧栏里找不到「${label}」入口`).toBeVisible();
   await entry.click();
 }
@@ -57,11 +55,7 @@ function currentTab(page: Page) {
 }
 
 /** 把某一屏开出来并断言它**真的渲染了内容**（不是只有页签）。 */
-async function expectViewRendered(
-  page: Page,
-  entryLabel: string,
-  contentAnchors: string[],
-) {
+async function expectViewRendered(page: Page, entryLabel: string, contentAnchors: Array<string>) {
   await openFromSidebar(page, entryLabel);
 
   const tab = currentTab(page);
@@ -89,32 +83,23 @@ async function expectViewRendered(
   /* **瞬时页签**的契约（`NavItem.transient` / `withTransientPruned`）：这两屏切走即关。
      切回首页之后页签数应当落回 1、且当前那一条是首页 —— 这一句把「它是瞬时页签」
      与「它只是恰好没常驻」分开：后者在切走时会留下一条残页。 */
-  await stripOf(page)
-    .getByRole("tab")
-    .first()
-    .click();
+  await stripOf(page).getByRole("tab").first().click();
   await expect(stripOf(page).getByRole("tab")).toHaveCount(1);
   await expect(currentTab(page)).toContainText("首页");
 }
 
 test.describe("模型适配 / 模式契约作为视图 @critical", () => {
-  test("开「模型适配」开出一页页签，内容真的渲染，且不在对话框里", async ({
-    page,
-  }) => {
+  test("开「模型适配」开出一页页签，内容真的渲染，且不在对话框里", async ({ page }) => {
     await page.goto("/workspace");
     await expectViewRendered(page, "模型适配", ["远端模型"]);
   });
 
-  test("开「模式契约」开出一页页签，内容真的渲染，且不在对话框里", async ({
-    page,
-  }) => {
+  test("开「模式契约」开出一页页签，内容真的渲染，且不在对话框里", async ({ page }) => {
     await page.goto("/workspace");
     await expectViewRendered(page, "模式契约", ["选择要配置的模式"]);
   });
 
-  test("两个入口落在**同一页**：先后开过之后只有一条页签、也不叠弹窗", async ({
-    page,
-  }) => {
+  test("两个入口落在**同一页**：先后开过之后只有一条页签、也不叠弹窗", async ({ page }) => {
     /* 旧写法是「开两屏、页签数涨到 3、两页并存」—— 那判的是「常驻」，而
        `f72a55ee` 之后它们是**瞬时页签**（切走即关）。新写法判的是瞬时语义的真契约：
        从 A 切到 B 时 A 那条**必须消失**、B 那条必须在，且**始终只有一条**。
@@ -140,9 +125,7 @@ test.describe("模型适配 / 模式契约作为视图 @critical", () => {
     await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 
-  test("工作流库页头那枚「模式契约」也切到同一页，不再自己开第二层弹窗", async ({
-    page,
-  }) => {
+  test("工作流库页头那枚「模式契约」也切到同一页，不再自己开第二层弹窗", async ({ page }) => {
     /* 这一条管的是**第二个入口**：旧形态下侧栏与工作流库各开各的弹窗（一处是外壳的
        `overlay` 状态，一处是 `ModeContractSettings` 自己的 `useState`），于是「契约
        开没开」有两份真相而页签上完全看不出来。现在两处都只能落到同一个视图页。
@@ -153,10 +136,7 @@ test.describe("模型适配 / 模式契约作为视图 @critical", () => {
     await expect(strip).toBeVisible({ timeout: 30_000 });
 
     /* 先进工作流库（侧栏那一项就叫「工作流库」）。 */
-    await page
-      .getByRole("button", { name: "工作流库", exact: true })
-      .first()
-      .click();
+    await page.getByRole("button", { name: "工作流库", exact: true }).first().click();
     await expect(strip.getByRole("tab")).toHaveCount(2);
 
     /* **前置断言**：同名按钮此刻恰好两枚 —— 侧栏那一项 + 工作流库页头那一枚。

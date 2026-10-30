@@ -218,8 +218,8 @@ export function compiledGlobalsCss(): Promise<string> {
  * （这条边界由 `docs-candidate-hygiene` 的空跑挡板兜着）。绝对路径也收（临时目录探针在用）。
  */
 export function compiledCssPinnedTo(
-  dirs: readonly string[],
-  inlineClasses: readonly string[] = [],
+  dirs: ReadonlyArray<string>,
+  inlineClasses: ReadonlyArray<string> = [],
 ): Promise<string> {
   const key = `${dirs.join("|")}#${inlineClasses.join("|")}`;
   let job = pinnedCompiles.get(key);
@@ -244,8 +244,8 @@ export function compiledCssPinnedTo(
  * 就会有两套转义/分组口径。要「哪些类真的被编进产物」那一类判据一律走这里。
  * ⚠️ 选择器里的 CSS 转义**没**还原（产物里怎么写就怎么给）—— 还原属于判据自己的口径。
  */
-export function ruleSelectors(cssText: string): string[] {
-  const out: string[] = [];
+export function ruleSelectors(cssText: string): Array<string> {
+  const out: Array<string> = [];
   postcss.parse(cssText).walkRules((rule: { selector: string }) => {
     out.push(rule.selector);
   });

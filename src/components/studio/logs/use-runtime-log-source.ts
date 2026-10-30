@@ -22,10 +22,7 @@ import { tailWindow } from "~/lib/page-window";
 import { useInterval } from "~/components/ui/use-interval";
 
 import { parseAnsiSegments, type AnsiSegment } from "~/lib/log/log-ansi";
-import {
-  fetchLogSessions,
-  type RuntimeLogSourceKind,
-} from "~/lib/log/log-file-client";
+import { fetchLogSessions, type RuntimeLogSourceKind } from "~/lib/log/log-file-client";
 import type { LogSessionMeta } from "~/lib/log/log-sessions";
 
 /** 跟随轮询间隔：与启动过程的可观测性要求一致（秒级）。 */
@@ -44,9 +41,9 @@ export interface RuntimeLogSourceState {
   /** 选中会话的正文（已去掉 `\r`）。 */
   text: string;
   /** 正文解析出的带样式片段（视图只渲染它）。 */
-  segments: AnsiSegment[];
+  segments: Array<AnsiSegment>;
   /** 可切换的会话（**新→旧，第一项就是最新**）；不足两条时界面不显示下拉。 */
-  sessions: LogSessionMeta[];
+  sessions: Array<LogSessionMeta>;
   /** 当前选中会话的 id；没有日志文件时为 null。 */
   sessionId: string | null;
   /** 选中那一份的正文被服务端截断（界面提示「只看得到最近一段」）。 */
@@ -71,8 +68,8 @@ export type RuntimeLogController = RuntimeLogSourceState & { active: boolean };
 
 interface Snapshot {
   text: string;
-  segments: AnsiSegment[];
-  sessions: LogSessionMeta[];
+  segments: Array<AnsiSegment>;
+  sessions: Array<LogSessionMeta>;
   sessionId: string | null;
   truncated: boolean;
   windowed: boolean;
@@ -90,7 +87,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
 };
 
 /** 解析结果按上限取尾部（与「只看最新一段」的口径一致）。 */
-function capSegments(segments: AnsiSegment[]): AnsiSegment[] {
+function capSegments(segments: Array<AnsiSegment>): Array<AnsiSegment> {
   return tailWindow(segments, MAX_SEGMENTS);
 }
 
@@ -103,7 +100,7 @@ export interface RuntimeLogSourceOptions {
    * `parseOllamaLogText`）：它进 effect 依赖，内联箭头函数会让定时器每次渲染
    * 重建。
    */
-  parse?: (text: string) => AnsiSegment[];
+  parse?: (text: string) => Array<AnsiSegment>;
 }
 
 export function useRuntimeLogSource({

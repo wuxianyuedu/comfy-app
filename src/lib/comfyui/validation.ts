@@ -40,9 +40,9 @@ const validationErrorSchema = z.object({
 });
 
 /** 校验并收窄任务表 JSON 列里的 validationErrors；不合法返回 undefined。 */
-export function parseValidationErrorsJson(raw: unknown): ValidationError[] | undefined {
+export function parseValidationErrorsJson(raw: unknown): Array<ValidationError> | undefined {
   if (!Array.isArray(raw)) return undefined;
-  const out: ValidationError[] = [];
+  const out: Array<ValidationError> = [];
   for (const item of raw) {
     const parsed = validationErrorSchema.safeParse(item);
     if (parsed.success) out.push(parsed.data);
@@ -81,7 +81,7 @@ export interface ValidationError {
 export function extractValidationErrors(
   res: unknown,
   graph?: Record<string, unknown>,
-): ValidationError[] {
+): Array<ValidationError> {
   // 外部输入一律 unknown + 收窄：res 可能是 carrier 对象 / 列表 / 任意 JSON。
   const resObj = asRecord(res) ?? undefined;
   let ne: unknown = resObj?.node_errors;
@@ -105,8 +105,8 @@ export function extractValidationErrors(
     ne = res;
   }
   if (!ne) return [];
-  const out: ValidationError[] = [];
-  const entries: [string, unknown][] = Array.isArray(ne)
+  const out: Array<ValidationError> = [];
+  const entries: Array<[string, unknown]> = Array.isArray(ne)
     ? ne.map((item: unknown) => {
         const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown> | null | undefined;
         // String(x) 的收窄等价（见本文件底部 toStringValue）：值来自外部 JSON。
@@ -159,11 +159,13 @@ export function extractValidationErrors(
 /* 把数据库 `validationErrors` 列（`ValidationError[]` 的 JSON 字符串，或 null）
  * 解析回类型化数组。做防御：载荷损坏或不是数组时返回 `null`，
  * 调用方据此回落到 `error` 字符串。 */
-export function parseValidationErrors(raw: string | null | undefined): ValidationError[] | null {
+export function parseValidationErrors(
+  raw: string | null | undefined,
+): Array<ValidationError> | null {
   if (!raw) return null;
   try {
     const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed)) return /* SAFETY: 类型断言已复核 */ parsed as ValidationError[];
+    if (Array.isArray(parsed)) return /* SAFETY: 类型断言已复核 */ parsed as Array<ValidationError>;
   } catch {
     /* fall through */
   }

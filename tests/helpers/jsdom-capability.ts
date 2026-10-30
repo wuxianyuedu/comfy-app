@@ -44,7 +44,7 @@ type JsdomErrorLike = {
 
 /** `jsdom.virtualConsole` 的结构面（它继承 `node:events` 的 EventEmitter）。 */
 type VirtualConsoleLike = {
-  listeners(event: string): unknown[];
+  listeners(event: string): Array<unknown>;
   removeAllListeners(event: string): unknown;
   on(event: string, listener: (error: JsdomErrorLike) => void): unknown;
 };
@@ -71,7 +71,7 @@ export interface JsdomCapabilityGap {
  * 规则的关闭与理由写在 `tests/a11y-axe-stories.test.ts`，这里只处置**残余**噪音
  * （axe 之外也有代码走到这两条通道时，仍按白名单吞、并计数报出来）。
  */
-export const KNOWN_JSDOM_GAPS: readonly JsdomCapabilityGap[] = [
+export const KNOWN_JSDOM_GAPS: ReadonlyArray<JsdomCapabilityGap> = [
   {
     message:
       "Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package",
@@ -93,7 +93,7 @@ export interface JsdomCapabilityController {
   /** 已吞掉的条数（全部缺口相加）。 */
   suppressedCount: () => number;
   /** 汇总行；一条都没吞过则是空数组（不打「0 条」那种废话）。 */
-  summaryLines: () => string[];
+  summaryLines: () => Array<string>;
   /** 还原 jsdom 原本的 `jsdomError` 监听。 */
   detach: () => void;
 }
@@ -103,7 +103,7 @@ export interface JsdomCapabilityController {
  * 转发与否的判据全在这里，`VirtualConsole` 只是它的一个消费者。
  */
 export function createJsdomCapabilityGate(
-  gaps: readonly JsdomCapabilityGap[] = KNOWN_JSDOM_GAPS,
+  gaps: ReadonlyArray<JsdomCapabilityGap> = KNOWN_JSDOM_GAPS,
 ): JsdomCapabilityController {
   const byMessage = new Map(gaps.map((gap) => [gap.message, gap]));
   const counts = new Map<string, number>();
@@ -152,7 +152,7 @@ const installed = new WeakMap<VirtualConsoleLike, JsdomCapabilityController>();
  */
 export function installJsdomCapabilityGate(
   scope: unknown,
-  gaps: readonly JsdomCapabilityGap[] = KNOWN_JSDOM_GAPS,
+  gaps: ReadonlyArray<JsdomCapabilityGap> = KNOWN_JSDOM_GAPS,
 ): JsdomCapabilityController | null {
   const console_ = readVirtualConsole(scope);
   if (!console_) {

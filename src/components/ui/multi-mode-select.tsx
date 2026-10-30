@@ -85,10 +85,10 @@ const CATEGORY_ACCENT: Record<WorkflowCategory, string> = {
 
 interface MultiModeSelectProps {
   /** 全部已选模式码（defaultMode ⊆ modes）。空数组 → 空 chip。 */
-  modes: string[];
+  modes: Array<string>;
   /** 默认模式码（defaultMode 必须 ∈ `modes`）。 */
   defaultMode: string;
-  onChange: (modes: string[], defaultMode: string) => void;
+  onChange: (modes: Array<string>, defaultMode: string) => void;
   className?: string;
   disabled?: boolean;
   /** 隐藏右侧的「+N」徽标：调用方（如详情页）自行把全部模式列在上方，
@@ -250,34 +250,34 @@ export function MultiModeSelect({
         {/* tabs — switchable 图像 / 视频 / 音频 */}
         <div className="border-border-subtle flex items-center gap-1 border-b px-2 pt-2">
           {
-            /* SAFETY: 类型断言已复核 */ (["image", "video", "audio"] as WorkflowCategory[]).map(
-              (cat) => {
-                const selCount = (grouped[cat] ?? []).filter((type) => draft.has(type.code)).length;
-                const isActive = activeTab === cat;
-                return (
-                  <Button
-                    key={cat}
-                    variant="ghost"
-                    onClick={() => setActiveTab(cat)}
-                    className={`relative h-auto flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold ${
-                      isActive
-                        ? `${CATEGORY_TEXT[cat]} bg-surface-2 hover:bg-surface-2`
-                        : "text-ink-muted hover:text-ink-strong"
-                    }`}
-                  >
-                    {CATEGORY_LABEL[cat]}
-                    {selCount > 0 && (
-                      <span className={`text-3xs ml-1 ${CATEGORY_TEXT[cat]}`}>{selCount}</span>
-                    )}
-                    {isActive && (
-                      <span
-                        className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full ${CATEGORY_ACCENT[cat]}`}
-                      />
-                    )}
-                  </Button>
-                );
-              },
-            )
+            /* SAFETY: 类型断言已复核 */ (
+              ["image", "video", "audio"] as Array<WorkflowCategory>
+            ).map((cat) => {
+              const selCount = (grouped[cat] ?? []).filter((type) => draft.has(type.code)).length;
+              const isActive = activeTab === cat;
+              return (
+                <Button
+                  key={cat}
+                  variant="ghost"
+                  onClick={() => setActiveTab(cat)}
+                  className={`relative h-auto flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold ${
+                    isActive
+                      ? `${CATEGORY_TEXT[cat]} bg-surface-2 hover:bg-surface-2`
+                      : "text-ink-muted hover:text-ink-strong"
+                  }`}
+                >
+                  {CATEGORY_LABEL[cat]}
+                  {selCount > 0 && (
+                    <span className={`text-3xs ml-1 ${CATEGORY_TEXT[cat]}`}>{selCount}</span>
+                  )}
+                  {isActive && (
+                    <span
+                      className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full ${CATEGORY_ACCENT[cat]}`}
+                    />
+                  )}
+                </Button>
+              );
+            })
           }
         </div>
 

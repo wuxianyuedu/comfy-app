@@ -50,8 +50,7 @@ const denied = (scope: string): string =>
     errcode: 10023,
     errmsg: `The token's authorization scope does not match this request. Missing required scopes: ${scope}`,
   });
-const notFound = (): string =>
-  JSON.stringify({ errcode: 404, errmsg: "not found" });
+const notFound = (): string => JSON.stringify({ errcode: 404, errmsg: "not found" });
 
 /** 按子路径分流；没点到的回 200。 */
 function fakeFetch(mapping: Record<string, FetchResult>): FetchFn {
@@ -94,22 +93,16 @@ describe("classifyReply：三句话的判据顺序", () => {
   it("网络层起不来 / 空响应 / 不是信封 ⇒ unknown，不是 granted", () => {
     expect(classifyReply("", { status: -1, error: "TimeoutError" }).state).toBe("unknown");
     expect(classifyReply("", { status: 0 }).state).toBe("unknown");
-    expect(classifyReply("<html>gateway</html>", reply("<html>", 502)).state).toBe(
-      "unknown",
-    );
+    expect(classifyReply("<html>gateway</html>", reply("<html>", 502)).state).toBe("unknown");
   });
 
   it("「没量到」的四种成因各自念得出来（否则读数让人猜 —— 第四跑之前就是这样）", () => {
-    expect(classifyReply("", { status: -1, error: "ENOTFOUND" }).why).toContain(
-      "起不来",
-    );
+    expect(classifyReply("", { status: -1, error: "ENOTFOUND" }).why).toContain("起不来");
     expect(classifyReply("", { status: 0 }).why).toContain("没有响应正文");
     expect(classifyReply("<html>", { status: 502 }).why).toContain("既没有信封");
     expect(
-      classifyReply(
-        JSON.stringify({ errcode: 10023, errmsg: "scope mismatch" }),
-        { status: 403 },
-      ).why,
+      classifyReply(JSON.stringify({ errcode: 10023, errmsg: "scope mismatch" }), { status: 403 })
+        .why,
     ).toContain("403");
   });
 });
@@ -248,9 +241,9 @@ describe("whereItLives：读数落在日志里，还要读得出来在哪", () =
 });
 
 describe("main：退码、缺件的出口、以及「不打凭据」", () => {
-  const heard: string[] = [];
+  const heard: Array<string> = [];
   const run = async (
-    argv: string[],
+    argv: Array<string>,
     env: Record<string, string | undefined> = {},
     fn: FetchFn = fakeFetch({}),
   ) => {
@@ -317,9 +310,7 @@ describe("接线：平台那一跳不许带 --strict", () => {
      * `repo-cnb-history:r` 都没有 ⇒ 探针全 403，带了 `--strict` 就红。那不是这一格坏了，
      * 那是它要量的东西 —— 判它红等于把平台形态伪装成这次 PR 的缺陷。 */
     const config = readFileSync(CONFIG, "utf8");
-    const lines = config
-      .split("\n")
-      .filter((l) => l.includes("ci-token-scopes.mjs"));
+    const lines = config.split("\n").filter((l) => l.includes("ci-token-scopes.mjs"));
     expect(lines.length, "三个入口各有一格，`.cnb.yml` 里应当出现三次").toBe(3);
     for (const line of lines) {
       expect(

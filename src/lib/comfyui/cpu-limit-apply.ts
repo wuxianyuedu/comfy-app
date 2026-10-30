@@ -34,27 +34,22 @@ export interface CpuLimitOutcome {
 /** 一条命令的执行：stderr 也收进来（`renice` 的「权限不足」只在 stderr 上）。 */
 function runCommand(
   command: string,
-  args: string[],
+  args: Array<string>,
   timeoutMs = 5000,
 ): Promise<{ ok: boolean; detail: string }> {
   return new Promise((resolve) => {
-    execFile(
-      command,
-      args,
-      { timeout: timeoutMs, windowsHide: true },
-      (err, _stdout, stderr) => {
-        if (err) {
-          /* `err.message` 对 ENOENT（命令不存在）与 EPERM（权限不足）是两句话，
-           * 直接带出去 —— 这两条恰好是用户唯一能动手修的情况。 */
-          resolve({
-            ok: false,
-            detail: (stderr || err.message || "未知错误").trim().slice(0, 200),
-          });
-          return;
-        }
-        resolve({ ok: true, detail: stderr.trim().slice(0, 200) });
-      },
-    );
+    execFile(command, args, { timeout: timeoutMs, windowsHide: true }, (err, _stdout, stderr) => {
+      if (err) {
+        /* `err.message` 对 ENOENT（命令不存在）与 EPERM（权限不足）是两句话，
+         * 直接带出去 —— 这两条恰好是用户唯一能动手修的情况。 */
+        resolve({
+          ok: false,
+          detail: (stderr || err.message || "未知错误").trim().slice(0, 200),
+        });
+        return;
+      }
+      resolve({ ok: true, detail: stderr.trim().slice(0, 200) });
+    });
   });
 }
 
@@ -74,7 +69,7 @@ export async function applyComfyCpuLimit(input: {
   cpuCount?: number;
   exec?: (
     command: string,
-    args: string[],
+    args: Array<string>,
   ) => Promise<{
     ok: boolean;
     detail: string;

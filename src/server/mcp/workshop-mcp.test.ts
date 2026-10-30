@@ -26,8 +26,8 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 /** 写侧两个出口把收到的实参留一份，断言直接读它 —— 比去索引 `mock.calls[0][1]`
  * （那条类型上是空元组）更好读，也更接近「服务端到底收到了什么」。 */
 const seen = vi.hoisted(() => ({
-  characters: /* SAFETY: 类型断言已复核 */ [] as unknown[],
-  shots: /* SAFETY: 类型断言已复核 */ [] as unknown[],
+  characters: /* SAFETY: 类型断言已复核 */ [] as Array<unknown>,
+  shots: /* SAFETY: 类型断言已复核 */ [] as Array<unknown>,
 }));
 
 const orchestrator = vi.hoisted(() => ({
@@ -40,12 +40,12 @@ const orchestrator = vi.hoisted(() => ({
   generateScript: vi.fn(async () => "# 剧本"),
   setScript: vi.fn(async () => ({ ok: true })),
   extractCharacters: vi.fn(async () => ({ added: 1, skipped: 0, total: 1 })),
-  setCharacters: vi.fn(async (_id: string, list: unknown[]) => {
+  setCharacters: vi.fn(async (_id: string, list: Array<unknown>) => {
     seen.characters = list;
     return [{ id: "c1" }];
   }),
   buildStoryboard: vi.fn(async () => ({ shotCount: 1 })),
-  setStoryboard: vi.fn(async (_id: string, list: unknown[]) => {
+  setStoryboard: vi.fn(async (_id: string, list: Array<unknown>) => {
     seen.shots = list;
     return [{ id: "s1" }];
   }),

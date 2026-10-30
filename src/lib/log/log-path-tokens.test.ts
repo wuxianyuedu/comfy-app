@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { findLogPathTokens } from "./log-path-tokens";
 
 /** 取出这一行里所有被认成路径的文本。 */
-function paths(line: string): string[] {
+function paths(line: string): Array<string> {
   return findLogPathTokens(line).map((t) => t.text);
 }
 
@@ -26,9 +26,9 @@ describe("日志行路径识别（ISSUE #1365 的用户原文）", () => {
     expect(paths(`启动状态文件: ${ROOT}\\run\\launch-status.json`)).toEqual([
       `${ROOT}\\run\\launch-status.json`,
     ]);
-    expect(
-      paths(`编排链路日志: ${ROOT}\\log\\launcher\\shell-launch.log`),
-    ).toEqual([`${ROOT}\\log\\launcher\\shell-launch.log`]);
+    expect(paths(`编排链路日志: ${ROOT}\\log\\launcher\\shell-launch.log`)).toEqual([
+      `${ROOT}\\log\\launcher\\shell-launch.log`,
+    ]);
   });
 
   it("一行两段路径各认一段（逗号并列）", () => {
@@ -58,9 +58,9 @@ describe("日志行路径识别（ISSUE #1365 的用户原文）", () => {
   });
 
   it("POSIX 形态与 UNC 形态都认", () => {
-    expect(
-      paths("  1) 壳侧编排链路（壳自己写的）：/workspace/log/launcher/x.log"),
-    ).toEqual(["/workspace/log/launcher/x.log"]);
+    expect(paths("  1) 壳侧编排链路（壳自己写的）：/workspace/log/launcher/x.log")).toEqual([
+      "/workspace/log/launcher/x.log",
+    ]);
     expect(paths("resolved to \\\\server\\share\\dir\\x.log")).toEqual([
       "\\\\server\\share\\dir\\x.log",
     ]);
@@ -70,15 +70,11 @@ describe("日志行路径识别（ISSUE #1365 的用户原文）", () => {
 describe("日志行路径识别：刻意漏的那几档", () => {
   it("相对路径不认（判不了相对谁，猜错会到别的文件夹）", () => {
     expect(paths("shell log: log/shell/shell.log")).toEqual([]);
-    expect(paths("见 ./src/lib/log.ts 与 src/lib/log/log-store.ts:12")).toEqual(
-      [],
-    );
+    expect(paths("见 ./src/lib/log.ts 与 src/lib/log/log-store.ts:12")).toEqual([]);
   });
 
   it("URL 里不切出裸路径段", () => {
-    expect(
-      paths("见 https://cnb.cool/moon-read/comfy-app-t3/-/issues/1365"),
-    ).toEqual([]);
+    expect(paths("见 https://cnb.cool/moon-read/comfy-app-t3/-/issues/1365")).toEqual([]);
     expect(paths("http://127.0.0.1:3100/workspace/x")).toEqual([]);
   });
 
@@ -100,16 +96,11 @@ describe("日志行路径识别：刻意漏的那几档", () => {
 
 describe("日志行路径识别：边界形状", () => {
   it("盘符 / UNC 起点把空格吃进来（Program Files 是一整段）", () => {
-    expect(paths("at F:\\with space\\file name.txt")).toEqual([
-      "F:\\with space\\file name.txt",
-    ]);
+    expect(paths("at F:\\with space\\file name.txt")).toEqual(["F:\\with space\\file name.txt"]);
   });
 
   it("POSIX 起点不吃空格（否则 `a and b`、并列路径会连成一段）", () => {
-    expect(paths("paths: /a/b/c.log and /d/e/f.log")).toEqual([
-      "/a/b/c.log",
-      "/d/e/f.log",
-    ]);
+    expect(paths("paths: /a/b/c.log and /d/e/f.log")).toEqual(["/a/b/c.log", "/d/e/f.log"]);
   });
 
   it("成对括号留给文件名，落单的右括号才裁", () => {
@@ -120,12 +111,8 @@ describe("日志行路径识别：边界形状", () => {
   });
 
   it("尾随开关裁到路径为止（含 `--k=v` 与 `--k v` 两种写法）", () => {
-    expect(paths("cmd F:\\a\\b\\d.mjs --mode prebuilt")).toEqual([
-      "F:\\a\\b\\d.mjs",
-    ]);
-    expect(paths("cmd F:\\a\\b\\d.mjs --port=3847")).toEqual([
-      "F:\\a\\b\\d.mjs",
-    ]);
+    expect(paths("cmd F:\\a\\b\\d.mjs --mode prebuilt")).toEqual(["F:\\a\\b\\d.mjs"]);
+    expect(paths("cmd F:\\a\\b\\d.mjs --port=3847")).toEqual(["F:\\a\\b\\d.mjs"]);
   });
 
   it("盘符根目录本身是合法路径（可以点开）", () => {
@@ -157,17 +144,11 @@ describe("日志行路径识别：边界形状", () => {
     expect(paths("OPTIONS /api/schema 204")).toEqual([]);
     /* 请求行的**查询串**同样不认：`/api/logs/current?source=…` 是本面板自己的
      * 轮询端点（与 `isPanelSelfPollingLine` 同一族行）。 */
-    expect(
-      paths("GET /api/logs/current?source=app-runtime 200 in 12ms"),
-    ).toEqual([]);
+    expect(paths("GET /api/logs/current?source=app-runtime 200 in 12ms")).toEqual([]);
   });
 
   it("带时刻 / 级别前缀的请求行照样不认（面板里就是长这样）", () => {
-    expect(
-      paths(
-        "[18:44:13] [INFO] GET /api/comfy/queue 200 in 2.5s (next.js: 20ms)",
-      ),
-    ).toEqual([]);
+    expect(paths("[18:44:13] [INFO] GET /api/comfy/queue 200 in 2.5s (next.js: 20ms)")).toEqual([]);
   });
 
   /* 第二条**真实**形态（实测从 564KB 的 nextjs-panel 转录里扫出来的唯一漏网者）：
@@ -193,22 +174,14 @@ describe("日志行路径识别：边界形状", () => {
       "/workspace/log/launcher/shell.log",
     ]);
     expect(paths("/var/log/app.log")).toEqual(["/var/log/app.log"]);
-    expect(paths("log at /home/user/data/a.txt")).toEqual([
-      "/home/user/data/a.txt",
-    ]);
+    expect(paths("log at /home/user/data/a.txt")).toEqual(["/home/user/data/a.txt"]);
     /* `GET` 出现在**别的**位置（不是紧挨着这个候选）时不该误伤。 */
-    expect(paths("GET 完成，日志在 /workspace/log/x.log")).toEqual([
-      "/workspace/log/x.log",
-    ]);
+    expect(paths("GET 完成，日志在 /workspace/log/x.log")).toEqual(["/workspace/log/x.log"]);
   });
 
   it("盘符 / UNC 不受 URL 判据影响（它们不可能是 URL）", () => {
-    expect(paths("cmd C:\\Program Files\\x.exe")).toEqual([
-      "C:\\Program Files\\x.exe",
-    ]);
-    expect(paths("GET \\\\server\\share\\x.log")).toEqual([
-      "\\\\server\\share\\x.log",
-    ]);
+    expect(paths("cmd C:\\Program Files\\x.exe")).toEqual(["C:\\Program Files\\x.exe"]);
+    expect(paths("GET \\\\server\\share\\x.log")).toEqual(["\\\\server\\share\\x.log"]);
   });
 
   it("回的是半开区间，切出来与 text 一致", () => {

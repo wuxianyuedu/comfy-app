@@ -28,17 +28,14 @@
  */
 import { execFileSync } from "node:child_process";
 
-import {
-  pythonCandidates,
-  pythonProbeArgs,
-} from "../../src/lib/process/python-candidates";
+import { pythonCandidates, pythonProbeArgs } from "../../src/lib/process/python-candidates";
 
 /** 一次可用的 Python 调用：`command` + 必须前置的参数。 */
 export interface PythonInvocation {
   /** 可执行文件名（落在 PATH 上）。 */
   command: string;
   /** 必须前置的参数（`py` 启动器是 `-3`；其余为空）。 */
-  prefixArgs: string[];
+  prefixArgs: Array<string>;
 }
 
 let resolved: PythonInvocation | null | undefined;
@@ -54,13 +51,9 @@ export function resolvePython(): PythonInvocation | null {
   for (const candidate of pythonCandidates()) {
     const prefixArgs = pythonProbeArgs(candidate);
     try {
-      execFileSync(
-        candidate,
-        [...prefixArgs, "-c", "import sys; sys.exit(0)"],
-        {
-          stdio: "ignore",
-        },
-      );
+      execFileSync(candidate, [...prefixArgs, "-c", "import sys; sys.exit(0)"], {
+        stdio: "ignore",
+      });
       resolved = { command: candidate, prefixArgs };
       return resolved;
     } catch {
@@ -93,12 +86,9 @@ export function hasPython(): boolean {
  * @param args 追加给脚本的位置参数（`sys.argv[1:]`）
  * @returns 解释器的 stdout（已去首尾空白）
  */
-export function runPython(code: string, args: string[] = []): string {
+export function runPython(code: string, args: Array<string> = []): string {
   const py = resolvePython();
-  if (!py)
-    throw new Error(
-      `PATH 上没有可用的 Python（试过 ${pythonCandidates().join(" / ")}）`,
-    );
+  if (!py) throw new Error(`PATH 上没有可用的 Python（试过 ${pythonCandidates().join(" / ")}）`);
   return execFileSync(py.command, [...py.prefixArgs, "-c", code, ...args], {
     encoding: "utf8",
   }).trim();

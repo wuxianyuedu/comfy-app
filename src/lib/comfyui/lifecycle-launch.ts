@@ -29,10 +29,7 @@ import type { getSettingsSync } from "../app-settings/app-settings.server";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
-import {
-  spawnManaged,
-  waitForDetachMediator,
-} from "~/lib/process/process-launch";
+import { spawnManaged, waitForDetachMediator } from "~/lib/process/process-launch";
 import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 import {
   buildEarlyExitDetail,
@@ -50,18 +47,10 @@ import {
   createRecentOutputLedger,
   waitForComfyReady,
 } from "./lifecycle-wait";
-import {
-  reportKeepAliveExit,
-  startComfyExitWatcher,
-  type ComfyExitReport,
-} from "./lifecycle-exit";
+import { reportKeepAliveExit, startComfyExitWatcher, type ComfyExitReport } from "./lifecycle-exit";
 import { getComfyRuntimeSnapshot } from "./status";
 import { applyComfyCpuLimit } from "./cpu-limit-apply";
-import {
-  CPU_LIMIT_LABELS,
-  resolveCpuLimitMode,
-  type CpuLimitMode,
-} from "./cpu-limit";
+import { CPU_LIMIT_LABELS, resolveCpuLimitMode, type CpuLimitMode } from "./cpu-limit";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 import { decodeIncremental } from "~/lib/log/utf8-incremental";
 import { fireAndForget } from "~/lib/async-action";
@@ -103,10 +92,7 @@ export interface LaunchHost {
   /** 本地时间戳（保活重定向文件名用）。 */
   localTimestamp: () => string;
   /** 记下「本次会话开始了」（写 `log/services/comfyui-last-session.json`）。 */
-  markSessionStart: (info: {
-    pid: number | null;
-    mode: "keepAlive" | "bound";
-  }) => void;
+  markSessionStart: (info: { pid: number | null; mode: "keepAlive" | "bound" }) => void;
   /** 记下「本次会话结束了」。应用自己也一起没了时这一步不会发生 ——
    *  那正是下次启动要反推的情况。 */
   markSessionEnd: (report: ComfyExitReport) => void;
@@ -123,7 +109,7 @@ type EnsureCtx = {
   /** 解析出的启动计划（cmd / args / cwd / mainPy）。 */
   plan: { cmd: string; cwd: string; mainPy: string };
   /** 最终启动参数（已含 --port / --enable-cors-header / 额外参数）。 */
-  args: string[];
+  args: Array<string>;
   /** 子进程环境（含 PYTHONIOENCODING / PYTHONUTF8 / 桌面实例 envVars）。 */
   stdioEnv: NodeJS.ProcessEnv;
   /** 硬超时绝对时间戳；null = 不设硬超时。 */
@@ -255,8 +241,7 @@ export async function runEnsureLaunch(input: {
   // → keepAlive，脱离进程树保活，下次打开应用直接复用。注意开关只在
   // 「拉起时」生效（桌面壳退出是整树强制关闭，退出那一刻没有
   // 机会再决定）。
-  const keepAlive =
-    resolveLaunchPolicy(getExitPolicy().exitKillComfyui) === "keepAlive";
+  const keepAlive = resolveLaunchPolicy(getExitPolicy().exitKillComfyui) === "keepAlive";
   /* 先换一份新的日志文件再写下第一条 —— 顺序反了会把本次的头几行写进上一次
    * 的文件里，而那正是「日志看起来少了一次」的现场（没有报错、只是归属错了）。 */
   host.beginRuntimeSession();
@@ -368,29 +353,20 @@ export async function waitForExistingInstanceReady(input: {
  * 保活模式：脱离进程树拉起，等就绪只在端口上实探，判死靠限频查进程表。
  * 直连 stdio 不可得，输出重定向到按次命名的文件、由 `tailKeepAliveLog` 增量跟进。
  */
-async function launchKeepAliveMode(
-  host: LaunchHost,
-  ctx: EnsureCtx,
-): Promise<EnsureResult> {
+async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<EnsureResult> {
   const { note, plan, args, stdioEnv, deadline, timeoutDetail } = ctx;
   const { st, appendRuntimeLog, clearComfyStopping } = host;
   // 保活：脱离进程树。没有直连 stdio/exit，但把 stdout/stderr 重定向到
   // 按次命名的文件里，等待循环会增量跟随进 comfyui-runtime.log ——
   // 保活模式下「启动日志」面板不再空白，完整输出也留得下文件。
   const kaStamp = host.localTimestamp().replace(/[: ]/g, "-");
-  const kaOutLog = path.join(
-    SERVICES_LOG_DIR,
-    `comfyui-keepalive-${kaStamp}.out.log`,
-  );
-  const kaErrLog = path.join(
-    SERVICES_LOG_DIR,
-    `comfyui-keepalive-${kaStamp}.err.log`,
-  );
+  const kaOutLog = path.join(SERVICES_LOG_DIR, `comfyui-keepalive-${kaStamp}.out.log`);
+  const kaErrLog = path.join(SERVICES_LOG_DIR, `comfyui-keepalive-${kaStamp}.err.log`);
   /* 判死时从本次的重定向日志全文里识别根因：keepAlive 没有直连 stdio，进程
    * 秒退的证据只在这两个按次命名的文件里 —— 此前判死文案是固定的「进程未
    * 出现」，而真实成因（解释器没有 pip/uv、缺依赖）就摆在同一份日志里。 */
   const diagnoseFromRedirectLogs = (): string | null => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     for (const file of [kaErrLog, kaOutLog]) {
       try {
         if (!fs.existsSync(file)) continue;
@@ -424,9 +400,7 @@ async function launchKeepAliveMode(
   appendRuntimeLog(
     `[keepAlive-spawn] cmd=${plan.cmd} args=${JSON.stringify(args)} cwd=${plan.cwd}`,
   );
-  appendRuntimeLog(
-    `[keepAlive-spawn] 完整输出重定向：${kaOutLog} 与 ${kaErrLog}`,
-  );
+  appendRuntimeLog(`[keepAlive-spawn] 完整输出重定向：${kaOutLog} 与 ${kaErrLog}`);
   /* 会话开始标记：pid 这里拿不到（真实进程是 Start-Process 的孙进程），退出
    * 监督器见到它时会知道「活了多久」，对账只关心「有没有结局」。 */
   host.markSessionStart({ pid: null, mode: "keepAlive" });
@@ -535,8 +509,7 @@ async function launchKeepAliveMode(
       /* 「端口被占」在重定向 stderr 里现身后，本次拉起的进程已经死了；
        * 再等下去，就绪判定只会被占端口的那个实例应答冒领。立即中止，
        * caller（runEnsureLaunch）据此转「等待已有实例就绪」。 */
-      if (portConflict)
-        return { ok: false, base: null, detail: portConflictExitDetail() };
+      if (portConflict) return { ok: false, base: null, detail: portConflictExitDetail() };
       return null;
     },
     /* 每轮先把新输出跟进日志，再做就绪探测。 */
@@ -659,10 +632,7 @@ function findLatestKeepAliveLogs(): { out?: string; err?: string } {
     const pick = (suffix: string): string | undefined => {
       const newest = fs
         .readdirSync(SERVICES_LOG_DIR)
-        .filter(
-          (name) =>
-            name.startsWith("comfyui-keepalive-") && name.endsWith(suffix),
-        )
+        .filter((name) => name.startsWith("comfyui-keepalive-") && name.endsWith(suffix))
         .map((name) => ({
           name,
           mtime: fs.statSync(path.join(SERVICES_LOG_DIR, name)).mtimeMs,
@@ -751,10 +721,7 @@ export function ensureKeepAliveWatchOnAdoption(input: {
  * bound 模式：直连 spawn（与父同组），stdio 直管，等就绪靠「已知子进程 PID
  * 的监听端口 + /system_stats」双重确认。
  */
-async function launchBoundMode(
-  host: LaunchHost,
-  ctx: EnsureCtx,
-): Promise<EnsureResult> {
+async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<EnsureResult> {
   const { note, plan, args, stdioEnv, deadline, timeoutDetail } = ctx;
   const { st, appendRuntimeLog, clearComfyStopping } = host;
   let child: ReturnType<typeof spawn>;
@@ -840,8 +807,7 @@ async function launchBoundMode(
         : null,
     probe: () => probeChildReady(child),
     /* 子进程句柄被清掉（= 进程已退出）→ 用留底给出可行动的报错。 */
-    isDead: async () =>
-      st.child !== child ? buildEarlyExitDetail(ledger.lines) : null,
+    isDead: async () => (st.child !== child ? buildEarlyExitDetail(ledger.lines) : null),
   });
   if (!result.ok) note(result.detail);
   return result;
@@ -853,9 +819,7 @@ async function launchBoundMode(
  * +1）。用「特定 PID 的监听端口 + /system_stats 响应」双重确认，避免把同
  * 网段上另一个 ComfyUI 实例误认作刚启动的配置实例。
  */
-export async function probeChildReady(
-  child: ReturnType<typeof spawn>,
-): Promise<string | null> {
+export async function probeChildReady(child: ReturnType<typeof spawn>): Promise<string | null> {
   const childPid = child.pid;
   const listenPort = childPid ? await findPidListeningPort(childPid) : null;
   if (!listenPort) return null;

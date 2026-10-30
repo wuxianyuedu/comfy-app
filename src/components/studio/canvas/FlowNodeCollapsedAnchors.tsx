@@ -58,13 +58,13 @@ export function CollapsedAnchorCylinder({
 export function CollapsedPortHandles({
   items,
 }: {
-  items: {
+  items: Array<{
     key: string;
     side: "left" | "right";
     id: string;
     title: string;
     color: string;
-  }[];
+  }>;
 }) {
   const total = items.length;
   return (
@@ -95,8 +95,8 @@ export function CollapsedPortHandles({
 
 interface FlowNodeCollapsedAnchorsProps {
   data: WorkflowNodeData;
-  orderedEntries: [string, unknown][];
-  outputs: [string, string][];
+  orderedEntries: Array<[string, unknown]>;
+  outputs: Array<[string, string]>;
 }
 
 export function FlowNodeCollapsedAnchors({

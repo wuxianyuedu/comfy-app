@@ -195,13 +195,9 @@ export function WorkflowNodeOutputsRow({
   renderHandle,
 }: {
   output: WorkflowIOEntry & { ioKey: string };
-  inputs: (WorkflowIOEntry & { ioKey: string })[];
-  outputs: (WorkflowIOEntry & { ioKey: string })[];
-  renderHandle?: (arg: {
-    id: string;
-    dir: "out";
-    type: string;
-  }) => React.ReactNode;
+  inputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  renderHandle?: (arg: { id: string; dir: "out"; type: string }) => React.ReactNode;
 }) {
   const oLabel = ioLabel(output, [...inputs, ...outputs]);
   const oType = output.type ?? "*";

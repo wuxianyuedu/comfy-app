@@ -30,7 +30,7 @@ interface WorkflowLibraryFiltersProps {
   typeCounts: { all: number; image: number; video: number; audio: number };
   modelFilter: string;
   onModelFilterChange: (v: string) => void;
-  modelTags: ModelTagCount[];
+  modelTags: Array<ModelTagCount>;
   onManageModels: () => void;
 }
 

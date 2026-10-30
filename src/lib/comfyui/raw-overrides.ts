@@ -63,8 +63,8 @@ export type RawUiNodeInput = {
 export type RawUiNode = {
   id?: unknown;
   type?: unknown;
-  inputs?: RawUiNodeInput[];
-  widgets_values?: unknown[];
+  inputs?: Array<RawUiNodeInput>;
+  widgets_values?: Array<unknown>;
 };
 /** 把 API 格式的节点 id（例如 "4:1670"）或顶层 id 映射到原始 UI 节点。
  *
@@ -233,7 +233,7 @@ function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
     defs != null && typeof defs === "object"
       ? /* SAFETY: 类型断言已复核 */ (defs as JsonRecord).subgraphs
       : undefined;
-  const list: unknown[] = Array.isArray(subs)
+  const list: Array<unknown> = Array.isArray(subs)
     ? subs
     : subs != null && typeof subs === "object"
       ? Object.values(subs)
@@ -270,7 +270,7 @@ interface SubgraphTargets {
   /** 提升引脚名 → 内层节点 id 与其**入参下标**（首条 origin=-10 的边界连线）。 */
   targetByName: Map<string, { nodeId: string; slot: number }>;
   /** 定义里声明的输入引脚（**按声明顺序**）。 */
-  defInputs: SubgraphPin[];
+  defInputs: Array<SubgraphPin>;
 }
 
 /**
@@ -301,7 +301,7 @@ function collectSubgraphTargets(raw: JsonRecord, wrapper: RawUiNode): SubgraphTa
     linksById.set(String(link.id), link);
   }
 
-  const defInputs: SubgraphPin[] = [];
+  const defInputs: Array<SubgraphPin> = [];
   for (const i of Array.isArray(sub.inputs) ? sub.inputs : []) {
     if (i == null || typeof i !== "object") continue;
     defInputs.push(/* SAFETY: 类型断言已复核 */ i as SubgraphPin);
@@ -344,7 +344,7 @@ function hostWidgetIndexes(wrapper: RawUiNode): Map<string, number> {
 function applySubgraphInteriorOverrides(
   raw: JsonRecord,
   wrapper: RawUiNode,
-  entries: { name: string; value: unknown }[],
+  entries: Array<{ name: string; value: unknown }>,
 ): void {
   const t = collectSubgraphTargets(raw, wrapper);
   if (!t) return;
@@ -436,7 +436,7 @@ function neutralizePromotedHostDrift(raw: JsonRecord): void {
        * 逐项取出的值才不会把 `any` 带进「写回内层」的那一步。 */
       const host = /* SAFETY: 类型断言已复核 */ (
         Array.isArray(node.widgets_values) ? node.widgets_values : []
-      ) as unknown[];
+      ) as Array<unknown>;
       for (const [name, idx] of ours) {
         const value = host[idx];
         if (value === undefined) continue;
@@ -514,7 +514,10 @@ const CONTROL_AFTER_GENERATE = "control_after_generate";
  *  （与 raw 路径在「没有哨兵槽」时的做法一致），其余模式保持 seed 原值。
  *
  *  图本身不变（不修改入参对象），返回一份深拷贝。 */
-export function applyApiOverrides(graph: unknown, overrides?: RawWorkflowOverride[]): JsonRecord {
+export function applyApiOverrides(
+  graph: unknown,
+  overrides?: Array<RawWorkflowOverride>,
+): JsonRecord {
   if (graph == null || typeof graph !== "object" || Array.isArray(graph)) return {};
   const out = /* SAFETY: 类型断言已复核 */ JSON.parse(JSON.stringify(graph)) as JsonRecord;
   if (!overrides?.length) return out;
@@ -540,7 +543,10 @@ export function applyApiOverrides(graph: unknown, overrides?: RawWorkflowOverrid
   return out;
 }
 /** 尽力把画布的 `workflowInputs` 注入到原始 UI JSON 里。 */
-export function applyRawOverrides(rawJson: unknown, overrides?: RawWorkflowOverride[]): JsonRecord {
+export function applyRawOverrides(
+  rawJson: unknown,
+  overrides?: Array<RawWorkflowOverride>,
+): JsonRecord {
   const raw = /* SAFETY: 类型断言已复核 */ JSON.parse(JSON.stringify(rawJson)) as JsonRecord;
   /* **没有**覆盖项也要走漂移抵消：comfy-cli 的提升控件回写错位与「这次有没有
    * 画布覆盖」无关 —— 它错的是宿主自己的值（本次现场 17 处全在我们一次都没碰过
@@ -550,7 +556,7 @@ export function applyRawOverrides(rawJson: unknown, overrides?: RawWorkflowOverr
     return raw;
   }
   /* 已落到节点上的覆盖项，循环结束后统一同步子图内层（见文件末尾）。 */
-  const pendingByNode = new Map<string, { name: string; value: unknown }[]>();
+  const pendingByNode = new Map<string, Array<{ name: string; value: unknown }>>();
   for (const ov of overrides) {
     if (!ov?.nodeId || ov.value === undefined) continue;
     const node = resolveRawNode(raw, ov.nodeId);

@@ -11,7 +11,7 @@ export function RgthreeFastGroupsBypasserBody({
   groups,
 }: {
   matchTitle: string;
-  groups: WorkflowGroup[];
+  groups: Array<WorkflowGroup>;
 }) {
   const ctx = useRgthreeGroups();
   /* useRgthreeGroups 在 store 未挂载时抛错；但该组件只会在编辑器内渲染，
@@ -118,7 +118,7 @@ export function RgthreeFastGroupsBypasserBody({
  *   • efficiency-nodes 的 SetNode / GetNode —— 它的包在我们装的环境里
  *     没有磁盘标记，节点本身也没有 `cnr_id`，所以硬编码这份
  *     归属。 */
-export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) {
+export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown> }) {
   const fmtStrength = (v: unknown): string | undefined => {
     if (typeof v === "number") {
       /* ComfyUI 会剥掉末尾的零（"1.00" → "1"，"0.85" 保持）——
@@ -133,8 +133,8 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
   // 逐 lora 行：过滤掉表头 widget 与空占位。
   // 行的形状取决于包（裸文件名字符串，或一条 widget 记录）。
   type PowerLoraWidget = string | Record<string, unknown>;
-  const loras: PowerLoraWidget[] = /* SAFETY: 类型断言已复核 */ (
-    (widgets ?? []) as PowerLoraWidget[]
+  const loras: Array<PowerLoraWidget> = /* SAFETY: 类型断言已复核 */ (
+    (widgets ?? []) as Array<PowerLoraWidget>
   ).filter((widget) => {
     if (widget === null || widget === undefined) return false;
     if (typeof widget !== "object" || Array.isArray(widget)) {

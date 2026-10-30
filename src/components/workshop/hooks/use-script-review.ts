@@ -16,7 +16,7 @@ import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";
 export interface ScriptReviewController {
   verdict: ReviewVerdict | null;
   /** 完整分数曲线（旧→新含本轮）；还没评过 → 空数组。 */
-  history: ReviewVerdict[];
+  history: Array<ReviewVerdict>;
   reviewing: boolean;
   revising: boolean;
   error: string;
@@ -29,7 +29,7 @@ export function useScriptReview(
   onScriptRevised: (markdown: string) => void,
 ): ScriptReviewController {
   const [verdict, setVerdict] = useState<ReviewVerdict | null>(null);
-  const [history, setHistory] = useState<ReviewVerdict[]>([]);
+  const [history, setHistory] = useState<Array<ReviewVerdict>>([]);
   const [error, setError] = useState("");
   const reviewBusy = useBusyAction();
   const reviseBusy = useBusyAction();

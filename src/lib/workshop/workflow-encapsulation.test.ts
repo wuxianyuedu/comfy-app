@@ -20,10 +20,7 @@ import {
   modeUsesFirstFrame,
   modeUsesLastFrame,
 } from "~/lib/workflow/workflow-exposed-params";
-import type {
-  WorkflowIOEntry,
-  WorkflowIOMap,
-} from "~/lib/workflow/workflow-io-types";
+import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { SizeSpec } from "~/lib/media/size-presets";
 
 /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）—— 工坊下发的唯一尺寸口径。 */
@@ -35,18 +32,12 @@ const sizeSpec = (over: Partial<SizeSpec> = {}): SizeSpec => ({
 });
 
 /** 作者在某个模式下连的线（落库形状 `paramMap.source.mode:<模式>`）。 */
-function wire(
-  mode: string,
-  lines: Record<string, string | null>,
-): Record<string, unknown> {
+function wire(mode: string, lines: Record<string, string | null>): Record<string, unknown> {
   return { source: { [`mode:${mode}`]: lines } };
 }
 
 /** 取 workflowInputs 里的某个 name 的值。 */
-function valueOf(
-  inputs: { name: string; value: unknown }[],
-  name: string,
-): unknown {
+function valueOf(inputs: Array<{ name: string; value: unknown }>, name: string): unknown {
   return inputs.find((i) => i.name === name)?.value;
 }
 
@@ -194,9 +185,7 @@ describe("落点只认作者连的线", () => {
       mode: "T2I",
       values: { prompt: "x" },
     });
-    expect(res.workflowInputs).toEqual([
-      { nodeId: "6", name: "text", value: "x" },
-    ]);
+    expect(res.workflowInputs).toEqual([{ nodeId: "6", name: "text", value: "x" }]);
   });
 
   it("作者显式断开（null）的口：值落不下去，如实上报", () => {
@@ -345,9 +334,7 @@ describe("尺寸：形态由作者连的子口声明，值按形态派", () => {
       mode: "T2I",
       values: { size: sizeSpec() },
     });
-    expect(res.workflowInputs).toEqual([
-      { nodeId: "5", name: "width", value: 768 },
-    ]);
+    expect(res.workflowInputs).toEqual([{ nodeId: "5", name: "width", value: 768 }]);
     /* 工坊只送一个尺寸表达，工作流接住其中一路即算接住 —— 不报子口级噪音。 */
     expect(res.unmatched).toEqual([]);
   });
@@ -461,9 +448,7 @@ describe("图片槽位：同名 pin 由线区分，不看名字 / 节点类名",
       mode: "I2V",
       values: { firstFrame: "a.png" },
     });
-    expect(res.workflowInputs).toEqual([
-      { nodeId: "21", name: "image", value: "a.png" },
-    ]);
+    expect(res.workflowInputs).toEqual([{ nodeId: "21", name: "image", value: "a.png" }]);
   });
 
   it("镜头图（referenceImages 第一张）落到作者连的首帧口", () => {
@@ -594,15 +579,13 @@ describe("自定义口：作者声明什么口，工坊就能给它落什么值"
   });
 
   it("空串当「没给」；数字口不按假值剪（0 是有效值）", () => {
-    expect(
-      pruneEmptyExposedValues({ custom: { "custom-text-1": "  " } }).custom,
-    ).toBeUndefined();
-    expect(
-      pruneEmptyExposedValues({ custom: { "custom-number-2": 0 } }).custom,
-    ).toEqual({ "custom-number-2": 0 });
-    expect(
-      pruneEmptyExposedValues({ custom: { "custom-text-1": " ok " } }).custom,
-    ).toEqual({ "custom-text-1": "ok" });
+    expect(pruneEmptyExposedValues({ custom: { "custom-text-1": "  " } }).custom).toBeUndefined();
+    expect(pruneEmptyExposedValues({ custom: { "custom-number-2": 0 } }).custom).toEqual({
+      "custom-number-2": 0,
+    });
+    expect(pruneEmptyExposedValues({ custom: { "custom-text-1": " ok " } }).custom).toEqual({
+      "custom-text-1": "ok",
+    });
   });
 });
 
@@ -732,18 +715,16 @@ describe("契约口 ↔ 对外值字段：读写共用一份映射", () => {
   it("口名与字段名不同名也能对上（negative → negativePrompt）", () => {
     const values = { negativePrompt: "lowres" };
     expect(exposedValueOf(values, "negative")).toBe("lowres");
-    expect(withExposedValue(values, "negative", "blurry").negativePrompt).toBe(
-      "blurry",
-    );
+    expect(withExposedValue(values, "negative", "blurry").negativePrompt).toBe("blurry");
   });
 
   it("参考图口按序号落槽位（第一张不带序号）", () => {
     const values = { referenceImages: ["a.png", "b.png"] };
     expect(exposedValueOf(values, "reference-image")).toBe("a.png");
     expect(exposedValueOf(values, "reference-image-2")).toBe("b.png");
-    expect(
-      withExposedValue(values, "reference-image-2", "c.png"),
-    ).toMatchObject({ referenceImages: ["a.png", "c.png"] });
+    expect(withExposedValue(values, "reference-image-2", "c.png")).toMatchObject({
+      referenceImages: ["a.png", "c.png"],
+    });
   });
 
   it("首帧 / 尾帧各写自己的字段，不互相串", () => {
@@ -800,15 +781,7 @@ describe("视频模式判定", () => {
     for (const code of ["T2V", "I2V", "TI2V", "FLF2V", "S2V", "V2V"]) {
       expect(isVideoMode(code)).toBe(true);
     }
-    for (const code of [
-      "T2I",
-      "I2I",
-      "Inpaint",
-      "Upscale",
-      "",
-      null,
-      undefined,
-    ]) {
+    for (const code of ["T2I", "I2I", "Inpaint", "Upscale", "", null, undefined]) {
       expect(isVideoMode(code)).toBe(false);
     }
   });
@@ -885,10 +858,7 @@ describe("unmatched 的用户口径：describeUnmatchedInputs", () => {
   });
 
   it("参考图各序号统一叫「参考图」，多条只报一次", () => {
-    const text = describeUnmatchedInputs([
-      "reference-image",
-      "reference-image-2",
-    ]);
+    const text = describeUnmatchedInputs(["reference-image", "reference-image-2"]);
     expect(text).toContain("参考图");
     expect((text ?? "").match(/参考图/g)).toHaveLength(1);
   });
@@ -901,8 +871,6 @@ describe("unmatched 的用户口径：describeUnmatchedInputs", () => {
   });
 
   it("自定义口没有内置名：原样展示 id，不冒充预制口", () => {
-    expect(describeUnmatchedInputs(["custom-text-1"])).toContain(
-      "自定义口 custom-text-1",
-    );
+    expect(describeUnmatchedInputs(["custom-text-1"])).toContain("自定义口 custom-text-1");
   });
 });

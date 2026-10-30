@@ -42,7 +42,7 @@ import { launcherChainSource } from "./helpers/launcher-source";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 用例自己造的「项目根」：只放宿主入口，日志因此落它自己的 tmpdir 下。 */
-const tmpRoots: string[] = [];
+const tmpRoots: Array<string> = [];
 function mkRoot({ withHost = true } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "executor-host-spawn-"));
   tmpRoots.push(root);
@@ -122,7 +122,7 @@ describe("planExecutorHostSpawn：哪些值会起宿主", () => {
 describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
   it("inline 时不起进程，返回 null（根目录里连宿主入口都没有）", () => {
     const root = mkRoot({ withHost: false });
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const result = maybeSpawnExecutorHost({
       root,
       runTimestamp: "t",
@@ -136,7 +136,7 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
 
   it("设了 host 但入口不在：不退回 inline，并说清后果", () => {
     const root = mkRoot({ withHost: false });
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const result = maybeSpawnExecutorHost({
       root,
       runTimestamp: "t",
@@ -153,7 +153,7 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
 
   it("认不出的值留一行可见提示（硬规则 4）", () => {
     const root = mkRoot();
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     maybeSpawnExecutorHost({
       root,
       runTimestamp: "t",
@@ -183,7 +183,7 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
       expect(spawnInGroup).toHaveBeenCalledTimes(1);
       const call = /* SAFETY: 类型断言已复核 */ spawnInGroup.mock.calls[0]?.[0] as {
         command: string;
-        args: string[];
+        args: Array<string>;
         cwd: string;
         env: Record<string, string>;
         platform: string;

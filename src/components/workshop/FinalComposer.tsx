@@ -20,10 +20,10 @@ import {
 } from "~/lib/workshop/types";
 
 interface Props {
-  shots: Shot[];
+  shots: Array<Shot>;
   title: string;
   /** 镜头列表所有者回调（时长 / 转场 / 运动编辑）。 */
-  onShotsChange: (shots: Shot[]) => void;
+  onShotsChange: (shots: Array<Shot>) => void;
   /** Raised when the user exports the composition plan (合成清单已导出，非成片). */
   onRendered: () => void;
   rendered: boolean;
@@ -31,8 +31,8 @@ interface Props {
   onComposeFilm?: () => void;
 }
 
-const TRANSITIONS: Transition[] = ["cut", "dissolve", "fade"];
-const MOTIONS: MotionLevel[] = ["low", "medium", "high"];
+const TRANSITIONS: Array<Transition> = ["cut", "dissolve", "fade"];
+const MOTIONS: Array<MotionLevel> = ["low", "medium", "high"];
 
 /** 顺序播放预览中的一个时间线条目。 */
 interface TimelineEntry {
@@ -69,7 +69,7 @@ export function FinalComposer({
   const [currentIdx, setCurrentIdx] = React.useState(0);
   const imageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const timeline: TimelineEntry[] = shots.map((shot) => ({
+  const timeline: Array<TimelineEntry> = shots.map((shot) => ({
     shot,
     duration: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
   }));

@@ -54,7 +54,7 @@ export const workflowListProcedures = {
     )
     .query(async ({ ctx, input }) => {
       const userId = ctx.user.id;
-      const whereConditions: SQL[] = [];
+      const whereConditions: Array<SQL> = [];
 
       if (input?.type) {
         whereConditions.push(eq(workflowTemplate.taskType, normalizeTaskType(input.type)));
@@ -100,7 +100,7 @@ export const workflowListProcedures = {
       // 批量取出每个模板的模型标签名（一次性取全部模板的标签，避免逐条查）
       const wfIds = list.map((w) => w.id);
       const tagRows = await workflowModelTagRepository.getTemplateTagRows(wfIds);
-      const tagsByName = new Map<string, string[]>();
+      const tagsByName = new Map<string, Array<string>>();
       for (const r of tagRows) {
         const arr = tagsByName.get(r.templateId) ?? [];
         arr.push(r.name);
@@ -121,7 +121,7 @@ export const workflowListProcedures = {
         absPath: string;
         exists: boolean;
       }> = [];
-      let localAllFiles: LocalWorkflowFile[] = [];
+      let localAllFiles: Array<LocalWorkflowFile> = [];
       if (localRoots.length > 0) {
         /* 递归扫描：ComfyUI 自己的 workflows/ 与桌面版的 user/default/workflows
          * 都会分子目录（default/、image/…），用户给一个根就是要「这个目录下的都算」，
@@ -203,7 +203,7 @@ export const workflowListProcedures = {
       /* 显式标注成**共用行类型**（数据形状的唯一出处）：不标的话对象字面量的
        *  字面量属性会在 `.map()` 里被推宽成 `string`，于是视图侧那份「三档联合」
        *  的收窄在出口静默失效 —— 收窄丢在这里，没有任何地方会红（ISSUE #1460）。 */
-      const enriched: WorkflowListRow[] = list.map((list) => {
+      const enriched: Array<WorkflowListRow> = list.map((list) => {
         const def = getWorkflowType(normalizeTaskType(list.taskType));
         const rawView = asRawWorkflow(list.rawJson);
         const graphObj =
@@ -257,7 +257,7 @@ export const workflowListProcedures = {
       });
 
       // ── 本地待导入占位行的构造器 ──
-      const localPending: LocalPendingRow[] = [];
+      const localPending: Array<LocalPendingRow> = [];
       if (localRoots.length > 0) {
         const existingByPath = new Set<string>();
         for (const w of enriched) {

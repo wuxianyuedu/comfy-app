@@ -60,9 +60,9 @@ export interface LibraryWireFlowArgs {
   /** 输入侧卡片派生（entries / resolved / ownersByPin / wires…）。 */
   paramCards: LibraryParamCards;
   /** 输出侧的连线（宿主输出行 → 右列卡片）。 */
-  outputWires: readonly ParamCardWire[];
+  outputWires: ReadonlyArray<ParamCardWire>;
   /** 契约条目表（闸门判「这个口接受什么类型的端口」，与自动落点同一份）。 */
-  entries: readonly ParamEntry[];
+  entries: ReadonlyArray<ParamEntry>;
   /** 三列节点的渲染内容（`LibraryNodeContent` 的三段，见画布的说明）。 */
   paramsNode: LibraryNodeContent["params"];
   hostNode: LibraryNodeContent["host"];
@@ -276,7 +276,7 @@ export const LIBRARY_FIT_PADDING = 0.08;
  *  `nodes` 只给 id（React Flow 的 `FitViewOptions.nodes` 接受 `{ id }` 形状），
  *  避免把节点对象复制成第二份事实。 */
 export function libraryFitViewOptions(): {
-  nodes: { id: string }[];
+  nodes: Array<{ id: string }>;
   padding: number;
 } {
   return {
@@ -300,7 +300,7 @@ export function libraryFitViewOptions(): {
 export function buildLibraryNodes(
   sizing: LayoutSizing,
   backdropSize?: { width: number; height: number },
-): Node[] {
+): Array<Node> {
   const at = layoutLibraryNodes(sizing);
   const extent = libraryBackdropSize(sizing, {
     width: sizing.paramsWidth + sizing.hostWidth + sizing.outputsWidth,
@@ -397,7 +397,7 @@ export type LibraryConnection = Pick<
 /** 闸门需要的上下文：IO 表（端口分类） + 契约条目表。 */
 export interface LibraryGateContext {
   io: WorkflowIOMap | null | undefined;
-  entries: readonly ParamEntry[];
+  entries: ReadonlyArray<ParamEntry>;
 }
 
 /** 库内连线的**类型闸门**（纯函数，可单测）。
@@ -485,13 +485,13 @@ function connectionFromDrop(state: {
  *  `selectedIds` 是画布上当前点选中的边 id 集合 —— 命中的边在 `style` 里直接注入
  *  高亮（内联 style 优先级确定，不依赖 React Flow 是否给 `<g>` 加 `.selected`）。 */
 export function deriveLibraryEdges(
-  inputWires: readonly ParamCardWire[],
-  outputWires: readonly ParamCardWire[],
+  inputWires: ReadonlyArray<ParamCardWire>,
+  outputWires: ReadonlyArray<ParamCardWire>,
   interactive: boolean,
   selectedIds?: ReadonlySet<string>,
-): Edge[] {
+): Array<Edge> {
   const sel = selectedIds ?? new Set<string>();
-  const out: Edge[] = [];
+  const out: Array<Edge> = [];
   for (const wire of inputWires)
     out.push(
       buildInputEdge(
@@ -518,7 +518,7 @@ export function deriveLibraryEdges(
  *  端口名反查条目。查不到（端口已从 IO 移除 / 过期快照）时拒绝连线。 */
 /** handle id 就是**条目 id**：一个口一颗点（见 `paramOutputPorts`），条目 id 在
  *  同一个画布节点内天然唯一（尺寸卡的六行各是子口 id，普通卡就是契约口 id）。 */
-function entryForHandle(entries: readonly ParamEntry[], handleId: string): ParamEntry | null {
+function entryForHandle(entries: ReadonlyArray<ParamEntry>, handleId: string): ParamEntry | null {
   return entries.find((item) => item.id === handleId) ?? null;
 }
 

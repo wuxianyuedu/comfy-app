@@ -88,7 +88,7 @@ function read(rel: string): string {
 }
 
 /** 取一个 sh 文件里**非注释**的命令行（用来判「这步到底还跑不跑」）。 */
-function activeShellCommands(source: string): string[] {
+function activeShellCommands(source: string): Array<string> {
   return source
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -145,7 +145,7 @@ function indexBlob(path: string): string {
 }
 
 /** 一条 `@font-face { … }` 块，按出现顺序。 */
-function fontFaces(css: string): string[] {
+function fontFaces(css: string): Array<string> {
   return [...css.matchAll(/@font-face\s*\{([^}]*)\}/g)].map((m) => m[1] ?? "");
 }
 

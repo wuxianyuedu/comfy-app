@@ -45,7 +45,7 @@ import {
 const ROOT = path.resolve(import.meta.dirname, "..");
 const HOOK = path.join(ROOT, ".githooks", "pre-commit");
 
-const temps: string[] = [];
+const temps: Array<string> = [];
 afterEach(() => {
   for (const dir of temps.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
@@ -63,11 +63,7 @@ function dirWithHook(): string {
 
 describe("复合档 —— 判决面只在「本次改动」上的那一步（ISSUE #2224）", () => {
   it("带 `--staged` 的步骤照旧剥掉：判全量档，判决面还在", () => {
-    const got = heavyGateArgv([
-      "node",
-      "scripts/check-dead-exports.cjs",
-      "--staged",
-    ]);
+    const got = heavyGateArgv(["node", "scripts/check-dead-exports.cjs", "--staged"]);
     expect(got.ok).toBe(true);
     if (!got.ok) return;
     expect(got.argv).toEqual(["node", "scripts/check-dead-exports.cjs"]);
@@ -75,22 +71,14 @@ describe("复合档 —— 判决面只在「本次改动」上的那一步（IS
   });
 
   it("check-format --staged ⇒ 换发 --changed（printWidth 迁移期全库档恒红，ISSUE #2729）", () => {
-    const got = heavyGateArgv([
-      "node",
-      "scripts/check-format.cjs",
-      "--staged",
-    ]);
+    const got = heavyGateArgv(["node", "scripts/check-format.cjs", "--staged"]);
     expect(got.ok).toBe(true);
     if (!got.ok) return;
     expect(got.argv).toEqual(["node", "scripts/check-format.cjs", "--changed"]);
     expect(got.via).toContain("改动面");
     expect(got.notRunCodes).toEqual([]);
     /* 对照：别的步骤不沾这个换发 —— 剥旗标进全库照旧。 */
-    const other = heavyGateArgv([
-      "node",
-      "scripts/check-dead-exports.cjs",
-      "--staged",
-    ]);
+    const other = heavyGateArgv(["node", "scripts/check-dead-exports.cjs", "--staged"]);
     expect(other.ok).toBe(true);
     if (!other.ok) return;
     expect(other.argv).toEqual(["node", "scripts/check-dead-exports.cjs"]);
@@ -102,12 +90,7 @@ describe("复合档 —— 判决面只在「本次改动」上的那一步（IS
     });
     expect(got.ok).toBe(true);
     if (!got.ok) return;
-    expect(got.argv).toEqual([
-      "node",
-      "scripts/shell-gate.mjs",
-      "--base",
-      "abc123",
-    ]);
+    expect(got.argv).toEqual(["node", "scripts/shell-gate.mjs", "--base", "abc123"]);
     /* 这一族把「没跑起来」报成 2（仓库三态），这一档必须认它 —— 不然「拿不到
      * 基线」会被读成「判红」。 */
     expect(got.notRunCodes).toContain(2);
@@ -124,7 +107,7 @@ describe("复合档 —— 判决面只在「本次改动」上的那一步（IS
   });
 
   it("有「没判」的那一条 ⇒ 退 2，且逐条点名（不许默默算绿）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = main({
       cwd: dirWithHook(),
       argv: ["--only=桌面壳"],
@@ -138,7 +121,7 @@ describe("复合档 —— 判决面只在「本次改动」上的那一步（IS
   });
 
   it("那一步自己报「没跑起来」（退 2）⇒ 这一格退 2，不读成「判红」", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = main({
       cwd: ROOT,
       argv: ["--only=桌面壳"],
@@ -169,7 +152,7 @@ describe("重档 —— 「没有结论」不许走成「全绿」（ISSUE #2367
      * 最后那个 `return 0` —— 账面「合计 0 条」读起来像「今天没有判据要跑」。 */
     const dir = mkdtempSync(path.join(tmpdir(), "heavy-gates-nohook-"));
     temps.push(dir);
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = main({
       cwd: dir,
       argv: [],
@@ -197,7 +180,7 @@ describe("重档 —— 「没有结论」不许走成「全绿」（ISSUE #2367
         "",
       ].join("\n"),
     );
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = main({
       cwd: dir,
       argv: ["--only=假判据"],
@@ -230,9 +213,9 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
   /** 跑一格，只看那一格的一条步骤（`--only` 按标签过滤）。 */
   const one = (
     only: string,
-    changedFiles: { files: readonly string[] } | null,
+    changedFiles: { files: ReadonlyArray<string> } | null,
   ): { code: number; out: string } => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = main({
       cwd: ROOT,
       argv: [`--only=${only}`],
@@ -274,18 +257,12 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
 
   it("面取自**收窄登记表**，不是手抄的第二份", () => {
     /* 反查：登记表里那一条的脚本 ⇒ 它的面就是登记表里那组 glob。 */
-    const entry = INCREMENTAL_GATES.find(
-      (e) => e.script === "scripts/check-theme-colors.cjs",
-    );
+    const entry = INCREMENTAL_GATES.find((e) => e.script === "scripts/check-theme-colors.cjs");
     expect(entry, "收窄登记表里没有「主题色扫描」这一条").toBeTruthy();
     if (!entry) return;
-    expect(
-      narrowingEntryForScript("scripts/check-theme-colors.cjs")?.globs,
-    ).toEqual(entry.globs);
+    expect(narrowingEntryForScript("scripts/check-theme-colors.cjs")?.globs).toEqual(entry.globs);
     /* 不在登记表里的判据（这里拿一条没有收窄面的）⇒ 查不到 ⇒ 不许收窄。 */
-    expect(
-      narrowingEntryForScript("scripts/check-gate-executors.cjs"),
-    ).toBeNull();
+    expect(narrowingEntryForScript("scripts/check-gate-executors.cjs")).toBeNull();
   });
 
   it("收窄判据按**判据脚本**查（不看标签名）", () => {
@@ -293,9 +270,9 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
       "scripts/check-theme-colors.cjs",
     );
     /* 参数里的路径不算判据本身 —— 取第一个才是。 */
-    expect(
-      judgmentScriptOf(["node", "scripts/check-a.cjs", "scripts/check-b.cjs"]),
-    ).toBe("scripts/check-a.cjs");
+    expect(judgmentScriptOf(["node", "scripts/check-a.cjs", "scripts/check-b.cjs"])).toBe(
+      "scripts/check-a.cjs",
+    );
     expect(judgmentScriptOf(["node", "-e", "1"])).toBeNull();
   });
 
@@ -326,7 +303,7 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
  */
 describe("复合档 —— 绿步的读数也要有出口（ISSUE #2256）", () => {
   it("绿步自己那一行读数被转述出来（此前一个字都不打）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = main({
       cwd: ROOT,
       /* 这一条**不依赖分支状态**（ISSUE #2265 之后「文档源 ⇄ 生成态镜像同批」要按基线
@@ -348,10 +325,7 @@ describe("复合档 —— 绿步的读数也要有出口（ISSUE #2256）", () 
      * 「红步的输出不许只念尾部」真跑一遍。两边各钉一头：
      *   · 只取最后一行 ⇒ 判决面（「改动面来自 …」）看不见，与「只转述一行」同病；
      *   · 只取尾部 12 行 ⇒ ISSUE #2367 的现场，红的那条连名字都没出现。 */
-    const src = readFileSync(
-      path.join(ROOT, "scripts", "ci-heavy-gates.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts", "ci-heavy-gates.mjs"), "utf8");
     expect(src).toContain("HEAD_LINES");
     expect(src).toContain("TAIL_LINES");
     expect(src).toContain(".slice(-TAIL_LINES)");
@@ -373,30 +347,21 @@ describe("复合档 —— 绿步的读数也要有出口（ISSUE #2256）", () 
  */
 describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
   it("这一族拿 `--base`，而且**把 `--staged` 一起剥掉**（判据只该有一个判决面来源）", () => {
-    const got = heavyGateArgv(
-      ["node", "scripts/check-doc-mirror-pairing.cjs", "--staged"],
-      { env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" } },
-    );
+    const got = heavyGateArgv(["node", "scripts/check-doc-mirror-pairing.cjs", "--staged"], {
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+    });
     expect(got.ok).toBe(true);
     if (!got.ok) return;
     /* `--staged` 必须不在：这条判据「剥掉旗标之后判的仍是暂存集」，两个都挂着
      * 就分不清它到底按哪个面判。 */
-    expect(got.argv).toEqual([
-      "node",
-      "scripts/check-doc-mirror-pairing.cjs",
-      "--base",
-      "abc123",
-    ]);
+    expect(got.argv).toEqual(["node", "scripts/check-doc-mirror-pairing.cjs", "--base", "abc123"]);
     expect(got.argv).not.toContain("--staged");
   });
 
   it("「已知基线失败登记·自证」也在这一族里（它连旗标都没有）", () => {
-    const got = heavyGateArgv(
-      ["node", "scripts/known-failed-selftest-gate.mjs"],
-      {
-        env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
-      },
-    );
+    const got = heavyGateArgv(["node", "scripts/known-failed-selftest-gate.mjs"], {
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+    });
     expect(got.ok).toBe(true);
     if (!got.ok) return;
     expect(got.argv).toEqual([
@@ -422,7 +387,7 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
     writeFileSync(path.join(dir, "silent.mjs"), "process.exit(0);\n", "utf8");
     const hookPath = path.join(dir, ".githooks", "pre-commit");
     appendFileSync(hookPath, '  run "静默那一步" node silent.mjs\n', "utf8");
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = main({
       cwd: dir,
       argv: ["--only=静默那一步"],

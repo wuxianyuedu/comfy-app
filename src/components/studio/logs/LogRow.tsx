@@ -21,10 +21,7 @@ import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { Hint } from "~/components/ui/hint";
 import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
-import {
-  copyFailureText,
-  useCopyFeedback,
-} from "~/components/ui/use-copy-feedback";
+import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { isCliJsonLine, parseCliJsonLine } from "~/lib/log/log-cli-json";
 import { findLogPathTokens } from "~/lib/log/log-path-tokens";
 import { normalizeNeedle } from "~/lib/list-filter";
@@ -48,18 +45,17 @@ import {
  * 内存由 RENDER_CACHE_MAX 限制（溢出时整体清空）。开发注记：
  * Fast Refresh 会在编辑时重执行本模块，所以规则变化天然
  * 从空缓存开始 —— 无需清理陈旧条目。 */
-const FRAGMENT_CACHE = new Map<string, RowToken[]>();
+const FRAGMENT_CACHE = new Map<string, Array<RowToken>>();
 const FRAGMENT_CACHE_MAX = 5000;
 
 /* 搜索命中 `<mark>` 高亮——琥珀是"荧光笔"的通用视觉语言、不是状态色
  * (warning-strong 会把「搜索到」误读为「警告」)。没有对应的"命中/高亮"
  * 语义 token → §3.6.1 例外块。 */
 // p71-allow:start 搜索命中 `<mark>` 高亮——荧光笔装饰色、非状态语义、无匹配 token
-const SEARCH_HIT_CLASS =
-  "rounded-sm bg-amber-400/30 px-0.5 text-amber-900 dark:text-amber-100";
+const SEARCH_HIT_CLASS = "rounded-sm bg-amber-400/30 px-0.5 text-amber-900 dark:text-amber-100";
 // p71-allow:end
 
-function fragmentsOf(text: string): RowToken[] {
+function fragmentsOf(text: string): Array<RowToken> {
   const hit = FRAGMENT_CACHE.get(text);
   if (hit) return hit;
   const out = rowFragments(text);
@@ -76,9 +72,7 @@ function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
   return (
     <>
       {fragments.map((fragment, index) => {
-        const className = fragment.style
-          ? TOKEN_CLASS[fragment.style]
-          : undefined;
+        const className = fragment.style ? TOKEN_CLASS[fragment.style] : undefined;
         return (
           <span key={index} className={className}>
             {highlightNeedle(fragment.text, needle)}
@@ -93,15 +87,13 @@ function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
 function highlightNeedle(text: string, needle: string): React.ReactNode {
   if (!needle) return <PathLinkedText text={text} />;
   const lower = text.toLowerCase();
-  const parts: React.ReactNode[] = [];
+  const parts: Array<React.ReactNode> = [];
   let cursor = 0;
   let at = lower.indexOf(needle);
   let key = 0;
   while (at !== -1) {
     if (at > cursor) {
-      parts.push(
-        <PathLinkedText key={`t${key}`} text={text.slice(cursor, at)} />,
-      );
+      parts.push(<PathLinkedText key={`t${key}`} text={text.slice(cursor, at)} />);
     }
     parts.push(
       <mark key={`m${key}`} className={SEARCH_HIT_CLASS}>
@@ -145,7 +137,7 @@ function highlightNeedle(text: string, needle: string): React.ReactNode {
 function PathLinkedText({ text }: { text: string }): React.ReactNode {
   const tokens = findLogPathTokens(text);
   if (tokens.length === 0) return text;
-  const parts: React.ReactNode[] = [];
+  const parts: Array<React.ReactNode> = [];
   let cursor = 0;
   for (const [index, token] of tokens.entries()) {
     if (token.start > cursor) parts.push(text.slice(cursor, token.start));
@@ -171,13 +163,7 @@ function PathLinkedText({ text }: { text: string }): React.ReactNode {
  * 放常驻说明，而「点了有反应」这件事必须在**点的那一处**看得出来。失败的原因
  * （服务端给的那句）进 `title`，鼠标停一下就能看到。
  */
-function RevealPathButton({
-  path,
-  children,
-}: {
-  path: string;
-  children: React.ReactNode;
-}) {
+function RevealPathButton({ path, children }: { path: string; children: React.ReactNode }) {
   /* 回执与成功态**必须同生共死**：两个独立定时器在时长一改就会漂移，留下
    * 「已定位」还在、绿色已经消失的自相矛盾画面（与 `SaveExportButton` 同款）。 */
   const hint = useFlashState(1200);
@@ -474,10 +460,7 @@ export const LogRow = memo(function LogRow({
         trigger={messageNode}
       >
         {expanded && cliJson ? (
-          <div
-            className="min-h-0"
-            style={{ height: LOG_ROW_EXPANDED - LOG_ROW_SINGLE }}
-          >
+          <div className="min-h-0" style={{ height: LOG_ROW_EXPANDED - LOG_ROW_SINGLE }}>
             <LazyJsonViewer
               data={cliJson.value}
               title={`comfy-cli ${cliJson.tag}`}

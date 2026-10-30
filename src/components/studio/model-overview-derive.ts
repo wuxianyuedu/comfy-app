@@ -24,7 +24,7 @@ export interface ModelOverviewGroup {
 
 export interface ModelOverviewState {
   /** 有模型的目录，按数量降序；空目录不列（列出来只会稀释信息）。 */
-  groups: ModelOverviewGroup[];
+  groups: Array<ModelOverviewGroup>;
   /** 本机可用模型的总数。 */
   total: number;
   /** 有多少个目录一个模型都没有 —— 用一句话交代，而不是不声不响地少列。 */
@@ -35,7 +35,7 @@ export interface ModelOverviewState {
 }
 
 export function deriveModelOverview(input: {
-  folders: OverviewFolder[] | undefined;
+  folders: Array<OverviewFolder> | undefined;
   loading: boolean;
   /** 只传「是不是失败了」这个布尔：错误文案的唯一出处在本模块，
    *  把 Error 对象传进来等于允许调用方各写一句。 */

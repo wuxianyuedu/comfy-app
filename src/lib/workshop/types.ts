@@ -97,7 +97,7 @@ export const DEFAULT_SHOT_TYPE: ShotType = "medium";
  *  不在清单里的一律回落默认档 —— 不抛错（一条镜头的景别写错不该毁掉整批解析），
  *  但也不放它进类型系统。 */
 export function normalizeShotType(raw: unknown): ShotType {
-  return /* SAFETY: 类型断言已复核 */ (SHOT_TYPES as readonly string[]).includes(
+  return /* SAFETY: 类型断言已复核 */ (SHOT_TYPES as ReadonlyArray<string>).includes(
     typeof raw === "string" ? raw : "",
   )
     ? /* SAFETY: 类型断言已复核 */ (raw as ShotType)
@@ -211,7 +211,7 @@ const stringList = z
  * 写在里面时输出类型是「必带这个键（值可为 undefined）」，与消费侧 `motion?:`
  * 那一类声明正好反过来，派生出来的类型就会让所有字面量集体报 `TS2741`。
  */
-function optionalEnum<const T extends readonly string[]>(values: T) {
+function optionalEnum<const T extends ReadonlyArray<string>>(values: T) {
   return z
     .unknown()
     .transform((value) =>

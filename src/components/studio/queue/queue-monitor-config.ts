@@ -25,9 +25,9 @@ export const RECENT_WINDOW = 8;
 
 /** 三个桶：跑动中 / 排队中 / 最近结果。 */
 export interface QueueBuckets {
-  running: QueueRow[];
-  queued: QueueRow[];
-  recent: QueueRow[];
+  running: Array<QueueRow>;
+  queued: Array<QueueRow>;
+  recent: Array<QueueRow>;
 }
 
 /**
@@ -39,10 +39,10 @@ export interface QueueBuckets {
  * 「跑动中」保留成数组而不是取第一条：今天执行器是单并发，写死一条的代价是将来
  * 放开并行时界面**静默少显示**，而分桶本身不需要这个假设。
  */
-export function bucketQueueRows(rows: readonly QueueRow[]): QueueBuckets {
-  const running: QueueRow[] = [];
-  const queued: QueueRow[] = [];
-  const recent: QueueRow[] = [];
+export function bucketQueueRows(rows: ReadonlyArray<QueueRow>): QueueBuckets {
+  const running: Array<QueueRow> = [];
+  const queued: Array<QueueRow> = [];
+  const recent: Array<QueueRow> = [];
   for (const row of rows) {
     if (row.status === "RUNNING") {
       running.push(row);
@@ -74,7 +74,7 @@ export function bucketQueueRows(rows: readonly QueueRow[]): QueueBuckets {
  * 先跑。直接拿倒序数组的下标当位次，会把最后一个排队的显示成「第 1 位」。
  */
 export function queuedWithPosition(
-  queued: readonly QueueRow[],
+  queued: ReadonlyArray<QueueRow>,
 ): Array<{ row: QueueRow; position: number }> {
   const total = queued.length;
   return queued
@@ -84,7 +84,7 @@ export function queuedWithPosition(
 }
 
 /** 最近结果：按窗口上限截断（进来的顺序已是新的在前）。 */
-export function recentWithin(rows: readonly QueueRow[]): QueueRow[] {
+export function recentWithin(rows: ReadonlyArray<QueueRow>): Array<QueueRow> {
   return rows.slice(0, RECENT_WINDOW);
 }
 
@@ -96,10 +96,7 @@ export function recentWithin(rows: readonly QueueRow[]): QueueRow[] {
  *   · 进度已经 100 —— 它在收尾，报「剩余 0 秒」只是噪声。
  * 宁缺毋滥：这一屏的数字是用户决定「要不要再提交一条」的依据。
  */
-export function estimateRemainingMs(
-  elapsedMs: number,
-  progressPct: number,
-): number | null {
+export function estimateRemainingMs(elapsedMs: number, progressPct: number): number | null {
   if (progressPct <= 0 || progressPct >= 100) return null;
   const total = elapsedMs / (progressPct / 100);
   return Math.max(0, Math.round(total - elapsedMs));
@@ -132,8 +129,7 @@ export function runningElapsedText(elapsedMs: number | null): string {
 export function offlineEmptyText(): { title: string; description: string } {
   return {
     title: "ComfyUI 未运行",
-    description:
-      "队列里的任务不会开始。启动后端后这一屏会自动接上，不用手动刷新。",
+    description: "队列里的任务不会开始。启动后端后这一屏会自动接上，不用手动刷新。",
   };
 }
 
@@ -144,8 +140,7 @@ export function offlineEmptyText(): { title: string; description: string } {
 export function offlineBannerText(): { title: string; description: string } {
   return {
     title: "ComfyUI 未连接",
-    description:
-      "队列里的任务暂时不会开始；连接恢复后这一屏自动接上，不用手动刷新。",
+    description: "队列里的任务暂时不会开始；连接恢复后这一屏自动接上，不用手动刷新。",
   };
 }
 
@@ -195,9 +190,5 @@ export function offlineRunningCardNote(): string {
  * 才给，为凑一句「已复制全部参数」多发一次查询，且文案仍然对不上，不值得。
  */
 export function reprintText(row: QueueRow): string {
-  return [
-    `提示词：${row.prompt}`,
-    `工作流：${row.workflowName}`,
-    `类型：${row.type}`,
-  ].join("\n");
+  return [`提示词：${row.prompt}`, `工作流：${row.workflowName}`, `类型：${row.type}`].join("\n");
 }

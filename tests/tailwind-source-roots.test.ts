@@ -47,11 +47,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import {
-  compiledCssPinnedTo,
-  compiledGlobalsCss,
-  ruleSelectors,
-} from "./helpers/theme-tokens";
+import { compiledCssPinnedTo, compiledGlobalsCss, ruleSelectors } from "./helpers/theme-tokens";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const GLOBALS_PATH = path.join(ROOT, "src", "app", "globals.css");
@@ -67,15 +63,7 @@ const SOURCE_ROOTS: Record<string, string> = {
 };
 
 /** 出现即红的目录：正文、账本、门禁脚本、生成物 —— 它们一旦进根就是把死规则请回来。 */
-const FORBIDDEN_IN_ROOTS = [
-  "docs",
-  "changelog.d",
-  "scripts",
-  "tests",
-  "tools",
-  "e2e",
-  "src-tauri",
-];
+const FORBIDDEN_IN_ROOTS = ["docs", "changelog.d", "scripts", "tests", "tools", "e2e", "src-tauri"];
 
 /**
  * 与 app **共用同一份 `globals.css` 入口**的外部面：它们写的类必须出现在生产产物里，
@@ -95,13 +83,12 @@ const MUST_BE_SCANNED = [
  * 第 9 刀量过纯文本正则会在别的方向上多报（模板串、变体选择器、`[0-9]` 这类正则字符组），
  * 而「属性名 + 方括号里是一个带单位的数」这一族在真源文件里不会出现假形。
  */
-const NUMERIC_ARBITRARY_RE =
-  /[-\w]+-\[[\d.]+(?:px|rem|em|vh|vw|vmin|vmax|ms|s|%)?\]/g;
+const NUMERIC_ARBITRARY_RE = /[-\w]+-\[[\d.]+(?:px|rem|em|vh|vw|vmin|vmax|ms|s|%)?\]/g;
 
 /** 一棵根目录下所有文本文件的拼接（用于「丢的那些确实写在这一根里」）。 */
 function textUnder(absDir: string): string {
   const skip = new Set(["node_modules", ".next", "generated", "dist"]);
-  const out: string[] = [];
+  const out: Array<string> = [];
   const walk = (dir: string) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       if (e.isDirectory()) {
@@ -116,8 +103,8 @@ function textUnder(absDir: string): string {
 }
 
 /** 从 globals.css 里读出 `@source` 指令的目标（忽略 `inline(...)` 点名与 `not` 形态）。 */
-function declaredRoots(css: string): string[] {
-  const out: string[] = [];
+function declaredRoots(css: string): Array<string> {
+  const out: Array<string> = [];
   for (const m of css.matchAll(/^\s*@source\s+"([^"]+)"\s*;/gm)) {
     const target = m[1];
     if (target && !target.startsWith("inline(")) out.push(target);
@@ -140,7 +127,7 @@ function selectorParts(css: string): Set<string> {
 /** 应用本体那棵根是所有对照的基准（其余每一根都要在它之上证明自己承重）。 */
 const BASE_ROOT = "../../src";
 
-let declared: string[] = [];
+let declared: Array<string> = [];
 let rootsCss = "";
 let baseCss = "";
 
@@ -167,7 +154,7 @@ describe("源扫描根是显式名单", () => {
     const css = readFileSync(GLOBALS_PATH, "utf8");
     expect(
       /^@import\s+["']tailwindcss["']\s+source\(none\)\s*;/m.test(css),
-      'globals.css 的第一行不再写 source(none) —— 自动发现回来了，238 条无调用点的规则一起回来',
+      "globals.css 的第一行不再写 source(none) —— 自动发现回来了，238 条无调用点的规则一起回来",
     ).toBe(true);
 
     expect(
@@ -179,10 +166,7 @@ describe("源扫描根是显式名单", () => {
     /* 名单里的每一棵都得真的存在 —— 拼错一道的表现不是红，是「那一根的样式静默消失」。 */
     for (const rel of Object.keys(SOURCE_ROOTS)) {
       const abs = path.resolve(path.dirname(GLOBALS_PATH), rel);
-      expect(
-        existsSync(abs),
-        `${rel}（登记为「${SOURCE_ROOTS[rel]}」）在磁盘上不存在`,
-      ).toBe(true);
+      expect(existsSync(abs), `${rel}（登记为「${SOURCE_ROOTS[rel]}」）在磁盘上不存在`).toBe(true);
     }
 
     const forbidden = declared.filter((rel) =>
@@ -196,10 +180,7 @@ describe("源扫描根是显式名单", () => {
 
     /* 登记表反向：条目对应的根若已从文件里消失，条目要一起删（不留「有登记、没有实物」）。 */
     const stale = Object.keys(SOURCE_ROOTS).filter((rel) => !declared.includes(rel));
-    expect(
-      stale,
-      "这些登记过的根已经不在 globals.css 里了：" + stale.join(" / "),
-    ).toEqual([]);
+    expect(stale, "这些登记过的根已经不在 globals.css 里了：" + stale.join(" / ")).toEqual([]);
   });
 
   it("每一根都承重：摘掉它必须真丢样式，丢的那些必须写在它自己里", () => {
@@ -220,13 +201,12 @@ describe("源扫描根是显式名单", () => {
           "它就不该在名单里：要么删登记，要么它供给的东西其实都在应用本体里",
       ).toBeGreaterThan(0);
       const rootText = textUnder(path.resolve(path.dirname(GLOBALS_PATH), rel));
-      const notSpelledThere = onlyThisRoot.filter(
-        (s) => !rootText.includes(unescape(s)),
-      );
+      const notSpelledThere = onlyThisRoot.filter((s) => !rootText.includes(unescape(s)));
       expect(
         notSpelledThere,
         `这些选择器只有 ${rel} 会供给，却没在那棵根的文本里找到逐字写法（说明登记理由不成立` +
-          `，或差集其实来自别处）：` + notSpelledThere.map(unescape).join(" / "),
+          `，或差集其实来自别处）：` +
+          notSpelledThere.map(unescape).join(" / "),
       ).toEqual([]);
     }
 
@@ -242,9 +222,7 @@ describe("源扫描根是显式名单", () => {
      * 而把一棵根从声明与登记里同时摘掉时差集会一起消失 —— 那一格就没人可依了。
      * 所以这里不看名单，只看「这些面写了哪些数值型任意值」与「产物里有没有它们」。 */
     const unescape = (s: string) => s.replace(/\\(.)/g, "$1").replace(/^\./, "");
-    const inProduct = new Set(
-      [...selectorParts(rootsCss)].map((s) => unescape(s)),
-    );
+    const inProduct = new Set([...selectorParts(rootsCss)].map((s) => unescape(s)));
     for (const surface of MUST_BE_SCANNED) {
       const text = textUnder(path.join(ROOT, surface.dir));
       const spelled = [...new Set([...text.matchAll(NUMERIC_ARBITRARY_RE)].map((m) => m[0]))];
@@ -256,7 +234,8 @@ describe("源扫描根是显式名单", () => {
       expect(
         missing,
         `${surface.dir} 与 app 共用同一份 globals.css（${surface.reason}），` +
-          `但这些类没进产物 —— 扫描根里少了这一棵：` + missing.join(" / "),
+          `但这些类没进产物 —— 扫描根里少了这一棵：` +
+          missing.join(" / "),
       ).toEqual([]);
     }
   });

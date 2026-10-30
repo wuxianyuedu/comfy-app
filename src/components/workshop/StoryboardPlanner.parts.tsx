@@ -42,8 +42,8 @@ export function ShotRow({
   onGenerate,
 }: {
   shot: Shot;
-  characters: Character[];
-  styles: StyleRef[];
+  characters: Array<Character>;
+  styles: Array<StyleRef>;
   progressByShot?: ShotProgress;
   generating: boolean;
   /** 该镜头的 AI 提示词润色进行中 */

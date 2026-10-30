@@ -25,10 +25,7 @@
 import { upperToken } from "~/lib/upper-token";
 import { asRecord } from "~/lib/comfyui/raw";
 import { inferIsMultiline } from "~/lib/comfyui/types";
-import {
-  type RawInputEntry,
-  type RawNodeMeta,
-} from "~/lib/comfyui/workflow-detail-raw";
+import { type RawInputEntry, type RawNodeMeta } from "~/lib/comfyui/workflow-detail-raw";
 import { type WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
 
 export interface WorkflowIORawEntry {
@@ -62,26 +59,26 @@ export interface WorkflowIORawEntry {
   /** 富化出来的控件默认值（图内 widget 当前值）。同 type，可作兜底基线。 */
   defaultValue?: unknown;
   /** COMBO 候选列表（来自 object_info）。离线保存时可能缺失，留空由表单回落文本。 */
-  options?: string[];
+  options?: Array<string>;
 }
 
 export interface WorkflowIOEnrichParams {
   workflowIORaw: Record<string, WorkflowIORawEntry>;
-  rawInputsById: Record<string, RawInputEntry[]>;
+  rawInputsById: Record<string, Array<RawInputEntry>>;
   /** 子工作流内部节点的输入元数据（`buildInnerNodeInputs`）。
    *  勾选点落在子图内层视图时，落库 `nodeId` 指向内部节点，顶层 `rawInputsById`
    *  里没有它 —— 没有这份兜底表，类型退化成 `*`、显示名退化成 pin 名
    *  （ISSUE #349）。缺省（无子图）时行为与旧版逐值等价。 */
-  innerInputsById?: Record<string, RawInputEntry[]>;
-  rawNodeMeta: RawNodeMeta[];
+  innerInputsById?: Record<string, Array<RawInputEntry>>;
+  rawNodeMeta: Array<RawNodeMeta>;
   graph: Record<string, unknown>;
   nodeTitleById: Record<string, string>;
   nodeTypeById: Record<string, string>;
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
-  ) => Promise<string[] | undefined>;
-  comboOptionsForFieldName: (field: string) => Promise<string[] | undefined>;
+  ) => Promise<Array<string> | undefined>;
+  comboOptionsForFieldName: (field: string) => Promise<Array<string> | undefined>;
   /** 某 class 某字段是否声明了 `{"multiline": true}`（object_info 的类型事实）。
    *  查不到返回 `undefined` —— 判定退到「值很长」这条数据判据，不猜名字。 */
   multilineForClassField: (
@@ -106,13 +103,9 @@ function optionRatio(label: string): number | null {
  * undefined（调用方摘掉该覆盖，回退合法 defaultValue）。候选表缺失
  * （ComfyUI 离线）时不动——此时无从判定合法性，交由表单原样编辑。
  */
-function reconcileOptionValue(
-  value: unknown,
-  options: string[] | undefined,
-): unknown {
+function reconcileOptionValue(value: unknown, options: Array<string> | undefined): unknown {
   if (!options || options.length === 0) return value;
-  if (typeof value !== "string" || value === "" || options.includes(value))
-    return value;
+  if (typeof value !== "string" || value === "" || options.includes(value)) return value;
   const ratio = optionRatio(value);
   if (ratio !== null) {
     const byRatio = options.find((option) => {
@@ -124,8 +117,7 @@ function reconcileOptionValue(
   const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
   const target = norm(value);
   return options.find(
-    (option) =>
-      norm(option).startsWith(target) || target.startsWith(norm(option)),
+    (option) => norm(option).startsWith(target) || target.startsWith(norm(option)),
   );
 }
 
@@ -141,7 +133,7 @@ export interface WorkflowIOEntry {
   multiline?: boolean;
   /** COMBO 候选项列表（unet_name / clip_name …），由 /api/object_info 解析得到。
    *  非 COMBO 引脚、或 ComfyUI 连不上时为空 —— 消费方回落到纯文本控件。 */
-  options?: string[];
+  options?: Array<string>;
   displayOrder?: number;
   /** IO 编辑里切换的「运行时强校验」标记 —— PATCH 原样落库，GET 透传。 */
   required?: boolean;
@@ -194,8 +186,7 @@ export function persistEnrichedWorkflowIO(
        * 不在这里猜，交给 GET 富化。 */
       const declared = upperToken(v.type);
       if (declared === "" || declared === "*") {
-        if (typeof gv === "number")
-          next.type = Number.isInteger(gv) ? "INT" : "FLOAT";
+        if (typeof gv === "number") next.type = Number.isInteger(gv) ? "INT" : "FLOAT";
         else if (typeof gv === "boolean") next.type = "BOOLEAN";
       }
     }
@@ -242,7 +233,7 @@ export async function enrichWorkflowIO(
     /* kind 与 key 直接透传存储值。存储自新格式起即正确区分
      *  widget(可编辑控件) / param(wire 端口) / output,不再做旧数据迁移。 */
     /* COMBO 候选项列表 —— 下面确定了最终的 `type` 之后再解析。 */
-    let options: string[] | undefined;
+    let options: Array<string> | undefined;
 
     // 助手：把存档里的 `v.nodeId` 与「两套 id 家族」中任一种形态的键对上 ——
     //   • React Flow 的短 id（例如 "9b9009e4"）—— 这是 toggleIO 写入的形态；
@@ -259,7 +250,7 @@ export async function enrichWorkflowIO(
       const metaById: Record<string, boolean> = Object.fromEntries(
         rawNodeMeta.map((meta) => [meta.id, true]),
       );
-      const dicts: Record<string, unknown>[] = [rawInputsById, metaById, graph];
+      const dicts: Array<Record<string, unknown>> = [rawInputsById, metaById, graph];
       for (const dict of dicts) {
         if (!dict) continue;
         if (Object.prototype.hasOwnProperty.call(dict, full)) return full;
@@ -271,9 +262,7 @@ export async function enrichWorkflowIO(
         if (!dict) continue;
         const hit = Object.keys(dict).find(
           (key) =>
-            key.length > full.length &&
-            key.startsWith(full) &&
-            key.charAt(full.length) === "-",
+            key.length > full.length && key.startsWith(full) && key.charAt(full.length) === "-",
         );
         if (hit) return hit;
       }
@@ -281,9 +270,7 @@ export async function enrichWorkflowIO(
     })();
 
     if (v.direction === "output") {
-      const meta = rawNodeMeta.find(
-        (rawNodeMeta) => rawNodeMeta.id === canonicalNodeId,
-      );
+      const meta = rawNodeMeta.find((rawNodeMeta) => rawNodeMeta.id === canonicalNodeId);
       const out = meta?.outputs.find((output) => output.name === v.name);
       if (out) {
         type = out.type || "*";
@@ -313,12 +300,7 @@ export async function enrichWorkflowIO(
           /* 候选名字集合：真实槽位名 + 内部字段名 + 本层作者名 + 内部作者名。
            *  「恰好只有一个暴露槽位认领这个名字」才认 —— 多插槽节点上同名者
            *  不止一行时宁可放过，也不把别的槽位的 label 安到这一行。 */
-          const names = [
-            raw.name,
-            raw.proxyField?.field,
-            raw.label,
-            raw.proxyField?.label,
-          ];
+          const names = [raw.name, raw.proxyField?.field, raw.label, raw.proxyField?.label];
           if (!names.includes(v.name)) return false;
           return (
             inputEntries.filter((other) => {
@@ -361,10 +343,7 @@ export async function enrichWorkflowIO(
           (f?.localized !== ri.name ? f?.localized : undefined) ??
           authorSlotLabel ??
           (f?.field !== ri.name ? f?.field : undefined);
-        if (
-          candidateSlotLabel !== undefined &&
-          candidateSlotLabel !== ri.name
-        ) {
+        if (candidateSlotLabel !== undefined && candidateSlotLabel !== ri.name) {
           slotLabel = candidateSlotLabel;
         }
 
@@ -372,13 +351,7 @@ export async function enrichWorkflowIO(
          *  唯一写入点是面板的改名框）—— 直读，不做任何「像不像机器名」的让位
          *  判断。作者想在面板里覆盖本层 raw label，写进去的就是它。 */
         label =
-          label ??
-          f?.label ??
-          f?.localized ??
-          ri.label ??
-          ri.localized ??
-          f?.field ??
-          ri.name;
+          label ?? f?.label ?? f?.localized ?? ri.label ?? ri.localized ?? f?.field ?? ri.name;
         if (ri.widgetValue !== undefined) defaultValue = ri.widgetValue;
       }
       /* 只导 API 格式时没有 rawJson → rawInputsById 是空的。
@@ -391,8 +364,7 @@ export async function enrichWorkflowIO(
       /* 连派生图也取不到（图里没有该字面量）时，回落到存档里
        * 上一次在线保存过的默认值 —— 让「ComfyUI 离线时保存」的条目重新打开时仍
        * 能带值，而不是退化成空串 / 未填（fix 4：默认值也固化下来）。 */
-      if (defaultValue === undefined && v.defaultValue !== undefined)
-        defaultValue = v.defaultValue;
+      if (defaultValue === undefined && v.defaultValue !== undefined) defaultValue = v.defaultValue;
       if (type === "*" && defaultValue !== undefined) {
         if (typeof defaultValue === "boolean") type = "BOOLEAN";
         else if (typeof defaultValue === "number")
@@ -407,10 +379,7 @@ export async function enrichWorkflowIO(
         if (ri?.comboOptions) {
           options = ri.comboOptions;
         } else {
-          const byClass = await comboOptionsForClassField(
-            nodeTypeById[canonicalNodeId],
-            v.name,
-          );
+          const byClass = await comboOptionsForClassField(nodeTypeById[canonicalNodeId], v.name);
           /* wrapper 节点（尤其是那些 `properties.proxyWidgets` 缺失或被隔离的
            *  `comfy-core` 子图）解析不出内部类型，导致上面的按类型查表什么也拿不到。
            *  此时回落到跨 object_info 的字段名扫描，
@@ -492,17 +461,13 @@ export async function enrichWorkflowIO(
       type,
       ...(defaultValue !== undefined ? { defaultValue } : {}),
       ...(options ? { options } : {}),
-      nodeTitle:
-        nodeTitleById[canonicalNodeId] ?? nodeTitleById[String(v.nodeId)],
+      nodeTitle: nodeTitleById[canonicalNodeId] ?? nodeTitleById[String(v.nodeId)],
       /* 多行 = 节点自己声明的 `("STRING", {"multiline": true})`（查 object_info），
        *  查不到时只剩「值很长」这条数据判据 —— 不再按字段名/显示名猜：
        *  `prompt_width_of_thing` 这类单行输入不会被升级成 textarea，作者改过名的
        *  提示词框也不会因为名字里没「prompt」而掉回单行。 */
       ...(type === "STRING" &&
-      inferIsMultiline(
-        await multilineForClassField(classType, v.name),
-        defaultValue,
-      )
+      inferIsMultiline(await multilineForClassField(classType, v.name), defaultValue)
         ? { multiline: true }
         : {}),
       /* 把用户自定义的 displayOrder 透传出去。它是用户在之前的会话里通过

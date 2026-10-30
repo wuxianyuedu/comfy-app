@@ -1,19 +1,15 @@
 "use client";
 
 import { useMemo } from "react";
-import type {
-  ComfyGraphNode,
-  RawOutputMeta,
-  WorkflowDetail,
-} from "../workflow-types";
+import type { ComfyGraphNode, RawOutputMeta, WorkflowDetail } from "../workflow-types";
 import { inferSourceOutNames } from "../workflow-utils";
 
 /** 原始 ComfyUI 节点元数据 —— `widgets_values` 元素与 flags /
  *  properties 字典都是不透明的 raw-JSON 负载，保持 `unknown`（此前
  *  是 `any`；消费方本来就当它们不透明处理）。 */
 export type RawNodeMeta = {
-  widgets_values: unknown[];
-  outputs: RawOutputMeta[];
+  widgets_values: Array<unknown>;
+  outputs: Array<RawOutputMeta>;
   flags: Record<string, unknown>;
   properties: Record<string, unknown>;
   mode: number;
@@ -22,7 +18,7 @@ export type RawNodeMeta = {
 export interface WorkflowDerivedData {
   rawMetaById: Record<string, RawNodeMeta>;
   scopeDetail: WorkflowDetail | null;
-  outSlotNameById: Record<string, string[]>;
+  outSlotNameById: Record<string, Array<string>>;
 }
 
 /**
@@ -32,23 +28,16 @@ export interface WorkflowDerivedData {
  *    的来源换成 `detail.rawView`，包装层数据保持不变）
  *  - outSlotNameById：按节点的输出槽名推导
  */
-export function useWorkflowDerivedData(
-  detail: WorkflowDetail | null,
-): WorkflowDerivedData {
+export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowDerivedData {
   const rawMetaById: Record<string, RawNodeMeta> = useMemo(() => {
     const m: Record<string, RawNodeMeta> = {};
     for (const rn of detail?.rawNodes ?? []) {
       if (rn?.id) {
         m[rn.id] = {
-          widgets_values: Array.isArray(rn.widgets_values)
-            ? rn.widgets_values
-            : [],
+          widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
           outputs: Array.isArray(rn.outputs) ? rn.outputs : [],
           flags: rn.flags && typeof rn.flags === "object" ? rn.flags : {},
-          properties:
-            rn.properties && typeof rn.properties === "object"
-              ? rn.properties
-              : {},
+          properties: rn.properties && typeof rn.properties === "object" ? rn.properties : {},
           mode: typeof rn.mode === "number" ? rn.mode : 0,
         };
       }
@@ -80,7 +69,7 @@ export function useWorkflowDerivedData(
     return detail;
   }, [detail]);
 
-  const outSlotNameById: Record<string, string[]> = useMemo(() => {
+  const outSlotNameById: Record<string, Array<string>> = useMemo(() => {
     if (!scopeDetail) return {};
     const nodesById: Record<string, ComfyGraphNode> = {};
     for (const n of scopeDetail.nodes) nodesById[n.id] = n;

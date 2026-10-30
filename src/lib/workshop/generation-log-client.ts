@@ -20,7 +20,7 @@ const LOGS_ENDPOINT = "/api/workshop/logs";
 /** 异步落盘一批日志；不 await 也不抛错（fire-and-forget）。 */
 export function persistGenerationLogs(
   stage: GenerationLogStage,
-  entries: PersistableGenerationLog[],
+  entries: Array<PersistableGenerationLog>,
 ): void {
   if (entries.length === 0) return;
   const payload = JSON.stringify({ stage, entries });
@@ -42,12 +42,10 @@ export function persistGenerationLogs(
 export async function fetchGenerationLogs(
   stage: GenerationLogStage,
   limit = 100,
-): Promise<PersistableGenerationLog[]> {
+): Promise<Array<PersistableGenerationLog>> {
   let res: Response;
   try {
-    res = await fetch(
-      withQuery(LOGS_ENDPOINT, { stage, limit: limit || undefined }),
-    );
+    res = await fetch(withQuery(LOGS_ENDPOINT, { stage, limit: limit || undefined }));
   } catch {
     return [];
   }

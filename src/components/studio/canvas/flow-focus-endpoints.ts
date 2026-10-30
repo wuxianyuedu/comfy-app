@@ -203,7 +203,7 @@ export interface NodePortFocus {
 }
 
 export interface ResolvePortFocusArgs {
-  connections: readonly PortFocusConnection[];
+  connections: ReadonlyArray<PortFocusConnection>;
   /** 选中节点 id 集合（已按实际节点 id 归一）。 */
   selectedIds: ReadonlySet<string>;
   /** 源端节点 id 的解析（映射线的参数卡片等合成端点返回 null 表示「不是图上的端口」）。 */
@@ -215,9 +215,7 @@ export interface ResolvePortFocusArgs {
 /** 端口行的实际 Handle id：输出侧的 `out:` 前缀在这里补全，避免各处各写一遍。 */
 export function portHandleId(side: "source" | "target", name: string): string {
   if (side !== "source") return name;
-  return name.startsWith(OUTPUT_PORT_HANDLE_PREFIX)
-    ? name
-    : `${OUTPUT_PORT_HANDLE_PREFIX}${name}`;
+  return name.startsWith(OUTPUT_PORT_HANDLE_PREFIX) ? name : `${OUTPUT_PORT_HANDLE_PREFIX}${name}`;
 }
 
 /** 一个端口行的关注级别；`none` = 该行没有连线落到。 */
@@ -232,11 +230,7 @@ interface PortFocusBucket {
 /** 把一次占用记进节点的端口桶。**互斥**：一个端口行只持有一个级别 ——
  *  既是上游又是下游时按上游（值确实是上游喂进来的），`related` 只用于
  *  「说不清方向」的两端都选中，不会把已经判定的上下游覆盖掉。 */
-function assignPortRole(
-  bucket: PortFocusBucket,
-  handle: string,
-  role: PortFocusRole,
-): void {
+function assignPortRole(bucket: PortFocusBucket, handle: string, role: PortFocusRole): void {
   const decided = bucket.upstream.has(handle)
     ? "upstream"
     : bucket.downstream.has(handle)
@@ -287,12 +281,8 @@ export function resolvePortFocusRoles({
 
   for (const connection of connections) {
     if (connection.paramMap === true) continue;
-    const source = connection.source
-      ? resolveSourceId(connection.source)
-      : null;
-    const target = connection.target
-      ? resolveTargetId(connection.target)
-      : null;
+    const source = connection.source ? resolveSourceId(connection.source) : null;
+    const target = connection.target ? resolveTargetId(connection.target) : null;
     const sourceSelected = source !== null && selectedIds.has(source);
     const targetSelected = target !== null && selectedIds.has(target);
     if (!sourceSelected && !targetSelected) continue;
@@ -302,21 +292,13 @@ export function resolvePortFocusRoles({
     /* 两端都选中（多选 / 自环）→ related：加粗仍说明「这一行有连线」，但不提亮，
      * 因为说不清值是从上游来还是往下去。 */
     const role: PortFocusRole =
-      sourceSelected && targetSelected
-        ? "related"
-        : targetSelected
-          ? "upstream"
-          : "downstream";
+      sourceSelected && targetSelected ? "related" : targetSelected ? "upstream" : "downstream";
 
     if (target !== null && targetHandle) {
       assignPortRole(bucket(target), targetHandle, role);
     }
     if (source !== null && sourceHandle) {
-      assignPortRole(
-        bucket(source),
-        portHandleId("source", sourceHandle),
-        role,
-      );
+      assignPortRole(bucket(source), portHandleId("source", sourceHandle), role);
     }
   }
 

@@ -41,7 +41,7 @@ export interface ParsedWorkflow {
   /** 节点坐标：RAW 自带 `pos` 时原样取出；没有则 null（由客户端自动布局兜底）。 */
   positions: Record<string, [number, number]> | null;
   taskType: string;
-  warnings: string[];
+  warnings: Array<string>;
   format: "raw";
 }
 
@@ -112,7 +112,7 @@ export async function parseWorkflowContent(
   const extracted = rawView ? extractPositions(rawView) : {};
   const positions: Record<string, [number, number]> | null =
     Object.keys(extracted).length > 0 ? extracted : null;
-  const warnings: string[] = [];
+  const warnings: Array<string> = [];
 
   /* 不再自动推断 taskType —— 旧逻辑用
    * `inferWorkflowTypeFromGraph(graph)` 兜底，但识别准确率不高（例如把

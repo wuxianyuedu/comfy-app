@@ -17,9 +17,7 @@ import type { StrictCanvasNodeData } from "~/lib/project-canvas/canvas-types";
 
 /** 两侧状态词表不同：Shot 有 queued/stale，画布节点只有 idle/running/done/error。
  *  收口成一处映射，避免各调用点各猜一次。 */
-export function shotStatusToNodeStatus(
-  status: Shot["status"],
-): StrictCanvasNodeData["status"] {
+export function shotStatusToNodeStatus(status: Shot["status"]): StrictCanvasNodeData["status"] {
   switch (status) {
     case "running":
     case "queued":
@@ -67,10 +65,7 @@ export interface ShotEditPatch {
   negativePrompt: string;
 }
 
-export function nodeEditToShot(patch: {
-  prompt: string;
-  negative: string;
-}): ShotEditPatch {
+export function nodeEditToShot(patch: { prompt: string; negative: string }): ShotEditPatch {
   return { prompt: patch.prompt, negativePrompt: patch.negative };
 }
 
@@ -79,11 +74,11 @@ export function nodeEditToShot(patch: {
  *   · 现有节点里没有对应 shotId 的，列为待新建。
  *  非镜头节点（无 shotId）不在输入集合里，天然不受影响。纯函数，便于单测。 */
 export function planShotSync(
-  shots: Shot[],
+  shots: Array<Shot>,
   existingShotIds: ReadonlySet<string>,
-): { patches: ShotNodePatch[]; newShotIds: string[] } {
-  const patches: ShotNodePatch[] = [];
-  const newShotIds: string[] = [];
+): { patches: Array<ShotNodePatch>; newShotIds: Array<string> } {
+  const patches: Array<ShotNodePatch> = [];
+  const newShotIds: Array<string> = [];
   for (const shot of shots) {
     patches.push(shotToNodePatch(shot));
     if (!existingShotIds.has(shot.id)) newShotIds.push(shot.id);
@@ -100,9 +95,9 @@ export interface ShotAnchoredNode {
  *  原样返回。纯函数，供画布物化镜头节点用（Phase 3c）——新建节点需要视口坐标，由
  *  调用方（画布）经 `placeCanvasNode` 处理，这里只负责「已有节点的回写合并」。 */
 export function applyShotPatches<T extends ShotAnchoredNode>(
-  nodes: T[],
-  patches: readonly ShotNodePatch[],
-): T[] {
+  nodes: Array<T>,
+  patches: ReadonlyArray<ShotNodePatch>,
+): Array<T> {
   const byShot = new Map(patches.map((patch) => [patch.shotId, patch]));
   return nodes.map((node) => {
     const shotId = node.data?.shotId;
@@ -121,9 +116,7 @@ export function applyShotPatches<T extends ShotAnchoredNode>(
 
 /** 画布节点生成态词表 → Shot.status 反向映射（与 shotStatusToNodeStatus 对偶）。
  *  节点词表更窄（idle/running/done/error），逐一对回：done→done、error→failed。 */
-export function nodeStatusToShotStatus(
-  status: StrictCanvasNodeData["status"],
-): Shot["status"] {
+export function nodeStatusToShotStatus(status: StrictCanvasNodeData["status"]): Shot["status"] {
   switch (status) {
     case "running":
       return "running";
@@ -155,18 +148,17 @@ export function nodeGenToShot(node: {
     status: nodeStatusToShotStatus(node.status),
   };
   if (node.taskId !== undefined) patch.taskId = node.taskId;
-  if (node.status === "done" && node.resultPath)
-    patch.imageUrl = node.resultPath;
+  if (node.status === "done" && node.resultPath) patch.imageUrl = node.resultPath;
   return patch;
 }
 
 /** 把某镜头的生成态补丁合并进 shots（按 id 命中，不可变返回新数组）。
  *  无命中 → 原样返回入参引用（调用方可据此判断「没有对应镜头、无需落库」）。 */
 export function applyShotGeneration(
-  shots: Shot[],
+  shots: Array<Shot>,
   shotId: string,
   patch: ShotGenerationPatch,
-): Shot[] {
+): Array<Shot> {
   let hit = false;
   const next = shots.map((shot) => {
     if (shot.id !== shotId) return shot;
@@ -179,13 +171,12 @@ export function applyShotGeneration(
 /** 单镜「退回让 AI 重做」（Phase 6 · P6-3b）：清空该镜已产出的图/视频、状态回落 idle、
  *  并把 `rev` 自增，作为「用户改过」的显式信号 —— run 规划器据此把该镜重新纳入待办、只重做它。
  *  作用于 production/draft 的 shots（unknown 记录）。无命中 → 原样返回入参引用。 */
-export function applyShotRedo(shots: unknown[], shotId: string): unknown[] {
+export function applyShotRedo(shots: Array<unknown>, shotId: string): Array<unknown> {
   let hit = false;
   const next = shots.map((raw) => {
     if (!isRecord(raw) || raw.id !== shotId) return raw;
     hit = true;
-    const rev =
-      typeof raw.rev === "number" && Number.isFinite(raw.rev) ? raw.rev : 0;
+    const rev = typeof raw.rev === "number" && Number.isFinite(raw.rev) ? raw.rev : 0;
     return {
       ...raw,
       imageUrl: undefined,
@@ -202,10 +193,10 @@ export function applyShotRedo(shots: unknown[], shotId: string): unknown[] {
  *  的清产物 + rev 自增 —— 于是评审不合格时既改了文案、又让 run 规划器把它重新纳入待办、用新提示词重跑。
  *  复用 `applyShotRedo` 这一原语做退回（§12.18 不在调用点重抄退回语义）。无命中 → 原样返回入参引用。 */
 export function applyReprompt(
-  shots: unknown[],
+  shots: Array<unknown>,
   shotId: string,
   newPrompt: string,
-): unknown[] {
+): Array<unknown> {
   let hit = false;
   const withPrompt = shots.map((raw) => {
     if (!isRecord(raw) || raw.id !== shotId) return raw;

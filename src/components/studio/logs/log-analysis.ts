@@ -151,7 +151,7 @@ function renderArg(kind: string, value: unknown): string {
  * 不支持的宽度 / 精度修饰（`%.2f`、`%5d`）按**原样保留**处理：它们是正文里
  * 的字面量，强行解析只会把内容改错。
  */
-export function formatConsoleArgs(args: unknown[]): string {
+export function formatConsoleArgs(args: Array<unknown>): string {
   const first = args[0];
   /* 首参不是字符串 = 没有模板可展开（`console.error(err)`）→ 原样拼。
    * **不能顺手在这里按 `args.length === 1` 提前返回**：单参调用里 `%%` 仍要还原
@@ -192,7 +192,7 @@ export function formatConsoleArgs(args: unknown[]): string {
   return out;
 }
 
-export function serialize(args: unknown[]): string {
+export function serialize(args: Array<unknown>): string {
   return formatConsoleArgs(args);
 }
 
@@ -213,7 +213,7 @@ export { captureLocation, locateInStack } from "./log-callsite";
  * `[[ << mutation #43 ]workflow.update {}`），它会被 React devtools 以
  * "Console Error" 形式从 LogProvider 转发帧抛到面板，同样属于无害框架噪音。
  */
-export function isReactQueryLog(args: unknown[]): boolean {
+export function isReactQueryLog(args: Array<unknown>): boolean {
   if (args.length === 0) return false;
   // 标准形态：tRPC loggerLink 的格式串 + 逐帧样式参数，args[0] 即为追踪签名。
   // 真实追踪至少两个参数（格式串 + 样式），单参数的不是追踪，避免误吞业务文案。
@@ -234,7 +234,7 @@ export function isReactQueryLog(args: unknown[]): boolean {
  * 典型例子：Tauri v2 在 Windows WebView2 上 IPC custom protocol fetch 失败时
  * 会自动降级到 postMessage，并打印一条 warn。这是正常行为，不影响功能。
  */
-export function isNoisyFrameworkLog(args: unknown[]): boolean {
+export function isNoisyFrameworkLog(args: Array<unknown>): boolean {
   if (args.length === 0) return false;
   const text = serialize(args);
   return /IPC custom protocol failed|Tauri will now use the postMessage interface/i.test(text);
@@ -247,7 +247,7 @@ export function isNoisyFrameworkLog(args: unknown[]): boolean {
  * `src/00vplg9./.js`），并非任何业务代码打印，也没有可读的调用位置。
  * 与其它框架噪音一致：保留在浏览器 console（降为 debug），只不入面板。
  */
-export function isNextDevNoise(args: unknown[]): boolean {
+export function isNextDevNoise(args: Array<unknown>): boolean {
   if (args.length === 0) return false;
   const text = serialize(args);
   return /\[Fast\s*Refresh\]\s*(?:done|finished)?.*\d+\s*ms/i.test(text);
@@ -289,7 +289,7 @@ const APP_RUNTIME_LOG_RE =
  * 「有问题的调用」（失败 error、超过慢查询阈值的 warn）必须保留——它们的消息
  * 带「失败」字样或级别本身是 warn/error，不会命中这里的"常规 info 计时"判定。
  */
-export function isRoutineRpcTimingLog(args: unknown[]): boolean {
+export function isRoutineRpcTimingLog(args: Array<unknown>): boolean {
   if (args.length === 0) return false;
   const text = serialize(args);
   const body = text
@@ -379,7 +379,7 @@ export function parseFileLogs(
   text: string,
   baseDate?: Date,
   origin?: LogEntry["origin"],
-): LogEntry[] {
+): Array<LogEntry> {
   /*
    * 读不到时刻时的兜底：baseDate 是**这批内容所属的日期**（默认今天），时刻取
    * 解析当时的本地时间。这样裸文本行落在「现在」，不会因为时间戳缺失被排到
@@ -387,7 +387,7 @@ export function parseFileLogs(
    */
   const now = Date.now();
   const today = baseDate ?? new Date();
-  const entries: LogEntry[] = [];
+  const entries: Array<LogEntry> = [];
   let seq = nextSeq();
   const push = (entry: Omit<LogEntry, "seq">) => {
     entries.push({ ...entry, seq: seq++ });
@@ -499,11 +499,14 @@ function isLogLine(line: string): boolean {
  * 只折叠**连续**重复（按相邻位置），不按键全局分组——跨距离的相同行之间隔着
  * 别的事件，合并它们会把时间线读成「同一个事件发生了 N 次」，那是错的。
  */
-export function dedupeRepeats(entries: LogEntry[], limit = REPEAT_FOLD_LIMIT): LogEntry[] {
+export function dedupeRepeats(
+  entries: Array<LogEntry>,
+  limit = REPEAT_FOLD_LIMIT,
+): Array<LogEntry> {
   /* 折叠键只看「级别 + 内容」，不看时刻：每轮轮询写出来的重复行时刻必然不同，
    * 带上时刻就一条也折叠不了。跨来源去重看时刻（entryKey），这里看语义。 */
   const foldKey = (entry: LogEntry) => `${entry.level}\u0000${entry.message}`;
-  const out: LogEntry[] = [];
+  const out: Array<LogEntry> = [];
   let i = 0;
   while (i < entries.length) {
     /* `at()` 越界即 `undefined`：索引取值与循环判据合成一处，不必再补 `!`。 */
@@ -536,7 +539,7 @@ function zeroCounts(): LogLevelCounts {
   return { all: 0, debug: 0, info: 0, warn: 0, error: 0 };
 }
 
-export function computeCounts(logs: LogEntry[], search = ""): LogLevelCounts {
+export function computeCounts(logs: Array<LogEntry>, search = ""): LogLevelCounts {
   const base = zeroCounts();
   for (const entry of logs) {
     if (!matchesSearch(entry, search)) continue;
@@ -564,10 +567,13 @@ export function computeCounts(logs: LogEntry[], search = ""): LogLevelCounts {
  *   跨来源相加**不**等于「全部来源」——两边的语义本来就不同，界面上也必须
  *   分开摆（见 `LogFilterBar` 的标签：级别按钮的数字是「当前来源」的）。
  */
-export function dedupeByIdentity(logs: LogEntry[], origin: LogOriginFilter = "all"): LogEntry[] {
+export function dedupeByIdentity(
+  logs: Array<LogEntry>,
+  origin: LogOriginFilter = "all",
+): Array<LogEntry> {
   if (origin !== "all") return logs;
   const seen = new Set<string>();
-  const out: LogEntry[] = [];
+  const out: Array<LogEntry> = [];
   for (const entry of logs) {
     const key = logEntryKey(entry);
     if (seen.has(key)) continue;
@@ -594,7 +600,7 @@ export function dedupeByIdentity(logs: LogEntry[], origin: LogOriginFilter = "al
  *   就显示几。两处若各写一套匹配规则，会出现「左边写着警告 2、切过去只剩 1」，
  *   比不显示数字更让人怀疑面板（ISSUE #360 的同一类问题）。
  */
-export function computeOriginCounts(logs: LogEntry[], search = ""): LogOriginCounts {
+export function computeOriginCounts(logs: Array<LogEntry>, search = ""): LogOriginCounts {
   const table: LogOriginCounts = {
     all: zeroCounts(),
     dev: zeroCounts(),
@@ -649,13 +655,13 @@ function matchesSearch(entry: LogEntry, search: string): boolean {
 }
 
 export function computeFiltered(
-  logs: LogEntry[],
+  logs: Array<LogEntry>,
   filter: LogFilter,
   search: string,
   origin: LogOriginFilter,
   /** 被「设置 → 日志」开关关掉、要从面板隐藏的分类（与 `bucketOf` 同域）。 */
-  disabled: LogCategoryFilter[] = [],
-): LogEntry[] {
+  disabled: Array<LogCategoryFilter> = [],
+): Array<LogEntry> {
   const disabledSet = disabled.length > 0 ? new Set(disabled) : null;
   /* 「全部来源」按身份去重（同一条日志被六路读到只显示一次，与 `table.all` 的
    * 计数同口径）；选了具体来源就是「那份文件里的行」，逐行照给——副本不丢，

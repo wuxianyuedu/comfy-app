@@ -21,7 +21,7 @@ const mod = /* SAFETY: 类型断言已复核 */ (await import(
   pathToFileURL(join(process.cwd(), "scripts", "app-service-exit.mjs")).href
 )) as unknown as ExitModule;
 
-const dirs: string[] = [];
+const dirs: Array<string> = [];
 function tmpRoot(): string {
   const dir = mkdtempSync(join(tmpdir(), "comfyapp-exit-"));
   dirs.push(dir);

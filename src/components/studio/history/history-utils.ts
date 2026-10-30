@@ -108,7 +108,7 @@ export function dateBucket(iso: string): string {
 }
 
 /** 简单的「看起来在跑」动效：递增到 95% 后封顶；任务结束时归 0。 */
-export function useSimulatedProgress(tasks: TaskItem[]) {
+export function useSimulatedProgress(tasks: Array<TaskItem>) {
   const [map, setMap] = useState<Record<string, number>>({});
   /* `useInterval` 的 `ms` 固定、回调放 ref —— 此前把 `tasks` 写进依赖数组，
    * 每次任务数组变化（轮询每次都会给新数组）都要重建定时器、把计时重置；

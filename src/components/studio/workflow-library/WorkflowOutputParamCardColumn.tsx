@@ -31,7 +31,7 @@ const CARD_WIDTH = 200;
 
 export interface WorkflowOutputParamCardColumnProps {
   /** 工作流对外暴露的输出（`workflowIO` 里 `direction: "output"` 的那些）。 */
-  outputs: readonly (WorkflowIOEntry & { ioKey: string })[];
+  outputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
   /** 输出口 ioKey → 当前取值的那一行 ioKey（`null` = 悬空 / 作者断开）。
    *  由 `deriveLibraryOutputCards` 派生；缺省时每个口取值于它自己那一行。 */
   resolved?: Record<string, string | null>;
@@ -44,11 +44,7 @@ export interface WorkflowOutputParamCardColumnProps {
   isManual?: (ioKey: string) => boolean;
   onReset?: (ioKey: string) => void;
   /** 端点槽位：消费方注入 `<Handle>`（库里那层）或只读圆点。 */
-  endpoint?: (port: {
-    name: string;
-    type: string;
-    handleId: string;
-  }) => ReactNode;
+  endpoint?: (port: { name: string; type: string; handleId: string }) => ReactNode;
 }
 
 export function WorkflowOutputParamCardColumn({

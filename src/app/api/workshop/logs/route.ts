@@ -12,10 +12,7 @@ import {
   GENERATION_LOG_STAGE_LABELS,
   parseGenerationLogStage,
 } from "~/lib/workshop/generation-log";
-import {
-  appendGenerationLogs,
-  readGenerationLogs,
-} from "~/lib/workshop/generation-log.server";
+import { appendGenerationLogs, readGenerationLogs } from "~/lib/workshop/generation-log.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,9 +36,7 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  const entries: unknown[] = Array.isArray(rec.entries)
-    ? rec.entries.slice(0, 200)
-    : [];
+  const entries: Array<unknown> = Array.isArray(rec.entries) ? rec.entries.slice(0, 200) : [];
   const saved = await appendGenerationLogs(stage, entries);
   return NextResponse.json({ saved });
 }
@@ -61,9 +56,6 @@ export async function GET(req: NextRequest) {
     );
   }
   const limit = Number(req.nextUrl.searchParams.get("limit") ?? "100");
-  const entries = await readGenerationLogs(
-    stage,
-    Number.isFinite(limit) ? limit : 100,
-  );
+  const entries = await readGenerationLogs(stage, Number.isFinite(limit) ? limit : 100);
   return NextResponse.json({ entries });
 }

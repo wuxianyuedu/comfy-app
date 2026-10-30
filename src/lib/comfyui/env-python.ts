@@ -65,12 +65,9 @@ export function parsePyvenvCfg(content: string): PyvenvConfig {
 export function pythonPathsFromPyvenv(
   cfg: PyvenvConfig,
   platform: NodeJS.Platform = process.platform,
-): string[] {
-  const names =
-    platform === "win32"
-      ? ["python.exe", "pythonw.exe"]
-      : ["python", "python3"];
-  const out: string[] = [];
+): Array<string> {
+  const names = platform === "win32" ? ["python.exe", "pythonw.exe"] : ["python", "python3"];
+  const out: Array<string> = [];
   if (cfg.executable) {
     out.push(cfg.executable);
   }
@@ -118,12 +115,12 @@ export function collectComfyPythonCandidates(
   deps: {
     exists?: (p: string) => boolean;
     readFile?: (p: string) => string;
-    readdir?: (p: string) => string[];
+    readdir?: (p: string) => Array<string>;
     env?: PythonEnvVars;
     platform?: NodeJS.Platform;
     homedir?: string;
   } = {},
-): PythonCandidate[] {
+): Array<PythonCandidate> {
   const exists = deps.exists ?? ((p: string) => fs.existsSync(p));
   const readFile =
     deps.readFile ??
@@ -153,7 +150,7 @@ export function collectComfyPythonCandidates(
   const platform = deps.platform ?? process.platform;
   const home = deps.homedir ?? os.homedir();
 
-  const out: PythonCandidate[] = [];
+  const out: Array<PythonCandidate> = [];
   const seen = new Set<string>();
   const push = (exe: string, via: string): void => {
     if (!exe) return;
@@ -194,11 +191,7 @@ export function collectComfyPythonCandidates(
       // 形态 A：<env>/python.exe；形态 B：<env>/install/python.exe。
       for (const rel of platform === "win32"
         ? ["python.exe", path.join("install", "python.exe")]
-        : [
-            "bin/python3",
-            "bin/python",
-            path.join("install", "bin", "python3"),
-          ]) {
+        : ["bin/python3", "bin/python", path.join("install", "bin", "python3")]) {
         const exe = path.join(envDir, rel);
         if (exists(/*turbopackIgnore: true*/ exe)) {
           push(exe, "uv 托管的解释器");
@@ -221,15 +214,14 @@ export function uvPythonDirs(
   env: PythonEnvVars,
   platform: NodeJS.Platform,
   homedir: string,
-): string[] {
-  const dirs: string[] = [];
+): Array<string> {
+  const dirs: Array<string> = [];
   const add = (d: string | undefined): void => {
     if (d && !dirs.includes(d)) dirs.push(d);
   };
   add(env.UV_PYTHON_INSTALL_DIR);
   if (platform === "win32") {
-    const localAppData =
-      env.LOCALAPPDATA ?? path.join(homedir, "AppData", "Local");
+    const localAppData = env.LOCALAPPDATA ?? path.join(homedir, "AppData", "Local");
     add(path.join(localAppData, "uv", "python"));
   } else {
     const dataHome = env.XDG_DATA_HOME ?? path.join(homedir, ".local", "share");

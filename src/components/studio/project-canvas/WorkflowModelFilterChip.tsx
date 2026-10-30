@@ -7,15 +7,11 @@ import { OptionListPopover } from "~/components/ui/option-list-popover";
 
 interface WorkflowModelFilterChipProps {
   value: string;
-  tags: { id: string; name: string; count: number }[];
+  tags: Array<{ id: string; name: string; count: number }>;
   onChange: (v: string) => void;
 }
 
-export function WorkflowModelFilterChip({
-  value,
-  tags,
-  onChange,
-}: WorkflowModelFilterChipProps) {
+export function WorkflowModelFilterChip({ value, tags, onChange }: WorkflowModelFilterChipProps) {
   const label = value === "all" ? "全部模型" : value;
 
   return (
@@ -53,11 +49,7 @@ export function WorkflowModelFilterChip({
           label: tag.name,
           title: tag.name,
           prefix: <span className="bg-accent-soft size-1.5 rounded-full" />,
-          suffix: (
-            <span className="text-ink-muted text-4xs tabular-nums">
-              {tag.count}
-            </span>
-          ),
+          suffix: <span className="text-ink-muted text-4xs tabular-nums">{tag.count}</span>,
         })),
       ]}
     />

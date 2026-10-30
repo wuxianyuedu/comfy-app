@@ -7,11 +7,7 @@ import { textHandler } from "~/lib/form-props";
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Input } from "~/components/ui/input";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "~/components/ui/input-group";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "~/components/ui/input-group";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { FieldLabel } from "~/components/ui/field";
@@ -34,10 +30,7 @@ import {
   fmtSize,
 } from "./model-library-config";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
-import {
-  EMBEDDED_SCROLL_MAX_HEIGHT,
-  OVERLAY_MAX_HEIGHT,
-} from "~/components/ui/overlay-max-height";
+import { EMBEDDED_SCROLL_MAX_HEIGHT, OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 
 /**
  * 工作室模型库 —— 视图层（规范 17 §17.2 第③层）。
@@ -107,20 +100,13 @@ export function ModelLibrary() {
             </>
           ) : (
             <>
-              <SelectChip
-                selected={c.filter === ALL_TYPES}
-                onClick={() => c.setFilter(ALL_TYPES)}
-              >
+              <SelectChip selected={c.filter === ALL_TYPES} onClick={() => c.setFilter(ALL_TYPES)}>
                 {`全部 (${c.models.length})`}
               </SelectChip>
               {c.typeChips.map(([t, count]) => {
                 const meta = folderMeta(t);
                 return (
-                  <SelectChip
-                    key={t}
-                    selected={c.filter === t}
-                    onClick={() => c.setFilter(t)}
-                  >
+                  <SelectChip key={t} selected={c.filter === t} onClick={() => c.setFilter(t)}>
                     {`${meta.label} (${count})`}
                   </SelectChip>
                 );
@@ -209,10 +195,7 @@ function ModelListSkeleton({ rows = 8 }: { rows?: number }) {
           }`}
         >
           <Skeleton className="h-5 w-14 shrink-0" />
-          <Skeleton
-            className="h-4 flex-1"
-            style={{ maxWidth: `${64 - i * 5}%` }}
-          />
+          <Skeleton className="h-4 flex-1" style={{ maxWidth: `${64 - i * 5}%` }} />
           <Skeleton className="h-3 w-12 shrink-0" />
         </div>
       ))}
@@ -225,7 +208,7 @@ function ModelListSkeleton({ rows = 8 }: { rows?: number }) {
  * 一段，DOM 数量恒定；量不到视口高度（jsdom 不做布局 / 首帧未测量）时退回
  * 整页渲染 —— 虚拟化是性能优化，绝不能变成「内容看不见」（同 LogPanel 口径）。
  */
-function ModelList({ items }: { items: ModelRow[] }) {
+function ModelList({ items }: { items: Array<ModelRow> }) {
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   // virtualizer 的读数（getVirtualItems/getTotalSize）只在本组件 render 内消费，
   // 不外传给被 memo 的子组件，不存在该规则担心的「跨组件陈旧 UI」风险，此告警对本用法是误报。
@@ -275,11 +258,7 @@ function ModelList({ items }: { items: ModelRow[] }) {
         </div>
       ) : (
         items.map((m, idx) => (
-          <ModelRowLine
-            key={m.id}
-            model={m}
-            isLast={idx === items.length - 1}
-          />
+          <ModelRowLine key={m.id} model={m} isLast={idx === items.length - 1} />
         ))
       )}
     </div>
@@ -304,9 +283,7 @@ function ModelRowLine({
         isLast ? "" : "border-border-subtle border-b"
       }`}
     >
-      <span
-        className={`text-2xs shrink-0 rounded-md px-2 py-0.5 font-medium ${meta.color}`}
-      >
+      <span className={`text-2xs shrink-0 rounded-md px-2 py-0.5 font-medium ${meta.color}`}>
         {meta.label}
       </span>
       <span
@@ -323,10 +300,7 @@ function ModelRowLine({
           不可用
         </span>
       )}
-      <span
-        className="text-ink-muted shrink-0 text-xs tabular-nums"
-        title="文件大小"
-      >
+      <span className="text-ink-muted shrink-0 text-xs tabular-nums" title="文件大小">
         {fmtSize(model.fileSize)}
       </span>
     </div>
@@ -365,11 +339,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
           <div className="border-border-subtle flex items-start justify-between border-b px-5 py-4">
             <div>
               <h2 className="text-ink flex items-center gap-2 text-base font-semibold">
-                <Icon
-                  name="foldertree"
-                  size={18}
-                  className="text-primary-strong"
-                />
+                <Icon name="foldertree" size={18} className="text-primary-strong" />
                 模型目录配置
               </h2>
               <p className="text-ink-muted mt-0.5 text-xs">
@@ -403,9 +373,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               ) : (
                 <span className="text-warning-strong">● ComfyUI 未连接</span>
               )}
-              <span className="text-ink-muted">
-                · 已启用 {c.enabledRows.length} 个
-              </span>
+              <span className="text-ink-muted">· 已启用 {c.enabledRows.length} 个</span>
               {c.err && <span className="text-destructive">{c.err}</span>}
             </div>
             <Button
@@ -436,9 +404,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
             <FieldLabel className="text-ink-faint flex shrink-0 cursor-pointer items-center gap-2 text-xs">
               <Checkbox
                 checked={c.onlyEnabled}
-                onCheckedChange={(checked) =>
-                  c.setOnlyEnabled(checked === true)
-                }
+                onCheckedChange={(checked) => c.setOnlyEnabled(checked === true)}
                 className="border-border-strong bg-surface-2 text-primary-strong focus:ring-primary/40 size-3.5 rounded"
               />
               仅显示已启用
@@ -487,9 +453,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                       <h3 className="text-ink-faint text-xs font-medium tracking-wide uppercase">
                         可添加 · {c.availableRows.length}
                       </h3>
-                      <p className="text-ink-muted text-xs">
-                        点「启用」加入扫描列表
-                      </p>
+                      <p className="text-ink-muted text-xs">点「启用」加入扫描列表</p>
                     </div>
                     <div className="flex flex-col gap-2">
                       {c.availableRows.map((row) => (
@@ -541,9 +505,7 @@ function FolderConfigRow({
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-ink-bright font-mono text-sm">
-              {row.folder}
-            </span>
+            <span className="text-ink-bright font-mono text-sm">{row.folder}</span>
             <span
               className={`text-2xs cursor-help rounded-md px-2 py-0.5 font-medium ${primaryMeta.color}`}
               title={getFolderTooltip(row.folder)}

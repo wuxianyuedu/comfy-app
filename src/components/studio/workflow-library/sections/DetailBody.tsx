@@ -54,7 +54,7 @@ interface DetailBodyProps {
   onEdit: () => void;
   /** 多模式工作流的模式切换（画布预览节点的类型 chip 可点选默认模式）。 */
   meta?: {
-    modes: string[];
+    modes: Array<string>;
     defaultMode: string;
     onModeChange: (code: string) => void;
   };
@@ -176,13 +176,9 @@ export function DetailBody({
       {tab === "source" && (
         <div className="border-border bg-panel-deep rounded-2xl border p-1">
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-ink-faint text-xs font-medium">
-              工作流(RAW)格式原件
-            </span>
+            <span className="text-ink-faint text-xs font-medium">工作流(RAW)格式原件</span>
           </div>
-          <div
-            className={`bg-canvas-deep ${EMBEDDED_SCROLL_MAX_HEIGHT} overflow-auto rounded-xl`}
-          >
+          <div className={`bg-canvas-deep ${EMBEDDED_SCROLL_MAX_HEIGHT} overflow-auto rounded-xl`}>
             {sourceData?.source != null ? (
               <LazyJsonViewer
                 data={sourceData.source}
@@ -190,9 +186,7 @@ export function DetailBody({
                 initialCollapsedDepth={2}
               />
             ) : (
-              <p className="text-ink-fainter px-4 py-10 text-center text-xs">
-                暂无源文件数据
-              </p>
+              <p className="text-ink-fainter px-4 py-10 text-center text-xs">暂无源文件数据</p>
             )}
           </div>
         </div>

@@ -79,7 +79,7 @@ function hookGateSteps(hookText: string) {
  *
  * @returns {{name: string, stage: string | null}[]}
  */
-function platformStages(): { name: string; stage: string | null }[] {
+function platformStages(): Array<{ name: string; stage: string | null }> {
   const text = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
   return registeredGateOrder(text).map((name) => ({
     name,
@@ -97,7 +97,7 @@ function platformStages(): { name: string; stage: string | null }[] {
  * 于是「平台侧那个执行者在不在」要问的是**每日**那一条，而 `platformStages()` 只认
  * PR 清单 —— 拿它去问会得到「不在」，而真相是「搬走了，不是不存在」。
  */
-function dailyStages(): { name: string; stage: string | null }[] {
+function dailyStages(): Array<{ name: string; stage: string | null }> {
   const text = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
   return registeredDailyGateOrder(text).map((name) => ({
     name,
@@ -744,7 +744,7 @@ const SECOND_TIER: ReadonlyArray<readonly [string, string, string]> = [
  *   2. 钩子里**不许**再让它们各占一行（各占一行 = 与聚合档跑两遍，白付一次解析）。
  *      第 2 条同时在 `tests/ast-gates-aggregate.test.ts` 里从聚合档侧钉了一遍。
  */
-const AGGREGATED_AST_GATES: readonly string[] = [
+const AGGREGATED_AST_GATES: ReadonlyArray<string> = [
   "check-react-updater-purity.cjs",
   "check-non-null-assertions.cjs",
   "check-void-floats.cjs",

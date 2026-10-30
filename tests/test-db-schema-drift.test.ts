@@ -51,14 +51,14 @@ function tableNameOf(table: Table): string {
  *  - **按下标取列**：`mapResultRow` 取值是 `row[columnIndex]`（`utils.cjs:62`），
  *    而这一条走的是「无 fields 的原样透传」，拿到的就是宿主给的**位置数组**。
  *    `PRAGMA table_info` 的列序是 `cid, name, type, notnull, dflt_value, pk` ⇒ 名字在 1。 */
-async function columnsOf(name: string): Promise<string[] | null> {
+async function columnsOf(name: string): Promise<Array<string> | null> {
   const session = /* SAFETY: 类型断言已复核 */ tdb as unknown as {
     all(query: ReturnType<typeof sql.raw>): Promise<unknown>;
   };
   try {
     const rows = /* SAFETY: 类型断言已复核 */ (await session.all(
       sql.raw(`PRAGMA table_info("${name}")`),
-    )) as unknown[][];
+    )) as Array<Array<unknown>>;
     return rows.map((row) => String(row[1]));
   } catch {
     return null;
@@ -67,7 +67,7 @@ async function columnsOf(name: string): Promise<string[] | null> {
 
 describe("测试库的表结构与 schema.ts 同步", () => {
   it("schema 里每一张表的每一列，测试库的 DDL 都有", async () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     let checkedTables = 0;
 
     for (const table of Object.values(schema)) {

@@ -10,9 +10,9 @@ import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 export interface WorkshopDraftDto {
   meta: ProjectMeta;
   scriptMarkdown: string;
-  scenes: Scene[];
-  characters: Character[];
-  shots: Shot[];
+  scenes: Array<Scene>;
+  characters: Array<Character>;
+  shots: Array<Shot>;
 }
 
 /** 未知值 → 草稿线上结构：逐字段校验类型，损坏字段回退空值（不抛）。
@@ -36,11 +36,13 @@ export function parseDraftDto(raw: unknown): WorkshopDraftDto {
       scriptMarkdown: typeof meta.scriptMarkdown === "string" ? meta.scriptMarkdown : undefined,
     },
     scriptMarkdown: typeof obj.scriptMarkdown === "string" ? obj.scriptMarkdown : "",
-    scenes: Array.isArray(obj.scenes) ? /* SAFETY: 类型断言已复核 */ (obj.scenes as Scene[]) : [],
-    characters: Array.isArray(obj.characters)
-      ? /* SAFETY: 类型断言已复核 */ (obj.characters as Character[])
+    scenes: Array.isArray(obj.scenes)
+      ? /* SAFETY: 类型断言已复核 */ (obj.scenes as Array<Scene>)
       : [],
-    shots: Array.isArray(obj.shots) ? /* SAFETY: 类型断言已复核 */ (obj.shots as Shot[]) : [],
+    characters: Array.isArray(obj.characters)
+      ? /* SAFETY: 类型断言已复核 */ (obj.characters as Array<Character>)
+      : [],
+    shots: Array.isArray(obj.shots) ? /* SAFETY: 类型断言已复核 */ (obj.shots as Array<Shot>) : [],
   };
 }
 
@@ -66,6 +68,6 @@ const PROJECT_TYPES = /* SAFETY: 类型断言已复核 */ [
 function isProjectType(v: unknown): v is ProjectMeta["type"] {
   return (
     typeof v === "string" &&
-    /* SAFETY: 类型断言已复核 */ (PROJECT_TYPES as readonly string[]).includes(v)
+    /* SAFETY: 类型断言已复核 */ (PROJECT_TYPES as ReadonlyArray<string>).includes(v)
   );
 }

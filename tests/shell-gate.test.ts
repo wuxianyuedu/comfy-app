@@ -72,7 +72,7 @@ function dGroupSteps(hookText: string) {
 }
 
 /** 从 `shellStaleWarning` 的 `const targets = [...]` 里抠出它盯的文件/目录名。 */
-function launcherTargetNames(): string[] {
+function launcherTargetNames(): Array<string> {
   const body = read(LAUNCHER);
   const fn = body.slice(body.indexOf("export function shellStaleWarning"));
   const block = /const targets = \[([\s\S]*?)\];/.exec(fn)?.[1] ?? "";
@@ -197,7 +197,7 @@ describe("桌面壳提交门禁的触发面（§11.10.4 / 硬规则 5）", () =>
  * 这里用真实临时仓库跑出 `git merge` 的三种形态，守的是「该放行的放行、该拦的仍拦」。
  */
 describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
-  const temps: string[] = [];
+  const temps: Array<string> = [];
 
   afterEach(() => {
     for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -207,7 +207,8 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
   function initRepo(): string {
     const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-"));
     temps.push(dir);
-    const git = (...args: string[]) => execFileSync("git", ["-C", dir, ...args], { stdio: "pipe" });
+    const git = (...args: Array<string>) =>
+      execFileSync("git", ["-C", dir, ...args], { stdio: "pipe" });
     git("init", "-q", "-b", "main");
     git("config", "user.email", "t@t.t");
     git("config", "user.name", "t");
@@ -327,7 +328,7 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
  * #1350 把陈旧 `$LASTEXITCODE` 当成败。**源码文本不是执行记录。**
  */
 describe("runGate 的四条判决分支真跑（夹具）", () => {
-  const temps: string[] = [];
+  const temps: Array<string> = [];
 
   afterEach(() => {
     for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -346,7 +347,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-fixture-"));
     temps.push(dir);
     const inputTime = new Date(Date.now() - 5 * HOUR);
-    const inputs: [string, string][] = [
+    const inputs: Array<[string, string]> = [
       ["src-tauri/tauri.conf.json", "{}\n"],
       ["src-tauri/build.rs", "// fixture\n"],
       ["src-tauri/src/lib.rs", "// fixture\n"],
@@ -427,7 +428,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
    * 判据是「找不到就说找不到、找得到就返回那一个」，而不是「源码里有 readdirSync」。
    */
   describe("cargo 寻址：PATH 优先、工具链默认安装位兜底（ISSUE #1555）", () => {
-    const temps: string[] = [];
+    const temps: Array<string> = [];
     afterEach(() => {
       for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
     });
@@ -438,7 +439,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
      * 只造文件不造内容：`findCargo` 判的是「这条路径上有没有那个可执行文件」，
      * 真起不起来由 `runCargoTest` 的注入参数管（那是另一格）。
      */
-    function fakeHome(dirs: string[]): string {
+    function fakeHome(dirs: Array<string>): string {
       const home = mkdtempSync(path.join(tmpdir(), "shell-gate-cargo-"));
       temps.push(home);
       for (const rel of dirs) {
@@ -595,7 +596,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
    * 引号、相对路径、尾部分隔符三种写法都得走到同一个落点。
    */
   describe("CARGO_HOME 的落点要真的进判据（ISSUE #2293）", () => {
-    const temps: string[] = [];
+    const temps: Array<string> = [];
     afterEach(() => {
       for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
     });
@@ -725,7 +726,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
      * 以及 `USERPROFILE` / `HOME` 与 `os.homedir()` 不一致时的另一种 `~/.cargo/bin`。
      */
     describe("「装在哪」读 rustup 记着的事实与用户家目录，不只读环境变量（ISSUE #2374）", () => {
-      const temps: string[] = [];
+      const temps: Array<string> = [];
       afterEach(() => {
         for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
       });
@@ -917,7 +918,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
  * （改了壳必须重编 / 壳内那批 `#[test]`）在平台侧**没有执行者**，而账面全绿。
  */
 describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面）", () => {
-  const temps: string[] = [];
+  const temps: Array<string> = [];
   afterEach(() => {
     for (const dir of temps.splice(0)) {
       rmSync(dir, { recursive: true, force: true });
@@ -1007,12 +1008,12 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
  * 用例真造 git 仓库与真起 CLI：假 git 回放不出 merge 拓扑，而这一族判的就是拓扑。
  */
 describe("shell-gate —— 平台合成的 merge 提交不许把别人的壳改动算进来（#2325）", () => {
-  const temps: string[] = [];
+  const temps: Array<string> = [];
   afterEach(() => {
     for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
 
-  function git(dir: string, ...args: string[]): string {
+  function git(dir: string, ...args: Array<string>): string {
     return execFileSync("git", ["-C", dir, ...args], {
       encoding: "utf8",
       stdio: "pipe",
@@ -1116,7 +1117,7 @@ describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => 
     /** @type {Array<[string, string]>} */
     const copies: Array<[string, string]> = [];
     /** @type {string[]} */
-    const chmods: string[] = [];
+    const chmods: Array<string> = [];
     const r = materializeCargoTestInputs({
       root: dir,
       cargo: "cargo",

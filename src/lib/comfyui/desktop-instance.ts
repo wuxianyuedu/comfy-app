@@ -26,7 +26,7 @@ import { classifyComfyInstall } from "./instance-kind";
 /** 桌面实例最终派生出的 headless 启动参数（不含解释器与 main.py 路径）。 */
 export type DesktopLaunchArgs = {
   /** 映射后的 headless 额外参数（如 --enable-manager …）。 */
-  args: string[];
+  args: Array<string>;
   /** 从 launchArgs 抽出的 --port；无则 null（用默认 8188）。 */
   port: number | null;
   /** 实例登记的 envVars（如 PYTHONUTF8 等）；无则空对象。 */
@@ -97,11 +97,11 @@ function deepFindById(node: unknown, id: string, depth = 0): Record<string, unkn
 }
 
 /** launchArgs 字段可能是空格分隔字符串或字符串数组，统一成数组。 */
-function toArgList(launchArgs: unknown): string[] {
+function toArgList(launchArgs: unknown): Array<string> {
   if (typeof launchArgs === "string") {
     // 支持双引号包裹含空格的路径。
     const re = /"([^"]*)"|(\S+)/g;
-    const out: string[] = [];
+    const out: Array<string> = [];
     let m: RegExpExecArray | null;
     while ((m = re.exec(launchArgs))) out.push(m[1] ?? m[2] ?? "");
     return out;
@@ -126,7 +126,7 @@ function toArgList(launchArgs: unknown): string[] {
  */
 export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
   const argv = toArgList(raw);
-  const args: string[] = [];
+  const args: Array<string> = [];
   let port: number | null = null;
 
   // GUI/桌面专属、或命令头 token 的去重黑名单。
@@ -250,8 +250,8 @@ export async function resolveDesktopLaunchArgs(
 }
 
 /** 把空格分隔的 extraArgs 切成参数数组（支持双引号包裹含空格的路径）。 */
-export function splitArgTokens(s: string): string[] {
-  const out: string[] = [];
+export function splitArgTokens(s: string): Array<string> {
+  const out: Array<string> = [];
   const re = /"([^"]*)"|(\S+)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(s ?? ""))) out.push(m[1] ?? m[2] ?? "");
@@ -261,7 +261,7 @@ export function splitArgTokens(s: string): string[] {
 /** 便携版/venv 的有效启动参数（端口 + 额外参数），由设置项直接决定。 */
 export type ManualLaunch = {
   port: number;
-  extraArgs: string[];
+  extraArgs: Array<string>;
   envVars: Record<string, string>;
 };
 

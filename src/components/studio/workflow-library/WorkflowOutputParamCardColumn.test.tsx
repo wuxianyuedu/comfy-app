@@ -20,7 +20,7 @@ import { outputPortLabel } from "./workflow-library-param-cards";
 /* vitest globals: false 下 RTL 不会自动 cleanup，需手动注册。 */
 afterEach(cleanup);
 
-const outputs: (WorkflowIOEntry & { ioKey: string })[] = [
+const outputs: Array<WorkflowIOEntry & { ioKey: string }> = [
   {
     direction: "output",
     kind: "output",
@@ -34,30 +34,20 @@ const outputs: (WorkflowIOEntry & { ioKey: string })[] = [
 
 describe("WorkflowOutputParamCardColumn", () => {
   it("每个对外输出一张卡片，卡片体是该端口的名字与类型", () => {
-    const { container } = render(
-      <WorkflowOutputParamCardColumn outputs={outputs} />,
-    );
+    const { container } = render(<WorkflowOutputParamCardColumn outputs={outputs} />);
     expect(screen.getByTestId("workflow-output-param-column")).toBeTruthy();
-    const card = container.querySelector(
-      '[data-testid="param-node-9::output::IMAGE"]',
-    )!;
+    const card = container.querySelector('[data-testid="param-node-9::output::IMAGE"]')!;
     expect(card).toBeTruthy();
     expect(card.textContent).toContain("images");
-    expect(
-      screen.getByTestId("param-node-out-type-9::output::IMAGE-0").textContent,
-    ).toBe("IMAGE");
+    expect(screen.getByTestId("param-node-out-type-9::output::IMAGE-0").textContent).toBe("IMAGE");
   });
 
   it("卡片头不把端口名再抄一遍（作者没改名时退回类别名）", () => {
     /* 卡片头写「images」、卡片体又写「images IMAGE」= 同一句话两处各说一遍
      *  —— 这是用户反复圈出来的毛病（「红框内那段没用，之前就让去掉了」）。
      *  作者改了名（label ≠ name）才用作者的名字当标题。 */
-    const { container } = render(
-      <WorkflowOutputParamCardColumn outputs={outputs} />,
-    );
-    const card = container.querySelector(
-      '[data-testid="param-node-9::output::IMAGE"]',
-    )!;
+    const { container } = render(<WorkflowOutputParamCardColumn outputs={outputs} />);
+    const card = container.querySelector('[data-testid="param-node-9::output::IMAGE"]')!;
     const header = card.firstElementChild!;
     expect(header.textContent).toContain("输出");
     expect(header.textContent).not.toContain("images");
@@ -74,16 +64,11 @@ describe("WorkflowOutputParamCardColumn", () => {
       <WorkflowOutputParamCardColumn
         outputs={outputs}
         endpoint={(port) => (
-          <span
-            data-testid="probe-endpoint"
-            data-endpoint-handle={port.handleId}
-          />
+          <span data-testid="probe-endpoint" data-endpoint-handle={port.handleId} />
         )}
       />,
     );
-    const dot = container.querySelector(
-      '[data-endpoint-handle="9::output::IMAGE"]',
-    )!;
+    const dot = container.querySelector('[data-endpoint-handle="9::output::IMAGE"]')!;
     expect(dot).toBeTruthy();
     /* 端点槽位在名字与类型**之前**（DOM 顺序 = 视觉顺序，圆点在左）。 */
     const row = screen.getByTestId("param-node-out-9::output::IMAGE-0");
@@ -91,15 +76,9 @@ describe("WorkflowOutputParamCardColumn", () => {
   });
 
   it("只读消费（没给落库回调）：不渲染「恢复默认」，也不给拖拽提示", () => {
-    const { container } = render(
-      <WorkflowOutputParamCardColumn outputs={outputs} />,
-    );
-    expect(
-      screen.queryByTestId("param-node-reset-9::output::IMAGE"),
-    ).toBeNull();
-    expect(
-      container.querySelector('[data-testid="probe-endpoint"]'),
-    ).toBeNull();
+    const { container } = render(<WorkflowOutputParamCardColumn outputs={outputs} />);
+    expect(screen.queryByTestId("param-node-reset-9::output::IMAGE")).toBeNull();
+    expect(container.querySelector('[data-testid="probe-endpoint"]')).toBeNull();
   });
 
   it("可拖 + 作者改过：端点槽位在，「恢复默认」可用", () => {
@@ -113,11 +92,9 @@ describe("WorkflowOutputParamCardColumn", () => {
         endpoint={(port) => <span data-endpoint-handle={port.handleId} />}
       />,
     );
-    expect(
-      screen
-        .getByTestId("param-node-reset-9::output::IMAGE")
-        .hasAttribute("disabled"),
-    ).toBe(false);
+    expect(screen.getByTestId("param-node-reset-9::output::IMAGE").hasAttribute("disabled")).toBe(
+      false,
+    );
   });
 
   it("没改过时「恢复默认」不可用（点了不会有变化）", () => {
@@ -129,17 +106,13 @@ describe("WorkflowOutputParamCardColumn", () => {
         onReset={() => undefined}
       />,
     );
-    expect(
-      screen
-        .getByTestId("param-node-reset-9::output::IMAGE")
-        .hasAttribute("disabled"),
-    ).toBe(true);
+    expect(screen.getByTestId("param-node-reset-9::output::IMAGE").hasAttribute("disabled")).toBe(
+      true,
+    );
   });
 
   it("没有输出时整列不渲染", () => {
-    const { container } = render(
-      <WorkflowOutputParamCardColumn outputs={[]} />,
-    );
+    const { container } = render(<WorkflowOutputParamCardColumn outputs={[]} />);
     expect(container.firstElementChild).toBeNull();
   });
 
@@ -153,9 +126,7 @@ describe("WorkflowOutputParamCardColumn", () => {
         endpoint={(port) => <span data-endpoint-handle={port.handleId} />}
       />,
     );
-    expect(
-      container.querySelector('[data-endpoint-handle="9::output::IMAGE"]'),
-    ).toBeTruthy();
+    expect(container.querySelector('[data-endpoint-handle="9::output::IMAGE"]')).toBeTruthy();
   });
 
   it("端口名为空 / 带空白时**显示名**退回「输出」，锚点仍是输出的 ioKey", () => {
@@ -163,9 +134,7 @@ describe("WorkflowOutputParamCardColumn", () => {
      *  锚点必须是唯一的 ioKey —— 用名字当锚点会在两个口同名时撞车，线量不到
      *  handleBounds 就整条不画（用户口径：「images 和对外输出参数之间无法连线」，
      *  ISSUE #355）。 */
-    const nameless = [
-      { ...outputs[0]!, name: "   ", ioKey: "9::output::EMPTY" },
-    ];
+    const nameless = [{ ...outputs[0]!, name: "   ", ioKey: "9::output::EMPTY" }];
     const { container } = render(
       <WorkflowOutputParamCardColumn
         outputs={nameless}
@@ -175,8 +144,6 @@ describe("WorkflowOutputParamCardColumn", () => {
     const dot = container.querySelector("[data-endpoint-handle]")!;
     expect(dot.getAttribute("data-endpoint-handle")).toBe("9::output::EMPTY");
     expect(outputPortLabel(nameless[0]!)).toBe("输出");
-    expect(
-      screen.getByTestId("param-node-out-9::output::EMPTY-0").textContent,
-    ).toContain("输出");
+    expect(screen.getByTestId("param-node-out-9::output::EMPTY-0").textContent).toContain("输出");
   });
 });

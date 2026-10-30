@@ -116,10 +116,10 @@ export type InferredGroup = DimensionGroup | VideoGroup;
  *  就回退首档」直接取 `[0]` 即可，不必再补 `!`。 */
 export const DIM_RATIO_PRESETS: [
   { label: string; ratio: number },
-  ...{
+  ...Array<{
     label: string;
     ratio: number;
-  }[],
+  }>,
 ] = SIZE_RATIO_PRESETS;
 
 /** 「像素」大类下的两个子类：分辨率（1k/2k/4k）与百万像素（1M/2M/4M）。
@@ -135,19 +135,15 @@ export interface DimClarityPreset {
   totalPixels?: number;
 }
 
-const dimClarityPresetOf = (
-  preset: (typeof SIZE_CLARITY_PRESETS)[number],
-): DimClarityPreset => ({
+const dimClarityPresetOf = (preset: (typeof SIZE_CLARITY_PRESETS)[number]): DimClarityPreset => ({
   kind: preset.kind,
   label: preset.label,
-  ...(preset.megapixels !== undefined
-    ? { totalPixels: preset.megapixels * 1_000_000 }
-    : {}),
+  ...(preset.megapixels !== undefined ? { totalPixels: preset.megapixels * 1_000_000 } : {}),
 });
 
 /* 首项单独映射、其余走 `map` —— 这样类型是**非空数组**，`[0]` 即默认档
  * （与 `SIZE_CLARITY_PRESETS` 同一口径）。 */
-export const DIM_CLARITY_PRESETS: [DimClarityPreset, ...DimClarityPreset[]] = [
+export const DIM_CLARITY_PRESETS: [DimClarityPreset, ...Array<DimClarityPreset>] = [
   dimClarityPresetOf(SIZE_CLARITY_PRESETS[0]),
   ...SIZE_CLARITY_PRESETS.slice(1).map(dimClarityPresetOf),
 ];
@@ -155,11 +151,9 @@ export const DIM_CLARITY_PRESETS: [DimClarityPreset, ...DimClarityPreset[]] = [
 /* 两张表的**首档默认值**具名导出：「`find` 没命中就回退首档」在
  * `DimensionControl`（两处）、`AspectMegapixelControl`、`VideoField`、
  * `VideoControl` 各写了一遍，这里是「首档是什么」这个事实的唯一出处。 */
-export const DEFAULT_DIM_RATIO_PRESET: (typeof DIM_RATIO_PRESETS)[number] =
-  DIM_RATIO_PRESETS[0];
+export const DEFAULT_DIM_RATIO_PRESET: (typeof DIM_RATIO_PRESETS)[number] = DIM_RATIO_PRESETS[0];
 
-export const DEFAULT_DIM_CLARITY_PRESET: DimClarityPreset =
-  DIM_CLARITY_PRESETS[0];
+export const DEFAULT_DIM_CLARITY_PRESET: DimClarityPreset = DIM_CLARITY_PRESETS[0];
 
 /** 清晰度标签 → 预设（含**自由百万像素值**）。
  *
@@ -179,10 +173,8 @@ export function clarityPresetFor(label: string): DimClarityPreset {
 }
 
 /** 「像素」大类下两个子类的显示名（与 `size-presets` 同一份）。 */
-export const CLARITY_SUBGROUP_OF_KIND: Record<
-  DimClarityPreset["kind"],
-  string
-> = CLARITY_SUBGROUP_LABELS;
+export const CLARITY_SUBGROUP_OF_KIND: Record<DimClarityPreset["kind"], string> =
+  CLARITY_SUBGROUP_LABELS;
 
 export { clarityKindOfLabel, megapixelTierOfLabel, resolutionTierOfLabel };
 
@@ -198,7 +190,7 @@ export { clarityKindOfLabel, megapixelTierOfLabel, resolutionTierOfLabel };
  *  the right chip instead of silently falling back to "自定义". */
 export const ASPECT_RATIO_LABEL_PRESETS: [
   { label: string; value: string; ratio: number },
-  ...{ label: string; value: string; ratio: number }[],
+  ...Array<{ label: string; value: string; ratio: number }>,
 ] = [
   { label: "1:1", value: "1:1 (Square)", ratio: 1 },
   { label: "4:3", value: "4:3 (Standard)", ratio: 4 / 3 },
@@ -211,7 +203,7 @@ export const ASPECT_RATIO_LABEL_PRESETS: [
 /** 比例标签预设的首项（同上，「回退首档」的唯一出处）。 */
 export const DEFAULT_ASPECT_RATIO_LABEL_PRESET = ASPECT_RATIO_LABEL_PRESETS[0];
 
-export const MEGAPIXEL_VALUE_PRESETS: { label: string; value: number }[] = [
+export const MEGAPIXEL_VALUE_PRESETS: Array<{ label: string; value: number }> = [
   { label: "1M", value: 1 },
   { label: "2M", value: 2 },
   { label: "4M", value: 4 },
@@ -224,8 +216,7 @@ export function parseRatioFromLabel(value: string): number | null {
   if (!match) return null;
   const w = Number(match[1]);
   const h = Number(match[2]);
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0)
-    return null;
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
   return w / h;
 }
 
@@ -253,14 +244,8 @@ export function dimsForRatio(
   if (typeof presetOrBase === "number") {
     const horizontal = safeRatio >= 1;
     return {
-      width: Math.max(
-        1,
-        Math.round(horizontal ? presetOrBase : presetOrBase * safeRatio),
-      ),
-      height: Math.max(
-        1,
-        Math.round(horizontal ? presetOrBase / safeRatio : presetOrBase),
-      ),
+      width: Math.max(1, Math.round(horizontal ? presetOrBase : presetOrBase * safeRatio)),
+      height: Math.max(1, Math.round(horizontal ? presetOrBase / safeRatio : presetOrBase)),
     };
   }
 
@@ -289,12 +274,7 @@ export function pickClarityPreset(
   scene: SizeScene = "image",
   table?: SizePresetTable,
 ): DimClarityPreset {
-  if (
-    !Number.isFinite(width) ||
-    !Number.isFinite(height) ||
-    width <= 0 ||
-    height <= 0
-  ) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     return DEFAULT_DIM_CLARITY_PRESET;
   }
   const alignM = normalizeAlignMultiple(alignMultiple);
@@ -302,13 +282,7 @@ export function pickClarityPreset(
   let best: DimClarityPreset = DEFAULT_DIM_CLARITY_PRESET;
   let bestDist = Number.POSITIVE_INFINITY;
   for (const preset of DIM_CLARITY_PRESETS) {
-    const { width: dw, height: dh } = dimsForRatio(
-      ratio,
-      preset,
-      alignM,
-      scene,
-      table,
-    );
+    const { width: dw, height: dh } = dimsForRatio(ratio, preset, alignM, scene, table);
     const dist = Math.abs(width - dw) + Math.abs(height - dh);
     if (dist < bestDist) {
       best = preset;
@@ -325,18 +299,12 @@ export function pickClarityPreset(
  *    • aspect_ratio + megapixels → renders a "比例 + 像素" quick picker that
  *      直接写进那两个暴露出来的 widget（如 ResolutionSelector）。
  */
-export function inferDimensionGroup(
-  widgets: EnrichedWidget[],
-): DimensionGroup | null {
+export function inferDimensionGroup(widgets: Array<EnrichedWidget>): DimensionGroup | null {
   const widthWidgets = widgets.filter(
-    (entry) =>
-      (entry.control === "int" || entry.control === "float") &&
-      isDimWidth(entry),
+    (entry) => (entry.control === "int" || entry.control === "float") && isDimWidth(entry),
   );
   const heightWidgets = widgets.filter(
-    (entry) =>
-      (entry.control === "int" || entry.control === "float") &&
-      isDimHeight(entry),
+    (entry) => (entry.control === "int" || entry.control === "float") && isDimHeight(entry),
   );
   /* 解构 + 明确守卫：`[0]` 与「数组非空」是同一个判据，写两遍就得多一个 `!`。 */
   const [width, height] = [widthWidgets[0], heightWidgets[0]];
@@ -360,10 +328,7 @@ export function inferDimensionGroup(
     if (aspect.ioKey === megapixels.ioKey) return null;
     /* 倍数（可选伴随）：存在时并入组合 popover 的第三段。 */
     const multiple = widgets.find(
-      (w) =>
-        w.ioKey !== aspect.ioKey &&
-        w.ioKey !== megapixels.ioKey &&
-        isDimMultiple(w),
+      (w) => w.ioKey !== aspect.ioKey && w.ioKey !== megapixels.ioKey && isDimMultiple(w),
     );
     return {
       kind: "dimension",
@@ -378,7 +343,7 @@ export function inferDimensionGroup(
 }
 
 /** 从 widget 清单里认出「时长 + 比例 + 质量」的视频分组。 */
-export function inferVideoGroup(widgets: EnrichedWidget[]): VideoGroup | null {
+export function inferVideoGroup(widgets: Array<EnrichedWidget>): VideoGroup | null {
   const len = widgets.filter(isVideoLength);
   const asp = widgets.filter(isVideoAspect);
   const quality = widgets.filter(isVideoQuality);
@@ -399,7 +364,7 @@ export function inferVideoGroup(widgets: EnrichedWidget[]): VideoGroup | null {
 /** 跑两次推断，并在视频扫描里排除尺寸 pin ——
  *  同一个 widget 永远不会同属两组。返回命中的分组，
  *  以及它们消费掉的完整 ioKey 集合（调用方据此把那些 pin 的通用逐行渲染抑制掉）。 */
-export function inferGroups(widgets: EnrichedWidget[]): {
+export function inferGroups(widgets: Array<EnrichedWidget>): {
   dimension: DimensionGroup | null;
   video: VideoGroup | null;
   groupedKeys: Set<string>;

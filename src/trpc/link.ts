@@ -24,7 +24,7 @@ export function trpcHttpLink(options: {
   source: TrpcClientSource;
   origin?: string;
   withLogger?: boolean;
-}): TRPCLink<never>[] {
+}): Array<TRPCLink<never>> {
   const url = options.origin === undefined ? getTrpcEndpoint() : getTrpcEndpointFor(options.origin);
 
   const http = httpBatchStreamLink({
@@ -46,5 +46,5 @@ export function trpcHttpLink(options: {
         (op.direction === "down" && op.result instanceof Error),
     }),
     http,
-  ] as TRPCLink<never>[];
+  ] as Array<TRPCLink<never>>;
 }

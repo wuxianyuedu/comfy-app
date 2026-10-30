@@ -61,7 +61,7 @@ export interface ExpansionSet {
    * 时用户收起的那个不该自己弹开。要「全部重置」用 `replace`（那是另一件事，
    * 不是「补默认」）。
    */
-  seedDefaults: (keys: readonly string[], open?: boolean) => void;
+  seedDefaults: (keys: ReadonlyArray<string>, open?: boolean) => void;
   /** 整体替换（全展开 / 全收起 / 从持久化恢复）。 */
   replace: (next: ExpansionMap) => void;
   /** 全收起。 */
@@ -96,7 +96,7 @@ export function useExpansionSet(
     setMap((prev) => ({ ...prev, [key]: open }));
   }, []);
 
-  const seedDefaults = useCallback((keys: readonly string[], open = true) => {
+  const seedDefaults = useCallback((keys: ReadonlyArray<string>, open = true) => {
     setMap((prev) => {
       let changed = false;
       const next = { ...prev };

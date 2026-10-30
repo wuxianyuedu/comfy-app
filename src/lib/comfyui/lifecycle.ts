@@ -279,7 +279,7 @@ export async function stopComfyUiProcess(): Promise<{
   }
   // 给进程一点退出时间，再探测确认。每轮结果都收集起来，由纯函数给出结论
   // （«最后一轮是否仍可达» 即「关了没有」），避免把判据散在循环与收尾两处。
-  const stopProbes: (string | null)[] = [];
+  const stopProbes: Array<string | null> = [];
   for (let i = 0; i < COMFY_STOP_PROBE.maxAttempts; i++) {
     await sleep(COMFY_STOP_PROBE.baseMs);
     const probe = await probeComfyUi(800);

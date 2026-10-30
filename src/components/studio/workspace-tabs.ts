@@ -32,7 +32,7 @@ export interface ViewTab {
 }
 
 export interface WorkspaceTabsState {
-  tabs: ViewTab[];
+  tabs: Array<ViewTab>;
   activeKey: string;
 }
 
@@ -60,12 +60,12 @@ export function isTabClosable(tab: ViewTab): boolean {
   return tab.view !== HOME_VIEW;
 }
 
-export function findTab(tabs: readonly ViewTab[], key: string): ViewTab | undefined {
+export function findTab(tabs: ReadonlyArray<ViewTab>, key: string): ViewTab | undefined {
   return tabs.find((tab) => tab.key === key);
 }
 
 /** 保证首页永远在列表里且在 0 位（关掉最后一个、恢复坏数据都走这一条）。 */
-function withHomeFirst(tabs: ViewTab[]): ViewTab[] {
+function withHomeFirst(tabs: Array<ViewTab>): Array<ViewTab> {
   const rest = tabs.filter((tab) => tab.view !== HOME_VIEW);
   return [homeTab(), ...rest];
 }
@@ -83,7 +83,7 @@ export function isTabTransient(tab: ViewTab): boolean {
  * 在自己的分支里重抄一遍「哪些视图该关」—— 那种写法只要漏一处，界面就会出现
  * 一个永远关不掉的设置页，而且没有任何东西会红。
  */
-function withTransientPruned(tabs: ViewTab[], activeKey: string): ViewTab[] {
+function withTransientPruned(tabs: Array<ViewTab>, activeKey: string): Array<ViewTab> {
   return tabs.filter((tab) => !isTabTransient(tab) || tab.key === activeKey);
 }
 
@@ -91,7 +91,7 @@ function withTransientPruned(tabs: ViewTab[], activeKey: string): ViewTab[] {
  * 激活一个页签后的完整状态：先剔瞬时页签，再确认 activeKey 确实指向一页
  * （按理说不会，但防御性地不让 activeKey 指向不存在的页 —— 那是界面上解释不了的空白）。
  */
-function activated(tabs: ViewTab[], activeKey: string): WorkspaceTabsState {
+function activated(tabs: Array<ViewTab>, activeKey: string): WorkspaceTabsState {
   const pruned = withHomeFirst(withTransientPruned(tabs, activeKey));
   const key = findTab(pruned, activeKey) ? activeKey : homeTab().key;
   return { tabs: pruned, activeKey: key };
@@ -204,7 +204,7 @@ export function serializeWorkspaceTabs(state: WorkspaceTabsState): string {
  */
 export function parseWorkspaceTabs(
   raw: string | null,
-  knownViews: readonly WorkspaceView[],
+  knownViews: ReadonlyArray<WorkspaceView>,
 ): WorkspaceTabsState | null {
   if (!raw) return null;
   let parsed: unknown;
@@ -221,7 +221,7 @@ export function parseWorkspaceTabs(
   if (!Array.isArray(record.tabs) || typeof record.activeKey !== "string") {
     return null;
   }
-  const tabs: ViewTab[] = [];
+  const tabs: Array<ViewTab> = [];
   for (const entry of record.tabs) {
     if (!Array.isArray(entry) || entry.length < 2) return null;
     const [view, projectId] = /* SAFETY: 类型断言已复核 */ entry as [unknown, unknown];

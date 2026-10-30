@@ -30,22 +30,17 @@ import {
   storySurface,
 } from "../scripts/storybook-checks/story-surface.mjs";
 
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0))
-    rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 /**
  * 造一个只含「组件 + 故事」的临时仓库，跑一遍扫描。
  * @param {{component?: string, story: string, componentName?: string}} input
  */
-function scan(input: {
-  component?: string;
-  story: string;
-  componentName?: string;
-}) {
+function scan(input: { component?: string; story: string; componentName?: string }) {
   const root = mkdtempSync(join(tmpdir(), "story-surface-"));
   tempDirs.push(root);
   const dir = join(root, "src", "components", "ui");
@@ -88,13 +83,7 @@ export const Default: Story = {};
 
 /** 解析一份源码（`missingRequiredArgs` 要 AST）。 */
 function parseSource(file: string, source: string) {
-  return ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  return ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 }
 
 describe("故事面的判据（规范 16 §16.2.3.8）", () => {
@@ -224,10 +213,7 @@ export const Probe = ({ label }: ProbeProps) => <div>{label}</div>;
 `,
     );
     const storyFile = join(dir, "probe.stories.tsx");
-    writeFileSync(
-      storyFile,
-      GOOD_STORY.replace(/thing/g, "probe").replace("Thing", "Probe"),
-    );
+    writeFileSync(storyFile, GOOD_STORY.replace(/thing/g, "probe").replace("Thing", "Probe"));
     const surface = storySurface(parseSource(storyFile, GOOD_STORY));
     expect(missingRequiredArgs(storyFile, surface.args)).toEqual([]);
   });

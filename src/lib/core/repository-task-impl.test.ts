@@ -547,7 +547,7 @@ describe("findExecJob（Phase 3-B1：host 重建 Job 的行读）", () => {
     const job = await hostImpl.findExecJob(id);
     expect(job?.workflowName).toBe("w");
     expect(job?.execPayload).toEqual({
-      nodes: /* SAFETY: 类型断言已复核 */ [{ id: "1", type: "KSampler" }] as unknown[],
+      nodes: /* SAFETY: 类型断言已复核 */ [{ id: "1", type: "KSampler" }] as Array<unknown>,
     });
     expect(job?.params).toMatchObject({
       workflowInputs: [{ nodeId: "1", name: "text", value: "x" }],
