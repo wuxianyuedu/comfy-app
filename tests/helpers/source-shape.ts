@@ -30,7 +30,9 @@ import * as ts from "typescript";
 
 /** 按扩展名选解析器方言（`.tsx`/`.jsx` 走 TSX，其余 JS 家族走 TS/JS）。 */
 function scriptKindOf(fileName: string): ts.ScriptKind {
-  if (fileName.endsWith(".tsx") || fileName.endsWith(".jsx")) return ts.ScriptKind.TSX;
+  if (fileName.endsWith(".tsx") || fileName.endsWith(".jsx")) {
+    return ts.ScriptKind.TSX;
+  }
   if (fileName.endsWith(".mjs") || fileName.endsWith(".cjs") || fileName.endsWith(".js")) {
     return ts.ScriptKind.JS;
   }

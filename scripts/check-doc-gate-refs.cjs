@@ -67,12 +67,20 @@ function checkGateStepIndexRefs(problems) {
   // `ASCII_ONLY_FACT_DOCS` 读它，不通过 SCOPED_DOCS），而「哪条判据在哪跑」正是写在这份文件里的，
   // 不并进来看不到它自己举例时用的旧序号。
   for (const doc of gateReferenceDocs()) {
-    if (!exists(doc)) continue;
+    if (!exists(doc)) {
+      continue;
+    }
     const lines = readText(doc).split("\n");
     lines.forEach((line, i) => {
-      if (!STEP_INDEX_RE.test(line)) return;
-      if (!GATE_STEP_REF_RE.test(line)) return; // 过程序号（§x.y 第 N 步）与本条无关
-      if (STEP_INDEX_EXPLAIN_RE.test(line)) return; // 描述这条规则本身，放行
+      if (!STEP_INDEX_RE.test(line)) {
+        return;
+      }
+      if (!GATE_STEP_REF_RE.test(line)) {
+        return;
+      } // 过程序号（§x.y 第 N 步）与本条无关
+      if (STEP_INDEX_EXPLAIN_RE.test(line)) {
+        return;
+      } // 描述这条规则本身，放行
       const hit = line.match(STEP_INDEX_RE)?.[0] ?? "第 N 步";
       problems.push(
         `[${doc}:${i + 1}] 用「${hit}」引用门禁步骤 —— 钩子已是组 0 + A/B/C/D 四个并行组，` +
@@ -100,13 +108,23 @@ const STEP_COUNT_RE = /[0-9]+\s*步/;
 
 function checkGateStepCounts(problems) {
   for (const doc of gateReferenceDocs()) {
-    if (!exists(doc)) continue;
+    if (!exists(doc)) {
+      continue;
+    }
     const lines = readText(doc).split("\n");
     lines.forEach((line, i) => {
-      if (STEP_INDEX_RE.test(line)) return; // 序号形态由 checkGateStepIndexRefs 报，不双报
-      if (!STEP_COUNT_RE.test(line)) return;
-      if (!GATE_STEP_REF_RE.test(line)) return; // 「prepare-local-run.ps1 第 3 步」这类有主人的过程计数
-      if (STEP_INDEX_EXPLAIN_RE.test(line)) return; // 描述这条规则本身，放行
+      if (STEP_INDEX_RE.test(line)) {
+        return;
+      } // 序号形态由 checkGateStepIndexRefs 报，不双报
+      if (!STEP_COUNT_RE.test(line)) {
+        return;
+      }
+      if (!GATE_STEP_REF_RE.test(line)) {
+        return;
+      } // 「prepare-local-run.ps1 第 3 步」这类有主人的过程计数
+      if (STEP_INDEX_EXPLAIN_RE.test(line)) {
+        return;
+      } // 描述这条规则本身，放行
       const hit = line.match(STEP_COUNT_RE)?.[0] ?? "N 步";
       problems.push(
         `[${doc}:${i + 1}] 写了门禁的步数「${hit}」—— 钩子每追加一步这个数字就静默过期，` +
@@ -159,10 +177,14 @@ function hookDGroupCommands(hookText) {
  * 遇到的**第一个** ``` 就是这份清单的收尾（别再往回找开围栏，那会切到散文上）。 */
 function checklistCommands(docText) {
   const start = docText.indexOf(CHECKLIST_MARKER);
-  if (start < 0) return null;
+  if (start < 0) {
+    return null;
+  }
   const rest = docText.slice(start);
   const close = rest.indexOf("```");
-  if (close < 0) return null;
+  if (close < 0) {
+    return null;
+  }
   return rest
     .slice(0, close)
     .split("\n")
@@ -171,7 +193,9 @@ function checklistCommands(docText) {
 }
 
 function checkGateChecklistMatchesHook(problems) {
-  if (!exists(HOOK_PATH) || !exists(GATE_CHECKLIST_DOC)) return;
+  if (!exists(HOOK_PATH) || !exists(GATE_CHECKLIST_DOC)) {
+    return;
+  }
   const hookCmds = hookDGroupCommands(readText(HOOK_PATH));
   const docCmds = checklistCommands(readText(GATE_CHECKLIST_DOC));
   // 读不到清单本身就是红：静默返回 0 条会让这条判据空转
@@ -186,14 +210,18 @@ function checkGateChecklistMatchesHook(problems) {
   const docSet = new Set(docCmds);
   const hookSet = new Set(hookCmds);
   for (const cmd of hookCmds) {
-    if (docSet.has(cmd)) continue;
+    if (docSet.has(cmd)) {
+      continue;
+    }
     problems.push(
       `[${HOOK_PATH}] 这一步真的在跑 \`${cmd}\`，但 ${GATE_CHECKLIST_DOC} 的 §13.1 清单里没有这条 ` +
         "（或 flag 与钩子不一致）。清单是手跑全套的唯一入口，漏一格 = 照着清单跑的人以为它不存在。",
     );
   }
   for (const cmd of docCmds) {
-    if (hookSet.has(cmd) || NON_D_GROUP_COMMANDS.has(cmd)) continue;
+    if (hookSet.has(cmd) || NON_D_GROUP_COMMANDS.has(cmd)) {
+      continue;
+    }
     problems.push(
       `[${GATE_CHECKLIST_DOC}] §13.1 清单写着 \`${cmd}\`，但 ${HOOK_PATH} 的 D 组没有这一步 —— ` +
         "「上面那份清单就是全文」这句话已经不成立。要么把这一步接回钩子，要么从清单里删掉。",

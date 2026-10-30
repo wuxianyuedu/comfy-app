@@ -71,10 +71,17 @@ function checkFactKeysMatchDocs() {
     return;
   }
   const md = readText("docs/reference-facts.md");
-  for (const f of FACTS) if (!md.includes(f.key)) problems.push(`登记表缺少事实 key：${f.key}`);
+  for (const f of FACTS) {
+    if (!md.includes(f.key)) {
+      problems.push(`登记表缺少事实 key：${f.key}`);
+    }
+  }
   const mdKeys = [...md.matchAll(/\| `([a-z][a-z0-9_.]+)` \|/g)].map((m) => m[1]);
-  for (const k of mdKeys)
-    if (!FACTS.some((f) => f.key === k)) problems.push(`登记表有多余/脚本未支持 key：${k}`);
+  for (const k of mdKeys) {
+    if (!FACTS.some((f) => f.key === k)) {
+      problems.push(`登记表有多余/脚本未支持 key：${k}`);
+    }
+  }
 }
 
 /* ── 校验范围守卫（ISSUE #316）─────────────────────────────────────────
@@ -102,9 +109,13 @@ function checkScopeCoverage() {
           walk(full);
           continue;
         }
-        if (!entry.name.endsWith(".md")) continue;
+        if (!entry.name.endsWith(".md")) {
+          continue;
+        }
         const rel = path.relative(ROOT, full).split(path.sep).join("/");
-        if (scoped.has(rel) || rel in SCOPED_DOC_EXEMPTIONS) continue;
+        if (scoped.has(rel) || rel in SCOPED_DOC_EXEMPTIONS) {
+          continue;
+        }
         problems.push(
           `校验范围守卫：${rel} 既未登记进 SCOPED_DOCS、也不在豁免名单里——` +
             `新增规范文档必须二选一（登记则参与校验；豁免则须在 scripts/doc-facts.cjs 的 ` +
@@ -133,21 +144,27 @@ function extractDocHostPorts(text) {
   const ports = new Set();
   const re = /(?:localhost|127\.0\.0\.1):(\d+)/g;
   let m;
-  while ((m = re.exec(text))) ports.add(Number(m[1]));
+  while ((m = re.exec(text))) {
+    ports.add(Number(m[1]));
+  }
   return [...ports];
 }
 
 function checkVerify(text, docPath, f) {
   const kind = f.key;
   try {
-    if (kind === "dev.host") return; // host 双形态等价
+    if (kind === "dev.host") {
+      return;
+    } // host 双形态等价
     if (kind === "dev.port.derived") {
       // 解析链（`pnpm dev` / `pnpm start`：.env → 检出路径推导 → 兜底 3100）的端口。
       // 描述 pnpm dev 语境的文档必须写**本检出真实推导值**，写静态 devUrl 值（兜底
       // 3100）会让人照着打开一个没人监听的端口 = ERR_CONNECTION_REFUSED（ISSUE #489）。
       const derivedPort = String(f.extract());
       const docPorts = extractDocHostPorts(text);
-      if (!docPorts.length) return; // 本文档没写具体地址，跳过
+      if (!docPorts.length) {
+        return;
+      } // 本文档没写具体地址，跳过
       if (!docPorts.map(String).includes(derivedPort)) {
         problems.push(
           `[${docPath}] 文档 dev 地址端口 ${docPorts.join(" / ")} 未包含本检出按路径推导的端口 ${derivedPort}` +
@@ -162,7 +179,9 @@ function checkVerify(text, docPath, f) {
       const candidates = extractFallbackPorts().map(Number);
       const allowed = new Set([port, ...candidates]);
       const docPorts = extractDocHostPorts(text);
-      if (!docPorts.length) return;
+      if (!docPorts.length) {
+        return;
+      }
       const hasDevFam = docPorts.some((p) => allowed.has(p));
       if (hasDevFam && !docPorts.includes(port)) {
         problems.push(
@@ -175,7 +194,9 @@ function checkVerify(text, docPath, f) {
       // 让端口清理/监听检测把 MCP 误判成 dev server 实例——这是该 fact 的防回归点。
       const mcpPort = Number(f.extract());
       const docPorts = extractDocHostPorts(text);
-      if (!docPorts.includes(mcpPort)) return; // 本文档未引用 MCP 端口，跳过
+      if (!docPorts.includes(mcpPort)) {
+        return;
+      } // 本文档未引用 MCP 端口，跳过
       const { port } = extractDevHostPort();
       const candidates = extractFallbackPorts().map(Number);
       const devFam = new Set([port, ...candidates]);
@@ -211,11 +232,17 @@ function checkLedgerCommands() {
   // 的生成面，所以刻意不塞进 SCOPED_DOCS——在这里显式并入遍历集合。
   const ledgerDocs = [AGENTS_MD_PATH, ...SCOPED_DOCS];
   for (const doc of ledgerDocs) {
-    if (!exists(doc)) continue;
+    if (!exists(doc)) {
+      continue;
+    }
     const lines = readText(doc).split("\n");
     lines.forEach((line, i) => {
-      if (!NPM_CMD_RE.test(line)) return;
-      if (NPM_CMD_EXPLAIN_RE.test(line)) return; // 说明性引用，放行
+      if (!NPM_CMD_RE.test(line)) {
+        return;
+      }
+      if (NPM_CMD_EXPLAIN_RE.test(line)) {
+        return;
+      } // 说明性引用，放行
       problems.push(
         `[${doc}:${i + 1}] 出现 npm/npx 命令（AGENTS 硬规则 1「包管理只用 pnpm」）。` +
           `请改为 pnpm（如 npm run test → pnpm test）；若是在描述该规则本身，` +
@@ -258,7 +285,9 @@ function userFacingDocs() {
   const out = ["README.md", "docs/README.md", AGENTS_MD_PATH];
   const collect = (dir, prefix) => {
     const abs = path.join(ROOT, dir);
-    if (!exists(dir)) return;
+    if (!exists(dir)) {
+      return;
+    }
     for (const name of fs.readdirSync(abs).sort()) {
       if (name.endsWith(".md") && name.startsWith(prefix)) {
         out.push(`${dir}${name}`);
@@ -272,11 +301,17 @@ function userFacingDocs() {
 
 function checkRuntimeAbsentDriverCommands() {
   for (const doc of userFacingDocs()) {
-    if (!exists(doc)) continue;
+    if (!exists(doc)) {
+      continue;
+    }
     const lines = readText(doc).split("\n");
     lines.forEach((line, i) => {
-      if (!RUNTIME_ABSENT_DRIVER_CMD_RE.test(line)) return;
-      if (RUNTIME_ABSENT_DRIVER_EXPLAIN_RE.test(line)) return;
+      if (!RUNTIME_ABSENT_DRIVER_CMD_RE.test(line)) {
+        return;
+      }
+      if (RUNTIME_ABSENT_DRIVER_EXPLAIN_RE.test(line)) {
+        return;
+      }
       problems.push(
         `[${doc}:${i + 1}] 出现 \`better-sqlite3\` 的可执行命令形状 —— 它是 ` +
           `devDependencies（只给测试基建），**生产运行时与桌包里没有这个包**，照抄就是 ` +
@@ -293,9 +328,12 @@ function checkRuntimeAbsentDriverCommands() {
 function shouldApplyFactToDoc(f, docPath) {
   // onlyDocs：事实的主适用文档组（未命中即跳过）；otherDocs：额外适用文档，
   // 与主文档组取并集（同一值在另一篇文档里以别的形态出现时用，见 doc-facts.cjs）。
-  if (f.onlyDocs && !f.onlyDocs.includes(docPath) && !(f.otherDocs || []).includes(docPath))
+  if (f.onlyDocs && !f.onlyDocs.includes(docPath) && !(f.otherDocs || []).includes(docPath)) {
     return false;
-  if (f.excludeDocs && f.excludeDocs.includes(docPath)) return false;
+  }
+  if (f.excludeDocs && f.excludeDocs.includes(docPath)) {
+    return false;
+  }
   return true;
 }
 
@@ -306,7 +344,9 @@ function checkDoc(docPath) {
   }
   const text = readText(docPath);
   for (const f of FACTS) {
-    if (!shouldApplyFactToDoc(f, docPath)) continue; // 事实声明了适用文档范围，未命中则跳过
+    if (!shouldApplyFactToDoc(f, docPath)) {
+      continue;
+    } // 事实声明了适用文档范围，未命中则跳过
     if (f.kind === "placeholder") {
       let realValue;
       try {
@@ -317,7 +357,9 @@ function checkDoc(docPath) {
       }
       const vals = Array.isArray(realValue) ? realValue : [realValue];
       for (const rv of vals) {
-        if (!rv) continue;
+        if (!rv) {
+          continue;
+        }
         if (bareValueOccurs(text, rv)) {
           problems.push(
             `[${docPath}] 发现裸值 "${rv}"（对应 ${f.key}，应改用占位符 ${f.placeholder}）。见 docs/reference-facts.md。`,
@@ -417,11 +459,15 @@ function gitignoredRootNames() {
   const names = new Set();
   for (const raw of gi.split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line || line.startsWith("#") || line.startsWith("!")) continue;
+    if (!line || line.startsWith("#") || line.startsWith("!")) {
+      continue;
+    }
     // 只认「根级单名」形态（`db.sqlite` / `/db.sqlite`）：带斜杠的是子路径规则，
     // 与 AGENTS_ROOT_FILES（全是根级文件名）不同口径，别混进来。
     const name = line.replace(/^\//, "");
-    if (name.includes("/")) continue;
+    if (name.includes("/")) {
+      continue;
+    }
     names.add(name);
   }
   return names;
@@ -450,11 +496,19 @@ function gitignoredDirPaths() {
   const dirs = new Set();
   for (const raw of gi.split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line || line.startsWith("#") || line.startsWith("!")) continue;
-    if (!line.endsWith("/")) continue;
+    if (!line || line.startsWith("#") || line.startsWith("!")) {
+      continue;
+    }
+    if (!line.endsWith("/")) {
+      continue;
+    }
     const body = line.replace(/^\//, "").replace(/\/+$/, "");
-    if (body === "") continue;
-    if (/[*?[\]{}]/.test(body)) continue;
+    if (body === "") {
+      continue;
+    }
+    if (/[*?[\]{}]/.test(body)) {
+      continue;
+    }
     dirs.add(body);
   }
   return [...dirs];
@@ -479,19 +533,31 @@ function isRuntimeProductPath(p) {
 /** 把一段反引号内容或链接 URL 判成「仓库相对路径」→ 返回规范化后的相对路径；不是则返回 null。 */
 function looksLikeRepoPath(raw) {
   const p = raw.trim();
-  if (!p) return null;
+  if (!p) {
+    return null;
+  }
   // 通配、占位符、range、章节号、代码符号、URL、锚点、配置对、带参数的调用形态
-  if (/[<>*~§()=\s]/.test(p)) return null;
-  if (p.startsWith("#")) return null;
-  if (/^[a-z]+:\/\//i.test(p)) return null;
-  if (/^::?1$/.test(p) || /^[\d.]+$/.test(p)) return null; // ::1 或 IP
+  if (/[<>*~§()=\s]/.test(p)) {
+    return null;
+  }
+  if (p.startsWith("#")) {
+    return null;
+  }
+  if (/^[a-z]+:\/\//i.test(p)) {
+    return null;
+  }
+  if (/^::?1$/.test(p) || /^[\d.]+$/.test(p)) {
+    return null;
+  } // ::1 或 IP
   const hasSlash = p.includes("/");
   if (!hasSlash) {
     return AGENTS_ROOT_FILES.has(p) ? p : null;
   }
   // 有斜杠：必须以允许前缀开头，避免误伤「简称文件名 / 抽象目录名」
   const allowed = AGENTS_PATH_PREFIXES.some((pre) => p.startsWith(pre));
-  if (!allowed) return null;
+  if (!allowed) {
+    return null;
+  }
   // 末尾斜杠表目录形态；去掉再交给 fs.existsSync
   const normalized = p.endsWith("/") ? p.slice(0, -1) : p;
   return normalized || null;
@@ -519,12 +585,18 @@ function checkAgentsMdPaths() {
     }
     for (const c of candidates) {
       const p = looksLikeRepoPath(c.raw);
-      if (!p) continue;
+      if (!p) {
+        continue;
+      }
       // 运行期产物（被 .gitignore 忽略）不参与「文件必须存在」判定，见上节。
       // 两类都查：根级单名（`db.sqlite`）与**目录形态**的忽略规则（`docs/api/`）。
-      if (GITIGNORED_ROOT_NAMES.has(p) || isRuntimeProductPath(p)) continue;
+      if (GITIGNORED_ROOT_NAMES.has(p) || isRuntimeProductPath(p)) {
+        continue;
+      }
       const key = `${p}@L${lineno}`;
-      if (seen.has(key)) continue;
+      if (seen.has(key)) {
+        continue;
+      }
       seen.add(key);
       if (!exists(p)) {
         problems.push(
@@ -538,7 +610,9 @@ function checkAgentsMdPaths() {
 }
 
 function checkAgentsMdSectionAnchors() {
-  if (!exists(AGENTS_MD_PATH)) return;
+  if (!exists(AGENTS_MD_PATH)) {
+    return;
+  }
   const text = readText(AGENTS_MD_PATH);
   const lines = text.split(/\r?\n/);
   // 「3 行窗口」：把当前行、上一行、下一行拼成一段——覆盖「同 bullet 跨行、
@@ -550,7 +624,9 @@ function checkAgentsMdSectionAnchors() {
   const reported = new Set();
   const targetCache = new Map();
   const readTarget = (rel) => {
-    if (targetCache.has(rel)) return targetCache.get(rel);
+    if (targetCache.has(rel)) {
+      return targetCache.get(rel);
+    }
     const content = exists(rel) ? readText(rel) : "";
     targetCache.set(rel, content);
     return content;
@@ -564,17 +640,27 @@ function checkAgentsMdSectionAnchors() {
     while ((m = fileRe.exec(window))) {
       files.push({ num: m[1], path: m[0] });
     }
-    if (!files.length) continue;
+    if (!files.length) {
+      continue;
+    }
     sectionRe.lastIndex = 0;
     while ((m = sectionRe.exec(window))) {
       const full = m[1]; // 形如 "18" / "18.4" / "13.6.1"
       const major = full.split(".")[0];
       const target = files.find((f) => f.num === major);
-      if (!target) continue; // 窗口里只有别的 standards 文件，跳过（避免误配）
-      if (full === major) continue; // 单级 §N（如 §17）不校验——粒度太粗、易混淆
-      if (!exists(target.path)) continue; // 文件本身缺失由 checkAgentsMdPaths 报，这里不重复
+      if (!target) {
+        continue;
+      } // 窗口里只有别的 standards 文件，跳过（避免误配）
+      if (full === major) {
+        continue;
+      } // 单级 §N（如 §17）不校验——粒度太粗、易混淆
+      if (!exists(target.path)) {
+        continue;
+      } // 文件本身缺失由 checkAgentsMdPaths 报，这里不重复
       const dedupKey = `${target.path}#${full}`;
-      if (reported.has(dedupKey)) continue;
+      if (reported.has(dedupKey)) {
+        continue;
+      }
       const content = readTarget(target.path);
       const escaped = full.replace(/\./g, "\\.");
       const anchorRe = new RegExp(`^#{1,6}\\s+(?:§)?${escaped}(?:\\s|[^\\d]|$)`, "m");
@@ -605,11 +691,15 @@ function main() {
   checkGateChecklistMatchesHook(problems);
   checkPaths();
   checkAgentsMdDrift();
-  for (const doc of SCOPED_DOCS) checkDoc(doc);
+  for (const doc of SCOPED_DOCS) {
+    checkDoc(doc);
+  }
 
   if (problems.length > 0) {
     console.error("\n[doc:check] 发现文档引用一致性问题：\n");
-    for (const p of problems) console.error("  ✗ " + p);
+    for (const p of problems) {
+      console.error("  ✗ " + p);
+    }
     console.error(`\n共 ${problems.length} 项。请对照 docs/reference-facts.md 更新文档。`);
     process.exit(1);
   }

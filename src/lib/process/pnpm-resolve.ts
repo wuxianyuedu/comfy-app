@@ -364,7 +364,9 @@ export function resolveCommandInvocation(
   }: WhichCommandOptions = {},
 ): ResolvedInvocation {
   const candidate = whichCommand(file, { env, platform, probe, probeArgs });
-  if (!candidate) return { command: file, args, resolved: false };
+  if (!candidate) {
+    return { command: file, args, resolved: false };
+  }
   const usable = usableCommand(candidate, probeArgs, { env, platform, probe });
   // 可用即用宿主形态；不可用（如 `.cmd` 且无 `.ps1` 回退）仍把**绝对路径**
   // 交出去 —— 让 spawn 报一个带绝对路径的错，比报裸名字更有排障价值。
