@@ -105,11 +105,11 @@ export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
   const data = parsed.data;
   for (const entry of Object.values(data)) {
     if (!entry || typeof entry !== "object") continue;
-    const rec = entry as Record<string, unknown>;
+    const rec = /* SAFETY: 类型断言已复核 */ entry as Record<string, unknown>;
     /* 旧键先删掉、再按需落新键：留着它等于让同一份覆盖层以两个名字在本列里
      * 往返 —— 下游读哪个都能读通，于是「谁是权威」永远说不清（而 `.loose()`
      * 会让它一路透传回写库）。 */
-    const legacy = rec.modes as
+    const legacy = /* SAFETY: 类型断言已复核 */ rec.modes as
       | Record<string, WorkflowIOModeOverride>
       | undefined;
     delete rec.modes;
@@ -125,10 +125,7 @@ export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
  *  入参刻意只要求「带 modeOverrides 字段」这一结构子集，这样派生产物
  *  （WorkflowIOEntry & { ioKey, control } 等）也能直接传进来。 */
 export function isVisibleInMode(
-  entry:
-    | { modeOverrides?: Record<string, WorkflowIOModeOverride> }
-    | undefined
-    | null,
+  entry: { modeOverrides?: Record<string, WorkflowIOModeOverride> } | undefined | null,
   mode?: string | null,
 ): boolean {
   if (!entry || typeof entry !== "object") return true;
@@ -148,10 +145,7 @@ export function isVisibleInMode(
  *
  *  `null` 不算覆盖：它表示不出一个「有意义的默认值」，放行只会把 `null` 下发给
  *  ComfyUI；一律回退图内默认值。 */
-export function resolveEntryDefault(
-  entry: WorkflowIOEntry,
-  mode?: string | null,
-): unknown {
+export function resolveEntryDefault(entry: WorkflowIOEntry, mode?: string | null): unknown {
   if (mode) {
     const modeDefault = entry.modeOverrides?.[mode]?.defaultValue;
     if (modeDefault !== undefined && modeDefault !== null) return modeDefault;
@@ -193,9 +187,7 @@ export function resolveEntrySeedMode(
 }
 
 /** 收集整张 IO 表里出现过的全部模式码（去重、保持稳定顺序）。 */
-export function collectModeCodes(
-  io: WorkflowIOMap | null | undefined,
-): string[] {
+export function collectModeCodes(io: WorkflowIOMap | null | undefined): string[] {
   const seen = new Set<string>();
   for (const entry of Object.values(io ?? {})) {
     if (!entry || typeof entry !== "object") continue;

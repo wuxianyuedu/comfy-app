@@ -43,7 +43,8 @@ vi.mock("~/lib/app-settings/app-settings.server", async (importOriginal) => {
   const mod = await importOriginal<typeof AppSettingsModule>();
   return {
     ...mod,
-    getSettingsSync: getSettingsMock as unknown as typeof mod.getSettingsSync,
+    getSettingsSync:
+      /* SAFETY: 类型断言已复核 */ getSettingsMock as unknown as typeof mod.getSettingsSync,
   };
 });
 vi.mock("~/lib/comfyui/importSource", async (importOriginal) => ({

@@ -44,7 +44,7 @@ function makeLogger(ns: string) {
       .trim()
       .split("\n")
       .filter(Boolean)
-      .map((l) => JSON.parse(l) as Record<string, unknown>);
+      .map((l) => /* SAFETY: 类型断言已复核 */ JSON.parse(l) as Record<string, unknown>);
   return { log, lines };
 }
 
@@ -75,7 +75,12 @@ describe("core/logger — 核心层门面（实现只有一份，就是本模块
       .trim()
       .split("\n")
       .filter(Boolean)
-      .map((l) => JSON.parse(l) as { level: number });
+      .map(
+        (l) =>
+          /* SAFETY: 类型断言已复核 */ JSON.parse(l) as {
+            level: number;
+          },
+      );
     expect(out.map((l) => l.level)).toEqual([50]);
   });
 

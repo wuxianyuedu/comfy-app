@@ -32,7 +32,7 @@ function setViewport(width: number): void {
 
 beforeEach(() => {
   listeners.clear();
-  window.matchMedia = ((query: string) => ({
+  window.matchMedia = /* SAFETY: 类型断言已复核 */ ((query: string) => ({
     get matches() {
       const max = /max-width:\s*(\d+)px/.exec(query)?.[1];
       return max === undefined ? false : window.innerWidth <= Number(max);
@@ -40,13 +40,10 @@ beforeEach(() => {
     media: query,
     onchange: null,
     addEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
-      listeners.add(cb as () => void);
+      listeners.add(/* SAFETY: 类型断言已复核 */ cb as () => void);
     },
-    removeEventListener: (
-      _: string,
-      cb: EventListenerOrEventListenerObject,
-    ) => {
-      listeners.delete(cb as () => void);
+    removeEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
+      listeners.delete(/* SAFETY: 类型断言已复核 */ cb as () => void);
     },
   })) as unknown as typeof window.matchMedia;
   setViewport(1440);

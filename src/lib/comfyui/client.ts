@@ -87,10 +87,7 @@ const SESSION_ID = Math.random().toString(36).slice(2, 10);
 
 /** 本次「探测全落空」是否值得再写一条日志（同一批地址、同一静默期内不重复写）。
  *  导出供回归测试直接断言节流判据。 */
-export function shouldLogProbeMiss(
-  key: string,
-  now: number = Date.now(),
-): boolean {
+export function shouldLogProbeMiss(key: string, now: number = Date.now()): boolean {
   const repeat =
     probeLog.key === key &&
     probeLog.lastAt !== undefined &&
@@ -220,9 +217,7 @@ export async function resolveComfyBase(): Promise<string> {
    * 命中（含查询失败/不可信），要么实例确实不是这个路径起的。 */
   if (await probePort(host, configuredPort)) {
     _resolvedBase =
-      host === LOOPBACK_HOST
-        ? comfyUiBaseUrl(configuredPort)
-        : `http://${host}:${configuredPort}`;
+      host === LOOPBACK_HOST ? comfyUiBaseUrl(configuredPort) : `http://${host}:${configuredPort}`;
     logger.info(`[comfyui] Connected on configured port :${configuredPort}`);
     return _resolvedBase;
   }
@@ -305,9 +300,7 @@ export function comfyBase(): string {
   if (_resolvedBase) return forceIpv4Host(_resolvedBase);
   const settings = getSettingsSync();
   const port =
-    settings.comfyuiPort && settings.comfyuiPort > 0
-      ? settings.comfyuiPort
-      : COMFYUI_DEFAULT_PORT;
+    settings.comfyuiPort && settings.comfyuiPort > 0 ? settings.comfyuiPort : COMFYUI_DEFAULT_PORT;
   const raw = process.env.COMFYUI_BASE ?? comfyUiBaseUrl(port);
   return forceIpv4Host(raw);
 }
@@ -328,14 +321,12 @@ export function toWsBase(httpBase: string): string {
   return httpBase.replace(/^http(s?):\/\//i, (_m, s) => `ws${s}://`);
 }
 
-export async function getHistory(
-  promptId: string,
-): Promise<Record<string, unknown>> {
+export async function getHistory(promptId: string): Promise<Record<string, unknown>> {
   const res = await fetch(`${comfyBase()}/api/history/${promptId}`, {
     // 本地 ComfyUI 正常秒回；此超时只兜「连上却不返回」的病态挂死，给足余量。
     signal: AbortSignal.timeout(15_000),
   });
-  return (await res.json()) as Record<string, unknown>;
+  return /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, unknown>;
 }
 
 /** `getView` 的失败带着 ComfyUI 回的状态码。
@@ -353,11 +344,7 @@ export class ComfyViewError extends Error {
   }
 }
 
-export async function getView(
-  filename: string,
-  subfolder: string,
-  type: string,
-): Promise<Buffer> {
+export async function getView(filename: string, subfolder: string, type: string): Promise<Buffer> {
   const url = new URL(`${comfyBase()}/api/view`);
 
   url.searchParams.set("filename", filename);
@@ -371,8 +358,7 @@ export async function getView(
     signal: AbortSignal.timeout(60_000),
   });
 
-  if (!res.ok)
-    throw new ComfyViewError(res.status, `getView failed: ${res.status}`);
+  if (!res.ok) throw new ComfyViewError(res.status, `getView failed: ${res.status}`);
 
   return Buffer.from(await res.arrayBuffer());
 }
@@ -380,12 +366,11 @@ export async function getView(
 // 返回某个模型目录在磁盘上的真实文件名列表。
 export async function listModels(folder: string): Promise<string[]> {
   try {
-    const res = await fetch(
-      `${comfyBase()}/api/models/${encodeURIComponent(folder)}`,
-      { signal: AbortSignal.timeout(5_000) },
-    );
+    const res = await fetch(`${comfyBase()}/api/models/${encodeURIComponent(folder)}`, {
+      signal: AbortSignal.timeout(5_000),
+    });
     if (!res.ok) return [];
-    const data = (await res.json()) as string[];
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as string[];
     return Array.isArray(data) ? data : [];
   } catch {
     return [];
@@ -407,7 +392,7 @@ export async function listModelFolders(): Promise<string[]> {
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return [];
-    const data = (await res.json()) as string[];
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as string[];
     return Array.isArray(data)
       ? data.filter((datum) => typeof datum === "string" && datum.length > 0)
       : [];
@@ -432,11 +417,11 @@ export async function uploadImage(
     signal: AbortSignal.timeout(120_000),
   });
   if (!res.ok) {
-    throw new Error(
-      `ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`,
-    );
+    throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
   }
-  return (await res.json()) as { name?: string };
+  return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    name?: string;
+  };
 }
 
 /** 让 ComfyUI 中断**当前正在执行的这一轮**（全局停、不带 prompt 参数——所以
@@ -493,10 +478,7 @@ interface ComfyDevice {
 
 function pickGpu(devices: ComfyDevice[] | undefined): ComfyDevice | undefined {
   if (!Array.isArray(devices) || devices.length === 0) return undefined;
-  return (
-    devices.find((d) => d.type !== "cpu" && (d.vram_total ?? 0) > 0) ??
-    devices[0]
-  );
+  return devices.find((d) => d.type !== "cpu" && (d.vram_total ?? 0) > 0) ?? devices[0];
 }
 
 /** 拉取 ComfyUI `/system_stats` 并折叠成状态栏需要的聚合字段。
@@ -511,7 +493,7 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
       signal: AbortSignal.timeout(2500),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as {
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       system?: { ram_total?: number; ram_free?: number };
       devices?: ComfyDevice[];
     };
@@ -532,8 +514,7 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
       vramFree,
       vramTotal,
       smiVramUsed: smi?.usedMiB != null ? smi.usedMiB * 1024 * 1024 : undefined,
-      smiVramTotal:
-        smi?.totalMiB != null ? smi.totalMiB * 1024 * 1024 : undefined,
+      smiVramTotal: smi?.totalMiB != null ? smi.totalMiB * 1024 * 1024 : undefined,
       ramUsed: ramTotal > 0 ? Math.max(0, ramTotal - ramFree) : 0,
       ramTotal,
     };

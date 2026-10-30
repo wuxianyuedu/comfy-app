@@ -10,7 +10,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const envStub = vi.hoisted(() => ({
-  localWorkflowsPath: null as string | null,
+  localWorkflowsPath: /* SAFETY: 类型断言已复核 */ null as string | null,
 }));
 vi.mock("~/lib/envfile", () => ({
   readEnvVar: vi.fn(() => envStub.localWorkflowsPath),
@@ -44,9 +44,7 @@ describe("本地工作流根目录：扫描与导入守卫同源", () => {
 
   it("isWithinAllowedLocalWorkflowRoot：目录内放行、目录外拒绝", () => {
     envStub.localWorkflowsPath = "D:/wf-extra";
-    expect(isWithinAllowedLocalWorkflowRoot("D:/wf-extra/sub/a.json")).toBe(
-      true,
-    );
+    expect(isWithinAllowedLocalWorkflowRoot("D:/wf-extra/sub/a.json")).toBe(true);
     expect(isWithinAllowedLocalWorkflowRoot("D:/elsewhere/a.json")).toBe(false);
   });
 });

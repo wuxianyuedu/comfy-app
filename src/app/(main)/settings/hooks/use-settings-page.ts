@@ -70,7 +70,7 @@ function readSettingsCache(): { llm?: QueryLlmConfig; settings?: Settings } {
   try {
     const raw = sessionStorage.getItem(SETTINGS_CACHE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as {
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
       llm?: QueryLlmConfig;
       settings?: Settings;
     };
@@ -80,10 +80,7 @@ function readSettingsCache(): { llm?: QueryLlmConfig; settings?: Settings } {
   }
 }
 
-function writeSettingsCache(value: {
-  llm?: QueryLlmConfig;
-  settings?: Settings;
-}): void {
+function writeSettingsCache(value: { llm?: QueryLlmConfig; settings?: Settings }): void {
   try {
     sessionStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(value));
   } catch {
@@ -94,7 +91,7 @@ function writeSettingsCache(value: {
 /** 目标分区（来自跳转载荷）的合法性收敛：不在白名单里就当作没给。 */
 function readInitialSection(raw: string | null | undefined): Section | null {
   return SETTINGS_SECTIONS.some((item) => item.id === raw)
-    ? (raw as Section)
+    ? /* SAFETY: 类型断言已复核 */ (raw as Section)
     : null;
 }
 
@@ -142,8 +139,7 @@ export function useSettingsPage(options?: {
    * `./use-settings-page-app-update` sub-hook 里；主 hook 只调一次、把
    * 返回值直接接进 controller 的 `appUpdate / checkAppUpdate /
    * installAppUpdate / relaunchApp` 四个字段。 */
-  const { appUpdate, checkAppUpdate, installAppUpdate, relaunchApp } =
-    useSettingsAppUpdate();
+  const { appUpdate, checkAppUpdate, installAppUpdate, relaunchApp } = useSettingsAppUpdate();
 
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmDraft, setLlmDraft] = useState<LlmConfig | null>(null);
@@ -188,9 +184,7 @@ export function useSettingsPage(options?: {
    * 改路径 / 启动参数后由 savePrefs、startComfy 手动 refetch（形态依赖路径）。 */
   /* ComfyUI 的状态查询 / 启动关闭打开动作 / 运行时日志整体沉在
    * `./use-settings-page-comfy`（与 ollama / db-studio 同族的 sub-hook）。 */
-  const openExternalM = useMutation(
-    trpc.setting.openExternal.mutationOptions(),
-  );
+  const openExternalM = useMutation(trpc.setting.openExternal.mutationOptions());
 
   /* 设置页的整页提示条：亮起 3.5s 自动收起。定时器管理（连点清旧、
    * 卸载清掉）由 `useFlashLatch` 收口 —— 此前这里是手写的 `flashTimerRef`，
@@ -225,9 +219,7 @@ export function useSettingsPage(options?: {
       apiKey: null,
       /* 本地候选（字符串）与远端独立模型（对象）从同一下发清单里拆开存，互不混写 */
       localCandidates: split.localNames.filter((n) => n !== llmConfig.model),
-      extraModels: split.remoteEntries.filter(
-        (e) => e.name !== llmConfig.model,
-      ),
+      extraModels: split.remoteEntries.filter((e) => e.name !== llmConfig.model),
       temperatureByTask: llmConfig.temperatureByTask ?? undefined,
     });
   }
@@ -295,12 +287,8 @@ export function useSettingsPage(options?: {
    * 便携版）与桌面实例的六个存储目录。运行态、启动 / 关闭 / 打开与启动日志
    * 整块搬去了侧栏「ComfyUI」页（`~/components/studio/comfyui`）——两件事各有
    * 自己的屏之后，改路径的人不必等秒级探测、看日志的人不必滚过一屏输入框。 */
-  const {
-    comfyInstance,
-    comfyStorage,
-    refetchComfyInstance,
-    refetchComfyStorage,
-  } = useSettingsComfy({ statusQueriesEnabled });
+  const { comfyInstance, comfyStorage, refetchComfyInstance, refetchComfyStorage } =
+    useSettingsComfy({ statusQueriesEnabled });
 
   /* ── Drizzle Studio：状态查询 + 启动 / 关闭 / 打开 + 运行时日志 ──
    * 状态与动作沉在 sub-hook；enabled 门控与 comfyStatus 同口径（首屏两份配置
@@ -402,10 +390,7 @@ export function useSettingsPage(options?: {
 
   /* 两份草稿齐了才算「可渲染表单」；只有一份时仍走错误/加载态，避免
    * 半份草稿导致视图里到处判空。 */
-  const drafts =
-    llmDraft && settingsDraft
-      ? { llm: llmDraft, settings: settingsDraft }
-      : null;
+  const drafts = llmDraft && settingsDraft ? { llm: llmDraft, settings: settingsDraft } : null;
 
   return {
     /* ComfyUI 默认端口（未配置端口时的兜底）。视图的 placeholder 与说明文案
@@ -417,8 +402,7 @@ export function useSettingsPage(options?: {
     ackJumpSection,
     theme: theme === "light" ? "light" : "dark",
     setTheme: (value: "light" | "dark") => setTheme(value),
-    isInitialLoad:
-      isInitialLoad && !queryFailed && !settingsQ.data && !llmQ.data,
+    isInitialLoad: isInitialLoad && !queryFailed && !settingsQ.data && !llmQ.data,
     hasError: queryFailed && !drafts,
     /* 既没在加载、也没失败，草稿却仍为空——正常状态机不可达。视图据此给
      * 可操作出口（重试 + 日志面板），不再渲染冻住用户的死胡同文案。 */

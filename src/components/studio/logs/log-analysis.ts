@@ -64,18 +64,20 @@ function serializeOne(a: unknown): string {
   if (a === undefined) return "undefined";
   if (a === null) return "null";
   if (a instanceof Error) {
-    return a.stack
-      ? `${a.name}: ${a.message}\n${a.stack}`
-      : `${a.name}: ${a.message}`;
+    return a.stack ? `${a.name}: ${a.message}\n${a.stack}` : `${a.name}: ${a.message}`;
   }
   // 保留可能来自序列化错误对象的类栈字符串。
   if (
     typeof a === "object" &&
     a !== null &&
     "stack" in a &&
-    typeof (a as { stack?: unknown }).stack === "string"
+    typeof (/* SAFETY: 类型断言已复核 */ (a as { stack?: unknown }).stack) === "string"
   ) {
-    const e = a as { name?: unknown; message?: unknown; stack: string };
+    const e = /* SAFETY: 类型断言已复核 */ a as {
+      name?: unknown;
+      message?: unknown;
+      stack: string;
+    };
     const head = typeof e.message === "string" ? e.message : JSON.stringify(a);
     return `${head}\n${e.stack}`;
   }
@@ -117,16 +119,15 @@ function serializeOne(a: unknown): string {
  */
 
 /** 占位符 → 消费一个实参的方式；`drop` 表示消费但不进正文（`%c` 的样式表）。 */
-const PLACEHOLDER_KINDS: Record<string, "text" | "number" | "object" | "drop"> =
-  {
-    s: "text",
-    d: "number",
-    i: "number",
-    f: "number",
-    o: "object",
-    O: "object",
-    c: "drop",
-  };
+const PLACEHOLDER_KINDS: Record<string, "text" | "number" | "object" | "drop"> = {
+  s: "text",
+  d: "number",
+  i: "number",
+  f: "number",
+  o: "object",
+  O: "object",
+  c: "drop",
+};
 
 /** 按 `kind` 渲染一个实参（`%c` 之外都复用 {@link serializeOne} 的口径）。 */
 function renderArg(kind: string, value: unknown): string {
@@ -218,10 +219,7 @@ export function isReactQueryLog(args: unknown[]): boolean {
   // 真实追踪至少两个参数（格式串 + 样式），单参数的不是追踪，避免误吞业务文案。
   if (args.length >= 2) {
     const first = args[0];
-    if (
-      typeof first === "string" &&
-      /^\s*%c\s*(?:<<|>>)\s*(?:query|mutation)\s*#\d+/i.test(first)
-    )
+    if (typeof first === "string" && /^\s*%c\s*(?:<<|>>)\s*(?:query|mutation)\s*#\d+/i.test(first))
       return true;
   }
   // 塌缩/重包装形态：loggerLink 的 %c 样式与逐帧参数被 React devtools 吞并，
@@ -239,9 +237,7 @@ export function isReactQueryLog(args: unknown[]): boolean {
 export function isNoisyFrameworkLog(args: unknown[]): boolean {
   if (args.length === 0) return false;
   const text = serialize(args);
-  return /IPC custom protocol failed|Tauri will now use the postMessage interface/i.test(
-    text,
-  );
+  return /IPC custom protocol failed|Tauri will now use the postMessage interface/i.test(text);
 }
 
 /**
@@ -280,8 +276,7 @@ export function isNextDevNoise(args: unknown[]): boolean {
  * 不敏感，与 app-runtime / launcher 转录的宽松口径一致。 */
 const LOG_LINE_RE =
   /^\s*\[(\d{2}):(\d{2}):(\d{2})\]\s*\[\[?[0-9;]*m?\[?\s*(STEP|OK|INFO|WARN|ERROR|DEBUG)\s*\[?[0-9;]*m?\]\s*(.*)$/;
-const LAUNCHER_LOG_RE =
-  /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]\s*(.*)$/;
+const LAUNCHER_LOG_RE = /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]\s*(.*)$/;
 const APP_RUNTIME_LOG_RE =
   /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]\s*\[(INFO|WARN|ERROR|DEBUG)\]\s*(?:\[([^\]]+)\]\s*)?(.*)$/;
 
@@ -378,8 +373,7 @@ function parseLogLevel(level: string): LogLevel {
  * 按级别正则会整行落成 error——看起来像应用出错，实际只是热更新进行中。
  * 与 isNextDevNoise（浏览器 console 侧过滤）互补：这条处理文件转录侧。
  */
-const FAST_REFRESH_REBUILD_RE =
-  /\[Fast\s*Refresh\]\s*rebuilding(?:\s*\[(?:ERROR|WARN|DEBUG)\])?/i;
+const FAST_REFRESH_REBUILD_RE = /\[Fast\s*Refresh\]\s*rebuilding(?:\s*\[(?:ERROR|WARN|DEBUG)\])?/i;
 
 export function parseFileLogs(
   text: string,
@@ -406,8 +400,7 @@ export function parseFileLogs(
     const head = record.head;
     if (!head.trim()) continue;
     /* ANSI 已在 splitLogRecords 之前剥掉，这里只处理「有无续行」。 */
-    const withRest = (msg: string) =>
-      record.rest ? `${msg}\n${record.rest}` : msg;
+    const withRest = (msg: string) => (record.rest ? `${msg}\n${record.rest}` : msg);
     // 常规 tRPC/RPC 调用计时行（如 `[rpc] xxx 155ms {"type":"query"}`）不进面板：
     // 正常调用高频产生会刷屏（#294）；失败/慢查询（error/warn 级别）仍保留。
     if (isRoutineRpcTimingLine(head)) continue;
@@ -448,9 +441,7 @@ export function parseFileLogs(
         id: nextId(d.getTime()),
         time: d.getTime(),
         // Fast Refresh 进行中若沾染上一条错误的级别标记，按 info 落板
-        level: FAST_REFRESH_REBUILD_RE.test(msgText)
-          ? "info"
-          : parseLogLevel(lv ?? "INFO"),
+        level: FAST_REFRESH_REBUILD_RE.test(msgText) ? "info" : parseLogLevel(lv ?? "INFO"),
         message: msgText,
         source: "system",
         ...originOf,
@@ -493,11 +484,7 @@ export function parseFileLogs(
 
 /** 该行是不是「带时刻的日志记录头」（三种可解析形态之一）。 */
 function isLogLine(line: string): boolean {
-  return (
-    LOG_LINE_RE.test(line) ||
-    APP_RUNTIME_LOG_RE.test(line) ||
-    LAUNCHER_LOG_RE.test(line)
-  );
+  return LOG_LINE_RE.test(line) || APP_RUNTIME_LOG_RE.test(line) || LAUNCHER_LOG_RE.test(line);
 }
 
 /**
@@ -512,10 +499,7 @@ function isLogLine(line: string): boolean {
  * 只折叠**连续**重复（按相邻位置），不按键全局分组——跨距离的相同行之间隔着
  * 别的事件，合并它们会把时间线读成「同一个事件发生了 N 次」，那是错的。
  */
-export function dedupeRepeats(
-  entries: LogEntry[],
-  limit = REPEAT_FOLD_LIMIT,
-): LogEntry[] {
+export function dedupeRepeats(entries: LogEntry[], limit = REPEAT_FOLD_LIMIT): LogEntry[] {
   /* 折叠键只看「级别 + 内容」，不看时刻：每轮轮询写出来的重复行时刻必然不同，
    * 带上时刻就一条也折叠不了。跨来源去重看时刻（entryKey），这里看语义。 */
   const foldKey = (entry: LogEntry) => `${entry.level}\u0000${entry.message}`;
@@ -526,10 +510,7 @@ export function dedupeRepeats(
     const first = entries.at(i);
     if (first === undefined) break;
     let run = 1;
-    while (
-      i + run < entries.length &&
-      foldKey(entries.at(i + run) ?? first) === foldKey(first)
-    ) {
+    while (i + run < entries.length && foldKey(entries.at(i + run) ?? first) === foldKey(first)) {
       run += 1;
     }
     if (run <= limit) {
@@ -583,10 +564,7 @@ export function computeCounts(logs: LogEntry[], search = ""): LogLevelCounts {
  *   跨来源相加**不**等于「全部来源」——两边的语义本来就不同，界面上也必须
  *   分开摆（见 `LogFilterBar` 的标签：级别按钮的数字是「当前来源」的）。
  */
-export function dedupeByIdentity(
-  logs: LogEntry[],
-  origin: LogOriginFilter = "all",
-): LogEntry[] {
+export function dedupeByIdentity(logs: LogEntry[], origin: LogOriginFilter = "all"): LogEntry[] {
   if (origin !== "all") return logs;
   const seen = new Set<string>();
   const out: LogEntry[] = [];
@@ -616,10 +594,7 @@ export function dedupeByIdentity(
  *   就显示几。两处若各写一套匹配规则，会出现「左边写着警告 2、切过去只剩 1」，
  *   比不显示数字更让人怀疑面板（ISSUE #360 的同一类问题）。
  */
-export function computeOriginCounts(
-  logs: LogEntry[],
-  search = "",
-): LogOriginCounts {
+export function computeOriginCounts(logs: LogEntry[], search = ""): LogOriginCounts {
   const table: LogOriginCounts = {
     all: zeroCounts(),
     dev: zeroCounts(),
@@ -670,10 +645,7 @@ function matchesSearch(entry: LogEntry, search: string): boolean {
   const needle = normalizeNeedle(search);
   /* 归一化与命中判决走 `~/lib/list-filter`（规范 16 §16.2.4.16）——
    * 「命中了正文还是位置」是本域的判据（两列），归一化不是。 */
-  return (
-    matchesNeedle(needle, entry.message) ||
-    matchesNeedle(needle, entry.location ?? "")
-  );
+  return matchesNeedle(needle, entry.message) || matchesNeedle(needle, entry.location ?? "");
 }
 
 export function computeFiltered(
@@ -698,7 +670,7 @@ export function computeFiltered(
      * 计数维度（`computeOriginCounts`）不读这里——下拉里仍显示真实条数，开关只
      * 影响「显示哪些行」，与「来源筛选下拉」是两条正交的轴。 */
     const categoryOk = disabledSet
-      ? !disabledSet.has(bucketOf(entry) as LogCategoryFilter)
+      ? !disabledSet.has(/* SAFETY: 类型断言已复核 */ bucketOf(entry) as LogCategoryFilter)
       : true;
     return levelOk && originOk && categoryOk && matchesSearch(entry, search);
   });

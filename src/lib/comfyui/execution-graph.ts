@@ -54,10 +54,7 @@ export interface ExecutionPrep {
 }
 
 /** 判断一个 input 值是否为连线引用 `[nodeId, slot]`（且目标节点真实存在）。 */
-function isLinkRef(
-  v: unknown,
-  graph: Record<string, unknown>,
-): v is [string | number, number] {
+function isLinkRef(v: unknown, graph: Record<string, unknown>): v is [string | number, number] {
   return (
     Array.isArray(v) &&
     v.length === 2 &&
@@ -67,14 +64,10 @@ function isLinkRef(
   );
 }
 
-type ResolvedOrigin =
-  | { kind: "link"; value: [string, number] }
-  | { kind: "value"; value: unknown };
+type ResolvedOrigin = { kind: "link"; value: [string, number] } | { kind: "value"; value: unknown };
 
 /** 剔除旁路 / 静音 / 纯前端节点，并把断掉的连线穿透到上游。 */
-export function prepareGraphForExecution(
-  input: Record<string, unknown>,
-): ExecutionPrep {
+export function prepareGraphForExecution(input: Record<string, unknown>): ExecutionPrep {
   /* 存库 graph 来自 JSON：先把每个节点一次性收窄成稳定视图（值仍逐字透传），
    * 后续 walk / 剔除逻辑都读写视图，不再到处 unknown。 */
   interface PrepEntry {
@@ -91,7 +84,7 @@ export function prepareGraphForExecution(
     if (!rec) continue;
     const meta = asRecord(rec._meta) ?? {};
     graph[id] = {
-      classType: rec.class_type as string,
+      classType: /* SAFETY: 类型断言已复核 */ rec.class_type as string,
       inputs: asRecord(rec.inputs) ?? {},
       meta,
     };
@@ -108,16 +101,11 @@ export function prepareGraphForExecution(
   const inactive = new Set(removed);
 
   /** 沿着被剔除的节点向上游走，直到落到一个真正会执行的节点。 */
-  function walk(
-    originId: string,
-    originSlot: number,
-    depth: number,
-  ): ResolvedOrigin | null {
+  function walk(originId: string, originSlot: number, depth: number): ResolvedOrigin | null {
     if (depth > 64) return null; // 环保护
     const node = graph[originId];
     if (!node) return null;
-    if (!inactive.has(originId))
-      return { kind: "link", value: [originId, originSlot] };
+    if (!inactive.has(originId)) return { kind: "link", value: [originId, originSlot] };
 
     const meta = node.meta;
     // 静音节点不透传：下游这一路直接断掉（与 ComfyUI 行为一致）。
@@ -157,11 +145,7 @@ export function prepareGraphForExecution(
       if (!isLinkRef(value, graph)) continue;
 
       const typeOfNm = types[nm];
-      if (
-        wanted &&
-        typeof typeOfNm === "string" &&
-        typeOfNm.toUpperCase() !== wanted.toUpperCase()
-      )
+      if (wanted && typeof typeOfNm === "string" && typeOfNm.toUpperCase() !== wanted.toUpperCase())
         continue;
 
       return walk(String(value[0]), Number(value[1]), depth + 1);

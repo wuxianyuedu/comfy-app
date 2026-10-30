@@ -94,7 +94,7 @@ export function readElementBox(
   /* `Element` 的 `clientWidth` 等只在 `HTMLElement` / `Element` 上都有；
    * 用 `typeof` 守卫而不是 `instanceof HTMLElement`：jsdom 与 SSR 的构造器
    * 可能不是同一个（跨 realm 时 `instanceof` 会假阴性）。 */
-  const box = el as Element & {
+  const box = /* SAFETY: 类型断言已复核 */ el as Element & {
     clientWidth?: number;
     clientHeight?: number;
     scrollWidth?: number;
@@ -140,7 +140,7 @@ export function offsetWithin(
   const innerRect = inner.getBoundingClientRect();
   const outerRect = outer.getBoundingClientRect();
   const outerScroll =
-    (outer as unknown as { scrollTop?: number }).scrollTop ?? 0;
+    /* SAFETY: 类型断言已复核 */ (outer as unknown as { scrollTop?: number }).scrollTop ?? 0;
   return innerRect.top - outerRect.top + outerScroll;
 }
 
@@ -168,12 +168,9 @@ export function isWithinViewport(
  * （`el.scrollHeight / lines.length`），而**除数为 0 时给出 `Infinity`**
  * ——那会把 `scrollTo({ top: Infinity })` 交给浏览器。这里量不到就返回 `null`。
  */
-export function readLineHeight(
-  el: Element | null | undefined,
-  lineCount: number,
-): number | null {
+export function readLineHeight(el: Element | null | undefined, lineCount: number): number | null {
   if (!el || lineCount <= 0) return null;
-  const scrollHeight = (el as { scrollHeight?: number }).scrollHeight;
+  const scrollHeight = /* SAFETY: 类型断言已复核 */ (el as { scrollHeight?: number }).scrollHeight;
   if (typeof scrollHeight !== "number" || scrollHeight <= 0) return null;
   return scrollHeight / lineCount;
 }

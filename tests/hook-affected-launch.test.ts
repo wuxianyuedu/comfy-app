@@ -59,10 +59,7 @@ import {
 } from "../scripts/affected-launch-log-budget.mjs";
 /* 日志预算的**另一半**：quiet 那档只打点，「跑了哪些用例」必须另有一处出口 —— 否则
  * 平台那屏日志里一个文件名都没有，只剩 `Tests N passed`（这一格此前就长这样）。 */
-import {
-  fileListReport,
-  MAX_LISTED,
-} from "../scripts/affected-launch-file-list.mjs";
+import { fileListReport, MAX_LISTED } from "../scripts/affected-launch-file-list.mjs";
 /* 墙钟判点（ISSUE #2364）：等待有预算而**跑**没有上界，于是负载膨胀时那一格一路开到被
  * 平台掐掉（实测 3240105ms），连「未判定」那句话都没说出来。下面这几条钉两件事：
  * **界只划在「还开不开下一遍」**（已开跑的那一遍永远跑完），以及**「没开」不许长得像
@@ -85,10 +82,7 @@ import {
 /* junit 取数/落盘形状层拆到自己那份之后（ISSUE #2364 撞上 900 行硬闸那一刀），这里按
  * 真实落点 import —— 判据跟着搬走的符号一起改路径，而不是让机制层转出假出口。
  * 「日志预算那一刀」把同名两件事另抽过一份，已并进这份（两侧各抄一份文件名会静默漂开）。 */
-import {
-  junitReportArgs,
-  writeFilesManifest,
-} from "../scripts/affected-launch-junit-io.mjs";
+import { junitReportArgs, writeFilesManifest } from "../scripts/affected-launch-junit-io.mjs";
 /* 分文件读数的**两侧**要判的是同一个布局，所以判据同时 import 读的那一侧：只测写的
  * 一侧（"它传了某个文件名"）挡不住读的一侧改了前缀 —— 而那正会退化成「永远读不到，
  * 且看起来像这次没有读数」。 */
@@ -108,10 +102,7 @@ import {
 } from "../scripts/affected-launch-retry-verdict.mjs";
 /* 话术层（收尾那两份账）现在住在自己那份文件里 —— 这里按它真实的落点 import，
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
-import {
-  rerunReport,
-  unverifiedReport,
-} from "../scripts/affected-launch-rerun-report.mjs";
+import { rerunReport, unverifiedReport } from "../scripts/affected-launch-rerun-report.mjs";
 import { groupShBody, withoutCommentLines } from "./helpers/hook-groups";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -137,9 +128,7 @@ const SPAWN_LAYER_PATH = "scripts/affected-launch-spawn.mjs";
  * 所以**每一处**调用 `runChunk` 的用例都必须走它（或走下面那份委托它的 `runCapturing`），
  * 「不许有漏掉的调用点」由本文件末尾那条判据钉住（针尖的构造方式见它里面的说明）。
  */
-async function captureStderr<T>(
-  fn: () => Promise<T>,
-): Promise<{ value: T; text: string }> {
+async function captureStderr<T>(fn: () => Promise<T>): Promise<{ value: T; text: string }> {
   const chunks: string[] = [];
   const realWrite = process.stderr.write.bind(process.stderr);
   process.stderr.write = (s: string | Uint8Array) => {
@@ -157,8 +146,7 @@ async function captureStderr<T>(
 function syntheticFiles(count: number): string[] {
   return Array.from(
     { length: count },
-    (_, i) =>
-      `src/components/studio/feature-${Math.floor(i / 100)}/hooks/use-thing-${i}.test.ts`,
+    (_, i) => `src/components/studio/feature-${Math.floor(i / 100)}/hooks/use-thing-${i}.test.ts`,
   );
 }
 
@@ -211,9 +199,7 @@ describe("受影响用例的启动器", () => {
 
   it("单条路径就超预算时点名红，不静默丢掉它", () => {
     const tooLong = ["src/" + "a".repeat(SAFE_ARGV_BUDGET) + ".test.ts"];
-    expect(() => planLaunches(tooLong, SAFE_ARGV_BUDGET)).toThrow(
-      /单个路径就超过命令行长预算/,
-    );
+    expect(() => planLaunches(tooLong, SAFE_ARGV_BUDGET)).toThrow(/单个路径就超过命令行长预算/);
   });
 
   it("空清单不产出任何一块 —— 阻断由调用方负责（否则 vitest 会跑成全量）", () => {
@@ -335,10 +321,7 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
      * `scripts/affected-launch-load-retry.mjs`（`run-affected-tests.mjs` 越过 900 行硬闸，
      * 按「负载归因 vs 起进程」切开）。留在老地方读 ⇒ `pick` 落空 ⇒ 下面那条
      * `mine.length > 0` 当场红 —— 这条断言的意义正在这里，别为了它把清单抄回来。 */
-    const launcherLayer = readFileSync(
-      "scripts/affected-launch-load-retry.mjs",
-      "utf8",
-    );
+    const launcherLayer = readFileSync("scripts/affected-launch-load-retry.mjs", "utf8");
     const baseCheck = readFileSync("scripts/base-check/verdict.mjs", "utf8");
     const pick = (text: string): string[] => {
       const block = /const TIMEOUT_SIGNATURES = \[([\s\S]*?)\n\];/.exec(text);
@@ -370,16 +353,14 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
      *     一行提醒，不是并发旋钮，把它算进来会让这条判据变成「谁在提示语里提到并发谁就
      *     红」，而真正的退化（复跑另给一个更大的并发）照样能从实参那一段看出来。
      * 「只许一处」本身不放松：全文件仍只有一处实参带并发旋钮。 */
-    const spawnSites = [
-      ...src.matchAll(/spawn\(\s*entry,\s*\[([\s\S]*?)\]\s*\)/g),
-    ].map((m) => m[1] ?? "");
+    const spawnSites = [...src.matchAll(/spawn\(\s*entry,\s*\[([\s\S]*?)\]\s*\)/g)].map(
+      (m) => m[1] ?? "",
+    );
     expect(
       spawnSites.length,
       "起 vitest 的调用点取不到两处 —— 提取落空会让下面每一条都对着空数组比",
     ).toBeGreaterThanOrEqual(2);
-    const workerSites = spawnSites.filter((args) =>
-      args.includes("--maxWorkers="),
-    );
+    const workerSites = spawnSites.filter((args) => args.includes("--maxWorkers="));
     expect(
       workerSites,
       `传进 vitest 的并发只该有一处（复跑必须更隔离，不许在这个方向上调）：${workerSites.join(" | ")}`,
@@ -387,9 +368,7 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
     // 接线到 `resolveMaxWorkers` 的解析结果（首跑的并发由它决定）。
     expect(workerSites[0]).toContain("${workers}");
     // 复跑那一次必须**不含**任何并发旗标（只加隔离，不给旋钮）。
-    const retrySite = spawnSites.find((args) =>
-      args.includes("--no-file-parallelism"),
-    );
+    const retrySite = spawnSites.find((args) => args.includes("--no-file-parallelism"));
     expect(retrySite, "复跑那处实参还在吗？").toBeTruthy();
     expect(retrySite).not.toContain("--maxWorkers");
     /* 分文件读数**不许顶掉人类可读的输出**这件事不在这里判 —— 调用点这一段源码里
@@ -412,22 +391,16 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
       path.join(ROOT, "scripts/affected-launch-retry-verdict.mjs"),
       "utf8",
     );
-    const judge = /export function classifyFirstPass\([\s\S]*?\n\}/.exec(
-      verdictSrc,
-    )?.[0];
+    const judge = /export function classifyFirstPass\([\s\S]*?\n\}/.exec(verdictSrc)?.[0];
     expect(judge, "classifyFirstPass 还在吗？").toBeTruthy();
     /* 指纹的取值面**只许**是失败段，不许回到整块输出（ISSUE #2601）：整块里住着
      * 全部用例的全部输出，那里按设计写着的 `Test timed out` 会替这一次的红签字。 */
-    expect(judge, "指纹又在整块输出上判了？").not.toMatch(
-      /isTimeoutShaped\(output\)/,
-    );
+    expect(judge, "指纹又在整块输出上判了？").not.toMatch(/isTimeoutShaped\(output\)/);
     expect(judge).toContain("failureSectionOf(output)");
     /* 装载失败那一档**必须**继续读整块：`AggregateError` 恰在失败明细之前那一段里。 */
     expect(judge).toContain("isLaunchFailureShaped(output)");
 
-    const chunkFn = /export async function runChunk\([\s\S]*?\n\}/.exec(
-      src,
-    )?.[0];
+    const chunkFn = /export async function runChunk\([\s\S]*?\n\}/.exec(src)?.[0];
     expect(chunkFn, "runChunk 还在吗？").toBeTruthy();
     const guard = chunkFn?.indexOf("classifyFirstPass(res)") ?? -1;
     const retry = chunkFn?.indexOf(`"--no-file-parallelism"`) ?? -1;
@@ -435,19 +408,16 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
     expect(retry).toBeGreaterThan(-1);
     expect(guard, "指纹判断必须在复跑之前").toBeLessThan(retry);
     // 不带指纹那一支必须**返回非零**（不许静默继续）。
-    const earlyReturn =
-      /if \(firstPass\.kind === "red"\) \{[\s\S]*?return firstPass\.code;/.exec(
-        chunkFn ?? "",
-      );
+    const earlyReturn = /if \(firstPass\.kind === "red"\) \{[\s\S]*?return firstPass\.code;/.exec(
+      chunkFn ?? "",
+    );
     expect(earlyReturn, "不带指纹时应当直接阻断").toBeTruthy();
   });
 
   it("输出被抓在手里再原样回吐 —— 不抓就分不出「真断言红」与「机器太满」", () => {
     // 判决依赖输出内容，所以失败那一档不能再是 stdio:"inherit"。
     const spawnSrc = readFileSync(SPAWN_LAYER_PATH, "utf8");
-    const spawn = /function spawnVitest\(entry, args\) \{[\s\S]*?\n\}/.exec(
-      spawnSrc,
-    )?.[0];
+    const spawn = /function spawnVitest\(entry, args\) \{[\s\S]*?\n\}/.exec(spawnSrc)?.[0];
     expect(spawn, "spawnVitest 还在吗？").toBeTruthy();
     expect(spawn).toContain('encoding: "utf8"');
     expect(spawn).toMatch(/process\.stdout\.write/);
@@ -482,8 +452,7 @@ describe("受影响用例的启动器 —— 第 1 遍的三档判决", () => {
     const got = classifyFirstPass({
       status: 1,
       output:
-        "AggregateError: Cannot find module 'better-sqlite3'\n" +
-        "    at Module._resolveFilename",
+        "AggregateError: Cannot find module 'better-sqlite3'\n" + "    at Module._resolveFilename",
     });
     expect(got.kind).toBe("launch-failed");
     expect(got.code).toBe(2);
@@ -673,10 +642,7 @@ describe("受影响用例的启动器 —— 等待负载回落（有界、不�
     expect(left).toBeGreaterThan(0);
     expect(left).toBeLessThanOrEqual(60_000);
     // 过期即 0（不许回退成整份预算 —— 那正是「每块重新拿一份」的形态）。
-    expect(
-      remainingWaitMs({ deadline: Date.now() - 1 }),
-      "过期后不许回退成整份 5 分钟",
-    ).toBe(0);
+    expect(remainingWaitMs({ deadline: Date.now() - 1 }), "过期后不许回退成整份 5 分钟").toBe(0);
     // 没有 deadline（单块调用 / 用例）时给整份：注入档不许被这条掏空。
     expect(remainingWaitMs(undefined)).toBeGreaterThan(60_000);
   });
@@ -712,8 +678,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
 
   const TIMEOUT: SpawnResult = {
     status: 1,
-    output:
-      "Error: Test timed out in 30000ms.\nIf this is a long-running test...",
+    output: "Error: Test timed out in 30000ms.\nIf this is a long-running test...",
   };
   const REAL_RED: SpawnResult = {
     status: 1,
@@ -733,10 +698,8 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   };
   const GREEN: SpawnResult = { status: 0, output: "Test Files 2 passed" };
 
-  const settledLow = () =>
-    Promise.resolve({ settled: true, load: 0.2, waitedMs: 0 });
-  const unsettledHigh = () =>
-    Promise.resolve({ settled: false, load: 9.5, waitedMs: 300_000 });
+  const settledLow = () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 0 });
+  const unsettledHigh = () => Promise.resolve({ settled: false, load: 9.5, waitedMs: 300_000 });
 
   /**
    * 跑一次本块的 `runChunk` 并把它的 stderr **收在手里**。
@@ -755,17 +718,11 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     }>;
     waitBudget?: { deadline: number };
     onUnverified?: (files: string[]) => void;
-    onAttempt?: (record: {
-      outcome: string;
-      waitedMs?: number;
-      settled?: boolean;
-    }) => void;
+    onAttempt?: (record: { outcome: string; waitedMs?: number; settled?: boolean }) => void;
   }): Promise<{ code: number; text: string }> {
     /* 委托给模块级那一份：抓取的**机制**只许有一处，各写一份就会漂成
      * 「有的调用点抓得到、有的抓不到」（§12.12 / §12.18）。 */
-    const { value: code, text } = await captureStderr(() =>
-      runChunk(CHUNK, deps),
-    );
+    const { value: code, text } = await captureStderr(() => runChunk(CHUNK, deps));
     return { code, text };
   }
 
@@ -830,9 +787,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     noThirdWholeBlock(calls);
     expect(unverified, "放行必须带出「哪几份没被校验」").toEqual([CHUNK]);
     expect(text, "话术要明说它不是绿").toMatch(/未校验/);
-    expect(text, "没有证据说它通过，就不许把它说成负载假红").not.toMatch(
-      /隔离复跑全绿/,
-    );
+    expect(text, "没有证据说它通过，就不许把它说成负载假红").not.toMatch(/隔离复跑全绿/);
   });
 
   /* 这一档**放行**，所以它的唯一产物就是收尾那段报告 —— 报告没印出来（或印得含糊），
@@ -893,9 +848,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     /* 补跑的每一份都只带一份文件，且总次数不超过「整块两遍 + 每份一次」。 */
     const extras = calls.slice(2);
     for (const one of extras) {
-      expect(
-        one.args.filter((a) => String(a).endsWith(".test.ts")),
-      ).toHaveLength(1);
+      expect(one.args.filter((a) => String(a).endsWith(".test.ts"))).toHaveLength(1);
     }
     expect(calls.length).toBeLessThanOrEqual(2 + CHUNK.length);
   });
@@ -911,8 +864,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     const waited = await runCapturing({
       entry: "vitest.mjs",
       spawn: fakeSpawn([TIMEOUT, GREEN]).spawn,
-      settle: () =>
-        Promise.resolve({ settled: true, load: 0.4, waitedMs: 42_000 }),
+      settle: () => Promise.resolve({ settled: true, load: 0.4, waitedMs: 42_000 }),
     });
     expect(waited.text).toContain("等了 42.0s");
     expect(waited.text).toContain("每核负载回落到 0.40");
@@ -980,9 +932,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     const self = readFileSync(import.meta.filename, "utf8");
     /* 针尖按**拼接**构造：把它整段写成字面量的话，这条断言会命中它自己（恒红 ——
      * 而恒红的判据比没有更坏，下一个人学到的动作是「先把它删掉」）。 */
-    const leaky = new RegExp(
-      `await\\s+(${["runChunk", "waitForLoadToSettle"].join("|")})\\(`,
-    );
+    const leaky = new RegExp(`await\\s+(${["runChunk", "waitForLoadToSettle"].join("|")})\\(`);
     expect(self, "本文件读不到 —— 路径/文件名变了？").toContain("runChunk(");
     expect(
       leaky.test(self),
@@ -1005,10 +955,7 @@ describe("受影响用例的启动器 —— 收尾的等待与复跑账", () =>
 
   it("一块都没复跑 ⇒ **空串**（绿的那一大半不该为这段账付输出）", () => {
     expect(
-      rerunReport(
-        [{ outcome: "first-green" }, { outcome: "red-no-fingerprint" }],
-        BUDGET,
-      ),
+      rerunReport([{ outcome: "first-green" }, { outcome: "red-no-fingerprint" }], BUDGET),
     ).toBe("");
   });
 
@@ -1027,9 +974,7 @@ describe("受影响用例的启动器 —— 收尾的等待与复跑账", () =>
     expect(text).toContain("红而不带超时指纹（真红，一次都不复跑）1 块");
     expect(text).toContain("带指纹复跑 3 块");
     /* 预算报的是**整次提交一份**那个数（逐块计就是 5 分钟 × N，实测 8 块压到 31 分钟）。 */
-    expect(text).toContain(
-      "等待累计 282.0s / 预算 300.0s（**整次提交一份**，不是每块一份）",
-    );
+    expect(text).toContain("等待累计 282.0s / 预算 300.0s（**整次提交一份**，不是每块一份）");
     expect(text).toContain("没等到回落 1 块");
     expect(text).toContain("**第 2 遍**的结果：负载假红放行 1 块");
     expect(text).toContain("**未校验**（每份都只是超时形态）1 块");
@@ -1042,10 +987,7 @@ describe("受影响用例的启动器 —— 收尾的等待与复跑账", () =>
   });
 
   it("真红那一格在账里也是**阻断**，不许被前面两格的「放行」语气盖掉", () => {
-    const text = rerunReport(
-      [{ outcome: "real-red", waitedMs: 5_000, settled: true }],
-      BUDGET,
-    );
+    const text = rerunReport([{ outcome: "real-red", waitedMs: 5_000, settled: true }], BUDGET);
     expect(text).toContain("真红 1 块");
     expect(text).toContain("等待累计 5.0s");
   });
@@ -1078,7 +1020,7 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
        两格、本地那一跳照旧铺开。默认值撤掉之后，漏传必须**响**。 */
     for (const bad of [undefined, null, 0, -1, 2.5, Number.NaN, "2"]) {
       expect(
-        () => resolveMaxWorkers("2", bad as unknown as number),
+        () => resolveMaxWorkers("2", /* SAFETY: 类型断言已复核 */ bad as unknown as number),
         `兜底 ${String(bad)} 必须停手`,
       ).toThrow(/兜底/);
     }
@@ -1146,11 +1088,10 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
        这种变异下照样绿（字符串还在），而那种变异恰恰就是「这一档被静音」。
        所以这里真起一次进程，两档各跑一遍，看输出形态。
        注意用 `--dry-run`：它既走完整条分支选择，又不真起 vitest。 */
-    const full = spawnSync(
-      process.execPath,
-      [LAUNCHER_PATH, "--full", "--dry-run"],
-      { cwd: ROOT, encoding: "utf8" },
-    );
+    const full = spawnSync(process.execPath, [LAUNCHER_PATH, "--full", "--dry-run"], {
+      cwd: ROOT,
+      encoding: "utf8",
+    });
     expect(full.status, `${full.stdout ?? ""}${full.stderr ?? ""}`).toBe(0);
     expect(full.stderr).toContain("--full：按名字要全量");
     // 增量档那句「N 个用例 / M 次启动」在全量档里**不该出现** —— 出现了说明它先解析了清单。
@@ -1161,12 +1102,8 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
       encoding: "utf8",
     });
     expect(inc.status, `${inc.stdout ?? ""}${inc.stderr ?? ""}`).toBe(0);
-    expect(inc.stdout, "增量档应当给出清单与启动次数").toMatch(
-      /个用例 \/ \d+ 次启动/,
-    );
-    expect(inc.stderr, "两档的话术必须可分辨").not.toContain(
-      "--full：按名字要全量",
-    );
+    expect(inc.stdout, "增量档应当给出清单与启动次数").toMatch(/个用例 \/ \d+ 次启动/);
+    expect(inc.stderr, "两档的话术必须可分辨").not.toContain("--full：按名字要全量");
   });
 
   it("`--full` 复用同一条判决链（`runChunk([], …)`）—— 不另写一套跑法", () => {
@@ -1175,29 +1112,21 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
        复用带来的是超时形态的负载自适应仍然在场 —— 全量档不该成为「机器太满」的结论出口。 */
     /* reporter 那一档（`quiet`）是**读数**上的选择，不是另写一套跑法：它跟着同一个
        `runChunk` 走 —— 所以这条形状判据把 `quiet` 也算进同一行里。 */
-    expect(src).toMatch(
-      /return await runChunk\(\[\], \{ entry, workers, quiet: \w+ \}\)/,
-    );
+    expect(src).toMatch(/return await runChunk\(\[\], \{ entry, workers, quiet: \w+ \}\)/);
   });
 
   it("意外空集仍阻断，且话术里指出 `--full` 是另一档（两者不许同形）", () => {
     const guard = /affected 解析没给出清单([\s\S]*?)return 1;/.exec(src)?.[0];
     expect(guard, "解不出空清单守卫").toBeTruthy();
     expect(guard).toContain("--full");
-    expect(
-      guard,
-      "空集必须仍然 return 1（不能因为 --full 存在就放行）",
-    ).toContain("return 1;");
+    expect(guard, "空集必须仍然 return 1（不能因为 --full 存在就放行）").toContain("return 1;");
   });
 
   it("`--full` **不接进钩子**（钩子只有增量档）", () => {
     const hook = readFileSync(HOOK_PATH, "utf8");
     const body = cGroupBody(hook);
     expect(body).toContain("run-affected-tests.mjs");
-    expect(
-      body,
-      "钩子里不许出现 --full：那会把每次提交变成整份套件的仪式",
-    ).not.toContain("--full");
+    expect(body, "钩子里不许出现 --full：那会把每次提交变成整份套件的仪式").not.toContain("--full");
   });
 
   it("wide 话术指名的就是这条命令，且它真的存在于入口（不是写了一段跑不响的话）", () => {
@@ -1205,9 +1134,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
        只钉前半 = 守一句散文；只钉后半 = 守一个没人知道的开关。 */
     const note = wideFallbackNote("门槛自身", 20);
     expect(note).toContain("scripts/run-affected-tests.mjs --full");
-    expect(src, "入口不认 --full，话术就指到空气上").toContain(
-      'argv.includes("--full")',
-    );
+    expect(src, "入口不认 --full，话术就指到空气上").toContain('argv.includes("--full")');
   });
 
   it("`--full` **不是**全量那一档（它不带覆盖率门槛，也不记那份账）", async () => {
@@ -1225,10 +1152,9 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
      *
      * 两侧都判：入口不记账 + 记账通道只挂在 `test:coverage` 上。只判一侧的话，
      * 另一侧哪天被改就成了「判据看着有、其实只守住了半条缝」。 */
-    expect(
-      src,
-      "`--full` 去写全量新鲜度账 = 用一条不过覆盖率门槛的跑法冒充那一档",
-    ).not.toMatch(/freshness|full-suite-run/);
+    expect(src, "`--full` 去写全量新鲜度账 = 用一条不过覆盖率门槛的跑法冒充那一档").not.toMatch(
+      /freshness|full-suite-run/,
+    );
 
     /* 判**语义**不判行形状：拿 `planRun()` 真跑一次读它给出的参数，而不是在源码文本里
      * 找一句 `"run", "test:coverage"` —— 那个字面量会被 prettier 折行顶掉（本仓踩过第二次），
@@ -1339,9 +1265,7 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
 
   it("清单落盘 + 读账读得到（两侧对同一布局的往返，改一边就该红）", () => {
     const dir = tempDir();
-    expect(
-      writeFilesManifest(dir, ["tests/a.test.ts", "tests/b.test.ts"]),
-    ).toBe(true);
+    expect(writeFilesManifest(dir, ["tests/a.test.ts", "tests/b.test.ts"])).toBe(true);
     const xml = junitReportArgs(dir, 0, 1).at(-1) ?? "";
     const file = xml.replace("--outputFile.junit=", "");
     writeFileSync(
@@ -1357,9 +1281,7 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
   });
 
   it("清单写不进去（目录不存在）⇒ 回 false，不抛、也不冒充已落", () => {
-    expect(
-      writeFilesManifest(path.join(tmpdir(), "comfy-不存在的一层"), ["a"]),
-    ).toBe(false);
+    expect(writeFilesManifest(path.join(tmpdir(), "comfy-不存在的一层"), ["a"])).toBe(false);
     expect(junitReportArgs(undefined, 0, 1)).toEqual([]);
   });
 });
@@ -1383,9 +1305,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
     try {
       firstPassXml(
         dir,
-        suite("tests/c.test.ts", 1) +
-          suite("tests/a.test.ts", 0, 1) +
-          suite("tests/b.test.ts", 0),
+        suite("tests/c.test.ts", 1) + suite("tests/a.test.ts", 0, 1) + suite("tests/b.test.ts", 0),
       );
       const got = retryScope({ chunk: CHUNK, junitDir: dir, chunkId: 0 });
       expect(got.files).toEqual(["tests/a.test.ts", "tests/c.test.ts"]);
@@ -1400,9 +1320,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
     try {
       firstPassXml(
         dir,
-        suite("tests/a.test.ts", 1) +
-          suite("tests/b.test.ts", 0) +
-          suite("tests/c.test.ts", 1),
+        suite("tests/a.test.ts", 1) + suite("tests/b.test.ts", 0) + suite("tests/c.test.ts", 1),
       );
       const TIMEOUT = {
         status: 1,
@@ -1419,8 +1337,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             return TIMEOUT;
           },
-          settle: () =>
-            Promise.resolve({ settled: true, load: 0.1, waitedMs: 9_999 }),
+          settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 9_999 }),
           stageBudget: { deadline: Date.now() - 1, budgetMs: 1 },
           onAttempt: (r) => outcomes.push(r.outcome),
         }),
@@ -1470,8 +1387,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
             fakeNow += calls.length === 1 ? 16 * 60_000 : 400;
             return calls.length === 1 ? TIMEOUT : GREEN;
           },
-          settle: () =>
-            Promise.resolve({ settled: true, load: 0.1, waitedMs: 500 }),
+          settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 500 }),
           /* 还剩一点、但买不起整块（现场：剩 8.8 分钟、整块估 32.4 分钟）——
            * 预算在**首遍开始前**就起，首遍那 16 分钟从里面扣。截止时刻**不许**已经
            * 过去：那一档一份都不开，是另一条判点（与这条各判各的）。 */
@@ -1498,9 +1414,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
     try {
       firstPassXml(
         dir,
-        suite("tests/a.test.ts", 1) +
-          suite("tests/b.test.ts", 0) +
-          suite("tests/c.test.ts", 1),
+        suite("tests/a.test.ts", 1) + suite("tests/b.test.ts", 0) + suite("tests/c.test.ts", 1),
       );
       const TIMEOUT = {
         status: 1,
@@ -1518,8 +1432,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             return calls.length === 1 ? TIMEOUT : GREEN;
           },
-          settle: () =>
-            Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_000 }),
+          settle: () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_000 }),
           stageBudget: wallClockBudget({
             startMs: Date.now(),
             budgetMs: 60 * 60 * 1000,
@@ -1539,13 +1452,10 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
   it("读数里的陌生路径不许进复跑面（它不属于这一块，跑它会改判据的分母）", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "c-scope-"));
     try {
-      firstPassXml(
-        dir,
-        suite("tests/zzz.test.ts", 1) + suite("tests/b.test.ts", 1),
-      );
-      expect(
-        retryScope({ chunk: CHUNK, junitDir: dir, chunkId: 0 }).files,
-      ).toEqual(["tests/b.test.ts"]);
+      firstPassXml(dir, suite("tests/zzz.test.ts", 1) + suite("tests/b.test.ts", 1));
+      expect(retryScope({ chunk: CHUNK, junitDir: dir, chunkId: 0 }).files).toEqual([
+        "tests/b.test.ts",
+      ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -1566,10 +1476,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
 
       /* ③ 读到了却一份失败都没有：崩在 suite 之前 / reporter 没记上。
        *    这一档与「这次清单本来就这么点」逐字同形，所以只能按最贵的算。 */
-      firstPassXml(
-        dir,
-        suite("tests/a.test.ts", 0) + suite("tests/b.test.ts", 0),
-      );
+      firstPassXml(dir, suite("tests/a.test.ts", 0) + suite("tests/b.test.ts", 0));
       const empty = retryScope({ chunk: CHUNK, junitDir: dir, chunkId: 0 });
       expect(empty.files).toEqual(CHUNK);
       expect(empty.why).toContain("没有");
@@ -1581,14 +1488,10 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
   it("整条链：超时形态 ⇒ 第 2 遍只带失败那 1 份，且「未校验」点名的也是那 1 份", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "c-chain-"));
     try {
-      firstPassXml(
-        dir,
-        suite("tests/a.test.ts", 1) + suite("tests/b.test.ts", 0),
-      );
+      firstPassXml(dir, suite("tests/a.test.ts", 1) + suite("tests/b.test.ts", 0));
       const TIMEOUT = {
         status: 1,
-        output:
-          "Error: Test timed out in 30000ms.\nIf this is a long-running test...",
+        output: "Error: Test timed out in 30000ms.\nIf this is a long-running test...",
       };
       const GREEN = { status: 0, output: "Test Files 1 passed" };
       const calls: string[][] = [];
@@ -1602,8 +1505,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             return calls.length === 1 ? TIMEOUT : GREEN;
           },
-          settle: () =>
-            Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_200 }),
+          settle: () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_200 }),
           onUnverified: (files: string[]) => unverified.push([...files]),
         }),
       );
@@ -1621,10 +1523,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
   it("第 2 遍仍只是超时形态 ⇒ 点名的名单是复跑面，不是整块", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "c-chain-"));
     try {
-      firstPassXml(
-        dir,
-        suite("tests/a.test.ts", 1) + suite("tests/b.test.ts", 0),
-      );
+      firstPassXml(dir, suite("tests/a.test.ts", 1) + suite("tests/b.test.ts", 0));
       const TIMEOUT = {
         status: 1,
         output: "Error: Test timed out in 30000ms.",
@@ -1636,8 +1535,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
           junitDir: dir,
           chunkId: 0,
           spawn: () => TIMEOUT,
-          settle: () =>
-            Promise.resolve({ settled: true, load: 0.1, waitedMs: 800 }),
+          settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 800 }),
           onUnverified: (files: string[]) => unverified.push([...files]),
         }),
       );
@@ -1665,8 +1563,7 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
   const TIMEOUT = { status: 1, output: TIMEOUT_BODY };
   const REAL_RED = { status: 1, output: ASSERT_BODY };
   const GREEN = { status: 0, output: "Test Files 1 passed" };
-  const settledLow = () =>
-    Promise.resolve({ settled: true, load: 0.3, waitedMs: 900 });
+  const settledLow = () => Promise.resolve({ settled: true, load: 0.3, waitedMs: 900 });
 
   /** 带失败文本的 suite —— 分档靠的就是这段文本，空 body 等于「认不出自己」。 */
   const suiteWith = (name: string, failures: number, text: string) =>
@@ -1684,9 +1581,9 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
 
   /** 第 1 遍的读数：`fails` 里点名的那些文件算失败（复跑面由它决定）。 */
   const firstFails = (...fails: string[]) =>
-    CHUNK.map((f) =>
-      suiteWith(f, fails.includes(f) ? 1 : 0, fails.includes(f) ? "x" : ""),
-    ).join("");
+    CHUNK.map((f) => suiteWith(f, fails.includes(f) ? 1 : 0, fails.includes(f) ? "x" : "")).join(
+      "",
+    );
 
   /** 按次序回放结果的假 spawn，同时把每次的清单记下来（补跑发生过没有要看它）。 */
   function scripted(results: { status: number; output: string }[]) {
@@ -1740,11 +1637,7 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
         dir,
         2,
         suiteWith("tests/a.test.ts", 1, TIMEOUT_BODY) +
-          suiteWith(
-            "tests/b.test.ts",
-            1,
-            "Timeout waiting for worker to respond",
-          ),
+          suiteWith("tests/b.test.ts", 1, "Timeout waiting for worker to respond"),
       );
       const unverified: string[][] = [];
       const { value: code } = await captureStderr(() =>
@@ -1813,10 +1706,7 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
 
   it("认不出的份数超过补跑上限 ⇒ 退 2：不是绿也不是红，且不冒充「整块只是超时」", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "c-verdict-"));
-    const nine = Array.from(
-      { length: 9 },
-      (_unused, i) => `tests/n${i}.test.ts`,
-    );
+    const nine = Array.from({ length: 9 }, (_unused, i) => `tests/n${i}.test.ts`);
     try {
       writeXml(dir, 1, nine.map((f) => suiteWith(f, 1, "x")).join(""));
       const s = scripted([TIMEOUT, TIMEOUT]);
@@ -1876,9 +1766,7 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
         ASSERT_BODY,
       )}${suiteWith("tests/c.test.ts", 0, "")}</testsuites>`,
     );
-    expect(suites.map((s: { name: string }) => s.name)).toEqual([
-      "tests/a.test.ts",
-    ]);
+    expect(suites.map((s: { name: string }) => s.name)).toEqual(["tests/a.test.ts"]);
     expect(suites[0]!.body).toContain("AssertionError");
   });
 });
@@ -1919,8 +1807,7 @@ describe("第 1 遍就没跑起来（装载 / 运行时级错误）", () => {
           calls.push(args);
           return results[Math.min(calls.length - 1, results.length - 1)]!;
         },
-        settle: () =>
-          Promise.resolve({ settled: true, load: 0.1, waitedMs: 0 }),
+        settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 0 }),
         onAttempt: (r: { outcome: string }) => seen.push(r.outcome),
         ...extra,
       }),
@@ -1932,29 +1819,21 @@ describe("第 1 遍就没跑起来（装载 / 运行时级错误）", () => {
     expect(isLaunchFailureShaped(AGGREGATE.output)).toBe(true);
     expect(isLaunchFailureShaped("Error: Cannot find package 'x'")).toBe(true);
     expect(
-      isLaunchFailureShaped(
-        "ERR_DLOPEN_FAILED: was compiled against a different Node.js version",
-      ),
+      isLaunchFailureShaped("ERR_DLOPEN_FAILED: was compiled against a different Node.js version"),
     ).toBe(true);
-    expect(
-      isLaunchFailureShaped("No test files found, exiting with code 1"),
-    ).toBe(true);
+    expect(isLaunchFailureShaped("No test files found, exiting with code 1")).toBe(true);
   });
 
   it("**真断言红优先**：栈里带 AggregateError 的断言失败不许被读成环境问题", () => {
     /* 放行一条真回归比多查一次环境贵得多 —— 所以这一条是「宁可误判成真红」的方向。 */
-    expect(
-      isLaunchFailureShaped(
-        "AssertionError: expected 3 to be 4\nError: AggregateError",
-      ),
-    ).toBe(false);
+    expect(isLaunchFailureShaped("AssertionError: expected 3 to be 4\nError: AggregateError")).toBe(
+      false,
+    );
   });
 
   it("装载失败 ⇒ 退 2（未判定，不是红）、一次都不复跑、下一动作指向环境", async () => {
     const { code, text, calls, seen } = await runWith([AGGREGATE, GREEN]);
-    expect(code, "把「没跑起来」读成红，就是让提交的人去查一件没发生的事").toBe(
-      2,
-    );
+    expect(code, "把「没跑起来」读成红，就是让提交的人去查一件没发生的事").toBe(2);
     expect(calls, "同样的环境再跑一遍没有任何意义").toHaveLength(1);
     expect(seen).toEqual(["launch-failed"]);
     expect(text).toContain("没跑起来");
@@ -2024,8 +1903,7 @@ describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
           calls.push(args);
           return calls.length === 1 ? TIMEOUT : GREEN;
         },
-        settle: () =>
-          Promise.resolve({ settled: true, load: 0.1, waitedMs: 0 }),
+        settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 0 }),
       }),
     );
     expect(calls).toHaveLength(2);
@@ -2049,10 +1927,9 @@ describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
   });
 
   it("quiet ⇒ 逐份列出清单，且明说这行是「跑了哪些」的唯一出处", () => {
-    const text = fileListReport(
-      ["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"],
-      { quiet: true },
-    );
+    const text = fileListReport(["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"], {
+      quiet: true,
+    });
     expect(text).toContain("本次清单：3 份用例");
     for (const f of ["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"]) {
       expect(text).toContain(f);
@@ -2073,10 +1950,7 @@ describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
 
   it("封顶是 200（比本仓常态的增量面大，只有异常大的改动面才截断）", () => {
     expect(MAX_LISTED).toBeGreaterThanOrEqual(150);
-    const files = Array.from(
-      { length: MAX_LISTED + 1 },
-      () => "tests/x.test.ts",
-    );
+    const files = Array.from({ length: MAX_LISTED + 1 }, () => "tests/x.test.ts");
     expect(fileListReport(files, { quiet: true })).toContain("另有 1 份未列出");
   });
 
@@ -2117,9 +1991,7 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
   it("串行复跑按首遍墙钟估，**不**按「失败了几份」的比例估", () => {
     /* 实测反例：第 2 遍只跑 2/98 份，却比首遍更慢（串行去掉了并发优势，1.48 倍）。
      * 按比例算会把界划在错的一侧 —— 它会在最需要复跑的那一次说「跑得完」。 */
-    expect(estimateSerialRerunMs(9.2 * MIN)).toBe(
-      9.2 * MIN * SERIAL_RERUN_FACTOR,
-    );
+    expect(estimateSerialRerunMs(9.2 * MIN)).toBe(9.2 * MIN * SERIAL_RERUN_FACTOR);
     expect(SERIAL_RERUN_FACTOR).toBeGreaterThanOrEqual(1.48);
     expect(estimateSerialRerunMs(-5)).toBe(0);
   });
@@ -2298,26 +2170,22 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
       { name: "tests/c.test.ts", body: "AssertionError: expected 1 to be 2" },
     ];
     /* 只买得起一份 ⇒ 给那份**不带指纹**的（它的红坐实就是 `hard-fail`，多知道一件）。 */
-    expect(
-      probeFiles({ files, count: 1, readSuites, isTimeout: isTimeoutShaped }),
-    ).toEqual(["tests/c.test.ts"]);
+    expect(probeFiles({ files, count: 1, readSuites, isTimeout: isTimeoutShaped })).toEqual([
+      "tests/c.test.ts",
+    ]);
     /* 买得起两份 ⇒ 第二份回到清单顺序（`a` 在 `b` 前），而不是按读数排。 */
-    expect(
-      probeFiles({ files, count: 2, readSuites, isTimeout: isTimeoutShaped }),
-    ).toEqual(["tests/c.test.ts", "tests/a.test.ts"]);
+    expect(probeFiles({ files, count: 2, readSuites, isTimeout: isTimeoutShaped })).toEqual([
+      "tests/c.test.ts",
+      "tests/a.test.ts",
+    ]);
     /* 买得起全部 ⇒ 原样（这一格不改名单，只改被放过去测量的那几份是谁）。 */
-    expect(
-      probeFiles({ files, count: 3, readSuites, isTimeout: isTimeoutShaped }),
-    ).toEqual(files);
+    expect(probeFiles({ files, count: 3, readSuites, isTimeout: isTimeoutShaped })).toEqual(files);
     /* 一份都买不起 ⇒ 空，不拿「反正要挑一份」顶上。 */
     expect(probeFiles({ files, count: 0, readSuites })).toEqual([]);
     expect(probeFiles({ files: [], count: 2 })).toEqual([]);
     /* junit 里**查不到自己**的那份仍在候选里（它要落到下面那条逐文件补跑），
        `isTimeout` 默认值不许把它悄悄筛掉。 */
-    expect(probeFiles({ files, count: 2 })).toEqual([
-      "tests/a.test.ts",
-      "tests/b.test.ts",
-    ]);
+    expect(probeFiles({ files, count: 2 })).toEqual(["tests/a.test.ts", "tests/b.test.ts"]);
   });
 
   it("两句判点话术各自必须说完「界是多少 / 为什么停 / 下一动作」", () => {
@@ -2350,9 +2218,7 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
     expect(resolveWallClockMs("").budgetMs).toBe(STAGE_WALL_CLOCK_MS);
     for (const bad of ["0", "-1", "abc", "12.5"]) {
       const got = resolveWallClockMs(bad);
-      expect(got.budgetMs, `非法值 ${bad} 不许退成 0`).toBe(
-        STAGE_WALL_CLOCK_MS,
-      );
+      expect(got.budgetMs, `非法值 ${bad} 不许退成 0`).toBe(STAGE_WALL_CLOCK_MS);
       expect(got.note, `非法值 ${bad} 必须说出口`).toContain("正整数毫秒");
     }
   });

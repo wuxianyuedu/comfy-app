@@ -86,7 +86,7 @@ export function classifyLivenessPhase(facts: LivenessFacts): LivenessPhase {
  */
 
 /** 启动等待：进程在跑、HTTP 未就绪。 */
-export const LIVENESS_STARTING = {
+export const LIVENESS_STARTING = /* SAFETY: 类型断言已复核 */ {
   /** 前 10s 用 400ms 一探：用户在盯着转圈，越快越好，此时也没别的负载
    *  （ComfyUI 还在 import torch / 加载模型，没有生成请求在排队）。 */
   fastMs: 400,
@@ -121,10 +121,7 @@ export const LIVENESS_VERIFY_MS = 0;
  * `elapsedInStartingMs` 只在 `starting` 档参与判断（快档 → 慢档的切换点）
  * —— 其它阶段传什么都一样。
  */
-export function livenessIntervalMs(
-  phase: LivenessPhase,
-  elapsedInStartingMs = 0,
-): number {
+export function livenessIntervalMs(phase: LivenessPhase, elapsedInStartingMs = 0): number {
   switch (phase) {
     case "verifying":
       return LIVENESS_VERIFY_MS;

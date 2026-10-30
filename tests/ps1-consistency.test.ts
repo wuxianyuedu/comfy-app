@@ -77,10 +77,7 @@ function runGuard(overrides: Record<string, string | null>): string {
     fs.copyFileSync(src, dst);
   }
   fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
-  fs.copyFileSync(
-    GUARD,
-    path.join(dir, "scripts", "check-ps1-consistency.mjs"),
-  );
+  fs.copyFileSync(GUARD, path.join(dir, "scripts", "check-ps1-consistency.mjs"));
   // ── 入口清单那一段（判据 ③）要读的三份文件 ──────────────────────────
   // 真实文件整体拷过去：判据按「README 的入口表 ⇄ tools/README.md 的全目录视图
   // ⇄ 磁盘」三向核对，抽掉任何一份都会让那一段变成另一种失败（而不是被测的那一种）。
@@ -129,26 +126,25 @@ function runGuard(overrides: Record<string, string | null>): string {
   }
 
   try {
-    execFileSync(
-      process.execPath,
-      [path.join(dir, "scripts", "check-ps1-consistency.mjs")],
-      {
-        cwd: dir,
-        encoding: "utf8",
-        stdio: "pipe",
-      },
-    );
+    execFileSync(process.execPath, [path.join(dir, "scripts", "check-ps1-consistency.mjs")], {
+      cwd: dir,
+      encoding: "utf8",
+      stdio: "pipe",
+    });
     return "CODE=0";
   } catch (e: unknown) {
-    const err = e as { stdout?: string; stderr?: string; status?: number };
+    const err = /* SAFETY: 类型断言已复核 */ e as {
+      stdout?: string;
+      stderr?: string;
+      status?: number;
+    };
     return `CODE=${err.status ?? 1}\n${err.stdout ?? ""}${err.stderr ?? ""}`;
   }
 }
 
 const cleanup: string[] = [];
 afterEach(() => {
-  for (const dir of cleanup.splice(0))
-    fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of cleanup.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
 describe("跨平台动作对照表（规范 §9.5）", () => {
@@ -162,10 +158,7 @@ describe("跨平台动作对照表（规范 §9.5）", () => {
 
   it("对照表里登记不存在的脚本 → 失败（登记漂移会被发现）", () => {
     const spec = fs.readFileSync(path.join(process.cwd(), SPEC), "utf8");
-    const broken = spec.replace(
-      "scripts/generate-docs.mjs",
-      "scripts/does-not-exist.mjs",
-    );
+    const broken = spec.replace("scripts/generate-docs.mjs", "scripts/does-not-exist.mjs");
     expect(broken).not.toBe(spec);
     const out = runGuard({ [SPEC]: broken });
     expect(out).toContain("CODE=1");
@@ -180,16 +173,10 @@ describe("跨平台动作对照表（规范 §9.5）", () => {
      * 但那报的是「测试写死了排版」，不是「门禁坏了」。 */
     const lines = spec.split("\n");
     const idx = lines.findIndex(
-      (l) =>
-        l.includes("端口推导跨语言自检") &&
-        l.includes("check-app-port-vectors.cjs"),
+      (l) => l.includes("端口推导跨语言自检") && l.includes("check-app-port-vectors.cjs"),
     );
-    expect(
-      idx,
-      "找不到端口推导自检那一行（对照表漂移了？）",
-    ).toBeGreaterThanOrEqual(0);
-    lines[idx] =
-      "| 端口推导跨语言自检 | `scripts/check-app-port-vectors.ps1` | — |";
+    expect(idx, "找不到端口推导自检那一行（对照表漂移了？）").toBeGreaterThanOrEqual(0);
+    lines[idx] = "| 端口推导跨语言自检 | `scripts/check-app-port-vectors.ps1` | — |";
     const broken = lines.join("\n");
     expect(broken).not.toBe(spec);
     const out = runGuard({ [SPEC]: broken });
@@ -199,10 +186,7 @@ describe("跨平台动作对照表（规范 §9.5）", () => {
 
   it("对照表被整体删除 → 失败（门禁不许静默失效）", () => {
     const spec = fs.readFileSync(path.join(process.cwd(), SPEC), "utf8");
-    const broken = spec.replace(
-      "<!-- cross-platform-pairs -->",
-      "<!-- pairs-marker-removed -->",
-    );
+    const broken = spec.replace("<!-- cross-platform-pairs -->", "<!-- pairs-marker-removed -->");
     const out = runGuard({ [SPEC]: broken });
     expect(out).toContain("CODE=1");
   });
@@ -228,10 +212,7 @@ describe("KNOWN_FAILED_FILES 的单点定义（规范 §9.5）", () => {
   });
 
   it("在 .ps1 里再定义一份字面量清单 → 失败（漏改一处就红/绿不可归因）", () => {
-    const gate = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "quality-gate.ps1"),
-      "utf8",
-    );
+    const gate = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.ps1"), "utf8");
     const broken = `${gate}\n$KNOWN_FAILED_FILES = @("src/lib/media.test.ts")\n`;
     const out = runGuard({
       [path.join("scripts", "quality-gate.ps1")]: broken,
@@ -241,15 +222,9 @@ describe("KNOWN_FAILED_FILES 的单点定义（规范 §9.5）", () => {
   });
 
   it("Node 侧门禁与共享模块读同一份清单（不许各写一套排除项）", () => {
-    const mjs = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "quality-gate.mjs"),
-      "utf8",
-    );
+    const mjs = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.mjs"), "utf8");
     expect(mjs).toContain('from "./quality-gate-shared.mjs"');
-    const runner = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "run-tests.mjs"),
-      "utf8",
-    );
+    const runner = fs.readFileSync(path.join(process.cwd(), "scripts", "run-tests.mjs"), "utf8");
     expect(runner).toContain('from "./quality-gate-shared.mjs"');
   });
 });
@@ -267,9 +242,7 @@ describe("跨平台动作的实现契约", () => {
       for (const m of text.matchAll(/from\s+"([^"]+)"/g)) {
         const spec = m[1] ?? "";
         expect(
-          spec.startsWith("node:") ||
-            spec.startsWith("./") ||
-            spec.startsWith("../"),
+          spec.startsWith("node:") || spec.startsWith("./") || spec.startsWith("../"),
           `${rel} 引入了非内建依赖：${spec}`,
         ).toBe(true);
       }
@@ -277,14 +250,8 @@ describe("跨平台动作的实现契约", () => {
   });
 
   it("质量门禁的三项与 .ps1 侧同命令（两侧不许各写一套门禁清单）", () => {
-    const ps1 = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "quality-gate.ps1"),
-      "utf8",
-    );
-    const mjs = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "quality-gate.mjs"),
-      "utf8",
-    );
+    const ps1 = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.ps1"), "utf8");
+    const mjs = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.mjs"), "utf8");
     const squash = (t: string) => t.replace(/\s+/g, " ");
     // 注意：lint 的扫描范围与 `--max-warnings 0` 等参数已按防漂移原则收进
     // package.json 的 `lint` 脚本，两侧门禁脚本只是 `pnpm run lint` 的委托方，
@@ -293,16 +260,12 @@ describe("跨平台动作的实现契约", () => {
     /* 软断言：五个关键词 × 两侧是十格独立结论 —— 缺一个时想看的是「缺了哪些」，
        而不是「第一个是哪个」（§11.18）。 */
     for (const needle of ["typecheck", "eslint", "run", "lint", "vitest"]) {
-      expect
-        .soft(squash(ps1), `quality-gate.ps1 缺 ${needle}`)
-        .toContain(needle);
-      expect
-        .soft(squash(mjs), `quality-gate.mjs 缺 ${needle}`)
-        .toContain(needle);
+      expect.soft(squash(ps1), `quality-gate.ps1 缺 ${needle}`).toContain(needle);
+      expect.soft(squash(mjs), `quality-gate.mjs 缺 ${needle}`).toContain(needle);
     }
     // lint 的 `--max-warnings` 唯一真源在 package.json，别让它静默丢失（否则
     // 零警告门禁形同虚设却没人发现）。
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
     ) as { scripts?: Record<string, string> };
     expect(
@@ -321,14 +284,8 @@ describe("跨平台动作的实现契约", () => {
     // Linux 上 `pnpm check:all` 悄悄多跑了一档、Windows 上双击入口按同样的名字报
     // 「参数不在可选集合内」，而两侧谁都没有任何东西会红。
     // 这里按两侧各自的结构取出**全量**名字再比 —— 不写死清单，增减门禁自然被跟上。
-    const ps1 = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "quality-gate.ps1"),
-      "utf8",
-    );
-    const mjs = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "quality-gate.mjs"),
-      "utf8",
-    );
+    const ps1 = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.ps1"), "utf8");
+    const mjs = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.mjs"), "utf8");
     // 解析器是共享件（`tests/helpers/quality-gate-gates`）：同一条 `$Blocks` / `GATES`
     // 形状在本文件与 `tests/daily-tracks.test.ts` 等处都要读，各写一份会在
     // 「换行 / 注释 / 块尾形态」上漂成两个口径（§12.18）。
@@ -377,10 +334,7 @@ describe("入口清单（README 的「双击入口速查」⇄ tools/README.md �
 
   it("README 表里的入口路径不存在 → 失败（改名 / 搬目录后表没跟着改）", () => {
     const readme = fs.readFileSync(path.join(process.cwd(), README), "utf8");
-    const broken = readme.replace(
-      "tools/start/run-tests.ps1",
-      "tools/start/run-test-typo.ps1",
-    );
+    const broken = readme.replace("tools/start/run-tests.ps1", "tools/start/run-test-typo.ps1");
     expect(broken).not.toBe(readme);
     const out = runGuard({ [README]: broken });
     expect(out).toContain("CODE=1");
@@ -404,9 +358,7 @@ describe("入口清单（README 的「双击入口速查」⇄ tools/README.md �
     // 是「至少出现在其中一处」，所以这里必须把两处一起抹掉才构成违规。
     const index = fs.readFileSync(path.join(process.cwd(), TOOLS_INDEX), "utf8");
     const lines = index.split("\n");
-    const kept = lines.filter((l) =>
-      !l.includes("database-studio/start-database-studio.ps1"),
-    );
+    const kept = lines.filter((l) => !l.includes("database-studio/start-database-studio.ps1"));
     expect(kept.length).toBeLessThan(lines.length);
     const out = runGuard({ [TOOLS_INDEX]: kept.join("\n") });
     expect(out).toContain("CODE=1");
@@ -420,10 +372,7 @@ describe("入口清单（README 的「双击入口速查」⇄ tools/README.md �
 
   it("README 的入口表整节被删 → 失败（承诺失去落点）", () => {
     const readme = fs.readFileSync(path.join(process.cwd(), README), "utf8");
-    const broken = readme.replace(
-      "## 双击入口速查（Windows）",
-      "## 入口（改标题即失去锚点）",
-    );
+    const broken = readme.replace("## 双击入口速查（Windows）", "## 入口（改标题即失去锚点）");
     expect(broken).not.toBe(readme);
     const out = runGuard({ [README]: broken });
     expect(out).toContain("CODE=1");

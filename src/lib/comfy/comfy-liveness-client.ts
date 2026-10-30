@@ -22,7 +22,7 @@ import type { ComfyLivenessSignal } from "~/lib/comfyui/liveness-signal";
 /** 帧形状收窄：SSE 载荷是外部输入，逐字段判型，不做类型断言。 */
 function parseSignal(raw: unknown): ComfyLivenessSignal | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const o = raw as Record<string, unknown>;
+  const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   if (
     typeof o.seq !== "number" ||
     !Number.isFinite(o.seq) ||

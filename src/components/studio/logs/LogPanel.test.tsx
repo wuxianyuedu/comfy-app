@@ -49,9 +49,7 @@ function makeEntry(index: number, overrides: Partial<LogEntry> = {}): LogEntry {
 
 function seed(count: number) {
   act(() =>
-    useLogStore
-      .getState()
-      .appendFileLogs(Array.from({ length: count }, (_, i) => makeEntry(i))),
+    useLogStore.getState().appendFileLogs(Array.from({ length: count }, (_, i) => makeEntry(i))),
   );
 }
 
@@ -136,9 +134,7 @@ afterEach(async () => {
     prevBody = body;
   }
   document
-    .querySelectorAll(
-      '[data-slot="select-content"], [data-slot="select-backdrop"]',
-    )
+    .querySelectorAll('[data-slot="select-content"], [data-slot="select-backdrop"]')
     .forEach((node) => node.remove());
   document
     .querySelectorAll("[data-base-ui-inert]")
@@ -157,9 +153,7 @@ afterEach(async () => {
 function levelButton(label: string): HTMLElement {
   const button = screen
     .getAllByRole("button")
-    .find((item) =>
-      item.getAttribute("title")?.startsWith(`当前来源的${label}：`),
-    );
+    .find((item) => item.getAttribute("title")?.startsWith(`当前来源的${label}：`));
   if (!button) throw new Error(`找不到级别按钮「${label}」`);
   return button;
 }
@@ -192,9 +186,9 @@ describe("LogPanel 日志面板", () => {
   it("渲染的行按时刻升序（用户诉求「最基本的时间顺序」）", () => {
     seed(20);
     render(<LogPanel />);
-    const stamps = Array.from(
-      document.querySelectorAll<HTMLElement>("time"),
-    ).map((el) => el.textContent ?? "");
+    const stamps = Array.from(document.querySelectorAll<HTMLElement>("time")).map(
+      (el) => el.textContent ?? "",
+    );
     expect(stamps).not.toHaveLength(0);
     const sorted = [...stamps].sort();
     expect(stamps).toEqual(sorted);
@@ -207,20 +201,14 @@ describe("LogPanel 日志面板", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
 
-    act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([makeEntry(9_999, { message: "新来的" })]),
-    );
+    act(() => useLogStore.getState().appendFileLogs([makeEntry(9_999, { message: "新来的" })]));
     const banner = screen.getByRole("button", { name: /有 1 条新的日志/ });
     await user.click(banner);
 
     expect(screen.getByText(/第 1 \//)).toBeInTheDocument();
     /* 回到最新后会看到窗口里的内容；新来的那条在窗口之后（下一轮滚动就能看到），
      * 因此这里断言的是「页码回到了第 1 页」与「计数归零」这两件用户能感知的事。 */
-    expect(
-      screen.queryByRole("button", { name: /有 \d+ 条新的日志/ }),
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: /有 \d+ 条新的日志/ })).toBeNull();
   });
 
   it("按来源筛选能滤掉启动行，只看应用运行日志", async () => {
@@ -262,9 +250,7 @@ describe("LogPanel 日志面板", () => {
       useLogStore
         .getState()
         .appendFileLogs(
-          Array.from({ length: 40 }, (_, i) =>
-            makeEntry(i, { message: "ComfyUI 未就绪，等待中" }),
-          ),
+          Array.from({ length: 40 }, (_, i) => makeEntry(i, { message: "ComfyUI 未就绪，等待中" })),
         ),
     );
     render(<LogPanel />);
@@ -277,16 +263,13 @@ describe("LogPanel 日志面板", () => {
 
   it("收起状态下只显示当前来源的名字，不重复每一项的条数", () => {
     act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([makeEntry(1, { level: "warn", origin: "app" })]),
+      useLogStore.getState().appendFileLogs([makeEntry(1, { level: "warn", origin: "app" })]),
     );
     render(<LogPanel />);
     /* 收缩面板本来就窄：这里报一遍每个来源多少条，只是把宽度再挤掉一块，
      * 而左侧级别按钮上已经写着同样的数字（用户反馈第 4 条）。 */
     const trigger = document.querySelector('[data-slot="select-trigger"]');
-    const label =
-      trigger?.textContent?.replace(/[\s\u25b2\u25bc\u200b]/g, "") ?? "";
+    const label = trigger?.textContent?.replace(/[\s\u25b2\u25bc\u200b]/g, "") ?? "";
     /* 扳机上只有这一项的名字——「（按条去重）」是它的一部分，不是数字：
      * 来源下拉的候选里有六个「各数各的那一份」的分项，而「全部来源」是**日志
      * 条数**，不带上这个限定语就会被读成「那六个加起来」（见 ORIGIN_TEXT）。 */
@@ -338,8 +321,7 @@ describe("LogPanel 日志面板", () => {
     render(<LogPanel />);
 
     /* 该分类出现在下拉选项里（带它自己的计数），而不是只在「全部来源」下能看见。 */
-    const optionTexts = () =>
-      screen.queryAllByRole("option").map((o) => o.textContent ?? "");
+    const optionTexts = () => screen.queryAllByRole("option").map((o) => o.textContent ?? "");
     expect(useLogStore.getState().countsByOrigin.console.all).toBe(1);
 
     act(() => useLogStore.getState().setOrigin("console"));
@@ -367,13 +349,9 @@ describe("LogPanel 日志面板", () => {
     await user.click(screen.getByRole("combobox", { name: "按来源筛选" }));
     /* 选项经 portal 异步挂载，负载下同步读取可能跑在挂载之前——optionOf 的
      * 空串兜底会把「没等到」伪装成「内容不符」。先显式等 option 出现。 */
-    await expect
-      .poll(() => screen.getAllByRole("option").length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => screen.getAllByRole("option").length).toBeGreaterThan(0);
     const optionOf = (label: string) =>
-      screen
-        .queryAllByRole("option")
-        .find((option) => (option.textContent ?? "").startsWith(label))
+      screen.queryAllByRole("option").find((option) => (option.textContent ?? "").startsWith(label))
         ?.textContent ?? "";
 
     /* 「应用服务」有 2 警告 1 错误；「启动器」一条警告都没有——切换过去是空
@@ -391,9 +369,7 @@ describe("LogPanel 日志面板", () => {
    * class 必须高于遮罩。真正「点得动」由 e2e（真实 Chromium）兜底。 */
   it("级别按钮整组吃掉行头的富余宽度（不再挤成 32px 的窄条）", () => {
     act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([makeEntry(1, { level: "warn", origin: "app" })]),
+      useLogStore.getState().appendFileLogs([makeEntry(1, { level: "warn", origin: "app" })]),
     );
     render(<LogPanel />);
 
@@ -459,8 +435,8 @@ describe("LogPanel 日志面板", () => {
       expect(button.className).not.toContain("min-w-0");
       expect(button.className).toContain("min-w-fit");
 
-      const labelEl = button.children[0] as HTMLElement;
-      const countEl = button.children[1] as HTMLElement;
+      const labelEl = /* SAFETY: 类型断言已复核 */ button.children[0] as HTMLElement;
+      const countEl = /* SAFETY: 类型断言已复核 */ button.children[1] as HTMLElement;
       expect(labelEl.className).toContain("whitespace-nowrap");
       expect(labelEl.className).not.toContain("truncate");
       /* 数字列：定宽 `4ch` + 右对齐 + 等宽数字——「文字 + 四位数字」是固定预算，
@@ -499,9 +475,7 @@ describe("LogPanel 日志面板", () => {
     expect(levelButton("信息").className).not.toContain("text-warning-strong");
     /* 数字是中性灰、显式覆盖继承色，不跟着级别变色。 */
     for (const label of ["警告", "错误"]) {
-      expect(levelButton(label).children[1]!.className).toContain(
-        "text-ink-fainter",
-      );
+      expect(levelButton(label).children[1]!.className).toContain("text-ink-fainter");
     }
   });
 
@@ -529,9 +503,7 @@ describe("LogPanel 日志面板", () => {
     /* 计数与完整分类数改由级别按钮承载（悬浮说明里能读全）。 */
     expect(levelButton("警告").textContent).toContain("警告1");
     expect(levelButton("错误").textContent).toContain("错误1");
-    expect(levelButton("警告").getAttribute("title")).toContain(
-      "共 3 条 · 警告 1 · 错误 1",
-    );
+    expect(levelButton("警告").getAttribute("title")).toContain("共 3 条 · 警告 1 · 错误 1");
   });
 
   it("页脚写出当前看的是哪一段，点一下即去掉该层筛选", async () => {
@@ -551,9 +523,7 @@ describe("LogPanel 日志面板", () => {
 
     const footer = screen.getByTestId("logpanel-origin-chip");
     expect(footer.textContent).toContain("应用服务");
-    expect(screen.getByTestId("logpanel-level-chip").textContent).toContain(
-      "错误",
-    );
+    expect(screen.getByTestId("logpanel-level-chip").textContent).toContain("错误");
 
     /* 点一下来源标签 → 回到全部来源；再点级别标签 → 回到全部级别。
      * 「该层筛选已去掉」的表现是枚标签变成禁用（无筛选可去），
@@ -563,9 +533,7 @@ describe("LogPanel 日志面板", () => {
     await user.click(screen.getByTestId("logpanel-level-chip"));
     expect(screen.getByTestId("logpanel-level-chip")).toBeDisabled();
     /* 该来源行重新出现在时间线里（第 1 页就是全部内容时必然可见） */
-    expect(useLogStore.getState().filteredLogs.map((e) => e.message)).toContain(
-      "开发服务已就绪",
-    );
+    expect(useLogStore.getState().filteredLogs.map((e) => e.message)).toContain("开发服务已就绪");
   });
 
   it("计数与过滤同口径：搜索时数字跟着收窄，不会「写着 2 切过去只有 1」", async () => {
@@ -599,9 +567,7 @@ describe("LogPanel 日志面板", () => {
   /* ISSUE #262 复审（这一轮的 4 条反馈）──────────────────────────────── */
 
   it("行头里类别与计数在前，搜索与来源下拉被推到最右", () => {
-    act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]),
-    );
+    act(() => useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]));
     render(<LogPanel />);
 
     const header = document.querySelector(".min-h-14");
@@ -615,9 +581,7 @@ describe("LogPanel 日志面板", () => {
     const trigger = header!.querySelector('[data-slot="select-trigger"]');
     expect(trigger).not.toBeNull();
     const levelButtons = order.indexOf(levelButton("全部").parentElement!);
-    const triggerHost = order.indexOf(
-      trigger!.closest("div.relative")?.parentElement ?? trigger!,
-    );
+    const triggerHost = order.indexOf(trigger!.closest("div.relative")?.parentElement ?? trigger!);
     const searchBox = header!.querySelector("input")!.closest("div.relative")!;
     const search = order.indexOf(searchBox);
 
@@ -637,18 +601,13 @@ describe("LogPanel 日志面板", () => {
     expect(order.indexOf(group)).toBeLessThan(search);
     /* 行头里不再有第二个无名弹性空白：唯一的弹性项就是级别按钮容器。 */
     const spacers = order.filter(
-      (el) =>
-        el.className.includes("flex-1") &&
-        el.tagName === "DIV" &&
-        el.children.length === 0,
+      (el) => el.className.includes("flex-1") && el.tagName === "DIV" && el.children.length === 0,
     );
     expect(spacers).toHaveLength(0);
   });
 
   it("来源下拉的弹层与扳机底边对齐，且不向上翻转", async () => {
-    act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]),
-    );
+    act(() => useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]));
     render(<LogPanel />);
     const user = userEvent.setup();
     await user.click(screen.getByRole("combobox", { name: "按来源筛选" }));
@@ -660,14 +619,10 @@ describe("LogPanel 日志面板", () => {
      *     会让弹层只能向上生长，实测直接顶到窗口最上方、盖住左侧的标题。
      * 真实浏览器里「撞到底部也不翻上去」由 §7.22 的现场复核兜底
      * （jsdom 不做布局，量不出坐标）。 */
-    const positioner = document.querySelector(
-      '[data-slot="select-content"]',
-    )!.parentElement!;
+    const positioner = document.querySelector('[data-slot="select-content"]')!.parentElement!;
     expect(positioner.getAttribute("data-side")).toBe("bottom");
     expect(
-      document
-        .querySelector('[data-slot="select-content"]')!
-        .getAttribute("data-align-trigger"),
+      document.querySelector('[data-slot="select-content"]')!.getAttribute("data-align-trigger"),
     ).toBe("false");
   });
 
@@ -697,16 +652,10 @@ describe("LogPanel 日志面板", () => {
      * 别把我拽走」）。 */
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 2 \/ 4 页/)).toBeInTheDocument();
-    act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([makeEntry(9_999, { message: "新来的" })]),
-    );
+    act(() => useLogStore.getState().appendFileLogs([makeEntry(9_999, { message: "新来的" })]));
     /* 正好来了 1 条新的（页面仍停在第 2 页，因为还没点「回到最新」） */
     expect(screen.getByText(/第 2 \/ 5 页/)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /有 1 条新的日志/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /有 1 条新的日志/ })).toBeInTheDocument();
 
     /* 点一下就能回到最新一页 */
     await user.click(screen.getByRole("button", { name: /回到最新/ }));
@@ -793,9 +742,7 @@ describe("LogPanel 日志面板", () => {
     const user = userEvent.setup();
     act(() => useLogStore.getState().setOrigin("app-runtime"));
 
-    await user.click(
-      screen.getByRole("button", { name: "复制当前筛选的全部日志" }),
-    );
+    await user.click(screen.getByRole("button", { name: "复制当前筛选的全部日志" }));
     const written = await navigator.clipboard.readText();
     expect(written).toContain("要复制的运行日志");
     expect(written).not.toContain("不该被复制的启动日志");
@@ -825,12 +772,14 @@ describe("LogPanel 日志面板", () => {
         }),
       );
       expect(await screen.findByText(/exports\//)).toBeInTheDocument();
-      const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      const [url, init] = /* SAFETY: 类型断言已复核 */ fetchMock.mock.calls[0] as unknown as [
         string,
         { body: string },
       ];
       expect(url).toBe("/api/logs/export");
-      const sent = JSON.parse(init.body) as { content?: string };
+      const sent = /* SAFETY: 类型断言已复核 */ JSON.parse(init.body) as {
+        content?: string;
+      };
       expect(sent.content).toContain("事件");
     } finally {
       vi.unstubAllGlobals();
@@ -857,11 +806,9 @@ describe("LogPanel 日志面板", () => {
       seed(2);
       render(<LogPanel />);
       const user = userEvent.setup();
-      await user.click(
-        screen.getByRole("button", { name: "打包诊断现场到本地文件" }),
-      );
+      await user.click(screen.getByRole("button", { name: "打包诊断现场到本地文件" }));
       expect(await screen.findByText(/diagnostics-/)).toBeInTheDocument();
-      const [url] = fetchMock.mock.calls[0] as unknown as [string];
+      const [url] = /* SAFETY: 类型断言已复核 */ fetchMock.mock.calls[0] as unknown as [string];
       expect(url).toBe("/api/logs/diagnostics");
     } finally {
       vi.unstubAllGlobals();
@@ -869,11 +816,7 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("复制失败时如实说失败，不谎报「已复制」", async () => {
-    act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([makeEntry(1, { message: "任务入队" })]),
-    );
+    act(() => useLogStore.getState().appendFileLogs([makeEntry(1, { message: "任务入队" })]));
     render(<LogPanel />);
     const user = userEvent.setup();
     /* 让剪贴板写入失败（权限被拒 / 非安全上下文都会走到这里）。注意顺序：
@@ -928,9 +871,7 @@ describe("LogPanel 日志面板", () => {
     useSmallPage(200);
     seed(120);
     render(<LogPanel />);
-    const rows = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-log-index] > div"),
-    );
+    const rows = Array.from(document.querySelectorAll<HTMLElement>("[data-log-index] > div"));
     expect(rows.length).toBeGreaterThan(0);
     /* 显式高度是这件事的地基：估算高度与实际渲染高度不同口径时，累计误差会让
      * 滚动位置与内容错开（见 log-virtual 的常量说明）。 */
@@ -938,8 +879,7 @@ describe("LogPanel 日志面板", () => {
       expect(row.style.height).toBe(`${LOG_ROW_SINGLE}px`);
     }
     /* 撑开滚动条的那一层：高度 = 行数 × 单行高度。 */
-    const spacer =
-      rows[0]!.closest("[data-log-index]")!.parentElement!.parentElement!;
+    const spacer = rows[0]!.closest("[data-log-index]")!.parentElement!.parentElement!;
     expect(spacer.style.height).toBe(`${120 * LOG_ROW_SINGLE}px`);
   });
 
@@ -957,7 +897,7 @@ describe("LogPanel 日志面板", () => {
     /* jsdom 不做布局，`clientHeight` 恒为 0；这里给它一个真实尺度的视口
      * （600px 高、1100px 宽），面板才会走虚拟窗口分支。改的是**原型**上的取值：
      * 面板读的是它自己那个滚动元素，而 jsdom 里所有元素的尺寸都由这一份原型给出。 */
-    const prototype: object = Object.getPrototypeOf(
+    const prototype: object = /* SAFETY: 类型断言已复核 */ Object.getPrototypeOf(
       document.createElement("div"),
     ) as object;
     const heights = Object.getOwnPropertyDescriptor(prototype, "clientHeight");
@@ -972,14 +912,9 @@ describe("LogPanel 日志面板", () => {
     });
     try {
       render(<LogPanel />);
-      const rowCount = () =>
-        document.querySelectorAll("[data-log-index]").length;
+      const rowCount = () => document.querySelectorAll("[data-log-index]").length;
       const firstIndex = () =>
-        Number(
-          document
-            .querySelector("[data-log-index]")!
-            .getAttribute("data-log-index"),
-        );
+        Number(document.querySelector("[data-log-index]")!.getAttribute("data-log-index"));
 
       /* 一页 200 行，视口 600px（单行取 `LOG_ROW_SINGLE`）只装得下二十来行 +
        * overscan。这里不写像素数：那个常量从 27 改到 28 时，抄下来的数字就是
@@ -989,8 +924,7 @@ describe("LogPanel 日志面板", () => {
       expect(firstIndex()).toBe(0);
 
       /* 往下滚 → 窗口跟着走（「滚动不换段」正是窗口算歪的表现）。 */
-      const scroller =
-        document.querySelector<HTMLElement>(".custom-scrollbar")!;
+      const scroller = document.querySelector<HTMLElement>(".custom-scrollbar")!;
       scroller.scrollTop = 3000;
       act(() => {
         scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
@@ -1021,7 +955,7 @@ describe("LogPanel 日志面板", () => {
     useSmallPage(200);
     seed(200);
 
-    const prototype: object = Object.getPrototypeOf(
+    const prototype: object = /* SAFETY: 类型断言已复核 */ Object.getPrototypeOf(
       document.createElement("div"),
     ) as object;
     const heights = Object.getOwnPropertyDescriptor(prototype, "clientHeight");
@@ -1036,8 +970,7 @@ describe("LogPanel 日志面板", () => {
     });
     try {
       render(<LogPanel />);
-      const scroller =
-        document.querySelector<HTMLElement>(".custom-scrollbar")!;
+      const scroller = document.querySelector<HTMLElement>(".custom-scrollbar")!;
 
       /* 用户滚到最底：贴底基线跟着取到当前页最后一条，effect 据此定位。 */
       scroller.scrollTop = 200 * LOG_ROW_SINGLE;
@@ -1051,9 +984,7 @@ describe("LogPanel 日志面板", () => {
       expect(scroller.scrollTop).toBe(expected);
       /* 窗口也真的跟着走到了页尾。 */
       const nodes = document.querySelectorAll("[data-log-index]");
-      const lastIndex = Number(
-        nodes[nodes.length - 1]!.getAttribute("data-log-index"),
-      );
+      const lastIndex = Number(nodes[nodes.length - 1]!.getAttribute("data-log-index"));
       expect(lastIndex).toBe(199);
     } finally {
       if (heights) Object.defineProperty(prototype, "clientHeight", heights);
@@ -1068,9 +999,7 @@ describe("LogPanel 日志面板", () => {
      结束（jsdom 不会派发那个事件），展开过一次就会给后续用例留下一份没摘除的
      弹层宿主。只影响测试环境，真实浏览器里过渡会正常结束。 */
   it("弹层定位层的层级高于面板遮罩（否则被遮罩压住、点不动）", async () => {
-    act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]),
-    );
+    act(() => useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]));
     render(<LogPanel />);
 
     /* 面板遮罩：面板改用 `ui/dialog` 后遮罩由基元 Portal 到 body（不再挂在

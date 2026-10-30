@@ -11,14 +11,7 @@
  * 所以它跑的是真脚本（子进程 + 临时仓库），不是把逻辑再实现一遍。
  */
 import { execFileSync } from "node:child_process";
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -66,10 +59,7 @@ function mkRepo(): string {
     // 必须**按原相对路径**落位：脚本里 import 的是 `./launcher-core/shell.mjs`，
     // 拷成 `scripts/shell.mjs` 会让子进程在加载阶段就 ERR_MODULE_NOT_FOUND ——
     // 那种红长得像业务失败，最难归因。
-    copyFileSync(
-      path.resolve(__dirname, "..", rel),
-      path.join(dir, ...rel.split("/")),
-    );
+    copyFileSync(path.resolve(__dirname, "..", rel), path.join(dir, ...rel.split("/")));
   }
   return dir;
 }
@@ -111,18 +101,12 @@ type LedgerFile = { ruleVersion: number; entries: LedgerEntry[] };
 const LEDGER_REL = path.join("scripts", ".dependency-audit-baseline.json");
 
 function readLedger(dir: string): LedgerFile {
-  const raw: unknown = JSON.parse(
-    readFileSync(path.join(dir, LEDGER_REL), "utf8"),
-  );
-  return raw as LedgerFile;
+  const raw: unknown = JSON.parse(readFileSync(path.join(dir, LEDGER_REL), "utf8"));
+  return /* SAFETY: 类型断言已复核 */ raw as LedgerFile;
 }
 
 function writeLedger(dir: string, ledger: LedgerFile): void {
-  writeFileSync(
-    path.join(dir, LEDGER_REL),
-    JSON.stringify(ledger, null, 2),
-    "utf8",
-  );
+  writeFileSync(path.join(dir, LEDGER_REL), JSON.stringify(ledger, null, 2), "utf8");
 }
 
 /** 用例里那几处「给台账每条补上原因」的公共动作。 */
@@ -147,10 +131,7 @@ describe("记账键与筛选（判据读什么）", () => {
         "5": advisory({ id: 5, module_name: "info", severity: "info" }),
       },
     });
-    expect(blocked.map((b: { module: string }) => b.module)).toEqual([
-      "crit",
-      "hi",
-    ]);
+    expect(blocked.map((b: { module: string }) => b.module)).toEqual(["crit", "hi"]);
     expect(BLOCKED_SEVERITIES).toEqual(["high", "critical"]);
   });
 
@@ -159,10 +140,7 @@ describe("记账键与筛选（判据读什么）", () => {
     // `pnpm audit --json` 时打出的形态（`.>better-auth>next`），用例钉住它。
     const blocked = collectBlocked({ advisories: { "1": advisory() } });
     expect(blocked.length).toBe(1);
-    expect(blocked[0]?.paths).toEqual([
-      "some-tool > demo-pkg",
-      "other-tool > mid > demo-pkg",
-    ]);
+    expect(blocked[0]?.paths).toEqual(["some-tool > demo-pkg", "other-tool > mid > demo-pkg"]);
   });
 
   it("同一条漏洞换了引入路径，键不变（不误报成新增）", () => {
@@ -199,21 +177,15 @@ describe("与基线对账（三条形状各钉一条）", () => {
   const diff = diffAgainstBaseline(blocked, baseline);
 
   it("① 基线外新增 → 进 added（这就是红）", () => {
-    expect(diff.added.map((a: { module: string }) => a.module)).toEqual([
-      "brand-new-pkg",
-    ]);
+    expect(diff.added.map((a: { module: string }) => a.module)).toEqual(["brand-new-pkg"]);
   });
 
   it("② 基线里已不再命中 → 进 stale（双向拦，不留失去记账能力的行）", () => {
-    expect(diff.stale.map((e: { key: string }) => e.key)).toEqual([
-      "gone-pkg#8",
-    ]);
+    expect(diff.stale.map((e: { key: string }) => e.key)).toEqual(["gone-pkg#8"]);
   });
 
   it("③ 命中且在基线里 → known（绿），但没写 reason 的仍被 unexplained 抓住", () => {
-    expect(diff.known.map((k: { module: string }) => k.module)).toEqual([
-      "known-pkg",
-    ]);
+    expect(diff.known.map((k: { module: string }) => k.module)).toEqual(["known-pkg"]);
     expect(diff.unexplained).toEqual([]);
     const 空原因 = diffAgainstBaseline(
       collectBlocked({
@@ -224,9 +196,7 @@ describe("与基线对账（三条形状各钉一条）", () => {
         entries: [{ key: "known-pkg#7", reason: "  " }],
       },
     );
-    expect(空原因.unexplained.map((e: { key: string }) => e.key)).toEqual([
-      "known-pkg#7",
-    ]);
+    expect(空原因.unexplained.map((e: { key: string }) => e.key)).toEqual(["known-pkg#7"]);
   });
 });
 
@@ -247,7 +217,11 @@ describe("真脚本：--update 只许降（验收点名要求的形态）", () =
       );
       return { code: 0, out };
     } catch (error) {
-      const e = error as { status?: number; stdout?: string; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ error as {
+        status?: number;
+        stdout?: string;
+        stderr?: string;
+      };
       return { code: e.status ?? 1, out: `${e.stdout ?? ""}${e.stderr ?? ""}` };
     }
   }
@@ -374,18 +348,9 @@ describe("拿不到 registry 的三种形态（这条判据不许静默变绿）
 });
 
 describe("接线（两处同步 + 刻意不进 pre-commit）", () => {
-  const gate = readFileSync(
-    path.resolve(__dirname, "../scripts/quality-gate.mjs"),
-    "utf8",
-  );
-  const ps1 = readFileSync(
-    path.resolve(__dirname, "../scripts/quality-gate.ps1"),
-    "utf8",
-  );
-  const hook = readFileSync(
-    path.resolve(__dirname, "../.githooks/pre-commit"),
-    "utf8",
-  );
+  const gate = readFileSync(path.resolve(__dirname, "../scripts/quality-gate.mjs"), "utf8");
+  const ps1 = readFileSync(path.resolve(__dirname, "../scripts/quality-gate.ps1"), "utf8");
+  const hook = readFileSync(path.resolve(__dirname, "../.githooks/pre-commit"), "utf8");
 
   it("Node 侧 GATES 与 PowerShell 侧 $Blocks 都登记了同名的这一条", () => {
     expect(gate).toMatch(/dependencyAudit:\s*\{/);

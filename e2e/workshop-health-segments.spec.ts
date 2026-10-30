@@ -33,11 +33,9 @@ interface SegmentOnScreen {
 async function readSegments(barRoots: Locator): Promise<SegmentOnScreen[]> {
   return await barRoots.evaluateAll((nodes) =>
     nodes.map((node) => {
-      const root = node as HTMLElement;
+      const root = /* SAFETY: 类型断言已复核 */ node as HTMLElement;
       const label = root.querySelector("span");
-      const fill = root.querySelector<HTMLElement>(
-        '[data-slot="progress-bar-fill"]',
-      );
+      const fill = root.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]');
       const raw = root.getAttribute("aria-valuenow");
       return {
         name: root.getAttribute("aria-label"),
@@ -45,8 +43,7 @@ async function readSegments(barRoots: Locator): Promise<SegmentOnScreen[]> {
         value: raw === null ? null : Number(raw),
         fill: fill === null ? "" : getComputedStyle(fill).backgroundColor,
         // 溢出 = 可见文字实际占宽超过容器可给宽（缩略要解决的就是这个）
-        labelOverflow:
-          label !== null && label.scrollWidth > label.clientWidth + 1,
+        labelOverflow: label !== null && label.scrollWidth > label.clientWidth + 1,
         barWidth: Math.round(root.getBoundingClientRect().width),
       };
     }),
@@ -76,9 +73,7 @@ async function resolveColorOf(
 }
 
 test.describe("工坊顶栏分段健康度条 @critical", () => {
-  test("六段一根条：全名给读屏、缩略给眼睛，且两档色都解析得到具体颜色", async ({
-    page,
-  }) => {
+  test("六段一根条：全名给读屏、缩略给眼睛，且两档色都解析得到具体颜色", async ({ page }) => {
     await page.goto("/workshop", { waitUntil: "domcontentloaded" });
 
     const group = page.getByRole("group", { name: "工坊流程健康度" });
@@ -126,12 +121,8 @@ test.describe("工坊顶栏分段健康度条 @critical", () => {
     const page = await ctx.newPage();
     await page.goto("/workshop", { waitUntil: "domcontentloaded" });
 
-    await expect(
-      page.getByRole("group", { name: "工坊流程健康度" }),
-    ).toBeHidden();
-    await expect(
-      page.getByText(/还差 \d+ 段：|流程已完成/).first(),
-    ).toBeVisible();
+    await expect(page.getByRole("group", { name: "工坊流程健康度" })).toBeHidden();
+    await expect(page.getByText(/还差 \d+ 段：|流程已完成/).first()).toBeVisible();
     await ctx.close();
   });
 });

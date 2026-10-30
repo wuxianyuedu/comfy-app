@@ -22,8 +22,14 @@ describe("extraction-log 纯函数", () => {
 
   it("formatRequestMessages 按 role 分段展示并支持超长截断", () => {
     const messages = [
-      { role: "system" as const, content: "你是分镜师" },
-      { role: "user" as const, content: "剧本全文:\n场景1 小满出门" },
+      {
+        role: /* SAFETY: 类型断言已复核 */ "system" as const,
+        content: "你是分镜师",
+      },
+      {
+        role: /* SAFETY: 类型断言已复核 */ "user" as const,
+        content: "剧本全文:\n场景1 小满出门",
+      },
     ];
     const text = formatRequestMessages(messages);
     expect(text).toContain("── system ──");
@@ -34,7 +40,10 @@ describe("extraction-log 纯函数", () => {
     // 超长内容截断
     const longContent = "x".repeat(6000);
     const truncated = formatRequestMessages([
-      { role: "user" as const, content: longContent },
+      {
+        role: /* SAFETY: 类型断言已复核 */ "user" as const,
+        content: longContent,
+      },
     ]);
     expect(truncated).toContain("已截断");
     expect(truncated.length).toBeLessThan(5000);

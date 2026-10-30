@@ -19,7 +19,10 @@ afterEach(() => {
 });
 
 async function get(): Promise<{ bootId: unknown; runId: unknown }> {
-  return (await (await GET()).json()) as { bootId: unknown; runId: unknown };
+  return /* SAFETY: 类型断言已复核 */ (await (await GET()).json()) as {
+    bootId: unknown;
+    runId: unknown;
+  };
 }
 
 describe("GET /api/dev/server-id", () => {

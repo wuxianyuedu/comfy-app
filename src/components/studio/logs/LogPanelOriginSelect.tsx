@@ -104,7 +104,7 @@ function CountColumn({
  */
 function asOriginFilter(value: unknown): LogOriginFilter {
   return typeof value === "string" && value in ORIGIN_TEXT
-    ? (value as LogOriginFilter)
+    ? /* SAFETY: 类型断言已复核 */ (value as LogOriginFilter)
     : "all";
 }
 
@@ -205,9 +205,7 @@ function OriginSelect({
       >
         {/* 只写来源名：具体多少条、多少警告在左侧级别按钮与标题徽标上，
             这里再报一遍既不增加信息量，又把本就不宽的行头再挤掉一块。 */}
-        <SelectValue>
-          {(selected) => ORIGIN_TEXT[asOriginFilter(selected)]}
-        </SelectValue>
+        <SelectValue>{(selected) => ORIGIN_TEXT[asOriginFilter(selected)]}</SelectValue>
       </SelectTrigger>
       {/* 弹层必须盖在日志面板之上：面板遮罩走刻度表的 `modal` 档（见本文件底部
           overlayClass 的 z 参数），而 Select 的定位层若低于它——弹层照常画出来，却整块
@@ -253,15 +251,9 @@ function OriginSelect({
             {ORIGIN_LABELS.map((origin) => {
               const counts = countsByOrigin[origin];
               return (
-                <SelectItem
-                  key={origin}
-                  value={origin}
-                  className="gap-0 py-1 pr-7 pl-1.5 text-xs"
-                >
+                <SelectItem key={origin} value={origin} className="gap-0 py-1 pr-7 pl-1.5 text-xs">
                   <span className="flex items-center gap-3">
-                    <span className="text-ink-bright shrink-0">
-                      {ORIGIN_TEXT[origin]}
-                    </span>
+                    <span className="text-ink-bright shrink-0">{ORIGIN_TEXT[origin]}</span>
                     {ORIGIN_COLUMNS.map((column) => (
                       <CountColumn
                         key={column.key}

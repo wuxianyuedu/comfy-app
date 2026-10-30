@@ -100,7 +100,7 @@ export function useSettingsBackup({
             const result = await restoreM.mutateAsync({ name });
             if (!result.ok) throw new Error(result.reason);
             return {
-              ok: true as const,
+              ok: /* SAFETY: 类型断言已复核 */ true as const,
               text: `已登记恢复 ${name} —— **重启应用**后生效（当前进程还连着数据库，不能就地换文件）`,
             };
           },

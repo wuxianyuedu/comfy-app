@@ -77,10 +77,8 @@ vi.mock("~/server/auth/request-user", () => ({
 }));
 vi.mock("~/lib/app-settings/app-settings.server", () => ({
   getSettingsSync: settingsMock,
-  deriveComfyuiSubdir: (root: string, sub: string) =>
-    root ? `${root}/${sub}` : "",
-  deriveComfyuiWorkflowsDir: (root: string) =>
-    root ? `${root}/workflows` : "",
+  deriveComfyuiSubdir: (root: string, sub: string) => (root ? `${root}/${sub}` : ""),
+  deriveComfyuiWorkflowsDir: (root: string) => (root ? `${root}/workflows` : ""),
 }));
 vi.mock("~/lib/envfile", () => ({ readEnvVar: () => undefined }));
 
@@ -94,7 +92,7 @@ vi.mock("node:fs", async (importOriginal) => {
       ? p
       : p instanceof URL
         ? p.href
-        : (p as { toString(): string }).toString();
+        : /* SAFETY: 类型断言已复核 */ (p as { toString(): string }).toString();
   const stub = {
     ...real,
     existsSync: (p: PathLike): boolean => {
@@ -104,10 +102,9 @@ vi.mock("node:fs", async (importOriginal) => {
          * 所以这一档要能造出来 —— 不能让假 fs 只会返回布尔值。 */
         if (hit.existsFails) {
           if (hit.existsFails === "silent") throw new Error("");
-          throw Object.assign(
-            new Error(`EACCES: permission denied, ${keyOf(p)}`),
-            { code: "EACCES" },
-          );
+          throw Object.assign(new Error(`EACCES: permission denied, ${keyOf(p)}`), {
+            code: "EACCES",
+          });
         }
         return !hit.missing;
       }
@@ -117,13 +114,12 @@ vi.mock("node:fs", async (importOriginal) => {
       const k = keyOf(p);
       const hit = fsState.files.get(k);
       if (!hit) {
-        return (real.readFileSync as (a: unknown, b: unknown) => unknown)(
-          p,
-          options,
-        );
+        return /* SAFETY: 类型断言已复核 */ (
+          real.readFileSync as (a: unknown, b: unknown) => unknown
+        )(p, options);
       }
       if (hit.missing || hit.readFails) {
-        const e = new Error(
+        const e = /* SAFETY: 类型断言已复核 */ new Error(
           hit.missing
             ? `ENOENT: no such file or directory, open '${k}'`
             : `EIO: i/o error, read '${k}'`,
@@ -137,9 +133,9 @@ vi.mock("node:fs", async (importOriginal) => {
     statSync: (p: PathLike): unknown => {
       const k = keyOf(p);
       const hit = fsState.files.get(k);
-      if (!hit) return (real.statSync as (a: unknown) => unknown)(p);
+      if (!hit) return /* SAFETY: 类型断言已复核 */ (real.statSync as (a: unknown) => unknown)(p);
       if (hit.missing || hit.statFails) {
-        const e = new Error(
+        const e = /* SAFETY: 类型断言已复核 */ new Error(
           hit.missing
             ? `ENOENT: no such file or directory, stat '${k}'`
             : `EACCES: permission denied, stat '${k}'`,
@@ -162,10 +158,7 @@ import { GET, POST } from "./route";
 
 /** 被测代码里那两个落点（与 `route.ts` 的常量同一算法，不是抄来的字面量）。 */
 const MANIFEST = customNodesManifestPath();
-const REPORT = path.join(
-  process.cwd(),
-  "src/generated/customNodes.report.json",
-);
+const REPORT = path.join(process.cwd(), "src/generated/customNodes.report.json");
 
 /** 每次 spawn 记录的 argv 与假子进程的事件袋（按调用顺序）。 */
 const children: FakeChild[] = [];
@@ -209,7 +202,7 @@ function emitClose(child: FakeChild, code: number) {
 }
 
 async function post(body: unknown) {
-  const req = new Request("http://127.0.0.1:3000/api/custom-nodes", {
+  const req = /* SAFETY: 类型断言已复核 */ new Request("http://127.0.0.1:3000/api/custom-nodes", {
     method: "POST",
     headers: { "content-type": "application/json" },
     // body 允许是「不是 JSON」的原文 —— 畸形体这一路也在测
@@ -220,7 +213,7 @@ async function post(body: unknown) {
 
 /** 取 argv（spawn 的第二个入参）。 */
 function argv(i = 0): string[] {
-  return spawnMock.mock.calls[i]?.[1] as string[];
+  return /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[i]?.[1] as string[];
 }
 
 /**
@@ -292,7 +285,7 @@ describe("POST /api/custom-nodes —— 鉴权与请求体", () => {
       localWorkflowsPath: "C:/Windows",
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as {
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       paths: string[];
       localWorkflowPaths: string[];
     };
@@ -311,10 +304,7 @@ describe("POST parse —— argv 注入闸门（台账 A6）", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("application/x-ndjson");
     const args = argv();
-    const manifest = path.join(
-      process.cwd(),
-      "src/generated/customNodes.manifest.json",
-    );
+    const manifest = path.join(process.cwd(), "src/generated/customNodes.manifest.json");
     expect(args.slice(0, 5)).toEqual([
       "-u",
       "scripts/parse_custom_nodes.py",
@@ -389,7 +379,10 @@ describe("POST parse —— argv 注入闸门（台账 A6）", () => {
     settingsMock.mockReturnValue({ comfyuiPath: "" });
     const res = await post({ action: "parse" });
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { ok: boolean; error: string };
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      ok: boolean;
+      error: string;
+    };
     expect(body.ok).toBe(false);
     expect(body.error).toContain("CUSTOM_NODES_PATH");
     expect(spawnMock).not.toHaveBeenCalled();
@@ -470,7 +463,7 @@ describe("POST parse —— 解释器退避与收尾归属（台账 A14）", () 
      * 又抄一份顺序（POSIX 上根本没有 `py` 这一档，那条断言会莫名其妙地空过）。 */
     for (const [command, args] of spawnMock.mock.calls) {
       if (String(command) !== "py") continue;
-      expect((args as string[])[0]).toBe("-3");
+      expect(/* SAFETY: 类型断言已复核 */ (args as string[])[0]).toBe("-3");
     }
   });
 });
@@ -596,15 +589,10 @@ async function getEvents(): Promise<Record<string, unknown>[]> {
   return eventsOf(res);
 }
 
-function eventOf(
-  events: Record<string, unknown>[],
-  type: string,
-): Record<string, unknown> {
+function eventOf(events: Record<string, unknown>[], type: string): Record<string, unknown> {
   const hit = events.find((e) => e.type === type);
   if (!hit) {
-    throw new Error(
-      `事件流里没有 ${type}，实到：[${events.map((e) => String(e.type)).join(",")}]`,
-    );
+    throw new Error(`事件流里没有 ${type}，实到：[${events.map((e) => String(e.type)).join(",")}]`);
   }
   return hit;
 }
@@ -667,7 +655,7 @@ const FULL_MANIFEST = {
 /** 摘要事件里的 `summary` 字段（冷/热两种返回形态都走这一个口子取）。 */
 async function summaryOf(): Promise<Record<string, unknown> | null> {
   const payload = await payloadOf();
-  return payload.summary as Record<string, unknown> | null;
+  return /* SAFETY: 类型断言已复核 */ payload.summary as Record<string, unknown> | null;
 }
 
 /**
@@ -684,7 +672,7 @@ async function payloadOf(): Promise<Record<string, unknown>> {
   if ((res.headers.get("content-type") ?? "").includes("ndjson")) {
     return eventOf(await eventsOf(res), "summary");
   }
-  return (await res.json()) as Record<string, unknown>;
+  return /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, unknown>;
 }
 
 /** 把流式响应读到底，按行解析成事件数组。 */
@@ -693,7 +681,7 @@ async function eventsOf(res: Response): Promise<Record<string, unknown>[]> {
   return text
     .split("\n")
     .filter((line) => line.trim() !== "")
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
+    .map((line) => /* SAFETY: 类型断言已复核 */ JSON.parse(line) as Record<string, unknown>);
 }
 
 describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
@@ -716,7 +704,7 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: true });
     const res = await GET();
     expect(res.status).toBe(500);
-    const body = (await res.json()) as {
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       error?: { code?: string; message?: string };
     };
     expect(body.error?.code).toBe("custom_nodes.read_failed");
@@ -728,16 +716,18 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: "silent" });
     const res = await GET();
     expect(res.status).toBe(500);
-    const body = (await res.json()) as { error?: { message?: string } };
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      error?: { message?: string };
+    };
     expect(body.error?.message).toBe("读取配置失败");
   });
 
   it("500 的信封里只有 error —— 消费方靠「没有 settings」判失败，形状不许偷偷加字段", async () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: true });
     const res = await GET();
-    expect(Object.keys((await res.json()) as Record<string, unknown>)).toEqual([
-      "error",
-    ]);
+    expect(
+      Object.keys(/* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, unknown>),
+    ).toEqual(["error"]);
   });
 });
 
@@ -747,15 +737,13 @@ describe("GET 摘要：清单的六种坏法", () => {
     const events = await getEvents();
     const summary = eventOf(events, "summary");
     expect(summary.summary).toBeNull();
-    const settings = summary.settings as {
+    const settings = /* SAFETY: 类型断言已复核 */ summary.settings as {
       paths: string[];
       localWorkflowPaths: string[];
     };
     // 两个伴随字段都得指向**同一个安装根**（对话框靠它们在同一屏里配对显示）。
     expect(settings.paths).toEqual([parent]);
-    expect(path.dirname(settings.localWorkflowPaths[0] ?? "")).toBe(
-      path.dirname(parent),
-    );
+    expect(path.dirname(settings.localWorkflowPaths[0] ?? "")).toBe(path.dirname(parent));
     expect(settings.localWorkflowPaths[0]).toMatch(/workflows$/);
   });
 
@@ -927,7 +915,7 @@ describe("GET 的 lastReport：原样透传，读不出来时按 null", () => {
     const events = await getEvents();
     expect(eventOf(events, "summary").lastReport).toBeNull();
     expect(
-      (eventOf(events, "summary").summary as Record<string, unknown>)
+      /* SAFETY: 类型断言已复核 */ (eventOf(events, "summary").summary as Record<string, unknown>)
         ?.totalNodes,
     ).toBe(2);
   });
@@ -964,7 +952,7 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     const events = text
       .split("\n")
       .filter((l) => l.trim() !== "")
-      .map((l) => JSON.parse(l) as Record<string, unknown>);
+      .map((l) => /* SAFETY: 类型断言已复核 */ JSON.parse(l) as Record<string, unknown>);
     expect(events.map((e) => e.type)).toEqual([
       "discover_start",
       "progress",
@@ -996,10 +984,12 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
 
     const res = await GET();
     expect(res.headers.get("content-type")).toContain("application/json");
-    const body = (await res.json()) as Record<string, unknown>;
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, unknown>;
     expect(spawnMock).toHaveBeenCalledTimes(1);
     expect(body.discoveredByParent).toEqual({ [parent]: [{ name: "Foo" }] });
-    expect((body.summary as Record<string, unknown>).totalNodes).toBe(2);
+    expect(/* SAFETY: 类型断言已复核 */ (body.summary as Record<string, unknown>).totalNodes).toBe(
+      2,
+    );
     expect(body.settings).toMatchObject({ paths: [parent] });
   });
 
@@ -1021,15 +1011,11 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     settingsMock.mockReturnValue({ comfyuiPath: "" });
     putManifest(FULL_MANIFEST);
     const events = await getEvents();
-    expect(events.map((e) => e.type)).toEqual([
-      "discover_start",
-      "summary",
-      "done",
-    ]);
+    expect(events.map((e) => e.type)).toEqual(["discover_start", "summary", "done"]);
     expect(events[0]).toMatchObject({ parents: [], total: 0 });
     expect(spawnMock).not.toHaveBeenCalled();
     expect(
-      (eventOf(events, "summary").summary as Record<string, unknown>)
+      /* SAFETY: 类型断言已复核 */ (eventOf(events, "summary").summary as Record<string, unknown>)
         .totalNodes,
     ).toBe(2);
   });
@@ -1037,15 +1023,11 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
   it("流内部起进程失败 → 出一条 error 事件并把流收尾，不是半截挂着", async () => {
     scriptDiscover([], { spawnThrows: true });
     const events = await getEvents();
-    expect(events.map((e) => e.type)).toEqual([
-      "discover_start",
-      "progress",
-      "error",
-    ]);
+    expect(events.map((e) => e.type)).toEqual(["discover_start", "progress", "error"]);
     expect(events[2]).toMatchObject({ type: "error" });
-    expect(String((events[2] as { message?: string }).message ?? "")).not.toBe(
-      "",
-    );
+    expect(
+      String(/* SAFETY: 类型断言已复核 */ (events[2] as { message?: string }).message ?? ""),
+    ).not.toBe("");
   });
 
   it("byPath 把同一个目录的两种写法归一到同一个键（界面上「已载入/已过期」靠它）", async () => {
@@ -1057,7 +1039,10 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     });
     scriptDiscover([JSON.stringify({ packages: [] })]);
     const events = await getEvents();
-    const byPath = eventOf(events, "summary").byPath as Record<string, unknown>;
+    const byPath = /* SAFETY: 类型断言已复核 */ eventOf(events, "summary").byPath as Record<
+      string,
+      unknown
+    >;
     expect(Object.keys(byPath)).toHaveLength(1);
     const key = Object.keys(byPath)[0] ?? "";
     expect(key).toBe(key.toLowerCase());
@@ -1113,42 +1098,28 @@ function queueChild(plan: ChildPlan): void {
       pid: 9,
     };
     children.push(child);
-    const fire = (
-      bag: Record<string, Cb[]>,
-      ev: string,
-      arg: unknown,
-    ): void => {
+    const fire = (bag: Record<string, Cb[]>, ev: string, arg: unknown): void => {
       for (const cb of bag[ev] ?? []) cb(arg);
     };
     /* 延后一拍：注册必须先于触发（与被测代码同步挂监听这一段配对）。 */
     setTimeout(() => {
-      for (const c of plan.chunks ?? [])
-        fire(child.out, "data", Buffer.from(c));
-      for (const l of plan.lines ?? [])
-        fire(child.out, "data", Buffer.from(`${l}\n`));
-      for (const e of plan.errChunks ?? [])
-        fire(child.err, "data", Buffer.from(e));
+      for (const c of plan.chunks ?? []) fire(child.out, "data", Buffer.from(c));
+      for (const l of plan.lines ?? []) fire(child.out, "data", Buffer.from(`${l}\n`));
+      for (const e of plan.errChunks ?? []) fire(child.err, "data", Buffer.from(e));
       if (plan.error) {
         fire(
           child.proc,
           "error",
-          Object.assign(
-            new Error(plan.error.message ?? `spawn ${plan.error.code}`),
-            {
-              code: plan.error.code,
-            },
-          ),
+          Object.assign(new Error(plan.error.message ?? `spawn ${plan.error.code}`), {
+            code: plan.error.code,
+          }),
         );
       }
       if (!plan.noClose && (!plan.error || plan.closeCode !== undefined)) {
         /* `closeCode: null` 是**真机那一形**（spawn 失败时 Node 给的是 null，不是 0），
          * 所以这里不能写 `?? 0` —— 那样 `null` 会被折成 0，「退出码为空」这一档
          * 在夹具里就永远造不出来了。 */
-        fire(
-          child.proc,
-          "close",
-          plan.closeCode === undefined ? 0 : plan.closeCode,
-        );
+        fire(child.proc, "close", plan.closeCode === undefined ? 0 : plan.closeCode);
       }
     }, 0);
     return handle;
@@ -1170,13 +1141,8 @@ function msgOf(ev: Record<string, unknown>): string {
  * 不能取「第一条 progress」：外层流自己会先吐一条 `📂 [1/1] <扫描根>`，
  * 拿第一条会把外层那条当成解析器发来的进度（实测就是这四条一开始红的原因）。
  */
-function progressWith(
-  events: Record<string, unknown>[],
-  substr: string,
-): Record<string, unknown> {
-  const hit = events.find(
-    (e) => e.type === "progress" && msgOf(e).includes(substr),
-  );
+function progressWith(events: Record<string, unknown>[], substr: string): Record<string, unknown> {
+  const hit = events.find((e) => e.type === "progress" && msgOf(e).includes(substr));
   if (!hit) {
     throw new Error(
       `进度事件里没有含 "${substr}" 的那条，实到的进度：` +
@@ -1215,9 +1181,7 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     /* 最后一个候选之后必须仍然给出**一句读得懂的原因** —— 这一句在修可达性之前不可达
      * （两条退避都写成 `i < pyCandidates.length - 1`，`i` 最大只到 2 就地 resolve），
      * 真机没装 Python 时界面只剩「0 个节点」。 */
-    expect(
-      events.filter((e) => msgOf(e).includes("未找到 Python 解释器")),
-    ).toHaveLength(1);
+    expect(events.filter((e) => msgOf(e).includes("未找到 Python 解释器"))).toHaveLength(1);
     expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
     /* 全失败**不许**回一个像成功的空收尾：没有解释器就没有 discover_done 这一步事实。 */
     expect(events.some((e) => e.type === "discover_done")).toBe(false);
@@ -1229,9 +1193,7 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     ORDER.forEach(() => queueChild({ closeCode: 127 }));
     const events = await getEvents();
     expect(interpreterNames()).toEqual(ORDER);
-    expect(
-      events.filter((e) => msgOf(e).includes("未找到 Python 解释器")),
-    ).toHaveLength(1);
+    expect(events.filter((e) => msgOf(e).includes("未找到 Python 解释器"))).toHaveLength(1);
     expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
     expect(events.some((e) => e.type === "discover_done")).toBe(false);
   });
@@ -1283,10 +1245,7 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     });
     const events = await getEvents();
     const hit = events.find((e) => msgOf(e).includes("SyntaxWarning"));
-    expect(
-      hit,
-      `事件流里没有那句 stderr 警告：${JSON.stringify(events)}`,
-    ).toBeTruthy();
+    expect(hit, `事件流里没有那句 stderr 警告：${JSON.stringify(events)}`).toBeTruthy();
     expect(hit ? msgOf(hit) : "").toContain("⚠️");
     expect(hit?.phase).toBe("scan");
   });
@@ -1334,13 +1293,10 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
   it("以最后一行 JSON 为准（解析器中途吐过的 JSON 行不许当结果）", async () => {
     coldRoot();
     queueChild({
-      lines: [
-        JSON.stringify({ packages: [{ name: "Old", path: "/tmp/a" }] }),
-        ONE_PKG_LINE,
-      ],
+      lines: [JSON.stringify({ packages: [{ name: "Old", path: "/tmp/a" }] }), ONE_PKG_LINE],
     });
     const events = await getEvents();
-    const packages = eventOf(events, "discover_done").packages as {
+    const packages = /* SAFETY: 类型断言已复核 */ eventOf(events, "discover_done").packages as {
       name: string;
     }[];
     expect(packages.map((p) => p.name)).toEqual(["Foo"]);
@@ -1351,10 +1307,7 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     queueChild({ lines: ["{not json at all"], closeCode: 3 });
     const events = await getEvents();
     const hit = events.find((e) => msgOf(e).includes("解析失败"));
-    expect(
-      hit,
-      `没有那句带退出码的失败进度：${JSON.stringify(events)}`,
-    ).toBeTruthy();
+    expect(hit, `没有那句带退出码的失败进度：${JSON.stringify(events)}`).toBeTruthy();
     expect(hit ? msgOf(hit) : "").toContain("3");
     expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
   });

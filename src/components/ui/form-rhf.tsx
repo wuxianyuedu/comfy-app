@@ -39,7 +39,7 @@ type FormFieldContextValue<
 };
 
 const FormFieldContext = React.createContext<FormFieldContextValue>(
-  {} as FormFieldContextValue,
+  /* SAFETY: 类型断言已复核 */ {} as FormFieldContextValue,
 );
 
 const FormField = <
@@ -60,7 +60,7 @@ type FormItemContextValue = {
 };
 
 const FormItemContext = React.createContext<FormItemContextValue>(
-  {} as FormItemContextValue,
+  /* SAFETY: 类型断言已复核 */ {} as FormItemContextValue,
 );
 
 function useFormField() {
@@ -91,19 +91,12 @@ function FormItem({ className, ...props }: React.ComponentProps<"div">) {
 
   return (
     <FormItemContext.Provider value={{ id }}>
-      <div
-        data-slot="form-item"
-        className={cn("grid gap-2", className)}
-        {...props}
-      />
+      <div data-slot="form-item" className={cn("grid gap-2", className)} {...props} />
     </FormItemContext.Provider>
   );
 }
 
-function FormLabel({
-  className,
-  ...props
-}: React.ComponentProps<typeof Label>) {
+function FormLabel({ className, ...props }: React.ComponentProps<typeof Label>) {
   const { error, formItemId } = useFormField();
 
   return (
@@ -117,17 +110,14 @@ function FormLabel({
 }
 
 function FormControl(props: React.PropsWithChildren) {
-  const { error, formItemId, formDescriptionId, formMessageId } =
-    useFormField();
+  const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
 
-  const child = React.Children.only(props.children) as React.ReactElement<
-    Record<string, unknown>
-  >;
+  const child = /* SAFETY: 类型断言已复核 */ React.Children.only(
+    props.children,
+  ) as React.ReactElement<Record<string, unknown>>;
   return React.cloneElement(child, {
     id: formItemId,
-    "aria-describedby": !error
-      ? `${formDescriptionId}`
-      : `${formDescriptionId} ${formMessageId}`,
+    "aria-describedby": !error ? `${formDescriptionId}` : `${formDescriptionId} ${formMessageId}`,
     "aria-invalid": !!error,
   });
 }

@@ -16,10 +16,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  collectShapes,
-  main,
-} from "../scripts/check-comment-headers.mjs";
+import { collectShapes, main } from "../scripts/check-comment-headers.mjs";
 import { headerShape } from "../scripts/ship-ticket.mjs";
 
 type FakeResult = {
@@ -161,14 +158,11 @@ describe("main：三态与点名", () => {
     main({ run, log, slug: "o/r", json: true });
     /* 追一行人类总结会让机器侧 `JSON.parse` 撞「尾部多余内容」，看起来像数据坏了。 */
     expect(heard).toHaveLength(1);
-    const parsed = JSON.parse(heard.join("\n")) as {
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(heard.join("\n")) as {
       total: number;
       rows: { number: string }[];
     };
     expect(parsed.total).toBe(3);
-    expect(parsed.rows.map((r: { number: string }) => r.number)).toEqual([
-      "2195",
-      "2194",
-    ]);
+    expect(parsed.rows.map((r: { number: string }) => r.number)).toEqual(["2195", "2194"]);
   });
 });

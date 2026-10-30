@@ -100,10 +100,7 @@ function makeWindowsPnpmDir(
     fs.writeFileSync(path.join(dir, "pnpm.ps1"), "Write-Output '12.4.1'\n");
   }
   if (options.cmd) {
-    fs.writeFileSync(
-      path.join(dir, "pnpm.CMD"),
-      "@ECHO off\r\necho 12.4.1\r\n",
-    );
+    fs.writeFileSync(path.join(dir, "pnpm.CMD"), "@ECHO off\r\necho 12.4.1\r\n");
   }
   return dir;
 }
@@ -181,12 +178,8 @@ describe("可执行形态的候选顺序（executableExts）", () => {
    */
   it("`.PS1` 无条件在候选里 —— 默认 PATHEXT 从不声明它，由它决定就是永远选不出来", () => {
     // Windows 的默认 PATHEXT（实测形态：没有 .PS1）。
-    const DEFAULT_PATHEXT =
-      ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC";
-    const exts = executableExts(
-      { PATH: "/x", PATHEXT: DEFAULT_PATHEXT },
-      "win32",
-    );
+    const DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC";
+    const exts = executableExts({ PATH: "/x", PATHEXT: DEFAULT_PATHEXT }, "win32");
     expect(exts).toContain(".PS1");
     // 顺序仍按「Node 能不能直接起」：`.PS1` 在 `.CMD` / `.BAT` **之前**
     // （`.CMD` 只有 cmd.exe 解释，Node 起它实测 EINVAL）。
@@ -260,9 +253,7 @@ describe("`.PS1` 是候选（Windows 默认 PATHEXT 不含它，ISSUE #1961）",
      * Node 自己起不来，必须交 PowerShell 宿主 + `-File`。 */
     const usable = usableCommand(found!, ["-v"], { env, platform: "win32" });
     expect(usable.ok).toBe(true);
-    expect(usable.command.toLowerCase()).toBe(
-      path.join(hostDir, "pwsh.EXE").toLowerCase(),
-    );
+    expect(usable.command.toLowerCase()).toBe(path.join(hostDir, "pwsh.EXE").toLowerCase());
     expect(usable.prefixArgs).toContain("-File");
     expect(usable.prefixArgs).toContain(found);
   });
@@ -305,9 +296,7 @@ describe("whichCommand 只认「真的能跑」的候选", () => {
   it("不可执行的 shim 不会被选中（旧实现在此选中它 → EACCES）", () => {
     const dir = makeWindowsPnpmDir({ shim: "broken", cmd: true });
     // 不可执行的 shim：明确排除。
-    expect(
-      whichCommand("pnpm", { env: WIN_ENV(dir), platform: "win32" }),
-    ).toBeNull();
+    expect(whichCommand("pnpm", { env: WIN_ENV(dir), platform: "win32" })).toBeNull();
   });
 
   needsPosixExec("能跑的 shim 会被选中（不会被垫底的 .CMD 抢走）", () => {
@@ -446,22 +435,19 @@ describe("探测结果区分成因（probePnpm / probeCommand）", () => {
     expect(probe.detail).not.toBe("未知错误");
   });
 
-  needsPosixExec(
-    "命令能起但报错退出：reason=exit-nonzero 且带出实际输出",
-    () => {
-      const script = path.join(tmp, "pnpm");
-      fs.writeFileSync(
-        script,
-        "#!/bin/sh\necho 'Failed to switch pnpm to pnpm@9.9.9 ENOENT' >&2\nexit 1\n",
-      );
-      fs.chmodSync(script, 0o755);
-      const probe = probeCommand(script);
-      expect(probe.ok).toBe(false);
-      expect(probe.reason).toBe("exit-nonzero");
-      // 真·corepack 缓存损坏**有输出**，与「stderr 全空」的形态必须能被分开。
-      expect(probe.detail).toContain("Failed to switch pnpm");
-    },
-  );
+  needsPosixExec("命令能起但报错退出：reason=exit-nonzero 且带出实际输出", () => {
+    const script = path.join(tmp, "pnpm");
+    fs.writeFileSync(
+      script,
+      "#!/bin/sh\necho 'Failed to switch pnpm to pnpm@9.9.9 ENOENT' >&2\nexit 1\n",
+    );
+    fs.chmodSync(script, 0o755);
+    const probe = probeCommand(script);
+    expect(probe.ok).toBe(false);
+    expect(probe.reason).toBe("exit-nonzero");
+    // 真·corepack 缓存损坏**有输出**，与「stderr 全空」的形态必须能被分开。
+    expect(probe.detail).toContain("Failed to switch pnpm");
+  });
 
   needsPosixExec("能用时带出解析到的版本号", () => {
     const script = path.join(tmp, "pnpm");
@@ -580,14 +566,12 @@ describe("编排器与启动页的接线契约", () => {
   });
 
   it("自查入口是跨平台薄壳，且登记在 package.json 与 §9.5 对照表", () => {
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
     ) as {
       scripts: Record<string, string>;
     };
-    expect(pkg.scripts["check:toolchain"]).toBe(
-      "node scripts/check-pnpm-available.mjs",
-    );
+    expect(pkg.scripts["check:toolchain"]).toBe("node scripts/check-pnpm-available.mjs");
     const selfCheck = fs.readFileSync(
       path.join(ROOT, "scripts", "check-pnpm-available.mjs"),
       "utf8",
@@ -668,11 +652,7 @@ describe("pnpm check:toolchain 真跑", () => {
     fs.mkdirSync(emptyRoot, { recursive: true });
     const r = spawnSync(
       process.execPath,
-      [
-        path.join(ROOT, "scripts", "check-pnpm-available.mjs"),
-        "--deps-root",
-        emptyRoot,
-      ],
+      [path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "--deps-root", emptyRoot],
       { encoding: "utf8", env: env ?? process.env },
     );
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
@@ -690,10 +670,7 @@ describe("pnpm check:toolchain 真跑", () => {
   });
 
   it("依赖判据与启动器同一个实现（不在自检里留一份弱化副本）", () => {
-    const src = fs.readFileSync(
-      path.join(ROOT, "scripts", "check-pnpm-available.mjs"),
-      "utf8",
-    );
+    const src = fs.readFileSync(path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "utf8");
     // 两份口径并存时「自检说已装、启动器说残缺」是必然的，且会各自漂移：
     // 旧版这里只查 `.modules.yaml` 一项，而启动器查 .bin/next + 关键依赖目录。
     expect(src).toContain("checkNodeModules");
@@ -733,9 +710,7 @@ describe("pnpm check:toolchain 真跑", () => {
     );
     expect(r.status).not.toBe(0);
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
-    expect(out, "探不到 pnpm 时没有留下读取到的 PATH 原文").toContain(
-      "PATH 原文",
-    );
+    expect(out, "探不到 pnpm 时没有留下读取到的 PATH 原文").toContain("PATH 原文");
     expect(out).toContain(badPath);
     // 空目录里一个都没命中，要说清是「这些条目里没有」，不写成「这台机没装」。
     expect(out).toContain("一个都没命中");
@@ -777,9 +752,7 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
       [
         "#!/bin/sh",
         `if [ "$1" = "--version" ]; then echo 0.34.0; exit 0; fi`,
-        options.aligns
-          ? `: > "${marker}"`
-          : `echo "prepare failed" >&2; exit 1`,
+        options.aligns ? `: > "${marker}"` : `echo "prepare failed" >&2; exit 1`,
         "exit 0",
         "",
       ].join("\n"),
@@ -797,40 +770,26 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
     return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
   }
 
-  needsPosixExec(
-    "对齐成功：报已对齐（带前后版本号），不留下「你只能自己修」的 WARN",
-    () => {
-      const { status, out } = runSelfCheck(
-        makeAlignableToolchain({ aligns: true }),
-      );
-      expect(status).toBe(0);
-      expect(out).toContain("已对齐");
-      expect(out).toContain("10.34.5");
-      expect(out).toContain(packageManagerVersion(ROOT)!);
-      expect(out).not.toContain("自动对齐未生效");
-    },
-  );
+  needsPosixExec("对齐成功：报已对齐（带前后版本号），不留下「你只能自己修」的 WARN", () => {
+    const { status, out } = runSelfCheck(makeAlignableToolchain({ aligns: true }));
+    expect(status).toBe(0);
+    expect(out).toContain("已对齐");
+    expect(out).toContain("10.34.5");
+    expect(out).toContain(packageManagerVersion(ROOT)!);
+    expect(out).not.toContain("自动对齐未生效");
+  });
 
-  needsPosixExec(
-    "对齐失败：复核后才 WARN，并给出手动命令（版本号取自 package.json）",
-    () => {
-      const { status, out } = runSelfCheck(
-        makeAlignableToolchain({ aligns: false }),
-      );
-      expect(status).toBe(0); // 与启动器一致：版本不一致不阻断
-      expect(out).toContain("自动对齐未生效");
-      expect(out).toContain(
-        `corepack prepare pnpm@${packageManagerVersion(ROOT)} --activate`,
-      );
-    },
-  );
+  needsPosixExec("对齐失败：复核后才 WARN，并给出手动命令（版本号取自 package.json）", () => {
+    const { status, out } = runSelfCheck(makeAlignableToolchain({ aligns: false }));
+    expect(status).toBe(0); // 与启动器一致：版本不一致不阻断
+    expect(out).toContain("自动对齐未生效");
+    expect(out).toContain(`corepack prepare pnpm@${packageManagerVersion(ROOT)} --activate`);
+  });
 
   needsPosixExec(
     "node_modules 未装时点出下一道门禁，不让「[OK] pnpm 可用」被读成「可以启动了」",
     () => {
-      const { status, out } = runSelfCheck(
-        makeAlignableToolchain({ aligns: true }),
-      );
+      const { status, out } = runSelfCheck(makeAlignableToolchain({ aligns: true }));
       expect(status).toBe(0);
       // 本仓库测试环境两态都可能（CI 装了 / 干净检出没装），只钉「不存在假装没事」：
       // 未装时必须出现 node_modules 的 WARN 与修复动作。
@@ -945,9 +904,7 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
      * 决定结论的断言，而那正是这条用例刚被修掉的形状。 */
     const selected = inv!.candidate.toLowerCase();
     expect(
-      [path.join(dir, "pnpm.CMD"), path.join(dir, "pnpm.ps1")].map((p) =>
-        p.toLowerCase(),
-      ),
+      [path.join(dir, "pnpm.CMD"), path.join(dir, "pnpm.ps1")].map((p) => p.toLowerCase()),
       `选中的不是那个目录里真有的形态：${inv!.candidate}`,
     ).toContain(selected);
     expect(inv!.viaHost).toBe(true);
@@ -982,14 +939,10 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
   it("dev.mjs / start.mjs 不再各自拼 pnpm 可执行名", () => {
     for (const rel of ["scripts/dev.mjs", "scripts/start.mjs"]) {
       const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
-      expect(src, `${rel}: 必须复用 pnpmInvocation`).toContain(
-        "pnpmInvocation",
-      );
+      expect(src, `${rel}: 必须复用 pnpmInvocation`).toContain("pnpmInvocation");
       // 写死平台后缀的旧写法必须消失（它是这条缺陷的形态本身）
       expect(src, `${rel}: 不得再写死 pnpm.cmd`).not.toContain('"pnpm.cmd"');
-      expect(src, `${rel}: 不得再按平台三元表达式拼可执行名`).not.toMatch(
-        /win32"\s*\?\s*"pnpm/,
-      );
+      expect(src, `${rel}: 不得再按平台三元表达式拼可执行名`).not.toMatch(/win32"\s*\?\s*"pnpm/);
     }
   });
 
@@ -1038,28 +991,20 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
       const code = raw
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .split("\n")
-        .map((line) =>
-          line.replace(/^\s*\/\/.*$/, "").replace(/([^:])\/\/.*$/, "$1"),
-        )
+        .map((line) => line.replace(/^\s*\/\/.*$/, "").replace(/([^:])\/\/.*$/, "$1"))
         .join("\n");
 
       // ① 写死平台后缀 / 按平台三元拼可执行名 —— 形态本身就是缺陷。
-      if (/"pnpm\.cmd"|'pnpm\.cmd'/.test(code))
-        offenders.push(`${rel}: 写死了 pnpm.cmd`);
-      if (/win32"?\s*\?\s*"pnpm/.test(code))
-        offenders.push(`${rel}: 按平台三元拼 pnpm 可执行名`);
+      if (/"pnpm\.cmd"|'pnpm\.cmd'/.test(code)) offenders.push(`${rel}: 写死了 pnpm.cmd`);
+      if (/win32"?\s*\?\s*"pnpm/.test(code)) offenders.push(`${rel}: 按平台三元拼 pnpm 可执行名`);
 
       // ② 裸 spawn/exec 一个 pnpm 名字（无论有没有扩展名）而没走同一处判据。
       //    `runPnpmSync` / `pnpmInvocation` 是**唯一**被允许的起 pnpm 的方式。
       const usesShared = /pnpmInvocation|runPnpmSync/.test(code);
       const spawnsByName =
-        /(?:spawn|spawnSync|exec|execSync|execFile|execFileSync)\s*\(\s*["'`]pnpm/i.test(
-          code,
-        );
+        /(?:spawn|spawnSync|exec|execSync|execFile|execFileSync)\s*\(\s*["'`]pnpm/i.test(code);
       if (spawnsByName && !usesShared) {
-        offenders.push(
-          `${rel}: 直接起 pnpm —— 必须复用 pnpmInvocation / runPnpmSync`,
-        );
+        offenders.push(`${rel}: 直接起 pnpm —— 必须复用 pnpmInvocation / runPnpmSync`);
       }
     }
 
@@ -1095,12 +1040,8 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     expect(failureBlock, "失败块里必须把 error 的 code 打出来").toContain(".code");
     expect(code).toContain("实际命令：");
     // 旧写法 `process.exit(result.status ?? 0)` 把「没起来」读成成功 —— 必须分开判。
-    expect(code, "不得再出现 ?? 0 吞掉「没起来」").not.toMatch(
-      /exit\(result\.status\s*\?\?\s*0\)/,
-    );
-    expect(code, "status 为 null 必须与非零退出分开").toContain(
-      "result.status === null",
-    );
+    expect(code, "不得再出现 ?? 0 吞掉「没起来」").not.toMatch(/exit\(result\.status\s*\?\?\s*0\)/);
+    expect(code, "status 为 null 必须与非零退出分开").toContain("result.status === null");
   });
 });
 
@@ -1175,12 +1116,8 @@ describe("pnpm 探测的记忆化（一次启动只探一次）", () => {
   needsPosixExec("换 PATH 就是另一个问题：不许互相顶掉结论", () => {
     const a = makeCountingPnpm("count-d", "echo 12.4.1");
     const b = makeCountingPnpm("count-e", "echo 9.9.9");
-    expect(probePnpm({ env: { PATH: a.dir }, platform: "linux" }).version).toBe(
-      "12.4.1",
-    );
-    expect(probePnpm({ env: { PATH: b.dir }, platform: "linux" }).version).toBe(
-      "9.9.9",
-    );
+    expect(probePnpm({ env: { PATH: a.dir }, platform: "linux" }).version).toBe("12.4.1");
+    expect(probePnpm({ env: { PATH: b.dir }, platform: "linux" }).version).toBe("9.9.9");
   });
 
   needsPosixExec("换 root 也是另一个问题（键里带 root）", () => {
@@ -1242,18 +1179,13 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
    * `launcher-core/shell-stage.mjs`：判据是**接线形态**（标记怎么判、哪一支不起壳），
    * 不是「这段写在哪份文件里」，所以走现算的链路闭包。 */
   const launcher = launcherChainSource();
-  const rust = fs.readFileSync(
-    path.join(ROOT, "src-tauri", "src", "shell_launch.rs"),
-    "utf8",
-  );
+  const rust = fs.readFileSync(path.join(ROOT, "src-tauri", "src", "shell_launch.rs"), "utf8");
 
   it("自编排链路里编排器不再起第二个壳", () => {
     // 判据是壳注入的标记（键名与壳侧 `spawn_orchestrator` 同源），且只对
     // prebuilt 成立。
     expect(launcher).toContain("const launchedByShell =");
-    expect(launcher).toContain(
-      'process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1"',
-    );
+    expect(launcher).toContain('process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1"');
     expect(launcher).toContain('mode === "prebuilt"');
     /* 不起壳那一支必须真的跳过 spawnShell。R5 拆刀（ISSUE #1811）把它重整成
      * **提前返回**（`if (launchedByShell) { …; return { ok: true, shell: null, staleShell }; }`），
@@ -1262,13 +1194,8 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
      * 返回形状的 `ok: true` 是本次拆刀补上的（与另一支的 `{ ok: true, shell, staleShell }`
      * 对齐），断言按**实际形态**写，不按记忆里的旧形态。 */
     const skipStart = launcher.indexOf("if (launchedByShell) {");
-    expect(skipStart, "找不到自编排分支（拆刀后别断了接线）").toBeGreaterThan(
-      -1,
-    );
-    const skipEnd = launcher.indexOf(
-      "return { ok: true, shell: null, staleShell };",
-      skipStart,
-    );
+    expect(skipStart, "找不到自编排分支（拆刀后别断了接线）").toBeGreaterThan(-1);
+    const skipEnd = launcher.indexOf("return { ok: true, shell: null, staleShell };", skipStart);
     expect(skipEnd, "自编排分支要提前返回、不再往下走").toBeGreaterThan(-1);
     const skipBody = launcher.slice(skipStart, skipEnd);
     expect(skipBody, "自编排分支不许再 spawn 壳").not.toContain("spawnShell(");
@@ -1297,20 +1224,13 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
   });
 
   it("壳侧单实例判定不再有「被编排器起的壳」短路", () => {
-    const lib = fs.readFileSync(
-      path.join(ROOT, "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const lib = fs.readFileSync(path.join(ROOT, "src-tauri", "src", "lib.rs"), "utf8");
     const body = lib.slice(
       lib.indexOf("fn another_instance_owns_this_checkout"),
       lib.indexOf("fn another_instance_owns_this_checkout") + 1500,
     );
-    expect(body, "任何壳都照常判单实例").toContain(
-      "single_instance::another_instance_running()",
-    );
-    expect(lib, "「被编排器起的壳」形态已随第二个壳一起移除").not.toContain(
-      "is_shell_child",
-    );
+    expect(body, "任何壳都照常判单实例").toContain("single_instance::another_instance_running()");
+    expect(lib, "「被编排器起的壳」形态已随第二个壳一起移除").not.toContain("is_shell_child");
   });
 });
 
@@ -1346,9 +1266,7 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
 
   it("本仓声明的范围满足每一条依赖下限（真算，不是比字符串）", () => {
     const r = checkDeclaredFloor({ root: ROOT, floors });
-    expect(r.ok, `被越过的依赖：${r.gaps?.map((g) => g.pkg).join(", ")}`).toBe(
-      true,
-    );
+    expect(r.ok, `被越过的依赖：${r.gaps?.map((g) => g.pkg).join(", ")}`).toBe(true);
   });
 
   it("README 的环境要求与 engines.node 同源（防文档漂回「≥ 22」那种松写法）", () => {
@@ -1365,28 +1283,20 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
   it("把声明放宽到 next 的下限 ⇒ 必须点名被越过的测试链依赖", () => {
     const r = checkDeclaredFloor({ root: ROOT, declared: ">=20.9.0", floors });
     expect(r.ok).toBe(false);
-    expect(r.gaps?.map((g) => g.pkg)).toEqual(
-      expect.arrayContaining(["vitest", "jsdom", "msw"]),
-    );
+    expect(r.gaps?.map((g) => g.pkg)).toEqual(expect.arrayContaining(["vitest", "jsdom", "msw"]));
   });
 
   it("无上界的 `>=24.15.0` 同样不合法（它放进了依赖不接受的 25.x）", () => {
     const r = checkDeclaredFloor({ root: ROOT, declared: ">=24.15.0", floors });
     expect(r.ok).toBe(false);
-    expect(r.gaps?.map((g) => g.pkg)).toEqual(
-      expect.arrayContaining(["vitest", "jsdom"]),
-    );
+    expect(r.gaps?.map((g) => g.pkg)).toEqual(expect.arrayContaining(["vitest", "jsdom"]));
   });
 
   it("读不懂的形状判「没跑起来」，不判绿", () => {
-    expect(checkDeclaredFloor({ root: ROOT, declared: "20.x" }).kind).toBe(
-      "unparsable",
-    );
+    expect(checkDeclaredFloor({ root: ROOT, declared: "20.x" }).kind).toBe("unparsable");
     expect(parseRange("20.x")).toBeNull();
     /* 空字符串与缺失也走同一格 —— 「没声明」不能读成「没有下限要求」。 */
-    expect(checkDeclaredFloor({ root: ROOT, declared: "" }).kind).toBe(
-      "missing",
-    );
+    expect(checkDeclaredFloor({ root: ROOT, declared: "" }).kind).toBe("missing");
   });
 
   it("形状解析覆盖真实出现的三种写法：操作符后带空格、一档内并排两个比较符、并集", () => {
@@ -1397,55 +1307,59 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
     expect(satisfies("22.12.0", ">=22.12.0 <23.0.0")).toBe(true);
     expect(satisfies("23.0.0", ">=22.12.0 <23.0.0")).toBe(false);
     expect(satisfies("25.0.0", "^22.22.2 || ^24.15.0 || >=26.0.0")).toBe(false);
-    expect(satisfies("22.22.1", "^22.22.2 || ^24.15.0 || >=26.0.0")).toBe(
-      false,
-    );
+    expect(satisfies("22.22.1", "^22.22.2 || ^24.15.0 || >=26.0.0")).toBe(false);
     expect(satisfies("22.22.2", "^22.22.2 || ^24.15.0 || >=26.0.0")).toBe(true);
   });
 
-  (envWithPnpm() ? it : it.skip)("check:toolchain 在低版本 Node 下 WARN 并点名坏的是哪一档，但退出码仍 0", () => {
-    const r = spawnSync(
-      process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
-      {
-        encoding: "utf8",
-        env: { ...(envWithPnpm() ?? process.env), COMFYAPP_NODE_VERSION: "v20.9.0" },
-      },
-    );
-    expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
-    expect(r.stdout).toContain("不在声明范围内");
-    expect(r.stdout).toContain("坏的是测试档");
-    /* 建议必须给「最近的可达档」：engines.node 收紧成 `>=26.12.1`（#2531）后，
-     * 唯一的可达档就是 26.12.1 本身 —— 曾经的 `^22.22.2 || …` 时代才会建议 22。 */
-    expect(r.stdout).toContain("建议升到 26.12.1");
-  });
+  (envWithPnpm() ? it : it.skip)(
+    "check:toolchain 在低版本 Node 下 WARN 并点名坏的是哪一档，但退出码仍 0",
+    () => {
+      const r = spawnSync(
+        process.execPath,
+        [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+        {
+          encoding: "utf8",
+          env: { ...(envWithPnpm() ?? process.env), COMFYAPP_NODE_VERSION: "v20.9.0" },
+        },
+      );
+      expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
+      expect(r.stdout).toContain("不在声明范围内");
+      expect(r.stdout).toContain("坏的是测试档");
+      /* 建议必须给「最近的可达档」：engines.node 收紧成 `>=26.12.1`（#2531）后，
+       * 唯一的可达档就是 26.12.1 本身 —— 曾经的 `^22.22.2 || …` 时代才会建议 22。 */
+      expect(r.stdout).toContain("建议升到 26.12.1");
+    },
+  );
 
-  (envWithPnpm() ? it : it.skip)("依赖下限采集没跑起来 ⇒ 念采集器的 reason，不把「没跑起来」印成「在声明范围内」（ISSUE #2722）", () => {
-    /* 临时根：有 engines.node 与依赖声明、**没有 node_modules** —— 硬规则 26 的场景
-     * （还没 install 就自查）。修复前：采集失败被折成空数组 ⇒ 那一格打 [OK] 在声明
-     * 范围内；修复后：WARN 带采集器的 reason（「一个依赖的 package.json 都没解析到」）。 */
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "toolchain-no-modules-"));
-    fs.writeFileSync(
-      path.join(tmp, "package.json"),
-      JSON.stringify({
-        name: "fixture",
-        version: "1.0.0",
-        engines: { node: ">=26.12.1" },
-        dependencies: { "some-pkg": "1.0.0" },
-      }),
-      "utf8",
-    );
-    const r = spawnSync(
-      process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "--deps-root", tmp],
-      { encoding: "utf8", env: envWithPnpm() ?? process.env },
-    );
-    expect(r.status, `stdout=${r.stdout ?? ""} stderr=${r.stderr ?? ""}`).toBe(0);
-    expect(r.stdout).toContain("Node 下限这条判据没跑起来");
-    expect(r.stdout).toContain("依赖没装");
-    expect(r.stdout).not.toContain("在声明范围内");
-    fs.rmSync(tmp, { recursive: true, force: true });
-  });
+  (envWithPnpm() ? it : it.skip)(
+    "依赖下限采集没跑起来 ⇒ 念采集器的 reason，不把「没跑起来」印成「在声明范围内」（ISSUE #2722）",
+    () => {
+      /* 临时根：有 engines.node 与依赖声明、**没有 node_modules** —— 硬规则 26 的场景
+       * （还没 install 就自查）。修复前：采集失败被折成空数组 ⇒ 那一格打 [OK] 在声明
+       * 范围内；修复后：WARN 带采集器的 reason（「一个依赖的 package.json 都没解析到」）。 */
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "toolchain-no-modules-"));
+      fs.writeFileSync(
+        path.join(tmp, "package.json"),
+        JSON.stringify({
+          name: "fixture",
+          version: "1.0.0",
+          engines: { node: ">=26.12.1" },
+          dependencies: { "some-pkg": "1.0.0" },
+        }),
+        "utf8",
+      );
+      const r = spawnSync(
+        process.execPath,
+        [path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "--deps-root", tmp],
+        { encoding: "utf8", env: envWithPnpm() ?? process.env },
+      );
+      expect(r.status, `stdout=${r.stdout ?? ""} stderr=${r.stderr ?? ""}`).toBe(0);
+      expect(r.stdout).toContain("Node 下限这条判据没跑起来");
+      expect(r.stdout).toContain("依赖没装");
+      expect(r.stdout).not.toContain("在声明范围内");
+      fs.rmSync(tmp, { recursive: true, force: true });
+    },
+  );
   (envWithPnpm() ? it : it.skip)("当前 Node 合规时打 OK 行（这句是上面那格的对照组）", () => {
     /* 本条的输入是「这一跑真的起的那个 node」，所以它**不能**注入
      * `COMFYAPP_NODE_VERSION`：上一格（低版本 Node 那一档）把它写进了宿主环境，

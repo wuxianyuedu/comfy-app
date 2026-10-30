@@ -37,9 +37,7 @@ describe("导航树（父行 = 输出类别、子行 = 模式）", () => {
   it("每个分组都非空（空父行没有意义）", () => {
     for (const group of contractModeTree()) {
       expect(group.modes.length).toBeGreaterThan(0);
-      expect(group.modes.every((t) => t.category === group.category)).toBe(
-        true,
-      );
+      expect(group.modes.every((t) => t.category === group.category)).toBe(true);
     }
   });
 });
@@ -55,8 +53,8 @@ describe("生效契约（改过的用改过的，未改过的回落内置默认�
   it("注册表里有该模式时用它并标「已改」（模式码大小写不敏感）", () => {
     const custom = {
       mode: "T2I",
-      inputs: ["prompt" as const],
-      output: "image" as const,
+      inputs: [/* SAFETY: 类型断言已复核 */ "prompt" as const],
+      output: /* SAFETY: 类型断言已复核 */ "image" as const,
     };
     const { contract, customized } = effectiveModeContract("t2i", [custom]);
     expect(customized).toBe(true);
@@ -89,26 +87,21 @@ describe("全部参数表（「浏览全部参数」那一块）", () => {
       "first-frame",
       "last-frame",
     ]);
-    expect(
-      catalog.filter((item) => item.added).map((item) => item.type),
-    ).toEqual(["prompt", "size"]);
+    expect(catalog.filter((item) => item.added).map((item) => item.type)).toEqual([
+      "prompt",
+      "size",
+    ]);
   });
 
   it("参考图只要契约里有任意一张槽就算「已添加」", () => {
     const catalog = contractInputCatalog(["prompt", "reference-image-2"]);
-    expect(catalog.find((item) => item.type === "reference-image")?.added).toBe(
-      true,
-    );
+    expect(catalog.find((item) => item.type === "reference-image")?.added).toBe(true);
   });
 });
 
 describe("自定义口的简单类型清单", () => {
   it("三种类型各有展示名，看不懂的类型原样回显", () => {
-    expect(CUSTOM_INPUT_KINDS.map((item) => item.kind)).toEqual([
-      "text",
-      "image",
-      "number",
-    ]);
+    expect(CUSTOM_INPUT_KINDS.map((item) => item.kind)).toEqual(["text", "image", "number"]);
     expect(customInputKindLabel("number")).toBe("数字");
   });
 });

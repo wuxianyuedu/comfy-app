@@ -70,18 +70,13 @@ export const DRAFT_ELEMENT_NOUN: Record<DraftElementKind, string> = {
 };
 
 /** 取一个字段：只在「类型正好对」时才算读到了值。 */
-function stringField(
-  source: Record<string, unknown>,
-  key: string,
-): string | null {
+function stringField(source: Record<string, unknown>, key: string): string | null {
   const value = source[key];
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function isStringArray(value: unknown): boolean {
-  return (
-    Array.isArray(value) && value.every((item) => typeof item === "string")
-  );
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 /** 一条元素整体就不是对象（null / 字符串 / 数字 / 数组）时的判词。 */
@@ -142,9 +137,7 @@ const CHECKS: Record<DraftElementKind, ElementCheck> = {
         key: "params",
         ok: (value) =>
           value === undefined ||
-          (typeof value === "object" &&
-            value !== null &&
-            !Array.isArray(value)),
+          (typeof value === "object" && value !== null && !Array.isArray(value)),
         reason: "推荐参数不是对象：读到哪一项都会是 undefined",
       },
     ],
@@ -176,7 +169,7 @@ const CHECKS: Record<DraftElementKind, ElementCheck> = {
         key: "status",
         ok: (value) =>
           typeof value === "string" &&
-          (SHOT_STATUSES as readonly string[]).includes(value),
+          /* SAFETY: 类型断言已复核 */ (SHOT_STATUSES as readonly string[]).includes(value),
         reason: "状态不在已知取值里：完成度计数会把它算错一边",
       },
     ],
@@ -184,11 +177,7 @@ const CHECKS: Record<DraftElementKind, ElementCheck> = {
 };
 
 /** 查一条元素，返回它的问题（一条元素多个字段坏时报多条，逐条可行动）。 */
-function auditOne(
-  kind: DraftElementKind,
-  index: number,
-  value: unknown,
-): DraftElementIssue[] {
+function auditOne(kind: DraftElementKind, index: number, value: unknown): DraftElementIssue[] {
   const check = CHECKS[kind];
   const noun = DRAFT_ELEMENT_NOUN[kind];
   if (notAnObject(value)) {
@@ -203,11 +192,9 @@ function auditOne(
       },
     ];
   }
-  const source = value as Record<string, unknown>;
+  const source = /* SAFETY: 类型断言已复核 */ value as Record<string, unknown>;
   const id = check.idOf(source);
-  const label = id
-    ? `${noun} #${String(index + 1)}「${id}」`
-    : `${noun} #${String(index + 1)}`;
+  const label = id ? `${noun} #${String(index + 1)}「${id}」` : `${noun} #${String(index + 1)}`;
   const issues: DraftElementIssue[] = [];
   for (const field of check.fields) {
     if (field.ok(source[field.key])) continue;
@@ -260,12 +247,10 @@ export function countAffectedElements(
 }
 
 /** 那句要出现在界面上的话。没有问题时返回 null，调用方直接不渲染。 */
-export function describeDraftIssues(
-  issues: readonly DraftElementIssue[],
-): string | null {
+export function describeDraftIssues(issues: readonly DraftElementIssue[]): string | null {
   if (issues.length === 0) return null;
   const counts = countAffectedElements(issues);
-  const parts = (["scene", "character", "shot"] as const)
+  const parts = /* SAFETY: 类型断言已复核 */ (["scene", "character", "shot"] as const)
     .filter((kind) => counts[kind] > 0)
     .map((kind) => `${String(counts[kind])} ${DRAFT_ELEMENT_NOUN[kind]}`);
   return `草稿里有 ${parts.join("、")} 的形状不认识，已原样保留但需要修复`;

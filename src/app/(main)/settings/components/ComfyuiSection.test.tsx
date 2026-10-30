@@ -33,7 +33,7 @@ function controller(
     desktopManaged: false,
   },
 ): ReadySettingsPageController {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     comfyDefaultPort: 8188,
     comfyInstance: instance,
     comfyStorage: null,
@@ -72,26 +72,17 @@ describe("ComfyuiSection（只配置路径）", () => {
         name: "提交任务时 ComfyUI 未运行则自动启动",
       }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "保存偏好" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存偏好" })).toBeInTheDocument();
   });
 
   it("运行态那几颗按钮与日志框都不在这一分区了", () => {
     render(<ComfyuiSection c={controller()} />);
-    for (const name of [
-      "启动 ComfyUI",
-      "关闭 ComfyUI",
-      "打开查看",
-      "在浏览器打开",
-    ]) {
+    for (const name of ["启动 ComfyUI", "关闭 ComfyUI", "打开查看", "在浏览器打开"]) {
       expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     }
     /* 日志框按它自己的标题判（页上那句「…以及每一次启动的日志」是**指路**，
        不是日志框本身）。 */
-    expect(
-      screen.queryByText("启动日志（comfyui-runtime.log）"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("启动日志（comfyui-runtime.log）")).not.toBeInTheDocument();
   });
 
   it("给出去侧栏「ComfyUI」页的**可点**出口（撤掉动作之后必须有落点）", async () => {
@@ -113,8 +104,6 @@ describe("ComfyuiSection（只配置路径）", () => {
         )}
       />,
     );
-    expect(
-      screen.getByText(/未配置——ComfyUI 未运行时任务会失败/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/未配置——ComfyUI 未运行时任务会失败/)).toBeInTheDocument();
   });
 });

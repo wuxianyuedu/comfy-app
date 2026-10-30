@@ -35,7 +35,10 @@ async function readOnce(res: Response): Promise<string> {
 function frameOf(chunk: string): Record<string, unknown> {
   // 形如 `data: {"changed":true,"at":123}\n\n`
   const line = chunk.split("\n").find((l) => l.startsWith("data: "));
-  return JSON.parse(line!.slice("data: ".length)) as Record<string, unknown>;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(line!.slice("data: ".length)) as Record<
+    string,
+    unknown
+  >;
 }
 
 describe("GET /api/comfy/queue/events", () => {

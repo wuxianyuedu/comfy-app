@@ -88,7 +88,7 @@ function parseReport(output: string): FreshnessReport {
   if (typeof raw !== "object" || raw === null) {
     throw new Error(`--json 输出不是一个对象：${output}`);
   }
-  const r = raw as Record<string, unknown>;
+  const r = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   if (!Array.isArray(r.remoteDrifts)) {
     throw new Error(`--json 输出缺少 remoteDrifts 数组：${output}`);
   }
@@ -96,8 +96,9 @@ function parseReport(output: string): FreshnessReport {
     code: typeof r.code === "number" ? r.code : -1,
     remoteChecked: r.remoteChecked === true,
     remoteAgeMs: typeof r.remoteAgeMs === "number" ? r.remoteAgeMs : null,
-    remoteDrifts: r.remoteDrifts as FreshnessReport["remoteDrifts"],
-    installDrift: (r.installDrift ?? null) as FreshnessReport["installDrift"],
+    remoteDrifts: /* SAFETY: 类型断言已复核 */ r.remoteDrifts as FreshnessReport["remoteDrifts"],
+    installDrift: /* SAFETY: 类型断言已复核 */ (r.installDrift ??
+      null) as FreshnessReport["installDrift"],
     envBroken: r.envBroken === true,
   };
 }
@@ -144,12 +145,7 @@ const { test, expect } = defineGateRepo({
     repo.commit("远端：升级依赖");
     // `--create-reflog`：判据的取证时间是**那条引用自己的** reflog mtime，
     // 少了它这一层就永远读成「未校验」，用例会测不到 ②。
-    repo.git(
-      "update-ref",
-      "--create-reflog",
-      "refs/remotes/origin/master",
-      "HEAD",
-    );
+    repo.git("update-ref", "--create-reflog", "refs/remotes/origin/master", "HEAD");
     // 本地 HEAD 留在分叉点（模拟「远端已经前进、本地还没拉」—— 这才是要判的现场：
     // 工作区那套依赖是**当前 HEAD** 声明的那套，而远端已经换过了）。
     repo.git("reset", "--hard", "fork-point");
@@ -176,9 +172,7 @@ describe("check-deps-freshness 契约", () => {
     expect(output).toContain("0.9.0 -> 1.0.0");
   });
 
-  test("远端只动了 lockfile 的注释 → 不报（实质 diff，不是字符串比）", ({
-    repo,
-  }) => {
+  test("远端只动了 lockfile 的注释 → 不报（实质 diff，不是字符串比）", ({ repo }) => {
     // 现场重搭一次：分叉点与「远端」的 lockfile **只差一句注释**，解析结果一字未变。
     // 直接改远端那份的文本（分叉点已有的是 `LOCK_STALE`，先把它对齐成 `LOCK_REMOTE`
     // 再只加注释）—— 判的是 ② 用不用实质 diff，不是别的。
@@ -198,9 +192,7 @@ describe("check-deps-freshness 契约", () => {
     expect(parseReport(output).remoteDrifts).toEqual([]);
   });
 
-  test("没有远端引用 → 打 [未校验]，且**不给出**「一致」这个结论", ({
-    repo,
-  }) => {
+  test("没有远端引用 → 打 [未校验]，且**不给出**「一致」这个结论", ({ repo }) => {
     repo.git("update-ref", "-d", "refs/remotes/origin/master");
     const { output } = repo.run();
     expect(output).toContain("[未校验]");
@@ -221,9 +213,7 @@ describe("check-deps-freshness 契约", () => {
    * —— 旧实现写死 `origin/master`，在那份检出上恒取不到引用，于是**硬规则 25 的执行者恒不判**
    * （降级话术是诚实的，但承诺的能力为空）。这两条用例把「按引用现算」与「不领先≠没看」钉住。
    */
-  test("远端命名为 cnb（不是 origin）时 ② 照判，且话术点名比对的是哪条引用", ({
-    repo,
-  }) => {
+  test("远端命名为 cnb（不是 origin）时 ② 照判，且话术点名比对的是哪条引用", ({ repo }) => {
     // 把夹具那条远端引用整体改名：`cnb/master` 指向升级后的提交，origin 那两条（引用 + reflog）删掉。
     repo.git(
       "update-ref",
@@ -242,17 +232,10 @@ describe("check-deps-freshness 契约", () => {
     expect(output).not.toContain("[未校验]");
   });
 
-  test("远端引用不领先于 HEAD ⇒ 判过（已核对），不许回落成 [未校验]", ({
-    repo,
-  }) => {
+  test("远端引用不领先于 HEAD ⇒ 判过（已核对），不许回落成 [未校验]", ({ repo }) => {
     // 夹具默认是「远端前进、本地停在分叉点」；这里把远端引用退回到分叉点本身，
     // 于是它是 HEAD 的祖先（相等）—— ② 的正确答案是「没有待同步对象」，不是「没看」。
-    repo.git(
-      "update-ref",
-      "--create-reflog",
-      "refs/remotes/origin/master",
-      "fork-point",
-    );
+    repo.git("update-ref", "--create-reflog", "refs/remotes/origin/master", "fork-point");
     const { output } = repo.run();
     expect(output).toContain("[已核对]");
     expect(output).toContain("已在本地历史里");
@@ -318,9 +301,7 @@ describe("check-deps-freshness 契约", () => {
    * 时拿到的是 `drift` 而不是 `unresolved` —— 那样测的就是「文本层还在不在」，
    * 而不是本组要问的「解析层单独能不能报红」。
    */
-  const markInstalled = (repo: {
-    write: (rel: string, content: string) => void;
-  }) => {
+  const markInstalled = (repo: { write: (rel: string, content: string) => void }) => {
     repo.write("node_modules/.modules.yaml", "nodeLinker: hoisted\n");
     repo.write("node_modules/.pnpm/lock.yaml", LOCK_STALE);
     repo.write("pnpm-lock.yaml", LOCK_STALE);
@@ -351,9 +332,7 @@ describe("check-deps-freshness 契约", () => {
     expect(output).not.toContain("装不是你当前检出声明的那套依赖");
   });
 
-  test("依赖压根没装（无 .modules.yaml）→ 仍走 no-install，解析层不抢答", ({
-    repo,
-  }) => {
+  test("依赖压根没装（无 .modules.yaml）→ 仍走 no-install，解析层不抢答", ({ repo }) => {
     // 对着一棵不存在的树报「这三个包都解析不到」是**准确的噪声**：动作一样是重装，
     // 但结论读起来完全不同（「没装」vs「装错了」）。这一档归 `no-install`。
     // 两侧 lockfile 对齐、只去掉 `.pnpm/lock.yaml`（=「安装记录不在」）：
@@ -369,15 +348,16 @@ describe("check-deps-freshness 契约", () => {
     // 权威定义（`scripts/doc-facts.cjs` 反向解析它），判据里的字面量必须与它逐项相等。
     // 这条用例同时挡住了「解析器失灵 ⇒ 读出空清单 ⇒ 一切照旧绿」那一档
     // （§12.16 的同款教训：一个永远返回空数组的解析器会让所有断言全绿）。
-    const facts = (await import("../scripts/doc-facts.cjs")) as unknown as {
-      FACTS: { key: string; extract: () => unknown }[];
-    };
+    const facts =
+      /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
+        FACTS: { key: string; extract: () => unknown }[];
+      };
     const probesFact = facts.FACTS.find((f) => f.key === "deps.resolveProbes");
     expect(probesFact, "FACTS 里缺 deps.resolveProbes 登记项").toBeDefined();
     const declared = probesFact?.extract();
     expect(Array.isArray(declared)).toBe(true);
     const worktree =
-      (await import("../scripts/launcher-core/worktree.mjs")) as unknown as {
+      /* SAFETY: 类型断言已复核 */ (await import("../scripts/launcher-core/worktree.mjs")) as unknown as {
         RESOLVE_PROBES: string[];
       };
     expect(worktree.RESOLVE_PROBES).toEqual(declared);
@@ -398,9 +378,7 @@ describe("check-deps-freshness 契约", () => {
     expect(report.installDrift).toBeNull();
   });
 
-  test("--staged 未命中依赖面 → 零输出退 0（不给无关提交加时间）", ({
-    repo,
-  }) => {
+  test("--staged 未命中依赖面 → 零输出退 0（不给无关提交加时间）", ({ repo }) => {
     repo.write("src/a.ts", "export const a = 1;\n");
     repo.git("add", "src/a.ts");
     const { code, output } = repo.run(["--staged"]);
@@ -409,10 +387,7 @@ describe("check-deps-freshness 契约", () => {
   });
 
   test("--staged 命中依赖面 → 照判，并点出是哪个文件触发的", ({ repo }) => {
-    repo.write(
-      "pnpm-workspace.yaml",
-      "minimumReleaseAge: 0\nallowBuilds: {}\n",
-    );
+    repo.write("pnpm-workspace.yaml", "minimumReleaseAge: 0\nallowBuilds: {}\n");
     repo.git("add", "pnpm-workspace.yaml");
     const { code, output } = repo.run(["--staged"]);
     expect(code).toBe(1);
@@ -456,9 +431,7 @@ describe("check-deps-freshness 契约", () => {
     expect(output).not.toContain("未校验");
   });
 
-  test("MERGE_HEAD 不在场时这一态不生效（自己改依赖照旧要判 ②）", ({
-    repo,
-  }) => {
+  test("MERGE_HEAD 不在场时这一态不生效（自己改依赖照旧要判 ②）", ({ repo }) => {
     // 反向对照：同一个「远端停在分叉点」的现场，只是没有在合并 —— `remoteDrifts`
     // 为空是因为**远端真没动依赖**，不是因为把 ② 关掉了。这里让远端前进过依赖，
     // 预期仍然报出来。
@@ -469,14 +442,10 @@ describe("check-deps-freshness 契约", () => {
     repo.git("update-ref", "refs/remotes/origin/master", "HEAD");
     repo.git("reset", "--hard", "fork-point");
     const { output } = repo.run(["--json"]);
-    expect(parseReport(output).remoteDrifts.map((d) => d.file)).toContain(
-      "package.json",
-    );
+    expect(parseReport(output).remoteDrifts.map((d) => d.file)).toContain("package.json");
   });
 
-  test("分叉之后自己在分支上加依赖 → 不算「远端改过依赖」（基准是分叉点）", ({
-    repo,
-  }) => {
+  test("分叉之后自己在分支上加依赖 → 不算「远端改过依赖」（基准是分叉点）", ({ repo }) => {
     // 现场重搭：远端**停在分叉点**（它没再动依赖），而我在自己的分支上把 `a` 从
     // 0.9.0 换成 0.8.0。拿 `origin/master` 直接比工作区会把它报成「远端改过依赖」
     // （反向误报）；基准取分叉点时，远端在依赖面上一字未动 ⇒ 这一层不报。

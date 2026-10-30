@@ -40,10 +40,7 @@ export function hasCodeUpdated(signal: CodeUpdateSignal): boolean {
  * 否则每次冷启动都会立刻上报一次。`pageOlderThanBuild` 那条事实由调用方在
  * 建立基准时单独记录（见条件 ②）。
  */
-export function isBuildIdChange(
-  baseline: string | null,
-  next: string | null,
-): boolean {
+export function isBuildIdChange(baseline: string | null, next: string | null): boolean {
   if (baseline === null || next === null) return false;
   return baseline !== next;
 }
@@ -54,10 +51,7 @@ export function isBuildIdChange(
  * 两者都取不到标识时（服务端未就绪、接口不可达）返回 false —— **无法判定
  * 不等于过期**，宁可漏报也不误报「页面是旧的」。
  */
-export function isPageOlderThanBuild(
-  loadedAt: string | null,
-  current: string | null,
-): boolean {
+export function isPageOlderThanBuild(loadedAt: string | null, current: string | null): boolean {
   if (loadedAt === null || current === null) return false;
   return loadedAt !== current;
 }
@@ -70,10 +64,7 @@ export function isPageOlderThanBuild(
  * 换了一次——这值得单独提示用户（服务重启会短暂中断进行中的任务连接）。
  * 任一侧取不到 bootId（端点未就绪 / 旧版壳）时返回 false：无法判定不等于重启。
  */
-export function isBootIdChange(
-  prev: string | null,
-  next: string | null,
-): boolean {
+export function isBootIdChange(prev: string | null, next: string | null): boolean {
   if (prev === null || next === null) return false;
   return prev !== next;
 }
@@ -126,7 +117,7 @@ export async function fetchBuildId(): Promise<BuildIdProbe> {
       signal: AbortSignal.timeout(BUILD_ID_TIMEOUT_MS),
     });
     if (!res.ok) return empty;
-    const data = (await res.json()) as {
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       buildId?: unknown;
       bootId?: unknown;
       restartReason?: unknown;
@@ -135,18 +126,12 @@ export async function fetchBuildId(): Promise<BuildIdProbe> {
       depsState?: unknown;
     };
     return {
-      buildId:
-        typeof data.buildId === "string" && data.buildId ? data.buildId : null,
-      bootId:
-        typeof data.bootId === "string" && data.bootId ? data.bootId : null,
+      buildId: typeof data.buildId === "string" && data.buildId ? data.buildId : null,
+      bootId: typeof data.bootId === "string" && data.bootId ? data.bootId : null,
       restartReason:
-        typeof data.restartReason === "string" && data.restartReason
-          ? data.restartReason
-          : null,
+        typeof data.restartReason === "string" && data.restartReason ? data.restartReason : null,
       restartDetail:
-        typeof data.restartDetail === "string" && data.restartDetail
-          ? data.restartDetail
-          : null,
+        typeof data.restartDetail === "string" && data.restartDetail ? data.restartDetail : null,
       depsStale: typeof data.depsStale === "boolean" ? data.depsStale : null,
       depsState: asDepsFreshnessState(data.depsState),
     };

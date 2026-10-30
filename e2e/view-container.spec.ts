@@ -23,11 +23,9 @@ import { expect, test, type Page } from "@playwright/test";
  * 判据用「不隐藏」而不是「第 N 个」：位序随开过的页签数漂，而「可见的那一屏」是
  * 这一档真正要问的东西（用户看到的是它）。
  */
-const activeView = (page: Page) =>
-  page.locator('[data-view]:not(.hidden)').first();
+const activeView = (page: Page) => page.locator("[data-view]:not(.hidden)").first();
 
-const column = (page: Page) =>
-  activeView(page).locator('[class*="overflow-y-auto"] > div').first();
+const column = (page: Page) => activeView(page).locator('[class*="overflow-y-auto"] > div').first();
 
 async function maxWidthOf(page: Page): Promise<string> {
   const el = column(page);
@@ -49,18 +47,13 @@ test.describe("统一容器的宽度账 @critical", () => {
        `max-h` 的小滚动区（列表、日志框）不该把这条宿主判据打红；而视图自己再套一层
        整屏滚动，才是这里要拦的东西。 */
     await expect(
-      activeView(page).locator(
-        '[data-view-container="document"] > [class*="overflow-y-auto"]',
-      ),
+      activeView(page).locator('[data-view-container="document"] > [class*="overflow-y-auto"]'),
     ).toHaveCount(1);
   });
 
   test("网格类屏落在 wide = 1200px（模型库）", async ({ page }) => {
     await page.goto("/workspace");
-    await page
-      .getByRole("button", { name: "模型", exact: true })
-      .first()
-      .click();
+    await page.getByRole("button", { name: "模型", exact: true }).first().click();
     await expect(activeView(page)).toHaveAttribute("data-view", "models");
     expect(await maxWidthOf(page)).toBe("1200px");
   });
@@ -71,14 +64,10 @@ test.describe("统一容器的宽度账 @critical", () => {
     await page.goto("/settings");
     const shell = page.locator(".mx-auto.max-w-medium").first();
     await expect(shell).toBeVisible();
-    expect(
-      await shell.evaluate((node) => getComputedStyle(node).maxWidth),
-    ).toBe("1100px");
+    expect(await shell.evaluate((node) => getComputedStyle(node).maxWidth)).toBe("1100px");
   });
 
-  test("工坊屏只有一条滚动条：外框落在视口内，滚动归容器内那一层", async ({
-    page,
-  }) => {
+  test("工坊屏只有一条滚动条：外框落在视口内，滚动归容器内那一层", async ({ page }) => {
     /* 走独立路由 `/workshop`：它不经过 AppShell（`(main)` 组没有 layout.tsx），
        是工坊屏的第二条渲染路径，也是这次改动最容易出事的一条 —— 外框改成「吃满
        父级」之后，如果高度链没给到，外框会退成内容高度并把底部顶出视口。
@@ -95,25 +84,21 @@ test.describe("统一容器的宽度账 @critical", () => {
     await expect(frame).toHaveCount(1);
 
     // 顶栏标题在视口内（内容没被裁掉）
-    await expect(
-      page.getByRole("group", { name: "工坊流程健康度" }),
-    ).toBeVisible();
+    await expect(page.getByRole("group", { name: "工坊流程健康度" })).toBeVisible();
 
     /* 外框的直接子层恰好一条。工作区型内部那些带 `max-h` 的小滚动区（属性多选
        下拉、pre 块、角色列表）是视图自己的事，不在这条判据范围内。 */
     await expect(
-      page.locator(
-        '[data-view-container="workspace"] > [class*="overflow-y-auto"]',
-      ),
+      page.locator('[data-view-container="workspace"] > [class*="overflow-y-auto"]'),
     ).toHaveCount(1);
 
     const numbers = await page.evaluate(() => {
       const f = document.querySelector('[data-view-container="workspace"]');
-      const scroller = f?.querySelector(
+      const scroller = /* SAFETY: 类型断言已复核 */ f?.querySelector(
         '[class*="overflow-y-auto"]',
       ) as HTMLElement | null;
       const doc = document.scrollingElement ?? document.documentElement;
-      const box = (f as HTMLElement | null)?.getBoundingClientRect();
+      const box = /* SAFETY: 类型断言已复核 */ (f as HTMLElement | null)?.getBoundingClientRect();
       return {
         innerHeight: window.innerHeight,
         frameBottom: box ? Math.round(box.bottom) : -1,
@@ -131,9 +116,6 @@ test.describe("统一容器的宽度账 @critical", () => {
       numbers.scrollerContent,
       "内层滚动区装不下内容又不出滚动条 = 裁掉且够不着",
     ).toBeGreaterThan(numbers.scrollerClient);
-    expect(
-      numbers.docOverflow,
-      "文档级滚动条还在 = 双层滚动没修掉",
-    ).toBeLessThanOrEqual(1);
+    expect(numbers.docOverflow, "文档级滚动条还在 = 双层滚动没修掉").toBeLessThanOrEqual(1);
   });
 });

@@ -26,7 +26,7 @@ afterEach(cleanup);
 function controller(
   overrides: Partial<ReadySettingsPageController> = {},
 ): ReadySettingsPageController {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     backups: [],
     pendingRestore: null,
     backupListLoading: false,
@@ -38,9 +38,7 @@ function controller(
   } as unknown as ReadySettingsPageController;
 }
 
-const oneBackup = [
-  { name: "db-backup-20261010-120000.sqlite", size: 8192, at: 0 },
-];
+const oneBackup = [{ name: "db-backup-20261010-120000.sqlite", size: 8192, at: 0 }];
 
 describe("备份清单", () => {
   it("还没有备份时给出「立即备份」这条路，而不是一片空白", () => {
@@ -67,9 +65,7 @@ describe("备份清单", () => {
 describe("恢复是两步，界面必须说清", () => {
   it("点恢复先确认，不直接登记", async () => {
     const restoreFrom = vi.fn(async () => undefined);
-    render(
-      <BackupSection c={controller({ backups: oneBackup, restoreFrom })} />,
-    );
+    render(<BackupSection c={controller({ backups: oneBackup, restoreFrom })} />);
 
     await userEvent.click(screen.getByRole("button", { name: "用这一份恢复" }));
     // 还没登记
@@ -77,16 +73,12 @@ describe("恢复是两步，界面必须说清", () => {
     expect(screen.getByText(/确认登记从/)).toBeTruthy();
 
     await userEvent.click(screen.getByRole("button", { name: "确认登记" }));
-    expect(restoreFrom).toHaveBeenCalledWith(
-      "db-backup-20261010-120000.sqlite",
-    );
+    expect(restoreFrom).toHaveBeenCalledWith("db-backup-20261010-120000.sqlite");
   });
 
   it("取消就真的不登记", async () => {
     const restoreFrom = vi.fn(async () => undefined);
-    render(
-      <BackupSection c={controller({ backups: oneBackup, restoreFrom })} />,
-    );
+    render(<BackupSection c={controller({ backups: oneBackup, restoreFrom })} />);
     await userEvent.click(screen.getByRole("button", { name: "用这一份恢复" }));
     await userEvent.click(screen.getByRole("button", { name: "取消" }));
     expect(restoreFrom).not.toHaveBeenCalled();

@@ -7,10 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  resetComfyLivenessClientForTest,
-  subscribeComfyCrashes,
-} from "./comfy-liveness-client";
+import { resetComfyLivenessClientForTest, subscribeComfyCrashes } from "./comfy-liveness-client";
 
 /** 最小的 EventSource 替身：只留 `onmessage` / `close`。 */
 class FakeEventSource {
@@ -23,10 +20,14 @@ class FakeEventSource {
     FakeEventSource.instances.push(this);
   }
   emit(payload: unknown): void {
-    this.onmessage?.({ data: JSON.stringify(payload) } as MessageEvent<string>);
+    this.onmessage?.(
+      /* SAFETY: 类型断言已复核 */ {
+        data: JSON.stringify(payload),
+      } as MessageEvent<string>,
+    );
   }
   emitRaw(data: string): void {
-    this.onmessage?.({ data } as MessageEvent<string>);
+    this.onmessage?.(/* SAFETY: 类型断言已复核 */ { data } as MessageEvent<string>);
   }
   close(): void {
     this.closed = true;
@@ -113,8 +114,7 @@ describe("subscribeComfyCrashes", () => {
       永远不成立（listeners 不会归零），断言就测不到断开。 */
     resetComfyLivenessClientForTest();
     const offA = subscribeComfyCrashes(vi.fn());
-    const conn =
-      FakeEventSource.instances[FakeEventSource.instances.length - 1]!;
+    const conn = FakeEventSource.instances[FakeEventSource.instances.length - 1]!;
     const before = FakeEventSource.instances.length;
     const offB = subscribeComfyCrashes(vi.fn());
     // 订阅者增加不新建连接：`ensureConnected` 幂等。

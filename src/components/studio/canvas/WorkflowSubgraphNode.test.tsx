@@ -56,15 +56,11 @@ describe("WorkflowSubgraphNode", () => {
      *   ② 折叠按钮有可访问名（读屏器/键盘用户唯一能按到它）；
      *   ③ 标题那条 truncate 规则还在（长标题会撑破节点宽度）；
      *   ④ `#id` 徽标带 `data-node-id-chip` 且标明子图变体（定位/调试靠它认行）。 */
-    expect(container.querySelector('[title="子工作流"]')?.textContent).toBe(
-      "S",
-    );
+    expect(container.querySelector('[title="子工作流"]')?.textContent).toBe("S");
     expect(screen.getByLabelText("折叠子图")).toBeInTheDocument();
     const title = container.querySelector('[title="我的子图"]');
     expect(title?.className).toMatch(/(^|\s)truncate(\s|$)/);
-    const chip = container.querySelector(
-      '[data-node-id-chip="10"][data-variant="subgraph"]',
-    );
+    const chip = container.querySelector('[data-node-id-chip="10"][data-variant="subgraph"]');
     expect(chip, "#id 徽标丢了子图变体标记").toBeTruthy();
   });
 
@@ -98,9 +94,7 @@ describe("WorkflowSubgraphNode — 封装节点暴露口的显示名（ISSUE #34
   };
 
   it("优先显示内部真实字段的业务名，而不是本层别名 value_1", () => {
-    const { container } = renderNode(
-      <WorkflowSubgraphNode data={wrapperData} />,
-    );
+    const { container } = renderNode(<WorkflowSubgraphNode data={wrapperData} />);
     expect(screen.getByText("随机种子")).toBeInTheDocument();
     // 内部字段没有 label/localized 时退到字段名，而不是别名。
     expect(screen.getByText("steps")).toBeInTheDocument();
@@ -132,14 +126,12 @@ describe("WorkflowSubgraphNode — 封装节点暴露口的显示名（ISSUE #34
     };
     const stores = makeStores();
     renderNode(<WorkflowSubgraphNode data={data} />, stores);
-    expect(
-      document.querySelector('[data-handleid="out:IMAGE"]'),
-    ).not.toBeNull();
+    expect(document.querySelector('[data-handleid="out:IMAGE"]')).not.toBeNull();
     stores.io.setState({ ioEditMode: true });
     renderNode(<WorkflowSubgraphNode data={data} />, stores);
     const handles = document.querySelectorAll('[data-handleid="out:IMAGE"]');
     expect(handles.length).toBeGreaterThan(0);
-    const last = handles[handles.length - 1] as HTMLElement;
+    const last = /* SAFETY: 类型断言已复核 */ handles[handles.length - 1] as HTMLElement;
     expect(last.style.opacity).toBe("0.35");
     expect(last.style.width).toBe("4px");
   });

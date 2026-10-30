@@ -88,9 +88,7 @@ function readEventTable(source: string): string[] {
   if (start < 0) return [];
   const block = source.slice(start, source.indexOf("\n}", start));
   const names: string[] = [];
-  for (const match of block.matchAll(
-    /^\s{2}(?:"([^"]+)"|([A-Za-z_$][\w$]*))\s*:/gm,
-  )) {
+  for (const match of block.matchAll(/^\s{2}(?:"([^"]+)"|([A-Za-z_$][\w$]*))\s*:/gm)) {
     const name = match[1] ?? match[2];
     if (name) names.push(name);
   }
@@ -141,7 +139,7 @@ function sidesOf(
 ): { emitted: string[]; subscribed: string[] } {
   const emitted: string[] = [];
   const subscribed: string[] = [];
-  for (const [fn, bucket] of [
+  for (const [fn, bucket] of /* SAFETY: 类型断言已复核 */ [
     ["emitAppEvent", emitted],
     ["subscribeAppEvent", subscribed],
   ] as const) {
@@ -269,20 +267,13 @@ describe("AppEvents 表的两端成对", () => {
        * 不加这一条判据就是「看着齐」的空通道有处可藏。 */
       {
         rel: "virtual/e.ts",
-        text: [
-          'emitAppEvent("self:loop");',
-          'subscribeAppEvent("self:loop", () => {});',
-        ].join("\n"),
+        text: ['emitAppEvent("self:loop");', 'subscribeAppEvent("self:loop", () => {});'].join(
+          "\n",
+        ),
       },
     ];
     const judged = judge(synthetic, table);
-    expect(
-      judged.map((row) => [
-        row.event,
-        row.emitters.length,
-        row.subscribers.length,
-      ]),
-    ).toEqual([
+    expect(judged.map((row) => [row.event, row.emitters.length, row.subscribers.length])).toEqual([
       ["only:emit", 1, 0],
       ["only:subscribe", 0, 1],
       ["both:ways", 1, 1],
@@ -291,11 +282,7 @@ describe("AppEvents 表的两端成对", () => {
     ]);
 
     const broken = judged.filter(isUnpaired);
-    expect(broken.map((row) => row.event)).toEqual([
-      "only:emit",
-      "only:subscribe",
-      "self:loop",
-    ]);
+    expect(broken.map((row) => row.event)).toEqual(["only:emit", "only:subscribe", "self:loop"]);
     /* `both:ways` 与 `mixed:ends` 必须**不**在名单里：后者是「派发方自己也订阅」
      * 这一常见形状，误报一片的判据会被当噪音关掉，那比没有判据更糟。 */
     expect(broken.map((row) => row.event)).not.toContain("mixed:ends");

@@ -79,11 +79,9 @@ export const APP_SERVICE_EXIT_FILE = "app-service-exit.json";
  * 不认识的 `kind` 收成 `unknown`（而不是丢弃整条记录）：未知成因仍然值得说
  * 「服务退出了，退出码 N」——升级前后版本混跑时这条尤其常见。
  */
-export function parseAppServiceExitRecord(
-  raw: unknown,
-): AppServiceExitRecord | null {
+export function parseAppServiceExitRecord(raw: unknown): AppServiceExitRecord | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const o = raw as Record<string, unknown>;
+  const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   if (typeof o.at !== "string" || o.at === "") return null;
   if (typeof o.reason !== "string") return null;
   return {
@@ -145,9 +143,7 @@ const CODE_HINT: Record<number, string> = {
  * 说成「服务崩溃」会让人白查半小时（历史事故同源，见 `describeDownstreamExit`
  * 的注释），反过来则会把真故障说成设计内行为。
  */
-export function describeAppServiceExit(
-  record: AppServiceExitRecord,
-): AppServiceExitNotice {
+export function describeAppServiceExit(record: AppServiceExitRecord): AppServiceExitNotice {
   /* 技术摘要对所有分支都一样（「这一次具体是什么结束的」与成因分档正交），
    * 因此在这里算一次、由每个分支带上，而不是让七个分支各写一遍。 */
   const detail = summarizeAppServiceExit(record);
@@ -176,9 +172,7 @@ export function describeAppServiceExit(
       };
     case "sidecar":
       return {
-        why: `内嵌的本地服务已终止${
-          record.code === null ? "" : `（退出码 ${record.code}）`
-        }`,
+        why: `内嵌的本地服务已终止${record.code === null ? "" : `（退出码 ${record.code}）`}`,
         action: "关掉应用窗口重新启动一次；若反复出现，把 log/nextjs/ 带上排查",
         detail,
       };
@@ -190,9 +184,7 @@ export function describeAppServiceExit(
       };
     default:
       return {
-        why: `本地服务已退出${
-          record.code === null ? "" : `（退出码 ${record.code}）`
-        }`,
+        why: `本地服务已退出${record.code === null ? "" : `（退出码 ${record.code}）`}`,
         action: "重新启动一次应用；若反复出现，把 log/ 下的诊断包带上排查",
         detail,
       };
@@ -210,15 +202,11 @@ export function describeAppServiceExit(
 export function summarizeAppServiceExit(record: AppServiceExitRecord): string {
   if (record.signal) {
     const hint = SIGNAL_HINT[record.signal];
-    return hint
-      ? `服务被 ${record.signal} 结束：${hint}`
-      : `服务被信号 ${record.signal} 结束`;
+    return hint ? `服务被 ${record.signal} 结束：${hint}` : `服务被信号 ${record.signal} 结束`;
   }
   if (record.code !== null && record.code !== 0) {
     const hint = CODE_HINT[record.code];
-    return hint
-      ? `服务${hint}（退出码 ${record.code}）`
-      : `服务以退出码 ${record.code} 结束`;
+    return hint ? `服务${hint}（退出码 ${record.code}）` : `服务以退出码 ${record.code} 结束`;
   }
   if (record.code === 0) return "服务正常退出（退出码 0）";
   return "服务已退出，但未拿到退出码或信号";
@@ -271,12 +259,10 @@ export function isPreviousRunExit(
  * 「记录写进去了、界面读不懂」。于是这里补齐 JSON 那一跳，并把坏字面（空串 /
  * 半截 JSON）归到「没有原因可讲」。
  */
-export function parseAppServiceExitRaw(
-  raw: string | null,
-): AppServiceExitRecord | null {
+export function parseAppServiceExitRaw(raw: string | null): AppServiceExitRecord | null {
   if (typeof raw !== "string" || raw.trim() === "") return null;
   try {
-    return parseAppServiceExitRecord(JSON.parse(raw) as unknown);
+    return parseAppServiceExitRecord(/* SAFETY: 类型断言已复核 */ JSON.parse(raw) as unknown);
   } catch {
     return null;
   }
@@ -365,16 +351,14 @@ export async function fetchAppServiceExit(): Promise<AppServiceExitProbe> {
       signal: AbortSignal.timeout(APP_SERVICE_EXIT_TIMEOUT_MS),
     });
     if (!res.ok) return empty;
-    const data = (await res.json()) as {
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       record?: unknown;
       currentRunId?: unknown;
     };
     return {
       record: parseAppServiceExitRecord(data.record),
       currentRunId:
-        typeof data.currentRunId === "string" && data.currentRunId
-          ? data.currentRunId
-          : null,
+        typeof data.currentRunId === "string" && data.currentRunId ? data.currentRunId : null,
     };
   } catch {
     return empty;

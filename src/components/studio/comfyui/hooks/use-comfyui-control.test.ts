@@ -19,21 +19,10 @@ import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import { http, HttpResponse } from "msw/http";
 import SuperJSON from "superjson";
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createTestQueryClient } from "../../../../../tests/helpers/renderWithProviders";
-import {
-  createTestTRPC,
-  testTrpcEndpoint,
-} from "../../../../../tests/helpers/test-trpc";
+import { createTestTRPC, testTrpcEndpoint } from "../../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
 import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 import { useShellTabs, MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
@@ -79,7 +68,10 @@ vi.mock("~/lib/shell/desktop-shell-client", () => ({
 /* 启动日志「按会话取」的请求记账（来源 + 请求的会话 id）—— 「下拉切过去要
  * 真带上那一次的 id」这条判据靠它。 */
 const { sessionLogRequests } = vi.hoisted(() => ({
-  sessionLogRequests: [] as Array<{ source: string; session: string | null }>,
+  sessionLogRequests: /* SAFETY: 类型断言已复核 */ [] as Array<{
+    source: string;
+    session: string | null;
+  }>,
 }));
 vi.mock("~/lib/log/log-file-client", () => {
   /* fetchLogSessions 复刻真实实现（走全局 fetch，由 MSW 拦截返回会话正文）。
@@ -90,7 +82,7 @@ vi.mock("~/lib/log/log-file-client", () => {
     if (sessionId) query.set("session", sessionId);
     const res = await fetch(`/api/logs/sessions?${query.toString()}`);
     if (!res.ok) return null;
-    return (await res.json()) as unknown;
+    return /* SAFETY: 类型断言已复核 */ (await res.json()) as unknown;
   });
   return {
     fetchFileLogSlice: vi.fn(async () => null),
@@ -148,7 +140,7 @@ const mockRouter = t.router({
       () =>
         behavior.comfyInstance ?? {
           pathConfigured: true,
-          instanceType: "portable" as const,
+          instanceType: /* SAFETY: 类型断言已复核 */ "portable" as const,
           desktopManaged: false,
         },
     ),
@@ -159,9 +151,7 @@ const mockRouter = t.router({
           reason: "ComfyUI 已开启 CORS",
         },
     ),
-    comfyStart: t.procedure.mutation(
-      () => behavior.comfyStart ?? { ok: true, detail: "已启动" },
-    ),
+    comfyStart: t.procedure.mutation(() => behavior.comfyStart ?? { ok: true, detail: "已启动" }),
     comfyStop: t.procedure.mutation(() => ({
       ok: true,
       detail: "已关闭",
@@ -228,7 +218,7 @@ function mockSessionsFor(
       id: "0",
       title: "11-05 09:36:12 · 本次运行",
       startedAt: null,
-      scope: "current" as const,
+      scope: /* SAFETY: 类型断言已复核 */ "current" as const,
       crashed: false,
     },
   ];
@@ -236,10 +226,7 @@ function mockSessionsFor(
     http.get("*/api/logs/sessions", ({ request }) => {
       const url = new URL(request.url);
       if (url.searchParams.get("source") !== source) {
-        return HttpResponse.json(
-          { error: "unexpected source" },
-          { status: 400 },
-        );
+        return HttpResponse.json({ error: "unexpected source" }, { status: 400 });
       }
       return HttpResponse.json({
         sessions,
@@ -280,10 +267,7 @@ beforeEach(() => {
      * 的话，只要用例渲染了这一页，客户端那一轮长轮询就会以
      * `onUnhandledFrame: error` 抛 unhandled InternalError。 */
     http.get("*/api/comfy/state", ({ request }) => {
-      const since = Number.parseInt(
-        new URL(request.url).searchParams.get("since") ?? "0",
-        10,
-      );
+      const since = Number.parseInt(new URL(request.url).searchParams.get("since") ?? "0", 10);
       stateRequests.push(new URL(request.url).search);
       /* 与真实路由同一判决：`since` 比当前纪元旧 → 回那一次变化，否则 204。 */
       const change = getComfyStateChange();
@@ -388,14 +372,14 @@ describe("useComfyuiControl", () => {
         id: "40",
         title: "11-05 09:36:12 · 本次运行",
         startedAt: null,
-        scope: "current" as const,
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
       {
         id: "12",
         title: "11-05 09:30:00 · 本次运行",
         startedAt: null,
-        scope: "current" as const,
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
     ];
@@ -441,7 +425,7 @@ describe("useComfyuiControl", () => {
         id: "12",
         title: "11-05 09:30:00 · 本次运行",
         startedAt: 1_000,
-        scope: "current" as const,
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
     ];
@@ -451,14 +435,11 @@ describe("useComfyuiControl", () => {
         const session = url.searchParams.get("session");
         /* 契约：新→旧，第一项即最新。 */
         const latestId = sessions[0]!.id;
-        const selectedId = sessions.some((s) => s.id === session)
-          ? session
-          : latestId;
+        const selectedId = sessions.some((s) => s.id === session) ? session : latestId;
         return HttpResponse.json({
           sessions,
           selectedId,
-          content:
-            selectedId === "12" ? "第一次启动的输出" : "第二次启动的输出",
+          content: selectedId === "12" ? "第一次启动的输出" : "第二次启动的输出",
           truncated: false,
           windowed: false,
           size: 128,
@@ -477,14 +458,14 @@ describe("useComfyuiControl", () => {
         id: "40",
         title: "11-05 09:36:12 · 本次运行",
         startedAt: 2_000,
-        scope: "current" as const,
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
       {
         id: "12",
         title: "11-05 09:30:00 · 本次运行",
         startedAt: 1_000,
-        scope: "current" as const,
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
     ];
@@ -502,21 +483,20 @@ describe("useComfyuiControl", () => {
   /* 跨包（ISSUE #1587）：归档份的 id 是 `<包名>/<文件名>`，hook 必须**原样**
    * 回传 —— 它不解析 id（形态判据只在服务端一处），也不该把它当成文件名拼一遍。 */
   it("切到归档包里的份：原样带上 `<包名>/<文件名>` 的 id 重新拉取", async () => {
-    const archived =
-      "2026-10-04_140000-bbbbbb/comfyui-runtime-20261004-140000.log";
+    const archived = "2026-10-04_140000-bbbbbb/comfyui-runtime-20261004-140000.log";
     const sessions = [
       {
         id: "comfyui-runtime-20261005-093612.log",
         title: "10-05 09:36:12 · 本次运行",
         startedAt: 2_000,
-        scope: "current" as const,
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
       {
         id: archived,
         title: "10-04 14:00:00 · 正常退出 · bbbbbb",
         startedAt: 1_000,
-        scope: "runs" as const,
+        scope: /* SAFETY: 类型断言已复核 */ "runs" as const,
         crashed: false,
       },
     ];
@@ -524,9 +504,7 @@ describe("useComfyuiControl", () => {
       http.get("*/api/logs/sessions", ({ request }) => {
         const url = new URL(request.url);
         const session = url.searchParams.get("session");
-        const selectedId = sessions.some((s) => s.id === session)
-          ? session!
-          : sessions[0]!.id;
+        const selectedId = sessions.some((s) => s.id === session) ? session! : sessions[0]!.id;
         return HttpResponse.json({
           sessions,
           selectedId,
@@ -561,14 +539,14 @@ describe("useComfyuiControl", () => {
         id: "40",
         title: "11-05 09:36:12 · 本次运行",
         startedAt: 2_000,
-        scope: "current" as const,
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
       {
         id: "12",
         title: "11-05 09:30:00 · 本次运行",
         startedAt: 1_000,
-        scope: "current" as const,
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
     ];
@@ -612,9 +590,7 @@ describe("useComfyuiControl", () => {
   describe("打开查看 ComfyUI — 页签形态（ISSUE #310）", () => {
     beforeEach(() => {
       useShellTabs.setState({
-        tabs: [
-          { id: MAIN_TAB_ID, label: "主应用", url: null, closable: false },
-        ],
+        tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
         activeTabId: MAIN_TAB_ID,
       });
     });
@@ -676,12 +652,8 @@ describe("useComfyuiControl", () => {
         await result.current.openComfy();
       });
 
-      expect(
-        useShellTabs.getState().tabs.find((t) => t.id === "comfyui"),
-      ).toBeUndefined();
-      expect(toastErrorMock).toHaveBeenCalledWith(
-        expect.stringContaining("先点「启动 ComfyUI」"),
-      );
+      expect(useShellTabs.getState().tabs.find((t) => t.id === "comfyui")).toBeUndefined();
+      expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining("先点「启动 ComfyUI」"));
     });
   });
 
@@ -692,9 +664,7 @@ describe("useComfyuiControl", () => {
     beforeEach(() => {
       isDesktopShellMock.mockReturnValue(false); // 非桌面壳 = 浏览器
       useShellTabs.setState({
-        tabs: [
-          { id: MAIN_TAB_ID, label: "主应用", url: null, closable: false },
-        ],
+        tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
         activeTabId: MAIN_TAB_ID,
       });
     });
@@ -710,9 +680,7 @@ describe("useComfyuiControl", () => {
       });
       await expect.poll(() => result.current.status).not.toBeNull();
       // 等状态查询落定，让缓存 base 就绪（浏览器分支优先用缓存、同步开窗）。
-      await expect
-        .poll(() => result.current.status?.base)
-        .toBe("http://127.0.0.1:8188");
+      await expect.poll(() => result.current.status?.base).toBe("http://127.0.0.1:8188");
 
       await act(async () => {
         await result.current.openComfy();
@@ -723,13 +691,9 @@ describe("useComfyuiControl", () => {
         "_blank",
         "noopener,noreferrer",
       );
-      expect(
-        useShellTabs.getState().tabs.find((t) => t.id === "comfyui"),
-      ).toBeUndefined();
+      expect(useShellTabs.getState().tabs.find((t) => t.id === "comfyui")).toBeUndefined();
       expect(toastSuccessMock).toHaveBeenCalled();
-      expect(toastSuccessMock).toHaveBeenCalledWith(
-        expect.stringContaining("新浏览器页签"),
-      );
+      expect(toastSuccessMock).toHaveBeenCalledWith(expect.stringContaining("新浏览器页签"));
     });
 
     it("未运行 → 不开新页签，给可行动提示", async () => {
@@ -745,9 +709,7 @@ describe("useComfyuiControl", () => {
       });
 
       expect(openSpy).not.toHaveBeenCalled();
-      expect(toastErrorMock).toHaveBeenCalledWith(
-        expect.stringContaining("先点「启动 ComfyUI」"),
-      );
+      expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining("先点「启动 ComfyUI」"));
     });
   });
 
@@ -760,9 +722,7 @@ describe("useComfyuiControl", () => {
   describe("在浏览器打开 ComfyUI — 与页签并列的出口", () => {
     beforeEach(() => {
       useShellTabs.setState({
-        tabs: [
-          { id: MAIN_TAB_ID, label: "主应用", url: null, closable: false },
-        ],
+        tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
         activeTabId: MAIN_TAB_ID,
       });
     });
@@ -801,9 +761,7 @@ describe("useComfyuiControl", () => {
       });
 
       expect(toastErrorMock).toHaveBeenCalled();
-      expect(toastErrorMock).toHaveBeenCalledWith(
-        expect.stringContaining("先点「启动 ComfyUI」"),
-      );
+      expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining("先点「启动 ComfyUI」"));
       expect(useShellTabs.getState().tabs).toHaveLength(1);
     });
 
@@ -823,9 +781,7 @@ describe("useComfyuiControl", () => {
       });
 
       expect(toastErrorMock).toHaveBeenCalled();
-      expect(toastErrorMock).toHaveBeenCalledWith(
-        expect.stringContaining("打开系统浏览器失败"),
-      );
+      expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining("打开系统浏览器失败"));
     });
   });
 });

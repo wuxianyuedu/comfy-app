@@ -21,8 +21,7 @@ import type { WorkflowIODropPosition } from "../workflow-types";
 /** 端口行与 widget 行同一守卫：可编辑控件（输入框 / 下拉 / 按钮）上起手
  * 不发起拖拽 —— 行级 draggable 会劫持文本选择，且从这些控件发起的原生
  * 拖拽经常不触发 drop（只有 dragend），表现成「拖了但顺序没变」。 */
-const DRAG_CANCEL_SELECTOR =
-  "input, textarea, select, button, [contenteditable]";
+const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]";
 
 /** 画布`workflow` 节点的可连接端口行。连线型输入渲染一个
  * 骑在左边缘的句柄 + 一个卡片体（STRING → 内联 textarea，IMAGE → 上传
@@ -81,11 +80,7 @@ export function WirePortRows({
    * 不带拖拽提示。 */
   draggingKey?: string | null;
   dragOverKey?: string | null;
-  onReorder?: (
-    fromKey: string,
-    targetKey: string | null,
-    position: WorkflowIODropPosition,
-  ) => void;
+  onReorder?: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
   /** 回调，好让父级在被拖的是
    * 端口行时同步它的`draggingKey` 状态。镜像
    * widget 行用的契约（DynamicWorkflowForm 自己的
@@ -106,11 +101,8 @@ export function WirePortRows({
   /* 落点位置（指针在目标行的上/下半区）：端口行自己持有 —— 上抛给父级的
    * 只有「拖起 / 放下」这两个时机，位置随每条 dragover 变化，放父级会多余
    * 一趟重渲染。指示线画的位置与 onDrop 收到的 position 同源。 */
-  const [portDropPosition, setPortDropPosition] =
-    useState<WorkflowIODropPosition>("before");
-  const positionOf = (
-    e: React.DragEvent<HTMLDivElement>,
-  ): WorkflowIODropPosition => {
+  const [portDropPosition, setPortDropPosition] = useState<WorkflowIODropPosition>("before");
+  const positionOf = (e: React.DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
     const rect = e.currentTarget?.getBoundingClientRect?.();
     if (!rect || rect.height <= 0) return "before";
     return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
@@ -121,7 +113,7 @@ export function WirePortRows({
       draggable: true,
       onDragStart: (e: React.DragEvent<HTMLDivElement>) => {
         /* 输入框 / 下拉 / 按钮上起手不拖（与 widget 行同守卫）。 */
-        const target = e.target as HTMLElement | null;
+        const target = /* SAFETY: 类型断言已复核 */ e.target as HTMLElement | null;
         if (target?.closest?.(DRAG_CANCEL_SELECTOR)) {
           e.preventDefault();
           return;
@@ -173,11 +165,7 @@ export function WirePortRows({
  输入 · SeedModeButton · chip 行末。chip 永在所有控件之后，与
  Card pr=14 边距对齐——STRING/INT/FLOAT/NUMBER chip 统一右对齐。*/
         }
-        if (
-          numericType &&
-          wireInput.control !== "textarea" &&
-          wireInput.control !== "image"
-        ) {
+        if (numericType && wireInput.control !== "textarea" && wireInput.control !== "image") {
           const b = numericBounds(wireInput);
           const isSeed = isSeedLike(wireInput);
           const isDragging = onReorder && draggingKey === wireInput.ioKey;
@@ -228,9 +216,7 @@ export function WirePortRows({
                   min={b.min}
                   max={b.max}
                   step={b.step}
-                  decimalPlaces={
-                    wireInput.control === "float" ? b.decimalPlaces : 0
-                  }
+                  decimalPlaces={wireInput.control === "float" ? b.decimalPlaces : 0}
                 />
               </div>
               {isSeed && onSeedModeChange && (
@@ -240,10 +226,7 @@ export function WirePortRows({
                 />
               )}
               <TypeChip size="md" tone="none" style={chipStyle}>
-                {typeDisplay(
-                  wireInput.type,
-                  wireInput.control === "float" ? "FLOAT" : "INT",
-                )}
+                {typeDisplay(wireInput.type, wireInput.control === "float" ? "FLOAT" : "INT")}
               </TypeChip>
             </div>
           );
@@ -312,16 +295,10 @@ export function WirePortRows({
                 )}
                 {wireInput.control === "text" && (
                   <input
-                    value={
-                      typeof v === "string" || typeof v === "number"
-                        ? String(v)
-                        : ""
-                    }
+                    value={typeof v === "string" || typeof v === "number" ? String(v) : ""}
                     aria-label={`输入 ${label}`}
                     placeholder={`输入 ${label}`}
-                    onChange={textHandler((value) =>
-                      set(wireInput.ioKey, value),
-                    )}
+                    onChange={textHandler((value) => set(wireInput.ioKey, value))}
                     className="nodrag nopan bg-canvas-deep text-ink-soft placeholder:text-ink-placeholder h-full w-full rounded-md px-2.5 py-2 text-sm outline-none"
                     style={{ fontFamily: "var(--font-sans)" }}
                   />

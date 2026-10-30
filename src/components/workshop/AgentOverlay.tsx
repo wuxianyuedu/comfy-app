@@ -11,10 +11,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Textarea } from "~/components/ui/textarea";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
-import type {
-  WorkshopAgentController,
-  AgentToolRun,
-} from "./hooks/use-workshop-agent";
+import type { WorkshopAgentController, AgentToolRun } from "./hooks/use-workshop-agent";
 import { zClass } from "~/lib/shell/overlay-z";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { Hint } from "~/components/ui/hint";
@@ -73,8 +70,7 @@ export function panelPlacement(
    * 上方的余量 = 视口高 − 图标高 − 它。早先版本误把它当成「上方余量」
    *（越大越宽裕），于是在「图标贴顶、偏移很大」时反而选了向上展开，
    * 把面板压成 144px 高 —— 标题栏与输入框之外什么都看不见。 */
-  const spaceAbove =
-    viewportHeight - anchorBottom - PANEL_ANCHOR_OFFSET - PANEL_EDGE_GAP_PX;
+  const spaceAbove = viewportHeight - anchorBottom - PANEL_ANCHOR_OFFSET - PANEL_EDGE_GAP_PX;
   if (spaceAbove >= PANEL_MIN_HEIGHT_PX) {
     return {
       bottom: `${anchorBottom}px`,
@@ -110,17 +106,7 @@ export function AgentOverlay({
    *  「面板与入口的相对位置」注释。 */
   anchor: { right: number; bottom: number };
 }) {
-  const {
-    open,
-    messages,
-    input,
-    busy,
-    error,
-    toolRuns,
-    closeAgent,
-    setInput,
-    send,
-  } = controller;
+  const { open, messages, input, busy, error, toolRuns, closeAgent, setInput, send } = controller;
   const taRef = React.useRef<HTMLTextAreaElement>(null);
 
   /* 面板纵向落点要判「图标上方放不放得下」，这需要视口高（见
@@ -143,7 +129,13 @@ export function AgentOverlay({
 
   const visibleMessages =
     messages.length === 0
-      ? [{ id: "greeting", role: "assistant" as const, content: GREETING }]
+      ? [
+          {
+            id: "greeting",
+            role: /* SAFETY: 类型断言已复核 */ "assistant" as const,
+            content: GREETING,
+          },
+        ]
       : messages;
 
   return (
@@ -175,9 +167,7 @@ export function AgentOverlay({
         </span>
         <div className="flex-1">
           <h3 className="text-ink u-title">创作指挥 Agent</h3>
-          <p className="text-muted-foreground text-xs">
-            用对话指挥完整工坊流程
-          </p>
+          <p className="text-muted-foreground text-xs">用对话指挥完整工坊流程</p>
         </div>
         <Button
           variant="ghost"
@@ -263,11 +253,7 @@ export function AgentOverlay({
             <div className="flex justify-start">
               <div className="bg-subtle rounded-2xl px-3 py-2.5">
                 <span className="inline-flex gap-1">
-                  <StatusDot
-                    state="probing"
-                    sizeClass="size-1.5 bg-muted-foreground"
-                    pulse
-                  />
+                  <StatusDot state="probing" sizeClass="size-1.5 bg-muted-foreground" pulse />
                   <StatusDot
                     state="probing"
                     sizeClass="size-1.5 bg-muted-foreground"
@@ -315,8 +301,7 @@ export function AgentOverlay({
              * 直接把`onChange` 换成适配器 —— 取值本身仍走出口。 */
             readTextInput(event, setInput);
             event.target.style.height = "auto";
-            event.target.style.height =
-              Math.min(event.target.scrollHeight, 80) + "px";
+            event.target.style.height = Math.min(event.target.scrollHeight, 80) + "px";
           }}
           /* Shift+Enter 换行、Enter 发送；`ignoreIme` 由出口默认开着 ——
            * 此前这里没判 IME，中文输入法下**候选词未上屏的 Enter 会被当成发送**

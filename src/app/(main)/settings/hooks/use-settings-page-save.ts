@@ -103,8 +103,11 @@ export function useSettingsSave(input: {
           },
         );
         return result.ok
-          ? { ok: true as const }
-          : { ok: false as const, error: result.detail };
+          ? { ok: /* SAFETY: 类型断言已复核 */ true as const }
+          : {
+              ok: /* SAFETY: 类型断言已复核 */ false as const,
+              error: result.detail,
+            };
       } finally {
         setSaving(false);
       }

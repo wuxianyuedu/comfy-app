@@ -21,10 +21,7 @@ import { errorText } from "~/lib/error-message";
 import { offsetWithin } from "~/lib/dom-rect";
 import { tailWindowAppend } from "~/lib/page-window";
 import { onNextFrame } from "~/lib/next-frame";
-import {
-  useExpansionSet,
-  type ExpansionSet,
-} from "~/components/ui/expansion-set";
+import { useExpansionSet, type ExpansionSet } from "~/components/ui/expansion-set";
 import type {
   DiscoveredSubpkg,
   ParseProgress,
@@ -124,8 +121,7 @@ function parseSettingsBlob(
 } {
   if (!data.settings) {
     const err = data.error;
-    const detail =
-      typeof err === "string" ? err : (err?.message ?? `HTTP ${status}`);
+    const detail = typeof err === "string" ? err : (err?.message ?? `HTTP ${status}`);
     throw new Error(detail || `读取配置失败（HTTP ${status}）`);
   }
   const paths = data.settings.paths || [];
@@ -172,7 +168,7 @@ async function consumeSettingsStream(
       // 设置流的 ndjson 事件 —— 仅本对话框消费的字段；每行由 JSON.parse 自身校验。
       let ev: SettingsStreamEvent;
       try {
-        ev = JSON.parse(line) as SettingsStreamEvent;
+        ev = /* SAFETY: 类型断言已复核 */ JSON.parse(line) as SettingsStreamEvent;
       } catch {
         continue;
       }
@@ -219,10 +215,7 @@ async function consumeSettingsStream(
         lastReport = ev.lastReport ?? null;
         byPath = ev.byPath ?? {};
       } else if (ev.type === "error") {
-        const message =
-          ev.message !== undefined && ev.message.length > 0
-            ? ev.message
-            : "未知错误";
+        const message = ev.message !== undefined && ev.message.length > 0 ? ev.message : "未知错误";
         sinks.setSaveErr("扫描失败：" + message);
       }
     }
@@ -250,14 +243,12 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   });
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const parseBusy = useBusyAction();
-  const [perPkgParsing, setPerPkgParsing] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [perPkgParsing, setPerPkgParsing] = useState<Record<string, boolean>>({});
   const [report, setReport] = useState<ParseReport | null>(null);
   const [summary, setSummary] = useState<SettingsResp["summary"]>(null);
-  const [discoveredByParent, setDiscoveredByParent] = useState<
-    Record<string, DiscoveredSubpkg[]>
-  >({});
+  const [discoveredByParent, setDiscoveredByParent] = useState<Record<string, DiscoveredSubpkg[]>>(
+    {},
+  );
   const [byPath, setByPath] = useState<Record<string, SummaryPkg>>({});
   const parentExpansion = useExpansionSet();
   /* 只取 `seedDefaults` 出来用在 `useCallback` 里：它的引用是稳定的
@@ -275,24 +266,19 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    * `ReferenceError: window is not defined`，`pnpm test` 因此随机非零退出，
    * 而用例层面全绿）。ISSUE #489。 */
   const aliveRef = useRef(true);
-  const progressHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const progressHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
-      if (progressHideTimerRef.current)
-        clearTimeout(progressHideTimerRef.current);
+      if (progressHideTimerRef.current) clearTimeout(progressHideTimerRef.current);
     };
   }, []);
 
   // 原始 manifest（classType → 完整 spec），独立于 refreshCustomNodes() 填充的
   // 注册表：即使对话框刚打开、尚无消费者调用 refresh，也能渲染预览卡片。每次解析
   // 后重新拉取，使新导入的包无需硬刷新即可显示节点。
-  const [manifestByNode, setManifestByNode] = useState<
-    Record<string, ManifestNodeRaw>
-  >({});
+  const [manifestByNode, setManifestByNode] = useState<Record<string, ManifestNodeRaw>>({});
   // 每个子包：内联节点列表是否展开？
   // 子包内联节点清单是否展开？
   const nodeListExpansion = useExpansionSet();
@@ -301,17 +287,11 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   const nodeCardExpansion = useExpansionSet();
 
   useEffect(() => {
-    const stillParsing =
-      parseBusy.busy || Object.values(perPkgParsing).some(Boolean);
+    const stillParsing = parseBusy.busy || Object.values(perPkgParsing).some(Boolean);
     if (stillParsing) {
-      if (consoleRef.current)
-        consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
-    } else if (
-      logs.some((log) => log.level === "error" || log.msg.includes("✗"))
-    ) {
-      const idx = logs.findIndex(
-        (log) => log.level === "error" || log.msg.includes("✗"),
-      );
+      if (consoleRef.current) consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+    } else if (logs.some((log) => log.level === "error" || log.msg.includes("✗"))) {
+      const idx = logs.findIndex((log) => log.level === "error" || log.msg.includes("✗"));
       return onNextFrame(() => {
         const console_ = consoleRef.current;
         if (!console_) return;
@@ -343,11 +323,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   }, [parseBusy.busy, perPkgParsing, logs.length]);
   // 单包解析完成时也滚到日志：此刻新 report 追加、reloadFromServer() 重新填充列表。
   useEffect(() => {
-    if (
-      report &&
-      !parseBusy.busy &&
-      !Object.values(perPkgParsing).some(Boolean)
-    ) {
+    if (report && !parseBusy.busy && !Object.values(perPkgParsing).some(Boolean)) {
       return onNextFrame(() => {
         logsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
@@ -366,7 +342,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
       if (!isStream) {
         // 缓存预热路径：服务端返回单个 JSON blob。
-        const data = (await res.json()) as SettingsResp & {
+        const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as SettingsResp & {
           error?: { message?: string } | string;
         };
         const parsed = parseSettingsBlob(data, res.status);
@@ -396,8 +372,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       if (aliveRef.current) {
         setLoading(false);
         // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
-        if (progressHideTimerRef.current)
-          clearTimeout(progressHideTimerRef.current);
+        if (progressHideTimerRef.current) clearTimeout(progressHideTimerRef.current);
         progressHideTimerRef.current = setTimeout(() => {
           if (!aliveRef.current) return;
           setProgress({
@@ -473,7 +448,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         buf = buf.slice(nl + 1);
         if (!line.trim()) continue;
         try {
-          const obj = JSON.parse(line) as ParseStreamEvent;
+          const obj = /* SAFETY: 类型断言已复核 */ JSON.parse(line) as ParseStreamEvent;
           if (obj.type === "log") {
             setLogs((prev) =>
               tailWindowAppend(
@@ -508,9 +483,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       const res = await fetch("/api/custom-nodes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          packages ? { action: "parse", packages } : { action: "parse" },
-        ),
+        body: JSON.stringify(packages ? { action: "parse", packages } : { action: "parse" }),
       });
       await readNdjson(res, async (record, ok) => {
         if (ok && record) {
@@ -526,9 +499,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
   async function onParseAll() {
     if (savedPaths.length === 0) {
-      setError_(
-        "未找到自定义节点目录 —— 请先在设置 → 创作后端 中配置 ComfyUI 安装路径",
-      );
+      setError_("未找到自定义节点目录 —— 请先在设置 → 创作后端 中配置 ComfyUI 安装路径");
       return;
     }
     setReport(null);

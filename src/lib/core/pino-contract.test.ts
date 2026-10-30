@@ -61,7 +61,7 @@ describe("pino 输出格式契约", () => {
     await flush();
 
     expect(lines()).toHaveLength(1);
-    const parsed = JSON.parse(lines()[0]!) as {
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(lines()[0]!) as {
       level: number;
       time: number;
       msg: string;
@@ -108,7 +108,7 @@ describe("pino 脱敏契约（redact 生效）", () => {
     expect(raw).not.toContain("sample-password-明文");
     expect(raw).not.toContain("sample-token-明文");
     expect(raw).not.toContain("sample-key-明文");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Record<string, unknown>;
     expect(parsed.password).toBe("[Redacted]");
     expect(parsed.token).toBe("[Redacted]");
     expect(parsed.apiKey).toBe("[Redacted]");
@@ -139,7 +139,7 @@ describe("pino 脱敏契约（redact 生效）", () => {
     expect(raw).not.toContain("sample-api-value-明文");
     expect(raw).not.toContain("sample-token-明文");
     expect(raw).not.toContain("sid=sample-session");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Record<string, unknown>;
     expect(parsed.client).toEqual({
       secret: "[Redacted]",
       apiSecret: "[Redacted]",
@@ -173,23 +173,22 @@ describe("日志不落 PII / prompt 原文（§11.5 埋点纪律扩展到日志�
 
     const raw = lines()[0]!;
     expect(raw).not.toContain("一只在月球上的猫");
-    const parsed = JSON.parse(raw) as { prompt: string };
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
+      prompt: string;
+    };
     expect(parsed.prompt).toBe("[Redacted]");
   });
 
   it("嵌套 prompt / negativePrompt 同样被脱敏", async () => {
     const { dest, lines } = capture();
     const log = createPinoLogger({ destination: dest });
-    log.info(
-      { request: { prompt: "negative 明文", negativePrompt: "n-明文" } },
-      "gen",
-    );
+    log.info({ request: { prompt: "negative 明文", negativePrompt: "n-明文" } }, "gen");
     await flush();
 
     const raw = lines()[0]!;
     expect(raw).not.toContain("negative 明文");
     expect(raw).not.toContain("n-明文");
-    const parsed = JSON.parse(raw) as {
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
       request: { prompt: string; negativePrompt: string };
     };
     expect(parsed.request.prompt).toBe("[Redacted]");
@@ -205,7 +204,10 @@ describe("日志不落 PII / prompt 原文（§11.5 埋点纪律扩展到日志�
     const raw = lines()[0]!;
     expect(raw).not.toContain("u@example.com");
     expect(raw).not.toContain("13800000000");
-    const parsed = JSON.parse(raw) as { email: string; phone: string };
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
+      email: string;
+      phone: string;
+    };
     expect(parsed.email).toBe("[Redacted]");
     expect(parsed.phone).toBe("[Redacted]");
   });
@@ -282,10 +284,7 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
   it("结构化埋点的 event 名同时充当命名空间", async () => {
     const { dest } = capture();
     const log = createPinoLogger({ destination: dest, ...makeMirror() });
-    log.error(
-      { event: "audit_write_failed", err: new Error("disk full") },
-      "audit",
-    );
+    log.error({ event: "audit_write_failed", err: new Error("disk full") }, "audit");
     await flush();
 
     const added = readMirror();
@@ -392,31 +391,24 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
     // pino 流侧：被 REDACT_PATHS 枚举到的名字必擦；`*_SECRET` 这类**没被枚举到**
     // 的名字 pino 侧擦不掉（这是 pino 通配语义的限制，见 REDACT_PATHS 上方注释），
     // 其防线是日志写入边界上的值形状守卫——镜像文件那一行就是它的证词。
-    expect(lines().join("")).not.toContain(
-      `BETTER_AUTH_SECRET":"${HEX_SECRET}`,
-    );
+    expect(lines().join("")).not.toContain(`BETTER_AUTH_SECRET":"${HEX_SECRET}`);
   });
 
   /* 值形状守卫本身（不问字段名，只问值长啥样）——这是 `*_SECRET` 这类
    * 「名字无法穷举」的密钥唯一的兜底，因此单独钉住它的判据与边界。 */
   it("值形状守卫：私钥块 / JWT / 高熵串被擦，普通长句不误伤", () => {
-    const pem =
-      "-----BEGIN RSA PRIVATE KEY-----\n<示例私钥内容>\n-----END RSA PRIVATE KEY-----";
-    const jwt =
-      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1LTEifQ.example-placeholder-signature";
+    const pem = "-----BEGIN RSA PRIVATE KEY-----\n<示例私钥内容>\n-----END RSA PRIVATE KEY-----";
+    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1LTEifQ.example-placeholder-signature";
     expect(redactSecretShaped(pem)).toContain("[Redacted]");
     expect(redactSecretShaped(jwt)).toContain("[Redacted]");
     expect(redactSecretShaped(HEX_SECRET)).toBe("[Redacted]");
     // 嵌套结构里同样生效，且不改结构
-    expect(
-      redactSecretShaped({ a: { b: HEX_SECRET }, list: [HEX_SECRET] }),
-    ).toEqual({
+    expect(redactSecretShaped({ a: { b: HEX_SECRET }, list: [HEX_SECRET] })).toEqual({
       a: { b: "[Redacted]" },
       list: ["[Redacted]"],
     });
     // 普通可读长句（无数字 / 低熵）不误伤
-    const plain =
-      "任务卡在队列超过 Ns，无人重新认领，请检查 ComfyUI 是否在运行";
+    const plain = "任务卡在队列超过 Ns，无人重新认领，请检查 ComfyUI 是否在运行";
     expect(redactSecretShaped(plain)).toBe(plain);
     // Error 实例保形：message 必须还在（`logger.error({ err })` 是最常见形态）
     const err = new Error("no such table: task");

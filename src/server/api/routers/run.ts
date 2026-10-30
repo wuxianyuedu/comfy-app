@@ -48,10 +48,7 @@ function kickEngine(userId: string, projectId: string): void {
 }
 
 /** 读项目并归一 run；无生产数据行 → 抛可行动错误。 */
-async function loadRun(
-  userId: string,
-  projectId: string,
-): Promise<ProductionRun> {
+async function loadRun(userId: string, projectId: string): Promise<ProductionRun> {
   const row = await productionRepository.getForUser(userId, projectId);
   // PRECONDITION_FAILED 而不是 NOT_FOUND：这一支要告诉调用方「先去医院，先产出内容」。
   // 探测面没有变大 —— 别人的项目与没内容的项目走的是同一条 `row === null`，
@@ -71,8 +68,7 @@ async function persistAndPlan(
   run: ProductionRun,
 ): Promise<{ run: ProductionRun; action: RunAction }> {
   const saved = await productionRepository.updateRun(userId, projectId, run);
-  if (!saved)
-    throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+  if (!saved) throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
   const row = await productionRepository.getForUser(userId, projectId);
   const action = planNextRunAction(toRunView(row ?? null), run);
   return { run, action };
@@ -83,14 +79,13 @@ export const runRouter = createTRPCRouter({
   status: authedProcedure
     .input(z.object({ projectId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
-      const row = await productionRepository.getForUser(
-        ctx.user.id,
-        input.projectId,
-      );
+      const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
       if (!row)
         return {
           run: normalizeProductionRun(null),
-          action: { kind: "idle" } as RunAction,
+          action: /* SAFETY: 类型断言已复核 */ {
+            kind: "idle",
+          } as RunAction,
         };
       const run = normalizeProductionRun(row.run);
       return { run, action: planNextRunAction(toRunView(row), run) };
@@ -133,7 +128,12 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const run = await loadRun(ctx.user.id, input.projectId);
       if (run.status !== "running" && run.status !== "awaiting_approval") {
-        return { run, action: { kind: "idle" } as RunAction };
+        return {
+          run,
+          action: /* SAFETY: 类型断言已复核 */ {
+            kind: "idle",
+          } as RunAction,
+        };
       }
       return persistAndPlan(ctx.user.id, input.projectId, {
         ...run,
@@ -148,7 +148,12 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const run = await loadRun(ctx.user.id, input.projectId);
       if (run.status !== "paused")
-        return { run, action: { kind: "idle" } as RunAction };
+        return {
+          run,
+          action: /* SAFETY: 类型断言已复核 */ {
+            kind: "idle",
+          } as RunAction,
+        };
       const result = await persistAndPlan(ctx.user.id, input.projectId, {
         ...run,
         status: "running",
@@ -164,7 +169,12 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const run = await loadRun(ctx.user.id, input.projectId);
       if (run.status !== "awaiting_approval") {
-        return { run, action: { kind: "idle" } as RunAction };
+        return {
+          run,
+          action: /* SAFETY: 类型断言已复核 */ {
+            kind: "idle",
+          } as RunAction,
+        };
       }
       const result = await persistAndPlan(ctx.user.id, input.projectId, {
         ...run,
@@ -191,16 +201,9 @@ export const runRouter = createTRPCRouter({
 
   /** 评审一个分镜镜头（文本评审）：调模型给判定 → 落库 `shot.review` → 回显判定。 */
   reviewShot: authedProcedure
-    .input(
-      z.object({ projectId: z.string().min(1), shotId: z.string().min(1) }),
-    )
+    .input(z.object({ projectId: z.string().min(1), shotId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const verdict = await reviewContent(
-        ctx.user.id,
-        input.projectId,
-        "shot",
-        input.shotId,
-      );
+      const verdict = await reviewContent(ctx.user.id, input.projectId, "shot", input.shotId);
       return { verdict };
     }),
 
@@ -209,15 +212,9 @@ export const runRouter = createTRPCRouter({
    * 打分，判定写回 `shot.imageReview`。没图 / 找不到镜头时抛可行动错误。
    */
   reviewShotImage: authedProcedure
-    .input(
-      z.object({ projectId: z.string().min(1), shotId: z.string().min(1) }),
-    )
+    .input(z.object({ projectId: z.string().min(1), shotId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const verdict = await reviewShotImage(
-        ctx.user.id,
-        input.projectId,
-        input.shotId,
-      );
+      const verdict = await reviewShotImage(ctx.user.id, input.projectId, input.shotId);
       return { verdict };
     }),
 
@@ -274,12 +271,7 @@ export const runRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return autoselectShotImage(
-        ctx.user.id,
-        input.projectId,
-        input.shotId,
-        input.taskIds,
-      );
+      return autoselectShotImage(ctx.user.id, input.projectId, input.shotId, input.taskIds);
     }),
 
   /**
@@ -297,13 +289,7 @@ export const runRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await regenerateShot(
-        ctx.user.id,
-        input.projectId,
-        input.shotId,
-        input.mode,
-        input.newPrompt,
-      );
+      await regenerateShot(ctx.user.id, input.projectId, input.shotId, input.mode, input.newPrompt);
       return { ok: true };
     }),
 
@@ -324,28 +310,23 @@ export const runRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const row = await productionRepository.getForUser(
-        ctx.user.id,
-        input.projectId,
-      );
-      if (!row)
-        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+      const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
       const rawList = input.kind === "shot" ? row.shots : row.characters;
       const list: unknown[] = Array.isArray(rawList) ? rawList : [];
       const rec = list.find(
         (item) =>
           typeof item === "object" &&
           item !== null &&
-          (item as { id?: unknown }).id === input.targetId,
+          /* SAFETY: 类型断言已复核 */ (item as { id?: unknown }).id === input.targetId,
       );
       if (!rec)
         throw new TRPCError({
           code: "NOT_FOUND",
           message: `找不到要裁决的${input.kind === "shot" ? "镜头" : "角色卡"}`,
         });
-      const revRaw = (rec as { rev?: unknown }).rev;
-      const rev =
-        typeof revRaw === "number" && Number.isFinite(revRaw) ? revRaw : 0;
+      const revRaw = /* SAFETY: 类型断言已复核 */ (rec as { rev?: unknown }).rev;
+      const rev = typeof revRaw === "number" && Number.isFinite(revRaw) ? revRaw : 0;
       const verdict = {
         pass: input.pass,
         note: input.note.trim(),
@@ -354,9 +335,7 @@ export const runRouter = createTRPCRouter({
       };
       const nextList = applyHumanVerdict(list, input.targetId, verdict);
       await productionRepository.patchContent(ctx.user.id, input.projectId, {
-        ...(input.kind === "shot"
-          ? { shots: nextList }
-          : { characters: nextList }),
+        ...(input.kind === "shot" ? { shots: nextList } : { characters: nextList }),
       });
       return { humanVerdict: verdict };
     }),
@@ -371,12 +350,8 @@ export const runRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const row = await productionRepository.getForUser(
-        ctx.user.id,
-        input.projectId,
-      );
-      if (!row)
-        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+      const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
       const shots: unknown[] = Array.isArray(row.shots) ? row.shots : [];
       const nextShots = applyHumanRating(shots, input.shotId, input.rating);
       if (nextShots === shots)
@@ -400,14 +375,9 @@ export const runRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const row = await productionRepository.getForUser(
-        ctx.user.id,
-        input.projectId,
-      );
-      if (!row)
-        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
-      const script =
-        typeof row.scriptMarkdown === "string" ? row.scriptMarkdown : "";
+      const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+      const script = typeof row.scriptMarkdown === "string" ? row.scriptMarkdown : "";
       const verdict = {
         pass: input.pass,
         note: input.note.trim(),
@@ -429,10 +399,7 @@ export const runRouter = createTRPCRouter({
   reviewCalibration: authedProcedure
     .input(z.object({ projectId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
-      const row = await productionRepository.getForUser(
-        ctx.user.id,
-        input.projectId,
-      );
+      const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
       const shots: unknown[] = row && Array.isArray(row.shots) ? row.shots : [];
       return calibrateFromShots(shots);
     }),

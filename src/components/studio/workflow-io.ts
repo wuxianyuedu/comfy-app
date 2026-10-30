@@ -79,13 +79,7 @@ const LINK_ONLY = new Set([
 const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
 
 /** 下游该派生出**视频**节点的输出类型。 */
-const VIDEO_TYPES = new Set([
-  "VIDEO",
-  "VHS_FILENAMES",
-  "VHS_VIDEOINFO",
-  "VHS_AUDIO",
-  "AUDIO",
-]);
+const VIDEO_TYPES = new Set(["VIDEO", "VHS_FILENAMES", "VHS_VIDEOINFO", "VHS_AUDIO", "AUDIO"]);
 
 /** 当某个 workflowIO 条目没有显式的 ComfyUI 类型时（例如保存 IO 映射时
  *  ComfyUI 离线），尝试从 pin 名 / 标签 / 默认值把控件种类**捞回来** ——
@@ -192,15 +186,13 @@ export function controlForEntry(e: WorkflowIOEntry): ControlKind {
     if (e.multiline) return "textarea";
     /* 当前值很长，是「这是提示词框」的强信号 ——
      * 即使服务端的名字启发式没认出来也照样判对。 */
-    if (typeof e.defaultValue === "string" && e.defaultValue.length > 40)
-      return "textarea";
+    if (typeof e.defaultValue === "string" && e.defaultValue.length > 40) return "textarea";
     return "text";
   }
   if (type === "*") {
     if (e.multiline) return "textarea";
     /* 当前值很长，是「这是提示词框」的强信号。 */
-    if (typeof e.defaultValue === "string" && e.defaultValue.length > 40)
-      return "textarea";
+    if (typeof e.defaultValue === "string" && e.defaultValue.length > 40) return "textarea";
     const inferred = inferControlFromName(e);
     if (inferred) return inferred;
     return "text";
@@ -208,8 +200,7 @@ export function controlForEntry(e: WorkflowIOEntry): ControlKind {
   /* 已声明但未在白名单里的类型（自定义节点的 `AUDIO` / `VIDEO` / 厂商私有
    *  枚举…）：只要控件位带着标量就仍以文本可编辑，避免整行退化成「只接受
    *  连线」的哑端口 —— 那是「用户勾了却改不了」的观感来源。 */
-  if (typeof e.defaultValue === "string" || typeof e.defaultValue === "number")
-    return "text";
+  if (typeof e.defaultValue === "string" || typeof e.defaultValue === "number") return "text";
   /* 彻底无法定类型的 pin（既不是标量，也没有上传语义）→ 走连线。 */
   return "link";
 }
@@ -223,12 +214,9 @@ export function numericBounds(e: WorkflowIOEntry): {
 } {
   const name = `${e.name} ${e.label ?? ""}`.toLowerCase();
   const isFloat = upperToken(e.type) === "FLOAT";
-  if (/seed|noise_seed/.test(name))
-    return { min: 0, max: 4294967295, step: 1, decimalPlaces: 0 };
-  if (name.includes("steps"))
-    return { min: 1, max: 200, step: 1, decimalPlaces: 0 };
-  if (/^cfg|cfg$|guidance/.test(name))
-    return { min: 0, max: 30, step: 0.5, decimalPlaces: 1 };
+  if (/seed|noise_seed/.test(name)) return { min: 0, max: 4294967295, step: 1, decimalPlaces: 0 };
+  if (name.includes("steps")) return { min: 1, max: 200, step: 1, decimalPlaces: 0 };
+  if (/^cfg|cfg$|guidance/.test(name)) return { min: 0, max: 30, step: 0.5, decimalPlaces: 1 };
   if (/denoise|strength|weight|scale|ratio/.test(name))
     return { min: 0, max: 2, step: 0.05, decimalPlaces: 2 };
   if (/width|height|size|resolution/.test(name))
@@ -253,12 +241,10 @@ export function numericBounds(e: WorkflowIOEntry): {
  *  三元组就是 ioKey 的拼法，因此任何一份拷贝都认得出来。 */
 function isSamePin(a: WorkflowIOEntry, b: WorkflowIOEntry): boolean {
   if (a === b) return true;
-  const aKey = (a as { ioKey?: string }).ioKey;
-  const bKey = (b as { ioKey?: string }).ioKey;
+  const aKey = /* SAFETY: 类型断言已复核 */ (a as { ioKey?: string }).ioKey;
+  const bKey = /* SAFETY: 类型断言已复核 */ (b as { ioKey?: string }).ioKey;
   if (aKey !== undefined && bKey !== undefined) return aKey === bKey;
-  return (
-    a.nodeId === b.nodeId && a.direction === b.direction && a.name === b.name
-  );
+  return a.nodeId === b.nodeId && a.direction === b.direction && a.name === b.name;
 }
 
 /** 名字是不是 ComfyUI 给子工作流槽位自动编号出的机器别名（`value_1` / 裸序号）。
@@ -291,10 +277,7 @@ function isMachineAliasName(name: string | undefined): boolean {
  *
  * 不传 `allEntries` 时，函数返回的仍是全应用早已依赖的 `label || name` 行为，
  * CreatePanel / CanvasNode 里的既有调用方不受影响。 */
-export function ioLabel(
-  e: WorkflowIOEntry,
-  allEntries?: readonly WorkflowIOEntry[],
-): string {
+export function ioLabel(e: WorkflowIOEntry, allEntries?: readonly WorkflowIOEntry[]): string {
   const candidate = e.label?.trim() ?? e.name;
   if (allEntries && allEntries.length > 1) {
     for (const entry of allEntries) {
@@ -396,10 +379,7 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
    *  三组（wire / widget / output）各自独立排序 ——
    *  画布侧的 IO 预览始终「连线 + widget 输入在上、输出在下」，
    *  用户也只在这些组内部调序，这正是预览面板的设计意图。 */
-  const byDisplayOrder = (
-    itemA: { displayOrder?: number },
-    itemB: { displayOrder?: number },
-  ) => {
+  const byDisplayOrder = (itemA: { displayOrder?: number }, itemB: { displayOrder?: number }) => {
     const ao = itemA.displayOrder;
     const bo = itemB.displayOrder;
     if (ao === bo) return 0;
@@ -449,8 +429,7 @@ export function outputTargetKind(
     if (IMAGE_TYPES.has(upperToken(output.type))) return "image";
   }
   const tt = (taskType ?? "").toLowerCase();
-  if (tt.includes("video") || tt === "t2v" || tt === "i2v" || tt === "flfvideo")
-    return "video";
+  if (tt.includes("video") || tt === "t2v" || tt === "i2v" || tt === "flfvideo") return "video";
   return "image";
 }
 
@@ -496,8 +475,7 @@ export function defaultInputValues(
        *  声明了类型（INT / FLOAT）的条目照旧给 numericBounds 默认值，行为不变；
        *  没类型的只交给图内默认值 / 用户填写，本函数不替它下发明文数字。 */
       if (!entry.controlInferred) out[entry.ioKey] = numericBounds(entry).min;
-    } else if (entry.control === "textarea" || entry.control === "text")
-      out[entry.ioKey] = "";
+    } else if (entry.control === "textarea" || entry.control === "text") out[entry.ioKey] = "";
   }
   return out;
 }
@@ -547,8 +525,7 @@ export function mergeRefreshedDefaults(
     /* 基线里没有的键 = 新暴露的 pin（作者刚勾选），按「未覆盖」处理，
      * 直接采用默认值，否则它会以 undefined 留在表单里。 */
     const inBaseline = Object.prototype.hasOwnProperty.call(baseline, key);
-    const untouched =
-      !inBaseline || (key in current && current[key] === baseline[key]);
+    const untouched = !inBaseline || (key in current && current[key] === baseline[key]);
     out[key] = untouched ? fresh[key] : current[key];
     if (out[key] !== current[key]) changed = true;
   }

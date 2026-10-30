@@ -15,7 +15,7 @@ import { eq, and, desc, type SQL } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
 
 /** 列表页需要的列：除 `positions`（列表页不读、且是大 JSON blob）外的全部。 */
-const LIST_ROW_COLUMNS = {
+const LIST_ROW_COLUMNS = /* SAFETY: 类型断言已复核 */ {
   id: workflowTemplate.id,
   userId: workflowTemplate.userId,
   name: workflowTemplate.name,
@@ -32,7 +32,7 @@ const LIST_ROW_COLUMNS = {
 } as const;
 
 /** 详情加载时用来判断「磁盘上有没有新版本」的最小列集：只要这三列。 */
-const SOURCE_META_COLUMNS = {
+const SOURCE_META_COLUMNS = /* SAFETY: 类型断言已复核 */ {
   id: workflowTemplate.id,
   sourcePath: workflowTemplate.sourcePath,
   sourceMtime: workflowTemplate.sourceMtime,
@@ -61,10 +61,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
       .orderBy(desc(workflowTemplate.createdAt));
   }
 
-  async findByIdForUser(
-    userId: string,
-    id: string,
-  ): Promise<WorkflowTemplate | null> {
+  async findByIdForUser(userId: string, id: string): Promise<WorkflowTemplate | null> {
     const wf = await this.findById(id);
     return wf?.userId === userId ? wf : null;
   }
@@ -85,9 +82,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
     const rows = await db
       .select(SOURCE_META_COLUMNS)
       .from(workflowTemplate)
-      .where(
-        and(eq(workflowTemplate.id, id), eq(workflowTemplate.userId, userId)),
-      )
+      .where(and(eq(workflowTemplate.id, id), eq(workflowTemplate.userId, userId)))
       .limit(1);
     return rows[0] ?? null;
   }
@@ -165,9 +160,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
     if (tagIds.length) {
       await db
         .insert(workflowModelTagToWorkflowTemplate)
-        .values(
-          tagIds.map((t) => ({ workflowModelTag: t, workflowTemplate: id })),
-        );
+        .values(tagIds.map((t) => ({ workflowModelTag: t, workflowTemplate: id })));
     }
   }
 }

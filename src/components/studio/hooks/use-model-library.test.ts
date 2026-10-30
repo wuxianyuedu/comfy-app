@@ -12,14 +12,8 @@ import { TRPCError } from "@trpc/server";
 import SuperJSON from "superjson";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import {
-  createTestTRPC,
-  testTrpcEndpoint,
-} from "../../../../tests/helpers/test-trpc";
-import {
-  forwardForTest,
-  setupTrpcServer,
-} from "../../../../tests/helpers/trpc-msw";
+import { createTestTRPC, testTrpcEndpoint } from "../../../../tests/helpers/test-trpc";
+import { forwardForTest, setupTrpcServer } from "../../../../tests/helpers/trpc-msw";
 import { createTestQueryClient } from "../../../../tests/helpers/renderWithProviders";
 import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
@@ -152,9 +146,7 @@ describe("useModelLibrary", () => {
     expect(result.current.loading).toBe(true);
     await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.models).toHaveLength(1);
-    expect(result.current.models[0]?.fileName).toBe(
-      "dreamshaper-xl.safetensors",
-    );
+    expect(result.current.models[0]?.fileName).toBe("dreamshaper-xl.safetensors");
   });
 
   /* 回归：effect 的依赖数组曾经是 `[syncMut, reload]`，而这两个引用
@@ -293,9 +285,7 @@ describe("useModelLibrary 卸载后不再 setState", () => {
       }),
     });
     server.use(
-      http.all("*/api/trpc/*", async ({ request }) =>
-        forwardForTest(request, gatedRouter),
-      ),
+      http.all("*/api/trpc/*", async ({ request }) => forwardForTest(request, gatedRouter)),
     );
 
     const { result, unmount } = renderHook(() => useModelLibrary(), {
@@ -308,8 +298,7 @@ describe("useModelLibrary 卸载后不再 setState", () => {
      * 等 `loading` 也从 `false` 转过来，判的是「这一刻两者都成立」。 */
     await expect
       .poll(() => listBlocked && result.current.loading, {
-        message:
-          "前提：查询在飞、回包被卡住（loading 与 listBlocked 同时成立）",
+        message: "前提：查询在飞、回包被卡住（loading 与 listBlocked 同时成立）",
       })
       .toBe(true);
 
@@ -321,14 +310,10 @@ describe("useModelLibrary 卸载后不再 setState", () => {
       configurable: true,
       get() {
         const stack = new Error().stack ?? "";
-        if (
-          /resolveUpdatePriority|dispatchSetState|scheduleUpdateOnFiber/.test(
-            stack,
-          )
-        ) {
+        if (/resolveUpdatePriority|dispatchSetState|scheduleUpdateOnFiber/.test(stack)) {
           scheduleReads += 1;
         }
-        return realWindow?.value as unknown;
+        return /* SAFETY: 类型断言已复核 */ realWindow?.value as unknown;
       },
     };
     Object.defineProperty(globalThis, "window", spy);

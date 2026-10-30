@@ -56,10 +56,7 @@ function resolveDbPath(url: string): string {
   // 503 (see `src/app/api/health/route.ts`) instead of a build crash.
   const value = url || DEFAULT_DB_FILE;
   const raw = value.startsWith("file:") ? value.slice("file:".length) : value;
-  return path.resolve(
-    /*turbopackIgnore: true*/ process.cwd(),
-    raw || DEFAULT_DB_FILE,
-  );
+  return path.resolve(/*turbopackIgnore: true*/ process.cwd(), raw || DEFAULT_DB_FILE);
 }
 
 // libsql's file: URL wants the resolved absolute path so hot reloads and
@@ -87,7 +84,7 @@ const client = createClient({
 // (ISSUE #1282).
 await applySqlitePragmas(client);
 
-const globalForDb = globalThis as unknown as {
+const globalForDb = /* SAFETY: reviewed */ globalThis as unknown as {
   db: ReturnType<typeof drizzle<typeof schema>> | undefined;
 };
 

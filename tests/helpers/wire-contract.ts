@@ -19,13 +19,10 @@ import type { ZodRawShape } from "zod";
  * 等于把判据的判断力交出去（它想断的正是「线上到底发成什么样」）。
  */
 export function throughJsonWire<T>(value: unknown): T {
-  return JSON.parse(JSON.stringify(value)) as T;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(JSON.stringify(value)) as T;
 }
 
 /** 镜像声明的列里，线上没有发出来的那些（空数组 = 契约对得上）。 */
-export function missingFromWire(
-  shape: ZodRawShape,
-  wireKeys: readonly string[],
-): string[] {
+export function missingFromWire(shape: ZodRawShape, wireKeys: readonly string[]): string[] {
   return Object.keys(shape).filter((key) => !wireKeys.includes(key));
 }

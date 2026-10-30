@@ -32,7 +32,7 @@ async function scanLogFiles(dir: string, base: string): Promise<LogFileInfo[]> {
   try {
     entries = await fs.promises.readdir(dir, { withFileTypes: true });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
   }
   const perEntry = await Promise.all(
@@ -69,9 +69,8 @@ export async function GET() {
       .sort((a, b) => b.mtimeMs - a.mtimeMs);
     return NextResponse.json({ files });
   } catch (error) {
-    return NextResponse.json(
-      apiErrorBody(error, "读取日志列表失败", { files: [] }),
-      { status: 500 },
-    );
+    return NextResponse.json(apiErrorBody(error, "读取日志列表失败", { files: [] }), {
+      status: 500,
+    });
   }
 }

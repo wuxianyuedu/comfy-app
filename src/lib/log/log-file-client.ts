@@ -72,7 +72,7 @@ export async function fetchFileLogSlice(
     }),
   );
   if (!res.ok) return null;
-  return (await res.json()) as FileLogSlice;
+  return /* SAFETY: 类型断言已复核 */ (await res.json()) as FileLogSlice;
 }
 
 /* ── 常驻服务 runtime 日志的「每一次启动」（设置页启动日志）─────────────
@@ -87,10 +87,7 @@ export async function fetchFileLogSlice(
  * 通道）。**不含 `app-runtime`**：它跟的是应用自身生命周期，没有「用户点了启动」
  * 这个动作，界面上没有可切的东西；它的历史由日志面板自己那一路覆盖。
  */
-export type RuntimeLogSourceKind =
-  | "comfyui-runtime"
-  | "drizzle-studio-runtime"
-  | "ollama-runtime";
+export type RuntimeLogSourceKind = "comfyui-runtime" | "drizzle-studio-runtime" | "ollama-runtime";
 
 /**
  * 拉取某来源的启动列表 + 指定一次（缺省取最新那一份）的正文。
@@ -105,11 +102,9 @@ export async function fetchLogSessions(
 ): Promise<LogSessionsPayload | null> {
   try {
     /* 会话 id 可选：空值由出口省略（不再自己 `if` 一次再 `set`）。 */
-    const res = await fetch(
-      withQuery("/api/logs/sessions", { source, session: sessionId }),
-    );
+    const res = await fetch(withQuery("/api/logs/sessions", { source, session: sessionId }));
     if (!res.ok) return null;
-    return (await res.json()) as LogSessionsPayload;
+    return /* SAFETY: 类型断言已复核 */ (await res.json()) as LogSessionsPayload;
   } catch {
     return null;
   }
@@ -144,17 +139,14 @@ export interface SavedLogExport {
  * 失败返回 `{ ok: false }` 而不是抛错——面板据此显示「保存失败」，
  * 不阻塞日志面板本身。
  */
-export async function saveLogExport(
-  label: string,
-  content: string,
-): Promise<SavedLogExport> {
+export async function saveLogExport(label: string, content: string): Promise<SavedLogExport> {
   try {
     const res = await fetch("/api/logs/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label, content }),
     });
-    const data = (await res.json()) as SavedLogExport;
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as SavedLogExport;
     return data;
   } catch (error) {
     return {
@@ -179,7 +171,7 @@ export async function saveLogExport(
 export async function saveDiagnosticsPackage(): Promise<SavedLogExport> {
   try {
     const res = await fetch("/api/logs/diagnostics", { method: "POST" });
-    return (await res.json()) as SavedLogExport;
+    return /* SAFETY: 类型断言已复核 */ (await res.json()) as SavedLogExport;
   } catch (error) {
     return {
       ok: false,

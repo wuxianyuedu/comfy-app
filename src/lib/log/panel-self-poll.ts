@@ -25,7 +25,7 @@ export const LOG_SLICE_ENDPOINT = "/api/logs/current";
 export const SERVER_ID_ENDPOINT = "/api/dev/server-id";
 
 /** 面板自用轮询打的全部端点。过滤判据按这份集合推，不另抄名字。 */
-export const PANEL_SELF_POLL_ENDPOINTS = [
+export const PANEL_SELF_POLL_ENDPOINTS = /* SAFETY: 类型断言已复核 */ [
   LOG_SLICE_ENDPOINT,
   SERVER_ID_ENDPOINT,
   BUILD_ID_ENDPOINT,

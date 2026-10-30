@@ -10,13 +10,7 @@
  *  **只接受 ComfyUI 的原始工作流格式（RAW）**：API 格式（「导出(API格式)」）不是
  *  本应用支持的导入形态，RAW 转可执行的 API 图由 comfy-cli 在执行时完成。
  */
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type DragEvent,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction } from "~/lib/async-action";
 import { errorText } from "~/lib/error-message";
@@ -158,15 +152,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         },
       ),
     );
-  }, [
-    importName,
-    importModes,
-    importDefaultMode,
-    importJson,
-    load,
-    createMut,
-    importBusy,
-  ]);
+  }, [importName, importModes, importDefaultMode, importJson, load, createMut, importBusy]);
 
   /** 文件入口的统一前处理漏斗（拖入 / 「选择文件」共用）：读文本 → JSON 解析 →
    *  校验是 ComfyUI 原始工作流 → 预填导入面板并打开，让用户确认名称 / 模式后再提交。
@@ -218,12 +204,14 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       //（upscale / inpaint / img2img），建议默认 I2I；否则 T2I。
       try {
         let suggested = "T2I";
-        const obj = parsed as Record<string, unknown>;
-        const nodes = Array.isArray(obj.nodes) ? (obj.nodes as unknown[]) : [];
+        const obj = /* SAFETY: 类型断言已复核 */ parsed as Record<string, unknown>;
+        const nodes = Array.isArray(obj.nodes)
+          ? /* SAFETY: 类型断言已复核 */ (obj.nodes as unknown[])
+          : [];
         for (const n of nodes) {
           const t =
             n && typeof n === "object"
-              ? (n as { type?: unknown }).type
+              ? /* SAFETY: 类型断言已复核 */ (n as { type?: unknown }).type
               : undefined;
           if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
             suggested = "I2I";

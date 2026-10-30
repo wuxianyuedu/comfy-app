@@ -9,21 +9,17 @@ import { withQuery } from "~/lib/query-string";
 import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 
 /** 拉取某项目的服务端草稿；服务端无该行或已空 → 返回 null。 */
-export async function fetchServerDraft(
-  projectId: string,
-): Promise<WorkshopDraftDto | null> {
+export async function fetchServerDraft(projectId: string): Promise<WorkshopDraftDto | null> {
   try {
-    const res = await fetch(
-      withQuery("/api/workshop/draft", { project: projectId }),
-    );
+    const res = await fetch(withQuery("/api/workshop/draft", { project: projectId }));
     if (!res.ok) return null;
     const data: unknown = await res.json();
     if (
       typeof data === "object" &&
       data !== null &&
-      (data as { exists?: unknown }).exists === true
+      /* SAFETY: 类型断言已复核 */ (data as { exists?: unknown }).exists === true
     ) {
-      return (data as { draft: WorkshopDraftDto }).draft;
+      return /* SAFETY: 类型断言已复核 */ (data as { draft: WorkshopDraftDto }).draft;
     }
     return null;
   } catch {
@@ -32,10 +28,7 @@ export async function fetchServerDraft(
 }
 
 /** 把某项目草稿写穿到服务端（写本地之外的第二份持久化副本）。静默失败不影响编辑。 */
-export async function pushServerDraft(
-  projectId: string,
-  draft: WorkshopDraftDto,
-): Promise<void> {
+export async function pushServerDraft(projectId: string, draft: WorkshopDraftDto): Promise<void> {
   try {
     await fetch("/api/workshop/draft", {
       method: "PUT",

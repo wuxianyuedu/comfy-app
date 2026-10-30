@@ -17,25 +17,19 @@ import {
   type EnrichedWidget,
   type WorkflowIOEntry,
 } from "~/components/studio/workflow-io";
-import {
-  isNumericWidget,
-  type DynamicWorkflowFormProps,
-} from "../dynamic-workflow-form-config";
+import { isNumericWidget, type DynamicWorkflowFormProps } from "../dynamic-workflow-form-config";
 import type { WorkflowIODropPosition } from "~/components/studio/workflow-types";
 
 /** 在这些可编辑控件上起手不发起拖拽：输入框 / 下拉 / 按钮是「用」的地方，
  *  不是「抓」的地方 —— 行级 draggable 会劫持文本选择与下拉交互；且从这些
  *  控件发起的原生拖拽经常根本不触发 drop（只有 dragend），表现成
  *  「拖了但顺序没变」。用户口径：只能从不可编辑区域拖动。 */
-const DRAG_CANCEL_SELECTOR =
-  "input, textarea, select, button, [contenteditable]";
+const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]";
 
 /** 指针在行内的上/下半区决定插入点：上半区 = 插到该行之前，下半区 = 之后。
  *  指示线画在实际插入位置，落点即所见。取不到几何信息（测试桩 / 理论上
  *  的分离节点）时退回 before。 */
-const positionOf = (
-  event: DragEvent<HTMLDivElement>,
-): WorkflowIODropPosition => {
+const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
   const rect = event.currentTarget?.getBoundingClientRect?.();
   if (!rect || rect.height <= 0) return "before";
   return event.clientY < rect.top + rect.height / 2 ? "before" : "after";
@@ -123,10 +117,7 @@ export function useDynamicWorkflowForm(
     onReorder
   );
 
-  const { wireInputs, widgetInputs, outputs } = useMemo(
-    () => splitWorkflowIO(io),
-    [io],
-  );
+  const { wireInputs, widgetInputs, outputs } = useMemo(() => splitWorkflowIO(io), [io]);
 
   /* 多模式：按当前模式过滤掉 `visible === false` 的行。
    *  只是展示层过滤——被隐藏的参数仍留在 values 里（调用方用
@@ -157,10 +148,7 @@ export function useDynamicWorkflowForm(
    * 改由 `GroupedControls` 渲染 —— 一个下拉在 分别填写 与
    * 友好预设范式之间切换。`groupedKeys` 是
    * 各组消费的 ioKey 集合。 */
-  const groups = useMemo(
-    () => inferGroups(shownWidgetInputs),
-    [shownWidgetInputs],
-  );
+  const groups = useMemo(() => inferGroups(shownWidgetInputs), [shownWidgetInputs]);
   const { groupedKeys } = groups;
 
   /* 端口行 = 连线输入 + 数值 widget（seed/steps/cfg …）。数值
@@ -174,9 +162,7 @@ export function useDynamicWorkflowForm(
       ...shownWireInputs,
       ...shownWidgetInputs.filter(
         (widgetInput) =>
-          isNumericWidget(widgetInput) &&
-          !groupedKeys.has(widgetInput.ioKey) &&
-          !isAuthoringEdit,
+          isNumericWidget(widgetInput) && !groupedKeys.has(widgetInput.ioKey) && !isAuthoringEdit,
       ),
     ],
     [shownWireInputs, shownWidgetInputs, groupedKeys, isAuthoringEdit],
@@ -186,8 +172,7 @@ export function useDynamicWorkflowForm(
     () =>
       shownWidgetInputs.filter(
         (widgetInput) =>
-          !groupedKeys.has(widgetInput.ioKey) &&
-          (isAuthoringEdit || !isNumericWidget(widgetInput)),
+          !groupedKeys.has(widgetInput.ioKey) && (isAuthoringEdit || !isNumericWidget(widgetInput)),
       ),
     [shownWidgetInputs, groupedKeys, isAuthoringEdit],
   );
@@ -208,8 +193,7 @@ export function useDynamicWorkflowForm(
   const dragFromRef = useRef<string | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
-  const [dropPosition, setDropPosition] =
-    useState<WorkflowIODropPosition>("before");
+  const [dropPosition, setDropPosition] = useState<WorkflowIODropPosition>("before");
 
   const beginDrag = useCallback((ioKey: string) => {
     dragFromRef.current = ioKey;
@@ -241,7 +225,7 @@ export function useDynamicWorkflowForm(
       onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         /* 输入框 / 下拉 / 按钮上起手不拖（用户口径：只能从不可编辑区域拖动）
          *  —— preventDefault 直接取消这次拖拽。 */
-        const target = event.target as HTMLElement | null;
+        const target = /* SAFETY: 类型断言已复核 */ event.target as HTMLElement | null;
         if (target?.closest?.(DRAG_CANCEL_SELECTOR)) {
           event.preventDefault();
           return;
@@ -337,9 +321,7 @@ export function useDynamicWorkflowForm(
        * **不 await** —— 它是附带效果，读文件的异步不该推迟真正的上传时序；读失败
        * 也只是没有本地预览，不阻断上传。 */
       void readFileAsDataUrl(file)
-        .then((dataUrl) =>
-          setPreviews((prev) => ({ ...prev, [target]: dataUrl })),
-        )
+        .then((dataUrl) => setPreviews((prev) => ({ ...prev, [target]: dataUrl })))
         .catch(() => undefined);
       try {
         /* ComfyUI 未运行 / 正在启动时由客户端自动等就绪后重试；等待期间

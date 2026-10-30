@@ -81,10 +81,7 @@ it("node 档不载 DOM 测试栈", () => {
  * 所以「写哪个扩展名」就是「测哪一档」——不另配 `--project`，那等于在这里
  * 重抄一遍归属判据（漂移是静默的）。
  */
-function runProbe(
-  source: string,
-  name: string,
-): { code: number; output: string } {
+function runProbe(source: string, name: string): { code: number; output: string } {
   const file = path.join(
     ROOT,
     "tests",
@@ -108,7 +105,7 @@ function runProbe(
     );
     return { code: 0, output };
   } catch (error) {
-    const e = error as {
+    const e = /* SAFETY: 类型断言已复核 */ error as {
       status?: number | null;
       stdout?: string;
       stderr?: string;
@@ -125,10 +122,7 @@ function runProbe(
 describe("全局 setup 的 RTL 逐用例卸载", () => {
   it("真的注册上了：挂载的组件在下一条用例里已经不在（量具没坏）", () => {
     const { code, output } = runProbe(PROBE, "test.tsx");
-    expect(
-      code,
-      `探针用例应当全绿 —— 红了说明全局清理没生效：\n${output}`,
-    ).toBe(0);
+    expect(code, `探针用例应当全绿 —— 红了说明全局清理没生效：\n${output}`).toBe(0);
     /* 探针确实**跑到了**（不是「被过滤掉、零用例」的假绿）——三条用例都绿。 */
     expect(output, "探针确实跑了三条用例").toMatch(/3\s+passed/);
   });
@@ -139,17 +133,12 @@ describe("全局 setup 的 RTL 逐用例卸载", () => {
    * 所以只能在这里正面判「node 档拿不到它」。 */
   it("node 档不载 DOM 测试栈（装载税不再回来）", () => {
     const { code, output } = runProbe(NODE_PROBE, "test.ts");
-    expect(
-      code,
-      `node 档探针应当全绿 —— 红了说明 DOM 测试栈被载进了 node 档：\n${output}`,
-    ).toBe(0);
+    expect(code, `node 档探针应当全绿 —— 红了说明 DOM 测试栈被载进了 node 档：\n${output}`).toBe(0);
     expect(output, "探针确实跑了一条用例").toMatch(/1\s+passed/);
   });
 
   it("setup 文件确实登记在根 `test.setupFiles` 上（不靠分辨率猜）", () => {
     const root = fs.readFileSync(path.join(ROOT, "vitest.config.ts"), "utf8");
-    expect(root, "共享 setup 该声明在根 `test` 上").toContain(
-      '"tests/setup.ts"',
-    );
+    expect(root, "共享 setup 该声明在根 `test` 上").toContain('"tests/setup.ts"');
   });
 });

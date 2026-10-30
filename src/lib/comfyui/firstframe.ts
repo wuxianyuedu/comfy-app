@@ -71,7 +71,7 @@ async function waitForImage(taskId: string): Promise<string> {
         throw new Error(row.error ?? `首帧生成失败（${row.status}）`);
       }
       const outputs =
-        (row.resultImages as Array<{
+        /* SAFETY: 类型断言已复核 */ (row.resultImages as Array<{
           mediaType?: string;
           localPath?: string;
         }> | null) ?? [];

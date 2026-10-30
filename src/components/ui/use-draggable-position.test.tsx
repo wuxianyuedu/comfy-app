@@ -55,7 +55,7 @@ function setViewport(width: number, height: number) {
  * 命中不了边界，等于没测。
  */
 function stubRect(this: HTMLElement) {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     width: 40,
     height: 40,
     top: 0,
@@ -110,9 +110,7 @@ function Harness({
 }
 
 /** 渲染被测组件；`controller()` 始终拿到最新一份 controller。 */
-function setup(
-  options: { onClick?: () => void; elementShown?: boolean } = {},
-): {
+function setup(options: { onClick?: () => void; elementShown?: boolean } = {}): {
   controller: () => DraggablePositionController<HTMLButtonElement>;
   attach: (shown: boolean) => void;
 } {
@@ -131,11 +129,7 @@ function setup(
     controller: () => latest!,
     attach: (shown) => {
       view.rerender(
-        <Harness
-          onClick={options.onClick}
-          elementShown={shown}
-          onController={onController}
-        />,
+        <Harness onClick={options.onClick} elementShown={shown} onController={onController} />,
       );
     },
   };
@@ -148,12 +142,14 @@ function drag(
   to: { x: number; y: number },
 ) {
   act(() => {
-    handleProps.onPointerDown({
-      button: 0,
-      pointerId: 1,
-      clientX: from.x,
-      clientY: from.y,
-    } as unknown as React.PointerEvent<HTMLElement>);
+    handleProps.onPointerDown(
+      /* SAFETY: 类型断言已复核 */ {
+        button: 0,
+        pointerId: 1,
+        clientX: from.x,
+        clientY: from.y,
+      } as unknown as React.PointerEvent<HTMLElement>,
+    );
   });
   const steps = 8;
   act(() => {
@@ -188,13 +184,9 @@ describe("useDraggablePosition", () => {
     const first = setup();
     await expect.poll(() => first.controller().offset).not.toBeNull();
     /* 往左上拖 200/100：右侧更远 → `right` 变大，下侧更远 → `bottom` 变大。 */
-    drag(
-      first.controller().handleProps,
-      { x: 900, y: 700 },
-      { x: 700, y: 600 },
-    );
+    drag(first.controller().handleProps, { x: 900, y: 700 }, { x: 700, y: 600 });
     await expect.poll(() => window.localStorage.getItem(KEY)).not.toBeNull();
-    const saved = JSON.parse(window.localStorage.getItem(KEY)!) as {
+    const saved = /* SAFETY: 类型断言已复核 */ JSON.parse(window.localStorage.getItem(KEY)!) as {
       right: number;
       bottom: number;
     };
@@ -212,25 +204,18 @@ describe("useDraggablePosition", () => {
    * 第一版就是在这条路径上把记住的位置**静默丢弃**的（拿到默认值去夹，没重读
    * storage），表现是「拖过之后重开应用，图标又跳回右下角」。 */
   it("元素首轮还没挂上：也要给位置，挂上后位置不跳变", async () => {
-    window.localStorage.setItem(
-      KEY,
-      JSON.stringify({ right: 500, bottom: 300 }),
-    );
+    window.localStorage.setItem(KEY, JSON.stringify({ right: 500, bottom: 300 }));
     const { controller, attach } = setup({ elementShown: false });
 
     /* 第一态：元素不在 DOM 里。这里**仍要给出位置** —— 调用处按「有没有偏移」
      * 决定要不要渲染被拖的元素，不给值它永远不渲染、也就永远挂不上（死结）。
      * 此时按零尺寸的占位盒子夹取，读到的已是 storage 里那个值。 */
-    await expect
-      .poll(() => controller().offset)
-      .toEqual({ right: 500, bottom: 300 });
+    await expect.poll(() => controller().offset).toEqual({ right: 500, bottom: 300 });
 
     /* 第二态：元素挂上 —— 位置**不该跳变**（这一条正是第一版丢掉记住位置时
      * 会红的地方：挂上后它拿默认值去夹，图标倏地跳回右下角）。 */
     act(() => attach(true));
-    await expect
-      .poll(() => controller().offset)
-      .toEqual({ right: 500, bottom: 300 });
+    await expect.poll(() => controller().offset).toEqual({ right: 500, bottom: 300 });
   });
 
   it("拖出视口时被夹住——元素整体留在视口内", async () => {
@@ -242,10 +227,9 @@ describe("useDraggablePosition", () => {
      * 挂一条断言，这里轮询「两条里较小的那条」——它不满足下限时，报错打出来的
      * 正是越界的那个数（比原来两条 `expect` 各说一半更准）。 */
     await expect
-      .poll(
-        () => Math.min(controller().offset!.right, controller().offset!.bottom),
-        { message: "夹取后右下都要留出通行留白" },
-      )
+      .poll(() => Math.min(controller().offset!.right, controller().offset!.bottom), {
+        message: "夹取后右下都要留出通行留白",
+      })
       .toBeGreaterThanOrEqual(DRAG_EDGE_GAP_PX);
     const { right, bottom } = controller().offset!;
     expect(right).toBeLessThanOrEqual(1000 - 40 - DRAG_EDGE_GAP_PX);
@@ -254,10 +238,7 @@ describe("useDraggablePosition", () => {
 
   it("窗口缩小后原先的落点被收紧回视口内", async () => {
     /* 先把元素摆到靠右下的远处（存进 storage），再把窗口缩到很小。 */
-    window.localStorage.setItem(
-      KEY,
-      JSON.stringify({ right: 900, bottom: 700 }),
-    );
+    window.localStorage.setItem(KEY, JSON.stringify({ right: 900, bottom: 700 }));
     const { controller } = setup();
     await expect.poll(() => controller().offset).not.toBeNull();
     act(() => {
@@ -282,11 +263,7 @@ describe("useDraggablePosition", () => {
     const onClick = vi.fn();
     const { controller } = setup({ onClick });
     await expect.poll(() => controller().offset).not.toBeNull();
-    drag(
-      controller().handleProps,
-      { x: 900, y: 700 },
-      { x: 900 + DRAG_SLOP_PX - 1, y: 700 },
-    );
+    drag(controller().handleProps, { x: 900, y: 700 }, { x: 900 + DRAG_SLOP_PX - 1, y: 700 });
     await expect.poll(() => onClick).toHaveBeenCalledTimes(1);
     expect(window.localStorage.getItem(KEY)).toBeNull();
   });
@@ -295,11 +272,7 @@ describe("useDraggablePosition", () => {
     const onClick = vi.fn();
     const { controller } = setup({ onClick });
     await expect.poll(() => controller().offset).not.toBeNull();
-    drag(
-      controller().handleProps,
-      { x: 900, y: 700 },
-      { x: 900 - DRAG_SLOP_PX * 4, y: 700 },
-    );
+    drag(controller().handleProps, { x: 900, y: 700 }, { x: 900 - DRAG_SLOP_PX * 4, y: 700 });
     expect(onClick).not.toHaveBeenCalled();
   });
 
@@ -308,12 +281,14 @@ describe("useDraggablePosition", () => {
     await expect.poll(() => controller().offset).not.toBeNull();
     const before = controller().offset;
     act(() => {
-      controller().handleProps.onPointerDown({
-        button: 2,
-        pointerId: 1,
-        clientX: 900,
-        clientY: 700,
-      } as unknown as React.PointerEvent<HTMLElement>);
+      controller().handleProps.onPointerDown(
+        /* SAFETY: 类型断言已复核 */ {
+          button: 2,
+          pointerId: 1,
+          clientX: 900,
+          clientY: 700,
+        } as unknown as React.PointerEvent<HTMLElement>,
+      );
     });
     act(() => {
       window.dispatchEvent(

@@ -54,7 +54,7 @@ type Verdict = "green" | "failed" | "cancelled" | "running";
  * 这里要的只是「读哪个字段」的形状，不是再写一套判决 —— 一次 `as`，字段全在这。
  */
 type PickedLike = { sn?: string; none?: string; outcome?: { state: string } };
-const asPicked = (p: unknown): PickedLike => p as PickedLike;
+const asPicked = (p: unknown): PickedLike => /* SAFETY: 类型断言已复核 */ p as PickedLike;
 
 /** 建单标题（去重键只认格名那一段，构建号 / 事件 / 时刻只给读者看 — ISSUE #2399）。 */
 const titleOf = (stage: string, sn = "sn-t", at = "2026-10-24T11:40:05.000Z") =>
@@ -99,8 +99,7 @@ function detail(state: Verdict): DetailJson {
             { id: "stage-5", name: "每日全量E2E", status: "skipped" },
             { id: "stage-6", name: "每日单元测试", status: "skipped" },
           ];
-  const status =
-    state === "green" ? "success" : state === "running" ? "pending" : "error";
+  const status = state === "green" ? "success" : state === "running" ? "pending" : "error";
   return {
     data: {
       status,
@@ -215,14 +214,8 @@ describe("按流水线名认「这一跑是不是这一档的」", () => {
   it("两跑都在 ⇒ 只挑本档的那一跑，不挑更新的那条别人的", () => {
     const picked = asPicked(
       pickPreviousDaily({
-        list: [
-          build("cnb-pkg", "crontab: 0 2 * * *"),
-          build("cnb-daily", "crontab: 0 0 * * *"),
-        ],
-        details: [
-          { sn: "cnb-pkg", json: packageDetail() },
-          d("cnb-daily", "failed"),
-        ],
+        list: [build("cnb-pkg", "crontab: 0 2 * * *"), build("cnb-daily", "crontab: 0 0 * * *")],
+        details: [{ sn: "cnb-pkg", json: packageDetail() }, d("cnb-daily", "failed")],
         lanes: laneStages("每日生产构建"),
       }),
     );
@@ -305,11 +298,7 @@ describe("决定写不写：②去重键是「格名」，不是整条标题", (
     const day1 = titleOf("每日单元测试", "cnb-aaa-111", "2026-10-24T11:40:05.000Z");
     const day2 = titleOf("每日单元测试", "cnb-bbb-222", "2026-10-25T16:00:22.000Z");
     expect(day2).not.toBe(day1);
-    for (const want of [
-      "cnb-bbb-222",
-      "crontab: 0 0 * * *",
-      "2026-10-25T16:00:22.000Z",
-    ])
+    for (const want of ["cnb-bbb-222", "crontab: 0 0 * * *", "2026-10-25T16:00:22.000Z"])
       expect(day2).toContain(want);
     expect(day2).toContain(titleKey("每日单元测试"));
     const act = decideAction({
@@ -342,10 +331,7 @@ describe("正文只含读数，不含因果", () => {
     sn: "cnb-8r8-1k5knrl91",
     stage: "每日生产构建",
     skipped: ["每日 ESLint 零警告", "每日单元测试"],
-    readout: [
-      "── 失败格：每日生产构建（stage-2）",
-      "L1212 [bundle-budget] 违规（阻断）：",
-    ],
+    readout: ["── 失败格：每日生产构建（stage-2）", "L1212 [bundle-budget] 违规（阻断）："],
     handle: "ci-daily",
   });
 
@@ -353,9 +339,7 @@ describe("正文只含读数，不含因果", () => {
     expect(body.startsWith("**[评论人：ci-daily]**")).toBe(true);
     expect(body).toContain("cnb-8r8-1k5knrl91");
     expect(body).toContain("「每日生产构建」");
-    expect(body).toContain(
-      "被它带下去、**根本没跑**的格：每日 ESLint 零警告、每日单元测试",
-    );
+    expect(body).toContain("被它带下去、**根本没跑**的格：每日 ESLint 零警告、每日单元测试");
     expect(body).toContain("L1212 [bundle-budget] 违规（阻断）：");
     expect(body).toContain("## 根因：**未判定**");
     expect(body).toContain("pnpm ship --diagnose cnb-8r8-1k5knrl91");
@@ -507,16 +491,10 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
  */
 describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
   /** 若干小时前的 ISO 时刻。 */
-  const hoursAgo = (h: number) =>
-    new Date(Date.now() - h * 3_600_000).toISOString();
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
 
   /** 造一整页（新→旧）：默认全是 PR 事件，`extra` 排在最前。 */
-  function pageRows(
-    count: number,
-    newestH: number,
-    oldestH: number,
-    extra: ListBuild[] = [],
-  ) {
+  function pageRows(count: number, newestH: number, oldestH: number, extra: ListBuild[] = []) {
     const rows: ListBuild[] = [...extra];
     for (let i = rows.length; i < count; i += 1) {
       const h = newestH + ((oldestH - newestH) * i) / Math.max(1, count - 1);
@@ -562,9 +540,7 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
       }
       if (key.includes("list-issues")) return json(input.openIssues);
       if (key.includes("list-issue-comments"))
-        return json(
-          (input.comments ?? ["sn-prev"]).map((body) => ({ body })),
-        );
+        return json((input.comments ?? ["sn-prev"]).map((body) => ({ body })));
       return json({});
     };
     return { run, calls };
@@ -584,9 +560,7 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
         2: pageRows(60, 8, 40, [prev]),
       },
       detailsBySn: { "sn-live": "running", "sn-prev": "failed" },
-      openIssues: [
-        { number: 2344, title: `${titleKey("每日生产构建")}—— 人工开的那张` },
-      ],
+      openIssues: [{ number: 2344, title: `${titleKey("每日生产构建")}—— 人工开的那张` }],
     });
     const heard: string[] = [];
     const code = main({

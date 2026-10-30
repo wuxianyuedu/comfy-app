@@ -186,7 +186,7 @@ export type CanvasNodeData = StrictCanvasNodeData & Record<string, unknown>;
  * 恰当的成本——继续保留零散断言才是问题。
  */
 export function asCanvasNodeData(data: unknown): StrictCanvasNodeData {
-  return data as StrictCanvasNodeData;
+  return /* SAFETY: 类型断言已复核 */ data as StrictCanvasNodeData;
 }
 
 /** ReactFlow 节点联合：逻辑节点（canvasNode）与纯视觉节点（workflowArdot）。

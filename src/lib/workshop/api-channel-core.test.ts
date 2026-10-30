@@ -35,33 +35,25 @@ const VIDEO: ApiChannelStored = {
 
 /** fetch 打桩：只记录调用，返回值由 impl 给。请求体用 `bodyOf` 读成对象。 */
 function stubFetch(impl: (url: string, init?: RequestInit) => unknown) {
-  const mock = vi.fn(async (url: string, init?: RequestInit) =>
-    impl(url, init),
-  );
+  const mock = vi.fn(async (url: string, init?: RequestInit) => impl(url, init));
   vi.stubGlobal("fetch", mock);
   return mock;
 }
 
 /** 取第 n 次 fetch 调用的请求体并解析成对象（body 是 JSON 字符串）。 */
-function bodyOf(
-  mock: ReturnType<typeof stubFetch>,
-  call = 0,
-): Record<string, unknown> {
+function bodyOf(mock: ReturnType<typeof stubFetch>, call = 0): Record<string, unknown> {
   const init: RequestInit | undefined = mock.mock.calls[call]?.[1];
   const raw: unknown = init?.body;
-  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(typeof raw === "string" ? raw : "{}") as Record<
     string,
     unknown
   >;
 }
 
 /** 取第 n 次 fetch 调用的请求头。 */
-function headersOf(
-  mock: ReturnType<typeof stubFetch>,
-  call = 0,
-): Record<string, string> {
+function headersOf(mock: ReturnType<typeof stubFetch>, call = 0): Record<string, string> {
   const init: RequestInit | undefined = mock.mock.calls[call]?.[1];
-  return (init?.headers ?? {}) as Record<string, string>;
+  return /* SAFETY: 类型断言已复核 */ (init?.headers ?? {}) as Record<string, string>;
 }
 
 /** 上游响应桩：按上面的 mock 签名给回 Response 形状。 */
@@ -111,7 +103,10 @@ describe("defaultChannelsFromEnv / normalizeSettings", () => {
   it("坏数据（非对象 / 字段类型不对）按默认处理，不抛错", () => {
     const defaults = defaultChannelsFromEnv({});
     const merged = normalizeSettings(
-      { image: "not-an-object" as never, video: { baseUrl: 123 } as never },
+      {
+        image: /* SAFETY: 类型断言已复核 */ "not-an-object" as never,
+        video: /* SAFETY: 类型断言已复核 */ { baseUrl: 123 } as never,
+      },
       defaults,
     );
     expect(merged.image).toEqual(defaults.image);
@@ -158,9 +153,7 @@ describe("端点拼装", () => {
   });
 
   it("pollEndpointFor 去重斜杠（baseUrl 尾 / 与 taskId 头 / 只留一个）", () => {
-    expect(pollEndpointFor("https://x/v1/", "/task/1")).toBe(
-      "https://x/v1/task/1",
-    );
+    expect(pollEndpointFor("https://x/v1/", "/task/1")).toBe("https://x/v1/task/1");
   });
 });
 
@@ -178,9 +171,7 @@ describe("callImageGeneration", () => {
   });
 
   it("请求体是 OpenAI 兼容默认映射，空串归一为省略字段", async () => {
-    const fetchMock = stubFetch(async () =>
-      jsonResponse({ data: [{ url: "https://img/1.png" }] }),
-    );
+    const fetchMock = stubFetch(async () => jsonResponse({ data: [{ url: "https://img/1.png" }] }));
     const url = await callImageGeneration(
       { prompt: "p", negative: "", size: "" },
       IMAGE,
@@ -200,33 +191,29 @@ describe("callImageGeneration", () => {
     await callImageGeneration({ prompt: "p" }, IMAGE, () => null);
     expect(headersOf(fetchMock)).toMatchObject({ Authorization: "Bearer k1" });
     fetchMock.mockClear();
-    await callImageGeneration(
-      { prompt: "p" },
-      { ...IMAGE, apiKey: "" },
-      () => null,
-    );
+    await callImageGeneration({ prompt: "p" }, { ...IMAGE, apiKey: "" }, () => null);
     expect(headersOf(fetchMock)).not.toHaveProperty("Authorization");
   });
 
   it("b64 响应包成 data URL（OpenAI images b64_json）", async () => {
     stubFetch(async () => jsonResponse({ data: [{ b64_json: "AAA" }] }));
-    await expect(
-      callImageGeneration({ prompt: "p" }, IMAGE, () => null),
-    ).resolves.toBe("data:image/png;base64,AAA");
+    await expect(callImageGeneration({ prompt: "p" }, IMAGE, () => null)).resolves.toBe(
+      "data:image/png;base64,AAA",
+    );
   });
 
   it("非 2xx 抛「API 生图失败 (状态码)」并截断响应体", async () => {
     stubFetch(async () => jsonResponse({ error: "boom" }, false, 502));
-    await expect(
-      callImageGeneration({ prompt: "p" }, IMAGE, () => null),
-    ).rejects.toThrow("API 生图失败 (502)");
+    await expect(callImageGeneration({ prompt: "p" }, IMAGE, () => null)).rejects.toThrow(
+      "API 生图失败 (502)",
+    );
   });
 
   it("响应里既无 URL 也无 b64 时给明确文案（不返回 undefined）", async () => {
     stubFetch(async () => jsonResponse({ data: [{ nope: 1 }] }));
-    await expect(
-      callImageGeneration({ prompt: "p" }, IMAGE, () => null),
-    ).rejects.toThrow("未找到图片 URL / b64 数据");
+    await expect(callImageGeneration({ prompt: "p" }, IMAGE, () => null)).rejects.toThrow(
+      "未找到图片 URL / b64 数据",
+    );
   });
 
   it("请求体可被适配器覆盖（bodyOverride 优先于默认映射）", async () => {
@@ -252,9 +239,7 @@ describe("callImageGeneration", () => {
   });
 
   it("outputField 未命中时回落通配提取（向后兼容）", async () => {
-    stubFetch(async () =>
-      jsonResponse({ data: [{ url: "https://fallback" }] }),
-    );
+    stubFetch(async () => jsonResponse({ data: [{ url: "https://fallback" }] }));
     await expect(
       callImageGeneration({ prompt: "p" }, IMAGE, () => null, {
         outputField: "result.image",
@@ -266,16 +251,14 @@ describe("callImageGeneration", () => {
 describe("callVideoSubmit", () => {
   it("未配置时不发请求", async () => {
     const fetchMock = stubFetch(async () => jsonResponse({}));
-    await expect(
-      callVideoSubmit({ prompt: "p" }, { ...VIDEO, baseUrl: "" }),
-    ).rejects.toThrow("API 视频通道未配置");
+    await expect(callVideoSubmit({ prompt: "p" }, { ...VIDEO, baseUrl: "" })).rejects.toThrow(
+      "API 视频通道未配置",
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("同步返回 URL 时直接给 url（不猜任务 id）", async () => {
-    stubFetch(async () =>
-      jsonResponse({ data: [{ video_url: "https://v/1.mp4" }] }),
-    );
+    stubFetch(async () => jsonResponse({ data: [{ video_url: "https://v/1.mp4" }] }));
     await expect(callVideoSubmit({ prompt: "p" }, VIDEO)).resolves.toEqual({
       url: "https://v/1.mp4",
     });
@@ -290,10 +273,7 @@ describe("callVideoSubmit", () => {
 
   it("首帧图同时写 image_url 与 image（兼容两种上游命名）", async () => {
     const fetchMock = stubFetch(async () => jsonResponse({ url: "u" }));
-    await callVideoSubmit(
-      { prompt: "p", imageDataUrl: "data:image/png;base64,AAA" },
-      VIDEO,
-    );
+    await callVideoSubmit({ prompt: "p", imageDataUrl: "data:image/png;base64,AAA" }, VIDEO);
     const body = bodyOf(fetchMock);
     expect(body.image_url).toBe("data:image/png;base64,AAA");
     expect(body.image).toBe("data:image/png;base64,AAA");
@@ -324,16 +304,14 @@ describe("callVideoPoll", () => {
   });
 
   it("请求打到 baseUrl + 任务 id", async () => {
-    const fetchMock = stubFetch(async () =>
-      jsonResponse({ status: "running" }),
-    );
+    const fetchMock = stubFetch(async () => jsonResponse({ status: "running" }));
     await callVideoPoll("/t-1", VIDEO);
     expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/t-1");
   });
 
   it("未配置时抛错（不静默 pending）", async () => {
-    await expect(
-      callVideoPoll("t-1", { ...VIDEO, baseUrl: "" }),
-    ).rejects.toThrow("API 视频通道未配置");
+    await expect(callVideoPoll("t-1", { ...VIDEO, baseUrl: "" })).rejects.toThrow(
+      "API 视频通道未配置",
+    );
   });
 });

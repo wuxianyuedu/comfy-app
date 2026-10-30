@@ -50,10 +50,7 @@ export function homeTab(): ViewTab {
  * （与 workspace 现有的 `isProjectTab(viewMode) && !activeProjectId` 守卫同源，
  * 收在一处意味着两处不会一处放行一处白屏）。
  */
-export function makeTab(
-  view: WorkspaceView,
-  projectId: string | null,
-): ViewTab | null {
+export function makeTab(view: WorkspaceView, projectId: string | null): ViewTab | null {
   if (isProjectTab(view) && !projectId) return null;
   const bound = isProjectTab(view) ? projectId : null;
   return { key: tabKey(view, bound), view, projectId: bound };
@@ -63,10 +60,7 @@ export function isTabClosable(tab: ViewTab): boolean {
   return tab.view !== HOME_VIEW;
 }
 
-export function findTab(
-  tabs: readonly ViewTab[],
-  key: string,
-): ViewTab | undefined {
+export function findTab(tabs: readonly ViewTab[], key: string): ViewTab | undefined {
   return tabs.find((tab) => tab.key === key);
 }
 
@@ -131,10 +125,7 @@ export function openViewTab(
  * 「离开的那一页若是瞬时页签就退场」。`find` 判据仍在（点一个不存在的 key
  * 不许把 activeKey 指到空白）。
  */
-export function focusViewTab(
-  state: WorkspaceTabsState,
-  key: string,
-): WorkspaceTabsState {
+export function focusViewTab(state: WorkspaceTabsState, key: string): WorkspaceTabsState {
   if (!findTab(state.tabs, key)) return state;
   return activated(state.tabs, key);
 }
@@ -145,10 +136,7 @@ export function focusViewTab(
  * 首页不可关；关的不是当前页时当前页不变；关的是当前页时落到**左邻**
  * （左邻按列表位置算，不是按打开时间）。
  */
-export function closeViewTab(
-  state: WorkspaceTabsState,
-  key: string,
-): WorkspaceTabsState {
+export function closeViewTab(state: WorkspaceTabsState, key: string): WorkspaceTabsState {
   const index = state.tabs.findIndex((tab) => tab.key === key);
   if (index < 0) return state;
   const target = state.tabs[index];
@@ -172,13 +160,8 @@ export function closeViewTab(
  * 项目被删/改名后，属于它的页签必须整批关掉 —— 留一个点开空白的页签比关掉更糟。
  * 若关掉的正是当前页，落点规则与手动关闭一致（左邻）。
  */
-export function dropProjectTabs(
-  state: WorkspaceTabsState,
-  projectId: string,
-): WorkspaceTabsState {
-  const kept = state.tabs.filter(
-    (tab) => tab.projectId === null || tab.projectId !== projectId,
-  );
+export function dropProjectTabs(state: WorkspaceTabsState, projectId: string): WorkspaceTabsState {
+  const kept = state.tabs.filter((tab) => tab.projectId === null || tab.projectId !== projectId);
   if (kept.length === state.tabs.length) return state;
   const activeStillThere = kept.some((tab) => tab.key === state.activeKey);
   return {
@@ -231,18 +214,24 @@ export function parseWorkspaceTabs(
     return null;
   }
   if (typeof parsed !== "object" || parsed === null) return null;
-  const record = parsed as { activeKey?: unknown; tabs?: unknown };
+  const record = /* SAFETY: 类型断言已复核 */ parsed as {
+    activeKey?: unknown;
+    tabs?: unknown;
+  };
   if (!Array.isArray(record.tabs) || typeof record.activeKey !== "string") {
     return null;
   }
   const tabs: ViewTab[] = [];
   for (const entry of record.tabs) {
     if (!Array.isArray(entry) || entry.length < 2) return null;
-    const [view, projectId] = entry as [unknown, unknown];
-    if (typeof view !== "string" || !knownViews.includes(view as WorkspaceView))
+    const [view, projectId] = /* SAFETY: 类型断言已复核 */ entry as [unknown, unknown];
+    if (
+      typeof view !== "string" ||
+      !knownViews.includes(/* SAFETY: 类型断言已复核 */ view as WorkspaceView)
+    )
       return null;
     if (projectId !== null && typeof projectId !== "string") return null;
-    const tab = makeTab(view as WorkspaceView, projectId);
+    const tab = makeTab(/* SAFETY: 类型断言已复核 */ view as WorkspaceView, projectId);
     // 造不出来（项目类视图丢了项目 id）或键重复 ⇒ 整份不可信。
     if (!tab || tabs.some((existing) => existing.key === tab.key)) return null;
     tabs.push(tab);

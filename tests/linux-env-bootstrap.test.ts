@@ -63,9 +63,7 @@ afterEach(() => {
 function relativeImportsOf(entryFile: string): string[] {
   const src = fs.readFileSync(entryFile, "utf8");
   const found = new Set<string>();
-  for (const match of src.matchAll(
-    /from\s+"(\.{1,2}\/[^"]+\.(?:mjs|cjs|ts|tsx))"/g,
-  )) {
+  for (const match of src.matchAll(/from\s+"(\.{1,2}\/[^"]+\.(?:mjs|cjs|ts|tsx))"/g)) {
     const spec = match[1];
     if (spec !== undefined) found.add(spec);
   }
@@ -132,7 +130,7 @@ function runEnvInitIn(files: Record<string, string>): {
 
 describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
   it("package.json 提供 env:init 入口（Windows 的 prepare-local-run.ps1 在 Linux 上不可用）", () => {
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
     ) as { scripts: Record<string, string> };
     expect(pkg.scripts["env:init"]).toBe("node scripts/env-init.mjs");
@@ -161,10 +159,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
     const example = fs.readFileSync(EXAMPLE, "utf8");
     // .env.example 里的 COMFYAPP_PORT 是注释行，这里按「用户已启用固定端口」的
     // 真实形态改成未注释的赋值，验证补齐时不会把它连同空值一起重写掉。
-    const custom = example.replace(
-      /^# COMFYAPP_PORT=.*$/m,
-      'COMFYAPP_PORT="3456"',
-    );
+    const custom = example.replace(/^# COMFYAPP_PORT=.*$/m, 'COMFYAPP_PORT="3456"');
     const first = runEnvInitIn({ ".env.example": example, ".env": custom });
     expect(first.status).toBe(0);
     const after = fs.readFileSync(path.join(tmp, ".env"), "utf8");
@@ -175,18 +170,9 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
   it("已存在且必填项非空时跳过，不动用户内容", () => {
     const example = fs.readFileSync(EXAMPLE, "utf8");
     const filled = example
-      .replace(
-        /^BETTER_AUTH_SECRET=.*$/m,
-        'BETTER_AUTH_SECRET="' + "a".repeat(64) + '"',
-      )
-      .replace(
-        /^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m,
-        'BETTER_AUTH_GITHUB_CLIENT_ID="mine"',
-      )
-      .replace(
-        /^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m,
-        'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"',
-      );
+      .replace(/^BETTER_AUTH_SECRET=.*$/m, 'BETTER_AUTH_SECRET="' + "a".repeat(64) + '"')
+      .replace(/^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_ID="mine"')
+      .replace(/^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"');
     const before = filled;
     const r = runEnvInitIn({ ".env.example": example, ".env": filled });
     expect(r.status).toBe(0);
@@ -198,28 +184,16 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
     const example = fs.readFileSync(EXAMPLE, "utf8");
     // 模拟「早在 #2175 之前生成的 .env」：必填齐、改过日志级别、没有后来新增的那个可选键。
     const mine = example
-      .replace(
-        /^BETTER_AUTH_SECRET=.*$/m,
-        'BETTER_AUTH_SECRET="' + "b".repeat(64) + '"',
-      )
-      .replace(
-        /^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m,
-        'BETTER_AUTH_GITHUB_CLIENT_ID="mine"',
-      )
-      .replace(
-        /^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m,
-        'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"',
-      )
+      .replace(/^BETTER_AUTH_SECRET=.*$/m, 'BETTER_AUTH_SECRET="' + "b".repeat(64) + '"')
+      .replace(/^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_ID="mine"')
+      .replace(/^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"')
       .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "")
       .replace(/^LOG_LEVEL=.*$/m, 'LOG_LEVEL="debug"');
     const r = runEnvInitIn({ ".env.example": example, ".env": mine });
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     const after = fs.readFileSync(path.join(tmp, ".env"), "utf8");
     const parsed = parseEnvFile(after);
-    expect(
-      parsed.has("COMFYAPP_DEV_HANDLE"),
-      "缺的可选键要被补上",
-    ).toBe(true);
+    expect(parsed.has("COMFYAPP_DEV_HANDLE"), "缺的可选键要被补上").toBe(true);
     // 不再照 example 补一个空值（ISSUE #2355）：补成空串等于「照提示做过一遍仍然没有名字」。
     // 值来自取值链（本机 `git config user.name` / 兜底 `cnb`），非空且不是密钥。
     expect(
@@ -238,18 +212,9 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
   it("负控制：注释形态的可选键不被提升成真值（端口钉回 3100 会打散并行检出）", () => {
     const example = fs.readFileSync(EXAMPLE, "utf8");
     const mine = example
-      .replace(
-        /^BETTER_AUTH_SECRET=.*$/m,
-        'BETTER_AUTH_SECRET="' + "d".repeat(64) + '"',
-      )
-      .replace(
-        /^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m,
-        'BETTER_AUTH_GITHUB_CLIENT_ID="mine"',
-      )
-      .replace(
-        /^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m,
-        'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"',
-      )
+      .replace(/^BETTER_AUTH_SECRET=.*$/m, 'BETTER_AUTH_SECRET="' + "d".repeat(64) + '"')
+      .replace(/^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_ID="mine"')
+      .replace(/^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"')
       .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "");
     const r = runEnvInitIn({ ".env.example": example, ".env": mine });
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
@@ -271,13 +236,9 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
       .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "");
     const r = runEnvInitIn({ ".env.example": example, ".env": stripped });
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
-    const parsed = parseEnvFile(
-      fs.readFileSync(path.join(tmp, ".env"), "utf8"),
-    );
+    const parsed = parseEnvFile(fs.readFileSync(path.join(tmp, ".env"), "utf8"));
     for (const key of REQUIRED_ENV_KEYS) {
-      expect((parsed.get(key) ?? "").trim(), `${key} 必须被补出来`).not.toBe(
-        "",
-      );
+      expect((parsed.get(key) ?? "").trim(), `${key} 必须被补出来`).not.toBe("");
     }
     // 话术只点名补了哪个键，密钥值不进日志。
     expect(r.stdout).not.toContain(parsed.get("BETTER_AUTH_SECRET")!);
@@ -309,8 +270,7 @@ describe("预检判据与 src/env.js 同口径", () => {
     fs.writeFileSync(path.join(tmp, ".env"), content, "utf8");
     const problem = checkEnvFile(tmp, {});
     expect(problem, "空串必须被判为未就绪").not.toBeNull();
-    for (const key of REQUIRED_ENV_KEYS)
-      expect(problem!.message).toContain(key);
+    for (const key of REQUIRED_ENV_KEYS) expect(problem!.message).toContain(key);
   });
 
   it("缺文件时报的是「找不到 .env」，并且不夹带任何 Windows 专属入口", () => {
@@ -373,21 +333,15 @@ describe("启动器念出 env:init 缺的键（ISSUE #2205）", () => {
     return fs
       .readFileSync(EXAMPLE, "utf8")
       .replace(/^BETTER_AUTH_SECRET=.*$/m, `BETTER_AUTH_SECRET="${"e".repeat(64)}"`)
-      .replace(
-        /^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m,
-        'BETTER_AUTH_GITHUB_CLIENT_ID="mine"',
-      )
-      .replace(
-        /^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m,
-        'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"',
-      );
+      .replace(/^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_ID="mine"')
+      .replace(/^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"');
   }
 
   it("missingEnvKeys：按 example 顺序报缺，整行缺失的必填项排在末尾", () => {
     const example = [
       'ALPHA="1"',
       'BETA="2"',
-      "# GAMMA=\"注释键不进补齐面\"",
+      '# GAMMA="注释键不进补齐面"',
       'DELTA="4"',
       'BETTER_AUTH_SECRET=""',
     ].join("\n");
@@ -492,9 +446,7 @@ describe("启动器念出 env:init 缺的键（ISSUE #2205）", () => {
     fs.writeFileSync(path.join(tmp, ".env.example"), example, "utf8");
     fs.writeFileSync(path.join(tmp, ".env"), example, "utf8");
     const complete = await runGates();
-    expect(complete.lines.some((line) => line.includes("环境配置提醒"))).toBe(
-      false,
-    );
+    expect(complete.lines.some((line) => line.includes("环境配置提醒"))).toBe(false);
 
     // 必填缺失时阻断那条已经给了 `pnpm env:init` 的完整出口，这一格不再重复念。
     fs.writeFileSync(
@@ -504,9 +456,7 @@ describe("启动器念出 env:init 缺的键（ISSUE #2205）", () => {
     );
     const blocked = await runGates();
     expect(blocked.gated.ok).toBe(false);
-    expect(blocked.lines.some((line) => line.includes("环境配置提醒"))).toBe(
-      false,
-    );
+    expect(blocked.lines.some((line) => line.includes("环境配置提醒"))).toBe(false);
   });
 });
 
@@ -515,9 +465,7 @@ describe("dev/start 在起 Next 之前预检", () => {
 
   it.for(entries)("%s 调用 exitIfEnvNotReady 且发生在 spawn 之前", (rel) => {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
-    expect(src).toContain(
-      'import { exitIfEnvNotReady } from "./env-preflight.mjs"',
-    );
+    expect(src).toContain('import { exitIfEnvNotReady } from "./env-preflight.mjs"');
     const gate = src.indexOf("exitIfEnvNotReady(root)");
     const spawn = src.search(/spawnSync\(/);
     expect(gate, "必须调用预检").toBeGreaterThan(-1);

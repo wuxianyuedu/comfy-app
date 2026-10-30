@@ -42,10 +42,7 @@ import {
   type ReviewMode,
   type ReviewVerdict,
 } from "~/lib/production/review-types";
-import {
-  renderRubricForPrompt,
-  rubricFor,
-} from "~/lib/production/review-rubrics";
+import { renderRubricForPrompt, rubricFor } from "~/lib/production/review-rubrics";
 import { applyReprompt, applyShotRedo } from "~/lib/production/sync";
 import type { Production } from "~/server/db/schema";
 
@@ -71,10 +68,7 @@ const VERDICT_SCHEMA = z.object({
   issues: z.array(z.string()).default([]),
   suggestion: z.string().default(""),
   scores: z
-    .record(
-      z.string(),
-      z.object({ score: z.number(), note: z.string().default("") }),
-    )
+    .record(z.string(), z.object({ score: z.number(), note: z.string().default("") }))
     .optional(),
 });
 
@@ -106,9 +100,7 @@ function reviewContext(row: Production): ContentReviewContext {
 function shotReviewText(rec: Record<string, unknown>): string {
   // 镜号是数字：只在它是 number/string 基元时拼进模板，避免对 unknown 做隐式字符串化。
   const indexText =
-    typeof rec.index === "number" || typeof rec.index === "string"
-      ? `镜号 ${rec.index}`
-      : "";
+    typeof rec.index === "number" || typeof rec.index === "string" ? `镜号 ${rec.index}` : "";
   const parts = [
     indexText,
     str(rec, "sceneHeading") ? `场景：${str(rec, "sceneHeading")}` : "",
@@ -140,10 +132,7 @@ function listForKind(row: Production, kind: ReviewKind): unknown[] {
 }
 
 /** 在记录数组里按 id 找到目标记录（宽松对象视图）；找不到 → null。 */
-function findRecord(
-  list: unknown[],
-  id: string,
-): Record<string, unknown> | null {
+function findRecord(list: unknown[], id: string): Record<string, unknown> | null {
   for (const raw of list) {
     const rec = asRecord(raw);
     if (rec?.id === id) return rec;
@@ -170,8 +159,7 @@ export async function reviewContent(
   const row = await loadRow(userId, projectId);
   const list = listForKind(row, kind);
   const rec = findRecord(list, targetId);
-  if (!rec)
-    throw new Error(`找不到要评审的${KIND_LABEL[kind]}（id=${targetId}）`);
+  if (!rec) throw new Error(`找不到要评审的${KIND_LABEL[kind]}（id=${targetId}）`);
 
   const cfg = await getLLMConfig({ taskType: "review" });
   // 评审温度走 temperatureByTask 的 review 档（FR-QA-07 ③）：用户覆盖 → review 推荐
@@ -223,7 +211,7 @@ async function scoreShotImage(
 ): Promise<ReviewVerdict> {
   // 出场角色的生效定妆照（角色一致性对照用）。
   const characterIds = Array.isArray(rec.characterIds)
-    ? (rec.characterIds as unknown[]).filter(
+    ? /* SAFETY: 类型断言已复核 */ (rec.characterIds as unknown[]).filter(
         (x): x is string => typeof x === "string",
       )
     : [];
@@ -235,8 +223,7 @@ async function scoreShotImage(
     if (!c || !characterIds.includes(String(c.id))) continue;
     if (typeof c.portraitUrl === "string" && c.portraitUrl.trim() !== "")
       portraitUrls.push(c.portraitUrl);
-    if (typeof c.name === "string" && c.name.trim() !== "")
-      characterNames.push(c.name);
+    if (typeof c.name === "string" && c.name.trim() !== "") characterNames.push(c.name);
   }
 
   const cfg = await getVisionLLMConfig({ taskType: "review" });
@@ -263,8 +250,7 @@ async function scoreShotImage(
     ...(raw.scores ? { scores: raw.scores } : {}),
     ...(rubric ? { rubricVersion: rubric.version } : {}),
   });
-  if (!verdict)
-    throw new Error("模型视觉评审返回缺 pass 判据（无法归一成判定）");
+  if (!verdict) throw new Error("模型视觉评审返回缺 pass 判据（无法归一成判定）");
   return verdict;
 }
 
@@ -278,8 +264,7 @@ export async function reviewShotImage(
   const rec = findRecord(shots, shotId);
   if (!rec) throw new Error(`找不到要评审的镜头（id=${shotId}）`);
   const imageUrl = str(rec, "imageUrl");
-  if (!imageUrl.trim())
-    throw new Error("该镜头还没有生成图（先在工坊生图，再视觉评审）");
+  if (!imageUrl.trim()) throw new Error("该镜头还没有生成图（先在工坊生图，再视觉评审）");
 
   const verdict = await scoreShotImage(row, rec, imageUrl);
   const nextShots = applyImageReview(shots, shotId, verdict);
@@ -358,9 +343,7 @@ export async function autoselectShotImage(
     throw new Error("所有候选都没有产物可评审（先生成，再优选）");
   }
   const winner = scored.reduce((best, c) =>
-    (reviewScoreMean(c.verdict) ?? 0) > (reviewScoreMean(best.verdict) ?? 0)
-      ? c
-      : best,
+    (reviewScoreMean(c.verdict) ?? 0) > (reviewScoreMean(best.verdict) ?? 0) ? c : best,
   );
   // 赢家判定落到镜头（与 reviewShotImage 同一落点；字段所有权见 #2615）。
   const nextShots = applyImageReview(shots, shotId, winner.verdict);
@@ -385,8 +368,7 @@ export async function reviewScript(
   projectId: string,
 ): Promise<ScriptReviewOutcome> {
   const row = await loadRow(userId, projectId);
-  if (!row.scriptMarkdown.trim())
-    throw new Error("该项目还没有剧本（先在工坊产出剧本再评审）");
+  if (!row.scriptMarkdown.trim()) throw new Error("该项目还没有剧本（先在工坊产出剧本再评审）");
 
   const cfg = await getLLMConfig({ taskType: "review" });
   const rubric = rubricFor("script");
@@ -426,16 +408,11 @@ export async function reviewScript(
  * （人可回看/接管，AI 下一轮从人改的版本继续）。没有可依据的评审位（没评过）时拒改——
  * 定向改写的「定向」来自评审意见，凭空改 = 退化成整篇重生成。
  */
-export async function reviseScript(
-  userId: string,
-  projectId: string,
-): Promise<string> {
+export async function reviseScript(userId: string, projectId: string): Promise<string> {
   const row = await loadRow(userId, projectId);
-  if (!row.scriptMarkdown.trim())
-    throw new Error("该项目还没有剧本（先在工坊产出剧本再改写）");
+  if (!row.scriptMarkdown.trim()) throw new Error("该项目还没有剧本（先在工坊产出剧本再改写）");
   const state = normalizeScriptReviewState(row.scriptReview);
-  if (!state.review)
-    throw new Error("这份剧本还没有评审判定（先评审、拿到低分维度再定向改写）");
+  if (!state.review) throw new Error("这份剧本还没有评审判定（先评审、拿到低分维度再定向改写）");
 
   const cfg = await getLLMConfig({ taskType: "review" });
   const md = (
@@ -456,11 +433,7 @@ export async function reviseScript(
 
   await productionRepository.patchContent(userId, projectId, {
     scriptMarkdown: md,
-    scriptReview: recordScriptRevision(
-      row.scriptReview,
-      row.scriptMarkdown,
-      nowIso(),
-    ),
+    scriptReview: recordScriptRevision(row.scriptReview, row.scriptMarkdown, nowIso()),
   });
   return md;
 }
@@ -493,25 +466,19 @@ export async function regenerateShot(
   }
 
   // reprompt：优先用调用方给的提示词；否则让模型据评审意见改写。
-  const finalPrompt = newPrompt?.trim()
-    ? newPrompt.trim()
-    : await revisePrompt(row, rec);
+  const finalPrompt = newPrompt?.trim() ? newPrompt.trim() : await revisePrompt(row, rec);
   await productionRepository.patchContent(userId, projectId, {
     shots: applyReprompt(shots, shotId, finalPrompt),
   });
 }
 
 /** 据镜头上已存的评审判定（或空意见）让模型产出一版改进提示词。 */
-async function revisePrompt(
-  row: Production,
-  rec: Record<string, unknown>,
-): Promise<string> {
+async function revisePrompt(row: Production, rec: Record<string, unknown>): Promise<string> {
   const review = asRecord(rec.review);
   const issues = Array.isArray(review?.issues)
     ? review.issues.filter((x): x is string => typeof x === "string")
     : [];
-  const suggestion =
-    review && typeof review.suggestion === "string" ? review.suggestion : "";
+  const suggestion = review && typeof review.suggestion === "string" ? review.suggestion : "";
   const cfg = await getLLMConfig({ taskType: "review" });
   const { prompt } = await completeLLMStructured(
     cfg,

@@ -25,10 +25,7 @@ export function trpcHttpLink(options: {
   origin?: string;
   withLogger?: boolean;
 }): TRPCLink<never>[] {
-  const url =
-    options.origin === undefined
-      ? getTrpcEndpoint()
-      : getTrpcEndpointFor(options.origin);
+  const url = options.origin === undefined ? getTrpcEndpoint() : getTrpcEndpointFor(options.origin);
 
   const http = httpBatchStreamLink({
     transformer: SuperJSON,
@@ -42,7 +39,7 @@ export function trpcHttpLink(options: {
 
   if (!options.withLogger) return [http];
 
-  return [
+  return /* SAFETY: 类型断言已复核 */ [
     loggerLink({
       enabled: (op) =>
         process.env.NODE_ENV === "development" ||

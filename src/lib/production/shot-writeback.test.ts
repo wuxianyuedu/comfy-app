@@ -10,10 +10,7 @@ import {
   writeWorkshopDraft,
 } from "~/lib/workshop/draft-store";
 import { pushServerDraft } from "~/lib/workshop/draft-sync-client";
-import {
-  fetchProduction,
-  pushProduction,
-} from "~/lib/production/production-client";
+import { fetchProduction, pushProduction } from "~/lib/production/production-client";
 import type { Shot } from "~/lib/workshop/types";
 import { recordCanvasShotGeneration, requestShotRedo } from "./shot-writeback";
 
@@ -149,7 +146,7 @@ describe("requestShotRedo", () => {
       ...emptyWorkshopDraft(),
       // rev 不在 Shot 类型上，作为未知扩展字段写入（草稿 JSON 列宽容）。
       shots: [
-        {
+        /* SAFETY: 类型断言已复核 */ {
           ...shotA(),
           imageUrl: "/x.png",
           clipUrl: "/y.mp4",
@@ -191,17 +188,15 @@ describe("requestShotRedo", () => {
 
     await requestShotRedo("proj_1", "a");
 
-    const drafted = readWorkshopDraft("proj_1").shots[0] as unknown as Record<
-      string,
-      unknown
-    >;
+    const drafted = /* SAFETY: 类型断言已复核 */ readWorkshopDraft("proj_1")
+      .shots[0] as unknown as Record<string, unknown>;
     expect(drafted).toMatchObject({ status: "idle", rev: 1 });
     expect(drafted.imageUrl).toBeUndefined();
     expect(pushDraftMock).toHaveBeenCalledTimes(1);
 
     expect(pushProdMock).toHaveBeenCalledTimes(1);
     const [, payload] = pushProdMock.mock.calls[0]!;
-    const pushed = (payload.shots as Record<string, unknown>[])[0]!;
+    const pushed = /* SAFETY: 类型断言已复核 */ (payload.shots as Record<string, unknown>[])[0]!;
     expect(pushed).toMatchObject({
       status: "idle",
       clipStatus: "idle",

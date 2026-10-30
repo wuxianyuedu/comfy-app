@@ -151,16 +151,14 @@ describe("轮转选择（纯函数）", () => {
       "db-backup-20261002-000000.sqlite",
       "db-backup-20261003-000000.sqlite",
     ];
-    expect(selectBackupsToPrune(names, 1, ["db-backup-20261001-000000.sqlite"])).toEqual(
-      ["db-backup-20261002-000000.sqlite"],
-    );
+    expect(selectBackupsToPrune(names, 1, ["db-backup-20261001-000000.sqlite"])).toEqual([
+      "db-backup-20261002-000000.sqlite",
+    ]);
   });
 
   it("份数不够时什么都不删", () => {
     expect(selectBackupsToPrune([], 3)).toEqual([]);
-    expect(selectBackupsToPrune(["db-backup-20261001-000000.sqlite"], 3)).toEqual(
-      [],
-    );
+    expect(selectBackupsToPrune(["db-backup-20261001-000000.sqlite"], 3)).toEqual([]);
   });
 });
 
@@ -243,9 +241,7 @@ describe("createBackup：真的备份，且验得动", () => {
     if (result.ok) return;
     expect(result.reason).toMatch(/VACUUM INTO 失败|读不通/);
     // 关键：备份目录里不许出现任何 `.sqlite`（`.partial` 残骸也不许留）
-    const leftovers = fs.existsSync(backupDir(root))
-      ? fs.readdirSync(backupDir(root))
-      : [];
+    const leftovers = fs.existsSync(backupDir(root)) ? fs.readdirSync(backupDir(root)) : [];
     expect(leftovers.filter((n) => n.endsWith(".sqlite"))).toEqual([]);
     expect(leftovers.filter((n) => n.endsWith(".partial"))).toEqual([]);
   });
@@ -283,7 +279,7 @@ describe("pruneBackups：删不动不改变结论，但要说话", () => {
       fs.writeFileSync(path.join(backupDir(root), n), "x");
     }
     const unlink = vi.spyOn(fs, "unlinkSync").mockImplementation(() => {
-      const e = new Error("EBUSY: 被占用") as NodeJS.ErrnoException;
+      const e = /* SAFETY: 类型断言已复核 */ new Error("EBUSY: 被占用") as NodeJS.ErrnoException;
       e.code = "EBUSY";
       throw e;
     });
@@ -369,9 +365,7 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     }
 
     // 退路里能找回「备份之后的改动」—— 恢复错了有得退
-    const safety = listBackups(root).find(
-      (b) => b.name === result.safetyBackup,
-    );
+    const safety = listBackups(root).find((b) => b.name === result.safetyBackup);
     expect(safety).toBeTruthy();
     const safetyDb = new DatabaseSync(safety!.file, { readOnly: true, open: true });
     try {
@@ -455,7 +449,7 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     const before = fs.readFileSync(dbFile);
 
     const mkdir = vi.spyOn(fs, "mkdirSync").mockImplementation(() => {
-      const e = new Error("EACCES: 拒绝访问") as NodeJS.ErrnoException;
+      const e = /* SAFETY: 类型断言已复核 */ new Error("EACCES: 拒绝访问") as NodeJS.ErrnoException;
       e.code = "EACCES";
       throw e;
     });
@@ -499,9 +493,12 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     expect(result.safetyBackup).toBeNull();
     const db = new DatabaseSync(dbFile, { readOnly: true, open: true });
     try {
-      expect(db.prepare("SELECT v FROM t").all().map((r) => r.v)).toEqual([
-        "只有备份里有",
-      ]);
+      expect(
+        db
+          .prepare("SELECT v FROM t")
+          .all()
+          .map((r) => r.v),
+      ).toEqual(["只有备份里有"]);
     } finally {
       db.close();
     }
@@ -556,9 +553,7 @@ describe("启动链出口：结果必落一句话，且不抛", () => {
     fs.mkdirSync(backupDir(root), { recursive: true });
     fs.writeFileSync(path.join(backupDir(root), "restore-request.json"), "{not json");
     expect(readRestoreRequest(root)).toBeNull();
-    expect(applyPendingRestore(root, { databaseUrl }).status).toBe(
-      "nothing-to-do",
-    );
+    expect(applyPendingRestore(root, { databaseUrl }).status).toBe("nothing-to-do");
   });
 });
 

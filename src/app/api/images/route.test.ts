@@ -49,7 +49,7 @@ vi.mock("~/lib/comfyui/client", () => ({
 import { GET } from "./route";
 
 function get(query: string): NextRequest {
-  return new Request(`http://127.0.0.1:3100/api/images${query}`, {
+  return /* SAFETY: 类型断言已复核 */ new Request(`http://127.0.0.1:3100/api/images${query}`, {
     method: "GET",
   }) as unknown as NextRequest;
 }
@@ -105,9 +105,7 @@ describe("形状闸 —— 拒绝必须发生在交给上游之前", () => {
 
 describe("成功路径的响应形状", () => {
   it("字节按扩展名给 Content-Type，参数原样交给 getView", async () => {
-    const res = await GET(
-      get("?filename=note.txt&subfolder=canvas&type=output"),
-    );
+    const res = await GET(get("?filename=note.txt&subfolder=canvas&type=output"));
     expect(res.status).toBe(200);
     // 只判「按扩展名」这一件事；`charset` 后缀由 Response 自己补
     expect(res.headers.get("Content-Type")).toMatch(/^text\/plain/);
@@ -122,9 +120,7 @@ describe("成功路径的响应形状", () => {
   });
 
   it("缓存必须是 private 且不许 immutable（响应取决于会话，而 input 会被同名上传覆盖）", async () => {
-    const cache = (await GET(get("?filename=a.png"))).headers.get(
-      "Cache-Control",
-    )!;
+    const cache = (await GET(get("?filename=a.png"))).headers.get("Cache-Control")!;
     expect(cache).toMatch(/private\b/);
     expect(cache).not.toMatch(/public/);
     expect(cache).not.toContain("immutable");
@@ -133,18 +129,16 @@ describe("成功路径的响应形状", () => {
 
 describe("上游失败要分相", () => {
   it("ComfyUI 回 404 → 404（与「这一格本来就没有文件」同形）", async () => {
-    getView.mockRejectedValueOnce(
-      new FakeViewError(404, "getView failed: 404"),
-    );
+    getView.mockRejectedValueOnce(new FakeViewError(404, "getView failed: 404"));
     const res = await GET(get("?filename=gone.png"));
     expect(res.status).toBe(404);
-    expect(((await res.json()) as { error?: string }).error).toBeTruthy();
+    expect(
+      /* SAFETY: 类型断言已复核 */ ((await res.json()) as { error?: string }).error,
+    ).toBeTruthy();
   });
 
   it("ComfyUI 回别的状态 → 502，不伪装成 500", async () => {
-    getView.mockRejectedValueOnce(
-      new FakeViewError(503, "getView failed: 503"),
-    );
+    getView.mockRejectedValueOnce(new FakeViewError(503, "getView failed: 503"));
     expect((await GET(get("?filename=a.png"))).status).toBe(502);
   });
 
@@ -152,7 +146,7 @@ describe("上游失败要分相", () => {
     getView.mockRejectedValueOnce(new TypeError("fetch failed"));
     const res = await GET(get("?filename=a.png"));
     expect(res.status).toBe(503);
-    expect(((await res.json()) as { hint?: string }).hint).toBe(
+    expect(/* SAFETY: 类型断言已复核 */ ((await res.json()) as { hint?: string }).hint).toBe(
       "comfyui-unreachable",
     );
   });

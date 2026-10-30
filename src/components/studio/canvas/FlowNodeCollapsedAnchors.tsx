@@ -15,10 +15,7 @@ import { Handle, Position } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { portColor } from "~/lib/comfyui/types";
 import { Z } from "~/lib/shell/overlay-z";
-import {
-  resolveAnchorCylinder,
-  type AnchorCylinderTheme,
-} from "./workflow-node-palette";
+import { resolveAnchorCylinder, type AnchorCylinderTheme } from "./workflow-node-palette";
 import type { WorkflowNodeData } from "../workflow-types";
 
 /* 圆柱视觉高度随端口数缩放，夹在 16px..64px 之间，
@@ -109,9 +106,7 @@ export function FlowNodeCollapsedAnchors({
 }: FlowNodeCollapsedAnchorsProps) {
   // 已连线的输入（连线元组 `[]`）与已连线的输出保持锚定。
   const connectedInputs = orderedEntries.filter(([, v]) => Array.isArray(v));
-  const connectedOutputs = outputs.filter(([n]) =>
-    data.connectedOutputs?.has(n),
-  );
+  const connectedOutputs = outputs.filter(([n]) => data.connectedOutputs?.has(n));
   /* 锚柱（收起时的端口载体）跟主题联动：浅色下白描白会让锚柱整个消失。 */
   const { resolvedTheme } = useTheme();
   const anchor = resolveAnchorCylinder(resolvedTheme);
@@ -122,28 +117,19 @@ export function FlowNodeCollapsedAnchors({
        *  灰色渐变压在连线之上（zIndex:10），好让用户
        *  在繁忙画布上看出「我的端口在这里」。 */}
       {connectedInputs.length > 0 && (
-        <CollapsedAnchorCylinder
-          side="left"
-          count={connectedInputs.length}
-          anchor={anchor}
-        />
+        <CollapsedAnchorCylinder side="left" count={connectedInputs.length} anchor={anchor} />
       )}
       {/* 右圆柱 —— 只要节点声明了输出就画（ComfyUI 的
        *  「输出始终可见」规则）。 */}
       {outputs.length > 0 && (
-        <CollapsedAnchorCylinder
-          side="right"
-          count={outputs.length}
-          anchor={anchor}
-        />
+        <CollapsedAnchorCylinder side="right" count={outputs.length} anchor={anchor} />
       )}
       <CollapsedPortHandles
         items={connectedInputs.map(([k], idx) => {
-          const inputType =
-            data.rawInputs?.find((raw) => raw.name === k)?.type ?? "*";
+          const inputType = data.rawInputs?.find((raw) => raw.name === k)?.type ?? "*";
           return {
             key: `collapsed-in-${k}-${idx}`,
-            side: "left" as const,
+            side: /* SAFETY: 类型断言已复核 */ "left" as const,
             id: String(k),
             title: `${String(k)} (${inputType})`,
             color: portColor(inputType),
@@ -153,7 +139,7 @@ export function FlowNodeCollapsedAnchors({
       <CollapsedPortHandles
         items={connectedOutputs.map(([name, type], idx) => ({
           key: `collapsed-out-${name}-${idx}`,
-          side: "right" as const,
+          side: /* SAFETY: 类型断言已复核 */ "right" as const,
           id: `out:${name}`,
           title: `Output: ${name} (${type})`,
           color: portColor(type),

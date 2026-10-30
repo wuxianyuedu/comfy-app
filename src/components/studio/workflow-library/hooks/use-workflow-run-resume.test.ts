@@ -230,11 +230,9 @@ describe("watchWorkflowRun", () => {
     const run = getWorkflowRun("t1");
     expect(run?.status).toBe("failed");
     expect(run?.errorMessage).toBe("显存不足");
-    expect(
-      run?.logs?.some(
-        (log) => log.level === "error" && log.msg.includes("显存不足"),
-      ),
-    ).toBe(true);
+    expect(run?.logs?.some((log) => log.level === "error" && log.msg.includes("显存不足"))).toBe(
+      true,
+    );
   });
 
   it("日志原样转交（累积与去重仍归调用方 / store）", () => {
@@ -242,7 +240,11 @@ describe("watchWorkflowRun", () => {
     const handlers = makeHandlers();
     watchWorkflowRun("t1", handlers);
     const captured = vi.mocked(watchTask).mock.calls[0]![1];
-    const entry = { t: 1, level: "info" as const, msg: "开始" };
+    const entry = {
+      t: 1,
+      level: /* SAFETY: 类型断言已复核 */ "info" as const,
+      msg: "开始",
+    };
     captured.onLog?.(entry);
     expect(handlers.onLog).toHaveBeenCalledWith("t1", entry);
   });

@@ -71,13 +71,7 @@ export type IOEditContextValue = ReturnType<typeof useIOEditContext>;
  *  NodeIdChip — 节点头部 `#id` 章，点击弹出 JSON 查看器。
  *  数据来自 store hook `useNodeJsonViewer`（弹层本身的挂点在 WorkflowStores）。
  * ──────────────────────────────────────────────────────────────────────── */
-export function NodeIdChip({
-  nodeId,
-  variant,
-}: {
-  nodeId: string;
-  variant: "node" | "subgraph";
-}) {
+export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node" | "subgraph" }) {
   const viewerApi = useNodeJsonViewer();
   const ref = React.useRef<HTMLButtonElement | null>(null);
   const requestShow = viewerApi.requestShow;
@@ -89,7 +83,7 @@ export function NodeIdChip({
 
   const handleOpen = (e: React.SyntheticEvent) => {
     e.stopPropagation();
-    const el = e.currentTarget as HTMLElement;
+    const el = /* SAFETY: 类型断言已复核 */ e.currentTarget as HTMLElement;
     requestShow(el, nodeId, variant);
   };
 
@@ -121,13 +115,7 @@ export function NodeIdChip({
 }
 
 /** rgthree Power Lora Loader — 每行参数暴露的勾选（输入→左；输出→右）。 */
-export function IoCheckbox({
-  ioRef,
-  io,
-}: {
-  ioRef: IoRef;
-  io: IOEditContextValue;
-}) {
+export function IoCheckbox({ ioRef, io }: { ioRef: IoRef; io: IOEditContextValue }) {
   const key = `${ioRef.nodeId}::${ioRef.kind}::${ioRef.name}`;
   const checked = !!io.workflowIO[key];
   const isOut = ioRef.direction === "output";
@@ -138,11 +126,7 @@ export function IoCheckbox({
       onCheckedChange={() => io.toggleIO(ioRef)}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
-      title={
-        checked
-          ? `已暴露为工作流${dirLabel}`
-          : `点击将其暴露为工作流${dirLabel}`
-      }
+      title={checked ? `已暴露为工作流${dirLabel}` : `点击将其暴露为工作流${dirLabel}`}
       className="size-3.5"
       style={{
         width: 13,

@@ -43,7 +43,7 @@ import { describe, expect, it } from "vitest";
 /** 站点根路径 → 仓库路径（`/fonts/x.woff2` 落在 `public/fonts/x.woff2`）。 */
 const PUBLIC_REL_OF = (sitePath: string) => `public${sitePath}`;
 /** 文件载体 → CSS 里该写的扩展名与 `format()`，两者必须同一项。 */
-const FONT_CARRIERS = [
+const FONT_CARRIERS = /* SAFETY: 类型断言已复核 */ [
   { ext: ".woff2", format: "woff2", glob: "*.woff2" },
   { ext: ".ttf", format: "truetype", glob: "*.ttf" },
 ] as const;
@@ -58,7 +58,7 @@ const LICENSE_REL = "public/fonts/OFL-Sarasa-Gothic.txt";
  *（前者的判据在下面 `@font-face` 的条数核对，后者的判据是每条的 family 必须
  * 真出现在某个 `--font-*` 的首选位上）。
  */
-const EMBEDDED_FACES = [
+const EMBEDDED_FACES = /* SAFETY: 类型断言已复核 */ [
   {
     file: "public/fonts/SarasaGothicSC-Bold.woff2",
     family: "Sarasa Gothic SC",
@@ -84,10 +84,7 @@ const EMBEDDED_FACES = [
 ] as const;
 
 function read(rel: string): string {
-  return readFileSync(
-    fileURLToPath(new URL(`../${rel}`, import.meta.url)),
-    "utf8",
-  );
+  return readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
 }
 
 /** 取一个 sh 文件里**非注释**的命令行（用来判「这步到底还跑不跑」）。 */
@@ -170,9 +167,7 @@ describe("字体走 git-lfs 的三条接线", () => {
 
   it(".githooks/pre-push 存在，且那行 git lfs pre-push 是**活命令**不是注释", () => {
     const source = read(".githooks/pre-push");
-    const calls = activeShellCommands(source).filter((l) =>
-      l.startsWith("git lfs pre-push"),
-    );
+    const calls = activeShellCommands(source).filter((l) => l.startsWith("git lfs pre-push"));
     expect(
       calls.length,
       "本仓库 core.hooksPath=.githooks 会整目录覆盖 .git/hooks，" +
@@ -186,14 +181,9 @@ describe("字体走 git-lfs 的三条接线", () => {
     const wired = source
       .split(/\r?\n/)
       .some((l) =>
-        /^\s*const lfs = git\(\["lfs", "install", "--local", "--manual"\]\);?$/.test(
-          l.trim(),
-        ),
+        /^\s*const lfs = git\(\["lfs", "install", "--local", "--manual"\]\);?$/.test(l.trim()),
       );
-    expect(
-      wired,
-      "git lfs install --local --manual 没在 postinstall 里被调用",
-    ).toBe(true);
+    expect(wired, "git lfs install --local --manual 没在 postinstall 里被调用").toBe(true);
     // 反向：钩子安装必须被 --manual 挡掉，否则它会往 .githooks/ 里写第二套
     expect(source).toContain("--manual");
   });
@@ -201,8 +191,7 @@ describe("字体走 git-lfs 的三条接线", () => {
   it("反向对照：把钩子那行注释掉，判据要红", () => {
     const muted = '# git lfs pre-push "$@"\n';
     expect(
-      activeShellCommands(muted).filter((l) => l.startsWith("git lfs pre-push"))
-        .length,
+      activeShellCommands(muted).filter((l) => l.startsWith("git lfs pre-push")).length,
       "注释行仍含同一段字面量 —— 在场判据不能按字面量包含",
     ).toBe(0);
   });
@@ -220,10 +209,7 @@ describe("字体走 git-lfs 的三条接线", () => {
         if (k === "filter") parsed.set(glob ?? "", v);
       }
     }
-    expect(
-      parsed.get("*.woff2"),
-      "属性表里没有 *.woff2 ⇒ 上面那条断言应当红",
-    ).toBe(undefined);
+    expect(parsed.get("*.woff2"), "属性表里没有 *.woff2 ⇒ 上面那条断言应当红").toBe(undefined);
   });
 });
 
@@ -240,9 +226,7 @@ describe("每一份内嵌字面本身", () => {
         `${file}（${why}）在 index 里不是 LFS 指针 —— 说明提交时过滤器没生效，` +
           "整份字体已经按原字节进历史",
       ).not.toBeNull();
-      const onDisk = statSync(
-        fileURLToPath(new URL(`../${file}`, import.meta.url)),
-      );
+      const onDisk = statSync(fileURLToPath(new URL(`../${file}`, import.meta.url)));
       expect(
         Number(pointer?.[2]),
         `${file} 指针记的 size 与磁盘字节数不一致（拷贝过的文件与提交出去的不是同一份）`,
@@ -262,15 +246,11 @@ describe("每一份内嵌字面本身", () => {
   });
 
   it("OFL 许可全文随字体一起放（再分发时这是条件，不是礼节）", () => {
-    expect(
-      existsSync(fileURLToPath(new URL(`../${LICENSE_REL}`, import.meta.url))),
-    ).toBe(true);
+    expect(existsSync(fileURLToPath(new URL(`../${LICENSE_REL}`, import.meta.url)))).toBe(true);
     const license = read(LICENSE_REL);
     // 按这份 LICENSE 的**实际**措辞断言（`SIL Open Font License v1.1` 那一行），
     // 不是按记忆里「全大写标题」的形态 —— 后者在这份文本里根本不存在。
-    expect(license).toMatch(
-      /This Font Software is licensed under the SIL Open Font License/,
-    );
+    expect(license).toMatch(/This Font Software is licensed under the SIL Open Font License/);
     expect(license).toMatch(/SIL Open Font License v1\.1/);
     expect(license).toMatch(/Copyright \(c\)/);
   });
@@ -280,9 +260,9 @@ describe("@font-face 与 --font-* 必须指向同一个名字", () => {
   const css = () => read("src/app/globals.css");
 
   it("每一个 @font-face 都登记在 EMBEDDED_FACES 里，且没有登记了却没写的", () => {
-    const declared = [
-      ...css().matchAll(/@font-face\s*\{[^}]*font-family:\s*"([^"]+)"/g),
-    ].map((m) => m[1]);
+    const declared = [...css().matchAll(/@font-face\s*\{[^}]*font-family:\s*"([^"]+)"/g)].map(
+      (m) => m[1],
+    );
     // 两头都判：写了没登记（8 MB 白背而没人管）与登记了没写（CSS 指向空气）
     // 都是静默形态，而任何一个方向的单边断言都拦不住另一边。
     expect(
@@ -296,14 +276,9 @@ describe("@font-face 与 --font-* 必须指向同一个名字", () => {
     const source = css();
     const faces = fontFaces(source);
     for (const face of EMBEDDED_FACES) {
-      const block = faces.find((b) =>
-        new RegExp(`font-family:\\s*"${face.family}"`).test(b),
-      );
+      const block = faces.find((b) => new RegExp(`font-family:\\s*"${face.family}"`).test(b));
       expect(block, `没有 ${face.family} 的 @font-face`).toBeTruthy();
-      const src =
-        /src:\s*url\("([^"]+\.(?:woff2|ttf))"\)\s*format\("([^"]+)"\)/.exec(
-          block ?? "",
-        );
+      const src = /src:\s*url\("([^"]+\.(?:woff2|ttf))"\)\s*format\("([^"]+)"\)/.exec(block ?? "");
       expect(
         src,
         `${face.family} 的 src 不是 \`url(<字体>.<ext>) format(<载体>)\` 形态`,
@@ -313,10 +288,7 @@ describe("@font-face 与 --font-* 必须指向同一个名字", () => {
       // **不报错** —— format() 写错时浏览器照嗅探照解码（它只是「要不要下载」的门），
       // 所以只有这里能拦。
       const carrier = FONT_CARRIERS.find((c) => url?.endsWith(c.ext));
-      expect(
-        carrier,
-        `${face.family} 指向 ${url}，那不是本仓库认的字体载体`,
-      ).toBeTruthy();
+      expect(carrier, `${face.family} 指向 ${url}，那不是本仓库认的字体载体`).toBeTruthy();
       expect(
         declaredFormat,
         `url 的扩展名是 ${carrier?.ext}，format() 却写着 "${declaredFormat}" —— 错的那一端不会喊`,

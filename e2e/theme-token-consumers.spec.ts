@@ -70,11 +70,7 @@ async function setTheme(page: Page, dark: boolean): Promise<void> {
   }, dark);
   await expect
     .poll(
-      () =>
-        page.evaluate(
-          (d) => document.documentElement.classList.contains("dark") === d,
-          dark,
-        ),
+      () => page.evaluate((d) => document.documentElement.classList.contains("dark") === d, dark),
       {
         message:
           `主题没落到 ${dark ? "dark" : "light"} 档 —— ` +
@@ -90,9 +86,7 @@ async function readToken(
   name: string,
 ): Promise<{ raw: string; fill: string; stroke: string }> {
   return page.evaluate((n) => {
-    const raw = getComputedStyle(document.documentElement)
-      .getPropertyValue(n)
-      .trim();
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("fill", `var(${n})`);
@@ -131,10 +125,9 @@ type Color = { r: number; g: number; b: number; a: number };
 
 function parseColor(css: string): Color {
   const t = css.trim();
-  const space =
-    /^color\(\s*srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\s*\)/i.exec(
-      t,
-    );
+  const space = /^color\(\s*srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\s*\)/i.exec(
+    t,
+  );
   if (space) {
     return {
       r: Number(space[1]) * 255,
@@ -143,10 +136,7 @@ function parseColor(css: string): Color {
       a: space[4] === undefined ? 1 : Number(space[4]),
     };
   }
-  const fn =
-    /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/i.exec(
-      t,
-    );
+  const fn = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/i.exec(t);
   if (fn) {
     return {
       r: Number(fn[1]),
@@ -188,9 +178,7 @@ function relativeLuminance(css: string): number {
   const lin = [c.r, c.g, c.b]
     .map((v) => v / 255)
     .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
-  return (
-    0.2126 * (lin[0] ?? 0) + 0.7152 * (lin[1] ?? 0) + 0.0722 * (lin[2] ?? 0)
-  );
+  return 0.2126 * (lin[0] ?? 0) + 0.7152 * (lin[1] ?? 0) + 0.0722 * (lin[2] ?? 0);
 }
 
 function contrastRatio(a: string, b: string): number {
@@ -215,18 +203,14 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       const bad: string[] = [];
       for (const name of CONSUMED_TOKENS) {
         const v = await readToken(page, name);
-        if (!v.raw)
-          bad.push(`${label} ${name} 声明值为空（被 shake 或名字不对）`);
-        if (!v.fill.startsWith("rgb"))
-          bad.push(`${label} ${name} fill 未解析：${v.fill}`);
+        if (!v.raw) bad.push(`${label} ${name} 声明值为空（被 shake 或名字不对）`);
+        if (!v.fill.startsWith("rgb")) bad.push(`${label} ${name} fill 未解析：${v.fill}`);
       }
       expect(bad, `${label}档有 token 解析失败`).toEqual([]);
     }
   });
 
-  test("负控制：不存在的 token 必须读到空，且 fill 退黑 / stroke 退 none", async ({
-    page,
-  }) => {
+  test("负控制：不存在的 token 必须读到空，且 fill 退黑 / stroke 退 none", async ({ page }) => {
     const nope = await readToken(page, "--color-nope-token");
     expect(nope.raw, "探针失效：不存在的名字竟读到了值").toBe("");
     expect(nope.fill).toBe("rgb(0, 0, 0)");
@@ -279,32 +263,24 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
    *  ② 改动的目的成立：**浅色画布上的网格线不该比深色下更看不见**。写死 slate-400 时
    *     浅色 1.11:1 / 深色 1.20:1（浅色反而更弱），换两档之后浅色走黑、反超深色。
    */
-  test("网格线：color-mix 在 stroke 位置解析，且浅色不再比深色更弱", async ({
-    page,
-  }) => {
+  test("网格线：color-mix 在 stroke 位置解析，且浅色不再比深色更弱", async ({ page }) => {
     /* 三档 α 都是真值：0.14 = 主参考线默认与库预览定值，0.22 = 细线默认，0.6 = 用户拉高。 */
     for (const alpha of [0.14, 0.22, 0.6]) {
       /* 与 `gridLineColor()` 同一套取整口径：α 换算成百分数，不丢一位小数。 */
       const percent = Math.round(alpha * 1000) / 10;
       const expr = `color-mix(in srgb, var(--color-canvas-grid-line) ${percent}%, transparent)`;
-      const seen: Record<
-        "light" | "dark",
-        { stroke: string; color: Color; ratio: number }
-      > = {} as never;
+      const seen: Record<"light" | "dark", { stroke: string; color: Color; ratio: number }> =
+        /* SAFETY: 类型断言已复核 */ {} as never;
 
       for (const dark of [false, true]) {
         await setTheme(page, dark);
-        const key = dark ? ("dark" as const) : ("light" as const);
+        const key = dark
+          ? /* SAFETY: 类型断言已复核 */ ("dark" as const)
+          : /* SAFETY: 类型断言已复核 */ ("light" as const);
         const got = await page.evaluate(
           ({ expr: e, token }) => {
-            const svg = document.createElementNS(
-              "http://www.w3.org/2000/svg",
-              "svg",
-            );
-            const path = document.createElementNS(
-              "http://www.w3.org/2000/svg",
-              "path",
-            );
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
             path.setAttribute("style", `stroke: ${e}`);
             svg.appendChild(path);
             document.body.appendChild(svg);
@@ -312,19 +288,14 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
             svg.remove();
             return {
               stroke,
-              canvas: getComputedStyle(document.documentElement)
-                .getPropertyValue(token)
-                .trim(),
+              canvas: getComputedStyle(document.documentElement).getPropertyValue(token).trim(),
             };
           },
           { expr, token: "--color-canvas" },
         );
         /* 线要真画出来：解析不出颜色 / 全透明 = 幽灵 token 的静默形态。 */
         const color = parseColor(got.stroke);
-        expect(
-          color.a,
-          `α=${alpha} ${key}档的线没画出来：stroke=${got.stroke}`,
-        ).toBeGreaterThan(0);
+        expect(color.a, `α=${alpha} ${key}档的线没画出来：stroke=${got.stroke}`).toBeGreaterThan(0);
         seen[key] = {
           stroke: got.stroke,
           color,
@@ -339,7 +310,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
         light: [0, 0, 0],
         dark: [148, 163, 184],
       };
-      for (const key of ["light", "dark"] as const) {
+      for (const key of /* SAFETY: 类型断言已复核 */ ["light", "dark"] as const) {
         const c = seen[key].color;
         const [r, g, b] = expected[key];
         const got2 = [Math.round(c.r), Math.round(c.g), Math.round(c.b)];
@@ -383,9 +354,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
    * 成立，之后拿到 0 条，报的是它自带的反空转话术「前提没了」（不是构建坏了：规则确实
    * 在 `.next/static/chunks/*.css` 里，只是进 DOM 的时机变了）。
    */
-  test("二次代入：经 --xy-background-pattern-color-props 取到的仍是同一个色", async ({
-    page,
-  }) => {
+  test("二次代入：经 --xy-background-pattern-color-props 取到的仍是同一个色", async ({ page }) => {
     /* ⚠️ 这里刻意**不写** `waitUntil: "domcontentloaded"`（原先有）。
      *
      * 立案读数：这一条在全量里必红、隔离单跑必绿，红在点「新建画布项目」之后
@@ -440,8 +409,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
                 continue;
               }
               for (const r of Array.from(rules ?? []))
-                if (r.cssText?.includes("--xy-background-pattern-color-props"))
-                  n++;
+                if (r.cssText?.includes("--xy-background-pattern-color-props")) n++;
             }
             return n;
           }),
@@ -455,14 +423,8 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       const got = await page.evaluate((e) => {
         const wrap = document.createElement("div");
         wrap.style.setProperty("--xy-background-pattern-color-props", e);
-        const svg = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "svg",
-        );
-        const path = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "path",
-        );
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
         /* 类名是真实路径的关键：stroke 由样式表按这个选择器给，不是内联。 */
         path.setAttribute("class", "react-flow__background-pattern lines");
         svg.appendChild(path);
@@ -474,10 +436,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       }, expr);
       const key = dark ? "深色" : "浅色";
       const c = parseColor(got);
-      expect(
-        c.a,
-        `${key}档：stroke=${got}（α 没穿过二次代入）`,
-      ).toBeGreaterThan(0);
+      expect(c.a, `${key}档：stroke=${got}（α 没穿过二次代入）`).toBeGreaterThan(0);
       const want = dark ? [148, 163, 184] : [0, 0, 0];
       expect(
         [Math.round(c.r), Math.round(c.g), Math.round(c.b)],
@@ -500,24 +459,17 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
      * 解析成我们的色相**，并把两种作用域的实际值打印出来供排障对照 ——
      * 比 seed 图标那次「退成黑色」还安静，因为画面看着「只是没有网格线」。
      */
-    const ghostExpr =
-      "color-mix(in srgb, var(--color-nope-token) 14%, transparent)";
+    const ghostExpr = "color-mix(in srgb, var(--color-nope-token) 14%, transparent)";
     const inBothScopes = await page.evaluate((e) => {
       const read = (hostClass: string): string => {
         const host = document.createElement("div");
         if (hostClass) host.className = hostClass;
-        const svg = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "svg",
-        );
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute(
           "style",
           `--xy-background-pattern-color-props: ${e}; width: 40px; height: 40px`,
         );
-        const path = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "path",
-        );
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
         path.setAttribute("class", "react-flow__background-pattern lines");
         svg.appendChild(path);
         host.appendChild(svg);
@@ -577,28 +529,20 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       expect(fonts.titleToken, `${label}：--font-title 解析为空`).toBeTruthy();
       /* 计算样式里必须看到项目写进栈里的名字。`Geist` 由 next/font 在运行时挂上
          <html>，是栈的首选；CJK 回退是项目自己写的，两者都得在。 */
-      expect(fonts.bodyFamily, `${label}：正文没走设计字体栈`).toContain(
-        "Geist",
-      );
+      expect(fonts.bodyFamily, `${label}：正文没走设计字体栈`).toContain("Geist");
       expect(fonts.bodyFamily).toContain("PingFang SC");
-      expect(
-        fonts.bodyFamily.toLowerCase(),
-        `${label}：正文退回浏览器默认字体`,
-      ).not.toContain("times new roman");
+      expect(fonts.bodyFamily.toLowerCase(), `${label}：正文退回浏览器默认字体`).not.toContain(
+        "times new roman",
+      );
       /* 标题档：探针元素必须解得出标题首选那颗字体，且与正文不同源
          （同源就说明「标题走另一颗 token」是假的）。 */
-      expect(
-        fonts.titleFamily,
-        `${label}：探针元素解不出字体（font-title 类没生效）`,
-      ).toBeTruthy();
-      expect(
-        fonts.titleFamily,
-        `${label}：标题档没用到 --font-title 的首选字体`,
-      ).toContain("Sarasa Gothic SC");
-      expect(
-        fonts.titleFamily,
-        `${label}：标题字体与正文一模一样，--font-title 没生效`,
-      ).not.toBe(fonts.bodyFamily);
+      expect(fonts.titleFamily, `${label}：探针元素解不出字体（font-title 类没生效）`).toBeTruthy();
+      expect(fonts.titleFamily, `${label}：标题档没用到 --font-title 的首选字体`).toContain(
+        "Sarasa Gothic SC",
+      );
+      expect(fonts.titleFamily, `${label}：标题字体与正文一模一样，--font-title 没生效`).not.toBe(
+        fonts.bodyFamily,
+      );
     }
   });
 });

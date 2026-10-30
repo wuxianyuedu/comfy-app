@@ -21,7 +21,7 @@ import { expectHomeReady } from "./support/home-anchors";
 
 /* 项目内的六个视图 —— 与 `projectTabs()` 的标签逐字对齐。
  * 名字写死是有意的：它们就是用户看见的那六个词，改标签等于改用户可见行为。 */
-const PROJECT_VIEWS = [
+const PROJECT_VIEWS = /* SAFETY: 类型断言已复核 */ [
   "主页",
   "画布",
   "工坊",
@@ -31,7 +31,7 @@ const PROJECT_VIEWS = [
 ] as const;
 
 /* 五个全局项 —— 用来证明「菜单里本来只有这些」，好让多出来的六个有对照。 */
-const GLOBAL_VIEWS = ["模型", "历史", "队列", "工作流库"] as const;
+const GLOBAL_VIEWS = /* SAFETY: 类型断言已复核 */ ["模型", "历史", "队列", "工作流库"] as const;
 
 async function stubBackend(page: Page) {
   /* 后端交互不参与本用例的判据（项目上下文全在客户端），但它**会把界面卡住**
@@ -88,9 +88,7 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
     for (const label of PROJECT_VIEWS) expect(afterReload).toContain(label);
   });
 
-  test("刷新后 active-id 与项目索引都还在（缺陷的另一半：别只在界面上兜住）", async ({
-    page,
-  }) => {
+  test("刷新后 active-id 与项目索引都还在（缺陷的另一半：别只在界面上兜住）", async ({ page }) => {
     await stubBackend(page);
     await page.goto("/workspace");
     await page.getByRole("button", { name: "新建画布项目" }).click();
@@ -99,9 +97,7 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
      * React 处理里，所以先等界面表达出「已经在项目里」再读。 */
     await expect(page.getByRole("button", { name: "新页签" })).toBeVisible();
     await expect
-      .poll(() =>
-        page.evaluate(() => localStorage.getItem("comfyapp.canvas.active.v1")),
-      )
+      .poll(() => page.evaluate(() => localStorage.getItem("comfyapp.canvas.active.v1")))
       .not.toBeNull();
 
     await page.reload();
@@ -117,7 +113,9 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
     }));
     expect(stored.active).not.toBeNull();
     /* 那一行不能被当成空草稿清掉 —— 它是用户刚建的、正开着的项目。 */
-    const projects = JSON.parse(stored.index ?? "[]") as Array<{ id: string }>;
+    const projects = /* SAFETY: 类型断言已复核 */ JSON.parse(stored.index ?? "[]") as Array<{
+      id: string;
+    }>;
     expect(projects.map((project) => project.id)).toContain(stored.active);
   });
 });

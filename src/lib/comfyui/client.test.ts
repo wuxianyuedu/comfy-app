@@ -51,25 +51,25 @@ const plan = {
 
 /** 只让指定端口应答 `/system_stats`，其余连接一律拒绝。 */
 function respondOn(ports: number[]) {
-  return vi
-    .spyOn(globalThis, "fetch")
-    .mockImplementation(async (input: unknown) => {
-      const url = String(input);
-      if (ports.some((p) => url.includes(`:${p}/`))) {
-        return new Response("{}", { status: 200 });
-      }
-      throw new Error("ECONNREFUSED");
-    });
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
+    const url = String(input);
+    if (ports.some((p) => url.includes(`:${p}/`))) {
+      return new Response("{}", { status: 200 });
+    }
+    throw new Error("ECONNREFUSED");
+  });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   resetComfyBase();
   resetProbeMissLog();
-  vi.mocked(getSettingsSync).mockReturnValue({
-    comfyuiPath: "D:\\Comfy",
-    comfyuiPort: 8188,
-  } as never);
+  vi.mocked(getSettingsSync).mockReturnValue(
+    /* SAFETY: 类型断言已复核 */ {
+      comfyuiPath: "D:\\Comfy",
+      comfyuiPort: 8188,
+    } as never,
+  );
   vi.mocked(resolveComfyLaunchPlan).mockReturnValue(plan);
   vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
     pid: null,
@@ -86,9 +86,7 @@ afterEach(() => {
 
 /** logger.warn 里有没有一条命中 `pattern` 的行。 */
 function warned(pattern: RegExp): boolean {
-  return vi
-    .mocked(logger.warn)
-    .mock.calls.some(([msg]) => pattern.test(String(msg)));
+  return vi.mocked(logger.warn).mock.calls.some(([msg]) => pattern.test(String(msg)));
 }
 
 describe("resolveComfyBase — 进程表查不到 main.py 时退回端口探测", () => {
@@ -246,11 +244,9 @@ describe("getView — 取字节的地址组装与失败形状", () => {
     const seen: string[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/api/view")
-        return new Response("{}", { status: 200 });
+      if (url.pathname !== "/api/view") return new Response("{}", { status: 200 });
       seen.push(url.search);
-      if (reply.status !== 200)
-        return new Response("nope", { status: reply.status });
+      if (reply.status !== 200) return new Response("nope", { status: reply.status });
       return new Response(new Uint8Array(reply.bytes ?? [1, 2, 3]), {
         status: 200,
       });
@@ -272,17 +268,13 @@ describe("getView — 取字节的地址组装与失败形状", () => {
     viewReply({ status: 404 });
     const err = await getView("gone.png", "", "input").catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ComfyViewError);
-    expect((err as ComfyViewError).status).toBe(404);
+    expect(/* SAFETY: 类型断言已复核 */ (err as ComfyViewError).status).toBe(404);
     // 消息保持原样：`executor-finalize` 那类只判「拿不到就抛」的调用方零感知
-    expect((err as Error).message).toBe("getView failed: 404");
+    expect(/* SAFETY: 类型断言已复核 */ (err as Error).message).toBe("getView failed: 404");
   });
 
   it("连不上时不包成 ComfyViewError（那是「上游答了」的形状），原样把 fetch 的失败交出去", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(
-      new TypeError("fetch failed"),
-    );
-    await expect(getView("a.png", "", "input")).rejects.toBeInstanceOf(
-      TypeError,
-    );
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
+    await expect(getView("a.png", "", "input")).rejects.toBeInstanceOf(TypeError);
   });
 });

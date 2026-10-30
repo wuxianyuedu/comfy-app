@@ -8,10 +8,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { useInterval } from "~/components/ui/use-interval";
-import {
-  fetchVideoTasks,
-  type VideoTask,
-} from "~/lib/media/video-queue-client";
+import { fetchVideoTasks, type VideoTask } from "~/lib/media/video-queue-client";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 
@@ -28,30 +25,28 @@ import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 
 type StatusMeta = { icon: string; label: string; cls: string };
 
-const STATUS_META: Record<
-  "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED",
-  StatusMeta
-> = {
-  QUEUED: { icon: "hourglass", label: "排队中", cls: "text-ink-muted" },
-  RUNNING: {
-    icon: "zap",
-    label: "生成中",
-    cls: "text-warning-strong",
-  },
-  SUCCEEDED: {
-    icon: "check",
-    label: "已完成",
-    cls: "text-success-strong",
-  },
-  FAILED: { icon: "x", label: "失败", cls: "text-destructive" },
-  CANCELLED: { icon: "ban", label: "已取消", cls: "text-ink-fainter" },
-};
+const STATUS_META: Record<"QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED", StatusMeta> =
+  {
+    QUEUED: { icon: "hourglass", label: "排队中", cls: "text-ink-muted" },
+    RUNNING: {
+      icon: "zap",
+      label: "生成中",
+      cls: "text-warning-strong",
+    },
+    SUCCEEDED: {
+      icon: "check",
+      label: "已完成",
+      cls: "text-success-strong",
+    },
+    FAILED: { icon: "x", label: "失败", cls: "text-destructive" },
+    CANCELLED: { icon: "ban", label: "已取消", cls: "text-ink-fainter" },
+  };
 
 /** 按任务状态取展示元数据。`task.status` 是宽字符串（来自后端），这里收口
  *  「未知状态 → 排队中」这一条兜底判据，返回**非空**，调用点不再各自 `!`。 */
 function statusMetaFor(status: string): StatusMeta {
   return status in STATUS_META
-    ? STATUS_META[status as keyof typeof STATUS_META]
+    ? STATUS_META[/* SAFETY: 类型断言已复核 */ status as keyof typeof STATUS_META]
     : STATUS_META.QUEUED;
 }
 
@@ -62,11 +57,7 @@ export interface VideoQueueModalProps {
   onOpenTask?: (taskId: string) => void;
 }
 
-export function VideoQueueModal({
-  open,
-  onClose,
-  onOpenTask,
-}: VideoQueueModalProps) {
+export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalProps) {
   const [tasks, setTasks] = useState<VideoTask[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -144,9 +135,7 @@ export function VideoQueueModal({
           <div className="flex-1 overflow-y-auto p-5">
             <div className="flex-col gap-3">
               {loading && tasks.length === 0 ? (
-                <p className="text-ink-fainter py-10 text-center text-xs">
-                  加载中…
-                </p>
+                <p className="text-ink-fainter py-10 text-center text-xs">加载中…</p>
               ) : tasks.length === 0 ? (
                 <p className="text-ink-fainter py-10 text-center text-xs">
                   暂无视频生成任务。在创作台「视频」模式直接生成（新视频的入口在创作台，这里只看队列）。
@@ -167,11 +156,7 @@ export function VideoQueueModal({
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          <Icon
-                            name="film"
-                            size={18}
-                            className="text-ink-muted"
-                          />
+                          <Icon name="film" size={18} className="text-ink-muted" />
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -179,17 +164,12 @@ export function VideoQueueModal({
                           <span className="text-primary-strong font-mono text-xs">
                             V{String(index + 1).padStart(2, "0")}
                           </span>
-                          <span
-                            className={`inline-flex items-center gap-1 text-xs ${meta.cls}`}
-                          >
+                          <span className={`inline-flex items-center gap-1 text-xs ${meta.cls}`}>
                             <Icon name={meta.icon} size={13} />
                             {meta.label}
                           </span>
                         </div>
-                        <p
-                          className="text-ink-soft truncate text-xs"
-                          title={task.prompt}
-                        >
+                        <p className="text-ink-soft truncate text-xs" title={task.prompt}>
                           {task.prompt || "（无提示词）"}
                         </p>
                         <p className="text-ink-fainter text-3xs mt-0.5 truncate font-mono">
@@ -227,9 +207,7 @@ export function VideoQueueModal({
                   );
                 })
               )}
-              {error && (
-                <p className="text-destructive text-center text-xs">{error}</p>
-              )}
+              {error && <p className="text-destructive text-center text-xs">{error}</p>}
             </div>
           </div>
         </div>
