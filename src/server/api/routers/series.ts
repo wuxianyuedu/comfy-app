@@ -511,6 +511,32 @@ export const seriesRouter = createTRPCRouter({
         .orderBy(asc(character.name));
     }),
 
+  /**
+   * 反向查询：列出「这个角色被哪些集引用了」（FR-SR-03 ②）。
+   * 与 `episodeCharacters`（正向：某集关联了哪些角色）互为反向；调用方可取
+   * `.length` 作为「被 N 集引用」的计数（FR-SR-03 ① 的提示来源）。
+   */
+  characterEpisodes: authedProcedure
+    .input(z.object({ characterId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      await assertCharacterOwner(ctx, input.characterId);
+      return ctx.db
+        .select({
+          episodeId: episode.id,
+          title: episode.title,
+          episodeNumber: episode.episodeNumber,
+          seasonId: season.id,
+          seasonNumber: season.seasonNumber,
+          seasonTitle: season.title,
+          role: episodeCharacter.role,
+        })
+        .from(episodeCharacter)
+        .innerJoin(episode, eq(episodeCharacter.episodeId, episode.id))
+        .innerJoin(season, eq(episode.seasonId, season.id))
+        .where(eq(episodeCharacter.characterId, input.characterId))
+        .orderBy(asc(season.seasonNumber), asc(episode.episodeNumber));
+    }),
+
   /** 把系列角色库里的某角色关联到某集（同一系列才可；重复关联幂等）。 */
   linkCharacter: authedProcedure
     .input(

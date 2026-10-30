@@ -846,20 +846,21 @@
 
 #### FR-SR-03 跨集资产复用（角色库 / 风格锚 / 场景库）
 
-- 状态：部分实现（#2508）—— 系列角色库 router + UI 面板 + 与 `production.characters` 的
-  双向同步已落地；验收 ③ 已达标，**① ② 两条待做**（已立单 #2801）。
+- 状态：已实现（#2508 角色库实体化 + #2801 引用提示 / 反向查询）
 - 需求：角色、风格、场景成为**可被多集引用**的实体（引用，不是拷贝）。
 - 行为与验收：① 在 B 集引用 A 集的角色后，改 A 集角色卡时给出「该角色被 N 集引用」的提示，
-  **不静默改**（改了别的集会跟着变，这件事必须让操作者看见）；**待做（#2801）**：目前
-  `updateCharacter` 直接改系列库实体，不提示被引用集数；
-  ② 引用关系可查（能列出「这个角色被哪些集用了」）；**待做（#2801）**：现有
-  `episodeCharacters` 是正向（某集关联了哪些角色），反向的「某角色被哪些集引用」查询尚未提供；
+  **不静默改**（改了别的集会跟着变，这件事必须让操作者看见）；**已达标**：角色库面板聚焦
+  某角色即显示「该角色被 N 集引用（改动会影响这些集）：S1E1 …」，N 取自 `characterEpisodes`；
+  ② 引用关系可查（能列出「这个角色被哪些集用了」）；**已达标**：`series.characterEpisodes`
+  反向查询返回该角色被引用的集（含季号 / 集号 / 标题 / 在本集的定位），与正向的
+  `episodeCharacters`（某集关联了哪些角色）互为反向；
   ③ **拷贝即失去一致性**：以「复制一份到本集」实现的复用不算本条达标。**已达标**：集经
   `episode_character` 引用系列角色实体，不复制 JSON。
 - 落点（现状）：`character` 实体表与 `episode_character` 关联表（`series` 级角色库，字段对齐
   `Character`）；系列角色库 tRPC router（`characters` / `createCharacter` / `updateCharacter` /
-  `deleteCharacter` / `episodeCharacters` / `linkCharacter` / `unlinkCharacter` /
-  `promoteFromProduction` / `injectToProduction`，见 `src/server/api/routers/series.ts`）、
+  `deleteCharacter` / `episodeCharacters` / `characterEpisodes` / `linkCharacter` /
+  `unlinkCharacter` / `promoteFromProduction` / `injectToProduction`，
+  见 `src/server/api/routers/series.ts`）、
   UI 面板 `src/components/studio/project-home/SeriesCharacterLibrary.tsx`；与 `production.characters`
   双向同步：提升 = 项目角色按 `name` 幂等并入系列库并关联本集，注入 = 本集关联角色按 `name`
   合并回项目（同名覆盖字段、不同名追加）。镜头仍走 `production.shots` JSON 列。

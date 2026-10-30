@@ -24,6 +24,8 @@ type Season = RouterOutputs["series"]["seasons"][number];
 type Episode = NonNullable<RouterOutputs["series"]["byProject"]>;
 type CharacterEntity = RouterOutputs["series"]["characters"][number];
 type EpisodeCharacterLink = RouterOutputs["series"]["episodeCharacters"][number];
+/** 反向：某角色被哪些集引用（FR-SR-03 ②）。 */
+type CharacterEpisodeRef = RouterOutputs["series"]["characterEpisodes"][number];
 
 /** 角色可改字段（UI 编辑面）。params / portraits 由生产侧/导入携带，UI 不直编。 */
 export type CharacterPatch = Partial<{
@@ -53,6 +55,10 @@ export interface SeriesOrganizerController {
   characters?: Array<CharacterEntity>;
   /** 当前选中集已关联的角色（含定位 role）。 */
   episodeCharacters?: Array<EpisodeCharacterLink>;
+  /** 反向：当前正在查看的角色被哪些集引用（FR-SR-03 ②）。 */
+  characterEpisodes?: Array<CharacterEpisodeRef>;
+  /** 正在查看引用集的角色 id（null = 没在查看）。 */
+  inspectedCharacterId: string | null;
 
   seriesId: string | null;
   seasonId: string | null;
@@ -79,6 +85,9 @@ export interface SeriesOrganizerController {
   /** 集 ↔ 角色关联。 */
   linkCharacter: (episodeId: string, characterId: string) => void;
   unlinkCharacter: (episodeId: string, characterId: string) => void;
+  /** 反向查询：查看某角色被哪些集引用（FR-SR-03 ②）。 */
+  inspectCharacterEpisodes: (characterId: string) => void;
+  clearInspectedCharacter: () => void;
   /** 双向同步：把项目角色提升进系列库 / 把系列库角色注入项目。 */
   promoteFromProduction: (projectId: string) => void;
   injectToProduction: (projectId: string) => void;
@@ -91,6 +100,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const [seriesId, setSeriesId] = useState<string | null>(null);
   const [seasonId, setSeasonId] = useState<string | null>(null);
   const [episodeId, setEpisodeId] = useState<string | null>(null);
+  const [inspectedCharacterId, setInspectedCharacterId] = useState<string | null>(null);
 
   const seriesList = useQuery(trpc.series.list.queryOptions());
   const seasons = useQuery(
@@ -111,6 +121,12 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
       { enabled: !!episodeId },
     ),
   );
+  const charEpisodes = useQuery(
+    trpc.series.characterEpisodes.queryOptions(
+      { characterId: inspectedCharacterId ?? "" },
+      { enabled: !!inspectedCharacterId },
+    ),
+  );
 
   const invalidateSeries = () => void qc.invalidateQueries(trpc.series.list.queryFilter());
   const invalidateSeasons = (sid: string) =>
@@ -124,6 +140,8 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     void qc.invalidateQueries(trpc.series.characters.queryFilter({ seriesId: sid }));
   const invalidateEpisodeChars = (eid: string) =>
     void qc.invalidateQueries(trpc.series.episodeCharacters.queryFilter({ episodeId: eid }));
+  const invalidateCharacterEpisodes = (cid: string) =>
+    void qc.invalidateQueries(trpc.series.characterEpisodes.queryFilter({ characterId: cid }));
 
   const createSeries = useMutation(
     trpc.series.create.mutationOptions({ onSuccess: invalidateSeries }),
@@ -216,15 +234,17 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   );
   const linkCharacterMut = useMutation(
     trpc.series.linkCharacter.mutationOptions({
-      onSuccess: () => {
+      onSuccess: (_data, vars) => {
         if (episodeId) invalidateEpisodeChars(episodeId);
+        invalidateCharacterEpisodes(vars.characterId);
       },
     }),
   );
   const unlinkCharacterMut = useMutation(
     trpc.series.unlinkCharacter.mutationOptions({
-      onSuccess: () => {
+      onSuccess: (_data, vars) => {
         if (episodeId) invalidateEpisodeChars(episodeId);
+        invalidateCharacterEpisodes(vars.characterId);
       },
     }),
   );
@@ -247,6 +267,8 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     currentEp: currentEp.data,
     characters: characterList.data,
     episodeCharacters: episodeChars.data,
+    characterEpisodes: charEpisodes.data,
+    inspectedCharacterId,
     seriesId,
     seasonId,
     episodeId,
@@ -279,6 +301,8 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     linkCharacter: (epid, cid) => linkCharacterMut.mutate({ episodeId: epid, characterId: cid }),
     unlinkCharacter: (epid, cid) =>
       unlinkCharacterMut.mutate({ episodeId: epid, characterId: cid }),
+    inspectCharacterEpisodes: (cid) => setInspectedCharacterId(cid),
+    clearInspectedCharacter: () => setInspectedCharacterId(null),
     promoteFromProduction: (pid) => promoteMut.mutate({ projectId: pid }),
     injectToProduction: (pid) => injectMut.mutate({ projectId: pid }),
   };

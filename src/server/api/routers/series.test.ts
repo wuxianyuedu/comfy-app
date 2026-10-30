@@ -257,6 +257,29 @@ describe("episode ↔ character 关联", () => {
       userCaller().linkCharacter({ episodeId: ep.id, characterId: chOther.id }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
+
+  it("characterEpisodes 反向列出「该角色被哪些集引用」（FR-SR-03 ②）", async () => {
+    const { s, se, ep } = await makeHierarchy();
+    const ch = await addCharacter(s.id, "主角");
+    await userCaller().linkCharacter({ episodeId: ep.id, characterId: ch.id, role: "男主" });
+    const refs = await userCaller().characterEpisodes({ characterId: ch.id });
+    expect(refs.length).toBe(1);
+    expect(refs[0]?.episodeId).toBe(ep.id);
+    expect(refs[0]?.seasonId).toBe(se.id);
+    expect(refs[0]?.seasonNumber).toBe(1);
+    expect(refs[0]?.episodeNumber).toBe(1);
+    expect(refs[0]?.role).toBe("男主");
+    await userCaller().unlinkCharacter({ episodeId: ep.id, characterId: ch.id });
+    expect(await userCaller().characterEpisodes({ characterId: ch.id })).toEqual([]);
+  });
+
+  it("他人角色的 characterEpisodes → FORBIDDEN", async () => {
+    const s = await addSeries(otherCaller(), "别人的系列");
+    const ch = await addCharacter(s.id, "外人", otherCaller());
+    await expect(userCaller().characterEpisodes({ characterId: ch.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
 });
 
 describe("production ↔ 系列库 双向同步（提升 / 注入）", () => {
