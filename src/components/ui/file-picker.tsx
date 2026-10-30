@@ -62,12 +62,7 @@ export interface FilePickerHandle {
  * `Input` 用 `useMemo` 固定身份：它在 JSX 里是组件位置，每次渲染重建会让
  * React 卸载再挂载 input（正在进行的文件对话框会被打断）。
  */
-export function useFilePicker({
-  onPick,
-  accept,
-  multiple,
-  inputProps,
-}: FilePickerProps) {
+export function useFilePicker({ onPick, accept, multiple, inputProps }: FilePickerProps) {
   const handleRef = React.useRef<FilePickerHandle | null>(null);
 
   /* `open` 必须身份稳定：调用方会把它放进 `onClick` 甚至依赖数组。 */
@@ -121,7 +116,9 @@ export function FilePicker({
     const picked = files && files.length > 0 ? files : null;
     event.target.value = "";
     const first = picked?.[0];
-    if (first) onPick(first, picked);
+    if (first) {
+      onPick(first, picked);
+    }
   };
 
   return (

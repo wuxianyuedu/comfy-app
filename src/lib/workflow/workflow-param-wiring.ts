@@ -41,8 +41,12 @@ export function canApplyWireEdit(
   edit: ParamWireEdit,
   io: WorkflowIOMap | null | undefined,
 ): boolean {
-  if (!edit.mode) return false;
-  if (edit.ioKey === null) return true;
+  if (!edit.mode) {
+    return false;
+  }
+  if (edit.ioKey === null) {
+    return true;
+  }
   return !!io?.[edit.ioKey];
 }
 
@@ -75,7 +79,9 @@ export function hasWireEdit(
   entryId: string,
   mode: string | null,
 ): boolean {
-  if (!mode) return false;
+  if (!mode) {
+    return false;
+  }
   const parsed = parseParamMapping(paramMap);
   const byEntry = parsed.manualByMode?.[mode];
   return !!byEntry && Object.prototype.hasOwnProperty.call(byEntry, entryId);
@@ -91,13 +97,18 @@ export function clearWireEdit(
   mode: string | null,
 ): Record<string, unknown> {
   const base = paramMap && typeof paramMap === "object" ? paramMap : {};
-  if (!mode) return base;
+  if (!mode) {
+    return base;
+  }
   const parsed = parseParamMapping(base);
   const byEntry = { ...(parsed.manualByMode?.[mode] ?? {}) };
   delete byEntry[entryId];
   const manualByMode = { ...(parsed.manualByMode ?? {}) };
-  if (Object.keys(byEntry).length > 0) manualByMode[mode] = byEntry;
-  else delete manualByMode[mode];
+  if (Object.keys(byEntry).length > 0) {
+    manualByMode[mode] = byEntry;
+  } else {
+    delete manualByMode[mode];
+  }
   return serializeParamMapping({ manualByMode }, base);
 }
 
@@ -142,7 +153,9 @@ export function resolveDropTarget(
       point.x <= rect.right + DROP_TOLERANCE &&
       point.y >= rect.top - DROP_TOLERANCE &&
       point.y <= rect.bottom + DROP_TOLERANCE;
-    if (!inside) continue;
+    if (!inside) {
+      continue;
+    }
     if (!hit || rect.height < hit.height) {
       hit = { ioKey: candidate.ioKey, height: rect.height };
     }

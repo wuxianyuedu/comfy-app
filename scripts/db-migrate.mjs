@@ -51,7 +51,9 @@ function fail(message) {
 
 /** 数一遍库里的用户表（排除 sqlite 内部表与 drizzle 的账本表）。读不到 → -1。 */
 function countUserTables() {
-  if (!fs.existsSync(dbPath)) return -1;
+  if (!fs.existsSync(dbPath)) {
+    return -1;
+  }
   try {
     const db = new DatabaseSync(dbPath, { readOnly: true, open: true });
     try {
@@ -63,7 +65,9 @@ function countUserTables() {
       /* `.get()` 取不到东西 = 驱动/连接不对，**不是**「库里有 0 张表」—— 后者会让外面
        * 那句「schema 是空的」替这条故障说话（与 `db-push.mjs` 同一处同一判法）。
        * 原行为也是 -1：`row` 是 undefined 时 `row.c` 抛出去、被下面那个 catch 折成 -1。 */
-      if (!row) return -1;
+      if (!row) {
+        return -1;
+      }
       return Number(row.c ?? 0);
     } finally {
       db.close();
@@ -75,24 +79,28 @@ function countUserTables() {
 
 /** 账本里的已应用迁移条数（迁移到底跑没跑，这是唯一权威）。读不到 → -1。 */
 function appliedMigrations() {
-  if (!fs.existsSync(dbPath)) return -1;
+  if (!fs.existsSync(dbPath)) {
+    return -1;
+  }
   try {
     const db = new DatabaseSync(dbPath, { readOnly: true, open: true });
     try {
       const exists = db
-        .prepare(
-          "SELECT count(*) AS c FROM sqlite_master WHERE type = 'table' AND name = ?",
-        )
+        .prepare("SELECT count(*) AS c FROM sqlite_master WHERE type = 'table' AND name = ?")
         .get(LEDGER_TABLE);
       /* 两处 `.get()` 都判空再取：取不到 = 驱动/连接不对，回 -1（读不到），
        * 不许折成 0 —— 0 在这份入口里的意思是「账本表在、里面一条迁移都没跑过」，
        * 那是另一种事实（外面按它报「迁移没跑」）。与 `countUserTables()` 上面同一判法。 */
-      if (!exists) return -1;
-      if (Number(exists.c ?? 0) === 0) return 0;
-      const counted = db
-        .prepare(`SELECT count(*) AS c FROM ${LEDGER_TABLE}`)
-        .get();
-      if (!counted) return -1;
+      if (!exists) {
+        return -1;
+      }
+      if (Number(exists.c ?? 0) === 0) {
+        return 0;
+      }
+      const counted = db.prepare(`SELECT count(*) AS c FROM ${LEDGER_TABLE}`).get();
+      if (!counted) {
+        return -1;
+      }
       return Number(counted.c ?? 0);
     } finally {
       db.close();
@@ -104,7 +112,9 @@ function appliedMigrations() {
 
 /** `drizzle/` 下的迁移文件（`*.sql`，按文件名排序 = 应用序）。 */
 function migrationFiles() {
-  if (!fs.existsSync(MIGRATIONS_DIR)) return [];
+  if (!fs.existsSync(MIGRATIONS_DIR)) {
+    return [];
+  }
   return fs
     .readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith(".sql"))
@@ -167,9 +177,7 @@ const beforeTables = countUserTables();
 const beforeApplied = appliedMigrations();
 process.stdout.write(
   `[db:migrate] 应用 ${files.length} 份迁移 → ${dbPath}` +
-    (beforeTables > 0
-      ? `（当前 ${beforeTables} 张用户表）`
-      : "（库还不存在 / 是空的）") +
+    (beforeTables > 0 ? `（当前 ${beforeTables} 张用户表）` : "（库还不存在 / 是空的）") +
     "\n",
 );
 
@@ -199,8 +207,7 @@ process.stdout.write(run.stdout);
  * 「应用了几份」是精确可查的，不像 diff 只能说"看起来一致了"。 */
 const afterTables = countUserTables();
 const afterApplied = appliedMigrations();
-const started =
-  /applying migrations/i.test(output) || /migrations applied/i.test(output);
+const started = /applying migrations/i.test(output) || /migrations applied/i.test(output);
 
 if (afterTables <= 0) {
   const hint = run.error
@@ -220,9 +227,7 @@ if (afterTables <= 0) {
        * 退出码也打出来，但**只当证据不当判据**：实测它「报错 + 留一个没动过的库 + 退 0」。 */
       `drizzle-kit 退出码：${String(run.status)}（它报错时也退 0，所以上面那条结论来自库里的事实，不是这个码）`,
       "drizzle-kit 的输出（stdout + stderr，真原因常在 stderr）：",
-      output.trim() === ""
-        ? "  (两边都是空的 —— 命令多半没起来)"
-        : output.trim(),
+      output.trim() === "" ? "  (两边都是空的 —— 命令多半没起来)" : output.trim(),
       "",
       "可行动作：",
       "  · 确认 drizzle.config.ts 的 dbCredentials.url 与 DATABASE_URL 指向同一个库；",
@@ -244,9 +249,7 @@ if (afterApplied !== files.length) {
       "",
       /* 同一句话术缺口的另一半：中途停了必定有一条真报错，而它也在 stderr。 */
       "drizzle-kit 的输出（stdout + stderr，真原因常在 stderr）：",
-      output.trim() === ""
-        ? "  (两边都是空的 —— 命令多半没起来)"
-        : output.trim(),
+      output.trim() === "" ? "  (两边都是空的 —— 命令多半没起来)" : output.trim(),
       "",
       "可行动作：",
       "  · 手工重跑：pnpm exec drizzle-kit migrate（它从账本断点继续，可重入）；",

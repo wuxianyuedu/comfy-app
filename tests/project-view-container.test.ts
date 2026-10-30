@@ -76,7 +76,9 @@ function frameClassNamesOf(rel: string): Array<string> {
   const out: Array<string> = [];
   for (const m of codeOf(rel).matchAll(/<DocumentFrame\b([\s\S]{0,400}?)>/g)) {
     const className = /className="([^"]*)"/.exec(m[1] ?? "")?.[1];
-    if (className !== undefined) out.push(className);
+    if (className !== undefined) {
+      out.push(className);
+    }
   }
   return out;
 }

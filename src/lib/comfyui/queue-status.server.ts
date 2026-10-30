@@ -57,7 +57,9 @@ export async function collectComfyQueueStatus(): Promise<ComfyQueueStatus> {
 /** 本应用当前在跑的那一个（跨宿主，取自库里那行）。 */
 async function describeRunning(): Promise<ComfyRunningTask | null> {
   const row = await taskRepository.findRunningForStatusBar();
-  if (!row) return null;
+  if (!row) {
+    return null;
+  }
 
   /* 开始时刻优先用 `claimedAt`（领取 / 首次转 RUNNING 时定格，见 schema 那一段的
    * 说明）；那列为 NULL 的只有本字段上线之前就存在的 RUNNING 行，用提交时刻近似
@@ -94,7 +96,9 @@ async function describeComfy(): Promise<{
   pending: number;
 } | null> {
   const raw = await getComfyQueue();
-  if (raw === null) return null;
+  if (raw === null) {
+    return null;
+  }
   /* 解析只走 `queueTraceSummary` 一处（reaper 的对账用的是同一份）——`/queue`
    * 的条目形态随版本变，两处各解一遍必然分叉。 */
   const { running, pending } = queueTraceSummary(raw);

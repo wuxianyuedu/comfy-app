@@ -47,10 +47,14 @@ export async function synthesizeFirstFrame(opts: {
    * **对同一个输入结论相反**（那侧忘了剥 `api/`，于是永远找不到文件），
    * 两条都是同一份布局的第二次实现，收口见 `~/lib/media/output-paths`。 */
   const abs = artifactDiskPath(localPath);
-  if (!abs) throw new Error(`首帧的产物地址不合法：${localPath}`);
+  if (!abs) {
+    throw new Error(`首帧的产物地址不合法：${localPath}`);
+  }
   const buf = await fs.readFile(abs);
   const res = await uploadImage(buf, `ff_${taskId}.png`, "input");
-  if (!res.name) throw new Error("首帧上传失败");
+  if (!res.name) {
+    throw new Error("首帧上传失败");
+  }
   return res.name;
 }
 // 成功时以第一张生成图的本地路径 resolve；出错/超时 reject。
@@ -65,7 +69,9 @@ async function waitForImage(taskId: string): Promise<string> {
     const row = await taskRepository.findExecutionProgress(taskId);
     /* 行读不到 = 这一跳的任务已被删（用户清了历史）。不静默续等：那样只会
      * 变成「首帧生成超时」，把一个明确的删除问题伪装成性能问题。 */
-    if (!row) throw new Error("首帧任务已不存在（可能被删除）");
+    if (!row) {
+      throw new Error("首帧任务已不存在（可能被删除）");
+    }
     if (isTerminalTaskStatus(row.status)) {
       if (row.status !== "SUCCEEDED") {
         throw new Error(row.error ?? `首帧生成失败（${row.status}）`);
@@ -76,7 +82,9 @@ async function waitForImage(taskId: string): Promise<string> {
           localPath?: string;
         }> | null) ?? [];
       const first = outputs.find((im) => im.mediaType === "image");
-      if (!first?.localPath) throw new Error("首帧无图像输出");
+      if (!first?.localPath) {
+        throw new Error("首帧无图像输出");
+      }
       return first.localPath;
     }
     await new Promise((resolve) =>

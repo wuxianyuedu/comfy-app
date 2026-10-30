@@ -81,11 +81,11 @@ export function rerunReport(attempts, budget) {
     "budget-skipped",
   ]);
   const skipped = attempts.filter((a) => a.outcome === "budget-skipped").length;
-  const launchFailed = attempts.filter(
-    (a) => a.outcome === "launch-failed",
-  ).length;
+  const launchFailed = attempts.filter((a) => a.outcome === "launch-failed").length;
   const reran = attempts.filter((a) => !NOT_RERUN.has(a.outcome));
-  if (reran.length === 0 && skipped === 0 && launchFailed === 0) return "";
+  if (reran.length === 0 && skipped === 0 && launchFailed === 0) {
+    return "";
+  }
   /** @type {(outcome: string) => number} */
   const count = (o) => attempts.filter((a) => a.outcome === o).length;
   const waitedMs = reran.reduce((a, r) => a + (r.waitedMs ?? 0), 0);
@@ -105,9 +105,7 @@ export function rerunReport(attempts, budget) {
     /* 「装载阶段就炸」那一档与上面四档**不同源**：它没有被复跑过，也没有第 2 遍的读数
      * —— 它说的是「第一遍就没跑起来」。所以它单独念，且只在真的发生时出现
      * （判据同 `gitDiff` 那条：没有的事不占一行）。 */
-    (launchFailed > 0
-      ? `；第 1 遍就没跑起来（装载 / 运行时级错误，退 2）${launchFailed} 块`
-      : "") +
+    (launchFailed > 0 ? `；第 1 遍就没跑起来（装载 / 运行时级错误，退 2）${launchFailed} 块` : "") +
     ".\n" +
     /* 墙钟那一格同理：只在真的跳过时占一行 —— 它是「连第二次测量都没发生」的证据，
      * 平时恒为 0，写进每一份账会让读者对 0 脱敏。 */

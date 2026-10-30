@@ -86,8 +86,12 @@ export interface RemoteModelEntry {
  *  缺键 / `undefined` / 其它类型 → `undefined`（不提供意见，保留库里既有）。 */
 export function normalizeEntryApiKey(rec: Record<string, unknown>): string | null | undefined {
   const v: unknown = rec.apiKey;
-  if (typeof v === "string") return v.trim() === "" ? null : v.trim();
-  if (v === null) return null;
+  if (typeof v === "string") {
+    return v.trim() === "" ? null : v.trim();
+  }
+  if (v === null) {
+    return null;
+  }
   return undefined;
 }
 
@@ -111,10 +115,14 @@ export type RawExtraModel = string | RemoteModelEntry;
  * 返回 `null` = 这一枚不是条目（不是对象、没有名字、名字全空白）。
  */
 function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
-  if (typeof item !== "object" || item === null) return null;
+  if (typeof item !== "object" || item === null) {
+    return null;
+  }
   const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
   const name = typeof rec.name === "string" ? rec.name.trim() : "";
-  if (name === "") return null;
+  if (name === "") {
+    return null;
+  }
   const kind: unknown = rec.kind;
   const apiKey = normalizeEntryApiKey(rec);
   return {
@@ -132,16 +140,22 @@ function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
 
 /** 把 DB / 请求载荷里的 extraModels 归一化成条目数组（丢弃无名与空白项）。 */
 export function normalizeExtraModels(raw: unknown): Array<RemoteModelEntry> {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const out: Array<RemoteModelEntry> = [];
   for (const item of raw) {
     if (typeof item === "string") {
       // 字符串形态只带了名字，对连接参数**不提供意见**（挂 null 会被读成「清空」）
-      if (item.trim() !== "") out.push({ name: item, baseUrl: null, kind: null });
+      if (item.trim() !== "") {
+        out.push({ name: item, baseUrl: null, kind: null });
+      }
       continue;
     }
     const entry = normalizeExtraModelItem(item);
-    if (entry) out.push(entry);
+    if (entry) {
+      out.push(entry);
+    }
   }
   return out;
 }
@@ -167,17 +181,23 @@ export interface ExtraModelSplit {
 export function splitExtraModels(raw: unknown): ExtraModelSplit {
   const localNames: Array<string> = [];
   const remoteEntries: Array<RemoteModelEntry> = [];
-  if (!Array.isArray(raw)) return { localNames, remoteEntries };
+  if (!Array.isArray(raw)) {
+    return { localNames, remoteEntries };
+  }
   for (const item of raw) {
     if (typeof item === "string") {
       const n = item.trim();
-      if (n !== "" && !localNames.includes(n)) localNames.push(n);
+      if (n !== "" && !localNames.includes(n)) {
+        localNames.push(n);
+      }
       continue;
     }
     /* 对象那一支的归一与读取侧同一次实现（见 `normalizeExtraModelItem`）——
      * 这里多出来的只有「按名字去重」与「字符串归本地候选」这两条分派规则。 */
     const entry = normalizeExtraModelItem(item);
-    if (!entry || remoteEntries.some((e) => e.name === entry.name)) continue;
+    if (!entry || remoteEntries.some((e) => e.name === entry.name)) {
+      continue;
+    }
     remoteEntries.push(entry);
   }
   return { localNames, remoteEntries };
@@ -201,7 +221,9 @@ export function isMisplacedLocalOllama(
   e: { apiKey?: string | null; baseUrl?: string | null },
   llmBaseUrl: string | null | undefined,
 ): boolean {
-  if (e.apiKey) return false; // 带独立密钥 = 真远端
+  if (e.apiKey) {
+    return false;
+  } // 带独立密钥 = 真远端
   const effective = e.baseUrl?.trim() ? e.baseUrl : (llmBaseUrl ?? "");
   return isLoopbackBaseUrl(effective);
 }
@@ -218,7 +240,9 @@ export function foldRemoteToLocal(
   const remotes: Array<RemoteModelEntry> = [];
   for (const e of remoteEntries) {
     if (isMisplacedLocalOllama(e, llmBaseUrl)) {
-      if (!locals.includes(e.name)) locals.push(e.name);
+      if (!locals.includes(e.name)) {
+        locals.push(e.name);
+      }
     } else {
       remotes.push(e);
     }
@@ -254,9 +278,15 @@ export function resolveTaskTemperature(opts: {
   fallback: number;
 }): number {
   const { taskType, explicitTemperature, overrides, fallback } = opts;
-  if (taskType && overrides?.[taskType] != null) return overrides[taskType];
-  if (explicitTemperature != null) return explicitTemperature;
-  if (taskType) return TASK_TYPES[taskType].defaultTemperature;
+  if (taskType && overrides?.[taskType] != null) {
+    return overrides[taskType];
+  }
+  if (explicitTemperature != null) {
+    return explicitTemperature;
+  }
+  if (taskType) {
+    return TASK_TYPES[taskType].defaultTemperature;
+  }
   return fallback;
 }
 
@@ -371,8 +401,12 @@ export function pickVisionModelName(
   override?: { visionModel?: string | null },
 ): string {
   const explicit = override?.visionModel?.trim();
-  if (explicit) return explicit;
+  if (explicit) {
+    return explicit;
+  }
   const imageEntry = cfg.extraModels?.find((e) => e.kind === "image");
-  if (imageEntry) return imageEntry.name;
+  if (imageEntry) {
+    return imageEntry.name;
+  }
   return cfg.model;
 }

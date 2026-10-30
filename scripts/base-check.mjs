@@ -121,11 +121,7 @@ import {
   resolveMergeBaseRef,
   ROOT,
 } from "./base-check/git-ref.mjs";
-import {
-  resolveGateCommand,
-  resolveMergeBatch,
-  runGate,
-} from "./base-check/hook-steps.mjs";
+import { resolveGateCommand, resolveMergeBatch, runGate } from "./base-check/hook-steps.mjs";
 import { isDidNotRunShaped, judge, nextSteps } from "./base-check/verdict.mjs";
 
 export {
@@ -198,18 +194,14 @@ export function baseCheck({ argv, label, ref, keep = false, json = false }) {
  * @param {{commands: Array<{argv: string[], label: string, baseSide?: boolean}>, ref: string, keep?: boolean, json?: boolean, shape?: "single" | "batch"}} input
  * @returns {number} 退出码（0 = 事实已复算；1 = 复算过程失败）
  */
-export function baseCheckMany({
-  commands,
-  ref,
-  keep = false,
-  json = false,
-  shape = "batch",
-}) {
+export function baseCheckMany({ commands, ref, keep = false, json = false, shape = "batch" }) {
   /* 本检出那一侧：**先跑、先收**（不建 worktree 就能判掉的情形不付这笔 —— 同
    * `baseCheck` 的旧口径）。 */
   /** @type {Array<{code: number, output: string}>} */
   const current = [];
-  for (const c of commands) current.push(runGate(c.argv, ROOT));
+  for (const c of commands) {
+    current.push(runGate(c.argv, ROOT));
+  }
   if (current.every((r) => r.code === 0)) {
     return reportMany(
       {
@@ -241,9 +233,7 @@ export function baseCheckMany({
     // （实测 `.git/index: index file open failed: Not a directory`，见 `GIT_ENV_DENY`
     // 那段）。两次都失败才是真失败 —— 不许把它读成「复算不出结论」。
     for (let attempt = 0; attempt < 2 && !worktreePath; attempt++) {
-      const candidate = fs.mkdtempSync(
-        path.join(os.tmpdir(), "comfy-base-check-"),
-      );
+      const candidate = fs.mkdtempSync(path.join(os.tmpdir(), "comfy-base-check-"));
       attempts.push(candidate);
       // `mkdtempSync` 建出的目录必须为空，而 `git worktree add` 要求目标**不存在**。
       fs.rmSync(candidate, { recursive: true, force: true });
@@ -312,15 +302,10 @@ export function baseCheckMany({
         ...(rowVerdict === "inconclusive"
           ? { didNotRun: didNotRunSide({ cur, curOutput, base, baseOutput }) }
           : {}),
-        ...(base && base.code !== 0
-          ? { baseOutputTail: tail(base.output) }
-          : {}),
+        ...(base && base.code !== 0 ? { baseOutputTail: tail(base.output) } : {}),
       });
     }
-    return reportMany(
-      { ref, commit, summary: summarizeRows(rows), rows },
-      { json, shape },
-    );
+    return reportMany({ ref, commit, summary: summarizeRows(rows), rows }, { json, shape });
   } finally {
     /* 未成为 worktree 的候选目录（建失败那一次留下的空目录）直接删。 */
     for (const candidate of attempts) {
@@ -379,7 +364,9 @@ export function baseCheckMany({
 export function linkDependencies(from, to) {
   const target = path.join(to, "node_modules");
   const source = path.join(from, "node_modules");
-  if (fs.existsSync(target) || !fs.existsSync(source)) return null;
+  if (fs.existsSync(target) || !fs.existsSync(source)) {
+    return null;
+  }
   try {
     fs.symlinkSync(source, target, "junction");
     return target;
@@ -411,7 +398,9 @@ export function linkDependencies(from, to) {
  * @param {string | null} link {@link linkDependencies} 建出来的链接路径
  */
 export function unlinkDependencies(link) {
-  if (!link) return;
+  if (!link) {
+    return;
+  }
   try {
     fs.rmSync(link, { recursive: false, force: true });
   } catch {
@@ -433,15 +422,18 @@ export function unlinkDependencies(link) {
  */
 export function didNotRunSide({ cur, curOutput, base, baseOutput }) {
   const sides = [];
-  if (cur === 127) sides.push("本检出：127（找不到模块 / 命令）");
-  else if (isDidNotRunShaped(curOutput))
+  if (cur === 127) {
+    sides.push("本检出：127（找不到模块 / 命令）");
+  } else if (isDidNotRunShaped(curOutput)) {
     sides.push("本检出：一条用例都没收集到");
+  }
   /* 基线那一侧的 `runGate` 结果整个传进来（`base.output`），而不是另拿一份
    * `baseOutput` —— 两个来源曾经在这里错位过一次（报告恒空），只留一条路。 */
   const baseCode = base ? base.code : null;
   const baseText = base ? String(base.output ?? "") : String(baseOutput ?? "");
-  if (baseCode === 127) sides.push("基线：127（找不到模块 / 命令）");
-  else if (baseCode !== null && baseCode !== 0 && isDidNotRunShaped(baseText)) {
+  if (baseCode === 127) {
+    sides.push("基线：127（找不到模块 / 命令）");
+  } else if (baseCode !== null && baseCode !== 0 && isDidNotRunShaped(baseText)) {
     sides.push("基线：一条用例都没收集到");
   }
   return sides.join("；");
@@ -463,7 +455,9 @@ export function didNotRunSide({ cur, curOutput, base, baseOutput }) {
  * @returns {"current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake"}
  */
 export function summarizeRows(rows) {
-  if (rows.length === 0) return "inconclusive";
+  if (rows.length === 0) {
+    return "inconclusive";
+  }
   /* 逐条全走同一份 `judge()`（ISSUE #2400）：0 码但「一条用例都没收集到」的行
    * 在 judge 里落 inconclusive，「段绿 + 逐条里混着一条没判的」在整批这里就折成
    * inconclusive（段码 2），不再只在 baseline-red 那一支才被读出来。 */
@@ -477,13 +471,21 @@ export function summarizeRows(rows) {
       baseOutput: r.baseOutput,
     }),
   );
-  if (verdicts.includes("inconclusive")) return "inconclusive";
-  if (verdicts.every((v) => v === "current-green")) return "current-green";
+  if (verdicts.includes("inconclusive")) {
+    return "inconclusive";
+  }
+  if (verdicts.every((v) => v === "current-green")) {
+    return "current-green";
+  }
   /* 混着「别线的红」与「你的红」时，**按更严重的那一档报**（`yours`）——
    * 别线的红可以就地收掉或登记，而你自己引入的那条必须改代码，两者都要人看见；
    * 报成 `baseline-red` 会让人以为整批都与自己无关。 */
-  if (verdicts.includes("yours")) return "yours";
-  if (verdicts.includes("load-flake")) return "load-flake";
+  if (verdicts.includes("yours")) {
+    return "yours";
+  }
+  if (verdicts.includes("load-flake")) {
+    return "load-flake";
+  }
   return "baseline-red";
 }
 
@@ -495,7 +497,9 @@ export function summarizeRows(rows) {
  * @returns {string[]}
  */
 export function nextStepsMany(summary, reds, { ref }) {
-  if (summary === "current-green") return nextSteps("current-green", { ref });
+  if (summary === "current-green") {
+    return nextSteps("current-green", { ref });
+  }
   const head = reds.map((r) => `${r.label}（${r.verdict}）`);
   return [`红的那几条：${head.join("、")}。`, ...nextSteps(summary, { ref })];
 }
@@ -609,7 +613,9 @@ function reportMany(result, { json, shape = "batch" }) {
   /* 基线那次输出的末尾只对**红的**那几条打（全绿时打出来只会把结论挤出屏幕，
    * 同 `tail()` 那条理由）。 */
   for (const r of reds) {
-    if (!r.baseOutputTail) continue;
+    if (!r.baseOutputTail) {
+      continue;
+    }
     process.stdout.write(`[base-check] 「${r.label}」基线输出末尾：\n`);
     process.stdout.write(
       `${r.baseOutputTail
@@ -688,9 +694,6 @@ function main(argv) {
 }
 
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
-if (
-  process.argv[1] &&
-  import.meta.filename === path.resolve(process.argv[1])
-) {
+if (process.argv[1] && import.meta.filename === path.resolve(process.argv[1])) {
   process.exit(main(process.argv.slice(2)));
 }

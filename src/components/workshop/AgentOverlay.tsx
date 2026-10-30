@@ -125,7 +125,9 @@ export function AgentOverlay({
     watch: `${messages.length}:${busy}`,
   });
 
-  if (!open || viewport === null) return null;
+  if (!open || viewport === null) {
+    return null;
+  }
 
   const visibleMessages =
     messages.length === 0
@@ -368,7 +370,9 @@ export function AgentFab({
     onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
   };
 }) {
-  if (offset === null) return null;
+  if (offset === null) {
+    return null;
+  }
   return (
     <Hint label="创作指挥 Agent（可拖动摆到任意位置）" side="left">
       <Button

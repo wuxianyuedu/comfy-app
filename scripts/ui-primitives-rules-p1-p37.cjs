@@ -14,7 +14,6 @@
 /* 引擎 helper 按本片实际用量解构（core no-unused-vars 守着）；跨片搬规则时同步增删。 */
 const { stripCommentsCached, isBusySlotName } = require("./ui-primitives-engine.cjs");
 
-
 module.exports = {
   P1: {
     label: "视图内手写 <button>（应使用 ~/components/ui/button 的 <Button>）",
@@ -27,8 +26,7 @@ module.exports = {
   P3: {
     label:
       "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading 的 PageLoading / Spinner、ui/skeleton / ui/progress）",
-    count: (t) =>
-      (stripCommentsCached(t).match(/\banimate-(?:spin|pulse)\b/g) || []).length,
+    count: (t) => (stripCommentsCached(t).match(/\banimate-(?:spin|pulse)\b/g) || []).length,
   },
   P9: {
     label:
@@ -60,23 +58,17 @@ module.exports = {
     },
   },
   P6: {
-    label:
-      "视图内自写 Blob 下载（应使用 ~/lib/browser-io 的 downloadText / downloadJson）",
-    count: (t) =>
-      (stripCommentsCached(t).match(/URL\.createObjectURL\s*\(/g) || []).length,
+    label: "视图内自写 Blob 下载（应使用 ~/lib/browser-io 的 downloadText / downloadJson）",
+    count: (t) => (stripCommentsCached(t).match(/URL\.createObjectURL\s*\(/g) || []).length,
   },
   P8: {
-    label:
-      "视图内自写「值不存在显示 —」的判据（应使用 ~/lib/display-value 的 displayValue）",
+    label: "视图内自写「值不存在显示 —」的判据（应使用 ~/lib/display-value 的 displayValue）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 数两种写法：① 字面量里直接写占位符；② 比较算子后面紧跟占位符。
        * 两条都要求占位符**字面出现**在代码里 —— 用了 `displayValue` 的地方
        * 自然不含它。 */
-      return (
-        (t2.match(/"—"|'—'/g) || []).length +
-        (t2.match(/\?\?\s*"[^"]*—/g) || []).length
-      );
+      return (t2.match(/"—"|'—'/g) || []).length + (t2.match(/\?\?\s*"[^"]*—/g) || []).length;
     },
   },
   P12: {
@@ -94,13 +86,14 @@ module.exports = {
       const t2 = stripCommentsCached(t);
       /* 「手搓 chip 浮层」= 本文件里既自建 `PopoverTrigger`、又自己画 `▾`
        * 展开标记。两个条件同时成立才计 —— 见文件头 P11 说明。 */
-      if (!/\bPopoverTrigger\b/.test(t2)) return 0;
+      if (!/\bPopoverTrigger\b/.test(t2)) {
+        return 0;
+      }
       return (t2.match(/▾/g) || []).length;
     },
   },
   P10: {
-    label:
-      "视图内自绘折叠/展开开关（应使用 ~/components/ui/disclosure 的 Disclosure）",
+    label: "视图内自绘折叠/展开开关（应使用 ~/components/ui/disclosure 的 Disclosure）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 两种形态：① 原生 `<details>`；② 自绘折叠开关 —— `role="button"` 配
@@ -155,13 +148,13 @@ module.exports = {
        * 是必须的：只数 `[k]: !x[k]` 会把「在跑标记」这类**不是折叠语义**的
        * 映射误判成展开集合（见文件头 P14）。 */
       const flips =
-        t2.match(
-          /[A-Za-z_$][\w$]*\s*,?\s*\[\s*[^\]]+\s*\]\s*:\s*!\s*[A-Za-z_$][\w$]*\s*\[/g,
-        ) || [];
+        t2.match(/[A-Za-z_$][\w$]*\s*,?\s*\[\s*[^\]]+\s*\]\s*:\s*!\s*[A-Za-z_$][\w$]*\s*\[/g) || [];
       let n = 0;
       for (const flip of flips) {
         const src = /!\s*([A-Za-z_$][\w$]*)\s*\[/.exec(flip)?.[1];
-        if (src && new RegExp("\\.\\.\\.\\s*" + src + "\\b").test(t2)) n++;
+        if (src && new RegExp("\\.\\.\\.\\s*" + src + "\\b").test(t2)) {
+          n++;
+        }
       }
       return n;
     },
@@ -173,10 +166,7 @@ module.exports = {
       const t2 = stripCommentsCached(t);
       /* 形态：`<flag> ? <X>.wide : <X>.base` —— 加宽档的三元写法。
        * 单看 `useState(false)` 会把所有弹窗开关算上（见文件头 P15）。 */
-      return (
-        t2.match(/\?\s*[A-Za-z_$][\w$]*\.wide\s*:\s*[A-Za-z_$][\w$]*\.base/g) ||
-        []
-      ).length;
+      return (t2.match(/\?\s*[A-Za-z_$][\w$]*\.wide\s*:\s*[A-Za-z_$][\w$]*\.base/g) || []).length;
     },
   },
   P16: {
@@ -190,8 +180,7 @@ module.exports = {
     },
   },
   P17: {
-    label:
-      "视图内自写键值行（应使用 ~/components/ui/key-value-rows 的 KeyValueRows）",
+    label: "视图内自写键值行（应使用 ~/components/ui/key-value-rows 的 KeyValueRows）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已经用了出口的文件**不可能**是「自己写一份」—— 它的标签 / 值节点
@@ -199,7 +188,9 @@ module.exports = {
        * （`WorkshopEncapsulationPanel` 的键节点里有个 muted 色的口 id span）。
        * 与 P13「同时数更差的那种写法」是同一枚硬币的两面：判据要覆盖所有
        * 不合规的写法，也要**一个都不误伤**合规的。 */
-      if (/from\s+["']~\/components\/ui\/key-value-rows["']/.test(t2)) return 0;
+      if (/from\s+["']~\/components\/ui\/key-value-rows["']/.test(t2)) {
+        return 0;
+      }
       /* 形态：一个 muted / faint 色的**标签叶子元素**，紧随其后出现值的
        * 渲染器（`displayValue(` / `JSON.stringify(` / `typeof x === "string"`）。
        *
@@ -218,8 +209,7 @@ module.exports = {
     },
   },
   P18: {
-    label:
-      "视图内裸写 <img> / <video>（应使用 ~/components/ui/media-thumbnail 的 MediaThumbnail）",
+    label: "视图内裸写 <img> / <video>（应使用 ~/components/ui/media-thumbnail 的 MediaThumbnail）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 形态：视图里自己出现 `<img` / `<video` 标签。收口后 `MediaThumbnail`
@@ -228,27 +218,20 @@ module.exports = {
        * ⚠️ 单看 `onError=` 会漏掉那 14 处**压根没有兜底**的 `<img>` —— 而
        * 「没有出现 onError」正是这条账里更差的那一半（与 P13 同源）。
        * `<video` 一并数：`MediaThumbnail` 管的就是「图片 / 视频二选一」。 */
-      return (
-        (t2.match(/<img\b/g) || []).length +
-        (t2.match(/<video\b/g) || []).length
-      );
+      return (t2.match(/<img\b/g) || []).length + (t2.match(/<video\b/g) || []).length;
     },
   },
   P19: {
-    label:
-      "视图内自写媒体拖拽源（应使用 ~/components/ui/media-drag-source 的 useMediaDragSource）",
+    label: "视图内自写媒体拖拽源（应使用 ~/components/ui/media-drag-source 的 useMediaDragSource）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 形态：手写本项目跨组件拖拽的自定义 MIME。
        * 单看 `draggable` 会把组件内拖拽（React Flow 节点、表单行）算进来。 */
-      return (
-        t2.match(/setData\(\s*["']application\/x-comfyapp-media["']/g) || []
-      ).length;
+      return (t2.match(/setData\(\s*["']application\/x-comfyapp-media["']/g) || []).length;
     },
   },
   P20: {
-    label:
-      "视图 / 逻辑层里自写全局快捷键监听（应使用 ~/components/ui/use-hotkey 的 useHotkey）",
+    label: "视图 / 逻辑层里自写全局快捷键监听（应使用 ~/components/ui/use-hotkey 的 useHotkey）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 形态：自己往 window / document 上挂 keydown。
@@ -258,8 +241,7 @@ module.exports = {
     },
   },
   P21: {
-    label:
-      "视图内自写滚动跟随到底（应使用 ~/components/ui/use-scroll-follow 的 useScrollFollow）",
+    label: "视图内自写滚动跟随到底（应使用 ~/components/ui/use-scroll-follow 的 useScrollFollow）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 形态：`el.scrollTop = el.scrollHeight` 这个**赋值**（两侧都在）。
@@ -283,8 +265,7 @@ module.exports = {
     },
   },
   P23: {
-    label:
-      "视图内自写「标签 + 控件」的表单行（应使用 ~/components/ui/form-field 的 FormField）",
+    label: "视图内自写「标签 + 控件」的表单行（应使用 ~/components/ui/form-field 的 FormField）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 形态：**块级标签行** —— `<label className="block …">`（标签是独立
@@ -309,18 +290,14 @@ module.exports = {
     },
   },
   P24: {
-    label:
-      "视图里自写读文件（应使用 ~/lib/file-io 的 readFileAsText / readFileAsDataUrl）",
+    label: "视图里自写读文件（应使用 ~/lib/file-io 的 readFileAsText / readFileAsDataUrl）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 形态：FileReader 的 `readAs*` 调用，或 `await <x>.text()`。
        * 单看 `FileReader` 会漏掉 `file.text()` 那一族（它们才是多数）；
        * `readAs*` 是 FileReader 的唯一签名，漏不掉「手搓 reader」那种。 */
       return (
-        (
-          t2.match(/readAs(?:Text|DataURL|ArrayBuffer|BinaryString)\s*\(/g) ||
-          []
-        ).length +
+        (t2.match(/readAs(?:Text|DataURL|ArrayBuffer|BinaryString)\s*\(/g) || []).length +
         /* **不带 `await` 的 `.text()` 也要数**：那是这条账里更差的一半 ——
          * `void file.text().then(...)` 没有 rejection 分支，读失败被整个吞掉
          *（`VideoQueueModal` / `WorkshopStageBody` 原先就是这两处）。
@@ -330,11 +307,7 @@ module.exports = {
          * `input.files[0]`）—— `.text()` 也是 `fetch` 读响应体的方法
          *（`res.text()`），那是网络读取，不是「读用户选的文件」。
          * 用名字前缀而不是白名单：调用处给 File 变量的命名几乎都带 `file`。 */
-        (
-          t2.match(
-            /\b(?:[A-Za-z_$]*[Ff]iles?(?:\[\d+\])?(?:\.\w+)?)\.text\s*\(\s*\)/g,
-          ) || []
-        ).length
+        (t2.match(/\b(?:[A-Za-z_$]*[Ff]iles?(?:\[\d+\])?(?:\.\w+)?)\.text\s*\(\s*\)/g) || []).length
       );
     },
   },
@@ -347,9 +320,7 @@ module.exports = {
        * 不数 `typeof localStorage` —— 那只是它的一个前置判据，
        * 而这条账里更差的一半正是「压根没判」（与 P13 / P18 同源）。 */
       return (
-        t2.match(
-          /(?:window\.)?localStorage\.(?:getItem|setItem|removeItem|clear)\s*\(/g,
-        ) || []
+        t2.match(/(?:window\.)?localStorage\.(?:getItem|setItem|removeItem|clear)\s*\(/g) || []
       ).length;
     },
   },
@@ -373,18 +344,20 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       const blocks =
-        t2.match(
-          /try\s*\{[\s\S]{0,3000}?\}\s*catch\s*(?:\([^)]*\))?\s*\{[\s\S]{0,600}?\n\s*\}/g,
-        ) || [];
+        t2.match(/try\s*\{[\s\S]{0,3000}?\}\s*catch\s*(?:\([^)]*\))?\s*\{[\s\S]{0,600}?\n\s*\}/g) ||
+        [];
       return blocks.filter((b) => {
-        if (!/\bawait\b/.test(b)) return false;
+        if (!/\bawait\b/.test(b)) {
+          return false;
+        }
         const catchBody = b.slice(b.indexOf("catch"));
         if (
           !/\b(?:toast\.error|setError|setErr|setMsg|showFlash|onFailed|setImportErr|setActionError)\s*\(/.test(
             catchBody,
           )
-        )
+        ) {
           return false;
+        }
         return /\berrorMessage\s*\(/.test(catchBody);
       }).length;
     },
@@ -442,8 +415,7 @@ module.exports = {
    * 与 P22「不数对内路由跳转」、P28「只数属性名不数函数」是同一条口径：
    * 判据锚在唯一的签名上，误伤一个合规者就等于逼人改坏代码。 */
   P29: {
-    label:
-      "手拼查询串（应使用 ~/lib/query-string 的 buildQueryString / withQuery）",
+    label: "手拼查询串（应使用 ~/lib/query-string 的 buildQueryString / withQuery）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       const re = /(?:^|[\w./\-'"`(])[?&][A-Za-z][\w.-]*=(?:\$\{|["'`])/g;
@@ -467,11 +439,15 @@ module.exports = {
        * 它们要的是 `<Button>`（P1），不是「输入框回车提交」。 */
       const blocks = t2.match(/onKeyDown=\{[\s\S]{0,600}?\}\s*\}/g) || [];
       return blocks.filter((b) => {
-        if (!/\.key\s*===\s*"Enter"/.test(b)) return false;
+        if (!/\.key\s*===\s*"Enter"/.test(b)) {
+          return false;
+        }
         /* 同一段里不得出现 Space 键位判据 —— 那是「复刻按钮默认行为」
          *（`role="tab"` / `role="button"` 上补 Enter/Space），要的是
          * `<Button>`（P1 的账），不是「输入框回车提交」。 */
-        if (/\.key\s*===\s*" "/.test(b)) return false;
+        if (/\.key\s*===\s*" "/.test(b)) {
+          return false;
+        }
         return true;
       }).length;
     },
@@ -486,9 +462,8 @@ module.exports = {
        * 同类元素上的 `className="hidden"`，以及同文件里再写一遍
        * `className="hidden"` 的另一处；用「同一元素标签内出现两者」判定。 */
       const tags = t2.match(/<input\b[^>]*>/g) || [];
-      return tags.filter(
-        (tag) => /type\s*=\s*["']file["']/.test(tag) && /\bhidden\b/.test(tag),
-      ).length;
+      return tags.filter((tag) => /type\s*=\s*["']file["']/.test(tag) && /\bhidden\b/.test(tag))
+        .length;
     },
   },
 
@@ -529,12 +504,12 @@ module.exports = {
         t2.match(
           /\bconst\s*\[\s*([A-Za-z_$][\w$]*[Ee]rror)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s*=\s*(?:React\.)?useState(?:<[^>]*>)?\s*\(/g,
         ) || [];
-      if (slots.length === 0) return 0;
+      if (slots.length === 0) {
+        return 0;
+      }
       let hits = 0;
       for (const slot of slots) {
-        const m = slot.match(
-          /\[\s*([A-Za-z_$][\w$]*[Ee]rror)\s*,\s*([A-Za-z_$][\w$]*)\s*\]/,
-        );
+        const m = slot.match(/\[\s*([A-Za-z_$][\w$]*[Ee]rror)\s*,\s*([A-Za-z_$][\w$]*)\s*\]/);
         const setter = m[2];
         /* ② **逐条写入点**：调用这个 setter 的函数**有除错误对象之外的实参**
          *    （`polishOne(shot)` / `handleAICard(character)`）—— 说明这块错误位
@@ -558,18 +533,26 @@ module.exports = {
         let cm;
         while ((cm = callRe.exec(t2)) !== null) {
           const before = t2.slice(0, cm.index);
-          const fn = before.match(
-            /(?:async\s+)?function\s+\w+\s*\(([^)]*)\)[^{]*\{[^{}]*$/,
-          );
-          if (!fn) continue;
+          const fn = before.match(/(?:async\s+)?function\s+\w+\s*\(([^)]*)\)[^{]*\{[^{}]*$/);
+          if (!fn) {
+            continue;
+          }
           const params = fn[1].trim();
-          if (!params) continue;
+          if (!params) {
+            continue;
+          }
           /* 唯一实参是错误对象 / 事件对象 → 那是「一个失败回调」，不是条目。 */
-          if (/^(?:event|e|ev|err|error|reason)[\s:]/i.test(params)) continue;
-          if (/^(?:event|e|ev|err|error|reason)$/i.test(params)) continue;
+          if (/^(?:event|e|ev|err|error|reason)[\s:]/i.test(params)) {
+            continue;
+          }
+          if (/^(?:event|e|ev|err|error|reason)$/i.test(params)) {
+            continue;
+          }
           perItem += 1;
         }
-        if (perItem > 0) hits += 1;
+        if (perItem > 0) {
+          hits += 1;
+        }
       }
       return hits;
     },
@@ -593,21 +576,23 @@ module.exports = {
    * 出口：`~/lib/stale-run` 的 `beginStaleRun`。
    */
   P31: {
-    label:
-      "自写「这一轮已作废」的守卫样板（应使用 ~/lib/stale-run 的 beginStaleRun）",
+    label: "自写「这一轮已作废」的守卫样板（应使用 ~/lib/stale-run 的 beginStaleRun）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* `let cancelled = false;` 这类声明：名字带作废语义。 */
-      const decls =
-        t2.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=\s*false\s*;/g) || [];
+      const decls = t2.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=\s*false\s*;/g) || [];
       let hits = 0;
       for (const decl of decls) {
         const name = decl.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=/)[1];
-        if (!/cancel|abort|stale|alive|disposed/i.test(name)) continue;
+        if (!/cancel|abort|stale|alive|disposed/i.test(name)) {
+          continue;
+        }
         /* 读法：`if (x)` / `if (!x)` —— 只要有读，且有置位。 */
         const readRe = new RegExp(`if\\s*\\(\\s*!?\\s*(?:this\\.)?${name}\\b`);
         const setRe = new RegExp(`\\b${name}\\s*=\\s*true\\s*;`);
-        if (readRe.test(t2) && setRe.test(t2)) hits += 1;
+        if (readRe.test(t2) && setRe.test(t2)) {
+          hits += 1;
+        }
       }
       return hits;
     },
@@ -643,9 +628,7 @@ module.exports = {
        * 那是往缓存里写一条状态记录，不是 HTTP 响应）。它同形但不同源，
        * 与 P22 / P31 是同一条口径：判据锚在唯一的签名上。 */
       const responseBodies =
-        t2.match(
-          /NextResponse\.json\([\s\S]{0,400}?\)|JSON\.stringify\([^)]{0,200}\)/g,
-        ) || [];
+        t2.match(/NextResponse\.json\([\s\S]{0,400}?\)|JSON\.stringify\([^)]{0,200}\)/g) || [];
       const write = responseBodies.filter((b) =>
         /\berror:\s*(?:errorMessage|apiErrorDetail)\s*\(/.test(b),
       ).length;
@@ -696,12 +679,15 @@ module.exports = {
        *    —— 都不是「记录 id」，它们不参与任何去重 / 排序 / 引用判据）。
        *    收口前那 6 处**每一处**都另有这三类线索之一，所以判据收窄后
        *    仍全部命中（改完为 0）。 */
-      const ID_HINT_RE =
-        /(?:\b[A-Za-z_$]*[Ii]d\b|Math\.random\(\)|\.toString\(36\)|_\$?\{)/;
+      const ID_HINT_RE = /(?:\b[A-Za-z_$]*[Ii]d\b|Math\.random\(\)|\.toString\(36\)|_\$?\{)/;
       const templates = t2.match(/`[^`]*`/g) || [];
       for (const tpl of templates) {
-        if (!/\bDate\.now\(\)/.test(tpl)) continue;
-        if (ID_HINT_RE.test(tpl)) hits += 1;
+        if (!/\bDate\.now\(\)/.test(tpl)) {
+          continue;
+        }
+        if (ID_HINT_RE.test(tpl)) {
+          hits += 1;
+        }
       }
       /* ② 字符串拼接里的同类写法：`"x_" + Date.now()` / `Date.now() + "_"`。
        *    ⚠️ 判据要求 `Date.now()` 的**另一侧是一个字符串字面量** ——
@@ -735,7 +721,9 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       const hasAdviceText = /建议[:：]/.test(t2);
-      if (!hasAdviceText) return 0;
+      if (!hasAdviceText) {
+        return 0;
+      }
       const faultRe =
         /out of memory|OOM|cuda out|tried to allocate|checkpoint|ckpt|\.safetensors|econnrefused|econnreset|fetch failed|server_busy|prompthelperror|not installed/i;
       const literalRe = /\/(?:[^/\\\n]|\\.)*\/[gimsuy]*/g;
@@ -772,7 +760,9 @@ module.exports = {
       let m;
       while ((m = marker.exec(t2)) !== null) {
         const window = t2.slice(Math.max(0, m.index - 300), m.index + 300);
-        if (/\bposition\s*:/.test(window)) hits += 1;
+        if (/\bposition\s*:/.test(window)) {
+          hits += 1;
+        }
       }
       return hits;
     },
@@ -806,10 +796,11 @@ module.exports = {
       const railRe =
         /["'`][^"'`\n]*\b(?:ml|pl)-(?:2|3|4|5|6|8)\b[^"'`\n]*\bborder-l-\d\b[^"'`\n]*["'`]/g;
       const rails = t2.match(railRe) || [];
-      if (rails.length === 0) return 0;
+      if (rails.length === 0) {
+        return 0;
+      }
       /* 展开判据：`isExpanded(` 这类读取，或 `<flag> && (` 条件渲染。 */
-      const expandRe =
-        /isExpanded\s*\(|\b(?:isOpen|open|expanded|expand\w*)\s*&&/;
+      const expandRe = /isExpanded\s*\(|\b(?:isOpen|open|expanded|expand\w*)\s*&&/;
       return expandRe.test(t2) ? rails.length : 0;
     },
   },
@@ -834,18 +825,24 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件直接跳过 —— 它的忙位由 `useItemAction` 给。 */
-      if (/useItemAction/.test(t2)) return 0;
+      if (/useItemAction/.test(t2)) {
+        return 0;
+      }
       const slotRe =
         /(?:const|let)\s*\[\s*(\w+)\s*,[^\]]*\]\s*=\s*(?:React\.)?useState<\s*string\s*\|\s*null\s*>\(\s*null\s*\)/g;
       let hits = 0;
       let m;
       while ((m = slotRe.exec(t2)) !== null) {
-        if (isBusySlotName(m[1])) hits += 1;
+        if (isBusySlotName(m[1])) {
+          hits += 1;
+        }
       }
       /* 视图侧的比较形态：`<busy 名字> === <x>.id`。 */
       const cmpRe = /\b(\w*[Bb]usy\w*|\w*[Rr]etry\w*Id\w*)\s*===?\s*\w+\.id\b/g;
       while ((m = cmpRe.exec(t2)) !== null) {
-        if (isBusySlotName(m[1])) hits += 1;
+        if (isBusySlotName(m[1])) {
+          hits += 1;
+        }
       }
       return hits;
     },

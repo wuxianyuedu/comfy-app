@@ -43,7 +43,9 @@ export function useUpdateCheck(opts: UpdateCheckHookOptions = {}): {
     return runChecking(async () => {
       const payload = await fetchUpdateCheck();
       // 服务端尚未建立基线（首轮）或请求失败：不改变脏态、不提示。
-      if (!payload.ok || !payload.armed) return false;
+      if (!payload.ok || !payload.armed) {
+        return false;
+      }
       const dirty = payload.dirty;
       const wasDirty = wasDirtyRef.current;
       wasDirtyRef.current = dirty;

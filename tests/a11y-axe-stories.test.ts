@@ -216,8 +216,12 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
       const meta: MetaShape = mod.default ?? {};
       const Comp = meta.component;
       for (const [storyName, raw] of Object.entries(mod)) {
-        if (storyName === "default") continue;
-        if (!raw || typeof raw !== "object") continue;
+        if (storyName === "default") {
+          continue;
+        }
+        if (!raw || typeof raw !== "object") {
+          continue;
+        }
         const story = /* SAFETY: 类型断言已复核 */ raw as StoryShape;
         const key = `${component} > ${storyName}`;
         /* `argTypes[x].defaultValue` 在 Storybook 里由 argsEnhancers 折进 args。

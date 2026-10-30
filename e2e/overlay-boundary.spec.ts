@@ -57,17 +57,15 @@ async function openInShell(page: Page) {
 async function hoverHint(page: Page, trigger: Locator) {
   await page.mouse.move(400, 700);
   const box = await trigger.boundingBox();
-  if (!box) throw new Error("量不到该入口的位置");
+  if (!box) {
+    throw new Error("量不到该入口的位置");
+  }
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await expect(
-    page.locator('[data-slot="tooltip-content"][data-open]'),
-  ).toBeVisible();
+  await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toBeVisible();
 }
 
 test.describe("锚定浮层让出窗口标题行 @critical", () => {
-  test("TopBar 每个入口的气泡都整体落在标题行之下，且没有被盖住", async ({
-    page,
-  }) => {
+  test("TopBar 每个入口的气泡都整体落在标题行之下，且没有被盖住", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openInShell(page);
 
@@ -81,23 +79,19 @@ test.describe("锚定浮层让出窗口标题行 @critical", () => {
     for (let i = 0; i < count; i += 1) {
       const trigger = triggers.nth(i);
       /* 标签逐轮重新读一次，只用于失败话术；判据本身不依赖它。 */
-      const label =
-        (await trigger.getAttribute("aria-label")) ?? `第 ${i + 1} 个入口`;
+      const label = (await trigger.getAttribute("aria-label")) ?? `第 ${i + 1} 个入口`;
       await hoverHint(page, trigger);
       const probe = await page.evaluate(() => {
         /* 只认当前打开的那一枚（`[data-open]`）——上一枚退场时仍挂在 DOM 里。 */
-        const popup = document.querySelector(
-          '[data-slot="tooltip-content"][data-open]',
-        );
-        if (!popup) return null;
+        const popup = document.querySelector('[data-slot="tooltip-content"][data-open]');
+        if (!popup) {
+          return null;
+        }
         const r = popup.getBoundingClientRect();
         const titleBar = document.querySelector('[data-slot="title-bar"]');
         const t = titleBar!.getBoundingClientRect();
         /* 气泡几何中心处的最顶层元素：被标题行盖住时会命中标题行。 */
-        const hit = document.elementFromPoint(
-          (r.left + r.right) / 2,
-          (r.top + r.bottom) / 2,
-        );
+        const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
         return {
           top: r.top,
           bottom: r.bottom,
@@ -108,46 +102,30 @@ test.describe("锚定浮层让出窗口标题行 @critical", () => {
         };
       });
       expect(probe, `「${label}」的提示气泡没出来`).not.toBeNull();
-      expect(
-        probe!.top,
-        `「${label}」的气泡伸进了标题行`,
-      ).toBeGreaterThanOrEqual(probe!.titleBarBottom);
-      expect(probe!.hitInsidePopup, `「${label}」的气泡被标题行盖住了`).toBe(
-        true,
+      expect(probe!.top, `「${label}」的气泡伸进了标题行`).toBeGreaterThanOrEqual(
+        probe!.titleBarBottom,
       );
+      expect(probe!.hitInsidePopup, `「${label}」的气泡被标题行盖住了`).toBe(true);
       expect(probe!.hitIsTitleBar).toBe(false);
       /* 文案也得在 —— 只剩一条白边正是本 ISSUE 的现场。 */
       expect(probe!.text.trim().length).toBeGreaterThan(0);
     }
   });
 
-  test("窄窗（左轨自动收起）下同样让位 —— 长文案也不往标题行里摆", async ({
-    page,
-  }) => {
+  test("窄窗（左轨自动收起）下同样让位 —— 长文案也不往标题行里摆", async ({ page }) => {
     /* 窄窗会走 `collapsedByAuto` 那条**长文案**分支（「窗口窄于 Npx 时先让位…」），
      * 气泡高度翻倍，正是用户截图里那一条。 */
     await page.setViewportSize({ width: 1100, height: 800 });
     await openInShell(page);
-    await expect(page.locator('[data-slot="sidebar"]')).toHaveAttribute(
-      "data-state",
-      "collapsed",
-    );
+    await expect(page.locator('[data-slot="sidebar"]')).toHaveAttribute("data-state", "collapsed");
 
-    await hoverHint(
-      page,
-      page.locator('header button[aria-label="切换深浅色"]').first(),
-    );
+    await hoverHint(page, page.locator('header button[aria-label="切换深浅色"]').first());
     const probe = await page.evaluate(() => {
-      const popup = document.querySelector(
-        '[data-slot="tooltip-content"][data-open]',
-      );
+      const popup = document.querySelector('[data-slot="tooltip-content"][data-open]');
       const titleBar = document.querySelector('[data-slot="title-bar"]')!;
       const r = popup!.getBoundingClientRect();
       const t = titleBar.getBoundingClientRect();
-      const hit = document.elementFromPoint(
-        (r.left + r.right) / 2,
-        (r.top + r.bottom) / 2,
-      );
+      const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
       return {
         top: r.top,
         titleBarBottom: t.bottom,

@@ -68,14 +68,18 @@ export function stripYamlComments(text) {
       for (let i = 0; i < line.length; i += 1) {
         const ch = line[i];
         if (quote !== null) {
-          if (ch === quote) quote = null;
+          if (ch === quote) {
+            quote = null;
+          }
           continue;
         }
         if (ch === '"' || ch === "'") {
           quote = ch;
           continue;
         }
-        if (ch === "#") return line.slice(0, i);
+        if (ch === "#") {
+          return line.slice(0, i);
+        }
       }
       return line;
     });
@@ -107,7 +111,9 @@ export function runnerShape(text) {
     /* `- runner:` 也算（列表项里的键）；只认键本身，不认 `something-runner:`。 */
     return body === "runner:" || body === "- runner:";
   });
-  if (start < 0) return { namespace: null, tags: [], verdict: "missing" };
+  if (start < 0) {
+    return { namespace: null, tags: [], verdict: "missing" };
+  }
   const first = lines[start] ?? "";
   const runnerIndent = first.length - first.trimStart().length;
   let namespace = null;
@@ -117,10 +123,14 @@ export function runnerShape(text) {
   for (let i = start + 1; i < lines.length; i += 1) {
     const raw = lines[i] ?? "";
     const body = raw.trim();
-    if (body === "") continue;
+    if (body === "") {
+      continue;
+    }
     const indent = raw.length - raw.trimStart().length;
     /* 回到 runner 那一层或更浅 ⇒ 这一块结束了。 */
-    if (indent <= runnerIndent) break;
+    if (indent <= runnerIndent) {
+      break;
+    }
     if (body.startsWith("namespace:")) {
       namespace = body.slice("namespace:".length).trim();
       mode = null;
@@ -185,12 +195,13 @@ export function containerStages(text) {
   let current = null;
   let volumesMode = false;
   const flush = () => {
-    if (current !== null && current.image !== "")
+    if (current !== null && current.image !== "") {
       out.push({
         name: current.name,
         image: current.image,
         volumes: current.volumes,
       });
+    }
     current = null;
     volumesMode = false;
   };
@@ -223,7 +234,9 @@ export function containerStages(text) {
           : null;
       continue;
     }
-    if (current === null || itemIndent === null) continue;
+    if (current === null || itemIndent === null) {
+      continue;
+    }
     /* 项**自己的**键：比 `- name:` 深一层。更深的是 `env:` / `volumes:` 的**条目**，
      * 那两处出现同名键不算（`env:` 里的 `image:` 是另一个东西）。 */
     if (indent === itemIndent + 2) {
@@ -264,7 +277,9 @@ export function parseVolume(spec) {
     .trim()
     .replace(/^["']|["']$/g, "");
   const at = text.indexOf(":");
-  if (at <= 0 || at === text.length - 1) return null;
+  if (at <= 0 || at === text.length - 1) {
+    return null;
+  }
   return { source: text.slice(0, at), target: text.slice(at + 1) };
 }
 
@@ -295,17 +310,22 @@ export function stageLevelImages(text) {
     if (body.startsWith("- name:")) {
       const item = { name: body.slice("- name:".length).trim(), indent };
       /* 比当前 stage 更深的是子 Job —— stage 那一层（同一个缩进）不换主。 */
-      if (stage === null || indent <= stage.indent) stage = item;
+      if (stage === null || indent <= stage.indent) {
+        stage = item;
+      }
       continue;
     }
-    if (stage === null || !body.startsWith("image:")) continue;
+    if (stage === null || !body.startsWith("image:")) {
+      continue;
+    }
     const value = body
       .slice("image:".length)
       .trim()
       .replace(/^["']|["']$/g, "");
     /* 只认 stage 项自己那一层（更深的是 Job 的 `image:`，那是**对**的那一层）。 */
-    if (value !== "" && indent === stage.indent + 2)
+    if (value !== "" && indent === stage.indent + 2) {
       out.push({ name: stage.name, image: value });
+    }
   }
   return out;
 }
@@ -326,16 +346,9 @@ export function plan(text) {
   const runner = runnerShape(text);
   const containers = containerStages(text);
   const missing = containers
-    .filter(
-      (s) => !s.volumes.some((v) => parseVolume(v)?.target === BROWSERS_VOLUME),
-    )
+    .filter((s) => !s.volumes.some((v) => parseVolume(v)?.target === BROWSERS_VOLUME))
     .map((s) => s.name);
-  const bridge =
-    containers.length === 0
-      ? "none"
-      : missing.length === 0
-        ? "complete"
-        : "broken";
+  const bridge = containers.length === 0 ? "none" : missing.length === 0 ? "complete" : "broken";
   return {
     runner,
     hosts: [],
@@ -390,5 +403,7 @@ export function describePlan(text) {
  * 判据在 `tests/ci-container-plan.test.ts`。 */
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const text = readFileSync(path.join(ROOT, CNB_CONFIG), "utf8");
-  for (const line of describePlan(text)) console.log(line);
+  for (const line of describePlan(text)) {
+    console.log(line);
+  }
 }

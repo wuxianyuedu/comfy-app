@@ -78,7 +78,9 @@ export function readCustomNodesManifest(root: string = process.cwd()): CustomNod
     };
   } catch (error) {
     const code = /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") return { kind: "missing" };
+    if (code === "ENOENT") {
+      return { kind: "missing" };
+    }
     return { kind: "unreadable", detail: `${code ?? "unknown"}` };
   }
 }

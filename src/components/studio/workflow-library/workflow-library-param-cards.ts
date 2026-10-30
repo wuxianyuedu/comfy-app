@@ -118,7 +118,9 @@ export function deriveLibraryParamCards(args: {
     const target = resolved[entry.id];
     /* 未连线 / 作者显式断开（`null`）→ 不画线：圆点悬空本身就在说「没连上」，
      *  画一条通向某处的线反而误导。 */
-    if (!target) continue;
+    if (!target) {
+      continue;
+    }
     /* 能走到这里说明 `resolveMapping` 给了落点，而落点**只可能来自作者画的线**
      *  —— 所以这条线一定是「作者连的」。用 `resolved` 而不是直接查键：解析时已把
      *  作者画的线归到契约 id 上（含 `<节点 id>|<分类>` 历史键），按裸键查会把作者
@@ -137,7 +139,9 @@ export function deriveLibraryParamCards(args: {
         handleId: entry.id,
         grouped: groupedKeys?.has(wired.ioKey) ?? false,
       });
-      if (ownersByPin[wired.ioKey]) continue;
+      if (ownersByPin[wired.ioKey]) {
+        continue;
+      }
       ownersByPin[wired.ioKey] = entry.label;
     }
   }
@@ -207,13 +211,17 @@ export function deriveLibraryOutputCards(args: {
   }
   for (const output of outputs) {
     const target = resolved[output.ioKey];
-    if (!target) continue;
+    if (!target) {
+      continue;
+    }
     /* 未连过（作者没改过这个输出口的取值行）→ **不画线**。
      *
      * 用户口径：这是**编辑对外参数**的界面，未连过就不要连 —— 默认取值来源仍算在
      * `resolved` 里（卡片与运行期读它），但画布上不再画一条虚线占位。库里因此
      * 只剩作者真连过的实线（见 `LIBRARY_EDGE_STYLE`）。 */
-    if (manualOutputSource(paramMap, output.ioKey, mode) === undefined) continue;
+    if (manualOutputSource(paramMap, output.ioKey, mode) === undefined) {
+      continue;
+    }
     wires.push({
       entryId: output.ioKey,
       targetIoKey: target,

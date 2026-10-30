@@ -59,10 +59,18 @@ export function nextSeq(): number {
 }
 
 function serializeOne(a: unknown): string {
-  if (typeof a === "string") return a;
-  if (typeof a === "number" || typeof a === "boolean") return String(a);
-  if (a === undefined) return "undefined";
-  if (a === null) return "null";
+  if (typeof a === "string") {
+    return a;
+  }
+  if (typeof a === "number" || typeof a === "boolean") {
+    return String(a);
+  }
+  if (a === undefined) {
+    return "undefined";
+  }
+  if (a === null) {
+    return "null";
+  }
   if (a instanceof Error) {
     return a.stack ? `${a.name}: ${a.message}\n${a.stack}` : `${a.name}: ${a.message}`;
   }
@@ -183,7 +191,9 @@ export function formatConsoleArgs(args: Array<unknown>): string {
     }
     const value = rest[argIndex];
     argIndex += 1;
-    if (kind !== "drop") out += renderArg(kind, value);
+    if (kind !== "drop") {
+      out += renderArg(kind, value);
+    }
     i += 1;
   }
   for (; argIndex < rest.length; argIndex += 1) {
@@ -214,13 +224,19 @@ export { captureLocation, locateInStack } from "./log-callsite";
  * "Console Error" 形式从 LogProvider 转发帧抛到面板，同样属于无害框架噪音。
  */
 export function isReactQueryLog(args: Array<unknown>): boolean {
-  if (args.length === 0) return false;
+  if (args.length === 0) {
+    return false;
+  }
   // 标准形态：tRPC loggerLink 的格式串 + 逐帧样式参数，args[0] 即为追踪签名。
   // 真实追踪至少两个参数（格式串 + 样式），单参数的不是追踪，避免误吞业务文案。
   if (args.length >= 2) {
     const first = args[0];
-    if (typeof first === "string" && /^\s*%c\s*(?:<<|>>)\s*(?:query|mutation)\s*#\d+/i.test(first))
+    if (
+      typeof first === "string" &&
+      /^\s*%c\s*(?:<<|>>)\s*(?:query|mutation)\s*#\d+/i.test(first)
+    ) {
       return true;
+    }
   }
   // 塌缩/重包装形态：loggerLink 的 %c 样式与逐帧参数被 React devtools 吞并，
   // 合并成带 "[[" 前缀的单串（形如 `[[ << mutation #43 ]workflow.update {}`），
@@ -235,7 +251,9 @@ export function isReactQueryLog(args: Array<unknown>): boolean {
  * 会自动降级到 postMessage，并打印一条 warn。这是正常行为，不影响功能。
  */
 export function isNoisyFrameworkLog(args: Array<unknown>): boolean {
-  if (args.length === 0) return false;
+  if (args.length === 0) {
+    return false;
+  }
   const text = serialize(args);
   return /IPC custom protocol failed|Tauri will now use the postMessage interface/i.test(text);
 }
@@ -248,7 +266,9 @@ export function isNoisyFrameworkLog(args: Array<unknown>): boolean {
  * 与其它框架噪音一致：保留在浏览器 console（降为 debug），只不入面板。
  */
 export function isNextDevNoise(args: Array<unknown>): boolean {
-  if (args.length === 0) return false;
+  if (args.length === 0) {
+    return false;
+  }
   const text = serialize(args);
   return /\[Fast\s*Refresh\]\s*(?:done|finished)?.*\d+\s*ms/i.test(text);
 }
@@ -290,7 +310,9 @@ const APP_RUNTIME_LOG_RE =
  * 带「失败」字样或级别本身是 warn/error，不会命中这里的"常规 info 计时"判定。
  */
 export function isRoutineRpcTimingLog(args: Array<unknown>): boolean {
-  if (args.length === 0) return false;
+  if (args.length === 0) {
+    return false;
+  }
   const text = serialize(args);
   const body = text
     .trim()
@@ -305,7 +327,9 @@ export function isRoutineRpcTimingLine(line: string): boolean {
   const text = m ? (m[10] ?? "") : line;
   const level = m ? upperToken(m[8]) : "";
   // 失败 / 慢查询（error/warn 级别）永远保留
-  if (level === "WARN" || level === "ERROR") return false;
+  if (level === "WARN" || level === "ERROR") {
+    return false;
+  }
   // 行格式两种来源：app-runtime 行的 text 已被 APP_RUNTIME_LOG_RE 拆掉 [ns]
   // 前缀；launcher 转录整行原文可能带 [rpc] / rpc] 前缀。先剥前缀再测正文。
   const body = text
@@ -342,9 +366,13 @@ const GET_REQUEST_TARGET = /^\s*GET\s+(\S+)/;
 export function isPanelSelfPollingLine(line: string): boolean {
   const match = GET_REQUEST_TARGET.exec(line);
   const target = match?.[1];
-  if (!target) return false;
+  if (!target) {
+    return false;
+  }
   return PANEL_SELF_POLL_ENDPOINTS.some((endpoint) => {
-    if (!target.startsWith(endpoint)) return false;
+    if (!target.startsWith(endpoint)) {
+      return false;
+    }
     /* 端点后必须是「查询串 / 到此为止」之一：`/api/logs/currentX` 不是这条
      * 端点，不能顺手被滤掉。 */
     const rest = target.slice(endpoint.length);
@@ -398,20 +426,28 @@ export function parseFileLogs(
    * 「一个 json 被拆成十几条」（ISSUE #609）。 */
   for (const record of splitLogRecords(stripSgr(text), isLogLine)) {
     const head = record.head;
-    if (!head.trim()) continue;
+    if (!head.trim()) {
+      continue;
+    }
     /* ANSI 已在 splitLogRecords 之前剥掉，这里只处理「有无续行」。 */
     const withRest = (msg: string) => (record.rest ? `${msg}\n${record.rest}` : msg);
     // 常规 tRPC/RPC 调用计时行（如 `[rpc] xxx 155ms {"type":"query"}`）不进面板：
     // 正常调用高频产生会刷屏（#294）；失败/慢查询（error/warn 级别）仍保留。
-    if (isRoutineRpcTimingLine(head)) continue;
+    if (isRoutineRpcTimingLine(head)) {
+      continue;
+    }
     // 面板自轮询的访问日志行（`GET /api/logs/current?…` 等）不进面板：
     // 它们是面板每 2s 轮询自己的回声，无限累积且成批挤在同一毫秒（见函数说明）。
-    if (isPanelSelfPollingLine(head)) continue;
+    if (isPanelSelfPollingLine(head)) {
+      continue;
+    }
     const m = LOG_LINE_RE.exec(head);
     if (m) {
       const [, hh, mm, ss, lv, msg] = m;
       // 带时间戳前缀的自轮询行（如 dev-launcher 转录的 dev 输出）：拆出正文后再判一次
-      if (isPanelSelfPollingLine(msg ?? "")) continue;
+      if (isPanelSelfPollingLine(msg ?? "")) {
+        continue;
+      }
       const d = new Date(today);
       d.setHours(Number(hh ?? "0"), Number(mm ?? "0"), Number(ss ?? "0"), 0);
       push({
@@ -511,7 +547,9 @@ export function dedupeRepeats(
   while (i < entries.length) {
     /* `at()` 越界即 `undefined`：索引取值与循环判据合成一处，不必再补 `!`。 */
     const first = entries.at(i);
-    if (first === undefined) break;
+    if (first === undefined) {
+      break;
+    }
     let run = 1;
     while (i + run < entries.length && foldKey(entries.at(i + run) ?? first) === foldKey(first)) {
       run += 1;
@@ -523,7 +561,9 @@ export function dedupeRepeats(
     }
     for (let k = 0; k < limit; k += 1) {
       const repeated = entries.at(i + k);
-      if (repeated !== undefined) out.push(repeated);
+      if (repeated !== undefined) {
+        out.push(repeated);
+      }
     }
     out.push({
       ...first,
@@ -542,7 +582,9 @@ function zeroCounts(): LogLevelCounts {
 export function computeCounts(logs: Array<LogEntry>, search = ""): LogLevelCounts {
   const base = zeroCounts();
   for (const entry of logs) {
-    if (!matchesSearch(entry, search)) continue;
+    if (!matchesSearch(entry, search)) {
+      continue;
+    }
     base.all++;
     base[entry.level]++;
   }
@@ -571,12 +613,16 @@ export function dedupeByIdentity(
   logs: Array<LogEntry>,
   origin: LogOriginFilter = "all",
 ): Array<LogEntry> {
-  if (origin !== "all") return logs;
+  if (origin !== "all") {
+    return logs;
+  }
   const seen = new Set<string>();
   const out: Array<LogEntry> = [];
   for (const entry of logs) {
     const key = logEntryKey(entry);
-    if (seen.has(key)) continue;
+    if (seen.has(key)) {
+      continue;
+    }
     seen.add(key);
     out.push(entry);
   }
@@ -613,14 +659,18 @@ export function computeOriginCounts(logs: Array<LogEntry>, search = ""): LogOrig
   };
 
   for (const entry of logs) {
-    if (!matchesSearch(entry, search)) continue;
+    if (!matchesSearch(entry, search)) {
+      continue;
+    }
     /* 逐来源独立计数（ISSUE #360），且**每个来源都必须有一个桶**：
      * 无 origin 的行（console 拦截 / Tauri 事件 / 全局错误）归 `console`，
      * 有 origin 的归它自己。于是「每个来源的各级别之和 = 该来源的总数」在
      * 任何情况下都成立，不会再出现「只在全部页签才显示、哪个分类都进不去」
      * 的行（ISSUE #262 六审）。 */
     const bucket = table[bucketOf(entry)];
-    if (!bucket) continue;
+    if (!bucket) {
+      continue;
+    }
     bucket.all += 1;
     bucket[entry.level] += 1;
   }
@@ -636,7 +686,9 @@ export function computeOriginCounts(logs: Array<LogEntry>, search = ""): LogOrig
    * 成立——e2e 那条守恒判据因此在整批跑时红（实测 5000 vs 3335）。
    * 现在两个口径各自成立、各自可断言：逐来源**内部**守恒，`all` 等于身份数。 */
   for (const entry of dedupeByIdentity(logs)) {
-    if (!matchesSearch(entry, search)) continue;
+    if (!matchesSearch(entry, search)) {
+      continue;
+    }
     table.all.all += 1;
     table.all[entry.level] += 1;
   }

@@ -185,7 +185,9 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
        * 一起咽掉（上面那条 `!b[name]` 的 continue 已经表达了「只在两边都有时比」）。 */
       const left = a[name];
       const right = b[name];
-      if (!left || !right) continue;
+      if (!left || !right) {
+        continue;
+      }
       const diff = diffColumns(left.cols, right.cols);
       if (diff.missing.length || diff.extra.length) {
         mismatches.push(
@@ -234,7 +236,9 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
        * 断言写不出「为什么没有这张表」，而这一条的失败信息必须是「migrate 侧没有它」。 */
       const shapeOf = (file: string): TableShape => {
         const s = readShape(file)[t];
-        if (!s) throw new Error(`${t} 不在 ${file} 里 ⇒ 这条用例没有对象`);
+        if (!s) {
+          throw new Error(`${t} 不在 ${file} 里 ⇒ 这条用例没有对象`);
+        }
         return s;
       };
       const a = shapeOf(migratedDb);
@@ -290,7 +294,9 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
     for (const name of Object.keys(a)) {
       const left = a[name];
       const right = b[name];
-      if (!left || !right) continue;
+      if (!left || !right) {
+        continue;
+      }
       if (left.idx !== right.idx) {
         mismatches.push(`${name}: migrate=[${left.idx}] push=[${right.idx}]`);
       }

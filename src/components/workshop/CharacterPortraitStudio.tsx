@@ -73,7 +73,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   const tagCounts = new Map<string, number>();
   for (const w of localWorkflows) {
     const tag = w.modelTags[0];
-    if (tag) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+    if (tag) {
+      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+    }
   }
   for (const w of localWorkflows) {
     const tag = w.modelTags[0];
@@ -95,7 +97,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   const [history, setHistory] = React.useState<Array<PersistableGenerationLog> | null>(null);
   const loadHistory = () => {
     setHistoryOpen(true);
-    if (history) return;
+    if (history) {
+      return;
+    }
     void fetchGenerationLogs("portrait", 100).then(setHistory);
   };
 

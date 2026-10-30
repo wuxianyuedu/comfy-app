@@ -64,7 +64,9 @@ function tw4Fixture(script: string): GateRepoOptions {
 /** 临时工作区 `scripts/` 下现存的基线 JSON（判「`--update` 有没有落盘」用）。 */
 function baselinesIn(root: string): Array<string> {
   const dir = join(root, "scripts");
-  if (!existsSync(dir)) return [];
+  if (!existsSync(dir)) {
+    return [];
+  }
   return readdirSync(dir).filter((name) => name.endsWith(".json"));
 }
 

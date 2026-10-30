@@ -37,7 +37,9 @@ export function trpcHttpLink(options: {
     },
   });
 
-  if (!options.withLogger) return [http];
+  if (!options.withLogger) {
+    return [http];
+  }
 
   return /* SAFETY: 类型断言已复核 */ [
     loggerLink({

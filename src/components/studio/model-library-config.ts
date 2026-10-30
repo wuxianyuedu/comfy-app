@@ -33,7 +33,9 @@ export const ALL_TYPES = "ALL";
 export function filterModels(models: Array<ModelRow>, filter: string, q: string): Array<ModelRow> {
   const term = normalizeNeedle(q);
   return models.filter((model) => {
-    if (filter !== ALL_TYPES && model.type !== filter) return false;
+    if (filter !== ALL_TYPES && model.type !== filter) {
+      return false;
+    }
     /* 可搜字段是本域的判据（名称 + 文件名，搜 `model.safetensors` 也能中），
      * 归一化与命中判决走 `~/lib/list-filter`（规范 16 §16.2.4.16）。 */
     return matchesNeedle(term, `${model.name} ${model.fileName}`);
@@ -46,7 +48,9 @@ export function filterModels(models: Array<ModelRow>, filter: string, q: string)
  */
 export function countByType(models: Array<ModelRow>): Array<[string, number]> {
   const counts = new Map<string, number>();
-  for (const m of models) counts.set(m.type, (counts.get(m.type) ?? 0) + 1);
+  for (const m of models) {
+    counts.set(m.type, (counts.get(m.type) ?? 0) + 1);
+  }
   return Array.from(counts.entries()).sort(
     /* 数量降序 → 类型名字典序；「按当前区域设置排序」走 `~/lib/ordered-set`
      *（规范 16 §16.2.4.55）。 */
@@ -68,14 +72,18 @@ export function fmtSize(n?: number | null): string {
   /* `0` 是**本域的**「尚未探到体积」，不是「缺值」 —— 这层语义必须显式写在
    * 这里（`displayValue` 会把 0 照常显示成 "0"，那对模型列表是误导）。
    * 占位符本身不在这里拼，走全库唯一出口。 */
-  if (!n) return displayValue(null);
+  if (!n) {
+    return displayValue(null);
+  }
   return displayValue(fmtBytes(n));
 }
 
 /** 目录行的关键字筛选（命中目录名或展示标签）。 */
 export function filterFolders(folders: Array<FolderConfigRow>, q: string): Array<FolderConfigRow> {
   const term = normalizeNeedle(q);
-  if (!term) return folders;
+  if (!term) {
+    return folders;
+  }
   return folders.filter((row) => matchesNeedle(term, `${row.folder} ${row.label}`));
 }
 

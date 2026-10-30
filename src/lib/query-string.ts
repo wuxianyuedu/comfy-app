@@ -67,7 +67,9 @@ function encodeValue(
   key: string,
 ): string | null {
   if (typeof value === "string") {
-    if (value === "" && !keepEmpty) return null;
+    if (value === "" && !keepEmpty) {
+      return null;
+    }
     return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
   }
   /* `0` 与 `false` 是**真实的值**，不是缺值（与 §16.2.4.20 的 `displayValue`
@@ -94,14 +96,20 @@ export function buildQueryString(
 ): string {
   const parts: Array<string> = [];
   for (const [key, value] of Object.entries(params)) {
-    if (value === null || value === undefined) continue;
+    if (value === null || value === undefined) {
+      continue;
+    }
     if (Array.isArray(value)) {
       /* 重复键：每个元素各出一段（`tag=a&tag=b`）。元素可能是 `null` /
        * `undefined`（调用处传的是稀疏数组），按单值口径省略。 */
       for (const item of /* SAFETY: 类型断言已复核 */ value as ReadonlyArray<QueryScalar>) {
-        if (item === null || item === undefined) continue;
+        if (item === null || item === undefined) {
+          continue;
+        }
         const part = encodeValue(item, keepEmpty, key);
-        if (part !== null) parts.push(part);
+        if (part !== null) {
+          parts.push(part);
+        }
       }
       continue;
     }
@@ -110,7 +118,9 @@ export function buildQueryString(
       keepEmpty,
       key,
     );
-    if (part !== null) parts.push(part);
+    if (part !== null) {
+      parts.push(part);
+    }
   }
   return parts.join("&");
 }
@@ -146,10 +156,14 @@ export function withQuery(
 export function readQueryParam(query: string, key: string): string | null {
   const start = query.startsWith("?") ? 1 : 0;
   for (const pair of query.slice(start).split("&")) {
-    if (pair === "") continue;
+    if (pair === "") {
+      continue;
+    }
     const eq = pair.indexOf("=");
     const rawKey = eq < 0 ? pair : pair.slice(0, eq);
-    if (decode(rawKey) !== key) continue;
+    if (decode(rawKey) !== key) {
+      continue;
+    }
     return eq < 0 ? "" : decode(pair.slice(eq + 1));
   }
   return null;

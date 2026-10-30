@@ -90,7 +90,9 @@ const globalForDb = /* SAFETY: reviewed */ globalThis as unknown as {
 
 export const db = globalForDb.db ?? drizzle(client, { schema });
 
-if (env.NODE_ENV !== "production") globalForDb.db = db;
+if (env.NODE_ENV !== "production") {
+  globalForDb.db = db;
+}
 
 /**
  * Close the underlying libsql client (tests only today).

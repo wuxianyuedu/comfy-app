@@ -127,13 +127,7 @@ export const FRESHNESS_TRACKS = {
      * 起 spec 的那两个配置，以及会让运行时换版本的 lockfile。
      * ⚠️ 刻意**不含** `docs/` `tests/` `scripts/` `.githooks/`：那些改动不改变被测链路，
      *   含进来等于把「按日历日」换个名字保留下来。 */
-    dirty: [
-      "src/",
-      "e2e/",
-      "playwright.config.ts",
-      "next.config.js",
-      "pnpm-lock.yaml",
-    ],
+    dirty: ["src/", "e2e/", "playwright.config.ts", "next.config.js", "pnpm-lock.yaml"],
     dirtyHow: 'node scripts/e2e-run.mjs --dirty "<理由>"',
     /* 宽限与另两档同为 7 天。为什么敢比「每天」松：「app 端到端是不是坏了」这个问题
      * 在**每个 PR** 上都有人答 —— 平台侧 `E2E 关键流程`（`e2e-run.mjs --grep=@critical`）。
@@ -201,11 +195,13 @@ export const FRESHNESS_TRACKS = {
  */
 export function contextSubject() {
   const raw = String(process.env.COMFY_CI_SUBJECT ?? "").trim();
-  if (raw === "") return "pr";
-  if (raw === "pr" || raw === "master") return raw;
-  throw new Error(
-    `[freshness-ledger] COMFY_CI_SUBJECT 的值不认："${raw}"（只认 pr / master）`,
-  );
+  if (raw === "") {
+    return "pr";
+  }
+  if (raw === "pr" || raw === "master") {
+    return raw;
+  }
+  throw new Error(`[freshness-ledger] COMFY_CI_SUBJECT 的值不认："${raw}"（只认 pr / master）`);
 }
 /**
  * 取一档的登记（未知的 kind 是**编码错误**，抛而不是回落 —— 回落会让「新加一档却忘了
@@ -273,7 +269,9 @@ export function freshnessRecord({
     ["skippedReason", skippedReason],
     ["dirtyReason", dirtyReason],
   ])) {
-    if (typeof value === "string" && value.trim()) record[field] = value.trim();
+    if (typeof value === "string" && value.trim()) {
+      record[field] = value.trim();
+    }
   }
   return record;
 }
@@ -289,7 +287,9 @@ export function freshnessRecord({
  */
 export function isUsableSkipReason(reason) {
   const text = String(reason ?? "").trim();
-  if (text.length < 8) return false;
+  if (text.length < 8) {
+    return false;
+  }
   return !/^(稍后|待定|下次|回头|todo|tbd|na|n\/a)$/i.test(text);
 }
 
@@ -312,7 +312,9 @@ export function isWholeTrackRun(extra = []) {
   const passthrough = (Array.isArray(extra) ? extra : [])
     .map((a) => String(a ?? "").trim())
     .filter((a) => a !== "");
-  if (passthrough.length === 0) return { ok: true, why: null };
+  if (passthrough.length === 0) {
+    return { ok: true, why: null };
+  }
   return {
     ok: false,
     why:
@@ -377,7 +379,9 @@ export function isSameLocalDay(a, b) {
  */
 export function dirtiesTrack(track, changed) {
   const prefixes = track.dirty ?? [];
-  if (prefixes.length === 0) return false;
+  if (prefixes.length === 0) {
+    return false;
+  }
   return changed.some((rel) => prefixes.some((p) => rel.startsWith(p)));
 }
 
@@ -410,21 +414,21 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
   const how = `\n        记账：${dirtyHows.join("，或")}。`;
   /* 今天已经自证过：日界比一次（`at` 落在今天），或这次自证的时刻晚于当天的第一次
    * 改动 —— 后者是「先改后跑」与「先跑后改」两种顺序都要放行的那一条边界。 */
-  if (isSameLocalDay(at, now)) return null;
-  if (since && at.getTime() >= since.getTime()) return null;
+  if (isSameLocalDay(at, now)) {
+    return null;
+  }
+  if (since && at.getTime() >= since.getTime()) {
+    return null;
+  }
   if ((track.dirty ?? []).length === 0) {
-    return (
-      `今天还没有自证 —— 上一次跑绿在 "${at.toISOString()}"，不是今天。` + how
-    );
+    return `今天还没有自证 —— 上一次跑绿在 "${at.toISOString()}"，不是今天。` + how;
   }
   if (since) {
     return (
       `今天的提交动过这一档的输入面（${track.dirty.join(" / ")}），而它还没有自证 —— ` +
       `上一次跑绿在 "${at.toISOString()}"，早于当天的第一次改动。` +
       how +
-      (track.dirtyHow
-        ? `\n              若这次改动确实不吃这一档：\`${track.dirtyHow}\`。`
-        : "")
+      (track.dirtyHow ? `\n              若这次改动确实不吃这一档：\`${track.dirtyHow}\`。` : "")
     );
   }
   const days = Math.floor((now.getTime() - at.getTime()) / 86_400_000);
@@ -435,9 +439,7 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
     `已经 ${days} 天没有自证（上一次跑绿在 "${at.toISOString()}"），` +
     `超过了 ${Math.round(track.graceMs / 86_400_000)} 天的宽限。` +
     how +
-    (track.dirtyHow
-      ? `\n              若近期改动确实不吃这一档：\`${track.dirtyHow}\`。`
-      : "")
+    (track.dirtyHow ? `\n              若近期改动确实不吃这一档：\`${track.dirtyHow}\`。` : "")
   );
 }
 
@@ -491,9 +493,7 @@ export function checkFreshnessLedger(
       continue;
     }
     if (typeof entry !== "object" || Array.isArray(entry)) {
-      problems.push(
-        `${track.label}（${key}）的新鲜度记录不是对象 —— 形状见 freshnessRecord。`,
-      );
+      problems.push(`${track.label}（${key}）的新鲜度记录不是对象 —— 形状见 freshnessRecord。`);
       continue;
     }
     const rec = /** @type {Record<string, unknown>} */ (entry);
@@ -546,8 +546,7 @@ export function checkFreshnessLedger(
     const waiver = ["skippedReason", "dirtyReason"].find(
       (f) => typeof rec[f] === "string" && rec[f].trim(),
     );
-    const waiverUsable =
-      waiver !== undefined && isUsableSkipReason(rec[waiver]);
+    const waiverUsable = waiver !== undefined && isUsableSkipReason(rec[waiver]);
     if (waiver !== undefined && !waiverUsable) {
       problems.push(
         `${track.label}（${key}）的${waiver === "dirtyReason" ? "「不吃这一档」" : "豁免"}理由` +
@@ -590,8 +589,7 @@ export function checkFreshnessLedger(
        * 读 `dirty` / `graceMs` / `dirtySince`，所以「不必每天跑」的两档照样有宽限，
        * 而按日历日判的 e2e 那档当场要今天的凭证 —— 差异仍然全在数据上，不在分支里。 */
       const waiverMs = waiverUsable ? Date.parse(at) : Number.NaN;
-      const waiverToday =
-        !Number.isNaN(waiverMs) && isSameLocalDay(new Date(waiverMs), now);
+      const waiverToday = !Number.isNaN(waiverMs) && isSameLocalDay(new Date(waiverMs), now);
       /* 占位理由那一判在**上面那层**（形状）已经报过，这里不再重复一条 —— 同一件事
        * 在同一屏里出现两次会读起来像两件不同的事（与 `--skip` / `--dirty` 分栏同理）。 */
       if (
@@ -663,14 +661,8 @@ export function checkFreshnessLedger(
  */
 export function readFreshnessLedgerAt(root, rel) {
   try {
-    const parsed = /** @type {unknown} */ (
-      JSON.parse(readFileSync(path.join(root, rel), "utf8"))
-    );
-    if (
-      parsed === null ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed)
-    ) {
+    const parsed = /** @type {unknown} */ (JSON.parse(readFileSync(path.join(root, rel), "utf8")));
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {};
     }
     return /** @type {Record<string, unknown>} */ (parsed);
@@ -818,9 +810,13 @@ export function writeSkipRecord({ root, kind, who, reason, field }) {
  */
 export function freshnessAge(entry, now = new Date()) {
   const ms = freshnessTime(entry);
-  if (ms === null) return null;
+  if (ms === null) {
+    return null;
+  }
   const days = Math.floor((now.getTime() - ms) / 86_400_000);
-  if (days < 0) return null;
+  if (days < 0) {
+    return null;
+  }
   return days === 0 ? "今天" : `${days} 天前`;
 }
 
@@ -834,10 +830,10 @@ export function freshnessAge(entry, now = new Date()) {
  * @returns {number | null}
  */
 export function freshnessTime(entry) {
-  if (entry === null || typeof entry !== "object") return null;
-  const at = String(
-    /** @type {Record<string, unknown>} */ (entry).verifiedAt ?? "",
-  ).trim();
+  if (entry === null || typeof entry !== "object") {
+    return null;
+  }
+  const at = String(/** @type {Record<string, unknown>} */ (entry).verifiedAt ?? "").trim();
   const ms = Date.parse(at);
   return Number.isNaN(ms) ? null : ms;
 }
@@ -862,7 +858,9 @@ export function freshnessTime(entry) {
  */
 export function freshnessStamp(entry) {
   const ms = freshnessTime(entry);
-  if (ms === null) return null;
+  if (ms === null) {
+    return null;
+  }
   const d = new Date(ms);
   /** @param {number} n */
   const p = (n) => String(n).padStart(2, "0");
@@ -891,6 +889,8 @@ export function freshnessStamp(entry) {
 export function freshnessReading(entry, now = new Date()) {
   const age = freshnessAge(entry, now);
   const stamp = freshnessStamp(entry);
-  if (age === null) return null;
+  if (age === null) {
+    return null;
+  }
   return stamp === null ? age : `${age}（${stamp}）`;
 }

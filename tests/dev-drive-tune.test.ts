@@ -93,7 +93,9 @@ function makeReport(overrides: Partial<Report> = {}): Report {
 /** 在动作矩阵里按 id 取一条。 */
 function leverOf(report: Report, id: string): Lever {
   const found = buildLevers(report).find((lever) => lever.id === id);
-  if (!found) throw new Error(`动作矩阵里应有 ${id} 这一条`);
+  if (!found) {
+    throw new Error(`动作矩阵里应有 ${id} 这一条`);
+  }
   return found;
 }
 

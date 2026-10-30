@@ -62,7 +62,9 @@ export const TASK_STATUS_LABELS = /* SAFETY: 类型断言已复核 */ {
 
 /** 读标签；未知状态原样回显（不静默转成「未知」把信息吞掉）。 */
 export function taskStatusLabel(status: string | null | undefined): string {
-  if (status === null || status === undefined || status === "") return "未知";
+  if (status === null || status === undefined || status === "") {
+    return "未知";
+  }
   const known: ReadonlyArray<string> = Object.keys(TASK_STATUS_LABELS);
   return known.includes(status)
     ? TASK_STATUS_LABELS[/* SAFETY: 类型断言已复核 */ status as keyof typeof TASK_STATUS_LABELS]

@@ -39,7 +39,9 @@ export function useComfyStateEvents(input: {
   }, [onChange]);
 
   useEffect(() => {
-    if (paused) return;
+    if (paused) {
+      return;
+    }
     return subscribeComfyStateChanges(() => onChangeRef.current());
   }, [paused]);
 }

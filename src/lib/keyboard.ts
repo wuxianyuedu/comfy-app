@@ -46,9 +46,13 @@ export type KeyName = (typeof KEY)[keyof typeof KEY];
  */
 export function normalizeKeyName(key: string): string {
   /* 单字符（含空格本身）走字符分支：`trim()` 在这里是错的。 */
-  if (key.length === 1) return key === " " ? "space" : key.toLowerCase();
+  if (key.length === 1) {
+    return key === " " ? "space" : key.toLowerCase();
+  }
   const trimmed = key.trim();
-  if (trimmed === "") return "space";
+  if (trimmed === "") {
+    return "space";
+  }
   return trimmed.toLowerCase();
 }
 
@@ -56,7 +60,9 @@ export function normalizeKeyName(key: string): string {
 export function isKeyIn(key: string, keys: ReadonlyArray<string>): boolean {
   const normalized = normalizeKeyName(key);
   for (const candidate of keys) {
-    if (normalizeKeyName(candidate) === normalized) return true;
+    if (normalizeKeyName(candidate) === normalized) {
+      return true;
+    }
   }
   return false;
 }

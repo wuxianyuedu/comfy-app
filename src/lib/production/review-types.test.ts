@@ -295,7 +295,9 @@ describe("剧本评审位 · 改写留档与低分维度（#2478）", () => {
 
   it("recordScriptRevision 超 SCRIPT_REVISION_LIMIT(3) 从头裁剪；畸形条目丢弃", () => {
     let state = normalizeScriptReviewState(null);
-    for (let i = 0; i < 5; i++) state = recordScriptRevision(state, `v${i}`, `t${i}`);
+    for (let i = 0; i < 5; i++) {
+      state = recordScriptRevision(state, `v${i}`, `t${i}`);
+    }
     expect(state.revisions.map((r) => r.markdown)).toEqual(["v2", "v3", "v4"]);
     // 畸形留档（缺 markdown / 空串）在读取时被丢弃
     const dirty = normalizeScriptReviewState({

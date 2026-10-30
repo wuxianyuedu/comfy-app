@@ -68,22 +68,19 @@ export interface ClampOptions {
  */
 export function clampText(text: string, opts: ClampOptions): string {
   const { maxLength, direction = "head", marker, annotation } = opts;
-  if (maxLength <= 0) return "";
-  if (text.length <= maxLength) return text;
-  const mark =
-    marker ??
-    (annotation !== undefined ? `${ELLIPSIS}(${annotation})` : ELLIPSIS);
+  if (maxLength <= 0) {
+    return "";
+  }
+  if (text.length <= maxLength) {
+    return text;
+  }
+  const mark = marker ?? (annotation !== undefined ? `${ELLIPSIS}(${annotation})` : ELLIPSIS);
   /* 标记比上限还长时**不留标记**（只裁到上限）—— 否则返回值反而变长。 */
   if (mark.length >= maxLength) {
-    return direction === "tail"
-      ? text.slice(text.length - maxLength)
-      : text.slice(0, maxLength);
+    return direction === "tail" ? text.slice(text.length - maxLength) : text.slice(0, maxLength);
   }
   const budget = maxLength - mark.length;
-  const body =
-    direction === "tail"
-      ? text.slice(text.length - budget)
-      : text.slice(0, budget);
+  const body = direction === "tail" ? text.slice(text.length - budget) : text.slice(0, budget);
   return direction === "tail" ? mark + body : body + mark;
 }
 

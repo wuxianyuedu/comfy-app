@@ -101,7 +101,9 @@ vi.mock("node:fs", async (importOriginal) => {
         /* 「在不在」都问不出来（挂载点失效 / 权限）是路由那层 try/catch 存在的理由，
          * 所以这一档要能造出来 —— 不能让假 fs 只会返回布尔值。 */
         if (hit.existsFails) {
-          if (hit.existsFails === "silent") throw new Error("");
+          if (hit.existsFails === "silent") {
+            throw new Error("");
+          }
           throw Object.assign(new Error(`EACCES: permission denied, ${keyOf(p)}`), {
             code: "EACCES",
           });
@@ -133,7 +135,9 @@ vi.mock("node:fs", async (importOriginal) => {
     statSync: (p: PathLike): unknown => {
       const k = keyOf(p);
       const hit = fsState.files.get(k);
-      if (!hit) return /* SAFETY: 类型断言已复核 */ (real.statSync as (a: unknown) => unknown)(p);
+      if (!hit) {
+        return /* SAFETY: 类型断言已复核 */ (real.statSync as (a: unknown) => unknown)(p);
+      }
       if (hit.missing || hit.statFails) {
         const e = /* SAFETY: 类型断言已复核 */ new Error(
           hit.missing
@@ -189,7 +193,11 @@ function installFakeChild() {
      * 「这个解释器不行」，三个候选轮完返回空批 —— 用例因此不必等真实超时
      *（DISCOVER_TIMEOUT_MS × 3）。 */
     setTimeout(() => {
-      if (nextStdout) for (const cb of child.out.data ?? []) cb(nextStdout);
+      if (nextStdout) {
+        for (const cb of child.out.data ?? []) {
+          cb(nextStdout);
+        }
+      }
       emitClose(child, 0);
     }, 0);
     return handle;
@@ -198,7 +206,9 @@ function installFakeChild() {
 
 /** 驱动假子进程收尾（discover 那条 await 它，不发 close 就永远挂着）。 */
 function emitClose(child: FakeChild, code: number) {
-  for (const cb of child.proc.close ?? []) cb(code);
+  for (const cb of child.proc.close ?? []) {
+    cb(code);
+  }
 }
 
 async function post(body: unknown) {
@@ -462,7 +472,9 @@ describe("POST parse —— 解释器退避与收尾归属（台账 A14）", () 
     /* 逐候选对账，而不是只盯 `calls[2]`：位置由判据给，写死下标就等于在这里
      * 又抄一份顺序（POSIX 上根本没有 `py` 这一档，那条断言会莫名其妙地空过）。 */
     for (const [command, args] of spawnMock.mock.calls) {
-      if (String(command) !== "py") continue;
+      if (String(command) !== "py") {
+        continue;
+      }
       expect(/* SAFETY: 类型断言已复核 */ (args as Array<string>)[0]).toBe("-3");
     }
   });
@@ -582,7 +594,9 @@ function readsOf(p: string): number {
 
 /** GET 的一次往返（流式形态会被读到底，返回按行解析出来的事件）。 */
 async function getEvents(): Promise<Array<Record<string, unknown>>> {
-  if (!armed) coldRoot();
+  if (!armed) {
+    coldRoot();
+  }
   const res = await GET();
   expect(res.status).toBe(200);
   expect(res.headers.get("content-type")).toContain("ndjson");
@@ -624,7 +638,9 @@ function scriptDiscover(
     children.push(child);
     setTimeout(() => {
       for (const cb of child.out.data ?? []) {
-        for (const line of lines) cb(Buffer.from(`${line}\n`));
+        for (const line of lines) {
+          cb(Buffer.from(`${line}\n`));
+        }
       }
       emitClose(child, opts.code ?? 0);
     }, 0);
@@ -666,7 +682,9 @@ async function summaryOf(): Promise<Record<string, unknown> | null> {
  * 就等于「测过了」而流式那一档一个字都没判。
  */
 async function payloadOf(): Promise<Record<string, unknown>> {
-  if (!armed) coldRoot();
+  if (!armed) {
+    coldRoot();
+  }
   const res = await GET();
   expect(res.status).toBe(200);
   if ((res.headers.get("content-type") ?? "").includes("ndjson")) {
@@ -1099,13 +1117,21 @@ function queueChild(plan: ChildPlan): void {
     };
     children.push(child);
     const fire = (bag: Record<string, Array<Cb>>, ev: string, arg: unknown): void => {
-      for (const cb of bag[ev] ?? []) cb(arg);
+      for (const cb of bag[ev] ?? []) {
+        cb(arg);
+      }
     };
     /* 延后一拍：注册必须先于触发（与被测代码同步挂监听这一段配对）。 */
     setTimeout(() => {
-      for (const c of plan.chunks ?? []) fire(child.out, "data", Buffer.from(c));
-      for (const l of plan.lines ?? []) fire(child.out, "data", Buffer.from(`${l}\n`));
-      for (const e of plan.errChunks ?? []) fire(child.err, "data", Buffer.from(e));
+      for (const c of plan.chunks ?? []) {
+        fire(child.out, "data", Buffer.from(c));
+      }
+      for (const l of plan.lines ?? []) {
+        fire(child.out, "data", Buffer.from(`${l}\n`));
+      }
+      for (const e of plan.errChunks ?? []) {
+        fire(child.err, "data", Buffer.from(e));
+      }
       if (plan.error) {
         fire(
           child.proc,

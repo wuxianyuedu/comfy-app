@@ -38,9 +38,14 @@ afterEach(() => {
   // 其余键用 saved 快照还原（含「原本不存在 → 删掉」这一支）。
   vi.unstubAllEnvs();
   for (const k of KEYS) {
-    if (k === "NODE_ENV") continue;
-    if (saved[k] === undefined) delete process.env[k];
-    else vi.stubEnv(k, saved[k]);
+    if (k === "NODE_ENV") {
+      continue;
+    }
+    if (saved[k] === undefined) {
+      delete process.env[k];
+    } else {
+      vi.stubEnv(k, saved[k]);
+    }
   }
 });
 

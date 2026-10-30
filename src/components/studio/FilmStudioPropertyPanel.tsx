@@ -215,7 +215,9 @@ export function FilmStudioPropertyPanel({
             aria-label="背景音乐（可选）"
             onChange={(event) => {
               const f = event.target.files?.[0];
-              if (f) void c.uploadBgmFile(f);
+              if (f) {
+                void c.uploadBgmFile(f);
+              }
             }}
             className="text-ink-fainter hover:text-primary-strong file:bg-primary/20 file:text-primary-strong text-2xs file:text-2xs w-full file:mr-2 file:rounded-lg file:border-0 file:px-3 file:py-1.5"
           />

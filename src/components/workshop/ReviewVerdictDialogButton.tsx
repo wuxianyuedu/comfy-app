@@ -32,9 +32,13 @@ function ScoreBars({
   verdict: ReviewVerdict;
   labels: ReadonlyMap<string, string>;
 }) {
-  if (!verdict.scores) return null;
+  if (!verdict.scores) {
+    return null;
+  }
   const entries = Object.entries(verdict.scores);
-  if (entries.length === 0) return null;
+  if (entries.length === 0) {
+    return null;
+  }
   return (
     <div className="flex flex-col gap-1.5">
       {entries.map(([key, item]) => (
@@ -62,7 +66,9 @@ function ScoreBars({
 
 /** 轮次曲线（均分 / 过·不过），只有多于一轮才值得展示。 */
 function HistoryCurve({ history }: { history: Array<ReviewVerdict> }) {
-  if (history.length <= 1) return null;
+  if (history.length <= 1) {
+    return null;
+  }
   return (
     <div className="text-ink-faintest text-2xs">
       轮次曲线：
@@ -124,7 +130,9 @@ export function ReviewVerdictDialogButton({
 
   /* 打开即评审一次 —— 评审对象可能刚被改过（人手改 / AI 改写），旧判定不作数。 */
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     void controller.review();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);

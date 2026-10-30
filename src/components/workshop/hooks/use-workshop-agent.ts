@@ -158,7 +158,9 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
   /** 核心 send：把用户消息送入 Agent 循环直至模型回复。 */
   const send = React.useCallback(async () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy) {
+      return;
+    }
 
     setInput("");
     setError("");

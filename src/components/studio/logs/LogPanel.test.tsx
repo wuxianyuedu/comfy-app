@@ -130,7 +130,9 @@ afterEach(async () => {
   for (let i = 0; i < 30; i++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
     const body = document.body.innerHTML;
-    if (body === prevBody) break;
+    if (body === prevBody) {
+      break;
+    }
     prevBody = body;
   }
   document
@@ -154,7 +156,9 @@ function levelButton(label: string): HTMLElement {
   const button = screen
     .getAllByRole("button")
     .find((item) => item.getAttribute("title")?.startsWith(`当前来源的${label}：`));
-  if (!button) throw new Error(`找不到级别按钮「${label}」`);
+  if (!button) {
+    throw new Error(`找不到级别按钮「${label}」`);
+  }
   return button;
 }
 
@@ -934,10 +938,16 @@ describe("LogPanel 日志面板", () => {
       expect(rowCount()).toBeLessThan(200);
     } finally {
       /* 还原原型上的取值：本文件其余用例要靠「量不到视口」走整页渲染那一支。 */
-      if (heights) Object.defineProperty(prototype, "clientHeight", heights);
-      else Reflect.deleteProperty(prototype, "clientHeight");
-      if (widths) Object.defineProperty(prototype, "clientWidth", widths);
-      else Reflect.deleteProperty(prototype, "clientWidth");
+      if (heights) {
+        Object.defineProperty(prototype, "clientHeight", heights);
+      } else {
+        Reflect.deleteProperty(prototype, "clientHeight");
+      }
+      if (widths) {
+        Object.defineProperty(prototype, "clientWidth", widths);
+      } else {
+        Reflect.deleteProperty(prototype, "clientWidth");
+      }
     }
   });
 
@@ -987,10 +997,16 @@ describe("LogPanel 日志面板", () => {
       const lastIndex = Number(nodes[nodes.length - 1]!.getAttribute("data-log-index"));
       expect(lastIndex).toBe(199);
     } finally {
-      if (heights) Object.defineProperty(prototype, "clientHeight", heights);
-      else Reflect.deleteProperty(prototype, "clientHeight");
-      if (widths) Object.defineProperty(prototype, "clientWidth", widths);
-      else Reflect.deleteProperty(prototype, "clientWidth");
+      if (heights) {
+        Object.defineProperty(prototype, "clientHeight", heights);
+      } else {
+        Reflect.deleteProperty(prototype, "clientHeight");
+      }
+      if (widths) {
+        Object.defineProperty(prototype, "clientWidth", widths);
+      } else {
+        Reflect.deleteProperty(prototype, "clientWidth");
+      }
     }
   });
 

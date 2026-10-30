@@ -62,7 +62,9 @@ export function withGenerationAttribution(
 
 export async function startLocalGenerate(input: GenerateInput): Promise<string> {
   const res = await vanillaApi.generate.generate.mutate(input);
-  if (!res?.taskId) throw new Error("本地生成任务创建失败");
+  if (!res?.taskId) {
+    throw new Error("本地生成任务创建失败");
+  }
   return res.taskId;
 }
 
@@ -103,9 +105,13 @@ export interface TaskSnapshot {
 export async function fetchTaskSnapshot(taskId: string): Promise<TaskSnapshot | null> {
   try {
     const task: unknown = await vanillaApi.task.detail.query({ id: taskId });
-    if (!isRecord(task)) return null;
+    if (!isRecord(task)) {
+      return null;
+    }
     const status = task.status;
-    if (typeof status !== "string" || status === "") return null;
+    if (typeof status !== "string" || status === "") {
+      return null;
+    }
     return {
       status,
       ...(typeof task.error === "string" && task.error ? { error: task.error } : {}),
@@ -143,7 +149,9 @@ export interface WorkshopWorkflowOption {
 function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption | null {
   const id = row.id;
   const name = row.name;
-  if (typeof id !== "string" || typeof name !== "string") return null;
+  if (typeof id !== "string" || typeof name !== "string") {
+    return null;
+  }
   const taskType = typeof row.taskType === "string" ? row.taskType : undefined;
   const modes = Array.isArray(row.modes)
     ? row.modes.filter((mode): mode is string => typeof mode === "string")
@@ -185,12 +193,18 @@ function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption 
 export async function fetchWorkshopWorkflows(): Promise<Array<WorkshopWorkflowOption>> {
   const res = await vanillaApi.workflow.list.query({});
   const rows: unknown = res;
-  if (!Array.isArray(rows)) return [];
+  if (!Array.isArray(rows)) {
+    return [];
+  }
   const out: Array<WorkshopWorkflowOption> = [];
   for (const row of rows) {
-    if (!isRecord(row)) continue;
+    if (!isRecord(row)) {
+      continue;
+    }
     const option = toWorkflowOption(row);
-    if (option) out.push(option);
+    if (option) {
+      out.push(option);
+    }
   }
   return out;
 }
@@ -201,8 +215,9 @@ function toStyleRef(row: Record<string, unknown>): StyleRef | null {
   const slug = row.slug;
   const name = row.name;
   const promptTemplate = row.promptTemplate;
-  if (typeof slug !== "string" || typeof name !== "string" || typeof promptTemplate !== "string")
+  if (typeof slug !== "string" || typeof name !== "string" || typeof promptTemplate !== "string") {
     return null;
+  }
   return {
     slug,
     name,
@@ -225,12 +240,18 @@ function toStyleRef(row: Record<string, unknown>): StyleRef | null {
 export async function fetchWorkshopStyles(): Promise<Array<StyleRef>> {
   const res = await vanillaApi.skill.list.query();
   const rows: unknown = res.skills;
-  if (!Array.isArray(rows)) return [];
+  if (!Array.isArray(rows)) {
+    return [];
+  }
   const out: Array<StyleRef> = [];
   for (const row of rows) {
-    if (!isRecord(row)) continue;
+    if (!isRecord(row)) {
+      continue;
+    }
     const style = toStyleRef(row);
-    if (style) out.push(style);
+    if (style) {
+      out.push(style);
+    }
   }
   return out;
 }
@@ -344,11 +365,15 @@ export interface TaskWatchHandlers {
 
 /* 把 SSE `log` 帧的 unknown 载荷收窄成 TaskLogEntry；收窄不了则为 null。 */
 function narrowLogEntry(raw: unknown): TaskLogEntry | null {
-  if (!isRecord(raw)) return null;
+  if (!isRecord(raw)) {
+    return null;
+  }
   const t = raw.t;
   const level = raw.level;
   const msg = raw.msg;
-  if (typeof t !== "number" || typeof msg !== "string") return null;
+  if (typeof t !== "number" || typeof msg !== "string") {
+    return null;
+  }
   const validLevels = /* SAFETY: 类型断言已复核 */ [
     "info",
     "progress",
@@ -357,7 +382,9 @@ function narrowLogEntry(raw: unknown): TaskLogEntry | null {
     "success",
   ] as const;
   const lv = validLevels.find((v) => v === level) ?? null;
-  if (!lv) return null;
+  if (!lv) {
+    return null;
+  }
   return {
     t,
     level: lv,
@@ -416,7 +443,9 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
   es.onmessage = (ev: MessageEvent<string>) => {
     try {
       const msg: unknown = JSON.parse(ev.data);
-      if (!isRecord(msg)) return;
+      if (!isRecord(msg)) {
+        return;
+      }
       const type: unknown = msg.type;
       if (type === "state") {
         const p: unknown = msg.progress;
@@ -453,7 +482,9 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
              * 完全同形——进程内 done 帧已随 ADR §14 D1 退役，不存在「另一种宿主
              * 收不到成功」的那半边流量了。
              * 已落定时整帧跳过：产出回调不许重发（同一终态可能被轮询发两次）。 */
-            if (settled) return;
+            if (settled) {
+              return;
+            }
             const outputs = extractSavedOutputs(msg.images);
             if (outputs.length === 0) {
               note("收到 state 帧 status=SUCCEEDED 但无产出，按失败落定");
@@ -481,7 +512,9 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
       }
       if (type === "log") {
         const entry = narrowLogEntry(msg.entry);
-        if (entry) h.onLog?.(entry);
+        if (entry) {
+          h.onLog?.(entry);
+        }
         return;
       }
       /*  这里过去还分两条分支收口 `done` / `error` 帧：那是 SSE 直接转发进程内
@@ -498,7 +531,9 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
       es.readyState === EventSource.CLOSED ? "SSE 连接已关闭" : "SSE 连接中断，浏览器将自动重连",
     );
     // 短暂断开会自动重连；只有流真正彻底关闭才算终态。
-    if (es.readyState === EventSource.CLOSED) settle(false, "任务连接中断");
+    if (es.readyState === EventSource.CLOSED) {
+      settle(false, "任务连接中断");
+    }
   };
   return () => {
     if (!settled) {
@@ -516,10 +551,14 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
 function relayErrorMessage(data: unknown, status: number): string {
   if (isRecord(data)) {
     const err: unknown = data.error;
-    if (typeof err === "string" && err) return err;
+    if (typeof err === "string" && err) {
+      return err;
+    }
     if (isRecord(err)) {
       const msg: unknown = err.message;
-      if (typeof msg === "string" && msg) return msg;
+      if (typeof msg === "string" && msg) {
+        return msg;
+      }
     }
   }
   return `API 请求失败 (${status})`;
@@ -562,7 +601,9 @@ async function postRelay(body: Record<string, unknown>): Promise<RelayResponse> 
   } catch {
     data = undefined;
   }
-  if (!res.ok) throw new Error(relayErrorMessage(data, res.status));
+  if (!res.ok) {
+    throw new Error(relayErrorMessage(data, res.status));
+  }
   // 「res.ok 但 body 不是对象」——以前是三个 caller 各自 `isRecord(data)` 前奏，
   // 现在这一层判据只写一次；null 交给 caller 决定抛错还是降级。
   return isRecord(data) ? data : null;
@@ -600,7 +641,9 @@ export async function apiGenerateImage(req: {
     ...(req.image ? { image: req.image } : {}),
   });
   const url = data && typeof data.url === "string" && data.url ? data.url : null;
-  if (!url) throw new Error("API 生图响应中未找到图片 URL");
+  if (!url) {
+    throw new Error("API 生图响应中未找到图片 URL");
+  }
   return url;
 }
 
@@ -628,11 +671,15 @@ export async function apiSubmitVideo(req: {
     frames: req.frames,
     fps: req.fps,
   });
-  if (!data) throw new Error("API 视频响应格式错误");
+  if (!data) {
+    throw new Error("API 视频响应格式错误");
+  }
   const url = typeof data.url === "string" && data.url ? data.url : undefined;
   const remoteTaskId =
     typeof data.remoteTaskId === "string" && data.remoteTaskId ? data.remoteTaskId : undefined;
-  if (!url && !remoteTaskId) throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
+  if (!url && !remoteTaskId) {
+    throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
+  }
   return { url, remoteTaskId };
 }
 
@@ -641,7 +688,9 @@ export async function apiPollVideo(
   remoteTaskId: string,
 ): Promise<{ url?: string; pending: boolean }> {
   const data = await postRelay({ kind: "video", remoteTaskId });
-  if (!data) return { pending: true };
+  if (!data) {
+    return { pending: true };
+  }
   const url = typeof data.url === "string" && data.url ? data.url : undefined;
   return { url, pending: !url };
 }
@@ -731,10 +780,14 @@ function narrowChannel(v: unknown, fallbackPath: string): ApiChannelView {
 export async function fetchApiChannels(): Promise<ApiChannelsView | null> {
   try {
     const res = await fetch("/api/workshop-api/config");
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     const data: unknown = await res.json();
     const channels = isRecord(data) ? data.channels : undefined;
-    if (!isRecord(channels)) return null;
+    if (!isRecord(channels)) {
+      return null;
+    }
     return {
       image: narrowChannel(channels.image, "/images/generations"),
       video: narrowChannel(channels.video, "/videos/generations"),

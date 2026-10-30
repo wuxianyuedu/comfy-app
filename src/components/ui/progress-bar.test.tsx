@@ -38,16 +38,12 @@ describe("ProgressBar 的确定态", () => {
     expect(track.getAttribute("aria-valuenow")).toBe("42");
     expect(track.getAttribute("aria-valuemin")).toBe("0");
     expect(track.getAttribute("aria-valuemax")).toBe("100");
-    const fill = container.querySelector<HTMLElement>(
-      '[data-slot="progress-bar-fill"]',
-    )!;
+    const fill = container.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]')!;
     expect(fill.style.transform).toBe("translateX(-58%)");
   });
 
   it("标签与百分比同排；showValue=false 时不显示百分比", () => {
-    const { container, rerender } = render(
-      <ProgressBar value={30} label="正在生成" />,
-    );
+    const { container, rerender } = render(<ProgressBar value={30} label="正在生成" />);
     expect(container.textContent).toContain("正在生成");
     expect(container.textContent).toContain("30%");
 
@@ -57,11 +53,8 @@ describe("ProgressBar 的确定态", () => {
   });
 
   it("minVisible 只抬非零值：0% 就是空条", () => {
-    const { container, rerender } = render(
-      <ProgressBar value={0} minVisible={4} />,
-    );
-    const fill = () =>
-      container.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]')!;
+    const { container, rerender } = render(<ProgressBar value={0} minVisible={4} />);
+    const fill = () => container.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]')!;
     expect(fill().style.transform).toBe("translateX(-100%)");
     rerender(<ProgressBar value={1} minVisible={4} />);
     expect(fill().style.transform).toBe("translateX(-96%)");
@@ -77,12 +70,8 @@ describe("ProgressBar 的确定态", () => {
 describe("ProgressBar 的不确定态（value === null）", () => {
   it("渲染滑动条纹，而不是 0% 空条", () => {
     const { container } = render(<ProgressBar value={null} label="正在扫描" />);
-    expect(
-      container.querySelector('[data-slot="progress-bar-indeterminate"]'),
-    ).not.toBeNull();
-    expect(
-      container.querySelector('[data-slot="progress-bar-fill"]'),
-    ).toBeNull();
+    expect(container.querySelector('[data-slot="progress-bar-indeterminate"]')).not.toBeNull();
+    expect(container.querySelector('[data-slot="progress-bar-fill"]')).toBeNull();
   });
 
   it("不给 aria-valuenow（不确定的进度不该被读成一个数），改给 valuetext", () => {
@@ -105,14 +94,14 @@ describe("ProgressBar 的可访问名（条上没字的那种用法）", () => {
    *  只能靠它，否则读屏器只报一个数字、说不出这是哪一段。 */
   function trackOf(container: HTMLElement): Element {
     const track = container.querySelector('[data-slot="progress-bar-track"]');
-    if (track === null) throw new Error("找不到 ARIA 宿主");
+    if (track === null) {
+      throw new Error("找不到 ARIA 宿主");
+    }
     return track;
   }
 
   it("给了 ariaLabel 就挂在 ARIA 宿主上，与数值同处一个元素", () => {
-    const { container } = render(
-      <ProgressBar value={100} ariaLabel="剧本" showValue={false} />,
-    );
+    const { container } = render(<ProgressBar value={100} ariaLabel="剧本" showValue={false} />);
     const track = trackOf(container);
     expect(track.getAttribute("aria-label")).toBe("剧本");
     expect(track.getAttribute("role")).toBe("progressbar");
@@ -140,9 +129,7 @@ describe("ProgressBar 的外观可覆盖而不重画轨道", () => {
      *   · data-slot="progress-track" → shadcn ProgressTrack（视觉轨道容器），
      *     管 bg-* / h-* / rounded-* / overflow-* 这类外观档。
      * trackClassName 是覆盖**视觉轨道**的，所以断言查后者。 */
-    const visualTrack = container.querySelector(
-      '[data-slot="progress-track"]',
-    )!;
+    const visualTrack = container.querySelector('[data-slot="progress-track"]')!;
     const fill = container.querySelector('[data-slot="progress-bar-fill"]')!;
     expect(visualTrack.className).toContain("bg-elevated");
     expect(visualTrack.className).toContain("h-1");

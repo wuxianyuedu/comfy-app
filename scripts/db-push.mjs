@@ -70,8 +70,7 @@ const root = path.resolve(import.meta.dirname, "..");
  * 确认那一步，库不动（本轮就是拿这一形在临时副本上复现出 #1956 那个 fail-open 的）。 */
 rejectUnknownArgs({
   command: "db:push",
-  action:
-    "它默认动的是 `drizzle-kit push --force` —— **真的写库**，且自动批准会丢数据的语句。",
+  action: "它默认动的是 `drizzle-kit push --force` —— **真的写库**，且自动批准会丢数据的语句。",
   exits: [
     "一份不写库的待执行语句清单 → pnpm exec drizzle-kit push（不带 --force；" +
       "无 TTY 时它列出语句后停在确认那一步，库不动）；",
@@ -89,7 +88,9 @@ const dbPath = resolveSqlitePath(root);
 
 /** 数一遍库里的用户表（排除 sqlite 内部表）。读不到/不是库 → -1。 */
 function countUserTables() {
-  if (!fs.existsSync(dbPath)) return -1;
+  if (!fs.existsSync(dbPath)) {
+    return -1;
+  }
   try {
     const db = new DatabaseSync(dbPath, { readOnly: true, open: true });
     try {
@@ -102,7 +103,9 @@ function countUserTables() {
        * 这一句直接 `row.c` 会抛出去被下面那个大 `catch` 折成 -1（今天的行为），
        * 写成 `row?.c ?? 0` 就把「取不到」降成了「无表」——那正是本文件下游要区分
        * 的两件事（0 会让复核报「drizzle-kit 没建表」）。所以判空照旧回 -1。 */
-      if (!row) return -1;
+      if (!row) {
+        return -1;
+      }
       return Number(row.c ?? 0);
     } finally {
       db.close();
@@ -267,8 +270,6 @@ function syncSchema() {
   } else if (writeSchemaFingerprint(root, undefined, fingerprint)) {
     process.stdout.write(`[db:push] ✓ 已登记 schema 指纹 ${fingerprint}\n`);
   } else {
-    process.stdout.write(
-      "[db:push] ⚠ 指纹登记失败（库不可写 / 被占用）——启动时会多跑一次 diff\n",
-    );
+    process.stdout.write("[db:push] ⚠ 指纹登记失败（库不可写 / 被占用）——启动时会多跑一次 diff\n");
   }
 }

@@ -46,7 +46,9 @@ export async function loadModeContracts(
 ): Promise<Array<ModeContract>> {
   for (const rel of [MODE_CONTRACTS_REL_PATH, LEGACY_CONFIG_REL_PATH]) {
     const override = await readOverrideFile(path.join(root, rel));
-    if (override && override.length > 0) return override;
+    if (override && override.length > 0) {
+      return override;
+    }
   }
   return configuredModeContracts();
 }

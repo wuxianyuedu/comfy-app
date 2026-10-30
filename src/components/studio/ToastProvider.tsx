@@ -42,7 +42,9 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function useToast(): ToastContextValue {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast must be used within <ToastProvider>");
+  if (!ctx) {
+    throw new Error("useToast must be used within <ToastProvider>");
+  }
   return ctx;
 }
 
@@ -97,7 +99,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const schedule = useCallback(
     (id: string, duration?: number) => {
       const tm = timers.current.get(id);
-      if (tm) clearTimeout(tm);
+      if (tm) {
+        clearTimeout(tm);
+      }
       if (duration && duration > 0) {
         timers.current.set(
           id,
@@ -125,7 +129,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const update = useCallback(
     (id: string, patch: Partial<Omit<ToastItem, "id">>) => {
       setItems((prev) => prev.map((prev) => (prev.id === id ? { ...prev, ...patch } : prev)));
-      if (patch.duration !== undefined) schedule(id, patch.duration);
+      if (patch.duration !== undefined) {
+        schedule(id, patch.duration);
+      }
     },
     [schedule],
   );

@@ -40,7 +40,9 @@ let releaseDrizzle: (() => void) | null = null;
 
 /** 把真 `drizzle/` 挪到一边（返回备份路径）；已经在一边时返回 null。 */
 function hideMigrations(): string | null {
-  if (!fs.existsSync(REAL_DRIZZLE)) return null;
+  if (!fs.existsSync(REAL_DRIZZLE)) {
+    return null;
+  }
   const bak = `${REAL_DRIZZLE}.test-bak-${process.pid}`;
   fs.renameSync(REAL_DRIZZLE, bak);
   return bak;
@@ -209,7 +211,9 @@ describe("前提不成立时：非零退出，且不产出 0 字节库", () => {
 describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一份", () => {
   /** 数一遍临时库里的用户表（读不到就返回 -1，让断言自己说清是哪种缺件）。 */
   function countTables(file: string): number {
-    if (!fs.existsSync(file)) return -1;
+    if (!fs.existsSync(file)) {
+      return -1;
+    }
     const db = new DatabaseSync(file, { readOnly: true, open: true });
     try {
       const row = db

@@ -128,7 +128,9 @@ export const DEFAULTS: AppSettings = {
 /** 退出策略默认值变更的一次性迁移（判据见 exitKillComfyuiDefaultMigrated）。
  *  纯函数、不做 IO —— 导出供单测直接锁住「迁移一次就收手」的行为。 */
 export function migrateExitDefaults(settings: AppSettings): AppSettings {
-  if (settings.exitKillComfyuiDefaultMigrated === true) return settings;
+  if (settings.exitKillComfyuiDefaultMigrated === true) {
+    return settings;
+  }
   return {
     ...settings,
     exitKillComfyui: DEFAULTS.exitKillComfyui,

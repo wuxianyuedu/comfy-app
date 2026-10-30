@@ -54,7 +54,9 @@ function stripComments(src: string): string {
       continue;
     }
     if (ch === "/" && next === "/") {
-      while (idx < src.length && src[idx] !== "\n") idx++;
+      while (idx < src.length && src[idx] !== "\n") {
+        idx++;
+      }
       out += "\n";
       continue;
     }
@@ -194,8 +196,11 @@ function listFiles(dir: string, prefix = ""): Array<string> {
       out.push(rel);
       continue;
     }
-    if (st.isDirectory()) out.push(...listFiles(abs, rel));
-    else out.push(rel);
+    if (st.isDirectory()) {
+      out.push(...listFiles(abs, rel));
+    } else {
+      out.push(rel);
+    }
   }
   return out;
 }

@@ -261,7 +261,9 @@ async function buildWorkflowDetailJson(input: {
       let def = subs[classType];
       if (!def) {
         const matchKey = Object.keys(subs).find((key) => subs[key]?.id === classType);
-        if (matchKey) def = subs[matchKey];
+        if (matchKey) {
+          def = subs[matchKey];
+        }
       }
       if (def && typeof def.name === "string" && def.name.trim()) {
         resolvedTitle = def.name.trim();
@@ -296,7 +298,9 @@ async function buildWorkflowDetailJson(input: {
   ) as Record<string, WorkflowIORawEntry>;
 
   const nodeTitleById: Record<string, string> = {};
-  for (const n of nodes) nodeTitleById[n.id] = n.title ?? n.class_type;
+  for (const n of nodes) {
+    nodeTitleById[n.id] = n.title ?? n.class_type;
+  }
 
   /* ── workflowIO ENRICHMENT ──
    * 落库的勾选只记录「哪个 pin 被暴露」（`direction` / `kind` / `nodeId` /
@@ -343,7 +347,9 @@ async function buildWorkflowDetailJson(input: {
   if (raw && Array.isArray(raw.groups)) {
     raw.groups.forEach((g: unknown, idx: number) => {
       const rec = asRecord(g);
-      if (!rec) return;
+      if (!rec) {
+        return;
+      }
       const bounds: Array<unknown> =
         Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
       groups.push({
@@ -370,7 +376,9 @@ async function buildWorkflowDetailJson(input: {
   const notes: Array<WorkflowDetailNote> = [];
   if (raw && Array.isArray(raw.nodes)) {
     raw.nodes.forEach((n) => {
-      if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) return;
+      if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) {
+        return;
+      }
       const pos = Array.isArray(n.pos) && n.pos.length >= 2 ? n.pos : [0, 0];
       const size = Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
       const wv = Array.isArray(n.widgets_values) ? n.widgets_values[0] : "";
@@ -524,7 +532,9 @@ export async function buildWorkflowDetailFull(
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
-  if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  if (!tpl) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  }
 
   /* ── 自动同步（可选，默认关）──
    *  设置 `autoSyncLocalWorkflow` 开启时，「进详情」等价于「点同步」：检出到磁盘
@@ -606,7 +616,9 @@ export async function buildSubgraphDetail(
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
-  if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  if (!tpl) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  }
 
   const raw = asRawWorkflow(tpl.rawJson);
   if (!raw?.definitions?.subgraphs) {
@@ -623,7 +635,9 @@ export async function buildSubgraphDetail(
   if (!sub) {
     // 退回按 .id 字段匹配
     const matchUid = Object.keys(subgraphs).find((key) => subgraphs[key]?.id === uid);
-    if (matchUid) sub = subgraphs[matchUid];
+    if (matchUid) {
+      sub = subgraphs[matchUid];
+    }
   }
   if (!sub) {
     throw new TRPCError({
@@ -654,7 +668,9 @@ export async function buildSubgraphDetail(
     for (const [nodeId, entries] of Object.entries(sg.rawInputsById)) {
       const classType = sg.graph[nodeId]?.class_type;
       for (const entry of entries) {
-        if (entry.type !== "STRING" || entry.multiline) continue;
+        if (entry.type !== "STRING" || entry.multiline) {
+          continue;
+        }
         if (
           inferIsMultiline(await multilineForClassField(classType, entry.name), entry.widgetValue)
         ) {
@@ -671,10 +687,14 @@ export async function buildSubgraphDetail(
     for (const n of sg.nodes) {
       for (const inp of n.raw_inputs ?? []) {
         const authorLabel = sg.proxyAuthorLabels[`${n.id}::${inp.name}`];
-        if (!authorLabel) continue;
+        if (!authorLabel) {
+          continue;
+        }
         /* 只对「本层槽位名与作者名不同」的暴露口打标；`field` 用槽位名本身，
          *  让富化按本层名字回查得中（顶层 `innerInputsById` 的键就是槽位名）。 */
-        if (inp.name === authorLabel) continue;
+        if (inp.name === authorLabel) {
+          continue;
+        }
         inp.label = authorLabel;
         inp.proxyField ??= { nodeId: "", field: inp.name, label: authorLabel };
       }

@@ -166,11 +166,7 @@ export function run(cmd, args, options = {}) {
  * @param {Record<string, string | undefined>} [env]
  */
 export function ledgerRoot(env = process.env) {
-  return (
-    env.COMFYAPP_CI_PROBE_DIR ||
-    env.LOCALAPPDATA ||
-    path.join(os.homedir(), ".cache")
-  );
+  return env.COMFYAPP_CI_PROBE_DIR || env.LOCALAPPDATA || path.join(os.homedir(), ".cache");
 }
 
 /**
@@ -229,12 +225,22 @@ export function writeLedger(file, entry, fsLike = realFs) {
  * @param {number | null | undefined} ageS
  */
 export function fmtAge(ageS) {
-  if (ageS === null || ageS === undefined) return "-";
+  if (ageS === null || ageS === undefined) {
+    return "-";
+  }
   const n = Number(ageS);
-  if (!Number.isFinite(n)) return "-";
-  if (n < 90) return `${n}s`;
-  if (n < 3600) return `${Math.round(n / 60)}m`;
-  if (n < 86400) return `${Math.round(n / 3600)}h`;
+  if (!Number.isFinite(n)) {
+    return "-";
+  }
+  if (n < 90) {
+    return `${n}s`;
+  }
+  if (n < 3600) {
+    return `${Math.round(n / 60)}m`;
+  }
+  if (n < 86400) {
+    return `${Math.round(n / 3600)}h`;
+  }
   return `${Math.round(n / 86400)}d`;
 }
 
@@ -267,7 +273,9 @@ export function jobLabel(cwd) {
 export function dirFact(target, nowMs, fsLike = realFs) {
   /** @type {DirFact} */
   const absent = { present: false, ageS: null, bornMs: null, from: "-" };
-  if (target == null) return absent;
+  if (target == null) {
+    return absent;
+  }
   /** @type {{birthtimeMs: number, mtimeMs: number} | null} */
   let st;
   try {
@@ -275,7 +283,9 @@ export function dirFact(target, nowMs, fsLike = realFs) {
   } catch {
     return absent;
   }
-  if (!st) return absent;
+  if (!st) {
+    return absent;
+  }
   const born = st.birthtimeMs || st.mtimeMs;
   return {
     present: true,
@@ -310,7 +320,9 @@ export function gitReadout(cwd, runCmd = run) {
     remotes: null,
   };
   const sha = git(["rev-parse", "HEAD"]);
-  if (!sha.ok) return out;
+  if (!sha.ok) {
+    return out;
+  }
   out.head = sha.out.slice(0, 12);
   out.detached = !git(["symbolic-ref", "-q", "HEAD"]).ok;
   const refs = git(["for-each-ref", "--format=%(refname)", "refs/heads"]);
@@ -323,9 +335,7 @@ export function gitReadout(cwd, runCmd = run) {
   const shallow = git(["rev-parse", "--is-shallow-repository"]);
   out.shallow = shallow.ok ? shallow.out : null;
   const remote = git(["remote"]);
-  out.remotes = remote.ok
-    ? remote.out.split("\n").filter(Boolean).length
-    : null;
+  out.remotes = remote.ok ? remote.out.split("\n").filter(Boolean).length : null;
   out.gitOk = true;
   return out;
 }
@@ -340,9 +350,7 @@ export function envReadout(env = process.env) {
   const names = Object.keys(env)
     .filter((k) => k.startsWith("CNB_"))
     .sort();
-  const lines = [
-    `CNB_* 变量 ${names.length} 个：${names.join(" ") || "（一个都没有）"}`,
-  ];
+  const lines = [`CNB_* 变量 ${names.length} 个：${names.join(" ") || "（一个都没有）"}`];
   for (const name of KEY_ENV) {
     const value = env[name];
     if (value === undefined) {
@@ -355,15 +363,11 @@ export function envReadout(env = process.env) {
         : `  ok ${name} = ${value}`,
     );
   }
-  const sensitive = names.filter(
-    (name) => SENSITIVE_ENV.test(name) && !KEY_ENV.includes(name),
-  );
+  const sensitive = names.filter((name) => SENSITIVE_ENV.test(name) && !KEY_ENV.includes(name));
   /* 有界：平台一次能给几十上百个变量，而这里要答的只有「凭据在不在、够不够得着自取」
    * 那一格。全名已经在第一行打过了，逐条只点到够定位的量。 */
   for (const name of sensitive.slice(0, 10)) {
-    lines.push(
-      `  ** ${name} 在场（敏感族，长度 ${String(env[name]).length}，值不打）`,
-    );
+    lines.push(`  ** ${name} 在场（敏感族，长度 ${String(env[name]).length}，值不打）`);
   }
   if (sensitive.length > 10) {
     lines.push(`  …另有 ${sensitive.length - 10} 个敏感族变量，同上不打值`);
@@ -385,9 +389,7 @@ export function envReadout(env = process.env) {
  */
 export function reuseVerdict(history, current) {
   if (history.length === 0) {
-    return [
-      "结论·未定：账本里没有比本次更早的一条，没有对照。同一台节点上再跑一轮就有了。",
-    ];
+    return ["结论·未定：账本里没有比本次更早的一条，没有对照。同一台节点上再跑一轮就有了。"];
   }
   const sameDir = history.filter((e) => e.cwd === current.cwd);
   if (sameDir.length === 0) {
@@ -476,19 +478,11 @@ export function workspaceProbeLines(io = {}) {
   const facts = {
     workspace: dirFact(cwd, nowMs, fsLike),
     gitDir: dirFact(gitDir, nowMs, fsLike),
-    fetchHead: dirFact(
-      gitDir ? path.join(gitDir, "FETCH_HEAD") : null,
-      nowMs,
-      fsLike,
-    ),
+    fetchHead: dirFact(gitDir ? path.join(gitDir, "FETCH_HEAD") : null, nowMs, fsLike),
     node_modules: dirFact(path.join(cwd, "node_modules"), nowMs, fsLike),
     ".next": dirFact(path.join(cwd, ".next"), nowMs, fsLike),
     coverage: dirFact(path.join(cwd, "coverage"), nowMs, fsLike),
-    "playwright-report": dirFact(
-      path.join(cwd, "playwright-report"),
-      nowMs,
-      fsLike,
-    ),
+    "playwright-report": dirFact(path.join(cwd, "playwright-report"), nowMs, fsLike),
   };
 
   /** @type {ProbeEntry} */
@@ -504,8 +498,7 @@ export function workspaceProbeLines(io = {}) {
   lines.push("== 检出与工作区 ==");
   lines.push(`cwd                 ${cwd}`);
   /** @type {(f: DirFact) => string} */
-  const age = (f) =>
-    f.present ? `在场，${fmtAge(f.ageS)} 前出现（取的是 ${f.from}）` : "不在场";
+  const age = (f) => (f.present ? `在场，${fmtAge(f.ageS)} 前出现（取的是 ${f.from}）` : "不在场");
   lines.push(`.git                ${age(facts.gitDir)}`);
   lines.push(`.git/FETCH_HEAD     ${age(facts.fetchHead)}`);
   if (git.gitOk) {
@@ -517,9 +510,7 @@ export function workspaceProbeLines(io = {}) {
       `对象库              ${git.packKib} KiB（git count-objects 现成的数）  remote ×${git.remotes}`,
     );
   } else {
-    lines.push(
-      "HEAD                git 读不到 —— 这一跑的工作区不是 git 检出（读数照打，不判红）",
-    );
+    lines.push("HEAD                git 读不到 —— 这一跑的工作区不是 git 检出（读数照打，不判红）");
   }
   /* 四件逐条点名而不是套循环：键写死在这里，`facts` 就是那份有固定形状的常量，
    * 不用 `Record<string, …>` 把每个读取都推成「possibly undefined」。 */
@@ -563,10 +554,9 @@ export function workspaceProbeLines(io = {}) {
 
 /* 判「是不是直接执行」的写法与 `python-probe.mjs` 逐字相同：拼 `file://${argv[1]}`
  * 在 Windows 上恒不相等，于是本脚本一行都不打就退 0 —— 而它存在的意义正是把这一格打出来。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
-  for (const line of workspaceProbeLines()) console.log(line);
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
+  for (const line of workspaceProbeLines()) {
+    console.log(line);
+  }
   process.exit(0);
 }

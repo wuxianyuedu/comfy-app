@@ -106,12 +106,18 @@ function activeShellCommands(source: string): Array<string> {
 function attrOf(pattern: string, key: string): string | null {
   for (const line of read(".gitattributes").split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
     const [glob, ...rest] = trimmed.split(/\s+/);
-    if (glob !== pattern) continue;
+    if (glob !== pattern) {
+      continue;
+    }
     for (const kv of rest) {
       const [k, v] = kv.split("=");
-      if (k === key) return v ?? "true";
+      if (k === key) {
+        return v ?? "true";
+      }
     }
     return null;
   }
@@ -130,8 +136,12 @@ function countGlob(pattern: string): number {
   let n = 0;
   for (const line of read(".gitattributes").split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    if (trimmed.split(/\s+/)[0] === pattern) n += 1;
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+    if (trimmed.split(/\s+/)[0] === pattern) {
+      n += 1;
+    }
   }
   return n;
 }
@@ -152,7 +162,9 @@ function fontFaces(css: string): Array<string> {
 /** 某个 `--font-*` 变量的值里，第几个位置是 `family`（0 起算；找不到为 -1）。 */
 function familyPosition(css: string, cssVar: string, family: string): number {
   const value = new RegExp(`${cssVar}:\\s*\\n?\\s*([^;]+);`).exec(css)?.[1];
-  if (value === undefined) return -1;
+  if (value === undefined) {
+    return -1;
+  }
   const names = [...value.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   return names.indexOf(family);
 }
@@ -206,7 +218,9 @@ describe("字体走 git-lfs 的三条接线", () => {
       const [glob, ...rest] = line.trim().split(/\s+/);
       for (const kv of rest) {
         const [k, v = ""] = kv.split("=");
-        if (k === "filter") parsed.set(glob ?? "", v);
+        if (k === "filter") {
+          parsed.set(glob ?? "", v);
+        }
       }
     }
     expect(parsed.get("*.woff2"), "属性表里没有 *.woff2 ⇒ 上面那条断言应当红").toBe(undefined);

@@ -72,11 +72,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -95,8 +91,7 @@ const TYPE_ONLY_FILE_RE = /\.test-d\.tsx?$/;
  * 扫描面，且漏得**静默**（同 §11.18.3.1 那条实测：`expect.soft` 的判据首版
  * 计数从 27 掉到 26，而判据照样报 OK）。
  */
-const TYPE_ASSERTION_SITE_RE =
-  /(?<![\w.$])(?:expectTypeOf|assertType)\s*[<(]/g;
+const TYPE_ASSERTION_SITE_RE = /(?<![\w.$])(?:expectTypeOf|assertType)\s*[<(]/g;
 
 /**
  * 枚举扫描面 = 上面两档的**并**，由两条 `source` 现拼（`walkForScan` 只收一个
@@ -104,9 +99,7 @@ const TYPE_ASSERTION_SITE_RE =
  * 并进扫描面」：那种漏法是静默的，站点照样数得到、只是这一类文件永不进面。
  * 分支仍由 `main` 里的 `TYPE_ONLY_FILE_RE.test(rel)` 判。
  */
-const SCAN_FILE_RE = new RegExp(
-  `(?:${TEST_FILE_RE.source}|${TYPE_ONLY_FILE_RE.source})`,
-);
+const SCAN_FILE_RE = new RegExp(`(?:${TEST_FILE_RE.source}|${TYPE_ONLY_FILE_RE.source})`);
 
 function walk(dir) {
   return walkForScan(dir, SCAN_FILE_RE);
@@ -136,8 +129,11 @@ function maskNonCode(src) {
     const ch = src[i];
     const next = src[i + 1];
     if (mode === "line") {
-      if (ch === "\n") mode = "code";
-      else out[i] = " ";
+      if (ch === "\n") {
+        mode = "code";
+      } else {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -148,7 +144,9 @@ function maskNonCode(src) {
         i += 2;
         mode = "code";
       } else {
-        if (ch !== "\n") out[i] = " ";
+        if (ch !== "\n") {
+          out[i] = " ";
+        }
         i += 1;
       }
       continue;
@@ -161,8 +159,11 @@ function maskNonCode(src) {
         i += 2;
         continue;
       }
-      if (ch === quote) mode = "code";
-      else out[i] = " ";
+      if (ch === quote) {
+        mode = "code";
+      } else {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -188,7 +189,9 @@ function maskNonCode(src) {
         i += 2;
         continue;
       }
-      if (ch !== "\n") out[i] = " ";
+      if (ch !== "\n") {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -220,12 +223,15 @@ function maskNonCode(src) {
       continue;
     }
     if (stack.at(-1) === "interp") {
-      if (ch === "{") braceDepth += 1;
-      else if (ch === "}") {
+      if (ch === "{") {
+        braceDepth += 1;
+      } else if (ch === "}") {
         if (braceDepth === 0) {
           stack.pop();
           mode = "tmpl";
-        } else braceDepth -= 1;
+        } else {
+          braceDepth -= 1;
+        }
       }
     }
     i += 1;
@@ -254,8 +260,11 @@ function blankJsonComments(src) {
     const ch = src[i];
     const next = src[i + 1];
     if (mode === "line") {
-      if (ch === "\n") mode = "code";
-      else out[i] = " ";
+      if (ch === "\n") {
+        mode = "code";
+      } else {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -266,7 +275,9 @@ function blankJsonComments(src) {
         i += 2;
         mode = "code";
       } else {
-        if (ch !== "\n") out[i] = " ";
+        if (ch !== "\n") {
+          out[i] = " ";
+        }
         i += 1;
       }
       continue;
@@ -276,7 +287,9 @@ function blankJsonComments(src) {
         i += 2;
         continue;
       }
-      if (ch === '"') mode = "code";
+      if (ch === '"') {
+        mode = "code";
+      }
       i += 1;
       continue;
     }
@@ -326,10 +339,9 @@ function readTsconfigInclude() {
   try {
     json = JSON.parse(stripped);
   } catch (e) {
-    throw new Error(
-      `解析 tsconfig.json 失败（挖注释后仍不是合法 JSON）：${e.message}`,
-      { cause: e },
-    );
+    throw new Error(`解析 tsconfig.json 失败（挖注释后仍不是合法 JSON）：${e.message}`, {
+      cause: e,
+    });
   }
   if (!Array.isArray(json?.include)) {
     throw new Error("tsconfig.json 的 `include` 不是数组（形状不在预期内）");
@@ -366,7 +378,9 @@ function includeEntryToRegExp(entry) {
     }
     if (ch === "{") {
       const end = norm.indexOf("}", i);
-      if (end === -1) throw new Error(`include 条目里的 \`{\` 没有配套的 \`}\`：${entry}`);
+      if (end === -1) {
+        throw new Error(`include 条目里的 \`{\` 没有配套的 \`}\`：${entry}`);
+      }
       const alts = norm
         .slice(i + 1, end)
         .split(",")
@@ -406,9 +420,7 @@ function main() {
     return 1;
   }
   if (include.length === 0) {
-    console.error(
-      "[ERROR] tsconfig 的 include 是空数组 —— 类型层断言必然没有执行者。",
-    );
+    console.error("[ERROR] tsconfig 的 include 是空数组 —— 类型层断言必然没有执行者。");
     return 1;
   }
 
@@ -435,7 +447,9 @@ function main() {
       continue;
     }
     const found = [...masked.matchAll(TYPE_ASSERTION_SITE_RE)];
-    if (found.length === 0) continue;
+    if (found.length === 0) {
+      continue;
+    }
 
     const typeOnly = TYPE_ONLY_FILE_RE.test(rel);
     /* 站点所在文件**有没有人跑它的类型断言**：判据是「在 tsconfig 的 include 面里」。
@@ -445,10 +459,10 @@ function main() {
     totalSites += found.length;
 
     if (!covered) {
-      const lines = found.map(
-        (m) => masked.slice(0, m.index).split("\n").length,
-      );
-      for (const line of lines) offenders.push({ rel, line, why: "不在 tsconfig 的 include 面里" });
+      const lines = found.map((m) => masked.slice(0, m.index).split("\n").length);
+      for (const line of lines) {
+        offenders.push({ rel, line, why: "不在 tsconfig 的 include 面里" });
+      }
     }
   }
 
@@ -473,7 +487,9 @@ function main() {
       ? `[type-assertion] 盘点：${offenders.length} 处无执行者（--report 不判失败）`
       : `[ERROR] 有 ${offenders.length} 处类型层断言**没有执行者**`) + "：\n",
   );
-  for (const o of offenders) console.error(`  · ${o.rel}:${o.line} —— ${o.why}`);
+  for (const o of offenders) {
+    console.error(`  · ${o.rel}:${o.line} —— ${o.why}`);
+  }
   console.error(
     "\n`expectTypeOf` / `assertType` 在 vitest 里**没有牙**：错的断言照样报绿" +
       "\n（实测 vitest 5.0.3：`expectTypeOf<string>().toEqualTypeOf<number>()` → Tests 1 passed）。" +
@@ -490,6 +506,8 @@ function main() {
 
 /* 只有作为脚本运行才执行并定退出码；被 `require` 时（判据自测要进程内调
    `readMasked`）不许把宿主进程一起带走。 */
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}
 
 module.exports = { readMasked };

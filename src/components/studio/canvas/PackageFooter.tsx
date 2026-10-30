@@ -65,7 +65,9 @@ export function PackageFooter({
         ? resolved.slice("ComfyUI-".length)
         : resolved;
 
-  if (!display) return null;
+  if (!display) {
+    return null;
+  }
 
   return (
     <div

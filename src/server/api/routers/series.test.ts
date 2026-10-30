@@ -48,17 +48,23 @@ const otherCaller = () =>
 /** 断言非空的种子 helper（create 类 procedure 返回 `T | undefined`）。 */
 async function addSeries(caller = userCaller(), title = "S") {
   const s = await caller.create({ title });
-  if (!s) throw new Error("seed series failed");
+  if (!s) {
+    throw new Error("seed series failed");
+  }
   return s;
 }
 async function addSeason(seriesId: string, caller = userCaller()) {
   const se = await caller.createSeason({ seriesId });
-  if (!se) throw new Error("seed season failed");
+  if (!se) {
+    throw new Error("seed season failed");
+  }
   return se;
 }
 async function addEpisode(seasonId: string, caller = userCaller()) {
   const ep = await caller.createEpisode({ seasonId });
-  if (!ep) throw new Error("seed ep failed");
+  if (!ep) {
+    throw new Error("seed ep failed");
+  }
   return ep;
 }
 

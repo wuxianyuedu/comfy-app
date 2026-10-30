@@ -20,8 +20,11 @@ beforeEach(() => {
   warnMock.mockClear();
 });
 afterAll(() => {
-  if (original === undefined) delete process.env.COMFY_EXECUTOR;
-  else process.env.COMFY_EXECUTOR = original;
+  if (original === undefined) {
+    delete process.env.COMFY_EXECUTOR;
+  } else {
+    process.env.COMFY_EXECUTOR = original;
+  }
 });
 
 describe("resolveExecutorClaim", () => {
@@ -45,4 +48,6 @@ describe("resolveExecutorClaim", () => {
   });
 });
 
-if (original !== undefined) process.env.COMFY_EXECUTOR = original;
+if (original !== undefined) {
+  process.env.COMFY_EXECUTOR = original;
+}

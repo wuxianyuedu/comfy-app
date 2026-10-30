@@ -135,7 +135,9 @@ export function RemoteModelDialog({
                       apiKey: event.target.value,
                     });
                     /* 输入新密钥即撤销「清除」标记 */
-                    if (event.target.value) d.setClearKey(false);
+                    if (event.target.value) {
+                      d.setClearKey(false);
+                    }
                   }}
                   placeholder={
                     dialog.mode === "edit" && dialog.entry.apiKey

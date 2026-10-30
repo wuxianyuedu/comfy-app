@@ -36,7 +36,9 @@ export function useWorkflowModes({
 }: UseWorkflowModesArgs): WorkflowModesController {
   const saveModes = useCallback(
     async (next: WorkflowModesState) => {
-      if (!workflowId) return;
+      if (!workflowId) {
+        return;
+      }
       setModes(next);
       try {
         await patchWorkflow({

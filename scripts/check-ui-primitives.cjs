@@ -319,7 +319,8 @@
  *   node scripts/check-ui-primitives.cjs --update   # 只给**新引入的棘轮判据**登记起点
  *                                                  # （硬闸未清零时直接拒绝，不写基线）
  *   --staged（钩子用）仅当暂存改动落在扫描面内才扫 —— 口径见 §13.5.8.2 */
-const fs = require("node:fs"), path = require("node:path");
+const fs = require("node:fs"),
+  path = require("node:path");
 const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -348,19 +349,17 @@ const {
 
 /* ── 扫描范围 ────────────────────────────────────────────── */
 
-
 /** 某文件是否被指定判据豁免。 */
 function isExemptFile(id, rel) {
   return (EXEMPT_FILES[id] ?? []).some((e) => e.re.test(rel));
 }
 
-
-
-
 /** rule id → 档位名；未登记的 id 返回 `null`（调用方据此报错）。 */
 function tierOf(id) {
   for (const [tier, ids] of Object.entries(RULE_TIER_IDS)) {
-    if (ids.includes(id)) return tier;
+    if (ids.includes(id)) {
+      return tier;
+    }
   }
   return null;
 }
@@ -389,7 +388,9 @@ function tierProblems() {
   const seen = new Map();
   for (const [tier, ids] of Object.entries(RULE_TIER_IDS)) {
     for (const id of ids) {
-      if (!RULES[id]) problems.push(`${tier} 登记了不存在的判据 ${id}`);
+      if (!RULES[id]) {
+        problems.push(`${tier} 登记了不存在的判据 ${id}`);
+      }
       if (seen.has(id)) {
         problems.push(`${id} 同时登记在 ${seen.get(id)} 与 ${tier}`);
       }
@@ -404,17 +405,19 @@ function tierProblems() {
   return problems;
 }
 
-
-
 /* ── 采集 ────────────────────────────────────────────────── */
 
 function walk(dir, out = []) {
   const abs = path.join(ROOT, dir);
-  if (!fs.existsSync(abs)) return out;
+  if (!fs.existsSync(abs)) {
+    return out;
+  }
   for (const e of fs.readdirSync(abs, { withFileTypes: true })) {
     const rel = `${dir}/${e.name}`;
     if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name === "__snapshots__") continue;
+      if (e.name === "node_modules" || e.name === "__snapshots__") {
+        continue;
+      }
       walk(rel, out);
     } else {
       out.push(rel);
@@ -423,8 +426,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-const isTest = (r) =>
-  /\.test\.[cm]?[jt]sx?$/.test(r) || r.includes("/__tests__/");
+const isTest = (r) => /\.test\.[cm]?[jt]sx?$/.test(r) || r.includes("/__tests__/");
 
 /** 收集当前各文件的违规计数：rel -> { P1?, P2?, P3?, P4? }。
  *  硬闸判据（HARD_GATE_RULES）一并收进来，由 main 分开判定：棘轮只看前者，
@@ -433,8 +435,12 @@ function collect() {
   const files = {};
   for (const dir of SCAN_DIRS) {
     for (const rel of walk(dir)) {
-      if (!/\.[jt]sx?$/.test(rel) || rel.endsWith(".d.ts")) continue;
-      if (isTest(rel)) continue;
+      if (!/\.[jt]sx?$/.test(rel) || rel.endsWith(".d.ts")) {
+        continue;
+      }
+      if (isTest(rel)) {
+        continue;
+      }
       /* `ui/` 豁免与 `hooks/` 豁免都**只对「数视图实现」的判据**成立：
        *   · P1/P2/P3 数的是视图里手写 `<button>` / portal / spinner ——
        *     `ui/` 与 `hooks/` 里出现不是「自己实现一份」；
@@ -445,7 +451,9 @@ function collect() {
       const inLib = /^src\/(lib|server)\//.test(rel);
       const text = fs.readFileSync(path.join(ROOT, rel), "utf8");
       for (const [id, rule] of Object.entries(RULES)) {
-        if (isExemptFile(id, rel)) continue;
+        if (isExemptFile(id, rel)) {
+          continue;
+        }
         /* P67 引入的对偶判据：这条账问的就是 ui/ 层自己有没有绕开 shadcn
          * 基元（Badge / Progress / Slider / Empty / Field），视图层里同样的
          * 命名形态是消费基元的业务包装、不该被算进来。见 UI_ONLY_RULES 上方
@@ -453,14 +461,24 @@ function collect() {
          * `inUi && !UI_ALSO_SCANNED.has(id)` 早一步 continue 掉、UI_ONLY
          * 反而永远扫不到自己该扫的那一层。 */
         if (UI_ONLY_RULES.has(id)) {
-          if (!inUi) continue;
+          if (!inUi) {
+            continue;
+          }
         } else {
-          if (inUi && !UI_ALSO_SCANNED.has(id)) continue;
-          if (inHooks && !HOOKS_ALSO_SCANNED.has(id)) continue;
-          if (inLib && !LIB_SCANNED_RULES.has(id)) continue;
+          if (inUi && !UI_ALSO_SCANNED.has(id)) {
+            continue;
+          }
+          if (inHooks && !HOOKS_ALSO_SCANNED.has(id)) {
+            continue;
+          }
+          if (inLib && !LIB_SCANNED_RULES.has(id)) {
+            continue;
+          }
         }
         const n = rule.count(text);
-        if (n > 0) (files[rel] ||= {})[id] = n;
+        if (n > 0) {
+          (files[rel] ||= {})[id] = n;
+        }
       }
     }
   }
@@ -473,9 +491,13 @@ function ratchetOnly(map) {
   for (const [rel, counts] of Object.entries(map)) {
     const keep = {};
     for (const [id, n] of Object.entries(counts)) {
-      if (!HARD_GATE_RULES.has(id)) keep[id] = n;
+      if (!HARD_GATE_RULES.has(id)) {
+        keep[id] = n;
+      }
     }
-    if (Object.keys(keep).length) out[rel] = keep;
+    if (Object.keys(keep).length) {
+      out[rel] = keep;
+    }
   }
   return out;
 }
@@ -485,8 +507,9 @@ function hardGateHits(map) {
   const hits = [];
   for (const [rel, counts] of Object.entries(map)) {
     for (const id of Object.keys(counts)) {
-      if (HARD_GATE_RULES.has(id))
+      if (HARD_GATE_RULES.has(id)) {
         hits.push(`${id} → ${rel}（${counts[id]} 处）`);
+      }
     }
   }
   return hits;
@@ -494,7 +517,11 @@ function hardGateHits(map) {
 
 function total(map) {
   let n = 0;
-  for (const v of Object.values(map)) for (const c of Object.values(v)) n += c;
+  for (const v of Object.values(map)) {
+    for (const c of Object.values(v)) {
+      n += c;
+    }
+  }
   return n;
 }
 
@@ -538,11 +565,11 @@ function main() {
     );
     process.exit(1);
   }
-  if (ARGS.has("--staged") && !REPORT_ONLY && !UPDATE) skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[ui-primitives]" });
+  if (ARGS.has("--staged") && !REPORT_ONLY && !UPDATE) {
+    skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[ui-primitives]" });
+  }
   const now = collect();
-  const prev = fs.existsSync(BASELINE)
-    ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))
-    : null;
+  const prev = fs.existsSync(BASELINE) ? JSON.parse(fs.readFileSync(BASELINE, "utf8")) : null;
   let baseFiles = prev?.files ?? null;
 
   if (UPDATE) {
@@ -613,36 +640,40 @@ function main() {
     const unknownRows = [];
     for (const dir of SCAN_DIRS) {
       for (const rel of walk(dir)) {
-        if (!/\.[jt]sx?$/.test(rel) || rel.endsWith(".d.ts")) continue;
-        if (isTest(rel)) continue;
+        if (!/\.[jt]sx?$/.test(rel) || rel.endsWith(".d.ts")) {
+          continue;
+        }
+        if (isTest(rel)) {
+          continue;
+        }
         const inUi = /^src\/components\/ui\//.test(rel);
-        if (inUi && !UI_ALSO_SCANNED.has("P82")) continue;
-        const r = countButtonTitle(
-          fs.readFileSync(path.join(ROOT, rel), "utf8"),
-        );
-        if (r.unknown) unknownRows.push([rel, r.unknown]);
+        if (inUi && !UI_ALSO_SCANNED.has("P82")) {
+          continue;
+        }
+        const r = countButtonTitle(fs.readFileSync(path.join(ROOT, rel), "utf8"));
+        if (r.unknown) {
+          unknownRows.push([rel, r.unknown]);
+        }
       }
     }
     /* 按档分组输出：85 条平铺看不出「响的是地基层还是业务面」——
      * 档位口径见文件头「分层」一节。 */
     for (const tier of TIER_ORDER) {
       const ids = Object.keys(RULES).filter((id) => tierOf(id) === tier);
-      console.log(
-        `[ui-primitives] ── ${tier}（${RULE_TIER_LABEL[tier]}）· ${ids.length} 条 ──`,
-      );
+      console.log(`[ui-primitives] ── ${tier}（${RULE_TIER_LABEL[tier]}）· ${ids.length} 条 ──`);
       for (const id of ids) {
         const rule = RULES[id];
         const hits = Object.entries(now)
           .filter(([, c]) => c[id])
           .sort((a, b) => b[1][id] - a[1][id]);
         const sum = hits.reduce((n, [, c]) => n + c[id], 0);
-        console.log(
-          `[ui-primitives] ${id} ${rule.label} —— ${sum} 处 / ${hits.length} 文件`,
-        );
+        console.log(`[ui-primitives] ${id} ${rule.label} —— ${sum} 处 / ${hits.length} 文件`);
         for (const [rel, c] of hits.slice(0, 15)) {
           console.log(`  · ${rel}（${c[id]} 处）`);
         }
-        if (hits.length > 15) console.log(`  … 另 ${hits.length - 15} 个文件`);
+        if (hits.length > 15) {
+          console.log(`  … 另 ${hits.length - 15} 个文件`);
+        }
       }
     }
     const ukSum = unknownRows.reduce((n, [, c]) => n + c, 0);
@@ -652,8 +683,9 @@ function main() {
     for (const [rel, c] of unknownRows.slice(0, 15)) {
       console.log(`  · ${rel}（${c} 处）`);
     }
-    if (unknownRows.length > 15)
+    if (unknownRows.length > 15) {
       console.log(`  … 另 ${unknownRows.length - 15} 个文件`);
+    }
     console.log("[ui-primitives] --report 模式：只出清单，不判失败 ✓");
     process.exit(0);
   }
@@ -662,9 +694,7 @@ function main() {
    * 没关系。把两者绑死会造出一个假前置 —— 全库判据都升成硬闸之后，删掉基线文件
    * 竟能让门禁报「先跑 --update」而不去数那 85 条（`--update` 此时还会被硬闸拒，
    * 于是门禁自己把自己锁死）。 */
-  const hasRatchetRules = Object.keys(RULES).some(
-    (id) => !HARD_GATE_RULES.has(id),
-  );
+  const hasRatchetRules = Object.keys(RULES).some((id) => !HARD_GATE_RULES.has(id));
   if (!baseFiles && hasRatchetRules) {
     console.error(
       "[ui-primitives] 基线文件缺失：先执行 node scripts/check-ui-primitives.cjs --update",
@@ -684,9 +714,7 @@ function main() {
       if (!b || b[id] === undefined) {
         problems.push(`新增 ${id}（${RULES[id].label}）→ ${rel}（${n} 处）`);
       } else if (n > b[id]) {
-        problems.push(
-          `${id} 上升 ${b[id]} → ${n} → ${rel}（${RULES[id].label}）`,
-        );
+        problems.push(`${id} 上升 ${b[id]} → ${n} → ${rel}（${RULES[id].label}）`);
       } else if (n < b[id]) {
         dropped.push(`${id} ${b[id]} → ${n}：${rel}`);
       }
@@ -695,7 +723,9 @@ function main() {
   for (const [rel, b] of Object.entries(baseFiles)) {
     const cur = now[rel];
     for (const [id, n] of Object.entries(b)) {
-      if (!cur || cur[id] === undefined) dropped.push(`${id} ${n} → 0：${rel}`);
+      if (!cur || cur[id] === undefined) {
+        dropped.push(`${id} ${n} → 0：${rel}`);
+      }
     }
   }
 

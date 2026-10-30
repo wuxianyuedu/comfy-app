@@ -309,16 +309,24 @@ describe("出口", () => {
     const declared = "a".repeat(40);
     const head = "b".repeat(40);
     const face = (verifyOk: boolean, ancestorOk: boolean) => (cmd: string, args: Array<string>) => {
-      if (cmd !== "git") return { ok: false, out: "" };
-      if (args[0] === "rev-parse" && args[1] === "HEAD") return { ok: true, out: head };
-      if (args[0] === "rev-parse" && args[1] === "--verify")
+      if (cmd !== "git") {
+        return { ok: false, out: "" };
+      }
+      if (args[0] === "rev-parse" && args[1] === "HEAD") {
+        return { ok: true, out: head };
+      }
+      if (args[0] === "rev-parse" && args[1] === "--verify") {
         return { ok: verifyOk, out: verifyOk ? declared : "" };
-      if (args[0] === "merge-base")
+      }
+      if (args[0] === "merge-base") {
         return {
           ok: ancestorOk,
           out: ancestorOk ? "" : "fatal: Not a valid object name",
         };
-      if (args[0] === "log") return { ok: true, out: declared };
+      }
+      if (args[0] === "log") {
+        return { ok: true, out: declared };
+      }
       return { ok: false, out: "" };
     };
     const call = (verifyOk: boolean, ancestorOk: boolean) =>

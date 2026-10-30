@@ -37,7 +37,9 @@ export function useSidebarProjects(): Array<SidebarProjectEntry> {
       void listProjectsWithServer().then(({ entries }) => {
         /* 卸载后落定就别再 setState（`listProjectsWithServer` 是 async，
          * 快速切视图时这一帧可能已经不在）。 */
-        if (!alive) return;
+        if (!alive) {
+          return;
+        }
         setProjects(
           entries
             .slice(0, SIDEBAR_PROJECT_LIMIT)

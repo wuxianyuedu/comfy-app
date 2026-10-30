@@ -65,13 +65,17 @@ export function useImageRedraw(
   const [resultTaskId, setResultTaskId] = useState<string | null>(null);
 
   const ensureTemplates = useCallback(async () => {
-    if (templates.length > 0 || templatesLoading) return;
+    if (templates.length > 0 || templatesLoading) {
+      return;
+    }
     setTemplatesLoading(true);
     try {
       const list = await deps.listTemplates();
       setTemplates(list);
       const first = list[0];
-      if (first) setSelectedTemplateId((prev) => prev || first.id);
+      if (first) {
+        setSelectedTemplateId((prev) => prev || first.id);
+      }
     } finally {
       setTemplatesLoading(false);
     }
@@ -114,7 +118,9 @@ export function useImageRedraw(
               `已提交${mode === "inpaint" ? "局部重绘" : "放大"}：新任务 ${r.detail}`,
           },
         );
-        if (result.ok) setResultTaskId(newTaskId);
+        if (result.ok) {
+          setResultTaskId(newTaskId);
+        }
       } finally {
         setBusy(false);
       }

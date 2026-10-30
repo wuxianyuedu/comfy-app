@@ -79,7 +79,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
    * 再弹一句是噪声），失败走 toast（规范 16 §16.2.4.30）。 */
   const report: ActionReport = useCallback(
     (kind, detail) => {
-      if (kind === "err") toast.error(detail);
+      if (kind === "err") {
+        toast.error(detail);
+      }
     },
     [toast],
   );
@@ -94,7 +96,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       try {
         const result = await runAsyncAction(() => deleteMut.mutateAsync({ id }), {
           report: (kind, detail) => {
-            if (kind === "err") setActionError(detail);
+            if (kind === "err") {
+              setActionError(detail);
+            }
           },
           failureText: "删除失败",
         });
@@ -134,7 +138,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         { report, failureText: "更新模式失败" },
       );
       /* 失败回滚：重新拉取列表，本地乐观更新的值被服务端真值替换。 */
-      if (!result.ok) void load();
+      if (!result.ok) {
+        void load();
+      }
     },
     [setWorkflows, updateMut, report, load],
   );
@@ -149,7 +155,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         report,
         failureText: "更新模型标签失败",
       });
-      if (!result.ok) void load();
+      if (!result.ok) {
+        void load();
+      }
     },
     [setWorkflows, updateMut, report, load],
   );
@@ -267,7 +275,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           successText: `已载入「${pending.name}」`,
         },
       );
-      if (result.ok) void load();
+      if (result.ok) {
+        void load();
+      }
       setPendingLoading((state) => {
         const cp = { ...state };
         delete cp[pending.id];

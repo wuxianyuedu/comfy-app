@@ -78,7 +78,9 @@ const TRANSIENT_CODES: ReadonlySet<string> = new Set<TRPC_ERROR_CODE_KEY>([
 /** 这条失败是不是「服务端确定不收这份内容」。 */
 export function isPermanentRefusal(e: unknown): boolean {
   const code = errorCode(e);
-  if (code === null) return false;
+  if (code === null) {
+    return false;
+  }
   return !TRANSIENT_CODES.has(code);
 }
 
@@ -145,10 +147,14 @@ export function recordSyncFailure(
   project: { id: string; name: string },
   e: unknown,
 ): boolean {
-  if (!isPermanentRefusal(e)) return false;
+  if (!isPermanentRefusal(e)) {
+    return false;
+  }
   const detail = refusalDetail(action, e);
   const prev = notices.get(project.id);
-  if (prev?.detail === detail) return false;
+  if (prev?.detail === detail) {
+    return false;
+  }
   notices.set(project.id, {
     projectId: project.id,
     projectName: project.name,
@@ -160,7 +166,9 @@ export function recordSyncFailure(
 
 /** 这一份终于写进去了 → 撤掉记录（并把名字改对之后残留的旧提示一起收掉）。 */
 export function clearSyncFailure(projectId: string): boolean {
-  if (!notices.delete(projectId)) return false;
+  if (!notices.delete(projectId)) {
+    return false;
+  }
   emitAppEvent("comfyapp:canvas-sync-changed");
   return true;
 }

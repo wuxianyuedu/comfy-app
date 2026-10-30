@@ -92,7 +92,9 @@ export function shouldLogProbeMiss(key: string, now: number = Date.now()): boole
     probeLog.key === key &&
     probeLog.lastAt !== undefined &&
     now - probeLog.lastAt < COMFY_PROBE_LOG_REPEAT_MS;
-  if (repeat) return false;
+  if (repeat) {
+    return false;
+  }
   probeLog.key = key;
   probeLog.lastAt = now;
   return true;
@@ -116,7 +118,9 @@ function forceIpv4Host(raw: string): string {
   try {
     const url = new URL(raw);
 
-    if (url.hostname === "localhost") url.hostname = LOOPBACK_HOST;
+    if (url.hostname === "localhost") {
+      url.hostname = LOOPBACK_HOST;
+    }
 
     return url.toString().replace(/\/$/, "");
   } catch {
@@ -142,7 +146,9 @@ async function probePort(_host: string, port: number): Promise<boolean> {
  * 依次试：配置端口 → +1 … 到 +PROBE_RANGE。结果缓存到进程生命周期结束。
  */
 export async function resolveComfyBase(): Promise<string> {
-  if (_resolvedBase) return _resolvedBase;
+  if (_resolvedBase) {
+    return _resolvedBase;
+  }
 
   const settings = getSettingsSync();
   // 连接地址固定本机（ComfyUI 由本应用按 comfyuiPath 拉起）；远程实例用
@@ -227,7 +233,9 @@ export async function resolveComfyBase(): Promise<string> {
    * `_resolvedBase` 就记住了，本函数不会再走到这里。 */
   const targets = probeTargets(configuredPort);
   for (const target of targets.slice(1)) {
-    if (!(await probePort(host, target.port))) continue;
+    if (!(await probePort(host, target.port))) {
+      continue;
+    }
     _resolvedBase = target.url;
     if (target.port === COMFY_WINDOW_PORT) {
       logger.warn(
@@ -297,7 +305,9 @@ export async function probeComfyBase(): Promise<string | null> {
  * 会改变状态的调用（上传 / 提交 prompt）请用 resolveComfyBase()。
  */
 export function comfyBase(): string {
-  if (_resolvedBase) return forceIpv4Host(_resolvedBase);
+  if (_resolvedBase) {
+    return forceIpv4Host(_resolvedBase);
+  }
   const settings = getSettingsSync();
   const port =
     settings.comfyuiPort && settings.comfyuiPort > 0 ? settings.comfyuiPort : COMFYUI_DEFAULT_PORT;
@@ -358,7 +368,9 @@ export async function getView(filename: string, subfolder: string, type: string)
     signal: AbortSignal.timeout(60_000),
   });
 
-  if (!res.ok) throw new ComfyViewError(res.status, `getView failed: ${res.status}`);
+  if (!res.ok) {
+    throw new ComfyViewError(res.status, `getView failed: ${res.status}`);
+  }
 
   return Buffer.from(await res.arrayBuffer());
 }
@@ -369,7 +381,9 @@ export async function listModels(folder: string): Promise<Array<string>> {
     const res = await fetch(`${comfyBase()}/api/models/${encodeURIComponent(folder)}`, {
       signal: AbortSignal.timeout(5_000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      return [];
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as Array<string>;
     return Array.isArray(data) ? data : [];
   } catch {
@@ -391,7 +405,9 @@ export async function listModelFolders(): Promise<Array<string>> {
     const res = await fetch(`${comfyBase()}/api/models`, {
       signal: AbortSignal.timeout(3000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      return [];
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as Array<string>;
     return Array.isArray(data)
       ? data.filter((datum) => typeof datum === "string" && datum.length > 0)
@@ -477,7 +493,9 @@ interface ComfyDevice {
 }
 
 function pickGpu(devices: Array<ComfyDevice> | undefined): ComfyDevice | undefined {
-  if (!Array.isArray(devices) || devices.length === 0) return undefined;
+  if (!Array.isArray(devices) || devices.length === 0) {
+    return undefined;
+  }
   return devices.find((d) => d.type !== "cpu" && (d.vram_total ?? 0) > 0) ?? devices[0];
 }
 
@@ -492,7 +510,9 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
     const res = await fetch(`${comfyBase()}/system_stats`, {
       signal: AbortSignal.timeout(2500),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       system?: { ram_total?: number; ram_free?: number };
       devices?: Array<ComfyDevice>;
@@ -536,7 +556,9 @@ export async function getComfyQueue(): Promise<unknown> {
     const res = await fetch(`${comfyBase()}/queue`, {
       signal: AbortSignal.timeout(2500),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     return await res.json();
   } catch {
     return null;

@@ -52,9 +52,13 @@ export function readCommentBodies({ run, slug, number, route = "issue" }) {
     route === "pull"
       ? cnbJson(run, ["pulls", "list-pull-comments", ...tail])
       : cnbJson(run, ["issues", "list-issue-comments", ...tail]);
-  if (!got) return null;
+  if (!got) {
+    return null;
+  }
   const list = asArray(got.json);
-  if (!list) return null;
+  if (!list) {
+    return null;
+  }
   return list.map((c) => String(c?.body ?? ""));
 }
 
@@ -69,34 +73,20 @@ export function readCommentBodies({ run, slug, number, route = "issue" }) {
  *   mkTmp:(name:string, text:string)=>string|null, route?:"issue"|"pull"}} ctx
  * @returns {{posted:boolean, bodies:string[] | null}}
  */
-export function appendComment({
-  run,
-  log,
-  slug,
-  number,
-  body,
-  mkTmp,
-  route = "issue",
-}) {
+export function appendComment({ run, log, slug, number, body, mkTmp, route = "issue" }) {
   const onPull = route === "pull";
   const file = mkTmp(onPull ? "pull-comment" : "issue-comment", body);
   if (!file) {
     log("[ship] ✗ 取不到 git 目录 ⇒ 评论正文没有落点，这一步没有执行者。");
     return { posted: false, bodies: null };
   }
-  const tail = [
-    "--repo",
-    slug,
-    "--number",
-    String(number),
-    "--body-file",
-    file,
-    "-v",
-  ];
+  const tail = ["--repo", slug, "--number", String(number), "--body-file", file, "-v"];
   const res = onPull
     ? cnbJson(run, ["pulls", "post-pull-comment", ...tail])
     : cnbJson(run, ["issues", "post-issue-comment", ...tail]);
-  if (!res || res.code !== 0) return { posted: false, bodies: null };
+  if (!res || res.code !== 0) {
+    return { posted: false, bodies: null };
+  }
   return { posted: true, bodies: readCommentBodies({ run, slug, number, route }) };
 }
 

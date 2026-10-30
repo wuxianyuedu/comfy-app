@@ -153,7 +153,9 @@ function publish(next: ComfyStatsSnapshot): void {
     return;
   }
   snapshot = next;
-  for (const subscription of subscriptions) subscription.onChange();
+  for (const subscription of subscriptions) {
+    subscription.onChange();
+  }
 }
 
 /**
@@ -207,7 +209,9 @@ function feedLiveness(ok: boolean): void {
 async function pollOnce(): Promise<void> {
   const myRequest = ++requestId;
   const next = await fetchComfyStats();
-  if (myRequest !== requestId) return; // 已有更新的请求在跑，丢弃本次迟到回包
+  if (myRequest !== requestId) {
+    return;
+  } // 已有更新的请求在跑，丢弃本次迟到回包
   /* 启动等待的起点与终点：进程在跑但 HTTP 未就绪时记下「从何时开始等」，
    * 就绪后清掉（下一轮若又没就绪会重新计）。这决定了 400ms → 1s 的换档。 */
   if (!next.online && next.processAlive === true) {
@@ -272,8 +276,7 @@ function currentPhase(): ReturnType<typeof classifyLivenessPhase> {
     up: snapshot.online,
     starting: startingSince !== null,
     busy: getComfyBusy(),
-    hidden:
-      typeof document !== "undefined" && document.visibilityState !== "visible",
+    hidden: typeof document !== "undefined" && document.visibilityState !== "visible",
     verifying,
   });
 }
@@ -286,14 +289,13 @@ function nextIntervalMs(): number {
      * 读数不该让用户等 15 秒才出现（「连接中」的观感比「离线」还坏）。 */
     return COMFY_STATS_POLL_MS;
   }
-  return livenessIntervalMs(
-    phase,
-    startingSince === null ? 0 : Date.now() - startingSince,
-  );
+  return livenessIntervalMs(phase, startingSince === null ? 0 : Date.now() - startingSince);
 }
 
 function ensurePolling(): void {
-  if (stopPolling !== null) return;
+  if (stopPolling !== null) {
+    return;
+  }
   stopPolling = startPollTimer(() => pollOnce(), {
     /* 函数形态：每拍跑完重新问一次「下一拍等多久」——档位在运行中会变
      * （用户点了生成 / 切走了窗口 / 刚收到崩溃信号），一个定死的数字表达不了。 */
@@ -310,7 +312,9 @@ function ensurePolling(): void {
  *  白跑 —— 换档的两种触发（收到崩溃信号、复核结束）本来就是「该马上看一次」
  *  的时刻。 */
 function reschedule(): void {
-  if (stopPolling === null) return;
+  if (stopPolling === null) {
+    return;
+  }
   stopPolling();
   stopPolling = null;
   ensurePolling();
@@ -319,7 +323,9 @@ function reschedule(): void {
 /** 进程退出事件 → 立刻复核。**这是「事件为主」的主力的接线处**。 */
 let stopCrashSubscription: (() => void) | null = null;
 function ensureCrashSubscription(): void {
-  if (stopCrashSubscription !== null) return;
+  if (stopCrashSubscription !== null) {
+    return;
+  }
   stopCrashSubscription = subscribeComfyCrashes(() => verifyOnce());
 }
 

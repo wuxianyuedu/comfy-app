@@ -53,7 +53,9 @@ function draftKeyFor(id: string): string {
  *  `~/lib/workshop/draft-integrity` 的 `auditDraftElements` 在消费侧判、在工坊界面
  *  报（台账 F13″）—— 这一扇门与那扇门共用一份判据，不各写一遍。 */
 function parseDraft(raw: string | null): WorkshopDraft {
-  if (!raw) return emptyWorkshopDraft();
+  if (!raw) {
+    return emptyWorkshopDraft();
+  }
   try {
     const draft = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Partial<WorkshopDraft>;
     return {

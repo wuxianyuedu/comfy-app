@@ -18,7 +18,9 @@ export function RgthreeFastGroupsBypasserBody({
    * 始终在 <WFStoresProvider> 之下，故可直接使用，无需 null 守卫。 */
   /* 归一化（trim + 折小写）走 `~/lib/list-filter`（规范 16 §16.2.4.16）。 */
   const needle = normalizeNeedle(matchTitle);
-  if (!needle) return null;
+  if (!needle) {
+    return null;
+  }
   const matches = groups
     .filter((group) => matchesNeedle(needle, group.title || ""))
     .slice()
@@ -27,7 +29,9 @@ export function RgthreeFastGroupsBypasserBody({
      * 让 `"apple" < "Zebra"`，码位序让 `"Zebra" < "apple"`），
      * 收口前两种混用。 */
     .sort((left, right) => compareText(left.title, right.title));
-  if (matches.length === 0) return null;
+  if (matches.length === 0) {
+    return null;
+  }
   const pad = Math.max(2, String(matches.length).length);
   return (
     <div className="flex flex-col gap-0.5 px-1 pb-1">
@@ -126,7 +130,9 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
        *（规范 16 §16.2.4.54），此前这里是手写的一份。 */
       return trimmed(v, 2) ?? undefined;
     }
-    if (typeof v === "string" && v.length > 0 && v !== "undefined") return v;
+    if (typeof v === "string" && v.length > 0 && v !== "undefined") {
+      return v;
+    }
     return undefined;
   };
 
@@ -136,12 +142,18 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
   const loras: Array<PowerLoraWidget> = /* SAFETY: 类型断言已复核 */ (
     (widgets ?? []) as Array<PowerLoraWidget>
   ).filter((widget) => {
-    if (widget === null || widget === undefined) return false;
+    if (widget === null || widget === undefined) {
+      return false;
+    }
     if (typeof widget !== "object" || Array.isArray(widget)) {
       return typeof widget === "string" && widget.length > 0; // bare lora filename
     }
-    if (Object.keys(widget).length === 0) return false; // {} placeholder
-    if (widget.type === "PowerLoraLoaderHeaderWidget") return false; // header widget
+    if (Object.keys(widget).length === 0) {
+      return false;
+    } // {} placeholder
+    if (widget.type === "PowerLoraLoaderHeaderWidget") {
+      return false;
+    } // header widget
     return true; // real lora tuple
   });
 

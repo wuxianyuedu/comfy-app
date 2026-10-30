@@ -101,7 +101,9 @@ export function useExpansionSet(
       let changed = false;
       const next = { ...prev };
       for (const key of keys) {
-        if (key in next) continue; // 已有表态（含用户手动收起）不动
+        if (key in next) {
+          continue;
+        } // 已有表态（含用户手动收起）不动
         next[key] = open;
         changed = true;
       }

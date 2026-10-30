@@ -162,7 +162,9 @@ export function Icon(props: IconProps) {
   const name = own.name;
   const size = own.size ?? 16;
   const Cmp: LucideIcon | undefined = name ? ICON_MAP[name.toLowerCase()] : undefined;
-  if (!Cmp) return null;
+  if (!Cmp) {
+    return null;
+  }
   return <Cmp size={size} className={own.className} aria-hidden {...rest} />;
 }
 

@@ -51,7 +51,9 @@ function stripComments(text) {
       if (ch === "\n") {
         inLine = false;
         out += ch;
-      } else out += " ";
+      } else {
+        out += " ";
+      }
       i++;
       continue;
     }
@@ -136,7 +138,9 @@ function stripP71AllowBlocks(text) {
   let inBlock = false;
   for (const line of lines) {
     if (inBlock) {
-      if (/(?:\/\/|\/\*)\s*p71-allow:end\b/.test(line)) inBlock = false;
+      if (/(?:\/\/|\/\*)\s*p71-allow:end\b/.test(line)) {
+        inBlock = false;
+      }
       continue;
     }
     if (/(?:\/\/|\/\*)\s*p71-allow:start\b/.test(line)) {
@@ -177,9 +181,11 @@ function countNestedMinMax(text) {
     const innerRe = new RegExp(`\\bMath\\.${inner}\\s*\\(`, "g");
     while (i < text.length && depth > 0) {
       const ch = text[i];
-      if (ch === "(") depth++;
-      else if (ch === ")") depth--;
-      else if (ch === "M" && depth === 1) {
+      if (ch === "(") {
+        depth++;
+      } else if (ch === ")") {
+        depth--;
+      } else if (ch === "M" && depth === 1) {
         /* 只在**直接内层**（depth 仍为 1）判 —— 深一层的由那一处自己数。 */
         innerRe.lastIndex = i;
         const hit = innerRe.exec(text);
@@ -208,13 +214,16 @@ function countNonContainment(text) {
   let m;
   while ((m = re.exec(text)) !== null) {
     const window = text.slice(m.index, m.index + 200);
-    if (/startsWith\s*\(\s*"\.\."/.test(window)) continue;
-    if (/isAbsolute/.test(window)) continue;
+    if (/startsWith\s*\(\s*"\.\."/.test(window)) {
+      continue;
+    }
+    if (/isAbsolute/.test(window)) {
+      continue;
+    }
     n++;
   }
   return n;
 }
-
 
 /* ── P82 判据：JSX 开标签扫描 + 属性解析 + 五档判定 ────────────────
  * 判据的三段拆开写，各管一件事（正则只定位起点，边界交给扫描器）：
@@ -248,13 +257,18 @@ function skipJsxString(src, i) {
           i = skipJsxString(src, i);
           continue;
         }
-        if (c === "{") depth++;
-        else if (c === "}") depth--;
+        if (c === "{") {
+          depth++;
+        } else if (c === "}") {
+          depth--;
+        }
         i++;
       }
       continue;
     }
-    if (ch === q) return i + 1;
+    if (ch === q) {
+      return i + 1;
+    }
     i++;
   }
   return i;
@@ -281,8 +295,9 @@ function scanJsxAttrs(src, from) {
       continue;
     }
     /* 只有 depth === 0 且不在字符串里时的 `>` 才算标签结束。 */
-    if (depth === 0 && c === ">")
+    if (depth === 0 && c === ">") {
       return { attrs: src.slice(from, i), end: i + 1 };
+    }
     i++;
   }
   return null;
@@ -307,10 +322,13 @@ function skipJsxBraceExpr(src, i) {
       i = skipJsxString(src, i);
       continue;
     }
-    if (c === "{") depth++;
-    else if (c === "}") {
+    if (c === "{") {
+      depth++;
+    } else if (c === "}") {
       depth--;
-      if (depth === 0) return i + 1;
+      if (depth === 0) {
+        return i + 1;
+      }
     }
     i++;
   }
@@ -337,8 +355,9 @@ function parseJsxProps(attrs) {
       const inner = attrs.slice(i, after);
       /* 属性级的 `{…}` 只有 `{...props}` 是展开；其余（如 `{cond && <X/>}`）
        * 不是属性，跳过即可。 */
-      if (/^\{\s*\.\.\./.test(inner))
+      if (/^\{\s*\.\.\./.test(inner)) {
         props.push({ name: "...", kind: "spread" });
+      }
       i = after;
       continue;
     }
@@ -347,17 +366,23 @@ function parseJsxProps(attrs) {
       continue;
     }
     let j = i;
-    while (j < n && JSX_NAME_CHAR.test(attrs[j])) j++;
+    while (j < n && JSX_NAME_CHAR.test(attrs[j])) {
+      j++;
+    }
     const name = attrs.slice(i, j);
     let k = j;
-    while (k < n && /\s/.test(attrs[k])) k++;
+    while (k < n && /\s/.test(attrs[k])) {
+      k++;
+    }
     if (attrs[k] !== "=") {
       props.push({ name, kind: "bare" });
       i = j;
       continue;
     }
     k++;
-    while (k < n && /\s/.test(attrs[k])) k++;
+    while (k < n && /\s/.test(attrs[k])) {
+      k++;
+    }
     const vc = attrs[k];
     if (vc === '"' || vc === "'" || vc === "`") {
       const after = skipJsxString(attrs + ">", k);
@@ -369,7 +394,9 @@ function parseJsxProps(attrs) {
       i = after;
     } else {
       let m = k;
-      while (m < n && !/[\s{("'`]/.test(attrs[m])) m++;
+      while (m < n && !/[\s{("'`]/.test(attrs[m])) {
+        m++;
+      }
       props.push({ name, kind: "value", raw: attrs.slice(k, m) });
       i = m;
     }
@@ -408,14 +435,18 @@ function countButtonTitle(text) {
   let m;
   while ((m = re.exec(t)) !== null) {
     const scanned = scanJsxAttrs(t, re.lastIndex);
-    if (!scanned) continue;
+    if (!scanned) {
+      continue;
+    }
     const props = parseJsxProps(scanned.attrs);
     const titles = props.filter((p) => p.name === "title");
     if (titles.length) {
       /* 同名重复时取最后一个（JSX 后者覆盖前者）。 */
       const tier = classifyTitleValue(titles[titles.length - 1]);
       res[tier]++;
-      if (tier === "static" || tier === "dynamic") res.violations++;
+      if (tier === "static" || tier === "dynamic") {
+        res.violations++;
+      }
     } else if (props.some((p) => p.kind === "spread")) {
       res.unknown++;
       res.unknownHits.push(m.index);
@@ -430,10 +461,14 @@ function countButtonTitle(text) {
  *  引号串（含空模板串）按内容判；`{…}` 表达式有非空内容 → dynamic。 */
 function classifyTitleValue(prop) {
   const raw = (prop.raw ?? "").trim();
-  if (!raw) return "empty";
+  if (!raw) {
+    return "empty";
+  }
   if (raw.startsWith("{")) {
     const expr = raw.slice(1).replace(/}$/, "").trim();
-    if (/^(undefined|null|void\s+0|)$/.test(expr)) return "empty";
+    if (/^(undefined|null|void\s+0|)$/.test(expr)) {
+      return "empty";
+    }
     return "dynamic";
   }
   const unquoted = raw.replace(/^["'`]/, "").replace(/["'`]$/, "");
@@ -536,11 +571,14 @@ const P81_ICON_NAMES = new Set([
   "Power",
 ]);
 function isP81IconName(name) {
-  if (name === "Icon" || name === "svg") return true;
-  if (name.length > 4 && name.endsWith("Icon")) return true;
+  if (name === "Icon" || name === "svg") {
+    return true;
+  }
+  if (name.length > 4 && name.endsWith("Icon")) {
+    return true;
+  }
   return P81_ICON_NAMES.has(name);
 }
-
 
 module.exports = {
   stripComments,

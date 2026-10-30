@@ -71,8 +71,9 @@ export function boundarySlotsByNode(
     (byNode[info.innerNodeId] ??= new Set()).add(info.innerSlot);
   }
   const out: Record<string, Array<number>> = {};
-  for (const [nodeId, slots] of Object.entries(byNode))
+  for (const [nodeId, slots] of Object.entries(byNode)) {
     out[nodeId] = [...slots].sort((a, b) => a - b);
+  }
   return out;
 }
 
@@ -121,10 +122,14 @@ export function parseSubgraphLinks(sub: RawSubgraphDef): {
 
   for (const lk of Array.isArray(sub.links) ? sub.links : []) {
     const parsed = SubgraphLinkSchema.safeParse(lk);
-    if (!parsed.success) continue;
+    if (!parsed.success) {
+      continue;
+    }
     const rec = parsed.data;
     const id = Number(rec.id);
-    if (!Number.isFinite(id)) continue;
+    if (!Number.isFinite(id)) {
+      continue;
+    }
     const originId = Number(rec.origin_id);
     const originSlot = Number(rec.origin_slot) || 0;
     const targetId = Number(rec.target_id);
@@ -227,7 +232,9 @@ export function parseSubgraphSlots(
 
   const innerNodes: Array<RawNode> = Array.isArray(sub.nodes) ? sub.nodes : [];
   for (const rn of innerNodes) {
-    if (!rn?.id) continue;
+    if (!rn?.id) {
+      continue;
+    }
     const nodeId = String(rn.id);
     if (Array.isArray(rn.inputs)) {
       const rawInputs: Array<RawNodeInput> = rn.inputs;
@@ -238,8 +245,12 @@ export function parseSubgraphSlots(
       // （封装节点把提示词暴露成输入时，CLIPTextEncode 的 `text` 就在这里）。
       inputWidgetValueByNodeSlot[nodeId] = slots.map(({ slot, index }) => {
         const slotInput = rawInputs[index];
-        if (!slotNameAt(slots, rawInputs, slot)) return undefined;
-        if (!slotInput?.widget) return undefined;
+        if (!slotNameAt(slots, rawInputs, slot)) {
+          return undefined;
+        }
+        if (!slotInput?.widget) {
+          return undefined;
+        }
         return widgets[slot];
       });
     }
@@ -346,9 +357,13 @@ export function buildSubgraphGraph(
   const proxyAuthorLabels: Record<string, string> = {};
   for (const pinRaw of Array.isArray(sub.inputs) ? sub.inputs : []) {
     const pin = asRecord(pinRaw);
-    if (!pin) continue;
+    if (!pin) {
+      continue;
+    }
     const authorLabel = typeof pin.label === "string" ? pin.label.trim() : "";
-    if (!authorLabel) continue;
+    if (!authorLabel) {
+      continue;
+    }
     const linkIds = Array.isArray(pin.linkIds)
       ? pin.linkIds
       : Array.isArray(pin.links)
@@ -362,21 +377,29 @@ export function buildSubgraphGraph(
     for (const lid of linkIds) {
       const lk = linkById[Number(lid)];
       /* 只在「源端是外层 wrapper 的哨兵边」上回收作者名。 */
-      if (lk?.src !== "-10") continue;
+      if (lk?.src !== "-10") {
+        continue;
+      }
       const slotNames: Array<string> | undefined = inputNameByNodeSlot[lk.targetId];
       const slotName = slotNames?.[lk.targetSlot];
-      if (slotName) proxyAuthorLabels[`${lk.targetId}::${slotName}`] = authorLabel;
+      if (slotName) {
+        proxyAuthorLabels[`${lk.targetId}::${slotName}`] = authorLabel;
+      }
     }
   }
 
   for (const rn of innerNodes) {
-    if (!rn?.id) continue;
+    if (!rn?.id) {
+      continue;
+    }
     const nodeId = String(rn.id);
     const classType: string = rn.type ?? "?";
     /* 记下原始的 litegraph 外框尺寸，客户端才能按 ComfyUI 的精确尺寸
      *  画出这个节点（见上面 `sizeById` 的声明）。 */
     const rnSize = Array.isArray(rn.size) && rn.size.length >= 2 ? rn.size : undefined;
-    if (rnSize) sizeById[nodeId] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
+    if (rnSize) {
+      sizeById[nodeId] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
+    }
     /* 每个输入的元数据。「内部」连线（源自子图内的另一个节点）与
      *  「边界」连线（源自输入哨兵节点 -10，值来自父级封装节点）分开标记。
      *  边界连线仍然记 isConnection（供 UI 打标签），但写 inputMap 时**跳过**，
@@ -394,7 +417,9 @@ export function buildSubgraphGraph(
        *  而不是空白行或错位行。 */
       const wvMap = pairWidgetValues(rn.inputs, rnWidgets);
       for (const inp of rn.inputs) {
-        if (!inp || typeof inp.name !== "string") continue;
+        if (!inp || typeof inp.name !== "string") {
+          continue;
+        }
         const isConn = inp.link != null;
         const widgetName =
           inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
@@ -410,8 +435,12 @@ export function buildSubgraphGraph(
           isConnection: isConn,
           isBoundary: false, // set later if needed
         };
-        if (widgetName) entry.widget = { name: widgetName };
-        if (widgetValue !== undefined) entry.widgetValue = widgetValue;
+        if (widgetName) {
+          entry.widget = { name: widgetName };
+        }
+        if (widgetValue !== undefined) {
+          entry.widgetValue = widgetValue;
+        }
         /* 与父级路由保持一致：给助手标出的 STRING 输入盖 `multiline`，
          *  免得很短的提示词输入被降级成单行芯片。
          *
@@ -424,7 +453,9 @@ export function buildSubgraphGraph(
          *  下游的 IMAGE 消费方只会再显示一遍未缩放 / 未编码的上游图，
          *  有误导性。只有 LoadImage 源节点带预览（在下面推的合成条目上）。 */
         if (typeof inp.type === "string" && inp.type === "STRING" && widgetValue !== undefined) {
-          if (inferIsMultiline(undefined, widgetValue)) entry.multiline = true;
+          if (inferIsMultiline(undefined, widgetValue)) {
+            entry.multiline = true;
+          }
         }
         rawInputs.push(entry);
         if (isConn) {
@@ -438,12 +469,16 @@ export function buildSubgraphGraph(
              *  我们要的是 widget 的默认值（真正的提示词文本），
              *  而不是一个连接元组。 */
             const last = rawInputs[rawInputs.length - 1];
-            if (last) last.isBoundary = true;
+            if (last) {
+              last.isBoundary = true;
+            }
             /* 把这个节点标成 INPUT 端点：源是哨兵 `-10` 意味着值来自父级
              *  封装节点，因此本节点是 INPUTS 侧的边界消费方。
              *  输入上出现输出哨兵 `-20` 在实践中很少，但它既然落进了
              *  「边界连线」分支，就同样归为 "input"。 */
-            if (lk.src === "-10") inputEndpointNodes.add(nodeId);
+            if (lk.src === "-10") {
+              inputEndpointNodes.add(nodeId);
+            }
             /* 存下边界端口细节，画布据此渲染一枚紧凑的 wfIoPort 标签。
              *  每个节点只记**第一个**边界输入（绝大多数端点就一个）。 */
             if (lk.src === "-10" && !boundaryInputByNode[nodeId]) {
@@ -461,7 +496,9 @@ export function buildSubgraphGraph(
              *  （OUTPUT 端点定位助手要用）。只保留**第一个**非哨兵源，
              *  定位结果才确定。 */
             // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 需保留 first-truthy 语义（空串也视为未设置）
-            if (!connectsFromByNode[nodeId]) connectsFromByNode[nodeId] = lk?.src ?? "";
+            if (!connectsFromByNode[nodeId]) {
+              connectsFromByNode[nodeId] = lk?.src ?? "";
+            }
           }
         } else if (widgetValue !== undefined) {
           // 把对应的 widget 值折进 inputs[]（API 形态）。
@@ -486,7 +523,9 @@ export function buildSubgraphGraph(
     const rawOutputs: Array<RawOutputEntry> = [];
     if (Array.isArray(rn.outputs)) {
       for (const o of rn.outputs) {
-        if (!o || typeof o.name !== "string") continue;
+        if (!o || typeof o.name !== "string") {
+          continue;
+        }
         /* 标记 OUTPUT 端点节点：本输出的任意一条连线指向哨兵 `-20` 目标
          *  （子图暴露的输出）时，本节点就是产出方 —— 它馈入父级封装节点暴露
          *  出去的输出。客户端据此在这簇节点外画一个 OUTPUTS wfGroup。 */

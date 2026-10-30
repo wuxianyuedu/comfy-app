@@ -368,7 +368,11 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
 
   const run = (args: Array<string>, extraEnv: Record<string, string> = {}) => {
     const env = { ...process.env, ...extraEnv };
-    for (const [k, v] of Object.entries(extraEnv)) if (v === "") delete env[k];
+    for (const [k, v] of Object.entries(extraEnv)) {
+      if (v === "") {
+        delete env[k];
+      }
+    }
     return spawnSync(process.execPath, [ENTRY, ...args], {
       cwd: ROOT,
       encoding: "utf8",
@@ -543,8 +547,12 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
           stderr: "",
           error: null,
         });
-        if (key.includes("get-build-logs")) return json([build("sn-live")]);
-        if (key.includes("get-build-status")) return json(detail("failed").data);
+        if (key.includes("get-build-logs")) {
+          return json([build("sn-live")]);
+        }
+        if (key.includes("get-build-status")) {
+          return json(detail("failed").data);
+        }
         return json({});
       },
     });

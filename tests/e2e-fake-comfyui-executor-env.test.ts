@@ -59,7 +59,9 @@ const tmpDirs: Array<string> = [];
 afterEach(() => {
   while (tmpDirs.length) {
     const dir = tmpDirs.pop();
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
 

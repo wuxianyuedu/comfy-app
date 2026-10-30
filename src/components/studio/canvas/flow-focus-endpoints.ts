@@ -51,10 +51,16 @@ export function resolveEdgeFocus({
   const sourceSelected = sourceId ? isSelected(sourceId) : false;
   const targetSelected = targetId ? isSelected(targetId) : false;
 
-  if (targetSelected && !sourceSelected) return "upstream";
-  if (sourceSelected && !targetSelected) return "downstream";
+  if (targetSelected && !sourceSelected) {
+    return "upstream";
+  }
+  if (sourceSelected && !targetSelected) {
+    return "downstream";
+  }
   /* 两端都是选中节点（多选同组、或自环）→ 相关，但没有单一方向。 */
-  if (sourceSelected || targetSelected) return "related";
+  if (sourceSelected || targetSelected) {
+    return "related";
+  }
   return "none";
 }
 
@@ -161,8 +167,12 @@ export function resolvePortRowTone(args: {
   role: EdgeFocusRole;
   hasSelection: boolean;
 }): PortRowTone {
-  if (args.role === "upstream" || args.role === "downstream") return "focused";
-  if (args.role === "related") return "related";
+  if (args.role === "upstream" || args.role === "downstream") {
+    return "focused";
+  }
+  if (args.role === "related") {
+    return "related";
+  }
   return args.hasSelection ? "dimmed" : "plain";
 }
 
@@ -214,7 +224,9 @@ export interface ResolvePortFocusArgs {
 
 /** 端口行的实际 Handle id：输出侧的 `out:` 前缀在这里补全，避免各处各写一遍。 */
 export function portHandleId(side: "source" | "target", name: string): string {
-  if (side !== "source") return name;
+  if (side !== "source") {
+    return name;
+  }
   return name.startsWith(OUTPUT_PORT_HANDLE_PREFIX) ? name : `${OUTPUT_PORT_HANDLE_PREFIX}${name}`;
 }
 
@@ -265,11 +277,15 @@ export function resolvePortFocusRoles({
   resolveTargetId = (visualNodeId) => visualNodeId,
 }: ResolvePortFocusArgs): { nodes: ReadonlyMap<string, NodePortFocus> } {
   const nodes = new Map<string, PortFocusBucket>();
-  if (selectedIds.size === 0) return { nodes };
+  if (selectedIds.size === 0) {
+    return { nodes };
+  }
 
   const bucket = (nodeId: string): PortFocusBucket => {
     const existing = nodes.get(nodeId);
-    if (existing) return existing;
+    if (existing) {
+      return existing;
+    }
     const created: PortFocusBucket = {
       upstream: new Set(),
       downstream: new Set(),
@@ -280,12 +296,16 @@ export function resolvePortFocusRoles({
   };
 
   for (const connection of connections) {
-    if (connection.paramMap === true) continue;
+    if (connection.paramMap === true) {
+      continue;
+    }
     const source = connection.source ? resolveSourceId(connection.source) : null;
     const target = connection.target ? resolveTargetId(connection.target) : null;
     const sourceSelected = source !== null && selectedIds.has(source);
     const targetSelected = target !== null && selectedIds.has(target);
-    if (!sourceSelected && !targetSelected) continue;
+    if (!sourceSelected && !targetSelected) {
+      continue;
+    }
 
     const targetHandle = connection.targetHandle;
     const sourceHandle = connection.sourceHandle;

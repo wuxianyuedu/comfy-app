@@ -103,7 +103,9 @@ describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
     const script = readFileSync(ASSET_SCRIPT, "utf8");
     /* 三张图的文件名必须**两处同源**：注入层的清单 + 生成脚本的产出表。 */
     for (const name of readConstArray("MEDIA_SOURCE_NAMES")) {
-      if (name === "missing.png") continue;
+      if (name === "missing.png") {
+        continue;
+      }
       expect(script, `${name} 不在 scripts/storybook-assets.mjs 的产出表里`).toContain(name);
     }
   });

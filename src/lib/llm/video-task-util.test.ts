@@ -13,13 +13,18 @@ let sandbox: string;
 
 function localFiles(): Array<string> {
   const root = join(sandbox, "temp", "usage-test");
-  if (!existsSync(root)) return [];
+  if (!existsSync(root)) {
+    return [];
+  }
   const out: Array<string> = [];
   const walk = (dir: string) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else out.push(relative(root, full));
+      if (entry.isDirectory()) {
+        walk(full);
+      } else {
+        out.push(relative(root, full));
+      }
     }
   };
   walk(root);
@@ -209,8 +214,12 @@ describe("pollRemoteVideoTask", () => {
       "fetch",
       vi.fn(async () => {
         call += 1;
-        if (call === 1) throw new Error("connection reset"); // 连接被重置
-        if (call === 2) return new Response("not json", { status: 200 });
+        if (call === 1) {
+          throw new Error("connection reset");
+        } // 连接被重置
+        if (call === 2) {
+          return new Response("not json", { status: 200 });
+        }
         // 第三轮起返回真实媒体键（`video_url`）—— 只有 `MEDIA_URL_KEYS` 里的键才被认。
         return new Response(JSON.stringify({ video_url: "https://cdn.example/late.mp4" }), {
           status: 200,

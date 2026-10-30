@@ -205,7 +205,9 @@ export function useHistoryList(): HistoryListController {
 
   const remove = useCallback(
     async (id: string) => {
-      if (!confirm("删除此任务记录？已生成的文件不会从磁盘删除。")) return;
+      if (!confirm("删除此任务记录？已生成的文件不会从磁盘删除。")) {
+        return;
+      }
       await runAsyncAction(
         async () => {
           await deleteTask.mutateAsync({ id });
@@ -215,7 +217,9 @@ export function useHistoryList(): HistoryListController {
             /* 键自带 DataTag：`old` 的形状由查询结果推导，不再手写窄类型 */
             (old) => (old ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) } : old),
           );
-          if (detailId === id) setDetailId(null);
+          if (detailId === id) {
+            setDetailId(null);
+          }
         },
         { report, failureText: "删除失败", successText: "已删除任务" },
       );

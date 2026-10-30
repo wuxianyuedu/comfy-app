@@ -40,8 +40,12 @@ function sourceFiles(dir = SRC): Array<string> {
       out.push(...sourceFiles(full));
       continue;
     }
-    if (!/\.tsx?$/.test(entry.name)) continue;
-    if (/\.(test|stories)\.tsx?$/.test(entry.name)) continue;
+    if (!/\.tsx?$/.test(entry.name)) {
+      continue;
+    }
+    if (/\.(test|stories)\.tsx?$/.test(entry.name)) {
+      continue;
+    }
     out.push(full);
   }
   return out;
@@ -56,7 +60,9 @@ function realStoreHooks(): Array<string> {
       /export\s+const\s+(use[A-Za-z0-9_]+)\s*=\s*create(?:Store)?\s*[<(]/g,
     )) {
       const name = m[1];
-      if (name) names.add(name);
+      if (name) {
+        names.add(name);
+      }
     }
   }
   return [...names].sort();
@@ -73,7 +79,9 @@ const EXTRA_SUBSCRIBERS = [
 function configuredHooks(): Array<string> {
   const src = readFileSync(CONFIG, "utf8");
   const block = /const STORE_SELECTOR_HOOKS = \[([\s\S]*?)\];/.exec(src)?.[1];
-  if (!block) return [];
+  if (!block) {
+    return [];
+  }
   return [...block.matchAll(/"([^"]+)"/g)]
     .map((m) => m[1] ?? "")
     .filter((n) => n.length > 0)
@@ -84,7 +92,9 @@ describe("① 存量为零：视图层没有现拼对象 / 现造新数组的 st
   it("扫描面非空（路径写错时「零命中」是假绿）", () => {
     const files = sourceFiles();
     expect(files.length).toBeGreaterThan(200);
-    for (const f of files.slice(0, 5)) expect(statSync(f).isFile()).toBe(true);
+    for (const f of files.slice(0, 5)) {
+      expect(statSync(f).isFile()).toBe(true);
+    }
   });
 
   it("没有 store selector 造新引用的调用点", () => {

@@ -52,7 +52,9 @@ export function useRevealLogPath(
 
   const reveal = useCallback(
     (target: string) => {
-      if (!lock.tryEnter()) return;
+      if (!lock.tryEnter()) {
+        return;
+      }
       setBusy(true);
       setOutcome("idle");
       setFailure("");
@@ -61,7 +63,9 @@ export function useRevealLogPath(
           /* 成败都改口（§16.2.4.43）：只在成功时改口同样是撒谎的另一半 ——
            * 用户连点几次都没反应，会以为按钮坏了。 */
           setOutcome(result.ok ? "done" : "failed");
-          if (!result.ok) setFailure(result.detail);
+          if (!result.ok) {
+            setFailure(result.detail);
+          }
           onOutcome?.(result.ok ? "done" : "failed");
         })
         .finally(() => {

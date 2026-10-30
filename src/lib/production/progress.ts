@@ -40,7 +40,9 @@ export const DEFAULT_PRODUCTION_PROGRESS: ProductionProgress = {
 /** 未知值（production 表的 progress JSON 列）→ 规范化的 ProductionProgress。
  *  非法 / 缺字段回落默认，不抛——读侧对脏数据宽容。 */
 export function normalizeProductionProgress(raw: unknown): ProductionProgress {
-  if (!isRecord(raw)) return { ...DEFAULT_PRODUCTION_PROGRESS };
+  if (!isRecord(raw)) {
+    return { ...DEFAULT_PRODUCTION_PROGRESS };
+  }
   return {
     stage: isProductionStage(raw.stage) ? raw.stage : "script",
     rendered: raw.rendered === true,

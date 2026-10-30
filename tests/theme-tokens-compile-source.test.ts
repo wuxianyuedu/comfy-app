@@ -47,7 +47,9 @@ describe("theme 编译的输入源固定住了（#1336 的反向判据）", () =
       const body = block[1] ?? "";
       for (const decl of body.matchAll(/(--[A-Za-z0-9-]+)\s*:/g)) {
         const name = decl[1];
-        if (name) declared.push(name);
+        if (name) {
+          declared.push(name);
+        }
       }
     }
     // 解析不到名字 = 这条判据在空跑，先钉住「真的解析到了」

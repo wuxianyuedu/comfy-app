@@ -93,10 +93,14 @@ export function parseArgs(argv) {
     /* `noUncheckedIndexedAccess` 之下按下标取到的是 `string | undefined`；
      * `i < argv.length` 已保证这一格有值，守卫只把这件事写给类型检查器看 ——
      * 与 `scripts/dev.mjs` 的 `parseArgs` 同一个写法。 */
-    if (arg === undefined) continue;
+    if (arg === undefined) {
+      continue;
+    }
     const eq = arg.indexOf("=");
     const name = eq > 0 ? arg.slice(0, eq) : arg;
-    if (!RECOGNIZED_FLAGS.includes(name)) continue;
+    if (!RECOGNIZED_FLAGS.includes(name)) {
+      continue;
+    }
     consumed.add(i);
     /* 等号形式带值；空格形式吃下一个 token 当值（那一格也标记为已消费，
      * 否则它会被上面那句「剩下的都不认」误报成多余参数）。 */
@@ -119,8 +123,9 @@ export function parseArgs(argv) {
       consumed.add(i + 1);
       i += 1;
     }
-    if (name === "--out") opts.out = value;
-    else {
+    if (name === "--out") {
+      opts.out = value;
+    } else {
       /* 只认**十进制正整数**字面量：`parseInt("2.9")` 给 2、`parseInt("0")` 给 0，
        * 而「你写的 2.9 我按 2 跑了」与「你写的 0 我按默认跑了」都是屏幕上没说过的改写。 */
       if (!/^\d+$/.test(value) || Number.parseInt(value, 10) < 1) {
@@ -158,7 +163,9 @@ async function main() {
   const { opts, problems } = parseArgs(process.argv.slice(2));
   if (problems.length > 0) {
     process.stderr.write("\n[docs] ✗ 用法错：\n\n");
-    for (const p of problems) process.stderr.write(`  · ${p}\n`);
+    for (const p of problems) {
+      process.stderr.write(`  · ${p}\n`);
+    }
     process.stderr.write(
       `\n[docs] 认的旗标只有 ${RECOGNIZED_FLAGS.join(" / ")}，两种形式都认` +
         "（`--out <目录>` 与 `--out=<目录>`）；这一条一个参数都没吃进去，产物没动。\n\n",
@@ -187,10 +194,10 @@ async function main() {
     console.error(
       `[ERROR] typedoc did not update ${res.outDir} after ${res.attempt}/${res.total} attempt(s): ${res.reason}`,
     );
-    console.error(
-      `[ERROR] files before=${res.before.files} after=${res.after.files}`,
-    );
-    if (res.log) console.error(`[ERROR] typedoc log tail:\n${res.log}`);
+    console.error(`[ERROR] files before=${res.before.files} after=${res.after.files}`);
+    if (res.log) {
+      console.error(`[ERROR] typedoc log tail:\n${res.log}`);
+    }
     console.error(
       `[ERROR] hint: a stale process / editor / indexer may still hold files under the out dir ` +
         `(EPERM / EBUSY on Windows is the usual shape). Close it and retry, or pass ` +

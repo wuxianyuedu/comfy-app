@@ -45,7 +45,9 @@ export async function streamChat({ messages, opts, onToken, signal }: ChatArgs):
    * 现在把「解析」与「处置」分开：解析失败（坏帧）跳过并继续，语义错误（服务端
    * 明确报错）立刻中断整条流。 */
   const handleFrame = (data: string): void => {
-    if (data === "[DONE]") return;
+    if (data === "[DONE]") {
+      return;
+    }
     let json: { error?: unknown; token?: unknown };
     try {
       json = /* SAFETY: 类型断言已复核 */ JSON.parse(data) as {
@@ -73,10 +75,14 @@ export async function streamChat({ messages, opts, onToken, signal }: ChatArgs):
     // 换行符，此前整条被 `break` 丢弃，用户可见表现是「回答最后一个字丢了」。
     const rest = flush ? "" : (lines.pop() ?? "");
     // 流已结束时最后可能留一个空尾段（`…\n` 切分后会多出一个 `""`），丢掉它。
-    if (flush && lines.at(-1)?.trim() === "") lines.pop();
+    if (flush && lines.at(-1)?.trim() === "") {
+      lines.pop();
+    }
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
+      if (!trimmed.startsWith("data:")) {
+        continue;
+      }
       handleFrame(trimmed.slice(5).trim());
     }
     return rest;
@@ -84,7 +90,9 @@ export async function streamChat({ messages, opts, onToken, signal }: ChatArgs):
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      break;
+    }
     buffer += decoder.decode(value, { stream: true });
     buffer = drainLines(buffer, false);
   }
@@ -105,7 +113,9 @@ export async function completeChat({ messages, opts }: ChatArgs): Promise<string
     content?: string;
     error?: string;
   };
-  if (!res.ok) throw new Error(readApiError(json) ?? `LLM 请求失败 (${res.status})`);
+  if (!res.ok) {
+    throw new Error(readApiError(json) ?? `LLM 请求失败 (${res.status})`);
+  }
   return json.content ?? "";
 }
 

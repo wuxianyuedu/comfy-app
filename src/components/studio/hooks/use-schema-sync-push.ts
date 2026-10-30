@@ -28,7 +28,9 @@ export function useSchemaSyncPush(): {
   }, []);
 
   const push = useCallback(async () => {
-    if (stoppedRef.current) return;
+    if (stoppedRef.current) {
+      return;
+    }
     setPushing(true);
     try {
       /* 结果不在这里消费：成败都会经状态文件反映到轮询到的相位上
@@ -37,7 +39,9 @@ export function useSchemaSyncPush(): {
     } catch {
       /* 网络层失败同理：下一次轮询（2s）会把真实状态带回来。 */
     } finally {
-      if (!stoppedRef.current) setPushing(false);
+      if (!stoppedRef.current) {
+        setPushing(false);
+      }
     }
   }, []);
 

@@ -93,7 +93,9 @@ export function useSettingsSave(input: {
               temperatureByTask: draft.temperatureByTask,
               maxTokens: draft.maxTokens,
             });
-            if (llmApiKey) setLlmApiKey("");
+            if (llmApiKey) {
+              setLlmApiKey("");
+            }
             await llmQ.refetch();
           },
           {
@@ -116,12 +118,16 @@ export function useSettingsSave(input: {
   );
 
   const saveLlm = useCallback(async () => {
-    if (!llmDraft) return;
+    if (!llmDraft) {
+      return;
+    }
     await persistLlmDraft(llmDraft);
   }, [llmDraft, persistLlmDraft]);
 
   const savePrefs = useCallback(async () => {
-    if (!settingsDraft) return;
+    if (!settingsDraft) {
+      return;
+    }
     setSaving(true);
     try {
       await runAsyncAction(

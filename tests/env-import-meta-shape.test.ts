@@ -53,8 +53,11 @@ function walk(dir: string): Array<string> {
   const out: Array<string> = [];
   for (const name of readdirSync(dir)) {
     const full = path.join(dir, name);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else out.push(full);
+    if (statSync(full).isDirectory()) {
+      out.push(...walk(full));
+    } else {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -68,12 +71,18 @@ function walk(dir: string): Array<string> {
 function findUnsafe(face: string, { includeTests }: { includeTests: boolean }) {
   const hits: Array<string> = [];
   for (const file of walk(path.join(REPO_ROOT, face))) {
-    if (!/\.(ts|tsx|js|mjs|cjs)$/.test(file)) continue;
-    if (!includeTests && /\.test\.(ts|tsx|js|mjs|cjs)$/.test(file)) continue;
+    if (!/\.(ts|tsx|js|mjs|cjs)$/.test(file)) {
+      continue;
+    }
+    if (!includeTests && /\.test\.(ts|tsx|js|mjs|cjs)$/.test(file)) {
+      continue;
+    }
     const lines: Array<string> = readFileSync(file, "utf8").split("\n");
     lines.forEach((line, index) => {
       const trimmed = line.trim();
-      if (trimmed.startsWith("//") || trimmed.startsWith("*")) return;
+      if (trimmed.startsWith("//") || trimmed.startsWith("*")) {
+        return;
+      }
       for (const match of line.matchAll(UNSAFE_IN_BUNDLE)) {
         hits.push(`${path.relative(REPO_ROOT, file)}:${index + 1} · import.meta.${match[1]}`);
       }

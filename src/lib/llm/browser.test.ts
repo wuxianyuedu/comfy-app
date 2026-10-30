@@ -12,7 +12,9 @@ function sseStream(chunks: Array<string>): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
-      for (const c of chunks) controller.enqueue(encoder.encode(c));
+      for (const c of chunks) {
+        controller.enqueue(encoder.encode(c));
+      }
       controller.close();
     },
   });
@@ -26,7 +28,9 @@ function okStream(chunks: Array<string>) {
  *  FormData / Blob 等，直接 String() 会被 lint 判为可疑的隐式序列化）。 */
 function jsonBody(init: RequestInit | undefined): unknown {
   const body = init?.body;
-  if (typeof body !== "string") throw new Error(`请求体不是字符串: ${typeof body}`);
+  if (typeof body !== "string") {
+    throw new Error(`请求体不是字符串: ${typeof body}`);
+  }
   return /* SAFETY: 类型断言已复核 */ JSON.parse(body) as unknown;
 }
 

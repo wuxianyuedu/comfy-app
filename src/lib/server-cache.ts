@@ -59,7 +59,9 @@ export async function cacheJson<T>(
   // 超出容量就淘汰最旧的。
   while (store.map.size > store.max) {
     const oldest = store.map.keys().next().value;
-    if (oldest === undefined) break;
+    if (oldest === undefined) {
+      break;
+    }
     store.map.delete(oldest);
   }
   return value;
@@ -91,6 +93,8 @@ export function cachePeek<T>(key: string): T | undefined {
 export function cacheDelPrefix(prefix: string): void {
   const store = getStore();
   for (const k of Array.from(store.map.keys())) {
-    if (k.startsWith(prefix)) store.map.delete(k);
+    if (k.startsWith(prefix)) {
+      store.map.delete(k);
+    }
   }
 }

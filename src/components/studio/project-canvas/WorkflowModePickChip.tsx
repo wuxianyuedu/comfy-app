@@ -62,7 +62,9 @@ export function WorkflowModePickChip({
   );
 
   const pick = (code: string) => {
-    if (code !== defaultMode) onChange(modes, code);
+    if (code !== defaultMode) {
+      onChange(modes, code);
+    }
   };
 
   return (

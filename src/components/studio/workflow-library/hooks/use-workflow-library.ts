@@ -213,7 +213,9 @@ export function useWorkflowLibrary(
   const [loadStalled, setLoadStalled] = useState(false);
   const awaitingData = listQ.isLoading || listQ.isFetching;
   useEffect(() => {
-    if (!awaitingData || listQ.data) return;
+    if (!awaitingData || listQ.data) {
+      return;
+    }
     const timer = setTimeout(() => setLoadStalled(true), LIST_STALL_MS);
     return () => clearTimeout(timer);
   }, [awaitingData, listQ.data]);
@@ -222,7 +224,9 @@ export function useWorkflowLibrary(
      * 不是常驻状态；下一次拉取若又卡住会重新点亮。
      * 后置到 render 提交后执行（规范 08 §8.6 写法二）：effect 体里同步
      * setState 会被 React 19 的 set-state-in-effect 规则拦下。 */
-    if (!listQ.data && !listQ.isError) return;
+    if (!listQ.data && !listQ.isError) {
+      return;
+    }
     const timer = setTimeout(() => setLoadStalled(false), 0);
     return () => clearTimeout(timer);
   }, [listQ.data, listQ.isError]);
@@ -231,12 +235,16 @@ export function useWorkflowLibrary(
    *  用快照比对避免同一份数据反复 setState。 */
   const lastSyncedRef = useRef<string>("");
   useEffect(() => {
-    if (!listQ.data) return;
+    if (!listQ.data) {
+      return;
+    }
     const snapshot = JSON.stringify({
       wf: listQ.data.workflows ?? [],
       pend: listQ.data.localPending ?? [],
     });
-    if (snapshot === lastSyncedRef.current) return;
+    if (snapshot === lastSyncedRef.current) {
+      return;
+    }
     lastSyncedRef.current = snapshot;
     setWorkflows(listQ.data.workflows ?? []);
     setLocalPending(listQ.data.localPending ?? []);
@@ -357,7 +365,9 @@ export function useWorkflowLibrary(
   const handleEditorClose = useCallback(() => {
     const id = editingId;
     setEditingId(null);
-    if (!id) return;
+    if (!id) {
+      return;
+    }
     void queryClient.invalidateQueries(trpc.workflow.detail.queryFilter({ id }));
     void queryClient.invalidateQueries(trpc.workflow.detailFull.queryFilter({ id }));
   }, [editingId, trpc, queryClient]);

@@ -33,7 +33,9 @@ const tempDirs: Array<string> = [];
 afterEach(() => {
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
 
@@ -55,6 +57,11 @@ function mkRepo(): string {
     // 上面那一份**自己**的依赖（现在是个叶子 `platform.ts`，ISSUE #1961）：
     // 它的依赖闭包同样要整条在场 —— 只抄上一份等于把「链」抄成「一个点」。
     "src/lib/process/platform.ts",
+    /* 上面那两份按职责拆出来的链（`executable-resolve.ts` 越过文件长度硬闸时切的）：
+     * 静态 import 关系是 `executable-resolve.ts` → `pnpm-resolve.ts` →
+     * `version-compare.ts`，整条链都得在场（理由同上：链缺一环 = 加载阶段就断）。 */
+    "src/lib/process/pnpm-resolve.ts",
+    "src/lib/process/version-compare.ts",
   ]) {
     // 必须**按原相对路径**落位：脚本里 import 的是 `./launcher-core/shell.mjs`，
     // 拷成 `scripts/shell.mjs` 会让子进程在加载阶段就 ERR_MODULE_NOT_FOUND ——
@@ -112,7 +119,9 @@ function writeLedger(dir: string, ledger: LedgerFile): void {
 /** 用例里那几处「给台账每条补上原因」的公共动作。 */
 function explainAll(dir: string): void {
   const ledger = readLedger(dir);
-  for (const entry of ledger.entries) entry.reason = "上游无修复版，待跟进";
+  for (const entry of ledger.entries) {
+    entry.reason = "上游无修复版，待跟进";
+  }
   writeLedger(dir, ledger);
 }
 

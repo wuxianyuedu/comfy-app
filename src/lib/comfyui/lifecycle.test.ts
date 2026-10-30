@@ -908,7 +908,9 @@ describe("已有实例在跑但 HTTP 暂未响应：不重复拉起，等待接�
     let probeCalls = 0;
     vi.mocked(probeComfyBase).mockImplementation(async () => {
       probeCalls += 1;
-      if (probeCalls >= 2) mainPyPid = null;
+      if (probeCalls >= 2) {
+        mainPyPid = null;
+      }
       return null;
     });
 

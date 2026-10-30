@@ -108,7 +108,9 @@ describe("MaterialLibraryPanel 作用域切换（ISSUE #1925）", () => {
         .sort()
         .join(" ");
     expect(shape(tabs[0]!)).toBe(shape(tabs[1]!));
-    for (const tab of tabs) expect(tab.className).not.toContain("border-b-2");
+    for (const tab of tabs) {
+      expect(tab.className).not.toContain("border-b-2");
+    }
   });
 });
 

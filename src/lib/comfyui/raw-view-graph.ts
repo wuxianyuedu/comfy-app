@@ -100,7 +100,9 @@ interface LinkRef {
 function buildLinkIndex(raw: RawWorkflow): Map<number, LinkRef> {
   const map = new Map<number, LinkRef>();
   for (const l of raw.links ?? []) {
-    if (!Array.isArray(l) || l.length < 5) continue;
+    if (!Array.isArray(l) || l.length < 5) {
+      continue;
+    }
     map.set(Number(l[0]), {
       originId: String(l[1]),
       originSlot: Number(l[2]),
@@ -126,7 +128,9 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
 
     if (Array.isArray(n.inputs) && n.inputs.length) {
       for (const inp of n.inputs) {
-        if (!inp || typeof inp.name !== "string") continue;
+        if (!inp || typeof inp.name !== "string") {
+          continue;
+        }
         slots.push({
           name: inp.name,
           type: typeof inp.type === "string" ? inp.type : undefined,
@@ -135,14 +139,24 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
       }
     } else {
       const order = FALLBACK_FULL[type] ?? [];
-      for (const name of order) slots.push({ name, link: null });
+      for (const name of order) {
+        slots.push({ name, link: null });
+      }
       for (const l of raw.links ?? []) {
-        if (!Array.isArray(l) || l.length < 5) continue;
-        if (String(l[3]) !== id) continue;
+        if (!Array.isArray(l) || l.length < 5) {
+          continue;
+        }
+        if (String(l[3]) !== id) {
+          continue;
+        }
         const slot = slots[Number(l[4])];
-        if (!slot) continue;
+        if (!slot) {
+          continue;
+        }
         slot.link = Number(l[0]);
-        if (typeof l[5] === "string") slot.type = l[5];
+        if (typeof l[5] === "string") {
+          slot.type = l[5];
+        }
       }
     }
 
@@ -170,7 +184,9 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
  */
 export function buildRawViewGraph(raw: RawWorkflow): Record<string, ApiWorkflowNode> {
   const graph: Record<string, ApiWorkflowNode> = {};
-  if (!Array.isArray(raw.nodes)) return graph;
+  if (!Array.isArray(raw.nodes)) {
+    return graph;
+  }
 
   const linkIndex = buildLinkIndex(raw);
   const index = indexRawNodes(raw);
@@ -178,9 +194,13 @@ export function buildRawViewGraph(raw: RawWorkflow): Record<string, ApiWorkflowN
   for (const idx of index.values()) {
     const inputs: Record<string, unknown> = {};
     for (const slot of idx.inputs) {
-      if (slot.link == null) continue;
+      if (slot.link == null) {
+        continue;
+      }
       const ref = linkIndex.get(slot.link);
-      if (!ref) continue;
+      if (!ref) {
+        continue;
+      }
       inputs[slot.name] = [ref.originId, ref.originSlot];
     }
 
@@ -189,20 +209,36 @@ export function buildRawViewGraph(raw: RawWorkflow): Record<string, ApiWorkflowN
      * inputTypes/outputTypes 供 `execution-graph` 在提交前穿透旁路节点。 */
     const meta: ApiNodeMeta = {};
     const title = idx.raw.title ?? idx.raw.properties?.title;
-    if (title) meta.title = toStringValue(title);
-    if (idx.mode !== NODE_MODE_ALWAYS) meta.mode = idx.mode;
-    if (idx.virtual) meta.virtual = true;
+    if (title) {
+      meta.title = toStringValue(title);
+    }
+    if (idx.mode !== NODE_MODE_ALWAYS) {
+      meta.mode = idx.mode;
+    }
+    if (idx.virtual) {
+      meta.virtual = true;
+    }
 
     const inactive = idx.virtual || idx.mode === NODE_MODE_NEVER || idx.mode === NODE_MODE_BYPASS;
     if (inactive) {
       meta.inputOrder = idx.inputs.map((input) => input.name);
       const types: Record<string, string> = {};
-      for (const s of idx.inputs) if (s.type) types[s.name] = s.type;
-      if (Object.keys(types).length) meta.inputTypes = types;
-      if (idx.outputTypes.length) meta.outputTypes = idx.outputTypes;
+      for (const s of idx.inputs) {
+        if (s.type) {
+          types[s.name] = s.type;
+        }
+      }
+      if (Object.keys(types).length) {
+        meta.inputTypes = types;
+      }
+      if (idx.outputTypes.length) {
+        meta.outputTypes = idx.outputTypes;
+      }
       if (idx.type === "PrimitiveNode") {
         const value = Array.isArray(idx.raw.widgets_values) ? idx.raw.widgets_values[0] : undefined;
-        if (value !== undefined) meta.value = value;
+        if (value !== undefined) {
+          meta.value = value;
+        }
       }
     }
 

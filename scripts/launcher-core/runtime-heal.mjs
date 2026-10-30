@@ -13,11 +13,7 @@
 
 import { spawnSync } from "node:child_process";
 
-import {
-  classifyChanges,
-  describeChanges,
-  parseDiffEntries,
-} from "./sync-attribution.mjs";
+import { classifyChanges, describeChanges, parseDiffEntries } from "./sync-attribution.mjs";
 
 /** 运行期探测的节拍：与心跳同档（明显小于「上一位 launcher 已死」的 30s 阈值）。 */
 export const RUNTIME_BEAT_MS = 5_000;
@@ -43,7 +39,9 @@ export function readGitHead(root) {
       cwd: root,
       encoding: "utf8",
     });
-    if (r.status !== 0) return null;
+    if (r.status !== 0) {
+      return null;
+    }
     const head = String(r.stdout ?? "").trim();
     return head === "" ? null : head;
   } catch {
@@ -68,7 +66,9 @@ export function readNameStatusDiff(root, base) {
         encoding: "utf8",
       },
     );
-    if (r.status !== 0) return null;
+    if (r.status !== 0) {
+      return null;
+    }
     return String(r.stdout ?? "");
   } catch {
     return null;
@@ -82,9 +82,13 @@ export function readNameStatusDiff(root, base) {
  * @param {string} root @param {string | null} headAtBoot @returns {string | null}
  */
 export function describeRuntimeHealCause(root, headAtBoot) {
-  if (!headAtBoot) return null;
+  if (!headAtBoot) {
+    return null;
+  }
   const raw = readNameStatusDiff(root, headAtBoot);
-  if (raw === null) return null;
+  if (raw === null) {
+    return null;
+  }
   const entries = parseDiffEntries(raw);
   return describeChanges(classifyChanges(entries), {
     headChanged: entries.length > 0,
@@ -132,7 +136,9 @@ export function createRuntimeRouteWatch({
 
   async function tick() {
     /* 上一拍还没跑完就跳过这一拍：探测本身是网络 IO，串行化避免堆积。 */
-    if (stopped || running) return;
+    if (stopped || running) {
+      return;
+    }
     running = true;
     try {
       const state = await probeHealth();
@@ -148,7 +154,9 @@ export function createRuntimeRouteWatch({
         return;
       }
       failures += 1;
-      if (failures < threshold) return;
+      if (failures < threshold) {
+        return;
+      }
       if (heals >= maxHeals) {
         if (failures === threshold) {
           log(
@@ -158,7 +166,9 @@ export function createRuntimeRouteWatch({
         }
         return;
       }
-      if (Date.now() - lastHealAt < cooldownMs) return;
+      if (Date.now() - lastHealAt < cooldownMs) {
+        return;
+      }
       /* 动手前多花一次请求复核「页面 200 / 接口 404」这个已知签名：页面也非 200
        * 说明是「服务半死」，那是另一类故障，不套用这条自愈。 */
       const rootOk = await probeRoot();
@@ -179,10 +189,7 @@ export function createRuntimeRouteWatch({
       );
       await onHeal();
     } catch (error) {
-      log(
-        `运行期路由探测异常：${error instanceof Error ? error.message : String(error)}`,
-        "WARN",
-      );
+      log(`运行期路由探测异常：${error instanceof Error ? error.message : String(error)}`, "WARN");
     } finally {
       running = false;
     }

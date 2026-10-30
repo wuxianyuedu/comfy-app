@@ -67,10 +67,7 @@ export function isExplicitSource(source) {
  * 平台侧那几个候选键，按可信度排序（NPC 名先于 token 用户名：前者是**这次会话是谁**，
  * 后者只是「拿谁的 token」—— 一台机器多份检出的 token 用户名是同一个）。
  */
-export const PLATFORM_HANDLE_KEYS = Object.freeze([
-  "CNB_NPC_NAME",
-  "CNB_TOKEN_USER_NAME",
-]);
+export const PLATFORM_HANDLE_KEYS = Object.freeze(["CNB_NPC_NAME", "CNB_TOKEN_USER_NAME"]);
 
 /**
  * `git config user.name` —— 取不到就回空串（不是抛、不是 `undefined`）。
@@ -113,10 +110,7 @@ export function resolveDevHandle({ root, env = {} }) {
   }
   try {
     const fromFile = String(
-      readEnvFileValue(
-        fs.readFileSync(path.join(root, ".env"), "utf8"),
-        DEV_HANDLE_ENV_KEY,
-      ) ?? "",
+      readEnvFileValue(fs.readFileSync(path.join(root, ".env"), "utf8"), DEV_HANDLE_ENV_KEY) ?? "",
     ).trim();
     if (fromFile !== "") {
       return { name: fromFile, source: HANDLE_SOURCES.dotenv, explicit: true };
@@ -126,11 +120,14 @@ export function resolveDevHandle({ root, env = {} }) {
   }
   for (const key of PLATFORM_HANDLE_KEYS) {
     const value = String(env[key] ?? "").trim();
-    if (value !== "") return { name: value, source: key, explicit: false };
+    if (value !== "") {
+      return { name: value, source: key, explicit: false };
+    }
   }
   const name = gitName(root);
-  if (name !== "")
+  if (name !== "") {
     return { name, source: "git config user.name", explicit: false };
+  }
   return { name: SETTLED_FALLBACK, source: "兜底", explicit: false };
 }
 
@@ -149,13 +146,12 @@ export function resolveDevHandle({ root, env = {} }) {
  */
 export function explicitDevHandle({ root, env = {} }) {
   const fromProcess = String(env[DEV_HANDLE_ENV_KEY] ?? "").trim();
-  if (fromProcess !== "") return fromProcess;
+  if (fromProcess !== "") {
+    return fromProcess;
+  }
   try {
     const fromFile = String(
-      readEnvFileValue(
-        fs.readFileSync(path.join(root, ".env"), "utf8"),
-        DEV_HANDLE_ENV_KEY,
-      ) ?? "",
+      readEnvFileValue(fs.readFileSync(path.join(root, ".env"), "utf8"), DEV_HANDLE_ENV_KEY) ?? "",
     ).trim();
     return fromFile === "" ? null : fromFile;
   } catch {
@@ -208,9 +204,13 @@ export function devHandleForEnvFile({ root, env = {} }) {
   }
   for (const key of PLATFORM_HANDLE_KEYS) {
     const value = String(env[key] ?? "").trim();
-    if (value !== "") return { name: value, source: key };
+    if (value !== "") {
+      return { name: value, source: key };
+    }
   }
   const name = gitName(root);
-  if (name !== "") return { name, source: "git config user.name" };
+  if (name !== "") {
+    return { name, source: "git config user.name" };
+  }
   return { name: SETTLED_FALLBACK, source: "兜底" };
 }

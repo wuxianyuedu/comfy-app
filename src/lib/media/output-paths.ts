@@ -40,11 +40,7 @@
  * 就等于把「布局只有一处定义」重新拆成两份。 */
 import path from "node:path";
 
-import {
-  ARTIFACT_ROOT_DIR,
-  LEGACY_ARTIFACT_ROOT_DIRS,
-  taskOutputSegments,
-} from "./output-layout";
+import { ARTIFACT_ROOT_DIR, LEGACY_ARTIFACT_ROOT_DIRS, taskOutputSegments } from "./output-layout";
 
 /* 形状（目录名 / 子层 / URL 前缀 / 相对段）在 `./output-layout.ts`，本层只做**磁盘解析**。
  * 那边是浏览器安全的（不引 `node:path`），因为界面也得告诉用户东西落在哪儿 ——
@@ -94,10 +90,7 @@ export function legacyGeneratedRoot(cwd: string = process.cwd()): string {
  *  `public/generatedX` 也算进来（前缀相同，并不是子路径）。
  *  第二个参数允许换一格比（素材库拿 `materials/` 当根来判同一件事），
  *  判据仍只有这一处。 */
-export function isWithinGeneratedRoot(
-  abs: string,
-  root: string = generatedRoot(),
-): boolean {
+export function isWithinGeneratedRoot(abs: string, root: string = generatedRoot()): boolean {
   return abs === root || abs.startsWith(root + path.sep);
 }
 
@@ -130,12 +123,11 @@ export function filmBgmRoot(root: string = generatedRoot()): string {
  *  百分号编码：地址由请求方/画布数据给，坏编码不是越权，但也不能顺着半截字符串
  *  去读盘 —— 判成「不是产物地址」。`path.resolve` 会把以 `/` 开头的残留段当绝对路径，
  *  那种位置一定在根外，因此同样落到 `null`。 */
-export function artifactDiskPath(
-  url: string,
-  root: string = generatedRoot(),
-): string | null {
+export function artifactDiskPath(url: string, root: string = generatedRoot()): string | null {
   const matched = /^\/(?:api\/)?generated\/(.+)$/.exec(url)?.[1];
-  if (!matched) return null;
+  if (!matched) {
+    return null;
+  }
   let decoded: string;
   try {
     decoded = decodeURIComponent(matched);
@@ -160,6 +152,8 @@ export function taskOutputDir(
   root: string = generatedRoot(),
 ): string | null {
   const abs = path.resolve(root, ...taskOutputSegments(taskId, projectId));
-  if (abs === root) return null;
+  if (abs === root) {
+    return null;
+  }
   return isWithinGeneratedRoot(abs, root) ? abs : null;
 }

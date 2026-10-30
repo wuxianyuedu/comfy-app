@@ -44,7 +44,9 @@ export function makeExtractLog(
 
 /** 把一条消息的 content（纯文本或多模态块）压成可记录的纯文本。 */
 function messageText(content: LLMMessage["content"]): string {
-  if (typeof content === "string") return content;
+  if (typeof content === "string") {
+    return content;
+  }
   return content.map((p) => (p.type === "text" ? p.text : "")).join("\n");
 }
 

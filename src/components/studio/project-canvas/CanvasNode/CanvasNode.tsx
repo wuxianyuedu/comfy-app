@@ -68,7 +68,9 @@ export const CanvasNode = React.memo(function CanvasNode({
   /* 镜头节点「退回让 AI 重做」：本地先回落 idle（清结果），并写回统一项目（清 imageUrl/clipUrl
    * + rev 自增）；run 若在跑，规划器下一步会重做该镜。IO 走 lib 客户端，本视图不碰 fetch。 */
   const redoShot = useCallback(() => {
-    if (!d.shotId) return;
+    if (!d.shotId) {
+      return;
+    }
     patch({ status: "idle", resultPath: undefined, error: undefined });
     void requestShotRedo(getActiveId() ?? "", d.shotId);
   }, [d.shotId, patch]);

@@ -169,12 +169,17 @@ export function useCopyFeedback({
    *（连点两下仍然发两次写入）—— 本用例集正是钉住这一点的。 */
   const report = useCallback(
     (start: () => Promise<boolean>) => {
-      if (!lock.tryEnter()) return;
+      if (!lock.tryEnter()) {
+        return;
+      }
       void start()
         .then((ok) => {
           const handlers = handlersRef.current;
-          if (ok) handlers.success?.(true);
-          else if (handlers.failure !== "silent") handlers.failure?.(false);
+          if (ok) {
+            handlers.success?.(true);
+          } else if (handlers.failure !== "silent") {
+            handlers.failure?.(false);
+          }
         })
         .finally(() => {
           lock.exit();
@@ -186,14 +191,14 @@ export function useCopyFeedback({
   /* 两种调用形态共用同一条重入判据与同一份反馈：
    *   · `copy("文本")` —— 最常见；
    *   · `copy(() => copyAllFromStore())` —— 文本由点击那一刻现算（日志面板）。 */
-  const run = useCallback(
-    (text: string) => report(() => copyText(text)),
-    [report],
-  );
+  const run = useCallback((text: string) => report(() => copyText(text)), [report]);
   return useCallback(
     (arg: string | (() => Promise<boolean>)) => {
-      if (typeof arg === "string") run(arg);
-      else report(arg);
+      if (typeof arg === "string") {
+        run(arg);
+      } else {
+        report(arg);
+      }
     },
     [report, run],
   );
@@ -216,7 +221,9 @@ export function useCopyResult(): (text: string) => Promise<boolean> {
   const lock = useReentrancyLock();
   return useCallback(
     (text: string): Promise<boolean> => {
-      if (!lock.tryEnter()) return Promise.resolve(false);
+      if (!lock.tryEnter()) {
+        return Promise.resolve(false);
+      }
       return copyText(text).finally(() => {
         lock.exit();
       });

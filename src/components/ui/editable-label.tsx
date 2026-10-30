@@ -75,8 +75,11 @@ export function EditableLabel({
     const next = draft.trim();
     /* trim 后的值没变时是空操作 —— 免得
      * 每次 blur 都把 workflowIO 表弄脏。 */
-    if (next && next !== label) onChange?.(next);
-    else setDraft(label);
+    if (next && next !== label) {
+      onChange?.(next);
+    } else {
+      setDraft(label);
+    }
     setEditing(false);
   };
 

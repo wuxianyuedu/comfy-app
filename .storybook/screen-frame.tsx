@@ -237,7 +237,9 @@ export function projectScene(name: string): ProjectScene {
  */
 export function seedProject(scene: ProjectScene): CanvasProject {
   for (const existing of listProjects()) {
-    if (existing.name === scene.name) deleteProject(existing.id);
+    if (existing.name === scene.name) {
+      deleteProject(existing.id);
+    }
   }
   const created = createProject(scene.name);
   /* 场景给了节点/连线就落进去（`upsertProject` 与生产代码的自动保存同一条路）。
@@ -374,7 +376,9 @@ export function useSeededProjects(spec: {
   const [projects] = useState<Array<CanvasProject>>(() => seedProjects(spec));
   useEffect(() => {
     return () => {
-      for (const project of projects) deleteProject(project.id);
+      for (const project of projects) {
+        deleteProject(project.id);
+      }
     };
   }, [projects]);
   return projects;

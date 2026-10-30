@@ -85,7 +85,9 @@ function parseCharacterFull(
 ): { appearance: string; costume: string; personality: string } | null {
   try {
     const parsed: unknown = extractJson(text);
-    if (!isRecord(parsed)) return null;
+    if (!isRecord(parsed)) {
+      return null;
+    }
     const rec = parsed;
     return {
       appearance: typeof rec.appearance === "string" ? rec.appearance : "",
@@ -168,9 +170,15 @@ export function resolveAgentTool(
     case "set_project_meta": {
       const args = safeParseJson(argsJson);
       const patch: Partial<WorkshopDraftDto["meta"]> = {};
-      if (typeof args.title === "string") patch.title = args.title;
-      if (typeof args.tone === "string") patch.tone = args.tone;
-      if (typeof args.logline === "string") patch.logline = args.logline;
+      if (typeof args.title === "string") {
+        patch.title = args.title;
+      }
+      if (typeof args.tone === "string") {
+        patch.tone = args.tone;
+      }
+      if (typeof args.logline === "string") {
+        patch.logline = args.logline;
+      }
       if (typeof args.type === "string") {
         const valid = ["short_video", "micro_film", "animation", "ad", "comic", "other"];
         if (valid.includes(args.type)) {
@@ -329,7 +337,9 @@ ${script.slice(0, 8000)}`,
         summary: `添加角色「${charName}」`,
         argSummary,
         execute: async () => {
-          if (!charName.trim()) return { ok: false, summary: "角色名为空" };
+          if (!charName.trim()) {
+            return { ok: false, summary: "角色名为空" };
+          }
           const existing = hd.getCharacters();
           if (existing.some((c) => c.name === charName)) {
             return { ok: false, summary: `角色「${charName}」已存在` };

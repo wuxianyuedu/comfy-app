@@ -32,15 +32,15 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 /* 默认扫描根（可被位置参数覆盖）。**必须在 `--staged` 短路之前**声明。 */
-const SCAN_DIR = (process.argv[2] && !process.argv[2].startsWith("-")) ? process.argv[2] : "src";
+const SCAN_DIR = process.argv[2] && !process.argv[2].startsWith("-") ? process.argv[2] : "src";
 
 /* `--staged`（钩子用）＝ 输入面跳过（§13.5.8.2）。短路点在 `require("typescript")`
  * 之前 —— 那一步 ≈180ms。位置参数显式指定了扫描根时不跳过（那是测试/盘点用法）。 */
-if (
-  process.argv.includes("--staged") &&
-  !process.argv.slice(2).some((a) => !a.startsWith("-"))
-) {
-  require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[updater-purity]" });
+if (process.argv.includes("--staged") && !process.argv.slice(2).some((a) => !a.startsWith("-"))) {
+  require("./gate-scan-read.cjs").skipUnlessStagedTouches({
+    roots: [SCAN_DIR],
+    tag: "[updater-purity]",
+  });
 }
 
 // ── 解析器依赖 ──
@@ -51,9 +51,7 @@ let ts = null;
 try {
   ts = require("typescript");
 } catch {
-  console.warn(
-    "[updater-purity] 未找到 typescript(node_modules 未安装),跳过(tsc 步骤同样需要它)",
-  );
+  console.warn("[updater-purity] 未找到 typescript(node_modules 未安装),跳过(tsc 步骤同样需要它)");
   process.exit(0);
 }
 
@@ -63,15 +61,15 @@ const ROOT = path.resolve(__dirname, "..");
 
 /* ── 判定:调用是不是「React/zustand 状态 setter」 ── */
 // setTimeout/setInterval/setImmediate 是定时器,不是 state setter,必须排除
-const NOT_SETTER = new Set([
-  "setTimeout", "setInterval", "setImmediate", "setTimeoutUnref",
-]);
+const NOT_SETTER = new Set(["setTimeout", "setInterval", "setImmediate", "setTimeoutUnref"]);
 const isStateSetter = (callee) => {
-  if (ts.isIdentifier(callee))
+  if (ts.isIdentifier(callee)) {
     return /^set[A-Z]/.test(callee.text) && !NOT_SETTER.has(callee.text);
+  }
   // zustand：store.set(state => ...) / store.setState(state => ...)
-  if (ts.isPropertyAccessExpression(callee))
+  if (ts.isPropertyAccessExpression(callee)) {
     return /^(set|setState)$/.test(callee.name.text);
+  }
   return false;
 };
 
@@ -93,17 +91,18 @@ function scanTree(sf, rel) {
       const callee = node.expression;
       if (isStateSetter(callee)) {
         const arg = node.arguments[0];
-        if (arg && (ts.isArrowFunction(arg) || ts.isFunctionExpression(arg))
-          && ts.isBlock(arg.body)) {
+        if (
+          arg &&
+          (ts.isArrowFunction(arg) || ts.isFunctionExpression(arg)) &&
+          ts.isBlock(arg.body)
+        ) {
           // 函数式 updater + 块体:逐条语句找「裸调用」副作用
           for (const stmt of arg.body.statements) {
-            if (ts.isExpressionStatement(stmt)
-              && ts.isCallExpression(stmt.expression)) {
-              const { line } = sf.getLineAndCharacterOfPosition(
-                stmt.getStart(sf));
+            if (ts.isExpressionStatement(stmt) && ts.isCallExpression(stmt.expression)) {
+              const { line } = sf.getLineAndCharacterOfPosition(stmt.getStart(sf));
               problems.push(
                 `${rel}:${line + 1} :: 在 ${callee.getText(sf)} 的函数式 updater 内调用 ` +
-                `${stmt.expression.getText(sf).split("\n")[0].slice(0, 60)}`,
+                  `${stmt.expression.getText(sf).split("\n")[0].slice(0, 60)}`,
               );
             }
           }
@@ -128,7 +127,8 @@ function collect(parsed) {
   const problems = [];
   // 扫描根既支持相对仓库根(默认 src/),也支持绝对路径(测试把 fixtures 放 tmp)。
   const absBase = path.isAbsolute(SCAN_DIR) ? SCAN_DIR : path.join(ROOT, SCAN_DIR);
-  const relBase = path.isAbsolute(SCAN_DIR) ? SCAN_DIR.replace(/\//g, "/")
+  const relBase = path.isAbsolute(SCAN_DIR)
+    ? SCAN_DIR.replace(/\//g, "/")
     : SCAN_DIR.replace(/^\/+/, "").replace(/\//g, "/");
   const files = walk(absBase, relBase);
   for (const rel of files) {
@@ -139,8 +139,13 @@ function collect(parsed) {
     }
     const absFile = path.isAbsolute(rel) ? rel : path.join(ROOT, rel);
     const src = fs.readFileSync(absFile, "utf8");
-    const sf = ts.createSourceFile(rel, src, ts.ScriptTarget.Latest, true,
-      rel.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    const sf = ts.createSourceFile(
+      rel,
+      src,
+      ts.ScriptTarget.Latest,
+      true,
+      rel.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
     problems.push(...scanTree(sf, rel));
   }
   return problems;
@@ -148,13 +153,22 @@ function collect(parsed) {
 
 /* 只收集 .ts/.tsx 源文件,跳过 .test. 与 .d.ts */
 function walk(absDir, relDir, out = []) {
-  if (!fs.existsSync(absDir)) return out;
+  if (!fs.existsSync(absDir)) {
+    return out;
+  }
   for (const e of fs.readdirSync(absDir, { withFileTypes: true })) {
     const abs = path.join(absDir, e.name);
     const rel = `${relDir}/${e.name}`;
-    if (e.isDirectory()) { walk(abs, rel, out); continue; }
-    if (!/\.(tsx?)$/.test(e.name)) continue;
-    if (/\.test\./.test(e.name) || e.name.endsWith(".d.ts")) continue;
+    if (e.isDirectory()) {
+      walk(abs, rel, out);
+      continue;
+    }
+    if (!/\.(tsx?)$/.test(e.name)) {
+      continue;
+    }
+    if (/\.test\./.test(e.name) || e.name.endsWith(".d.ts")) {
+      continue;
+    }
     out.push(rel);
   }
   return out;
@@ -177,4 +191,6 @@ function main(parsed) {
 /* 规则本体导出给聚合档 `run-ast-gates.cjs`（单条脚本行为不变）。 */
 module.exports = { scanTree, collect, main, SCAN_DIR };
 
-if (require.main === module) main();
+if (require.main === module) {
+  main();
+}

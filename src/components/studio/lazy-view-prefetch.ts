@@ -38,7 +38,9 @@ export function registerLazyViewLoader(loader: LazyViewLoader): void {
 
 /** 启动空闲预热（幂等）—— 由工作区视图栈挂载时调用一次。 */
 export function startLazyViewPrefetch(): void {
-  if (scheduled) return;
+  if (scheduled) {
+    return;
+  }
   scheduled = true;
   scheduleIdle(drainOne);
 }
@@ -46,7 +48,9 @@ export function startLazyViewPrefetch(): void {
 /** 取队头一个 loader 要一次；要完（或失败）再排下一个 —— 串行的落点。 */
 function drainOne(): void {
   const loader = pending.shift();
-  if (!loader) return;
+  if (!loader) {
+    return;
+  }
   void loader()
     .catch(() => undefined)
     .finally(() => {

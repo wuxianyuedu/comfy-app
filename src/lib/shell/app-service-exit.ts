@@ -80,10 +80,16 @@ export const APP_SERVICE_EXIT_FILE = "app-service-exit.json";
  * 「服务退出了，退出码 N」——升级前后版本混跑时这条尤其常见。
  */
 export function parseAppServiceExitRecord(raw: unknown): AppServiceExitRecord | null {
-  if (typeof raw !== "object" || raw === null) return null;
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
   const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
-  if (typeof o.at !== "string" || o.at === "") return null;
-  if (typeof o.reason !== "string") return null;
+  if (typeof o.at !== "string" || o.at === "") {
+    return null;
+  }
+  if (typeof o.reason !== "string") {
+    return null;
+  }
   return {
     at: o.at,
     kind: asExitKind(o.kind),
@@ -208,7 +214,9 @@ export function summarizeAppServiceExit(record: AppServiceExitRecord): string {
     const hint = CODE_HINT[record.code];
     return hint ? `服务${hint}（退出码 ${record.code}）` : `服务以退出码 ${record.code} 结束`;
   }
-  if (record.code === 0) return "服务正常退出（退出码 0）";
+  if (record.code === 0) {
+    return "服务正常退出（退出码 0）";
+  }
   return "服务已退出，但未拿到退出码或信号";
 }
 
@@ -247,7 +255,9 @@ export function isPreviousRunExit(
   record: AppServiceExitRecord,
   currentRunId: string | null,
 ): boolean {
-  if (record.runId === null || currentRunId === null) return true;
+  if (record.runId === null || currentRunId === null) {
+    return true;
+  }
   return record.runId !== currentRunId;
 }
 
@@ -260,7 +270,9 @@ export function isPreviousRunExit(
  * 半截 JSON）归到「没有原因可讲」。
  */
 export function parseAppServiceExitRaw(raw: string | null): AppServiceExitRecord | null {
-  if (typeof raw !== "string" || raw.trim() === "") return null;
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return null;
+  }
   try {
     return parseAppServiceExitRecord(/* SAFETY: 类型断言已复核 */ JSON.parse(raw) as unknown);
   } catch {
@@ -294,7 +306,9 @@ export function isCurrentDisconnectExit(
     return record.runId === currentRunId;
   }
   const writtenAt = Date.parse(record.at);
-  if (!Number.isFinite(writtenAt)) return false;
+  if (!Number.isFinite(writtenAt)) {
+    return false;
+  }
   const age = now - writtenAt;
   /* 负值 = 时钟漂移 / 记录来自另一台机器写的文件，同样不可用作「刚刚」。 */
   return age >= 0 && age <= RECENT_EXIT_WINDOW_MS;
@@ -333,7 +347,9 @@ export async function fetchCurrentDisconnectExit(
    * `desktop-shell-client` 里其它调用点同一取向）。非壳环境它自己回 null。 */
   const { readAppServiceExitRecord } = await import("./desktop-shell-client");
   const record = parseAppServiceExitRaw(await readAppServiceExitRecord());
-  if (record === null) return null;
+  if (record === null) {
+    return null;
+  }
   return isCurrentDisconnectExit(record, currentRunId, now) ? record : null;
 }
 
@@ -350,7 +366,9 @@ export async function fetchAppServiceExit(): Promise<AppServiceExitProbe> {
       cache: "no-store",
       signal: AbortSignal.timeout(APP_SERVICE_EXIT_TIMEOUT_MS),
     });
-    if (!res.ok) return empty;
+    if (!res.ok) {
+      return empty;
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       record?: unknown;
       currentRunId?: unknown;

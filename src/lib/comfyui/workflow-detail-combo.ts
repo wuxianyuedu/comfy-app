@@ -23,7 +23,9 @@ import { modelFoldersForField } from "~/lib/model-types";
  *  混进候选表（如 aspect_ratio 混出简写 "16:9"），用户照着选就会提交
  *  服务器不认的值。 */
 const comboOptionsFromSpec = (spec: unknown): Array<string> | undefined => {
-  if (!Array.isArray(spec)) return undefined;
+  if (!Array.isArray(spec)) {
+    return undefined;
+  }
   const head: unknown = spec[0];
   if (Array.isArray(head)) {
     const opts = head.filter((x): x is string => typeof x === "string");
@@ -64,7 +66,9 @@ export function createObjectInfoResolvers(): {
 } {
   let _comboObjectInfo: Awaited<ReturnType<typeof fetchObjectInfo>> | undefined;
   const ensureObjectInfo = async () => {
-    if (_comboObjectInfo === undefined) _comboObjectInfo = await fetchObjectInfo();
+    if (_comboObjectInfo === undefined) {
+      _comboObjectInfo = await fetchObjectInfo();
+    }
     return _comboObjectInfo;
   };
 
@@ -84,11 +88,17 @@ export function createObjectInfoResolvers(): {
     classType: string | undefined,
     field: string,
   ): Promise<unknown> => {
-    if (!classType) return undefined;
+    if (!classType) {
+      return undefined;
+    }
     const oi = await ensureObjectInfo();
-    if (!oi) return undefined;
+    if (!oi) {
+      return undefined;
+    }
     const def = oi[classType];
-    if (!def?.input) return undefined;
+    if (!def?.input) {
+      return undefined;
+    }
     return def.input.required?.[field] ?? def.input.optional?.[field];
   };
 
@@ -122,12 +132,16 @@ export function createObjectInfoResolvers(): {
    */
   const comboOptionsForFieldName = async (field: string): Promise<Array<string> | undefined> => {
     const oi = await ensureObjectInfo();
-    if (!oi) return undefined;
+    if (!oi) {
+      return undefined;
+    }
     const declared: Array<string> = [];
     let found = false;
     for (const def of Object.values(oi)) {
       const inp = def.input;
-      if (!inp) continue;
+      if (!inp) {
+        continue;
+      }
       const spec = inp.required?.[field] ?? inp.optional?.[field];
       const opts = comboOptionsFromSpec(spec);
       if (opts) {
@@ -135,7 +149,9 @@ export function createObjectInfoResolvers(): {
         declared.push(...opts);
       }
     }
-    if (!found) return undefined;
+    if (!found) {
+      return undefined;
+    }
     /* 同上一处：并集 + 去重 + 字典序走 `~/lib/ordered-set`。 */
     const out = uniqueSorted(
       union(declared, await localModelFileNames(modelFoldersForField(field))),
@@ -153,9 +169,13 @@ export function createObjectInfoResolvers(): {
     field: string,
   ): Promise<boolean | undefined> => {
     const spec = await specForClassField(classType, field);
-    if (!Array.isArray(spec)) return undefined;
+    if (!Array.isArray(spec)) {
+      return undefined;
+    }
     const extra: unknown = spec[1];
-    if (extra == null || typeof extra !== "object") return undefined;
+    if (extra == null || typeof extra !== "object") {
+      return undefined;
+    }
     return /* SAFETY: 类型断言已复核 */ (extra as Record<string, unknown>).multiline === true;
   };
 

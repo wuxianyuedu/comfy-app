@@ -57,7 +57,9 @@ export function stripComments(text: string): string {
 export function quotedRepoPaths(text: string): Array<string> {
   const out = new Set<string>();
   for (const m of stripComments(text).matchAll(PATH_RE)) {
-    if (m[1]) out.add(m[1]);
+    if (m[1]) {
+      out.add(m[1]);
+    }
   }
   return [...out];
 }
@@ -89,7 +91,9 @@ function gateScripts(): Array<string> {
      * `tests/helpers/gate-repo.ts` 的 `copyGateDeps`）。 */
     for (const m of src.matchAll(/require\(\s*"\.\/([\w.-]+\.cjs)"\s*\)/g)) {
       const dep = `scripts/${m[1]!}`;
-      if (seen.has(dep) || !existsSync(path.join(ROOT, dep))) continue;
+      if (seen.has(dep) || !existsSync(path.join(ROOT, dep))) {
+        continue;
+      }
       seen.add(dep);
       queue.push(dep);
     }
@@ -241,11 +245,17 @@ describe("门禁脚本里的路径字面量必须存在", () => {
       // 「产物根」命名空间的字面量不参与本判据（构建期才存在的文件名，仓库里查不到
       // 不是缺陷）；它们由下面那条用例反向守着，不许变成免检洞
       for (const p of all) {
-        if (isProductRootLiteral(rel, p)) continue;
+        if (isProductRootLiteral(rel, p)) {
+          continue;
+        }
         // 「条件路径」（台账类：零站点时本就不该存在）同样不参与 —— 它们由下面
         // 那条用例**真跑一次**反向守着，不是声明即放行
-        if (isConditionalPath(rel, p)) continue;
-        if (!existsSync(path.join(ROOT, p))) dead.push(`${rel} → ${p}`);
+        if (isConditionalPath(rel, p)) {
+          continue;
+        }
+        if (!existsSync(path.join(ROOT, p))) {
+          dead.push(`${rel} → ${p}`);
+        }
       }
     }
     /* 自证：扫描面没匹配到任何路径字面量时，上面的空清单断言是**空转**

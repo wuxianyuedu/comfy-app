@@ -56,7 +56,9 @@ function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
  * 两处分头拼 `with`，不如把「按 id 装载」收到这里，保证两种取法给出同一形状。
  */
 async function attachImages(rows: Array<Task>): Promise<Array<TaskWithCover>> {
-  if (!rows.length) return [];
+  if (!rows.length) {
+    return [];
+  }
   const ids = rows.map((r) => r.id);
   const images = await db
     .select()
@@ -210,9 +212,13 @@ export class TaskRepository extends DrizzleRepository<Task> {
     extra?: Partial<Task>,
   ): Promise<Task> {
     const existing = await this.findByIdForUser(userId, id);
-    if (!existing) throw new NotFoundError(`任务不存在: ${id}`);
+    if (!existing) {
+      throw new NotFoundError(`任务不存在: ${id}`);
+    }
     const data: Partial<Task> = { status };
-    if (extra) Object.assign(data, extra);
+    if (extra) {
+      Object.assign(data, extra);
+    }
     const rows = await db.update(task).set(data).where(eq(task.id, id)).returning();
     return firstRowOfExisting(rows, `任务不存在: ${id}`);
   }
@@ -303,7 +309,9 @@ export class TaskRepository extends DrizzleRepository<Task> {
       resultImages: unknown;
     }>
   > {
-    if (!taskIds.length) return [];
+    if (!taskIds.length) {
+      return [];
+    }
     return db
       .select({
         id: task.id,

@@ -19,6 +19,9 @@ const RULE_PARTS = [
   require("./ui-primitives-rules-p38-p58.cjs"),
   require("./ui-primitives-rules-p59-p66.cjs"),
   require("./ui-primitives-rules-p67-p86.cjs"),
+  /* P87 单列一片：它属于 P67~P86 的编号区间，但那一片只剩 1 行余量就撞 R5 的
+   * 900 行硬闸（下一条判据一进来就红）。追加在最后 = 键序与拆分前逐字一致。 */
+  require("./ui-primitives-rules-p87.cjs"),
 ];
 
 /** 85 条判据的定义。键序 = 四份分片的拼接顺序。 */

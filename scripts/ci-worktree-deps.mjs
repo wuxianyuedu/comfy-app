@@ -100,7 +100,9 @@ export function worktreeDepsProblem({ installed, env = {} }) {
  * @returns {string} `ok` 时是一行读数；不 ok 时是「为什么 + 下一步」
  */
 export function describeWorktreeDeps(readout, scope = "这一跑") {
-  if (readout.ok) return `[deps-probe] ${scope}：${readout.lines.join("；")}\n`;
+  if (readout.ok) {
+    return `[deps-probe] ${scope}：${readout.lines.join("；")}\n`;
+  }
   return (
     `[deps-probe] × ${scope}的**前提**不成立（不是用例红）：\n` +
     readout.lines.map((l) => `  · ${l}\n`).join("") +

@@ -62,8 +62,7 @@ export const NAV_AUTO_COLLAPSE_MAX_PX = NAV_EXPANDED_MIN_PX - 1;
 export const NAV_AUTO_COLLAPSE_QUERY = `(max-width: ${NAV_AUTO_COLLAPSE_MAX_PX}px)`;
 
 /** 收起确实换出了多少宽度 —— 漂移断言用它反证这笔账的方向没写反。 */
-export const NAV_COLLAPSE_SAVED_PX =
-  NAV_WIDTH_EXPANDED_PX - NAV_WIDTH_COLLAPSED_PX;
+export const NAV_COLLAPSE_SAVED_PX = NAV_WIDTH_EXPANDED_PX - NAV_WIDTH_COLLAPSED_PX;
 
 /**
  * 收起态与内容区下限能不能同时成立（收起后中间列仍 ≥ 下限）。
@@ -110,6 +109,8 @@ export function resolveRailCollapsed(input: {
   if (choice !== null && choice.atCrossing === crossings) {
     return !choice.open;
   }
-  if (narrow) return true;
+  if (narrow) {
+    return true;
+  }
   return !preferredOpen;
 }

@@ -65,16 +65,24 @@ function collectSources(): Array<SourceFile> {
         /* 只跳这两类：`generated` 在本仓库是**产物根**的名字，
          * 别处抄来的「跳过名为 generated 的目录」会把真源文件一起摘掉
          * （同一份扫描工具在不同目录语义不同，实测踩过一次）。 */
-        if (entry.name === "node_modules" || entry.name === ".next") continue;
+        if (entry.name === "node_modules" || entry.name === ".next") {
+          continue;
+        }
         walk(path.join(dir, entry.name));
         continue;
       }
-      if (!/\.(ts|tsx)$/.test(entry.name)) continue;
-      if (/\.(test|spec)\./.test(entry.name)) continue;
+      if (!/\.(ts|tsx)$/.test(entry.name)) {
+        continue;
+      }
+      if (/\.(test|spec)\./.test(entry.name)) {
+        continue;
+      }
       const abs = path.join(dir, entry.name);
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");
       /* 定义处不算任何一端：它的类型注释里会写出每个事件名。 */
-      if (rel === TABLE_FILE) continue;
+      if (rel === TABLE_FILE) {
+        continue;
+      }
       out.push({ rel, text: fs.readFileSync(abs, "utf8") });
     }
   };
@@ -85,12 +93,16 @@ function collectSources(): Array<SourceFile> {
 /** 表里的事件名（键带引号或不带引号都认）。 */
 function readEventTable(source: string): Array<string> {
   const start = source.indexOf("export interface AppEvents");
-  if (start < 0) return [];
+  if (start < 0) {
+    return [];
+  }
   const block = source.slice(start, source.indexOf("\n}", start));
   const names: Array<string> = [];
   for (const match of block.matchAll(/^\s{2}(?:"([^"]+)"|([A-Za-z_$][\w$]*))\s*:/gm)) {
     const name = match[1] ?? match[2];
-    if (name) names.push(name);
+    if (name) {
+      names.push(name);
+    }
   }
   return names;
 }
@@ -108,7 +120,9 @@ function readNameConstants(sources: Array<SourceFile>): Map<string, string> {
     )) {
       const identifier = match[1];
       const name = match[2];
-      if (identifier && name) map.set(identifier, name);
+      if (identifier && name) {
+        map.set(identifier, name);
+      }
     }
   }
   return map;
@@ -127,8 +141,12 @@ function resolveEventName(
   identifier: string | undefined,
   names: Map<string, string>,
 ): string | null {
-  if (literal !== undefined) return literal;
-  if (identifier === undefined) return null;
+  if (literal !== undefined) {
+    return literal;
+  }
+  if (identifier === undefined) {
+    return null;
+  }
   return names.get(identifier) ?? null;
 }
 
@@ -147,7 +165,9 @@ function sidesOf(
       new RegExp(`\\b${fn}\\s*\\(\\s*(?:"([^"]+)"|([A-Za-z_$][\\w$]*))`, "g"),
     )) {
       const name = resolveEventName(match[1], match[2], names);
-      if (name) bucket.push(name);
+      if (name) {
+        bucket.push(name);
+      }
     }
   }
   return { emitted, subscribed };

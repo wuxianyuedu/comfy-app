@@ -146,12 +146,16 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     setIOLabel: (key, label) =>
       set((state) => {
         const cur = state.workflowIO[key];
-        if (!cur) return {};
+        if (!cur) {
+          return {};
+        }
         /* 清空 = 恢复默认（取消这条参数的重命名），显示名回到富化链。
          * 写什么就存什么：不再有「这个名字像机器名，所以不让存」的判定 ——
          * 作者的显式命名是唯一真相（ISSUE #349 的「改了也不行」不会再出现）。 */
         const kept = label.trim() || undefined;
-        if (kept === cur.label) return {};
+        if (kept === cur.label) {
+          return {};
+        }
         return {
           workflowIO: { ...state.workflowIO, [key]: { ...cur, label: kept } },
         };
@@ -160,11 +164,15 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     toggleIORequired: (key) =>
       set((state) => {
         const cur = state.workflowIO[key];
-        if (!cur) return {};
+        if (!cur) {
+          return {};
+        }
         /* 只有本代画布勾选写入的 widget 条目可调「必填」；param（连线端口）
          *  与 output 不可调。存储自新格式起即正确区分 kind，此处直接以
          *  kind !== "widget" 拦截即可，无需旧数据特判。 */
-        if (cur.kind !== "widget") return {};
+        if (cur.kind !== "widget") {
+          return {};
+        }
         return {
           workflowIO: {
             ...state.workflowIO,
@@ -176,12 +184,16 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     setIOModeOverride: (key, mode, patch) =>
       set((state) => {
         const cur = state.workflowIO[key];
-        if (!cur || !mode) return {};
+        if (!cur || !mode) {
+          return {};
+        }
         const modes: Record<string, WorkflowIOModeOverride> = {
           ...(cur.modeOverrides ?? {}),
         };
         if (patch === null) {
-          if (!(mode in modes)) return {};
+          if (!(mode in modes)) {
+            return {};
+          }
           delete modes[mode];
         } else {
           modes[mode] = { ...(modes[mode] ?? {}), ...patch };
@@ -207,7 +219,9 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
             (entry) => entry?.modeOverrides != null && code in entry.modeOverrides,
           ),
         );
-        if (hit.length === 0) return {};
+        if (hit.length === 0) {
+          return {};
+        }
         const next: Record<string, WorkflowIOParam> = {};
         for (const [key, entry] of Object.entries(state.workflowIO)) {
           const modes = entry?.modeOverrides;
@@ -216,7 +230,9 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
             continue;
           }
           const rest = { ...modes };
-          for (const code of hit) delete rest[code];
+          for (const code of hit) {
+            delete rest[code];
+          }
           /* 与 setIOModeOverride 的落库形态一致：modes 全空时摘掉字段。 */
           next[key] = {
             ...entry,
@@ -232,8 +248,12 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     setIOSeedMode: (key, mode) =>
       set((state) => {
         const cur = state.workflowIO[key];
-        if (cur?.kind !== "widget") return {};
-        if (cur.seedMode === mode) return {};
+        if (cur?.kind !== "widget") {
+          return {};
+        }
+        if (cur.seedMode === mode) {
+          return {};
+        }
         return {
           workflowIO: {
             ...state.workflowIO,
@@ -249,13 +269,19 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
      *  before、下半区 = after，与指示线画的位置同源。旧版按拖动方向猜插入点，
      *  指示线却永远画在行顶，两者打架时用户看到的就是「拖了但顺序没变」。 */
     reorderIO: (fromKey, targetKey, position) => {
-      if (fromKey === targetKey) return;
+      if (fromKey === targetKey) {
+        return;
+      }
       set((state) => {
         const prev = state.workflowIO;
         const fromEntry = prev[fromKey];
-        if (!fromEntry) return {};
+        if (!fromEntry) {
+          return {};
+        }
         const groupOf = (e: WorkflowIOParam): "wire" | "widget" | "output" => {
-          if (e.direction === "output") return "output";
+          if (e.direction === "output") {
+            return "output";
+          }
           return e.kind === "widget" ? "widget" : "wire";
         };
         const movingGroup = groupOf(fromEntry);
@@ -265,9 +291,15 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           .sort((itemA, itemB) => {
             const ao = itemA.entry.displayOrder;
             const bo = itemB.entry.displayOrder;
-            if (ao === bo) return 0;
-            if (ao === undefined) return 1;
-            if (bo === undefined) return -1;
+            if (ao === bo) {
+              return 0;
+            }
+            if (ao === undefined) {
+              return 1;
+            }
+            if (bo === undefined) {
+              return -1;
+            }
             return ao - bo;
           });
         const without = ordered.filter(({ entryKey }) => entryKey !== fromKey);
@@ -311,17 +343,23 @@ export const WFStoresContext = createContext<WFStores | null>(null);
  *  消费方请用 useIOEditStore(selector)。 */
 export function useIOEditApi(): StoreApi<IOEditStore> {
   const ctx = useContext(WFStoresContext);
-  if (!ctx) throw new Error("useIOEditApi 必须在 <WFStoresContext.Provider> 内使用");
+  if (!ctx) {
+    throw new Error("useIOEditApi 必须在 <WFStoresContext.Provider> 内使用");
+  }
   return ctx.io;
 }
 export function useRgthreeApi(): StoreApi<RgthreeGroupsStore> {
   const ctx = useContext(WFStoresContext);
-  if (!ctx) throw new Error("useRgthreeApi 必须在 <WFStoresContext.Provider> 内使用");
+  if (!ctx) {
+    throw new Error("useRgthreeApi 必须在 <WFStoresContext.Provider> 内使用");
+  }
   return ctx.rgthree;
 }
 export function useViewerApi(): StoreApi<NodeJsonViewerStore> {
   const ctx = useContext(WFStoresContext);
-  if (!ctx) throw new Error("useViewerApi 必须在 <WFStoresContext.Provider> 内使用");
+  if (!ctx) {
+    throw new Error("useViewerApi 必须在 <WFStoresContext.Provider> 内使用");
+  }
   return ctx.viewer;
 }
 
@@ -372,7 +410,9 @@ export function callStoreAction<S extends object>(
 
 export function useIOEditStore<U>(selector: (s: IOEditStore) => U): U {
   const ctx = useContext(WFStoresContext);
-  if (!ctx) throw new Error("useIOEditStore 必须在 <WFStoresContext.Provider> 内使用");
+  if (!ctx) {
+    throw new Error("useIOEditStore 必须在 <WFStoresContext.Provider> 内使用");
+  }
   return useZustandStore(ctx.io, selector);
 }
 
@@ -417,7 +457,9 @@ export function createRgthreeGroupsStore(
       const override = get().overrides[groupId];
       /* 用 `in` 判据 + 值本身收窄：`hasOwnProperty` 只回答「有没有这个键」，
        * 类型上仍要做一次索引取值。 */
-      if (override !== undefined) return override;
+      if (override !== undefined) {
+        return override;
+      }
       const g = get().detail?.groups?.find((x: WorkflowGroup) => x.id === groupId);
       return !!g?.bypass;
     },
@@ -436,13 +478,17 @@ export function createRgthreeGroupsStore(
 
 export function useRgthreeGroupsStore<U>(selector: (s: RgthreeGroupsStore) => U): U {
   const ctx = useContext(WFStoresContext);
-  if (!ctx) throw new Error("useRgthreeGroupsStore 必须在 <WFStoresContext.Provider> 内使用");
+  if (!ctx) {
+    throw new Error("useRgthreeGroupsStore 必须在 <WFStoresContext.Provider> 内使用");
+  }
   return useZustandStore(ctx.rgthree, selector);
 }
 /* 返回 getBypass/setBypass —— 与 RgthreeGroupsContextValue 等价。 */
 export function useRgthreeGroups(): RgthreeGroupsContextValue {
   const ctx = useContext(WFStoresContext);
-  if (!ctx) throw new Error("useRgthreeGroups 必须在 <WFStoresContext.Provider> 内使用");
+  if (!ctx) {
+    throw new Error("useRgthreeGroups 必须在 <WFStoresContext.Provider> 内使用");
+  }
   const getBypass = useZustandStore(ctx.rgthree, (state) => state.getBypass);
   const setBypass = useZustandStore(ctx.rgthree, (state) => state.setBypass);
   return { getBypass, setBypass };
@@ -498,7 +544,9 @@ export function createNodeJsonViewerStore(
 
     getNodeJson: (nodeId) => {
       const { detail } = get();
-      if (!detail?.graph) return null;
+      if (!detail?.graph) {
+        return null;
+      }
       const entry: unknown = detail.graph[nodeId];
       return entry && typeof entry === "object"
         ? /* SAFETY: 类型断言已复核 */ (entry as Record<string, unknown>)
@@ -507,7 +555,9 @@ export function createNodeJsonViewerStore(
 
     getNodeView: (nodeId) => {
       const { detail, rawMetaById, positions, subgraphRawContext, subgraphStackLength } = get();
-      if (!detail) return null;
+      if (!detail) {
+        return null;
+      }
       const rawEntry: unknown = detail.graph?.[nodeId];
       const entry =
         rawEntry && typeof rawEntry === "object"
@@ -539,8 +589,9 @@ export function createNodeJsonViewerStore(
                   targetUid,
               )
             : undefined;
-          if (matchKey && subs)
+          if (matchKey && subs) {
             subDef = /* SAFETY: 类型断言已复核 */ subs[matchKey] as RawSubgraphDef;
+          }
         }
         if (subDef && Array.isArray(subDef.nodes)) {
           rawNodesSource = subDef.nodes;
@@ -580,13 +631,17 @@ export function createNodeJsonViewerStore(
 
 export function useNodeJsonViewerStore<U>(selector: (s: NodeJsonViewerStore) => U): U {
   const ctx = useContext(WFStoresContext);
-  if (!ctx) throw new Error("useNodeJsonViewerStore 必须在 <WFStoresContext.Provider> 内使用");
+  if (!ctx) {
+    throw new Error("useNodeJsonViewerStore 必须在 <WFStoresContext.Provider> 内使用");
+  }
   return useZustandStore(ctx.viewer, selector);
 }
 /* 便捷访问 —— 与原 NodeJsonViewerContextValue 等价，供 NodeIdChip 等使用。 */
 export function useNodeJsonViewer(): NodeJsonViewerContextValue {
   const ctx = useContext(WFStoresContext);
-  if (!ctx) throw new Error("useNodeJsonViewer 必须在 <WFStoresContext.Provider> 内使用");
+  if (!ctx) {
+    throw new Error("useNodeJsonViewer 必须在 <WFStoresContext.Provider> 内使用");
+  }
   const getNodeJson = useZustandStore(ctx.viewer, (state) => state.getNodeJson);
   const getNodeView = useZustandStore(ctx.viewer, (state) => state.getNodeView);
   const requestShow = useZustandStore(ctx.viewer, (state) => state.requestShow);
@@ -620,7 +675,9 @@ function NodeJsonViewerPortal({ store }: { store: StoreApi<NodeJsonViewerStore> 
   const getNodeJson = useZustandStore(store, (state) => state.getNodeJson);
   const getNodeView = useZustandStore(store, (state) => state.getNodeView);
   const dismiss = useZustandStore(store, (state) => state.dismiss);
-  if (!viewer) return null;
+  if (!viewer) {
+    return null;
+  }
   return (
     <NodeJsonPopover
       key={`${viewer.nodeId}-${viewer.kind}`}

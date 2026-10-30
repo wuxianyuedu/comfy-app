@@ -59,17 +59,25 @@ export function useModelAdapters(): ModelAdaptersController {
 
   const candidates: Array<AdapterCandidate> = React.useMemo(() => {
     const raw: unknown = configQ.data?.config;
-    if (typeof raw !== "object" || raw === null) return [];
+    if (typeof raw !== "object" || raw === null) {
+      return [];
+    }
     const extra = /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>).extraModels;
-    if (!Array.isArray(extra)) return [];
+    if (!Array.isArray(extra)) {
+      return [];
+    }
     const out: Array<AdapterCandidate> = [];
     for (const item of extra) {
-      if (typeof item !== "object" || item === null) continue;
+      if (typeof item !== "object" || item === null) {
+        continue;
+      }
       const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
       const name = typeof rec.name === "string" ? rec.name : "";
       const kind = rec.kind === "video" ? "video" : rec.kind === "image" ? "image" : "chat";
       const baseUrl = typeof rec.baseUrl === "string" ? rec.baseUrl : null;
-      if (!name || kind === "chat") continue; // 文本模型不参与工坊生图/视频
+      if (!name || kind === "chat") {
+        continue;
+      } // 文本模型不参与工坊生图/视频
       out.push({ name, kind, baseUrl });
     }
     return out;
@@ -131,7 +139,9 @@ export function useModelAdapters(): ModelAdaptersController {
   );
 
   const save = useCallback(async () => {
-    if (!selectedModel) return;
+    if (!selectedModel) {
+      return;
+    }
     setMessage(null);
     try {
       const data = await saveBusy.run(() =>

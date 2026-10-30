@@ -44,11 +44,10 @@ export interface ComfyStatusViewModel {
 const DEGRADED_NOTE = "ComfyUI 未运行，显存/内存暂不可用";
 
 /** 已用/总量 → 占用条；总量非法或未用为负则返回 null（该项隐藏）。 */
-function toBar(
-  used: number | undefined,
-  total: number | undefined,
-): StatBar | null {
-  if (!total || total <= 0 || used == null || used < 0) return null;
+function toBar(used: number | undefined, total: number | undefined): StatBar | null {
+  if (!total || total <= 0 || used == null || used < 0) {
+    return null;
+  }
   /* 「已用 / 总量 → 百分比」走 `~/lib/progress` 的 `toPct`（同一条口径的另一
    * 处落点）；`null` 在上面的守卫里已排除，这里落回 0 只为类型收窄。 */
   return {

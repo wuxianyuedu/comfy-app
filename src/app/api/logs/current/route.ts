@@ -50,8 +50,9 @@ async function sizeOrNull(file: string): Promise<number | null> {
     const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
     return stat.size;
   } catch (error) {
-    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code === "ENOENT")
+    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code === "ENOENT") {
       return null;
+    }
     throw error;
   }
 }
@@ -69,10 +70,14 @@ async function sizeOrNull(file: string): Promise<number | null> {
  */
 async function readBytes(file: string, start: number, length: number): Promise<Buffer | null> {
   const size = await sizeOrNull(file);
-  if (size === null) return null;
+  if (size === null) {
+    return null;
+  }
   const from = clamp(start, 0, size);
   const len = clamp(length, 0, size - from);
-  if (len === 0) return Buffer.alloc(0);
+  if (len === 0) {
+    return Buffer.alloc(0);
+  }
   const buf = Buffer.alloc(len);
   const handle = await fs.promises.open(/*turbopackIgnore: true*/ file, "r");
   try {
@@ -85,9 +90,13 @@ async function readBytes(file: string, start: number, length: number): Promise<B
 
 /** 把窗口起点向后对齐到第一个完整行（丢弃被截断的头半行），避免解析出乱码。 */
 function alignToLineStart(buf: Buffer, start: number, fileSize: number): number {
-  if (start <= 0) return 0;
+  if (start <= 0) {
+    return 0;
+  }
   const nl = buf.indexOf(0x0a);
-  if (nl < 0) return fileSize;
+  if (nl < 0) {
+    return fileSize;
+  }
   return start + nl + 1;
 }
 
@@ -106,7 +115,9 @@ async function sessionStartMs(): Promise<number | null> {
 }
 
 async function resolveCurrentLog(source: string): Promise<string> {
-  if (source === "launcher") return LAUNCHER_LOG_FILE;
+  if (source === "launcher") {
+    return LAUNCHER_LOG_FILE;
+  }
   try {
     const raw = await fs.promises.readFile(/*turbopackIgnore: true*/ SENTINEL_FILE, "utf8");
     const sentinel = raw.trim();

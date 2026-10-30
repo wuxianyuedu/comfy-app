@@ -87,12 +87,18 @@ const REGISTERED: Record<string, string> = {
 
 function walk(rel: string, out: Array<string> = []): Array<string> {
   const abs = path.join(ROOT, rel);
-  if (!existsSync(abs)) return out;
+  if (!existsSync(abs)) {
+    return out;
+  }
   for (const e of readdirSync(abs, { withFileTypes: true })) {
     const child = path.join(abs, e.name);
     if (e.isDirectory()) {
-      if (!SKIP_DIRS.has(e.name)) walk(path.relative(ROOT, child), out);
-    } else out.push(path.relative(ROOT, child).split(path.sep).join("/"));
+      if (!SKIP_DIRS.has(e.name)) {
+        walk(path.relative(ROOT, child), out);
+      }
+    } else {
+      out.push(path.relative(ROOT, child).split(path.sep).join("/"));
+    }
   }
   return out;
 }
@@ -120,12 +126,16 @@ function unescapeSelector(part: string): string {
 function arbitraryCandidates(css: string): Set<string> {
   const out = new Set<string>();
   for (const selector of ruleSelectors(css)) {
-    if (!selector.includes("[")) continue;
+    if (!selector.includes("[")) {
+      continue;
+    }
     /* 逗号只在**未被转义**处分组：任意值里的逗号在产物里是「反斜杠加逗号」，
      * 在那里切开会把一枚候选名（比如网格列数那种重复函数）截成两半、凭空造出误报。 */
     for (const part of selector.split(/(?<!\\),/)) {
       const plain = unescapeSelector(part);
-      for (const c of plain.matchAll(/[-\w]+-\[[^\]]*\]/g)) out.add(c[0]);
+      for (const c of plain.matchAll(/[-\w]+-\[[^\]]*\]/g)) {
+        out.add(c[0]);
+      }
     }
   }
   return out;
@@ -155,7 +165,9 @@ function placeholderCandidates(candidates: Iterable<string>): Set<string> {
       out.add(c);
       continue;
     }
-    if (/[\u4e00-\u9fff]/.test(value)) out.add(c);
+    if (/[\u4e00-\u9fff]/.test(value)) {
+      out.add(c);
+    }
   }
   return out;
 }
@@ -206,8 +218,12 @@ describe("正文与用例不许成为死规则的唯一出处", () => {
   it("只有正文在供给的 arbitrary 候选名，只能留在登记表里", () => {
     const offenders: Array<string> = [];
     for (const candidate of proseCandidates) {
-      if (srcCandidates.has(candidate)) continue; // src 自己也在供给，不是正文造成的死规则
-      if (REGISTERED[candidate]) continue; // 逐字示例 / 检索式，已给理由
+      if (srcCandidates.has(candidate)) {
+        continue;
+      } // src 自己也在供给，不是正文造成的死规则
+      if (REGISTERED[candidate]) {
+        continue;
+      } // 逐字示例 / 检索式，已给理由
       const where = proseFiles.filter(([, text]) => spelledIn(text, candidate)).map(([f]) => f);
       offenders.push(`${candidate}  ← ${where.join(" | ") || "(归属未命中)"}`);
     }

@@ -446,7 +446,9 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
     exists: (p: string) => files[p] !== undefined || dirs.has(p),
     spawn: (cmd: string) => {
       const hit = files[cmd];
-      if (!hit) return { status: null, stdout: "", stderr: "", error: "ENOENT" };
+      if (!hit) {
+        return { status: null, stdout: "", stderr: "", error: "ENOENT" };
+      }
       if (!hit.ok) {
         return { status: 1, stdout: "", stderr: "usage", error: null };
       }

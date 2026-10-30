@@ -110,7 +110,9 @@ export function listLinks(dir, prefix = "") {
       out.push({ abs, rel });
       continue; // 只登记链接本身，不进它背后
     }
-    if (st.isDirectory()) out.push(...listLinks(abs, rel));
+    if (st.isDirectory()) {
+      out.push(...listLinks(abs, rel));
+    }
   }
   return out;
 }
@@ -177,13 +179,19 @@ export function siblingVariantInstalled(nodeModules, linkText) {
    * `.pnpm` 那层在**解析后的绝对路径**里、不在文本里 —— 照着文本找 `.pnpm`
    * 一条都匹配不到，于是每条变体死链都被当成缺件（实测：判据改完仍 exit 1）。 */
   const m = /(?:^|[\\/])([^\\/]+)[\\/]node_modules[\\/](.+)$/.exec(linkText);
-  if (!m) return false;
+  if (!m) {
+    return false;
+  }
   const x = m[1] ?? "";
   const plus = x.lastIndexOf("+");
-  if (plus <= 0) return false;
+  if (plus <= 0) {
+    return false;
+  }
   const base = x.slice(0, plus);
   const rest = (m[2] ?? "").split(/[\\/]/).filter(Boolean);
-  if (rest.length === 0) return false;
+  if (rest.length === 0) {
+    return false;
+  }
   const pnpmDir = join(nodeModules, ".pnpm");
   let names;
   try {
@@ -192,20 +200,20 @@ export function siblingVariantInstalled(nodeModules, linkText) {
     return false;
   }
   for (const name of names) {
-    if (!name.startsWith(base + "+")) continue;
+    if (!name.startsWith(base + "+")) {
+      continue;
+    }
     /* 目录名形如 `<base>+<其它变体>@<ver>` —— 实体路径里用的是**那一支的**变体名，
      * 不是这条死链自己的（`rest` 的末段是死链指向的那个变体，用它去找就永远找不到）。 */
     const variant = name.slice(base.length + 1).replace(/@[^@]*$/, "");
-    if (variant === "") continue;
-    const candidate = join(
-      pnpmDir,
-      name,
-      "node_modules",
-      ...rest.slice(0, -1),
-      variant,
-    );
+    if (variant === "") {
+      continue;
+    }
+    const candidate = join(pnpmDir, name, "node_modules", ...rest.slice(0, -1), variant);
     try {
-      if (statSync(candidate).isDirectory()) return true;
+      if (statSync(candidate).isDirectory()) {
+        return true;
+      }
     } catch {
       /* 这份变体也没装实 —— 找下一份 */
     }
@@ -256,7 +264,9 @@ export function repairUnfollowableLinks(dir, deps = {}) {
   const broken = [];
   let repaired = 0;
   for (const { abs, rel } of links) {
-    if (follow(abs) === "follow") continue;
+    if (follow(abs) === "follow") {
+      continue;
+    }
     let linkText;
     try {
       linkText = readText(abs);
@@ -327,10 +337,7 @@ export function runLinkRepair(nodeModules, deps = {}) {
       lines: ["[standalone-links] 未找到 .next/standalone/node_modules，跳过"],
     };
   }
-  const { scanned, repaired, broken } = repairUnfollowableLinks(
-    nodeModules,
-    deps,
-  );
+  const { scanned, repaired, broken } = repairUnfollowableLinks(nodeModules, deps);
   const blocking = broken.filter((b) => !b.variantDead);
   const variantDead = broken.filter((b) => b.variantDead);
   const lines = [
@@ -343,12 +350,11 @@ export function runLinkRepair(nodeModules, deps = {}) {
         "（目标不存在，但同包的其它变体已安装 —— 运行期用的是本平台那份，不需要处理）",
     );
     for (const b of variantDead.slice(0, 10)) {
-      lines.push(
-        `    ${b.rel}：链接文本=${JSON.stringify(b.linkText)} 目标存在=NO ${b.error}`,
-      );
+      lines.push(`    ${b.rel}：链接文本=${JSON.stringify(b.linkText)} 目标存在=NO ${b.error}`);
     }
-    if (variantDead.length > 10)
+    if (variantDead.length > 10) {
       lines.push(`    …其余 ${variantDead.length - 10} 条同类`);
+    }
   }
   if (blocking.length > 0) {
     lines.push(
@@ -361,8 +367,9 @@ export function runLinkRepair(nodeModules, deps = {}) {
           `目标存在=${b.targetExists ? "YES" : "NO"} ${b.error}`,
       );
     }
-    if (blocking.length > 10)
+    if (blocking.length > 10) {
       lines.push(`    …其余 ${blocking.length - 10} 条同类`);
+    }
   }
   return { ran: true, scanned, repaired, broken, blocking, lines };
 }
@@ -370,16 +377,18 @@ export function runLinkRepair(nodeModules, deps = {}) {
 /** 作为脚本直接执行：修 `.next/standalone/node_modules`。 */
 function main() {
   const root = join(import.meta.dirname, "..");
-  const result = runLinkRepair(
-    join(root, ".next", "standalone", "node_modules"),
-  );
+  const result = runLinkRepair(join(root, ".next", "standalone", "node_modules"));
   for (const line of result.lines) {
-    if (line.startsWith("[standalone-links] ✗")) console.error(line);
-    else console.log(line);
+    if (line.startsWith("[standalone-links] ✗")) {
+      console.error(line);
+    } else {
+      console.log(line);
+    }
   }
   return result.blocking.length > 0 ? 1 : 0;
 }
 
-const invokedDirectly =
-  process.argv[1] && import.meta.filename === process.argv[1];
-if (invokedDirectly) process.exit(main());
+const invokedDirectly = process.argv[1] && import.meta.filename === process.argv[1];
+if (invokedDirectly) {
+  process.exit(main());
+}

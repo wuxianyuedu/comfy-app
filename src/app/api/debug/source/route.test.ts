@@ -37,7 +37,9 @@ const LOGGED_IN = { id: "u-1" };
 
 function requestWith(file: string | null): NextRequest {
   const url = new URL("http://x/api/debug/source");
-  if (file !== null) url.searchParams.set("file", file);
+  if (file !== null) {
+    url.searchParams.set("file", file);
+  }
   return new NextRequest(url);
 }
 

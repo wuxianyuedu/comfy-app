@@ -118,9 +118,15 @@ const DID_NOT_RUN_SIGNATURES = [
  */
 export function runState(run) {
   const text = String(run.output ?? "");
-  if (DID_NOT_RUN_SIGNATURES.some((re) => re.test(text))) return "did-not-run";
-  if (run.code === 127) return "did-not-run";
-  if (run.code === 0 || run.code === 1 || run.code === 2) return "ran";
+  if (DID_NOT_RUN_SIGNATURES.some((re) => re.test(text))) {
+    return "did-not-run";
+  }
+  if (run.code === 127) {
+    return "did-not-run";
+  }
+  if (run.code === 0 || run.code === 1 || run.code === 2) {
+    return "ran";
+  }
   /* 其余退出码（含 `-1` / 信号打死 / 别的工具自己的码）—— 这一侧看不出状态。
    * 与 `ran` 同处置：`judge()` 仍按退出码/指纹走，不额外降档。 */
   return "unknown";
@@ -179,14 +185,12 @@ export function judge({ currentCode, baseCode, currentOutput, baseOutput }) {
   /* `baseCode === null` = **这一条只在单侧跑**（`baseSide: false`）：它的对象是本检出
    * 这条线上的提交对象，基线快照里没有它们，所以「没比较过」不是「别线上也红」。
    * 它红的时候唯一的可能是「这次提交的声明与它自己的树矛盾」⇒ 纯粹的 `yours`。 */
-  if (baseCode === null) return "yours";
+  if (baseCode === null) {
+    return "yours";
+  }
   /* 两侧都红、且**两侧的输出都带超时指纹** ⇒ 负载假红优先于 `baseline-red`。
    * 只在单侧超时形态不降这一档（那更像「你让它变慢了」，归 `yours`）。 */
-  if (
-    baseCode !== 0 &&
-    isTimeoutShaped(currentOutput) &&
-    isTimeoutShaped(baseOutput)
-  ) {
+  if (baseCode !== 0 && isTimeoutShaped(currentOutput) && isTimeoutShaped(baseOutput)) {
     return "load-flake";
   }
   return baseCode !== 0 ? "baseline-red" : "yours";
@@ -201,9 +205,7 @@ export function judge({ currentCode, baseCode, currentOutput, baseOutput }) {
  */
 export function nextSteps(verdict, { ref }) {
   if (verdict === "current-green") {
-    return [
-      "你的检出上这条判据已经是绿的（已修 / 或它只在别的输入面上触发）—— 无需复算。",
-    ];
+    return ["你的检出上这条判据已经是绿的（已修 / 或它只在别的输入面上触发）—— 无需复算。"];
   }
   if (verdict === "inconclusive") {
     return [

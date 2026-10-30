@@ -45,7 +45,9 @@ function fakeGit(handlers: Record<string, { ok: boolean; stdout: string }>) {
     const shape = args[0] === "-c" ? args.slice(2) : args;
     const key = shape[0] === "diff" ? `diff ${shape[shape.length - 1] ?? ""}` : (shape[0] ?? "");
     const hit = handlers[key] ?? handlers[shape[0] ?? ""];
-    if (!hit) return { ok: false, stdout: "" };
+    if (!hit) {
+      return { ok: false, stdout: "" };
+    }
     return hit;
   };
   return { runGit, calls };
@@ -82,7 +84,9 @@ describe("ci-affected-tests — 改动面从哪来", () => {
       runGit,
     });
     expect(got.ok).toBe(false);
-    if (got.ok) return;
+    if (got.ok) {
+      return;
+    }
     expect(got.reason).toContain("abc123");
     expect(got.reason).toContain("没跑起来");
   });
@@ -162,7 +166,9 @@ describe("ci-affected-tests — 改动面从哪来", () => {
       fallbackRef: null,
     });
     expect(got.ok).toBe(false);
-    if (got.ok) return;
+    if (got.ok) {
+      return;
+    }
     expect(got.reason).toContain("取不到");
   });
 });

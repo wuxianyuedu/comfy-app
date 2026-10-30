@@ -80,7 +80,9 @@ const NODE_EXT_RE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|json)$/;
 function readTextFile(abs) {
   try {
     const st = fs.statSync(abs);
-    if (!st.isFile()) return null;
+    if (!st.isFile()) {
+      return null;
+    }
     return fs.readFileSync(abs, "utf8");
   } catch {
     return null;
@@ -114,7 +116,9 @@ function walkFiles(dir, root, out) {
        * `scripts/git-dir-literal-scan.mjs` 那条判据正是守着「检出子目录的名字只许
        * `scripts/git-dir.mjs` 一处知道」，而这里要的不是「检出目录在哪」，是
        * 「别走进不是源码的地方」。 */
-      if (e.name === "node_modules" || e.name.startsWith(".")) continue;
+      if (e.name === "node_modules" || e.name.startsWith(".")) {
+        continue;
+      }
       walkFiles(rel, root, out);
     } else if (e.isFile() && NODE_EXT_RE.test(e.name)) {
       out.push(rel);
@@ -152,7 +156,9 @@ export function filesUnder(dir, root = ROOT) {
  */
 export function typedocConfig(root = ROOT) {
   const raw = readTextFile(path.join(root, TYPEDOC_CONFIG));
-  if (raw === null) return {};
+  if (raw === null) {
+    return {};
+  }
   try {
     const cfg = JSON.parse(raw);
     return cfg && typeof cfg === "object" ? cfg : {};
@@ -169,7 +175,9 @@ export function typedocConfig(root = ROOT) {
  */
 export function typedocEntryPoints(root = ROOT) {
   const eps = typedocConfig(root).entryPoints;
-  if (!Array.isArray(eps)) return [];
+  if (!Array.isArray(eps)) {
+    return [];
+  }
   return eps.filter((e) => typeof e === "string");
 }
 
@@ -186,7 +194,9 @@ export function typedocEntryPoints(root = ROOT) {
  */
 export function typedocExcludes(root = ROOT) {
   const ex = typedocConfig(root).exclude;
-  if (!Array.isArray(ex)) return [];
+  if (!Array.isArray(ex)) {
+    return [];
+  }
   return ex.filter((e) => typeof e === "string");
 }
 
@@ -303,7 +313,9 @@ export function isUnderRoots(rel, roots) {
 export function closureOutsideRoots(root = ROOT) {
   const entryPoints = typedocEntryPoints(root);
   const roots = typedocRoots(root);
-  if (roots.length === 0 || entryPoints.length === 0) return [];
+  if (roots.length === 0 || entryPoints.length === 0) {
+    return [];
+  }
   const excludeRes = typedocExcludes(root).map((g) => globToRe(g));
   /**
    * 这个文件是不是被 typedoc 的 `exclude` 排掉了（排掉 ⇒ typedoc 根本不读它）。
@@ -316,21 +328,27 @@ export function closureOutsideRoots(root = ROOT) {
     .map(negatedBasenamePattern)
     .filter((p) => p !== null)
     .map((p) => globToRe(p));
-  const startExts = new Set(
-    entryPoints.map(entryPointExtension).filter((e) => e !== ""),
-  );
+  const startExts = new Set(entryPoints.map(entryPointExtension).filter((e) => e !== ""));
 
   /** ① 入口点 */
   /** @type {string[]} */
   const queue = [];
   /** @type {string[]} */
   const underRoots = [];
-  for (const r of roots) walkFiles(r, root, underRoots);
+  for (const r of roots) {
+    walkFiles(r, root, underRoots);
+  }
   for (const f of underRoots) {
-    if (!startExts.has(entryPointExtension(f))) continue;
+    if (!startExts.has(entryPointExtension(f))) {
+      continue;
+    }
     const base = f.slice(f.lastIndexOf("/") + 1);
-    if (negatedBases.some((re) => re.test(base))) continue;
-    if (isExcluded(f)) continue;
+    if (negatedBases.some((re) => re.test(base))) {
+      continue;
+    }
+    if (isExcluded(f)) {
+      continue;
+    }
     queue.push(f);
   }
 
@@ -343,24 +361,46 @@ export function closureOutsideRoots(root = ROOT) {
    * `scripts/db-backup-core.mjs` 加进 entryPoints 反而会让它**掉出**叶子集 ——
    * 面罩不住它，恰好是本模块要治的那一族。 */
   for (const ep of entryPoints) {
-    if (isGlobEntryPoint(ep)) continue;
-    if (!fs.existsSync(path.join(root, ep))) continue;
-    if (isExcluded(ep)) continue;
-    if (!isUnderRoots(ep, roots)) outside.add(ep);
+    if (isGlobEntryPoint(ep)) {
+      continue;
+    }
+    if (!fs.existsSync(path.join(root, ep))) {
+      continue;
+    }
+    if (isExcluded(ep)) {
+      continue;
+    }
+    if (!isUnderRoots(ep, roots)) {
+      outside.add(ep);
+    }
     queue.push(ep);
   }
   while (queue.length > 0) {
     const rel = queue.pop();
-    if (rel === undefined || seen.has(rel)) continue;
+    if (rel === undefined || seen.has(rel)) {
+      continue;
+    }
     seen.add(rel);
     const text = readTextFile(path.join(root, rel));
-    if (text === null) continue;
+    if (text === null) {
+      continue;
+    }
     for (const cand of specifiersOf(text, rel)) {
-      if (!NODE_EXT_RE.test(cand)) continue;
-      if (readTextFile(path.join(root, cand)) === null) continue;
-      if (isExcluded(cand)) continue;
-      if (!isUnderRoots(cand, roots)) outside.add(cand);
-      if (!seen.has(cand)) queue.push(cand);
+      if (!NODE_EXT_RE.test(cand)) {
+        continue;
+      }
+      if (readTextFile(path.join(root, cand)) === null) {
+        continue;
+      }
+      if (isExcluded(cand)) {
+        continue;
+      }
+      if (!isUnderRoots(cand, roots)) {
+        outside.add(cand);
+      }
+      if (!seen.has(cand)) {
+        queue.push(cand);
+      }
     }
   }
   /** ③ 叶子集 */
@@ -384,12 +424,11 @@ export function docsApiInputClosure(root = ROOT) {
 
 /* 直接执行时把这份闭包打出来（人读的那一份；判据在测试里）。
  * `node scripts/docs-api-input-closure.mjs` */
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   const c = docsApiInputClosure();
   process.stdout.write(`[docs-api 闭包] 根：${c.roots.join(", ") || "(取不到 typedoc.json)"}\n`);
   process.stdout.write(`[docs-api 闭包] 根外叶子 ${c.leaves.length} 个：\n`);
-  for (const leaf of c.leaves) process.stdout.write(`  · ${leaf}\n`);
+  for (const leaf of c.leaves) {
+    process.stdout.write(`  · ${leaf}\n`);
+  }
 }

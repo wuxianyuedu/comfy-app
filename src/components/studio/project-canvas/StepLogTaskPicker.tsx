@@ -32,9 +32,13 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
     const map = new Map<string, number>();
     for (const cachedId of cachedIds) {
       const nodeId = getNodeIdByTaskId(cachedId) ?? loadStepLogPanelState(cachedId)?.nodeId;
-      if (!nodeId) continue;
+      if (!nodeId) {
+        continue;
+      }
       const seq = nodeSeqOf(nodes, nodeId);
-      if (seq !== null) map.set(cachedId, seq);
+      if (seq !== null) {
+        map.set(cachedId, seq);
+      }
     }
     return map;
   }, [cachedIds, nodes]);

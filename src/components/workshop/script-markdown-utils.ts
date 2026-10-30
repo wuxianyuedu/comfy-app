@@ -21,7 +21,9 @@ export function normalizeMarkdown(source: string): string {
     /* `at()` 越界即 `undefined`：取元素与循环判据合成一处，
      * 不必再靠 `!` 把索引签名加上的 `undefined` 抹掉。 */
     const raw = lines.at(index);
-    if (raw === undefined) break;
+    if (raw === undefined) {
+      break;
+    }
     const fenceMatch = /^ {0,3}(`{3,}|~{3,})/.exec(raw);
     if (fenceMatch) {
       const markerStr = fenceMatch.at(1) ?? "";
@@ -50,13 +52,19 @@ export function normalizeMarkdown(source: string): string {
     let blankRun = 0;
     while (index < lines.length) {
       const probe = lines.at(index);
-      if (probe === undefined) break;
-      if (probe.replace(/[ \t]+$/u, "") !== "") break;
+      if (probe === undefined) {
+        break;
+      }
+      if (probe.replace(/[ \t]+$/u, "") !== "") {
+        break;
+      }
       blankRun += 1;
       index += 1;
     }
     const kept = blankRun >= 3 ? 1 : blankRun;
-    for (let i = 0; i < kept; i += 1) result.push("");
+    for (let i = 0; i < kept; i += 1) {
+      result.push("");
+    }
   }
   return result.join("\n");
 }

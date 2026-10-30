@@ -65,16 +65,15 @@ function bannerFor(docRel) {
 // 移除编辑文档里特有的「占位符约定」引用块：生成文档已显示真实值，该段无意义。
 // 匹配以 "> **占位符约定**：" 开头、到空行结束的连续引用行。
 function stripPlaceholderNote(text) {
-  return text.replace(
-    /(?:\n)?> \*\*占位符约定\*\*：[^\n]*(?:\n> [^\n]*)*\n+(?=\n|> |#|$)/g,
-    "\n",
-  );
+  return text.replace(/(?:\n)?> \*\*占位符约定\*\*：[^\n]*(?:\n> [^\n]*)*\n+(?=\n|> |#|$)/g, "\n");
 }
 
 function buildPlaceholderMap() {
   const map = new Map(); // placeholder -> realValue
   for (const f of FACTS) {
-    if (f.kind !== "placeholder" || !f.placeholder) continue;
+    if (f.kind !== "placeholder" || !f.placeholder) {
+      continue;
+    }
     let realValue;
     try {
       realValue = f.extract();
@@ -83,7 +82,9 @@ function buildPlaceholderMap() {
     }
     const vals = Array.isArray(realValue) ? realValue : [realValue];
     for (const v of vals) {
-      if (v) map.set(f.placeholder, v);
+      if (v) {
+        map.set(f.placeholder, v);
+      }
     }
   }
   return map;
@@ -104,10 +105,7 @@ function resolvePlaceholders(text, map) {
 
 /** 一份原文文档的内容（写入模式与 `--check` 共用：判据与实现读同一份「源 → 生成物」计算）。 */
 function renderDocContent(docRel, map) {
-  return (
-    bannerFor(docRel) +
-    resolvePlaceholders(stripPlaceholderNote(readText(docRel)), map)
-  );
+  return bannerFor(docRel) + resolvePlaceholders(stripPlaceholderNote(readText(docRel)), map);
 }
 
 /** 换行先归一到 LF 再比对：这条判据问的是「内容是否一致」，行尾由 .gitattributes 与 §13.7 管。 */
@@ -191,7 +189,9 @@ function runCheck() {
   const expected = new Set();
 
   for (const docRel of SCOPED_DOCS) {
-    if (!exists(docRel)) continue; // 源不在了：交给下面的「多余生成物」报
+    if (!exists(docRel)) {
+      continue;
+    } // 源不在了：交给下面的「多余生成物」报
     const outRel = generatedPathFor(docRel);
     expected.add(path.basename(outRel));
     const outAbs = path.join(ROOT, outRel);
@@ -201,7 +201,9 @@ function runCheck() {
     }
     const want = normalizeEol(renderDocContent(docRel, map));
     const got = normalizeEol(fs.readFileSync(outAbs, "utf8"));
-    if (got !== want) drifted.push({ outRel, docRel });
+    if (got !== want) {
+      drifted.push({ outRel, docRel });
+    }
   }
 
   const orphans = fs.existsSync(outDir)
@@ -216,21 +218,24 @@ function runCheck() {
   const report = [];
   if (drifted.length || missing.length || orphans.length) {
     report.push("✗ 生成态文档与源不一致：");
-    for (const d of drifted)
+    for (const d of drifted) {
       report.push(`  · ${d.outRel} 落后于源 ${d.docRel}`);
-    for (const m of missing)
+    }
+    for (const m of missing) {
       report.push(`  · ${m.outRel} 缺失（源仍在 SCOPED_DOCS 里）`);
-    for (const o of orphans)
+    }
+    for (const o of orphans) {
       report.push(`  · ${o} 多余（对应源已不在 SCOPED_DOCS）`);
-    report.push(
-      "修法：pnpm doc:render 后把重渲染结果一并提交（不要手改生成物）。",
-    );
+    }
+    report.push("修法：pnpm doc:render 后把重渲染结果一并提交（不要手改生成物）。");
   }
   if (!report.length) {
     console.log(`${tag} ✓ 生成态文档与源一致（${expected.size} 份）。`);
     return { ok: true, drifted, missing, orphans };
   }
-  for (const line of report) console.error(`${tag} ${line}`);
+  for (const line of report) {
+    console.error(`${tag} ${line}`);
+  }
   return { ok: false, drifted, missing, orphans, report };
 }
 
@@ -248,14 +253,16 @@ function runCheck() {
 function checkOrAutofix() {
   const tag = "[doc:render --autofix]";
   const first = runCheck();
-  if (first.ok) return true;
+  if (first.ok) {
+    return true;
+  }
   /* 判据红过一次，先把「第一遍红了什么」**再打一遍到 stdout**：这一档的读者最需要的是
    * 「本次自动修改动了哪几份」—— 少了这几行，日志里只剩一句「重新生成了 N 份」，
    * 看不出改了什么（而「改了什么」正是让下一个人决定要不要接受这次自动修的依据）。 */
-  console.log(
-    `${tag} 上面那份不一致 —— 就地重渲染一遍，再判一次。第一遍的读数：`,
-  );
-  for (const line of first.report ?? []) console.log(`${tag}   ${line}`);
+  console.log(`${tag} 上面那份不一致 —— 就地重渲染一遍，再判一次。第一遍的读数：`);
+  for (const line of first.report ?? []) {
+    console.log(`${tag}   ${line}`);
+  }
   const generated = writeAll();
   console.log(`${tag} 重渲染 ${generated} 份，重新比对：`);
   const after = runCheck();
@@ -273,9 +280,15 @@ function checkOrAutofix() {
    *   · **落后** —— 重渲染过还是不一样，说明产物那一侧不是由这次渲染决定的
    *     （手改过 / 两份源映射到同一个产物名），同样不该重试。 */
   const kinds = [];
-  if (after.drifted.length) kinds.push("落后");
-  if (after.missing.length) kinds.push("缺失");
-  if (after.orphans.length) kinds.push("多余");
+  if (after.drifted.length) {
+    kinds.push("落后");
+  }
+  if (after.missing.length) {
+    kinds.push("缺失");
+  }
+  if (after.orphans.length) {
+    kinds.push("多余");
+  }
   console.error(
     `${tag} ✗ 重渲染之后仍不一致（${kinds.join(" / ")}）—— 这不是「忘了重渲染」，` +
       `别再重试同一件事。\n` +
@@ -301,12 +314,16 @@ const ONLY = RAW_ARGS.reduce((acc, arg, index) => {
     const next = RAW_ARGS[index + 1] ?? "";
     for (const item of next.split(",")) {
       const trimmed = item.trim();
-      if (trimmed !== "") acc.push(trimmed);
+      if (trimmed !== "") {
+        acc.push(trimmed);
+      }
     }
   } else if (arg.startsWith("--only=")) {
     for (const item of arg.slice("--only=".length).split(",")) {
       const trimmed = item.trim();
-      if (trimmed !== "") acc.push(trimmed);
+      if (trimmed !== "") {
+        acc.push(trimmed);
+      }
     }
   }
   return acc;
@@ -314,7 +331,9 @@ const ONLY = RAW_ARGS.reduce((acc, arg, index) => {
 
 if (ARGS.has("--check")) {
   const ok = AUTOFIX ? checkOrAutofix() : runCheck().ok;
-  if (!ok) process.exit(1);
+  if (!ok) {
+    process.exit(1);
+  }
 } else {
   writeAll(ONLY);
 }

@@ -84,13 +84,13 @@ export function withTimeout<T>(
       } catch {
         /* 收尾钩子失败不改结论：这依然是一次超时。 */
       }
-      reject(
-        new TimeoutError(opts.message ?? timeoutMessage(ms, opts.label), ms),
-      );
+      reject(new TimeoutError(opts.message ?? timeoutMessage(ms, opts.label), ms));
     }, ms);
   });
   return Promise.race([promise, timeout]).finally(() => {
-    if (timer !== undefined) clearTimeout(timer);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
   });
 }
 
@@ -124,7 +124,9 @@ export function withTimeoutResult<T>(
     }, ms);
   });
   return Promise.race([promise, timeout]).finally(() => {
-    if (timer !== undefined) clearTimeout(timer);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
   });
 }
 

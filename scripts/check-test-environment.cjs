@@ -43,11 +43,7 @@
  * 退出码 0 = 通过，1 = 阻断。
  */
 const path = require("node:path");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 const { loadProjects, matchesAny } = require("./vitest-projects.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -75,7 +71,8 @@ const TEST_FILE_RE = /\.test\.tsx?$/;
  * jsdom 提供的（`navigator` 在 Node 24 也**存在**，所以它单独列出来是给
  * 「按浏览器语义用它」的用例留的；真要判它请配 `vi.stubGlobal`）。
  */
-const ENV_GLOBALS = "window|document|navigator|localStorage|sessionStorage|self|HTMLCanvasElement|MutationObserver|ResizeObserver";
+const ENV_GLOBALS =
+  "window|document|navigator|localStorage|sessionStorage|self|HTMLCanvasElement|MutationObserver|ResizeObserver";
 
 /**
  * ⚠️ 只认「守卫紧跟着裸 `return`」这一形态。**带了断言的守卫不算**
@@ -89,7 +86,8 @@ const ENV_GLOBALS = "window|document|navigator|localStorage|sessionStorage|self|
  */
 const EARLY_RETURN_RES = [
   new RegExp(
-    String.raw`if\s*\(\s*typeof\s+(?:` + ENV_GLOBALS +
+    String.raw`if\s*\(\s*typeof\s+(?:` +
+      ENV_GLOBALS +
       String.raw`)\s*[!=]==?\s*""\s*\)\s*\{?\s*return\s*;?`,
   ),
 ];
@@ -114,24 +112,58 @@ function stripCommentsAndStrings(src) {
     const c = src[i];
     const c2 = src.slice(i, i + 2);
     if (state === "code") {
-      if (c2 === "//") { state = "line"; i += 2; continue; }
-      if (c2 === "/*") { state = "block"; i += 2; continue; }
-      if (c === '"' || c === "'") { state = "str"; open = c; i += 1; continue; }
-      if (c === "`") { state = "tpl"; open = c; i += 1; continue; }
-      out += c; i += 1; continue;
+      if (c2 === "//") {
+        state = "line";
+        i += 2;
+        continue;
+      }
+      if (c2 === "/*") {
+        state = "block";
+        i += 2;
+        continue;
+      }
+      if (c === '"' || c === "'") {
+        state = "str";
+        open = c;
+        i += 1;
+        continue;
+      }
+      if (c === "`") {
+        state = "tpl";
+        open = c;
+        i += 1;
+        continue;
+      }
+      out += c;
+      i += 1;
+      continue;
     }
     if (state === "line") {
-      if (c === "\n") { state = "code"; out += c; }
-      i += 1; continue;
+      if (c === "\n") {
+        state = "code";
+        out += c;
+      }
+      i += 1;
+      continue;
     }
     if (state === "block") {
-      if (c2 === "*/") { state = "code"; i += 2; continue; }
-      if (c === "\n") out += c;
-      i += 1; continue;
+      if (c2 === "*/") {
+        state = "code";
+        i += 2;
+        continue;
+      }
+      if (c === "\n") {
+        out += c;
+      }
+      i += 1;
+      continue;
     }
     if (state === "str" || state === "tpl") {
       /* 转义序列整体吃掉（含 `\\"` 与 `\\\n`），不让它提前闭合。 */
-      if (c === "\\") { i += 2; continue; }
+      if (c === "\\") {
+        i += 2;
+        continue;
+      }
       const closer = state === "str" ? (open === '"' ? '"' : "'") : "`";
       if (c === closer) {
         state = "code";
@@ -141,8 +173,11 @@ function stripCommentsAndStrings(src) {
         i += 1;
         continue;
       }
-      if (c === "\n") out += c; /* 模板串里的换行要留着，行号才对得上 */
-      i += 1; continue;
+      if (c === "\n") {
+        out += c;
+      } /* 模板串里的换行要留着，行号才对得上 */
+      i += 1;
+      continue;
     }
   }
   return out;
@@ -178,7 +213,9 @@ function projectGlobs() {
   return loadProjects(ROOT);
 }
 
-function toPosix(p) { return p.split(path.sep).join("/"); }
+function toPosix(p) {
+  return p.split(path.sep).join("/");
+}
 
 function main() {
   const listed = SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)))
@@ -231,13 +268,15 @@ function main() {
   const { tiers, found, environments: envOfTier, configText } = projectGlobs();
   if (found < 2) {
     console.error(
-      "[ERROR] 解析 `vitest.config.ts` 的 `projects` 失败（拿到 " + found + " 个档，期望 2）。\n" +
-      (configText === null
-        ? "        连 `vitest.config.ts` 都没读到 —— 那本身就是要判失败的故障，\n" +
-          "        不许当「配置里没有 projects」处理。\n"
-        : "") +
-      "        本判据依赖那两个 project 的 `include` / `exclude` glob；\n" +
-      "        配置形状改了就要同批改这里 —— 静默退回「没有目录档」等于这条判据消失。",
+      "[ERROR] 解析 `vitest.config.ts` 的 `projects` 失败（拿到 " +
+        found +
+        " 个档，期望 2）。\n" +
+        (configText === null
+          ? "        连 `vitest.config.ts` 都没读到 —— 那本身就是要判失败的故障，\n" +
+            "        不许当「配置里没有 projects」处理。\n"
+          : "") +
+        "        本判据依赖那两个 project 的 `include` / `exclude` glob；\n" +
+        "        配置形状改了就要同批改这里 —— 静默退回「没有目录档」等于这条判据消失。",
     );
     return 1;
   }
@@ -257,7 +296,9 @@ function main() {
     for (const [name, g] of tiers) {
       const included = matchesAny(rel, g.include);
       const excluded = matchesAny(rel, g.exclude);
-      if (included && !excluded) hits.push(name);
+      if (included && !excluded) {
+        hits.push(name);
+      }
     }
     return hits.length === 1 ? hits[0] : null;
   }
@@ -295,17 +336,21 @@ function main() {
 
   for (const { rel } of files) {
     const tier = tierOf(rel);
-    if (tier === null) continue;
+    if (tier === null) {
+      continue;
+    }
     const tierEnv = envOfTier[tier];
     if (tierEnv === undefined) {
       console.error(
         `[ERROR] 档 \`${tier}\` 在 \`vitest.config.ts\` 里没有可识别的 \`environment\`。\n` +
-        "        本判据按那个值比对文件头 —— 读不到就判失败，不静默放过（同 §11.17.4）。",
+          "        本判据按那个值比对文件头 —— 读不到就判失败，不静默放过（同 §11.17.4）。",
       );
       return 1;
     }
     const env = declaredEnv(rawByRel.get(rel));
-    if (!env) continue;
+    if (!env) {
+      continue;
+    }
 
     if (tierEnv === "node") {
       /* node 档：只有「文件头也写 node」才是冗余；写 DOM 头是正当写法。
@@ -315,7 +360,8 @@ function main() {
         redundantHeads.push({
           rel,
           kind: "冗余文件头",
-          detail: "目录档已经给出 node —— 文件头是同一个结论的第二个来源，删掉它（同一件事只留一个来源）",
+          detail:
+            "目录档已经给出 node —— 文件头是同一个结论的第二个来源，删掉它（同一件事只留一个来源）",
         });
       }
       continue;
@@ -355,28 +401,32 @@ function main() {
   if (jsdomExceptions.length > 0) {
     console.log(
       `\n[test-env] 本档例外：${jsdomExceptions.length} 份用例用文件头改到 jsdom` +
-      `（DOM 档默认 happy-dom）——`,
+        `（DOM 档默认 happy-dom）——`,
     );
-    for (const rel of jsdomExceptions) console.log(`  · ${rel}`);
+    for (const rel of jsdomExceptions) {
+      console.log(`  · ${rel}`);
+    }
     console.log(
       "  新增例外前先确认「happy-dom 真的做不到」（具体到哪一条 API / 行为），" +
-      "口径见 docs/standards/11-测试与可观测性.md §11.17。",
+        "口径见 docs/standards/11-测试与可观测性.md §11.17。",
     );
   }
 
   if (all.length === 0) {
-    if (!REPORT_ONLY)
+    if (!REPORT_ONLY) {
       console.log(
-        `[test-env] OK —— ${files.length} 份用例：无环境早退，无目录档矛盾，无冗余文件头。` +
-          note,
+        `[test-env] OK —— ${files.length} 份用例：无环境早退，无目录档矛盾，无冗余文件头。` + note,
       );
-    else
+    } else {
       console.log(`[test-env] 盘点：${files.length} 份用例，无问题。` + note);
+    }
     return 0;
   }
 
   console.error(
-    (REPORT_ONLY ? `[test-env] 盘点：${all.length} 处待办（--report 不判失败）` : `[ERROR] 用例的环境档有 ${all.length} 处问题`) + "：\n",
+    (REPORT_ONLY
+      ? `[test-env] 盘点：${all.length} 处待办（--report 不判失败）`
+      : `[ERROR] 用例的环境档有 ${all.length} 处问题`) + "：\n",
   );
   for (const p of all) {
     console.error(`  · ${p.rel}${p.line ? ":" + p.line : ""}  [${p.kind}]`);
@@ -384,14 +434,15 @@ function main() {
   }
   console.error(
     "\n修法：" +
-    "\n  · 「环境早退」：别把结论挂在环境的一个全局默认值上。要覆盖 SSR / 无 window 分支，\n" +
-    "    就**把条件造出来**：`vi.stubGlobal(\"window\", undefined)` + 断言（配 `afterEach(vi.unstubAllGlobals)`）。\n" +
-    "    仓里现成样板：src/lib/app-events.test.ts 的「无 `window` 时订阅给一个空操作…」那条。\n" +
-    "  · 「目录档与文件头矛盾」：两者必有一处过时 —— 要么用例挪错了目录，要么文件头该改。\n" +
-    "    别只改一边凑绿：那正是这条判据要照出来的改动。\n" +
-    "  · 「冗余文件头」：删掉这一行 `// @vitest-environment …` 即可（目录档已给出同结论）。\n" +
-    "    列清单：`node scripts/check-test-environment.cjs --report`。\n" +
-    "  口径见 docs/standards/11-测试与可观测性.md §11.17。" + note,
+      "\n  · 「环境早退」：别把结论挂在环境的一个全局默认值上。要覆盖 SSR / 无 window 分支，\n" +
+      '    就**把条件造出来**：`vi.stubGlobal("window", undefined)` + 断言（配 `afterEach(vi.unstubAllGlobals)`）。\n' +
+      "    仓里现成样板：src/lib/app-events.test.ts 的「无 `window` 时订阅给一个空操作…」那条。\n" +
+      "  · 「目录档与文件头矛盾」：两者必有一处过时 —— 要么用例挪错了目录，要么文件头该改。\n" +
+      "    别只改一边凑绿：那正是这条判据要照出来的改动。\n" +
+      "  · 「冗余文件头」：删掉这一行 `// @vitest-environment …` 即可（目录档已给出同结论）。\n" +
+      "    列清单：`node scripts/check-test-environment.cjs --report`。\n" +
+      "  口径见 docs/standards/11-测试与可观测性.md §11.17。" +
+      note,
   );
   return REPORT_ONLY ? 0 : 1;
 }

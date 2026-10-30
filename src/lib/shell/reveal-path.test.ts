@@ -38,11 +38,14 @@ function installFakeChild(errorCode?: string) {
     };
     setTimeout(() => {
       if (errorCode) {
-        for (const cb of handlers.error ?? [])
+        for (const cb of handlers.error ?? []) {
           cb(Object.assign(new Error(`spawn ${errorCode}`), { code: errorCode }));
+        }
         return;
       }
-      for (const cb of handlers.spawn ?? []) cb();
+      for (const cb of handlers.spawn ?? []) {
+        cb();
+      }
     }, 0);
     return handle;
   });
@@ -168,7 +171,9 @@ describe("命令与参数形态", () => {
   });
 
   it("目录应直接打开进入，而非停在父层选中（Windows 实测「开了但没进到文件夹」）", async () => {
-    if (process.platform !== "win32") return; // 只在会走到该分支的平台钉死
+    if (process.platform !== "win32") {
+      return;
+    } // 只在会走到该分支的平台钉死
     const tmp = mkdtempSync(join(tmpdir(), "reveal-"));
     try {
       const result = await revealPathInFileManager(tmp, () => true);

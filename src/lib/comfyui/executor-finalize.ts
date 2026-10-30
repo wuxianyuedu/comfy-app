@@ -81,12 +81,16 @@ export function configureExecutorFinalize(next: Partial<ExecutorFinalizeDeps>): 
 }
 
 async function resolveTaskRepo(): Promise<TaskRepoLike> {
-  if (depsOverride.taskRepo) return depsOverride.taskRepo;
+  if (depsOverride.taskRepo) {
+    return depsOverride.taskRepo;
+  }
   return loadRealTaskRepo();
 }
 
 async function resolveGetView(): Promise<GetViewLike> {
-  if (depsOverride.getView) return depsOverride.getView;
+  if (depsOverride.getView) {
+    return depsOverride.getView;
+  }
   return (await import("./client")).getView;
 }
 
@@ -94,8 +98,12 @@ async function resolveGetView(): Promise<GetViewLike> {
  *  server-only）时静默 skip，与旧契约「日志挂不上不阻塞收口」同构。 */
 let _runtimeLoggerCache: RuntimeLoggerLike | null | undefined;
 async function resolveRuntimeLogger(): Promise<RuntimeLoggerLike | null> {
-  if (depsOverride.runtimeLog) return depsOverride.runtimeLog;
-  if (_runtimeLoggerCache !== undefined) return _runtimeLoggerCache;
+  if (depsOverride.runtimeLog) {
+    return depsOverride.runtimeLog;
+  }
+  if (_runtimeLoggerCache !== undefined) {
+    return _runtimeLoggerCache;
+  }
   try {
     const { createAppRuntimeLogger } = await import("~/lib/log/app-runtime-log");
     _runtimeLoggerCache = createAppRuntimeLogger("task");
@@ -113,7 +121,9 @@ function statusMessageTypeOf(msg: unknown): unknown {
 }
 
 function executionErrorMessageOf(msg: unknown): unknown {
-  if (!Array.isArray(msg)) return undefined;
+  if (!Array.isArray(msg)) {
+    return undefined;
+  }
   // Array.isArray 把 unknown 收窄为 any[]，索引取值后立即断言收口。
   const payload = /* SAFETY: 类型断言已复核 */ msg[1] as Record<string, unknown> | null | undefined;
   return payload != null && typeof payload === "object" ? payload.exception_message : undefined;
@@ -129,7 +139,9 @@ function executedWorkflowOf(taskId: string): unknown {
 
 /** 完成入口：抢终态 → completeInner → 兜底失败。 */
 export async function complete(taskId: string, promptId: string) {
-  if (!claimSettle(taskId)) return;
+  if (!claimSettle(taskId)) {
+    return;
+  }
   const executedWorkflow = executedWorkflowOf(taskId);
   try {
     await completeInner(taskId, promptId, executedWorkflow);
@@ -280,11 +292,21 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   }
 
   const parts: Array<string> = [];
-  if (images.length) parts.push(`${images.length} 张图像`);
-  if (videos.length) parts.push(`${videos.length} 个视频`);
-  if (audios.length) parts.push(`${audios.length} 个音频`);
-  if (others.length) parts.push(`${others.length} 个文件`);
-  if (texts.length) parts.push(`${texts.length} 段文本`);
+  if (images.length) {
+    parts.push(`${images.length} 张图像`);
+  }
+  if (videos.length) {
+    parts.push(`${videos.length} 个视频`);
+  }
+  if (audios.length) {
+    parts.push(`${audios.length} 个音频`);
+  }
+  if (others.length) {
+    parts.push(`${others.length} 个文件`);
+  }
+  if (texts.length) {
+    parts.push(`${texts.length} 段文本`);
+  }
   log(taskId, "success", `✓ 生成完成，开始下载 ${parts.join("、") || "结果"}`);
 
   /* 落盘目录：与 publicBase 同源。越界判据也在这里生效 —— projectId 由客户端
@@ -489,7 +511,9 @@ export async function fail(
   error: unknown,
   validationErrors?: Array<ValidationError>,
 ) {
-  if (!claimSettle(taskId)) return;
+  if (!claimSettle(taskId)) {
+    return;
+  }
   await finalizeFailure(taskId, promptId, error, validationErrors);
 }
 

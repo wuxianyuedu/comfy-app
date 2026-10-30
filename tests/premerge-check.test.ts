@@ -18,10 +18,12 @@
  *      却报全绿 —— 那是本仓库最怕的那种静默）。跳过清单按 `SEGMENTS` 推，不硬写段数。
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+
+import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 import {
   combineCodes,
@@ -32,13 +34,61 @@ import {
 
 const SCRIPT = join(process.cwd(), "scripts", "premerge-check.mjs");
 
-/** 跑一次入口脚本。 */
-function run(args: Array<string> = []) {
+/**
+/**
+ * 本检出 `HEAD` 的 sha —— 当**显式**的改动面基线（ISSUE #2799）。
+ *
+ * 为什么还要这一层（`run()` 已经过 `gitSandboxEnv()` 剥过平台那一族了，见下）：
+ * 剥完之后「哪一条是基线」就只剩「宿主有没有 `master` 引用」这一个来源 —— 那是**这台
+ * 机器的事实**，不是被测行为。平台节点只 fetch 协商后的单 ref（`.cnb.yml` 里那句注释
+ * 写得很清楚），于是本机绿、平台上整组红成 `expected 2 to be 0`（PR #2784 现场）。
+ *
+ * 传给 `HEAD` 的 sha 是刻意的：分叉点 == HEAD ⇒ 待审那一批为空 ⇒
+ * `check-commit-claims.mjs` 说「无可审，不是判过」并退 0（本仓对这一档的定义），
+ * 于是这一组判的是**编排**（筛段 / JSON / 旗标），不掺任何宿主状态。
+ *
+ * 判据行为一个字没动：取不到基线仍然退 2（「没判 ≠ 绿」，§13.6.2）—— 那条由
+ * 「算不出锚点时**退 2 并说明**」守着，两种机器上都照旧。
+ */
+function headBaseline(): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  }).trim();
+}
+
+/**
+ * 跑一次入口脚本 —— **子进程里跑**，但不是「裸」跑。
+ *
+ * 这一份用例的每一段都在**真检出**上敲 git（`resolveForkBaseline` 与两段各自起的
+ * `check-commit-claims.mjs` / `check-merged-side-loss.mjs`），所以它对这个仓库的
+ * **位置**极其敏感，而继承来的环境会把它指到别处去：
+ *
+ *   · `GIT_DIR` / `GIT_INDEX_FILE` 一族 —— git 导给它自己起的钩子，pre-commit 里跑的
+ *     vitest 一路继承（机制与现场见 `git-sandbox-env.ts` 文件头）；
+ *   · `CNB_PULL_REQUEST_TARGET_SHA` / `CNB_COMMIT` / `CNB_PULL_REQUEST_MERGE_SHA` ——
+ *     **平台那一跑**的改动面读数（ISSUE #2787）。PR 流水线里它们同样继承进用例 spawn
+ *     的每一个子进程，于是「分叉点是哪一条」在本地与平台上**不是同一个问题**：
+ *     本机问的是 `origin/master` 的分叉点，平台上问的是那一跑的 sha。
+ *
+ * `tests/setup.ts` 已经在 worker 启动时剥过一次（那一条盖住 `runScript` 往下那一层），
+ * 但夹具**自己**起的这一次不该指望上游清理过 —— 与 `gate-repo.ts` 那句「共享夹具要自带
+ * 隔离」同一条口径。剥法复用 `gitSandboxEnv()`（唯一一份清单，§12.18），顺带把「禁签名
+ * + 身份」也注入进去。
+ *
+ * 基线与平台变量**一律显式给**：剥干净之后它们只剩「宿主恰好有什么」这一个来源，
+ * 而那正是 #2799 的症状。
+ *
+ * @param args 交给入口的旗标
+ * @param baseline 这一次的改动面基线（默认本检出 HEAD 的 sha）
+ */
+function run(args: Array<string> = [], baseline: string = headBaseline()) {
   try {
     const output = execFileSync(process.execPath, [SCRIPT, ...args], {
       cwd: process.cwd(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      env: gitSandboxEnv({ CNB_PULL_REQUEST_TARGET_SHA: baseline }),
     });
     return { code: 0, output };
   } catch (err) {
@@ -52,6 +102,44 @@ function run(args: Array<string> = []) {
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
     };
   }
+}
+
+/**
+ * 「这一段没有结论」不是「这条判据红了」—— **锚点取不到**时的统一读法（PR #2784 现场）。
+ *
+ * `claims` / `mergeLoss` 两段的锚点是 `git merge-base(<要并进去的那条>, HEAD)`。
+ * 而这个入口跑在**真检出**上，所以有两件事与题面无关、却会决定那个锚点算不算得出来：
+ *
+ *   · 仓库冻结在合并态（`MERGE_HEAD` 在场、合并未落地）：`git merge-base` 退 1、
+ *     stdout 为空 ⇒ 分叉点算不出；
+ *   · 要并进去的那条在这个检出里根本不存在（平台节点只 fetch 协商后的单 ref，
+ *     `origin/master` / 本地 `master` 都可能不在）。
+ *
+ * 两种情形下入口都如实记 **2（没跑起来）**，那是**正确的读数** —— 分叉点确实不可知。
+ * 错的是下面这三条用例：它们问的是「`--only` / `--json` / `--full` 有没有生效」，
+ * 却用字面 `0` 钉死，把这个与题面无关的前提一起钉住了 —— 本机绿（锚点算得出）、
+ * 平台红，而报错只说得出一句 `expected 2 to be +0`。
+ *
+ * 所以豁免的只有**一格**：读数必须是 2 **且**输出里那句正是「取不到 / 算不出锚点」。
+ * 别的 2（参数不认识、段名不存在……）照旧红。「锚点算不出时不许折成 0」另有
+ * `anchorMissed` 那条用例钉着，它不经过本入口、不受这一态影响。
+ *
+ * @param code 入口的退出码
+ * @param output 入口的输出（两流合并）
+ */
+function expectAnchorMissRead(code: number, output: string): void {
+  const merged = existsSync(join(process.cwd(), ".git", "MERGE_HEAD"));
+  if (code === 0) {
+    /* 绿就对了 —— 锚点算得出（合并态、目标引用在不在都不重要）。 */
+    return;
+  }
+  /* 非 0：只放行「锚点取不到」这一形，其余照旧红。 */
+  expect(
+    code,
+    `这一跳的读数不是「没结论」，是别的东西 —— 换成 0 才说明 ` +
+      `\`--only\` / \`--json\` / \`--full\` 生效了（合并态=${merged}）：\n${output}`,
+  ).toBe(2);
+  expect(output).toMatch(/算不出|取不到要并进去的那条/);
 }
 
 describe("premerge-check —— 总码合成（纯函数）", () => {
@@ -127,6 +215,7 @@ describe("premerge-check —— 段的筛选", () => {
 
   test("`--only=claims` 只跑那一段（不跑复算那一大段）", () => {
     const { code, output } = run(["--only=claims"]);
+    expectAnchorMissRead(code, output);
     expect(code).toBe(0);
     expect(output).toContain("提交信息里的机械可核声明");
     /* 复算那一段的标签不该出现 —— 出现了说明 `--only` 没筛住。 */
@@ -135,6 +224,7 @@ describe("premerge-check —— 段的筛选", () => {
 
   test("`--json` 给出逐段结论（机器可读那一半）", () => {
     const { code, output } = run(["--only=claims", "--json"]);
+    expectAnchorMissRead(code, output);
     expect(code).toBe(0);
     const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(output) as {
       code: number;
@@ -160,6 +250,7 @@ describe("premerge-check —— 旗标解析（#2764）", () => {
   test("`--full` 是默认档的显式写法，与不给它逐字相同", () => {
     const plain = run(["--only=claims"]);
     const explicit = run(["--only=claims", "--full"]);
+    expectAnchorMissRead(plain.code, plain.output);
     expect(plain.code).toBe(0);
     expect(explicit.code).toBe(plain.code);
   });
@@ -219,7 +310,9 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
     /* 它要么绿（0）、要么真报「需要人工看」（1）；「没跑起来」（2）只允许由
      * 取不到 merge target / 浅克隆这一族原因给出，且必须在输出里说清原因。 */
     expect([0, 1, 2]).toContain(code);
-    if (code === 2) expect(output).toContain("[premerge] ");
+    if (code === 2) {
+      expect(output).toContain("[premerge] ");
+    }
   });
 
   test("`claims` 段的扫描面是**这批**，不是「最新那一笔」（ISSUE #2070）", () => {
@@ -274,9 +367,13 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
     const { code, output } = run(["--only=claims"]);
     expect(output).not.toContain("取不到要审的提交");
     expect([0, 1, 2]).toContain(code);
-    if (code === 2) expect(output).toContain("[premerge] ");
+    if (code === 2) {
+      expect(output).toContain("[premerge] ");
+    }
     /* 走到「审了几笔」这一层：绿的那一支必须说得出条数，或说得出「无可审」。 */
-    if (code === 0) expect(output).toMatch(/次提交|无可审/);
+    if (code === 0) {
+      expect(output).toMatch(/次提交|无可审/);
+    }
   });
 
   test("锚点 = **分叉点**（`merge-base` 要并进去的那条 vs HEAD），不是上游的尖端", async () => {
@@ -303,7 +400,9 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
             "commit.gpgsign=false",
             ...args,
           ],
-          { cwd: repo, encoding: "utf8" },
+          /* 临时仓库里的 git 自带隔离（同 `run()` 那段：钩子 / 平台那一跑的变量会让
+           * 它操作到**别的**仓库，而那类故障在日志里长得像夹具坏了）。 */
+          { cwd: repo, encoding: "utf8", env: gitSandboxEnv() },
         ).trim();
       g("init", "-q", "-b", "master");
       writeFileSync(join(repo, "a.txt"), "1\n");
@@ -331,7 +430,9 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       const { resolveForkBaseline } = await import("../scripts/premerge-check.mjs");
       const got = resolveForkBaseline(repo);
       expect(got.ok).toBe(true);
-      if (!got.ok) return;
+      if (!got.ok) {
+        return;
+      }
       /* 关键：它得停在**分叉点**，不是上游尖端。 */
       expect(got.baseline).toBe(fork);
       expect(got.baseline).not.toBe(tip);
@@ -352,7 +453,8 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         execFileSync(
           "git",
           ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args],
-          { cwd: repo, encoding: "utf8" },
+          /* 临时仓库里的 git 自带隔离（同 `run()` 那段）。 */
+          { cwd: repo, encoding: "utf8", env: gitSandboxEnv() },
         ).trim();
       /* 全程不出现任何名为 `master` 的引用 —— 这就是平台检出的形状。 */
       g("init", "-q", "-b", "main");
@@ -378,12 +480,15 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         CNB_PULL_REQUEST_TARGET_SHA: target,
       });
       expect(withEnv.ok).toBe(true);
-      if (!withEnv.ok) return;
+      if (!withEnv.ok) {
+        return;
+      }
       expect(withEnv.baseline).toBe(target);
       /* 交出去的那一批就是「PR 自己的提交」，不多不少一笔。 */
       const batch = execFileSync("git", ["log", "--format=%s", `${withEnv.baseline}..HEAD`], {
         cwd: repo,
         encoding: "utf8",
+        env: gitSandboxEnv(),
       })
         .trim()
         .split("\n");
@@ -395,7 +500,9 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         CNB_PULL_REQUEST_TARGET_SHA: "f".repeat(40),
       });
       expect(bogus.ok).toBe(false);
-      if (!bogus.ok) expect(bogus.reason).toContain("CNB_PULL_REQUEST_TARGET_SHA");
+      if (!bogus.ok) {
+        expect(bogus.reason).toContain("CNB_PULL_REQUEST_TARGET_SHA");
+      }
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
@@ -411,7 +518,8 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         execFileSync(
           "git",
           ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args],
-          { cwd: repo, encoding: "utf8" },
+          /* 临时仓库里的 git 自带隔离（同 `run()` 那段）。 */
+          { cwd: repo, encoding: "utf8", env: gitSandboxEnv() },
         ).trim();
       g("init", "-q", "-b", "work");
       writeFileSync(join(repo, "a.txt"), "1\n");
@@ -435,6 +543,63 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         // 而且 2 压过 1：合成器不许把「没跑起来」降级成「红了」。
         expect(combineCodes([0, missed.code, 1])).toBe(2);
       }
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  test("平台那一格：目标 sha 只在 env 里时，`claims` 审的是**这批**而不是 `HEAD`（ISSUE #2788）", () => {
+    /* 立案现场（第 2784 号 PR 的「提交声明核对」那一格，三轮都 0.5 秒红）：
+     * 这一段此前把 `<分叉点>..HEAD` 当**位置参数**交给 `check-commit-claims.mjs`，
+     * 而那份脚本只从 **`--range`** 认区间 —— 位置参数被它当成「审这一个 rev」，
+     * 于是 `git log <sha>..HEAD` 被读成一次提交查询 ⇒ `取不到要审的提交` ⇒ 退 2。
+     * 本机绿是因为那份脚本的 `--commit <rev>` 兜底读到了 env 里的
+     * `CNB_PULL_REQUEST_TARGET_SHA`；而平台**节点不 fetch `origin/master`**，
+     * 本文件算锚点走的是 env，子进程却拿不到同一个来源 —— 两个来源不一致。
+     * 修法：锚点由本文件算、按 `--range` 显式交出去（区间端点与 HEAD 同库）。
+     *
+     * 判的是**调用形状**那一半（子进程确实收到 `--range <分叉点>..HEAD`）；
+     * 「审了几笔」那一半由 `tests/check-commit-claims.test.ts` 的区间那组兜着。 */
+    const repo = mkdtempSync(join(tmpdir(), "premerge-claims-args-"));
+    try {
+      const g = (...args: Array<string>) =>
+        execFileSync(
+          "git",
+          ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args],
+          /* 临时仓库里的 git 自带隔离（同 `run()` 那段）。 */
+          { cwd: repo, encoding: "utf8", env: gitSandboxEnv() },
+        ).trim();
+      g("init", "-q", "-b", "main");
+      writeFileSync(join(repo, "a.txt"), "1\n");
+      g("add", "-A");
+      g("commit", "-qm", "base");
+      const target = g("rev-parse", "HEAD");
+      g("checkout", "-q", "-b", "work");
+      writeFileSync(join(repo, "b.txt"), "1\n");
+      g("add", "-A");
+      g("commit", "-qm", "mine");
+
+      /* 平台形状：**没有任何 master 引用**，目标 sha 只在 env 里。 */
+      const env = { ...gitSandboxEnv(), CNB_PULL_REQUEST_TARGET_SHA: target };
+      execFileSync(
+        process.execPath,
+        [join(process.cwd(), "scripts", "premerge-check.mjs"), "--only=claims"],
+        {
+          cwd: repo,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+          env,
+        },
+      );
+      /* 跑通就说明整条链对上了（旧形状在这里退 2：那边锚点取自安装位置那份检出、
+       * 子进程却在 cwd 那份里找端点）。再独立跑一次同一份区间，钉住「审到的就是
+       * 这一批、一笔不多一笔不少」—— 只判退出码会让「审了 0 笔却报绿」也通过。 */
+      const claims = execFileSync(
+        process.execPath,
+        [join(process.cwd(), "scripts", "check-commit-claims.mjs"), "--range", `${target}..HEAD`],
+        { cwd: repo, encoding: "utf8", env: gitSandboxEnv() },
+      );
+      expect(claims).toContain("1 次提交");
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }

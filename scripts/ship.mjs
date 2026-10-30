@@ -205,25 +205,11 @@ import { resolveGitDir } from "./git-dir.mjs";
 /* 旗标解析在 `ship-args.mjs`：它跟着「命令行长什么样」动，而 `ship-core` 跟着「外部执行者的
  * 读数形状」动（ISSUE #2491 把这一层拆出去的那条理由写在文件头）。 */
 import { parseArgs } from "./ship-args.mjs";
-import {
-  CODE,
-  combineShipCodes,
-  parseSlug,
-  PHASES,
-  resolveUpstream,
-} from "./ship-core.mjs";
+import { CODE, combineShipCodes, parseSlug, PHASES, resolveUpstream } from "./ship-core.mjs";
 import { makeRunner, writeScratch } from "./ship-exec.mjs";
-import {
-  handleFromProcessEnv,
-  readDevHandleWithSource,
-} from "./ship-ticket.mjs";
+import { handleFromProcessEnv, readDevHandleWithSource } from "./ship-ticket.mjs";
 import { reapCheckoutInstances, readAppInstances } from "./ship-reap.mjs";
-import {
-  cleanBranch,
-  createOrReusePull,
-  mergeAndVerify,
-  reportVerdict,
-} from "./ship-platform.mjs";
+import { cleanBranch, createOrReusePull, mergeAndVerify, reportVerdict } from "./ship-platform.mjs";
 import { pollUntilTerminal } from "./ship-poll.mjs";
 import { closeIssues } from "./ship-close.mjs";
 import { runCommitStage, runPushStage } from "./ship-local.mjs";
@@ -318,17 +304,17 @@ async function runFlow(deps, tmpFiles) {
   /** 写一份临时文件到 git 目录并**登记待回收**；没有落点时回 null（不往工作区猜）。 */
   const mkTmp = (/** @type {string} */ name, /** @type {string} */ text) => {
     const p = writeScratch(root, name, text, resolveDir);
-    if (p) tmpFiles.push(p);
+    if (p) {
+      tmpFiles.push(p);
+    }
     return p;
   };
   const run = deps.run ?? makeRunner(root);
   /** cnb 在不在：**真起一次** `--version` 看退码。不按「PATH 里有没有那个名字」判 ——
    *  在 Windows 垫片上「找得到」与「起得来」是两件事（见 `ship-exec.mjs` 的 `cnbSpawn`）。 */
-  const probeCnb =
-    deps.probeCnb ?? (() => run("cnb", ["--version"]).status === 0);
+  const probeCnb = deps.probeCnb ?? (() => run("cnb", ["--version"]).status === 0);
   const log = deps.log ?? ((s) => process.stdout.write(s + "\n"));
-  const sleep =
-    deps.sleep ?? ((ms) => new Promise((res) => setTimeout(res, ms)));
+  const sleep = deps.sleep ?? ((ms) => new Promise((res) => setTimeout(res, ms)));
   const now = deps.now ?? (() => Date.now());
   const opt = parseArgs(deps.args ?? process.argv.slice(2));
   const codes = /** @type {number[]} */ ([]);
@@ -348,21 +334,21 @@ async function runFlow(deps, tmpFiles) {
    * @param {{stdout:string,stderr?:string}} r 执行结果
    */
   const relay = (r) => {
-    if (r.stdout && r.stdout.trim()) log(r.stdout.trimEnd());
-    if (r.stderr && r.stderr.trim()) log(r.stderr.trimEnd());
+    if (r.stdout && r.stdout.trim()) {
+      log(r.stdout.trimEnd());
+    }
+    if (r.stderr && r.stderr.trim()) {
+      log(r.stderr.trimEnd());
+    }
   };
 
   if (opt.unknown.length > 0) {
     log(`[ship] [ERROR] unknown flag(s): ${opt.unknown.join(" ")}`);
-    log(
-      "[ship] 拼错的旗标会被读成「没要那个动作」，所以这里直接停。见文件头「用法」。",
-    );
+    log("[ship] 拼错的旗标会被读成「没要那个动作」，所以这里直接停。见文件头「用法」。");
     return CODE.NOT_RUN;
   }
   if (opt.only && !PHASES.includes(opt.only)) {
-    log(
-      `[ship] [ERROR] --only 不认的阶段：${opt.only}（可选：${PHASES.join(" / ")}）`,
-    );
+    log(`[ship] [ERROR] --only 不认的阶段：${opt.only}（可选：${PHASES.join(" / ")}）`);
     return CODE.NOT_RUN;
   }
   /* `--close-issue` 后面跟的东西必须像 issue 号（ISSUE #2199）。把它当未知旗标收下是
@@ -373,19 +359,14 @@ async function runFlow(deps, tmpFiles) {
       `[ship] [ERROR] --close-issue 收的是 issue 号（2 位以上数字，可写 #2179），` +
         `这里不像：${opt.closeIssueBad.join(" ")}`,
     );
-    log(
-      "[ship] 一个都不认 ⇒ 不动任何单子；这一格没有结论（不是「已经关好了」）。",
-    );
+    log("[ship] 一个都不认 ⇒ 不动任何单子；这一格没有结论（不是「已经关好了」）。");
     return CODE.NOT_RUN;
   }
   /* `--as-merged` 收的是 **PR 号**（ISSUE #2491）。它自己不做任何动作，只给「只补关」那一路
    * 供凭据（合没合并仍由 `ship-close.mjs` 去平台回读）。两种误用都得当场点名、共用同一个出口：
    * 不像号（打错或把标题粘进来），以及**没带 `--close-issue`** —— 那时它没有任何执行者，
    * 而屏幕上会留下一句看起来像「已经处理过了」的沉默。 */
-  if (
-    opt.asMergedBad.length > 0 ||
-    (opt.asMerged !== null && !opt.closeIssue)
-  ) {
+  if (opt.asMergedBad.length > 0 || (opt.asMerged !== null && !opt.closeIssue)) {
     if (opt.asMergedBad.length > 0) {
       log(
         `[ship] [ERROR] --as-merged 收的是 PR 号（2 位以上数字，可写 #2487），` +
@@ -407,20 +388,10 @@ async function runFlow(deps, tmpFiles) {
    * 或「合并那一段才有的验真结果」，而它们是在 pull-request / merge 那两段拿到的 ——
    * 单独 --only=poll 会走进「一段都没跑、于是没有任何结论」却退 0 的形态。那是假绿灯，
    * 正是本工具要防的那一类，所以显式拒绝，而不是让它安静地成功。 */
-  const NEEDS_PR_NUMBER = [
-    "poll",
-    "verdict",
-    "merge",
-    "close-issue",
-    "clean-branch",
-  ];
+  const NEEDS_PR_NUMBER = ["poll", "verdict", "merge", "close-issue", "clean-branch"];
   if (opt.only && NEEDS_PR_NUMBER.includes(opt.only)) {
-    log(
-      `[ship] [ERROR] --only=${opt.only} 不能单独跑：它要用 pull-request 那一段解析出的 PR 号。`,
-    );
-    log(
-      "[ship] 要接着上一次的进度就整段重跑（PR 已存在时会复用，不重建）：pnpm ship",
-    );
+    log(`[ship] [ERROR] --only=${opt.only} 不能单独跑：它要用 pull-request 那一段解析出的 PR 号。`);
+    log("[ship] 要接着上一次的进度就整段重跑（PR 已存在时会复用，不重建）：pnpm ship");
     return CODE.NOT_RUN;
   }
 
@@ -440,12 +411,7 @@ async function runFlow(deps, tmpFiles) {
    * `origin`；见 docs/audits/2026-10-12 R12-01）。推不出远端名时**不在这里**判红：
    * 各阶段拿 `up.remote === null` 自己退 NOT_RUN —— 「取不到远端」与
    * 「这一步跑出来是红的」是两件事（三态退出码那条口径）。 */
-  const upRes = run("git", [
-    "rev-parse",
-    "--abbrev-ref",
-    "--symbolic-full-name",
-    "@{u}",
-  ]);
+  const upRes = run("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
   const remotesRes = run("git", ["remote"]);
   const headRes = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
   const localBranch = headRes.stdout.trim();
@@ -460,19 +426,14 @@ async function runFlow(deps, tmpFiles) {
     remotes: remotesRes.stdout.split("\n"),
     localBranch,
     remoteHead: probe.remote
-      ? run("git", [
-          "symbolic-ref",
-          "--quiet",
-          `refs/remotes/${probe.remote}/HEAD`,
-        ]).stdout
+      ? run("git", ["symbolic-ref", "--quiet", `refs/remotes/${probe.remote}/HEAD`]).stdout
       : null,
   });
   /* 基线引用要**真的存在**才拿来比：拿不存在的 ref 做 `A...HEAD`，git 失败、stdout 为空，
    * 而这一查的语义是「这条分支带进来了什么」—— 空串会被读成「什么都没带」，
    * 一条听起来完全正当的假结论。所以正面验一次，验不到就往下标成「没有事实源」。 */
   baseRef =
-    up.base !== null &&
-    run("git", ["rev-parse", "--verify", "--quiet", up.base]).status === 0
+    up.base !== null && run("git", ["rev-parse", "--verify", "--quiet", up.base]).status === 0
       ? up.base
       : null;
   /** 主干**分支名**（PR 的 `--base` 要的是它，不是 `<远端>/<分支>`）。推不出就不给
@@ -480,9 +441,7 @@ async function runFlow(deps, tmpFiles) {
   baseBranch = baseRef ? baseRef.split("/").slice(1).join("/") : null;
 
   /** 仓库 slug 与 cnb 在场性 —— 装配层的事实（阶段 0 的屏幕输出与「只补关」那一路都要用）。 */
-  const slugRes = up.remote
-    ? run("git", ["remote", "get-url", up.remote])
-    : { stdout: "" };
+  const slugRes = up.remote ? run("git", ["remote", "get-url", up.remote]) : { stdout: "" };
   let slug = parseSlug(slugRes.stdout);
   /* 留痕短名在**所有**要它的格子之前取一次：whoami、领取 / 结束 / 列表、preflight 的
    * 单子身份读数、PR 标签、关单后的结束评论。各格自己再读一次会让同一次跑里出现两套答案
@@ -513,7 +472,9 @@ async function runFlow(deps, tmpFiles) {
     mkTmp,
     settle: (cs) => finish(cs),
   });
-  if (standalone.handled) return standalone.code;
+  if (standalone.handled) {
+    return standalone.code;
+  }
   const cnbOk = standalone.cnbOk;
 
   // ── 阶段 0：preflight（实现见 `ship-preflight.mjs`）──────────────
@@ -535,9 +496,15 @@ async function runFlow(deps, tmpFiles) {
       readInstances: deps.readInstances ?? readAppInstances,
     });
     codes.push(...pf.codes);
-    if (pf.action === "stop") return pf.code;
-    if (pf.action === "finish") return finish(codes);
-    if (pf.action === "dry-run") return CODE.GREEN;
+    if (pf.action === "stop") {
+      return pf.code;
+    }
+    if (pf.action === "finish") {
+      return finish(codes);
+    }
+    if (pf.action === "dry-run") {
+      return CODE.GREEN;
+    }
     /* slug 由 preflight 的 `!slug` 闸收窄后带回：阶段 0 之后的平台动作不再面对 null。 */
     const { branch, frags, staged, unstagedModified, untracked } = pf;
     slug = pf.slug;
@@ -555,7 +522,9 @@ async function runFlow(deps, tmpFiles) {
         relay,
       });
       codes.push(...r.codes);
-      if (r.stop) return finish(codes);
+      if (r.stop) {
+        return finish(codes);
+      }
     }
 
     // ── 阶段 2：push（合并前固定动作由 pre-push 钩子自己跑）────
@@ -570,7 +539,9 @@ async function runFlow(deps, tmpFiles) {
         relay,
       });
       codes.push(...r.codes);
-      if (r.stop) return finish(codes);
+      if (r.stop) {
+        return finish(codes);
+      }
     }
 
     // ── 阶段 3-6：平台侧（需要 cnb，实现见 `ship-platform.mjs`）──
@@ -623,9 +594,7 @@ async function runFlow(deps, tmpFiles) {
 
       // ── 阶段 5：verdict ──────────────────────────────────────
       if (want("verdict")) {
-        codes.push(
-          reportVerdict({ run, log, slug, number, buildState, buildSn }),
-        );
+        codes.push(reportVerdict({ run, log, slug, number, buildState, buildSn }));
       }
 
       // ── 阶段 6：merge（显式）─────────────────────────────────
@@ -735,9 +704,6 @@ async function runFlow(deps, tmpFiles) {
   }
 }
 
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   main().then((code) => process.exit(code));
 }

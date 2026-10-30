@@ -149,10 +149,16 @@ export const MediaThumbnail = React.memo(function MediaThumbnail(props: MediaThu
   const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
   const failed = failedSrc !== null && failedSrc === src;
 
-  if (!src) return null;
+  if (!src) {
+    return null;
+  }
   if (failed) {
-    if (fallback === "none") return null;
-    if (fallback === "placeholder") return <FailurePlaceholder className={className} />;
+    if (fallback === "none") {
+      return null;
+    }
+    if (fallback === "placeholder") {
+      return <FailurePlaceholder className={className} />;
+    }
     return <>{fallback}</>;
   }
 

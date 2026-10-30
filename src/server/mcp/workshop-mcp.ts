@@ -50,7 +50,9 @@ function sizeSpecOf(args: {
       multiple: args.multiple,
     });
   }
-  if (args.size) return sizeSpecFromText(args.size);
+  if (args.size) {
+    return sizeSpecFromText(args.size);
+  }
   return undefined;
 }
 
@@ -148,7 +150,9 @@ export function buildWorkshopMcpServer(): McpServer {
     },
     async (args) => {
       const state = await orchestrator.getSession(args.sessionId);
-      if (!state) throw new Error(`工坊会话不存在：${args.sessionId}`);
+      if (!state) {
+        throw new Error(`工坊会话不存在：${args.sessionId}`);
+      }
       return json(state);
     },
   );

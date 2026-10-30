@@ -58,7 +58,9 @@ function descendantPids(root: number): Array<number> {
     const [pidStr, ppidStr] = line.trim().split(/\s+/);
     const pid = Number(pidStr);
     const ppid = Number(ppidStr);
-    if (!Number.isInteger(pid) || !Number.isInteger(ppid)) continue;
+    if (!Number.isInteger(pid) || !Number.isInteger(ppid)) {
+      continue;
+    }
     const arr = byParent.get(ppid) ?? [];
     arr.push(pid);
     byParent.set(ppid, arr);
@@ -67,7 +69,9 @@ function descendantPids(root: number): Array<number> {
   const stack = [...(byParent.get(root) ?? [])];
   while (stack.length) {
     const p = stack.pop()!;
-    if (acc.includes(p)) continue;
+    if (acc.includes(p)) {
+      continue;
+    }
     acc.push(p);
     stack.push(...(byParent.get(p) ?? []));
   }

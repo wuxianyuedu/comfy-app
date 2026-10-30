@@ -89,7 +89,9 @@ const TWO_DAYS_AGO = new Date(SAME_DAY.getTime() - 48 * 3_600_000).toISOString()
 let workdir = "";
 
 afterEach(() => {
-  if (workdir) rmSync(workdir, { recursive: true, force: true });
+  if (workdir) {
+    rmSync(workdir, { recursive: true, force: true });
+  }
   workdir = "";
 });
 
@@ -168,7 +170,9 @@ describe("三档的登记形状（§11.8）", () => {
         ["pr", "master"],
         `${kind}.subject 写成了「${subject}」—— 只认 pr / master（主体答的是「这一次是谁在判」）`,
       ).toContain(subject);
-      if (subject !== "master") continue;
+      if (subject !== "master") {
+        continue;
+      }
       expect(
         String(track.ciStage ?? "")
           .trim()
@@ -832,8 +836,11 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
       expect(gitUser(SUITE_TRACK.key)).toBe("cnb.dQh7kaCfAPA");
     } finally {
       for (const k of ["GIT_AUTHOR_NAME", "CNB_BUILD_USER_NICKNAME", "CNB_BUILD_USER"]) {
-        if (saved[k] === undefined) delete process.env[k];
-        else process.env[k] = saved[k];
+        if (saved[k] === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = saved[k];
+        }
       }
     }
     /* 兜底那一格仍要能答出一个说得清来路的字符串（环境全空时不许回空串 ——
@@ -893,19 +900,25 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
       const flush = () => {
         if (hit && stamp) {
           const at = new Date(stamp);
-          if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest)) earliest = at;
+          if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest)) {
+            earliest = at;
+          }
         }
         hit = false;
       };
       for (const line of out.split("\n")) {
         const t = line.trim();
-        if (!t) continue;
+        if (!t) {
+          continue;
+        }
         if (/^\d{4}-\d{2}-\d{2}T/.test(t)) {
           flush();
           stamp = t;
           continue;
         }
-        if (prefixes.some((p) => t.startsWith(p))) hit = true;
+        if (prefixes.some((p) => t.startsWith(p))) {
+          hit = true;
+        }
       }
       flush();
       /* `earliest` 在闭包 `flush()` 里被赋值，TS 的控制流分析看不进去 ——

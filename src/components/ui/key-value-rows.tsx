@@ -106,7 +106,9 @@ function itemLabelText(item: KeyValueItem): string {
 }
 
 function renderValue(item: KeyValueItem, mono: boolean): ReactNode {
-  if (item.value !== undefined) return item.value;
+  if (item.value !== undefined) {
+    return item.value;
+  }
   const text = displayValue(item.raw);
   return mono ? <span className="font-mono">{text}</span> : text;
 }
@@ -139,7 +141,9 @@ export function KeyValueRows({
   keyClassName?: string;
   valueClassName?: string;
 }) {
-  if (items.length === 0) return null;
+  if (items.length === 0) {
+    return null;
+  }
 
   if (layout === "inline") {
     return (

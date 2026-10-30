@@ -133,11 +133,17 @@ export function parseStageScripts(text) {
       continue;
     }
     // 同级或更浅的键 = 这一项结束了（`env:` / 顶层 `master:` 等）。
-    if (current !== null && /^\S/.test(raw)) current = null;
-    if (current === null) continue;
+    if (current !== null && /^\S/.test(raw)) {
+      current = null;
+    }
+    if (current === null) {
+      continue;
+    }
 
     const script = /^ {4}script:\s*(\S.*)$/.exec(raw);
-    if (script?.[1] !== undefined) out.set(current, script[1]);
+    if (script?.[1] !== undefined) {
+      out.set(current, script[1]);
+    }
   }
   return out;
 }
@@ -188,11 +194,7 @@ export function collectExecutors(text, heavyGates) {
  *   （缺省为空 = 只认 stage，纯配置的自测样本走这一档）
  * @returns {string[]} 逐条不一致（人读的话术）
  */
-export function checkAutofixDuties(
-  text,
-  autofixTokens = ["--autofix"],
-  heavyGates = [],
-) {
+export function checkAutofixDuties(text, autofixTokens = ["--autofix"], heavyGates = []) {
   const scripts = collectExecutors(text, heavyGates);
   /** @type {string[]} */
   const problems = [];
@@ -223,8 +225,12 @@ export function checkAutofixDuties(
   }
 
   for (const [stage, line] of scripts) {
-    if (!autofixTokens.some((t) => line.includes(t))) continue;
-    if (AUTOFIX_STAGE_NAMES.has(stage)) continue;
+    if (!autofixTokens.some((t) => line.includes(t))) {
+      continue;
+    }
+    if (AUTOFIX_STAGE_NAMES.has(stage)) {
+      continue;
+    }
     problems.push(
       `\`${stage}\` 的 script 带着自动修旗标，但不在登记表里 —— ` +
         `「哪几档会自己改工作区」必须只有一处出处：把它登记进 ` +

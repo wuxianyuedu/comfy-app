@@ -156,7 +156,9 @@ export function waitForComfyStateChange(
 ): Promise<ComfyStateChange | null> {
   const current = st.seq ?? 0;
   const last = st.last ?? null;
-  if (last !== null && current > since) return Promise.resolve(last);
+  if (last !== null && current > since) {
+    return Promise.resolve(last);
+  }
   /* 「等一次通知、超时给 null」= 一次赛跑，出口**只有一处**
    * （`~/lib/with-timeout` 的 `withTimeoutResult`，§16.2.4.62 的 P58 硬闸）：
    * 自写 `setTimeout` + `clearTimeout` + 在回调里结算 Promise 正是它要消灭的

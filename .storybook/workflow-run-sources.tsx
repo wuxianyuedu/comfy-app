@@ -274,6 +274,8 @@ function seedScene(name: string): void {
  */
 export const withWorkflowRunScene: Decorator = (Story, context) => {
   const name = (context.parameters as { runScene?: unknown }).runScene;
-  if (typeof name === "string") seedScene(name);
+  if (typeof name === "string") {
+    seedScene(name);
+  }
   return <Story />;
 };

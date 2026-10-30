@@ -81,7 +81,9 @@ export function planShotSync(
   const newShotIds: Array<string> = [];
   for (const shot of shots) {
     patches.push(shotToNodePatch(shot));
-    if (!existingShotIds.has(shot.id)) newShotIds.push(shot.id);
+    if (!existingShotIds.has(shot.id)) {
+      newShotIds.push(shot.id);
+    }
   }
   return { patches, newShotIds };
 }
@@ -101,9 +103,13 @@ export function applyShotPatches<T extends ShotAnchoredNode>(
   const byShot = new Map(patches.map((patch) => [patch.shotId, patch]));
   return nodes.map((node) => {
     const shotId = node.data?.shotId;
-    if (!shotId) return node;
+    if (!shotId) {
+      return node;
+    }
     const patch = byShot.get(shotId);
-    if (!patch) return node;
+    if (!patch) {
+      return node;
+    }
     return { ...node, data: { ...node.data, ...patch } };
   });
 }
@@ -147,8 +153,12 @@ export function nodeGenToShot(node: {
   const patch: ShotGenerationPatch = {
     status: nodeStatusToShotStatus(node.status),
   };
-  if (node.taskId !== undefined) patch.taskId = node.taskId;
-  if (node.status === "done" && node.resultPath) patch.imageUrl = node.resultPath;
+  if (node.taskId !== undefined) {
+    patch.taskId = node.taskId;
+  }
+  if (node.status === "done" && node.resultPath) {
+    patch.imageUrl = node.resultPath;
+  }
   return patch;
 }
 
@@ -161,7 +171,9 @@ export function applyShotGeneration(
 ): Array<Shot> {
   let hit = false;
   const next = shots.map((shot) => {
-    if (shot.id !== shotId) return shot;
+    if (shot.id !== shotId) {
+      return shot;
+    }
     hit = true;
     return { ...shot, ...patch };
   });
@@ -174,7 +186,9 @@ export function applyShotGeneration(
 export function applyShotRedo(shots: Array<unknown>, shotId: string): Array<unknown> {
   let hit = false;
   const next = shots.map((raw) => {
-    if (!isRecord(raw) || raw.id !== shotId) return raw;
+    if (!isRecord(raw) || raw.id !== shotId) {
+      return raw;
+    }
     hit = true;
     const rev = typeof raw.rev === "number" && Number.isFinite(raw.rev) ? raw.rev : 0;
     return {
@@ -199,7 +213,9 @@ export function applyReprompt(
 ): Array<unknown> {
   let hit = false;
   const withPrompt = shots.map((raw) => {
-    if (!isRecord(raw) || raw.id !== shotId) return raw;
+    if (!isRecord(raw) || raw.id !== shotId) {
+      return raw;
+    }
     hit = true;
     return { ...raw, prompt: newPrompt };
   });

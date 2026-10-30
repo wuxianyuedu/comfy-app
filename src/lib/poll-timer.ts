@@ -66,18 +66,14 @@ export interface PollTimerOptions {
  */
 export function startPollTimer(
   run: () => unknown,
-  {
-    ms,
-    immediate = true,
-    pauseWhenHidden = true,
-    pauseWhenUnfocused,
-    onError,
-  }: PollTimerOptions,
+  { ms, immediate = true, pauseWhenHidden = true, pauseWhenUnfocused, onError }: PollTimerOptions,
 ): () => void {
   /* 固定间隔与函数间隔走**两条装表路径**：固定值用 `setInterval`（最省事、语义
    * 也最直白），函数值必须用 `setTimeout` 链 —— 每拍跑完才知道下一拍等多久。 */
   const dynamic = typeof ms === "function";
-  if (!dynamic && (ms == null || ms <= 0)) return () => undefined;
+  if (!dynamic && (ms == null || ms <= 0)) {
+    return () => undefined;
+  }
 
   // 未显式指定时按运行环境决定：桌面壳里默认开、浏览器 tab 里默认关。
   const unfocused = pauseWhenUnfocused ?? isDesktopShell();
@@ -112,7 +108,9 @@ export function startPollTimer(
   const start = (): void => {
     stop();
     stopped = false;
-    if (immediate) tick();
+    if (immediate) {
+      tick();
+    }
     if (!dynamic) {
       timer = setInterval(tick, ms);
       return;
@@ -122,7 +120,9 @@ export function startPollTimer(
       /* `null` = 下一拍不排（调用方靠 `stop()` / 重建拉起，或者它自己会重新
        * 订阅）。**不能与 `0` 混为一谈**：`0` 是「立刻再跑一拍」（事件驱动那一档），
        * 把 `null` 也当成 0 就成了忙等 —— 实测这条会在一秒内空转上万次。 */
-      if (next === null) return;
+      if (next === null) {
+        return;
+      }
       if (next > 0) {
         /* 正数档：本拍**已发车**即排下一拍，不等它到站 —— 等待会让「上一轮还没
          * 回来」变成阻塞，而那是调用方自己的背压（见文件头）。 */
@@ -150,7 +150,9 @@ export function startPollTimer(
       chain = setTimeout(() => {
         fireAndForget(
           pending.then(() => {
-            if (stopped) return;
+            if (stopped) {
+              return;
+            }
             tick();
             arm();
           }),
@@ -171,17 +173,26 @@ export function startPollTimer(
   // - `document.hasFocus()` 覆盖：桌面壳里窗口被别的窗口遮挡但未最小化，
   //   `visibilityState` 仍是 visible，`visibilitychange` 不触发。
   const shouldPause = (): boolean => {
-    if (pauseWhenHidden && document.visibilityState !== "visible") return true;
-    if (unfocused && !document.hasFocus()) return true;
+    if (pauseWhenHidden && document.visibilityState !== "visible") {
+      return true;
+    }
+    if (unfocused && !document.hasFocus()) {
+      return true;
+    }
     return false;
   };
 
   const onChange = (): void => {
-    if (shouldPause()) stop();
-    else start();
+    if (shouldPause()) {
+      stop();
+    } else {
+      start();
+    }
   };
 
-  if (!shouldPause()) start();
+  if (!shouldPause()) {
+    start();
+  }
   if (pauseWhenHidden) {
     document.addEventListener("visibilitychange", onChange);
   }

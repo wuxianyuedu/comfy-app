@@ -31,7 +31,9 @@ const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]
  *  的分离节点）时退回 before。 */
 const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
   const rect = event.currentTarget?.getBoundingClientRect?.();
-  if (!rect || rect.height <= 0) return "before";
+  if (!rect || rect.height <= 0) {
+    return "before";
+  }
   return event.clientY < rect.top + rect.height / 2 ? "before" : "after";
 };
 
@@ -220,7 +222,9 @@ export function useDynamicWorkflowForm(
   const beginPortDrag = beginDrag;
 
   const dragHandlers = useMemo<RowDragHandlers | null>(() => {
-    if (!onReorder) return null;
+    if (!onReorder) {
+      return null;
+    }
     return {
       onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         /* 输入框 / 下拉 / 按钮上起手不拖（用户口径：只能从不可编辑区域拖动）
@@ -246,12 +250,18 @@ export function useDynamicWorkflowForm(
       },
       onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         const fromKey = dragFromRef.current;
-        if (!fromKey || fromKey === ioKey) return;
+        if (!fromKey || fromKey === ioKey) {
+          return;
+        }
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
-        if (dragOverKey !== ioKey) setDragOverKey(ioKey);
+        if (dragOverKey !== ioKey) {
+          setDragOverKey(ioKey);
+        }
         const pos = positionOf(event);
-        if (dropPosition !== pos) setDropPosition(pos);
+        if (dropPosition !== pos) {
+          setDropPosition(pos);
+        }
       },
       onDrop: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         event.preventDefault();
@@ -262,7 +272,9 @@ export function useDynamicWorkflowForm(
         const toKey = rowKeyOf(event.target) ?? ioKey;
         const pos = positionOf(event);
         endDrag();
-        if (!fromKey || fromKey === toKey) return;
+        if (!fromKey || fromKey === toKey) {
+          return;
+        }
         onReorder(fromKey, toKey, pos);
       },
       onDragEnd: endDrag,
@@ -284,7 +296,9 @@ export function useDynamicWorkflowForm(
       /* 清空某格 → 撤掉它的本地预览，避免「值已空却还显示旧图」。 */
       if (value === "" || value == null) {
         setPreviews((prev) => {
-          if (prev[ioKey] === undefined) return prev;
+          if (prev[ioKey] === undefined) {
+            return prev;
+          }
           const next = { ...prev };
           delete next[ioKey];
           return next;
@@ -314,7 +328,9 @@ export function useDynamicWorkflowForm(
   const onFile = useCallback(
     async (file: File) => {
       const target = uploadTarget;
-      if (!target) return;
+      if (!target) {
+        return;
+      }
       setUploading(true);
       setUploadError(null);
       /* 本地预览：读成 data URL 后存起来，选完立刻显示、不依赖 ComfyUI 是否运行。

@@ -78,10 +78,14 @@ function staticSpecifiers(source: string): Array<string> {
   const code = stripComments(source);
   const specs: Array<string> = [];
   for (const m of code.matchAll(/from\s+["']([^"']+)["']/g)) {
-    if (m[1]) specs.push(m[1]);
+    if (m[1]) {
+      specs.push(m[1]);
+    }
   }
   for (const m of code.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) {
-    if (m[1]) specs.push(m[1]);
+    if (m[1]) {
+      specs.push(m[1]);
+    }
   }
   return specs;
 }
@@ -370,7 +374,9 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
           fs.rmSync(dir, { recursive: true, force: true });
         }
       } finally {
-        if (existed) restoreGeneratedFile(generatedFile, stash);
+        if (existed) {
+          restoreGeneratedFile(generatedFile, stash);
+        }
       }
       /* 活性证明（≈0.3s）：同一个可执行文件报得出版本号 —— 上面断言的是退出码，
          万一解出来的是个空壳，`--version` 也会红。 */
@@ -605,7 +611,9 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     const keys = ["SB_APP_DEV_PORT", "SB_APP_DEV_ORIGIN", "SB_APP_DEV_PORT_SOURCE"];
     const saved = new Map(keys.map((k) => [k, process.env[k]]));
     try {
-      for (const k of keys) delete process.env[k];
+      for (const k of keys) {
+        delete process.env[k];
+      }
       expect(readAppOrigin()).toEqual(APP_ORIGIN_DEFAULTS);
       // 形状不对（端口不是数字）同样走缺省 —— 半份数据比没有更危险。
       process.env.SB_APP_DEV_PORT = "not-a-port";
@@ -621,8 +629,11 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
       });
     } finally {
       for (const [k, v] of saved) {
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
+        if (v === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = v;
+        }
       }
     }
   });
@@ -670,7 +681,9 @@ function moveFileAcrossVolumes(from: string, to: string): void {
   try {
     fs.renameSync(from, to);
   } catch (e) {
-    if (/* SAFETY: 类型断言已复核 */ (e as NodeJS.ErrnoException).code !== "EXDEV") throw e;
+    if (/* SAFETY: 类型断言已复核 */ (e as NodeJS.ErrnoException).code !== "EXDEV") {
+      throw e;
+    }
     fs.copyFileSync(from, to);
     fs.unlinkSync(from);
   }
@@ -732,9 +745,13 @@ function resolveTscBin(): {
     } catch {
       continue;
     }
-    if (!bin) continue;
+    if (!bin) {
+      continue;
+    }
     const file = path.resolve(path.dirname(pkgJson), bin);
-    if (!fs.existsSync(file)) continue;
+    if (!fs.existsSync(file)) {
+      continue;
+    }
     const runIn = (cwd: string, args: Array<string>) => {
       /* bin 是带 shebang 的 node 脚本垫片 —— Windows 的 spawnSync 不认
        * shebang，直接 exec 会 ENOENT（本机实测），必须经 node 启动。 */

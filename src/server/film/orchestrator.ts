@@ -163,7 +163,9 @@ async function parseScriptToShots(
       const cam = CAMERA_KEYWORDS[order % CAMERA_KEYWORDS.length];
       const base = sc.action.trim() || raw.trim();
       const parts = [base, cam];
-      if (stylePrompt) parts.push(stylePrompt);
+      if (stylePrompt) {
+        parts.push(stylePrompt);
+      }
       const prompt = parts.filter(Boolean).join(", ");
       const negative = [FILM_NEGATIVE, styleNegative].filter(Boolean).join(", ");
       shots.push({
@@ -395,11 +397,17 @@ async function generateVideoShot(
 // ── start (autopilot) ───────────────────────────────────────
 export async function startFilm(id: string) {
   const film = await filmRepository.findById(id);
-  if (!film) throw new Error("影片不存在");
-  if (film.status === "GENERATING" || film.status === "COMPOSING") return;
+  if (!film) {
+    throw new Error("影片不存在");
+  }
+  if (film.status === "GENERATING" || film.status === "COMPOSING") {
+    return;
+  }
 
   const shots = await filmShotRepository.listByFilm(id, { status: "IDLE" });
-  if (!shots.length) throw new Error("没有可生成的镜头，请重新创建");
+  if (!shots.length) {
+    throw new Error("没有可生成的镜头，请重新创建");
+  }
 
   await filmRepository.markGenerating(id);
   await appendFilmLog(id, "info", `开始逐镜生成（共 ${shots.length} 镜）`);
@@ -448,7 +456,9 @@ function inFlightFilms(): Set<string> {
 /** 监看一部影片直到出片 / 判失败；同一部影片在本进程内**至多一条**循环。 */
 async function watchFilm(id: string, opts: { resumed?: boolean } = {}) {
   const inFlight = inFlightFilms();
-  if (inFlight.has(id)) return;
+  if (inFlight.has(id)) {
+    return;
+  }
   inFlight.add(id);
   try {
     await watchLoop(id, opts);
@@ -465,7 +475,9 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
   }
   for (let i = 0; i < WATCH_MAX_ITER; i++) {
     const film = await filmRepository.findById(id);
-    if (!film || film.status === "CANCELLED" || film.status === "FAILED") return;
+    if (!film || film.status === "CANCELLED" || film.status === "FAILED") {
+      return;
+    }
     if (film.status !== "GENERATING") {
       // 已经走掉了（例如合成已开始）
     }
@@ -502,8 +514,11 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
        * SUCCEEDED 无 taskId 的镜头就让影片停在 progress 50）。
        * 真正「没任务又不是终态」的（IDLE / 提交前就崩的 QUEUED）照旧算等待。 */
       if (shot.status === "SUCCEEDED" || shot.status === "FAILED") {
-        if (shot.status === "SUCCEEDED") done++;
-        else failed++;
+        if (shot.status === "SUCCEEDED") {
+          done++;
+        } else {
+          failed++;
+        }
         continue;
       }
       if (!shot.taskId) {
@@ -515,7 +530,9 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
 
     const taskIds: Array<string> = [];
     for (const shot of awaiting) {
-      if (shot.taskId) taskIds.push(shot.taskId);
+      if (shot.taskId) {
+        taskIds.push(shot.taskId);
+      }
     }
     const progressById = new Map(
       (await taskRepository.findExecutionProgressMany(taskIds)).map(
@@ -570,9 +587,13 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
           duration: duration ?? null,
         });
       }
-      if (next === "SUCCEEDED") done++;
-      else if (next === "FAILED") failed++;
-      else pending++;
+      if (next === "SUCCEEDED") {
+        done++;
+      } else if (next === "FAILED") {
+        failed++;
+      } else {
+        pending++;
+      }
     }
 
     const total = shots.length;
@@ -626,7 +647,9 @@ export async function resumeStalledFilms(): Promise<{
     for (const film of await filmRepository.listByStatus(["GENERATING"])) {
       /* 本进程已有循环在跑（HMR 之后旧循环还活着）就不再起第二条 ——
        * 判据与 `watchFilm` 内部那道是同一份在飞表，两处各自判就会漂开。 */
-      if (inFlightFilms().has(film.id)) continue;
+      if (inFlightFilms().has(film.id)) {
+        continue;
+      }
       resumed.push(film.id);
       void watchFilm(film.id, { resumed: true });
     }
@@ -660,10 +683,14 @@ export async function resumeStalledFilms(): Promise<{
 // ── cancel ──────────────────────────────────────────────────
 export async function cancelFilm(id: string) {
   const film = await filmRepository.findById(id);
-  if (!film) return;
+  if (!film) {
+    return;
+  }
   const shots = await filmShotRepository.listActiveWithTask(id);
   for (const s of shots) {
-    if (s.taskId) await cancelTask(s.taskId).catch(() => undefined);
+    if (s.taskId) {
+      await cancelTask(s.taskId).catch(() => undefined);
+    }
   }
   await filmShotRepository.markAllActiveFailed(id);
   await filmRepository.markCancelled(id);

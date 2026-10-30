@@ -49,6 +49,14 @@ const {
   extractDevHostPort,
   extractFallbackPorts,
 } = require("./doc-facts.cjs");
+/* 「文档怎么引用门禁」那三条判据（不写第 N 步 / 不写步数 / §13.1 清单与钩子 D 组一致）
+ * 搬去了同目录的 check-doc-gate-refs.cjs：它们与上面这一半判的不是一件事，
+ * 而两半合住一份文件时越过了 §12.6 R5 的 900 行。 */
+const {
+  checkGateStepIndexRefs,
+  checkGateStepCounts,
+  checkGateChecklistMatchesHook,
+} = require("./check-doc-gate-refs.cjs");
 
 const problems = [];
 
@@ -63,14 +71,17 @@ function checkFactKeysMatchDocs() {
     return;
   }
   const md = readText("docs/reference-facts.md");
-  for (const f of FACTS)
-    if (!md.includes(f.key)) problems.push(`登记表缺少事实 key：${f.key}`);
-  const mdKeys = [...md.matchAll(/\| `([a-z][a-z0-9_.]+)` \|/g)].map(
-    (m) => m[1],
-  );
-  for (const k of mdKeys)
-    if (!FACTS.some((f) => f.key === k))
+  for (const f of FACTS) {
+    if (!md.includes(f.key)) {
+      problems.push(`登记表缺少事实 key：${f.key}`);
+    }
+  }
+  const mdKeys = [...md.matchAll(/\| `([a-z][a-z0-9_.]+)` \|/g)].map((m) => m[1]);
+  for (const k of mdKeys) {
+    if (!FACTS.some((f) => f.key === k)) {
       problems.push(`登记表有多余/脚本未支持 key：${k}`);
+    }
+  }
 }
 
 /* ── 校验范围守卫（ISSUE #316）─────────────────────────────────────────
@@ -88,9 +99,7 @@ function checkScopeCoverage() {
   for (const dir of SCOPED_DOC_DIRS) {
     const absDir = path.join(ROOT, dir);
     if (!fs.existsSync(absDir)) {
-      problems.push(
-        `校验范围守卫：目录不存在 ${dir}（SCOPED_DOC_DIRS 需与仓库结构一致）`,
-      );
+      problems.push(`校验范围守卫：目录不存在 ${dir}（SCOPED_DOC_DIRS 需与仓库结构一致）`);
       continue;
     }
     const walk = (abs) => {
@@ -100,9 +109,13 @@ function checkScopeCoverage() {
           walk(full);
           continue;
         }
-        if (!entry.name.endsWith(".md")) continue;
+        if (!entry.name.endsWith(".md")) {
+          continue;
+        }
         const rel = path.relative(ROOT, full).split(path.sep).join("/");
-        if (scoped.has(rel) || rel in SCOPED_DOC_EXEMPTIONS) continue;
+        if (scoped.has(rel) || rel in SCOPED_DOC_EXEMPTIONS) {
+          continue;
+        }
         problems.push(
           `校验范围守卫：${rel} 既未登记进 SCOPED_DOCS、也不在豁免名单里——` +
             `新增规范文档必须二选一（登记则参与校验；豁免则须在 scripts/doc-facts.cjs 的 ` +
@@ -114,14 +127,10 @@ function checkScopeCoverage() {
   }
   for (const [rel, reason] of Object.entries(SCOPED_DOC_EXEMPTIONS)) {
     if (!reason || !reason.trim()) {
-      problems.push(
-        `校验范围守卫：豁免名单条目 ${rel} 没有写理由（豁免必须可核验）`,
-      );
+      problems.push(`校验范围守卫：豁免名单条目 ${rel} 没有写理由（豁免必须可核验）`);
     }
     if (!exists(rel)) {
-      problems.push(
-        `校验范围守卫：豁免名单条目 ${rel} 指向的文件不存在——过期条目应删除`,
-      );
+      problems.push(`校验范围守卫：豁免名单条目 ${rel} 指向的文件不存在——过期条目应删除`);
     }
   }
 }
@@ -135,21 +144,27 @@ function extractDocHostPorts(text) {
   const ports = new Set();
   const re = /(?:localhost|127\.0\.0\.1):(\d+)/g;
   let m;
-  while ((m = re.exec(text))) ports.add(Number(m[1]));
+  while ((m = re.exec(text))) {
+    ports.add(Number(m[1]));
+  }
   return [...ports];
 }
 
 function checkVerify(text, docPath, f) {
   const kind = f.key;
   try {
-    if (kind === "dev.host") return; // host 双形态等价
+    if (kind === "dev.host") {
+      return;
+    } // host 双形态等价
     if (kind === "dev.port.derived") {
       // 解析链（`pnpm dev` / `pnpm start`：.env → 检出路径推导 → 兜底 3100）的端口。
       // 描述 pnpm dev 语境的文档必须写**本检出真实推导值**，写静态 devUrl 值（兜底
       // 3100）会让人照着打开一个没人监听的端口 = ERR_CONNECTION_REFUSED（ISSUE #489）。
       const derivedPort = String(f.extract());
       const docPorts = extractDocHostPorts(text);
-      if (!docPorts.length) return; // 本文档没写具体地址，跳过
+      if (!docPorts.length) {
+        return;
+      } // 本文档没写具体地址，跳过
       if (!docPorts.map(String).includes(derivedPort)) {
         problems.push(
           `[${docPath}] 文档 dev 地址端口 ${docPorts.join(" / ")} 未包含本检出按路径推导的端口 ${derivedPort}` +
@@ -164,7 +179,9 @@ function checkVerify(text, docPath, f) {
       const candidates = extractFallbackPorts().map(Number);
       const allowed = new Set([port, ...candidates]);
       const docPorts = extractDocHostPorts(text);
-      if (!docPorts.length) return;
+      if (!docPorts.length) {
+        return;
+      }
       const hasDevFam = docPorts.some((p) => allowed.has(p));
       if (hasDevFam && !docPorts.includes(port)) {
         problems.push(
@@ -177,7 +194,9 @@ function checkVerify(text, docPath, f) {
       // 让端口清理/监听检测把 MCP 误判成 dev server 实例——这是该 fact 的防回归点。
       const mcpPort = Number(f.extract());
       const docPorts = extractDocHostPorts(text);
-      if (!docPorts.includes(mcpPort)) return; // 本文档未引用 MCP 端口，跳过
+      if (!docPorts.includes(mcpPort)) {
+        return;
+      } // 本文档未引用 MCP 端口，跳过
       const { port } = extractDevHostPort();
       const candidates = extractFallbackPorts().map(Number);
       const devFam = new Set([port, ...candidates]);
@@ -205,8 +224,7 @@ function checkVerify(text, docPath, f) {
  * 即视为说明而非可执行命令。
  */
 const NPM_CMD_RE = /(^|[\s`(（])(npm\s+run|npx)\b/;
-const NPM_CMD_EXPLAIN_RE =
-  /改为|修正|修正为|pnpm|禁止|违反|原记录|不要用|应使用/;
+const NPM_CMD_EXPLAIN_RE = /改为|修正|修正为|pnpm|禁止|违反|原记录|不要用|应使用/;
 
 function checkLedgerCommands() {
   // AGENTS.md 是**代理自动加载**的仓库根导航文件，历史上「npm run test:e2e」这类
@@ -214,11 +232,17 @@ function checkLedgerCommands() {
   // 的生成面，所以刻意不塞进 SCOPED_DOCS——在这里显式并入遍历集合。
   const ledgerDocs = [AGENTS_MD_PATH, ...SCOPED_DOCS];
   for (const doc of ledgerDocs) {
-    if (!exists(doc)) continue;
+    if (!exists(doc)) {
+      continue;
+    }
     const lines = readText(doc).split("\n");
     lines.forEach((line, i) => {
-      if (!NPM_CMD_RE.test(line)) return;
-      if (NPM_CMD_EXPLAIN_RE.test(line)) return; // 说明性引用，放行
+      if (!NPM_CMD_RE.test(line)) {
+        return;
+      }
+      if (NPM_CMD_EXPLAIN_RE.test(line)) {
+        return;
+      } // 说明性引用，放行
       problems.push(
         `[${doc}:${i + 1}] 出现 npm/npx 命令（AGENTS 硬规则 1「包管理只用 pnpm」）。` +
           `请改为 pnpm（如 npm run test → pnpm test）；若是在描述该规则本身，` +
@@ -261,7 +285,9 @@ function userFacingDocs() {
   const out = ["README.md", "docs/README.md", AGENTS_MD_PATH];
   const collect = (dir, prefix) => {
     const abs = path.join(ROOT, dir);
-    if (!exists(dir)) return;
+    if (!exists(dir)) {
+      return;
+    }
     for (const name of fs.readdirSync(abs).sort()) {
       if (name.endsWith(".md") && name.startsWith(prefix)) {
         out.push(`${dir}${name}`);
@@ -275,11 +301,17 @@ function userFacingDocs() {
 
 function checkRuntimeAbsentDriverCommands() {
   for (const doc of userFacingDocs()) {
-    if (!exists(doc)) continue;
+    if (!exists(doc)) {
+      continue;
+    }
     const lines = readText(doc).split("\n");
     lines.forEach((line, i) => {
-      if (!RUNTIME_ABSENT_DRIVER_CMD_RE.test(line)) return;
-      if (RUNTIME_ABSENT_DRIVER_EXPLAIN_RE.test(line)) return;
+      if (!RUNTIME_ABSENT_DRIVER_CMD_RE.test(line)) {
+        return;
+      }
+      if (RUNTIME_ABSENT_DRIVER_EXPLAIN_RE.test(line)) {
+        return;
+      }
       problems.push(
         `[${doc}:${i + 1}] 出现 \`better-sqlite3\` 的可执行命令形状 —— 它是 ` +
           `devDependencies（只给测试基建），**生产运行时与桌包里没有这个包**，照抄就是 ` +
@@ -293,197 +325,15 @@ function checkRuntimeAbsentDriverCommands() {
   }
 }
 
-/**
- * 门禁步骤的引用口径：规范文档与索引里引用 `.githooks/pre-commit`（或已删除的平台流水线） * 的某一步，一律写**钩子日志里打印的标签**（`── check: <标签>`）或那一步跑的脚本名，
- * 不写「第 N 步」（ISSUE #1374）。
- *
- * 为什么单列一条：钩子早已是「组 0 + A/B/C/D 四个并行组」，「第 N 步」在这份形状上
- * **没有唯一解释**（同一份文档里混着「branch-guard 算第 1 步」与「判据从第 1 条起算」两种口径），
- * 而序号又不属于任何现有事实核（本脚本管硬编码值、路径存在性、端口、npm 命令字样）。
- * 结果是：每给 D 组追加一步，文档里那批数字就整体错位一次，表现不是红，是**指到别的判据上**。
- * 立案时的实测样本：UI 基元复用棘轮写作「第 12 步」（实际第 9 条）、生成态文档同步写作
- * 「第 26 步」（实际第 21 条）、三处把 C 组固定清单里的用例称作「第 23 步」。
- *
- * 判据范围刻意窄：同一行既要出现「第 N 步」，也要出现 pre-commit / `.githooks` / CI，
- * 所以「§2.2 第 5 步」「`prepare-local-run.ps1` 第 3 步」这类**有主人的过程序号**不受影响
- * —— 那种序号正是推荐形态（引用一份有顺序的程序的第几步）。
- *
- * 不扫 `changelog.d/**` 与 `CHANGELOG.md`：碎片是**当时那次变更的记录**，里面的序号是历史事实，
- * 改写历史等于伪造证据（AGENTS 硬规则 14 / §13.10.5）。边界由用例
- * `tests/check-doc-references.test.ts` 的「历史碎片不改写」钉住。
- *
- * 豁免：描述这条规则本身的句子（带 不写 / 别再 / 禁止 / 应写 / 一律 / 序号 / 已删 等纠正词）。
- */
-const STEP_INDEX_RE = /第\s*\d+(?:\s*\/\s*\d+)?\s*步/;
-const GATE_STEP_REF_RE = /pre-commit|\.githooks|\bCI\b/;
-const STEP_INDEX_EXPLAIN_RE =
-  /不写|别再|不要写|禁止|应写|应改|一律|改成|序号|没有唯一|已删|已随|历史|不再|过期/;
-
-/** 门禁口径的遍历集合：钩子与「哪条判据在哪跑」不只写在 SCOPED_DOCS 里。 */
-function gateReferenceDocs() {
-  return [
-    ...new Set([
-      AGENTS_MD_PATH,
-      "docs/README.md",
-      "README.md",
-      "docs/reference-facts.md",
-      ...SCOPED_DOCS,
-    ]),
-  ];
-}
-
-function checkGateStepIndexRefs() {
-  // AGENTS.md 与两份索引（docs/README.md、README.md）都带「哪条判据在哪跑」这类表述，
-  // 但都不在 SCOPED_DOCS 里（AGENTS 无占位符、索引不属于 docs/standards|guides 目录扫描面），
-  // 所以在这里显式并入遍历集合 —— 与 checkLedgerCommands 同一手法。
-  // `docs/reference-facts.md` 同理：它是**登记表本身**（FACTS 通过
-  // `ASCII_ONLY_FACT_DOCS` 读它，不通过 SCOPED_DOCS），而「哪条判据在哪跑」正是写在这份文件里的，
-  // 不并进来看不到它自己举例时用的旧序号。
-  for (const doc of gateReferenceDocs()) {
-    if (!exists(doc)) continue;
-    const lines = readText(doc).split("\n");
-    lines.forEach((line, i) => {
-      if (!STEP_INDEX_RE.test(line)) return;
-      if (!GATE_STEP_REF_RE.test(line)) return; // 过程序号（§x.y 第 N 步）与本条无关
-      if (STEP_INDEX_EXPLAIN_RE.test(line)) return; // 描述这条规则本身，放行
-      const hit = line.match(STEP_INDEX_RE)?.[0] ?? "第 N 步";
-      problems.push(
-        `[${doc}:${i + 1}] 用「${hit}」引用门禁步骤 —— 钩子已是组 0 + A/B/C/D 四个并行组，` +
-          `序号没有唯一解释，追加一步就会整体错位（ISSUE #1374）。` +
-          `请改写为标签形态：pre-commit 的 <组>「<标签>」（标签就是日志里 \`── check: <标签>\` 那一行），` +
-          `或直接写那一步跑的脚本名；若这一行正是在描述本条口径，补「不写/禁止/序号」等纠正词。`,
-      );
-    });
-  }
-}
-
-/**
- * 门禁的**步数**也不许写进文档（ISSUE #1407，签字口径 (a)）—— 与 `checkGateStepIndexRefs`
- * 是同一条纪律的两个载体：序号会整体错位，数字会静默过期。
- *
- * 立案现场：`docs/standards/11` 那节写着「`.githooks/pre-commit`（24 步）」并抄了清单的前 6 行。
- * 那一天钩子的真实形状是 组 0 + A + B + C + D，**D 组 27 条**（这数字由
- * `tests/doc-check-hook-wiring.test.ts` 与钩子注释逐字核对）。也就是说那句数字不是「将来会过期」，
- * 是**当场就已经是错的**，而没有任何东西会变红 —— 它既不是序号也不属于任何事实核。
- *
- * 与序号那条的分工：命中「第 N 步」的行交给 `checkGateStepIndexRefs` 报（同一行不双报），
- * 本条只管裸计数形态（「24 步」「共 30 步」）。豁免集合与那条共用，所以描述本口径自身的句子不误伤。
- */
-const STEP_COUNT_RE = /[0-9]+\s*步/;
-
-function checkGateStepCounts() {
-  for (const doc of gateReferenceDocs()) {
-    if (!exists(doc)) continue;
-    const lines = readText(doc).split("\n");
-    lines.forEach((line, i) => {
-      if (STEP_INDEX_RE.test(line)) return; // 序号形态由 checkGateStepIndexRefs 报，不双报
-      if (!STEP_COUNT_RE.test(line)) return;
-      if (!GATE_STEP_REF_RE.test(line)) return; // 「prepare-local-run.ps1 第 3 步」这类有主人的过程计数
-      if (STEP_INDEX_EXPLAIN_RE.test(line)) return; // 描述这条规则本身，放行
-      const hit = line.match(STEP_COUNT_RE)?.[0] ?? "N 步";
-      problems.push(
-        `[${doc}:${i + 1}] 写了门禁的步数「${hit}」—— 钩子每追加一步这个数字就静默过期，` +
-          `没有任何判据会因此变红（ISSUE #1407，同 13.5.10 的「不写序号」）。` +
-          `请只写「清单的唯一出处是 §13.1 / .githooks/pre-commit」这种指针形态；` +
-          `若这一行正是在描述本条口径，补「不写/别再/不再/过期」等纠正词。`,
-      );
-    });
-  }
-}
-
-/**
- * §13.1「本地提交前必须通过」那份清单必须与 `.githooks/pre-commit` 的 D 组逐字一致
- * （ISSUE #1404 顺带收的那格漂移）。
- *
- * 为什么要有这条：那份清单是人 / 代理手跑全套门禁的唯一入口，而它已经漂了 ——
- * 立案时实测：钩子 D 组 27 步，清单里只有 21 步对得上（`check-ps1-consistency.mjs`、
- * `check-import-alias.cjs`、`check-ui-customizations.cjs`、`check-doc-references.cjs`、
- * `storybook-check.mjs` 五步进了钩子没进清单）。更要紧的是 **flag 层面的漂移**：
- * 那时清单写 `node scripts/check-file-structure.cjs`（不带 `--strict`），而钩子跑的是
- * 带它的那一档 —— 照清单手跑的人会得出「R5 不拦」的结论，而同一节还写着「上面那份
- * 清单就是全文」。那个具体的 `--strict` 差异随 ISSUE #1811 收掉 R5 棘轮而不存在了，
- * 但**比对整条命令而不是脚本名**这条口径要一直留着：下一个 flag 层面的漂移会以
- * 别的形态出现（同一份「哪些一步带什么参数」的账）。
- *
- * 所以比对的是**整条命令**（含 flag），不是脚本名：只比名字就正好漏掉上面那一格。
- * 组 0 / A / B / C 那四条命令没有 `  run "<标签>" <命令>` 形态（走 `run_group` 或直接调用），
- * 它们在清单里、不在 D 组里是事实，所以列进豁免集合，而不是把清单删成只剩 D 组。
- */
-const HOOK_PATH = ".githooks/pre-commit";
-const GATE_CHECKLIST_DOC = "docs/standards/13-提交与-code-review.md";
-const CHECKLIST_MARKER = "本地提交前必须通过";
-/** D 组之外的四条：组 0 分支守卫、组 A tsc、组 B eslint、组 C 受影响用例启动器。 */
-const NON_D_GROUP_COMMANDS = new Set([
-  "node scripts/check-branch-guard.cjs",
-  "pnpm exec tsc --noEmit",
-  "pnpm run lint",
-  "node scripts/run-affected-tests.mjs",
-]);
-
-/** 钩子 D 组的命令（行首锚定 = 只认真调用，被 `# ` 注掉的行不算在场）。 */
-function hookDGroupCommands(hookText) {
-  return [...hookText.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) =>
-    (m[2] ?? "").replace(/\s+/g, " ").trim(),
-  );
-}
-
-/** §13.1 代码块里 `✅ <命令>  # 说明` 那份清单的命令部分。
- *  marker 那句「本地提交前必须通过…」本身就写在围栏**里面**，所以取 marker 之后
- * 遇到的**第一个** ``` 就是这份清单的收尾（别再往回找开围栏，那会切到散文上）。 */
-function checklistCommands(docText) {
-  const start = docText.indexOf(CHECKLIST_MARKER);
-  if (start < 0) return null;
-  const rest = docText.slice(start);
-  const close = rest.indexOf("```");
-  if (close < 0) return null;
-  return rest
-    .slice(0, close)
-    .split("\n")
-    .filter((l) => l.startsWith("✅ "))
-    .map((l) => l.slice(2).split(/ +# /)[0].replace(/\s+/g, " ").trim());
-}
-
-function checkGateChecklistMatchesHook() {
-  if (!exists(HOOK_PATH) || !exists(GATE_CHECKLIST_DOC)) return;
-  const hookCmds = hookDGroupCommands(readText(HOOK_PATH));
-  const docCmds = checklistCommands(readText(GATE_CHECKLIST_DOC));
-  // 读不到清单本身就是红：静默返回 0 条会让这条判据空转
-  // （下一节改了 marker 措辞或代码块形状，它就再也不比对任何东西）。
-  if (!docCmds || docCmds.length === 0) {
-    problems.push(
-      `[${GATE_CHECKLIST_DOC}] 取不到「${CHECKLIST_MARKER}」那份命令清单 —— ` +
-        "§13.1 与钩子的一致性判据没有比对对象。marker / 代码块形状变了就同步改这里。",
-    );
-    return;
-  }
-  const docSet = new Set(docCmds);
-  const hookSet = new Set(hookCmds);
-  for (const cmd of hookCmds) {
-    if (docSet.has(cmd)) continue;
-    problems.push(
-      `[${HOOK_PATH}] 这一步真的在跑 \`${cmd}\`，但 ${GATE_CHECKLIST_DOC} 的 §13.1 清单里没有这条 ` +
-        "（或 flag 与钩子不一致）。清单是手跑全套的唯一入口，漏一格 = 照着清单跑的人以为它不存在。",
-    );
-  }
-  for (const cmd of docCmds) {
-    if (hookSet.has(cmd) || NON_D_GROUP_COMMANDS.has(cmd)) continue;
-    problems.push(
-      `[${GATE_CHECKLIST_DOC}] §13.1 清单写着 \`${cmd}\`，但 ${HOOK_PATH} 的 D 组没有这一步 —— ` +
-        "「上面那份清单就是全文」这句话已经不成立。要么把这一步接回钩子，要么从清单里删掉。",
-    );
-  }
-}
-
 function shouldApplyFactToDoc(f, docPath) {
   // onlyDocs：事实的主适用文档组（未命中即跳过）；otherDocs：额外适用文档，
   // 与主文档组取并集（同一值在另一篇文档里以别的形态出现时用，见 doc-facts.cjs）。
-  if (
-    f.onlyDocs &&
-    !f.onlyDocs.includes(docPath) &&
-    !(f.otherDocs || []).includes(docPath)
-  )
+  if (f.onlyDocs && !f.onlyDocs.includes(docPath) && !(f.otherDocs || []).includes(docPath)) {
     return false;
-  if (f.excludeDocs && f.excludeDocs.includes(docPath)) return false;
+  }
+  if (f.excludeDocs && f.excludeDocs.includes(docPath)) {
+    return false;
+  }
   return true;
 }
 
@@ -494,7 +344,9 @@ function checkDoc(docPath) {
   }
   const text = readText(docPath);
   for (const f of FACTS) {
-    if (!shouldApplyFactToDoc(f, docPath)) continue; // 事实声明了适用文档范围，未命中则跳过
+    if (!shouldApplyFactToDoc(f, docPath)) {
+      continue;
+    } // 事实声明了适用文档范围，未命中则跳过
     if (f.kind === "placeholder") {
       let realValue;
       try {
@@ -505,7 +357,9 @@ function checkDoc(docPath) {
       }
       const vals = Array.isArray(realValue) ? realValue : [realValue];
       for (const rv of vals) {
-        if (!rv) continue;
+        if (!rv) {
+          continue;
+        }
         if (bareValueOccurs(text, rv)) {
           problems.push(
             `[${docPath}] 发现裸值 "${rv}"（对应 ${f.key}，应改用占位符 ${f.placeholder}）。见 docs/reference-facts.md。`,
@@ -605,11 +459,15 @@ function gitignoredRootNames() {
   const names = new Set();
   for (const raw of gi.split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line || line.startsWith("#") || line.startsWith("!")) continue;
+    if (!line || line.startsWith("#") || line.startsWith("!")) {
+      continue;
+    }
     // 只认「根级单名」形态（`db.sqlite` / `/db.sqlite`）：带斜杠的是子路径规则，
     // 与 AGENTS_ROOT_FILES（全是根级文件名）不同口径，别混进来。
     const name = line.replace(/^\//, "");
-    if (name.includes("/")) continue;
+    if (name.includes("/")) {
+      continue;
+    }
     names.add(name);
   }
   return names;
@@ -638,11 +496,19 @@ function gitignoredDirPaths() {
   const dirs = new Set();
   for (const raw of gi.split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line || line.startsWith("#") || line.startsWith("!")) continue;
-    if (!line.endsWith("/")) continue;
+    if (!line || line.startsWith("#") || line.startsWith("!")) {
+      continue;
+    }
+    if (!line.endsWith("/")) {
+      continue;
+    }
     const body = line.replace(/^\//, "").replace(/\/+$/, "");
-    if (body === "") continue;
-    if (/[*?[\]{}]/.test(body)) continue;
+    if (body === "") {
+      continue;
+    }
+    if (/[*?[\]{}]/.test(body)) {
+      continue;
+    }
     dirs.add(body);
   }
   return [...dirs];
@@ -667,19 +533,31 @@ function isRuntimeProductPath(p) {
 /** 把一段反引号内容或链接 URL 判成「仓库相对路径」→ 返回规范化后的相对路径；不是则返回 null。 */
 function looksLikeRepoPath(raw) {
   const p = raw.trim();
-  if (!p) return null;
+  if (!p) {
+    return null;
+  }
   // 通配、占位符、range、章节号、代码符号、URL、锚点、配置对、带参数的调用形态
-  if (/[<>*~§()=\s]/.test(p)) return null;
-  if (p.startsWith("#")) return null;
-  if (/^[a-z]+:\/\//i.test(p)) return null;
-  if (/^::?1$/.test(p) || /^[\d.]+$/.test(p)) return null; // ::1 或 IP
+  if (/[<>*~§()=\s]/.test(p)) {
+    return null;
+  }
+  if (p.startsWith("#")) {
+    return null;
+  }
+  if (/^[a-z]+:\/\//i.test(p)) {
+    return null;
+  }
+  if (/^::?1$/.test(p) || /^[\d.]+$/.test(p)) {
+    return null;
+  } // ::1 或 IP
   const hasSlash = p.includes("/");
   if (!hasSlash) {
     return AGENTS_ROOT_FILES.has(p) ? p : null;
   }
   // 有斜杠：必须以允许前缀开头，避免误伤「简称文件名 / 抽象目录名」
   const allowed = AGENTS_PATH_PREFIXES.some((pre) => p.startsWith(pre));
-  if (!allowed) return null;
+  if (!allowed) {
+    return null;
+  }
   // 末尾斜杠表目录形态；去掉再交给 fs.existsSync
   const normalized = p.endsWith("/") ? p.slice(0, -1) : p;
   return normalized || null;
@@ -707,12 +585,18 @@ function checkAgentsMdPaths() {
     }
     for (const c of candidates) {
       const p = looksLikeRepoPath(c.raw);
-      if (!p) continue;
+      if (!p) {
+        continue;
+      }
       // 运行期产物（被 .gitignore 忽略）不参与「文件必须存在」判定，见上节。
       // 两类都查：根级单名（`db.sqlite`）与**目录形态**的忽略规则（`docs/api/`）。
-      if (GITIGNORED_ROOT_NAMES.has(p) || isRuntimeProductPath(p)) continue;
+      if (GITIGNORED_ROOT_NAMES.has(p) || isRuntimeProductPath(p)) {
+        continue;
+      }
       const key = `${p}@L${lineno}`;
-      if (seen.has(key)) continue;
+      if (seen.has(key)) {
+        continue;
+      }
       seen.add(key);
       if (!exists(p)) {
         problems.push(
@@ -726,7 +610,9 @@ function checkAgentsMdPaths() {
 }
 
 function checkAgentsMdSectionAnchors() {
-  if (!exists(AGENTS_MD_PATH)) return;
+  if (!exists(AGENTS_MD_PATH)) {
+    return;
+  }
   const text = readText(AGENTS_MD_PATH);
   const lines = text.split(/\r?\n/);
   // 「3 行窗口」：把当前行、上一行、下一行拼成一段——覆盖「同 bullet 跨行、
@@ -738,39 +624,46 @@ function checkAgentsMdSectionAnchors() {
   const reported = new Set();
   const targetCache = new Map();
   const readTarget = (rel) => {
-    if (targetCache.has(rel)) return targetCache.get(rel);
+    if (targetCache.has(rel)) {
+      return targetCache.get(rel);
+    }
     const content = exists(rel) ? readText(rel) : "";
     targetCache.set(rel, content);
     return content;
   };
 
   for (let i = 0; i < lines.length; i++) {
-    const window = [lines[i - 1] ?? "", lines[i], lines[i + 1] ?? ""].join(
-      "\n",
-    );
+    const window = [lines[i - 1] ?? "", lines[i], lines[i + 1] ?? ""].join("\n");
     const files = [];
     let m;
     fileRe.lastIndex = 0;
     while ((m = fileRe.exec(window))) {
       files.push({ num: m[1], path: m[0] });
     }
-    if (!files.length) continue;
+    if (!files.length) {
+      continue;
+    }
     sectionRe.lastIndex = 0;
     while ((m = sectionRe.exec(window))) {
       const full = m[1]; // 形如 "18" / "18.4" / "13.6.1"
       const major = full.split(".")[0];
       const target = files.find((f) => f.num === major);
-      if (!target) continue; // 窗口里只有别的 standards 文件，跳过（避免误配）
-      if (full === major) continue; // 单级 §N（如 §17）不校验——粒度太粗、易混淆
-      if (!exists(target.path)) continue; // 文件本身缺失由 checkAgentsMdPaths 报，这里不重复
+      if (!target) {
+        continue;
+      } // 窗口里只有别的 standards 文件，跳过（避免误配）
+      if (full === major) {
+        continue;
+      } // 单级 §N（如 §17）不校验——粒度太粗、易混淆
+      if (!exists(target.path)) {
+        continue;
+      } // 文件本身缺失由 checkAgentsMdPaths 报，这里不重复
       const dedupKey = `${target.path}#${full}`;
-      if (reported.has(dedupKey)) continue;
+      if (reported.has(dedupKey)) {
+        continue;
+      }
       const content = readTarget(target.path);
       const escaped = full.replace(/\./g, "\\.");
-      const anchorRe = new RegExp(
-        `^#{1,6}\\s+(?:§)?${escaped}(?:\\s|[^\\d]|$)`,
-        "m",
-      );
+      const anchorRe = new RegExp(`^#{1,6}\\s+(?:§)?${escaped}(?:\\s|[^\\d]|$)`, "m");
       if (!anchorRe.test(content)) {
         reported.add(dedupKey);
         problems.push(
@@ -793,19 +686,21 @@ function main() {
   checkScopeCoverage();
   checkLedgerCommands();
   checkRuntimeAbsentDriverCommands();
-  checkGateStepIndexRefs();
-  checkGateStepCounts();
-  checkGateChecklistMatchesHook();
+  checkGateStepIndexRefs(problems);
+  checkGateStepCounts(problems);
+  checkGateChecklistMatchesHook(problems);
   checkPaths();
   checkAgentsMdDrift();
-  for (const doc of SCOPED_DOCS) checkDoc(doc);
+  for (const doc of SCOPED_DOCS) {
+    checkDoc(doc);
+  }
 
   if (problems.length > 0) {
     console.error("\n[doc:check] 发现文档引用一致性问题：\n");
-    for (const p of problems) console.error("  ✗ " + p);
-    console.error(
-      `\n共 ${problems.length} 项。请对照 docs/reference-facts.md 更新文档。`,
-    );
+    for (const p of problems) {
+      console.error("  ✗ " + p);
+    }
+    console.error(`\n共 ${problems.length} 项。请对照 docs/reference-facts.md 更新文档。`);
     process.exit(1);
   }
   console.log("[doc:check] ✓ 文档引用与权威源一致。");

@@ -53,9 +53,13 @@ export function isEdgeHandleCullingNoise(args: {
   targetId: string | null;
 }): boolean {
   const { message, mountedNodeIds, sourceId, targetId } = args;
-  if (!message.startsWith(EDGE_HANDLE_ERROR)) return false;
+  if (!message.startsWith(EDGE_HANDLE_ERROR)) {
+    return false;
+  }
   /* 端点信息缺失（边引用的节点已被删）→ 交给 React Flow 自己处理。 */
-  if (!sourceId || !targetId) return false;
+  if (!sourceId || !targetId) {
+    return false;
+  }
   /* 两端都挂载还报错 ⇒ 是真的找不到 handle，必须暴露。 */
   return !mountedNodeIds.has(sourceId) || !mountedNodeIds.has(targetId);
 }
@@ -160,7 +164,9 @@ export function WorkflowEditorCanvas({
       const edge = edgeLookup.get(id);
       const mounted = new Set<string>();
       nodeLookup.forEach((internal, nodeId) => {
-        if (internal.internals.handleBounds) mounted.add(nodeId);
+        if (internal.internals.handleBounds) {
+          mounted.add(nodeId);
+        }
       });
       if (
         isEdgeHandleCullingNoise({

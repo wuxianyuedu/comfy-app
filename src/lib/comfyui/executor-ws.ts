@@ -68,7 +68,9 @@ export function configureExecutorWs(next: Partial<ExecutorWsDeps>): void {
 }
 
 async function resolveTaskRepo(): Promise<TaskRepoForWs> {
-  if (depsOverride.taskRepo) return depsOverride.taskRepo;
+  if (depsOverride.taskRepo) {
+    return depsOverride.taskRepo;
+  }
   return loadRealTaskRepo();
 }
 
@@ -85,7 +87,9 @@ let comfyDownNotified = false;
  */
 export async function connect(): Promise<void> {
   const s = state();
-  if (s.connecting || s.ws) return;
+  if (s.connecting || s.ws) {
+    return;
+  }
   s.connecting = true;
 
   let base: string;
@@ -155,7 +159,9 @@ export async function connect(): Promise<void> {
     // 15s 走一遍「探测失败 → 讨要启动 → 被闩锁拦下」的空转（ISSUE #335）。
     // 真正需要重连时机由用户动作带回（手动启动成功会写 st.child / 端口可达），
     // 而 status 轮询与后续 enqueue 会再次触发 connect()。
-    if (!isComfyAutoStartSuppressed()) scheduleReconnect();
+    if (!isComfyAutoStartSuppressed()) {
+      scheduleReconnect();
+    }
     return;
   }
   // await 期间可能已有别的调用建好了连接
@@ -201,7 +207,9 @@ export async function connect(): Promise<void> {
     // 这里兜底触发重连，否则队列会卡死在 RUNNING。
     logger.warn(`[comfyui] WS(${path}) 出错：${err?.message ?? err}`);
     // 连接阶段（未 open）就失败：换下一条 WS 路径重试一次。
-    if (!opened) s.wsPathIndex += 1;
+    if (!opened) {
+      s.wsPathIndex += 1;
+    }
     handleWsDrop(ws);
   });
   s.ws = ws;
@@ -214,7 +222,9 @@ export async function connect(): Promise<void> {
  */
 function handleWsDrop(ws: WebSocket) {
   const s = state();
-  if (s.ws !== ws) return;
+  if (s.ws !== ws) {
+    return;
+  }
   s.ws = null;
   s.connecting = false;
   resetComfyBase();
@@ -235,7 +245,9 @@ function scheduleReconnect() {
     ...WS_RECONNECT,
     attempt: s.reconnectAttempts++,
   });
-  if (reconnectHandle) clearTimeout(reconnectHandle);
+  if (reconnectHandle) {
+    clearTimeout(reconnectHandle);
+  }
   reconnectHandle = setTimeout(() => {
     reconnectHandle = null;
     fireAndForget(connect(), (err) => logger.warn(`[comfyui] ${errorText(err, "WS 重连失败")}`));
@@ -261,8 +273,12 @@ const unownedFrameTypes = new Set<string>();
 const UNOWNED_FRAME_TYPE_MAX = 32;
 
 function noteUnownedFrame(type: string, dataKeys: Array<string>): void {
-  if (unownedFrameTypes.has(type)) return;
-  if (unownedFrameTypes.size >= UNOWNED_FRAME_TYPE_MAX) return;
+  if (unownedFrameTypes.has(type)) {
+    return;
+  }
+  if (unownedFrameTypes.size >= UNOWNED_FRAME_TYPE_MAX) {
+    return;
+  }
   unownedFrameTypes.add(type);
   trace("ws", null, "WS 帧不带 prompt_id（跳过归属）", { type, dataKeys });
 }
@@ -285,7 +301,9 @@ export async function handleMessage(raw: string) {
     trace("ws", null, "WS 消息非合法 JSON", { raw });
     return;
   }
-  if (!msg || typeof msg !== "object") return;
+  if (!msg || typeof msg !== "object") {
+    return;
+  }
   // ComfyUI WS 消息的最小结构视图（协议判断委托给 comfyProtocol Adapter）。
   const message = /* SAFETY: 类型断言已复核 */ msg as ComfyWsMessage;
   const data = message.data ?? {};
@@ -441,7 +459,9 @@ export async function handleMessage(raw: string) {
 export function armWatchdog(taskId: string, promptId: string) {
   const s = state();
   const existing = s.timers.get(taskId);
-  if (existing) clearTimeout(existing);
+  if (existing) {
+    clearTimeout(existing);
+  }
   const timer = setTimeout(() => {
     fireAndForget(fail(taskId, promptId, "生成超时"), (e) =>
       logger.warn(`[comfyui] ${errorText(e, `fail(${taskId}) 超时收口异常`)}`),
