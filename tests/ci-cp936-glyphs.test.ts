@@ -227,7 +227,10 @@ describe("转码外壳：接上了归一化", () => {
     expect(source).toContain("describeGlyphReplacements");
     const guards = source.match(/if \(said !== ""\)/g) ?? [];
     expect(guards.length, "两处调用点各要有一个「空串就不发」").toBe(2);
-    const summaryAt = source.indexOf("describeGlyphReplacements(\n");
+    /* 认的是「收尾那条调用」，不认它的排版：`eslint/curly` 那批之后它由折行变回单行
+     * （`describeGlyphReplacements([...], "这一跑")`），写死 `(\n` 会在那次批量改动里
+     * **静默失配** —— 而这条判据要守的正是「收尾那一处也走 `write`」。 */
+    const summaryAt = source.search(/describeGlyphReplacements\(\s*\n?\s*\[\.\.\.glyphTotals/);
     expect(summaryAt, "认不出收尾那条调用；它的形状变了要同批改这里").toBeGreaterThan(-1);
     const summaryChunk = source.slice(summaryAt, summaryAt + 320);
     expect(summaryChunk).toContain("write(summary");

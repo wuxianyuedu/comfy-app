@@ -133,7 +133,9 @@ describe("应用服务退出记录：跨侧同源", () => {
      * 恢复后读回 null，界面只能回一句把成因猜成「手工 pnpm dev」的兜底。 */
     expect(DOWNSTREAM_EXIT_MJS).toContain("export function runtimeExitRecord(");
     // 判据只认「dev 先退出」：壳先走是用户关窗 / 壳被收走，服务是被带走的。
-    expect(DOWNSTREAM_EXIT_MJS).toContain('if (who !== "dev") return null;');
+    /* 形态跟 `eslint/curly` 走（单语句体也带花括号）：判的仍是「只认 dev 先退出」，
+     * 所以认的是条件 + 紧随其后的 `return null;`，不认它写在一行还是两行。 */
+    expect(DOWNSTREAM_EXIT_MJS).toMatch(/if \(who !== "dev"\) \{\s*\n\s*return null;/);
     // 调用点在常驻段，且排在 `await shutdown(` 之前（写太晚 = 现场已收走）。
     const resident = LAUNCHER_MJS.slice(LAUNCHER_MJS.indexOf("const record = runtimeExitRecord({"));
     expect(resident).toContain("writeAppServiceExit(ROOT, record)");

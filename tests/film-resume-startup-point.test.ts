@@ -82,7 +82,9 @@ describe("去重与预算的同源性（漂开就静默失效的那两条）", (
      * 字段形状变了不升版本号 = 读到旧单例里没有这个字段（同 runner-state 的坑）。 */
     expect(src).toMatch(/var filmWatchInFlight_v1: Set<string> \| undefined/);
     expect(src).toMatch("globalThis.filmWatchInFlight_v1 ??= new Set<string>()");
-    expect(src).toMatch("inFlight.has(id)) return");
+    /* 形态跟 `eslint/curly` 走（单语句体也带花括号）：判的仍是「同一部影片已在飞就
+     * 不再起第二条循环」，所以认条件 + 紧随其后的 `return`，不认它写在一行还是两行。 */
+    expect(src).toMatch(/inFlight\.has\(id\)\) \{\s*\n\s*return;/);
     expect(src).toMatch("inFlight.delete(id)");
   });
 

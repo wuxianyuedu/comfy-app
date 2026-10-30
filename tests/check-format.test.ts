@@ -369,7 +369,12 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
 
   test("本地那一档（没有平台旗标，走 merge-base 兜底）给出同一个面", ({ repo }) => {
     toMergeState(repo, CLEAN2);
-    const r = repo.run(["--staged"]);
+    /* 「没有平台旗标」这件事要**真的**成立，不能靠「本机大概没设它」：在 CNB 构建容器
+     * / NPC 工作区里跑这份用例时，`CNB_PULL_REQUEST_TARGET_SHA` 就躺在继承环境里，于是
+     * 这一格拿到的是上一个 PR 的目标 sha、进而去问本仓的对象库要那个提交
+     * （实测报 `改动面没算出来：8d118946… 的 diff 没跑起来`）—— 那测的就不是兜底链了。
+     * 显式删掉它（`undefined` 在夹具里=「这次不设它」），判据才落在要被判的那一档上。 */
+    const r = repo.run(["--staged"], { env: { CNB_PULL_REQUEST_TARGET_SHA: undefined } });
     expect(r.code, r.output).toBe(0);
     expect(r.output).toContain("暂存面 1 份 → 收窄到本分支带来的 0 份");
     expect(r.output).not.toContain("src/lib/legacy.ts");
@@ -383,7 +388,8 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
      * 提交它就不是「合并那一刻」的形状了。 */
     repo.write("src/lib/mine.ts", DIRTY);
     gitOf(repo.dir, ["add", "src/lib/mine.ts"]);
-    const r = repo.run(["--staged"]);
+    /* 同上：这一档同样走「没有平台旗标」那条路。 */
+    const r = repo.run(["--staged"], { env: { CNB_PULL_REQUEST_TARGET_SHA: undefined } });
     expect(r.code, r.output).toBe(1);
     expect(r.output).toContain("src/lib/mine.ts");
     /* 只点名这一份 —— 主干那份仍不在面内（两条同时断言，才排除「整个跳过」与

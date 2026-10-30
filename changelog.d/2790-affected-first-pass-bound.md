@@ -5,3 +5,6 @@
 - 收尾账同步新增 `budget-killed` 一档（比 `budget-skipped` 更彻底：后者是「没开第 2 遍」，这里是「第 1 遍没跑完」），措辞不许含糊成「跑完了」。判据 `tests/hook-affected-launch.test.ts` 新增三条钉住「按份数 × 单价判 / 三个『不知道』都不拦 / 那句话必须说未判定并给两条出口」，并修了两条因函数签名与调用形状变化而会**静默取不到**的源码文本判据。
 
   > **这是「装不下」，不是「有回归」**：同一份 808 份在本机空机上默认并发 **597.6s 跑完**，12 份失败全是 `isSameVolume("G:\\a","C:\\b")` 这一类 Windows 盘符断言在 Linux 上的平台形态，同一批在 `master` 上同样红 —— 与 `curly` 无关。
+
+- **顺带修掉 `curly` 批量化带出的 6 份源码契约用例**（它们断言的是「不带花括号的单语句体」这一排版形态，本 PR 的 `eslint/curly` 把那些行改成了 `if (…) { … }`）：`app-port-vectors-timeout-classification`（2 条）、`app-service-exit-contract`、`ci-cp936-glyphs`、`ci-toolchain-selfcheck`（`.replace` 锚点没命中，被它自己那段「三处各自判一次」抓出来）、`film-resume-startup-point`。判据内容一个字没放宽——改的是「认条件 + 紧随其后的语句」而不是「认它写在一行」。这 5 份在 `master`（`8d118946`）上实测全绿，是本批引入的回归。
+- `check-format.test.ts` 那两条「本地那一档（没有平台旗标）」**真的**没有平台旗标了：在 CNB 构建容器 / NPC 工作区里跑时，`CNB_PULL_REQUEST_TARGET_SHA` 躺在继承环境里，于是那一格拿到的是上一个 PR 的目标 sha、进而去问本仓对象库要那个提交（实测报 `改动面没算出来：8d118946… 的 diff 没跑起来`）。现在显式删掉它——夹具本来就支持 `{ env: { KEY: undefined } }` 这档，只是这条用例没用到。

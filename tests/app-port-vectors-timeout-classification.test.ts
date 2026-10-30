@@ -267,15 +267,19 @@ describe("接线在位：复跑真的会发生，出口真的分两条", () => {
   });
 
   it("catch 里按形态分流：超时返回 timeout 态，真失败返回带 problems 的 answered 态", () => {
-    expect(SCRIPT_SOURCE).toMatch(/if \(isTimeoutLike\(e\)\) return \{ state: "timeout"/);
+    /* 形态跟 `eslint/curly`（即 `oxlint` 的 `curly: "all"`）走：单语句体也要花括号，
+     * 所以这里认的是「条件在 `if (…)`，`return { state: "timeout"` 在它后面」——
+     * 写死 `) return {` 的那一版会在加花括号的那次批量改动里**静默失配**。 */
+    expect(SCRIPT_SOURCE).toMatch(/if \(isTimeoutLike\(e\)\) \{\s*\n\s*return \{ state: "timeout"/);
     expect(SCRIPT_SOURCE).toMatch(/problems: \[\s*\n?\s*`Python 侧自检失败：/);
   });
 
   it("判决结果同时喂两条出口（problems 与 unverified 各走各的）", () => {
     expect(SCRIPT_SOURCE).toMatch(/const verdict = decidePythonVerdict\(first, second\);/);
     expect(SCRIPT_SOURCE).toMatch(/problems\.push\(\.\.\.verdict\.problems\);/);
+    /* 同上：`curly` 之后循环体带花括号，判的仍是「判决结果喂进 unverified 那条出口」。 */
     expect(SCRIPT_SOURCE).toMatch(
-      /for \(const note of verdict\.unverified\) unverified\.push\(note\);/,
+      /for \(const note of verdict\.unverified\) \{\s*\n\s*unverified\.push\(note\);/,
     );
   });
 

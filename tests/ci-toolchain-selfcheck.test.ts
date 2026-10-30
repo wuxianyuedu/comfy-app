@@ -1614,9 +1614,12 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
           //     本仓的 Linux 检出与自托管节点都可能**预装**了那一件，于是自取一「成」
           //     它就当场返回 0 —— 补丁只打在 `already` 上时，这一条的现场被它顶掉
           //     （实测：`STATUS: 0`，而输出停在「自取成功：已就位」）。
+          /* 锚点按**当前源码**写（`eslint/curly` 之后这条 `if` 的花括号跨了行）——
+           * 锚点与源码不一致时 `.replace` 静默不命中，而补丁没落盘会由下面那段
+           * 「三处各自判一次」当场抓出来（那正是它存在的理由）。 */
           .replace(
-            "  if (seeded.ok && browserExecutableExists({ env }).ok) return 0;",
-            "  if (false && seeded.ok && browserExecutableExists({ env }).ok) return 0;",
+            "  if (seeded.ok && browserExecutableExists({ env }).ok) {\n    return 0;\n  }",
+            "  if (false && seeded.ok && browserExecutableExists({ env }).ok) {\n    return 0;\n  }",
           )
           // ② 复验指向一个空落点 ⇒ 「退 0 但没落地」那一态
           .replace(
