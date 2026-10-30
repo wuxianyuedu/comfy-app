@@ -21,11 +21,32 @@ import { mkdtempSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { expectActionableRefusal } from "./helpers/ratchet-refusal";
+import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 const REPO_ROOT = resolve(process.cwd());
 const CHECK = join(REPO_ROOT, "scripts", "check-scripts-typecheck.cjs");
+
+/**
+ * 在临时夹具里起一次 git（`git ls-files` / `git commit` 那一半的取数要靠真仓库）。
+ *
+ * 为什么**必须**经 `gitSandboxEnv()`（`tests/helpers/git-sandbox-env.ts`，本仓测试夹具
+ * 的隔离核心，§12.18「写之前先查」）：这个环境里 `commit.gpgsign = true`，于是「在临时
+ * 仓库里造一个提交」会直接死在 `error: gpg failed to sign the data` —— 本地实测同一句
+ * 补上签名开关就过、不补就炸。那是一层「夹具依赖宿主配置」：CI 上绿、配了签名的开发机
+ * 上红，而红的原因与本用例判的东西毫无关系（ISSUE #2756 的现场）。
+ * 同理它还剥掉继承来的 `GIT_DIR` 一族（钩子里跑时会把临时仓库的操作**打到真仓库**上）
+ * 与 `core.autocrlf` 那一串 warning。
+ */
+function gitInTempRepo(args: Array<string>, cwd: string): string {
+  const argv = args[0] === "commit" ? ["-c", "core.hooksPath=", ...args] : args;
+  return execFileSync("git", argv, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    env: gitSandboxEnv(),
+  });
+}
 
 /** 夹具的 tsconfig：与主配置同一把尺（`strict` + `checkJs` + `noUnusedLocals`）。 */
 const FIXTURE_CONFIG = {
@@ -267,6 +288,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
         execFileSync("git", ["ls-files", "-z", "--", "*.mjs"], {
           cwd: REPO_ROOT,
           encoding: "utf8",
+          env: gitSandboxEnv(),
         })
           .split("\0")
           .filter(Boolean),
@@ -376,20 +398,7 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
   });
 
   it("真 git 夹具：未入库那份被点名、不进面、它的红也不记账；提交之后就进账", () => {
-    /* 走 `gitSandboxEnv()` 而不是裸 `git`：宿主的全局 `.gitconfig` 常带
-     * `commit.gpgsign = true` + 一个平台专属签名器（本仓的构建容器就是），而临时仓库里
-     * 既没有可用密钥、签名器也不在 PATH 上 ⇒ 那三行 `git commit` 直接报
-     * `error: gpg failed to sign the data` / `fatal: failed to write commit object`。
-     * 报错一个字都不指向夹具 —— 实测本用例在 CNB 上就是这样整条红的。
-     * 这一层同时压掉 `core.autocrlf` 的 `LF will be replaced by CRLF` 噪音，
-     * 见 `tests/helpers/git-sandbox-env.ts` 文件头。 */
-    const git = (args: Array<string>, cwd: string) =>
-      execFileSync("git", args, {
-        cwd,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-        env: gitSandboxEnv(),
-      });
+    const git = (args: Array<string>, cwd: string) => gitInTempRepo(args, cwd);
     const repo = mkdtempSync(join(tmpdir(), "2681-repo-"));
     rmSync(repo, { recursive: true, force: true });
     mkdirSync(repo, { recursive: true });
@@ -403,7 +412,7 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
     writeFileSync(join(repo, "scripts", "clean.mjs"), "export const a = 1;\n", "utf8");
     git(["init", "-q"], repo);
     git(["add", "-A"], repo);
-    git(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "seed"], repo);
+    git(["commit", "-q", "-m", "seed"], repo);
 
     /* 先让它自己写一份基线（否则「不记账」那一支会被「没有基线」那一步盖住，读不出因果）。 */
     const seed = runCheck(["--update"], repo);
