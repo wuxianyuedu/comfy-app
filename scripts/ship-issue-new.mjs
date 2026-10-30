@@ -99,8 +99,7 @@ export function runAppendIssueComment({
  *   · 署名行由 `withCommentHeader` 保证（与建单同一口径）；正文里的人话是调用方的判断；
  *   · 未配留痕**不阻断**：署名会写「未配」，评论照发 —— 它仍是读数，不是判据。
  *
- * @param {{run:any, log:(s:string)=>void, slug:string, number:number, handle:string,
- *   root:string, opt:any, mkTmp:(name:string,text:string)=>string|null, dryRun?:boolean}} ctx
+ * @param {{run:any, log:(s:string)=>void, slug:string, number:number, handle:string, root:string, opt:any, mkTmp:(name:string,text:string)=>string|null, dryRun?:boolean}} ctx 全部由装配层注入
  * @returns {number} `CODE` 之一
  */
 export function runIssueComment({
