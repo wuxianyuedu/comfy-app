@@ -64,6 +64,10 @@
  *     「这一轮要不要上色」。
  *     重定向到文件 / 被别的脚本抓输出时不着色，抓出来的仍是那行干净文本
  *     （`ci-heavy-gates.mjs` 读回绿步的结论句靠的是**子进程的管道**，不是这条短路）。
+ *     **唯一的例外**是 `COMFYAPP_CI_COLOR`：平台那一档的 stdout 不是 TTY，而它的日志页
+ *     会渲染色号 —— 那一格落在这条边界的两个判据之外，所以给它一枚**只被本层认**的
+ *     旗标（不用 `FORCE_COLOR`：那枚会连带点亮被捕获解析的子进程输出）。见
+ *     `colorEnabled()` 的次序注释与规范 §13.5.29.1（ISSUE #2755）。
  *   · **颜色是附加，不是判决**：删掉所有色号，三态仍然分得开（前缀 + 结构）。
  *     「看不清红」这件事不许只能靠颜色解决。
  *
@@ -132,12 +136,22 @@ const TAG_RE = /\[([^[^\]\s]{1,12})\]/g;
 const COLOR_BAND = "90";
 
 /**
- * 这一轮要不要上色。
+ * 这一轮要不要上色。四条按**次序**判，次序本身是判据：
  *
- * 两条都成立才上色，缺一条就不上：`NO_COLOR`（no-color.org 的通行约定，值不论）
- * 与**非 TTY**（被重定向 / 被别的脚本抓输出 / 平台抓 stage 输出）。
- * 后者是这一层能安全存在的前提 —— `ci-heavy-gates.mjs` 就是**抓输出读回**判据结论的，
- * 那一路拿到的必须是干净文本，否则它的 90 字压缩与「截断报数」都会把色号算进字数。
+ *   1. `NO_COLOR`（no-color.org 的通行约定，值不论）**一票否决**，压过下面三条；
+ *   2. `FORCE_COLOR` —— 全生态共识旗标，认它的远不止本层（chalk / picocolors /
+ *      oxfmt 的 anstyle 都读它）；
+ *   3. `COMFYAPP_CI_COLOR` —— **只被本层认**的那一枚（ISSUE #2755）。它治的是那一格
+ *      交集之外：平台 stage 的 stdout **不是 TTY**（实测 build `cnb-gig-1k65nb59l`
+ *      的 stage-27 正文 64 行里只有 2 行带 ANSI，而那两行是平台自己的 `Runner` /
+ *      `Finished` 前缀），可它的日志页**会渲染色号**（同一份正文里那枚绿色 `Runner`
+ *      就是证据）⇒ 缺的不是渲染，是「谁在平台上把色号发出来」。**为什么不用
+ *      `FORCE_COLOR` 顶这一格**：那枚会把聚合档**捕获后解析**的那份子进程输出一起
+ *      点亮，`lastLine()` / `looksSkipped()` / 90 字压缩三处都会把色号算进内容。
+ *      挂在 `.cnb.yml` 的**流水线级 env**（它是「这台节点会渲染色号」的事实，不是
+ *      某一格的事实），理由与那条边界同处一篇：规范 §13.5.29.1。
+ *   4. 前三条都没说话 ⇒ 按 **TTY** 判。非 TTY 不上色是这一层能安全存在的前提 ——
+ *      被重定向、被别的脚本抓输出时拿到的必须是干净文本。
  *
  * @param {{env?: Record<string, string | undefined>, isTTY?: boolean}} [io]
  * @returns {boolean}
@@ -145,6 +159,9 @@ const COLOR_BAND = "90";
 export function colorEnabled({ env = process.env, isTTY } = {}) {
   if (env.NO_COLOR !== undefined) return false;
   if (env.FORCE_COLOR !== undefined) return true;
+  const ciColor = env.COMFYAPP_CI_COLOR;
+  /* 「0」按关算：这一枚是本仓私有的旗标，`X=0` 是它最自然的关法。 */
+  if (ciColor !== undefined && ciColor !== "" && ciColor !== "0") return true;
   return isTTY ?? Boolean(process.stdout.isTTY);
 }
 
