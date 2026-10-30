@@ -54,7 +54,7 @@ const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
 /* ── 白名单判据的两个取样器（供下面的用例共用）────────────────────────── */
 
 /** 从 `check-standalone-contents.cjs` 源码里取出 ALLOWED_SCRIPTS 的字面量集合。 */
-function allowedScriptsFromChecker(source: string): string[] {
+function allowedScriptsFromChecker(source: string): Array<string> {
   const start = source.indexOf("const ALLOWED_SCRIPTS = new Set([");
   expect(start, "check-standalone-contents.cjs 里找不到 ALLOWED_SCRIPTS").toBeGreaterThan(-1);
   const body = source.slice(start, source.indexOf("]);", start));
@@ -72,7 +72,7 @@ function allowedScriptsFromChecker(source: string): string[] {
  * 行注释必须先剥掉：JSDoc 里的 `import("../lockfile/lock-diff.d.mts")` 是类型引用，
  * 不是运行期依赖（登记它反而违背「运行时真的会读」这条判据）。
  */
-function collectRelativeClosure(entry: string): string[] {
+function collectRelativeClosure(entry: string): Array<string> {
   const scriptsRoot = join(process.cwd(), "scripts");
   const seen = new Set<string>();
   const walk = (file: string): void => {
@@ -266,17 +266,17 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
  */
 interface CheckerExports {
   FORBIDDEN: Array<[string, RegExp]>;
-  REQUIRED_RUNTIME_FILES: string[];
-  REQUIRED_HOST_FILES: string[];
-  REQUIRED_PAYLOAD_FILES: string[];
+  REQUIRED_RUNTIME_FILES: Array<string>;
+  REQUIRED_HOST_FILES: Array<string>;
+  REQUIRED_PAYLOAD_FILES: Array<string>;
   RUNTIME_DIR: string;
-  STANDALONE_ALLOWED_TOPLEVEL: string[];
-  STATIC_ALLOWED_TOPLEVEL: string[];
-  ALLOWED_SRC_FILES: string[];
-  allowedTopLevelFor: (label: string) => string[];
+  STANDALONE_ALLOWED_TOPLEVEL: Array<string>;
+  STATIC_ALLOWED_TOPLEVEL: Array<string>;
+  ALLOWED_SRC_FILES: Array<string>;
+  allowedTopLevelFor: (label: string) => Array<string>;
   isAllowedSrcPath: (rel: string) => boolean;
-  collectFiles: (dir: string, followLinks: boolean) => string[];
-  missingRequiredRuntimeFiles: (dir: string) => string[];
+  collectFiles: (dir: string, followLinks: boolean) => Array<string>;
+  missingRequiredRuntimeFiles: (dir: string) => Array<string>;
   checkDir: (dir: string, label: string) => boolean;
 }
 
@@ -295,7 +295,7 @@ function checkerForbidden(): Array<[string, RegExp]> {
 }
 
 /** 某个标签在禁忌清单里的全部正则原文（同名的可以有多条）。 */
-function forbiddenSourcesFor(tag: string): string[] {
+function forbiddenSourcesFor(tag: string): Array<string> {
   return checkerForbidden()
     .filter(([entryTag]) => entryTag === tag)
     .map(([, re]) => re.source);
@@ -538,7 +538,7 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
    * 我们要验的那一条（变量必须只有一个）。它们各自的内容与「同形」由
    * `tests/standalone-runtime.test.ts` 与 `tests/executor-host-artifact.test.ts` 守。
    */
-  function makeProduct(dir: string, present: string[]): void {
+  function makeProduct(dir: string, present: Array<string>): void {
     const mod = checkerExports();
     writeFileSync(join(dir, "server.js"), "// entry");
     for (const rel of [...mod.REQUIRED_HOST_FILES, ...mod.REQUIRED_PAYLOAD_FILES]) {
@@ -576,12 +576,12 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
    */
   it("static（真正被内嵌进 exe 的那一层）也报缺件", () => {
     const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-req-"));
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     // 两个通道都按住：checkDir 的「✓ 产物干净」走 console.log，不接住会往测试输出里灌噪声
-    const errSpy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation((...args: Array<unknown>) => {
       lines.push(args.join(" "));
     });
-    const logSpy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...args: Array<unknown>) => {
       lines.push(args.join(" "));
     });
     try {
@@ -616,11 +616,11 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
    */
   it("往 static 里放一个 db.sqlite → 两条违规一起点名（投毒验收）", () => {
     const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-poison-"));
-    const lines: string[] = [];
-    const errSpy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+    const lines: Array<string> = [];
+    const errSpy = vi.spyOn(console, "error").mockImplementation((...a: Array<unknown>) => {
       lines.push(a.join(" "));
     });
-    const logSpy = vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...a: Array<unknown>) => {
       lines.push(a.join(" "));
     });
     try {
@@ -658,11 +658,11 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
    */
   it("未装配的 static 层不判顶层，但念出「这一格不判」；补上 server.js 照样红", () => {
     const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-unassembled-"));
-    const lines: string[] = [];
-    const errSpy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+    const lines: Array<string> = [];
+    const errSpy = vi.spyOn(console, "error").mockImplementation((...a: Array<unknown>) => {
       lines.push(a.join(" "));
     });
-    const logSpy = vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...a: Array<unknown>) => {
       lines.push(a.join(" "));
     });
     try {
@@ -789,12 +789,12 @@ describe("产物顶层的默认拒绝（ISSUE #1217）", () => {
   }
 
   /** 捕 checkDir 的两个输出通道（「✓ 产物干净」走 log，违规走 error）。 */
-  function captureCheck(dir: string, label: string): { failed: boolean; lines: string[] } {
-    const lines: string[] = [];
-    const errSpy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+  function captureCheck(dir: string, label: string): { failed: boolean; lines: Array<string> } {
+    const lines: Array<string> = [];
+    const errSpy = vi.spyOn(console, "error").mockImplementation((...a: Array<unknown>) => {
       lines.push(a.join(" "));
     });
-    const logSpy = vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...a: Array<unknown>) => {
       lines.push(a.join(" "));
     });
     try {

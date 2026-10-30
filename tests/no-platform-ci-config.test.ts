@@ -88,17 +88,17 @@ const CI_CONFIG_PATHS = [".github/workflows", ".buildkite/pipeline.yml"];
  * 那会把「这份配置叫什么」这件事摊成满文件的可选链，反而看不出意图。
  */
 const REGISTERED_CI_CONFIG = ".cnb.yml";
-const REGISTERED_CI_CONFIGS: readonly string[] = [REGISTERED_CI_CONFIG];
+const REGISTERED_CI_CONFIGS: ReadonlyArray<string> = [REGISTERED_CI_CONFIG];
 
 const CI_NAMES = new Set([...CI_CONFIG_FILES, ...CI_CONFIG_PATHS]);
 
 /** 从一组仓库相对路径里挑出「是 CI 配置」的那些（匹配逻辑，可复算）。 */
-export function ciConfigsAmong(entries: string[]): string[] {
+export function ciConfigsAmong(entries: Array<string>): Array<string> {
   return entries.filter((rel) => CI_NAMES.has(rel));
 }
 
 /** 仓库根的一层目录项 + 已知 CI 目录位（判据的真实扫描面）。 */
-function repoTopLevel(): string[] {
+function repoTopLevel(): Array<string> {
   const top = readdirSync(ROOT, { withFileTypes: true }).map((e) => e.name);
   const nested = CI_CONFIG_PATHS.filter((rel) => existsSync(path.join(ROOT, ...rel.split("/"))));
   return [...top, ...nested];
@@ -155,7 +155,7 @@ function configEventBlock(text: string, event: string): string {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex((l) => l === `  ${event}:`);
   if (start < 0) return "";
-  const out: string[] = [];
+  const out: Array<string> = [];
   for (const line of lines.slice(start + 1)) {
     if (/^ {2}\S/.test(line)) break;
     out.push(line);
@@ -241,9 +241,9 @@ const PS7_ONLY: Array<{ pattern: RegExp; what: string; instead: string }> = [
  *
  * @returns 每条违规的 `行号: 说明`
  */
-export function ps7OnlySyntaxIn(text: string): string[] {
+export function ps7OnlySyntaxIn(text: string): Array<string> {
   const lines = text.split("\n");
-  const found: string[] = [];
+  const found: Array<string> = [];
   /* 正文缩进：`script: |` 自己的列 + 默认 2（块标量必须比键更深）。
    * 键可能写成 `script: |` 也可能写成列表项 `- script: |`，两种都收。 */
   let bodyIndent: number | null = null;
@@ -289,7 +289,7 @@ export function ps7OnlySyntaxIn(text: string): string[] {
  */
 /* 实现见 `scripts/ci-gate-names.mjs`（判据脚本与三处消费它的测试共用同一份解析，
  * 不各写一遍 —— §12.12 / §12.18）。 */
-export function registeredGateOrder(text: string): string[] {
+export function registeredGateOrder(text: string): Array<string> {
   return gateOrderImpl(text);
 }
 
@@ -310,7 +310,7 @@ export function registeredGateOrder(text: string): string[] {
  * @returns 被停用的 stage 名（已 trim）
  */
 /* 实现见 `scripts/ci-gate-names.mjs`（同一份解析，三处消费共用）。 */
-export function registeredDisabledGates(text: string): string[] {
+export function registeredDisabledGates(text: string): Array<string> {
   return disabledGatesImpl(text);
 }
 
@@ -357,7 +357,7 @@ const DAILY_GATES = [
  * 用 `` `每日${旧名}` `` 拼会得到 `每日Python 可用性`，那条判据于是恒红 ——
  * 而它红的原因与配置对不对毫无关系（第一版就是这么错的）。
  */
-const PR_MOVED_TO_DAILY: [string, string, string, string][] = [
+const PR_MOVED_TO_DAILY: Array<[string, string, string, string]> = [
   ["工具链自证", "每日工具链自证", "scripts/ci-toolchain-selfcheck.mjs", ""],
   ["Python 可用性", "每日 Python 可用性", "scripts/ci-toolchain-selfcheck.mjs", "--python-only"],
   ["Python 探针读数", "每日 Python 探针读数", "scripts/python-probe.mjs", ""],
@@ -388,7 +388,7 @@ const PR_MOVED_TO_DAILY: [string, string, string, string][] = [
  * PR 清单（见上面 `PR_MOVED_TO_DAILY`），拿一个不存在的 PR 块来比相同性，得到的不是
  * 「两边漂了」而是「一边根本不在场」—— 那种红会教会人忽略红。它们由那条判据接住。
  */
-const DAILY_SCRIPT_MIRRORS: [string, string][] = [
+const DAILY_SCRIPT_MIRRORS: Array<[string, string]> = [
   // 多行块也在内：这一格是 `script: |` 的三行体，只比第一行会漏掉「第二行改了」这种漂移。
   ["每日安装依赖", "Install dependencies"],
   /* 浏览器那一格比的不只是命令行：它背着**两行 env**（下载根 + 连接超时），那是四次
@@ -411,7 +411,7 @@ const DAILY_SCRIPT_MIRRORS: [string, string][] = [
  * 为什么不干脆让配置自己表达「这里可以不一样」：那样判据只能判「不相同」，判不出
  * 「不相同的那一行正是被允许的那一行」—— 第一次故意改与第一次手滑在账面上同形。
  */
-const DAILY_ENV_ONLY_ON_PR: Record<string, string[]> = {
+const DAILY_ENV_ONLY_ON_PR: Record<string, Array<string>> = {
   每日安装依赖: ["COMFY_CI_SLOT"],
 };
 
@@ -423,9 +423,9 @@ function envAssignmentKey(line: string): string | null {
 
 /** 判「PR-only 例外」的形状；回 `null` = 合法，回一句字符串 = 下一动作。 */
 function checkPrOnlyEnvExceptions(
-  dailyEnv: string[],
-  prEnv: string[],
-  onlyOnPr: string[],
+  dailyEnv: Array<string>,
+  prEnv: Array<string>,
+  onlyOnPr: Array<string>,
 ): string | null {
   for (const key of onlyOnPr) {
     const onPr = prEnv.filter((l) => envAssignmentKey(l) === key);
@@ -449,7 +449,7 @@ function checkPrOnlyEnvExceptions(
 }
 
 /** 剥掉登记为 PR-only 的那几行，剩下的才拿去逐字比。 */
-function dropPrOnlyEnvLines(env: string[], onlyOnPr: string[]): string[] {
+function dropPrOnlyEnvLines(env: Array<string>, onlyOnPr: Array<string>): Array<string> {
   return env.filter((l) => !onlyOnPr.includes(envAssignmentKey(l) ?? ""));
 }
 
@@ -468,7 +468,7 @@ function stageBudgetMinutes(raw: string | undefined): number {
  * 定时那一格要讲「为什么每天一次」），要求逐字相同只会逼人删注释 —— 而漂移能藏的地方
  * 只有命令行。返回数组而不是拼好的字符串，红的时候两边的差是哪一行一眼可见。
  */
-function executableScriptLines(text: string, name: string): string[] {
+function executableScriptLines(text: string, name: string): Array<string> {
   return stageScriptLine(text, name)
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -486,13 +486,13 @@ function executableScriptLines(text: string, name: string): string[] {
  * 收的是 `KEY: value` 那种形状（`-` 开头的列表项与更深一层的结构一律不当赋值行），
  * 所以它不会把注释或下一格的键吞进来；`env:` 缺席时回空数组 = 两格都不许有 env。
  */
-function stageEnvAssignments(text: string, name: string): string[] {
+function stageEnvAssignments(text: string, name: string): Array<string> {
   const block = stageBlock(text, name);
   if (!block) return [];
   const lines = block.split(/\r?\n/);
   const at = lines.findIndex((l) => /^\s*env:\s*$/.test(l));
   if (at < 0) return [];
-  const out: string[] = [];
+  const out: Array<string> = [];
   for (const line of lines.slice(at + 1)) {
     if (/^\s*(script|timeout|ifModify|name|retries|jobs|runs_on|image):/.test(line)) break;
     const t = line.trim();
@@ -517,7 +517,7 @@ function stageScriptLine(text: string, name: string): string {
   if (at < 0) return "";
   const first = lines[at]?.replace(/^\s*script:[ \t]*/, "") ?? "";
   if (first && !/^[|>][-+]?\s*$/.test(first)) return first.trim();
-  const body: string[] = [];
+  const body: Array<string> = [];
   for (const line of lines.slice(at + 1)) {
     if (/^\s*(timeout|env|ifModify|name|retries):/.test(line)) break;
     if (line.trim() === "") continue;
@@ -580,7 +580,7 @@ export function crontabEvents(
  * @param text `.cnb.yml` 原文
  * @returns stage 名（已 trim）；`[]` = 键不在（调用方据此判红）
  */
-export function registeredDailyGateOrder(text: string): string[] {
+export function registeredDailyGateOrder(text: string): Array<string> {
   const m =
     /^[ \t]*COMFYAPP_CI_DAILY_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
       text,
@@ -605,7 +605,7 @@ export function registeredDailyGateOrder(text: string): string[] {
  * @param text `.cnb.yml` 原文
  * @returns stage 名（已 trim）；`[]` = 键不在（调用方据此判红）
  */
-export function registeredPushGateOrder(text: string): string[] {
+export function registeredPushGateOrder(text: string): Array<string> {
   const m =
     /^[ \t]*COMFYAPP_CI_PUSH_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
       text,
@@ -633,7 +633,7 @@ export function registeredPushGateOrder(text: string): string[] {
  * @param pipelineName 流水线的 `name:` 值（如「每日生产构建」）
  * @returns stage 名；`[]` = 那条流水线没找到 / 没有 stages
  */
-export function pipelineStageNames(text: string, pipelineName: string): string[] {
+export function pipelineStageNames(text: string, pipelineName: string): Array<string> {
   const lines = text.split("\n");
   let start = -1;
   for (let i = 0; i < lines.length; i += 1) {
@@ -649,7 +649,7 @@ export function pipelineStageNames(text: string, pipelineName: string): string[]
   if (start < 0) return [];
   /* 流水线项的缩进 = 它 `name:` 那一行的缩进；`stages:` 的键在它**下一层**。 */
   const itemIndent = (lines[start] ?? "").length - (lines[start] ?? "").trimStart().length;
-  const out: string[] = [];
+  const out: Array<string> = [];
   let stageIndent: number | null = null;
   for (let i = start + 1; i < lines.length; i += 1) {
     const raw = lines[i] ?? "";
@@ -688,7 +688,7 @@ export function pipelineStageNames(text: string, pipelineName: string): string[]
  * @param anchor `&` 后面那个名字
  * @returns stage 名；`[]` = 锚点不存在（调用方要把它当成「没找到」，不是「清单为空」）
  */
-export function anchorStageNames(text: string, anchor: string): string[] {
+export function anchorStageNames(text: string, anchor: string): Array<string> {
   const lines = text.split("\n");
   const escaped = anchor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const def = new RegExp(`^\\.[^:]*:[ \\t]*&${escaped}[ \\t]*$`);
@@ -700,7 +700,7 @@ export function anchorStageNames(text: string, anchor: string): string[] {
     }
   }
   if (start < 0) return [];
-  const out: string[] = [];
+  const out: Array<string> = [];
   for (const raw of lines.slice(start + 1)) {
     if (raw.trim() === "" || raw.trim().startsWith("#")) continue;
     if (/^\S/.test(raw)) break;
@@ -741,7 +741,7 @@ export function stageKeptAsComment(text: string, name: string): boolean {
  */
 export function resolveAnchoredRunner(
   text: string,
-): Array<{ namespace?: string; tags?: string[] }> {
+): Array<{ namespace?: string; tags?: Array<string> }> {
   // 抽出 `.common` 锚点块里的 runner（缩进两层：`  runner:` 下跟两键）。
   const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S)/m.exec(text);
   const body = anchor?.[1];
@@ -800,7 +800,7 @@ export function stageBlock(text: string, name: string): string | null {
     }
   }
   if (start < 0) return null;
-  const out: string[] = [lines[start] ?? ""];
+  const out: Array<string> = [lines[start] ?? ""];
   for (let i = start + 1; i < lines.length; i += 1) {
     const raw = lines[i] ?? "";
     /* 下一个**同级或更浅**的列表项 / 更浅的键都算收尾（空行不算 —— 配置里正文之间有空行）。 */
@@ -837,7 +837,7 @@ export function commentedStageBlock(text: string, name: string): string | null {
   }
   if (start < 0) return null;
   const strip = (l: string) => l.replace(/^#\s?/, "");
-  const out: string[] = [strip(lines[start] ?? "")];
+  const out: Array<string> = [strip(lines[start] ?? "")];
   for (let i = start + 1; i < lines.length; i += 1) {
     const raw = lines[i] ?? "";
     /* 收尾：下一个同级（注释态）stage 项，或**回到未注释的顶格键**（`master:` 那一层）。
@@ -1099,8 +1099,8 @@ export function pipelineLockAssignments(text: string): Array<{
  * @param prIid 用来模拟一次 PR 事件的编号（默认任取一个，只用于比对形状）
  * @returns 每条违规的一句人话
  */
-export function lockClassViolations(text: string, prIid = "1982"): string[] {
-  const bad: string[] = [];
+export function lockClassViolations(text: string, prIid = "1982"): Array<string> {
+  const bad: Array<string> = [];
   const defs = lockAnchorDefinitions(text);
   const commonTemplate = pipelineLockKeyTemplate(text);
   if (commonTemplate === null) {
@@ -1221,7 +1221,7 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
 }
 
 /** 规范里必须留痕的口径；缺失 = 决策被悄悄推翻、而文件面判据还没跟着变。 */
-const DOC_ANCHORS: Array<{ file: string; mustContain: string[] }> = [
+const DOC_ANCHORS: Array<{ file: string; mustContain: Array<string> }> = [
   {
     file: "docs/standards/13-提交与-code-review.md",
     mustContain: [
@@ -1236,7 +1236,11 @@ const DOC_ANCHORS: Array<{ file: string; mustContain: string[] }> = [
 ];
 
 /** 文档里缺哪些锚点句（跨行断句不算缺失，故整篇去换行后再比）。 */
-export function missingAnchors(file: string, needles: string[], root: string = ROOT): string[] {
+export function missingAnchors(
+  file: string,
+  needles: Array<string>,
+  root: string = ROOT,
+): Array<string> {
   const text = readFileSync(path.join(root, file), "utf8");
   const flat = text.replace(/\r\n/g, "\n").replace(/\n/g, "");
   return needles.filter((needle) => !flat.includes(needle.replace(/\n/g, "")));
@@ -1254,8 +1258,8 @@ export function missingAnchors(file: string, needles: string[], root: string = R
  * @param text `.cnb.yml` 原文
  * @returns 顶层键（按出现顺序，**允许重复**：重复就是要抓的东西）
  */
-export function topLevelKeys(text: string): string[] {
-  const out: string[] = [];
+export function topLevelKeys(text: string): Array<string> {
+  const out: Array<string> = [];
   for (const raw of text.split("\n")) {
     if (raw === "" || raw.startsWith("#")) continue;
     if (/^\S/.test(raw)) {
@@ -1498,7 +1502,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("规范正文确实写着这次的决策反转（反向锚点）", () => {
-    const drifted: string[] = [];
+    const drifted: Array<string> = [];
     for (const { file, mustContain } of DOC_ANCHORS) {
       const missing = missingAnchors(file, mustContain);
       if (missing.length > 0) drifted.push(`${file} 缺：${missing.join(" / ")}`);
@@ -2922,7 +2926,7 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
    * 因此不算违规。要防的是「两条流水线里有两个同名 stage」——那会让按名字取块的解析器
    * 读到哪一个变成运气（`.cnb.yml` 里 `每日安装依赖` 那段注释记着同一件事）。
    */
-  function duplicatedStageNames(text: string): string[] {
+  function duplicatedStageNames(text: string): Array<string> {
     const seen = new Map<string, number>();
     for (const m of text.matchAll(/^ {2}- name: (\S.*?)[ \t]*$/gm)) {
       const name = m[1] ?? "";

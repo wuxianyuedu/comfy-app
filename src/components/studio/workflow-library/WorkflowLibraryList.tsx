@@ -22,8 +22,8 @@ import { StatusDot } from "~/components/ui/status-dot";
 import { ListBadge } from "~/components/ui/list-badge";
 
 interface WorkflowLibraryListProps {
-  workflows: WorkflowRow[];
-  pendingRows?: PendingRow[];
+  workflows: Array<WorkflowRow>;
+  pendingRows?: Array<PendingRow>;
   selectedId?: string | null;
   search: string;
   onSearchChange: (value: string) => void;
@@ -138,9 +138,7 @@ export function WorkflowLibraryList({
             description={
               <>
                 应用服务可能在编译或重启。可稍候重试；若持续如此，按{""}
-                <kbd className="border-border rounded border px-1 font-mono">
-                  Ctrl+Shift+L
-                </kbd>
+                <kbd className="border-border rounded border px-1 font-mono">Ctrl+Shift+L</kbd>
                 {""}
                 打开日志面板查看具体原因。
               </>
@@ -197,10 +195,7 @@ export function WorkflowLibraryList({
                 return (
                   <li key={pending.id}>
                     <div className="border-border-subtle bg-subtle flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2">
-                      <span
-                        className="text-ink-strong text-2xs truncate"
-                        title={pending.name}
-                      >
+                      <span className="text-ink-strong text-2xs truncate" title={pending.name}>
                         {pending.name}
                       </span>
                       <Hint label={`载入「${pending.name}」`} wrap>
@@ -210,10 +205,7 @@ export function WorkflowLibraryList({
                           disabled={loadingPending}
                           className="text-3xs h-auto shrink-0 gap-1 rounded-md px-2 py-1 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          <Download
-                            data-icon="inline-start"
-                            className="size-3"
-                          />
+                          <Download data-icon="inline-start" className="size-3" />
                           {loadingPending ? "载入中…" : "载入"}
                         </Button>
                       </Hint>
@@ -296,10 +288,7 @@ function WorkflowListItem({
             {workflow.name}
           </span>
           {!usable && (
-            <ListBadge
-              tone="danger"
-              title="没有工作流(RAW)原件 —— 没有可执行内容"
-            >
+            <ListBadge tone="danger" title="没有工作流(RAW)原件 —— 没有可执行内容">
               无可执行内容
             </ListBadge>
           )}
@@ -310,9 +299,7 @@ function WorkflowListItem({
           {usable && (
             <ListBadge
               tone={encapsulation.ready ? "success" : "warning"}
-              className={
-                encapsulation.ready ? "" : "text-encap-pending bg-warning/12"
-              }
+              className={encapsulation.ready ? "" : "text-encap-pending bg-warning/12"}
               title={
                 encapsulation.ready
                   ? `对外参数已配置（${encapsulation.resolvedCount}/${encapsulation.entries.length}）`
@@ -323,10 +310,7 @@ function WorkflowListItem({
             </ListBadge>
           )}
           {canResync && (
-            <ListBadge
-              tone="warning"
-              title={missing ? "本地文件已丢失" : "本地文件有更新"}
-            >
+            <ListBadge tone="warning" title={missing ? "本地文件已丢失" : "本地文件有更新"}>
               {missing ? "已丢失" : "有更新"}
             </ListBadge>
           )}

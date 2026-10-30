@@ -21,7 +21,7 @@ import { MEDIA_DRAG_MIME, type MediaDragPayload } from "~/components/ui/media-dr
 
 export interface UseCanvasDropArgs {
   screenToFlowPosition: (p: XYPosition) => XYPosition;
-  setNodes: Dispatch<SetStateAction<CanvasNodeType[]>>;
+  setNodes: Dispatch<SetStateAction<Array<CanvasNodeType>>>;
 }
 
 /** 落点载荷 = 源端交给 `mediaDragSourceProps` 的形状 + 落地坐标。 */

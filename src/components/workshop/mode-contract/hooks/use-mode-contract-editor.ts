@@ -26,7 +26,7 @@ export interface ModeContractEditorController {
   /** 当前编辑的契约草稿（null = 未选模式）。 */
   draft: ModeContract | null;
   /** 注册表里用户改过的模式。 */
-  stored: ModeContract[];
+  stored: Array<ModeContract>;
   saving: boolean;
   /** 打开某模式的契约编辑（初值 = 已改过的用改过的，否则内置默认）。 */
   selectMode: (mode: string) => void;
@@ -73,9 +73,7 @@ export function useModeContractEditor(): ModeContractEditorController {
 
   const appendInput = useCallback((id: ModeContractInputId) => {
     setDraft((prev) =>
-      prev && !prev.inputs.includes(id)
-        ? { ...prev, inputs: [...prev.inputs, id] }
-        : prev,
+      prev && !prev.inputs.includes(id) ? { ...prev, inputs: [...prev.inputs, id] } : prev,
     );
     setSaved(false);
   }, []);
@@ -104,54 +102,43 @@ export function useModeContractEditor(): ModeContractEditorController {
    * 序号），另存一份顺序必然与它走散。越界时纯函数返回原数组，这里不再判一次。 */
   const moveInput = useCallback((id: ModeContractInputId, delta: number) => {
     setDraft((prev) =>
-      prev
-        ? { ...prev, inputs: moveContractInput(prev.inputs, id, delta) }
-        : prev,
+      prev ? { ...prev, inputs: moveContractInput(prev.inputs, id, delta) } : prev,
     );
     setSaved(false);
   }, []);
 
   /* 自定义口：id 由系统生成（把类型编进去，见 `nextCustomInputId`），作者只填
    *  名字 —— 名字单独存在 `customInputs` 里，落点/封装/适配器一律按 id 走。 */
-  const addCustomInput = useCallback(
-    (label: string, kind: ModeContractCustomKind) => {
-      const trimmed = label.trim();
-      if (!trimmed) return;
-      setDraft((prev) => {
-        if (!prev) return prev;
-        const id = nextCustomInputId(prev.inputs, kind);
-        return {
-          ...prev,
-          inputs: [...prev.inputs, id],
-          customInputs: [
-            ...(prev.customInputs ?? []),
-            { id, label: trimmed, kind },
-          ],
-        };
-      });
-      setSaved(false);
-    },
-    [],
-  );
+  const addCustomInput = useCallback((label: string, kind: ModeContractCustomKind) => {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const id = nextCustomInputId(prev.inputs, kind);
+      return {
+        ...prev,
+        inputs: [...prev.inputs, id],
+        customInputs: [...(prev.customInputs ?? []), { id, label: trimmed, kind }],
+      };
+    });
+    setSaved(false);
+  }, []);
 
-  const renameCustomInput = useCallback(
-    (id: ModeContractInputId, label: string) => {
-      const trimmed = label.trim();
-      if (!trimmed) return;
-      setDraft((prev) =>
-        prev?.customInputs
-          ? {
-              ...prev,
-              customInputs: prev.customInputs.map((def) =>
-                def.id === id ? { ...def, label: trimmed } : def,
-              ),
-            }
-          : prev,
-      );
-      setSaved(false);
-    },
-    [],
-  );
+  const renameCustomInput = useCallback((id: ModeContractInputId, label: string) => {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    setDraft((prev) =>
+      prev?.customInputs
+        ? {
+            ...prev,
+            customInputs: prev.customInputs.map((def) =>
+              def.id === id ? { ...def, label: trimmed } : def,
+            ),
+          }
+        : prev,
+    );
+    setSaved(false);
+  }, []);
 
   /** 该模式下生效的必备口（配过用配过的，没配过回落内置默认）。 */
   const effectiveRequired = useMemo(
@@ -179,9 +166,7 @@ export function useModeContractEditor(): ModeContractEditorController {
         inputs: prev.inputs,
         required: prev.required,
       });
-      const next = current.includes(id)
-        ? current.filter((x) => x !== id)
-        : [...current, id];
+      const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
       return {
         ...prev,
         required: prev.inputs.filter((x) => next.includes(x)),

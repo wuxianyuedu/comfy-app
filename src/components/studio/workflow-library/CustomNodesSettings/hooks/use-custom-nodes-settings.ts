@@ -40,11 +40,11 @@ type RowState = ReturnType<typeof deriveRowState>;
 
 export interface ParentBlock {
   parent: string;
-  subs: {
+  subs: Array<{
     sub: DiscoveredSubpkg;
     saved: SummaryPkg | undefined;
     state: RowState;
-  }[];
+  }>;
   cnt: {
     loaded: number;
     outdated: number;
@@ -61,7 +61,7 @@ export interface ParentBlock {
 export interface CustomNodesSettingsController {
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  savedPaths: string[];
+  savedPaths: Array<string>;
   /** 目录配置相关错误（如 ComfyUI 路径未配置）。 */
   saveErr: string | null;
   loading: boolean;
@@ -70,11 +70,11 @@ export interface CustomNodesSettingsController {
   perPkgParsing: Record<string, boolean>;
   report: ParseReport | null;
   summary: SettingsResp["summary"];
-  discoveredByParent: Record<string, DiscoveredSubpkg[]>;
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
   byPath: Record<string, SummaryPkg>;
   /** 父目录展开集合（`~/components/ui/expansion-set`，规范 16 §16.2.4.17）。 */
   parentExpansion: ExpansionSet;
-  logs: { level: string; msg: string }[];
+  logs: Array<{ level: string; msg: string }>;
   consoleRef: RefObject<HTMLDivElement | null>;
   logsRef: RefObject<HTMLDivElement | null>;
   manifestByNode: Record<string, ManifestNodeRaw>;
@@ -85,7 +85,7 @@ export interface CustomNodesSettingsController {
   onParseAll: () => Promise<void>;
   onParseSingle: (pkgPath: string) => Promise<void>;
   onParseAllParent: (parent: string) => Promise<void>;
-  parentBlocks: ParentBlock[];
+  parentBlocks: Array<ParentBlock>;
   totalAcrossParents: {
     loaded: number;
     outdated: number;
@@ -113,10 +113,10 @@ function parseSettingsBlob(
   data: SettingsResp & { error?: { message?: string } | string },
   status: number,
 ): {
-  paths: string[];
+  paths: Array<string>;
   summary: SettingsResp["summary"];
   lastReport: ParseReport | null;
-  discoveredByParent: Record<string, DiscoveredSubpkg[]>;
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
   byPath: Record<string, SummaryPkg>;
 } {
   if (!data.settings) {
@@ -140,11 +140,11 @@ async function consumeSettingsStream(
     setSaveErr: (msg: string) => void;
   },
 ): Promise<{
-  paths: string[];
+  paths: Array<string>;
   summary: SettingsResp["summary"];
   lastReport: ParseReport | null;
   byPath: Record<string, SummaryPkg>;
-  discoveredByParent: Record<string, DiscoveredSubpkg[]>;
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
 }> {
   const reader = res.body?.getReader();
   if (!reader) throw new Error("服务器未返回流式响应");
@@ -153,8 +153,8 @@ async function consumeSettingsStream(
   let summary: SettingsResp["summary"] = null;
   let lastReport: ParseReport | null = null;
   let byPath: Record<string, SummaryPkg> = {};
-  const discoveredByParent: Record<string, DiscoveredSubpkg[]> = {};
-  const paths: string[] = [];
+  const discoveredByParent: Record<string, Array<DiscoveredSubpkg>> = {};
+  const paths: Array<string> = [];
 
   while (true) {
     const { done, value } = await reader.read();
@@ -226,7 +226,7 @@ async function consumeSettingsStream(
 
 export function useCustomNodesSettings(): CustomNodesSettingsController {
   const [open, setOpen] = useState(false);
-  const [savedPaths, setSavedPaths] = useState<string[]>([]);
+  const [savedPaths, setSavedPaths] = useState<Array<string>>([]);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // 进度分两阶段，均用「包数」而非「文件数」表达（shape/字段文档见 ./types.ts 的
@@ -246,9 +246,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   const [perPkgParsing, setPerPkgParsing] = useState<Record<string, boolean>>({});
   const [report, setReport] = useState<ParseReport | null>(null);
   const [summary, setSummary] = useState<SettingsResp["summary"]>(null);
-  const [discoveredByParent, setDiscoveredByParent] = useState<Record<string, DiscoveredSubpkg[]>>(
-    {},
-  );
+  const [discoveredByParent, setDiscoveredByParent] = useState<
+    Record<string, Array<DiscoveredSubpkg>>
+  >({});
   const [byPath, setByPath] = useState<Record<string, SummaryPkg>>({});
   const parentExpansion = useExpansionSet();
   /* 只取 `seedDefaults` 出来用在 `useCallback` 里：它的引用是稳定的
@@ -257,7 +257,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    * `useCallback` 每轮重建，那正是它此前 `[]` 想避免的事。 */
   const { seedDefaults: seedParentDefaults } = parentExpansion;
 
-  const [logs, setLogs] = useState<{ level: string; msg: string }[]>([]);
+  const [logs, setLogs] = useState<Array<{ level: string; msg: string }>>([]);
   const consoleRef = useRef<HTMLDivElement>(null);
   const logsRef = useRef<HTMLDivElement>(null);
   /* 卸载标记：见 fetchSettings 的 finally —— 那里有一个「让完成后提示停留
@@ -476,7 +476,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    *  收口前这段 fetch + NDJSON 流式消费在**三处逐字重复**，而忙碌位的复位各自
    *  写在 `finally` 里；现在复位绑在忙碌位出口上（规范 16 §16.2.4.71），
    *  「解析中」不会因为中途抛错永远留在界面上。 */
-  async function runParse(packages?: string[]) {
+  async function runParse(packages?: Array<string>) {
     setError_(null);
     setLogs([]);
     try {

@@ -58,7 +58,7 @@ const SCRIPTS = /* SAFETY: 类型断言已复核 */ [
 ] as const;
 
 test("每个在进程内跑的判据脚本，它的每个导出都有人用（零消费导出当场红）", () => {
-  const problems: string[] = [];
+  const problems: Array<string> = [];
   for (const entry of SCRIPTS) {
     const mod = /* SAFETY: 类型断言已复核 */ loadJudgeModule() as unknown as Record<
       string,

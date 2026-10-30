@@ -66,13 +66,13 @@ function reduceBlockOf(text: string): string | null {
 }
 
 /** 块体内出现过的 `data-slot` 值（选择器里点名的那些）。 */
-function slotsNamedIn(block: string): string[] {
+function slotsNamedIn(block: string): Array<string> {
   return [...new Set([...block.matchAll(/\[data-slot="([^"]+)"\]/g)].map((m) => m[1]!))];
 }
 
 /** 用到某个 class 的 `.tsx` 清单（只扫 `src/components` 与 `src/app`）。 */
-function collectConsumers(cls: string): string[] {
-  const out: string[] = [];
+function collectConsumers(cls: string): Array<string> {
+  const out: Array<string> = [];
   const walk = (dir: string) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.name.startsWith(".")) continue;

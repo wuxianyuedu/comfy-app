@@ -4,22 +4,14 @@
 
 export interface OptionGroup {
   title: string;
-  options: string[];
+  options: Array<string>;
 }
 
 /** 服装 · 按年代/类型分组（穷举常见题材服装） */
-export const COSTUME_OPTIONS: OptionGroup[] = [
+export const COSTUME_OPTIONS: Array<OptionGroup> = [
   {
     title: "中式",
-    options: [
-      "唐装",
-      "汉服",
-      "旗袍",
-      "长衫/马褂",
-      "中山装",
-      "新中式服饰",
-      "戏服(戏曲)",
-    ],
+    options: ["唐装", "汉服", "旗袍", "长衫/马褂", "中山装", "新中式服饰", "戏服(戏曲)"],
   },
   {
     title: "日韩",
@@ -59,16 +51,7 @@ export const COSTUME_OPTIONS: OptionGroup[] = [
   },
   {
     title: "职业/功能",
-    options: [
-      "白大褂(医生)",
-      "护士服",
-      "警服",
-      "军装",
-      "工装",
-      "厨师服",
-      "飞行服",
-      "运动装备",
-    ],
+    options: ["白大褂(医生)", "护士服", "警服", "军装", "工装", "厨师服", "飞行服", "运动装备"],
   },
   {
     title: "奇幻/科幻",
@@ -85,20 +68,12 @@ export const COSTUME_OPTIONS: OptionGroup[] = [
   },
   {
     title: "特殊服饰",
-    options: [
-      "婚纱",
-      "浴袍",
-      "睡衣",
-      "泳装",
-      "斗篷/披风",
-      "围巾大衣",
-      "帽兜外套",
-    ],
+    options: ["婚纱", "浴袍", "睡衣", "泳装", "斗篷/披风", "围巾大衣", "帽兜外套"],
   },
 ];
 
 /** 外貌特征 · 分发型/眼眉/脸型/五官/体型/肤发色 穷举 */
-export const APPEARANCE_OPTIONS: OptionGroup[] = [
+export const APPEARANCE_OPTIONS: Array<OptionGroup> = [
   {
     title: "发型",
     options: [
@@ -123,17 +98,7 @@ export const APPEARANCE_OPTIONS: OptionGroup[] = [
   },
   {
     title: "发色",
-    options: [
-      "黑发",
-      "棕发",
-      "金发/黄发",
-      "红发",
-      "银发/白发",
-      "蓝发",
-      "绿发",
-      "渐变发色",
-      "挑染",
-    ],
+    options: ["黑发", "棕发", "金发/黄发", "红发", "银发/白发", "蓝发", "绿发", "渐变发色", "挑染"],
   },
   {
     title: "眼眉",
@@ -170,27 +135,11 @@ export const APPEARANCE_OPTIONS: OptionGroup[] = [
   },
   {
     title: "体型/身高",
-    options: [
-      "高挑",
-      "匀称",
-      "纤细/纤瘦",
-      "丰满",
-      "健硕/肌肉",
-      "娇小",
-      "魁梧高大",
-    ],
+    options: ["高挑", "匀称", "纤细/纤瘦", "丰满", "健硕/肌肉", "娇小", "魁梧高大"],
   },
   {
     title: "肤色",
-    options: [
-      "白皙",
-      "自然肤色",
-      "小麦色",
-      "古铜色",
-      "深肤色",
-      "冷白皮",
-      "暖黄皮",
-    ],
+    options: ["白皙", "自然肤色", "小麦色", "古铜色", "深肤色", "冷白皮", "暖黄皮"],
   },
   {
     title: "其他特征",
@@ -210,7 +159,7 @@ export const APPEARANCE_OPTIONS: OptionGroup[] = [
 ];
 
 /** 性格（写入 personality，作画面 mood 关键词） */
-export const PERSONALITY_OPTIONS: OptionGroup[] = [
+export const PERSONALITY_OPTIONS: Array<OptionGroup> = [
   {
     title: "正向",
     options: [
@@ -251,7 +200,7 @@ export const PERSONALITY_OPTIONS: OptionGroup[] = [
 ];
 
 /** 气质（写入 personality，作画面氛围关键词） */
-export const TEMPERAMENT_OPTIONS: OptionGroup[] = [
+export const TEMPERAMENT_OPTIONS: Array<OptionGroup> = [
   {
     title: "气质",
     options: [
@@ -278,7 +227,7 @@ export const TEMPERAMENT_OPTIONS: OptionGroup[] = [
 ];
 
 /** 风格标签（写 styleTags，作画面画风关键词） */
-export const STYLE_TAG_OPTIONS: OptionGroup[] = [
+export const STYLE_TAG_OPTIONS: Array<OptionGroup> = [
   {
     title: "美术/画风",
     options: [
@@ -325,16 +274,13 @@ export const STYLE_TAG_OPTIONS: OptionGroup[] = [
 export interface AttributeOptionSet {
   id: string;
   label: string;
-  groups: OptionGroup[];
+  groups: Array<OptionGroup>;
 }
 
 /* 标成**非空数组**：调用方（`CharacterDesigner.attrSet`）把首项当作
  * 「id 对不上时」的兜底维度，类型上直接是元素而非 `| undefined`。 */
 /** 组件下拉维度配置：顺序即展示顺序 */
-export const CHARACTER_ATTRIBUTES: [
-  AttributeOptionSet,
-  ...AttributeOptionSet[],
-] = [
+export const CHARACTER_ATTRIBUTES: [AttributeOptionSet, ...Array<AttributeOptionSet>] = [
   { id: "costume", label: "服装", groups: COSTUME_OPTIONS },
   { id: "appearance", label: "外貌特征", groups: APPEARANCE_OPTIONS },
   { id: "personality", label: "性格", groups: PERSONALITY_OPTIONS },

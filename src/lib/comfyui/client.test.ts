@@ -50,7 +50,7 @@ const plan = {
 };
 
 /** 只让指定端口应答 `/system_stats`，其余连接一律拒绝。 */
-function respondOn(ports: number[]) {
+function respondOn(ports: Array<number>) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
     const url = String(input);
     if (ports.some((p) => url.includes(`:${p}/`))) {
@@ -240,8 +240,8 @@ describe("getView — 取字节的地址组装与失败形状", () => {
    *  顺手把打出去的查询串记进 `seen` —— 断言取这里，而不是回读 `mock.calls`
    *  （那个元素的类型是 `URL | RequestInfo` 联合，字符串化会撞上
    *  `no-base-to-string`；`input: unknown` 的写法与本文件顶部的 `respondOn` 一致）。 */
-  function viewReply(reply: { bytes?: number[]; status: number }) {
-    const seen: string[] = [];
+  function viewReply(reply: { bytes?: Array<number>; status: number }) {
+    const seen: Array<string> = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
       const url = new URL(String(input));
       if (url.pathname !== "/api/view") return new Response("{}", { status: 200 });

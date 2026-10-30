@@ -18,7 +18,7 @@ import {
 } from "./production-bridge";
 import type { WorkshopSessionState, WorkshopSessionSummary } from "./types";
 
-const VALID_STAGES: readonly PipelineStageId[] = [
+const VALID_STAGES: ReadonlyArray<PipelineStageId> = [
   "script",
   "character",
   "storyboard",
@@ -30,7 +30,7 @@ const VALID_STAGES: readonly PipelineStageId[] = [
 export function isStage(v: unknown): v is PipelineStageId {
   return (
     typeof v === "string" &&
-    /* SAFETY: 类型断言已复核 */ (VALID_STAGES as readonly string[]).includes(v)
+    /* SAFETY: 类型断言已复核 */ (VALID_STAGES as ReadonlyArray<string>).includes(v)
   );
 }
 
@@ -96,11 +96,13 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
       logline: row.logline,
       scriptMarkdown: row.scriptMarkdown,
     },
-    scenes: Array.isArray(row.scenes) ? /* SAFETY: 类型断言已复核 */ (row.scenes as Scene[]) : [],
-    characters: Array.isArray(row.characters)
-      ? /* SAFETY: 类型断言已复核 */ (row.characters as Character[])
+    scenes: Array.isArray(row.scenes)
+      ? /* SAFETY: 类型断言已复核 */ (row.scenes as Array<Scene>)
       : [],
-    shots: Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[]) : [],
+    characters: Array.isArray(row.characters)
+      ? /* SAFETY: 类型断言已复核 */ (row.characters as Array<Character>)
+      : [],
+    shots: Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>) : [],
     stage: isStage(row.stage) ? row.stage : "script",
     projectId: row.projectId ?? null,
   };
@@ -180,7 +182,7 @@ export async function getSession(id: string): Promise<WorkshopSessionState | nul
   return state;
 }
 
-export async function listSessions(): Promise<WorkshopSessionSummary[]> {
+export async function listSessions(): Promise<Array<WorkshopSessionSummary>> {
   const rows = await workshopDb
     .select()
     .from(workshopSession)

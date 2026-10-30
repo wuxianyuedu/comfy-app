@@ -53,15 +53,15 @@ export interface DynamicWorkflowFormController {
    *  单键快捷方式。 */
   onChange: (next: Record<string, unknown>) => void;
   /** 全量输入（wire + widget），按 displayOrder 稳定排序。 */
-  inputs: EnrichedWidget[];
-  outputs: (WorkflowIOEntry & { ioKey: string })[];
-  wireInputs: EnrichedWidget[];
-  widgetInputs: EnrichedWidget[];
+  inputs: Array<EnrichedWidget>;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  wireInputs: Array<EnrichedWidget>;
+  widgetInputs: Array<EnrichedWidget>;
   groups: ReturnType<typeof inferGroups>;
   /** 端口行：wire inputs + 数值 widget（已分组的 pin 除外）。 */
-  portEntries: EnrichedWidget[];
+  portEntries: Array<EnrichedWidget>;
   /** 可编辑参数行：非数值 widget（已分组的 pin 除外）。 */
-  widgetSectionEntries: EnrichedWidget[];
+  widgetSectionEntries: Array<EnrichedWidget>;
   /** 没有任何输入/输出端点 —— 视图据此渲染空态提示。 */
   isEmpty: boolean;
   uploading: boolean;

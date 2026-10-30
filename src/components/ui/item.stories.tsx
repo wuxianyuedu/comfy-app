@@ -29,13 +29,11 @@ import {
  */
 type ItemVariant = NonNullable<React.ComponentProps<typeof Item>["variant"]>;
 type ItemSize = NonNullable<React.ComponentProps<typeof Item>["size"]>;
-type ItemMediaVariant = NonNullable<
-  React.ComponentProps<typeof ItemMedia>["variant"]
->;
+type ItemMediaVariant = NonNullable<React.ComponentProps<typeof ItemMedia>["variant"]>;
 
-const VARIANTS: ItemVariant[] = ["default", "outline", "muted"];
-const SIZES: ItemSize[] = ["default", "sm", "xs"];
-const MEDIA_KINDS: ItemMediaVariant[] = ["default", "icon", "image"];
+const VARIANTS: Array<ItemVariant> = ["default", "outline", "muted"];
+const SIZES: Array<ItemSize> = ["default", "sm", "xs"];
+const MEDIA_KINDS: Array<ItemMediaVariant> = ["default", "icon", "image"];
 
 const meta = {
   title: "UI/Item",
@@ -119,9 +117,7 @@ export const Sizes: Story = {
           <ItemContent>
             <ItemTitle>size={size}</ItemTitle>
             <ItemDescription>
-              {size === "xs"
-                ? "给浮层里的列表项用（更紧、字号更小）"
-                : "常规列表项"}
+              {size === "xs" ? "给浮层里的列表项用（更紧、字号更小）" : "常规列表项"}
             </ItemDescription>
           </ItemContent>
         </Item>
@@ -161,9 +157,7 @@ export const WithHeaderAndFooter: Story = {
         <ItemDescription>12:04:31</ItemDescription>
       </ItemHeader>
       <ItemContent>
-        <ItemDescription>
-          提示词：a lone lighthouse on a basalt cliff …
-        </ItemDescription>
+        <ItemDescription>提示词：a lone lighthouse on a basalt cliff …</ItemDescription>
       </ItemContent>
       <ItemFooter>
         <ItemDescription>耗时 42.8s</ItemDescription>

@@ -48,12 +48,7 @@ describe("branchLandingRows：三种结论，且「没取到」不等于「没�
   ];
 
   it("已合并的那条给 landed，未合并的那条给 not-merged", () => {
-    const rows = branchLandingRows(
-      branches.slice(0, 2),
-      pulls,
-      new Set(),
-      "master",
-    );
+    const rows = branchLandingRows(branches.slice(0, 2), pulls, new Set(), "master");
     expect(rows.map((r) => r.verdict)).toEqual(["landed", "not-merged"]);
     expect(rows[0]?.pr).toBe(2420);
     expect(rows[0]?.mergedBy).toBe(true);
@@ -61,40 +56,26 @@ describe("branchLandingRows：三种结论，且「没取到」不等于「没�
   });
 
   it("窗口取满而确实没有 PR ⇒ not-merged（这是正面事实，保守到「别删」）", () => {
-    const rows = branchLandingRows(
-      [{ name: "scratch/x", sha: "s" }],
-      pulls,
-      new Set(),
-      "master",
-      { windowComplete: true },
-    );
+    const rows = branchLandingRows([{ name: "scratch/x", sha: "s" }], pulls, new Set(), "master", {
+      windowComplete: true,
+    });
     expect(rows[0]?.verdict).toBe("not-merged");
   });
 
   it("窗口没取满 ⇒ no-pull-in-window，不许被读成「没合并」", () => {
-    const rows = branchLandingRows(
-      [{ name: "scratch/x", sha: "s" }],
-      pulls,
-      new Set(),
-      "master",
-      { windowComplete: false },
-    );
+    const rows = branchLandingRows([{ name: "scratch/x", sha: "s" }], pulls, new Set(), "master", {
+      windowComplete: false,
+    });
     expect(rows[0]?.verdict).toBe("no-pull-in-window");
     expect(rows[0]?.pr).toBeNull();
     expect(rows[0]?.isMerged).toBeNull();
   });
 
   it("裸分支名匹配不上：平台的形状是 refs/heads/<名>（错法实测把九条已合并分支判成「没找到」）", () => {
-    const bareShape = [
-      { number: 1, is_merged: true, head: { ref: "fix/a", sha: "x" } },
-    ];
-    const rows = branchLandingRows(
-      [{ name: "fix/a", sha: "x" }],
-      bareShape,
-      new Set(),
-      "master",
-      { windowComplete: true },
-    );
+    const bareShape = [{ number: 1, is_merged: true, head: { ref: "fix/a", sha: "x" } }];
+    const rows = branchLandingRows([{ name: "fix/a", sha: "x" }], bareShape, new Set(), "master", {
+      windowComplete: true,
+    });
     // 按裸名存的那份记录**不该**被认成命中（认了就是拿一次巧合当结论）。
     expect(rows[0]?.pr).toBeNull();
     expect(rows[0]?.verdict).toBe("not-merged");
@@ -122,11 +103,7 @@ describe("fetchPullsForBranches：取不到就是取不到", () => {
   });
 
   it("响应不是 JSON ⇒ ok:false（不许拿一份空列表去判「都没提过 PR」）", () => {
-    const got = fetchPullsForBranches(
-      () => ok("cnb: command not found"),
-      "o/r",
-      { maxPages: 1 },
-    );
+    const got = fetchPullsForBranches(() => ok("cnb: command not found"), "o/r", { maxPages: 1 });
     expect(got.ok).toBe(false);
     expect(got.windowComplete).toBe(false);
     expect(got.note).toContain("没有结论");
@@ -147,41 +124,36 @@ describe("fetchPullsForBranches：取不到就是取不到", () => {
     const full = Array.from({ length: BRANCH_PULL_PAGE_SIZE }, (_, i) =>
       pull(2000 - i, `b${i}`, true),
     );
-    const got = fetchPullsForBranches(
-      () => ok(JSON.stringify({ data: full })),
-      "o/r",
-      { maxPages: 2 },
-    );
+    const got = fetchPullsForBranches(() => ok(JSON.stringify({ data: full })), "o/r", {
+      maxPages: 2,
+    });
     expect(got.windowComplete).toBe(false);
     expect(got.note).toContain("就到顶");
   });
 });
 
 /** `main()` 那一层需要的最小 io（形状同 `tests/ship.test.ts` 的 `issueMainIo`）。 */
-function branchesMainIo(opts: { pulls: unknown[]; branchList: string }) {
-  const calls: string[] = [];
-  const log: string[] = [];
+function branchesMainIo(opts: { pulls: Array<unknown>; branchList: string }) {
+  const calls: Array<string> = [];
+  const log: Array<string> = [];
   const ok = (stdout: string): FakeResult => ({
     status: 0,
     stdout,
     stderr: "",
     error: null,
   });
-  const run = (cmd: string, args: string[]): FakeResult => {
+  const run = (cmd: string, args: Array<string>): FakeResult => {
     calls.push([cmd, ...args].join(" "));
     const key = args.join(" ");
     if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
     if (cmd === "git" && key.includes("@{u}")) return ok("cnb/master");
     if (cmd === "git" && key === "remote") return ok("cnb\n");
-    if (cmd === "git" && key.includes("symbolic-ref"))
-      return ok("refs/remotes/cnb/master");
+    if (cmd === "git" && key.includes("symbolic-ref")) return ok("refs/remotes/cnb/master");
     if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
-    if (cmd === "git" && key.includes("rev-parse --verify --quiet"))
-      return ok("d02ec9");
+    if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
     if (cmd === "git" && key.includes("get-url"))
       return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-    if (cmd === "git" && key.includes("for-each-ref"))
-      return ok(opts.branchList);
+    if (cmd === "git" && key.includes("for-each-ref")) return ok(opts.branchList);
     if (cmd === "git" && key.includes("ls-remote --heads"))
       return ok("aaa\trefs/heads/fix/landed\n");
     if (cmd === "cnb" && args[0] === "pulls" && args[1] === "list-pulls")

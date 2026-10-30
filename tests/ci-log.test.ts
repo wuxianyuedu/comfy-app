@@ -60,9 +60,7 @@ describe("三条判决的形状", () => {
       gate: "生成态文档与源同步",
       detail: "暂存区是空的 ⇒ 没有要判的东西",
     });
-    expect(head).toBe(
-      "[skip] 生成态文档与源同步（暂存区是空的 ⇒ 没有要判的东西）",
-    );
+    expect(head).toBe("[skip] 生成态文档与源同步（暂存区是空的 ⇒ 没有要判的东西）");
     expect(head?.startsWith(TAGS.ok)).toBe(false);
   });
 
@@ -83,17 +81,13 @@ describe("三条判决的形状", () => {
   });
 
   it("没有任何对象 / 读数时不留悬空的分隔符", () => {
-    expect(renderVerdict({ gate: "镜像身份", detail: " " })[0]).toBe(
-      "[ok] 镜像身份",
-    );
+    expect(renderVerdict({ gate: "镜像身份", detail: " " })[0]).toBe("[ok] 镜像身份");
   });
 });
 
 describe("降级：读数里说「这一轮没判」的自动成 skip", () => {
   it.for(SKIP_MARKERS.map((m) => [m]))("「%s」触发降级", ([marker]) => {
-    expect(looksSkipped(`[doc-mirror] ${marker} ⇒ 这一批没有要判的东西`)).toBe(
-      true,
-    );
+    expect(looksSkipped(`[doc-mirror] ${marker} ⇒ 这一批没有要判的东西`)).toBe(true);
     expect(gatePass("某判据", `${marker} ⇒ 这一批没有要判的东西`)).toBe("skip");
   });
 
@@ -102,7 +96,7 @@ describe("降级：读数里说「这一轮没判」的自动成 skip", () => {
   });
 
   it("降级后那一行带的是 [skip]，不是 [ok]", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     gatePass("镜像同批", "暂存区是空的 ⇒ 没有要判的东西", {
       out: (line: string) => lines.push(line),
     });
@@ -150,7 +144,7 @@ describe("三个动词都只排版、不判", () => {
   });
 
   it("gateFail 的 detail 可以覆盖默认读数", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     gateFail("函数长度", ["f:1"], {
       detail: "超过 400 行 2 个",
       out: (line: string) => lines.push(line),
@@ -161,7 +155,7 @@ describe("三个动词都只排版、不判", () => {
 
 describe("没有证据就不打红（屏幕上不许出现「命中 0 条」的红）", () => {
   it("gateFail 收到空清单时什么都不打，并如实回 ok", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     expect(
       gateFail("文件结构硬规则", [], {
         out: (line: string) => lines.push(line),
@@ -190,9 +184,7 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
 
   it("色带只加一个前导竖线与一格空白，不动行内任何一格", () => {
     const { line } = bandLine("[skip] 生成态文档与源同步（没判）");
-    expect(line.replace(/\u001b\[[\d;]*m/g, "")).toBe(
-      "▌ [skip] 生成态文档与源同步（没判）",
-    );
+    expect(line.replace(/\u001b\[[\d;]*m/g, "")).toBe("▌ [skip] 生成态文档与源同步（没判）");
   });
 
   it("色带认三态前缀取色，认不出的行用中性灰（不沿用上一条的颜色）", () => {
@@ -218,9 +210,7 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
 
   it("逐行上色只染标签，不改变「这一行是不是判决」", () => {
     const line = colorizeLine("[info] 命中输入面 3 个文件，生成并自检中…");
-    expect(line.replace(/\u001b\[[\d;]*m/g, "")).toBe(
-      "[info] 命中输入面 3 个文件，生成并自检中…",
-    );
+    expect(line.replace(/\u001b\[[\d;]*m/g, "")).toBe("[info] 命中输入面 3 个文件，生成并自检中…");
     expect(line).not.toBe("[info] 命中输入面 3 个文件，生成并自检中…");
   });
 
@@ -234,7 +224,7 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
   });
 
   it("调用方给了 out ⇒ 交出去的仍是干净文本（跑批靠它读回结论句）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     gatePass("a", "命中 0 条", { out: (l: string) => lines.push(l) });
     expect(lines).toEqual(["[ok] a（命中 0 条）"]);
   });

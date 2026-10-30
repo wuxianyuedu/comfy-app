@@ -6,13 +6,9 @@
 
 import { describe, expect, it } from "vitest";
 
-import {
-  exposedClassOf,
-  exposedParamLabel,
-  exposedParamsForMode,
-} from "./workflow-exposed-params";
+import { exposedClassOf, exposedParamLabel, exposedParamsForMode } from "./workflow-exposed-params";
 
-function ids(mode: string | null): string[] {
+function ids(mode: string | null): Array<string> {
   return exposedParamsForMode(mode).map((def) => def.id);
 }
 
@@ -33,14 +29,7 @@ describe("exposedParamsForMode", () => {
   });
 
   it("单图生视频给首帧，不给尾帧；视频口都带时长", () => {
-    expect(ids("I2V")).toEqual([
-      "prompt",
-      "negative",
-      "first-frame",
-      "size",
-      "duration",
-      "seed",
-    ]);
+    expect(ids("I2V")).toEqual(["prompt", "negative", "first-frame", "size", "duration", "seed"]);
   });
 
   it("首尾帧模式才给尾帧", () => {
@@ -56,13 +45,7 @@ describe("exposedParamsForMode", () => {
   });
 
   it("文生视频不给首帧（没有图可给），但有时长", () => {
-    expect(ids("T2V")).toEqual([
-      "prompt",
-      "negative",
-      "size",
-      "duration",
-      "seed",
-    ]);
+    expect(ids("T2V")).toEqual(["prompt", "negative", "size", "duration", "seed"]);
   });
 
   it("时长是视频专有口：生图模式不带", () => {

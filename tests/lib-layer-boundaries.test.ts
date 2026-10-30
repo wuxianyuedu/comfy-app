@@ -30,7 +30,7 @@ type Policy = {
 };
 
 /** 从扁平配置里取出 boundaries 那一节（含 elements 声明与策略）。 */
-function boundariesSection(): { elements: ElementDef[]; policies: Policy[] } {
+function boundariesSection(): { elements: Array<ElementDef>; policies: Array<Policy> } {
   const configs = /* SAFETY: 类型断言已复核 */ eslintConfig as unknown as Array<{
     plugins?: Record<string, unknown>;
     settings?: Record<string, unknown>;
@@ -39,9 +39,9 @@ function boundariesSection(): { elements: ElementDef[]; policies: Policy[] } {
   const section = configs.find((c) => c.plugins?.boundaries);
   expect(section, "eslint.config.js 里找不到 boundaries 配置节").toBeTruthy();
   const elements = /* SAFETY: 类型断言已复核 */ (section?.settings?.["boundaries/elements"] ??
-    []) as ElementDef[];
+    []) as Array<ElementDef>;
   const rule = /* SAFETY: 类型断言已复核 */ section?.rules?.["boundaries/dependencies"] as
-    | [string, { policies?: Policy[] }]
+    | [string, { policies?: Array<Policy> }]
     | undefined;
   return { elements, policies: rule?.[1]?.policies ?? [] };
 }
@@ -79,7 +79,7 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
 
   it("真实仓库里 src/lib 没有 import src/components / src/app（事实层）", () => {
     const root = process.cwd();
-    const hits: string[] = [];
+    const hits: Array<string> = [];
     const walk = (dir: string) => {
       for (const name of readdirSync(dir)) {
         const full = join(dir, name);

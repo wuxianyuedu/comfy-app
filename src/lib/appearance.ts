@@ -36,7 +36,7 @@ export interface AppearanceStep {
  * （`ui/card` 走 `rounded-xl`，实际角比标签值大 4px）。改基数或改这里的值，
  * 两边必须同批 —— 文案说 16px 而实渲染 12px 就是骗用户。
  */
-export const RADIUS_STEPS: AppearanceStep[] = [
+export const RADIUS_STEPS: Array<AppearanceStep> = [
   { id: "sm", label: "小 · 12px", value: "0.75rem" },
   { id: "md", label: "中 · 16px", value: "1rem" },
   { id: "lg", label: "大 · 20px", value: "1.25rem" },
@@ -44,7 +44,7 @@ export const RADIUS_STEPS: AppearanceStep[] = [
 ];
 
 /** 标题字阶档位（倍率；基准在 CSS 里）。 */
-export const FONT_SCALE_STEPS: AppearanceStep[] = [
+export const FONT_SCALE_STEPS: Array<AppearanceStep> = [
   { id: "90", label: "紧凑 90%", value: "0.9" },
   { id: "100", label: "标准 100%", value: "1" },
   { id: "110", label: "舒适 110%", value: "1.1" },
@@ -62,7 +62,7 @@ export const DEFAULT_APPEARANCE: AppearancePrefs = {
   fontScale: "100",
 };
 
-function stepValue(steps: AppearanceStep[], id: string, fallbackId: string): string {
+function stepValue(steps: Array<AppearanceStep>, id: string, fallbackId: string): string {
   const hit = steps.find((step) => step.id === id);
   return (hit ?? steps.find((step) => step.id === fallbackId))?.value ?? "";
 }

@@ -1,9 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import {
-  BreadcrumbPath,
-  type BreadcrumbSegment,
-} from "~/components/ui/breadcrumb-path";
+import { BreadcrumbPath, type BreadcrumbSegment } from "~/components/ui/breadcrumb-path";
 
 /**
  * `ui/breadcrumb-path` 是「一段路径 `A / B / 当前 C`」的**唯一实现**
@@ -29,7 +26,7 @@ const meta = {
       { label: "参考素材", key: null },
       { label: "角色参考", key: "characters" },
       { label: "小夜", key: null },
-    ] satisfies BreadcrumbSegment[],
+    ] satisfies Array<BreadcrumbSegment>,
     onNavigate: () => undefined,
     navigable: true,
   },

@@ -28,9 +28,9 @@ const log = createLogger("workshop:logs");
 /** 追加一批执行日志（调用方已按环节分组）；失败仅 warn，不抛出。 */
 export async function appendGenerationLogs(
   stage: GenerationLogStage,
-  entries: unknown[],
+  entries: Array<unknown>,
 ): Promise<number> {
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   for (const raw of entries) {
     const entry = normalizeGenerationLogEntry(raw);
     if (entry) lines.push(JSON.stringify({ stage, ...entry }));
@@ -56,14 +56,14 @@ export async function appendGenerationLogs(
 export async function readGenerationLogs(
   stage: GenerationLogStage,
   limit: number,
-): Promise<GenerationLogEntry[]> {
+): Promise<Array<GenerationLogEntry>> {
   const capped = clampInt(Math.floor(limit) || 100, 1, 500, { mode: "trunc" });
   try {
     const names = (await fs.readdir(WORKSHOP_LOG_DIR))
       .filter((n) => /^generation-\d{4}-\d{2}-\d{2}\.log$/.test(n))
       .sort()
       .reverse();
-    const collected: GenerationLogEntry[] = [];
+    const collected: Array<GenerationLogEntry> = [];
     for (const name of names) {
       let text: string;
       try {

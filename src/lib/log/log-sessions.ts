@@ -70,7 +70,7 @@ export interface LogSessionsPayload {
    * 归档之后那些份此前**没有任何界面能打开**）。视图侧「新一次启动自动切过去」
    * 取的就是 `sessions[0]`，与端点 `selectedId` 的缺省值同端。
    */
-  sessions: LogSessionMeta[];
+  sessions: Array<LogSessionMeta>;
   /** 本次返回的正文属于哪一份文件；没有可用会话时为 null。 */
   selectedId: string | null;
   /** 选中那一份的正文（超长时取**尾部窗口**，见 `truncated` / `windowed`）。 */

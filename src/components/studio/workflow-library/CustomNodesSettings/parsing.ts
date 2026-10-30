@@ -47,14 +47,14 @@ export function deriveRowState(sub: DiscoveredSubpkg, saved: SummaryPkg | undefi
   };
 }
 
-export function splitPaths(text: string): string[] {
+export function splitPaths(text: string): Array<string> {
   return text
     .split(/[\n,]/)
     .map((segment) => segment.trim())
     .filter(Boolean);
 }
 
-export function eqArr(first: string[], second: string[]) {
+export function eqArr(first: Array<string>, second: Array<string>) {
   if (first.length !== second.length) return false;
   for (let i = 0; i < first.length; i++) if (first[i] !== second[i]) return false;
   return true;

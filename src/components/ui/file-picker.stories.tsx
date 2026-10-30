@@ -38,14 +38,8 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-function FilePickerDemo({
-  accept,
-  multiple,
-}: {
-  accept?: string;
-  multiple?: boolean;
-}) {
-  const [picked, setPicked] = useState<string[]>([]);
+function FilePickerDemo({ accept, multiple }: { accept?: string; multiple?: boolean }) {
+  const [picked, setPicked] = useState<Array<string>>([]);
   const picker = useFilePicker({
     onPick: (file, files) => {
       setPicked(multiple ? Array.from(files).map((f) => f.name) : [file.name]);

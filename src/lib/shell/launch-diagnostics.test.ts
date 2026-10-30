@@ -17,7 +17,7 @@ import {
   writeStatusFile,
 } from "./launch-diagnostics";
 
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 function tempDir(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "launch-diag-"));
@@ -35,24 +35,14 @@ afterEach(() => {
 describe("launchPaths", () => {
   it("锚在项目根下，且与 Rust 侧读的路径逐一对应", () => {
     const paths = launchPaths("/proj");
-    expect(paths.statusFile).toBe(
-      path.join("/proj", "run", "launch-status.json"),
-    );
+    expect(paths.statusFile).toBe(path.join("/proj", "run", "launch-status.json"));
     expect(paths.orchestratorLog).toBe(
       path.join("/proj", "log", "current", "launcher", "dev-launcher.log"),
     );
     expect(paths.orchestratorStderr).toBe(
-      path.join(
-        "/proj",
-        "log",
-        "current",
-        "launcher",
-        "dev-launcher-stderr.log",
-      ),
+      path.join("/proj", "log", "current", "launcher", "dev-launcher-stderr.log"),
     );
-    expect(paths.shellLog).toBe(
-      path.join("/proj", "log", "current", "shell", "shell.log"),
-    );
+    expect(paths.shellLog).toBe(path.join("/proj", "log", "current", "shell", "shell.log"));
     expect(paths.shellLaunchLog).toBe(
       path.join("/proj", "log", "current", "launcher", "shell-launch.log"),
     );
@@ -70,11 +60,7 @@ describe("launchPaths", () => {
 
 describe("启动快照", () => {
   it("进度必须 < 1（≥1 会被启动页画成「✓ 完成」）", () => {
-    for (const fallback of [
-      idleFallback(),
-      orchestratingFallback(),
-      idleFallback("shell-boot"),
-    ]) {
+    for (const fallback of [idleFallback(), orchestratingFallback(), idleFallback("shell-boot")]) {
       expect(fallback.progress).toBeLessThan(1);
       expect(fallback.progress).toBeGreaterThanOrEqual(0);
       expect(fallback.error).toBe(false);
@@ -98,12 +84,8 @@ describe("启动快照", () => {
     ]) {
       expect(fallback.diagnostics.statusFile).toBe(paths.statusFile);
     }
-    expect(orchestratingFallback("/proj").diagnostics.launchLog).toBe(
-      paths.shellLaunchLog,
-    );
-    expect(orchestratingFallback("/proj").diagnostics.shellLog).toBe(
-      paths.shellLog,
-    );
+    expect(orchestratingFallback("/proj").diagnostics.launchLog).toBe(paths.shellLaunchLog);
+    expect(orchestratingFallback("/proj").diagnostics.shellLog).toBe(paths.shellLog);
     // 项目根为空时路径仍是可解释的（不是 `undefined` / `null` 拼出来的野字符串）。
     expect(idleFallback("shell-boot", "").diagnostics.projectRoot).toBe("");
   });
@@ -123,18 +105,12 @@ describe("formatReportItem", () => {
 
 describe("formatLogLine", () => {
   it("形态与 log/services 同族：本地时刻 + 级别 + 正文", () => {
-    const line = formatLogLine(
-      "info",
-      "编排器已拉起",
-      new Date(2026, 8, 21, 9, 5, 3, 42),
-    );
+    const line = formatLogLine("info", "编排器已拉起", new Date(2026, 8, 21, 9, 5, 3, 42));
     expect(line).toBe("[2026-09-21 09:05:03.042] [INFO] 编排器已拉起");
   });
 
   it("级别一律大写（便于面板按级别着色 / 检索）", () => {
-    expect(formatLogLine("warn", "x", new Date(2026, 0, 1))).toContain(
-      "[WARN]",
-    );
+    expect(formatLogLine("warn", "x", new Date(2026, 0, 1))).toContain("[WARN]");
   });
 });
 
@@ -161,9 +137,7 @@ describe("落盘适配", () => {
   it("目录缺失时递归建目录并写入", () => {
     const dir = tempDir();
     const paths = launchPaths(dir);
-    expect(writeStatusFile(paths.statusFile, { phase: "shell-boot" })).toBe(
-      true,
-    );
+    expect(writeStatusFile(paths.statusFile, { phase: "shell-boot" })).toBe(true);
     expect(JSON.parse(readFileSync(paths.statusFile, "utf8"))).toEqual({
       phase: "shell-boot",
     });

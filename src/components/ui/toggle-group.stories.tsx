@@ -17,19 +17,13 @@ import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
  * **多选还是单选由 `ToggleGroup` 的 `value` / `defaultValue` 形状决定**
  * （数组 = 多选），这是这一族最容易写错的一处 —— 两条 story 并排给出来。
  */
-type ToggleGroupVariant = NonNullable<
-  React.ComponentProps<typeof ToggleGroup>["variant"]
->;
-type ToggleGroupSize = NonNullable<
-  React.ComponentProps<typeof ToggleGroup>["size"]
->;
-type ToggleGroupOrientation = NonNullable<
-  React.ComponentProps<typeof ToggleGroup>["orientation"]
->;
+type ToggleGroupVariant = NonNullable<React.ComponentProps<typeof ToggleGroup>["variant"]>;
+type ToggleGroupSize = NonNullable<React.ComponentProps<typeof ToggleGroup>["size"]>;
+type ToggleGroupOrientation = NonNullable<React.ComponentProps<typeof ToggleGroup>["orientation"]>;
 
-const VARIANTS: ToggleGroupVariant[] = ["default", "outline"];
-const SIZES: ToggleGroupSize[] = ["default", "sm", "lg"];
-const ORIENTATIONS: ToggleGroupOrientation[] = ["horizontal", "vertical"];
+const VARIANTS: Array<ToggleGroupVariant> = ["default", "outline"];
+const SIZES: Array<ToggleGroupSize> = ["default", "sm", "lg"];
+const ORIENTATIONS: Array<ToggleGroupOrientation> = ["horizontal", "vertical"];
 
 const meta = {
   title: "UI/ToggleGroup",
@@ -73,12 +67,7 @@ export const SingleSelect: Story = {
  *  与上一档的**唯一差别就是这个布尔**（`value` 两档都是数组）。 */
 export const MultiSelect: Story = {
   render: (args) => (
-    <ToggleGroup
-      {...args}
-      multiple
-      defaultValue={["bold"]}
-      aria-label="文字样式"
-    >
+    <ToggleGroup {...args} multiple defaultValue={["bold"]} aria-label="文字样式">
       <ToggleGroupItem value="bold" aria-label="加粗">
         <Bold />
       </ToggleGroupItem>

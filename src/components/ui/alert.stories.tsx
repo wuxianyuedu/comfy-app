@@ -1,12 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 import { CircleAlert, Info, TriangleAlert } from "lucide-react";
 
-import {
-  Alert,
-  AlertAction,
-  AlertDescription,
-  AlertTitle,
-} from "~/components/ui/alert";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 
 /**
@@ -18,7 +13,7 @@ import { Button } from "~/components/ui/button";
  */
 type AlertVariant = NonNullable<React.ComponentProps<typeof Alert>["variant"]>;
 
-const VARIANTS: AlertVariant[] = [
+const VARIANTS: Array<AlertVariant> = [
   "default",
   "destructive",
   "warning",
@@ -35,9 +30,7 @@ const meta = {
     children: (
       <>
         <AlertTitle>工作流未保存</AlertTitle>
-        <AlertDescription>
-          关闭前请先保存，否则本次改动会丢失。
-        </AlertDescription>
+        <AlertDescription>关闭前请先保存，否则本次改动会丢失。</AlertDescription>
       </>
     ),
   },
@@ -74,9 +67,7 @@ export const WithIcon: Story = {
       <>
         <TriangleAlert />
         <AlertTitle>端口被占用</AlertTitle>
-        <AlertDescription>
-          该端口已被另一个实例监听，请先关闭它再重试。
-        </AlertDescription>
+        <AlertDescription>该端口已被另一个实例监听，请先关闭它再重试。</AlertDescription>
       </>
     ),
   },
@@ -113,9 +104,7 @@ export const Attention: Story = {
       <>
         <CircleAlert />
         <AlertTitle>读取工作流失败</AlertTitle>
-        <AlertDescription>
-          workflow.json 不是合法的 JSON，请检查文件后重试。
-        </AlertDescription>
+        <AlertDescription>workflow.json 不是合法的 JSON，请检查文件后重试。</AlertDescription>
       </>
     ),
   },

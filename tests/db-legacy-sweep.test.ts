@@ -17,10 +17,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  epochMsToIso,
-  sweepLegacyTimestamps,
-} from "../scripts/db-legacy-sweep.mjs";
+import { epochMsToIso, sweepLegacyTimestamps } from "../scripts/db-legacy-sweep.mjs";
 
 let tmp: string;
 let dbFile: string;
@@ -37,9 +34,7 @@ function open(): DatabaseSync {
 function rows() {
   const db = open();
   try {
-    return db
-      .prepare("SELECT id, createdAt, updatedAt FROM project ORDER BY id")
-      .all();
+    return db.prepare("SELECT id, createdAt, updatedAt FROM project ORDER BY id").all();
   } finally {
     db.close();
   }
@@ -49,9 +44,7 @@ beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "db-sweep-"));
   dbFile = path.join(tmp, "db.sqlite");
   const db = open();
-  db.exec(
-    "CREATE TABLE project (id TEXT PRIMARY KEY, name TEXT, createdAt TEXT, updatedAt TEXT)",
-  );
+  db.exec("CREATE TABLE project (id TEXT PRIMARY KEY, name TEXT, createdAt TEXT, updatedAt TEXT)");
   db.close();
 });
 
@@ -131,7 +124,7 @@ describe("sweepLegacyTimestamps —— 归一与幂等", () => {
     );
     db.close();
 
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const summary = sweepLegacyTimestamps(dbFile, (l) => lines.push(l));
     expect(summary.skipped).toEqual(["proj_c.updatedAt = not-a-date"]);
     expect(lines.join("")).toContain("proj_c.updatedAt = not-a-date");

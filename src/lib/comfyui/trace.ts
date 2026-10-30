@@ -222,7 +222,7 @@ export function historyTraceSummary(
 export function historyOutputKeys(
   hist: Record<string, unknown> | null | undefined,
   promptId: string,
-): { nodeId: string; keys: string[] }[] {
+): Array<{ nodeId: string; keys: Array<string> }> {
   const entry =
     hist && promptId
       ? /* SAFETY: 类型断言已复核 */ (hist[promptId] as Record<string, unknown> | undefined)
@@ -237,15 +237,15 @@ export function historyOutputKeys(
 
 /** /queue 快照摘要（在飞 + 排队 的 prompt_id 列表），用于「任务还在跑吗」。 */
 export function queueTraceSummary(qd: unknown): {
-  running: string[];
-  pending: string[];
+  running: Array<string>;
+  pending: Array<string>;
 } {
   /* ComfyUI /queue 的条目是 `[number, prompt_id, prompt, extra, outputs]` 元组；
    *  也曾出现过 `{prompt_id}` 对象形态（第三方构建），两种都认。 */
-  const pick = (v: unknown): string[] => {
+  const pick = (v: unknown): Array<string> => {
     if (!nonEmptyArray(v)) return [];
-    const ids: string[] = [];
-    for (const it of /* SAFETY: 类型断言已复核 */ v as unknown[]) {
+    const ids: Array<string> = [];
+    for (const it of /* SAFETY: 类型断言已复核 */ v as Array<unknown>) {
       if (Array.isArray(it)) {
         if (typeof it[1] === "string" && it[1]) ids.push(it[1]);
       } else if (it && typeof it === "object") {

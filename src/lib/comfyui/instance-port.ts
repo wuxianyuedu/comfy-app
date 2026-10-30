@@ -64,9 +64,7 @@ function noProcess(extra: Partial<InstanceQuery> = {}): InstanceQuery {
  * `running` 为 true 表示「进程活着但还没绑定端口」（正在加载）——这是个
  * **有意义的中间态**：调用方应据此等待而不是换地址猜。
  */
-export async function queryInstanceByPath(
-  comfyuiPath: string,
-): Promise<InstanceQuery> {
+export async function queryInstanceByPath(comfyuiPath: string): Promise<InstanceQuery> {
   const root = comfyuiPath?.trim();
   if (!root) return noProcess();
 
@@ -86,11 +84,11 @@ export async function queryInstanceByPath(
   //    main.py，① 必然落空。先试 setup 登记的启动器，再试解释器候选。
   const classify = classifyComfyInstall(root);
   const registered = readRegisteredLauncher(classify.instanceRoot ?? root);
-  const candidates: {
+  const candidates: Array<{
     cmd: string;
     via: string;
     source: InstanceDiscoverySource;
-  }[] = [];
+  }> = [];
   if (registered) {
     candidates.push({
       cmd: registered,
@@ -113,9 +111,7 @@ export async function queryInstanceByPath(
   // 会把冷启动的等待叠成 N 倍（每次查询要起一个 PowerShell 枚举，本机 ~2.5s）。
   // 命中后按候选**原始顺序**取第一个，保证「先声明的判据优先」。（与
   // status.ts 同一处优化，ISSUE #339 的残留延迟。）
-  const lookups = await Promise.all(
-    candidates.map((c) => findPidForMainPyDetailed(c.cmd)),
-  );
+  const lookups = await Promise.all(candidates.map((c) => findPidForMainPyDetailed(c.cmd)));
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
     const lookup = lookups[i];

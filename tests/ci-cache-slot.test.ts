@@ -13,10 +13,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  FINGERPRINT_FILE,
-  pnpmInstallFingerprint,
-} from "../scripts/ci-install-deps.mjs";
+import { FINGERPRINT_FILE, pnpmInstallFingerprint } from "../scripts/ci-install-deps.mjs";
 import {
   CACHE_ROOT_ENV,
   main,
@@ -38,7 +35,7 @@ const KEY = "a".repeat(64);
  * 「槽不在 ⇒ install-into-slot」这一档永远测不到，看起来像判据坏了。
  * 落点取卷根下的临时目录，正是生产里推导出来的那个位置同一层。
  */
-const made: string[] = [];
+const made: Array<string> = [];
 function tmpRoot(): string {
   const onRepoVolume = path.join(path.parse(ROOT).root, "comfy-slot-test");
   let dir: string;
@@ -95,11 +92,7 @@ describe("planSlot 的四档关系", () => {
       slotFingerprint: KEY,
     });
     expect(hit.action).toBe("reuse");
-    for (const plan of [
-      planSlot({}),
-      planSlot({ cacheRoot: "C:/slots", key: KEY }),
-      hit,
-    ]) {
+    for (const plan of [planSlot({}), planSlot({ cacheRoot: "C:/slots", key: KEY }), hit]) {
       expect(SLOT_ACTIONS).toContain(plan.action);
     }
   });
@@ -111,7 +104,7 @@ describe("键的来源与读数形态", () => {
   });
 
   it("打印出来的键就是 `pnpmInstallFingerprint` 那一份（同源，不是第二份 sha）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = main({
       cwd: ROOT,
       env: { [CACHE_ROOT_ENV]: "" },
@@ -121,15 +114,12 @@ describe("键的来源与读数形态", () => {
     });
     expect(code).toBe(0);
     const expected = pnpmInstallFingerprint(ROOT)?.slice(0, 12);
-    expect(
-      expected,
-      "真仓库的依赖面指纹取不到 ⇒ 这条断言在守的东西本身没了",
-    ).toBeTruthy();
+    expect(expected, "真仓库的依赖面指纹取不到 ⇒ 这条断言在守的东西本身没了").toBeTruthy();
     expect(lines.join("\n")).toContain(`键 ${expected}`);
   });
 
   it("恒不退非零，且明说「今天不复制、不链接、不装」—— 开关没拨过去这件事必须读得出来", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const root = tmpRoot();
     // 配一个真的槽根 + 里面摆一份合不上的指纹：仍只出读数、仍退 0。
     const key = pnpmInstallFingerprint(ROOT) ?? KEY;
@@ -152,7 +142,7 @@ describe("键的来源与读数形态", () => {
   });
 
   it("槽里已经有本次指纹 ⇒ 读数走 reuse 那一句话（第二增量的开关就靠这句验证它接对了）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const root = tmpRoot();
     const key = pnpmInstallFingerprint(ROOT);
     expect(key).toBeTruthy();
@@ -172,8 +162,7 @@ describe("键的来源与读数形态", () => {
 
 describe("槽根的推导（不写死盘符）", () => {
   /** 与真仓库同卷的一个假 store 路径（`pnpm store path` 会答成这个形态）。 */
-  const storeOnThisVolume = () =>
-    path.join(path.parse(ROOT).root, ".pnpm-store", "v11");
+  const storeOnThisVolume = () => path.join(path.parse(ROOT).root, ".pnpm-store", "v11");
 
   it("显式 `COMFY_CI_CACHE_ROOT` 优先，且来源被点名（那是「这台机器要放另一块盘」的出口）", () => {
     const out = resolveCacheRoot({
@@ -196,15 +185,12 @@ describe("槽根的推导（不写死盘符）", () => {
     });
     expect(out.root).not.toBeNull();
     expect(path.parse(out.root!).root).toBe(path.parse(store).root);
-    expect(out.root!.endsWith(path.join("ci-cache", "comfy-app-t3"))).toBe(
-      true,
-    );
+    expect(out.root!.endsWith(path.join("ci-cache", "comfy-app-t3"))).toBe(true);
     expect(out.from).toContain(store);
   });
 
   it("runner 换盘 ⇒ 推导跟着换，配置一个字都不用改（这一条就是那次搬家要防的事）", () => {
-    const answerFor = (driveRoot: string) =>
-      path.join(driveRoot, ".pnpm-store", "v11");
+    const answerFor = (driveRoot: string) => path.join(driveRoot, ".pnpm-store", "v11");
     const rootOf = (driveRoot: string) =>
       resolveCacheRoot({
         cwd: ROOT,
@@ -219,9 +205,7 @@ describe("槽根的推导（不写死盘符）", () => {
   });
 
   it("问不出 store ⇒ 不设槽（宁可不省，也不猜一个卷）", () => {
-    expect(
-      resolveCacheRoot({ cwd: ROOT, env: {}, run: () => ({ status: 1 }) }).root,
-    ).toBeNull();
+    expect(resolveCacheRoot({ cwd: ROOT, env: {}, run: () => ({ status: 1 }) }).root).toBeNull();
     expect(
       resolveCacheRoot({
         cwd: ROOT,
@@ -233,7 +217,7 @@ describe("槽根的推导（不写死盘符）", () => {
   });
 
   it("读数里必须连着来源一起出现（一个路径孤零零摆在那儿，读的人不知道它是哪来的）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     main({
       cwd: ROOT,
       env: {},
@@ -269,8 +253,6 @@ describe("第二条同卷义务：槽与作业必须同卷", () => {
   });
 
   it("没给这条事实时不拦（默认同卷 ⇒ 既有四档的形状不变）", () => {
-    expect(planSlot({ cacheRoot: "D:/ci-cache/repo", key: KEY }).action).toBe(
-      "install-into-slot",
-    );
+    expect(planSlot({ cacheRoot: "D:/ci-cache/repo", key: KEY }).action).toBe("install-into-slot");
   });
 });

@@ -57,10 +57,10 @@ function nestedRaw() {
   };
 }
 
-function widgetsOf(raw: unknown, subgraphUid: string, innerId: string): unknown[] {
+function widgetsOf(raw: unknown, subgraphUid: string, innerId: string): Array<unknown> {
   const r = /* SAFETY: 类型断言已复核 */ raw as {
     definitions: {
-      subgraphs: Record<string, { nodes: { id: string; widgets_values: unknown[] }[] }>;
+      subgraphs: Record<string, { nodes: Array<{ id: string; widgets_values: Array<unknown> }> }>;
     };
   };
   const node = r.definitions.subgraphs[subgraphUid]!.nodes.find((n) => n.id === innerId)!;
@@ -107,7 +107,7 @@ describe("resolveRawNode — 拼接 id 逐层下钻", () => {
     };
     const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
       { nodeId: "24", name: "image", value: "new.png" },
-    ]) as { nodes: { id: string; widgets_values: unknown[] }[] };
+    ]) as { nodes: Array<{ id: string; widgets_values: Array<unknown> }> };
 
     expect(result.nodes[0]!.widgets_values).toEqual(["new.png"]);
   });
@@ -264,7 +264,7 @@ function driftRaw(socketInnerHasWidget: boolean) {
 }
 
 type DriftOut = {
-  nodes: { id: string; widgets_values: unknown[] }[];
+  nodes: Array<{ id: string; widgets_values: Array<unknown> }>;
 };
 
 describe("抵消 comfy-cli 提升控件回写的槽位漂移", () => {

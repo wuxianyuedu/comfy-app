@@ -39,13 +39,13 @@ const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
  */
 type StaticAllowModule = {
   isStaticPathAllowed: (rel: string) => boolean;
-  pruneStaticToAllowList: (dir: string, onRemoved?: (name: string) => void) => string[];
-  RUNTIME_SRC: string[];
-  PREBUNDLED_SRC_ROOTS: string[];
-  RUNTIME_SCRIPTS: string[];
-  BUILT_RUNTIME_SCRIPTS: string[];
-  PRIVATE_INPUTS: string[];
-  stripPrivateInputs: (dir: string, onRemoved?: (name: string) => void) => string[];
+  pruneStaticToAllowList: (dir: string, onRemoved?: (name: string) => void) => Array<string>;
+  RUNTIME_SRC: Array<string>;
+  PREBUNDLED_SRC_ROOTS: Array<string>;
+  RUNTIME_SCRIPTS: Array<string>;
+  BUILT_RUNTIME_SCRIPTS: Array<string>;
+  PRIVATE_INPUTS: Array<string>;
+  stripPrivateInputs: (dir: string, onRemoved?: (name: string) => void) => Array<string>;
 };
 type RuntimeEnvModule = {
   OAUTH_PLACEHOLDER: string;
@@ -174,14 +174,14 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
     };
     /** 一份 TS 里 `./x.ts` / `./x` 两种写法都要认（本仓 TS 侧惯例是省略扩展名，
      *  而 `.mjs` 侧必须带 —— 那正是 `platform.ts` 被拆出来的理由）。 */
-    const relativeSpecifiers = (abs: string): string[] => {
+    const relativeSpecifiers = (abs: string): Array<string> => {
       const code = stripCommentLines(readFileSync(abs, "utf8"));
       return [...code.matchAll(/from "(\.[^"]+)"/g)]
         .map((m) => m[1])
         .filter((spec): spec is string => typeof spec === "string");
     };
     /** 从几个 `src/` 根出发，顺着它们自己的 import 走到底。 */
-    const closureFrom = (seeds: string[]): Set<string> => {
+    const closureFrom = (seeds: Array<string>): Set<string> => {
       const seen = new Set(seeds);
       const queue = [...seeds];
       while (queue.length > 0) {
@@ -206,7 +206,7 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
     /* 入口侧按「文件里出现 `../src/…` 的字符串」收，是因为回收链那两处是**常量中转**
      * 的动态 import（`const specifier = "../src/lib/process/kill-process-tree.ts"`，
      * 见 `scripts/reap-process.mjs` 文件头）—— 只认 `from "…"` 会把整条链漏掉。 */
-    const seeds: string[] = [];
+    const seeds: Array<string> = [];
     for (const abs of entries) {
       const code = stripCommentLines(readFileSync(abs, "utf8"));
       for (const m of code.matchAll(/"((?:\.\.\/)+src\/[^"]+)"/g)) {

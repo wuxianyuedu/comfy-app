@@ -180,7 +180,9 @@ export async function GET(request: Request) {
   const source = searchParams.get("source") ?? "";
   const requested = searchParams.get("session");
 
-  if (!(/* SAFETY: 类型断言已复核 */ (RUNTIME_LOG_SOURCES as readonly string[]).includes(source))) {
+  if (
+    !(/* SAFETY: 类型断言已复核 */ (RUNTIME_LOG_SOURCES as ReadonlyArray<string>).includes(source))
+  ) {
     return NextResponse.json(emptyPayload(`unknown source: ${source}`), {
       status: 400,
     });

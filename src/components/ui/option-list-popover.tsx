@@ -3,11 +3,7 @@
 import { useState, type ReactNode } from "react";
 
 import { Button } from "~/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { cn } from "~/lib/utils";
 
 /**
@@ -68,7 +64,7 @@ export function OptionListPopover({
   align = "start",
 }: {
   value: string;
-  items: OptionListItem[];
+  items: Array<OptionListItem>;
   onSelect: (value: string) => void;
   trigger: ReactNode;
   contentClassName?: string;

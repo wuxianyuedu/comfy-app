@@ -42,7 +42,7 @@ import { AppError, NotFoundError } from "./errors";
 import type { Task, TaskImage } from "~/server/db/schema";
 
 /** 带首张封面图的任务行（画廊/历史面板专用）。 */
-export type TaskWithCover = Task & { images: TaskImage[] };
+export type TaskWithCover = Task & { images: Array<TaskImage> };
 
 /** 所有可被 Repository 管理的实体都需具备可比较的字符串主键。 */
 export interface Identifiable {
@@ -57,7 +57,7 @@ export interface Repository<T extends Identifiable> {
   /** 按主键取单条；不存在返回 `null`。 */
   findById(id: string): Promise<T | null>;
   /** 取全部（**不保证顺序**；需要稳定顺序时在子类里 `orderBy`）。 */
-  findAll(): Promise<T[]>;
+  findAll(): Promise<Array<T>>;
   /** 插入一条。 */
   create(entity: T): Promise<T>;
   /** 部分更新（仅覆盖传入字段）。 */
@@ -100,8 +100,8 @@ export class DrizzleRepository<T extends Identifiable> implements Repository<T> 
     return /* SAFETY: 类型断言已复核 */ (rows[0] as T) ?? null;
   }
 
-  async findAll(): Promise<T[]> {
-    return /* SAFETY: 类型断言已复核 */ (await db.select().from(this.table)) as T[];
+  async findAll(): Promise<Array<T>> {
+    return /* SAFETY: 类型断言已复核 */ (await db.select().from(this.table)) as Array<T>;
   }
 
   async create(entity: T): Promise<T> {

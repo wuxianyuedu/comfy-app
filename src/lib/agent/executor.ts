@@ -106,7 +106,7 @@ function parseShotsFromJson(text: string): Array<{
   sceneHeading: string;
   description: string;
   shotType: ShotType;
-  characterNames: string[];
+  characterNames: Array<string>;
 }> {
   try {
     const arr = extractJsonArray(text);
@@ -124,7 +124,7 @@ function parseShotsFromJson(text: string): Array<{
           description: typeof rec.description === "string" ? rec.description : "",
           shotType: normalizeShotType(rec.shotType),
           characterNames: Array.isArray(rec.characterNames)
-            ? /* SAFETY: 类型断言已复核 */ (rec.characterNames as unknown[]).map(String)
+            ? /* SAFETY: 类型断言已复核 */ (rec.characterNames as Array<unknown>).map(String)
             : [],
         };
       })

@@ -240,7 +240,7 @@ describe("reportKeepAliveExit —— 把保活崩溃尾部带进 runtime 日志"
       'boot ok\nTraceback (most recent call last):\n  File "main.py", line 1\nValueError: boom\n',
     );
     fs.writeFileSync(outFile, "started ok\n");
-    const runtime: string[] = [];
+    const runtime: Array<string> = [];
     reportKeepAliveExit({
       facts: { pid: 149720, uptimeMs: 26 * 60_000 + 13_000 },
       stopRequested: false,
@@ -258,7 +258,7 @@ describe("reportKeepAliveExit —— 把保活崩溃尾部带进 runtime 日志"
   });
 
   it("没有 keepAliveLogs 时不带尾部（向后兼容）", () => {
-    const runtime: string[] = [];
+    const runtime: Array<string> = [];
     reportKeepAliveExit({
       facts: { pid: 1, uptimeMs: 1000 },
       stopRequested: false,

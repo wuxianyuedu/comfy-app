@@ -21,7 +21,7 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
   taskId,
   onSelect,
 }: {
-  cachedIds: string[];
+  cachedIds: Array<string>;
   taskId: string | null;
   onSelect: (next: string | null) => void;
 }) {
@@ -31,8 +31,7 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
   const seqByTaskId = useMemo(() => {
     const map = new Map<string, number>();
     for (const cachedId of cachedIds) {
-      const nodeId =
-        getNodeIdByTaskId(cachedId) ?? loadStepLogPanelState(cachedId)?.nodeId;
+      const nodeId = getNodeIdByTaskId(cachedId) ?? loadStepLogPanelState(cachedId)?.nodeId;
       if (!nodeId) continue;
       const seq = nodeSeqOf(nodes, nodeId);
       if (seq !== null) map.set(cachedId, seq);
@@ -53,11 +52,7 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
           const st = meta?.status ?? "?";
           const seqLabel = seq ? `#${seq}` : null;
           const titleParts = [seqLabel, wn, st, id].filter(Boolean);
-          const displayParts = [
-            seqLabel,
-            wn ?? `task ${id.slice(0, 8)}`,
-            st,
-          ].filter(Boolean);
+          const displayParts = [seqLabel, wn ?? `task ${id.slice(0, 8)}`, st].filter(Boolean);
           return [
             id,
             <span key={id} title={titleParts.join(" ·")}>

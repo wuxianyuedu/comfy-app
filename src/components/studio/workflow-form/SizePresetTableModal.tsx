@@ -12,12 +12,7 @@ import { useCallback, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { NumberField } from "~/components/ui/number-field";
 import {
   Table,
@@ -38,7 +33,7 @@ import {
 } from "~/lib/media/size-presets";
 import { useSizePresetTable } from "./hooks/use-size-preset-table";
 
-const SCENES: SizeScene[] = ["image", "video"];
+const SCENES: Array<SizeScene> = ["image", "video"];
 
 /** 表里允许的宽高范围：比常规参数的 [64, 4096] 宽 —— 超宽 4k 档要到 5120。 */
 const TABLE_MIN = 64;
@@ -78,9 +73,7 @@ export function SizePresetTableModal({
         popupClassName={`flex ${OVERLAY_MAX_HEIGHT} w-full max-w-3xl flex-col gap-0 overflow-hidden rounded-xl p-0`}
       >
         <DialogHeader className="border-border-strong flex-row items-center gap-3 border-b px-4 py-3">
-          <DialogTitle className="text-ink-bright text-sm font-semibold">
-            {title}配置
-          </DialogTitle>
+          <DialogTitle className="text-ink-bright text-sm font-semibold">{title}配置</DialogTitle>
           <div className="border-border-strong bg-canvas-deep flex items-center gap-1 rounded-lg border p-0.5">
             <ToggleGroup
               multiple={false}
@@ -123,9 +116,7 @@ export function SizePresetTableModal({
             <TableBody>
               {SIZE_RATIO_PRESETS.map((preset) => (
                 <TableRow key={preset.label} className="align-middle">
-                  <TableCell className="text-ink-bright pr-2">
-                    {preset.label}
-                  </TableCell>
+                  <TableCell className="text-ink-bright pr-2">{preset.label}</TableCell>
                   {RESOLUTION_TIERS.map((tier) => {
                     const dims = table[scene]?.[preset.label]?.[tier] ?? {
                       width: 1024,

@@ -25,7 +25,7 @@ const kernelSrc = fs.readFileSync(LOG_COMMON, "utf8");
 
 /** 按宿主可用性收集要跑的 PowerShell（5.1 与 7 都跑，两边行为必须同形）。 */
 const hosts = (() => {
-  const found: string[] = [];
+  const found: Array<string> = [];
   for (const candidate of ["pwsh", "powershell"]) {
     try {
       execFileSync(candidate, ["-NoProfile", "-Command", "exit 0"], {
@@ -40,7 +40,7 @@ const hosts = (() => {
 })();
 const hasPs = hosts.length > 0;
 
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 afterAll(() => {
   for (const dir of tmpDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -81,16 +81,12 @@ function runHarness(host: string): Record<string, string> {
   tmpDirs.push(dir);
   const harness = path.join(dir, "harness.ps1");
   fs.writeFileSync(harness, HARNESS, "utf8");
-  const r = spawnSync(
-    host,
-    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", harness],
-    {
-      cwd: dir,
-      encoding: "utf8",
-      timeout: 180_000,
-      env: { ...process.env, JUDGE_ROOT: dir, JUDGE_LOG_COMMON: LOG_COMMON },
-    },
-  );
+  const r = spawnSync(host, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", harness], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 180_000,
+    env: { ...process.env, JUDGE_ROOT: dir, JUDGE_LOG_COMMON: LOG_COMMON },
+  });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   const codes: Record<string, string> = {};
   for (const line of out.split(/\r?\n/)) {
@@ -114,9 +110,7 @@ describe("内核的失败形态要分开（静态）", () => {
     expect(kernelSrc).toContain("[CMD-NOTFOUND]");
     // 旧形状在 ForEach-Object 的循环体里也赋一次值 —— 子进程零输出时循环体一次都不执行，
     // 那份赋值就漏写结论（两个读者迟早漂成两个数）。
-    const assignments = kernelSrc.match(
-      /\$script:LAST_INVOKE_CODE\s*=\s*\$LASTEXITCODE/g,
-    );
+    const assignments = kernelSrc.match(/\$script:LAST_INVOKE_CODE\s*=\s*\$LASTEXITCODE/g);
     expect(assignments ?? []).toHaveLength(1);
   });
 
@@ -127,16 +121,18 @@ describe("内核的失败形态要分开（静态）", () => {
        的毛病不该遮住另外两个的（§11.18）。 */
     for (const rel of READERS) {
       const text = fs.readFileSync(path.join(ROOT, rel), "utf8");
-      expect.soft(text, `${rel} 必须读 $script:LAST_INVOKE_CODE`).toContain(
-        "$script:LAST_INVOKE_CODE",
-      );
+      expect
+        .soft(text, `${rel} 必须读 $script:LAST_INVOKE_CODE`)
+        .toContain("$script:LAST_INVOKE_CODE");
       const afterInvoke = text.split("Invoke-Logged").slice(1);
       for (const chunk of afterInvoke) {
         const head = chunk.split(/\r?\n/).slice(1, 3).join("\n");
-        expect.soft(
-          /\$LASTEXITCODE\s*-ne\s*0/.test(head),
-          `${rel} 在 Invoke-Logged 之后直接判 $LASTEXITCODE（那份可能是陈旧值）`,
-        ).toBe(false);
+        expect
+          .soft(
+            /\$LASTEXITCODE\s*-ne\s*0/.test(head),
+            `${rel} 在 Invoke-Logged 之后直接判 $LASTEXITCODE（那份可能是陈旧值）`,
+          )
+          .toBe(false);
       }
     }
   });
@@ -154,10 +150,7 @@ describe.skipIf(!hasPs)("Invoke-Logged 真跑（三态跨宿主同形）", () =>
         `命令起不来却记成 ${c["missing-after-success"]}（陈旧码），输出：\n${out}`,
       ).toBe("127");
       expect(c.exit3, `外部命令退 3 必须记 3，读到 ${c.exit3}`).toBe("3");
-      expect(
-        c["missing-after-exit3"],
-        `此时陈旧值是 3，必须被清成 127 而不是复用 3`,
-      ).toBe("127");
+      expect(c["missing-after-exit3"], `此时陈旧值是 3，必须被清成 127 而不是复用 3`).toBe("127");
       expect(out).toContain("[CMD-NOTFOUND]");
       // 三态各一条结论：不许把「判不了」塌成「跑了且失败」，也不许反过来
       expect(out).not.toContain("[FAIL][DEP-DRIFT]");

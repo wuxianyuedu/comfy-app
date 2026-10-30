@@ -35,12 +35,8 @@ import { isWindows } from "./platform.ts";
  * 这里解析的是**宿主 PATH 上那个通用解释器**（门禁自检、`python -m comfy_cli`）。
  * 两者只是恰好共用「先 `python3` 还是先 `python`」这条常识。
  */
-export function pythonCandidates(
-  platform: NodeJS.Platform = process.platform,
-): string[] {
-  return isWindows(platform)
-    ? ["python", "py", "python3"]
-    : ["python3", "python"];
+export function pythonCandidates(platform: NodeJS.Platform = process.platform): Array<string> {
+  return isWindows(platform) ? ["python", "py", "python3"] : ["python3", "python"];
 }
 
 /**
@@ -50,9 +46,6 @@ export function pythonCandidates(
  * 「命令在、不是可用解释器」的形态（本仓 `probeCommand` 的 `present-but-nonzero`），
  * 拿它当「装好了 Python」是句假话。带 `-3` 才是在选一个解释器。
  */
-export function pythonProbeArgs(
-  candidate: string,
-  args: string[] = [],
-): string[] {
+export function pythonProbeArgs(candidate: string, args: Array<string> = []): Array<string> {
   return candidate === "py" ? ["-3", ...args] : args;
 }

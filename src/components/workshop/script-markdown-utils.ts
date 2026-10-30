@@ -13,7 +13,7 @@ export interface OutlineItem {
  * 5. 围栏代码块(``` 或 ~~~)内部不做任何处理,避免破坏代码内容。 */
 export function normalizeMarkdown(source: string): string {
   const lines = source.replace(/\r\n?/g, "\n").split("\n");
-  const result: string[] = [];
+  const result: Array<string> = [];
   let inFence = false;
   let fenceMarker = "";
   let index = 0;
@@ -29,10 +29,7 @@ export function normalizeMarkdown(source: string): string {
       if (!inFence) {
         inFence = true;
         fenceMarker = marker;
-      } else if (
-        marker === fenceMarker &&
-        raw.slice(markerStr.length).trim() === ""
-      ) {
+      } else if (marker === fenceMarker && raw.slice(markerStr.length).trim() === "") {
         inFence = false;
       }
       result.push(raw);
@@ -64,8 +61,8 @@ export function normalizeMarkdown(source: string): string {
   return result.join("\n");
 }
 
-export function buildOutline(value: string): OutlineItem[] {
-  const items: OutlineItem[] = [];
+export function buildOutline(value: string): Array<OutlineItem> {
+  const items: Array<OutlineItem> = [];
   const lines = value.split("\n");
   lines.forEach((line, index) => {
     const match = /^(#{1,3})\s+(.+)$/.exec(line);

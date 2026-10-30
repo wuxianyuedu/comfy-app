@@ -20,13 +20,7 @@
  * 临时仓库里 `src/` 是空的，6 条判据会全部报「0 处」，那种绿判不出任何东西。
  */
 import { spawnSync } from "node:child_process";
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -49,7 +43,7 @@ const GATES = [
 ];
 
 /** 跑一个脚本，归一成 `{code, output}`（stdout+stderr 合并）。 */
-function run(script: string, args: string[] = [], cwd = REPO_ROOT) {
+function run(script: string, args: Array<string> = [], cwd = REPO_ROOT) {
   const r = spawnSync(process.execPath, [script, ...args], {
     cwd,
     encoding: "utf8",
@@ -59,10 +53,8 @@ function run(script: string, args: string[] = [], cwd = REPO_ROOT) {
 }
 
 /** 聚合档输出里「各判据自己的那些行」——去掉聚合档自己的汇总行。 */
-function gateLines(output: string): string[] {
-  return output
-    .split("\n")
-    .filter((l) => l.length > 0 && !l.startsWith("[ast-gates]"));
+function gateLines(output: string): Array<string> {
+  return output.split("\n").filter((l) => l.length > 0 && !l.startsWith("[ast-gates]"));
 }
 
 describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
@@ -96,7 +88,7 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
     const agg = repo.run(["scripts/run-ast-gates.cjs"]);
     const fromAgg = gateLines(agg.output);
 
-    const fromSingles: string[] = [];
+    const fromSingles: Array<string> = [];
     for (const g of GATES) {
       const { output } = repo.run([`scripts/${g}`]);
       fromSingles.push(...output.split("\n").filter((l) => l.length > 0));
@@ -114,18 +106,13 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
      * 于是一个只在**失败档**才出现的对拍差异**从未被发现**。 */
     const lines = agg.output.split("\n");
     const head = lines.findIndex((l) => l.includes("逐条复验"));
-    expect(
-      head,
-      "失败收尾段不见了 —— 探针没让任何判据红？",
-    ).toBeGreaterThanOrEqual(0);
+    expect(head, "失败收尾段不见了 —— 探针没让任何判据红？").toBeGreaterThanOrEqual(0);
     /* 收尾段 = 「逐条复验」那一行 + 紧随其后的复验命令行（形态固定：
      * `  node scripts/<判据脚本>`）。**只认这一段**，不要拿 `node scripts/check-` 泛匹配 ——
      * 判据自己的输出里也有「先跑 node scripts/check-*.cjs --update」这类提示行，
      * 泛匹配会把它们一起圈进来（实测撞到过）。 */
     const tail = lines.slice(head).filter((l) => l.trim() !== "");
-    const cmds = tail.filter((l) =>
-      /^\[ast-gates\]\s+node scripts\/\S+\.cjs$/.test(l),
-    );
+    const cmds = tail.filter((l) => /^\[ast-gates\]\s+node scripts\/\S+\.cjs$/.test(l));
     expect(cmds.length, "复验命令一行都没有").toBeGreaterThan(0);
     for (const line of tail) {
       expect(
@@ -145,9 +132,7 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
       "[form-field-wiring]",
       "[click-keyboard]",
     ]) {
-      expect(output, `聚合档输出里没有 ${tag} 的行 —— 这一条没跑`).toContain(
-        tag,
-      );
+      expect(output, `聚合档输出里没有 ${tag} 的行 —— 这一条没跑`).toContain(tag);
     }
     expect(output, "ts-duplicate-keys 没跑").toContain("同一属性指定两次");
   });
@@ -192,9 +177,7 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
   it("钩子 D 组里 6 条单条脚本不再各占一行，只留聚合档这一行（否则等于跑两遍）", () => {
     const hook = readFileSync(HOOK, "utf8");
     const runLines = hook.split("\n").filter((l) => l.startsWith("  run "));
-    const aggLines = runLines.filter((l) =>
-      l.includes("scripts/run-ast-gates.cjs"),
-    );
+    const aggLines = runLines.filter((l) => l.includes("scripts/run-ast-gates.cjs"));
     expect(aggLines.length, "钩子里聚合档那一行不见了").toBe(1);
     for (const g of GATES) {
       const dup = runLines.filter((l) => l.includes(`scripts/${g}`));
@@ -204,9 +187,9 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
 });
 
 /** 在临时 git 仓库里跑聚合档（只有给定的暂存文件），返回 `{code, output}`。 */
-function runInScratchGit(rel: string[]) {
+function runInScratchGit(rel: Array<string>) {
   const dir = mkdtempSync(join(tmpdir(), "ast-gates-scratch-"));
-  const git = (...args: string[]) =>
+  const git = (...args: Array<string>) =>
     spawnSync("git", args, {
       cwd: dir,
       encoding: "utf8",
@@ -249,7 +232,7 @@ function runInScratchGit(rel: string[]) {
  * 这 6 条走的是 CJS `require`，`NODE_PATH` 对它们是有效的。
  */
 function probeRepo(): {
-  run: (argv: string[]) => { code: number; output: string };
+  run: (argv: Array<string>) => { code: number; output: string };
 } {
   const dir = mkdtempSync(join(tmpdir(), "ast-gates-probe-"));
   const scriptsDir = join(dir, "scripts");
@@ -267,10 +250,8 @@ function probeRepo(): {
     "src/lib/b.ts": "export const f = (s: string | null) => s!.length;\n",
     "src/lib/c.ts": "export function g() { void someFn(); }\n",
     "src/lib/d.ts": "export const o = { k: 1, k: 2 };\n",
-    "src/components/e.tsx":
-      'export const E = () => <FormField label="x"><input /></FormField>;\n',
-    "src/components/f.tsx":
-      "export const F = () => <div onClick={() => go()}>x</div>;\n",
+    "src/components/e.tsx": 'export const E = () => <FormField label="x"><input /></FormField>;\n',
+    "src/components/f.tsx": "export const F = () => <div onClick={() => go()}>x</div>;\n",
   };
   for (const [rel, content] of Object.entries(probes)) {
     const abs = join(dir, rel);
@@ -279,16 +260,12 @@ function probeRepo(): {
   }
   return {
     run: (argv) => {
-      const r = spawnSync(
-        process.execPath,
-        [join(dir, argv[0]!), ...argv.slice(1)],
-        {
-          cwd: dir,
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "pipe"],
-          env: { ...process.env, NODE_PATH: join(REPO_ROOT, "node_modules") },
-        },
-      );
+      const r = spawnSync(process.execPath, [join(dir, argv[0]!), ...argv.slice(1)], {
+        cwd: dir,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, NODE_PATH: join(REPO_ROOT, "node_modules") },
+      });
       return {
         code: r.status ?? 1,
         output: `${r.stdout ?? ""}${r.stderr ?? ""}`,

@@ -23,7 +23,7 @@ import {
  */
 type Layout = NonNullable<KeyValueLayout>;
 
-const LAYOUTS: Layout[] = ["rows", "stacked", "table", "inline"];
+const LAYOUTS: Array<Layout> = ["rows", "stacked", "table", "inline"];
 
 const meta = {
   title: "UI/KeyValueRows",
@@ -36,7 +36,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** 样本：一份训练参数（四种布局共用同一份数据，才比得出布局差异）。 */
-const PARAMS: KeyValueItem[] = [
+const PARAMS: Array<KeyValueItem> = [
   { key: "base_model", raw: "sd_xl_base_1.0.safetensors" },
   { key: "steps", raw: 2400 },
   { key: "learning_rate", raw: 0.0001 },
@@ -50,15 +50,11 @@ export const Rows: Story = {
   render: () => (
     <div className="flex w-120 flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <span className="text-ink-muted font-mono text-[11px]">
-          rows（默认）
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">rows（默认）</span>
         <KeyValueRows items={PARAMS} />
       </div>
       <div className="flex flex-col gap-1.5">
-        <span className="text-ink-muted font-mono text-[11px]">
-          rows + bordered + striped
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">rows + bordered + striped</span>
         <KeyValueRows items={PARAMS} bordered striped />
       </div>
     </div>
@@ -80,9 +76,7 @@ export const Stacked: Story = {
 /** `table`：真正的 `<table>`，行表头走 `<th scope="row">` ——
  *  两列参数表（左列等宽截断）的形态，语义比一堆 div 强。 */
 export const TableLayout: Story = {
-  render: () => (
-    <KeyValueRows layout="table" className="w-120" items={PARAMS} />
-  ),
+  render: () => <KeyValueRows layout="table" className="w-120" items={PARAMS} />,
 };
 
 /** `inline`：`label value` 挤在一行不换行的内联项 ——
@@ -110,9 +104,7 @@ export const AllLayouts: Story = {
     <div className="flex flex-col gap-8">
       {LAYOUTS.map((layout) => (
         <div key={layout} className="flex flex-col gap-1.5">
-          <span className="text-ink-muted font-mono text-[11px]">
-            layout={layout}
-          </span>
+          <span className="text-ink-muted font-mono text-[11px]">layout={layout}</span>
           <KeyValueRows
             layout={layout}
             className="w-136"

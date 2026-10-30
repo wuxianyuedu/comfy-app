@@ -63,7 +63,7 @@ vi.mock("./llm", () => ({
     maxTokens: 100,
   })),
   completeWorkshopLLM: vi.fn(
-    async (_cfg: WorkshopLLMConfig, messages: LLMMessage[]): Promise<string> => {
+    async (_cfg: WorkshopLLMConfig, messages: Array<LLMMessage>): Promise<string> => {
       const sys = typeof messages[0]?.content === "string" ? messages[0].content : "";
       if (sys.includes("编剧")) {
         return "# 场景1 · 咖啡馆\nΔ 小满走进咖啡馆。\nV1 小满：今天天气真好。";
@@ -114,7 +114,7 @@ vi.mock("./comfyui", () => ({
 }));
 
 vi.mock("./final-compose", () => ({
-  buildCompositionPlan: vi.fn((title: string, shots: Shot[]) => ({
+  buildCompositionPlan: vi.fn((title: string, shots: Array<Shot>) => ({
     project: title,
     exportedAt: "",
     totalShots: shots.length,

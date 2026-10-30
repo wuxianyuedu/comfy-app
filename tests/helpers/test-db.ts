@@ -243,23 +243,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS episode_character_uniq ON episode_character (e
 `;
 
 export interface TestTables {
-  users: Row[];
-  projects: Row[];
-  workflowTemplates: Row[];
-  workflowModelTags: Row[];
-  tasks: Row[];
-  taskImages: Row[];
-  llmConfig: Row[];
-  posts: Row[];
-  models: Row[];
-  remoteModels: Row[];
+  users: Array<Row>;
+  projects: Array<Row>;
+  workflowTemplates: Array<Row>;
+  workflowModelTags: Array<Row>;
+  tasks: Array<Row>;
+  taskImages: Array<Row>;
+  llmConfig: Array<Row>;
+  posts: Array<Row>;
+  models: Array<Row>;
+  remoteModels: Array<Row>;
 }
 
 export interface TestDb {
   $reset(): void;
   $tables: TestTables;
   /** 本条用例经过宿主的 SQL 顺序（`$reset()` 清空）。判「读有没有落在事务内」用它。 */
-  $sqlTrace: string[];
+  $sqlTrace: Array<string>;
   [key: string]: unknown;
 }
 
@@ -306,10 +306,10 @@ function serializeValue(col: string, v: unknown): unknown {
   return v;
 }
 
-function allRows(table: string): Row[] {
+function allRows(table: string): Array<Row> {
   if (!currentSqlite) throw new Error("test db 未初始化");
   return /* SAFETY: 类型断言已复核 */ (
-    currentSqlite.prepare(`SELECT * FROM "${table}"`).all() as Record<string, unknown>[]
+    currentSqlite.prepare(`SELECT * FROM "${table}"`).all() as Array<Record<string, unknown>>
   ).map((r) => parseRow(table, r));
 }
 
@@ -348,9 +348,9 @@ type StatementHook = {
   left: number;
   hits: number;
 };
-const statementHooks: StatementHook[] = [];
+const statementHooks: Array<StatementHook> = [];
 /** 本条用例经过宿主的 SQL 顺序（`$reset()` 清空）——「读有没有落在事务内」只有靠它判。 */
-const sqlTrace: string[] = [];
+const sqlTrace: Array<string> = [];
 
 /**
  * 让接下来匹配这条谓词的语句抛错（默认只拦一次，之后原样放行）。
@@ -398,7 +398,7 @@ export function armStatementFailure(
 function sqliteProxyHost(client: Database.Database) {
   return (
     sql: string,
-    params: unknown[],
+    params: Array<unknown>,
     method: "run" | "all" | "values" | "get",
   ): Promise<{ rows: unknown }> => {
     sqlTrace.push(sql);
@@ -441,7 +441,7 @@ export function createTestDb(): TestDb {
     { schema },
   );
 
-  const workflowTemplatesWithTags = (): Row[] => {
+  const workflowTemplatesWithTags = (): Array<Row> => {
     const rows = allRows("workflowTemplate");
     const tagRows = /* SAFETY: 类型断言已复核 */ sqlite
       .prepare(
@@ -625,7 +625,7 @@ export interface SeedTaskInput {
   params?: unknown;
   workflowName?: string;
   projectId?: string | null;
-  images?: Row[];
+  images?: Array<Row>;
   workflowSnapshot?: unknown;
   referenceImages?: unknown;
   /** 来源任务（重绘 / 放大的追溯用例用）。 */

@@ -20,7 +20,7 @@
 export type HookStep = { label: string; cmd: string };
 
 /** 全文的 `  run "<标签>" <命令…>` 步骤行（**不分组** —— 门禁链的在场判据用它）。 */
-export function runSteps(hookText: string): HookStep[] {
+export function runSteps(hookText: string): Array<HookStep> {
   return [...hookText.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
     label: m[1] ?? "",
     cmd: m[2] ?? "",
@@ -37,7 +37,7 @@ export function groupShBody(hookText: string, id: string): string {
 }
 
 /** 某个组内的步骤行（= 组正文上的 {@link runSteps}）。 */
-export function stepsInGroup(hookText: string, id: string): HookStep[] {
+export function stepsInGroup(hookText: string, id: string): Array<HookStep> {
   return runSteps(groupShBody(hookText, id));
 }
 

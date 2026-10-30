@@ -105,34 +105,19 @@ export function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton
-          onClick={() => wrapSelection("**", "**", "粗体")}
-          hint="粗体"
-        >
+        <ToolbarButton onClick={() => wrapSelection("**", "**", "粗体")} hint="粗体">
           <Bold size={18} />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => wrapSelection("*", "*", "斜体")}
-          hint="斜体"
-        >
+        <ToolbarButton onClick={() => wrapSelection("*", "*", "斜体")} hint="斜体">
           <Italic size={18} />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => wrapSelection("__", "__", "下划线")}
-          hint="下划线"
-        >
+        <ToolbarButton onClick={() => wrapSelection("__", "__", "下划线")} hint="下划线">
           <Underline size={18} />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => wrapSelection("~~", "~~", "删除线")}
-          hint="删除线"
-        >
+        <ToolbarButton onClick={() => wrapSelection("~~", "~~", "删除线")} hint="删除线">
           <Strikethrough size={18} />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => wrapSelection("`", "`", "代码")}
-          hint="行内代码"
-        >
+        <ToolbarButton onClick={() => wrapSelection("`", "`", "代码")} hint="行内代码">
           <Code size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -171,10 +156,7 @@ export function EditorToolbar({
         <ToolbarButton onClick={() => restoreHistory(-1)} hint="撤销 (Ctrl+Z)">
           <Undo size={18} />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => restoreHistory(1)}
-          hint="重做 (Ctrl+Shift+Z)"
-        >
+        <ToolbarButton onClick={() => restoreHistory(1)} hint="重做 (Ctrl+Shift+Z)">
           <Redo size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -203,7 +185,7 @@ export function OutlineSidebar({
   outline,
   onJump,
 }: {
-  outline: OutlineItem[];
+  outline: Array<OutlineItem>;
   onJump: (line: number) => void;
 }) {
   return (
@@ -281,11 +263,7 @@ export function EditorBody({
           ref={textareaRef}
           value={value}
           onChange={(event) => {
-            onChange(
-              event.target.value,
-              event.target.selectionStart,
-              event.target.selectionEnd,
-            );
+            onChange(event.target.value, event.target.selectionStart, event.target.selectionEnd);
           }}
           onKeyDown={(event) => {
             /* 键判据（哪几个键、要不要 preventDefault、收不收连发）来自出口，
@@ -296,11 +274,7 @@ export function EditorBody({
               const nextValue = value.slice(0, start) + "" + value.slice(end);
               emitChange(nextValue);
               pushHistory(nextValue, start + 2, start + 2);
-              setTimeout(
-                () =>
-                  textareaRef.current?.setSelectionRange(start + 2, start + 2),
-                0,
-              );
+              setTimeout(() => textareaRef.current?.setSelectionRange(start + 2, start + 2), 0);
             });
             tabHandler.onKeyDown(event);
           }}

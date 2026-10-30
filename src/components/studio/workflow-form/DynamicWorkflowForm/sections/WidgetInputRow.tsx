@@ -24,7 +24,7 @@ import { TypeChip } from "~/components/studio/TypeChip";
 interface WidgetInputRowProps {
   entry: EnrichedWidget;
   /** 全量 pin —— ioLabel() 靠它在标签撞名时回退到原始 name，保持可辨识。 */
-  allPins: readonly WorkflowIOEntry[];
+  allPins: ReadonlyArray<WorkflowIOEntry>;
   value: unknown;
   compact: boolean;
   disabled: boolean;
@@ -85,9 +85,7 @@ export function WidgetInputRow({
    * normalizeTypeChip 的白名单回退：那会把自定义节点的 IMAGEUPLOAD 之类
    * 悄悄改成 INT/STRING，用户看到的类型与工作流里的定义对不上。 */
   const typeChip = (
-    <TypeChip>
-      {typeDisplay(entry.type, controlTypeFallback(entry.control))}
-    </TypeChip>
+    <TypeChip>{typeDisplay(entry.type, controlTypeFallback(entry.control))}</TypeChip>
   );
 
   /* 标签行：传了 onLabelChange 时标签可单击就地改名（Enter / 失焦提交，Esc
@@ -98,10 +96,7 @@ export function WidgetInputRow({
       {/* 标签区：圆点 + EditableLabel 占满左侧 flex-1 区域，长标签可截断。 */}
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         {onRequiredChange && (
-          <span
-            className="size-2 shrink-0 rounded-full"
-            style={{ background: accent }}
-          />
+          <span className="size-2 shrink-0 rounded-full" style={{ background: accent }} />
         )}
         <EditableLabel
           label={label}
@@ -113,21 +108,13 @@ export function WidgetInputRow({
           避免一进入改名输入态按钮就跑到输入框旁边。 */}
       <span className="flex shrink-0 items-center gap-1.5">
         {onRequiredChange && (
-          <Hint
-            label={
-              entry.required
-                ? "已标记为必填，点击切换为可选"
-                : "点击将其标记为必填"
-            }
-          >
+          <Hint label={entry.required ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}>
             <Button
               variant={entry.required ? "danger" : "ghost"}
               onClick={() => onRequiredChange(!entry.required)}
               onMouseDown={(event) => event.stopPropagation()}
               className={`nodrag nopan text-3xs h-auto shrink-0 rounded px-1.5 py-px font-medium ${
-                entry.required
-                  ? ""
-                  : "border-border-strong bg-subtle text-ink-muted border"
+                entry.required ? "" : "border-border-strong bg-subtle text-ink-muted border"
               }`}
             >
               {entry.required ? "必填" : "可选"}
@@ -170,10 +157,7 @@ export function WidgetInputRow({
   if (entry.control === "link") {
     if (compact) {
       return (
-        <div
-          className={`relative ${dimmed ? "opacity-50" : ""}`}
-          data-io-key={entry.ioKey}
-        >
+        <div className={`relative ${dimmed ? "opacity-50" : ""}`} data-io-key={entry.ioKey}>
           {withHandle && (
             <PortHandle
               id={handleId ?? entry.ioKey}
@@ -191,17 +175,10 @@ export function WidgetInputRow({
     }
     return (
       <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
-        {withHandle && (
-          <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />
-        )}
+        {withHandle && <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />}
         <div className="bg-canvas-deep flex items-center gap-2 rounded-md px-2.5 py-1.5 pr-3.5 pl-3.5">
-          <span
-            className="size-2 shrink-0 rounded-full"
-            style={{ background: accent }}
-          />
-          <span className="text-ink-soft text-2xs min-w-0 flex-1 truncate">
-            {label}
-          </span>
+          <span className="size-2 shrink-0 rounded-full" style={{ background: accent }} />
+          <span className="text-ink-soft text-2xs min-w-0 flex-1 truncate">{label}</span>
           {/* link 行同样打印 pin 真实声明的类型：MODEL / CLIP / LATENT /
               IMAGEUPLOAD 等自定义类型一律原样展示，不回退成 "*"。 */}
           <TypeChip>{typeDisplay(entry.type)}</TypeChip>
@@ -256,9 +233,7 @@ export function WidgetInputRow({
    * 卡片左缘 —— 放进带 padding 的子行会让圆心内缩 14px，与端口行错位。 */
   return (
     <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
-      {withHandle && (
-        <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />
-      )}
+      {withHandle && <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />}
       <div className="px-3.5 pt-1.5">{labelRow}</div>
       {control}
     </div>

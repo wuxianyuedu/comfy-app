@@ -185,11 +185,11 @@ export function copyGateDeps(
  * 反方向也认：先落的是文件、后到的是它的父目录（`copy` 里同时列了单文件与它所在的
  * 目录时）→ 那条目录不许再整棵铺一遍，否则刚落的文件又被覆盖一次。
  */
-function claims(initial: string[]): {
+function claims(initial: Array<string>): {
   covers: (rel: string) => boolean;
   add: (rel: string) => void;
 } {
-  const owned: string[] = [...initial].map(normalizeRel);
+  const owned: Array<string> = [...initial].map(normalizeRel);
   return {
     covers: (rel) => {
       const target = normalizeRel(rel);
@@ -292,7 +292,10 @@ export interface GateRepo {
    * 的 fail-closed 用例）。这不是顺手开的口子：判据脚本的**环境本身就是被测输入**，
    * 只给一个固定 env 就等于让「没设这个变量」那一档永远测不到。
    */
-  run: (args?: string[], overrides?: { env?: Record<string, string | undefined> }) => GateRunResult;
+  run: (
+    args?: Array<string>,
+    overrides?: { env?: Record<string, string | undefined> },
+  ) => GateRunResult;
   /** 从工作区里读回一个文件（判据会就地改文件时用）。 */
   read: (rel: string) => string;
   /** 工作区里这个路径在不在（判「`--update` 到底有没有落盘」用，不必 `read` 再 catch）。 */
@@ -318,7 +321,7 @@ export interface GateRepo {
    * 各处的 `git(["config", "commit.gpgsign", "false"])` 这类「不配就会被宿主
    * 全局配置坑到」的前置就不会被漏抄。
    */
-  git: (...args: string[]) => void;
+  git: (...args: Array<string>) => void;
   /** 造一次提交（`add -A` + commit）—— 上手身份与禁签名在本夹具里已配好。 */
   commit: (message: string) => void;
 }
@@ -329,7 +332,7 @@ export interface GateRepoOptions {
   /** 脚本在工作区里的落点：`"scripts"`（默认为此）或 `"root"`。 */
   dir?: "scripts" | "root";
   /** 预先建好的空目录（被扫目录）。 */
-  dirs?: string[];
+  dirs?: Array<string>;
   /** `mkdtempSync` 的前缀；默认由脚本名推出来（去掉 `check-` 与扩展名）。 */
   workdir?: string;
   /**

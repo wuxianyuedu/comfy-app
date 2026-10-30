@@ -34,7 +34,7 @@ function executionShapeOf(row: { rawJson: unknown }): {
  *  主路径：设置里配置的 ComfyUI 安装根下的用户工作流目录（自动推导，
  *  见 deriveComfyuiWorkflowsDir —— 兼容 user/default/workflows 与旧 workflows）。
  *  `.env` 的 LOCAL_WORKFLOWS_PATH 仍作为覆盖项保留（向后兼容，可加扫额外目录）。 */
-function getLocalWorkflowRoots(): string[] {
+function getLocalWorkflowRoots(): Array<string> {
   const derived = deriveComfyuiWorkflowsDir(getSettingsSync().comfyuiPath);
   const extra = (readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "")
     .split(/[\n,]/)
@@ -60,7 +60,7 @@ interface LocalPendingRow {
   id: string;
   name: string;
   taskType: string;
-  modes: string[];
+  modes: Array<string>;
   defaultMode: string | null;
   createdAt: Date;
   paramMap: WorkflowParamMap;
@@ -75,7 +75,7 @@ interface LocalPendingRow {
   usable: boolean;
   preview: WorkflowPreview;
   workflowIO: WorkflowIOMap;
-  modelTags: string[];
+  modelTags: Array<string>;
   pending: boolean;
   pendingSize: number;
   pendingMtime: number;
@@ -126,7 +126,7 @@ function normalizePathKey(p: string): string {
  *  读 `LOCAL_WORKFLOWS_PATH` 与 `getLocalWorkflowRoots` 同走 `readEnvVar`：
  *  此前守卫用 `process.env`（启动快照），.env 新增目录后扫描器看得到、
  *  守卫却拒绝——「界面给得出待导入项、点了导入被拒」的死胡同。 */
-function getAllowedLocalWorkflowRoots(): string[] {
+function getAllowedLocalWorkflowRoots(): Array<string> {
   const derived = deriveComfyuiWorkflowsDir(getSettingsSync().comfyuiPath);
   const extra = (readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "")
     .split(/[\n,]/)

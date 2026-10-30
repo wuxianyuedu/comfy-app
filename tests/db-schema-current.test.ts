@@ -133,11 +133,11 @@ function makeDb(file: string, extraSql = ""): void {
   );
 }
 
-function columnsOf(file: string, table: string): string[] {
+function columnsOf(file: string, table: string): Array<string> {
   const db = new DatabaseSync(file, { readOnly: true });
   try {
     return /* SAFETY: 类型断言已复核 */ (
-      db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+      db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
     ).map((row) => row.name);
   } finally {
     db.close();

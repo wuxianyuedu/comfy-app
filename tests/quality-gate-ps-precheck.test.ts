@@ -50,7 +50,7 @@ const psExe = (() => {
 })();
 const hasPs = psExe !== "";
 
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 
 /**
  * 从**当前真锁文件**里取一个 `overrides` 条目并把版本号改掉 —— 这是「造一条实质漂移」的变异点。
@@ -71,10 +71,7 @@ function driftOneOverride(real: string, key: string): string {
     );
   }
   const bumped = hit[1] === "0.0.0" ? "0.0.1" : "0.0.0";
-  return real.replace(
-    new RegExp(`^  ${escaped}: \\S+$`, "m"),
-    `  ${key}: ${bumped}`,
-  );
+  return real.replace(new RegExp(`^  ${escaped}: \\S+$`, "m"), `  ${key}: ${bumped}`);
 }
 afterAll(() => {
   for (const dir of tmpDirs.splice(0)) {
@@ -91,7 +88,7 @@ afterAll(() => {
 function makeFakeRepo(
   opts: {
     lockfileText?: string;
-    dropFiles?: string[];
+    dropFiles?: Array<string>;
     /** 改写假检出里那份 `quality-gate.ps1`（验运行器自身的形状时用）。 */
     patchGateText?: (src: string) => string;
   } = {},
@@ -109,25 +106,17 @@ function makeFakeRepo(
     path.join(ROOT, "scripts", "quality-gate-shared.mjs"),
     path.join(root, "scripts", "quality-gate-shared.mjs"),
   );
-  for (const name of [
-    "diff-cli.mjs",
-    "lock-diff.mjs",
-    "render-lock-diff.mjs",
-  ]) {
+  for (const name of ["diff-cli.mjs", "lock-diff.mjs", "render-lock-diff.mjs"]) {
     fs.copyFileSync(
       path.join(ROOT, "scripts", "lockfile", name),
       path.join(root, "scripts", "lockfile", name),
     );
   }
   const installedLock = path.join(root, "node_modules", ".pnpm", "lock.yaml");
-  fs.copyFileSync(
-    path.join(ROOT, "node_modules", ".pnpm", "lock.yaml"),
-    installedLock,
-  );
+  fs.copyFileSync(path.join(ROOT, "node_modules", ".pnpm", "lock.yaml"), installedLock);
   fs.writeFileSync(
     path.join(root, "pnpm-lock.yaml"),
-    opts.lockfileText ??
-      fs.readFileSync(path.join(ROOT, "pnpm-lock.yaml"), "utf8"),
+    opts.lockfileText ?? fs.readFileSync(path.join(ROOT, "pnpm-lock.yaml"), "utf8"),
     "utf8",
   );
   for (const rel of opts.dropFiles ?? []) {
@@ -210,9 +199,7 @@ describe("diff-cli 的退出码契约（纯 Node，跨平台）", () => {
      * 而红话报的是「预检没打 [DEP-DRIFT]」—— 把人的排查方向整个带偏（实测撞过一次：
      * #1638 把 brace-expansion@1 从 1.1.20 升到 1.1.21，同一批这条用例就红了）。 */
     const real = fs.readFileSync(path.join(ROOT, "pnpm-lock.yaml"), "utf8");
-    expect(() => driftOneOverride(real, "no-such-package@9")).toThrow(
-      /静默 no-op/,
-    );
+    expect(() => driftOneOverride(real, "no-such-package@9")).toThrow(/静默 no-op/);
     // 反向：现存的真键必须能改出差异（不抛，且文本确实变了）。
     const drifted = driftOneOverride(real, "undici@7");
     expect(drifted).not.toBe(real);
@@ -223,13 +210,7 @@ describe("diff-cli 的退出码契约（纯 Node，跨平台）", () => {
   it("判据内部意外 → 2（不许顶着一律退 1 被读成「依赖陈旧」）", () => {
     const r = spawnSync(
       process.execPath,
-      [
-        LOCK_CLI,
-        "--installed",
-        path.join(ROOT, "node_modules", ".pnpm"),
-        "--root",
-        ROOT,
-      ],
+      [LOCK_CLI, "--installed", path.join(ROOT, "node_modules", ".pnpm"), "--root", ROOT],
       { encoding: "utf8" },
     );
     expect(r.status).toBe(2);
@@ -291,9 +272,7 @@ describe("运行器：命令解析与「没跑起来」（静态）", () => {
      * 用了同一个词。仓库的三态口径是 `0 绿 / 1 红 / 2 没跑起来`（`premerge-check.mjs`），
      * 说「没跑起来」的那一档在屏幕上必须是 `[skip]`，与 `[ok]` / `[红]` 都分开。 */
     expect(gateSrc).toContain("[skip] $($Block.Label)（没跑起来：命令没找到");
-    expect(gateSrc).not.toMatch(
-      /\$Block\.Cmd -match "\^\(pnpm\|npm\|node\)\$"/,
-    );
+    expect(gateSrc).not.toMatch(/\$Block\.Cmd -match "\^\(pnpm\|npm\|node\)\$"/);
   });
 
   it("变异点还在（不在这儿就整组反向用例会静默空跑）", () => {
@@ -301,97 +280,79 @@ describe("运行器：命令解析与「没跑起来」（静态）", () => {
   });
 });
 
-describe.skipIf(!hasPs)(
-  "运行器真跑：判决必须来自子进程真的执行（ISSUE #1345）",
-  () => {
-    it("真状态 -Mode dependencyAudit：要看见子进程自己的 [dep-audit] 标记", async () => {
-      // 跑**真仓库**而不是假检出：这条要钉的就是「这台机器上的真门禁真的执行了」。
-      // `[dep-audit]` 前缀在脚本的三条出口（有新增/无新增/拿不到 registry）里都会打，
-      // 所以它只在「进程根本没起来」时缺席 —— 正是本条要抓的那一种。
-      const r = spawnSync(
-        psExe,
-        [
-          "-NoProfile",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-File",
-          GATE_PS1,
-          "-Mode",
-          "dependencyAudit",
-        ],
-        { cwd: ROOT, encoding: "utf8", timeout: 240_000 },
-      );
-      const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
-      expect(out).toContain("[dep-audit]");
-      expect(out).not.toContain("（没跑起来：");
-      // 不锁 status：真有基线外新增时它该退 1（那是 #1331 的判据），本条只问「跑没跑」。
-    }, 240_000);
+describe.skipIf(!hasPs)("运行器真跑：判决必须来自子进程真的执行（ISSUE #1345）", () => {
+  it("真状态 -Mode dependencyAudit：要看见子进程自己的 [dep-audit] 标记", async () => {
+    // 跑**真仓库**而不是假检出：这条要钉的就是「这台机器上的真门禁真的执行了」。
+    // `[dep-audit]` 前缀在脚本的三条出口（有新增/无新增/拿不到 registry）里都会打，
+    // 所以它只在「进程根本没起来」时缺席 —— 正是本条要抓的那一种。
+    const r = spawnSync(
+      psExe,
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", GATE_PS1, "-Mode", "dependencyAudit"],
+      { cwd: ROOT, encoding: "utf8", timeout: 240_000 },
+    );
+    const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+    expect(out).toContain("[dep-audit]");
+    expect(out).not.toContain("（没跑起来：");
+    // 不锁 status：真有基线外新增时它该退 1（那是 #1331 的判据），本条只问「跑没跑」。
+  }, 240_000);
 
-    it("命令拼不出来：判「没跑起来」（不是红、不是通过），退非 0", () => {
-      const { root } = makeFakeRepo({
-        patchGateText: (src) =>
-          src.replace(NOEXEC_MUTATION.from, NOEXEC_MUTATION.to),
-      });
-      const r = runGate(root);
-      /* 「没跑起来」必须打在自己的那一档上：从前它与「跑了且失败」共用 `[FAIL]`，
-       * 读的人会去查一条根本没有执行过的判据的报错（ISSUE #2506）。 */
-      expect(r.out).toContain("（没跑起来：命令没找到");
-      expect(r.out).not.toContain("[ok]");
-      expect(r.status).not.toBe(0);
+  it("命令拼不出来：判「没跑起来」（不是红、不是通过），退非 0", () => {
+    const { root } = makeFakeRepo({
+      patchGateText: (src) => src.replace(NOEXEC_MUTATION.from, NOEXEC_MUTATION.to),
     });
+    const r = runGate(root);
+    /* 「没跑起来」必须打在自己的那一档上：从前它与「跑了且失败」共用 `[FAIL]`，
+     * 读的人会去查一条根本没有执行过的判据的报错（ISSUE #2506）。 */
+    expect(r.out).toContain("（没跑起来：命令没找到");
+    expect(r.out).not.toContain("[ok]");
+    expect(r.status).not.toBe(0);
+  });
 
-    it("进程起来了且退非 0：判红必须来自它的退出码", () => {
-      // 与上面那条成对：一条管「没跑起来」，一条管「跑了且失败」；旧形状下**前者**被陈旧
-      // $LASTEXITCODE 读成 `[OK]`。
-      // 边界要说清：这条**不**覆盖「子进程 stdout 被并进返回值」那一半（去掉 `| Out-Host`
-      // 它照样绿，实测过）—— node 的 `Cannot find module` 走 stderr、没进函数输出流，
-      // 返回值就只剩退出码一个元素。 stdout 被吞那半由上面 `[dep-audit]` 那条钉。
-      const { root } = makeFakeRepo({
-        patchGateText: (src) =>
-          src.replace(
-            NOEXEC_MUTATION.from,
-            'Cmd = "node"; Args = @("scripts\\no-such-gate.mjs")',
-          ),
-      });
-      const r = runGate(root);
-      expect(r.out).toContain("（退出码 1）");
-      expect(r.out).not.toContain("[ok]");
-      expect(r.status).toBe(1);
+  it("进程起来了且退非 0：判红必须来自它的退出码", () => {
+    // 与上面那条成对：一条管「没跑起来」，一条管「跑了且失败」；旧形状下**前者**被陈旧
+    // $LASTEXITCODE 读成 `[OK]`。
+    // 边界要说清：这条**不**覆盖「子进程 stdout 被并进返回值」那一半（去掉 `| Out-Host`
+    // 它照样绿，实测过）—— node 的 `Cannot find module` 走 stderr、没进函数输出流，
+    // 返回值就只剩退出码一个元素。 stdout 被吞那半由上面 `[dep-audit]` 那条钉。
+    const { root } = makeFakeRepo({
+      patchGateText: (src) =>
+        src.replace(NOEXEC_MUTATION.from, 'Cmd = "node"; Args = @("scripts\\no-such-gate.mjs")'),
     });
-  },
-);
+    const r = runGate(root);
+    expect(r.out).toContain("（退出码 1）");
+    expect(r.out).not.toContain("[ok]");
+    expect(r.status).toBe(1);
+  });
+});
 
-describe.skipIf(!hasPs)(
-  "所有 .ps1 必须可解析（补上「没人解析 PowerShell」那一格）",
-  () => {
-    it("scripts/ 与 tools/ 下的每份 .ps1 都是 0 个 ParserError", () => {
-      const files: string[] = [];
-      for (const base of ["scripts", "tools"]) {
-        const walk = (dir: string): void => {
-          for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-            const p = path.join(dir, e.name);
-            if (e.isDirectory()) walk(p);
-            else if (e.name.endsWith(".ps1")) files.push(p);
-          }
-        };
-        walk(path.join(ROOT, base));
-      }
-      expect(files.length).toBeGreaterThan(0);
-      // 一次进程内跑完所有解析：逐份 spawn 在这个仓的机器上比解析本身贵两个数量级。
-      // 路径**不转义反斜杠**：PS 的单引号串里 `\` 就是字面量，而翻倍后开头那两个 `\`
-      // 会被 .NET 当成 UNC 前缀看（同一条「PS 里 \ 不是转义符」的坑见 quality-gate.ps1）。
-      const script = files
-        .map(
-          (f) =>
-            `$e=$null;[System.Management.Automation.Language.Parser]::ParseFile(` +
-            `'${f}',[ref]$null,[ref]$e)|Out-Null;` +
-            `if($e.Count -gt 0){"BROKEN: ${f} " + $e.Count}`,
-        )
-        .join("\n");
-      const out = execFileSync(psExe, ["-NoProfile", "-Command", script], {
-        encoding: "utf8",
-      });
-      expect(out).not.toContain("BROKEN");
+describe.skipIf(!hasPs)("所有 .ps1 必须可解析（补上「没人解析 PowerShell」那一格）", () => {
+  it("scripts/ 与 tools/ 下的每份 .ps1 都是 0 个 ParserError", () => {
+    const files: Array<string> = [];
+    for (const base of ["scripts", "tools"]) {
+      const walk = (dir: string): void => {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+          const p = path.join(dir, e.name);
+          if (e.isDirectory()) walk(p);
+          else if (e.name.endsWith(".ps1")) files.push(p);
+        }
+      };
+      walk(path.join(ROOT, base));
+    }
+    expect(files.length).toBeGreaterThan(0);
+    // 一次进程内跑完所有解析：逐份 spawn 在这个仓的机器上比解析本身贵两个数量级。
+    // 路径**不转义反斜杠**：PS 的单引号串里 `\` 就是字面量，而翻倍后开头那两个 `\`
+    // 会被 .NET 当成 UNC 前缀看（同一条「PS 里 \ 不是转义符」的坑见 quality-gate.ps1）。
+    const script = files
+      .map(
+        (f) =>
+          `$e=$null;[System.Management.Automation.Language.Parser]::ParseFile(` +
+          `'${f}',[ref]$null,[ref]$e)|Out-Null;` +
+          `if($e.Count -gt 0){"BROKEN: ${f} " + $e.Count}`,
+      )
+      .join("\n");
+    const out = execFileSync(psExe, ["-NoProfile", "-Command", script], {
+      encoding: "utf8",
     });
-  },
-);
+    expect(out).not.toContain("BROKEN");
+  });
+});

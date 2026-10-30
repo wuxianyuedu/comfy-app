@@ -29,7 +29,7 @@ import { Disclosure, type DisclosureMarker } from "~/components/ui/disclosure";
  */
 type Marker = NonNullable<DisclosureMarker>;
 
-const MARKERS: Marker[] = ["caret", "chevron", "none"];
+const MARKERS: Array<Marker> = ["caret", "chevron", "none"];
 
 const meta = {
   title: "UI/Disclosure",
@@ -69,9 +69,7 @@ export const Markers: Story = {
               )
             }
           >
-            <p className="text-ink-muted pt-2 text-sm">
-              这一档的标记是这样画的。
-            </p>
+            <p className="text-ink-muted pt-2 text-sm">这一档的标记是这样画的。</p>
           </Disclosure>
         </div>
       ))}
@@ -95,9 +93,7 @@ function ControlledDemo() {
         </Button>
       </div>
       <Disclosure open={open} onOpenChange={setOpen} trigger="受控的折叠区">
-        <p className="text-ink-muted pt-2 text-sm">
-          上面那个按钮与这行标题改的是同一份状态。
-        </p>
+        <p className="text-ink-muted pt-2 text-sm">上面那个按钮与这行标题改的是同一份状态。</p>
       </Disclosure>
     </div>
   );

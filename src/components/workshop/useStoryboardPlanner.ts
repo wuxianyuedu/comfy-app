@@ -14,11 +14,7 @@ import { useItemErrors } from "~/components/ui/use-item-errors";
 import { useItemAction } from "~/components/ui/use-item-action";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import type { Shot, Scene, Character, StyleRef } from "~/lib/workshop/types";
-import {
-  buildShotPrompt,
-  buildShotNegative,
-  mergeParams,
-} from "~/lib/workshop/prompt-builder";
+import { buildShotPrompt, buildShotNegative, mergeParams } from "~/lib/workshop/prompt-builder";
 import { workshopUid } from "~/lib/workshop/script-parser";
 import { runWithConcurrency } from "~/lib/async-pool";
 import { WORKSHOP_BATCH_CONCURRENCY } from "~/lib/workshop/generation-client";
@@ -36,11 +32,11 @@ import { useStoryboardExtractFlow } from "./useStoryboardExtractFlow";
 export type ShotProgress = Record<string, { pct: number; label?: string }>;
 
 export interface Props {
-  scenes: Scene[];
-  characters: Character[];
-  styles: StyleRef[];
-  shots: Shot[];
-  onShotsChange: (s: Shot[]) => void;
+  scenes: Array<Scene>;
+  characters: Array<Character>;
+  styles: Array<StyleRef>;
+  shots: Array<Shot>;
+  onShotsChange: (s: Array<Shot>) => void;
   onGenerate: (shot: Shot) => Promise<void>;
   generating: boolean;
   /** 镜头节点上的实时生成进度（running 时在节点内渲染进度条） */
@@ -48,7 +44,7 @@ export interface Props {
   /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
   scriptMarkdown?: string;
   /** 分镜阶段导入角色卡 JSON 时的角色写入口(可选,未接入时仅提示) */
-  onCharactersChange?: (c: Character[]) => void;
+  onCharactersChange?: (c: Array<Character>) => void;
   /** 分镜「从剧本提取」会话(busy/progress/日志)已收归 controller，经 props 注入；
    *  未注入(遗留/独立使用)时退化为本 hook 局部会话。 */
   extract?: { session: ExtractSession; actions: ExtractSessionActions };
@@ -58,7 +54,7 @@ export interface Props {
 function recompute(
   shot: Shot,
   scene: Scene | undefined,
-  chars: Character[],
+  chars: Array<Character>,
   style?: StyleRef,
 ): Shot {
   const prompt = buildShotPrompt(shot, scene, chars, style);
@@ -121,7 +117,7 @@ export function useStoryboardPlanner(props: Props) {
 
   // 从剧本导入镜头：每个场景 → shotCount 个镜头
   function importFromScript() {
-    const built: Shot[] = [];
+    const built: Array<Shot> = [];
     let n = shots.length;
     scenes.forEach((scene) => {
       const count = Math.max(1, scene.shotCount);
@@ -154,9 +150,7 @@ export function useStoryboardPlanner(props: Props) {
         if (shot.id !== id) return shot;
         const next = { ...shot, ...patch };
         const scene = scenes.find((sc) => sc.id === next.sceneId);
-        const chars = characters.filter((character) =>
-          next.characterIds.includes(character.id),
-        );
+        const chars = characters.filter((character) => next.characterIds.includes(character.id));
         const style = styles.find((st) => st.slug === next.skillSlug);
         return recompute(next, scene, chars, style);
       }),
@@ -180,20 +174,16 @@ export function useStoryboardPlanner(props: Props) {
     setAiProgress("");
     setAiError("");
     try {
-      const built: Shot[] = [];
+      const built: Array<Shot> = [];
       let n = shots.length;
-      const charNames = characters
-        .map((character) => character.name)
-        .filter(Boolean);
+      const charNames = characters.map((character) => character.name).filter(Boolean);
       /* 「逐幕拆镜」这一整段套进忙碌位出口：复位绑在 finally 上，
        * 于是中途抛错（模型报错 / 解析失败）不会把「拆镜中」永远留在界面上。 */
       await ai.run(async () => {
         /* 用 `entries()` 同时拿下标与元素：写 `scenes[i]` 就得多一次 `!`
          * 把 `noUncheckedIndexedAccess` 加上的 `undefined` 抹掉。 */
         for (const [i, scene] of scenes.entries()) {
-          setAiProgress(
-            `正在拆镜 ${i + 1}/${scenes.length} · ${scene.heading}`,
-          );
+          setAiProgress(`正在拆镜 ${i + 1}/${scenes.length} · ${scene.heading}`);
           const full = await streamChat({
             messages: buildStoryboardMessages(scene, charNames),
             /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
@@ -202,10 +192,7 @@ export function useStoryboardPlanner(props: Props) {
           raws.forEach((raw) => {
             n += 1;
             const charIds = characters
-              .filter(
-                (character) =>
-                  character.name && raw.characterNames.includes(character.name),
-              )
+              .filter((character) => character.name && raw.characterNames.includes(character.name))
               .map((character) => character.id);
             const shot: Shot = {
               id: workshopUid("shot"),
@@ -220,9 +207,7 @@ export function useStoryboardPlanner(props: Props) {
               params: {},
               status: "idle",
             };
-            const linkedChars = characters.filter((character) =>
-              charIds.includes(character.id),
-            );
+            const linkedChars = characters.filter((character) => charIds.includes(character.id));
             built.push(recompute(shot, scene, linkedChars, undefined));
           });
         }
@@ -235,14 +220,10 @@ export function useStoryboardPlanner(props: Props) {
   }
 
   async function generateAll() {
-    const pending = shots.filter(
-      (shot) => shot.status === "idle" || shot.status === "failed",
-    );
+    const pending = shots.filter((shot) => shot.status === "idle" || shot.status === "failed");
     /* 有界并发（见 WORKSHOP_BATCH_CONCURRENCY）：onGenerate 内部自兜单条失败，
      * 一条 failed 不中断批量。 */
-    await runWithConcurrency(pending, WORKSHOP_BATCH_CONCURRENCY, (shot) =>
-      onGenerate(shot),
-    );
+    await runWithConcurrency(pending, WORKSHOP_BATCH_CONCURRENCY, (shot) => onGenerate(shot));
   }
 
   /* ── 图片提示词：AI 润色 ──
@@ -296,9 +277,7 @@ export function useStoryboardPlanner(props: Props) {
 
   function sceneFallback(shot: Shot): string {
     const scene = scenes.find((sc) => sc.id === shot.sceneId);
-    return [shot.shotType, scene?.location, scene?.action]
-      .filter(Boolean)
-      .join(", ");
+    return [shot.shotType, scene?.location, scene?.action].filter(Boolean).join(", ");
   }
 
   async function polishAll() {

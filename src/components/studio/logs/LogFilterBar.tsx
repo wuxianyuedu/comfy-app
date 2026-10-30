@@ -35,7 +35,7 @@ const LEVEL_LABEL_STYLES: Record<LogFilter, string> = {
   error: "text-danger-strong hover:opacity-80",
 };
 
-export const FILTER_LABELS: { label: string; value: LogFilter }[] = [
+export const FILTER_LABELS: Array<{ label: string; value: LogFilter }> = [
   { label: "全部", value: "all" },
   { label: "调试", value: "debug" },
   { label: "信息", value: "info" },
@@ -154,10 +154,7 @@ export function LogFilterBar({
       {/* 搜索框可收缩（`shrink` + `min-w`）：行头窄到放不下时它先让位，
           而不是去挤筛选器的标签。`w-56` 是它舒展时的宽度。 */}
       <div className="relative flex w-56 min-w-24 shrink items-center">
-        <Search
-          size={14}
-          className="text-ink-fainter pointer-events-none absolute left-2.5"
-        />
+        <Search size={14} className="text-ink-fainter pointer-events-none absolute left-2.5" />
         <Input
           type="text"
           value={search}

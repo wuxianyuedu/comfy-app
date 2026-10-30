@@ -21,11 +21,7 @@
  * 失守。
  */
 
-import {
-  describeComfyExit,
-  type ComfyExitFacts,
-  type ComfyExitReport,
-} from "./lifecycle-exit";
+import { describeComfyExit, type ComfyExitFacts, type ComfyExitReport } from "./lifecycle-exit";
 import { sleep } from "~/lib/with-timeout";
 
 /** 就绪探测：返回可达 base（不可达为 null）。 */
@@ -77,9 +73,7 @@ export interface WaitReadyResult {
  * 这就是 `lifecycle-derive.ts` 判决表同一手法的延伸：把「怎么探」与
  * 「怎么判」变成参数，循环本身可被逐条测试锁住（不必起真进程）。
  */
-export async function waitForComfyReady(
-  opts: WaitForComfyReadyOpts,
-): Promise<WaitReadyResult> {
+export async function waitForComfyReady(opts: WaitForComfyReadyOpts): Promise<WaitReadyResult> {
   const interval = opts.intervalMs ?? 2000;
   for (;;) {
     const exit = opts.earlyExit?.();
@@ -133,9 +127,7 @@ export interface OutputSinkDeps {
  * expect(lines[0]).toContain("…");  // 已截断
  * ```
  */
-export function createOutputSink(
-  deps: OutputSinkDeps,
-): (chunk: Buffer | string) => void {
+export function createOutputSink(deps: OutputSinkDeps): (chunk: Buffer | string) => void {
   const cap = deps.maxLineChars ?? 500;
   return (chunk: Buffer | string) => {
     const text = chunk.toString().trimEnd().slice(0, cap);
@@ -146,13 +138,13 @@ export function createOutputSink(
 
 /** 行留底账本：按行累积、超出 `maxLines` 丢弃最旧。 */
 export interface RecentOutputLedger {
-  lines: string[];
+  lines: Array<string>;
   push: (text: string) => void;
 }
 
 /** 留底账本（默认上限 60 行，与既有行为一致）。 */
 export function createRecentOutputLedger(maxLines = 60): RecentOutputLedger {
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   return {
     lines,
     push(text: string) {
@@ -184,10 +176,7 @@ export interface ChildExitDeps {
    *  应用自己也一起没了的那种情况，只能靠它反推）。 */
   onExitReport?: (report: ComfyExitReport) => void;
   /** 退出事实里只有宿主知道的那几样（pid / 存活时长 / 是否用户主动关 / 模式）。 */
-  context: () => Pick<
-    ComfyExitFacts,
-    "pid" | "uptimeMs" | "stopRequested" | "mode"
-  >;
+  context: () => Pick<ComfyExitFacts, "pid" | "uptimeMs" | "stopRequested" | "mode">;
 }
 
 /**
@@ -206,8 +195,7 @@ export function createChildExitHandler(
     const report = describeComfyExit({ code, signal, ...deps.context() });
     deps.appendRuntimeLog(`■ ${deps.subject} 进程已退出：${report.reason}`);
     deps.appendRuntimeLog(`[exit] ${report.reason}（${report.detail}）`);
-    if (report.advice !== null)
-      deps.appendRuntimeLog(`[exit] ↩ ${report.advice}`);
+    if (report.advice !== null) deps.appendRuntimeLog(`[exit] ↩ ${report.advice}`);
     deps.log(`${deps.subject} 进程退出：${report.reason}`);
     deps.onExitReport?.(report);
     deps.clearChild();

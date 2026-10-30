@@ -79,10 +79,10 @@ export interface WorkflowLibraryCanvasProps {
   paramCards: LibraryParamCards;
   outputCards: LibraryOutputCards;
   /** 契约条目表 —— 闸门（`isValidConnection`）按它判类型。 */
-  entries: readonly ParamEntry[];
+  entries: ReadonlyArray<ParamEntry>;
   /** 契约口清单（`modeContractEntries`）—— 卡片头按它取名，与「工坊封装」
    *  页签同一份（ISSUE #596）。缺省时卡片头退回条目自带的 label。 */
-  contractEntries?: readonly { id: string; label: string }[];
+  contractEntries?: ReadonlyArray<{ id: string; label: string }>;
   /** 是否允许连线（有模式 + 上层给了落库回调）。 */
   canWire: boolean;
   selectedEntryId: string | null;
@@ -289,7 +289,7 @@ function WorkflowLibraryCanvasInner({
   /* React Flow 通过 Delete / Backspace 删除选中线时回调：解析出每条线对应的
    * 对外参数（输入侧 entryId / 输出侧 ioKey），落到 `disconnect` 只断那一条。 */
   const handleEdgesDelete = useCallback(
-    (deleted: Edge[]) => {
+    (deleted: Array<Edge>) => {
       for (const edge of deleted) {
         const owner = libraryEdgeOwner(edge.id);
         if (owner && onDeleteWire) onDeleteWire(owner.namespace, owner.entryId);

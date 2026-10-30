@@ -30,7 +30,7 @@ interface SegmentOnScreen {
   barWidth: number;
 }
 
-async function readSegments(barRoots: Locator): Promise<SegmentOnScreen[]> {
+async function readSegments(barRoots: Locator): Promise<Array<SegmentOnScreen>> {
   return await barRoots.evaluateAll((nodes) =>
     nodes.map((node) => {
       const root = /* SAFETY: 类型断言已复核 */ node as HTMLElement;

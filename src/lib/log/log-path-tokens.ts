@@ -93,21 +93,10 @@ export interface LogPathToken {
  * 只收「明显是句子标点」的那几个：`-` `.` `_` 不在其中 —— 它们是真实文件名的
  * 一部分（`dev-launcher.mjs`、`comfy-app-t3-branch4`），收掉一个字符就是另一个东西。
  */
-const TRAILING_PUNCT = new Set([
-  "。",
-  "，",
-  "；",
-  "、",
-  "）",
-  "】",
-  "》",
-  "”",
-  "’",
-  "…",
-]);
+const TRAILING_PUNCT = new Set(["。", "，", "；", "、", "）", "】", "》", "”", "’", "…"]);
 
 /** 只在**数量不配平**时才可以丢的一对标点（`(` `)` `[` `]` `{` `}` `"` `'`）。 */
-const PAIRED_PUNCT: [left: string, right: string][] = [
+const PAIRED_PUNCT: Array<[left: string, right: string]> = [
   ["(", ")"],
   ["[", "]"],
   ["{", "}"],
@@ -217,10 +206,7 @@ function trimCandidate(raw: string): string {
     for (const [left, right] of PAIRED_PUNCT) {
       /* **数量不配平**才丢：Windows 文件名真能带成对括号
        * （`C:\Program Files (x86)\…`），一刀切会把合法路径削掉一半。 */
-      if (
-        text.endsWith(right) &&
-        countChar(text, left) < countChar(text, right)
-      ) {
+      if (text.endsWith(right) && countChar(text, left) < countChar(text, right)) {
         text = text.slice(0, -1);
       }
     }
@@ -342,8 +328,8 @@ function pathStartAt(text: string, at: number): number {
  * 与标点（`-`、`@`、`+`），切词会把长路径切碎成几段、每段都不像路径而整条丢掉。
  * 这里改成「找到起点就一路吃到不可再吃的字符」，再回头收尾巴。
  */
-export function findLogPathTokens(text: string): LogPathToken[] {
-  const tokens: LogPathToken[] = [];
+export function findLogPathTokens(text: string): Array<LogPathToken> {
+  const tokens: Array<LogPathToken> = [];
   let i = 0;
   while (i < text.length) {
     const start = pathStartAt(text, i);

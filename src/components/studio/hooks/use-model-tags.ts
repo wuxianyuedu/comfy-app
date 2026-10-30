@@ -11,10 +11,7 @@
 
 import { useCallback, useState } from "react";
 
-import {
-  useItemErrors,
-  type ItemErrors,
-} from "~/components/ui/use-item-errors";
+import { useItemErrors, type ItemErrors } from "~/components/ui/use-item-errors";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction } from "~/lib/async-action";
 import { vanillaApi } from "~/trpc/vanilla";
@@ -29,7 +26,7 @@ export interface TagItem {
 }
 
 export interface ModelTagsController {
-  tags: TagItem[];
+  tags: Array<TagItem>;
   /** 新增框草稿。 */
   draft: string;
   setDraft: (value: string) => void;
@@ -54,10 +51,7 @@ export interface ModelTagsController {
 }
 
 /** 把父组件的快照并入本地列表：只补本地没有的，不覆盖已有的。 */
-export function mergeTagSnapshots(
-  local: TagItem[],
-  snapshot: TagItem[],
-): TagItem[] {
+export function mergeTagSnapshots(local: Array<TagItem>, snapshot: Array<TagItem>): Array<TagItem> {
   const localNames = new Set(local.map((tag) => tag.name));
   const fresh = snapshot.filter((tag) => !localNames.has(tag.name));
   return fresh.length > 0 ? [...fresh, ...local] : local;
@@ -65,16 +59,13 @@ export function mergeTagSnapshots(
 
 export interface UseModelTagsOptions {
   /** 父组件的缓存快照（首次渲染的种子值）。 */
-  initialTags: TagItem[];
+  initialTags: Array<TagItem>;
   /** 任一写操作成功后回调，让父组件刷新自己的列表。 */
   onChanged?: () => void;
 }
 
-export function useModelTags({
-  initialTags,
-  onChanged,
-}: UseModelTagsOptions): ModelTagsController {
-  const [tags, setTags] = useState<TagItem[]>(initialTags);
+export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): ModelTagsController {
+  const [tags, setTags] = useState<Array<TagItem>>(initialTags);
   const [draft, setDraft] = useState("");
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const addBusy = useBusyAction();
@@ -180,9 +171,7 @@ export function useModelTags({
           errors.clear(oldName);
           // 本地先换名，让弹窗立刻反映重命名，不等父组件 onChanged 的往返。
           setTags((prev) =>
-            prev.map((tag) =>
-              tag.name === oldName ? { ...tag, name: trimmed } : tag,
-            ),
+            prev.map((tag) => (tag.name === oldName ? { ...tag, name: trimmed } : tag)),
           );
           await refresh();
           onChanged?.();

@@ -47,7 +47,7 @@ const SCRIPT = path.join(ROOT, "scripts", "gate-tier-summary.cjs");
 const HOOK = path.join(ROOT, ".githooks", "pre-commit");
 
 /** 跑一次脚本，返回 stdout 与退出码。 */
-function run(...flags: string[]) {
+function run(...flags: Array<string>) {
   const got = spawnSync(process.execPath, [SCRIPT, ...flags], {
     encoding: "utf8",
     cwd: ROOT,
@@ -65,19 +65,10 @@ describe("gate-tier-summary：按这一轮实际跑了什么念", () => {
   }
 
   it("默认档：降下来的 A B D 逐组点名，带上钩子里那份说明", () => {
-    const { out, code } = run(
-      "--ran",
-      "D0",
-      "--skipped",
-      "A B D",
-      "--moved",
-      "C",
-    );
+    const { out, code } = run("--ran", "D0", "--skipped", "A B D", "--moved", "C");
     expect(code, out).toBe(0);
     for (const id of ["A", "B", "D"]) {
-      expect(out, `「没跑」那句里应当点名组 ${id}`).toContain(
-        `组 ${id}：${hookLabels.get(id)}`,
-      );
+      expect(out, `「没跑」那句里应当点名组 ${id}`).toContain(`组 ${id}：${hookLabels.get(id)}`);
     }
     /* 收尾那句跟着档位走：只跑了 D0 ⇒ 重档仍在外头。 */
     expect(out).toContain("入选档位全部通过 ✓（跑了：D0；重档见平台）");
@@ -96,9 +87,7 @@ describe("gate-tier-summary：按这一轮实际跑了什么念", () => {
 
   it("挪去平台的那一组不混进「降档」名单（旧形态把它写在「组 A B C D」里）", () => {
     const { out } = run("--ran", "D0", "--skipped", "A B D", "--moved", "C");
-    const sentence = out
-      .split("\n")
-      .find((line) => line.includes("本次提交本地**没跑**"));
+    const sentence = out.split("\n").find((line) => line.includes("本次提交本地**没跑**"));
     expect(sentence, out).toBeDefined();
     expect(sentence).not.toMatch(/组 C/);
     expect(sentence).toContain("组 A");
@@ -127,16 +116,7 @@ describe("gate-tier-summary：按这一轮实际跑了什么念", () => {
         ),
         "utf8",
       );
-      const renamed = run(
-        "--hook",
-        fixture,
-        "--ran",
-        "D0",
-        "--skipped",
-        "A",
-        "--moved",
-        "",
-      );
+      const renamed = run("--hook", fixture, "--ran", "D0", "--skipped", "A", "--moved", "");
       expect(renamed.out).toContain("组 A：类型检查（换了名的那一组）");
       expect(renamed.out).not.toContain("组 A：tsc --noEmit");
     } finally {

@@ -104,7 +104,7 @@ export function useDebugMode() {
  * 不该点亮「你改过设置」这个点。 */
 export function isCustomCanvasSettings(settings: CanvasSettings): boolean {
   const keys = /* SAFETY: 类型断言已复核 */ (
-    Object.keys(DEFAULT_CANVAS_SETTINGS) as (keyof CanvasSettings)[]
+    Object.keys(DEFAULT_CANVAS_SETTINGS) as Array<keyof CanvasSettings>
   ).filter((key) => key !== "debugMode");
   for (const k of keys) {
     if (settings[k] !== DEFAULT_CANVAS_SETTINGS[k]) return true;

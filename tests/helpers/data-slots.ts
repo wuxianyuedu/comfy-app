@@ -16,8 +16,8 @@ import { fileURLToPath } from "node:url";
 const SRC_DIR = fileURLToPath(new URL("../../src", import.meta.url));
 
 /** 递归列出目录下的文件（跳过 `node_modules` 与构建产物那一类点开头目录）。 */
-function walk(dir: string): string[] {
-  const out: string[] = [];
+function walk(dir: string): Array<string> {
+  const out: Array<string> = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.name.startsWith(".")) continue;
     const full = path.join(dir, entry.name);

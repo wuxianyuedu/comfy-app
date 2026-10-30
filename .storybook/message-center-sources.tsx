@@ -81,7 +81,7 @@ export interface MessageScene {
   /** 面板是否打开（`false` 时 `MessageCenterPanel` 不渲染）。 */
   readonly open: boolean;
   /** 这一档要 push 的那几条 —— 每条都由**生产方**给出，不在这里手抄文案。 */
-  readonly produced: readonly ProducedMessage[];
+  readonly produced: ReadonlyArray<ProducedMessage>;
   /**
    * push 完之后是否调一次真 action `markAllRead()`。
    *
@@ -179,8 +179,7 @@ function serviceRecoveredNotice(): { title: string; body: string } {
     notice: {
       why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
       action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
-      detail:
-        "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
+      detail: "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
     },
   });
 }
@@ -232,8 +231,7 @@ export const MESSAGE_SCENES = {
    * 合并之后用户实际会看到的样子（而不是「断开 / 恢复 / 重启」三条并排）。
    */
   runtimeSelfHeal: {
-    about:
-      "接口层 404 自愈重启（带归因的那一条）+ 依赖面陈旧（需停服务重装依赖）",
+    about: "接口层 404 自愈重启（带归因的那一条）+ 依赖面陈旧（需停服务重装依赖）",
     open: true,
     produced: [
       { kind: "update", make: healRestartNotice },
@@ -330,11 +328,11 @@ export function messageSceneArgType() {
  * 与 `store-sources.tsx` 的 `sceneEntries()` 同一个位置：`MessageCenterPanel`
  * 自己读 store，不需要这条；它是给「想摆一条真消息、但不吃 store」的 story 留的。
  */
-export function sceneMessages(name: string): {
+export function sceneMessages(name: string): Array<{
   kind: string;
   title: string;
   body: string;
-}[] {
+}> {
   const scene: MessageScene | undefined = MESSAGE_SCENES[name as SceneName];
   if (scene === undefined) {
     throw new Error(
@@ -364,9 +362,7 @@ function seedMessageScene(name: string): MessageScene {
   const store = useMessageCenterStore.getState();
   store.clear();
   for (const produced of scene.produced) {
-    useMessageCenterStore
-      .getState()
-      .push({ kind: produced.kind, ...produced.make() });
+    useMessageCenterStore.getState().push({ kind: produced.kind, ...produced.make() });
   }
   if (scene.markAllRead === true) {
     useMessageCenterStore.getState().markAllRead();

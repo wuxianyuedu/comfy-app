@@ -35,7 +35,7 @@ type LlmDraftSetter = Dispatch<SetStateAction<LlmConfig | null>>;
  * 主模型永远在列（本地 Ollama 当前生效模型）；查询结果相同时返回原引用，
  * 避免「主模型切换 → 勾选列表重算」引发受控组件输入抖动。
  */
-function mergeExtraModels(current: string[], model: string, toggled: string): string[] {
+function mergeExtraModels(current: Array<string>, model: string, toggled: string): Array<string> {
   const next = model.trim() !== "" ? [model, ...current.filter((m) => m !== model)] : [...current];
   if (!toggled.trim()) return next;
   if (next.includes(toggled)) {
@@ -173,7 +173,7 @@ export function useSettingsRemoteModels(input: {
 
   /** 远端候选模型列表（配置视图，按保存顺序）——设置页不区分「当前生效」，
    *  用哪个模型由工坊运行时切换。 */
-  const remoteModelList: RemoteModelEntry[] = llmDraft?.extraModels ?? [];
+  const remoteModelList: Array<RemoteModelEntry> = llmDraft?.extraModels ?? [];
 
   const setTaskTemperature = useCallback(
     (task: TaskType, raw: string) => {

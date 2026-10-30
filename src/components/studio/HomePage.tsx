@@ -39,7 +39,7 @@ export interface RecentProject {
   id: string;
   name: string;
   updatedAt: string;
-  thumbnails?: string[];
+  thumbnails?: Array<string>;
   /** 项目种类 —— 决定图标与视觉处理 */
   kind?: "canvas" | "generation" | "workflow" | "video";
   /** Secondary line: e.g. "12 节点", "4 张图", "Wan I2V" */
@@ -178,7 +178,7 @@ function ResumeProjectCard({
 
 export interface HomePageProps {
   onNewProject?: () => void;
-  recentProjects?: RecentProject[];
+  recentProjects?: Array<RecentProject>;
   onOpenProject?: (id: string) => void;
   /** 打开一个画布项目（设为活跃 + 跳到项目主页）。 */
   onOpenCanvasProject?: (id: string) => void;

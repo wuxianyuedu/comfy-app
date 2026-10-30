@@ -85,7 +85,7 @@ export function RangeSlider({
       min={min}
       max={max}
       step={step}
-      onValueChange={(v: number | readonly number[]) => {
+      onValueChange={(v: number | ReadonlyArray<number>) => {
         /* shadcn 官方 `<Slider>` 的 wrapper 不转发 base-ui Slider 的 `Value`
          * 泛型,onValueChange 回调参数在 TS 侧被推成 `any`——这里显式标
          * `number | readonly number[]` 与 base-ui 内部约定**完全一致**

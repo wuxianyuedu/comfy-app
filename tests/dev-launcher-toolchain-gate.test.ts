@@ -965,9 +965,9 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
    * 「会静默失效的清单只许定义一次」——所以这里用扫描而不是再列一张会漂移的文件清单。
    */
   it("全仓 scripts/**：由 Node 起 pnpm 一律经 shell.mjs 的形态判据", () => {
-    const offenders: string[] = [];
-    const walk = (dir: string): string[] => {
-      const out: string[] = [];
+    const offenders: Array<string> = [];
+    const walk = (dir: string): Array<string> => {
+      const out: Array<string> = [];
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, e.name);
         if (e.isDirectory()) {

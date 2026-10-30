@@ -38,9 +38,9 @@ import {
 
 interface ContractInputCatalogProps {
   /** 本契约已经有的口（判断「已添加」）。 */
-  inputs: readonly string[];
+  inputs: ReadonlyArray<string>;
   /** 本契约的自定义口定义。 */
-  customInputs: readonly ModeContractCustomInput[];
+  customInputs: ReadonlyArray<ModeContractCustomInput>;
   /** 点一个预制口（`reference-image` 由调用方换成下一个参考图槽）。 */
   onAddPredefined: (type: ModeContractInputType) => void;
   /** 新增一个自定义口（名 + 类型）。 */
@@ -81,17 +81,11 @@ export function ContractInputCatalog({
         {/* 预制口是**可选的**一组：这里按 `role="group"` 给组名，
             每一枚的选中态说的是「它在本契约里」（与上面输入口清单同一件事的
             另一种入口）—— 同一份状态两个视图，`selected` 都从 `item.added` 来。 */}
-        <div
-          role="group"
-          aria-label="预制参数"
-          className="flex flex-wrap gap-1.5"
-        >
+        <div role="group" aria-label="预制参数" className="flex flex-wrap gap-1.5">
           {catalog.map((item) => (
             <Hint
               key={item.type}
-              label={
-                item.added ? "已在当前契约里" : `添加「${item.label}」到契约`
-              }
+              label={item.added ? "已在当前契约里" : `添加「${item.label}」到契约`}
               wrap
             >
               <SelectChip
@@ -138,9 +132,7 @@ export function ContractInputCatalog({
               <span className="text-muted-foreground bg-subtle border-border-strong text-2xs shrink-0 rounded border px-1.5 py-0.5">
                 {customInputKindLabel(def.kind)}
               </span>
-              <span className="text-muted-foreground/50 text-2xs shrink-0 font-mono">
-                {def.id}
-              </span>
+              <span className="text-muted-foreground/50 text-2xs shrink-0 font-mono">{def.id}</span>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -170,11 +162,7 @@ export function ContractInputCatalog({
                 aria-label="自定义参数名称"
                 className="h-7 w-44 text-xs"
               />
-              <div
-                role="group"
-                aria-label="参数类型"
-                className="flex items-center gap-1.5"
-              >
+              <div role="group" aria-label="参数类型" className="flex items-center gap-1.5">
                 {CUSTOM_INPUT_KINDS.map((item) => (
                   <Hint key={item.kind} label={item.hint}>
                     <SelectChip

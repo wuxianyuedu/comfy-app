@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
  */
 type AvatarSize = NonNullable<React.ComponentProps<typeof Avatar>["size"]>;
 
-const SIZES: AvatarSize[] = ["default", "sm", "lg"];
+const SIZES: Array<AvatarSize> = ["default", "sm", "lg"];
 
 /** 无色数据 URL：透明底 + 只描边的椭圆「头像」。 */
 const PORTRAIT =

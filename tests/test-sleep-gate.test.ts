@@ -42,8 +42,8 @@ const DEP = path.join(SCRIPTS_DIR, "check-test-concurrency.cjs");
  * 这个时刻（造得出就只能靠删文件，那是一次概率窗口，不是判据）。
  */
 const { scanFile, walk } = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(SCRIPT) as {
-  scanFile: (abs: string) => unknown[] | null;
-  walk: (dir: string, out?: string[]) => string[];
+  scanFile: (abs: string) => Array<unknown> | null;
+  walk: (dir: string, out?: Array<string>) => Array<string>;
 };
 
 /**
@@ -55,7 +55,10 @@ const { scanFile, walk } = /* SAFETY: 类型断言已复核 */ createRequire(imp
  * @param files 相对路径 → 内容
  * @param args 额外参数（如 --update / --report）
  */
-function gate(files: Record<string, string>, args: string[] = []): { ok: boolean; output: string } {
+function gate(
+  files: Record<string, string>,
+  args: Array<string> = [],
+): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "test-sleep-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   for (const src of [SCRIPT, DEP]) {

@@ -45,7 +45,7 @@ type Story = StoryObj<typeof meta>;
  * 端口行用的类型（ComfyUI 的真类型名 —— `normalizeTypeChip()` 只认那几个，
  * 自造的词会落到「未知类型」那一档、看不出差别）。
  */
-const PORT_ROWS: { id: string; dir: "in" | "out"; type?: string }[] = [
+const PORT_ROWS: Array<{ id: string; dir: "in" | "out"; type?: string }> = [
   { id: "3:model", dir: "in", type: "MODEL" },
   { id: "3:positive", dir: "in", type: "CONDITIONING" },
   { id: "3:latent_image", dir: "in", type: "LATENT" },

@@ -3,12 +3,10 @@ import type { Character, Shot, Scene, StyleRef } from "./types";
 /* 依据角色设定表与风格，拼出这个角色的 ComfyUI 正向提示词。
  */
 export function buildCharacterPrompt(c: Character, style?: StyleRef): string {
-  const parts: string[] = [];
+  const parts: Array<string> = [];
 
   // 核心身份特征
-  const identity = [c.ageGender, c.appearance, c.costume]
-    .filter(Boolean)
-    .join(", ");
+  const identity = [c.ageGender, c.appearance, c.costume].filter(Boolean).join(", ");
   if (identity) parts.push(identity);
 
   // 性格 / 气质，作为氛围关键词
@@ -26,10 +24,7 @@ export function buildCharacterPrompt(c: Character, style?: StyleRef): string {
   return parts.filter(Boolean).join(", ");
 }
 
-export function buildCharacterNegative(
-  _c: Character,
-  style?: StyleRef,
-): string {
+export function buildCharacterNegative(_c: Character, style?: StyleRef): string {
   const base = [
     "ugly",
     "deformed",
@@ -48,10 +43,10 @@ export function buildCharacterNegative(
 export function buildShotPrompt(
   shot: Pick<Shot, "description" | "shotType">,
   scene: Scene | undefined,
-  characters: Character[],
+  characters: Array<Character>,
   style?: StyleRef,
 ): string {
-  const parts: string[] = [];
+  const parts: Array<string> = [];
 
   // 镜头构图关键词
   const shotKw = SHOT_KEYWORDS[shot.shotType] ?? "";
@@ -59,9 +54,7 @@ export function buildShotPrompt(
 
   // 场景氛围
   if (scene) {
-    const sceneBits = [scene.location, scene.time, scene.action]
-      .filter(Boolean)
-      .join(", ");
+    const sceneBits = [scene.location, scene.time, scene.action].filter(Boolean).join(", ");
     if (sceneBits) parts.push(sceneBits);
   }
 
@@ -80,10 +73,7 @@ export function buildShotPrompt(
   return parts.filter(Boolean).join(", ");
 }
 
-export function buildShotNegative(
-  characters: Character[],
-  style?: StyleRef,
-): string {
+export function buildShotNegative(characters: Array<Character>, style?: StyleRef): string {
   const neg = [
     "ugly",
     "deformed",
@@ -113,10 +103,7 @@ const SHOT_KEYWORDS: Record<string, string> = {
 };
 
 /* 合并风格与角色各自的推荐参数；冲突时以角色为准。 */
-export function mergeParams(
-  style?: StyleRef,
-  character?: Character,
-): Record<string, unknown> {
+export function mergeParams(style?: StyleRef, character?: Character): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (style?.defaultParams) Object.assign(out, style.defaultParams);
   if (character?.params) Object.assign(out, character.params);

@@ -31,11 +31,7 @@ import { useInterval } from "~/components/ui/use-interval";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { fetchRawCli } from "~/lib/comfyui/raw-cli-client";
-import {
-  parseRawCliLine,
-  sameRawCliLines,
-  type ParsedCliLine,
-} from "./raw-cli-lines";
+import { parseRawCliLine, sameRawCliLines, type ParsedCliLine } from "./raw-cli-lines";
 
 const TAG_STYLES: Record<string, string> = {
   原始: "text-info-strong",
@@ -52,11 +48,7 @@ const TAG_STYLES: Record<string, string> = {
  * 下就是「这个界面非常卡」的一半来源（另一半是首屏全量展开，见
  * `ui/json-viewer` 里 `collapsed` 那段注释）。
  */
-const RawCliLineCard = memo(function RawCliLineCard({
-  entry,
-}: {
-  entry: ParsedCliLine;
-}) {
+const RawCliLineCard = memo(function RawCliLineCard({ entry }: { entry: ParsedCliLine }) {
   const tagClass = TAG_STYLES[entry.tag] ?? "text-ink-muted";
 
   if (entry.kind === "json") {
@@ -65,11 +57,7 @@ const RawCliLineCard = memo(function RawCliLineCard({
         <div className={`text-2xs mb-1 font-mono uppercase ${tagClass}`}>
           [comfy-cli {entry.tag}]
         </div>
-        <JsonViewer
-          data={entry.value}
-          title="comfy-cli 输出"
-          initialCollapsedDepth={2}
-        />
+        <JsonViewer data={entry.value} title="comfy-cli 输出" initialCollapsedDepth={2} />
       </div>
     );
   }
@@ -103,7 +91,7 @@ export function WorkflowRunRawCliModal({
   open,
   onClose,
 }: WorkflowRunRawCliModalProps) {
-  const [lines, setLines] = useState<string[]>([]);
+  const [lines, setLines] = useState<Array<string>>([]);
   const [loaded, setLoaded] = useState(false);
   const [autoscroll, setAutoscroll] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -233,27 +221,19 @@ export function WorkflowRunRawCliModal({
               <EmptyState
                 variant="panel"
                 icon={loaded ? FileJson : undefined}
-                title={
-                  loaded
-                    ? "暂无完整输出（旧任务或服务端重启后内存缓冲已清空）"
-                    : "加载中…"
-                }
+                title={loaded ? "暂无完整输出（旧任务或服务端重启后内存缓冲已清空）" : "加载中…"}
               />
             ) : (
               /* 服务端缓冲只从**尾部**追加、到上限后从头部裁，所以除裁切那一轮外
                  下标与行的对应关系稳定；配上行内 `memo`（按 `entry` 身份跳过），
                  追加新行不会牵连已有卡片。 */
-              parsed.map((entry, index) => (
-                <RawCliLineCard key={index} entry={entry} />
-              ))
+              parsed.map((entry, index) => <RawCliLineCard key={index} entry={entry} />)
             )}
           </div>
 
           {/* Footer */}
           <div className="border-border bg-card text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-xs">
-            <span>
-              {copied ? "已复制全部" : "完整、未经截断的 comfy-cli 输出"}
-            </span>
+            <span>{copied ? "已复制全部" : "完整、未经截断的 comfy-cli 输出"}</span>
             <FieldLabel className="flex cursor-pointer items-center gap-1.5 select-none">
               <Checkbox
                 checked={autoscroll}

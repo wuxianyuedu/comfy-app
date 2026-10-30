@@ -1,11 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { MaterialItem } from "./MaterialLibraryPanel";
 import { MaterialLibraryPanel } from "./MaterialLibraryPanel";
@@ -22,7 +16,7 @@ function mockFetch(body: unknown, ok = true) {
   return fetchMock;
 }
 
-const sampleItems: MaterialItem[] = [
+const sampleItems: Array<MaterialItem> = [
   {
     id: "m-1",
     name: "poster.png",
@@ -51,9 +45,7 @@ describe("MaterialLibraryPanel", () => {
     });
     const onUse = vi.fn();
     const onClose = vi.fn();
-    render(
-      <MaterialLibraryPanel onClose={onClose} projectId="p-1" onUse={onUse} />,
-    );
+    render(<MaterialLibraryPanel onClose={onClose} projectId="p-1" onUse={onUse} />);
 
     // 首屏停在分类列表（folder === null），此时只渲染分类卡片
     expect(await screen.findByText("参考素材")).toBeInTheDocument();
@@ -67,9 +59,7 @@ describe("MaterialLibraryPanel", () => {
     mockFetch({ folders: [], items: [] });
     render(<MaterialLibraryPanel onClose={vi.fn()} projectId="p-1" />);
     // 初始 loading 文案应消失(拉取完成),且不抛错
-    await waitFor(() =>
-      expect(screen.queryByText("读取素材库失败")).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByText("读取素材库失败")).not.toBeInTheDocument());
   });
 
   it("请求失败时展示错误文案", async () => {

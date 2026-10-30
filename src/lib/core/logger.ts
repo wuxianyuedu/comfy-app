@@ -217,7 +217,10 @@ export const logger = createPinoLogger();
  * `[app] （无可读文案；字段：password, token） {"ns":"login"}`）。
  * pino 里也没有「(msg, ns)」这种签名：`(msg, extra)` 的第二个参数是格式化实参。
  */
-function renderServerLogEntry(rawArgs: unknown[], loggerNs?: string): { msg: string; ns: string } {
+function renderServerLogEntry(
+  rawArgs: Array<unknown>,
+  loggerNs?: string,
+): { msg: string; ns: string } {
   // 二次防线（也覆盖直接调用本函数的路径）：先把 payload 里的密钥形状值擦掉再取文案。
   const args = rawArgs.map((a) => redactSecretShaped(a));
   const first = args[0];
@@ -231,7 +234,7 @@ function renderServerLogEntry(rawArgs: unknown[], loggerNs?: string): { msg: str
       : undefined;
 
   // 空串按「没取到」处理：`??` 只挡 null/undefined，挡不住 ""（会写出空行）
-  const firstNonEmpty = (...candidates: (string | undefined)[]) =>
+  const firstNonEmpty = (...candidates: Array<string | undefined>) =>
     candidates.find((c) => c !== undefined && c.length > 0);
 
   // 优先级：字段里的正文 > 调用方给的第二个字符串（pino 的 `(obj, msg)`）>

@@ -41,7 +41,7 @@ function samplesWith(
   warmup: number,
   steady: number,
   steadyCount = ROUNDS - DISCARD_ROUNDS,
-): (number | null)[] {
+): Array<number | null> {
   return [
     ...Array.from({ length: DISCARD_ROUNDS }, () => warmup),
     ...Array.from({ length: steadyCount }, () => steady),
@@ -90,7 +90,7 @@ describe("运行时读数口径（steadyMin / 弃前 N 轮）", () => {
   });
 
   it("summarize 两档各自弃前 N 轮，且形状与 spec 读的两栏一致", () => {
-    const samples: NavigationSample[] = Array.from({ length: ROUNDS }, (_, i) => ({
+    const samples: Array<NavigationSample> = Array.from({ length: ROUNDS }, (_, i) => ({
       // 斜坡段故意让 load 也不单调
       loadEventEnd: i < DISCARD_ROUNDS ? 900 : 320,
       firstContentfulPaint: i < DISCARD_ROUNDS ? 700 : 250,

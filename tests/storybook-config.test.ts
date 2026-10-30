@@ -53,7 +53,7 @@ const GENERATED_DIRS = [`${sep}assets${sep}`, `${sep}generated${sep}`];
  * 文件**决定 —— 否则本机跑过一次 `pnpm storybook` 之后的判据覆盖面就与别人的检出
  * 不一样了（那正是生成件不进类型程序的理由在判据这一侧的回声）。
  */
-function storybookSources(): string[] {
+function storybookSources(): Array<string> {
   return readdirSync(STORYBOOK_DIR, { recursive: true, withFileTypes: true })
     .filter(
       (entry) =>
@@ -153,7 +153,7 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
     // 扫描面非空：目录读空了，下面那条相等断言会在空集上假绿。
     expect(files.length).toBeGreaterThan(0);
 
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const abs of files) {
       const source = readFileSync(abs, "utf8");
       if (addExtensionsToRelativeImports(source, abs) !== source) {

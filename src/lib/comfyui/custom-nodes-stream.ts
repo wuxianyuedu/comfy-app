@@ -17,8 +17,8 @@ export interface PkgReport {
   exists: boolean;
   status: "ok" | "missing" | "error" | "empty";
   nodeCount: number;
-  nodeTypes: string[];
-  errors: { file: string; error: string }[];
+  nodeTypes: Array<string>;
+  errors: Array<{ file: string; error: string }>;
 }
 
 export interface ParseReport {
@@ -26,8 +26,8 @@ export interface ParseReport {
   totalNodes: number;
   pathCount: number;
   errorCount: number;
-  packages: PkgReport[];
-  parseErrors?: { file: string; error: string }[];
+  packages: Array<PkgReport>;
+  parseErrors?: Array<{ file: string; error: string }>;
   /** 增量解析报告携带的模式标记（全量报告缺省为 undefined）。 */
   mode?: "subset" | "full";
   /** 增量解析时新增节点数（全量报告缺省为 undefined）。 */
@@ -54,8 +54,8 @@ export interface SummaryPkg {
   path: string;
   status: string;
   nodeCount: number;
-  nodeTypes: string[];
-  errors: unknown[];
+  nodeTypes: Array<string>;
+  errors: Array<unknown>;
   contentHash?: string;
   parsedAt?: string | null;
   parsedFileCount?: number;
@@ -63,17 +63,17 @@ export interface SummaryPkg {
 }
 
 export interface SettingsResp {
-  settings: { paths: string[]; localWorkflowPaths: string[] };
+  settings: { paths: Array<string>; localWorkflowPaths: Array<string> };
   summary: {
     generatedAt: string | null;
     totalNodes: number;
-    packages: SummaryPkg[];
-    missingPaths: string[];
-    parseErrors: { file: string; error: string }[];
-    sources: string[];
+    packages: Array<SummaryPkg>;
+    missingPaths: Array<string>;
+    parseErrors: Array<{ file: string; error: string }>;
+    sources: Array<string>;
   } | null;
   lastReport: ParseReport | null;
-  discoveredByParent: Record<string, DiscoveredSubpkg[]>;
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
   /** 归一化绝对路径（正斜杠、小写）→ 已加载的 SummaryPkg，让 UI 能把发现的
    *  子包与清单对齐，并用 contentHash 识别「已加载但已过期」。 */
   byPath: Record<string, SummaryPkg>;
@@ -82,7 +82,7 @@ export interface SettingsResp {
 /** 设置/探测流的一行 ndjson 事件（`/api/custom-nodes` 探测端点发出）。按 `type`
  *  判别；`phase` 只取上线会出现的三态（不含 UI 初值 `""`）。 */
 export type SettingsStreamEvent =
-  | { type: "discover_start"; parents?: string[]; total?: number }
+  | { type: "discover_start"; parents?: Array<string>; total?: number }
   | {
       type: "progress";
       parent?: string;
@@ -95,7 +95,7 @@ export type SettingsStreamEvent =
   | {
       type: "discover_done";
       parent?: string;
-      packages?: DiscoveredSubpkg[];
+      packages?: Array<DiscoveredSubpkg>;
       cached?: boolean;
     }
   | {
@@ -103,7 +103,7 @@ export type SettingsStreamEvent =
       summary?: SettingsResp["summary"];
       lastReport?: ParseReport | null;
       byPath?: Record<string, SummaryPkg>;
-      settings?: { paths: string[]; localWorkflowPaths: string[] };
+      settings?: { paths: Array<string>; localWorkflowPaths: Array<string> };
     }
   | { type: "error"; message?: string }
   | { type: "done" };

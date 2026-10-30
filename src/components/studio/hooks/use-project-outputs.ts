@@ -32,15 +32,15 @@ export interface ProjectOutputItem {
   steps: number | null;
   cfg: number | null;
   checkpoint: string | null;
-  referenceImages: string[];
+  referenceImages: Array<string>;
   /** 来源任务（#2483 FR-QA-09）：重绘 / 放大的产物指回原任务；NULL = 常规提交。 */
   parentId: string | null;
   createdAt: string;
-  images: ProjectOutputImage[];
+  images: Array<ProjectOutputImage>;
 }
 
 export interface ProjectOutputsController {
-  outputs: ProjectOutputItem[];
+  outputs: Array<ProjectOutputItem>;
   loading: boolean;
   refetching: boolean;
   refetch: () => void;
@@ -56,7 +56,7 @@ export function useProjectOutputs(projectId: string | null): ProjectOutputsContr
   const outputs = /* SAFETY: 类型断言已复核 */ (outputsQ.data?.outputs ?? []).map((output) => ({
     ...output,
     createdAt: String(output.createdAt),
-  })) as ProjectOutputItem[];
+  })) as Array<ProjectOutputItem>;
 
   const refetch = useCallback(() => {
     void outputsQ.refetch();

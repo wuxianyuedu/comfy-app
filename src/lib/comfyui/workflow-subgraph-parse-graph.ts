@@ -65,12 +65,12 @@ const LOAD_IMAGE_NODE_TYPES = new Set([
 
 export function boundarySlotsByNode(
   boundaryLinkInfoById: Record<number, BoundaryLinkInfo>,
-): Record<string, number[]> {
+): Record<string, Array<number>> {
   const byNode: Record<string, Set<number>> = {};
   for (const info of Object.values(boundaryLinkInfoById)) {
     (byNode[info.innerNodeId] ??= new Set()).add(info.innerSlot);
   }
-  const out: Record<string, number[]> = {};
+  const out: Record<string, Array<number>> = {};
   for (const [nodeId, slots] of Object.entries(byNode))
     out[nodeId] = [...slots].sort((a, b) => a - b);
   return out;
@@ -176,9 +176,9 @@ interface InputSlotRef {
  *
  *  判据按节点取，所以同一子图里两种口径可以并存。 */
 function resolveInputSlots(
-  inputs: readonly RawNodeInput[],
-  boundarySlots: readonly number[] | undefined,
-): InputSlotRef[] {
+  inputs: ReadonlyArray<RawNodeInput>,
+  boundarySlots: ReadonlyArray<number> | undefined,
+): Array<InputSlotRef> {
   if (!boundarySlots || boundarySlots.length === 0) {
     return inputs
       .map((entry, index) => ({ index, slot: entry?.idx ?? index }))
@@ -194,8 +194,8 @@ function resolveInputSlots(
 
 /** 按槽位下标取槽位名（缺槽读成空串 = 「没解析出槽位名」）。 */
 function slotNameAt(
-  slots: readonly InputSlotRef[],
-  inputs: readonly RawNodeInput[],
+  slots: ReadonlyArray<InputSlotRef>,
+  inputs: ReadonlyArray<RawNodeInput>,
   index: number,
 ): string {
   const ref = slots.find((item) => item.slot === index);
@@ -213,24 +213,24 @@ export function parseSubgraphSlots(
   sub: RawSubgraphDef,
   /** 被哨兵边**实际关联**的输入槽位（`boundarySlotsByNode(…)` 的产物）——
    *  ComfyUI 写下的关联是事实，能直接解开「下标口径不一致」的歧义。 */
-  boundarySlotsByNodeId?: Record<string, number[]>,
+  boundarySlotsByNodeId?: Record<string, Array<number>>,
 ): {
-  inputNameByNodeSlot: Record<string, string[]>;
-  outputNameByNodeSlot: Record<string, string[]>;
-  inputWidgetValueByNodeSlot: Record<string, unknown[]>;
+  inputNameByNodeSlot: Record<string, Array<string>>;
+  outputNameByNodeSlot: Record<string, Array<string>>;
+  inputWidgetValueByNodeSlot: Record<string, Array<unknown>>;
 } {
-  const inputNameByNodeSlot: Record<string, string[]> = {};
-  const outputNameByNodeSlot: Record<string, string[]> = {};
+  const inputNameByNodeSlot: Record<string, Array<string>> = {};
+  const outputNameByNodeSlot: Record<string, Array<string>> = {};
   /** 每个节点的「原始输入/输出下标 → widget 值」查找表
    *  （用于**同时**带边界连线的输入，例如 CLIPTextEncode 的 text）。 */
-  const inputWidgetValueByNodeSlot: Record<string, unknown[]> = {};
+  const inputWidgetValueByNodeSlot: Record<string, Array<unknown>> = {};
 
-  const innerNodes: RawNode[] = Array.isArray(sub.nodes) ? sub.nodes : [];
+  const innerNodes: Array<RawNode> = Array.isArray(sub.nodes) ? sub.nodes : [];
   for (const rn of innerNodes) {
     if (!rn?.id) continue;
     const nodeId = String(rn.id);
     if (Array.isArray(rn.inputs)) {
-      const rawInputs: RawNodeInput[] = rn.inputs;
+      const rawInputs: Array<RawNodeInput> = rn.inputs;
       const slots = resolveInputSlots(rawInputs, boundarySlotsByNodeId?.[nodeId]);
       const widgets = Array.isArray(rn.widgets_values) ? rn.widgets_values : [];
       inputNameByNodeSlot[nodeId] = slots.map(({ slot }) => slotNameAt(slots, rawInputs, slot));
@@ -258,11 +258,11 @@ export function parseSubgraphSlots(
 
 export interface SubgraphGraphResult {
   graph: Record<string, ApiWorkflowNode>;
-  rawInputsById: Record<string, RawInputEntry[]>;
-  rawOutputsById: Record<string, RawOutputEntry[]>;
-  rawNodeMeta: RawNodeMeta[];
+  rawInputsById: Record<string, Array<RawInputEntry>>;
+  rawOutputsById: Record<string, Array<RawOutputEntry>>;
+  rawNodeMeta: Array<RawNodeMeta>;
   sizeById: Record<string, [number, number]>;
-  nodes: DetailNodeView[];
+  nodes: Array<DetailNodeView>;
   inputEndpointNodes: Set<string>;
   outputEndpointNodes: Set<string>;
   boundaryInputByNode: Record<string, { name: string; type: string; value: unknown }>;
@@ -271,8 +271,8 @@ export interface SubgraphGraphResult {
   connectsFromByNode: Record<string, string>;
   /** 每个节点的槽位名查找表（位置下标 → 槽位名），
    *  交给调用方拼 boundaryLinks。 */
-  inputNameByNodeSlot: Record<string, string[]>;
-  outputNameByNodeSlot: Record<string, string[]>;
+  inputNameByNodeSlot: Record<string, Array<string>>;
+  outputNameByNodeSlot: Record<string, Array<string>>;
   /** 子图暴露口 → 作者写在**外层 wrapper** 上的业务名（`label`）。
    *
    *  勾选点落在外层封装卡片上时，落库的 `name` 是 wrapper 本层的槽位名；
@@ -302,18 +302,18 @@ export function buildSubgraphGraph(
   linkById: Record<number, SubgraphLinkEntry>,
   /** 被哨兵边实际关联的输入槽位（`boundarySlotsByNode(…)` 的产物）——槽位表
    *  按它解析，边界 handle id 才会落在真的挂载了 Handle 的那一行上。 */
-  boundarySlotsByNodeId?: Record<string, number[]>,
+  boundarySlotsByNodeId?: Record<string, Array<number>>,
 ): SubgraphGraphResult {
-  const innerNodes: RawNode[] = Array.isArray(sub.nodes) ? sub.nodes : [];
+  const innerNodes: Array<RawNode> = Array.isArray(sub.nodes) ? sub.nodes : [];
   const graph: Record<string, ApiWorkflowNode> = {};
-  const rawInputsById: Record<string, RawInputEntry[]> = {};
+  const rawInputsById: Record<string, Array<RawInputEntry>> = {};
 
-  const rawOutputsById: Record<string, RawOutputEntry[]> = {};
+  const rawOutputsById: Record<string, Array<RawOutputEntry>> = {};
   /* 每个内部节点的 ComfyUI 精确外框尺寸（[w, h]）—— 透传出去，让内层画布的
    *  节点与导入配置里的尺寸一致。取自原始内部节点 JSON（sub.nodes）：
    *  下面那张合成 `graph` 表只保留 class_type 与 inputs。 */
   const sizeById: Record<string, [number, number]> = {};
-  const rawNodeMeta: RawNodeMeta[] = [];
+  const rawNodeMeta: Array<RawNodeMeta> = [];
   /* 边界节点 id 收集器 —— 在走节点与连线的同一趟里填好，
    *  客户端便能直接标出「这个节点在子图的输入/输出边界上」，不必重扫连线。
    *  节点的某个输入由哨兵 `-10` 源馈入，它就是 INPUT 端点
@@ -363,7 +363,7 @@ export function buildSubgraphGraph(
       const lk = linkById[Number(lid)];
       /* 只在「源端是外层 wrapper 的哨兵边」上回收作者名。 */
       if (lk?.src !== "-10") continue;
-      const slotNames: string[] | undefined = inputNameByNodeSlot[lk.targetId];
+      const slotNames: Array<string> | undefined = inputNameByNodeSlot[lk.targetId];
       const slotName = slotNames?.[lk.targetSlot];
       if (slotName) proxyAuthorLabels[`${lk.targetId}::${slotName}`] = authorLabel;
     }
@@ -381,7 +381,7 @@ export function buildSubgraphGraph(
      *  「边界」连线（源自输入哨兵节点 -10，值来自父级封装节点）分开标记。
      *  边界连线仍然记 isConnection（供 UI 打标签），但写 inputMap 时**跳过**，
      *  免得把值绑到一个哨兵源上。 */
-    const rawInputs: RawInputEntry[] = [];
+    const rawInputs: Array<RawInputEntry> = [];
     const inputMap: Record<string, unknown> = {};
     if (Array.isArray(rn.inputs)) {
       const rnWidgets = Array.isArray(rn.widgets_values) ? rn.widgets_values : [];
@@ -483,7 +483,7 @@ export function buildSubgraphGraph(
     };
 
     /* 每个输出的元数据。 */
-    const rawOutputs: RawOutputEntry[] = [];
+    const rawOutputs: Array<RawOutputEntry> = [];
     if (Array.isArray(rn.outputs)) {
       for (const o of rn.outputs) {
         if (!o || typeof o.name !== "string") continue;
@@ -574,7 +574,7 @@ export function buildSubgraphGraph(
    *  同时给每个节点盖 `is_input_endpoint` / `is_output_endpoint`，
    *  客户端便能在这两簇外面画 INPUTS / OUTPUTS 的 wfGroup 矩形，
    *  不必重走一遍连线表。 */
-  const nodes: DetailNodeView[] = Object.entries(graph).map(([nodeId, n]) => {
+  const nodes: Array<DetailNodeView> = Object.entries(graph).map(([nodeId, n]) => {
     // class_type / type 的回落与父级路由一致 —— 新的 ComfyUI 导出把类名放在
     // `class_type`，旧的与 rgthree-comfy 的导出只有 `type`。没有这道回落，
     // 子图封装节点会带着 classType="?" 与 `is_subgraph: false` 回来，

@@ -36,7 +36,7 @@ const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
 ) as { scripts: Record<string, string> };
 const postinstall = pkg.scripts.postinstall ?? "";
 
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 afterEach(() => {
   for (const dir of tmpDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });

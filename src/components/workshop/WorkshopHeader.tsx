@@ -19,14 +19,10 @@ import type { HealthRow } from "~/components/workshop/stage-config";
 interface WorkshopHeaderProps {
   title: string;
   progressPct: number;
-  health: HealthRow[];
+  health: Array<HealthRow>;
 }
 
-export function WorkshopHeader({
-  title,
-  progressPct,
-  health,
-}: WorkshopHeaderProps) {
+export function WorkshopHeader({ title, progressPct, health }: WorkshopHeaderProps) {
   /* 唯一一份进度账在 health 里：段数与「差哪几段」都由它派生，头部不再自己数一遍。 */
   const pendingRows = health.filter((row) => row.pending);
   const pendingCount = countPendingStages(health);
@@ -84,14 +80,10 @@ export function WorkshopHeader({
         <span
           className={cn(
             "rounded-full px-3 py-1.5 text-xs font-medium",
-            pendingCount > 0
-              ? "bg-amber/15 text-amber"
-              : "bg-success/15 text-success-strong",
+            pendingCount > 0 ? "bg-amber/15 text-amber" : "bg-success/15 text-success-strong",
           )}
         >
-          {pendingCount > 0
-            ? `还差 ${pendingCount} 段：${pendingLabels}`
-            : "六段流程已完成"}
+          {pendingCount > 0 ? `还差 ${pendingCount} 段：${pendingLabels}` : "六段流程已完成"}
         </span>
       </div>
     </header>

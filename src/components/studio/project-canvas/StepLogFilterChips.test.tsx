@@ -15,7 +15,7 @@ afterEach(cleanup);
  *
  * 现在整排交给 `ui/select-chip`。这里钉单选语义 + 选中档四层俱在 + 悬停回钉。
  */
-const stepLogs: StepLogEntry[] = [
+const stepLogs: Array<StepLogEntry> = [
   { t: 1, level: "info", msg: "开始" },
   { t: 2, level: "error", msg: "炸了" },
 ];
@@ -48,14 +48,10 @@ describe("画布执行日志的级别筛选 chip（ISSUE #1925）", () => {
     /* 开关按钮先打开弹窗。 */
     const { default: userEvent } = await import("@testing-library/user-event");
     await userEvent.setup().click(screen.getByText("执行日志"));
-    expect(
-      screen.getByRole("radiogroup", { name: "日志级别筛选" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "日志级别筛选" })).toBeTruthy();
     const chips = screen.getAllByRole("radio");
     expect(chips.length).toBeGreaterThan(1);
-    expect(
-      chips.filter((c) => c.getAttribute("aria-checked") === "true"),
-    ).toHaveLength(1);
+    expect(chips.filter((c) => c.getAttribute("aria-checked") === "true")).toHaveLength(1);
   });
 
   it("选中档四层俱在，且手搓时代那个同值底色已不再出现", async () => {

@@ -31,7 +31,7 @@ export type ComfyHistoryEntry = {
   outputs?: Record<string, unknown>;
   status?: {
     status_str?: string;
-    messages?: unknown[];
+    messages?: Array<unknown>;
   };
   prompt?: unknown;
 };

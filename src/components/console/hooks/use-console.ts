@@ -58,7 +58,7 @@ export interface ConsoleController {
   /** 结论是否为「成功」（决定颜色）。 */
   verdictOk: boolean;
   /** 本次会话跑过的命令（新的在前）。 */
-  history: ConsoleHistoryItem[];
+  history: Array<ConsoleHistoryItem>;
   /** 命令是否可提交（非空 + 没在跑 + 不超长）。 */
   canRun: boolean;
   /** 输入框的字符上限（与路由同一常量，界面与服务端不会各说各话）。 */
@@ -102,7 +102,7 @@ export function useConsole(): ConsoleController {
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [verdict, setVerdict] = useState("");
   const [verdictOk, setVerdictOk] = useState(false);
-  const [history, setHistory] = useState<ConsoleHistoryItem[]>([]);
+  const [history, setHistory] = useState<Array<ConsoleHistoryItem>>([]);
 
   /** 在飞请求的中止控制器：`stop()` 与卸载都经它断开（断开 = 服务端回收命令）。 */
   const abortRef = useRef<AbortController | null>(null);
@@ -171,15 +171,11 @@ export function useConsole(): ConsoleController {
           setExitCode(event.code);
           if (event.killed) {
             setPhase("stopped");
-            setVerdict(
-              `已停止（用时 ${formatDuration(event.durationMs)}）—— 命令及其子进程已回收`,
-            );
+            setVerdict(`已停止（用时 ${formatDuration(event.durationMs)}）—— 命令及其子进程已回收`);
             setVerdictOk(false);
           } else if (event.code === 0) {
             setPhase("done");
-            setVerdict(
-              `完成（退出码 0，用时 ${formatDuration(event.durationMs)}）`,
-            );
+            setVerdict(`完成（退出码 0，用时 ${formatDuration(event.durationMs)}）`);
             setVerdictOk(true);
           } else {
             setPhase("done");
@@ -265,10 +261,7 @@ export function useConsole(): ConsoleController {
   const fill = useCallback((next: string) => setCommand(next), []);
 
   const canRun = useMemo(
-    () =>
-      phase !== "running" &&
-      command.trim().length > 0 &&
-      command.length <= MAX_COMMAND_CHARS,
+    () => phase !== "running" && command.trim().length > 0 && command.length <= MAX_COMMAND_CHARS,
     [command, phase],
   );
 

@@ -37,13 +37,13 @@ const HEAD = (name: string) => `**[评论人：${name}]**`;
 
 /** 假执行者：按子命令答；`bodies` 是「单号 → 正文」，缺键的那张答非 JSON（演「读不到」）。 */
 function fake(opts: {
-  issues?: { number: string; title: string }[];
+  issues?: Array<{ number: string; title: string }>;
   bodies?: Record<string, string>;
-  pulls?: { number: string; title: string; body?: string }[];
+  pulls?: Array<{ number: string; title: string; body?: string }>;
   listsDown?: boolean;
 }) {
-  const calls: string[] = [];
-  const run = (_cmd: string, args: string[]): FakeResult => {
+  const calls: Array<string> = [];
+  const run = (_cmd: string, args: Array<string>): FakeResult => {
     calls.push([_cmd, ...args].join(" "));
     if (opts.listsDown) {
       return { status: -1, stdout: "", stderr: "ENOENT", error: "ENOENT" };
@@ -112,7 +112,7 @@ describe("collectShapes：只读、且不逐张多问", () => {
 
 describe("main：三态与点名", () => {
   const collect = () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     return { heard, log: (s: string) => heard.push(s) };
   };
 
@@ -160,7 +160,7 @@ describe("main：三态与点名", () => {
     expect(heard).toHaveLength(1);
     const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(heard.join("\n")) as {
       total: number;
-      rows: { number: string }[];
+      rows: Array<{ number: string }>;
     };
     expect(parsed.total).toBe(3);
     expect(parsed.rows.map((r: { number: string }) => r.number)).toEqual(["2195", "2194"]);

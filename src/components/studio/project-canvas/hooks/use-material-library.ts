@@ -28,8 +28,8 @@ export interface MaterialLibraryController {
   scope: MaterialScope;
   folder: string | null;
   search: string;
-  folders: MaterialFolder[];
-  items: MaterialItem[];
+  folders: Array<MaterialFolder>;
+  items: Array<MaterialItem>;
   loading: boolean;
   uploading: boolean;
   /**
@@ -73,8 +73,8 @@ export function useMaterialLibrary({
   const [search, setSearch] = useState("");
   /** null = 停在分类列表；非空 = 进入了某个分类 */
   const [folder, setFolder] = useState<string | null>(null);
-  const [folders, setFolders] = useState<MaterialFolder[]>([]);
-  const [items, setItems] = useState<MaterialItem[]>([]);
+  const [folders, setFolders] = useState<Array<MaterialFolder>>([]);
+  const [items, setItems] = useState<Array<MaterialItem>>([]);
   const [loading, setLoading] = useState(true);
   /** 拉取失败的错误（重新拉取成功即消失）。 */
   const [loadError, setLoadError] = useState<string | null>(null);

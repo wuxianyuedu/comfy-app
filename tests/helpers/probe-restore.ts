@@ -66,7 +66,7 @@ export const realProbeIo: ProbeIo = {
 
 /** 拍下这些路径**此刻**的字节（不存在记成 `null`）。在任何探针动手之前调用。 */
 export function snapshotPaths(
-  absList: readonly string[],
+  absList: ReadonlyArray<string>,
   io: ProbeIo = realProbeIo,
 ): Map<string, SnapshotEntry> {
   const snap = new Map<string, SnapshotEntry>();
@@ -87,10 +87,14 @@ export function snapshotPaths(
 export function restoreToSnapshot(
   snapshot: ReadonlyMap<string, SnapshotEntry>,
   io: ProbeIo = realProbeIo,
-): { restored: string[]; unchanged: string[]; failed: { abs: string; why: string }[] } {
-  const restored: string[] = [];
-  const unchanged: string[] = [];
-  const failed: { abs: string; why: string }[] = [];
+): {
+  restored: Array<string>;
+  unchanged: Array<string>;
+  failed: Array<{ abs: string; why: string }>;
+} {
+  const restored: Array<string> = [];
+  const unchanged: Array<string> = [];
+  const failed: Array<{ abs: string; why: string }> = [];
   for (const [abs, want] of snapshot) {
     let now: SnapshotEntry;
     try {

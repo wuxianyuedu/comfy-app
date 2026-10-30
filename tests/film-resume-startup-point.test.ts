@@ -20,13 +20,12 @@ import { describe, expect, it } from "vitest";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const code = (rel: string): string =>
-  stripComments(readFileSync(path.join(ROOT, rel), "utf-8"));
+const code = (rel: string): string => stripComments(readFileSync(path.join(ROOT, rel), "utf-8"));
 
 const ORCHESTRATOR = "src/server/film/orchestrator.ts";
 
 /** 全仓（src + scripts）里出现 `resumeStalledFilms(` **调用**的文件。 */
-function sweepCallSites(): string[] {
+function sweepCallSites(): Array<string> {
   const files = [
     "src/instrumentation.ts",
     "src/server/api/routers/film.ts",
@@ -44,8 +43,7 @@ function sweepCallSites(): string[] {
       .split("\n")
       .some(
         (line) =>
-          line.includes("resumeStalledFilms(") &&
-          !line.includes("function resumeStalledFilms"),
+          line.includes("resumeStalledFilms(") && !line.includes("function resumeStalledFilms"),
       ),
   );
 }
@@ -54,20 +52,12 @@ describe("恢复扫描的启动点：Next 侧一处，且只一处", () => {
   it("src/instrumentation.ts 的 nodejs 分支里恰好一处，排在派发循环之后", () => {
     const src = code("src/instrumentation.ts");
     const starts = src.match(/m\.resumeStalledFilms\(\)/g) ?? [];
-    expect(starts, "Next 侧必须有且仅有一处 resumeStalledFilms").toHaveLength(
-      1,
-    );
+    expect(starts, "Next 侧必须有且仅有一处 resumeStalledFilms").toHaveLength(1);
     // 顺序也有意义：先转录 stdout → 起回收器 → 起领取循环 → 最后接回影片监看
     // （监看读的是任务行的终态，排在领取循环之后才谈得上「接得上」）。
-    expect(src.indexOf("installStreamCapture")).toBeLessThan(
-      src.indexOf("startReaper"),
-    );
-    expect(src.indexOf("startReaper")).toBeLessThan(
-      src.indexOf("startDispatchLoop"),
-    );
-    expect(src.indexOf("startDispatchLoop")).toBeLessThan(
-      src.indexOf("resumeStalledFilms"),
-    );
+    expect(src.indexOf("installStreamCapture")).toBeLessThan(src.indexOf("startReaper"));
+    expect(src.indexOf("startReaper")).toBeLessThan(src.indexOf("startDispatchLoop"));
+    expect(src.indexOf("startDispatchLoop")).toBeLessThan(src.indexOf("resumeStalledFilms"));
     // Edge runtime 的分支里不许出现（Node-only / server-only 模块进 Edge 图会构建失败）。
     const edge = src.slice(src.indexOf('process.env.NEXT_RUNTIME === "edge"'));
     expect(edge).not.toMatch("resumeStalledFilms");
@@ -91,9 +81,7 @@ describe("去重与预算的同源性（漂开就静默失效的那两条）", (
      * 新模块的自己是一份新 Set，看不见它 ⇒ 同一部影片两条循环。而 `??=` 只认键名，
      * 字段形状变了不升版本号 = 读到旧单例里没有这个字段（同 runner-state 的坑）。 */
     expect(src).toMatch(/var filmWatchInFlight_v1: Set<string> \| undefined/);
-    expect(src).toMatch(
-      "globalThis.filmWatchInFlight_v1 ??= new Set<string>()",
-    );
+    expect(src).toMatch("globalThis.filmWatchInFlight_v1 ??= new Set<string>()");
     expect(src).toMatch("inFlight.has(id)) return");
     expect(src).toMatch("inFlight.delete(id)");
   });

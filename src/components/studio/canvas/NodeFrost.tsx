@@ -10,14 +10,14 @@ export const PSEUDO_FROST_NOISE_URL =
  * 位置与尺寸都用百分比，所以这层会随节点被 React Flow 施加的 `minWidth`
  * 自然重排，不必做任何布局上的小动作。每个色块各用自己的 `filter: blur(Npx)`，
  * 于是即使父级缩放施加了 CSS `transform: scale(...)`，轮廓仍然是柔和的。 */
-export const PSEUDO_FROST_BLOBS: {
+export const PSEUDO_FROST_BLOBS: Array<{
   left: string;
   top: string;
   w: string;
   h: string;
   alphaKey: "primary" | "secondary" | "cool" | "warm" | "shadow";
   blurPx: number;
-}[] = [
+}> = [
   {
     left: "6%",
     top: "10%",
@@ -145,13 +145,7 @@ export function NodeFrost({
  *  就只有真的渲染毛玻璃层的节点会响应缩放变化
  *（它们的屏幕毛玻璃尺寸必须跟随视口），普通节点在缩放时纹丝不动。
  * ------------------------------------------------------------------------- */
-export function FrostLayer({
-  color,
-  nodeMode,
-}: {
-  color: string | null;
-  nodeMode: number;
-}) {
+export function FrostLayer({ color, nodeMode }: { color: string | null; nodeMode: number }) {
   const zoom = useStore((state) => state.transform[2]);
   return <NodeFrost zoom={zoom} color={color} nodeMode={nodeMode} />;
 }

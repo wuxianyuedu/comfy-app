@@ -44,7 +44,7 @@ const { test, expect } = defineGateRepo({
 });
 
 /** 跑门禁：直接在本仓库工作区跑（验「仓库里的基线 ⇄ 仓库里的代码」）。 */
-function runInRepo(args: string[] = []): { code: number; output: string } {
+function runInRepo(args: Array<string> = []): { code: number; output: string } {
   try {
     const output = execFileSync(process.execPath, [SCRIPT, ...args], {
       cwd: REPO_ROOT,
@@ -70,7 +70,7 @@ function runInRepo(args: string[] = []): { code: number; output: string } {
  * `scripts/doc-facts.cjs` 反向解析它。临时工作区里没有那篇文档，因此这里放一份
  * 最小替身（只含被解析的那一行），把「脚本从哪里读名单」这件事在隔离环境里钉住。
  */
-function seedFactsDoc(repo: GateRepo, modules: string[]): void {
+function seedFactsDoc(repo: GateRepo, modules: Array<string>): void {
   const row =
     `| \`comment.language.asciiOnly\` | ` +
     modules.map((m) => `\`${m}\``).join("、") +
@@ -500,7 +500,7 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
   test("doc-facts 从 reference-facts 的那一行解析出名单，而不是另存一份", async () => {
     const mod =
       /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-        extractAsciiOnlyModules: () => string[];
+        extractAsciiOnlyModules: () => Array<string>;
         FACTS: Array<{ key: string; kind: string }>;
       };
     const paths = mod.extractAsciiOnlyModules();

@@ -1,10 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 import { useState } from "react";
 
-import {
-  OptionListPopover,
-  type OptionListItem,
-} from "~/components/ui/option-list-popover";
+import { OptionListPopover, type OptionListItem } from "~/components/ui/option-list-popover";
 
 /**
  * `OptionListPopover` 是「一个可滚动的浮层选项列表」的唯一实现
@@ -18,7 +15,7 @@ import {
  * 要看的是「壳与行」这件事：触发器上的 `▾` 随 `aria-expanded` 旋转、选中行有勾、
  * 行内容可以带前后装饰（画布 chip 靠它挂颜色点与计数）。
  */
-const ITEMS: OptionListItem[] = [
+const ITEMS: Array<OptionListItem> = [
   { value: "workflow", label: "工作流名", title: "按工作流名过滤" },
   { value: "form", label: "形态", suffix: "3" },
   { value: "source", label: "来源", suffix: "12" },
@@ -43,7 +40,7 @@ function ChipTrigger({ label, count }: { label: string; count: number }) {
  */
 interface StoryArgs {
   value: string;
-  items: OptionListItem[];
+  items: Array<OptionListItem>;
   triggerLabel: string;
   triggerCount: number;
   triggerTitle?: string;
@@ -56,11 +53,7 @@ interface StoryArgs {
 }
 
 /** 适配件：把 Args 里那几项拼成一个真触发器，并补上选中回调。 */
-function PopoverWithTrigger({
-  triggerLabel,
-  triggerCount,
-  ...rest
-}: StoryArgs) {
+function PopoverWithTrigger({ triggerLabel, triggerCount, ...rest }: StoryArgs) {
   return (
     <OptionListPopover
       {...rest}
@@ -86,9 +79,7 @@ function ControlledOpenSample() {
         trigger={<ChipTrigger label="形态" count={3} />}
         triggerClassName="border-border-strong bg-canvas-deep shrink-0 rounded-lg border px-2 py-0.5"
       />
-      <span className="text-ink-muted font-mono text-[11px]">
-        onOpenChange：{openNote}
-      </span>
+      <span className="text-ink-muted font-mono text-[11px]">onOpenChange：{openNote}</span>
     </div>
   );
 }

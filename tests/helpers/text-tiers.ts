@@ -39,8 +39,7 @@ const TEXT_DECL_RE = /^\s*--text-([a-z0-9]+)\s*:\s*([0-9.]+)(rem|px)\s*;/gm;
  * **认不出形状就抛错，不当「没有配对」**：静默漏掉一条配对，会让
  * 「按行高推理」的判据拿到一份缺东西的表，那比红更糟。
  */
-const LINE_HEIGHT_RE =
-  /^\s*--text-([a-z0-9]+)--line-height\s*:\s*([^;]+);\s*$/gm;
+const LINE_HEIGHT_RE = /^\s*--text-([a-z0-9]+)--line-height\s*:\s*([^;]+);\s*$/gm;
 
 /** 解一条行高声明成比值（乘字号得像素）。支持 `calc(a / b)` 与裸数值两种形状。 */
 function parseLineRatio(raw: string, where: string): number {
@@ -65,7 +64,7 @@ export interface TextTiers {
   /** 渲染 px → 档名（多个档同名值时保留第一个，仅用于报错话术）。 */
   byPx: Map<number, string>;
   /** 当前在用的全部档名（已按 t-shirt 形状筛过）。 */
-  names: string[];
+  names: Array<string>;
   /**
    * 档名 → **配对行高比值**（`text-<名>` 会连带锁 `line-height`）。
    * 不在表里 = 这一档没有配对，行高走继承（项目自加的 `2xs` / `3xs` 就是刻意如此）。
@@ -111,7 +110,7 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
   }
 
   const byPx = new Map<number, string>();
-  const names: string[] = [];
+  const names: Array<string> = [];
   for (const [name, px] of [...collected].sort((a, b) => a[1] - b[1])) {
     names.push(name);
     if (!byPx.has(px)) byPx.set(px, name);
@@ -137,10 +136,7 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
  * 某一档在真浏览器里渲染出的行盒高度（px，四舍五入到 0.01 与读数对齐）。
  * 没有配对的档返回 `null` —— 那一档的行高由继承决定，不由这张表担保。
  */
-export function renderedLineHeightPx(
-  tiers: TextTiers,
-  name: string,
-): number | null {
+export function renderedLineHeightPx(tiers: TextTiers, name: string): number | null {
   const ratio = tiers.lineRatios.get(name);
   const size = [...tiers.byPx].find(([, n]) => n === name)?.[0];
   if (ratio === undefined || size === undefined) return null;
@@ -148,10 +144,6 @@ export function renderedLineHeightPx(
 }
 
 /** 项目自加的档名：t-shirt 形状、或覆盖的是一个默认名（那 `cn` 本来就认识）才算可用。 */
-function fromProjectIsUsable(
-  name: string,
-  tshirt: RegExp,
-  defaults: Set<string>,
-): boolean {
+function fromProjectIsUsable(name: string, tshirt: RegExp, defaults: Set<string>): boolean {
   return tshirt.test(name) || defaults.has(name);
 }

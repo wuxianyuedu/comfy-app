@@ -40,7 +40,7 @@ vi.mock("~/lib/shell/open-in-browser", () => ({
  * `runtime-log-pack` 按时刻拼 —— 因此这里 mock 那一个的写入器。
  * 写入的行收集在 `logLines` 里：退出记录「写了谁的名字、给了什么排查建议」
  * 只有读回落盘的那几行才判得了（ISSUE #2435）。 */
-const logLines = vi.hoisted(() => /* SAFETY: 类型断言已复核 */ [] as string[]);
+const logLines = vi.hoisted(() => /* SAFETY: 类型断言已复核 */ [] as Array<string>);
 vi.mock("~/lib/log/runtime-log-pack.server", () => ({
   openRuntimeLogWriter: () => ({
     file: "/tmp/x.log",
@@ -186,7 +186,7 @@ describe("退出记录的归属（ISSUE #2435）", () => {
   }
 
   it("用户点「关闭」：写「用户主动关闭」，不写成一次异常退出", async () => {
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     const child = await launchFakeStudio(4321, (m) => seen.push(m));
     // 真实顺序：taskkill 返回 → 子进程以 code=1、signal=null 消失
     //（Windows 上被杀就是这一对值，与它自己崩溃长得一模一样）。
@@ -208,7 +208,7 @@ describe("退出记录的归属（ISSUE #2435）", () => {
   });
 
   it("没人点关闭而它自己退了：主语仍是 Drizzle Studio，建议不提 Python / 显存", async () => {
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     const child = await launchFakeStudio(4711, (m) => seen.push(m));
 
     child.emit("exit", 1, null);

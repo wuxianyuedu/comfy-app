@@ -79,8 +79,8 @@ function proxyKey(target: [string, string]): string {
  *
  *  一个都解析不出来时返回空数组 —— 调用方据此跳过该 wrapper（保持旧行为：
  *  没有映射就不猜，宁可只显示别名，也不把别的槽位的字段名安到这一行）。 */
-function collectProxyWidgetPairs(raw: unknown): { slot?: string; target: [string, string] }[] {
-  const pairs: { slot?: string; target: [string, string] }[] = [];
+function collectProxyWidgetPairs(raw: unknown): Array<{ slot?: string; target: [string, string] }> {
+  const pairs: Array<{ slot?: string; target: [string, string] }> = [];
   const asTarget = (pair: unknown): [string, string] | null => {
     if (!Array.isArray(pair) || pair.length < 2) return null;
     if (pair[0] === undefined || pair[0] === null || pair[1] === undefined || pair[1] === null) {
@@ -142,11 +142,11 @@ function isWrapperAliasSlot(name: string): boolean {
 async function enrichSubgraphProxyWidgets(input: {
   raw: RawWorkflow | null;
   /** 原地更新：每个封装节点的条目列表会被整体替换。 */
-  rawInputsById: Record<string, RawInputEntry[]>;
+  rawInputsById: Record<string, Array<RawInputEntry>>;
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
-  ) => Promise<string[] | undefined>;
+  ) => Promise<Array<string> | undefined>;
   multilineForClassField: (
     classType: string | undefined,
     field: string,
@@ -187,7 +187,7 @@ async function enrichSubgraphProxyWidgets(input: {
     const lookupFieldValue = (internalNode: RawNode | undefined, fieldName: string): unknown => {
       if (!internalNode || !Array.isArray(internalNode.inputs)) return undefined;
       const inputs = internalNode.inputs;
-      const wv: unknown[] = Array.isArray(internalNode.widgets_values)
+      const wv: Array<unknown> = Array.isArray(internalNode.widgets_values)
         ? internalNode.widgets_values
         : [];
       /* control_after_generate 永远紧跟在 seed 的**下一个**槽位。 */
@@ -218,7 +218,7 @@ async function enrichSubgraphProxyWidgets(input: {
     };
     /* 给每个封装节点预先算好 (subDefKey, proxyWidgets, internalById)，
      * 工作流里封装节点很多时，内层映射的代价仍然很低。 */
-    const wrapperNodeIds: string[] = [];
+    const wrapperNodeIds: Array<string> = [];
     for (const nodeId of Object.keys(rawInputsById)) {
       const rn = raw.nodes.find((n) => String(n?.id) === nodeId);
       if (!rn) continue;
@@ -364,8 +364,8 @@ function subgraphAuthorLabelsByUid(
   /* `subgraphs` 有两种形态：以 UUID 为键的对象，或按顺序排列的数组（旧导出）。
    * 键也可能是数字序号，真 UUID 藏在定义自身的 `id` 上 —— 两种都登记，让
    * 上层按 wrapper 的 `class_type` 查得到。 */
-  const subgraphEntries: [string, RawSubgraphDef][] = Array.isArray(subgraphs)
-    ? /* SAFETY: 类型断言已复核 */ (subgraphs as RawSubgraphDef[]).map(
+  const subgraphEntries: Array<[string, RawSubgraphDef]> = Array.isArray(subgraphs)
+    ? /* SAFETY: 类型断言已复核 */ (subgraphs as Array<RawSubgraphDef>).map(
         (subDef, index): [string, RawSubgraphDef] => [String(index), subDef],
       )
     : Object.entries(subgraphs);
@@ -393,7 +393,7 @@ export async function buildRawInputs(
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
-  ) => Promise<string[] | undefined>,
+  ) => Promise<Array<string> | undefined>,
   /** 某 class 某字段是否声明了 `{"multiline": true}`（object_info 的事实）。
    *  查不到返回 `undefined` —— 多行判定退到「值很长」那条数据判据，不猜名字。 */
   multilineForClassField: (
@@ -401,7 +401,7 @@ export async function buildRawInputs(
     field: string,
   ) => Promise<boolean | undefined>,
 ): Promise<{
-  rawInputsById: Record<string, RawInputEntry[]>;
+  rawInputsById: Record<string, Array<RawInputEntry>>;
   sizeById: Record<string, [number, number]>;
 }> {
   /* 给每个图节点建 `rawInputs` 查找表。原始 UI 格式里，每个节点在磁盘记录上
@@ -410,7 +410,7 @@ export async function buildRawInputs(
    * `localized_name` 是简体中文显示标签（ComfyUI 逐节点保存的），
    * `type` 是 ComfyUI 的数据类型字符串，连线与 widget 值都用它。
    * 工作流只以 API JSON 导入时，这张表是空的。 */
-  const rawInputsById: Record<string, RawInputEntry[]> = {};
+  const rawInputsById: Record<string, Array<RawInputEntry>> = {};
   /* ComfyUI / litegraph 节点的 `size`（[w, h]）—— 透传出去，画布便能按
    *  ComfyUI 的精确尺寸画出每个节点框（用户期望卡片与导入的配置一致，
    * 包括那些内部留白很大的超尺寸框）。API 格式的 `tpl.graph` 把 `size` 丢了，
@@ -420,8 +420,8 @@ export async function buildRawInputs(
    * 哨兵槽）。惰性拉取 —— 只有真的遇到「inputs[] 没覆盖到的控件值」时才请求
    * object_info，避免每个工作流都白跑一次；ComfyUI 未启动时 30s 负缓存生效，
    * 拿不到表也只是退回旧逻辑，不会拖慢。 */
-  let widgetOrderTable: Record<string, string[]> | null = null;
-  const ensureWidgetOrderTable = async (): Promise<Record<string, string[]>> => {
+  let widgetOrderTable: Record<string, Array<string>> | null = null;
+  const ensureWidgetOrderTable = async (): Promise<Record<string, Array<string>>> => {
     widgetOrderTable ??= await fetchWidgetOrderTable();
     return widgetOrderTable;
   };
@@ -442,7 +442,7 @@ export async function buildRawInputs(
         sizeById[String(rn.id)] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
       }
       if (!Array.isArray(rn.inputs)) continue;
-      const list: RawInputEntry[] = [];
+      const list: Array<RawInputEntry> = [];
       const rnWidgets = Array.isArray(rn.widgets_values) ? rn.widgets_values : [];
       const rnClassType = typeof rn.type === "string" ? rn.type : "";
 
@@ -471,7 +471,7 @@ export async function buildRawInputs(
        *  值仅存在于 widgets_values[]。仅靠 inputs[] 配对会整段漏掉它们
        *  （CLIPTextEncode 的提示词、SenseNovaU15Loader 的模型名…），节点上看
        *  不到任何参数。这里改用与 convertRawToApi 同源的控件顺序表反查下标。 */
-      let byOrder: { name: string; value: unknown }[] | null = null;
+      let byOrder: Array<{ name: string; value: unknown }> | null = null;
       if (rnWidgets.length > 0 && (widgetCounter < rnWidgets.length || legacyByName.size === 0)) {
         const table = await ensureWidgetOrderTable();
         byOrder = mapWidgetValuesByOrder(table[rnClassType], rnWidgets);

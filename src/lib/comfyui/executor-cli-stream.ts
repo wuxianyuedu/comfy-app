@@ -65,7 +65,7 @@ export const MAX_RAW_JSON_LINES = 300;
 export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
   if (!root || typeof root !== "object") return undefined;
   const seen = new WeakSet<object>();
-  const stack: { node: JsonRecord; d: number }[] = [
+  const stack: Array<{ node: JsonRecord; d: number }> = [
     { node: /* SAFETY: 类型断言已复核 */ root as JsonRecord, d: 0 },
   ];
   while (stack.length) {
@@ -97,7 +97,7 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
 export function extractEnvelopeValidationErrors(
   env: unknown,
   patched?: Record<string, unknown>,
-): ValidationError[] | undefined {
+): Array<ValidationError> | undefined {
   const carrier = findNodeErrorsCarrier(env);
   if (!carrier) return undefined;
   return extractValidationErrors(carrier, patched);
@@ -477,7 +477,7 @@ export interface CliFinisherDeps {
     taskId: string,
     promptId: string,
     detail: string,
-    validationErrors?: ValidationError[],
+    validationErrors?: Array<ValidationError>,
   ) => void;
 }
 

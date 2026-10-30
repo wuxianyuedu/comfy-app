@@ -188,12 +188,12 @@ describe("app-port 四语言共享校验向量", () => {
   const fixture = /* SAFETY: 类型断言已复核 */ JSON.parse(
     fs.readFileSync(path.join(process.cwd(), "tests", "fixtures", "app-port-vectors.json"), "utf8"),
   ) as {
-    vectors: {
+    vectors: Array<{
       input: string;
       normalized: string;
       fnv1a32: number;
       port: number;
-    }[];
+    }>;
   };
 
   it("向量文件非空（防止误删后测试静默全绿）", () => {

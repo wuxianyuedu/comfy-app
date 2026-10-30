@@ -83,7 +83,7 @@ async function hintText(user: ReturnType<typeof userEvent.setup>, el: HTMLElemen
 }
 
 /** 这一行里所有「定位路径」按钮（按 aria-label 前缀数，见上面那条说明）。 */
-function revealButtons(): HTMLElement[] {
+function revealButtons(): Array<HTMLElement> {
   return screen
     .queryAllByRole("button")
     .filter((el) => (el.getAttribute("aria-label") ?? "").startsWith("在文件管理器里定位 "));

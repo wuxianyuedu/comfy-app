@@ -6,11 +6,9 @@ import { StatusDot } from "~/components/ui/status-dot";
  * 四档状态语义 —— 候选清单是 `StatusDotState` 这个**联合类型**，不是 cva 轴，
  * 所以照 `button.stories.tsx` 的口径从组件 props 派生。
  */
-type StatusDotState = NonNullable<
-  React.ComponentProps<typeof StatusDot>["state"]
->;
+type StatusDotState = NonNullable<React.ComponentProps<typeof StatusDot>["state"]>;
 
-const STATES: StatusDotState[] = ["up", "busy", "probing", "down"];
+const STATES: Array<StatusDotState> = ["up", "busy", "probing", "down"];
 
 const meta = {
   title: "UI/StatusDot",
@@ -32,10 +30,7 @@ export const States: Story = {
   render: () => (
     <div className="flex flex-col gap-2">
       {STATES.map((state) => (
-        <span
-          key={state}
-          className="text-ink-muted flex items-center gap-2 text-xs"
-        >
+        <span key={state} className="text-ink-muted flex items-center gap-2 text-xs">
           <StatusDot state={state} />
           {state}
         </span>

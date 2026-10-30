@@ -14,7 +14,7 @@ export interface OllamaModel {
   modified_at: string;
 }
 
-export type OllamaProbe = { up: true; models: OllamaModel[] } | { up: false };
+export type OllamaProbe = { up: true; models: Array<OllamaModel> } | { up: false };
 
 /** Ollama 的 /api/tags 在 OpenAI 兼容 base URL（…/v1）后面，需要剥掉后缀。 */
 export function ollamaTagsUrl(baseUrl: string): string {
@@ -45,7 +45,9 @@ export async function probeOllama(baseUrl: string): Promise<OllamaProbe> {
     const models = isRecord(body) ? body.models : undefined;
     return {
       up: true,
-      models: Array.isArray(models) ? /* SAFETY: 类型断言已复核 */ (models as OllamaModel[]) : [],
+      models: Array.isArray(models)
+        ? /* SAFETY: 类型断言已复核 */ (models as Array<OllamaModel>)
+        : [],
     };
   } catch {
     return { up: false };

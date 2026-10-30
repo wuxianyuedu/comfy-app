@@ -36,15 +36,15 @@ export interface WorkflowLibraryDetailActions {
 /** 类型 / 模型编辑器的派生数据与动作（规范 17 §17.2 第②层）。 */
 export interface MetaEditorController {
   /** 当前生效的 mode 集合（缺省回退 [taskType]，兼容旧行）。 */
-  modes: string[];
+  modes: Array<string>;
   defaultMode: string;
   /** 已绑定的模型标签名。 */
-  modelTags: string[];
+  modelTags: Array<string>;
   /** 全部可选模型标签。 */
-  allModelTags: { id: string; name: string; count: number }[];
+  allModelTags: Array<{ id: string; name: string; count: number }>;
   busy: boolean;
-  patchModes: (modes: string[], defaultMode: string) => Promise<void>;
-  patchModelTags: (names: string[]) => Promise<void>;
+  patchModes: (modes: Array<string>, defaultMode: string) => Promise<void>;
+  patchModelTags: (names: Array<string>) => Promise<void>;
   /** 持久化某个 IO 参数的 seed「控件后行为」（fixed/increment/decrement/random）。
    *  写进 workflowIO 条目并整体落库，预览面板与画布运行时共用。 */
   patchSeedMode: (ioKey: string, mode: string) => Promise<void>;

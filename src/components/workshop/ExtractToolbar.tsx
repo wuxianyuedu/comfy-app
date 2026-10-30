@@ -67,7 +67,7 @@ interface ExtractToolbarProps {
   statusText?: string;
   errorText?: string;
   /** 本次提取的结构化执行日志（模型输入/输出/结果/错误），跑完仍展示 */
-  executionLog?: ExtractLogEntry[];
+  executionLog?: Array<ExtractLogEntry>;
   /** 传了环节名（character / storyboard）就提供「历史」入口：按需拉取
    * log/workshop/ 里落盘的历史日志（跨刷新 / 重启可回看）。 */
   logStage?: GenerationLogStage;
@@ -102,9 +102,7 @@ export function ExtractToolbar({
 
   /* 执行日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
   const [historyOpen, setHistoryOpen] = React.useState(false);
-  const [history, setHistory] = React.useState<
-    PersistableGenerationLog[] | null
-  >(null);
+  const [history, setHistory] = React.useState<Array<PersistableGenerationLog> | null>(null);
   const loadHistory = () => {
     if (!logStage) return;
     setHistoryOpen(true);
@@ -115,15 +113,10 @@ export function ExtractToolbar({
   return (
     <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-primary flex items-center text-xs font-medium">
-          {title}
-        </span>
+        <span className="text-primary flex items-center text-xs font-medium">{title}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <ExtractModelSelect
-          value={channelValue}
-          onChange={onChannelValueChange}
-        />
+        <ExtractModelSelect value={channelValue} onChange={onChannelValueChange} />
         <Hint label={extractDisabled ? extractDisabledReason : undefined} wrap>
           <Button
             variant="primary-solid"
@@ -159,9 +152,7 @@ export function ExtractToolbar({
           </pre>
         </Disclosure>
       )}
-      {statusText && !errorText && (
-        <p className="text-primary mt-2 text-xs">{statusText}</p>
-      )}
+      {statusText && !errorText && <p className="text-primary mt-2 text-xs">{statusText}</p>}
       {errorText && (
         <p className="bg-destructive/10 text-destructive mt-2 rounded-lg px-3 py-2 text-xs">
           {errorText}
@@ -189,10 +180,7 @@ export function ExtractToolbar({
             >
               <ul className="mt-2 flex flex-col gap-2">
                 {executionLog.map((entry, i) => (
-                  <li
-                    key={`${entry.ts}-${i}`}
-                    className="bg-surface rounded-lg px-2.5 py-2"
-                  >
+                  <li key={`${entry.ts}-${i}`} className="bg-surface rounded-lg px-2.5 py-2">
                     <div className="flex items-center gap-2">
                       <span
                         className={`text-3xs rounded px-1.5 py-0.5 font-medium ${logBadge(entry.kind)}`}
@@ -233,16 +221,11 @@ export function ExtractToolbar({
               {history === null ? (
                 <p className="text-muted-foreground text-2xs">加载中…</p>
               ) : history.length === 0 ? (
-                <p className="text-muted-foreground text-2xs">
-                  还没有落盘的历史日志。
-                </p>
+                <p className="text-muted-foreground text-2xs">还没有落盘的历史日志。</p>
               ) : (
                 <ul className="mt-1.5 flex max-h-48 flex-col gap-1.5 overflow-y-auto">
                   {history.map((entry, i) => (
-                    <li
-                      key={`${entry.ts}-${i}`}
-                      className="bg-surface rounded-lg px-2.5 py-2"
-                    >
+                    <li key={`${entry.ts}-${i}`} className="bg-surface rounded-lg px-2.5 py-2">
                       <div className="flex items-center gap-2">
                         <span className="bg-primary-soft text-primary text-3xs rounded px-1.5 py-0.5 font-medium">
                           {entry.kind}

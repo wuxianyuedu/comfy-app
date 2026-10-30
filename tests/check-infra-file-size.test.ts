@@ -24,7 +24,7 @@ const { test, expect } = defineGateRepo({
 });
 
 /** 工作区里现存的基线 JSON（递归找 `scripts/` 下 `*.json`）。 */
-function globBaselines(root: string): string[] {
+function globBaselines(root: string): Array<string> {
   const dir = join(root, "scripts");
   if (!existsSync(dir)) return [];
   return readdirSync(dir).filter((name) => name.endsWith(".json"));
@@ -53,18 +53,13 @@ describe("check-infra-file-size 硬闸", () => {
   });
 
   test("`tools/**` 的 `.ps1` 同判（不是只扫 scripts/）", ({ repo }) => {
-    repo.write(
-      "tools/start/Big.ps1",
-      "Write-Host \"x\"\n".repeat(905),
-    );
+    repo.write("tools/start/Big.ps1", 'Write-Host "x"\n'.repeat(905));
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toMatch(/tools\/start\/Big\.ps1/);
   });
 
-  test("`--update` 这个出口**已经不存在**：传了也照样按判定档判（断头用例）", ({
-    repo,
-  }) => {
+  test("`--update` 这个出口**已经不存在**：传了也照样按判定档判（断头用例）", ({ repo }) => {
     /* 翻硬闸时最容易漏的一件事：把 `--update` 的**分支**删了，却留着它的**参数
      * 契约** —— 下一个人照旧跑 `--update` 以为能把违规登记成存量，而脚本默默按
      * 判定档退 1。这里正面钉住：传 `--update` 时既**不**落盘任何 JSON，

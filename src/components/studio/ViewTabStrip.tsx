@@ -21,10 +21,7 @@ import { isTabClosable, type ViewTab } from "./workspace-tabs";
  * 视图页签的标签文案 —— 与顶栏标题、侧栏导航同一个出处（`NAV_ITEMS`）。
  * 在这里另写一张 label 表，就会长出「侧栏叫队列、页签叫排队中」这类漂移。
  */
-export function viewTabLabel(
-  view: WorkspaceView,
-  projectName?: string | null,
-): string {
+export function viewTabLabel(view: WorkspaceView, projectName?: string | null): string {
   const base = NAV_ITEMS.find((item) => item.id === view)?.label ?? view;
   const name = projectName?.trim();
   // 项目类视图带上项目名（原型里就是「工坊·雾中来信」）—— 同一视图开两页时，
@@ -33,7 +30,7 @@ export function viewTabLabel(
 }
 
 export interface ViewTabStripProps {
-  tabs: ViewTab[];
+  tabs: Array<ViewTab>;
   activeKey: string;
   /** 项目 id → 项目名；缺失时退化为只显示视图名（不显示 id，也不显示 undefined）。 */
   projectNameOf?: (projectId: string | null) => string | null | undefined;
@@ -43,7 +40,7 @@ export interface ViewTabStripProps {
    * 「+」菜单里可打开的视图。由调用处给 —— 哪些视图能开是页面知识（有没有活跃项目
    * 决定项目内那六个能不能开），不是页签条的知识。不传就不渲染「+」。
    */
-  openableViews?: OpenableView[];
+  openableViews?: Array<OpenableView>;
   /** 从「+」菜单里选了一个视图。 */
   onOpenView?: (view: WorkspaceView) => void;
   /** 标题行内嵌时去掉自己的边框/背景（那条横条的视觉由标题行统一持有）。 */
@@ -156,10 +153,7 @@ export function ViewTabStrip({
             <DropdownMenuGroup>
               <DropdownMenuLabel>打开视图</DropdownMenuLabel>
               {openableViews.map((item) => (
-                <DropdownMenuItem
-                  key={item.view}
-                  onClick={() => onOpenView?.(item.view)}
-                >
+                <DropdownMenuItem key={item.view} onClick={() => onOpenView?.(item.view)}>
                   {item.label}
                 </DropdownMenuItem>
               ))}

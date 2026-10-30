@@ -251,7 +251,7 @@ describe("callStoreAction", () => {
    * 这里锁住「降级时顺手把事实交给通知通道」这条接线（去重与文案在通知层，
    * 见 ~/lib/stale-store-notify 的用例）。 */
   it("动作缺失时把「陈旧实例」事实交给通知通道", () => {
-    const deliveries: { title: string }[] = [];
+    const deliveries: Array<{ title: string }> = [];
     registerStaleStoreDeliver((n) => deliveries.push(n));
     reportCodeUpdatedSinceLoad();
     const stale = /* SAFETY: 类型断言已复核 */ {

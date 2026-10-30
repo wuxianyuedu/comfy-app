@@ -24,11 +24,7 @@
  * 无 React、无 IO（规范 §17.2 第②层），因此可直接单测。
  */
 
-import {
-  normalizeSizeSpec,
-  sceneFromMode,
-  sizeSpecToWxH,
-} from "~/lib/media/size-presets";
+import { normalizeSizeSpec, sceneFromMode, sizeSpecToWxH } from "~/lib/media/size-presets";
 import {
   applyParamMapping,
   buildParamEntries,
@@ -36,10 +32,7 @@ import {
   resolveMapping,
 } from "~/lib/workflow/workflow-param-mapping";
 import { exposedCustomKindOf } from "~/lib/workflow/workflow-exposed-params";
-import type {
-  WorkflowIOEntry,
-  WorkflowIOMap,
-} from "~/lib/workflow/workflow-io-types";
+import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 /** 工坊这一次生成要落下去的对外参数（全部可选）。
  *
@@ -63,7 +56,7 @@ export interface WorkshopExposedValues {
   /** 参考图文件名（已上传到 ComfyUI 输入目录）。
    *  按契约口顺序（`reference-image` / `reference-image-2`…）给值，各自落到作者
    *  连的那一行；未连线的槽不落。 */
-  referenceImages?: string[];
+  referenceImages?: Array<string>;
   /** 视频：首帧文件名。缺省时回退到 referenceImages[0]。 */
   firstFrame?: string;
   /** 视频：尾帧文件名（首尾帧工作流用）。 */
@@ -103,10 +96,10 @@ export interface SizeSpecValue {
 /** 一次封装的结果。 */
 export interface EncapsulatedInputs {
   /** 下发给 generate.generate 的 workflowInputs（**只含作者连过线的口**）。 */
-  workflowInputs: { nodeId: string; name: string; value: unknown }[];
+  workflowInputs: Array<{ nodeId: string; name: string; value: unknown }>;
   /** 用户给了值、但落不到任何端口的口（未连线 / 作者显式断开 / 端口已消失）。
    *  以前这里会按名字猜一个端口兜住，现在如实上报 —— 没连线就是「未配置」。 */
-  unmatched: string[];
+  unmatched: Array<string>;
 }
 
 /** 该时长端口按「帧」还是按「秒」表达。
@@ -128,14 +121,9 @@ function durationPinUsesFrames(e: WorkflowIOEntry): boolean {
  *  3. 候选全是数字但没逐字命中 → 取最接近的一档（时长是连续量，落到相邻档位是
  *     可预期的；直接丢掉反而让用户看到「给了 5 秒却还是默认长度」）；
  *  4. 候选里有非数字项 → 不猜，返回 undefined，调用方退回端口默认值。 */
-function matchDurationOption(
-  entry: WorkflowIOEntry,
-  value: number,
-): number | string | undefined {
+function matchDurationOption(entry: WorkflowIOEntry, value: number): number | string | undefined {
   const options = Array.isArray(entry.options)
-    ? entry.options.filter(
-        (option): option is string => typeof option === "string",
-      )
+    ? entry.options.filter((option): option is string => typeof option === "string")
     : [];
   if (options.length === 0) return value;
   const wanted = String(value);
@@ -173,9 +161,7 @@ function durationValueFor(args: {
   const port = target ? io[target] : undefined;
   if (!port) return values.duration ?? values.frames;
   const wantsFrames = durationPinUsesFrames(port);
-  const raw = wantsFrames
-    ? (values.frames ?? values.duration)
-    : (values.duration ?? values.frames);
+  const raw = wantsFrames ? (values.frames ?? values.duration) : (values.duration ?? values.frames);
   if (raw === undefined) return undefined;
   const matched = matchDurationOption(port, raw);
   return typeof matched === "number" ? matched : undefined;
@@ -192,7 +178,7 @@ function toContractValues(args: {
   mode: string | null;
   values: WorkshopExposedValues;
   resolved: Record<string, string | null>;
-  entries: readonly { id: string; cls: string }[];
+  entries: ReadonlyArray<{ id: string; cls: string }>;
 }): Record<string, unknown> {
   const { io, mode, values, resolved, entries } = args;
   const out: Record<string, unknown> = {};
@@ -204,10 +190,7 @@ function toContractValues(args: {
    *  认的形状（宽 / 高 / 比例标签 / 像素量 / 分辨率档 / 倍数）—— 换算只此一处，
    *  写成 "WxH" 是为了让两边的口径完全一致（映射层只吃这一种尺寸串）。 */
   if (values.size !== undefined) {
-    out.size = sizeSpecToWxH(
-      normalizeSizeSpec(values.size),
-      sceneFromMode(mode),
-    );
+    out.size = sizeSpecToWxH(normalizeSizeSpec(values.size), sceneFromMode(mode));
   }
 
   /* 图片：契约口 `first-frame` / `last-frame` / `reference-image(-n)` 各自落哪一行
@@ -261,16 +244,12 @@ function referenceSlotOf(id: string): number {
  *  `negativePrompt`；口叫 `reference-image-2`，值是 `referenceImages[1]`。
  *  读写各写一遍会让「表单上显示的那一口」与「真正下发下去的值」对不上，
  *  所以两个方向共用这一份映射（尺寸 / 时长各有自己的控件，不走这里）。 */
-export function exposedValueOf(
-  values: WorkshopExposedValues,
-  id: string,
-): string {
+export function exposedValueOf(values: WorkshopExposedValues, id: string): string {
   if (id === "prompt") return values.prompt ?? "";
   if (id === "negative") return values.negativePrompt ?? "";
   if (id === "first-frame") return values.firstFrame ?? "";
   if (id === "last-frame") return values.lastFrame ?? "";
-  if (id === "seed")
-    return values.seed === undefined ? "" : String(values.seed);
+  if (id === "seed") return values.seed === undefined ? "" : String(values.seed);
   /* 自定义口：值按 id 收在 `custom` 里（界面按文本显示它的当前内容）。 */
   if (exposedCustomKindOf(id)) return String(values.custom?.[id] ?? "");
   const slot = referenceSlotOf(id);
@@ -322,12 +301,9 @@ export function withExposedValue(
  *  而空串是**给了一个空值** —— 负向提示词那一格清空后再跑，会把工作流里作者写好的
  *  负向提示词抹成空。流程测试的表单是「全部口都摆出来」的，用户没碰过的口天然是
  *  空串，所以这一层清洗必须在提交口做一次。 */
-export function pruneEmptyExposedValues(
-  values: WorkshopExposedValues,
-): WorkshopExposedValues {
+export function pruneEmptyExposedValues(values: WorkshopExposedValues): WorkshopExposedValues {
   const out: WorkshopExposedValues = {};
-  const text = (v: string | undefined) =>
-    v !== undefined && v.trim() !== "" ? v : undefined;
+  const text = (v: string | undefined) => (v !== undefined && v.trim() !== "" ? v : undefined);
   const prompt = text(values.prompt);
   if (prompt !== undefined) out.prompt = prompt;
   const negative = text(values.negativePrompt);
@@ -383,7 +359,7 @@ export function buildEncapsulatedInputs(args: {
   paramMap: unknown;
   mode: string | null | undefined;
   values: WorkshopExposedValues;
-  contractIds?: readonly string[];
+  contractIds?: ReadonlyArray<string>;
 }): EncapsulatedInputs {
   const { io, paramMap, mode, values, contractIds } = args;
   if (!io || typeof io !== "object") {
@@ -415,32 +391,22 @@ export function buildEncapsulatedInputs(args: {
   const reported = new Set(unmatched);
   const hasEntry = (id: string) => entries.some((entry) => entry.id === id);
   const refs = values.referenceImages ?? [];
-  if (
-    (values.firstFrame !== undefined || refs.length > 0) &&
-    !hasEntry("first-frame")
-  ) {
+  if ((values.firstFrame !== undefined || refs.length > 0) && !hasEntry("first-frame")) {
     reported.add("first-frame");
   }
   if (values.lastFrame !== undefined && !hasEntry("last-frame")) {
     reported.add("last-frame");
   }
-  if (
-    (values.duration !== undefined || values.frames !== undefined) &&
-    !hasEntry("duration")
-  ) {
+  if ((values.duration !== undefined || values.frames !== undefined) && !hasEntry("duration")) {
     reported.add("duration");
   }
   /* 尺寸折叠成一条：工坊只送**一个**尺寸表达（比例 + 档位 + 倍数），工作流用
    *  「宽高」还是「比例 + 像素量」由它自己决定 —— 接住其中一路就算接住（另一路
    *  没落点不算问题，图内默认值补上）。所以只在**一路都没落上**时报一次 `size`，
    *  报子口级会让「只暴露 width/height 的工作流」多出四条噪音。 */
-  const sizeIds = entries
-    .filter((entry) => entry.id.startsWith("size-"))
-    .map((entry) => entry.id);
+  const sizeIds = entries.filter((entry) => entry.id.startsWith("size-")).map((entry) => entry.id);
   if (sizeIds.length > 0 && values.size !== undefined) {
-    const landed = sizeIds.some(
-      (id) => resolved[id] !== undefined && !reported.has(id),
-    );
+    const landed = sizeIds.some((id) => resolved[id] !== undefined && !reported.has(id));
     sizeIds.forEach((id) => reported.delete(id));
     if (!landed) reported.add("size");
   }
@@ -484,12 +450,10 @@ function unmatchedLabel(id: string): string {
  *  「给了值却落不到端口」意味着该值**没有生效**（工作流用图内默认值顶上），
  *  静默就是「改了没反应」（规范 10 §10.3.1 降级不得静默）—— 调用方拿到
  *  非空结果必须展示给用户。 */
-export function describeUnmatchedInputs(
-  unmatched: readonly string[],
-): string | null {
+export function describeUnmatchedInputs(unmatched: ReadonlyArray<string>): string | null {
   if (unmatched.length === 0) return null;
   const seen = new Set<string>();
-  const labels: string[] = [];
+  const labels: Array<string> = [];
   for (const id of unmatched) {
     const label = unmatchedLabel(id);
     if (seen.has(label)) continue;

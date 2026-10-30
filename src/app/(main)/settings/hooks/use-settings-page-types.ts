@@ -51,9 +51,9 @@ export type LlmConfig = {
   baseUrl: string;
   model: string;
   /** 本地 Ollama 启用的候选模型名（纯名字，无 apiKey）—— option C 与远端分开。 */
-  localCandidates: string[];
+  localCandidates: Array<string>;
   /** 远端独立模型条目（可带独立 baseUrl / apiKey）—— option C 存 remoteModel 表。 */
-  extraModels: RemoteModelEntry[];
+  extraModels: Array<RemoteModelEntry>;
   temperature: number;
   temperatureByTask?: Record<TaskType, number>;
   maxTokens: number;
@@ -78,7 +78,7 @@ export type QueryLlmConfig = Omit<
   /** 服务端可能下发 null（表示「未配置覆盖」），草稿层归一为 undefined。 */
   temperatureByTask?: Record<TaskType, number> | null;
   /** 下发形状不含该栏（它是草稿侧拆出来的），容错为可选。 */
-  localCandidates?: string[];
+  localCandidates?: Array<string>;
 };
 
 export type Section =
@@ -150,7 +150,7 @@ export interface SettingsPageController {
   setLlmApiKey: (value: string) => void;
   /* Ollama */
   ollamaStatus: OllamaStatus;
-  ollamaModels: OllamaModel[];
+  ollamaModels: Array<OllamaModel>;
   ollamaStarting: boolean;
   startOllama: () => Promise<void>;
   /* ComfyUI（**只剩配置侧**：运行态与启动日志在侧栏「ComfyUI」页，
@@ -191,7 +191,7 @@ export interface SettingsPageController {
   /* 数据库备份 / 恢复（D6）：清单 + 手动备份 + 登记恢复。
    * 「恢复」是两步 —— `restoreFrom` 只写待恢复标记，换文件在下次启动，
    * 所以有 `pendingRestore` 这一格要被视图讲出来（见 `use-settings-page-backup`）。 */
-  backups: BackupEntry[];
+  backups: Array<BackupEntry>;
   pendingRestore: PendingRestore | null;
   backupListLoading: boolean;
   backupBusy: boolean;
@@ -221,7 +221,7 @@ export interface SettingsPageController {
   toggleExtraModel: (name: string) => void;
   /* 远端模型管理：列表 + 添加 / 编辑 / 移除 + 测试。增删改即时落库
    * （无需单独的保存按钮），返回本次保存结果供弹窗留在原地报错。 */
-  remoteModelList: RemoteModelEntry[];
+  remoteModelList: Array<RemoteModelEntry>;
   /* 入参形状由 lib 里那一份草稿→条目桥给出（`remoteModelEntryFromDraft` 的返回类型）：
    * 这一层过去另写一遍字段，于是「弹窗拼的那枚条目」与「controller 收的那枚条目」
    * 是两个各自自洽的形状。 */
@@ -265,7 +265,7 @@ export interface SettingsPageController {
   relaunchApp: () => Promise<void>;
 }
 
-export const SETTINGS_SECTIONS: { id: Section; label: string }[] = [
+export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "appearance", label: "外观" },
   { id: "appUpdate", label: "应用更新" },
   { id: "llmLocal", label: "本地模型" },
@@ -278,10 +278,9 @@ export const SETTINGS_SECTIONS: { id: Section; label: string }[] = [
 ];
 
 /** 按任务温度区的任务清单 —— 视图遍历渲染，顺序即渲染顺序。 */
-export const TEMPERATURE_TASKS = /* SAFETY: 类型断言已复核 */ Object.entries(TASK_TYPES) as [
-  TaskType,
-  (typeof TASK_TYPES)[TaskType],
-][];
+export const TEMPERATURE_TASKS = /* SAFETY: 类型断言已复核 */ Object.entries(TASK_TYPES) as Array<
+  [TaskType, (typeof TASK_TYPES)[TaskType]]
+>;
 
 /** `drafts` 非空由容器保证（`if (!c.drafts)` 早退），用交集类型表达，
  *  消费方（含子视图）内不必逐处判空。 */

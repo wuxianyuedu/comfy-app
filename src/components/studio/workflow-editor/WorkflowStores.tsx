@@ -89,7 +89,7 @@ export interface IOEditActions {
    *  无主覆盖会一直跟着 workflowIO 落库往返（页签栏不再显示，纯脏数据）。
    *  返回清理后的 workflowIO 映射；没有任何覆盖命中时返回 null，调用方
    *  据此决定是否需要把清理结果落库。 */
-  purgeModeOverrides: (codes: string[]) => Record<string, WorkflowIOParam> | null;
+  purgeModeOverrides: (codes: Array<string>) => Record<string, WorkflowIOParam> | null;
 }
 export type IOEditStore = IOEditState & IOEditActions;
 

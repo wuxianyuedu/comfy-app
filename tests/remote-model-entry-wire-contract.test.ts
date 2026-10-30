@@ -72,9 +72,9 @@ function entryFromDialog(form: Partial<RemoteModelFieldValues> = {}) {
 }
 
 /** 取回读那一份里的远端条目（本地候选是字符串、远端是对象，两支混在一个数组里）。 */
-function remoteEntriesOf(config: unknown): Record<string, unknown>[] {
+function remoteEntriesOf(config: unknown): Array<Record<string, unknown>> {
   const { extraModels } = throughJsonWire<{
-    extraModels: Record<string, unknown>[];
+    extraModels: Array<Record<string, unknown>>;
   }>(config);
   return extraModels.filter((item) => typeof item === "object");
 }

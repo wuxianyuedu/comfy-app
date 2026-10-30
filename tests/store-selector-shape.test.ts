@@ -32,8 +32,8 @@ const SRC = path.join(ROOT, "src");
 const CONFIG = path.join(ROOT, "eslint.config.js");
 
 /** 递归收集 `src/**` 下的全部 `.ts` / `.tsx`（跳过用例与 story）。 */
-function sourceFiles(dir = SRC): string[] {
-  const out: string[] = [];
+function sourceFiles(dir = SRC): Array<string> {
+  const out: Array<string> = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
@@ -48,7 +48,7 @@ function sourceFiles(dir = SRC): string[] {
 }
 
 /** 仓库里真实的 zustand store hook 名（`export const useXxx = create<...>()`）。 */
-function realStoreHooks(): string[] {
+function realStoreHooks(): Array<string> {
   const names = new Set<string>();
   for (const file of sourceFiles()) {
     const code = stripComments(readFileSync(file, "utf8"));
@@ -70,7 +70,7 @@ const EXTRA_SUBSCRIBERS = [
 ];
 
 /** 从 `eslint.config.js` 源码取 `STORE_SELECTOR_HOOKS` 清单（不在此重抄一份）。 */
-function configuredHooks(): string[] {
+function configuredHooks(): Array<string> {
   const src = readFileSync(CONFIG, "utf8");
   const block = /const STORE_SELECTOR_HOOKS = \[([\s\S]*?)\];/.exec(src)?.[1];
   if (!block) return [];
@@ -101,7 +101,7 @@ describe("① 存量为零：视图层没有现拼对象 / 现造新数组的 st
     const newArray = new RegExp(
       `\\b(?:${names})\\s*\\(\\s*\\(?[A-Za-z_$][\\w$]*\\)?\\s*=>\\s*[^)]*?\\.(?:map|filter|slice|concat|sort)\\(`,
     );
-    const hits: string[] = [];
+    const hits: Array<string> = [];
     for (const file of sourceFiles()) {
       const flat = oneLine(stripComments(readFileSync(file, "utf8")));
       for (const re of [objLiteral, newArray]) {
@@ -137,7 +137,7 @@ describe("③ selector 真的会响", () => {
   const src = readFileSync(CONFIG, "utf8");
 
   /** 从配置里取出两条真实 selector（模板变量换成清单内容），不在此重抄定义。 */
-  function realSelectors(): string[] {
+  function realSelectors(): Array<string> {
     const hooks = configuredHooks().join("|");
     return src
       .split("\n")
@@ -170,28 +170,19 @@ describe("③ selector 真的会响", () => {
           ],
         },
       });
-    const flagged = (code: string) =>
-      verify(code).some((m) => m.ruleId === "no-restricted-syntax");
+    const flagged = (code: string) => verify(code).some((m) => m.ruleId === "no-restricted-syntax");
 
     // 反模式：对象字面量 / 造新数组
     expect(
-      flagged(
-        `const a = useShellTabs((s) => ({ tabs: s.tabs, active: s.activeTabId }));`,
-      ),
+      flagged(`const a = useShellTabs((s) => ({ tabs: s.tabs, active: s.activeTabId }));`),
     ).toBe(true);
     expect(
-      flagged(
-        `const b = useMessageCenterStore((s) => s.messages.filter((m) => !m.read));`,
-      ),
+      flagged(`const b = useMessageCenterStore((s) => s.messages.filter((m) => !m.read));`),
     ).toBe(true);
 
     // 合法：原始值 / store 里已固化的引用 / reduce 成原始值
-    expect(flagged(`const c = useShellTabs((s) => s.activeTabId);`)).toBe(
-      false,
-    );
-    expect(flagged(`const d = useLogCategoryStore((s) => s.enabled);`)).toBe(
-      false,
-    );
+    expect(flagged(`const c = useShellTabs((s) => s.activeTabId);`)).toBe(false);
+    expect(flagged(`const d = useLogCategoryStore((s) => s.enabled);`)).toBe(false);
     expect(
       flagged(
         `const e = useMessageCenterStore((s) => s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0));`,

@@ -53,7 +53,7 @@ export interface ShellTab {
 
 export interface ShellTabsState {
   /** 已打开的页签；恒含主应用页签且排在最前。 */
-  tabs: ShellTab[];
+  tabs: Array<ShellTab>;
   /** 当前激活页签 id。 */
   activeTabId: string;
   /** 新增（或激活已存在的同名）页签并激活。 */
@@ -65,9 +65,7 @@ export interface ShellTabsState {
   /** 更新指定页签标题 / 地址。 */
   updateTab: (
     id: string,
-    patch: Partial<
-      Pick<ShellTab, "label" | "url" | "blockedReason" | "blockedUrl">
-    >,
+    patch: Partial<Pick<ShellTab, "label" | "url" | "blockedReason" | "blockedUrl">>,
   ) => void;
 }
 
@@ -122,9 +120,7 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
     }),
 
   activateTab: (id) =>
-    set((state) =>
-      state.tabs.some((t) => t.id === id) ? { activeTabId: id } : state,
-    ),
+    set((state) => (state.tabs.some((t) => t.id === id) ? { activeTabId: id } : state)),
 
   closeTab: (id) =>
     set((state) => {

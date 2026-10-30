@@ -44,13 +44,13 @@ export interface FilmShotClip {
 export async function syncFilmToProject(
   userId: string,
   projectId: string,
-  filmShots: FilmShotClip[],
+  filmShots: Array<FilmShotClip>,
 ): Promise<void> {
   const row = await productionRepository.getForUser(userId, projectId);
   if (!row) return;
   const progress = normalizeProductionProgress(row.progress);
   const rawShots = Array.isArray(row.shots)
-    ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[])
+    ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>)
     : [];
 
   // 按 shotId 索引成片结果（只取有 videoPath 的镜头回写 clip）。
@@ -59,7 +59,7 @@ export async function syncFilmToProject(
     if (fs.shotId && fs.videoPath) clipByShotId.set(fs.shotId, fs);
   }
 
-  const nextShots: Shot[] = rawShots.map((shot) => {
+  const nextShots: Array<Shot> = rawShots.map((shot) => {
     const clip = clipByShotId.get(shot.id);
     if (!clip) return shot;
     return {
@@ -97,7 +97,7 @@ export async function isFFmpegAvailable(): Promise<boolean> {
 }
 
 function runFFmpeg(
-  args: string[],
+  args: Array<string>,
   cwd?: string,
   timeout = 120000,
 ): Promise<{ code: number; stderr: string }> {

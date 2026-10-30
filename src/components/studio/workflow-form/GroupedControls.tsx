@@ -17,11 +17,7 @@
  * 其余拆件：VideoControl.tsx / VideoField.tsx / grouped-controls-presets.ts /
  * SizePresetTableModal.tsx（尺寸表配置）。
  * ───────────────────────────────────────────────────────────────────────── */
-import {
-  type DimensionGroup,
-  type EnrichedWidget,
-  type VideoGroup,
-} from "../workflow-io";
+import { type DimensionGroup, type EnrichedWidget, type VideoGroup } from "../workflow-io";
 import { DimensionControl } from "./DimensionControl";
 import { VideoControl } from "./VideoControl";
 import { SECTION_ACCENT } from "./DynamicWorkflowForm/constants";
@@ -63,10 +59,8 @@ function GroupedControls({
   if (!dimension && !video) return null;
   const count = (dimension ? 1 : 0) + (video ? 1 : 0);
 
-  const set = (ioKey: string, v: unknown) =>
-    onChange({ ...values, [ioKey]: v });
-  const setMany = (patch: Record<string, unknown>) =>
-    onChange({ ...values, ...patch });
+  const set = (ioKey: string, v: unknown) => onChange({ ...values, [ioKey]: v });
+  const setMany = (patch: Record<string, unknown>) => onChange({ ...values, ...patch });
 
   /* 组合控件覆盖到的端口（宽/高、比例/像素/倍数、时长/画质/比例）。 */
   const keys = new Set<string>();
@@ -89,9 +83,7 @@ function GroupedControls({
 
   return (
     <>
-      {!compact && (
-        <SectionHeader label="组合参数" accent={SECTION_ACCENT} count={count} />
-      )}
+      {!compact && <SectionHeader label="组合参数" accent={SECTION_ACCENT} count={count} />}
       <div className="flex-col gap-3">
         {dimension && (
           <DimensionControl
@@ -125,9 +117,7 @@ function GroupedControls({
 }
 
 /** 组合控件覆盖到的端口（顺序 = 声明顺序，两端稳定）。 */
-function groupEntries(
-  group: DimensionGroup | VideoGroup | null,
-): EnrichedWidget[] {
+function groupEntries(group: DimensionGroup | VideoGroup | null): Array<EnrichedWidget> {
   if (!group) return [];
   return [
     "width" in group ? group.width : undefined,

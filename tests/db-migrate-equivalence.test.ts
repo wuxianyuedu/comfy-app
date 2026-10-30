@@ -90,7 +90,10 @@ function readShape(file: string): Record<string, TableShape> {
  * @param leftCols `db:migrate` 那一侧的 token 串（物理序）
  * @param rightCols `db:push` 那一侧的 token 串（物理序）
  */
-function diffColumns(leftCols: string, rightCols: string): { missing: string[]; extra: string[] } {
+function diffColumns(
+  leftCols: string,
+  rightCols: string,
+): { missing: Array<string>; extra: Array<string> } {
   const left = leftCols ? leftCols.split(",") : [];
   const right = rightCols ? rightCols.split(",") : [];
   return {
@@ -175,7 +178,7 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
   it("逐表逐列一致（列名 / 类型 / NOT NULL / 主键；**不比列序**，ISSUE #2655）", () => {
     const a = readShape(migratedDb);
     const b = readShape(pushedDb);
-    const mismatches: string[] = [];
+    const mismatches: Array<string> = [];
     for (const name of Object.keys(a)) {
       /* `noUncheckedIndexedAccess` 下 `a[name]` 是 `T | undefined` —— 这里用
        * 解构取出来并显式收窄，而不是 `!` 断言：断言会把「键不在」这类真问题
@@ -236,16 +239,16 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
       };
       const a = shapeOf(migratedDb);
       const b = shapeOf(pushedDb);
-      const tokens = (s: TableShape): string[] => s.cols.split(",");
+      const tokens = (s: TableShape): Array<string> => s.cols.split(",");
       /* token 形状是 `名:类型 [NOT NULL] [PK]` —— 取名就是切到第一个冒号为止。 */
-      const namesOf = (s: TableShape): string[] =>
+      const namesOf = (s: TableShape): Array<string> =>
         tokens(s).map((tok) => tok.slice(0, tok.indexOf(":")));
       const values = tokens(a).map((tok) => (tok.includes(":INTEGER") ? 7 : "probe"));
       /**
        * 在这个库里插同一行、再按 `selectList`（**这一侧自己的物理列序**）取回，
        * 还原成 `名=值` 的有序串 —— 顺序进、名字出，两边才能直接比。
        */
-      const readBack = (file: string, selectList: string[]) => {
+      const readBack = (file: string, selectList: Array<string>) => {
         const script = [
           'const { DatabaseSync } = require("node:sqlite");',
           `const db = new DatabaseSync(${JSON.stringify(file)}, { open: true });`,
@@ -283,7 +286,7 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
   it("索引集合一致", () => {
     const a = readShape(migratedDb);
     const b = readShape(pushedDb);
-    const mismatches: string[] = [];
+    const mismatches: Array<string> = [];
     for (const name of Object.keys(a)) {
       const left = a[name];
       const right = b[name];

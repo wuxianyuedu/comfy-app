@@ -61,9 +61,7 @@ describe("outputFileTracingIncludes：Next 自带运行时脚本必须显式包�
 
   it("包含 next/dist/compiled/next-server 的运行时脚本", () => {
     expect(
-      config.includes(
-        "./node_modules/next/dist/compiled/next-server/*runtime.prod.js",
-      ),
+      config.includes("./node_modules/next/dist/compiled/next-server/*runtime.prod.js"),
       "缺口就在这里：`route.ts` 都要的 `app-route-turbo.runtime.prod.js` 是动态 " +
         "require 字符串，历史上确实漏追过（页面 200、接口全 500）。当前构建链上这条 " +
         "条目不承重（见文件头那段 A/B），真正判缺件的是下面的产物探针与 " +
@@ -74,9 +72,7 @@ describe("outputFileTracingIncludes：Next 自带运行时脚本必须显式包�
   it("不是用 excludes 反着写（excludes 只做减法，补不回缺失的文件）", () => {
     // 这条是方向性判据：曾经「修」这条的思路是往 excludes 里加东西，
     // 而 excludes 只会让产物更小。缺件只能靠 includes。
-    expect(config).not.toMatch(
-      /outputFileTracingExcludes:\s*\{[^}]*next-server[^}]*\}/,
-    );
+    expect(config).not.toMatch(/outputFileTracingExcludes:\s*\{[^}]*next-server[^}]*\}/);
   });
 });
 
@@ -103,35 +99,30 @@ const standaloneDir = join(process.cwd(), ".next", "standalone");
  * 由 `scripts/.artifact-freshness.json` 那一档每日自证判（§11.8 / §13.5.4）——
  * 把「这台机器没构建」变成这里的红，只会让人去改判据而不是去跑构建。
  */
-const nextReachable = existsSync(
-  join(standaloneDir, "node_modules", "next", "package.json"),
-);
+const nextReachable = existsSync(join(standaloneDir, "node_modules", "next", "package.json"));
 const artifactUsable = existsSync(standaloneDir) && nextReachable;
 
 /** 列出运行时脚本目录（不存在时返回空数组，绝不裸调）。 */
-function runtimeFiles(): string[] {
+function runtimeFiles(): Array<string> {
   const dir = join(standaloneDir, RUNTIME_DIR);
   return existsSync(dir) ? readdirSync(dir) : [];
 }
 
-describe.skipIf(!artifactUsable)(
-  ".next/standalone 里的 Next 运行时脚本不得缺件",
-  () => {
-    const files = artifactUsable ? runtimeFiles() : [];
+describe.skipIf(!artifactUsable)(".next/standalone 里的 Next 运行时脚本不得缺件", () => {
+  const files = artifactUsable ? runtimeFiles() : [];
 
-    it("探针自身不空跑（确实数到了运行时脚本目录）", () => {
-      expect(files.length).toBeGreaterThan(0);
-    });
+  it("探针自身不空跑（确实数到了运行时脚本目录）", () => {
+    expect(files.length).toBeGreaterThan(0);
+  });
 
-    it.for(REQUIRED_RUNTIME_FILES)("%s 在产物里", (name) => {
-      expect(
-        files,
-        `缺少 ${name}：所有 App Route 运行时都会 ` +
-          `Failed to load external module 并返回 500（页面正常，接口全挂）`,
-      ).toContain(name);
-    });
-  },
-);
+  it.for(REQUIRED_RUNTIME_FILES)("%s 在产物里", (name) => {
+    expect(
+      files,
+      `缺少 ${name}：所有 App Route 运行时都会 ` +
+        `Failed to load external module 并返回 500（页面正常，接口全挂）`,
+    ).toContain(name);
+  });
+});
 
 /* ── 守卫自身的可运行性 ────────────────────────────────────────────────
  * 与上面那组同源：runtimeFiles() 不得在收集期被裸调。这里用结构断言而不是
@@ -198,10 +189,7 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
  * 上面那段实测读数与 `scripts/start.mjs` 里那条注释记着它）。
  */
 describe("`pnpm start` 的入口：仓库检出里必须走 `next start`（不换 standalone 入口）", () => {
-  const source = readFileSync(
-    join(process.cwd(), "scripts", "start.mjs"),
-    "utf8",
-  );
+  const source = readFileSync(join(process.cwd(), "scripts", "start.mjs"), "utf8");
 
   it("用的是 `next start`（经 pnpm 可执行形态判据，不是裸名字）", () => {
     expect(source).toMatch(/"next",\s*\n?\s*"start"/);

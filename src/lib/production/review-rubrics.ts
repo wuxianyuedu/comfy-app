@@ -31,7 +31,7 @@ export interface ReviewRubric {
   kind: ReviewRubricKind;
   /** 版本号（口径演进后旧分数仍可解释的判据；进 `ReviewVerdict.rubricVersion`）。 */
   version: string;
-  dimensions: ReviewRubricDimension[];
+  dimensions: Array<ReviewRubricDimension>;
 }
 
 /** 评审对象：剧本 / 角色卡 / 分镜镜头文本 / 生图（视觉评审 P8-2）。 */

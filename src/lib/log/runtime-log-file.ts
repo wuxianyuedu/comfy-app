@@ -41,7 +41,7 @@ export type RuntimeLogSource =
   | "app-runtime";
 
 /** 来源键的全集（判据与门禁用它做穷举，不在别处再列一遍）。 */
-export const RUNTIME_LOG_SOURCES: readonly RuntimeLogSource[] = [
+export const RUNTIME_LOG_SOURCES: ReadonlyArray<RuntimeLogSource> = [
   "comfyui-runtime",
   "drizzle-studio-runtime",
   "ollama-runtime",
@@ -61,8 +61,7 @@ function stamp(at: Date): string {
 const STAMP_RE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
 
 /** 名字形态：`<来源>-<时刻>[-<第几次>].log`。 */
-const FILE_RE =
-  /^([a-z0-9-]+?)-(\d{4}\d{2}\d{2}-\d{2}\d{2}\d{2})(?:-(\d+))?\.log$/;
+const FILE_RE = /^([a-z0-9-]+?)-(\d{4}\d{2}\d{2}-\d{2}\d{2}\d{2})(?:-(\d+))?\.log$/;
 
 /**
  * 一次启动的文件名：`<source>-<YYYYMMDD-HHmmss>.log`。
@@ -70,11 +69,7 @@ const FILE_RE =
  * `ordinal` 给「同一秒内不止一次启动」分叉（`-2` / `-3`）；缺省一次落一个名字，
  * 占用由调用方（`runtime-log-pack.server.ts`）按目录里已有什么决定。
  */
-export function runtimeLogFileName(
-  source: RuntimeLogSource,
-  at: Date,
-  ordinal = 1,
-): string {
+export function runtimeLogFileName(source: RuntimeLogSource, at: Date, ordinal = 1): string {
   const suffix = ordinal > 1 ? `-${ordinal}` : "";
   return `${source}-${stamp(at)}${suffix}.log`;
 }
@@ -97,9 +92,7 @@ export interface RuntimeLogFileName {
  * 又不把 `drizzle-studio-runtime-20261005-093612.log` 误判成别的来源。拿表去
  * 逐一 `startsWith` 也行，但那要求调用方先知道来源；而读目录时恰恰是**不知道**。
  */
-export function parseRuntimeLogFileName(
-  name: string,
-): RuntimeLogFileName | null {
+export function parseRuntimeLogFileName(name: string): RuntimeLogFileName | null {
   const m = FILE_RE.exec(name);
   if (!m) return null;
   const [, source, stampText, ordinalText] = m;
@@ -151,14 +144,7 @@ export function parseLaunchStamp(value: string | undefined): Date | null {
   const m = value ? LAUNCH_STAMP_RE.exec(value) : null;
   if (!m) return null;
   const [, y, mo, d, h, mi, s] = m;
-  const at = new Date(
-    Number(y),
-    Number(mo) - 1,
-    Number(d),
-    Number(h),
-    Number(mi),
-    Number(s),
-  );
+  const at = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
   return Number.isFinite(at.getTime()) ? at : null;
 }
 

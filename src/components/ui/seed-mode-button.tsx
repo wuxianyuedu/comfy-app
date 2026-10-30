@@ -4,16 +4,12 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 
 /** seed 模式 —— ComfyUI `control_after_generate` 的映射。每条含
  *  ComfyUI 取值、中文标签，以及浮层里用的两行说明
  *（对应 Ardot「控件后行为」四选项面板）。 */
-const SEED_MODES: { value: string; label: string; hint: string }[] = [
+const SEED_MODES: Array<{ value: string; label: string; hint: string }> = [
   { value: "fixed", label: "固定值", hint: "数值不变" },
   { value: "increment", label: "递增值", hint: "数值+1 或切换到下一个选项" },
   { value: "decrement", label: "递减值", hint: "数值-1 或切换到上一个选项" },
@@ -107,13 +103,7 @@ function SeedModeIcon({ value }: { value: string }) {
   }
   // 随机（骰子）
   return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 22 22"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect
         x="2.5"
         y="2.5"
@@ -155,8 +145,7 @@ export function SeedModeButton({
   onPick: (m: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const current =
-    SEED_MODES.find((item) => item.value === mode)?.label ?? "固定值";
+  const current = SEED_MODES.find((item) => item.value === mode)?.label ?? "固定值";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -182,8 +171,7 @@ export function SeedModeButton({
       >
         <div className="flex flex-col gap-0.5">
           <h4 className="text-ink-bright text-xs font-semibold">
-            控件后行为{" "}
-            <span className="text-ink-muted">· CONTROL AFTER GENERATE</span>
+            控件后行为 <span className="text-ink-muted">· CONTROL AFTER GENERATE</span>
           </h4>
           <p className="text-ink-muted text-2xs leading-relaxed">
             seed / 类似数值 widget 点击数字弹出 4 选 1 切换面板
@@ -212,18 +200,12 @@ export function SeedModeButton({
                   <SeedModeIcon value={item.value} />
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-ink-bright text-xs font-semibold">
-                    {item.label}
-                  </span>
-                  <span className="text-ink-muted text-2xs truncate leading-snug">
-                    {item.hint}
-                  </span>
+                  <span className="text-ink-bright text-xs font-semibold">{item.label}</span>
+                  <span className="text-ink-muted text-2xs truncate leading-snug">{item.hint}</span>
                 </span>
                 <span
                   className={`size-3.5 shrink-0 rounded-full border-2 transition-colors ${
-                    selected
-                      ? "border-primary bg-primary"
-                      : "border-border-strong bg-transparent"
+                    selected ? "border-primary bg-primary" : "border-border-strong bg-transparent"
                   }`}
                 >
                   {selected && (

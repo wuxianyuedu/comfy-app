@@ -57,7 +57,10 @@ interface ShikiToken {
 }
 
 type ShikiHighlighter = {
-  codeToTokensBase: (code: string, options: { lang: string; theme: string }) => ShikiToken[][];
+  codeToTokensBase: (
+    code: string,
+    options: { lang: string; theme: string },
+  ) => Array<Array<ShikiToken>>;
 };
 
 let highlighterPromise: Promise<ShikiHighlighter> | null = null;
@@ -66,8 +69,8 @@ function getHighlighter(): Promise<ShikiHighlighter> {
   highlighterPromise ??= (async () => {
     const shiki = /* SAFETY: 类型断言已复核 */ (await import("shiki/dist/bundle-web.mjs")) as {
       createHighlighter: (options: {
-        themes: string[];
-        langs: string[];
+        themes: Array<string>;
+        langs: Array<string>;
       }) => Promise<ShikiHighlighter>;
     };
     return shiki.createHighlighter({
@@ -125,7 +128,7 @@ function PlainCodeBlock({ code }: { code: string }) {
 }
 
 export function CodeBlock({ code, language }: { code: string; language: string }) {
-  const [tokens, setTokens] = useState<ShikiToken[][] | null>(null);
+  const [tokens, setTokens] = useState<Array<Array<ShikiToken>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   /* 语法高亮主题必须跟应用主题走：只在 `one-dark-pro` 上高亮时，Light 下
      代码是「暗色主题的 token 色」压在浅底上（关键字/注释对比度极低）。
@@ -155,7 +158,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
          * 此前 `chunkIndex * CHUNK_LINES` 与 `ceil(total / CHUNK_LINES)`
          * 各写一遍，且没有一处夹住越界块号。 */
         const { total: totalChunks } = chunkRange(allLines.length, CHUNK_LINES, 0);
-        const acc: ShikiToken[][] = [];
+        const acc: Array<Array<ShikiToken>> = [];
         let chunkIndex = 0;
 
         const processChunk = () => {

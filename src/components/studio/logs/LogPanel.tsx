@@ -51,21 +51,14 @@ import { isCliJsonLine } from "~/lib/log/log-cli-json";
  *  性能优化，不该变成「内容看不见」的判据——取不到值时说「全都要」最安全，
  *  与改动前的行为一致。jsdom 里的单测正是走这一支。 */
 function useVirtualWindow(input: {
-  pageLogs: LogEntry[];
+  pageLogs: Array<LogEntry>;
   wrap: boolean;
   viewportWidth: number;
   viewportHeight: number;
   scrollTop: number;
   expansionMap: Record<string, boolean>;
 }) {
-  const {
-    pageLogs,
-    wrap,
-    viewportWidth,
-    viewportHeight,
-    scrollTop,
-    expansionMap,
-  } = input;
+  const { pageLogs, wrap, viewportWidth, viewportHeight, scrollTop, expansionMap } = input;
   const cliJsonIds = useMemo(() => {
     const ids = new Set<string>();
     for (const entry of pageLogs) {
@@ -113,7 +106,7 @@ const PANEL_WIDTH = modalWidth("w-6xl");
 
 /* 面板关闭时喂给分页/布局 memo 的稳定空数组（引用恒定，memo 据此不随
  * header.filteredLogs 每 2s 变化而重算整页前缀和）。 */
-const NO_LOG_ENTRIES: LogEntry[] = [];
+const NO_LOG_ENTRIES: Array<LogEntry> = [];
 
 export function LogPanel() {
   const {
@@ -167,10 +160,7 @@ export function LogPanel() {
 
   /* 「复制全部」的文本要到点击那一刻才从 store 取（当前筛选 × 所有页），
    * 所以走出口的**现算**形态。 */
-  const copyAllAction = useCallback(
-    () => copyAll(() => copyAllRaw()),
-    [copyAll, copyAllRaw],
-  );
+  const copyAllAction = useCallback(() => copyAll(() => copyAllRaw()), [copyAll, copyAllRaw]);
 
   const bodyRef = useRef<HTMLDivElement>(null);
   /* 滚动视口的**元素本身**进 state：下面「量视口」的 effect 必须等到这个元素
@@ -245,10 +235,7 @@ export function LogPanel() {
     entries: rawPageLogs,
     page: safePage,
     totalPages,
-  } = useMemo(
-    () => selectPageLogs(viewLogs, page, pageSize),
-    [viewLogs, page, pageSize],
-  );
+  } = useMemo(() => selectPageLogs(viewLogs, page, pageSize), [viewLogs, page, pageSize]);
 
   /* 第 1 页用**锚定**窗口（见 store 的 anchorId）：不锚定时窗口整体前移，每来一条
    * 新日志就重建一次首行节点——用户刚框住的文本随节点被卸载，选区当场消失
@@ -258,10 +245,7 @@ export function LogPanel() {
    *
    * 其余页（历史页）本来就与「最新」无关，继续用固定窗口。 */
   const anchored = useMemo(
-    () =>
-      safePage === 1
-        ? selectFirstPageWindow(viewLogs, anchorId, pageSize)
-        : null,
+    () => (safePage === 1 ? selectFirstPageWindow(viewLogs, anchorId, pageSize) : null),
     [safePage, viewLogs, anchorId, pageSize],
   );
   const visibleLogs = anchored ? anchored.entries : rawPageLogs;
@@ -371,11 +355,7 @@ export function LogPanel() {
      * 面板打开时仍可见可点，仅靠 z-index 只保住了鼠标命中、没保住 a11y 可见）。日志面板
      * 本就是「开着还能继续用页签」的非阻塞工具窗，用非模态正好。关闭路径不变（Esc +
      * onOpenChange + Ctrl+Shift+L + 关闭按钮）。 */
-    <Dialog
-      open
-      modal={false}
-      onOpenChange={(next) => !next && setIsOpen(false)}
-    >
+    <Dialog open modal={false} onOpenChange={(next) => !next && setIsOpen(false)}>
       <DialogContent
         aria-label="应用日志"
         showCloseButton={false}
@@ -426,10 +406,7 @@ export function LogPanel() {
             ) : (
               /* 虚拟窗口：外层撑出**估算总高**（滚动条长度与真实内容一致），
                内层 `translateY` 到当前窗口的起点——只挂视口内的行。 */
-              <div
-                style={{ height: `${scrollHeight}px` }}
-                className="relative w-full"
-              >
+              <div style={{ height: `${scrollHeight}px` }} className="relative w-full">
                 <div
                   style={{
                     transform: `translateY(${rows[rowWindow.start]?.start ?? 0}px)`,

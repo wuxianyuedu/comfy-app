@@ -33,7 +33,7 @@ class FakeChild extends EventEmitter {
 
 function harness(script: (child: FakeChild) => void) {
   const child = new FakeChild();
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   const pending = runInstallWithBudget({
     command: "pnpm",
     args: ["install", "--frozen-lockfile"],

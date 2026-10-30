@@ -29,13 +29,13 @@ export const PROJECTS_SUBDIR = "projects";
 export const ARTIFACT_URL_PREFIX = "/api/generated";
 
 /** 由「根内相对段」拼产物地址。film / materials 各自重抄前缀就会分叉（台账 A8）。 */
-export function artifactUrl(segments: readonly (string | number)[]): string {
+export function artifactUrl(segments: ReadonlyArray<string | number>): string {
   return `${ARTIFACT_URL_PREFIX}/${segments.join("/")}`;
 }
 
 /** 布局的唯一形状：project 任务在 `projects/<projectId>/<taskId>` 下，其余直接在 `<taskId>` 下。
  *  磁盘与 URL 两条出口都由它派生。 */
-export function taskOutputSegments(taskId: string, projectId?: string | null): string[] {
+export function taskOutputSegments(taskId: string, projectId?: string | null): Array<string> {
   return projectId ? [PROJECTS_SUBDIR, projectId, taskId] : [taskId];
 }
 

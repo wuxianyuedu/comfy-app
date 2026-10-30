@@ -53,7 +53,7 @@ export function normalizeKeyName(key: string): string {
 }
 
 /** `event.key` 是不是这几个键之一（比较用归一形态，见 `normalizeKeyName`）。 */
-export function isKeyIn(key: string, keys: readonly string[]): boolean {
+export function isKeyIn(key: string, keys: ReadonlyArray<string>): boolean {
   const normalized = normalizeKeyName(key);
   for (const candidate of keys) {
     if (normalizeKeyName(candidate) === normalized) return true;

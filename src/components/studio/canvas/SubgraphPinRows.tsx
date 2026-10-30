@@ -12,8 +12,8 @@ import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { RawInputMeta, RawOutputMeta } from "../workflow-types";
 
 interface SubgraphPinRowsProps {
-  connInputs: { inp: RawInputMeta; label: string }[];
-  outputs: { out: RawOutputMeta; display: string }[];
+  connInputs: Array<{ inp: RawInputMeta; label: string }>;
+  outputs: Array<{ out: RawOutputMeta; display: string }>;
   io: IOEditContextValue | null;
   nodeId: string;
   hostNodeId?: string;
@@ -78,21 +78,18 @@ export function SubgraphPinRows({
                  *  就是哨兵边界连线）取值来自上游 —— 它们
                  *  不能被暴露成工作流输入。已连线的槽位
                  *  跳过复选框。 */}
-                {io?.ioEditMode &&
-                  inName &&
-                  !inInp?.isConnection &&
-                  !inInp?.isBoundary && (
-                    <IoCheckbox
-                      io={io}
-                      ioRef={{
-                        nodeId: String(nodeId),
-                        hostNodeId,
-                        name: inName,
-                        kind: "param",
-                        direction: "input",
-                      }}
-                    />
-                  )}
+                {io?.ioEditMode && inName && !inInp?.isConnection && !inInp?.isBoundary && (
+                  <IoCheckbox
+                    io={io}
+                    ioRef={{
+                      nodeId: String(nodeId),
+                      hostNodeId,
+                      name: inName,
+                      kind: "param",
+                      direction: "input",
+                    }}
+                  />
+                )}
                 <span
                   /* 去掉 `truncate`：让长的边界端口标签
                    *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors

@@ -117,7 +117,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
 
     const makeLogger =
       (level: LogLevel) =>
-      (...args: unknown[]) => {
+      (...args: Array<unknown>) => {
         /* 已识别的框架噪声（React Query / tRPC 往返日志等）不写日志面板。
          * 它们通常由库打到 console.error，即便被过滤也会触发 Next dev
          * overlay 的「Console Error」浮层（看似崩溃实为噪声），因此连带

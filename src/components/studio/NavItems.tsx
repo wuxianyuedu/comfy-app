@@ -138,7 +138,7 @@ export const PROJECTS_ENTRY: NavItem = {
  * 全量注册表：顶部标题（`TopBar`）按 id 反查标签、命令面板取全局项 + 项目页签都读它。
  * 顺序 = 全局项在前、项目页签居中、项目入口（works）在后；分区由下方 helper 按标记切出。
  */
-export const NAV_ITEMS: NavItem[] = [
+export const NAV_ITEMS: Array<NavItem> = [
   {
     id: "home",
     label: "首页",
@@ -292,7 +292,7 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 /** 主页侧栏顶部常驻的全局项（排除项目页签与项目入口）。 */
-export function globalNavItems(): NavItem[] {
+export function globalNavItems(): Array<NavItem> {
   return NAV_ITEMS.filter((item) => !item.projectScoped && item.id !== PROJECTS_ENTRY.id);
 }
 
@@ -304,7 +304,7 @@ export function globalNavItems(): NavItem[] {
  * 入口归顶栏应用菜单，但它仍应能被「+」菜单和 ⌘K 搜到。收口在 `globalNavItems()`
  * 上会连带把那两处一起删掉（设置就成了只有顶栏一个入口的孤岛）。
  */
-export function sidebarNavItems(): NavItem[] {
+export function sidebarNavItems(): Array<NavItem> {
   return globalNavItems().filter((item) => !item.sidebarHidden);
 }
 
@@ -326,7 +326,7 @@ export function pageHeaderTitle(view: WorkspaceView): string {
 }
 
 /** 项目界面顶部的切换页签（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片）。 */
-export function projectTabs(): NavItem[] {
+export function projectTabs(): Array<NavItem> {
   return NAV_ITEMS.filter((item) => item.projectScoped);
 }
 

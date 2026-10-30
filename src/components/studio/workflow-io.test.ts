@@ -33,7 +33,7 @@ function pin(name: string, label: string, type?: string): WorkflowIOEntry {
 }
 
 /** 走真实的 splitWorkflowIO，保证用例覆盖的是运行时同一条链路。 */
-function widgetsOf(...entries: WorkflowIOEntry[]): EnrichedWidget[] {
+function widgetsOf(...entries: Array<WorkflowIOEntry>): Array<EnrichedWidget> {
   const map: WorkflowIOMap = {};
   for (const entry of entries) {
     map[`${entry.nodeId}::widget::${entry.name}`] = entry;

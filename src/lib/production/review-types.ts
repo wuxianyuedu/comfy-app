@@ -27,7 +27,7 @@ export interface ReviewVerdict {
   /** 是否合格。false → 触发抽卡 / 改提示词重生成的入口对用户可见。 */
   pass: boolean;
   /** 逐条缺陷（人读，中文）。合格时通常为空数组。 */
-  issues: string[];
+  issues: Array<string>;
   /** 改进方向（不合格时给出的一句话建议）。 */
   suggestion: string;
   /** ISO 打分时间戳。 */
@@ -59,7 +59,7 @@ export const SCRIPT_REVISION_LIMIT = 3;
  */
 export type ReviewMode = "gacha" | "reprompt";
 
-const MODES: readonly ReviewMode[] = ["gacha", "reprompt"];
+const MODES: ReadonlyArray<ReviewMode> = ["gacha", "reprompt"];
 
 /** 宽容解析重生成方式；非法/缺省回落 `gacha`（抽卡是默认动作）。 */
 export function normalizeReviewMode(raw: unknown): ReviewMode {
@@ -150,10 +150,10 @@ export function getRecordImageReview(raw: unknown): ReviewVerdict | null {
  * 无命中 → 原样返回入参引用。只动 `imageReview`，不动 `review` / `reviewHistory`。
  */
 export function applyImageReview(
-  entities: unknown[],
+  entities: Array<unknown>,
   id: string,
   verdict: ReviewVerdict,
-): unknown[] {
+): Array<unknown> {
   let hit = false;
   const next = entities.map((raw) => {
     if (!isRecord(raw) || raw.id !== id) return raw;
@@ -173,14 +173,18 @@ export function applyImageReview(
  * `reviewHistory`（尾部追加、超上限从头裁剪），当前判定始终在 `review` ——
  * 曲线 = `[...reviewHistory, review]`。旧判定无效（缺 pass）时不往历史塞垃圾。
  */
-export function applyReview(entities: unknown[], id: string, verdict: ReviewVerdict): unknown[] {
+export function applyReview(
+  entities: Array<unknown>,
+  id: string,
+  verdict: ReviewVerdict,
+): Array<unknown> {
   let hit = false;
   const next = entities.map((raw) => {
     if (!isRecord(raw) || raw.id !== id) return raw;
     hit = true;
     // Array.isArray 把 unknown 收窄成 any[]：显式标 unknown[] 再展开，避免 any 混入数组。
-    const prevHistory: unknown[] = Array.isArray(raw.reviewHistory)
-      ? /* SAFETY: 类型断言已复核 */ (raw.reviewHistory as unknown[])
+    const prevHistory: Array<unknown> = Array.isArray(raw.reviewHistory)
+      ? /* SAFETY: 类型断言已复核 */ (raw.reviewHistory as Array<unknown>)
       : [];
     const prevVerdict = normalizeReviewVerdict(raw.review);
     const history = prevVerdict
@@ -204,9 +208,9 @@ export interface ScriptReviewState {
   /** 当前有效判定；没评过 / 列里判定非法 → null。 */
   review: ReviewVerdict | null;
   /** 本轮之前的历次判定（旧→新，超限裁剪）；曲线 = `[...history, review]`。 */
-  history: ReviewVerdict[];
+  history: Array<ReviewVerdict>;
   /** 改写前的旧剧本全文（旧→新，超限从头裁剪）；缺省 = 还没有过 AI 改写。 */
-  revisions: ScriptRevision[];
+  revisions: Array<ScriptRevision>;
   /** 人工裁决（#2480）：`digest` 记裁决时剧本指纹，剧本变过 → 裁决作废。 */
   humanVerdict: HumanVerdict | null;
 }
@@ -292,7 +296,7 @@ export function recordScriptRevision(
 export function weakScoreEntries(
   verdict: ReviewVerdict,
   maxScore = 3,
-): { key: string; score: number; note: string }[] {
+): Array<{ key: string; score: number; note: string }> {
   const scores = verdict.scores;
   if (!scores) return [];
   return Object.entries(scores)
@@ -350,10 +354,10 @@ export function getRecordHumanVerdict(raw: unknown): HumanVerdict | null {
  * 优先级由消费方（规划器 / 评审收敛）按「人工优先」裁决。
  */
 export function applyHumanVerdict(
-  entities: unknown[],
+  entities: Array<unknown>,
   id: string,
   verdict: HumanVerdict,
-): unknown[] {
+): Array<unknown> {
   let hit = false;
   const next = entities.map((raw) => {
     if (!isRecord(raw) || raw.id !== id) return raw;
@@ -381,10 +385,10 @@ export function getRecordHumanRating(raw: unknown): number | null {
 
 /** 把人评分写回一批记录里 `id` 命中的那条（不可变返回新数组）；null = 清除。 */
 export function applyHumanRating(
-  entities: unknown[],
+  entities: Array<unknown>,
   id: string,
   rating: number | null,
-): unknown[] {
+): Array<unknown> {
   let hit = false;
   const next = entities.map((raw) => {
     if (!isRecord(raw) || raw.id !== id) return raw;

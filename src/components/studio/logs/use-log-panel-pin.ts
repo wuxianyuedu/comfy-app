@@ -25,9 +25,9 @@ export function useLogPanelPin(input: {
   /** store 修订号：每次日志追加都重跑贴底判定。 */
   revision: number;
   /** 当前页渲染用的日志（锚定窗口 / 历史页固定窗口）。 */
-  visibleLogs: { id: string }[];
+  visibleLogs: Array<{ id: string }>;
   /** 行位置表（整页前缀和），与 visibleLogs 同源同长。 */
-  rows: { start: number; size: number }[];
+  rows: Array<{ start: number; size: number }>;
   /** 滚动视口元素（父组件持有 ref，贴底 / 滚动都读写它）。 */
   bodyRef: { current: HTMLDivElement | null };
   /** 滚动位置是渲染输入（决定窗口取哪一段），父组件据此进 state。 */
@@ -107,23 +107,11 @@ export function useLogPanelPin(input: {
      * 什么都不做，绝不能乱滚。 */
     const row = rows[targetIndex];
     if (!row) return;
-    const next = pinScrollTop(
-      { start: row.start, size: row.size },
-      el.clientHeight,
-    );
+    const next = pinScrollTop({ start: row.start, size: row.size }, el.clientHeight);
     el.scrollTop = next;
     appliedTopRef.current = next;
     appliedRef.current = targetIndex;
-  }, [
-    isOpen,
-    autoScroll,
-    safePage,
-    revision,
-    followResetAt,
-    visibleLogs.length,
-    rows,
-    bodyRef,
-  ]);
+  }, [isOpen, autoScroll, safePage, revision, followResetAt, visibleLogs.length, rows, bodyRef]);
 
   const onScroll = useCallback(() => {
     const el = bodyRef.current;

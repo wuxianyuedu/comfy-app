@@ -28,7 +28,7 @@ import {
   main,
 } from "../scripts/ci-workspace-provenance.mjs";
 
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 function tmpLedgerDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prov-ledger-"));
   tmpDirs.push(dir);
@@ -131,8 +131,8 @@ describe("允许写脏的名单", () => {
 
 describe("三格的判定与档位", () => {
   const base = {
-    trackedDirty: /* SAFETY: 类型断言已复核 */ [] as string[],
-    untracked: /* SAFETY: 类型断言已复核 */ [] as string[],
+    trackedDirty: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    untracked: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
     prefixes: ["docs/generated/", "coverage/"],
   };
 
@@ -256,7 +256,7 @@ describe("出口", () => {
   it("红 ⇒ 退非零；绿 ⇒ 退 0；而 git status 没跑起来 ⇒ 按「未校验」退 0", () => {
     const dir = tmpLedgerDir();
     const sha = "c".repeat(40);
-    const run = (cmd: string, args: string[]) =>
+    const run = (cmd: string, args: Array<string>) =>
       cmd === "git" && args[0] === "rev-parse" ? { ok: true, out: sha } : { ok: false, out: "" };
     const spawnOk = (stdout: string) => () => ({ status: 0, stdout });
 
@@ -308,7 +308,7 @@ describe("出口", () => {
     const dir = tmpLedgerDir();
     const declared = "a".repeat(40);
     const head = "b".repeat(40);
-    const face = (verifyOk: boolean, ancestorOk: boolean) => (cmd: string, args: string[]) => {
+    const face = (verifyOk: boolean, ancestorOk: boolean) => (cmd: string, args: Array<string>) => {
       if (cmd !== "git") return { ok: false, out: "" };
       if (args[0] === "rev-parse" && args[1] === "HEAD") return { ok: true, out: head };
       if (args[0] === "rev-parse" && args[1] === "--verify")
@@ -355,7 +355,7 @@ describe("出口", () => {
           CNB_COMMIT: sourceSha,
           COMFYAPP_CI_PROBE_DIR: dir,
         },
-        run: (cmd: string, args: string[]) =>
+        run: (cmd: string, args: Array<string>) =>
           cmd === "git" && args[1] === "HEAD"
             ? { ok: true, out: mergeSha }
             : { ok: false, out: "" },
@@ -378,7 +378,7 @@ describe("出口", () => {
      * 落在这）。按本档真正断言的那三格收成有类型的账目，注入面与读出面从此同一个形状。 */
     const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(file, "utf8"),
-    ) as unknown[];
+    ) as Array<unknown>;
     expect(Array.isArray(ledger)).toBe(true);
     expect(ledger.length).toBe(2);
     expect(ledger[0]).toMatchObject({ red: false, offenders: 0, untracked: 1 });

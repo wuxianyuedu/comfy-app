@@ -98,7 +98,7 @@ describe("createWorkflowRunTask", () => {
     });
     const created = /* SAFETY: 类型断言已复核 */ taskRepo.createQueued.mock.calls[0]![0] as {
       params: {
-        workflowInputs?: { nodeId: string; name: string; value: unknown }[];
+        workflowInputs?: Array<{ nodeId: string; name: string; value: unknown }>;
       };
       prompt: string;
       workflowName: string;

@@ -280,7 +280,7 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
   /** 把 wrapper 的 proxyWidgets 换成任意形态，其余保持真实导出形状。 */
   function withProxy(props: Record<string, unknown>): RawWorkflow {
     const clone = /* SAFETY: 类型断言已复核 */ structuredClone(wrapperWorkflow) as unknown as {
-      nodes: { properties: Record<string, unknown> }[];
+      nodes: Array<{ properties: Record<string, unknown> }>;
     };
     clone.nodes[0]!.properties = props;
     return /* SAFETY: 类型断言已复核 */ clone as unknown as RawWorkflow;

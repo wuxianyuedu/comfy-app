@@ -82,7 +82,7 @@ function stageDetail(stage: ProductionStage, view: ProductionRunView): string {
 /** 主页要展示的项目状态总览。 */
 export interface ProjectOverview {
   /** 六个阶段按流水线顺序。 */
-  stages: ProjectStageRow[];
+  stages: Array<ProjectStageRow>;
   /** 已完成阶段数 / 总数（进度条用）。 */
   doneCount: number;
   totalCount: number;

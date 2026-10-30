@@ -69,7 +69,7 @@ const MJS_HOSTS = [
 ];
 
 /** 一份 TS 里的相对 import 说明符。 */
-function relativeSpecifiers(src: string): string[] {
+function relativeSpecifiers(src: string): Array<string> {
   return [...src.matchAll(/from "(\.[^"]*)"/g)]
     .map((m) => m[1])
     .filter((v): v is string => v !== undefined);
@@ -78,7 +78,7 @@ function relativeSpecifiers(src: string): string[] {
 describe("跨宿主 import 的扩展名形态（ISSUE #1961）", () => {
   it("每个跨宿主地基层模块都是**叶子**（只 import 同一批里的东西）", () => {
     const allowed = new Set(CROSS_HOST_MODULES);
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const rel of CROSS_HOST_MODULES) {
       const src = readFileSync(path.join(ROOT, rel), "utf8");
       for (const spec of relativeSpecifiers(src)) {
@@ -86,9 +86,7 @@ describe("跨宿主 import 的扩展名形态（ISSUE #1961）", () => {
           offenders.push(`${rel} → ${spec}（跨宿主说明符必须带 .ts）`);
           continue;
         }
-        const resolved = path.posix.normalize(
-          path.posix.join(path.posix.dirname(rel), spec),
-        );
+        const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(rel), spec));
         if (!allowed.has(resolved)) {
           offenders.push(`${rel} → ${spec}（指向了清单外的模块）`);
         }
@@ -108,8 +106,8 @@ describe("跨宿主 import 的扩展名形态（ISSUE #1961）", () => {
       readFileSync(path.join(ROOT, rel), "utf8"); // 不存在就抛
     }
     const referenced = MJS_HOSTS.filter((h) =>
-      relativeSpecifiers(readFileSync(path.join(ROOT, h), "utf8")).some(
-        (spec) => spec.includes("src/lib/process/"),
+      relativeSpecifiers(readFileSync(path.join(ROOT, h), "utf8")).some((spec) =>
+        spec.includes("src/lib/process/"),
       ),
     );
     expect(

@@ -10,10 +10,10 @@ import { Separator } from "~/components/ui/separator";
 
 interface IoEndpointsSectionProps {
   /** Wire-only inputs (必须连线) — rendered as read-only chips. */
-  wireInputs: EnrichedWidget[];
+  wireInputs: Array<EnrichedWidget>;
   /** 全部已富化输入；传给 ioLabel() 做冲突感知标签。 */
-  inputs: EnrichedWidget[];
-  outputs: (WorkflowIOEntry & { ioKey: string })[];
+  inputs: Array<EnrichedWidget>;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
   showOutputs: boolean;
 }
 
@@ -47,9 +47,7 @@ export function IoEndpointsSection({
                 <span className="bg-info size-1.5 rounded-full" />
                 {label}
                 {/* chip 打印 pin 真实类型（含 IMAGEUPLOAD 等自定义类型）。 */}
-                <span className="text-4xs font-mono opacity-70">
-                  {typeDisplay(wireInput.type)}
-                </span>
+                <span className="text-4xs font-mono opacity-70">{typeDisplay(wireInput.type)}</span>
               </span>
             );
           })}
@@ -61,9 +59,7 @@ export function IoEndpointsSection({
       {showOutputs && outputs.length > 0 && (
         <>
           <div className="flex items-center gap-1.5 pt-1">
-            <span className="text-ink-muted text-3xs font-medium">
-              输出端点
-            </span>
+            <span className="text-ink-muted text-3xs font-medium">输出端点</span>
             <Separator className="border-border-subtle h-0 flex-1 border-t border-dashed bg-transparent" />
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -76,9 +72,7 @@ export function IoEndpointsSection({
                 <span className="bg-success size-1.5 rounded-full" />
                 {/* conflict-aware：同上，撞名时回退到原始 name。 */}
                 {ioLabel(output, [...inputs, ...outputs])}
-                <span className="text-4xs font-mono opacity-70">
-                  {typeDisplay(output.type)}
-                </span>
+                <span className="text-4xs font-mono opacity-70">{typeDisplay(output.type)}</span>
               </span>
             ))}
           </div>

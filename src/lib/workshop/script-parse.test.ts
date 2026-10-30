@@ -70,7 +70,7 @@ function makeScene(overrides: Partial<Scene> = {}): Scene {
   };
 }
 
-const STYLES: StyleRef[] = [
+const STYLES: Array<StyleRef> = [
   {
     slug: "pixar",
     name: "皮克斯",
@@ -104,16 +104,12 @@ describe("parseCharacterEntries 从剧本提取角色卡", () => {
   it("空剧本与无结构文本返回空数组", () => {
     expect(parseCharacterEntries("")).toEqual([]);
     expect(
-      parseCharacterEntries(
-        "这是一段没有任何结构标记的普通叙述文字。\n第二行也只是叙述。",
-      ),
+      parseCharacterEntries("这是一段没有任何结构标记的普通叙述文字。\n第二行也只是叙述。"),
     ).toEqual([]);
   });
 
   it("同名角色去重,后条仅在前条外貌为空时补齐", () => {
-    const drafts = parseCharacterEntries(
-      "人物:小满\n角色:小满——红色风衣,牛仔裤",
-    );
+    const drafts = parseCharacterEntries("人物:小满\n角色:小满——红色风衣,牛仔裤");
     expect(drafts).toHaveLength(1);
     expect(drafts[0]?.appearance).toBe("红色风衣,牛仔裤");
   });
@@ -166,9 +162,7 @@ describe("parseShotDrafts 从剧本拆分镜头", () => {
   });
 
   it("Δ 之前出现的 Vx 台词归入该场景首镜", () => {
-    const drafts = parseShotDrafts(
-      "1-1 场景 内 房间(夜晚)\nV1 旁白:夜色渐深。\nΔ灯亮起。",
-    );
+    const drafts = parseShotDrafts("1-1 场景 内 房间(夜晚)\nV1 旁白:夜色渐深。\nΔ灯亮起。");
     expect(drafts).toHaveLength(1);
     expect(drafts[0]?.dialogue).toBe("旁白:夜色渐深。");
     expect(drafts[0]?.description).toBe("灯亮起。");
@@ -176,12 +170,8 @@ describe("parseShotDrafts 从剧本拆分镜头", () => {
 
   it("空剧本 / 无结构文本 / 只有标题的块返回空数组", () => {
     expect(parseShotDrafts("")).toEqual([]);
-    expect(
-      parseShotDrafts("完全没有任何结构标记的普通段落。\n再来一段。"),
-    ).toEqual([]);
-    expect(
-      parseShotDrafts("1-1 场景 外 天台(黄昏)\n\n1-2 场景 内 房间(夜晚)"),
-    ).toEqual([]);
+    expect(parseShotDrafts("完全没有任何结构标记的普通段落。\n再来一段。")).toEqual([]);
+    expect(parseShotDrafts("1-1 场景 外 天台(黄昏)\n\n1-2 场景 内 房间(夜晚)")).toEqual([]);
   });
 
   it("全文无场景标题但有 Δ/V 行时,整篇视为一个未命名场景", () => {
@@ -270,9 +260,7 @@ describe("parseImportedCharacterCards 导入角色卡 JSON", () => {
   });
 
   it("缺 name 的条目跳过,全部无效时抛错", () => {
-    expect(() =>
-      parseImportedCharacterCards('[{"appearance":"无名"}]'),
-    ).toThrow();
+    expect(() => parseImportedCharacterCards('[{"appearance":"无名"}]')).toThrow();
     expect(() => parseImportedCharacterCards("not json")).toThrow();
     expect(() => parseImportedCharacterCards('{"foo":1}')).toThrow();
   });
@@ -320,14 +308,8 @@ describe("mergeCharacterDrafts 草稿并入角色列表", () => {
 
 describe("buildShotsFromEntries 条目写入分镜", () => {
   it("场景按标题匹配(精确与包含),角色按名字关联,镜号顺延,台词写入", () => {
-    const scenes = [
-      makeScene(),
-      makeScene({ id: "scene_2", heading: "场景2 · 出租屋" }),
-    ];
-    const characters = [
-      makeCharacter(),
-      makeCharacter({ id: "char_2", name: "阿声" }),
-    ];
+    const scenes = [makeScene(), makeScene({ id: "scene_2", heading: "场景2 · 出租屋" })];
+    const characters = [makeCharacter(), makeCharacter({ id: "char_2", name: "阿声" })];
     const shots = buildShotsFromEntries(
       [
         {
@@ -371,9 +353,7 @@ describe("buildExtractCharactersMessages / buildExtractShotsMessages", () => {
     const chars = buildExtractCharactersMessages(long);
     expect(chars).toHaveLength(2);
     expect(chars[0]?.role).toBe("system");
-    expect(chars[1]?.content.length).toBeLessThanOrEqual(
-      8000 + "剧本全文:\n".length,
-    );
+    expect(chars[1]?.content.length).toBeLessThanOrEqual(8000 + "剧本全文:\n".length);
     const shots = buildExtractShotsMessages("剧本", ["小满", " ", "阿声"]);
     expect(shots[1]?.content).toContain("小满、阿声");
   });

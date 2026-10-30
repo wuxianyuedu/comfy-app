@@ -185,7 +185,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
 });
 
 describe("modeContracts —— 契约口 id 的类型守卫", () => {
-  const contract = (inputs: string[]) => ({
+  const contract = (inputs: Array<string>) => ({
     contracts: [
       {
         mode: "TXT2IMG",
@@ -256,9 +256,9 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
         },
       ],
     });
-    const passed = /* SAFETY: 类型断言已复核 */ save.mock.calls[0]?.[1] as {
+    const passed = /* SAFETY: 类型断言已复核 */ save.mock.calls[0]?.[1] as Array<{
       mode: string;
-    }[];
+    }>;
     expect(passed[0]?.mode).toBe("TXT2IMG");
     save.mockRestore();
   });

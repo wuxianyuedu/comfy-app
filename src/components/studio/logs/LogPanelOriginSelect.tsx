@@ -109,11 +109,11 @@ function asOriginFilter(value: unknown): LogOriginFilter {
 }
 
 /** 下拉候选列表的列宽（列标题与各行共用，列与列才对得上）。 */
-const ORIGIN_COLUMNS: {
+const ORIGIN_COLUMNS: Array<{
   key: LogLevel | "all";
   title: string;
   tone: "muted" | "warn" | "error";
-}[] = [
+}> = [
   { key: "all", title: "条数", tone: "muted" },
   { key: "info", title: "信息", tone: "muted" },
   { key: "warn", title: "警告", tone: "warn" },
@@ -135,7 +135,7 @@ const ORIGIN_COLUMNS: {
  *
  * 文案统一取自 ORIGIN_TEXT（此前下拉里叫「启动」、页脚里叫「开发服务」，
  * 同一个来源两种叫法，用户对不上号）。 */
-const ORIGIN_LABELS: LogOriginFilter[] = [
+const ORIGIN_LABELS: Array<LogOriginFilter> = [
   "all",
   "app-runtime",
   "app",

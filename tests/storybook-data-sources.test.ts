@@ -45,7 +45,7 @@ const main = readFileSync(MAIN, "utf8");
  * Storybook 的 `@storybook/nextjs` 一起拉进 vitest 的 node 环境）。这里判的正是
  * 「那份清单与磁盘对不对得上」，读文本足够且不引入运行期依赖。
  */
-function readConstArray(name: string): string[] {
+function readConstArray(name: string): Array<string> {
   const re = new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\] as const;`);
   const hit = re.exec(sources);
   expect(hit, `没在 ${SOURCES} 里找到 ${name} —— 注入层的名字清单被删了？`).not.toBeNull();
@@ -56,8 +56,11 @@ describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
   it("有值源注册表，且每个源都带 about / names / load 三件", () => {
     expect(sources).toContain("export const DATA_SOURCES");
     for (const key of ["about", "names", "load"]) {
-      expect(sources, `注册表条目缺 ${key} —— 缺 about 说不清数据从哪来，` +
-        "缺 names 进不了 Args 面板，缺 load 就是个空壳").toContain(key);
+      expect(
+        sources,
+        `注册表条目缺 ${key} —— 缺 about 说不清数据从哪来，` +
+          "缺 names 进不了 Args 面板，缺 load 就是个空壳",
+      ).toContain(key);
     }
   });
 
@@ -78,17 +81,14 @@ describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
 
     /* `missing.png` 是**故意不存在**的那一个（失败兜底那条分支的现场），
        所以用它做判据的锚点：它在清单里，就必须真的不在磁盘上。 */
-    expect(names, "失败兜底的现场没了（`missing.png`）—— 那条分支没人验").toContain(
-      "missing.png",
-    );
+    expect(names, "失败兜底的现场没了（`missing.png`）—— 那条分支没人验").toContain("missing.png");
 
     for (const name of names) {
       const onDisk = existsSync(join(ASSETS, name));
       if (name === "missing.png") {
-        expect(
-          onDisk,
-          "`missing.png` 真的存在了 —— 「加载失败落兜底」那条分支的现场就没了",
-        ).toBe(false);
+        expect(onDisk, "`missing.png` 真的存在了 —— 「加载失败落兜底」那条分支的现场就没了").toBe(
+          false,
+        );
       } else {
         expect(
           onDisk,
@@ -104,17 +104,14 @@ describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
     /* 三张图的文件名必须**两处同源**：注入层的清单 + 生成脚本的产出表。 */
     for (const name of readConstArray("MEDIA_SOURCE_NAMES")) {
       if (name === "missing.png") continue;
-      expect(script, `${name} 不在 scripts/storybook-assets.mjs 的产出表里`).toContain(
-        name,
-      );
+      expect(script, `${name} 不在 scripts/storybook-assets.mjs 的产出表里`).toContain(name);
     }
   });
 
   it("资源走 Storybook 的 staticDirs，不落 public/（那会随桌包出厂）", () => {
-    expect(
-      main,
-      "`.storybook/assets` 没挂进 staticDirs —— media 源指向的文件会 404",
-    ).toContain(".storybook/assets");
+    expect(main, "`.storybook/assets` 没挂进 staticDirs —— media 源指向的文件会 404").toContain(
+      ".storybook/assets",
+    );
     expect(
       main,
       "资源落在了 `public/` 下 —— 它会随 next build 进 standalone 产物、" +
@@ -136,9 +133,8 @@ describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
       tsconfig,
       "`.storybook/**` 不在 tsconfig 的 include 里 —— TS 的 `**/*.ts` 会跳过点目录",
     ).toContain(".storybook/**/*.ts");
-    expect(
-      eslint,
-      "`.storybook/**` 不在 LINT_FILES 里 —— 同一个目录两种检查都看不到",
-    ).toContain(".storybook/**/*.{ts,tsx,mts,cts}");
+    expect(eslint, "`.storybook/**` 不在 LINT_FILES 里 —— 同一个目录两种检查都看不到").toContain(
+      ".storybook/**/*.{ts,tsx,mts,cts}",
+    );
   });
 });

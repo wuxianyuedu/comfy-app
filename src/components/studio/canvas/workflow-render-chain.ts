@@ -18,7 +18,7 @@ import { NODE_TYPE_REGISTRY } from "~/lib/comfyui/node-registry";
 import { isCustomNode, getCustomNodePackage } from "~/config/custom-nodes";
 
 /** 工作流画布所有节点共用的渲染链路（不随 classType 变化） */
-const WF_COMMON: RenderChainModule[] = [
+const WF_COMMON: Array<RenderChainModule> = [
   { file: "src/components/studio/workflow-node.tsx", label: "workflow-node" },
   { file: "src/lib/comfyui/types.ts", label: "comfyui/types" },
   { file: "src/lib/comfyui/node-titles.ts", label: "node-titles" },
@@ -30,9 +30,7 @@ const WF_COMMON: RenderChainModule[] = [
  * 自定义节点（扩展包）追加 customNodes manifest 与后端 route；
  * 其余 classType（note / subgraph / 未注册）只返回公共链路。
  */
-export function getWorkflowRenderChainModules(
-  classType: string,
-): RenderChainModule[] {
+export function getWorkflowRenderChainModules(classType: string): Array<RenderChainModule> {
   const chain = [...WF_COMMON];
 
   if (isCustomNode(classType)) {

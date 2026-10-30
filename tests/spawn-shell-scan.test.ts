@@ -507,7 +507,10 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
 });
 
 describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () => {
-  const run = (argv: string[], cwd = ROOT): { status: number; stdout: string; stderr: string } => {
+  const run = (
+    argv: Array<string>,
+    cwd = ROOT,
+  ): { status: number; stdout: string; stderr: string } => {
     try {
       const stdout = execFileSync(process.execPath, argv, {
         cwd,

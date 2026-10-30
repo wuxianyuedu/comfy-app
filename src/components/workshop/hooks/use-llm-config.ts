@@ -25,9 +25,9 @@ function isChatModel(kind: RemoteModelKind | null | undefined): boolean {
 
 /** 候选模型条目（兼容旧字符串与新对象）→ 名字数组，供工坊切换选择。
  *  远端条目仅收文本生成(chat)类型；图片/视频模型不参与工坊文本链路。 */
-function toModelNames(raw: unknown): string[] {
+function toModelNames(raw: unknown): Array<string> {
   if (!Array.isArray(raw)) return [];
-  const names: string[] = [];
+  const names: Array<string> = [];
   for (const item of raw) {
     if (typeof item === "string") {
       if (item.trim() !== "") names.push(item);
@@ -54,20 +54,20 @@ export interface LLMConfigController {
   /** 当前生效配置（已做 hasApiKey 收窄）；首次加载完成前为 null。 */
   config: LLMConfigView | null;
   /** 静态配置下的本地候选模型名（本地 Ollama，无 apiKey）。 */
-  localModels: string[];
+  localModels: Array<string>;
   /** 静态配置下的远端独立模型名（存 remoteModel 表，仅 chat 文本生成类型）。 */
-  remoteModels: string[];
+  remoteModels: Array<string>;
   /** 静态配置下的远端生图模型名（kind=image，供定妆照等远端生图通道挑选）。 */
-  remoteImageModels: string[];
+  remoteImageModels: Array<string>;
   loading: boolean;
   refresh: () => void;
 }
 
 /** 候选模型分组：本地（Ollama）/ 远端文本（chat）/ 远端生图（image）。 */
 type ModelSplit = {
-  local: string[];
-  remote: string[];
-  remoteImage: string[];
+  local: Array<string>;
+  remote: Array<string>;
+  remoteImage: Array<string>;
 };
 
 const EMPTY_SPLIT: ModelSplit = { local: [], remote: [], remoteImage: [] };

@@ -27,8 +27,8 @@ interface LogFileInfo {
  *     由 `GET` 那一层回 500 —— 「读不到」不许被并成「没有」。
  * 这里原本不带 `turbopackIgnore` 标记，改完也不带（加标记会改变构建期 tracing）。
  */
-async function scanLogFiles(dir: string, base: string): Promise<LogFileInfo[]> {
-  let entries: Dirent[];
+async function scanLogFiles(dir: string, base: string): Promise<Array<LogFileInfo>> {
+  let entries: Array<Dirent>;
   try {
     entries = await fs.promises.readdir(dir, { withFileTypes: true });
   } catch (error) {
@@ -36,7 +36,7 @@ async function scanLogFiles(dir: string, base: string): Promise<LogFileInfo[]> {
     throw error;
   }
   const perEntry = await Promise.all(
-    entries.map(async (entry): Promise<LogFileInfo[]> => {
+    entries.map(async (entry): Promise<Array<LogFileInfo>> => {
       const full = path.join(dir, entry.name);
       const rel = path.join(base, entry.name);
       if (entry.isDirectory()) {

@@ -150,12 +150,8 @@ function DimensionSizeControl({
   visibilityMode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
 }) {
-  const w0 = Number(
-    values[group.width.ioKey] ?? group.width.defaultValue ?? 1024,
-  );
-  const h0 = Number(
-    values[group.height.ioKey] ?? group.height.defaultValue ?? 1024,
-  );
+  const w0 = Number(values[group.width.ioKey] ?? group.width.defaultValue ?? 1024);
+  const h0 = Number(values[group.height.ioKey] ?? group.height.defaultValue ?? 1024);
 
   /** 场景决定 1k/2k/4k 查哪张表（图片 = AI 出图口径，视频 = 行业标准口径）。
    * 模式码是视频模式（T2V / I2V …）时用视频表。 */
@@ -171,10 +167,8 @@ function DimensionSizeControl({
   const [alignMultiple, setAlignMultipleState] = useState<number>(() =>
     /* SSR / 隐私模式 / 坏数据一律回落默认值（§16.2.4.28）。窄化交给
      *`parse`：此前这里要在本地写一遍`Number.parseInt` + 归一化。 */
-    readStorageJson(
-      `${ALIGN_PREFIX}:${workflowId ?? "global"}`,
-      DEFAULT_ALIGN_MULTIPLE,
-      (raw) => normalizeAlignMultiple(Number.parseInt(raw, 10)),
+    readStorageJson(`${ALIGN_PREFIX}:${workflowId ?? "global"}`, DEFAULT_ALIGN_MULTIPLE, (raw) =>
+      normalizeAlignMultiple(Number.parseInt(raw, 10)),
     ),
   );
   const setAlignMultiple = useCallback(
@@ -182,10 +176,7 @@ function DimensionSizeControl({
       const clamped = normalizeAlignMultiple(multiple);
       setAlignMultipleState(clamped);
       /* 存储不可用（配额满 / 隐私模式）非致命，静默 —— 本次会话内仍然生效。 */
-      writeStorageItem(
-        `${ALIGN_PREFIX}:${workflowId ?? "global"}`,
-        String(clamped),
-      );
+      writeStorageItem(`${ALIGN_PREFIX}:${workflowId ?? "global"}`, String(clamped));
     },
     [workflowId],
   );
@@ -197,10 +188,7 @@ function DimensionSizeControl({
     const currentRatio = h0 === 0 ? 1 : w0 / h0;
     return DIM_RATIO_PRESETS.reduce(
       (best, preset) =>
-        Math.abs(preset.ratio - currentRatio) <
-        Math.abs(best.ratio - currentRatio)
-          ? preset
-          : best,
+        Math.abs(preset.ratio - currentRatio) < Math.abs(best.ratio - currentRatio) ? preset : best,
       DEFAULT_DIM_RATIO_PRESET,
     ).label;
   }, [w0, h0]);
@@ -224,27 +212,17 @@ function DimensionSizeControl({
    * 宽高推出来的那个量，所以起点与屏幕上看到的尺寸一致（选 1k 就是它的实际
    * 0.8M，而不是从 1M 跳一下）。用户改它 → 按同一比例换总像素预算，宽高随之
    * 吸附到倍数网格。 */
-  const currentMegapixels = useMemo(
-    () => megapixelsOf({ width: w0, height: h0 }),
-    [w0, h0],
-  );
+  const currentMegapixels = useMemo(() => megapixelsOf({ width: w0, height: h0 }), [w0, h0]);
 
   const applyPreset = useCallback(
     (rLabel: string, cLabel: string) => {
       const rp =
-        DIM_RATIO_PRESETS.find((preset) => preset.label === rLabel) ??
-        DEFAULT_DIM_RATIO_PRESET;
+        DIM_RATIO_PRESETS.find((preset) => preset.label === rLabel) ?? DEFAULT_DIM_RATIO_PRESET;
       /* 含自由百万像素值（`"2.5M"`）：`clarityPresetFor` 认档位表之外的合法值，
        * 直接用`DIM_CLARITY_PRESETS.find` 会把用户填的 2.5 悄悄换成 1k。 */
       const cp = clarityPresetFor(cLabel);
       /* 分辨率档查场景表；百万像素档把用户选的倍数带进去吸附宽高。 */
-      const { width, height } = dimsForRatio(
-        rp.ratio,
-        cp,
-        alignMultiple,
-        scene,
-        table,
-      );
+      const { width, height } = dimsForRatio(rp.ratio, cp, alignMultiple, scene, table);
       setExplicitClarity(cLabel);
       setMany({ [group.width.ioKey]: width, [group.height.ioKey]: height });
     },
@@ -262,18 +240,11 @@ function DimensionSizeControl({
       const clamped = normalizeAlignMultiple(next);
       setAlignMultiple(clamped);
       const rp =
-        DIM_RATIO_PRESETS.find((preset) => preset.label === ratio) ??
-        DEFAULT_DIM_RATIO_PRESET;
+        DIM_RATIO_PRESETS.find((preset) => preset.label === ratio) ?? DEFAULT_DIM_RATIO_PRESET;
       const cp =
         DIM_CLARITY_PRESETS.find((preset) => preset.label === clarity) ??
         DEFAULT_DIM_CLARITY_PRESET;
-      const { width, height } = dimsForRatio(
-        rp.ratio,
-        cp,
-        clamped,
-        scene,
-        table,
-      );
+      const { width, height } = dimsForRatio(rp.ratio, cp, clamped, scene, table);
       setExplicitClarity(null);
       setMany({ [group.width.ioKey]: width, [group.height.ioKey]: height });
     },
@@ -295,8 +266,8 @@ function DimensionSizeControl({
     [group, set],
   );
 
-  const sections: SegmentSection<string>[] = useMemo(() => {
-    const list: SegmentSection<string>[] = [
+  const sections: Array<SegmentSection<string>> = useMemo(() => {
+    const list: Array<SegmentSection<string>> = [
       {
         label: "比例",
         value: ratio,
@@ -325,9 +296,7 @@ function DimensionSizeControl({
           <MegapixelStepper
             value={currentMegapixels}
             disabled={disabled}
-            onChange={(megapixels) =>
-              applyPreset(ratio, megapixelLabel(megapixels))
-            }
+            onChange={(megapixels) => applyPreset(ratio, megapixelLabel(megapixels))}
           />
         ),
       },
@@ -383,9 +352,7 @@ function DimensionSizeControl({
                   scene={scene}
                   onOpen={() => setTableOpen(true)}
                   extra={
-                    <span className="text-ink-faint text-3xs">
-                      {CLARITY_HINT[clarityKind]}
-                    </span>
+                    <span className="text-ink-faint text-3xs">{CLARITY_HINT[clarityKind]}</span>
                   }
                 />
               }
@@ -432,12 +399,7 @@ function DimensionSizeControl({
         </div>
       )}
 
-      {tableOpen && (
-        <SizePresetTableModal
-          scene={scene}
-          onClose={() => setTableOpen(false)}
-        />
-      )}
+      {tableOpen && <SizePresetTableModal scene={scene} onClose={() => setTableOpen(false)} />}
     </div>
   );
 }

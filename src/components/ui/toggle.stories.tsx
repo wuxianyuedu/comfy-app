@@ -9,13 +9,11 @@ import { Toggle } from "~/components/ui/toggle";
  *
  * `pressed` 是**受控状态**、不是变体，所以它不列进 `argTypes.options`。
  */
-type ToggleVariant = NonNullable<
-  React.ComponentProps<typeof Toggle>["variant"]
->;
+type ToggleVariant = NonNullable<React.ComponentProps<typeof Toggle>["variant"]>;
 type ToggleSize = NonNullable<React.ComponentProps<typeof Toggle>["size"]>;
 
-const VARIANTS: ToggleVariant[] = ["default", "outline"];
-const SIZES: ToggleSize[] = ["default", "sm", "lg"];
+const VARIANTS: Array<ToggleVariant> = ["default", "outline"];
+const SIZES: Array<ToggleSize> = ["default", "sm", "lg"];
 
 const meta = {
   title: "UI/Toggle",

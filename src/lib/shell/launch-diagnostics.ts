@@ -124,10 +124,7 @@ export interface LaunchReportItem {
  * 而它写第一份日志之前磁盘上恰恰什么都没有 —— 那段窗口期里启动页能拿到的
  * 现场只有这份快照里的路径与启动报告（ISSUE #784 手验反馈）。
  */
-export function idleFallback(
-  phase: LaunchPhase = "shell-prepare",
-  root = "",
-): LaunchFallback {
+export function idleFallback(phase: LaunchPhase = "shell-prepare", root = ""): LaunchFallback {
   return {
     phase,
     // **必须 < 1**：启动页把 pct >= 100 画成「✓」，一个常驻快照若标成 100%
@@ -197,11 +194,7 @@ export function formatReportItem(item: LaunchReportItem): string {
  * 见其注释）。这里手拼一遍就是第七处 —— 且会立刻踩上同一个坑（`toISOString()`
  * 在 +8 时区凭空差 8 小时，用户对照本机时钟会以为日志串了日期）。
  */
-export function formatLogLine(
-  level: string,
-  message: string,
-  now: Date = new Date(),
-): string {
+export function formatLogLine(level: string, message: string, now: Date = new Date()): string {
   return `[${formatLocalStamp(now, { millis: true })}] [${level.toUpperCase()}] ${message}`;
 }
 
@@ -217,7 +210,7 @@ export function trimReportValue(value: string): string {
  * **壳自持**的那一份 —— 清单必须把这一层写在最前面，否则「按提示查了、还是
  * 没有」会重复发生（ISSUE #784 手验反馈正是这么来的）。
  */
-export function logHintLines(paths: LaunchPaths): string[] {
+export function logHintLines(paths: LaunchPaths): Array<string> {
   return [
     `  1) 壳侧编排链路（壳自己写的，启动期最先有内容）：${paths.shellLaunchLog}`,
     `  2) 编排日志（编排器起来后才有）：${paths.orchestratorLog}`,
@@ -233,10 +226,7 @@ export function logHintLines(paths: LaunchPaths): string[] {
  * 是壳写的显式标记，`no-status-file` 是壳在状态文件缺席时给的兜底（连文件都
  * 没有，更谈不上权威）。
  */
-export function isShellFallbackStatus(status: {
-  fallback?: unknown;
-  phase?: unknown;
-}): boolean {
+export function isShellFallbackStatus(status: { fallback?: unknown; phase?: unknown }): boolean {
   return status.fallback === true || status.phase === "no-status-file";
 }
 

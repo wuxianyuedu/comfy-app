@@ -99,7 +99,7 @@ export default function WorkspacePage() {
   //    再水合。"comfyapp:canvas-store-changed" 事件让首页
   //    视图与 ProjectCanvas 里的编辑（upsert / delete
   //    / rename）保持同步，无需整页重载。
-  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
+  const [recentProjects, setRecentProjects] = useState<Array<RecentProject>>([]);
   useEffect(() => {
     // 在首页挂载时做一次性清扫：移除较早代码版本
     // 留在索引里的陈旧空默认名草稿。

@@ -77,13 +77,13 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   // ── 导入面板状态 ──
   const [showImport, setShowImport] = useState(false);
   const [importName, setImportName] = useState("");
-  const [importModes, setImportModes] = useState<string[]>([]);
+  const [importModes, setImportModes] = useState<Array<string>>([]);
   const [importDefaultMode, setImportDefaultMode] = useState("");
   const [importJson, setImportJson] = useState("");
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const importBusy = useBusyAction();
   const [importErr, setImportErr] = useState("");
-  const [importWarn, setImportWarn] = useState<string[]>([]);
+  const [importWarn, setImportWarn] = useState<Array<string>>([]);
   //（#53）：导入面板的「?」帮助以前只有悬停
   //（pointer-events-none + group-hover）。点击没反应。把它改成
   // 真正的开关，好让点击能显示 / 隐藏说明。
@@ -206,7 +206,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         let suggested = "T2I";
         const obj = /* SAFETY: 类型断言已复核 */ parsed as Record<string, unknown>;
         const nodes = Array.isArray(obj.nodes)
-          ? /* SAFETY: 类型断言已复核 */ (obj.nodes as unknown[])
+          ? /* SAFETY: 类型断言已复核 */ (obj.nodes as Array<unknown>)
           : [];
         for (const n of nodes) {
           const t =

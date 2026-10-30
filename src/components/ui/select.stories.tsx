@@ -29,11 +29,9 @@ import {
  * 出口（33 处消费点）；本件是通用基座。轻量、选项少、想省浮层的场景用
  * `native-select`。
  */
-type SelectTriggerSize = NonNullable<
-  React.ComponentProps<typeof SelectTrigger>["size"]
->;
+type SelectTriggerSize = NonNullable<React.ComponentProps<typeof SelectTrigger>["size"]>;
 
-const TRIGGER_SIZES: SelectTriggerSize[] = ["sm", "default"];
+const TRIGGER_SIZES: Array<SelectTriggerSize> = ["sm", "default"];
 
 const meta = {
   title: "UI/Select",
@@ -116,9 +114,7 @@ export const Grouped: Story = {
 export const AlignItemWithTriggerOff: Story = {
   render: (args) => (
     <div className="flex w-56 flex-col gap-2">
-      <span className="text-ink-muted text-xs">
-        选最后一项，再重新打开看弹层还在不在下方
-      </span>
+      <span className="text-ink-muted text-xs">选最后一项，再重新打开看弹层还在不在下方</span>
       <Select defaultValue="i1">
         <SelectTrigger {...args}>
           <SelectValue />

@@ -28,8 +28,7 @@ const src = readFileSync(join(process.cwd(), SCRIPT), "utf8");
  * 非贪婪到第一个 `);` —— 本文件的日志语句里没有嵌套的 `);`（模板串里的括号不成对出现），
  * 所以这一层不需要真解析器；口径写在这里，改动文案时不会悄悄少抠一条。
  */
-const logCalls = (text: string): string[] =>
-  text.match(/console\.log\([\s\S]*?\);/g) ?? [];
+const logCalls = (text: string): Array<string> => text.match(/console\.log\([\s\S]*?\);/g) ?? [];
 
 describe("build-desktop 念得出每一步多久（ISSUE #2574）", () => {
   /* 按**计时变量的归属**判，不按步骤标号的字面位置判：`3/4` 那一跳的时长念在
@@ -105,9 +104,7 @@ describe("build-desktop 念得出每一步多久（ISSUE #2574）", () => {
    * 与 `pnpm ship` 阶段 0 那三行同口径 —— 所以这条钉的是「时长不进判决路径」。 */
   it("读数不参与退码：fail() 的话术里不许出现时长", () => {
     const fails = src.match(/fail\([\s\S]*?\);/g) ?? [];
-    expect(fails.length, "本脚本的失败出口应当是 fail()，取空了说明取法漂了").toBeGreaterThan(
-      5,
-    );
+    expect(fails.length, "本脚本的失败出口应当是 fail()，取空了说明取法漂了").toBeGreaterThan(5);
     for (const f of fails) {
       expect(f, "时长进了失败话术 = 把读数升级成判定").not.toContain("elapsedSince(");
     }

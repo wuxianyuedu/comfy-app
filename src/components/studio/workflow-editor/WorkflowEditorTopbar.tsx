@@ -29,9 +29,9 @@ export interface WorkflowEditorTopBarProps {
   onClose: () => void;
   detail: WorkflowDetail;
   rootWorkflowName: string;
-  subgraphStack: { uid: string; name: string; nodeId: string }[];
+  subgraphStack: Array<{ uid: string; name: string; nodeId: string }>;
   setSubgraphStack: React.Dispatch<
-    React.SetStateAction<{ uid: string; name: string; nodeId: string }[]>
+    React.SetStateAction<Array<{ uid: string; name: string; nodeId: string }>>
   >;
   fetchDetail: (opts?: {
     subgraphUid?: string;
@@ -82,20 +82,14 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
    *  「面板已消失、勾选框还挂在节点上」的半截状态。 */
   const setIoEditMode = useCallback(
     (v: boolean | ((prev: boolean) => boolean)) =>
-      ioApi
-        .getState()
-        .setIoEditMode(
-          typeof v === "function" ? v(ioApi.getState().ioEditMode) : v,
-        ),
+      ioApi.getState().setIoEditMode(typeof v === "function" ? v(ioApi.getState().ioEditMode) : v),
     [ioApi],
   );
   const setIoPreviewOpen = useCallback(
     (v: boolean | ((prev: boolean) => boolean)) =>
       ioApi
         .getState()
-        .setIoPreviewOpen(
-          typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v,
-        ),
+        .setIoPreviewOpen(typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v),
     [ioApi],
   );
   const toast = useToast();
@@ -158,8 +152,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             {subgraphStack.map((crumb, i) => {
               const isLast = i === subgraphStack.length - 1;
               /* 所有面包屑通用的截断样式。 */
-              const baseCls =
-                "max-w-65 truncate text-sm font-medium transition-colors";
+              const baseCls = "max-w-65 truncate text-sm font-medium transition-colors";
               if (isLast) {
                 /* 当前子图：不可点击的 span，配紫色
                  *  选中药丸，视觉上钉住「此处」
@@ -219,11 +212,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                   onClick={onExitSubgraph}
                   className="text-2xs ml-2 h-auto rounded-md px-2 py-0.5"
                 >
-                  <ArrowLeft
-                    data-icon="inline-start"
-                    size={10}
-                    strokeWidth={2.5}
-                  />
+                  <ArrowLeft data-icon="inline-start" size={10} strokeWidth={2.5} />
                   返回上一级
                 </Button>
               </Hint>
@@ -239,18 +228,13 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 onClick={() => forceReloadDetail(viewHostNodeId)}
                 className="text-2xs ml-1 h-auto rounded-md px-2 py-0.5"
               >
-                <RotateCw
-                  data-icon="inline-start"
-                  size={10}
-                  strokeWidth={2.5}
-                />
+                <RotateCw data-icon="inline-start" size={10} strokeWidth={2.5} />
                 强制重载
               </Button>
             </Hint>
           </div>
           <p className="text-ink-soft text-2xs mt-0.5 truncate font-medium">
-            {detail.nodes.filter((node) => !isNoteType(node.class_type)).length}{" "}
-            个节点
+            {detail.nodes.filter((node) => !isNoteType(node.class_type)).length} 个节点
             <span className="text-ink-fainter mx-1.5">·</span>
             {Object.keys(workflowIO).length} 个暴露 IO
             <span className="text-ink-fainter mx-1.5">·</span>
@@ -260,9 +244,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             {subgraphStack.length > 0 && (
               <>
                 <span className="text-ink-fainter mx-1.5">·</span>
-                <span className="text-primary-strong">
-                  子工作流 #{subgraphStack.at(-1)?.uid}
-                </span>
+                <span className="text-primary-strong">子工作流 #{subgraphStack.at(-1)?.uid}</span>
               </>
             )}
           </p>
@@ -280,9 +262,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             ) : detail.sourceOutdated ? (
               <p className="border-warning/30 bg-warning/10 text-warning-strong text-2xs mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1">
                 <span className="font-semibold">磁盘文件有更新</span>
-                <span className="opacity-80">
-                  · 回工作流库点「同步」拉取最新内容
-                </span>
+                <span className="opacity-80">· 回工作流库点「同步」拉取最新内容</span>
                 <span
                   className="text-success-strong/80 truncate font-mono"
                   title={detail.sourcePath}
@@ -315,9 +295,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             className={topBarButtonClass(
               "ghost",
               "compact",
-              debugMode
-                ? "bg-primary-500 text-primary-foreground hover:bg-primary-500 shadow"
-                : "",
+              debugMode ? "bg-primary-500 text-primary-foreground hover:bg-primary-500 shadow" : "",
             )}
           >
             {debugMode ? "✓ 调试中" : "调试"}
@@ -342,10 +320,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           <Button
             variant="ghost"
             onClick={() => setIoEditMode((value) => !value)}
-            className={topBarButtonClass(
-              ioEditMode ? "ioOn" : "outline",
-              "compact",
-            )}
+            className={topBarButtonClass(ioEditMode ? "ioOn" : "outline", "compact")}
           >
             {ioEditMode ? "✓ 编辑 IO 中" : "📌 编辑 IO"}
             {ioEditMode && Object.keys(workflowIO).length > 0 && (
@@ -372,11 +347,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           <Button
             variant="ghost"
             onClick={() => setIoPreviewOpen((value) => !value)}
-            disabled={
-              !ioEditMode &&
-              !ioPreviewOpen &&
-              Object.keys(workflowIO).length === 0
-            }
+            disabled={!ioEditMode && !ioPreviewOpen && Object.keys(workflowIO).length === 0}
             className={topBarButtonClass(
               ioPreviewOpen ? "ioPreviewOn" : "outline",
               "compact",
@@ -389,10 +360,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
         {/* 顶部直达 JSON 源码查看器。复用 WorkflowLibrary
          *  的 SourceModal —— 从缓存里的 disk snapshot 拿 graph/rawJson,
          *  无需再 fetch。打开 modal 前判读 detail 是否已就绪,否则 toast 提醒。 */}
-        <Hint
-          label="查看当前工作流的 RAW 源码（基于磁盘已保存版本，未保存的画布修改不在内）"
-          wrap
-        >
+        <Hint label="查看当前工作流的 RAW 源码（基于磁盘已保存版本，未保存的画布修改不在内）" wrap>
           <Button
             variant="ghost"
             onClick={() => {
@@ -403,11 +371,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               setViewJsonOpen(true);
             }}
             disabled={!detail}
-            className={topBarButtonClass(
-              "outline",
-              "compact",
-              "disabled:opacity-40",
-            )}
+            className={topBarButtonClass("outline", "compact", "disabled:opacity-40")}
           >
             📋 查看 JSON
           </Button>
@@ -425,11 +389,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           variant="ghost"
           onClick={handleSave}
           disabled={saving}
-          className={topBarButtonClass(
-            "solid",
-            "compact",
-            "disabled:opacity-50",
-          )}
+          className={topBarButtonClass("solid", "compact", "disabled:opacity-50")}
         >
           {saving ? "保存中…" : "💾 保存"}
         </Button>

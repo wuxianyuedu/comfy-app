@@ -19,7 +19,7 @@ const SCRIPT = path.resolve(__dirname, "../scripts/check-ui-customizations.cjs")
 const DOC = "docs/standards/16-shadcn-ui与表单校验.md";
 
 /** 台账小节（形状与真实文档一致：标题 + 四列表格）。 */
-function docWithLedger(rows: string[]): string {
+function docWithLedger(rows: Array<string>): string {
   return [
     "### 16.7 不碰 ui/ 的硬规则",
     "",

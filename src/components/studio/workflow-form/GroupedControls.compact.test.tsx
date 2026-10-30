@@ -56,7 +56,7 @@ const io: WorkflowIOMap = {
   },
 };
 
-function widgets(): EnrichedWidget[] {
+function widgets(): Array<EnrichedWidget> {
   return Object.entries(io).map(([ioKey, entry]) => ({
     ...entry,
     ioKey,

@@ -137,7 +137,7 @@ export async function getConfigForClient() {
       /* SAFETY: 类型断言已复核 */ (row as Record<string, unknown>).extraModels,
     );
     const remoteRows = await remoteModelRepository.list();
-    const tableEntries: RemoteModelEntry[] = remoteRows.map((r) => ({
+    const tableEntries: Array<RemoteModelEntry> = remoteRows.map((r) => ({
       name: r.name,
       baseUrl: r.baseUrl,
       apiKey: r.apiKey,
@@ -233,7 +233,10 @@ export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
  *       （Ollama 的视觉输入形态，与 OpenAI content 数组不同）。
  * 图块的 `url` 接受 http(s) 或 `data:` base64；本地 Ollama 可直接喂本机可达址。
  */
-function messagesToWire(cfg: LLMConfig, messages: LLMMessage[]): Array<Record<string, unknown>> {
+function messagesToWire(
+  cfg: LLMConfig,
+  messages: Array<LLMMessage>,
+): Array<Record<string, unknown>> {
   const local = cfg.provider === "local";
   return messages.map((m) => {
     const base: Record<string, unknown> = { role: m.role };
@@ -319,7 +322,7 @@ function assertModelConfigured(cfg: LLMConfig): void {
 }
 
 /* 一次性（非流式）补全。 */
-export async function completeLLM(cfg: LLMConfig, messages: LLMMessage[]): Promise<string> {
+export async function completeLLM(cfg: LLMConfig, messages: Array<LLMMessage>): Promise<string> {
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {
     model: cfg.model,
@@ -342,7 +345,7 @@ export async function completeLLM(cfg: LLMConfig, messages: LLMMessage[]): Promi
  */
 export async function streamLLM(
   cfg: LLMConfig,
-  messages: LLMMessage[],
+  messages: Array<LLMMessage>,
   onToken: (token: string) => void,
 ): Promise<string> {
   assertModelConfigured(cfg);
@@ -399,7 +402,7 @@ export async function streamLLM(
  */
 export async function completeLLMStructured<T>(
   cfg: LLMConfig,
-  messages: LLMMessage[],
+  messages: Array<LLMMessage>,
   schema: ZodType<T>,
 ): Promise<T> {
   assertModelConfigured(cfg);
@@ -442,8 +445,8 @@ export interface CompleteToolsResult {
 
 export async function completeLLMTools(
   cfg: LLMConfig,
-  messages: LLMMessage[],
-  tools: LLMTool[],
+  messages: Array<LLMMessage>,
+  tools: Array<LLMTool>,
 ): Promise<CompleteToolsResult> {
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {

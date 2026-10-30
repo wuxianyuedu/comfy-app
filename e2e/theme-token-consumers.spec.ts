@@ -200,7 +200,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
     for (const dark of [false, true]) {
       await setTheme(page, dark);
       const label = dark ? "暗色" : "浅色";
-      const bad: string[] = [];
+      const bad: Array<string> = [];
       for (const name of CONSUMED_TOKENS) {
         const v = await readToken(page, name);
         if (!v.raw) bad.push(`${label} ${name} 声明值为空（被 shake 或名字不对）`);
@@ -218,7 +218,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
   });
 
   test("图标 token 对它实际所托的表面 ≥3:1（两态各自验）", async ({ page }) => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     for (const dark of [false, true]) {
       await setTheme(page, dark);
       const label = dark ? "暗色" : "浅色";

@@ -33,11 +33,7 @@ import {
 } from "~/lib/workshop/character-portrait-client";
 import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { Character, CharacterPortrait } from "~/lib/workshop/types";
-import {
-  DEFAULT_SHOT_SIZE,
-  shotSizeSummary,
-  type ShotSizeState,
-} from "../shot-size-config";
+import { DEFAULT_SHOT_SIZE, shotSizeSummary, type ShotSizeState } from "../shot-size-config";
 
 /** 定妆照生成通道：本机 ComfyUI 工作流 / 远端 API 直连。 */
 export type PortraitChannel = "local" | "remote";
@@ -83,7 +79,7 @@ export interface PortraitSession {
   status: string;
   /** 本次会话的失败原因（可行动文案）；空串 = 当前没有失败 */
   error: string;
-  log: PortraitLogEntry[];
+  log: Array<PortraitLogEntry>;
 }
 
 export interface PortraitSessionActions {
@@ -92,10 +88,7 @@ export interface PortraitSessionActions {
   appendLog: (entry: PortraitLogEntry) => void;
   /** 按角色提示词生成一张定妆照，结果作为新候选并入该角色。
    *  overrides：本次使用的通道模型（不传则用会话里的当前选择）。 */
-  generate: (
-    character: Character,
-    overrides?: PortraitGenerateOverrides,
-  ) => Promise<void>;
+  generate: (character: Character, overrides?: PortraitGenerateOverrides) => Promise<void>;
   /** 外部导入一张现成定妆照（写进素材库「角色」分类） */
   importFile: (character: Character, file: File) => Promise<void>;
   /** 把候选里的一张定为定妆照（后续分镜图的参考图） */
@@ -132,7 +125,7 @@ function initialSession(): PortraitSession {
 }
 
 export function useCharacterPortrait(opts: {
-  setCharacters: React.Dispatch<React.SetStateAction<Character[]>>;
+  setCharacters: React.Dispatch<React.SetStateAction<Array<Character>>>;
   /** 工坊项目 id：导入的定妆照落到素材库的本项目目录 */
   projectId: string;
 }): [PortraitSession, PortraitSessionActions] {
@@ -164,8 +157,7 @@ export function useCharacterPortrait(opts: {
    *  选择后不再成立，留着红色提示条只会误导；生成失败的详情另有一份在 log 与
    *  log/workshop/ 落盘历史里，清掉提示条不会丢信息。 */
   const patch = React.useCallback(
-    (p: PortraitSessionPatch) =>
-      setSession((prev) => ({ ...prev, ...p, error: "" })),
+    (p: PortraitSessionPatch) => setSession((prev) => ({ ...prev, ...p, error: "" })),
     [],
   );
 
@@ -183,9 +175,7 @@ export function useCharacterPortrait(opts: {
     (characterId: string, candidate: CharacterPortrait) => {
       setCharacters((prev) =>
         prev.map((item) =>
-          item.id === characterId
-            ? withPortraitCandidate(item, candidate)
-            : item,
+          item.id === characterId ? withPortraitCandidate(item, candidate) : item,
         ),
       );
     },
@@ -195,9 +185,7 @@ export function useCharacterPortrait(opts: {
   const select = React.useCallback(
     (characterId: string, url: string) => {
       setCharacters((prev) =>
-        prev.map((item) =>
-          item.id === characterId ? withSelectedPortrait(item, url) : item,
-        ),
+        prev.map((item) => (item.id === characterId ? withSelectedPortrait(item, url) : item)),
       );
     },
     [setCharacters],
@@ -206,9 +194,7 @@ export function useCharacterPortrait(opts: {
   const remove = React.useCallback(
     (characterId: string, url: string) => {
       setCharacters((prev) =>
-        prev.map((item) =>
-          item.id === characterId ? withoutPortraitCandidate(item, url) : item,
-        ),
+        prev.map((item) => (item.id === characterId ? withoutPortraitCandidate(item, url) : item)),
       );
     },
     [setCharacters],
@@ -217,11 +203,7 @@ export function useCharacterPortrait(opts: {
   /** 候选回写：只在「发起时的项目」仍是当前项目时才写进角色列表；否则保留
    *  素材库里的文件、把原因如实告诉用户 —— 不静默丢弃一次昂贵的生成结果。 */
   const writeBackCandidate = React.useCallback(
-    (
-      characterId: string,
-      candidate: CharacterPortrait,
-      originProjectId: string,
-    ): boolean => {
+    (characterId: string, candidate: CharacterPortrait, originProjectId: string): boolean => {
       if (projectIdRef.current === originProjectId) {
         addCandidate(characterId, candidate);
         return true;
@@ -243,24 +225,16 @@ export function useCharacterPortrait(opts: {
       try {
         const prompt = character.positivePrompt.trim();
         if (!prompt) {
-          fail(
-            "该角色还没有生成提示词，请先补全角色信息（外貌 / 服装等会自动合成提示词）",
-          );
+          fail("该角色还没有生成提示词，请先补全角色信息（外貌 / 服装等会自动合成提示词）");
           return;
         }
         const channel = session.channel;
-        const remoteModel = (
-          overrides?.remoteModel ?? session.remoteModel
-        ).trim();
-        const localWorkflowId = (
-          overrides?.localWorkflowId ?? session.localWorkflowId
-        ).trim();
+        const remoteModel = (overrides?.remoteModel ?? session.remoteModel).trim();
+        const localWorkflowId = (overrides?.localWorkflowId ?? session.localWorkflowId).trim();
         /* 本地通道没有内置模板可回落：必须先选好一个工作流库工作流（自带封装）。
          * 与区块的门禁提示同一口径。 */
         if (channel === "local" && !localWorkflowId) {
-          fail(
-            "本地通道需要先选模型：上方下拉选工作流库模型（需在库里配置好对外参数）",
-          );
+          fail("本地通道需要先选模型：上方下拉选工作流库模型（需在库里配置好对外参数）");
           return;
         }
         /* 日志里写「比例 + 档位（+ 倍数）」而不是折算出来的像素 —— 尺寸的表达
@@ -315,19 +289,12 @@ export function useCharacterPortrait(opts: {
                  * 「焦点还是不是这个角色」是本域的判据，留在调用处。 */
                 if (!progressGate.current.allow(character.id)) return;
                 setSession((prev) =>
-                  prev.focusCharacterId === character.id
-                    ? { ...prev, progress: pct }
-                    : prev,
+                  prev.focusCharacterId === character.id ? { ...prev, progress: pct } : prev,
                 );
               },
               onLog: (entry) => {
                 if (entry.level === "progress") return;
-                appendLog(
-                  makePortraitLog(
-                    entry.level === "error" ? "error" : "info",
-                    entry.msg,
-                  ),
-                );
+                appendLog(makePortraitLog(entry.level === "error" ? "error" : "info", entry.msg));
               },
             },
           );
@@ -348,12 +315,7 @@ export function useCharacterPortrait(opts: {
             progress: 100,
             status: `已生成一张定妆照（${modelLabel}），可在下方候选里挑选`,
           }));
-          appendLog(
-            makePortraitLog(
-              "success",
-              `定妆照生成完成（任务 ${taskId.slice(0, 12)}…）`,
-            ),
-          );
+          appendLog(makePortraitLog("success", `定妆照生成完成（任务 ${taskId.slice(0, 12)}…）`));
         } else {
           const url = await generateRemotePortrait(req, {
             projectId,

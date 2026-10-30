@@ -29,7 +29,7 @@ function sampleLine(i: number): string {
 }
 
 /** 造 `n` 条互不相同的条目（id/seq/time 都单调，保证不会被去重）。 */
-function makeEntries(n: number, seqBase: number, timeBase: number): LogEntry[] {
+function makeEntries(n: number, seqBase: number, timeBase: number): Array<LogEntry> {
   const levels = /* SAFETY: 类型断言已复核 */ [
     "debug",
     "info",
@@ -38,7 +38,7 @@ function makeEntries(n: number, seqBase: number, timeBase: number): LogEntry[] {
     "warn",
     "error",
   ] as const;
-  const out: LogEntry[] = [];
+  const out: Array<LogEntry> = [];
   for (let i = 0; i < n; i += 1) {
     out.push({
       id: `probe-${seqBase + i}`,
@@ -56,7 +56,7 @@ function makeEntries(n: number, seqBase: number, timeBase: number): LogEntry[] {
 /** 取中位数（比均值抗机器负载抖动，也比最小值更能反映典型成本）。 */
 function medianMs(fn: () => void, runs: number): number {
   fn(); // 预热：让 JIT 与内联缓存先热起来，否则首个样本吞掉一次编译
-  const samples: number[] = [];
+  const samples: Array<number> = [];
   for (let i = 0; i < runs; i += 1) {
     const t0 = performance.now();
     fn();
@@ -72,7 +72,7 @@ const runs = runsArg >= 0 ? Number(args[runsArg + 1] ?? "7") : 7;
 
 /** 一次写入的耗时 vs（时间线大小 × 批次大小）——本探针的主表。 */
 function tableAppend(): void {
-  const rows: string[] = [];
+  const rows: Array<string> = [];
   for (const size of [0, 1000, 2000, LOG_STORE_MAX]) {
     for (const batch of [1, 10, 100, 300, 1000]) {
       const base = makeEntries(size, 0, 1_700_000_000_000);
@@ -119,7 +119,7 @@ function pollRound(): void {
 
 /** 解析侧的开销：轮询回来的文本要先过 parseFileLogs，它不该被忽略。 */
 function parseCost(): void {
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   for (let i = 0; i < 300; i += 1) lines.push(sampleLine(i));
   const text = lines.join("\n");
   const cost = medianMs(() => void parseFileLogs(text), runs);

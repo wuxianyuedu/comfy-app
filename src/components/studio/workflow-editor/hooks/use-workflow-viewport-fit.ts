@@ -40,7 +40,7 @@ const FIT_MAX_ATTEMPTS = 24;
  *  `minX - RAIL_GAP` / `maxX + RAIL_GAP`（见 workflow-editor-build-nodes），
  *  参与包围盒就会把中心拉偏、把工作流压成一条细缝。 */
 function collectFitTargets(
-  nodes: readonly {
+  nodes: ReadonlyArray<{
     id: string;
     type?: string;
     position: { x: number; y: number };
@@ -48,9 +48,9 @@ function collectFitTargets(
     width?: number;
     height?: number;
     style?: { width?: number | string; height?: number | string };
-  }[],
-): FitBoundsNode[] {
-  const out: FitBoundsNode[] = [];
+  }>,
+): Array<FitBoundsNode> {
+  const out: Array<FitBoundsNode> = [];
   for (const n of nodes) {
     if (n.type === "wfIoPort") continue;
     if (String(n.id).startsWith("grp:bpin:")) continue;

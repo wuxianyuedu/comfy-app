@@ -46,12 +46,7 @@ export interface RuntimeLogBoxProps {
   className?: string;
 }
 
-export function RuntimeLogBox({
-  fileName,
-  log,
-  emptyHint,
-  className,
-}: RuntimeLogBoxProps) {
+export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLogBoxProps) {
   const [fullscreen, setFullscreen] = useState(false);
   /* 滚动跟随是纯视觉偏好，留在视图层（三个分区此前各持一份，现已合并）。 */
   const [follow, setFollow] = useState(true);
@@ -63,12 +58,7 @@ export function RuntimeLogBox({
       {/* 全屏时整块小窗口都不渲染：同一段日志渲染两份既费 DOM、又会出现两个
           同名的会话下拉（读屏器与测试都分不清该操作哪一个）。 */}
       {!fullscreen && (
-        <div
-          className={cn(
-            "border-border bg-surface-1 mb-4 rounded-xl border",
-            className,
-          )}
-        >
+        <div className={cn("border-border bg-surface-1 mb-4 rounded-xl border", className)}>
           <LogToolbar
             variant="inline"
             title={title}
@@ -196,9 +186,7 @@ function LogToolbar({
             /* 文案用服务端给的 `title`：它已含「时刻 · 退出形态 · runId」
              * （由端点的 `formatRunLabel` 拼好）。视图不再自己格式化一遍 ——
              * 两边各拼一次必然有一边先漂（§12.12）。 */
-            labels={Object.fromEntries(
-              log.sessions.map((s) => [s.id, s.title]),
-            )}
+            labels={Object.fromEntries(log.sessions.map((s) => [s.id, s.title]))}
             aria-label="切换要查看的启动"
             className="text-2xs max-w-55"
           />
@@ -277,19 +265,13 @@ function LogBody({
  * （硬规则 4）：否则用户会以为日志本来就长这样，转头去猜为什么缺内容。
  */
 function LogHint({ log }: { log: RuntimeLogController }) {
-  const parts: string[] = [];
+  const parts: Array<string> = [];
   if (log.truncated) parts.push("该次启动的输出过长，只显示最近一段。");
   /* 列表被上限裁过：说清「还有更早的」而不是让用户以为「只启动过这些次」。
    * 一次启动一份文件之后同一天可能攒几十份，这条提示比过去更常出现。 */
   if (log.sessions.length < log.total) {
-    parts.push(
-      `该服务一共启动过 ${log.total} 次，下拉只列最近 ${log.sessions.length} 次。`,
-    );
+    parts.push(`该服务一共启动过 ${log.total} 次，下拉只列最近 ${log.sessions.length} 次。`);
   }
   if (parts.length === 0) return null;
-  return (
-    <p className="text-ink-fainter text-2xs px-3 pb-2 leading-relaxed">
-      {parts.join("")}
-    </p>
-  );
+  return <p className="text-ink-fainter text-2xs px-3 pb-2 leading-relaxed">{parts.join("")}</p>;
 }

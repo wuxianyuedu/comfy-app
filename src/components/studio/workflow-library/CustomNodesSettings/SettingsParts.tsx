@@ -35,9 +35,7 @@ export function PortRow({
   //`workflow-param-mapping-ui` 的`PARAM_CLASS_COLOR` 同源。
   const dotColor = isOut ? "#06B6D4" : color;
   return (
-    <div
-      className={`flex min-w-0 items-center gap-1 ${isOut ? "flex-row-reverse" : ""}`}
-    >
+    <div className={`flex min-w-0 items-center gap-1 ${isOut ? "flex-row-reverse" : ""}`}>
       <span
         className="inline-block shrink-0 rounded-full"
         style={{ width: 7, height: 7, background: dotColor }}
@@ -86,21 +84,13 @@ function widgetValueToText(v: unknown): string {
   return "";
 }
 
-export function WidgetValueChip({
-  widget,
-  value,
-}: {
-  widget: string | null;
-  value: unknown;
-}) {
+export function WidgetValueChip({ widget, value }: { widget: string | null; value: unknown }) {
   if (widget === "toggle") {
     const on = value === true || value === "true" || value === "True";
     return (
       <span
         className={`text-3xs rounded px-1.5 py-px font-mono font-semibold ${
-          on
-            ? "bg-success-strong/18 text-success-strong"
-            : "bg-destructive/18 text-destructive"
+          on ? "bg-success-strong/18 text-success-strong" : "bg-destructive/18 text-destructive"
         }`}
       >
         {on ? "✓" : "✗"}
@@ -140,18 +130,12 @@ export function WidgetValueChip({
 
 /** 「当前清单」单行清单摘要 —— 从主组件
  * 的「nodes」页签 render 原样提出。 */
-export function ManifestSummary({
-  summary,
-}: {
-  summary: NonNullable<SettingsResp["summary"]>;
-}) {
+export function ManifestSummary({ summary }: { summary: NonNullable<SettingsResp["summary"]> }) {
   return (
     <div className="border-border bg-bg text-muted-foreground mb-4 rounded-lg border px-3 py-2 text-xs">
       当前清单：共 <b className="text-ink">{summary.totalNodes}</b> 个节点类型
       {summary.generatedAt ? ` · 生成于 ${summary.generatedAt}` : ""}
-      {summary.missingPaths?.length
-        ? ` · ⚠️ ${summary.missingPaths.length} 个目录未找到`
-        : ""}
+      {summary.missingPaths?.length ? ` · ⚠️ ${summary.missingPaths.length} 个目录未找到` : ""}
     </div>
   );
 }
@@ -188,9 +172,7 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
             📦 已发现 <span className="font-mono">{progress.discovered}</span>
             {""}
             个节点包
-            <span className="text-muted-foreground text-2xs ml-2">
-              （总数待定，正在扫描…）
-            </span>
+            <span className="text-muted-foreground text-2xs ml-2">（总数待定，正在扫描…）</span>
           </span>
         ) : (
           <span>首次扫描目录中的节点包…</span>
@@ -232,7 +214,7 @@ export function ParseConsole({
   logsRef,
   consoleRef,
 }: {
-  logs: { level: string; msg: string }[];
+  logs: Array<{ level: string; msg: string }>;
   parsing: boolean;
   logsRef: RefObject<HTMLDivElement | null>;
   consoleRef: RefObject<HTMLDivElement | null>;
@@ -240,9 +222,7 @@ export function ParseConsole({
   return (
     <div ref={logsRef} className="mb-4">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-muted-foreground text-xs font-medium">
-          解析日志
-        </span>
+        <span className="text-muted-foreground text-xs font-medium">解析日志</span>
         {parsing && (
           <span className="text-primary flex items-center gap-1.5 text-xs">
             <StatusDot state="busy" sizeClass="size-2" pulse />
@@ -252,9 +232,7 @@ export function ParseConsole({
       </div>
       {logs.length === 0 ? (
         <div className="border-border bg-bg/30 text-muted-foreground text-2xs rounded-lg border border-dashed p-3 text-center">
-          {parsing
-            ? "等待第一条日志…"
-            : "点击「解析全部」或「导入此包」后日志会出现在这里。"}
+          {parsing ? "等待第一条日志…" : "点击「解析全部」或「导入此包」后日志会出现在这里。"}
         </div>
       ) : (
         <div
@@ -265,11 +243,7 @@ export function ParseConsole({
             <div
               key={`log-${idx}`}
               data-log-row
-              className={
-                log.level === "error"
-                  ? "text-destructive"
-                  : "text-success-strong"
-              }
+              className={log.level === "error" ? "text-destructive" : "text-success-strong"}
             >
               {log.msg}
             </div>
@@ -299,10 +273,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
         {(report.packages ?? []).map((pkg) => {
           const st = STATUS_STYLE[pkg.status] ?? OK_STATUS_STYLE;
           return (
-            <div
-              key={pkg.name}
-              className="border-border bg-bg rounded-xl border p-3"
-            >
+            <div key={pkg.name} className="border-border bg-bg rounded-xl border p-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -324,9 +295,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="text-ink-bright text-lg font-semibold">
-                    {pkg.nodeCount}
-                  </div>
+                  <div className="text-ink-bright text-lg font-semibold">{pkg.nodeCount}</div>
                   <div className="text-muted-foreground text-2xs">节点类型</div>
                 </div>
               </div>
@@ -350,10 +319,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
               {pkg.errors?.length > 0 && (
                 <div className="mt-2 flex flex-col gap-1">
                   {pkg.errors.map((er, j) => (
-                    <div
-                      key={j}
-                      className="text-destructive text-2xs font-mono"
-                    >
+                    <div key={j} className="text-destructive text-2xs font-mono">
                       ⚠ {er.file}: {er.error}
                     </div>
                   ))}

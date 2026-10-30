@@ -3,7 +3,7 @@ import { PassThrough } from "node:stream";
 
 import { createLogger, coreLogger } from "~/lib/core/logger";
 
-const streams: PassThrough[] = [];
+const streams: Array<PassThrough> = [];
 
 afterEach(() => {
   while (streams.length > 0) streams.pop()?.destroy();
@@ -31,7 +31,7 @@ const NOOP_MIRROR = { error: () => undefined };
 function makeLogger(ns: string) {
   const stream = new PassThrough();
   streams.push(stream);
-  const chunks: string[] = [];
+  const chunks: Array<string> = [];
   stream.on("data", (c: Buffer) => chunks.push(c.toString("utf8")));
   const log = createLogger(ns, {
     destination: stream,
@@ -61,7 +61,7 @@ describe("core/logger — 核心层门面（实现只有一份，就是本模块
   it("实例级别决定门槛：level=error 时只有 error 输出", () => {
     const stream = new PassThrough();
     streams.push(stream);
-    const chunks: string[] = [];
+    const chunks: Array<string> = [];
     stream.on("data", (c: Buffer) => chunks.push(c.toString("utf8")));
     const log = createLogger("t", {
       destination: stream,

@@ -27,7 +27,7 @@ import { SECTION_ROOT_MARGIN, useSectionScrollSpy } from "./use-section-scroll-s
 /** 假观察器：只记录「观察了谁、配置是什么」，回调由用例手动投递。 */
 class FakeIntersectionObserver {
   static last: FakeIntersectionObserver | null = null;
-  observed: Element[] = [];
+  observed: Array<Element> = [];
   options: IntersectionObserverInit | undefined;
   callback: IntersectionObserverCallback;
   disconnected = false;
@@ -46,12 +46,12 @@ class FakeIntersectionObserver {
   disconnect() {
     this.disconnected = true;
   }
-  takeRecords(): IntersectionObserverEntry[] {
+  takeRecords(): Array<IntersectionObserverEntry> {
     return [];
   }
 
   /** 投递一次「谁进入了 / 谁离开了」。 */
-  emit(entries: { target: Element; isIntersecting: boolean }[]) {
+  emit(entries: Array<{ target: Element; isIntersecting: boolean }>) {
     this.callback(
       entries.map(
         (e) =>

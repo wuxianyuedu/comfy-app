@@ -22,7 +22,7 @@ import { modelFoldersForField } from "~/lib/model-types";
  *  整体落空，退到 field-name 全库 union——把其它节点同名字段的选项
  *  混进候选表（如 aspect_ratio 混出简写 "16:9"），用户照着选就会提交
  *  服务器不认的值。 */
-const comboOptionsFromSpec = (spec: unknown): string[] | undefined => {
+const comboOptionsFromSpec = (spec: unknown): Array<string> | undefined => {
   if (!Array.isArray(spec)) return undefined;
   const head: unknown = spec[0];
   if (Array.isArray(head)) {
@@ -55,8 +55,8 @@ export function createObjectInfoResolvers(): {
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
-  ) => Promise<string[] | undefined>;
-  comboOptionsForFieldName: (field: string) => Promise<string[] | undefined>;
+  ) => Promise<Array<string> | undefined>;
+  comboOptionsForFieldName: (field: string) => Promise<Array<string> | undefined>;
   multilineForClassField: (
     classType: string | undefined,
     field: string,
@@ -95,7 +95,7 @@ export function createObjectInfoResolvers(): {
   const comboOptionsForClassField = async (
     classType: string | undefined,
     field: string,
-  ): Promise<string[] | undefined> => {
+  ): Promise<Array<string> | undefined> => {
     const [specOpts, localOpts] = await Promise.all([
       (async () => comboOptionsFromSpec(await specForClassField(classType, field)))(),
       localModelFileNames(modelFoldersForField(field)),
@@ -120,10 +120,10 @@ export function createObjectInfoResolvers(): {
    * 会把所有已知默认值并起来 —— 这无害，因为下面的本地模型并集已经覆盖了
    * 现实中磁盘上的那批。object_info 只拉一次并缓存，因此重复调用很便宜。
    */
-  const comboOptionsForFieldName = async (field: string): Promise<string[] | undefined> => {
+  const comboOptionsForFieldName = async (field: string): Promise<Array<string> | undefined> => {
     const oi = await ensureObjectInfo();
     if (!oi) return undefined;
-    const declared: string[] = [];
+    const declared: Array<string> = [];
     let found = false;
     for (const def of Object.values(oi)) {
       const inp = def.input;

@@ -54,7 +54,7 @@ export interface WorkflowRunMeta {
   resultUrl?: string;
   errorMessage?: string;
   /** 累积的执行步骤日志（重开窗口后由 SSE 回放继续补齐）。 */
-  logs?: TaskLogEntry[];
+  logs?: Array<TaskLogEntry>;
 }
 
 const MAX_ENTRIES = 32;
@@ -269,14 +269,17 @@ export function latestRunForWorkflow(
 }
 
 /** 全部已登记运行（新→旧）。 */
-export function listWorkflowRuns(): WorkflowRunMeta[] {
+export function listWorkflowRuns(): Array<WorkflowRunMeta> {
   return Array.from(runs.values()).sort((a, b) => b.startedAt - a.startedAt);
 }
 
 /* ── 日志累积（store 托管，组件卸载不丢）──────────────────────────────── */
 
 /** 记录一条运行日志并返回累积后的数组（无该 taskId 登记时返回 null）。 */
-export function appendWorkflowRunLog(taskId: string, entry: TaskLogEntry): TaskLogEntry[] | null {
+export function appendWorkflowRunLog(
+  taskId: string,
+  entry: TaskLogEntry,
+): Array<TaskLogEntry> | null {
   const prev = runs.get(taskId);
   if (!prev) return null;
   const logs = prev.logs ?? [];
@@ -296,7 +299,7 @@ export function appendWorkflowRunLog(taskId: string, entry: TaskLogEntry): TaskL
 
 export interface WorkflowRunStoreSnapshot {
   version: number;
-  runs: WorkflowRunMeta[];
+  runs: Array<WorkflowRunMeta>;
   /** 最近一次仍在运行（或最近一次）的 taskId，null 表示从未运行。 */
   activeTaskId: string | null;
 }

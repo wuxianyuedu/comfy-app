@@ -218,7 +218,7 @@ describe("applyShotRedo", () => {
     const out = /* SAFETY: 类型断言已复核 */ applyShotRedo(
       [{ id: "a", imageUrl: "/x" }],
       "a",
-    ) as Record<string, unknown>[];
+    ) as Array<Record<string, unknown>>;
     expect(out[0]!.rev).toBe(1);
   });
 
@@ -241,10 +241,9 @@ describe("applyReprompt", () => {
       },
       { id: "b", prompt: "别的" },
     ];
-    const out = /* SAFETY: 类型断言已复核 */ applyReprompt(shots, "a", "新提示词") as Record<
-      string,
-      unknown
-    >[];
+    const out = /* SAFETY: 类型断言已复核 */ applyReprompt(shots, "a", "新提示词") as Array<
+      Record<string, unknown>
+    >;
     expect(out[0]!.prompt).toBe("新提示词");
     expect(out[0]!.imageUrl).toBeUndefined();
     expect(out[0]!.clipUrl).toBeUndefined();
@@ -262,10 +261,9 @@ describe("applyReprompt", () => {
 
   it("非记录项被跳过（只认带 id 的对象）", () => {
     const shots = ["字符串项", { id: "b", prompt: "p" }];
-    const out = /* SAFETY: 类型断言已复核 */ applyReprompt(shots, "b", "改后") as Record<
-      string,
-      unknown
-    >[];
+    const out = /* SAFETY: 类型断言已复核 */ applyReprompt(shots, "b", "改后") as Array<
+      Record<string, unknown>
+    >;
     expect(out[0]).toBe("字符串项");
     expect(out[1]!.prompt).toBe("改后");
     expect(out[1]!.rev).toBe(1);

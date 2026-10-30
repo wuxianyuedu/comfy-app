@@ -864,7 +864,8 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
      * 拿它当夹具的用例会在某个平常的提交上自己变红。 */
     const dir = mkdtempSync(join(tmpdir(), "dirty-since-"));
     workdir = dir;
-    const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+    const git = (...args: Array<string>) =>
+      execFileSync("git", args, { cwd: dir, encoding: "utf8" });
     git("init", "-q", ".");
     git("config", "user.email", "t@example.com");
     git("config", "user.name", "t");
@@ -885,7 +886,7 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
     /* 状态机与 `dirtySinceToday` 逐字同源（那条函数读的是真仓库，没法在夹具上跑）。
      * 复刻它的唯一目的是让「空行怎么处理」这条边界**可被执行** —— 它是这段实现里
      * 唯一出错不会红的地方。 */
-    const sinceFor = (prefixes: string[]) => {
+    const sinceFor = (prefixes: Array<string>) => {
       let earliest: Date | null = null;
       let stamp: string | null = null;
       let hit = false;

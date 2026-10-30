@@ -90,7 +90,7 @@ describe("useModelTags", () => {
     // 回归：`initialTags={tags?.data ?? []}` 这种写法每次渲染都是新数组，
     // 按引用比较会每次 setState → React「Too many re-renders」。改为按内容判重。
     const { rerender } = renderHook(
-      ({ tags }: { tags: TagItem[] }) => useModelTags({ initialTags: tags }),
+      ({ tags }: { tags: Array<TagItem> }) => useModelTags({ initialTags: tags }),
       { initialProps: { tags: [tag("z-image")] } },
     );
     for (let i = 0; i < 5; i++) rerender({ tags: [tag("z-image")] });

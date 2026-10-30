@@ -34,14 +34,16 @@ const { stat, open, readCalls, disk, userMock, loginRequiredMock, foreignMock } 
   () => ({
     stat: vi.fn(),
     open: vi.fn(),
-    readCalls: /* SAFETY: type assertion reviewed */ [] as {
+    readCalls: /* SAFETY: type assertion reviewed */ [] as Array<{
       length: number;
       position: number;
-    }[],
+    }>,
     disk: { bytes: Buffer.from("") },
     userMock: vi.fn<() => Promise<{ id: string } | null>>(),
     loginRequiredMock: vi.fn<() => boolean>(() => false),
-    foreignMock: vi.fn<(segments: string[], userId: string) => Promise<boolean>>(async () => false),
+    foreignMock: vi.fn<(segments: Array<string>, userId: string) => Promise<boolean>>(
+      async () => false,
+    ),
   }),
 );
 
@@ -69,11 +71,11 @@ function normalize(p: string): string {
   return p.replace(/\\/g, "/");
 }
 
-function paramsOf(path: string[] | undefined) {
+function paramsOf(path: Array<string> | undefined) {
   return { params: Promise.resolve({ path }) };
 }
 
-function get(path: string[] | undefined, range?: string) {
+function get(path: Array<string> | undefined, range?: string) {
   return import("./route").then(({ GET }) =>
     GET(
       /* SAFETY: type assertion reviewed */ new Request("http://x/api/generated", {

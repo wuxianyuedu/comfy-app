@@ -69,7 +69,7 @@ export interface ItemErrors {
  * 传 `undefined` 表示「条目集合不固定」（如新增框：新增前还没有这一条），
  * 这时不做收敛，错误靠 `clear` / `clearAll` 显式清。
  */
-export function useItemErrors(keys?: readonly string[]): ItemErrors {
+export function useItemErrors(keys?: ReadonlyArray<string>): ItemErrors {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   /* key 集合的内容指纹 —— 按**内容**比较而非数组引用：调用处几乎都是
@@ -121,10 +121,7 @@ export function useItemErrors(keys?: readonly string[]): ItemErrors {
     setErrors((prev) => (Object.keys(prev).length === 0 ? prev : {}));
   }, []);
 
-  const get = useCallback(
-    (key: ErrorScope) => visible[scopeKey(key)] ?? null,
-    [visible],
-  );
+  const get = useCallback((key: ErrorScope) => visible[scopeKey(key)] ?? null, [visible]);
 
   return useMemo(
     () => ({

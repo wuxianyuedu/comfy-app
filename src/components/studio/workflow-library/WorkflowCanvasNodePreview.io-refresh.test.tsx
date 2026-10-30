@@ -89,7 +89,7 @@ function renderPreview(io: WorkflowIOMap) {
 }
 
 /** 表单行没有 <label> 关联，按渲染顺序取两个数值输入框（步数 → 引导系数）。 */
-function inputs(): HTMLInputElement[] {
+function inputs(): Array<HTMLInputElement> {
   return screen.getAllByRole<HTMLInputElement>("textbox");
 }
 const stepsInput = () => inputs()[0]!;

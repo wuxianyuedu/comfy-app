@@ -3,14 +3,14 @@ import { getOrCreate, getOrThrow } from "./collections";
 
 describe("getOrCreate", () => {
   it("键不存在时用工厂建桶、写入并返回", () => {
-    const map = new Map<string, number[]>();
+    const map = new Map<string, Array<number>>();
     const bucket = getOrCreate(map, "a", () => []);
     bucket.push(1);
     expect(map.get("a")).toEqual([1]);
   });
 
   it("键已存在时返回原桶、不重复新建", () => {
-    const map = new Map<string, number[]>();
+    const map = new Map<string, Array<number>>();
     const first = getOrCreate(map, "a", () => []);
     first.push(1);
     const second = getOrCreate(map, "a", () => [999]);
@@ -38,8 +38,6 @@ describe("getOrThrow", () => {
 
   it("缺失时抛带上下文与键名的错误（替代静默的 !）", () => {
     const map = new Map<string, number>();
-    expect(() => getOrThrow(map, "missing", "节点表里缺")).toThrow(
-      "节点表里缺（键：missing）",
-    );
+    expect(() => getOrThrow(map, "missing", "节点表里缺")).toThrow("节点表里缺（键：missing）");
   });
 });

@@ -60,7 +60,7 @@ afterEach(() => {
  * 拷进临时检出的那一份会在**加载阶段**报 `ERR_MODULE_NOT_FOUND` —— 于是这条用例看到的
  * 是一段 ESM 解析栈，而不是它要判的「预检结论」。收 `.ts` / `.tsx` 之后闭包按事实走。
  */
-function relativeImportsOf(entryFile: string): string[] {
+function relativeImportsOf(entryFile: string): Array<string> {
   const src = fs.readFileSync(entryFile, "utf8");
   const found = new Set<string>();
   for (const match of src.matchAll(/from\s+"(\.{1,2}\/[^"]+\.(?:mjs|cjs|ts|tsx))"/g)) {
@@ -382,7 +382,7 @@ describe("启动器念出 env:init 缺的键（ISSUE #2205）", () => {
 
   /** 跑预检桥段：除了 `.env` 的两个读数，其余门禁全部空转（这条判的只是提醒）。 */
   async function runGates() {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const gated = await runStartupGates(
       {
         log: (message: string) => lines.push(message),
@@ -425,7 +425,7 @@ describe("启动器念出 env:init 缺的键（ISSUE #2205）", () => {
       example.replace(/^COMFYAPP_DEV_HANDLE=.*$/m, ""),
       "utf8",
     );
-    const writes: string[] = [];
+    const writes: Array<string> = [];
     const spy = vi
       .spyOn(process.stderr, "write")
       .mockImplementation((chunk: string | Uint8Array) => {

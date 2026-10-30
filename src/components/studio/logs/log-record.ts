@@ -120,10 +120,10 @@ export const stripSgr = (text: string) => stripSgrFromAnsi(text);
 export function splitLogRecords(
   text: string,
   isRecordStart: (line: string) => boolean,
-): RawRecord[] {
-  const records: RawRecord[] = [];
+): Array<RawRecord> {
+  const records: Array<RawRecord> = [];
   let head = "";
-  let lines: string[] = [];
+  let lines: Array<string> = [];
   let depth = 0;
   let jsonish = false;
 
@@ -168,9 +168,7 @@ export function splitLogRecords(
       head !== "" &&
       (depth > 0 ||
         (headIsLogLine && PAYLOAD_START_RE.test(line)) ||
-        (!headIsLogLine &&
-          jsonish &&
-          (looksLikeJsonFragment(line) || INDENTED_RE.test(line))));
+        (!headIsLogLine && jsonish && (looksLikeJsonFragment(line) || INDENTED_RE.test(line))));
     if (continues) {
       lines.push(line);
       depth += bracketDepthDelta(line);

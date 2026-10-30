@@ -100,7 +100,7 @@ export function hasAnsi(text: string): boolean {
 const TOKEN_RE =
   /(\[\d{2}:\d{2}:\d{2}\]|\[OK\]|\[STEP\]|\[WARN\]|\[ERROR\]|\[INFO\]|PID\s*[:：]\s*\d+|https?:\/\/[^\s]+)/gi;
 
-const TOKEN_STYLES: { pattern: RegExp; style: AnsiStyleKey }[] = [
+const TOKEN_STYLES: Array<{ pattern: RegExp; style: AnsiStyleKey }> = [
   { pattern: /^\[\d{2}:\d{2}:\d{2}\]$/, style: "gray" },
   { pattern: /^\[OK\]$/, style: "green-bright" },
   { pattern: /^\[STEP\]$/, style: "cyan-bright" },
@@ -136,8 +136,8 @@ function styleOfToken(text: string): AnsiStyleKey | undefined {
  * 落在路径区间内就让位（`C:\a\[OK]\b` 这种目录名不该把路径切成三段）。让位判据是
  * 区间相交，不依赖 TOKEN_RE 的分支顺序 —— 那个顺序只对「同级竞争」有意义。
  */
-function styledSpans(text: string): StyledSpan[] {
-  const spans: StyledSpan[] = findLogPathTokens(text).map((token) => ({
+function styledSpans(text: string): Array<StyledSpan> {
+  const spans: Array<StyledSpan> = findLogPathTokens(text).map((token) => ({
     start: token.start,
     end: token.end,
     style: PATH_STYLE,
@@ -161,8 +161,8 @@ function styledSpans(text: string): StyledSpan[] {
  * 那种做法下「切点」与「样式」是两件事，于是新增路径形态时最容易漏掉的是**切点**
  * （切错 ⇒ 颜色断在半截，且下层按片段识别路径时直接认不出来）。
  */
-export function tokenizeRow(text: string): RowToken[] {
-  const parts: RowToken[] = [];
+export function tokenizeRow(text: string): Array<RowToken> {
+  const parts: Array<RowToken> = [];
   let cursor = 0;
   for (const span of styledSpans(text)) {
     /* 同一段文本可能被两档同时命中（路径里带 `[OK]` 之类）；已消费的区间跳过，
@@ -184,7 +184,7 @@ export function tokenizeRow(text: string): RowToken[] {
  *   → 含 ANSI 的行 → 按 SGR 分片
  *   → 其余 → 词法分片。
  */
-export function rowFragments(text: string): RowToken[] {
+export function rowFragments(text: string): Array<RowToken> {
   const logrus = colorizeLogrusLine(text);
   if (logrus) {
     return logrus.map((seg) => ({

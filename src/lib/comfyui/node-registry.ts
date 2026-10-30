@@ -36,7 +36,7 @@ const F = {
   sel: (
     key: string,
     label: string,
-    options: string[],
+    options: Array<string>,
     opts?: Partial<FieldDef>,
   ): FieldDef => ({
     key,
@@ -286,9 +286,7 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
     category: "output",
     width: 180,
     height: 60,
-    defaultFields: [
-      F.str("filename_prefix", "文件名前缀", { placeholder: "ComfyAPP" }),
-    ],
+    defaultFields: [F.str("filename_prefix", "文件名前缀", { placeholder: "ComfyAPP" })],
   },
   LoadImage: {
     label: "加载图像",
@@ -359,7 +357,7 @@ export function getNodeConfig(classType: string): NodeTypeConfig {
 
 /* 所有已知的 class_type 名字（内置 + 解析出的自定义节点）。
  * 每次调用都重新计算，因此新解析出来的自定义节点不必重启就能出现。 */
-export function getAllNodeTypes(): string[] {
+export function getAllNodeTypes(): Array<string> {
   return Object.keys({
     ...NODE_TYPE_REGISTRY,
     ...CUSTOM_NODE_TYPES,

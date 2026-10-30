@@ -3,10 +3,7 @@
 import React from "react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { beginStaleRun } from "~/lib/stale-run";
-import {
-  fetchLocalModels,
-  fetchRemoteModels,
-} from "~/lib/llm/model-catalog-client";
+import { fetchLocalModels, fetchRemoteModels } from "~/lib/llm/model-catalog-client";
 import { useLLM } from "~/components/workshop/LLMContext";
 import { parseChannelOption } from "~/lib/workshop/channel-options";
 
@@ -15,9 +12,7 @@ function optionLabel(name: string, badge: string): React.ReactNode {
   return (
     <span className="flex w-full items-center">
       <span className="min-w-0 flex-1 truncate">{name}</span>
-      <span className="text-muted-foreground text-3xs ml-2 shrink-0">
-        {badge}
-      </span>
+      <span className="text-muted-foreground text-3xs ml-2 shrink-0">{badge}</span>
     </span>
   );
 }
@@ -54,17 +49,12 @@ export function ExtractModelSelect({
     const guard = beginStaleRun();
     // 远端探测带上当前选中的模型名：该模型若配了独立 baseUrl/apiKey，
     // 服务端会用它探测（而不是拿全局 Base URL 探，避免误报 fetch failed）。
-    const probe =
-      channel === "local"
-        ? () => fetchLocalModels()
-        : () => fetchRemoteModels(model);
+    const probe = channel === "local" ? () => fetchLocalModels() : () => fetchRemoteModels(model);
     void probe().then((res) => {
       guard.commit(() =>
         setAvailByKey((prev) => ({
           ...prev,
-          [selKey]: res.ok
-            ? { kind: "ok" }
-            : { kind: "err", detail: res.detail },
+          [selKey]: res.ok ? { kind: "ok" } : { kind: "err", detail: res.detail },
         })),
       );
     });
@@ -72,7 +62,7 @@ export function ExtractModelSelect({
   }, [selKey, channel, model]);
 
   const options = React.useMemo(() => {
-    const list: string[] = [];
+    const list: Array<string> = [];
     for (const m of localModels) list.push(`local::${m}`);
     for (const m of remoteModels) list.push(`remote::${m}`);
     return list;
@@ -94,22 +84,13 @@ export function ExtractModelSelect({
   if (channel) {
     const badge = channel === "local" ? "本地" : "远端";
     if (selChecking) {
-      hint = (
-        <p className="text-muted-foreground text-2xs mt-1">
-          {badge}服务可用性校验中…
-        </p>
-      );
+      hint = <p className="text-muted-foreground text-2xs mt-1">{badge}服务可用性校验中…</p>;
     } else if (selAvail?.kind === "ok") {
-      hint = (
-        <p className="text-success-strong text-2xs mt-1">
-          {badge}服务可达，可直接使用。
-        </p>
-      );
+      hint = <p className="text-success-strong text-2xs mt-1">{badge}服务可达，可直接使用。</p>;
     } else if (selAvail?.kind === "err") {
       hint = (
         <p className="text-destructive text-2xs mt-1 leading-relaxed">
-          {badge}模型不可用：{selAvail.detail}。可先确认对应服务已启动 /
-          配置正确后再试。
+          {badge}模型不可用：{selAvail.detail}。可先确认对应服务已启动 / 配置正确后再试。
         </p>
       );
     }

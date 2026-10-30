@@ -23,11 +23,11 @@ type Episode = NonNullable<RouterOutputs["series"]["byProject"]>;
 
 export interface SeriesOrganizerController {
   /** 系列列表。 */
-  seriesList?: Series[];
+  seriesList?: Array<Series>;
   /** 当前选中系列下的季列表。 */
-  seasons?: Season[];
+  seasons?: Array<Season>;
   /** 当前选中季下的集列表。 */
-  episodes?: Episode[];
+  episodes?: Array<Episode>;
   /** 当前项目归属的集（无归属为 null）。 */
   currentEp?: Episode | null;
 
@@ -50,9 +50,7 @@ export interface SeriesOrganizerController {
   assignCurrentProject: (episodeId: string) => void;
 }
 
-export function useSeriesOrganizer(
-  projectId?: string,
-): SeriesOrganizerController {
+export function useSeriesOrganizer(projectId?: string): SeriesOrganizerController {
   const trpc = useTRPC();
   const qc = useQueryClient();
 
@@ -62,39 +60,22 @@ export function useSeriesOrganizer(
 
   const seriesList = useQuery(trpc.series.list.queryOptions());
   const seasons = useQuery(
-    trpc.series.seasons.queryOptions(
-      { seriesId: seriesId ?? "" },
-      { enabled: !!seriesId },
-    ),
+    trpc.series.seasons.queryOptions({ seriesId: seriesId ?? "" }, { enabled: !!seriesId }),
   );
   const episodes = useQuery(
-    trpc.series.episodes.queryOptions(
-      { seasonId: seasonId ?? "" },
-      { enabled: !!seasonId },
-    ),
+    trpc.series.episodes.queryOptions({ seasonId: seasonId ?? "" }, { enabled: !!seasonId }),
   );
   const currentEp = useQuery(
-    trpc.series.byProject.queryOptions(
-      { projectId: projectId ?? "" },
-      { enabled: !!projectId },
-    ),
+    trpc.series.byProject.queryOptions({ projectId: projectId ?? "" }, { enabled: !!projectId }),
   );
 
-  const invalidateSeries = () =>
-    void qc.invalidateQueries(trpc.series.list.queryFilter());
+  const invalidateSeries = () => void qc.invalidateQueries(trpc.series.list.queryFilter());
   const invalidateSeasons = (sid: string) =>
-    void qc.invalidateQueries(
-      trpc.series.seasons.queryFilter({ seriesId: sid }),
-    );
+    void qc.invalidateQueries(trpc.series.seasons.queryFilter({ seriesId: sid }));
   const invalidateEpisodes = (sid: string) =>
-    void qc.invalidateQueries(
-      trpc.series.episodes.queryFilter({ seasonId: sid }),
-    );
+    void qc.invalidateQueries(trpc.series.episodes.queryFilter({ seasonId: sid }));
   const invalidateCurrent = () => {
-    if (projectId)
-      void qc.invalidateQueries(
-        trpc.series.byProject.queryFilter({ projectId }),
-      );
+    if (projectId) void qc.invalidateQueries(trpc.series.byProject.queryFilter({ projectId }));
   };
 
   const createSeries = useMutation(
@@ -187,8 +168,7 @@ export function useSeriesOrganizer(
     createSeason: (sid, title) => createSeason.mutate({ seriesId: sid, title }),
     renameSeason: (id, title) => updateSeason.mutate({ id, title }),
     deleteSeason: (id) => deleteSeason.mutate({ id }),
-    createEpisode: (sid, title) =>
-      createEpisode.mutate({ seasonId: sid, title }),
+    createEpisode: (sid, title) => createEpisode.mutate({ seasonId: sid, title }),
     renameEpisode: (id, title) => updateEpisode.mutate({ id, title }),
     deleteEpisode: (id) => deleteEpisode.mutate({ id }),
     assignCurrentProject: (epid) => {

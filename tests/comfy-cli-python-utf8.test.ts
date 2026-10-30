@@ -32,12 +32,9 @@ const ROOT = path.resolve(__dirname, "..");
  * 用「含 PYTHONUNBUFFERED」当选择器是错的（ComfyUI 那一份没有这个键），
  * 第一版就是这么判的、直接把另一条链路判成「找不到」。
  */
-function pythonEnvKeys(rel: string): { name: string; keys: string[] } {
-  const src = stripComments(readFileSync(path.join(ROOT, rel), "utf8")).replace(
-    /\r\n/g,
-    "\n",
-  );
-  const found: { name: string; keys: string[] }[] = [];
+function pythonEnvKeys(rel: string): { name: string; keys: Array<string> } {
+  const src = stripComments(readFileSync(path.join(ROOT, rel), "utf8")).replace(/\r\n/g, "\n");
+  const found: Array<{ name: string; keys: Array<string> }> = [];
   const head = /(?:^|[\s,(])(env|stdioEnv|childEnv)\s*:\s*\{/g;
   let m: RegExpExecArray | null;
   while ((m = head.exec(src))) {
@@ -54,8 +51,7 @@ function pythonEnvKeys(rel: string): { name: string; keys: string[] } {
     }
     const body = src.slice(start + 1, i);
     const keys = [...body.matchAll(/([A-Z][A-Z0-9_]*)\s*:/g)].map((k) => k[1]!);
-    if (keys.some((k) => k.startsWith("PYTHON")))
-      found.push({ name: m[1]!, keys });
+    if (keys.some((k) => k.startsWith("PYTHON"))) found.push({ name: m[1]!, keys });
   }
   expect(
     found.length,
@@ -83,9 +79,7 @@ describe("Python 子进程必须被锁在 UTF-8（ISSUE #1164）", () => {
     const src = stripComments(
       readFileSync(path.join(ROOT, "src/lib/comfyui/executor-cli.ts"), "utf8"),
     );
-    const decodes = [...src.matchAll(/\.setEncoding\(\s*"([^"]+)"\s*\)/g)].map(
-      (m) => m[1],
-    );
+    const decodes = [...src.matchAll(/\.setEncoding\(\s*"([^"]+)"\s*\)/g)].map((m) => m[1]);
     expect(decodes.length).toBeGreaterThanOrEqual(2); // stdout + stderr
     expect(new Set(decodes)).toEqual(new Set(["utf-8"]));
   });

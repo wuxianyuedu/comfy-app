@@ -18,13 +18,13 @@ import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const { dirEntries, fileStats, disk, userMock } = vi.hoisted(() => ({
-  dirEntries: new Map<string, { names?: string[]; subdirs?: string[] }>(),
+  dirEntries: new Map<string, { names?: Array<string>; subdirs?: Array<string> }>(),
   fileStats: new Map<string, { size: number; mtime: Date }>(),
   disk: {
-    reads: /* SAFETY: 类型断言已复核 */ [] as string[],
-    mkdir: /* SAFETY: 类型断言已复核 */ [] as string[],
-    writeFile: /* SAFETY: 类型断言已复核 */ [] as string[],
-    unlink: /* SAFETY: 类型断言已复核 */ [] as string[],
+    reads: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    mkdir: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    writeFile: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    unlink: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
   },
   userMock: vi.fn<() => Promise<{ id: string } | null>>(),
 }));
@@ -153,7 +153,7 @@ describe("GET /api/materials —— 读侧归属", () => {
     const res = await GET(reqOf(urlOf("?projectId=proj-a&folder=ref")));
     expect(res.status).toBe(200);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      items: { id: string }[];
+      items: Array<{ id: string }>;
     };
     expect(body.items.map((i) => nameOf(i.id))).toEqual(["mine.png", "shared.png"]);
   });
@@ -161,14 +161,14 @@ describe("GET /api/materials —— 读侧归属", () => {
   it("别人的项目 → 与「没素材」同形（不给探测项目 id 用）", async () => {
     const body = /* SAFETY: 类型断言已复核 */ (await (
       await GET(reqOf(urlOf("?projectId=proj-b&folder=ref")))
-    ).json()) as { items: { id: string }[] };
+    ).json()) as { items: Array<{ id: string }> };
     expect(body.items.map((i) => nameOf(i.id))).toEqual(["shared.png"]);
   });
 
   it("cross 不再枚举全库目录（别人项目里的文件一条都不出现）", async () => {
     const body = /* SAFETY: 类型断言已复核 */ (await (
       await GET(reqOf(urlOf("?scope=cross&folder=ref")))
-    ).json()) as { items: { scope: string }[] };
+    ).json()) as { items: Array<{ scope: string }> };
     expect(body.items.map((i) => i.scope)).not.toContain("proj-b");
   });
 
@@ -180,8 +180,8 @@ describe("GET /api/materials —— 读侧归属", () => {
     const res = await GET(reqOf(urlOf("?scope=cross&folder=ref")));
     expect(res.status).toBe(200);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      items: { scope: string }[];
-      folders: unknown[];
+      items: Array<{ scope: string }>;
+      folders: Array<unknown>;
     };
     // 只剩共享区那一份（它是末尾统一补的，不依赖能不能枚举到目录）
     expect(body.items.map((i) => i.scope)).toEqual([SHARED_SCOPE]);
@@ -197,7 +197,7 @@ describe("GET /api/materials —— 读侧归属", () => {
     put("proj-fresh", "ref", "fresh.png");
     const body = /* SAFETY: 类型断言已复核 */ (await (
       await GET(reqOf(urlOf("?projectId=proj-fresh&folder=ref")))
-    ).json()) as { items: { id: string }[] };
+    ).json()) as { items: Array<{ id: string }> };
     expect(body.items.map((i) => nameOf(i.id))).toContain("fresh.png");
   });
 });
@@ -232,7 +232,7 @@ describe("POST /api/materials —— 上传", () => {
   });
 
   it("坏 MIME / 缺分类 / 缺 projectId：各自一个 400，且都不落盘", async () => {
-    const cases: Parameters<typeof uploadForm>[0][] = [
+    const cases: Array<Parameters<typeof uploadForm>[0]> = [
       { type: "application/x-msdownload", projectId: "proj-a", folder: "docs" },
       { projectId: "proj-a", folder: "../../outside" },
       { projectId: "", folder: "docs" },

@@ -52,7 +52,7 @@ export type ReviewKind = "shot" | "character";
 /** 一次剧本评审的产出：判定 + 完整分数曲线（旧→新，含本轮；FR-QA-07「每轮分数可回看」）。 */
 export interface ScriptReviewOutcome {
   verdict: ReviewVerdict;
-  history: ReviewVerdict[];
+  history: Array<ReviewVerdict>;
 }
 
 const KIND_LABEL: Record<ReviewKind, string> = {
@@ -126,13 +126,13 @@ function reviewTextOf(kind: ReviewKind, rec: Record<string, unknown>): string {
   return kind === "shot" ? shotReviewText(rec) : characterReviewText(rec);
 }
 
-function listForKind(row: Production, kind: ReviewKind): unknown[] {
+function listForKind(row: Production, kind: ReviewKind): Array<unknown> {
   const raw = kind === "shot" ? row.shots : row.characters;
   return Array.isArray(raw) ? raw : [];
 }
 
 /** 在记录数组里按 id 找到目标记录（宽松对象视图）；找不到 → null。 */
-function findRecord(list: unknown[], id: string): Record<string, unknown> | null {
+function findRecord(list: Array<unknown>, id: string): Record<string, unknown> | null {
   for (const raw of list) {
     const rec = asRecord(raw);
     if (rec?.id === id) return rec;
@@ -211,13 +211,13 @@ async function scoreShotImage(
 ): Promise<ReviewVerdict> {
   // 出场角色的生效定妆照（角色一致性对照用）。
   const characterIds = Array.isArray(rec.characterIds)
-    ? /* SAFETY: 类型断言已复核 */ (rec.characterIds as unknown[]).filter(
+    ? /* SAFETY: 类型断言已复核 */ (rec.characterIds as Array<unknown>).filter(
         (x): x is string => typeof x === "string",
       )
     : [];
   const characters = Array.isArray(row.characters) ? row.characters : [];
-  const portraitUrls: string[] = [];
-  const characterNames: string[] = [];
+  const portraitUrls: Array<string> = [];
+  const characterNames: Array<string> = [];
   for (const raw of characters) {
     const c = asRecord(raw);
     if (!c || !characterIds.includes(String(c.id))) continue;
@@ -287,7 +287,7 @@ export interface AutoselectResult {
   winnerTaskId: string;
   winnerImageUrl: string;
   winnerVerdict: ReviewVerdict;
-  candidates: AutoselectCandidate[];
+  candidates: Array<AutoselectCandidate>;
 }
 
 /**
@@ -301,7 +301,7 @@ export async function autoselectShotImage(
   userId: string,
   projectId: string,
   shotId: string,
-  taskIds: string[],
+  taskIds: Array<string>,
 ): Promise<AutoselectResult> {
   if (taskIds.length < 2 || taskIds.length > 4) {
     throw new Error("抽卡候选数量须在 2~4 张");
@@ -312,7 +312,7 @@ export async function autoselectShotImage(
   if (!rec) throw new Error(`找不到要优选的镜头（id=${shotId}）`);
 
   const seen = new Set<string>();
-  const candidates: AutoselectCandidate[] = [];
+  const candidates: Array<AutoselectCandidate> = [];
   for (const taskId of taskIds) {
     if (seen.has(taskId)) continue;
     seen.add(taskId);

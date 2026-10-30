@@ -22,10 +22,7 @@ import { RotateCcw } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 
-import type {
-  ParamEntry,
-  ParamOutputPort,
-} from "~/lib/workflow/workflow-param-mapping";
+import type { ParamEntry, ParamOutputPort } from "~/lib/workflow/workflow-param-mapping";
 import {
   PARAM_NODE_HEADER_H,
   PARAM_NODE_OUTPUT_ROW_H,
@@ -75,7 +72,7 @@ export interface WorkflowParamCardProps {
    *  由 `paramOutputPorts` 派生：类型是**这个口自己的**（按族 / 按尺寸形态），
    *  连没连线都一样 —— 口子不该因为连到了 `IMAGEUPLOAD` 的装载行就把自己说成
    *  IMAGEUPLOAD。落点那一行的声明类型在行 title 里可查（`targetType`）。 */
-  outputPorts: readonly ParamOutputPort[];
+  outputPorts: ReadonlyArray<ParamOutputPort>;
   /** **每一行**输出端口右侧的端点槽位（编辑器 = <Handle>，库里 = 只读圆点）。
    *
    *  每颗圆点各带自己的 handle id（见 `ParamOutputPort.handleId`），拖哪颗点就连到
@@ -193,9 +190,7 @@ export function WorkflowParamCard({
         >
           {label}
           {idLabel && (
-            <span className="text-ink-faint text-3xs ml-1 font-mono font-normal">
-              {idLabel}
-            </span>
+            <span className="text-ink-faint text-3xs ml-1 font-mono font-normal">{idLabel}</span>
           )}
         </span>
         {onReset && (

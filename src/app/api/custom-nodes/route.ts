@@ -69,9 +69,9 @@ interface ManifestPackageSummary {
   name: string;
   path: string;
   nodeCount: number;
-  nodeTypes: string[];
+  nodeTypes: Array<string>;
   status: string;
-  errors: unknown[];
+  errors: Array<unknown>;
   contentHash: string;
   parsedAt: string | null;
   parsedFileCount: number;
@@ -81,7 +81,7 @@ interface ManifestPackageSummary {
 /* 解析自定义节点的扫描根目录。
  *  主路径：设置里配置的 ComfyUI 安装根下的 `custom_nodes` 目录（自动推导）。
  *  `.env` 的 CUSTOM_NODES_PATH 仍作为覆盖/补充项保留（向后兼容）。 */
-function getPaths(): string[] {
+function getPaths(): Array<string> {
   const derived = deriveComfyuiSubdir(getSettingsSync().comfyuiPath, "custom_nodes");
   const extra = (readEnvVar("CUSTOM_NODES_PATH") ?? "")
     .split(",")
@@ -95,7 +95,7 @@ function getPaths(): string[] {
  * `.env` 的 LOCAL_WORKFLOWS_PATH 作为补充覆盖项保留。
  * 服务端**绝不**往这些目录写东西；它只是一个只读扫描器
  *（见 localWorkflows.ts）。 */
-function getLocalWorkflowPaths(): string[] {
+function getLocalWorkflowPaths(): Array<string> {
   const derived = deriveComfyuiWorkflowsDir(getSettingsSync().comfyuiPath);
   const extra = (readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "")
     .split(/[\n,]/)
@@ -110,10 +110,10 @@ function getLocalWorkflowPaths(): string[] {
 interface ManifestSummary {
   generatedAt: string | null;
   totalNodes: number;
-  packages: ManifestPackageSummary[];
-  missingPaths: string[];
-  parseErrors: unknown[];
-  sources: string[];
+  packages: Array<ManifestPackageSummary>;
+  missingPaths: Array<string>;
+  parseErrors: Array<unknown>;
+  sources: Array<string>;
 }
 
 let manifestSummaryCache: {
@@ -143,7 +143,7 @@ function readManifestSummary() {
      * 标量 JSON 在原 `m.packages` 处会抛 TypeError → catch → null；守卫把该行为显式化。 */
     if (!isPlainRecord(parsed)) return null;
     const m = parsed;
-    const pkgs: ManifestPackageSummary[] = [];
+    const pkgs: Array<ManifestPackageSummary> = [];
     const pmap: Record<string, unknown> = isPlainRecord(m.packages) ? m.packages : {};
     for (const [name, info] of Object.entries(pmap)) {
       const fields: Record<string, unknown> | undefined = isPlainRecord(info) ? info : undefined;
@@ -151,23 +151,23 @@ function readManifestSummary() {
         name,
         path: jsonField(fields, "path", ""),
         nodeCount: jsonField(fields, "nodeCount", 0),
-        nodeTypes: jsonField<string[]>(fields, "nodeTypes", []),
+        nodeTypes: jsonField<Array<string>>(fields, "nodeTypes", []),
         status: jsonField(fields, "status", "ok"),
-        errors: jsonField<unknown[]>(fields, "errors", []),
+        errors: jsonField<Array<unknown>>(fields, "errors", []),
         contentHash: jsonField(fields, "contentHash", ""),
         parsedAt: jsonField<string | null>(fields, "parsedAt", null),
         parsedFileCount: jsonField(fields, "parsedFileCount", 0),
         generatedAt: jsonField<string | null>(m, "generatedAt", null),
       });
     }
-    const sources: string[] = jsonField<string[]>(m, "sources", []);
+    const sources: Array<string> = jsonField<Array<string>>(m, "sources", []);
     const nodes: unknown = jsonField(m, "nodes", null);
     const summary = {
       generatedAt: jsonField<string | null>(m, "generatedAt", null),
       totalNodes: isPlainRecord(nodes) ? Object.keys(nodes).length : 0,
       packages: pkgs,
-      missingPaths: /* SAFETY: 类型断言已复核 */ [] as string[],
-      parseErrors: jsonField<unknown[]>(m, "parseErrors", []),
+      missingPaths: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+      parseErrors: jsonField<Array<unknown>>(m, "parseErrors", []),
       sources,
     };
     // stat 失败（极罕见）时 stamp 为 null：返回结果但不缓存。
@@ -206,14 +206,14 @@ function buildPathMap(
 
 /* 对一组父目录跑只读的 `discover` 模式并返回子包。
  * 做短暂缓存，因为界面上路径输入一变就会调它。 */
-const discoverCache = new Map<string, { at: number; result: DiscoveredSubpkg[] }>();
+const discoverCache = new Map<string, { at: number; result: Array<DiscoveredSubpkg> }>();
 
 /* 缓存容量上限。必须设：键由请求体里的父目录列表拼成（外部可控），而 TTL 只在
  * 读的时候判 —— 过期的条目本身会一直留在表里，不设界就是无上限增长。 */
 const DISCOVER_CACHE_MAX = 32;
 
 /** 写缓存并把容量压回上限：超出时淘汰最早插入的键（Map 的插入序）。 */
-function rememberDiscover(key: string, result: DiscoveredSubpkg[]): void {
+function rememberDiscover(key: string, result: Array<DiscoveredSubpkg>): void {
   discoverCache.delete(key);
   discoverCache.set(key, { at: Date.now(), result });
   while (discoverCache.size > DISCOVER_CACHE_MAX) {
@@ -233,7 +233,7 @@ const DISCOVER_TIMEOUT_MS = 60_000;
  *  **不用 `spawnSync`**：它是同步的，会把整个 Node 事件循环连同所有并发请求
  *  一起堵住 —— 而这一步正是本路由最慢的一段。启动失败 / 非零退出 / 超时一律
  *  resolve 成 `null`，由调用方决定换解释器还是放弃。 */
-function spawnCapture(command: string, args: string[]): Promise<string | null> {
+function spawnCapture(command: string, args: Array<string>): Promise<string | null> {
   let killChild: (() => void) | undefined;
 
   /* 起进程并收集 stdout：启动失败 / 非零退出 / 空输出都 resolve 成 null
@@ -266,7 +266,7 @@ function spawnCapture(command: string, args: string[]): Promise<string | null> {
   });
 }
 
-async function runDiscover(parentDirs: readonly unknown[]): Promise<unknown[]> {
+async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<unknown>> {
   const key = parentDirs.join("|");
   const cached = discoverCache.get(key);
   if (cached && Date.now() - cached.at < 5000) return cached.result;
@@ -289,7 +289,7 @@ async function runDiscover(parentDirs: readonly unknown[]): Promise<unknown[]> {
       const parsed: unknown = JSON.parse(stdout);
       const pkgs = /* SAFETY: 类型断言已复核 */ (
         isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : []
-      ) as DiscoveredSubpkg[];
+      ) as Array<DiscoveredSubpkg>;
       rememberDiscover(key, pkgs);
       return pkgs;
     } catch {
@@ -320,7 +320,7 @@ interface DiscoverProgressFields {
 function runDiscoverStreaming(
   parent: string,
   send: (ev: SettingsStreamEvent) => void,
-): Promise<unknown[]> {
+): Promise<Array<unknown>> {
   const cached = discoverCache.get(parent);
   if (cached && Date.now() - cached.at < 5000) {
     send({
@@ -460,7 +460,7 @@ function runDiscoverStreaming(
           const parsed: unknown = finalJson ? JSON.parse(finalJson) : { packages: [] };
           const pkgs = /* SAFETY: 类型断言已复核 */ (
             isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : []
-          ) as DiscoveredSubpkg[];
+          ) as Array<DiscoveredSubpkg>;
           rememberDiscover(parent, pkgs);
           resolved = true;
           send({
@@ -500,7 +500,7 @@ function safeSpawnArg(token: unknown): string | null {
 /* 构建流式响应：先把解析器的实时日志透出去，再给报告。
  * 传 `onlyPkgs`（具体子包路径）表示做子集 / 合并解析；
  * 否则 `paths` 就是完整的根目录列表。 */
-function streamParse(paths: string[], onlyPkgs?: string[]): Response {
+function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -681,7 +681,7 @@ async function buildGetResponse(): Promise<Response> {
   // 也能填充那个伴随字段。
   const settings = { paths, localWorkflowPaths };
   if (allCached) {
-    const discoveredByParent: Record<string, unknown[]> = {};
+    const discoveredByParent: Record<string, Array<unknown>> = {};
     /* `allCached` 已逐个查过缓存，这里的 `?? []` 只是让类型与判据同一处
      * 落地（真出现空说明 `allCached` 那次判定与本次读取之间缓存被清了）。 */
     for (const p of paths) discoveredByParent[p] = discoverCache.get(p)?.result ?? [];
@@ -702,7 +702,7 @@ async function buildGetResponse(): Promise<Response> {
         controller.enqueue(encoder.encode(JSON.stringify(ev) + "\n"));
       try {
         send({ type: "discover_start", parents: paths, total: paths.length });
-        const discoveredByParent: Record<string, unknown[]> = {};
+        const discoveredByParent: Record<string, Array<unknown>> = {};
         /* 遍历本身就是「取元素 + 收窄类型」：写 `paths[idx]` 就得多一次
          * `!` 把 `noUncheckedIndexedAccess` 加上的 `undefined` 抹掉。 */
         let idx = 0;
@@ -772,9 +772,9 @@ export async function POST(req: NextRequest) {
   if (action === "parse") {
     const paths = getPaths();
     const rawPkgs = Array.isArray(rec.packages) ? rec.packages : undefined;
-    let onlyPkgs: string[] | undefined;
+    let onlyPkgs: Array<string> | undefined;
     if (rawPkgs?.length) {
-      const sanitized: string[] = [];
+      const sanitized: Array<string> = [];
       for (const p of rawPkgs) {
         const s = safeSpawnArg(p);
         if (s === null) {
@@ -803,7 +803,7 @@ export async function POST(req: NextRequest) {
 
   if (action === "discover") {
     const parentsRaw = Array.isArray(rec.parents) ? rec.parents : [];
-    const parents: string[] = [];
+    const parents: Array<string> = [];
     for (const p of parentsRaw) {
       const s = safeSpawnArg(p);
       if (s === null) {

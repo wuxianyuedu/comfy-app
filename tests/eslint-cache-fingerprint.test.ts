@@ -38,7 +38,7 @@ import {
 } from "../scripts/eslint-cache-fingerprint.mjs";
 
 const ROOT = process.cwd();
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 
 afterEach(() => {
   for (const dir of tmpDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });

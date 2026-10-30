@@ -20,7 +20,7 @@ export interface SkillSeed {
   negativePrompt?: string;
   defaultParams?: Record<string, unknown>;
   recommendedModel?: string;
-  tags: string[];
+  tags: Array<string>;
   coverUrl?: string;
   sortOrder: number;
 }
@@ -30,11 +30,8 @@ export class SkillRepository extends DrizzleRepository<Skill> {
     super(skill, skill.id);
   }
 
-  async ensureBuiltIns(seeds: SkillSeed[]): Promise<void> {
-    const [row] = await db
-      .select({ v: count() })
-      .from(skill)
-      .where(eq(skill.isBuiltIn, true));
+  async ensureBuiltIns(seeds: Array<SkillSeed>): Promise<void> {
+    const [row] = await db.select({ v: count() }).from(skill).where(eq(skill.isBuiltIn, true));
     if ((row?.v ?? 0) > 0) return;
     await db.insert(skill).values(
       seeds.map((s) => ({
@@ -60,7 +57,7 @@ export class SkillRepository extends DrizzleRepository<Skill> {
     category?: string | null;
     q?: string;
     includeInactive?: boolean;
-  }): Promise<Skill[]> {
+  }): Promise<Array<Skill>> {
     const conditions = [];
     if (!opts.includeInactive) conditions.push(eq(skill.isActive, true));
     if (opts.category && opts.category !== "all")
@@ -81,9 +78,7 @@ export class SkillRepository extends DrizzleRepository<Skill> {
       .orderBy(asc(skill.sortOrder), desc(skill.createdAt));
   }
 
-  async groupByActiveCategory(): Promise<
-    Array<{ category: string; count: number }>
-  > {
+  async groupByActiveCategory(): Promise<Array<{ category: string; count: number }>> {
     const rows = await db
       .select({ category: skill.category, count: count() })
       .from(skill)
@@ -93,11 +88,7 @@ export class SkillRepository extends DrizzleRepository<Skill> {
   }
 
   async findBySlug(slug: string): Promise<Skill | null> {
-    const rows = await db
-      .select()
-      .from(skill)
-      .where(eq(skill.slug, slug))
-      .limit(1);
+    const rows = await db.select().from(skill).where(eq(skill.slug, slug)).limit(1);
     return rows[0] ?? null;
   }
 
@@ -113,7 +104,7 @@ export class SkillRepository extends DrizzleRepository<Skill> {
     recommendedModel?: string | null;
     coverUrl?: string | null;
     sortOrder: number;
-    tags: string[];
+    tags: Array<string>;
   }): Promise<Skill> {
     const rows = await db
       .insert(skill)

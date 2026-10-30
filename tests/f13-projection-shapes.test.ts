@@ -54,13 +54,12 @@ const AS_NEVER_LEDGER: Record<string, { count: number; reason: string }> = {
 };
 
 /** 递归收集 `src/**` 的非测试 `.ts` / `.tsx`。 */
-function collectSource(dir: string, out: string[] = []): string[] {
+function collectSource(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir)) {
     if (entry === "node_modules" || entry === ".next") continue;
     const full = path.join(dir, entry);
     if (statSync(full).isDirectory()) collectSource(full, out);
-    else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry))
-      out.push(full);
+    else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(full);
   }
   return out;
 }
@@ -105,18 +104,9 @@ describe("F13：形状判据不许把「调用点写错了」咽掉", () => {
       .map(([rel, n]) => `${rel} ×${n}`);
     const stale = Object.entries(AS_NEVER_LEDGER)
       .filter(([rel, entry]) => found.get(rel) !== entry.count)
-      .map(
-        ([rel, entry]) =>
-          `${rel}（登记 ${entry.count}，实际 ${found.get(rel) ?? 0}）`,
-      );
-    expect(
-      unregistered,
-      "新增的 as never：改掉它，或登记「为什么改不掉」",
-    ).toEqual([]);
-    expect(
-      stale,
-      "登记表与实际不符：删掉或改数字（数字变了通常是好事）",
-    ).toEqual([]);
+      .map(([rel, entry]) => `${rel}（登记 ${entry.count}，实际 ${found.get(rel) ?? 0}）`);
+    expect(unregistered, "新增的 as never：改掉它，或登记「为什么改不掉」").toEqual([]);
+    expect(stale, "登记表与实际不符：删掉或改数字（数字变了通常是好事）").toEqual([]);
   });
 
   it("每条登记都写着「为什么」", () => {
@@ -125,22 +115,19 @@ describe("F13：形状判据不许把「调用点写错了」咽掉", () => {
   });
 
   it("投影类参数不许是 unknown / any，也不许出现 .select(… as never)", () => {
-    const hits: string[] = [];
+    const hits: Array<string> = [];
     for (const { rel, text } of files) {
-      for (const m of text.matchAll(UNKNOWN_PROJECTION))
-        hits.push(`${rel} → ${m[0].trim()}`);
-      for (const m of text.matchAll(SELECT_AS_NEVER))
-        hits.push(`${rel} → ${m[0]}`);
+      for (const m of text.matchAll(UNKNOWN_PROJECTION)) hits.push(`${rel} → ${m[0].trim()}`);
+      for (const m of text.matchAll(SELECT_AS_NEVER)) hits.push(`${rel} → ${m[0]}`);
     }
     expect(hits).toEqual([]);
   });
 
   it("仓储层签名里不许有以 _ 开头的参数（空气能力的来源）", () => {
-    const hits: string[] = [];
+    const hits: Array<string> = [];
     for (const { rel, text } of files) {
       if (!/src\/lib\/core\/repository[^/]*\.ts$/.test(rel)) continue;
-      for (const m of text.matchAll(UNDERSCORE_PARAM))
-        hits.push(`${rel} → ${m[0].trim()}`);
+      for (const m of text.matchAll(UNDERSCORE_PARAM)) hits.push(`${rel} → ${m[0].trim()}`);
     }
     expect(hits).toEqual([]);
   });
@@ -150,11 +137,8 @@ describe("F13：形状判据不许把「调用点写错了」咽掉", () => {
      * `z.array(z.any())` + `as never` 一叠，形状检查就整个消失了（台账 F13′ 的原始形态）。
      * 契约本体在 `~/lib/workshop/types` 的写侧那一段，MCP 侧只引用它。 */
     const mcpFiles = files.filter((f) => f.rel.startsWith("src/server/mcp/"));
-    expect(
-      mcpFiles.length,
-      "MCP 面一个文件都没扫到 = 这条判据是空的",
-    ).toBeGreaterThan(0);
-    const hits: string[] = [];
+    expect(mcpFiles.length, "MCP 面一个文件都没扫到 = 这条判据是空的").toBeGreaterThan(0);
+    const hits: Array<string> = [];
     for (const { rel, text } of mcpFiles) {
       for (const m of text.matchAll(MCP_ANY)) hits.push(`${rel} → ${m[0]}`);
     }
@@ -178,18 +162,12 @@ describe("F13：形状判据不许把「调用点写错了」咽掉", () => {
     expect(original.asNever).toBe(1);
     // 空气参数
     expect(
-      probe(
-        "async findByIdForUserSelect(userId: string, id: string, _select?: unknown) {",
-      ).underscore,
+      probe("async findByIdForUserSelect(userId: string, id: string, _select?: unknown) {")
+        .underscore,
     ).toBe(1);
     // MCP 面的「什么都收」：合成一份必须照得出来（照不出的那条判据是装饰）
-    expect(
-      probe('characters: z.array(z.any()).describe("Character 数组")').mcpAny,
-    ).toBe(1);
+    expect(probe('characters: z.array(z.any()).describe("Character 数组")').mcpAny).toBe(1);
     // 只有注释里出现 → 剥完注释就不该照到（否则每次引用事故都会红）
-    expect(
-      probe(stripComments("// db.select(select as never) 这句已经删了"))
-        .asNever,
-    ).toBe(0);
+    expect(probe(stripComments("// db.select(select as never) 这句已经删了")).asNever).toBe(0);
   });
 });

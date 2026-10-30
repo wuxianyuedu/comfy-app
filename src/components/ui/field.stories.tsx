@@ -28,19 +28,11 @@ import { Switch } from "~/components/ui/switch";
  *
  * 枚举从 props 派生（不从任何变体表的返回值上取，规范 16 §16.2.3.4）。
  */
-type FieldOrientation = NonNullable<
-  React.ComponentProps<typeof Field>["orientation"]
->;
-type FieldLegendVariant = NonNullable<
-  React.ComponentProps<typeof FieldLegend>["variant"]
->;
+type FieldOrientation = NonNullable<React.ComponentProps<typeof Field>["orientation"]>;
+type FieldLegendVariant = NonNullable<React.ComponentProps<typeof FieldLegend>["variant"]>;
 
-const ORIENTATIONS: FieldOrientation[] = [
-  "vertical",
-  "horizontal",
-  "responsive",
-];
-const LEGEND_VARIANTS: FieldLegendVariant[] = ["legend", "label"];
+const ORIENTATIONS: Array<FieldOrientation> = ["vertical", "horizontal", "responsive"];
+const LEGEND_VARIANTS: Array<FieldLegendVariant> = ["legend", "label"];
 
 const meta = {
   title: "UI/Field",
@@ -62,15 +54,10 @@ export const Orientations: Story = {
     <div className="flex w-xl flex-col gap-6">
       {ORIENTATIONS.map((orientation) => (
         <div key={orientation} className="flex flex-col gap-1.5">
-          <span className="text-ink-muted font-mono text-[11px]">
-            orientation={orientation}
-          </span>
+          <span className="text-ink-muted font-mono text-[11px]">orientation={orientation}</span>
           <Field orientation={orientation}>
             <FieldLabel htmlFor={`name-${orientation}`}>模型名称</FieldLabel>
-            <Input
-              id={`name-${orientation}`}
-              placeholder="例如 sd_xl_base_1.0"
-            />
+            <Input id={`name-${orientation}`} placeholder="例如 sd_xl_base_1.0" />
           </Field>
         </div>
       ))}
@@ -83,9 +70,7 @@ export const GroupedSet: Story = {
   render: () => (
     <FieldSet className="w-xl">
       <FieldLegend>输出设置</FieldLegend>
-      <FieldDescription>
-        这里的取值会写进工作流模板，节点上的同名字段以节点为准。
-      </FieldDescription>
+      <FieldDescription>这里的取值会写进工作流模板，节点上的同名字段以节点为准。</FieldDescription>
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="field-width">宽度</FieldLabel>
@@ -143,15 +128,9 @@ export const ErrorShapes: Story = {
     <div className="flex flex-col gap-4">
       <FieldError errors={[{ message: "单条：直接出文" }]} />
       <FieldError
-        errors={[
-          { message: "重复的一条" },
-          { message: "重复的一条" },
-          { message: "另一条" },
-        ]}
+        errors={[{ message: "重复的一条" }, { message: "重复的一条" }, { message: "另一条" }]}
       />
-      <FieldError errors={[{ message: "这个不会出现" }]}>
-        传了 children 时它优先
-      </FieldError>
+      <FieldError errors={[{ message: "这个不会出现" }]}>传了 children 时它优先</FieldError>
       {/* 空数组 / 全是 undefined 时整行不渲染（`content` 为 null） */}
       <FieldError errors={[]} />
       <FieldError errors={[undefined]} />
@@ -166,10 +145,7 @@ export const SelectionRow: Story = {
       {["本地模型", "工作流库", "项目产物"].map((label, index) => (
         <FieldLabel key={label} htmlFor={`pick-${String(index)}`}>
           <Field orientation="horizontal">
-            <Checkbox
-              id={`pick-${String(index)}`}
-              defaultChecked={index === 0}
-            />
+            <Checkbox id={`pick-${String(index)}`} defaultChecked={index === 0} />
             <FieldContent>
               <FieldTitle>{label}</FieldTitle>
               <FieldDescription>扫这个来源下的条目</FieldDescription>

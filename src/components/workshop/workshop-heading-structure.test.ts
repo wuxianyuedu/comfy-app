@@ -15,8 +15,8 @@ import { describe, expect, it } from "vitest";
 const dir = fileURLToPath(new URL(".", import.meta.url));
 
 /** 工坊目录下的视图源文件（测试自身与被测源码都不参与判据）。 */
-function viewSources(where = dir): string[] {
-  const out: string[] = [];
+function viewSources(where = dir): Array<string> {
+  const out: Array<string> = [];
   for (const entry of readdirSync(where, { withFileTypes: true })) {
     const full = `${where}/${entry.name}`;
     if (entry.isDirectory()) {
@@ -49,17 +49,13 @@ describe("工坊屏的标题结构", () => {
    */
   it("段级档 .u-title-stage 全工坊只用在一处，就是当前段的标题", () => {
     const stageFile = readFileSync(`${dir}WorkshopStageBody.tsx`, "utf8");
-    expect([...stageFile.matchAll(/className="u-title-stage"/g)]).toHaveLength(
-      1,
-    );
+    expect([...stageFile.matchAll(/className="u-title-stage"/g)]).toHaveLength(1);
     expect(allText.match(/u-title-stage/g) ?? []).toHaveLength(1);
   });
 
   it("标题元素上不再出现「text- 方括号硬写字号」这类写法（档位化已生效）", () => {
     const offenders = [
-      ...allText.matchAll(
-        /<h[1-6]\b[^>]*className="[^"]*text-\[[\d.]+px\][^"]*"/g,
-      ),
+      ...allText.matchAll(/<h[1-6]\b[^>]*className="[^"]*text-\[[\d.]+px\][^"]*"/g),
     ];
     expect(offenders.map((m) => m[0])).toEqual([]);
   });

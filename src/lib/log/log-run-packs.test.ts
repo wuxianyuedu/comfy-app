@@ -28,7 +28,7 @@ function file(name: string, startedAt: number | null): PackLogFile {
 }
 
 /** 造一个包（`files` 按旧→新，与 IO 那层的输出同序）。 */
-function pack(name: string, files: PackLogFile[], crashed = false): RunPack {
+function pack(name: string, files: Array<PackLogFile>, crashed = false): RunPack {
   return { name, startedAt: packNameToMs(name), crashed, files };
 }
 
@@ -40,12 +40,7 @@ describe("包目录名解析", () => {
   });
 
   it("形态不符回 null（`.zip` 包、别的目录一律不认）", () => {
-    for (const bad of [
-      "2026-09-30_193612-a1b2c3.zip",
-      "2026-09-30-a1b2c3",
-      "archive",
-      "",
-    ]) {
+    for (const bad of ["2026-09-30_193612-a1b2c3.zip", "2026-09-30-a1b2c3", "archive", ""]) {
       expect(packNameToMs(bad)).toBeNull();
     }
   });
@@ -110,12 +105,7 @@ describe("列表顺序：本次运行在最前，其后各包新→旧", () => {
 
   it("本次运行恒在最前，即使历史包的时刻更晚", () => {
     const future = pack("2026-10-09_235959-ffffff", [file("f.log", 9000)]);
-    const { sessions } = buildRunScopedOptions(
-      [file("c.log", 1)],
-      [future],
-      30,
-      2,
-    );
+    const { sessions } = buildRunScopedOptions([file("c.log", 1)], [future], 30, 2);
     expect(sessions[0]!.id).toBe("c.log");
     expect(sessions[0]!.scope).toBe("current");
   });
@@ -141,11 +131,7 @@ describe("列表顺序：本次运行在最前，其后各包新→旧", () => {
         "2026-09-30_193612-a1b2c3",
         "2026-10-03_100000-aaaaaa",
       ]),
-    ).toEqual([
-      "2026-09-30_193612-a1b2c3",
-      "2026-10-03_100000-aaaaaa",
-      "2026-10-04_140000-bbbbbb",
-    ]);
+    ).toEqual(["2026-09-30_193612-a1b2c3", "2026-10-03_100000-aaaaaa", "2026-10-04_140000-bbbbbb"]);
   });
 });
 
@@ -179,17 +165,8 @@ describe("下拉文案：时刻 · 退出形态 · runId", () => {
   });
 
   it("本次运行的项标「本次运行」，归档份标退出形态", () => {
-    const crashed = pack(
-      "2026-10-04_140000-bbbbbb",
-      [file("b.log", 1000)],
-      true,
-    );
-    const { sessions } = buildRunScopedOptions(
-      [file("c.log", 10)],
-      [crashed],
-      30,
-      2,
-    );
+    const crashed = pack("2026-10-04_140000-bbbbbb", [file("b.log", 1000)], true);
+    const { sessions } = buildRunScopedOptions([file("c.log", 10)], [crashed], 30, 2);
     expect(sessions[0]!.title).toContain("本次运行");
     expect(sessions[0]!.crashed).toBe(false);
     expect(sessions[1]!.title).toContain("异常退出");

@@ -26,10 +26,7 @@ import {
   type EncapsulationEntryStatus,
 } from "~/lib/workshop/workshop-encapsulation-status";
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
-import {
-  modeContractEntries,
-  requiredInputsFor,
-} from "~/lib/workshop/model-mode-contract";
+import { modeContractEntries, requiredInputsFor } from "~/lib/workshop/model-mode-contract";
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
 import { modeLabel } from "../workflow-library-config";
 import { sceneFromMode } from "~/lib/media/size-presets";
@@ -61,7 +58,7 @@ interface WorkshopEncapsulationPanelProps {
   /** 当前模式（详情层持有，与「画布节点」页签同一份）。 */
   mode: string | null | undefined;
   /** 该工作流可跑的模式码（多于一个时渲染模式下拉）。 */
-  modes?: readonly string[];
+  modes?: ReadonlyArray<string>;
   /** 切换当前模式（**只改查看 / 测试语境，不落库**）：多模式工作流要能逐个
    * 模式跑一次流程测试 —— 文生图 / 图生图两条链路的封装口往往不同，只看默认
    * 模式测不出另一条能不能用。 */
@@ -133,8 +130,7 @@ export function WorkshopEncapsulationPanel({
     () =>
       requiredInputsFor({
         inputs: contractIds,
-        required: storedContracts.find((c) => c.mode === upperToken(mode))
-          ?.required,
+        required: storedContracts.find((c) => c.mode === upperToken(mode))?.required,
       }),
     [contractIds, mode, storedContracts],
   );
@@ -171,8 +167,7 @@ export function WorkshopEncapsulationPanel({
   const [logOpen, setLogOpen] = useState(false);
   const [logTaskId, setLogTaskId] = useState<string | null>(null);
   const latestLogTaskId = useMemo(
-    () =>
-      latestRunForWorkflow(workflowId, "encapsulation-test")?.taskId ?? null,
+    () => latestRunForWorkflow(workflowId, "encapsulation-test")?.taskId ?? null,
     [workflowId],
   );
   const logViewTaskId = logTaskId ?? latestLogTaskId;
@@ -211,9 +206,7 @@ export function WorkshopEncapsulationPanel({
             value={mode ?? modes.at(0) ?? ""}
             onChange={onModeChange}
             options={[...modes]}
-            labels={Object.fromEntries(
-              modes.map((code) => [code, modeLabel(code)]),
-            )}
+            labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
             popoverMinWidth={160}
             autoFitFromOptions={false}
             className="border-border-strong! text-2xs h-auto bg-transparent! px-2 py-0.5"
@@ -335,9 +328,7 @@ export function WorkshopEncapsulationPanel({
           )}
           {test.resultUrl && (
             <div className="flex flex-col gap-1">
-              <p className="text-primary text-2xs">
-                流程测试通过 —— {displayName} 在工坊中可用。
-              </p>
+              <p className="text-primary text-2xs">流程测试通过 —— {displayName} 在工坊中可用。</p>
               <MediaThumbnail
                 src={test.resultUrl}
                 alt="流程测试产物"
@@ -346,8 +337,7 @@ export function WorkshopEncapsulationPanel({
             </div>
           )}
           <p className="text-muted-foreground/70 text-3xs">
-            工作流图内的其余参数（步数 /
-            采样器等）按图内默认值执行，不在工坊对外暴露。
+            工作流图内的其余参数（步数 / 采样器等）按图内默认值执行，不在工坊对外暴露。
           </p>
         </div>
       </div>

@@ -39,11 +39,11 @@ function pkg(status: "ok" | "missing" | "error" | "empty", name: string) {
     exists: true,
     status,
     nodeCount: 0,
-    nodeTypes: /* SAFETY: 类型断言已复核 */ [] as string[],
-    errors: /* SAFETY: 类型断言已复核 */ [] as {
+    nodeTypes: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    errors: /* SAFETY: 类型断言已复核 */ [] as Array<{
       file: string;
       error: string;
-    }[],
+    }>,
   };
 }
 

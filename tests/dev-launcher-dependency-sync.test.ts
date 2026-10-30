@@ -19,10 +19,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  lockfileDrift,
-  verifyInstall,
-} from "../scripts/launcher-core/worktree.mjs";
+import { lockfileDrift, verifyInstall } from "../scripts/launcher-core/worktree.mjs";
 import {
   HEARTBEAT_STALE_MS,
   touchHeartbeat,
@@ -31,10 +28,9 @@ import {
 import { syncDependencies } from "../scripts/dev-launcher.mjs";
 
 const ROOT = process.cwd();
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 afterEach(() => {
-  for (const dir of tmpDirs.splice(0))
-    fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tmpDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
 /** 最小可用 lockfile —— 形态必须**与 pnpm 真实产物同形**。
@@ -47,11 +43,7 @@ afterEach(() => {
  *    · 依赖名要比 `dependencies:` 更深一层（`splitTopKeys` 按最小缩进取一级键）。
  *  正确形态可用 `pnpm install --lockfile-only` 在一个空包里生成后对照。 */
 function lockText(
-  deps: string[] = [
-    "      clsx:",
-    "        specifier: ^2.1.1",
-    "        version: 2.1.1",
-  ],
+  deps: Array<string> = ["      clsx:", "        specifier: ^2.1.1", "        version: 2.1.1"],
 ): string {
   return [
     "lockfileVersion: '9.0'",
@@ -96,20 +88,12 @@ function addDepToRepoLock(dir: string, name: string): void {
 }
 
 /** 造一个「装过」的 node_modules：安装时 lockfile + 最小健康标识。 */
-function fakeInstall(
-  dir: string,
-  installedLock: string,
-  { healthy = true } = {},
-): void {
+function fakeInstall(dir: string, installedLock: string, { healthy = true } = {}): void {
   const nm = path.join(dir, "node_modules");
   fs.mkdirSync(path.join(nm, ".pnpm"), { recursive: true });
   fs.writeFileSync(path.join(nm, ".pnpm", "lock.yaml"), installedLock, "utf8");
   if (!healthy) return;
-  fs.writeFileSync(
-    path.join(nm, ".modules.yaml"),
-    "hoistPattern: []\n",
-    "utf8",
-  );
+  fs.writeFileSync(path.join(nm, ".modules.yaml"), "hoistPattern: []\n", "utf8");
   const bin = path.join(nm, ".bin");
   fs.mkdirSync(bin, { recursive: true });
   fs.writeFileSync(path.join(bin, "next"), "", "utf8");
@@ -155,11 +139,7 @@ describe("verifyInstall：复核「目标状态达成了」，不看退出码", 
 
   it("安装残缺（缺 .modules.yaml）→ 不通过，并说明缺什么", () => {
     const dir = makeRepo();
-    fakeInstall(
-      dir,
-      fs.readFileSync(path.join(dir, "pnpm-lock.yaml"), "utf8"),
-      { healthy: false },
-    );
+    fakeInstall(dir, fs.readFileSync(path.join(dir, "pnpm-lock.yaml"), "utf8"), { healthy: false });
     const verdict = verifyInstall(dir);
     expect(verdict.ok).toBe(false);
     expect(verdict.reason).toContain(".modules.yaml");
@@ -201,9 +181,7 @@ describe("syncDependencies：漂移才装，装完必须复核", () => {
     /* 「探不到 pnpm」那一格的出口**必须带上这一份进程读到的 PATH**（ISSUE #2281）：
      * 只有一句「pnpm 不在 PATH 上」时，真没装 / 键名不是 `PATH` / 分隔符读错
      * 三种成因在日志里逐字同形，而它们的下一动作完全不同。 */
-    expect(src, "探不到 pnpm 的分支没有给出 PATH 读数").toContain(
-      "describePnpmMiss()",
-    );
+    expect(src, "探不到 pnpm 的分支没有给出 PATH 读数").toContain("describePnpmMiss()");
   });
 
   it("编排主流程真的会调用它，失败即非零退出", () => {
@@ -218,10 +196,7 @@ describe("syncDependencies：漂移才装，装完必须复核", () => {
     const call = gates.indexOf("await ctx.syncDependencies(");
     expect(call, "预检桥段没有调用依赖对齐").toBeGreaterThan(-1);
     expect(gates.slice(call, call + 400)).toMatch(/if \(syncProblem\)/);
-    const launcher = fs.readFileSync(
-      path.join(ROOT, "scripts", "dev-launcher.mjs"),
-      "utf8",
-    );
+    const launcher = fs.readFileSync(path.join(ROOT, "scripts", "dev-launcher.mjs"), "utf8");
     /* 编排器接住的那一句是 `if (!gated.ok) {`（拆刀后桥段以 `ok` 出口交回，
      * `gated.error` 只是它的一个字段）—— 断言按**实际形态**写，不按旧形态。 */
     const gated = launcher.indexOf("if (!gated.ok) {");
@@ -287,24 +262,14 @@ describe("syncDependencies：本检出实例在跑时先拦下来（AGENTS 硬�
     const install = src.indexOf('pnpmInvocation(["install"])');
     expect(guard, "补装路径里没有归属探测").toBeGreaterThan(-1);
     expect(install).toBeGreaterThan(-1);
-    expect(guard, "探测排在 install 之后 —— 那一步已经锁上了").toBeLessThan(
-      install,
-    );
+    expect(guard, "探测排在 install 之后 —— 那一步已经锁上了").toBeLessThan(install);
   });
 
   it("命令行出口复用同一个判据（不在 .ps1 里再写一份端口探测）", () => {
-    const cli = fs.readFileSync(
-      path.join(ROOT, "scripts", "deps-install-guard.mjs"),
-      "utf8",
-    );
+    const cli = fs.readFileSync(path.join(ROOT, "scripts", "deps-install-guard.mjs"), "utf8");
     expect(cli).toContain("runningAppInstances");
-    const ps1 = fs.readFileSync(
-      path.join(ROOT, "scripts", "sync-lint.ps1"),
-      "utf8",
-    );
+    const ps1 = fs.readFileSync(path.join(ROOT, "scripts", "sync-lint.ps1"), "utf8");
     expect(ps1).toContain("deps-install-guard.mjs");
-    expect(ps1, "又回到 .ps1 自己探端口那一族").not.toMatch(
-      /Get-NetTCPConnection/,
-    );
+    expect(ps1, "又回到 .ps1 自己探端口那一族").not.toMatch(/Get-NetTCPConnection/);
   });
 });

@@ -28,7 +28,7 @@ export type DesktopStorageDeps = {
   exists?: (p: string) => boolean;
   readFile?: (p: string, enc: "utf8") => Promise<string>;
   /** 有效启动参数（默认走桌面元数据 → headless 映射，与本应用 spawn 时同一条路）。 */
-  resolveArgs?: (comfyuiPath: string) => Promise<string[]>;
+  resolveArgs?: (comfyuiPath: string) => Promise<Array<string>>;
 };
 
 /** extra_model_paths.yaml 的文件名。 */
@@ -44,7 +44,7 @@ function detectBaseDir(instanceRoot: string, exists: (p: string) => boolean): st
 }
 
 /** yaml 的候选位置：base 目录优先（ComfyUI 从 cwd 读它），其次实例根。 */
-function extraPathsCandidates(baseDir: string, instanceRoot: string): string[] {
+function extraPathsCandidates(baseDir: string, instanceRoot: string): Array<string> {
   const candidates = [path.join(baseDir, EXTRA_PATHS_FILE)];
   if (path.resolve(instanceRoot) !== path.resolve(baseDir)) {
     candidates.push(path.join(instanceRoot, EXTRA_PATHS_FILE));
@@ -54,7 +54,7 @@ function extraPathsCandidates(baseDir: string, instanceRoot: string): string[] {
 
 /** 读第一份存在的 extra_model_paths.yaml；都没有则 null。 */
 async function readExtraPathsFile(
-  candidates: string[],
+  candidates: Array<string>,
   readFile: (p: string, enc: "utf8") => Promise<string>,
 ): Promise<{ file: string; content: string } | null> {
   for (const candidate of candidates) {
@@ -71,7 +71,7 @@ async function readExtraPathsFile(
 function expandEntry(
   entry: ExtraModelPathEntry,
   exists: (p: string) => boolean,
-): { slot: StorageSlot; dir: StorageDirInfo }[] {
+): Array<{ slot: StorageSlot; dir: StorageDirInfo }> {
   return entry.paths.map((item) => ({
     slot: classifyStorageSlot(item),
     dir: {
@@ -83,7 +83,7 @@ function expandEntry(
 }
 
 /** 三组「主目录 + 共享目录」的空盘面。 */
-function emptySlots(): Record<StorageSlot, StorageDirInfo[]> {
+function emptySlots(): Record<StorageSlot, Array<StorageDirInfo>> {
   return { models: [], input: [], output: [] };
 }
 
@@ -122,7 +122,7 @@ export async function resolveDesktopStoragePaths(
     ? parseExtraModelPathsYaml(extra.content)
     : {
         basePath: null,
-        entries: /* SAFETY: 类型断言已复核 */ [] as ExtraModelPathEntry[],
+        entries: /* SAFETY: 类型断言已复核 */ [] as Array<ExtraModelPathEntry>,
       };
 
   const launchArgs = await resolveArgs(dir);
@@ -130,7 +130,7 @@ export async function resolveDesktopStoragePaths(
    * 声明位置）：逐份解析并叠加 entries；主 yaml 优先，配置文件缺失/读不到按
    * 「没有这一份」处理。 */
   const configFiles = parseExtraModelPathsConfigArgs(launchArgs);
-  const mergedEntries: ExtraModelPathEntry[] = [...parsedMain.entries];
+  const mergedEntries: Array<ExtraModelPathEntry> = [...parsedMain.entries];
   let configBase: string | null = null;
   for (const cfg of configFiles) {
     try {

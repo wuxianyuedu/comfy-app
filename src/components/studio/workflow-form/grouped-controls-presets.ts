@@ -15,7 +15,7 @@ export function shortRatioLabel(label: string): string {
  * `[0]` 是 `T | undefined`），调用点的「回退首档」不必再补 `!`。 */
 export const VIDEO_DURATION_PRESETS: [
   { label: string; value: number },
-  ...{ label: string; value: number }[],
+  ...Array<{ label: string; value: number }>,
 ] = [
   { label: "3 秒", value: 48 },
   { label: "5 秒", value: 80 },
@@ -24,7 +24,7 @@ export const VIDEO_DURATION_PRESETS: [
 ];
 export const VIDEO_QUALITY_PRESETS: [
   { label: string; value: number },
-  ...{ label: string; value: number }[],
+  ...Array<{ label: string; value: number }>,
 ] = [
   { label: "流畅 480P", value: 480 },
   { label: "标清 720P", value: 720 },
@@ -38,21 +38,14 @@ export const DEFAULT_VIDEO_QUALITY_PRESET = VIDEO_QUALITY_PRESETS[0];
 
 /** 把视频的时长 / 画质 / 比例取值映射成友好的浮层标签。 */
 export function videoDurationLabel(value: number): string {
-  return (
-    VIDEO_DURATION_PRESETS.find((preset) => preset.value === value)?.label ??
-    `${value} 帧`
-  );
+  return VIDEO_DURATION_PRESETS.find((preset) => preset.value === value)?.label ?? `${value} 帧`;
 }
 export function videoQualityLabel(value: number): string {
-  return (
-    VIDEO_QUALITY_PRESETS.find((preset) => preset.value === value)?.label ??
-    `${value}P`
-  );
+  return VIDEO_QUALITY_PRESETS.find((preset) => preset.value === value)?.label ?? `${value}P`;
 }
 export function videoAspectLabel(ratio: number): string {
   return shortRatioLabel(
-    DIM_RATIO_PRESETS.find((preset) => Math.abs(preset.ratio - ratio) < 0.05)
-      ?.label ?? "自定义",
+    DIM_RATIO_PRESETS.find((preset) => Math.abs(preset.ratio - ratio) < 0.05)?.label ?? "自定义",
   );
 }
 

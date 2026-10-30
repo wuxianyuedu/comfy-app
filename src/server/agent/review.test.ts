@@ -47,8 +47,8 @@ const PROJ = "proj_rev";
 
 async function seed(content: {
   scriptMarkdown?: string;
-  characters?: unknown[];
-  shots?: unknown[];
+  characters?: Array<unknown>;
+  shots?: Array<unknown>;
 }) {
   await productionRepository.upsertForUser(USER, {
     id: PROJ,
@@ -65,10 +65,12 @@ async function seed(content: {
 }
 
 /** 读回库里的 shots / characters。 */
-async function rows(col: "shots" | "characters"): Promise<Record<string, unknown>[]> {
+async function rows(col: "shots" | "characters"): Promise<Array<Record<string, unknown>>> {
   const row = await productionRepository.getForUser(USER, PROJ);
   const raw = row?.[col];
-  return Array.isArray(raw) ? /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>[]) : [];
+  return Array.isArray(raw)
+    ? /* SAFETY: 类型断言已复核 */ (raw as Array<Record<string, unknown>>)
+    : [];
 }
 
 beforeEach(() => {

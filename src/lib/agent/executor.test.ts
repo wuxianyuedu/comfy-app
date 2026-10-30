@@ -18,7 +18,7 @@ function streamReturns(text: string) {
 }
 
 vi.mock("~/lib/llm/browser", () => ({
-  streamChat: (...args: unknown[]): Promise<string> =>
+  streamChat: (...args: Array<unknown>): Promise<string> =>
     /* SAFETY: 类型断言已复核 */ streamChat(...args) as Promise<string>,
 }));
 vi.mock("~/lib/llm/prompts", () => ({

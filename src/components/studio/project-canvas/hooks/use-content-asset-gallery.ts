@@ -19,10 +19,7 @@ import { useEffect, useState } from "react";
 
 import { beginStaleRun } from "~/lib/stale-run";
 import type { Dispatch, SetStateAction } from "react";
-import {
-  fetchTaskImages,
-  type TaskGalleryImage,
-} from "~/lib/media/task-images-client";
+import { fetchTaskImages, type TaskGalleryImage } from "~/lib/media/task-images-client";
 
 export interface UseContentAssetGalleryArgs {
   taskId?: string | null;
@@ -32,7 +29,7 @@ export interface UseContentAssetGalleryArgs {
 
 export interface ContentAssetGallery {
   /** 多图时的图片列表（长度 > 1），单图 / 无图为 null。 */
-  images: TaskGalleryImage[] | null;
+  images: Array<TaskGalleryImage> | null;
   open: boolean;
   index: number;
   setOpen: (open: boolean) => void;
@@ -53,7 +50,7 @@ export function useContentAssetGallery({
    * 新任务的首帧不会渲染上一任务的缩略图。 */
   const [gallery, setGallery] = useState<{
     key: string;
-    images: TaskGalleryImage[] | null;
+    images: Array<TaskGalleryImage> | null;
   }>({ key: ctxKey, images: null });
   const images = gallery.key === ctxKey ? gallery.images : null;
 

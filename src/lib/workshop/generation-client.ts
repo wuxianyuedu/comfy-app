@@ -95,7 +95,7 @@ export interface TaskSnapshot {
   /** 终态失败时的原因（任务表 error 列）。 */
   error?: string;
   /** 已落盘产物（本地任务 imageUrl / clipUrl 的真值来源）。 */
-  outputs: SavedOutput[];
+  outputs: Array<SavedOutput>;
 }
 
 /** 查一个本地任务的状态与产物快照；任务不存在 / 查询失败返回 null
@@ -129,9 +129,9 @@ export interface WorkshopWorkflowOption {
   /** 服务端富化的内容类别（image / video / audio；未知按 image 处理）。 */
   category: WorkshopWorkflowCategory;
   /** 该工作流可跑的全部模式码（taskType 常是其中的默认模式）。 */
-  modes: string[];
+  modes: Array<string>;
   /** 挂在条目上的模型标签（工作流库「管理模型」维护，如 z-Image）。 */
-  modelTags: string[];
+  modelTags: Array<string>;
   /** 对外参数封装就绪：契约必备口「提示词」已有落点，工坊可直接驱动。 */
   encapsulationReady: boolean;
 }
@@ -182,11 +182,11 @@ function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption 
 }
 
 /** 拉取工作流列表，供工坊选择「用哪个工作流库工作流生成」。 */
-export async function fetchWorkshopWorkflows(): Promise<WorkshopWorkflowOption[]> {
+export async function fetchWorkshopWorkflows(): Promise<Array<WorkshopWorkflowOption>> {
   const res = await vanillaApi.workflow.list.query({});
   const rows: unknown = res;
   if (!Array.isArray(rows)) return [];
-  const out: WorkshopWorkflowOption[] = [];
+  const out: Array<WorkshopWorkflowOption> = [];
   for (const row of rows) {
     if (!isRecord(row)) continue;
     const option = toWorkflowOption(row);
@@ -222,11 +222,11 @@ function toStyleRef(row: Record<string, unknown>): StyleRef | null {
  *  404 的 HTML 又让 `res.json()` 抛错，被调用点那句 `catch {}` 吞成「没有技能」，
  *  于是工坊的风格卡常年空态、全仓库没有一条判据红过。「客户端写的地址有没有落点」
  *  由 `tests/rest-endpoint-targets.test.ts` 钉住。 */
-export async function fetchWorkshopStyles(): Promise<StyleRef[]> {
+export async function fetchWorkshopStyles(): Promise<Array<StyleRef>> {
   const res = await vanillaApi.skill.list.query();
   const rows: unknown = res.skills;
   if (!Array.isArray(rows)) return [];
-  const out: StyleRef[] = [];
+  const out: Array<StyleRef> = [];
   for (const row of rows) {
     if (!isRecord(row)) continue;
     const style = toStyleRef(row);
@@ -240,11 +240,11 @@ export interface LibraryWorkflowBuildResult {
   input: GenerateInput;
   /** 用户给了值、但落不到任何端口的口（未连线 / 断开 / 端口已消失）。
    *  键是**契约口 id**（`prompt` / `size-width`…），不是工作流里的端口名。 */
-  unmatched: string[];
+  unmatched: Array<string>;
   /** 本次实际使用的模式码（服务端默认模式，缺省回退 taskType / modes[0]）。 */
   mode: string | null;
   /** 该工作流可跑的全部模式码。 */
-  modes: string[];
+  modes: Array<string>;
   /** 本次生成会用到首帧 / 尾帧图（按模式判定，供调用方决定要不要预传图）。 */
   usesFirstFrame: boolean;
   usesLastFrame: boolean;
@@ -273,7 +273,7 @@ export async function buildLibraryWorkflowInput(
    *  不传时按内置默认契约组载荷 —— 作者在「模式契约」里新增的自定义口不在
    *  其中，给它的值就落不下去（如实进 `unmatched`，不静默丢）。能拿到契约
    *  注册表的调用方（封装页签的流程测试）必须传。 */
-  contractIds?: readonly string[],
+  contractIds?: ReadonlyArray<string>,
 ): Promise<LibraryWorkflowBuildResult> {
   const detail = await vanillaApi.workflow.detailFull.query({ id: workflowId });
   const io = detail?.workflowIO ?? null;
@@ -686,14 +686,14 @@ const PORTRAIT_REF_CACHE_MAX = 32;
  *  （reference-image / -2），超过两张的定妆照落不进端口，这里截到两张、
  *  不做无效上传。没有角色选了定妆照 → 空数组，调用方不给这个口。 */
 export async function preparePortraitReferences(
-  characters: Character[],
-  characterIds: readonly string[],
-): Promise<{ files: string[]; failedCount: number }> {
+  characters: Array<Character>,
+  characterIds: ReadonlyArray<string>,
+): Promise<{ files: Array<string>; failedCount: number }> {
   const urls = characterIds
     .map((id) => characters.find((c) => c.id === id)?.portraitUrl)
     .filter((url): url is string => typeof url === "string" && url !== "")
     .slice(0, 2);
-  const files: string[] = [];
+  const files: Array<string> = [];
   let failedCount = 0;
   for (const url of urls) {
     const cached = portraitRefCache.get(url);

@@ -46,7 +46,7 @@ async function isForeignProjectScope(scope: string, userId: string) {
 /** 这条产物**能否被确定属于请求者之外的人**（`true` 就不该给读）。
  *  `segments` 是相对于产物根（`generatedRoot()`）的路径片段（已经过 URL 解码）。 */
 export async function isForeignOwnedArtifact(
-  segments: string[],
+  segments: Array<string>,
   userId: string,
 ): Promise<boolean> {
   const [first, second] = segments;

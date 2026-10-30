@@ -68,7 +68,7 @@ import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
 export const SQLITE_BUSY_TIMEOUT_MS = 250;
 
 /** Database-level PRAGMA list. Order is meaning: WAL first, then integrity. */
-export const SQLITE_PRAGMAS: readonly string[] = [
+export const SQLITE_PRAGMAS: ReadonlyArray<string> = [
   "PRAGMA journal_mode = WAL",
   "PRAGMA foreign_keys = ON",
 ];
@@ -109,7 +109,7 @@ export interface SqlitePragmaTarget {
  */
 export async function applySqlitePragmas(
   target: SqlitePragmaTarget,
-  pragmas: readonly string[] = SQLITE_PRAGMAS,
+  pragmas: ReadonlyArray<string> = SQLITE_PRAGMAS,
 ): Promise<void> {
   for (const pragma of pragmas) {
     /* The loop body moved into `~/lib/sqlite-busy-retry` (ISSUE #2586) — the same

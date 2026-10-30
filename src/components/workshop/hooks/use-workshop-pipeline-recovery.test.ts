@@ -65,7 +65,7 @@ function makeShot(patch: Partial<Shot> = {}): Shot {
 }
 
 /** 预置一份带镜头的本地草稿（模拟「刷新前正在进行」的落盘现场）。 */
-function seedDraft(projectId: string, shots: Shot[]) {
+function seedDraft(projectId: string, shots: Array<Shot>) {
   localStorage.setItem(
     `comfyapp.workshop.draft.${projectId}.v1`,
     JSON.stringify({
@@ -82,9 +82,7 @@ function seedDraft(projectId: string, shots: Shot[]) {
 }
 
 /** 一次封装结果的桩（buildLibraryWorkflowInput 的返回形状）。 */
-function buildResult(
-  patch: Partial<LibraryWorkflowBuildResult> = {},
-): LibraryWorkflowBuildResult {
+function buildResult(patch: Partial<LibraryWorkflowBuildResult> = {}): LibraryWorkflowBuildResult {
   return {
     input: { workflow: "wf-1", prompt: "a cat" },
     unmatched: [],
@@ -139,9 +137,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
 
   it("任务已成功但没有图片产物：按失败收尾并提示（不假装完成）", async () => {
     const project = createProject();
-    seedDraft(project.id, [
-      makeShot({ status: "running", taskId: "task-empty" }),
-    ]);
+    seedDraft(project.id, [makeShot({ status: "running", taskId: "task-empty" })]);
     fetchTaskSnapshotMock.mockResolvedValue({
       status: "SUCCEEDED",
       outputs: [],
@@ -158,9 +154,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
 
   it("任务已失败 / 已取消：按失败收尾并给出原因", async () => {
     const project = createProject();
-    seedDraft(project.id, [
-      makeShot({ status: "running", taskId: "task-bad" }),
-    ]);
+    seedDraft(project.id, [makeShot({ status: "running", taskId: "task-bad" })]);
     fetchTaskSnapshotMock.mockResolvedValue({
       status: "FAILED",
       error: "显存不足",
@@ -178,9 +172,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
 
   it("任务查无真值（记录被删 / 查询失败）：如实按失败收尾", async () => {
     const project = createProject();
-    seedDraft(project.id, [
-      makeShot({ status: "running", taskId: "task-gone" }),
-    ]);
+    seedDraft(project.id, [makeShot({ status: "running", taskId: "task-gone" })]);
     fetchTaskSnapshotMock.mockResolvedValue(null);
 
     const { result } = renderHook(() => useWorkshopPipeline());
@@ -193,16 +185,11 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
 
   it("任务仍在跑：重订阅 SSE，落定后回写终态", async () => {
     const project = createProject();
-    seedDraft(project.id, [
-      makeShot({ status: "running", taskId: "task-live" }),
-    ]);
+    seedDraft(project.id, [makeShot({ status: "running", taskId: "task-live" })]);
     fetchTaskSnapshotMock.mockResolvedValue({ status: "RUNNING", outputs: [] });
     let settle!: (r: { ok: boolean; message?: string }) => void;
     watchTaskMock.mockImplementation(
-      (
-        _taskId: string,
-        h: { onSettled: (r: { ok: boolean; message?: string }) => void },
-      ) => {
+      (_taskId: string, h: { onSettled: (r: { ok: boolean; message?: string }) => void }) => {
         settle = h.onSettled;
         return () => undefined;
       },
@@ -225,9 +212,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
 
   it("恢复是异步的：期间用户重新发起（taskId 已换），旧恢复不覆盖新任务的状态", async () => {
     const project = createProject();
-    seedDraft(project.id, [
-      makeShot({ status: "running", taskId: "task-old" }),
-    ]);
+    seedDraft(project.id, [makeShot({ status: "running", taskId: "task-old" })]);
     let resolveSnapshot!: (v: unknown) => void;
     fetchTaskSnapshotMock.mockReturnValue(
       new Promise((resolve) => {
@@ -239,9 +224,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     /* 用户在恢复查询在途时重新发起了生成：taskId 换成了新的。 */
     act(() => {
       result.current.setShots((prev) =>
-        prev.map((item) =>
-          item.id === "shot-1" ? { ...item, taskId: "task-new" } : item,
-        ),
+        prev.map((item) => (item.id === "shot-1" ? { ...item, taskId: "task-new" } : item)),
       );
     });
     /* 然后恢复结果才到达 —— 归属核对（taskId 已换）必须拦下这次回写。 */
@@ -285,9 +268,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
 
   it("刷新恢复（视频）：成功任务的产物里没有视频（只有图）→ 按失败收尾", async () => {
     const project = createProject();
-    seedDraft(project.id, [
-      makeShot({ clipStatus: "running", clipTaskId: "clip-noout" }),
-    ]);
+    seedDraft(project.id, [makeShot({ clipStatus: "running", clipTaskId: "clip-noout" })]);
     fetchTaskSnapshotMock.mockResolvedValue({
       status: "SUCCEEDED",
       outputs: [{ url: "/api/generated/x.png", kind: "image" }],
@@ -305,9 +286,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
 
   it("刷新恢复（视频）：片段任务仍在跑 → 重订阅 SSE，落定回写 clipStatus", async () => {
     const project = createProject();
-    seedDraft(project.id, [
-      makeShot({ clipStatus: "running", clipTaskId: "clip-live" }),
-    ]);
+    seedDraft(project.id, [makeShot({ clipStatus: "running", clipTaskId: "clip-live" })]);
     fetchTaskSnapshotMock.mockResolvedValue({ status: "RUNNING", outputs: [] });
     watchTaskMock.mockImplementation((_taskId, h) => {
       h.onSettled({ ok: true });
@@ -326,9 +305,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
 
   it("刷新恢复（视频）：恢复期间重新发起片段（clipTaskId 已换），旧恢复不覆盖", async () => {
     const project = createProject();
-    seedDraft(project.id, [
-      makeShot({ clipStatus: "running", clipTaskId: "clip-old" }),
-    ]);
+    seedDraft(project.id, [makeShot({ clipStatus: "running", clipTaskId: "clip-old" })]);
     let resolveSnapshot!: (v: unknown) => void;
     fetchTaskSnapshotMock.mockReturnValue(
       new Promise((resolve) => {
@@ -339,9 +316,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     const { result } = renderHook(() => useWorkshopPipeline());
     act(() => {
       result.current.setShots((prev) =>
-        prev.map((item) =>
-          item.id === "shot-1" ? { ...item, clipTaskId: "clip-new" } : item,
-        ),
+        prev.map((item) => (item.id === "shot-1" ? { ...item, clipTaskId: "clip-new" } : item)),
       );
     });
     await act(async () => {
@@ -365,15 +340,10 @@ describe("useWorkshopPipeline generateShot 的可靠性出口", () => {
       await Promise.resolve();
     });
 
-    vi.mocked(buildLibraryWorkflowInput).mockResolvedValue(
-      buildResult({ unmatched: ["seed"] }),
-    );
+    vi.mocked(buildLibraryWorkflowInput).mockResolvedValue(buildResult({ unmatched: ["seed"] }));
     vi.mocked(startLocalGenerate).mockResolvedValue("task-1");
     watchTaskMock.mockImplementation(
-      (
-        _taskId: string,
-        h: { onSettled: (r: { ok: boolean; message?: string }) => void },
-      ) => {
+      (_taskId: string, h: { onSettled: (r: { ok: boolean; message?: string }) => void }) => {
         h.onSettled({ ok: true });
         return () => undefined;
       },

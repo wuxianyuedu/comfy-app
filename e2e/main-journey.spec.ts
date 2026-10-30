@@ -143,8 +143,8 @@ async function trpcCall(
   /* 最后一行是 `[chunkId, status, data]`，其中 `data` 的形状是
    * `[[值]]`「值 + 零个 asyncProp」（三段含义见 `e2e/support/trpc-stub.ts` 的
    * 文件头）。逐层取到 `[2] → [0] → [0]` 就是过程返回的那个值本身。 */
-  const data = /* SAFETY: 类型断言已复核 */ (parsed.json as unknown[] | undefined)?.[2];
-  const value = /* SAFETY: 类型断言已复核 */ (data as unknown[][] | undefined)?.[0];
+  const data = /* SAFETY: 类型断言已复核 */ (parsed.json as Array<unknown> | undefined)?.[2];
+  const value = /* SAFETY: 类型断言已复核 */ (data as Array<Array<unknown>> | undefined)?.[0];
   return Array.isArray(value) ? value[0] : value;
 }
 
@@ -202,7 +202,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     /* 断言的是**库里有这一行**，不是「请求发出去了」：再读一次服务端，
      * 拿到的必须是我们刚写进去的那个 id / 名字。 */
     const listed = /* SAFETY: 类型断言已复核 */ (await trpcQuery(page, "project.list")) as
-      | { id: string; name: string }[]
+      | Array<{ id: string; name: string }>
       | undefined;
     const project = (listed ?? []).find((item) => item.id === projectId);
     expect(
@@ -247,7 +247,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
         async () => {
           const detail = /* SAFETY: 类型断言已复核 */ (await trpcQuery(page, "task.detail", {
             id: taskId,
-          })) as { status?: string; error?: string | null; images?: unknown[] } | undefined;
+          })) as { status?: string; error?: string | null; images?: Array<unknown> } | undefined;
           /* 非终态一律回同一个哨兵：poll 据此**继续等**（`QUEUED` 也到不了
              `"终态"`，所以不会被当成结论放行）。 */
           return isTerminalTaskStatus(detail?.status) ? detail : null;
@@ -264,7 +264,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
           /* SAFETY: 类型断言已复核 */ detail as {
             status?: string;
             error?: string | null;
-            images?: unknown[];
+            images?: Array<unknown>;
           },
       );
 

@@ -104,7 +104,7 @@ export const taskRouter = createTRPCRouter({
       }
 
       type Card = Awaited<ReturnType<typeof scanOnce>>[number];
-      const matched: Card[] = [];
+      const matched: Array<Card> = [];
       for (let round = 0; round < MAX_ROUNDS; round += 1) {
         const page = await scanOnce(round * PAGE);
         for (const card of page) {

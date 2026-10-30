@@ -313,7 +313,7 @@ export const runRouter = createTRPCRouter({
       const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
       const rawList = input.kind === "shot" ? row.shots : row.characters;
-      const list: unknown[] = Array.isArray(rawList) ? rawList : [];
+      const list: Array<unknown> = Array.isArray(rawList) ? rawList : [];
       const rec = list.find(
         (item) =>
           typeof item === "object" &&
@@ -352,7 +352,7 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
-      const shots: unknown[] = Array.isArray(row.shots) ? row.shots : [];
+      const shots: Array<unknown> = Array.isArray(row.shots) ? row.shots : [];
       const nextShots = applyHumanRating(shots, input.shotId, input.rating);
       if (nextShots === shots)
         throw new TRPCError({
@@ -400,7 +400,7 @@ export const runRouter = createTRPCRouter({
     .input(z.object({ projectId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
       const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
-      const shots: unknown[] = row && Array.isArray(row.shots) ? row.shots : [];
+      const shots: Array<unknown> = row && Array.isArray(row.shots) ? row.shots : [];
       return calibrateFromShots(shots);
     }),
 });

@@ -109,12 +109,12 @@ export interface WorkflowDetailFull {
   /** 该工作流可运行的全部模式码（从 JSON 字符串列解析）。
    *  子图变体不带这个字段。改名 `availableModes` 以与 `WorkflowIOParam.modeOverrides`
    *  （按模式码的覆盖层）区分 —— 两者同名 `modes` 是历史命名地雷。 */
-  availableModes?: string[];
+  availableModes?: Array<string>;
   defaultMode?: string | null;
   graph: Record<string, ApiWorkflowNode>;
   /** 导入时的原始 RAW（UI 格式）JSON。 */
   rawJson?: unknown;
-  nodes: DetailNodeView[];
+  nodes: Array<DetailNodeView>;
   /** 从 rawJson 重新推导出的 RAW 视图包（nodes / positions / graph）。 */
   rawView?: RawViewPacket | null;
   /** `paramMap` JSON 列。形状的唯一出处是 `WorkflowParamMap` —— 这里声明成
@@ -123,9 +123,9 @@ export interface WorkflowDetailFull {
   paramMap: WorkflowParamMap;
   workflowIO: Record<string, WorkflowDetailIOEntry>;
   positions: Record<string, [number, number]> | null;
-  groups: WorkflowDetailGroup[];
-  notes: WorkflowDetailNote[];
-  rawNodes: RawNodeMeta[];
+  groups: Array<WorkflowDetailGroup>;
+  notes: Array<WorkflowDetailNote>;
+  rawNodes: Array<RawNodeMeta>;
   format: string;
   hasRaw?: boolean;
   usable?: boolean;
@@ -139,11 +139,11 @@ export interface WorkflowDetailFull {
   subgraphUid?: string;
   /** 子图变体：边界 pin 实体。 */
   boundaryPins?: {
-    inputs: BoundaryPin[];
-    outputs: BoundaryPin[];
+    inputs: Array<BoundaryPin>;
+    outputs: Array<BoundaryPin>;
   };
   /** 子图变体：哨兵连线 ↔ pin/槽位 的配对。 */
-  boundaryLinks?: BoundaryLink[];
+  boundaryLinks?: Array<BoundaryLink>;
 }
 
 /** 把已读出的工作流行转换成下发给客户端的序列化 JSON。
@@ -160,8 +160,8 @@ async function buildWorkflowDetailJson(input: {
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
-  ) => Promise<string[] | undefined>;
-  comboOptionsForFieldName: (field: string) => Promise<string[] | undefined>;
+  ) => Promise<Array<string> | undefined>;
+  comboOptionsForFieldName: (field: string) => Promise<Array<string> | undefined>;
   /** 某 class 某字段是否声明了 `{"multiline": true}`（object_info 的类型事实）。 */
   multilineForClassField: (
     classType: string | undefined,
@@ -235,7 +235,7 @@ async function buildWorkflowDetailJson(input: {
   /* 派生视图图（保留 subgraph wrapper）就是 `detail.nodes` / `detail.graph`
    * 的来源：`rawJson` 是唯一的存库原件。 */
   const viewGraph = buildRawViewGraph(raw ?? { nodes: [] });
-  const nodes: DetailNodeView[] = Object.entries(viewGraph).map(([nodeId, n]) => {
+  const nodes: Array<DetailNodeView> = Object.entries(viewGraph).map(([nodeId, n]) => {
     // ComfyUI 的导出形态不一：新快照用 `class_type`，旧的与部分 rgthree-comfy
     // 导出只有 `type`。回落读 `type`，下面那句「是否为子图封装节点」的判断才能
     // 认出两个字段里任一处的 UUID 类名 —— 少了这道回落，每个节点都会被渲染成
@@ -339,12 +339,12 @@ async function buildWorkflowDetailJson(input: {
    *   { title, bounding: [x, y, w, h], color }（color 是十六进制字符串）
    * 透传出去，编辑器便能渲染出忠实、且**支持嵌套**的背景框
    * （子分组的包围盒落在父分组内部）。 */
-  const groups: WorkflowDetailGroup[] = [];
+  const groups: Array<WorkflowDetailGroup> = [];
   if (raw && Array.isArray(raw.groups)) {
     raw.groups.forEach((g: unknown, idx: number) => {
       const rec = asRecord(g);
       if (!rec) return;
-      const bounds: unknown[] =
+      const bounds: Array<unknown> =
         Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
       groups.push({
         id: toStringValue(rec.id ?? `g-${idx}`),
@@ -367,7 +367,7 @@ async function buildWorkflowDetailJson(input: {
 
   /* ── 便签（Note / MarkdownNote 注释节点）──
    * 文本在 widgets_values[0]，位置与尺寸在 pos/size。 */
-  const notes: WorkflowDetailNote[] = [];
+  const notes: Array<WorkflowDetailNote> = [];
   if (raw && Array.isArray(raw.nodes)) {
     raw.nodes.forEach((n) => {
       if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) return;

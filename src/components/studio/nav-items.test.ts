@@ -14,7 +14,7 @@ import {
   type WorkspaceView,
 } from "./NavItems";
 
-const GLOBAL_IDS: WorkspaceView[] = [
+const GLOBAL_IDS: Array<WorkspaceView> = [
   "home",
   "models",
   "history",
@@ -36,7 +36,7 @@ const GLOBAL_IDS: WorkspaceView[] = [
   "mode-contract",
   "console",
 ];
-const PROJECT_TAB_IDS: WorkspaceView[] = [
+const PROJECT_TAB_IDS: Array<WorkspaceView> = [
   "project",
   "canvas",
   "workshop",
@@ -127,7 +127,7 @@ describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
   /* 这两张清单是**产品判断**的落点，不是实现细节：改一个视图就换一种行为，
      而界面上不会有任何东西提示"这一页的规则变了"。所以逐项钉死 ——
      以后想把画布也改成瞬时、或想把设置放回侧栏，必须先来改这里并说明理由。 */
-  const TRANSIENT_IDS: WorkspaceView[] = ["settings", "model-adapters", "mode-contract"];
+  const TRANSIENT_IDS: Array<WorkspaceView> = ["settings", "model-adapters", "mode-contract"];
 
   it("恰好这三项是瞬时页签（切走即关），其余都不是", () => {
     const actual = NAV_ITEMS.filter((item) => isTransientView(item.id)).map((item) => item.id);

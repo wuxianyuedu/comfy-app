@@ -67,13 +67,13 @@ const SAMPLE = /* SAFETY: 类型断言已复核 */ JSON.parse(
   readFileSync(path.join(REAL_ROOT, "tests", "fixtures", "a11y-rule-ledger.sample.json"), "utf8"),
 ) as {
   why: string;
-  dialect: { rule: string; decision: string; why: string; keeper: string }[];
-  inlineExemptions: {
+  dialect: Array<{ rule: string; decision: string; why: string; keeper: string }>;
+  inlineExemptions: Array<{
     rule: string;
     file: string;
     why: string;
     keeper: string;
-  }[];
+  }>;
 };
 
 /**
@@ -97,7 +97,7 @@ let seq = 0;
  * 真台账**从头到尾只读** —— 这是相对旧版「备份 / 还原真文件」的关键差别：
  * 没有共享可变状态，用例中途 throw 也不会把真仓库留在脏状态。
  */
-async function runWithLedger(ledger: Ledger, args: string[] = []) {
+async function runWithLedger(ledger: Ledger, args: Array<string> = []) {
   const file = path.join(tmpdir(), `a11y-rules-gate-${process.pid}-${seq++}.json`);
   writeFileSync(file, JSON.stringify(ledger, null, 2));
 

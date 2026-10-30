@@ -28,7 +28,7 @@ export interface ResourceMetricDescriptor {
  * 顺序即渲染顺序（物理显存 → ComfyUI 显存 → 内存）。状态栏历史上就是这个次序，
  * 首页卡沿用，免得同一组数在两个地方以两种顺序出现。
  */
-export const RESOURCE_METRICS: readonly ResourceMetricDescriptor[] = [
+export const RESOURCE_METRICS: ReadonlyArray<ResourceMetricDescriptor> = [
   {
     key: "smiVram",
     label: "显存",
@@ -65,8 +65,8 @@ export interface VisibleResourceMetric {
  */
 export function selectVisibleResourceMetrics(
   view: Pick<ComfyStatusViewModel, "smiVram" | "cudaVram" | "ram">,
-): VisibleResourceMetric[] {
-  const out: VisibleResourceMetric[] = [];
+): Array<VisibleResourceMetric> {
+  const out: Array<VisibleResourceMetric> = [];
   for (const descriptor of RESOURCE_METRICS) {
     const bar = view[descriptor.key];
     if (bar) out.push({ descriptor, bar });

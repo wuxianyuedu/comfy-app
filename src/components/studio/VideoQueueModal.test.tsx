@@ -16,7 +16,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { VideoQueueModal } from "./VideoQueueModal";
 import type { VideoTask } from "~/lib/media/video-queue-client";
 
-const fetchVideoTasksMock = vi.fn<() => Promise<VideoTask[]>>(async () => []);
+const fetchVideoTasksMock = vi.fn<() => Promise<Array<VideoTask>>>(async () => []);
 vi.mock("~/lib/media/video-queue-client", () => ({
   fetchVideoTasks: () => fetchVideoTasksMock(),
 }));
@@ -59,8 +59,6 @@ describe("VideoQueueModal：队列只读视图（批量提交已整格撤掉，#
 
   it("空队列的指引指向创作台（新视频的入口在那里，不在本弹窗）", async () => {
     renderModal();
-    expect(
-      await screen.findByText(/在创作台「视频」模式直接生成/),
-    ).toBeVisible();
+    expect(await screen.findByText(/在创作台「视频」模式直接生成/)).toBeVisible();
   });
 });

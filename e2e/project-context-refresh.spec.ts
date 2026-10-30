@@ -41,7 +41,7 @@ async function stubBackend(page: Page) {
 }
 
 /** 打开「＋」菜单并返回其中的菜单项文字。 */
-async function openViewMenuItems(page: Page): Promise<string[]> {
+async function openViewMenuItems(page: Page): Promise<Array<string>> {
   await page.getByRole("button", { name: "新页签", exact: true }).click();
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();

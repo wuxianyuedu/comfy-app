@@ -64,8 +64,8 @@ type SidebarMenuButtonVariant = NonNullable<
 >;
 type SidebarMenuButtonSize = NonNullable<React.ComponentProps<typeof SidebarMenuButton>["size"]>;
 
-const MENU_BUTTON_VARIANTS: SidebarMenuButtonVariant[] = ["default", "outline"];
-const MENU_BUTTON_SIZES: SidebarMenuButtonSize[] = ["default", "sm", "lg"];
+const MENU_BUTTON_VARIANTS: Array<SidebarMenuButtonVariant> = ["default", "outline"];
+const MENU_BUTTON_SIZES: Array<SidebarMenuButtonSize> = ["default", "sm", "lg"];
 
 const meta = {
   title: "UI/Sidebar",
@@ -84,7 +84,7 @@ const meta = {
       },
       options: MENU_BUTTON_SIZES,
     },
-  } as Record<string, { control: { type: "select" }; options: string[] }>,
+  } as Record<string, { control: { type: "select" }; options: Array<string> }>,
 } satisfies Meta<typeof Sidebar>;
 
 export default meta;

@@ -46,7 +46,7 @@ const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
 
 /** 跑一次读数，把打印出来的行收起来（不出网、不读真环境）。 */
 function run(env: Record<string, string | undefined> = {}) {
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   const result = imageIdentity({
     env,
     osReleaseImpl: () => "测试用发行版 / linux x64",
@@ -70,9 +70,7 @@ describe("镜像身份：标签判读的三档（「钉版本」与「latest」�
   });
 
   it("`latest` ⇒ floating；别的一律 pinned（含 registry 端口那种形态）", () => {
-    expect(imageTagVerdict("cnb.cool/ns/node-base:latest").verdict).toBe(
-      "floating",
-    );
+    expect(imageTagVerdict("cnb.cool/ns/node-base:latest").verdict).toBe("floating");
     expect(imageTagVerdict("cnb.cool/ns/node-base:v24.4")).toEqual({
       verdict: "pinned",
       tag: "v24.4",
@@ -83,9 +81,7 @@ describe("镜像身份：标签判读的三档（「钉版本」与「latest」�
       verdict: "floating",
       tag: "latest",
     });
-    expect(
-      imageTagVerdict("registry.local:5000/ns/node-base:2026-10").verdict,
-    ).toBe("pinned");
+    expect(imageTagVerdict("registry.local:5000/ns/node-base:2026-10").verdict).toBe("pinned");
   });
 
   it("`@sha256:` 形态算 pinned（digest 比标签更硬）", () => {
@@ -214,10 +210,7 @@ describe("镜像身份：流水线上真的在跑它（脚本存在而配置没�
     const at = order.indexOf("镜像身份");
     /* 位置：紧跟 `工具链自证`（它读的正是那一步自证出来的那台机器），
      * 且早于一切依赖安装 —— 与 `环境前提` 同一类「便宜且早」的步骤。 */
-    expect(
-      at,
-      "`镜像身份` 不在清单里 —— 那一步因此没有任何执行者",
-    ).toBeGreaterThan(-1);
+    expect(at, "`镜像身份` 不在清单里 —— 那一步因此没有任何执行者").toBeGreaterThan(-1);
     expect(at).toBe(order.indexOf("工具链自证") + 1);
     expect(at).toBeLessThan(order.indexOf("Install dependencies"));
   });
@@ -234,9 +227,7 @@ describe("镜像身份：流水线上真的在跑它（脚本存在而配置没�
       command,
       "「镜像身份」的脚本里没有给 PowerShell 设 UTF-8 输出编码 —— 平台日志会是乱码",
     ).toContain("[Console]::OutputEncoding");
-    expect(unwrapCp936(command)).toContain(
-      "node scripts/ci-image-identity.mjs",
-    );
+    expect(unwrapCp936(command)).toContain("node scripts/ci-image-identity.mjs");
     expect(read("scripts/ci-image-identity.mjs").length).toBeGreaterThan(0);
   });
 
@@ -281,7 +272,7 @@ describe("镜像身份：流水线上真的在跑它（脚本存在而配置没�
  */
 describe("容器格：哪几格进容器是**决定**，不是随手写的（ISSUE #1993 续）", () => {
   /** 本仓**允许**带 `image:` 的 stage —— **空**：这台节点上没有 docker daemon。 */
-  const CONTAINER_STAGES: string[] = [];
+  const CONTAINER_STAGES: Array<string> = [];
 
   it("解析器只认 Job 级 `image:`，且不把 `env:` 里的同名键算进来", () => {
     const fixture = [
@@ -301,9 +292,7 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
       "    #   image: node:24",
       "",
     ].join("\n");
-    expect(platformImageStages(fixture)).toEqual([
-      { name: "B", image: "node:24" },
-    ]);
+    expect(platformImageStages(fixture)).toEqual([{ name: "B", image: "node:24" }]);
     /* 写错层的那一格**不进**这份名单，而进另一个出口 —— 它压根跑不起来，
      * 与「某一格进了容器」是两件事（`readImageDeclarations()` 两个出口）。 */
     const wrongLevel = [

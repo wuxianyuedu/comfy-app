@@ -151,7 +151,7 @@ function commitAll(repo: GateRepo, message: string): void {
  * 时代就是这么写的）在换格式化器之后会变成「手写的那一份」，判据与夹具各说一套，
  * 而用例还全绿 —— 那是最难看的一类失效。所以夹具与判据走**同一个入口**。
  */
-function formatInPlace(repo: GateRepo, rel: string | string[]): void {
+function formatInPlace(repo: GateRepo, rel: string | Array<string>): void {
   /* 路径可以是**一批**：`oxfmt a b c…` 一次做完，而每条路径各起一次进程是本文件
    * 最大的那笔开销（格式化器冷启实测百毫秒级，与文件大小几乎无关）。「12 个文件
    * 各起一次」与「一次做完」在**判据上等价** —— 被测的是「这些文件有没有被重排」，
@@ -233,8 +233,8 @@ function instrumentOxfmt(repo: GateRepo, failFirst = false): () => number {
 }
 
 /** 生成 n 个未过 oxfmt 的源文件并提交成基线。 */
-function seedDirty(repo: GateRepo, n: number): string[] {
-  const files: string[] = [];
+function seedDirty(repo: GateRepo, n: number): Array<string> {
+  const files: Array<string> = [];
   for (let i = 0; i < n; i++) {
     const rel = `src/lib/dirty-${i}.ts`;
     repo.write(rel, `export const PROBE_${i}={a:${i},b:"x"};\n`);

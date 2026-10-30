@@ -36,7 +36,7 @@ const REFUSAL_TOAST_MS = 12_000;
 export function useSyncRefusalNotice(): void {
   const toast = useToast();
   /** 已经提示过的「画布 + 原因」，用于去重。 */
-  const shown = useRef<string[]>([]);
+  const shown = useRef<Array<string>>([]);
 
   useEffect(() => {
     const flush = () => {

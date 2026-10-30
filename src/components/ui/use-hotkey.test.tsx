@@ -234,7 +234,7 @@ describe("target 与平台探测的边界", () => {
 
 describe("回调身份变化不重建监听", () => {
   it("父组件每轮渲染传新函数，按住一次也只在每次按下时触发一次", () => {
-    const hits: string[] = [];
+    const hits: Array<string> = [];
     const { rerender } = render(<Probe onHit={() => hits.push("a")} />);
     fireEvent.keyDown(window, { key: "l", ctrlKey: true });
     rerender(<Probe onHit={() => hits.push("b")} />);

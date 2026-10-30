@@ -85,7 +85,7 @@ const REGISTERED: Record<string, string> = {
     "DESIGN.md 里那是一条 grep 检索式（`[0-9]` 是字符组），加空格会把正则写坏",
 };
 
-function walk(rel: string, out: string[] = []): string[] {
+function walk(rel: string, out: Array<string> = []): Array<string> {
   const abs = path.join(ROOT, rel);
   if (!existsSync(abs)) return out;
   for (const e of readdirSync(abs, { withFileTypes: true })) {
@@ -204,7 +204,7 @@ beforeAll(async () => {
 
 describe("正文与用例不许成为死规则的唯一出处", () => {
   it("只有正文在供给的 arbitrary 候选名，只能留在登记表里", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const candidate of proseCandidates) {
       if (srcCandidates.has(candidate)) continue; // src 自己也在供给，不是正文造成的死规则
       if (REGISTERED[candidate]) continue; // 逐字示例 / 检索式，已给理由

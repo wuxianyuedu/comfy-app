@@ -40,8 +40,8 @@ export interface UseGenerateArgs {
   wfParamMap?: Record<string, unknown> | null;
   /** 工作流当前生效的模式（落点覆盖按它归属，`source.mode:<模式>`）。 */
   wfMode?: string | null;
-  setNodes: Dispatch<SetStateAction<Node[]>>;
-  setEdges: Dispatch<SetStateAction<Edge[]>>;
+  setNodes: Dispatch<SetStateAction<Array<Node>>>;
+  setEdges: Dispatch<SetStateAction<Array<Edge>>>;
   getNode: (id: string) => Node | undefined;
   /** 屏幕坐标 → 画布坐标（`useReactFlow().screenToFlowPosition`）——
    *  自动孵化下游节点时由出口用它换算落点。 */

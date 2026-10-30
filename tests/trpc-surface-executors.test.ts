@@ -76,7 +76,7 @@ import { appRouter } from "~/server/api/root";
 const ROUTER_DIR = "src/server/api/routers";
 
 /** 递归收集 `src` 与 `tests` 下的 `.ts` / `.tsx`（跳过构建产物与生成物）。 */
-function collect(dir: string, out: string[] = []): string[] {
+function collect(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir)) {
     if (entry === "node_modules" || entry === ".next" || entry === "generated") continue;
     const full = path.join(dir, entry);
@@ -142,12 +142,12 @@ function callNeedle(proc: string): RegExp {
 /** 核心判据（纯函数，便于下面用合成输入自证它在工作）：
  *  返回「没有任何执行者」的 procedure 路径。 */
 function proceduresWithoutExecutor(input: {
-  procedurePaths: string[];
+  procedurePaths: Array<string>;
   mounts: Record<string, string>;
   closures: Record<string, Set<string>>;
-  tests: { file: string; text: string }[];
-}): string[] {
-  const offenders: string[] = [];
+  tests: Array<{ file: string; text: string }>;
+}): Array<string> {
+  const offenders: Array<string> = [];
   for (const dotted of input.procedurePaths) {
     const ns = dotted.split(".")[0]!;
     const proc = dotted.slice(ns.length + 1);
@@ -298,7 +298,7 @@ const ZERO_CONSUMER: Record<string, string> = {
 const MAX_ZERO_CONSUMER = 3;
 
 /** 「有人点名这条口」的三种形态。收不全的形态写在下面的已知边界里。 */
-function consumerNeedles(ns: string, proc: string): RegExp[] {
+function consumerNeedles(ns: string, proc: string): Array<RegExp> {
   return [
     // ① 链式点名：`api.project.upsert` / `vanillaApi.skill.list` / `"task.detail"`
     //    （失效键、日志标签这类字符串形状也走这一支）
@@ -314,7 +314,7 @@ function consumerNeedles(ns: string, proc: string): RegExp[] {
 type ConsumerInput = {
   mounts: Record<string, string>;
   closures: Record<string, Set<string>>;
-  consumers: { base: string; text: string }[];
+  consumers: Array<{ base: string; text: string }>;
 };
 
 /** 单条口有没有消费方 —— 本维度的唯一实现，主断言与登记表的两条陈旧判据共用。
@@ -332,7 +332,9 @@ function hasConsumer(dotted: string, input: ConsumerInput): boolean {
 }
 
 /** 核心判据（纯函数，便于用合成输入自证）：未登记在案、又找不到消费方的口。 */
-function proceduresWithoutConsumer(input: ConsumerInput & { procedurePaths: string[] }): string[] {
+function proceduresWithoutConsumer(
+  input: ConsumerInput & { procedurePaths: Array<string> },
+): Array<string> {
   return input.procedurePaths.filter(
     (dotted) => !(dotted in ZERO_CONSUMER) && !hasConsumer(dotted, input),
   );

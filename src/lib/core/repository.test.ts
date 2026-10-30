@@ -890,7 +890,7 @@ describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
      * 上一条用例里那条路只跑到「这一页是空的」，于是 attachImages 的真实装载
      * 一次都没被执行过：那条分支要是写成不带 images，界面上只是少一张封面，
      * 而 SQL 一声不响。 */
-    const ids: string[] = [];
+    const ids: Array<string> = [];
     for (let i = 0; i < 3; i++) {
       const t = await taskRepository.createQueued({
         ...queued,

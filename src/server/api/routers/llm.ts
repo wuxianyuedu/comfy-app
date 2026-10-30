@@ -15,7 +15,10 @@ import { loadModeContracts, saveModeContracts } from "~/lib/workshop/mode-contra
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
   type: z.enum(
-    /* SAFETY: 类型断言已复核 */ WORKSHOP_INPUT_TYPES.map((t) => t.type) as [string, ...string[]],
+    /* SAFETY: 类型断言已复核 */ WORKSHOP_INPUT_TYPES.map((t) => t.type) as [
+      string,
+      ...Array<string>,
+    ],
   ),
   field: z.string().min(1),
 });

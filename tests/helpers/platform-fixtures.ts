@@ -61,7 +61,7 @@ export interface HostFixtures {
    * 于是「没有执行位」与「内核解析 shebang」这两档在 Windows 上造不出来 ——
    * 注入之后这张表在两端机器上判同一个结论。
    */
-  makeHost: (usable: string[]) => {
+  makeHost: (usable: Array<string>) => {
     access: (candidate: string) => void;
     spawn: (cmd: string) => string | null;
   };
@@ -84,7 +84,7 @@ export const test = base.extend<PlatformFixtures & HostFixtures>({
    * no-empty-pattern 在此属误报（台账见 tests/helpers/gate-repo.ts 那处）。
    */
   // eslint-disable-next-line no-empty-pattern
-  realPlatform: async ({ }, use) => {
+  realPlatform: async ({}, use) => {
     await use(process.platform);
   },
 
@@ -93,7 +93,7 @@ export const test = base.extend<PlatformFixtures & HostFixtures>({
   },
 
   // eslint-disable-next-line no-empty-pattern -- 同上：vitest fixture 第一参必须解构
-  asPlatform: async ({ }, use) => {
+  asPlatform: async ({}, use) => {
     /* 一次用例里可能切多次（`withWindows` 的调用点就是「切一段、跑、恢复、再跑」），
      * 所以维护一份「原值」，由本 fixture 自己负责在收尾时回滚到位 —— 用例中途
      * throw 也一样（这正是用它替代手写 try/finally 的那个收益）。 */
@@ -113,8 +113,8 @@ export const test = base.extend<PlatformFixtures & HostFixtures>({
   },
 
   // eslint-disable-next-line no-empty-pattern -- 同上：vitest fixture 第一参必须解构
-  makeHost: async ({ }, use) => {
-    await use((usable: string[]) => {
+  makeHost: async ({}, use) => {
+    await use((usable: Array<string>) => {
       const set = new Set(usable);
       return {
         access: (candidate: string) => {

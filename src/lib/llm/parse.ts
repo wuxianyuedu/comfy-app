@@ -26,7 +26,7 @@ export function extractJson(text: string): unknown {
 }
 
 /* 与 extractJson 相同，但一定返回数组（否则抛错）。 */
-export function extractJsonArray(text: string): unknown[] {
+export function extractJsonArray(text: string): Array<unknown> {
   const value = extractJson(text);
 
   if (!Array.isArray(value)) throw new Error("LLM 未返回数组");

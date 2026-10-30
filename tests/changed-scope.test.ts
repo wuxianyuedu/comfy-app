@@ -23,16 +23,13 @@ import {
 
 /** 假 git：按调用顺序回放预置结果。 */
 function fakeGit(handlers: Record<string, { ok: boolean; stdout: string }>) {
-  const calls: string[][] = [];
-  const runGit = (args: string[], _cwd: string) => {
+  const calls: Array<Array<string>> = [];
+  const runGit = (args: Array<string>, _cwd: string) => {
     calls.push(args);
     /* 剥掉**全局旗标**那一对（`-c core.quotePath=false`，ISSUE #2272）：它是 git 的
      * 全局配置，不属于「这条 diff 是什么形状」⇒ 键要按形状算。 */
     const shape = args[0] === "-c" ? args.slice(2) : args;
-    const key =
-      shape[0] === "diff"
-        ? `diff ${shape[shape.length - 1] ?? ""}`
-        : (shape[0] ?? "");
+    const key = shape[0] === "diff" ? `diff ${shape[shape.length - 1] ?? ""}` : (shape[0] ?? "");
     const hit = handlers[key] ?? handlers[shape[0] ?? ""];
     if (!hit) return { ok: false, stdout: "" };
     return hit;
@@ -180,18 +177,17 @@ describe("changed-scope —— 改动面怎么读", () => {
  * 期望：`<B>...M` 里**有**别人的 `lib.rs`（这就是 bug），而对账之后只剩 PR 自己那条。
  */
 describe("changed-scope —— 平台合成 merge 提交上的对账（#2325）", () => {
-  const temps: string[] = [];
+  const temps: Array<string> = [];
 
   afterEach(() => {
-    for (const dir of temps.splice(0))
-      rmSync(dir, { recursive: true, force: true });
+    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
 
   /** 建一个临时仓库；返仓库根。`git` 用户名/邮箱按仓库级设，不污染全局。 */
   function initRepo(): string {
     const dir = mkdtempSync(path.join(tmpdir(), "changed-scope-merge-"));
     temps.push(dir);
-    const git = (...args: string[]) =>
+    const git = (...args: Array<string>) =>
       execFileSync("git", ["-C", dir, ...args], { stdio: "pipe" });
     git("init", "-q", "-b", "main");
     git("config", "user.email", "t@t.t");
@@ -200,7 +196,7 @@ describe("changed-scope —— 平台合成 merge 提交上的对账（#2325）"
     return dir;
   }
 
-  function git(dir: string, ...args: string[]): string {
+  function git(dir: string, ...args: Array<string>): string {
     return execFileSync("git", ["-C", dir, ...args], {
       encoding: "utf8",
       stdio: "pipe",

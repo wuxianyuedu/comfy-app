@@ -8,14 +8,14 @@ export interface DepEntry {
 }
 
 export interface LockSection {
-  keys: Map<string, string[]>;
-  raw: string[];
+  keys: Map<string, Array<string>>;
+  raw: Array<string>;
 }
 
 export interface ParsedLockfile {
   sections: Map<string, LockSection>;
   importer: Map<string, Map<string, Map<string, DepEntry>>>;
-  duplicates: string[];
+  duplicates: Array<string>;
   lockfileVersion: string;
 }
 
@@ -36,25 +36,25 @@ export interface DepChange {
 }
 
 export interface FlatDiff {
-  added: FieldChange[];
-  removed: FieldChange[];
-  changed: FieldChange[];
+  added: Array<FieldChange>;
+  removed: Array<FieldChange>;
+  changed: Array<FieldChange>;
 }
 
 export interface GroupDiff {
-  added: DepChange[];
-  removed: DepChange[];
-  changed: DepChange[];
+  added: Array<DepChange>;
+  removed: Array<DepChange>;
+  changed: Array<DepChange>;
 }
 
 export interface EntryDiff {
-  added: string[];
-  removed: string[];
+  added: Array<string>;
+  removed: Array<string>;
 }
 
 export interface LockDiff {
   lockfileVersion: string;
-  duplicates: { old: string[]; new: string[] };
+  duplicates: { old: Array<string>; new: Array<string> };
   settings: FlatDiff;
   overrides: FlatDiff;
   importers: Record<string, Record<string, GroupDiff>>;
@@ -63,12 +63,15 @@ export interface LockDiff {
 }
 
 export function stripBundledSection(text: string): string;
-export function splitTopSections(text: string): { sections: Map<string, string[]>; duplicates: string[] };
-export function splitTopKeys(lines: string[]): Map<string, string[]>;
-export function flatEntries(lines: string[]): Map<string, string>;
-export function importerGroups(lines: string[]): Map<string, string[]>;
-export function parseDependencyTable(lines: string[]): Map<string, DepEntry>;
+export function splitTopSections(text: string): {
+  sections: Map<string, Array<string>>;
+  duplicates: Array<string>;
+};
+export function splitTopKeys(lines: Array<string>): Map<string, Array<string>>;
+export function flatEntries(lines: Array<string>): Map<string, string>;
+export function importerGroups(lines: Array<string>): Map<string, Array<string>>;
+export function parseDependencyTable(lines: Array<string>): Map<string, DepEntry>;
 export function parseLockfile(text: string): ParsedLockfile;
 export function diffLockfiles(oldText: string, newText: string): LockDiff;
 export function isEmptyDiff(d: LockDiff): boolean;
-export function sectionFingerprint(sectionLines: string[]): string;
+export function sectionFingerprint(sectionLines: Array<string>): string;

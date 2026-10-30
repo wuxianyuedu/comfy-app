@@ -34,7 +34,7 @@ interface HomeEntry {
   desc: string;
 }
 
-const ENTRIES: HomeEntry[] = [
+const ENTRIES: Array<HomeEntry> = [
   { id: "workshop", label: "全链路工坊", desc: "剧本 → 分镜 → 成片" },
   { id: "canvas", label: "画布", desc: "自由编排节点工作流" },
   { id: "outputs", label: "产出", desc: "看这个项目生成了什么" },
@@ -50,11 +50,7 @@ export interface ProjectHomePageProps {
   projectId?: string;
 }
 
-export function ProjectHomePage({
-  projectName,
-  onNavigate,
-  projectId,
-}: ProjectHomePageProps) {
+export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectHomePageProps) {
   const controller = useProjectHome();
   const { overview, headline, loading } = controller;
 
@@ -67,9 +63,7 @@ export function ProjectHomePage({
       {/* ── 项目标识 + 一句话进展 ─────────────────────────── */}
       <header className="flex flex-col gap-2">
         <h1 className="u-title-page truncate">{projectName}</h1>
-        <p className="text-ink-muted text-sm">
-          {loading ? "正在读取项目状态…" : headline}
-        </p>
+        <p className="text-ink-muted text-sm">{loading ? "正在读取项目状态…" : headline}</p>
       </header>
 
       {/* ── 总进度：一条，口径 = 六个完成阶段的等权平均 ────── */}
@@ -81,19 +75,13 @@ export function ProjectHomePage({
       />
 
       {/* ── 状态卡：阶段条 + 计数 ─────────────────────────── */}
-      <ProjectHomeStatus
-        overview={overview}
-        loading={loading}
-        onNavigate={onNavigate}
-      />
+      <ProjectHomeStatus overview={overview} loading={loading} onNavigate={onNavigate} />
 
       {/* ── AI 自主成片：与工坊 / 画布同一份 run 的操纵台 ──── */}
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="u-title">AI 自主成片</h2>
-          <span className="text-ink-faint text-xs">
-            从剧本一路跑到合成，可随时叫停或逐步点头
-          </span>
+          <span className="text-ink-faint text-xs">从剧本一路跑到合成，可随时叫停或逐步点头</span>
         </div>
         {/* RunControlBar 自带容器边框与外层留白由这里给：它是「一条横条」的
                 形态（工坊里顶在阶段轨上方），放进主页卡片里需要圆角与描边 —— 
@@ -117,9 +105,7 @@ export function ProjectHomePage({
                 "flex h-auto flex-col items-start gap-1 rounded-2xl border p-4 text-left font-normal",
               )}
             >
-              <span className="text-ink-bright text-sm font-medium">
-                {entry.label}
-              </span>
+              <span className="text-ink-bright text-sm font-medium">{entry.label}</span>
               <span className="text-ink-muted text-xs">{entry.desc}</span>
             </Button>
           ))}

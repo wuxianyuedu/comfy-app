@@ -55,7 +55,7 @@ export interface ScannedRoot {
   exists: boolean;
   /** 逐文件的扫描结果。根目录不存在、或里面没有 `.json` / `.workflow` 时为空。
    *  **从不**抛错 —— 扫描失败经 `error`（可选字符串）上报。 */
-  files: LocalWorkflowFile[];
+  files: Array<LocalWorkflowFile>;
   error?: string;
 }
 
@@ -85,8 +85,8 @@ const STAT_PARALLEL = 32;
 
 /** 批量 stat，读不到的位置返回 `null`（权限错误 / 扫描中途消失）。
  *  与原先同步版的 `catch { continue }` 同语义：单个条目出错不影响整趟扫描。 */
-async function statMany(paths: string[]): Promise<(fs.Stats | null)[]> {
-  const out: (fs.Stats | null)[] = Array.from({ length: paths.length }, () => null);
+async function statMany(paths: Array<string>): Promise<Array<fs.Stats | null>> {
+  const out: Array<fs.Stats | null> = Array.from({ length: paths.length }, () => null);
   let cursor = 0;
   async function worker(): Promise<void> {
     while (cursor < paths.length) {
@@ -153,9 +153,9 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
     };
   }
 
-  const out: LocalWorkflowFile[] = [];
+  const out: Array<LocalWorkflowFile> = [];
   const visit = async (dir: string): Promise<void> => {
-    let entries: fs.Dirent[];
+    let entries: Array<fs.Dirent>;
     try {
       entries = await fs.promises.readdir(dir, { withFileTypes: true });
     } catch {
@@ -174,7 +174,7 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
 
     /* 先按 `Dirent` 的类型位分流（目录 / 非目标后缀一律不 stat），
      * 再把这一层的候选文件一次性并发 stat。 */
-    const pending: string[] = [];
+    const pending: Array<string> = [];
     for (const ent of entries) {
       const fullPath = path.join(dir, ent.name);
       if (ent.isDirectory()) {
@@ -224,11 +224,11 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
  *  • 跨所有根目录的 `LocalWorkflowFile` 扁平清单，按绝对路径去重
  *    （用户可以把互相重叠的根目录都列上而不产生重复项）。 */
 export async function scanLocalWorkflowRoots(
-  rawPaths: string[],
+  rawPaths: Array<string>,
   opts: { recursive?: boolean } = {},
-): Promise<{ roots: ScannedRoot[]; allFiles: LocalWorkflowFile[] }> {
+): Promise<{ roots: Array<ScannedRoot>; allFiles: Array<LocalWorkflowFile> }> {
   const recursive = !!opts.recursive;
-  const allFiles: LocalWorkflowFile[] = [];
+  const allFiles: Array<LocalWorkflowFile> = [];
   const trimmedPaths = rawPaths.map((raw) => raw.trim()).filter((trimmed) => trimmed.length > 0);
   /* 目录之间并发：同步版是一个目录一个目录地等，总耗时是所有目录之和。 */
   const roots = await Promise.all(trimmedPaths.map((trimmed) => scanRoot(trimmed, recursive)));
@@ -366,10 +366,10 @@ export function resetLocalWorkflowChecksumCache(): void {
  *  mtime+size 与上一趟相同的文件直接取记忆里的 checksum，不再读内容 ——
  *  这是「轮询里同一份数据反复出现」的常规场景（见 `checksumCache`）。 */
 export async function scanLocalWorkflowChecksums(
-  rawPaths: string[],
-): Promise<LocalChecksumEntry[]> {
+  rawPaths: Array<string>,
+): Promise<Array<LocalChecksumEntry>> {
   const { allFiles } = await scanLocalWorkflowRoots(rawPaths);
-  const out: LocalChecksumEntry[] = [];
+  const out: Array<LocalChecksumEntry> = [];
   // 并发上限：一次扫 200 个文件不会同时开 200 条流。
   const MAX_PARALLEL = 8;
   let cursor = 0;

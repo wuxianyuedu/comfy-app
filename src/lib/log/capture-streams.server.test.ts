@@ -131,7 +131,7 @@ describe("installStreamCapture", () => {
   });
 
   it("原输出行为不变（转录是额外落一份，不接管）", async () => {
-    const writes: string[] = [];
+    const writes: Array<string> = [];
     process.stdout.write = (chunk: string | Uint8Array) => {
       writes.push(String(chunk));
       return true;

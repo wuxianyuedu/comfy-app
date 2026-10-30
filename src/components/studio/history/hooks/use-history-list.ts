@@ -41,14 +41,14 @@ import { useTRPC } from "~/trpc/react";
 const EMPTY_WORKFLOW_IO: WorkflowIOMap = {};
 
 export interface HistoryListController {
-  tasks: TaskItem[];
+  tasks: Array<TaskItem>;
   loading: boolean;
   filter: FilterKey;
   sort: SortKey;
   /** 各状态计数，key 为 FilterKey 或任务 status。 */
   counts: Record<string, number>;
   /** 当前可见的日期分组（已按 displayCount 裁剪）。 */
-  visibleGroups: Array<{ key: string; items: TaskItem[] }>;
+  visibleGroups: Array<{ key: string; items: Array<TaskItem> }>;
   visibleTotal: number;
   filteredCount: number;
   canLoadMore: boolean;
@@ -67,7 +67,7 @@ export interface HistoryListController {
   workflowIO: WorkflowIOMap;
   /** 模式契约注册表（只含用户改过的模式）：详情弹窗按它 + 任务模式枚举工坊对外口。
    *  未加载 / 失败时为 null，工坊参数回落内置默认契约。 */
-  modeContracts: readonly ModeContract[] | null;
+  modeContracts: ReadonlyArray<ModeContract> | null;
   setSort: (sort: SortKey) => void;
   switchFilter: (filter: FilterKey) => void;
   loadMore: () => void;
@@ -107,7 +107,7 @@ export function useHistoryList(): HistoryListController {
       placeholderData: (prev) => prev,
     }),
   );
-  const tasks = useMemo<TaskItem[]>(
+  const tasks = useMemo<Array<TaskItem>>(
     () =>
       (tasksQ.data?.tasks ?? []).map((task) => ({
         ...task,
@@ -154,9 +154,8 @@ export function useHistoryList(): HistoryListController {
       enabled: !!detailId,
     }),
   );
-  const modeContracts = /* SAFETY: 类型断言已复核 */ (contractsQ.data?.contracts ?? null) as
-    | readonly ModeContract[]
-    | null;
+  const modeContracts = /* SAFETY: 类型断言已复核 */ (contractsQ.data?.contracts ??
+    null) as ReadonlyArray<ModeContract> | null;
 
   const filtered = useMemo(
     () => sortTasks(filterTasks(tasks, filter), sort),

@@ -47,7 +47,7 @@ export interface UsabilityProbe {
   /** 执行位检查：抛错即「没有执行权限」（默认真 `fs.accessSync(X_OK)`）。 */
   access(candidate: string): void;
   /** 起一次确认：返回 libuv 给的错误码，`null` = 起得来（默认真 `spawnSync`）。 */
-  spawn(candidate: string, args: string[]): string | null;
+  spawn(candidate: string, args: Array<string>): string | null;
 }
 
 /** 探针这一次「起一次确认」的超时预算（毫秒）。
@@ -134,7 +134,7 @@ export interface WhichCommandOptions {
    * 记忆化键里**也不含它** —— 同一条 PATH 上「`py --version` 不成立、`py -3 --version`
    * 成立」会被读成同一条缓存，换 probeArgs 的用例请先 `clearWhichCommandCache()`。
    */
-  probeArgs?: string[];
+  probeArgs?: Array<string>;
 }
 
 /** 「这个候选能不能被 spawn」的结论。`prefixArgs` 是启动它所需的宿主参数
@@ -142,7 +142,7 @@ export interface WhichCommandOptions {
 export interface CommandUsability {
   ok: boolean;
   command: string;
-  prefixArgs: string[];
+  prefixArgs: Array<string>;
   reason: string | null;
 }
 
@@ -287,7 +287,7 @@ export function whichCommand(
 export function executableExts(
   env: NodeJS.ProcessEnv | Record<string, string | undefined>,
   platform: NodeJS.Platform = process.platform,
-): string[] {
+): Array<string> {
   if (!isWindows(platform)) return [""];
   const declared = String(envVar(env, "PATHEXT", platform) ?? ".COM;.EXE;.BAT;.CMD")
     .split(";")
@@ -295,7 +295,7 @@ export function executableExts(
     .filter(Boolean);
   /** 认形态的前缀（大小写不敏感，PATHEXT 常见写法是大写）。 */
   const declaredHas = (ext: string) => declared.some((d) => d.toUpperCase() === ext);
-  const ordered: string[] = [];
+  const ordered: Array<string> = [];
   if (declaredHas(".EXE") || declared.length === 0) ordered.push("");
   for (const ext of [".EXE", ".PS1", ".CMD", ".BAT", ".COM"]) {
     /* `.PS1` 不看 `PATHEXT`（理由见头注）：它是本仓唯一能被 Node 起的 corepack 形态，
@@ -404,7 +404,7 @@ export function executableKind(candidate: string): ExecutableKind {
  */
 export function usableCommand(
   candidate: string,
-  probeArgs: string[] = ["--version"],
+  probeArgs: Array<string> = ["--version"],
   {
     env = process.env,
     platform = process.platform,
@@ -536,13 +536,13 @@ export function powershellHost({
 /** 当前脚本要跑的命令形态（`command` / `prefixArgs`）——POSIX 上恒为原路径。 */
 export function commandInvocation(
   candidate: string,
-  probeArgs: string[] = ["--version"],
+  probeArgs: Array<string> = ["--version"],
   {
     env = process.env,
     platform = process.platform,
     probe = realUsabilityProbe,
   }: WhichCommandOptions = {},
-): { command: string; prefixArgs: string[] } {
+): { command: string; prefixArgs: Array<string> } {
   const usable = usableCommand(candidate, probeArgs, { env, platform, probe });
   return usable.ok
     ? { command: usable.command, prefixArgs: usable.prefixArgs }
@@ -554,7 +554,7 @@ export interface PnpmInvocation {
   /** 真正要 spawn 的可执行文件（可能是 PowerShell 宿主）。 */
   command: string;
   /** 完整参数（宿主参数在前）。 */
-  args: string[];
+  args: Array<string>;
   /** PATH 上选中的候选（`.ps1` 回退时是那个脚本，不是宿主）。 */
   candidate: string;
   /** 这一跳是不是**经宿主（PowerShell）**起的 —— 排障时「为什么多了一层」的答案。
@@ -566,9 +566,9 @@ export interface PnpmInvocation {
   /** PATH 原文——**就是 `env` 里那一串**，不是本判据解析出来的那几段。 */
   pathRaw: string;
   /** 按**目标平台**分隔符切出来的 PATH 条目（空串已滤掉）。 */
-  pathEntries: string[];
+  pathEntries: Array<string>;
   /** 那些条目里 `pnpm<后缀>` 真的落在盘上的（只看「名字在不在」，`.ps1` 无条件在列）。 */
-  onDisk: string[];
+  onDisk: Array<string>;
   /** 解释器宿主（PowerShell）的绝对路径；POSIX 上恒为 `null`。失败结论要能分清
    *  「没装 pnpm」与「宿主没找到」—— 那两句指向完全不同的下一步（ISSUE #2281）。 */
   osHost: string | null;
@@ -600,7 +600,7 @@ export interface PnpmInvocation {
  * 重新解析 —— 而正是那第二份读法把「键名不是 `PATH`」「分隔符读错」两类成因藏起来的。
  */
 export function pnpmInvocation(
-  args: string[] = [],
+  args: Array<string> = [],
   {
     env = process.env,
     platform = process.platform,
@@ -622,7 +622,7 @@ export function pnpmInvocation(
   const osHost = isWindows(platform) ? powershellHost({ env, platform }) : null;
   const pathRaw = String(envVar(env, "PATH", platform) ?? "");
   const pathEntries = pathRaw.split(isWindows(platform) ? ";" : ":").filter(Boolean);
-  const onDisk: string[] = [];
+  const onDisk: Array<string> = [];
   /* `.ps1` **无条件**在列（与 `executableExts` 同口径）：Windows 默认 `PATHEXT` 从不含它，
    * 漏掉这一读数就会出现「一个都没命中」而旁边正躺着一个能用的 `pnpm.ps1`（ISSUE #2281）。 */
   for (const dir of pathEntries) {
@@ -650,7 +650,7 @@ export interface ResolvedInvocation {
   /** 真正要 spawn 的可执行文件（可能是绝对路径或 PowerShell 宿主）。 */
   command: string;
   /** 完整参数（宿主参数在前）。 */
-  args: string[];
+  args: Array<string>;
   /** 是否在 PATH 上找到了这个命令（`false` = 交回原样，让 spawn 报它那一句错）。 */
   resolved: boolean;
 }
@@ -690,7 +690,7 @@ export interface ResolvedInvocation {
  */
 export function resolveCommandInvocation(
   file: string,
-  args: string[] = [],
+  args: Array<string> = [],
   {
     env = process.env,
     platform = process.platform,
@@ -798,7 +798,7 @@ export function pnpmJsInvocation({
   platform: NodeJS.Platform;
 }): {
   command: string;
-  prefixArgs: string[];
+  prefixArgs: Array<string>;
   entry: string;
   candidate: string;
 } | null {

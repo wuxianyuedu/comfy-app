@@ -49,7 +49,7 @@ function repoMock(
   return vi.mocked(taskRepository)[name];
 }
 /** 上一次跑过的 taskId 集合 —— 清理由它们排下的防抖定时器。 */
-function persistTasks(): string[] {
+function persistTasks(): Array<string> {
   return [...state().logs.keys()];
 }
 
@@ -59,12 +59,12 @@ function comfyStartingMock(): MockedFn {
 
 /** 取第 n 次调用的参数（mock.calls 元素被推断为 any[]，集中在一处断言并
  *  转成 unknown[]，避免在调用点重复 no-unsafe-assignment）。 */
-function callArgsOf(fn: MockedFn, index = 0): unknown[] {
-  return /* SAFETY: 类型断言已复核 */ (fn.mock.calls[index] as unknown[] | undefined) ?? [];
+function callArgsOf(fn: MockedFn, index = 0): Array<unknown> {
+  return /* SAFETY: 类型断言已复核 */ (fn.mock.calls[index] as Array<unknown> | undefined) ?? [];
 }
 
 /** 取本任务在 runner 状态里的日志行（reaper 写的判决说明）。 */
-function logsOf(taskId: string): string[] {
+function logsOf(taskId: string): Array<string> {
   return (state().logs.get(taskId) ?? []).map((e) => e.msg);
 }
 

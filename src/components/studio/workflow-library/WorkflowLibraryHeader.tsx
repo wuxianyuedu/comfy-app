@@ -18,11 +18,7 @@ import { Button } from "~/components/ui/button";
 import { ModeContractSettings } from "./ModeContractSettings";
 import { CustomNodesSettings } from "./CustomNodesSettings";
 import { WorkflowLibraryFilters } from "./WorkflowLibraryFilters";
-import {
-  HEADER_ACTION_BTN,
-  type SourceFilter,
-  type TypeFilter,
-} from "./workflow-library-config";
+import { HEADER_ACTION_BTN, type SourceFilter, type TypeFilter } from "./workflow-library-config";
 import type { ModelTagCount } from "./WorkflowLibraryFilters";
 
 interface WorkflowLibraryHeaderProps {
@@ -35,7 +31,7 @@ interface WorkflowLibraryHeaderProps {
   typeCounts: { all: number; image: number; video: number; audio: number };
   modelFilter: string;
   onModelFilterChange: (v: string) => void;
-  modelTags: ModelTagCount[];
+  modelTags: Array<ModelTagCount>;
   onManageModels: () => void;
 }
 
@@ -85,11 +81,7 @@ export function WorkflowLibraryHeader({
             而这圈 `shadow-lg shadow-primary-500/*` 是扁平规范明确不发的
             「渐变发光」（DESIGN.md §Elevation：纯色、无阴影、无模糊、无渐变发光）。
             剧本侧那两颗同款渐变按钮上的同一圈发光此前已刻意撤掉。 */}
-        <Button
-          onClick={onToggleImport}
-          variant="gradient"
-          className={HEADER_ACTION_BTN}
-        >
+        <Button onClick={onToggleImport} variant="gradient" className={HEADER_ACTION_BTN}>
           <FolderInput data-icon="inline-start" size={13} />
           导入工作流
         </Button>

@@ -58,7 +58,7 @@ export interface VideoQueueModalProps {
 }
 
 export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalProps) {
-  const [tasks, setTasks] = useState<VideoTask[]>([]);
+  const [tasks, setTasks] = useState<Array<VideoTask>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 

@@ -20,7 +20,7 @@ export class ModelRepository extends DrizzleRepository<Model> {
     super(model, model.id);
   }
 
-  async list(opts?: { type?: string; q?: string }): Promise<Model[]> {
+  async list(opts?: { type?: string; q?: string }): Promise<Array<Model>> {
     const where = and(
       eq(model.isAvailable, true),
       opts?.type ? eq(model.type, opts.type) : undefined,
@@ -71,13 +71,13 @@ export class ModelRepository extends DrizzleRepository<Model> {
    * UPDATE，往返数从 N 降到 N / UPSERT_CHUNK。语义与单条版一致：按
    * (fileName, folder) 冲突则更新为「可见 + 最新的 name/type/baseModel」。 */
   async upsertScannedMany(
-    inputs: {
+    inputs: Array<{
       fileName: string;
       folder: string;
       name: string;
       type: string;
       baseModel: string;
-    }[],
+    }>,
   ): Promise<void> {
     if (!inputs.length) return;
     for (let start = 0; start < inputs.length; start += UPSERT_CHUNK) {
@@ -107,7 +107,7 @@ export class ModelRepository extends DrizzleRepository<Model> {
     }
   }
 
-  async listAvailableFileNamesByFolders(folders: string[]): Promise<string[]> {
+  async listAvailableFileNamesByFolders(folders: Array<string>): Promise<Array<string>> {
     if (!folders.length) return [];
     const rows = await db
       .select({ fileName: model.fileName })
@@ -134,11 +134,11 @@ export class UserModelConfigRepository extends DrizzleRepository<UserModelConfig
     super(userModelConfig, userModelConfig.id);
   }
 
-  async listByUser(userId: string): Promise<UserModelConfig[]> {
+  async listByUser(userId: string): Promise<Array<UserModelConfig>> {
     return db.select().from(userModelConfig).where(eq(userModelConfig.userId, userId));
   }
 
-  async listEnabledFolders(): Promise<string[]> {
+  async listEnabledFolders(): Promise<Array<string>> {
     const rows = await db
       .select({ folder: userModelConfig.folder })
       .from(userModelConfig)

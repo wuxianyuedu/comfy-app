@@ -10,11 +10,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import {
-  DEFAULT_SIZE_SPEC,
-  sizeSpecToWxH,
-  type SizeSpec,
-} from "~/lib/media/size-presets";
+import { DEFAULT_SIZE_SPEC, sizeSpecToWxH, type SizeSpec } from "~/lib/media/size-presets";
 import type { Shot } from "~/lib/workshop/types";
 
 const COMPOSE_DIR = path.join(process.cwd(), "data", "workshop-compositions");
@@ -47,7 +43,7 @@ export interface CompositionPlan {
   exportedAt: string;
   totalShots: number;
   totalDurationSec: number;
-  segments: CompositionSegment[];
+  segments: Array<CompositionSegment>;
 }
 
 export interface RenderResult {
@@ -57,11 +53,8 @@ export interface RenderResult {
 }
 
 /** 由分镜构建有序合成清单（与界面 FinalComposer.exportPlan 对齐）。 */
-export function buildCompositionPlan(
-  title: string,
-  shots: Shot[],
-): CompositionPlan {
-  const segments: CompositionSegment[] = shots.map((shot, i) => ({
+export function buildCompositionPlan(title: string, shots: Array<Shot>): CompositionPlan {
+  const segments: Array<CompositionSegment> = shots.map((shot, i) => ({
     order: i + 1,
     shotId: shot.id,
     scene: shot.sceneHeading,
@@ -69,10 +62,7 @@ export function buildCompositionPlan(
     prompt: shot.prompt,
     imageUrl: shot.imageUrl ?? null,
     clipUrl: shot.clipUrl ?? null,
-    durationSec:
-      typeof shot.duration === "number" && shot.duration > 0
-        ? shot.duration
-        : 4,
+    durationSec: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
     motion: shot.motion ?? "medium",
     transition: shot.transition ?? "cut",
     dialogue: shot.dialogue ?? "",
@@ -129,7 +119,7 @@ export async function renderComposition(
   const tmpDir = path.join(COMPOSE_DIR, `.tmp-${outputName}`);
   await fs.mkdir(tmpDir, { recursive: true });
 
-  const segs: string[] = [];
+  const segs: Array<string> = [];
   for (const s of plan.segments) {
     const clip = localPathOf(s.clipUrl);
     const img = localPathOf(s.imageUrl);
@@ -194,13 +184,9 @@ export async function renderComposition(
   );
   const out = path.join(COMPOSE_DIR, `${outputName}.mp4`);
   try {
-    await execFileP(
-      ff,
-      ["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", out],
-      {
-        timeout: 300_000,
-      },
-    );
+    await execFileP(ff, ["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", out], {
+      timeout: 300_000,
+    });
   } catch (e) {
     await fs.rm(tmpDir, { recursive: true, force: true });
     return {

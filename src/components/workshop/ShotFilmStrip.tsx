@@ -31,7 +31,7 @@ export function ShotFilmStrip({
   shots,
   onJump,
 }: {
-  shots: Shot[];
+  shots: Array<Shot>;
   /** 跳到某一镜（由调用处决定是滚动定位还是同时展开那张卡）。 */
   onJump: (shot: Shot) => void;
 }) {
@@ -81,11 +81,7 @@ export function ShotFilmStrip({
                 }
               >
                 {shot.imageUrl ? (
-                  <MediaThumbnail
-                    src={shot.imageUrl}
-                    alt=""
-                    className="size-full object-cover"
-                  />
+                  <MediaThumbnail src={shot.imageUrl} alt="" className="size-full object-cover" />
                 ) : (
                   /* 还没有成图：给出镜号本身，而不是一个灰块 —— 空帧也要说得出
                      「这是第几镜、还没出图」。 */
@@ -101,10 +97,7 @@ export function ShotFilmStrip({
                   </span>
                 )}
 
-                <span
-                  aria-hidden
-                  className={`absolute inset-x-0 bottom-0 h-1 ${frame.barClass}`}
-                />
+                <span aria-hidden className={`absolute inset-x-0 bottom-0 h-1 ${frame.barClass}`} />
               </Button>
             </Hint>
           );

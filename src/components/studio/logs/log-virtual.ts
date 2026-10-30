@@ -162,15 +162,15 @@ export interface LogLayoutOptions {
  * 仍是同一行。
  */
 export function layoutRows(
-  entries: readonly { message: string; id?: string }[],
+  entries: ReadonlyArray<{ message: string; id?: string }>,
   wrap: boolean,
   availableWidth = 0,
   options: LogLayoutOptions = {},
-): { rows: RowLayout[]; totalSize: number } {
+): { rows: Array<RowLayout>; totalSize: number } {
   const { expandedIds, singleLineIds } = options;
   /* `Array.from` 而不是 `new Array(n)`：后者在 lint 下是 `any[]`，会一路传染到
      下面的 `rows[i]` 赋值上。 */
-  const rows: RowLayout[] = Array.from({ length: entries.length }, () => ({
+  const rows: Array<RowLayout> = Array.from({ length: entries.length }, () => ({
     start: 0,
     size: LOG_ROW_SINGLE,
   }));
@@ -203,7 +203,7 @@ export function layoutRows(
  *   - `scrollTop` 为负 / `NaN`（jsdom 与初次布局）当 0 处理。
  */
 export function visibleRange(
-  rows: readonly RowLayout[],
+  rows: ReadonlyArray<RowLayout>,
   scrollTop: number,
   viewportHeight: number,
   overscan = LOG_VIRTUAL_OVERSCAN,
@@ -211,9 +211,7 @@ export function visibleRange(
   const count = rows.length;
   if (count === 0) return { start: 0, end: 0 };
   const top = Number.isFinite(scrollTop) ? Math.max(0, scrollTop) : 0;
-  const height = Number.isFinite(viewportHeight)
-    ? Math.max(0, viewportHeight)
-    : 0;
+  const height = Number.isFinite(viewportHeight) ? Math.max(0, viewportHeight) : 0;
   const pad = Math.max(0, overscan);
 
   const first = firstVisibleRow(rows, top);
@@ -229,10 +227,7 @@ export function visibleRange(
  * 二分而不是线性扫描：滚动事件每帧都要求一次，线性扫描 2000 行在慢速设备上
  * 会直接体现在滚动掉帧上。`rows` 的 `start` 单调递增，因此二分成立。
  */
-export function firstVisibleRow(
-  rows: readonly RowLayout[],
-  offset: number,
-): number {
+export function firstVisibleRow(rows: ReadonlyArray<RowLayout>, offset: number): number {
   if (rows.length === 0) return 0;
   let low = 0;
   let high = rows.length - 1;
@@ -279,15 +274,8 @@ export function scrollHeightOf(estimated: number): {
  * 取 max 是为了「新行一条条露出来」（不跳空），钳到末条是为了不被后面的新行
  * 无限拖走。
  */
-export function pinTargetIndex(
-  baseline: number,
-  applied: number,
-  bottomIndex: number,
-): number {
-  return Math.max(
-    clamp(baseline, 0, bottomIndex),
-    clamp(applied, 0, bottomIndex),
-  );
+export function pinTargetIndex(baseline: number, applied: number, bottomIndex: number): number {
+  return Math.max(clamp(baseline, 0, bottomIndex), clamp(applied, 0, bottomIndex));
 }
 
 /**
@@ -313,9 +301,7 @@ export function pinScrollTop(
   geometry: { start: number; size: number },
   viewportHeight: number,
 ): number {
-  const viewport = Number.isFinite(viewportHeight)
-    ? Math.max(0, viewportHeight)
-    : 0;
+  const viewport = Number.isFinite(viewportHeight) ? Math.max(0, viewportHeight) : 0;
   const next = geometry.start + geometry.size - viewport;
   return Number.isFinite(next) ? Math.max(0, next) : 0;
 }
@@ -338,13 +324,8 @@ export function pinPlan(input: {
   scrollTop: number;
   appliedTop: number;
 }): number | null {
-  const targetIndex = pinTargetIndex(
-    input.baseline,
-    input.applied,
-    input.bottomIndex,
-  );
+  const targetIndex = pinTargetIndex(input.baseline, input.applied, input.bottomIndex);
   const userTookOver =
-    input.applied === targetIndex &&
-    Math.abs(input.scrollTop - input.appliedTop) > 1;
+    input.applied === targetIndex && Math.abs(input.scrollTop - input.appliedTop) > 1;
   return userTookOver ? null : targetIndex;
 }

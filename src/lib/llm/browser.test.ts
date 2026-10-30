@@ -8,7 +8,7 @@ import { completeChat, probeRemoteApi, streamChat } from "./browser";
  *   ② 错误必须**抛出来**而不是返回半截内容，否则调用方会当成正常回答渲染。
  */
 
-function sseStream(chunks: string[]): ReadableStream<Uint8Array> {
+function sseStream(chunks: Array<string>): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
@@ -18,7 +18,7 @@ function sseStream(chunks: string[]): ReadableStream<Uint8Array> {
   });
 }
 
-function okStream(chunks: string[]) {
+function okStream(chunks: Array<string>) {
   return new Response(sseStream(chunks), { status: 200 });
 }
 
@@ -42,7 +42,7 @@ describe("streamChat", () => {
         okStream(['data: {"token":"你"}\n', 'data: {"token":"好"}\n', "data: [DONE]\n"]),
       ),
     );
-    const tokens: string[] = [];
+    const tokens: Array<string> = [];
     const full = await streamChat({
       messages: [{ role: "user", content: "hi" }],
       onToken: (t) => tokens.push(t),

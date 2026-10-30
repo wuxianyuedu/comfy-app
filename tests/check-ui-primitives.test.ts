@@ -42,7 +42,7 @@ function seedBaseline(repo: GateRepo): void {
  * 要求收紧 → --update 拒绝放宽」这套棘轮语义是给**新引入的判据**起步用的。
  * 不给它造一个执行者，这条路就没有任何测试覆盖，下次真加新判据时它是坏的也没人知道。
  */
-function demoteToRatchet(repo: GateRepo, ...ids: string[]): void {
+function demoteToRatchet(repo: GateRepo, ...ids: Array<string>): void {
   /* `HARD_GATE_RULES` 随声明层搬到了 `ui-primitives-rules.cjs`（ISSUE #1811 拆
    * R5 超限文件）：主脚本现在只剩机制，按 id 登记的表全在那一份里。
    * `defineGateRepo` 的 `copyGateDeps` 会沿 require 递归把依赖拷进临时仓库，

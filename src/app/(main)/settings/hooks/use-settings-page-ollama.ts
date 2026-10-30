@@ -44,7 +44,7 @@ const OLLAMA_START_POLL_INTERVAL_MS = OLLAMA_READY.baseMs;
 
 export interface UseSettingsOllama {
   ollamaStatus: OllamaStatus;
-  ollamaModels: OllamaModel[];
+  ollamaModels: Array<OllamaModel>;
   ollamaStarting: boolean;
   ollamaStopping: boolean;
   ollamaLog: RuntimeLogController & { active: boolean };
@@ -65,7 +65,7 @@ export function useSettingsOllama({
   showFlash: ActionReport;
 }): UseSettingsOllama {
   const [status, setStatus] = useState<OllamaStatus>("checking");
-  const [models, setModels] = useState<OllamaModel[]>([]);
+  const [models, setModels] = useState<Array<OllamaModel>>([]);
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
   /* 启动 / 关闭流程期间状态行的持有权标记：launch / stop 会自己落「启动中 /
