@@ -74,9 +74,7 @@ if (entry === null) {
    * 用 package.json 的依赖声明区分这两档，而不是猜。 */
   let inManifest;
   try {
-    const manifest = JSON.parse(
-      fs.readFileSync(path.join(root, "package.json"), "utf8"),
-    );
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
     const deps = {
       ...(manifest.dependencies ?? {}),
       ...(manifest.devDependencies ?? {}),
