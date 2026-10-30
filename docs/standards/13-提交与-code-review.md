@@ -6325,7 +6325,7 @@ A/B/D 又与 C 并行（挪走它们省不到墙钟），真正的大头 C 却�
 | 用什么取       | vitest 的 **junit reporter**：每个文件一个内层 `<testsuite name="tests/x.test.ts" time="0.33">`。`json` reporter 的 `duration` 是**逐用例**的、没有文件级时长 —— 拿它拼只能再自己加一遍聚合                                                                                                                                                                                            |
 | 落在哪         | 钩子的 `$LOGD`（每次新建、随 EXIT trap 删除、**不在检出里**）—— 写进检出就是未跟踪文件，被结构门禁那一套判，且会被下一次 checkout 牵走。平台那一格没有 `$LOGD`，由 `scripts/ci-affected-tests.mjs` 自己造一份同布局目录（`node_modules/.cache/comfy-affected-*`，跑完删掉）经 `LOGD` 交给启动器（ISSUE #2074）：此前这一格**没有账本**，复跑面每次都退回整块、对账也没做成             |
 | 怎么不顶掉输出 | **`--reporter=default` 与 `--reporter=junit` 两个都给**：只给 junit 会把人类可读的输出整个换掉，而真红那一屏是唯一能读的东西（由 `tests/hook-affected-launch.test.ts` 钉住）。唯一例外是 quiet 档（`--reporter=dot`，平台日志预算）：已经有人读的出口时**不再叠 default**，否则同一跑打印两遍，正好把 102400 字节的预算作废（`junitReportArgs` 的 `withDefaultReporter`，ISSUE #2074） |
-| 清单谁念 | quiet 档换掉的是**逐一打印的那一份**（`dot` 只打点），于是「这次跑了哪些用例」在平台日志里**一个文件名都没有**，只剩 `Tests N passed` —— 而清单里排在最前面的是**固定清单**（103 份），它们才是「这次守的到底是什么」的答案，总数答不了。所以 `affected-launch-file-list.mjs` 在 quiet 档把**送进 vitest 的那一份清单**逐行念一遍（默认 200 行封顶，超出只念条数；**只打、不为它多起一次 vitest**、不改任何判据）。不 quiet 时不打 —— 默认 reporter 已经打过了，重复打印会把那一档的预算又作废一次 |
+| 清单谁念 | quiet 档换掉的是**逐一打印的那一份**（`dot` 只打点），于是「这次跑了哪些用例」在平台日志里**一个文件名都没有**，只剩 `Tests N passed` —— 而清单里排在最前面的是**固定清单**（份数**不写在本文里**：现值取 `FIXED_STRUCTURAL_TESTS.length`，一条命令的取法见本节末「日志预算的另一半」那一段），它们才是「这次守的到底是什么」的答案，总数答不了。所以 `affected-launch-file-list.mjs` 在 quiet 档把**送进 vitest 的那一份清单**逐行念一遍（默认 200 行封顶，超出只念条数；**只打、不为它多起一次 vitest**、不改任何判据）。不 quiet 时不打 —— 默认 reporter 已经打过了，重复打印会把那一档的预算又作废一次 |
 | 两块 / 两遍    | 每块、每遍各一个文件。合并按 `(块, 遍)` 升序、**后写的覆盖先写的** ⇒ 隔离复跑那遍赢。拿首跑那组数排序会把**负载**读成**文件的成本**（§13.6.4 那一族）                                                                                                                                                                                                                                  |
 | 分母           | 同目录落一份「这次真正跑了哪些文件」的清单。没有它，「junit 里只有 88 份」与「清单就是 88 份」在账本里**逐字同形**，而前者意味着两份文件一次都没被计时 —— 缺的份数被点名，且明写「不是 0 秒」                                                                                                                                                                                          |
 | 对账           | 报表给「分文件之和 ⇄ 组 C 墙钟」两行对照：junit 的 `time` 只算**测试阶段**，不含 vitest 启动、收集/transform 与 worker 拉起。所以这张表用来**排序**，不能当墙钟用                                                                                                                                                                                                                      |
@@ -6361,8 +6361,12 @@ A/B/D 又与 C 并行（挪走它们省不到墙钟），真正的大头 C 却�
 「quiet 只换 reporter」买到了「结论不被逐文件的行挤出去」，代价是**「跑了哪些用例」
 在平台日志里彻底消失** —— `--reporter=dot` 只打点，`.cnb.yml` 那一格是 quiet，于是
 一屏日志只剩 `Tests 1116 passed (1116)` 这类总数。而清单里排在最前面的是**固定清单**
-（`scripts/fixed-structural-tests.mjs`，当下 103 份：日志实现只有一处、lib 的 Node-only
-声明口径、core 骨架单一事实源……），它们才是「这次守的到底是什么」的答案 —— 总数答不了。
+（`scripts/fixed-structural-tests.mjs`；**份数不写在本文里** —— 它随每次加判据变动，而「文档里那份数」
+没有任何判据会因它漂开而红，写下来就是一份会过期的读数且没人收到账。要现值就跑一条命令：
+`pnpm exec node -e "import('./scripts/fixed-structural-tests.mjs').then((m) => console.log(m.FIXED_STRUCTURAL_TESTS.length))"`
+—— 这也是上面 §13.5.8 那句「现值以 `FIXED_STRUCTURAL_TESTS` 为准」的唯一取法）。
+这份清单守的是**全库级不变量**：日志实现只有一处、lib 的 Node-only
+声明口径、core 骨架单一事实源……，它们才是「这次守的到底是什么」的答案 —— 总数答不了。
 
 > 平台对单次日志的硬上限是 102400 字节、**保留尾部**（见 `affected-launch-log-budget.mjs`
 > 的文件头）。所以这份清单打在**起 vitest 之前**、紧接着 `reporter：dot` 那行 —— 它落在
