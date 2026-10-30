@@ -63,6 +63,15 @@ const CLEAN = "export const PROBE = { a: 1, b: 2 };\n";
 /* 另一种干净形态（`--staged` 判面收窄那条用例要暂存一份**干净的**改动）。 */
 const CLEAN2 = "export const PROBE = { b: 2, a: 1 };\n";
 
+/**
+ * 「没有平台旗标」那一档的输入：**声明**不设它，而不是指望跑测试那一跳恰好没设。
+ *
+ * 平台的「受影响用例」运行器给每个 stage 进程都注入 `CNB_PULL_REQUEST_TARGET_SHA`
+ * （ISSUE #2795）：继承来的基线在临时夹具仓库里不存在 ⇒ 判据 fail-closed 退 2，
+ * 于是「本机绿、平台恒红」，而报错一个字都不指向「继承」这件事。
+ */
+const NO_PLATFORM_TARGET = { env: { CNB_PULL_REQUEST_TARGET_SHA: undefined } };
+
 /** 读工作区 HEAD 的 sha（`--changed` 用例拿它当 `CNB_PULL_REQUEST_TARGET_SHA`）。 */
 function gitSha(dir: string): string {
   return execFileSync("git", ["rev-parse", "HEAD"], {
@@ -369,7 +378,7 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
 
   test("本地那一档（没有平台旗标，走 merge-base 兜底）给出同一个面", ({ repo }) => {
     toMergeState(repo, CLEAN2);
-    const r = repo.run(["--staged"]);
+    const r = repo.run(["--staged"], NO_PLATFORM_TARGET);
     expect(r.code, r.output).toBe(0);
     expect(r.output).toContain("暂存面 1 份 → 收窄到本分支带来的 0 份");
     expect(r.output).not.toContain("src/lib/legacy.ts");
@@ -383,7 +392,7 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
      * 提交它就不是「合并那一刻」的形状了。 */
     repo.write("src/lib/mine.ts", DIRTY);
     gitOf(repo.dir, ["add", "src/lib/mine.ts"]);
-    const r = repo.run(["--staged"]);
+    const r = repo.run(["--staged"], NO_PLATFORM_TARGET);
     expect(r.code, r.output).toBe(1);
     expect(r.output).toContain("src/lib/mine.ts");
     /* 只点名这一份 —— 主干那份仍不在面内（两条同时断言，才排除「整个跳过」与
@@ -397,7 +406,7 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
     /* 把合并提交退回第一父：索引不动 ⇒ 暂存面 = 主干那份 delta，而 `MERGE_HEAD` 已不在。
      * 这一步之后判据必须**照旧**点名它 —— 收窄只绑在合并态，不是一副永久眼罩。 */
     gitOf(repo.dir, ["reset", "-q", "--soft", "HEAD^"]);
-    const r = repo.run(["--staged"]);
+    const r = repo.run(["--staged"], NO_PLATFORM_TARGET);
     expect(r.code, r.output).toBe(1);
     expect(r.output).toContain("src/lib/legacy.ts");
     expect(r.output).not.toContain("合并态（MERGE_HEAD 在场）");
