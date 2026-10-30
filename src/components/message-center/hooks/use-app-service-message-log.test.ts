@@ -38,17 +38,14 @@ function stubExitEndpoint({
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (!url.includes("/api/dev/last-exit")) {
         return new Response("{}", { status: 404 });
       }
       calls.lastExit += 1;
-      if (fail) throw new Error("network down");
+      if (fail) {
+        throw new Error("network down");
+      }
       return new Response(JSON.stringify({ record, currentRunId }), {
         status: 200,
       });
@@ -74,9 +71,7 @@ vi.mock("~/lib/shell/desktop-shell-client", () => ({
 }));
 
 function stubShellExitRecord(record: unknown = EXIT_RECORD) {
-  shell.readAppServiceExitRecord.mockResolvedValue(
-    record === null ? null : JSON.stringify(record),
-  );
+  shell.readAppServiceExitRecord.mockResolvedValue(record === null ? null : JSON.stringify(record));
 }
 
 type Facts = {
@@ -380,12 +375,9 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
      * React 提交一起排空，不需要挂钟。 */
     await act(async () => {
       release?.(
-        new Response(
-          JSON.stringify({ record: EXIT_RECORD, currentRunId: "run-new" }),
-          {
-            status: 200,
-          },
-        ),
+        new Response(JSON.stringify({ record: EXIT_RECORD, currentRunId: "run-new" }), {
+          status: 200,
+        }),
       );
     });
     expect(messages()).toHaveLength(0);
@@ -432,9 +424,7 @@ describe("useAppServiceMessageLog：每条消息盖「启动戳」", () => {
     expect(useMessageCenterStore.getState().currentRunId).toBe("d4e5f6");
 
     /* 推一条**不带 runId** 的（代码更新 / 版本更新就是这种），它应盖上当前这一次。 */
-    useMessageCenterStore
-      .getState()
-      .push({ kind: "info", title: "某次更新", body: "正文" });
+    useMessageCenterStore.getState().push({ kind: "info", title: "某次更新", body: "正文" });
     expect(messages()[0]!.runId).toBe("d4e5f6");
   });
 

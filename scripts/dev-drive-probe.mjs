@@ -111,7 +111,9 @@ export const ROOT = path.resolve(import.meta.dirname, "..");
  * @returns {string}
  */
 export function volumeRootOf(target, platform = process.platform) {
-  if (platform !== "win32") return "/";
+  if (platform !== "win32") {
+    return "/";
+  }
   return path.win32.parse(path.resolve(target)).root.toUpperCase();
 }
 
@@ -123,7 +125,9 @@ export function volumeRootOf(target, platform = process.platform) {
  * @returns {boolean}
  */
 export function isSameVolume(a, b, platform = process.platform) {
-  if (!a || !b) return false;
+  if (!a || !b) {
+    return false;
+  }
   return volumeRootOf(a, platform) === volumeRootOf(b, platform);
 }
 
@@ -136,9 +140,15 @@ export function classifyFilesystem(fsType) {
   const value = String(fsType ?? "")
     .trim()
     .toLowerCase();
-  if (!value) return "unknown";
-  if (value === "refs") return "refs";
-  if (value === "ntfs") return "ntfs";
+  if (!value) {
+    return "unknown";
+  }
+  if (value === "refs") {
+    return "refs";
+  }
+  if (value === "ntfs") {
+    return "ntfs";
+  }
   return "other";
 }
 
@@ -152,9 +162,13 @@ export function classifyFilesystem(fsType) {
  * @returns {string}
  */
 function decodeOutput(buffer) {
-  if (!buffer || buffer.length === 0) return "";
+  if (!buffer || buffer.length === 0) {
+    return "";
+  }
   const utf8 = new TextDecoder("utf-8").decode(buffer);
-  if (!utf8.includes("\uFFFD")) return utf8;
+  if (!utf8.includes("\uFFFD")) {
+    return utf8;
+  }
   try {
     return new TextDecoder("gbk").decode(buffer);
   } catch {
@@ -205,7 +219,9 @@ export function runPowerShell(command, platform = process.platform) {
   let last = { ok: false, stdout: "", stderr: "", status: null, error: "没有可用的 PowerShell" };
   for (const shell of ["pwsh", "powershell.exe"]) {
     const result = runCommand(shell, ["-NoProfile", "-Command", prefixed]);
-    if (!result.error) return result;
+    if (!result.error) {
+      return result;
+    }
     last = result;
   }
   return last;
@@ -329,7 +345,9 @@ export function probeDevDrive(volume, platform) {
  */
 function physicalClusters(file) {
   const result = runCommand("fsutil", ["file", "queryextents", file]);
-  if (!result.ok) return null;
+  if (!result.ok) {
+    return null;
+  }
   const matches = [...result.stdout.matchAll(/LCN:\s*(0x[0-9a-f]+)/g)].map((m) => m[1]);
   return matches.length > 0 ? matches.join(",") : null;
 }
@@ -425,7 +443,9 @@ export function probePnpmStore(platform) {
   try {
     const workspaceConfig = fs.readFileSync(path.join(ROOT, "pnpm-workspace.yaml"), "utf8");
     const matched = workspaceConfig.match(/^\s*package-import-method:\s*(\S+)/m);
-    if (matched) importMethod = matched[1] ?? null;
+    if (matched) {
+      importMethod = matched[1] ?? null;
+    }
   } catch {
     importMethod = null;
   }
@@ -530,7 +550,9 @@ export function probeWorkdirs(platform) {
     { name: "src-tauri/target", target: path.join(ROOT, "src-tauri", "target") },
   ];
   const gitDir = resolveGitDir(ROOT);
-  if (gitDir) entries.push({ name: "git-dir", target: gitDir });
+  if (gitDir) {
+    entries.push({ name: "git-dir", target: gitDir });
+  }
   return entries.map(({ name, target }) => {
     const exists = fs.existsSync(target);
     let realPath = target;
@@ -555,12 +577,13 @@ export function probeWorkdirs(platform) {
  * @param {NodeJS.Platform} platform
  * @returns {DefenderProbe}
  */
-export function probeDefender(platform) {  if (platform !== "win32") {
+export function probeDefender(platform) {
+  if (platform !== "win32") {
     return { known: false, realTime: null, exclusions: [], performanceMode: false };
   }
   const result = runPowerShell(
     "$p = Get-MpPreference -ErrorAction SilentlyContinue; " +
-      "if ($p) { \"$($p.DisableRealtimeMonitoring)|$($p.ExclusionPath -join ';')\" } else { \"|\" }",
+      'if ($p) { "$($p.DisableRealtimeMonitoring)|$($p.ExclusionPath -join \';\')" } else { "|" }',
     platform,
   );
   const [flag = "", excluded = ""] = result.stdout.split("|");
@@ -589,11 +612,15 @@ export function probeDefender(platform) {  if (platform !== "win32") {
  */
 export function probeIndexMarking(platform) {
   const empty = { known: false, sampled: 0, marked: 0, ratio: null };
-  if (platform !== "win32") return empty;
+  if (platform !== "win32") {
+    return empty;
+  }
   const roots = [path.join(ROOT, "src"), path.join(ROOT, "docs")].filter((item) =>
     fs.existsSync(item),
   );
-  if (roots.length === 0) return empty;
+  if (roots.length === 0) {
+    return empty;
+  }
   const parts = roots.map(
     (item) =>
       `Get-ChildItem -LiteralPath '${item}' -Recurse -File -Force -ErrorAction SilentlyContinue`,
@@ -603,7 +630,9 @@ export function probeIndexMarking(platform) {
       `"$($files.Count)|$(@($files | Where-Object { $_.Attributes -band [IO.FileAttributes]::NotContentIndexed }).Count)"`,
     platform,
   );
-  if (!result.ok) return empty;
+  if (!result.ok) {
+    return empty;
+  }
   const [total = "", marked = ""] = result.stdout.split("|");
   const sampled = Number(total);
   const hits = Number(marked);

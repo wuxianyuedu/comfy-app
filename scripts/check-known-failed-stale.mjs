@@ -71,9 +71,7 @@ export function checkRegistrations(registered, exists) {
   const seen = new Set();
   for (const rel of registered) {
     if (seen.has(rel)) {
-      problems.push(
-        `${rel} 在登记表里出现了两次 —— 重复登记说明有人顺手又加了一条。`,
-      );
+      problems.push(`${rel} 在登记表里出现了两次 —— 重复登记说明有人顺手又加了一条。`);
       continue;
     }
     seen.add(rel);
@@ -107,12 +105,7 @@ export function checkRegistrations(registered, exists) {
  *        vitest 写下的 JSON 结果（null = 没写出来 / 解析不了 = 没跑过）
  * @returns {{exitCode: number, problems: string[], failedFiles: string[]}} 判决
  */
-export function judgeStillFailing(
-  registered,
-  runResult,
-  commandLine,
-  evidence,
-) {
+export function judgeStillFailing(registered, runResult, commandLine, evidence) {
   /** @type {string[]} */
   const problems = [];
   if (runResult.error) {
@@ -151,7 +144,9 @@ export function judgeStillFailing(
   for (const rel of registered) {
     const abs = path.join(ROOT, rel).replaceAll("\\", "/");
     const status = byAbs.get(abs);
-    if (status === "failed") continue;
+    if (status === "failed") {
+      continue;
+    }
     // 没被这一场跑到（或跑到但绿了）：两者都是「这条登记没在红」。
     failures.push({ rel, status: status ?? "未跑到" });
   }
@@ -205,8 +200,7 @@ function readEvidence() {
     const raw = JSON.parse(fs.readFileSync(resultFile(), "utf8"));
     return {
       files: Array.isArray(raw.testResults) ? raw.testResults : [],
-      numTotalTests:
-        typeof raw.numTotalTests === "number" ? raw.numTotalTests : 0,
+      numTotalTests: typeof raw.numTotalTests === "number" ? raw.numTotalTests : 0,
     };
   } catch {
     return null;
@@ -288,8 +282,13 @@ function main() {
   const argv = process.argv.slice(2);
 
   if (argv.includes("--list")) {
-    if (KNOWN_FAILED_FILES.length === 0) console.log("（空）");
-    else for (const f of KNOWN_FAILED_FILES) console.log(f);
+    if (KNOWN_FAILED_FILES.length === 0) {
+      console.log("（空）");
+    } else {
+      for (const f of KNOWN_FAILED_FILES) {
+        console.log(f);
+      }
+    }
     return 0;
   }
 
@@ -364,7 +363,9 @@ function main() {
   );
 
   const existence = checkRegistrations(KNOWN_FAILED_FILES, isTracked);
-  for (const p of existence.problems) console.error(`  ✗ ${p}`);
+  for (const p of existence.problems) {
+    console.error(`  ✗ ${p}`);
+  }
   if (existence.exitCode !== 0) {
     console.error(
       "  [known-failed-stale] 登记表里有指向不存在文件的条目，先修这一层（真跑没有意义）。",
@@ -374,23 +375,13 @@ function main() {
   console.log("  [ok] 每个登记项都指向一个被 git 跟踪的真实文件");
 
   const result = runRegistered(KNOWN_FAILED_FILES);
-  const judged = judgeStillFailing(
-    KNOWN_FAILED_FILES,
-    result,
-    result.commandLine,
-    readEvidence(),
-  );
+  const judged = judgeStillFailing(KNOWN_FAILED_FILES, result, result.commandLine, readEvidence());
   if (judged.exitCode !== 0) {
     // 把 vitest 的真实输出带出来：判据说「全绿」时，读的人需要能自己确认那不是
     // 「一条都没跑到」。只打结论等于把人挡在证据外面（同 §11.13 的复算要求）。
-    const tail = (result.stdout + result.stderr)
-      .split(/\r?\n/)
-      .slice(-25)
-      .join("\n");
+    const tail = (result.stdout + result.stderr).split(/\r?\n/).slice(-25).join("\n");
     console.error(`  ✗ ${judged.problems.join("\n")}`);
-    console.error(
-      `  ── vitest 输出（末 25 行，命令：${result.commandLine}）──`,
-    );
+    console.error(`  ── vitest 输出（末 25 行，命令：${result.commandLine}）──`);
     console.error(tail);
     return 1;
   }
@@ -401,10 +392,6 @@ function main() {
   return 0;
 }
 
-if (
-  process.argv[1] &&
-  fs.realpathSync(process.argv[1]) ===
-    fs.realpathSync(import.meta.filename)
-) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(import.meta.filename)) {
   process.exit(main());
 }

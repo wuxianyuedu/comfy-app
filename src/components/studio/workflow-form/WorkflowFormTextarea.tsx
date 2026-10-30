@@ -41,7 +41,9 @@ export function AutoResizeTextarea({
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const resize = useCallback(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     // 重置成 "auto"，好让 scrollHeight 只反映自然内容高度
     //（否则会被夹到上一次的显式高度）。
     el.style.height = "auto";

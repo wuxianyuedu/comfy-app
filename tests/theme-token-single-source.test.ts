@@ -55,15 +55,22 @@ const sourceCss = readFileSync(path.resolve(__dirname, "../src/app/globals.css")
  */
 function braceBlock(source: string, startMarker: string): string {
   const marker = source.indexOf(startMarker);
-  if (marker < 0) throw new Error(`找不到起始标记：${startMarker}`);
+  if (marker < 0) {
+    throw new Error(`找不到起始标记：${startMarker}`);
+  }
   const open = source.indexOf("{", marker);
-  if (open < 0) throw new Error(`${startMarker} 后面没有 {`);
+  if (open < 0) {
+    throw new Error(`${startMarker} 后面没有 {`);
+  }
   let depth = 0;
   for (let i = open; i < source.length; i++) {
-    if (source[i] === "{") depth += 1;
-    else if (source[i] === "}") {
+    if (source[i] === "{") {
+      depth += 1;
+    } else if (source[i] === "}") {
       depth -= 1;
-      if (depth === 0) return source.slice(open + 1, i);
+      if (depth === 0) {
+        return source.slice(open + 1, i);
+      }
     }
   }
   throw new Error(`${startMarker} 的花括号没闭合`);
@@ -137,7 +144,9 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
       ["浅色", rawL],
       ["深色", rawD],
     ] as const) {
-      if (raw === undefined) continue;
+      if (raw === undefined) {
+        continue;
+      }
       expect(raw, `${name} ${label}档应转发到项目 token，而不是写死`).toMatch(
         /^var\(\s*--color-[a-z0-9-]+\s*\)$/,
       );
@@ -151,7 +160,9 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
     for (const name of ALIASES) {
       const rawL = light.raw(name);
       const rawD = dark.raw(name);
-      if (rawL === undefined || rawD === undefined) continue;
+      if (rawL === undefined || rawD === undefined) {
+        continue;
+      }
       expect.soft(rawL, `${name} 又按主题写了两份（应只转发表达一次）`).toBe(rawD);
     }
   });
@@ -185,7 +196,11 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
       "--shadow-card", // 浮层卡片投影（Tailwind shadow 命名空间）
     ];
     const declared = new Set<string>();
-    for (const m of sourceCss.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)) if (m[1]) declared.add(m[1]);
+    for (const m of sourceCss.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)) {
+      if (m[1]) {
+        declared.add(m[1]);
+      }
+    }
     const stray = [...declared].filter(
       (n) =>
         !KNOWN_PREFIXES.some((p) => n.startsWith(p)) &&
@@ -257,7 +272,9 @@ describe("T3 var() 引用链无环、不漏到未定义的名字", () => {
     /* 软断言：这三条是一张 30 条别名的清单上的逐项检查 —— 一条别名成环不该
        把其余 29 条的结论一起藏起来（§11.18）。 */
     for (const name of ALIASES) {
-      if (!t.has(name)) continue;
+      if (!t.has(name)) {
+        continue;
+      }
       expect.soft(() => t.get(name), `${name} 解析抛错（多半是成环或缺定义）`).not.toThrow();
       expect.soft(t.get(name), `${name} 解不出具体值`).toBeTruthy();
       expect.soft(t.get(name), `${name} 解出的仍是未展开的 var()`).not.toMatch(/var\(/);

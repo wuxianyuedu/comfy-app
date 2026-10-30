@@ -52,7 +52,9 @@ function tmpDir(tag: string): string {
 }
 
 afterEach(() => {
-  for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of made.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** 一份「打出过成品」的工作区：bundle 根下两份安装包 + 一份非安装包（不许被收走）。 */

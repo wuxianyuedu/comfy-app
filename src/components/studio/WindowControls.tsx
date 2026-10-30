@@ -95,9 +95,13 @@ export function useWindowMaximized(): [boolean, (next: boolean) => void] {
     let alive = true;
     void (async () => {
       const current = await isWindowMaximized();
-      if (alive) setMaximized(current);
+      if (alive) {
+        setMaximized(current);
+      }
       unlisten = await onWindowResized((next) => {
-        if (alive) setMaximized(next);
+        if (alive) {
+          setMaximized(next);
+        }
       });
     })();
     return () => {
@@ -120,15 +124,18 @@ export function useWindowMaximized(): [boolean, (next: boolean) => void] {
  */
 export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0) {
+      return;
+    }
     if (
       !isDragRegionTarget(
         /* SAFETY: 类型断言已复核 */ e.target as unknown as {
           closest?: (s: string) => unknown;
         },
       )
-    )
+    ) {
       return;
+    }
     void startWindowDrag();
   }, []);
 
@@ -140,10 +147,13 @@ export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
             closest?: (s: string) => unknown;
           },
         )
-      )
+      ) {
         return;
+      }
       void toggleMaximizeWindow().then((next) => {
-        if (next !== null) setMaximized(next);
+        if (next !== null) {
+          setMaximized(next);
+        }
       });
     },
     [setMaximized],
@@ -173,7 +183,9 @@ export function WindowControls({
         kind={resolveMaximizeButtonKind(maximized)}
         onClick={() => {
           void toggleMaximizeWindow().then((next) => {
-            if (next !== null) onMaximizedChange(next);
+            if (next !== null) {
+              onMaximizedChange(next);
+            }
           });
         }}
       />

@@ -77,7 +77,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   /* 没有显式钉住时，视图重置到活跃任务。 */
   const taskId = viewTaskId ?? activeTaskId;
   useEffect(() => {
-    if (activeTaskId && !viewTaskId) setViewTaskId(activeTaskId);
+    if (activeTaskId && !viewTaskId) {
+      setViewTaskId(activeTaskId);
+    }
   }, [activeTaskId, viewTaskId]);
 
   /* 监听该任务的执行日志流：SSE 建连 / 帧解析 / 关流 / 播种 / 空闲卡住检测
@@ -93,7 +95,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   });
   const onCancelFromPanel = () => {
     // 无任务时按钮本就禁用（下方 disabled），这里只是防重复点击的兜底。
-    if (!taskId) return;
+    if (!taskId) {
+      return;
+    }
     return cancelFromPanel();
   };
 
@@ -118,7 +122,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
    * 随后通过 patchStepLogMeta 持久化到 stepLogCache。 */
   /* 弹窗已打开时不受 debugMode 开关影响（关闭开关不应让正在查看的日志
    * 瞬间消失）；关闭弹窗后入口按钮与弹窗一起隐藏。 */
-  if (!debugMode && !open) return null;
+  if (!debugMode && !open) {
+    return null;
+  }
 
   /* 弹窗里的行数是一处界面预算，不是「倒数 300 条」这段算式各写一遍 ——
    * 尾部窗口收在`~/lib/page-window`（规范 16 §16.2.4.67）。 */

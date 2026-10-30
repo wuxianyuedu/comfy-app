@@ -129,7 +129,9 @@ describe("EncapsulationTestForm", () => {
     /* 原因现在由 `<Hint label wrap>` 承载：`disabled` 的按钮不发指针事件，
      * 提示挂在它外层锚点上（见 `ui/hint` 的 `wrap` 一档），悬停锚点才读得到。 */
     const anchor = button.parentElement;
-    if (!anchor) throw new Error("找不到 <Hint wrap> 的锚点层");
+    if (!anchor) {
+      throw new Error("找不到 <Hint wrap> 的锚点层");
+    }
     await userEvent.hover(anchor);
     expect(await screen.findByText("提示词未落到端口")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("输入负向提示词")).toBeDisabled();

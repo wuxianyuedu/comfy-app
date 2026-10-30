@@ -98,7 +98,9 @@ export function WorkflowRunRawCliModal({
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current);
+      }
     };
   }, []);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -110,19 +112,29 @@ export function WorkflowRunRawCliModal({
   const loadRef = useRef<(background?: boolean) => void>(() => undefined);
 
   useEffect(() => {
-    if (!open || !taskId) return;
+    if (!open || !taskId) {
+      return;
+    }
     let alive = true;
     const doLoad = (background = false) => {
-      if (!alive) return;
-      if (!background) setLoaded(false);
+      if (!alive) {
+        return;
+      }
+      if (!background) {
+        setLoaded(false);
+      }
       void fetchRawCli(taskId)
         .then((l) => {
           /* 逐字比对后才写 state：内容没变时保持旧数组，整棵列表一次都不重渲染。 */
-          if (alive) setLines((prev) => (sameRawCliLines(prev, l) ? prev : l));
+          if (alive) {
+            setLines((prev) => (sameRawCliLines(prev, l) ? prev : l));
+          }
         })
         .catch(() => undefined)
         .finally(() => {
-          if (alive) setLoaded(true);
+          if (alive) {
+            setLoaded(true);
+          }
         });
     };
     loadRef.current = doLoad;
@@ -148,13 +160,17 @@ export function WorkflowRunRawCliModal({
   const copy = useCopyFeedback({
     onSuccess: () => {
       setCopied(true);
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current);
+      }
       copiedTimerRef.current = setTimeout(() => setCopied(false), 1500);
     },
     onFailure: "silent",
   });
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>

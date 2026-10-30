@@ -182,9 +182,13 @@ export function pickNodeVersion(index, floor) {
   /** @type {{version: string, parts: [number, number, number]}[]} */
   const parsed = [];
   for (const entry of index ?? []) {
-    if (!(entry.files ?? []).includes("linux-x64")) continue;
+    if (!(entry.files ?? []).includes("linux-x64")) {
+      continue;
+    }
     const m = /^v(\d+)\.(\d+)\.(\d+)$/.exec(entry.version);
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     parsed.push({
       version: entry.version,
       parts: [Number(m[1]), Number(m[2]), Number(m[3])],
@@ -239,15 +243,21 @@ export function toolingVersionsFromLock(lockText, names) {
   const lines = String(lockText ?? "").split("\n");
   const starts = [];
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i] === "importers:") starts.push(i);
+    if (lines[i] === "importers:") {
+      starts.push(i);
+    }
   }
-  if (starts.length === 0) return out;
+  if (starts.length === 0) {
+    return out;
+  }
   const from = /** @type {number} */ (starts[starts.length - 1]);
   const block = [];
   for (let i = from + 1; i < lines.length; i++) {
     /* 顶格的行 = 又一个顶层键（`packages:` / `settings:` / `snapshots:`）。 */
     const line = String(lines[i] ?? "");
-    if (/^\S/.test(line)) break;
+    if (/^\S/.test(line)) {
+      break;
+    }
     block.push(line);
   }
   const text = block.join("\n");
@@ -262,7 +272,9 @@ export function toolingVersionsFromLock(lockText, names) {
       "m",
     );
     const m = re.exec(text);
-    if (m) out[name] = /** @type {string} */ (m[2]);
+    if (m) {
+      out[name] = /** @type {string} */ (m[2]);
+    }
   }
   return out;
 }
@@ -452,9 +464,15 @@ export function imagePlanLayersAreOrdered(dockerfile) {
   const install = at(/^RUN pnpm install/m);
   const copyAll = at(/^COPY \. \./m);
   const playwright = at(/^RUN .*playwright install/m);
-  if (copyManifests < 0) problems.push("没有 `COPY package.json …` 那一行（依赖层没有输入）");
-  if (install < 0) problems.push("没有 `RUN pnpm install --frozen-lockfile` 那一行");
-  if (copyAll < 0) problems.push("没有 `COPY . .` 那一行（源码进不去）");
+  if (copyManifests < 0) {
+    problems.push("没有 `COPY package.json …` 那一行（依赖层没有输入）");
+  }
+  if (install < 0) {
+    problems.push("没有 `RUN pnpm install --frozen-lockfile` 那一行");
+  }
+  if (copyAll < 0) {
+    problems.push("没有 `COPY . .` 那一行（源码进不去）");
+  }
   if (copyManifests >= 0 && install >= 0 && copyManifests > install) {
     problems.push(
       "`COPY package.json …` 排在 `pnpm install` 之后 —— 依赖层因此永远拿不到输入，" +
@@ -604,7 +622,9 @@ export function tarHeader(
   put("ustar\0" + "00", 257, 8);
   /* 校验和 = 头部全部字节（校验和字段按 8 个空格算）之和。 */
   let sum = 0;
-  for (const byte of head) sum += byte;
+  for (const byte of head) {
+    sum += byte;
+  }
   put(sum.toString(8).padStart(6, "0") + "\0 ", 148, 8);
   return head;
 }
@@ -612,7 +632,9 @@ export function tarHeader(
 /** 把内容补到 512 的整数倍。 */
 function pad512(/** @type {Buffer} */ content) {
   const rem = content.length % 512;
-  if (rem === 0) return content;
+  if (rem === 0) {
+    return content;
+  }
   return Buffer.concat([content, Buffer.alloc(512 - rem)]);
 }
 
@@ -743,7 +765,9 @@ export function main({
   log("\n# ── 3) 装进宿主机（拷出来，不挂载宿主目录）──");
   log(plan.cp);
   log("\n# ── 4) 逐件核对（与本文件构建期自证同一份清单）──");
-  for (const line of checkCommands()) log(`  ${line}`);
+  for (const line of checkCommands()) {
+    log(`  ${line}`);
+  }
   log("\n# ── 5) 钉成机器级标识（`镜像身份` 那一档读的两个变量）──");
   log(
     `docker image inspect --format "{{index .RepoDigests 0}}" ${plan.tag}` +

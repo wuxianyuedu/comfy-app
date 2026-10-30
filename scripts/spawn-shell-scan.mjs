@@ -134,12 +134,12 @@ const ARG_LITERAL_CMD_RE = /^["'`][^"'`]*\.(?:cmd|bat)\b["'`]$/i;
 function childProcessImports(src) {
   /** @type {Set<string>} */
   const names = new Set();
-  for (const m of src.matchAll(
-    /import\s*\{([^}]*)\}\s*from\s*["']node:child_process["']/g,
-  )) {
+  for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']node:child_process["']/g)) {
     for (const part of (m[1] ?? "").split(",")) {
       const name = (part.trim().split(/\s+as\s+/)[0] ?? "").trim();
-      if (name) names.add(name);
+      if (name) {
+        names.add(name);
+      }
     }
   }
   return names;
@@ -164,8 +164,11 @@ function argumentSpans(src, open) {
   for (let i = open + 1; i < src.length; i += 1) {
     const ch = src[i];
     if (quote !== null) {
-      if (ch === "\\") i += 1;
-      else if (ch === quote) quote = null;
+      if (ch === "\\") {
+        i += 1;
+      } else if (ch === quote) {
+        quote = null;
+      }
       continue;
     }
     if (ch === '"' || ch === "'" || ch === "`") {
@@ -178,7 +181,9 @@ function argumentSpans(src, open) {
     }
     if (ch === ")" || ch === "]" || ch === "}") {
       if (depth === 0) {
-        if (ch !== ")") return null;
+        if (ch !== ")") {
+          return null;
+        }
         spans.push({ start, end: i });
         return spans;
       }
@@ -209,14 +214,18 @@ function maskStringContents(text) {
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i];
     if (quote === null) {
-      if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+      if (ch === '"' || ch === "'" || ch === "`") {
+        quote = ch;
+      }
       out += ch;
       continue;
     }
     if (ch === "\\") {
       const next = text[i + 1];
       out += ch + (next === undefined ? "" : next === "\n" ? "\n" : " ");
-      if (next !== undefined) i += 1;
+      if (next !== undefined) {
+        i += 1;
+      }
       continue;
     }
     if (ch === quote) {
@@ -240,8 +249,11 @@ function depthAt(masked, index) {
   let depth = 0;
   for (let i = 0; i < index; i += 1) {
     const ch = masked[i];
-    if (ch === "{" || ch === "(" || ch === "[") depth += 1;
-    else if (ch === "}" || ch === ")" || ch === "]") depth -= 1;
+    if (ch === "{" || ch === "(" || ch === "[") {
+      depth += 1;
+    } else if (ch === "}" || ch === ")" || ch === "]") {
+      depth -= 1;
+    }
   }
   return depth;
 }
@@ -257,15 +269,16 @@ export function findShellOptionsIn(src, rel = "(inline)") {
   /** @type {Set<string>} */
   const offenders = new Set();
   const lines = src.split("\n");
-  const lineOf = (/** @type {number} */ index) =>
-    src.slice(0, index).split("\n").length;
+  const lineOf = (/** @type {number} */ index) => src.slice(0, index).split("\n").length;
   /* `exec` / `execSync` 只认 child_process 那一个（见 `childProcessImports` 头注）：
    * 局部函数 / 注入端口同名不算。 */
   const cpNames = childProcessImports(src);
   for (const call of src.matchAll(new RegExp(SPAWN_CALLEE_SOURCE, "g"))) {
     const open = (call.index ?? 0) + call[0].length - 1;
     const spans = argumentSpans(src, open);
-    if (spans === null) continue;
+    if (spans === null) {
+      continue;
+    }
     for (const span of spans) {
       const text = src.slice(span.start, span.end);
       const trimmed = text.trim();
@@ -280,12 +293,16 @@ export function findShellOptionsIn(src, rel = "(inline)") {
         );
       }
       /* 只有**对象字面量**才是选项对象：字符串 / 数组 / 变量 / 回调都不是本判据的面 */
-      if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) continue;
+      if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+        continue;
+      }
       const masked = maskStringContents(text);
       for (const m of masked.matchAll(new RegExp(SHELL_OPTION_RE.source, "g"))) {
         /* 深度 1 = 选项对象的顶层键。嵌套对象里的同名键不是 spawn 的选项不判；
          * 深度 0 是字面量之前（不可能命中，留着当防御）。 */
-        if (depthAt(masked, m.index ?? 0) !== 1) continue;
+        if (depthAt(masked, m.index ?? 0) !== 1) {
+          continue;
+        }
         const line = lineOf(span.start + (m.index ?? 0));
         offenders.add(`${rel}:${line}: ${(lines[line - 1] ?? "").trim()}`);
       }
@@ -295,7 +312,9 @@ export function findShellOptionsIn(src, rel = "(inline)") {
    * 扫描永远看不见（缺口 2）。这里单独收，但只认 child_process 那个绑定。 */
   for (const call of src.matchAll(new RegExp(EXEC_CALLEE_RE, "g"))) {
     const fn = call[0].replace(/\s*\($/, "");
-    if (!cpNames.has(fn)) continue;
+    if (!cpNames.has(fn)) {
+      continue;
+    }
     const line = lineOf(call.index ?? 0);
     offenders.add(
       `${rel}:${line}: ${(lines[line - 1] ?? "").trim()} ` +
@@ -321,11 +340,15 @@ function collect(dir, out = []) {
     const full = path.join(dir, name);
     const st = fs.statSync(full);
     if (st.isDirectory()) {
-      if (name === "node_modules") continue;
+      if (name === "node_modules") {
+        continue;
+      }
       collect(full, out);
       continue;
     }
-    if (/\.(?:mjs|cjs|ts|tsx|jsx)$/.test(name)) out.push(full);
+    if (/\.(?:mjs|cjs|ts|tsx|jsx)$/.test(name)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -346,7 +369,9 @@ export function findShellOptions(root = ROOT) {
   const offenders = [];
   for (const sub of SCAN_SUBDIRS) {
     const base = path.join(root, sub);
-    if (!fs.existsSync(base)) continue;
+    if (!fs.existsSync(base)) {
+      continue;
+    }
     for (const file of collect(base)) {
       const rel = path.relative(root, file).split(path.sep).join("/");
       /* `trailing: true`：默认档只去整行注释，会把 `const a = 1; // 别写 shell: true`
@@ -362,10 +387,7 @@ export function findShellOptions(root = ROOT) {
 
 /* 直接执行时给人读的报告（`node scripts/spawn-shell-scan.mjs [--root <dir>]`）。
  * `--root` 供阳性对照（canary）：在临时树里放一个已知违例，确认本脚本退出码非 0。 */
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   const rootFlag = process.argv.indexOf("--root");
   const scanRoot = rootFlag !== -1 ? process.argv[rootFlag + 1] : ROOT;
   const offenders = findShellOptions(scanRoot);
@@ -375,10 +397,13 @@ if (
         "且开了 shell 参数要自己括引号）—— 改用" +
         "`spawn(process.execPath, [resolvePackageBinEntry(pkg), …])` 直起包真身：\n",
     );
-    for (const o of offenders) process.stderr.write(`  ${o}\n`);
+    for (const o of offenders) {
+      process.stderr.write(`  ${o}\n`);
+    }
     process.exit(1);
   }
-  const msg = "[spawn-shell-scan] OK：scripts/ tools/ .storybook/ e2e/ 里没有起子进程走 shell 的形态（含 exec/execSync 与 .cmd/.bat 直接 spawn）";
+  const msg =
+    "[spawn-shell-scan] OK：scripts/ tools/ .storybook/ e2e/ 里没有起子进程走 shell 的形态（含 exec/execSync 与 .cmd/.bat 直接 spawn）";
   if (process.argv.includes("--json")) {
     process.stdout.write(JSON.stringify({ ok: true, offenders }));
   } else {

@@ -151,9 +151,13 @@ const APPROVAL_MODES: ReadonlyArray<ApprovalMode> = ["auto", "stage", "shot"];
 function parseRevMap(raw: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   const source = asRecord(raw);
-  if (!source) return out;
+  if (!source) {
+    return out;
+  }
   for (const [key, value] of Object.entries(source)) {
-    if (typeof value === "number" && Number.isFinite(value)) out[key] = value;
+    if (typeof value === "number" && Number.isFinite(value)) {
+      out[key] = value;
+    }
   }
   return out;
 }
@@ -161,7 +165,9 @@ function parseRevMap(raw: unknown): Record<string, number> {
 /** 未知值（production.run 列）→ 规范化 ProductionProgress run；非法/缺字段回落默认，不抛。 */
 export function normalizeProductionRun(raw: unknown): ProductionRun {
   const obj = asRecord(raw);
-  if (!obj) return { ...DEFAULT_PRODUCTION_RUN };
+  if (!obj) {
+    return { ...DEFAULT_PRODUCTION_RUN };
+  }
   const status = RUN_STATUSES.includes(/* SAFETY: 类型断言已复核 */ obj.status as RunStatus)
     ? /* SAFETY: 类型断言已复核 */ (obj.status as RunStatus)
     : "idle";
@@ -174,7 +180,9 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
   if (Array.isArray(obj.log)) {
     for (const raw of obj.log) {
       const rec = asRecord(raw);
-      if (!rec || typeof rec.ts !== "string") continue;
+      if (!rec || typeof rec.ts !== "string") {
+        continue;
+      }
       log.push({
         ts: rec.ts,
         kind: typeof rec.kind === "string" ? rec.kind : "info",
@@ -264,7 +272,9 @@ export function toRunView(production: ProductionLike | null): ProductionRunView 
   const shots: Array<ShotRunView> = [];
   for (const item of shotsRaw) {
     const rec = asRecord(item);
-    if (!rec || typeof rec.id !== "string") continue;
+    if (!rec || typeof rec.id !== "string") {
+      continue;
+    }
     shots.push({
       id: rec.id,
       rev: typeof rec.rev === "number" && Number.isFinite(rec.rev) ? rec.rev : 0,
@@ -324,7 +334,9 @@ export function planNextRunAction(view: ProductionRunView, run: ProductionRun): 
       // idle / paused / failed / cancelled → 引擎不动作。
       return { kind: "idle" };
   }
-  if (!view.hasScript) return { kind: "generate_script" };
+  if (!view.hasScript) {
+    return { kind: "generate_script" };
+  }
   // 剧本质量闭环（FR-QA-07 ④ · #2478）：剧本指纹 ≠ 评审收口快照 → 待评审（首评 =
   // 快照还是空串，同样命中）；评审提出改写 → 先定向改写（改完剧本变 → 指纹变 → 回到待评审）。
   // 「人机接力」靠同一把指纹：人改剧本 → 指纹变 → AI 从人改的版本继续评。
@@ -332,31 +344,43 @@ export function planNextRunAction(view: ProductionRunView, run: ProductionRun): 
   // → 视为已收口，AI 不再评；人否决不产生豁免（不收口，AI 循环照跑——改写后指纹变，
   // 旧裁决自然失效）。
   if (run.autoReview) {
-    if (run.scriptRevisionPending) return { kind: "revise_script" };
+    if (run.scriptRevisionPending) {
+      return { kind: "revise_script" };
+    }
     const humanApproved =
       view.scriptHumanVerdict?.pass === true &&
       view.scriptHumanVerdict.digest === view.scriptDigest;
-    if (run.scriptReviewDigest !== view.scriptDigest && !humanApproved)
+    if (run.scriptReviewDigest !== view.scriptDigest && !humanApproved) {
       return { kind: "review_script" };
+    }
   }
-  if (view.characterCount === 0) return { kind: "extract_characters" };
-  if (view.shots.length === 0) return { kind: "plan_storyboard" };
+  if (view.characterCount === 0) {
+    return { kind: "extract_characters" };
+  }
+  if (view.shots.length === 0) {
+    return { kind: "plan_storyboard" };
+  }
   // 分镜联动（#2478 ④）：分镜之后剧本变过（AI 改写定稿 / 人手改）→ 重排分镜，
   // 让下游真的吃到新剧本（FR-QA-01「改剧本重跑分镜，镜头描述随之改变」）。
   // 分镜是整幅覆盖（既有语义），因此只在 autoReview 的自动链路里生效；快照在
   // 引擎执行 plan_storyboard 时写入 —— 没变过的剧本不会反复重排。
-  if (run.autoReview && run.storyboardScriptDigest !== view.scriptDigest)
+  if (run.autoReview && run.storyboardScriptDigest !== view.scriptDigest) {
     return { kind: "plan_storyboard" };
+  }
   const needImage = view.shots
     .filter((s) => {
-      if (!s.hasImage) return true;
+      if (!s.hasImage) {
+        return true;
+      }
       // 仅当「本 run 之前处理过该镜」且当前 rev 又变新（用户在其后改过 / 退回），才重做；
       // 从未被本 run 处理过（快照缺省）时，已有图的镜头视为已完成、不纳入。
       const done = run.processedShotRev[s.id];
       return done !== undefined && done < s.rev;
     })
     .map((s) => s.id);
-  if (needImage.length > 0) return { kind: "render_images", shotIds: needImage };
+  if (needImage.length > 0) {
+    return { kind: "render_images", shotIds: needImage };
+  }
   // 自动评审：图齐后，把「已出图但评审定稿快照落后于当前 rev」的镜头纳入待评审。
   // 评审不合格的抽卡会抬高该镜 rev → 重新出现在 needImage → 重出后再评，直到通过或达上限。
   // 人工裁决优先（#2480 · FR-AG-02 质量停点由人拍板）：
@@ -368,9 +392,13 @@ export function planNextRunAction(view: ProductionRunView, run: ProductionRun): 
   if (run.autoReview) {
     const needReview = view.shots
       .filter((s) => {
-        if (!s.hasImage) return false;
+        if (!s.hasImage) {
+          return false;
+        }
         const human = s.humanVerdict;
-        if (human?.pass === true && human.rev === s.rev) return false;
+        if (human?.pass === true && human.rev === s.rev) {
+          return false;
+        }
         if ((run.reviewedShotRev[s.id] ?? -1) >= s.rev) {
           return (
             human?.pass === false &&
@@ -381,9 +409,13 @@ export function planNextRunAction(view: ProductionRunView, run: ProductionRun): 
         return true;
       })
       .map((s) => s.id);
-    if (needReview.length > 0) return { kind: "review_shots", shotIds: needReview };
+    if (needReview.length > 0) {
+      return { kind: "review_shots", shotIds: needReview };
+    }
   }
-  if (!view.filmRendered) return { kind: "render_film" };
+  if (!view.filmRendered) {
+    return { kind: "render_film" };
+  }
   return { kind: "done" };
 }
 
@@ -405,7 +437,9 @@ export function markActionProcessed(
       const revById = new Map(view.shots.map((s) => [s.id, s.rev]));
       for (const shotId of action.shotIds) {
         const rev = revById.get(shotId);
-        if (rev !== undefined) next.processedShotRev[shotId] = rev;
+        if (rev !== undefined) {
+          next.processedShotRev[shotId] = rev;
+        }
       }
       return next;
     }

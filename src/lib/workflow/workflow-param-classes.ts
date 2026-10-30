@@ -158,7 +158,9 @@ export function sizeSubLabel(cls: ParamClass): string {
  *  而连线、落点、↺ 恢复默认都按子口走 —— 这层换算就是两者的桥：
  *  `sizeGroupIds("size")` 给出全部六个键，`sizeGroupIds(<子口 id>)` 回它自己。 */
 export function sizeGroupIds(id: string | null | undefined): ReadonlyArray<ParamClass> {
-  if (!id) return [];
+  if (!id) {
+    return [];
+  }
   return id === "size" ? SIZE_SUB_IDS : [/* SAFETY: 类型断言已复核 */ id as ParamClass];
 }
 
@@ -188,11 +190,19 @@ const NUMBER_TYPES = new Set(["INT", "FLOAT", "NUMBER", "COMBO", "*"]);
 
 /** 端口按声明类型归族（`null` = 不能当任何对外参数的落点：连线型端口、输出口）。 */
 export function pinFamily(e: WorkflowIOEntry | null | undefined): PinFamily | null {
-  if (e?.direction !== "input" || e.kind !== "widget") return null;
+  if (e?.direction !== "input" || e.kind !== "widget") {
+    return null;
+  }
   const type = (e.type ?? "*").toUpperCase();
-  if (TEXT_TYPES.has(type)) return "text";
-  if (IMAGE_TYPES.has(type)) return "image";
-  if (NUMBER_TYPES.has(type)) return "number";
+  if (TEXT_TYPES.has(type)) {
+    return "text";
+  }
+  if (IMAGE_TYPES.has(type)) {
+    return "image";
+  }
+  if (NUMBER_TYPES.has(type)) {
+    return "number";
+  }
   return null;
 }
 
@@ -242,13 +252,21 @@ export function pinAcceptsEntry(
   ioEntry: WorkflowIOEntry | null | undefined,
 ): boolean {
   const family = familyOfClass(cls);
-  if (!family) return false;
-  if (pinFamily(ioEntry) !== family) return false;
+  if (!family) {
+    return false;
+  }
+  if (pinFamily(ioEntry) !== family) {
+    return false;
+  }
   const accepted = acceptedPinTypesFor(cls);
-  if (!accepted) return true;
+  if (!accepted) {
+    return true;
+  }
   const type = upperToken(ioEntry?.type);
   /* 类型未知（缺省 / `*`）：放行 —— 拿不到事实时不替作者做决定。 */
-  if (!type || type === "*") return true;
+  if (!type || type === "*") {
+    return true;
+  }
   return accepted.includes(type);
 }
 
@@ -270,10 +288,16 @@ export function candidateClasses(cls: ParamClass): ReadonlyArray<ParamClass> {
  *  未配置，「缺了它不能跑」的清单里带上它。 */
 export function isSizeDetermined(resolved: Record<string, string | null | undefined>): boolean {
   const wired = (cls: ParamClass) => Boolean(resolved[cls]);
-  if (wired("size-width") && wired("size-height")) return true;
-  if (!wired("size-aspect")) return false;
+  if (wired("size-width") && wired("size-height")) {
+    return true;
+  }
+  if (!wired("size-aspect")) {
+    return false;
+  }
   /* 分辨率档自己就能定宽高（档位表给出确切宽高）。 */
-  if (wired("size-resolution")) return true;
+  if (wired("size-resolution")) {
+    return true;
+  }
   /* 像素量档只有总像素：还要倍数（两侧吸附到哪个网格）才解得出宽高 ——
    * 「比例 + 像素量 + 倍数」是工坊那一类尺寸表达的三段，缺一段定不出来。 */
   return wired("size-megapixels") && wired("size-multiple");
@@ -382,7 +406,9 @@ const FAMILY_TYPE: Record<PinFamily, string> = {
  *  其余按端口族（见 `FAMILY_TYPE`）。 */
 export function classPinType(cls: ParamClass): string {
   const sub = SIZE_SUB_SPEC[cls]?.display;
-  if (sub) return sub;
+  if (sub) {
+    return sub;
+  }
   const family = familyOfClass(cls);
   return family ? FAMILY_TYPE[family] : "*";
 }

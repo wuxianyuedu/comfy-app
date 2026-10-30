@@ -77,8 +77,12 @@ let ownerOverride: TaskClaimMode | null = null;
  *  `owner` 与 `createTaskRepoImpl(db, { owner })` 那次声明**必须同源**，
  *  否则领到的行与收口时的守卫判据不一致（同 reaper 那条约束）。 */
 export function configureDispatch(next: { taskRepo?: DispatchRepo; owner?: TaskClaimMode }): void {
-  if (next.taskRepo) repoOverride = next.taskRepo;
-  if (next.owner) ownerOverride = next.owner;
+  if (next.taskRepo) {
+    repoOverride = next.taskRepo;
+  }
+  if (next.owner) {
+    ownerOverride = next.owner;
+  }
 }
 
 let warnedUnconfigured = false;
@@ -116,7 +120,9 @@ async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
   try {
     const ids = await repo.listQueuedIds(owner, WAIT_HINT_LIMIT);
     for (const id of ids) {
-      if (s.wsWaitLogged.has(id)) continue;
+      if (s.wsWaitLogged.has(id)) {
+        continue;
+      }
       s.wsWaitLogged.add(id);
       logWhileQueued(
         id,
@@ -148,7 +154,9 @@ export async function claimAndDispatchOnce(options?: {
 }): Promise<string | null> {
   const s = state();
   const resolved = await resolveDispatch();
-  if (!resolved) return null;
+  if (!resolved) {
+    return null;
+  }
   const { repo, owner } = resolved;
 
   if (!options?.skipReadyGate && s.ws?.readyState !== WebSocket.OPEN) {
@@ -161,7 +169,9 @@ export async function claimAndDispatchOnce(options?: {
     await hintWaitingTasks(repo, owner);
     return null;
   }
-  if (s.pendingDispatch.size >= MAX_CONCURRENCY) return null;
+  if (s.pendingDispatch.size >= MAX_CONCURRENCY) {
+    return null;
+  }
 
   let claimed: Array<string>;
   try {
@@ -171,7 +181,9 @@ export async function claimAndDispatchOnce(options?: {
     return null;
   }
   const taskId = claimed[0];
-  if (!taskId) return null;
+  if (!taskId) {
+    return null;
+  }
 
   markDispatched(taskId);
   /* 领到手 = 这一轮的执行起点，原来在 `enqueue()` 里做的四件记账搬到这里（第二刀）：
@@ -264,7 +276,9 @@ const dispatchState: DispatchGlobal = (globalThis.__comfyDispatch_v1 ??= {
  * `claimAndDispatchOnce`），所以这里不需要很快。
  */
 export function startDispatchLoop(intervalMs = DISPATCH_TICK_MS): void {
-  if (dispatchState.handle) return;
+  if (dispatchState.handle) {
+    return;
+  }
   dispatchState.handle = setInterval(() => {
     fireAndForget(claimAndDispatchOnce(), (err: unknown) => {
       logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "领取循环异常（下一轮重试）")}`);
@@ -298,9 +312,13 @@ const ANNOUNCE_LIMIT = 20;
 
 async function announceWaiting(msg: string, level: LogEntry["level"]): Promise<void> {
   const resolved = await resolveDispatch();
-  if (!resolved) return;
+  if (!resolved) {
+    return;
+  }
   const ids = await resolved.repo.listQueuedIds(resolved.owner, ANNOUNCE_LIMIT);
-  for (const id of ids) logWhileQueued(id, level, msg);
+  for (const id of ids) {
+    logWhileQueued(id, level, msg);
+  }
 }
 
 /* 同一个叶子总线、第二种注册：通道层（executor-ws）在 ComfyUI 自动启动的每个

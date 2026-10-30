@@ -96,7 +96,9 @@ export const LOG_SCROLL_MAX = 8_000_000;
  * 「不低估」：低估会让下面几行被推到视口外，高估只是多留一点空白。
  */
 export function estimateRowHeight(message: string, wrap: boolean): number {
-  if (!wrap) return LOG_ROW_SINGLE;
+  if (!wrap) {
+    return LOG_ROW_SINGLE;
+  }
   const lines = Math.max(1, countLines(message));
   return LOG_ROW_SINGLE + (lines - 1) * LOG_ROW_LINE;
 }
@@ -119,7 +121,9 @@ export function countLines(message: string, availableWidth = 0): number {
   while (segments.length > 1 && segments[segments.length - 1] === "") {
     segments.pop();
   }
-  if (availableWidth <= 0) return segments.length;
+  if (availableWidth <= 0) {
+    return segments.length;
+  }
   let total = 0;
   for (const segment of segments) {
     total += Math.max(1, Math.ceil((segment.length * 13) / availableWidth));
@@ -209,7 +213,9 @@ export function visibleRange(
   overscan = LOG_VIRTUAL_OVERSCAN,
 ): { start: number; end: number } {
   const count = rows.length;
-  if (count === 0) return { start: 0, end: 0 };
+  if (count === 0) {
+    return { start: 0, end: 0 };
+  }
   const top = Number.isFinite(scrollTop) ? Math.max(0, scrollTop) : 0;
   const height = Number.isFinite(viewportHeight) ? Math.max(0, viewportHeight) : 0;
   const pad = Math.max(0, overscan);
@@ -228,13 +234,18 @@ export function visibleRange(
  * 会直接体现在滚动掉帧上。`rows` 的 `start` 单调递增，因此二分成立。
  */
 export function firstVisibleRow(rows: ReadonlyArray<RowLayout>, offset: number): number {
-  if (rows.length === 0) return 0;
+  if (rows.length === 0) {
+    return 0;
+  }
   let low = 0;
   let high = rows.length - 1;
   while (low < high) {
     const mid = (low + high + 1) >> 1;
-    if ((rows.at(mid)?.start ?? Number.POSITIVE_INFINITY) <= offset) low = mid;
-    else high = mid - 1;
+    if ((rows.at(mid)?.start ?? Number.POSITIVE_INFINITY) <= offset) {
+      low = mid;
+    } else {
+      high = mid - 1;
+    }
   }
   return low;
 }

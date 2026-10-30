@@ -118,9 +118,9 @@ const ROOT = path.resolve(HERE, "..");
  * 判定门是 `--check --autofix`），不再经过 glob 这一层。 */
 /* `文件结构硬规则` 的触发面同样**不手抄**：扫描根与根目录扩展名在判据自己的
  * 声明层（`file-structure-rules.cjs` 的 `TRIGGER_GLOBS`），那里改一处、这里跟着变。 */
-const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(
-  import.meta.url,
-)("./file-structure-rules.cjs");
+const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(import.meta.url)(
+  "./file-structure-rules.cjs",
+);
 
 /* ── 文档面那两条的触发面：同样**不手抄** ──────────────────────────────────────
  *
@@ -147,9 +147,9 @@ const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(
  *     （产物）；源与产物**都在 `docs/**` 下面**，故取上界 `docs/**`（逐条抄 32 个路径
  *     就是第二份会漂的副本 —— 抄一份的漂移形态是「新增一篇文档忘了加进收窄面」）。
  */
-const { INPUT_GLOBS: DOCS_API_INPUT_GLOBS } = createRequire(
-  import.meta.url,
-)("./check-docs-api.cjs");
+const { INPUT_GLOBS: DOCS_API_INPUT_GLOBS } = createRequire(import.meta.url)(
+  "./check-docs-api.cjs",
+);
 /** `生成态文档与源同步` 的面：源（`SCOPED_DOCS`）与产物（`docs/generated/**`）同在 `docs/**`。 */
 const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
 
@@ -162,7 +162,7 @@ const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
  * 唯一权威），别在这儿复述成第二份会过期的定义。
  *
  * @type {ReadonlyArray<{name: string, globs: readonly string[], why: string, script: string}>}
- */export const INCREMENTAL_GATES = [
+ */ export const INCREMENTAL_GATES = [
   {
     name: "标题行让位",
     globs: ["src/components/**", "src/app/**"],
@@ -192,11 +192,7 @@ const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
   },
   {
     name: "ComfyUI 端口口径",
-    globs: [
-      "src/lib/comfyui/**",
-      "src/lib/app-settings/**",
-      "src/lib/endpoints.ts",
-    ],
+    globs: ["src/lib/comfyui/**", "src/lib/app-settings/**", "src/lib/endpoints.ts"],
     script: "scripts/check-comfyui-port-contract.cjs",
     why: "读的是 CLIENT / LIFECYCLE / DERIVE / DESKTOP 四份 comfyui 文件与 SETTINGS_PURE / SETTINGS_IO / ENDPOINTS 三处端口来源 —— 域就是这几个点，故 globs 列出它们所在的目录与文件。",
   },
@@ -318,9 +314,7 @@ const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
 ];
 
 /** 表里登记的名字集合（判据与自测都用它，避免各处重算）。 */
-export const INCREMENTAL_GATE_NAMES = new Set(
-  INCREMENTAL_GATES.map((g) => g.name),
-);
+export const INCREMENTAL_GATE_NAMES = new Set(INCREMENTAL_GATES.map((g) => g.name));
 
 /**
  * **复合执行者**：一格装多条判据的 stage 名（此刻只有 `重档静态判据`）。
@@ -372,8 +366,12 @@ export function parseStageIfModify(text) {
       continue;
     }
     // 同级或更浅的键 = 这一项结束了（`env:`、顶层 `master:` 等）。
-    if (current !== null && /^\S/.test(raw)) current = null;
-    if (current === null) continue;
+    if (current !== null && /^\S/.test(raw)) {
+      current = null;
+    }
+    if (current === null) {
+      continue;
+    }
 
     // `ifModify:` 开一行（缩进 4 空格，与 `script:` / `timeout:` 同级）。
     const head = /^ {4}ifModify:\s*(.*?)\s*$/.exec(raw);
@@ -398,7 +396,9 @@ export function parseStageIfModify(text) {
       }
       /* 非列表项的行 = 这一段结束了（下一键 / 缩进变化 / 注释）。注释行不算结束 ——
        * 清单里的注释是说明，夹在中间很正常。 */
-      if (!/^\s*#/.test(raw) && raw.trim() !== "") mode = null;
+      if (!/^\s*#/.test(raw) && raw.trim() !== "") {
+        mode = null;
+      }
     }
   }
   return out;
@@ -486,10 +486,10 @@ function main() {
     );
     return 0;
   }
-  console.error(
-    `[ci-incremental] ✗ 平台侧门禁的增量登记与配置不一致（${problems.length} 条）：`,
-  );
-  for (const p of problems) console.error(`[ci-incremental]   · ${p}`);
+  console.error(`[ci-incremental] ✗ 平台侧门禁的增量登记与配置不一致（${problems.length} 条）：`);
+  for (const p of problems) {
+    console.error(`[ci-incremental]   · ${p}`);
+  }
   return 1;
 }
 
@@ -522,7 +522,9 @@ const { matchesAny } = createRequire(import.meta.url)("./vitest-projects.cjs");
  */
 export function narrowingEntryForScript(script) {
   const s = String(script ?? "").replace(/\\/g, "/");
-  if (s === "") return null;
+  if (s === "") {
+    return null;
+  }
   return INCREMENTAL_GATES.find((e) => e.script === s) ?? null;
 }
 
@@ -541,22 +543,19 @@ export function narrowingEntryForScript(script) {
 export function faceTouched(entry, files) {
   const globs = entry?.globs ?? [];
   /* 没有面 ⇒ 不许收窄（宁可多跑）：全仓不变量与前提类都在这一档里。 */
-  if (globs.length === 0) return true;
+  if (globs.length === 0) {
+    return true;
+  }
   const list = Array.isArray(files) ? files : [];
-  if (list.length === 0) return true;
-  return list.some((f) =>
-    matchesAny(String(f ?? "").replace(/\\/g, "/"), globs),
-  );
+  if (list.length === 0) {
+    return true;
+  }
+  return list.some((f) => matchesAny(String(f ?? "").replace(/\\/g, "/"), globs));
 }
 
 /* 「是不是被直接执行」按 Node 自己的口径判 —— 这条踩过（ISSUE #1961 最后一格：
  * `file://${path.resolve(...)}` 在 Windows 上恒不相等，main() 一次都不跑、进程退 0）。
  * 用 argv[1] 与当前文件的 realpath 比较，平台无关。 */
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }
-
-

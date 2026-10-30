@@ -80,7 +80,9 @@ export function useModeContractEditor(): ModeContractEditorController {
 
   const removeInput = useCallback((id: ModeContractInputId) => {
     setDraft((prev) => {
-      if (!prev) return prev;
+      if (!prev) {
+        return prev;
+      }
       const inputs = prev.inputs.filter((x) => x !== id);
       return {
         ...prev,
@@ -111,9 +113,13 @@ export function useModeContractEditor(): ModeContractEditorController {
    *  名字 —— 名字单独存在 `customInputs` 里，落点/封装/适配器一律按 id 走。 */
   const addCustomInput = useCallback((label: string, kind: ModeContractCustomKind) => {
     const trimmed = label.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      return;
+    }
     setDraft((prev) => {
-      if (!prev) return prev;
+      if (!prev) {
+        return prev;
+      }
       const id = nextCustomInputId(prev.inputs, kind);
       return {
         ...prev,
@@ -126,7 +132,9 @@ export function useModeContractEditor(): ModeContractEditorController {
 
   const renameCustomInput = useCallback((id: ModeContractInputId, label: string) => {
     const trimmed = label.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      return;
+    }
     setDraft((prev) =>
       prev?.customInputs
         ? {
@@ -158,7 +166,9 @@ export function useModeContractEditor(): ModeContractEditorController {
   );
   const toggleRequired = useCallback((id: ModeContractInputId) => {
     setDraft((prev) => {
-      if (!prev) return prev;
+      if (!prev) {
+        return prev;
+      }
       /* 第一次改动就先把生效值固化下来（`required` 从 undefined 变实数组）——
        * 不固化的话每次读回落内置默认，「取消勾选提示词」这个操作会被默认值
        * 立刻复活，勾选框点不掉。 */
@@ -179,7 +189,9 @@ export function useModeContractEditor(): ModeContractEditorController {
   }, []);
 
   const save = useCallback(async () => {
-    if (!draft) return;
+    if (!draft) {
+      return;
+    }
     const rest = registry.contracts.filter((c) => c.mode !== draft.mode);
     await registry.save([...rest, draft]);
     setSaved(true);

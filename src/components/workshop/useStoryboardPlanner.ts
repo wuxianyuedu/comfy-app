@@ -147,7 +147,9 @@ export function useStoryboardPlanner(props: Props) {
   function updateShot(id: string, patch: Partial<Shot>) {
     onShotsChange(
       shots.map((shot) => {
-        if (shot.id !== id) return shot;
+        if (shot.id !== id) {
+          return shot;
+        }
         const next = { ...shot, ...patch };
         const scene = scenes.find((sc) => sc.id === next.sceneId);
         const chars = characters.filter((character) => next.characterIds.includes(character.id));
@@ -162,11 +164,15 @@ export function useStoryboardPlanner(props: Props) {
   }
 
   function clearShots() {
-    if (confirm("确定清空当前所有分镜？")) onShotsChange([]);
+    if (confirm("确定清空当前所有分镜？")) {
+      onShotsChange([]);
+    }
   }
 
   async function handleAISplit() {
-    if (scenes.length === 0) return;
+    if (scenes.length === 0) {
+      return;
+    }
     if (!config) {
       openSettings();
       return;
@@ -266,7 +272,9 @@ export function useStoryboardPlanner(props: Props) {
           opts: { temperature: 0.7 },
         });
         const polished = full.trim();
-        if (!polished) throw new Error("模型未返回提示词");
+        if (!polished) {
+          throw new Error("模型未返回提示词");
+        }
         updateShot(shot.id, { prompt: polished });
       } catch (e: unknown) {
         polishErrors.report(shot.id)("err", errorMessage(e, "提示词润色失败"));

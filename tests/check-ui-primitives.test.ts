@@ -58,7 +58,9 @@ function demoteToRatchet(repo: GateRepo, ...ids: Array<string>): void {
    * 登记项、把判据的分档自检打成红（实测 7 条用例连坐）。**赌「没有第二处」的
    * 判据会在第二处出现的那天静默改错地方**（§13.5.12 同族），所以补锚点。 */
   const decl = DECL_RE.exec(src);
-  if (!decl) throw new Error("读不到 HARD_GATE_RULES 的声明 —— 改测试");
+  if (!decl) {
+    throw new Error("读不到 HARD_GATE_RULES 的声明 —— 改测试");
+  }
   const declAt = src.indexOf(decl[0]);
   const head = src.slice(0, declAt);
   let body = decl[0];

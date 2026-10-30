@@ -63,10 +63,7 @@ export function ResourceLibrary() {
   const needsProject = library.scope === "project" && c.projectId === null;
 
   return (
-    <DocumentFrame
-      width="wide"
-      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
-    >
+    <DocumentFrame width="wide" className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8">
       {/* ── 页头：动作（屏名由页签给出，说明问号在顶栏标题右侧） ── */}
       <PageHeader srTitle={pageHeaderTitle("library")} />
 
@@ -106,7 +103,9 @@ export function ResourceLibrary() {
           onValueChange={(value: unknown) => {
             /* 基元的 `onValueChange` 出参是 `any`：收窄放在这里，
                别拿 `as MaterialScope` 把判据抹掉（§16.2.4.68 的同一取向）。 */
-            if (value === "project" || value === "cross") c.setScope(value);
+            if (value === "project" || value === "cross") {
+              c.setScope(value);
+            }
           }}
           className="gap-0"
         >
@@ -119,9 +118,7 @@ export function ResourceLibrary() {
                 >
                   {scope.label}
                   {library.scope === scope.id && c.totalCount > 0 ? (
-                    <span className="text-ink-fainter text-2xs tabular-nums">
-                      {c.totalCount}
-                    </span>
+                    <span className="text-ink-fainter text-2xs tabular-nums">{c.totalCount}</span>
                   ) : null}
                 </TabsTrigger>
               </Hint>
@@ -131,11 +128,7 @@ export function ResourceLibrary() {
 
         {/* 显示密度：纯视觉偏好，与业务数据无关（与画布抽屉同一取舍）。
             三处逐字相同的孪生对已收口到基元（ISSUE #1925）。 */}
-        <DisplayDensityToggle
-          value={display}
-          onChange={setDisplay}
-          className="ml-auto"
-        />
+        <DisplayDensityToggle value={display} onChange={setDisplay} className="ml-auto" />
 
         <div className="border-border bg-subtle flex w-full items-center gap-2 rounded-lg border px-3 py-2 sm:w-72">
           <Search size={14} className="text-ink-muted shrink-0" />

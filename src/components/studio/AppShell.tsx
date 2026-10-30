@@ -189,7 +189,9 @@ export function AppShell({
                           disabled={!enabled}
                           tooltip={enabled ? item.label : `${item.label}（即将推出）`}
                           onClick={() => {
-                            if (enabled) onSelect(item.id);
+                            if (enabled) {
+                              onSelect(item.id);
+                            }
                           }}
                         >
                           {item.icon}

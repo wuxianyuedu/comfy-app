@@ -51,7 +51,9 @@ function makePack(name: string, spec: PackSpec = {}): void {
   for (const [file, content] of Object.entries(spec.files ?? {})) {
     fs.writeFileSync(path.join(svc, file), content, "utf8");
   }
-  if (spec.noRunJson) return;
+  if (spec.noRunJson) {
+    return;
+  }
   fs.writeFileSync(
     path.join(dir, "run.json"),
     JSON.stringify({
@@ -121,9 +123,7 @@ describe("列包", () => {
     });
 
     const { packs } = await scan();
-    expect(packs[0]!.files.map((f) => f.name)).toEqual([
-      "comfyui-runtime-20261004-140000.log",
-    ]);
+    expect(packs[0]!.files.map((f) => f.name)).toEqual(["comfyui-runtime-20261004-140000.log"]);
   });
 
   it("不认的日志文件不列（同目录里的 keepalive 之类）", async () => {
@@ -135,9 +135,7 @@ describe("列包", () => {
     });
 
     const { packs } = await scan();
-    expect(packs[0]!.files.map((f) => f.name)).toEqual([
-      "comfyui-runtime-20261004-140000.log",
-    ]);
+    expect(packs[0]!.files.map((f) => f.name)).toEqual(["comfyui-runtime-20261004-140000.log"]);
   });
 
   it("包内多份按时间序（旧→新）给，同秒分叉也在", async () => {
@@ -187,9 +185,7 @@ describe("包的元信息（run.json）", () => {
     makePack("2026-10-04_140000-bbbbbb", {
       files: { "comfyui-runtime-20261004-140000.log": "x\n" },
     });
-    expect((await scan()).packs[0]!.startedAt).toBe(
-      new Date(2026, 9, 4, 14, 0, 0).getTime(),
-    );
+    expect((await scan()).packs[0]!.startedAt).toBe(new Date(2026, 9, 4, 14, 0, 0).getTime());
   });
 
   it("坏 / 缺 run.json 不让列表带崩（crashed 退 false、时刻退名字里那个）", async () => {

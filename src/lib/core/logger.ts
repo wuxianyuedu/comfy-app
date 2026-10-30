@@ -115,9 +115,13 @@ export interface PinoLoggerOptions {
  * 这么做的），所以这里对测试进程关掉默认落盘不损失任何判据，只堵住污染。
  */
 function resolveMirrorTarget(mirror?: PinoLoggerOptions["mirror"]) {
-  if (mirror) return mirror;
+  if (mirror) {
+    return mirror;
+  }
   // `process.env.VITEST` 由 vitest 自己设置（不用 NODE_ENV：本仓库另有它用）。
-  if (process.env.VITEST) return { error: () => undefined };
+  if (process.env.VITEST) {
+    return { error: () => undefined };
+  }
   return appRuntimeLog;
 }
 
@@ -159,10 +163,14 @@ export function createPinoLogger(opts: PinoLoggerOptions = {}) {
   };
 
   // 显式指定目标流：JSON 直写，用于契约测试捕获输出（不启 worker transport）。
-  if (destination) return pino(base, destination);
+  if (destination) {
+    return pino(base, destination);
+  }
 
   // 生产：JSON 直写 stdout（采集端解析）。
-  if (process.env.NODE_ENV === "production") return pino(base);
+  if (process.env.NODE_ENV === "production") {
+    return pino(base);
+  }
 
   // 本地开发：pino-pretty 美化。
   return pino({
@@ -267,9 +275,13 @@ function renderServerLogEntry(
  * （见 `renderServerLogEntry` 的 ISSUE #1696 说明），因此不能在这里顺手返回。
  */
 function renderServerLogMessage(payload?: Record<string, unknown>): string {
-  if (!payload) return "";
+  if (!payload) {
+    return "";
+  }
   const raw = payload.msg ?? payload.message;
-  if (typeof raw === "string" && raw.length > 0) return raw;
+  if (typeof raw === "string" && raw.length > 0) {
+    return raw;
+  }
   const err = /* SAFETY: 类型断言已复核 */ payload.err as { message?: unknown } | undefined;
   if (err && typeof err.message === "string" && err.message.length > 0) {
     return err.message;

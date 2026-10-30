@@ -29,7 +29,9 @@ export function defaultShellExe(root = process.cwd()) {
     : ["src-tauri/target/release/app", "src-tauri/target/debug/app"];
   for (const rel of candidates) {
     const full = path.join(root, rel);
-    if (fs.existsSync(full)) return full;
+    if (fs.existsSync(full)) {
+      return full;
+    }
   }
   return null;
 }
@@ -73,12 +75,7 @@ export function ensureSplashResource(ctx, root = process.cwd()) {
  * @param {{ root?: string, foreground?: string | null }} [options]
  *   检出根与前台开关
  */
-export function spawnShell(
-  ctx,
-  shellExe,
-  port,
-  { root = process.cwd(), foreground = null } = {},
-) {
+export function spawnShell(ctx, shellExe, port, { root = process.cwd(), foreground = null } = {}) {
   const child = spawnInGroup({
     command: shellExe,
     args: [],
@@ -137,7 +134,9 @@ export async function killShellFromPidFile(ctx, root = process.cwd()) {
       /* 忽略 */
     }
   }
-  if (!Number.isInteger(pid) || pid <= 0) return false;
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
   const via = await ctx.reapProcessTree({
     pid,
     detached: !isWindows(),
@@ -146,4 +145,3 @@ export async function killShellFromPidFile(ctx, root = process.cwd()) {
   ctx.log(`兜底回收桌面壳（PID ${pid}）：${via.via}`, "STEP");
   return true;
 }
-

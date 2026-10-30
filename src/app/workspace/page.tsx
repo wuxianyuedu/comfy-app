@@ -48,8 +48,12 @@ export default function WorkspacePage() {
     () =>
       subscribeAppEvent("workspace:navigate", ({ view, section }) => {
         const target = WORKSPACE_VIEWS.find((candidate) => candidate === view);
-        if (!target) return;
-        if (target === "settings" && section) setPendingSettingsSection(section);
+        if (!target) {
+          return;
+        }
+        if (target === "settings" && section) {
+          setPendingSettingsSection(section);
+        }
         navigateTo(target);
       }),
     [navigateTo],
@@ -170,7 +174,9 @@ export default function WorkspacePage() {
     (view: WorkspaceView) => {
       // 接受任何已注册的 WorkspaceView id；"home" 就是当前视图，
       // 所以再点它是个空操作。
-      if (view === "home") return;
+      if (view === "home") {
+        return;
+      }
       navigateTo(view);
     },
     [navigateTo],

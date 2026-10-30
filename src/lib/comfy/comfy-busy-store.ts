@@ -54,7 +54,9 @@ function listeners(): Set<Listener> {
 }
 
 function notify(): void {
-  for (const l of listeners()) l();
+  for (const l of listeners()) {
+    l();
+  }
 }
 
 /**
@@ -66,7 +68,9 @@ function notify(): void {
 export function noteComfyBusy(busy: boolean, now = Date.now()): void {
   const s = state();
   if (busy) {
-    if (s.busy) return;
+    if (s.busy) {
+      return;
+    }
     st.state = { busy: true, since: now };
     notify();
     return;
@@ -74,8 +78,12 @@ export function noteComfyBusy(busy: boolean, now = Date.now()): void {
   /* 转闲要过黏滞窗口：窗口内仍视为忙（见 COMFY_BUSY_HOLD_MS）。
    * `since` 记的是「开始忙」的时刻，不是「上一次喂 true」的时刻 —— 否则
    * 连续喂 true 会不断把窗口往后推，忙完之后要再等满 5s 才肯转闲。 */
-  if (!s.busy) return;
-  if (now - s.since < COMFY_BUSY_HOLD_MS) return;
+  if (!s.busy) {
+    return;
+  }
+  if (now - s.since < COMFY_BUSY_HOLD_MS) {
+    return;
+  }
   st.state = { busy: false, since: now };
   notify();
 }

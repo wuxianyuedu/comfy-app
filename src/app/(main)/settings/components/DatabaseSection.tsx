@@ -22,8 +22,12 @@ import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 /** Drizzle Studio 状态 → 圆点语义（过渡态优先，口径同 ComfyUI 那条）。 */
 function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
-  if (c.dbStudioStatus?.up) return "up";
-  if (c.dbStudioStatus?.starting || c.dbStudioStarting) return "busy";
+  if (c.dbStudioStatus?.up) {
+    return "up";
+  }
+  if (c.dbStudioStatus?.starting || c.dbStudioStarting) {
+    return "busy";
+  }
   return "down";
 }
 
@@ -38,9 +42,7 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
         <code className="text-ink/80">local.drizzle.studio</code>
         ），本地只起一个回连端口；点「打开查看」会用系统默认浏览器打开它。
       </p>
-      <div
-        className={`border-border bg-surface-1 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
-      >
+      <div className={`border-border bg-surface-1 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}>
         <StatusDot state={dbStudioDotState(c)} />
         <span
           className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
@@ -68,9 +70,7 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
           <StatusButton
             onClick={() => void c.openDbStudio()}
             variant="primary"
-            disabled={
-              c.dbStudioOpening || c.dbStudioStarting || !c.dbStudioStatus?.up
-            }
+            disabled={c.dbStudioOpening || c.dbStudioStarting || !c.dbStudioStatus?.up}
           >
             {c.dbStudioOpening ? "打开中…" : "打开查看"}
           </StatusButton>
@@ -99,16 +99,15 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
         className="mt-4"
         emptyHint={
           <>
-            暂无日志 —— 点「启动 Drizzle Studio」后这里会实时输出拉起
-            过程（spawn 参数与 drizzle-kit 输出）；也可点「刷新」查看
-            最近一次启动日志。
+            暂无日志 —— 点「启动 Drizzle Studio」后这里会实时输出拉起 过程（spawn 参数与 drizzle-kit
+            输出）；也可点「刷新」查看 最近一次启动日志。
           </>
         }
       />
       <p className="text-muted-foreground mt-3 text-xs">
         说明：Drizzle Studio 需要本机开发依赖 （node_modules 里的
-        drizzle-kit）。双击桌面壳的开发模式可用； 若当前是不可携带完整
-        node_modules 的 standalone 打包，启动时会 提示未找到 drizzle-kit。
+        drizzle-kit）。双击桌面壳的开发模式可用； 若当前是不可携带完整 node_modules 的 standalone
+        打包，启动时会 提示未找到 drizzle-kit。
       </p>
     </SettingsCard>
   );

@@ -66,14 +66,20 @@ export interface VideoTask {
  * `id` 非法（比如是数字）同样整行丢掉，而不是把 `undefined` 硬塞给视图。
  */
 export function parseVideoRows(raw: unknown): Array<VideoTask> {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const out: Array<VideoTask> = [];
   for (const item of raw) {
     const parsed = videoTaskRowSchema.safeParse(item);
-    if (!parsed.success) continue;
+    if (!parsed.success) {
+      continue;
+    }
     /* 只要 VIDEO 类任务进这张表（图片任务由画布历史那一路管）。判据在 `type`：
      * 它也在镜像里，因此「过滤」这一步有契约兜着，不是拿视图的猜测。 */
-    if (parsed.data.type !== "VIDEO") continue;
+    if (parsed.data.type !== "VIDEO") {
+      continue;
+    }
     out.push({
       id: parsed.data.id,
       status: parsed.data.status,

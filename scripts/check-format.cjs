@@ -144,15 +144,15 @@ const { gateFail, gatePass, indentItems } = require("./ci-log.mjs");
 /** oxfmt 入口的三级解析（见上）。取不到返回 null，由 `main()` 以 exit 2 收尾。 */
 function resolveOxfmtEntry() {
   const fromEnv = process.env.COMFYAPP_OXFMT_ENTRY;
-  if (fromEnv) return fs.existsSync(fromEnv) ? fromEnv : null;
+  if (fromEnv) {
+    return fs.existsSync(fromEnv) ? fromEnv : null;
+  }
   try {
     // 按扫描根解析：门禁在仓库根被调用，本地 `node_modules/oxfmt` 就是它的依赖。
     // 取 `oxfmt/package.json` 而不是直接 resolve `oxfmt/bin/oxfmt`：后者可能被包的
     // `exports` 字段挡住（子路径不导出），前者是常见可解析面；两者都失败时退回按
     // 扫描根拼路径（与 prettier 时代「任何一档都不许回落成 0 个未过」同口径）。
-    const pkg = createRequire(path.join(ROOT, "noop.js")).resolve(
-      "oxfmt/package.json",
-    );
+    const pkg = createRequire(path.join(ROOT, "noop.js")).resolve("oxfmt/package.json");
     return path.join(path.dirname(pkg), "bin", "oxfmt");
   } catch {
     const fallback = path.join(ROOT, "node_modules", "oxfmt", "bin", "oxfmt");
@@ -293,15 +293,13 @@ function stagedFiles() {
   /* `-c core.quotePath=false`:路径要原样(ISSUE #2272,机制见 scripts/changed-scope.mjs 的
    * 文件头「口径 ④」)。git 默认把含非 ASCII 字符的路径转义加引号,而本仓有 38 份文件名
    * 带非 ASCII 的文件(全在 docs/ 下)⇒ 转义过的路径认不出来,那些文件会**不进 prettier**。 */
-  const res = spawnSync(
-    "git",
-    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
-    {
-      cwd: ROOT,
-      encoding: "utf8",
-    },
-  );
-  if (res.status !== 0) return null;
+  const res = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (res.status !== 0) {
+    return null;
+  }
   return (res.stdout || "").split(/\r?\n/).filter(Boolean).map(toPosix);
 }
 
@@ -375,9 +373,7 @@ function oxfmtCheckTargets(entry, targets, subject) {
     // 有差异行形如 `src/foo.ts (12ms)`；其余是 `Checking formatting...` /
     // `Format issues found in above N files.` / `Finished in ...` 这类摘要行，
     // 认不出的行一律丢掉（宁可漏报也不许把摘要行当成文件名）。
-    .map(
-      (line) => line.match(/^(.+?)\s+\(\d+(?:\.\d+)?(?:ms|s)\)$/)?.[1] ?? null,
-    )
+    .map((line) => line.match(/^(.+?)\s+\(\d+(?:\.\d+)?(?:ms|s)\)$/)?.[1] ?? null)
     .filter((line) => line && !line.startsWith("["));
   if (res.status !== 0 && res.status !== 1) {
     console.error(
@@ -391,8 +387,9 @@ function oxfmtCheckTargets(entry, targets, subject) {
         "[format]   「命令没跑成」，不是「全库干净」。真实仓里出现这一行请贴出入口与\n" +
         "[format]   下面这段 stderr。",
     );
-    if (res.stderr)
+    if (res.stderr) {
       console.error(`[format]   stderr: ${String(res.stderr).trim()}`);
+    }
     process.exit(2);
   }
   return lines;
@@ -403,7 +400,9 @@ function keepScanned(f, found) {
   const rel = toPosix(path.relative(ROOT, path.resolve(ROOT, f)));
   // 传目录给 oxfmt 会把它认识的语言（含 md / json / css）一并扫到，
   // 本格的面仍是 ts/tsx/js/jsx/mdx 减白名单 —— 用 isScanned 收口。
-  if (!isScanned(rel)) return;
+  if (!isScanned(rel)) {
+    return;
+  }
   found.add(rel);
 }
 
@@ -418,7 +417,9 @@ function collectUnformatted(entry) {
      * 也不是「没跑成」，而是「这一根没有账可算」（判据自测的临时仓库就没有
      * `.storybook`，实测把整条门打成了 fail-closed 的 exit 2）。真实仓两个根都在，
      * 这条跳过不改真实仓的判决面。 */
-    if (!fs.existsSync(path.join(ROOT, root))) continue;
+    if (!fs.existsSync(path.join(ROOT, root))) {
+      continue;
+    }
     for (const f of oxfmtCheckTargets(entry, [root], `扫描根 ${root}`)) {
       keepScanned(f, found);
     }
@@ -521,7 +522,9 @@ async function main() {
      * 未迁移的存量恒红（见文件头），而提交这一刻要判的是「这一批带进来干不干净」
      * —— 那批没被暂存的存量文件并不随本次提交走，不该由它背书。 */
     const entry = resolveOxfmtEntry();
-    if (!entry) entryMissing();
+    if (!entry) {
+      entryMissing();
+    }
     judge(collectUnformattedFiles(entry, hits), "暂存面");
     return;
   }
@@ -538,7 +541,9 @@ async function main() {
       process.exit(0);
     }
     const entry = resolveOxfmtEntry();
-    if (!entry) entryMissing();
+    if (!entry) {
+      entryMissing();
+    }
     /* 只看**已提交**的改动（`git diff <基线>...HEAD` 的定义边界）：没提交的新文件
      * 不在面里，它们由 pre-commit 的 `--staged` 档在提交那一刻判 —— 两档合起来
      * 才是完整的一条链，单独哪一档都不许被读成「全量」。 */
@@ -547,23 +552,26 @@ async function main() {
   }
 
   const entry = resolveOxfmtEntry();
-  if (!entry) entryMissing();
+  if (!entry) {
+    entryMissing();
+  }
   console.log("[format] 运行 oxfmt --check（无缓存档，全量约 2s）…");
   const current = collectUnformatted(entry);
 
   if (REPORT_ONLY) {
-    gatePass(
-      "oxfmt 格式",
-      `未过 oxfmt ${current.length} 个文件（只出清单）`,
-    );
-    for (const line of indentItems(current)) console.log(line);
+    gatePass("oxfmt 格式", `未过 oxfmt ${current.length} 个文件（只出清单）`);
+    for (const line of indentItems(current)) {
+      console.log(line);
+    }
     process.exit(0);
   }
 
   judge(current, "全库");
 }
 
-if (require.main === module) main();
+if (require.main === module) {
+  main();
+}
 
 /** 供测试引用:判据实现共用一份(§12.18),不跑 oxfmt 的纯判定入口
  *  (main 守卫在,require 本文件不会触发扫描)。三个消费方都在 tests/ 下：

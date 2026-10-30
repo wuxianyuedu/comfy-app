@@ -47,7 +47,9 @@ const MAX_ORDINAL = 100;
 export function allocateRuntimeLogFile(source: RuntimeLogSource, dir: string, at: Date): string {
   for (let ordinal = 1; ordinal <= MAX_ORDINAL; ordinal += 1) {
     const file = path.join(dir, runtimeLogFileName(source, at, ordinal));
-    if (!fs.existsSync(/*turbopackIgnore: true*/ file)) return file;
+    if (!fs.existsSync(/*turbopackIgnore: true*/ file)) {
+      return file;
+    }
   }
   /* 同一秒里上百次启动：退到毫秒级补一个唯一名，而不是覆盖别人的现场。 */
   return path.join(dir, `${source}-${at.getTime()}.log`);
@@ -107,13 +109,17 @@ function toRuntimeLogEntries(
 ): Array<RuntimeLogFileEntry> {
   const out: Array<RuntimeLogFileEntry> = [];
   for (const name of names) {
-    if (!name.endsWith(".log")) continue;
+    if (!name.endsWith(".log")) {
+      continue;
+    }
     if (name === legacyRuntimeLogFileName(source)) {
       out.push({ name, file: path.join(dir, name), startedAt: null });
       continue;
     }
     const parsed = parseRuntimeLogFileName(name);
-    if (parsed?.source !== source) continue;
+    if (parsed?.source !== source) {
+      continue;
+    }
     out.push({
       name,
       file: path.join(dir, name),
@@ -125,8 +131,12 @@ function toRuntimeLogEntries(
     if (a.startedAt === null && b.startedAt === null) {
       return a.name.localeCompare(b.name);
     }
-    if (a.startedAt === null) return -1;
-    if (b.startedAt === null) return 1;
+    if (a.startedAt === null) {
+      return -1;
+    }
+    if (b.startedAt === null) {
+      return 1;
+    }
     return a.startedAt - b.startedAt;
   });
 }

@@ -52,18 +52,17 @@ export function WorkflowRunLogButton({
   const runs = useMemo(
     () =>
       snapshot.runs.filter(
-        (run) =>
-          run.workflowId === workflowId && (!source || run.source === source),
+        (run) => run.workflowId === workflowId && (!source || run.source === source),
       ),
     [snapshot.runs, workflowId, source],
   );
-  if (runs.length === 0 && !alwaysVisible) return null;
+  if (runs.length === 0 && !alwaysVisible) {
+    return null;
+  }
   const active = taskId ? runs.find((run) => run.taskId === taskId) : runs[0];
   /* 呼吸点：调用方没指定（详情头部不绑定任何页签的运行）就按登记表自己判 ——
    * 该工作流还有没收尾的运行就算「在跑」。 */
-  const live =
-    running ??
-    runs.some((run) => run.status !== "done" && run.status !== "failed");
+  const live = running ?? runs.some((run) => run.status !== "done" && run.status !== "failed");
   const statusText = active
     ? active.status === "done"
       ? "上次已完成"

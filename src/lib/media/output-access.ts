@@ -50,7 +50,9 @@ export async function isForeignOwnedArtifact(
   userId: string,
 ): Promise<boolean> {
   const [first, second] = segments;
-  if (!first) return false;
+  if (!first) {
+    return false;
+  }
 
   if (first === "materials") {
     // materials/<scope>/<folder>/<file>：scope 就是项目 id（或 _shared）
@@ -61,7 +63,9 @@ export async function isForeignOwnedArtifact(
     return second ? isForeignProjectScope(second, userId) : false;
   }
   if (first === "films") {
-    if (!second || UNSCOPED_PREFIXES.has(`films/${second}`)) return false;
+    if (!second || UNSCOPED_PREFIXES.has(`films/${second}`)) {
+      return false;
+    }
     const row = await filmRepository.findById(filmIdOf(second));
     return !!row && row.userId !== userId;
   }

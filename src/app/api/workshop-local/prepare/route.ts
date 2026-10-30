@@ -8,10 +8,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { uploadImage } from "~/lib/comfyui/client";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
-import {
-  resolveMediaBytes,
-  strField,
-} from "~/lib/workshop/media-source.server";
+import { resolveMediaBytes, strField } from "~/lib/workshop/media-source.server";
 import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { uniqueStamp } from "~/lib/unique-id";
@@ -31,17 +28,16 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await readJsonRecord(req);
-  if (isErrorResponse(body)) return body;
+  if (isErrorResponse(body)) {
+    return body;
+  }
   const image = strField(body, "image");
   if (!image) {
     return NextResponse.json({ error: "image 不能为空" }, { status: 400 });
   }
 
   try {
-    const { buffer, mime } = await resolveMediaBytes(
-      image,
-      new URL(req.url).origin,
-    );
+    const { buffer, mime } = await resolveMediaBytes(image, new URL(req.url).origin);
     /* 文件名走全库唯一出口（规范 16 §16.2.4.36）。 */
     const filename = `${uniqueStamp("workshop-ref-")}.${extForMime(mime) ?? DEFAULT_EXT}`;
     const uploaded = await uploadImage(buffer, filename);

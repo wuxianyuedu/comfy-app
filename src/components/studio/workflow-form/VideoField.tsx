@@ -40,16 +40,10 @@ function VideoField({
   const label = roleLabel(role);
 
   // COMBO 已解析出候选项 → 一律用下拉（两种范式都是）。
-  if (
-    entry.control === "select" &&
-    Array.isArray(entry.options) &&
-    entry.options.length > 0
-  ) {
+  if (entry.control === "select" && Array.isArray(entry.options) && entry.options.length > 0) {
     const opts = entry.options;
     const val =
-      typeof current === "string" && opts.includes(current)
-        ? current
-        : (opts.at(0) ?? "");
+      typeof current === "string" && opts.includes(current) ? current : (opts.at(0) ?? "");
     return (
       <Field label={label}>
         <SelectMenu
@@ -66,9 +60,7 @@ function VideoField({
   if (preset) {
     if (role === "length") {
       const presets = VIDEO_DURATION_PRESETS;
-      const cur = Number(
-        current ?? entry.defaultValue ?? DEFAULT_VIDEO_DURATION_PRESET.value,
-      );
+      const cur = Number(current ?? entry.defaultValue ?? DEFAULT_VIDEO_DURATION_PRESET.value);
       const val =
         presets.find((preset) => preset.value === cur)?.label ??
         DEFAULT_VIDEO_DURATION_PRESET.label;
@@ -80,7 +72,9 @@ function VideoField({
             disabled={disabled}
             onChange={(value) => {
               const preset = presets.find((item) => item.label === value);
-              if (preset) set(entry.ioKey, preset.value);
+              if (preset) {
+                set(entry.ioKey, preset.value);
+              }
             }}
           />
         </Field>
@@ -88,12 +82,9 @@ function VideoField({
     }
     if (role === "quality") {
       const presets = VIDEO_QUALITY_PRESETS;
-      const cur = Number(
-        current ?? entry.defaultValue ?? DEFAULT_VIDEO_QUALITY_PRESET.value,
-      );
+      const cur = Number(current ?? entry.defaultValue ?? DEFAULT_VIDEO_QUALITY_PRESET.value);
       const val =
-        presets.find((preset) => preset.value === cur)?.label ??
-        DEFAULT_VIDEO_QUALITY_PRESET.label;
+        presets.find((preset) => preset.value === cur)?.label ?? DEFAULT_VIDEO_QUALITY_PRESET.label;
       return (
         <Field label={label}>
           <SelectMenu
@@ -102,7 +93,9 @@ function VideoField({
             disabled={disabled}
             onChange={(value) => {
               const preset = presets.find((item) => item.label === value);
-              if (preset) set(entry.ioKey, preset.value);
+              if (preset) {
+                set(entry.ioKey, preset.value);
+              }
             }}
           />
         </Field>
@@ -111,9 +104,7 @@ function VideoField({
     if (role === "aspect") {
       // 数值比例 → 写浮点比值的形式预设
       const presets = DIM_RATIO_PRESETS;
-      const cur = Number(
-        current ?? entry.defaultValue ?? DEFAULT_DIM_RATIO_PRESET.ratio,
-      );
+      const cur = Number(current ?? entry.defaultValue ?? DEFAULT_DIM_RATIO_PRESET.ratio);
       const val =
         presets.find((preset) => Math.abs(preset.ratio - cur) < 0.05)?.label ??
         DEFAULT_DIM_RATIO_PRESET.label;
@@ -125,7 +116,9 @@ function VideoField({
             disabled={disabled}
             onChange={(value) => {
               const preset = presets.find((item) => item.label === value);
-              if (preset) set(entry.ioKey, preset.ratio);
+              if (preset) {
+                set(entry.ioKey, preset.ratio);
+              }
             }}
           />
         </Field>

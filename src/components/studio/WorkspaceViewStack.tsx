@@ -89,7 +89,9 @@ function lazyView<P extends object>(
            * 让它悬着比立刻抛错更好（抛了会先闪一下 error boundary 再被导航覆盖）；
            * 没触发刷新（不是分块问题 / 本会话已刷过）时照常抛，错误照旧落到
            * error boundary。 */
-          if (reloadOnceForChunkError(err)) return NEVER_SETTLES;
+          if (reloadOnceForChunkError(err)) {
+            return NEVER_SETTLES;
+          }
           throw err;
         }),
     { ssr: false },

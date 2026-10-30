@@ -63,10 +63,14 @@ const ROOT = path.resolve(HERE, "..");
  * @returns {string | null}
  */
 export function binRelativePath(bin, binName) {
-  if (typeof bin === "string") return bin;
+  if (typeof bin === "string") {
+    return bin;
+  }
   if (bin && typeof bin === "object") {
     const v = /** @type {Record<string, unknown>} */ (bin)[binName];
-    if (typeof v === "string") return v;
+    if (typeof v === "string") {
+      return v;
+    }
   }
   return null;
 }
@@ -95,7 +99,9 @@ export function resolvePackageBinEntry(pkgName, opts = {}) {
     const pkgDir = path.dirname(pkgPath);
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
     const rel = binRelativePath(pkg?.bin, binName);
-    if (typeof rel !== "string") return null;
+    if (typeof rel !== "string") {
+      return null;
+    }
     const entry = path.resolve(pkgDir, rel.replace(/^\.\//, ""));
     return fs.existsSync(entry) ? entry : null;
   } catch {
@@ -139,10 +145,14 @@ export function resolveBinEntryByName(name, opts = {}) {
   const { root = ROOT } = opts;
   const binDir = path.join(root, "node_modules", ".bin");
   const declared = readDeclaredTarget(path.join(binDir, name));
-  if (declared !== null) return declared;
+  if (declared !== null) {
+    return declared;
+  }
   for (const shimName of [`${name}.cmd`, name]) {
     const target = readShimTarget(path.join(binDir, shimName));
-    if (target !== null) return target;
+    if (target !== null) {
+      return target;
+    }
   }
   return null;
 }
@@ -159,7 +169,9 @@ export function resolveBinEntryByName(name, opts = {}) {
  * @returns {string | null}
  */
 function readDeclaredTarget(shimPath) {
-  if (!fs.existsSync(shimPath)) return null;
+  if (!fs.existsSync(shimPath)) {
+    return null;
+  }
   let text;
   try {
     text = fs.readFileSync(shimPath, "utf8");
@@ -167,7 +179,9 @@ function readDeclaredTarget(shimPath) {
     return null;
   }
   const m = /^# cmd-shim-target=(\S.*)$/m.exec(text);
-  if (m?.[1] === undefined) return null;
+  if (m?.[1] === undefined) {
+    return null;
+  }
   const target = path.resolve(m[1].trim());
   return fs.existsSync(target) ? target : null;
 }
@@ -191,7 +205,9 @@ function readDeclaredTarget(shimPath) {
  * @returns {string | null}
  */
 function readShimTarget(shimPath) {
-  if (!fs.existsSync(shimPath)) return null;
+  if (!fs.existsSync(shimPath)) {
+    return null;
+  }
   let text;
   try {
     text = fs.readFileSync(shimPath, "utf8");
@@ -203,32 +219,32 @@ function readShimTarget(shimPath) {
     const token = raw.slice(1, -1).trim();
     const isCmd = token.includes("%~dp0");
     const isSh = token.includes("$basedir");
-    if (!isCmd && !isSh) continue;
-    const rel = isCmd
-      ? token.split("%~dp0").pop()
-      : token.replace(/^\$basedir(_win)?/, "");
-    if (rel === undefined || rel === "") continue;
+    if (!isCmd && !isSh) {
+      continue;
+    }
+    const rel = isCmd ? token.split("%~dp0").pop() : token.replace(/^\$basedir(_win)?/, "");
+    if (rel === undefined || rel === "") {
+      continue;
+    }
     /* 先剥掉前导分隔符再 resolve：`.cmd` 里那串是 `%~dp0\..\…`，`split("%~dp0")` 出来
      * 带着**前导反斜杠**，而 `path.resolve` 会把以 `\` 开头的路径当**盘根相对**
      * （`G:\..\…` ⇒ 直接指到别的卷目录上去，`existsSync` 一律 false，表现就是
      * 「所有垫片都解析不到」）。sh 那份的 `$basedir/…` 同理带前导 `/`。 */
-    const target = path.resolve(
-      here,
-      rel.replace(/^[/\\]+/, "").replace(/\\/g, path.sep),
-    );
+    const target = path.resolve(here, rel.replace(/^[/\\]+/, "").replace(/\\/g, path.sep));
     const base = path.basename(target).toLowerCase();
-    if (base === "node" || base === "node.exe") continue;
-    if (fs.existsSync(target)) return target;
+    if (base === "node" || base === "node.exe") {
+      continue;
+    }
+    if (fs.existsSync(target)) {
+      return target;
+    }
   }
   return null;
 }
 
 /* 直接执行时念一句（人读的那一份；判据在用例里）：
  * `node scripts/package-bin-entry.mjs typedoc storybook vitest` */
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   const names = process.argv.slice(2);
   if (names.length === 0) {
     process.stdout.write(
@@ -240,8 +256,6 @@ if (
   const byName = names[0] === "--by-name";
   for (const n of byName ? names.slice(1) : names) {
     const entry = byName ? resolveBinEntryByName(n) : resolvePackageBinEntry(n);
-    process.stdout.write(
-      `${n}: ${entry ?? "(解析不到 —— 没装，或垫片不在)"}\n`,
-    );
+    process.stdout.write(`${n}: ${entry ?? "(解析不到 —— 没装，或垫片不在)"}\n`);
   }
 }

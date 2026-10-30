@@ -294,27 +294,41 @@ function parseRow(_table: string, row: Record<string, unknown>): Row {
 }
 
 function serializeValue(col: string, v: unknown): unknown {
-  if (v === null || v === undefined) return v;
+  if (v === null || v === undefined) {
+    return v;
+  }
   // better-sqlite3 只接受 number/string/bigint/buffer/null 绑定值：boolean 必须
   // 先转 0/1（schema.ts 的 boolean 列是 integer({ mode: "boolean" })，存 0/1）。
-  if (typeof v === "boolean") return v ? 1 : 0;
-  if (v instanceof Date) return v.toISOString();
-  if (jsonColumns.has(col)) return JSON.stringify(v);
+  if (typeof v === "boolean") {
+    return v ? 1 : 0;
+  }
+  if (v instanceof Date) {
+    return v.toISOString();
+  }
+  if (jsonColumns.has(col)) {
+    return JSON.stringify(v);
+  }
   // better-sqlite3（v13 / Node 24 编译）拒绝绑定 boolean，需按 schema 的
   // INTEGER 列语义归一为 1/0（旧版 better-sqlite3 曾隐式强转 true→1）。
-  if (typeof v === "boolean") return v ? 1 : 0;
+  if (typeof v === "boolean") {
+    return v ? 1 : 0;
+  }
   return v;
 }
 
 function allRows(table: string): Array<Row> {
-  if (!currentSqlite) throw new Error("test db 未初始化");
+  if (!currentSqlite) {
+    throw new Error("test db 未初始化");
+  }
   return /* SAFETY: 类型断言已复核 */ (
     currentSqlite.prepare(`SELECT * FROM "${table}"`).all() as Array<Record<string, unknown>>
   ).map((r) => parseRow(table, r));
 }
 
 function insertInto(table: string, obj: Record<string, unknown>): void {
-  if (!currentSqlite) throw new Error("test db 未初始化");
+  if (!currentSqlite) {
+    throw new Error("test db 未初始化");
+  }
   const entries = Object.entries(obj).filter(([, v]) => v !== undefined);
   const cols = entries.map(([k]) => k);
   const vals = entries.map(([k, v]) => serializeValue(k, v));
@@ -324,11 +338,15 @@ function insertInto(table: string, obj: Record<string, unknown>): void {
 }
 
 function getRow(table: string, id: string): Row {
-  if (!currentSqlite) throw new Error("test db 未初始化");
+  if (!currentSqlite) {
+    throw new Error("test db 未初始化");
+  }
   const raw = /* SAFETY: 类型断言已复核 */ currentSqlite
     .prepare(`SELECT * FROM "${table}" WHERE id = ?`)
     .get(id) as Record<string, unknown> | undefined;
-  if (!raw) throw new Error(`row not found: ${table} ${id}`);
+  if (!raw) {
+    throw new Error(`row not found: ${table} ${id}`);
+  }
   return parseRow(table, raw);
 }
 
@@ -501,7 +519,9 @@ export function createTestDb(): TestDb {
   };
 
   const reset = (): void => {
-    for (const t of TABLES) sqlite.prepare(`DELETE FROM "${t}"`).run();
+    for (const t of TABLES) {
+      sqlite.prepare(`DELETE FROM "${t}"`).run();
+    }
     /* 钩子与 trace 就地清空（不是重新赋值）：`$sqlTrace` 是把这份数组**引用**挂在实例上的，
      * 换掉引用会让先前取到的读取者看到一份永久的旧账。 */
     statementHooks.length = 0;
@@ -537,7 +557,9 @@ let seedSeq = 0;
  * 「密文形态」恰恰是 `LlmConfigRepository` / `RemoteModelRepository` 的关键行为。
  */
 function encryptSeedLlmKey(plain: string | null | undefined): string | null {
-  if (plain == null || plain === "") return null;
+  if (plain == null || plain === "") {
+    return null;
+  }
   return encryptLlmKey(plain);
 }
 

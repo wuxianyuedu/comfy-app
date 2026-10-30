@@ -58,10 +58,14 @@ const GLOBALS_CSS = path.resolve(__dirname, "../../src/app/globals.css");
 function selectsHtml(selector: string): boolean {
   return selector.split(",").some((raw) => {
     const p = raw.trim();
-    if (!p) return false;
+    if (!p) {
+      return false;
+    }
     // 去掉 `:not(.dark)` 这段后，余下必须是**单个**「挂在根上」的简单选择器
     const stripped = p.replace(/:not\([^)]*\)/g, "");
-    if (!/^(:root|:host|\.dark)$/.test(stripped)) return false;
+    if (!/^(:root|:host|\.dark)$/.test(stripped)) {
+      return false;
+    }
     return true;
   });
 }
@@ -70,10 +74,16 @@ function selectsHtml(selector: string): boolean {
 function matchesTheme(selector: string, dark: boolean): boolean {
   return selector.split(",").some((raw) => {
     const p = raw.trim();
-    if (!selectsHtml(p)) return false;
+    if (!selectsHtml(p)) {
+      return false;
+    }
     const excludesDark = p.includes(":not(.dark)");
-    if (excludesDark) return !dark;
-    if (p.includes(".dark")) return dark;
+    if (excludesDark) {
+      return !dark;
+    }
+    if (p.includes(".dark")) {
+      return dark;
+    }
     return true; // 裸 `:root` / `:host`
   });
 }
@@ -281,9 +291,13 @@ export function themeTokens(theme: "light" | "dark", cssText: string): ThemeToke
 
   root.walkDecls((decl: Declaration) => {
     const parent = decl.parent;
-    if (parent?.type !== "rule") return;
+    if (parent?.type !== "rule") {
+      return;
+    }
     const rule = parent;
-    if (!matchesTheme(rule.selector, dark)) return;
+    if (!matchesTheme(rule.selector, dark)) {
+      return;
+    }
     order += 1;
     // `@layer` 内的声明优先级低于层外声明；同一层内**后写胜出**。
     const atrule = rule.parent;
@@ -291,14 +305,20 @@ export function themeTokens(theme: "light" | "dark", cssText: string): ThemeToke
     const prev = values.get(decl.prop);
     const wins =
       !prev || (prev.layered && !layered) || (prev.layered === layered && prev.order < order);
-    if (wins) values.set(decl.prop, { value: decl.value, layered, order });
+    if (wins) {
+      values.set(decl.prop, { value: decl.value, layered, order });
+    }
   });
 
   /** 解析 `var()` 链。 */
   function resolve(name: string, seen: Set<string>): string | undefined {
     const entry = values.get(name);
-    if (!entry) return undefined;
-    if (seen.has(name)) throw new Error(`token 引用成环：${[...seen, name].join(" → ")}`);
+    if (!entry) {
+      return undefined;
+    }
+    if (seen.has(name)) {
+      throw new Error(`token 引用成环：${[...seen, name].join(" → ")}`);
+    }
     const next = new Set(seen).add(name);
     return resolveValue(entry.value, next);
   }
@@ -309,7 +329,9 @@ export function themeTokens(theme: "light" | "dark", cssText: string): ThemeToke
       /var\(\s*(--[a-zA-Z0-9-]+)\s*(?:,\s*([^()]*(?:\([^()]*\)[^()]*)*))?\)/g,
       (_all, ref: string, fallback?: string) => {
         const v = resolve(ref, seen);
-        if (v !== undefined && v !== "") return v;
+        if (v !== undefined && v !== "") {
+          return v;
+        }
         return (fallback ?? "").trim();
       },
     );

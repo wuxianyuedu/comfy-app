@@ -200,7 +200,9 @@ export function useCharacterExtractFlow(input: {
        * 而「读失败」与「文件为空」在它们那里压成同一个结果。 */
       const text = await readFileAsText(file);
       const trimmed = text.trim();
-      if (!trimmed) throw new Error("文件内容为空");
+      if (!trimmed) {
+        throw new Error("文件内容为空");
+      }
       let drafts: Array<ParsedCharacterDraft>;
       if (looksLikeJson(trimmed)) {
         drafts = parseImportedCharacterCards(trimmed);
@@ -281,7 +283,9 @@ export function useCharacterAiFlow(input: {
   const genSelectValue = channelSelectionDisplayValue(genSel, config);
 
   async function handleAIGenerate() {
-    if (!brief.trim()) return;
+    if (!brief.trim()) {
+      return;
+    }
     if (!config) {
       openSettings();
       return;

@@ -94,7 +94,9 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
   const refresh = useCallback(async () => {
     try {
       const d = await vanillaApi.workflowModel.list.query();
-      if (Array.isArray(d.tags)) setTags(d.tags);
+      if (Array.isArray(d.tags)) {
+        setTags(d.tags);
+      }
     } catch {
       /* 拉取失败保留旧列表，弹窗仍可用 */
     }
@@ -102,7 +104,9 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
 
   const addTag = useCallback(async () => {
     const name = draft.trim();
-    if (!name) return;
+    if (!name) {
+      return;
+    }
     /* 「新增」还没有对应的条目，错误挂在 `null` 那档（整表）—— 它呈现的位置
      * 就是新增框下方那块错误条。 */
     errors.clear(null);
@@ -113,7 +117,9 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
       runAsyncAction(
         async () => {
           const d = await vanillaApi.workflowModel.create.mutate({ name });
-          if (!d.tag) throw new Error("添加失败");
+          if (!d.tag) {
+            throw new Error("添加失败");
+          }
           setDraft("");
           await refresh();
           onChanged?.();
@@ -136,12 +142,16 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
         const ok = window.confirm(
           `该标签「${name}」已绑定 ${count} 个工作流。\n删除后这些工作流将一并解除绑定，且不可撤销。\n\n确定要继续吗？`,
         );
-        if (!ok) return;
+        if (!ok) {
+          return;
+        }
       }
       await runAsyncAction(
         async () => {
           const d = await vanillaApi.workflowModel.delete.mutate({ name });
-          if (!d.ok) throw new Error("删除失败");
+          if (!d.ok) {
+            throw new Error("删除失败");
+          }
           await refresh();
           onChanged?.();
         },
@@ -160,14 +170,18 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
     async (oldName: string, newName: string): Promise<boolean> => {
       const trimmed = newName.trim();
       // 同名或空名视为 no-op 成功：调用方直接关闭编辑器（原组件行为）。
-      if (!trimmed || trimmed === oldName) return true;
+      if (!trimmed || trimmed === oldName) {
+        return true;
+      }
       const result = await runAsyncAction(
         async () => {
           const d = await vanillaApi.workflowModel.rename.mutate({
             oldName,
             newName: trimmed,
           });
-          if (!d.tag) throw new Error("重命名失败");
+          if (!d.tag) {
+            throw new Error("重命名失败");
+          }
           errors.clear(oldName);
           // 本地先换名，让弹窗立刻反映重命名，不等父组件 onChanged 的往返。
           setTags((prev) =>

@@ -41,7 +41,9 @@ function dialogSlot(): HTMLElement | null {
 /** 复刻调用处的受控用法：父层持开关，关闭后弹窗由父层卸载。 */
 function Harness() {
   const [open, setOpen] = useState(true);
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
   return <SourceModal data={DATA} onClose={() => setOpen(false)} />;
 }
 

@@ -71,7 +71,9 @@ function chainModules(): Array<string> {
       /* 只收 `scripts/**` 内的形态。跨层引用（`../src/**`）不在 `scripts/` 里，
        * 它们是运行期兜底 `await import` 的落点，不属于这条链路的源码面。 */
       const resolved = path.posix.normalize(path.posix.join(baseDir, dep));
-      if (resolved.startsWith("..") || seen.has(resolved)) continue;
+      if (resolved.startsWith("..") || seen.has(resolved)) {
+        continue;
+      }
       seen.add(resolved);
       queue.push(resolved);
     }

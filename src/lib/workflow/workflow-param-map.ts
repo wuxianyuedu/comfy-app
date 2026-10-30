@@ -51,8 +51,7 @@ export const workflowParamMapSchema = z.looseObject({
  *
  *  `source` / `output` 之外允许任意键：那是历史命名空间（`positiveNode`…），
  *  本轮不定它们的档，也不许把它们剥掉（写入路径一律原样透传）。 */
-export type WorkflowParamMap = z.infer<typeof workflowParamMapSchema> &
-  Record<string, unknown>;
+export type WorkflowParamMap = z.infer<typeof workflowParamMapSchema> & Record<string, unknown>;
 
 /** `paramMap` 列的**读边界**：解析成权威类型；不是对象 / 形状不符 → `null`。
  *
@@ -61,9 +60,13 @@ export type WorkflowParamMap = z.infer<typeof workflowParamMapSchema> &
  *  与 `parseWorkflowIOMap` 的「畸形 → 空表」刻意不同 —— 那一处下游按空表
  *  渲染，这一处下游要把空值原样传回去。 */
 export function parseWorkflowParamMap(value: unknown): WorkflowParamMap | null {
-  if (value === null || value === undefined) return null;
+  if (value === null || value === undefined) {
+    return null;
+  }
   const parsed = workflowParamMapSchema.safeParse(value);
-  if (!parsed.success) return null;
+  if (!parsed.success) {
+    return null;
+  }
   return parsed.data;
 }
 
@@ -82,7 +85,9 @@ export const workflowParamMapInputSchema = z
   .unknown()
   .optional()
   .transform((value) => {
-    if (value === undefined || value === null) return undefined;
+    if (value === undefined || value === null) {
+      return undefined;
+    }
     /* 顶层形状复用 `~/lib/is-record`（P48 硬闸：`unknown` → 宽松对象视图只有
      *  那一处口径），不再写第二份 `typeof === "object" && !Array.isArray`。 */
     return isPlainRecord(value) ? value : null;

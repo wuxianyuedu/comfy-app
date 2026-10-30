@@ -599,7 +599,9 @@ describe("编排器与启动页的接线契约", () => {
  */
 function envWithPnpm() {
   const cli = pnpmCli({ write: () => undefined });
-  if (!cli.resolved) return null;
+  if (!cli.resolved) {
+    return null;
+  }
   const dir = path.dirname(cli.command);
   return {
     ...process.env,
@@ -971,18 +973,26 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, e.name);
         if (e.isDirectory()) {
-          if (["node_modules", "__pycache__"].includes(e.name)) continue;
+          if (["node_modules", "__pycache__"].includes(e.name)) {
+            continue;
+          }
           out.push(...walk(full));
-        } else out.push(full);
+        } else {
+          out.push(full);
+        }
       }
       return out;
     };
 
     for (const abs of walk(path.join(ROOT, "scripts"))) {
-      if (!/\.(mjs|cjs|ts)$/.test(abs)) continue;
+      if (!/\.(mjs|cjs|ts)$/.test(abs)) {
+        continue;
+      }
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");
       // 判据模块自己：它必须写出这些形态（否则「起不来」这件事无法被表达）。
-      if (rel === "scripts/launcher-core/shell.mjs") continue;
+      if (rel === "scripts/launcher-core/shell.mjs") {
+        continue;
+      }
       const raw = fs.readFileSync(abs, "utf8");
       // 注释里会**引用**旧写法作反面说明，判据只看代码（与 dev.mjs 那条同口径）。
       // **块注释也要剥**：`/** … */` 里的举例会被逐行扫成「真写了这句」
@@ -995,8 +1005,12 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
         .join("\n");
 
       // ① 写死平台后缀 / 按平台三元拼可执行名 —— 形态本身就是缺陷。
-      if (/"pnpm\.cmd"|'pnpm\.cmd'/.test(code)) offenders.push(`${rel}: 写死了 pnpm.cmd`);
-      if (/win32"?\s*\?\s*"pnpm/.test(code)) offenders.push(`${rel}: 按平台三元拼 pnpm 可执行名`);
+      if (/"pnpm\.cmd"|'pnpm\.cmd'/.test(code)) {
+        offenders.push(`${rel}: 写死了 pnpm.cmd`);
+      }
+      if (/win32"?\s*\?\s*"pnpm/.test(code)) {
+        offenders.push(`${rel}: 按平台三元拼 pnpm 可执行名`);
+      }
 
       // ② 裸 spawn/exec 一个 pnpm 名字（无论有没有扩展名）而没走同一处判据。
       //    `runPnpmSync` / `pnpmInvocation` 是**唯一**被允许的起 pnpm 的方式。

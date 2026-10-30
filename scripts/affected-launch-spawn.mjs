@@ -108,7 +108,9 @@ export function spawnVitest(entry, args) {
   const output = `${res.stdout ?? ""}${res.stderr ?? ""}`;
   process.stdout.write(res.stdout ?? "");
   process.stderr.write(res.stderr ?? "");
-  if (res.error) throw res.error;
+  if (res.error) {
+    throw res.error;
+  }
   return { status: res.status, output };
 }
 
@@ -124,7 +126,9 @@ export function planLaunches(files, budget = SAFE_ARGV_BUDGET) {
   let length = 0;
   for (const file of files) {
     const name = String(file).trim();
-    if (!name) continue;
+    if (!name) {
+      continue;
+    }
     if (name.length + 1 > budget) {
       throw new Error(
         `[affected-launch] 单个路径就超过命令行长预算（${name.length} > ${budget}）——` +
@@ -142,7 +146,9 @@ export function planLaunches(files, budget = SAFE_ARGV_BUDGET) {
     current.push(name);
     length = next;
   }
-  if (current.length > 0) chunks.push(current);
+  if (current.length > 0) {
+    chunks.push(current);
+  }
   return chunks;
 }
 

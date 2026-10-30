@@ -18,7 +18,9 @@ const STATES: Array<StatusDotState> = ["up", "busy", "probing", "down"];
 function dotOf(props: Parameters<typeof StatusDot>[0]): HTMLElement {
   const { container } = render(<StatusDot {...props} />);
   const el = container.querySelector("[data-slot=status-dot]");
-  if (!el) throw new Error("StatusDot 未渲染出 data-slot=status-dot 的元素");
+  if (!el) {
+    throw new Error("StatusDot 未渲染出 data-slot=status-dot 的元素");
+  }
   return /* SAFETY: 类型断言已复核 */ el as HTMLElement;
 }
 

@@ -120,7 +120,9 @@ export function resolveTauriCacheRoot(env) {
   }
   /* 非 Windows：bundler 用的是 XDG 那套，这里只给一个能被验证的落点，不猜。 */
   const xdg = String(env.XDG_CACHE_HOME ?? "").trim();
-  if (xdg) return { dir: path.join(xdg, "tauri"), from: "环境变量 XDG_CACHE_HOME" };
+  if (xdg) {
+    return { dir: path.join(xdg, "tauri"), from: "环境变量 XDG_CACHE_HOME" };
+  }
   return { dir: null, from: "既无 LOCALAPPDATA 也无 XDG_CACHE_HOME ⇒ 落点问不出来" };
 }
 
@@ -132,14 +134,19 @@ export function resolveTauriCacheRoot(env) {
 export function listTreeFiles(dir) {
   /** @type {string[]} */
   const out = [];
-  if (!fs.existsSync(dir)) return out;
+  if (!fs.existsSync(dir)) {
+    return out;
+  }
   /** @param {string} current @param {string} rel */
   const walk = (current, rel) => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const abs = path.join(current, entry.name);
       const relPath = (rel ? `${rel}/` : "") + entry.name;
-      if (entry.isDirectory()) walk(abs, relPath);
-      else if (entry.isFile()) out.push(relPath);
+      if (entry.isDirectory()) {
+        walk(abs, relPath);
+      } else if (entry.isFile()) {
+        out.push(relPath);
+      }
     }
   };
   walk(dir, "");
@@ -163,7 +170,9 @@ export function mirrorDir(toolRoot, plan = NSIS_PLAN) {
 /** @param {string} mirror @returns {{files: {path: string, sha256: string, bytes: number}[]} | null} */
 function readMirrorManifest(mirror) {
   const file = path.join(mirror, TOOLS_MANIFEST_FILE);
-  if (!fs.existsSync(file)) return null;
+  if (!fs.existsSync(file)) {
+    return null;
+  }
   try {
     const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
     return Array.isArray(parsed?.files) ? { files: parsed.files } : null;

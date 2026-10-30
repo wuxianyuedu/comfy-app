@@ -115,7 +115,9 @@ function Stage({
   const select = useCallback(
     (nodeId: string, selected: boolean) => {
       const internal = store.getState().nodeLookup.get(nodeId);
-      if (!internal) return;
+      if (!internal) {
+        return;
+      }
       internal.internals.userNode.selected = selected;
       store.setState({});
     },

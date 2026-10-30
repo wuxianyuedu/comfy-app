@@ -42,13 +42,17 @@ export function isVideoMode(code: string | null | undefined): boolean {
 
 /** 该模式是否自带首帧图（图生视频 / 图文生视频 / 首尾帧）。 */
 export function modeUsesFirstFrame(code: string | null | undefined): boolean {
-  if (typeof code !== "string") return false;
+  if (typeof code !== "string") {
+    return false;
+  }
   return /^(i2v|ti2v|flf2v|fmf2v|r2v|s2v|ia2v)$/i.test(code.trim());
 }
 
 /** 该模式是否需要尾帧图（首尾帧视频）。 */
 export function modeUsesLastFrame(code: string | null | undefined): boolean {
-  if (typeof code !== "string") return false;
+  if (typeof code !== "string") {
+    return false;
+  }
   return /^(flf2v|fmf2v)$/i.test(code.trim());
 }
 
@@ -127,7 +131,9 @@ const REFERENCE_IMAGE_DEFAULT_COUNT = 2;
  *  这些模式的输入本身就是一张图，对外就必须暴露「参考图」；纯文生图（T2I）
  *  没有这个口子。 */
 function isImageEditMode(code: string | null | undefined): boolean {
-  if (typeof code !== "string") return false;
+  if (typeof code !== "string") {
+    return false;
+  }
   return /^(i2i|inpaint|outpaint|upscale|e2i|d2i|p2i|r2i|c2i)$/i.test(code.trim());
 }
 
@@ -249,11 +255,17 @@ const EXPOSED_CUSTOM_CLASS: Record<ExposedCustomKind, ExposedParamClass> = {
  *  编一个名字。自定义口给一条中性兜底：它的名字只有模式契约知道（作者起的名），
  *  落到下面按「类」取会张冠李戴（把 `custom-text-1` 显示成「提示词」）。 */
 export function exposedParamDisplayLabel(id: string): string {
-  if (exposedCustomKindOf(id)) return "自定义参数";
+  if (exposedCustomKindOf(id)) {
+    return "自定义参数";
+  }
   const cls = exposedClassOf(id);
-  if (!cls) return id;
+  if (!cls) {
+    return id;
+  }
   const slot = referenceImageSlotIndex(id);
-  if (slot > 1) return `${EXPOSED_PARAM_DISPLAY_LABEL["reference-image"]} ${slot}`;
+  if (slot > 1) {
+    return `${EXPOSED_PARAM_DISPLAY_LABEL["reference-image"]} ${slot}`;
+  }
   return EXPOSED_PARAM_DISPLAY_LABEL[cls];
 }
 
@@ -276,8 +288,14 @@ export function exposedParamLabel(id: string): string {
  *  自定义口按它的简单类型归到同族的那一类，见 `EXPOSED_CUSTOM_CLASS`）。 */
 export function exposedClassOf(id: string): ExposedParamClass | null {
   const custom = exposedCustomKindOf(id);
-  if (custom) return EXPOSED_CUSTOM_CLASS[custom];
-  if (id in EXPOSED_PARAM_LABEL) return /* SAFETY: 类型断言已复核 */ id as ExposedParamClass;
-  if (/^reference-image-\d+$/.test(id)) return "reference-image";
+  if (custom) {
+    return EXPOSED_CUSTOM_CLASS[custom];
+  }
+  if (id in EXPOSED_PARAM_LABEL) {
+    return /* SAFETY: 类型断言已复核 */ id as ExposedParamClass;
+  }
+  if (/^reference-image-\d+$/.test(id)) {
+    return "reference-image";
+  }
   return null;
 }

@@ -195,8 +195,12 @@ export function resolveWebServerCommand(
   const explicit = String(env.COMFY_E2E_SERVER ?? "")
     .trim()
     .toLowerCase();
-  if (explicit === "dev") return pnpmWebServerCommand("dev", env);
-  if (explicit === "start") return pnpmWebServerCommand("start", env);
+  if (explicit === "dev") {
+    return pnpmWebServerCommand("dev", env);
+  }
+  if (explicit === "start") {
+    return pnpmWebServerCommand("start", env);
+  }
   if (explicit !== "") {
     throw new Error(
       `COMFY_E2E_SERVER 的值认不出来："${env.COMFY_E2E_SERVER}"（只认 dev / start）—— ` +
@@ -269,7 +273,9 @@ export function resolveE2eWorkers(env: NodeJS.ProcessEnv, cpus = resolveLocalCpu
 export function resolveLocalCpus(env: NodeJS.ProcessEnv = process.env): number {
   const raw = String(env.CNB_CPUS ?? "").trim();
   const parsed = Number(raw);
-  if (raw !== "" && Number.isInteger(parsed) && parsed >= 1) return parsed;
+  if (raw !== "" && Number.isInteger(parsed) && parsed >= 1) {
+    return parsed;
+  }
   const local = availableParallelism();
   return Number.isInteger(local) && local >= 1 ? local : 0;
 }

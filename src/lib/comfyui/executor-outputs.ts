@@ -36,27 +36,40 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
   const others: Array<CollectedOutputFile> = [];
   const texts: Array<string> = [];
   for (const nodeOut of Object.values(outputs)) {
-    if (!nodeOut || typeof nodeOut !== "object") continue;
+    if (!nodeOut || typeof nodeOut !== "object") {
+      continue;
+    }
     const node = /* SAFETY: 类型断言已复核 */ nodeOut as Record<string, unknown>;
-    if (Array.isArray(node.images))
+    if (Array.isArray(node.images)) {
       images.push(.../* SAFETY: 类型断言已复核 */ (node.images as Array<CollectedOutputFile>));
-    if (Array.isArray(node.videos))
+    }
+    if (Array.isArray(node.videos)) {
       videos.push(.../* SAFETY: 类型断言已复核 */ (node.videos as Array<CollectedOutputFile>));
+    }
     // VHS_VideoCombine 把文件发在 `gifs` 下（实际是 mp4/gif/webm）。
-    if (Array.isArray(node.gifs))
+    if (Array.isArray(node.gifs)) {
       videos.push(.../* SAFETY: 类型断言已复核 */ (node.gifs as Array<CollectedOutputFile>));
+    }
     // SaveAudio 与 AudioComposite 把文件发在 `audios` 下。
-    if (Array.isArray(node.audios))
+    if (Array.isArray(node.audios)) {
       audios.push(.../* SAFETY: 类型断言已复核 */ (node.audios as Array<CollectedOutputFile>));
+    }
     // ShowText / 任意文本输出节点：保留渲染文本（无文件）.
-    if (typeof node.text === "string" && node.text.trim()) texts.push(node.text);
-    else if (Array.isArray(node.text))
-      for (const t of node.text) if (typeof t === "string" && t.trim()) texts.push(t);
+    if (typeof node.text === "string" && node.text.trim()) {
+      texts.push(node.text);
+    } else if (Array.isArray(node.text)) {
+      for (const t of node.text) {
+        if (typeof t === "string" && t.trim()) {
+          texts.push(t);
+        }
+      }
+    }
     // 3D / 未知文件输出（Hunyuan3D、mesh、gltf…）：兜底收集任何其它
     // 「数组内含 {filename,...}」的输出，避免被静默丢弃。
     for (const [k, v] of Object.entries(node)) {
-      if (k === "images" || k === "videos" || k === "gifs" || k === "audios" || k === "text")
+      if (k === "images" || k === "videos" || k === "gifs" || k === "audios" || k === "text") {
         continue;
+      }
       if (
         Array.isArray(v) &&
         v.length &&
@@ -67,8 +80,9 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
             typeof (/* SAFETY: 类型断言已复核 */ (it as Record<string, unknown>).filename) ===
               "string",
         )
-      )
+      ) {
         others.push(.../* SAFETY: 类型断言已复核 */ (v as Array<CollectedOutputFile>));
+      }
     }
   }
   return { images, videos, audios, others, texts };
@@ -136,13 +150,24 @@ function readSamplerNode(
         ? Number(seedRaw)
         : undefined;
   const out: SamplerRuntime = { nodeId, classType };
-  if (typeof seed === "number" && Number.isFinite(seed)) out.seed = seed;
-  if (typeof inputs.steps === "number") out.steps = inputs.steps;
-  if (typeof inputs.cfg === "number") out.cfg = inputs.cfg;
-  if (typeof inputs.sampler_name === "string" && inputs.sampler_name)
+  if (typeof seed === "number" && Number.isFinite(seed)) {
+    out.seed = seed;
+  }
+  if (typeof inputs.steps === "number") {
+    out.steps = inputs.steps;
+  }
+  if (typeof inputs.cfg === "number") {
+    out.cfg = inputs.cfg;
+  }
+  if (typeof inputs.sampler_name === "string" && inputs.sampler_name) {
     out.sampler_name = inputs.sampler_name;
-  if (typeof inputs.scheduler === "string" && inputs.scheduler) out.scheduler = inputs.scheduler;
-  if (typeof inputs.denoise === "number") out.denoise = inputs.denoise;
+  }
+  if (typeof inputs.scheduler === "string" && inputs.scheduler) {
+    out.scheduler = inputs.scheduler;
+  }
+  if (typeof inputs.denoise === "number") {
+    out.denoise = inputs.denoise;
+  }
   return out;
 }
 
@@ -153,28 +178,48 @@ export function extractRuntimeParams(entry: unknown): RuntimeParams {
   const graphRaw = /* SAFETY: 类型断言已复核 */ (
     prompt as Record<string, unknown> | null | undefined
   )?.[2];
-  if (!graphRaw || typeof graphRaw !== "object") return out;
+  if (!graphRaw || typeof graphRaw !== "object") {
+    return out;
+  }
   const graph = /* SAFETY: 类型断言已复核 */ graphRaw as Record<string, unknown>;
   const samplers: Array<SamplerRuntime> = [];
   for (const [nid, nodeRaw] of Object.entries(graph)) {
     const node = /* SAFETY: 类型断言已复核 */ nodeRaw as Record<string, unknown> | undefined;
     const t = typeof node?.class_type === "string" ? node.class_type : "";
-    if (!isSamplerClassType(t)) continue;
+    if (!isSamplerClassType(t)) {
+      continue;
+    }
     const inputs = /* SAFETY: 类型断言已复核 */ (node?.inputs ?? {}) as Record<string, unknown>;
     samplers.push(readSamplerNode(nid, t, inputs));
   }
-  if (samplers.length === 0) return out;
+  if (samplers.length === 0) {
+    return out;
+  }
   out.samplers = samplers;
   /* 主采样器 = graph 顺序第一个：摊平到顶层，保持历史既有形态（下游零改动）。 */
   const primary = samplers[0];
-  if (!primary) return out;
+  if (!primary) {
+    return out;
+  }
   out.samplerNodeId = primary.nodeId;
   out.samplerClassType = primary.classType;
-  if (primary.seed !== undefined) out.seed = primary.seed;
-  if (primary.steps !== undefined) out.steps = primary.steps;
-  if (primary.cfg !== undefined) out.cfg = primary.cfg;
-  if (primary.sampler_name !== undefined) out.sampler_name = primary.sampler_name;
-  if (primary.scheduler !== undefined) out.scheduler = primary.scheduler;
-  if (primary.denoise !== undefined) out.denoise = primary.denoise;
+  if (primary.seed !== undefined) {
+    out.seed = primary.seed;
+  }
+  if (primary.steps !== undefined) {
+    out.steps = primary.steps;
+  }
+  if (primary.cfg !== undefined) {
+    out.cfg = primary.cfg;
+  }
+  if (primary.sampler_name !== undefined) {
+    out.sampler_name = primary.sampler_name;
+  }
+  if (primary.scheduler !== undefined) {
+    out.scheduler = primary.scheduler;
+  }
+  if (primary.denoise !== undefined) {
+    out.denoise = primary.denoise;
+  }
   return out;
 }

@@ -7,14 +7,20 @@ export function buildCharacterPrompt(c: Character, style?: StyleRef): string {
 
   // 核心身份特征
   const identity = [c.ageGender, c.appearance, c.costume].filter(Boolean).join(", ");
-  if (identity) parts.push(identity);
+  if (identity) {
+    parts.push(identity);
+  }
 
   // 性格 / 气质，作为氛围关键词
   const mood = [c.personality, c.temperament].filter(Boolean).join(", ");
-  if (mood) parts.push(`mood: ${mood}`);
+  if (mood) {
+    parts.push(`mood: ${mood}`);
+  }
 
   // 风格标签
-  if (c.styleTags.length) parts.push(c.styleTags.join(", "));
+  if (c.styleTags.length) {
+    parts.push(c.styleTags.join(", "));
+  }
 
   // 关联的技能模板（充当美术指导的外包装）
   if (style?.promptTemplate) {
@@ -35,7 +41,9 @@ export function buildCharacterNegative(_c: Character, style?: StyleRef): string 
     "watermark",
     "text",
   ];
-  if (style?.negativePrompt) base.push(style.negativePrompt);
+  if (style?.negativePrompt) {
+    base.push(style.negativePrompt);
+  }
   return base.join(", ");
 }
 
@@ -50,25 +58,35 @@ export function buildShotPrompt(
 
   // 镜头构图关键词
   const shotKw = SHOT_KEYWORDS[shot.shotType] ?? "";
-  if (shotKw) parts.push(shotKw);
+  if (shotKw) {
+    parts.push(shotKw);
+  }
 
   // 场景氛围
   if (scene) {
     const sceneBits = [scene.location, scene.time, scene.action].filter(Boolean).join(", ");
-    if (sceneBits) parts.push(sceneBits);
+    if (sceneBits) {
+      parts.push(sceneBits);
+    }
   }
 
   // 该镜头特有的描述
-  if (shot.description) parts.push(shot.description);
+  if (shot.description) {
+    parts.push(shot.description);
+  }
 
   // Character prompts
   const charPrompts = characters
     .map((character) => buildCharacterPrompt(character, style))
     .filter(Boolean);
-  if (charPrompts.length) parts.push(`characters: ${charPrompts.join("; ")}`);
+  if (charPrompts.length) {
+    parts.push(`characters: ${charPrompts.join("; ")}`);
+  }
 
   // Style wrapper
-  if (style?.promptTemplate) parts.push(style.promptTemplate);
+  if (style?.promptTemplate) {
+    parts.push(style.promptTemplate);
+  }
 
   return parts.filter(Boolean).join(", ");
 }
@@ -85,9 +103,13 @@ export function buildShotNegative(characters: Array<Character>, style?: StyleRef
     "extra fingers",
   ];
   characters.forEach((character) => {
-    if (character.negativePrompt) neg.push(character.negativePrompt);
+    if (character.negativePrompt) {
+      neg.push(character.negativePrompt);
+    }
   });
-  if (style?.negativePrompt) neg.push(style.negativePrompt);
+  if (style?.negativePrompt) {
+    neg.push(style.negativePrompt);
+  }
   return Array.from(new Set(neg)).join(", ");
 }
 
@@ -105,7 +127,11 @@ const SHOT_KEYWORDS: Record<string, string> = {
 /* 合并风格与角色各自的推荐参数；冲突时以角色为准。 */
 export function mergeParams(style?: StyleRef, character?: Character): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  if (style?.defaultParams) Object.assign(out, style.defaultParams);
-  if (character?.params) Object.assign(out, character.params);
+  if (style?.defaultParams) {
+    Object.assign(out, style.defaultParams);
+  }
+  if (character?.params) {
+    Object.assign(out, character.params);
+  }
   return out;
 }

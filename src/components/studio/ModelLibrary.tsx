@@ -238,7 +238,9 @@ function ModelList({ items }: { items: Array<ModelRow> }) {
         >
           {virtualizer.getVirtualItems().map((vi) => {
             const m = items[vi.index];
-            if (!m) return null;
+            if (!m) {
+              return null;
+            }
             return (
               <ModelRowLine
                 key={vi.key}

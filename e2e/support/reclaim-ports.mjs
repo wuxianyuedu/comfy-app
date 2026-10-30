@@ -35,10 +35,7 @@ import {
   pidBelongsToRoot,
   processCommandLines,
 } from "../../scripts/launcher-core/procs.mjs";
-import {
-  isAppDevServerCmdline,
-  reapProcessTree,
-} from "../../scripts/launcher-core/port-reap.mjs";
+import { isAppDevServerCmdline, reapProcessTree } from "../../scripts/launcher-core/port-reap.mjs";
 import { isFakeServerCmdline, pickOwnFakePids } from "./preflight-ports.mjs";
 import {
   classifyFakeSlot,
@@ -62,7 +59,9 @@ export async function isFakeServerAnswering(_pid, options = {}) {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(options.timeoutMs ?? 1500),
     });
-    if (res.status !== 200) return false;
+    if (res.status !== 200) {
+      return false;
+    }
     return isFakeComfyuiPayload(await res.json());
   } catch {
     return false;
@@ -92,16 +91,18 @@ export async function reclaimOwnFakePort(port, options = {}) {
   const reap = options.reap ?? reapProcessTree;
   const platform = options.platform ?? process.platform;
   const pids = await listPids(port);
-  if (pids.length === 0) return { reclaimed: [], foreign: [], free: true };
+  if (pids.length === 0) {
+    return { reclaimed: [], foreign: [], free: true };
+  }
 
   const cmdlines = await readCmdlines(pids);
   /* 判据 ② 是**异步的**（问那个进程的 `/system_stats`），所以先只对「命令行走形的那几个」
    * 付这次代价 —— 一个不相关的占位者不必被 fetch 一遍。 */
-  const byCmdline = pids.filter((pid) =>
-    isFakeServerCmdline(cmdlines.get(pid) ?? ""),
-  );
+  const byCmdline = pids.filter((pid) => isFakeServerCmdline(cmdlines.get(pid) ?? ""));
   const answers = new Map();
-  for (const pid of byCmdline) answers.set(pid, await answersFake(pid));
+  for (const pid of byCmdline) {
+    answers.set(pid, await answersFake(pid));
+  }
   const own = pickOwnFakePids(pids, {
     cmdlineOf: (pid) => cmdlines.get(pid) ?? "",
     answersFake: (pid) => answers.get(pid) === true,
@@ -199,7 +200,9 @@ export async function isAppAnswering(port, options = {}) {
       signal: AbortSignal.timeout(options.timeoutMs ?? 1500),
     });
     /* 503（库没就绪）也是本应用的应答 —— 只认「它答得出这个形状」。 */
-    if (res.status !== 200 && res.status !== 503) return false;
+    if (res.status !== 200 && res.status !== 503) {
+      return false;
+    }
     const body = await res.json();
     return (
       !!body &&
@@ -261,7 +264,9 @@ export async function reclaimOwnAppPort(port, root, options = {}) {
   const reap = options.reap ?? reapProcessTree;
   const platform = options.platform ?? process.platform;
   const pids = await listPids(port);
-  if (pids.length === 0) return { reclaimed: [], foreign: [], free: true };
+  if (pids.length === 0) {
+    return { reclaimed: [], foreign: [], free: true };
+  }
 
   const cmdlines = await readCmdlines(pids);
   /* ① 的两条线索各取一次（命令行一次批量查、工作目录一次按 PID：
@@ -279,8 +284,7 @@ export async function reclaimOwnAppPort(port, root, options = {}) {
    * 所以只探一次，而且只在 ① 命中过时才探（不相关的占位者不必被 fetch 一遍）。
    * ⚠️ 入参是**端口**不是 PID：判据问的是「这个口上坐着的是不是一个在应答的本应用」，
    * 而端口上可能同时有好几层进程（`pnpm` / `node start.mjs` / `next-server`）。 */
-  const answersAppOnPort =
-    candidates.length > 0 ? await answersApp(port) : false;
+  const answersAppOnPort = candidates.length > 0 ? await answersApp(port) : false;
   const own = pickOwnAppPids(pids, {
     cmdlineOf: (pid) => cmdlines.get(pid) ?? "",
     root,

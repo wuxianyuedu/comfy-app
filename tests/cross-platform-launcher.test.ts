@@ -76,7 +76,9 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   afterEach(() => {
     while (tmpDirs.length > 0) {
       const dir = tmpDirs.pop();
-      if (dir) fs.rmSync(dir, { recursive: true, force: true });
+      if (dir) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     }
   });
 
@@ -293,7 +295,9 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     // 不向前端暴露执行能力：caps 里不得出现 shell 的 execute/spawn 权限
     for (const cap of ["default", "remote", "splash"]) {
       const file = path.join(root, "src-tauri", "capabilities", `${cap}.json`);
-      if (!fs.existsSync(file)) continue;
+      if (!fs.existsSync(file)) {
+        continue;
+      }
       expect(fs.readFileSync(file, "utf8")).not.toMatch(/shell:(allow-execute|allow-spawn)/);
     }
   });
@@ -484,8 +488,11 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
     const out: Array<string> = [];
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) out.push(...scriptFiles(full));
-      else if (/\.(mjs|cjs|ts)$/.test(entry.name)) out.push(full);
+      if (entry.isDirectory()) {
+        out.push(...scriptFiles(full));
+      } else if (/\.(mjs|cjs|ts)$/.test(entry.name)) {
+        out.push(full);
+      }
     }
     return out;
   }
@@ -498,7 +505,9 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
       const source = stripComments(fs.readFileSync(abs, "utf8"));
       for (const match of source.matchAll(SPEC_LITERAL_RE)) {
         const specifier = match[1];
-        if (!specifier) continue;
+        if (!specifier) {
+          continue;
+        }
         checked += 1;
         if (!fs.existsSync(path.resolve(path.dirname(abs), specifier))) {
           offenders.push(`${rel} → ${specifier}`);
@@ -614,7 +623,9 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
   afterEach(() => {
     while (tmpDirs.length > 0) {
       const dir = tmpDirs.pop();
-      if (dir) fs.rmSync(dir, { recursive: true, force: true });
+      if (dir) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     }
   });
 

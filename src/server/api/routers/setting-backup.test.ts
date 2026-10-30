@@ -75,7 +75,9 @@ describe("setting.backupCreate", () => {
     const caller = createCaller(makeCtx());
     const result = await caller.backupCreate();
     expect(result.ok).toBe(true);
-    if (!result.ok) return;
+    if (!result.ok) {
+      return;
+    }
     expect(result.name).toMatch(/^db-backup-\d{8}-\d{6}(-\d+)?\.sqlite$/);
 
     const listed = await caller.backupList();
@@ -87,7 +89,9 @@ describe("setting.backupCreate", () => {
     const caller = createCaller(makeCtx());
     const result = await caller.backupCreate();
     expect(result.ok).toBe(false);
-    if (result.ok) return;
+    if (result.ok) {
+      return;
+    }
     expect(result.reason).toContain("不存在");
   });
 });
@@ -109,7 +113,9 @@ describe("setting.backupRestore", () => {
      * 裸 `throw new Error` 会被判成「router 里抛裸 Error」（§11.2.1 第七条）。
      * 这里本来也不是在测失败路径。 */
     expect(made.ok, JSON.stringify(made)).toBe(true);
-    if (!made.ok) return;
+    if (!made.ok) {
+      return;
+    }
     const before = fs.readFileSync(path.join(root, "db.sqlite"));
 
     const result = await caller.backupRestore({ name: made.name });
@@ -119,9 +125,7 @@ describe("setting.backupRestore", () => {
     const listed = await caller.backupList();
     expect(listed.pending?.file).toBe(made.name);
     // ② 库文件**没动**（换文件在下次启动，不是在这一刻）
-    expect(fs.readFileSync(path.join(root, "db.sqlite")).equals(before)).toBe(
-      true,
-    );
+    expect(fs.readFileSync(path.join(root, "db.sqlite")).equals(before)).toBe(true);
   });
 
   it("拒绝任意路径 / 穿越 / 不存在的名字（恢复不是「用任意文件覆盖数据库」）", async () => {
@@ -147,7 +151,9 @@ describe("落点", () => {
     const caller = createCaller(makeCtx());
     const made = await caller.backupCreate();
     expect(made.ok).toBe(true);
-    if (!made.ok) return;
+    if (!made.ok) {
+      return;
+    }
     expect(fs.existsSync(path.join(root, BACKUP_DIR, made.name))).toBe(true);
     expect(fs.existsSync(path.join(root, made.name))).toBe(false);
   });

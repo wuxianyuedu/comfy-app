@@ -55,7 +55,9 @@ function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const abs = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "node_modules" || entry.name === "__snapshots__") continue;
+      if (entry.name === "node_modules" || entry.name === "__snapshots__") {
+        continue;
+      }
       walk(abs, out);
     } else if (/\.[jt]sx?$/.test(entry.name) && !/\.test\.[jt]sx?$/.test(entry.name)) {
       out.push(abs);
@@ -75,13 +77,19 @@ const problems = [];
 
 for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
   const file = rel(abs);
-  if (EXEMPT.has(file)) continue;
+  if (EXEMPT.has(file)) {
+    continue;
+  }
   const lines = fs.readFileSync(abs, "utf8").split("\n");
   lines.forEach((line, index) => {
     const trimmed = line.trim();
     // 注释行不算（解释历史写法是允许的，判据是「渲染出」的 JSX）
-    if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) return;
-    if (!INLINE_STYLE.test(line)) return;
+    if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+      return;
+    }
+    if (!INLINE_STYLE.test(line)) {
+      return;
+    }
     problems.push(`${file}:${index + 1}  ${trimmed.slice(0, 120)}`);
   });
 }

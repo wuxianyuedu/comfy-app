@@ -86,11 +86,15 @@ export function forEachOutputLine(
     while ((nl = buf.indexOf("\n")) >= 0) {
       const line = buf.slice(0, nl);
       buf = buf.slice(nl + 1);
-      if (line.trim()) onLine(line);
+      if (line.trim()) {
+        onLine(line);
+      }
     }
   });
   stream.on("end", () => {
     const rest = buf.trim();
-    if (rest) onLine(rest);
+    if (rest) {
+      onLine(rest);
+    }
   });
 }

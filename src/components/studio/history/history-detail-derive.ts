@@ -23,7 +23,9 @@ import type { TaskDetail } from "./history-types";
  * 各有一份逐字相同的三元 —— 收进这里，改一处即可。
  */
 export function kvValueText(value: unknown): string {
-  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
   return JSON.stringify(value);
 }
 
@@ -122,16 +124,22 @@ function resolvePortValue(
 ): unknown {
   const keys = PORT_TO_PARAM_KEYS[portId] ?? [portId];
   for (const key of keys) {
-    if (!isBlank(params[key])) return params[key];
+    if (!isBlank(params[key])) {
+      return params[key];
+    }
   }
   if (portId === "size") {
     const parts = inputs
       .filter((input) => SIZE_PIN_NAMES.has(input.name))
       .map((input) => `${resolveParamLabel(input, io)} ${kvValueText(input.value)}`);
-    if (parts.length > 0) return parts.join(" · ");
+    if (parts.length > 0) {
+      return parts.join(" · ");
+    }
   }
   const pin = inputs.find((input) => input.name === portId);
-  if (pin && !isBlank(pin.value)) return pin.value;
+  if (pin && !isBlank(pin.value)) {
+    return pin.value;
+  }
   return undefined;
 }
 
@@ -188,14 +196,20 @@ function findIoEntry(
   nodeId: string | undefined,
   name: string,
 ): { label?: string } | null {
-  if (!io) return null;
+  if (!io) {
+    return null;
+  }
   if (nodeId) {
     const exact = io[`${nodeId}::widget::${name}`] ?? io[`${nodeId}::input::${name}`];
-    if (exact) return exact;
+    if (exact) {
+      return exact;
+    }
   }
   const suffix = `::widget::${name}`;
   for (const [key, entry] of Object.entries(io)) {
-    if (key.endsWith(suffix)) return entry;
+    if (key.endsWith(suffix)) {
+      return entry;
+    }
   }
   return null;
 }

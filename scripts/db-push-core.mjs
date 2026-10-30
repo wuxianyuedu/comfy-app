@@ -52,8 +52,7 @@ export function pushBlockedByTty(output) {
  * 换了输出格式、我们漏认了某类语句时，黑名单会把它当安全语句**直接执行**，
  * 白名单只会让用户多跑一次命令。
  */
-const SAFE_STATEMENT =
-  /^(ALTER TABLE `[^`]+` ADD|CREATE TABLE\b|CREATE (UNIQUE )?INDEX\b)/i;
+const SAFE_STATEMENT = /^(ALTER TABLE `[^`]+` ADD|CREATE TABLE\b|CREATE (UNIQUE )?INDEX\b)/i;
 
 /**
  * 「这一行看起来是一条 SQL」—— 只收这些行。
@@ -80,20 +79,20 @@ const SQL_LINE = /^(ALTER|CREATE|DROP|INSERT|UPDATE|DELETE|PRAGMA|RENAME)\b/i;
 export function pendingStatements(output) {
   const lines = String(output).split("\n");
   const start = lines.findIndex((line) => /about to execute/i.test(line));
-  if (start === -1) return [];
+  if (start === -1) {
+    return [];
+  }
   const out = [];
   for (const line of lines.slice(start + 1)) {
     const text = line.trim();
     /* 状态行（`[✓] Changes applied` / `[i] No changes detected` /
      * 下一次 `Reading config`）是这段列表的结束标志；空行只是分隔。 */
-    if (
-      /^(\[|Reading config|Warning\b|No changes detected|Changes applied)/i.test(
-        text,
-      )
-    ) {
+    if (/^(\[|Reading config|Warning\b|No changes detected|Changes applied)/i.test(text)) {
       break;
     }
-    if (SQL_LINE.test(text)) out.push(text);
+    if (SQL_LINE.test(text)) {
+      out.push(text);
+    }
   }
   return out;
 }
@@ -102,9 +101,7 @@ export function pendingStatements(output) {
  *  @param {string[]} statements `pendingStatements` 的结果
  *  @returns {boolean} */
 export function canAutoApply(statements) {
-  return (
-    statements.length > 0 && statements.every((s) => SAFE_STATEMENT.test(s))
-  );
+  return statements.length > 0 && statements.every((s) => SAFE_STATEMENT.test(s));
 }
 
 /** 白名单之外的语句（给人看的原因）。
@@ -138,20 +135,20 @@ export function describeRiskyChanges(statements) {
   const recreated = new Set();
   for (const s of statements) {
     const m = s.match(/^CREATE\s+TABLE\s+`__new_([^`]+)`/i);
-    if (m) recreated.add(m[1]);
+    if (m) {
+      recreated.add(m[1]);
+    }
   }
   /** @type {string[]} */
   const out = [];
   for (const raw of statements) {
-    if (SAFE_STATEMENT.test(raw)) continue;
+    if (SAFE_STATEMENT.test(raw)) {
+      continue;
+    }
     const sql = raw.replace(/;+\s*$/, "");
     let desc = null;
     let m;
-    if (
-      (m = sql.match(
-        /^ALTER\s+TABLE\s+`([^`]+)`\s+DROP\s+COLUMN\s+`([^`]+)`$/i,
-      ))
-    ) {
+    if ((m = sql.match(/^ALTER\s+TABLE\s+`([^`]+)`\s+DROP\s+COLUMN\s+`([^`]+)`$/i))) {
       desc = `${m[1]}.${m[2]}（删列，该列的数据会丢）`;
     } else if ((m = sql.match(/^DROP\s+TABLE\s+`([^`]+)`$/i))) {
       desc = recreated.has(m[1])
@@ -163,7 +160,9 @@ export function describeRiskyChanges(statements) {
     if (desc === null) {
       desc = `「${sql.length > 80 ? `${sql.slice(0, 77)}…` : sql}」`;
     }
-    if (!out.includes(desc)) out.push(desc);
+    if (!out.includes(desc)) {
+      out.push(desc);
+    }
   }
   return out;
 }
@@ -192,8 +191,12 @@ export function describeRiskyChanges(statements) {
  * @returns {string}
  */
 export function describeSpawnFailure(error) {
-  if (!error) return "UNKNOWN";
-  if (typeof error === "string") return error;
+  if (!error) {
+    return "UNKNOWN";
+  }
+  if (typeof error === "string") {
+    return error;
+  }
   return error.code ?? error.message ?? "UNKNOWN";
 }
 
@@ -229,11 +232,11 @@ export function pushSchema(root, options = {}) {
   } = options;
 
   const args = ["exec", "drizzle-kit", "push"];
-  if (force) args.push("--force");
+  if (force) {
+    args.push("--force");
+  }
   const env =
-    databaseUrl === undefined
-      ? process.env
-      : { ...process.env, DATABASE_URL: databaseUrl };
+    databaseUrl === undefined ? process.env : { ...process.env, DATABASE_URL: databaseUrl };
 
   const first = run(args, { cwd: root, env, stdio: "pipe", timeoutMs });
   const firstOutput = `${first.stdout}\n${first.stderr}`;

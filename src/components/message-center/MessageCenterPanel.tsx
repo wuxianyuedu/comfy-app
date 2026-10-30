@@ -39,10 +39,7 @@ import { useHotkey } from "~/components/ui/use-hotkey";
  * 于是「加了一档分档、忘了配图标与色调」不会拖到运行期才显形（此前这里是
  * `Record<string, …>` + 运行时 `?? KIND_META.info!` 兜底，配色表漏一档就静默
  * 退化成 info 那一档）。 */
-const KIND_META: Record<
-  MessageKind,
-  { icon: typeof Bell; tint: string; ring: string }
-> = {
+const KIND_META: Record<MessageKind, { icon: typeof Bell; tint: string; ring: string }> = {
   update: {
     icon: RefreshCw,
     tint: "text-primary-strong bg-primary/15",
@@ -85,15 +82,10 @@ function RunGroupHeader({ group }: { group: MessageRunGroup<MessageRecord> }) {
       className="flex items-center gap-2.5 px-1 pt-2 pb-1"
       aria-label={`${group.label}${group.isCurrent ? "（当前）" : ""}`}
     >
-      <span
-        className={`h-px flex-1 ${group.isCurrent ? "bg-primary/30" : "bg-border-subtle"}`}
-      />
+      <span className={`h-px flex-1 ${group.isCurrent ? "bg-primary/30" : "bg-border-subtle"}`} />
       <span className="flex shrink-0 items-center gap-1.5">
         {group.isCurrent && (
-          <span
-            className="bg-primary size-1.5 shrink-0 rounded-full"
-            aria-hidden="true"
-          />
+          <span className="bg-primary size-1.5 shrink-0 rounded-full" aria-hidden="true" />
         )}
         <span
           className={
@@ -104,12 +96,8 @@ function RunGroupHeader({ group }: { group: MessageRunGroup<MessageRecord> }) {
         >
           {group.label}
         </span>
-        <span className="text-ink-fainter text-2xs tabular-nums">
-          {fmtTime(group.latestAt)}
-        </span>
-        <span className="text-ink-fainter text-2xs tabular-nums">
-          · {group.count} 条
-        </span>
+        <span className="text-ink-fainter text-2xs tabular-nums">{fmtTime(group.latestAt)}</span>
+        <span className="text-ink-fainter text-2xs tabular-nums">· {group.count} 条</span>
         {/* runId 与 `log/runs/<日期>_<时分秒>-<runId>` 同形：分组头带上它，
             用户想翻日志时不用再去猜是哪一包。 */}
         {group.runId !== null && (
@@ -121,9 +109,7 @@ function RunGroupHeader({ group }: { group: MessageRunGroup<MessageRecord> }) {
           </span>
         )}
       </span>
-      <span
-        className={`h-px flex-1 ${group.isCurrent ? "bg-primary/30" : "bg-border-subtle"}`}
-      />
+      <span className={`h-px flex-1 ${group.isCurrent ? "bg-primary/30" : "bg-border-subtle"}`} />
     </li>
   );
 }
@@ -147,10 +133,7 @@ export function MessageCenterPanel() {
     hydrate();
   }, [hydrate]);
 
-  const unread = useMemo(
-    () => messages.reduce((n, m) => n + (m.read ? 0 : 1), 0),
-    [messages],
-  );
+  const unread = useMemo(() => messages.reduce((n, m) => n + (m.read ? 0 : 1), 0), [messages]);
 
   /* 按「每一次启动」分组。判据是纯函数（`~/lib/shell/message-run-groups`），
    * 这里只把结果摊平成交错的「组头 + 消息行」——分不分组、哪一组是「本次启动」
@@ -167,7 +150,9 @@ export function MessageCenterPanel() {
     filterInput: false,
   });
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   return (
     <FullScreenLayer
@@ -188,13 +173,9 @@ export function MessageCenterPanel() {
               </span>
             )}
           </span>
-          <span className="text-ink-bright text-sm font-semibold">
-            消息中心
-          </span>
+          <span className="text-ink-bright text-sm font-semibold">消息中心</span>
           <span className="text-ink-muted text-xs">
-            {messages.length
-              ? `${messages.length} 条 · ${unread} 条未读`
-              : "暂无消息"}
+            {messages.length ? `${messages.length} 条 · ${unread} 条未读` : "暂无消息"}
           </span>
         </div>
 
@@ -252,9 +233,7 @@ export function MessageCenterPanel() {
                     <li
                       key={m.id}
                       className={`bg-subtle/60 hover:bg-subtle rounded-xl border p-3.5 transition-colors ${
-                        m.read
-                          ? "border-border-subtle opacity-70"
-                          : `${meta.ring} border`
+                        m.read ? "border-border-subtle opacity-70" : `${meta.ring} border`
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -287,9 +266,7 @@ export function MessageCenterPanel() {
                           </span>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-baseline gap-2">
-                              <h3 className="text-ink-bright text-sm font-semibold">
-                                {m.title}
-                              </h3>
+                              <h3 className="text-ink-bright text-sm font-semibold">{m.title}</h3>
                               {!m.read && (
                                 <Badge tone="primary" size="pill-sm">
                                   新

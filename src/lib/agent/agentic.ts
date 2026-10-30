@@ -77,10 +77,14 @@ function offlineIdea(text: string, kind: "image" | "video" = "image"): AgentSpec
 
 function detectKind(msgs: Array<string>): "image" | "video" | null {
   for (const m of msgs) {
-    if (/视频|video|短片|动图|mv|影片|动漫短/.test(m)) return "video";
+    if (/视频|video|短片|动图|mv|影片|动漫短/.test(m)) {
+      return "video";
+    }
   }
   for (const m of msgs) {
-    if (/图片|图像|照片|插画|画作|海报|图$/.test(m)) return "image";
+    if (/图片|图像|照片|插画|画作|海报|图$/.test(m)) {
+      return "image";
+    }
   }
   return null;
 }
@@ -161,7 +165,9 @@ export async function chatAgent(history: Array<ChatMessage>): Promise<AgentTurnR
         maxTokens: 700,
       }),
     });
-    if (!res.ok) throw new Error("llm failed");
+    if (!res.ok) {
+      throw new Error("llm failed");
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       content?: string;
       choices?: Array<{ message?: { content?: string } }>;

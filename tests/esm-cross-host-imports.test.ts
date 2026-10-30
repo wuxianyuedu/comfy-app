@@ -57,6 +57,11 @@ const CROSS_HOST_MODULES = [
   "src/lib/process/python-resolve.ts",
   "src/lib/process/probe-exe.ts",
   "src/lib/process/kill-process-tree.ts",
+  /* `executable-resolve.ts` 拆出来的两块（它越过文件长度硬闸时按职责切的）：
+   * 它们同样只依赖 `platform.ts` 与 node 内建，所以仍然是**叶子** —— 但必须登记
+   * 在这里，否则判据 ① 会把它俩读成「清单外的依赖」。 */
+  "src/lib/process/pnpm-resolve.ts",
+  "src/lib/process/version-compare.ts",
 ];
 
 /** `.mjs` 侧的宿主：直接 `import` 上面那些模块的那些文件。 */

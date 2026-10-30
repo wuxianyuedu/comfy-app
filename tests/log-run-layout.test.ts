@@ -95,7 +95,9 @@ function makeRun(name: string, mtime?: Date): string {
   const dir = path.join(runs(), name);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "launcher.log"), "x");
-  if (mtime) fs.utimesSync(dir, mtime, mtime);
+  if (mtime) {
+    fs.utimesSync(dir, mtime, mtime);
+  }
   return dir;
 }
 
@@ -146,7 +148,9 @@ describe("目录名与路径", () => {
   });
 
   it("runId 是 6 位小写十六进制", () => {
-    for (let i = 0; i < 50; i++) expect(newRunId()).toMatch(/^[0-9a-f]{6}$/);
+    for (let i = 0; i < 50; i++) {
+      expect(newRunId()).toMatch(/^[0-9a-f]{6}$/);
+    }
   });
 
   it("路径常量全在 log/ 下，current 与 runs 是同级子目录", () => {
@@ -263,7 +267,9 @@ describe("保留策略", () => {
       makeRun(name);
       names.push(name);
     }
-    for (const run of listRuns(root)) alignMtimeToName(run);
+    for (const run of listRuns(root)) {
+      alignMtimeToName(run);
+    }
     // now 设在最后一个包的一个月后：25 包全部掉出 7 天窗口，只剩「最近 20」这条通道
     const now = new Date(2026, 9, 10, 12, 0, 0).getTime();
     const result = await pruneRuns(root, { now });
@@ -436,7 +442,9 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
 describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", () => {
   /** 四个写方。（读方在端点侧，不在这里列。） */
   const WRITERS = [
-    "src/lib/comfyui/lifecycle.ts",
+    /* ComfyUI 那一支的实际写盘在手：`lifecycle.ts` 把它按职责拆出去了
+     * （会话标记 + runtime 日志写入器），文件名仍走 `runtime-log-pack.server`。 */
+    "src/lib/comfyui/lifecycle-session-log.ts",
     "src/lib/drizzle-studio/lifecycle.ts",
     "src/app/api/llm/ollama-start/route.ts",
     "src/app/api/llm/ollama-stop/route.ts",

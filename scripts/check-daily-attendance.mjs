@@ -48,10 +48,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { cnbJson, makeRunner } from "./ship-exec.mjs";
-import {
-  classifyBuildOutcome,
-  downstreamSkipped,
-} from "./ci-build-readout.mjs";
+import { classifyBuildOutcome, downstreamSkipped } from "./ci-build-readout.mjs";
 
 /** 一天一次 + 半天余量：补派与延迟落地（实测有 04:00 事件 08:42 才落的那次）都吃得下。 */
 export const DEFAULT_WINDOW_HOURS = 36;
@@ -82,9 +79,7 @@ export const CODE = { PRESENT: 0, ABSENT: 1, NO_VERDICT: 2 };
 export function isDailyDispatch(build) {
   const event = String(build?.event ?? "");
   return (
-    event.startsWith("crontab:") ||
-    event === "web_trigger_daily" ||
-    event === "api_trigger_daily"
+    event.startsWith("crontab:") || event === "web_trigger_daily" || event === "api_trigger_daily"
   );
 }
 
@@ -97,9 +92,7 @@ export function isDailyDispatch(build) {
 export function latestDailyDispatch(builds) {
   const daily = (Array.isArray(builds) ? builds : [])
     .filter(isDailyDispatch)
-    .sort((a, b) =>
-      String(b?.createTime ?? "").localeCompare(String(a?.createTime ?? "")),
-    );
+    .sort((a, b) => String(b?.createTime ?? "").localeCompare(String(a?.createTime ?? "")));
   return daily[0] ?? null;
 }
 
@@ -127,12 +120,7 @@ export function latestDailyDispatch(builds) {
  * @param {AttendanceInput} input 列表 + 逐格详情 + 现在时刻
  * @returns {AttendanceVerdict} 判定与逐格读数
  */
-export function judgeAttendance({
-  builds,
-  details = [],
-  now,
-  windowHours = DEFAULT_WINDOW_HOURS,
-}) {
+export function judgeAttendance({ builds, details = [], now, windowHours = DEFAULT_WINDOW_HOURS }) {
   const latest = latestDailyDispatch(builds);
   if (!latest) {
     return {
@@ -186,9 +174,7 @@ export function judgeAttendance({
   }
   const dragged = downstreamSkipped(outcome);
   if (dragged.length > 0) {
-    evidence.push(
-      `  · 被它带下去、根本没跑的格：${dragged.map((s) => s.name).join("、")}`,
-    );
+    evidence.push(`  · 被它带下去、根本没跑的格：${dragged.map((s) => s.name).join("、")}`);
   }
 
   if (outcome.state === "green" && ageHours <= windowHours) {
@@ -264,8 +250,12 @@ export function judgeAttendance({
  */
 function asBuildArray(json) {
   const first = json?.data ?? json;
-  if (Array.isArray(first)) return first;
-  if (Array.isArray(first?.data)) return first.data;
+  if (Array.isArray(first)) {
+    return first;
+  }
+  if (Array.isArray(first?.data)) {
+    return first.data;
+  }
   return null;
 }
 
@@ -359,11 +349,11 @@ export function fetchBuildsCoveringWindow({
       exhausted = true;
       break;
     }
-    if (oldestMs !== null && oldestMs <= horizonMs) break;
+    if (oldestMs !== null && oldestMs <= horizonMs) {
+      break;
+    }
   }
-  const covered =
-    broke === null &&
-    (exhausted || (oldestMs !== null && oldestMs <= horizonMs));
+  const covered = broke === null && (exhausted || (oldestMs !== null && oldestMs <= horizonMs));
   const span = `${pages} 页 / ${list.length} 条 · 最早 ${
     oldestMs === null ? "(认不出时刻)" : new Date(oldestMs).toISOString()
   }`;
@@ -401,17 +391,13 @@ export function fetchBuildDetails(run, slug, builds) {
   const out = [];
   for (const build of (Array.isArray(builds) ? builds : []).slice(0, 3)) {
     const sn = String(build?.sn ?? "");
-    if (sn === "") continue;
-    const res = cnbJson(run, [
-      "build",
-      "get-build-status",
-      "--repo",
-      slug,
-      "--sn",
-      sn,
-      "-v",
-    ]);
-    if (res?.json) out.push({ sn, json: res.json });
+    if (sn === "") {
+      continue;
+    }
+    const res = cnbJson(run, ["build", "get-build-status", "--repo", slug, "--sn", sn, "-v"]);
+    if (res?.json) {
+      out.push({ sn, json: res.json });
+    }
   }
   return out;
 }
@@ -468,8 +454,7 @@ export function readOffline(file) {
   const looksLikeBuild =
     one &&
     typeof one === "object" &&
-    (one.pipelinesStatus !== undefined ||
-      (typeof one.status === "string" && one.status !== ""));
+    (one.pipelinesStatus !== undefined || (typeof one.status === "string" && one.status !== ""));
   if (!one || !looksLikeBuild) {
     return {
       list: [],
@@ -521,9 +506,7 @@ function flagValue(argv, flag) {
 export function main(rawArgv, env = {}) {
   const argv = rawArgv ?? process.argv.slice(2);
   const asJson = argv.includes("--json");
-  const windowHours = Number(
-    flagValue(argv, "--hours") || DEFAULT_WINDOW_HOURS,
-  );
+  const windowHours = Number(flagValue(argv, "--hours") || DEFAULT_WINDOW_HOURS);
   /* 「现在」也要能钉住：夹具里的派发时刻是**绝对时刻**，而窗口比的是「距现在多久」
    * ⇒ 不钉住 now，这一档就会随真实时间推移自己变红（2026-10-24 现场：夹具写的是
    * 10-22 16:00Z，真实时间到 10-24 08:21Z 已隔 40.4h > 36h ⇒ 一条本该恒绿的离线
@@ -557,19 +540,16 @@ export function main(rawArgv, env = {}) {
       source = {
         ...source,
         failure:
-          source.failure ??
-          "--from 那一档必须同时钉住「现在」（--now <ISO 时刻> 或 --now <毫秒>）",
+          source.failure ?? "--from 那一档必须同时钉住「现在」（--now <ISO 时刻> 或 --now <毫秒>）",
       };
     }
   } else {
-    const run =
-      env.run ?? makeRunner(fileURLToPath(new URL(".", import.meta.url)));
+    const run = env.run ?? makeRunner(fileURLToPath(new URL(".", import.meta.url)));
     /* `flagValue` 对「没给这个旗标」回**空串**，而空串不是 nullish —— `??` 兜不住，
      * 于是 `--repo` 会被交成一个空字符串，表现就是「取不到构建列表」
      * （实测踩过：把 null 换成空串的那一次改动，在线那一跳当场落到红档）。要显式判空。 */
     const repoFlag = flagValue(argv, "--repo");
-    const slug =
-      env.slug ?? (repoFlag === "" ? "moon-read/comfy-app-t3" : repoFlag);
+    const slug = env.slug ?? (repoFlag === "" ? "moon-read/comfy-app-t3" : repoFlag);
     const win = fetchBuildsCoveringWindow({
       run,
       slug,
@@ -580,8 +560,7 @@ export function main(rawArgv, env = {}) {
       source = {
         list: [],
         details: [],
-        failure:
-          "取不到构建列表（`cnb` 起不来 / 网络不通 / 返回不是 JSON）—— 判据自身不做重试",
+        failure: "取不到构建列表（`cnb` 起不来 / 网络不通 / 返回不是 JSON）—— 判据自身不做重试",
       };
     } else if (!win.covered) {
       /* 这一格是整个判据最坏的形状在这里：窗口没盖住就往下单念「缺勤」，是把「我没取到」
@@ -617,13 +596,18 @@ export function main(rawArgv, env = {}) {
       });
   /** JSON 里多带一句覆盖自证（只有拿得出来的时候才多这个键，形状不凭空长）。 */
   const payload = coverage ? { ...out, coverage } : out;
-  if (asJson) console.log(JSON.stringify(payload, null, 2));
-  else {
+  if (asJson) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else {
     console.log(`[daily-attendance] ${out.headline}`);
     /* 「窗口内没有派发」这句话必须有依据才能念，而依据是**取数盖到了多久以前**。
      * 成功路径上把它一起打出来：不印就等于让读者只看见结论（§11.23 那一族）。 */
-    if (coverage) console.log(`[daily-attendance] ${coverage.label}：${coverage.text}`);
-    for (const line of out.evidence) console.log(line);
+    if (coverage) {
+      console.log(`[daily-attendance] ${coverage.label}：${coverage.text}`);
+    }
+    for (const line of out.evidence) {
+      console.log(line);
+    }
   }
   return out.code;
 }

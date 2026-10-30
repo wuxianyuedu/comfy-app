@@ -77,7 +77,9 @@ export async function waitForComfyReady(opts: WaitForComfyReadyOpts): Promise<Wa
   const interval = opts.intervalMs ?? 2000;
   for (;;) {
     const exit = opts.earlyExit?.();
-    if (exit) return exit;
+    if (exit) {
+      return exit;
+    }
 
     const dead = await opts.isDead();
     if (dead !== null) {
@@ -95,7 +97,9 @@ export async function waitForComfyReady(opts: WaitForComfyReadyOpts): Promise<Wa
       };
     }
 
-    if (opts.deadline !== null && Date.now() >= opts.deadline) break;
+    if (opts.deadline !== null && Date.now() >= opts.deadline) {
+      break;
+    }
     await sleep(interval);
   }
   return { ok: false, base: null, detail: opts.timeoutDetail };
@@ -150,9 +154,13 @@ export function createRecentOutputLedger(maxLines = 60): RecentOutputLedger {
     push(text: string) {
       for (const line of text.split("\n")) {
         const trimmed = line.trim();
-        if (!trimmed) continue;
+        if (!trimmed) {
+          continue;
+        }
         lines.push(trimmed);
-        while (lines.length > maxLines) lines.shift();
+        while (lines.length > maxLines) {
+          lines.shift();
+        }
       }
     },
   };
@@ -195,7 +203,9 @@ export function createChildExitHandler(
     const report = describeComfyExit({ code, signal, ...deps.context() });
     deps.appendRuntimeLog(`■ ${deps.subject} 进程已退出：${report.reason}`);
     deps.appendRuntimeLog(`[exit] ${report.reason}（${report.detail}）`);
-    if (report.advice !== null) deps.appendRuntimeLog(`[exit] ↩ ${report.advice}`);
+    if (report.advice !== null) {
+      deps.appendRuntimeLog(`[exit] ↩ ${report.advice}`);
+    }
     deps.log(`${deps.subject} 进程退出：${report.reason}`);
     deps.onExitReport?.(report);
     deps.clearChild();

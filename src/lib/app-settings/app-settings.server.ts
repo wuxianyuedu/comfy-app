@@ -32,7 +32,9 @@ export function deriveComfyuiSubdir(
   subdir: "custom_nodes" | "workflows",
 ): string | null {
   const root = (comfyuiPath ?? "").trim();
-  if (!root) return null;
+  if (!root) {
+    return null;
+  }
   // 各布局的「ComfyUI 源码根」（main.py 所在目录）。
   const candidates = [
     root, // 便携版 / venv：main.py 直接在配置根下
@@ -41,7 +43,9 @@ export function deriveComfyuiSubdir(
   for (const base of candidates) {
     const dir = path.join(base, subdir);
     try {
-      if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) return dir;
+      if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+        return dir;
+      }
     } catch {
       /* 忽略 —— 继续往下走 */
     }
@@ -63,12 +67,16 @@ const COMFYUI_WORKFLOW_SUBDIRS: ReadonlyArray<ReadonlyArray<string>> = [
  *  回退旧的 `<comfyuiPath>[/ComfyUI]/workflows`。找不到返回 null（调用方自行降级）。 */
 export function deriveComfyuiWorkflowsDir(comfyuiPath: string): string | null {
   const root = (comfyuiPath ?? "").trim();
-  if (!root) return null;
+  if (!root) {
+    return null;
+  }
   for (const base of [root, path.join(root, "ComfyUI")]) {
     for (const sub of COMFYUI_WORKFLOW_SUBDIRS) {
       const dir = path.join(base, ...sub);
       try {
-        if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) return dir;
+        if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+          return dir;
+        }
       } catch {
         /* 该候选不可访问 → 试下一个 */
       }
@@ -123,9 +131,13 @@ function readSettingsFile(): { fingerprint: string; raw: string | null } {
 /* 同步读取，带进程内缓存（磁盘上的设置一变就重读）。从请求处理器里调用是安全的。 */
 export function getSettingsSync(): AppSettings {
   const { fingerprint, raw } = readSettingsFile();
-  if (cache && fingerprint === cacheFingerprint) return cache;
+  if (cache && fingerprint === cacheFingerprint) {
+    return cache;
+  }
   try {
-    if (raw === null) throw new Error("设置文件读不到");
+    if (raw === null) {
+      throw new Error("设置文件读不到");
+    }
     const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Partial<AppSettings> & {
       comfyuiUrl?: string;
     };

@@ -46,7 +46,9 @@ export function FlowNodePinRows({
     const roles = handles.map((handle) => readPortFocusRole(nodeData, handle));
     for (const role of roles) {
       const tone = resolvePortRowTone({ role, hasSelection: true });
-      if (tone === "focused" || tone === "related") return tone;
+      if (tone === "focused" || tone === "related") {
+        return tone;
+      }
     }
     return resolvePortRowTone({ role: "none", hasSelection: portFocusActive });
   };

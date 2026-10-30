@@ -37,7 +37,9 @@ function tempDir(prefix: string): string {
 }
 
 afterEach(() => {
-  while (temps.length) rmSync(temps.pop()!, { recursive: true, force: true });
+  while (temps.length) {
+    rmSync(temps.pop()!, { recursive: true, force: true });
+  }
 });
 
 /** 造一份「刚刚写过」的产物：探针文件存在且 mtime 是现在。 */
@@ -153,7 +155,9 @@ describe("runTypedoc：静默失败会重试，救回来算成功", () => {
       backoff: [0, 0],
       spawnImpl: async (_bin: string, dir: string) => {
         calls += 1;
-        if (calls >= 2) writeProbe(dir);
+        if (calls >= 2) {
+          writeProbe(dir);
+        }
         return silentRun();
       },
       onProgress: quiet,

@@ -97,9 +97,13 @@ const SOURCES = [
           inPackage = line === "[package]";
           continue;
         }
-        if (!inPackage) continue;
+        if (!inPackage) {
+          continue;
+        }
         const m = /^version\s*=\s*"([^"]*)"/.exec(line);
-        if (m) return m[1];
+        if (m) {
+          return m[1];
+        }
       }
       return null;
     },
@@ -114,8 +118,9 @@ function readVersion(src) {
     return { error: `读不到 ${src.file}（${e.code || e.message}）` };
   }
   const value = src.extract(text);
-  if (value == null)
+  if (value == null) {
     return { error: `${src.file} 里提取不出 ${src.label} —— 字段被改名 / 挪位了？` };
+  }
   return { value };
 }
 
@@ -125,17 +130,19 @@ function main() {
   const reads = [];
   for (const src of SOURCES) {
     const r = readVersion(src);
-    if (r.error) problems.push(r.error);
-    else reads.push({ label: src.label, value: r.value });
+    if (r.error) {
+      problems.push(r.error);
+    } else {
+      reads.push({ label: src.label, value: r.value });
+    }
   }
 
   /* 形态检查与相等检查分开报：形态不对时「三处相等」是一条没有意义的话
    * （三处都写成 `0.1` 也会相等），分开报才指得出该改哪儿。 */
   for (const r of reads) {
-    if (!SEMVER_RE.test(r.value))
-      problems.push(
-        `${r.label} 不是 MAJOR.MINOR.PATCH 形态：${JSON.stringify(r.value)}`,
-      );
+    if (!SEMVER_RE.test(r.value)) {
+      problems.push(`${r.label} 不是 MAJOR.MINOR.PATCH 形态：${JSON.stringify(r.value)}`);
+    }
   }
 
   if (reads.length === SOURCES.length) {
@@ -150,7 +157,9 @@ function main() {
   }
 
   if (REPORT_ONLY) {
-    for (const r of reads) process.stdout.write(`  ${r.label}：${r.value}\n`);
+    for (const r of reads) {
+      process.stdout.write(`  ${r.label}：${r.value}\n`);
+    }
     if (problems.length) {
       process.stdout.write(`  （另有 ${problems.length} 处读不出/形态异常）\n`);
     }

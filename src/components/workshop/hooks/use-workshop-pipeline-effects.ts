@@ -74,7 +74,9 @@ export function useWorkshopTaskRecovery(input: {
   const resumedRef = useRef(false);
 
   useEffect(() => {
-    if (resumedRef.current) return;
+    if (resumedRef.current) {
+      return;
+    }
     resumedRef.current = true;
     /** 恢复一个失联任务：查真值 → 已终态直接回写，仍在跑才重订阅。 */
     const resumeTask = (shotId: string, taskId: string, target: "image" | "video") => {
@@ -85,7 +87,9 @@ export function useWorkshopTaskRecovery(input: {
         const patchIfOwned = (p: Partial<Shot>) =>
           setShots((prev) =>
             prev.map((item) => {
-              if (item.id !== shotId) return item;
+              if (item.id !== shotId) {
+                return item;
+              }
               const owned =
                 target === "video" ? item.clipTaskId === taskId : item.taskId === taskId;
               return owned ? { ...item, ...p } : item;

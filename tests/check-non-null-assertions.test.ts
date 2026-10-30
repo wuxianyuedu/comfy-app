@@ -25,7 +25,9 @@ const { test, expect } = defineGateRepo({
 /** 工作区里现存的基线 JSON（递归找 `scripts/` 下 `*.json`）。 */
 function globBaselines(root: string): Array<string> {
   const dir = join(root, "scripts");
-  if (!existsSync(dir)) return [];
+  if (!existsSync(dir)) {
+    return [];
+  }
   return readdirSync(dir).filter((name) => name.endsWith(".json"));
 }
 

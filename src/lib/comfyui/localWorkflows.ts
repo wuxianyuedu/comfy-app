@@ -62,7 +62,9 @@ export interface ScannedRoot {
 /** 与服务端其余部分用同一种方式归一化绝对路径：反斜杠 → 正斜杠、转小写。
  *  与 customNodes.ts 的 `pathKey` 同口径，Windows 盘符大小写因此不会对不上。 */
 function pathKey(p: string): string {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   try {
     return normalizeSlashes(path.resolve(p)).toLowerCase();
   } catch {
@@ -92,7 +94,9 @@ async function statMany(paths: Array<string>): Promise<Array<fs.Stats | null>> {
     while (cursor < paths.length) {
       const index = cursor++;
       const target = paths[index];
-      if (target === undefined) continue;
+      if (target === undefined) {
+        continue;
+      }
       try {
         out[index] = await fs.promises.stat(target);
       } catch {
@@ -178,11 +182,17 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
     for (const ent of entries) {
       const fullPath = path.join(dir, ent.name);
       if (ent.isDirectory()) {
-        if (recursive) await visit(fullPath);
+        if (recursive) {
+          await visit(fullPath);
+        }
         continue;
       }
-      if (!ent.isFile()) continue;
-      if (!/\.(json|workflow)$/i.test(ent.name)) continue;
+      if (!ent.isFile()) {
+        continue;
+      }
+      if (!/\.(json|workflow)$/i.test(ent.name)) {
+        continue;
+      }
       pending.push(fullPath);
     }
 
@@ -190,7 +200,9 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
     for (let index = 0; index < pending.length; index++) {
       const st = stats[index];
       const fullPath = pending[index];
-      if (!st || fullPath === undefined) continue;
+      if (!st || fullPath === undefined) {
+        continue;
+      }
       out.push({
         absPath: path.resolve(fullPath),
         name: path.basename(fullPath),
@@ -240,7 +252,9 @@ export async function scanLocalWorkflowRoots(
     roots.flatMap((r) => r.files),
     (f) => (f.absPath ? pathKey(f.absPath) : null),
   )) {
-    if (!file.absPath) continue;
+    if (!file.absPath) {
+      continue;
+    }
     allFiles.push(file);
   }
 
@@ -315,7 +329,9 @@ function rememberChecksum(key: string, memo: ChecksumMemo): void {
   cache.set(key, memo);
   while (cache.size > CHECKSUM_CACHE_MAX) {
     const oldest = cache.keys().next().value;
-    if (oldest === undefined) break;
+    if (oldest === undefined) {
+      break;
+    }
     cache.delete(oldest);
   }
 }
@@ -378,7 +394,9 @@ export async function scanLocalWorkflowChecksums(
       const file = allFiles.at(cursor);
       cursor += 1;
 
-      if (!file?.absPath) continue;
+      if (!file?.absPath) {
+        continue;
+      }
 
       const result = await checksumOfFile(file.absPath, file.size, file.mtimeMs);
 

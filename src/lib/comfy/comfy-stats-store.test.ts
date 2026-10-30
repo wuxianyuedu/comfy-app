@@ -31,7 +31,9 @@ vi.mock("~/lib/comfy/comfy-liveness-client", () => ({
     crashListeners.push(l);
     return () => {
       const i = crashListeners.indexOf(l);
-      if (i >= 0) crashListeners.splice(i, 1);
+      if (i >= 0) {
+        crashListeners.splice(i, 1);
+      }
     };
   },
 }));
@@ -278,7 +280,9 @@ describe("进程级判活（与 /api/comfy/queue 同口径）", () => {
     const goodStats = getComfyStatsSnapshot().stats;
 
     fetchMock.mockResolvedValue(ALIVE_BUT_NO_ANSWER);
-    for (let i = 0; i < 5; i++) await refreshComfyStats(); // 远超离线阈值也不该翻
+    for (let i = 0; i < 5; i++) {
+      await refreshComfyStats();
+    } // 远超离线阈值也不该翻
 
     const snapshot = getComfyStatsSnapshot();
     expect(snapshot.online).toBe(true);
@@ -289,7 +293,9 @@ describe("进程级判活（与 /api/comfy/queue 同口径）", () => {
   it("从没读到过数据 + 进程在跑：算在线（连接中），不报未运行", async () => {
     subscribeComfyStats(noop);
     fetchMock.mockResolvedValue(ALIVE_BUT_NO_ANSWER);
-    for (let i = 0; i < 5; i++) await refreshComfyStats();
+    for (let i = 0; i < 5; i++) {
+      await refreshComfyStats();
+    }
 
     const snapshot = getComfyStatsSnapshot();
     expect(snapshot.online).toBe(true);

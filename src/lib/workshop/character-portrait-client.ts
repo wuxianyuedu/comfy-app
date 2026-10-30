@@ -7,11 +7,7 @@
 import { isInlineMedia } from "~/lib/media/data-url";
 import { DEFAULT_IMAGE_MIME, extForMime } from "~/lib/media/mime-ext";
 import { uploadMaterialItem } from "~/lib/media/materials-client";
-import {
-  sizeSpecToRelay,
-  sizeSpecToWxH,
-  type SizeSpec,
-} from "~/lib/media/size-presets";
+import { sizeSpecToRelay, sizeSpecToWxH, type SizeSpec } from "~/lib/media/size-presets";
 import type { SavedOutput } from "./api-channel-shared";
 import {
   apiGenerateImage,
@@ -60,12 +56,18 @@ export async function generateWorkflowPortrait(
       onProgress: (pct) => handlers.onProgress?.(pct),
       onLog: (entry) => handlers.onLog?.(entry),
       onOutput: (output: SavedOutput) => {
-        if (output.kind !== "video" && !imageUrl) imageUrl = output.url;
+        if (output.kind !== "video" && !imageUrl) {
+          imageUrl = output.url;
+        }
       },
       onSettled: (result) => {
-        if (!result.ok) reject(new Error(result.message ?? "定妆照生成失败"));
-        else if (imageUrl) resolve(imageUrl);
-        else reject(new Error("任务完成但没有产出图片"));
+        if (!result.ok) {
+          reject(new Error(result.message ?? "定妆照生成失败"));
+        } else if (imageUrl) {
+          resolve(imageUrl);
+        } else {
+          reject(new Error("任务完成但没有产出图片"));
+        }
       },
     });
   });
@@ -79,7 +81,9 @@ const DEFAULT_EXT = "png";
 async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
   /* 「这是不是一个内联 media」走 `~/lib/media/data-url`（规范 16 §16.2.4.56）；
    * 解码本身交给 `fetch`（浏览器原生，不必自己 base64 → Blob）。 */
-  if (!isInlineMedia(dataUrl)) throw new Error("data URL 格式无效");
+  if (!isInlineMedia(dataUrl)) {
+    throw new Error("data URL 格式无效");
+  }
   const blob = await (await fetch(dataUrl)).blob();
   /* 服务端按扩展名归属素材种类，没有扩展名会被当成文档，故这里必须有兜底后缀。 */
   const ext = extForMime(blob.type) ?? DEFAULT_EXT;
@@ -95,7 +99,9 @@ async function localizePortraitImage(
   url: string,
   opts: { projectId: string; name: string },
 ): Promise<string> {
-  if (!isInlineMedia(url)) return url;
+  if (!isInlineMedia(url)) {
+    return url;
+  }
   const file = await dataUrlToFile(url, opts.name);
   const item = await uploadMaterialItem(file, {
     folder: "characters",
@@ -130,10 +136,7 @@ export async function generateRemotePortrait(
 }
 
 /** 外部导入现成的定妆照：写进素材库「角色」分类并返回地址。 */
-export async function importPortraitFile(
-  file: File,
-  opts: { projectId: string },
-): Promise<string> {
+export async function importPortraitFile(file: File, opts: { projectId: string }): Promise<string> {
   const item = await uploadMaterialItem(file, {
     folder: "characters",
     projectId: opts.projectId,

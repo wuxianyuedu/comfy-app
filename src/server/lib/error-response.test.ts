@@ -63,9 +63,13 @@ describe("REST route 不再手写错误信封（防回潮）", () => {
           walk(full);
           continue;
         }
-        if (!name.endsWith(".ts") || name.endsWith(".test.ts")) continue;
+        if (!name.endsWith(".ts") || name.endsWith(".test.ts")) {
+          continue;
+        }
         const src = readFileSync(full, "utf8");
-        if (/error:\s*\{\s*code:/.test(src)) offenders.push(full);
+        if (/error:\s*\{\s*code:/.test(src)) {
+          offenders.push(full);
+        }
       }
     };
     walk(join(process.cwd(), "src/app/api"));

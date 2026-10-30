@@ -47,7 +47,9 @@ let resolved: PythonInvocation | null | undefined;
  *          不要用「PATH 上有这个文件名」冒充可用）
  */
 export function resolvePython(): PythonInvocation | null {
-  if (resolved !== undefined) return resolved;
+  if (resolved !== undefined) {
+    return resolved;
+  }
   for (const candidate of pythonCandidates()) {
     const prefixArgs = pythonProbeArgs(candidate);
     try {
@@ -88,7 +90,9 @@ export function hasPython(): boolean {
  */
 export function runPython(code: string, args: Array<string> = []): string {
   const py = resolvePython();
-  if (!py) throw new Error(`PATH 上没有可用的 Python（试过 ${pythonCandidates().join(" / ")}）`);
+  if (!py) {
+    throw new Error(`PATH 上没有可用的 Python（试过 ${pythonCandidates().join(" / ")}）`);
+  }
   return execFileSync(py.command, [...py.prefixArgs, "-c", code, ...args], {
     encoding: "utf8",
   }).trim();

@@ -24,7 +24,9 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
 
   const paintBase = useCallback((canvas: HTMLCanvasElement) => {
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }, []);
@@ -32,13 +34,19 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
   // 底色只画一次 + 外部清空（value 从非 null 变 null）时重画。
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    if (value === null) paintBase(canvas);
+    if (!canvas) {
+      return;
+    }
+    if (value === null) {
+      paintBase(canvas);
+    }
   }, [value, paintBase]);
 
   const pointOf = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas) return null;
+    if (!canvas) {
+      return null;
+    }
     const rect = canvas.getBoundingClientRect();
     return {
       x: ((event.clientX - rect.left) / rect.width) * canvas.width,
@@ -49,7 +57,9 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
   const strokeTo = (point: { x: number; y: number }) => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
+    if (!canvas || !ctx) {
+      return;
+    }
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = brush;
     ctx.lineCap = "round";
@@ -74,23 +84,35 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
           (disabled ? "opacity-50" : "cursor-crosshair")
         }
         onPointerDown={(e) => {
-          if (disabled) return;
+          if (disabled) {
+            return;
+          }
           e.currentTarget.setPointerCapture(e.pointerId);
           drawingRef.current = true;
           const point = pointOf(e);
-          if (point) strokeTo(point);
+          if (point) {
+            strokeTo(point);
+          }
         }}
         onPointerMove={(e) => {
-          if (!drawingRef.current || disabled) return;
+          if (!drawingRef.current || disabled) {
+            return;
+          }
           const point = pointOf(e);
-          if (point) strokeTo(point);
+          if (point) {
+            strokeTo(point);
+          }
         }}
         onPointerUp={() => {
-          if (!drawingRef.current) return;
+          if (!drawingRef.current) {
+            return;
+          }
           drawingRef.current = false;
           lastPointRef.current = null;
           const canvas = canvasRef.current;
-          if (canvas) onChange(canvas.toDataURL("image/png"));
+          if (canvas) {
+            onChange(canvas.toDataURL("image/png"));
+          }
         }}
       />
       <div className="flex items-center gap-2">
@@ -117,7 +139,9 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
           aria-label="清空蒙版"
           onClick={() => {
             const canvas = canvasRef.current;
-            if (!canvas) return;
+            if (!canvas) {
+              return;
+            }
             paintBase(canvas);
             onChange(null);
           }}

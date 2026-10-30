@@ -63,7 +63,9 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
   const [error, setError] = useState("");
 
   const loadTasks = useCallback(async () => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     setLoading(true);
     try {
       const videos = await fetchVideoTasks();
@@ -80,7 +82,9 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
   //`setTimeout(…, 0)` 把首次拉取延出 effect 体，现在那一层由 hook 承担。
   useInterval(loadTasks, { ms: open ? 4000 : null });
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   const runningCount = tasks.filter(
     (task) => task.status === "RUNNING" || task.status === "QUEUED",

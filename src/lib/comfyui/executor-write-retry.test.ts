@@ -47,7 +47,9 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
     let calls = 0;
     const outcome = await writeTerminal("t-retry", "失败收口", async () => {
       calls += 1;
-      if (calls < 3) throw busyError();
+      if (calls < 3) {
+        throw busyError();
+      }
       return /* SAFETY: 类型断言已复核 */ "written" as const;
     });
 

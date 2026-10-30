@@ -79,8 +79,12 @@ export function parseRefLines(stdinText) {
  */
 export function mergeCandidates(refs, targetBranch = "master") {
   return refs.filter((r) => {
-    if (!r.remoteRef.startsWith("refs/heads/")) return false;
-    if (ZERO_SHA.test(r.localSha)) return false;
+    if (!r.remoteRef.startsWith("refs/heads/")) {
+      return false;
+    }
+    if (ZERO_SHA.test(r.localSha)) {
+      return false;
+    }
     const branch = r.remoteRef.slice("refs/heads/".length);
     return branch !== targetBranch;
   });
@@ -100,12 +104,7 @@ export function mergeCandidates(refs, targetBranch = "master") {
  * @param {{candidates: ReturnType<typeof mergeCandidates>, headSha: string, upstreamSha: string | null, proof: {headSha?: string, upstreamSha?: string, verifiedAt?: string} | null}} input
  * @returns {{verdict: "run" | "skip" | "unavailable", reasons: string[]}}
  */
-export function decidePremergePush({
-  candidates,
-  headSha,
-  upstreamSha,
-  proof,
-}) {
+export function decidePremergePush({ candidates, headSha, upstreamSha, proof }) {
   if (candidates.length === 0) {
     return {
       verdict: "skip",
@@ -126,9 +125,7 @@ export function decidePremergePush({
   if (!proof || !proof.verifiedAt) {
     reasons.push("本机还没有过合并前复算的记录");
   } else if (proof.headSha !== headSha) {
-    reasons.push(
-      `记录停在 ${shortSha(proof.headSha)}，而本检出现在是 ${shortSha(headSha)}`,
-    );
+    reasons.push(`记录停在 ${shortSha(proof.headSha)}，而本检出现在是 ${shortSha(headSha)}`);
   }
   if (proof && proof.upstreamSha && proof.upstreamSha !== upstreamSha) {
     reasons.push(
@@ -163,7 +160,9 @@ export function exitForNotRun(verdict, ctx) {
         `也不能确认它没必要）\n`,
     };
   }
-  if (verdict.verdict !== "skip") return null;
+  if (verdict.verdict !== "skip") {
+    return null;
+  }
   /* 唯一「不跑但也不拦」的形态：确实没什么要复算的（没有目标分支 ref），
    * 或已经有一份仍然成立的证明。其余不跑都是**没法跑**，得拦下来。 */
   if (ctx.proof?.verifiedAt && ctx.candidates.length > 0) {
@@ -220,9 +219,7 @@ export function readRevisions(gitDir, cwd = ROOT) {
   const upstreamRef = ref && ref.includes("/") ? ref : null;
   return {
     headSha: run(["rev-parse", "HEAD"]),
-    upstreamSha:
-      (upstreamRef && run(["rev-parse", "--verify", "--quiet", upstreamRef])) ||
-      null,
+    upstreamSha: (upstreamRef && run(["rev-parse", "--verify", "--quiet", upstreamRef])) || null,
   };
 }
 
@@ -232,9 +229,7 @@ export function readRevisions(gitDir, cwd = ROOT) {
  */
 export function readProof(gitDir) {
   try {
-    const parsed = JSON.parse(
-      fs.readFileSync(path.join(gitDir, PROVEN_FILE_NAME), "utf8"),
-    );
+    const parsed = JSON.parse(fs.readFileSync(path.join(gitDir, PROVEN_FILE_NAME), "utf8"));
     return parsed && typeof parsed === "object" ? parsed : null;
   } catch {
     /* 没有记录 = 从没复算过；读不出（半截文件 / 手工改坏）同样按「没有」处理，
@@ -306,17 +301,20 @@ export function decideBaseAttribution(attribution) {
       allowed: false,
       blocking: [],
       baselineOnly: [],
-      reason:
-        "base 段报了红，但逐条里没有红项 —— 两份读数不一致，按没跑起来处理",
+      reason: "base 段报了红，但逐条里没有红项 —— 两份读数不一致，按没跑起来处理",
     };
   }
   const blocking = [];
   const baselineOnly = [];
   for (const r of reds) {
     const label = String(r.label ?? "(未命名判据)");
-    if (BLOCKING_BASE_STATES.has(String(r.verdict))) blocking.push(label);
-    else if (String(r.verdict) === "baseline-red") baselineOnly.push(label);
-    else blocking.push(`${label}（归属读数：${String(r.verdict ?? "未知")}）`);
+    if (BLOCKING_BASE_STATES.has(String(r.verdict))) {
+      blocking.push(label);
+    } else if (String(r.verdict) === "baseline-red") {
+      baselineOnly.push(label);
+    } else {
+      blocking.push(`${label}（归属读数：${String(r.verdict ?? "未知")}）`);
+    }
   }
   return {
     allowed: blocking.length === 0,
@@ -384,9 +382,7 @@ export function runFromStdin(stdinText) {
     encoding: "utf8",
   });
   if (gitDirOut.status !== 0) {
-    process.stderr.write(
-      "[pre-push] 当前目录不是 git 检出 —— 无从复算（退 2）\n",
-    );
+    process.stderr.write("[pre-push] 当前目录不是 git 检出 —— 无从复算（退 2）\n");
     return 2;
   }
   const gitDir = path.resolve(ROOT, String(gitDirOut.stdout ?? "").trim());
@@ -407,8 +403,12 @@ export function runFromStdin(stdinText) {
     upstreamSha,
   });
   if (notRun) {
-    if (notRun.out) process.stdout.write(notRun.out);
-    if (notRun.err) process.stderr.write(notRun.err);
+    if (notRun.out) {
+      process.stdout.write(notRun.out);
+    }
+    if (notRun.err) {
+      process.stderr.write(notRun.err);
+    }
     return notRun.code;
   }
 
@@ -447,8 +447,7 @@ export function runFromStdin(stdinText) {
   const reds = segments.filter((s) => (s?.code ?? 0) !== 0);
   /** @type {string[]} */
   let blocking = reds.map(
-    (s) =>
-      `${String(s?.label ?? s?.key ?? "?")}（退 ${String(s?.code ?? "?")}）`,
+    (s) => `${String(s?.label ?? s?.key ?? "?")}（退 ${String(s?.code ?? "?")}）`,
   );
   /** @type {string[]} */
   let baselineOnly = [];
@@ -497,10 +496,7 @@ export function runFromStdin(stdinText) {
   return 0;
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const stdin = fs.readFileSync(0, "utf8");
   process.exit(runFromStdin(stdin));
 }

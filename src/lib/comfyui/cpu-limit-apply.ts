@@ -93,7 +93,9 @@ export async function applyComfyCpuLimit(input: {
   /* 逐条串行：两条命令都很快（毫秒级），并行只会让日志里的顺序不确定，
    * 而顺序正是排查时读的唯一线索。 */
   for (const cmd of [priority, affinity]) {
-    if (!cmd) continue;
+    if (!cmd) {
+      continue;
+    }
     const r = await executed(cmd.command, cmd.args);
     results.push({ describe: cmd.describe, ok: r.ok, detail: r.detail });
   }

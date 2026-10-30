@@ -55,7 +55,9 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
    *  纯视图交互，不入库；随弹窗关闭即丢弃。 */
   function patchField(index: number, patch: Partial<UsageField>) {
     update((prev) => {
-      if (!prev) return prev;
+      if (!prev) {
+        return prev;
+      }
       const fields = prev.fields.map((f, i) => (i === index ? { ...f, ...patch } : f));
       return { ...prev, fields };
     });
@@ -80,7 +82,9 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
     );
   }
   async function pickFieldImage(index: number, file: File | undefined) {
-    if (!file) return;
+    if (!file) {
+      return;
+    }
     try {
       const dataUrl = await readFileAsDataUrl(file);
       patchField(index, { value: dataUrl });
@@ -100,7 +104,9 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
    *  填进了 mode 行或首行默认值——先把它搬移过去再设 mode，避免丢图。 */
   function setVideoMode(mode: string) {
     update((prev) => {
-      if (!prev) return prev;
+      if (!prev) {
+        return prev;
+      }
       const idx = prev.fields.findIndex((f) => f.key === "mode");
       if (idx >= 0) {
         const fields = prev.fields.map((f, i) => (i === idx ? { ...f, value: mode } : f));
@@ -121,7 +127,9 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
    *  这里手抄一份 `"text"` 就是同一件事的两个名字（§12.14）。 */
   function rescueMediaFromMode(index: number, url: string) {
     update((prev) => {
-      if (!prev) return prev;
+      if (!prev) {
+        return prev;
+      }
       const fields = prev.fields.map((f, i) =>
         i === index ? { ...f, value: sanitizeModeValue(f.value) } : f,
       );

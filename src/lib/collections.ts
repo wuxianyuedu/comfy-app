@@ -15,7 +15,9 @@
 /** 取 `key` 对应的桶；不存在则用 `create` 建一个、放进 map、再返回。 */
 export function getOrCreate<K, V>(map: Map<K, V>, key: K, create: () => V): V {
   const existing = map.get(key);
-  if (existing !== undefined) return existing;
+  if (existing !== undefined) {
+    return existing;
+  }
   const created = create();
   map.set(key, created);
   return created;

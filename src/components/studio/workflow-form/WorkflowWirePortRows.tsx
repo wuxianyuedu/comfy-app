@@ -104,11 +104,15 @@ export function WirePortRows({
   const [portDropPosition, setPortDropPosition] = useState<WorkflowIODropPosition>("before");
   const positionOf = (e: React.DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
     const rect = e.currentTarget?.getBoundingClientRect?.();
-    if (!rect || rect.height <= 0) return "before";
+    if (!rect || rect.height <= 0) {
+      return "before";
+    }
     return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
   };
   const portDrag = (ioKey: string) => {
-    if (!onReorder) return {};
+    if (!onReorder) {
+      return {};
+    }
     return {
       draggable: true,
       onDragStart: (e: React.DragEvent<HTMLDivElement>) => {
@@ -127,15 +131,21 @@ export function WirePortRows({
         onPortDragStart?.(ioKey);
       },
       onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
-        if (!draggingKey || draggingKey === ioKey) return;
+        if (!draggingKey || draggingKey === ioKey) {
+          return;
+        }
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         const pos = positionOf(e);
-        if (portDropPosition !== pos) setPortDropPosition(pos);
+        if (portDropPosition !== pos) {
+          setPortDropPosition(pos);
+        }
       },
       onDrop: (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
-        if (!onReorder || !draggingKey || draggingKey === ioKey) return;
+        if (!onReorder || !draggingKey || draggingKey === ioKey) {
+          return;
+        }
         const pos = positionOf(e);
         setPortDropPosition("before");
         onReorder(draggingKey, ioKey, pos);

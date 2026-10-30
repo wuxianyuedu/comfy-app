@@ -14,7 +14,9 @@ export function StringTextarea({
   const ref = React.useRef<HTMLTextAreaElement>(null);
   React.useLayoutEffect(() => {
     const ta = ref.current;
-    if (!ta) return;
+    if (!ta) {
+      return;
+    }
     if (!hasSize) {
       // 内容自适应高度：textarea 自己决定高度，以内容封顶。
       // 不设 96px 上限：多行提示词必须完整

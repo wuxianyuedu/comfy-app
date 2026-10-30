@@ -66,7 +66,9 @@ const ADVICE_RULES: Array<AdviceRule> = [
     pattern: /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
     advice: (e) => {
       const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.exec(e);
-      if (!uuid || !/not found|not installed/i.test(e)) return "";
+      if (!uuid || !/not found|not installed/i.test(e)) {
+        return "";
+      }
       return `wrapper 子图（${uuid[0].slice(0, 8)}…）找不到。自定义工作流依赖的节点未在 ComfyUI 端安装；请确认 wrapper 在源工作流里声明了相同的自定义节点包，或回退到「无 wrapper」的 flat form 模板。`;
     },
   },
@@ -110,11 +112,17 @@ const ADVICE_RULES: Array<AdviceRule> = [
  */
 export function adviseOnError(error: string | null | undefined): string | null {
   const text = error ?? "";
-  if (!text) return null;
+  if (!text) {
+    return null;
+  }
   for (const rule of ADVICE_RULES) {
-    if (!rule.pattern.test(text)) continue;
+    if (!rule.pattern.test(text)) {
+      continue;
+    }
     const advice = rule.advice(text);
-    if (advice) return advice;
+    if (advice) {
+      return advice;
+    }
   }
   return null;
 }
@@ -138,7 +146,11 @@ export function shouldAutoExpandError(
   error: string | null | undefined,
   validationErrorCount = 0,
 ): boolean {
-  if (validationErrorCount > 0) return true;
-  if (!error) return false;
+  if (validationErrorCount > 0) {
+    return true;
+  }
+  if (!error) {
+    return false;
+  }
   return ERROR_AUTO_EXPAND_RE.test(error);
 }

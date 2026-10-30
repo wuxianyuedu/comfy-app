@@ -171,13 +171,17 @@ export async function getSession(id: string): Promise<WorkshopSessionState | nul
     .where(eq(workshopSession.id, id))
     .limit(1);
   const row = rows[0];
-  if (!row) return null;
+  if (!row) {
+    return null;
+  }
   const state = rowToState(row);
   // 桥（#2482）：绑定过的会话，内容权威读在 production——人在界面改了，
   // AI 下一次 get 读到的就是新的（FR-AG-01①「人改 AI 见」）。
   if (row.projectId) {
     const content = await readProductionContent(row.projectId);
-    if (content) return applyContentToState(state, content);
+    if (content) {
+      return applyContentToState(state, content);
+    }
   }
   return state;
 }
@@ -197,7 +201,9 @@ export async function updateState(id: string, state: WorkshopSessionState): Prom
     .where(eq(workshopSession.id, id))
     .limit(1);
   const row = rows[0];
-  if (!row) return; // 既有语义：无行不写（编排器先 load，正常到不了这里）。
+  if (!row) {
+    return;
+  } // 既有语义：无行不写（编排器先 load，正常到不了这里）。
   let projectId = row.projectId;
   if (!projectId) {
     // 遗留会话（桥之前建的）首次写 → 桥接：以当前内容为初始值新建项目，

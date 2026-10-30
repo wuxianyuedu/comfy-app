@@ -64,7 +64,9 @@ function ensureRunDir(root) {
 /** 进程是否还活着（POSIX 用 signal 0 探测，Windows 用 tasklist 由调用方另判）。
  * @param {number} pid @returns {boolean} */
 export function isPidAlive(pid) {
-  if (!pid || pid <= 0) return false;
+  if (!pid || pid <= 0) {
+    return false;
+  }
   try {
     process.kill(pid, 0);
     return true;
@@ -80,7 +82,9 @@ export function readSession(root) {
   try {
     const raw = fs.readFileSync(sessionFilePath(root), "utf8");
     const parsed = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return null;
+    if (typeof parsed !== "object" || parsed === null) {
+      return null;
+    }
     return parsed;
   } catch {
     return null;
@@ -117,10 +121,7 @@ export function touchHeartbeat(root, at = Date.now()) {
  * @param {string} root @returns {number | null} */
 export function readHeartbeat(root) {
   try {
-    const value = Number.parseInt(
-      fs.readFileSync(heartbeatFilePath(root), "utf8").trim(),
-      10,
-    );
+    const value = Number.parseInt(fs.readFileSync(heartbeatFilePath(root), "utf8").trim(), 10);
     return Number.isInteger(value) && value > 0 ? value : null;
   } catch {
     return null;
@@ -136,9 +137,13 @@ export function readHeartbeat(root) {
  */
 export function isSessionOwnerAlive(root, now = Date.now()) {
   const session = readSession(root);
-  if (!session) return false;
+  if (!session) {
+    return false;
+  }
   const beat = readHeartbeat(root);
-  if (beat === null || now - beat > HEARTBEAT_STALE_MS) return false;
+  if (beat === null || now - beat > HEARTBEAT_STALE_MS) {
+    return false;
+  }
   return isPidAlive(Number(session.launcher_pid));
 }
 

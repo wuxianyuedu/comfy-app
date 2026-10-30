@@ -138,7 +138,9 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
       stopped: () => stopped,
       /** 跑一轮（等它内部的 await 落定）。 */
       tick: async () => {
-        for (const fn of ticks) fn();
+        for (const fn of ticks) {
+          fn();
+        }
         await new Promise((resolve) => setImmediate(resolve));
       },
     };

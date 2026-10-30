@@ -62,7 +62,9 @@ export function parsePs1Gates(src: string): Array<GateEntry> {
   // 前者会在默认档里凭空多出一条 `id`（实测就是这条把两个平台的默认档集合判成了不等）。
   const start = src.indexOf("$Blocks = @(");
   const end = start < 0 ? -1 : src.indexOf("\n)", start);
-  if (start < 0 || end < 0) return [];
+  if (start < 0 || end < 0) {
+    return [];
+  }
   const region = src.slice(start, end);
   const blocks = [...region.matchAll(/@\{([\s\S]*?)\}/g)].map((m) => stripForParsing(m[1] ?? ""));
   return blocks
@@ -86,7 +88,9 @@ export function parsePs1Gates(src: string): Array<GateEntry> {
 export function parseMjsGates(src: string): Array<GateEntry> {
   const start = src.indexOf("const GATES = {");
   const end = src.indexOf("function parseArgs");
-  if (start < 0 || end < 0 || end < start) return [];
+  if (start < 0 || end < 0 || end < start) {
+    return [];
+  }
   const block = src.slice(start, end);
   return [
     ...block.matchAll(/^ {2}([A-Za-z0-9_]+): \{([\s\S]*?)(?=^ {2}[A-Za-z0-9_]+: \{|^\};)/gm),

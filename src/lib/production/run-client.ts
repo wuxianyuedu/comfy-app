@@ -29,7 +29,9 @@ function toSnapshot(res: { run: ProductionRun; action: RunAction }): RunSnapshot
 
 /** 读当前 run + 下一步动作；无活跃项目 → idle。 */
 export async function fetchRunStatus(projectId: string): Promise<RunSnapshot> {
-  if (!projectId) return IDLE_SNAPSHOT;
+  if (!projectId) {
+    return IDLE_SNAPSHOT;
+  }
   const res = await vanillaApi.run.status.query({ projectId });
   return toSnapshot(res);
 }

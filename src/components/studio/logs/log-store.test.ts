@@ -898,10 +898,14 @@ describe("computeFiltered 级别过滤与搜索", () => {
 describe("日志分类开关过滤", () => {
   /** 每条用例前后把所有分类复位为开启，避免用例间污染（store 是模块级单例）。 */
   beforeEach(() => {
-    for (const c of LOG_CATEGORY_FILTERS) useLogCategoryStore.getState().setEnabled(c, true);
+    for (const c of LOG_CATEGORY_FILTERS) {
+      useLogCategoryStore.getState().setEnabled(c, true);
+    }
   });
   afterEach(() => {
-    for (const c of LOG_CATEGORY_FILTERS) useLogCategoryStore.getState().setEnabled(c, true);
+    for (const c of LOG_CATEGORY_FILTERS) {
+      useLogCategoryStore.getState().setEnabled(c, true);
+    }
   });
 
   function seedByCategory() {

@@ -41,8 +41,12 @@ export function ExtractModelSelect({
   const probeStarted = React.useRef<Record<string, boolean>>({});
 
   React.useEffect(() => {
-    if (!selKey) return;
-    if (probeStarted.current[selKey]) return;
+    if (!selKey) {
+      return;
+    }
+    if (probeStarted.current[selKey]) {
+      return;
+    }
     probeStarted.current[selKey] = true;
     /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换选中项 / 通道 / 模型会重开
      * 一轮，旧轮次的探测结论不落地（否则会把上一个选中项的结论写上去）。 */
@@ -63,15 +67,23 @@ export function ExtractModelSelect({
 
   const options = React.useMemo(() => {
     const list: Array<string> = [];
-    for (const m of localModels) list.push(`local::${m}`);
-    for (const m of remoteModels) list.push(`remote::${m}`);
+    for (const m of localModels) {
+      list.push(`local::${m}`);
+    }
+    for (const m of remoteModels) {
+      list.push(`remote::${m}`);
+    }
     return list;
   }, [localModels, remoteModels]);
 
   const labels = React.useMemo(() => {
     const map: Record<string, React.ReactNode> = {};
-    for (const m of localModels) map[`local::${m}`] = optionLabel(m, "本地");
-    for (const m of remoteModels) map[`remote::${m}`] = optionLabel(m, "远端");
+    for (const m of localModels) {
+      map[`local::${m}`] = optionLabel(m, "本地");
+    }
+    for (const m of remoteModels) {
+      map[`remote::${m}`] = optionLabel(m, "远端");
+    }
     return map;
   }, [localModels, remoteModels]);
 

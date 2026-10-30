@@ -64,7 +64,9 @@ export interface BackoffOptions extends BackoffShapeOptions {
 export function backoffDelayMs(opts: BackoffOptions): number {
   const { attempt, baseMs, shape, maxMs, maxAttempt } = opts;
   const n = Math.max(0, attempt);
-  if (shape === "fixed") return baseMs;
+  if (shape === "fixed") {
+    return baseMs;
+  }
   const capped = maxAttempt === undefined ? n : Math.min(n, maxAttempt);
   return Math.min(baseMs * 2 ** capped, maxMs ?? Number.POSITIVE_INFINITY);
 }

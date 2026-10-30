@@ -91,7 +91,9 @@ export function toCpuLimitMode(value: unknown): CpuLimitMode {
  * 因为那里没有「用户在同一个窗口里干别的活」这回事，凭空降速只会让人困惑。
  */
 export function resolveCpuLimitMode(facts: CpuLimitFacts): CpuLimitMode {
-  if (facts.mode !== undefined) return facts.mode;
+  if (facts.mode !== undefined) {
+    return facts.mode;
+  }
   return facts.desktopShell ? "yield" : "off";
 }
 
@@ -156,7 +158,9 @@ export function cpuLimitCommands(input: {
   cpuCount: number;
 }): { priority: CpuLimitCommand | null; affinity: CpuLimitCommand | null } {
   const { mode, platform, pid } = input;
-  if (mode === "off") return { priority: null, affinity: null };
+  if (mode === "off") {
+    return { priority: null, affinity: null };
+  }
 
   const win = platform === "win32";
   /* 优先级那一半：两档都要。Windows 走 WMI SetPriority（`Set-CimInstance`
@@ -183,7 +187,9 @@ export function cpuLimitCommands(input: {
         describe: `nice +${POSIX_NICE_INCREMENT}（让路给前台）`,
       };
 
-  if (mode === "yield") return { priority, affinity: null };
+  if (mode === "yield") {
+    return { priority, affinity: null };
+  }
 
   /* 限核档：亲和性那一半。Windows 用 WMI 的 `ProcessorAffinity`，
    * POSIX 用 `taskset -c 0-<n-1>`。 */

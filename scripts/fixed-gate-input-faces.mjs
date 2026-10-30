@@ -149,11 +149,7 @@ export const INPUT_FACES = [
   },
   {
     test: "tests/gate-executors.test.ts",
-    face: [
-      "scripts/**",
-      "tests/helpers/gate-repo.ts",
-      "tests/gate-executors.test.ts",
-    ],
+    face: ["scripts/**", "tests/helpers/gate-repo.ts", "tests/gate-executors.test.ts"],
     why: "它 `readdirSync(scripts/)` 把每一份判据脚本拷进临时工作区，再拿 `.gate-executor-ledger.json` 与 `quality-gate.mjs/.ps1` 对账 —— 新增、改名或删掉一份判据脚本都会改判决；真钩子那一侧是 wide 触发面，轮不到这一层",
   },
   {
@@ -278,9 +274,15 @@ export const INPUT_FACES = [
 export function faceMatches(file, pattern) {
   const f = String(file).replace(/\\/g, "/");
   const p = String(pattern).replace(/\\/g, "/");
-  if (p === "" || p === "**" || p === "*") return false;
-  if (p.endsWith("/**")) return f.startsWith(p.slice(0, -2));
-  if (!p.includes("*")) return f === p;
+  if (p === "" || p === "**" || p === "*") {
+    return false;
+  }
+  if (p.endsWith("/**")) {
+    return f.startsWith(p.slice(0, -2));
+  }
+  if (!p.includes("*")) {
+    return f === p;
+  }
   const re = new RegExp(
     `^${p
       .split("*")
@@ -299,9 +301,14 @@ export function faceMatches(file, pattern) {
  */
 export function faceHits(entry, changed) {
   for (const rel of changed) {
-    if (rel === entry.test) return true;
-    for (const pattern of entry.face)
-      if (faceMatches(rel, pattern)) return true;
+    if (rel === entry.test) {
+      return true;
+    }
+    for (const pattern of entry.face) {
+      if (faceMatches(rel, pattern)) {
+        return true;
+      }
+    }
   }
   return false;
 }

@@ -83,9 +83,13 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
         projectId?: string;
         media?: TaskMediaType;
       } = { take: TAKE };
-      if (scope === "project" && projectId) params.projectId = projectId;
+      if (scope === "project" && projectId) {
+        params.projectId = projectId;
+      }
       /* "all" 不是服务端认识的 media 枚举，只在筛选非全部时才带上。 */
-      if (filter !== "all") params.media = filter;
+      if (filter !== "all") {
+        params.media = filter;
+      }
       try {
         const rows = await fetchHistoryTasks(params);
         guard.commit(() => setTasks(rows));
@@ -105,7 +109,9 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
 
   /* ── 本项目为空时探一次全局，以便给出「查看全部」引导 ── */
   useEffect(() => {
-    if (scope !== "project" || loading || tasks.length > 0 || globalCount !== null) return;
+    if (scope !== "project" || loading || tasks.length > 0 || globalCount !== null) {
+      return;
+    }
     const guard = beginStaleRun();
     void probeGlobalTaskCount().then((count) => {
       guard.commit(() => setGlobalCount(count));

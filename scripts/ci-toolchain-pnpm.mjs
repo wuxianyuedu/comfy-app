@@ -25,12 +25,13 @@ import path from "node:path";
  * @param {{platform?: NodeJS.Platform, env?: Record<string, string | undefined>}} [options]
  * @returns {string} 原文；没有这个变量时是空串
  */
-export function pnpmPathValue({
-  platform = process.platform,
-  env = process.env,
-} = {}) {
-  if (env.PATH !== undefined) return String(env.PATH);
-  if (platform !== "win32") return "";
+export function pnpmPathValue({ platform = process.platform, env = process.env } = {}) {
+  if (env.PATH !== undefined) {
+    return String(env.PATH);
+  }
+  if (platform !== "win32") {
+    return "";
+  }
   const key = Object.keys(env).find((k) => k.toUpperCase() === "PATH");
   return key === undefined ? "" : String(env[key] ?? "");
 }
@@ -129,7 +130,9 @@ export function findPnpm({
    * 都要付一次 PowerShell 冷启动 —— 而包真身就摆在 corepack 的落点旁边。 */
   for (const dir of pnpmPathEntries({ platform, env })) {
     const entry = pnpmJsEntryIn(dir, { isFile });
-    if (!entry) continue;
+    if (!entry) {
+      continue;
+    }
     const probed = probeRun(process.execPath, [entry, "-v"]);
     if (!probed) {
       tried.push(entry);
@@ -149,7 +152,9 @@ export function findPnpm({
   for (const dir of pnpmPathEntries({ platform, env })) {
     for (const ext of exts) {
       const candidate = path.join(dir, `pnpm${ext}`);
-      if (!isFile(candidate)) continue;
+      if (!isFile(candidate)) {
+        continue;
+      }
       const usable = usablePnpm(candidate, {
         platform,
         probeRun,
@@ -232,7 +237,9 @@ export function pnpmForensics({
    * 可注入 —— 单测正是在 POSIX 上判 Windows 的形态。
    * 切分也只走 `pnpmPathEntries()` 一份：`findPnpm()` 判的和这里打的必须是同一份。 */
   const dirs = pnpmPathEntries({ platform, env });
-  for (const d of dirs) lines.push(`  ${d}`);
+  for (const d of dirs) {
+    lines.push(`  ${d}`);
+  }
   /* 每个 PATH 目录里 `pnpm*` 的命中 —— 判的是「这个目录下真有这个名字吗」，
    * 不判它起不起得起来（那是 `findPnpm` 的事）。两者分开，人才能判出
    * 「名字在但起不来」与「名字根本不在」这一格分岔。 */
@@ -250,9 +257,7 @@ export function pnpmForensics({
     }
   }
   if (hits === 0) {
-    lines.push(
-      "  （一个都没命中 —— 这个执行账号的 PATH 上没有 pnpm 的任何形态）",
-    );
+    lines.push("  （一个都没命中 —— 这个执行账号的 PATH 上没有 pnpm 的任何形态）");
   }
   /* 后半段是**这一跑真正的读数**：命中的候选里有哪些真被试过、以及有没有
    * 解释得了它们的宿主。没有它，「命中在盘上」与「起不来」之间那条缝就只能靠猜
@@ -261,7 +266,9 @@ export function pnpmForensics({
   if (tried.length === 0) {
     lines.push("  （没有 —— 一个候选都没进到探测这一步）");
   } else {
-    for (const c of tried) lines.push(`  ${c}`);
+    for (const c of tried) {
+      lines.push(`  ${c}`);
+    }
   }
   lines.push(
     hostFound
@@ -316,24 +323,27 @@ function pnpmJsEntryIn(dropIn, { isFile }) {
     }
   };
   const own = manifestOf(dropIn);
-  if (own && own.name === "pnpm") candidates.push(dropIn);
+  if (own && own.name === "pnpm") {
+    candidates.push(dropIn);
+  }
   for (const pkgDir of candidates) {
     const manifest = manifestOf(pkgDir);
-    if (!manifest) continue;
+    if (!manifest) {
+      continue;
+    }
     const bin = manifest.bin;
-    const rel =
-      typeof bin === "string"
-        ? bin
-        : bin && typeof bin === "object"
-          ? bin.pnpm
-          : null;
+    const rel = typeof bin === "string" ? bin : bin && typeof bin === "object" ? bin.pnpm : null;
     if (typeof rel === "string" && rel !== "") {
       const target = path.resolve(pkgDir, rel);
-      if (isFile(target) && looksLikeScript(target)) return target;
+      if (isFile(target) && looksLikeScript(target)) {
+        return target;
+      }
     }
     for (const name of ["pnpm.mjs", "pnpm.cjs"]) {
       const corepackEntry = path.join(pkgDir, "bin", name);
-      if (isFile(corepackEntry) && looksLikeScript(corepackEntry)) return corepackEntry;
+      if (isFile(corepackEntry) && looksLikeScript(corepackEntry)) {
+        return corepackEntry;
+      }
     }
   }
   return null;
@@ -356,14 +366,22 @@ function looksLikeScript(candidate) {
   } catch {
     return false;
   }
-  if (head.length < 2) return false;
-  if (head.startsWith("#!")) return true;
-  if (/^@?\s*(echo|setlocal)\b/i.test(head) || head.startsWith("@")) return false;
+  if (head.length < 2) {
+    return false;
+  }
+  if (head.startsWith("#!")) {
+    return true;
+  }
+  if (/^@?\s*(echo|setlocal)\b/i.test(head) || head.startsWith("@")) {
+    return false;
+  }
   /* `#` 起头而**非** `#!`：Corepack 缓存里的**占位文本**（首行注释写着「请走
    * ./bin/pnpm.mjs」）。node 起它必然 `SyntaxError` 而退的是 1 —— 与「判据跑了且红」
    * 同形（ISSUE #2597）。与 `executable-resolve.ts` 的 `isPnpmEntryScript()` 同一条规则，
    * 这两份是 ISSUE #2562 里刻意各留的（自证那一格不许 import 仓库内模块）⇒ 必须同批改。 */
-  if (head.startsWith("#")) return false;
+  if (head.startsWith("#")) {
+    return false;
+  }
   /* 可打印 ASCII 起头即文本脚本；MZ / ELF 那类二进制落到 else（`{2}` 会退化成
    * 「长度恰好为 2」，ISSUE #2563 就是那个形状）。 */
   return /^[\x09\x0a\x0d\x20-\x7e]{2,}$/.test(head);
@@ -374,9 +392,7 @@ function looksLikeScript(candidate) {
  * @returns {string[]}
  */
 function pnpmCandidateExts(platform) {
-  return platform === "win32"
-    ? ["", ".EXE", ".PS1", ".CMD", ".BAT", ".COM"]
-    : [""];
+  return platform === "win32" ? ["", ".EXE", ".PS1", ".CMD", ".BAT", ".COM"] : [""];
 }
 
 /**
@@ -407,7 +423,9 @@ function usablePnpm(candidate, { platform, probeRun, host, isFile }) {
   }
   if (platform === "win32" && ext === ".ps1") {
     const exe = host();
-    if (!exe) return null;
+    if (!exe) {
+      return null;
+    }
     /* **探的参数必须带上**（`-v`）：`.ps1` 那一档判的是「这个垫片起了之后真能答出
      * 版本」，而不是「PowerShell 能加载它」。少了它，corepack 的 `pnpm.ps1` 收到
      * 空参数会打 usage 并**退非零**（实测 `pnpm` 裸跑 exit≠0、`pnpm -v` exit=0），
@@ -435,9 +453,13 @@ function usablePnpm(candidate, { platform, probeRun, host, isFile }) {
 function viaSiblingPs1(candidate, { host, probeRun, isFile }) {
   const ext = path.extname(candidate);
   const script = (ext ? candidate.slice(0, -ext.length) : candidate) + ".ps1";
-  if (!isFile(script)) return null;
+  if (!isFile(script)) {
+    return null;
+  }
   const exe = host();
-  if (!exe) return null;
+  if (!exe) {
+    return null;
+  }
   /* 同一条：探的参数一并交给垫片（见上面 `.ps1` 那一支的注释）。 */
   return viaHost(exe, ps1Invocation(script), probeRun);
 }
@@ -463,7 +485,9 @@ function viaSiblingPs1(candidate, { host, probeRun, isFile }) {
 function viaHost(exe, prefix, probeRun) {
   const probeArgs = ["-v"];
   const probed = probeRun(exe, [...prefix, ...probeArgs]);
-  if (!probed) return null;
+  if (!probed) {
+    return null;
+  }
   return { ...probed, prefixArgs: prefix, probeArgs };
 }
 
@@ -480,7 +504,9 @@ function viaHost(exe, prefix, probeRun) {
 function runProbe(cmd, args) {
   const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
-  if (r.error || r.status !== 0) return null;
+  if (r.error || r.status !== 0) {
+    return null;
+  }
   return { command: cmd, args, out };
 }
 
@@ -506,14 +532,18 @@ function ps1Invocation(script) {
  * @returns {string | null}
  */
 function powershellHost() {
-  if (process.platform !== "win32") return null;
+  if (process.platform !== "win32") {
+    return null;
+  }
   for (const name of ["pwsh", "powershell"]) {
     for (const ext of [".EXE", ""]) {
       for (const dir of String(process.env.PATH ?? "")
         .split(path.delimiter)
         .filter(Boolean)) {
         const candidate = path.join(dir, name + ext);
-        if (isFileOnDisk(candidate)) return candidate;
+        if (isFileOnDisk(candidate)) {
+          return candidate;
+        }
       }
     }
   }

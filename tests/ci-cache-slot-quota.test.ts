@@ -46,11 +46,7 @@ import {
   SLOT_TTL_MS,
   SLOT_USED_FILE,
 } from "../scripts/ci-cache-slot.mjs";
-import {
-  applySlot,
-  pruneSlots,
-  SLOT_ENABLED_ENV,
-} from "../scripts/ci-slot-apply.mjs";
+import { applySlot, pruneSlots, SLOT_ENABLED_ENV } from "../scripts/ci-slot-apply.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -75,19 +71,20 @@ function makeSlot(
 ): string {
   const dir = path.join(cacheRoot, key);
   mkdirSync(dir, { recursive: true });
-  if (opts.tree) mkdirSync(path.join(dir, "node_modules"), { recursive: true });
+  if (opts.tree) {
+    mkdirSync(path.join(dir, "node_modules"), { recursive: true });
+  }
   if (opts.fingerprint) {
     const modules = path.join(dir, "node_modules");
     mkdirSync(modules, { recursive: true });
-    writeFileSync(
-      path.join(modules, ".ci-deps-fingerprint"),
-      `${opts.fingerprint}\n`,
-    );
+    writeFileSync(path.join(modules, ".ci-deps-fingerprint"), `${opts.fingerprint}\n`);
   }
   if (typeof opts.stamp === "number") {
     writeFileSync(path.join(dir, SLOT_USED_FILE), `${opts.stamp}\n`);
   }
-  if (opts.lock) writeFileSync(path.join(dir, ".ci-slot.lock"), "");
+  if (opts.lock) {
+    writeFileSync(path.join(dir, ".ci-slot.lock"), "");
+  }
   if (typeof opts.mtime === "number") {
     const at = new Date(opts.mtime);
     utimesSync(dir, at, at);
@@ -99,10 +96,7 @@ describe("缓存槽的配额与淘汰（契约）", () => {
   it("配额与 TTL 只有一处（读数侧与执行侧是同一份）", () => {
     /* 执行档**不许**自己写这两个数字：它是「会删盘」那一刀的执行者，而读数那一格
      * 要把「配额是几个」说出来 —— 两处各写一份时，漂了之后没人能回答「哪一份是真的」。 */
-    const src = readFileSync(
-      path.join(ROOT, "scripts", "ci-slot-apply.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts", "ci-slot-apply.mjs"), "utf8");
     expect(
       /export const MAX_SLOT_KEYS\s*=/.test(src),
       "`ci-slot-apply.mjs` 里又定义了一份配额 —— 它该从读数那一侧取（`ci-cache-slot.mjs`）",
@@ -126,17 +120,11 @@ describe("缓存槽的配额与淘汰（契约）", () => {
     /* 行为级的断言代价太大（接槽要真建一条 junction），所以这里钉**源码形态** ——
      * 与 `tests/ci-toolchain-selfcheck.test.ts` 的「复验真的排在装之后」同一处置：
      * 那一组也是靠源码切片来钉顺序的。 */
-    const src = readFileSync(
-      path.join(ROOT, "scripts", "ci-slot-apply.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts", "ci-slot-apply.mjs"), "utf8");
     const reuseAt = src.indexOf('plan.action === "reuse"');
     expect(reuseAt, "执行档里找不到「命中」那一支").toBeGreaterThan(-1);
     const installAt = src.indexOf("install-into-slot");
-    const reuseBranch = src.slice(
-      reuseAt,
-      installAt > reuseAt ? installAt : reuseAt + 4000,
-    );
+    const reuseBranch = src.slice(reuseAt, installAt > reuseAt ? installAt : reuseAt + 4000);
     expect(
       reuseBranch,
       "命中那一支没有跑淘汰 —— 于是「依赖面不再变」的那段时间里，过了 TTL 的键会一直躺着",
@@ -342,10 +330,7 @@ describe("缓存槽的配额与淘汰（契约）", () => {
   });
 
   it("读数那一格的打印里带着那几项（读数落在日志里读不出来，与没有读数等价）", () => {
-    const src = readFileSync(
-      path.join(ROOT, "scripts", "ci-cache-slot.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts", "ci-cache-slot.mjs"), "utf8");
     for (const word of ["键数", "配额", "超配额", "空槽"]) {
       expect(src, `读数的打印里应当有「${word}」`).toContain(word);
     }
@@ -355,10 +340,7 @@ describe("缓存槽的配额与淘汰（契约）", () => {
     expect(SLOT_ENABLED_ENV).toBe("COMFY_CI_SLOT");
     /* `applySlot` 是执行者，而调用方（`ci-install-deps.mjs`）按开关决定要不要调它 ——
      * 判据在这里钉住「开关名不许变」，因为回退 = 摘掉那两行 env。 */
-    const src = readFileSync(
-      path.join(ROOT, "scripts", "ci-install-deps.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts", "ci-install-deps.mjs"), "utf8");
     expect(src).toContain(SLOT_ENABLED_ENV);
     expect(typeof applySlot).toBe("function");
   });

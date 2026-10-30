@@ -41,11 +41,15 @@ const validationErrorSchema = z.object({
 
 /** 校验并收窄任务表 JSON 列里的 validationErrors；不合法返回 undefined。 */
 export function parseValidationErrorsJson(raw: unknown): Array<ValidationError> | undefined {
-  if (!Array.isArray(raw)) return undefined;
+  if (!Array.isArray(raw)) {
+    return undefined;
+  }
   const out: Array<ValidationError> = [];
   for (const item of raw) {
     const parsed = validationErrorSchema.safeParse(item);
-    if (parsed.success) out.push(parsed.data);
+    if (parsed.success) {
+      out.push(parsed.data);
+    }
   }
   return out.length ? out : undefined;
 }
@@ -89,7 +93,9 @@ export function extractValidationErrors(
   const isListCarrier =
     Array.isArray(res) &&
     res.some((r: unknown): boolean => {
-      if (!r || typeof r !== "object") return false;
+      if (!r || typeof r !== "object") {
+        return false;
+      }
       const rec = /* SAFETY: 类型断言已复核 */ r as Record<string, unknown>;
       // 这几个字段可能是空字符串，必须用 `||` 判空（`??` 只挡 null/undefined）；
       // eslint 的 prefer-nullish-coalescing 在这里给的是误报，故就地豁免。
@@ -104,7 +110,9 @@ export function extractValidationErrors(
   ) {
     ne = res;
   }
-  if (!ne) return [];
+  if (!ne) {
+    return [];
+  }
   const out: Array<ValidationError> = [];
   const entries: Array<[string, unknown]> = Array.isArray(ne)
     ? ne.map((item: unknown) => {
@@ -162,10 +170,14 @@ export function extractValidationErrors(
 export function parseValidationErrors(
   raw: string | null | undefined,
 ): Array<ValidationError> | null {
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   try {
     const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed)) return /* SAFETY: 类型断言已复核 */ parsed as Array<ValidationError>;
+    if (Array.isArray(parsed)) {
+      return /* SAFETY: 类型断言已复核 */ parsed as Array<ValidationError>;
+    }
   } catch {
     /* fall through */
   }
@@ -178,8 +190,14 @@ export function parseValidationErrors(
  *  toString（普通对象即 "[object Object]"）。显式收窄只为满足
  *  no-base-to-string（该规则把 String(unknown/{}) 一律视为误报）。 */
 function toStringValue(v: unknown): string {
-  if (typeof v === "string") return v;
-  if (v === null) return "null";
-  if (v === undefined) return "undefined";
+  if (typeof v === "string") {
+    return v;
+  }
+  if (v === null) {
+    return "null";
+  }
+  if (v === undefined) {
+    return "undefined";
+  }
   return /* SAFETY: 类型断言已复核 */ (v as { toString(): string }).toString();
 }

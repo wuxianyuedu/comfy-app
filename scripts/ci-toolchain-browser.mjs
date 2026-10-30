@@ -157,9 +157,7 @@ export function playwrightOnly({
    * 120s 超时收场（同一镜像上 120 MB 那件是好的）。少装它**不改判据**（复验找的
    * 本来就是 headless shell），而它是「多下一件以防万一」变成红的唯一原因。 */
   if (env.PLAYWRIGHT_DOWNLOAD_HOST) {
-    log(
-      `下载根由 PLAYWRIGHT_DOWNLOAD_HOST 指定：${env.PLAYWRIGHT_DOWNLOAD_HOST}`,
-    );
+    log(`下载根由 PLAYWRIGHT_DOWNLOAD_HOST 指定：${env.PLAYWRIGHT_DOWNLOAD_HOST}`);
   }
   /* ⚠️ `pickRoots` 缺省是**活的**：把 `probe` 绑进去（`pickPlaywrightRoots` 自己的
    * `probe` 缺省是「一个都不量」，那是给判据用的安静档 —— 见它的头注）。少了这一行，
@@ -187,21 +185,24 @@ export function playwrightOnly({
       ? `自取成功：${seeded.out}`
       : `自取没成（交给 playwright install 的老路）：${seeded.out}`,
   );
-  if (seeded.ok && browserExecutableExists({ env }).ok) return 0; // 见 seed 模块头注：老路会拉 ffmpeg
+  if (seeded.ok && browserExecutableExists({ env }).ok) {
+    return 0;
+  } // 见 seed 模块头注：老路会拉 ffmpeg
 
   const install = runPlaywrightInstall({
     find,
     exec,
     env,
     probe,
-    pickRoots:
-      pickRoots ?? ((ports = {}) => pickPlaywrightRoots({ probe, ...ports })),
+    pickRoots: pickRoots ?? ((ports = {}) => pickPlaywrightRoots({ probe, ...ports })),
   });
   /* 换根这件事要**留痕**：`env` 里配着的那个与真用上的那个不是同一个时，人必须
    * 在日志里看得到（否则下一次核对配置与日志时会以为配置被吃掉了）。 */
   if (install.probes?.length) {
     log("---- 下载根（装之前现场量的）----");
-    for (const line of install.probes) log(line);
+    for (const line of install.probes) {
+      log(line);
+    }
     log("---------------------------------");
   }
   if (install.host && env.PLAYWRIGHT_DOWNLOAD_HOST !== install.host) {
@@ -220,11 +221,9 @@ export function playwrightOnly({
     /* 失败话术后面跟**读数**，而不是又一句「常见成因：网络不通或磁盘满」——
      * 那两种成因的处置完全相反（一个是放宽多久算超时、一个是清盘），
      * 而日志里此前一个字都分不开它们。见 `playwrightInstallHints()`。 */
-    for (const line of playwrightInstallHints(
-      install.out,
-      playwrightInstallHintFacts(env),
-    ))
+    for (const line of playwrightInstallHints(install.out, playwrightInstallHintFacts(env))) {
       log(line);
+    }
     /* 失败之后**当场量一次**「这台机器到底出得去哪些域名」。
      *
      * 这是本格最贵的一次教训（ISSUE #1961 第四跑）：镜像那一行是**在别处**量出来能用的
@@ -289,9 +288,7 @@ export function playwrightOnly({
  * @returns {never}
  */
 function required(what) {
-  throw new Error(
-    `ci-toolchain-browser：缺 ${what} 注入面（由调用方传入，见文件头）`,
-  );
+  throw new Error(`ci-toolchain-browser：缺 ${what} 注入面（由调用方传入，见文件头）`);
 }
 
 /** 默认什么都不打的分节 —— 调用方不关心分节时就别硬塞一行。 */
@@ -354,15 +351,12 @@ function noopSection() {}
  */
 export function playwrightInstallHints(out, facts = {}) {
   const text = out ?? "";
-  if (!/Failed to download|Download failure|timed out after/.test(text))
+  if (!/Failed to download|Download failure|timed out after/.test(text)) {
     return [];
+  }
   const observed = observedTimeoutMs(text) ?? facts.timeoutMs ?? null;
   const host = stringOrNull(facts.host);
-  const urls = [
-    ...new Set(
-      [...text.matchAll(/Request to (\S+?) timed out/g)].map((m) => m[1]),
-    ),
-  ];
+  const urls = [...new Set([...text.matchAll(/Request to (\S+?) timed out/g)].map((m) => m[1]))];
   /* `Downloading … from <url>` 里给的是**真资源 URL**（根 + `builds/cft/<版本>/<档>/<包>`），
    * 而配置面给的是**根** —— 拿前者去和 `PLAYWRIGHT_DOWNLOAD_HOST` 比逐字比对恒不相等
    * （这个形态真的错过一次：话术于是把「配了根、且正是它失败」读成了「还没配」）。 */
@@ -376,10 +370,8 @@ export function playwrightInstallHints(out, facts = {}) {
   /* 「试过的根全是 Playwright 内置那一族」——现场那次正是它：5 条
    * `Downloading … from cdn.playwright.dev` 之后 `Download failure, code=1`。
    * 判的是**试过的根**（摘不到时退回「配着的那个根」，再退回「没有」）。 */
-  const triedForFamily =
-    triedRoots.length > 0 ? triedRoots : host ? [host] : [];
-  const sameFamily =
-    triedForFamily.length > 0 && triedForFamily.every(isPlaywrightFamilyRoot);
+  const triedForFamily = triedRoots.length > 0 ? triedRoots : host ? [host] : [];
+  const sameFamily = triedForFamily.length > 0 && triedForFamily.every(isPlaywrightFamilyRoot);
   /* 配了一个根、而它正是被反复试的那一个 —— 这一档下「配一个根」这条出口已经是
    * 既成事实，话术不许再把它当建议给出去。 */
   const configuredRootFailed = host !== null && triedForFamily.includes(host);
@@ -403,8 +395,7 @@ export function playwrightInstallHints(out, facts = {}) {
       configuredRootFailed,
       host,
       triedRoots,
-      timeoutRaised:
-        observed !== null && observed > DEFAULT_DOWNLOAD_TIMEOUT_MS,
+      timeoutRaised: observed !== null && observed > DEFAULT_DOWNLOAD_TIMEOUT_MS,
     }),
     "  所有出口都只关「走哪条链路 / 多久放弃」，不改「装完能起才放行」那条判据。",
     "------------------------------------",
@@ -441,13 +432,7 @@ export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30000;
  *          triedRoots: string[], timeoutRaised: boolean}} ctx
  * @returns {string[]}
  */
-function hintActions({
-  sameFamily,
-  configuredRootFailed,
-  host,
-  triedRoots,
-  timeoutRaised,
-}) {
+function hintActions({ sameFamily, configuredRootFailed, host, triedRoots, timeoutRaised }) {
   if (configuredRootFailed) {
     return [
       `  配着的下载根就是失败的那一个（${host}）—— 这一跑里那两条常用出口${
@@ -491,12 +476,8 @@ function hintActions({
       : "  下载根 还没配 —— 这一档的出路是**从外面给一个能通的镜像根**。",
     "  两条出口（都是 Playwright 自己的环境变量，本仓不发明第二套）：",
     ...(host
-      ? [
-          "    · 换一个能到的根：改 `PLAYWRIGHT_DOWNLOAD_HOST`（`浏览器安装` stage 的 env）",
-        ]
-      : [
-          "    · 配镜像：PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>（配到 stage 的 env 上）",
-        ]),
+      ? ["    · 换一个能到的根：改 `PLAYWRIGHT_DOWNLOAD_HOST`（`浏览器安装` stage 的 env）"]
+      : ["    · 配镜像：PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>（配到 stage 的 env 上）"]),
     ...(timeoutRaised
       ? [
           "    · 放宽超时**这一跑已经做过了**（上面那个数比缺省的 30000ms 大）——" +
@@ -538,7 +519,9 @@ export function playwrightInstallHintFacts(env = {}) {
  */
 function observedTimeoutMs(text) {
   const m = /timed out after (\d+)ms/.exec(text ?? "");
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   const n = Number(m[1]);
   return Number.isFinite(n) ? n : null;
 }
@@ -554,9 +537,7 @@ function observedTimeoutMs(text) {
  */
 function isPlaywrightFamilyRoot(root) {
   try {
-    return /(^|\.)(playwright\.dev|prss\.microsoft\.com)$/.test(
-      new URL(root).hostname,
-    );
+    return /(^|\.)(playwright\.dev|prss\.microsoft\.com)$/.test(new URL(root).hostname);
   } catch {
     /* 不是一个能解析的 URL（Playwright 换了话术 / 输出被截断）⇒ 不认这一档，
      * 退到通用出口。**猜错方向比不猜更贵**。 */
@@ -574,7 +555,9 @@ function isPlaywrightFamilyRoot(root) {
  * @returns {string | undefined}
  */
 function downloadRootOf(url) {
-  if (typeof url !== "string") return undefined;
+  if (typeof url !== "string") {
+    return undefined;
+  }
   const i = url.indexOf("/builds/");
   return i === -1 ? url : url.slice(0, i);
 }
@@ -643,7 +626,9 @@ export function browserExecutableExists({
   const { primary, fallback } = playwrightRootCandidates({ platform, env });
   const envNote = env.PLAYWRIGHT_BROWSERS_PATH ?? "(未设)";
   const at = findBrowserExecutable({ root: primary, platform, list, envNote });
-  if (at.found) return { ok: true, out: at.found };
+  if (at.found) {
+    return { ok: true, out: at.found };
+  }
   /* **落点扑空时再问一句「是不是装在别处」** —— 为什么问、问完判据怎么不变，
    * 都在上面那段「为什么要问两个根」里；这里只留一句结论：
    * 默认根里有、而生效落点里没有 ⇒ **仍然判不过**（运行时只看生效落点），
@@ -750,13 +735,7 @@ export function runPlaywrightInstall({
         `（探到的原因：${pnpm.out || "无输出"}）`,
     };
   }
-  const args = [
-    ...pnpm.prefixArgs,
-    "exec",
-    "playwright",
-    "install",
-    ...BROWSER_PACKAGES,
-  ];
+  const args = [...pnpm.prefixArgs, "exec", "playwright", "install", ...BROWSER_PACKAGES];
   /* 试哪几个根 —— **先量一次再决定**（`pickPlaywrightRoots()` 的头注写了它与
    * `playwrightDownloadRoots()` 那条「给上了就只用它」怎么并存）。
    *
@@ -776,21 +755,18 @@ export function runPlaywrightInstall({
    * 缺省是「一个都不量」（那是给判据用的安静档），传 `probe` 进来才算真的量。
    * 它的返回值也不再是「一个个去试」——它排序后的第一个就是「先试哪个」。 */
   const resolvedPickRoots =
-    pickRoots ??
-    ((ports = {}) =>
-      pickPlaywrightRoots({ ...ports, probe: ports.probe ?? probe }));
+    pickRoots ?? ((ports = {}) => pickPlaywrightRoots({ ...ports, probe: ports.probe ?? probe }));
   const picked = env.PLAYWRIGHT_DOWNLOAD_HOST
     ? resolvedPickRoots({ roots: playwrightDownloadRoots(env), probe })
     : { roots: playwrightDownloadRoots(env), verdicts: [] };
-  const probes = picked.verdicts.map(
-    (v) => `  ${v.root} → ${v.verdict}（${v.grade}）`,
-  );
+  const probes = picked.verdicts.map((v) => `  ${v.root} → ${v.verdict}（${v.grade}）`);
   let out = "";
   for (const host of picked.roots) {
     const r = exec(pnpm.command, args, host);
     out += `${r.out ?? ""}\n`;
-    if (r.ok)
+    if (r.ok) {
       return { ok: true, out, command: pnpm.command, args, host, probes };
+    }
   }
   return { ok: false, out, command: pnpm.command, args, probes };
 }

@@ -48,7 +48,9 @@ function clearWorkflowCache(): void {
     const keys: Array<string> = [];
     for (let i = sessionStorage.length - 1; i >= 0; i--) {
       const k = sessionStorage.key(i);
-      if (k?.startsWith("wfdetail:")) keys.push(k);
+      if (k?.startsWith("wfdetail:")) {
+        keys.push(k);
+      }
     }
     keys.forEach((k) => sessionStorage.removeItem(k));
   } catch {
@@ -59,7 +61,9 @@ function clearWorkflowCache(): void {
 function readCache(key: string): WorkflowDetail | null {
   try {
     const raw = sessionStorage.getItem(key);
-    if (!raw) return null;
+    if (!raw) {
+      return null;
+    }
     const obj = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as CacheEnvelope;
     return Date.now() - obj.t < CACHE_TTL_MS ? obj.d : null;
   } catch {
@@ -245,7 +249,9 @@ export function useWorkflowDetailLoader({
           : vanillaApi.workflow.detailFull.query({ id: workflowId });
         void bg
           .then((data: WorkflowDetailResponse | null) => {
-            if (!data || data.error) return;
+            if (!data || data.error) {
+              return;
+            }
             writeCache(cacheKey, data);
             if (myReqId === latestRequestIdRef.current) {
               applyDetailState(data, isSubgraph);
@@ -256,7 +262,9 @@ export function useWorkflowDetailLoader({
       }
 
       /* 冷路径：走 tRPC（POST，绕过 HTTP 缓存）。 */
-      if (!detail) setLoading(true);
+      if (!detail) {
+        setLoading(true);
+      }
       /* 忙碌位在这一段跨了多次 await（收窄 → 提交 → 竞态判定），复位写在
        *  `finally` 里已经是对的；保留显式 `try/finally` 是因为它不仅复位，
        *  还带**竞态令牌**（`myReqId`）判据 —— 那条不属于忙碌位这条账。 */
@@ -281,17 +289,24 @@ export function useWorkflowDetailLoader({
             message: `${subgraphUid ? "子工作流" : "工作流"}加载超时（60s），请重试`,
           },
         )) as WorkflowDetailResponse;
-        if (d.error) throw new Error(d.error);
+        if (d.error) {
+          throw new Error(d.error);
+        }
         writeCache(cacheKey, d);
-        if (myReqId === latestRequestIdRef.current) commitDetail(d, isSubgraph, opts);
+        if (myReqId === latestRequestIdRef.current) {
+          commitDetail(d, isSubgraph, opts);
+        }
       } catch (e: unknown) {
         /* 子图下钻失败：非致命 —— 保留父图，仅用内联错误提示，绝不渲染「返回」
          *  错误屏（那会回退到工作流库界面）。e 为 unknown：先 instanceof Error
          *  收窄再取 message，否则回退到约定文案。 */
         const msg =
           (e instanceof Error ? e.message : "") || (isSubgraph ? "子工作流加载失败" : "加载失败");
-        if (isSubgraph) setSubgraphError(msg);
-        else setError(msg);
+        if (isSubgraph) {
+          setSubgraphError(msg);
+        } else {
+          setError(msg);
+        }
       } finally {
         if (myReqId === latestRequestIdRef.current) {
           setLoading(false);
@@ -385,7 +400,9 @@ export function useWorkflowDetailLoader({
   const onExitSubgraph = useCallback(async () => {
     setSubgraphLoading(true);
     const current = stackRef.current;
-    if (current.length === 0) return;
+    if (current.length === 0) {
+      return;
+    }
     const next = current.slice(0, -1);
     updateStack(next);
     const parent = next.at(-1);

@@ -48,10 +48,7 @@ import { pruneTimestampedLogs } from "./worktree.mjs";
 export const EXECUTOR_HOST_SCRIPT = "scripts/executor-host.mjs";
 
 /** 宿主 stdout/stderr 的按次命名前缀（保留份数由 {@link pruneTimestampedLogs} 管）。 */
-export const EXECUTOR_HOST_LOG_PREFIXES = [
-  "executor-host-stdout-",
-  "executor-host-stderr-",
-];
+export const EXECUTOR_HOST_LOG_PREFIXES = ["executor-host-stdout-", "executor-host-stderr-"];
 
 /** 最近 N 份宿主日志留下（与 nextjs 那两路同值：够追溯最近几次启动即可）。 */
 export const EXECUTOR_HOST_LOG_KEEP = 5;
@@ -101,7 +98,9 @@ export function maybeSpawnExecutorHost({
       "WARN",
     );
   }
-  if (!plan.shouldSpawn) return null;
+  if (!plan.shouldSpawn) {
+    return null;
+  }
 
   const hostScript = path.join(root, EXECUTOR_HOST_SCRIPT);
   if (!fs.existsSync(hostScript)) {
@@ -121,14 +120,8 @@ export function maybeSpawnExecutorHost({
    * GBK 解码成乱码（文件通道恒 UTF-8），且宿主逐 tick 的输出会淹没启动进度。 */
   const servicesDir = currentDirOf("services", root);
   pruneTimestampedLogs(servicesDir, EXECUTOR_HOST_LOG_PREFIXES, EXECUTOR_HOST_LOG_KEEP);
-  const stdoutFile = path.join(
-    servicesDir,
-    `executor-host-stdout-${runTimestamp}.log`,
-  );
-  const stderrFile = path.join(
-    servicesDir,
-    `executor-host-stderr-${runTimestamp}.log`,
-  );
+  const stdoutFile = path.join(servicesDir, `executor-host-stdout-${runTimestamp}.log`);
+  const stderrFile = path.join(servicesDir, `executor-host-stderr-${runTimestamp}.log`);
 
   let child;
   try {

@@ -62,11 +62,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -112,8 +108,11 @@ function maskNonCode(src) {
     const ch = src[i];
     const next = src[i + 1];
     if (mode === "line") {
-      if (ch === "\n") mode = "code";
-      else out[i] = " ";
+      if (ch === "\n") {
+        mode = "code";
+      } else {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -124,7 +123,9 @@ function maskNonCode(src) {
         i += 2;
         mode = "code";
       } else {
-        if (ch !== "\n") out[i] = " ";
+        if (ch !== "\n") {
+          out[i] = " ";
+        }
         i += 1;
       }
       continue;
@@ -137,8 +138,11 @@ function maskNonCode(src) {
         i += 2;
         continue;
       }
-      if (ch === quote) mode = "code";
-      else out[i] = " ";
+      if (ch === quote) {
+        mode = "code";
+      } else {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -164,7 +168,9 @@ function maskNonCode(src) {
         i += 2;
         continue;
       }
-      if (ch !== "\n") out[i] = " ";
+      if (ch !== "\n") {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -200,12 +206,15 @@ function maskNonCode(src) {
       continue;
     }
     if (stack.at(-1) === "interp") {
-      if (ch === "{") braceDepth += 1;
-      else if (ch === "}") {
+      if (ch === "{") {
+        braceDepth += 1;
+      } else if (ch === "}") {
         if (braceDepth === 0) {
           stack.pop();
           mode = "tmpl";
-        } else braceDepth -= 1;
+        } else {
+          braceDepth -= 1;
+        }
       }
     }
     i += 1;
@@ -302,7 +311,9 @@ function main() {
         : `[ERROR] 有 ${sites.length} 处 \`ctx.annotate\` 站点，但 ${LEDGER} 里没有消费方`) +
         "：\n",
     );
-    for (const s of sites) console.error(`  · ${s.rel}:${s.line}`);
+    for (const s of sites) {
+      console.error(`  · ${s.rel}:${s.line}`);
+    }
     console.error(
       "\n`annotate` 写下的注释**只有失败时**在 text reporter 里可见，`--reporter=json`\n" +
         "的产物里一个字都没有（实测逐键核过），唯一的读数通道是 programmatic API\n" +
@@ -317,8 +328,7 @@ function main() {
   }
 
   console.log(
-    `[annotate] OK —— ${sites.length} 处注解站点，消费方 ${consumers.length} 条登记。` +
-      note,
+    `[annotate] OK —— ${sites.length} 处注解站点，消费方 ${consumers.length} 条登记。` + note,
   );
   return 0;
 }

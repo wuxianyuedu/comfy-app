@@ -84,9 +84,15 @@ export function simpleKeyHandler(
   const normalized = new Set(keys.map(normalizeKeyName));
   return {
     onKeyDown: (event) => {
-      if (ignoreRepeat && event.repeat) return;
-      if (!normalized.has(normalizeKeyName(event.key))) return;
-      if (preventDefault) event.preventDefault();
+      if (ignoreRepeat && event.repeat) {
+        return;
+      }
+      if (!normalized.has(normalizeKeyName(event.key))) {
+        return;
+      }
+      if (preventDefault) {
+        event.preventDefault();
+      }
       action(event);
     },
   };

@@ -29,7 +29,9 @@ export function SubgraphPinRows({
   /* 顶部 PINS 行：每个声明的输入端口与每个输出端口各占一行，
    *  左右拉链式成对、行高 22px（与普通 WorkflowNode 相同）。 */
   const pinRows = Math.max(connInputs.length, outputs.length);
-  if (pinRows === 0) return null;
+  if (pinRows === 0) {
+    return null;
+  }
 
   return (
     <div

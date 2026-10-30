@@ -89,7 +89,9 @@ export function CanvasArea({
 
   // 点击外部时关闭菜单
   useEffect(() => {
-    if (!menu) return;
+    if (!menu) {
+      return;
+    }
     const handler = () => setMenu(null);
     window.addEventListener("pointerdown", handler, { once: true });
     return () => window.removeEventListener("pointerdown", handler);

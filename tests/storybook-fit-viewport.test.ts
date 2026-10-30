@@ -81,7 +81,9 @@ function pinnedScenes(): Set<string> {
           ts.isIdentifier(prop.name) &&
           prop.name.text === "pinZoom",
       );
-      if (name !== null && hasPinZoom) pinned.add(name);
+      if (name !== null && hasPinZoom) {
+        pinned.add(name);
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -116,10 +118,16 @@ function canvasUsagesIn(file: string): Array<CanvasUsage> {
       let hasFit = false;
       let sceneName: string | null = null;
       for (const attr of node.attributes.properties) {
-        if (!ts.isJsxAttribute(attr) || !ts.isIdentifier(attr.name)) continue;
-        if (attr.name.text === "nodeTypes") hasNodeTypes = true;
+        if (!ts.isJsxAttribute(attr) || !ts.isIdentifier(attr.name)) {
+          continue;
+        }
+        if (attr.name.text === "nodeTypes") {
+          hasNodeTypes = true;
+        }
         /* `fit` 是简写属性（`fit`）或 `fit={true}`：两种都算。 */
-        if (attr.name.text === "fit") hasFit = true;
+        if (attr.name.text === "fit") {
+          hasFit = true;
+        }
         if (attr.name.text === "scene" && attr.initializer) {
           /* 场景名经 `canvasScene("twoNodes")` 求值 —— 从**调用实参**取字面量，
              不按整个属性文本猜（`withNodeType(canvasScene("x"), "story")` 里
@@ -154,8 +162,11 @@ function storyFiles(dir: string): Array<string> {
   const out: Array<string> = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...storyFiles(full));
-    else if (full.endsWith(".stories.tsx")) out.push(full);
+    if (statSync(full).isDirectory()) {
+      out.push(...storyFiles(full));
+    } else if (full.endsWith(".stories.tsx")) {
+      out.push(full);
+    }
   }
   return out;
 }

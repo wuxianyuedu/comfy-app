@@ -161,7 +161,9 @@ export function probeExecutable(
   }
   /* 起来了 ⇒ 认退出码：`status === 0` 才算可用。`status === null`（被信号干掉、或压根
    * 没等到状态）与退非零一样 —— **都不是「它可用」的证据**。 */
-  if (probe.status === 0) return { ok: true, failure: null };
+  if (probe.status === 0) {
+    return { ok: true, failure: null };
+  }
   /* 两个字段的 `?? null` 是**同一件事的两半**（`spawnSync` 的类型写着可空）：一条
    * 「起了但没等到状态」的读数要被如实交出去，而不是被读成「退 0」。 */
   const status = probe.status ?? null;
@@ -215,7 +217,9 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
     ((candidate: string, args: Array<string>) =>
       probeExecutable(candidate, args, options.timeoutMs));
   const got = firstRunnable(options.candidates, options.probeArgs, probe);
-  if (got.hit) return got.hit;
+  if (got.hit) {
+    return got.hit;
+  }
   /* 一行读数走**两条出口**，它们答的是两件不同的事：
    *   · `emit("warn", …)` —— 应用侧的那条唯一日志通道（`process-launch.ts` 注入了
    *     `~/lib/core/logger`，因此落 `log/` 面板、过 redact）。本模块自己**不** import
@@ -285,7 +289,9 @@ export function firstRunnable(
   const timeouts: Array<ProbedCandidate> = [];
   for (const candidate of candidates) {
     const outcome = probe(candidate, probeArgs(candidate));
-    if (outcome.ok) return { hit: candidate, missed, timeouts };
+    if (outcome.ok) {
+      return { hit: candidate, missed, timeouts };
+    }
     const failure = outcome.failure ?? { kind: "spawn-error", code: "UNKNOWN" };
     (failure.kind === "timeout" ? timeouts : missed).push({
       candidate,
@@ -321,7 +327,9 @@ export function describeProbeMisses(
 
 /** 单个 `ProbeFailure` 的一句话（三条出口各一句，别糊成「不可用」）。 */
 export function describeProbeFailure(failure: ProbeFailure): string {
-  if (failure.kind === "spawn-error") return `起不来（${failure.code}）`;
+  if (failure.kind === "spawn-error") {
+    return `起不来（${failure.code}）`;
+  }
   if (failure.kind === "timeout") {
     return `没在预算内给出读数（${failure.timeoutMs}ms，属「没量到」而不是「起不来」）`;
   }
@@ -331,7 +339,9 @@ export function describeProbeFailure(failure: ProbeFailure): string {
    * 后果是 Windows 节点上每日一跑恒红）。否则给退出码。
    * 两种都没有的形态（libuv 既不给码也不给信号）写「没有读数」—— 不许编一个 `0`
    * 出来充数（那会被读成「成功了」）。 */
-  if (failure.signal !== null) return `起来了但被信号 ${failure.signal} 结束`;
+  if (failure.signal !== null) {
+    return `起来了但被信号 ${failure.signal} 结束`;
+  }
   return failure.status === null
     ? "起来了但没拿到退出码（这一档没有读数）"
     : `起来了但退非零（exit ${failure.status}）`;

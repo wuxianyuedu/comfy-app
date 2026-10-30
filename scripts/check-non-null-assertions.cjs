@@ -51,8 +51,7 @@ if (STAGED && !REPORT_ONLY) {
 
 const ts = require("typescript");
 
-const isTestFile = (rel) =>
-  /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.includes("/__tests__/");
+const isTestFile = (rel) => /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.includes("/__tests__/");
 
 /* ── 已登记的合法形态（正则捕获组 / drizzle 判据构造）────────────────────
  *
@@ -110,28 +109,38 @@ function isLegitSite(rel, node) {
   if (ts.isCallExpression(expr) && ts.isIdentifier(expr.expression)) {
     return LEGIT_SITES.has(`${rel}|call:${expr.expression.text}|`);
   }
-  if (!ts.isElementAccessExpression(expr)) return false;
+  if (!ts.isElementAccessExpression(expr)) {
+    return false;
+  }
   const target = expr.expression;
-  if (!ts.isIdentifier(target)) return false;
-  const index = expr.argumentExpression
-    ? expr.argumentExpression.getText()
-    : "";
+  if (!ts.isIdentifier(target)) {
+    return false;
+  }
+  const index = expr.argumentExpression ? expr.argumentExpression.getText() : "";
   return LEGIT_SITES.has(`${rel}|${target.text}|${index}`);
 }
 
 /** 递归收集 .ts/.tsx 文件(跳过测试与 .d.ts)。 */
 function collectFiles(dir, out = []) {
   const abs = path.join(ROOT, dir);
-  if (!fs.existsSync(abs)) return out;
+  if (!fs.existsSync(abs)) {
+    return out;
+  }
   for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
     const rel = path.join(dir, entry.name).split(path.sep).join("/");
     if (entry.isDirectory()) {
       collectFiles(rel, out);
       continue;
     }
-    if (!/\.(ts|tsx)$/.test(entry.name)) continue;
-    if (entry.name.endsWith(".d.ts")) continue;
-    if (isTestFile(rel)) continue;
+    if (!/\.(ts|tsx)$/.test(entry.name)) {
+      continue;
+    }
+    if (entry.name.endsWith(".d.ts")) {
+      continue;
+    }
+    if (isTestFile(rel)) {
+      continue;
+    }
     out.push(rel);
   }
   return out;
@@ -150,7 +159,9 @@ function collectFiles(dir, out = []) {
 function countTree(sf, rel = "") {
   let count = 0;
   const visit = (node) => {
-    if (ts.isNonNullExpression(node) && !isLegitSite(rel, node)) count += 1;
+    if (ts.isNonNullExpression(node) && !isLegitSite(rel, node)) {
+      count += 1;
+    }
     ts.forEachChild(node, visit);
   };
   visit(sf);
@@ -168,7 +179,9 @@ function countTree(sf, rel = "") {
  */
 function countFor(rel, parsed) {
   const shared = parsed && parsed.get(rel);
-  if (shared) return countTree(shared, rel);
+  if (shared) {
+    return countTree(shared, rel);
+  }
   const abs = path.join(ROOT, rel);
   const src = fs.readFileSync(abs, "utf8");
   return countTree(
@@ -199,9 +212,7 @@ function main(parsed) {
     console.log(
       `[non-null] src 生产代码 ${total} 处 \`!\` 分布 ${Object.keys(current).length} 个文件`,
     );
-    for (const [rel, n] of Object.entries(current).sort(
-      (a, b) => b[1] - a[1],
-    )) {
+    for (const [rel, n] of Object.entries(current).sort((a, b) => b[1] - a[1])) {
       console.log(`  · ${n} 处  ${rel}`);
     }
     return;
@@ -229,4 +240,6 @@ function main(parsed) {
 /* 规则本体导出给聚合档 `run-ast-gates.cjs`（单条脚本行为不变）。 */
 module.exports = { countTree, countFor, collectFiles, main, SCAN_DIR, isTestFile, LEGIT_SITES };
 
-if (require.main === module) main();
+if (require.main === module) {
+  main();
+}

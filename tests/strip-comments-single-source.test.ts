@@ -108,16 +108,22 @@ function sourceFiles(): Array<string> {
       const abs = path.join(dir, entry);
       const stat = statSync(abs);
       if (stat.isDirectory()) {
-        if (!SKIP_DIRS.has(entry) && !entry.startsWith(".")) walk(abs);
+        if (!SKIP_DIRS.has(entry) && !entry.startsWith(".")) {
+          walk(abs);
+        }
         continue;
       }
-      if (!SOURCE_EXT.test(entry)) continue;
+      if (!SOURCE_EXT.test(entry)) {
+        continue;
+      }
       out.push(path.relative(ROOT, abs).split(path.sep).join("/"));
     }
   };
   for (const layer of LAYERS) {
     const abs = path.join(ROOT, layer);
-    if (statSync(abs, { throwIfNoEntry: false })?.isDirectory()) walk(abs);
+    if (statSync(abs, { throwIfNoEntry: false })?.isDirectory()) {
+      walk(abs);
+    }
   }
   return out.sort();
 }
@@ -166,7 +172,9 @@ describe("stripComments 的唯一实现（§12.18 复用优先）", () => {
   });
 
   it("台账本身不自相矛盾：NAIVE 那两份必须也在总台账里", () => {
-    for (const rel of NAIVE_LEDGER) expect(LEDGER).toContain(rel);
+    for (const rel of NAIVE_LEDGER) {
+      expect(LEDGER).toContain(rel);
+    }
     // 台账不许有重复条目（重复会让「少一份就红」这条判决变得不可预期）
     expect(new Set(LEDGER).size).toBe(LEDGER.length);
   });

@@ -31,7 +31,9 @@ export type Listener = () => void;
 
 /** 单格宽高是否合法（正整数且在常识范围内）。 */
 function isValidDims(value: unknown): value is SizeDims {
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== "object") {
+    return false;
+  }
   const width = /* SAFETY: 类型断言已复核 */ (value as { width?: unknown }).width;
   const height = /* SAFETY: 类型断言已复核 */ (value as { height?: unknown }).height;
   return (
@@ -114,7 +116,9 @@ function commit(next: SizePresetTable): void {
   snapshot = next;
   /* 存储不可用（配额满 / 隐私模式）静默：本次会话内仍然生效。 */
   writeStorageJson(SIZE_PRESET_STORAGE_KEY, next);
-  for (const listener of listeners) listener();
+  for (const listener of listeners) {
+    listener();
+  }
 }
 
 /** 改一格（场景 + 比例行 + 分辨率档）。 */
@@ -125,7 +129,9 @@ export function setSizePresetDims(
   size: SizeDims,
 ): void {
   const row = snapshot[scene]?.[ratioLabel];
-  if (!row) return;
+  if (!row) {
+    return;
+  }
   const nextScene: SceneResolutionTable = {
     ...snapshot[scene],
     [ratioLabel]: {

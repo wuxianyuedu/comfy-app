@@ -86,10 +86,14 @@ function sweepStaleTempDirs(): void {
     return;
   }
   for (const name of names) {
-    if (!name.startsWith(TMP_PREFIX)) continue;
+    if (!name.startsWith(TMP_PREFIX)) {
+      continue;
+    }
     const full = path.join(base, name);
     try {
-      if (Date.now() - fs.statSync(full).mtimeMs < 60_000) continue;
+      if (Date.now() - fs.statSync(full).mtimeMs < 60_000) {
+        continue;
+      }
       fs.rmSync(full, { recursive: true, force: true });
     } catch {
       // 还被别的进程占着：这轮不删，下一轮再来（删除是尽力，不是契约）。

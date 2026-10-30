@@ -21,28 +21,32 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** 从请求体里取生产数据载荷（宽松读取，字段缺省由表的默认值兜底）。 */
-function productionFromBody(
-  body: Record<string, unknown>,
-): Record<string, unknown> | null {
+function productionFromBody(body: Record<string, unknown>): Record<string, unknown> | null {
   return isRecord(body.production) ? body.production : null;
 }
 
 function projectIdFrom(q: string | null): string | null {
   const trimmed = q?.trim();
-  if (trimmed) return trimmed;
+  if (trimmed) {
+    return trimmed;
+  }
   return null;
 }
 
 export async function GET(req: NextRequest) {
   const user = await requireRequestUser();
-  if (!user) return unauthorizedResponse();
+  if (!user) {
+    return unauthorizedResponse();
+  }
   const project = projectIdFrom(req.nextUrl.searchParams.get("project"));
   if (!project) {
     return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
   }
   try {
     const row = await productionRepository.getForUser(user.id, project);
-    if (!row) return NextResponse.json({ exists: false });
+    if (!row) {
+      return NextResponse.json({ exists: false });
+    }
     return NextResponse.json({ exists: true, production: row });
   } catch (e) {
     return NextResponse.json(apiErrorBody(e, "读取生产数据失败"), {
@@ -53,12 +57,15 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const user = await requireRequestUser();
-  if (!user) return unauthorizedResponse();
+  if (!user) {
+    return unauthorizedResponse();
+  }
 
   const body = await readJsonRecord(req);
-  if (isErrorResponse(body)) return body;
-  const project =
-    typeof body.project === "string" && body.project ? body.project : null;
+  if (isErrorResponse(body)) {
+    return body;
+  }
+  const project = typeof body.project === "string" && body.project ? body.project : null;
   if (!project) {
     return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
   }
@@ -71,36 +78,23 @@ export async function PUT(req: NextRequest) {
     // 整列 upsert 前从库中同 id 记录继承缺键的位，否则工坊里编辑任何东西
     // 的下一次自动保存就会把它们抹掉。
     const existing = await productionRepository.getForUser(user.id, project);
-    const existingShots =
-      existing && Array.isArray(existing.shots) ? existing.shots : [];
+    const existingShots = existing && Array.isArray(existing.shots) ? existing.shots : [];
     const existingCharacters =
       existing && Array.isArray(existing.characters) ? existing.characters : [];
     const shots = Array.isArray(production.shots)
-      ? inheritDerivedFields(
-          production.shots,
-          existingShots,
-          SHOT_DERIVED_FIELDS,
-        )
+      ? inheritDerivedFields(production.shots, existingShots, SHOT_DERIVED_FIELDS)
       : production.shots;
     const characters = Array.isArray(production.characters)
-      ? inheritDerivedFields(
-          production.characters,
-          existingCharacters,
-          CHARACTER_DERIVED_FIELDS,
-        )
+      ? inheritDerivedFields(production.characters, existingCharacters, CHARACTER_DERIVED_FIELDS)
       : production.characters;
     await productionRepository.upsertForUser(user.id, {
       id: project,
-      title:
-        typeof production.title === "string" ? production.title : undefined,
+      title: typeof production.title === "string" ? production.title : undefined,
       type: typeof production.type === "string" ? production.type : undefined,
       tone: typeof production.tone === "string" ? production.tone : undefined,
-      logline:
-        typeof production.logline === "string" ? production.logline : undefined,
+      logline: typeof production.logline === "string" ? production.logline : undefined,
       scriptMarkdown:
-        typeof production.scriptMarkdown === "string"
-          ? production.scriptMarkdown
-          : undefined,
+        typeof production.scriptMarkdown === "string" ? production.scriptMarkdown : undefined,
       scenes: production.scenes,
       characters,
       shots,

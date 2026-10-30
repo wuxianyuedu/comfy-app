@@ -20,8 +20,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  if (saved === null) fs.rmSync(FILE, { force: true });
-  else fs.writeFileSync(FILE, saved, "utf8");
+  if (saved === null) {
+    fs.rmSync(FILE, { force: true });
+  } else {
+    fs.writeFileSync(FILE, saved, "utf8");
+  }
   delete process.env.COMFYAPP_RUN_ID;
 });
 

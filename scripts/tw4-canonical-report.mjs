@@ -149,8 +149,11 @@ const ds = await __unstable__loadDesignSystem('@import "tailwindcss";', {
 function* walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) yield* walk(full);
-    else if (/\.tsx?$|\.css$|\.snap$/.test(entry.name)) yield full;
+    if (entry.isDirectory()) {
+      yield* walk(full);
+    } else if (/\.tsx?$|\.css$|\.snap$/.test(entry.name)) {
+      yield full;
+    }
   }
 }
 
@@ -162,10 +165,7 @@ function* walk(dir) {
  *  @returns {boolean} */
 const isTestFile = (file) => /\.(test|spec)\.tsx?$|__tests__[\\/]/.test(file);
 
-const files =
-  explicit.length > 0
-    ? explicit.map((f) => path.resolve(ROOT, f))
-    : [...walk(SRC)];
+const files = explicit.length > 0 ? explicit.map((f) => path.resolve(ROOT, f)) : [...walk(SRC)];
 
 /** token → 命中处
  * @type {Map<string, Hit[]>} */
@@ -175,7 +175,9 @@ const orphanSnapshots = new Set();
 for (const file of files) {
   const isSnapshot = file.endsWith(".snap");
   const isOrphan = isSnapshot && !fs.existsSync(file.replace(/\.snap$/, ""));
-  if (isOrphan) orphanSnapshots.add(file);
+  if (isOrphan) {
+    orphanSnapshots.add(file);
+  }
   /* 注释剥离只对 JS/TS 源文件成立：`.css` / `.snap` 里的 `//` 不是注释语法，
    * 剥它等于把真的内容吞掉（快照里更可能逐字记着一段输出）。 */
   const literals = /\.tsx?$/.test(file)
@@ -185,7 +187,9 @@ for (const file of files) {
       }));
   for (const match of literals) {
     for (const token of match.content.split(/\s+/)) {
-      if (!token || !MAYBE_CLASS.test(token)) continue;
+      if (!token || !MAYBE_CLASS.test(token)) {
+        continue;
+      }
       const hits = occurrences.get(token) ?? [];
       hits.push({
         file,
@@ -212,7 +216,9 @@ const startedAt = Date.now();
 let done = 0;
 for (const token of tokens) {
   const [value] = ds.canonicalizeCandidates([token]);
-  if (value && value !== token) canonical.set(token, value);
+  if (value && value !== token) {
+    canonical.set(token, value);
+  }
   done += 1;
   if (done % 2000 === 0) {
     const per = (Date.now() - startedAt) / done;
@@ -221,9 +227,7 @@ for (const token of tokens) {
     );
   }
 }
-console.error(
-  `canonicalize 用时 ${Math.round((Date.now() - startedAt) / 1000)}s`,
-);
+console.error(`canonicalize 用时 ${Math.round((Date.now() - startedAt) / 1000)}s`);
 /** 一条建议 = 一个 raw，连同它的命中处（孤儿快照里的不算：无人校验，改了也没用例兜底）。 */
 let orphanHits = 0;
 /** @type {Suggestion[]} */
@@ -236,7 +240,9 @@ for (const [raw, to] of canonical) {
   const all = occurrences.get(raw) ?? [];
   const hits = all.filter((h) => !h.orphan);
   orphanHits += all.length - hits.length;
-  if (hits.length === 0) continue;
+  if (hits.length === 0) {
+    continue;
+  }
   const inTests = hits.filter((h) => h.test);
   suggestions.push({
     raw,
@@ -265,15 +271,21 @@ if (shouldWrite) {
          * 循环界保证它不是 undefined，但那是**我**知道的不是**类型**知道的 ——
          * 直接 `canonical.get(pieces[i])` 会新冒一格 TS2345（本批实测就是这么现出来的）。 */
         const piece = pieces[i];
-        if (piece === undefined) continue;
+        if (piece === undefined) {
+          continue;
+        }
         const to = canonical.get(piece);
-        if (!to) continue;
+        if (!to) {
+          continue;
+        }
         pieces[i] = to;
         hit = true;
       }
       return hit ? pieces.join("") : null;
     });
-    if (changed === 0) return false;
+    if (changed === 0) {
+      return false;
+    }
     fs.writeFileSync(file, after);
     return true;
   };
@@ -283,7 +295,11 @@ if (shouldWrite) {
       .flatMap((s) => (withTests ? s.files : s.sourceFiles))
       .filter((f) => !f.endsWith(".snap")),
   );
-  for (const file of targets) if (rewriteFile(file)) changed += 1;
+  for (const file of targets) {
+    if (rewriteFile(file)) {
+      changed += 1;
+    }
+  }
   console.error(
     `已改写 ${changed} 个文件；快照（${suggestions.reduce((n, s) => n + s.snapshots, 0)} 处）` +
       "需另跑 vitest -u 重生成。",
@@ -345,17 +361,18 @@ if (asJson) {
       "\n测试文件里（--write 默认不改：正样本要同步、负样本改了会把判据改坏，得人判断）：",
     );
     for (const s of testRows) {
-      console.log(
-        `  ${String(s.inTests).padStart(4)} 处  ${s.raw}  →  ${s.to}`,
-      );
-      for (const f of s.testFiles)
+      console.log(`  ${String(s.inTests).padStart(4)} 处  ${s.raw}  →  ${s.to}`);
+      for (const f of s.testFiles) {
         console.log(`        ${path.relative(ROOT, f)}`);
+      }
     }
   }
   console.log("\n按文件：");
   for (const s of sorted) {
     console.log(`  ${s.files.length} 个文件：${s.raw} → ${s.to}`);
-    for (const f of s.files) console.log(`      ${path.relative(ROOT, f)}`);
+    for (const f of s.files) {
+      console.log(`      ${path.relative(ROOT, f)}`);
+    }
   }
 }
 
@@ -382,9 +399,7 @@ const currentTotal = Object.values(current).reduce((a, b) => a + b, 0);
 
 if (shouldCheck) {
   if (currentTotal > 0) {
-    console.error(
-      `canonical 候选 硬闸：源文件里有 ${currentTotal} 处可改成规范写法（须为 0）\n`,
-    );
+    console.error(`canonical 候选 硬闸：源文件里有 ${currentTotal} 处可改成规范写法（须为 0）\n`);
     for (const [rel, n] of Object.entries(current).sort((a, b) => b[1] - a[1])) {
       console.error(`  ✗ ${rel}：${n} 处`);
     }

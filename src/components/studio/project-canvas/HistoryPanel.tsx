@@ -23,8 +23,12 @@ import {
 } from "~/lib/project-canvas/history-panel-types";
 
 function KindIcon({ kind }: { kind: TaskMediaType }) {
-  if (kind === "video") return <Video size={16} strokeWidth={1.8} />;
-  if (kind === "audio") return <Music size={16} strokeWidth={1.8} />;
+  if (kind === "video") {
+    return <Video size={16} strokeWidth={1.8} />;
+  }
+  if (kind === "audio") {
+    return <Music size={16} strokeWidth={1.8} />;
+  }
   return <ImageIcon size={16} strokeWidth={1.8} />;
 }
 

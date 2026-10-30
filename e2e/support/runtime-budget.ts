@@ -135,9 +135,13 @@ export function steadyMin(
   samples: Array<number | null>,
   discard: number = DISCARD_ROUNDS,
 ): number | null {
-  if (samples.length <= discard) return null;
+  if (samples.length <= discard) {
+    return null;
+  }
   const kept = samples.slice(discard);
-  if (kept.some((v) => v === null || !Number.isFinite(v))) return null;
+  if (kept.some((v) => v === null || !Number.isFinite(v))) {
+    return null;
+  }
   return Math.min(.../* SAFETY: 类型断言已复核 */ (kept as Array<number>));
 }
 

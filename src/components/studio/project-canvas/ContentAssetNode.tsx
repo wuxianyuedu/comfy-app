@@ -147,7 +147,9 @@ export function ContentAssetBody({
             event.stopPropagation();
             setIsDropOver(false);
             const f = event.dataTransfer.files?.[0];
-            if (f && onUploadFile) void onUploadFile(f);
+            if (f && onUploadFile) {
+              void onUploadFile(f);
+            }
           }}
           onDragOver={(event) => {
             event.preventDefault();
@@ -155,7 +157,9 @@ export function ContentAssetBody({
             /* 只有当拖入的是文件（不是节点 / 边）时才高亮
              *  —— `types` 对原生文件拖拽含 "Files"。 */
             const types = Array.from(event.dataTransfer.types ?? []);
-            if (types.includes("Files") && !isDropOver) setIsDropOver(true);
+            if (types.includes("Files") && !isDropOver) {
+              setIsDropOver(true);
+            }
             event.dataTransfer.dropEffect = "copy";
           }}
           onDragLeave={(event) => {
@@ -171,14 +175,8 @@ export function ContentAssetBody({
               : "border-ink-fainter bg-canvas-deep hover:text-ink-bright hover:border-ink-soft"
           }`}
         >
-          <Icon
-            name={isPic ? "image" : "film"}
-            size={38}
-            className="opacity-60"
-          />
-          <span className="text-xs">
-            {isPic ? "拖入上传图片" : "拖入上传视频"}
-          </span>
+          <Icon name={isPic ? "image" : "film"} size={38} className="opacity-60" />
+          <span className="text-xs">{isPic ? "拖入上传图片" : "拖入上传视频"}</span>
         </div>
       )}
       {/* "水逐渐装满" 进度覆盖层 — 仅当 status ===
@@ -264,9 +262,7 @@ export function ContentAssetBody({
                   onClick={(event) => {
                     event.stopPropagation();
                     gallery.setIndex(
-                      (index) =>
-                        (index - 1 + galleryImages.length) %
-                        galleryImages.length,
+                      (index) => (index - 1 + galleryImages.length) % galleryImages.length,
                     );
                   }}
                   disabled={galleryImages.length <= 1}
@@ -281,9 +277,7 @@ export function ContentAssetBody({
                   size="icon-lg"
                   onClick={(event) => {
                     event.stopPropagation();
-                    gallery.setIndex(
-                      (index) => (index + 1) % galleryImages.length,
-                    );
+                    gallery.setIndex((index) => (index + 1) % galleryImages.length);
                   }}
                   disabled={galleryImages.length <= 1}
                   className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 right-4 -translate-y-1/2 rounded-full hover:text-white"

@@ -59,11 +59,7 @@
  */
 const path = require("node:path");
 const { maskNonCode } = require("./check-test-concurrency.cjs");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -86,10 +82,7 @@ const FIXTURE_SKIP = new Set(["tests/test-it-each-gate.test.ts"]);
 const HOSTS = ["it", "test", "describe"];
 
 /** 站点：宿主对象上的 `.each(` 方法调用。 */
-const SITE_RE = new RegExp(
-  `(?<![\\w.$])(${HOSTS.join("|")})\\s*\\.\\s*each\\s*\\(`,
-  "g",
-);
+const SITE_RE = new RegExp(`(?<![\\w.$])(${HOSTS.join("|")})\\s*\\.\\s*each\\s*\\(`, "g");
 
 /**
  * 枚举扫描面。两种消失窗口与「只降级 ENOENT」的口径在 `gate-scan-read.cjs`
@@ -102,7 +95,11 @@ function walk(dir) {
 
 function lineOf(src, index) {
   let line = 1;
-  for (let i = 0; i < index; i++) if (src[i] === "\n") line++;
+  for (let i = 0; i < index; i++) {
+    if (src[i] === "\n") {
+      line++;
+    }
+  }
   return line;
 }
 
@@ -116,10 +113,14 @@ function lineOf(src, index) {
  */
 function importsVitestHosts(raw) {
   for (const m of raw.matchAll(/import\s*\{[^}]*\}\s*from\s*["'][^"']+["']/g)) {
-    if (!/from\s*["']vitest["']/.test(m[0])) continue;
+    if (!/from\s*["']vitest["']/.test(m[0])) {
+      continue;
+    }
     const names = m[0].match(/\{([^}]*)\}/)[1];
     for (const host of HOSTS) {
-      if (new RegExp(`(?<![\\w$])${host}\\s*(?:,|$)`).test(names)) return true;
+      if (new RegExp(`(?<![\\w$])${host}\\s*(?:,|$)`).test(names)) {
+        return true;
+      }
     }
   }
   return false;
@@ -135,8 +136,12 @@ function scanFile(abs) {
    * 「不许静默」（静默等于让判据在它其实没读过的目录上假装绿 —— §13.5.12 那一族
    * 「判据自称在跑、实际没有」的入口）都在 `gate-scan-read.cjs` 那一份里。 */
   const raw = readForScan(abs);
-  if (raw === null) return null;
-  if (!importsVitestHosts(raw)) return [];
+  if (raw === null) {
+    return null;
+  }
+  if (!importsVitestHosts(raw)) {
+    return [];
+  }
   const masked = maskNonCode(raw);
   const rawLines = raw.split("\n");
   const sites = [];
@@ -156,13 +161,17 @@ function collect() {
   let vanished = 0;
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    if (FIXTURE_SKIP.has(rel)) continue;
+    if (FIXTURE_SKIP.has(rel)) {
+      continue;
+    }
     const hit = scanFile(abs);
     if (hit === null) {
       vanished += 1;
       continue;
     }
-    if (hit.length) sites.set(rel, hit);
+    if (hit.length) {
+      sites.set(rel, hit);
+    }
   }
   return { sites, vanished };
 }
@@ -173,13 +182,10 @@ function main() {
 
   if (REPORT_ONLY) {
     console.log(
-      `[test-it-each] 盘点：${total} 处 / ${sites.size} 份文件。` +
-        vanishedNote(vanished),
+      `[test-it-each] 盘点：${total} 处 / ${sites.size} 份文件。` + vanishedNote(vanished),
     );
     for (const [rel, list] of [...sites.entries()].sort()) {
-      console.log(
-        `  · ${rel}: ${list.length} 处（第 ${list.map((s) => s.line).join(",")} 行）`,
-      );
+      console.log(`  · ${rel}: ${list.length} 处（第 ${list.map((s) => s.line).join(",")} 行）`);
     }
     return 0;
   }
@@ -213,13 +219,13 @@ function main() {
     return 1;
   }
 
-  console.log(
-    "[test-it-each] OK —— 无 `it.each` 站点" + vanishedNote(vanished),
-  );
+  console.log("[test-it-each] OK —— 无 `it.each` 站点" + vanishedNote(vanished));
   return 0;
 }
 
 /* 自测（`tests/test-it-each-gate.test.ts`）钉的是**站点识别口径**。 */
 module.exports = { scanFile, importsVitestHosts, collect, FIXTURE_SKIP, HOSTS };
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}

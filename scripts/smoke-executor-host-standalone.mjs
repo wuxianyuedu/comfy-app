@@ -40,10 +40,7 @@ const DEFAULT_TARGET = path.join(ROOT, ".next", "standalone");
 const BUNDLE_REL = path.join("scripts", "executor-host.runtime.mjs");
 const MANIFEST_REL = path.join("scripts", "executor-host.build.json");
 const HOST_ENTRY_REL = path.join("scripts", "executor-host.mjs");
-const BUILTIN = new Set([
-  ...builtinModules,
-  ...builtinModules.map((m) => `node:${m}`),
-]);
+const BUILTIN = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)]);
 
 function fail(into, message) {
   into.push(message);
@@ -61,10 +58,7 @@ export function smokeExecutorHostArtifact(targetDir = DEFAULT_TARGET) {
   const manifestPath = path.join(targetDir, MANIFEST_REL);
 
   if (!fs.existsSync(path.join(targetDir, "server.js"))) {
-    fail(
-      problems,
-      `no artifact at ${targetDir} (server.js missing) - run next build first`,
-    );
+    fail(problems, `no artifact at ${targetDir} (server.js missing) - run next build first`);
     return { ok: false, problems, detail };
   }
   for (const [label, file] of [
@@ -80,15 +74,15 @@ export function smokeExecutorHostArtifact(targetDir = DEFAULT_TARGET) {
       );
     }
   }
-  if (problems.length > 0) return { ok: false, problems, detail };
+  if (problems.length > 0) {
+    return { ok: false, problems, detail };
+  }
 
   /** @type {{ externals?: string[], inputs?: string[], bytes?: number }} */
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 
   // 1) 每个非内置 external 都必须能从产物里解析到
-  const requireFromArtifact = createRequire(
-    path.join(targetDir, "package.json"),
-  );
+  const requireFromArtifact = createRequire(path.join(targetDir, "package.json"));
   const missing = (manifest.externals ?? [])
     .filter((spec) => !BUILTIN.has(spec) && !spec.startsWith("node:"))
     .filter((spec) => {
@@ -152,9 +146,11 @@ export function smokeExecutorHostArtifact(targetDir = DEFAULT_TARGET) {
       );
     }
     const q2 = /runtime q2-scan hostShardQueued=(\S+)/.exec(log);
-    if (q2) detail.push(`queue scan reported ${q2[1]}`);
-    else if (run.status === 0)
+    if (q2) {
+      detail.push(`queue scan reported ${q2[1]}`);
+    } else if (run.status === 0) {
       fail(problems, "packaged host never reached the queue scan");
+    }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -163,14 +159,10 @@ export function smokeExecutorHostArtifact(targetDir = DEFAULT_TARGET) {
 }
 
 const invokedDirectly =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) ===
-    path.resolve(import.meta.filename);
+  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename);
 
 if (invokedDirectly) {
-  const target = process.argv[2]
-    ? path.resolve(ROOT, process.argv[2])
-    : DEFAULT_TARGET;
+  const target = process.argv[2] ? path.resolve(ROOT, process.argv[2]) : DEFAULT_TARGET;
   const result = smokeExecutorHostArtifact(target);
   for (const line of result.detail) {
     console.log(`[executor-host-smoke] ${line}`);
@@ -185,7 +177,5 @@ if (invokedDirectly) {
     );
     process.exit(1);
   }
-  console.log(
-    "[executor-host-smoke] OK packaged host booted with the precompiled runtime graph",
-  );
+  console.log("[executor-host-smoke] OK packaged host booted with the precompiled runtime graph");
 }

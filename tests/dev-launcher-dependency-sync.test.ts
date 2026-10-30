@@ -30,7 +30,9 @@ import { syncDependencies } from "../scripts/dev-launcher.mjs";
 const ROOT = process.cwd();
 const tmpDirs: Array<string> = [];
 afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tmpDirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** 最小可用 lockfile —— 形态必须**与 pnpm 真实产物同形**。
@@ -92,7 +94,9 @@ function fakeInstall(dir: string, installedLock: string, { healthy = true } = {}
   const nm = path.join(dir, "node_modules");
   fs.mkdirSync(path.join(nm, ".pnpm"), { recursive: true });
   fs.writeFileSync(path.join(nm, ".pnpm", "lock.yaml"), installedLock, "utf8");
-  if (!healthy) return;
+  if (!healthy) {
+    return;
+  }
   fs.writeFileSync(path.join(nm, ".modules.yaml"), "hoistPattern: []\n", "utf8");
   const bin = path.join(nm, ".bin");
   fs.mkdirSync(bin, { recursive: true });

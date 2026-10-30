@@ -140,7 +140,9 @@ export function maskChannels(settings: WorkshopApiSettings): ApiChannelsView {
 /** 请求头：总是 JSON，有 apiKey 才带 Authorization。 */
 export function headersFor(c: ApiChannelStored): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (c.apiKey) h.Authorization = `Bearer ${c.apiKey}`;
+  if (c.apiKey) {
+    h.Authorization = `Bearer ${c.apiKey}`;
+  }
   return h;
 }
 
@@ -171,13 +173,17 @@ function upstreamError(label: string, status: number, payload: unknown): Error {
 
 /** 按点分字段路径取一个字符串（适配器的 outputField；未指定/未命中返回 null）。 */
 function pickStringByPath(payload: unknown, fieldPath?: string): string | null {
-  if (!fieldPath) return null;
+  if (!fieldPath) {
+    return null;
+  }
   let cur: unknown = payload;
   for (const seg of fieldPath.split(".").filter(Boolean)) {
     /* 用 isRecord（含数组）而非 isPlainRecord：本函数按点分路径下钻，
      * 路径段是字符串，但数组索引 "0" 在 JS 里也能取到元素 —— 收口前的
      * 实现正是「数组也算对象」，改用严格版会静默改变收窄结果。 */
-    if (!isRecord(cur)) return null;
+    if (!isRecord(cur)) {
+      return null;
+    }
     cur = cur[seg];
   }
   return typeof cur === "string" && cur.length > 0 ? cur : null;
@@ -259,12 +265,16 @@ export async function callImageGeneration(
     throw new Error(errorText(e, "API 生图请求失败"), { cause: e });
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
-  if (!res.ok) throw upstreamError("API 生图失败", res.status, payload);
+  if (!res.ok) {
+    throw upstreamError("API 生图失败", res.status, payload);
+  }
   /* 适配器指定了结果字段：只认那个字段（不再做通配提取，避免取到无关的
    * 同名字段）。命中即返回，未命中回落通配提取——与既有行为一致。 */
   const picked = pickStringByPath(payload, options.outputField);
   const url = picked ?? extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
-  if (!url) throw new Error("API 生图响应中未找到图片 URL / b64 数据");
+  if (!url) {
+    throw new Error("API 生图响应中未找到图片 URL / b64 数据");
+  }
   return url;
 }
 
@@ -274,7 +284,9 @@ export async function callVideoSubmit(
   channel: ApiChannelStored,
   options: ApiChannelFetchOptions = {},
 ): Promise<ApiVideoSubmitResult> {
-  if (!channel.baseUrl) throw new Error("API 视频通道未配置：请先填写 Base URL 与 API Key");
+  if (!channel.baseUrl) {
+    throw new Error("API 视频通道未配置：请先填写 Base URL 与 API Key");
+  }
   let res: Response;
   try {
     res = await fetch(endpointFor(channel), {
@@ -287,11 +299,17 @@ export async function callVideoSubmit(
     throw new Error(errorText(e, "API 视频提交失败"), { cause: e });
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
-  if (!res.ok) throw upstreamError("API 视频提交失败", res.status, payload);
+  if (!res.ok) {
+    throw upstreamError("API 视频提交失败", res.status, payload);
+  }
   const url = extractMediaUrl(payload);
-  if (url) return { url };
+  if (url) {
+    return { url };
+  }
   const remoteTaskId = extractRemoteTaskId(payload);
-  if (remoteTaskId) return { remoteTaskId };
+  if (remoteTaskId) {
+    return { remoteTaskId };
+  }
   throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
 }
 
@@ -301,7 +319,9 @@ export async function callVideoPoll(
   channel: ApiChannelStored,
   options: ApiChannelFetchOptions = {},
 ): Promise<{ url?: string; pending: boolean }> {
-  if (!channel.baseUrl) throw new Error("API 视频通道未配置");
+  if (!channel.baseUrl) {
+    throw new Error("API 视频通道未配置");
+  }
   let res: Response;
   try {
     res = await fetch(pollEndpointFor(channel.baseUrl, remoteTaskId), {
@@ -313,8 +333,12 @@ export async function callVideoPoll(
     throw new Error(errorText(e, "API 视频轮询失败"), { cause: e });
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
-  if (!res.ok) throw upstreamError("API 视频轮询失败", res.status, payload);
+  if (!res.ok) {
+    throw upstreamError("API 视频轮询失败", res.status, payload);
+  }
   const mediaUrl = extractMediaUrl(payload);
-  if (mediaUrl) return { url: mediaUrl, pending: false };
+  if (mediaUrl) {
+    return { url: mediaUrl, pending: false };
+  }
   return { pending: true };
 }

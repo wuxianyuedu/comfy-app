@@ -29,7 +29,9 @@ export function sortTasks(tasks: Array<TaskItem>, sort: SortKey): Array<TaskItem
 /** 各状态计数：ALL 为总数，其余按 status 累加。 */
 export function countByStatus(tasks: Array<TaskItem>): Record<string, number> {
   const countsMap: Record<string, number> = { ALL: tasks.length };
-  for (const task of tasks) countsMap[task.status] = (countsMap[task.status] ?? 0) + 1;
+  for (const task of tasks) {
+    countsMap[task.status] = (countsMap[task.status] ?? 0) + 1;
+  }
   return countsMap;
 }
 
@@ -57,9 +59,13 @@ export function paginateGroups(
   let remaining = displayCount;
   const visibleGroups: Array<TaskGroup> = [];
   for (const group of groups) {
-    if (remaining <= 0) break;
+    if (remaining <= 0) {
+      break;
+    }
     const sliced = group.items.slice(0, remaining);
-    if (sliced.length > 0) visibleGroups.push({ key: group.key, items: sliced });
+    if (sliced.length > 0) {
+      visibleGroups.push({ key: group.key, items: sliced });
+    }
     remaining -= group.items.length;
   }
   const visibleTotal = visibleGroups.reduce((sum, group) => sum + group.items.length, 0);

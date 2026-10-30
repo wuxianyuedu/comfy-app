@@ -80,7 +80,9 @@ function lastSpawn(): [string, Array<string>, Record<string, unknown>] {
   const call = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls.at(-1) as
     | [string, Array<string>, Record<string, unknown>]
     | undefined;
-  if (!call) throw new Error("这一条用例没有调到 spawn —— 判据落空，先查分支");
+  if (!call) {
+    throw new Error("这一条用例没有调到 spawn —— 判据落空，先查分支");
+  }
   return call;
 }
 
@@ -289,8 +291,11 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
       },
     ];
     for (const path of paths) {
-      if (path.shellExe) process.env.COMFYAPP_SHELL_EXE = path.shellExe;
-      else delete process.env.COMFYAPP_SHELL_EXE;
+      if (path.shellExe) {
+        process.env.COMFYAPP_SHELL_EXE = path.shellExe;
+      } else {
+        delete process.env.COMFYAPP_SHELL_EXE;
+      }
       spawnMock.mockImplementationOnce(() => hostileThrow(`${path.name} 抛的字符串`));
       expect(path.run(), path.name).toBe(`${path.name} 抛的字符串`);
     }

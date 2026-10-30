@@ -90,7 +90,9 @@ function readLedger(result: { out: string }): Array<LedgerRun> {
  */
 function firstRun(result: { out: string }): LedgerRun {
   const [run] = readLedger(result);
-  if (!run) throw new Error(`账本是空的（--json 输出：${result.out}）`);
+  if (!run) {
+    throw new Error(`账本是空的（--json 输出：${result.out}）`);
+  }
   return run;
 }
 

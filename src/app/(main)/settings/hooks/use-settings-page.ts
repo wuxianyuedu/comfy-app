@@ -69,7 +69,9 @@ const SETTINGS_CACHE_KEY = "settingsPage.lastGoodConfig.v1";
 function readSettingsCache(): { llm?: QueryLlmConfig; settings?: Settings } {
   try {
     const raw = sessionStorage.getItem(SETTINGS_CACHE_KEY);
-    if (!raw) return {};
+    if (!raw) {
+      return {};
+    }
     const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
       llm?: QueryLlmConfig;
       settings?: Settings;
@@ -120,7 +122,9 @@ export function useSettingsPage(options?: {
   );
   useEffect(() => {
     const requested = readInitialSection(initialSection);
-    if (!requested) return;
+    if (!requested) {
+      return;
+    }
     /* 设置是**瞬时页签**（切走即退场），通常挂载时的初值就够。这一条 effect 只
      * 覆盖「设置已挂载时又跳进来一次」：登记待落定的目标，仍不在这里消费。 */
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -211,7 +215,9 @@ export function useSettingsPage(options?: {
    * 关闭再打开时 prev 初值被缓存命中，分支永不触发，草稿一直为空，页面
    * 会落到「配置数据未就绪」。 */
   const llmChanged = llmConfig !== prevLlmConfig;
-  if (llmChanged) setPrevLlmConfig(llmConfig);
+  if (llmChanged) {
+    setPrevLlmConfig(llmConfig);
+  }
   if (llmConfig && (llmChanged || !llmDraft)) {
     const split = splitExtraModels(llmConfig.extraModels);
     setLlmDraft({
@@ -230,7 +236,9 @@ export function useSettingsPage(options?: {
   const [prevSettingsData, setPrevSettingsData] = useState(settingsData);
   /* 同 llm 播种：缓存命中 / refetch 两种情形都要能落到草稿，避免落到降级 UI。 */
   const settingsChanged = settingsData !== prevSettingsData;
-  if (settingsChanged) setPrevSettingsData(settingsData);
+  if (settingsChanged) {
+    setPrevSettingsData(settingsData);
+  }
   if (settingsData && (settingsChanged || !settingsDraft)) {
     setSettingsDraft(settingsData);
   }
@@ -260,7 +268,9 @@ export function useSettingsPage(options?: {
    * 写外部存储是**副作用**，必须留在 effect 里（P2 渲染期副作用）：放在渲染体
    * 会让每次 render 都写一遍，StrictMode 双渲染下重复写。 */
   useEffect(() => {
-    if (lastGood.llm ?? lastGood.settings) writeSettingsCache(lastGood);
+    if (lastGood.llm ?? lastGood.settings) {
+      writeSettingsCache(lastGood);
+    }
   }, [lastGood]);
 
   /* ── Ollama 探测 / 拉起 / 关闭 / 运行时日志（沉在 sub-hook）────────

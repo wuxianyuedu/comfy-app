@@ -88,7 +88,9 @@ export function useParamWiring({
 
   const connect = useCallback(
     (entryId: string, ioKey: string) => {
-      if (!activeMode) return;
+      if (!activeMode) {
+        return;
+      }
       commit(applyWireEdit(effective, { entryId, ioKey, mode: activeMode }));
     },
     [activeMode, commit, effective],
@@ -96,7 +98,9 @@ export function useParamWiring({
 
   const disconnect = useCallback(
     (entryId: string) => {
-      if (!activeMode) return;
+      if (!activeMode) {
+        return;
+      }
       const edit: ParamWireEdit = { entryId, ioKey: null, mode: activeMode };
       commit(applyWireEdit(effective, edit));
     },
@@ -105,7 +109,9 @@ export function useParamWiring({
 
   const resetToAuto = useCallback(
     (entryId: string) => {
-      if (!activeMode) return;
+      if (!activeMode) {
+        return;
+      }
       commit(clearWireEdit(effective, entryId, activeMode));
     },
     [activeMode, commit, effective],
@@ -116,7 +122,9 @@ export function useParamWiring({
    *  条目）—— 用户看到的正是「重置清不掉」。 */
   const resetMany = useCallback(
     (entryIds: ReadonlyArray<string>) => {
-      if (!activeMode || entryIds.length === 0) return;
+      if (!activeMode || entryIds.length === 0) {
+        return;
+      }
       let next = effective;
       for (const entryId of entryIds) {
         next = clearWireEdit(next, entryId, activeMode);
@@ -150,11 +158,15 @@ function mergeParamMaps(
   base: Record<string, unknown>,
   overlay: Record<string, unknown>,
 ): Record<string, unknown> {
-  if (Object.keys(overlay).length === 0) return base;
+  if (Object.keys(overlay).length === 0) {
+    return base;
+  }
   const next: Record<string, unknown> = { ...base };
   for (const ns of LOCAL_OVERLAY_NAMESPACES) {
     const merged = mergeNamespace(namespaceOf(base, ns), namespaceOf(overlay, ns));
-    if (Object.keys(merged).length > 0) next[ns] = merged;
+    if (Object.keys(merged).length > 0) {
+      next[ns] = merged;
+    }
   }
   return next;
 }

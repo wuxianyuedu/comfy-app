@@ -46,8 +46,11 @@ function routeFiles(dir: string): Array<string> {
   const out: Array<string> = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...routeFiles(full));
-    else if (entry.isFile() && entry.name === "route.ts") out.push(full);
+    if (entry.isDirectory()) {
+      out.push(...routeFiles(full));
+    } else if (entry.isFile() && entry.name === "route.ts") {
+      out.push(full);
+    }
   }
   return out;
 }

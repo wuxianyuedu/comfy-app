@@ -233,7 +233,9 @@ describe("resolveDesktopStoragePaths", () => {
         resolveArgs: async () => ["--extra-model-paths-config", configPath],
         readFile: async (target: string) => {
           const t = path.resolve(target);
-          if (t === configPath) return configYaml;
+          if (t === configPath) {
+            return configYaml;
+          }
           return SHARED_YAML;
         },
       }),

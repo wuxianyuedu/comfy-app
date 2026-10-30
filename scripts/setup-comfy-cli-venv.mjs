@@ -30,13 +30,7 @@
  * `PYTHON_MIN_VERSION`（环境前提探针与升级指引都引用它，别另抄数字）。
  */
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  appendFileSync,
-  writeFileSync,
-  readFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, appendFileSync, writeFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -130,8 +124,12 @@ function runStep(label, file, args, timeoutMs = STEP_TIMEOUT_DEFAULT_MS) {
   }
   const stdout = String(r.stdout ?? "");
   const stderr = String(r.stderr ?? "");
-  if (stdout.trim()) writeLog("INFO", stdout.trim());
-  if (stderr.trim()) writeLog("WARN", stderr.trim());
+  if (stdout.trim()) {
+    writeLog("INFO", stdout.trim());
+  }
+  if (stderr.trim()) {
+    writeLog("WARN", stderr.trim());
+  }
   if (r.status !== 0) {
     writeLog("ERROR", `${label} 失败（exit=${r.status ?? "?"}）`);
     return { ok: false, stdout, stderr };
@@ -141,7 +139,9 @@ function runStep(label, file, args, timeoutMs = STEP_TIMEOUT_DEFAULT_MS) {
 }
 
 function isComfyCliInstalled() {
-  if (!existsSync(VenvPy)) return false;
+  if (!existsSync(VenvPy)) {
+    return false;
+  }
   const r = spawnSync(VenvPy, ["-c", "import comfy_cli"], {
     cwd: ROOT,
     encoding: "utf8",
@@ -158,7 +158,9 @@ function getInstalledComfyCliVersion() {
     ["-m", "pip", "show", "comfy-cli"],
     120_000,
   );
-  if (!r.ok) return null;
+  if (!r.ok) {
+    return null;
+  }
   return /^Version:\s*(\S+)/m.exec(r.stdout)?.[1] ?? null;
 }
 
@@ -171,10 +173,7 @@ function getLatestComfyCliVersion() {
   );
   if (!r.ok) {
     // 离线 / PyPI 不可达是常态而非故障：保持已安装版本，不阻断启动
-    writeLog(
-      "WARN",
-      "查询 comfy-cli 最新版本失败，跳过升级检查（离线或 PyPI 不可达）",
-    );
+    writeLog("WARN", "查询 comfy-cli 最新版本失败，跳过升级检查（离线或 PyPI 不可达）");
     return null;
   }
   return /^comfy-cli\s*\(([^)]+)\)/m.exec(r.stdout)?.[1] ?? null;
@@ -195,7 +194,9 @@ function compareVersions(left, right) {
     if (Number.isNaN(na) || Number.isNaN(nb)) {
       return String(pa[i] ?? "").localeCompare(String(pb[i] ?? ""));
     }
-    if (na !== nb) return na - nb;
+    if (na !== nb) {
+      return na - nb;
+    }
   }
   return 0;
 }
@@ -236,11 +237,17 @@ function saveUpgradeState(installed, latest) {
  * @returns {boolean}
  */
 function upgradeCheckDue(force) {
-  if (force) return true;
+  if (force) {
+    return true;
+  }
   const state = readUpgradeState();
-  if (!state?.last_check_at) return true;
+  if (!state?.last_check_at) {
+    return true;
+  }
   const last = Date.parse(state.last_check_at);
-  if (Number.isNaN(last)) return true;
+  if (Number.isNaN(last)) {
+    return true;
+  }
   return Date.now() - last >= UpgradeCheckIntervalHours * 3600_000;
 }
 
@@ -248,7 +255,9 @@ function upgradeCheckDue(force) {
 function findBasePython() {
   for (const name of ["python", "python3", "py"]) {
     const candidate = whichCommand(name);
-    if (candidate) return { name, path: candidate };
+    if (candidate) {
+      return { name, path: candidate };
+    }
   }
   return null;
 }
@@ -267,7 +276,9 @@ function printPosixVenvGuide() {
     "[setup-comfy-cli-venv]   macOS(brew):   brew install python",
     "[setup-comfy-cli-venv] 装好后重跑本脚本：node scripts/setup-comfy-cli-venv.mjs",
   ];
-  for (const line of lines) process.stdout.write(`${line}\n`);
+  for (const line of lines) {
+    process.stdout.write(`${line}\n`);
+  }
 }
 
 /** 主流程。返回退出码。 */
@@ -328,11 +339,9 @@ function main() {
     // 升级失败不阻断：venv 仍在，旧版本可继续工作，下次启动再试
     writeLog("ERROR", `comfy-cli 升级失败，继续使用已安装版本 ${installed}`);
     saveUpgradeState(installed ?? "", latest);
-    writeStatus(
-      "done",
-      `comfy-cli 升级失败，继续使用 v${installed ?? "?"}（详见日志）`,
-      { done: true },
-    );
+    writeStatus("done", `comfy-cli 升级失败，继续使用 v${installed ?? "?"}（详见日志）`, {
+      done: true,
+    });
     return 0;
   }
 
@@ -343,11 +352,7 @@ function main() {
     const basePy = findBasePython();
     if (!basePy) {
       writeLog("ERROR", "未找到 Python，无法创建虚拟环境");
-      writeStatus(
-        "error",
-        `未找到 Python，请先安装 Python ${PYTHON_MIN_TEXT}+`,
-        { failed: true },
-      );
+      writeStatus("error", `未找到 Python，请先安装 Python ${PYTHON_MIN_TEXT}+`, { failed: true });
       process.stderr.write(
         `[setup-comfy-cli-venv] 未找到 Python —— 本仓下限 Python ${PYTHON_MIN_TEXT}` +
           `（唯一定义：scripts/ci-env-probe.mjs 的 PYTHON_MIN_VERSION）。\n`,
@@ -355,11 +360,7 @@ function main() {
       return 1;
     }
     if (!pythonMeetsFloor(basePy.path)) {
-      writeStatus(
-        "error",
-        `基础 Python 低于本仓下限 Python ${PYTHON_MIN_TEXT}+`,
-        { failed: true },
-      );
+      writeStatus("error", `基础 Python 低于本仓下限 Python ${PYTHON_MIN_TEXT}+`, { failed: true });
       return 1;
     }
     writeLog("INFO", `使用基础 Python：${basePy.path}`);
@@ -372,45 +373,29 @@ function main() {
 
     const created = runStep("创建虚拟环境", basePy.path, venvArgs, 300_000);
     if (!created.ok) {
-      if (!isWin) printPosixVenvGuide();
-      writeStatus(
-        "error",
-        "创建虚拟环境失败，详见 log/tools/comfy-cli-setup.log",
-        { failed: true },
-      );
+      if (!isWin) {
+        printPosixVenvGuide();
+      }
+      writeStatus("error", "创建虚拟环境失败，详见 log/tools/comfy-cli-setup.log", {
+        failed: true,
+      });
       return 1;
     }
   }
 
   writeStatus("pip", "正在安装 comfy-cli（首次较慢）…");
 
-  if (
-    !runStep(
-      "升级 pip",
-      VenvPy,
-      ["-m", "pip", "install", "--upgrade", "pip"],
-      600_000,
-    ).ok
-  ) {
+  if (!runStep("升级 pip", VenvPy, ["-m", "pip", "install", "--upgrade", "pip"], 600_000).ok) {
     writeStatus("error", "升级 pip 失败，详见 log/tools/comfy-cli-setup.log", {
       failed: true,
     });
     return 1;
   }
 
-  if (
-    !runStep(
-      "安装 comfy-cli",
-      VenvPy,
-      ["-m", "pip", "install", "comfy-cli"],
-      1_800_000,
-    ).ok
-  ) {
-    writeStatus(
-      "error",
-      "安装 comfy-cli 失败，详见 log/tools/comfy-cli-setup.log",
-      { failed: true },
-    );
+  if (!runStep("安装 comfy-cli", VenvPy, ["-m", "pip", "install", "comfy-cli"], 1_800_000).ok) {
+    writeStatus("error", "安装 comfy-cli 失败，详见 log/tools/comfy-cli-setup.log", {
+      failed: true,
+    });
     return 1;
   }
 
@@ -442,8 +427,7 @@ function pythonMeetsFloor(pythonPath) {
     return true;
   }
   const [maj, min] = PYTHON_MIN_VERSION;
-  const ok =
-    Number(m[1]) > maj || (Number(m[1]) === maj && Number(m[2]) >= min);
+  const ok = Number(m[1]) > maj || (Number(m[1]) === maj && Number(m[2]) >= min);
   if (!ok) {
     writeLog(
       "ERROR",
@@ -453,9 +437,6 @@ function pythonMeetsFloor(pythonPath) {
   return ok;
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main());
 }

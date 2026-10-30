@@ -66,7 +66,9 @@ function sources(over: Record<string, string> = {}) {
     "scripts/check-b.cjs": "const MIN_DUTIES = 5;\n",
     "scripts/check-c.cjs": "const PROBE_TIMEOUT_MS = 10_000;\n",
   };
-  for (const [k, v] of Object.entries(over)) src[k] = v;
+  for (const [k, v] of Object.entries(over)) {
+    src[k] = v;
+  }
   return (f: string) => src[f] ?? null;
 }
 

@@ -87,10 +87,7 @@ import { spawnSync } from "node:child_process";
 
 import { diffLockfiles, isEmptyDiff } from "./lockfile/lock-diff.mjs";
 import { renderLockDiff } from "./lockfile/render-lock-diff.mjs";
-import {
-  lockfileDrift,
-  unresolvableDeclaredDeps,
-} from "./launcher-core/worktree.mjs";
+import { lockfileDrift, unresolvableDeclaredDeps } from "./launcher-core/worktree.mjs";
 import { DEPENDENCY_FILES } from "./dependency-face.mjs";
 import { resolveGitDir, hasInProgressMerge } from "./git-dir.mjs";
 
@@ -158,11 +155,10 @@ export function matchedDependencyFiles(files) {
 function stagedFiles(root) {
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
    * 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，而机器之间还不一样）。 */
-  const r = git(
-    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
-    root,
-  );
-  if (!r.ok) return null;
+  const r = git(["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], root);
+  if (!r.ok) {
+    return null;
+  }
   return r.out.split(/\r?\n/).filter(Boolean);
 }
 
@@ -190,16 +186,17 @@ export const DEFAULT_REMOTE_REV = "origin/master";
  * @returns {string | null} 形如 `cnb/master`；`null` = 没有任何可用的远端跟踪引用
  */
 export function resolveRemoteMasterRev(root, branch = "master") {
-  const res = git(
-    ["for-each-ref", "--format=%(refname:lstrip=2)", "refs/remotes/"],
-    root,
-  );
-  if (!res.ok) return null;
+  const res = git(["for-each-ref", "--format=%(refname:lstrip=2)", "refs/remotes/"], root);
+  if (!res.ok) {
+    return null;
+  }
   const names = res.out
     .split(/\r?\n/)
     .map((s) => s.trim())
     .filter((s) => s.endsWith(`/${branch}`));
-  if (names.length === 0) return null;
+  if (names.length === 0) {
+    return null;
+  }
   const preferred = names.find((s) => s === `origin/${branch}`);
   /* 排序取首个也要过一遍 `?? null`：`sort()[0]` 在类型上是 `string | undefined`，
    * 而上面的长度判据已经保证它存在 —— 那句 `?? null` 是写给检查器的，
@@ -221,13 +218,17 @@ export function resolveRemoteMasterRev(root, branch = "master") {
  * @returns {{ ok: boolean, out: string }}
  */
 function git(args, cwd) {
-  if (typeof cwd !== "string" || cwd === "") return { ok: false, out: "" };
+  if (typeof cwd !== "string" || cwd === "") {
+    return { ok: false, out: "" };
+  }
   const res = spawnSync("git", args, {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
   });
-  if (res.error || res.status !== 0) return { ok: false, out: "" };
+  if (res.error || res.status !== 0) {
+    return { ok: false, out: "" };
+  }
   return { ok: true, out: res.stdout ?? "" };
 }
 
@@ -264,7 +265,9 @@ export function remoteRefTimestamp(root, rev = DEFAULT_REMOTE_REV) {
   const remote = at > 0 ? rev.slice(0, at) : "origin";
   const branch = at > 0 ? rev.slice(at + 1) : rev;
   const gitDir = resolveGitDir(root);
-  if (!gitDir) return null; // 不在 git 检出里 ⇒ 远端引用不可知
+  if (!gitDir) {
+    return null;
+  } // 不在 git 检出里 ⇒ 远端引用不可知
   const log = path.join(gitDir, "logs", "refs", "remotes", remote, branch);
   try {
     return fs.statSync(log).mtimeMs;
@@ -341,14 +344,18 @@ export function isRemoteAncestorOfHead(root, rev) {
  */
 export function forkPoint(root, remoteRev = DEFAULT_REMOTE_REV) {
   // 远端已在 HEAD 的历史里（典型：刚把它 merge 进来）⇒ ② 没有可比的对象。
-  if (isRemoteAncestorOfHead(root, remoteRev)) return null;
+  if (isRemoteAncestorOfHead(root, remoteRev)) {
+    return null;
+  }
   // **合并已解完、提交还没落地**（`MERGE_HEAD` 在场）：HEAD 仍是合并前那个提交，
   // 上面那条 `--is-ancestor` 因此看不到「远端已经进来了」，而 `merge-base` 回的仍是
   // 合并前的分叉点 —— 于是解冲突的人会拿到一条**永远解不开**的红（出口让他把远端合并
   // 进来，而他刚做完那件事）。这不是「没查到」，是「没什么要查」：合并的第二个父提交
   // 就是远端，它一旦落地，② 立刻走上面那条路径。
   // 判的是**本次提交**是不是那个待落地的合并（`MERGE_HEAD`），不是「历史上merge过」。
-  if (hasInProgressMerge(root)) return null;
+  if (hasInProgressMerge(root)) {
+    return null;
+  }
   const r = git(["merge-base", "HEAD", remoteRev], root);
   return r.ok && r.out.trim() ? r.out.trim() : null;
 }
@@ -380,17 +387,15 @@ export function forkPoint(root, remoteRev = DEFAULT_REMOTE_REV) {
  * @param {string} remoteRev 远端引用
  * @returns {Drift[]}
  */
-export function detectRemoteDrift(
-  root,
-  baseRev,
-  remoteRev = DEFAULT_REMOTE_REV,
-) {
+export function detectRemoteDrift(root, baseRev, remoteRev = DEFAULT_REMOTE_REV) {
   /** @type {Drift[]} */
   const drifts = [];
   for (const rel of DEPENDENCY_FILES) {
     const baseText = readAtRev(baseRev, rel, root);
     const remoteText = readAtRev(remoteRev, rel, root);
-    if (baseText === null && remoteText === null) continue;
+    if (baseText === null && remoteText === null) {
+      continue;
+    }
     /* 拆成两条独立判据，而不是过去那条 `baseText !== null && remoteText === null`：
      * 语义一字未动（两侧都为 null 已在上一行 continue），但复合条件让检查器
      * 没能把 `remoteText` 收进「非 null」那一支 —— 于是下面 `diffLockfiles(baseText, remoteText)`
@@ -411,7 +416,9 @@ export function detectRemoteDrift(
       });
       continue;
     }
-    if (remoteText === baseText) continue;
+    if (remoteText === baseText) {
+      continue;
+    }
     if (rel !== "pnpm-lock.yaml") {
       drifts.push({ file: rel, kind: "远端改过内容", detail: [] });
       continue;
@@ -429,7 +436,9 @@ export function detectRemoteDrift(
       });
       continue;
     }
-    if (isEmptyDiff(diff)) continue; // 只差注释 / 空行 / 顺序 —— 不算依赖变化
+    if (isEmptyDiff(diff)) {
+      continue;
+    } // 只差注释 / 空行 / 顺序 —— 不算依赖变化
     drifts.push({
       file: rel,
       kind: "远端改过解析结果",
@@ -502,20 +511,14 @@ function renderInstallDrift(drift) {
     "node_modules 装的不是你当前检出声明的那套依赖（拉取更新后没重装，或上次 install 被中断）。",
   ];
   if (drift.unresolved?.length) {
-    lines.push(
-      `同时这些依赖解析不到：${drift.unresolved.join(" / ")} —— 重装会一并解决。`,
-    );
+    lines.push(`同时这些依赖解析不到：${drift.unresolved.join(" / ")} —— 重装会一并解决。`);
   }
   lines.push(
     "出口：在项目根执行 pnpm install（动手前先 `pnpm deps:guard` —— 本检出的应用服务在跑时它会拦下：原生模块被进程锁住会让安装 EPERM 连锁失败，AGENTS 硬规则 9）。",
   );
   const body = drift.diff ? renderLockDiff(drift.diff) : [];
   if (body.length) {
-    lines.push(
-      "",
-      "差异（仓库 pnpm-lock.yaml vs 最近一次安装时的 lockfile）：",
-      ...body,
-    );
+    lines.push("", "差异（仓库 pnpm-lock.yaml vs 最近一次安装时的 lockfile）：", ...body);
   }
   return lines;
 }
@@ -541,9 +544,7 @@ export function runFreshnessCheck(root, opts = {}) {
   /* 不是 git 仓库 / git 不可用：**环境故障，不是业务结论**，这一趟判 2。
    * 但它**不许**把 ③ 一起吞掉 —— 判据没跑起来，与「本地那一层是对的」是两件事，
    * 混成一句话的读数是「这里查不了」，而读者问的是「我的依赖装对了吗」。 */
-  const envBroken =
-    !opts.offline &&
-    !git(["rev-parse", "--verify", "--quiet", "HEAD"], root).ok;
+  const envBroken = !opts.offline && !git(["rev-parse", "--verify", "--quiet", "HEAD"], root).ok;
 
   let remoteChecked = false;
   let remoteAgeMs = null;
@@ -572,9 +573,13 @@ export function runFreshnessCheck(root, opts = {}) {
     const contained = !merging && isRemoteAncestorOfHead(root, rev);
     // 分叉点拿不到 ⇒ ② 这一层**不判**（不是「无差异」）。`remoteChecked` 保持
     // 由 reflog 决定：两者的含义不同，一个是「② 可信不」，一个是「② 能不能做」。
-    if (base) remoteDrifts = detectRemoteDrift(root, base, rev);
-    else if (contained) remoteAlreadyContained = true;
-    else remoteChecked = false;
+    if (base) {
+      remoteDrifts = detectRemoteDrift(root, base, rev);
+    } else if (contained) {
+      remoteAlreadyContained = true;
+    } else {
+      remoteChecked = false;
+    }
   }
 
   // ③：本地自身的一致性，与远端无关，任何环境都判。
@@ -589,9 +594,7 @@ export function runFreshnessCheck(root, opts = {}) {
       "         这一行**不是**「依赖没问题」：本地安装那一层照旧判（见下）。",
     );
   } else if (opts.offline) {
-    lines.push(
-      "[未校验] --offline：本次没有核对远端依赖（只看本地自身是否自洽）。",
-    );
+    lines.push("[未校验] --offline：本次没有核对远端依赖（只看本地自身是否自洽）。");
   } else if (merging) {
     /* 这一行**不能**复用下面那句 `[未校验]` —— 那是「没看」，这是「远端已经在
      * 本次合并里」，两者读起来正好相反。 */
@@ -630,13 +633,12 @@ export function runFreshnessCheck(root, opts = {}) {
   }
 
   if (remoteDrifts.length) {
-    lines.push(
-      "",
-      `你分叉之后，远端（${rev}）改过依赖 —— 你的基线是旧的那一套：`,
-    );
+    lines.push("", `你分叉之后，远端（${rev}）改过依赖 —— 你的基线是旧的那一套：`);
     for (const d of remoteDrifts) {
       lines.push(`  · ${d.file}：${d.kind}`);
-      for (const l of d.detail) lines.push(`  ${l}`);
+      for (const l of d.detail) {
+        lines.push(`  ${l}`);
+      }
     }
     lines.push(
       "",
@@ -647,7 +649,9 @@ export function runFreshnessCheck(root, opts = {}) {
 
   if (installDrift) {
     lines.push("", "本地依赖与当前检出的声明不一致：");
-    for (const l of renderInstallDrift(installDrift)) lines.push(`  ${l}`);
+    for (const l of renderInstallDrift(installDrift)) {
+      lines.push(`  ${l}`);
+    }
   }
 
   /* 三态口径（与 `.githooks` 的三态一致）：0 绿 / 1 红 / 2 **没跑起来**。
@@ -699,10 +703,10 @@ function main() {
   if (process.argv.includes("--staged")) {
     const files = stagedFiles(root);
     const hit = files === null ? [] : matchedDependencyFiles(files);
-    if (hit.length === 0) return 0;
-    process.stdout.write(
-      `本次提交动了依赖面（${hit.join(" / ")}）—— 判定你的基线是不是旧的：\n`,
-    );
+    if (hit.length === 0) {
+      return 0;
+    }
+    process.stdout.write(`本次提交动了依赖面（${hit.join(" / ")}）—— 判定你的基线是不是旧的：\n`);
   }
 
   const result = runFreshnessCheck(root, {
@@ -749,14 +753,13 @@ function main() {
   process.stdout.write(
     `${result.code === 0 ? "[deps-freshness] OK" : result.code === 2 ? "[deps-freshness] 没跑起来" : noInstallOnly ? "[deps-freshness] 依赖还没装（出口：pnpm install）" : "[deps-freshness] 有漂移"}\n`,
   );
-  for (const l of result.lines) process.stdout.write(`${l}\n`);
+  for (const l of result.lines) {
+    process.stdout.write(`${l}\n`);
+  }
   return result.code;
 }
 
 // 只在被直接运行时执行 CLI（被 import 时不跑）。
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main());
 }

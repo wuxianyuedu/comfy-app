@@ -50,7 +50,9 @@ export const PSEUDO_FROST_BLOBS: Array<{
  * 禁用态偏灰、绕过态偏粉紫；冷 / 暖 / 阴影三个通道保持不变，
  * 因此无论哪种模式，面板读起来都是一块连贯的玻璃面。 */
 export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
-  if (!modeColor) return null;
+  if (!modeColor) {
+    return null;
+  }
   const palette = pseudoFrostPalette(modeColor);
   return (
     <div
@@ -112,7 +114,9 @@ export function NodeFrost({
   color: string | null;
   nodeMode: number;
 }) {
-  if (!color || nodeMode === 0) return null;
+  if (!color || nodeMode === 0) {
+    return null;
+  }
   // 让屏幕占位不小于节点 zoom=1 时的尺寸。
   const scale = Math.max(1, 1 / Math.max(zoom, 0.01));
   const blur = 6 / scale; // 不论缩放多少，屏幕上的模糊都保持在约 6px

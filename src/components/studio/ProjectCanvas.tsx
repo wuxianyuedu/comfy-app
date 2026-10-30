@@ -117,7 +117,9 @@ function materializeProductionShots(
     prod && Array.isArray(prod.shots)
       ? /* SAFETY: 类型断言已复核 */ (prod.shots as Array<Shot>)
       : [];
-  if (shots.length === 0) return nodes;
+  if (shots.length === 0) {
+    return nodes;
+  }
   const existingShotIds = new Set(
     nodes
       .map((n) => /* SAFETY: 类型断言已复核 */ (n.data as { shotId?: string } | undefined)?.shotId)
@@ -128,7 +130,9 @@ function materializeProductionShots(
   const byId = new Map(shots.map((s) => [s.id, s]));
   for (const sid of newShotIds) {
     const shot = byId.get(sid);
-    if (!shot) continue;
+    if (!shot) {
+      continue;
+    }
     result = placeCanvasNode({
       nodes: result,
       flow: { screenToFlowPosition },
@@ -250,7 +254,9 @@ function CanvasInner({
    *  挂载前先清掉历史会话遗留的「空默认」行，
    *  免得最近项目列表一直脏着。 */
   useEffect(() => {
-    if (loadedRef.current) return;
+    if (loadedRef.current) {
+      return;
+    }
     loadedRef.current = true;
     void (async () => {
       // 在读取当前项目**之前**先把服务端项目对账进 localStorage，
@@ -263,7 +269,9 @@ function CanvasInner({
         proj = createDraftProject();
       } else {
         const activeId = getActiveId();
-        if (activeId) proj = getProject(activeId);
+        if (activeId) {
+          proj = getProject(activeId);
+        }
         proj ??= listProjects()[0] ?? null;
         proj ??= createDraftProject();
       }

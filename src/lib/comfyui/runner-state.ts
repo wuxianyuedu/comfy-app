@@ -98,7 +98,9 @@ function callerLoc(): string {
   try {
     const stack = new Error().stack;
 
-    if (!stack) return "";
+    if (!stack) {
+      return "";
+    }
 
     const lines = stack.split("\n");
 
@@ -182,7 +184,9 @@ function touchAndEvict<V>(map: Map<string, V>, taskId: string, value: V, maxTask
   map.set(taskId, value);
   while (map.size > maxTasks) {
     const oldest = map.keys().next().value;
-    if (oldest === undefined) break;
+    if (oldest === undefined) {
+      break;
+    }
     map.delete(oldest);
   }
 }
@@ -196,7 +200,9 @@ export function log(taskId: string, level: LogEntry["level"], msg: string): LogE
 
   arr.push(entry);
 
-  if (arr.length > LOGS_MAX_LINES) arr.splice(0, arr.length - LOGS_MAX_LINES);
+  if (arr.length > LOGS_MAX_LINES) {
+    arr.splice(0, arr.length - LOGS_MAX_LINES);
+  }
 
   touchAndEvict(store.logs, taskId, arr, LOGS_MAX_TASKS);
 
@@ -228,7 +234,9 @@ export function logWhileQueued(taskId: string, level: LogEntry["level"], msg: st
    * 落过一次库，丢的只是「领取时保留」这份冗余，不是现场）。 */
   if (store.queuedEntries.size > LOGS_MAX_TASKS) {
     const oldest = store.queuedEntries.keys().next().value;
-    if (oldest !== undefined) store.queuedEntries.delete(oldest);
+    if (oldest !== undefined) {
+      store.queuedEntries.delete(oldest);
+    }
   }
 }
 
@@ -277,7 +285,9 @@ const persistTimers = new Map<
 export function cancelPersistLogs(taskId: string): void {
   const pending = persistTimers.get(taskId);
 
-  if (!pending) return;
+  if (!pending) {
+    return;
+  }
 
   clearTimeout(pending.debounce);
 
@@ -287,7 +297,9 @@ export function cancelPersistLogs(taskId: string): void {
 }
 
 export function schedulePersistLogs(taskId: string) {
-  if (!taskId) return;
+  if (!taskId) {
+    return;
+  }
 
   const existing = persistTimers.get(taskId);
 
@@ -351,10 +363,14 @@ export function schedulePersistLogs(taskId: string) {
  */
 export function claimSettle(taskId: string): boolean {
   const s = state();
-  if (s.settled.has(taskId)) return false;
+  if (s.settled.has(taskId)) {
+    return false;
+  }
   s.settled.add(taskId);
   const t = s.timers.get(taskId);
-  if (t) clearTimeout(t);
+  if (t) {
+    clearTimeout(t);
+  }
   s.timers.delete(taskId);
   return true;
 }
@@ -364,7 +380,9 @@ export function claimSettle(taskId: string): boolean {
  *  语义与 `claimSettle` 平行，但锁的是「DB 终态」而不是「收口流程」。 */
 export function claimFinalize(taskId: string): boolean {
   const s = state();
-  if (s.finalized.has(taskId)) return false;
+  if (s.finalized.has(taskId)) {
+    return false;
+  }
   s.finalized.add(taskId);
   return true;
 }
@@ -428,7 +446,9 @@ export function forgetTaskFootprint(taskId: string, promptId?: string): void {
     s.promptToTask.delete(promptId);
   }
   for (const [known, owner] of s.promptToTask) {
-    if (owner === taskId) s.promptToTask.delete(known);
+    if (owner === taskId) {
+      s.promptToTask.delete(known);
+    }
   }
 }
 
@@ -561,7 +581,9 @@ export const RAW_CLI_MAX_LINES = 5000;
 
 /** 追加一行 comfy-cli 完整原文（不截断），供前端「查看完整输出」按需拉取。 */
 export function appendRawCli(taskId: string, line: string): void {
-  if (!taskId) return;
+  if (!taskId) {
+    return;
+  }
   const store = state();
   const arr = store.rawCli.get(taskId) ?? [];
   arr.push(line);
@@ -586,7 +608,9 @@ function getRawCli(taskId: string): Array<string> {
  *  失败的处理与 `persistLogs` 同形：排障入口少一份原文，不该把收口链路整段回滚。 */
 export async function persistRawCli(taskId: string): Promise<void> {
   const lines = getRawCli(taskId);
-  if (lines.length === 0) return;
+  if (lines.length === 0) {
+    return;
+  }
   try {
     const { taskRepo } = await resolveDeps();
     await taskRepo.replaceRawCli(taskId, lines);

@@ -86,7 +86,9 @@ export function isWindowsPlatform(platform: NodeJS.Platform = process.platform):
 export function readPgid(pid: number, timeoutMs = 2000): Promise<number | null> {
   return new Promise((resolve) => {
     execFile("ps", ["-o", "pgid=", "-p", String(pid)], { timeout: timeoutMs }, (err, stdout) => {
-      if (err) return resolve(null);
+      if (err) {
+        return resolve(null);
+      }
       const pgid = Number.parseInt(stdout.trim().split(/\s+/)[0] ?? "", 10);
       resolve(Number.isInteger(pgid) && pgid > 0 ? pgid : null);
     });
@@ -250,7 +252,9 @@ export interface KillHostedChildOptions {
  *  与命令，才是历史「单杀留孤儿」反复出现的原因。
  */
 export async function killProcessTreeByImage(image: string): Promise<KillProcessTreeResult> {
-  if (!image.trim()) return { ok: false, via: "无映像名（跳过）" };
+  if (!image.trim()) {
+    return { ok: false, via: "无映像名（跳过）" };
+  }
   if (isWindowsPlatform()) {
     return { ok: true, via: spawnTaskkill(windowsKillArgs(image, "image")) };
   }
@@ -336,14 +340,18 @@ export async function killProcessTreeWith(
   { windows = isWindowsPlatform(), image = "" }: { windows?: boolean; image?: string },
 ): Promise<KillProcessTreeResult> {
   const { pid, detached = false, force = false, mode = "tree", wait = false } = opts;
-  if (!pid || pid <= 0) return { ok: false, via: "无有效 PID（跳过）" };
+  if (!pid || pid <= 0) {
+    return { ok: false, via: "无有效 PID（跳过）" };
+  }
 
   if (windows) {
     // taskkill 是异步派发：默认不等它退出，调用方随后用「探测确认」收尾
     // （与同步入口同一语义）。命令原文写进 via，便于运行日志给出可复现线索。
     const target = mode === "image" ? image : String(pid);
     const args = windowsKillArgs(target, mode);
-    if (!wait) return { ok: true, via: spawnTaskkill(args) };
+    if (!wait) {
+      return { ok: true, via: spawnTaskkill(args) };
+    }
 
     // 等它结束（`wait: true`）：给「派发完立刻 exit」的调用方用 —— 否则那条命令
     // 可能随父进程一起消失，让人以为已经回收。退出码同时写进 via（taskkill 对
@@ -365,7 +373,9 @@ export async function killProcessTreeWith(
  */
 export function killProcessTreeSync(opts: KillProcessTreeOptions): KillProcessTreeResult {
   const { pid, detached = false, force = false, mode = "tree" } = opts;
-  if (!pid || pid <= 0) return { ok: false, via: "无有效 PID（跳过）" };
+  if (!pid || pid <= 0) {
+    return { ok: false, via: "无有效 PID（跳过）" };
+  }
   /* `mode: "image"` 在同步入口上**没法兑现**：这张签名里只有一个 pid，没有映像名。
    * 照字面走下去会得到 `/IM 4321 /T /F`（去杀一个名字恰好叫「4321」的映像），
    * 在 POSIX 侧则静默退化成单杀 leader —— 两边都不是调用方要的那件事。

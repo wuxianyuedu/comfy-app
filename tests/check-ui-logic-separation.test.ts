@@ -32,32 +32,20 @@ const DIRTY = `export function C() {
 `;
 
 describe("三条指标与三类豁免（此前从未被执行过）", () => {
-  test("S1 裸 fetch / S2 vanillaApi / S3 tRPC hook 各认一条，合计 3 并阻断", ({
-    repo,
-  }) => {
+  test("S1 裸 fetch / S2 vanillaApi / S3 tRPC hook 各认一条，合计 3 并阻断", ({ repo }) => {
     put(repo, "src/components/Probe.tsx", DIRTY);
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("违规 3 处 · 1 个文件");
-    for (const id of ["S1", "S2", "S3"]) expect(r.output).toContain(id);
+    for (const id of ["S1", "S2", "S3"]) {
+      expect(r.output).toContain(id);
+    }
   });
 
   test("Route Handler / hooks/ / 测试文件三类豁免都不计入", ({ repo }) => {
-    put(
-      repo,
-      "src/app/api/x/route.ts",
-      "export const R = () => fetch('/z');\n",
-    );
-    put(
-      repo,
-      "src/components/feat/hooks/useH.tsx",
-      "export const H = () => fetch('/y');\n",
-    );
-    put(
-      repo,
-      "src/components/Fe.test.tsx",
-      "export const T = () => fetch('/t');\n",
-    );
+    put(repo, "src/app/api/x/route.ts", "export const R = () => fetch('/z');\n");
+    put(repo, "src/components/feat/hooks/useH.tsx", "export const H = () => fetch('/y');\n");
+    put(repo, "src/components/Fe.test.tsx", "export const T = () => fetch('/t');\n");
     const r = repo.run();
     expect(r.output).toContain("[ok] UI/逻辑分离");
     expect(r.code).toBe(0);
@@ -89,9 +77,7 @@ describe("三条指标与三类豁免（此前从未被执行过）", () => {
     expect(r.output).not.toContain("违规（阻断）");
   });
 
-  test("注释里写的 fetch( 也计入：宁多报不漏报（去注释会造假绿）", ({
-    repo,
-  }) => {
+  test("注释里写的 fetch( 也计入：宁多报不漏报（去注释会造假绿）", ({ repo }) => {
     // 这不是笔误而是取向：#1192 量过「裸的全局去行尾注释会造假绿」
     // （`const url = "http://a"; wfParam();` 被剥完就消失）。
     // 对这条判据，多报是几分钟解释成本，漏报是硬规则 10 失守。
@@ -122,9 +108,7 @@ describe("检查路径（硬闸）", () => {
     expect(r.output).toContain("[ok] UI/逻辑分离");
   });
 
-  test("翻硬闸后 --update / --strict 是断头的（不许有隐藏放宽通道）", ({
-    repo,
-  }) => {
+  test("翻硬闸后 --update / --strict 是断头的（不许有隐藏放宽通道）", ({ repo }) => {
     /* 少了这一格，「删了 --update」与「--update 还在但没人调」看起来一样。
      * 这里刻意留一处**违规**：两个旗标都不得把它判绿，也不得落盘任何基线。 */
     put(repo, "src/components/A.tsx", "export const A = () => fetch('/x');\n");

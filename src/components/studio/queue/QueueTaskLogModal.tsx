@@ -26,10 +26,7 @@ import { Hint } from "~/components/ui/hint";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
-import {
-  TaskLogEmptyHint,
-  TaskLogTimeline,
-} from "~/components/studio/logs/TaskLogTimeline";
+import { TaskLogEmptyHint, TaskLogTimeline } from "~/components/studio/logs/TaskLogTimeline";
 import { WorkflowRunRawCliModal } from "~/components/studio/workflow-library/WorkflowRunRawCliModal";
 import { useCancelTask } from "~/components/studio/project-canvas/hooks/use-cancel-task";
 import { taskStatusLabel } from "~/lib/task-state";
@@ -68,7 +65,9 @@ export function QueueTaskLogModal({
     onFailed: () => undefined,
   });
 
-  if (!task) return null;
+  if (!task) {
+    return null;
+  }
 
   /* 徽标状态：流内终态 > 流内进度帧 > 打开那一刻的行状态。排队中的任务开跑、
    * 被取消、跑完，都在弹窗里直接翻面，不用等列表那边的轮询。 */
@@ -80,10 +79,8 @@ export function QueueTaskLogModal({
       ? "RUNNING"
       : task.status;
   /* 还没落定才谈得上「在跑」：raw-cli 弹窗据此决定要不要保持 1.5s 轮询。 */
-  const running =
-    !stream.settled && (stream.started || task.status === "RUNNING");
-  const failureMessage =
-    stream.settled && !stream.settled.ok ? stream.settled.message : null;
+  const running = !stream.settled && (stream.started || task.status === "RUNNING");
+  const failureMessage = stream.settled && !stream.settled.ok ? stream.settled.message : null;
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
@@ -101,9 +98,7 @@ export function QueueTaskLogModal({
           <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
               <FileText size={16} className="text-primary-strong shrink-0" />
-              <span className="text-ink truncate text-[15px] font-semibold">
-                执行日志
-              </span>
+              <span className="text-ink truncate text-[15px] font-semibold">执行日志</span>
               <span
                 className="text-ink-muted text-2xs max-w-55 truncate"
                 title={task.workflowName ?? undefined}
@@ -132,10 +127,7 @@ export function QueueTaskLogModal({
                   </Button>
                 </Hint>
               )}
-              <Hint
-                label="查看 comfy-cli 完整输出（未经截断、可格式化 JSON）"
-                wrap
-              >
+              <Hint label="查看 comfy-cli 完整输出（未经截断、可格式化 JSON）" wrap>
                 <Button
                   variant="ghost"
                   onClick={() => setRawOpen(true)}

@@ -34,17 +34,16 @@ import {
 } from "~/lib/comfyui/custom-nodes-manifest.server";
 import { AppError, NotFoundError } from "~/lib/core/errors";
 import { requireRequestUser } from "~/server/auth/request-user";
-import {
-  errorResponse,
-  unauthorizedResponse,
-} from "~/server/lib/error-response";
+import { errorResponse, unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
   const user = await requireRequestUser();
-  if (!user) return unauthorizedResponse();
+  if (!user) {
+    return unauthorizedResponse();
+  }
 
   const read = readCustomNodesManifest();
   if (read.kind === "missing") {

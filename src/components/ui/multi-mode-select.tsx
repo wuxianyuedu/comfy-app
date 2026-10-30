@@ -342,7 +342,9 @@ export function MultiModeSelect({
                     variant="ghost"
                     onClick={(event) => {
                       event.stopPropagation();
-                      if (!draft.has(item.code)) toggle(item.code);
+                      if (!draft.has(item.code)) {
+                        toggle(item.code);
+                      }
                       setDraftDefault(item.code);
                     }}
                     title={isDraftDefault ? "当前默认模式" : "设为默认模式"}

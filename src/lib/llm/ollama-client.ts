@@ -32,7 +32,9 @@ export async function probeOllama(baseUrl: string): Promise<OllamaProbe> {
     const res = await fetch(ollamaTagsUrl(baseUrl), {
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
-    if (!res.ok) return { up: false };
+    if (!res.ok) {
+      return { up: false };
+    }
     let body: unknown;
     try {
       body = await res.json();

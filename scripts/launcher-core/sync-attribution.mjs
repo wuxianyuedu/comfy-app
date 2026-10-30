@@ -38,19 +38,10 @@ const ROUTE_FILE_RE =
 const STRUCTURAL_STATUS = new Set(["A", "D", "R", "C"]);
 
 /** 改变依赖面的文件名（与仓库里真正影响安装的三个文件同名）。 */
-const DEP_FILES = new Set([
-  "package.json",
-  "pnpm-lock.yaml",
-  "pnpm-workspace.yaml",
-]);
+const DEP_FILES = new Set(["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"]);
 
 /** 中间件约定文件名：改了它们会改变所有请求的转发语义。 */
-const MIDDLEWARE_FILES = new Set([
-  "proxy.ts",
-  "proxy.js",
-  "middleware.ts",
-  "middleware.js",
-]);
+const MIDDLEWARE_FILES = new Set(["proxy.ts", "proxy.js", "middleware.ts", "middleware.js"]);
 
 /** `next.config.*` 的判定（改了它可能改变输出 / 追踪 / 实验开关）。 */
 const NEXT_CONFIG_RE = /(?:^|\/)next\.config\.(?:js|ts|mjs|cjs)$/;
@@ -70,16 +61,24 @@ export function parseDiffEntries(output) {
   const entries = [];
   for (const rawLine of String(output ?? "").split("\n")) {
     const line = rawLine.trim();
-    if (line === "") continue;
+    if (line === "") {
+      continue;
+    }
     const parts = line.split("\t");
     const rawStatus = parts[0];
     const firstPath = parts[1];
-    if (rawStatus === undefined || firstPath === undefined) continue;
+    if (rawStatus === undefined || firstPath === undefined) {
+      continue;
+    }
     const status = rawStatus.trim().charAt(0).toUpperCase();
-    if (status === "") continue;
+    if (status === "") {
+      continue;
+    }
     if (parts.length >= 3) {
       const newPath = parts[2];
-      if (newPath === undefined) continue;
+      if (newPath === undefined) {
+        continue;
+      }
       entries.push({ status, oldPath: firstPath, path: newPath });
     } else {
       entries.push({ status, oldPath: "", path: firstPath });
@@ -133,13 +132,15 @@ export function classifyChanges(entries) {
     }
     if (path.startsWith("src/app/") && ROUTE_FILE_RE.test(path)) {
       if (STRUCTURAL_STATUS.has(status)) {
-        if (status === "A") routes.added += 1;
-        else if (status === "D") routes.removed += 1;
-        else routes.renamed += 1;
+        if (status === "A") {
+          routes.added += 1;
+        } else if (status === "D") {
+          routes.removed += 1;
+        } else {
+          routes.renamed += 1;
+        }
         if (routes.examples.length < 2) {
-          routes.examples.push(
-            oldPath === "" ? path : `${oldPath} → ${path}`,
-          );
+          routes.examples.push(oldPath === "" ? path : `${oldPath} → ${path}`);
         }
         continue;
       }
@@ -169,19 +170,32 @@ export function describeChanges(classified, facts) {
   const { routes } = classified;
   if (routes.added + routes.removed + routes.renamed > 0) {
     const counts = [];
-    if (routes.added > 0) counts.push(`新增 ${routes.added}`);
-    if (routes.removed > 0) counts.push(`删除 ${routes.removed}`);
-    if (routes.renamed > 0) counts.push(`重命名 ${routes.renamed}`);
+    if (routes.added > 0) {
+      counts.push(`新增 ${routes.added}`);
+    }
+    if (routes.removed > 0) {
+      counts.push(`删除 ${routes.removed}`);
+    }
+    if (routes.renamed > 0) {
+      counts.push(`重命名 ${routes.renamed}`);
+    }
     const example = routes.examples[0] ? `，如 ${routes.examples[0]}` : "";
     parts.push(`改了路由结构（${counts.join(" / ")}${example}）`);
   }
-  if (classified.middleware) parts.push("改了中间件（proxy.ts / middleware.ts）");
-  if (classified.nextConfig) parts.push("改了 next.config");
-  if (classified.deps) parts.push("改了依赖面（package.json / pnpm-lock.yaml）");
-  if (classified.shell) parts.push("改了桌面壳（src-tauri）");
+  if (classified.middleware) {
+    parts.push("改了中间件（proxy.ts / middleware.ts）");
+  }
+  if (classified.nextConfig) {
+    parts.push("改了 next.config");
+  }
+  if (classified.deps) {
+    parts.push("改了依赖面（package.json / pnpm-lock.yaml）");
+  }
+  if (classified.shell) {
+    parts.push("改了桌面壳（src-tauri）");
+  }
 
-  const tail =
-    classified.other > 0 ? `；另有 ${classified.other} 个文件的常规改动` : "";
+  const tail = classified.other > 0 ? `；另有 ${classified.other} 个文件的常规改动` : "";
 
   if (parts.length === 0) {
     return `本次代码更新含 ${classified.other} 个文件的改动（未涉及路由结构 / 中间件 / 配置 / 依赖 / 壳）`;

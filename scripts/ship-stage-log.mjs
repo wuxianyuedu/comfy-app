@@ -89,15 +89,13 @@ export function runStageLog({
   const want = String(stageRef ?? "").trim();
   if (want === "") {
     log(
-      "[ship] --stage-log 要点名读哪一格：格名（如 \"API 文档生成与自检\"）或格 id（如 stage-27）。",
+      '[ship] --stage-log 要点名读哪一格：格名（如 "API 文档生成与自检"）或格 id（如 stage-27）。',
     );
     log("[ship] 用法：pnpm ship --stage-log [<sn>] <格名|格 id>");
     return CODE.NOT_RUN;
   }
   if (!slug) {
-    log(
-      "[ship] --stage-log 取不到仓库路径 ⇒ 没有结论（不猜一个仓库名去读别人的构建）。",
-    );
+    log("[ship] --stage-log 取不到仓库路径 ⇒ 没有结论（不猜一个仓库名去读别人的构建）。");
     return CODE.NOT_RUN;
   }
   if (dryRun) {
@@ -108,9 +106,7 @@ export function runStageLog({
     return CODE.GREEN;
   }
   if (!cnbOk) {
-    log(
-      "[ship] --stage-log 没有执行者（cnb 不在）⇒ 没有结论，不猜那一格念了什么。",
-    );
+    log("[ship] --stage-log 没有执行者（cnb 不在）⇒ 没有结论，不猜那一格念了什么。");
     return CODE.NOT_RUN;
   }
   const target = resolveBuildSn({
@@ -121,12 +117,12 @@ export function runStageLog({
     headSha,
     command: "pnpm ship --stage-log",
   });
-  if (!target) return CODE.NOT_RUN;
+  if (!target) {
+    return CODE.NOT_RUN;
+  }
   const statusJson = fetchBuildStatus(run, slug, target);
   if (!statusJson) {
-    log(
-      `[ship] 构建 ${target} 取不到逐格读数 ⇒ 反查不了这一格的 id（不是「这一跑没这一格」）。`,
-    );
+    log(`[ship] 构建 ${target} 取不到逐格读数 ⇒ 反查不了这一格的 id（不是「这一跑没这一格」）。`);
     return CODE.NOT_RUN;
   }
   const outcome = classifyBuildOutcome(statusJson);
@@ -144,9 +140,7 @@ export function runStageLog({
           .join("、")} —— 照原样点名。`,
       );
     }
-    log(
-      `[ship]   这一跑一共 ${examined} 格；要整跑哪格红了用 pnpm ship --diagnose ${target}。`,
-    );
+    log(`[ship]   这一跑一共 ${examined} 格；要整跑哪格红了用 pnpm ship --diagnose ${target}。`);
     return CODE.NOT_RUN;
   }
   if (hits.length > 1) {
@@ -164,7 +158,9 @@ export function runStageLog({
   }
   /* 上面已排掉「零命中」与「多命中」两支，这里只是让类型收窄到一格。 */
   const hit = hits[0];
-  if (!hit) return CODE.NOT_RUN;
+  if (!hit) {
+    return CODE.NOT_RUN;
+  }
   const { pipeline, stage } = hit;
   const link = `https://cnb.cool/${slug}/-/build/logs/${target}`;
   log(
@@ -172,9 +168,7 @@ export function runStageLog({
   );
   const detail = fetchStageDetail(run, slug, target, pipeline.id, stage.id);
   if (!detail) {
-    log(
-      `[ship] 取不到这一格的日志正文 ⇒ 没有结论（不是「这一格没念任何话」）。完整日志：${link}`,
-    );
+    log(`[ship] 取不到这一格的日志正文 ⇒ 没有结论（不是「这一格没念任何话」）。完整日志：${link}`);
     return CODE.NOT_RUN;
   }
   if (detail.duration !== null) {
@@ -189,7 +183,9 @@ export function runStageLog({
       `[ship]   按格取回的状态是 ${detail.status}，与逐格读数的 ${stage.status} 不同 —— 两处都是原值，本脚本不替你调和。`,
     );
   }
-  if (detail.error) log(`[ship]   平台给这一格的原话：${detail.error}`);
+  if (detail.error) {
+    log(`[ship]   平台给这一格的原话：${detail.error}`);
+  }
   if (stageInFlight(detail.status) || stageInFlight(stage.status)) {
     log("[ship]   这一格还没有终态 ⇒ 下面是**截到此刻**的正文，不是完整日志。");
   }
@@ -199,8 +195,6 @@ export function runStageLog({
     log(`[ship]   L${idx + 1} ${line.trimEnd()}`);
   });
   log(`[ship] 完整日志：${link}`);
-  log(
-    "[ship] 这一格只念正文，不判这一跑绿没绿 —— 那一问用 pnpm ship --diagnose <sn>。",
-  );
+  log("[ship] 这一格只念正文，不判这一跑绿没绿 —— 那一问用 pnpm ship --diagnose <sn>。");
   return CODE.GREEN;
 }

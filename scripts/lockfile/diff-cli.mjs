@@ -27,10 +27,13 @@ function parseArgs(argv) {
   const out = { installed: "", root: process.cwd(), maxPerSection: 8 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--installed") out.installed = argv[++i] || "";
-    else if (a === "--root") out.root = argv[++i] || "";
-    else if (a === "--max-per-section")
+    if (a === "--installed") {
+      out.installed = argv[++i] || "";
+    } else if (a === "--root") {
+      out.root = argv[++i] || "";
+    } else if (a === "--max-per-section") {
       out.maxPerSection = Number(argv[++i]) || 8;
+    }
   }
   return out;
 }
@@ -53,9 +56,7 @@ function main() {
   const newText = fs.readFileSync(rootLock, "utf8");
   const diff = diffLockfiles(oldText, newText);
   if (isEmptyDiff(diff)) {
-    console.log(
-      "[lock-diff] 两份 lockfile 实质一致（差异仅在注释/空行/条目顺序）。",
-    );
+    console.log("[lock-diff] 两份 lockfile 实质一致（差异仅在注释/空行/条目顺序）。");
     process.exit(0);
   }
   for (const line of renderDriftReport(diff, {

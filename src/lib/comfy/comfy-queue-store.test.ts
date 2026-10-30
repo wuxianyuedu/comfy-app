@@ -34,7 +34,9 @@ class FakeEventSource {
 
   close(): void {
     this.closed = true;
-    if (FakeEventSource.last === this) FakeEventSource.last = null;
+    if (FakeEventSource.last === this) {
+      FakeEventSource.last = null;
+    }
   }
 
   emit(data: string): void {

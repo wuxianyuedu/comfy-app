@@ -367,8 +367,12 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
       .where(eq(task.id, taskId))
       .limit(1);
     const row = rows[0];
-    if (!row) return "skipped-missing";
-    if (!isOwnedBy(row.claimedBy, owner)) return "skipped-not-owned";
+    if (!row) {
+      return "skipped-missing";
+    }
+    if (!isOwnedBy(row.claimedBy, owner)) {
+      return "skipped-not-owned";
+    }
     return "skipped-terminal";
   }
 

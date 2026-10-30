@@ -101,8 +101,12 @@ export function useThrottledProgress(
     (next: number) => {
       /* 卸载守卫：回调可能在组件消失之后才到达（`watchTask` 的关闭由调用处
        * 负责，漏一次就是这里兜住）。 */
-      if (!mountedRef.current) return;
-      if (!Number.isFinite(next)) return;
+      if (!mountedRef.current) {
+        return;
+      }
+      if (!Number.isFinite(next)) {
+        return;
+      }
       const now = Date.now();
       if (tickMs <= 0 || now - lastAtRef.current >= tickMs) {
         lastAtRef.current = now;
@@ -116,15 +120,21 @@ export function useThrottledProgress(
   );
 
   const flush = useCallback((next: number) => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) {
+      return;
+    }
     lastAtRef.current = Date.now();
-    if (!Number.isFinite(next)) return;
+    if (!Number.isFinite(next)) {
+      return;
+    }
     setValue((prev) => (prev === next ? prev : next));
   }, []);
 
   const reset = useCallback(() => {
     lastAtRef.current = 0;
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) {
+      return;
+    }
     setValue(initial);
   }, [initial]);
 
@@ -186,15 +196,17 @@ export function useThrottledProgressMap(
   /* 写一条：**值没变就不换对象** —— 收口前无条件 `{ ...prev, [k]: v }`
    * 每次都新建对象，`Object.is` 判不出相等，同值也会触发重渲染。 */
   const write = useCallback((key: string, next: number) => {
-    setProgress((prev) =>
-      prev[key] === next ? prev : { ...prev, [key]: next },
-    );
+    setProgress((prev) => (prev[key] === next ? prev : { ...prev, [key]: next }));
   }, []);
 
   const report = useCallback(
     (key: string, next: number) => {
-      if (!mountedRef.current) return;
-      if (!Number.isFinite(next)) return;
+      if (!mountedRef.current) {
+        return;
+      }
+      if (!Number.isFinite(next)) {
+        return;
+      }
       const now = Date.now();
       if (tickMs <= 0 || now - (lastAtRef.current[key] ?? 0) >= tickMs) {
         lastAtRef.current[key] = now;
@@ -206,16 +218,22 @@ export function useThrottledProgressMap(
 
   const flush = useCallback(
     (key: string, next: number) => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) {
+        return;
+      }
       lastAtRef.current[key] = Date.now();
-      if (!Number.isFinite(next)) return;
+      if (!Number.isFinite(next)) {
+        return;
+      }
       write(key, next);
     },
     [write],
   );
 
   const clear = useCallback((key?: string) => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) {
+      return;
+    }
     if (key === undefined) {
       lastAtRef.current = {};
       setProgress({});
@@ -223,7 +241,9 @@ export function useThrottledProgressMap(
     }
     delete lastAtRef.current[key];
     setProgress((prev) => {
-      if (!(key in prev)) return prev;
+      if (!(key in prev)) {
+        return prev;
+      }
       const next = { ...prev };
       delete next[key];
       return next;
@@ -266,15 +286,22 @@ export function createThrottleGate(): ThrottleGate {
   let lastAt: Record<string, number> = {};
   return {
     allow(key = "", tickMs = PROGRESS_THROTTLE_MS) {
-      if (tickMs <= 0) return true;
+      if (tickMs <= 0) {
+        return true;
+      }
       const now = Date.now();
-      if (now - (lastAt[key] ?? 0) < tickMs) return false;
+      if (now - (lastAt[key] ?? 0) < tickMs) {
+        return false;
+      }
       lastAt[key] = now;
       return true;
     },
     reset(key) {
-      if (key === undefined) lastAt = {};
-      else delete lastAt[key];
+      if (key === undefined) {
+        lastAt = {};
+      } else {
+        delete lastAt[key];
+      }
     },
   };
 }

@@ -79,25 +79,37 @@ function unquote(raw: string): string {
 function pipelineEnv(text: string): Record<string, string> {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex((l) => /^\.common:\s*&common\s*$/.test(l));
-  if (start < 0) return {};
+  if (start < 0) {
+    return {};
+  }
   const out: Record<string, string> = {};
   let inEnv = false;
   for (const line of lines.slice(start + 1)) {
     /* 出了 `.common` 块（顶层键）就收工。 */
-    if (/^\S/.test(line)) break;
+    if (/^\S/.test(line)) {
+      break;
+    }
     if (/^ {2}env:\s*$/.test(line)) {
       inEnv = true;
       continue;
     }
-    if (!inEnv) continue;
+    if (!inEnv) {
+      continue;
+    }
     if (/^ {4}[A-Za-z_][A-Za-z0-9_]*:/.test(line)) {
       const m = /^ {4}([A-Za-z_][A-Za-z0-9_]*):[ \t]*(.*)$/.exec(line);
-      if (m) out[m[1]!] = unquote(m[2] ?? "");
+      if (m) {
+        out[m[1]!] = unquote(m[2] ?? "");
+      }
       continue;
     }
     /* 折叠标量的续行与注释行都跳过；缩进回到 2 层及更浅 ⇒ env 块收口。 */
-    if (/^ {4}/.test(line)) continue;
-    if (line.trim() === "" || line.trim().startsWith("#")) continue;
+    if (/^ {4}/.test(line)) {
+      continue;
+    }
+    if (line.trim() === "" || line.trim().startsWith("#")) {
+      continue;
+    }
     inEnv = false;
   }
   return out;
@@ -110,7 +122,9 @@ function isAbsolutePath(p: string): boolean {
 
 /** 一个路径所在的**卷根**（`G:\Temp` ⇒ `G:\`；`/tmp/x` ⇒ `/`）。 */
 function volumeRootOf(p: string): string {
-  if (/^[A-Za-z]:[\\/]/.test(p)) return path.win32.parse(p).root.toLowerCase();
+  if (/^[A-Za-z]:[\\/]/.test(p)) {
+    return path.win32.parse(p).root.toLowerCase();
+  }
   return path.posix.parse(p).root;
 }
 
@@ -139,10 +153,14 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
     const offLevel: Array<string> = [];
     for (const line of text.split(/\r?\n/)) {
       const m = /^([ \t]*)(TEMP|TMP|PLAYWRIGHT_BROWSERS_PATH):/.exec(line);
-      if (!m) continue;
+      if (!m) {
+        continue;
+      }
       const indent = m[1]!.replace(/\t/g, "    ").length;
       /* 流水线级 = 第 4 列；格级 = 第 6 列（`  - name:` ⇒ `    env:` ⇒ `      KEY:`）。 */
-      if (indent !== 4) offLevel.push(line.trim());
+      if (indent !== 4) {
+        offLevel.push(line.trim());
+      }
     }
     expect(
       offLevel,

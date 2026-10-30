@@ -95,7 +95,9 @@ export function ImageGenerationPanel({
    * 任务，使 GlobalStepLogPanel 自动跟随。ImageGenerationPanel 仅在选中节点时
    * 挂载，而用户点「生成」时必然选中，故 taskId 一旦就绪即可被捕获。 */
   useEffect(() => {
-    if (d.taskId) setActiveTaskId(d.taskId);
+    if (d.taskId) {
+      setActiveTaskId(d.taskId);
+    }
   }, [d.taskId]);
 
   const isVideo = kind === "video";
@@ -110,25 +112,61 @@ export function ImageGenerationPanel({
     const up = upperToken(rawName);
     // ── VIDEO 类（更具体优先；Chinese"图生视频" 出现在 I2V 之前，
     // 因为中文"图生视频" 后面可能不带"I2V" 字样）
-    if (/图生视频|IMG2VIDEO/.test(rawName)) return "I2V";
-    if (/文生视频|TXT2VIDEO/.test(rawName)) return "T2V";
-    if (/首尾帧视频|FLFVIDEO|FLF2V|FL2V/.test(up)) return "FLF2V";
-    if (/视频转视频|V2V/.test(up)) return "V2V";
-    if (rawName.includes("图生视频") || up.includes("I2V")) return "I2V";
-    if (up.includes("FMF2V")) return "FMF2V";
-    if (up.includes("T2V")) return "T2V";
-    if (up.includes("S2V")) return "S2V";
-    if (up.includes("R2V")) return "R2V";
-    if (/VR2V|VRC2V/.test(up)) return "VR2V";
-    if (/视频|VIDEO/.test(rawName) || up.includes("VIDEO")) return "T2V"; // 中文"视频"或VIDEO兜底
+    if (/图生视频|IMG2VIDEO/.test(rawName)) {
+      return "I2V";
+    }
+    if (/文生视频|TXT2VIDEO/.test(rawName)) {
+      return "T2V";
+    }
+    if (/首尾帧视频|FLFVIDEO|FLF2V|FL2V/.test(up)) {
+      return "FLF2V";
+    }
+    if (/视频转视频|V2V/.test(up)) {
+      return "V2V";
+    }
+    if (rawName.includes("图生视频") || up.includes("I2V")) {
+      return "I2V";
+    }
+    if (up.includes("FMF2V")) {
+      return "FMF2V";
+    }
+    if (up.includes("T2V")) {
+      return "T2V";
+    }
+    if (up.includes("S2V")) {
+      return "S2V";
+    }
+    if (up.includes("R2V")) {
+      return "R2V";
+    }
+    if (/VR2V|VRC2V/.test(up)) {
+      return "VR2V";
+    }
+    if (/视频|VIDEO/.test(rawName) || up.includes("VIDEO")) {
+      return "T2V";
+    } // 中文"视频"或VIDEO兜底
     // ── IMAGE 类
-    if (/文生图|T2I|TXT2IMG/.test(rawName) || /T2I|TXT2IMG/.test(up)) return "T2I";
-    if (/图生图|局部重绘|I2I|IMG2IMG/.test(rawName) || /I2I|IMG2IMG/.test(up)) return "I2I";
-    if (up.includes("INPAINT")) return "Inpaint";
-    if (up.includes("OUTPAINT")) return "Outpaint";
-    if (up.includes("UPSCAL")) return "Upscale";
-    if (up.includes("C2I")) return "C2I";
-    if (up.includes("IMAGE")) return "T2I"; // 兜底归 T2I
+    if (/文生图|T2I|TXT2IMG/.test(rawName) || /T2I|TXT2IMG/.test(up)) {
+      return "T2I";
+    }
+    if (/图生图|局部重绘|I2I|IMG2IMG/.test(rawName) || /I2I|IMG2IMG/.test(up)) {
+      return "I2I";
+    }
+    if (up.includes("INPAINT")) {
+      return "Inpaint";
+    }
+    if (up.includes("OUTPAINT")) {
+      return "Outpaint";
+    }
+    if (up.includes("UPSCAL")) {
+      return "Upscale";
+    }
+    if (up.includes("C2I")) {
+      return "C2I";
+    }
+    if (up.includes("IMAGE")) {
+      return "T2I";
+    } // 兜底归 T2I
     return "";
   };
   /* name 推断优先于 DB。
@@ -140,9 +178,13 @@ export function ImageGenerationPanel({
     id?: string | null;
   }): string => {
     const fromName = inferTypeByName(w.name ?? "");
-    if (fromName) return fromName;
+    if (fromName) {
+      return fromName;
+    }
     const fromDb = normalizeTaskType(w.taskType ?? "");
-    if (fromDb) return fromDb;
+    if (fromDb) {
+      return fromDb;
+    }
     return inferTypeByName(w.id ?? "");
   };
   // Q3=B：列出全部类型，但隐藏无对应工作流的页签
@@ -179,7 +221,9 @@ export function ImageGenerationPanel({
     const newTypeWfs = wfList.filter((wfList) => effectiveTaskType(wfList) === code);
     const newAvailTags = new Set<string>();
     for (const w of newTypeWfs) {
-      for (const tag of w.modelTags ?? []) newAvailTags.add(tag);
+      for (const tag of w.modelTags ?? []) {
+        newAvailTags.add(tag);
+      }
     }
     const keepTag = genTag && newAvailTags.has(genTag) ? genTag : "";
     patch({

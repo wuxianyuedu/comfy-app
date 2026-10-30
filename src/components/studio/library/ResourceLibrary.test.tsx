@@ -1,12 +1,6 @@
 // 资源库页：作用域档、分类渲染、无项目时的引导态。
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { setActive } from "~/lib/project-canvas/canvas-store";
@@ -68,11 +62,9 @@ describe("ResourceLibrary", () => {
     render(<ResourceLibrary />);
     const project = await screen.findByRole("tab", { name: /^本项目/ });
     expect(project.getAttribute("aria-selected")).toBe("true");
-    expect(
-      screen
-        .getByRole("tab", { name: /^跨项目/ })
-        .getAttribute("aria-selected"),
-    ).toBe("false");
+    expect(screen.getByRole("tab", { name: /^跨项目/ }).getAttribute("aria-selected")).toBe(
+      "false",
+    );
   });
 
   it("作用域档走 ui/tabs 的 line 档：选中态由 data-active 一处驱动（ISSUE #1925 收口）", async () => {
@@ -86,7 +78,9 @@ describe("ResourceLibrary", () => {
        这一族与 `MaterialLibraryPanel` / `HistoryPanel` 的作用域切换逐字同形。 */
     const tabs = within(list).getAllByRole("tab");
     expect(tabs).toHaveLength(2);
-    for (const tab of tabs) expect(tab).not.toHaveAttribute("aria-pressed");
+    for (const tab of tabs) {
+      expect(tab).not.toHaveAttribute("aria-pressed");
+    }
 
     /* 下划线由 `data-active` + `after:opacity-*` 两层驱动，两枚同高同基线：
        选中档与未选中档的 `after:` 契约只在 `opacity` 上有差，没有任何
@@ -108,17 +102,19 @@ describe("ResourceLibrary", () => {
        的字色翻掉。现在走 `ui/display-density-toggle`。 */
     const radios = within(group).getAllByRole("radio");
     expect(radios).toHaveLength(2);
-    for (const radio of radios)
+    for (const radio of radios) {
       expect(radio).not.toHaveAttribute("aria-pressed");
+    }
 
     const grid = within(group).getByRole("radio", { name: "网格视图" });
     expect(grid).toHaveAttribute("aria-checked", "true");
     expect(grid.className).toContain("aria-checked:hover:text-primary-strong");
 
     fireEvent.click(within(group).getByRole("radio", { name: "列表视图" }));
-    expect(
-      within(group).getByRole("radio", { name: "列表视图" }),
-    ).toHaveAttribute("aria-checked", "true");
+    expect(within(group).getByRole("radio", { name: "列表视图" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
   });
 
   it("没有活跃项目时给出引导，并可一键切到「跨项目」", async () => {

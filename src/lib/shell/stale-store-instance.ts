@@ -64,7 +64,9 @@ export const STALE_STORE_SAFETY_NOTE =
 export function deriveStaleStoreNotification(
   input: StaleStoreSignalInput,
 ): StaleStoreNotification | null {
-  if (!input.codeUpdatedSinceLoad || input.reason === null) return null;
+  if (!input.codeUpdatedSinceLoad || input.reason === null) {
+    return null;
+  }
 
   const steps = STALE_STORE_RELOAD_STEPS.map((s, i) => `${i + 1}. ${s}`).join("\n");
   const body = [

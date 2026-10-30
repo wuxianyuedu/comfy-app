@@ -39,9 +39,7 @@ export const ISSUE_PRIORITIES = "P0|P1|P2|P3";
  */
 export function fragmentHead(root, rel) {
   try {
-    return String(
-      fs.readFileSync(path.join(root, rel), "utf8").split("\n", 1)[0],
-    ).trim();
+    return String(fs.readFileSync(path.join(root, rel), "utf8").split("\n", 1)[0]).trim();
   } catch {
     return "";
   }
@@ -76,11 +74,15 @@ export function ticketReading({ root, fragments = [] }) {
     const name = path.basename(rel);
     const m = /^#?(\d+)-/.exec(name);
     // 不是 `<号>-<slug>.md` 形态的文件（目录说明 `README.md` 之类）没有号这一格可判。
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     if (Number(m[1]) === 0) {
       anonymous.push(name);
       const section = /^#{1,6}\s*([A-Za-z]+)/.exec(fragmentHead(root, rel));
-      if ((section?.[1] ?? "") === "Fixed") anonymousFixed.push(name);
+      if ((section?.[1] ?? "") === "Fixed") {
+        anonymousFixed.push(name);
+      }
     } else {
       numbers.push(Number(m[1]));
     }
@@ -232,9 +234,13 @@ export function labelValues(labels, role) {
   const out = [];
   for (const item of Array.isArray(labels) ? labels : []) {
     const name = typeof item === "string" ? item : String(item?.name ?? "");
-    if (!name.startsWith(prefix)) continue;
+    if (!name.startsWith(prefix)) {
+      continue;
+    }
     const value = name.slice(prefix.length).trim();
-    if (value !== "" && !out.includes(value)) out.push(value);
+    if (value !== "" && !out.includes(value)) {
+      out.push(value);
+    }
   }
   return out;
 }
@@ -288,8 +294,12 @@ export function withCommentHeader(body, handle) {
       i += 1;
       continue;
     }
-    if (!HEADER_LINE_RE.test(trimmed)) break;
-    if (kept === null) kept = trimmed;
+    if (!HEADER_LINE_RE.test(trimmed)) {
+      break;
+    }
+    if (kept === null) {
+      kept = trimmed;
+    }
     i += 1;
   }
   const rest = lines.slice(i).join("\n").replace(/\s+$/, "");
@@ -315,9 +325,13 @@ export function withCommentHeader(body, handle) {
 export function headerShape(body) {
   const lines = String(body ?? "").split(/\r?\n/);
   const heads = lines.filter((l) => HEADER_LINE_RE.test(String(l).trim()));
-  if (heads.length === 0) return "缺";
+  if (heads.length === 0) {
+    return "缺";
+  }
   const first = lines.find((l) => String(l).trim() !== "");
-  if (!HEADER_LINE_RE.test(String(first ?? "").trim())) return "不在首行";
+  if (!HEADER_LINE_RE.test(String(first ?? "").trim())) {
+    return "不在首行";
+  }
   return heads.length > 1 ? "重复" : "正常";
 }
 
@@ -445,12 +459,7 @@ export function issueItemShapes(body) {
  *   `source` 取自 `readDevHandleWithSource().source`（`.env` / `CNB_NPC_NAME` / …）。
  * @returns {string[]} 要打印的几行
  */
-export function whoamiLines({
-  handle = null,
-  source = null,
-  root = "",
-  slug = null,
-} = {}) {
+export function whoamiLines({ handle = null, source = null, root = "", slug = null } = {}) {
   const name = String(handle ?? "").trim();
   const label = handlerLabel(name);
   const author = authorLabel(name);
@@ -459,9 +468,7 @@ export function whoamiLines({
   const from = String(source ?? "").trim();
   const lines = [
     `[ship] 本检出的平台留痕：${name || "未配"}` +
-      (name
-        ? `（提单人标签 ${author} · 处理人标签 ${label} · 参与人标签 ${participant}）`
-        : "") +
+      (name ? `（提单人标签 ${author} · 处理人标签 ${label} · 参与人标签 ${participant}）` : "") +
       (isExplicitSource(from)
         ? `（你填的：${from === ".env" ? "这一份检出的 `.env`" : "进程环境"}）`
         : from
@@ -493,8 +500,6 @@ export function whoamiLines({
     "[ship] 规则三：单子的领取 / 结束 / 查看走 ship（领取会补 `处理人:` / `参与人:` 并评论，" +
       "结束只撤 `处理人:`、保留 `参与人:`）：",
   );
-  lines.push(
-    `[ship]   pnpm ship --claim <号> · pnpm ship --release <号> · pnpm ship --claims`,
-  );
+  lines.push(`[ship]   pnpm ship --claim <号> · pnpm ship --release <号> · pnpm ship --claims`);
   return lines;
 }

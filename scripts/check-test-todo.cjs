@@ -52,11 +52,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -100,8 +96,11 @@ function maskNonCode(src) {
     const ch = src[i];
     const next = src[i + 1];
     if (mode === "line") {
-      if (ch === "\n") mode = "code";
-      else out[i] = " ";
+      if (ch === "\n") {
+        mode = "code";
+      } else {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -112,7 +111,9 @@ function maskNonCode(src) {
         i += 2;
         mode = "code";
       } else {
-        if (ch !== "\n") out[i] = " ";
+        if (ch !== "\n") {
+          out[i] = " ";
+        }
         i += 1;
       }
       continue;
@@ -125,8 +126,11 @@ function maskNonCode(src) {
         i += 2;
         continue;
       }
-      if (ch === quote) mode = "code";
-      else out[i] = " ";
+      if (ch === quote) {
+        mode = "code";
+      } else {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -152,7 +156,9 @@ function maskNonCode(src) {
         i += 2;
         continue;
       }
-      if (ch !== "\n") out[i] = " ";
+      if (ch !== "\n") {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -188,12 +194,15 @@ function maskNonCode(src) {
       continue;
     }
     if (stack.at(-1) === "interp") {
-      if (ch === "{") braceDepth += 1;
-      else if (ch === "}") {
+      if (ch === "{") {
+        braceDepth += 1;
+      } else if (ch === "}") {
         if (braceDepth === 0) {
           stack.pop();
           mode = "tmpl";
-        } else braceDepth -= 1;
+        } else {
+          braceDepth -= 1;
+        }
       }
     }
     i += 1;
@@ -285,10 +294,11 @@ function main() {
     console.error(
       (REPORT_ONLY
         ? `[test-todo] 盘点：${sites.length} 处站点、无消费方登记（--report 不判失败）`
-        : `[ERROR] 有 ${sites.length} 处 \`test.todo\` 站点，但 ${LEDGER} 里没有消费方`) +
-        "：\n",
+        : `[ERROR] 有 ${sites.length} 处 \`test.todo\` 站点，但 ${LEDGER} 里没有消费方`) + "：\n",
     );
-    for (const s of sites) console.error(`  · ${s.rel}:${s.line}`);
+    for (const s of sites) {
+      console.error(`  · ${s.rel}:${s.line}`);
+    }
     console.error(
       "\n`test.todo` 是一条「这件事还没有人做」的声明：退出码 **0**、不进失败计数，\n" +
         "而门禁链跑 vitest 只看退出码（`run-affected-tests.mjs`，无 `--reporter=json`）——\n" +
@@ -302,14 +312,15 @@ function main() {
   }
 
   console.log(
-    `[test-todo] OK —— ${sites.length} 处 todo 站点，消费方 ${consumers.length} 条登记。` +
-      note,
+    `[test-todo] OK —— ${sites.length} 处 todo 站点，消费方 ${consumers.length} 条登记。` + note,
   );
   return 0;
 }
 
 /* 与 `check-test-it-each.cjs` 同形：只有作为脚本运行才执行并定退出码，
    被 `require` 时（判据自测要进程内调 `readForScan`）不许把宿主进程一起带走。 */
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}
 
 module.exports = { readForScan };

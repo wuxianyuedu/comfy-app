@@ -6,7 +6,11 @@
  * 贴底行为与既有测试一致，不会因为多了一道判据而整体失效。
  */
 export function currentSelection() {
-  if (typeof window === "undefined") return null;
-  if (typeof window.getSelection !== "function") return null;
+  if (typeof window === "undefined") {
+    return null;
+  }
+  if (typeof window.getSelection !== "function") {
+    return null;
+  }
   return window.getSelection();
 }

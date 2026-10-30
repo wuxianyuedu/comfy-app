@@ -16,13 +16,7 @@ import { zClass } from "~/lib/shell/overlay-z";
  * 且无法定位根因。接入后崩溃时停留在编辑器内并显示错误详情 +
  * 「返回」按钮（用户主动点击才回工作流库），console 同步打印
  * componentStack 供排查。 */
-function EditorCrashFallback({
-  error,
-  onClose,
-}: {
-  error: Error | null;
-  onClose: () => void;
-}) {
+function EditorCrashFallback({ error, onClose }: { error: Error | null; onClose: () => void }) {
   return (
     <FullScreenLayer
       zClass={zClass("modal")}
@@ -56,23 +50,19 @@ export function WorkflowCanvasEditor({
   onClose: () => void;
   onSave?: () => void;
 }) {
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   return (
     <ErrorBoundary
-      fallback={(error) => (
-        <EditorCrashFallback error={error} onClose={onClose} />
-      )}
+      fallback={(error) => <EditorCrashFallback error={error} onClose={onClose} />}
       onError={(error) => {
         console.error("[WorkflowCanvasEditor] 渲染异常，编辑器已降级", error);
       }}
     >
       <ReactFlowProvider>
-        <WorkflowEditorInner
-          workflowId={workflowId}
-          onClose={onClose}
-          onSave={onSave}
-        />
+        <WorkflowEditorInner workflowId={workflowId} onClose={onClose} onSave={onSave} />
       </ReactFlowProvider>
     </ErrorBoundary>
   );

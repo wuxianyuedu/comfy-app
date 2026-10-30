@@ -98,7 +98,9 @@ export function toBase64(bytes: Uint8Array): string {
       Buffer?: { from(b: Uint8Array): { toString(enc: string): string } };
     }
   ).Buffer;
-  if (bufferCtor) return bufferCtor.from(bytes).toString("base64");
+  if (bufferCtor) {
+    return bufferCtor.from(bytes).toString("base64");
+  }
   /* 浏览器：分块 `btoa`，避免 `String.fromCharCode(...bytes)` 在大数组上
    * 触发「参数过多」的 RangeError（24MB 上限的图片轻松越过该阈值）。 */
   let binary = "";
@@ -137,14 +139,22 @@ export function isInlineMedia(reference: string): boolean {
  * ```
  */
 export function parseDataUrl(value: string): ParsedDataUrl | null {
-  if (!isDataUrl(value)) return null;
+  if (!isDataUrl(value)) {
+    return null;
+  }
   const comma = value.indexOf(",");
-  if (comma < 0) return null;
+  if (comma < 0) {
+    return null;
+  }
   const meta = value.slice(DATA_URL_PREFIX.length, comma);
-  if (!meta.toLowerCase().endsWith(";base64")) return null;
+  if (!meta.toLowerCase().endsWith(";base64")) {
+    return null;
+  }
   const base64 = value.slice(comma + 1);
   /* 空载荷与「逗号后面什么都没有」是同一件事，但都不该被当成合法 data URL。 */
-  if (base64 === "") return null;
+  if (base64 === "") {
+    return null;
+  }
   const mime = meta.slice(0, -";base64".length);
   return { mime: mime || "application/octet-stream", base64 };
 }
