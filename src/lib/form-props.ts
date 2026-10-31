@@ -148,5 +148,5 @@ export function readTextInput(event: ValueEvent, onValue: ValueHandler<string>):
  * 字段该走 `numberHandler`（它连「读不出来算几」都要求调用处说出来）。
  */
 export function digitsOnly(raw: string): string {
-  return raw.replace(/[^\d]/g, "");
+  return raw.replaceAll(/[^\d]/g, "");
 }
