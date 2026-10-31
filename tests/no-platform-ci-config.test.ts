@@ -1955,6 +1955,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
        * （实测本地 forks worker 调度超时），所以预算跟着那一族走，不因为「跑得快」
        * 就省掉 —— 预算回答的是「卡死多久有人知道」，不是「通常跑多久」。 */
       "受影响用例",
+      /* 2026-10-31 从 `受影响用例` 拆出来的静态契约那半（ISSUE #2845）：同一份入口链、
+       * 同一族执行者，预算口径与被拆出来的那一半完全一致。 */
+      "固定结构用例",
     ].filter((name) => !disabled.includes(name));
     const missing = required.filter((name) => !timeouts.has(name));
     expect(

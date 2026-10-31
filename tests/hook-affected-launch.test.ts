@@ -1976,10 +1976,11 @@ describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
 
   it("清单那一跳真的接进了增量档，且打的是**送进 vitest 的**那份清单", () => {
     /* 形状那一面由用例守着（`main` 会起真 vitest，不在单测里跑）：判的是「打了」与
-     * 「打的是 files」两件事 —— 换成别的变量名就会读到一份「看起来也列了东西」的清单，
-     * 而那一份与真跑的清单可以完全不同步。 */
+     * 「打的是送进 vitest 的清单」两件事 —— 换成别的变量名就会读到一份「看起来也列了
+     * 东西」的清单，而那一份与真跑的清单可以完全不同步。变量名是 `segFiles`
+     * （ISSUE #2845 起：段开关下它是**本段**实际送进 vitest 的那份，两档逐字同义）。 */
     const launcher = readFileSync(LAUNCHER_PATH, "utf8");
-    expect(launcher).toMatch(/fileListReport\(files, \{ quiet \}\)/);
+    expect(launcher).toMatch(/fileListReport\(segFiles, \{ quiet \}\)/);
     /* `--full` 那一档没有清单可列（vitest 自己收集），但也不许静默：
      * 「这一档本来就不列」与「列清单这件事坏了」必须读得出区别。 */
     expect(launcher).toMatch(/全量档由 vitest 自行收集，故不逐份列出/);
@@ -2117,8 +2118,9 @@ describe("逐份用时：读数怎么排成给人那一段（ISSUE #2683）", ()
 
   it("接在**收尾**那一段，且取数走账本读者（不是自己扫目录）", () => {
     const launcher = readFileSync(LAUNCHER_PATH, "utf8");
-    /* 收尾才读：第一遍跑完才有 junit，而清单那一屏要早于起 vitest —— 两句各在各的位置。 */
-    expect(launcher).toMatch(/const flush = \(\) => \{[\s\S]{0,400}fileTimingReport\(files/);
+    /* 收尾才读：第一遍跑完才有 junit，而清单那一屏要早于起 vitest —— 两句各在各的位置。
+     * 取数对象是 `segFiles`（ISSUE #2845 起：段开关下它是本段实际送进 vitest 的那份）。 */
+    expect(launcher).toMatch(/const flush = \(\) => \{[\s\S]{0,400}fileTimingReport\(segFiles/);
     expect(launcher).toMatch(/collectFileTimings\(\{ dir: junitDir \}\)/);
     /* 没有落点 ⇒ 空读数（「读不到」），不是「每份 0ms」。 */
     expect(launcher).toMatch(/junitDir \? collectFileTimings/);
