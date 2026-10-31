@@ -646,6 +646,7 @@ async function runFlow(deps, tmpFiles) {
             landed,
             explicit: opt.closeIssueNumbers,
             handle,
+            handleExplicit: who.explicit,
             mkTmp,
             asMerged: opt.asMerged,
           }),

@@ -45,8 +45,68 @@ export const SETTLED_FALLBACK = "cnb";
 export const HANDLE_SOURCES = Object.freeze({
   processEnv: "进程环境",
   dotenv: ".env",
-  explicit: new Set(["进程环境", ".env"]),
+  /* 链接 worktree 的回落档（ISSUE #2833）：worktree 天然没有 `.gitignore` 掉的 `.env`，
+   * 人配留痕的那份在主检出根下 —— 读到它仍然算「人填的」（同一个键、同一支笔），
+   * 但 source 要把来路说出来，读日志的人才知道这份检出的 `.env` 其实不在自己根下。 */
+  dotenvMain: ".env（主检出）",
+  explicit: new Set(["进程环境", ".env", ".env（主检出）"]),
 });
+
+/**
+ * 读某个根下 `.env` 里的一个键；文件不在 / 键为空 ⇒ `null`。
+ *
+ * `resolveDevHandle` 与 `explicitDevHandle` 共用这一份 —— 两处各写一遍 `readFileSync`
+ * 的话，worktree 回落那一刀（#2833）加在哪一边、另一边就会静默漂掉。
+ *
+ * @param {string} root 仓库根
+ * @param {string} key 要读的键名
+ * @returns {string | null}
+ */
+function dotenvValueAt(root, key) {
+  try {
+    const v = String(
+      readEnvFileValue(fs.readFileSync(path.join(root, ".env"), "utf8"), key) ?? "",
+    ).trim();
+    return v === "" ? null : v;
+  } catch {
+    // 没有 `.env`（CI / 干净检出 / 链接 worktree）是常态 ⇒ 不是「读不出来」，是这一档没有值。
+    return null;
+  }
+}
+
+/**
+ * 本检出若是**链接 worktree**，回主检出的根；否则回 `null`。
+ *
+ * 判据是 `git rev-parse --git-common-dir`：worktree 的 commondir 指向主检出的 `.git`
+ * （其父目录即主检出根），而主检出自己的 commondir 就是本根下的 `.git` —— 两者相同
+ * ⇒ 不是链接 worktree，不猜。非 git 检出（CI / 干净目录）spawn 非 0 ⇒ 同样 `null`。
+ *
+ * @param {string} root 本检出根
+ * @returns {string | null}
+ */
+function mainCheckoutRoot(root) {
+  try {
+    const got = spawnSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd: root || process.cwd(),
+      encoding: "utf8",
+    });
+    if (got.status !== 0) {
+      return null;
+    }
+    const common = String(got.stdout ?? "").trim();
+    if (common === "") {
+      return null;
+    }
+    const cwd = root || process.cwd();
+    const abs = path.isAbsolute(common) ? common : path.resolve(cwd, common);
+    if (path.resolve(abs) === path.resolve(path.join(cwd, ".git"))) {
+      return null;
+    }
+    return path.dirname(abs);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 「这个 source 是**人填的**吗」—— 「名字稳不稳」那半问的共用谓词（ISSUE #2387）。
@@ -118,6 +178,15 @@ export function resolveDevHandle({ root, env = {} }) {
   } catch {
     // 没有 `.env`（CI / 干净检出）是常态 ⇒ 不是「读不出来」，是这一档没有值。
   }
+  /* 链接 worktree 的回落（ISSUE #2833）：worktree 天然没有 `.gitignore` 掉的 `.env`，
+   * 而留痕是人配在**主检出**根下的 —— 不接这一档，worktree 里的 ship 会把「我是谁」
+   * 跌到 git config user.name 上，收尾时「处理人是不是我」就答错人（#2833 的现场：
+   * 自动释放被跳过，而话术把因果说成「处理人是别人」）。 */
+  const mainRoot = mainCheckoutRoot(root);
+  const fromMain = mainRoot ? dotenvValueAt(mainRoot, DEV_HANDLE_ENV_KEY) : null;
+  if (fromMain) {
+    return { name: fromMain, source: HANDLE_SOURCES.dotenvMain, explicit: true };
+  }
   for (const key of PLATFORM_HANDLE_KEYS) {
     const value = String(env[key] ?? "").trim();
     if (value !== "") {
@@ -149,14 +218,14 @@ export function explicitDevHandle({ root, env = {} }) {
   if (fromProcess !== "") {
     return fromProcess;
   }
-  try {
-    const fromFile = String(
-      readEnvFileValue(fs.readFileSync(path.join(root, ".env"), "utf8"), DEV_HANDLE_ENV_KEY) ?? "",
-    ).trim();
-    return fromFile === "" ? null : fromFile;
-  } catch {
-    return null;
+  const fromFile = dotenvValueAt(root, DEV_HANDLE_ENV_KEY);
+  if (fromFile) {
+    return fromFile;
   }
+  /* 与 `resolveDevHandle` 同一档回落（ISSUE #2833）：两个读「人填过没有」的口子
+   * 必须看到同一个 `.env` 面，否则 worktree 里「名字从哪来」与「填过没有」会分叉。 */
+  const mainRoot = mainCheckoutRoot(root);
+  return mainRoot ? dotenvValueAt(mainRoot, DEV_HANDLE_ENV_KEY) : null;
 }
 
 /**

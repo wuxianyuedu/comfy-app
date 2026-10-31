@@ -440,6 +440,7 @@ export function fetchPullMergeProof({ run, slug, prNumber }) {
  *   landed?: {verified: boolean, sha?: string, title?: string} | null,
  *   explicit?: number[],
  *   handle?: string | null,
+ *   handleExplicit?: boolean,
  *   mkTmp?: ((name: string, text: string) => string | null) | null,
  *   asMerged?: number | null,
  *   dryRun?: boolean,
@@ -463,6 +464,9 @@ export function closeIssues(ctx) {
     landed = null,
     explicit = [],
     handle = null,
+    /* 「我是谁」是不是**人填的**（ISSUE #2833）：false 时「不代发」那格要念出
+     * 「取的名字」这条因，不许让它长得像「处理人真是别人」。 */
+    handleExplicit = undefined,
     mkTmp = null,
     asMerged = null,
     dryRun = false,
@@ -607,7 +611,7 @@ export function closeIssues(ctx) {
       /* 关单成功之后才做「开发结束」评论与撤处理人标签：单子还没关成就先放掉标签，
        * 等于在「还在开着的单」上宣布结束。评论失败时 `finishIssueWork` 会保留标签。 */
       if (handle && mkTmp) {
-        codes.push(finishIssueWork({ run, log, slug, handle, number, mkTmp }));
+        codes.push(finishIssueWork({ run, log, slug, handle, handleExplicit, number, mkTmp }));
       }
     } else {
       codes.push(CODE.RED);
