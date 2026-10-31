@@ -308,13 +308,13 @@ export async function composeFilm(id: string) {
             status: /* SAFETY: 类型断言已复核 */ s.status as ShotStatus,
           })),
         );
-      } catch (e) {
-        await appendFilmLog(id, "warn", `已合成，但回写项目失败：${errorText(e, "未知错误")}`);
+      } catch (error) {
+        await appendFilmLog(id, "warn", `已合成，但回写项目失败：${errorText(error, "未知错误")}`);
       }
     }
-  } catch (e) {
-    await filmRepository.markFailed(id, errorMessage(e, "合成失败"));
-    await appendFilmLog(id, "error", errorText(e, "合成失败"));
+  } catch (error) {
+    await filmRepository.markFailed(id, errorMessage(error, "合成失败"));
+    await appendFilmLog(id, "error", errorText(error, "合成失败"));
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
   }

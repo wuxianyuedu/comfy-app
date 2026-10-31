@@ -129,8 +129,8 @@ async function executeRun(
         },
       });
     });
-  } catch (e) {
-    setPhase({ kind: "failed", message: errorMessage(e, String(e)) });
+  } catch (error) {
+    setPhase({ kind: "failed", message: errorMessage(error, String(error)) });
   }
 }
 

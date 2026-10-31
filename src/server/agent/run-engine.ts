@@ -336,8 +336,8 @@ async function execReviewScript(
   let outcome;
   try {
     outcome = await reviewScript(userId, projectId);
-  } catch (e: unknown) {
-    return { ok: false, error: errorMessage(e, "剧本评审失败") };
+  } catch (error: unknown) {
+    return { ok: false, error: errorMessage(error, "剧本评审失败") };
   }
   const attempts = run.scriptReviewAttempts + 1;
   const mean = reviewScoreMean(outcome.verdict);
@@ -390,8 +390,8 @@ async function execReviseScript(
   let md: string;
   try {
     md = await reviseScript(userId, projectId);
-  } catch (e: unknown) {
-    return { ok: false, error: errorMessage(e, "剧本定向改写失败") };
+  } catch (error: unknown) {
+    return { ok: false, error: errorMessage(error, "剧本定向改写失败") };
   }
   return {
     ok: true,
@@ -524,8 +524,8 @@ async function execFilm(
       imageWorkflowId: run.imageWorkflowId || undefined,
     });
     await startFilm(id);
-  } catch (e: unknown) {
-    return { ok: false, error: errorMessage(e, "启动成片失败") };
+  } catch (error: unknown) {
+    return { ok: false, error: errorMessage(error, "启动成片失败") };
   }
   return {
     ok: true,
@@ -657,7 +657,7 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
         error: "执行引擎步数超限",
       });
     }
-  } catch (e: unknown) {
+  } catch (error: unknown) {
     try {
       const row = await productionRepository.getForUser(userId, projectId);
       const run = normalizeProductionRun(row?.run);
@@ -665,7 +665,7 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
         await saveRun(userId, projectId, {
           ...run,
           status: "failed",
-          error: errorMessage(e, "执行引擎异常"),
+          error: errorMessage(error, "执行引擎异常"),
         });
       }
     } catch {

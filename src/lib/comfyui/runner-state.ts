@@ -555,8 +555,8 @@ export async function persistLogs(taskId: string) {
   try {
     const { taskRepo } = await resolveDeps();
     await taskRepo.replaceLogs(taskId, arr);
-  } catch (e) {
-    const message = `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(e, "unknown")}`;
+  } catch (error) {
+    const message = `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(error, "unknown")}`;
     // 兜底 warn：若 resolveDeps 已经拉起了 log，走注入侧；否则再试一次 dynamic
     // import。这一句本身在纯 Node + 未 configure 的失败路径下也会抛（server-only），
     // 但那时上面 catch 里已经没有别的兜底手段可依赖了（logger 都没起来），
@@ -568,7 +568,7 @@ export async function persistLogs(taskId: string) {
     } catch {
       // 完全无法落库 + 无法 warn：让 caller 通过 unhandled rejection 感知，
       // 不吞掉。
-      throw e;
+      throw error;
     }
   }
 }
@@ -614,13 +614,13 @@ export async function persistRawCli(taskId: string): Promise<void> {
   try {
     const { taskRepo } = await resolveDeps();
     await taskRepo.replaceRawCli(taskId, lines);
-  } catch (e) {
-    const message = `[comfyui] persistRawCli(${taskId}) 落库失败：${errorText(e, "unknown")}`;
+  } catch (error) {
+    const message = `[comfyui] persistRawCli(${taskId}) 落库失败：${errorText(error, "unknown")}`;
     try {
       const { log: hostLog } = await resolveDeps();
       hostLog.warn(message);
     } catch {
-      throw e;
+      throw error;
     }
   }
 }

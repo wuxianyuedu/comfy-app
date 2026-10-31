@@ -276,7 +276,7 @@ describe("readUpstreamJson / 字段守卫", () => {
     const long = `<html>${"x".repeat(4000)}</html>`;
     const message = await readUpstreamJson(new Response(long, { status: 502 })).then(
       () => "",
-      (e: unknown) => (e instanceof Error ? e.message : String(e)),
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
     );
     expect(message).toContain("上游返回非 JSON (502)");
     /* 片段是有界的：拿整包 HTML 当错误消息会顺着日志与界面文案一路扩散。

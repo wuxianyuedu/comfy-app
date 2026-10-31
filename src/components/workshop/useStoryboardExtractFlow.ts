@@ -167,10 +167,10 @@ export function useStoryboardExtractFlow(input: {
       }
       appendLog(makeExtractLog("result", `解析出 ${entries.length} 个分镜，准备写入`));
       appendShots(entries);
-    } catch (e: unknown) {
-      appendLog(makeExtractLog("error", errorMessage(e, "提取失败")));
+    } catch (error: unknown) {
+      appendLog(makeExtractLog("error", errorMessage(error, "提取失败")));
       setExtractState({
-        error: `${errorMessage(e, "提取失败")} 可重试,或调整脚本后重跑。`,
+        error: `${errorMessage(error, "提取失败")} 可重试,或调整脚本后重跑。`,
       });
     } finally {
       setExtractState({ busy: false });
@@ -219,8 +219,8 @@ export function useStoryboardExtractFlow(input: {
         throw new Error("未在文件中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行");
       }
       appendShots(drafts.map(draftToShotEntry));
-    } catch (e: unknown) {
-      setExtractState({ error: errorMessage(e, "导入失败") });
+    } catch (error: unknown) {
+      setExtractState({ error: errorMessage(error, "导入失败") });
     } finally {
       setExtractState({ busy: false });
     }

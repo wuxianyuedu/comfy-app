@@ -119,10 +119,10 @@ export async function POST(req: NextRequest) {
       savedPath,
       elapsedMs: Date.now() - startedAt,
     });
-  } catch (e) {
+  } catch (error) {
     return NextResponse.json({
       ok: false,
-      detail: apiErrorDetail(e, "调用失败"),
+      detail: apiErrorDetail(error, "调用失败"),
       elapsedMs: Date.now() - startedAt,
     });
   }

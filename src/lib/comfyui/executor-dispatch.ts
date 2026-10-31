@@ -99,11 +99,11 @@ async function resolveDispatch(): Promise<{
   try {
     const { taskRepository } = await import("../core/repository");
     return { repo: taskRepository, owner: ownerOverride ?? "inline" };
-  } catch (err) {
+  } catch (error) {
     if (!warnedUnconfigured) {
       warnedUnconfigured = true;
       logger.warn(
-        `[comfyui] dispatch 未注入 taskRepo 且 Next barrel 不可达，本轮跳过领取：${errorText(err, "resolveDispatch")}`,
+        `[comfyui] dispatch 未注入 taskRepo 且 Next barrel 不可达，本轮跳过领取：${errorText(error, "resolveDispatch")}`,
       );
     }
     return null;
@@ -130,8 +130,8 @@ async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
         "⏳ 等待 ComfyUI WebSocket 连接就绪；若 ComfyUI 未运行且已开启自动启动，将自动拉起并在此后继续执行…",
       );
     }
-  } catch (err) {
-    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "等待提示写入失败")}`);
+  } catch (error) {
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(error, "等待提示写入失败")}`);
   }
 }
 
@@ -176,8 +176,8 @@ export async function claimAndDispatchOnce(options?: {
   let claimed: Array<string>;
   try {
     claimed = await repo.claimNextQueued(owner, 1);
-  } catch (err) {
-    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "领取队列任务失败")}`);
+  } catch (error) {
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(error, "领取队列任务失败")}`);
     return null;
   }
   const taskId = claimed[0];
@@ -240,17 +240,17 @@ export async function claimAndDispatchOnce(options?: {
   /* fire-and-forget + `.catch`：`executeViaComfyCli` 若 reject（resolveComfyBase
    * throw、writeFile EACCES、spawn ENOENT…），不兜住就是 unhandled rejection，
    * 而在飞记账会永远占着那个槽（界面表现：任务永远 QUEUED 0%）。 */
-  void executeViaComfyCli(job).catch(async (err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
+  void executeViaComfyCli(job).catch(async (error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error);
     log(taskId, "error", `工作流启动异常：${msg}`);
     try {
       await finalizeFailure(taskId, "", msg);
-    } catch (inner) {
+    } catch (error) {
       /* finalizeFailure 自己也可能抛（数据库挂了）：不再嵌 catch，只归还槽位。
        * 这里**刻意不再立刻领一次**——走到这一支的含义就是「库此刻写不进去」，
        * 在它上面自旋只会把每一次领取都变成一次失败；下一拍（2s 的常驻循环）
        * 再试才是有退避的推进。 */
-      log(taskId, "error", errorText(inner, "finalizeFailure 二次失败"));
+      log(taskId, "error", errorText(error, "finalizeFailure 二次失败"));
       releaseDispatchSlot(taskId);
     }
   });

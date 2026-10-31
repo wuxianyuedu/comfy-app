@@ -245,12 +245,12 @@ export async function hydrateFromServer(): Promise<void> {
       writeIndex(merged);
       emitChanged();
     }
-  } catch (e) {
+  } catch (error) {
     /* 拉不到服务端列表 ⇒ 这一轮只用本地索引（local-first 的承诺），并把
      * `hydrated` 退回 false 让下一次挂载再试。但「静默重试」不等于「静默」：
      * 这一行日志是「我的画布为什么没出现在列表里」唯一的可查出口（硬规则 4），
      * 而它走的是 `sync-notice` 那一条诊断口 —— 本文件不许自己写 console。 */
-    logSyncIssue("读取服务端画布列表失败，本轮只用本地索引", e);
+    logSyncIssue("读取服务端画布列表失败，本轮只用本地索引", error);
     hydrated = false;
   }
 }
@@ -298,8 +298,8 @@ export async function hydrateProjectFromServer(id: string): Promise<CanvasProjec
     writeIndex(sortByUpdated(index));
     emitChanged();
     return getProject(id);
-  } catch (e) {
-    logSyncIssue("读取服务端画布列表失败，这一行没能拉到本机", e);
+  } catch (error) {
+    logSyncIssue("读取服务端画布列表失败，这一行没能拉到本机", error);
     return null;
   }
 }
@@ -589,11 +589,11 @@ export async function listProjectsWithServer(): Promise<{
       byId.set(row.id, { ...newer, origin: "both" });
     }
     return { entries: sortByUpdated(byId), ok: true };
-  } catch (e) {
+  } catch (error) {
     /* 「服务端那份没拉到」与「服务端确实没有这一行」是两件事，读侧要能分辨
      * （`ok: false` ⇒ 界面别把「看不到」说成「不存在」）。日志照旧走
      * `sync-notice` 那一条诊断口 —— 本文件不许自己写 console。 */
-    logSyncIssue("读取服务端项目列表失败，本屏只列出本地项目", e);
+    logSyncIssue("读取服务端项目列表失败，本屏只列出本地项目", error);
     return { entries: sortByUpdated(byId), ok: false };
   }
 }

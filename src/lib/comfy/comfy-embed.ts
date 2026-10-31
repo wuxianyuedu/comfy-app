@@ -276,10 +276,10 @@ export async function probeComfyEmbeddable(
       headers: { Origin: hostOrigin },
       signal: AbortSignal.timeout(EMBED_PROBE_TIMEOUT_MS),
     });
-  } catch (e) {
+  } catch (error) {
     return {
       embeddable: false,
-      reason: errorText(e, "无法探测 ComfyUI 的内嵌策略"),
+      reason: errorText(error, "无法探测 ComfyUI 的内嵌策略"),
     };
   }
   return judgeEmbeddable({

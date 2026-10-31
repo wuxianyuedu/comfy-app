@@ -55,9 +55,9 @@ export function useScriptReview(
           setVerdict(outcome.verdict);
           setHistory(outcome.history);
         });
-      } catch (e) {
+      } catch (error_) {
         guard.commit(() => {
-          setError(e instanceof Error ? e.message : "评审失败");
+          setError(error_ instanceof Error ? error_.message : "评审失败");
         });
       }
     });
@@ -82,9 +82,9 @@ export function useScriptReview(
         });
         // 定向改写完成后立即复评 —— 闭环在界面侧一次点击走完。
         await review();
-      } catch (e) {
+      } catch (error_) {
         guard.commit(() => {
-          setError(e instanceof Error ? e.message : "改写失败");
+          setError(error_ instanceof Error ? error_.message : "改写失败");
         });
       }
     });

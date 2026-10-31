@@ -97,8 +97,8 @@ export async function POST(req: NextRequest) {
   let parsed: Awaited<ReturnType<typeof BodySchema.parse>>;
   try {
     parsed = BodySchema.parse(body);
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "请求格式错误"), { status: 400 });
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "请求格式错误"), { status: 400 });
   }
 
   const cfg = await getLLMConfig(parsed.opts);
@@ -116,8 +116,8 @@ export async function POST(req: NextRequest) {
       }
       const content = await completeLLM(cfg, parsed.messages);
       return NextResponse.json({ content });
-    } catch (e) {
-      return NextResponse.json(apiErrorBody(e, "LLM 调用失败"), {
+    } catch (error) {
+      return NextResponse.json(apiErrorBody(error, "LLM 调用失败"), {
         status: 502,
       });
     }
@@ -132,11 +132,11 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
         });
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-      } catch (e) {
+      } catch (error) {
         controller.enqueue(
           encoder.encode(
             /* SSE 的一帧也用同一个键：客户端读的是同一处 `readApiError`。 */
-            `data: ${JSON.stringify(apiErrorBody(e, "LLM 调用失败"))}\n\n`,
+            `data: ${JSON.stringify(apiErrorBody(error, "LLM 调用失败"))}\n\n`,
           ),
         );
       } finally {

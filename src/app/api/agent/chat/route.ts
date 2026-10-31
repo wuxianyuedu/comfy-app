@@ -45,8 +45,8 @@ export async function POST(req: NextRequest) {
   try {
     const result = await handleAgentChat(request);
     return NextResponse.json(result);
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "Agent 处理请求失败"), {
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "Agent 处理请求失败"), {
       status: 502,
     });
   }

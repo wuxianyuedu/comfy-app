@@ -44,8 +44,7 @@ const createCaller = createCallerFactory(projectRouter);
 const tdb = getTestDb();
 
 /** user-b 的 context（越权用例的请求方；`makeCtx()` 缺省是 user-a）。 */
-const ctxB = () =>
-  makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } });
+const ctxB = () => makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } });
 
 const NODES = [{ id: "n1", type: "workflow", position: { x: 0, y: 0 } }];
 const EDGES = [{ id: "e1", source: "n1", target: "n1" }];
@@ -137,9 +136,7 @@ describe("project.upsert", () => {
     expect(row.userId).toBe("user-a");
     // 拒绝要有可查的出口（硬规则 4）：这条链路的客户端是「尽力而为的镜像」，
     // 失败被前端吞掉，服务端这一行 warn 是唯一留下的痕迹。
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("p-victim"),
-    );
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("p-victim"));
   });
 
   it("Zod 校验：空 id / 空 name → BAD_REQUEST", async () => {
@@ -170,8 +167,8 @@ describe("project.get", () => {
     const envelope = (p: Promise<unknown>) =>
       p.then(
         () => "OK",
-        (e: { code?: string; message?: string }) =>
-          `${e?.code ?? "?"}|${e?.message ?? "?"}`,
+        (error: { code?: string; message?: string }) =>
+          `${error?.code ?? "?"}|${error?.message ?? "?"}`,
       );
     const foreign = await envelope(caller.get({ projectId: "p-b" }));
     const missing = await envelope(caller.get({ projectId: "nope" }));
@@ -337,14 +334,14 @@ describe("project.outputs", () => {
       projectId: "p-b",
       images: [IMG("i-b", "/api/generated/p-b/t-b/img_0.png")],
     });
-    await expect(
-      createCaller(makeCtx()).outputs({ projectId: "p-b" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(createCaller(makeCtx()).outputs({ projectId: "p-b" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 
   it("不存在的项目 → 同一句NOT_FOUND", async () => {
-    await expect(
-      createCaller(makeCtx()).outputs({ projectId: "nope" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(createCaller(makeCtx()).outputs({ projectId: "nope" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 });

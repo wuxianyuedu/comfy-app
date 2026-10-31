@@ -57,18 +57,18 @@ export async function GET(req: NextRequest): Promise<Response> {
   let body: Buffer;
   try {
     body = await getView(filename, subfolder, type);
-  } catch (e) {
+  } catch (error) {
     /* 三种失败给三个可分支的答案，而不是统一一个 500：
      *  · 上游明确 404 → 这一格本来就没有文件；
      *  · 上游回了别的状态 → 网关层的失败；
      *  · fetch 自己抛（连不上 / 超时）→ ComfyUI 没在跑。最后这条是**常态**
      *    （壳起来而 ComfyUI 还没起来），所以带 `hint` 让调用方能显示「未连接」
      *    而不是把它当「图不存在」画成碎图标。 */
-    if (e instanceof ComfyViewError) {
-      if (e.status === 404) {
+    if (error instanceof ComfyViewError) {
+      if (error.status === 404) {
         return NextResponse.json({ error: "素材不存在" }, { status: 404 });
       }
-      return NextResponse.json({ error: `ComfyUI 回 ${e.status}` }, { status: 502 });
+      return NextResponse.json({ error: `ComfyUI 回 ${error.status}` }, { status: 502 });
     }
     return NextResponse.json(
       { error: "无法连接 ComfyUI", hint: "comfyui-unreachable" },

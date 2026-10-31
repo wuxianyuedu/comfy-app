@@ -31,11 +31,7 @@ import { createCallerFactory } from "~/server/api/trpc";
 import { skillRepository } from "~/lib/core/repository";
 import { BUILTIN_SKILLS } from "~/lib/skills-seed";
 import { skillRouter } from "~/server/api/routers/skill";
-import {
-  getTestDb,
-  seedUser,
-  type TestDb,
-} from "../../../../tests/helpers/test-db";
+import { getTestDb, seedUser, type TestDb } from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(skillRouter);
@@ -45,7 +41,7 @@ const caller = () => createCaller(makeCtx());
 async function envelope(p: Promise<unknown>): Promise<string> {
   return p.then(
     () => "OK",
-    (e: { code?: string }) => e?.code ?? "UNKNOWN",
+    (error: { code?: string }) => error?.code ?? "UNKNOWN",
   );
 }
 
@@ -99,9 +95,7 @@ describe("skill.list —— 内置补齐与三个默认值", () => {
 describe("skill.create —— 重名的码与形状闸", () => {
   it("slug 撞车 → CONFLICT，且不覆盖已有的那一行", async () => {
     await caller().create(newSkill());
-    expect(await envelope(caller().create(newSkill({ name: "改掉它" })))).toBe(
-      "CONFLICT",
-    );
+    expect(await envelope(caller().create(newSkill({ name: "改掉它" })))).toBe("CONFLICT");
     const row = await skillRepository.findBySlug("my-skill");
     expect(row?.name).toBe("我的技能");
   });
@@ -114,22 +108,16 @@ describe("skill.create —— 重名的码与形状闸", () => {
     await caller().list(); // 先让内置补齐落库
     expect(
       await envelope(
-        caller().create(
-          newSkill({ slug: taken, name: "覆盖内置", description: "x" }),
-        ),
+        caller().create(newSkill({ slug: taken, name: "覆盖内置", description: "x" })),
       ),
     ).toBe("CONFLICT");
-    expect((await skillRepository.findBySlug(String(taken)))?.name).not.toBe(
-      "覆盖内置",
-    );
+    expect((await skillRepository.findBySlug(String(taken)))?.name).not.toBe("覆盖内置");
   });
 
   it("slug 带大写或空格 → BAD_REQUEST，且一次数据库都不查", async () => {
     const find = vi.spyOn(skillRepository, "findBySlug");
     for (const bad of ["My-Skill", "有中文", "a b", ""]) {
-      expect(await envelope(caller().create(newSkill({ slug: bad })))).toBe(
-        "BAD_REQUEST",
-      );
+      expect(await envelope(caller().create(newSkill({ slug: bad })))).toBe("BAD_REQUEST");
     }
     expect(find).not.toHaveBeenCalled();
     find.mockRestore();

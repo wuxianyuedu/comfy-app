@@ -49,8 +49,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ exists: false });
     }
     return NextResponse.json({ exists: true, draft });
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "读取服务端草稿失败"), {
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "读取服务端草稿失败"), {
       status: 500,
     });
   }
@@ -74,8 +74,8 @@ export async function PUT(req: NextRequest) {
   try {
     await upsertDraft(project, draft, user.id);
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "保存服务端草稿失败"), {
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "保存服务端草稿失败"), {
       status: 500,
     });
   }
@@ -93,8 +93,8 @@ export async function DELETE(req: NextRequest) {
   try {
     await deleteDraft(project);
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "删除服务端草稿失败"), {
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "删除服务端草稿失败"), {
       status: 500,
     });
   }

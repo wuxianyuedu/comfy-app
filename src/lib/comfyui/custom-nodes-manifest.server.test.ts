@@ -214,8 +214,8 @@ describe("三相互斥：同一份磁盘只可能给出一个结论", () => {
     let kind;
     try {
       kind = readCustomNodesManifest(root).kind;
-    } catch (e) {
-      throw new Error(`不该抛出：${String(e)}`, { cause: e });
+    } catch (error) {
+      throw new Error(`不该抛出：${String(error)}`, { cause: error });
     }
     expect(["missing", "unreadable"]).toContain(kind);
   });

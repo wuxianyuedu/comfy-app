@@ -127,10 +127,10 @@ export async function POST(req: NextRequest) {
       detail = `连接成功，但「${model}」不在服务端模型列表中，请确认名称是否正确`;
     }
     return NextResponse.json({ ok: true, detail, models });
-  } catch (e) {
+  } catch (error) {
     return NextResponse.json({
       ok: false,
-      detail: apiErrorDetail(e, "连接失败"),
+      detail: apiErrorDetail(error, "连接失败"),
     });
   }
 }

@@ -45,10 +45,10 @@ export function useCharacterReview(projectId: string): CharacterReviewController
         try {
           const v = await reviewCharacter(projectId, characterId);
           guard.commit(() => setVerdict(v));
-        } catch (e) {
+        } catch (error_) {
           guard.commit(() => {
             setVerdict(null);
-            setError(e instanceof Error ? e.message : "评审失败");
+            setError(error_ instanceof Error ? error_.message : "评审失败");
           });
         }
       });

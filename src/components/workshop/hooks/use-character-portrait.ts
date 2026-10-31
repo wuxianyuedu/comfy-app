@@ -349,8 +349,8 @@ export function useCharacterPortrait(opts: {
           }));
           appendLog(makePortraitLog("success", "远端 API 返回图片完成"));
         }
-      } catch (e: unknown) {
-        const message = errorMessage(e, "定妆照生成失败");
+      } catch (error: unknown) {
+        const message = errorMessage(error, "定妆照生成失败");
         fail(message);
         appendLog(makePortraitLog("error", message));
       } finally {
@@ -408,8 +408,8 @@ export function useCharacterPortrait(opts: {
           ...prev,
           status: `已导入 ${file.name}，可在下方候选里挑选`,
         }));
-      } catch (e: unknown) {
-        const message = errorMessage(e, "导入定妆照失败");
+      } catch (error: unknown) {
+        const message = errorMessage(error, "导入定妆照失败");
         fail(message);
         /* 与生成失败同款：导入失败也进执行日志，否则「生成过程」面板与
          *  log/workshop/ 的落盘历史里完全看不到这次失败。 */

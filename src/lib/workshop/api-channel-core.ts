@@ -261,8 +261,8 @@ export async function callImageGeneration(
       body: JSON.stringify(options.bodyOverride ?? defaultImageBody(req, target.model)),
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
-  } catch (e) {
-    throw new Error(errorText(e, "API 生图请求失败"), { cause: e });
+  } catch (error) {
+    throw new Error(errorText(error, "API 生图请求失败"), { cause: error });
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
   if (!res.ok) {
@@ -295,8 +295,8 @@ export async function callVideoSubmit(
       body: JSON.stringify(videoBody(req, channel.model)),
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
-  } catch (e) {
-    throw new Error(errorText(e, "API 视频提交失败"), { cause: e });
+  } catch (error) {
+    throw new Error(errorText(error, "API 视频提交失败"), { cause: error });
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
   if (!res.ok) {
@@ -329,8 +329,8 @@ export async function callVideoPoll(
       headers: headersFor(channel),
       signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
     });
-  } catch (e) {
-    throw new Error(errorText(e, "API 视频轮询失败"), { cause: e });
+  } catch (error) {
+    throw new Error(errorText(error, "API 视频轮询失败"), { cause: error });
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
   if (!res.ok) {

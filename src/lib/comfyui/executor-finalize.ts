@@ -145,12 +145,12 @@ export async function complete(taskId: string, promptId: string) {
   const executedWorkflow = executedWorkflowOf(taskId);
   try {
     await completeInner(taskId, promptId, executedWorkflow);
-  } catch (e) {
+  } catch (error) {
     // 下载 / 落盘 / 写库任何一步炸了，都必须把任务收口，否则队列同样会卡死。
     await finalizeFailure(
       taskId,
       promptId,
-      /* SAFETY: 类型断言已复核 */ (e as { message?: unknown } | null | undefined)?.message ??
+      /* SAFETY: 类型断言已复核 */ (error as { message?: unknown } | null | undefined)?.message ??
         "结果处理失败",
     );
   }

@@ -53,11 +53,11 @@ async function ensureOnce(): Promise<ComfyReadyResult> {
   let res: Response;
   try {
     res = await fetch("/api/comfy/ensure", { method: "POST" });
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
       pending: true,
-      message: errorMessage(e, "无法连接应用服务，稍后重试"),
+      message: errorMessage(error, "无法连接应用服务，稍后重试"),
     };
   }
   let body: unknown;

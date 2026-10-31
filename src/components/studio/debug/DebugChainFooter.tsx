@@ -92,8 +92,8 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
       try {
         const payload = await sourceBusy.run(() => fetchDebugSource(file));
         setSource(payload);
-      } catch (err) {
-        setLoadError(errorMessage(err, "读取源码失败"));
+      } catch (error) {
+        setLoadError(errorMessage(error, "读取源码失败"));
       }
     },
     [sourceBusy],

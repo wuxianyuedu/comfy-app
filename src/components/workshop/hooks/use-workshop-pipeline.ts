@@ -510,8 +510,8 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     try {
       await cancelLocalTask(taskId);
       setNotice("已发送取消请求，正在等待任务停止…");
-    } catch (e: unknown) {
-      setNotice(errorMessage(e, "取消失败（任务可能已经结束）"));
+    } catch (error: unknown) {
+      setNotice(errorMessage(error, "取消失败（任务可能已经结束）"));
     }
   }, []);
 

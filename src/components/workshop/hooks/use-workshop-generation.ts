@@ -225,11 +225,11 @@ export function useWorkshopGeneration({
         );
         setShots((prev) => prev.map((item) => (item.id === shot.id ? { ...item, taskId } : item)));
         await watchShotTask(shot.id, taskId);
-      } catch (err: unknown) {
+      } catch (error: unknown) {
         setShots((prev) =>
           prev.map((item) => (item.id === shot.id ? { ...item, status: "failed" } : item)),
         );
-        const message = errorMessage(err, "生成失败");
+        const message = errorMessage(error, "生成失败");
         console.error(message);
         notify(message);
       } finally {

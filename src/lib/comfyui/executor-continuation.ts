@@ -68,14 +68,12 @@ export function kickQueue(): void {
   if (!kick) {
     if (!warnedMissing) {
       warnedMissing = true;
-      logger.warn(
-        "[comfyui] 续跑回调未注册：领取将由常驻循环接管（若不出现，说明调度层未被加载）",
-      );
+      logger.warn("[comfyui] 续跑回调未注册：领取将由常驻循环接管（若不出现，说明调度层未被加载）");
     }
     return;
   }
-  void Promise.resolve(kick()).catch((err: unknown) => {
-    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "续跑出队失败")}`);
+  void Promise.resolve(kick()).catch((error: unknown) => {
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(error, "续跑出队失败")}`);
   });
 }
 
@@ -94,17 +92,12 @@ export function registerQueueAnnounce(fn: Announce): void {
  * 未注册时**安静跳过并 warn 一次**：这些都是「让用户别以为连接断了」的辅助行，
  * 缺了不影响执行；但静默失效是另一种坏（没人知道自己少了提示）。
  */
-export function announceToQueuedTasks(
-  msg: string,
-  level: LogEntry["level"] = "info",
-): void {
+export function announceToQueuedTasks(msg: string, level: LogEntry["level"] = "info"): void {
   if (!announce) {
-    logger.warn(
-      `[comfyui] 排队任务广播未注册（提示「${msg.slice(0, 40)}」未写入任务日志）`,
-    );
+    logger.warn(`[comfyui] 排队任务广播未注册（提示「${msg.slice(0, 40)}」未写入任务日志）`);
     return;
   }
-  void Promise.resolve(announce(msg, level)).catch((err: unknown) => {
-    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "排队任务广播失败")}`);
+  void Promise.resolve(announce(msg, level)).catch((error: unknown) => {
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(error, "排队任务广播失败")}`);
   });
 }

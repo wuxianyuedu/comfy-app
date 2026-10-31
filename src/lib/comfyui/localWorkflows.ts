@@ -131,14 +131,14 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
   let rootStat: fs.Stats;
   try {
     rootStat = await fs.promises.stat(abs);
-  } catch (e) {
-    const code = /* SAFETY: 类型断言已复核 */ (e as NodeJS.ErrnoException | undefined)?.code;
+  } catch (error) {
+    const code = /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException | undefined)?.code;
     if (code === "ENOENT") {
       return { rawPath: rawDir, absPath: abs, exists: false, files: [] };
     }
     // e 为 unknown：`(e as Error)?.message ?? String(e)` 与旧 `e?.message ?? String(e)`
     // 的运行时语义逐字一致（node fs 抛的都是 Error 实例）。
-    const msg = /* SAFETY: 类型断言已复核 */ (e as Error | undefined)?.message ?? String(e);
+    const msg = /* SAFETY: 类型断言已复核 */ (error as Error | undefined)?.message ?? String(error);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -215,8 +215,8 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
   };
   try {
     await visit(abs);
-  } catch (e) {
-    const msg = /* SAFETY: 类型断言已复核 */ (e as Error | undefined)?.message ?? String(e);
+  } catch (error) {
+    const msg = /* SAFETY: 类型断言已复核 */ (error as Error | undefined)?.message ?? String(error);
     return {
       rawPath: rawDir,
       absPath: abs,

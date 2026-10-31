@@ -55,9 +55,9 @@ export async function writeTerminal<T>(
       },
       onGiveUp: (err, tries) => giveUp(taskId, label, err, tries),
     });
-  } catch (err) {
-    throw new Error(describeSqliteWriteError(err, `终态${label}写库失败`), {
-      cause: err,
+  } catch (error) {
+    throw new Error(describeSqliteWriteError(error, `终态${label}写库失败`), {
+      cause: error,
     });
   }
 }
@@ -68,12 +68,7 @@ export async function writeTerminal<T>(
  * 顺序有意：摘足迹放在最前，这样即使后面那行日志也写不出去，这一行在回收器眼里
  * 已经是孤儿了（接管只依赖库里的状态与本进程的足迹，不依赖那行日志）。
  */
-function giveUp(
-  taskId: string,
-  label: string,
-  err: unknown,
-  tried: number,
-): void {
+function giveUp(taskId: string, label: string, err: unknown, tried: number): void {
   forgetTaskClaimEntirely(taskId);
   log(
     taskId,

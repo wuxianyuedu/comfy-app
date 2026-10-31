@@ -48,8 +48,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ exists: false });
     }
     return NextResponse.json({ exists: true, production: row });
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "读取生产数据失败"), {
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "读取生产数据失败"), {
       status: 500,
     });
   }
@@ -101,8 +101,8 @@ export async function PUT(req: NextRequest) {
       progress: production.progress,
     });
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "保存生产数据失败"), {
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "保存生产数据失败"), {
       status: 500,
     });
   }

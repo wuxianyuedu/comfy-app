@@ -54,8 +54,8 @@ export function useCancelTask({ taskId, onFailed }: UseCancelTaskArgs): CancelTa
     try {
       await cancelBusy.run(() => cancelTask(currentTaskId));
       // 取消请求已送达，收尾交给 SSE 的 error 事件。
-    } catch (e) {
-      onFailedRef.current(errorText(e, "取消请求异常"));
+    } catch (error) {
+      onFailedRef.current(errorText(error, "取消请求异常"));
     }
   }, [cancelBusy]);
 

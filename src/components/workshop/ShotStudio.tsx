@@ -303,9 +303,9 @@ export function ShotStudio({
         patchShot(shot.id, { status: "done", imageUrl: url });
         return null;
       }
-    } catch (e: unknown) {
+    } catch (error: unknown) {
       patchShot(shot.id, { status: "failed" });
-      setShotError(shot.id, errorMessage(e, "生成失败"));
+      setShotError(shot.id, errorMessage(error, "生成失败"));
       return null;
     }
   }
@@ -342,8 +342,8 @@ export function ShotStudio({
           })
           .join(" / ");
         onNotice(`优选完成：…${res.winnerTaskId.slice(-4)} 胜出（${summary}）`);
-      } catch (e: unknown) {
-        onNotice(errorMessage(e, "优选失败"));
+      } catch (error: unknown) {
+        onNotice(errorMessage(error, "优选失败"));
       }
     });
 

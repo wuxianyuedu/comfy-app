@@ -178,7 +178,7 @@ function WorkflowEditorBody({
    *  而不必让每个节点各自发一次 /api 请求。
    *  manifest 在首次解析后已经在服务端缓存，因此每次打开页面只花一次廉价往返。 */
   useEffect(() => {
-    refreshCustomNodes().catch((e) => console.warn("[we] 节点清单刷新失败", e));
+    refreshCustomNodes().catch((error_) => console.warn("[we] 节点清单刷新失败", error_));
   }, []);
   /* 子工作流导航栈。查看顶层工作流时为空。
    *  每一项是 {uid, name}，供面包屑显示；点某一级会退回到那一层。 */

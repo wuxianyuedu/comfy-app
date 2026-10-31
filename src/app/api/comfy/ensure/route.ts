@@ -67,8 +67,8 @@ export async function POST() {
       },
       { status: 202 },
     );
-  } catch (e) {
-    const detail = errorMessage(e, "启动失败");
+  } catch (error) {
+    const detail = errorMessage(error, "启动失败");
     logger.error(`[comfyui-ensure] 启动失败：${detail}`);
     return NextResponse.json({ ok: false, pending: false, detail }, { status: 503 });
   }

@@ -163,15 +163,15 @@ const timingMiddleware = t.middleware(async ({ next, path, type }) => {
       }
     }
     return result;
-  } catch (cause) {
+  } catch (error) {
     const durationMs = Date.now() - start;
     logger.debug({ path, durationMs, type }, "trpc_timing");
     // 调用抛错 = 出问题：在面板可见通道记一条 error，便于用户当场定位。
     trpcRuntimeLog.error(`${path} 失败 ${durationMs}ms`, {
       type,
-      error: cause instanceof Error ? cause.message : String(cause),
+      error: error instanceof Error ? error.message : String(error),
     });
-    throw cause;
+    throw error;
   }
 });
 
