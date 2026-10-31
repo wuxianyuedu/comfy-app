@@ -71,7 +71,9 @@ export function rerunReport(attempts, budget) {
    *   · `launch-failed` —— **第 1 遍就没跑起来**（装载阶段炸了），它从来没走到复跑那一跳，
    *     算进 `reran` 会让「等待累计 / 预算」为一次根本没发生的等待报账；
    *   · `budget-skipped` —— 第 2 遍**根本没开**（墙钟不够，ISSUE #2364），混进复跑数会让
-   *     账读成「测过两次，两次都只是超时」，而那正是这一档要避开的那句话。
+   *     账读成「测过两次，两次都只是超时」，而那正是这一档要避开的那句话；
+   *   · `budget-killed` —— **第 1 遍自己**被墙钟掐断（连一遍都没跑完），它同样从来没走到
+   *     复跑那一跳，而且比 `budget-skipped` 更彻底：连第一份读数都没有。
    * 后两档共用一个后果：**它们本身就是要念出来的读数**，所以即使一块都没复跑，
    * 只要它们不为零，这份账也必须印 —— 判据是下面那个「三档全零才回空串」。 */
   const NOT_RERUN = new Set([
@@ -79,11 +81,13 @@ export function rerunReport(attempts, budget) {
     "red-no-fingerprint",
     "launch-failed",
     "budget-skipped",
+    "budget-killed",
   ]);
   const skipped = attempts.filter((a) => a.outcome === "budget-skipped").length;
+  const killed = attempts.filter((a) => a.outcome === "budget-killed").length;
   const launchFailed = attempts.filter((a) => a.outcome === "launch-failed").length;
   const reran = attempts.filter((a) => !NOT_RERUN.has(a.outcome));
-  if (reran.length === 0 && skipped === 0 && launchFailed === 0) {
+  if (reran.length === 0 && skipped === 0 && killed === 0 && launchFailed === 0) {
     return "";
   }
   /** @type {(outcome: string) => number} */
@@ -112,6 +116,13 @@ export function rerunReport(attempts, budget) {
     (skipped > 0
       ? `  **墙钟**：第 2 遍因预算不够**根本没开** ${skipped} 块` +
         "（那是未判定，退 2 —— 连第二次测量都没有发生，不许读成「测过了、都只是超时」）。\n"
+      : "") +
+    /* 比上面那一格更彻底的一档：**第一遍**就被掐断（`budget-killed`）。它与
+     * `budget-skipped` 不同源 —— 后者是「没开第 2 遍」，这里是「第 1 遍没跑完」，
+     * 连一份读数都没有。只在真的发生时占一行（判据同上），措辞不许含糊成「跑完了」。 */
+    (killed > 0
+      ? `  **墙钟**：第 1 遍自己就被掐断 ${killed} 块` +
+        "（连一遍都没跑完 ⇒ 未判定，退 2：任何一条断言都没有给出结论）。\n"
       : "") +
     "  ⚠️ 「放行」不等于「通过」：前者是同一批用例在更隔离条件下重测的结果；" +
     "「未校验」是这次**没测到**（已逐条点名哪几份）；" +
