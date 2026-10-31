@@ -17,7 +17,7 @@ for (const file of process.argv.slice(2)) {
   const after = before
     .replaceAll(/\/\[0\.(\d+)\]/g, (_, digits) => {
       count++;
-      return "/" + String(parseFloat("0." + digits) * 100);
+      return "/" + String(Number.parseFloat("0." + digits) * 100);
     })
     .replaceAll(/bg-gradient-to-([a-z]+)/g, (_, dir) => {
       count++;
