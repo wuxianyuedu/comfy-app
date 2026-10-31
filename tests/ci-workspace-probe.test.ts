@@ -31,7 +31,7 @@ const NOW = 1_800_000_000_000;
  * 记着整条链为什么是 CP936），把新的坏字符补进这里。这条判据要挡的病很具体：**红的时候
  * 最该读的那几行正好是非 ASCII**，而 `⇒` 被打成 `?` 那次就是这一档自己的下一动作读不出来。
  */
-const CP936_UNENCODABLE = [0x21d2, 0x26a0, 0xfe0f];
+const CP936_UNENCODABLE = [0x21_d2, 0x26_a0, 0xfe_0f];
 
 function expectCp936Safe(lines: Array<string>) {
   const text = lines.join("\n");
@@ -417,14 +417,14 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
     expect(fmtAge(570)).toBe("10m");
     expect(fmtAge(3599)).toBe("60m");
     expect(fmtAge(3600)).toBe("1h");
-    expect(fmtAge(86399)).toBe("24h");
-    expect(fmtAge(86400)).toBe("1d");
+    expect(fmtAge(86_399)).toBe("24h");
+    expect(fmtAge(86_400)).toBe("1d");
     expect(fmtAge(4_923_662)).toBe("57d");
     expect(fmtAge(null)).toBe("-");
   });
 
   it("文件系统没有 birthtime 时退回 mtime，并如实标出用的是哪一个", () => {
-    const { fsLike } = fakeFs({ [CWD]: { mtime: NOW - 5_000 } });
+    const { fsLike } = fakeFs({ [CWD]: { mtime: NOW - 5000 } });
     expect(dirFact(CWD, NOW, fsLike)).toMatchObject({
       present: true,
       ageS: 5,

@@ -94,7 +94,7 @@ export function exportsDir(root) {
  * @returns {string}
  */
 export function newRunId() {
-  return Math.floor(Math.random() * 0x1000000)
+  return Math.floor(Math.random() * 0x1_00_00_00)
     .toString(16)
     .padStart(6, "0");
 }
@@ -645,9 +645,9 @@ function collectFiles(dir, prefix = "") {
 function localHeader({ nameBytes, crc, compressSize, uncompressedSize, method }) {
   const size = 30 + nameBytes.length;
   const b = Buffer.alloc(size);
-  b.writeUInt32LE(0x04034b50, 0);
+  b.writeUInt32LE(0x04_03_4b_50, 0);
   b.writeUInt16LE(20, 4); // version needed
-  b.writeUInt16LE(0x0800, 6); // flags: UTF-8 文件名
+  b.writeUInt16LE(0x08_00, 6); // flags: UTF-8 文件名
   b.writeUInt16LE(method, 8);
   b.writeUInt16LE(0, 10); // mod time（不定：跨平台时区差异会让包不可复现）
   b.writeUInt16LE(0x21, 12); // mod date（1980-01-01，zip 纪元）
@@ -667,10 +667,10 @@ function localHeader({ nameBytes, crc, compressSize, uncompressedSize, method })
  */
 function centralHeader({ nameBytes, crc, compressSize, uncompressedSize, method, offset }) {
   const b = Buffer.alloc(46 + nameBytes.length);
-  b.writeUInt32LE(0x02014b50, 0);
+  b.writeUInt32LE(0x02_01_4b_50, 0);
   b.writeUInt16LE(20, 4); // version made by
   b.writeUInt16LE(20, 6); // version needed
-  b.writeUInt16LE(0x0800, 8);
+  b.writeUInt16LE(0x08_00, 8);
   b.writeUInt16LE(method, 10);
   b.writeUInt16LE(0, 12);
   b.writeUInt16LE(0x21, 14);
@@ -695,7 +695,7 @@ function centralHeader({ nameBytes, crc, compressSize, uncompressedSize, method,
  */
 function endOfCentral({ count, centralSize, centralOffset }) {
   const b = Buffer.alloc(22);
-  b.writeUInt32LE(0x06054b50, 0);
+  b.writeUInt32LE(0x06_05_4b_50, 0);
   b.writeUInt16LE(0, 4);
   b.writeUInt16LE(0, 6);
   b.writeUInt16LE(count, 8);
@@ -719,7 +719,7 @@ function crc32(buf) {
     for (let i = 0; i < 256; i++) {
       let c = i;
       for (let k = 0; k < 8; k++) {
-        c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        c = c & 1 ? 0xed_b8_83_20 ^ (c >>> 1) : c >>> 1;
       }
       crcTable[i] = c;
     }

@@ -632,7 +632,7 @@ export async function runChunk(chunk, deps) {
   if (res.timedOut) {
     process.stderr.write(
       "[affected-launch] 第 1 遍**没跑完**：墙钟预算用尽，本块 " +
-        `${chunk.length} 个用例被中途掐断（剩余预算 ${Math.round((firstPassTimeoutMs ?? 0) / 60000)} 分钟）\n` +
+        `${chunk.length} 个用例被中途掐断（剩余预算 ${Math.round((firstPassTimeoutMs ?? 0) / 60_000)} 分钟）\n` +
         "  ⇒ 按**未判定**收（退 2）：这不是红，也不是绿 —— 这一遍没有任何一条断言给出结论。\n" +
         "  下一动作：把改动拆开（规范 §13.5.8.1），或按名字要全量 " +
         "`node scripts/run-affected-tests.mjs --full`。\n",

@@ -266,7 +266,7 @@ describe("环境前提：判定面的两个方向（红了要红在「几秒就�
     envProbe(
       greenPorts({
         readEncodingImpl: () => ({
-          codePage: 65001,
+          codePage: 65_001,
           chcpRaw: "Active code page: 65001",
         }),
         log: (l: string) => lines.push(l),

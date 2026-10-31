@@ -65,7 +65,7 @@ function parseArgs(argv) {
 const { port: portArg, hostname } = parseArgs(process.argv.slice(2));
 // 命令行显式端口优先（启动器已经算好）；否则走 .env → 路径推导 → 兜底。
 const parsed = Number.parseInt(portArg ?? "", 10);
-const explicit = Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535;
+const explicit = Number.isInteger(parsed) && parsed >= 1 && parsed <= 65_535;
 const resolved = resolveAppPortWithSource(root);
 const port = explicit ? parsed : resolved.port;
 // 端口来源一并打印：与壳「两侧读同一处」的判据就是这个值（ISSUE #821）。
@@ -81,7 +81,7 @@ process.stdout.write(
 // 这正是壳 3809 / dev server 3100 那类「永远对不上」的来源。不阻断启动（命令行是
 // 权威入口），但必须说出来，否则用户只能看到一个连不上的端口。
 const envPort = Number.parseInt(process.env[APP_PORT_ENV_KEY] ?? "", 10);
-if (explicit && Number.isInteger(envPort) && envPort >= 1 && envPort <= 65535 && envPort !== port) {
+if (explicit && Number.isInteger(envPort) && envPort >= 1 && envPort <= 65_535 && envPort !== port) {
   process.stderr.write(
     `[dev.mjs] ⚠ 环境变量 ${APP_PORT_ENV_KEY}=${envPort} 与本次实际监听端口 ${port} 不一致：\n` +
       "[dev.mjs]   命令行的 -p/--port 优先，本次以它为准；但请确认调用方算端口的口径\n" +

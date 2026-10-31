@@ -95,8 +95,8 @@ describe("build-desktop 念得出每一步多久（ISSUE #2574）", () => {
    * 本脚本的读数走同一个函数，所以这条既是对共享件的断言，也是「这条链念出来的
    * 时长该长什么样」的标本。 */
   it("念出来的是时长而不是毫秒数（#2442 的那一格单位）", () => {
-    expect(formatDurationMs(930916)).toBe("15m31s");
-    expect(formatDurationMs(47161)).toBe("47s");
+    expect(formatDurationMs(930_916)).toBe("15m31s");
+    expect(formatDurationMs(47_161)).toBe("47s");
     // 取不到时不许假装是 0 —— 调用方（本脚本）明说「取不到时长」。
     expect(formatDurationMs(null)).toBeNull();
     expect(src).toContain("取不到时长");

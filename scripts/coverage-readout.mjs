@@ -174,7 +174,7 @@ async function main() {
   }
   const reportMtime = r.reportMtime;
   if (!reportMtime) return 0;
-  const ageMin = Math.round((Date.now() - new Date(reportMtime).getTime()) / 60000);
+  const ageMin = Math.round((Date.now() - new Date(reportMtime).getTime()) / 60_000);
   console.log(
     `[coverage-readout] 实况 vs 登记值（报告 mtime ${reportMtime.toISOString()} ≈ ${ageMin} 分钟前；` +
       `登记处 ${r.registeredCount} 条）。`,

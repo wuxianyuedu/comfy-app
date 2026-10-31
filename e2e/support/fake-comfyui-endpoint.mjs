@@ -34,7 +34,7 @@
  * 所以「替身监听哪个口」与「应用连哪个口」不会各说一套。
  */
 /** 替身默认端口。刻意避开 ComfyUI 默认端口与它的就近偏移窗口（见文件头 ①）。 */
-export const FAKE_COMFYUI_DEFAULT_PORT = 18188;
+export const FAKE_COMFYUI_DEFAULT_PORT = 18_188;
 
 /** 替身监听地址。回环 IPv4 显式写法 —— `localhost` 会被 Node fetch 先解析成 `::1`。 */
 export const FAKE_COMFYUI_HOST = "127.0.0.1";
@@ -56,7 +56,7 @@ export const COMFY_BASE_ENV_KEY = "COMFYUI_BASE";
  */
 export function resolveFakeComfyuiPort(env = process.env) {
   const raw = Number(env[FAKE_COMFY_PORT_ENV_KEY]);
-  return Number.isInteger(raw) && raw > 0 && raw <= 65535 ? raw : FAKE_COMFYUI_DEFAULT_PORT;
+  return Number.isInteger(raw) && raw > 0 && raw <= 65_535 ? raw : FAKE_COMFYUI_DEFAULT_PORT;
 }
 
 /**

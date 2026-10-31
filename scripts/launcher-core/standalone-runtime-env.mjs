@@ -185,7 +185,7 @@ export function buildStandaloneRuntimeEnv({
   port,
   env = process.env,
 }) {
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
     throw new Error(
       `standalone runtime needs a valid PORT from the shell, got: ${JSON.stringify(port)}`,
     );

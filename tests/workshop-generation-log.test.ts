@@ -13,12 +13,12 @@ describe("工坊生成执行日志：落盘条目归一化", () => {
       ts: 1_700_000_000_000,
       kind: "request",
       summary: "  向模型发送请求  ",
-      detail: "x".repeat(20000),
+      detail: "x".repeat(20_000),
     });
     expect(entry).not.toBeNull();
     expect(entry?.ts).toBe(1_700_000_000_000);
     expect(entry?.summary).toBe("向模型发送请求");
-    expect(entry?.detail?.length).toBe(12000);
+    expect(entry?.detail?.length).toBe(12_000);
   });
 
   it("无摘要 / 非对象输入返回 null（坏数据不炸文件）", () => {

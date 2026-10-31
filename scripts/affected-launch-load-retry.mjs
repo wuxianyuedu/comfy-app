@@ -173,7 +173,7 @@ export function isLaunchFailureShaped(output) {
 export const RETRY_BUDGET_MS = 5 * 60 * 1000;
 
 /** 每一跳等多久再重新读负载。 */
-const RETRY_POLL_MS = 5_000;
+const RETRY_POLL_MS = 5000;
 
 /**
  * 「这台机器还剩多少余量」—— **每核负载**（`loadavg[0] / cpus().length`）。

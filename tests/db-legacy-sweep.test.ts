@@ -60,7 +60,7 @@ describe("epochMsToIso —— 形状判据", () => {
   it("已是 ISO / 空串 / 非字符串 → null（原样保留）", () => {
     expect(epochMsToIso("2026-09-23T12:55:34.886Z")).toBeNull();
     expect(epochMsToIso("")).toBeNull();
-    expect(epochMsToIso(1787379642808)).toBeNull();
+    expect(epochMsToIso(1_787_379_642_808)).toBeNull();
     expect(epochMsToIso(null)).toBeNull();
   });
 

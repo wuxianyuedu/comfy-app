@@ -16,7 +16,7 @@ import { spawnSync } from "node:child_process";
 import { classifyChanges, describeChanges, parseDiffEntries } from "./sync-attribution.mjs";
 
 /** 运行期探测的节拍：与心跳同档（明显小于「上一位 launcher 已死」的 30s 阈值）。 */
-export const RUNTIME_BEAT_MS = 5_000;
+export const RUNTIME_BEAT_MS = 5000;
 
 /** 「接口层持续 404」连中几拍才定性（约 15s）：单拍 404 可能只是路由在按需编译。 */
 export const RUNTIME_404_THRESHOLD = 3;

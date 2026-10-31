@@ -167,7 +167,7 @@ async function main() {
      * 信息不丢）。逐个登记会让表随 emoji 家族一起涨 —— 而 CP936 的四字节区
      * 本来就不收这一段，于是每一个 emoji 都是「坏的」，那张表会长成一张
      * emoji 名录。口径是：**表收的是「有专门写法」的字符**，emoji 走通用兜底。 */
-    if (ch.codePointAt(0) >= 0x1f000) {
+    if (ch.codePointAt(0) >= 0x1_f0_00) {
       return false;
     }
     return !isCp936Encodable(ch);

@@ -582,7 +582,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
             return stable;
           },
           /* 动画实测 ~280ms；给足余量，但仍是有上限的轮询而非固定 sleep。 */
-          { timeout: 5_000 },
+          { timeout: 5000 },
         )
         .toBe(true);
       if (box === null) {
@@ -841,7 +841,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       expect(before.selected.length).toBeGreaterThan(0);
 
       /* 等 ≥2 轮轮询（2s 一轮） */
-      await page.waitForTimeout(5_000);
+      await page.waitForTimeout(5000);
 
       const after = await page.evaluate(() => ({
         selected: window.getSelection()?.toString() ?? "",

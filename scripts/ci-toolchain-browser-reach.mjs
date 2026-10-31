@@ -449,7 +449,7 @@ export function isReachableVerdict(verdict) {
  */
 export function httpDownloadProbe(
   url,
-  { timeoutMs = 8000, chunkBytes = 65536, maxRedirects = 3 } = {},
+  { timeoutMs = 8000, chunkBytes = 65_536, maxRedirects = 3 } = {},
 ) {
   const r = spawnSync(
     process.execPath,
