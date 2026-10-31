@@ -327,7 +327,7 @@ function readInputSpec(spec: ObjectInfoInputSpec | undefined): {
     }
 
     if (typeof type === "string") {
-      return { type: type, options: spec };
+      return { type, options: spec };
     }
   }
 
