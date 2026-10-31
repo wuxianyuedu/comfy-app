@@ -506,8 +506,7 @@ function deltaLines(d, top, indent = "") {
     `${indent}「新增」按内容指纹算 —— 老块内容小改导致换名也会落在这里；` +
       "要看的是上面那行的净差，不是最大的那个名字。",
   );
-  for (const e of d.added
-    .slice()
+  for (const e of [...d.added]
     .sort((a, b) => b.gzip - a.gzip)
     .slice(0, top)) {
     out.push(`${indent}  · ${e.name}（gzip ${kb(e.gzip)}）`);
@@ -780,8 +779,7 @@ function main() {
       }
       if (d.grown.length) {
         lines.push(`  同名且变大 ${d.grown.length} 个，增幅最大的 5 个：`);
-        for (const [name, b, v] of d.grown
-          .slice()
+        for (const [name, b, v] of [...d.grown]
           .sort((a, b) => b[2] - b[1] - (a[2] - a[1]))
           .slice(0, 5)) {
           lines.push(`    · ${name}（gzip ${kb(b)} → ${kb(v)}）`);

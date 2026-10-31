@@ -42,7 +42,7 @@ function FilePickerDemo({ accept, multiple }: { accept?: string; multiple?: bool
   const [picked, setPicked] = useState<Array<string>>([]);
   const picker = useFilePicker({
     onPick: (file, files) => {
-      setPicked(multiple ? Array.from(files).map((f) => f.name) : [file.name]);
+      setPicked(multiple ? [...files].map((f) => f.name) : [file.name]);
     },
     accept,
     multiple,

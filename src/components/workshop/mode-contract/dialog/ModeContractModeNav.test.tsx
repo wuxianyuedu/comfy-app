@@ -34,9 +34,7 @@ function categoryTrigger(category: string): HTMLElement {
 /** 某类下的模式行（按 `data-mode` 认，`data-category` 是它的容器）。 */
 function modesOf(container: HTMLElement, category: string): Array<Element> {
   const slot = container.querySelector(`[data-category="${category}"]`);
-  return Array.from(
-    slot?.closest('[data-slot="disclosure"]')?.querySelectorAll("[data-mode]") ?? [],
-  );
+  return [...(slot?.closest('[data-slot="disclosure"]')?.querySelectorAll("[data-mode]") ?? [])];
 }
 
 afterEach(cleanup);

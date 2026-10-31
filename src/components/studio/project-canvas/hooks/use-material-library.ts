@@ -158,7 +158,7 @@ export function useMaterialLibrary({
       setActionError(null);
       try {
         await uploadBusy.run(async () => {
-          for (const file of Array.from(files)) {
+          for (const file of files) {
             await uploadMaterial(file, { folder: target, projectId });
           }
         });

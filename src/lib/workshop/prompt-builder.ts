@@ -110,7 +110,7 @@ export function buildShotNegative(characters: Array<Character>, style?: StyleRef
   if (style?.negativePrompt) {
     neg.push(style.negativePrompt);
   }
-  return Array.from(new Set(neg)).join(", ");
+  return [...new Set(neg)].join(", ");
 }
 
 const SHOT_KEYWORDS: Record<string, string> = {

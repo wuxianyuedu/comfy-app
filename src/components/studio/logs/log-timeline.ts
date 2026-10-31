@@ -217,7 +217,7 @@ export function mergeTimelineIndexed(
     added.push(entry);
   }
   if (added.length === 0) {
-    return { logs: changed ? current.slice() : current, index };
+    return { logs: changed ? [...current] : current, index };
   }
   const merged =
     current.length === 0 || changed

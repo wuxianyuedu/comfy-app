@@ -33,7 +33,7 @@ function makeProps(data: Record<string, unknown> | undefined): EdgeProps {
  *  带偏（第一版就踩了这个坑：拿到的 20 是命中区的宽度）。 */
 function wireStyles(data: Record<string, unknown> | undefined) {
   const { container } = render(<WorkflowEdge {...makeProps(data)} />);
-  const borders = Array.from(container.querySelectorAll("path.react-flow__edge-path"));
+  const borders = [...container.querySelectorAll("path.react-flow__edge-path")];
   /* 每条描边后面跟着一条同几何的命中区 path（无 style），过滤掉它们。 */
   const painted = borders.filter((path) => path.getAttribute("style") !== null);
   expect(painted.length).toBe(2);
@@ -90,7 +90,7 @@ describe("WorkflowEdge 选中态样式", () => {
         style={{ stroke: "#10b981" }}
       />,
     );
-    const painted = Array.from(container.querySelectorAll("path.react-flow__edge-path")).filter(
+    const painted = [...container.querySelectorAll("path.react-flow__edge-path")].filter(
       (path) => path.getAttribute("style") !== null,
     );
     const stroke = painted.at(-1)!.getAttribute("style") ?? "";

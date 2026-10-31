@@ -66,7 +66,7 @@ function useDropZone(
       event.preventDefault();
       counterRef.current = 0;
       setActive(false);
-      const files = Array.from(event.dataTransfer.files ?? []);
+      const files = [...(event.dataTransfer.files ?? [])];
       const [first] = files;
       if (!first) {
         return;

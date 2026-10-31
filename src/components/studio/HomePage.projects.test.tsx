@@ -120,8 +120,8 @@ describe("首页背景（极光光斑已撤）", () => {
      糊成一块粉，而首页正是浅色态最常落的屏。 */
   it("首页不再渲染任何径向渐变光斑", () => {
     const { container } = render(<HomePage recentProjects={[]} />);
-    const withRadial = Array.from(container.querySelectorAll<HTMLElement>("div[style]")).filter(
-      (el) => (el.getAttribute("style") ?? "").includes("radial-gradient"),
+    const withRadial = [...container.querySelectorAll<HTMLElement>("div[style]")].filter((el) =>
+      (el.getAttribute("style") ?? "").includes("radial-gradient"),
     );
     expect(withRadial.map((el) => el.getAttribute("class"))).toEqual([]);
   });

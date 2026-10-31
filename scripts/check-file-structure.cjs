@@ -569,7 +569,7 @@ function vanishedLine(count) {
  * 且「跳过」与「判过」在屏幕上也分不开。 */
 /* 消失数两条出口都要给：只在绿那一行给，等于「判据报红时覆盖范围不可见」——
  * 而那恰恰是最需要读数的时刻（报红的这一轮到底看全了没有）。 */
-gateFail("文件结构硬规则", problems.concat(vanishedLine(vanished)), {
+gateFail("文件结构硬规则", [...problems, ...vanishedLine(vanished)], {
   subject: "R1-R12",
   hint:
     "规范见 docs/standards/12-代码组织与文件结构.md §12.6 / §12.8 / §12.11，\n" +

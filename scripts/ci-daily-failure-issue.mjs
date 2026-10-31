@@ -244,7 +244,7 @@ export const LANE_STAGES = /** @type {Record<string, string[]>} */ ({
  */
 export function laneStages(lane) {
   const key = String(lane ?? "").trim();
-  return key === "" ? [] : (LANE_STAGES[key] ?? []).slice();
+  return key === "" ? [] : [...LANE_STAGES[key] ?? []];
 }
 
 /**
