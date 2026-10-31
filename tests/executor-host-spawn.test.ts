@@ -65,7 +65,7 @@ afterEach(() => {
 });
 
 function readScript(rel: string): string {
-  return fs.readFileSync(path.join(REPO_ROOT, rel), "utf-8");
+  return fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
 }
 
 /**

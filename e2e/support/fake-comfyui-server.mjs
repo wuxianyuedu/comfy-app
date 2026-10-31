@@ -119,7 +119,7 @@ function readBody(req) {
     /** @type {Buffer[]} */
     const chunks = [];
     req.on("data", (/** @type {Buffer} */ c) => chunks.push(c));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
   });
 }
 
