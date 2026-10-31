@@ -274,7 +274,7 @@ export async function enrichWorkflowIO(
         if (!dict) {
           continue;
         }
-        if (Object.prototype.hasOwnProperty.call(dict, full)) {
+        if (Object.hasOwn(dict, full)) {
           return full;
         }
       }

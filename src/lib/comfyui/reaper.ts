@@ -269,7 +269,7 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
       return null;
     }
     const hd = /* SAFETY: 类型断言已复核 */ (await h.json()) as Record<string, unknown> | null;
-    return !!hd && Object.prototype.hasOwnProperty.call(hd, hintPromptId);
+    return !!hd && Object.hasOwn(hd, hintPromptId);
   } catch {
     /* 网络错误 / 超时：证据不足。 */
     return null;

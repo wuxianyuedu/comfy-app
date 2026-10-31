@@ -84,7 +84,7 @@ export function hasWireEdit(
   }
   const parsed = parseParamMapping(paramMap);
   const byEntry = parsed.manualByMode?.[mode];
-  return !!byEntry && Object.prototype.hasOwnProperty.call(byEntry, entryId);
+  return !!byEntry && Object.hasOwn(byEntry, entryId);
 }
 
 /** 撤销某个对外参数在这个模式下的手工线（回到「未配置」）。

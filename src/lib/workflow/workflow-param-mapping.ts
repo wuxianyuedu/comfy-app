@@ -248,11 +248,11 @@ function manualTargetForEntryRaw(
   if (!manual) {
     return { found: false, target: null };
   }
-  if (Object.prototype.hasOwnProperty.call(manual, entry.id)) {
+  if (Object.hasOwn(manual, entry.id)) {
     return { found: true, target: manual[entry.id] ?? null };
   }
   for (const legacy of legacyEntryIds(entry)) {
-    if (Object.prototype.hasOwnProperty.call(manual, legacy)) {
+    if (Object.hasOwn(manual, legacy)) {
       return { found: true, target: manual[legacy] ?? null };
     }
   }
@@ -321,7 +321,7 @@ export function manualTargetFor(
     return undefined;
   }
   const byEntry = mapping?.manualByMode?.[mode];
-  if (byEntry && Object.prototype.hasOwnProperty.call(byEntry, entryId)) {
+  if (byEntry && Object.hasOwn(byEntry, entryId)) {
     return byEntry[entryId] ?? null;
   }
   return undefined;
@@ -520,7 +520,7 @@ export function buildSourceOverrides(
   const resolved = resolveMapping(entries, io, mapping, mode);
   const out: Record<string, string | null> = {};
   for (const entry of entries) {
-    if (!Object.prototype.hasOwnProperty.call(resolved, entry.id)) {
+    if (!Object.hasOwn(resolved, entry.id)) {
       continue;
     }
     out[entry.id] = resolved[entry.id] ?? null;
