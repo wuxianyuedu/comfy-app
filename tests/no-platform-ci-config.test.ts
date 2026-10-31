@@ -2559,7 +2559,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const events = crontabEvents(text);
     expect(
       events.length,
-      '`.cnb.yml` 里的 `"crontab: …"` 事件键应恰好两条：每日那 12 格 + 桌包那一档' +
+      '`.cnb.yml` 里的 `"crontab: …"` 事件键应恰好两条：每日那一档 + 桌包那一档' +
         "（ISSUE #2503 要求它**独立成档**，既不进 `.daily-gates` 那张表，也不与每日档共用一把锁）。" +
         "少一条 = 生产构建又只剩 PR 那一条，或桌包档被并进了每日档；多一条 = 有第二条没人认领的定时任务",
     ).toBe(2);
