@@ -129,7 +129,7 @@ export { listeningPidsOnPort, pidBelongsToRoot, processCwd } from "./launcher-co
 
 /** 心跳间隔：必须明显小于 dev-launcher-session 的孤儿判定阈值（30s），
  *  否则正常运行的 launcher 会被下一次启动误判成已死。 */
-const HEARTBEAT_INTERVAL_MS = 5_000;
+const HEARTBEAT_INTERVAL_MS = 5000;
 
 // ── 日志：log/current/<分区>/（路径固定，退出时整目录归档到 runs/）──
 // 顺序很重要：先 recoverStaleCurrent 收走上一次崩掉的残留，再 startRun 写新

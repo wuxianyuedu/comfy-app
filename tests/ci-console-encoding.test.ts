@@ -67,8 +67,8 @@ describe("控制台输出编码：读数（只读，不改任何东西）", () =
         out: "65001\nACP=65001\nActive code page: 65001",
       }),
     });
-    expect(now.codePage).toBe(65001);
-    expect(now.ansiCodePage).toBe(65001);
+    expect(now.codePage).toBe(65_001);
+    expect(now.ansiCodePage).toBe(65_001);
     expect(now.chcpRaw).toBe("Active code page: 65001");
   });
 
@@ -120,7 +120,7 @@ describe("控制台输出编码：读数（只读，不改任何东西）", () =
 
 describe("控制台输出编码：纠正动作", () => {
   it("目标代码页只有一处定义，且它就是 UTF-8", () => {
-    expect(UTF8_CODE_PAGE).toBe(65001);
+    expect(UTF8_CODE_PAGE).toBe(65_001);
   });
 
   it("钉成功时如实报成功（按**复核后的读数**判，不采信命令退出码）", () => {

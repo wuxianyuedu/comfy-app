@@ -4148,7 +4148,7 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       readPullCreateError({
         status: 400,
         data: {
-          errcode: 2000003,
+          errcode: 2_000_003,
           errmsg: "body length exceeded the limit 65,535",
         },
       }),

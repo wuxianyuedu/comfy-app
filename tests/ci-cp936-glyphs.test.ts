@@ -204,7 +204,7 @@ describe("CP936 码表：与 .NET 的判定同源", () => {
   });
 
   it("码表本身不是空的（判据在空表上会假绿）", () => {
-    expect(cp936EncodableSet().size).toBeGreaterThan(20000);
+    expect(cp936EncodableSet().size).toBeGreaterThan(20_000);
   });
 });
 

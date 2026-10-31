@@ -112,7 +112,7 @@ export function schemaFingerprint(root) {
     }
     const bytes = Buffer.concat(files.map((name) => fs.readFileSync(path.join(dir, name))));
     const digest = Buffer.from(crypto.hash("sha256", bytes, "hex"), "hex");
-    return digest.readUInt32BE(0) & 0x7fffffff;
+    return digest.readUInt32BE(0) & 0x7f_ff_ff_ff;
   } catch {
     return null;
   }

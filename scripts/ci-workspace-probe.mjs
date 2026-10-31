@@ -238,10 +238,10 @@ export function fmtAge(ageS) {
   if (n < 3600) {
     return `${Math.round(n / 60)}m`;
   }
-  if (n < 86400) {
+  if (n < 86_400) {
     return `${Math.round(n / 3600)}h`;
   }
-  return `${Math.round(n / 86400)}d`;
+  return `${Math.round(n / 86_400)}d`;
 }
 
 /**

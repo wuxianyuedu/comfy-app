@@ -54,17 +54,17 @@ const SCRIPT = path.join(ROOT, "scripts/check-daily-attendance.mjs");
 
 /** 2026-10-23 00:00 那一跑的真形状（第一次 `0 0` 派发，11 格全 success）。 */
 const GREEN_STAGES = [
-  { name: "Prepare", status: "success", duration: 31547 },
-  { name: "每日工具链自证", status: "success", duration: 13324 },
-  { name: "每日安装依赖", status: "success", duration: 256363 },
+  { name: "Prepare", status: "success", duration: 31_547 },
+  { name: "每日工具链自证", status: "success", duration: 13_324 },
+  { name: "每日安装依赖", status: "success", duration: 256_363 },
   { name: "每日 Python 可用性", status: "success", duration: 3550 },
   { name: "每日 Python 探针读数", status: "success", duration: 4177 },
-  { name: "每日同步数据库表结构", status: "success", duration: 20448 },
-  { name: "每日生产构建", status: "success", duration: 128856 },
-  { name: "每日 ESLint 零警告", status: "success", duration: 333521 },
+  { name: "每日同步数据库表结构", status: "success", duration: 20_448 },
+  { name: "每日生产构建", status: "success", duration: 128_856 },
+  { name: "每日 ESLint 零警告", status: "success", duration: 333_521 },
   { name: "每日浏览器安装", status: "success", duration: 2771 },
-  { name: "每日全量E2E", status: "success", duration: 100865 },
-  { name: "每日单元测试", status: "success", duration: 658594 },
+  { name: "每日全量E2E", status: "success", duration: 100_865 },
+  { name: "每日单元测试", status: "success", duration: 658_594 },
   { name: "BeforeEnd", status: "success", duration: 4 },
   { name: "DebugDetection", status: "skipped", duration: 0 },
   { name: "End", status: "success", duration: 83 },
@@ -162,8 +162,8 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
 
   it("被取消那一跑落在「没结论」而不是「红」（#2114 那条锁退化的形状）", () => {
     const stages = [
-      { name: "Prepare", status: "success", duration: 29083 },
-      { name: "单跑构建·安装依赖", status: "success", duration: 214977 },
+      { name: "Prepare", status: "success", duration: 29_083 },
+      { name: "单跑构建·安装依赖", status: "success", duration: 214_977 },
       { name: "单跑构建·同步数据库表结构", status: "cancel", duration: 86 },
       { name: "单跑构建·生产构建", status: "skipped", duration: 0 },
       { name: "BeforeEnd", status: "success", duration: 3 },

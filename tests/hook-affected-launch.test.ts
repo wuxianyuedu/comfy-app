@@ -181,13 +181,13 @@ describe("受影响用例的启动器", () => {
     const files = syntheticFiles(400);
     /* 用一个**故意小**的预算来逼出多块：判据要的是「分块策略不丢用例」这条性质，
      * 而不是「400 条恰好会超真实的 24000」那种会随模板长度腐烂的算术。 */
-    const chunks = planLaunches(files, 4_000);
+    const chunks = planLaunches(files, 4000);
     const flattened = chunks.flat();
     expect(flattened).toEqual(files);
     expect(flattened).toHaveLength(files.length);
     expect(chunks.length).toBeGreaterThan(1);
     for (const chunk of chunks) {
-      expect(chunk.join(" ").length).toBeLessThanOrEqual(4_000);
+      expect(chunk.join(" ").length).toBeLessThanOrEqual(4000);
     }
   });
 
@@ -204,7 +204,7 @@ describe("受影响用例的启动器", () => {
      * cmd.exe 的 8191 却仍在 node 直起的预算内。按同样的规模合成一份，必须是一整块。 */
     const files = syntheticFiles(229);
     const joined = files.join(" ");
-    expect(joined.length).toBeGreaterThan(8_191);
+    expect(joined.length).toBeGreaterThan(8191);
     expect(joined.length).toBeLessThanOrEqual(SAFE_ARGV_BUDGET);
     expect(planLaunches(files, SAFE_ARGV_BUDGET)).toHaveLength(1);
   });
@@ -1036,7 +1036,7 @@ describe("受影响用例的启动器 —— 收尾的等待与复跑账", () =>
   });
 
   it("真红那一格在账里也是**阻断**，不许被前面两格的「放行」语气盖掉", () => {
-    const text = rerunReport([{ outcome: "real-red", waitedMs: 5_000, settled: true }], BUDGET);
+    const text = rerunReport([{ outcome: "real-red", waitedMs: 5000, settled: true }], BUDGET);
     expect(text).toContain("真红 1 块");
     expect(text).toContain("等待累计 5.0s");
   });
@@ -1396,7 +1396,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             return TIMEOUT;
           },
-          settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 9_999 }),
+          settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 9999 }),
           stageBudget: { deadline: Date.now() - 1, budgetMs: 1 },
           onAttempt: (r) => outcomes.push(r.outcome),
         }),
@@ -1491,7 +1491,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             return calls.length === 1 ? TIMEOUT : GREEN;
           },
-          settle: () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_000 }),
+          settle: () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 1000 }),
           stageBudget: wallClockBudget({
             startMs: Date.now(),
             budgetMs: 60 * 60 * 1000,
@@ -1564,7 +1564,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             return calls.length === 1 ? TIMEOUT : GREEN;
           },
-          settle: () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_200 }),
+          settle: () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 1200 }),
           onUnverified: (files: Array<string>) => unverified.push([...files]),
         }),
       );
@@ -2304,11 +2304,11 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
   });
 
   it("逐文件补跑的份数：没界=全部，界已过=0，没单价=先拿一份的单价", () => {
-    expect(affordablePerFileCount({ perFileMs: 3_000, pending: 5 })).toBe(5);
+    expect(affordablePerFileCount({ perFileMs: 3000, pending: 5 })).toBe(5);
     expect(
       affordablePerFileCount({
         budget: { deadline: 10_000 },
-        perFileMs: 3_000,
+        perFileMs: 3000,
         pending: 5,
         nowMs: 10_000,
       }),
@@ -2399,8 +2399,8 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
     expect(second).toContain("--no-file-parallelism");
     expect(second).not.toContain("已确认");
     const perFile = perFileBudgetStopReport({
-      remainingMs: 1_200,
-      perFileMs: 4_000,
+      remainingMs: 1200,
+      perFileMs: 4000,
       left: 2,
     });
     expect(perFile).toContain("一次都没被测量过");
@@ -2425,10 +2425,10 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
 
   it("起界那份给的是「整次一份」的截止时刻，不是每块一份", () => {
     const b = wallClockBudget({
-      startMs: 1_000,
+      startMs: 1000,
       budgetMs: STAGE_WALL_CLOCK_MS,
     });
-    expect(b.deadline).toBe(1_000 + STAGE_WALL_CLOCK_MS);
+    expect(b.deadline).toBe(1000 + STAGE_WALL_CLOCK_MS);
     expect(b.budgetMs).toBe(STAGE_WALL_CLOCK_MS);
   });
 });
@@ -2472,8 +2472,8 @@ describe("墙钟判点：第一遍自己开不开得起（PR #2760 的现场）"
     const budget = { deadline: STAGE_WALL_CLOCK_MS, budgetMs: STAGE_WALL_CLOCK_MS };
     for (const input of [
       { budget, files: 808, perFileMs: 0, nowMs: 0 },
-      { budget, files: 0, perFileMs: 1_000, nowMs: 0 },
-      { budget: null, files: 808, perFileMs: 1_000, nowMs: 0 },
+      { budget, files: 0, perFileMs: 1000, nowMs: 0 },
+      { budget: null, files: 808, perFileMs: 1000, nowMs: 0 },
     ]) {
       const got = gateFirstPassByWallClock(input);
       expect(got.ok, JSON.stringify(input)).toBe(true);
@@ -2485,7 +2485,7 @@ describe("墙钟判点：第一遍自己开不开得起（PR #2760 的现场）"
     const got = gateFirstPassByWallClock({
       budget: { deadline: MIN, budgetMs: STAGE_WALL_CLOCK_MS },
       files: 100,
-      perFileMs: 5_000,
+      perFileMs: 5000,
       nowMs: 0,
     });
     expect(got.ok).toBe(false);

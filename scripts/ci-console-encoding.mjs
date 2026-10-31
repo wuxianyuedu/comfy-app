@@ -68,7 +68,7 @@ import process from "node:process";
  *
  * 它同时是判断读数「对不对」的基准，所以两处不许各写一个数字。
  */
-export const UTF8_CODE_PAGE = 65001;
+export const UTF8_CODE_PAGE = 65_001;
 
 /**
  * 一条子进程的读数 —— `applyConsoleEncoding` / `readConsoleEncoding` 共用的形状。

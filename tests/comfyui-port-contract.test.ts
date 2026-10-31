@@ -44,7 +44,7 @@ describe("默认端口是单一事实源", () => {
   it("COMFYUI_DEFAULT_PORT 是正整数（常量被删/改成 0 都会让两侧的兜底失据）", () => {
     expect(Number.isInteger(COMFYUI_DEFAULT_PORT)).toBe(true);
     expect(COMFYUI_DEFAULT_PORT).toBeGreaterThan(0);
-    expect(COMFYUI_DEFAULT_PORT).toBeLessThanOrEqual(65535);
+    expect(COMFYUI_DEFAULT_PORT).toBeLessThanOrEqual(65_535);
   });
 
   it("常量只定义在零依赖的 endpoints.ts；app-settings 不再转手它", () => {

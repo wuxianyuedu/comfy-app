@@ -143,7 +143,7 @@ function extractDerivedAppPort() {
   const { createRequire } = require("node:module");
   const req = createRequire(__filename);
   const port = req(path.join(ROOT, "scripts", "app-port.mjs")).resolveAppPort(ROOT);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
     throw new Error(`无法从 scripts/app-port.mjs 解析本检出端口：${port}`);
   }
   return String(port);

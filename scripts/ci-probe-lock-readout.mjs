@@ -501,7 +501,7 @@ export function waitTerminal(repo, sn, timeoutMs = 30 * 60 * 1000) {
   const deadline = Date.now() + timeoutMs;
   let last = readBuild(repo, sn);
   while (Date.now() < deadline && !TERMINAL.has(last.status)) {
-    const wait = Math.min(15000, Math.max(0, deadline - Date.now()));
+    const wait = Math.min(15_000, Math.max(0, deadline - Date.now()));
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, wait);
     last = readBuild(repo, sn);
   }

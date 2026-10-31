@@ -60,7 +60,7 @@ const argv = process.argv.slice(2);
 const runOnce = argv.includes("--once");
 const claimOnce = argv.includes("--claim-once");
 const intervalArg = argv.find((a) => a.startsWith("--interval="));
-const intervalMs = intervalArg ? Number.parseInt(intervalArg.split("=")[1] ?? "", 10) : 5_000;
+const intervalMs = intervalArg ? Number.parseInt(intervalArg.split("=")[1] ?? "", 10) : 5000;
 
 /** 日志路径：默认落 `log/current/services/executor-host.log`（追加不轮转，与
  *  `comfyui-runtime.log` 同族；current/ 的语义见规范 §4 —— 退出时整目录归档）。
@@ -174,7 +174,7 @@ let hostRuntime = null;
 
 /** 领取节拍（ms）。与 inline 的「点一次跑一个」语义对齐：每 tick `take=1`，
  *  串行的深队列由 dispatch 的槽位判据（MAX_CONCURRENCY）管，这里不一次领一串。 */
-const CLAIM_TICK_MS = Number.parseInt(process.env.COMFYAPP_HOST_CLAIM_TICK_MS ?? "", 10) || 2_000;
+const CLAIM_TICK_MS = Number.parseInt(process.env.COMFYAPP_HOST_CLAIM_TICK_MS ?? "", 10) || 2000;
 
 /** 领一行并投递执行 + 取消收尾（P3 §5 ADR §14 D1 第二刀之后）：
  *  领取与提交的全部判据都在 `src/lib/comfyui/executor-dispatch.ts`（与 Next 侧
@@ -386,7 +386,7 @@ const hb = setInterval(
   () => {
     writeLine(`heartbeat bootId=${bootId}`);
   },
-  Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 5_000,
+  Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 5000,
 );
 
 /* 领取主循环（3-B1）：host 形态每 CLAIM_TICK_MS 领一行（无行可领时只是一个

@@ -105,6 +105,6 @@ describe("装依赖那一跳的墙钟", () => {
     /* 预算必须比心跳大：反过来的话心跳一行都打不出来，这一格又回到「卡住了但没读数」。 */
     expect(DEFAULT_INSTALL_BUDGET_MS).toBeGreaterThan(HEARTBEAT_MS);
     /* 而它必须显著小于平台硬上限（8640s）—— 卡死要在十几分钟报出来，不是两小时。 */
-    expect(DEFAULT_INSTALL_BUDGET_MS).toBeLessThan(86_400_00);
+    expect(DEFAULT_INSTALL_BUDGET_MS).toBeLessThan(8_640_000);
   });
 });
