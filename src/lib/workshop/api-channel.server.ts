@@ -55,7 +55,7 @@ export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
   let stored: Partial<WorkshopApiSettings> = {};
   try {
     stored = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      readFileSync(FILE, "utf-8"),
+      readFileSync(FILE, "utf8"),
     ) as Partial<WorkshopApiSettings>;
   } catch {
     // 文件缺失或损坏 → 用默认值。
@@ -75,7 +75,7 @@ export async function saveWorkshopApiSettings(
   };
   cache = next;
   await fs.mkdir(path.dirname(FILE), { recursive: true });
-  await fs.writeFile(FILE, JSON.stringify(next, null, 2), "utf-8");
+  await fs.writeFile(FILE, JSON.stringify(next, null, 2), "utf8");
   return next;
 }
 

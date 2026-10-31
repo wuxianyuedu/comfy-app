@@ -150,7 +150,7 @@ export function trace(
         ? ` ${clampLine(JSON.stringify(redactSecretShaped(meta)))}`
         : "";
     const line = `[${localTimestamp()}] [INFO] [trace] ${channel} [${taskId ?? "-"}] ${text}${metaText}\n`;
-    fs.appendFileSync(/*turbopackIgnore: true*/ tracePath, line, "utf-8");
+    fs.appendFileSync(/*turbopackIgnore: true*/ tracePath, line, "utf8");
   } catch {
     /* trace 写入失败绝不阻塞业务主流程（可能是只读盘 / 路径被占）。 */
   }

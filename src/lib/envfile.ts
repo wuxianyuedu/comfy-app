@@ -26,7 +26,7 @@ export function readEnvVar(key: string): string | null {
       continue;
     }
 
-    const text = fs.readFileSync(fullPath, "utf-8");
+    const text = fs.readFileSync(fullPath, "utf8");
 
     for (const line of text.split("\n")) {
       const match = /^\s*([\w.-]+)\s*=\s*(.*?)\s*$/.exec(line);

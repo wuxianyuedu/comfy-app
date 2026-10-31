@@ -222,7 +222,7 @@ describe("状态栏那一格的全部来源都是库", () => {
 
   it("源形态：这一格不再从执行进程的内存取数（这一刀的判据本身）", async () => {
     const source = stripComments(
-      readFileSync(path.resolve(process.cwd(), "src/lib/comfyui/queue-status.server.ts"), "utf-8"),
+      readFileSync(path.resolve(process.cwd(), "src/lib/comfyui/queue-status.server.ts"), "utf8"),
     );
     expect(source).not.toMatch(/runner-state/);
     expect(source).not.toMatch(/\bstate\(\)/);

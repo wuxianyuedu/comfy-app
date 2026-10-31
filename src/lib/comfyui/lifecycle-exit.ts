@@ -327,7 +327,7 @@ function readTailLines(filePath: string, maxLines = 40, maxLineLen = 600): Array
     const text =
       buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe
         ? buf.subarray(2).toString("utf16le")
-        : buf.toString("utf-8");
+        : buf.toString("utf8");
     const lines = text
       .split(/\r?\n/)
       .map((l) => l.trimEnd())

@@ -30,7 +30,7 @@ describe("fileMtimeMs", () => {
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "log-session-scope-"));
     file = path.join(dir, "app-runtime.log");
-    fs.writeFileSync(file, "old\n", "utf-8");
+    fs.writeFileSync(file, "old\n", "utf8");
   });
 
   afterEach(() => {

@@ -88,7 +88,9 @@ describe("Python 子进程必须被锁在 UTF-8（ISSUE #1164）", () => {
     );
     const decodes = [...src.matchAll(/\.setEncoding\(\s*"([^"]+)"\s*\)/g)].map((m) => m[1]);
     expect(decodes.length).toBeGreaterThanOrEqual(2); // stdout + stderr
-    expect(new Set(decodes)).toEqual(new Set(["utf-8"]));
+    /* oxlint 的 `unicorn/text-encoding-identifier-case` 把编码标识统一成规范短名
+     *（`utf8`）；两种写法 Node 等价，这里钉的是「两条管道都显式按 UTF-8 解」。 */
+    expect(new Set(decodes)).toEqual(new Set(["utf8"]));
   });
 
   it("ComfyUI 本体那条链路保持着同一口径（自定义节点 print emoji 会崩进程）", () => {

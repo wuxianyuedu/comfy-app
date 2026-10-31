@@ -46,11 +46,11 @@ export type SettingsFileIo = {
 };
 
 const realSettingsFileIo: SettingsFileIo = {
-  read: (file) => readFileSync(file, "utf-8"),
+  read: (file) => readFileSync(file, "utf8"),
   fingerprint: settingsFileFingerprint,
   write: async (file, content) => {
     await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, content, "utf-8");
+    await fs.writeFile(file, content, "utf8");
   },
 };
 

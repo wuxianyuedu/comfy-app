@@ -229,7 +229,7 @@ export async function executeViaComfyCli(job: Job) {
   await fs.mkdir(tmpDir, { recursive: true });
   const tmpFile = path.join(tmpDir, `wf-${taskId}.json`);
   log(taskId, "info", `写入临时工作流文件：${tmpFile}`);
-  await fs.writeFile(tmpFile, JSON.stringify(patched), "utf-8");
+  await fs.writeFile(tmpFile, JSON.stringify(patched), "utf8");
   // 记下本次实际提交出去的工作流：RAW 是（覆盖 + 剔除后的）未展开原件，
   // API 是（剔除/穿透后的）图。任务完成落盘为 workflow.json 供完整复现。
   s.executedWorkflow.set(taskId, patched);
@@ -345,7 +345,7 @@ export async function executeViaComfyCli(job: Job) {
       COMFY_CLI_NO_TELEMETRY: "1",
       PYTHONUNBUFFERED: "1",
       PYTHONUTF8: "1",
-      PYTHONIOENCODING: "utf-8",
+      PYTHONIOENCODING: "utf8",
     },
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
@@ -397,7 +397,7 @@ export async function executeViaComfyCli(job: Job) {
     promptId: () => promptId,
   });
 
-  child.stdout?.setEncoding("utf-8");
+  child.stdout?.setEncoding("utf8");
   const stdoutParser = createCliEnvelopeParser({
     taskId,
     log,
@@ -446,7 +446,7 @@ export async function executeViaComfyCli(job: Job) {
   // 错误堆栈挤出面板。单行截断放宽到 400 字符（traceback 的路径很长）。
   // stderrSink.raw() 始终完整累积，close 时的 tail 汇总不受行数上限影响。
   const stderrSink = createCliStderrSink({ taskId, log, rawCli: appendRawCli });
-  child.stderr?.setEncoding("utf-8");
+  child.stderr?.setEncoding("utf8");
   child.stderr?.on("data", stderrSink.sink);
 
   child.on("close", (code) => {

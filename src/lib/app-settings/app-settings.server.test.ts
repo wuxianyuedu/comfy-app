@@ -1,12 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  utimesSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -25,7 +18,7 @@ async function loadSettingsServer() {
 
 function writeSettings(payload: Record<string, unknown>): void {
   mkdirSync(join(sandbox, "data"), { recursive: true });
-  writeFileSync(settingsFile, JSON.stringify(payload, null, 2), "utf-8");
+  writeFileSync(settingsFile, JSON.stringify(payload, null, 2), "utf8");
 }
 
 beforeEach(() => {
@@ -121,6 +114,6 @@ describe("getSettingsSync 的跨进程失效", () => {
     const saved = await saveSettings({ comfyCliPython: "D:/x/python.exe" });
     expect(saved.comfyCliPython).toBe("D:/x/python.exe");
     expect(getSettingsSync().comfyCliPython).toBe("D:/x/python.exe");
-    expect(readFileSync(settingsFile, "utf-8")).toContain("D:/x/python.exe");
+    expect(readFileSync(settingsFile, "utf8")).toContain("D:/x/python.exe");
   });
 });
