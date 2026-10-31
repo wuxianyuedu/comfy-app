@@ -55,6 +55,7 @@ import { ONESHOT_TARGETS, oneshotGates, oneshotPairs } from "../scripts/ci-onesh
 /* 预算这一格的判据要拿**脚本自己那份预算**当基准，而不是在测试里再抄一个常数：
  * 抄一份的话「改了脚本预算、忘了改配置」两种漂移里只会看见一种。 */
 import { FULL_SUITE_TIMEOUT_MS } from "../scripts/full-suite-run.mjs";
+import { DAILY_LANE_PIPELINES } from "../scripts/check-daily-attendance.mjs";
 import { FRESHNESS_TRACKS } from "../scripts/freshness-ledger.mjs";
 import { describe, expect, it } from "vitest";
 
@@ -1776,6 +1777,47 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       buttons,
       "按钮的 `reg` 必须锚定到 master（正则要带 ^ 与 $）—— 否则每日档能在别的分支上被点",
     ).toMatch(/^ {2}- reg: \^\S+\$[ 	]*$/m);
+  });
+
+  /**
+   * 出勤判据认的那份流水线名 ⇄ 配置里真正跑 `*daily_gates` 的那些流水线（ISSUE #2873）。
+   *
+   * 为什么这一对要双向核对：`check-daily-attendance.mjs` 的 `DAILY_LANE_PIPELINES` 是它
+   * **认档**用的唯一名单（事件名前缀不够 —— 01:00 与 03:00 两条定时档共享 `crontab:` 前缀，
+   * 实测把桌包档死在平台 `Prepare` 念成了每日档的缺勤）。名单漂了两种方向都静默：
+   *   · 配置改了流水线名而名单没跟 ⇒ 判据从此「窗口内没有一条属于本档」，念成**永远缺勤**；
+   *   · 名单里留着一个已经不存在的名字 ⇒ 它照旧"认得出"，而那一档其实早就没了，
+   *     于是**永远出勤**。两种都不会让别的判据红。
+   * 比的是「跑哪份清单」（`stagesRef`），不是「挂在哪个事件名 / 几点」—— 后者是本文件反复
+   * 拒绝的那一类写法（小时在 10-22 一天内换过两次）。
+   */
+  it("每日出勤判据认的流水线名，就是配置里跑 `*daily_gates` 的那几条（不多不少）", () => {
+    const rows = pipelineLockAssignments(readRegisteredConfig());
+    const dailyNames = rows.filter((r) => r.stagesRef === "*daily_gates").map((r) => r.name);
+    expect(dailyNames.length, "配置里一条跑 `*daily_gates` 的流水线都没解析出来").toBeGreaterThan(0);
+    expect(
+      [...DAILY_LANE_PIPELINES].sort(),
+      "`DAILY_LANE_PIPELINES` 与 `.cnb.yml` 里跑 `*daily_gates` 的流水线名不是一张表 —— " +
+        "配置那侧改了名（或加了一个触发口）而名单没跟，出勤判据就会静默变成恒缺勤或恒出勤",
+    ).toEqual(dailyNames.sort());
+
+    /* 另一定时档必须在名单**之外**：这是 #2873 的那条实质。取「跑的不是 `*daily_gates`
+     * 的定时类流水线」而不是取某个具体名字，所以桌包改天再拆一条出来也在这条的量程里。 */
+    const cronRows = rows.filter((r) => r.event.startsWith("crontab:"));
+    expect(
+      cronRows.length,
+      "配置里只解析出一条定时流水线 —— 这条判据就没有对象了（第二条定时档就是 #2873 的由来）",
+    ).toBeGreaterThanOrEqual(2);
+    const otherCron = cronRows.filter((r) => r.stagesRef !== "*daily_gates");
+    expect(otherCron.length, "定时类里没有「不跑每日清单」的那一条，判据的空转形态").toBeGreaterThan(
+      0,
+    );
+    for (const r of otherCron) {
+      expect(
+        DAILY_LANE_PIPELINES,
+        `定时档「${r.name}」（事件 ${r.event}）被算进了每日出勤的名单 —— 两档会互相替对方作证`,
+      ).not.toContain(r.name);
+    }
   });
 
   it("规范正文确实写着这次的决策反转（反向锚点）", () => {
