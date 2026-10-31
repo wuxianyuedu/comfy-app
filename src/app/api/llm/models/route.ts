@@ -119,13 +119,13 @@ export async function GET(req: NextRequest) {
       models,
       detail: `共 ${models.length} 个模型`,
     });
-  } catch (e) {
+  } catch (error) {
     // 网络层 TypeError（如 fetch failed / ECONNREFUSED）翻译成可操作的人话，
     // 避免用户在工坊只看到一句生硬的 `fetch failed`。
     return NextResponse.json({
       ok: false,
       models: [],
-      detail: describeFetchFailure(e, cfg),
+      detail: describeFetchFailure(error, cfg),
     });
   }
 }

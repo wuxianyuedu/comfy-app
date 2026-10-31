@@ -140,9 +140,9 @@ export async function POST(req: NextRequest) {
           `[console] run 完成 command="${result.command}" exit=${result.exitCode ?? "null"}` +
             ` killed=${result.killed} 用时=${result.durationMs}ms`,
         );
-      } catch (e) {
+      } catch (error) {
         cancelOnClose = false;
-        const message = errorMessage(e, "控制台命令执行失败");
+        const message = errorMessage(error, "控制台命令执行失败");
         send({ type: "error", message });
         logger.error(`[console] run 异常 command="${parsed.display}"：${message}`);
       } finally {

@@ -330,8 +330,8 @@ export async function POST(_req: NextRequest) {
       return NextResponse.json({ ok: true, detail: result.detail });
     }
     return NextResponse.json({ error: result.detail }, { status: 500 });
-  } catch (e) {
-    const hint = ollamaFailureHint(e);
+  } catch (error) {
+    const hint = ollamaFailureHint(error);
     appendOllamaLog(`[err] 启动失败：${hint}`);
     return NextResponse.json({ error: `启动 Ollama 失败：${hint}` }, { status: 500 });
   } finally {

@@ -190,8 +190,8 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         /* 读取本身也收在唯一出口里（§16.2.4.27）：为什么用 `file.text()`
          * 不用手搓 `FileReader`、失败怎么表达，口径只有一处。 */
         text = await readFileAsText(file);
-      } catch (e: unknown) {
-        showFileError(errorText(e, "无法读取文件"));
+      } catch (error: unknown) {
+        showFileError(errorText(error, "无法读取文件"));
         return;
       }
       let parsed: unknown;

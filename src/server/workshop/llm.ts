@@ -89,15 +89,16 @@ export async function completeWorkshopLLM(
       }),
       signal: AbortSignal.timeout(180_000),
     });
-  } catch (e) {
-    const msg = errorMessage(e, String(e));
-    const cause = e instanceof TypeError && e.cause instanceof Error ? String(e.cause.message) : "";
+  } catch (error) {
+    const msg = errorMessage(error, String(error));
+    const cause =
+      error instanceof TypeError && error.cause instanceof Error ? String(error.cause.message) : "";
     const reach = /ECONNREFUSED|ECONNRESET/.test(cause) || /fetch failed/i.test(msg);
     throw new Error(
       reach
         ? `连不上 LLM 服务（${cfg.baseUrl}）：请确认本地服务已启动或 Base URL 正确（${cause || "连接被拒绝"}）。`
         : `LLM 请求失败：${msg}`,
-      { cause: e },
+      { cause: error },
     );
   }
   if (!res.ok) {

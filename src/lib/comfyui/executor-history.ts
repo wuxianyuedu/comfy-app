@@ -69,8 +69,8 @@ export async function fetchHistoryEntry(promptId: string): Promise<ComfyHistoryE
         );
         return entry;
       }
-    } catch (err) {
-      lastErr = err;
+    } catch (error) {
+      lastErr = error;
     }
     await sleep(HISTORY_RETRY_DELAY_MS);
   }
@@ -121,10 +121,10 @@ export async function traceComfyQueue(taskId: string | null): Promise<void> {
     const qd = /* SAFETY: 类型断言已复核 */ (await r.json()) as unknown;
     const sum = queueTraceSummary(qd);
     trace("http", taskId, "ComfyUI /queue 快照", { base, ...sum, raw: qd });
-  } catch (err) {
+  } catch (error) {
     trace("http", taskId, "ComfyUI /queue 探测不可达", {
       base,
-      error: err instanceof Error ? err.message : String(err),
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 }

@@ -195,11 +195,11 @@ export async function renderComposition(
     await execFileP(ff, ["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", out], {
       timeout: 300_000,
     });
-  } catch (e) {
+  } catch (error) {
     await fs.rm(tmpDir, { recursive: true, force: true });
     return {
       ok: false,
-      note: errorText(e, "ffmpeg 合成失败"),
+      note: errorText(error, "ffmpeg 合成失败"),
     };
   }
   await fs.rm(tmpDir, { recursive: true, force: true });

@@ -689,9 +689,9 @@ export async function GET() {
    * 真实原因反而看不到。现在错误以 { error } JSON 返回，前端可读展示。 */
   try {
     return await buildGetResponse();
-  } catch (e) {
+  } catch (error) {
     return errorResponse(
-      new AppError(apiErrorDetail(e, "读取配置失败"), "custom_nodes.read_failed", 500),
+      new AppError(apiErrorDetail(error, "读取配置失败"), "custom_nodes.read_failed", 500),
     );
   }
 }
@@ -770,8 +770,8 @@ async function buildGetResponse(): Promise<Response> {
           settings: { paths, localWorkflowPaths },
         });
         send({ type: "done" });
-      } catch (e) {
-        send({ type: "error", message: apiErrorDetail(e, String(e)) });
+      } catch (error) {
+        send({ type: "error", message: apiErrorDetail(error, String(error)) });
       } finally {
         controller.close();
       }

@@ -34,8 +34,8 @@ describe("firstRowRequired —— 写入路径取首行", () => {
       try {
         firstRowRequired([], "用户插入");
         return null;
-      } catch (e) {
-        return e;
+      } catch (error) {
+        return error;
       }
     })();
     expect(err).toBeInstanceOf(AppError);
@@ -66,8 +66,8 @@ describe("firstRowOfExisting —— 按 id 更新取首行", () => {
       try {
         firstRowOfExisting([], "用户不存在: u1");
         return null;
-      } catch (e) {
-        return e;
+      } catch (error) {
+        return error;
       }
     })();
     expect(err).toBeInstanceOf(NotFoundError);
@@ -87,16 +87,16 @@ describe("两者的分工（同一份输入、两条判决）", () => {
     const required = (() => {
       try {
         firstRowRequired([], "x");
-      } catch (e) {
-        return /* SAFETY: 类型断言已复核 */ e as AppError;
+      } catch (error) {
+        return /* SAFETY: 类型断言已复核 */ error as AppError;
       }
       return null;
     })();
     const existing = (() => {
       try {
         firstRowOfExisting([], "x");
-      } catch (e) {
-        return /* SAFETY: 类型断言已复核 */ e as AppError;
+      } catch (error) {
+        return /* SAFETY: 类型断言已复核 */ error as AppError;
       }
       return null;
     })();

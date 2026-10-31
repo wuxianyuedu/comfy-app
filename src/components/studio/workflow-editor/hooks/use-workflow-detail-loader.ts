@@ -257,7 +257,7 @@ export function useWorkflowDetailLoader({
               applyDetailState(data, isSubgraph);
             }
           })
-          .catch((e) => console.warn("[we] 后台刷新详情失败", e));
+          .catch((error) => console.warn("[we] 后台刷新详情失败", error));
         return;
       }
 
@@ -296,12 +296,13 @@ export function useWorkflowDetailLoader({
         if (myReqId === latestRequestIdRef.current) {
           commitDetail(d, isSubgraph, opts);
         }
-      } catch (e: unknown) {
+      } catch (error: unknown) {
         /* 子图下钻失败：非致命 —— 保留父图，仅用内联错误提示，绝不渲染「返回」
          *  错误屏（那会回退到工作流库界面）。e 为 unknown：先 instanceof Error
          *  收窄再取 message，否则回退到约定文案。 */
         const msg =
-          (e instanceof Error ? e.message : "") || (isSubgraph ? "子工作流加载失败" : "加载失败");
+          (error instanceof Error ? error.message : "") ||
+          (isSubgraph ? "子工作流加载失败" : "加载失败");
         if (isSubgraph) {
           setSubgraphError(msg);
         } else {

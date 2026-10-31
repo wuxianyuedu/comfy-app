@@ -143,10 +143,10 @@ export async function probeRemoteApi(input: {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     });
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
-      detail: errorMessage(e, "网络请求失败"),
+      detail: errorMessage(error, "网络请求失败"),
     };
   }
   const json = /* SAFETY: 类型断言已复核 */ (await readJsonBody(res)) as {

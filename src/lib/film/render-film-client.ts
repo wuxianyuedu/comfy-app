@@ -48,8 +48,8 @@ export async function renderProjectFilm(input: RenderFilmInput): Promise<RenderF
       summary: "已启动成片：将按项目镜头逐镜生成视频并合成，完成后自动更新项目进度",
       detail: id,
     };
-  } catch (e: unknown) {
-    const msg = errorMessage(e, "未知错误");
+  } catch (error: unknown) {
+    const msg = errorMessage(error, "未知错误");
     return { ok: false, summary: "启动成片失败", detail: msg };
   }
 }

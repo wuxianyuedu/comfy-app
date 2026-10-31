@@ -61,10 +61,10 @@ export async function openUrlInBrowser(url: string): Promise<{ detail: string; o
       });
     });
     return { ok: true, detail: `已调用系统默认浏览器打开 ${url}` };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
-      detail: `${errorText(e, "打开系统浏览器失败")}。可手动在浏览器访问 ${url}`,
+      detail: `${errorText(error, "打开系统浏览器失败")}。可手动在浏览器访问 ${url}`,
     };
   }
 }

@@ -1497,8 +1497,8 @@ describe("RemoteModelRepository", () => {
       .replaceAll([{ name: "乙" }])
       .then(() => null)
       .catch(
-        (e: unknown) =>
-          /* SAFETY: 类型断言已复核 */ e as {
+        (error: unknown) =>
+          /* SAFETY: 类型断言已复核 */ error as {
             cause?: { message?: string };
             message: string;
           },
@@ -1630,8 +1630,8 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     })
       .then(() => null)
       .catch(
-        (e: unknown) =>
-          /* SAFETY: 类型断言已复核 */ e as {
+        (error: unknown) =>
+          /* SAFETY: 类型断言已复核 */ error as {
             cause?: { message?: string };
             message: string;
           },
@@ -1664,8 +1664,8 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     })
       .then(() => null)
       .catch(
-        (e: unknown) =>
-          /* SAFETY: 类型断言已复核 */ e as {
+        (error: unknown) =>
+          /* SAFETY: 类型断言已复核 */ error as {
             cause?: { message?: string };
             message: string;
           },

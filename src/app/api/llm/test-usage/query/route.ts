@@ -68,10 +68,10 @@ export async function POST(req: NextRequest) {
       pending: true,
       elapsedMs: Date.now() - startedAt,
     });
-  } catch (e) {
+  } catch (error) {
     return NextResponse.json({
       ok: false,
-      detail: apiErrorDetail(e, "查询失败"),
+      detail: apiErrorDetail(error, "查询失败"),
       elapsedMs: Date.now() - startedAt,
     });
   }

@@ -260,10 +260,10 @@ export function useGenerate({
             },
           });
         }
-      } catch (e: unknown) {
+      } catch (error: unknown) {
         patch({
           status: "error",
-          error: errorMessage(e, "生成失败"),
+          error: errorMessage(error, "生成失败"),
           errorContext: {
             request: payload,
             timestamp: new Date().toISOString(),
@@ -326,10 +326,10 @@ export function useGenerate({
           },
         });
       }
-    } catch (e: unknown) {
+    } catch (error: unknown) {
       patch({
         status: "error",
-        error: errorMessage(e, "生成失败"),
+        error: errorMessage(error, "生成失败"),
         errorContext: {
           request: req,
           timestamp: new Date().toISOString(),

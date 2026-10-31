@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   try {
     await saveWorkshopApiSettings(patch);
     return NextResponse.json({ channels: getMaskedChannels() });
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "保存失败"), { status: 500 });
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "保存失败"), { status: 500 });
   }
 }

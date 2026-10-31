@@ -51,17 +51,19 @@ export async function readLocalFile(absPath: string): Promise<{ mtimeMs: number;
   let stat;
   try {
     stat = await fs.stat(absPath);
-  } catch (e: unknown) {
+  } catch (error: unknown) {
     /* 只取 `code` 判「文件不存在」这一档；文案一律由 `errorText` 产出
      *（它带网络层翻译，`String(e)` 那一路会把非 Error 抛值渲染成
      * `[object Object]`）。 */
-    const err = /* SAFETY: 类型断言已复核 */ (typeof e === "object" && e !== null ? e : {}) as {
+    const err = /* SAFETY: 类型断言已复核 */ (
+      typeof error === "object" && error !== null ? error : {}
+    ) as {
       code?: string;
     };
     if (err.code === "ENOENT") {
-      throw new Error("本地文件不存在", { cause: e });
+      throw new Error("本地文件不存在", { cause: error });
     }
-    throw new Error(errorText(e, "无法读取本地文件"), { cause: e });
+    throw new Error(errorText(error, "无法读取本地文件"), { cause: error });
   }
   const text = await fs.readFile(absPath, "utf-8");
   return { text, mtimeMs: stat.mtimeMs };
@@ -200,8 +202,8 @@ export async function reimportFromSource(tpl: {
   let stat;
   try {
     stat = await fs.stat(tpl.sourcePath);
-  } catch (e: unknown) {
-    const err = /* SAFETY: 类型断言已复核 */ e as {
+  } catch (error: unknown) {
+    const err = /* SAFETY: 类型断言已复核 */ error as {
       code?: string;
     } | null;
     if (err?.code === "ENOENT") {

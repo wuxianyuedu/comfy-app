@@ -420,9 +420,9 @@ export async function startFilm(id: string) {
         params: shot.params,
       });
       await filmShotRepository.markQueued(shot.id, taskId);
-    } catch (e) {
+    } catch (error) {
       await filmShotRepository.markFailed(shot.id);
-      await appendFilmLog(id, "error", errorText(e, `镜头 ${shot.order + 1} 提交失败`));
+      await appendFilmLog(id, "error", errorText(error, `镜头 ${shot.order + 1} 提交失败`));
     }
   }
 
@@ -668,8 +668,8 @@ export async function resumeStalledFilms(): Promise<{
       );
       abandoned.push(film.id);
     }
-  } catch (err) {
-    logger.warn(`[film] ${errorText(err, "resumeStalledFilms 失败（重启恢复扫描）")}`);
+  } catch (error) {
+    logger.warn(`[film] ${errorText(error, "resumeStalledFilms 失败（重启恢复扫描）")}`);
   }
 
   if (resumed.length || abandoned.length) {

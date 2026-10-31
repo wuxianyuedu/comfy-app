@@ -85,8 +85,8 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
       setAiStatus(
         `已用 ${channelProviderLabel(provider)} · ${model || "当前配置"} 生成剧本，已写入剧本内容。`,
       );
-    } catch (e: unknown) {
-      setAiError(errorMessage(e, "生成剧本失败"));
+    } catch (error: unknown) {
+      setAiError(errorMessage(error, "生成剧本失败"));
     }
   }
 

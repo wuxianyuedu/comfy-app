@@ -55,11 +55,11 @@ async function getModels(
         : [],
       detail: typeof json.detail === "string" ? json.detail : `请求失败 (${res.status})`,
     };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
       models: [],
-      detail: errorMessage(e, "网络请求失败"),
+      detail: errorMessage(error, "网络请求失败"),
     };
   }
 }

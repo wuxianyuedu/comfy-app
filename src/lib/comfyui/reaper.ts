@@ -70,11 +70,11 @@ async function resolveTaskRepo(): Promise<TaskRepoForReaper | null> {
   }
   try {
     return await loadRealTaskRepo();
-  } catch (err) {
+  } catch (error) {
     if (!warnedUnconfigured) {
       warnedUnconfigured = true;
       logger.warn(
-        `[comfyui] reaper 未注入 taskRepo 且 Next barrel 不可达（预期于纯 Node 宿主 boot 注入前），本轮跳过：${errorText(err, "loadRealTaskRepo")}`,
+        `[comfyui] reaper 未注入 taskRepo 且 Next barrel 不可达（预期于纯 Node 宿主 boot 注入前），本轮跳过：${errorText(error, "loadRealTaskRepo")}`,
       );
     }
     return null;
@@ -385,8 +385,8 @@ export async function reapStaleQueuedTasks(): Promise<void> {
         `[comfyui] reaper: marked ${stale.length} dead-letter QUEUED task(s) as FAILED (older than ${STALE_MS / 1000}s, no promptId, claimedBy 不属于任何归属片)`,
       );
     }
-  } catch (err) {
-    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "reapStaleQueuedTasks 失败")}`);
+  } catch (error) {
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(error, "reapStaleQueuedTasks 失败")}`);
   }
 }
 
@@ -536,9 +536,9 @@ export async function reapStaleRunningTasks(): Promise<void> {
             verdict = "unknown";
             reason = `ComfyUI /history 返回 ${r.status} — 下次重试`;
           }
-        } catch (netErr) {
+        } catch (error) {
           verdict = "unknown";
-          reason = `ComfyUI 不可达：${netErr instanceof Error ? netErr.message : "network"} — 下次重试`;
+          reason = `ComfyUI 不可达：${error instanceof Error ? error.message : "network"} — 下次重试`;
         }
         if (verdict === "unknown") {
           log(t.id, "warn", `reaper(running): ${reason}`);
@@ -579,8 +579,8 @@ export async function reapStaleRunningTasks(): Promise<void> {
     logger.warn(
       `[comfyui] reaper(running): checked ${stale.length} stale RUNNING task(s) (older than ${RUNNING_STALE_MS / 1000}s)`,
     );
-  } catch (err) {
-    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "reapStaleRunningTasks 失败")}`);
+  } catch (error) {
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(error, "reapStaleRunningTasks 失败")}`);
   }
 }
 

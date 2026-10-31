@@ -142,8 +142,8 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
             ...(result.detail ? { detail: result.detail } : {}),
           }),
         } satisfies AgentMessageLike;
-      } catch (err: unknown) {
-        const msg = errorMessage(err, "工具执行失败");
+      } catch (error_: unknown) {
+        const msg = errorMessage(error_, "工具执行失败");
         patchToolRun(runId, { status: "error", detail: msg });
         return {
           role: /* SAFETY: 类型断言已复核 */ "tool" as const,

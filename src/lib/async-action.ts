@@ -250,9 +250,9 @@ export async function runAsyncAction(
  * `onError` 自己的日志路径去暴露，本处只保证"最后一道防线不再漏"。
  */
 export function fireAndForget(task: Promise<unknown>, onError: (e: unknown) => void): void {
-  task.catch((e) => {
+  task.catch((error) => {
     try {
-      onError(e);
+      onError(error);
     } catch {
       /* onError 内抛就不再向外冒，见上方文档。 */
     }

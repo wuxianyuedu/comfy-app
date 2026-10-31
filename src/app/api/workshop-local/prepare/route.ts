@@ -42,8 +42,8 @@ export async function POST(req: NextRequest) {
     const filename = `${uniqueStamp("workshop-ref-")}.${extForMime(mime) ?? DEFAULT_EXT}`;
     const uploaded = await uploadImage(buffer, filename);
     return NextResponse.json({ filename: uploaded.name ?? filename });
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "参考图准备失败"), {
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "参考图准备失败"), {
       status: 502,
     });
   }
