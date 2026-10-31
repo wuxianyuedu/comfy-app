@@ -160,8 +160,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
   it("日志实现只有一处：pino 工厂与 ERROR 镜像不许在别处重建", () => {
     // 判据落在「实现特征」上，而不是文件清单：谁在 import pino / 谁在定义 redact 路径，
     // 谁就是实现处。两份实现只要出现，这条立刻红。
-    const implementors = walk(join(SRC, "lib"))
-      .concat(walk(join(SRC, "server")))
+    const implementors = [...walk(join(SRC, "lib")), ...walk(join(SRC, "server"))]
       .filter((f) => !/\.test\.(ts|tsx)$/.test(f))
       .filter((f) => /from\s+["']pino["']/.test(readFileSync(f, "utf8")))
       .map((f) => relative(ROOT, f).split("\\").join("/"));
@@ -181,8 +180,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
   });
 
   it("值形状守卫只有一份实现（两条通道都从 core 取）", () => {
-    const files = walk(join(SRC, "lib"))
-      .concat(walk(join(SRC, "server")))
+    const files = [...walk(join(SRC, "lib")), ...walk(join(SRC, "server"))]
       .filter((f) => !/\.test\.(ts|tsx)$/.test(f))
       .filter((f) => /export\s+function\s+redactSecretShaped/.test(readFileSync(f, "utf8")))
       .map((f) => relative(ROOT, f).split("\\").join("/"));

@@ -10,6 +10,8 @@ import {
   type MaterialItem,
 } from "~/lib/media/materials-client";
 
+import { fakeFileList } from "../../../../../tests/helpers/fake-file-list";
+
 import { useMaterialLibrary } from "./use-material-library";
 
 vi.mock("~/lib/media/materials-client", () => ({
@@ -112,11 +114,7 @@ describe("useMaterialLibrary", () => {
     await expect.poll(() => result.current.loading).toBe(false);
 
     const file = new File(["x"], "a.png", { type: "image/png" });
-    const files = /* SAFETY: 类型断言已复核 */ {
-      length: 1,
-      0: file,
-      item: (i: number) => (i === 0 ? file : null),
-    } as unknown as FileList;
+    const files = fakeFileList(file);
     await act(async () => {
       await result.current.upload(files);
     });
@@ -136,11 +134,7 @@ describe("useMaterialLibrary", () => {
 
     const a = new File(["a"], "a.png");
     const b = new File(["b"], "b.png");
-    const files = /* SAFETY: 类型断言已复核 */ {
-      length: 2,
-      0: a,
-      1: b,
-    } as unknown as FileList;
+    const files = fakeFileList(a, b);
     await act(async () => {
       await result.current.upload(files);
     });
@@ -156,10 +150,7 @@ describe("useMaterialLibrary", () => {
     mockedUpload.mockRejectedValue(new Error("磁盘已满"));
     const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
     const file = new File(["x"], "a.png");
-    const files = /* SAFETY: 类型断言已复核 */ {
-      length: 1,
-      0: file,
-    } as unknown as FileList;
+    const files = fakeFileList(file);
     await act(async () => {
       await result.current.upload(files);
     });
@@ -173,10 +164,7 @@ describe("useMaterialLibrary", () => {
     await expect.poll(() => result.current.loading).toBe(false);
 
     const file = new File(["x"], "a.png");
-    const files = /* SAFETY: 类型断言已复核 */ {
-      length: 1,
-      0: file,
-    } as unknown as FileList;
+    const files = fakeFileList(file);
     await act(async () => {
       await result.current.upload(files);
     });

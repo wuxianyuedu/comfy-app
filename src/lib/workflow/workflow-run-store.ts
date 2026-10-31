@@ -96,7 +96,7 @@ function persist(): void {
   /* 配额满 / 隐私模式：降级为仅会话内持久（写失败已静默）——
    * 「能不能用 storage」与「写失败怎么办」收在 `~/lib/browser-storage`
    *（§16.2.4.28）。 */
-  const arr = Array.from(runs.values()).map((meta) => ({
+  const arr = [...runs.values()].map((meta) => ({
     ...meta,
     logs: meta.logs ? tailWindow(meta.logs, MAX_LOGS) : undefined,
   }));
@@ -298,7 +298,7 @@ export function latestRunForWorkflow(
 
 /** 全部已登记运行（新→旧）。 */
 export function listWorkflowRuns(): Array<WorkflowRunMeta> {
-  return Array.from(runs.values()).sort((a, b) => b.startedAt - a.startedAt);
+  return [...runs.values()].sort((a, b) => b.startedAt - a.startedAt);
 }
 
 /* ── 日志累积（store 托管，组件卸载不丢）──────────────────────────────── */

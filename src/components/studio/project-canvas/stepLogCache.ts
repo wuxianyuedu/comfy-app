@@ -201,7 +201,7 @@ export function stepLogCacheSize(): number {
 /* 返回缓存当前持有的 taskId，最近触碰的排在最前。
  * 全局日志面板的任务选择器用它，让用户能在历史运行之间来回切，而不必重跑。 */
 export function listCachedTaskIds(): Array<string> {
-  return Array.from(cache.keys());
+  return [...cache.keys()];
 }
 
 /* 测试 / 管理用助手：丢掉全部缓存状态。 */

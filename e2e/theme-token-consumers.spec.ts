@@ -405,14 +405,14 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
         () =>
           page.evaluate(() => {
             let n = 0;
-            for (const sheet of Array.from(document.styleSheets)) {
+            for (const sheet of document.styleSheets) {
               let rules: CSSRuleList | null;
               try {
                 rules = sheet.cssRules;
               } catch {
                 continue;
               }
-              for (const r of Array.from(rules ?? [])) {
+              for (const r of rules) {
                 if (r.cssText?.includes("--xy-background-pattern-color-props")) {
                   n++;
                 }

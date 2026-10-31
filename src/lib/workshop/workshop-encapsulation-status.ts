@@ -194,7 +194,7 @@ export function deriveEncapsulationStatus(args: {
       required: requiredSet.has(slot.id),
     };
   });
-  const ordered = Array.from(new Map(mapped.map((e) => [e.id, e])).values());
+  const ordered = [...new Map(mapped.map((e) => [e.id, e])).values()];
   const resolvedCount = ordered.filter((e) => e.targetIoKey !== null).length;
   const missingRequired = ordered
     .filter((e) => required.includes(e.id) && e.targetIoKey === null)

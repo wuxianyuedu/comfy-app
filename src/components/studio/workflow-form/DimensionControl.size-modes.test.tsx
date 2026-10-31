@@ -59,7 +59,7 @@ function renderSize(width: number, height: number) {
    * role 更稳、也不被未来 base-ui 语义微调打断。
    * 注意:PopoverContent 走 Portal 挂到 `document.body`、不在 `container`
    * 里 —— 必须从 document 或 `screen` 拿,与旧 `screen.queryAllByRole` 等价。 */
-  return Array.from(document.querySelectorAll<HTMLElement>("[data-slot=toggle-group-item]")).map(
+  return [...document.querySelectorAll<HTMLElement>("[data-slot=toggle-group-item]")].map(
     (el) => el.textContent ?? "",
   );
 }

@@ -190,7 +190,7 @@ describe("LogPanel 日志面板", () => {
   it("渲染的行按时刻升序（用户诉求「最基本的时间顺序」）", () => {
     seed(20);
     render(<LogPanel />);
-    const stamps = Array.from(document.querySelectorAll<HTMLElement>("time")).map(
+    const stamps = [...document.querySelectorAll<HTMLElement>("time")].map(
       (el) => el.textContent ?? "",
     );
     expect(stamps).not.toHaveLength(0);
@@ -576,7 +576,7 @@ describe("LogPanel 日志面板", () => {
 
     const header = document.querySelector(".min-h-14");
     expect(header).not.toBeNull();
-    const order = Array.from(header!.children);
+    const order = [...header!.children];
 
     /* 类别计数（级别按钮）必须排在前半段、来源下拉排在后半段：用户反馈「下拉
      * 右侧有很多红白（空白），左边的类别与条数反而最挤」——行头里那两块的位置
@@ -875,7 +875,7 @@ describe("LogPanel 日志面板", () => {
     useSmallPage(200);
     seed(120);
     render(<LogPanel />);
-    const rows = Array.from(document.querySelectorAll<HTMLElement>("[data-log-index] > div"));
+    const rows = [...document.querySelectorAll<HTMLElement>("[data-log-index] > div")];
     expect(rows.length).toBeGreaterThan(0);
     /* 显式高度是这件事的地基：估算高度与实际渲染高度不同口径时，累计误差会让
      * 滚动位置与内容错开（见 log-virtual 的常量说明）。 */
@@ -994,7 +994,7 @@ describe("LogPanel 日志面板", () => {
       expect(scroller.scrollTop).toBe(expected);
       /* 窗口也真的跟着走到了页尾。 */
       const nodes = document.querySelectorAll("[data-log-index]");
-      const lastIndex = Number(Array.from(nodes).at(-1)!.getAttribute("data-log-index"));
+      const lastIndex = Number([...nodes].at(-1)!.getAttribute("data-log-index"));
       expect(lastIndex).toBe(199);
     } finally {
       if (heights) {

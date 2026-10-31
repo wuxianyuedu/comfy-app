@@ -39,7 +39,7 @@ function renderGrid(settings?: Partial<CanvasSettings>) {
 
 /** 某一层是否已渲染（React Flow 的 <Background> 把层 id 挂在 pattern 上）。 */
 function layerIds(container: HTMLElement): Array<string> {
-  return Array.from(container.querySelectorAll("pattern")).map((el) => el.id);
+  return [...container.querySelectorAll("pattern")].map((el) => el.id);
 }
 
 function hasLayer(container: HTMLElement, layerId: string): boolean {
@@ -48,8 +48,8 @@ function hasLayer(container: HTMLElement, layerId: string): boolean {
 
 /** 底色层实际下发的画布背景色（React Flow 把它写成 CSS 变量）。 */
 function baseColor(container: HTMLElement): string {
-  const svg = Array.from(container.querySelectorAll("svg.react-flow__background")).find((el) =>
-    Array.from(el.querySelectorAll("pattern")).some((p) => p.id.endsWith(GRID_BASE_LAYER_ID)),
+  const svg = [...container.querySelectorAll("svg.react-flow__background")].find((el) =>
+    [...el.querySelectorAll("pattern")].some((p) => p.id.endsWith(GRID_BASE_LAYER_ID)),
   );
   return svg?.getAttribute("style") ?? "";
 }
@@ -107,9 +107,9 @@ describe("CanvasGrid · 画布底色", () => {
 describe("网格线颜色出口", () => {
   /** 某一层实际下发的颜色表达式（React Flow 写在 svg 的内联自定义属性上）。 */
   function patternColor(container: HTMLElement, layerId: string): string {
-    const svgs = Array.from(container.querySelectorAll("svg.react-flow__background"));
+    const svgs = [...container.querySelectorAll("svg.react-flow__background")];
     for (const svg of svgs) {
-      const mine = Array.from(svg.querySelectorAll("pattern")).some((p) => p.id.endsWith(layerId));
+      const mine = [...svg.querySelectorAll("pattern")].some((p) => p.id.endsWith(layerId));
       if (mine) {
         return (
           svg

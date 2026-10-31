@@ -157,7 +157,7 @@ export function ContentAssetBody({
             event.stopPropagation();
             /* 只有当拖入的是文件（不是节点 / 边）时才高亮
              *  —— `types` 对原生文件拖拽含 "Files"。 */
-            const types = Array.from(event.dataTransfer.types ?? []);
+            const types = [...(event.dataTransfer.types ?? [])];
             if (types.includes("Files") && !isDropOver) {
               setIsDropOver(true);
             }

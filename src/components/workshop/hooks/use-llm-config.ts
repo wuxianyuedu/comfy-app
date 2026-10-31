@@ -109,8 +109,8 @@ export function useLLMConfig(): LLMConfigController {
     /* 远端生图模型（kind=image）单独一组，给定妆照等远端生图通道挑选。 */
     const remoteImageNames = p.remoteEntries.filter((e) => e.kind === "image").map((e) => e.name);
     /* 本地 Ollama 模型均通过 chat/completions 调用，天然可做文本任务。 */
-    const local = p.localNames.slice();
-    const remote = remoteNames.slice();
+    const local = [...p.localNames];
+    const remote = [...remoteNames];
     const model = cfg.model?.trim() ?? "";
     /* 生效提供方：本机 Ollama 被存成「远端 API」（baseUrl 回环 + 无密钥）时按
        本地分组与展示——否则 ollama 模型在下拉/徽标里被挂成「远端」，可用性

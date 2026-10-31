@@ -509,13 +509,11 @@ export async function pruneRuns(root, { now = Date.now(), delete: del } = {}) {
   const runs = listRuns(root);
   const cutoff = now - RETENTION.maxAgeDays * 24 * 60 * 60 * 1000;
   const byAge = new Set(
-    runs
-      .slice()
+    [...runs]
       .sort((a, b) => b.name.localeCompare(a.name))
       .map((r) => r.name),
   );
-  const recent = runs
-    .slice()
+  const recent = [...runs]
     .sort((a, b) => b.name.localeCompare(a.name))
     .slice(0, RETENTION.maxRuns)
     .map((r) => r.name);
