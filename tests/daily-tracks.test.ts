@@ -1010,7 +1010,7 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
      * 于是它先被当成相对路径、撞上的是**冒号**那一条（两条话术各指各的下一动作，
      * 这点对得正好）。在 Windows 上同一行会走到「仓库外」。判据原先只认前者 ⇒
      * 整条用例在非 win32 宿主上必红（本地钩子的组 C 就是这么暴露的）。 */
-    expect(() => toTransportSafePath("C:\\WINDOWS\\TEMP\\x.xml")).toThrow(
+    expect(() => toTransportSafePath(String.raw`C:\WINDOWS\TEMP\x.xml`)).toThrow(
       process.platform === "win32" ? /仓库内/ : /冒号/,
     );
     expect(() => suitePlan([], 4, path.resolve(ROOT, "..", "outside.xml")).args).toThrow(/仓库内/);
@@ -1041,19 +1041,19 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
      * 「破折号开头 + `=` + 值里有冒号」这一交集。裸绝对路径与不带破折号的 `k=v:`
      * 都原样到达 —— **把它们也拦下就是拒掉一条本来能跑的命令**（`viaHost: false`
      * 那一半同理：非宿主形态没有这次切分）。 */
-    const split = "--outputFile.junit=C:\\dir\\a.xml";
+    const split = String.raw`--outputFile.junit=C:\dir\a.xml`;
     expect(hostUnsafeArgs([split], true)).toEqual([split]);
     expect(hostUnsafeArgs([split], false)).toEqual([]);
     expect(hostUnsafeArgs(["--outputFile.junit=node_modules/.cache/a.xml"], true)).toEqual([]);
     // 冒号不一定要跟在驱动器字母后面：值里第一个冒号就是切点。
-    expect(hostUnsafeArgs(["--out=1:\\x", "--out=./C:\\x"], true)).toEqual([
-      "--out=1:\\x",
-      "--out=./C:\\x",
+    expect(hostUnsafeArgs([String.raw`--out=1:\x`, String.raw`--out=./C:\x`], true)).toEqual([
+      String.raw`--out=1:\x`,
+      String.raw`--out=./C:\x`,
     ]);
     // 下面三条都是**观察到的安全形状**，一条都不许被挑出来。
     expect(
       hostUnsafeArgs(
-        ["C:\\dir\\a.xml", "out=C:\\dir\\a.xml", "/p=C:\\x", "a=b:c", "--out=C\\dir"],
+        [String.raw`C:\dir\a.xml`, String.raw`out=C:\dir\a.xml`, String.raw`/p=C:\x`, "a=b:c", String.raw`--out=C\dir`],
         true,
       ),
     ).toEqual([]);

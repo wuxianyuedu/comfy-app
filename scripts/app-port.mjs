@@ -52,7 +52,7 @@ export function normalizeRootForPort(root) {
   // 拼上 cwd —— 这正是上面描述的失真来源。盘符判据本体写作 /^[a-z]:\//i
   //（ASCII 盘符不区分大小写，无需再列 A-Z），UNC 另判前导双反斜杠。
   const isWindowsDrive = /^[a-z]:\//i.test(raw.replaceAll("\\", "/"));
-  const isUnc = raw.startsWith("\\\\");
+  const isUnc = raw.startsWith(String.raw`\\`);
   const absolute = isWindowsDrive || isUnc || path.isAbsolute(raw);
   const resolved = absolute ? raw : path.resolve(raw);
   return resolved.replaceAll("\\", "/").toLowerCase().replace(/\/+$/, "");

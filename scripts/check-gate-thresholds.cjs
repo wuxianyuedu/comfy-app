@@ -59,7 +59,7 @@ const MIN_ENTRIES = 15;
  * （ISSUE #2236：本仓自己就先撞上过一次 —— 新常量先写成 `export const`，账一个字都没念它，
  * 改成非导出才进得了面）。
  */
-const CONST_HEAD = "^(?:export\\s+)?const\\s+";
+const CONST_HEAD = String.raw`^(?:export\s+)?const\s+`;
 
 /**
  * 顶层具名数值常量：`const NAME = 123;` / `export const NAME = 0.75;` / `10_000`。

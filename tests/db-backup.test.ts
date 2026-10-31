@@ -322,7 +322,7 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     for (const bad of [
       "../../../etc/passwd",
       "/etc/passwd",
-      "C:\\Windows\\System32\\config\\SAM",
+      String.raw`C:\Windows\System32\config\SAM`,
       "db.sqlite",
       "随便什么.sqlite",
     ]) {

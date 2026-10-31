@@ -504,7 +504,7 @@ export function probeCacheLocations(platform) {
       envName: "PLAYWRIGHT_BROWSERS_PATH",
       value: process.env.PLAYWRIGHT_BROWSERS_PATH,
       fallback: path.join(localAppData, "ms-playwright"),
-      sub: ".cache\\ms-playwright",
+      sub: String.raw`.cache\ms-playwright`,
     },
     {
       key: "npmCache",

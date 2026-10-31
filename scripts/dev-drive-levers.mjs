@@ -471,7 +471,7 @@ function filtersLever(volume, bench) {
       actions: [
         {
           label: "更精准：在那个第三方客户端里把开发卷加进它的排除/信任列表",
-          command: "（在联想电脑管家 / Lenovo Windows Security Center 的设置里排除 G:\\）",
+          command: String.raw`（在联想电脑管家 / Lenovo Windows Security Center 的设置里排除 G:\）`,
           scope: "user",
         },
         {
@@ -614,7 +614,7 @@ function searchIndexLever(drive, marking) {
         scope: "user",
       },
       {
-        label: "只标某一棵子树时也能用 attrib（注意尾部必须带 \\*，否则它什么也不做）",
+        label: String.raw`只标某一棵子树时也能用 attrib（注意尾部必须带 \*，否则它什么也不做）`,
         command: `attrib +I /S /D "${drive}\\*"`,
         scope: "user",
       },

@@ -172,7 +172,7 @@ function jsdocStructuralOnly(text) {
   const param = PARAM_TAG_RE.exec(text);
   if (param && param[2]) {
     // 剥掉参数名那一处（整词），余下才是说明部分。
-    rest = rest.replace(new RegExp(`(^|\\s)${param[2].replaceAll(/[$]/g, "\\$")}(?=\\s|$)`), " ");
+    rest = rest.replace(new RegExp(`(^|\\s)${param[2].replaceAll(/[$]/g, String.raw`\$`)}(?=\\s|$)`), " ");
   }
   if (JSDOC_PROSE_WORDS_RE.test(rest)) {
     return false;

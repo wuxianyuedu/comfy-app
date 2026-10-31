@@ -154,7 +154,7 @@ function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}
     [
       'const fs = require("node:fs");',
       'const has = fs.existsSync("marker.txt");',
-      'process.stdout.write(has ? "[gate] 命中\\n" : "[gate] 干净\\n");',
+      String.raw`process.stdout.write(has ? "[gate] 命中\n" : "[gate] 干净\n");`,
       "process.exit(has ? 1 : 0);",
       "",
     ].join("\n"),
@@ -171,7 +171,7 @@ function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}
     writeFileSync(
       join(work, "gate.cjs"),
       [
-        'process.stdout.write("Test Files  1 failed (1)\\n     Tests  no tests\\n");',
+        String.raw`process.stdout.write("Test Files  1 failed (1)\n     Tests  no tests\n");`,
         "process.exit(1);",
         "",
       ].join("\n"),
@@ -198,8 +198,8 @@ function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}
     writeFileSync(
       join(work, "gate.cjs"),
       [
-        'process.stdout.write("Test Files  1 failed (1)\\n     Tests  1 failed (1)\\n");',
-        'process.stdout.write("[gate] 真红\\n");',
+        String.raw`process.stdout.write("Test Files  1 failed (1)\n     Tests  1 failed (1)\n");`,
+        String.raw`process.stdout.write("[gate] 真红\n");`,
         "process.exit(1);",
         "",
       ].join("\n"),
@@ -778,7 +778,7 @@ describe("base-check —— 真仓库上的四态", () => {
       [
         'const fs = require("node:fs");',
         'const has = fs.existsSync("marker.txt");',
-        'process.stdout.write(has ? "[gate] 命中\\n" : "[gate] 干净\\n");',
+        String.raw`process.stdout.write(has ? "[gate] 命中\n" : "[gate] 干净\n");`,
         "process.exit(has ? 1 : 0);",
         "",
       ].join("\n"),
@@ -1170,7 +1170,7 @@ describe("base-check --base —— 真仓库上的端到端", () => {
       [
         'const fs = require("node:fs");',
         'const has = fs.existsSync("marker.txt");',
-        'process.stdout.write(has ? "[gate] 命中\\n" : "[gate] 干净\\n");',
+        String.raw`process.stdout.write(has ? "[gate] 命中\n" : "[gate] 干净\n");`,
         "process.exit(has ? 1 : 0);",
         "",
       ].join("\n"),

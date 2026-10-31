@@ -140,7 +140,7 @@ function businessSources(): Array<{ rel: string; text: string }> {
 
 /** 业务侧引用 `~/components/ui/<name>` 的文件数（不含 ui/ 内部互相引用）。 */
 function consumerCount(name: string): number {
-  const pattern = new RegExp(`from\\s+["']~/components/ui/${name.replaceAll(/[-]/g, "\\-")}["']`);
+  const pattern = new RegExp(`from\\s+["']~/components/ui/${name.replaceAll(/[-]/g, String.raw`\-`)}["']`);
   return businessSources().filter((f) => pattern.test(f.text)).length;
 }
 

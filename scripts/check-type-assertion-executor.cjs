@@ -384,12 +384,12 @@ function includeEntryToRegExp(entry) {
       const alts = norm
         .slice(i + 1, end)
         .split(",")
-        .map((s) => s.trim().replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+        .map((s) => s.trim().replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`));
       re += `(?:${alts.join("|")})`;
       i = end;
       continue;
     }
-    re += ch.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    re += ch.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   }
   return new RegExp(`^${re}$`);
 }

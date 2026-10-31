@@ -58,8 +58,8 @@ describe("命令行回显：格式化", () => {
   });
 
   it("含空白 / shell 元字符的参数才加引号", () => {
-    expect(formatCommandLine("node", ["C:\\Program Files\\nodejs\\node.exe"])).toBe(
-      'node "C:\\Program Files\\nodejs\\node.exe"',
+    expect(formatCommandLine("node", [String.raw`C:\Program Files\nodejs\node.exe`])).toBe(
+      String.raw`node "C:\Program Files\nodejs\node.exe"`,
     );
     expect(formatCommandLine("git", ["commit", "-m", "a b;c"])).toBe('git commit -m "a b;c"');
   });
@@ -70,7 +70,7 @@ describe("命令行回显：格式化", () => {
 
   it("参数里的双引号转义，且输出保持单行", () => {
     const line = formatCommandLine("say", ['a"b c']);
-    expect(line).toBe('say "a\\"b c"');
+    expect(line).toBe(String.raw`say "a\"b c"`);
     // 回显是「一行一条命令」：日志与终端都按行读，格式化的结果里不该出现换行
     expect(line).not.toContain("\n");
   });

@@ -576,7 +576,7 @@ export function looksNewlineMangled(msg) {
   if (!msg) {
     return false;
   }
-  return !msg.includes("\n") && msg.includes("\\n");
+  return !msg.includes("\n") && msg.includes(String.raw`\n`);
 }
 
 /**

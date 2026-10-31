@@ -364,7 +364,7 @@ export function stageEnvValue(text, stage, key) {
   /* `\s*` 而不是 `\s+`：**停用形态**里那一项的缩进已被压平（注释块按第 0 列读），
    * 键因此可能顶格出现。匹配面仍限在这一项自己的块内，不会串到别的 stage。 */
   const re = new RegExp(
-    `^\\s*${key.replaceAll(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}:\\s*(.+?)\\s*$`,
+    `^\\s*${key.replaceAll(/[.*+?^${}()|[\\]\\\\]/g, String.raw`\\$&`)}:\\s*(.+?)\\s*$`,
     "m",
   );
   const m = re.exec(block);

@@ -546,7 +546,7 @@ describe("编排器与启动页的接线契约", () => {
       path.join(ROOT, "scripts", "launcher-core", "startup-gates.mjs"),
       "utf8",
     );
-    expect(gates).toContain('gateProblem.split("\\n")[0]');
+    expect(gates).toContain(String.raw`gateProblem.split("\n")[0]`);
     expect(gates).toContain("staleShell: gateProblem");
     // 编排器那一层负责把产出交给启动页（横幅字段不许在转发时丢掉）。
     expect(launcher).toContain("gated.error.staleShell");
