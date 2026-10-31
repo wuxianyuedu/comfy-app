@@ -92,6 +92,7 @@ function dotenvValueAt(root, key) {
 function mainCheckoutRoot(root) {
   try {
     const cwd = root || process.cwd();
+    /** @param {string[]} args */
     const rev = (args) => {
       const got = spawnSync("git", args, { cwd, encoding: "utf8" });
       return got.status === 0 ? String(got.stdout ?? "").trim() : "";
@@ -101,6 +102,7 @@ function mainCheckoutRoot(root) {
     if (own === "" || common === "") {
       return null;
     }
+    /** @param {string} p */
     const abs = (p) => (path.isAbsolute(p) ? p : path.resolve(cwd, p));
     if (path.resolve(abs(own)) === path.resolve(abs(common))) {
       return null;
