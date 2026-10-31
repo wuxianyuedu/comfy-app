@@ -406,7 +406,7 @@ export function StorybookTrpcProvider({
 
   return (
     <QueryClientProvider client={bundle.queryClient}>
-      <TRPCProvider trpcClient={bundle.client} queryClient={bundle.queryClient}>
+      <TRPCProvider queryClient={bundle.queryClient} trpcClient={bundle.client}>
         {children}
       </TRPCProvider>
     </QueryClientProvider>

@@ -27,13 +27,13 @@ export interface ProjectHomeStatusProps {
 /** 阶段行的图标：完成 → 勾、当前 → 转圈、未开始 → 空圈。 */
 function StageIcon({ done, current }: { current: boolean; done: boolean }) {
   if (done) {
-    return <Check size={13} className="text-success-strong" aria-hidden />;
+    return <Check aria-hidden className="text-success-strong" size={13} />;
   }
   if (current) {
     /* 转圈走基元（P3 硬闸：自写 `animate-spin` 不许出现在视图里）。 */
     return <Spinner className="text-primary size-3.25" />;
   }
-  return <Circle size={13} className="text-ink-fainter" aria-hidden />;
+  return <Circle aria-hidden className="text-ink-fainter" size={13} />;
 }
 
 function stageStateText(done: boolean, current: boolean): string {
@@ -61,13 +61,13 @@ export function ProjectHomeStatus({ overview, loading, onNavigate }: ProjectHome
         <ul className="flex flex-col gap-1.5">
           {overview.stages.map((stage) => (
             <li
-              key={stage.id}
               className={cn(
                 "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px]",
                 stage.current && "bg-primary/8",
               )}
+              key={stage.id}
             >
-              <StageIcon done={stage.done} current={stage.current} />
+              <StageIcon current={stage.current} done={stage.done} />
               <span
                 className={cn(
                   "min-w-0 flex-1 truncate",
@@ -92,9 +92,7 @@ export function ProjectHomeStatus({ overview, loading, onNavigate }: ProjectHome
       <section className="border-border bg-panel flex flex-col gap-2 rounded-2xl border p-4">
         <h2 className="u-title">素材进度</h2>
         <KeyValueRows
-          layout="rows"
           bordered
-          striped
           items={[
             {
               key: "剧本",
@@ -109,11 +107,13 @@ export function ProjectHomeStatus({ overview, loading, onNavigate }: ProjectHome
               value: loading ? displayValue(null) : overview.filmRendered ? "已合成" : "未合成",
             },
           ]}
+          layout="rows"
+          striped
         />
         <Button
-          variant="link"
-          onClick={() => onNavigate("workshop")}
           className="text-ink-muted hover:text-ink-strong text-2xs h-auto self-start p-0"
+          onClick={() => onNavigate("workshop")}
+          variant="link"
         >
           去工坊继续 →
         </Button>

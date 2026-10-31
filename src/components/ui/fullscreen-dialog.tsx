@@ -51,7 +51,7 @@ export function FullScreenDialog({
         默认「点弹窗外即关闭」，于是用户点标题栏（想拖动窗口的肌肉记忆）
         会把整个全屏视图关掉（用户实测反馈）。全屏视图只该由显式出口
         （退出按钮 / Esc）关闭，故禁掉指针关闭，Esc 不受影响。 */
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange} disablePointerDismissal>
+    <DialogPrimitive.Root disablePointerDismissal onOpenChange={onOpenChange} open={open}>
       <DialogPrimitive.Portal>
         {/* 遮罩与 `ui/dialog` / `ui/sheet` **同一份**（`dialog-overlay.ts` 的
             默认档）：它同时满足「让出标题行」的硬判据（ISSUE #310），另写一份必然
@@ -59,7 +59,6 @@ export function FullScreenDialog({
             且不随主题（同一件事两套底色，ISSUE #1742 收口成 `--color-scrim`）。 */}
         <DialogPrimitive.Backdrop className={dialogBackdropClass()} />
         <DialogPrimitive.Popup
-          data-slot="fullscreen-dialog"
           className={cn(
             /* 定位不铺到 bottom-0：底部状态栏是 z-toast 的固定悬浮层，会把
                面板最后 24px 压住（日志全屏视图实测「最后几行看不到」）。 */
@@ -67,6 +66,7 @@ export function FullScreenDialog({
             "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 duration-100",
             className,
           )}
+          data-slot="fullscreen-dialog"
         >
           <DialogPrimitive.Title className="sr-only">{label}</DialogPrimitive.Title>
           {children}

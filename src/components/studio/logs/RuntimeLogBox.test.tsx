@@ -54,9 +54,9 @@ function controller(over: Partial<RuntimeLogController> = {}): RuntimeLogControl
 function renderBox(log: RuntimeLogController) {
   return render(
     <RuntimeLogBox
+      emptyHint="暂无日志 —— 点「启动 ComfyUI」后这里会实时输出"
       fileName={FILE_NAME}
       log={log}
-      emptyHint="暂无日志 —— 点「启动 ComfyUI」后这里会实时输出"
     />,
   );
 }

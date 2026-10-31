@@ -114,7 +114,7 @@ export function TaskLogTimeline({
           行头底色同值（`log-row-style.ts` 记过同一件事），选中本来就弱。
           整排交给基元后选中态四层俱在、悬停值钉回常态。 */}
       <div className="border-border bg-card flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
-        <div role="radiogroup" aria-label="日志级别筛选" className="flex items-center gap-1">
+        <div aria-label="日志级别筛选" className="flex items-center gap-1" role="radiogroup">
           {FILTER_LABELS.map((option) => {
             const count =
               option.value === "all"
@@ -122,11 +122,11 @@ export function TaskLogTimeline({
                 : visibleAll.filter((l) => l.level === option.value).length;
             return (
               <SelectChip
-                key={option.value}
-                shape="compact"
-                selected={filter === option.value}
-                onClick={() => setFilter(option.value)}
                 className="px-2.5 py-1 text-sm"
+                key={option.value}
+                onClick={() => setFilter(option.value)}
+                selected={filter === option.value}
+                shape="compact"
               >
                 {option.label}
                 <span className="text-ink-fainter text-2xs ml-1">{count}</span>
@@ -137,8 +137,8 @@ export function TaskLogTimeline({
         <FieldLabel className="text-ink-faint flex cursor-pointer items-center gap-1.5 text-xs select-none">
           <Checkbox
             checked={autoscroll}
-            onCheckedChange={(checked) => setAutoscroll(checked === true)}
             className="accent-primary size-3.5 cursor-pointer"
+            onCheckedChange={(checked) => setAutoscroll(checked === true)}
           />
           自动滚动
         </FieldLabel>
@@ -146,15 +146,15 @@ export function TaskLogTimeline({
 
       {/* Log body — 虚拟滚动（复用 VirtualLogList） */}
       <VirtualLogList
-        entries={visible}
-        getMessage={(log) => log.msg}
-        renderRow={renderRow ?? ((log) => <DefaultLogRow log={log} rowTestId={rowTestId} />)}
-        following={autoscroll}
-        onFollowingChange={setAutoscroll}
-        watch={`${logs.length}:${filter}`}
         className={listClassName}
-        topSlot={topSlot ?? null}
         emptySlot={emptySlot ?? null}
+        entries={visible}
+        following={autoscroll}
+        getMessage={(log) => log.msg}
+        onFollowingChange={setAutoscroll}
+        renderRow={renderRow ?? ((log) => <DefaultLogRow log={log} rowTestId={rowTestId} />)}
+        topSlot={topSlot ?? null}
+        watch={`${logs.length}:${filter}`}
       />
 
       {/* Footer */}
@@ -172,9 +172,9 @@ export function TaskLogTimeline({
 function DefaultLogRow({ log, rowTestId }: { log: TaskLogEntry; rowTestId?: string }) {
   return (
     <div
-      data-testid={rowTestId}
-      data-level={log.level}
       className="border-border-subtle hover:bg-card flex items-start gap-2.5 border-b px-4 py-1 font-mono text-sm leading-snug"
+      data-level={log.level}
+      data-testid={rowTestId}
     >
       <span className="text-ink-muted shrink-0">{fmtTime(log.t)}</span>
       <span
@@ -196,5 +196,5 @@ function DefaultLogRow({ log, rowTestId }: { log: TaskLogEntry; rowTestId?: stri
 
 /** 无日志时的默认占位（消费方不传 `emptySlot` 时兜底，避免空列表静默）。 */
 export function TaskLogEmptyHint({ message }: { message: string }) {
-  return <EmptyState variant="panel" icon={FileText} title={message} />;
+  return <EmptyState icon={FileText} title={message} variant="panel" />;
 }

@@ -116,43 +116,43 @@ export function DynamicWorkflowFormView({
         : entry;
     return (
       <WidgetInputRow
-        key={rowEntry.ioKey}
-        entry={rowEntry}
         allPins={allPins}
-        value={values[entry.ioKey]}
         compact={compact}
+        dimmed={!!visibilityMode && rowEntry.modeOverrides?.[visibilityMode]?.visible === false}
         disabled={disabled}
-        uploading={uploading && uploadTarget === entry.ioKey}
-        seedMode={seedModes?.[entry.ioKey]}
-        onSeedModeChange={
-          onSeedModeChange ? (mode: string) => onSeedModeChange(entry.ioKey, mode) : undefined
-        }
-        onValueChange={(next: unknown) => set(entry.ioKey, next)}
-        onPickFile={() => pickFile(entry.ioKey)}
-        previewSrc={localPreviewUrl(entry.ioKey)}
+        entry={rowEntry}
+        /* 画布上 handle id 必须唯一：同一个 pin 名可能同时出现在两个节点上（自定义
+         * 节点重名很常见），用 ioKey 当 handle id 才会接到「那一行」而不是「同名的
+         * 另一行」。 */
+        handleId={entry.ioKey}
+        key={rowEntry.ioKey}
         onLabelChange={
           onLabelChange ? (label: string) => onLabelChange(entry.ioKey, label) : undefined
         }
+        onPickFile={() => pickFile(entry.ioKey)}
         onRequiredChange={
           onRequiredChange
             ? (required: boolean) => onRequiredChange(entry.ioKey, required)
             : undefined
         }
-        visible={
-          visibilityMode ? (entry.modeOverrides?.[visibilityMode]?.visible ?? true) : undefined
+        onSeedModeChange={
+          onSeedModeChange ? (mode: string) => onSeedModeChange(entry.ioKey, mode) : undefined
         }
+        onValueChange={(next: unknown) => set(entry.ioKey, next)}
         onVisibilityChange={
           onVisibilityChange && visibilityMode
             ? (visible: boolean) => onVisibilityChange(entry.ioKey, visible)
             : undefined
         }
-        dimmed={!!visibilityMode && rowEntry.modeOverrides?.[visibilityMode]?.visible === false}
-        withHandle={withHandle}
-        /* 画布上 handle id 必须唯一：同一个 pin 名可能同时出现在两个节点上（自定义
-         * 节点重名很常见），用 ioKey 当 handle id 才会接到「那一行」而不是「同名的
-         * 另一行」。 */
-        handleId={entry.ioKey}
+        previewSrc={localPreviewUrl(entry.ioKey)}
+        seedMode={seedModes?.[entry.ioKey]}
         trailing={rowTrailing?.(entry)}
+        uploading={uploading && uploadTarget === entry.ioKey}
+        value={values[entry.ioKey]}
+        visible={
+          visibilityMode ? (entry.modeOverrides?.[visibilityMode]?.visible ?? true) : undefined
+        }
+        withHandle={withHandle}
       />
     );
   };
@@ -167,10 +167,10 @@ export function DynamicWorkflowFormView({
         <div className="border-destructive/30 bg-destructive/10 text-destructive text-2xs flex items-start justify-between gap-2 rounded-md border px-2.5 py-2 leading-relaxed">
           <span className="min-w-0 flex-1">上传失败：{uploadError}</span>
           <Button
-            variant="ghost"
-            onClick={dismissUploadError}
-            className="nodrag nopan text-danger-strong hover:text-danger-strong h-auto shrink-0 rounded px-1"
             aria-label="关闭上传错误提示"
+            className="nodrag nopan text-danger-strong hover:text-danger-strong h-auto shrink-0 rounded px-1"
+            onClick={dismissUploadError}
+            variant="ghost"
           >
             ✕
           </Button>
@@ -193,13 +193,13 @@ export function DynamicWorkflowFormView({
 
             return (
               <div
-                key={entry.ioKey}
-                draggable
-                onDragStart={dragHandlers.onDragStart(entry.ioKey)}
-                onDragOver={dragHandlers.onDragOver(entry.ioKey)}
-                onDrop={dragHandlers.onDrop(entry.ioKey)}
-                onDragEnd={dragHandlers.onDragEnd}
                 className={`relative ${isDragging ? "opacity-50" : ""}`}
+                draggable
+                key={entry.ioKey}
+                onDragEnd={dragHandlers.onDragEnd}
+                onDragOver={dragHandlers.onDragOver(entry.ioKey)}
+                onDragStart={dragHandlers.onDragStart(entry.ioKey)}
+                onDrop={dragHandlers.onDrop(entry.ioKey)}
               >
                 {/* 插入指示线画在**实际插入位置**：指针在目标行上半区 = 行顶、
                  * 下半区 = 行底，与 reorderIO 收到的 position 同源 —— 若整段
@@ -213,8 +213,8 @@ export function DynamicWorkflowFormView({
                  * 下拉上起手会在 dragstart 里被取消）；它自身 pointer-events-none，
                  * 点击会落到下面的输入框上。 */}
                 <div
-                  className="z-base text-3xs pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 leading-1.5 text-white/30 select-none"
                   aria-hidden
+                  className="z-base text-3xs pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 leading-1.5 text-white/30 select-none"
                 >
                   ⋮⋮
                 </div>
@@ -229,21 +229,21 @@ export function DynamicWorkflowFormView({
        * width/height、时长/画质/比例 散落成多个独立框。 */}
       {(groups.dimension ?? groups.video) && (
         <GroupedControls
-          dimension={groups.dimension}
-          video={groups.video}
-          values={values}
-          onChange={onChange}
-          workflowId={workflowId}
-          compact={compact}
-          disabled={disabled}
-          onRequiredChange={onRequiredChange}
-          mode={mode}
-          visibilityMode={visibilityMode}
-          onVisibilityChange={onVisibilityChange}
           /* 画布 / 库内把组合控件收窄成一块（宽度按内容走，仍是那块带下拉的
            * 控件）：不再摊成逐行参数清单。宽版表单不收窄 —— 作者在那里要的是
            * 整块录入。 */
           collapseGrouped={compact}
+          compact={compact}
+          dimension={groups.dimension}
+          disabled={disabled}
+          mode={mode}
+          onChange={onChange}
+          onRequiredChange={onRequiredChange}
+          onVisibilityChange={onVisibilityChange}
+          values={values}
+          video={groups.video}
+          visibilityMode={visibilityMode}
+          workflowId={workflowId}
         />
       )}
 
@@ -252,30 +252,30 @@ export function DynamicWorkflowFormView({
         <>
           {compact ? (
             <WirePortRows
-              wireInputs={portEntries}
-              outputs={showOutputs ? outputs : []}
-              values={values}
-              set={set}
-              pickFile={pickFile}
-              uploading={uploading}
-              uploadTarget={uploadTarget}
-              seedModes={seedModes}
+              draggingKey={draggingKey}
+              dragOverKey={dragOverKey}
+              onPortDragEnd={endDrag}
+              onPortDragStart={beginPortDrag}
+              onReorder={onReorder}
               onSeedModeChange={onSeedModeChange}
+              outputs={showOutputs ? outputs : []}
+              pickFile={pickFile}
+              seedModes={seedModes}
+              set={set}
               /* 双层守卫：外层已按 showOutputs 过滤 outputs，这里再显式透传，
                * 避免日后重构成别的判断方式时复活 images 行 + 紫圆点。 */
               showOutputs={showOutputs}
-              draggingKey={draggingKey}
-              dragOverKey={dragOverKey}
-              onReorder={onReorder}
-              onPortDragStart={beginPortDrag}
-              onPortDragEnd={endDrag}
+              uploading={uploading}
+              uploadTarget={uploadTarget}
+              values={values}
+              wireInputs={portEntries}
             />
           ) : (
             <IoEndpointsSection
-              wireInputs={wireInputs}
               inputs={inputs}
               outputs={outputs}
               showOutputs={showOutputs}
+              wireInputs={wireInputs}
             />
           )}
         </>
@@ -286,9 +286,9 @@ export function DynamicWorkflowFormView({
       {!compact && widgetSectionEntries.length > 0 && (
         <>
           <SectionHeader
-            label="可编辑参数"
-            count={widgetSectionEntries.length}
             accent={SECTION_ACCENT}
+            count={widgetSectionEntries.length}
+            label="可编辑参数"
           />
           {widgetSectionEntries.map((entry) => renderRow(entry, false))}
         </>

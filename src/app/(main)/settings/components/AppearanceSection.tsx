@@ -73,9 +73,9 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
           roving）会把这条契约丢掉。 */}
       <RadioGroup
         aria-label="主题外观"
-        value={c.theme}
-        onValueChange={(v) => c.setTheme(/* SAFETY: 类型断言已复核 */ v as "dark" | "light")}
         className="grid max-w-md grid-cols-2 gap-3"
+        onValueChange={(v) => c.setTheme(/* SAFETY: 类型断言已复核 */ v as "dark" | "light")}
+        value={c.theme}
       >
         {
           /* SAFETY: 类型断言已复核 */ (
@@ -96,7 +96,6 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
           ).map(({ value, label, Icon, hint }) => (
             <RadioGroupItem
               key={value}
-              value={value}
               /* 主题卡是「整卡可点」的选项，不是动作按钮：基元的尺寸/高度/内边距/
                字号全部归还给调用处 —— 基类是「小圆点」形态（`size-4` +
                `aspect-square`），这里必须连**宽度**与**宽高比**一起还
@@ -107,13 +106,14 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
               nativeButton
               render={
                 <Button
-                  variant="ghost"
                   className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-ink data-checked:hover:border-primary data-checked:hover:bg-primary-soft data-checked:hover:text-ink data-unchecked:border-border data-unchecked:bg-surface-1 data-unchecked:text-muted-foreground data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink aspect-auto! size-auto! flex-col items-start justify-start gap-1.5 rounded-xl border p-4 text-left whitespace-normal transition-colors **:data-[slot=radio-group-indicator]:hidden"
+                  variant="ghost"
                 />
               }
+              value={value}
             >
               <span className="flex items-center gap-2 text-sm font-semibold">
-                <Icon size={18} className="text-primary" />
+                <Icon className="text-primary" size={18} />
                 {label}
               </span>
               <span className="text-xs opacity-80">{hint}</span>
@@ -125,18 +125,18 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
       {/* 圆角与标题字阶各只改一个全局 CSS 变量（--radius / --font-scale）；
           具体数值留在 globals.css 一处，这里不重复定义基准。 */}
       <StepRow
-        label="圆角"
         hint="影响卡片、按钮、输入框等所有圆角。"
+        label="圆角"
+        onChange={(id) => update({ radius: id })}
         steps={RADIUS_STEPS}
         value={prefs.radius}
-        onChange={(id) => update({ radius: id })}
       />
       <StepRow
-        label="标题字阶"
         hint="只影响各级标题；正文与小号文字保持原尺寸，不随这一档变化。"
+        label="标题字阶"
+        onChange={(id) => update({ fontScale: id })}
         steps={FONT_SCALE_STEPS}
         value={prefs.fontScale}
-        onChange={(id) => update({ fontScale: id })}
       />
       {notPersisted && (
         <p className="text-warning mt-3 text-xs">
@@ -170,23 +170,23 @@ function StepRow({
       {/* 同主题卡：单选组的方向键契约由 `RadioGroup` 基元给（见上面那段注释）。 */}
       <RadioGroup
         aria-label={label}
-        value={value}
-        onValueChange={onChange}
         className="flex flex-wrap gap-2"
+        onValueChange={onChange}
+        value={value}
       >
         {steps.map((step) => (
           <RadioGroupItem
             key={step.id}
-            value={step.id}
             nativeButton
             render={
               <Button
-                variant="ghost"
-                size="sm"
                 /* 同主题卡：小圆点选中指示器在药丸形态只会叠在文字上，隐藏。 */
                 className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-primary data-checked:hover:border-primary data-checked:hover:bg-primary-soft data-checked:hover:text-primary data-unchecked:border-border data-unchecked:text-muted-foreground data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink aspect-auto! size-auto! rounded-lg border px-3 py-1.5 text-xs **:data-[slot=radio-group-indicator]:hidden"
+                size="sm"
+                variant="ghost"
               />
             }
+            value={step.id}
           >
             {step.label}
           </RadioGroupItem>

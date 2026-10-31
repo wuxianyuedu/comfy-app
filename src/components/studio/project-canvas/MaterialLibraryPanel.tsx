@@ -72,25 +72,25 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
       <div className="border-border-strong flex items-center gap-2 border-b px-4 py-3">
         <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">素材库</h2>
         <Hint
-          label={`素材保存在 ${ARTIFACT_ROOT_DIR}/materials 下，可直接把文件丢进对应分类目录`}
           accessibleName
+          label={`素材保存在 ${ARTIFACT_ROOT_DIR}/materials 下，可直接把文件丢进对应分类目录`}
         >
           <Button
-            variant="ghost"
-            size="icon-xs"
             className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
+            size="icon-xs"
+            variant="ghost"
           >
             <CircleHelp data-icon="inline-start" size={14} />
           </Button>
         </Hint>
         {/* 显示密度切换 —— 三处逐字相同的孪生对已收口到基元（ISSUE #1925）。 */}
-        <DisplayDensityToggle value={display} onChange={setDisplay} />
-        <Hint label="关闭" accessibleName>
+        <DisplayDensityToggle onChange={setDisplay} value={display} />
+        <Hint accessibleName label="关闭">
           <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={onClose}
             className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
+            onClick={onClose}
+            size="icon-xs"
+            variant="ghost"
           >
             <X data-icon="inline-start" size={14} />
           </Button>
@@ -106,13 +106,13 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
           改用 `ui/tabs` 的 `line` 档：选中态由 `data-active` 驱动（字色 +
           下划线两层），两枚同高同基线。 */}
       <Tabs
-        value={scope}
-        onValueChange={(value) => setScope(/* SAFETY: 类型断言已复核 */ value as MaterialScope)}
         className="gap-0"
+        onValueChange={(value) => setScope(/* SAFETY: 类型断言已复核 */ value as MaterialScope)}
+        value={scope}
       >
         <TabsList
-          variant="line"
           className="border-border-strong h-auto w-full justify-start gap-4 rounded-none border-b px-4 pt-2"
+          variant="line"
         >
           {[
             {
@@ -125,9 +125,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
             },
           ].map((scopeItem) => (
             <TabsTrigger
+              className="h-auto flex-none rounded-none px-0 pb-2.5 text-sm font-medium"
               key={scopeItem.id}
               value={scopeItem.id}
-              className="h-auto flex-none rounded-none px-0 pb-2.5 text-sm font-medium"
             >
               {scopeItem.label}
             </TabsTrigger>
@@ -138,21 +138,21 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
       {/* ── Search + upload ── */}
       <div className="flex items-center gap-2 px-4 py-3">
         <div className="border-border-strong bg-subtle flex flex-1 items-center gap-2 rounded-lg border px-3 py-2">
-          <Search size={14} className="text-ink-muted shrink-0" />
+          <Search className="text-ink-muted shrink-0" size={14} />
           <Input
-            type="text"
-            value={search}
+            className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
             onChange={textHandler(setSearch)}
             placeholder={folder ? "在当前分类搜索" : "搜索全部素材"}
-            className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
+            type="text"
+            value={search}
           />
           {search && (
-            <Hint label="清空" accessibleName>
+            <Hint accessibleName label="清空">
               <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => setSearch("")}
                 className="text-ink-fainter hover:text-ink-soft h-auto shrink-0 p-0 hover:bg-transparent"
+                onClick={() => setSearch("")}
+                size="icon-xs"
+                variant="ghost"
               >
                 <X data-icon="inline-start" size={12} strokeWidth={2.5} />
               </Button>
@@ -169,11 +169,11 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
           wrap
         >
           <Button
-            variant="ghost"
-            size="icon"
-            onClick={uploadPicker.open}
-            disabled={uploading}
             className="text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg"
+            disabled={uploading}
+            onClick={uploadPicker.open}
+            size="icon"
+            variant="ghost"
           >
             {uploading ? (
               <Spinner className="size-4" />
@@ -189,16 +189,16 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
           这段渲染与资源库页此前各写一份、class 串逐字相同。 */}
       <div className="flex items-center px-4 pb-2">
         <BreadcrumbPath
-          segments={breadcrumbSegments}
           navigable={!searching}
           onNavigate={enterFolder}
+          segments={breadcrumbSegments}
         />
         {/* 返回按钮：仅在进入某分类且非搜索时显示 */}
         {showItems && !searching && folder && (
           <Button
-            variant="ghost"
-            onClick={() => enterFolder(null)}
             className="text-ink-muted hover:bg-subtle hover:text-ink-soft text-2xs ml-auto h-auto shrink-0 gap-1 rounded-md px-2 py-1 font-normal"
+            onClick={() => enterFolder(null)}
+            variant="ghost"
           >
             <ChevronLeft data-icon="inline-start" size={11} strokeWidth={2.5} />
             返回
@@ -211,9 +211,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
         <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
           <span className="text-destructive text-2xs min-w-0 flex-1 wrap-break-word">{error}</span>
           <Button
-            variant="ghost"
-            onClick={refresh}
             className="text-destructive text-2xs h-auto shrink-0 p-0 underline hover:bg-transparent"
+            onClick={refresh}
+            variant="ghost"
           >
             重试
           </Button>
@@ -223,8 +223,8 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
       <MaterialLibraryContent
         c={c}
         display={display}
-        onUse={onUse}
         onOpenUploadPicker={() => uploadPicker.open}
+        onUse={onUse}
       />
     </aside>
   );

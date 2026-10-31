@@ -177,7 +177,7 @@ export const WithDisabled: Story = {
         <DropdownMenuItem disabled>
           <Download /> 还没产物（禁用）
         </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" disabled>
+        <DropdownMenuItem disabled variant="destructive">
           运行中不能删除（禁用）
         </DropdownMenuItem>
       </DropdownMenuContent>

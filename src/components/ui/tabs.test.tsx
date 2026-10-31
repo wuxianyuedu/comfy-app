@@ -58,7 +58,7 @@ function listEl(): HTMLElement {
 
 describe("ui/tabs 的命名钩子", () => {
   it("四个 data-slot 与两根轴都在位（下游样式与 reduced-motion 降级块按名字找元素）", () => {
-    render(<Demo variant="line" orientation="vertical" />);
+    render(<Demo orientation="vertical" variant="line" />);
 
     const root = document.querySelector<HTMLElement>('[data-slot="tabs"]')!;
     const list = listEl();
@@ -193,7 +193,7 @@ describe("ui/tabs 的键盘换页签", () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
     render(
-      <Tabs value="params" onValueChange={onValueChange}>
+      <Tabs onValueChange={onValueChange} value="params">
         <TabsList>
           <TabsTrigger value="params">参数</TabsTrigger>
           <TabsTrigger value="nodes">节点</TabsTrigger>

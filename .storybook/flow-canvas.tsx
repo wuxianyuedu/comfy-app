@@ -384,8 +384,8 @@ export function StorybookFlowCanvas({
     <div className={`${CANVAS_FRAME_CLASS} bg-canvas relative`}>
       <ReactFlowProvider>
         <ReactFlow
-          nodes={[...scene.nodes]}
           edges={[...scene.edges]}
+          nodes={[...scene.nodes]}
           nodeTypes={nodeTypes}
           /* 两种视口口径互斥：`fit` 时 React Flow 自己算视口、`viewport` 不传
              （传了也不会被用，但留着会让人以为「钉住 + 自适应」能同时成立）。 */
@@ -398,27 +398,27 @@ export function StorybookFlowCanvas({
                 viewport: scene.viewport,
                 onViewportChange: () => undefined,
               })}
-          proOptions={{ hideAttribution: true }}
-          nodesDraggable={false}
-          nodesConnectable={false}
           elementsSelectable={false}
+          nodesConnectable={false}
+          nodesDraggable={false}
+          proOptions={{ hideAttribution: true }}
         >
           {/* 细网格 + 主参考线：与 `WorkflowCanvasDecorations` 的 `CanvasGrid`
               同一个判据来源（缩放太低时细线淡出、底色留下）。这里用 React Flow
               自带的 `<Background>` 摆一份等价的底，好让「底色在不在」这件事在
               画布上看得见 —— 它是画布有没有渲染出来的唯一直观凭据。 */}
           <Background
-            variant={BackgroundVariant.Lines}
+            color="var(--color-border)"
             gap={10}
             lineWidth={1}
-            color="var(--color-border)"
+            variant={BackgroundVariant.Lines}
           />
           <Background
-            id="major"
-            variant={BackgroundVariant.Lines}
-            gap={100}
-            lineWidth={1}
             color="var(--color-border-strong)"
+            gap={100}
+            id="major"
+            lineWidth={1}
+            variant={BackgroundVariant.Lines}
           />
           {children}
         </ReactFlow>

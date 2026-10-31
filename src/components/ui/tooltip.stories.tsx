@@ -94,7 +94,7 @@ export const Sides: Story = {
         {
           /* SAFETY: 类型断言已复核 */ (["top", "right", "bottom", "left"] as const).map((side) => (
             <Tooltip key={side}>
-              <TooltipTrigger render={<Button variant="outline" size="sm" />}>
+              <TooltipTrigger render={<Button size="sm" variant="outline" />}>
                 {side}
               </TooltipTrigger>
               <TooltipContent side={side}>开在 {side}</TooltipContent>

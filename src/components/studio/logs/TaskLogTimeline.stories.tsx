@@ -1,10 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import {
-  TaskLogEmptyHint,
-  TaskLogTimeline,
-} from "~/components/studio/logs/TaskLogTimeline";
+import { TaskLogEmptyHint, TaskLogTimeline } from "~/components/studio/logs/TaskLogTimeline";
 import {
   getWorkflowRunStoreSnapshot,
   subscribeWorkflowRunStore,
@@ -62,8 +59,7 @@ function TaskLogTimelineHarness({
     getWorkflowRunStoreSnapshot,
     getWorkflowRunStoreSnapshot,
   );
-  const run =
-    snapshot.runs.find((r) => r.errorMessage !== undefined) ?? snapshot.runs[0];
+  const run = snapshot.runs.find((r) => r.errorMessage !== undefined) ?? snapshot.runs[0];
   const logs = run?.logs ?? [];
   const errorMessage = runSceneError(scene);
   return (
@@ -72,20 +68,16 @@ function TaskLogTimelineHarness({
         {runSceneName(scene)} · {logs.length} 条
       </div>
       <TaskLogTimeline
+        emptySlot={<TaskLogEmptyHint message="运行生成后此处会显示执行步骤日志" />}
+        listClassName="bg-panel-deep/60"
         logs={logs}
         rowTestId="story-log-line"
-        listClassName="bg-panel-deep/60"
         topSlot={
           withTopSlot && errorMessage !== undefined ? (
             <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
-              <div className="wrap-break-word whitespace-pre-wrap">
-                {errorMessage}
-              </div>
+              <div className="wrap-break-word whitespace-pre-wrap">{errorMessage}</div>
             </div>
           ) : null
-        }
-        emptySlot={
-          <TaskLogEmptyHint message="运行生成后此处会显示执行步骤日志" />
         }
       />
     </div>

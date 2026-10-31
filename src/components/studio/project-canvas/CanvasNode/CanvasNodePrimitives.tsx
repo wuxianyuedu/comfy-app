@@ -31,9 +31,8 @@ export function Field({
         {port && s && !isOut && (
           <>
             <Handle
-              type="target"
-              position={Position.Left}
               id={port.id}
+              position={Position.Left}
               style={{
                 position: "absolute",
                 width: 10,
@@ -46,6 +45,7 @@ export function Field({
                 transform: "translateY(-50%)",
                 borderRadius: 9999,
               }}
+              type="target"
             />
             <span className="text-2xs font-medium" style={{ color: s.color }}>
               {s.label}
@@ -66,9 +66,8 @@ export function Field({
               </span>
             </span>
             <Handle
-              type="source"
-              position={Position.Right}
               id={port.id}
+              position={Position.Right}
               style={{
                 width: 10,
                 height: 10,
@@ -78,6 +77,7 @@ export function Field({
                 right: -14,
                 top: 1,
               }}
+              type="source"
             />
           </>
         )}
@@ -173,10 +173,10 @@ export function StatusDot({ status }: { status: CanvasNodeData["status"] }) {
 export function StatusBadge({ status }: { status: CanvasNodeData["status"] }) {
   return (
     <StatusBadgePrimitive
-      status={STATUS_BADGE_KEY[status]}
-      label={STATUS_LABEL[status]}
-      dot={false}
       className="text-3xs shrink-0 gap-0 rounded px-1.5 py-0.5"
+      dot={false}
+      label={STATUS_LABEL[status]}
+      status={STATUS_BADGE_KEY[status]}
     />
   );
 }
@@ -200,6 +200,7 @@ export function NodeChip({
   return (
     <div className={`flex min-w-0 items-center ${isSm ? "gap-1.5" : "gap-2.5"}`}>
       <span
+        aria-label={`类型 ${meta.label}`}
         className={`flex shrink-0 items-center justify-center rounded-full font-bold ${
           isSm ? "text-3xs h-5 w-5" : "text-2xs h-6 w-6"
         }`}
@@ -208,7 +209,6 @@ export function NodeChip({
           color: meta.color,
           boxShadow: `0 0 8px ${meta.color}33, inset 0 0 0 1px ${meta.color}40`,
         }}
-        aria-label={`类型 ${meta.label}`}
       >
         {meta.typeChar}
       </span>

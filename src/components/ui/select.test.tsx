@@ -41,12 +41,12 @@ function Demo({
 }) {
   return (
     <Select defaultValue={defaultValue} onValueChange={onValueChange}>
-      <SelectTrigger size={size} aria-label="输出格式">
+      <SelectTrigger aria-label="输出格式" size={size}>
         <SelectValue placeholder="选一个格式" />
       </SelectTrigger>
       <SelectContent
-        positionerClassName={positionerClassName}
         alignItemWithTrigger={alignItemWithTrigger}
+        positionerClassName={positionerClassName}
       >
         {OPTIONS.map((value) => (
           <SelectItem key={value} value={value}>

@@ -55,13 +55,13 @@ export function DiagnosticsButton() {
     <span className="flex items-center gap-1">
       <Hint label="打包本次运行与最近几次的历史日志（含 run.json 环境信息）到 log/exports/">
         <Button
-          variant="ghost"
-          size="icon"
-          onClick={onPackage}
           aria-label="打包诊断现场到本地文件"
           className={`hover:bg-subtle hover:text-ink rounded-md ${
             failed ? "text-danger-strong" : "text-ink-muted"
           }`}
+          onClick={onPackage}
+          size="icon"
+          variant="ghost"
         >
           <PackageSearch size={16} />
         </Button>

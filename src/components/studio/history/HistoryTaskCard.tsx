@@ -32,16 +32,17 @@ export function HistoryTaskCard({
   const st = STATUS_STYLE[task.status] ?? QUEUED_STATUS_STYLE;
   return (
     <div
-      key={task.id}
       className={
         "group bg-card hover:bg-subtle relative overflow-hidden rounded-2xl border border-l-4 py-3 pr-3 pl-5 transition-all " +
         st.accentCls +
         " " +
         st.cardBorderCls
       }
+      key={task.id}
     >
       {/* 左缘 accent 额外强调（border-l-4 已在父级，再叠一层高亮条） */}
       <div
+        aria-hidden
         className={
           "absolute top-0 bottom-0 left-0 w-1 " +
           (task.status === "SUCCEEDED"
@@ -54,24 +55,23 @@ export function HistoryTaskCard({
                   ? "bg-info"
                   : "bg-gray-500")
         }
-        aria-hidden
       />
 
       <div className="flex items-center gap-4">
         {/* ── 缩略图 ── */}
         <Button
-          variant="ghost"
-          onClick={() => onOpenDetail(task.id)}
-          className="bg-panel-deep relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl p-0"
           aria-label="查看任务详情"
+          className="bg-panel-deep relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl p-0"
+          onClick={() => onOpenDetail(task.id)}
+          variant="ghost"
         >
           {task.cover ? (
             <MediaThumbnail
-              src={task.cover}
               alt=""
-              className="h-full w-full object-cover"
               autoPlay
+              className="h-full w-full object-cover"
               loop
+              src={task.cover}
             />
           ) : (
             <span className="text-ink-fainter text-xs">
@@ -82,11 +82,11 @@ export function HistoryTaskCard({
               宽度下限与文字百分比分列两处，观感与收口前一致）。 */}
           {st.showProgress && (
             <ProgressBar
-              value={progress}
-              showValue={false}
               className="absolute inset-x-0 bottom-0"
-              trackClassName="bg-canvas-deep h-1 rounded-none"
               fillClassName="u-gradient-brand rounded-none duration-1000 ease-linear"
+              showValue={false}
+              trackClassName="bg-canvas-deep h-1 rounded-none"
+              value={progress}
             />
           )}
           {/* 排队中：虚线边框 + 计时图标 */}
@@ -103,9 +103,9 @@ export function HistoryTaskCard({
          * 那种写法）。`text-left` 与 `p` → `span.block` 是因为 `<button>` 里不能嵌
          * 块级元素，而它的默认排版是居中。 */}
         <Button
-          variant="ghost"
-          onClick={() => onOpenDetail(task.id)}
           className="h-auto min-w-0 flex-1 cursor-pointer justify-start rounded-xl p-0 text-left font-normal whitespace-normal hover:bg-transparent"
+          onClick={() => onOpenDetail(task.id)}
+          variant="ghost"
         >
           <div className="flex flex-wrap items-center gap-2">
             <span className={`text-2xs rounded-full px-2 py-0.5 font-medium ${st.pillCls}`}>
@@ -140,8 +140,8 @@ export function HistoryTaskCard({
                     节点配置校验（{task.validationErrors.length} 项）
                   </div>
                   <ValidationErrorList
-                    errors={task.validationErrors}
                     className="text-destructive/90"
+                    errors={task.validationErrors}
                   />
                 </div>
               )}
@@ -154,30 +154,30 @@ export function HistoryTaskCard({
           <div className="flex items-center gap-2">
             {st.isActive && (
               <Button
-                variant="warning"
-                size="xs"
-                onClick={() => onCancel(task.id)}
                 className="h-auto rounded-lg px-2.5 py-1"
+                onClick={() => onCancel(task.id)}
+                size="xs"
+                variant="warning"
               >
                 取消
               </Button>
             )}
             {task.status === "FAILED" && (
               <Button
-                variant="primary"
-                size="xs"
-                onClick={() => onRetry(task)}
-                disabled={retrying}
                 className="h-auto rounded-lg px-2.5 py-1"
+                disabled={retrying}
+                onClick={() => onRetry(task)}
+                size="xs"
+                variant="primary"
               >
                 {retrying ? "提交中…" : "↻ 重试"}
               </Button>
             )}
             <Button
-              variant="danger"
-              size="xs"
-              onClick={() => onRemove(task.id)}
               className="h-auto rounded-lg px-2.5 py-1"
+              onClick={() => onRemove(task.id)}
+              size="xs"
+              variant="danger"
             >
               删除
             </Button>

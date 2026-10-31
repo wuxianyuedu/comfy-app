@@ -250,40 +250,40 @@ export function VideoStudio({
   return (
     <div className="flex flex-col gap-4">
       <ChannelSwitch
-        channel={channel}
-        onChannelChange={setChannel}
         apiChannels={apiChannels}
         apiReady={apiReady}
-        workflowSelected={!!workflowId}
-        fps={fps}
-        onFpsChange={setFps}
         batchRunning={batch.busy}
-        pendingCount={pending.length}
+        channel={channel}
+        fps={fps}
+        onChannelChange={setChannel}
+        onFpsChange={setFps}
         onGenerateBatch={() => void generateBatch()}
         onNextStage={onNextStage}
         onOpenModelAdapters={onOpenModelAdapters}
+        pendingCount={pending.length}
+        workflowSelected={!!workflowId}
       />
 
       {shots.length === 0 ? (
         <EmptyState
-          variant="hint"
-          description="暂无镜头数据。请先完成「场景分镜」— 镜头时长与运动强度会自动带入本阶段。"
           className="py-10 text-sm"
+          description="暂无镜头数据。请先完成「场景分镜」— 镜头时长与运动强度会自动带入本阶段。"
+          variant="hint"
         />
       ) : (
         <div className="flex flex-col gap-3">
           {shots.map((shot) => (
             <ShotCard
-              key={shot.id}
-              shot={shot}
-              progress={progress[shot.id] ?? 0}
-              error={errors[shot.id]}
-              channel={channel}
               apiReady={apiReady}
+              channel={channel}
+              error={errors[shot.id]}
               fps={fps}
-              onPatch={(p) => patchShot(shot.id, p)}
-              onGenerate={() => void generateClip(shot)}
+              key={shot.id}
               onCancel={() => void onCancelShot(shot)}
+              onGenerate={() => void generateClip(shot)}
+              onPatch={(p) => patchShot(shot.id, p)}
+              progress={progress[shot.id] ?? 0}
+              shot={shot}
             />
           ))}
         </div>
@@ -297,10 +297,10 @@ export function VideoStudio({
       )}
       {shots.length > 0 && (
         <Button
-          variant="secondary"
-          size="xs"
-          onClick={onPrevStage}
           className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
+          onClick={onPrevStage}
+          size="xs"
+          variant="secondary"
         >
           ← 回镜头生图
         </Button>

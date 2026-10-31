@@ -112,10 +112,10 @@ export function StatusButton({
 }) {
   return (
     <Button
-      variant={variant}
-      onClick={onClick}
-      disabled={disabled}
       className={statusButtonClass(`h-auto rounded-lg px-4 py-2 font-semibold ${className ?? ""}`)}
+      disabled={disabled}
+      onClick={onClick}
+      variant={variant}
     >
       {children}
     </Button>

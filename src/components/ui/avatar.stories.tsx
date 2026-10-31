@@ -63,11 +63,11 @@ export const WithImage: Story = {
   render: (args) => (
     <div className="flex items-center gap-3">
       <Avatar {...args}>
-        <AvatarImage src={PORTRAIT} alt="月读" />
+        <AvatarImage alt="月读" src={PORTRAIT} />
         <AvatarFallback>月</AvatarFallback>
       </Avatar>
       <Avatar {...args}>
-        <AvatarImage src="/not-a-real-image.png" alt="加载失败" />
+        <AvatarImage alt="加载失败" src="/not-a-real-image.png" />
         <AvatarFallback>失败</AvatarFallback>
       </Avatar>
     </div>

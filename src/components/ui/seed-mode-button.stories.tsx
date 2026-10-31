@@ -47,7 +47,7 @@ export const AllModes: Story = {
   render: () => (
     <div className="flex flex-col gap-3">
       {MODES.map((mode) => (
-        <div key={mode} className="flex items-center gap-3">
+        <div className="flex items-center gap-3" key={mode}>
           <span className="text-ink-muted w-20 font-mono text-[11px]">{mode}</span>
           <SeedModeButton mode={mode} onPick={() => undefined} />
         </div>

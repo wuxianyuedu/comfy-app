@@ -317,9 +317,8 @@ export function WorkflowCanvasNodePreview({
       {/* ── edit 模式：参数连线画布（三列 React Flow） ── */}
       {viewMode === "edit" && (
         <WorkflowLibraryCanvas
-          io={workflowIO}
-          paramCards={paramCards}
-          outputCards={outputCards}
+          canWire={!!effectiveMode && !!onPatchParamMap}
+          contractEntries={contractEntries}
           /* 闸门（`isValidConnection`）按它判类型 —— 必须与卡片列**同一份**
              契约（含作者自定义的口），否则自定义口的圆点拖到宿主行上会被判成
              「这一行不收这个口子」，而卡片列明明画着它。 */
@@ -327,26 +326,52 @@ export function WorkflowCanvasNodePreview({
             mode: effectiveMode,
             contractIds: contractEntries.map((item) => item.id),
           })}
-          contractEntries={contractEntries}
-          canWire={!!effectiveMode && !!onPatchParamMap}
-          selectedEntryId={selectedParamId}
-          selectedOutputId={selectedOutputId}
-          onSelectParam={(id) => {
-            setSelectedParamId(id);
-            if (id) {
-              setSelectedOutputId(null);
-            }
-          }}
-          onSelectOutput={(id) => {
-            setSelectedOutputId(id);
-            if (id) {
-              setSelectedParamId(null);
-            }
-          }}
-          onResetParam={(id) => {
-            wiring.resetMany(sizeGroupIds(id));
-          }}
-          onResetOutput={outputWiring.reset}
+          host={
+            <LibraryHostCard
+              actions={
+                <WorkflowNodeActionButton
+                  disabled={true}
+                  hint="切换到「实际使用」页签后可执行"
+                  label="▶ 用此工作流生成"
+                  onClick={run}
+                />
+              }
+              effectiveMode={effectiveMode}
+              effectiveModeLabel={effectiveModeLabel}
+              form={
+                <DynamicWorkflowForm
+                  compact
+                  io={workflowIO ?? undefined}
+                  mode={effectiveMode}
+                  onChange={setValuesAndClearFailure}
+                  onSeedModeChange={onSeedModeChange}
+                  onUploadError={setUploadNotice}
+                  onUploadProgress={setUploadNotice}
+                  rowTrailing={(entry) => (
+                    <ParamOwnerTag label={paramCards.ownersByPin[entry.ioKey]} />
+                  )}
+                  seedModes={seedModes}
+                  showOutputs={false}
+                  values={values}
+                  workflowId={workflowId}
+                />
+              }
+              hostRef={hostRef}
+              inputs={inputs}
+              modes={modes}
+              onModeChange={onModeChange}
+              outputs={outputs}
+              phaseKind={viewMode === "edit" && phase.kind === "failed" ? "idle" : phase.kind}
+              running={running}
+              /* 编辑对外参数页签是配置界面，不应显示上次运行的失败状态（红点 +
+               *  「失败」文案）。这里把失败态渲染成「待开始」的中性状态，运行中 /
+               *  已完成等状态保留，方便用户必要时感知运行进度。 */
+              statusLabel={viewMode === "edit" && phase.kind === "failed" ? "待开始" : statusLabel}
+              taskType={taskType}
+              workflowName={workflowName}
+            />
+          }
+          io={workflowIO}
           onConnect={effectiveMode && onPatchParamMap ? wiring.connect : undefined}
           onConnectOutput={effectiveMode && onPatchParamMap ? outputWiring.connect : undefined}
           onDeleteWire={
@@ -360,100 +385,75 @@ export function WorkflowCanvasNodePreview({
                 }
               : undefined
           }
-          host={
-            <LibraryHostCard
-              workflowName={workflowName}
-              /* 编辑对外参数页签是配置界面，不应显示上次运行的失败状态（红点 +
-               *  「失败」文案）。这里把失败态渲染成「待开始」的中性状态，运行中 /
-               *  已完成等状态保留，方便用户必要时感知运行进度。 */
-              statusLabel={viewMode === "edit" && phase.kind === "failed" ? "待开始" : statusLabel}
-              running={running}
-              phaseKind={viewMode === "edit" && phase.kind === "failed" ? "idle" : phase.kind}
-              modes={modes}
-              effectiveMode={effectiveMode}
-              taskType={taskType}
-              effectiveModeLabel={effectiveModeLabel}
-              onModeChange={onModeChange}
-              hostRef={hostRef}
-              form={
-                <DynamicWorkflowForm
-                  io={workflowIO ?? undefined}
-                  values={values}
-                  onChange={setValuesAndClearFailure}
-                  showOutputs={false}
-                  compact
-                  mode={effectiveMode}
-                  seedModes={seedModes}
-                  rowTrailing={(entry) => (
-                    <ParamOwnerTag label={paramCards.ownersByPin[entry.ioKey]} />
-                  )}
-                  onSeedModeChange={onSeedModeChange}
-                  workflowId={workflowId}
-                  onUploadProgress={setUploadNotice}
-                  onUploadError={setUploadNotice}
-                />
-              }
-              outputs={outputs}
-              inputs={inputs}
-              actions={
-                <WorkflowNodeActionButton
-                  label="▶ 用此工作流生成"
-                  disabled={true}
-                  onClick={run}
-                  hint="切换到「实际使用」页签后可执行"
-                />
-              }
-            />
-          }
+          onResetOutput={outputWiring.reset}
+          onResetParam={(id) => {
+            wiring.resetMany(sizeGroupIds(id));
+          }}
+          onSelectOutput={(id) => {
+            setSelectedOutputId(id);
+            if (id) {
+              setSelectedParamId(null);
+            }
+          }}
+          onSelectParam={(id) => {
+            setSelectedParamId(id);
+            if (id) {
+              setSelectedOutputId(null);
+            }
+          }}
+          outputCards={outputCards}
+          paramCards={paramCards}
+          selectedEntryId={selectedParamId}
+          selectedOutputId={selectedOutputId}
         />
       )}
 
       {/* ── use 模式：简化视图（表单 + 生成按钮 + 日志入口 + 模式切换） ── */}
       {viewMode === "use" && (
         <WorkflowPreviewUsePanel
-          workflowId={workflowId}
-          workflowName={workflowName}
-          workflowIO={workflowIO}
+          canRun={canRun}
           effectiveMode={effectiveMode}
-          taskType={taskType}
+          effectiveModeLabel={effectiveModeLabel}
+          logViewTaskId={logViewTaskId}
+          missingLabels={missingLabels}
           modes={modes}
           onModeChange={onModeChange}
-          effectiveModeLabel={effectiveModeLabel}
-          values={values}
-          onValuesChange={setValuesAndClearFailure}
-          seedModes={seedModes}
+          onOpenLog={() => setLogOpen(true)}
           onSeedModeChange={onSeedModeChange}
           onUploadNotice={setUploadNotice}
-          running={running}
-          canRun={canRun}
-          run={run}
+          onValuesChange={setValuesAndClearFailure}
           pct={pct}
-          missingLabels={missingLabels}
-          logViewTaskId={logViewTaskId}
-          onOpenLog={() => setLogOpen(true)}
+          run={run}
+          running={running}
+          seedModes={seedModes}
+          taskType={taskType}
+          values={values}
+          workflowId={workflowId}
+          workflowIO={workflowIO}
+          workflowName={workflowName}
         />
       )}
 
       {/* ── 运行的内联反馈（进度 / 结果 / 失败原因 / 上传与缺参提示） ── */}
       <WorkflowPreviewRunFeedback
-        phase={phase}
-        pct={pct}
-        nodeLabel={nodeLabel}
-        resultUrl={resultUrl}
-        workflowName={workflowName}
-        viewMode={viewMode}
-        running={running}
         missingLabels={missingLabels}
-        uploadNotice={uploadNotice}
+        nodeLabel={nodeLabel}
         onDismissUploadNotice={() => setUploadNotice(null)}
+        pct={pct}
+        phase={phase}
+        resultUrl={resultUrl}
+        running={running}
+        uploadNotice={uploadNotice}
+        viewMode={viewMode}
+        workflowName={workflowName}
       />
       <WorkflowRunLogModal
+        onClose={() => setLogOpen(false)}
+        onViewTaskIdChange={setLogTaskId}
         open={logOpen}
-        workflowId={workflowId}
         source="canvas-node"
         viewTaskId={logViewTaskId}
-        onViewTaskIdChange={setLogTaskId}
-        onClose={() => setLogOpen(false)}
+        workflowId={workflowId}
       />
     </div>
   );

@@ -28,7 +28,7 @@ function failFirstMedia(container: HTMLElement) {
 
 describe("失败兜底收在出口里", () => {
   it("默认渲染 <img>，并自带 lazy / async（调用处不再各写一遍）", () => {
-    const { container } = render(<MediaThumbnail src={IMG} alt="x" />);
+    const { container } = render(<MediaThumbnail alt="x" src={IMG} />);
     const img = container.querySelector("img");
     expect(img).not.toBeNull();
     expect(img!.getAttribute("loading")).toBe("lazy");
@@ -36,7 +36,7 @@ describe("失败兜底收在出口里", () => {
   });
 
   it("失败后默认换成中性占位，且不是把元素藏起来（格子仍在）", () => {
-    const { container } = render(<MediaThumbnail src={IMG} alt="x" className="size-10" />);
+    const { container } = render(<MediaThumbnail alt="x" className="size-10" src={IMG} />);
     failFirstMedia(container);
     /* 破图 / 被藏起来的元素都该消失。 */
     expect(container.querySelector("img")).toBeNull();
@@ -48,20 +48,20 @@ describe("失败兜底收在出口里", () => {
   });
 
   it('fallback="none" 时什么都不渲染（列表里宁缺勿错）', () => {
-    const { container } = render(<MediaThumbnail src={IMG} fallback="none" />);
+    const { container } = render(<MediaThumbnail fallback="none" src={IMG} />);
     failFirstMedia(container);
     expect(container.innerHTML).toBe("");
   });
 
   it("fallback 传节点时按调用处的盒子渲染", () => {
-    const { container } = render(<MediaThumbnail src={IMG} fallback={<span>自定义兜底</span>} />);
+    const { container } = render(<MediaThumbnail fallback={<span>自定义兜底</span>} src={IMG} />);
     failFirstMedia(container);
     expect(container.textContent).toContain("自定义兜底");
   });
 
   it("onLoadError 只在失败时回调一次，且带上 src", () => {
     const onLoadError = vi.fn();
-    const { container } = render(<MediaThumbnail src={IMG} onLoadError={onLoadError} />);
+    const { container } = render(<MediaThumbnail onLoadError={onLoadError} src={IMG} />);
     failFirstMedia(container);
     expect(onLoadError).toHaveBeenCalledTimes(1);
     expect(onLoadError).toHaveBeenCalledWith(IMG);
@@ -91,7 +91,7 @@ describe("视频与图片走同一个出口", () => {
   });
 
   it("video 的播放相关属性都透传", () => {
-    const { container } = render(<MediaThumbnail src="/a.mp4" autoPlay loop muted={false} />);
+    const { container } = render(<MediaThumbnail autoPlay loop muted={false} src="/a.mp4" />);
     const video = container.querySelector("video")!;
     expect(video.hasAttribute("autoplay")).toBe(true);
     expect(video.hasAttribute("loop")).toBe(true);
@@ -101,7 +101,7 @@ describe("视频与图片走同一个出口", () => {
 
   it("onLoad 拿到的是底层媒体元素（供读 naturalWidth / 尺寸）", () => {
     const onLoad = vi.fn();
-    const { container } = render(<MediaThumbnail src={IMG} onLoad={onLoad} />);
+    const { container } = render(<MediaThumbnail onLoad={onLoad} src={IMG} />);
     fireEvent.load(container.querySelector("img")!);
     expect(onLoad).toHaveBeenCalledTimes(1);
     const el = /* SAFETY: 类型断言已复核 */ onLoad.mock.calls[0]![0] as unknown as {
@@ -112,7 +112,7 @@ describe("视频与图片走同一个出口", () => {
 
   it("视频的 onLoad 在 loadeddata 时回调（视频没有 load 事件概念）", () => {
     const onLoad = vi.fn();
-    const { container } = render(<MediaThumbnail src="/a.mp4" onLoad={onLoad} />);
+    const { container } = render(<MediaThumbnail onLoad={onLoad} src="/a.mp4" />);
     fireEvent.loadedData(container.querySelector("video")!);
     expect(onLoad).toHaveBeenCalledTimes(1);
     const el = /* SAFETY: 类型断言已复核 */ onLoad.mock.calls[0]![0] as unknown as {
@@ -123,7 +123,7 @@ describe("视频与图片走同一个出口", () => {
 
   it("额外的 DOM 属性（onClick / title）原样透传到媒体元素", () => {
     const onClick = vi.fn();
-    const { container } = render(<MediaThumbnail src={IMG} title="封面" onClick={onClick} />);
+    const { container } = render(<MediaThumbnail onClick={onClick} src={IMG} title="封面" />);
     const img = container.querySelector("img")!;
     expect(img.getAttribute("title")).toBe("封面");
     fireEvent.click(img);

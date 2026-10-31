@@ -64,13 +64,13 @@ function LogRowHarness({
     <div className="bg-canvas-deep border-border-strong w-225 max-w-full overflow-hidden rounded-md border">
       {entries.map((entry) => (
         <LogRow
-          key={entry.id}
           entry={entry}
-          wrap={wrap}
-          keyword={keyword}
           expanded={expansion.isExpanded(entry.id)}
+          key={entry.id}
+          keyword={keyword}
           onToggleExpand={expansion.toggle}
           style={{ minHeight: LOG_ROW_SINGLE }}
+          wrap={wrap}
         />
       ))}
     </div>
@@ -112,7 +112,7 @@ export const CliRowsCollapsed: Story = {
  * 展开集合是多选集合，不是单选，行高按 id 各自算（对不齐时滚动会错开）。
  */
 export const CliRowsExpanded: Story = {
-  render: () => <LogRowHarness scene="cliExpandable" expandFirst />,
+  render: () => <LogRowHarness expandFirst scene="cliExpandable" />,
 };
 
 /** 同一毫秒的多行：`(time, seq)` 邻近行的级别徽标与正文并排的真实负载。 */

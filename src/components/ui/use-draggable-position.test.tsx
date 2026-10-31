@@ -124,8 +124,8 @@ function setup(options: { elementShown?: boolean; onClick?: () => void } = {}): 
   };
   const view = render(
     <Harness
-      onClick={options.onClick}
       elementShown={options.elementShown ?? true}
+      onClick={options.onClick}
       onController={onController}
     />,
   );
@@ -133,7 +133,7 @@ function setup(options: { elementShown?: boolean; onClick?: () => void } = {}): 
     controller: () => latest!,
     attach: (shown) => {
       view.rerender(
-        <Harness onClick={options.onClick} elementShown={shown} onController={onController} />,
+        <Harness elementShown={shown} onClick={options.onClick} onController={onController} />,
       );
     },
   };

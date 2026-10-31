@@ -38,10 +38,10 @@ function SeedModeIcon({ value }: { value: string }) {
     // 📌 图钉（圆角方帽 + 带点的斜杆）。
     return (
       <svg
-        width="22"
+        fill="none"
         height="22"
         viewBox="0 0 22 22"
-        fill="none"
+        width="22"
         xmlns="http://www.w3.org/2000/svg"
       >
         <path
@@ -54,24 +54,24 @@ function SeedModeIcon({ value }: { value: string }) {
   if (value === "increment") {
     return (
       <svg
-        width="22"
+        fill="none"
         height="22"
         viewBox="0 0 22 22"
-        fill="none"
+        width="22"
         xmlns="http://www.w3.org/2000/svg"
       >
         <path
           d="M11 4.5V17.5"
           stroke="var(--color-seed-step)"
-          strokeWidth="2.4"
           strokeLinecap="round"
+          strokeWidth="2.4"
         />
         <path
           d="M6 9.5L11 4.5L16 9.5"
           stroke="var(--color-seed-step)"
-          strokeWidth="2.4"
           strokeLinecap="round"
           strokeLinejoin="round"
+          strokeWidth="2.4"
         />
       </svg>
     );
@@ -79,46 +79,46 @@ function SeedModeIcon({ value }: { value: string }) {
   if (value === "decrement") {
     return (
       <svg
-        width="22"
+        fill="none"
         height="22"
         viewBox="0 0 22 22"
-        fill="none"
+        width="22"
         xmlns="http://www.w3.org/2000/svg"
       >
         <path
           d="M11 17.5V4.5"
           stroke="var(--color-seed-step)"
-          strokeWidth="2.4"
           strokeLinecap="round"
+          strokeWidth="2.4"
         />
         <path
           d="M6 12.5L11 17.5L16 12.5"
           stroke="var(--color-seed-step)"
-          strokeWidth="2.4"
           strokeLinecap="round"
           strokeLinejoin="round"
+          strokeWidth="2.4"
         />
       </svg>
     );
   }
   // 随机（骰子）
   return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg fill="none" height="22" viewBox="0 0 22 22" width="22" xmlns="http://www.w3.org/2000/svg">
       <rect
-        x="2.5"
-        y="2.5"
-        width="17"
+        fill="var(--color-seed-dice-bg)"
         height="17"
         rx="3.5"
-        fill="var(--color-seed-dice-bg)"
         stroke="var(--color-seed-dice-stroke)"
         strokeWidth="1.2"
+        width="17"
+        x="2.5"
+        y="2.5"
       />
-      <circle cx="7" cy="7" r="1.4" fill="var(--color-seed-dice-pip)" />
-      <circle cx="15" cy="7" r="1.4" fill="var(--color-seed-dice-pip)" />
-      <circle cx="11" cy="11" r="1.4" fill="var(--color-seed-dice-pip)" />
-      <circle cx="7" cy="15" r="1.4" fill="var(--color-seed-dice-pip)" />
-      <circle cx="15" cy="15" r="1.4" fill="var(--color-seed-dice-pip)" />
+      <circle cx="7" cy="7" fill="var(--color-seed-dice-pip)" r="1.4" />
+      <circle cx="15" cy="7" fill="var(--color-seed-dice-pip)" r="1.4" />
+      <circle cx="11" cy="11" fill="var(--color-seed-dice-pip)" r="1.4" />
+      <circle cx="7" cy="15" fill="var(--color-seed-dice-pip)" r="1.4" />
+      <circle cx="15" cy="15" fill="var(--color-seed-dice-pip)" r="1.4" />
     </svg>
   );
 }
@@ -148,26 +148,26 @@ export function SeedModeButton({
   const current = SEED_MODES.find((item) => item.value === mode)?.label ?? "固定值";
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger
-        title="控件后行为 · CONTROL AFTER GENERATE"
         render={
           <Button
-            variant="outline"
             className="nodrag nopan border-border-strong bg-canvas-deep text-ink-soft hover:bg-canvas-deep hover:border-primary/40 hover:text-ink-bright focus-visible:border-primary/40 text-2xs h-auto shrink-0 gap-1 rounded-md px-2 py-0 font-medium"
+            variant="outline"
           />
         }
+        title="控件后行为 · CONTROL AFTER GENERATE"
       >
         <span className="truncate">{current}</span>
-        <ChevronDown size={8} className="opacity-70" />
+        <ChevronDown className="opacity-70" size={8} />
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        side="bottom"
-        sideOffset={6}
         /* 面板自身滚动：窗口再矮也不会把最后一个选项推出视口（基元负责
            `max-height` 与翻转，这里只给形态）。 */
         className="nodrag nopan border-border-strong bg-card w-70 gap-0 overflow-hidden rounded-xl border p-3 shadow-2xl shadow-black/12 dark:shadow-black/60"
+        side="bottom"
+        sideOffset={6}
       >
         <div className="flex flex-col gap-0.5">
           <h4 className="text-ink-bright text-xs font-semibold">
@@ -182,19 +182,19 @@ export function SeedModeButton({
             const selected = item.value === mode;
             return (
               <Button
-                key={item.value}
-                variant="ghost"
-                role="option"
                 aria-selected={selected}
-                onClick={() => {
-                  onPick(item.value);
-                  setOpen(false);
-                }}
                 className={`nodrag nopan hover:bg-subtle flex h-auto w-full justify-start gap-2.5 rounded-lg border px-2 py-1.5 text-left ${
                   selected
                     ? "border-primary/40 bg-node-accent hover:bg-node-accent"
                     : "border-transparent"
                 }`}
+                key={item.value}
+                onClick={() => {
+                  onPick(item.value);
+                  setOpen(false);
+                }}
+                role="option"
+                variant="ghost"
               >
                 <span className="bg-node-accent flex size-9 shrink-0 items-center justify-center rounded-lg">
                   <SeedModeIcon value={item.value} />

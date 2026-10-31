@@ -46,10 +46,10 @@ export function FullScreenLayer({
 }: FullScreenLayerProps) {
   return (
     <div
+      aria-label={ariaLabel}
+      aria-modal={ariaModal}
       className={fullScreenLayerClass(zClass, className)}
       role={role}
-      aria-modal={ariaModal}
-      aria-label={ariaLabel}
     >
       {children}
     </div>

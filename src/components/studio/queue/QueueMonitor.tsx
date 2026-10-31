@@ -18,11 +18,7 @@ export function QueueMonitor({ onOpenComfyui }: { onOpenComfyui: () => void }) {
       {/* key = 任务 id：换一条查看时整弹窗重挂，流订阅与筛选状态随之重置
        * （logRow 是 openLog 那一刻的快照，身份稳定，不会随 2s 轮询抖动）。 */}
       {c.logRow ? (
-        <QueueTaskLogModal
-          key={c.logRow.id}
-          task={c.logRow}
-          onClose={c.closeLog}
-        />
+        <QueueTaskLogModal key={c.logRow.id} onClose={c.closeLog} task={c.logRow} />
       ) : null}
     </>
   );

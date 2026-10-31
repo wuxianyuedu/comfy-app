@@ -155,12 +155,12 @@ function renderPanel(io: IOMap) {
   const view = render(
     <WFStoresProvider stores={stores}>
       <WorkflowIoPreviewPanel
-        workflowIO={io}
+        defaultMode="i2v"
         detailIOMap={io}
         modes={["i2v", "flf2v"]}
-        defaultMode="i2v"
-        onModesChange={noop}
         onClose={noop}
+        onModesChange={noop}
+        workflowIO={io}
       />
     </WFStoresProvider>,
   );
@@ -169,12 +169,12 @@ function renderPanel(io: IOMap) {
     view.rerender(
       <WFStoresProvider stores={stores}>
         <WorkflowIoPreviewPanel
-          workflowIO={stores.io.getState().workflowIO}
+          defaultMode="i2v"
           detailIOMap={io}
           modes={["i2v", "flf2v"]}
-          defaultMode="i2v"
-          onModesChange={noop}
           onClose={noop}
+          onModesChange={noop}
+          workflowIO={stores.io.getState().workflowIO}
         />
       </WFStoresProvider>,
     );
@@ -267,12 +267,12 @@ describe("WorkflowIOPreviewPanel — seed 行取名（ISSUE #349）", () => {
     const view = render(
       <WFStoresProvider stores={stores}>
         <WorkflowIoPreviewPanel
-          workflowIO={io}
+          defaultMode="i2v"
           detailIOMap={io}
           modes={["i2v", "flf2v"]}
-          defaultMode="i2v"
-          onModesChange={noop}
           onClose={noop}
+          onModesChange={noop}
+          workflowIO={io}
         />
       </WFStoresProvider>,
     );
@@ -291,12 +291,12 @@ describe("WorkflowIOPreviewPanel — seed 行取名（ISSUE #349）", () => {
       view.rerender(
         <WFStoresProvider stores={stores}>
           <WorkflowIoPreviewPanel
-            workflowIO={stores.io.getState().workflowIO}
+            defaultMode="i2v"
             detailIOMap={io}
             modes={["i2v", "flf2v"]}
-            defaultMode="i2v"
-            onModesChange={noop}
             onClose={noop}
+            onModesChange={noop}
+            workflowIO={stores.io.getState().workflowIO}
           />
         </WFStoresProvider>,
       );

@@ -59,16 +59,16 @@ export function NodePreviewCard({
        * 折叠标记」不是一个形态（该豁免已在 `scripts/check-ui-primitives.cjs`
        * 的 `EXEMPT_FILES.P10` 里写明理由）。 */}
       <Button
-        variant="ghost"
-        onClick={onToggle}
         /* 覆盖串排在 `variant` 之后（tailwind-merge 后面的类赢）：圆角 / 悬停底 /
          * 文字色都由这里接管，基元只提供键盘与焦点语义（§16.2.4.2 第 5 条）。 */
         className="hover:text-ink-bright flex w-full items-center justify-start gap-2 rounded-none px-2.5 text-left outline-none hover:bg-transparent"
+        onClick={onToggle}
         style={{
           height: 28,
           background: color,
           color: "#fff",
         }}
+        variant="ghost"
       >
         <span className="text-2xs leading-none">{expanded ? "▾" : "▸"}</span>
         <span
@@ -120,17 +120,17 @@ export function NodePreviewCard({
             <div className="mb-1.5 grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 4 }}>
               <div className="flex flex-col gap-0.75">
                 {typed.map((i, idx) => (
-                  <PortRow key={`ti-${idx}`} side="in" color={color} type={i.type} name={i.name} />
+                  <PortRow color={color} key={`ti-${idx}`} name={i.name} side="in" type={i.type} />
                 ))}
               </div>
               <div className="flex flex-col items-end gap-0.75">
                 {outputs.map((output, idx) => (
                   <PortRow
-                    key={`to-${idx}`}
-                    side="out"
                     color={color}
-                    type={output.type}
+                    key={`to-${idx}`}
                     name={output.name}
+                    side="out"
+                    type={output.type}
                   />
                 ))}
               </div>
@@ -144,7 +144,7 @@ export function NodePreviewCard({
               style={{ borderColor: "var(--color-border-subtle)" }}
             >
               {widgets.slice(0, 32).map((widget, idx) => (
-                <div key={`w-${idx}`} className="text-2xs flex items-center gap-1.5">
+                <div className="text-2xs flex items-center gap-1.5" key={`w-${idx}`}>
                   <span
                     className="inline-block shrink-0 rounded-full"
                     style={{
@@ -157,7 +157,7 @@ export function NodePreviewCard({
                   <span className="text-ink-soft min-w-0 flex-1 truncate" title={widget.name}>
                     {widget.name}
                   </span>
-                  <WidgetValueChip widget={widget.widget ?? null} value={widget.default} />
+                  <WidgetValueChip value={widget.default} widget={widget.widget ?? null} />
                 </div>
               ))}
               {widgets.length > 32 && (

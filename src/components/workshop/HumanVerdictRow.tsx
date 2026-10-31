@@ -29,20 +29,20 @@ function RatingStars({
     <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map((star) => (
         <Button
+          aria-label={`${star} 星`}
+          disabled={disabled}
           key={star}
+          onClick={() => onPick(value === star ? null : star)}
+          size="icon-sm"
           type="button"
           variant="ghost"
-          size="icon-sm"
-          disabled={disabled}
-          aria-label={`${star} 星`}
-          onClick={() => onPick(value === star ? null : star)}
         >
           <Star
-            data-icon="inline-start"
-            size={14}
             className={
               value !== null && star <= value ? "fill-warning text-warning" : "text-ink-faintest"
             }
+            data-icon="inline-start"
+            size={14}
           />
         </Button>
       ))}
@@ -127,9 +127,9 @@ export function HumanVerdictRow({
         <span className="text-ink-faint text-xs">人工裁决（优先于 AI）</span>
         {onRatingChange && (
           <RatingStars
-            value={localRating}
             disabled={disabled || busy.busy}
             onPick={(value) => void pickRating(value)}
+            value={localRating}
           />
         )}
       </div>
@@ -143,27 +143,27 @@ export function HumanVerdictRow({
       <div className="flex items-center gap-2">
         <Input
           className="h-7 min-w-0 flex-1 text-xs"
+          disabled={disabled || busy.busy}
+          maxLength={200}
+          onChange={textHandler(setNote)}
           placeholder="一句话理由（可选）"
           value={note}
-          maxLength={200}
-          disabled={disabled || busy.busy}
-          onChange={textHandler(setNote)}
         />
         <Button
-          type="button"
-          variant="outline"
-          size="sm"
           disabled={disabled || busy.busy}
           onClick={() => void submit(true)}
+          size="sm"
+          type="button"
+          variant="outline"
         >
           通过
         </Button>
         <Button
-          type="button"
-          variant="outline"
-          size="sm"
           disabled={disabled || busy.busy}
           onClick={() => void submit(false)}
+          size="sm"
+          type="button"
+          variant="outline"
         >
           否决
         </Button>

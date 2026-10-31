@@ -163,25 +163,25 @@ export function EncapsulationTestForm({
       {entries.map((entry) => {
         if (entry.control === "size") {
           return (
-            <div key={entry.id} className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1" key={entry.id}>
               <FieldLabel label={entry.label} />
-              <ShotSizePicker value={size} onChange={setSize} scene={scene} disabled={disabled} />
+              <ShotSizePicker disabled={disabled} onChange={setSize} scene={scene} value={size} />
             </div>
           );
         }
         if (entry.control === "duration") {
           return (
-            <div key={entry.id} className="flex-col gap-1">
+            <div className="flex-col gap-1" key={entry.id}>
               <FieldLabel label={entry.label} />
               <div className="flex items-center gap-2">
                 <NumberField
-                  value={duration}
-                  onChange={setDuration}
-                  min={1}
-                  max={30}
-                  step={1}
-                  disabled={disabled}
                   className="h-7 w-28"
+                  disabled={disabled}
+                  max={30}
+                  min={1}
+                  onChange={setDuration}
+                  step={1}
+                  value={duration}
                 />
                 <span className="text-muted-foreground/70 text-3xs">秒</span>
               </div>
@@ -192,13 +192,13 @@ export function EncapsulationTestForm({
          * 工作流那一端决定，这里只按工坊口径给一个数）。 */
         if (entry.control === "number") {
           return (
-            <div key={entry.id} className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1" key={entry.id}>
               <FieldLabel label={entry.label} unwired={entry.targetIoKey === null} />
               <NumberField
-                value={numbers[entry.id] ?? 0}
-                onChange={(value) => setNumbers((prev) => ({ ...prev, [entry.id]: value }))}
-                disabled={disabled}
                 className="h-7 w-28"
+                disabled={disabled}
+                onChange={(value) => setNumbers((prev) => ({ ...prev, [entry.id]: value }))}
+                value={numbers[entry.id] ?? 0}
               />
             </div>
           );
@@ -207,26 +207,26 @@ export function EncapsulationTestForm({
         if (entry.control === "image") {
           return (
             <ImageField
-              key={entry.id}
+              disabled={disabled}
               entry={entry}
-              value={text}
+              key={entry.id}
+              onPick={pickImage}
               previewSrc={previews[entry.id]}
               uploading={uploadingId === entry.id}
-              disabled={disabled}
-              onPick={pickImage}
+              value={text}
             />
           );
         }
         return (
-          <div key={entry.id} className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1" key={entry.id}>
             <FieldLabel label={entry.label} unwired={entry.targetIoKey === null} />
             <Textarea
-              value={text}
-              onChange={textHandler((value) => patchText(entry.id, value))}
-              rows={entry.id === "prompt" ? 2 : 1}
               className="border-border bg-bg text-xs"
-              placeholder={entry.id === "prompt" ? "测试提示词" : `输入${entry.label}`}
               disabled={disabled}
+              onChange={textHandler((value) => patchText(entry.id, value))}
+              placeholder={entry.id === "prompt" ? "测试提示词" : `输入${entry.label}`}
+              rows={entry.id === "prompt" ? 2 : 1}
+              value={text}
             />
           </div>
         );
@@ -238,9 +238,9 @@ export function EncapsulationTestForm({
       <div className="flex items-center gap-2">
         <Hint label={runDisabledReason} wrap>
           <Button
-            onClick={submit}
-            disabled={disabled}
             className="h-auto rounded-lg px-3 py-1.5 text-xs font-medium"
+            disabled={disabled}
+            onClick={submit}
           >
             {running ? "测试中…" : "执行流程测试"}
           </Button>
@@ -292,9 +292,9 @@ function ImageField({
           {displayValue(value)}
         </span>
         <Button
-          onClick={picker.open}
-          disabled={disabled || uploading}
           className="text-2xs h-auto rounded-md px-2 py-1"
+          disabled={disabled || uploading}
+          onClick={picker.open}
         >
           {uploading ? "上传中…" : "选择图片"}
         </Button>
@@ -302,10 +302,10 @@ function ImageField({
       </div>
       {previewUrl && (
         <MediaThumbnail
-          src={previewUrl}
           alt={entry.label}
-          fallback="none"
           className="border-border bg-surface max-h-40 w-full rounded-lg border object-contain"
+          fallback="none"
+          src={previewUrl}
         />
       )}
     </div>

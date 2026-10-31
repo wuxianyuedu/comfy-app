@@ -63,16 +63,16 @@ export function WindowButton({
   return (
     <Hint label={label}>
       <Button
-        variant="ghost"
         aria-label={label}
-        data-no-drag
-        onClick={onClick}
         className={cn(
           "text-ink-soft h-full w-11 rounded-none",
           danger
             ? "hover:bg-destructive hover:text-primary-foreground"
             : "hover:bg-subtle hover:text-ink-bright",
         )}
+        data-no-drag
+        onClick={onClick}
+        variant="ghost"
       >
         {icon}
       </Button>
@@ -189,7 +189,7 @@ export function WindowControls({
           });
         }}
       />
-      <WindowButton kind="close" danger onClick={() => void closeWindow()} />
+      <WindowButton danger kind="close" onClick={() => void closeWindow()} />
     </div>
   );
 }

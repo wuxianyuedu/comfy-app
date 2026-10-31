@@ -78,7 +78,7 @@ export const States: Story = {
       <NativeSelect aria-label="禁用" disabled>
         <NativeSelectOption value="a">禁用</NativeSelectOption>
       </NativeSelect>
-      <NativeSelect aria-label="错误" aria-invalid>
+      <NativeSelect aria-invalid aria-label="错误">
         <NativeSelectOption value="a">错误（aria-invalid）</NativeSelectOption>
       </NativeSelect>
     </div>

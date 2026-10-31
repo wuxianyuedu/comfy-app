@@ -62,36 +62,36 @@ export function CanvasGrid({
     <>
       {settings.showGrid && showFineLines && (
         <Background
-          id={GRID_MINOR_LAYER_ID}
-          variant={BackgroundVariant.Lines}
+          color={gridLineColor(settings.gridMinorAlpha * minorAlpha)}
           /* 间距 / 线宽 / 透明度现在绑定到用户的画布设置，
            *  不再是硬编码的 10 / 1 / 0.22。
            *  会乘上一个「随缩放淡出」的系数，让线在任何缩放档下都可读
            *（此前缩放 0.5 时透明度直接是 0）。 */
           gap={settings.gridGap}
+          id={GRID_MINOR_LAYER_ID}
           lineWidth={settings.gridMinorLineWidth}
-          color={gridLineColor(settings.gridMinorAlpha * minorAlpha)}
+          variant={BackgroundVariant.Lines}
         />
       )}
       {/* 底色层：**唯一一个恒常渲染**的网格层（它自己就是画布的底色）。
           细线在主参考线之前渲染（都会被后画的层盖在上方），顺序不影响观感。 */}
       <Background
+        bgColor={CANVAS_BG}
+        color="transparent"
+        gap={1e6}
         id={GRID_BASE_LAYER_ID}
         variant={BackgroundVariant.Dots}
-        gap={1e6}
-        color="transparent"
-        bgColor={CANVAS_BG}
       />
       {settings.showGrid && (
         /* 主参考线恒落在 `gridGap * 10` 处，保持用户预期的 1:10 比例；
          *  可调的只有它们的透明度与线宽。 */
         <Background
-          id={GRID_MAJOR_LAYER_ID}
-          variant={BackgroundVariant.Lines}
-          gap={settings.gridGap * GRID_MAJOR_EVERY}
-          lineWidth={settings.gridMajorLineWidth}
-          color={gridLineColor(settings.gridMajorAlpha)}
           bgColor="transparent"
+          color={gridLineColor(settings.gridMajorAlpha)}
+          gap={settings.gridGap * GRID_MAJOR_EVERY}
+          id={GRID_MAJOR_LAYER_ID}
+          lineWidth={settings.gridMajorLineWidth}
+          variant={BackgroundVariant.Lines}
         />
       )}
     </>
@@ -220,18 +220,18 @@ export function ZoomIndicator({
     return (
       <input
         autoFocus
-        value={draft}
         inputMode="numeric"
-        onChange={textHandler(setDraft, digitsOnly)}
         onBlur={commit}
+        onChange={textHandler(setDraft, digitsOnly)}
+        value={draft}
         {...enterCommit({
           onCommit: commit,
           /* Esc 关掉编辑态即可 —— 草稿在下次进入编辑时由 `beginEdit()` 重置，
            * 所以这里不需要显式回退原值。 */
           onCancel: () => setEditing(false),
         })}
-        title="输入缩放百分比后回车"
         className="bg-panel text-ink-bright z-base border-primary/60 text-2xs absolute top-3 right-3 h-7 w-16 rounded-md border px-2 text-right font-medium tabular-nums shadow-lg outline-none"
+        title="输入缩放百分比后回车"
       />
     );
   }
@@ -239,8 +239,9 @@ export function ZoomIndicator({
   return (
     <Hint label="点击输入缩放倍数，或按住上下拖动调整">
       <Button
-        variant="outline"
-        onMouseDown={onScrubStart}
+        className={`border-border-strong bg-panel text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg select-none hover:border-white/25 ${
+          dragging ? "border-primary-400/50 cursor-grabbing" : "cursor-ns-resize"
+        }`}
         onClick={() => {
           if (justDraggedRef.current) {
             justDraggedRef.current = false;
@@ -248,9 +249,8 @@ export function ZoomIndicator({
           }
           beginEdit();
         }}
-        className={`border-border-strong bg-panel text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg select-none hover:border-white/25 ${
-          dragging ? "border-primary-400/50 cursor-grabbing" : "cursor-ns-resize"
-        }`}
+        onMouseDown={onScrubStart}
+        variant="outline"
       >
         {pct}%
       </Button>
@@ -336,12 +336,12 @@ export function CanvasRulers({
     "pointer-events-none absolute select-none whitespace-nowrap text-3xs font-medium tabular-nums tracking-tight";
 
   return (
-    <div className="z-base pointer-events-none absolute inset-0" aria-hidden>
+    <div aria-hidden className="z-base pointer-events-none absolute inset-0">
       {/* 上边 —— X 坐标 */}
       {xLabels.map(({ world, screen }) => (
         <div
-          key={`rt-${world}`}
           className={labelBase}
+          key={`rt-${world}`}
           style={{
             left: screen,
             top: 2,
@@ -357,8 +357,8 @@ export function CanvasRulers({
        *  左下角按钮簇不盖住最左侧的标签） */}
       {xLabels.map(({ world, screen }) => (
         <div
-          key={`rb-${world}`}
           className={labelBase}
+          key={`rb-${world}`}
           style={{
             left: screen,
             bottom: 2,
@@ -373,8 +373,8 @@ export function CanvasRulers({
       {/* 左边 —— Y 坐标 */}
       {yLabels.map(({ world, screen }) => (
         <div
-          key={`rl-${world}`}
           className={labelBase}
+          key={`rl-${world}`}
           style={{
             top: screen,
             left: 3,
@@ -389,8 +389,8 @@ export function CanvasRulers({
       {/* 右边 —— Y 坐标 */}
       {yLabels.map(({ world, screen }) => (
         <div
-          key={`rr-${world}`}
           className={labelBase}
+          key={`rr-${world}`}
           style={{
             top: screen,
             right: 3,

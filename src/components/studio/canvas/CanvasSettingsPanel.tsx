@@ -37,12 +37,12 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
   /* 抽屉走 ui/sheet（规范 16 §16.2.3 P2）：Esc 关闭、点遮罩关闭、遮罩让出
  标题行与 ProjectSettingsDrawer 是同一件事，此前两边各写一份。 */
   return (
-    <Sheet open onOpenChange={(next) => !next && onClose()}>
+    <Sheet onOpenChange={(next) => !next && onClose()} open>
       <SheetContent
-        side="right"
-        showCloseButton={false}
-        className="bg-panel/97 border-border-strong text-ink-bright w-85 gap-0 border-l shadow-2xl shadow-black/10 sm:max-w-85 dark:shadow-black/50"
         aria-label="工作流画布设置"
+        className="bg-panel/97 border-border-strong text-ink-bright w-85 gap-0 border-l shadow-2xl shadow-black/10 sm:max-w-85 dark:shadow-black/50"
+        showCloseButton={false}
+        side="right"
       >
         <SheetTitle className="sr-only">工作流画布设置</SheetTitle>
         {/* Header bar */}
@@ -54,16 +54,16 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
             <span className="text-ink-bright truncate text-[12.5px] font-semibold tracking-wide">
               画布设置
             </span>
-            <Badge tone="neutral" size="pill-sm" className="font-mono">
+            <Badge className="font-mono" size="pill-sm" tone="neutral">
               v1
             </Badge>
           </div>
           <Button
-            variant="outline"
-            size="icon-xs"
-            onClick={onClose}
             aria-label="关闭"
             className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright text-2xs rounded-md"
+            onClick={onClose}
+            size="icon-xs"
+            variant="outline"
           >
             ✕
           </Button>
@@ -71,104 +71,104 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          <Section title="网格" subtitle="背景格子线条的视觉强度">
+          <Section subtitle="背景格子线条的视觉强度" title="网格">
             <SliderRow
+              format={formatAlpha}
               label="细线透明度"
-              value={settings.gridMinorAlpha}
-              min={0}
               max={1}
-              step={0.02}
+              min={0}
               onChange={(value) => update({ gridMinorAlpha: value })}
-              format={formatAlpha}
-              tooltip="细格子 (默认 10px 一格) 线条的可见度。设为 0 接近全透明"
-            />
-            <SliderRow
-              label="主线透明度"
-              value={settings.gridMajorAlpha}
-              min={0}
-              max={1}
               step={0.02}
-              onChange={(value) => update({ gridMajorAlpha: value })}
+              tooltip="细格子 (默认 10px 一格) 线条的可见度。设为 0 接近全透明"
+              value={settings.gridMinorAlpha}
+            />
+            <SliderRow
               format={formatAlpha}
+              label="主线透明度"
+              max={1}
+              min={0}
+              onChange={(value) => update({ gridMajorAlpha: value })}
+              step={0.02}
               tooltip="主参考线 (每 10 格 = 100px) 的可见度"
+              value={settings.gridMajorAlpha}
             />
             <SliderRow
+              format={formatPx}
               label="细线宽度"
-              value={settings.gridMinorLineWidth}
-              min={0.5}
               max={3}
-              step={0.25}
+              min={0.5}
               onChange={(value) => update({ gridMinorLineWidth: value })}
-              format={formatPx}
-            />
-            <SliderRow
-              label="主线宽度"
-              value={settings.gridMajorLineWidth}
-              min={0.5}
-              max={3}
               step={0.25}
-              onChange={(value) => update({ gridMajorLineWidth: value })}
-              format={formatPx}
+              value={settings.gridMinorLineWidth}
             />
             <SliderRow
-              label="格子间距"
-              value={settings.gridGap}
-              min={4}
-              max={40}
-              step={2}
-              onChange={(value) => update({ gridGap: value })}
+              format={formatPx}
+              label="主线宽度"
+              max={3}
+              min={0.5}
+              onChange={(value) => update({ gridMajorLineWidth: value })}
+              step={0.25}
+              value={settings.gridMajorLineWidth}
+            />
+            <SliderRow
               format={(value) => `${value}px`}
+              label="格子间距"
+              max={40}
+              min={4}
+              onChange={(value) => update({ gridGap: value })}
+              step={2}
               tooltip="细格子之间的世界坐标距离；调小 → 更密集的网格"
+              value={settings.gridGap}
             />
             <ToggleRow
               label="显示网格"
-              value={settings.showGrid}
               onChange={(value) => update({ showGrid: value })}
+              value={settings.showGrid}
             />
           </Section>
 
-          <Section title="画布" subtitle="坐标尺 / 缩略图 等装饰">
+          <Section subtitle="坐标尺 / 缩略图 等装饰" title="画布">
             <ToggleRow
               label="显示坐标尺"
-              value={settings.showRulers}
               onChange={(value) => update({ showRulers: value })}
               tooltip="四边的世界坐标刻度，鼠标移动时会同步高亮最近刻度"
+              value={settings.showRulers}
             />
             <ToggleRow
               label="显示缩略图"
-              value={settings.showMiniMap}
               onChange={(value) => update({ showMiniMap: value })}
               tooltip="右下角缩略图，方便定位大规模工作流"
+              value={settings.showMiniMap}
             />
           </Section>
 
-          <Section title="缩放" subtitle="下次打开编辑器时生效">
+          <Section subtitle="下次打开编辑器时生效" title="缩放">
             <SliderRow
-              label="最大缩放"
-              value={settings.maxZoom}
-              min={1}
-              max={4}
-              step={0.1}
-              onChange={(value) => update({ maxZoom: value })}
               format={(value) => `${fixed(value, 1) ?? ""}×`}
+              label="最大缩放"
+              max={4}
+              min={1}
+              onChange={(value) => update({ maxZoom: value })}
+              step={0.1}
+              value={settings.maxZoom}
             />
             <SliderRow
-              label="最小缩放"
-              value={settings.minZoom}
-              min={0.05}
-              max={0.5}
-              step={0.05}
-              onChange={(value) => update({ minZoom: value })}
               format={(value) => `${fixed(value, 2) ?? ""}×`}
+              label="最小缩放"
+              max={0.5}
+              min={0.05}
+              onChange={(value) => update({ minZoom: value })}
+              step={0.05}
+              value={settings.minZoom}
             />
           </Section>
 
-          <Section title="调试" subtitle="日志入口开关；节点渲染链路标签由顶栏「调试」按钮控制">
+          <Section subtitle="日志入口开关；节点渲染链路标签由顶栏「调试」按钮控制" title="调试">
             <ToggleRow
               label="日志面板"
-              value={settings.debugMode}
               onChange={(value) => update({ debugMode: value })}
               tooltip="开启后在画布右上角显示『执行日志』入口按钮，点击以弹窗形式查看实时执行日志；节点卡片上的渲染链路标签请用顶栏「调试」按钮"
+              value={settings.debugMode}
             />
           </Section>
         </div>
@@ -177,10 +177,10 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
         <div className="border-border-strong text-ink-muted text-2xs flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3">
           <span>设置保存在本浏览器</span>
           <Button
-            variant="outline"
-            size="xs"
-            onClick={reset}
             className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright h-auto rounded-md px-2 py-1"
+            onClick={reset}
+            size="xs"
+            variant="outline"
           >
             恢复默认
           </Button>
@@ -241,7 +241,7 @@ function SliderRow({
         </span>
         <span className="text-ink-soft font-mono tabular-nums">{format(value)}</span>
       </div>
-      <RangeSlider min={min} max={max} step={step} value={value} onChange={onChange} />
+      <RangeSlider max={max} min={min} onChange={onChange} step={step} value={value} />
     </FieldLabel>
   );
 }
@@ -264,7 +264,7 @@ function ToggleRow({
       </span>
       {/* 与 ProjectCanvasSettings 的 ToggleRow 是同一件事（开关），此前各画
  一份 —— 现在都走 ui/switch（规范 16 §16.2.3）。 */}
-      <Switch checked={value} onCheckedChange={onChange} className="shrink-0" />
+      <Switch checked={value} className="shrink-0" onCheckedChange={onChange} />
     </FieldLabel>
   );
 }

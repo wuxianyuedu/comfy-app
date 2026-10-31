@@ -99,24 +99,24 @@ export default function LoginPage() {
     色值还各不相同 —— 见规范 03 §3.6.2）。浅色下 opacity 大幅调低、
     不用`mix-blend-screen`（screen 在白底上什么也不显示）。 */}
         <AuroraGlow
-          tone="violet"
           alpha={0.45}
           className="-top-40 -right-32 size-160 opacity-[0.14] blur-[120px] dark:opacity-70"
+          tone="violet"
         />
         <AuroraGlow
-          tone="cyan"
           alpha={0.25}
           className="-bottom-40 -left-32 size-140 opacity-10 blur-[110px] dark:opacity-60"
+          tone="cyan"
         />
         <AuroraGlow
-          tone="cyan"
           alpha={0.16}
           className="top-1/3 left-1/2 size-90 opacity-[0.08] blur-[90px] dark:opacity-40"
+          tone="cyan"
         />
 
         <div className="border-border-subtle bg-surface shadow-ink/5 dark:border-border-strong relative w-full max-w-110 rounded-xl border p-9 shadow-[0_8px_40px]">
           {/* Brand */}
-          <Link href="/" className="mb-7 flex items-center justify-center gap-2 font-semibold">
+          <Link className="mb-7 flex items-center justify-center gap-2 font-semibold" href="/">
             <span className="bg-primary grid size-9 place-items-center rounded-lg text-white">
               <BoltIcon />
             </span>
@@ -133,23 +133,23 @@ export default function LoginPage() {
               时 `text-primary` 被翻成 `foreground`。整排交给基元后，选中态
               由 `aria-checked` 一处驱动（底色 / 字色 / 描边 / 字重四层俱在）。 */}
           <div
-            role="radiogroup"
             aria-label="登录或创建账号"
             className="bg-subtle mb-6 flex gap-1 rounded-xl p-1"
+            role="radiogroup"
           >
             <SelectChip
-              shape="segment"
-              selected={mode === "signin"}
-              onClick={() => switchMode("signin")}
               className="flex-1 justify-center px-4 py-2"
+              onClick={() => switchMode("signin")}
+              selected={mode === "signin"}
+              shape="segment"
             >
               登录
             </SelectChip>
             <SelectChip
-              shape="segment"
-              selected={mode === "register"}
-              onClick={() => switchMode("register")}
               className="flex-1 justify-center px-4 py-2"
+              onClick={() => switchMode("register")}
+              selected={mode === "register"}
+              shape="segment"
             >
               创建账号
             </SelectChip>
@@ -162,18 +162,18 @@ export default function LoginPage() {
           </p>
 
           {notice && (
-            <Alert variant="info" className="mb-4 flex items-start gap-2 px-3 py-2.5 text-sm">
-              <Icon name="info" size={15} className="mt-0.5 shrink-0" />
+            <Alert className="mb-4 flex items-start gap-2 px-3 py-2.5 text-sm" variant="info">
+              <Icon className="mt-0.5 shrink-0" name="info" size={15} />
               <AlertDescription className="flex-1 text-sm leading-relaxed">
                 {notice}
               </AlertDescription>
               <AlertAction className="static">
                 <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => setNotice(null)}
-                  className="text-primary/70 hover:text-primary"
                   aria-label="关闭提示"
+                  className="text-primary/70 hover:text-primary"
+                  onClick={() => setNotice(null)}
+                  size="icon-xs"
+                  variant="ghost"
                 >
                   <X data-icon="inline-start" size={13} />
                 </Button>
@@ -181,44 +181,44 @@ export default function LoginPage() {
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             {mode === "register" && (
               <LoginFieldRow
+                autoComplete="name"
                 label="昵称（可选）"
-                type="text"
-                value={name}
                 onChange={setName}
                 placeholder="体验创作者"
-                autoComplete="name"
+                type="text"
+                value={name}
               />
             )}
             <LoginFieldRow
+              autoComplete="email"
               label="邮箱"
-              type="email"
-              value={email}
               onChange={setEmail}
               placeholder="name@example.com"
-              autoComplete="email"
+              type="email"
+              value={email}
             />
             <LoginFieldRow
+              autoComplete={mode === "register" ? "new-password" : "current-password"}
               label="密码"
-              type={showPassword ? "text" : "password"}
-              value={password}
               onChange={setPassword}
               placeholder={mode === "register" ? "至少 8 位" : "请输入密码"}
-              autoComplete={mode === "register" ? "new-password" : "current-password"}
               right={
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setShowPassword((value) => !value)}
-                  className="text-ink-fainter hover:bg-surface-2 hover:text-ink rounded-md"
                   aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                  className="text-ink-fainter hover:bg-surface-2 hover:text-ink rounded-md"
+                  onClick={() => setShowPassword((value) => !value)}
+                  size="icon-sm"
                   tabIndex={-1}
+                  variant="ghost"
                 >
                   <Icon data-icon="inline-start" name={showPassword ? "eyeoff" : "eye"} size={18} />
                 </Button>
               }
+              type={showPassword ? "text" : "password"}
+              value={password}
             />
 
             {error && (
@@ -230,9 +230,9 @@ export default function LoginPage() {
             {mode === "signin" && (
               <div className="text-right">
                 <Button
-                  variant="link"
-                  onClick={() => setNotice("本地账号密码重置功能即将上线，如需帮助请联系管理员")}
                   className="text-primary/90 hover:text-primary h-auto p-0 text-sm"
+                  onClick={() => setNotice("本地账号密码重置功能即将上线，如需帮助请联系管理员")}
+                  variant="link"
                 >
                   忘记密码?
                 </Button>
@@ -240,10 +240,10 @@ export default function LoginPage() {
             )}
 
             <Button
-              variant="primary-solid"
-              type="submit"
-              disabled={submitBusy.busy}
               className="h-auto w-full rounded-xl py-3"
+              disabled={submitBusy.busy}
+              type="submit"
+              variant="primary-solid"
             >
               {submitBusy.busy ? "处理中…" : mode === "signin" ? "登录" : "创建并登录"}
             </Button>
@@ -257,16 +257,16 @@ export default function LoginPage() {
 
           <div className="grid grid-cols-2 gap-3">
             <Button
-              variant="outline"
-              onClick={() => setNotice("GitHub 第三方登录即将上线，当前请使用邮箱账号登录")}
               className="border-border-strong bg-subtle text-ink-soft hover:text-ink hover:border-ink-fainter h-auto rounded-xl py-2.5"
+              onClick={() => setNotice("GitHub 第三方登录即将上线，当前请使用邮箱账号登录")}
+              variant="outline"
             >
               GitHub
             </Button>
             <Button
-              variant="outline"
-              onClick={() => setNotice("Google 第三方登录即将上线，当前请使用邮箱账号登录")}
               className="border-border-strong bg-subtle text-ink-soft hover:text-ink hover:border-ink-fainter h-auto rounded-xl py-2.5"
+              onClick={() => setNotice("Google 第三方登录即将上线，当前请使用邮箱账号登录")}
+              variant="outline"
             >
               Google
             </Button>
@@ -307,13 +307,13 @@ function LoginFieldRow({
         <div className="relative">
           <input
             {...field}
-            type={type}
-            value={value}
+            autoComplete={autoComplete}
+            className="border-border-strong bg-subtle text-ink placeholder:text-ink-fainter focus:border-primary/50 w-full rounded-xl border px-3.5 py-3 pr-11 text-sm focus:outline-none"
             onChange={textHandler(onChange)}
             placeholder={placeholder}
-            autoComplete={autoComplete}
             required
-            className="border-border-strong bg-subtle text-ink placeholder:text-ink-fainter focus:border-primary/50 w-full rounded-xl border px-3.5 py-3 pr-11 text-sm focus:outline-none"
+            type={type}
+            value={value}
           />
           {right && <div className="absolute top-1/2 right-1.5 -translate-y-1/2">{right}</div>}
         </div>

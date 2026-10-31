@@ -35,30 +35,12 @@ export function WorkflowPickChip({
 
   return (
     <OptionListPopover
-      value={value}
-      onSelect={onSelect}
-      triggerTitle="选择工作流"
       align="start"
       contentClassName="w-70 py-1"
-      triggerClassName="border-primary/35 bg-node-accent h-6 min-w-0 flex-1 rounded-lg border px-2.5 text-xs"
-      trigger={
-        <span
-          className="text-ink-bright min-w-0 flex-1 truncate text-left font-semibold"
-          style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}
-        >
-          {loading && !sel ? (
-            <span className="text-ink-muted">加载中…</span>
-          ) : sel ? (
-            sel.name
-          ) : (
-            <span className="text-ink-muted">选择工作流…</span>
-          )}
-        </span>
-      }
       emptyHint={
         loading ? (
           <div className="flex items-center gap-2 px-0 py-1">
-            <PageLoading label="加载中…" className="flex-row gap-2" />
+            <PageLoading className="flex-row gap-2" label="加载中…" />
           </div>
         ) : (
           (emptyHint ?? "暂无符合筛选的工作流")
@@ -81,6 +63,24 @@ export function WorkflowPickChip({
           </span>
         ) : undefined,
       }))}
+      onSelect={onSelect}
+      trigger={
+        <span
+          className="text-ink-bright min-w-0 flex-1 truncate text-left font-semibold"
+          style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}
+        >
+          {loading && !sel ? (
+            <span className="text-ink-muted">加载中…</span>
+          ) : sel ? (
+            sel.name
+          ) : (
+            <span className="text-ink-muted">选择工作流…</span>
+          )}
+        </span>
+      }
+      triggerClassName="border-primary/35 bg-node-accent h-6 min-w-0 flex-1 rounded-lg border px-2.5 text-xs"
+      triggerTitle="选择工作流"
+      value={value}
     />
   );
 }

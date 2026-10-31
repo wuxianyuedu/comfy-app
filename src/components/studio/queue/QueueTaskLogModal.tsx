@@ -83,13 +83,13 @@ export function QueueTaskLogModal({
   const failureMessage = stream.settled && !stream.settled.ok ? stream.settled.message : null;
 
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
         aria-label="执行日志"
-        data-testid="queue-log-modal"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
+        data-testid="queue-log-modal"
         popupClassName={panel.widthClass}
+        showCloseButton={false}
       >
         <div
           className={`border-border bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60 ${panel.widthClass}`}
@@ -97,7 +97,7 @@ export function QueueTaskLogModal({
           {/* Header */}
           <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <FileText size={16} className="text-primary-strong shrink-0" />
+              <FileText className="text-primary-strong shrink-0" size={16} />
               <span className="text-ink truncate text-[15px] font-semibold">执行日志</span>
               <span
                 className="text-ink-muted text-2xs max-w-55 truncate"
@@ -106,10 +106,10 @@ export function QueueTaskLogModal({
                 {task.workflowName ?? "（未知工作流）"}
               </span>
               <StatusBadge
-                status={status}
-                label={taskStatusLabel(status)}
-                dot={false}
                 className="text-3xs px-1.5 py-px"
+                dot={false}
+                label={taskStatusLabel(status)}
+                status={status}
               />
             </div>
 
@@ -117,11 +117,11 @@ export function QueueTaskLogModal({
               {!stream.settled && (
                 <Hint label="取消当前查看的任务" wrap>
                   <Button
-                    variant="danger"
-                    onClick={() => void cancel()}
-                    disabled={cancelling}
-                    data-testid="queue-log-cancel"
                     className="text-2xs h-auto rounded-md px-2 py-0.5"
+                    data-testid="queue-log-cancel"
+                    disabled={cancelling}
+                    onClick={() => void cancel()}
+                    variant="danger"
                   >
                     {cancelling ? "× 取消中…" : "× 取消"}
                   </Button>
@@ -129,24 +129,24 @@ export function QueueTaskLogModal({
               )}
               <Hint label="查看 comfy-cli 完整输出（未经截断、可格式化 JSON）" wrap>
                 <Button
-                  variant="ghost"
-                  onClick={() => setRawOpen(true)}
-                  data-testid="queue-log-raw"
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong text-2xs rounded-md px-2 py-0.5"
+                  data-testid="queue-log-raw"
+                  onClick={() => setRawOpen(true)}
+                  variant="ghost"
                 >
                   查看完整输出
                 </Button>
               </Hint>
               <WidePanelToggle
-                panel={panel}
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                panel={panel}
               />
-              <Hint label="关闭" accessibleName>
+              <Hint accessibleName label="关闭">
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={onClose}
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                  onClick={onClose}
+                  size="icon-sm"
+                  variant="ghost"
                 >
                   <X data-icon="inline-start" size={16} />
                 </Button>
@@ -156,18 +156,6 @@ export function QueueTaskLogModal({
 
           {/* 时间线主体（级别筛选 + 自动滚动 + 虚拟列表 + 底栏计数）—— 共享组件 */}
           <TaskLogTimeline
-            logs={stream.logs}
-            rowTestId="queue-log-line"
-            listClassName="bg-panel-deep/60"
-            topSlot={
-              (failureMessage ?? task.error) ? (
-                <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
-                  <div className="wrap-break-word whitespace-pre-wrap">
-                    {failureMessage ?? task.error}
-                  </div>
-                </div>
-              ) : null
-            }
             emptySlot={
               <TaskLogEmptyHint
                 message={
@@ -177,14 +165,26 @@ export function QueueTaskLogModal({
                 }
               />
             }
+            listClassName="bg-panel-deep/60"
+            logs={stream.logs}
+            rowTestId="queue-log-line"
+            topSlot={
+              (failureMessage ?? task.error) ? (
+                <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
+                  <div className="wrap-break-word whitespace-pre-wrap">
+                    {failureMessage ?? task.error}
+                  </div>
+                </div>
+              ) : null
+            }
           />
         </div>
       </DialogContent>
       <WorkflowRunRawCliModal
-        taskId={task.id}
-        running={running}
-        open={rawOpen}
         onClose={() => setRawOpen(false)}
+        open={rawOpen}
+        running={running}
+        taskId={task.id}
       />
     </Dialog>
   );

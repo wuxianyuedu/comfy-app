@@ -37,10 +37,10 @@ export function SourceTag({ source, local }: { local?: boolean | null; source?: 
   if (isLocal) {
     return (
       <Badge
-        size="sm"
-        variant="outline"
         className={`${OUTLINE_RESET} bg-success/12 text-success-strong`}
+        size="sm"
         title="本地工作流 · 已连接磁盘文件"
+        variant="outline"
       >
         本地
       </Badge>
@@ -48,10 +48,10 @@ export function SourceTag({ source, local }: { local?: boolean | null; source?: 
   }
   return (
     <Badge
-      size="sm"
-      variant="outline"
       className={`${OUTLINE_RESET} bg-subtle text-ink-faint`}
+      size="sm"
       title="在线工作流 · 粘贴/API 导入，保存在数据库"
+      variant="outline"
     >
       在线
     </Badge>

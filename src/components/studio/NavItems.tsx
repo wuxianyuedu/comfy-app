@@ -202,8 +202,8 @@ export const NAV_ITEMS: Array<NavItem> = [
     enabled: true,
     icon: (
       <svg {...ICON_PROPS}>
-        <rect x="3" y="3" width="7" height="7" rx="1.5" />
-        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        <rect height="7" rx="1.5" width="7" x="3" y="3" />
+        <rect height="7" rx="1.5" width="7" x="14" y="14" />
         <path d="M10 6.5h4a3 3 0 013 3v4.5" />
       </svg>
     ),
@@ -257,7 +257,7 @@ export const NAV_ITEMS: Array<NavItem> = [
     projectScoped: true,
     icon: (
       <svg {...ICON_PROPS}>
-        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <rect height="18" rx="2" width="18" x="3" y="3" />
         <path d="M3 9h18M9 21V9" />
         <circle cx="15" cy="15" r="2" />
       </svg>

@@ -106,18 +106,17 @@ export function Disclosure({
 }) {
   return (
     <CollapsiblePrimitive.Root
-      open={open}
-      defaultOpen={defaultOpen}
-      onOpenChange={onOpenChange}
-      disabled={disabled}
-      data-slot="disclosure"
       /* 整排的容器：调用处要 `leading` / `trailing` 与触发开关同排时，
        * 布局类（`flex` 一族）加在这里 —— 见 `rootClassName`。 */
       className={rootClassName}
+      data-slot="disclosure"
+      defaultOpen={defaultOpen}
+      disabled={disabled}
+      onOpenChange={onOpenChange}
+      open={open}
     >
       {leading}
       <CollapsiblePrimitive.Trigger
-        data-slot="disclosure-trigger"
         className={cn(
           /* 触发行：默认「标记 + 内容」贴左、整行可点。调用处要两端对齐
            *  （标题左、状态右）时传 `className` 覆盖为 `justify-between`。 */
@@ -125,12 +124,13 @@ export function Disclosure({
           disabled && "cursor-not-allowed opacity-50",
           className,
         )}
+        data-slot="disclosure-trigger"
       >
         {marker === "caret" && (
           <span
             aria-hidden
-            data-slot="disclosure-marker"
             className={cn(MARKER_BASE, "group-aria-expanded/disclosure:hidden")}
+            data-slot="disclosure-marker"
           >
             ▸
           </span>
@@ -138,8 +138,8 @@ export function Disclosure({
         {marker === "caret" && (
           <span
             aria-hidden
-            data-slot="disclosure-marker"
             className={cn(MARKER_BASE, "hidden group-aria-expanded/disclosure:inline")}
+            data-slot="disclosure-marker"
           >
             ▾
           </span>
@@ -147,23 +147,23 @@ export function Disclosure({
         {marker === "chevron" && (
           <ChevronRight
             aria-hidden
-            size={13}
-            data-slot="disclosure-marker"
             className={cn(MARKER_BASE, "group-aria-expanded/disclosure:rotate-90")}
+            data-slot="disclosure-marker"
+            size={13}
           />
         )}
         {trigger}
       </CollapsiblePrimitive.Trigger>
       {trailing}
       <CollapsiblePrimitive.Panel
+        /* `w-full`：Root 是 flex 行时面板仍是「独占一行」的那块（配
+         * `panelClassName="basis-full"`），不随内容宽度收缩。 */
+        className={cn("w-full", panelClassName)}
         data-slot="disclosure-panel"
         /* `hiddenUntilFound`：用 `hidden="until-found"` 而非移除 DOM ——
          * 浏览器页内查找（Ctrl+F）命中折叠内容时会自动展开它。这正是原生
          * `<details>` 的行为，换成自绘「条件渲染」就丢了。 */
         hiddenUntilFound
-        /* `w-full`：Root 是 flex 行时面板仍是「独占一行」的那块（配
-         * `panelClassName="basis-full"`），不随内容宽度收缩。 */
-        className={cn("w-full", panelClassName)}
       >
         {children}
       </CollapsiblePrimitive.Panel>

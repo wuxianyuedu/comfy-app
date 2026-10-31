@@ -28,9 +28,9 @@ export const Default: Story = {};
 export const Modes: Story = {
   render: () => (
     <div className="flex w-80 flex-col gap-5">
-      <ProgressBar value={42} label="正在解析节点包" />
-      <ProgressBar value={null} label="正在扫描…" />
-      <ProgressBar value={68} ariaLabel="画布加载进度" />
+      <ProgressBar label="正在解析节点包" value={42} />
+      <ProgressBar label="正在扫描…" value={null} />
+      <ProgressBar ariaLabel="画布加载进度" value={68} />
     </div>
   ),
 };
@@ -42,10 +42,10 @@ export const Modes: Story = {
 export const Values: Story = {
   render: () => (
     <div className="flex w-80 flex-col gap-5">
-      <ProgressBar value={0} label="0%" />
-      <ProgressBar value={0} minVisible={4} label="0% + minVisible" />
-      <ProgressBar value={-1} label="越界下（-1）" />
-      <ProgressBar value={120} label="越界上（120）" />
+      <ProgressBar label="0%" value={0} />
+      <ProgressBar label="0% + minVisible" minVisible={4} value={0} />
+      <ProgressBar label="越界下（-1）" value={-1} />
+      <ProgressBar label="越界上（120）" value={120} />
     </div>
   ),
 };
@@ -54,8 +54,8 @@ export const Values: Story = {
 export const WithoutValueText: Story = {
   render: () => (
     <div className="flex w-80 flex-col gap-5">
-      <ProgressBar value={33} label="上传中" showValue={false} />
-      <ProgressBar value={33} showValue={false} ariaLabel="无标题行的进度" />
+      <ProgressBar label="上传中" showValue={false} value={33} />
+      <ProgressBar ariaLabel="无标题行的进度" showValue={false} value={33} />
     </div>
   ),
 };
@@ -67,12 +67,12 @@ export const CompactSegments: Story = {
     <div className="flex w-80 items-center gap-1">
       {[100, 100, 60, 0].map((value, index) => (
         <ProgressBar
-          key={index}
-          value={value}
-          showValue={false}
           ariaLabel={`第 ${index + 1} 阶段`}
-          trackClassName="h-0.5"
           className="w-16"
+          key={index}
+          showValue={false}
+          trackClassName="h-0.5"
+          value={value}
         />
       ))}
     </div>

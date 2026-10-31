@@ -58,13 +58,13 @@ function renderShell(active: WorkspaceView) {
   render(
     <AppShell
       active={active}
-      onSelect={vi.fn()}
-      onOpenSettings={vi.fn()}
-      projects={PROJECTS}
       activeProjectId="p-active"
-      onOpenProject={vi.fn()}
-      onShowAllProjects={vi.fn()}
       onNewProject={vi.fn()}
+      onOpenProject={vi.fn()}
+      onOpenSettings={vi.fn()}
+      onSelect={vi.fn()}
+      onShowAllProjects={vi.fn()}
+      projects={PROJECTS}
     >
       <div />
     </AppShell>,
@@ -75,9 +75,7 @@ function renderShell(active: WorkspaceView) {
  *
  * 判属性**在不在**：`useRender` 的 state 通道对真值给空属性、对假值整个不发。 */
 function rowActive(name: string): boolean {
-  return (
-    screen.getByRole("button", { name }).hasAttribute("data-active") === true
-  );
+  return screen.getByRole("button", { name }).hasAttribute("data-active") === true;
 }
 
 describe("侧栏项目高亮只在项目视图里成立", () => {
@@ -92,16 +90,12 @@ describe("侧栏项目高亮只在项目视图里成立", () => {
     },
   );
 
-  it.each<WorkspaceView>([
-    "project",
-    "canvas",
-    "workshop",
-    "library",
-    "outputs",
-    "film",
-  ])("项目页签 %s 上：亮的正是活跃那一个", (view) => {
-    renderShell(view);
-    expect(rowActive("未命名_3")).toBe(true);
-    expect(rowActive("未命名_2")).toBe(false);
-  });
+  it.each<WorkspaceView>(["project", "canvas", "workshop", "library", "outputs", "film"])(
+    "项目页签 %s 上：亮的正是活跃那一个",
+    (view) => {
+      renderShell(view);
+      expect(rowActive("未命名_3")).toBe(true);
+      expect(rowActive("未命名_2")).toBe(false);
+    },
+  );
 });

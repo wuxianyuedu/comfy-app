@@ -60,11 +60,11 @@ function renderForm(
   const onRun = vi.fn<(values: WorkshopExposedValues) => void>();
   const utils = render(
     <EncapsulationTestForm
-      entries={entries}
-      scene={over.scene ?? "image"}
-      running={false}
       canRun
+      entries={entries}
       onRun={onRun}
+      running={false}
+      scene={over.scene ?? "image"}
       uploadImage={vi.fn().mockResolvedValue("uploaded.png")}
       {...over}
     />,

@@ -44,9 +44,9 @@ export function ShotFilmStrip({
 
   return (
     <section
-      data-component="workshop-shot-filmstrip"
       aria-label="镜头胶片带"
       className="border-border bg-surface-1 rounded-xl border p-2"
+      data-component="workshop-shot-filmstrip"
     >
       <div className="mb-1.5 flex items-baseline gap-2 px-0.5">
         {/* 不是章节标题，是一行的标签：整条带的可访问名由 section 的 aria-label 给。
@@ -69,9 +69,6 @@ export function ShotFilmStrip({
               label={`#${formatShotIndex(shot.index)} ${heading || displayValue(null)} · ${frame.label}`}
             >
               <Button
-                type="button"
-                variant="ghost"
-                onClick={() => onJump(shot)}
                 aria-label={`跳到镜头 ${formatShotIndex(shot.index)}${heading ? ` · ${heading}` : ""} · ${frame.label}`}
                 className={
                   // 固定尺寸 + 不收缩：一帧被压扁，整条带子的对齐就没了。
@@ -81,9 +78,12 @@ export function ShotFilmStrip({
                     ? " border-destructive/50 bg-destructive/10"
                     : " border-border bg-subtle hover:bg-surface-2")
                 }
+                onClick={() => onJump(shot)}
+                type="button"
+                variant="ghost"
               >
                 {shot.imageUrl ? (
-                  <MediaThumbnail src={shot.imageUrl} alt="" className="size-full object-cover" />
+                  <MediaThumbnail alt="" className="size-full object-cover" src={shot.imageUrl} />
                 ) : (
                   /* 还没有成图：给出镜号本身，而不是一个灰块 —— 空帧也要说得出
                      「这是第几镜、还没出图」。 */

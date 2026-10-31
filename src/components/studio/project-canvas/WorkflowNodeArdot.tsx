@@ -96,7 +96,7 @@ function PortChip({ type }: { type: string }) {
           border: "1px solid var(--color-border-subtle)",
         };
   return (
-    <TypeChip tone="none" style={style}>
+    <TypeChip style={style} tone="none">
       {type}
     </TypeChip>
   );
@@ -144,10 +144,10 @@ function PortRowString({ label, type, value }: { label: string; type: string; va
         <PortChip type={type} />
       </div>
       <Textarea
+        className="bg-canvas-deep text-ink-soft border-border-subtle field-sizing-normal text-2xs mx-3.5 h-13 min-h-0 resize-none rounded-md border px-2.5 py-2 leading-relaxed focus-visible:ring-0"
+        defaultValue={value}
         readOnly
         rows={2}
-        defaultValue={value}
-        className="bg-canvas-deep text-ink-soft border-border-subtle field-sizing-normal text-2xs mx-3.5 h-13 min-h-0 resize-none rounded-md border px-2.5 py-2 leading-relaxed focus-visible:ring-0"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </div>
@@ -166,10 +166,10 @@ function PortRowInt({ label, type, value }: { label: string; type: string; value
       </span>
       <div className="flex-1" />
       <input
-        readOnly
-        defaultValue={value}
         aria-label={label}
         className="border-border-strong bg-canvas-deep text-ink-bright h-5.25 w-35 rounded border px-2 text-right text-xs tabular-nums outline-none"
+        defaultValue={value}
+        readOnly
         style={{ fontFamily: "var(--font-sans)" }}
       />
       <PortChip type={type} />
@@ -247,8 +247,8 @@ export function WorkflowNodeArdot() {
         <div className="flex h-11 items-center gap-1.5 pr-3.5 pl-3.5">
           {/* Chip 1：本机（位置）· 绿点+本机+▾ */}
           <Button
-            variant="outline"
             className="border-primary/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-normal"
+            variant="outline"
           >
             <span
               aria-hidden
@@ -270,8 +270,8 @@ export function WorkflowNodeArdot() {
           </Button>
           {/* Chip 2：image_z_image_int8（具体工作流名）· flex-1 撑满中间 */}
           <Button
-            variant="outline"
             className="border-primary/35 bg-node-accent flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-normal"
+            variant="outline"
           >
             <span
               className="text-ink-bright min-w-0 flex-1 truncate text-left font-semibold"
@@ -289,8 +289,8 @@ export function WorkflowNodeArdot() {
           </Button>
           {/* Chip 3：T2I（类型，单独下拉，最右）· 紫描边加深强调可切换 */}
           <Button
-            variant="outline"
             className="border-primary/55 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-normal"
+            variant="outline"
           >
             <span
               className="text-ink-bright font-medium"
@@ -334,10 +334,10 @@ export function WorkflowNodeArdot() {
       {/* ── 端点层（外层 wrapper 的 absolute 子元素，骑跨 Card 边框）──
           y 坐标按 Ardot 实测（3:161/3:162/3:163 + 输出行 y=282 h=28, 圆心 296） */}
       <div className="pointer-events-none absolute inset-0">
-        <PortDot side="left" top={91} color={portColor("STRING")} />
-        <PortDot side="left" top={177} color={portColor("STRING")} />
-        <PortDot side="left" top={265} color={portColor("INT")} />
-        <PortDot side="right" top={296} color={portColor("IMAGE")} />
+        <PortDot color={portColor("STRING")} side="left" top={91} />
+        <PortDot color={portColor("STRING")} side="left" top={177} />
+        <PortDot color={portColor("INT")} side="left" top={265} />
+        <PortDot color={portColor("IMAGE")} side="right" top={296} />
       </div>
     </div>
   );

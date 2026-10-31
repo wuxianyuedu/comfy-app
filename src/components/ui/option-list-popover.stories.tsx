@@ -57,8 +57,8 @@ function PopoverWithTrigger({ triggerLabel, triggerCount, ...rest }: StoryArgs) 
   return (
     <OptionListPopover
       {...rest}
-      trigger={<ChipTrigger label={triggerLabel} count={triggerCount} />}
       onSelect={() => undefined}
+      trigger={<ChipTrigger count={triggerCount} label={triggerLabel} />}
     />
   );
 }
@@ -72,12 +72,12 @@ function ControlledOpenSample() {
   return (
     <div className="flex flex-col items-start gap-3">
       <OptionListPopover
-        value="form"
         items={ITEMS}
-        onSelect={() => undefined}
         onOpenChange={(open) => setOpenNote(open ? "已开" : "已关")}
-        trigger={<ChipTrigger label="形态" count={3} />}
+        onSelect={() => undefined}
+        trigger={<ChipTrigger count={3} label="形态" />}
         triggerClassName="border-border-strong bg-canvas-deep shrink-0 rounded-lg border px-2 py-0.5"
+        value="form"
       />
       <span className="text-ink-muted font-mono text-[11px]">onOpenChange：{openNote}</span>
     </div>

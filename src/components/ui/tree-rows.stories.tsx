@@ -1,12 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { Disclosure } from "~/components/ui/disclosure";
-import {
-  TREE_INDENT_STEP,
-  TreeChildren,
-  TreeRow,
-  indentClass,
-} from "~/components/ui/tree-rows";
+import { TREE_INDENT_STEP, TreeChildren, TreeRow, indentClass } from "~/components/ui/tree-rows";
 
 /**
  * `TreeRow` / `TreeChildren` 是「一棵树的**层级关系**怎么画」的唯一实现
@@ -58,14 +53,12 @@ export const SingleLevel: Story = {
 export const NestedThreeLevels: Story = {
   render: () => (
     <div className="w-120 rounded-lg border p-3">
-      <TreeRow
-        row={<span className="text-sm font-medium">自定义节点目录</span>}
-      >
-        <TreeRow row={<span className="text-sm">─ style_pack</span>} depth={1}>
-          <TreeRow row={<span className="text-sm">─ 高光增强</span>} depth={2}>
+      <TreeRow row={<span className="text-sm font-medium">自定义节点目录</span>}>
+        <TreeRow depth={1} row={<span className="text-sm">─ style_pack</span>}>
+          <TreeRow depth={2} row={<span className="text-sm">─ 高光增强</span>}>
             <div className="text-ink-muted text-xs">3 个节点</div>
           </TreeRow>
-          <TreeRow row={<span className="text-sm">─ 边缘锐化</span>} depth={2}>
+          <TreeRow depth={2} row={<span className="text-sm">─ 边缘锐化</span>}>
             <div className="text-ink-muted text-xs">2 个节点</div>
           </TreeRow>
         </TreeRow>
@@ -81,7 +74,7 @@ export const IndentSteps: Story = {
   render: () => (
     <div className="flex w-120 flex-col gap-4">
       {[0, 1, 2].map((depth) => (
-        <div key={depth} className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1" key={depth}>
           <span className="text-ink-muted font-mono text-[11px]">
             indentClass({depth}) = &quot;{indentClass(depth)}&quot;
           </span>
@@ -94,8 +87,8 @@ export const IndentSteps: Story = {
       ))}
       <p className="text-ink-muted text-xs">
         TREE_INDENT_STEP = &quot;{TREE_INDENT_STEP}
-        &quot;（缩进与引导线是**一组**，分开写会 只写一半 —— `NodesTab`
-        此前正是「父级那层只有 border-t、子包那层两样 都有」）
+        &quot;（缩进与引导线是**一组**，分开写会 只写一半 —— `NodesTab` 此前正是「父级那层只有
+        border-t、子包那层两样 都有」）
       </p>
     </div>
   ),
@@ -106,10 +99,7 @@ export const IndentSteps: Story = {
 export const WithDisclosure: Story = {
   render: () => (
     <div className="w-120 rounded-lg border p-3">
-      <Disclosure
-        defaultOpen
-        trigger={<span className="text-sm font-medium">节点包 A</span>}
-      >
+      <Disclosure defaultOpen trigger={<span className="text-sm font-medium">节点包 A</span>}>
         <TreeChildren>
           <Disclosure trigger={<span className="text-sm">─ 子包 A1</span>}>
             <TreeChildren>

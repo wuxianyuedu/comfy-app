@@ -74,22 +74,16 @@ export const Languages: Story = {
       {[
         ["workflow.json", '{ "3": { "class_type": "KSampler" } }'],
         ["styles.css", ".probe { color: var(--color-primary); }"],
-        [
-          "steps.yml",
-          "steps:\n  - name: 解析\n    run: node scripts/parse.mjs",
-        ],
+        ["steps.yml", "steps:\n  - name: 解析\n    run: node scripts/parse.mjs"],
         ["notes.md", "# 标题\n\n一段说明。"],
         ["unknown.zzz", "这一档没有对应的高亮语言，落 plaintext。"],
       ].map(([fileName, code]) => (
-        <div key={fileName} className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" key={fileName}>
           <span className="text-ink-muted font-mono text-[11px]">
             {fileName} → extToLanguage() = {extToLanguage(fileName ?? "")}
           </span>
           <div className="w-160">
-            <CodeBlock
-              code={code ?? ""}
-              language={extToLanguage(fileName ?? "")}
-            />
+            <CodeBlock code={code ?? ""} language={extToLanguage(fileName ?? "")} />
           </div>
         </div>
       ))}
@@ -103,8 +97,7 @@ export const OversizedFallsBackToPlain: Story = {
   args: {
     code: Array.from(
       { length: 400 },
-      (_, index) =>
-        `// 第 ${String(index + 1)} 行：一段足够长的注释，用来把字符数推过阈值`,
+      (_, index) => `// 第 ${String(index + 1)} 行：一段足够长的注释，用来把字符数推过阈值`,
     ).join("\n"),
     language: "typescript",
   },

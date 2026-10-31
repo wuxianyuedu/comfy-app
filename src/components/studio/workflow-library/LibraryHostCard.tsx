@@ -70,13 +70,14 @@ export function LibraryHostCard({
   actions,
 }: LibraryHostCardProps) {
   return (
-    <div ref={hostRef} className="relative">
+    <div className="relative" ref={hostRef}>
       <WorkflowNodeCardShell>
         <WorkflowNodeHeader
-          title={workflowName}
           right={
             <WorkflowNodePill>
               <StatusDot
+                pulse={running}
+                sizeClass="size-1.5"
                 state={
                   running
                     ? "busy"
@@ -86,8 +87,6 @@ export function LibraryHostCard({
                         ? "down"
                         : "probing"
                 }
-                sizeClass="size-1.5"
-                pulse={running}
               />
               <span
                 className="text-ink-soft text-3xs font-medium"
@@ -97,6 +96,7 @@ export function LibraryHostCard({
               </span>
             </WorkflowNodePill>
           }
+          title={workflowName}
         />
 
         <WorkflowNodeDivider />
@@ -122,13 +122,13 @@ export function LibraryHostCard({
             {modes && modes.length > 1 && onModeChange ? (
               /* 多模式：类型 chip 变成模式切换下拉（与工作流库「类型」同码表） */
               <SelectMenu
-                value={effectiveMode ?? taskType}
-                onChange={(code) => onModeChange(code)}
-                options={modes}
-                labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
-                popoverMinWidth={150}
                 autoFitFromOptions={false}
                 className="border-border-strong! text-2xs shrink-0 bg-transparent!"
+                labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
+                onChange={(code) => onModeChange(code)}
+                options={modes}
+                popoverMinWidth={150}
+                value={effectiveMode ?? taskType}
               />
             ) : (
               <WorkflowStaticChip>
@@ -151,21 +151,21 @@ export function LibraryHostCard({
           <div className="border-border-subtle border-t">
             {outputs.map((output) => (
               <WorkflowNodeOutputsRow
+                inputs={[...inputs]}
                 key={output.nodeId + ":" + output.name}
                 output={output}
-                inputs={[...inputs]}
                 outputs={[...outputs]}
                 renderHandle={({ id, dir, type }) => (
                   <PortHandle
-                    id={id}
                     dir={dir}
-                    type={type}
+                    id={id}
                     style={{
                       right: -6,
                       top: 14,
                       transform: "translateY(-50%)",
                       boxShadow: "none",
                     }}
+                    type={type}
                   />
                 )}
               />

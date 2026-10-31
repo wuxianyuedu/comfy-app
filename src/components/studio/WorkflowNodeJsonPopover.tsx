@@ -191,14 +191,14 @@ export function NodeJsonPopover({
        此前用 `ui/dialog` 配 `top-24 left-1/2` 是**丢掉了锚点定位**：dialog 的
        基类自带 `top-1/2 -translate-y-1/2`，与 `top-24` 叠加后浮层被推到视口之上
        （实测 `top: -174`），头部与 JSON 开头被裁在视口外（ISSUE #717）。 */
-    <Popover open modal onOpenChange={(next) => !next && onDismiss()}>
+    <Popover modal onOpenChange={(next) => !next && onDismiss()} open>
       <PopoverContent
         anchor={anchorElement}
         aria-label={`节点 #${request.nodeId} 的原始 JSON`}
         className="w-115 max-w-[calc(100vw-2rem)] gap-0 border-0 bg-transparent p-0 shadow-none ring-0"
-        positionerClassName="max-h-[60vh]"
         collisionPadding={12}
         onMouseDown={(event) => event.stopPropagation()}
+        positionerClassName="max-h-[60vh]"
       >
         <span className="sr-only">节点 #{request.nodeId} 的原始 JSON</span>
         <div
@@ -265,7 +265,6 @@ export function NodeJsonPopover({
                 </span>
               </div>
               <div
-                title={nodeClass}
                 style={{
                   fontSize: 13,
                   fontWeight: 600,
@@ -274,45 +273,46 @@ export function NodeJsonPopover({
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
                 }}
+                title={nodeClass}
               >
                 {nodeClass}
               </div>
             </div>
             <Hint label={copyFailed ? copyFailureText() : "复制 JSON 到剪贴板"}>
               <Button
-                variant="outline"
-                size="xs"
+                className="font-normal"
                 onClick={() => handleCopy(pretty)}
+                size="xs"
                 style={{
                   background: copied.on ? accentAlpha(15) : "var(--color-subtle)",
                   color: copied.on ? accent : "var(--color-ink)",
                   border: `1px solid ${copied.on ? accentAlpha(40) : "var(--color-border-strong)"}`,
                 }}
-                className="font-normal"
+                variant="outline"
               >
                 {copyFailed ? "复制失败" : copied.on ? "✓ 已复制" : "⧉ 复制"}
               </Button>
             </Hint>
             <Hint label="关闭 (Esc)">
               <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={onDismiss}
                 aria-label="关闭"
+                className="rounded-md text-sm leading-none"
+                onClick={onDismiss}
+                size="icon-sm"
                 style={{
                   background: "var(--color-subtle)",
                   border: "1px solid var(--color-border-strong)",
                   color: "var(--color-ink-muted)",
                 }}
-                className="rounded-md text-sm leading-none"
+                variant="outline"
               >
                 ×
               </Button>
             </Hint>
           </div>
           <div
-            role="tablist"
             aria-label="节点 JSON 视图切换"
+            role="tablist"
             style={{
               display: "flex",
               gap: 4,
@@ -329,18 +329,18 @@ export function NodeJsonPopover({
                 const active = tab === key;
                 return (
                   <Hint
+                    key={key}
                     label={
                       key === "saved"
                         ? "执行条目：detail.graph[nodeId] —— 从工作流原件派生的节点条目；不含画布元数据"
                         : "RAW 格式：detail.rawJson.nodes[id] —— 与整工作流「查看 JSON」RAW 逐字节一致"
                     }
-                    key={key}
                   >
                     <Button
-                      variant="ghost"
-                      role="tab"
                       aria-selected={active}
+                      className="h-auto font-normal"
                       onClick={() => setTab(key)}
+                      role="tab"
                       style={{
                         fontFamily: "var(--font-mono)",
                         fontSize: 11,
@@ -353,7 +353,7 @@ export function NodeJsonPopover({
                         background: active ? accentAlpha(13) : "var(--color-subtle)",
                         color: active ? "var(--color-ink)" : "var(--color-ink-muted)",
                       }}
-                      className="h-auto font-normal"
+                      variant="ghost"
                     >
                       {key === "saved" ? "执行 · 节点条目" : "RAW · 节点视图"}
                     </Button>

@@ -44,15 +44,11 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   render: () => (
     <Dialog>
-      <DialogTrigger render={<Button variant="outline" />}>
-        新建项目
-      </DialogTrigger>
+      <DialogTrigger render={<Button variant="outline" />}>新建项目</DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>新建项目</DialogTitle>
-          <DialogDescription>
-            项目产物会落在输出目录下的同名文件夹里。
-          </DialogDescription>
+          <DialogDescription>项目产物会落在输出目录下的同名文件夹里。</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2">
           <Label htmlFor="dialog-name">名称</Label>
@@ -71,10 +67,8 @@ export const Default: Story = {
 export const CustomHeader: Story = {
   render: () => (
     <Dialog>
-      <DialogTrigger render={<Button variant="outline" />}>
-        自绘 header
-      </DialogTrigger>
-      <DialogContent showCloseButton={false} className="w-md">
+      <DialogTrigger render={<Button variant="outline" />}>自绘 header</DialogTrigger>
+      <DialogContent className="w-md" showCloseButton={false}>
         <div className="flex items-center justify-between border-b pb-3">
           <DialogTitle>运行日志</DialogTitle>
           <Button size="xs" variant="ghost">
@@ -96,28 +90,20 @@ export const Widths: Story = {
   render: () => (
     <div className="flex gap-3">
       <Dialog>
-        <DialogTrigger render={<Button variant="outline" />}>
-          默认宽
-        </DialogTrigger>
+        <DialogTrigger render={<Button variant="outline" />}>默认宽</DialogTrigger>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>默认宽度</DialogTitle>
-            <DialogDescription>
-              w-full + max-w-calc(100%-2rem)
-            </DialogDescription>
+            <DialogDescription>w-full + max-w-calc(100%-2rem)</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
       <Dialog>
-        <DialogTrigger render={<Button variant="outline" />}>
-          加宽 672px
-        </DialogTrigger>
+        <DialogTrigger render={<Button variant="outline" />}>加宽 672px</DialogTrigger>
         <DialogContent className="w-2xl">
           <DialogHeader>
             <DialogTitle>调用处给 w-[42rem]</DialogTitle>
-            <DialogDescription>
-              这条能生效，是因为卡片自己不再带 sm:max-w-sm
-            </DialogDescription>
+            <DialogDescription>这条能生效，是因为卡片自己不再带 sm:max-w-sm</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
@@ -135,10 +121,10 @@ function ControlledDemo() {
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button variant="outline" onClick={() => setOpen(true)}>
+      <Button onClick={() => setOpen(true)} variant="outline">
         受控打开
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>受控弹窗</DialogTitle>

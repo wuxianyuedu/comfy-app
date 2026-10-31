@@ -45,12 +45,12 @@ export function ToolbarButton({
   onClick: () => void;
 }) {
   return (
-    <Hint label={hint} accessibleName>
+    <Hint accessibleName label={hint}>
       <Button
-        variant="ghost"
-        size="icon"
-        onClick={onClick}
         className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-lg"
+        onClick={onClick}
+        size="icon"
+        variant="ghost"
       >
         {children}
       </Button>
@@ -91,13 +91,13 @@ export function EditorToolbar({
   return (
     <div className="border-border bg-panel flex items-center gap-1 border-b px-4 py-2">
       <ToolbarGroup>
-        <ToolbarButton onClick={() => insertAtLineStart("#")} hint="标题 1">
+        <ToolbarButton hint="标题 1" onClick={() => insertAtLineStart("#")}>
           <Heading1 size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => insertAtLineStart("##")} hint="标题 2">
+        <ToolbarButton hint="标题 2" onClick={() => insertAtLineStart("##")}>
           <Heading2 size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => insertAtLineStart("###")} hint="标题 3">
+        <ToolbarButton hint="标题 3" onClick={() => insertAtLineStart("###")}>
           <Heading3 size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -105,19 +105,19 @@ export function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton onClick={() => wrapSelection("**", "**", "粗体")} hint="粗体">
+        <ToolbarButton hint="粗体" onClick={() => wrapSelection("**", "**", "粗体")}>
           <Bold size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => wrapSelection("*", "*", "斜体")} hint="斜体">
+        <ToolbarButton hint="斜体" onClick={() => wrapSelection("*", "*", "斜体")}>
           <Italic size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => wrapSelection("__", "__", "下划线")} hint="下划线">
+        <ToolbarButton hint="下划线" onClick={() => wrapSelection("__", "__", "下划线")}>
           <Underline size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => wrapSelection("~~", "~~", "删除线")} hint="删除线">
+        <ToolbarButton hint="删除线" onClick={() => wrapSelection("~~", "~~", "删除线")}>
           <Strikethrough size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => wrapSelection("`", "`", "代码")} hint="行内代码">
+        <ToolbarButton hint="行内代码" onClick={() => wrapSelection("`", "`", "代码")}>
           <Code size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -125,13 +125,13 @@ export function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton onClick={() => insertList(false)} hint="无序列表">
+        <ToolbarButton hint="无序列表" onClick={() => insertList(false)}>
           <List size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => insertList(true)} hint="有序列表">
+        <ToolbarButton hint="有序列表" onClick={() => insertList(true)}>
           <ListOrdered size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => insertAtLineStart(">")} hint="引用">
+        <ToolbarButton hint="引用" onClick={() => insertAtLineStart(">")}>
           <Quote size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -139,13 +139,13 @@ export function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton onClick={insertLink} hint="链接">
+        <ToolbarButton hint="链接" onClick={insertLink}>
           <Link size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={insertImage} hint="图片">
+        <ToolbarButton hint="图片" onClick={insertImage}>
           <ImageIcon size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={insertTable} hint="表格">
+        <ToolbarButton hint="表格" onClick={insertTable}>
           <Table size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -153,20 +153,20 @@ export function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton onClick={() => restoreHistory(-1)} hint="撤销 (Ctrl+Z)">
+        <ToolbarButton hint="撤销 (Ctrl+Z)" onClick={() => restoreHistory(-1)}>
           <Undo size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => restoreHistory(1)} hint="重做 (Ctrl+Shift+Z)">
+        <ToolbarButton hint="重做 (Ctrl+Shift+Z)" onClick={() => restoreHistory(1)}>
           <Redo size={18} />
         </ToolbarButton>
       </ToolbarGroup>
 
       <div className="ml-auto flex items-center gap-2">
         <Button
-          variant="ghost"
-          size="xs"
-          onClick={onTogglePreview}
           className="text-ink-muted hover:bg-subtle hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+          onClick={onTogglePreview}
+          size="xs"
+          variant="ghost"
         >
           {showPreview ? (
             <EyeOff data-icon="inline-start" size={14} />
@@ -200,11 +200,8 @@ export function OutlineSidebar({
       ) : (
         <nav className="flex flex-col gap-1">
           {outline.map((item, index) => (
-            <Hint label={item.text} key={`${item.line}-${index}`}>
+            <Hint key={`${item.line}-${index}`} label={item.text}>
               <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => onJump(item.line)}
                 className={`hover:bg-subtle hover:text-ink-bright block h-auto w-full truncate rounded-md px-2.5 py-1.5 text-left ${
                   item.level === 1
                     ? "text-ink-strong font-medium"
@@ -212,6 +209,9 @@ export function OutlineSidebar({
                       ? "text-ink-muted pl-5 font-normal"
                       : "text-ink-faint pl-8 font-normal"
                 }`}
+                onClick={() => onJump(item.line)}
+                size="xs"
+                variant="ghost"
               >
                 {item.text}
               </Button>
@@ -260,8 +260,7 @@ export function EditorBody({
         />
       ) : (
         <Textarea
-          ref={textareaRef}
-          value={value}
+          className={`${SCROLLBAR_VISIBLE_CLASSES} field-sizing-normal bg-canvas text-ink-bright placeholder:text-ink-fainter min-h-0 flex-1 resize-none rounded-none border-0 p-6 font-mono text-sm leading-7 focus-visible:ring-0`}
           onChange={(event) => {
             onChange(event.target.value, event.target.selectionStart, event.target.selectionEnd);
           }}
@@ -278,10 +277,11 @@ export function EditorBody({
             });
             tabHandler.onKeyDown(event);
           }}
-          spellCheck={false}
           placeholder="# 剧本标题\n\n## 第一场\n\n（在此处编写完整剧本……）"
-          className={`${SCROLLBAR_VISIBLE_CLASSES} field-sizing-normal bg-canvas text-ink-bright placeholder:text-ink-fainter min-h-0 flex-1 resize-none rounded-none border-0 p-6 font-mono text-sm leading-7 focus-visible:ring-0`}
+          ref={textareaRef}
+          spellCheck={false}
           style={{ tabSize: 2 }}
+          value={value}
         />
       )}
     </main>

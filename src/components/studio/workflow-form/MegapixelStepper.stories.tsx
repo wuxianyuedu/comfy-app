@@ -42,7 +42,7 @@ function LiveStepper({ initial, ...rest }: { disabled?: boolean; initial: number
   const [value, setValue] = useState(initial);
   return (
     <div className="flex w-64 flex-col gap-2">
-      <MegapixelStepper {...rest} value={value} onChange={setValue} />
+      <MegapixelStepper {...rest} onChange={setValue} value={value} />
       <p className="text-ink-muted font-mono text-[11px]">value = {String(value)} M</p>
     </div>
   );
@@ -81,5 +81,5 @@ export const Boundaries: Story = {
 
 /** 禁用态（尺寸由场景预设接管时）。 */
 export const Disabled: Story = {
-  render: () => <LiveStepper initial={2} disabled />,
+  render: () => <LiveStepper disabled initial={2} />,
 };

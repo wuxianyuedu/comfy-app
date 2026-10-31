@@ -46,9 +46,9 @@ function renderSize(width: number, height: number) {
           defaultValue: height,
         }),
       }}
-      values={{}}
       set={() => undefined}
       setMany={() => undefined}
+      values={{}}
     />,
   );
   fireEvent.click(container.querySelector('[aria-label="选择比例与像素"]')!);

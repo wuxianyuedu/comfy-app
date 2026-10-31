@@ -46,7 +46,6 @@ export function StatusDot({
 }) {
   return (
     <span
-      data-slot="status-dot"
       aria-hidden
       className={cn(
         "inline-block shrink-0 rounded-full",
@@ -55,6 +54,7 @@ export function StatusDot({
         pulse && "animate-pulse",
         className,
       )}
+      data-slot="status-dot"
     />
   );
 }

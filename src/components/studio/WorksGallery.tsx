@@ -76,13 +76,30 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
 
   return (
     <DocumentFrame
-      width="wide"
-      className="px-4 pt-4 pb-8 sm:px-8 sm:pt-5 sm:pb-12"
       backdrop={<AuroraBackground />}
+      className="px-4 pt-4 pb-8 sm:px-8 sm:pt-5 sm:pb-12"
+      width="wide"
     >
       <PageHeader
+        actions={
+          <>
+            <Button
+              className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-2"
+              onClick={controller.refresh}
+              variant="outline"
+            >
+              ↻ 刷新
+            </Button>
+            <Button
+              className="h-auto rounded-lg px-4 py-2"
+              onClick={() => onOpenTask?.("new")}
+              variant="primary-solid"
+            >
+              新建创作
+            </Button>
+          </>
+        }
         className="mb-8"
-        title={`所有${PROJECTS_ENTRY.label}`}
         /* 「服务端」这三个字要的是**视觉强调**，不是字面量星号：JSX 文本节点
            不解析 Markdown，裸写星号会把星号原样印到界面上（ISSUE #1522 收尾
            时撞到的排版 bug）。
@@ -105,24 +122,7 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
             </p>
           ) : null
         }
-        actions={
-          <>
-            <Button
-              variant="outline"
-              onClick={controller.refresh}
-              className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-2"
-            >
-              ↻ 刷新
-            </Button>
-            <Button
-              variant="primary-solid"
-              onClick={() => onOpenTask?.("new")}
-              className="h-auto rounded-lg px-4 py-2"
-            >
-              新建创作
-            </Button>
-          </>
-        }
+        title={`所有${PROJECTS_ENTRY.label}`}
       />
 
       {loading ? (
@@ -145,28 +145,28 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
               const displayName = project.name || "未命名项目";
               return (
                 <div
-                  key={project.id}
                   className="group border-border-subtle bg-card relative rounded-2xl border transition-all hover:border-cyan-400/25 hover:bg-cyan-400/4"
+                  key={project.id}
                 >
                   <Button
-                    variant="ghost"
-                    onClick={() => controller.openProject(project.id)}
                     className="flex h-auto w-full items-start gap-3 rounded-2xl p-3.5 text-left font-normal"
+                    onClick={() => controller.openProject(project.id)}
+                    variant="ghost"
                   >
                     <div
                       className={`mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl ${WORKS_CATEGORY_ICON_BG}`}
                     >
                       <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
                         fill="none"
+                        height="16"
                         stroke="currentColor"
-                        strokeWidth="2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                        width="16"
                       >
-                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <rect height="18" rx="2" width="18" x="3" y="3" />
                         <path d="M3 9h18M9 21V9" />
                         <circle cx="15" cy="15" r="2" />
                       </svg>
@@ -192,8 +192,8 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
                   {/* 出处标：只给「只在一侧」的行。`both` 是正常行，标出来是噪声。 */}
                   {badge && (
                     <span
-                      title={hint}
                       className="text-ink-fainter border-border-subtle bg-surface-2 text-3xs absolute bottom-2.5 left-3.5 rounded-md border px-1.5 py-0.5"
+                      title={hint}
                     >
                       {badge}
                     </span>
@@ -205,14 +205,14 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
                        遮罩」那一档）：标题靠 `pr-12` 让位是**主**防线，这里是
                        **兜底** —— 万一别的文案更宽，按钮也不会被字透出来。 */}
                   <Button
-                    variant="ghost"
-                    size="xs"
                     aria-label={`删除项目「${displayName}」`}
+                    className="text-ink-muted hover:bg-danger/15 hover:text-danger-strong text-2xs bg-card z-base absolute top-2 right-2 h-auto gap-1 rounded-md px-1.5 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                     onClick={(event) => {
                       event.stopPropagation();
                       requestDelete(project.id);
                     }}
-                    className="text-ink-muted hover:bg-danger/15 hover:text-danger-strong text-2xs bg-card z-base absolute top-2 right-2 h-auto gap-1 rounded-md px-1.5 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                    size="xs"
+                    variant="ghost"
                   >
                     <Trash2 data-icon="inline-start" size={12} />
                     <span>删除</span>
@@ -225,30 +225,30 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
       ) : (
         <section>
           <EmptyState
-            title="还没有画布项目"
             description="点击右上角「新建创作」开始你的第一个工作流，或者在工作流库载入模板。"
-            minHeightClass="min-h-90"
             icon={
               <span
                 className={`flex size-14 items-center justify-center rounded-2xl ${WORKS_CATEGORY_ICON_BG}`}
               >
                 <svg
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
+                  aria-hidden
                   fill="none"
+                  height="22"
                   stroke="currentColor"
-                  strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  aria-hidden
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  width="22"
                 >
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <rect height="18" rx="2" width="18" x="3" y="3" />
                   <path d="M3 9h18M9 21V9" />
                   <circle cx="15" cy="15" r="2" />
                 </svg>
               </span>
             }
+            minHeightClass="min-h-90"
+            title="还没有画布项目"
           />
         </section>
       )}
@@ -258,10 +258,9 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
           可回退的东西），而删正常行两边一起动 —— 说成同一句会让用户在删完一个
           别处的画布之后才知道删的是什么。 */}
       <ConfirmDialog
-        open={pendingDelete !== null}
-        onClose={cancelDelete}
+        cancelLabel="取消"
+        confirmLabel="删除项目"
         danger
-        title={pendingDelete?.origin === "server" ? "删除服务端上的这条项目？" : "删除此画布项目？"}
         description={
           pendingDelete
             ? pendingDelete.origin === "server"
@@ -271,9 +270,7 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
                 `该操作不可撤销，画布内的节点与连线将一并丢失。`
             : ""
         }
-        confirmLabel="删除项目"
-        cancelLabel="取消"
-        pending={deleting}
+        onClose={cancelDelete}
         onConfirm={() => {
           void confirmDelete().then((name) => {
             if (name) {
@@ -281,6 +278,9 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
             }
           });
         }}
+        open={pendingDelete !== null}
+        pending={deleting}
+        title={pendingDelete?.origin === "server" ? "删除服务端上的这条项目？" : "删除此画布项目？"}
       />
     </DocumentFrame>
   );

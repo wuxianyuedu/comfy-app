@@ -79,13 +79,13 @@ function fmtTime(t: number): string {
 function RunGroupHeader({ group }: { group: MessageRunGroup<MessageRecord> }) {
   return (
     <li
-      className="flex items-center gap-2.5 px-1 pt-2 pb-1"
       aria-label={`${group.label}${group.isCurrent ? "（当前）" : ""}`}
+      className="flex items-center gap-2.5 px-1 pt-2 pb-1"
     >
       <span className={`h-px flex-1 ${group.isCurrent ? "bg-primary/30" : "bg-border-subtle"}`} />
       <span className="flex shrink-0 items-center gap-1.5">
         {group.isCurrent && (
-          <span className="bg-primary size-1.5 shrink-0 rounded-full" aria-hidden="true" />
+          <span aria-hidden="true" className="bg-primary size-1.5 shrink-0 rounded-full" />
         )}
         <span
           className={
@@ -156,17 +156,17 @@ export function MessageCenterPanel() {
 
   return (
     <FullScreenLayer
-      zClass={zClass("modal")}
+      aria-label="消息中心"
+      aria-modal="true"
       className="bg-bg flex flex-col"
       role="dialog"
-      aria-modal="true"
-      aria-label="消息中心"
+      zClass={zClass("modal")}
     >
       {/* 顶栏 */}
       <header className="border-border-strong flex h-12 shrink-0 items-center gap-3 border-b px-4">
         <div className="flex items-center gap-2">
           <span className="relative">
-            <BellRing size={16} className="text-primary-strong" />
+            <BellRing className="text-primary-strong" size={16} />
             {unread > 0 && (
               <span className="bg-primary text-3xs absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 font-bold text-white">
                 {unread > 99 ? "99+" : unread}
@@ -181,31 +181,31 @@ export function MessageCenterPanel() {
 
         <div className="ml-auto flex items-center gap-1">
           <Button
-            variant="ghost"
-            size="xs"
-            onClick={markAllRead}
-            disabled={unread === 0}
             className="text-ink-soft hover:bg-subtle hover:text-ink h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-xs"
+            disabled={unread === 0}
+            onClick={markAllRead}
+            size="xs"
+            variant="ghost"
           >
             <CheckCheck data-icon="inline-start" size={14} />
             全部已读
           </Button>
           <Button
-            variant="ghost"
-            size="xs"
-            onClick={clear}
-            disabled={messages.length === 0}
             className="text-ink-soft hover:bg-danger/10 hover:text-danger-strong h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-xs"
+            disabled={messages.length === 0}
+            onClick={clear}
+            size="xs"
+            variant="ghost"
           >
             <Trash2 data-icon="inline-start" size={14} />
             清空
           </Button>
           <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setOpen(false)}
-            className="text-ink-soft hover:bg-subtle hover:text-ink ml-1 rounded-md"
             aria-label="关闭消息中心"
+            className="text-ink-soft hover:bg-subtle hover:text-ink ml-1 rounded-md"
+            onClick={() => setOpen(false)}
+            size="icon"
+            variant="ghost"
           >
             <X data-icon="inline-start" size={16} />
           </Button>
@@ -216,10 +216,10 @@ export function MessageCenterPanel() {
       <div className="custom-scrollbar flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           <EmptyState
-            variant="panel"
             className="gap-3"
-            icon={<Inbox size={44} strokeWidth={1.2} className="opacity-30" />}
+            icon={<Inbox className="opacity-30" size={44} strokeWidth={1.2} />}
             title="暂无系统消息"
+            variant="panel"
           />
         ) : (
           <ul className="mx-auto flex w-full max-w-3xl flex-col gap-2.5 px-4 py-5">
@@ -231,10 +231,10 @@ export function MessageCenterPanel() {
                   const Icon = meta.icon;
                   return (
                     <li
-                      key={m.id}
                       className={`bg-subtle/60 hover:bg-subtle rounded-xl border p-3.5 transition-colors ${
                         m.read ? "border-border-subtle opacity-70" : `${meta.ring} border`
                       }`}
+                      key={m.id}
                     >
                       <div className="flex items-start gap-3">
                         {/* 整行「点一下标记已读」用原生 `<Button variant="ghost">`
@@ -248,8 +248,6 @@ export function MessageCenterPanel() {
                          *  `ghost` 变体的底色/文字色由这里接管（§16.2.4.2 第 5 条），
                          *  行外观与收口前一致。 */}
                         <Button
-                          variant="ghost"
-                          onClick={() => markRead(m.id)}
                           /* `h-auto` 是必须的，不是风格：`size` 的缺省档带 `h-8`（32px
                            * 定高），而这条按钮的内容是「标题 + 正文」——正文可能是**多段**
                            *（陈旧实例那条就是：正文含换行、`whitespace-pre-wrap` 会照实
@@ -258,6 +256,8 @@ export function MessageCenterPanel() {
                            * 叠在一起，tsc / eslint / 构建全绿。同文件另外两颗按钮也带
                            * `h-auto`，这里此前漏了。 */
                           className="flex h-auto min-w-0 flex-1 items-start justify-start gap-3 rounded-lg p-0 text-left font-normal whitespace-normal hover:bg-transparent"
+                          onClick={() => markRead(m.id)}
+                          variant="ghost"
                         >
                           <span
                             className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg ${meta.tint}`}
@@ -268,7 +268,7 @@ export function MessageCenterPanel() {
                             <div className="flex items-baseline gap-2">
                               <h3 className="text-ink-bright text-sm font-semibold">{m.title}</h3>
                               {!m.read && (
-                                <Badge tone="primary" size="pill-sm">
+                                <Badge size="pill-sm" tone="primary">
                                   新
                                 </Badge>
                               )}
@@ -282,11 +282,11 @@ export function MessageCenterPanel() {
                           </div>
                         </Button>
                         <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={() => remove(m.id)}
-                          className="text-ink-fainter hover:bg-subtle hover:text-ink-soft shrink-0 rounded"
                           aria-label="删除该消息"
+                          className="text-ink-fainter hover:bg-subtle hover:text-ink-soft shrink-0 rounded"
+                          onClick={() => remove(m.id)}
+                          size="icon-xs"
+                          variant="ghost"
                         >
                           <Trash2 data-icon="inline-start" size={13} />
                         </Button>
@@ -303,10 +303,10 @@ export function MessageCenterPanel() {
       <footer className="border-border-strong text-ink-muted text-2xs flex h-9 shrink-0 items-center justify-between border-t px-4">
         <span>底部状态栏铃铛实时汇总未读消息，点此可全屏查看。</span>
         <Button
-          variant="secondary"
-          size="xs"
-          onClick={() => setOpen(false)}
           className="bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink rounded px-2 py-0.5"
+          onClick={() => setOpen(false)}
+          size="xs"
+          variant="secondary"
         >
           关闭 (Esc)
         </Button>

@@ -73,11 +73,11 @@ export function useFilePicker({ onPick, accept, multiple, inputProps }: FilePick
       function PickerInput() {
         return (
           <FilePicker
-            onPick={onPick}
             accept={accept}
-            multiple={multiple}
-            inputProps={inputProps}
             handleRef={handleRef}
+            inputProps={inputProps}
+            multiple={multiple}
+            onPick={onPick}
           />
         );
       },
@@ -123,12 +123,12 @@ export function FilePicker({
 
   return (
     <input
+      accept={accept}
+      className="hidden"
+      multiple={multiple}
+      onChange={handleChange}
       ref={inputRef}
       type="file"
-      accept={accept}
-      multiple={multiple}
-      className="hidden"
-      onChange={handleChange}
       {...inputProps}
     />
   );
@@ -160,11 +160,11 @@ export function FilePickerButton({
         {children}
       </Button>
       <FilePicker
-        onPick={onPick}
         accept={accept}
-        multiple={multiple}
-        inputProps={inputProps}
         handleRef={handleRef}
+        inputProps={inputProps}
+        multiple={multiple}
+        onPick={onPick}
       />
     </>
   );

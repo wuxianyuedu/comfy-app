@@ -71,8 +71,8 @@ function ExpansionDemo() {
         {PATHS.map((path) => (
           <Disclosure
             key={path}
-            open={nodes.isExpanded(path)}
             onOpenChange={() => nodes.toggle(path)}
+            open={nodes.isExpanded(path)}
             trigger={<span className="text-sm">{path}</span>}
           >
             <TreeChildren>

@@ -49,12 +49,7 @@ const LOAD_IMAGE_IO: WorkflowIOMap = {
 function renderForm(values: Record<string, unknown> = {}) {
   const onChange = vi.fn();
   render(
-    <DynamicWorkflowForm
-      io={LOAD_IMAGE_IO}
-      values={values}
-      onChange={onChange}
-      showOutputs
-    />,
+    <DynamicWorkflowForm io={LOAD_IMAGE_IO} onChange={onChange} showOutputs values={values} />,
   );
   return { onChange };
 }
@@ -104,8 +99,7 @@ describe("DynamicWorkflowForm — 图片上传位（ISSUE #311）", () => {
         name: /上传 choose 1st frame to upload/,
       }),
     );
-    const input =
-      document.querySelector<HTMLInputElement>('input[type="file"]');
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
     expect(input).toBeTruthy();
     const file = new File([new Uint8Array([1, 2, 3])], "shot.png", {
       type: "image/png",

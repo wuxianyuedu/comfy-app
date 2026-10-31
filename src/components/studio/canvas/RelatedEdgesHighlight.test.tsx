@@ -144,7 +144,7 @@ function Stage({
 
   return (
     <div style={{ width: 800, height: 600, position: "relative" }}>
-      <ReactFlow nodes={nodes} edges={currentEdges} onEdgesChange={onEdgesChange} fitView={false}>
+      <ReactFlow edges={currentEdges} fitView={false} nodes={nodes} onEdgesChange={onEdgesChange}>
         <div data-testid="canvas-ready" />
       </ReactFlow>
     </div>
@@ -167,10 +167,10 @@ function renderStage(
   render(
     <ReactFlowProvider>
       <Stage
-        sink={sink}
-        nodeIds={options.nodeIds ?? ["1", "2", "3"]}
         edges={options.edges ?? EDGES}
+        nodeIds={options.nodeIds ?? ["1", "2", "3"]}
         resolveNodeId={options.resolveNodeId}
+        sink={sink}
       />
     </ReactFlowProvider>,
   );

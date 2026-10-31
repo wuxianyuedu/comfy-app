@@ -153,8 +153,8 @@ export function PageHeader({
 
   return (
     <header
-      data-component="page-header"
       className={cn("flex flex-wrap items-center justify-between gap-3", className)}
+      data-component="page-header"
     >
       {hiddenTitle !== undefined ? <Heading className="sr-only">{hiddenTitle}</Heading> : null}
       {hasTitleBlock ? (

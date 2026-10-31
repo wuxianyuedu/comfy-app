@@ -43,7 +43,7 @@ type StoryArgs = { zClass: string };
 /** 适配件：`zClass` 进 Args，正文由各 story 的 `render` 给。 */
 function LayerSample({ zClass: z, children }: StoryArgs & { children?: React.ReactNode }) {
   return (
-    <FullScreenLayer zClass={z} className="bg-bg flex flex-col">
+    <FullScreenLayer className="bg-bg flex flex-col" zClass={z}>
       {children}
     </FullScreenLayer>
   );
@@ -139,7 +139,7 @@ function InContainer({
   return (
     <ChromeFrame showStatusBar={chrome === "title+status"}>
       <div className="absolute inset-0">
-        <FullScreenLayer zClass={z} className="bg-bg absolute flex flex-col" {...a11y}>
+        <FullScreenLayer className="bg-bg absolute flex flex-col" zClass={z} {...a11y}>
           {children}
         </FullScreenLayer>
       </div>
@@ -162,12 +162,12 @@ export const Default: Story = {
 export const MaskedPanel: Story = {
   render: (args) => (
     <InContainer
-      zClass={args.zClass}
       a11y={{
         role: "dialog",
         "aria-modal": true,
         "aria-label": "系统消息中心",
       }}
+      zClass={args.zClass}
     >
       <div className="text-ink-soft flex flex-1 items-center justify-center text-xs">
         遮罩式全屏面板（读屏器播报 aria-label）
@@ -186,7 +186,7 @@ export const MaskedPanel: Story = {
  */
 export const StatusBarOverlap: Story = {
   render: (args) => (
-    <InContainer zClass={args.zClass} chrome="title+status">
+    <InContainer chrome="title+status" zClass={args.zClass}>
       <div className="text-ink-soft flex flex-1 items-center justify-center text-xs">
         内容铺到 bottom-0 —— 最后 24px 被状态栏压住
       </div>

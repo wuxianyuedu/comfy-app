@@ -152,11 +152,11 @@ export function useWidePanel(
 export function WidePanelToggle({ panel, className }: { className?: string; panel: WidePanel }) {
   return (
     <Button
-      variant="ghost"
-      onClick={panel.toggle}
-      title={panel.toggleLabel}
       aria-label={panel.toggleLabel}
       className={className}
+      onClick={panel.toggle}
+      title={panel.toggleLabel}
+      variant="ghost"
     >
       {panel.wide ? (
         <Minimize2 data-icon="inline-start" size={16} />

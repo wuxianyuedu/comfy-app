@@ -91,11 +91,11 @@ function SegmentWithSummary({ summary, sectionCount, align, disabled }: StoryArg
   return (
     <div className="w-72">
       <MultiSegmentPopover
-        ariaLabel="选择比例与像素"
-        triggerContent={summary}
-        sections={buildSections(sectionCount)}
         align={align}
+        ariaLabel="选择比例与像素"
         disabled={disabled}
+        sections={buildSections(sectionCount)}
+        triggerContent={summary}
       />
     </div>
   );
@@ -151,16 +151,16 @@ export const WithFooter: Story = {
           </span>
           <div className="w-40 min-w-0">
             <MultiSegmentPopover
-              ariaLabel="选择比例与像素"
-              triggerContent={args.summary}
-              sections={buildSections(args.sectionCount)}
               align={args.align}
+              ariaLabel="选择比例与像素"
               footer={
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-ink-muted text-[11px]">打开尺寸表…</span>
                   <span className="text-ink-faint text-[10px]">像素按长边给定</span>
                 </div>
               }
+              sections={buildSections(args.sectionCount)}
+              triggerContent={args.summary}
             />
           </div>
         </div>

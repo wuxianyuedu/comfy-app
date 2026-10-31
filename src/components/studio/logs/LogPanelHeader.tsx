@@ -59,7 +59,7 @@ export function LogPanelHeader(input: {
         撑高而不是钉死高度。 */}
       <div className="border-border-strong bg-surface-1 flex min-h-14 shrink-0 flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
         <div className="flex shrink-0 items-center gap-2">
-          <FileText size={16} className="text-primary-strong shrink-0" />
+          <FileText className="text-primary-strong shrink-0" size={16} />
           {/* 标题不可换行：换行会把行头撑高、把下面的筛选器挤成竖排单字
           （窄窗口下实测就是这样）。宽度不够时宁可让别的元素让它。 */}
           <span className="text-ink-bright text-[15px] font-semibold whitespace-nowrap">
@@ -94,24 +94,24 @@ export function LogPanelHeader(input: {
         候选列表每项自带「条数 / 信息 / 警告 / 错误」四列——此前只有名字，
         用户必须先切过去才知道那边有没有问题（ISSUE #360）。 */}
         <OriginSelect
-          value={origin ?? "all"}
           countsByOrigin={countsByOrigin}
           onChange={setOrigin}
+          value={origin ?? "all"}
         />
 
         {/* Actions */}
         <div className="flex items-center gap-1 pl-2">
-          <Hint label={wrap ? "折叠超长行" : "自动换行显示"} accessibleName>
+          <Hint accessibleName label={wrap ? "折叠超长行" : "自动换行显示"}>
             <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setWrap((prev) => !prev)}
               /* 选中态与级别按钮同一份：`bg-subtle` 在浅色主题下与行头底色同值。 */
               className={`rounded-md p-2 transition-colors ${
                 wrap
                   ? `${FILTER_SELECTED_STYLES} text-ink-bright`
                   : "text-ink-muted hover:bg-subtle hover:text-ink"
               }`}
+              onClick={() => setWrap((prev) => !prev)}
+              size="icon"
+              variant="ghost"
             >
               <Type size={16} />
             </Button>
@@ -127,13 +127,13 @@ export function LogPanelHeader(input: {
             }
           >
             <Button
-              variant="ghost"
-              size="icon"
-              onClick={copyAllAction}
               aria-label="复制当前筛选的全部日志"
               className={`rounded-md ${
                 copyFailed ? "text-danger-strong" : "text-ink-muted hover:bg-subtle hover:text-ink"
               }`}
+              onClick={copyAllAction}
+              size="icon"
+              variant="ghost"
             >
               {copyFailed ? (
                 <span className="text-3xs whitespace-nowrap">复制失败</span>
@@ -141,19 +141,19 @@ export function LogPanelHeader(input: {
                 /* 对勾替换掉复制图标是「按下去了」的唯一可见变化 —— 闪一下
                    （`value-tick`）把它从「图标不知什么时候换的」变成一次
                    明确的反馈；`key` 只在两态之间切换，值没变不重播。 */
-                <Check key="done" data-icon="inline-start" className="value-tick" size={16} />
+                <Check className="value-tick" data-icon="inline-start" key="done" size={16} />
               ) : (
-                <Copy key="idle" data-icon="inline-start" size={16} />
+                <Copy data-icon="inline-start" key="idle" size={16} />
               )}
             </Button>
           </Hint>
           <Hint label={`下载为文本文件（当前筛选的全部日志：${scopeLabel} · ${total} 条）`}>
             <Button
-              variant="ghost"
-              size="icon"
-              onClick={download}
               aria-label="下载当前筛选的全部日志"
               className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
+              onClick={download}
+              size="icon"
+              variant="ghost"
             >
               <Download data-icon="inline-start" size={16} />
             </Button>
@@ -163,26 +163,26 @@ export function LogPanelHeader(input: {
           {/* 整份现场打包（见 DiagnosticsButton）：与上面那个分工不同 —— 它带
               走的是面板上看不到的环境信息与崩溃残留。 */}
           <DiagnosticsButton />
-          <Hint label="清空面板" accessibleName>
+          <Hint accessibleName label="清空面板">
             <Button
-              variant="ghost"
-              size="icon"
-              onClick={clear}
               className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
+              onClick={clear}
+              size="icon"
+              variant="ghost"
             >
               <Trash2 data-icon="inline-start" size={16} />
             </Button>
           </Hint>
           <WidePanelToggle
-            panel={panel}
             className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
+            panel={panel}
           />
-          <Hint label="关闭 (Ctrl+Shift+L)" accessibleName>
+          <Hint accessibleName label="关闭 (Ctrl+Shift+L)">
             <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsOpen(false)}
               className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
+              onClick={() => setIsOpen(false)}
+              size="icon"
+              variant="ghost"
             >
               <X data-icon="inline-start" size={16} />
             </Button>

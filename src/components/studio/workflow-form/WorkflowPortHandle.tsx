@@ -160,16 +160,16 @@ export function PortHandle({
    *  圆点锁在标签行中线，按整行 50% 量就会把线画到圆点下方十几像素处，表现为
    *  「线没有连接到端点上」）。 */
   if (!nodeId) {
-    return <span aria-hidden style={dotStyle} data-port-dot={id} />;
+    return <span aria-hidden data-port-dot={id} style={dotStyle} />;
   }
 
   return (
     <Handle
-      type={dir === "in" ? "target" : "source"}
-      position={dir === "in" ? Position.Left : Position.Right}
-      id={id}
-      style={dotStyle}
       data-port-dot={id}
+      id={id}
+      position={dir === "in" ? Position.Left : Position.Right}
+      style={dotStyle}
+      type={dir === "in" ? "target" : "source"}
     />
   );
 }

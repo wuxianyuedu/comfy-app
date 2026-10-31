@@ -56,9 +56,9 @@ export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectH
 
   return (
     <DocumentFrame
-      width="narrow"
-      className="flex flex-col gap-6 px-8 py-10"
       backdrop={<AuroraBackground />}
+      className="flex flex-col gap-6 px-8 py-10"
+      width="narrow"
     >
       {/* ── 项目标识 + 一句话进展 ─────────────────────────── */}
       <header className="flex flex-col gap-2">
@@ -68,14 +68,14 @@ export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectH
 
       {/* ── 总进度：一条，口径 = 六个完成阶段的等权平均 ────── */}
       <ProgressBar
-        value={loading ? null : overview.progressPct}
-        label="项目进度"
         ariaLabel="项目整体完成度"
+        label="项目进度"
         trackClassName="h-1.5"
+        value={loading ? null : overview.progressPct}
       />
 
       {/* ── 状态卡：阶段条 + 计数 ─────────────────────────── */}
-      <ProjectHomeStatus overview={overview} loading={loading} onNavigate={onNavigate} />
+      <ProjectHomeStatus loading={loading} onNavigate={onNavigate} overview={overview} />
 
       {/* ── AI 自主成片：与工坊 / 画布同一份 run 的操纵台 ──── */}
       <section className="flex flex-col gap-2">
@@ -97,13 +97,13 @@ export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectH
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {ENTRIES.map((entry) => (
             <Button
-              key={entry.id}
-              variant="ghost"
-              onClick={() => onNavigate(entry.id)}
               className={cn(
                 "border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2",
                 "flex h-auto flex-col items-start gap-1 rounded-2xl border p-4 text-left font-normal",
               )}
+              key={entry.id}
+              onClick={() => onNavigate(entry.id)}
+              variant="ghost"
             >
               <span className="text-ink-bright text-sm font-medium">{entry.label}</span>
               <span className="text-ink-muted text-xs">{entry.desc}</span>

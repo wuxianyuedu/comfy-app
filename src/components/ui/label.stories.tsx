@@ -39,7 +39,7 @@ export const WithControlInline: Story = {
   render: () => (
     <div className="flex flex-col gap-3">
       <Label htmlFor="label-check-a">
-        <Checkbox id="label-check-a" defaultChecked /> 本地模型
+        <Checkbox defaultChecked id="label-check-a" /> 本地模型
       </Label>
       <Label htmlFor="label-check-b">
         <Checkbox id="label-check-b" /> 工作流库
@@ -54,11 +54,11 @@ export const DisabledPeer: Story = {
   render: () => (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <Input id="label-peer-disabled" disabled className="peer" />
+        <Input className="peer" disabled id="label-peer-disabled" />
         <Label htmlFor="label-peer-disabled">同时写出元数据</Label>
       </div>
       <div className="flex items-center gap-2">
-        <Input id="label-peer-enabled" className="peer" />
+        <Input className="peer" id="label-peer-enabled" />
         <Label htmlFor="label-peer-enabled">这一行是对照（可用）</Label>
       </div>
     </div>

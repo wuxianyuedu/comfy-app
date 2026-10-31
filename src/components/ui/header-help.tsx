@@ -26,13 +26,13 @@ import { Hint } from "~/components/ui/hint";
  */
 export function HeaderHelp({ text }: { text: ReactNode }) {
   return (
-    <Hint side="bottom" label={text}>
+    <Hint label={text} side="bottom">
       <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
         aria-label="说明"
         className="text-ink-fainter hover:text-ink-bright shrink-0 rounded-full"
+        size="icon-xs"
+        type="button"
+        variant="ghost"
       >
         <CircleHelp aria-hidden className="size-3.5" />
       </Button>

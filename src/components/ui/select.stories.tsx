@@ -70,7 +70,7 @@ export const TriggerSizes: Story = {
   render: () => (
     <div className="flex items-center gap-4">
       {TRIGGER_SIZES.map((size) => (
-        <Select key={size} defaultValue="a">
+        <Select defaultValue="a" key={size}>
           <SelectTrigger size={size}>
             <SelectValue />
           </SelectTrigger>

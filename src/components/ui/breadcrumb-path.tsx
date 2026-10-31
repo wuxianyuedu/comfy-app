@@ -88,9 +88,9 @@ export function BreadcrumbPath({
               <BreadcrumbItem>
                 {navKey !== null ? (
                   <Button
-                    variant="ghost"
-                    onClick={() => onNavigate(navKey)}
                     className="text-ink-muted hover:text-primary-strong h-auto p-0 text-xs font-normal hover:bg-transparent hover:underline"
+                    onClick={() => onNavigate(navKey)}
+                    variant="ghost"
                   >
                     {seg.label}
                   </Button>

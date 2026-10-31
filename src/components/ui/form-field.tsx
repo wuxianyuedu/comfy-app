@@ -146,7 +146,7 @@ export function FormField({
         >
           {label}
           {required && (
-            <span className="text-danger-strong ml-0.5" aria-hidden>
+            <span aria-hidden className="text-danger-strong ml-0.5">
               *
             </span>
           )}
@@ -158,8 +158,8 @@ export function FormField({
       )}
       {error != null && error !== "" && (
         <FieldError
-          id={errorId}
           className={cn("text-danger-strong text-2xs mt-1 font-normal", errorClassName)}
+          id={errorId}
         >
           {error}
         </FieldError>

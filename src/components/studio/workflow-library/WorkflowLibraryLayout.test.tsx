@@ -62,20 +62,20 @@ function headerRow(over: Partial<WorkflowRow> = {}): WorkflowRow {
 function renderHeader() {
   render(
     <DetailHeader
-      workflow={headerRow()}
-      usable
-      canResync={false}
-      missing={false}
-      isTechnical={false}
       busyDownload={false}
       busyResync={false}
+      canResync={false}
+      isTechnical={false}
       meta={meta}
-      onEdit={vi.fn()}
-      onResync={vi.fn()}
-      onDownload={vi.fn()}
+      missing={false}
       onDelete={vi.fn()}
+      onDownload={vi.fn()}
+      onEdit={vi.fn()}
       onOpenSource={vi.fn()}
+      onResync={vi.fn()}
       onUse={vi.fn()}
+      usable
+      workflow={headerRow()}
     />,
   );
 }

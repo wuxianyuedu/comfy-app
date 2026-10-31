@@ -120,24 +120,24 @@ export function ExtractToolbar({
         <span className="text-primary flex items-center text-xs font-medium">{title}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <ExtractModelSelect value={channelValue} onChange={onChannelValueChange} />
+        <ExtractModelSelect onChange={onChannelValueChange} value={channelValue} />
         <Hint label={extractDisabled ? extractDisabledReason : undefined} wrap>
           <Button
-            variant="primary-solid"
-            size="xs"
-            onClick={onExtract}
-            disabled={busy || extractDisabled}
             className="h-auto rounded-lg px-3 py-1.5"
+            disabled={busy || extractDisabled}
+            onClick={onExtract}
+            size="xs"
+            variant="primary-solid"
           >
             {busy ? "提取中…" : "提取"}
           </Button>
         </Hint>
         <Button
-          variant="outline"
-          size="xs"
-          onClick={importPicker.open}
-          disabled={busy}
           className="border-border text-primary hover:bg-subtle h-auto rounded-lg px-3 py-1.5"
+          disabled={busy}
+          onClick={importPicker.open}
+          size="xs"
+          variant="outline"
         >
           外部导入
         </Button>
@@ -146,9 +146,9 @@ export function ExtractToolbar({
       {/* 实时流式输出（提取中单独展示，便于跟随 token 累积） */}
       {busy && progressText && (
         <Disclosure
+          className="text-primary bg-bg/60 text-2xs mt-2 rounded-lg px-3 py-2"
           defaultOpen
           marker="caret"
-          className="text-primary bg-bg/60 text-2xs mt-2 rounded-lg px-3 py-2"
           trigger="提取过程"
         >
           <pre className="text-muted-foreground text-2xs mt-1 max-h-40 overflow-y-auto leading-relaxed break-all whitespace-pre-wrap">
@@ -177,14 +177,14 @@ export function ExtractToolbar({
         <div className="border-border bg-bg/40 mt-2 rounded-lg border px-3 py-2">
           <div className="text-primary text-2xs flex items-center gap-2 font-medium">
             <Disclosure
-              open={busy ? true : undefined}
               marker="caret"
+              open={busy ? true : undefined}
               panelClassName="text-2xs"
               trigger={`执行日志（${executionLog.length} 条）`}
             >
               <ul className="mt-2 flex flex-col gap-2">
                 {executionLog.map((entry, i) => (
-                  <li key={`${entry.ts}-${i}`} className="bg-surface rounded-lg px-2.5 py-2">
+                  <li className="bg-surface rounded-lg px-2.5 py-2" key={`${entry.ts}-${i}`}>
                     <div className="flex items-center gap-2">
                       <span
                         className={`text-3xs rounded px-1.5 py-0.5 font-medium ${logBadge(entry.kind)}`}
@@ -209,9 +209,9 @@ export function ExtractToolbar({
             </Disclosure>
             {logStage && (
               <Button
-                variant="link"
-                onClick={() => loadHistory()}
                 className="text-muted-foreground hover:text-primary text-3xs h-auto shrink-0 p-0 font-normal underline underline-offset-2"
+                onClick={() => loadHistory()}
+                variant="link"
               >
                 历史
               </Button>
@@ -229,7 +229,7 @@ export function ExtractToolbar({
               ) : (
                 <ul className="mt-1.5 flex max-h-48 flex-col gap-1.5 overflow-y-auto">
                   {history.map((entry, i) => (
-                    <li key={`${entry.ts}-${i}`} className="bg-surface rounded-lg px-2.5 py-2">
+                    <li className="bg-surface rounded-lg px-2.5 py-2" key={`${entry.ts}-${i}`}>
                       <div className="flex items-center gap-2">
                         <span className="bg-primary-soft text-primary text-3xs rounded px-1.5 py-0.5 font-medium">
                           {entry.kind}

@@ -49,13 +49,13 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   render: (args) => (
     <ButtonGroup {...args}>
-      <Button variant="outline" size="icon-sm" aria-label="加粗">
+      <Button aria-label="加粗" size="icon-sm" variant="outline">
         <Bold />
       </Button>
-      <Button variant="outline" size="icon-sm" aria-label="斜体">
+      <Button aria-label="斜体" size="icon-sm" variant="outline">
         <Italic />
       </Button>
-      <Button variant="outline" size="icon-sm" aria-label="下划线">
+      <Button aria-label="下划线" size="icon-sm" variant="outline">
         <Underline />
       </Button>
     </ButtonGroup>
@@ -67,10 +67,10 @@ export const TwoButtons: Story = {
   render: (args) => (
     <div className="flex flex-col gap-4">
       <ButtonGroup {...args}>
-        <Button variant="outline" size="sm">
+        <Button size="sm" variant="outline">
           <Undo2 /> 撤销
         </Button>
-        <Button variant="outline" size="sm">
+        <Button size="sm" variant="outline">
           <Redo2 /> 重做
         </Button>
       </ButtonGroup>
@@ -85,16 +85,16 @@ export const Orientations: Story = {
   render: () => (
     <div className="flex items-start gap-8">
       {ORIENTATIONS.map((orientation) => (
-        <div key={orientation} className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" key={orientation}>
           <span className="text-ink-muted font-mono text-[11px]">orientation={orientation}</span>
           <ButtonGroup orientation={orientation}>
-            <Button variant="outline" size="sm">
+            <Button size="sm" variant="outline">
               上
             </Button>
-            <Button variant="outline" size="sm">
+            <Button size="sm" variant="outline">
               中
             </Button>
-            <Button variant="outline" size="sm">
+            <Button size="sm" variant="outline">
               下
             </Button>
           </ButtonGroup>
@@ -131,18 +131,18 @@ export const Nested: Story = {
   render: (args) => (
     <ButtonGroup {...args}>
       <ButtonGroup>
-        <Button variant="outline" size="sm">
+        <Button size="sm" variant="outline">
           左一
         </Button>
-        <Button variant="outline" size="sm">
+        <Button size="sm" variant="outline">
           左二
         </Button>
       </ButtonGroup>
       <ButtonGroup>
-        <Button variant="outline" size="sm">
+        <Button size="sm" variant="outline">
           右一
         </Button>
-        <Button variant="outline" size="sm">
+        <Button size="sm" variant="outline">
           右二
         </Button>
       </ButtonGroup>

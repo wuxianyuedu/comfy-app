@@ -42,8 +42,6 @@ export function WorkshopStageItem({
   const done = ratio >= 1;
   return (
     <Button
-      variant="ghost"
-      onClick={onSelect}
       aria-current={isCurrent ? "step" : undefined}
       className={cn(
         "flex h-auto items-center gap-3 rounded-xl px-4 py-3 font-normal",
@@ -52,6 +50,8 @@ export function WorkshopStageItem({
           : "bg-surface hover:bg-surface",
         className,
       )}
+      onClick={onSelect}
+      variant="ghost"
     >
       {/* 等宽高只写一个出处（size-9），不再 h-9 + w-9 凑 */}
       <span

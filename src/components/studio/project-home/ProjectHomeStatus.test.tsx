@@ -26,7 +26,7 @@ function overview(over: Partial<ProductionRunView> = {}) {
 
 describe("ProjectHomeStatus", () => {
   it("六个阶段逐行按流水线顺序渲染，未开始的都标「未开始」", () => {
-    render(<ProjectHomeStatus overview={overview()} loading={false} onNavigate={vi.fn()} />);
+    render(<ProjectHomeStatus loading={false} onNavigate={vi.fn()} overview={overview()} />);
     /* 按阶段列表（`<ul>`）逐行取，而不是全文档 `getByText` —— 「剧本」「成片」
      * 在旁边的「素材进度」里也有同名行，全文档查询会撞到两个节点。 */
     const rows = screen.getAllByRole("listitem").map((row) => row.textContent);
@@ -48,6 +48,8 @@ describe("ProjectHomeStatus", () => {
   it("已完成阶段标「已完成」，计数与镜头数一致", () => {
     render(
       <ProjectHomeStatus
+        loading={false}
+        onNavigate={vi.fn()}
         overview={overview({
           hasScript: true,
           characterCount: 2,
@@ -58,8 +60,6 @@ describe("ProjectHomeStatus", () => {
             hasClip: false,
           })),
         })}
-        loading={false}
-        onNavigate={vi.fn()}
       />,
     );
     // 剧本 / 角色卡 / 场景分镜 三段完成（有剧本 + 有角色 + 有镜头即算拆出了分镜）。
@@ -69,14 +69,14 @@ describe("ProjectHomeStatus", () => {
   });
 
   it("加载中不报假的 0，一律给占位符", () => {
-    render(<ProjectHomeStatus overview={overview()} loading onNavigate={vi.fn()} />);
+    render(<ProjectHomeStatus loading onNavigate={vi.fn()} overview={overview()} />);
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
     expect(screen.queryByText("0 / 6 完成")).toBeNull();
   });
 
   it("「去工坊继续」回抛 workshop", () => {
     const onNavigate = vi.fn();
-    render(<ProjectHomeStatus overview={overview()} loading={false} onNavigate={onNavigate} />);
+    render(<ProjectHomeStatus loading={false} onNavigate={onNavigate} overview={overview()} />);
     fireEvent.click(screen.getByRole("button", { name: /去工坊继续/ }));
     expect(onNavigate).toHaveBeenCalledWith("workshop");
   });

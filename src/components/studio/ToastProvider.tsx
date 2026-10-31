@@ -159,8 +159,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           const st = KIND_STYLE[item.kind];
           return (
             <div
-              key={item.id}
               className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-panel p-3.5 shadow-xl shadow-black/8 transition-all dark:shadow-black/40`}
+              key={item.id}
             >
               <div className={`mt-0.5 ${st.iconColor}`}>
                 {item.kind === "loading" ? (
@@ -176,11 +176,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 )}
               </div>
               <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => dismiss(item.id)}
-                className="text-ink-muted hover:text-ink-bright hover:bg-transparent"
                 aria-label="关闭"
+                className="text-ink-muted hover:text-ink-bright hover:bg-transparent"
+                onClick={() => dismiss(item.id)}
+                size="icon-xs"
+                variant="ghost"
               >
                 <X data-icon="inline-start" size={14} />
               </Button>

@@ -62,8 +62,8 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
     >
       {PSEUDO_FROST_BLOBS.map((blob, idx) => (
         <div
-          key={`blob-${idx}`}
           className="absolute rounded-full"
+          key={`blob-${idx}`}
           style={{
             left: blob.left,
             top: blob.top,
@@ -151,7 +151,7 @@ export function NodeFrost({
  * ------------------------------------------------------------------------- */
 export function FrostLayer({ color, nodeMode }: { color: string | null; nodeMode: number }) {
   const zoom = useStore((state) => state.transform[2]);
-  return <NodeFrost zoom={zoom} color={color} nodeMode={nodeMode} />;
+  return <NodeFrost color={color} nodeMode={nodeMode} zoom={zoom} />;
 }
 
 /* ---------------------------------------------------------------------------

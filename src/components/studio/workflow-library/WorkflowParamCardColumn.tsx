@@ -83,10 +83,10 @@ export function WorkflowParamCardColumn({
 
   return (
     <aside
-      className="flex shrink-0 flex-col gap-2 self-start"
-      style={{ width: CARD_WIDTH }}
       aria-label="对外参数"
+      className="flex shrink-0 flex-col gap-2 self-start"
       data-testid="workflow-param-card-column"
+      style={{ width: CARD_WIDTH }}
     >
       <p className="text-ink-faint text-2xs px-0.5 font-medium">
         {canWire ? "对外参数 · 拖圆点改落点" : "对外参数"}
@@ -105,20 +105,16 @@ export function WorkflowParamCardColumn({
             contractEntries?.find((item) => item.id === "size")?.label ?? sizeSubLabel("size");
           return (
             <WorkflowParamCard
-              key="size"
-              /* 选中的可能是这张卡（`size`）或它的某一条线（子口 id）：两种都点亮。 */
-              selected={sizeGroupIds(selectedEntryId).some((id) => SIZE_SUB_IDS.includes(id))}
-              onSelect={onSelect ? () => onSelect("size") : undefined}
-              entryId="size"
-              cls="size"
-              label={sizeLabel}
-              idLabel="size"
-              classLabel={paramClassStyle("size").label}
-              hostNodeId={first.hostNodeId || first.nodeId}
-              width={CARD_WIDTH}
-              canWire={canWire}
-              readOnly={!canWire}
               canReset={canWire && SIZE_SUB_IDS.some((id) => !!isManual?.(id))}
+              canWire={canWire}
+              classLabel={paramClassStyle("size").label}
+              cls="size"
+              endpoint={endpoint}
+              entryId="size"
+              hostNodeId={first.hostNodeId || first.nodeId}
+              idLabel="size"
+              key="size"
+              label={sizeLabel}
               /* 一行 = 一个子口：卡片头的 ↺ 把六条线一起撤掉（尺寸是一张卡，
                * 只撤其中一条会让卡片看着「还有线」）。
                *
@@ -126,6 +122,7 @@ export function WorkflowParamCardColumn({
                *  `resetMany`。在这里逐个上抛的话，消费方每收到一个就落一次库，
                *  后一次会把前一次的删除覆盖回去（用户口径：「重置也清不掉」）。 */
               onReset={canWire ? () => onReset?.("size") : undefined}
+              onSelect={onSelect ? () => onSelect("size") : undefined}
               /* 行 = 形态（「尺寸 · 宽高比」），不是候选端口：形态由作者从哪一行
                * 拖出去声明，handle id 就是子口 id（连线层按它反查条目）。 */
               outputPorts={forms.map((item) => {
@@ -144,7 +141,10 @@ export function WorkflowParamCardColumn({
                   active: !!target,
                 };
               })}
-              endpoint={endpoint}
+              readOnly={!canWire}
+              /* 选中的可能是这张卡（`size`）或它的某一条线（子口 id）：两种都点亮。 */
+              selected={sizeGroupIds(selectedEntryId).some((id) => SIZE_SUB_IDS.includes(id))}
+              width={CARD_WIDTH}
             />
           );
         }
@@ -156,36 +156,36 @@ export function WorkflowParamCardColumn({
           contractEntries?.find((item) => item.id === entry.id)?.label ?? entry.label;
         return (
           <WorkflowParamCard
-            key={entry.id}
-            /* 选中的卡片（含被点选的线那一端）提亮：一条线上有三处（卡片、
-             * 圆点、宿主行），选中状态必须同时在两端看得出来。 */
-            selected={selectedEntryId === entry.id}
-            onSelect={onSelect ? () => onSelect(entry.id) : undefined}
-            entryId={entry.id}
-            cls={entry.cls}
-            label={cardLabel}
-            /* 与「工坊封装」页签同口径：名字后面标出契约口 id（`prompt` /
-               `size` / `reference-image-2`…），配置与日志里认的是 id。 */
-            idLabel={entry.id}
-            classLabel={style.label}
-            hostNodeId={entry.hostNodeId || entry.nodeId}
-            width={CARD_WIDTH}
+            canReset={canWire && !!isManual?.(entry.id)}
             /* `canWire` 与 `readOnly` 分开表达：库里现在**可连线**（拖圆点改落点），
              * 但卡片本身仍是消费方托管的视觉本体 —— 不写「先选模式才能连线」那类
              * 编辑提示（节点上模式早就选好了，ISSUE #355）。 */
             canWire={canWire}
-            readOnly={!canWire}
-            canReset={canWire && !!isManual?.(entry.id)}
-            onReset={canWire ? () => onReset?.(entry.id) : undefined}
-            /* **一个口一颗点**：卡片只说「这个口对外是什么」（名字 + 类型），
-             *  落点由线的另一端声明（拖到宿主哪一行就是哪一行）。 */
-            outputPorts={paramOutputPorts(entry, io, resolved[entry.id], cardLabel)}
+            classLabel={style.label}
+            cls={entry.cls}
             /* 右侧小圆点端点：**每个候选一颗圆点**（与编辑器画布同口径）。
              *
              * 端点由消费方注入 —— 库里那层给的是 React Flow 的 `<Handle>`
              * （ISSUE #529），它自带拖线的起手手势与命中半径；卡片列只把槽位
              * 让出来，不碰 React Flow。 */
             endpoint={endpoint}
+            entryId={entry.id}
+            hostNodeId={entry.hostNodeId || entry.nodeId}
+            /* 与「工坊封装」页签同口径：名字后面标出契约口 id（`prompt` /
+               `size` / `reference-image-2`…），配置与日志里认的是 id。 */
+            idLabel={entry.id}
+            key={entry.id}
+            label={cardLabel}
+            onReset={canWire ? () => onReset?.(entry.id) : undefined}
+            onSelect={onSelect ? () => onSelect(entry.id) : undefined}
+            /* **一个口一颗点**：卡片只说「这个口对外是什么」（名字 + 类型），
+             *  落点由线的另一端声明（拖到宿主哪一行就是哪一行）。 */
+            outputPorts={paramOutputPorts(entry, io, resolved[entry.id], cardLabel)}
+            readOnly={!canWire}
+            /* 选中的卡片（含被点选的线那一端）提亮：一条线上有三处（卡片、
+             * 圆点、宿主行），选中状态必须同时在两端看得出来。 */
+            selected={selectedEntryId === entry.id}
+            width={CARD_WIDTH}
           />
         );
       })}

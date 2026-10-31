@@ -44,8 +44,8 @@ export function ValidationErrorList({
     <ul className={cn("flex flex-col gap-1", className)}>
       {errors.map((error, index) => (
         <li
-          key={`${error.nodeId}-${error.field}-${index}`}
           className="text-2xs flex flex-wrap items-baseline gap-x-1 leading-relaxed"
+          key={`${error.nodeId}-${error.field}-${index}`}
         >
           <span className="font-mono font-semibold">节点 {error.nodeId}</span>
           {error.classType ? (

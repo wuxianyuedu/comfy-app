@@ -42,7 +42,7 @@ describe("StatusBadge", () => {
   });
 
   it.for(KNOWN)("status=%s 的配色不落原生调色板字面量", (status) => {
-    render(<StatusBadge status={status} className="bg-x" />);
+    render(<StatusBadge className="bg-x" status={status} />);
     const cls = badgeClass(status);
     expect(cls).not.toMatch(
       /\b(bg|text|border)-(?:violet|red|rose|emerald|amber|cyan|sky|fuchsia|purple|green|blue)-\d/,
@@ -52,8 +52,8 @@ describe("StatusBadge", () => {
   it("状态键大小写不敏感（画布用小写词，服务端给大写）", () => {
     render(
       <>
-        <StatusBadge status="succeeded" label="小写" />
-        <StatusBadge status="SUCCEEDED" label="大写" />
+        <StatusBadge label="小写" status="succeeded" />
+        <StatusBadge label="大写" status="SUCCEEDED" />
       </>,
     );
     expect(badgeClass("小写")).toBe(badgeClass("大写"));
@@ -66,7 +66,7 @@ describe("StatusBadge", () => {
 
   it("缺省带状态圆点；dot={false} 时不带（叠在媒体上的角标）", () => {
     const { container: withDot } = render(<StatusBadge status="RUNNING" />);
-    const { container: withoutDot } = render(<StatusBadge status="RUNNING" dot={false} />);
+    const { container: withoutDot } = render(<StatusBadge dot={false} status="RUNNING" />);
     expect(withDot.querySelectorAll("span").length).toBe(
       withoutDot.querySelectorAll("span").length + 1,
     );
@@ -75,8 +75,8 @@ describe("StatusBadge", () => {
   it("label 覆盖显示文案（配色仍随 status）", () => {
     render(
       <>
-        <StatusBadge status="DONE" dot={false} />
-        <StatusBadge status="DONE" label="运行后生成" dot={false} />
+        <StatusBadge dot={false} status="DONE" />
+        <StatusBadge dot={false} label="运行后生成" status="DONE" />
       </>,
     );
     expect(badgeClass("运行后生成")).toBe(badgeClass("DONE"));

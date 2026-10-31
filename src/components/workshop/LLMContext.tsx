@@ -86,11 +86,11 @@ export function LLMSettingsButton() {
   return (
     <Hint label="LLM 文本生成设置">
       <Button
-        variant="outline"
-        onClick={openSettings}
         className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm transition-colors"
+        onClick={openSettings}
+        variant="outline"
       >
-        <Icon data-icon="inline-start" name="settings" size={14} className="mr-1.5" />
+        <Icon className="mr-1.5" data-icon="inline-start" name="settings" size={14} />
         LLM 设置
       </Button>
     </Hint>
@@ -192,22 +192,22 @@ function LLMSettingsModal({
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写`onClick` 关闭，Esc 没接、焦点不锁也不归还。 */
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
         aria-label="模型选择"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-md"
+        showCloseButton={false}
       >
         <div className="border-border bg-surface w-full max-w-md rounded-2xl border p-5 shadow-2xl">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="u-title">模型选择</h3>
             <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onClose}
-              className="text-muted-foreground hover:text-ink"
               aria-label="关闭"
+              className="text-muted-foreground hover:text-ink"
+              onClick={onClose}
+              size="icon-sm"
+              variant="ghost"
             >
               ✕
             </Button>
@@ -217,9 +217,9 @@ function LLMSettingsModal({
             工坊按当前生效的模型调用全链路（剧本 → 角色卡 → 分镜 →
             图片提示词）。需要增删模型、调温度等，请到
             <Button
-              variant="link"
-              onClick={onClose}
               className="mx-1 h-auto p-0 text-inherit underline underline-offset-2"
+              onClick={onClose}
+              variant="link"
             >
               设置
             </Button>
@@ -228,16 +228,16 @@ function LLMSettingsModal({
 
           {/* 提供方切换：本地 / 远程的启用从设置页挪到运行界面（与选模型同处） */}
           {/* 提供方是**二选一按钮组**而不是单个控件：标签行只作小标题。 */}
-          <FormField label="提供方" className="mb-3">
+          <FormField className="mb-3" label="提供方">
             {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。 */}
-            <div role="radiogroup" aria-label="提供方" className="flex gap-2">
+            <div aria-label="提供方" className="flex gap-2" role="radiogroup">
               {
                 /* SAFETY: 类型断言已复核 */ (["local", "remote"] as const).map((p) => (
                   <SelectChip
                     key={p}
-                    shape="segment"
-                    selected={provider === p}
                     onClick={() => setDraftProvider(p)}
+                    selected={provider === p}
+                    shape="segment"
                   >
                     {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
                   </SelectChip>
@@ -249,14 +249,14 @@ function LLMSettingsModal({
           {candidates.length > 0 ? (
             /* 一列里选一个 —— 与上面那一排同一条单选契约（`radiogroup`），
                只是排布成竖列（模型名长，横排会被截断）。 */
-            <div role="radiogroup" aria-label="选择模型" className="flex flex-col gap-1.5">
+            <div aria-label="选择模型" className="flex flex-col gap-1.5" role="radiogroup">
               {candidates.map((name) => (
                 <SelectChip
-                  key={name}
-                  shape="compact"
-                  selected={activeModel === name}
-                  onClick={() => setDraftModel(name)}
                   className="w-full justify-start gap-2 px-3 py-2 text-left text-sm"
+                  key={name}
+                  onClick={() => setDraftModel(name)}
+                  selected={activeModel === name}
+                  shape="compact"
                 >
                   <span
                     className={`inline-block size-2 shrink-0 rounded-full ${
@@ -290,18 +290,18 @@ function LLMSettingsModal({
 
           <div className="mt-4 flex items-center gap-2">
             <Button
-              variant="outline"
-              onClick={handleTest}
-              disabled={testBusy.busy}
               className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm"
+              disabled={testBusy.busy}
+              onClick={handleTest}
+              variant="outline"
             >
               {testBusy.busy ? "测试中…" : "测试连接"}
             </Button>
             <Button
-              variant="primary-solid"
-              onClick={handleSave}
-              disabled={saving || (draftModel == null && draftProvider == null)}
               className="h-auto flex-1 rounded-lg px-4 py-2 text-sm"
+              disabled={saving || (draftModel == null && draftProvider == null)}
+              onClick={handleSave}
+              variant="primary-solid"
             >
               {saving
                 ? "保存中…"

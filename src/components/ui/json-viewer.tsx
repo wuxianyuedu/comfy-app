@@ -413,11 +413,11 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
         <span className="text-ink-bright font-medium">{title}</span>
         <span className="flex-1" />
         <Button
-          variant="outline"
-          size="xs"
-          onClick={() => copy(JSON.stringify(data, null, 2))}
           className="text-ink-muted hover:bg-subtle hover:text-ink-bright bg-transparent"
+          onClick={() => copy(JSON.stringify(data, null, 2))}
+          size="xs"
           title={copyFailed ? copyFailureText() : "把当前 JSON 复制到剪贴板"}
+          variant="outline"
         >
           {copyFailed ? "复制失败" : copied.on ? "已复制" : "复制"}
         </Button>
@@ -425,16 +425,16 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
 
       {/* 搜索条 */}
       <div className="border-border-subtle flex items-center gap-2 border-b px-3 py-1.5 text-xs">
-        <Icon name="search" size={14} className="text-ink-fainter shrink-0" />
+        <Icon className="text-ink-fainter shrink-0" name="search" size={14} />
         <input
-          ref={searchRef}
-          type="text"
-          value={query}
           aria-label="在 JSON 里搜索"
+          className="border-border bg-canvas-deep text-ink-bright placeholder:text-ink-faintest focus:border-primary-400/60 flex-1 rounded border px-2 py-0.5 font-mono outline-none"
           onChange={textHandler(setQuery)}
           onKeyDown={onSearchKey}
           placeholder="搜索 key / string / number / bool / null…（⌘F / Ctrl+F）"
-          className="border-border bg-canvas-deep text-ink-bright placeholder:text-ink-faintest focus:border-primary-400/60 flex-1 rounded border px-2 py-0.5 font-mono outline-none"
+          ref={searchRef}
+          type="text"
+          value={query}
         />
         {query && (
           <span className="text-ink-muted font-mono">
@@ -444,43 +444,43 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
         {query && (
           <>
             <Button
-              variant="outline"
-              size="icon-xs"
-              onClick={() => nextHit(-1)}
-              disabled={hits.length === 0}
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
+              disabled={hits.length === 0}
+              onClick={() => nextHit(-1)}
+              size="icon-xs"
               title="上一个 (Shift+Enter)"
+              variant="outline"
             >
               <Icon
+                className="text-ink-muted"
                 data-icon="inline-start"
                 name="chevronup"
                 size={14}
-                className="text-ink-muted"
               />
             </Button>
             <Button
-              variant="outline"
-              size="icon-xs"
-              onClick={() => nextHit(1)}
-              disabled={hits.length === 0}
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
+              disabled={hits.length === 0}
+              onClick={() => nextHit(1)}
+              size="icon-xs"
               title="下一个 (Enter)"
+              variant="outline"
             >
               <Icon
+                className="text-ink-muted"
                 data-icon="inline-start"
                 name="chevrondown"
                 size={14}
-                className="text-ink-muted"
               />
             </Button>
             <Button
-              variant="outline"
-              size="icon-xs"
-              onClick={() => setQuery("")}
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
+              onClick={() => setQuery("")}
+              size="icon-xs"
               title="清空 (Esc)"
+              variant="outline"
             >
-              <Icon data-icon="inline-start" name="close" size={14} className="text-ink-muted" />
+              <Icon className="text-ink-muted" data-icon="inline-start" name="close" size={14} />
             </Button>
           </>
         )}
@@ -488,18 +488,15 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
 
       {/* 主体 (lib 渲染) */}
       <div
-        ref={bodyRef}
         className="min-h-0 flex-1 overflow-auto px-3 py-2"
         data-testid="json-viewer-body"
+        ref={bodyRef}
       >
         {data === undefined ? (
           <span className="text-ink-fainter">(empty)</span>
         ) : (
           <MemoJsonView
-            src={data}
-            /* 不再传 `dark`（它会挂上写死的 dark.css），语法着色统一由
-               `.jv-theme-comfy` 的两态 token 负责（见 globals.css）。 */
-            theme="default"
+            className="jv-theme-comfy"
             /* 这里**不能**传 `collapsed`：库的 isCollapsed() 第一句就是
                `if (typeof collapsed === 'boolean') return collapsed;` —— 传
                `collapsed={false}` 会让它「每个容器都返回 false」，下面的
@@ -508,13 +505,16 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
                「查看完整输出」弹窗卡死。省略它才走阈值分支：小容器展开、项数
                超过 `collapseThreshold` 的容器折成 `…`，点开才渲染。 */
             collapseObjectsAfterLength={collapseThreshold}
-            collapseStringsAfterLength={80}
             collapseStringMode="word"
-            enableClipboard={false}
-            displaySize={false}
+            collapseStringsAfterLength={80}
             displayArrayIndex
+            displaySize={false}
+            enableClipboard={false}
             matchesURL={false}
-            className="jv-theme-comfy"
+            src={data}
+            /* 不再传 `dark`（它会挂上写死的 dark.css），语法着色统一由
+               `.jv-theme-comfy` 的两态 token 负责（见 globals.css）。 */
+            theme="default"
           />
         )}
       </div>

@@ -165,7 +165,7 @@ export function Icon(props: IconProps) {
   if (!Cmp) {
     return null;
   }
-  return <Cmp size={size} className={own.className} aria-hidden {...rest} />;
+  return <Cmp aria-hidden className={own.className} size={size} {...rest} />;
 }
 
 export type { LucideIcon, ComponentType };

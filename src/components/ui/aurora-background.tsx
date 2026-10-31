@@ -29,8 +29,8 @@ export function AuroraBackground({ className = "" }: { className?: string }) {
        由 scripts/check-title-bar-clearance.cjs 豁免清单放行。 */
     <div
       aria-hidden
-      data-testid="aurora-bg"
       className={`pointer-events-none fixed inset-0 -z-10 overflow-hidden ${className}`}
+      data-testid="aurora-bg"
       /* 重绘隔离：这层铺满视口、且被几乎每个主页面常驻渲染，`contain` 让它的
        * 布局与绘制不顺着祖先链扩散到整页 —— 页面内容变化时不必连带重算它。 */
       style={{ contain: "layout paint" }}

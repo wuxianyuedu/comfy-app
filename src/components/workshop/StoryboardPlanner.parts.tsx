@@ -20,10 +20,10 @@ import type { ShotProgress } from "./useStoryboardPlanner";
 export function ShotStatusBadge({ status }: { status: Shot["status"] }) {
   return (
     <StatusBadge
-      status={status}
-      label={SHOT_STATUS_LABEL[status]}
-      dot={false}
       className="text-3xs px-2 py-0.5"
+      dot={false}
+      label={SHOT_STATUS_LABEL[status]}
+      status={status}
     />
   );
 }
@@ -65,11 +65,11 @@ export function ShotRow({
         <span className="text-muted-foreground text-xs">{shot.sceneHeading}</span>
         <ShotStatusBadge status={shot.status} />
         <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => onRemove(shot.id)}
-          className="text-muted-foreground hover:text-danger-strong ml-auto"
           aria-label="删除镜头"
+          className="text-muted-foreground hover:text-danger-strong ml-auto"
+          onClick={() => onRemove(shot.id)}
+          size="icon-sm"
+          variant="ghost"
         >
           <Trash data-icon="inline-start" size={15} />
         </Button>
@@ -82,7 +82,7 @@ export function ShotRow({
             <SelectMenu
               {...field}
               className="bg-subtle! border-border! text-xs"
-              value={shot.shotType}
+              labels={/* SAFETY: 类型断言已复核 */ SHOT_TYPE_LABELS as Record<string, string>}
               onChange={(value) =>
                 onUpdate(shot.id, {
                   shotType: /* SAFETY: 类型断言已复核 */ value as ShotType,
@@ -91,8 +91,8 @@ export function ShotRow({
               /* 清单的唯一出处是 readonly（类型由它派生），而 `SelectMenu.options` 至今是
                * 可变 `string[]` —— 这一份浅拷贝是两边口径的接缝，不是新的真相。 */
               options={[...SHOT_TYPES]}
-              labels={/* SAFETY: 类型断言已复核 */ SHOT_TYPE_LABELS as Record<string, string>}
               placeholder="选择景别"
+              value={shot.shotType}
             />
           )}
         </FormField>
@@ -103,13 +103,13 @@ export function ShotRow({
             <SelectMenu
               {...field}
               className="bg-subtle! border-border! text-xs"
-              value={shot.skillSlug ?? ""}
-              onChange={(value) => onUpdate(shot.id, { skillSlug: value || undefined })}
-              options={styles.map((style) => style.slug)}
               labels={Object.fromEntries(
                 styles.map((style) => [style.slug, `${style.icon} ${style.name}`]),
               )}
+              onChange={(value) => onUpdate(shot.id, { skillSlug: value || undefined })}
+              options={styles.map((style) => style.slug)}
               placeholder="跟随角色/默认"
+              value={shot.skillSlug ?? ""}
             />
           )}
         </FormField>
@@ -117,11 +117,11 @@ export function ShotRow({
 
       {/* Description */}
       <Textarea
-        value={shot.description}
-        onChange={(event) => onUpdate(shot.id, { description: event.target.value })}
-        rows={2}
         className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 mt-2 min-h-0 rounded-md px-2 py-1.5 text-xs"
+        onChange={(event) => onUpdate(shot.id, { description: event.target.value })}
         placeholder="画面描述（留空则使用场景动作描述）"
+        rows={2}
+        value={shot.description}
       />
 
       {/* 角色多选 */}
@@ -133,9 +133,8 @@ export function ShotRow({
               const on = shot.characterIds.includes(character.id);
               return (
                 <Button
+                  className="h-auto rounded-full px-2 py-0.5"
                   key={character.id}
-                  variant={on ? "default" : "outline"}
-                  size="xs"
                   onClick={() =>
                     onUpdate(shot.id, {
                       characterIds: on
@@ -143,7 +142,8 @@ export function ShotRow({
                         : [...shot.characterIds, character.id],
                     })
                   }
-                  className="h-auto rounded-full px-2 py-0.5"
+                  size="xs"
+                  variant={on ? "default" : "outline"}
                 >
                   {character.name || "未命名"}
                 </Button>
@@ -160,11 +160,11 @@ export function ShotRow({
           {onPolish && (
             <Hint label="用模型润色为更有画面感的提示词" wrap>
               <Button
-                variant="ghost"
-                size="xs"
-                onClick={onPolish}
-                disabled={polishBusy}
                 className="text-primary hover:bg-primary/10 text-3xs h-auto rounded px-1.5 py-0.5"
+                disabled={polishBusy}
+                onClick={onPolish}
+                size="xs"
+                variant="ghost"
               >
                 {polishBusy ? "润色中…" : "✨ AI 润色"}
               </Button>
@@ -187,21 +187,21 @@ export function ShotRow({
           进度（`pct` 未定义）时是**不确定态**，不是 0% —— 此前 `?? 0`
           把它画成空条，看起来像「卡住没动」。 */}
       {shot.status === "running" && (
-        <div className="mt-2" aria-live="polite">
+        <div aria-live="polite" className="mt-2">
           <ProgressBar
-            value={progress?.pct ?? null}
             label={progress?.label ? `正在执行 ${progress.label}` : "正在生成…"}
+            value={progress?.pct ?? null}
           />
         </div>
       )}
 
       {/* Generate button */}
       <Button
-        variant="primary-solid"
-        size="xs"
-        onClick={() => onGenerate(shot)}
-        disabled={shot.status === "running" || generating || !shot.prompt}
         className="mt-2 h-auto w-full rounded-lg py-2"
+        disabled={shot.status === "running" || generating || !shot.prompt}
+        onClick={() => onGenerate(shot)}
+        size="xs"
+        variant="primary-solid"
       >
         {shot.status === "running"
           ? progressByShot?.[shot.id]
@@ -214,9 +214,9 @@ export function ShotRow({
 
       {shot.imageUrl && (
         <MediaThumbnail
-          src={shot.imageUrl}
           alt={shot.sceneHeading}
           className="border-border mt-2 w-full rounded-lg border"
+          src={shot.imageUrl}
         />
       )}
     </div>

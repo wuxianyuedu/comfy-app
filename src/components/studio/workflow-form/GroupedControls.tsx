@@ -87,32 +87,32 @@ function GroupedControls({
 
   return (
     <>
-      {!compact && <SectionHeader label="组合参数" accent={SECTION_ACCENT} count={count} />}
+      {!compact && <SectionHeader accent={SECTION_ACCENT} count={count} label="组合参数" />}
       <div className="flex-col gap-3">
         {dimension && (
           <DimensionControl
-            group={dimension}
-            values={values}
-            set={set}
-            setMany={setMany}
             disabled={disabled}
-            workflowId={workflowId}
+            group={dimension}
+            mode={mode}
             /* 画布 / 库内：控件按内容收窄（`w-fit`），不再占满整行。 */
             narrow={narrow}
             onRequiredChange={onRequiredChange}
-            mode={mode}
-            visibilityMode={visibilityMode}
             onVisibilityChange={onVisibilityChange}
+            set={set}
+            setMany={setMany}
+            values={values}
+            visibilityMode={visibilityMode}
+            workflowId={workflowId}
           />
         )}
         {video && (
           <VideoControl
-            group={video}
-            values={values}
-            set={set}
-            workflowId={workflowId}
             disabled={disabled}
+            group={video}
             narrow={narrow}
+            set={set}
+            values={values}
+            workflowId={workflowId}
           />
         )}
       </div>
