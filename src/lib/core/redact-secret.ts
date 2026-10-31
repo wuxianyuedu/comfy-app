@@ -97,7 +97,7 @@ export function redactSecretShaped(
     return value
       .replace(PEM_BLOCK_RE, "[Redacted]")
       .replace(JWT_RE, "[Redacted]")
-      .replace(HIGH_ENTROPY_CANDIDATE, (m) =>
+      .replaceAll(HIGH_ENTROPY_CANDIDATE, (m) =>
         /[0-9]/.test(m) && shannonEntropy(m) >= ENTROPY_MIN ? "[Redacted]" : m,
       );
   }
