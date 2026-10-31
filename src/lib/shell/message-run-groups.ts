@@ -88,7 +88,7 @@ export function groupMessagesByRun<T extends RunScopedMessage>(
 ): Array<MessageRunGroup<T>> {
   const drafts: Array<Draft<T>> = [];
   for (const m of messages) {
-    const last = drafts[drafts.length - 1];
+    const last = drafts.at(-1);
     /* 连续同一个 runId → 归进上一组。`last.runId === m.runId` 对两个 null 也成立，
      * 于是所有未标记的消息自然并成一组（它们本来也无法再分）。 */
     if (last?.runId === m.runId) {

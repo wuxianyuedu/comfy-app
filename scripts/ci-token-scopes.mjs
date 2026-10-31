@@ -308,7 +308,7 @@ export function classifyReply(raw, transport = {}) {
     return {
       state: "unknown",
       status: status ?? undefined,
-      why: `平台回了 ${status ?? "?"}：${errmsg[1]?.replace(/"/g, "'")}`,
+      why: `平台回了 ${status ?? "?"}：${errmsg[1]?.replaceAll("\"", "'")}`,
     };
   }
   return {

@@ -999,7 +999,7 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
       // （`scripts/ci-cp936-exit.mjs` 头注里就有 `spawn("pnpm")` 这种反面举例，
       // 只剥 `//` 会让本判据把它判成违规）。先剥 `/* … */` 再剥行注释。
       const code = raw
-        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replaceAll(/\/\*[\s\S]*?\*\//g, "")
         .split("\n")
         .map((line) => line.replace(/^\s*\/\/.*$/, "").replace(/([^:])\/\/.*$/, "$1"))
         .join("\n");

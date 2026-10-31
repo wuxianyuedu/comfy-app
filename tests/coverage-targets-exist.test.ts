@@ -41,7 +41,7 @@ const { globToRegExp } = /* SAFETY: 类型断言已复核 */ require("../scripts
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 配置里的 glob 是转义形态，磁盘路径不是 —— 比之前先脱转义。 */
-const unescapeGlob = (glob: string) => glob.replace(/\\/g, "");
+const unescapeGlob = (glob: string) => glob.replaceAll("\\", "");
 
 function sourceFiles(): Array<string> {
   const out: Array<string> = [];

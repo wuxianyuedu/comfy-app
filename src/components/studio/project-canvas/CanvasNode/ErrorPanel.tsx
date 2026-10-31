@@ -245,7 +245,7 @@ export function ErrorPanel({
           {!errExpanded && (
             <p className="nodrag nopan text-danger-strong/80 text-3xs mt-1 line-clamp-2 wrap-break-word">
               {typeof error === "string"
-                ? clampText(error.replace(/\n/g, ""), {
+                ? clampText(error.replaceAll("\n", ""), {
                     maxLength: INLINE_SNIPPET_MAX,
                     marker: "",
                   })

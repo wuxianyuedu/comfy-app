@@ -750,7 +750,7 @@ export async function exportDiagnostics(root, { at = new Date(), runId } = {}) {
   const id = runId ?? (typeof meta?.runId === "string" ? meta.runId : "unknown");
   // 时间戳与 runs 目录名同形（`<日期>_<时分秒>`，无冒号）：用户在 Windows 上
   // 打开 exports/ 时两个地方的名字读起来是同一套写法。
-  const stamp = localTimestamp(at).slice(0, 19).replace(" ", "_").replace(/:/g, "");
+  const stamp = localTimestamp(at).slice(0, 19).replace(" ", "_").replaceAll(":", "");
   const out = path.join(exportsDir(root), `diagnostics-${stamp}-${id}.zip`);
   // 先备一份到临时目录，再按「current/ + 最近几次 runs/」的目录结构打包，
   // 保证解压出来就是 log/ 的形状（用户/我们能直接对照规范 §4 读）。

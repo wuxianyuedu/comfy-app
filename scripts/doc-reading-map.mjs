@@ -155,7 +155,7 @@ function hits(entry, file) {
  *   永远匹配不出来，所以调用点要把它们**显式印出来**，不能静默略过。
  */
 export function matchDocReading(changed) {
-  const files = [...changed].map((f) => String(f).replace(/\\/g, "/"));
+  const files = [...changed].map((f) => String(f).replaceAll("\\", "/"));
   const matched = [];
   const actionOnly = [];
   for (const entry of DOC_READING_MAP) {

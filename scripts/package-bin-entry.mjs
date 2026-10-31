@@ -230,7 +230,7 @@ function readShimTarget(shimPath) {
      * 带着**前导反斜杠**，而 `path.resolve` 会把以 `\` 开头的路径当**盘根相对**
      * （`G:\..\…` ⇒ 直接指到别的卷目录上去，`existsSync` 一律 false，表现就是
      * 「所有垫片都解析不到」）。sh 那份的 `$basedir/…` 同理带前导 `/`。 */
-    const target = path.resolve(here, rel.replace(/^[/\\]+/, "").replace(/\\/g, path.sep));
+    const target = path.resolve(here, rel.replace(/^[/\\]+/, "").replaceAll("\\", path.sep));
     const base = path.basename(target).toLowerCase();
     if (base === "node" || base === "node.exe") {
       continue;

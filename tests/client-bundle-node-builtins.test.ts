@@ -58,7 +58,7 @@ function scan(): Report {
 
 /** 去掉注释，避免把注释里提到的 `node:fs` 误判成 import。 */
 function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
 }
 
 /**

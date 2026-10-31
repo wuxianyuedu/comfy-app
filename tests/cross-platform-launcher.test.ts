@@ -481,7 +481,7 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
 
   /** 剥掉块注释与整行 `//` 注释：注释里解释「为什么用动态 import」不该被当成说明符。 */
   function stripComments(source: string): string {
-    return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+    return source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^[ \t]*\/\/.*$/gm, "");
   }
 
   function scriptFiles(dir: string): Array<string> {

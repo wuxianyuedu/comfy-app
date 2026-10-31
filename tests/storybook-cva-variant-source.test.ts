@@ -98,7 +98,7 @@ const PAIRABLE = STORIES.flatMap((story) => {
   return axes.length === 0 ? [] : [{ story, component, axes }];
 });
 
-const rel = (p: string) => relative(ROOT, p).replace(/\\/g, "/");
+const rel = (p: string) => relative(ROOT, p).replaceAll("\\", "/");
 
 describe("故事文件的枚举来源（ISSUE #1381）", () => {
   it("stories glob 能扫到的故事文件不为空（空集 = 判据在空转）", () => {

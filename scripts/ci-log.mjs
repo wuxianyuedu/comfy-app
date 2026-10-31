@@ -246,7 +246,7 @@ export function colorizeLine(line, enabled = true) {
   if (state) {
     return paintByState(text, state);
   }
-  return text.replace(TAG_RE, (whole, word) => {
+  return text.replaceAll(TAG_RE, (whole, word) => {
     const code = TAG_COLORS[whole];
     return code && word ? paint(whole, code, true) : whole;
   });

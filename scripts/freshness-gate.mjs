@@ -284,7 +284,7 @@ function stagedTouchesTrack(track) {
  * @returns {boolean}
  */
 export function stagedDirtiesTrack(track, rawLines) {
-  const paths = rawLines.map((line) => line.trim().replace(/\\/g, "/")).filter(Boolean);
+  const paths = rawLines.map((line) => line.trim().replaceAll("\\", "/")).filter(Boolean);
   return dirtiesTrack(track, paths);
 }
 
@@ -349,7 +349,7 @@ function committedSinceMidnight(track, now) {
       stamp = trimmed;
       continue;
     }
-    if (dirtiesTrack(track, [trimmed.replace(/\\/g, "/")])) {
+    if (dirtiesTrack(track, [trimmed.replaceAll("\\", "/")])) {
       hit = true;
     }
   }

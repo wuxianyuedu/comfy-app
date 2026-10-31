@@ -29,7 +29,7 @@ const FIT_HOOK = path.join("hooks", "use-workflow-viewport-fit.ts");
 
 /** 去掉块注释与行注释，避免文档里提到旧写法时误伤断言。 */
 function stripComments(code: string): string {
-  return code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  return code.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/[^\n]*/g, "");
 }
 
 function readSource(file: string): string {
@@ -49,9 +49,7 @@ describe("打开画布时的聚焦（容器尺寸口径）", () => {
     const src = readSource(FIT_HOOK);
     expect(src).toContain("useStoreApi()");
     /* 聚焦路径上两处下发视口都用 store 的宽高。 */
-    const uses = src.match(
-      /const \{ width, height \} = rfStore\.getState\(\);/g,
-    );
+    const uses = src.match(/const \{ width, height \} = rfStore\.getState\(\);/g);
     expect(uses?.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -61,9 +59,7 @@ describe("打开画布时的聚焦（容器尺寸口径）", () => {
      * 写死下限会让宽图「聚焦后仍有大半在视口外」（ISSUE #717）。 */
     const calls = src.match(/applyFitViewport\(/g) ?? [];
     const withBounds =
-      src.match(
-        /minZoom: canvasSettings\.minZoom, maxZoom: canvasSettings\.maxZoom/g,
-      ) ?? [];
+      src.match(/minZoom: canvasSettings\.minZoom, maxZoom: canvasSettings\.maxZoom/g) ?? [];
     /* 1 处定义 + 1 处带换行的调用（逐字形态不同），另有 1 处单行形态。 */
     expect(calls.length).toBeGreaterThanOrEqual(3);
     expect(withBounds.length).toBeGreaterThanOrEqual(1);

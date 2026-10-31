@@ -79,7 +79,7 @@ function toPosix(p) {
 
 /** 去掉注释,避免把注释里提到的 import 当成真实依赖。 */
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
 }
 
 /**
@@ -175,7 +175,7 @@ function findCycles(graph) {
     onStack.add(start);
 
     while (work.length) {
-      const frame = work[work.length - 1];
+      const frame = work.at(-1);
       const [node, i] = frame;
       const neighbors = graph.get(node) || [];
       if (i < neighbors.length) {
@@ -196,7 +196,7 @@ function findCycles(graph) {
       // 邻居访问完:回填 low,必要时弹分量
       work.pop();
       if (work.length) {
-        const parent = work[work.length - 1][0];
+        const parent = work.at(-1)[0];
         low.set(parent, Math.min(low.get(parent), low.get(node)));
       }
       if (low.get(node) === index.get(node)) {

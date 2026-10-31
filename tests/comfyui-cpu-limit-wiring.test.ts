@@ -25,7 +25,7 @@ function launchSource(): string {
       path.join(ROOT, "src/lib/comfyui/lifecycle-launch.ts"),
       "utf8",
     ),
-  ).replace(/\r\n/g, "\n");
+  ).replaceAll("\r\n", "\n");
 }
 
 describe("CPU 档位必须接进两条拉起路径（ISSUE #1959）", () => {

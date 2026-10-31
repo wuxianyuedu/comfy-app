@@ -74,13 +74,36 @@ function codeOf(rel: string): string {
 /** 该文件里每一处 `<DocumentFrame …>` 传进去的 `className`（没传则跳过）。 */
 function frameClassNamesOf(rel: string): Array<string> {
   const out: Array<string> = [];
-  for (const m of codeOf(rel).matchAll(/<DocumentFrame\b([\s\S]{0,400}?)>/g)) {
-    const className = /className="([^"]*)"/.exec(m[1] ?? "")?.[1];
+  const code = codeOf(rel);
+  for (const m of code.matchAll(/<DocumentFrame\b/g)) {
+    const className = frameClassNameOf(code, m.index + m[0].length);
     if (className !== undefined) {
       out.push(className);
     }
   }
   return out;
+}
+
+/** 只认**顶层**的 `className`，并把开标签结束的 `>` 按花括号深度判：
+ *  `backdrop={…}` 里的嵌套元素（含它自己的 `/>` 与 `className`）不算开标签的一部分 ——
+ *  拿「第一个 `>` / 第一个 className」当前者会把外层属性读错位。 */
+function frameClassNameOf(code: string, start: number): string | undefined {
+  const attr = 'className="';
+  let braces = 0;
+  for (let i = start; i < code.length; i += 1) {
+    const ch = code[i];
+    if (ch === "{") {
+      braces += 1;
+    } else if (ch === "}") {
+      braces -= 1;
+    } else if (ch === ">" && braces === 0) {
+      return undefined;
+    } else if (braces === 0 && code.startsWith(attr, i)) {
+      const end = code.indexOf('"', i + attr.length);
+      return end === -1 ? undefined : code.slice(i + attr.length, end);
+    }
+  }
+  return undefined;
 }
 
 describe("统一容器的接入约定（文档型）", () => {

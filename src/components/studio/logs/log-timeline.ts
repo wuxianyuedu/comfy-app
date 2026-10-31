@@ -234,7 +234,7 @@ function arrivalKey(entry: Pick<LogEntry, "time" | "level" | "message">): string
 
 /** 时间线的**真实**末条（最新一条）——「已读水位」「有无新内容」「跳最新」都用它。 */
 export function lastSeqOf(logs: Array<LogEntry>): number {
-  return logs[logs.length - 1]?.seq ?? 0;
+  return logs.at(-1)?.seq ?? 0;
 }
 
 /**

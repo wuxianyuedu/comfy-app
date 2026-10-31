@@ -242,7 +242,7 @@ describe("工坊封装页签：模式可切换 / 必填可分 / 不再有手动�
        「必填 / 可选」读的正是「没落点会不会挡住运行」，再挂一个同义徽标就是把
        同一份事实换个说法说第二遍。判据先去掉注释 —— 把「为什么删掉它」写进
        注释不该让计数停在原地（同 §16.2.4.12 的 P9 口径）。 */
-    const code = panel.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const code = panel.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
     expect(code).not.toContain("可选 · 未落点");
     expect(code).not.toContain("必备 · 未落点");
     /* 例外只留「必填口没落点」：那不是复述，是缺件状态。 */
@@ -344,9 +344,9 @@ describe("局部加载不许用整列加载界面", () => {
     /* 常驻形态的回归：`<WorkflowCanvasEditor …>` 不出现在**任何**条件之外
      *  —— 逐个匹配点都必须在 `editingId &&` 里。取反的写法是把条件那一段剥掉
      *  再看还剩不剩裸的 `<WorkflowCanvasEditor`。 */
-    expect(library.replace(/\{c\.editingId && \(\s*<WorkflowCanvasEditor/g, "<GATED")).not.toMatch(
-      /<WorkflowCanvasEditor\s+workflowId=/,
-    );
+    expect(
+      library.replaceAll(/\{c\.editingId && \(\s*<WorkflowCanvasEditor/g, "<GATED"),
+    ).not.toMatch(/<WorkflowCanvasEditor\s+workflowId=/);
     /* 编辑器自身仍带 `open` 契约（组件 API 不变）。 */
     expect(library).toMatch(/<WorkflowCanvasEditor[\s\S]{0,180}\bopen\b/);
   });

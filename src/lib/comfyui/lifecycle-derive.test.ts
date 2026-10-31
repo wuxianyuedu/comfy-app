@@ -388,7 +388,7 @@ describe("withEmbedClearanceFlag — 内嵌放行开关注入", () => {
       defaultPort: 8188,
       extraArgs: ["--cpu", "--lowvram"],
     });
-    expect(args[args.length - 1]).toBe(COMFY_EMBED_FLAG);
+    expect(args.at(-1)).toBe(COMFY_EMBED_FLAG);
   });
 });
 

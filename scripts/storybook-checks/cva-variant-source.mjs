@@ -190,7 +190,7 @@ export function literalArray(name, source) {
     if (node.initializer === undefined) {
       found = [];
     } else if (ts.isArrayLiteralExpression(node.initializer)) {
-      found = node.initializer.elements.map((el) => el.getText(source).replace(/^["']|["']$/g, ""));
+      found = node.initializer.elements.map((el) => el.getText(source).replaceAll(/^["']|["']$/g, ""));
     }
   });
   return found;
@@ -251,7 +251,7 @@ export function controlOptionsByAxis(source) {
  * @returns {string}
  */
 function unquote(text) {
-  return text.replace(/^["']|["']$/g, "");
+  return text.replaceAll(/^["']|["']$/g, "");
 }
 
 /**

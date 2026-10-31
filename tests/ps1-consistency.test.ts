@@ -259,7 +259,7 @@ describe("跨平台动作的实现契约", () => {
   it("质量门禁的三项与 .ps1 侧同命令（两侧不许各写一套门禁清单）", () => {
     const ps1 = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.ps1"), "utf8");
     const mjs = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.mjs"), "utf8");
-    const squash = (t: string) => t.replace(/\s+/g, " ");
+    const squash = (t: string) => t.replaceAll(/\s+/g, " ");
     // 注意：lint 的扫描范围与 `--max-warnings 0` 等参数已按防漂移原则收进
     // package.json 的 `lint` 脚本，两侧门禁脚本只是 `pnpm run lint` 的委托方，
     // 其源码里不再内联这些参数——故这里只核对「两侧都委托同一 lint 命令」，

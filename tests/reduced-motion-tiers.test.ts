@@ -92,7 +92,7 @@ function collectConsumers(cls: string): Array<string> {
            不算消费（本仓库已有 18 份内联的剥注释实现，见
            `tests/strip-comments-single-source.test.ts`；这里按同口径内联一遍，
            它的判据是「不许再新增第 19 份」，而本文件是既有的一份）。 */
-        const code = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+        const code = text.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/(^|[^:])\/\/.*$/gm, "$1");
         if (code.includes(cls)) {
           out.push(full);
         }

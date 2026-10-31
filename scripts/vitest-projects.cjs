@@ -382,7 +382,7 @@ function globToRe(g) {
 }
 
 function escapeRe(s) {
-  return s.replace(ESCAPE_RE, String.fromCharCode(92) + "$&");
+  return s.replaceAll(ESCAPE_RE, String.fromCharCode(92) + "$&");
 }
 
 function matchesAny(rel, globs) {

@@ -20,10 +20,10 @@ import { MODAL_WIDE_WIDTH, modalWidth } from "./dialog-width";
 
 /** 源码**去掉注释**再判：把「为什么删掉 sm:max-w-sm」写进注释不该让判据失效
  *  （同 §16.2.4.12 的 P9 口径）。 */
-const dialogSource = readFileSync(
-  path.resolve(__dirname, "dialog.tsx"),
-  "utf8",
-).replace(/\/\*[\s\S]*?\*\//g, "");
+const dialogSource = readFileSync(path.resolve(__dirname, "dialog.tsx"), "utf8").replaceAll(
+  /\/\*[\s\S]*?\*\//g,
+  "",
+);
 
 describe("居中模态卡片的宽度档", () => {
   it("加宽档用 width 而不是 max-width（跨族才有确定结论）", () => {

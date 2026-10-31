@@ -468,7 +468,7 @@ function formatMany(entries) {
       fs.mkdirSync(path.dirname(target), { recursive: true });
       // 归一化行尾的理由见文件头那段:副本保持 CRLF 会让每个 CRLF 文件都进
       // 「被改写」,等于把成本又放回去。
-      const normalized = text.replace(/\r\n/g, "\n");
+      const normalized = text.replaceAll("\r\n", "\n");
       fs.writeFileSync(target, normalized);
       before.set(file, normalized);
     }
@@ -505,7 +505,7 @@ function formatOne(text, file) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reformat-one-"));
   try {
     const target = path.join(dir, `probe.${ext}`);
-    fs.writeFileSync(target, text.replace(/\r\n/g, "\n"));
+    fs.writeFileSync(target, text.replaceAll("\r\n", "\n"));
     const { cwd } = runnerPrefix();
     const res = runOxfmt([dir], cwd);
     if (res.error || res.status !== 0 || typeof res.status !== "number") {
@@ -527,7 +527,7 @@ function formatOne(text, file) {
  * 历史文件(§13.7)—— 把行尾算成差异会让这些文件永远判成「真实改动」。
  */
 function classifyReformatOnly(entries) {
-  const norm = (s) => s.replace(/\r\n/g, "\n").trimEnd();
+  const norm = (s) => s.replaceAll("\r\n", "\n").trimEnd();
   const pending = entries.filter((e) => e.before && e.after);
   const { ok, rewritten, settled } = formatMany(
     pending.map((e) => ({ file: e.file, text: e.before })),

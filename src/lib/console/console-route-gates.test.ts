@@ -22,7 +22,7 @@ const ROUTE = join(ROOT, "src/app/api/console/run/route.ts");
 const source = readFileSync(ROUTE, "utf8");
 
 /** 剥掉注释再判形态：注释里出现「allow」这类词不该被当成代码。 */
-const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/[^\n]*/g, "");
 
 /** 某个片段的出现位置；-1 = 没出现。 */
 const at = (needle: string) => code.indexOf(needle);

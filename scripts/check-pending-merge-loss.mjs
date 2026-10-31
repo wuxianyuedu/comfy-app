@@ -262,8 +262,8 @@ export function acknowledgeReason(message, lost) {
         return false;
       }
       /* ③ 理由：路径前后还得有别的字（只有一条 `  · <路径>` 的清单行不算理由）。 */
-      const before = line.slice(0, at).replace(/[-*·\s:：、,，()（）「」"']/g, "");
-      const after = line.slice(at + file.length).replace(/[-*·\s:：、,，()（）「」"']/g, "");
+      const before = line.slice(0, at).replaceAll(/[-*·\s:：、,，()（）「」"']/g, "");
+      const after = line.slice(at + file.length).replaceAll(/[-*·\s:：、,，()（）「」"']/g, "");
       return before.length > 0 || after.length > 0;
     });
     if (!hit) {

@@ -197,7 +197,7 @@ function toPosix(p) {
 }
 
 function escapeRe(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return s.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** 把 glob 转成正则(支持 `**` / `*` / `?` / `{a,b}`):不引依赖,口径可控。 */
@@ -367,7 +367,7 @@ function oxfmtCheckTargets(entry, targets, subject) {
     // `\u001b[38;2;…msrc/lib/fresh.ts\u001b[0m (0ms)`），带码的「文件名」
     // 过不了 `isScanned` 的路径形态，整张清单会被悄悄滤成空 —— 门禁当场读成
     // 「命中 0 个」（本地 stdout 不着色，所以这一档只在 CI 形态下暴露）。
-    .replace(/\u001b\[[0-9;]*m/g, "")
+    .replaceAll(/\u001b\[[0-9;]*m/g, "")
     .split("\n")
     .map((line) => line.trim())
     // 有差异行形如 `src/foo.ts (12ms)`；其余是 `Checking formatting...` /

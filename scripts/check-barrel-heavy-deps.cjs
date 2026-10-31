@@ -75,7 +75,7 @@ function toPosix(p) {
 
 /** 去掉注释与字符串字面量里的噪声前先剥注释 —— 注释里写 `import "x"` 不构成依赖。 */
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
 }
 
 /**

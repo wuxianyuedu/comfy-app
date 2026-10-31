@@ -42,7 +42,7 @@ export function capDiffstat(diffstat, sampleMax = DIFFSTAT_SAMPLE_MAX) {
     .filter((l) => l.trim() !== "");
   /* 末行是总数那一行（` 2673 files changed, 1 insertion(+), …`）。它必须留下：
    * 被裁之后，「这次到底动了多少」是读者唯一还能直接拿到的量。 */
-  const last = lines[lines.length - 1] ?? "";
+  const last = lines.at(-1) ?? "";
   const hasTotal = lines.length > 0 && /\b\d[\d,]* files? changed\b/.test(last);
   const totalLine = hasTotal ? last : "";
   const fileLines = hasTotal ? lines.slice(0, -1) : lines;

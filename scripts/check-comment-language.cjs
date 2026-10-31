@@ -133,11 +133,11 @@ const JSDOC_PROSE_WORDS_RE =
 
 /** 剥掉类型块、`[...]` 名字、`@tag`，剩下的就是标识符与标点。 */
 function stripJsdocTypeSyntax(text) {
-  let rest = text.replace(/\{[^{}]*(\{[^{}]*\}[^{}]*)*\}/g, " ").replace(/\[[^\]]*\]/g, " ");
+  let rest = text.replaceAll(/\{[^{}]*(\{[^{}]*\}[^{}]*)*\}/g, " ").replaceAll(/\[[^\]]*\]/g, " ");
   if (rest.includes("{")) {
     rest = rest.slice(0, rest.indexOf("{"));
   }
-  return rest.replace(/@\w+/g, " ").replace(/[{}]/g, " ");
+  return rest.replaceAll(/@\w+/g, " ").replaceAll(/[{}]/g, " ");
 }
 
 /**
@@ -172,7 +172,7 @@ function jsdocStructuralOnly(text) {
   const param = PARAM_TAG_RE.exec(text);
   if (param && param[2]) {
     // 剥掉参数名那一处（整词），余下才是说明部分。
-    rest = rest.replace(new RegExp(`(^|\\s)${param[2].replace(/[$]/g, "\\$")}(?=\\s|$)`), " ");
+    rest = rest.replace(new RegExp(`(^|\\s)${param[2].replaceAll(/[$]/g, "\\$")}(?=\\s|$)`), " ");
   }
   if (JSDOC_PROSE_WORDS_RE.test(rest)) {
     return false;
@@ -199,7 +199,7 @@ function jsdocStructuralContinuation(text) {
     return false;
   }
   // 出现句末标点（`.`/`!`/`?`）说明是句子，不是类型
-  return !/[.!?]\s*$/.test(rest.replace(/[\w)]\.(?=\w)/g, ""));
+  return !/[.!?]\s*$/.test(rest.replaceAll(/[\w)]\.(?=\w)/g, ""));
 }
 
 /**
@@ -264,9 +264,9 @@ async function asciiOnlyModules() {
  */
 function looksEnglish(text) {
   const bare = text
-    .replace(/`[^`]*`/g, " ")
-    .replace(/"[^"]*"|'[^']*'|“[^”]*”/g, " ")
-    .replace(/[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+/g, " ");
+    .replaceAll(/`[^`]*`/g, " ")
+    .replaceAll(/"[^"]*"|'[^']*'|“[^”]*”/g, " ")
+    .replaceAll(/[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+/g, " ");
   if ((bare.match(ENGLISH_WORD_RE) || []).length < ENGLISH_WORDS_THRESHOLD) {
     return false;
   }

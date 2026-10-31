@@ -47,7 +47,7 @@ const PX_LITERAL_CLASS = "h-" + "[22px]";
  * 配置」同一族：**判据也不许假定读者的路径分隔符**。
  */
 function namesFile(output: string, relPosix: string): boolean {
-  return output.replace(/\\/g, "/").includes(relPosix);
+  return output.replaceAll("\\", "/").includes(relPosix);
 }
 
 /** 两份工具的公共夹具：`scripts/` 落点 + globals.css + 链回来的 node_modules。 */

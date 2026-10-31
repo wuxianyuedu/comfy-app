@@ -80,7 +80,7 @@ const CONST_DECL = new RegExp(
  * @returns {number}
  */
 function num(raw) {
-  return Number(String(raw).replace(/_/g, ""));
+  return Number(String(raw).replaceAll("_", ""));
 }
 
 /**

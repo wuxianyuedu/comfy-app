@@ -180,12 +180,12 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
     const text = "[红] 跨文件重复块 · src/**（命中 2 条）";
     const colored = paint(text, COLORS.red, true);
     expect(colored).not.toBe(text);
-    expect(colored.replace(/\u001b\[[\d;]*m/g, "")).toBe(text);
+    expect(colored.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe(text);
   });
 
   it("色带只加一个前导竖线与一格空白，不动行内任何一格", () => {
     const { line } = bandLine("[skip] 生成态文档与源同步（没判）");
-    expect(line.replace(/\u001b\[[\d;]*m/g, "")).toBe("▌ [skip] 生成态文档与源同步（没判）");
+    expect(line.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe("▌ [skip] 生成态文档与源同步（没判）");
   });
 
   it("色带认三态前缀取色，认不出的行用中性灰（不沿用上一条的颜色）", () => {
@@ -234,7 +234,7 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
 
   it("逐行上色只染标签，不改变「这一行是不是判决」", () => {
     const line = colorizeLine("[info] 命中输入面 3 个文件，生成并自检中…");
-    expect(line.replace(/\u001b\[[\d;]*m/g, "")).toBe("[info] 命中输入面 3 个文件，生成并自检中…");
+    expect(line.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe("[info] 命中输入面 3 个文件，生成并自检中…");
     expect(line).not.toBe("[info] 命中输入面 3 个文件，生成并自检中…");
   });
 
@@ -255,7 +255,7 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
       const text = `${TAGS[state]} 某判据（读数）`;
       const painted = paintLine(text, { enabled: true });
       expect(painted).toContain(`\u001b[${COLORS[state]}m${text}\u001b[0m`);
-      expect(painted.replace(/\u001b\[[\d;]*m/g, "")).toBe(`▌ ${text}`);
+      expect(painted.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe(`▌ ${text}`);
     }
   });
 
@@ -269,7 +269,7 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
     const painted = paintLine(text, { enabled: true, color: COLORS.red });
     expect(painted.startsWith(`\u001b[${COLORS.red}m▌`)).toBe(true);
     expect(painted).toContain(`\u001b[${COLORS.red}m${text}\u001b[0m`);
-    expect(painted.replace(/\u001b\[[\d;]*m/g, "")).toBe(`▌ ${text}`);
+    expect(painted.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe(`▌ ${text}`);
     /* 不给 `color` 时它仍是一行认不出态的普通文本（中性灰带）——
      * 覆盖口只给点名要它的那一行，不默认把整屏染起来。 */
     expect(paintLine(text, { enabled: true })).toBe(

@@ -33,7 +33,7 @@ const ROOT = path.resolve(__dirname, "..");
  * 第一版就是这么判的、直接把另一条链路判成「找不到」。
  */
 function pythonEnvKeys(rel: string): { keys: Array<string>; name: string; } {
-  const src = stripComments(readFileSync(path.join(ROOT, rel), "utf8")).replace(/\r\n/g, "\n");
+  const src = stripComments(readFileSync(path.join(ROOT, rel), "utf8")).replaceAll("\r\n", "\n");
   const found: Array<{ keys: Array<string>; name: string; }> = [];
   const head = /(?:^|[\s,(])(env|stdioEnv|childEnv)\s*:\s*\{/g;
   let m: RegExpExecArray | null;

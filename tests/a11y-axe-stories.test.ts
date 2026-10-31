@@ -146,7 +146,7 @@ function reasonOf(error: unknown): string {
    * 而栈里第一个**指向 ui 组件文件**的帧恰好就是那一处。Windows 的栈用反斜杠，先归一。 */
   const frame = error.stack
     ?.split("\n")
-    .map((l) => l.replace(/\\/g, "/"))
+    .map((l) => l.replaceAll("\\", "/"))
     .find((l) => l.includes("src/components/ui/"));
   return (frame ? `${error.message} ← ${frame.trim()}` : error.message).slice(0, 200);
 }

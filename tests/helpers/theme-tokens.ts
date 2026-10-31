@@ -61,7 +61,7 @@ function selectsHtml(selector: string): boolean {
       return false;
     }
     // 去掉 `:not(.dark)` 这段后，余下必须是**单个**「挂在根上」的简单选择器
-    const stripped = p.replace(/:not\([^)]*\)/g, "");
+    const stripped = p.replaceAll(/:not\([^)]*\)/g, "");
     if (!/^(:root|:host|\.dark)$/.test(stripped)) {
       return false;
     }
@@ -130,7 +130,7 @@ const PINNED_UTILITY_CLASSES = /* SAFETY: 类型断言已复核 */ [
  * 差集判据当场失效；而 #1336 那份「固定输入源」也会退回全量级的耗时与不可复现。
  */
 export function stripSourceDirectives(cssText: string): string {
-  return cssText.replace(/^\s*@source\b[^\n]*\n/gm, "");
+  return cssText.replaceAll(/^\s*@source\b[^\n]*\n/gm, "");
 }
 
 /**
@@ -187,7 +187,7 @@ export function withPinnedSources(cssText: string): string {
   // `sidebar-state-contrast` 的「浅色：选中底上的正文与指示条都够亮」当场红，而深色档因为
   // 是手写在 `.dark {}` 里的所以还在 —— 这种「一半在、一半被摇掉」的形状比全红更难归因）。
   // static 只**加**声明、不改任何已有值（逐条比对过两态产物：同名不同值 = 0 条）。
-  const staticTheme = noAutoScan.replace(/@theme(\s+inline)?\s*\{/g, "@theme$1 static {");
+  const staticTheme = noAutoScan.replaceAll(/@theme(\s+inline)?\s*\{/g, "@theme$1 static {");
   return `${staticTheme}\n${pins}\n`;
 }
 
@@ -324,7 +324,7 @@ export function themeTokens(theme: "light" | "dark", cssText: string): ThemeToke
 
   function resolveValue(value: string, seen: Set<string>): string {
     // 逐个替换 `var(--name[, fallback])`
-    return value.replace(
+    return value.replaceAll(
       /var\(\s*(--[a-zA-Z0-9-]+)\s*(?:,\s*([^()]*(?:\([^()]*\)[^()]*)*))?\)/g,
       (_all, ref: string, fallback?: string) => {
         const v = resolve(ref, seen);

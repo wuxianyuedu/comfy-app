@@ -149,7 +149,7 @@ function scanFile(abs) {
     const line = lineOf(masked, m.index);
     sites.push({
       line,
-      text: (rawLines[line - 1] ?? "").trim().replace(/\s+/g, " ").slice(0, 110),
+      text: (rawLines[line - 1] ?? "").trim().replaceAll(/\s+/g, " ").slice(0, 110),
     });
   }
   return sites;

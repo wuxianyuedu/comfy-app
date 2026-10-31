@@ -81,7 +81,7 @@ function launcherTargetNames(): Array<string> {
   return [...block.matchAll(/path\.join\(([^)]*)\)/g)]
     .map((m) => {
       const parts = [...(m[1] ?? "").matchAll(/"([^"]+)"/g)].map((q) => q[1] ?? "");
-      const last = parts[parts.length - 1] ?? "";
+      const last = parts.at(-1) ?? "";
       return last.replace(/^src-tauri\//, "").replace(/\/$/, "");
     })
     .filter(Boolean)
@@ -778,7 +778,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
           path.join(rustupHome, "settings.toml"),
           [
             'default_toolchain = "stable-x86_64-pc-windows-msvc"',
-            `cargo_home = "${cargoHome.replace(/\\/g, "\\\\")}"`,
+            `cargo_home = "${cargoHome.replaceAll("\\", "\\\\")}"`,
             'rustup_home = "x"',
             "",
           ].join("\n"),
@@ -799,7 +799,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
         mkdirSync(path.join(fakeUserHome, ".rustup"), { recursive: true });
         writeFileSync(
           path.join(fakeUserHome, ".rustup", "settings.toml"),
-          `cargo_home = "${cargoHome.replace(/\\/g, "\\\\")}"\n`,
+          `cargo_home = "${cargoHome.replaceAll("\\", "\\\\")}"\n`,
         );
         expect(
           findCargoLookup({

@@ -163,7 +163,7 @@ export async function latestRuntimeLogFile(
   dir: string = SERVICES_LOG_DIR,
 ): Promise<RuntimeLogFileEntry | null> {
   const all = await listRuntimeLogFiles(source, dir);
-  return all.length > 0 ? (all[all.length - 1] ?? null) : null;
+  return all.length > 0 ? (all.at(-1) ?? null) : null;
 }
 
 /** 写入器：一行一行追加进**本次启动那一份**文件。 */

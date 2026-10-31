@@ -133,7 +133,7 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
     join(process.cwd(), "tests", "standalone-runtime-completeness.test.ts"),
     "utf8",
   );
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/.*$/gm, "");
 
   it("runtimeFiles 的调用必须挂在「产物存在」判据之下，不得裸调", () => {
     expect(code.match(/=\s*runtimeFiles\(\)/g) ?? []).toHaveLength(0);

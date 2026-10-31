@@ -121,8 +121,8 @@ describe("GET /api/debug/source", () => {
     expect(body.size).toBe(19);
     expect(body.modifiedAt).toBe(mtime.toISOString());
     // 两个路径字段的分工：一个给人看（相对），一个给 vscode:// 协议用（绝对、正斜杠）。
-    expect(String(body.file).replace(/\\/g, "/")).toBe("src/lib/clamp.ts");
-    expect(String(body.absolutePath).replace(/\\/g, "/")).toContain("/src/lib/clamp.ts");
+    expect(String(body.file).replaceAll("\\", "/")).toBe("src/lib/clamp.ts");
+    expect(String(body.absolutePath).replaceAll("\\", "/")).toContain("/src/lib/clamp.ts");
   });
 
   it("文件不存在 → 404，不把 fs 的错误原文回出去", async () => {

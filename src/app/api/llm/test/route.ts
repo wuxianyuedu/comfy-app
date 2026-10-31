@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       if (segs.length === 0) {
         return null;
       }
-      const last = segs[segs.length - 1]?.toLowerCase() ?? "";
+      const last = segs.at(-1)?.toLowerCase() ?? "";
       if (
         !["images", "videos", "chat", "completions", "embeddings", "audio", "moderations"].includes(
           last,

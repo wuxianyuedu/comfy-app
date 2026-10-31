@@ -265,7 +265,7 @@ export function probeVolume(platform) {
       filtersKnown: false,
     };
   }
-  const letter = root.replace(/[:\\]/g, "");
+  const letter = root.replaceAll(/[:\\]/g, "");
   // 首选 `DriveInfo`（.NET API：不依赖卷管理服务是否就绪，返回值也不受系统语言影响）；
   // 读不到再退回 `Get-Volume`（字段更多，但那条路依赖存储服务 —— 负载高时它会**偶发
   // 返回空**，踩过一次：卷类型读空，报告里跟着把「不是 ReFS」写成了结论）。
@@ -437,7 +437,7 @@ export function probePnpmStore(platform) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const storePath = store.ok ? (lines[lines.length - 1] ?? "") : "";
+  const storePath = store.ok ? (lines.at(-1) ?? "") : "";
   /** @type {string | null} */
   let importMethod = null;
   try {

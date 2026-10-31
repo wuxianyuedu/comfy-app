@@ -374,7 +374,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       /* 造一个「一定长得像那个 glob 命中物」的探针：先展开花括号，再补上缺的路径与
        * 扩展名。`*.js` 那类「通配 + 扩展名」的条目展开后已经是真文件名，不能再改扩展名
        * —— 换成 `.ts` 会让它落回扫描面里，那测的是本函数而不是 `IGNORE_GLOBS`。 */
-      const braced = glob.replace(/\{[^}]*\}/g, "ts");
+      const braced = glob.replaceAll(/\{[^}]*\}/g, "ts");
       const probe = /\.\w+$/.test(braced.replace(/^\*/, "x"))
         ? braced.replace(/\*/, "probe")
         : braced.replace(/\*\*$|\*$/, "probe.ts");

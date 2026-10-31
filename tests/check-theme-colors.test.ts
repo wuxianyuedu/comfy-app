@@ -472,7 +472,7 @@ describe("主题色豁免台账", () => {
       const reason = /reason:\s*([\s\S]*?),\n {2}\},$/.exec(entry)?.[1] ?? "";
       // 理由必须说清「为什么这行色值是内容自己的颜色」，不能是一句「类型色」了事。
       expect(
-        reason.replace(/\s+/g, "").length,
+        reason.replaceAll(/\s+/g, "").length,
         `豁免理由过短（等于没写）：${file}`,
       ).toBeGreaterThan(20);
     }

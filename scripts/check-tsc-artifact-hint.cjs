@@ -35,7 +35,7 @@ const ERROR_LINE = /(?:^|[\s(])("([^"]+)"|([^\s(]+))\((\d+),(\d+)\):\s+error\s+T
 
 /** 归一化路径分隔符：tsc 在 Windows 上给反斜杠，日志里也可能出现绝对路径。 */
 function toPosix(p) {
-  return String(p).replace(/\\/g, "/");
+  return String(p).replaceAll("\\", "/");
 }
 
 /**

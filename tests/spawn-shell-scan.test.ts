@@ -281,7 +281,7 @@ describe("scripts/package-bin-entry.mjs", () => {
     for (const pkg of ["typedoc", "vitest", "storybook"]) {
       const entry = resolvePackageBinEntry(pkg);
       expect(entry, `${pkg} 解析不到`).toBeTruthy();
-      const rel = entry!.replace(/\\/g, "/");
+      const rel = entry!.replaceAll("\\", "/");
       expect(rel, `${pkg} 指到了 .bin 垫片`).not.toContain("/node_modules/.bin/");
     }
   });
@@ -432,7 +432,7 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
         [shimRel]: (root) =>
           `#!/bin/sh\nexec node "$basedir/../pkg/bin/absent" "$@"\n# cmd-shim-target=${path
             .join(root, targetRel)
-            .replace(/\\/g, "/")}\n`,
+            .replaceAll("\\", "/")}\n`,
       },
       (root) => {
         expect(resolveBinEntryByName("x", { root })).toBe(targetOf(root));
@@ -491,7 +491,7 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
       {
         [targetRel]: "console.log(1)\n",
         [shimRel]: (root) =>
-          `#!/bin/sh\n  # cmd-shim-target=${path.join(root, targetRel).replace(/\\/g, "/")}\n`,
+          `#!/bin/sh\n  # cmd-shim-target=${path.join(root, targetRel).replaceAll("\\", "/")}\n`,
       },
       (root) => {
         expect(resolveBinEntryByName("x", { root })).toBeNull();
@@ -552,7 +552,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
         "node_modules/.bin/echo": (root) =>
           `# cmd-shim-target=${path
             .join(root, "node_modules", "pkg", "bin", "echo.cjs")
-            .replace(/\\/g, "/")}\n`,
+            .replaceAll("\\", "/")}\n`,
       },
       (root) => {
         const args = ["--reporter", "verbose output", "--only-changed"];
@@ -572,7 +572,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
         "node_modules/.bin/fail": (root) =>
           `# cmd-shim-target=${path
             .join(root, "node_modules", "pkg", "bin", "fail.cjs")
-            .replace(/\\/g, "/")}\n`,
+            .replaceAll("\\", "/")}\n`,
       },
       (root) => {
         expect(run(["scripts/ci-run-tool.mjs", "--root", root, "fail"]).status).toBe(3);

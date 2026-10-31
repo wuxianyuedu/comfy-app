@@ -204,7 +204,7 @@ async function gateDocs(): Promise<Array<string>> {
  */
 function isCalledInMain(script: string, call: string): boolean {
   const mainBody = script.slice(script.indexOf("function main()"));
-  const escaped = call.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = call.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`^[ \\t]*${escaped};$`, "m").test(mainBody);
 }
 
@@ -809,7 +809,7 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
   function hookCommands(): Array<string> {
     const text = docText(HOOK_REL);
     return [...text.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) =>
-      (m[2] ?? "").replace(/\s+/g, " ").trim(),
+      (m[2] ?? "").replaceAll(/\s+/g, " ").trim(),
     );
   }
   function docCommands(): Array<string> {
@@ -823,7 +823,7 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
       .slice(0, close)
       .split("\n")
       .filter((l) => l.startsWith("✅ "))
-      .map((l) => (l.slice(2).split(/ +# /)[0] ?? "").replace(/\s+/g, " ").trim());
+      .map((l) => (l.slice(2).split(/ +# /)[0] ?? "").replaceAll(/\s+/g, " ").trim());
   }
 
   /** 精确替换一次：命中 0 次或 ≥2 次都直接抛 —— 否则文档一改措辞，探针就静默失效，
