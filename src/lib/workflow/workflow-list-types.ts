@@ -22,8 +22,12 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 /** 「磁盘与库不一致」的四个手动同步标记。在线行（没有 `sourcePath`）这四项
- *  都为 null/false。 */
-type DiskSyncFlags = {
+ *  都为 null/false。
+ *
+ *  ⚠️ **必须导出**：`WorkflowListRow` 是以交叉类型（`& DiskSyncFlags`）引用它的，
+ *  而 typedoc 对「被引用却没进文档」的本地类型报 warning ——
+ *  `pnpm docs:check` 那一格就判这个（ISSUE #2835）。改成不导出会让那一格红。 */
+export type DiskSyncFlags = {
   /** `diskMtimeSec > sourceMtimeSec` —— 磁盘上的文件在上次导入之后被改过。 */
   diskDirty: boolean;
   /** 来源文件在磁盘上已不存在。 */
@@ -32,8 +36,9 @@ type DiskSyncFlags = {
   sourceMtimeSec: number | null;
 };
 
-/** 可执行性标记：`hasRaw` 是「RAW 原件列有没有内容」，`usable` 由它推出。 */
-type ExecutionFlags = {
+/** 可执行性标记：`hasRaw` 是「RAW 原件列有没有内容」，`usable` 由它推出。
+ *  导出理由与 `DiskSyncFlags` 同一处（typedoc 收不进未导出的被引用类型）。 */
+export type ExecutionFlags = {
   hasRaw: boolean;
   usable: boolean;
 };
