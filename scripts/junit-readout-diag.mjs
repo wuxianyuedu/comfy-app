@@ -77,7 +77,9 @@ export function findJunitReport(expectedAbs) {
   const hits = [];
   for (const d of [path.join(ROOT, ".comfy-ci"), path.join(ROOT, "node_modules", ".cache")]) {
     try {
-      if (!fs.statSync(d).isDirectory()) continue;
+      if (!fs.statSync(d).isDirectory()) {
+        continue;
+      }
     } catch {
       continue;
     }
@@ -96,7 +98,9 @@ export function findJunitReport(expectedAbs) {
   }
   hits.sort((a, b) => b.m - a.m);
   const best = hits[0];
-  if (!best) return { path: expectedAbs, found: false, drifted: false };
+  if (!best) {
+    return { path: expectedAbs, found: false, drifted: false };
+  }
   return { path: best.p, found: true, drifted: true };
 }
 

@@ -133,14 +133,18 @@ export async function buildCoverageReadout({ root = ROOT, summaryPath } = {}) {
   for (const [glob, reg] of Object.entries(registered)) {
     const agg = aggregateForGlob(glob, files);
     const pct = agg.pct;
-    if (agg.matched === 0 || !pct) continue;
+    if (agg.matched === 0 || !pct) {
+      continue;
+    }
     /** @type {CovDim} */
     const gap = /** @type {any} */ ({});
     let maxGap = 0;
     for (const dim of DIMENSIONS) {
       const g = reg[dim] - pct[dim];
       gap[dim] = g;
-      if (g > maxGap) maxGap = g;
+      if (g > maxGap) {
+        maxGap = g;
+      }
     }
     rows.push({ glob, matched: agg.matched, pct, reg, gap, maxGap });
   }
@@ -173,7 +177,9 @@ async function main() {
     return 0;
   }
   const reportMtime = r.reportMtime;
-  if (!reportMtime) return 0;
+  if (!reportMtime) {
+    return 0;
+  }
   const ageMin = Math.round((Date.now() - new Date(reportMtime).getTime()) / 60_000);
   console.log(
     `[coverage-readout] 实况 vs 登记值（报告 mtime ${reportMtime.toISOString()} ≈ ${ageMin} 分钟前；` +

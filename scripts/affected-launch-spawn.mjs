@@ -133,7 +133,9 @@ export function resolveMaxWorkers(raw, fallback) {
  * @returns {string}
  */
 export function filterSpawnOutput(stdout, stderr, filterLine) {
-  if (!filterLine) return `${stdout ?? ""}${stderr ?? ""}`;
+  if (!filterLine) {
+    return `${stdout ?? ""}${stderr ?? ""}`;
+  }
   const keep = (s) =>
     String(s ?? "")
       .split("\n")
@@ -158,10 +160,14 @@ export function spawnVitest(entry, args, options = {}) {
    * 由 `filterSpawnOutput` 算（噪音清单里不含任何指纹，过滤不会吞掉判决文本）。 */
   if (filterLine) {
     for (const line of String(res.stdout ?? "").split("\n")) {
-      if (!filterLine(line)) process.stdout.write(`${line}\n`);
+      if (!filterLine(line)) {
+        process.stdout.write(`${line}\n`);
+      }
     }
     for (const line of String(res.stderr ?? "").split("\n")) {
-      if (!filterLine(line)) process.stderr.write(`${line}\n`);
+      if (!filterLine(line)) {
+        process.stderr.write(`${line}\n`);
+      }
     }
   } else {
     process.stdout.write(res.stdout ?? "");

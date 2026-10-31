@@ -78,8 +78,12 @@ describe("filterNoiseText —— 按行抠掉噪音", () => {
     const out = filterNoiseText(text).split("\n");
     expect(out).toContain("前面一句真信息");
     expect(out).toContain("后面一句真信息");
-    for (const noisy of REAL) expect(out).toContain(noisy);
-    for (const noisy of BENIGN) expect(out).not.toContain(noisy);
+    for (const noisy of REAL) {
+      expect(out).toContain(noisy);
+    }
+    for (const noisy of BENIGN) {
+      expect(out).not.toContain(noisy);
+    }
   });
 });
 
@@ -103,7 +107,9 @@ describe("resolveNoiseFilter —— 只认 1 / true", () => {
 describe("spawnVitest end-to-end —— 真起 node 验证过滤写入", () => {
   let dir: string | undefined;
   afterEach(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
     dir = undefined;
     vi.restoreAllMocks();
   });
