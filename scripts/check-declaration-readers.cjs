@@ -78,8 +78,8 @@ function readLedger() {
   let parsed;
   try {
     parsed = JSON.parse(fs.readFileSync(LEDGER, "utf8"));
-  } catch (err) {
-    problems.push(`索引不是合法 JSON：${err.message}`);
+  } catch (error) {
+    problems.push(`索引不是合法 JSON：${error.message}`);
     return null;
   }
   const carriers = parsed?.carriers;

@@ -206,10 +206,10 @@ export async function main(argv = process.argv.slice(2)) {
   }
   try {
     fs.writeFileSync(HERE, wanted, "utf8");
-  } catch (e) {
+  } catch (error) {
     const code =
-      typeof e === "object" && e !== null && "code" in e
-        ? String(/** @type {{code: string}} */ (e).code)
+      typeof error === "object" && error !== null && "code" in error
+        ? String(/** @type {{code: string}} */ (error).code)
         : "UNKNOWN";
     process.stderr.write(`${TAG} 写不进去（${code}）：${HERE} —— 这是「没跑成」，不是「已装好」\n`);
     return 2;

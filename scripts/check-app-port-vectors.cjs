@@ -127,11 +127,11 @@ function probeCommand(cmd, args) {
   try {
     execFileSync(cmd, args, { stdio: "pipe", timeout: PROBE_TIMEOUT_MS });
     return "ok";
-  } catch (e) {
-    if (isTimeoutLike(e)) {
+  } catch (error) {
+    if (isTimeoutLike(error)) {
       return "timeout";
     }
-    if (e && (e.code === NOT_FOUND || e.code === NO_EXEC)) {
+    if (error && (error.code === NOT_FOUND || error.code === NO_EXEC)) {
       return "missing";
     }
     return "present-but-nonzero";
@@ -196,14 +196,14 @@ function measurePythonOnce(pyChecker) {
       python,
       problems: out.includes("OK") ? [] : [`Python 侧自检未通过：${out.trim()}`],
     };
-  } catch (e) {
-    if (isTimeoutLike(e)) {
+  } catch (error) {
+    if (isTimeoutLike(error)) {
       return { state: "timeout", python, problems: [] };
     }
     return {
       state: "answered",
       python,
-      problems: [`Python 侧自检失败：${(e.stdout || e.message || "").toString().trim()}`],
+      problems: [`Python 侧自检失败：${(error.stdout || error.message || "").toString().trim()}`],
     };
   }
 }
@@ -259,8 +259,8 @@ async function main() {
   let fixture;
   try {
     fixture = JSON.parse(fs.readFileSync(path.join(ROOT, REL_VECTORS), "utf8"));
-  } catch (e) {
-    problems.push(`共享向量不可读（${REL_VECTORS}）：${e.message}`);
+  } catch (error) {
+    problems.push(`共享向量不可读（${REL_VECTORS}）：${error.message}`);
     report();
     return;
   }
@@ -292,8 +292,8 @@ async function main() {
         problems.push(`Node 端口 ${JSON.stringify(v.input)} 与向量不符`);
       }
     }
-  } catch (e) {
-    problems.push(`Node 侧实现不可导入：${e.message}`);
+  } catch (error) {
+    problems.push(`Node 侧实现不可导入：${error.message}`);
   }
 
   // ── ①′ `.env` 单值解析（ISSUE #821）──
@@ -322,8 +322,8 @@ async function main() {
         );
       }
     }
-  } catch (e) {
-    problems.push(`Node 侧 .env 解析不可导入：${e.message}`);
+  } catch (error) {
+    problems.push(`Node 侧 .env 解析不可导入：${error.message}`);
   }
 
   // ── ② Python 侧取证（两遍，形态说话）──
@@ -439,8 +439,8 @@ function report() {
  * （`tests/app-port-vectors-timeout-classification.test.ts`）。少了这道守卫，
  * 任何 `require` 这份文件的用例都会现场跑一次四侧取证并可能 `process.exit`。 */
 if (require.main === module) {
-  main().catch((e) => {
-    console.error("[app-port-vectors] 检查脚本异常：" + (e && e.message));
+  main().catch((error) => {
+    console.error("[app-port-vectors] 检查脚本异常：" + (error && error.message));
     process.exit(1);
   });
 }

@@ -82,8 +82,8 @@ if (!git(["rev-parse", "--is-inside-work-tree"]).ok) {
 try {
   const { runFingerprint } = await import("./eslint-cache-fingerprint.mjs");
   runFingerprint({ root, log: say });
-} catch (err) {
-  say(`警告：eslint 缓存指纹失效这一步被跳过（${String(err)}）`);
+} catch (error) {
+  say(`警告：eslint 缓存指纹失效这一步被跳过（${String(error)}）`);
 }
 
 // ── 顺带补上 Storybook 的类型输入（台账 E15）─────────────────────────────────
@@ -119,9 +119,9 @@ try {
     path.join(root, ".storybook", "generated", "app-origin.json"),
   );
   say(`[hooks] Storybook 的开发期输入就绪：${origin}（${source}）`);
-} catch (err) {
+} catch (error) {
   say(
-    `警告：Storybook 的开发期输入没补上（${String(err)}）—— pnpm storybook 会自己生成`,
+    `警告：Storybook 的开发期输入没补上（${String(error)}）—— pnpm storybook 会自己生成`,
   );
 }
 

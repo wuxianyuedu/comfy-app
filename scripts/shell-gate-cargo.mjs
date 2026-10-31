@@ -128,13 +128,13 @@ export function findCargoLookup({ env = process.env, home = os.homedir() } = {})
       let versions;
       try {
         versions = fs.readdirSync(dir).sort().reverse();
-      } catch (err) {
+      } catch (error) {
         // 目录不存在 = 这一处没有，接着看下一处（不是「探到但不可用」）；
         // 读不了（没权限 / 不是目录）必须分开记 —— 那要人去查权限，不是去装 rustup。
         probes.push(
-          isAbsentError(err)
+          isAbsentError(error)
             ? { where, result: "absent" }
-            : { where, result: "unreadable", detail: errorCode(err) },
+            : { where, result: "unreadable", detail: errorCode(error) },
         );
         continue;
       }
@@ -198,9 +198,9 @@ export function probeCargoIn(dir) {
   let names;
   try {
     names = fs.readdirSync(dir);
-  } catch (err) {
-    const code = errorCode(err);
-    return isAbsentError(err)
+  } catch (error) {
+    const code = errorCode(error);
+    return isAbsentError(error)
       ? { ok: false, result: "absent", detail: `${exe}（目录不在）` }
       : {
           ok: false,

@@ -219,8 +219,8 @@ async function main() {
 
 main().then(
   (code) => process.exit(code),
-  (err) => {
-    console.error("[cp936-glyph] 判据自己出错了：", err);
+  (error) => {
+    console.error("[cp936-glyph] 判据自己出错了：", error);
     process.exit(1);
   },
 );

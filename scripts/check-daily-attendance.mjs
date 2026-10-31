@@ -591,11 +591,11 @@ export function readOffline(file) {
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(file, "utf8"));
-  } catch (e) {
+  } catch (error) {
     return {
       list: [],
       details: [],
-      failure: `--from 那份不是能解析的 JSON：${/** @type {Error} */ (e).message}`,
+      failure: `--from 那份不是能解析的 JSON：${/** @type {Error} */ (error).message}`,
     };
   }
   const list = asBuildArray(parsed);

@@ -246,8 +246,8 @@ describe("scripts/spawn-shell-scan.mjs", () => {
           encoding: "utf8",
           stdio: ["ignore", "ignore", "pipe"],
         });
-      } catch (err) {
-        const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stderr?: string | Buffer };
+      } catch (error) {
+        const e = /* SAFETY: 类型断言已复核 */ error as { status?: number; stderr?: string | Buffer };
         code = e.status ?? 1;
         stderr = String(e.stderr ?? "");
       }
@@ -518,8 +518,8 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
         stdio: ["ignore", "pipe", "pipe"],
       });
       return { status: 0, stdout, stderr: "" };
-    } catch (err) {
-      const e = /* SAFETY: 类型断言已复核 */ err as {
+    } catch (error) {
+      const e = /* SAFETY: 类型断言已复核 */ error as {
         status?: number;
         stderr?: string;
         stdout?: string;

@@ -63,8 +63,8 @@ export function readOrCreateAuthSecret(appRoot) {
   let raw;
   try {
     raw = readFileSync(file, "utf8");
-  } catch (err) {
-    if (err?.code === "ENOENT") {
+  } catch (error) {
+    if (error?.code === "ENOENT") {
       // 首启：还没有密钥文件。只有这一种情况才新建。
       const secret = newAuthSecret();
       mkdirSync(path.dirname(file), { recursive: true });
@@ -77,8 +77,8 @@ export function readOrCreateAuthSecret(appRoot) {
     }
     // 其它读失败（权限 / 目录被删成半个）是真故障，必须报出来。
     throw new Error(
-      `cannot read auth secret: ${file} (${err?.message ?? err})`,
-      { cause: err },
+      `cannot read auth secret: ${file} (${error?.message ?? error})`,
+      { cause: error },
     );
   }
   // 以下三种「文件在但内容不能用」一律抛错，**不悄悄换一把**：换密钥等于把用户已有的

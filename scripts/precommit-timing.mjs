@@ -159,10 +159,10 @@ export function appendRun({ gitDir, record }) {
   try {
     fs.appendFileSync(file, `${JSON.stringify(record)}\n`, "utf8");
     return { ok: true };
-  } catch (err) {
+  } catch (error) {
     return {
       ok: false,
-      reason: err instanceof Error ? err.message : String(err),
+      reason: error instanceof Error ? error.message : String(error),
     };
   }
 }

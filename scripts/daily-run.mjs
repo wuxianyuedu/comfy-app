@@ -76,8 +76,8 @@ export function writeLedgerNote({ root, kind, mode, reason, platform }) {
     process.stdout.write(`[daily-run] ✓ 已记一条${mode === "dirty" ? "「不吃这一档」" : "豁免"}\n`);
     process.stdout.write(`[daily-run] ${note}\n`);
     return 0;
-  } catch (err) {
-    process.stderr.write(`[daily-run] ✗ ${err instanceof Error ? err.message : String(err)}\n`);
+  } catch (error) {
+    process.stderr.write(`[daily-run] ✗ ${error instanceof Error ? error.message : String(error)}\n`);
     return 2;
   }
 }

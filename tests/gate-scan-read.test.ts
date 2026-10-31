@@ -347,8 +347,8 @@ describe("立案现场回归 —— 从仓库根递归的判据撞上并发删�
           env: { ...process.env, VICTIM_DIR: path.join(root, victim) },
         },
       );
-    } catch (err) {
-      const e = /* SAFETY: 类型断言已复核 */ err as {
+    } catch (error) {
+      const e = /* SAFETY: 类型断言已复核 */ error as {
         status?: number;
         stderr?: string;
         stdout?: string;

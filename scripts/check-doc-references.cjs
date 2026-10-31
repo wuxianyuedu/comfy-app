@@ -206,8 +206,8 @@ function checkVerify(text, docPath, f) {
         );
       }
     }
-  } catch (e) {
-    problems.push(`[${docPath}] 无法核对 ${f.key}（${e.message}）`);
+  } catch (error) {
+    problems.push(`[${docPath}] 无法核对 ${f.key}（${error.message}）`);
   }
 }
 
@@ -351,8 +351,8 @@ function checkDoc(docPath) {
       let realValue;
       try {
         realValue = f.extract();
-      } catch (e) {
-        problems.push(`[${docPath}] 无法提取 ${f.key}（${e.message}）`);
+      } catch (error) {
+        problems.push(`[${docPath}] 无法提取 ${f.key}（${error.message}）`);
         continue;
       }
       const vals = Array.isArray(realValue) ? realValue : [realValue];

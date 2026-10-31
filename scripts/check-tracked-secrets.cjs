@@ -400,11 +400,11 @@ function main(argv = process.argv.slice(2), deps = {}) {
       scanned = byFile.size;
       inputs = [...byFile.entries()].map(([file, rows]) => ({ file, rows }));
     }
-  } catch (e) {
+  } catch (error) {
     // git 取不到清单（不在检出里 / git 不可用）⇒ 这一格没有结论，不圆成「没命中」。
     write(
       `[tracked-secrets] ${STAGED ? "`git diff --cached`" : "`git ls-files`"} 取不到输入面：` +
-        `${e instanceof Error ? e.message : String(e)} ⇒ 不构成结论（不是「没命中」）。\n`,
+        `${error instanceof Error ? error.message : String(error)} ⇒ 不构成结论（不是「没命中」）。\n`,
     );
     return 2;
   }

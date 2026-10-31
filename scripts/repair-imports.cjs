@@ -113,8 +113,8 @@ function parseAndFixDepth() {
       throw new Error(`起 pnpm 失败（${res.error.code ?? "UNKNOWN"}）：${res.error.message}`);
     }
     out = res.stdout;
-  } catch (e) {
-    out = String(e.stdout || "");
+  } catch (error) {
+    out = String(error.stdout || "");
   }
   const errs = [
     ...out.matchAll(/^(.+?)\((\d+),\d+\): error TS2307: Cannot find module '([^']+)'/gm),

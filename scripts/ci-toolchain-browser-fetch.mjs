@@ -314,12 +314,12 @@ export function fetchRangeToFile(url, dest, offset, size, timeoutMs, { probeOnly
     writeFileSync(dest, part, { flag: "a" });
     rmSync(scratch, { force: true });
     return { bytes: part.length, total, out };
-  } catch (e) {
+  } catch (error) {
     rmSync(scratch, { force: true });
     return {
       bytes: -1,
       total: null,
-      out: `接片失败：${e instanceof Error ? e.message : String(e)}`,
+      out: `接片失败：${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }
@@ -530,8 +530,8 @@ export function extractZipTo(zip, dir) {
   let buf;
   try {
     buf = readFileSync(zip);
-  } catch (e) {
-    return `zip 读不出来：${e instanceof Error ? e.message : String(e)}`;
+  } catch (error) {
+    return `zip 读不出来：${error instanceof Error ? error.message : String(error)}`;
   }
   const entries = readCentralDirectory(buf);
   if (typeof entries === "string") {
@@ -553,8 +553,8 @@ export function extractZipTo(zip, dir) {
       data = e.stored
         ? buf.subarray(e.dataOffset, e.dataOffset + e.compressedSize)
         : inflateRawSync(buf.subarray(e.dataOffset, e.dataOffset + e.compressedSize));
-    } catch (err) {
-      return `解压 ${e.name} 失败：${err instanceof Error ? err.message : String(err)}`;
+    } catch (error) {
+      return `解压 ${e.name} 失败：${error instanceof Error ? error.message : String(error)}`;
     }
     mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, data);

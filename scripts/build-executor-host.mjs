@@ -73,11 +73,11 @@ const require = createRequire(import.meta.url);
 function loadEsbuild() {
   try {
     return require("esbuild");
-  } catch (err) {
+  } catch (error) {
     console.error(
       "[ERROR] esbuild is not resolvable from this script. Run `pnpm install` " +
         "(esbuild is a devDependency used only at build time; it must NOT be a " +
-        `production dependency). Underlying error: ${err?.message ?? err}`,
+        `production dependency). Underlying error: ${error?.message ?? error}`,
     );
     process.exit(1);
   }
@@ -204,8 +204,8 @@ if (invokedDirectly) {
         `externals=${built.externals.join(",") || "-"} ` +
         `bytes=${built.bytes} -> ${path.relative(ROOT, built.bundlePath)}`,
     );
-  } catch (err) {
-    console.error(`[ERROR] ${err?.stack ?? err}`);
+  } catch (error) {
+    console.error(`[ERROR] ${error?.stack ?? error}`);
     process.exit(1);
   }
 }

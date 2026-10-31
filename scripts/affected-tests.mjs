@@ -580,9 +580,9 @@ function git(args) {
       encoding: "utf8",
       maxBuffer: 64 << 20,
     });
-  } catch (err) {
+  } catch (error) {
     process.stderr.write(
-      `[affected] git ${args.join(" ")} 失败：${err instanceof Error ? err.message : String(err)}\n`,
+      `[affected] git ${args.join(" ")} 失败：${error instanceof Error ? error.message : String(error)}\n`,
     );
     return null;
   }

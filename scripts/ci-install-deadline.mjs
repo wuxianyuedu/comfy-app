@@ -139,9 +139,9 @@ export function runInstallWithBudget(io) {
     let child;
     try {
       child = spawnImpl(command, args, { cwd, stdio: "inherit" });
-    } catch (err) {
+    } catch (error) {
       /* 「起不来」与「跑完但非零」是两档（同 `spawnSettled` 的契约）：前者 stderr 常常是空的。 */
-      finish({ code: UNDECIDED_EXIT, error: messageOf(err) });
+      finish({ code: UNDECIDED_EXIT, error: messageOf(error) });
       return;
     }
     child.on("error", (err) => {

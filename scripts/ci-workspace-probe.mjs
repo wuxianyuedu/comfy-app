@@ -531,8 +531,8 @@ export function workspaceProbeLines(io = {}) {
     history = readLedger(file, fsLike);
     const kept = writeLedger(file, entry, fsLike);
     ledgerNote = `（账本 ${kept} 条）`;
-  } catch (err) {
-    ledgerNote = `（账本写不进去：${err && /** @type {Error} */ (err).message} —— 只打磁盘侧读数）`;
+  } catch (error) {
+    ledgerNote = `（账本写不进去：${error && /** @type {Error} */ (error).message} —— 只打磁盘侧读数）`;
   }
   lines.push("");
   lines.push(`== 跨构建对照 ${ledgerNote}==`);

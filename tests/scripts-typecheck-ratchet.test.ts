@@ -80,8 +80,8 @@ function runCheck(args: Array<string>, root = fixture): { code: number; output: 
       env: { ...process.env, COMFY_SCRIPTS_TYPECHECK_ROOT: root },
     });
     return { code: 0, output };
-  } catch (err) {
-    const e = /* SAFETY: 类型断言已复核 */ err as {
+  } catch (error) {
+    const e = /* SAFETY: 类型断言已复核 */ error as {
       status?: number;
       stderr?: string;
       stdout?: string;
@@ -296,8 +296,8 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
           .split("\0")
           .filter(Boolean),
       );
-    } catch (e) {
-      return `；git 清单取不到，定位不了是哪几份：${/* SAFETY: 类型断言已复核 */ (e as Error).message}`;
+    } catch (error) {
+      return `；git 清单取不到，定位不了是哪几份：${/* SAFETY: 类型断言已复核 */ (error as Error).message}`;
     }
     const stray = face.map((p) => String(p).replaceAll("\\", "/")).filter((p) => !tracked.has(p));
     return (

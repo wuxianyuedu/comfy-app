@@ -136,13 +136,13 @@ export function rebuildLinkInPlace(abs, linkText) {
     rmSync(abs);
     renameSync(tmp, abs);
     return { ok: true, error: "" };
-  } catch (e) {
+  } catch (error) {
     try {
       rmSync(tmp, { force: true });
     } catch {
       /* 临时名都没建起来，没什么要收 */
     }
-    return { ok: false, error: describeError(e) };
+    return { ok: false, error: describeError(error) };
   }
 }
 
@@ -270,13 +270,13 @@ export function repairUnfollowableLinks(dir, deps = {}) {
     let linkText;
     try {
       linkText = readText(abs);
-    } catch (e) {
+    } catch (error_) {
       broken.push({
         rel,
         linkText: "",
         target: "",
         targetExists: false,
-        error: `readlink 失败：${describeError(e)}`,
+        error: `readlink 失败：${describeError(error_)}`,
         variantDead: false,
       });
       continue;

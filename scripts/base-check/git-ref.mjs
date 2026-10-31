@@ -219,12 +219,12 @@ export function git(args, cwd = ROOT) {
       stdout: String(r.stdout ?? "").trim(),
       stderr: String(r.stderr ?? "").trim(),
     };
-  } catch (err) {
+  } catch (error) {
     return {
       ok: false,
       status: -1,
       stdout: "",
-      stderr: String(err instanceof Error ? err.message : err),
+      stderr: String(error instanceof Error ? error.message : error),
     };
   }
 }

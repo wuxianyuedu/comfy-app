@@ -215,8 +215,8 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
       });
-    } catch (err) {
-      const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stderr?: string };
+    } catch (error) {
+      const e = /* SAFETY: 类型断言已复核 */ error as { status?: number; stderr?: string };
       code = e.status ?? -1;
       out = `${e.stderr ?? ""}`;
     }
