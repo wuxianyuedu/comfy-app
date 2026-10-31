@@ -24,7 +24,7 @@
  * @typedef {(cmd: string, args: string[], opts?: {env?: Record<string,string>}) => {status: number, stdout: string, stderr?: string, error?: string | null}} PlatformRun
  */
 
-import { CODE, looksNewlineMangled, readProof } from "./ship-core.mjs";
+import { CODE, classifyPushFailure, looksNewlineMangled, readProof } from "./ship-core.mjs";
 import { safeRead, short } from "./ship-exec.mjs";
 /* 「这一笔是刻意的空提交」不靠猜索引 —— 由被触发的两条 D0 判据认这个说出来的旗标
  * （唯一生产者就是下面这一格，口径在 `intentional-empty-commit.mjs`，ISSUE #2354）。 */
@@ -159,7 +159,8 @@ export function runPushStage(ctx) {
   const ps = run("git", ["push", "-u", up.remote, branch]);
   relay(ps);
   if (ps.status !== 0) {
-    log(`[ship] push 失败（exit ${ps.status}）⇒ 多半是 pre-push 的合并前复算没放行。`);
+    /* 分型按 push 原话（ISSUE #2825）：远端 128 与钩子拒绝的修法完全不同，不再固定猜 premerge。 */
+    log(`[ship] push 失败（exit ${ps.status}）⇒ ${classifyPushFailure(ps.stdout, ps.stderr).note}`);
     return { stop: true, codes: [CODE.RED] };
   }
   const codes = [];
@@ -233,7 +234,8 @@ export function runRerunCiStage(ctx) {
   const ps = run("git", ["push", "-u", up.remote, branch]);
   relay(ps);
   if (ps.status !== 0) {
-    log(`[ship] push 失败（exit ${ps.status}）⇒ 多半是 pre-push 的合并前复算没放行。`);
+    /* 同上（ISSUE #2825）：rerun 那一跳也不固定猜 premerge，按原话分型。 */
+    log(`[ship] push 失败（exit ${ps.status}）⇒ ${classifyPushFailure(ps.stdout, ps.stderr).note}`);
     return CODE.RED;
   }
   const sha = run("git", ["rev-parse", "HEAD"]).stdout.trim();
