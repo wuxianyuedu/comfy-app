@@ -123,7 +123,7 @@ export function intField(
   max: number,
 ): number | undefined {
   const v: unknown = rec[key];
-  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : Number.NaN;
   if (!Number.isFinite(n)) {
     return undefined;
   }

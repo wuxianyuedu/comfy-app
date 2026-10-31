@@ -93,7 +93,10 @@ describe("normalizeBounds", () => {
   it("没有节点 / 坐标非有限值 → null（由调用方走 fitView 兜底）", () => {
     expect(normalizeBounds([], FALLBACK)).toBeNull();
     expect(
-      normalizeBounds([{ position: { x: NaN, y: 0 }, style: { width: 10, height: 10 } }], FALLBACK),
+      normalizeBounds(
+        [{ position: { x: Number.NaN, y: 0 }, style: { width: 10, height: 10 } }],
+        FALLBACK,
+      ),
     ).toBeNull();
   });
 });

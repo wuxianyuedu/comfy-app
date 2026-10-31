@@ -68,8 +68,8 @@ export function NumberField({
 
   const commitText = useCallback(
     (text: string) => {
-      const n = parseFloat(text);
-      if (!isNaN(n)) {
+      const n = Number.parseFloat(text);
+      if (!Number.isNaN(n)) {
         onChange(clampToStep(n));
       }
     },
@@ -117,8 +117,8 @@ export function NumberField({
           const text = event.target.value;
           setDraft(text);
           /* 合法前缀实时上抛（clamp 只影响提交值，不打断击键回显） */
-          const n = parseFloat(text);
-          if (!isNaN(n)) {
+          const n = Number.parseFloat(text);
+          if (!Number.isNaN(n)) {
             onChange(clampToStep(n));
           }
         }}

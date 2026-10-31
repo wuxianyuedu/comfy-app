@@ -171,8 +171,8 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
     // 提取 --port：`--port <n>` 或 `--port=<n>` 或 `-p <n>`。
     if (lower === "--port" || lower === "-p") {
       const next = argv[i + 1];
-      const n = parseInt(next ?? "", 10);
-      if (!isNaN(n)) {
+      const n = Number.parseInt(next ?? "", 10);
+      if (!Number.isNaN(n)) {
         port = n;
         i++; // 跳过端口值
       }
@@ -180,8 +180,8 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
     }
     const eq = /^--port=(.+)$/.exec(lower) ?? /^-p=(.+)$/.exec(lower);
     if (eq) {
-      const n = parseInt(eq[1] ?? "", 10);
-      if (!isNaN(n)) {
+      const n = Number.parseInt(eq[1] ?? "", 10);
+      if (!Number.isNaN(n)) {
         port = n;
       }
       continue;

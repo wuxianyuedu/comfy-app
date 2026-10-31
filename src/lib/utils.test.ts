@@ -18,24 +18,22 @@ import { cn } from "~/lib/utils";
 describe("cn（ISSUE #623 迁移到 cn@0.3.0 后的契约）", () => {
   it("接受 clsx 的三种入参形态：条件串、嵌套数组、对象", () => {
     const active = true;
-    expect(
-      cn("px-2 py-1", active && "bg-blue-500", { "text-white": active }),
-    ).toBe("px-2 py-1 bg-blue-500 text-white");
+    expect(cn("px-2 py-1", active && "bg-blue-500", { "text-white": active })).toBe(
+      "px-2 py-1 bg-blue-500 text-white",
+    );
     expect(cn("text-sm", ["px-1", ["py-2"]])).toBe("text-sm px-1 py-2");
     expect(cn("a", { b: true, c: false }, ["d"])).toBe("a b d");
   });
 
   it("丢弃 falsy 入参（undefined / null / false / 0 / NaN）", () => {
-    expect(cn("", null, undefined, false, 0, NaN, "px-1")).toBe("px-1");
+    expect(cn("", null, undefined, false, 0, Number.NaN, "px-1")).toBe("px-1");
   });
 
   it("后写的冲突类胜出，不只是拼接", () => {
     expect(cn("p-2 p-4")).toBe("p-4");
     expect(cn("px-2 py-1", "px-4")).toBe("py-1 px-4");
     // 修饰符不同的冲突类各自保留（hover 与基础态不是同一组）
-    expect(cn("hover:bg-red-500", "bg-blue-500")).toBe(
-      "hover:bg-red-500 bg-blue-500",
-    );
+    expect(cn("hover:bg-red-500", "bg-blue-500")).toBe("hover:bg-red-500 bg-blue-500");
   });
 
   it("合并项目自定义主题里的 v4 括号语法", () => {
@@ -43,8 +41,6 @@ describe("cn（ISSUE #623 迁移到 cn@0.3.0 后的契约）", () => {
     expect(cn("w-(--panel-right-width)", "w-full")).toBe("w-full");
     expect(cn("rounded-(--radius)", "rounded-md")).toBe("rounded-md");
     // 任意值与变体不应被拆散
-    expect(cn("[&>svg]:size-4", "[&>svg]:shrink-0")).toBe(
-      "[&>svg]:size-4 [&>svg]:shrink-0",
-    );
+    expect(cn("[&>svg]:size-4", "[&>svg]:shrink-0")).toBe("[&>svg]:size-4 [&>svg]:shrink-0");
   });
 });

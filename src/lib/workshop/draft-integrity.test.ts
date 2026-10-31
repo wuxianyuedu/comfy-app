@@ -114,7 +114,7 @@ describe("② 不静默：每一种脏法都要被点名", () => {
     },
     {
       name: "建议镜数是 NaN",
-      draft: draftOf({ scenes: [{ ...CLEAN_SCENES[0], shotCount: NaN }] }),
+      draft: draftOf({ scenes: [{ ...CLEAN_SCENES[0], shotCount: Number.NaN }] }),
       expect: [["scene", "shotCount"]],
     },
     {
