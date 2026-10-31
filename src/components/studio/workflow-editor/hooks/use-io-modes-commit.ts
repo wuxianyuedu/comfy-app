@@ -8,7 +8,7 @@ import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import type { useIOEditApi } from "../WorkflowStores";
-import { type useWorkflowSaveMutation } from "./use-workflow-save";
+import type { useWorkflowSaveMutation } from "./use-workflow-save";
 import type { WorkflowDetail } from "../../workflow-types";
 
 export function useIoModesCommit(params: {

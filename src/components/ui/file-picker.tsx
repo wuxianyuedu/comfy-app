@@ -3,7 +3,7 @@
 import React from "react";
 
 import { Button } from "~/components/ui/button";
-import { type OmitOwnProps } from "~/lib/dom-props";
+import type { OmitOwnProps } from "~/lib/dom-props";
 
 /**
  * 「隐藏 `<input type="file">` + 谁来点它」的唯一出口。

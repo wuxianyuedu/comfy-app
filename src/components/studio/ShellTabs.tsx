@@ -37,9 +37,9 @@ import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
 import { TitleBarTabs } from "./TitleBarTabs";
-import { type ViewTab } from "./workspace-tabs";
-import { type OpenableView } from "./ViewTabStrip";
-import { type WorkspaceView } from "./NavItems";
+import type { ViewTab } from "./workspace-tabs";
+import type { OpenableView } from "./ViewTabStrip";
+import type { WorkspaceView } from "./NavItems";
 import { Button } from "~/components/ui/button";
 
 type ShellTabsProps = {

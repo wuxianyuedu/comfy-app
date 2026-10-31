@@ -21,7 +21,7 @@ import {
   type UsageTaskQueryInput,
   type UsageTestInput,
 } from "~/lib/llm/usage-test-client";
-import { type RemoteModelEntry, type TaskType } from "~/lib/llm/types";
+import type { RemoteModelEntry, TaskType } from "~/lib/llm/types";
 /* 条目形状的唯一出处：controller 收的那一枚，就是 lib 里那座草稿→条目桥产出的那枚。 */
 import type { RemoteModelDraftEntry } from "~/lib/llm/remote-model-schema";
 

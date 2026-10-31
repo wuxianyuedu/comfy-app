@@ -4,7 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { displayValue } from "~/lib/display-value";
-import { type Shot } from "~/lib/workshop/types";
+import type { Shot } from "~/lib/workshop/types";
 
 import { shotFrameView } from "./shot-status-config";
 

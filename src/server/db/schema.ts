@@ -29,7 +29,7 @@ import {
 import { relations } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { cuid, dateNotNull, user } from "./schema-common";
-import { type InferSelectModel, type InferInsertModel } from "drizzle-orm";
+import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
 // ── 自定义 DateTime 列（库文件里存 ISO 字符串）──────────────────
@@ -158,9 +158,7 @@ export const model = sqliteTable(
     coverUrl: text("coverUrl"),
     description: text("description"),
     category: text("category"),
-    isAvailable: integer("isAvailable", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    isAvailable: integer("isAvailable", { mode: "boolean" }).notNull().default(false),
     source: text("source").notNull().default("LOCAL"),
     createdAt: dateNotNull("createdAt")
       .notNull()
@@ -323,9 +321,7 @@ export const taskImage = sqliteTable(
     humanRating: integer("humanRating"),
     /** 人工收藏（#2480）：「优秀样本进 few-shot」沉淀机制的输入（与模型库的
      *  `favorite` 表无关——那张表挂 user↔model，这张列挂产物本身）。 */
-    isFavorite: integer("isFavorite", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    isFavorite: integer("isFavorite", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [
     // 每次 task.list / history 带 includeImages 都按 taskId IN(...) 回表；
@@ -468,9 +464,7 @@ export const skill = sqliteTable(
     recommendedModel: text("recommendedModel"),
     tags: text("tags").default("[]"),
     coverUrl: text("coverUrl"),
-    isBuiltIn: integer("isBuiltIn", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    isBuiltIn: integer("isBuiltIn", { mode: "boolean" }).notNull().default(false),
     sortOrder: integer("sortOrder").notNull().default(0),
     isActive: integer("isActive", { mode: "boolean" }).notNull().default(true),
     createdAt: dateNotNull("createdAt")
@@ -501,9 +495,7 @@ export const filmProject = sqliteTable(
     size: text("size").notNull().default("1280x720"),
     fps: integer("fps").notNull().default(16),
     framesPerShot: integer("framesPerShot").notNull().default(49),
-    subtitleOn: integer("subtitleOn", { mode: "boolean" })
-      .notNull()
-      .default(true),
+    subtitleOn: integer("subtitleOn", { mode: "boolean" }).notNull().default(true),
     bgmName: text("bgmName"),
     status: text("status").notNull().default("PARSING"),
     progress: integer("progress").notNull().default(0),
@@ -669,9 +661,7 @@ export const production = sqliteTable(
      *  形状 `{ review, reviewHistory }`，归一在 `~/lib/production/review-types` 的
      *  `normalizeScriptReviewState`；写入口是 `server/agent/review.ts` 的 `reviewScript`
      *  （经 `patchContent` 的 `scriptReview`）。工坊自动保存不碰这列（字段所有权同 run）。 */
-    scriptReview: text("scriptReview", { mode: "json" })
-      .notNull()
-      .default("{}"),
+    scriptReview: text("scriptReview", { mode: "json" }).notNull().default("{}"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
