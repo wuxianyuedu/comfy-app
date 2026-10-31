@@ -65,7 +65,7 @@ describe("form-props —— 事件值 → 值回调", () => {
 
   it("bindKey 把值绑到指定的键上", () => {
     const patch = vi.fn();
-    bindKey<{ model: string; base: string }, "model">(patch, "model")("m1");
+    bindKey<{ base: string; model: string }, "model">(patch, "model")("m1");
     expect(patch).toHaveBeenCalledWith({ model: "m1" });
   });
 

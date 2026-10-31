@@ -44,10 +44,10 @@ export function SizePresetTableModal({
   title = "尺寸表",
   onClose,
 }: {
+  onClose: () => void;
   /** 打开时选中的场景页签（当前控件正用的场景）。 */
   scene?: SizeScene;
   title?: string;
-  onClose: () => void;
 }) {
   const { table, setDims, resetScene, isModified } = useSizePresetTable();
   const [scene, setScene] = useState<SizeScene>(initialScene);

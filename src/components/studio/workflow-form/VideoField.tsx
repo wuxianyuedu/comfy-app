@@ -29,12 +29,12 @@ function VideoField({
   set,
   disabled,
 }: {
-  role: VideoRole;
+  disabled?: boolean;
   entry: EnrichedWidget;
   preset: boolean;
-  values: Record<string, unknown>;
+  role: VideoRole;
   set: (ioKey: string, v: unknown) => void;
-  disabled?: boolean;
+  values: Record<string, unknown>;
 }) {
   const current = values[entry.ioKey];
   const label = roleLabel(role);

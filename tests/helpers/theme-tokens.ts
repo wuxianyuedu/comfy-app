@@ -263,9 +263,9 @@ export function ruleSelectors(cssText: string): Array<string> {
 
 /** 一次拿到浅色 / 深色两态的取值器（`beforeAll` 里 `await` 用）。 */
 export async function loadThemeTokens(): Promise<{
-  light: ThemeTokens;
-  dark: ThemeTokens;
   css: string;
+  dark: ThemeTokens;
+  light: ThemeTokens;
 }> {
   const css = await compiledGlobalsCss();
   return {

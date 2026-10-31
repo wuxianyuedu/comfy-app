@@ -146,11 +146,11 @@ interface PosixKillPlan {
  * 也不冒「应用把自己整组杀掉」这种无法补救的风险。
  */
 function planPosixKill(input: {
-  pid: number;
-  pgid: number | null;
-  ownPgid: number | null;
   detached: boolean;
   force: boolean;
+  ownPgid: number | null;
+  pgid: number | null;
+  pid: number;
 }): PosixKillPlan {
   const { pid, pgid, ownPgid, detached, force } = input;
   const sig: PosixSignal = force ? "SIGKILL" : "SIGTERM";
@@ -337,7 +337,7 @@ export async function killProcessTree(
  */
 export async function killProcessTreeWith(
   opts: KillProcessTreeOptions,
-  { windows = isWindowsPlatform(), image = "" }: { windows?: boolean; image?: string },
+  { windows = isWindowsPlatform(), image = "" }: { image?: string; windows?: boolean },
 ): Promise<KillProcessTreeResult> {
   const { pid, detached = false, force = false, mode = "tree", wait = false } = opts;
   if (!pid || pid <= 0) {

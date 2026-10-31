@@ -28,7 +28,7 @@ vi.mock("~/lib/workshop/character-portrait-client", () => ({
 }));
 
 /* 生成链路整体部分 mock：保留真实导出（常量 / 类型），只换掉网络行为。 */
-type SettleFn = (r: { ok: boolean; message?: string }) => void;
+type SettleFn = (r: { message?: string; ok: boolean }) => void;
 const watchTaskMock = vi.hoisted(() =>
   vi.fn<(taskId: string, h: { onSettled: SettleFn }) => () => void>(),
 );
@@ -187,9 +187,9 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     const project = createProject();
     seedDraft(project.id, [makeShot({ status: "running", taskId: "task-live" })]);
     fetchTaskSnapshotMock.mockResolvedValue({ status: "RUNNING", outputs: [] });
-    let settle!: (r: { ok: boolean; message?: string }) => void;
+    let settle!: (r: { message?: string; ok: boolean }) => void;
     watchTaskMock.mockImplementation(
-      (_taskId: string, h: { onSettled: (r: { ok: boolean; message?: string }) => void }) => {
+      (_taskId: string, h: { onSettled: (r: { message?: string; ok: boolean }) => void }) => {
         settle = h.onSettled;
         return () => undefined;
       },
@@ -343,7 +343,7 @@ describe("useWorkshopPipeline generateShot 的可靠性出口", () => {
     vi.mocked(buildLibraryWorkflowInput).mockResolvedValue(buildResult({ unmatched: ["seed"] }));
     vi.mocked(startLocalGenerate).mockResolvedValue("task-1");
     watchTaskMock.mockImplementation(
-      (_taskId: string, h: { onSettled: (r: { ok: boolean; message?: string }) => void }) => {
+      (_taskId: string, h: { onSettled: (r: { message?: string; ok: boolean }) => void }) => {
         h.onSettled({ ok: true });
         return () => undefined;
       },

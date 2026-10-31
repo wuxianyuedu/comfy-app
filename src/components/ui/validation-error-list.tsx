@@ -34,8 +34,8 @@ export function ValidationErrorList({
   errors,
   className = "",
 }: {
-  errors: Array<ValidationError> | null | undefined;
   className?: string;
+  errors: Array<ValidationError> | null | undefined;
 }) {
   if (!errors || errors.length === 0) {
     return null;

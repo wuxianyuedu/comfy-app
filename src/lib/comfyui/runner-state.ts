@@ -489,14 +489,14 @@ export function forgetTaskClaimEntirely(taskId: string): void {
  * 背整个 `taskRepository` 或 pino 的全部面。
  */
 export type RunnerDeps = {
+  log: {
+    warn(msg: string): void;
+  };
   taskRepo: {
     replaceLogs(taskId: string, entries: Array<LogEntry>): Promise<void>;
     /** comfy-cli 完整原文整包落库（P3 §5 ADR §14 D1 的 4-B2）：「查看完整输出」
      *  这个排障入口此前只有执行进程自己看得见。 */
     replaceRawCli(taskId: string, lines: Array<string>): Promise<void>;
-  };
-  log: {
-    warn(msg: string): void;
   };
 };
 

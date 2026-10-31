@@ -87,7 +87,7 @@ export interface FakeSlotObservation {
  * 应答」而不是「端口上有人」）。
  */
 export async function probeFakeComfySlot(
-  options: { url?: string; timeoutMs?: number } = {},
+  options: { timeoutMs?: number; url?: string; } = {},
 ): Promise<FakeSlotObservation> {
   const url = options.url ?? fakeComfyuiStatsUrl();
   /* 1500ms 是**本地回环**上探一个已经起来的服务，本机实测 13ms —— 给两个数量级

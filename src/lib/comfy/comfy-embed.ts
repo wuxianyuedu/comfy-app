@@ -119,14 +119,14 @@ export function isHttpOrigin(origin: string): boolean {
  *      自己拦下」写进 reason。
  */
 export function judgeEmbeddable(input: {
-  base: string;
-  hostOrigin: string;
-  xFrameOptions: string | null;
-  contentSecurityPolicy: string | null;
-  /** 探测响应的 HTTP 状态码：403 即 ComfyUI 的 origin-only 中间件拦下了跨源。 */
-  status?: number;
   /** 探测响应的 `Access-Control-Allow-Origin`：有值即说明 CORS 已放行。 */
   allowOrigin?: string | null;
+  base: string;
+  contentSecurityPolicy: string | null;
+  hostOrigin: string;
+  /** 探测响应的 HTTP 状态码：403 即 ComfyUI 的 origin-only 中间件拦下了跨源。 */
+  status?: number;
+  xFrameOptions: string | null;
 }): EmbedVerdict {
   /* 非 http(s) 的地址（壳里宿主页是 `about:blank`，见 lib.rs 的 main 窗初始
    * URL）既不是同源、也探不出跨源放行与否。**必须先于 isSameOrigin 处理**：

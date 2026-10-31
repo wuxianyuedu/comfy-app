@@ -61,7 +61,6 @@ import {
 
 /** 富化后的 widget 条目，由 `splitWorkflowIO().widgetInputs` 产出。 */
 export type EnrichedWidget = WorkflowIOEntry & {
-  ioKey: string;
   control: ControlKind;
   /** 控件种类是**推断**出来的（条目没有声明 ComfyUI 类型）。
    *  区别于「声明的类型」（富化链路给的 INT / FLOAT / STRING / COMBO …）。
@@ -69,6 +68,7 @@ export type EnrichedWidget = WorkflowIOEntry & {
    *  `defaultInputValues` 据此**不**给推断出的数值控件造默认值，避免离线时
    *  静默下发一个猜出来的数字（见该函数的注释）。 */
   controlInferred?: boolean;
+  ioKey: string;
 };
 
 export interface DimensionGroup {
@@ -191,8 +191,8 @@ export { clarityKindOfLabel, megapixelTierOfLabel, resolutionTierOfLabel };
  *  spells the option differently ("16:9 宽屏", "16:9") still highlights
  *  the right chip instead of silently falling back to "自定义". */
 export const ASPECT_RATIO_LABEL_PRESETS: [
-  { label: string; value: string; ratio: number },
-  ...Array<{ label: string; value: string; ratio: number }>,
+  { label: string; ratio: number; value: string },
+  ...Array<{ label: string; ratio: number; value: string }>,
 ] = [
   { label: "1:1", value: "1:1 (Square)", ratio: 1 },
   { label: "4:3", value: "4:3 (Standard)", ratio: 4 / 3 },
@@ -242,7 +242,7 @@ export function dimsForRatio(
   alignMultiple: number = DEFAULT_ALIGN_MULTIPLE,
   scene: SizeScene = "image",
   table?: SizePresetTable,
-): { width: number; height: number } {
+): { height: number; width: number } {
   /* 防退化 / 缺失的比例：NaN / 0 / 负数一律回落到 1:1 正方形，
    * 表单拿到的永远是一个有限值。 */
   const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
@@ -380,8 +380,8 @@ export function inferVideoGroup(widgets: Array<EnrichedWidget>): VideoGroup | nu
  *  以及它们消费掉的完整 ioKey 集合（调用方据此把那些 pin 的通用逐行渲染抑制掉）。 */
 export function inferGroups(widgets: Array<EnrichedWidget>): {
   dimension: DimensionGroup | null;
-  video: VideoGroup | null;
   groupedKeys: Set<string>;
+  video: VideoGroup | null;
 } {
   const dimension = inferDimensionGroup(widgets);
   /* 尺寸组可能是 W/H 成对，也可能是别的形态，

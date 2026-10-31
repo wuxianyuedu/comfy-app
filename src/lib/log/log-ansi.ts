@@ -201,12 +201,12 @@ export function parseAnsiSegments(text: string): Array<AnsiSegment> {
 
 /** 汇总当前活动样式：前景/背景/字重可叠加，由视图层逐个映射成 class。 */
 function composeStyles(state: {
+  bg?: AnsiStyleKey;
   bold: boolean;
   dim: boolean;
+  fg?: AnsiStyleKey;
   italic: boolean;
   underline: boolean;
-  fg?: AnsiStyleKey;
-  bg?: AnsiStyleKey;
 }): Array<AnsiStyleKey> {
   const styles: Array<AnsiStyleKey> = [];
   if (state.fg) {

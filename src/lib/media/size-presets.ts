@@ -491,7 +491,7 @@ export const DEFAULT_SIZE_SPEC: SizeSpec = {
  *  方（MCP / 接口）按直觉给的是短标签，落到最接近的预设行即可；缺项与识别不出的
  *  值回退默认。 */
 export function normalizeSizeSpec(
-  raw: { ratio?: unknown; clarity?: unknown; multiple?: unknown } | null | undefined,
+  raw: { clarity?: unknown; multiple?: unknown; ratio?: unknown } | null | undefined,
 ): SizeSpec {
   const ratioLabel = normalizeRatioLabel(raw?.ratio);
   const clarityLabel =

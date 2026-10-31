@@ -93,7 +93,7 @@ function readShape(file: string): Record<string, TableShape> {
 function diffColumns(
   leftCols: string,
   rightCols: string,
-): { missing: Array<string>; extra: Array<string> } {
+): { extra: Array<string>; missing: Array<string>; } {
   const left = leftCols ? leftCols.split(",") : [];
   const right = rightCols ? rightCols.split(",") : [];
   return {

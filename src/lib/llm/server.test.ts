@@ -46,7 +46,7 @@ const CFG = (over: Partial<LLMConfig> = {}): LLMConfig => ({
 });
 
 /** 一次性响应替身：`res.json()` / `res.text()` 都可用。 */
-function jsonResponse(body: unknown, init: { status?: number; ok?: boolean } = {}): Response {
+function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}): Response {
   const status = init.status ?? 200;
   return /* SAFETY: 类型断言已复核 */ {
     ok: init.ok ?? (status >= 200 && status < 300),
@@ -83,7 +83,7 @@ const noop = (): void => undefined;
 const fetchMock = vi.fn<typeof fetch>();
 
 /** 取第 n 次 fetch 调用的 (url, init)，并把 init 收成可安全访问的形状。 */
-function callAt(n = 0): { url: string; init: RequestInit } {
+function callAt(n = 0): { init: RequestInit; url: string } {
   const call = fetchMock.mock.calls[n]!;
   // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。

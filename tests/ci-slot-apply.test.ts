@@ -105,7 +105,7 @@ describe("槽的输入面与落位", () => {
     const written = materializeSlotInputs({ jobRoot: job, slot });
     const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(slot, "package.json"), "utf8"),
-    ) as { scripts?: unknown; dependencies?: Record<string, string> };
+    ) as { dependencies?: Record<string, string>; scripts?: unknown; };
     expect(pkg.scripts).toBeUndefined();
     expect(pkg.dependencies).toEqual({ leftpad: "1.0.0" });
     expect(fs.readFileSync(path.join(slot, "pnpm-lock.yaml"), "utf8")).toBe("pnpm-lock.yaml\n");

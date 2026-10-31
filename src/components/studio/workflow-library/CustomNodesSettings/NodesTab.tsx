@@ -73,9 +73,9 @@ function NodeCardList({
   manifestByNode,
   nodeCardExpansion,
 }: {
-  nodeTypeList: Array<string>;
   manifestByNode: CustomNodesSettingsController["manifestByNode"];
   nodeCardExpansion: CustomNodesSettingsController["nodeCardExpansion"];
+  nodeTypeList: Array<string>;
 }) {
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   // 与 ModelLibrary / ProjectOutputs 同一条误报豁免：virtualizer 的读数只在

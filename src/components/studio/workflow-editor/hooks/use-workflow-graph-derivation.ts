@@ -29,22 +29,20 @@ import type { WorkflowDetail } from "../../workflow-types";
 
 export function useWorkflowGraphDerivation(params: {
   detail: WorkflowDetail | null;
+  onEnterSubgraph: ReturnType<typeof useWorkflowDetailLoader>["onEnterSubgraph"];
   paramMap: Record<string, unknown>;
-  onEnterSubgraph: ReturnType<
-    typeof useWorkflowDetailLoader
-  >["onEnterSubgraph"];
-  /** 当前视图的宿主（外层封装）节点 id 链 —— 顶层为空串，下钻后是 `4`（或
-   *  嵌套时的 `4:5`）。带上它才能在勾选时落库「外层 + 内层」两个 id
-   *  （ISSUE #349 后续）。 */
-  viewHostNodeId: string;
-  workflowId: string;
-  viewerApi: ReturnType<typeof useViewerApi>;
   rgthreeApi: ReturnType<typeof useRgthreeApi>;
   subgraphRawContext: {
     parentRawJson: unknown;
     subUid: string;
   } | null;
   subgraphStackLength: number;
+  viewerApi: ReturnType<typeof useViewerApi>;
+  /** 当前视图的宿主（外层封装）节点 id 链 —— 顶层为空串，下钻后是 `4`（或
+   *  嵌套时的 `4:5`）。带上它才能在勾选时落库「外层 + 内层」两个 id
+   *  （ISSUE #349 后续）。 */
+  viewHostNodeId: string;
+  workflowId: string;
 }) {
   const {
     detail,
@@ -57,8 +55,7 @@ export function useWorkflowGraphDerivation(params: {
     subgraphRawContext,
     subgraphStackLength,
   } = params;
-  const { rawMetaById, scopeDetail, outSlotNameById } =
-    useWorkflowDerivedData(detail);
+  const { rawMetaById, scopeDetail, outSlotNameById } = useWorkflowDerivedData(detail);
 
   /* IO 预览的富化数据源。顶层视图直接用服务端产出的 `detail.workflowIO`；
    * 下钻到子工作流后该字段为空（子图路由不产出它），于是退回「按当前视图
@@ -82,15 +79,7 @@ export function useWorkflowGraphDerivation(params: {
         onEnterSubgraph,
         hostNodeId: viewHostNodeId || undefined,
       }),
-    [
-      detail,
-      scopeDetail,
-      rawMetaById,
-      outSlotNameById,
-      paramMap,
-      onEnterSubgraph,
-      viewHostNodeId,
-    ],
+    [detail, scopeDetail, rawMetaById, outSlotNameById, paramMap, onEnterSubgraph, viewHostNodeId],
   );
 
   /* P2: 把 detail 派生的查找上下文同步进 viewer / rgthree store，让

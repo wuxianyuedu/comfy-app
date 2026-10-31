@@ -24,7 +24,7 @@ export const COMFY_READY_TIMEOUT_MS = 180_000;
 /** 单次轮询间隔：服务端每次会短等一小会儿，这里再退避一档，避免连打。 */
 export const COMFY_READY_POLL_MS = 2_000;
 
-export type ComfyReadyResult = { ok: true } | { ok: false; pending: boolean; message: string };
+export type ComfyReadyResult = { ok: true } | { message: string; ok: false; pending: boolean };
 
 interface EnsureBody {
   ok?: unknown;
@@ -91,9 +91,9 @@ async function ensureOnce(): Promise<ComfyReadyResult> {
  */
 export async function waitForComfyReady(
   opts: {
-    timeoutMs?: number;
-    pollMs?: number;
     onProgress?: (message: string) => void;
+    pollMs?: number;
+    timeoutMs?: number;
   } = {},
 ): Promise<ComfyReadyResult> {
   const timeoutMs = opts.timeoutMs ?? COMFY_READY_TIMEOUT_MS;

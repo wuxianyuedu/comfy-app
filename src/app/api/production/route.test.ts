@@ -112,7 +112,7 @@ describe("GET /api/production", () => {
     expect(res.status).toBe(200);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       exists: boolean;
-      production: { title: string; shots: unknown };
+      production: { shots: unknown; title: string };
     };
     expect(body.exists).toBe(true);
     expect(body.production.title).toBe("我的短剧");

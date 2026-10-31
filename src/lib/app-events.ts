@@ -61,8 +61,8 @@ export interface AppEvents {
   /** 某个画布节点产出了结果，读侧据此把输出喂给下游。 */
   "canvas:produce": {
     id: string;
-    resultPath: string;
     resultMediaType?: string;
+    resultPath: string;
   };
   /**
    * 请求工作区切到某个视图。载荷：视图 id（`WorkspaceView`）。
@@ -79,7 +79,7 @@ export interface AppEvents {
    * 载荷刻意写成 `string` 而不是 import `WorkspaceView` / `Section`：本模块在
    * `src/lib`，不得反向依赖视图层（§18 硬规则 22）—— 合法性由订阅侧按已有枚举收敛。
    */
-  "workspace:navigate": { view: string; section?: string };
+  "workspace:navigate": { section?: string; view: string };
   /**
    * 自定义节点注册表被重新灌入（画布挂载时那一次、以及每次解析收尾后的那一次）。
    * 载荷：无 —— 结论本身可查（`~/config/custom-nodes` 的

@@ -29,8 +29,8 @@ export function NodePreviewCard({
   onToggle,
 }: {
   data: ManifestNodeRaw | undefined;
-  fallbackName: string;
   expanded: boolean;
+  fallbackName: string;
   onToggle: () => void;
 }) {
   const color = colorFor(data?.category);
@@ -104,35 +104,23 @@ export function NodePreviewCard({
       ) : !expanded ? (
         <div className="text-ink-muted text-3xs flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5">
           <span>
-            <span className="text-ink-bright font-mono">{typed.length}</span>{" "}
-            typed
+            <span className="text-ink-bright font-mono">{typed.length}</span> typed
           </span>
           <span>
-            <span className="text-ink-bright font-mono">{widgets.length}</span>{" "}
-            widget
+            <span className="text-ink-bright font-mono">{widgets.length}</span> widget
           </span>
           <span>
-            <span className="text-ink-bright font-mono">{outputs.length}</span>{" "}
-            output
+            <span className="text-ink-bright font-mono">{outputs.length}</span> output
           </span>
         </div>
       ) : (
         <div className="px-2.5 pt-1.5 pb-2">
           {/* 区 1 —— 类型端口（输入在左，输出在右） */}
           {(typed.length > 0 || outputs.length > 0) && (
-            <div
-              className="mb-1.5 grid"
-              style={{ gridTemplateColumns: "1fr 1fr", gap: 4 }}
-            >
+            <div className="mb-1.5 grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 4 }}>
               <div className="flex flex-col gap-0.75">
                 {typed.map((i, idx) => (
-                  <PortRow
-                    key={`ti-${idx}`}
-                    side="in"
-                    color={color}
-                    type={i.type}
-                    name={i.name}
-                  />
+                  <PortRow key={`ti-${idx}`} side="in" color={color} type={i.type} name={i.name} />
                 ))}
               </div>
               <div className="flex flex-col items-end gap-0.75">
@@ -156,10 +144,7 @@ export function NodePreviewCard({
               style={{ borderColor: "var(--color-border-subtle)" }}
             >
               {widgets.slice(0, 32).map((widget, idx) => (
-                <div
-                  key={`w-${idx}`}
-                  className="text-2xs flex items-center gap-1.5"
-                >
+                <div key={`w-${idx}`} className="text-2xs flex items-center gap-1.5">
                   <span
                     className="inline-block shrink-0 rounded-full"
                     style={{
@@ -169,16 +154,10 @@ export function NodePreviewCard({
                       opacity: 0.7,
                     }}
                   />
-                  <span
-                    className="text-ink-soft min-w-0 flex-1 truncate"
-                    title={widget.name}
-                  >
+                  <span className="text-ink-soft min-w-0 flex-1 truncate" title={widget.name}>
                     {widget.name}
                   </span>
-                  <WidgetValueChip
-                    widget={widget.widget ?? null}
-                    value={widget.default}
-                  />
+                  <WidgetValueChip widget={widget.widget ?? null} value={widget.default} />
                 </div>
               ))}
               {widgets.length > 32 && (
@@ -189,13 +168,11 @@ export function NodePreviewCard({
             </div>
           )}
 
-          {typed.length === 0 &&
-            widgets.length === 0 &&
-            outputs.length === 0 && (
-              <div className="text-muted-foreground text-3xs py-1 text-center italic">
-                无输入 / 输出参数
-              </div>
-            )}
+          {typed.length === 0 && widgets.length === 0 && outputs.length === 0 && (
+            <div className="text-muted-foreground text-3xs py-1 text-center italic">
+              无输入 / 输出参数
+            </div>
+          )}
         </div>
       )}
     </div>

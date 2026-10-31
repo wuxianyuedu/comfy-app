@@ -125,20 +125,20 @@ export function KeyValueRows({
   keyClassName,
   valueClassName,
 }: {
-  items: ReadonlyArray<KeyValueItem>;
-  /** 布局语言，见文件头。 */
-  layout?: KeyValueLayout;
-  /** `stacked` 的列数（`rows` / `inline` 忽略）。 */
-  columns?: 1 | 2 | 3;
   /** `rows`：整块加外框（圆角 + 描边 + 裁切）。 */
   bordered?: boolean;
-  /** `rows`：隔行底色。 */
-  striped?: boolean;
+  className?: string;
+  /** `stacked` 的列数（`rows` / `inline` 忽略）。 */
+  columns?: 1 | 2 | 3;
+  itemClassName?: string;
+  items: ReadonlyArray<KeyValueItem>;
+  keyClassName?: string;
+  /** 布局语言，见文件头。 */
+  layout?: KeyValueLayout;
   /** 值是否走等宽字体（数值 / 路径 / 标识符传 true，文案传 false）。 */
   mono?: boolean;
-  className?: string;
-  itemClassName?: string;
-  keyClassName?: string;
+  /** `rows`：隔行底色。 */
+  striped?: boolean;
   valueClassName?: string;
 }) {
   if (items.length === 0) {

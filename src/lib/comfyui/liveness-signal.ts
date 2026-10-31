@@ -60,9 +60,9 @@ interface Subscription {
 }
 
 type SignalGlobal = {
-  seq?: number;
   last?: ComfyLivenessSignal | null;
   listeners?: Set<Subscription>;
+  seq?: number;
 };
 
 declare global {

@@ -41,8 +41,8 @@ export function ToolbarButton({
   hint,
 }: {
   children: ReactNode;
-  onClick: () => void;
   hint: string;
+  onClick: () => void;
 }) {
   return (
     <Hint label={hint} accessibleName>
@@ -79,14 +79,14 @@ export function EditorToolbar({
   onTogglePreview,
 }: {
   insertAtLineStart: (prefix: string) => void;
-  wrapSelection: (before: string, after: string, placeholder?: string) => void;
-  insertList: (ordered: boolean) => void;
-  insertLink: () => void;
   insertImage: () => void;
+  insertLink: () => void;
+  insertList: (ordered: boolean) => void;
   insertTable: () => void;
+  onTogglePreview: () => void;
   restoreHistory: (delta: number) => void;
   showPreview: boolean;
-  onTogglePreview: () => void;
+  wrapSelection: (before: string, after: string, placeholder?: string) => void;
 }) {
   return (
     <div className="border-border bg-panel flex items-center gap-1 border-b px-4 py-2">
@@ -185,8 +185,8 @@ export function OutlineSidebar({
   outline,
   onJump,
 }: {
-  outline: Array<OutlineItem>;
   onJump: (line: number) => void;
+  outline: Array<OutlineItem>;
 }) {
   return (
     <aside className="border-border bg-panel w-64 shrink-0 overflow-y-auto border-r p-4">
@@ -234,14 +234,14 @@ export function EditorBody({
   getSelection,
   onChange,
 }: {
+  emitChange: (next: string) => void;
+  getSelection: () => { end: number; start: number; text: string };
+  onChange: (next: string, start: number, end: number) => void;
+  previewHtml: string;
+  pushHistory: (next: string, start: number, end: number) => void;
+  showPreview: boolean;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   value: string;
-  showPreview: boolean;
-  previewHtml: string;
-  emitChange: (next: string) => void;
-  pushHistory: (next: string, start: number, end: number) => void;
-  getSelection: () => { start: number; end: number; text: string };
-  onChange: (next: string, start: number, end: number) => void;
 }) {
   /* Tab 缩进的键动作走`~/components/ui/simple-key-handler`（规范 16
    * §16.2.4.57）：键判别与`preventDefault` 此前混在同一个`if` 里，

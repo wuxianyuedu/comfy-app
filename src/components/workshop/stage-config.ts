@@ -17,7 +17,7 @@ export const STAGE_DEFS = /* SAFETY: 类型断言已复核 */ [
 
 export type Tab = (typeof STAGE_DEFS)[number]["id"];
 
-export const STAGE_TITLES: Record<Tab, { title: string; desc: string }> = {
+export const STAGE_TITLES: Record<Tab, { desc: string; title: string }> = {
   script: {
     title: "剧本",
     desc: "编写或导入完整剧本，为后续角色提取、分镜规划与全流程生成提供基础。",
@@ -109,7 +109,7 @@ export function stageSubtitle(
 }
 
 /** 前置未满足时的温和提示(纯建议,不阻断)。 */
-export function stagePrereq(id: Tab, ctx: StageViewContext): { text: string; go: Tab } | null {
+export function stagePrereq(id: Tab, ctx: StageViewContext): { go: Tab; text: string } | null {
   switch (id) {
     case "character":
       return ctx.scriptReady

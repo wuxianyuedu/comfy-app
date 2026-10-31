@@ -91,10 +91,10 @@ function UsageItem({
   pct,
 }: {
   label: string;
-  title: string;
-  used: number;
-  total: number;
   pct: number;
+  title: string;
+  total: number;
+  used: number;
 }) {
   return (
     <KeyValueRows

@@ -370,8 +370,8 @@ export async function fetchAppServiceExit(): Promise<AppServiceExitProbe> {
       return empty;
     }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      record?: unknown;
       currentRunId?: unknown;
+      record?: unknown;
     };
     return {
       record: parseAppServiceExitRecord(data.record),

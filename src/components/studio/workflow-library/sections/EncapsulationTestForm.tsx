@@ -270,12 +270,12 @@ function ImageField({
   disabled,
   onPick,
 }: {
+  disabled: boolean;
   entry: EncapsulationEntryStatus;
-  value: string;
+  onPick: (entryId: string, file: File) => void;
   previewSrc?: string;
   uploading: boolean;
-  disabled: boolean;
-  onPick: (entryId: string, file: File) => void;
+  value: string;
 }) {
   const entryId = entry.id;
   const handlePick = useCallback((file: File) => onPick(entryId, file), [onPick, entryId]);

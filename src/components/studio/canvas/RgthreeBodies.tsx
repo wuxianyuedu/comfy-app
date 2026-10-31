@@ -10,8 +10,8 @@ export function RgthreeFastGroupsBypasserBody({
   matchTitle,
   groups,
 }: {
-  matchTitle: string;
   groups: Array<WorkflowGroup>;
+  matchTitle: string;
 }) {
   const ctx = useRgthreeGroups();
   /* useRgthreeGroups 在 store 未挂载时抛错；但该组件只会在编辑器内渲染，
@@ -292,8 +292,8 @@ export function RgthreeLabelBody({
   text,
   properties,
 }: {
-  text: string;
   properties: Record<string, unknown>;
+  text: string;
 }) {
   const p = properties ?? {};
   const fontSize = typeof p.fontSize === "number" ? p.fontSize : 24;

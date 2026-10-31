@@ -185,12 +185,12 @@ function writeSession(key: string, value: string): void {
 }
 
 type ProbeResult =
-  | { ok: true; bootId: string; runId: string | null }
+  | { bootId: string; ok: true; runId: string | null }
   /** 服务**应答了**，但这条端点不在编译图里（404 = 陈旧路由表的签名，
    *  与启动器 `classifyProbe` 的 `route-404` 同一判据）。 */
-  | { ok: false; bootId: null; runId: null; routeTableStale: true }
+  | { bootId: null; ok: false; routeTableStale: true; runId: null }
   /** 网络层失败 / 非 404 的错误码：服务此刻不可达（或答不上来）。 */
-  | { ok: false; bootId: null; runId: null; routeTableStale: false };
+  | { bootId: null; ok: false; routeTableStale: false; runId: null };
 
 /** 单次探测：读取 dev server 当前 bootId 与**本次启动**的 runId。
  *

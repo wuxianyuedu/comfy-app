@@ -35,9 +35,9 @@ function OutputCard({
   active,
   onSelect,
 }: {
-  output: ProjectOutputItem;
   active: boolean;
   onSelect: (id: string) => void;
+  output: ProjectOutputItem;
 }) {
   const c = taskCover(output.images);
   const isVideoOut = c?.mediaType === "video";
@@ -120,9 +120,9 @@ function VirtualizedOutputGrid({
   selectedId,
   onSelect,
 }: {
+  onSelect: (id: string) => void;
   outputs: Array<ProjectOutputItem>;
   selectedId: string | null;
-  onSelect: (id: string) => void;
 }) {
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -148,7 +148,7 @@ function VirtualizedOutputGrid({
   const rowH = cardW + CARD_TEXT_H;
 
   const rows = useMemo(() => {
-    const out: Array<{ start: number; items: Array<ProjectOutputItem> }> = [];
+    const out: Array<{ items: Array<ProjectOutputItem>; start: number }> = [];
     for (let i = 0; i < outputs.length; i += cols) {
       out.push({ start: i, items: outputs.slice(i, i + cols) });
     }

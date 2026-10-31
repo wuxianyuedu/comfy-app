@@ -362,8 +362,8 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     expect([...(gate?.globs ?? [])].sort()).toEqual([".storybook/**", "src/**"]);
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fmt = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
-      isScanned: (rel: string) => boolean;
       IGNORE_GLOBS: ReadonlyArray<string>;
+      isScanned: (rel: string) => boolean;
     };
     for (const rel of ["src/lib/a.ts", "src/app/b.tsx", ".storybook/preview.tsx"]) {
       expect(fmt.isScanned(rel), `判据面应当包含 ${rel}`).toBe(true);

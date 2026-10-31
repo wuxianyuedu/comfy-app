@@ -92,10 +92,10 @@ describe("/api/logs/diagnostics", () => {
     const res = await POST();
     expect(res.status).toBe(200);
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      bytes: number | null;
       ok: boolean;
       path: string;
       relativePath: string;
-      bytes: number | null;
     };
     expect(data.ok).toBe(true);
     expect(data.path.startsWith(path.join(logRoot, "exports"))).toBe(true);

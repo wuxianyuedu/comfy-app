@@ -228,10 +228,10 @@ const NOT_A_RATCHET: Record<string, string> = {
  * 于是这条判据会开始报不存在的东西 —— 判据一旦误报，下一次「真的漏登记」就被当成
  * 又一轮噪声（§11.18.4「会误报的判据活不过一次评审」）。
  */
-function discoveredBaselines(): Array<{ script: string; baseline: string }> {
+function discoveredBaselines(): Array<{ baseline: string; script: string; }> {
   const dir = join(import.meta.dirname, "..", "scripts");
   /** 键 = `脚本:基线名`（两者都不含冒号），去重用 Map 而不是拼哨兵字符串。 */
-  const found = new Map<string, { script: string; baseline: string }>();
+  const found = new Map<string, { baseline: string; script: string; }>();
   const push = (script: string, baseline: string) =>
     found.set(`${script}:${baseline}`, { script, baseline });
 

@@ -18,17 +18,14 @@
 import type WebSocket from "ws";
 
 export type RawWorkflowOverride = {
-  nodeId: string;
   name: string;
+  nodeId: string;
   value?: unknown;
 };
 
 export type Job = {
-  taskId: string;
-
-  /** 工作流名（入队方从模板行带上）：执行日志要能独立说出「这次跑的是哪个
-   *  工作流」—— 面板标题是客户端拼的，日志行才是可导出/回放的自包含现场。 */
-  workflowName?: string;
+  /** 执行前注入到原始 JSON 里的画布 `workflowInputs`。 */
+  overrides?: Array<RawWorkflowOverride>;
 
   /** API 格式的图，走 `executeViaComfyCli` 的**非 RAW 那条分支**
    *  （`executor-cli.ts` 里 `applyApiOverrides(prompt, overrides)` → 收拾图 → 直接提交）。
@@ -44,13 +41,14 @@ export type Job = {
   /** 原始 UI 格式的 JSON（含子图 wrapper）—— 走 comfy-cli 执行。 */
   rawJson?: unknown;
 
-  /** 执行前注入到原始 JSON 里的画布 `workflowInputs`。 */
-  overrides?: Array<RawWorkflowOverride>;
+  taskId: string;
+
+  /** 工作流名（入队方从模板行带上）：执行日志要能独立说出「这次跑的是哪个
+   *  工作流」—— 面板标题是客户端拼的，日志行才是可导出/回放的自包含现场。 */
+  workflowName?: string;
 };
 
 export type LogEntry = {
-  t: number; // epoch ms
-
   level: "info" | "progress" | "warn" | "error" | "success";
 
   msg: string;
@@ -60,6 +58,8 @@ export type LogEntry = {
    *  因此 SSE 重放也带着它（实现见 log() 与 callerLoc()）。
    *  不捕获时这里为空字符串。 */
   src?: string;
+
+  t: number; // epoch ms
 };
 
 /* 曾经这里有一个 `TaskEvent` 联合（progress / done / error / log / state 五种），
@@ -69,7 +69,42 @@ export type LogEntry = {
  * `src/lib/workshop/generation-client.ts`）。 */
 
 export type RunnerState = {
-  ws: WebSocket | null;
+  connecting: boolean;
+
+  /** 本次执行实际提交给 ComfyUI 的工作流 JSON。RAW 载荷存 patched（liblib
+   *  subgraph 格式，未展开，含画布覆盖）；API 载荷存 execution-graph 收拾后的图。
+   *  任务完成后落盘到 generated/.../workflow.json，便于工作流模板后续改动
+   *  时仍能完整复现本次生成结果（种子已存 manifest.seed + TaskImage.seed）。
+   *
+   *  第二个用途（ISSUE #1202 收口时登记）：WS 的 `executing` / `progress` 帧只带节点
+   *  id，日志那行「▶ 节点 [3] 采样器（KSampler）」与落库的 `progressNode.classType`
+   *  都靠这一份认类名 —— 必须是**提交那一刻的图**才与帧里的 id 对得上（画布原件会被
+   *  覆盖注入与剔除改动）。两种形状怎么认见 `graph-node-class.ts`。 */
+  executedWorkflow: Map<string, unknown>;
+
+  /** 「终态已落库」标记（与 `settled` 的「终态已认领」区分）。
+   *  同一个 taskId 可能被多条收口路径尝试写终态：正常 executor 路径、
+   *  看门狗超时、reaper 孤儿回收。`settled` 只保证「谁先认领」，但认领失败
+   *  的一方若直接调用 `finalizeFailure`（不走 claim）仍会二次写库，把先写入
+   *  的失败原因覆盖掉——用户就会在「执行日志」（经 SSE 拿到的第一份原因）与
+   *  「应用日志 / DB」（被后写入覆盖的第二份原因）看到互相矛盾的结果。
+   *  这里给「DB 终态写入」单独加一把一次性锁：首个写入者落库，其余直接跳过，
+   *  保证两处永远显示同一个失败原因。 */
+  finalized: Set<string>;
+
+  lastLogPct: Map<string, number>;
+
+  /** 按节点记录完成情况。ComfyUI 发 `executing` 且 `data.node !== null` 时，
+   *  把（节点 id, classType）记在这里；下一条 `executing` 的 node 为 null
+   *  到达时，用记录下来的值打出「✔ 节点 X (classType) 完成」。
+   *  这样日志面板给用户的是按节点的时间线，而不只是「开始了」的标记。
+   *  仅 API 格式路径需要这一对日志；comfy-cli 路径自己会打（见 executor-ws）。 */
+  lastNodeByTask: Map<string, { classType: string; node: string; t: number }>;
+
+  /** taskId → 这一轮的日志缓冲。落库是整包 `replaceLogs`（不是追加），所以这一份
+   *  就是「库里那一列接下来会变成什么」的草稿，进程内活着的轮次都攒在这里，由
+   *  `LOGS_MAX_TASKS` 的 LRU 收干。 */
+  logs: Map<string, Array<LogEntry>>;
 
   /** 本进程已领取、尚未收口的任务（P3 §5 ADR §14 D1 的第二刀：取代原来的
    *  内存队列 `queue` 与计数器 `active`）。
@@ -79,14 +114,7 @@ export type RunnerState = {
    *  正是后者（旧实现靠 `queue.some(...)` 回答，队列没了就得另找依据）。 */
   pendingDispatch: Set<string>;
 
-  connecting: boolean;
-
   promptToTask: Map<string, string>;
-
-  /** taskId → 这一轮的日志缓冲。落库是整包 `replaceLogs`（不是追加），所以这一份
-   *  就是「库里那一列接下来会变成什么」的草稿，进程内活着的轮次都攒在这里，由
-   *  `LOGS_MAX_TASKS` 的 LRU 收干。 */
-  logs: Map<string, Array<LogEntry>>;
 
   /** taskId → **本轮排队期**写下的行（等待原因那类）。领取会重开 `logs`（重跑不混
    *  上一轮的尾巴），这份登记让领取那一刻把本轮已经写过、且已经落库的行接回去，
@@ -102,49 +130,21 @@ export type RunnerState = {
    *  RAW_CLI_MAX_LINES，任务数上限见 LOGS_MAX_TASKS。 */
   rawCli: Map<string, Array<string>>;
 
-  lastLogPct: Map<string, number>;
+  reconnectAttempts: number;
 
-  /** 按节点记录完成情况。ComfyUI 发 `executing` 且 `data.node !== null` 时，
-   *  把（节点 id, classType）记在这里；下一条 `executing` 的 node 为 null
-   *  到达时，用记录下来的值打出「✔ 节点 X (classType) 完成」。
-   *  这样日志面板给用户的是按节点的时间线，而不只是「开始了」的标记。
-   *  仅 API 格式路径需要这一对日志；comfy-cli 路径自己会打（见 executor-ws）。 */
-  lastNodeByTask: Map<string, { node: string; classType: string; t: number }>;
+  settled: Set<string>;
 
   /** 任务开始时间（epoch 毫秒），用于完成时打「总耗时 Xs」。
    *  在 enqueue() 里写入，在 complete() / fail() / cancelTask() 里清除。
    *  （缺失时说明任务来自上一次服务端生命周期。） */
   startedAt: Map<string, number>;
 
-  settled: Set<string>;
-
-  /** 「终态已落库」标记（与 `settled` 的「终态已认领」区分）。
-   *  同一个 taskId 可能被多条收口路径尝试写终态：正常 executor 路径、
-   *  看门狗超时、reaper 孤儿回收。`settled` 只保证「谁先认领」，但认领失败
-   *  的一方若直接调用 `finalizeFailure`（不走 claim）仍会二次写库，把先写入
-   *  的失败原因覆盖掉——用户就会在「执行日志」（经 SSE 拿到的第一份原因）与
-   *  「应用日志 / DB」（被后写入覆盖的第二份原因）看到互相矛盾的结果。
-   *  这里给「DB 终态写入」单独加一把一次性锁：首个写入者落库，其余直接跳过，
-   *  保证两处永远显示同一个失败原因。 */
-  finalized: Set<string>;
-
   timers: Map<string, NodeJS.Timeout>;
 
-  reconnectAttempts: number;
+  ws: WebSocket | null;
 
   /** 当前使用的 WS 路径下标（连接失败时推进到下一条路径重试）。 */
   wsPathIndex: number;
-
-  /** 本次执行实际提交给 ComfyUI 的工作流 JSON。RAW 载荷存 patched（liblib
-   *  subgraph 格式，未展开，含画布覆盖）；API 载荷存 execution-graph 收拾后的图。
-   *  任务完成后落盘到 generated/.../workflow.json，便于工作流模板后续改动
-   *  时仍能完整复现本次生成结果（种子已存 manifest.seed + TaskImage.seed）。
-   *
-   *  第二个用途（ISSUE #1202 收口时登记）：WS 的 `executing` / `progress` 帧只带节点
-   *  id，日志那行「▶ 节点 [3] 采样器（KSampler）」与落库的 `progressNode.classType`
-   *  都靠这一份认类名 —— 必须是**提交那一刻的图**才与帧里的 id 对得上（画布原件会被
-   *  覆盖注入与剔除改动）。两种形状怎么认见 `graph-node-class.ts`。 */
-  executedWorkflow: Map<string, unknown>;
 
   /** 已向排队任务写入过「等待 ComfyUI 连接/启动」提示的 taskId 集合。
    *  防止领取循环每 2s 撞一次不就绪、对同一任务反复刷同一行。

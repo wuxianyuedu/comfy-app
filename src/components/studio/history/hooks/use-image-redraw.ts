@@ -53,7 +53,7 @@ export interface ImageRedrawController {
 
 export function useImageRedraw(
   deps: ImageRedrawDeps,
-  initial: { prompt: string; projectId?: string | null; parentId: string },
+  initial: { parentId: string; projectId?: string | null; prompt: string },
 ): ImageRedrawController {
   const [mode, setMode] = useState<RedrawMode>("upscale");
   const [templates, setTemplates] = useState<Array<RedrawTemplate>>([]);

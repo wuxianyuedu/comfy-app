@@ -110,7 +110,7 @@ function norm(p: string): string {
  * @param {Array<{name: string, data: Buffer}>} files
  * @returns {Buffer}
  */
-function makeZip(files: Array<{ name: string; data: Buffer }>): Buffer {
+function makeZip(files: Array<{ data: Buffer; name: string; }>): Buffer {
   const locals: Array<Buffer> = [];
   const centrals: Array<Buffer> = [];
   let offset = 0;

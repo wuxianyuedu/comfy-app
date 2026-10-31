@@ -120,20 +120,20 @@ export interface StrictCanvasNodeData {
   scriptText?: string;
 
   // agent node
-  agentHistory: Array<{ role: "user" | "assistant"; content: string }>;
+  agentHistory: Array<{ content: string; role: "user" | "assistant" }>;
   agentReply?: string;
   agentReady?: boolean;
   agentSpec?: {
-    prompt: string;
-    negative?: string;
     kind?: "image" | "video";
+    negative?: string;
     params?: {
-      steps?: number;
       cfg?: number;
       sampler?: string;
       scheduler?: string;
       size?: string;
+      steps?: number;
     };
+    prompt: string;
   };
 
   // 工作流节点（用户上传的 ComfyUI 工作流）
@@ -216,10 +216,10 @@ export function isCanvasNode(
 export const NODE_META: Record<
   NodeKind,
   {
-    label: string;
-    icon: string;
     color: string;
     desc: string;
+    icon: string;
+    label: string;
     /** 单字符类型标识，显示在每个节点左上角的圆圈里（头部与结果区都显示）。 */
     typeChar: string;
   }

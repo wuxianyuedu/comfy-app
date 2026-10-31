@@ -145,7 +145,7 @@ export function resolveDropTarget(
   point: { x: number; y: number },
   candidates: ReadonlyArray<{ ioKey: string; rect: DOMRectLike }>,
 ): string | null {
-  let hit: { ioKey: string; height: number } | null = null;
+  let hit: { height: number; ioKey: string } | null = null;
   for (const candidate of candidates) {
     const { rect } = candidate;
     const inside =

@@ -45,10 +45,10 @@ export function WorkflowCanvasEditor({
   onClose,
   onSave,
 }: {
-  workflowId: string;
-  open: boolean;
   onClose: () => void;
   onSave?: () => void;
+  open: boolean;
+  workflowId: string;
 }) {
   if (!open) {
     return null;

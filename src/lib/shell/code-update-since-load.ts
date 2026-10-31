@@ -126,12 +126,12 @@ export async function fetchBuildId(): Promise<BuildIdProbe> {
       return empty;
     }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      buildId?: unknown;
       bootId?: unknown;
-      restartReason?: unknown;
-      restartDetail?: unknown;
+      buildId?: unknown;
       depsStale?: unknown;
       depsState?: unknown;
+      restartDetail?: unknown;
+      restartReason?: unknown;
     };
     return {
       buildId: typeof data.buildId === "string" && data.buildId ? data.buildId : null,

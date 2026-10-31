@@ -115,9 +115,9 @@ describe("收的方式与边界", () => {
     const reaped = /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
       reap.mock.calls as Array<Array<unknown>>
     )[0]?.[0] as {
-      pid: number;
-      force: boolean;
       detached: boolean;
+      force: boolean;
+      pid: number;
     };
     expect(reaped.pid).toBe(4242);
     expect(reaped.force).toBe(true);
@@ -325,8 +325,8 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
     const reaped = /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
       reap.mock.calls as Array<Array<unknown>>
     )[0]?.[0] as {
-      pid: number;
       force: boolean;
+      pid: number;
     };
     expect(reaped.pid).toBe(4242);
     expect(reaped.force).toBe(true);

@@ -74,8 +74,8 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
   /* 已解码图片的尺寸与它对应的地址：地址换了旧尺寸立刻失效（否则新图会先按
    * 上一张的尺寸渲染一帧，尺寸差得远时肉眼可见地跳一下）。 */
   const [loaded, setLoaded] = useState<{
-    src: string;
     size: NaturalSize;
+    src: string;
   } | null>(null);
   const natural = loaded?.src === src ? loaded.size : null;
 
@@ -118,8 +118,8 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
    * 里还是旧尺寸，写进去会被旧的内容范围夹掉。存下来、等这一轮渲染提交完
    * 再由 effect 应用（`scale` 表示它属于哪一轮，避免残留值被下一轮误用）。 */
   const pendingScrollRef = useRef<{
-    scale: number;
     left: number;
+    scale: number;
     top: number;
   } | null>(null);
 
@@ -191,13 +191,13 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
    * 指针捕获让指针移出容器后仍能收到事件（否则拖到边缘就断）。 */
   const innerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    scrollLeft: number;
-    scrollTop: number;
     dx: number;
     dy: number;
+    pointerId: number;
+    scrollLeft: number;
+    scrollTop: number;
+    startX: number;
+    startY: number;
   } | null>(null);
   /* 本帧是否已排过一次写入（同一帧内的多个 pointermove 合并成一次）。 */
   const panFrameRef = useRef<CancelNextFrame | null>(null);

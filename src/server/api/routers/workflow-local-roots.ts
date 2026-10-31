@@ -96,7 +96,7 @@ function pathKey(p: string): string {
 /* 找出「`absPath` 是 `filePath` 路径前缀」的那个已配置根目录。 */
 function findRootFor(
   filePath: string,
-  roots: Array<{ rawPath: string; absPath: string }>,
+  roots: Array<{ absPath: string; rawPath: string }>,
 ): string | undefined {
   if (!filePath || roots.length === 0) {
     return undefined;

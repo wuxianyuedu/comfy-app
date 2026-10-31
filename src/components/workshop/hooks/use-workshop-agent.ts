@@ -29,7 +29,7 @@ export interface AgentToolRun {
 
 /** Agent 一帧对话消息（用户 / 助手 / 工具记录）。 */
 export type AgentPanelMessage =
-  | { id: string; role: "user" | "assistant"; content: string }
+  | { content: string; id: string; role: "user" | "assistant" }
   | { id: string; role: "tool-run"; run: AgentToolRun };
 
 /** 工坊 Agent 需要调用 controller 的操作（由 WorkshopPipeline 注入）。 */
@@ -116,7 +116,7 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
 
   /** 把工具调用解析并执行（纯逻辑经 executor 模块）。 */
   const executeOneTool = React.useCallback(
-    async (call: { id: string; name: string; arguments: string }) => {
+    async (call: { arguments: string; id: string; name: string }) => {
       const runId = toolRunId();
       const tool = resolveAgentTool(call.name, call.arguments, handlersRef.current);
       const run: AgentToolRun = {

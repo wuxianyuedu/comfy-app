@@ -210,12 +210,12 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
   it("同一次事件循环里连点两下只发一次（重入判据走同步 ref，读 busy state 会漏）", async () => {
     /* 挂起的 promise：用例要在请求**还没回来**的时候点第二下 —— 这正是
      * `setBusy(true)` 尚未提交的那个窗口。 */
-    let resolveIt: (value: { ok: boolean; detail: string }) => void = () => {
+    let resolveIt: (value: { detail: string; ok: boolean }) => void = () => {
       // 有意为空：赋值发生在下面 mock 的实现里，调用时早已被替换。
     };
     mutateMock.mockImplementation(
       () =>
-        new Promise<{ ok: boolean; detail: string }>((resolve) => {
+        new Promise<{ detail: string; ok: boolean }>((resolve) => {
           resolveIt = resolve;
         }),
     );

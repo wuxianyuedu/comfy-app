@@ -78,12 +78,12 @@ export function newCharacter(): Character {
 }
 export function useCharacterExtractFlow(input: {
   characters: Array<Character>;
-  styles: Array<StyleRef>;
-  onCharactersChange: (list: Array<Character>) => void;
-  scriptMarkdown?: string;
-  extract?: { session: ExtractSession; actions: ExtractSessionActions };
   config: LLMConfigView | null;
+  extract?: { actions: ExtractSessionActions; session: ExtractSession };
+  onCharactersChange: (list: Array<Character>) => void;
   openSettings: () => void;
+  scriptMarkdown?: string;
+  styles: Array<StyleRef>;
 }) {
   const { characters, styles, onCharactersChange, scriptMarkdown, extract, config, openSettings } =
     input;
@@ -243,15 +243,15 @@ export function useCharacterExtractFlow(input: {
   };
 }
 export function useCharacterAiFlow(input: {
+  brief: string;
   characters: Array<Character>;
-  styles: Array<StyleRef>;
+  config: LLMConfigView | null;
   onCharactersChange: (list: Array<Character>) => void;
+  openSettings: () => void;
+  setBrief: (value: string) => void;
+  styles: Array<StyleRef>;
   /** 主组件的既有更新路径：润色结果经它重算提示词。 */
   update: (id: string, patch: Partial<Character>) => void;
-  brief: string;
-  setBrief: (value: string) => void;
-  config: LLMConfigView | null;
-  openSettings: () => void;
 }) {
   const { characters, styles, onCharactersChange, update, brief, setBrief, config, openSettings } =
     input;

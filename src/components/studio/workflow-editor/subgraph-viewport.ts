@@ -20,10 +20,10 @@ import { clamp } from "~/lib/clamp";
 export interface FitBoundsNode {
   id?: string;
   position: { x: number; y: number };
-  measured?: { width?: number; height?: number };
+  measured?: { height?: number; width?: number };
   width?: number;
   height?: number;
-  style?: { width?: number | string; height?: number | string };
+  style?: { height?: number | string; width?: number | string };
 }
 
 export interface Bounds {
@@ -74,7 +74,7 @@ function toFiniteNumber(value: unknown): number | null {
  */
 export function normalizeBounds(
   nodes: ReadonlyArray<FitBoundsNode>,
-  fallbackSize: { width: number; height: number },
+  fallbackSize: { height: number; width: number },
 ): Bounds | null {
   let minX = Infinity;
   let maxX = -Infinity;
@@ -125,9 +125,9 @@ export function computeFitViewport(
   bounds: Bounds | null,
   container: ViewportRect,
   options?: {
-    padding?: ViewportPadding;
-    minZoom?: number;
     maxZoom?: number;
+    minZoom?: number;
+    padding?: ViewportPadding;
   },
 ): FitViewport | null {
   if (!bounds) {
@@ -176,7 +176,7 @@ export interface FitSettleStepper {
 
 export interface FitSettleOptions {
   /** 参与包围盒的节点都没量到尺寸时的兜底尺寸。 */
-  fallbackSize: { width: number; height: number };
+  fallbackSize: { height: number; width: number };
   /** 连续多少帧范围不再扩大就认为收敛。 */
   settleRounds: number;
   /** 帧数护栏，避免测量始终不稳时无限重算。 */

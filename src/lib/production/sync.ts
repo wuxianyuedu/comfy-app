@@ -65,7 +65,7 @@ export interface ShotEditPatch {
   negativePrompt: string;
 }
 
-export function nodeEditToShot(patch: { prompt: string; negative: string }): ShotEditPatch {
+export function nodeEditToShot(patch: { negative: string; prompt: string }): ShotEditPatch {
   return { prompt: patch.prompt, negativePrompt: patch.negative };
 }
 
@@ -76,7 +76,7 @@ export function nodeEditToShot(patch: { prompt: string; negative: string }): Sho
 export function planShotSync(
   shots: Array<Shot>,
   existingShotIds: ReadonlySet<string>,
-): { patches: Array<ShotNodePatch>; newShotIds: Array<string> } {
+): { newShotIds: Array<string>; patches: Array<ShotNodePatch> } {
   const patches: Array<ShotNodePatch> = [];
   const newShotIds: Array<string> = [];
   for (const shot of shots) {
@@ -146,9 +146,9 @@ export interface ShotGenerationPatch {
 /** 从画布镜头节点的 data 提炼生成态补丁。节点 resultPath ↔ Shot imageUrl（与
  *  shotToNodePatch 同口径）：仅 done 且有结果时才写 url，避免运行中清空已有 url。 */
 export function nodeGenToShot(node: {
+  resultPath?: string;
   status: StrictCanvasNodeData["status"];
   taskId?: string;
-  resultPath?: string;
 }): ShotGenerationPatch {
   const patch: ShotGenerationPatch = {
     status: nodeStatusToShotStatus(node.status),

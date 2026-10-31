@@ -209,8 +209,8 @@ export function copyGateDeps(
  * 目录时）→ 那条目录不许再整棵铺一遍，否则刚落的文件又被覆盖一次。
  */
 function claims(initial: Array<string>): {
-  covers: (rel: string) => boolean;
   add: (rel: string) => void;
+  covers: (rel: string) => boolean;
 } {
   const owned: Array<string> = [...initial].map(normalizeRel);
   return {
@@ -276,7 +276,7 @@ export interface GateRunResult {
    * 反过来想断言「这句话**不在** stdout」也做不到。取两条流原值即可，不改 `output`
    * 那条既有约定（全仓门禁自测都挂在那上面）。
    */
-  raw: { stdout: string; stderr: string };
+  raw: { stderr: string; stdout: string; };
 }
 
 /**
@@ -517,9 +517,9 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
         });
       } catch (error) {
         const e = /* SAFETY: 类型断言已复核 */ error as {
+          status?: number;
           stderr?: string;
           stdout?: string;
-          status?: number;
         };
         throw new Error(
           `夹具里 git ${args.join(" ")} 失败（cwd=${root}，退出码 ${e.status ?? "?"}）：` +

@@ -1499,8 +1499,8 @@ describe("RemoteModelRepository", () => {
       .catch(
         (e: unknown) =>
           /* SAFETY: 类型断言已复核 */ e as {
-            message: string;
             cause?: { message?: string };
+            message: string;
           },
       );
     expect(failure, "第二条写失败必须让整条调用失败得看得见").not.toBeNull();
@@ -1632,8 +1632,8 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
       .catch(
         (e: unknown) =>
           /* SAFETY: 类型断言已复核 */ e as {
-            message: string;
             cause?: { message?: string };
+            message: string;
           },
       );
     expect(failure, "第二条写失败必须让整条保存失败得看得见").not.toBeNull();
@@ -1666,8 +1666,8 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
       .catch(
         (e: unknown) =>
           /* SAFETY: 类型断言已复核 */ e as {
-            message: string;
             cause?: { message?: string };
+            message: string;
           },
       );
     expect(failure, "远端那一写失败必须让整条保存失败").not.toBeNull();

@@ -33,7 +33,7 @@ export const DEFAULT_DETAIL_TAB: DetailTab = DETAIL_TABS[0].key;
 export interface WorkflowLibraryDetailProps {
   workflow: WorkflowRow | null;
   /** 用户级全局模型标签库（用于类型/模型编辑器）。 */
-  allModelTags?: Array<{ id: string; name: string; count: number }>;
+  allModelTags?: Array<{ count: number; id: string; name: string }>;
   /** 持久化类型（modes + defaultMode）。 */
   onPatchModes?: (id: string, modes: Array<string>, defaultMode: string) => Promise<void>;
   /** 持久化模型标签绑定。 */

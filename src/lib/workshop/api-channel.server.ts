@@ -127,9 +127,9 @@ async function resolveTarget(
   req: ApiImageRequest,
   channel: ApiChannelStored,
 ): Promise<{
-  target: ApiUpstreamTarget;
-  channel: ApiChannelStored;
   adapter: RemoteModeAdapter | null;
+  channel: ApiChannelStored;
+  target: ApiUpstreamTarget;
 }> {
   /* 返回体里带上 channel 是为了让调用方把「同一份配置」交给 callImageGeneration
    * 做端点的最终拼装（未配置时的可读错误也在那里判）。 */
@@ -201,7 +201,7 @@ export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<Api
 /* 轮询一次异步视频任务：返回成品 URL，或 { pending: true } 表示仍在进行。 */
 export async function pollVideoViaApi(
   remoteTaskId: string,
-): Promise<{ url?: string; pending: boolean }> {
+): Promise<{ pending: boolean; url?: string }> {
   return callVideoPoll(remoteTaskId, getWorkshopApiSettingsSync().video, {
     readJson: readUpstreamJson,
   });

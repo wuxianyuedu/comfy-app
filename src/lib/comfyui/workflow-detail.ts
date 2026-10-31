@@ -156,7 +156,6 @@ export interface WorkflowDetailFull {
  *  `sourcePath` / `sourceChanged` / `sourceMissing` 由调用方（re-import 判定）
  *  算好后传入 —— 本函数只管转换，不碰磁盘。 */
 async function buildWorkflowDetailJson(input: {
-  tpl: WorkflowDetailTemplateRow;
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
@@ -167,9 +166,10 @@ async function buildWorkflowDetailJson(input: {
     classType: string | undefined,
     field: string,
   ) => Promise<boolean | undefined>;
-  sourcePath: string | null;
-  sourceOutdated: boolean;
   sourceMissing: boolean;
+  sourceOutdated: boolean;
+  sourcePath: string | null;
+  tpl: WorkflowDetailTemplateRow;
 }): Promise<string> {
   const {
     tpl,

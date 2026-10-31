@@ -27,10 +27,10 @@ import { classifyComfyInstall } from "./instance-kind";
 export type DesktopLaunchArgs = {
   /** 映射后的 headless 额外参数（如 --enable-manager …）。 */
   args: Array<string>;
-  /** 从 launchArgs 抽出的 --port；无则 null（用默认 8188）。 */
-  port: number | null;
   /** 实例登记的 envVars（如 PYTHONUTF8 等）；无则空对象。 */
   envVars: Record<string, string>;
+  /** 从 launchArgs 抽出的 --port；无则 null（用默认 8188）。 */
+  port: number | null;
 };
 
 /** 从 .comfyui-desktop-* 文件内容读实例 ID（单行文本，去掉空白）。 */
@@ -237,8 +237,8 @@ export function parseDesktopLaunchArgs(
 export async function resolveDesktopLaunchArgs(
   instanceIdFile: string,
   deps: {
-    readFile?: (p: string, enc: "utf8") => Promise<string>;
     configRoot?: string;
+    readFile?: (p: string, enc: "utf8") => Promise<string>;
   } = {},
 ): Promise<DesktopLaunchArgs | null> {
   const readFile =
@@ -289,9 +289,9 @@ export function splitArgTokens(s: string): Array<string> {
 
 /** 便携版/venv 的有效启动参数（端口 + 额外参数），由设置项直接决定。 */
 export type ManualLaunch = {
-  port: number;
-  extraArgs: Array<string>;
   envVars: Record<string, string>;
+  extraArgs: Array<string>;
+  port: number;
 };
 
 /** 组装一次启动所需的有效端口 / 额外参数 / 环境变量。
@@ -303,15 +303,15 @@ export type ManualLaunch = {
  * 便携版 / venv：沿用设置里的 comfyuiPort（0 = 默认 8188）与 comfyuiExtraArgs。
  */
 export async function resolveEffectiveLaunch(input: {
+  classify?: (dir: string) => {
+    instanceIdFile: string | null;
+    kind: string;
+  };
+  comfyuiExtraArgs: string;
   comfyuiPath: string;
   comfyuiPort: number;
-  comfyuiExtraArgs: string;
-  classify?: (dir: string) => {
-    kind: string;
-    instanceIdFile: string | null;
-  };
-  resolveDesktop?: (file: string) => Promise<DesktopLaunchArgs | null>;
   exists?: (p: string) => boolean;
+  resolveDesktop?: (file: string) => Promise<DesktopLaunchArgs | null>;
 }): Promise<ManualLaunch> {
   const kind = input.classify
     ? input.classify(input.comfyuiPath)

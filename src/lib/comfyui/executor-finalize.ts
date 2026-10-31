@@ -62,13 +62,13 @@ export type TaskRepoLike = Pick<
 >;
 export type GetViewLike = (filename: string, subfolder: string, type: string) => Promise<Buffer>;
 export type RuntimeLoggerLike = {
-  info(msg: string, ctx?: unknown): void;
   error(msg: string, ctx?: unknown): void;
+  info(msg: string, ctx?: unknown): void;
 };
 export type ExecutorFinalizeDeps = {
-  taskRepo: TaskRepoLike;
   getView: GetViewLike;
   runtimeLog: RuntimeLoggerLike;
+  taskRepo: TaskRepoLike;
 };
 
 let depsOverride: Partial<ExecutorFinalizeDeps> = {};

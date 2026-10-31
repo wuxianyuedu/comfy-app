@@ -92,10 +92,10 @@ export function AuroraGlow({
   alpha,
   className = "",
 }: {
-  tone: "violet" | "cyan" | "magenta";
   /** 光晕中心的不透明度（0~1），只影响这一层。 */
   alpha: number;
   className?: string;
+  tone: "violet" | "cyan" | "magenta";
 }) {
   const stop = `color-mix(in srgb, ${AURORA_TONE_VAR[tone]} ${Math.round(alpha * 100)}%, transparent)`;
   return (

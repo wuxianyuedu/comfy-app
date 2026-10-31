@@ -21,10 +21,10 @@ function escapeFilter(s: string): string {
  *
  *  `fadeOut` 是淡出起始时刻（调用方已算好，保证 `-t` 与 fade 时刻同一口径）。 */
 export function buildSegmentVf(opts: {
-  width: number;
-  height: number;
-  fps: number;
   fadeOut: number;
+  fps: number;
+  height: number;
+  width: number;
 }): string {
   const { width: W, height: H, fps, fadeOut } = opts;
   return (
@@ -38,7 +38,7 @@ export function buildSegmentVf(opts: {
 /** 一条字幕的 SRT 文件内容（单条：0 → 镜头时长）。
  *
  *  `text` 由调用方传入（镜头标题或提示词，已截断），本函数只管时间轴与格式。 */
-export function buildSrtBody(opts: { text: string; dur: number }): string {
+export function buildSrtBody(opts: { dur: number; text: string }): string {
   const { text, dur } = opts;
   const endSec = String(Math.floor(dur)).padStart(2, "0");
   return `1\n00:00:00,000 --> 00:00:${endSec},000\n${text}\n`;
@@ -51,10 +51,10 @@ export function buildSrtBody(opts: { text: string; dur: number }): string {
  *  孪生参数数组合并为一的地方。 */
 export function buildNormalizeArgs(opts: {
   clip: string;
-  vf: string;
   dur: number;
   out: string;
   srtPath: string | null;
+  vf: string;
 }): Array<string> {
   const { clip, vf, dur, out, srtPath } = opts;
   const vfWithSub =

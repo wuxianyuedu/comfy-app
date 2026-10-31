@@ -62,11 +62,11 @@ function makeSlot(
   cacheRoot: string,
   key: string,
   opts: {
-    tree?: boolean;
     fingerprint?: string | null;
-    stamp?: number | null;
     lock?: boolean;
     mtime?: number;
+    stamp?: number | null;
+    tree?: boolean;
   } = {},
 ): string {
   const dir = path.join(cacheRoot, key);

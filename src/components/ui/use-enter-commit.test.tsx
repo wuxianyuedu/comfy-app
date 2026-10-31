@@ -22,10 +22,7 @@ import userEvent from "@testing-library/user-event";
 import { enterCommit, isCommitKey } from "./use-enter-commit";
 
 /** 造一个合成事件形状（`isCommitKey` 只读这三个字段）。 */
-function ev(
-  key: string,
-  { shiftKey = false, isComposing = false, keyCode = 0 } = {},
-) {
+function ev(key: string, { shiftKey = false, isComposing = false, keyCode = 0 } = {}) {
   return { key, shiftKey, nativeEvent: { isComposing, keyCode } };
 }
 
@@ -38,9 +35,9 @@ function keyEvent(
     isComposing = false,
     preventDefault = vi.fn(),
   }: {
-    shiftKey?: boolean;
     isComposing?: boolean;
     preventDefault?: () => void;
+    shiftKey?: boolean;
   } = {},
 ) {
   return {
@@ -60,17 +57,13 @@ describe("isCommitKey", () => {
 
   it("Shift+Enter 不算提交（换行）", () => {
     expect(isCommitKey(ev("Enter", { shiftKey: true }))).toBe(false);
-    expect(
-      isCommitKey(ev("Enter", { shiftKey: true }), { excludeShift: false }),
-    ).toBe(true);
+    expect(isCommitKey(ev("Enter", { shiftKey: true }), { excludeShift: false })).toBe(true);
   });
 
   it("组字中的 Enter 不算提交（IME 确认候选，不是提交）", () => {
     expect(isCommitKey(ev("Enter", { isComposing: true }))).toBe(false);
     expect(isCommitKey(ev("Enter", { keyCode: 229 }))).toBe(false);
-    expect(
-      isCommitKey(ev("Enter", { isComposing: true }), { ignoreIme: false }),
-    ).toBe(true);
+    expect(isCommitKey(ev("Enter", { isComposing: true }), { ignoreIme: false })).toBe(true);
   });
 });
 
@@ -88,9 +81,7 @@ describe("enterCommit 的 onKeyDown", () => {
     const onCommit = vi.fn();
     const onCancel = vi.fn();
     const preventDefault = vi.fn();
-    enterCommit({ onCommit, onCancel }).onKeyDown(
-      keyEvent("Escape", { preventDefault }),
-    );
+    enterCommit({ onCommit, onCancel }).onKeyDown(keyEvent("Escape", { preventDefault }));
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onCommit).not.toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalledTimes(1);
@@ -106,9 +97,7 @@ describe("enterCommit 的 onKeyDown", () => {
 
   it("组字中的 Enter 传到底层判定后不提交", () => {
     const onCommit = vi.fn();
-    enterCommit({ onCommit }).onKeyDown(
-      keyEvent("Enter", { isComposing: true }),
-    );
+    enterCommit({ onCommit }).onKeyDown(keyEvent("Enter", { isComposing: true }));
     expect(onCommit).not.toHaveBeenCalled();
   });
 });
@@ -118,11 +107,7 @@ describe("接在真实输入框上（属性包可用）", () => {
     const onCommit = vi.fn();
     const onCancel = vi.fn();
     render(
-      <input
-        aria-label="改名"
-        defaultValue="草稿"
-        {...enterCommit({ onCommit, onCancel })}
-      />,
+      <input aria-label="改名" defaultValue="草稿" {...enterCommit({ onCommit, onCancel })} />,
     );
     const input = screen.getByLabelText("改名");
     input.focus();

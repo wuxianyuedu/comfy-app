@@ -61,14 +61,14 @@ const READER_PATH = fileURLToPath(new URL("../scripts/gate-scan-read.cjs", impor
 const SCRIPTS_DIR = fileURLToPath(new URL("../scripts", import.meta.url));
 
 type ScanReader = {
-  readForScan: (abs: string) => string | null;
   readdirForScan: (dir: string) => Array<Dirent> | null;
+  readForScan: (abs: string) => string | null;
+  vanishedNote: (count: number) => string;
   walkForScan: (
     dir: string,
     fileRe: RegExp,
     opts?: { skipDirs?: Set<string>; skipHiddenDirs?: boolean },
   ) => Array<string>;
-  vanishedNote: (count: number) => string;
 };
 
 const reader = /* SAFETY: 类型断言已复核 */ requireCjs(READER_PATH) as ScanReader;
@@ -350,8 +350,8 @@ describe("立案现场回归 —— 从仓库根递归的判据撞上并发删�
     } catch (err) {
       const e = /* SAFETY: 类型断言已复核 */ err as {
         status?: number;
-        stdout?: string;
         stderr?: string;
+        stdout?: string;
       };
       code = typeof e.status === "number" ? e.status : 1;
       output = `${e.stdout ?? ""}${e.stderr ?? ""}`;

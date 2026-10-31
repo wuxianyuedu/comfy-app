@@ -67,12 +67,12 @@ export const CHARACTER_SYSTEM = `你是角色设定助手。用户会给出一�
 全程使用中文。`;
 
 export function buildCharacterMessages(c: {
-  name: string;
   appearance?: string;
   costume?: string;
+  name: string;
   personality?: string;
-  styleTags?: Array<string>;
   skillName?: string;
+  styleTags?: Array<string>;
 }): Array<LLMMessage> {
   const brief = [
     c.name ? `名字：${c.name}` : "",
@@ -323,7 +323,7 @@ export interface ScriptRevisionFeedback {
   issues: Array<string>;
   suggestion: string;
   /** 低分维度：key + 分 + 打分依据；未评分（旧判定）时为空数组。 */
-  lowScores: Array<{ key: string; score: number; note: string }>;
+  lowScores: Array<{ key: string; note: string; score: number }>;
 }
 
 /** 组装「按评审意见定向改写剧本」的消息。`sourceText` 是完整剧本 Markdown（调用方裁长）。 */

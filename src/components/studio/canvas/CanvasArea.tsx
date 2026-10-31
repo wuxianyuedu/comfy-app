@@ -229,10 +229,10 @@ function ToolbarButton({
   hint,
   active = false,
 }: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  hint?: string;
   active?: boolean;
+  children: React.ReactNode;
+  hint?: string;
+  onClick?: () => void;
 }) {
   return (
     <Hint label={hint} accessibleName>

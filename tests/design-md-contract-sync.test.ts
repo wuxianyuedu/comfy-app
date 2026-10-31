@@ -56,10 +56,10 @@ function findUnknownTokens(cited: Array<string>, exists: (name: string) => boole
 }
 
 type HexRow = {
-  token: string;
+  dark?: string;
   /** 该态文档写的是单一 `#rrggbb`；否则为 undefined（跳过，不猜）。 */
   light?: string;
-  dark?: string;
+  token: string;
 };
 
 /** 单元格必须是**单独一颗**且**形如** `shape` 的行内代码。 */
@@ -1056,12 +1056,12 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
      否则标记写漂了就永远全绿，那是比红更糟的失效形态。
      `scope: "line"` 的族把命中收窄到**同一枚 class 字符串**上（理由见下面那一族的注释）。 */
   const FAMILIES: Array<{
+    marks: Array<RegExp>;
     name: string;
     owner: string;
-    use: string;
-    marks: Array<RegExp>;
     sample: string;
     scope?: "file" | "line";
+    use: string;
   }> = [
     {
       name: "序号圆",

@@ -272,8 +272,8 @@ function ModelRowLine({
   isLast,
   style,
 }: {
-  model: ModelRow;
   isLast: boolean;
+  model: ModelRow;
   style?: CSSProperties;
 }) {
   const meta = folderMeta(model.type);
@@ -491,10 +491,10 @@ function FolderConfigRow({
   onAdd,
   onDelete,
 }: {
-  row: FolderConfigRowData;
-  onToggle: (folder: string, enabled: boolean) => void;
   onAdd: (folder: string) => void;
   onDelete: (folder: string) => void;
+  onToggle: (folder: string, enabled: boolean) => void;
+  row: FolderConfigRowData;
 }) {
   const primaryMeta = folderMeta(row.type);
 

@@ -37,10 +37,10 @@ import type { WorkflowNodeData } from "../workflow-types";
 
 /** 节点角色配色定义（assignedRole → 标签 + 强调色）。 */
 export const PORT_ROLES: Array<{
+  bg: string;
+  color: string;
   key: string;
   label: string;
-  color: string;
-  bg: string;
 }> = [
   {
     key: "positiveNode",

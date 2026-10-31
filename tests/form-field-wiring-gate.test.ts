@@ -35,7 +35,7 @@ const SCRIPT = path.join(SCRIPTS_DIR, "check-form-field-wiring.cjs");
 function gate(
   files: Record<string, string>,
   args: Array<string> = [],
-  baseline?: { total: number; files: Record<string, number> },
+  baseline?: { files: Record<string, number>; total: number; },
 ): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "form-field-wiring-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
@@ -70,7 +70,7 @@ function gate(
       }),
     };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }

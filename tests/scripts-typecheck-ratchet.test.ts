@@ -84,8 +84,8 @@ function runCheck(args: Array<string>, root = fixture): { code: number; output: 
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: typeof e.status === "number" ? e.status : 1,
@@ -104,8 +104,8 @@ function write(rel: string, body: string): string {
 /** 账本的形状（判据写出去的那一份，读侧只认这三格）。 */
 type Ledger = {
   face: number;
-  total: number;
   files: Record<string, Record<string, number>>;
+  total: number;
 };
 
 /** 夹具里那份账本（判「`--update` 到底写没写」的唯一证据来源）。 */
@@ -347,20 +347,20 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       "../scripts/check-scripts-typecheck.cjs",
     ) as {
       configFace: (ts: unknown) => {
-        ok: boolean;
-        mjs?: Array<string>;
         excludes?: Array<string>;
+        mjs?: Array<string>;
+        ok: boolean;
         reason?: string;
       };
       diskFace: (
         list: Array<string>,
         excludes: Array<string>,
       ) => { all: Array<string>; missed: Array<string> };
-      trackedMjs: (root: string) => Set<string> | null;
       splitTrackedFace: (
         mjs: Array<string>,
         tracked: Set<string> | null,
-      ) => { face: Array<string>; untracked: Array<string>; filtered: boolean };
+      ) => { face: Array<string>; filtered: boolean; untracked: Array<string>; };
+      trackedMjs: (root: string) => Set<string> | null;
     };
     /* `require("typescript")` 的返回是 `any` —— 这里只把它当**不透明句柄**交给判据
      * （判据那边只调 `readConfigFile` / `parseJsonConfigFileContent` 两件事），
@@ -394,7 +394,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     ).toEqual([]);
     const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".scripts-typecheck-baseline.json"), "utf8"),
-    ) as { face: number; total: number; files: Record<string, Record<string, number>> };
+    ) as { face: number; files: Record<string, Record<string, number>>; total: number; };
     /* 面收了、账没跟着记（或反过来）都会在这一格现形 —— 那两种形态在账面读数上
      * 长得一模一样，只有拿配置原值对才分得开。 */
     expect(
@@ -431,11 +431,11 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
  */
 describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
   const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {
-    trackedMjs: (root: string) => Set<string> | null;
     splitTrackedFace: (
       mjs: Array<string>,
       tracked: Set<string> | null,
-    ) => { face: Array<string>; untracked: Array<string>; filtered: boolean };
+    ) => { face: Array<string>; filtered: boolean; untracked: Array<string>; };
+    trackedMjs: (root: string) => Set<string> | null;
   };
 
   it("求交给出两侧；取不到 git 清单时明写「没筛」而不是「都不算」", () => {

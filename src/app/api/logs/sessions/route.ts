@@ -113,7 +113,7 @@ function emptyPayload(error?: string): LogSessionsPayload & { error?: string } {
 async function readTail(
   file: string,
   maxBytes: number,
-): Promise<{ text: string; windowed: boolean; size: number }> {
+): Promise<{ size: number; text: string; windowed: boolean }> {
   let size: number;
   try {
     const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);

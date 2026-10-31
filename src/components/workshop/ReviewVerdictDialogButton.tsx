@@ -29,8 +29,8 @@ function ScoreBars({
   verdict,
   labels,
 }: {
-  verdict: ReviewVerdict;
   labels: ReadonlyMap<string, string>;
+  verdict: ReviewVerdict;
 }) {
   if (!verdict.scores) {
     return null;

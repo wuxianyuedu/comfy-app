@@ -115,10 +115,10 @@ function copyScriptWithRelativeClosure(entryRel: string): string {
 /** 真跑 `scripts/env-init.mjs`（把项目根换成临时目录的等价形态不成立——
  *  脚本按自身位置定位项目根，所以这里用一个同名的最小检出副本）。 */
 function runEnvInitIn(files: Record<string, string>): {
-  status: number | null;
-  stdout: string;
-  stderr: string;
   scriptPath: string;
+  status: number | null;
+  stderr: string;
+  stdout: string;
 } {
   const scriptPath = copyScriptWithRelativeClosure("env-init.mjs");
   for (const [rel, content] of Object.entries(files)) {

@@ -20,7 +20,7 @@ export class ModelRepository extends DrizzleRepository<Model> {
     super(model, model.id);
   }
 
-  async list(opts?: { type?: string; q?: string }): Promise<Array<Model>> {
+  async list(opts?: { q?: string; type?: string }): Promise<Array<Model>> {
     const where = and(
       eq(model.isAvailable, true),
       opts?.type ? eq(model.type, opts.type) : undefined,
@@ -38,11 +38,11 @@ export class ModelRepository extends DrizzleRepository<Model> {
   }
 
   async upsertScanned(input: {
+    baseModel: string;
     fileName: string;
     folder: string;
     name: string;
     type: string;
-    baseModel: string;
   }): Promise<void> {
     await db
       .insert(model)
@@ -72,11 +72,11 @@ export class ModelRepository extends DrizzleRepository<Model> {
    * (fileName, folder) 冲突则更新为「可见 + 最新的 name/type/baseModel」。 */
   async upsertScannedMany(
     inputs: Array<{
+      baseModel: string;
       fileName: string;
       folder: string;
       name: string;
       type: string;
-      baseModel: string;
     }>,
   ): Promise<void> {
     if (!inputs.length) {

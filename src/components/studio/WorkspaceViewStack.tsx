@@ -325,8 +325,8 @@ export function WorkspaceViewStack({
    * 计时刻意放在 **effect** 里：渲染期调用 `performance.now()` 属 React 的不纯
    * 调用（`react-hooks/purity` 会红），effect 里则是合规的。 */
   const [opened, setOpened] = useState<{
-    view: WorkspaceView;
     at: number;
+    view: WorkspaceView;
   } | null>(null);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

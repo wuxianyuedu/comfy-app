@@ -115,7 +115,7 @@ export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node
 }
 
 /** rgthree Power Lora Loader — 每行参数暴露的勾选（输入→左；输出→右）。 */
-export function IoCheckbox({ ioRef, io }: { ioRef: IoRef; io: IOEditContextValue }) {
+export function IoCheckbox({ ioRef, io }: { io: IOEditContextValue; ioRef: IoRef }) {
   const key = `${ioRef.nodeId}::${ioRef.kind}::${ioRef.name}`;
   const checked = !!io.workflowIO[key];
   const isOut = ioRef.direction === "output";

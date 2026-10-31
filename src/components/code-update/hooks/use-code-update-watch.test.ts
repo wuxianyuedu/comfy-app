@@ -17,10 +17,7 @@ import {
   DEV_RESTART_NOTIFIED_KEY,
   useCodeUpdateWatch,
 } from "./use-code-update-watch";
-import {
-  hasCodeUpdatedSinceLoad,
-  resetStaleStoreNotify,
-} from "~/lib/shell/stale-store-notify";
+import { hasCodeUpdatedSinceLoad, resetStaleStoreNotify } from "~/lib/shell/stale-store-notify";
 
 /** 逐次返回可控的构建标识探针；字段为 null = 本次读不到 / 无此事。 */
 type Probe = CodeUpdateModule.BuildIdProbe;
@@ -39,10 +36,10 @@ function probe(
   buildId: string | null,
   opts: {
     bootId?: string | null;
-    restartReason?: string | null;
-    restartDetail?: string | null;
     depsStale?: boolean | null;
     depsState?: DepsState | null;
+    restartDetail?: string | null;
+    restartReason?: string | null;
   } = {},
 ): Probe {
   return {
@@ -83,9 +80,7 @@ describe("useCodeUpdateWatch", () => {
 
   it("加载后构建标识变化 → 上报一次代码更新", async () => {
     vi.useFakeTimers();
-    probeMock
-      .mockReturnValueOnce(probe("build-1"))
-      .mockReturnValueOnce(probe("build-2"));
+    probeMock.mockReturnValueOnce(probe("build-1")).mockReturnValueOnce(probe("build-2"));
 
     renderHook(() => useCodeUpdateWatch());
     await settle();
@@ -143,15 +138,13 @@ describe("useCodeUpdateWatch", () => {
     vi.useFakeTimers();
     const onRestart = vi.fn();
     const detail = "本次代码更新改了路由结构（新增 2，如 api/foo/route.ts）";
-    probeMock
-      .mockReturnValueOnce(probe("b1", { bootId: "boot-A" }))
-      .mockReturnValueOnce(
-        probe("b2", {
-          bootId: "boot-B",
-          restartReason: "route-404-heal",
-          restartDetail: detail,
-        }),
-      );
+    probeMock.mockReturnValueOnce(probe("b1", { bootId: "boot-A" })).mockReturnValueOnce(
+      probe("b2", {
+        bootId: "boot-B",
+        restartReason: "route-404-heal",
+        restartDetail: detail,
+      }),
+    );
 
     renderHook(() => useCodeUpdateWatch({ onDevServerRestart: onRestart }));
     await settle();
@@ -199,9 +192,7 @@ describe("useCodeUpdateWatch", () => {
     vi.useFakeTimers();
     const onDepsStale = vi.fn();
     // buildId 取不到（服务端还没就绪）：这条依赖面判定仍必须发出。
-    probeMock.mockReturnValue(
-      probe(null, { depsStale: true, depsState: "drift" }),
-    );
+    probeMock.mockReturnValue(probe(null, { depsStale: true, depsState: "drift" }));
 
     renderHook(() => useCodeUpdateWatch({ onDepsStale }));
     await settle();
@@ -211,9 +202,7 @@ describe("useCodeUpdateWatch", () => {
 
   it("依赖面同一形态跨刷新只提示一次（按 depsState 去重）", async () => {
     vi.useFakeTimers();
-    probeMock.mockReturnValue(
-      probe("b1", { depsStale: true, depsState: "no-install" }),
-    );
+    probeMock.mockReturnValue(probe("b1", { depsStale: true, depsState: "no-install" }));
 
     const first = vi.fn();
     renderHook(() => useCodeUpdateWatch({ onDepsStale: first }));
@@ -232,12 +221,8 @@ describe("useCodeUpdateWatch", () => {
     const onDepsStale = vi.fn();
     probeMock
       .mockReturnValueOnce(probe("b1", { depsStale: true, depsState: "drift" }))
-      .mockReturnValueOnce(
-        probe("b1", { depsStale: false, depsState: "fresh" }),
-      )
-      .mockReturnValueOnce(
-        probe("b1", { depsStale: true, depsState: "drift" }),
-      );
+      .mockReturnValueOnce(probe("b1", { depsStale: false, depsState: "fresh" }))
+      .mockReturnValueOnce(probe("b1", { depsStale: true, depsState: "drift" }));
 
     renderHook(() => useCodeUpdateWatch({ onDepsStale }));
     await settle();

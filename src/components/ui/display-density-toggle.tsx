@@ -40,20 +40,17 @@ export function DisplayDensityToggle({
   onChange,
   className,
 }: {
-  /** 当前档位。 */
-  value: DisplayDensity;
-  onChange: (next: DisplayDensity) => void;
   /** 外层容器的类（各落点的间距不同，底色 `bg-subtle` / 内边距由这里给）。 */
   className?: string;
+  onChange: (next: DisplayDensity) => void;
+  /** 当前档位。 */
+  value: DisplayDensity;
 }) {
   return (
     <div
       role="radiogroup"
       aria-label="显示密度"
-      className={cn(
-        "bg-subtle flex items-center gap-0.5 rounded-lg p-0.5",
-        className,
-      )}
+      className={cn("bg-subtle flex items-center gap-0.5 rounded-lg p-0.5", className)}
     >
       <Hint label="网格视图" accessibleName>
         <SelectChip

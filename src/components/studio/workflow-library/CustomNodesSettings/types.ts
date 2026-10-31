@@ -17,12 +17,12 @@ export type {
 /** 每个子包行由发现的条目 + 同路径上已加载的清单
  *  条目共同推导出的视觉状态。 */
 export type RowState =
-  | { kind: "loaded"; savedHash: string; nodeCount: number }
+  | { kind: "loaded"; nodeCount: number; savedHash: string }
   | {
+      diskHash: string;
       kind: "outdated";
       savedHash: string;
       savedNodeCount: number;
-      diskHash: string;
     }
   | { kind: "unimported" }
   | { kind: "error"; reason: string }
@@ -35,10 +35,10 @@ export type RowState =
  * 进度条填充会切换：扫描期间不确定（CSS 动画），
  * 然后当扫描宣布 `total=M` 时跳到确定的 K/M。 */
 export type ParseProgress = {
-  phase: "queue" | "scan" | "hash" | "";
-  done: number;
-  total: number;
   discovered: number;
-  parent: string;
+  done: number;
   msg: string;
+  parent: string;
+  phase: "queue" | "scan" | "hash" | "";
+  total: number;
 };

@@ -137,8 +137,8 @@ function positionOf(nodeId: string): { x: number; y: number } | null {
  *  更小。尺寸变化时（窗口缩放、面板拖动）重新派生，同步进 React Flow 的节点表。
  */
 function useCanvasBackdropSize(box: ElementBox | null): {
-  width: number;
   height: number;
+  width: number;
 } {
   /* 量测收在 `~/components/ui/use-element-box`（规范 16 §16.2.4.41）：
    * 此前是本文件自持的 `ResizeObserver` + 手写等值判断 —— 与 `LogPanel`

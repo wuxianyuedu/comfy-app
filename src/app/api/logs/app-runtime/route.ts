@@ -33,10 +33,10 @@ const MAX_MSG_LEN = RUNTIME_LOG_MESSAGE_MAX;
 export async function POST(request: Request) {
   try {
     const body = /* SAFETY: 类型断言已复核 */ (await request.json()) as {
-      ns?: string;
+      fields?: Record<string, unknown>;
       level?: string;
       msg?: string;
-      fields?: Record<string, unknown>;
+      ns?: string;
     };
 
     const ns = body.ns ?? "app";

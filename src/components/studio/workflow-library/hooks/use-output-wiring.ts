@@ -21,14 +21,14 @@ import type { WorkflowIOMap } from "../../workflow-io";
 import type { deriveLibraryOutputCards } from "../workflow-library-param-cards";
 
 export function useOutputWiring(params: {
-  workflowIO: WorkflowIOMap | null;
+  commitParamMap: (next: Record<string, unknown>) => void;
   effectiveMode: string | null;
-  onPatchParamMap?: (next: Record<string, unknown>) => void | Promise<void>;
-  outputCards: ReturnType<typeof deriveLibraryOutputCards>;
   /* 本地 overlay 已经并入的生效 paramMap（useParamWiring 吐出的那份）——
    * 卡片列与连线要读的是同一份。 */
   effectiveParamMap: Record<string, unknown>;
-  commitParamMap: (next: Record<string, unknown>) => void;
+  onPatchParamMap?: (next: Record<string, unknown>) => void | Promise<void>;
+  outputCards: ReturnType<typeof deriveLibraryOutputCards>;
+  workflowIO: WorkflowIOMap | null;
 }) {
   /* 解构出两个稳定引用再进 useMemo：params 每次渲染都是新对象，回调里直接写
    * `params.x` 会被 eslint 要求依赖整个 params（那样 useMemo 每次都重算）。 */

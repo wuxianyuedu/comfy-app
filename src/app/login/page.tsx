@@ -62,11 +62,7 @@ export default function LoginPage() {
         });
 
         if (signInError) {
-          setError(
-            mode === "register"
-              ? "注册成功，但自动登录失败，请重试"
-              : "邮箱或密码错误",
-          );
+          setError(mode === "register" ? "注册成功，但自动登录失败，请重试" : "邮箱或密码错误");
           return;
         }
 
@@ -75,10 +71,7 @@ export default function LoginPage() {
          * 的读取出口 —— 「键不存在」与「键为空串」分得开，坏转义不抛。 */
         /* 空串 / 全空白都回落默认目标（`callbackUrl=` 是「没指定」而不是
          * 「跳到首页」）—— 所以先归一，再判空，最后才`??`。 */
-        const requested = readQueryParam(
-          window.location.search,
-          "callbackUrl",
-        )?.trim();
+        const requested = readQueryParam(window.location.search, "callbackUrl")?.trim();
         /*`requested` 为空串 / 全空白时回落默认目标（`callbackUrl=` 是
          * 「没指定」而不是「跳到首页」）—— 空串归一后走`??` 读不出差别，
          * 所以显式用`||` 的语义写在这一行，并在这里说明理由。 */
@@ -123,10 +116,7 @@ export default function LoginPage() {
 
         <div className="border-border-subtle bg-surface shadow-ink/5 dark:border-border-strong relative w-full max-w-110 rounded-xl border p-9 shadow-[0_8px_40px]">
           {/* Brand */}
-          <Link
-            href="/"
-            className="mb-7 flex items-center justify-center gap-2 font-semibold"
-          >
+          <Link href="/" className="mb-7 flex items-center justify-center gap-2 font-semibold">
             <span className="bg-primary grid size-9 place-items-center rounded-lg text-white">
               <BoltIcon />
             </span>
@@ -172,10 +162,7 @@ export default function LoginPage() {
           </p>
 
           {notice && (
-            <Alert
-              variant="info"
-              className="mb-4 flex items-start gap-2 px-3 py-2.5 text-sm"
-            >
+            <Alert variant="info" className="mb-4 flex items-start gap-2 px-3 py-2.5 text-sm">
               <Icon name="info" size={15} className="mt-0.5 shrink-0" />
               <AlertDescription className="flex-1 text-sm leading-relaxed">
                 {notice}
@@ -219,9 +206,7 @@ export default function LoginPage() {
               value={password}
               onChange={setPassword}
               placeholder={mode === "register" ? "至少 8 位" : "请输入密码"}
-              autoComplete={
-                mode === "register" ? "new-password" : "current-password"
-              }
+              autoComplete={mode === "register" ? "new-password" : "current-password"}
               right={
                 <Button
                   variant="ghost"
@@ -231,11 +216,7 @@ export default function LoginPage() {
                   aria-label={showPassword ? "隐藏密码" : "显示密码"}
                   tabIndex={-1}
                 >
-                  <Icon
-                    data-icon="inline-start"
-                    name={showPassword ? "eyeoff" : "eye"}
-                    size={18}
-                  />
+                  <Icon data-icon="inline-start" name={showPassword ? "eyeoff" : "eye"} size={18} />
                 </Button>
               }
             />
@@ -250,11 +231,7 @@ export default function LoginPage() {
               <div className="text-right">
                 <Button
                   variant="link"
-                  onClick={() =>
-                    setNotice(
-                      "本地账号密码重置功能即将上线，如需帮助请联系管理员",
-                    )
-                  }
+                  onClick={() => setNotice("本地账号密码重置功能即将上线，如需帮助请联系管理员")}
                   className="text-primary/90 hover:text-primary h-auto p-0 text-sm"
                 >
                   忘记密码?
@@ -268,11 +245,7 @@ export default function LoginPage() {
               disabled={submitBusy.busy}
               className="h-auto w-full rounded-xl py-3"
             >
-              {submitBusy.busy
-                ? "处理中…"
-                : mode === "signin"
-                  ? "登录"
-                  : "创建并登录"}
+              {submitBusy.busy ? "处理中…" : mode === "signin" ? "登录" : "创建并登录"}
             </Button>
           </form>
 
@@ -285,18 +258,14 @@ export default function LoginPage() {
           <div className="grid grid-cols-2 gap-3">
             <Button
               variant="outline"
-              onClick={() =>
-                setNotice("GitHub 第三方登录即将上线，当前请使用邮箱账号登录")
-              }
+              onClick={() => setNotice("GitHub 第三方登录即将上线，当前请使用邮箱账号登录")}
               className="border-border-strong bg-subtle text-ink-soft hover:text-ink hover:border-ink-fainter h-auto rounded-xl py-2.5"
             >
               GitHub
             </Button>
             <Button
               variant="outline"
-              onClick={() =>
-                setNotice("Google 第三方登录即将上线，当前请使用邮箱账号登录")
-              }
+              onClick={() => setNotice("Google 第三方登录即将上线，当前请使用邮箱账号登录")}
               className="border-border-strong bg-subtle text-ink-soft hover:text-ink hover:border-ink-fainter h-auto rounded-xl py-2.5"
             >
               Google
@@ -324,13 +293,13 @@ function LoginFieldRow({
   autoComplete,
   right,
 }: {
+  autoComplete?: string;
   label: string;
-  type: string;
-  value: string;
   onChange: (v: string) => void;
   placeholder?: string;
-  autoComplete?: string;
   right?: React.ReactNode;
+  type: string;
+  value: string;
 }) {
   return (
     <FormField label={label}>
@@ -346,11 +315,7 @@ function LoginFieldRow({
             required
             className="border-border-strong bg-subtle text-ink placeholder:text-ink-fainter focus:border-primary/50 w-full rounded-xl border px-3.5 py-3 pr-11 text-sm focus:outline-none"
           />
-          {right && (
-            <div className="absolute top-1/2 right-1.5 -translate-y-1/2">
-              {right}
-            </div>
-          )}
+          {right && <div className="absolute top-1/2 right-1.5 -translate-y-1/2">{right}</div>}
         </div>
       )}
     </FormField>

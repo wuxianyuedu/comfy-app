@@ -352,10 +352,10 @@ describe("入口：三档各退各的码", () => {
     cmd: string,
     args: Array<string>,
   ) => {
-    status: number;
-    stdout: string;
-    stderr: string;
     error: string | null;
+    status: number;
+    stderr: string;
+    stdout: string;
   } {
     return (_cmd, args) => {
       if (args[1] === "get-build-status") {
@@ -974,11 +974,11 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
 /** `get-build-status -v` 的 `data` 那一段（用例只用到 `pipelinesStatus[*].stages[]`）。 */
 interface BuildJson {
   data: {
-    status?: string;
     pipelinesStatus: Record<
       string,
-      { id?: string; name?: string; status?: string; stages: Array<StageJson> }
+      { id?: string; name?: string; stages: Array<StageJson>; status?: string; }
     >;
+    status?: string;
   };
 }
 

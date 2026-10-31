@@ -36,10 +36,10 @@ export interface ModelOverviewState {
 
 export function deriveModelOverview(input: {
   folders: Array<OverviewFolder> | undefined;
-  loading: boolean;
   /** 只传「是不是失败了」这个布尔：错误文案的唯一出处在本模块，
    *  把 Error 对象传进来等于允许调用方各写一句。 */
   isError: boolean;
+  loading: boolean;
 }): ModelOverviewState {
   const folders = input.folders ?? [];
   const withModels = folders

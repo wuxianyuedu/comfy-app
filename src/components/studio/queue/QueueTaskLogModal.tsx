@@ -51,8 +51,8 @@ export function QueueTaskLogModal({
   task,
   onClose,
 }: {
-  task: QueueTaskLogTarget | null;
   onClose: () => void;
+  task: QueueTaskLogTarget | null;
 }) {
   const stream = useTaskLogStream(task?.id ?? null);
   /* 「查看完整输出」弹窗：comfy-cli 未经截断的完整原文。 */

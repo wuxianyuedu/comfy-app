@@ -28,8 +28,8 @@ import { isTaskClaimedInProcess } from "./reaper";
 
 function fakeState(
   overrides: Partial<{
-    pendingDispatch: Set<string>;
     executedWorkflow: Map<string, unknown>;
+    pendingDispatch: Set<string>;
     settled: Set<string>;
   }>,
 ) {

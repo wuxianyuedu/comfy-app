@@ -29,7 +29,7 @@ import { withTimeoutResult } from "~/lib/with-timeout";
 import type { Character, Shot } from "~/lib/workshop/types";
 
 /** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别）。 */
-export type ShotProgressMap = Record<string, { pct: number; label?: string }>;
+export type ShotProgressMap = Record<string, { label?: string; pct: number }>;
 
 export interface WorkshopGenerationDeps {
   /** 本地链路的唯一可执行来源（空串 = 未选工作流）。 */

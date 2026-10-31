@@ -37,16 +37,16 @@
 
 /** jsdom 发出的错误对象（只声明本文件用到的那几个字段，不依赖 jsdom 的类型包）。 */
 type JsdomErrorLike = {
-  type?: string;
-  message: string;
   cause?: { stack?: string };
+  message: string;
+  type?: string;
 };
 
 /** `jsdom.virtualConsole` 的结构面（它继承 `node:events` 的 EventEmitter）。 */
 type VirtualConsoleLike = {
   listeners(event: string): Array<unknown>;
-  removeAllListeners(event: string): unknown;
   on(event: string, listener: (error: JsdomErrorLike) => void): unknown;
+  removeAllListeners(event: string): unknown;
 };
 
 export interface JsdomCapabilityGap {

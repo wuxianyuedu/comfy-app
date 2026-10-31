@@ -57,7 +57,7 @@ export interface RecentProject {
  * 色值本身属规范 03 §3.6.1 的**类型色例外**（项目类别色与
  * `lib/project-canvas/canvas-types.ts` 的 `NODE_META.color` 同构），
  * 已在 `scripts/check-theme-colors.cjs` 的 `EXEMPT_TABLES` 登记。 */
-type KindConfig = { label: string; color: string; icon: React.ReactNode };
+type KindConfig = { color: string; icon: React.ReactNode; label: string };
 
 const KIND_CONFIG: Record<"canvas" | "generation" | "workflow" | "video", KindConfig> = {
   canvas: {
@@ -112,8 +112,8 @@ function ResumeProjectCard({
   proj,
   onOpen,
 }: {
-  proj: RecentProject;
   onOpen: (proj: RecentProject) => void;
+  proj: RecentProject;
 }) {
   const cfg = kindConfigOf(proj.kind);
   const thumbs = (proj.thumbnails ?? []).slice(0, 3);

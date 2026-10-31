@@ -55,10 +55,10 @@ export function ModeContractModeNav({
 }: {
   /** 当前选中的模式码（null = 未选）。 */
   activeMode: string | null;
-  /** 注册表里已被用户改过的模式（标「已改」）。 */
-  storedCustomized: (mode: string) => boolean;
   /** 选一个模式。 */
   onSelect: (mode: string) => void;
+  /** 注册表里已被用户改过的模式（标「已改」）。 */
+  storedCustomized: (mode: string) => boolean;
 }) {
   /* 类别 → 是否展开。**初始全部展开**（把每个类别先表一次态），收起是「先看别的
      类别」的临时动作，默认折着等于把当前模式藏起来。 */
@@ -117,9 +117,7 @@ export function ModeContractModeNav({
                         : "text-ink-muted hover:text-ink",
                     )}
                   >
-                    <span className="min-w-0 flex-1 truncate text-left">
-                      {t.label}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate text-left">{t.label}</span>
                     {customized && (
                       <span
                         className={cn(

@@ -55,11 +55,11 @@ export function BreadcrumbPath({
   className,
   label = "路径",
 }: {
-  segments: ReadonlyArray<BreadcrumbSegment>;
-  onNavigate: (key: string) => void;
-  navigable?: boolean;
   className?: string;
   label?: string;
+  navigable?: boolean;
+  onNavigate: (key: string) => void;
+  segments: ReadonlyArray<BreadcrumbSegment>;
 }) {
   if (segments.length === 0) {
     return null;

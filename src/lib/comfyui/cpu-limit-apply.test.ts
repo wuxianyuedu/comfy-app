@@ -4,7 +4,7 @@ import { applyComfyCpuLimit } from "./cpu-limit-apply";
 
 /** 注入式执行器：记下调了什么，并按需伪造失败。 */
 function recorder(failFor: Array<string> = []) {
-  const calls: Array<{ command: string; args: Array<string> }> = [];
+  const calls: Array<{ args: Array<string>; command: string }> = [];
   return {
     calls,
     exec: (command: string, args: Array<string>) => {

@@ -63,9 +63,9 @@ describe("pino 输出格式契约", () => {
     expect(lines()).toHaveLength(1);
     const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(lines()[0]!) as {
       level: number;
-      time: number;
       msg: string;
       taskId: string;
+      time: number;
     };
     // pino level 30 == info（数值编码，采集端靠数字分流）
     expect(parsed.level).toBe(30);
@@ -189,7 +189,7 @@ describe("日志不落 PII / prompt 原文（§11.5 埋点纪律扩展到日志�
     expect(raw).not.toContain("negative 明文");
     expect(raw).not.toContain("n-明文");
     const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
-      request: { prompt: string; negativePrompt: string };
+      request: { negativePrompt: string; prompt: string };
     };
     expect(parsed.request.prompt).toBe("[Redacted]");
     expect(parsed.request.negativePrompt).toBe("[Redacted]");

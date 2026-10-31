@@ -350,7 +350,7 @@ describe("check-deps-freshness 契约", () => {
     // （§12.16 的同款教训：一个永远返回空数组的解析器会让所有断言全绿）。
     const facts =
       /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-        FACTS: Array<{ key: string; extract: () => unknown }>;
+        FACTS: Array<{ extract: () => unknown; key: string; }>;
       };
     const probesFact = facts.FACTS.find((f) => f.key === "deps.resolveProbes");
     expect(probesFact, "FACTS 里缺 deps.resolveProbes 登记项").toBeDefined();

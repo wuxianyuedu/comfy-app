@@ -1,12 +1,7 @@
 "use client";
 
 import { cn } from "~/lib/utils";
-import {
-  Card as ShadcnCard,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+import { Card as ShadcnCard, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
 /**
  * SettingsCard —— 设置页各段落使用的「有标题的卡片」的唯一出口。
@@ -56,11 +51,11 @@ export function SettingsCard({
   children,
   className,
 }: {
-  title: string;
-  /** 可选副说明：写「答案在别处拿不到的那句话」，同义反复就不传。 */
-  description?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  /** 可选副说明：写「答案在别处拿不到的那句话」，同义反复就不传。 */
+  description?: React.ReactNode;
+  title: string;
 }) {
   return (
     <ShadcnCard
@@ -73,9 +68,7 @@ export function SettingsCard({
           差距（16px vs 14px 的差距在同一屏里读不出来）。 */}
       <CardHeader className="border-border-subtle border-b py-3">
         <CardTitle className="u-title">{title}</CardTitle>
-        {description ? (
-          <p className="text-ink-muted text-xs">{description}</p>
-        ) : null}
+        {description ? <p className="text-ink-muted text-xs">{description}</p> : null}
       </CardHeader>
       <CardContent className="py-4">{children}</CardContent>
     </ShadcnCard>

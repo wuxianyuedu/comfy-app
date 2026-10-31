@@ -63,18 +63,18 @@ export function OptionListPopover({
   disabled,
   align = "start",
 }: {
-  value: string;
+  align?: "start" | "center" | "end";
+  contentClassName?: string;
+  disabled?: boolean;
+  emptyHint?: ReactNode;
   items: Array<OptionListItem>;
+  listClassName?: string;
+  onOpenChange?: (open: boolean) => void;
   onSelect: (value: string) => void;
   trigger: ReactNode;
-  contentClassName?: string;
   triggerClassName?: string;
   triggerTitle?: string;
-  listClassName?: string;
-  emptyHint?: ReactNode;
-  onOpenChange?: (open: boolean) => void;
-  disabled?: boolean;
-  align?: "start" | "center" | "end";
+  value: string;
 }) {
   const [open, setOpen] = useState(false);
   /* 内部 state 与外部回调一起用：外部只想「被通知」时（如画布变换后关闭）

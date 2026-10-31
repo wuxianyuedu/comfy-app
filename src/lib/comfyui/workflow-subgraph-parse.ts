@@ -59,13 +59,13 @@ export interface BoundaryPin {
  */
 export function parseSubgraphPins(sub: RawSubgraphDef): {
   boundaryPins: { inputs: Array<BoundaryPin>; outputs: Array<BoundaryPin> };
-  pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }>;
+  pinIdByLinkId: Record<number, { kind: "input" | "output"; pinId: string }>;
 } {
   const boundaryPins: { inputs: Array<BoundaryPin>; outputs: Array<BoundaryPin> } = {
     inputs: [],
     outputs: [],
   };
-  const pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }> = {};
+  const pinIdByLinkId: Record<number, { kind: "input" | "output"; pinId: string }> = {};
   const rawSubInputs: Array<unknown> = Array.isArray(sub.inputs) ? sub.inputs : [];
   const rawSubOutputs: Array<unknown> = Array.isArray(sub.outputs) ? sub.outputs : [];
 
@@ -135,7 +135,7 @@ export interface BoundaryLink {
  */
 export function buildBoundaryLinks(
   boundaryLinkInfoById: Record<number, BoundaryLinkInfo>,
-  pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }>,
+  pinIdByLinkId: Record<number, { kind: "input" | "output"; pinId: string }>,
   inputNameByNodeSlot: Record<string, Array<string>>,
   /** 输出侧槽位表 —— 输出边界连线由别处组装，本函数只处理输入侧，保留参数以
    *  与调用方口径一致（不参与计算）。 */
@@ -180,15 +180,15 @@ export function buildBoundaryLinks(
 export function reportDroppedBoundaryLinks(
   sub: RawSubgraphDef,
   boundaryLinkInfoById: Record<number, BoundaryLinkInfo>,
-  pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }>,
+  pinIdByLinkId: Record<number, { kind: "input" | "output"; pinId: string }>,
   produced: ReadonlyArray<BoundaryLink>,
-): Array<{ linkId: number; pinId: string; innerNodeId: string; innerSlot: number }> {
+): Array<{ innerNodeId: string; innerSlot: number; linkId: number; pinId: string }> {
   const producedIds = new Set(produced.map((link) => link.linkId));
   const dropped: Array<{
-    linkId: number;
-    pinId: string;
     innerNodeId: string;
     innerSlot: number;
+    linkId: number;
+    pinId: string;
   }> = [];
   for (const [linkIdStr, info] of Object.entries(boundaryLinkInfoById)) {
     const linkId = Number(linkIdStr);
@@ -254,27 +254,27 @@ export function extractSubgraphAnnotations(
   hostId = "",
 ): {
   groups: Array<{
-    id: string;
-    title: string;
     bounding: [number, number, number, number];
     color: string;
-  }>;
-  notes: Array<{
     id: string;
     title: string;
-    text: string;
+  }>;
+  notes: Array<{
+    color: string;
+    id: string;
     pos: [number, number];
     size: [number, number];
-    color: string;
+    text: string;
+    title: string;
   }>;
   positions: Record<string, [number, number]>;
 } {
   /* 内层的分组框。 */
   const groups: Array<{
-    id: string;
-    title: string;
     bounding: [number, number, number, number];
     color: string;
+    id: string;
+    title: string;
   }> = [];
   if (Array.isArray(sub.groups)) {
     sub.groups.forEach((g: unknown, idx: number) => {
@@ -302,12 +302,12 @@ export function extractSubgraphAnnotations(
 
   /* 内层的便签注释。 */
   const notes: Array<{
+    color: string;
     id: string;
-    title: string;
-    text: string;
     pos: [number, number];
     size: [number, number];
-    color: string;
+    text: string;
+    title: string;
   }> = [];
   const innerNodes: Array<RawNode> = Array.isArray(sub.nodes) ? sub.nodes : [];
   for (const n of innerNodes) {

@@ -69,8 +69,8 @@ vi.mock("~/lib/shell/desktop-shell-client", () => ({
  * 真带上那一次的 id」这条判据靠它。 */
 const { sessionLogRequests } = vi.hoisted(() => ({
   sessionLogRequests: /* SAFETY: 类型断言已复核 */ [] as Array<{
-    source: string;
     session: string | null;
+    source: string;
   }>,
 }));
 vi.mock("~/lib/log/log-file-client", () => {
@@ -96,7 +96,7 @@ vi.mock("~/lib/log/log-file-client", () => {
 });
 
 interface Behavior {
-  comfyStart?: { ok: boolean; detail: string };
+  comfyStart?: { detail: string; ok: boolean };
   /** comfyui.status 返回的 base（非空即「运行中」，供「打开查看」使用）。 */
   comfyBase?: string | null;
   /** comfyui.status 返回的**已保存**路径（启动动作实际会用的那一条）。 */
@@ -104,11 +104,11 @@ interface Behavior {
   /** comfyEmbeddable 探测结论（决定页签里渲染 iframe 还是可读说明）。 */
   comfyEmbeddable?: { embeddable: boolean; reason: string };
   /** comfyOpen（在浏览器打开）的返回文案；默认成功。 */
-  comfyOpen?: { ok: boolean; detail: string };
+  comfyOpen?: { detail: string; ok: boolean };
   comfyInstance?: {
-    pathConfigured: boolean;
-    instanceType: "desktop" | "portable" | "venv" | null;
     desktopManaged: boolean;
+    instanceType: "desktop" | "portable" | "venv" | null;
+    pathConfigured: boolean;
   };
 }
 
@@ -207,11 +207,11 @@ function mockSessionsFor(
   payload: {
     content: string;
     sessions?: Array<{
-      id: string;
-      title: string;
-      startedAt: number | null;
-      scope: "current" | "runs";
       crashed: boolean;
+      id: string;
+      scope: "current" | "runs";
+      startedAt: number | null;
+      title: string;
     }>;
     truncated?: boolean;
     windowed?: boolean;

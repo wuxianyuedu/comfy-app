@@ -18,7 +18,7 @@ export const UPDATE_CHECK_POLL_MS = 30_000;
 
 export interface UpdateCheckHookOptions {
   /** 轮询发现「干净→脏」时触发一次（容器层据此弹应用内提示）。 */
-  onDirty?: (groups: Array<{ key: string; label: string; hint: string }>) => void;
+  onDirty?: (groups: Array<{ hint: string; key: string; label: string }>) => void;
 }
 
 /** 主动检测一次；返回是否真正执行（false = 请求失败/服务端未就绪）。 */

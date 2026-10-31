@@ -247,7 +247,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
         async () => {
           const detail = /* SAFETY: 类型断言已复核 */ (await trpcQuery(page, "task.detail", {
             id: taskId,
-          })) as { status?: string; error?: string | null; images?: Array<unknown> } | undefined;
+          })) as { error?: string | null; images?: Array<unknown>; status?: string; } | undefined;
           /* 非终态一律回同一个哨兵：poll 据此**继续等**（`QUEUED` 也到不了
              `"终态"`，所以不会被当成结论放行）。 */
           return isTerminalTaskStatus(detail?.status) ? detail : null;
@@ -262,9 +262,9 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
       .then(
         (detail) =>
           /* SAFETY: 类型断言已复核 */ detail as {
-            status?: string;
             error?: string | null;
             images?: Array<unknown>;
+            status?: string;
           },
       );
 
@@ -322,8 +322,8 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
       )
       .not.toBeNull()
       .then(() => trpcQuery(page, "task.detail", { id: taskId }))) as {
-      status?: string;
       error?: string | null;
+      status?: string;
     };
 
     expect(terminal.status).toBe("FAILED");

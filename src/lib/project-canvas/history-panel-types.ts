@@ -37,7 +37,7 @@ export interface HistoryTaskRow {
   error: string | null;
 }
 
-export const STATUS_PILL: Record<string, { label: string; cls: string }> = {
+export const STATUS_PILL: Record<string, { cls: string; label: string }> = {
   QUEUED: {
     label: "排队中",
     cls: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300",

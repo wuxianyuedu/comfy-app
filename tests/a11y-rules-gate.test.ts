@@ -66,14 +66,14 @@ const { judge } = loadJudgeModule();
 const SAMPLE = /* SAFETY: 类型断言已复核 */ JSON.parse(
   readFileSync(path.join(REAL_ROOT, "tests", "fixtures", "a11y-rule-ledger.sample.json"), "utf8"),
 ) as {
-  why: string;
-  dialect: Array<{ rule: string; decision: string; why: string; keeper: string }>;
+  dialect: Array<{ decision: string; keeper: string; rule: string; why: string; }>;
   inlineExemptions: Array<{
-    rule: string;
     file: string;
-    why: string;
     keeper: string;
+    rule: string;
+    why: string;
   }>;
+  why: string;
 };
 
 /**
@@ -108,7 +108,7 @@ async function runWithLedger(ledger: Ledger, args: Array<string> = []) {
     encoding: "utf8",
   }).then(
     (r) => ({ ok: true, output: r.stdout + r.stderr }),
-    (e: { code?: number; stdout?: string; stderr?: string }) => ({
+    (e: { code?: number; stderr?: string; stdout?: string; }) => ({
       ok: (e.code ?? 1) === 0,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
     }),
@@ -310,7 +310,7 @@ test("⑩ `--ledger` 缺路径 → 退 2（不许静默退回真台账）", asyn
     encoding: "utf8",
   }).then(
     () => ({ code: 0, output: "" }),
-    (error: { code?: number; stdout?: string; stderr?: string }) => ({
+    (error: { code?: number; stderr?: string; stdout?: string; }) => ({
       code: error.code ?? 1,
       output: `${error.stdout ?? ""}${error.stderr ?? ""}`,
     }),

@@ -11,7 +11,7 @@ import { useLogPanel } from "./LogProvider";
 const SAVED_FLASH_MS = 8000;
 
 /* 「未亮起」的空载荷：模块级常量，身份稳定（见 `useFlashLatch`）。 */
-const EMPTY_SAVED: { savedPath: string | null; failed: boolean } = {
+const EMPTY_SAVED: { failed: boolean; savedPath: string | null } = {
   savedPath: null,
   failed: false,
 };
@@ -68,10 +68,7 @@ export function DiagnosticsButton() {
       </Hint>
       {/* 路径就是这次打包的「回执」：没有它，用户只能自己去猜文件在哪。 */}
       {savedPath && (
-        <span
-          className="text-ink-fainter text-2xs max-w-56 truncate"
-          title={savedPath}
-        >
+        <span className="text-ink-fainter text-2xs max-w-56 truncate" title={savedPath}>
           已打包 {savedPath}
         </span>
       )}
