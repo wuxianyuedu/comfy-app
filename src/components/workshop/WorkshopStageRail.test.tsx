@@ -34,10 +34,10 @@ const pendingIndex = STAGE_DEFS.findIndex((stage) => ratios[stage.id] < 1 && sta
 function renderRail() {
   const { container } = render(
     <WorkshopStageRail
-      tab={ACTIVE}
-      stageRatios={ratios}
-      viewContext={ctx}
       onTabChange={() => undefined}
+      stageRatios={ratios}
+      tab={ACTIVE}
+      viewContext={ctx}
     />,
   );
   const nav = container.querySelector<HTMLElement>("nav");

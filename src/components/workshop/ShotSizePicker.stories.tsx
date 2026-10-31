@@ -52,7 +52,7 @@ function LivePicker({
   const [value, setValue] = useState(initial);
   return (
     <div className="flex flex-col gap-2">
-      <ShotSizePicker {...rest} value={value} onChange={setValue} />
+      <ShotSizePicker {...rest} onChange={setValue} value={value} />
       <p className="text-ink-muted font-mono text-[11px]">
         {JSON.stringify(value)} → {shotSizeSummary(value)}
       </p>
@@ -80,7 +80,7 @@ export const TwoScenes: Story = {
     <div className="flex gap-10">
       {
         /* SAFETY: 类型断言已复核 */ (["image", "video"] as const).map((scene) => (
-          <div key={scene} className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2" key={scene}>
             <span className="text-ink-muted font-mono text-[11px]">scene = {scene}</span>
             <LivePicker initial={{ ...DEFAULT_SHOT_SIZE, clarity: "2k" }} scene={scene} />
           </div>
@@ -92,5 +92,5 @@ export const TwoScenes: Story = {
 
 /** 禁用态（生成进行中 / 尺寸由封装层接管）。 */
 export const Disabled: Story = {
-  render: () => <LivePicker initial={DEFAULT_SHOT_SIZE} disabled />,
+  render: () => <LivePicker disabled initial={DEFAULT_SHOT_SIZE} />,
 };

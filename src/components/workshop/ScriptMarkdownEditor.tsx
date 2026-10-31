@@ -293,7 +293,7 @@ export function ScriptMarkdownEditor({
   return (
     /* 全屏编辑弹层:底部 padding-bottom 6(24px) 为全局常驻的 BrowserStatusBar
        (fixed bottom-0 z-[100] h-6) 让位,避免底部「取消/保存」按钮被它盖住(ISSUE #35)。 */
-    <FullScreenLayer zClass={zClass("modal")} className="bg-canvas flex flex-col pb-6">
+    <FullScreenLayer className="bg-canvas flex flex-col pb-6" zClass={zClass("modal")}>
       {/* Header */}
       <header className="border-border flex h-14 items-center justify-between border-b px-5">
         <div className="flex items-center gap-3">
@@ -303,11 +303,11 @@ export function ScriptMarkdownEditor({
           <h2 className="text-ink-bright u-title">{title}</h2>
         </div>
         <Button
-          variant="ghost"
-          size="icon"
-          onClick={onCancel}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-lg"
           aria-label="关闭"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-lg"
+          onClick={onCancel}
+          size="icon"
+          variant="ghost"
         >
           <X data-icon="inline-start" size={18} />
         </Button>
@@ -316,36 +316,36 @@ export function ScriptMarkdownEditor({
       {/* Toolbar */}
       <EditorToolbar
         insertAtLineStart={insertAtLineStart}
-        wrapSelection={wrapSelection}
-        insertList={insertList}
-        insertLink={insertLink}
         insertImage={insertImage}
+        insertLink={insertLink}
+        insertList={insertList}
         insertTable={insertTable}
+        onTogglePreview={() => setShowPreview((prev) => !prev)}
         restoreHistory={restoreHistory}
         showPreview={showPreview}
-        onTogglePreview={() => setShowPreview((prev) => !prev)}
+        wrapSelection={wrapSelection}
       />
 
       {/* Body */}
       <div className="flex min-h-0 flex-1">
         {/* Outline sidebar */}
-        <OutlineSidebar outline={outline} onJump={jumpToLine} />
+        <OutlineSidebar onJump={jumpToLine} outline={outline} />
 
         {/* Editor area:单列布局 —— 编辑态直接显示 markdown 源(全宽),
             右上「预览」按钮按需切换到整区渲染视图,再点返回编辑。 */}
         <EditorBody
-          textareaRef={textareaRef}
-          value={value}
-          showPreview={showPreview}
-          previewHtml={previewHtml}
           emitChange={emitChange}
-          pushHistory={pushHistory}
           getSelection={getSelection}
           onChange={(next, start, end) => {
             emitChange(next);
             selectionRef.current = { start, end };
             pushHistory(next, start, end);
           }}
+          previewHtml={previewHtml}
+          pushHistory={pushHistory}
+          showPreview={showPreview}
+          textareaRef={textareaRef}
+          value={value}
         />
       </div>
 
@@ -355,18 +355,18 @@ export function ScriptMarkdownEditor({
           {value.split("\n").filter((line) => line.trim()).length} 行 · {value.trim().length} 字符
         </span>
         <Button
-          variant="outline"
-          size="xs"
-          onClick={onCancel}
           className="border-border text-ink-strong hover:bg-subtle h-auto rounded-lg px-5 py-2"
+          onClick={onCancel}
+          size="xs"
+          variant="outline"
         >
           取消
         </Button>
         <Button
-          variant="primary-solid"
-          size="xs"
-          onClick={onSave}
           className="h-auto rounded-lg px-5 py-2"
+          onClick={onSave}
+          size="xs"
+          variant="primary-solid"
         >
           保存
         </Button>

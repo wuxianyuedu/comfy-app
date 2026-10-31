@@ -97,40 +97,40 @@ export function AttributeMultiSelect({
       <div className="border-border bg-bg flex flex-wrap items-center gap-1.5 rounded-md border px-1.5 py-1.5">
         {value.map((v) => (
           <span
-            key={v}
             className="bg-primary-soft text-primary flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+            key={v}
           >
             {v}
             <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => removeOne(v)}
-              className="text-primary/60 hover:text-danger-strong"
               aria-label={`移除 ${v}`}
+              className="text-primary/60 hover:text-danger-strong"
+              onClick={() => removeOne(v)}
+              size="icon-xs"
+              variant="ghost"
             >
               <X data-icon="inline-start" size={11} />
             </Button>
           </span>
         ))}
         <Popover
-          open={open}
           onOpenChange={(next) => {
             setOpen(next);
             if (next) {
               setKeyword("");
             }
           }}
+          open={open}
         >
           <PopoverTrigger
-            ref={triggerRef}
-            type="button"
-            role="combobox"
-            id={panelId}
-            disabled={disabled}
             className="border-border text-muted-foreground hover:border-primary hover:text-primary ml-1 inline-flex h-auto items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-xs transition-colors disabled:opacity-40"
+            disabled={disabled}
+            id={panelId}
+            ref={triggerRef}
+            role="combobox"
+            type="button"
           >
             + 选择
-            <ChevronDown size={11} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+            <ChevronDown className={`transition-transform ${open ? "rotate-180" : ""}`} size={11} />
           </PopoverTrigger>
           {value.length === 0 && (
             <span className="text-muted-foreground/60 text-2xs px-1">{placeholder}</span>
@@ -144,20 +144,20 @@ export function AttributeMultiSelect({
           >
             {/* 搜索 */}
             <div className="border-border flex items-center gap-1.5 border-b px-2 py-1.5">
-              <Search size={13} className="text-muted-foreground shrink-0" />
+              <Search className="text-muted-foreground shrink-0" size={13} />
               <input
-                value={keyword}
-                onChange={textHandler(setKeyword)}
                 className="placeholder:text-muted-foreground/50 min-w-0 flex-1 bg-transparent text-xs outline-none"
+                onChange={textHandler(setKeyword)}
                 placeholder="搜索…"
+                value={keyword}
               />
             </div>
 
             {/* 选项（分组） · role="option" 要求 listbox 父级 · 允许多选 */}
             <div
-              role="listbox"
               aria-multiselectable="true"
               className="max-h-56 overflow-y-auto px-1 py-1"
+              role="listbox"
             >
               {visibleGroups.length === 0 ? (
                 <p className="text-muted-foreground text-2xs px-2 py-2">
@@ -165,7 +165,7 @@ export function AttributeMultiSelect({
                 </p>
               ) : (
                 visibleGroups.map((g) => (
-                  <div key={g.title} className="mb-1">
+                  <div className="mb-1" key={g.title}>
                     <p className="text-muted-foreground/70 text-3xs px-2 py-0.5 font-medium tracking-wide uppercase">
                       {g.title}
                     </p>
@@ -174,9 +174,10 @@ export function AttributeMultiSelect({
                       return (
                         /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：选项行的键出口是 `simpleKeyHandler` 的展开（`tabIndex` 本轮已补）。 */
                         <div
-                          key={opt}
-                          role="option"
                           aria-selected={on}
+                          key={opt}
+                          onClick={() => toggle(opt)}
+                          role="option"
                           /* 行可聚焦 + Enter/Space 切换：此前只有 `onClick`，
                            * 连 `tabIndex` 都没有 —— 键盘用户完全进不来。
                            * `role="option"` 承诺「Space / Enter 可选中」，键判据
@@ -185,7 +186,6 @@ export function AttributeMultiSelect({
                            * 字面量找 `onKeyDown` 找不到，豁免登记在
                            * `scripts/.a11y-rule-ledger.json`）。 */
                           tabIndex={0}
-                          onClick={() => toggle(opt)}
                           /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`：
                            * 这一行里还有「点 label 选、点默认星切默认」两个动作，合成
                            * 一个 button 会把后者的键语义一起吞掉）。`tabIndex={0}` 让
@@ -216,17 +216,17 @@ export function AttributeMultiSelect({
             {/* 自定义添加 */}
             <div className="border-border flex items-center gap-1.5 border-t px-2 py-1.5">
               <input
-                value={custom}
                 onChange={textHandler(setCustom)}
+                value={custom}
                 {...enterCommit({ onCommit: addCustom })}
                 className="border-border bg-bg focus:border-primary min-w-0 flex-1 rounded border px-1.5 py-0.5 text-xs outline-none"
                 placeholder="没有想要的？自定义添加后回车"
               />
               <Button
-                type="button"
-                onClick={addCustom}
-                disabled={!custom.trim()}
                 className="h-auto shrink-0 rounded px-2 py-0.5 text-xs font-medium text-white disabled:opacity-40"
+                disabled={!custom.trim()}
+                onClick={addCustom}
+                type="button"
               >
                 添加
               </Button>

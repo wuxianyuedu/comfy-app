@@ -54,10 +54,8 @@ function InteractiveStrip({ inTitleBar, tabs }: { inTitleBar: boolean; tabs: Arr
     <div className="flex flex-col gap-3">
       <div className={inTitleBar ? "bg-canvas border-border border-b pb-2" : ""}>
         <ViewTabStrip
-          tabs={state.tabs}
           activeKey={state.activeKey}
-          projectNameOf={projectNameOf}
-          onSelect={(key) => setState((s) => ({ ...s, activeKey: key }))}
+          inTitleBar={inTitleBar}
           onClose={(key) =>
             setState((s) => ({
               ...s,
@@ -65,9 +63,11 @@ function InteractiveStrip({ inTitleBar, tabs }: { inTitleBar: boolean; tabs: Arr
               closed: [...s.closed, key],
             }))
           }
-          openableViews={OPENABLE}
           onOpenView={() => undefined}
-          inTitleBar={inTitleBar}
+          onSelect={(key) => setState((s) => ({ ...s, activeKey: key }))}
+          openableViews={OPENABLE}
+          projectNameOf={projectNameOf}
+          tabs={state.tabs}
         />
       </div>
       <p className="text-ink-muted text-xs">

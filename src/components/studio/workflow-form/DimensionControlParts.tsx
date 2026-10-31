@@ -76,9 +76,9 @@ export function RequiredChips({
         const visible = visibilityMode == null ? true : isVisibleInMode(pin, visibilityMode);
         return (
           <span
-            key={pin.ioKey}
             className="border-border-strong bg-canvas-deep flex items-center gap-1 rounded border px-1.5 py-0.5"
             data-dimension-pin={pin.ioKey}
+            key={pin.ioKey}
           >
             <span
               className="text-ink-soft text-3xs max-w-20 truncate"
@@ -89,11 +89,11 @@ export function RequiredChips({
             {onRequiredChange && (
               <Hint label={required ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}>
                 <Button
-                  variant={required ? "danger" : "ghost"}
-                  onClick={() => onRequiredChange(pin.ioKey, !required)}
                   className={`nodrag nopan text-3xs h-auto rounded px-1.5 py-px font-medium ${
                     required ? "" : "border-border-strong bg-subtle text-ink-muted border"
                   }`}
+                  onClick={() => onRequiredChange(pin.ioKey, !required)}
+                  variant={required ? "danger" : "ghost"}
                 >
                   {required ? "必填" : "可选"}
                 </Button>
@@ -108,14 +108,14 @@ export function RequiredChips({
                 }
               >
                 <Button
-                  variant="ghost"
-                  onClick={() => onVisibilityChange(pin.ioKey, !visible)}
-                  onMouseDown={(event) => event.stopPropagation()}
                   className={`nodrag nopan h-auto rounded p-0.5 ${
                     visible
                       ? "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
                       : "text-ink-fainter hover:bg-surface-2 hover:text-ink-bright"
                   }`}
+                  onClick={() => onVisibilityChange(pin.ioKey, !visible)}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  variant="ghost"
                 >
                   {visible ? (
                     <Eye data-icon="inline-start" size={11} />
@@ -145,9 +145,9 @@ export function SizeTableFooter({
   return (
     <div className="flex items-center gap-2">
       <Button
-        variant="outline"
-        onClick={onOpen}
         className="nodrag nopan border-border-strong text-ink-muted hover:bg-subtle hover:text-ink-bright text-3xs h-auto rounded-md px-2 py-1"
+        onClick={onOpen}
+        variant="outline"
       >
         尺寸表（{SIZE_SCENE_LABELS[scene]}场景）…
       </Button>

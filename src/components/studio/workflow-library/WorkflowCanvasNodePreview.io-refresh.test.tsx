@@ -79,11 +79,11 @@ function ioWith(steps: number, cfg: number): WorkflowIOMap {
 function renderPreview(io: WorkflowIOMap) {
   return render(
     <WorkflowCanvasNodePreview
-      workflowId="wf-1"
-      workflowName="测试工作流"
       taskType="t2i"
-      workflowIO={io}
       usable
+      workflowId="wf-1"
+      workflowIO={io}
+      workflowName="测试工作流"
     />,
   );
 }
@@ -116,11 +116,11 @@ describe("WorkflowCanvasNodePreview — 默认值刷新", () => {
     /* 作者在 IO 编辑里把 steps 默认改成 30、cfg 默认改成 9 并保存。 */
     rerender(
       <WorkflowCanvasNodePreview
-        workflowId="wf-1"
-        workflowName="测试工作流"
         taskType="t2i"
-        workflowIO={ioWith(30, 9)}
         usable
+        workflowId="wf-1"
+        workflowIO={ioWith(30, 9)}
+        workflowName="测试工作流"
       />,
     );
 
@@ -139,11 +139,11 @@ describe("WorkflowCanvasNodePreview — 默认值刷新", () => {
 
     rerender(
       <WorkflowCanvasNodePreview
-        workflowId="wf-2"
-        workflowName="另一个工作流"
         taskType="t2i"
-        workflowIO={ioWith(50, 3)}
         usable
+        workflowId="wf-2"
+        workflowIO={ioWith(50, 3)}
+        workflowName="另一个工作流"
       />,
     );
     expect(stepsInput().value).toBe("50");
@@ -187,13 +187,13 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
   it("卡片头是契约里的统一参数名（提示词 / 尺寸），不是工作流里的端口名", () => {
     const { container } = render(
       <WorkflowCanvasNodePreview
-        workflowId="wf-1"
-        workflowName="测试工作流"
-        taskType="t2i"
-        workflowIO={promptSizeIO()}
-        paramMap={{}}
-        usable
         defaultMode="T2I"
+        paramMap={{}}
+        taskType="t2i"
+        usable
+        workflowId="wf-1"
+        workflowIO={promptSizeIO()}
+        workflowName="测试工作流"
       />,
     );
     expect(container.querySelector('[data-testid="workflow-param-card-column"]')).toBeTruthy();
@@ -218,14 +218,14 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
   it("节点上已经选了模式时，卡片不再提示「需要选择模式」", () => {
     const { container } = render(
       <WorkflowCanvasNodePreview
-        workflowId="wf-1"
-        workflowName="测试工作流"
-        taskType="I2V"
-        workflowIO={promptSizeIO()}
-        paramMap={{}}
-        usable
-        modes={["T2V", "I2V"]}
         defaultMode="I2V"
+        modes={["T2V", "I2V"]}
+        paramMap={{}}
+        taskType="I2V"
+        usable
+        workflowId="wf-1"
+        workflowIO={promptSizeIO()}
+        workflowName="测试工作流"
       />,
     );
     expect(container.textContent).not.toContain("先选模式才能连线");
@@ -234,10 +234,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
   it("被对外参数落到的那一行，行尾标出它属于哪个对外参数", () => {
     const { container } = render(
       <WorkflowCanvasNodePreview
-        workflowId="wf-1"
-        workflowName="测试工作流"
-        taskType="t2i"
-        workflowIO={promptSizeIO()}
+        defaultMode="T2I"
         /* 落点只由**作者画的线**决定：不给线就是未配置，行尾不该有徽标。 */
         paramMap={{
           source: {
@@ -247,8 +244,11 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
             },
           },
         }}
+        taskType="t2i"
         usable
-        defaultMode="T2I"
+        workflowId="wf-1"
+        workflowIO={promptSizeIO()}
+        workflowName="测试工作流"
       />,
     );
     /* 提示词落到 positive_prompt、尺寸落到宽高比那一行 —— 两行各带一次徽标。 */
@@ -269,10 +269,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     }).find((entry) => entry.id === "prompt")!;
     const { container } = render(
       <WorkflowCanvasNodePreview
-        workflowId="wf-1"
-        workflowName="测试工作流"
-        taskType="t2i"
-        workflowIO={promptSizeIO()}
+        defaultMode="T2I"
         paramMap={{
           source: {
             "mode:T2I": {
@@ -281,8 +278,11 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
             },
           },
         }}
+        taskType="t2i"
         usable
-        defaultMode="T2I"
+        workflowId="wf-1"
+        workflowIO={promptSizeIO()}
+        workflowName="测试工作流"
       />,
     );
     const tags = [...container.querySelectorAll('[data-testid="wflib-param-owner"]')];
@@ -301,13 +301,13 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
      * 断言对象随之变成「节点 / handle / edge」的 DOM。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
-        workflowId="wf-1"
-        workflowName="测试工作流"
-        taskType="t2i"
-        workflowIO={promptSizeIO()}
-        paramMap={{}}
-        usable
         defaultMode="T2I"
+        paramMap={{}}
+        taskType="t2i"
+        usable
+        workflowId="wf-1"
+        workflowIO={promptSizeIO()}
+        workflowName="测试工作流"
       />,
     );
     /* 左列卡片的 handle id = **条目 id**（一个口一颗点）：普通卡是契约口 id，
@@ -331,9 +331,11 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
      *  （大端点）摆在框外左侧。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
-        workflowId="wf-1"
-        workflowName="测试工作流"
+        defaultMode="T2I"
+        paramMap={{}}
         taskType="t2i"
+        usable
+        workflowId="wf-1"
         workflowIO={{
           "5::widget::aspect_ratio": {
             direction: "input",
@@ -354,9 +356,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
             defaultValue: 1,
           },
         }}
-        paramMap={{}}
-        usable
-        defaultMode="T2I"
+        workflowName="测试工作流"
       />,
     );
     /* 控件在（带下拉触发器）。 */
@@ -391,13 +391,13 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
      *  （`layoutLibraryNodes` 的 `columnGap` 是节点坐标的一部分）。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
-        workflowId="wf-1"
-        workflowName="测试工作流"
-        taskType="t2i"
-        workflowIO={promptSizeIO()}
-        paramMap={{}}
-        usable
         defaultMode="T2I"
+        paramMap={{}}
+        taskType="t2i"
+        usable
+        workflowId="wf-1"
+        workflowIO={promptSizeIO()}
+        workflowName="测试工作流"
       />,
     );
     const nodes = [...container.querySelectorAll<HTMLElement>(".react-flow__node")];
@@ -417,9 +417,11 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
      *  拖线时有得可落。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
-        workflowId="wf-1"
-        workflowName="测试工作流"
+        defaultMode="T2I"
+        paramMap={{}}
         taskType="t2i"
+        usable
+        workflowId="wf-1"
         workflowIO={{
           "5::widget::aspect_ratio": {
             direction: "input",
@@ -440,9 +442,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
             defaultValue: 1,
           },
         }}
-        paramMap={{}}
-        usable
-        defaultMode="T2I"
+        workflowName="测试工作流"
       />,
     );
     expect(container.querySelector('[aria-label="选择比例与像素"]')).toBeTruthy();
@@ -461,12 +461,12 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
      *  契约口照样在列，卡片如实显示成未配置（作者在库里连线才是落点问题）。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
-        workflowId="wf-1"
-        workflowName="测试工作流"
-        taskType="t2i"
-        workflowIO={{}}
         paramMap={{}}
+        taskType="t2i"
         usable
+        workflowId="wf-1"
+        workflowIO={{}}
+        workflowName="测试工作流"
       />,
     );
     expect(container.querySelector('[data-testid="workflow-param-card-column"]')).toBeTruthy();

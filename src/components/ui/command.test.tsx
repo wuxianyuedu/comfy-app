@@ -71,7 +71,7 @@ afterEach(cleanup);
 describe("CommandDialog 必须有 <Command> 祖先", () => {
   it("打开面板时渲染 cmdk 各部件不抛 'subscribe' 错", () => {
     render(
-      <CommandDialog open onOpenChange={vi.fn()}>
+      <CommandDialog onOpenChange={vi.fn()} open>
         <CommandInput placeholder="搜索…" />
         <CommandList>
           <CommandEmpty>无结果</CommandEmpty>

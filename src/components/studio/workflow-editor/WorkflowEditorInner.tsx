@@ -110,7 +110,7 @@ export function WorkflowEditorInner({
   }));
   return (
     <WFStoresProvider stores={stores}>
-      <WorkflowEditorBody workflowId={workflowId} onClose={onClose} onSave={onSave} />
+      <WorkflowEditorBody onClose={onClose} onSave={onSave} workflowId={workflowId} />
     </WFStoresProvider>
   );
 }
@@ -389,23 +389,23 @@ function WorkflowEditorBody({
   }
 
   return (
-    <FullScreenLayer zClass={zClass("modal")} className="bg-canvas flex flex-col pb-6">
+    <FullScreenLayer className="bg-canvas flex flex-col pb-6" zClass={zClass("modal")}>
       {/* ── Top bar ── */}
       <WorkflowEditorTopBar
-        onClose={onClose}
         detail={detail}
-        rootWorkflowName={rootWorkflowName}
-        subgraphStack={subgraphStack}
-        setSubgraphStack={setSubgraphStack}
-        fetchDetail={fetchDetail}
-        onExitSubgraph={onExitSubgraph}
-        forceReloadDetail={forceReloadDetail}
-        viewHostNodeId={viewHostNodeId}
-        setViewJsonOpen={setViewJsonOpen}
-        resetLayout={resetLayout}
-        handleSave={handleSave}
-        saving={saving}
         error={error}
+        fetchDetail={fetchDetail}
+        forceReloadDetail={forceReloadDetail}
+        handleSave={handleSave}
+        onClose={onClose}
+        onExitSubgraph={onExitSubgraph}
+        resetLayout={resetLayout}
+        rootWorkflowName={rootWorkflowName}
+        saving={saving}
+        setSubgraphStack={setSubgraphStack}
+        setViewJsonOpen={setViewJsonOpen}
+        subgraphStack={subgraphStack}
+        viewHostNodeId={viewHostNodeId}
       />
 
       {/* ── Canvas ── */}
@@ -441,26 +441,26 @@ function WorkflowEditorBody({
          *  叠上去，这样未保存的重命名立即生效。 */}
         {ioPreviewOpen && (
           <WorkflowIoPreviewPanel
-            workflowIO={workflowIO}
+            defaultMode={detail.defaultMode ?? null}
             detailIOMap={ioDetailMap}
             modes={detail.availableModes ?? []}
-            defaultMode={detail.defaultMode ?? null}
-            onModesChange={handleModesChange}
             onClose={() => setIoPreviewOpen(false)}
+            onModesChange={handleModesChange}
+            workflowIO={workflowIO}
           />
         )}
         <WorkflowEditorCanvas
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onNodeDragStop={onNodeDragStop}
           canvasSettings={canvasSettings}
           canvasSettingsHydrated={canvasSettingsHydrated}
+          edges={edges}
+          nodes={nodes}
+          onEdgeClick={onEdgeClick}
+          onEdgesChange={onEdgesChange}
           onMiniMapJump={onMiniMapJump}
+          onNodeDragStop={onNodeDragStop}
+          onNodesChange={onNodesChange}
           onOpenSettings={() => setCanvasSettingsOpen(true)}
           onRecenter={recenterCanvas}
-          onEdgeClick={onEdgeClick}
           /* 选中节点后由画布把「相关连线」与「相关端口行」标记分别写回 edges /
            * 节点 data（连线加粗提亮，落到的端口行同步提亮）。 */
           setEdges={setEdges}
@@ -473,10 +473,10 @@ function WorkflowEditorBody({
          *  点击齿轮按钮时渲染。 */}
         {canvasSettingsOpen && (
           <CanvasSettingsPanel
+            onClose={() => setCanvasSettingsOpen(false)}
+            reset={resetCanvasSettings}
             settings={canvasSettings}
             update={updateCanvasSetting}
-            reset={resetCanvasSettings}
-            onClose={() => setCanvasSettingsOpen(false)}
           />
         )}
         {/* 工作流编辑画布是纯配置界面（不存在执行），不再挂执行日志入口；

@@ -45,14 +45,14 @@ export function WorkshopStageRail({
     >
       {STAGE_DEFS.map((stage, index) => (
         <WorkshopStageItem
-          key={stage.id}
           className="w-full min-w-0"
+          isCurrent={tab === stage.id}
+          key={stage.id}
           label={stage.label}
+          onSelect={() => onTabChange(stage.id)}
           ordinal={index + 1}
           ratio={stageRatios[stage.id]}
           subtitle={stageSubtitle(stage.id, tab, stageRatios, viewContext)}
-          isCurrent={tab === stage.id}
-          onSelect={() => onTabChange(stage.id)}
         />
       ))}
     </nav>

@@ -93,32 +93,32 @@ function DimensionControl({
   if (group.width && group.height) {
     return (
       <DimensionSizeControl
-        group={{ ...group, width: group.width, height: group.height }}
-        values={values}
-        set={set}
-        setMany={setMany}
         disabled={disabled}
-        workflowId={workflowId}
+        group={{ ...group, width: group.width, height: group.height }}
+        mode={mode}
         narrow={narrow}
         onRequiredChange={onRequiredChange}
-        mode={mode}
-        visibilityMode={visibilityMode}
         onVisibilityChange={onVisibilityChange}
+        set={set}
+        setMany={setMany}
+        values={values}
+        visibilityMode={visibilityMode}
+        workflowId={workflowId}
       />
     );
   }
   if (group.aspect && group.megapixels) {
     return (
       <AspectMegapixelControl
-        group={{ ...group, aspect: group.aspect, megapixels: group.megapixels }}
-        values={values}
-        setMany={setMany}
         disabled={disabled}
+        group={{ ...group, aspect: group.aspect, megapixels: group.megapixels }}
+        mode={mode}
         narrow={narrow}
         onRequiredChange={onRequiredChange}
-        mode={mode}
-        visibilityMode={visibilityMode}
         onVisibilityChange={onVisibilityChange}
+        setMany={setMany}
+        values={values}
+        visibilityMode={visibilityMode}
       />
     );
   }
@@ -294,9 +294,9 @@ function DimensionSizeControl({
          *`clarityPresetFor` 认出它。 */
         extra: (
           <MegapixelStepper
-            value={currentMegapixels}
             disabled={disabled}
             onChange={(megapixels) => applyPreset(ratio, megapixelLabel(megapixels))}
+            value={currentMegapixels}
           />
         ),
       },
@@ -343,28 +343,28 @@ function DimensionSizeControl({
           </span>
           <div className={narrow ? "w-28 min-w-0" : "min-w-0 flex-1"}>
             <MultiSegmentPopover
-              ariaLabel="选择比例与像素"
-              triggerContent={`${shortRatioLabel(ratio)} / ${clarity}${clarityKind === "megapixel" ? ` / ${alignMultiple}` : ""}`}
-              sections={sections}
               align="right"
+              ariaLabel="选择比例与像素"
               footer={
                 <SizeTableFooter
-                  scene={scene}
-                  onOpen={() => setTableOpen(true)}
                   extra={
                     <span className="text-ink-faint text-3xs">{CLARITY_HINT[clarityKind]}</span>
                   }
+                  onOpen={() => setTableOpen(true)}
+                  scene={scene}
                 />
               }
+              sections={sections}
+              triggerContent={`${shortRatioLabel(ratio)} / ${clarity}${clarityKind === "megapixel" ? ` / ${alignMultiple}` : ""}`}
             />
           </div>
         </div>
         <RequiredChips
-          pins={[group.width, group.height]}
-          onRequiredChange={onRequiredChange}
           mode={mode}
-          visibilityMode={visibilityMode}
+          onRequiredChange={onRequiredChange}
           onVisibilityChange={onVisibilityChange}
+          pins={[group.width, group.height]}
+          visibilityMode={visibilityMode}
         />
       </div>
 
@@ -378,28 +378,28 @@ function DimensionSizeControl({
         <div className="grid grid-cols-2 gap-2">
           <Field label="宽度">
             <NumberField
-              value={w0}
-              min={64}
-              max={GROUPED_SIZE_MAX}
-              step={alignMultiple}
               disabled={disabled}
+              max={GROUPED_SIZE_MAX}
+              min={64}
               onChange={handleW}
+              step={alignMultiple}
+              value={w0}
             />
           </Field>
           <Field label="高度">
             <NumberField
-              value={h0}
-              min={64}
-              max={GROUPED_SIZE_MAX}
-              step={alignMultiple}
               disabled={disabled}
+              max={GROUPED_SIZE_MAX}
+              min={64}
               onChange={handleH}
+              step={alignMultiple}
+              value={h0}
             />
           </Field>
         </div>
       )}
 
-      {tableOpen && <SizePresetTableModal scene={scene} onClose={() => setTableOpen(false)} />}
+      {tableOpen && <SizePresetTableModal onClose={() => setTableOpen(false)} scene={scene} />}
     </div>
   );
 }

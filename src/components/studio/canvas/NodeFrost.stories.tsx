@@ -65,7 +65,7 @@ function FrostCard({ zoom, nodeMode, label }: { label: string; nodeMode: number;
         }}
       >
         <PseudoFrostLayer modeColor={palette.modeColor} />
-        <NodeFrost zoom={zoom} color={palette.modeColor} nodeMode={palette.nodeMode} />
+        <NodeFrost color={palette.modeColor} nodeMode={palette.nodeMode} zoom={zoom} />
         <div
           className={`relative ${zClass("base")} p-3 text-xs`}
           style={{ color: DARK_PALETTE_BASE.titleFallback }}
@@ -88,7 +88,7 @@ export const ZoomLadder: Story = {
   render: () => (
     <div className="flex flex-wrap items-start gap-6 p-4">
       {[0.25, 0.5, 1, 2].map((zoom) => (
-        <FrostCard key={zoom} zoom={zoom} nodeMode={4} label="旁路（粉）" />
+        <FrostCard key={zoom} label="旁路（粉）" nodeMode={4} zoom={zoom} />
       ))}
     </div>
   ),
@@ -98,9 +98,9 @@ export const ZoomLadder: Story = {
 export const ModeColors: Story = {
   render: () => (
     <div className="flex flex-wrap items-start gap-6 p-4">
-      <FrostCard zoom={1} nodeMode={4} label="旁路 nodeMode=4" />
-      <FrostCard zoom={1} nodeMode={2} label="静音 nodeMode=2" />
-      <FrostCard zoom={1} nodeMode={0} label="始终 nodeMode=0（不渲染毛玻璃）" />
+      <FrostCard label="旁路 nodeMode=4" nodeMode={4} zoom={1} />
+      <FrostCard label="静音 nodeMode=2" nodeMode={2} zoom={1} />
+      <FrostCard label="始终 nodeMode=0（不渲染毛玻璃）" nodeMode={0} zoom={1} />
     </div>
   ),
 };
@@ -113,8 +113,8 @@ export const InCanvas: Story = {
   render: () => (
     <div className="p-4">
       <StorybookFlowCanvas
-        scene={withNodeType(canvasScene("zoomedIn"), "story")}
         nodeTypes={FROST_NODE_TYPES}
+        scene={withNodeType(canvasScene("zoomedIn"), "story")}
       />
     </div>
   ),

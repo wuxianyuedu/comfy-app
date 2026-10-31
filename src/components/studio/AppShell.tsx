@@ -49,16 +49,16 @@ function ProjectGlyph() {
   return (
     <svg
       aria-hidden
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
       fill="none"
+      height="16"
       stroke="currentColor"
-      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+      width="16"
     >
-      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <rect height="18" rx="2" width="18" x="3" y="3" />
       <path d="M3 9h18M9 21V9" />
       <circle cx="15" cy="15" r="2" />
     </svg>
@@ -172,7 +172,7 @@ export function AppShell({
     /* 视图动作槽的宿主在 `TopBar`、使用者是各视图（它的后代）—— 提供者因此
        必须裹住两者。见 `ViewActions` 里那段「为什么是槽不是注册表」。 */
     <ViewActionsProvider>
-      <SidebarProvider defaultOpen={defaultSidebarOpen} className="h-full min-h-0">
+      <SidebarProvider className="h-full min-h-0" defaultOpen={defaultSidebarOpen}>
         <Sidebar collapsible="icon">
           <SidebarContent>
             <SidebarGroup>
@@ -185,14 +185,14 @@ export function AppShell({
                         {/* 未上线的视图留在列表里但禁用：移除会让「以后有这个」这件事消失，
                           禁用则给出「即将推出」（`tooltip` 里写明）。 */}
                         <SidebarMenuButton
-                          isActive={active === item.id}
                           disabled={!enabled}
-                          tooltip={enabled ? item.label : `${item.label}（即将推出）`}
+                          isActive={active === item.id}
                           onClick={() => {
                             if (enabled) {
                               onSelect(item.id);
                             }
                           }}
+                          tooltip={enabled ? item.label : `${item.label}（即将推出）`}
                         >
                           {item.icon}
                           <span>{item.label}</span>
@@ -216,16 +216,6 @@ export function AppShell({
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <Disclosure
-                      defaultOpen
-                      marker="chevron"
-                      trigger={
-                        <>
-                          {PROJECTS_ENTRY.icon}
-                          <span className="group-data-[collapsible=icon]:hidden">
-                            {PROJECTS_ENTRY.label}
-                          </span>
-                        </>
-                      }
                       className={cn(
                         "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                         "rounded-md p-2 text-sm font-medium [&_svg]:size-4 [&_svg]:shrink-0",
@@ -235,16 +225,26 @@ export function AppShell({
                         "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center",
                         "group-data-[collapsible=icon]:**:data-[slot=disclosure-marker]:hidden",
                       )}
+                      defaultOpen
+                      marker="chevron"
                       panelClassName="mt-1"
+                      trigger={
+                        <>
+                          {PROJECTS_ENTRY.icon}
+                          <span className="group-data-[collapsible=icon]:hidden">
+                            {PROJECTS_ENTRY.label}
+                          </span>
+                        </>
+                      }
                     >
                       <SidebarMenu>
                         {projects.map((project) => (
                           <SidebarMenuItem key={project.id}>
                             <SidebarMenuButton
-                              size="sm"
                               isActive={insideProject && project.id === activeProjectId}
-                              tooltip={project.name}
                               onClick={() => onOpenProject(project.id)}
+                              size="sm"
+                              tooltip={project.name}
                             >
                               {/* 缩略图标：展开态与缩略态都要有，否则收起后
                                 按钮里只剩一个空格子（名称被 `truncate` 掉）。 */}
@@ -255,16 +255,16 @@ export function AppShell({
                         ))}
                         <SidebarMenuItem>
                           <SidebarMenuButton
+                            onClick={onShowAllProjects}
                             size="sm"
                             tooltip="查看全部"
-                            onClick={onShowAllProjects}
                           >
                             <LayoutGrid />
                             <span>查看全部</span>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                         <SidebarMenuItem>
-                          <SidebarMenuButton size="sm" tooltip="新建项目" onClick={onNewProject}>
+                          <SidebarMenuButton onClick={onNewProject} size="sm" tooltip="新建项目">
                             <Plus />
                             <span>新建项目</span>
                           </SidebarMenuButton>
@@ -291,30 +291,30 @@ export function AppShell({
             保留在 `SidebarInset` 内部是为了让 fixed 侧栏自然让位，避免被侧栏压住关闭按钮。 */}
           {titleBarTabs ? null : (
             <ViewTabStrip
-              tabs={viewTabs ?? []}
               activeKey={activeViewKey ?? ""}
-              projectNameOf={projectNameOf}
-              onSelect={(key) => onSelectViewTab?.(key)}
               onClose={(key) => onCloseViewTab?.(key)}
-              openableViews={openableViews}
               onOpenView={onOpenView}
+              onSelect={(key) => onSelectViewTab?.(key)}
+              openableViews={openableViews}
+              projectNameOf={projectNameOf}
+              tabs={viewTabs ?? []}
             />
           )}
 
           <TopBar
             active={active}
-            onOpenSettings={onOpenSettings}
             onOpenSearch={() => setCommandOpen(true)}
+            onOpenSettings={onOpenSettings}
           />
 
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
         </SidebarInset>
 
         <CommandPalette
-          open={commandOpen}
-          onOpenChange={setCommandOpen}
           active={active}
+          onOpenChange={setCommandOpen}
           onSelect={onSelect}
+          open={commandOpen}
         />
       </SidebarProvider>
     </ViewActionsProvider>

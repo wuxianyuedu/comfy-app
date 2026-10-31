@@ -31,15 +31,14 @@ export function StringTextarea({
   }, [value, hasSize]);
   return (
     <Textarea
-      ref={ref}
-      readOnly
-      value={value}
-      rows={1}
-      onFocus={(event) => event.currentTarget.blur()}
       className={
         "border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal text-2xs block w-full resize-none rounded border px-2 py-1.5 leading-snug focus-visible:ring-0" +
         (mono ? " font-mono" : "")
       }
+      onFocus={(event) => event.currentTarget.blur()}
+      readOnly
+      ref={ref}
+      rows={1}
       style={{
         /* `width: 100%` 占住行内 flexbox 给我们的每个像素。
          * `flex: 1 1 0` + `minHeight: 0` 在 hasSize 路径上接入行的 flex 链
@@ -60,6 +59,7 @@ export function StringTextarea({
         overflowY: "auto",
       }}
       title={value}
+      value={value}
     />
   );
 }

@@ -9,9 +9,7 @@ import { TooltipProvider } from "./tooltip";
 
 afterEach(cleanup);
 
-const wrap = (ui: ReactNode) => (
-  <TooltipProvider delay={0}>{ui}</TooltipProvider>
-);
+const wrap = (ui: ReactNode) => <TooltipProvider delay={0}>{ui}</TooltipProvider>;
 
 /**
  * P82 出口（规范 16 §16.2.3）的回归：`Hint` 是「原生 `title=` → Tooltip」
@@ -64,9 +62,7 @@ describe("Hint", () => {
     );
     for (const name of ["甲", "乙", "丙"]) {
       await user.hover(screen.getByRole("button", { name }));
-      expect(
-        document.querySelector('[data-slot="tooltip-content"]'),
-      ).toBeNull();
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
     }
     await user.click(screen.getByRole("button", { name: "甲" }));
     expect(onClick).toHaveBeenCalledTimes(1);
@@ -75,7 +71,7 @@ describe("Hint", () => {
   it("纯图标按钮：accessibleName 把 label 同步成 aria-label（规范 §6.1）", () => {
     render(
       wrap(
-        <Hint label="关闭" accessibleName>
+        <Hint accessibleName label="关闭">
           <Button>✕</Button>
         </Hint>,
       ),
@@ -86,14 +82,12 @@ describe("Hint", () => {
   it("子元素已自带 aria-label 时不覆盖（调用处是更精确的判断）", () => {
     render(
       wrap(
-        <Hint label="关闭此面板" accessibleName>
+        <Hint accessibleName label="关闭此面板">
           <Button aria-label="关闭设置">✕</Button>
         </Hint>,
       ),
     );
-    expect(
-      screen.getByRole("button", { name: "关闭设置" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "关闭设置" })).toBeInTheDocument();
   });
 
   it("默认不补名：有可见文字的按钮不该出现「名字与可见文字不一致」", () => {
@@ -112,7 +106,7 @@ describe("Hint", () => {
     render(
       wrap(
         <Hint label="已跑到默认连线">
-          <Button onClick={onClick} disabled>
+          <Button disabled onClick={onClick}>
             重置
           </Button>
         </Hint>,
@@ -134,9 +128,7 @@ describe("Hint", () => {
       ),
     );
     expect(screen.getByRole("button", { name: "提取" })).toBeDisabled();
-    await user.hover(
-      screen.getByRole("button", { name: "提取" }).parentElement!,
-    );
+    await user.hover(screen.getByRole("button", { name: "提取" }).parentElement!);
     await findHintPopup("先选一条素材");
   });
 });

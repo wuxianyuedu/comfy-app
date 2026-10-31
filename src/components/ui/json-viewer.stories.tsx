@@ -107,8 +107,8 @@ export const Empty: Story = {
   render: (args) => (
     <JsonViewer
       data={undefined}
-      title={args.title}
       initialCollapsedDepth={args.initialCollapsedDepth}
+      title={args.title}
     />
   ),
 };
@@ -129,8 +129,8 @@ export const LazyWrapped: Story = {
   render: (args) => (
     <LazyJsonViewer
       data={resolveSource("json", args.sourceName)}
-      title={args.title}
       initialCollapsedDepth={args.initialCollapsedDepth}
+      title={args.title}
     />
   ),
 };

@@ -19,7 +19,7 @@ afterEach(cleanup);
 describe("FormField", () => {
   it("标签与控件用 htmlFor/id 关联（点标签即聚焦控件）", () => {
     render(
-      <FormField label="模型名称" id="m">
+      <FormField id="m" label="模型名称">
         {(a11y) => <input {...a11y} />}
       </FormField>,
     );
@@ -34,7 +34,7 @@ describe("FormField", () => {
 
   it("有错误时自动上 aria-invalid 与 aria-describedby（调用处不可能只写一个）", () => {
     render(
-      <FormField label="名称" id="n" error="请填写名称">
+      <FormField error="请填写名称" id="n" label="名称">
         {(a11y) => <input {...a11y} />}
       </FormField>,
     );
@@ -47,7 +47,7 @@ describe("FormField", () => {
 
   it("无错误时不上 ARIA 无效标记（错误行也不渲染）", () => {
     render(
-      <FormField label="名称" id="n">
+      <FormField id="n" label="名称">
         {(a11y) => <input {...a11y} />}
       </FormField>,
     );
@@ -59,25 +59,21 @@ describe("FormField", () => {
 
   it('空串错误按「没有错误」处理（`error=""` 不应渲染空错误行）', () => {
     render(
-      <FormField label="名称" id="n" error="">
+      <FormField error="" id="n" label="名称">
         {(a11y) => <input {...a11y} />}
       </FormField>,
     );
-    expect(screen.getByLabelText("名称").hasAttribute("aria-invalid")).toBe(
-      false,
-    );
+    expect(screen.getByLabelText("名称").hasAttribute("aria-invalid")).toBe(false);
   });
 
   it("hint 挂在控件下方、错误行在 hint 之下（先解释、再报错）", () => {
     const { container } = render(
-      <FormField label="地址" id="a" hint="留空则跟随全局" error="地址不合法">
+      <FormField error="地址不合法" hint="留空则跟随全局" id="a" label="地址">
         {(a11y) => <input {...a11y} />}
       </FormField>,
     );
     const text = container.textContent ?? "";
-    expect(text.indexOf("留空则跟随全局")).toBeLessThan(
-      text.indexOf("地址不合法"),
-    );
+    expect(text.indexOf("留空则跟随全局")).toBeLessThan(text.indexOf("地址不合法"));
   });
 
   /* 「小标题」形态：控件在别处（或多个控件，如按钮组），没有一个能被
@@ -86,7 +82,7 @@ describe("FormField", () => {
    * 判据 `scripts/check-form-field-wiring.cjs` 把这一档记在基线里。 */
   it("children 是普通节点时不给 htmlFor（箭头会悬空）", () => {
     render(
-      <FormField label="用途" id="k">
+      <FormField id="k" label="用途">
         <div data-testid="ctl" />
       </FormField>,
     );
@@ -96,7 +92,7 @@ describe("FormField", () => {
   });
 
   it("可省略 children：标签行 + hint 的小标题形态不给 htmlFor", () => {
-    render(<FormField label="请求体额外字段" hint="值可为文本 / 数字" />);
+    render(<FormField hint="值可为文本 / 数字" label="请求体额外字段" />);
     expect(screen.getByText("请求体额外字段")).toBeTruthy();
     expect(screen.getByText("值可为文本 / 数字")).toBeTruthy();
     expect(screen.getByText("请求体额外字段").getAttribute("for")).toBeNull();
@@ -104,7 +100,7 @@ describe("FormField", () => {
 
   it("render-prop 形态下**必须**给 htmlFor（箭头真的指得着）", () => {
     render(
-      <FormField label="用途" id="wired">
+      <FormField id="wired" label="用途">
         {(field) => <input {...field} />}
       </FormField>,
     );
@@ -113,7 +109,7 @@ describe("FormField", () => {
 
   it("required 只加一个装饰星号，不改 aria-required（必填语义由调用处给）", () => {
     const { container } = render(
-      <FormField label="名称" id="n" required>
+      <FormField id="n" label="名称" required>
         {(a11y) => <input {...a11y} />}
       </FormField>,
     );

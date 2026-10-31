@@ -200,20 +200,16 @@ export function WorkflowNode({
       <div className="flex flex-col gap-1 pr-3.5 pb-1.5 pl-3.5">
         {/* Row 1 — 高优先级筛选 chip：来源 + 模型 */}
         <div className="flex h-7 min-w-0 items-center gap-1">
-          <WorkflowSourceFilterChip value={sourceFilter} onChange={onSourceFilterChange} />
+          <WorkflowSourceFilterChip onChange={onSourceFilterChange} value={sourceFilter} />
           <WorkflowModelFilterChip
-            value={modelFilter}
-            tags={modelTagLib}
             onChange={(value) => onModelFilterChange?.(value)}
+            tags={modelTagLib}
+            value={modelFilter}
           />
         </div>
         {/* Row 2 — 配置 chip：当前所选工作流 (flex-1) + 模式 */}
         <div className="flex h-7 min-w-0 items-center gap-1">
           <WorkflowPickChip
-            value={d.workflowId ?? ""}
-            options={filteredList}
-            onSelect={onSelectWorkflow}
-            loading={workflowListLoading}
             emptyHint={
               sourceFilter !== "all"
                 ? `当前筛选下没有工作流，切换「${sourceFilter === "local" ? "本机" : "在线"}」试试`
@@ -221,12 +217,16 @@ export function WorkflowNode({
                   ? `当前模型「${modelFilter}」下没有工作流`
                   : "暂无工作流，先去工作流库导入"
             }
+            loading={workflowListLoading}
+            onSelect={onSelectWorkflow}
+            options={filteredList}
+            value={d.workflowId ?? ""}
           />
           <WorkflowModePickChip
-            modes={workflowModes?.modes ?? []}
             defaultMode={workflowModes?.defaultMode ?? null}
-            onChange={onModesChange}
             disabled={!d.workflowId}
+            modes={workflowModes?.modes ?? []}
+            onChange={onModesChange}
           />
         </div>
       </div>
@@ -237,15 +237,15 @@ export function WorkflowNode({
        *  右侧紫色 images 输出 Handle 会让用户误以为是漏出的 bug（"那个
        *  圆点不要"）。CreatePanel 路径仍走 `showOutputs={true}`，不影响。 */}
       <DynamicWorkflowForm
+        compact
         io={workflowIO ?? undefined}
         loading={workflowIOLoading}
-        values={d.workflowInputs ?? {}}
         onChange={onFormChange}
-        compact
-        showOutputs={false}
-        workflowId={d.workflowId}
-        seedModes={d.seedModes}
         onSeedModeChange={onSeedModeChange}
+        seedModes={d.seedModes}
+        showOutputs={false}
+        values={d.workflowInputs ?? {}}
+        workflowId={d.workflowId}
       />
 
       {/* outputs row — 收成单行 labelRow（label + 右侧 type chip）。
@@ -261,7 +261,7 @@ export function WorkflowNode({
             const oLabel = ioLabel(output, [...inputs, ...outputs]);
             const oType = output.type;
             return (
-              <div key={output.nodeId + ":" + output.name} className="relative">
+              <div className="relative" key={output.nodeId + ":" + output.name}>
                 {/* 圆点几何位置上推 2px — 用户反馈
                  *  的 `top:16`（= labelRow 中线 y=16）虽然几何计算
                  *  完美（pt-1.5=6 + h-5/2=10 = 16），但实际渲染圆点仍视觉下
@@ -272,15 +272,15 @@ export function WorkflowNode({
                  *  视觉与 chip 中线 16 重合。boxShadow: \"none\" 关掉默认下偏
                  *  阴影（4px y blur 4px 向下晕 8px 是主要下偏源）。 */}
                 <PortHandle
-                  id={output.ioKey}
                   dir="out"
-                  type={oType ?? "*"}
+                  id={output.ioKey}
                   style={{
                     right: -6,
                     top: 14,
                     transform: "translateY(-50%)",
                     boxShadow: "none",
                   }}
+                  type={oType ?? "*"}
                 />
                 {/* 单行 labelRow — 与 inputs labelRow 镜像
                  *  顺序一致 = [label | typeChip]（label 在左、type 在右）。
@@ -307,8 +307,8 @@ export function WorkflowNode({
       {/* 生成按钮：形状唯一出处在 WorkflowNodeParts（本卡片不裁切，故走 `own` 自带下沿圆角） */}
       <WorkflowNodeActionButton
         disabled={d.status === "running"}
-        onClick={onGenerate}
         label={d.status === "running" ? "生成中…" : "▶ 用此工作流生成"}
+        onClick={onGenerate}
       />
     </>
   );

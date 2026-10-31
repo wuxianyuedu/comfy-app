@@ -4,10 +4,7 @@ import {
   CanvasProgressIndicator,
   stageProgressPct,
 } from "~/components/studio/project-canvas/CanvasProgressIndicator";
-import {
-  PRODUCTION_STAGES,
-  normalizeProductionProgress,
-} from "~/lib/production/progress";
+import { PRODUCTION_STAGES, normalizeProductionProgress } from "~/lib/production/progress";
 
 /**
  * 画布侧「生产进度」指示器 —— **纯展示**，入参只有一份 `ProductionProgress`
@@ -52,7 +49,7 @@ export const EachStage: Story = {
   render: () => (
     <div className="grid grid-cols-2 gap-4">
       {PRODUCTION_STAGES.map((stage) => (
-        <div key={stage} className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1" key={stage}>
           <span className="text-ink-muted font-mono text-[11px]">
             stage = {stage} · {stageProgressPct({ stage, rendered: false })}%
           </span>
@@ -82,21 +79,16 @@ export const Rendered: Story = {
 export const TolerantOfDirtyInput: Story = {
   render: () => (
     <div className="grid grid-cols-2 gap-4">
-      {[null, {}, { stage: "not-a-stage" }, { rendered: "yes" }].map(
-        (raw, i) => (
-          <div key={i} className="flex flex-col gap-1">
-            <span className="text-ink-muted font-mono text-[11px]">
-              原始值 {JSON.stringify(raw)} →{" "}
-              {JSON.stringify(normalizeProductionProgress(raw))}
-            </span>
-            <div className="relative h-20">
-              <CanvasProgressIndicator
-                progress={normalizeProductionProgress(raw)}
-              />
-            </div>
+      {[null, {}, { stage: "not-a-stage" }, { rendered: "yes" }].map((raw, i) => (
+        <div className="flex flex-col gap-1" key={i}>
+          <span className="text-ink-muted font-mono text-[11px]">
+            原始值 {JSON.stringify(raw)} → {JSON.stringify(normalizeProductionProgress(raw))}
+          </span>
+          <div className="relative h-20">
+            <CanvasProgressIndicator progress={normalizeProductionProgress(raw)} />
           </div>
-        ),
-      )}
+        </div>
+      ))}
     </div>
   ),
 };

@@ -24,7 +24,7 @@ const createMut = /* SAFETY: 类型断言已复核 */ {
 
 function Harness() {
   const state = useWorkflowImport({ createMut, load: () => undefined });
-  return <WorkflowImportPanel state={state} onClose={() => undefined} onImport={() => undefined} />;
+  return <WorkflowImportPanel onClose={() => undefined} onImport={() => undefined} state={state} />;
 }
 
 /** jsdom 各版本对 `Blob.text()` 的支持不一致，这里直接钉死读取结果。 */

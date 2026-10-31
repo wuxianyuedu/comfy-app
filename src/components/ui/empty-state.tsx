@@ -118,9 +118,9 @@ export function EmptyState({
      * `typeof icon === "function"` 的判据接不住它。 */
     const Icon = icon;
     renderedIcon = panel ? (
-      <Icon size={32} strokeWidth={1.5} aria-hidden className="opacity-30" />
+      <Icon aria-hidden className="opacity-30" size={32} strokeWidth={1.5} />
     ) : (
-      <Icon size={32} aria-hidden />
+      <Icon aria-hidden size={32} />
     );
   } else if (icon) {
     renderedIcon = icon;

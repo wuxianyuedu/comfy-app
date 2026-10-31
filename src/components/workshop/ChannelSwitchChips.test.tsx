@@ -41,18 +41,18 @@ function renderChannelSwitch(channel: "local" | "api" = "local") {
   const onChannelChange = vi.fn();
   render(
     <ChannelSwitch
-      channel={channel}
-      onChannelChange={onChannelChange}
       apiChannels={apiChannels}
       apiReady
-      workflowSelected
-      fps={16}
-      onFpsChange={() => undefined}
       batchRunning={false}
-      pendingCount={0}
+      channel={channel}
+      fps={16}
+      onChannelChange={onChannelChange}
+      onFpsChange={() => undefined}
       onGenerateBatch={() => undefined}
       onNextStage={() => undefined}
       onOpenModelAdapters={() => undefined}
+      pendingCount={0}
+      workflowSelected
     />,
   );
   return { onChannelChange };
@@ -65,10 +65,7 @@ describe("工坊生成通道 chip（ISSUE #1925）", () => {
     expect(group).toBeTruthy();
     const chips = screen.getAllByRole("radio");
     expect(chips).toHaveLength(2);
-    expect(chips.map((c) => c.getAttribute("aria-checked"))).toEqual([
-      "true",
-      "false",
-    ]);
+    expect(chips.map((c) => c.getAttribute("aria-checked"))).toEqual(["true", "false"]);
   });
 
   it("选中档四层俱在，且悬停值钉回常态（幽灵悬停改写不会再回来）", () => {

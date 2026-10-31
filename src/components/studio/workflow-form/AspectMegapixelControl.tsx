@@ -305,9 +305,9 @@ export function AspectMegapixelControl({
          * 能填任意值的步进器（挨着「百万像素」那一行渲染）。 */
         extra: (
           <MegapixelStepper
-            value={currentMp}
             disabled={disabled}
             onChange={(megapixels) => apply(aspectValue, megapixels, currentMultiple)}
+            value={currentMp}
           />
         ),
       },
@@ -365,13 +365,13 @@ export function AspectMegapixelControl({
   const footer = (
     <div className="flex flex-col gap-1.5">
       <SizeTableFooter
-        scene={scene}
-        onOpen={() => setTableOpen(true)}
         extra={
           <span className="text-ink-faint text-3xs">
             {currentDims ? `${currentDims.width}×${currentDims.height}` : resolutionHint}
           </span>
         }
+        onOpen={() => setTableOpen(true)}
+        scene={scene}
       />
     </div>
   );
@@ -398,7 +398,6 @@ export function AspectMegapixelControl({
                 .filter((entry): entry is EnrichedWidget => !!entry)
                 .map((entry) => (
                   <div
-                    key={entry.ioKey}
                     /* 左内边距与节点上其他参数行同款（`pl-3.5`）：端点圆点
                      * 12px、圆心骑跨卡片左缘（-6），文字从 14px 起 —— 圆点与
                      * 参数名之间才留得出 8px 的空隙。此前这里是`pl-0.5`，
@@ -407,12 +406,13 @@ export function AspectMegapixelControl({
                     className="relative flex h-5.5 items-center gap-1.5 pl-3.5"
                     /* 行锚点：拖拽重排与 e2e 按它认「这一行是哪一格」。 */
                     data-io-key={entry.ioKey}
+                    key={entry.ioKey}
                   >
                     <PortHandle
-                      id={entry.ioKey}
                       dir="in"
-                      type={entry.type}
+                      id={entry.ioKey}
                       style={{ top: "50%", transform: "translateY(-50%)" }}
+                      type={entry.type}
                     />
                     <span
                       className="text-ink-bright min-w-0 truncate text-xs font-medium"
@@ -427,28 +427,28 @@ export function AspectMegapixelControl({
             {/* 组合控件本体（表头 + 下拉），整块贴右沿：框里不再重复列那三个参数
  —— 它们已经以真正的参数行形态摆在框外左侧了。 */}
             <div
-              data-grouped-box
               className="border-accent/30 bg-accent/4 w-fit max-w-full shrink-0 rounded-lg border p-2"
+              data-grouped-box
             >
               <span className="text-accent text-3xs font-semibold tracking-wider uppercase">
                 比例 + 像素{multiple ? " + 倍数" : ""}
               </span>
               <div className="mt-1 w-42 min-w-0">
                 <MultiSegmentPopover
-                  ariaLabel={multiple ? "选择比例、像素与倍数" : "选择比例与像素"}
-                  triggerContent={`${activeAspect?.label ?? "自定义"} / ${mpLabel}${multiple ? ` / ${multipleLabel}` : ""}`}
-                  sections={sections}
                   align="right"
+                  ariaLabel={multiple ? "选择比例、像素与倍数" : "选择比例与像素"}
                   disabled={disabled}
                   footer={footer}
+                  sections={sections}
+                  triggerContent={`${activeAspect?.label ?? "自定义"} / ${mpLabel}${multiple ? ` / ${multipleLabel}` : ""}`}
                 />
               </div>
               <RequiredChips
-                pins={[aspect, megapixels, multiple]}
-                onRequiredChange={onRequiredChange}
                 mode={mode}
-                visibilityMode={visibilityMode}
+                onRequiredChange={onRequiredChange}
                 onVisibilityChange={onVisibilityChange}
+                pins={[aspect, megapixels, multiple]}
+                visibilityMode={visibilityMode}
               />
             </div>
           </>
@@ -460,27 +460,27 @@ export function AspectMegapixelControl({
               </span>
               <div className="min-w-0 flex-1">
                 <MultiSegmentPopover
-                  ariaLabel={multiple ? "选择比例、像素与倍数" : "选择比例与像素"}
-                  triggerContent={`${activeAspect?.label ?? "自定义"} / ${mpLabel}${multiple ? ` / ${multipleLabel}` : ""}`}
-                  sections={sections}
                   align="right"
+                  ariaLabel={multiple ? "选择比例、像素与倍数" : "选择比例与像素"}
                   disabled={disabled}
                   footer={footer}
+                  sections={sections}
+                  triggerContent={`${activeAspect?.label ?? "自定义"} / ${mpLabel}${multiple ? ` / ${multipleLabel}` : ""}`}
                 />
               </div>
             </div>
             <RequiredChips
-              pins={[aspect, megapixels, multiple]}
-              onRequiredChange={onRequiredChange}
               mode={mode}
-              visibilityMode={visibilityMode}
+              onRequiredChange={onRequiredChange}
               onVisibilityChange={onVisibilityChange}
+              pins={[aspect, megapixels, multiple]}
+              visibilityMode={visibilityMode}
             />
           </div>
         )}
       </div>
 
-      {tableOpen && <SizePresetTableModal scene={scene} onClose={() => setTableOpen(false)} />}
+      {tableOpen && <SizePresetTableModal onClose={() => setTableOpen(false)} scene={scene} />}
     </div>
   );
 }

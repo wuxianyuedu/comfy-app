@@ -58,7 +58,7 @@ const REPORT: ParseReport = {
 describe("PortRow", () => {
   it("输入行:色点用入参 color,类型徽标大写展示,name 带 title", () => {
     const { container } = render(
-      <PortRow side="in" color="#FF9C5B" type="CONDITIONING" name="positive" />,
+      <PortRow color="#FF9C5B" name="positive" side="in" type="CONDITIONING" />,
     );
     expect(screen.getByText("positive")).toHaveAttribute("title", "positive");
     expect(screen.getByText("CONDITIONING")).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe("PortRow", () => {
 
   it("输出行:色点固定为青色 #06B6D4(与入参 color 无关)", () => {
     const { container } = render(
-      <PortRow side="out" color="#FF0000" type="IMAGE" name="IMAGE_FINAL" />,
+      <PortRow color="#FF0000" name="IMAGE_FINAL" side="out" type="IMAGE" />,
     );
     const dot = container.querySelector("span.rounded-full")!;
     expect(dot).toHaveStyle({ background: "#06B6D4" });
@@ -79,33 +79,33 @@ describe("PortRow", () => {
 
 describe("WidgetValueChip", () => {
   it('toggle:truthy 值渲染 ✓(含字符串 "true"/"True")', () => {
-    const { rerender } = render(<WidgetValueChip widget="toggle" value={true} />);
+    const { rerender } = render(<WidgetValueChip value={true} widget="toggle" />);
     expect(screen.getByText("✓")).toBeInTheDocument();
-    rerender(<WidgetValueChip widget="toggle" value="True" />);
+    rerender(<WidgetValueChip value="True" widget="toggle" />);
     expect(screen.getByText("✓")).toBeInTheDocument();
   });
 
   it("toggle:falsy 值渲染 ✗", () => {
-    render(<WidgetValueChip widget="toggle" value={false} />);
+    render(<WidgetValueChip value={false} widget="toggle" />);
     expect(screen.getByText("✗")).toBeInTheDocument();
   });
 
   it("select:值经 String() 渲染并同步 title,null 显示 —", () => {
-    const { rerender } = render(<WidgetValueChip widget="select" value="sdxl" />);
+    const { rerender } = render(<WidgetValueChip value="sdxl" widget="select" />);
     expect(screen.getByText("sdxl")).toHaveAttribute("title", "sdxl");
-    rerender(<WidgetValueChip widget="select" value={null} />);
+    rerender(<WidgetValueChip value={null} widget="select" />);
     expect(screen.getByText("—")).toBeInTheDocument();
   });
 
   it("number:数值渲染为字符串", () => {
-    render(<WidgetValueChip widget="number" value={25} />);
+    render(<WidgetValueChip value={25} widget="number" />);
     expect(screen.getByText("25")).toBeInTheDocument();
   });
 
   it("其他 widget(string/text/未知):null 显示 —,标量显示 String 值", () => {
-    const { rerender } = render(<WidgetValueChip widget={null} value={null} />);
+    const { rerender } = render(<WidgetValueChip value={null} widget={null} />);
     expect(screen.getByText("—")).toBeInTheDocument();
-    rerender(<WidgetValueChip widget="text" value="hello world" />);
+    rerender(<WidgetValueChip value="hello world" widget="text" />);
     expect(screen.getByText("hello world")).toBeInTheDocument();
   });
 });

@@ -15,10 +15,10 @@ import type { QueueRow } from "./queue-monitor-config";
 export function SectionHeading({ id, children }: { children: ReactNode; id: string }) {
   return (
     <h2
-      id={id}
       className="text-ink-soft mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide"
+      id={id}
     >
-      <Activity className="size-3.5" aria-hidden />
+      <Activity aria-hidden className="size-3.5" />
       {children}
     </h2>
   );
@@ -35,7 +35,7 @@ export function Field({ label, children }: { children: string; label: string }) 
             不动一下的话，用户分不出「它还在动」与「它卡住了」。
             `key` 换成当前值即触发重挂载：**值没变就不重播**，于是它天然是
             「变化提示」而不是第二条循环动画。 */}
-        <span key={children} className="value-tick inline-block">
+        <span className="value-tick inline-block" key={children}>
           {displayValue(children)}
         </span>
       </dd>
@@ -80,56 +80,56 @@ export function QueueRowLine({
       <span className="text-ink-fainter min-w-0 basis-40 truncate text-xs sm:flex-1">
         {displayValue(row.prompt)}
       </span>
-      {terminal ? <StatusBadge status={row.status} label={taskStatusLabel(row.status)} /> : null}
+      {terminal ? <StatusBadge label={taskStatusLabel(row.status)} status={row.status} /> : null}
       {row.error ? (
         <span className="text-danger-strong min-w-0 basis-full truncate text-xs">{row.error}</span>
       ) : null}
       <span className="flex shrink-0 items-center gap-1">
         <Button
-          variant="ghost"
-          size="xs"
-          onClick={onOpenLog}
           aria-label="查看这一条的执行日志"
           className="h-auto gap-1"
+          onClick={onOpenLog}
+          size="xs"
+          variant="ghost"
         >
-          <FileText data-icon="inline-start" className="size-3" aria-hidden />
+          <FileText aria-hidden className="size-3" data-icon="inline-start" />
           日志
         </Button>
         {terminal ? (
           <>
             <Button
-              variant="ghost"
-              size="xs"
-              disabled={busy}
-              onClick={onOpenFolder}
               aria-label="打开这一条的输出目录"
               className="h-auto gap-1"
+              disabled={busy}
+              onClick={onOpenFolder}
+              size="xs"
+              variant="ghost"
             >
-              <FolderOpen data-icon="inline-start" className="size-3" aria-hidden />
+              <FolderOpen aria-hidden className="size-3" data-icon="inline-start" />
               输出目录
             </Button>
             <Button
-              variant="ghost"
-              size="xs"
-              disabled={busy}
-              onClick={onCopy}
               aria-label="复制这一条的提交内容，回画布改完再投一次"
               className="h-auto gap-1"
+              disabled={busy}
+              onClick={onCopy}
+              size="xs"
+              variant="ghost"
             >
-              <Copy data-icon="inline-start" className="size-3" aria-hidden />
+              <Copy aria-hidden className="size-3" data-icon="inline-start" />
               复制去重投
             </Button>
           </>
         ) : (
           <Button
-            variant="ghost"
-            size="xs"
-            disabled={busy}
-            onClick={onCancel}
             aria-label="取消这一条"
             className="h-auto gap-1"
+            disabled={busy}
+            onClick={onCancel}
+            size="xs"
+            variant="ghost"
           >
-            <X data-icon="inline-start" className="size-3" aria-hidden />
+            <X aria-hidden className="size-3" data-icon="inline-start" />
             {busy ? "处理中" : "取消"}
           </Button>
         )}

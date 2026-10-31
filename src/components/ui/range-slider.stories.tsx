@@ -39,13 +39,13 @@ function Demo(props: {
   return (
     <div className="flex w-80 items-center gap-3">
       <RangeSlider
-        value={value}
-        onChange={setValue}
-        min={props.min}
-        max={props.max}
-        step={props.step}
-        disabled={props.disabled}
         aria-label={props["aria-label"]}
+        disabled={props.disabled}
+        max={props.max}
+        min={props.min}
+        onChange={setValue}
+        step={props.step}
+        value={value}
       />
       <span className="text-ink-muted w-12 shrink-0 font-mono text-xs tabular-nums">{value}</span>
     </div>
@@ -53,7 +53,7 @@ function Demo(props: {
 }
 
 export const Default: Story = {
-  render: () => <Demo value={0.5} min={0} max={1} step={0.01} aria-label="去噪强度" />,
+  render: () => <Demo aria-label="去噪强度" max={1} min={0} step={0.01} value={0.5} />,
 };
 
 /** 三档量纲并列：0..1 的浮点（`step=0.01`）/ 1..150 的整数（步数）/
@@ -62,9 +62,9 @@ export const Default: Story = {
 export const Steps: Story = {
   render: () => (
     <div className="flex flex-col gap-6">
-      <Demo value={0.75} min={0} max={1} step={0.01} aria-label="强度" />
-      <Demo value={24} min={1} max={150} step={1} aria-label="步数" />
-      <Demo value={1024} min={512} max={2048} step={64} aria-label="边长（64 的倍数）" />
+      <Demo aria-label="强度" max={1} min={0} step={0.01} value={0.75} />
+      <Demo aria-label="步数" max={150} min={1} step={1} value={24} />
+      <Demo aria-label="边长（64 的倍数）" max={2048} min={512} step={64} value={1024} />
     </div>
   ),
 };
@@ -74,13 +74,13 @@ export const Steps: Story = {
 export const Bounds: Story = {
   render: () => (
     <div className="flex flex-col gap-6">
-      <Demo value={0} min={0} max={100} step={1} aria-label="最小值" />
-      <Demo value={100} min={0} max={100} step={1} aria-label="最大值" />
+      <Demo aria-label="最小值" max={100} min={0} step={1} value={0} />
+      <Demo aria-label="最大值" max={100} min={0} step={1} value={100} />
     </div>
   ),
 };
 
 /** 禁用：`disabled` 时把手不可拖、键盘也不响应（`aria-disabled`）。 */
 export const Disabled: Story = {
-  render: () => <Demo value={42} min={0} max={100} disabled aria-label="被锁定的参数" />,
+  render: () => <Demo aria-label="被锁定的参数" disabled max={100} min={0} value={42} />,
 };

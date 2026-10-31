@@ -54,11 +54,11 @@ function renderRow(message: string) {
     <TooltipProvider delay={0}>
       <LogRow
         entry={entry(message)}
-        wrap
-        keyword=""
         expanded={false}
+        keyword=""
         onToggleExpand={() => undefined}
         style={{}}
+        wrap
       />
     </TooltipProvider>,
   );

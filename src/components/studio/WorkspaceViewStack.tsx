@@ -226,12 +226,12 @@ export function WorkspaceViewStack({
     if (view === "home") {
       return (
         <HomePage
-          onNewProject={onNewProject}
-          recentProjects={recentProjects}
-          onOpenProject={onOpenProject}
-          onOpenCanvasProject={onOpenCanvasProject}
           onNavigate={onHomeNavigate}
+          onNewProject={onNewProject}
+          onOpenCanvasProject={onOpenCanvasProject}
+          onOpenProject={onOpenProject}
           onShowAllProjects={onShowAllProjects}
+          recentProjects={recentProjects}
         />
       );
     }
@@ -243,15 +243,15 @@ export function WorkspaceViewStack({
       case "project":
         return (
           <ProjectHomePage
-            projectName={recentProjects.find((p) => p.id === activeProjectId)?.name ?? "未命名项目"}
             onNavigate={onNavigate}
             projectId={activeProjectId ?? ""}
+            projectName={recentProjects.find((p) => p.id === activeProjectId)?.name ?? "未命名项目"}
           />
         );
 
       case "works":
         return (
-          <WorksGallery onOpenTask={onOpenProject} onOpenCanvasProject={onOpenCanvasProject} />
+          <WorksGallery onOpenCanvasProject={onOpenCanvasProject} onOpenTask={onOpenProject} />
         );
 
       case "models":
@@ -284,10 +284,10 @@ export function WorkspaceViewStack({
       case "canvas":
         return (
           <ProjectCanvas
-            seedNew={canvasSeedNew}
+            onConsumePending={onConsumePendingWorkflow}
             onConsumeSeed={onConsumeCanvasSeed}
             pendingWorkflow={pendingCanvasWorkflow}
-            onConsumePending={onConsumePendingWorkflow}
+            seedNew={canvasSeedNew}
           />
         );
 
@@ -361,10 +361,10 @@ export function WorkspaceViewStack({
         );
         return (
           <div
-            key={tab.key}
-            data-view={tab.view}
             aria-hidden={!isActive}
             className={isActive ? "h-full" : "hidden h-full"}
+            data-view={tab.view}
+            key={tab.key}
           >
             {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感。
                 挂在各自的 wrapper 里（只有非 home 需要）——放在栈外层会让首页也多一层

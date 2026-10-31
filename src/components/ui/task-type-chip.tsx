@@ -35,12 +35,11 @@ import {
  */
 /** 底色取 `*-soft` 档、字色取 `*-strong` 档（都是两态 token，调用点不必
  *  再手写 `dark:`）：与 `ui/badge.tsx` 的 tone 表同一套「浅底 + 深字」配方。 */
-const CATEGORY_STYLES: Record<WorkflowCategory, { bg: string; text: string }> =
-  {
-    image: { bg: "bg-primary-soft", text: "text-primary-strong" },
-    video: { bg: "bg-info/10", text: "text-info-strong" },
-    audio: { bg: "bg-warning-soft", text: "text-warning-strong" },
-  };
+const CATEGORY_STYLES: Record<WorkflowCategory, { bg: string; text: string }> = {
+  image: { bg: "bg-primary-soft", text: "text-primary-strong" },
+  video: { bg: "bg-info/10", text: "text-info-strong" },
+  audio: { bg: "bg-warning-soft", text: "text-warning-strong" },
+};
 
 /** `variant="outline"` 会带一条 `border-border`；chip 两档**不想要边框**
  *  （密集行内元信息、色底就够表达语义），用 `border-transparent` 顶掉
@@ -56,10 +55,10 @@ export function TaskTypeChip({ taskType }: { taskType?: string | null }) {
 
   return (
     <Badge
-      size="sm"
-      variant="outline"
       className={`${OUTLINE_RESET} ${styles.bg} ${styles.text}`}
+      size="sm"
       title={def?.description ?? label}
+      variant="outline"
     >
       {label}
     </Badge>

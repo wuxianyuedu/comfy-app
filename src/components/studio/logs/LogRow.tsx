@@ -78,7 +78,7 @@ function HighlightedText({ text, keyword }: { keyword: string; text: string }) {
       {fragments.map((fragment, index) => {
         const className = fragment.style ? TOKEN_CLASS[fragment.style] : undefined;
         return (
-          <span key={index} className={className}>
+          <span className={className} key={index}>
             {highlightNeedle(fragment.text, needle)}
           </span>
         );
@@ -102,7 +102,7 @@ function highlightNeedle(text: string, needle: string): React.ReactNode {
       parts.push(<PathLinkedText key={`t${key}`} text={text.slice(cursor, at)} />);
     }
     parts.push(
-      <mark key={`m${key}`} className={SEARCH_HIT_CLASS}>
+      <mark className={SEARCH_HIT_CLASS} key={`m${key}`}>
         <PathLinkedText text={text.slice(at, at + needle.length)} />
       </mark>,
     );
@@ -210,12 +210,12 @@ function RevealPathButton({ path, children }: { children: React.ReactNode; path:
   return (
     <Hint label={hintLabel}>
       <Button
-        type="button"
-        onClick={onReveal}
+        aria-label={`在文件管理器里定位 ${path}`}
         /* 悬停/聚焦都给一点底色：日志行本身就是可滚动的密集文本，只有下划线时
          * 「这一段能不能点」在长行里读不出来。 */
         className={`hover:bg-subtle focus-visible:bg-subtle h-auto cursor-pointer rounded-sm px-0.5 py-0 leading-snug underline decoration-dotted underline-offset-2 ${tone}`}
-        aria-label={`在文件管理器里定位 ${path}`}
+        onClick={onReveal}
+        type="button"
       >
         {children}
         {hint.on ? (
@@ -279,11 +279,7 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
       }
     >
       <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={() => void onCopy()}
         aria-label="复制本条日志"
-        data-log-copy=""
         /* 悬停/聚焦才显形：日志是「长时间盯着看」的界面，一个常在的按钮列会
          * 在每行末尾多出一块常驻色块，把正文的右边界切碎。键盘 Tab 聚焦时同样
          * 显形（`focus-visible`），不然纯键盘用户点不到它。 */
@@ -298,6 +294,10 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
               ? "text-danger-strong"
               : "text-ink-muted"
         }`}
+        data-log-copy=""
+        onClick={() => void onCopy()}
+        size="icon-xs"
+        variant="ghost"
       >
         {outcome === "idle" ? (
           <Copy data-icon="inline-start" size={13} />
@@ -358,8 +358,8 @@ export const LogRow = memo(function LogRow({
   const location = entry.location;
   const timeNode = (
     <time
-      dateTime={new Date(entry.time).toISOString()}
       className="text-ink-muted shrink-0 tabular-nums"
+      dateTime={new Date(entry.time).toISOString()}
     >
       {formatTime(entry.time)}
     </time>
@@ -390,7 +390,7 @@ export const LogRow = memo(function LogRow({
       } ${LEVEL_TEXT_STYLES[entry.level]}`}
       title={messageTitle}
     >
-      <HighlightedText text={entry.message} keyword={keyword} />
+      <HighlightedText keyword={keyword} text={entry.message} />
     </span>
   );
   /* 位置分两态（ISSUE #1703）：`src/…:123` 是可点开的业务位置；`pkg → fn` 是
@@ -408,9 +408,9 @@ export const LogRow = memo(function LogRow({
   const locationNode = location ? (
     <Hint label={locationHint}>
       <Button
-        variant="ghost"
-        onClick={() => copyLocation(location)}
         className="text-ink-fainter hover:text-ink-soft text-2xs h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right font-normal whitespace-nowrap"
+        onClick={() => copyLocation(location)}
+        variant="ghost"
       >
         {location}
       </Button>
@@ -428,8 +428,8 @@ export const LogRow = memo(function LogRow({
   if (!expandable) {
     return (
       <div
-        style={style}
         className="border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 py-1 font-mono text-sm leading-snug"
+        style={style}
       >
         {timeNode}
         {levelNode}
@@ -446,26 +446,26 @@ export const LogRow = memo(function LogRow({
    * `gap`（不要行间距，否则标题行 + 面板会超出 `LOG_ROW_EXPANDED` 而被裁掉）。 */
   return (
     <div
-      style={style}
       className="border-border-subtle hover:bg-subtle/60 group overflow-hidden border-b font-mono text-sm leading-snug"
+      style={style}
     >
       <Disclosure
-        open={expanded}
-        onOpenChange={(next) => {
-          if (next !== expanded) {
-            onToggleExpand(entry.id);
-          }
-        }}
-        marker="chevron"
-        rootClassName="flex flex-wrap items-start gap-x-2.5 px-4 py-1"
         className="w-auto min-w-0 flex-1"
-        panelClassName="basis-full"
         leading={
           <>
             {timeNode}
             {levelNode}
           </>
         }
+        marker="chevron"
+        onOpenChange={(next) => {
+          if (next !== expanded) {
+            onToggleExpand(entry.id);
+          }
+        }}
+        open={expanded}
+        panelClassName="basis-full"
+        rootClassName="flex flex-wrap items-start gap-x-2.5 px-4 py-1"
         trailing={
           <>
             {locationNode}
@@ -479,8 +479,8 @@ export const LogRow = memo(function LogRow({
           <div className="min-h-0" style={{ height: LOG_ROW_EXPANDED - LOG_ROW_SINGLE }}>
             <LazyJsonViewer
               data={cliJson.value}
-              title={`comfy-cli ${cliJson.tag}`}
               initialCollapsedDepth={2}
+              title={`comfy-cli ${cliJson.tag}`}
             />
           </div>
         ) : null}

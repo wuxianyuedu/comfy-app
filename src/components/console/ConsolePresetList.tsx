@@ -71,17 +71,19 @@ export function ConsolePresetList({ onFill, disabled }: ConsolePresetListProps) 
 
   return (
     <div
-      data-testid="console-preset-list"
       className="custom-scrollbar flex h-full min-h-0 flex-col gap-1 overflow-y-auto p-3"
+      data-testid="console-preset-list"
     >
       {CONSOLE_PRESETS.map((group) => {
         const open = groups.isExpanded(group.id);
         return (
           <Disclosure
+            className="hover:text-ink w-auto flex-1 py-1"
             key={group.id}
-            open={open}
-            onOpenChange={() => groups.toggle(group.id)}
             marker="chevron"
+            onOpenChange={() => groups.toggle(group.id)}
+            open={open}
+            panelClassName="basis-full flex flex-col gap-0.5 pt-0.5"
             /* 整排的排布在 Root 上（`rootClassName`）：触发开关与右侧那个条数
              * 是 Root 的**并列**子元素，Root 不写 `flex` 它们就各自独占一行
              * （规范 16 §16.2.4.13 的迁移口径，与 `NodesTab` 的分组头同款）。
@@ -98,8 +100,11 @@ export function ConsolePresetList({ onFill, disabled }: ConsolePresetListProps) 
              * 基元自己的用例（`ui/disclosure.test.tsx` 那条「面板不随内容收缩」）
              * 用的正是 `flex flex-wrap` + `basis-full` 这对写法。 */
             rootClassName="flex flex-wrap items-center gap-2"
-            className="hover:text-ink w-auto flex-1 py-1"
-            panelClassName="basis-full flex flex-col gap-0.5 pt-0.5"
+            trailing={
+              <span className="text-ink-fainter text-3xs shrink-0 tabular-nums">
+                {group.items.length}
+              </span>
+            }
             trigger={
               <span className="min-w-0 flex-1" data-testid={`console-preset-group-${group.id}`}>
                 <span className="text-ink block text-xs font-semibold">{group.label}</span>
@@ -109,25 +114,20 @@ export function ConsolePresetList({ onFill, disabled }: ConsolePresetListProps) 
                 <span className="text-ink-fainter text-2xs block leading-snug">{group.hint}</span>
               </span>
             }
-            trailing={
-              <span className="text-ink-fainter text-3xs shrink-0 tabular-nums">
-                {group.items.length}
-              </span>
-            }
           >
             {group.items.map((item) => (
               <Hint key={item.id} label={presetHint(item)} side="right">
                 <Button
-                  variant="ghost"
+                  className="group text-ink-muted hover:bg-subtle hover:text-ink-strong h-auto w-full justify-start gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-normal"
+                  data-testid={`console-preset-${item.id}`}
                   disabled={disabled}
                   onClick={() => onFill(item.command)}
-                  data-testid={`console-preset-${item.id}`}
-                  className="group text-ink-muted hover:bg-subtle hover:text-ink-strong h-auto w-full justify-start gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-normal"
+                  variant="ghost"
                 >
                   <ChevronRight
+                    className="text-ink-fainter shrink-0"
                     data-icon="inline-start"
                     size={12}
-                    className="text-ink-fainter shrink-0"
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{item.label}</span>

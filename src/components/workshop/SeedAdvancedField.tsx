@@ -23,30 +23,30 @@ export interface SeedAdvancedFieldProps {
 export function SeedAdvancedField({ value, onChange, disabled }: SeedAdvancedFieldProps) {
   return (
     <Disclosure
-      marker="chevron"
-      trigger={<span className="text-muted-foreground text-xs font-medium">高级</span>}
       className="px-1 py-0.5"
+      marker="chevron"
       panelClassName="mt-1"
+      trigger={<span className="text-muted-foreground text-xs font-medium">高级</span>}
     >
       <div className="flex items-center gap-2 text-xs">
         <span className="text-muted-foreground shrink-0">种子</span>
         <Input
-          type="number"
-          inputMode="numeric"
-          value={value}
+          className="border-border bg-bg text-ink h-7 w-36 text-xs"
           disabled={disabled}
+          inputMode="numeric"
           onChange={textHandler(onChange)}
           placeholder="留空＝每次随机"
-          className="border-border bg-bg text-ink h-7 w-36 text-xs"
+          type="number"
+          value={value}
         />
         <Hint label="清空为自动随机" wrap>
           <Button
-            type="button"
-            variant="ghost"
-            size="xs"
+            className="text-muted-foreground hover:text-ink h-7 gap-1 px-2"
             disabled={disabled}
             onClick={() => onChange("")}
-            className="text-muted-foreground hover:text-ink h-7 gap-1 px-2"
+            size="xs"
+            type="button"
+            variant="ghost"
           >
             <Dices size={13} />
             随机

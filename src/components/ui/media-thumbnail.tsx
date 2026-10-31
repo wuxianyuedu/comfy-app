@@ -106,9 +106,9 @@ export interface MediaThumbnailProps extends OmitOwnProps<
 function FailurePlaceholder({ className }: { className?: string }) {
   return (
     <span
-      role="img"
       aria-label="图片不可用"
       className={`text-ink-fainter bg-canvas-deep text-3xs flex items-center justify-center ${className ?? ""}`}
+      role="img"
     >
       图片不可用
     </span>
@@ -181,16 +181,16 @@ export const MediaThumbnail = React.memo(function MediaThumbnail(props: MediaThu
        * 真要放带音频的视频时，字幕由调用处另给 `<track>`。 */
       /* eslint-disable-next-line jsx-a11y/media-has-caption -- 静音预览媒体，无音轨可配字幕（空 <track> 反而给读屏器一条假字幕轨） */
       <video
-        src={src}
         aria-label={alt}
-        className={className}
         autoPlay={autoPlay}
-        muted={muted}
+        className={className}
         loop={loop}
+        muted={muted}
+        onError={handleError}
+        onLoadedData={(event) => onLoad?.(event.currentTarget)}
         playsInline
         preload="metadata"
-        onLoadedData={(event) => onLoad?.(event.currentTarget)}
-        onError={handleError}
+        src={src}
         {...mediaProps}
       />
     );
@@ -198,16 +198,16 @@ export const MediaThumbnail = React.memo(function MediaThumbnail(props: MediaThu
 
   return (
     <img
-      src={src}
       /* 纯装饰缩略图（`alt` 没给）时给 `alt=""` + `aria-hidden`：读屏器跳过它，
        * 与「这张图不携带信息」一致；给了 `alt` 的按正常可访问名走（规范 §6.9）。 */
       alt={alt}
       aria-hidden={alt === "" ? true : undefined}
       className={className}
-      loading="lazy"
       decoding="async"
-      onLoad={(event) => onLoad?.(event.currentTarget)}
+      loading="lazy"
       onError={handleError}
+      onLoad={(event) => onLoad?.(event.currentTarget)}
+      src={src}
       {...mediaProps}
     />
   );

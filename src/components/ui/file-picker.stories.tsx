@@ -50,7 +50,7 @@ function FilePickerDemo({ accept, multiple }: { accept?: string; multiple?: bool
   return (
     <div className="flex w-120 flex-col gap-3">
       <div className="flex items-center gap-2">
-        <Button variant="outline" onClick={picker.open}>
+        <Button onClick={picker.open} variant="outline">
           选择文件
         </Button>
         {/* 隐藏 input 挂在树里，ref 转发由出口负责 —— 调用处不用管。 */}

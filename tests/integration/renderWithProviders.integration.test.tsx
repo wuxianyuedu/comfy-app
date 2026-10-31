@@ -73,7 +73,7 @@ function renderTagDemo(ui: ReactElement) {
   const qc = createTestQueryClient();
   return render(
     <QueryClientProvider client={qc}>
-      <LocalProvider trpcClient={localTrpcClient} queryClient={qc}>
+      <LocalProvider queryClient={qc} trpcClient={localTrpcClient}>
         {ui}
       </LocalProvider>
     </QueryClientProvider>,
@@ -121,7 +121,7 @@ function TagDemo() {
       {listQ.data && (
         <ul data-testid="tag-list">
           {listQ.data.tags.map((tg) => (
-            <li key={tg} data-testid="tag-item">
+            <li data-testid="tag-item" key={tg}>
               {tg}
             </li>
           ))}

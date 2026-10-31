@@ -18,17 +18,12 @@ export interface CharacterReviewButtonProps {
   character: Character;
 }
 
-export function CharacterReviewButton({
-  character,
-}: CharacterReviewButtonProps) {
+export function CharacterReviewButton({ character }: CharacterReviewButtonProps) {
   const [projectId] = useState<string>(() => getActiveId() ?? "");
   const review = useCharacterReview(projectId);
 
   return (
     <ReviewVerdictDialogButton
-      label="AI 评审这张角色卡"
-      title={`角色卡评审 · ${character.name || "未命名角色"}`}
-      description="由 AI 对这张角色卡的文本设定做质检；不合格请照建议改上方字段后重出定妆照。"
       busyText="正在评审…"
       controller={{
         verdict: review.verdict,
@@ -36,6 +31,9 @@ export function CharacterReviewButton({
         error: review.error,
         review: () => review.review(character.id),
       }}
+      description="由 AI 对这张角色卡的文本设定做质检；不合格请照建议改上方字段后重出定妆照。"
+      label="AI 评审这张角色卡"
+      title={`角色卡评审 · ${character.name || "未命名角色"}`}
     />
   );
 }

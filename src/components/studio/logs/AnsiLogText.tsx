@@ -54,11 +54,11 @@ export function AnsiLogText({ segments }: { segments: Array<AnsiSegment> }) {
       {segments.map((seg, i) =>
         seg.styles && seg.styles.length > 0 ? (
           <span
-            key={i}
             className={seg.styles
               .map((style) => ANSI_STYLE_CLASS[style])
               .filter(Boolean)
               .join(" ")}
+            key={i}
           >
             {seg.text}
           </span>

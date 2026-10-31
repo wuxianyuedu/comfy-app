@@ -45,7 +45,7 @@ describe("MaterialLibraryPanel", () => {
     });
     const onUse = vi.fn();
     const onClose = vi.fn();
-    render(<MaterialLibraryPanel onClose={onClose} projectId="p-1" onUse={onUse} />);
+    render(<MaterialLibraryPanel onClose={onClose} onUse={onUse} projectId="p-1" />);
 
     // 首屏停在分类列表（folder === null），此时只渲染分类卡片
     expect(await screen.findByText("参考素材")).toBeInTheDocument();

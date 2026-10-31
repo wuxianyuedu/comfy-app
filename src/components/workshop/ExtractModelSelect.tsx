@@ -112,14 +112,14 @@ export function ExtractModelSelect({
     <div>
       <div className="min-w-56">
         <SelectMenu
-          value={value}
+          autoFitFromOptions={false}
+          className="bg-subtle! border-border! text-xs"
+          labels={labels}
           onChange={onChange}
           options={options}
-          labels={labels}
           placeholder="选择模型"
-          className="bg-subtle! border-border! text-xs"
           popoverMinWidth={280}
-          autoFitFromOptions={false}
+          value={value}
         />
       </div>
       {hint}

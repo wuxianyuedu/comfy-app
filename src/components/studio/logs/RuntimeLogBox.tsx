@@ -60,68 +60,68 @@ export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLo
       {!fullscreen && (
         <div className={cn("border-border bg-surface-1 mb-4 rounded-xl border", className)}>
           <LogToolbar
-            variant="inline"
-            title={title}
-            log={log}
             follow={follow}
+            log={log}
             onFollowChange={setFollow}
+            title={title}
             trailing={
               <Hint label="全屏查看">
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setFullscreen(true)}
                   aria-label="全屏查看"
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                  onClick={() => setFullscreen(true)}
+                  size="icon-sm"
+                  variant="ghost"
                 >
                   <Maximize2 data-icon="inline-start" size={14} />
                 </Button>
               </Hint>
             }
+            variant="inline"
           />
           <LogBody
-            log={log}
-            follow={follow}
-            onFollowChange={setFollow}
-            emptyHint={emptyHint}
             className="border-border-subtle mx-3 mb-3 max-h-44 rounded-lg border px-3 py-2"
+            emptyHint={emptyHint}
+            follow={follow}
+            log={log}
+            onFollowChange={setFollow}
           />
           <LogHint log={log} />
         </div>
       )}
 
       <FullScreenDialog
-        open={fullscreen}
-        onOpenChange={setFullscreen}
-        label={title}
         className="bg-bg"
+        label={title}
+        onOpenChange={setFullscreen}
+        open={fullscreen}
       >
         <LogToolbar
-          variant="full"
-          title={title}
-          log={log}
           follow={follow}
+          log={log}
           onFollowChange={setFollow}
+          title={title}
           trailing={
             <Hint label="退出全屏">
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setFullscreen(false)}
                 aria-label="退出全屏"
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                onClick={() => setFullscreen(false)}
+                size="icon-sm"
+                variant="ghost"
               >
                 <Minimize2 data-icon="inline-start" size={16} />
               </Button>
             </Hint>
           }
+          variant="full"
         />
         <LogBody
-          log={log}
-          follow={follow}
-          onFollowChange={setFollow}
-          emptyHint={emptyHint}
           className="border-border-subtle flex-1 border-t px-4 py-3 text-xs"
+          emptyHint={emptyHint}
+          follow={follow}
+          log={log}
+          onFollowChange={setFollow}
         />
         <LogHint log={log} />
       </FullScreenDialog>
@@ -171,7 +171,7 @@ function LogToolbar({
         </span>
         {log.active && (
           <span className="text-success-strong text-3xs inline-flex shrink-0 items-center gap-1.5 font-normal">
-            <StatusDot state="up" sizeClass="size-1.5" pulse />
+            <StatusDot pulse sizeClass="size-1.5" state="up" />
             跟随中
           </span>
         )}
@@ -180,31 +180,31 @@ function LogToolbar({
         {/* 只有一次启动时不给下拉：一个选不出别的东西的下拉只是噪声。 */}
         {log.sessions.length > 1 && (
           <SelectMenu
-            value={log.sessionId ?? ""}
-            onChange={log.selectSession}
-            options={log.sessions.map((s) => s.id)}
+            aria-label="切换要查看的启动"
+            className="text-2xs max-w-55"
             /* 文案用服务端给的 `title`：它已含「时刻 · 退出形态 · runId」
              * （由端点的 `formatRunLabel` 拼好）。视图不再自己格式化一遍 ——
              * 两边各拼一次必然有一边先漂（§12.12）。 */
             labels={Object.fromEntries(log.sessions.map((s) => [s.id, s.title]))}
-            aria-label="切换要查看的启动"
-            className="text-2xs max-w-55"
+            onChange={log.selectSession}
+            options={log.sessions.map((s) => s.id)}
+            value={log.sessionId ?? ""}
           />
         )}
         {!follow && (
           <Button
-            size="xs"
-            onClick={() => onFollowChange(true)}
             className="text-2xs h-auto rounded px-2 py-0.5 font-medium"
+            onClick={() => onFollowChange(true)}
+            size="xs"
           >
             恢复自动滚动
           </Button>
         )}
         <Button
-          variant="outline"
-          size="xs"
-          onClick={() => void log.refresh()}
           className="text-muted-foreground text-2xs h-auto rounded px-2 py-0.5"
+          onClick={() => void log.refresh()}
+          size="xs"
+          variant="outline"
         >
           刷新
         </Button>
@@ -243,9 +243,9 @@ function LogBody({
 
   return (
     <div
-      ref={scrollerRef}
-      onScroll={scroller.onScroll}
       className={`bg-canvas-deep text-ink-field custom-scrollbar text-2xs overflow-y-auto font-mono leading-relaxed ${className}`}
+      onScroll={scroller.onScroll}
+      ref={scrollerRef}
     >
       {log.text ? (
         <span className="break-all whitespace-pre-wrap">

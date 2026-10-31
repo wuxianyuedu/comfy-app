@@ -28,8 +28,7 @@ const meta = {
   component: PageHeader,
   args: {
     title: "控制台",
-    description:
-      "在项目根执行命令；命令与其子进程在切走视图或点「停止」时一并回收。",
+    description: "在项目根执行命令；命令与其子进程在切走视图或点「停止」时一并回收。",
   },
 } satisfies Meta<typeof PageHeader>;
 
@@ -70,13 +69,12 @@ export const TabNamed: Story = {
 export const WithActions: Story = {
   args: {
     title: "队列与运行",
-    description:
-      "每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。",
+    description: "每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。",
     actions: (
       <>
         <span className="text-ink-faint text-xs tabular-nums">待执行 3</span>
-        <Button variant="outline" size="xs">
-          <RefreshCcw data-icon="inline-start" className="size-3" aria-hidden />
+        <Button size="xs" variant="outline">
+          <RefreshCcw aria-hidden className="size-3" data-icon="inline-start" />
           刷新
         </Button>
       </>
@@ -93,7 +91,7 @@ export const LongTitle: Story = {
     description: undefined,
     titleSuffix: "· 产出",
     actions: (
-      <Button variant="outline" size="sm">
+      <Button size="sm" variant="outline">
         刷新
       </Button>
     ),

@@ -290,19 +290,19 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
     zoom.mode === "fit" ? "适应窗口" : zoom.mode === "actual" ? "原始大小" : "自定义缩放";
 
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
-        data-slot="image-viewer"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
+        data-slot="image-viewer"
         popupClassName={VIEWER_POPUP_WIDTH}
+        showCloseButton={false}
       >
         <div
           className={`border-border bg-panel flex flex-col overflow-hidden rounded-2xl border ${VIEWER_BODY_HEIGHT}`}
         >
           <div className="border-border-subtle flex h-11 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <ZoomIn size={15} className="text-ink-muted shrink-0" aria-hidden="true" />
+              <ZoomIn aria-hidden="true" className="text-ink-muted shrink-0" size={15} />
               <DialogTitle className="text-ink min-w-0 truncate text-sm font-semibold">
                 {title}
               </DialogTitle>
@@ -315,12 +315,12 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
 
             <div className="flex shrink-0 items-center gap-1">
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={zoom.zoomOut}
                 aria-label="缩小"
-                title="缩小"
                 className="text-ink-muted hover:text-ink rounded-md"
+                onClick={zoom.zoomOut}
+                size="icon-sm"
+                title="缩小"
+                variant="ghost"
               >
                 <Minus data-icon="inline-start" size={14} />
               </Button>
@@ -331,12 +331,12 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
                 {zoom.percent}%
               </span>
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={zoom.zoomIn}
                 aria-label="放大"
-                title="放大"
                 className="text-ink-muted hover:text-ink rounded-md"
+                onClick={zoom.zoomIn}
+                size="icon-sm"
+                title="放大"
+                variant="ghost"
               >
                 <Plus data-icon="inline-start" size={14} />
               </Button>
@@ -347,32 +347,32 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
                   注意 `zoom.mode` 还有第三种 `manual`（滚轮 / ± 按钮缩出来的
                   自由倍数）—— 那时两枚都不选中，正是单选组「可以都不选」的
                   合法状态（双击画布的 toggle 会把它收回前两档）。 */}
-              <div role="radiogroup" aria-label="缩放档位" className="flex items-center gap-0.5">
+              <div aria-label="缩放档位" className="flex items-center gap-0.5" role="radiogroup">
                 <SelectChip
-                  shape="compact"
                   className="gap-1 px-2 py-1"
-                  selected={zoom.mode === "fit"}
                   onClick={zoom.fit}
+                  selected={zoom.mode === "fit"}
+                  shape="compact"
                 >
                   适应窗口
                 </SelectChip>
                 <SelectChip
-                  shape="compact"
                   className="gap-1 px-2 py-1"
-                  selected={zoom.mode === "actual"}
                   onClick={zoom.actualSize}
+                  selected={zoom.mode === "actual"}
+                  shape="compact"
                 >
                   <Maximize2 data-icon="inline-start" size={11} />
                   原始大小
                 </SelectChip>
               </div>
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onClose}
                 aria-label="关闭"
-                title="关闭"
                 className="text-ink-muted hover:text-ink rounded-md"
+                onClick={onClose}
+                size="icon-sm"
+                title="关闭"
+                variant="ghost"
               >
                 <X data-icon="inline-start" size={15} />
               </Button>
@@ -381,37 +381,37 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
 
           {/* 画布：双击切换适应窗口 / 原始大小；滚轮与拖拽见上方 handler。 */}
           <div
-            ref={setScroller}
+            className="bg-canvas-deep relative min-h-0 flex-1 cursor-grab touch-none overflow-auto overscroll-contain active:cursor-grabbing"
             data-testid="image-viewer-canvas"
             onDoubleClick={zoom.toggleFitActual}
+            onPointerCancel={handlePointerUp}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            className="bg-canvas-deep relative min-h-0 flex-1 cursor-grab touch-none overflow-auto overscroll-contain active:cursor-grabbing"
+            ref={setScroller}
           >
             {/* 内层用 `w-max min-w-full h-max min-h-full` + 居中：图比可视区小时
                 居中显示，比可视区大时内层恰好等于图宽/高，`justify-center` 不再
                 产生偏移（经典 flex 居中会裁掉溢出内容的左/上边缘）。 */}
             <div
-              ref={innerRef}
-              data-testid="image-viewer-content"
               className="flex h-max min-h-full w-max min-w-full items-center justify-center"
+              data-testid="image-viewer-content"
+              ref={innerRef}
               style={{ padding: VIEWPORT_PADDING }}
             >
               <MediaThumbnail
-                src={src}
                 alt={alt}
-                fallback={<span className="text-ink-fainter text-xs">图片不可用</span>}
                 className={mediaClass}
-                style={mediaStyle}
                 draggable={false}
+                fallback={<span className="text-ink-fainter text-xs">图片不可用</span>}
                 onLoad={(media) => {
                   const size = readNaturalSize(media);
                   if (size) {
                     setLoaded({ src, size });
                   }
                 }}
+                src={src}
+                style={mediaStyle}
               />
             </div>
           </div>
@@ -482,19 +482,19 @@ export function ViewableImage({
   return (
     <>
       <Button
-        variant="ghost"
-        onClick={() => setOpen(true)}
-        title={title}
         aria-label={name ? `查看大图：${name}` : "查看大图"}
         /* `h-full` 而不是 `h-auto`：调用处常在**有确定高度**的盒子里塞它
            （`aspect-square` 网格、定高缩略图位），缩略图的 `h-full` 要有参照
            才撑得满；父级高度是 auto 时 `h-full` 计算为 auto，行为不变。 */
         className="h-full w-full cursor-zoom-in rounded-xl p-0 hover:bg-transparent"
+        onClick={() => setOpen(true)}
+        title={title}
+        variant="ghost"
       >
-        <MediaThumbnail src={src} alt={alt} className={className} fallback={fallback} />
+        <MediaThumbnail alt={alt} className={className} fallback={fallback} src={src} />
       </Button>
       {open && (
-        <ImageViewer src={src} alt={alt} label={name ?? undefined} onClose={() => setOpen(false)} />
+        <ImageViewer alt={alt} label={name ?? undefined} onClose={() => setOpen(false)} src={src} />
       )}
     </>
   );

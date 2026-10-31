@@ -142,6 +142,7 @@ export function AgentOverlay({
 
   return (
     <div
+      className={`border-border bg-panel-deep/95 ${zClass("popup")} fixed flex w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl`}
       /* 面板与入口的相对位置：入口那一枚图标是锚点，面板从它**左侧**展开
        * （`right` 再加上图标直径与间距）。
        *
@@ -160,23 +161,22 @@ export function AgentOverlay({
         right: anchor.right + PANEL_ANCHOR_OFFSET,
         ...panelPlacement(anchor.bottom, viewport.height),
       }}
-      className={`border-border bg-panel-deep/95 ${zClass("popup")} fixed flex w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl`}
     >
       {/* Header */}
       <div className="border-border flex items-center gap-2 border-b px-4 py-3">
         <span className="text-2xs u-gradient-brand flex size-6 items-center justify-center rounded-full font-bold text-white">
-          <Icon name="bot" size={13} className="text-white" />
+          <Icon className="text-white" name="bot" size={13} />
         </span>
         <div className="flex-1">
           <h3 className="text-ink u-title">创作指挥 Agent</h3>
           <p className="text-muted-foreground text-xs">用对话指挥完整工坊流程</p>
         </div>
         <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={closeAgent}
-          className="text-muted-foreground hover:text-ink"
           aria-label="关闭 Agent"
+          className="text-muted-foreground hover:text-ink"
+          onClick={closeAgent}
+          size="icon-xs"
+          variant="ghost"
         >
           <Icon data-icon="inline-start" name="x" size={14} />
         </Button>
@@ -186,15 +186,15 @@ export function AgentOverlay({
       {toolRuns.length > 0 && (
         <div className="border-border bg-bg/60 max-h-28 shrink-0 overflow-y-auto border-b px-4 py-2">
           <div className="text-muted-foreground text-3xs mb-1.5 flex items-center gap-1.5 font-medium">
-            <Icon name="loader" size={11} className="inline" />
+            <Icon className="inline" name="loader" size={11} />
             工作过程
           </div>
           <div className="flex-col gap-1">
             {toolRuns.map((run) => (
-              <div key={run.id} className="flex items-center gap-2">
+              <div className="flex items-center gap-2" key={run.id}>
                 <span
-                  data-slot="agent-tool-status-dot"
                   className={`size-1.5 shrink-0 rounded-full ${TOOL_STATUS_COLOR[run.status]}`}
+                  data-slot="agent-tool-status-dot"
                   style={
                     run.status === "running"
                       ? { animation: "pulse 1.2s ease-in-out infinite" }
@@ -218,14 +218,14 @@ export function AgentOverlay({
  「消息不刷新了」。 */}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div
-          ref={followRef}
-          onScroll={follow.onScroll}
           className="flex-1 gap-3 overflow-y-auto px-4 py-3"
+          onScroll={follow.onScroll}
+          ref={followRef}
         >
           {visibleMessages.map((msg) => {
             if (msg.role === "user") {
               return (
-                <div key={msg.id} className="flex justify-end">
+                <div className="flex justify-end" key={msg.id}>
                   <div className="bg-primary/90 max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap text-white">
                     {msg.content}
                   </div>
@@ -234,7 +234,7 @@ export function AgentOverlay({
             }
             if (msg.role === "tool-run") {
               return (
-                <div key={msg.id} className="flex justify-start">
+                <div className="flex justify-start" key={msg.id}>
                   <div className="border-border/60 bg-bg/80 text-muted-foreground text-2xs max-w-[85%] rounded-xl border px-3 py-1.5">
                     ⚙ {msg.run.summary}
                   </div>
@@ -243,7 +243,7 @@ export function AgentOverlay({
             }
             // assistant
             return (
-              <div key={msg.id} className="flex justify-start">
+              <div className="flex justify-start" key={msg.id}>
                 <div className="bg-subtle text-ink max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap">
                   {msg.content}
                 </div>
@@ -255,18 +255,18 @@ export function AgentOverlay({
             <div className="flex justify-start">
               <div className="bg-subtle rounded-2xl px-3 py-2.5">
                 <span className="inline-flex gap-1">
-                  <StatusDot state="probing" sizeClass="size-1.5 bg-muted-foreground" pulse />
+                  <StatusDot pulse sizeClass="size-1.5 bg-muted-foreground" state="probing" />
                   <StatusDot
-                    state="probing"
-                    sizeClass="size-1.5 bg-muted-foreground"
-                    pulse
                     className="[animation-delay:0.15s]"
+                    pulse
+                    sizeClass="size-1.5 bg-muted-foreground"
+                    state="probing"
                   />
                   <StatusDot
-                    state="probing"
-                    sizeClass="size-1.5 bg-muted-foreground"
-                    pulse
                     className="[animation-delay:0.3s]"
+                    pulse
+                    sizeClass="size-1.5 bg-muted-foreground"
+                    state="probing"
                   />
                 </span>
               </div>
@@ -277,10 +277,10 @@ export function AgentOverlay({
         {/* 上滚后的可见出口：不给它，用户只会觉得「AI 不回复了」。 */}
         {!follow.following && (
           <Button
-            variant="primary-solid"
-            size="xs"
-            onClick={follow.jumpToLatest}
             className="text-2xs absolute bottom-3 left-1/2 h-auto -translate-x-1/2 rounded-full px-3 py-1 shadow-lg"
+            onClick={follow.jumpToLatest}
+            size="xs"
+            variant="primary-solid"
           >
             回到最新
           </Button>
@@ -296,8 +296,6 @@ export function AgentOverlay({
       {/* Input */}
       <div className="border-border flex items-end gap-2 border-t p-3">
         <Textarea
-          ref={taRef}
-          value={input}
           onChange={(event) => {
             /* 这一处要在同一个事件里读`scrollHeight` 调整高度，所以不能
              * 直接把`onChange` 换成适配器 —— 取值本身仍走出口。 */
@@ -305,6 +303,8 @@ export function AgentOverlay({
             event.target.style.height = "auto";
             event.target.style.height = Math.min(event.target.scrollHeight, 80) + "px";
           }}
+          ref={taRef}
+          value={input}
           /* Shift+Enter 换行、Enter 发送；`ignoreIme` 由出口默认开着 ——
            * 此前这里没判 IME，中文输入法下**候选词未上屏的 Enter 会被当成发送**
            *（把半截拼音发给 AI），见 §16.2.4.29。 */
@@ -312,17 +312,17 @@ export function AgentOverlay({
             onCommit: () => void send(),
             excludeShift: true,
           })}
-          rows={1}
-          placeholder="描述你的创作想法… (Enter 发送)"
           className="field-sizing-normal border-border bg-subtle text-ink placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 flex-1 resize-none rounded-xl px-3 py-2 text-sm"
+          placeholder="描述你的创作想法… (Enter 发送)"
+          rows={1}
         />
         <Button
-          variant="primary-solid"
-          size="icon-lg"
-          onClick={() => void send()}
-          disabled={!input.trim() || busy}
-          className="shrink-0 rounded-lg"
           aria-label="发送"
+          className="shrink-0 rounded-lg"
+          disabled={!input.trim() || busy}
+          onClick={() => void send()}
+          size="icon-lg"
+          variant="primary-solid"
         >
           {busy ? (
             <Spinner className="size-3.5" />
@@ -379,12 +379,12 @@ export function AgentFab({
         ref={elementRef}
         variant="primary-solid"
         {...handleProps}
-        onClick={onOpen}
-        style={{ right: offset.right, bottom: offset.bottom }}
+        aria-label="打开创作指挥 Agent"
         className={`${zClass("popup")} fixed size-10 touch-none rounded-full p-0 shadow-lg shadow-black/25 ${
           dragging ? "cursor-grabbing" : "cursor-grab"
         }`}
-        aria-label="打开创作指挥 Agent"
+        onClick={onOpen}
+        style={{ right: offset.right, bottom: offset.bottom }}
       >
         <Icon data-icon="inline-start" name="bot" size={18} />
       </Button>

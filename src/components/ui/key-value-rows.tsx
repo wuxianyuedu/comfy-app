@@ -150,8 +150,8 @@ export function KeyValueRows({
       <span className={cn("inline-flex items-center gap-1", className)}>
         {items.map((item) => (
           <span
-            key={item.id ?? itemLabelText(item)}
             className={cn("inline-flex items-center gap-1", itemClassName, item.itemClassName)}
+            key={item.id ?? itemLabelText(item)}
             title={item.title}
           >
             <span className={cn("text-ink-muted", keyClassName)}>{item.key}</span>
@@ -171,8 +171,8 @@ export function KeyValueRows({
       <div className={cn("grid gap-x-4 gap-y-3", colClass, className)}>
         {items.map((item) => (
           <div
-            key={item.id ?? itemLabelText(item)}
             className={cn("flex min-w-0 flex-col gap-0.5", itemClassName, item.itemClassName)}
+            key={item.id ?? itemLabelText(item)}
             title={item.title}
           >
             <span className={cn("text-ink-fainter text-3xs", keyClassName)}>{item.key}</span>
@@ -204,16 +204,16 @@ export function KeyValueRows({
           <tbody>
             {items.map((item) => (
               <tr
-                key={item.id ?? itemLabelText(item)}
                 className={cn("border-border-subtle border-b last:border-b-0", item.itemClassName)}
+                key={item.id ?? itemLabelText(item)}
               >
                 <th
-                  scope="row"
-                  title={item.title}
                   className={cn(
                     "border-border-subtle bg-card w-[36%] max-w-45 truncate border-r px-2.5 py-1.5 text-left align-top font-mono",
                     keyClassName,
                   )}
+                  scope="row"
+                  title={item.title}
                 >
                   {item.key}
                 </th>
@@ -243,7 +243,6 @@ export function KeyValueRows({
     >
       {items.map((item, index) => (
         <div
-          key={item.id ?? itemLabelText(item)}
           className={cn(
             "flex items-center justify-between gap-3 text-xs",
             bordered ? "px-3 py-2" : "py-1",
@@ -252,6 +251,7 @@ export function KeyValueRows({
             itemClassName,
             item.itemClassName,
           )}
+          key={item.id ?? itemLabelText(item)}
           title={item.title}
         >
           <span className={cn("text-ink-muted", keyClassName)}>{item.key}</span>

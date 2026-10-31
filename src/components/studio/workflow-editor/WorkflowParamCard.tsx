@@ -149,6 +149,12 @@ export function WorkflowParamCard({
     /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- 选中高亮的便捷落点，不是交互本体 */
     <div
       className="bg-card shadow-card relative flex flex-col rounded-lg border"
+      data-selected={selected ? "true" : undefined}
+      onClick={onSelect}
+      /* 悬浮态由消费方（画布节点）的钩子写到 React Flow 外壳上 —— 抬层级的是
+       *  外壳（它自带 position:absolute + z-index，自成层叠上下文），不是这张
+       *  卡片（见 HoverElevation 的注释）。 */
+      ref={hoverRef}
       style={{
         width,
         /* 描边配色：选中 → 分类色；**可编辑但当前不可连**（没有模式语境）→ 灰，
@@ -161,12 +167,6 @@ export function WorkflowParamCard({
             : `${style.color}66`,
         isolation: "isolate",
       }}
-      data-selected={selected ? "true" : undefined}
-      onClick={onSelect}
-      /* 悬浮态由消费方（画布节点）的钩子写到 React Flow 外壳上 —— 抬层级的是
-       *  外壳（它自带 position:absolute + z-index，自成层叠上下文），不是这张
-       *  卡片（见 HoverElevation 的注释）。 */
-      ref={hoverRef}
       {...hoverEvents}
       data-testid={`param-node-${entryId}`}
     >
@@ -205,10 +205,7 @@ export function WorkflowParamCard({
             wrap
           >
             <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={onReset}
-              disabled={!canReset}
+              aria-label="恢复默认"
               /* 卡片上的小圆钮沿用自己这套尺寸与内边距：基元 `size` 变体写死了
                *  h/w，必须 `h-auto w-auto` 让回来（16 §16.2.4.2 第 3 条）。 */
               className={`nodrag nopan h-auto w-auto shrink-0 rounded p-0.5 ${
@@ -217,7 +214,10 @@ export function WorkflowParamCard({
                   : "text-ink-fainter cursor-default"
               }`}
               data-testid={`param-node-reset-${entryId}`}
-              aria-label="恢复默认"
+              disabled={!canReset}
+              onClick={onReset}
+              size="icon-xs"
+              variant="ghost"
             >
               <RotateCcw data-icon="inline-start" size={11} />
             </Button>
@@ -236,15 +236,15 @@ export function WorkflowParamCard({
       <div className="flex flex-col px-2 pb-1">
         {outputPorts.map((port, index) => (
           <div
-            key={`${port.name}-${index}`}
             /* `relative` 是端点定位的锚：注入的端点（画布上的 <Handle>、库内
              *  的只读圆点）都以**这一行**为参照居中，而不是整张卡片 —— 否则
              *  多行输出端口时圆点会全部叠在卡片中线，看不出连的是哪一行。 */
             className={`text-2xs relative flex min-w-0 items-center gap-1.5 ${
               side === "left" ? "justify-start" : "justify-end"
             }`}
-            style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
             data-testid={`param-node-out-${entryId}-${index}`}
+            key={`${port.name}-${index}`}
+            style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
             title={
               /* 行上显示的是对外参数自己的名字（`display`）与类型（`type`）；
                *  **落到工作流的哪一行**在这里可查（`ioKey`）—— 显示与落点是两件事，
@@ -265,12 +265,12 @@ export function WorkflowParamCard({
             </span>
             <span
               className="text-4xs shrink-0 rounded px-1 font-mono leading-3.5"
+              data-testid={`param-node-out-type-${entryId}-${index}`}
               style={{
                 color: style.color,
                 background: `${style.color}1f`,
                 border: `1px solid ${style.color}44`,
               }}
-              data-testid={`param-node-out-type-${entryId}-${index}`}
             >
               {port.type}
             </span>

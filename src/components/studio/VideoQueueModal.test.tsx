@@ -24,7 +24,7 @@ vi.mock("~/lib/media/video-queue-client", () => ({
 afterEach(cleanup);
 
 function renderModal() {
-  render(<VideoQueueModal open onClose={() => undefined} />);
+  render(<VideoQueueModal onClose={() => undefined} open />);
 }
 
 const oneTask: VideoTask = {

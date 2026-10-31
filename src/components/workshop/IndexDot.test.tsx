@@ -44,7 +44,7 @@ describe("IndexDot", () => {
   });
 
   it("className 追加在末尾 —— 调用点要能盖掉缺省（tailwind-merge 后面的赢）", () => {
-    render(<IndexDot index={9} className="size-8" />);
+    render(<IndexDot className="size-8" index={9} />);
     const dot = screen.getByText("9");
     expect(dot).toHaveClass("size-8");
     expect(dot).not.toHaveClass("size-6");

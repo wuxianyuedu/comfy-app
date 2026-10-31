@@ -25,8 +25,8 @@ export function CanvasProgressIndicator({ progress }: { progress: ProductionProg
     <div className="z-canvas-ui pointer-events-none absolute top-3 left-3">
       <div className="bg-card border-border-strong w-56 rounded-xl border px-3 py-2 shadow-lg">
         <ProgressBar
-          value={stageProgressPct(progress)}
           label={progress.rendered ? "生产进度 · 已合成" : "生产进度"}
+          value={stageProgressPct(progress)}
         />
       </div>
     </div>

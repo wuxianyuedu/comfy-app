@@ -164,10 +164,10 @@ export function CharacterDesigner({
         </h3>
         <div className="flex gap-2">
           <Button
-            variant="outline"
-            size="xs"
-            onClick={add}
             className="border-border text-primary hover:bg-subtle h-auto rounded-lg px-3 py-1.5"
+            onClick={add}
+            size="xs"
+            variant="outline"
           >
             + 新建角色
           </Button>
@@ -184,15 +184,15 @@ export function CharacterDesigner({
       <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-primary flex items-center text-xs font-medium">
-            <Icon name="sparkles" size={13} className="mr-1" />
+            <Icon className="mr-1" name="sparkles" size={13} />
             用一句话生成角色
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ExtractModelSelect value={genSelectValue} onChange={setGenSel} />
+          <ExtractModelSelect onChange={setGenSel} value={genSelectValue} />
           <input
-            value={brief}
             onChange={textHandler(setBrief)}
+            value={brief}
             /* Enter 触发 AI 生成（Shift+Enter 不触发）；生成中不响应。 */
             {...enterCommit({
               onCommit: () => {
@@ -202,15 +202,15 @@ export function CharacterDesigner({
               },
               excludeShift: true,
             })}
-            placeholder="例如：一位穿唐装的白发剑客，气质孤傲"
             className="border-border bg-bg focus:border-primary flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
+            placeholder="例如：一位穿唐装的白发剑客，气质孤傲"
           />
           <Button
-            variant="primary-solid"
-            size="xs"
-            onClick={handleAIGenerate}
-            disabled={!brief.trim() || gen.busy}
             className="h-auto rounded-lg px-3 py-2"
+            disabled={!brief.trim() || gen.busy}
+            onClick={handleAIGenerate}
+            size="xs"
+            variant="primary-solid"
           >
             {gen.busy ? "生成中…" : "AI 生成"}
           </Button>
@@ -229,9 +229,9 @@ export function CharacterDesigner({
             )}
             {gen.busy && genProgress && (
               <Disclosure
+                className="text-primary bg-bg/60 text-2xs rounded-lg px-3 py-2"
                 defaultOpen
                 marker="caret"
-                className="text-primary bg-bg/60 text-2xs rounded-lg px-3 py-2"
                 trigger="生成过程"
               >
                 <pre className="text-muted-foreground text-2xs mt-1 max-h-40 overflow-y-auto leading-relaxed break-all whitespace-pre-wrap">
@@ -251,8 +251,13 @@ export function CharacterDesigner({
 
       {/* 从剧本提取角色：独立区块，分组下拉（工具/本地/远端）+ 提取 */}
       <ExtractToolbar
-        title="从剧本提取角色"
+        busy={extractBusy}
         channelValue={extractChannelValue}
+        errorText={extractError}
+        executionLog={extractionLog}
+        extractDisabled={!hasScript}
+        extractDisabledReason="未获取到剧本文本(在「剧本」阶段编写后可提取)。仍可用「外部导入」载入角色卡 JSON 或人物清单。"
+        logStage="character"
         onChannelValueChange={(value) => setExtractChannelValue(value)}
         onExtract={() => {
           void handleExtract();
@@ -260,47 +265,42 @@ export function CharacterDesigner({
         onImportFile={(file) => {
           void handleImportFile(file);
         }}
-        busy={extractBusy}
         progressText={extractProgress}
         statusText={extractStatus}
-        errorText={extractError}
-        executionLog={extractionLog}
-        logStage="character"
-        extractDisabled={!hasScript}
-        extractDisabledReason="未获取到剧本文本(在「剧本」阶段编写后可提取)。仍可用「外部导入」载入角色卡 JSON 或人物清单。"
+        title="从剧本提取角色"
       />
 
       {characters.length === 0 ? (
         <EmptyState
-          variant="hint"
-          description="还没有角色。添加角色后会自动生成可送入生图的提示词。"
           className="py-10 text-sm"
+          description="还没有角色。添加角色后会自动生成可送入生图的提示词。"
+          variant="hint"
         />
       ) : (
         <div className="flex flex-col gap-3">
           {characters.map((character, i) => (
-            <div key={character.id} className="border-border bg-surface rounded-xl border p-4">
+            <div className="border-border bg-surface rounded-xl border p-4" key={character.id}>
               <div className="mb-3 flex items-center gap-2">
                 <IndexDot index={i + 1} />
                 <input
-                  value={character.name}
-                  onChange={(event) => update(character.id, { name: event.target.value })}
                   className="text-ink hover:border-border focus:border-primary flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium outline-none"
+                  onChange={(event) => update(character.id, { name: event.target.value })}
                   placeholder="角色名"
+                  value={character.name}
                 />
                 <Hint label="用 LLM 补全外貌/服装/性格" wrap>
                   <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={() => handleAICard(character)}
-                    disabled={aiAction.isBusy(character.id) || gen.busy}
                     className="border-primary-soft text-primary hover:bg-primary-soft h-auto rounded-md px-2 py-1"
+                    disabled={aiAction.isBusy(character.id) || gen.busy}
+                    onClick={() => handleAICard(character)}
+                    size="xs"
+                    variant="outline"
                   >
                     {aiAction.isBusy(character.id) ? (
                       "…"
                     ) : (
                       <>
-                        <Icon data-icon="inline-start" name="sparkles" size={12} className="mr-1" />
+                        <Icon className="mr-1" data-icon="inline-start" name="sparkles" size={12} />
                         AI 润色
                       </>
                     )}
@@ -308,11 +308,11 @@ export function CharacterDesigner({
                 </Hint>
                 <CharacterReviewButton character={character} />
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => remove(character.id)}
-                  className="text-muted-foreground hover:text-danger-strong"
                   aria-label="删除角色"
+                  className="text-muted-foreground hover:text-danger-strong"
+                  onClick={() => remove(character.id)}
+                  size="icon-sm"
+                  variant="ghost"
                 >
                   <Trash data-icon="inline-start" size={16} />
                 </Button>
@@ -321,46 +321,46 @@ export function CharacterDesigner({
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field
                   label="年龄/性别"
-                  value={character.ageGender}
                   onChange={(value) => update(character.id, { ageGender: value })}
                   placeholder="25岁 女性"
+                  value={character.ageGender}
                 />
 
                 {/* 服装 / 外貌特征 / 性格 / 气质 / 风格 —— 穷举式多选下拉 */}
                 <AttributeMultiSelect
-                  label={attrSet("costume").label}
                   groups={attrSet("costume").groups}
-                  value={splitAttr(character.costume)}
+                  label={attrSet("costume").label}
                   onChange={(items) => update(character.id, { costume: joinAttr(items) })}
                   placeholder="如：唐装、风衣…"
+                  value={splitAttr(character.costume)}
                 />
                 <AttributeMultiSelect
-                  label={attrSet("appearance").label}
                   groups={attrSet("appearance").groups}
-                  value={splitAttr(character.appearance)}
+                  label={attrSet("appearance").label}
                   onChange={(items) => update(character.id, { appearance: joinAttr(items) })}
                   placeholder="如：短发、双眼皮…"
+                  value={splitAttr(character.appearance)}
                 />
                 <AttributeMultiSelect
-                  label={attrSet("personality").label}
                   groups={attrSet("personality").groups}
-                  value={splitAttr(character.personality)}
+                  label={attrSet("personality").label}
                   onChange={(items) => update(character.id, { personality: joinAttr(items) })}
                   placeholder="如：冷静、开朗…"
+                  value={splitAttr(character.personality)}
                 />
                 <AttributeMultiSelect
-                  label={attrSet("temperament").label}
                   groups={attrSet("temperament").groups}
-                  value={splitAttr(character.temperament)}
+                  label={attrSet("temperament").label}
                   onChange={(items) => update(character.id, { temperament: joinAttr(items) })}
                   placeholder="如：清冷孤傲、知性…"
+                  value={splitAttr(character.temperament)}
                 />
                 <AttributeMultiSelect
-                  label={attrSet("styleTags").label}
                   groups={attrSet("styleTags").groups}
-                  value={character.styleTags ?? []}
+                  label={attrSet("styleTags").label}
                   onChange={(items) => update(character.id, { styleTags: items })}
                   placeholder="如：厚涂、国风…"
+                  value={character.styleTags ?? []}
                 />
               </div>
 
@@ -369,13 +369,13 @@ export function CharacterDesigner({
                 <span className="text-muted-foreground mb-1 block text-xs">艺术风格（Skill）</span>
                 <SelectMenu
                   className="border-border! bg-subtle! text-sm"
-                  value={character.skillSlug ?? ""}
-                  onChange={(value) => update(character.id, { skillSlug: value || undefined })}
-                  options={styles.map((style) => style.slug)}
                   labels={Object.fromEntries(
                     styles.map((style) => [style.slug, `${style.icon} ${style.name}`]),
                   )}
+                  onChange={(value) => update(character.id, { skillSlug: value || undefined })}
+                  options={styles.map((style) => style.slug)}
                   placeholder="不指定（使用风格标签）"
+                  value={character.skillSlug ?? ""}
                 />
               </div>
 
@@ -419,10 +419,10 @@ function Field({
       {(a11y) => (
         <input
           {...a11y}
-          value={value}
-          onChange={textHandler(onChange)}
           className="border-border bg-bg focus:border-primary w-full rounded-md border px-2 py-1.5 text-xs outline-none"
+          onChange={textHandler(onChange)}
           placeholder={placeholder}
+          value={value}
         />
       )}
     </FormField>

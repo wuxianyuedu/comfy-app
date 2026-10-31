@@ -73,7 +73,7 @@ export function renderWithProviders(
     return (
       <Outer>
         <QueryClientProvider client={qc}>
-          <TRPCProvider trpcClient={trpcClient} queryClient={qc}>
+          <TRPCProvider queryClient={qc} trpcClient={trpcClient}>
             {children}
           </TRPCProvider>
         </QueryClientProvider>

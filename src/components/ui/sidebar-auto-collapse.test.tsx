@@ -59,7 +59,7 @@ function Probe() {
     <div>
       <span data-testid="state">{state}</span>
       <span data-testid="auto">{String(collapsedByAuto)}</span>
-      <button type="button" onClick={toggleSidebar}>
+      <button onClick={toggleSidebar} type="button">
         开关导航
       </button>
     </div>

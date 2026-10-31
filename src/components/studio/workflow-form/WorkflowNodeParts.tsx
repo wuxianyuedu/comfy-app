@@ -122,8 +122,8 @@ export function WorkflowStaticChip({
 }) {
   return (
     <span
-      title={title}
       className={`border-primary/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 ${className}`}
+      title={title}
     >
       {children}
     </span>
@@ -159,9 +159,6 @@ export function WorkflowNodeActionButton({
 }) {
   const button = (
     <Button
-      variant="primary-solid"
-      disabled={disabled}
-      onClick={onClick}
       className={cn(
         "from-primary to-accent nodrag nopan flex h-10.75 w-full items-center justify-center gap-2 bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)] hover:opacity-95",
         /* 圆角是这一枚唯一按宿主分叉的形状：坐在卡片下沿时自己收角，并把顶角收成直角
@@ -170,7 +167,10 @@ export function WorkflowNodeActionButton({
          * 认的那枚形状，往里塞形态就是往唯一出处里塞第二份来源。 */
         corner === "own" ? "rounded-b-node rounded-t-none" : "rounded-none",
       )}
+      disabled={disabled}
+      onClick={onClick}
       style={{ fontFamily: "var(--font-sans)" }}
+      variant="primary-solid"
     >
       {label}
     </Button>
@@ -202,7 +202,7 @@ export function WorkflowNodeOutputsRow({
   const oLabel = ioLabel(output, [...inputs, ...outputs]);
   const oType = output.type ?? "*";
   return (
-    <div key={output.nodeId + ":" + output.name} className="relative">
+    <div className="relative" key={output.nodeId + ":" + output.name}>
       {renderHandle && output.ioKey
         ? renderHandle({ id: output.ioKey, dir: "out", type: oType })
         : null}

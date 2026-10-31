@@ -41,7 +41,6 @@ function renderTopBar() {
   return render(
     <WFStoresProvider stores={makeStores()}>
       <WorkflowEditorTopBar
-        onClose={noop}
         detail={
           /* SAFETY: 类型断言已复核 */ {
             name: "wf",
@@ -52,18 +51,19 @@ function renderTopBar() {
             positions: {},
           } as never
         }
-        rootWorkflowName="wf"
-        subgraphStack={[]}
-        setSubgraphStack={/* SAFETY: 类型断言已复核 */ noop as never}
-        fetchDetail={vi.fn(async () => undefined)}
-        onExitSubgraph={noop}
-        forceReloadDetail={noop}
-        setViewJsonOpen={/* SAFETY: 类型断言已复核 */ noop as never}
-        resetLayout={noop}
-        viewHostNodeId=""
-        handleSave={noop}
-        saving={false}
         error=""
+        fetchDetail={vi.fn(async () => undefined)}
+        forceReloadDetail={noop}
+        handleSave={noop}
+        onClose={noop}
+        onExitSubgraph={noop}
+        resetLayout={noop}
+        rootWorkflowName="wf"
+        saving={false}
+        setSubgraphStack={/* SAFETY: 类型断言已复核 */ noop as never}
+        setViewJsonOpen={/* SAFETY: 类型断言已复核 */ noop as never}
+        subgraphStack={[]}
+        viewHostNodeId=""
       />
     </WFStoresProvider>,
   );

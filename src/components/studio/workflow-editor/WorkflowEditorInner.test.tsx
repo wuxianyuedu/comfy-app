@@ -91,7 +91,7 @@ describe("WorkflowEditorInner", () => {
     const { container } = render(
       <ReactFlowProvider>
         <ToastProvider>
-          <WorkflowEditorInner workflowId="wf-test" onClose={vi.fn()} />
+          <WorkflowEditorInner onClose={vi.fn()} workflowId="wf-test" />
         </ToastProvider>
       </ReactFlowProvider>,
     );

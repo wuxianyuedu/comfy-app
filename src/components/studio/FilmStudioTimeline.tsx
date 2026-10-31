@@ -40,8 +40,8 @@ export function FilmStudioTimeline({ playheadPos, bgmName }: FilmStudioTimelineP
           <div className="flex flex-1 gap-1.5">
             {VIDEO_CLIPS.map((clip) => (
               <div
-                key={clip.id}
                 className={`flex h-8 items-center rounded-md bg-linear-to-r ${clip.colorClass} px-2.5 shadow-sm`}
+                key={clip.id}
                 style={{ width: `${clip.width}px` }}
               >
                 <span className={`text-3xs font-semibold ${clip.textColorClass}`}>
@@ -73,15 +73,15 @@ export function FilmStudioTimeline({ playheadPos, bgmName }: FilmStudioTimelineP
             style={{ width: "200px" }}
           >
             <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
+              className="mr-1.5 shrink-0"
               fill="none"
+              height="12"
               stroke="var(--color-primary-strong)"
-              strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="mr-1.5 shrink-0"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              width="12"
             >
               <path d="M9 18V5l12-2v13M9 18a3 3 0 01-3-3H3a3 3 0 006 3z" />
             </svg>

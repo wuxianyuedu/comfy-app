@@ -100,8 +100,8 @@ export function WidgetInputRow({
         )}
         <EditableLabel
           label={label}
-          title={`${entry.nodeTitle ?? ""} · ${entry.name}`}
           onChange={onLabelChange}
+          title={`${entry.nodeTitle ?? ""} · ${entry.name}`}
         />
       </span>
       {/* 操作区：「必填 / 👁」与类型徽章始终固定在行右侧 —— 与编辑态与否无关，
@@ -110,12 +110,12 @@ export function WidgetInputRow({
         {onRequiredChange && (
           <Hint label={entry.required ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}>
             <Button
-              variant={entry.required ? "danger" : "ghost"}
-              onClick={() => onRequiredChange(!entry.required)}
-              onMouseDown={(event) => event.stopPropagation()}
               className={`nodrag nopan text-3xs h-auto shrink-0 rounded px-1.5 py-px font-medium ${
                 entry.required ? "" : "border-border-strong bg-subtle text-ink-muted border"
               }`}
+              onClick={() => onRequiredChange(!entry.required)}
+              onMouseDown={(event) => event.stopPropagation()}
+              variant={entry.required ? "danger" : "ghost"}
             >
               {entry.required ? "必填" : "可选"}
             </Button>
@@ -131,14 +131,14 @@ export function WidgetInputRow({
             }
           >
             <Button
-              variant="ghost"
-              onClick={() => onVisibilityChange(visible === false)}
-              onMouseDown={(event) => event.stopPropagation()}
               className={`nodrag nopan h-auto shrink-0 rounded p-0.5 ${
                 visible === false
                   ? "text-ink-fainter hover:text-ink-soft"
                   : "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
               }`}
+              onClick={() => onVisibilityChange(visible === false)}
+              onMouseDown={(event) => event.stopPropagation()}
+              variant="ghost"
             >
               {visible === false ? (
                 <EyeOff data-icon="inline-start" size={11} />
@@ -160,10 +160,10 @@ export function WidgetInputRow({
         <div className={`relative ${dimmed ? "opacity-50" : ""}`} data-io-key={entry.ioKey}>
           {withHandle && (
             <PortHandle
-              id={handleId ?? entry.ioKey}
               dir="in"
-              type={entry.type}
+              id={handleId ?? entry.ioKey}
               style={{ top: 16, transform: "translateY(-50%)" }}
+              type={entry.type}
             />
           )}
           <div className="px-3.5 pt-1.5">{labelRow}</div>
@@ -175,7 +175,7 @@ export function WidgetInputRow({
     }
     return (
       <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
-        {withHandle && <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />}
+        {withHandle && <PortHandle dir="in" id={handleId ?? entry.ioKey} type={entry.type} />}
         <div className="bg-canvas-deep flex items-center gap-2 rounded-md px-2.5 py-1.5 pr-3.5 pl-3.5">
           <span className="size-2 shrink-0 rounded-full" style={{ background: accent }} />
           <span className="text-ink-soft text-2xs min-w-0 flex-1 truncate">{label}</span>
@@ -189,17 +189,17 @@ export function WidgetInputRow({
 
   const control = (
     <WidgetControl
-      entry={entry}
-      label={label}
-      value={value}
       compact={compact}
       disabled={disabled}
-      uploading={uploading}
-      seedMode={seedMode}
+      entry={entry}
+      label={label}
+      onPickFile={onPickFile}
       onSeedModeChange={onSeedModeChange}
       onValueChange={onValueChange}
-      onPickFile={onPickFile}
       previewSrc={previewSrc}
+      seedMode={seedMode}
+      uploading={uploading}
+      value={value}
     />
   );
 
@@ -217,10 +217,10 @@ export function WidgetInputRow({
           /* 圆心锁到标签行中线（pt-1.5 = 6 + h-5 / 2 = 10 = 16px）：默认的
            * top:50% 会让圆点掉在两行之间、与参数名错位。 */
           <PortHandle
-            id={handleId ?? entry.ioKey}
             dir="in"
-            type={entry.type}
+            id={handleId ?? entry.ioKey}
             style={{ top: 16, transform: "translateY(-50%)" }}
+            type={entry.type}
           />
         )}
         <div className="px-3.5 pt-1.5">{labelRow}</div>
@@ -233,7 +233,7 @@ export function WidgetInputRow({
    * 卡片左缘 —— 放进带 padding 的子行会让圆心内缩 14px，与端口行错位。 */
   return (
     <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
-      {withHandle && <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />}
+      {withHandle && <PortHandle dir="in" id={handleId ?? entry.ioKey} type={entry.type} />}
       <div className="px-3.5 pt-1.5">{labelRow}</div>
       {control}
     </div>

@@ -105,17 +105,17 @@ export function ProgressBar({
 
   return (
     <ProgressPrimitive.Root
-      value={pct}
-      max={100}
+      aria-label={ariaLabel}
+      aria-valuetext={indeterminate ? "进行中" : undefined}
+      className={cn("w-full", className)}
       /* data-slot 沿用「progress-bar-track」这一旧命名挂在 ARIA 宿主上——
        * 不是 shadcn ProgressTrack 的 visual track（那个在下一层）；
        * 之所以不叫 root 是为了让 progress-bar.test.tsx 与 SettingsParts
        * 的 DOM 契约保持不变、`getAttribute("role") === "progressbar"` 的
        * 断点不动。 */
       data-slot="progress-bar-track"
-      aria-label={ariaLabel}
-      className={cn("w-full", className)}
-      aria-valuetext={indeterminate ? "进行中" : undefined}
+      max={100}
+      value={pct}
     >
       {label !== undefined && (
         <div className="mb-1 flex items-center justify-between gap-2 text-xs">
@@ -130,14 +130,14 @@ export function ProgressBar({
       >
         {indeterminate ? (
           <div
-            data-slot="progress-bar-indeterminate"
             className={cn("bg-primary h-full w-1/3", fillClassName)}
+            data-slot="progress-bar-indeterminate"
             style={{ animation: "progressStripe 1.4s ease-in-out infinite" }}
           />
         ) : (
           <div
-            data-slot="progress-bar-fill"
             className={cn("bg-primary h-full rounded-full transition-transform", fillClassName)}
+            data-slot="progress-bar-fill"
             style={{ transform: `translateX(${width - 100}%)` }}
           />
         )}

@@ -58,12 +58,11 @@ export function AutoResizeTextarea({
   }, [value, resize]);
   return (
     <Textarea
-      ref={ref}
-      value={value}
-      placeholder={placeholder}
-      rows={1}
-      onChange={textHandler(onChange)}
       className="nodrag nopan bg-canvas-deep text-ink-soft placeholder:text-ink-placeholder field-sizing-normal block w-full min-w-0 resize-none overflow-x-hidden rounded-md border-0 py-2 pr-3 pl-2.5 text-sm leading-relaxed focus-visible:ring-0"
+      onChange={textHandler(onChange)}
+      placeholder={placeholder}
+      ref={ref}
+      rows={1}
       style={{
         fontFamily: "var(--font-sans)",
         boxSizing: "border-box",
@@ -75,6 +74,7 @@ export function AutoResizeTextarea({
         scrollbarWidth: "none",
         msOverflowStyle: "none",
       }}
+      value={value}
     />
   );
 }

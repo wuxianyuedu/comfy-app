@@ -76,14 +76,14 @@ export function ViewTabStrip({
 }: ViewTabStripProps) {
   return (
     <div
-      role="tablist"
       aria-label="已打开的视图"
-      data-component="workspace-view-tabstrip"
       className={
         inTitleBar
           ? "flex min-w-0 shrink items-center gap-1"
           : "border-border bg-sidebar/40 flex shrink-0 items-center gap-1 border-b px-2 py-1.5"
       }
+      data-component="workspace-view-tabstrip"
+      role="tablist"
     >
       {tabs.map((tab) => {
         const active = tab.key === activeKey;
@@ -91,12 +91,12 @@ export function ViewTabStrip({
         return (
           /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：键出口是 `simpleKeyHandler` 的展开。 */
           <div
-            key={tab.key}
-            role="tab"
             aria-selected={active}
-            tabIndex={active ? 0 : -1}
             data-no-drag
+            key={tab.key}
             onClick={() => onSelect(tab.key)}
+            role="tab"
+            tabIndex={active ? 0 : -1}
             {...simpleKeyHandler(["Space", "Enter"], () => onSelect(tab.key))}
             className={
               /* 选中态走 `.u-tab-active`（更亮的表面 + 顶部一条品牌色），两种形态
@@ -114,15 +114,15 @@ export function ViewTabStrip({
             <span className="min-w-0 truncate">{label}</span>
             {isTabClosable(tab) ? (
               <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
                 aria-label={`关闭 ${displayValue(label)}`}
+                className="text-ink-fainter hover:text-ink -mr-1 shrink-0"
                 onClick={(event) => {
                   event.stopPropagation();
                   onClose(tab.key);
                 }}
-                className="text-ink-fainter hover:text-ink -mr-1 shrink-0"
+                size="icon-xs"
+                type="button"
+                variant="ghost"
               >
                 <X data-icon="inline-start" size={12} />
               </Button>
@@ -139,11 +139,11 @@ export function ViewTabStrip({
           <DropdownMenuTrigger
             render={
               <Button
-                variant="ghost"
-                size="icon-xs"
                 aria-label="新页签"
-                data-no-drag
                 className="text-ink-muted hover:text-ink shrink-0"
+                data-no-drag
+                size="icon-xs"
+                variant="ghost"
               >
                 <Plus data-icon="inline-start" size={14} />
               </Button>

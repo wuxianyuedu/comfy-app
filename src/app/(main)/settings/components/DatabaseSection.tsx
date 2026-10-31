@@ -68,23 +68,23 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
               「看」走软底、`outline` 给并列出口、**当前这一态该按的那一颗**
               才是实心。此前三颗都是实心品牌紫，一屏里三颗主按钮。 */}
           <StatusButton
+            disabled={c.dbStudioOpening || c.dbStudioStarting || !c.dbStudioStatus?.up}
             onClick={() => void c.openDbStudio()}
             variant="primary"
-            disabled={c.dbStudioOpening || c.dbStudioStarting || !c.dbStudioStatus?.up}
           >
             {c.dbStudioOpening ? "打开中…" : "打开查看"}
           </StatusButton>
           <StatusButton
+            disabled={c.dbStudioStarting || c.dbStudioStatus?.up === true}
             onClick={() => void c.startDbStudio()}
             variant={c.dbStudioStatus?.up ? "primary" : "primary-solid"}
-            disabled={c.dbStudioStarting || c.dbStudioStatus?.up === true}
           >
             {c.dbStudioStarting ? "启动中…" : "启动 Drizzle Studio"}
           </StatusButton>
           <StatusButton
+            disabled={c.dbStudioStopping || !c.dbStudioStatus?.up}
             onClick={() => void c.stopDbStudio()}
             variant={c.dbStudioStatus?.up ? "primary-solid" : "primary"}
-            disabled={c.dbStudioStopping || !c.dbStudioStatus?.up}
           >
             {c.dbStudioStopping ? "关闭中…" : "关闭 Drizzle Studio"}
           </StatusButton>
@@ -94,8 +94,6 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
           log/services/drizzle-studio-runtime.log（同 ComfyUI 的用户可见出口）。
           下拉按「每次启动」切换、可全屏，见 RuntimeLogBox。 */}
       <RuntimeLogBox
-        fileName="drizzle-studio-runtime.log"
-        log={c.dbStudioLog}
         className="mt-4"
         emptyHint={
           <>
@@ -103,6 +101,8 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
             输出）；也可点「刷新」查看 最近一次启动日志。
           </>
         }
+        fileName="drizzle-studio-runtime.log"
+        log={c.dbStudioLog}
       />
       <p className="text-muted-foreground mt-3 text-xs">
         说明：Drizzle Studio 需要本机开发依赖 （node_modules 里的

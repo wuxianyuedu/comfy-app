@@ -92,23 +92,27 @@ export function NumberField({
       } ${className ?? ""}`}
     >
       <Button
-        variant="ghost"
+        className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0"
+        disabled={disabled || value <= min}
         onMouseDown={(event) => {
           event.preventDefault();
           decr();
         }}
-        disabled={disabled || value <= min}
-        className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0"
         title={`减少 ${step}`}
+        variant="ghost"
       >
         <Minus data-icon="inline-start" size={12} strokeWidth={2.5} />
       </Button>
       {/* 数值**左对齐**（ComfyUI 的数值 widget 同款）：居中时同一列里的数字会随
           位数/小数点左右跳动，参数行读起来不齐。 */}
       <input
-        type="text"
         inputMode="decimal"
-        value={draft ?? fmt(value)}
+        onBlur={() => {
+          if (draft !== null) {
+            commitText(draft);
+            setDraft(null);
+          }
+        }}
         onChange={(event) => {
           const text = event.target.value;
           setDraft(text);
@@ -118,12 +122,8 @@ export function NumberField({
             onChange(clampToStep(n));
           }
         }}
-        onBlur={() => {
-          if (draft !== null) {
-            commitText(draft);
-            setDraft(null);
-          }
-        }}
+        type="text"
+        value={draft ?? fmt(value)}
         /* Enter = 提交：走 `onBlur` 的落盘路径（**用事件目标而不是 ref** ——
          * 渲染期读 `ref.current` 会触发 `react-hooks/refs`，而这里要的本来就是
          * 「让这个输入框失焦」，事件目标就是它）。Esc 无「取消」语义：数值框没有
@@ -131,18 +131,18 @@ export function NumberField({
         {...enterCommit({
           onCommit: ({ currentTarget }) => currentTarget.blur(),
         })}
-        disabled={disabled}
         className="text-ink-bright h-6 min-w-9 flex-1 [appearance:textfield] bg-transparent py-0 text-left font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        disabled={disabled}
       />
       <Button
-        variant="ghost"
+        className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0"
+        disabled={disabled || value >= max}
         onMouseDown={(event) => {
           event.preventDefault();
           incr();
         }}
-        disabled={disabled || value >= max}
-        className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0"
         title={`增加 ${step}`}
+        variant="ghost"
       >
         <Plus data-icon="inline-start" size={12} strokeWidth={2.5} />
       </Button>

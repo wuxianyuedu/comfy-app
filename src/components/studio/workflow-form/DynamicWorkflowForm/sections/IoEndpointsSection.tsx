@@ -28,9 +28,9 @@ export function IoEndpointsSection({
   return (
     <>
       <SectionHeader
-        label="I/O 端点"
-        count={wireInputs.length + (showOutputs ? outputs.length : 0)}
         accent={PIN_ACCENT}
+        count={wireInputs.length + (showOutputs ? outputs.length : 0)}
+        label="I/O 端点"
       />
       {wireInputs.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -40,8 +40,8 @@ export function IoEndpointsSection({
             const label = ioLabel(wireInput, [...inputs, ...outputs]);
             return (
               <span
-                key={wireInput.ioKey}
                 className="border-info/25 bg-info/10 text-info text-3xs inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5"
+                key={wireInput.ioKey}
                 title={`${wireInput.nodeTitle ?? ""} · ${wireInput.name} · 仅可通过连线输入`}
               >
                 <span className="bg-info size-1.5 rounded-full" />
@@ -65,8 +65,8 @@ export function IoEndpointsSection({
           <div className="flex flex-wrap gap-1.5">
             {outputs.map((output) => (
               <span
-                key={output.ioKey}
                 className="border-success/25 bg-success/10 text-success text-3xs inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5"
+                key={output.ioKey}
                 title={`${output.nodeTitle ?? ""} · ${output.name}`}
               >
                 <span className="bg-success size-1.5 rounded-full" />

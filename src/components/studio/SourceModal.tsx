@@ -63,14 +63,14 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
      监听 + 自绘遮罩 `onClick`，焦点也不会锁在弹窗内、关闭后不归还。
      `open={data !== null}` 与调用方的条件渲染同义，多一层兜底。 */
   return (
-    <Dialog open={data !== null} onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open={data !== null}>
       {/* 关闭按钮由下面的 header 自绘 —— 必须关掉基元的内置那枚，
           否则会渲染出两枚重叠的 ✕（见 `ui/dialog` 的 `showCloseButton`）。 */}
       <DialogContent
         aria-label="查看源文件"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"
+        showCloseButton={false}
       >
         <div className="border-border-strong bg-panel flex h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60">
           {/* Header */}
@@ -79,8 +79,8 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
               <h2 className="text-ink-bright flex items-center gap-2 text-sm font-semibold">
                 查看源文件 · {displayValue(data?.name)}
                 <span
-                  title="ComfyUI 原始 JSON（nodes[] / links[] / widgets_values）"
                   className={RAW_FORMAT_CHIP}
+                  title="ComfyUI 原始 JSON（nodes[] / links[] / widgets_values）"
                 >
                   RAW 原件
                 </span>
@@ -96,11 +96,11 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
                 念不出「关闭」，所以名字显式给 `aria-label`，说明文字走 `<Hint>`。 */}
             <Hint label="关闭">
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onClose}
-                className="text-ink-muted hover:text-ink-soft"
                 aria-label="关闭"
+                className="text-ink-muted hover:text-ink-soft"
+                onClick={onClose}
+                size="icon-sm"
+                variant="ghost"
               >
                 ✕
               </Button>
@@ -111,11 +111,11 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
           <div className="border-border-strong flex items-center gap-3 border-b px-5 py-2">
             <span className="flex-1" />
             <Button
-              variant="outline"
-              size="xs"
-              onClick={downloadCurrent}
-              disabled={!activeText}
               className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-md px-3 py-1.5"
+              disabled={!activeText}
+              onClick={downloadCurrent}
+              size="xs"
+              variant="outline"
             >
               下载当前
             </Button>
@@ -131,10 +131,10 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
               <p className="text-ink-muted px-5 py-3 text-sm">没有可显示的数据</p>
             ) : (
               <LazyJsonViewer
-                key="source"
                 data={data.source}
-                title="工作流(RAW)格式"
                 initialCollapsedDepth={1}
+                key="source"
+                title="工作流(RAW)格式"
               />
             )}
           </div>

@@ -374,27 +374,27 @@ export function ShotStudio({
             「未选中之外」的那一半，而 `outline` 自带
             `hover:bg-muted hover:text-foreground` —— 划过**已选中**的那一枚
             时悬停档胜出，紫色选中翻成白字灰底。 */}
-        <div role="radiogroup" aria-label="生成通道" className="flex gap-2">
+        <div aria-label="生成通道" className="flex gap-2" role="radiogroup">
           <SelectChip
-            shape="segment"
-            selected={channel === "local"}
             onClick={() => setChannel("local")}
+            selected={channel === "local"}
+            shape="segment"
           >
             本地 · ComfyUI 工作流
           </SelectChip>
           <SelectChip
-            shape="segment"
-            selected={channel === "api"}
             onClick={() => setChannel("api")}
+            selected={channel === "api"}
+            shape="segment"
           >
             API 直连{apiChannels ? (apiReady ? " · 已配置" : " · 未配置") : ""}
           </SelectChip>
         </div>
         <Button
-          variant="ghost"
-          size="xs"
-          onClick={onOpenModelAdapters}
           className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto gap-1 rounded-lg px-3 py-1.5"
+          onClick={onOpenModelAdapters}
+          size="xs"
+          variant="ghost"
         >
           <Icon data-icon="inline-start" name="settings" size={12} />
           模型适配
@@ -403,30 +403,30 @@ export function ShotStudio({
  会被 label 的点击行为抢焦点（弹窗开着、背后的下拉被一起触发）。 */}
         <div className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">尺寸</span>
-          <ShotSizePicker value={shotSize} onChange={setShotSize} disabled={batch.busy} />
+          <ShotSizePicker disabled={batch.busy} onChange={setShotSize} value={shotSize} />
         </div>
         {channel === "local" && (
-          <SeedAdvancedField value={seedInput} onChange={setSeedInput} disabled={batch.busy} />
+          <SeedAdvancedField disabled={batch.busy} onChange={setSeedInput} value={seedInput} />
         )}
         <Button
-          variant="primary-solid"
-          size="xs"
-          onClick={() => void generateBatch()}
+          className="ml-auto h-auto rounded-lg px-3 py-1.5"
           disabled={
             batch.busy ||
             pending.length === 0 ||
             (channel === "local" && !workflowId) ||
             (channel === "api" && !apiReady)
           }
-          className="ml-auto h-auto rounded-lg px-3 py-1.5"
+          onClick={() => void generateBatch()}
+          size="xs"
+          variant="primary-solid"
         >
           {batch.busy ? "批量生成中…" : `批量生图 (${pending.length})`}
         </Button>
         <Button
-          variant="secondary"
-          size="xs"
-          onClick={onNextStage}
           className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
+          onClick={onNextStage}
+          size="xs"
+          variant="secondary"
         >
           下一阶段 →
         </Button>
@@ -448,40 +448,40 @@ export function ShotStudio({
 
       {shots.length === 0 ? (
         <EmptyState
-          variant="hint"
-          description="暂无镜头数据。请先在「场景分镜」阶段提取或生成分镜 — 镜头提示词会自动带入本阶段。"
           className="py-10 text-sm"
+          description="暂无镜头数据。请先在「场景分镜」阶段提取或生成分镜 — 镜头提示词会自动带入本阶段。"
+          variant="hint"
         />
       ) : (
         <div className="flex flex-col gap-3">
           {/* 胶片带：纵向列表逐镜看很合适，但回答不了「16 镜跑到哪了、哪几镜挂了」。
               点一帧只负责把那张卡滚到眼前，不引入「当前镜头」这个新状态。 */}
           <ShotFilmStrip
-            shots={shots}
             onJump={(shot) => {
               document
                 .querySelector(`[data-shot-index="${shot.index}"]`)
                 ?.scrollIntoView({ behavior: "smooth", block: "center" });
             }}
+            shots={shots}
           />
           {shots.map((shot) => (
             <ShotCardRow
-              key={shot.id}
-              shot={shot}
-              progress={progress[shot.id] ?? 0}
-              error={errors[shot.id]}
+              apiReady={apiReady}
               busyCount={busyCount}
               channel={channel}
-              workflowId={workflowId}
-              apiReady={apiReady}
-              onGenerate={(s) => void generateShot(s)}
-              onGacha={(s, n) => void gachaShot(s, n)}
+              error={errors[shot.id]}
               gachaBusy={gachaAction.isBusy(shot.id)}
+              key={shot.id}
               onCancel={(s) => void onCancelShot(s)}
+              onGacha={(s, n) => void gachaShot(s, n)}
+              onGenerate={(s) => void generateShot(s)}
               onPromptChange={(id, prompt) => {
                 editedRef.current.add(id);
                 patchShot(id, { prompt });
               }}
+              progress={progress[shot.id] ?? 0}
+              shot={shot}
+              workflowId={workflowId}
             />
           ))}
         </div>
@@ -503,10 +503,10 @@ export function ShotStudio({
 function StatusBadge({ status }: { status: Shot["status"] }) {
   return (
     <StatusBadgePrimitive
-      status={status}
-      label={SHOT_STATUS_LABEL[status]}
-      dot={false}
       className="text-3xs px-2 py-0.5"
+      dot={false}
+      label={SHOT_STATUS_LABEL[status]}
+      status={status}
     />
   );
 }
@@ -552,7 +552,7 @@ function ShotCardRow({
 }: ShotCardRowProps) {
   const [gachaCount, setGachaCount] = React.useState(2);
   return (
-    <div data-shot-index={shot.index} className="border-border bg-surface rounded-xl border p-4">
+    <div className="border-border bg-surface rounded-xl border p-4" data-shot-index={shot.index}>
       <div className="mb-2 flex items-center gap-2">
         <IndexDot index={shot.index} />
         <span className="text-muted-foreground truncate text-xs">{shot.sceneHeading}</span>
@@ -567,27 +567,27 @@ function ShotCardRow({
 
       {shot.status === "running" && (
         <ProgressBar
-          value={progress}
+          className="mb-2"
           /* 同 VideoStudio.parts：起点 0 时留一格可见。 */
           minVisible={4}
           showValue={false}
-          className="mb-2"
           trackClassName="bg-elevated h-1"
+          value={progress}
         />
       )}
 
       <Textarea
-        value={shot.prompt}
-        onChange={(e) => onPromptChange(shot.id, e.target.value)}
-        rows={2}
         className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 rounded-md px-2 py-1.5 text-xs"
+        onChange={(e) => onPromptChange(shot.id, e.target.value)}
         placeholder="生图提示词(自动预填自分镜与角色卡,可手动修改)"
+        rows={2}
+        value={shot.prompt}
       />
       {error && (
         <Alert
-          variant="danger"
           /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
           className="text-2xs mt-1 block rounded-md border-transparent px-2 py-1"
+          variant="danger"
         >
           {error}
         </Alert>
@@ -595,30 +595,30 @@ function ShotCardRow({
 
       <div className="mt-2 flex items-center gap-3">
         <Button
-          variant="primary-solid"
-          size="xs"
-          onClick={() => onGenerate(shot)}
+          className="h-auto rounded-lg px-4 py-1.5"
           disabled={
             shot.status === "running" ||
             !shot.prompt ||
             (channel === "local" && !workflowId) ||
             (channel === "api" && !apiReady)
           }
-          className="h-auto rounded-lg px-4 py-1.5"
+          onClick={() => onGenerate(shot)}
+          size="xs"
+          variant="primary-solid"
         >
           {shot.status === "running" ? "生成中…" : shot.imageUrl ? "重新生成" : "生成此镜头"}
         </Button>
         {channel === "local" && (
           /* 抽卡优选（FR-QA-04④）：本地通道才有任务行可评；N=连发张数。 */
-          <div role="radiogroup" aria-label="抽卡张数" className="flex items-center gap-1">
+          <div aria-label="抽卡张数" className="flex items-center gap-1" role="radiogroup">
             {[2, 3, 4].map((n) => (
               <SelectChip
-                key={n}
-                shape="segment"
-                selected={gachaCount === n}
-                onClick={() => setGachaCount(n)}
-                disabled={gachaBusy || shot.status === "running"}
                 className="text-2xs"
+                disabled={gachaBusy || shot.status === "running"}
+                key={n}
+                onClick={() => setGachaCount(n)}
+                selected={gachaCount === n}
+                shape="segment"
               >
                 ×{n}
               </SelectChip>
@@ -627,16 +627,16 @@ function ShotCardRow({
         )}
         {channel === "local" && (
           <Button
-            variant="secondary"
-            size="xs"
-            onClick={() => onGacha(shot, gachaCount)}
+            className="h-auto rounded-lg px-3 py-1.5"
             disabled={
               gachaBusy ||
               shot.status === "running" ||
               !shot.prompt ||
               (channel === "local" && !workflowId)
             }
-            className="h-auto rounded-lg px-3 py-1.5"
+            onClick={() => onGacha(shot, gachaCount)}
+            size="xs"
+            variant="secondary"
           >
             {gachaBusy ? "优选中…" : "抽卡优选"}
           </Button>
@@ -645,10 +645,10 @@ function ShotCardRow({
           /* 只对本机任务可取消（API 直连没有可取消的任务 id）：
              点击后 task.cancel 置 CANCELLED，观察循环收终态收尾。 */
           <Button
-            variant="secondary"
-            size="xs"
-            onClick={() => onCancel(shot)}
             className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
+            onClick={() => onCancel(shot)}
+            size="xs"
+            variant="secondary"
           >
             取消
           </Button>
@@ -660,9 +660,9 @@ function ShotCardRow({
 
       {shot.imageUrl && (
         <MediaThumbnail
-          src={shot.imageUrl}
           alt={shot.sceneHeading}
           className="border-border mt-2 max-h-64 w-auto rounded-lg border"
+          src={shot.imageUrl}
         />
       )}
     </div>

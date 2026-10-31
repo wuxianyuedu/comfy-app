@@ -62,15 +62,15 @@ function renderPreview(viewMode: "edit" | "use" = "use") {
   const onPatch = vi.fn();
   const view = render(
     <WorkflowCanvasNodePreview
-      workflowId="wf-1"
-      workflowName="测试工作流"
-      taskType="t2i"
-      workflowIO={io}
-      paramMap={{}}
-      usable
       defaultMode="T2I"
-      viewMode={viewMode}
       onPatchParamMap={onPatch}
+      paramMap={{}}
+      taskType="t2i"
+      usable
+      viewMode={viewMode}
+      workflowId="wf-1"
+      workflowIO={io}
+      workflowName="测试工作流"
     />,
   );
   return { ...view, onPatch };
@@ -98,15 +98,15 @@ describe("WorkflowCanvasNodePreview — 失败态 UX", () => {
 
     rerender(
       <WorkflowCanvasNodePreview
-        workflowId="wf-1"
-        workflowName="测试工作流"
-        taskType="t2i"
-        workflowIO={io}
-        paramMap={{}}
-        usable
         defaultMode="T2I"
-        viewMode="edit"
         onPatchParamMap={vi.fn()}
+        paramMap={{}}
+        taskType="t2i"
+        usable
+        viewMode="edit"
+        workflowId="wf-1"
+        workflowIO={io}
+        workflowName="测试工作流"
       />,
     );
 

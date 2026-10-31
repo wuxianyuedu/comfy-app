@@ -59,13 +59,13 @@ export function ProjectOutputsMetadataSheet({
  与设置页两个抽屉（已迁`ui/sheet`）是同一件事的两套写法。
  遮罩与面板都由基元 Portal，顶部让出标题行的硬判据（ISSUE #310）
  收在`dialogBackdropClass()` 里。 */}
-      <Sheet open={selected !== null} onOpenChange={(next) => !next && onClose()}>
+      <Sheet onOpenChange={(next) => !next && onClose()} open={selected !== null}>
         <SheetContent
-          side="right"
           aria-label={`产出 #${selected?.id.slice(-4) ?? ""}`}
-          showCloseButton={false}
           className="gap-0 p-0"
           panelClassName="bg-node border-border-strong w-95 max-w-[90vw]"
+          showCloseButton={false}
+          side="right"
         >
           {selected && (
             <>
@@ -80,11 +80,11 @@ export function ProjectOutputsMetadataSheet({
                   </span>
                 </div>
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={onClose}
-                  className="text-ink-muted hover:text-ink"
                   aria-label="关闭"
+                  className="text-ink-muted hover:text-ink"
+                  onClick={onClose}
+                  size="icon-sm"
+                  variant="ghost"
                 >
                   <X data-icon="inline-start" size={16} />
                 </Button>
@@ -98,14 +98,14 @@ export function ProjectOutputsMetadataSheet({
                     <div className="grid grid-cols-4 gap-2">
                       {selected.referenceImages.map((image, index) => (
                         <div
-                          key={image}
                           className="border-border-strong bg-panel-deep aspect-square overflow-hidden rounded-lg border"
+                          key={image}
                         >
                           {}
                           <MediaThumbnail
-                            src={mediaPreviewUrl(image)}
                             alt={`参考图 ${index + 1}`}
                             className="h-full w-full object-cover"
+                            src={mediaPreviewUrl(image)}
                           />
                         </div>
                       ))}
@@ -145,7 +145,6 @@ export function ProjectOutputsMetadataSheet({
  字符串）也留在了调用处。 */}
                   <KeyValueRows
                     bordered
-                    striped
                     items={[
                       { key: "Seed", raw: selected.seed },
                       { key: "模型", raw: selected.checkpoint },
@@ -159,6 +158,7 @@ export function ProjectOutputsMetadataSheet({
                       },
                       { key: "来源任务", raw: selected.parentId },
                     ]}
+                    striped
                   />
                 </section>
 
@@ -176,19 +176,19 @@ export function ProjectOutputsMetadataSheet({
                 <div className="flex gap-2">
                   <Hint label={copyFailed ? copyFailureText() : "复制元数据到剪贴板"}>
                     <Button
-                      variant="primary-solid"
-                      size="sm"
-                      onClick={onCopy}
                       className="h-auto flex-1 rounded-lg px-3 py-2 text-xs"
+                      onClick={onCopy}
+                      size="sm"
+                      variant="primary-solid"
                     >
                       {copyFailed ? "复制失败" : copySucceeded ? "已复制 ✓" : "复制元数据"}
                     </Button>
                   </Hint>
                   <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onExport}
                     className="border-border-strong text-ink-soft hover:bg-subtle h-auto flex-1 rounded-lg px-3 py-2 text-xs"
+                    onClick={onExport}
+                    size="sm"
+                    variant="outline"
                   >
                     导出 JSON
                   </Button>

@@ -71,19 +71,19 @@ export function ContentAssetBody({
     return (
       <div className="relative">
         <Textarea
-          ref={textareaRef}
           className="border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal focus-visible:ring-primary/30 focus-visible:border-primary/40 h-65 w-full resize-none rounded-xl border px-3 py-2.5 text-xs leading-relaxed transition-colors"
-          value={data.content ?? ""}
-          placeholder="输入要喂给下游生成节点的提示词 / 参考文字…"
           onChange={textHandler((content) => onPatch({ content }))}
+          placeholder="输入要喂给下游生成节点的提示词 / 参考文字…"
+          ref={textareaRef}
+          value={data.content ?? ""}
         />
-        <Hint label="编辑文本" accessibleName>
+        <Hint accessibleName label="编辑文本">
           <Button
-            variant="ghost"
-            size="icon-lg"
-            onClick={() => textareaRef.current?.focus()}
             className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"
+            onClick={() => textareaRef.current?.focus()}
+            size="icon-lg"
             style={{ background: accent }}
+            variant="ghost"
           >
             <Icon data-icon="inline-start" name="pen" size={16} />
           </Button>
@@ -109,7 +109,6 @@ export function ContentAssetBody({
       {mediaSrc ? (
         isPic ? (
           <MediaThumbnail
-            src={mediaSrc}
             alt={data.mediaName ?? "参考图"}
             className="border-border-strong bg-canvas-deep h-65 w-full rounded-xl border object-cover"
             onClick={() => {
@@ -118,13 +117,14 @@ export function ContentAssetBody({
                 gallery.setOpen(true);
               }
             }}
+            src={mediaSrc}
             style={imageCount > 1 ? { cursor: "pointer" } : undefined}
           />
         ) : (
           <MediaThumbnail
-            src={mediaSrc}
-            controls
             className="border-border-strong bg-canvas-deep h-65 w-full rounded-xl border object-cover"
+            controls
+            src={mediaSrc}
           />
         )
       ) : (
@@ -142,14 +142,15 @@ export function ContentAssetBody({
            要求的是**提供替代路径**（右下角 FAB 选文件），不是给容器加个键。 */
         /* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- DnD 落点，不是点击交互 */
         <div
-          onDrop={(event) => {
+          className={`nodrag nopan text-ink-soft flex h-65 w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed transition-colors ${
+            isDropOver
+              ? "text-ink-bright border-primary/70 bg-primary/10"
+              : "border-ink-fainter bg-canvas-deep hover:text-ink-bright hover:border-ink-soft"
+          }`}
+          onDragLeave={(event) => {
             event.preventDefault();
             event.stopPropagation();
             setIsDropOver(false);
-            const f = event.dataTransfer.files?.[0];
-            if (f && onUploadFile) {
-              void onUploadFile(f);
-            }
           }}
           onDragOver={(event) => {
             event.preventDefault();
@@ -162,20 +163,19 @@ export function ContentAssetBody({
             }
             event.dataTransfer.dropEffect = "copy";
           }}
-          onDragLeave={(event) => {
+          onDrop={(event) => {
             event.preventDefault();
             event.stopPropagation();
             setIsDropOver(false);
+            const f = event.dataTransfer.files?.[0];
+            if (f && onUploadFile) {
+              void onUploadFile(f);
+            }
           }}
-          onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => event.stopPropagation()}
-          className={`nodrag nopan text-ink-soft flex h-65 w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed transition-colors ${
-            isDropOver
-              ? "text-ink-bright border-primary/70 bg-primary/10"
-              : "border-ink-fainter bg-canvas-deep hover:text-ink-bright hover:border-ink-soft"
-          }`}
+          onPointerDown={(event) => event.stopPropagation()}
         >
-          <Icon name={isPic ? "image" : "film"} size={38} className="opacity-60" />
+          <Icon className="opacity-60" name={isPic ? "image" : "film"} size={38} />
           <span className="text-xs">{isPic ? "拖入上传图片" : "拖入上传视频"}</span>
         </div>
       )}
@@ -184,13 +184,13 @@ export function ContentAssetBody({
        *  整个预览区但不拦截 FAB / 拖入 / 点击。FAB 是后渲染的兄弟节点，
        *  视觉上自然压在覆盖层之上。 */}
       {status === "running" && <WaterFillProgress progress={progress ?? 0} />}
-      <Hint label={isPic ? "上传图片" : "上传视频"} accessibleName>
+      <Hint accessibleName label={isPic ? "上传图片" : "上传视频"}>
         <Button
-          variant="ghost"
-          size="icon-lg"
-          onClick={() => onPickMedia(isPic ? "picture" : "movie")}
           className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"
+          onClick={() => onPickMedia(isPic ? "picture" : "movie")}
+          size="icon-lg"
           style={{ background: accent }}
+          variant="ghost"
         >
           <Icon data-icon="inline-start" name="plus" size={18} />
         </Button>
@@ -200,13 +200,13 @@ export function ContentAssetBody({
       {imageCount > 1 && mediaSrc && (
         <Hint label={`查看全部 ${imageCount} 张图片`}>
           <Button
-            variant="ghost"
-            size="icon-xs"
+            className="hover:bg-primary/80 text-3xs absolute top-2.5 right-2.5 h-auto min-w-5 rounded-full bg-black/70 px-1.5 font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 hover:text-white"
             onClick={() => {
               gallery.setIndex(0);
               gallery.setOpen(true);
             }}
-            className="hover:bg-primary/80 text-3xs absolute top-2.5 right-2.5 h-auto min-w-5 rounded-full bg-black/70 px-1.5 font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 hover:text-white"
+            size="icon-xs"
+            variant="ghost"
           >
             {imageCount}
           </Button>
@@ -218,25 +218,25 @@ export function ContentAssetBody({
           `aria-modal` / 遮罩点击都手写齐了，但 Esc 与焦点锁仍缺 —— 键盘用户
           进得来出不去。 */}
       <Dialog
-        open={gallery.open && galleryImages.length > 0}
         onOpenChange={(next) => !next && gallery.setOpen(false)}
+        open={gallery.open && galleryImages.length > 0}
       >
         <DialogContent
           aria-label="图片画廊"
-          showCloseButton={false}
           className="bg-transparent p-0 ring-0"
           popupClassName="flex max-w-none items-center justify-center bg-transparent"
+          showCloseButton={false}
         >
           {/* 关闭按钮 */}
-          <Hint label="关闭" accessibleName>
+          <Hint accessibleName label="关闭">
             <Button
-              variant="ghost"
-              size="icon"
+              className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-4 right-4 rounded-full hover:text-white"
               onClick={(event) => {
                 event.stopPropagation();
                 gallery.setOpen(false);
               }}
-              className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-4 right-4 rounded-full hover:text-white"
+              size="icon"
+              variant="ghost"
             >
               <X data-icon="inline-start" size={16} />
             </Button>
@@ -244,43 +244,43 @@ export function ContentAssetBody({
 
           {/* 主图 */}
           <MediaThumbnail
-            src={comfyImageUrl({
-              filename: galleryImages[gallery.index]?.localPath ?? "",
-            })}
             alt={`图片 ${gallery.index + 1}/${galleryImages.length}`}
             className={`border-border-strong ${OVERLAY_MAX_HEIGHT} max-w-[85vw] rounded-lg border object-contain shadow-2xl`}
             onClick={(event) => event.stopPropagation()}
+            src={comfyImageUrl({
+              filename: galleryImages[gallery.index]?.localPath ?? "",
+            })}
           />
 
           {/* 左右切换 + 计数 */}
           {galleryImages.length > 1 && (
             <>
-              <Hint label="上一张" accessibleName wrap>
+              <Hint accessibleName label="上一张" wrap>
                 <Button
-                  variant="ghost"
-                  size="icon-lg"
+                  className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 left-4 -translate-y-1/2 rounded-full hover:text-white"
+                  disabled={galleryImages.length <= 1}
                   onClick={(event) => {
                     event.stopPropagation();
                     gallery.setIndex(
                       (index) => (index - 1 + galleryImages.length) % galleryImages.length,
                     );
                   }}
-                  disabled={galleryImages.length <= 1}
-                  className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 left-4 -translate-y-1/2 rounded-full hover:text-white"
+                  size="icon-lg"
+                  variant="ghost"
                 >
                   <ChevronLeft data-icon="inline-start" size={18} />
                 </Button>
               </Hint>
-              <Hint label="下一张" accessibleName wrap>
+              <Hint accessibleName label="下一张" wrap>
                 <Button
-                  variant="ghost"
-                  size="icon-lg"
+                  className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 right-4 -translate-y-1/2 rounded-full hover:text-white"
+                  disabled={galleryImages.length <= 1}
                   onClick={(event) => {
                     event.stopPropagation();
                     gallery.setIndex((index) => (index + 1) % galleryImages.length);
                   }}
-                  disabled={galleryImages.length <= 1}
-                  className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 right-4 -translate-y-1/2 rounded-full hover:text-white"
+                  size="icon-lg"
+                  variant="ghost"
                 >
                   <ChevronRight data-icon="inline-start" size={18} />
                 </Button>
@@ -292,24 +292,24 @@ export function ContentAssetBody({
                 </span>
                 <div className="bg-subtle flex gap-1.5 overflow-hidden rounded-full p-1">
                   {galleryImages.map((img, i) => (
-                    <Hint label={`第 ${i + 1} 张`} accessibleName key={img.id}>
+                    <Hint accessibleName key={img.id} label={`第 ${i + 1} 张`}>
                       <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          gallery.setIndex(i);
-                        }}
                         className={`h-auto w-6 shrink-0 overflow-hidden rounded-full border-2 p-0 hover:bg-transparent ${
                           i === gallery.index
                             ? "border-primary opacity-100"
                             : "border-transparent opacity-50 hover:opacity-80"
                         }`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          gallery.setIndex(i);
+                        }}
+                        size="icon-xs"
+                        variant="ghost"
                       >
                         <MediaThumbnail
-                          src={comfyImageUrl({ filename: img.localPath })}
                           alt=""
                           className="h-full w-full object-cover"
+                          src={comfyImageUrl({ filename: img.localPath })}
                         />
                       </Button>
                     </Hint>

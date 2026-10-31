@@ -85,15 +85,15 @@ export function OptionListPopover({
   };
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover onOpenChange={handleOpenChange} open={open}>
       <PopoverTrigger
-        type="button"
-        disabled={disabled}
-        title={triggerTitle}
         className={cn(
           "group/popover-trigger nodrag nopan flex items-center gap-1.5",
           triggerClassName,
         )}
+        disabled={disabled}
+        title={triggerTitle}
+        type="button"
       >
         {trigger}
         {/* 展开指示：两个形态由 `group-aria-expanded` 切换 —— 与
@@ -123,21 +123,21 @@ export function OptionListPopover({
           const selected = item.value === value;
           return (
             <Button
-              key={item.value}
-              variant="ghost"
-              role="option"
               aria-selected={selected}
-              title={item.title}
-              onClick={() => {
-                onSelect(item.value);
-                setOpen(false);
-              }}
               className={cn(
                 "text-2xs flex h-auto w-full items-center gap-2 rounded-none px-3 py-1.5 text-left font-normal transition-colors",
                 selected
                   ? "bg-primary-500/20 text-primary-strong"
                   : "text-ink-soft hover:bg-subtle",
               )}
+              key={item.value}
+              onClick={() => {
+                onSelect(item.value);
+                setOpen(false);
+              }}
+              role="option"
+              title={item.title}
+              variant="ghost"
             >
               {item.prefix}
               <span className="min-w-0 flex-1 truncate">{item.label}</span>

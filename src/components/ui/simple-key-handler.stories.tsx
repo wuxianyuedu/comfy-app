@@ -39,10 +39,10 @@ function Demo({ keys, ignoreRepeat, preventDefault }: SimpleKeyHandlerProps) {
   return (
     <div className="flex flex-col items-start gap-2">
       <div
+        className="border-border bg-subtle focus-visible:border-ring rounded-md border border-dashed px-4 py-3 text-xs"
+        data-slot="key-target"
         role="button"
         tabIndex={0}
-        data-slot="key-target"
-        className="border-border bg-subtle focus-visible:border-ring rounded-md border border-dashed px-4 py-3 text-xs"
         {...simpleKeyHandler(
           keys,
           (event) => {

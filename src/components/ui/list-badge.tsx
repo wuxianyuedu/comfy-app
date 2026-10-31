@@ -54,13 +54,13 @@ export function ListBadge({
 }) {
   return (
     <Badge
-      size="xs"
-      tone={tone}
-      title={title}
       /* list-badge 视觉契约：**无边框**。Badge cva 的 tone 会带
        * border-X/30，这里用 border-transparent 顶掉（tailwind-merge
        * 后传者胜）；px-1 / py-px / text-4xs / rounded 由 size=xs 给。 */
       className={`border-transparent ${className ?? ""}`}
+      size="xs"
+      title={title}
+      tone={tone}
     >
       {children}
     </Badge>

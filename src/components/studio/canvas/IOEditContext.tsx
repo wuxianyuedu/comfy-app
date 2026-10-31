@@ -90,20 +90,20 @@ export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node
   return (
     <Hint label={`查看节点 ${nodeId} 在工作流 JSON 中的原始数据`}>
       <Button
-        ref={ref}
-        variant="outline"
-        data-node-id-chip={nodeId}
-        data-variant={variant}
-        onClick={handleOpen}
-        onMouseDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
         aria-label={`查看节点 #${nodeId} 的原始 JSON 数据`}
         className={
           variant === "subgraph"
             ? "nodrag nopan group border-primary-400/40 bg-primary-500/10 text-primary-strong hover:border-primary-300/70 hover:bg-primary-500/25 focus:ring-primary-400/40 inline-flex h-auto shrink-0 cursor-pointer items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold tracking-wider uppercase focus:ring-1 focus:outline-none"
             : "nodrag nopan group border-info/45 bg-info/15 text-info-strong hover:border-info/70 hover:bg-info/25 focus:ring-info/40 inline-flex h-auto shrink-0 cursor-pointer items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold focus:ring-1 focus:outline-none"
         }
+        data-node-id-chip={nodeId}
+        data-variant={variant}
+        onClick={handleOpen}
+        onDoubleClick={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+        ref={ref}
+        variant="outline"
       >
         <span aria-hidden style={{ fontSize: 9, lineHeight: 1 }}>
           🔍
@@ -123,11 +123,10 @@ export function IoCheckbox({ ioRef, io }: { io: IOEditContextValue; ioRef: IoRef
   return (
     <Checkbox
       checked={checked}
+      className="size-3.5"
       onCheckedChange={() => io.toggleIO(ioRef)}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
-      title={checked ? `已暴露为工作流${dirLabel}` : `点击将其暴露为工作流${dirLabel}`}
-      className="size-3.5"
       style={{
         width: 13,
         height: 13,
@@ -137,6 +136,7 @@ export function IoCheckbox({ ioRef, io }: { io: IOEditContextValue; ioRef: IoRef
         accentColor: checked ? "#fbbf24" : "#a1a1aa",
         cursor: "pointer",
       }}
+      title={checked ? `已暴露为工作流${dirLabel}` : `点击将其暴露为工作流${dirLabel}`}
     />
   );
 }

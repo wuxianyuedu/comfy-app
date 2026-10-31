@@ -94,7 +94,7 @@ export function LogPanelFooter(input: {
       </span>
       <span className="flex items-center gap-3">
         {shouldPin && (
-          <Button variant="primary-solid" size="xs" onClick={jumpToLatest}>
+          <Button onClick={jumpToLatest} size="xs" variant="primary-solid">
             <ArrowDownToLine size={12} />
             {newLogCount > 0 ? `有 ${newLogCount} 条新的日志 · 回到最新` : "回到最新"}
           </Button>
@@ -109,13 +109,13 @@ export function LogPanelFooter(input: {
         <Pagination className="w-auto flex-1 justify-end">
           <PaginationContent className="gap-1">
             <PaginationItem>
-              <Hint label="更新的一页" accessibleName wrap>
+              <Hint accessibleName label="更新的一页" wrap>
                 <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => setPage(safePage - 1)}
-                  disabled={safePage <= 1}
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage(safePage - 1)}
+                  size="icon-xs"
+                  variant="ghost"
                 >
                   <ChevronLeft data-icon="inline-start" size={14} />
                 </Button>
@@ -127,24 +127,24 @@ export function LogPanelFooter(input: {
             <PaginationItem className="text-ink-soft flex items-center gap-1">
               <Hint label={origin && origin !== "all" ? "去掉来源筛选" : undefined} wrap>
                 <Button
-                  variant="ghost"
-                  size="xs"
-                  data-testid="logpanel-origin-chip"
-                  onClick={() => setOrigin("all")}
-                  disabled={!origin || origin === "all"}
                   className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md tabular-nums disabled:cursor-default"
+                  data-testid="logpanel-origin-chip"
+                  disabled={!origin || origin === "all"}
+                  onClick={() => setOrigin("all")}
+                  size="xs"
+                  variant="ghost"
                 >
                   {ORIGIN_TEXT[origin ?? "all"]}
                 </Button>
               </Hint>
               <Hint label={filter !== "all" ? "去掉级别筛选" : undefined} wrap>
                 <Button
-                  variant="ghost"
-                  size="xs"
-                  data-testid="logpanel-level-chip"
-                  onClick={() => setFilter("all")}
-                  disabled={filter === "all"}
                   className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
+                  data-testid="logpanel-level-chip"
+                  disabled={filter === "all"}
+                  onClick={() => setFilter("all")}
+                  size="xs"
+                  variant="ghost"
                 >
                   {FILTER_LABELS.find((item) => item.value === filter)?.label}
                 </Button>
@@ -152,10 +152,10 @@ export function LogPanelFooter(input: {
               {search.trim() && (
                 <Hint label="清空搜索">
                   <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setSearch("")}
                     className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
+                    onClick={() => setSearch("")}
+                    size="xs"
+                    variant="ghost"
                   >
                     {`搜索「${search.trim()}」`}
                   </Button>
@@ -163,13 +163,13 @@ export function LogPanelFooter(input: {
               )}
             </PaginationItem>
             <PaginationItem>
-              <Hint label="更早的一页" accessibleName wrap>
+              <Hint accessibleName label="更早的一页" wrap>
                 <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => setPage(safePage + 1)}
-                  disabled={safePage >= totalPages}
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage(safePage + 1)}
+                  size="icon-xs"
+                  variant="ghost"
                 >
                   <ChevronRight data-icon="inline-start" size={14} />
                 </Button>

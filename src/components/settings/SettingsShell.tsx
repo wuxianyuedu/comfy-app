@@ -201,7 +201,7 @@ export function SettingsShell({
         {/* 导航在左、内容在右：树需要的是**纵向**空间（父行 + 缩进子行），
             而横排那条带子只能靠分隔符暗示分组 —— 层级读不出来。 */}
         <div className="flex min-h-0 flex-1 gap-6 pt-4">
-          <SettingsSectionNav section={section} onSelect={handleSelect} />
+          <SettingsSectionNav onSelect={handleSelect} section={section} />
 
           {/* 内容区：**全部**分区节，唯一一根滚动条。每个节自带 `id` 与
               `scroll-mt-*`（顶线偏移，避免滚过去被标题行盖住顶部）。
@@ -209,8 +209,8 @@ export function SettingsShell({
               主操作按钮仍在各区卡片自己的末尾（规范 §4.12 管的是「列表容器内
               不要放主操作」，这里是文档式长页、卡片不是滚动容器的直接子项）。 */}
           <div
-            ref={scrollRef}
             className="custom-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto pb-6"
+            ref={scrollRef}
           >
             {fallback !== undefined ? (
               fallback
@@ -219,15 +219,15 @@ export function SettingsShell({
                 {banner}
                 {sectionIds.map((id) => (
                   <section
-                    key={id}
-                    id={sectionAnchorId(id)}
-                    ref={registerSection(id)}
                     aria-label={sectionLabel(id)}
                     /* `scroll-mt-*` 是滚过去的**落点补偿**：`scrollIntoView` 把节顶
                    对到容器上沿，不给上边距就会贴着标题行。
                    节与节之间用 `mb-*` 拉开一档：上一节卡片末尾与下一节标题
                    若贴着，读起来像同属一组。 */
                     className="mb-8 scroll-mt-6 last:mb-0"
+                    id={sectionAnchorId(id)}
+                    key={id}
+                    ref={registerSection(id)}
                   >
                     <SettingsSectionHeading section={id} />
                     {sections?.[id]}
@@ -298,7 +298,7 @@ function SettingsSectionNav({
           return null;
         }
         return (
-          <div key={group.label} className="mb-3 last:mb-0">
+          <div className="mb-3 last:mb-0" key={group.label}>
             {/* 分组名是父行：弱一档、不可点 —— 它只回答「这几项属于一类」，
                 不是导航目标（点了也不会切到某个分区）。读屏不进可访问名，
                 分区自身由子行的 `aria-current` 表达。 */}
@@ -307,22 +307,22 @@ function SettingsSectionNav({
             </p>
             {/* 子行集合走 `TreeChildren`：缩进档 + 引导线一处给全（§16.2.4.39）。
                 `depth=1` 是「父行是分组头」这一档的标准形态。 */}
-            <TreeChildren depth={1} className="flex flex-col gap-0.5">
+            <TreeChildren className="flex flex-col gap-0.5" depth={1}>
               {items.map((item) => {
                 const active = section === item.id;
                 return (
                   <Button
-                    key={item.id}
-                    variant="ghost"
-                    size="sm"
                     aria-current={active ? "true" : undefined}
-                    onClick={() => onSelect(item.id)}
                     className={cn(
                       "h-auto w-full justify-start rounded-lg px-3 py-1.5 text-sm font-medium",
                       active
                         ? "bg-primary-soft text-primary-strong hover:bg-primary-soft hover:text-primary-strong"
                         : "text-ink-muted hover:text-ink",
                     )}
+                    key={item.id}
+                    onClick={() => onSelect(item.id)}
+                    size="sm"
+                    variant="ghost"
                   >
                     {item.label}
                   </Button>

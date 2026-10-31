@@ -29,48 +29,44 @@ export function SelectedToolbar({
     "nodrag nopan text-ink-soft hover:bg-subtle flex size-7 items-center justify-center rounded-full text-sm transition-colors";
   return (
     <div className="nodrag nopan border-border-strong bg-panel z-base absolute -top-12 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full border px-1 py-1 shadow-lg shadow-black/40">
-      <Hint label="删除节点 (Delete)" accessibleName>
+      <Hint accessibleName label="删除节点 (Delete)">
         <Button
-          variant="ghost"
-          onClick={onDelete}
           className={`${btn} text-destructive hover:bg-destructive/15`}
+          onClick={onDelete}
+          variant="ghost"
         >
           ⌫
         </Button>
       </Hint>
       {onRedo && (
-        <Hint label="退回让 AI 重做这一镜" accessibleName>
-          <Button
-            variant="ghost"
-            onClick={onRedo}
-            className={`${btn} hover:bg-primary/15`}
-          >
+        <Hint accessibleName label="退回让 AI 重做这一镜">
+          <Button className={`${btn} hover:bg-primary/15`} onClick={onRedo} variant="ghost">
             ↺
           </Button>
         </Hint>
       )}
-      <Hint label="节点信息" accessibleName>
-        <Button variant="ghost" className={btn}>
+      <Hint accessibleName label="节点信息">
+        <Button className={btn} variant="ghost">
           ⓘ
         </Button>
       </Hint>
-      <Hint label="主题色" accessibleName>
-        <Button variant="ghost" className={btn}>
+      <Hint accessibleName label="主题色">
+        <Button className={btn} variant="ghost">
           ●
         </Button>
       </Hint>
-      <Hint label="聚焦此节点" accessibleName>
-        <Button variant="ghost" onClick={onFocusNode} className={btn}>
+      <Hint accessibleName label="聚焦此节点">
+        <Button className={btn} onClick={onFocusNode} variant="ghost">
           ⛶
         </Button>
       </Hint>
-      <Hint label="撤销" accessibleName>
-        <Button variant="ghost" className={btn}>
+      <Hint accessibleName label="撤销">
+        <Button className={btn} variant="ghost">
           ↶
         </Button>
       </Hint>
-      <Hint label="更多" accessibleName>
-        <Button variant="ghost" className={btn}>
+      <Hint accessibleName label="更多">
+        <Button className={btn} variant="ghost">
           ⋮
         </Button>
       </Hint>
@@ -91,25 +87,23 @@ export function OutputRowPort({
 }) {
   const outputs = wfIO ? splitWorkflowIO(wfIO).outputs : [];
   const o = outputs[0];
-  const fallbackType: string =
-    kind === "video" ? "VIDEO" : kind === "script" ? "STRING" : "IMAGE";
-  const fallbackLabel: string =
-    kind === "video" ? "视频" : kind === "script" ? "结果" : "图像";
+  const fallbackType: string = kind === "video" ? "VIDEO" : kind === "script" ? "STRING" : "IMAGE";
+  const fallbackLabel: string = kind === "video" ? "视频" : kind === "script" ? "结果" : "图像";
   const outLabel = o ? ioLabel(o, outputs) : fallbackLabel;
   const outType = o?.type ?? fallbackType;
   const outKey = o?.ioKey ?? "output";
   return (
     <div className="relative">
       <PortHandle
-        id={outKey}
         dir="out"
-        type={outType}
+        id={outKey}
         style={{
           right: -6,
           top: 14,
           transform: "translateY(-50%)",
           boxShadow: "none",
         }}
+        type={outType}
       />
       <div className="flex h-5 items-center justify-end gap-1.5 px-3.5 pt-1.5">
         <span

@@ -71,22 +71,9 @@ export function WorkflowModePickChip({
     <>
       {open && <PopoverAutoClose onClose={() => setOpen(false)} />}
       <OptionListPopover
-        value={defaultMode ?? ""}
-        onSelect={pick}
-        onOpenChange={setOpen}
-        triggerTitle="工作流模式选择"
         align="start"
         contentClassName="w-60 rounded-xl"
         disabled={disabled}
-        triggerClassName="border-primary/55 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-xs disabled:opacity-50"
-        trigger={
-          <span
-            className={`font-semibold ${hasModes ? "text-ink-bright" : "text-ink-muted"}`}
-            style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
-          >
-            {hasModes ? triggerLabel : "未选"}
-          </span>
-        }
         emptyHint="该工作流没有声明可用模式"
         items={items.map((item) => {
           const isDef = defaultMode === item.code;
@@ -113,6 +100,19 @@ export function WorkflowModePickChip({
             ),
           };
         })}
+        onOpenChange={setOpen}
+        onSelect={pick}
+        trigger={
+          <span
+            className={`font-semibold ${hasModes ? "text-ink-bright" : "text-ink-muted"}`}
+            style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
+          >
+            {hasModes ? triggerLabel : "未选"}
+          </span>
+        }
+        triggerClassName="border-primary/55 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-xs disabled:opacity-50"
+        triggerTitle="工作流模式选择"
+        value={defaultMode ?? ""}
       />
     </>
   );

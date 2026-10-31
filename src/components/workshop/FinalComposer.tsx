@@ -161,9 +161,9 @@ export function FinalComposer({
   if (shots.length === 0) {
     return (
       <EmptyState
-        variant="hint"
-        description="暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。"
         className="p-8 text-sm"
+        description="暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。"
+        variant="hint"
       />
     );
   }
@@ -188,27 +188,27 @@ export function FinalComposer({
         <div className="ml-auto flex gap-2">
           {!playing ? (
             <Button
-              variant="primary-solid"
-              onClick={startPlayback}
-              disabled={clipsDone === 0 && timeline.every((entry) => !entry.shot.imageUrl)}
               className="h-auto rounded-xl px-4 py-2 font-semibold"
+              disabled={clipsDone === 0 && timeline.every((entry) => !entry.shot.imageUrl)}
+              onClick={startPlayback}
+              variant="primary-solid"
             >
-              <Icon data-icon="inline-start" name="play" size={13} className="mr-1" />
+              <Icon className="mr-1" data-icon="inline-start" name="play" size={13} />
               串播预览
             </Button>
           ) : (
             <Button
-              variant="secondary"
-              onClick={stopPlayback}
               className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-xl px-4 py-2 font-semibold"
+              onClick={stopPlayback}
+              variant="secondary"
             >
               停止
             </Button>
           )}
           <Button
-            variant="primary-solid"
-            onClick={exportPlan}
             className="h-auto rounded-xl px-4 py-2 font-semibold"
+            onClick={exportPlan}
+            variant="primary-solid"
           >
             导出合成清单
           </Button>
@@ -223,9 +223,9 @@ export function FinalComposer({
         </span>
         {onComposeFilm && (
           <Button
-            variant="primary-solid"
-            onClick={onComposeFilm}
             className="h-auto rounded-lg px-3 py-1.5 font-semibold"
+            onClick={onComposeFilm}
+            variant="primary-solid"
           >
             去成片合成 MP4
           </Button>
@@ -245,18 +245,18 @@ export function FinalComposer({
           <div className="bg-bg grid min-h-60 place-items-center overflow-hidden rounded-xl">
             {current.shot.clipUrl ? (
               <MediaThumbnail
-                key={current.shot.id}
-                src={current.shot.clipUrl}
                 autoPlay
-                controls
-                onEnded={advance}
                 className="max-h-105 w-full"
+                controls
+                key={current.shot.id}
+                onEnded={advance}
+                src={current.shot.clipUrl}
               />
             ) : current.shot.imageUrl ? (
               <MediaThumbnail
-                src={current.shot.imageUrl}
                 alt={current.shot.sceneHeading}
                 className="max-h-105 w-full object-contain"
+                src={current.shot.imageUrl}
               />
             ) : (
               <span className="text-muted-foreground text-xs">该镜头缺少画面，已跳过</span>
@@ -275,18 +275,18 @@ export function FinalComposer({
           const active = playing && idx === currentIdx;
           return (
             <div
-              key={shot.id}
               className={`border-border bg-surface flex items-center gap-3 rounded-xl border p-3 ${
                 active ? "ring-primary/40 ring-1" : ""
               }`}
+              key={shot.id}
             >
               <IndexDot index={idx + 1} size="lg" />
               <div className="bg-elevated h-14 w-20 shrink-0 overflow-hidden rounded-lg">
                 {shot.imageUrl ? (
                   <MediaThumbnail
-                    src={shot.imageUrl}
                     alt={shot.sceneHeading}
                     className="h-full w-full object-cover"
+                    src={shot.imageUrl}
                   />
                 ) : (
                   <div className="text-muted-foreground grid h-full place-items-center">
@@ -310,16 +310,16 @@ export function FinalComposer({
                   {(field) => (
                     <Input
                       {...field}
-                      type="number"
-                      min={1}
+                      className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-1 text-xs"
                       max={20}
-                      value={entry.duration}
+                      min={1}
                       onChange={(event) =>
                         updateShot(shot.id, {
                           duration: clamp(Number(event.target.value) || 4, 1, 20),
                         })
                       }
-                      className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-1 text-xs"
+                      type="number"
+                      value={entry.duration}
                     />
                   )}
                 </FormField>
@@ -328,15 +328,15 @@ export function FinalComposer({
                     <SelectMenu
                       {...field}
                       className="bg-subtle! border-border! text-xs"
-                      value={shot.transition ?? "cut"}
+                      labels={TRANSITION_LABELS}
                       onChange={(value) =>
                         updateShot(shot.id, {
                           transition: /* SAFETY: 类型断言已复核 */ value as Transition,
                         })
                       }
                       options={TRANSITIONS}
-                      labels={TRANSITION_LABELS}
                       placeholder="转场"
+                      value={shot.transition ?? "cut"}
                     />
                   )}
                 </FormField>
@@ -345,15 +345,15 @@ export function FinalComposer({
                     <SelectMenu
                       {...field}
                       className="bg-subtle! border-border! text-xs"
-                      value={shot.motion ?? "medium"}
+                      labels={MOTION_LABELS}
                       onChange={(value) =>
                         updateShot(shot.id, {
                           motion: /* SAFETY: 类型断言已复核 */ value as MotionLevel,
                         })
                       }
                       options={MOTIONS}
-                      labels={MOTION_LABELS}
                       placeholder="运动"
+                      value={shot.motion ?? "medium"}
                     />
                   )}
                 </FormField>

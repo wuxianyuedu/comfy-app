@@ -43,9 +43,9 @@ export function FilmStudioPropertyPanel({
           {(field) => (
             <input
               {...field}
-              value={selectedShot.name}
-              onChange={textHandler((name) => onPatchShot(selectedShotId, { name }))}
               className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-sm outline-none focus:ring-1"
+              onChange={textHandler((name) => onPatchShot(selectedShotId, { name }))}
+              value={selectedShot.name}
             />
           )}
         </FormField>
@@ -55,17 +55,17 @@ export function FilmStudioPropertyPanel({
           {(field) => (
             <input
               {...field}
-              type="number"
-              step="0.1"
-              min="0.5"
+              className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-sm outline-none focus:ring-1"
               max="30"
-              value={parseFloat(selectedShot.duration)}
+              min="0.5"
               onChange={(event) =>
                 onPatchShot(selectedShotId, {
                   duration: formatShotDuration(Number(event.target.value)),
                 })
               }
-              className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-sm outline-none focus:ring-1"
+              step="0.1"
+              type="number"
+              value={parseFloat(selectedShot.duration)}
             />
           )}
         </FormField>
@@ -89,9 +89,9 @@ export function FilmStudioPropertyPanel({
           {(field) => (
             <Textarea
               {...field}
-              rows={3}
-              defaultValue="城市在晨光中苏醒，镜头缓缓推进，展现繁忙街道与远处天际线…"
               className="border-border bg-subtle text-ink-fainter resize-none rounded-lg text-xs leading-relaxed"
+              defaultValue="城市在晨光中苏醒，镜头缓缓推进，展现繁忙街道与远处天际线…"
+              rows={3}
             />
           )}
         </FormField>
@@ -105,26 +105,26 @@ export function FilmStudioPropertyPanel({
  （单选、multiple=false），active 视觉由基元的 `data-[state=on]:bg-muted`
  统一持有，不再每处手写 variant=primary/ghost 对。 */}
         <ToggleGroup
+          aria-label="镜头来源"
+          className="gap-1"
           multiple={false}
-          value={[c.shotSource]}
           onValueChange={(vals) => {
             const next = vals[0];
             if (typeof next === "string" && next !== c.shotSource) {
               c.setShotSource(/* SAFETY: 类型断言已复核 */ next as "project" | "script");
             }
           }}
-          aria-label="镜头来源"
-          className="gap-1"
+          value={[c.shotSource]}
         >
           <ToggleGroupItem
-            value="project"
-            disabled={!c.activeProjectId || c.projectShotCount === 0}
             className="h-auto flex-1 rounded-lg px-2.5 py-1 text-xs"
+            disabled={!c.activeProjectId || c.projectShotCount === 0}
+            value="project"
           >
             当前项目镜头
             {c.projectShotCount > 0 ? `（${c.projectShotCount}）` : ""}
           </ToggleGroupItem>
-          <ToggleGroupItem value="script" className="h-auto flex-1 rounded-lg px-2.5 py-1 text-xs">
+          <ToggleGroupItem className="h-auto flex-1 rounded-lg px-2.5 py-1 text-xs" value="script">
             剧本自动分镜
           </ToggleGroupItem>
         </ToggleGroup>
@@ -142,11 +142,11 @@ export function FilmStudioPropertyPanel({
             {(field) => (
               <Textarea
                 {...field}
-                value={c.script}
-                onChange={textHandler(c.setScript)}
-                rows={3}
-                placeholder="支持一句话自动分镜…"
                 className="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest resize-none rounded-lg text-xs leading-relaxed"
+                onChange={textHandler(c.setScript)}
+                placeholder="支持一句话自动分镜…"
+                rows={3}
+                value={c.script}
               />
             )}
           </FormField>
@@ -158,14 +158,14 @@ export function FilmStudioPropertyPanel({
             <>
               <SelectMenu
                 {...field}
-                value={c.videoWorkflowId}
+                fullWidth
+                labels={Object.fromEntries(c.videoWorkflows.map((wf) => [wf.id, wf.name]))}
                 onChange={c.setVideoWorkflowId}
                 options={c.videoWorkflows.map((wf) => wf.id)}
-                labels={Object.fromEntries(c.videoWorkflows.map((wf) => [wf.id, wf.name]))}
                 placeholder={
                   c.videoWorkflows.length ? "选择视频工作流…" : "工作流库里还没有视频工作流"
                 }
-                fullWidth
+                value={c.videoWorkflowId}
               />
               {!c.videoWorkflowId && (
                 <span className="text-ink-fainter text-2xs mt-1 block">
@@ -184,14 +184,14 @@ export function FilmStudioPropertyPanel({
           {(field) => (
             <SelectMenu
               {...field}
-              value={c.imageWorkflowId}
+              fullWidth
+              labels={Object.fromEntries(c.imageWorkflows.map((wf) => [wf.id, wf.name]))}
               onChange={c.setImageWorkflowId}
               options={c.imageWorkflows.map((wf) => wf.id)}
-              labels={Object.fromEntries(c.imageWorkflows.map((wf) => [wf.id, wf.name]))}
               placeholder={
                 c.imageWorkflows.length ? "不需要 / 未选择" : "工作流库里还没有图类工作流"
               }
-              fullWidth
+              value={c.imageWorkflowId}
             />
           )}
         </FormField>
@@ -201,8 +201,8 @@ export function FilmStudioPropertyPanel({
           <span className="text-ink-field text-sm">烧录字幕</span>
           <Checkbox
             checked={c.subtitleOn}
-            onCheckedChange={(checked) => c.setSubtitleOn(checked === true)}
             className="accent-primary"
+            onCheckedChange={(checked) => c.setSubtitleOn(checked === true)}
           />
         </FieldLabel>
 
@@ -210,16 +210,16 @@ export function FilmStudioPropertyPanel({
         <div>
           <span className="text-ink-faint text-2xs mb-1.5 block">背景音乐（可选）</span>
           <input
-            type="file"
             accept="audio/*"
             aria-label="背景音乐（可选）"
+            className="text-ink-fainter hover:text-primary-strong file:bg-primary/20 file:text-primary-strong text-2xs file:text-2xs w-full file:mr-2 file:rounded-lg file:border-0 file:px-3 file:py-1.5"
             onChange={(event) => {
               const f = event.target.files?.[0];
               if (f) {
                 void c.uploadBgmFile(f);
               }
             }}
-            className="text-ink-fainter hover:text-primary-strong file:bg-primary/20 file:text-primary-strong text-2xs file:text-2xs w-full file:mr-2 file:rounded-lg file:border-0 file:px-3 file:py-1.5"
+            type="file"
           />
           {c.bgmName && (
             <p className="text-primary-strong text-2xs mt-1 truncate">已选：{c.bgmName}</p>
@@ -233,9 +233,9 @@ export function FilmStudioPropertyPanel({
             {c.film.status === "FAILED" &&
               c.film.shots.some((shot) => shot.status === "SUCCEEDED") && (
                 <Button
-                  variant="link"
-                  onClick={() => void c.recompose()}
                   className="ml-2 h-auto text-inherit underline hover:no-underline"
+                  onClick={() => void c.recompose()}
+                  variant="link"
                 >
                   重新合成
                 </Button>

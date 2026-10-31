@@ -14,11 +14,7 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { textHandler } from "~/lib/form-props";
-import {
-  createProject,
-  listProjects,
-  setActive,
-} from "~/lib/project-canvas/canvas-store";
+import { createProject, listProjects, setActive } from "~/lib/project-canvas/canvas-store";
 
 interface ProjectGateProps {
   /** 新建或选择项目后回调：上层据此刷新活跃项目 id 并渲染目标视图。 */
@@ -46,11 +42,11 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
 
         <div className="mt-5 flex items-center gap-2">
           <input
-            value={name}
             onChange={textHandler(setName)}
+            value={name}
             {...enterCommit({ onCommit: () => handleCreate() })}
-            placeholder="项目名称（可留空，默认「未命名」）"
             className="border-border bg-canvas-deep text-ink placeholder:text-ink-fainter focus:border-border-strong min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
+            placeholder="项目名称（可留空，默认「未命名」）"
           />
           <Button onClick={handleCreate} variant="gradient">
             新建并进入
@@ -59,25 +55,21 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
 
         {projects.length > 0 && (
           <div className="mt-6">
-            <p className="text-ink-faint mb-2 text-xs font-semibold">
-              或打开已有项目
-            </p>
+            <p className="text-ink-faint mb-2 text-xs font-semibold">或打开已有项目</p>
             <ul className="border-border-subtle flex max-h-56 flex-col gap-1 overflow-y-auto">
               {projects.map((project) => {
                 const nodeCount = project.nodes?.length ?? 0;
                 return (
                   <li key={project.id}>
                     <Button
-                      variant="ghost"
+                      className="border-border-subtle hover:bg-subtle text-ink-strong flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
                       onClick={() => {
                         setActive(project.id);
                         onEnter();
                       }}
-                      className="border-border-subtle hover:bg-subtle text-ink-strong flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
+                      variant="ghost"
                     >
-                      <span className="truncate">
-                        {project.name || "未命名项目"}
-                      </span>
+                      <span className="truncate">{project.name || "未命名项目"}</span>
                       <span className="text-ink-fainter shrink-0 text-xs">
                         {nodeCount > 0 ? `${nodeCount} 节点` : "空"}
                       </span>
@@ -90,9 +82,9 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
         )}
 
         <Button
-          variant="link"
-          onClick={onExit}
           className="text-ink-muted hover:text-ink mt-5 px-0 text-xs"
+          onClick={onExit}
+          variant="link"
         >
           返回首页
         </Button>

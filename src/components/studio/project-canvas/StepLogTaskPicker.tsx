@@ -45,9 +45,8 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
 
   return (
     <SelectMenu
-      value={taskId ?? ""}
-      onChange={(v) => onSelect(v || null)}
-      options={cachedIds}
+      aria-label="切换查看的任务"
+      className="text-2xs max-w-50"
       labels={Object.fromEntries(
         cachedIds.map((id) => {
           const meta = loadStepLogPanelState(id);
@@ -65,9 +64,10 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
           ];
         }),
       )}
+      onChange={(v) => onSelect(v || null)}
+      options={cachedIds}
       placeholder={taskId ? undefined : "（无任务）"}
-      aria-label="切换查看的任务"
-      className="text-2xs max-w-50"
+      value={taskId ?? ""}
     />
   );
 });

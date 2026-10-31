@@ -3,10 +3,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { OriginSelect } from "~/components/studio/logs/LogPanelOriginSelect";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
-import type {
-  LogOriginCounts,
-  LogOriginFilter,
-} from "~/components/studio/logs/log-store";
+import type { LogOriginCounts, LogOriginFilter } from "~/components/studio/logs/log-store";
 
 /**
  * 日志面板的**来源筛选下拉**（`LogPanel` 的拆分件）。
@@ -44,22 +41,12 @@ type Story = StoryObj<typeof OriginSelectHarness>;
  * `OriginSelect` 拿到的**是同一份**（同一个 selector、同一个派生），不另写
  * 一份「story 版计数」。
  */
-function OriginSelectHarness({
-  initial = "all",
-}: {
-  initial?: LogOriginFilter;
-}) {
-  const countsByOrigin = useLogPanel(
-    (state): LogOriginCounts => state.countsByOrigin,
-  );
+function OriginSelectHarness({ initial = "all" }: { initial?: LogOriginFilter }) {
+  const countsByOrigin = useLogPanel((state): LogOriginCounts => state.countsByOrigin);
   const [value, setValue] = useState<LogOriginFilter>(initial);
   return (
     <div className="bg-canvas-deep border-border-strong w-fit rounded-md border p-3">
-      <OriginSelect
-        value={value}
-        countsByOrigin={countsByOrigin}
-        onChange={setValue}
-      />
+      <OriginSelect countsByOrigin={countsByOrigin} onChange={setValue} value={value} />
     </div>
   );
 }

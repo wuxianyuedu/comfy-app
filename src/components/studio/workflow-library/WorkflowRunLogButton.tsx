@@ -76,16 +76,16 @@ export function WorkflowRunLogButton({
   return (
     <Hint label="打开执行日志">
       <Button
-        variant="outline"
-        onClick={onOpen}
-        data-testid="wflib-log-open"
         /* 与同排的「导入画布 / 编辑 / 源文件 / 下载」同款描边按钮（`ActionButton`
          *  的 default 变体）：这一排按钮是一组动作，不要一个深底一个浅底。 */
         className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright text-2xs h-auto gap-1.5 rounded-lg px-2.5 py-1.5 font-medium"
+        data-testid="wflib-log-open"
+        onClick={onOpen}
+        variant="outline"
       >
         <span className="text-ink-strong flex items-center gap-1.5 font-medium">
           执行日志
-          {live && <StatusDot state="busy" sizeClass="size-1.5" pulse />}
+          {live && <StatusDot pulse sizeClass="size-1.5" state="busy" />}
         </span>
         <span className="text-ink-fainter text-2xs">{statusText}</span>
       </Button>
