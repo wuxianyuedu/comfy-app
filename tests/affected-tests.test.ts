@@ -7,13 +7,15 @@ import {
   attributeAffected,
   buildImportedBy,
   changedPathsFrom,
-  changedPathsFromNameStatus,
   isSourcePath,
   isTestPath,
   resolveAffectedTests,
   specCandidates,
   wideFallbackNote,
 } from "../scripts/affected-tests.mjs";
+/* `--name-status` 的解析住在零依赖模块里（ISSUE #2830：说明符扫描器带上了
+ * `typescript`，沙箱里那份 `changed-scope.mjs` 不能再连带它）。 */
+import { changedPathsFromNameStatus } from "../scripts/git-name-status.mjs";
 /* 清单那一跳的载体住在自己那份文件里 —— 用例按它真实的落点 import，
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
 import { describeListFailure } from "../scripts/affected-launch-changed-list.mjs";
