@@ -171,8 +171,13 @@ module.exports = {
       let hits = 0;
       /* ① 自己定义 `isRecord`（9 处里 8 处是逐字相同的实现）。 */
       hits += (t2.match(/function\s+isRecord\s*\(/g) || []).length;
-      /* ② 入参收窄三步：`req.json()` + 400 信封。 */
-      if (/(?:req|request)\.json\s*\(/.test(t2) && /NextResponse\.json\(\s*\{[^}]*error/.test(t2)) {
+      /* ② 入参收窄三步：`req.json()` + 400 信封。信封认的是**键**
+       *（`error:`），不是 `error` 字样 —— 后者会把 `catch (error)` 的实参、
+       * `apiErrorDetail(` 这类标识符一并算成信封，一次纯改名就能判红。 */
+      if (
+        /(?:req|request)\.json\s*\(/.test(t2) &&
+        /NextResponse\.json\(\s*\{[^}]*\berror\s*:/.test(t2)
+      ) {
         hits += 1;
       }
       return hits;

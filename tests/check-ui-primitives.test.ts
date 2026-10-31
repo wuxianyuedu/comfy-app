@@ -2096,6 +2096,27 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
+  test("catch 形参叫 error 但信封里没有 error 键，不算 P41（纯改名不判红）", ({ repo }) => {
+    repo.write(
+      "src/app/api/widgets/route.ts",
+      [
+        "export async function POST(req: Request) {",
+        "  try {",
+        "    await req.json();",
+        "    return NextResponse.json({ ok: true });",
+        "  } catch (error) {",
+        "    return NextResponse.json({",
+        "      ok: false,",
+        '      detail: String(error),',
+        "    });",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
   /* ── P42：错误文案的「动作前缀」（规范 §16.2.4.45）────────────────────
    *
    * 判据取「**动作前缀 + 冒号 + 紧跟一个错误取值动作**」这个签名。
