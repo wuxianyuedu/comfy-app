@@ -1212,7 +1212,7 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
      * （两条退避都写成 `i < pyCandidates.length - 1`，`i` 最大只到 2 就地 resolve），
      * 真机没装 Python 时界面只剩「0 个节点」。 */
     expect(events.filter((e) => msgOf(e).includes("未找到 Python 解释器"))).toHaveLength(1);
-    expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
+    expect(events.map((e) => e.type).at(-1)).toBe("done");
     /* 全失败**不许**回一个像成功的空收尾：没有解释器就没有 discover_done 这一步事实。 */
     expect(events.some((e) => e.type === "discover_done")).toBe(false);
   });
@@ -1224,7 +1224,7 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     const events = await getEvents();
     expect(interpreterNames()).toEqual(ORDER);
     expect(events.filter((e) => msgOf(e).includes("未找到 Python 解释器"))).toHaveLength(1);
-    expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
+    expect(events.map((e) => e.type).at(-1)).toBe("done");
     expect(events.some((e) => e.type === "discover_done")).toBe(false);
   });
 
@@ -1238,7 +1238,7 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     expect(interpreterNames()).toEqual(ORDER.slice(0, 1));
     const progress = events.filter((e) => e.type === "progress");
     expect(JSON.stringify(progress)).toContain("EACCES");
-    expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
+    expect(events.map((e) => e.type).at(-1)).toBe("done");
   });
 
   it("退出码 127（命令不存在）也要换下一个解释器", async () => {
@@ -1340,6 +1340,6 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     const hit = events.find((e) => msgOf(e).includes("解析失败"));
     expect(hit, `没有那句带退出码的失败进度：${JSON.stringify(events)}`).toBeTruthy();
     expect(hit ? msgOf(hit) : "").toContain("3");
-    expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
+    expect(events.map((e) => e.type).at(-1)).toBe("done");
   });
 });

@@ -211,7 +211,7 @@ describe("缓存槽的配额与淘汰（契约）", () => {
           stamp: now - (keys.length - i) * 10 * 60 * 60 * 1000,
         });
       }
-      const current = keys[keys.length - 1]!;
+      const current = keys.at(-1)!;
       const out = pruneSlots({ cacheRoot: cache, currentKey: current, now });
       expect(out.evicted.length).toBe(2);
       expect(out.evicted).not.toContain(current);
@@ -294,7 +294,7 @@ describe("缓存槽的配额与淘汰（契约）", () => {
       expect(slots.overQuota).toBe(1);
       expect(slots.heldByTtl).toBe(1);
       expect(slots.emptyCount).toBe(0);
-      expect(slots.keys[slots.keys.length - 1]?.key).toBe("d");
+      expect(slots.keys.at(-1)?.key).toBe("d");
     } finally {
       rmSync(cache, { recursive: true, force: true });
     }

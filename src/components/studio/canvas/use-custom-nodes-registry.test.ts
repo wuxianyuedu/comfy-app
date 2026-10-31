@@ -145,8 +145,8 @@ describe("灌入 → memo 掉的读方被叫醒", () => {
     await act(async () => {
       await refreshCustomNodes();
     });
-    expect(seenA[seenA.length - 1]).toBe(version + 1);
-    expect(seenB[seenB.length - 1]).toBe(version + 1);
+    expect(seenA.at(-1)).toBe(version + 1);
+    expect(seenB.at(-1)).toBe(version + 1);
     // 两位读到的**当前值**也一致：快照函数按引用取，不存在「一个看到一个没看到」
     expect(a.result.current).toBe(b.result.current);
     expect(seenA.length).toBeGreaterThan(1);

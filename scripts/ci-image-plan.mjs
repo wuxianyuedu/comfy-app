@@ -250,7 +250,7 @@ export function toolingVersionsFromLock(lockText, names) {
   if (starts.length === 0) {
     return out;
   }
-  const from = /** @type {number} */ (starts[starts.length - 1]);
+  const from = /** @type {number} */ (starts.at(-1));
   const block = [];
   for (let i = from + 1; i < lines.length; i++) {
     /* 顶格的行 = 又一个顶层键（`packages:` / `settings:` / `snapshots:`）。 */
