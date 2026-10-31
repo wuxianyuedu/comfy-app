@@ -126,7 +126,7 @@ export const LOG_MODAL_MAX_ROWS = 300;
 export function tailWindow<T>(items: ReadonlyArray<T>, size: number): Array<T> {
   const n = safeSize(size);
   if (n >= items.length) {
-    return items.slice();
+    return [...items];
   }
   return items.slice(items.length - n);
 }

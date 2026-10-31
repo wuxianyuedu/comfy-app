@@ -92,7 +92,7 @@ export function cachePeek<T>(key: string): T | undefined {
 /* 删除所有以 `prefix` 开头的缓存键（例如 `wf:userId:`）。 */
 export function cacheDelPrefix(prefix: string): void {
   const store = getStore();
-  for (const k of Array.from(store.map.keys())) {
+  for (const k of store.map.keys()) {
     if (k.startsWith(prefix)) {
       store.map.delete(k);
     }

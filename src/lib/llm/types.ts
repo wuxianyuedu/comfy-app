@@ -237,7 +237,7 @@ export function foldRemoteToLocal(
   localNames: Array<string>,
   llmBaseUrl: string | null | undefined,
 ): ExtraModelSplit {
-  const locals = localNames.slice();
+  const locals = [...localNames];
   const remotes: Array<RemoteModelEntry> = [];
   for (const e of remoteEntries) {
     if (isMisplacedLocalOllama(e, llmBaseUrl)) {
