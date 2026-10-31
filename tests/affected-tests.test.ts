@@ -161,11 +161,19 @@ describe("affected-tests：五条命中判据", () => {
       // 扫描器对 `export * as ns from` 这一形态不报，说明符抽取里单独补了一条。
       // 目标写成不存在的模块：本文件自己的源码里也有一份同形夹具，别让它变成一条真边。
       "src/a/real-ns.test.ts": "export * as clampNs from '~/lib/clamp-ns';",
+      // JSDoc 里的类型引用是真的依赖（tsc / typedoc 都沿它解析），扫描器不报，
+      // 按「落在注释里」补回来；字符串里的同形文本仍然不算。
+      "src/a/type-ref.test.ts": "/** @type {import('~/lib/clamp-type').T} */\nconst x = 1;",
+      "src/a/type-ref-string.test.ts": "const s = \"import('~/lib/clamp-type-string')\";",
     });
     const tests = run(["src/lib/clamp.ts"]).tests;
     expect(tests).not.toContain("src/a/fixture.test.ts");
     expect(tests).toContain("src/a/real.test.ts");
     expect(run(["src/lib/clamp-ns.ts"]).tests).toContain("src/a/real-ns.test.ts");
+    expect(run(["src/lib/clamp-type.ts"]).tests).toContain("src/a/type-ref.test.ts");
+    expect(run(["src/lib/clamp-type-string.ts"]).tests).not.toContain(
+      "src/a/type-ref-string.test.ts",
+    );
   });
 
   it("③''' 被删掉的文件不在索引清单里，它的消费方仍要被拉进来", () => {

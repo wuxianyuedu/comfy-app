@@ -5353,7 +5353,7 @@ await」等一并揪出来，一次报几百处、评审看下来全是"这里�
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 自身             | 改测试就跑它                                                                                                                                                                                                                                                                                         |
 | 同名兄弟 / 快照  | 改 `x.ts` 跑 `x.test.ts(x)`；改 `__snapshots__/x.test.tsx.snap` 跑宿主                                                                                                                                                                                                                               |
-| 反向 import 闭包 | 谁 import 了改动文件、谁又 import 了那些文件……沿 import 图走到测试为止。静态 `from`、副作用 import、动态 `import()`、`require`、`vi.mock` 都算；说明符由 TypeScript 的预处理扫描器（`ts.preProcessFile`）取出 —— **字符串 / 模板串 / 注释里「长得像 import」的那一段不算引用**（ISSUE #2830），扫描器没覆盖的 `vi.mock` / `jest.mock` 与 `export * as ns from` 各补一条剥注释后的正则；别名 `~/` `@/`、相对说明符按**引用方位置**解析；目录 import 命中 `dir/index.*`，所以 barrel 的转出口天然在图里（**没有**「同目录就算消费」那种放宽） |
+| 反向 import 闭包 | 谁 import 了改动文件、谁又 import 了那些文件……沿 import 图走到测试为止。静态 `from`、副作用 import、动态 `import()`、`require`、`vi.mock` 都算；说明符由 TypeScript 的预处理扫描器（`ts.preProcessFile`）取出 —— **字符串 / 模板串 / 注释里「长得像 import 语句」的那一段不算引用**（ISSUE #2830），扫描器没覆盖的三处各补一条：`vi.mock` / `jest.mock` 与 `export * as ns from` 跑在剥注释后的文本上、JSDoc 的 `import("…")` 类型引用只认注释里那一份（tsc 与 typedoc 都沿它解析类型，`scripts/lockfile/lock-diff.d.mts` 就靠它进 typedoc 闭包）；别名 `~/` `@/`、相对说明符按**引用方位置**解析；目录 import 命中 `dir/index.*`，所以 barrel 的转出口天然在图里（**没有**「同目录就算消费」那种放宽） |
 | 按路径引用       | 改动路径以字面量出现在测试的**代码文本**里（门禁 `execFileSync` 起被测脚本、主题用例按路径读 CSS），另含 `scripts/<name>` ⇄ `tests/<name>.test.ts` 的同名配对                                                                                                                                        |
 
 **改名（`R`）的旧路径也进改动面**（ISSUE #2226）：改动面由 `git diff --name-status -M`
@@ -5550,7 +5550,10 @@ runner 检出后只 `git config --local` 配了身份与凭据，**一条 `core.
 - **夹具字符串不是依赖**（ISSUE #2830）：门禁自测常把源码样例写成字符串，旧正则把它们
   全算成 import 边 —— `tests/check-ui-primitives.test.ts` 一份就 682 条、修后 11 条。
   代价是扫描器比正则慢（全库 2351 份 / 17.2MB：2.3s → 3.6s），买的是「重档自测只在该跑
-  的提交上跑」。
+  的提交上跑」。**注释不是一刀切掉**：JSDoc 里的 `import("…")` 是类型引用，tsc 与
+  typedoc 都会沿它解析 —— 那一条单独按「落在注释里」补回来（`stripComments` 保持长度，
+  剥完变空白的那一段才算注释），否则 typedoc 输入面闭包会少掉
+  `scripts/lockfile/lock-diff.d.mts`。
 - **归因与主链同一条判定链**：`attributeAffected` 复用注入的同一份图，所以 `--attribute`
   的数与真正要跑的清单继续对得上（§13.5.8.4 那条「两处漂移是静默的」在这里同样成立）。
 

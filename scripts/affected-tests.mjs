@@ -205,6 +205,12 @@ const MOCK_RE = /(?:vi|jest)\.mock\s*\(\s*["']([^"'\n]+)["']/g;
  *  一条转出口 —— 漏了就是「闭包算少了」那一侧，单独补一条。 */
 const EXPORT_NS_RE = /\bexport\s+(?:type\s+)?\*\s+as\s+[\w$]+\s+from\s*["']([^"'\n]+)["']/g;
 
+/** JSDoc 里的类型引用 `import("x")`（`@param {import("…").T}` / `@type {import("…")}`）：
+ *  扫描器只按 JS 语法走，注释不在它的结果里；而这类引用**是真的依赖** —— tsc 与
+ *  typedoc 都沿它解析类型（`scripts/lockfile/lock-diff.d.mts` 就是 typedoc 输入面闭包
+ *  里唯一一条靠它进图的文件）。所以按「落在注释里」把它补回来。 */
+const TYPE_IMPORT_RE = /\bimport\s*\(\s*["']([^"'\n]+)["']\s*\)/g;
+
 /**
  * 一份源码静态引用到的模块（候选路径集合，含 barrel 的 `dir/index.*` 形态）。
  *
@@ -214,10 +220,11 @@ const EXPORT_NS_RE = /\bexport\s+(?:type\s+)?\*\s+as\s+[\w$]+\s+from\s*["']([^"'
  * **夹具字符串**一起算成依赖（ISSUE #2830：一份门禁自测把源码样例写成字符串，
  * 于是改样例里提到的那份模块就把整份重档自测拉进无关提交的受影响面）。
  *
- * 扫描器没覆盖的两种形态各补一条正则，跑在**剥注释之后**的文本上：`vi.mock` 的
- * 模块替身、`export * as ns from`。已知边界：字符串里**逐字**写出这两种形态时仍会被
- * 算成依赖（扫描器管不到它们）—— 偏「多跑几份」而不是「少跑」，全仓实测只出现在
- * 自测夹具里。
+ * 扫描器没覆盖的三种形态各补一条规则：`vi.mock` 的模块替身、`export * as ns from`、
+ * 以及 JSDoc 里的类型引用 `import("…")`（前两条跑在**剥注释之后**的文本上，第三条
+ * 反过来只认注释里那一份）。已知边界：字符串里**逐字**写出前两种形态时仍会被算成
+ * 依赖（扫描器管不到它们，剥注释也只剥真的注释）—— 偏「多跑几份」而不是「少跑」，
+ * 全仓实测只出现在自测夹具里。
  *
  * **导出的理由**：`scripts/docs-api-input-closure.mjs` 要算 typedoc 输入面的
  * 传递闭包，而它需要的正是这同一份说明符解析 —— 抄第二份正则就会漂（§12.12 / §12.18），
@@ -240,6 +247,18 @@ export function specifiersOf(text, fromFile) {
       for (const cand of specCandidates(m[1], fromFile)) {
         out.add(cand);
       }
+    }
+  }
+  /* 类型引用只认**注释里**那一份：`stripComments` 保持长度、把注释字符换成空格，
+   * 所以「同一段在剥完注释的文本里变成空白」= 它落在注释里。代码里的动态
+   * `import("…")` 扫描器已经报过，字符串里的同形文本则原样保留、不会命中这一条。 */
+  for (const m of text.matchAll(TYPE_IMPORT_RE)) {
+    const idx = m.index ?? 0;
+    if (code.slice(idx, idx + m[0].length).trim() !== "") {
+      continue;
+    }
+    for (const cand of specCandidates(m[1] ?? "", fromFile)) {
+      out.add(cand);
     }
   }
   return out;
