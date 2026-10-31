@@ -2547,6 +2547,52 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
     }
   });
 
+  it("finishIssueWork：取的名字撞上别人的处理人 ⇒ 话术把『我是谁是怎么来的』说出来（ISSUE #2833）", () => {
+    /* 「不代发」背后是两件事：处理人真是别人，与这份检出的「我是谁」落到了**取的**名字上
+     * （链接 worktree 不带 .env ⇒ 跌到 git user.name）。后者要修留痕通道，话术必须分开。 */
+    const f = issueIo({ labels: ["处理人:someone-else"] });
+    const s = scratch();
+    try {
+      const code = finishIssueWork({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        handle,
+        handleExplicit: false,
+        number: 2833,
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(f.log.join("\n")).toContain("取的");
+      expect(f.log.join("\n")).toContain("ISSUE #2833");
+      expect(
+        f.calls.some((c) => c.includes("post-issue-comment") || c.includes("delete-issue-label")),
+      ).toBe(false);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("finishIssueWork：显式的名字撞上别人的处理人 ⇒ 不打 worktree 提示（那真是别人在收尾）", () => {
+    const f = issueIo({ labels: ["处理人:someone-else"] });
+    const s = scratch();
+    try {
+      const code = finishIssueWork({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        handle,
+        handleExplicit: true,
+        number: 2833,
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(f.log.join("\n")).not.toContain("ISSUE #2833");
+    } finally {
+      s.cleanup();
+    }
+  });
+
   it("finishIssueWork：结束评论没落地 ⇒ 2 且标签保留", () => {
     const f = issueIo({
       labels: [`处理人:${handle}`],
