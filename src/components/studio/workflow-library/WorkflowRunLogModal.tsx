@@ -19,8 +19,6 @@ import { FileText, X } from "lucide-react";
 import {
   getWorkflowRunStoreSnapshot,
   subscribeWorkflowRunStore,
-} from "~/lib/workflow/workflow-run-store";
-import {
   runLogSourceLabel,
   type WorkflowRunMeta,
   type WorkflowRunSource,

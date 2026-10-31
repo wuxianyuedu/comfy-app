@@ -28,7 +28,13 @@ import {
   parseImportedCharacterCards,
 } from "~/lib/workshop/script-parse";
 import type { ParsedCharacterDraft } from "~/lib/workshop/script-parse";
-import { parseChannelOption, type ExtractChannel } from "~/lib/workshop/channel-options";
+import {
+  parseChannelOption,
+  type ExtractChannel,
+  channelProviderLabel,
+  channelSelectionDisplayValue,
+  resolveChannelSelection,
+} from "~/lib/workshop/channel-options";
 import {
   useExtractSession,
   type ExtractSession,
@@ -41,11 +47,6 @@ import {
   parseCharacter,
   parseCharacterFull,
 } from "~/lib/llm/prompts";
-import {
-  channelProviderLabel,
-  channelSelectionDisplayValue,
-  resolveChannelSelection,
-} from "~/lib/workshop/channel-options";
 import { formatRequestMessages, makeExtractLog } from "~/lib/workshop/extraction-log";
 import { errorMessage } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";

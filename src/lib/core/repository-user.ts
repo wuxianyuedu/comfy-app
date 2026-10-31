@@ -15,7 +15,7 @@ import "server-only";
 import { db } from "~/lib/db";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import { decryptLlmKey, encryptLlmKey } from "~/lib/llm/secrets";
-import type { RawExtraModel } from "~/lib/llm/types";
+import { type RawExtraModel, splitExtraModels, type RemoteModelEntry } from "~/lib/llm/types";
 import {
   user,
   llmConfig,
@@ -27,7 +27,6 @@ import {
 import { eq, inArray, sql } from "drizzle-orm";
 import { SETTINGS_DB_WRITE } from "~/lib/retry-policy";
 import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
-import { splitExtraModels, type RemoteModelEntry } from "~/lib/llm/types";
 import type { DbExecutor } from "./repository-executor-types";
 
 export class UserRepository {
