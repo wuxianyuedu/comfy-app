@@ -93,7 +93,7 @@ function writeLine(msg) {
     // 「grep runId 一把梭」要求**每个通道**都写这一列，靠各进程自己生成就散了。
     const runId = process.env.COMFYAPP_RUN_ID;
     const tag = runId ? `[${runId}][executor-host] ` : "[executor-host] ";
-    fs.appendFileSync(logPath, `[${localStamp()}] [INFO] ${tag}${msg}\n`, "utf-8");
+    fs.appendFileSync(logPath, `[${localStamp()}] [INFO] ${tag}${msg}\n`, "utf8");
   } catch (err) {
     // 日志写不进不能拖崩主循环；stderr 一行 + 继续跑。
     process.stderr.write(
@@ -130,7 +130,7 @@ function resolveDatabaseUrl() {
   try {
     const envPath = path.join(ROOT, ".env");
     if (fs.existsSync(envPath)) {
-      const parsed = parseEnvFile(fs.readFileSync(envPath, "utf-8"));
+      const parsed = parseEnvFile(fs.readFileSync(envPath, "utf8"));
       const fromFile = parsed.get("DATABASE_URL");
       if (fromFile) {
         return fromFile;

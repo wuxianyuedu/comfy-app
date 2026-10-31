@@ -246,6 +246,8 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
     expect(probe).toContain("codePageIsUtf8");
     /* 话术里必须给**下一动作**（与 §13.5.3.5.1「红了要红在能指路的位置」同口径）。 */
     expect(probe).toContain("--apply");
-    expect(probe).toContain("UTF-8");
+    /* 这里断言的是「话术里印了 UTF-8 字样」，不是编码参数；用正则避开
+     * unicorn/text-encoding-identifier-case 对编码字面量的改写。 */
+    expect(probe).toMatch(/UTF-8/);
   });
 });

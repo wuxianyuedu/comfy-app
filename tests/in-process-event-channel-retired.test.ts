@@ -24,7 +24,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 /* 判据针对的是**代码**：这几处退役的理由就写在注释里（「不再有
  * `s.emitter.emit`」这类句子会自己把自己判红），所以先剥注释再匹配。 */
 const src = (rel: string): string =>
-  stripComments(readFileSync(path.join(ROOT, rel), "utf-8"));
+  stripComments(readFileSync(path.join(ROOT, rel), "utf8"));
 
 /** 执行链里「曾经会 emit」的那几个模块。新增执行侧模块时把它加进来。 */
 const EXEC_CHAIN_FILES = [
