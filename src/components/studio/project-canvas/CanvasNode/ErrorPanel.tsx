@@ -211,7 +211,7 @@ export function ErrorPanel({
                     copyDetail(
                       JSON.stringify(
                         {
-                          nodeId: nodeId,
+                          nodeId,
                           workflowId: workflowId ?? null,
                           workflowName: workflowName ?? null,
                           taskId: taskId ?? null,
