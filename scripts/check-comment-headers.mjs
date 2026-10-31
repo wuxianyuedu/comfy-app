@@ -23,8 +23,10 @@
  *   ③ **单张读不到 ≠ 缺**：某张 `get-issue` 失败时记进「读不到」那一档，不改判成缺，
  *      也不因此变红 —— 「拿不到测量」与「测量结果是红的」是两件事。
  *
- * 成本：一次列表 + 每张单一次 `get-issue`（默认只扫第 1 页 open 单，`--pages` 可调），
- * 走网络 ⇒ **不进钩子**，登记在 `scripts/.gate-executor-ledger.json` 的按需台账。
+ * 成本：一次列表 + **每张 open 对象一次 `get-*`**（单子 `get-issue`、PR `get-pull`；
+ *       默认只扫第 1 页 open 单，`--pages` 可调）。PR 那一侧**不能**省成列表带回来的
+ *       `body` —— 列表形态里那个键是空串，见 `collectShapes` 里那段（ISSUE #2788）。
+ *       走网络 ⇒ **不进钩子**，登记在 `scripts/.gate-executor-ledger.json` 的按需台账。
  *
  * 用法：
  *   pnpm check:comment-headers                 # 人读清单
@@ -111,12 +113,22 @@ export function collectShapes(ctx) {
       if (!number) {
         continue;
       }
-      /* PR 列表自带 `body`（实测字段表里有），不再逐张 `get-pull` 多问一次。 */
-      const body = item?.body;
+      /* 正文**逐张 `get-pull` 取**，与上面单子那一侧同一个形状。
+       *
+       * 曾经这里直接用 `list-pulls` 带回来的 `item.body`，理由是「PR 列表自带 `body`
+       * （实测字段表里有）」—— 那句**半真**：键在、类型是 string，而列表形态里它的值是
+       * **空串**（ISSUE #2788 实测四张 open PR 全为 0 长度，同几张 `get-pull` 有正文）。
+       * 于是 `typeof body === "string"` 守卫放行，`headerShape("")` 给「缺」⇒
+       * **每一条 open PR 都被判成缺署名**，与本单自己口径 ③（「读不到 ≠ 缺」）相反，
+       * 而下面那句 `shape !== "读不到"` 把这份假阳性一路带进退码（红）。
+       * 「字段存在」不等于「字段有值」—— 拿缺字段当结论是这一族反复在收的形状。 */
+      const one = cnbJson(run, ["pulls", "get-pull", "--repo", slug, "--number", number, "-v"]);
+      const body = one?.json?.data?.body;
       rows.push({
         kind: "PR",
         number,
         title: String(item?.title ?? ""),
+        /* 读不到 ⇒ 「读不到」那一档，不判成缺、也不因此变红（与单子那一侧同口径）。 */
         shape: typeof body === "string" ? headerShape(body) : "读不到",
       });
     }
