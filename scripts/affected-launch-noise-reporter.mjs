@@ -30,6 +30,20 @@
  * 这条边界由 `tests/affected-launch-noise-reporter.test.ts` 的**反向判据**钉住：
  * 给一组真红 / 真挂死的原文，断言 `isNoiseLine` 一律返回 false。
  *
+ * 第二批（ISSUE #2844，实测 build cnb-hkh-1k68d3ms7，2026-10-31）：与上面那批不同源 ——
+ * 不是「被测源码的 stderr 错误」，而是**测试夹具自己 spawn 的子进程输出**与**探针脚本
+ * 的段落抬头**（走 stdout）：git 传输警告 / `git worktree add` 进度行 / 负向用例按设计
+ * 造的失败（git 在非仓库目录、Playwright 起不来）/ 探针段名（[ports]/[python]/…）/
+ * ci-install-deps 判据被夹具 exercise 时的原话 / storybook 加载 `.storybook/main.ts`
+ * 的已知警告块。这批单独一张清单（`FIXTURE_NOISE_PATTERN`），与第一批分开列是为了
+ * 「每一条都能指到出处」—— 混在一张正则里，下一个人就分不清哪条是谁了。
+ *
+ * ⚠️ junit **不吃**这份过滤：junit 由 vitest 自己写（过滤发生在 vitest 退出之后），
+ * 所以逐文件读数与失败明细永远保全量；被滤掉的只有**回吐给平台的那屏**。
+ * `fatal: not a git repository` 与 `起不了 Playwright` 这两条**理论上**可能出现在某条
+ * 真红的报告原文里 —— 接受这个交换：它们在 junit 与失败摘要里仍在，回吐屏丢的只是
+ * 上下文行；而它们作为夹具噪音出现的频率远高于作为真红原文的频率（两次实测都是前者）。
+ *
  * 接入点：本文件只提供纯函数；真正的过滤动作在 `affected-launch-spawn.mjs` 的
  * `spawnVitest` 抓到 vitest 输出、回吐给平台之前那一刀（按行过 `isNoiseLine`）。
  */
@@ -49,9 +63,35 @@
 export const NOISE_PATTERN =
   /::1:3000|127\.0\.0\.1:3000|port:\s*3000|errno:\s*-4078|internalConnectMultiple|afterConnectMultiple|createConnectionError|address:\s*'::1'|\[canvas-sync\]|这份画布没能存进服务端|Stream closed before head was received|TRPCClientError|渲染期炸了|The above error occurred|React will try to recreate|\[ErrorBoundary\]|ChunkLoadError|Failed to load chunk|error-boundary\.stories\.tsx|use-lazy-chunk-fallback\.stories\.tsx/;
 
-/** 一行是不是良性噪音（CI 里应被屏蔽）。 */
+/**
+ * 第二批（夹具 / 探针输出，ISSUE #2844）的判定式。逐条锚定、每条能指到出处：
+ *
+ *   · `^warning: in the working copy of ` —— git autocrlf 的传输警告，夹具 spawn git
+ *     时必漏（`LF will be replaced by CRLF` 那句的后半段随路径/方向变，锚前半句）。
+ *   · `^Preparing worktree \(` —— `git worktree add` 的进度行（负向/夹具用例造 worktree）。
+ *   · `^fatal: not a git repository \(or any of the parent directories\)` —— git 在非
+ *     仓库目录的标准报错，负向用例按设计造的出口（junit 保全量，见上面的交换说明）。
+ *   · `起不了 Playwright（` —— `e2e-run-playwright.mjs` 的设计内失败抬头（tag 形态
+ *     `[e2e-run/test]` / `[e2e-run]` 都算）；以及它下面那行箭头注解
+ *     `**判据按设计造的失败**`。
+ *   - `^\[(ports|python|schema|browser)\]\s*$` —— `ci-env-probe.mjs` 的**裸段名抬头**
+ *     （被 ci-env-probe / ci-image-identity / fixed-gate-input-faces 等夹具 exercise 时
+ *     漏出）。只收**裸行**：带内容的行（真读数）不在此列。
+ *   · `^\[ci-install-deps\] ` —— 同判据被夹具 exercise 时的原话（这一格真正跑在
+ *     install-deps 那条 CI 链上，不在本门输出里）。
+ *   · storybook 的 extensionless 警告块：触发行（`One or more extensionless imports
+ *     detected`）、框线行（`│` 起手 —— 本门输出里只有 storybook 用它画框）、
+ *     OSC-8 超链接包装（`]8;;`）与 faq 链接行。
+ *   · `^x\s*$` —— 孤立 x 行（两次构建 cnb-41t-1k688asn3 / cnb-hkh-1k68d3ms7 都在场，
+ *     **源未定位**；按观察形态收，真读数不会是一行孤立的 `x`）。
+ */
+export const FIXTURE_NOISE_PATTERN =
+  /^warning: in the working copy of |^Preparing worktree \(|^fatal: not a git repository \(or any of the parent directories\)|起不了 Playwright（|\*\*判据按设计造的失败\*\*|^\[(ports|python|schema|browser)\]\s*$|^\[ci-install-deps\] |One or more extensionless imports detected|^\s*│|]8;;|storybook\.js\.org\/docs\/faq|^x\s*$/;
+
+/** 一行是不是良性噪音（CI 里应被屏蔽）。两张清单任一命中即算。 */
 export function isNoiseLine(line) {
-  return NOISE_PATTERN.test(line ?? "");
+  const s = line ?? "";
+  return NOISE_PATTERN.test(s) || FIXTURE_NOISE_PATTERN.test(s);
 }
 
 /**
@@ -76,7 +116,7 @@ export function resolveNoiseFilter(raw) {
   return {
     enabled,
     note: enabled
-      ? "噪音屏蔽：开（屏蔽 ECONNREFUSED/:3000、canvas-sync 重试、a11y 故意渲染的 error-boundary/lazy-chunk 故事 stderr；不影响断言判定与超时指纹）"
+      ? "噪音屏蔽：开（屏蔽 ECONNREFUSED/:3000、canvas-sync 重试、a11y 故意渲染的 error-boundary/lazy-chunk 故事 stderr；以及夹具 spawn 的 git 传输警告 / worktree 进度 / 设计内失败抬头、探针裸段名、ci-install-deps 夹具原话、storybook extensionless 警告块 —— #2823 + #2844 两张清单；不影响断言判定与超时指纹）"
       : null,
   };
 }
