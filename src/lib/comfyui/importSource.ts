@@ -65,7 +65,7 @@ export async function readLocalFile(absPath: string): Promise<{ mtimeMs: number;
     }
     throw new Error(errorText(error, "无法读取本地文件"), { cause: error });
   }
-  const text = await fs.readFile(absPath, "utf-8");
+  const text = await fs.readFile(absPath, "utf8");
   return { text, mtimeMs: stat.mtimeMs };
 }
 
@@ -219,7 +219,7 @@ export async function reimportFromSource(tpl: {
   }
 
   // mtime 变了（或此前没记 mtime）→ 读文件并重新解析。
-  const text = await fs.readFile(tpl.sourcePath, "utf-8");
+  const text = await fs.readFile(tpl.sourcePath, "utf8");
   const parsed = await parseWorkflowContent(text, {
     preferredTaskType: tpl.existingTaskType ?? "",
   });

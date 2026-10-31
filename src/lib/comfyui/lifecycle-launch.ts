@@ -262,7 +262,7 @@ export async function runEnsureLaunch(input: {
     stdioEnv: {
       ...process.env,
       ...eff.envVars,
-      PYTHONIOENCODING: "utf-8",
+      PYTHONIOENCODING: "utf8",
       PYTHONUTF8: "1",
     },
     deadline: input.timeoutMs != null ? Date.now() + input.timeoutMs : null,

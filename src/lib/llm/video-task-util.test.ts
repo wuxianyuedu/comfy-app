@@ -50,7 +50,7 @@ describe("saveMediaToLocalTemp · 路径落点", () => {
 
     expect(dest).not.toBeNull();
     expect(dest!.startsWith(join(sandbox, "temp", "usage-test", "my-model"))).toBe(true);
-    expect(readFileSync(dest!, "utf-8")).toBe("hello");
+    expect(readFileSync(dest!, "utf8")).toBe("hello");
     expect(localFiles()).toHaveLength(1);
   });
 

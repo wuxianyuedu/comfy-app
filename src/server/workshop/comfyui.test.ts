@@ -76,11 +76,7 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
 
     /* 用户照本模块话术手改文件（绕过 save）。mtime 可能同毫秒 ⇒ 指纹里带 size：
      * 这里连内容带体积一起改，任一变化都足以让指纹失配。 */
-    writeFileSync(
-      file,
-      JSON.stringify({ checkpoint: "hand_edited.safetensors" }, null, 2),
-      "utf-8",
-    );
+    writeFileSync(file, JSON.stringify({ checkpoint: "hand_edited.safetensors" }, null, 2), "utf8");
     expect(memo.load().checkpoint).toBe("hand_edited.safetensors");
   });
 
@@ -88,12 +84,12 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
     const dir = mkdtempSync(path.join(tmpdir(), "comfy-memo-"));
     tmpDirs.push(dir);
     const file = path.join(dir, "workshop-comfy-settings.json");
-    writeFileSync(file, '{"checkpoint":"a.safetensors"}', "utf-8");
+    writeFileSync(file, '{"checkpoint":"a.safetensors"}', "utf8");
     let reads = 0;
     const memo = createSettingsFileMemo(file, {
       read: (f) => {
         reads += 1;
-        return readFileSyncSync(f, "utf-8");
+        return readFileSyncSync(f, "utf8");
       },
       fingerprint: (f) => {
         try {
@@ -103,7 +99,7 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
           return null;
         }
       },
-      write: async (f, content) => writeFileSync(f, content, "utf-8"),
+      write: async (f, content) => writeFileSync(f, content, "utf8"),
     });
     expect(memo.load().checkpoint).toBe("a.safetensors");
     rmSync(file);
@@ -121,10 +117,10 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
     const memo = createSettingsFileMemo(file, {
       read: (f) => {
         reads += 1;
-        return readFileSyncSync(f, "utf-8");
+        return readFileSyncSync(f, "utf8");
       },
       fingerprint: () => null,
-      write: async (f, content) => writeFileSync(f, content, "utf-8"),
+      write: async (f, content) => writeFileSync(f, content, "utf8"),
     });
     await memo.save({ checkpoint: "a.safetensors" });
     memo.load();

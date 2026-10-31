@@ -88,7 +88,7 @@ let writer: RuntimeLogWriter | null = null;
 
 function appendTo(file: string, line: string): void {
   try {
-    fs.appendFileSync(/*turbopackIgnore: true*/ file, `${line}\n`, "utf-8");
+    fs.appendFileSync(/*turbopackIgnore: true*/ file, `${line}\n`, "utf8");
   } catch {
     // 日志写入失败绝不阻塞业务主流程
   }

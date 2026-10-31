@@ -37,7 +37,7 @@ const COMFY_SESSION_MARK = `${SERVICES_LOG_DIR}/comfyui-last-session.json`;
 
 export function readSessionMark(): ComfySessionMark | null {
   try {
-    const parsed: unknown = JSON.parse(fs.readFileSync(COMFY_SESSION_MARK, "utf-8"));
+    const parsed: unknown = JSON.parse(fs.readFileSync(COMFY_SESSION_MARK, "utf8"));
     if (parsed === null || typeof parsed !== "object") {
       return null;
     }
@@ -50,7 +50,7 @@ export function readSessionMark(): ComfySessionMark | null {
 function writeSessionMark(mark: ComfySessionMark): void {
   try {
     fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
-    fs.writeFileSync(COMFY_SESSION_MARK, JSON.stringify(mark), "utf-8");
+    fs.writeFileSync(COMFY_SESSION_MARK, JSON.stringify(mark), "utf8");
   } catch {
     /* 标记写不进去不该影响启动本身：最坏的结果只是下次启动少一条对账提示 */
   }
