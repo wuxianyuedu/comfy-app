@@ -147,7 +147,7 @@ function pruneOldFiles(): void {
 
 function safeAppend(filePath: string, text: string): void {
   try {
-    fs.appendFileSync(/*turbopackIgnore: true*/ filePath, text, "utf-8");
+    fs.appendFileSync(/*turbopackIgnore: true*/ filePath, text, "utf8");
   } catch {
     /* 面板日志写失败绝不影响应用 */
   }
@@ -232,7 +232,7 @@ export function installStreamCapture(): void {
       cb?: (err?: Error | null) => void,
     ): boolean {
       try {
-        const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf-8");
+        const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
         bufferedAppend(filePath, text);
       } catch {
         /* 转录失败不吞掉输出本身 */

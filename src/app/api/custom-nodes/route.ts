@@ -138,7 +138,7 @@ function readManifestSummary() {
     return null;
   }
   try {
-    const parsed: unknown = JSON.parse(fs.readFileSync(MANIFEST, "utf-8"));
+    const parsed: unknown = JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
     /* 清单体必须是「JSON 对象」，数组不算：`isRecord` 认数组，于是一份被写坏的清单
      * （`[]`）会被读成「解析过了，但一个节点都没有」—— 而界面把这两种当两件事：
      * 前者该提示「清单坏了」，后者是正常冷启动（台账 E9 记的就是这一族「不同因同形」）。
@@ -648,7 +648,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
           let report: unknown = null;
           try {
             if (fs.existsSync(REPORT)) {
-              report = JSON.parse(fs.readFileSync(REPORT, "utf-8"));
+              report = JSON.parse(fs.readFileSync(REPORT, "utf8"));
             }
           } catch {
             report = null;
@@ -703,7 +703,7 @@ async function buildGetResponse(): Promise<Response> {
   let lastReport: unknown = null;
   if (fs.existsSync(REPORT)) {
     try {
-      lastReport = JSON.parse(fs.readFileSync(REPORT, "utf-8"));
+      lastReport = JSON.parse(fs.readFileSync(REPORT, "utf8"));
     } catch {
       lastReport = null;
     }

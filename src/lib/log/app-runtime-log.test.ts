@@ -33,7 +33,7 @@ describe("app-runtime-log 行格式", () => {
   it("写出的行符合 [日期时间] [LEVEL] [ns] msg 面板可解析格式", () => {
     const log = createAppRuntimeLogger("task", logFile);
     log.info("任务完成 abc", { outputs: 2 });
-    const content = fs.readFileSync(logFile, "utf-8");
+    const content = fs.readFileSync(logFile, "utf8");
     expect(content).toMatch(
       /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] \[INFO\] \[task\] 任务完成 abc \{"outputs":2\}\n$/,
     );
@@ -44,7 +44,7 @@ describe("app-runtime-log 行格式", () => {
     log.warn("w");
     log.error("e");
     log.debug("d");
-    const lines = fs.readFileSync(logFile, "utf-8").trim().split("\n");
+    const lines = fs.readFileSync(logFile, "utf8").trim().split("\n");
     expect(lines).toHaveLength(3);
     expect(lines[0]).toContain("[WARN]");
     expect(lines[1]).toContain("[ERROR]");
@@ -55,14 +55,14 @@ describe("app-runtime-log 行格式", () => {
     const parent = createAppRuntimeLogger("trpc", logFile);
     const child = parent.child("generate");
     child.info("hi");
-    const content = fs.readFileSync(logFile, "utf-8");
+    const content = fs.readFileSync(logFile, "utf8");
     expect(content).toContain("[trpc:generate] hi");
   });
 
   it("未提供命名空间时不写 [ns] 段", () => {
     const log = createAppRuntimeLogger("", logFile);
     log.info("plain");
-    const content = fs.readFileSync(logFile, "utf-8");
+    const content = fs.readFileSync(logFile, "utf8");
     expect(content).toContain("[INFO] plain");
     expect(content).not.toContain("[INFO] [");
   });
@@ -70,7 +70,7 @@ describe("app-runtime-log 行格式", () => {
   it("字段序列化追加在消息后", () => {
     const log = createAppRuntimeLogger("app", logFile);
     log.info("gen", { durationMs: 25, type: "mutation" });
-    const content = fs.readFileSync(logFile, "utf-8");
+    const content = fs.readFileSync(logFile, "utf8");
     expect(content).toContain('"durationMs":25');
     expect(content).toContain('"type":"mutation"');
   });
@@ -87,7 +87,7 @@ describe("app-runtime-log 行格式", () => {
     const cyclic: Record<string, unknown> = { taskId: "t1" };
     cyclic.self = cyclic;
     expect(() => log.info("gen", cyclic)).not.toThrow();
-    const content = fs.readFileSync(logFile, "utf-8");
+    const content = fs.readFileSync(logFile, "utf8");
     expect(content).toContain("[app] gen <unserializable-fields>\n");
     expect(content).not.toContain('"taskId"');
   });
@@ -95,7 +95,7 @@ describe("app-runtime-log 行格式", () => {
   it("父命名空间为空时，子日志器直接用子段（不留一个空的 `:` 前缀）", () => {
     const child = createAppRuntimeLogger("", logFile).child("solo");
     child.info("hi");
-    const content = fs.readFileSync(logFile, "utf-8");
+    const content = fs.readFileSync(logFile, "utf8");
     expect(content).toContain("[INFO] [solo] hi");
     expect(content).not.toContain("[:]");
   });
@@ -148,7 +148,7 @@ describe("app-runtime-log 本次运行那一份（不传 file，走 writerFor）
     expect(packProbe.openRuntimeLogWriter).toHaveBeenCalledWith("app-runtime", at, undefined, {
       reuse: runtimeLogFileName("app-runtime", at),
     });
-    expect(fs.readFileSync(openedFile, "utf-8")).toContain("[INFO] [app] 第一行");
+    expect(fs.readFileSync(openedFile, "utf8")).toContain("[INFO] [app] 第一行");
   });
 
   it("句柄定下来之后不再变：第二次写不重开、也不重跑轮转", async () => {
@@ -160,7 +160,7 @@ describe("app-runtime-log 本次运行那一份（不传 file，走 writerFor）
 
     expect(packProbe.openRuntimeLogWriter).toHaveBeenCalledTimes(1);
     expect(packProbe.pruneRuntimeLogFiles).toHaveBeenCalledTimes(1);
-    const lines = fs.readFileSync(openedFile, "utf-8").trim().split("\n");
+    const lines = fs.readFileSync(openedFile, "utf8").trim().split("\n");
     expect(lines).toHaveLength(2);
     expect(lines[1]).toContain("[WARN] [app] 二");
   });
@@ -174,6 +174,6 @@ describe("app-runtime-log 本次运行那一份（不传 file，走 writerFor）
     /* 只给 source：`at` / `dir` / `options` 全部留给 openRuntimeLogWriter 的默认值 ——
      * 自己拼名字的后果是写进一份「谁都认不出、也不在轮转清单里」的文件。 */
     expect(packProbe.openRuntimeLogWriter).toHaveBeenCalledWith("app-runtime");
-    expect(fs.readFileSync(openedFile, "utf-8")).toContain("[INFO] [app] 非双击链路");
+    expect(fs.readFileSync(openedFile, "utf8")).toContain("[INFO] [app] 非双击链路");
   });
 });

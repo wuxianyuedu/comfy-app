@@ -121,7 +121,7 @@ function readSettingsFile(): { fingerprint: string; raw: string | null } {
     const raw = fs.readFileSync(/*turbopackIgnore: true*/ SETTINGS_FILE);
     return {
       fingerprint: hash("sha1", raw, "hex"),
-      raw: raw.toString("utf-8"),
+      raw: raw.toString("utf8"),
     };
   } catch {
     return { fingerprint: "", raw: null };
@@ -161,7 +161,7 @@ export async function saveSettings(partial: Partial<AppSettings>): Promise<AppSe
   const next: AppSettings = { ...getSettingsSync(), ...partial };
   cache = next;
   await fs.promises.mkdir(path.dirname(SETTINGS_FILE), { recursive: true });
-  await fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(next, null, 2), "utf-8");
+  await fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(next, null, 2), "utf8");
   /* 落盘后把指纹对齐到刚写的这一份：不这样做的话，下一次读会拿「自己刚写进去的
    * 内容」判成外部改动、白白重读一遍（读出来还是同一份，只是白花一次 IO）。
    * 别的进程（执行宿主）不受这里影响，它自己按文件指纹重读。 */

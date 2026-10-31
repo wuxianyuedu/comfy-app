@@ -363,7 +363,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // 文本产物（ShowText）：存成 .txt，结果可读可查。
   for (const [i, text] of texts.entries()) {
     const fname = `txt_${i}.txt`;
-    await fs.writeFile(path.join(dir, fname), text, "utf-8");
+    await fs.writeFile(path.join(dir, fname), text, "utf8");
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "text" });
     log(taskId, "info", `保存第 ${i + 1} 段文本`);
   }
@@ -465,7 +465,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     files: saved,
   };
   await fs
-    .writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8")
+    .writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8")
     .catch(() => undefined);
 
   // 落盘本次执行实际用到的 workflow.json。种子等已在
@@ -474,11 +474,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // 已展开 graph。
   if (executedWorkflow != null) {
     await fs
-      .writeFile(
-        path.join(dir, "workflow.json"),
-        JSON.stringify(executedWorkflow, null, 2),
-        "utf-8",
-      )
+      .writeFile(path.join(dir, "workflow.json"), JSON.stringify(executedWorkflow, null, 2), "utf8")
       .catch(() => undefined);
   }
 

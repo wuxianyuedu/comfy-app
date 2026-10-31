@@ -199,7 +199,7 @@ export async function composeFilm(id: string) {
         // 空串标题也要回落到 prompt（|| 语义），沿用既有行为。
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
         const srtText = (shot.heading || shot.prompt).slice(0, 80);
-        await fs.writeFile(srtPath, buildSrtBody({ text: srtText, dur }), "utf-8");
+        await fs.writeFile(srtPath, buildSrtBody({ text: srtText, dur }), "utf8");
       }
 
       const tryWithSub = film.subtitleOn;
@@ -231,7 +231,7 @@ export async function composeFilm(id: string) {
     // concat
     const list = shots.map((_, i) => `file 'seg_${i}.mp4'`).join("\n");
     const listPath = path.join(tmpDir, "segs.txt");
-    await fs.writeFile(listPath, list, "utf-8");
+    await fs.writeFile(listPath, list, "utf8");
     const concatPath = path.join(tmpDir, "concat.mp4");
     const cres = await runFFmpeg(
       ["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", concatPath],

@@ -59,7 +59,7 @@ async function writerForStop(): Promise<RuntimeLogWriter> {
 
 function appendTo(file: string, line: string): void {
   try {
-    fs.appendFileSync(/*turbopackIgnore: true*/ file, `${line}\n`, "utf-8");
+    fs.appendFileSync(/*turbopackIgnore: true*/ file, `${line}\n`, "utf8");
   } catch {
     /* 日志失败不影响主流程 */
   }

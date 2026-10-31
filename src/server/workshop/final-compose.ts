@@ -84,7 +84,7 @@ export async function writeCompositionPlan(
 ): Promise<string> {
   await fs.mkdir(COMPOSE_DIR, { recursive: true });
   const file = path.join(COMPOSE_DIR, `${sessionId}.json`);
-  await fs.writeFile(file, JSON.stringify(plan, null, 2), "utf-8");
+  await fs.writeFile(file, JSON.stringify(plan, null, 2), "utf8");
   return file;
 }
 
@@ -188,7 +188,7 @@ export async function renderComposition(
   await fs.writeFile(
     listFile,
     segs.map((p) => `file '${p.replace(/'/g, String.raw`'\''`)}'`).join("\n"),
-    "utf-8",
+    "utf8",
   );
   const out = path.join(COMPOSE_DIR, `${outputName}.mp4`);
   try {

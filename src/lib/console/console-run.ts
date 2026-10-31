@@ -195,7 +195,7 @@ export function createConsoleRunner(): ConsoleRunner {
            * `drizzle-kit` 的中文输出会先被编码成 GBK 再被我们按 utf-8 解 ——
            * 用户看到的是乱码，且看不出是编码问题（与 `executor-cli.ts` 给
            * Python 那两个变量同源的口径）。 */
-          PYTHONIOENCODING: "utf-8",
+          PYTHONIOENCODING: "utf8",
           PYTHONUTF8: "1",
         },
       });
