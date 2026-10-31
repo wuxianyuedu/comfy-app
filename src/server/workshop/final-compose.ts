@@ -187,7 +187,7 @@ export async function renderComposition(
   const listFile = path.join(tmpDir, "list.txt");
   await fs.writeFile(
     listFile,
-    segs.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n"),
+    segs.map((p) => `file '${p.replace(/'/g, String.raw`'\''`)}'`).join("\n"),
     "utf-8",
   );
   const out = path.join(COMPOSE_DIR, `${outputName}.mp4`);

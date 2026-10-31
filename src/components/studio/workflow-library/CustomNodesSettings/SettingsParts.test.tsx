@@ -145,7 +145,7 @@ describe("ParseProgressBanner", () => {
           phase: "hash",
           done: 3,
           total: 8,
-          parent: "C:\\ComfyUI\\custom_nodes\\ipadapter_plus",
+          parent: String.raw`C:\ComfyUI\custom_nodes\ipadapter_plus`,
           msg: "hashing packages…",
         }}
       />,

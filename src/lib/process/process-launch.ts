@@ -92,7 +92,7 @@ export function escapePwshSingle(s: string): string {
  * 含空格的参数必须由元素自带引号才不会被拆分。
  */
 function toStartProcessElement(arg: string): string {
-  return escapePwshSingle(`"${arg.replace(/"/g, '\\"')}"`);
+  return escapePwshSingle(`"${arg.replace(/"/g, String.raw`\"`)}"`);
 }
 
 /**

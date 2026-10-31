@@ -290,7 +290,7 @@ describe("POST /api/materials —— 上传", () => {
       uploadForm({
         projectId: "proj-a",
         folder: "docs",
-        name: "..\\..\\evil.txt",
+        name: String.raw`..\..\evil.txt`,
       }),
     );
     expect(disk.writeFile[0]).toBe(path.join(ROOT, "proj-a", "docs", "evil.txt"));

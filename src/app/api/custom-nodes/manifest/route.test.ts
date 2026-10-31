@@ -17,7 +17,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { userMock, readMock, pathMock } = vi.hoisted(() => ({
   userMock: vi.fn<() => Promise<{ id: string } | null>>(),
   readMock: vi.fn(),
-  pathMock: vi.fn(() => "C:\\repo\\src\\generated\\customNodes.manifest.json"),
+  pathMock: vi.fn(() => String.raw`C:\repo\src\generated\customNodes.manifest.json`),
 }));
 
 vi.mock("~/server/auth/request-user", () => ({

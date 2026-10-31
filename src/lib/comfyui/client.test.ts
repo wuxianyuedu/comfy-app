@@ -43,10 +43,10 @@ import { resolveComfyLaunchPlan } from "./launch-path";
 import { logger } from "~/lib/core/logger";
 
 const plan = {
-  cmd: "D:\\Comfy\\ComfyUI\\.venv\\Scripts\\python.exe",
-  baseArgs: ["-s", "D:\\Comfy\\ComfyUI\\main.py"],
-  cwd: "D:\\Comfy\\ComfyUI",
-  mainPy: "D:\\Comfy\\ComfyUI\\main.py",
+  cmd: String.raw`D:\Comfy\ComfyUI\.venv\Scripts\python.exe`,
+  baseArgs: ["-s", String.raw`D:\Comfy\ComfyUI\main.py`],
+  cwd: String.raw`D:\Comfy\ComfyUI`,
+  mainPy: String.raw`D:\Comfy\ComfyUI\main.py`,
 };
 
 /** 只让指定端口应答 `/system_stats`，其余连接一律拒绝。 */
@@ -66,7 +66,7 @@ beforeEach(() => {
   resetProbeMissLog();
   vi.mocked(getSettingsSync).mockReturnValue(
     /* SAFETY: 类型断言已复核 */ {
-      comfyuiPath: "D:\\Comfy",
+      comfyuiPath: String.raw`D:\Comfy`,
       comfyuiPort: 8188,
     } as never,
   );

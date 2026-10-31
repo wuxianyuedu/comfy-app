@@ -205,14 +205,14 @@ describe("useQueueMonitor", () => {
   it("打开输出目录：成功时报的是服务端探出来的定位结论", async () => {
     mockedReveal.mockResolvedValue({
       ok: true,
-      detail: "已在文件管理器里定位：F:\\gen\\task-late",
+      detail: String.raw`已在文件管理器里定位：F:\gen\task-late`,
     });
     const { result } = renderHook(() => useQueueMonitor());
     await act(async () => {
       await result.current.openFolder(queuedRow("late", "后提交的工作流"));
     });
     expect(mockedReveal).toHaveBeenCalledWith("late");
-    expect(toast.info).toHaveBeenCalledWith("已在文件管理器里定位：F:\\gen\\task-late");
+    expect(toast.info).toHaveBeenCalledWith(String.raw`已在文件管理器里定位：F:\gen\task-late`);
     expect(toast.error).not.toHaveBeenCalled();
   });
 

@@ -96,8 +96,7 @@ describe("selectionInsideLogs 选区是否落在日志正文里", () => {
  */
 describe("词法上色里的路径区间", () => {
   /** 用户贴图那行命令回显（两个带空格的路径 + 一堆开关）。 */
-  const ECHO =
-    '>>> "C:\\Program Files\\PowerShell\\7\\pwsh.EXE" -NoProfile -ExecutionPolicy Bypass -File "D:\\Program Files\\nodejs\\pnpm.ps1" -v';
+  const ECHO = String.raw`>>> "C:\Program Files\PowerShell\7\pwsh.EXE" -NoProfile -ExecutionPolicy Bypass -File "D:\Program Files\nodejs\pnpm.ps1" -v`;
 
   it("带空格的路径整条上色，不在第一个空格处断开", () => {
     expect(
@@ -105,15 +104,15 @@ describe("词法上色里的路径区间", () => {
         .filter((token) => token.style !== undefined)
         .map((token) => token.text),
     ).toEqual([
-      "C:\\Program Files\\PowerShell\\7\\pwsh.EXE",
-      "D:\\Program Files\\nodejs\\pnpm.ps1",
+      String.raw`C:\Program Files\PowerShell\7\pwsh.EXE`,
+      String.raw`D:\Program Files\nodejs\pnpm.ps1`,
     ]);
   });
 
   it("分片拼回去逐字等于原文（切分不许吃字，也不出重复段）", () => {
     for (const line of [
       ECHO,
-      "项目根: F:\\AI\\Other\\comfy-app-t3-branch4",
+      String.raw`项目根: F:\AI\Other\comfy-app-t3-branch4`,
       "[OK] 阶段: 壳已接手（双击 app.exe）",
       "见 https://cnb.cool/moon-read/comfy-app-t3/-/issues/1365",
     ]) {

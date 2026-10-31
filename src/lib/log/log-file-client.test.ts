@@ -169,7 +169,7 @@ describe("saveLogExport —— 导出到本机", () => {
   it("POST 带上 label 与正文，并把服务端写下的路径原样回传", async () => {
     const payload = {
       ok: true,
-      path: "C:\\log\\exports\\a.log",
+      path: String.raw`C:\log\exports\a.log`,
       relativePath: "exports/a.log",
       bytes: 12,
     };
@@ -219,7 +219,7 @@ describe("saveDiagnosticsPackage —— 打包整份诊断现场", () => {
   it("POST 到诊断端点，不带请求体（现场由服务端自己收）", async () => {
     const payload = {
       ok: true,
-      path: "C:\\log\\exports\\diagnostics.zip",
+      path: String.raw`C:\log\exports\diagnostics.zip`,
       relativePath: "exports/diagnostics.zip",
       bytes: 4096,
     };

@@ -14,7 +14,7 @@ import { artifactDiskPath, generatedRoot } from "~/lib/media/output-paths";
 
 /** ffmpeg 滤镜表达式里的字符转义（单引号与冒号）。 */
 function escapeFilter(s: string): string {
-  return s.replace(/'/g, "\\'").replace(/:/g, "\\:");
+  return s.replace(/'/g, String.raw`\'`).replace(/:/g, String.raw`\:`);
 }
 
 /** 单个镜头归一化到统一画幅 / 帧率并首尾淡入淡出的 `vf` 滤镜串。

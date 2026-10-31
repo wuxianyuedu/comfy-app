@@ -56,6 +56,6 @@ describe("isVideo 视频源判定", () => {
   it("非字符串类型的空值兜底不影响正常路径", () => {
     // 正常路径回归:真实 URL 与本地路径
     expect(isVideo("file:///D:/media/demo.mov")).toBe(true);
-    expect(isVideo("C:\\media\\demo.mp4")).toBe(true);
+    expect(isVideo(String.raw`C:\media\demo.mp4`)).toBe(true);
   });
 });

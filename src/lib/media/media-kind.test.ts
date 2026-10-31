@@ -12,15 +12,7 @@ import { isAudio, isVideo, kindOf } from "./media-kind";
 
 describe("kindOf 媒体种类推导", () => {
   it("常见图片扩展名 → image", () => {
-    for (const name of [
-      "a.png",
-      "a.jpg",
-      "a.jpeg",
-      "a.webp",
-      "a.bmp",
-      "a.avif",
-      "a.svg",
-    ]) {
+    for (const name of ["a.png", "a.jpg", "a.jpeg", "a.webp", "a.bmp", "a.avif", "a.svg"]) {
       expect(kindOf(name), name).toBe("image");
     }
   });
@@ -32,15 +24,7 @@ describe("kindOf 媒体种类推导", () => {
   });
 
   it("视频扩展名全集 → video（含 mkv/avi/ogg/m4v）", () => {
-    for (const name of [
-      "a.mp4",
-      "a.webm",
-      "a.mov",
-      "a.mkv",
-      "a.avi",
-      "a.ogg",
-      "a.m4v",
-    ]) {
+    for (const name of ["a.mp4", "a.webm", "a.mov", "a.mkv", "a.avi", "a.ogg", "a.m4v"]) {
       expect(kindOf(name), name).toBe("video");
     }
   });
@@ -65,7 +49,7 @@ describe("kindOf 媒体种类推导", () => {
     expect(kindOf("https://cdn.example.com/v/clip.mp4")).toBe("video");
     expect(kindOf("/abs/path/clip.webm")).toBe("video");
     expect(kindOf("file:///D:/media/demo.mov")).toBe("video");
-    expect(kindOf("C:\\media\\demo.mp4")).toBe("video");
+    expect(kindOf(String.raw`C:\media\demo.mp4`)).toBe("video");
   });
 
   it("无扩展名 / 未知扩展名 → doc", () => {
@@ -92,16 +76,7 @@ describe("kindOf 媒体种类推导", () => {
 
 describe("isVideo / isAudio 与 kindOf 同源", () => {
   it("两者只是 kindOf 的语法糖，不存在第二份判据", () => {
-    const samples = [
-      "a.png",
-      "a.gif",
-      "a.mp4",
-      "a.mkv",
-      "a.ogg",
-      "a.mp3",
-      "a.txt",
-      "",
-    ];
+    const samples = ["a.png", "a.gif", "a.mp4", "a.mkv", "a.ogg", "a.mp3", "a.txt", ""];
     for (const sample of samples) {
       expect(isVideo(sample), sample).toBe(kindOf(sample) === "video");
       expect(isAudio(sample), sample).toBe(kindOf(sample) === "audio");
