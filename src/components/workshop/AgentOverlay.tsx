@@ -301,7 +301,7 @@ export function AgentOverlay({
              * 直接把`onChange` 换成适配器 —— 取值本身仍走出口。 */
             readTextInput(event, setInput);
             event.target.style.height = "auto";
-            event.target.style.height = Math.min(event.target.scrollHeight, 80) + "px";
+            event.target.style.height = `${Math.min(event.target.scrollHeight, 80)}px`;
           }}
           ref={taRef}
           value={input}

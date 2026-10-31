@@ -155,7 +155,7 @@ export function MultiSegmentPopover({
         {sections.map((section, i) => (
           <Section
             first={i === 0}
-            key={section.label + ":" + (section.value ?? "")}
+            key={`${section.label}:${section.value ?? ""}`}
             section={section}
           />
         ))}

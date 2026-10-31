@@ -441,7 +441,7 @@ function runDiscoverStreaming(
           type: "progress",
           parent,
           phase: "scan",
-          msg: "⚠️ " + line,
+          msg: `⚠️ ${line}`,
         });
       });
 
@@ -502,7 +502,7 @@ function runDiscoverStreaming(
             type: "progress",
             parent,
             phase: "scan",
-            msg: "⚠️ 解析失败，退出码 " + code,
+            msg: `⚠️ 解析失败，退出码 ${code}`,
           });
           resolve([]);
         }
@@ -539,7 +539,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const send = (ev: ParseStreamEvent) =>
-        controller.enqueue(encoder.encode(JSON.stringify(ev) + "\n"));
+        controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
 
       const scriptArgs = [
         "-u",
@@ -743,7 +743,7 @@ async function buildGetResponse(): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (ev: SettingsStreamEvent) =>
-        controller.enqueue(encoder.encode(JSON.stringify(ev) + "\n"));
+        controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
       try {
         send({ type: "discover_start", parents: paths, total: paths.length });
         const discoveredByParent: Record<string, Array<unknown>> = {};

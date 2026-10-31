@@ -73,10 +73,11 @@ export function ShotFilmStrip({
                 className={
                   // 固定尺寸 + 不收缩：一帧被压扁，整条带子的对齐就没了。
                   // `p-0` 把按钮内边距让给封面；状态条贴在底边，不参与布局。
-                  "relative size-16 shrink-0 overflow-hidden rounded-lg border p-0 transition-colors" +
-                  (shot.status === "failed"
-                    ? " border-destructive/50 bg-destructive/10"
-                    : " border-border bg-subtle hover:bg-surface-2")
+                  `relative size-16 shrink-0 overflow-hidden rounded-lg border p-0 transition-colors${
+                    shot.status === "failed"
+                      ? " border-destructive/50 bg-destructive/10"
+                      : " border-border bg-subtle hover:bg-surface-2"
+                  }`
                 }
                 onClick={() => onJump(shot)}
                 type="button"

@@ -151,7 +151,7 @@ async function parseScriptToShots(
     });
     scenes = sc.map((scene) => ({
       heading: scene.heading,
-      action: `${scene.action}${scene.dialogue ? " " + scene.dialogue : ""}`,
+      action: `${scene.action}${scene.dialogue ? ` ${scene.dialogue}` : ""}`,
       shotCount: scene.shotCount,
     }));
   }

@@ -32,20 +32,16 @@ export function HistoryTaskCard({
   const st = STATUS_STYLE[task.status] ?? QUEUED_STATUS_STYLE;
   return (
     <div
-      className={
-        "group bg-card hover:bg-subtle relative overflow-hidden rounded-2xl border border-l-4 py-3 pr-3 pl-5 transition-all " +
-        st.accentCls +
-        " " +
-        st.cardBorderCls
-      }
+      className={`group bg-card hover:bg-subtle relative overflow-hidden rounded-2xl border border-l-4 py-3 pr-3 pl-5 transition-all ${
+        st.accentCls
+      } ${st.cardBorderCls}`}
       key={task.id}
     >
       {/* 左缘 accent 额外强调（border-l-4 已在父级，再叠一层高亮条） */}
       <div
         aria-hidden
-        className={
-          "absolute top-0 bottom-0 left-0 w-1 " +
-          (task.status === "SUCCEEDED"
+        className={`absolute top-0 bottom-0 left-0 w-1 ${
+          task.status === "SUCCEEDED"
             ? "bg-success"
             : task.status === "RUNNING"
               ? "bg-primary"
@@ -53,8 +49,8 @@ export function HistoryTaskCard({
                 ? "bg-destructive"
                 : task.status === "QUEUED"
                   ? "bg-info"
-                  : "bg-gray-500")
-        }
+                  : "bg-gray-500"
+        }`}
       />
 
       <div className="flex items-center gap-4">

@@ -38,7 +38,7 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
   const draggable = !!data.draggable;
   return (
     <div
-      className={"relative h-full w-full rounded-md " + (draggable ? "cursor-move" : "")}
+      className={`relative h-full w-full rounded-md ${draggable ? "cursor-move" : ""}`}
       style={{
         background: fill,
         border: `1.5px solid ${border}`,

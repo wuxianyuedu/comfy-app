@@ -273,7 +273,7 @@ describe("resolveMediaDataUrl", () => {
 
 describe("readUpstreamJson / 字段守卫", () => {
   it("上游回非 JSON 时给出状态码与被截断的片段（长响应不许整包进错误）", async () => {
-    const long = "<html>" + "x".repeat(4_000) + "</html>";
+    const long = `<html>${"x".repeat(4_000)}</html>`;
     const message = await readUpstreamJson(new Response(long, { status: 502 })).then(
       () => "",
       (e: unknown) => (e instanceof Error ? e.message : String(e)),

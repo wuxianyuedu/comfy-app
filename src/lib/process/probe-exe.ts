@@ -226,9 +226,10 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
    *     日志实现：那是跨宿主地基层，裸 Node 加载期会 `ERR_MODULE_NOT_FOUND`（见文件头）；
    *   · `options.report` —— 调用方自己那只眼睛。测试夹具要的是**屏幕上**那一眼，
    *     logger 写到盘上去了，跑用例的人在终端上是看不见的。 */
-  const line =
-    `本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
-    describeProbeMisses(got.missed, got.timeouts);
+  const line = `本机没有可用的 ${options.label}，相关用例跳过（不是通过）：${describeProbeMisses(
+    got.missed,
+    got.timeouts,
+  )}`;
   emit("warn", `[probe] ${line}`);
   try {
     options.report?.(line);

@@ -539,7 +539,7 @@ function siblingFallback(
   { env = process.env, platform = process.platform }: WhichCommandOptions = {},
 ): CommandUsability | null {
   const ext = path.extname(candidate);
-  const script = (ext ? candidate.slice(0, -ext.length) : candidate) + ".ps1";
+  const script = `${ext ? candidate.slice(0, -ext.length) : candidate}.ps1`;
   if (!isFile(script)) {
     return null;
   }

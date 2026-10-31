@@ -184,7 +184,7 @@ export function WorkflowNode({
             className={`text-3xs font-mono font-semibold ${NODE_SEQ_CHIP_TEXT}`}
             style={{ fontFamily: "var(--font-mono)" }}
           >
-            {nodeSeq !== null ? `#${nodeSeq}` : `#${id.length > 10 ? id.slice(0, 9) + "…" : id}`}
+            {nodeSeq !== null ? `#${nodeSeq}` : `#${id.length > 10 ? `${id.slice(0, 9)}…` : id}`}
           </span>
         </WorkflowNodePill>
       </div>
@@ -261,7 +261,7 @@ export function WorkflowNode({
             const oLabel = ioLabel(output, [...inputs, ...outputs]);
             const oType = output.type;
             return (
-              <div className="relative" key={output.nodeId + ":" + output.name}>
+              <div className="relative" key={`${output.nodeId}:${output.name}`}>
                 {/* 圆点几何位置上推 2px — 用户反馈
                  *  的 `top:16`（= labelRow 中线 y=16）虽然几何计算
                  *  完美（pt-1.5=6 + h-5/2=10 = 16），但实际渲染圆点仍视觉下

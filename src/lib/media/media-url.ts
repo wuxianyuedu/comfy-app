@@ -52,15 +52,11 @@ export function comfyImageUrl(ref: ComfyMediaRef): string | null {
   if (filename === "") {
     return null;
   }
-  return (
-    IMAGES_ENDPOINT +
-    "?" +
-    buildQueryString({
-      filename,
-      subfolder: ref.subfolder,
-      type: ref.type ?? "input",
-    })
-  );
+  return `${IMAGES_ENDPOINT}?${buildQueryString({
+    filename,
+    subfolder: ref.subfolder,
+    type: ref.type ?? "input",
+  })}`;
 }
 
 /**

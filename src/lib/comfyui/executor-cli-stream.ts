@@ -167,9 +167,7 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
       return `  · ${node}${field}：${hint}${tail}`;
     });
     const more = list.length > 12 ? `\n  …还有 ${list.length - 12} 处` : "";
-    return (
-      "工作流校验未通过（comfy-cli 对照服务端校验），请修正后重新执行：\n" + lines.join("\n") + more
-    );
+    return `工作流校验未通过（comfy-cli 对照服务端校验），请修正后重新执行：\n${lines.join("\n")}${more}`;
   }
   const message =
     /* SAFETY: 类型断言已复核 */
@@ -279,7 +277,7 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
       doTrace("cli", taskId, "stdout 非 JSON 行", { line });
       if (nonJsonLines <= MAX_NON_JSON_LINES) {
         const trimmed =
-          line.length > NON_JSON_LINE_CHARS ? line.slice(0, NON_JSON_LINE_CHARS) + "…" : line;
+          line.length > NON_JSON_LINE_CHARS ? `${line.slice(0, NON_JSON_LINE_CHARS)}…` : line;
         log(taskId, "info", `[comfy-cli stdout] ${trimmed}`);
       } else if (nonJsonLines === MAX_NON_JSON_LINES + 1) {
         log(taskId, "info", `[comfy-cli stdout] …后续非 JSON 行已省略（查看后端日志）`);
@@ -463,7 +461,7 @@ export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
       deps.rawCli?.(taskId, `[comfy-cli stderr] ${trimmed}`);
       if (errLines <= STDERR_MAX_LINES) {
         const t =
-          trimmed.length > STDERR_LINE_CHARS ? trimmed.slice(0, STDERR_LINE_CHARS) + "…" : trimmed;
+          trimmed.length > STDERR_LINE_CHARS ? `${trimmed.slice(0, STDERR_LINE_CHARS)}…` : trimmed;
         log(taskId, "warn", `[comfy-cli stderr] ${t}`);
       } else if (errLines === STDERR_MAX_LINES + 1) {
         log(taskId, "warn", `[comfy-cli stderr] …后续行已省略（完整内容在进程退出汇总）`);
@@ -525,9 +523,9 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
         log(
           taskId,
           "error",
-          `  · 节点 ${ve.nodeId}${ve.classType ? ` (${ve.classType})` : ""}` +
-            (ve.field ? ` · 字段 ${ve.field}` : "") +
-            `：${ve.message}`,
+          `  · 节点 ${ve.nodeId}${ve.classType ? ` (${ve.classType})` : ""}${
+            ve.field ? ` · 字段 ${ve.field}` : ""
+          }：${ve.message}`,
         );
       });
       if (validationErrors.length > 12) {

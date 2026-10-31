@@ -229,8 +229,11 @@ export async function claimAndDispatchOnce(options?: {
     log(
       taskId,
       "info",
-      `输入参数（workflowInputs，${job.overrides.length} 项）：\n` +
-        JSON.stringify(job.overrides, null, 2),
+      `输入参数（workflowInputs，${job.overrides.length} 项）：\n${JSON.stringify(
+        job.overrides,
+        null,
+        2,
+      )}`,
     );
   }
 
