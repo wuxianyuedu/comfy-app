@@ -174,7 +174,7 @@ function placeholderCandidates(candidates: Iterable<string>): Set<string> {
 
 /** 文件归属用**带边界**的匹配，别拿子串：短属性名是那枚长候选名的子串，会被算成它的出处。 */
 function spelledIn(text: string, candidate: string): boolean {
-  const escaped = candidate.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = candidate.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   return new RegExp(`(^|[^\\w-])${escaped}(?![\\w-])`).test(text);
 }
 

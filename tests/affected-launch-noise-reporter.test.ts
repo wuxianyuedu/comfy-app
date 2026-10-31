@@ -177,7 +177,7 @@ describe("FIXTURE_NOISE_PATTERN —— 夹具 / 探针输出的良性形态", ()
     // 负向用例按设计造的 git 失败（junit 保全量，见判据文件头的交换说明）
     "fatal: not a git repository (or any of the parent directories): .git",
     // e2e-run 设计内失败抬头 + 它的箭头注解
-    "[e2e-run/test] × 起不了 Playwright（G:\\runner\\…\\no-such-playwright-runner）：失败码 ENOENT —— 盘上没有 / 起不来的形态见 resolveCommandInvocation（§2.1.1）",
+    String.raw`[e2e-run/test] × 起不了 Playwright（G:\runner\…\no-such-playwright-runner）：失败码 ENOENT —— 盘上没有 / 起不来的形态见 resolveCommandInvocation（§2.1.1）`,
     "          ↑ 这条是**判据按设计造的失败**（负向用例要的正是这个出口），不是这一跑起不来。",
     // ci-env-probe 的裸段名抬头（×6；只收裸行，带内容的行是真读数）
     "[ports]",
@@ -191,7 +191,7 @@ describe("FIXTURE_NOISE_PATTERN —— 夹具 / 探针输出的良性形态", ()
     // storybook extensionless 警告块（触发行 / 框线行 / 超链接包装）
     "▲  One or more extensionless imports detected: \"./app-origin-defaults\" in",
     "│  file",
-    "│  \"G:\\runner\\…\\.storybook\\main.ts\".",
+    String.raw`│  "G:\runner\…\.storybook\main.ts".`,
     "│  For more information on how to resolve the issue:",
     "]8;;https://storybook.js.org/docs/faq#extensionless-imports-in-storybookmaints-and-required-ts-extensionshttps://storybook.js.org/docs/faq#extensionless-imports-in-st...]8;;",
     // 孤立 x 行（两次构建都在场、源未定位 —— 按观察形态收，见判据文件头）

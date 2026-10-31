@@ -733,7 +733,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     const section = doc.slice(start, doc.indexOf("## Layout", start));
     const undocumented = [...inUse.keys()]
       .sort((a, b) => Number(a) - Number(b))
-      .filter((v) => !new RegExp(`(^|[^\\d.])${v.replace(".", "\\.")}px`).test(section));
+      .filter((v) => !new RegExp(`(^|[^\\d.])${v.replace(".", String.raw`\.`)}px`).test(section));
     expect(
       undocumented,
       "这些字号在代码里用着、却没写进那一节（或写了但没有角色）：" +

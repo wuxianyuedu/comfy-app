@@ -257,11 +257,11 @@ module.exports = {
       }
       let hits = 0;
       for (const setter of setters) {
-        const off = new RegExp("\\b" + setter + "\\(\\s*false\\s*\\)");
+        const off = new RegExp(String.raw`\b` + setter + String.raw`\(\s*false\s*\)`);
         if (!off.test(t2)) {
           continue;
         }
-        const on = new RegExp("\\b" + setter + "\\(\\s*true\\s*\\)", "g");
+        const on = new RegExp(String.raw`\b` + setter + String.raw`\(\s*true\s*\)`, "g");
         let o;
         while ((o = on.exec(t2)) !== null) {
           /* 取置忙之后的一段，够跨过动作体（含 NDJSON 流式消费那种长回调）。 */
@@ -322,9 +322,9 @@ module.exports = {
           continue;
         }
         const window = t2.slice(m.index, m.index + 900);
-        const writes = (window.match(new RegExp("\\b" + name + "\\.current\\s*=", "g")) || [])
+        const writes = (window.match(new RegExp(String.raw`\b` + name + String.raw`\.current\s*=`, "g")) || [])
           .length;
-        const reads = (window.match(new RegExp("!?\\b" + name + "\\.current", "g")) || []).length;
+        const reads = (window.match(new RegExp(String.raw`!?\b` + name + String.raw`\.current`, "g")) || []).length;
         if (writes >= 1 && reads >= 2) {
           hits++;
         }

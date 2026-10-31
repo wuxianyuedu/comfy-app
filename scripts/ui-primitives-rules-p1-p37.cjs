@@ -152,7 +152,7 @@ module.exports = {
       let n = 0;
       for (const flip of flips) {
         const src = /!\s*([A-Za-z_$][\w$]*)\s*\[/.exec(flip)?.[1];
-        if (src && new RegExp("\\.\\.\\.\\s*" + src + "\\b").test(t2)) {
+        if (src && new RegExp(String.raw`\.\.\.\s*` + src + String.raw`\b`).test(t2)) {
           n++;
         }
       }

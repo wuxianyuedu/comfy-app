@@ -37,8 +37,8 @@ import { resolveCiWorkers } from "./scripts/ci-load.mjs";
  * **不要为了省几行文件头去 `exclude` 少数派** —— 见上面 `projects` 的注释。
  */
 const DOM_TEST_GLOBS = [
-  "src/app/\\(main\\)/settings/components/**/*.test.{ts,tsx}",
-  "src/app/\\(main\\)/settings/hooks/**/*.test.{ts,tsx}",
+  String.raw`src/app/\(main\)/settings/components/**/*.test.{ts,tsx}`,
+  String.raw`src/app/\(main\)/settings/hooks/**/*.test.{ts,tsx}`,
   "src/components/agent-run/**/*.test.{ts,tsx}",
   "src/components/agent-run/hooks/**/*.test.{ts,tsx}",
   "src/components/code-update/**/*.test.{ts,tsx}",
@@ -435,7 +435,7 @@ const BASE_CONFIG = defineConfig({
          * **整层不在覆盖率面上** —— 既不在 `src/lib` 也不在 `src/server` 的通配里，
          * 于是路由的鉴权 / 路径包含 / 状态码契约坏了没有任何数字会动。
          * 与下面的 `thresholds` **两处同批**登记（只写一处 = 门槛静默失效）。 */
-        "src/app/api/generated/\\[...path\\]/route.ts",
+        String.raw`src/app/api/generated/\[...path\]/route.ts`,
         "src/app/api/debug/source/route.ts",
         "src/app/api/comfy/stats/route.ts",
         "src/app/api/comfy/queue/route.ts",
@@ -605,8 +605,8 @@ const BASE_CONFIG = defineConfig({
          * 只写门槛不进 `include` 会让门槛静默失效（`ui/file-picker.tsx` 的前车之鉴）。
          * ⚠️ 路由组名 `(main)` 里的括号是 glob 分组语法，必须转义 —— 写成字面量
          * 时条目**静默不匹配**（同 `\\[...path\\]` 那条动态段）。 */
-        "src/app/\\(main\\)/settings/comfyui-storage-paths-config.ts",
-        "src/app/\\(main\\)/settings/components/ComfyuiStoragePaths.tsx",
+        String.raw`src/app/\(main\)/settings/comfyui-storage-paths-config.ts`,
+        String.raw`src/app/\(main\)/settings/components/ComfyuiStoragePaths.tsx`,
         /* 台账 E9 这一刀（自定义节点注册表的灌入链）带出的四个出口，**两处同批**
          * 登记（`coverage.include` + `thresholds`）——只写门槛不进 `include` 会让
          * 门槛静默失效（本仓已经栽过一次：`ui/file-picker.tsx`）。

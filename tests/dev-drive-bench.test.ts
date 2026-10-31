@@ -40,7 +40,7 @@ type Target = {
 function makeTarget(overrides: Partial<Target> = {}): Target {
   return {
     label: "开发卷",
-    dir: "G:\\.workbuddy\\dev-drive-bench",
+    dir: String.raw`G:\.workbuddy\dev-drive-bench`,
     bigWriteMbps: 2900,
     bigReadMbps: 7300,
     smallCreatePerSec: 2553,

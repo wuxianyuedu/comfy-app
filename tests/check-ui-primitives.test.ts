@@ -1212,7 +1212,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         '    <a href="/workspace?tab=canvas">去创作</a>',
         "  );",
         "}",
-        "export const RE = /\\|?msg=([^|]*)/;",
+        String.raw`export const RE = /\|?msg=([^|]*)/;`,
       ].join("\n"),
     );
     const { code, output } = repo.run();
@@ -2525,7 +2525,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("自写「非法字符换下划线」的文件名安全化直接阻断（规范 P49）", ({ repo }) => {
     repo.write(
       "src/server/thing.ts",
-      ['export const safe = (n: string) => n.replace(/[^\\w.-]/g, "_");'].join("\n"),
+      [String.raw`export const safe = (n: string) => n.replace(/[^\w.-]/g, "_");`].join("\n"),
     );
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -2549,8 +2549,8 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     repo.write(
       "src/server/thing.ts",
       [
-        'export const norm = (n: string) => n.replace(/\\s+/g, " ").trim();',
-        'export const strip = (u: string) => u.replace(/\\/+$/, "");',
+        String.raw`export const norm = (n: string) => n.replace(/\s+/g, " ").trim();`,
+        String.raw`export const strip = (u: string) => u.replace(/\/+$/, "");`,
       ].join("\n"),
     );
     const { code, output } = repo.run();
@@ -2808,7 +2808,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     repo.write(
       "src/lib/log/thing.ts",
       [
-        "export const SGR_RE = /\\x1b\\[[0-9;:]*m/g;",
+        String.raw`export const SGR_RE = /\x1b\[[0-9;:]*m/g;`,
         'export const strip = (t: string) => t.replace(SGR_RE, "");',
       ].join("\n"),
     );
@@ -2841,7 +2841,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     repo.write(
       "src/lib/log/log-ansi.ts",
       [
-        "export const SGR_RE = /\\x1b\\[[0-9;:]*m/g;",
+        String.raw`export const SGR_RE = /\x1b\[[0-9;:]*m/g;`,
         'export const strip = (t: string) => t.replace(SGR_RE, "");',
       ].join("\n"),
     );
@@ -2849,10 +2849,10 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
-  test("单独的 \\x1b（光标移动等，不带 [Nm 形态）不算 P54（另一条账）", ({ repo }) => {
+  test(String.raw`单独的 \x1b（光标移动等，不带 [Nm 形态）不算 P54（另一条账）`, ({ repo }) => {
     repo.write(
       "src/lib/log/thing.ts",
-      ['export const moveCursor = (t: string) => t.replace(/\\x1b\\[/g, "");'].join("\n"),
+      [String.raw`export const moveCursor = (t: string) => t.replace(/\x1b\[/g, "");`].join("\n"),
     );
     const { code, output } = repo.run();
     expect(code, output).toBe(0);
@@ -2915,8 +2915,8 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     repo.write(
       "src/lib/thing.ts",
       [
-        "export const tail = (p: string) => p.split(/[\\\\/]/).pop();",
-        "export const slash = (p: string) => p.replace(/\\\\/g, '/');",
+        String.raw`export const tail = (p: string) => p.split(/[\\/]/).pop();`,
+        String.raw`export const slash = (p: string) => p.replace(/\\/g, '/');`,
         "export const tail2 = (p: string) => p.split('/').pop();",
       ].join("\n"),
     );

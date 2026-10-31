@@ -223,10 +223,10 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
 
     // ① 旧的写法：一条带分隔符的相对路径字面量 —— 正是 Linux 上恒红的那一版
     const windowsLiteral =
-      '$allowedRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\\generated"))';
+      String.raw`$allowedRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\generated"))`;
     expect(
       flagged(windowsLiteral),
-      "旧的「..\\generated」字面量没能被照出来 —— 判据挡不住这条非跨平台写法",
+      String.raw`旧的「..\generated」字面量没能被照出来 —— 判据挡不住这条非跨平台写法`,
     ).toBe(true);
 
     // ② 偏移一位：段都是干净的，只有真解析一次才露出来

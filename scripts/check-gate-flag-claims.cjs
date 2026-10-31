@@ -224,7 +224,7 @@ function flipsWithoutExecutor(flips) {
 }
 
 function escapeRe(s) {
-  return s.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return s.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /**

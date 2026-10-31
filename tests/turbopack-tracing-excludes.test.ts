@@ -264,7 +264,7 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
 
   it("存在判据与调用在同一条件表达式里（缺失时整组不执行、不报错）", () => {
     // 用 RegExp 构造避免本断言的字面量自身命中下面的 bareCalls 匹配
-    expect(code).toMatch(new RegExp("standaloneExists\\s*\\?\\s*listFiles\\("));
+    expect(code).toMatch(new RegExp(String.raw`standaloneExists\s*\?\s*listFiles\(`));
   });
 });
 

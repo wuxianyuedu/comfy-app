@@ -110,7 +110,7 @@ describe("应用服务退出记录：跨侧同源", () => {
   it("记录必须无 BOM（读取侧是 JSON.parse，BOM 会让它当场失败）", () => {
     // 两侧都写 utf8 且不写 BOM；TS 端点用的是 JSON.parse。
     expect(EXIT_MJS).toContain('"utf8"');
-    expect(EXIT_MJS).not.toContain("\\uFEFF");
+    expect(EXIT_MJS).not.toContain(String.raw`\uFEFF`);
   });
 
   it("启动编排在回收之前写下记录（写太晚 = 现场已经收走）", () => {

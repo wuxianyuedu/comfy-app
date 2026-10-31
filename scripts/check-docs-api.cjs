@@ -110,7 +110,7 @@ const CLOSURE_LEAVES = [
 
 /** 把一个路径变成「逐字匹配它自己」的正则（点号等元字符要转义）。 */
 function exactPathRe(p) {
-  return new RegExp(`^${p.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+  return new RegExp(`^${p.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}$`);
 }
 
 /**

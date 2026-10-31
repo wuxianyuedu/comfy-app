@@ -56,7 +56,7 @@ describe("前缀锚定类：出现即红（不看熵）", () => {
     expect(
       shapesOf("const PEM_BLOCK_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;"),
     ).toEqual([]);
-    expect(shapesOf("re: /\\bghp_[0-9A-Za-z]{36,}\\b/g")).toEqual([]);
+    expect(shapesOf(String.raw`re: /\bghp_[0-9A-Za-z]{36,}\b/g`)).toEqual([]);
   });
 });
 

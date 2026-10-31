@@ -76,7 +76,7 @@ describe("gates:which —— 认得出钩子步骤跑的是哪份脚本", () => 
     expect(scriptOf(["node", "scripts/affected-tests.mjs", "--json"])).toBe(
       "scripts/affected-tests.mjs",
     );
-    expect(scriptOf(["node", "G:\\repo\\scripts\\check-format.cjs", "--staged"])).toBe(
+    expect(scriptOf(["node", String.raw`G:\repo\scripts\check-format.cjs`, "--staged"])).toBe(
       "scripts/check-format.cjs",
     );
   });
@@ -195,7 +195,7 @@ describe("gates:which —— 规范匹配（机器可读副本）", () => {
   });
 
   test("反斜杠路径先归一（Windows 上 git 给的可能是 `\\`）", () => {
-    const { matched } = matchDocReading(["src\\lib\\comfyui\\lifecycle.ts"]);
+    const { matched } = matchDocReading([String.raw`src\lib\comfyui\lifecycle.ts`]);
     expect(matched.map((e) => e.scope)).toContain("ComfyUI 生命周期");
   });
 

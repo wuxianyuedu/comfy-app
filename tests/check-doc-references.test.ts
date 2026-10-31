@@ -204,7 +204,7 @@ async function gateDocs(): Promise<Array<string>> {
  */
 function isCalledInMain(script: string, call: string): boolean {
   const mainBody = script.slice(script.indexOf("function main()"));
-  const escaped = call.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = call.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   return new RegExp(`^[ \\t]*${escaped};$`, "m").test(mainBody);
 }
 
