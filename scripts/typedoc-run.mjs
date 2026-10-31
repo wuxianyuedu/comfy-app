@@ -227,7 +227,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * @param {number} [opts.attempts] 最大尝试次数
  * @param {number[]} [opts.backoff] 两次尝试之间的等待
  * @param {(entry: string, outDir: string, root: string) => Promise<{status: number|null, signal?: string|null, error?: Error|null, log: string}>} [opts.spawnImpl]
- *        起进程的注入缝：typedoc 冷跑实测 31s，契约测试不可能真跑它，于是把
+ *        起进程的注入缝：typedoc 冷跑以百秒计（现值取法见规范 §13.5.17），契约测试不可能真跑它，于是把
  *        「起了但没写」这种现场直接喂进来（见 `tests/typedoc-run.test.ts`）。
  * @param {(msg: string) => void} [opts.onProgress] 每次尝试的结论（默认打到 stderr）
  * @returns {Promise<{ok: boolean, outDir: string, attempt: number, total: number, files: number, reason: string, log: string, before: ReturnType<typeof snapshotOutput>, after: ReturnType<typeof snapshotOutput}>} 结论对象：`ok` 成没成、`attempt` 第几次成的（失败时等于最后一次）、`files` 产物文件数、`reason` 没成的原因（成功时是空串）、`log` 日志尾巴、`before` / `after` 跑前与跑后的产物快照。
