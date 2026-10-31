@@ -587,7 +587,9 @@ function runClaims(ctx) {
  *   · 评论失败就保留标签（与 `runRelease` 同一条顺序理由）。
  *   · 未配留痕是**读数**：不阻断关单，只是这一格没有可留的痕。
  *
- * @param {{run:any, log:(s:string)=>void, slug:string, handle:string|null, number:number, mkTmp:any}} ctx
+ *   `handleExplicit` 是「`handle` 是不是**人填的**」（`resolveDevHandle().explicit`；ISSUE #2833）——
+ *   `false` 时「不代发」那格要念出「取的名字」这条因，不许让它长得像「处理人真是别人」。
+ * @param {{run:any, log:(s:string)=>void, slug:string, handle:string|null, handleExplicit?: boolean, number:number, mkTmp:any}} ctx
  * @returns {number} `CODE` 之一
  */
 export function finishIssueWork(ctx) {
@@ -609,6 +611,17 @@ export function finishIssueWork(ctx) {
         handlers.length > 0 ? `是 ${handlers.join("、")}` : "标签不在场"
       } ⇒ 不代发「开发结束」、不动标签。`,
     );
+    /* 「不代发」背后是**两件不同的事**（ISSUE #2833 的现场）：处理人真是别人，与
+     * 「这份检出的我是谁」落到了**取的**名字上（链接 worktree 不带 `.gitignore` 掉的
+     * `.env` ⇒ 取值链跌到 git config user.name）。后者要修的是留痕通道（回主检出 /
+     * 补 COMFYAPP_DEV_HANDLE），不是「等一个不存在的换名」—— 话术必须把两件分开，
+     * 否则读的人会照着「别人在收尾」那条路走。 */
+    if (ctx.handleExplicit === false) {
+      log(
+        `[ship]   ⚠️ 而这份检出的「我是谁」是**取的**（非显式配置）—— 链接 worktree 不带 .env 时` +
+          `就会落到这一格（ISSUE #2833）：回主检出、或补上 COMFYAPP_DEV_HANDLE 后再跑 --release。`,
+      );
+    }
     return CODE.GREEN;
   }
   const others = handlers.filter((x) => x !== name);

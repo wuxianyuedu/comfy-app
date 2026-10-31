@@ -132,7 +132,9 @@ describe("档位：跳过必须被说出来", () => {
 
     const cnb = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
     expect(cnb).toContain("- name: 受影响用例");
-    expect(cnb).toContain("类型检查, 受影响用例,");
+    /* #2845 起固定/受影响拆成两格：名单里两格相邻、且各有自己的 stage 块。 */
+    expect(cnb).toContain("类型检查, 固定结构用例, 受影响用例,");
+    expect(cnb).toContain("- name: 固定结构用例");
     // 拿不到改动面 / 清单为空必须退 2（没判 ≠ 绿）。
     expect(ci).toMatch(/files\.length === 0[\s\S]{0,400}return 2/);
   });
@@ -152,7 +154,15 @@ describe("档位：跳过必须被说出来", () => {
         {
           cwd: ROOT,
           encoding: "utf8",
-          env: { ...process.env, COMFY_AFFECTED_CHANGED: changed },
+          env: {
+            ...process.env,
+            COMFY_AFFECTED_CHANGED: changed,
+            /* 显式抹平段开关（ISSUE #2845）：这条用例判的是「面 → 判决链」那一路，
+             * 它是 both/affected 段的行为；固定结构用例那格的 `SEGMENT=fixed` 会经
+             * process.env 漏进子进程，把 collectList 整段旁路掉（实测 cnb-lpr-1k68pquq6：
+             * 两次都数出 106，`> 106` 的负控制永远不成立）。 */
+            COMFY_AFFECTED_SEGMENT: "",
+          },
         },
       );
       expect(r.status, r.stderr ?? "").toBe(0);
