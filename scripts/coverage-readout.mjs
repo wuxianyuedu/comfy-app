@@ -112,7 +112,7 @@ export async function buildCoverageReadout({ root = ROOT, summaryPath } = {}) {
     const st = fs.statSync(summaryFile);
     summary = { mtime: st.mtime, data: JSON.parse(fs.readFileSync(summaryFile, "utf8")) };
   } catch {
-    summary = null;
+    // statSync / 解析失败 ⇒ summary 保持初始 null，下面走 no-report 分支
   }
   if (!summary) {
     return {
