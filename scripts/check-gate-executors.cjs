@@ -505,7 +505,7 @@ for (const name of names) {
   const src = fs.readFileSync(path.join(scriptsDir, name), "utf8");
   const judge = hasExit(src);
   const referenced = hasExecutor(name, executors);
-  const registered = Object.prototype.hasOwnProperty.call(ledger.onDemand, name);
+  const registered = Object.hasOwn(ledger.onDemand, name);
 
   if (judge) {
     if (referenced) {
