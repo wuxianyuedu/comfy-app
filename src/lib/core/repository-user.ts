@@ -101,7 +101,7 @@ function encryptInput(
  * 「路由多传一格，而那一格在保存路径上被静默丢掉」。
  * 每一格都是**三态**：缺键 = 不动，`undefined` 同义；显式给值才覆盖。
  */
-export interface LlmConfigPatch {
+export type LlmConfigPatch = {
   apiKey?: string | null;
   baseUrl?: string;
   /** 候选模型：旧纯名字字符串 / 新条目对象（远端条目可带独立 baseUrl、apiKey） */
@@ -111,7 +111,7 @@ export interface LlmConfigPatch {
   provider?: string;
   temperature?: number;
   temperatureByTask?: unknown;
-}
+};
 
 export class LlmConfigRepository {
   /**

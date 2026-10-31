@@ -28,14 +28,14 @@ import { zClass } from "~/lib/shell/overlay-z";
   - minimap 开关（左下角）
  */
 
-export interface ContextMenuItem {
+export type ContextMenuItem = {
   danger?: boolean;
   disabled?: boolean;
   divider?: boolean;
   icon?: React.ReactNode;
   id: string;
   label: string;
-}
+};
 
 const DEFAULT_CONTEXT_MENU: Array<ContextMenuItem> = [
   { id: "upload", label: "上传", icon: <MenuIconUpload /> },
@@ -50,7 +50,7 @@ const DEFAULT_CONTEXT_MENU: Array<ContextMenuItem> = [
   { id: "paste", label: "粘贴", icon: <MenuIconPaste /> },
 ];
 
-export interface CanvasAreaProps {
+export type CanvasAreaProps = {
   children: React.ReactNode;
   /** 画布包裹层的 class 名 */
   className?: string;
@@ -70,7 +70,7 @@ export interface CanvasAreaProps {
   toolbarExtra?: React.ReactNode;
   /** Zoom level (0-100) */
   zoom?: number;
-}
+};
 
 export function CanvasArea({
   children,

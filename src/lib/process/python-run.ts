@@ -18,10 +18,10 @@ import "server-only";
 import { pythonCandidates, pythonProbeArgs } from "./python-candidates";
 
 /** 退避链上的一次尝试：解释器候选名 + 该候选所需的完整参数（脚本及其参数在后）。 */
-export interface PythonAttempt {
+export type PythonAttempt = {
   args: Array<string>;
   command: string;
-}
+};
 
 /**
  * 按平台给出解释器退避链。
@@ -44,10 +44,10 @@ export function pythonAttempts(
 }
 
 /** 一次失败的可读信号：`spawn` 侧报的 `errno`，或进程收尾时的退出码。 */
-export interface InterpreterMissSignal {
+export type InterpreterMissSignal = {
   errno?: string | null;
   exitCode?: number | null;
-}
+};
 
 /**
  * 「这台机器上没有这个解释器」的两种形状 —— **必须同因**：

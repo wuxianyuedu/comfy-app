@@ -29,7 +29,7 @@ export function viewTabLabel(view: WorkspaceView, projectName?: string | null): 
   return name ? `${base}·${name}` : base;
 }
 
-export interface ViewTabStripProps {
+export type ViewTabStripProps = {
   activeKey: string;
   /** 标题行内嵌时去掉自己的边框/背景（那条横条的视觉由标题行统一持有）。 */
   inTitleBar?: boolean;
@@ -45,13 +45,13 @@ export interface ViewTabStripProps {
   /** 项目 id → 项目名；缺失时退化为只显示视图名（不显示 id，也不显示 undefined）。 */
   projectNameOf?: (projectId: string | null) => string | null | undefined;
   tabs: Array<ViewTab>;
-}
+};
 
 /** 「+」菜单里的一项：视图 id + 展示名。 */
-export interface OpenableView {
+export type OpenableView = {
   label: string;
   view: WorkspaceView;
-}
+};
 
 /**
  * 视图页签条 —— 桌面壳内嵌进窗口标题行，浏览器/dev 里单独一条。

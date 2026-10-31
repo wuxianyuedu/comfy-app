@@ -85,7 +85,7 @@ function HistoryCurve({ history }: { history: Array<ReviewVerdict> }) {
 }
 
 /** 评审弹窗骨架消费的判定面与动作（由各壳的 hook 装配）。 */
-export interface ReviewVerdictController {
+export type ReviewVerdictController = {
   /** 评审 / 改写任一在途（busy 时弹窗与按钮整体禁动）。 */
   busy: boolean;
   error: string;
@@ -96,9 +96,9 @@ export interface ReviewVerdictController {
   /** 定向改写动作；不给则不渲染「按意见改写」。 */
   revise?: () => Promise<void>;
   verdict: ReviewVerdict | null;
-}
+};
 
-export interface ReviewVerdictDialogButtonProps {
+export type ReviewVerdictDialogButtonProps = {
   /** 在途文案（场景有改写时可传「正在按意见改写…」）。 */
   busyText: string;
   controller: ReviewVerdictController;
@@ -111,7 +111,7 @@ export interface ReviewVerdictDialogButtonProps {
   /** 入口按钮的 Hint / aria-label（如「AI 评审这张角色卡」）。 */
   label: string;
   title: string;
-}
+};
 
 const EMPTY_LABELS: ReadonlyMap<string, string> = new Map();
 

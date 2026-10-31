@@ -17,10 +17,10 @@ import { sanitizeComboLabel } from "~/components/studio/workflow-utils";
 
 /** 本地勾选态在显示名上真正携带的字段（作者的显式重命名 + 画布透传的类型，
  *  后者缺省时不该把富化类型盖掉）。 */
-export interface ExposedLabelSource {
+export type ExposedLabelSource = {
   label?: string;
   type?: string;
-}
+};
 
 /** 一个已暴露条目的显示名：作者重命名 → 富化名 → 真实 pin 名。 */
 export function resolveExposedLabel(

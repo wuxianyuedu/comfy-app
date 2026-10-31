@@ -22,7 +22,7 @@ import { type OmitOwnProps } from "~/lib/dom-props";
  *     改一处「要不要支持多选」要改四个地方。
  */
 
-export interface FilePickerProps {
+export type FilePickerProps = {
   /** 透传给 `<input>` 的 `accept`，把系统文件对话框筛成期望类型。 */
   accept?: string;
   /** 额外透传给 `<input>` 的属性（如 `id`，供 `<label htmlFor>` 关联）。 */
@@ -41,12 +41,12 @@ export interface FilePickerProps {
    * 那正是此前 9 份实现里各写一遍、且有两处忘了判空的地方。
    */
   onPick: (file: File, files: FileList) => void;
-}
+};
 
-export interface FilePickerHandle {
+export type FilePickerHandle = {
   /** 打开系统文件对话框。 */
   open: () => void;
-}
+};
 
 /**
  * 命令式用法：`open()` 挂在任意既有按钮上，`Input` 挂在本组件树里。

@@ -9,12 +9,12 @@
 
 import { vanillaApi } from "~/trpc/vanilla";
 
-export interface OpenFolderResult {
+export type OpenFolderResult = {
   absolutePath?: string | null;
   comfyappUrl?: string | null;
   error?: string | null;
   opened: boolean;
-}
+};
 
 /** 打开任务输出目录：失败路径分「目录未生成」与其它错误两种，由 hook 决定提示文案。 */
 export async function openTaskFolder(taskId: string): Promise<OpenFolderResult> {

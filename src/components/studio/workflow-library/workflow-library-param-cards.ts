@@ -36,7 +36,7 @@ import {
   resolveOutputSource,
 } from "~/lib/workflow/workflow-output-binding";
 
-export interface LibraryParamCards {
+export type LibraryParamCards = {
   /** 对外参数条目（稳定顺序）。 */
   entries: Array<ParamEntry>;
   /** 派生用的 IO 表（卡片列渲染端口类型读它）。 */
@@ -63,10 +63,10 @@ export interface LibraryParamCards {
    *  与编辑器画布同一套语义 —— 库里不画线的话，圆点就只是一颗装饰点，
    *  读者答不出它连到哪。 */
   wires: Array<ParamCardWire>;
-}
+};
 
 /** 库内一条只读映射连线。 */
-export interface ParamCardWire {
+export type ParamCardWire = {
   entryId: string;
   /** 被连的端口落在**组合控件**上（宽/高、比例/像素这类没有独立行的端口），
    *  端点锚在整块控件上，线指向那一格。 */
@@ -79,7 +79,7 @@ export interface ParamCardWire {
    *  （宿主输出行 → 对外输出参数卡片）。 */
   kind?: "paramToHost" | "hostToParam";
   targetIoKey: string;
-}
+};
 
 /** 从 workflowIO + paramMap 派生库内画布所需的归属数据。
  *
@@ -179,7 +179,7 @@ export function deriveLibraryParamCards(args: {
  *  默认取值来源（`resolved` 里的那个回落值）仍然保留：卡片与运行期要读它；只是
  *  画布上不再拿一条虚线表示「这是默认线」—— 未连过就是没有线。 */
 /** 对外**输出**参数卡片列与它的连线（`deriveLibraryOutputCards` 的产物）。 */
-export interface LibraryOutputCards {
+export type LibraryOutputCards = {
   /** 某个输出口在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
   isManual: (ioKey: string) => boolean;
   outputs: Array<WorkflowIOEntry & { ioKey: string }>;
@@ -188,7 +188,7 @@ export interface LibraryOutputCards {
   /** 某个输出口是否存在任何取值来源（宿主那一行真的画得出来）。 */
   wired: boolean;
   wires: Array<ParamCardWire>;
-}
+};
 
 export function deriveLibraryOutputCards(args: {
   io: WorkflowIOMap | null | undefined;

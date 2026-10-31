@@ -5,7 +5,7 @@
 // 报错（类型在 TS 里被擦除，但 `import` 语句不会）。类型放这里，两边都干净。
 
 /** 本应用正在跑的那一个任务（单 GPU 串行，最多一个）。 */
-export interface ComfyRunningTask {
+export type ComfyRunningTask = {
   /** 主模型文件名（从本次实际提交的图里认出来，见 `executed-model.ts`）；认不出为 null。 */
   model: string | null;
   /** 当前节点类名（`Task.progressNode` 里的 `classType`）；没有为 null。
@@ -19,9 +19,9 @@ export interface ComfyRunningTask {
   taskId: string;
   /** 工作流名（来自 `Task.workflowName`）；查不到时为 null。 */
   workflowName: string | null;
-}
+};
 
-export interface ComfyQueueStatus {
+export type ComfyQueueStatus = {
   /** ComfyUI 自己的排队口径 —— **含不是本应用提交的任务**（用户在原生界面排的也在这里）。 */
   comfy: { pending: number; running: number };
   /** ComfyUI 是否可达。不可达时其余字段一律是空值，前端显示「离线」。 */
@@ -30,4 +30,4 @@ export interface ComfyQueueStatus {
   queued: number;
   /** 本应用当前在跑的那个。 */
   running: ComfyRunningTask | null;
-}
+};

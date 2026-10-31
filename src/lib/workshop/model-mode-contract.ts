@@ -60,7 +60,7 @@ export function workshopInputLabel(type: WorkshopInputType): string {
 }
 
 /** 一种远端模式在工坊下的适配器。 */
-export interface RemoteModeAdapter {
+export type RemoteModeAdapter = {
   /** 上游端点路径（拼在条目 baseUrl 后），如 /v1/images/generations。 */
   endpointPath: string;
   /** 统一输入 → 请求体字段名。同一类型只能出现一次。 */
@@ -69,7 +69,7 @@ export interface RemoteModeAdapter {
   mode: string;
   /** 产物字段路径（响应 JSON 内，支持 a.b.0.c）；空 = 走通用提取。 */
   outputField: string;
-}
+};
 
 /** 该模式默认的输入清单（适配器新建时预填；field 暂用类型名本身）。 */
 export function defaultInputsForMode(mode: string): Array<{
@@ -300,14 +300,14 @@ export function modeContractInputLabel(type: ModeContractInputType): string {
 export type ModeContractCustomKind = ExposedCustomKind;
 
 /** 一条自定义口的定义：id（含类型与序号）+ 作者填的展示名。 */
-export interface ModeContractCustomInput {
+export type ModeContractCustomInput = {
   /** 契约口 id（`custom-<类型>-<序号>`；序号在契约内不与其它自定义口重复）。 */
   id: ModeContractInputId;
   /** 简单类型（恒与 id 里编的类型一致 —— 归一化时以 id 为准）。 */
   kind: ModeContractCustomKind;
   /** 展示名（作者填）。空名不留（归一化时丢弃）。 */
   label: string;
-}
+};
 
 /** 契约口 id 的完整值域：8 个基础口 +「参考图」第 2 张起带序号
  *  （`reference-image-2`）+ 自定义口（`custom-<类型>-<序号>`）。
@@ -440,7 +440,7 @@ export type ModeContractOutput = "image" | "video" | "audio";
 export type ModeContractRequired = Array<ModeContractInputId>;
 
 /** 一种模式的统一输入 / 输出契约（工坊对外口径）。 */
-export interface ModeContract {
+export type ModeContract = {
   /** 自定义口的定义（id → 作者填的展示名 + 简单类型）。
    *
    *  `inputs` 里的自定义口必须在其中有定义：没有定义的口下游读不出名字与类型
@@ -458,7 +458,7 @@ export interface ModeContract {
    *  主动清空了必备口」是两个不同的状态，用空数组一锅端会让「我明明取消勾选了」
    *  与「我还没配过」读起来一样。 */
   required?: ModeContractRequired;
-}
+};
 
 /** 内置的必备口判定（一份契约没显式列必备口时用它）。
  *
@@ -653,11 +653,11 @@ function parseCustomInputs(raw: unknown): Array<ModeContractCustomInput> {
  *  两份视图看的必须是同一张清单：一份按内置契约（按模式）、一份按用户改过的
  *  模式契约注册表。若各读各的，同一页面上两个页签会列出不同的口（ISSUE #596
  *  的「对外参数显示不一致」就是这么来的）。 */
-export interface ContractEntryDisplay {
+export type ContractEntryDisplay = {
   control: "text" | "size" | "image" | "duration" | "number";
   id: string;
   label: string;
-}
+};
 
 /** 契约口 id → 工坊控件形态（尺寸是组合控件、时长是秒数选择、其余按图示）。
  *

@@ -75,14 +75,14 @@ export function runtimeLogFileName(source: RuntimeLogSource, at: Date, ordinal =
 }
 
 /** 解析结果：这份文件属于哪个来源、哪一刻、以及同秒内的第几份。 */
-export interface RuntimeLogFileName {
+export type RuntimeLogFileName = {
   /** 同秒内第几份（1 = 第一份）。 */
   ordinal: number;
   /** 由名字反解出的来源（前缀匹配，不按表查——见 {@link parseRuntimeLogFileName}）。 */
   source: string;
   /** 名字里的时刻（毫秒）；形态不符时 null。 */
   startedAt: number | null;
-}
+};
 
 /**
  * 解析一份 runtime 日志的文件名；不是这个形态时返回 null。

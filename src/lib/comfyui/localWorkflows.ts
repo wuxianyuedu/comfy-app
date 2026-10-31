@@ -26,7 +26,7 @@ import { normalizeSlashes } from "~/lib/path-display";
 
 import { compareText, uniqueBy } from "~/lib/ordered-set";
 
-export interface LocalWorkflowFile {
+export type LocalWorkflowFile = {
   /** 绝对、归一化后的文件系统路径（小写 + 正斜杠，便于 Windows 盘符比较）。 */
   absPath: string;
   mtimeMs: number;
@@ -44,9 +44,9 @@ export interface LocalWorkflowFile {
    *  值等于该根目录的 `rawPath`（逐字，与用户在对话框里输入的一致）。 */
   rootRawPath: string;
   size: number;
-}
+};
 
-export interface ScannedRoot {
+export type ScannedRoot = {
   /** 归一化后的绝对路径；用户本来就输入绝对路径时等于 `rawPath`。
    *  用于 Windows 上忽略大小写的比较。 */
   absPath: string;
@@ -57,7 +57,7 @@ export interface ScannedRoot {
   files: Array<LocalWorkflowFile>;
   /** 配置的根目录（逐字），用于显示。 */
   rawPath: string;
-}
+};
 
 /** 与服务端其余部分用同一种方式归一化绝对路径：反斜杠 → 正斜杠、转小写。
  *  与 customNodes.ts 的 `pathKey` 同口径，Windows 盘符大小写因此不会对不上。 */
@@ -284,7 +284,7 @@ export async function scanLocalWorkflowRoots(
  * `checksumCache`），命中时连文件都不打开 —— 这曾是本接口稳定 1s+ 的主因。
  * ───────────────────────────────────────────────────────────────────────── */
 
-export interface LocalChecksumEntry {
+export type LocalChecksumEntry = {
   /** 磁盘文件的绝对路径。 */
   absPath: string;
   /** sha1(text).slice(0,16) —— 与 `WorkflowTemplate.sourceChecksum` 同值。 */
@@ -292,7 +292,7 @@ export interface LocalChecksumEntry {
   /** 文件 mtime（毫秒时间戳，取自扫描器的 `statSync`）。调用方在多个文件
    *  checksum 相同时用它断开（少见但确实可能）；它同时是 checksum 记忆的键。 */
   mtimeMs: number;
-}
+};
 
 /** checksum 的 mtime+size 记忆表。
  *

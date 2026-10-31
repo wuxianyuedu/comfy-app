@@ -11,13 +11,13 @@ import { Button } from "~/components/ui/button";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { setImageFeedback } from "~/lib/history-detail-actions";
 
-export interface ImageFeedbackRowProps {
+export type ImageFeedbackRowProps = {
   image: {
     humanRating: number | null;
     id: string;
     isFavorite: boolean;
   };
-}
+};
 
 export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
   const [rating, setRatingState] = useState<number | null>(image.humanRating ?? null);

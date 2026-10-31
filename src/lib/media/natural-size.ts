@@ -23,18 +23,18 @@
 // `element` 只要求有那四个尺寸读数，所以可以脱离真实图片单测。
 
 /** 读自然尺寸需要的最小宿主形状（`HTMLImageElement` / `HTMLVideoElement` 都满足）。 */
-export interface NaturalSizeSource {
+export type NaturalSizeSource = {
   naturalHeight?: number;
   naturalWidth?: number;
   videoHeight?: number;
   videoWidth?: number;
-}
+};
 
 /** 一张媒体的自然尺寸（像素）。两个数都保证是**正**的有限数。 */
-export interface NaturalSize {
+export type NaturalSize = {
   height: number;
   width: number;
-}
+};
 
 /**
  * 从媒体元素读出自然尺寸；读不到（0 / NaN / 负 / 无限）返回 `null`。

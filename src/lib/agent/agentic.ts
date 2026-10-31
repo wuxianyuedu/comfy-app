@@ -2,13 +2,13 @@
 // 配了本地/远程 LLM 时就用它；没配则回落到一个脚本化的离线状态机，
 // 保证多轮流程始终可用。
 
-export interface AgentSpec {
+export type AgentSpec = {
   kind?: "image" | "video";
   negative?: string;
   params?: AgentParams;
   prompt: string;
   skillHint?: string;
-}
+};
 
 export type AgentParams = {
   cfg?: number;
@@ -18,19 +18,19 @@ export type AgentParams = {
   steps?: number;
 };
 
-export interface ChatMessage {
+export type ChatMessage = {
   content: string;
   role: "user" | "assistant" | "system";
-}
+};
 
-export interface AgentTurnResult {
+export type AgentTurnResult = {
   /** 有此字段且为真，表示描述已定稿、可以开始生成。 */
   ready: boolean;
   /** 助手的自然语言回复（一个提问，或一次确认）。 */
   reply: string;
   /** 最终的结构化描述（仅在就绪时给出）。 */
   spec?: AgentSpec;
-}
+};
 
 const MULTITURN_SYSTEM = `你是一个 AI 创作引导助手，帮助用户用 ComfyUI 生成图片或视频。
 通过简短的多轮对话帮用户理清需求，每轮最多问 1-2 个最关键的澄清问题，不要一次问太多。

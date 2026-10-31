@@ -31,7 +31,7 @@
  * `current/` 下的份是裸文件名，归档份是 `<包名>/<文件名>`。客户端原样回传即可，
  * **不解析它** —— 形态判据只在服务端一处。
  */
-export interface LogSessionMeta {
+export type LogSessionMeta = {
   /** 该次运行异常退出（归档包 `run.json` 的 `crashed`）；`current` 恒为 false。 */
   crashed: boolean;
   /**
@@ -53,7 +53,7 @@ export interface LogSessionMeta {
    * 在看什么）、runId 是跨包 `grep <runId> log/current log/runs/` 的唯一入口。
    */
   title: string;
-}
+};
 
 /**
  * `GET /api/logs/sessions` 的响应体。
@@ -61,7 +61,7 @@ export interface LogSessionMeta {
  * 定义在这里而不是端点或客户端任一侧：它是**两端共用的契约**，写在一边就会
  * 出现「服务端改了字段、客户端还在按旧字段读」的静默漂移。
  */
-export interface LogSessionsPayload {
+export type LogSessionsPayload = {
   /** 选中那一份的正文（超长时取**尾部窗口**，见 `truncated` / `windowed`）。 */
   content: string;
   /** 本次返回的正文属于哪一份文件；没有可用会话时为 null。 */
@@ -88,4 +88,4 @@ export interface LogSessionsPayload {
   truncated: boolean;
   /** 服务端只扫了尾部窗口 —— 前面还有没读到的内容。 */
   windowed: boolean;
-}
+};

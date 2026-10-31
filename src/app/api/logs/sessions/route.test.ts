@@ -51,7 +51,7 @@ vi.mock("~/lib/log/log-paths", async () => {
 
 const { GET } = await import("./route");
 
-interface Payload {
+type Payload = {
   content: string;
   error?: string;
   selectedId: string | null;
@@ -66,7 +66,7 @@ interface Payload {
   total: number;
   truncated: boolean;
   windowed: boolean;
-}
+};
 
 async function get(query: string): Promise<{ data: Payload; status: number }> {
   const res = await GET(new Request(`http://localhost/api/logs/sessions?${query}`));

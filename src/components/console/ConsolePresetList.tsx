@@ -42,11 +42,11 @@ import { useExpansionSet } from "~/components/ui/expansion-set";
 import { Hint } from "~/components/ui/hint";
 import { CONSOLE_PRESETS, type ConsolePreset } from "~/lib/console/console-catalog";
 
-export interface ConsolePresetListProps {
+export type ConsolePresetListProps = {
   /** 有命令在跑时禁用（避免用户以为点了就会插队执行）。 */
   disabled: boolean;
   onFill: (command: string) => void;
-}
+};
 
 /**
  * 一条预设的悬停提示：展示名 + 说明小字 + 会填进输入框的命令。

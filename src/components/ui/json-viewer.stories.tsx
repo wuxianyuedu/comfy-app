@@ -34,14 +34,14 @@ import {
  * —— 那条判据锚的形态是对的（那种表真该收进 `~/lib/dom-props`），这里只是长得像。
  * 不用豁免去绕，改成逐项列，两边都清楚。
  */
-interface StoryArgs {
+type StoryArgs = {
   /** 首屏折叠档位：0 = 全展开；>=1 时项数超过 `30 + N*40` 的容器折成 `…`。 */
   initialCollapsedDepth?: number;
   /** 注入层的数据源旋钮（真报文的名字，见 `.storybook/data-sources.tsx`）。 */
   sourceName: JsonSourceName;
   /** Toolbar 副标题。 */
   title?: string;
-}
+};
 
 /**
  * Storybook 要的「组件」在这里是个**适配件**：它不改变渲染，只把

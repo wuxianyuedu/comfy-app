@@ -20,13 +20,13 @@ import { type RouterInputs, type RouterOutputs } from "~/trpc/react";
 import { isRawWorkflowJson } from "~/lib/workflow/workflow-format";
 import { type MutateAsyncLike } from "./use-workflow-actions";
 
-export interface UseWorkflowImportArgs {
+export type UseWorkflowImportArgs = {
   createMut: MutateAsyncLike<
     RouterInputs["workflow"]["create"],
     RouterOutputs["workflow"]["create"]
   >;
   load: () => Promise<void> | void;
-}
+};
 
 /** 拖放投放区：只认带 `Files` 的拖动（否则文本选择拖动也会点亮高亮）。
  *  计数器抵消子元素冒泡产生的 leave —— 没有它，光标掠过子元素时高亮会闪。

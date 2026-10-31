@@ -21,7 +21,7 @@ import { WorkflowLibraryFilters } from "./WorkflowLibraryFilters";
 import { HEADER_ACTION_BTN, type SourceFilter, type TypeFilter } from "./workflow-library-config";
 import type { ModelTagCount } from "./WorkflowLibraryFilters";
 
-interface WorkflowLibraryHeaderProps {
+type WorkflowLibraryHeaderProps = {
   modelFilter: string;
   modelTags: Array<ModelTagCount>;
   onManageModels: () => void;
@@ -33,7 +33,7 @@ interface WorkflowLibraryHeaderProps {
   sourceFilter: SourceFilter;
   typeCounts: { all: number; audio: number; image: number; video: number };
   typeFilter: TypeFilter;
-}
+};
 
 export function WorkflowLibraryHeader({
   onToggleImport,

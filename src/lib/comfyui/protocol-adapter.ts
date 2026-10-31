@@ -33,7 +33,7 @@
 // 「直连 `/prompt`」形态留的正确实现，帧哪天回来就得是对的。
 
 /** ComfyUI WS 消息的最小结构视图（原始载荷是 `any`）。 */
-export interface ComfyWsMessage {
+export type ComfyWsMessage = {
   data?: {
     [k: string]: unknown;
     exception_message?: unknown;
@@ -43,7 +43,7 @@ export interface ComfyWsMessage {
     value?: unknown;
   };
   type?: string;
-}
+};
 
 /** 执行器会响应的统一信号类别。 */
 export type ComfySignal =

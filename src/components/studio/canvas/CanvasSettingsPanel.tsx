@@ -26,12 +26,12 @@ function formatPx(value: number): string {
   return `${fixed(value, 2) ?? ""}px`;
 }
 
-interface PanelProps {
+type PanelProps = {
   onClose: () => void;
   reset: () => void;
   settings: CanvasSettings;
   update: (patch: Partial<CanvasSettings>) => void;
-}
+};
 
 export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelProps) {
   /* 抽屉走 ui/sheet（规范 16 §16.2.3 P2）：Esc 关闭、点遮罩关闭、遮罩让出

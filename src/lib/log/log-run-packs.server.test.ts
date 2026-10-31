@@ -31,12 +31,12 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-interface PackSpec {
+type PackSpec = {
   crashed?: boolean;
   files?: Record<string, string>;
   /** 不写 `run.json`（模拟被截断 / 手工搬进来的包）。 */
   noRunJson?: boolean;
-}
+};
 
 /**
  * 造一个运行包（目录名与 `run.mjs` 的 `runDirName` 同形）。

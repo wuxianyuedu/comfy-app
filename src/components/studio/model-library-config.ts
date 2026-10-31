@@ -7,17 +7,17 @@ import { displayValue } from "~/lib/display-value";
 // 行类型、纯派生（筛选 / 计数 / 体积格式化）——与 tRPC hook 分开，
 // 可脱离 React 直接断言。
 
-export interface ModelRow {
+export type ModelRow = {
   fileName: string;
   fileSize?: number | null;
   id: string;
   isAvailable: boolean;
   name: string;
   type: string;
-}
+};
 
 /** GET /api/models/config 返回的一行（只保留本视图渲染用到的子集）。 */
-export interface FolderConfigRow {
+export type FolderConfigRow = {
   count: number;
   enabled: boolean;
   folder: string;
@@ -25,7 +25,7 @@ export interface FolderConfigRow {
   label: string;
   /** 目录名**就是**模型类型。 */
   type: string;
-}
+};
 
 export const ALL_TYPES = "ALL";
 

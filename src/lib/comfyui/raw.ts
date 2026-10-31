@@ -63,7 +63,7 @@ export function toStringValue(v: unknown): string {
 
 /** raw UI 格式节点的 inputs[] 条目（ComfyUI 只把「转为输入」的槽位写进来）。
  *  字段值来自外部 JSON，一律 unknown，读取点自行 typeof 守卫。 */
-export interface RawNodeInput {
+export type RawNodeInput = {
   [k: string]: unknown;
   /** 槽位序号（新版 ComfyUI 写入；旧版按数组序） */
   idx?: number;
@@ -76,10 +76,10 @@ export interface RawNodeInput {
   type?: unknown;
   /** 暴露内部控件的槽位标记（值存于 widgets_values） */
   widget?: { name?: unknown } | null;
-}
+};
 
 /** raw UI 格式节点的 outputs[] 条目。 */
-export interface RawNodeOutput {
+export type RawNodeOutput = {
   [k: string]: unknown;
   /** 槽位序号（新版 ComfyUI 写入；旧版按数组序） */
   idx?: number;
@@ -89,9 +89,9 @@ export interface RawNodeOutput {
   localized_name?: unknown;
   name?: unknown;
   type?: unknown;
-}
+};
 
-export interface RawNode {
+export type RawNode = {
   /** 其余动态字段（color 等），按需 typeof 守卫后读取 */
   [k: string]: unknown;
   /** LiteGraph 运行时 flags（如 collapsed / bypass） */
@@ -118,9 +118,9 @@ export interface RawNode {
   type?: string;
   /** 节点控件值的有序数组，含义由 class_type 决定 */
   widgets_values?: Array<unknown>;
-}
+};
 
-export interface RawWorkflow {
+export type RawWorkflow = {
   [k: string]: unknown;
   config?: Record<string, unknown>;
   /** ComfyUI ≥ v0.7 的子图定义（subgraph wrapper） */
@@ -132,18 +132,18 @@ export interface RawWorkflow {
   /** 每条 link 是 [link_id, src_id, src_slot, dst_id, dst_slot, type]（元素动态） */
   links?: Array<Array<unknown>>;
   nodes: Array<RawNode>;
-}
+};
 
 /** ComfyUI v0.7+ 子图定义容器（rawJson.definitions）。 */
-export interface RawDefinitions {
+export type RawDefinitions = {
   [k: string]: unknown;
   /** 子图定义：键为 UUID 或数字序号；wrapper 的 class_type 即对应 UUID */
   subgraphs?: Record<string, RawSubgraphDef>;
-}
+};
 
 /** 单个子图定义（rawJson.definitions.subgraphs[uid]）。
  *  与顶层 raw 的差异：links 是对象数组（非元组），inputs/outputs 是边界 pin。 */
-export interface RawSubgraphDef {
+export type RawSubgraphDef = {
   [k: string]: unknown;
   /** 内部分组框 */
   groups?: Array<unknown>;
@@ -159,7 +159,7 @@ export interface RawSubgraphDef {
   nodes?: Array<RawNode>;
   /** 边界输出 pin 定义 */
   outputs?: Array<unknown>;
-}
+};
 
 /* ── 子图定义内部的形状契约（外部输入边界，规范 §5.5）────────────────────
  * schema 放在 `RawSubgraphDef` 的声明处（同一处定义、同一处演进），消费方
@@ -192,7 +192,7 @@ export const SubgraphPinSchema = z.looseObject({ id: z.string().min(1) });
  * 展示与提交前穿透**，在 `execution-graph.prepareGraphForExecution()` 里会被
  * 剥到只剩 `title`，绝不外发给 ComfyUI。
  */
-export interface ApiNodeMeta {
+export type ApiNodeMeta = {
   /** 入参名的槽位顺序（bypass 穿透时按槽位匹配） */
   inputOrder?: Array<string>;
   /** 入参名 → 类型（bypass 穿透时按类型匹配） */
@@ -206,16 +206,16 @@ export interface ApiNodeMeta {
   value?: unknown;
   /** 纯前端节点标记（Reroute / PrimitiveNode / Note …） */
   virtual?: boolean;
-}
+};
 
-export interface ApiWorkflowNode {
+export type ApiWorkflowNode = {
   _meta?: ApiNodeMeta;
   /** 部分导出携带的其余动态字段（如旧 rgthree 导出的 type） */
   [k: string]: unknown;
   class_type: string;
   /** API inputs: 命名参数；数组 [nodeId, slotIdx] 表示连线 */
   inputs: Record<string, unknown>;
-}
+};
 
 /* ──────────────────────────────────────────────────────────────────────
  * 从原始格式抽取节点坐标 (用于编辑器初始布局)
@@ -296,14 +296,14 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
  */
 export type ObjectInfoInputSpec = [unknown, Record<string, unknown>?] | Record<string, unknown>;
 
-export interface ObjectInfoClassDef {
+export type ObjectInfoClassDef = {
   [k: string]: unknown;
   input?: {
     optional?: Record<string, ObjectInfoInputSpec>;
     required?: Record<string, ObjectInfoInputSpec>;
   };
   input_order?: { optional?: Array<string>; required?: Array<string> };
-}
+};
 
 /** 把 /object_info 的输入定义规范化为 { type, options }。 */
 function readInputSpec(spec: ObjectInfoInputSpec | undefined): {

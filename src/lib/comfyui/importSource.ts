@@ -35,7 +35,7 @@ const RawWorkflowSchema = z.looseObject({
   nodes: z.array(z.looseObject({ type: z.string() })).min(1),
 });
 
-export interface ParsedWorkflow {
+export type ParsedWorkflow = {
   format: "raw";
   /** 节点坐标：RAW 自带 `pos` 时原样取出；没有则 null（由客户端自动布局兜底）。 */
   positions: Record<string, [number, number]> | null;
@@ -43,7 +43,7 @@ export interface ParsedWorkflow {
   rawJson: unknown;
   taskType: string;
   warnings: Array<string>;
-}
+};
 
 /* 读一个本地文件，返回它的文本与 mtime（毫秒）。
  * 路径缺失或不可读时抛出带可读说明的错误。 */
@@ -130,13 +130,13 @@ export async function parseWorkflowContent(
   return { rawJson, positions, taskType, warnings, format: "raw" };
 }
 
-export interface ImportedFromFile extends ParsedWorkflow {
+export type ImportedFromFile = {
   sourceChecksum: string;
   /** 文件 mtime，单位是秒（epoch）—— 它存在 SQLite 的 32 位 INT 列里，
    *  因此要保持在 2.1e9 以下，不能用毫秒（会溢出 INT）。 */
   sourceMtime: number;
   sourcePath: string;
-}
+} & ParsedWorkflow;
 
 /* 从本地路径做一次性导入：读文件，返回全部规整字段，
  * 以及要写进 WorkflowTemplate 行的追踪元数据。 */
@@ -157,7 +157,7 @@ export async function importFromLocalPath(
   };
 }
 
-export interface ReimportResult {
+export type ReimportResult = {
   /* 文件已从磁盘上消失 —— 调用方应给出「源文件缺失」的提示 */
   missing?: boolean;
   /* 文件还在，但 mtime 与上次导入一致（快路径，不重新解析） */
@@ -173,7 +173,7 @@ export interface ReimportResult {
     sourceMtime: number;
     taskType: string;
   };
-}
+};
 
 /**
  * 重新读取此前导入过的工作流的源文件，判断有没有变化、变化了什么。

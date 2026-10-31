@@ -30,13 +30,13 @@ type Row = {
   type: string;
 };
 
-interface Behavior {
+type Behavior = {
   /** 非空时 list 抛错 —— 覆盖错误态 */
   listError?: string;
   models: Array<Row>;
   /** 非空时 sync 抛错 —— 覆盖静默同步失败 */
   syncError?: string;
-}
+};
 
 let behavior: Behavior = { models: [] };
 /** 记录 list 收到的入参，用于断言筛选真的传到了后端 */

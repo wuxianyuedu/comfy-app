@@ -24,11 +24,11 @@ export const QUEUED_WINDOW = 50;
 export const RECENT_WINDOW = 8;
 
 /** 三个桶：跑动中 / 排队中 / 最近结果。 */
-export interface QueueBuckets {
+export type QueueBuckets = {
   queued: Array<QueueRow>;
   recent: Array<QueueRow>;
   running: Array<QueueRow>;
-}
+};
 
 /**
  * 按状态分桶。

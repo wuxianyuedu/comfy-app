@@ -21,7 +21,7 @@ import { WidgetControl } from "./WidgetControl";
 import { Hint } from "~/components/ui/hint";
 import { TypeChip } from "~/components/studio/TypeChip";
 
-interface WidgetInputRowProps {
+type WidgetInputRowProps = {
   /** 全量 pin —— ioLabel() 靠它在标签撞名时回退到原始 name，保持可辨识。 */
   allPins: ReadonlyArray<WorkflowIOEntry>;
   compact: boolean;
@@ -54,7 +54,7 @@ interface WidgetInputRowProps {
   visible?: boolean;
   /** 挂左侧可连接端点（画布节点用），圆心骑跨卡片左缘。 */
   withHandle?: boolean;
-}
+};
 
 export function WidgetInputRow({
   entry,

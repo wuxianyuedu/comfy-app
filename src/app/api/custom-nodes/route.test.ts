@@ -31,11 +31,11 @@ import { customNodesManifestPath } from "~/lib/comfyui/custom-nodes-manifest.ser
 import { pythonCandidates } from "~/lib/process/python-candidates";
 
 type Cb = (...args: Array<unknown>) => void;
-interface FakeChild {
+type FakeChild = {
   err: Record<string, Array<Cb>>;
   out: Record<string, Array<Cb>>;
   proc: Record<string, Array<Cb>>;
-}
+};
 
 /**
  * 假文件系统的登记表（只覆盖下面这两个路径，其余转调真 `node:fs`）。
@@ -43,7 +43,7 @@ interface FakeChild {
  * 路径是开发机上「解析过一次就会长出来」的那两个，所以每条用例都**显式**登记自己那一档
  *（包括「不存在」）—— 否则同一个断言在解析过一次的机器上会与在干净检出上不同形。
  */
-interface StubFile {
+type StubFile = {
   /** 连「在不在」都问不出来（挂载点失效 / 权限）—— 路由的 try/catch 就是为这一档写的。
    *  `"silent"` 表示抛的是一个**没有 message** 的 Error，用来判兜底文案那一格。 */
   existsFails?: boolean | "silent";
@@ -56,7 +56,7 @@ interface StubFile {
   statFails?: boolean;
   /** 文件内容（字符串原文；`undefined` + `missing` 表示没有这个文件）。 */
   text?: string;
-}
+};
 
 const { spawnMock, userMock, settingsMock, fsState } = vi.hoisted(() => {
   const files = new Map<string, StubFile>();

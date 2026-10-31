@@ -14,7 +14,7 @@
  */
 
 /** 一种元素在产物里的写法。 */
-export interface StyleRule {
+export type StyleRule = {
   /**
    * `style` 之外的属性（形如 ` target="_blank" rel="noreferrer"`，**自带前导空格**）。
    * 默认空串。链接与图片会用到。
@@ -26,7 +26,7 @@ export interface StyleRule {
    * 「明确的零样式」这两种含义混在一起）。
    */
   style?: string;
-}
+};
 
 const MONO = "font-family:ui-monospace,SFMono-Regular,Menlo,monospace;";
 

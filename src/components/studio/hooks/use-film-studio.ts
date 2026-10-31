@@ -38,7 +38,7 @@ import {
 /** 成片镜头来源：统一项目的镜头（工坊产出），或自由文本剧本自动分镜。 */
 export type FilmShotSource = "project" | "script";
 
-export interface FilmStudioController {
+export type FilmStudioController = {
   /** 当前活跃统一项目 id（无则 null）。 */
   activeProjectId: string | null;
   bgmName: string | null;
@@ -84,7 +84,7 @@ export interface FilmStudioController {
   videoWorkflowId: string;
   /** 工作流库里可选的视频工作流（逐镜生成用；本地链路唯一来源）。 */
   videoWorkflows: Array<{ id: string; name: string }>;
-}
+};
 
 /**
  * 拉取成片详情并在进行中时启动轮询。

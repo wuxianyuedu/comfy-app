@@ -113,7 +113,7 @@ export type { ShotProgressMap };
  *  收在 controller 层 —— 提取中切页签再切回，进度与日志不丢（取代原先
  *  散落在各组件里的会话级模块缓存）。
  */
-export interface ExtractSession {
+export type ExtractSession = {
   busy: boolean;
   /** 模型下拉完整选项值（tool | local::<model> | remote::<model>） */
   channelValue: string;
@@ -124,11 +124,11 @@ export interface ExtractSession {
   progress: string;
   /** 成功 / 结果提示文案 */
   status: string;
-}
+};
 
 /** 提取会话更新动作：patch 更新普通字段，appendLog / resetLog 维护日志。
  *  阶段组件卸载期间后台 async 仍可调用（controller 常驻），故能跨页签续传。 */
-export interface ExtractSessionActions {
+export type ExtractSessionActions = {
   /** 追加一条结构化执行日志 */
   appendLog: (entry: ExtractLogEntry) => void;
   /** 向实时 process 追加一段文本（流式 token 累积用） */
@@ -145,9 +145,9 @@ export interface ExtractSessionActions {
   ) => void;
   /** 以给定数组整体替换执行日志（新一次提取重置时用） */
   setLog: (entries: Array<ExtractLogEntry>) => void;
-}
+};
 
-export interface WorkshopPipelineController {
+export type WorkshopPipelineController = {
   /* ── 所在项目（Phase 2：并入统一 proj_*，工坊不再自建多项目） ── */
   activeProjectId: string;
   apiChannels: ApiChannelsView | null;
@@ -231,7 +231,7 @@ export interface WorkshopPipelineController {
   workflowId: string;
   /** 工作流库里的可选工作流（ISSUE #145）。 */
   workflowOptions: Array<WorkshopWorkflowOption>;
-}
+};
 
 /** 创建一个收在 controller 的提取会话（state + 稳定动作）。
  *  在工坊控制器内调用两次（角色卡 / 分镜），动作经 useCallback 保持稳定，

@@ -35,7 +35,7 @@ import { useLogPanel } from "~/components/studio/logs/LogProvider";
 import { SettingsPageView } from "~/app/(main)/settings/SettingsPageView";
 import { useSettingsPage } from "~/app/(main)/settings/hooks/use-settings-page";
 
-export interface SettingsViewProps {
+export type SettingsViewProps = {
   /** 撑满父级高度（工作区视图里由外层给视口高度）；缺省走外壳自己的视口档。 */
   fillHeight?: boolean;
   /**
@@ -46,7 +46,7 @@ export interface SettingsViewProps {
   initialSection?: string | null;
   /** 目标分区已落定后回调（容器据此清空一次性载荷）。 */
   onConsumeSection?: () => void;
-}
+};
 
 export function SettingsView({ fillHeight, initialSection, onConsumeSection }: SettingsViewProps) {
   const c = useSettingsPage({

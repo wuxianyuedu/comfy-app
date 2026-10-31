@@ -20,12 +20,12 @@ export const PORTRAIT_SOURCE_LABELS: Record<PortraitSource, string> = {
 };
 
 /** 定妆照生成过程的一条日志（进度 / 结果 / 错误），供界面折叠展示。 */
-export interface PortraitLogEntry {
+export type PortraitLogEntry = {
   level: "info" | "success" | "error";
   text: string;
   /** 生成时间戳（ms），界面按它显示时刻 */
   ts: number;
-}
+};
 
 export function makePortraitLog(level: PortraitLogEntry["level"], text: string): PortraitLogEntry {
   return { ts: Date.now(), level, text };

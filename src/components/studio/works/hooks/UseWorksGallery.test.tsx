@@ -12,14 +12,14 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-interface EntryRow {
+type EntryRow = {
   edges: Array<unknown>;
   id: string;
   name: string;
   nodes: Array<unknown>;
   origin: "server" | "local" | "both";
   updatedAt: number;
-}
+};
 
 const listProjectsWithServerMock = vi.hoisted(() =>
   vi.fn<() => Promise<{ entries: Array<EntryRow>; ok: boolean }>>(),

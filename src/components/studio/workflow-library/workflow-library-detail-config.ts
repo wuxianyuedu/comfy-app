@@ -30,7 +30,7 @@ export type DetailTab = (typeof DETAIL_TABS)[number]["key"];
 /** 打开一条工作流时的默认页签 —— 取表里的第一项（最轻的那个，见上）。 */
 export const DEFAULT_DETAIL_TAB: DetailTab = DETAIL_TABS[0].key;
 
-export interface WorkflowLibraryDetailProps {
+export type WorkflowLibraryDetailProps = {
   /** 用户级全局模型标签库（用于类型/模型编辑器）。 */
   allModelTags?: Array<{ count: number; id: string; name: string }>;
   /** 「这一条在下载 / 在同步吗」的判据（由父级的 `useItemAction` 给，
@@ -51,16 +51,16 @@ export interface WorkflowLibraryDetailProps {
   onResync: (id: string, name: string) => void;
   onUse: (id: string, meta?: { name: string; taskType: string }) => void;
   workflow: WorkflowRow | null;
-}
+};
 
 /** 详情接口里本面板用到的模板片段 —— 显式收窄，便于单测与复用。 */
-export interface DetailTemplate {
+export type DetailTemplate = {
   /** 工作流模板的 paramMap 列（含 `source.mode:<模式>` 的对外参数落点覆盖）。
    *  仅在类型层描述线上返回的 Json 列；库画布据此标出对外参数与落点归属。 */
   paramMap?: unknown;
   rawJson?: unknown;
   workflowIO?: unknown;
-}
+};
 
 /** workflowIO 在旧数据里可能存成数组或非对象，这里收紧成 Map 或 null。 */
 export function normalizeWorkflowIO(raw: unknown): WorkflowIOMap | null {

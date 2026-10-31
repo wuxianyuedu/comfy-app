@@ -47,7 +47,7 @@
  * **也不许只写一端** —— `tests/app-event-pairing.test.ts` 要求这一行的每一条
  * 都既有派发方又有订阅方（认字面量，也认 `export const X = "…"` 常量的间接写法）。
  */
-export interface AppEvents {
+export type AppEvents = {
   /** 某个画布节点产出了结果，读侧据此把输出喂给下游。 */
   "canvas:produce": {
     id: string;
@@ -95,7 +95,7 @@ export interface AppEvents {
    * `src/lib`，不得反向依赖视图层（§18 硬规则 22）—— 合法性由订阅侧按已有枚举收敛。
    */
   "workspace:navigate": { section?: string; view: string };
-}
+};
 
 /** 应用事件名的联合类型。 */
 export type AppEventName = keyof AppEvents;

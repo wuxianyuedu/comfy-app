@@ -20,11 +20,11 @@ import { streamChat } from "~/lib/llm/browser";
 import { buildScriptMarkdownMessages } from "~/lib/llm/prompts";
 import { errorMessage } from "~/lib/error-message";
 
-interface Props {
+type Props = {
   meta: ProjectMeta;
   onMetaChange: (m: ProjectMeta) => void;
   onScriptChange: (markdown: string) => void;
-}
+};
 
 const PROJECT_TYPES: Array<ProjectType> = [
   "short_video",

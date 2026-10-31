@@ -22,11 +22,11 @@ import { readStorageItem, writeStorageItem } from "~/lib/browser-storage";
 export const APPEARANCE_STORAGE_KEY = "comfyapp:appearance-v1";
 
 /** 一档可选值：id 用于持久化，label 是界面文案，value 是写进 CSS 变量的值。 */
-export interface AppearanceStep {
+export type AppearanceStep = {
   id: string;
   label: string;
   value: string;
-}
+};
 
 /**
  * 圆角档位。`中` 就是 `globals.css` 里 `--radius` 那颗基数（1rem）——
@@ -51,10 +51,10 @@ export const FONT_SCALE_STEPS: Array<AppearanceStep> = [
   { id: "125", label: "宽松 125%", value: "1.25" },
 ];
 
-export interface AppearancePrefs {
+export type AppearancePrefs = {
   fontScale: string;
   radius: string;
-}
+};
 
 /** 默认值 = `globals.css` 里 `--radius` / `--font-scale` 的基数（两者必须同批改）。 */
 export const DEFAULT_APPEARANCE: AppearancePrefs = {

@@ -69,14 +69,14 @@ export type ValueSourceKind = "json" | "media";
  * 每个 `load` 都必须是「真东西」。**不许**在这里塞一份手写的示例对象去讨好某个
  * story —— 那就是把假形态请回来。
  */
-export interface ValueSource<T> {
+export type ValueSource<T> = {
   /** 这个源解决什么、真数据从哪来（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
   /** 按名字取值；不认识的名字**抛错** —— 静默回退会让「源名写错了」看不出来。 */
   readonly load: (name: string) => T;
   /** 这个名字下**有哪些**取值（进 Args 面板的选项）。 */
   readonly names: ReadonlyArray<string>;
-}
+};
 
 /**
  * 值源的**真实来源**：Storybook 的 `staticDirs` 里那份开发期资源目录。

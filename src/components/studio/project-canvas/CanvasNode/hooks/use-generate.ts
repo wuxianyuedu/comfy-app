@@ -31,7 +31,7 @@ import { buildCanvasGeneratePayload } from "~/components/studio/project-canvas/C
 import { parseGenerateInput, type GenerateInput } from "~/lib/workflow/workflow-generate-input";
 import { errorMessage } from "~/lib/error-message";
 
-export interface UseGenerateArgs {
+export type UseGenerateArgs = {
   d: CanvasNodeData;
   getNode: (id: string) => Node | undefined;
   id: string;
@@ -46,7 +46,7 @@ export interface UseGenerateArgs {
   wfMode?: string | null;
   /** 作者在工作流库配的「对外参数 → 节点端口」映射（paramMap.source）。 */
   wfParamMap?: Record<string, unknown> | null;
-}
+};
 
 export function useGenerate({
   id,

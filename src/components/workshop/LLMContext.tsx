@@ -12,7 +12,7 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FormField } from "~/components/ui/form-field";
 import { SelectChip } from "~/components/ui/select-chip";
 
-interface LLMContextValue {
+type LLMContextValue = {
   closeSettings: () => void;
   config: LLMConfigView | null;
   loading: boolean;
@@ -25,7 +25,7 @@ interface LLMContextValue {
   /** 静态配置下的远端独立模型名（工坊下拉「远端」组读它，不实时探测）。 */
   remoteModels: Array<string>;
   settingsOpen: boolean;
-}
+};
 
 const LLMContext = React.createContext<LLMContextValue | null>(null);
 

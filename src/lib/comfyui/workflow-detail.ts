@@ -73,23 +73,23 @@ import {
 export type WorkflowDetailIOEntry = IOParamSlot & Omit<WorkflowIOEntry, "direction" | "kind">;
 
 /** ComfyUI group frames 的下发形状（镜像客户端 WorkflowGroup，bypass 恒写入）。 */
-export interface WorkflowDetailGroup {
+export type WorkflowDetailGroup = {
   bounding: [number, number, number, number];
   bypass: boolean;
   color: string;
   id: string;
   title: string;
-}
+};
 
 /** Note / MarkdownNote 注记的下发形状（镜像客户端 WorkflowNote）。 */
-export interface WorkflowDetailNote {
+export type WorkflowDetailNote = {
   color: string;
   id: string;
   pos: [number, number];
   size: [number, number];
   text: string;
   title: string;
-}
+};
 
 /** 详情转换所需的行类型（整行，含 `rawJson` / `positions` 两个大字段）。
  *  单独起名是为了让 `buildWorkflowDetailJson` 的参数可读——
@@ -102,7 +102,7 @@ type WorkflowDetailTemplateRow = NonNullable<
  *  与客户端 components/studio/wf-types.ts 里的 `WorkflowDetail` 接口对应。
  *  有些字段只出现在子图变体上。
  *  subgraph variant. */
-export interface WorkflowDetailFull {
+export type WorkflowDetailFull = {
   /** 该工作流可运行的全部模式码（从 JSON 字符串列解析）。
    *  子图变体不带这个字段。改名 `availableModes` 以与 `WorkflowIOParam.modeOverrides`
    *  （按模式码的覆盖层）区分 —— 两者同名 `modes` 是历史命名地雷。 */
@@ -144,7 +144,7 @@ export interface WorkflowDetailFull {
   taskType: string;
   usable?: boolean;
   workflowIO: Record<string, WorkflowDetailIOEntry>;
-}
+};
 
 /** 把已读出的工作流行转换成下发给客户端的序列化 JSON。
  *

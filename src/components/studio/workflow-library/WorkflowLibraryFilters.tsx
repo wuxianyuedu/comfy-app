@@ -15,13 +15,13 @@ import { Icon } from "~/components/ui/icon";
 import { SelectMenu } from "~/components/ui/select-menu";
 import type { SourceFilter, TypeFilter } from "./workflow-library-config";
 
-export interface ModelTagCount {
+export type ModelTagCount = {
   count: number;
   id: string;
   name: string;
-}
+};
 
-interface WorkflowLibraryFiltersProps {
+type WorkflowLibraryFiltersProps = {
   modelFilter: string;
   modelTags: Array<ModelTagCount>;
   onManageModels: () => void;
@@ -32,7 +32,7 @@ interface WorkflowLibraryFiltersProps {
   sourceFilter: SourceFilter;
   typeCounts: { all: number; audio: number; image: number; video: number };
   typeFilter: TypeFilter;
-}
+};
 
 const SOURCE_OPTIONS = /* SAFETY: 类型断言已复核 */ ["all", "local", "online"] as const;
 const SOURCE_LABELS: Record<SourceFilter, string> = {

@@ -80,7 +80,7 @@ export const REDACT_PATHS = /* SAFETY: 类型断言已复核 */ [
   "phoneNumber",
 ] as const;
 
-export interface PinoLoggerOptions {
+export type PinoLoggerOptions = {
   /** 日志目标流。显式传入时走 JSON 直写（不经 pino-pretty worker transport），便于测试/定制输出。 */
   destination?: DestinationStream;
   /** 覆盖日志级别；缺省读 `LOG_LEVEL`，再回退 info。 */
@@ -102,7 +102,7 @@ export interface PinoLoggerOptions {
    * 会随调用方漂移。绑定一次、处处带上，是 pino 的标准做法（`log.child({ ns })`）。
    */
   ns?: string;
-}
+};
 
 /**
  * 镜像的目标：显式传入者优先；**未传时在测试进程里直接空转**。
@@ -307,14 +307,14 @@ function renderFieldKeyList(payload?: Record<string, unknown>): string {
  * 显式包装成「命名空间拼接」的语义（`a:b`），与旧接口逐字一致 —— 调用方
  * （各 repository、workshop 生成日志等）无需改动。
  */
-export interface Logger {
+export type Logger = {
   /** 派生子日志器，命名空间拼接为 `parent:child`。 */
   child(ns: string): Logger;
   debug(msg: string, fields?: Record<string, unknown>): void;
   error(msg: string, fields?: Record<string, unknown>): void;
   info(msg: string, fields?: Record<string, unknown>): void;
   warn(msg: string, fields?: Record<string, unknown>): void;
-}
+};
 
 /** 绑定名放在 `ns` 字段（pino 的 `bindings` 会带上它，便于采集端按命名空间过滤）。 */
 function wrap(inner: PinoLogger): Logger {

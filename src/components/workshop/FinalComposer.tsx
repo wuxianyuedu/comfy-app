@@ -19,7 +19,7 @@ import {
   type Transition,
 } from "~/lib/workshop/types";
 
-interface Props {
+type Props = {
   /** 跳到「成片」视图（真出 MP4）。由父组件注入（内部走 workspace:navigate 广播）。 */
   onComposeFilm?: () => void;
   /** Raised when the user exports the composition plan (合成清单已导出，非成片). */
@@ -29,16 +29,16 @@ interface Props {
   rendered: boolean;
   shots: Array<Shot>;
   title: string;
-}
+};
 
 const TRANSITIONS: Array<Transition> = ["cut", "dissolve", "fade"];
 const MOTIONS: Array<MotionLevel> = ["low", "medium", "high"];
 
 /** 顺序播放预览中的一个时间线条目。 */
-interface TimelineEntry {
+type TimelineEntry = {
   duration: number;
   shot: Shot;
-}
+};
 
 const MOTION_PROMPTS: Record<MotionLevel, string> = {
   low: "subtle motion, gentle camera drift",

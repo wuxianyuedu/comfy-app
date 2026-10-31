@@ -71,13 +71,13 @@ export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
  *
  * `hasApiKey` 是**只读视图字段**：服务端下发时逐条标「这条存过密钥」（与顶层同口径），
  * 供设置页显示「已配置」而不把明文送进浏览器；它不参与写入判定。 */
-export interface RemoteModelEntry {
+export type RemoteModelEntry = {
   apiKey?: string | null;
   baseUrl?: string | null;
   hasApiKey?: boolean;
   kind?: RemoteModelKind | null;
   name: string;
-}
+};
 
 /** `apiKey` 的三态归一（唯一一份口径，`normalizeExtraModels` 与 `splitExtraModels`
  *  都吃它 —— 这两处此前各写一份「不是非空字符串就折成 null」，而那正是把
@@ -167,12 +167,12 @@ export function extraModelName(entry: RawExtraModel): string {
 }
 
 /** option C 的拆分结果：本地 ollama 候选（纯名字，无 apiKey）与远端独立模型分开。 */
-export interface ExtraModelSplit {
+export type ExtraModelSplit = {
   /** 本地 Ollama 候选模型名（无 apiKey）。 */
   localNames: Array<string>;
   /** 远端独立模型条目（可带独立 baseUrl / apiKey）。 */
   remoteEntries: Array<RemoteModelEntry>;
-}
+};
 
 /**
  * 把 DB / 请求里的候选列表按「类型」拆成本地与远端两堆：
@@ -291,7 +291,7 @@ export function resolveTaskTemperature(opts: {
   return fallback;
 }
 
-export interface LLMConfig {
+export type LLMConfig = {
   /** remote 提供方的密钥；与 RemoteModelEntry.apiKey 一样只在服务端参与请求 */
   apiKey?: string | null;
   /** OpenAI-compatible base URL: 本机 Ollama 默认值见 `~/lib/endpoints`
@@ -306,10 +306,10 @@ export interface LLMConfig {
   temperature: number;
   /** 按任务类型覆盖的温度；缺失某 key 时回退到该任务的推荐默认值 */
   temperatureByTask?: Record<TaskType, number> | null;
-}
+};
 
 /* 发送给浏览器 / 与浏览器共享的配置形状（apiKey 已脱敏）。 */
-export interface LLMConfigView {
+export type LLMConfigView = {
   baseUrl: string;
   /** 候选模型名（条目已归一成名字下发，供工坊内切换；连接参数不下发） */
   extraModels?: Array<string> | null;
@@ -319,7 +319,7 @@ export interface LLMConfigView {
   provider: LLMProviderType;
   temperature: number;
   temperatureByTask?: Record<TaskType, number> | null;
-}
+};
 
 /**
  * 多模态消息内容块（P8-2 视觉评审地基）：文本块 + 图块。OpenAI 兼容接口用 content
@@ -331,7 +331,7 @@ export type LLMContentPart =
   | { text: string; type: "text" }
   | { image_url: { url: string }; type: "image_url" };
 
-export interface LLMMessage {
+export type LLMMessage = {
   /** 纯文本（历史用法）或多模态内容块数组（带图时用）。两者都合法。 */
   content: string | Array<LLMContentPart>;
   role: "system" | "user" | "assistant" | "tool";
@@ -343,26 +343,26 @@ export interface LLMMessage {
     id: string;
     type: "function";
   }>;
-}
+};
 /** OpenAI function calling 工具定义（OpenAI 兼容 /chat/completions 的 tools 参数）。 */
-export interface LLMTool {
+export type LLMTool = {
   function: {
     description: string;
     name: string;
     parameters?: Record<string, unknown>;
   };
   type: "function";
-}
+};
 
 /** OpenAI 兼容响应中的 tool_call 条目。 */
-export interface LLMToolCall {
+export type LLMToolCall = {
   function: {
     arguments: string;
     name: string;
   };
   id: string;
   type: "function";
-}
+};
 
 /** 工坊阶段的 key —— 供按阶段挑选模型 / 提示各阶段能力 */
 export const WORKSHOP_STAGES = /* SAFETY: 类型断言已复核 */ [
@@ -374,7 +374,7 @@ export const WORKSHOP_STAGES = /* SAFETY: 类型断言已复核 */ [
 
 export type WorkshopStage = (typeof WORKSHOP_STAGES)[number]["id"];
 
-export interface LLMRequestOptions {
+export type LLMRequestOptions = {
   baseUrl?: string;
   maxTokens?: number;
   model?: string;
@@ -390,7 +390,7 @@ export interface LLMRequestOptions {
    * 因此给它一个独立指定通道，缺省不强行要求用户配置。
    */
   visionModel?: string;
-}
+};
 
 /**
  * 选视觉评审模型名（P8-2）：优先级 = 调用方显式指定 → 远端候选里 `kind=image` 的那条

@@ -11,10 +11,10 @@
  *   - 显示中文优先；若调用方 ctx="en" 则给英文版本
  */
 
-interface NodeTitleEntry {
+type NodeTitleEntry = {
   en: string;
   zh: string;
-}
+};
 
 /* ComfyUI 核心内置节点（简体中文界面的叫法）。
  * 来源是 ComfyUI 前端 apps/src/locales/zh-CN.json（0.5.x 版），

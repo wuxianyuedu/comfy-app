@@ -45,7 +45,7 @@ export type ModelDialog =
 type ModelDialogField = keyof ModelDialogForm;
 
 /** 「实际使用」测试弹窗的状态：参数可自定义，结果按用途渲染。 */
-export interface UsageTestDialogState {
+export type UsageTestDialogState = {
   apiKey: string;
   baseUrl: string;
   entry: RemoteModelEntry;
@@ -59,12 +59,12 @@ export interface UsageTestDialogState {
   result: UsageTestResult | null;
   running: boolean;
   size: string;
-}
+};
 
 /** 每个条目「实际使用」测试弹窗的草稿快照：不含运行时 running / entry 引用，
  *  只保留「重开可恢复」的填写内容与最近一次执行结果 / 状态。
  *  关闭弹窗不丢内容（ISSUE #107）：重开同一 kind + 条目的弹窗时据此恢复。 */
-export interface UsageTestDialogSnapshot {
+export type UsageTestDialogSnapshot = {
   apiKey: string;
   baseUrl: string;
   fields: Array<UsageField>;
@@ -74,7 +74,7 @@ export interface UsageTestDialogSnapshot {
   prompt: string;
   result: UsageTestResult | null;
   size: string;
-}
+};
 
 /** 模块级草稿仓库：键 = usageTestDraftKey(kind, name)。
  *  放在模块作用域而非组件 state，是为了「关闭弹窗」也能保留——
@@ -104,13 +104,13 @@ function restoreUsageTestDraft(kind: UsageTestKind, name: string): UsageTestDial
 }
 
 /** 每个模型条目的「测试连接」进行态与结果。 */
-export interface RowProbe {
+export type RowProbe = {
   msg: { kind: "ok" | "err"; text: string } | null;
   name: string;
   running: boolean;
-}
+};
 
-export interface RemoteModelDialogs {
+export type RemoteModelDialogs = {
   /** 弹窗内提交失败的错误文案（留在原地展示）。 */
   addError: string | null;
   addField: (key?: string) => void;
@@ -164,7 +164,7 @@ export interface RemoteModelDialogs {
   usageFieldsToSend: (state: UsageTestDialogState) => Array<UsageField>;
   /** 「实际使用」测试弹窗状态（null = 关闭）。 */
   usageTest: UsageTestDialogState | null;
-}
+};
 
 /**
  * 远程模型管理的弹窗交互状态与动作。

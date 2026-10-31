@@ -51,7 +51,7 @@ import { WorkflowPreviewRunFeedback } from "./WorkflowPreviewRunFeedback";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import { latestRunForWorkflow } from "~/lib/workflow/workflow-run-store";
 
-interface Props {
+type Props = {
   defaultMode?: string;
   /** 多模式工作流：提供时第二行右侧的类型 chip 变成模式切换下拉。 */
   modes?: Array<string>;
@@ -73,7 +73,7 @@ interface Props {
   workflowId: string;
   workflowIO: WorkflowIOMap | null;
   workflowName: string;
-}
+};
 
 /* 相位 → 状态胶囊文案（running 的百分比是动态的，查表只覆盖静态四种）。 */
 const STATUS_LABEL: Record<Exclude<Phase["kind"], "running">, string> = {

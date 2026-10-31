@@ -11,13 +11,13 @@ import { portColor } from "~/lib/comfyui/types";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { RawInputMeta, RawOutputMeta } from "../workflow-types";
 
-interface SubgraphPinRowsProps {
+type SubgraphPinRowsProps = {
   connInputs: Array<{ inp: RawInputMeta; label: string }>;
   hostNodeId?: string;
   io: IOEditContextValue | null;
   nodeId: string;
   outputs: Array<{ display: string; out: RawOutputMeta }>;
-}
+};
 
 export function SubgraphPinRows({
   connInputs,

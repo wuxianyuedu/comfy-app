@@ -93,11 +93,11 @@ export function CollapsedPortHandles({
   );
 }
 
-interface FlowNodeCollapsedAnchorsProps {
+type FlowNodeCollapsedAnchorsProps = {
   data: WorkflowNodeData;
   orderedEntries: Array<[string, unknown]>;
   outputs: Array<[string, string]>;
-}
+};
 
 export function FlowNodeCollapsedAnchors({
   data,

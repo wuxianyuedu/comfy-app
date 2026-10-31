@@ -41,7 +41,7 @@ const PARSE_LOG_MAX = 2000;
 
 type RowState = ReturnType<typeof deriveRowState>;
 
-export interface ParentBlock {
+export type ParentBlock = {
   cnt: {
     empty: number;
     error: number;
@@ -57,11 +57,11 @@ export interface ParentBlock {
     sub: DiscoveredSubpkg;
   }>;
   total: number;
-}
+};
 
 /** 自定义节点 / 本地工作流对话框的全部状态、派生数据与操作。
  *  容器与视图组件只消费这个 controller，不自己持有任何逻辑。 */
-export interface CustomNodesSettingsController {
+export type CustomNodesSettingsController = {
   byPath: Record<string, SummaryPkg>;
   consoleRef: RefObject<HTMLDivElement | null>;
   discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
@@ -95,7 +95,7 @@ export interface CustomNodesSettingsController {
     total: number;
     unimported: number;
   };
-}
+};
 
 /**
  * ndjson 进度事件流的消费器（从 `fetchSettings` 拆出，§12.13）。

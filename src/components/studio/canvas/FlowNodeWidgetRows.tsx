@@ -12,13 +12,13 @@ import { PORT_ROW_TONES, portDotGlow, resolvePortRowTone } from "./flow-focus-en
 import { NODE_PORT_FOCUS_ACTIVE_KEY, readPortFocusRole } from "./hooks/use-related-edges-highlight";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
 
-interface FlowNodeWidgetRowsProps {
+type FlowNodeWidgetRowsProps = {
   data: WorkflowNodeData;
   hasSize: boolean;
   io: IOEditContextValue | null;
   rawMeta: Record<string, RawInputMeta>;
   visibleWidgetEntries: Array<[string, unknown]>;
-}
+};
 
 export function FlowNodeWidgetRows({
   data,

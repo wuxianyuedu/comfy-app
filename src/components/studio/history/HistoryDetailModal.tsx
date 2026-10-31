@@ -27,7 +27,7 @@ import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { zClass } from "~/lib/shell/overlay-z";
 
-interface HistoryDetailModalProps {
+type HistoryDetailModalProps = {
   detail: TaskDetail | null;
   detailId: string | null;
   detailLoading: boolean;
@@ -38,7 +38,7 @@ interface HistoryDetailModalProps {
   /** 本任务所用工作流的 IO 定义：参数可读名从它的`label` 查（任务行里只存了
    * pin 名）。工作流已被删除时是空表，参数名如实回落 pin 名。 */
   workflowIO: WorkflowIOMap;
-}
+};
 
 /**
  * 历史任务详情弹窗 —— 纯展示层（规范 17 §17.2 第③层）。

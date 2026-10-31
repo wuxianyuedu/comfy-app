@@ -16,7 +16,7 @@ import { firstRowRequired } from "./repository-row";
  *  （成片监看每 4s 就打进度日志），界面也只显示最近一段。 */
 const LOGS_MAX = 500;
 
-export interface FilmSummary {
+export type FilmSummary = {
   createdAt: Date;
   finalVideo: string | null;
   id: string;
@@ -24,7 +24,7 @@ export interface FilmSummary {
   shotCount: number;
   status: string;
   title: string;
-}
+};
 
 export class FilmRepository extends DrizzleRepository<FilmProject> {
   constructor() {

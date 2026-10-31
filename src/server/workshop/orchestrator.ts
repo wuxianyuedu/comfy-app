@@ -243,7 +243,7 @@ export async function setStoryboard(id: string, shots: Array<Shot>) {
 
 // ── 阶段 4：生图 ───────────────────────────────────────────────
 
-export interface GenerateImageInput {
+export type GenerateImageInput = {
   channel?: "api" | "comfyui";
   characterId?: string;
   shotId?: string;
@@ -251,7 +251,7 @@ export interface GenerateImageInput {
    *  缺省各通道按自己的默认档走。调用方（MCP）若仍按老口径给 "1024x1024"，
    *  由边界用 `toSizeSpec` 归一。 */
   size?: SizeSpec;
-}
+};
 
 export async function generateImage(id: string, input: GenerateImageInput) {
   const state = await load(id);
@@ -305,7 +305,7 @@ export async function generateImage(id: string, input: GenerateImageInput) {
 
 // ── 阶段 5：生视频 ─────────────────────────────────────────────
 
-export interface SubmitVideoInput {
+export type SubmitVideoInput = {
   channel?: "api" | "comfyui";
   fps?: number;
   frames?: number;
@@ -313,7 +313,7 @@ export interface SubmitVideoInput {
   prompt?: string;
   shotId: string;
   useFirstFrame?: boolean;
-}
+};
 
 export async function submitVideo(id: string, input: SubmitVideoInput) {
   const state = await load(id);
@@ -386,17 +386,17 @@ export async function pollVideo(id: string, shotId: string) {
 
 // ── 阶段 6：成片合成 ─────────────────────────────────────────────
 
-export interface ComposeFinalInput {
+export type ComposeFinalInput = {
   render?: boolean;
   title?: string;
-}
+};
 
-export interface ComposeFinalResult {
+export type ComposeFinalResult = {
   outputPath?: string;
   plan: CompositionPlan;
   planPath: string;
   renderNote?: string;
-}
+};
 
 /** 把分镜按序合成为成片：写出合成清单（JSON），可选 ffmpeg 渲染成 mp4。 */
 export async function composeFinal(

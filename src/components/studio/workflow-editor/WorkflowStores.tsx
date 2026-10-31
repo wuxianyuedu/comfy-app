@@ -53,15 +53,15 @@ import { reportStaleStoreAction } from "~/lib/shell/stale-store-notify";
  *  workflowId。其余动作（toggleIO / setIOLabel / toggleIORequired /
  *  setIOModeOverride / purgeModeOverrides）都是纯状态更新，与编辑器其它 30+
  *  个画布 state 解耦。 */
-export interface IOEditState {
+export type IOEditState = {
   ioEditMode: boolean;
   ioPreviewOpen: boolean;
   workflowIO: Record<string, WorkflowIOParam>;
   /** 本地勾选态里的作者重命名（`label`）只由 `setIOLabel` 写入；勾选 / 取消
    *  勾选不再抄画布的显示名进库，因此这里没有「既不是作者命名、又要保留」的
    *  中间态，也不需要任何机器名判定。 */
-}
-export interface IOEditActions {
+};
+export type IOEditActions = {
   /** 批量摘掉所有 IO 条目上给定模式码的覆盖层（modes[mode]）。
    *  模式从工作流 `modes` 列移除后，条目里的覆盖必须跟着清掉，否则这些
    *  无主覆盖会一直跟着 workflowIO 落库往返（页签栏不再显示，纯脏数据）。
@@ -90,7 +90,7 @@ export interface IOEditActions {
   setIOSeedMode: (key: string, mode: string) => void;
   toggleIO: (ref: IoRef) => void;
   toggleIORequired: (key: string) => void;
-}
+};
 export type IOEditStore = IOEditState & IOEditActions;
 
 export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
@@ -331,11 +331,11 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
  *  订阅。这既消除 React Context 的「value 对象每次重渲重建 → 全子树重渲」问题，
  *  又保留每实例隔离。
  * ─────────────────────────────────────────────────────────────────────── */
-export interface WFStores {
+export type WFStores = {
   io: StoreApi<IOEditStore>;
   rgthree: StoreApi<RgthreeGroupsStore>;
   viewer: StoreApi<NodeJsonViewerStore>;
-}
+};
 export const WFStoresContext = createContext<WFStores | null>(null);
 
 /** 取 IOEdit store 的 api —— 供 owner（WorkflowEditorInner）在容器上方直写。
@@ -427,18 +427,18 @@ export const selectIoPreviewOpen = (s: IOEditStore) => s.ioPreviewOpen;
  *  乐观 overrides（groupId → bypass）优先于 detail.groups[].bypass，
  *  直到一次成功的 PATCH + detail refetch 调和。工厂参数携带 workflowId +
  *  detail（读 groups 的 fallback）。 */
-export interface RgthreeGroupsState {
+export type RgthreeGroupsState = {
   /** 运行时同步进来的有效 detail / workflowId —— getBypass 每次从 get() 读，确切
    *  detail 到达（而非首次 factory 的 null）后仍反射最新 groups。 */
   detail: WorkflowDetail | null;
   /** 乐观 overrides（groupId → bypass），优先于 detail.groups[].bypass。 */
   overrides: Record<string, boolean>;
   workflowId: string;
-}
-export interface RgthreeGroupsActions {
+};
+export type RgthreeGroupsActions = {
   getBypass: (groupId: string) => boolean;
   setBypass: (groupId: string, bypass: boolean) => void;
-}
+};
 export type RgthreeGroupsStore = RgthreeGroupsState & RgthreeGroupsActions;
 export type RgthreeGroupsStoreParams = {
   detail: WorkflowDetail | null;
@@ -501,15 +501,15 @@ export function useRgthreeGroups(): RgthreeGroupsContextValue {
  *  getNodeJson / getNodeView（detail / rawMeta / positions / 子图 raw def）。
  *  popover 本体（NodeJsonPopover）仍由 Provider 渲染并通过 context 提供，
  *  但状态/动作全部收进 store。 */
-export interface NodeJsonViewerState {
+export type NodeJsonViewerState = {
   viewer: NodeJsonViewerRequest | null;
-}
-export interface NodeJsonViewerActions {
+};
+export type NodeJsonViewerActions = {
   dismiss: () => void;
   getNodeJson: NodeJsonViewerContextValue["getNodeJson"];
   getNodeView: NodeJsonViewerContextValue["getNodeView"];
   requestShow: NodeJsonViewerContextValue["requestShow"];
-}
+};
 export type NodeJsonViewerStore = NodeJsonViewerState &
   NodeJsonViewerActions &
   NodeJsonViewerLookup;
@@ -523,13 +523,13 @@ export type NodeJsonViewerStoreParams = {
 
 /* 可变查找上下文 —— getNodeJson/getNodeView 每次调用都从 get() 读最新值，
  * 由 Provider 在 params 变化时同步，确保 drill-in 子图视图仍反射最新 detail。 */
-export interface NodeJsonViewerLookup {
+export type NodeJsonViewerLookup = {
   detail: WorkflowDetail | null;
   positions: Record<string, [number, number]> | null;
   rawMetaById: Record<string, RawMetaEntry>;
   subgraphRawContext: { parentRawJson: unknown; subUid: string } | null;
   subgraphStackLength: number;
-}
+};
 
 export function createNodeJsonViewerStore(
   params: NodeJsonViewerStoreParams,

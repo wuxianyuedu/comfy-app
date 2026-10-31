@@ -7,7 +7,7 @@ import { Hint } from "~/components/ui/hint";
 
 export type CanvasPanelType = "materials" | "history" | null;
 
-interface CanvasPanelToolbarProps {
+type CanvasPanelToolbarProps = {
   /** 当前打开的面板（null = 无） */
   active: CanvasPanelType;
   /**
@@ -19,7 +19,7 @@ interface CanvasPanelToolbarProps {
   floating?: boolean;
   /** 用户切换面板时调用 */
   onSelect: (panel: CanvasPanelType) => void;
-}
+};
 
 /**
  * 竖向工具栏，用于切换素材库 / 历史面板。

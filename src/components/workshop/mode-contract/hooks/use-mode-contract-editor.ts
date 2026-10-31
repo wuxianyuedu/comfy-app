@@ -20,7 +20,7 @@ import {
 import { effectiveModeContract } from "../mode-contract-config";
 import { useModeContracts } from "./use-mode-contracts";
 
-export interface ModeContractEditorController {
+export type ModeContractEditorController = {
   /** 新增一个自定义口（作者填名 + 选简单类型）。空名不生效。 */
   addCustomInput: (label: string, kind: ModeContractCustomKind) => void;
   /** 追加一个输入口（参考图由调用方传 `nextReferenceImageId` 的结果）。 */
@@ -54,7 +54,7 @@ export interface ModeContractEditorController {
   stored: Array<ModeContract>;
   /** 切换某个口的「必备」状态。 */
   toggleRequired: (id: ModeContractInputId) => void;
-}
+};
 
 export function useModeContractEditor(): ModeContractEditorController {
   const registry = useModeContracts();

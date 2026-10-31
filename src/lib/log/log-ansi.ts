@@ -10,11 +10,11 @@
  */
 
 /** 一段带样式的日志文本。text 为原文（不含转义序列）。 */
-export interface AnsiSegment {
+export type AnsiSegment = {
   /** 活动样式（前景/背景/字重等可同时生效）；空 = 默认样式 */
   styles?: Array<AnsiStyleKey>;
   text: string;
-}
+};
 
 export type AnsiStyleKey =
   | "bold"
@@ -230,14 +230,14 @@ function composeStyles(state: {
   return styles;
 }
 
-interface SgrState {
+type SgrState = {
   bg?: AnsiStyleKey;
   bold: boolean;
   dim: boolean;
   fg?: AnsiStyleKey;
   italic: boolean;
   underline: boolean;
-}
+};
 
 function applySgr(codes: string, set: (state: SgrState) => void, get: () => SgrState): void {
   const parts = codes

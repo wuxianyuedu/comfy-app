@@ -36,7 +36,7 @@ import { useCallback, useMemo, useState } from "react";
 /** 一次动作的 scope：`null` 表示「不属于任何一条」（整表级别的错误）。 */
 export type ErrorScope = string | null;
 
-export interface ItemErrors {
+export type ItemErrors = {
   /** 手动清掉某一条（如用户重新打开该行的编辑器）。 */
   clear: (key: ErrorScope) => void;
   /** 清掉全部（如整表刷新 / 关闭弹窗）。 */
@@ -57,7 +57,7 @@ export interface ItemErrors {
    * 同时清掉无 key 那档（整表错误在任一条成功后即失效）。
    */
   report: (key: ErrorScope) => (kind: "ok" | "err", detail: string) => void;
-}
+};
 
 /**
  * 按条目挂错误的错误表。

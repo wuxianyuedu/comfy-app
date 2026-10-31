@@ -32,17 +32,17 @@
 /** 参与分组的最小形状。刻意不 import 组件层的 `MessageRecord`：
  *  `src/lib/**` 不得依赖 `src/components/**`（eslint boundaries 的 H1），
  *  而分组这件事本身只需要「谁 + 哪一次启动 + 什么时候」。 */
-export interface RunScopedMessage {
+export type RunScopedMessage = {
   /** 消息 id（分组不改写它，只是原样带过去）。 */
   id: string;
   /** 属于哪一次启动；null = 写入时不知道。 */
   runId: string | null;
   /** Unix 毫秒。 */
   time: number;
-}
+};
 
 /** 一组消息 = 一次启动（或「未标记」那一组）。 */
-export interface MessageRunGroup<T extends RunScopedMessage> {
+export type MessageRunGroup<T extends RunScopedMessage> = {
   /** 组内条数（= `messages.length`，单列一个字段是为了视图不用再数）。 */
   count: number;
   /** 是否正是**当前**这一次启动（`currentRunId` 命中的那一组）。 */
@@ -56,7 +56,7 @@ export interface MessageRunGroup<T extends RunScopedMessage> {
   messages: Array<T>;
   /** 组键：这一次启动的 runId；null = 未标记启动。 */
   runId: string | null;
-}
+};
 
 /** 「本次启动」——当前这一次，用户正身处其中。 */
 const LABEL_CURRENT = "本次启动";
@@ -68,12 +68,12 @@ const LABEL_EARLIER = "更早的启动";
 const LABEL_UNMARKED = "未标记启动";
 
 /** 内部草稿：定完 label 再交出去，避免把「先占位再回填」的半成品暴露给调用方。 */
-interface Draft<T extends RunScopedMessage> {
+type Draft<T extends RunScopedMessage> = {
   isCurrent: boolean;
   latestAt: number;
   messages: Array<T>;
   runId: string | null;
-}
+};
 
 /**
  * 把消息按「每一次启动」分组。

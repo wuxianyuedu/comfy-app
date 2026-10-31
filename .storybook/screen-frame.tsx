@@ -67,7 +67,7 @@ import { defaultData, type CanvasNodeType, type NodeKind } from "~/lib/project-c
  * 工作台加一层 mock（那正是这一批在防的事）。
  */
 /** 一个真项目：名字与节点数据都是真形状（节点类型用 `canvas-types` 的真 kind）。 */
-export interface ProjectScene {
+export type ProjectScene = {
   /** 这个场景解决什么（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
   readonly edges?: ReadonlyArray<Edge>;
@@ -82,7 +82,7 @@ export interface ProjectScene {
    * 退化成另一种形态。
    */
   readonly nodes?: ReadonlyArray<CanvasNodeType>;
-}
+};
 
 /**
  * 造一批真形状的业务节点 —— 走 `placeCanvasNode()`（建节点的**唯一出口**）。

@@ -26,7 +26,7 @@ import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { collectReferenceImages, seedModeOverrides } from "./helpers";
 
 /** 构造一次生成请求所需的全部输入（都来自节点数据 + 该工作流的 IO 映射）。 */
-export interface CanvasGeneratePayloadArgs {
+export type CanvasGeneratePayloadArgs = {
   /** 发起生成的那个节点的数据（工作流 id、对外口的取值、种子控制模式、上游图）。 */
   d: CanvasNodeData;
   /** 项目级产出：归属到哪个画布项目（`getActiveId()` 的结果，由调用点传入）。 */
@@ -37,7 +37,7 @@ export interface CanvasGeneratePayloadArgs {
   wfMode?: string | null;
   /** 作者在工作流库配的「对外参数 → 节点端口」映射（`paramMap.source`）。 */
   wfParamMap?: Record<string, unknown> | null;
-}
+};
 
 /** 把「这个节点要点一次生成」翻译成 tRPC 入参。 */
 export function buildCanvasGeneratePayload({

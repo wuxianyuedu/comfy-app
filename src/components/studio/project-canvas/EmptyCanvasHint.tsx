@@ -5,10 +5,10 @@
 import { Icon } from "~/components/ui/icon";
 import { Spinner } from "~/components/ui/spinner";
 
-interface EmptyCanvasHintProps {
+type EmptyCanvasHintProps = {
   /** true → 水合覆盖层；false → 空画布引导。 */
   loading: boolean;
-}
+};
 
 export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
   if (loading) {

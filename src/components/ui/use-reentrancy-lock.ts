@@ -48,7 +48,7 @@ import { useCallback, useRef } from "react";
  * `exit()` 之前一律拿 `false`。它表达的是「这一刻这件事是不是已经在跑了」，
  * 而 `useState` 的忙碌位表达的是「界面该显示成什么样」—— 前者不能是异步的。
  */
-export interface ReentrancyLock {
+export type ReentrancyLock = {
   /** 离开临界区 —— 必须在 `finally` 里调（提前 `return` 的分支也要走到）。 */
   exit: () => void;
   /** 当前是否在临界区里（只读，给「要不要禁用按钮」这类展示判断用）。 */
@@ -59,7 +59,7 @@ export interface ReentrancyLock {
    * {@link ReentrancyLock.exit}。
    */
   tryEnter: () => boolean;
-}
+};
 
 /**
  * 就地造一把闸门（模块级 / 组件级都能用）。

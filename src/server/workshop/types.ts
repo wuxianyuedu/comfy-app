@@ -7,7 +7,7 @@ import type { Character, PipelineStageId, ProjectMeta, Scene, Shot } from "~/lib
 /** 一个工坊会话的完整流水线状态（内存视图，落库时拆列存储）。
  *  绑定过界面项目（projectId 非空，#2482）后，meta / scenes / characters / shots
  *  的权威读在 production——本视图是「会话行 + production」的合并读数。 */
-export interface WorkshopSessionState {
+export type WorkshopSessionState = {
   characters: Array<Character>;
   idea: string;
   meta: ProjectMeta;
@@ -16,10 +16,10 @@ export interface WorkshopSessionState {
   scenes: Array<Scene>;
   shots: Array<Shot>;
   stage: PipelineStageId;
-}
+};
 
 /** 列表返回用的轻量摘要（不携带 scenes/characters/shots 大字段）。 */
-export interface WorkshopSessionSummary {
+export type WorkshopSessionSummary = {
   characterCount: number;
   createdAt: string;
   id: string;
@@ -36,4 +36,4 @@ export interface WorkshopSessionSummary {
   type: string;
   updatedAt: string;
   userId: string | null;
-}
+};

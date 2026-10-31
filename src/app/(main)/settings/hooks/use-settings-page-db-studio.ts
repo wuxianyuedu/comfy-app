@@ -32,13 +32,13 @@ import {
   type RuntimeLogController,
 } from "~/components/studio/logs/use-runtime-log-source";
 
-export interface DbStudioStatus {
+export type DbStudioStatus = {
   port: number;
   starting: boolean;
   up: boolean;
-}
+};
 
-export interface UseSettingsDbStudio {
+export type UseSettingsDbStudio = {
   dbStudioLog: RuntimeLogController & { active: boolean };
   dbStudioOpening: boolean;
   dbStudioStarting: boolean;
@@ -47,7 +47,7 @@ export interface UseSettingsDbStudio {
   openDbStudio: () => Promise<void>;
   startDbStudio: () => Promise<void>;
   stopDbStudio: () => Promise<void>;
-}
+};
 
 export function useSettingsDbStudio({
   statusQueriesEnabled,

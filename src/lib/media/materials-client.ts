@@ -8,16 +8,16 @@ import { withQuery } from "~/lib/query-string";
 import { isRecord } from "~/lib/is-record";
 
 /** 分类（文件夹）摘要，含该分类素材条数。 */
-export interface MaterialFolder {
+export type MaterialFolder = {
   count: number;
   id: string;
   name: string;
-}
+};
 
 export type MaterialKind = "image" | "video" | "audio" | "doc";
 
 /** 单个素材条目。 */
-export interface MaterialItem {
+export type MaterialItem = {
   folder: string;
   folderName: string;
   id: string;
@@ -27,16 +27,16 @@ export interface MaterialItem {
   size: number;
   updatedAt: string;
   url: string;
-}
+};
 
 /** GET /api/materials 的响应。 */
-export interface MaterialListResult {
+export type MaterialListResult = {
   folders: Array<MaterialFolder>;
   items: Array<MaterialItem>;
-}
+};
 
 /** 列表查询参数。 */
-export interface MaterialListQuery {
+export type MaterialListQuery = {
   /** 进入的分类；未传（且无搜索）时只返回分类计数。 */
   folder?: string | null;
   /** 画布项目 id；为空则只看共享素材。 */
@@ -45,7 +45,7 @@ export interface MaterialListQuery {
   q?: string;
   /** project = 本项目 + 共享；cross = 跨项目聚合。 */
   scope: "project" | "cross";
-}
+};
 
 const ENDPOINT = "/api/materials";
 
@@ -141,13 +141,13 @@ export async function uploadMaterial(
 
 /** 上传成功回执里的可用信息 —— POST 只回 url/id/name 等基础字段，
  *  不含 kind / updatedAt，故不等于完整的 MaterialItem。 */
-export interface MaterialUploadResult {
+export type MaterialUploadResult = {
   /** 稳定 id：`scope/folder/name` */
   id: string;
   name: string;
   /** 浏览器可直接引用的地址（走 /api/generated 读盘） */
   url: string;
-}
+};
 
 /** 上传素材并取回落盘地址（工坊「定妆照」导入需要把图写进素材库再引用）。 */
 export async function uploadMaterialItem(

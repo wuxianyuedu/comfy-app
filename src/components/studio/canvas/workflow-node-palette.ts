@@ -20,13 +20,13 @@ const DISABLED_COLOR = "#6b7280";
  *   标题   → `--color-ink-bright`
  *   圆点   → `--color-ink-muted`
  */
-export interface NodePaletteBase {
+export type NodePaletteBase = {
   body: string;
   borderFallback: string;
   dotFallback: string;
   header: string;
   titleFallback: string;
-}
+};
 
 /** 浅色底色 —— 应用 `@theme` 块里的默认值。 */
 export const LIGHT_PALETTE_BASE: NodePaletteBase = {
@@ -50,7 +50,7 @@ export const DARK_PALETTE_BASE: NodePaletteBase = {
   dotFallback: "#6b7280",
 };
 
-export interface NodePalette {
+export type NodePalette = {
   dotBg: string;
   effectiveColor: string | undefined;
   headerBg: string;
@@ -59,7 +59,7 @@ export interface NodePalette {
   nodeBorder: string;
   nodeMode: number;
   titleColor: string;
-}
+};
 
 /**
  * 节点模式（LiteGraph 0=始终 / 2=不静音 / 4=旁路）会覆盖角色色调，
@@ -109,11 +109,11 @@ export function computeNodePalette(
  *（`rgba(255,255,255,0.45)` 叠在浅色画布上）—— 锚点直接看不见。把色标
  * 交给主题，药丸在两种模式下都读得出来，与 `--color-port-surface` 同一判断。
  */
-export interface AnchorCylinderTheme {
+export type AnchorCylinderTheme = {
   border: string;
   boxShadow: string;
   gradient: string;
-}
+};
 
 /** 浅色：金属圆柱读作带深色包边的中灰药丸。 */
 export const LIGHT_ANCHOR_CYLINDER: AnchorCylinderTheme = {

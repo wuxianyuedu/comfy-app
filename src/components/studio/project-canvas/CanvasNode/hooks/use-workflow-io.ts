@@ -33,10 +33,10 @@ let sharedListsInflight: Promise<{
   wfList: Array<WfListItem>;
 }> | null = null;
 
-export interface UseWorkflowIoArgs {
+export type UseWorkflowIoArgs = {
   d: CanvasNodeData;
   patch: (p: Partial<CanvasNodeData>) => void;
-}
+};
 
 export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
   /* ── 已上传的工作流列表（给 workflow 节点用） ── */

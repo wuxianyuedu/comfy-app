@@ -23,7 +23,7 @@ import { create } from "zustand";
 /** 页签 id 常量：主应用页签不可关闭。 */
 export const MAIN_TAB_ID = "main";
 
-export interface ShellTab {
+export type ShellTab = {
   /**
    * 无法内嵌时的**页签内**说明（成因 + 修复动作）。
    *
@@ -49,9 +49,9 @@ export interface ShellTab {
   label: string;
   /** 页签内容地址：主应用为 null（由 children 渲染），其余为待内嵌 URL。 */
   url: string | null;
-}
+};
 
-export interface ShellTabsState {
+export type ShellTabsState = {
   /** 激活指定页签。 */
   activateTab: (id: string) => void;
   /** 当前激活页签 id。 */
@@ -67,7 +67,7 @@ export interface ShellTabsState {
     id: string,
     patch: Partial<Pick<ShellTab, "label" | "url" | "blockedReason" | "blockedUrl">>,
   ) => void;
-}
+};
 
 const MAIN_TAB: ShellTab = {
   id: MAIN_TAB_ID,

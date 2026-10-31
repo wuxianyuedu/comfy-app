@@ -11,7 +11,7 @@ import { ProgressBar } from "~/components/ui/progress-bar";
 
 import type { Phase } from "./hooks/use-generation-runner";
 
-interface Props {
+type Props = {
   missingLabels: Array<string>;
   /** 正在执行的节点名（SSE 帧里带的 label；没有时显示工作流整体进度）。 */
   nodeLabel: string | null;
@@ -25,7 +25,7 @@ interface Props {
   uploadNotice: string | null;
   viewMode: "edit" | "use";
   workflowName: string;
-}
+};
 
 export function WorkflowPreviewRunFeedback({
   phase,

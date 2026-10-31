@@ -9,14 +9,14 @@ import type { WorkflowNodeData, IoRef } from "../workflow-types";
 import type { NodePalette } from "./workflow-node-palette";
 import { Hint } from "~/components/ui/hint";
 
-export interface FlowNodeRole {
+export type FlowNodeRole = {
   bg: string;
   color: string;
   key: string;
   label: string;
-}
+};
 
-interface FlowNodeHeaderProps {
+type FlowNodeHeaderProps = {
   data: WorkflowNodeData;
   displayTitle: string;
   io: IOEditContextValue | null;
@@ -25,7 +25,7 @@ interface FlowNodeHeaderProps {
   outputs: Array<[string, string]>;
   palette: Pick<NodePalette, "headerBg" | "titleColor" | "dotBg">;
   role?: FlowNodeRole;
-}
+};
 
 export function FlowNodeHeader({
   data,

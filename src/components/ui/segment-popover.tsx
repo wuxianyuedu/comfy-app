@@ -65,7 +65,7 @@ export function shortRatioLabel(label: string): string {
 }
 
 /** 多段式面板里的一个分组。 */
-export interface SegmentSection<T extends string = string> {
+export type SegmentSection<T extends string = string> = {
   /** 可选：渲染在本分组**所有子分组之后**的自由控件。
    *
    *  给「不是从几个选项里挑一个、而是直接给一个值」的连续量控件留的位置
@@ -88,7 +88,7 @@ export interface SegmentSection<T extends string = string> {
   }>;
   /** 当前选中的选项值（必须是 `options.value` 之一）。 */
   value: T;
-}
+};
 
 /** 段内 ToggleGroup 的排布：跨子分组共享一个 `value`（互斥），
  *  每个子分组仍是「flex flex-wrap 横排、子分组间纵向堆叠」。

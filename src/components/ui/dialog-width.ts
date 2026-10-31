@@ -21,12 +21,12 @@
  */
 
 /** 居中卡片的宽度档：默认档由调用处按内容密度给，加宽档统一。 */
-export interface ModalWidth {
+export type ModalWidth = {
   /** 默认档（弹窗刚打开时）。 */
   base: string;
   /** 加宽档（标题栏的「加宽」按钮）。 */
   wide: string;
-}
+};
 
 /** 加宽档对每个调用处都一样：贴满内容区，只留 8px。 */
 export const MODAL_WIDE_WIDTH = "w-[calc(100vw-16px)]";

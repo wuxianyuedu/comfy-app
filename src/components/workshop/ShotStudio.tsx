@@ -47,7 +47,7 @@ import { errorMessage } from "~/lib/error-message";
 import { IndexDot } from "~/components/workshop/IndexDot";
 import { paramString } from "~/lib/workshop/param-coerce";
 
-interface Props {
+type Props = {
   /** 掩码后的 API 通道配置；图片通道的放行判据来自这里。 */
   apiChannels: ApiChannelsView | null;
   characters: Array<Character>;
@@ -66,7 +66,7 @@ interface Props {
   styles: Array<StyleRef>;
   /** 选定的工作流库工作流 id：本地通道的唯一可执行来源（内置模板已移除）。 */
   workflowId: string;
-}
+};
 
 type Channel = "local" | "api";
 
@@ -514,7 +514,7 @@ function StatusBadge({ status }: { status: Shot["status"] }) {
 /** 单个镜头卡片行：状态 / 进度 / 提示词编辑 / 生成按钮 / 成图预览。
  *  从 ShotStudio 主体拆出（规范 §12.13 函数长度）：主组件只留编排与工具行，
  *  「一条镜头长什么样」收在这里。 */
-interface ShotCardRowProps {
+type ShotCardRowProps = {
   apiReady: boolean;
   /** 全表在跑的条目数（>0 且本条在跑时显示百分比 / 排队中）。 */
   busyCount: number;
@@ -534,7 +534,7 @@ interface ShotCardRowProps {
   progress: number;
   shot: Shot;
   workflowId: string;
-}
+};
 
 function ShotCardRow({
   shot,

@@ -26,7 +26,7 @@ import {
   type ProjectListEntry,
 } from "~/lib/project-canvas/canvas-store";
 
-export interface WorksGalleryController {
+export type WorksGalleryController = {
   cancelDelete: () => void;
   /** 确认删除。落定后返回被删那一行的名字（toast 用；没有目标则 null）。 */
   confirmDelete: () => Promise<string | null>;
@@ -46,7 +46,7 @@ export interface WorksGalleryController {
   requestDelete: (id: string) => void;
   /** 服务端列表这一轮拉到了没有。false ⇒ 视图给一句降级说明。 */
   serverOk: boolean;
-}
+};
 
 export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGalleryController {
   const [projects, setProjects] = useState<Array<ProjectListEntry>>([]);

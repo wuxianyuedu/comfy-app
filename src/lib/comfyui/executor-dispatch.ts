@@ -255,9 +255,9 @@ export async function claimAndDispatchOnce(options?: {
   return taskId;
 }
 
-interface DispatchGlobal {
+type DispatchGlobal = {
   handle: ReturnType<typeof setInterval> | null;
-}
+};
 
 declare global {
   var __comfyDispatch_v1: DispatchGlobal | undefined;

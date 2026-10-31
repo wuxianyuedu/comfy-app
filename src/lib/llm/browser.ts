@@ -4,13 +4,13 @@ import type { LLMMessage, LLMRequestOptions } from "./types";
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { errorMessage } from "~/lib/error-message";
 
-export interface ChatArgs {
+export type ChatArgs = {
   messages: Array<LLMMessage>;
   /** 每收到一个流式 token 就回调一次（仅流式模式）。 */
   onToken?: (token: string) => void;
   opts?: LLMRequestOptions;
   signal?: AbortSignal;
-}
+};
 
 /* 经服务端代理（/api/llm）做流式对话。API 密钥由服务端藏住，
  * 浏览器永远看不到它。SSE 分片形如 `{ token }`，
@@ -119,12 +119,12 @@ export async function completeChat({ messages, opts }: ChatArgs): Promise<string
   return json.content ?? "";
 }
 
-export interface RemoteProbeResult {
+export type RemoteProbeResult = {
   detail: string;
   /** 服务端模型清单（/models 拉取成功时返回），供「添加模型」弹窗点选。 */
   models?: Array<string>;
   ok: boolean;
-}
+};
 
 /**
  * 设置页「添加模型」弹窗：测试 OpenAI 兼容接口连通性并顺带拉取模型清单。

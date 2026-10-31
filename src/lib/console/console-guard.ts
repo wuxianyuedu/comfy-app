@@ -67,9 +67,9 @@ function stripPort(host: string): string {
 }
 
 /** 该请求是否来自本机（`Host` 与 `Origin` 两侧都必须是回环）。 */
-export interface LoopbackHeadersLike {
+export type LoopbackHeadersLike = {
   get(name: string): string | null;
-}
+};
 
 /**
  * 判一条请求是不是从本机发起的。

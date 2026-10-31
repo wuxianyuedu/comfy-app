@@ -40,7 +40,7 @@ import { useTRPC } from "~/trpc/react";
 /** 空 IO 表：引用恒定（未查到工作流时沿用同一个对象，不每次渲染造新的）。 */
 const EMPTY_WORKFLOW_IO: WorkflowIOMap = {};
 
-export interface HistoryListController {
+export type HistoryListController = {
   cancel: (id: string) => Promise<void>;
   canLoadMore: boolean;
   closeDetail: () => void;
@@ -77,7 +77,7 @@ export interface HistoryListController {
   /** 本任务所用工作流的 IO 定义（参数可读名从它的 `label` 查）。
    *  工作流已被删除 / 查询未回来时是空表，参数名如实回落 pin 名。 */
   workflowIO: WorkflowIOMap;
-}
+};
 
 /**
  * 历史记录列表的全部逻辑。

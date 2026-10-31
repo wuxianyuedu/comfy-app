@@ -33,7 +33,7 @@ import type { Character } from "~/lib/workshop/types";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 
 /** 定妆照区块需要的全部上下文：会话（controller 常驻）+ 生成通道配置。 */
-export interface CharacterPortraitContext {
+export type CharacterPortraitContext = {
   actions: PortraitSessionActions;
   /** API 直连通道的脱敏配置（远端通道的门禁） */
   apiChannels: ApiChannelsView | null;
@@ -41,12 +41,12 @@ export interface CharacterPortraitContext {
   session: PortraitSession;
   /** 工作流库可选项（本地通道按模型标签挑选已封装的生图工作流）。 */
   workflows: Array<WorkshopWorkflowOption>;
-}
+};
 
-interface Props {
+type Props = {
   character: Character;
   portrait: CharacterPortraitContext;
-}
+};
 
 /** 单张角色卡里的「定妆照」区块：生成 / 导入 / 挑选。 */
 export function CharacterPortraitStudio({ character, portrait }: Props) {

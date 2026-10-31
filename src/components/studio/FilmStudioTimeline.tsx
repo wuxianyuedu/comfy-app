@@ -2,11 +2,11 @@
 /* 影片工坊中栏的时间线：标尺 + 播放头 + 视频/字幕/BGM 三条轨道。 */
 import { VIDEO_CLIPS } from "./film-studio-config";
 
-interface FilmStudioTimelineProps {
+type FilmStudioTimelineProps = {
   bgmName: string | null;
   /** 播放头位置（px from timeline left）。 */
   playheadPos: number;
-}
+};
 
 export function FilmStudioTimeline({ playheadPos, bgmName }: FilmStudioTimelineProps) {
   return (

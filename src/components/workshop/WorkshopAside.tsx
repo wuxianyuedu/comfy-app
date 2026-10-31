@@ -72,7 +72,7 @@ function WorkshopWorkflowSelect({
   );
 }
 
-interface WorkshopAsideProps {
+type WorkshopAsideProps = {
   apiChannels: ApiChannelsView | null;
   characterCount: number;
   clipDoneCount: number;
@@ -87,7 +87,7 @@ interface WorkshopAsideProps {
   /** 工作流库里的可选工作流（ISSUE #145）：本地通道的唯一可执行来源。
    * 按内容类别分栏：面板只列出当前阶段对应的那一栏。 */
   workflowOptions: Array<WorkshopWorkflowOption>;
-}
+};
 
 export function WorkshopAside({
   missing,

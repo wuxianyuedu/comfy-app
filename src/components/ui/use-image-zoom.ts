@@ -50,7 +50,7 @@ export function clampZoomScale(value: number): number {
   return clamp(value, MIN_ZOOM_SCALE, MAX_ZOOM_SCALE);
 }
 
-export interface UseImageZoomOptions {
+export type UseImageZoomOptions = {
   /** 图片的自然尺寸；`null` = 还没读到（解码中 / 加载失败）。 */
   naturalSize: NaturalSize | null;
   /** 可视区单边内边距（px）—— 算「适应窗口」时从可视区里扣掉，默认 0。 */
@@ -59,9 +59,9 @@ export interface UseImageZoomOptions {
   viewportHeight: number | null;
   /** 可视区布局宽度（px）；`null` = 还没量到。 */
   viewportWidth: number | null;
-}
+};
 
-export interface ImageZoom {
+export type ImageZoom = {
   /** 切到「原始大小」（1:1）。 */
   actualSize: () => void;
   /** 切到「适应窗口」。 */
@@ -83,7 +83,7 @@ export interface ImageZoom {
    * 「脱离对象传递、this 语义不明」。 */
   zoomIn: () => void;
   zoomOut: () => void;
-}
+};
 
 /**
  * 用法：把自然尺寸与可视区尺寸交给它，界面上只渲染它给出的 `percent`

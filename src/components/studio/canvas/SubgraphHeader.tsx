@@ -11,7 +11,7 @@ import { Button } from "~/components/ui/button";
 import { IoCheckbox, NodeIdChip, type IOEditContextValue } from "./IOEditContext";
 import { Hint } from "~/components/ui/hint";
 
-export interface SubgraphHeaderProps {
+export type SubgraphHeaderProps = {
   accent: string;
   io?: IOEditContextValue;
   isCollapsed: boolean;
@@ -23,7 +23,7 @@ export interface SubgraphHeaderProps {
    *  outputs. */
   outputRef?: { name: string } | null;
   title: string;
-}
+};
 
 export function SubgraphHeader({
   title,

@@ -16,11 +16,11 @@ import { cn } from "~/lib/utils";
 import { countPendingStages } from "~/components/workshop/stage-config";
 import type { HealthRow } from "~/components/workshop/stage-config";
 
-interface WorkshopHeaderProps {
+type WorkshopHeaderProps = {
   health: Array<HealthRow>;
   progressPct: number;
   title: string;
-}
+};
 
 export function WorkshopHeader({ title, progressPct, health }: WorkshopHeaderProps) {
   /* 唯一一份进度账在 health 里：段数与「差哪几段」都由它派生，头部不再自己数一遍。 */

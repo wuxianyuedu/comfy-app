@@ -30,13 +30,13 @@ import {
  *  刻意**不** import 主 hook 的 `UsageTestDialogState` —— 那会形成双向依赖
  *  （主 hook 要 import 本模块的构造函数），由 `tests/check-circular-deps.test.ts`
  *  拦下。这里按「我需要什么」声明，主 hook 的完整状态**结构上**满足它。 */
-export interface UsageFieldEditorState {
+export type UsageFieldEditorState = {
   fields: Array<UsageField>;
   kind: RemoteModelKind;
-}
+};
 
 /** 字段行编辑器的动作集合（挂在 `RemoteModelDialogs` 上透给视图）。 */
-export interface UsageFieldEditor {
+export type UsageFieldEditor = {
   addField: (key?: string) => void;
   addPresetField: (key: string) => void;
   patchField: (index: number, patch: Partial<UsageField>) => void;
@@ -45,7 +45,7 @@ export interface UsageFieldEditor {
   rescueMediaFromMode: (index: number, url: string) => void;
   setVideoMode: (mode: string) => void;
   usageFieldsToSend: (state: UsageFieldEditorState) => Array<UsageField>;
-}
+};
 
 /** 造出字段行编辑器的动作集合。`update` 即 `setUsageTest`。 */
 export function createUsageFieldEditor<T extends UsageFieldEditorState>(

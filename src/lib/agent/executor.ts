@@ -8,7 +8,7 @@ import { normalizeShotType, type ShotType } from "~/lib/workshop/types";
 import { SUMMARY_MAX, clampText } from "~/lib/text-clamp";
 
 /** Agent 执行工具时需要调用的 controller 操作。 */
-export interface AgentToolHandlers {
+export type AgentToolHandlers = {
   getCharacters: () => WorkshopDraftDto["characters"];
   getDraft: () => WorkshopDraftDto;
   getMeta: () => WorkshopDraftDto["meta"];
@@ -20,15 +20,15 @@ export interface AgentToolHandlers {
   setMeta: (patch: Partial<WorkshopDraftDto["meta"]>) => void;
   setScriptMarkdown: (markdown: string) => void;
   setShots: (shots: WorkshopDraftDto["shots"]) => void;
-}
+};
 
 /** 一个待执行的工具（已解析出参数摘要）。 */
-export interface ResolvedAgentTool {
+export type ResolvedAgentTool = {
   argSummary: string;
   execute: () => Promise<{ detail?: string; ok: boolean; summary: string }>;
   summary: string;
   toolName: string;
-}
+};
 
 /** 安全解析 JSON 参数串为对象。 */
 function safeParseJson(json: string): Record<string, unknown> {

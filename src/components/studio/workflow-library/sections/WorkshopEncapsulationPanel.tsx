@@ -49,7 +49,7 @@ const LazyWorkflowRunLogModal = React.lazy(() =>
   })),
 );
 
-interface WorkshopEncapsulationPanelProps {
+type WorkshopEncapsulationPanelProps = {
   /** 工坊下拉/徽标展示名（模型标签优先；仅用于文案）。 */
   displayName: string;
   /** 当前模式（详情层持有，与「画布节点」页签同一份）。 */
@@ -63,7 +63,7 @@ interface WorkshopEncapsulationPanelProps {
   paramMap: Record<string, unknown> | null;
   workflowId: string;
   workflowIO: WorkflowIOMap | null;
-}
+};
 
 /** 契约口状态徽标的形态（配色表；文案由`entryStateBadge` 按缺口给）。
  *  走语义 token（§4.11.1 / P71）：已落点→success、必填未落点→destructive。

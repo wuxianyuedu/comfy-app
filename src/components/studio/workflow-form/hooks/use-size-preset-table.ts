@@ -25,7 +25,7 @@ import {
   type SizeScene,
 } from "~/lib/media/size-presets";
 
-export interface SizePresetTableController {
+export type SizePresetTableController = {
   /** 该场景相对默认值是否被改过。 */
   isModified: (scene: SizeScene) => boolean;
   /** 把某场景整表恢复默认（另一个场景不受影响）。 */
@@ -34,7 +34,7 @@ export interface SizePresetTableController {
   setDims: (scene: SizeScene, ratioLabel: string, tier: ResolutionTier, size: SizeDims) => void;
   /** 当前生效的尺寸表（用户改过的覆盖默认表）。 */
   table: SizePresetTable;
-}
+};
 
 export function useSizePresetTable(): SizePresetTableController {
   const table = useSyncExternalStore(

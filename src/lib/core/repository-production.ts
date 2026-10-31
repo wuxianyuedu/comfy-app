@@ -11,7 +11,7 @@ import { and, eq } from "drizzle-orm";
 import type { ProductionRun } from "~/lib/production/run-types";
 
 /** 写一条生产数据（按 proj_* upsert）的入参；JSON 列传对象，Drizzle 负责序列化。 */
-export interface ProductionInput {
+export type ProductionInput = {
   characters?: unknown;
   id: string;
   logline?: string;
@@ -24,7 +24,7 @@ export interface ProductionInput {
   title?: string;
   tone?: string;
   type?: string;
-}
+};
 
 export class ProductionRepository extends DrizzleRepository<Production> {
   constructor() {

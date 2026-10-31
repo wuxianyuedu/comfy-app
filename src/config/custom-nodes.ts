@@ -107,7 +107,7 @@ export const CUSTOM_NODE_PACKAGE: Record<string, string> = {};
  * 也可能是「清单还没生成」「没登录」「读盘失败」—— 这两类以前在界面上同形，
  * 而台账 E9 记的「刷新看着没生效」正是被这一格糊住的。
  */
-export interface CustomNodesRegistryState {
+export type CustomNodesRegistryState = {
   /** 当前表里的自定义节点类型数。 */
   count: number;
   /** `loaded: false` 时给用户看的那句话；`loaded: true` 时为 null。 */
@@ -116,7 +116,7 @@ export interface CustomNodesRegistryState {
   loaded: boolean;
   /** 每次**成功**灌入 +1：订阅方拿它当「该重渲染了」的凭据。 */
   version: number;
-}
+};
 
 let registryState: CustomNodesRegistryState = {
   version: 0,
@@ -191,11 +191,11 @@ function classifyManifestFailure(status: number): ManifestFailure {
   };
 }
 
-interface RawManifest {
+type RawManifest = {
   nodes?: Record<string, ManifestNode>;
-}
+};
 
-interface ManifestInput {
+type ManifestInput = {
   /** 控件的默认值（字符串 / 数字 / 布尔 … 原始 JSON 值），对本模块不透明。 */
   default?: unknown;
   name: string;
@@ -203,9 +203,9 @@ interface ManifestInput {
   required?: boolean;
   type: string;
   widget?: string | null;
-}
+};
 
-interface ManifestNode {
+type ManifestNode = {
   category?: string;
   classType: string;
   description?: string | null;
@@ -222,7 +222,7 @@ interface ManifestNode {
   package?: string;
   /** 磁盘上的源文件（仅供参考）。 */
   source?: string;
-}
+};
 
 function buildInto(
   target: Record<string, NodeTypeConfig>,
@@ -302,7 +302,7 @@ export function isCustomNode(classType: string): boolean {
 /* `/api/custom-nodes/manifest.nodes` 里单个节点的原始形状。
  * 自定义节点设置面板直接用它，于是在注册表尚未构建时（例如刚解析完、还没有
  * 任何消费方调用 `refreshCustomNodes`）也能渲染小预览卡。 */
-export interface ManifestNodeRaw {
+export type ManifestNodeRaw = {
   category?: string;
   classType: string;
   description?: string | null;
@@ -321,7 +321,7 @@ export interface ManifestNodeRaw {
   outputs?: Array<{ name: string; type: string }>;
   package?: string;
   source?: string;
-}
+};
 
 /* 直接从磁盘取原始 manifest。manifest 缺失或为空（例如还没解析过）时返回 null。
  * 服务端侧开销很小 —— 首解析之后文件已在缓存里。 */

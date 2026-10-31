@@ -24,7 +24,7 @@ const NODE_TITLE_ANCHOR: Record<string, number> = {
   wfSubgraph: NODE_TITLE_H,
 };
 
-export interface WorkflowPersistenceArgs {
+export type WorkflowPersistenceArgs = {
   detail: WorkflowDetail | null;
   fitToContent: () => void;
   /** 当前视图的宿主链路（顶层为空串，下钻一层是 `4`，再下钻是 `4:5`）。
@@ -48,7 +48,7 @@ export interface WorkflowPersistenceArgs {
   setSaving: Dispatch<SetStateAction<boolean>>;
   workflowId: string;
   workflowIO: Record<string, WorkflowIOParam>;
-}
+};
 
 /**
  * 工作流编辑器的布局快照 / 重置 / 保存 / 拖拽落盘逻辑。

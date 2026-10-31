@@ -48,7 +48,7 @@ const MAX_TICKS = 240;
 const TICK_MS = 4000;
 const nowIso = () => new Date().toISOString();
 
-interface ExecResult {
+type ExecResult = {
   error?: string;
   ok: boolean;
   /** 执行后应写回的 run（多数动作不改 run，返回 undefined 表示沿用原 run）。 */
@@ -57,7 +57,7 @@ interface ExecResult {
   skipLog?: boolean;
   /** 人读产出摘要（写进执行日志），如「已生成剧本（1234 字）」。 */
   summary?: string;
-}
+};
 
 /** 动作 kind → 日志里的动作名。 */
 function actionLabel(action: RunAction): string {

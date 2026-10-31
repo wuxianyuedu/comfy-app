@@ -27,7 +27,7 @@ export type MutateAsyncLike<TInput, TOutput> = {
   mutateAsync: (input: TInput) => Promise<TOutput>;
 };
 
-export interface UseWorkflowActionsArgs {
+export type UseWorkflowActionsArgs = {
   createMut: MutateAsyncLike<
     RouterInputs["workflow"]["create"],
     RouterOutputs["workflow"]["create"]
@@ -54,7 +54,7 @@ export interface UseWorkflowActionsArgs {
     RouterInputs["workflow"]["update"],
     RouterOutputs["workflow"]["update"]
   >;
-}
+};
 
 export function useWorkflowActions(args: UseWorkflowActionsArgs) {
   const {

@@ -34,7 +34,7 @@ const LazyWorkflowCanvasNodePreview = React.lazy(() =>
   })),
 );
 
-interface DetailBodyProps {
+type DetailBodyProps = {
   /** **两个页签共用的当前模式**（详情层持有，见 `WorkflowLibraryDetailController`
    *  的 `activeMode`）：画布卡片列与工坊封装按同一个模式渲染，用户在两处切换的
    *  是同一件事。 */
@@ -62,7 +62,7 @@ interface DetailBodyProps {
   usable: boolean;
   workflow: WorkflowRow;
   workflowIO: WorkflowIOMap | null;
-}
+};
 
 export function DetailBody({
   workflow,

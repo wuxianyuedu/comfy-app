@@ -37,7 +37,7 @@
 import { clampInt } from "~/lib/clamp";
 
 /** 判据所需的**事实**（全部由调用方从设置与平台读，本模块不做 IO）。 */
-export interface CpuLimitFacts {
+export type CpuLimitFacts = {
   /**
    * 当前进程是否处于**桌面壳内**（Tauri）。
    *
@@ -50,7 +50,7 @@ export interface CpuLimitFacts {
   mode: CpuLimitMode | undefined;
   /** 目标平台（注入以便用例喂两种平台断言两种形状）。 */
   platform: NodeJS.Platform;
-}
+};
 
 /** CPU 档位：不动 / 让路（后台优先）/ 限核。 */
 export type CpuLimitMode = "off" | "yield" | "throttle";
@@ -116,14 +116,14 @@ export function resolveCpuLimitMode(facts: CpuLimitFacts): CpuLimitMode {
  *     BSD 基座的常备件，但**仍可能缺失** —— 缺失时按「本档不生效」处理并
  *     留一行日志，绝不让它把启动搞挂（见 `apply`）。
  */
-export interface CpuLimitCommand {
+export type CpuLimitCommand = {
   /** 参数数组。 */
   args: Array<string>;
   /** 可执行文件。 */
   command: string;
   /** 这一档实际做了什么（写进运行日志的一句话）。 */
   describe: string;
-}
+};
 
 /** 本机逻辑核数（`os.cpus().length`，取不到时按 2 兜底 —— 见 `throttleCores`）。 */
 export function throttleCores(

@@ -44,7 +44,7 @@ function isFile(candidate: string): boolean {
 }
 
 /** `pnpmInvocation()` 的结论。 */
-export interface PnpmInvocation {
+export type PnpmInvocation = {
   /** 完整参数（宿主参数在前）。 */
   args: Array<string>;
   /** PATH 上选中的候选（`.ps1` 回退时是那个脚本，不是宿主）。 */
@@ -66,7 +66,7 @@ export interface PnpmInvocation {
    *  `candidate`」：走包真身 JS 入口时 `command` 是 `process.execPath`、`candidate`
    *  是落点目录，两者本来就不相等，而那条路上一个宿主也没有（ISSUE #2562）。 */
   viaHost: boolean;
-}
+};
 
 /** 把 `pnpm <args…>` 解析成「这台机器上真能跑起来」的命令形态。
  *
@@ -311,14 +311,14 @@ export function pnpmJsInvocation({
   return null;
 }
 
-export interface ResolvedInvocation {
+export type ResolvedInvocation = {
   /** 完整参数（宿主参数在前）。 */
   args: Array<string>;
   /** 真正要 spawn 的可执行文件（可能是绝对路径或 PowerShell 宿主）。 */
   command: string;
   /** 是否在 PATH 上找到了这个命令（`false` = 交回原样，让 spawn 报它那一句错）。 */
   resolved: boolean;
-}
+};
 
 /**
  * 把一行「用户想跑的命令」解析成这台机器上真能起得来的形态。

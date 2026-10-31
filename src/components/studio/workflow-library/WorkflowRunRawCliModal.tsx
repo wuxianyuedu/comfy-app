@@ -76,14 +76,14 @@ const RawCliLineCard = memo(function RawCliLineCard({ entry }: { entry: ParsedCl
   );
 });
 
-export interface WorkflowRunRawCliModalProps {
+export type WorkflowRunRawCliModalProps = {
   onClose: () => void;
   open: boolean;
   /** 是否仍在运行（运行期每 1.5s 轮询刷新）。 */
   running?: boolean;
   /** 当前查看的运行；无则禁用入口。 */
   taskId: string | null;
-}
+};
 
 export function WorkflowRunRawCliModal({
   taskId,

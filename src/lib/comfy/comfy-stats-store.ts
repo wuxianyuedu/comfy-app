@@ -61,7 +61,7 @@ import { fetchComfyStats, type ComfyStatsPayload } from "./comfy-stats-client";
 export const COMFY_STATS_POLL_MS = 4000;
 
 /** 一份对外读数：视图层只读这三个字段，不自己发请求（规范 17 §17.2 第②层）。 */
-export interface ComfyStatsSnapshot {
+export type ComfyStatsSnapshot = {
   /**
    * 进程级判活的**结论**：此刻算不算「崩了」。
    *
@@ -77,7 +77,7 @@ export interface ComfyStatsSnapshot {
   stale: boolean;
   /** 最近一次读到的指标；尚未返回时为 null。 */
   stats: ComfyStatsPayload | null;
-}
+};
 
 const OFFLINE_STATS: ComfyStatsPayload = {
   online: false,
@@ -100,9 +100,9 @@ let snapshot: ComfyStatsSnapshot = {
  * 同一个回调函数订阅两次时，`Set` 只会有一条记录，而订阅计数会加到 2 ——
  * 第一次退订就把这条回调删掉，另一个订阅者从此收不到通知（静默失效）。
  */
-interface Subscription {
+type Subscription = {
   onChange: () => void;
-}
+};
 
 const subscriptions = new Set<Subscription>();
 

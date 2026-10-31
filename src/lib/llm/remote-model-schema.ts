@@ -69,7 +69,7 @@ export const remoteModelEntrySchema = z.object({
  *     显式清空由编辑侧的 `clearApiKey` 表达，它不在这里 —— 那是勾选框的意图，
  *     不是草稿字段能算出来的事。
  */
-export interface RemoteModelDraftEntry {
+export type RemoteModelDraftEntry = {
   /** `undefined` = 这次不给意见（保留库里既有），不是「清空」。 */
   apiKey?: string;
   baseUrl?: string | null;
@@ -78,7 +78,7 @@ export interface RemoteModelDraftEntry {
   /** `null` 只在编辑侧有意义：清掉用途这一档（草稿桥接出来的一定是具体值）。 */
   kind?: RemoteModelKind | null;
   name: string;
-}
+};
 
 export function remoteModelEntryFromDraft(draft: RemoteModelFieldValues): RemoteModelDraftEntry {
   const baseUrl = draft.baseUrl.trim();

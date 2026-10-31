@@ -67,15 +67,15 @@ export type ConsoleEvent =
   | { message: string; type: "error" };
 
 /** 一次执行的收尾事实（供运行日志与界面共用）。 */
-export interface ConsoleRunResult {
+export type ConsoleRunResult = {
   command: string;
   durationMs: number;
   exitCode: number | null;
   killed: boolean;
   runId: string;
-}
+};
 
-export interface StartRunOptions {
+export type StartRunOptions = {
   args: Array<string>;
   command: string;
   cwd: string;
@@ -83,17 +83,17 @@ export interface StartRunOptions {
   runId: string;
   /** 看门狗上限（毫秒）。超时走 `killProcessTree` 掐整棵树。 */
   timeoutMs: number;
-}
+};
 
 /** 控制台执行器的对外形状（单槽 + 取消）。 */
-export interface ConsoleRunner {
+export type ConsoleRunner = {
   /** 当前是否有命令在跑；忙时回「是谁、跑了多久」（界面据此禁用输入）。 */
   busy: () => { command: string; runId: string; startedAt: number } | null;
   /** 取消当前命令（杀整棵树）。没有在跑的命令时返回 false。 */
   cancel: () => Promise<boolean>;
   /** 起一条命令，逐事件推给 `onEvent`。返回收尾事实。 */
   run: (opts: StartRunOptions, onEvent: (event: ConsoleEvent) => void) => Promise<ConsoleRunResult>;
-}
+};
 
 /**
  * 「这条命令没起来」的**可读出口**（硬规则 4：失败路径要有人看得懂的那句话）。

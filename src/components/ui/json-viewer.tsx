@@ -280,7 +280,7 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
 }
 
 // ─── 外层组件 ──────────────────────────────────────────────────────────────
-export interface JsonViewerProps {
+export type JsonViewerProps = {
   data: unknown;
   /** 首屏折叠口径（阈值由下方 `collapseObjectsAfterLength` 决定）：
    *   - 0   → 全部展开（不折叠任何容器）
@@ -290,7 +290,7 @@ export interface JsonViewerProps {
   initialCollapsedDepth?: number;
   /** Toolbar 副标题 (默认 "JSON") */
   title?: string;
-}
+};
 
 export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: JsonViewerProps) {
   // ── 搜索 + 命中索引 ──

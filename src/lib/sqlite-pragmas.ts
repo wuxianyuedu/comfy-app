@@ -78,9 +78,9 @@ export const SQLITE_PRAGMAS: ReadonlyArray<string> = [
  *  只声明用到的那一个方法，调用方传 `@libsql/client` 的 `Client`（它有更多方法）
  *  或本测试里的假对象都成立 —— 这样本模块不必依赖驱动类型，`scripts/*.mjs` 那侧
  *  的可测性也不受影响。 */
-export interface SqlitePragmaTarget {
+export type SqlitePragmaTarget = {
   execute(sql: string): Promise<unknown>;
-}
+};
 
 /**
  * 把那份清单应用到一条连接上，**撞锁按预算重试**。

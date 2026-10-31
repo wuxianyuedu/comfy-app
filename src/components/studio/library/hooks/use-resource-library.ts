@@ -17,7 +17,7 @@ import {
   type MaterialScope,
 } from "~/components/studio/project-canvas/hooks/use-material-library";
 
-export interface ResourceLibraryController {
+export type ResourceLibraryController = {
   /** 素材库控制器（分类 / 条目 / 搜索 / 上传 / 删除，与画布那份同源）。 */
   library: MaterialLibraryController;
   /** 当前活跃项目 id；null = 还没有项目（页面据此给引导）。 */
@@ -26,7 +26,7 @@ export interface ResourceLibraryController {
   setScope: (scope: MaterialScope) => void;
   /** 所有分类的素材总数（各分类 count 之和）。 */
   totalCount: number;
-}
+};
 
 /**
  * 活跃项目 id 跟随 canvas-store。

@@ -25,7 +25,7 @@ import {
 } from "./workflow-editor-topbar-config";
 import { Hint } from "~/components/ui/hint";
 
-export interface WorkflowEditorTopBarProps {
+export type WorkflowEditorTopBarProps = {
   detail: WorkflowDetail;
   error: string;
   fetchDetail: (opts?: {
@@ -52,7 +52,7 @@ export interface WorkflowEditorTopBarProps {
   subgraphStack: Array<{ name: string; nodeId: string; uid: string }>;
   /** 当前视图的宿主链（顶层为空串，下钻后 `4` / `4:5`）。 */
   viewHostNodeId: string;
-}
+};
 
 export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   onClose,

@@ -16,17 +16,17 @@ import { useBusyAction } from "~/components/ui/use-busy-action";
 import { errorText } from "~/lib/error-message";
 import { cancelTask } from "~/lib/task-cancel-client";
 
-export interface UseCancelTaskArgs {
+export type UseCancelTaskArgs = {
   /** 失败时的本地回滚，形态由调用方决定（画布节点 patch，日志面板 setError）。 */
   onFailed: (reason: string) => void;
   /** 当前要取消的任务 id（可能还没就绪 —— 见下方取消回调注释）。 */
   taskId?: string | null;
-}
+};
 
-export interface CancelTaskController {
+export type CancelTaskController = {
   cancel: () => Promise<void>;
   cancelling: boolean;
-}
+};
 
 export function useCancelTask({ taskId, onFailed }: UseCancelTaskArgs): CancelTaskController {
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */

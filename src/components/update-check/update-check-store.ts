@@ -11,7 +11,7 @@ import { create } from "zustand";
 
 import type { UpdateGroup } from "~/lib/update-check-client";
 
-export interface UpdateCheckState {
+export type UpdateCheckState = {
   applyResult: (groups: Array<UpdateGroup>, dirty: boolean) => void;
   /** 手动检测进行中标记（避免连点） */
   checking: boolean;
@@ -36,7 +36,7 @@ export interface UpdateCheckState {
   runChecking: <T>(action: () => Promise<T>) => Promise<T>;
   setChecking: (value: boolean) => void;
   setEnabled: (value: boolean) => void;
-}
+};
 
 export const useUpdateCheckStore = create<UpdateCheckState>((set) => ({
   enabled: true,

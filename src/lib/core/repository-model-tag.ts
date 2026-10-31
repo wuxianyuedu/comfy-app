@@ -15,11 +15,11 @@ import { DrizzleRepository } from "./repository-base";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import { eq, and, asc, count, inArray, exists, sql, type SQL } from "drizzle-orm";
 
-export interface WorkflowModelTagView {
+export type WorkflowModelTagView = {
   count: number;
   id: string;
   name: string;
-}
+};
 
 export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelTag> {
   constructor() {

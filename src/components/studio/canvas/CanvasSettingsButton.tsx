@@ -7,10 +7,10 @@
 import { Hint } from "~/components/ui/hint";
 import { Button } from "~/components/ui/button";
 
-interface ButtonProps {
+type ButtonProps = {
   hasOverrides: boolean;
   onClick: () => void;
-}
+};
 
 export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
   return (

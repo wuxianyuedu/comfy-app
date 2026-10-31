@@ -6,13 +6,13 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import type { FilmStudioController } from "./hooks/use-film-studio";
 
-interface FilmStudioTopBarProps {
+type FilmStudioTopBarProps = {
   c: FilmStudioController;
   isPlaying: boolean;
   onRedo: () => void;
   onTogglePlay: () => void;
   onUndo: () => void;
-}
+};
 
 export function FilmStudioTopBar({
   c,

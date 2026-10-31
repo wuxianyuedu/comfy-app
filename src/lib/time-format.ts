@@ -22,12 +22,12 @@
 const MINUTE = 60_000;
 
 /** 相对时间档位的调用处差异。 */
-export interface RelativeTimeOptions {
+export type RelativeTimeOptions = {
   /** 超过该天数返回 `null`，由调用方退化成绝对日期（此前只有一处这么做）。 */
   maxDays?: number;
   /** 每档文案后缀，如 `"修改"`（`"3 分钟前"` → `"3 分钟前修改"`）。 */
   suffix?: string;
-}
+};
 
 /**
  * ISO 时间串 / 毫秒数 → 「刚刚 / N 分钟前 / N 小时前 / N 天前」。

@@ -24,7 +24,7 @@ const COMPOSE_SIZE: SizeSpec = { ...DEFAULT_SIZE_SPEC, ratio: "16:9 横屏" };
 /** ffmpeg 的 `scale` 过滤器用 `W:H` 写法（不是 WxH）。 */
 const COMPOSE_SCALE = sizeSpecToWxH(COMPOSE_SIZE, "video").replace("x", ":");
 
-export interface CompositionSegment {
+export type CompositionSegment = {
   clipUrl: string | null;
   dialogue: string;
   durationSec: number;
@@ -36,21 +36,21 @@ export interface CompositionSegment {
   shotId: string;
   shotType: string;
   transition: string;
-}
+};
 
-export interface CompositionPlan {
+export type CompositionPlan = {
   exportedAt: string;
   project: string;
   segments: Array<CompositionSegment>;
   totalDurationSec: number;
   totalShots: number;
-}
+};
 
-export interface RenderResult {
+export type RenderResult = {
   note?: string;
   ok: boolean;
   outputPath?: string;
-}
+};
 
 /** 由分镜构建有序合成清单（与界面 FinalComposer.exportPlan 对齐）。 */
 export function buildCompositionPlan(title: string, shots: Array<Shot>): CompositionPlan {

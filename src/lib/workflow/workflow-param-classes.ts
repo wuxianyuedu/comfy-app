@@ -82,7 +82,7 @@ export const SIZE_SUB_IDS: ReadonlyArray<ParamClass> = SIZE_CLASSES;
  *
  *  `id` 是契约内的稳定键（`prompt` / `size` / `first-frame`…），**不含工作流
  *  信息** —— 同一个「提示词」在所有工作流里都是同一个键，落点由映射表决定。 */
-export interface ParamEntry {
+export type ParamEntry = {
   cls: ParamClass;
   /** 承载这个对外参数的**宿主节点 id** —— 库内映射线的宿主端与连线的合法性判定
    *  都以它为准。
@@ -104,7 +104,7 @@ export interface ParamEntry {
   /** 该契约口子在当前工作流里的候选端口（ioKey 保持 workflowIO 的原始键）。
    *  作者从这些候选里拖一条线选中一个作为落点。 */
   pins: Array<{ defaultValue: unknown; ioKey: string; name: string; type: string }>;
-}
+};
 
 /** 端口所属的节点 id（ioKey 形如 `<nodeId>::<kind>::<name>`）。
  *
@@ -321,7 +321,7 @@ export function isSizeDetermined(resolved: Record<string, string | null | undefi
  */
 
 /** 单条输出端口的展示形态（纯数据，视图只负责画）。 */
-export interface ParamOutputPort {
+export type ParamOutputPort = {
   /** 是否为**当前生效落点**（作者连上的那一颗；未连线时全为 false）。 */
   active: boolean;
   /** 是否已经落到了工作流里真实存在的端口。 */
@@ -354,7 +354,7 @@ export interface ParamOutputPort {
    *  的装载口就显示成 IMAGEUPLOAD，松手又变回 IMAGE，读起来像口子自己换了类型。
    *  落点那一行的类型仍在（`targetType`，行 title 里可查）。*/
   type: string;
-}
+};
 
 /** 一枚标签/端口的类型展示名：声明类型原样大写，缺省 `*`。 */
 export function portTypeDisplay(type: string | undefined | null): string {

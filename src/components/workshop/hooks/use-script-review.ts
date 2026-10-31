@@ -13,7 +13,7 @@ import { reviewScript, reviseScript } from "~/lib/production/run-client";
 import type { ReviewVerdict } from "~/lib/production/review-types";
 import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";
 
-export interface ScriptReviewController {
+export type ScriptReviewController = {
   error: string;
   /** 完整分数曲线（旧→新含本轮）；还没评过 → 空数组。 */
   history: Array<ReviewVerdict>;
@@ -22,7 +22,7 @@ export interface ScriptReviewController {
   revise: () => Promise<void>;
   revising: boolean;
   verdict: ReviewVerdict | null;
-}
+};
 
 export function useScriptReview(
   projectId: string,

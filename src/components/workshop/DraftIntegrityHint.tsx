@@ -32,10 +32,10 @@ const KIND_TAB: Record<DraftElementKind, Tab> = {
   shot: "storyboard",
 };
 
-interface DraftIntegrityHintProps {
+type DraftIntegrityHintProps = {
   issues: Array<DraftElementIssue>;
   onGoTo: (tab: Tab) => void;
-}
+};
 
 /** 把「一条元素的多个字段问题」并成一行：`镜头 #2 · 缺 id；镜号不是数字`。 */
 function groupByElement(

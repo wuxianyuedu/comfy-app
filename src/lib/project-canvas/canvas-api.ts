@@ -151,17 +151,17 @@ export async function startGenerate(input: GenerateInput): Promise<string> {
   return d.taskId;
 }
 
-export interface TaskResult {
+export type TaskResult = {
   localPath: string;
   mediaType: string;
   taskId?: string;
-}
+};
 
 /* `pollTask` 在服务端任务没产出结果就结束时返回它
  *（FAILED / CANCELLED / ERROR / TIMEOUT）。它带上任务行 `error` 列里
  * 底层后端的错误信息，好让界面给出有意义的解释，
  * 而不是一句通用的「生成失败或无结果」。 */
-export interface TaskFailure {
+export type TaskFailure = {
   /** 后端 / ComfyUI 的原始错误信息，已解码成纯文本。 */
   error: string;
   /** 原始请求载荷的快照（任务行 `params` 列），
@@ -172,7 +172,7 @@ export interface TaskFailure {
   /** 结构化的 ComfyUI /prompt 校验错误（摊平后的 `node_errors`），
    *  好让界面渲染出精确到字段的列表，而不是去解析 `error` 里那句英文摘要。 */
   validationErrors?: Array<ValidationError>;
-}
+};
 
 /* 轮询一个任务，直到它有结果、失败或超时。
  * 成功时返回 `TaskResult`（真值）；终态失败时返回结构化的 `TaskFailure`，

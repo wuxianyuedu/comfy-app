@@ -23,7 +23,7 @@ import {
 } from "~/lib/shell/app-update-client";
 
 /** 自更新分区的完整视图态（原 `SettingsPageController["appUpdate"]` 内联形状）。 */
-export interface AppUpdateView {
+export type AppUpdateView = {
   /** 最近一次检测是否发现可用更新。 */
   available: boolean;
   /** 一次操作的进行态；idle 表示空闲。 */
@@ -38,14 +38,14 @@ export interface AppUpdateView {
   progress: { downloaded: number; total?: number } | null;
   /** 可用的远端版本号（available 时非空）。 */
   version: string | null;
-}
+};
 
-export interface UseSettingsAppUpdate {
+export type UseSettingsAppUpdate = {
   appUpdate: AppUpdateView;
   checkAppUpdate: () => Promise<void>;
   installAppUpdate: () => Promise<void>;
   relaunchApp: () => Promise<void>;
-}
+};
 
 export function useSettingsAppUpdate(): UseSettingsAppUpdate {
   const [busy, setBusy] = useState<"idle" | "checking" | "installing">("idle");

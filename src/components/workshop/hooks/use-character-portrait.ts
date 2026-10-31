@@ -45,16 +45,16 @@ export type PortraitSessionPatch = Partial<
 
 /** 单次生成的覆盖项：调用方算好的「本次用哪个模型」，不传则回落到会话里的当前选择。
  *  `localLabel` 只进展示文案（工作流库里的模型名），不参与请求组装。 */
-export interface PortraitGenerateOverrides {
+export type PortraitGenerateOverrides = {
   /** 本地通道的展示标签（工作流库里的模型名）。 */
   localLabel?: string;
   /** 本次使用的工作流库工作流 id（本地通道）。 */
   localWorkflowId?: string;
   /** 本次使用的设置页「远端模型」名（远端通道）。 */
   remoteModel?: string;
-}
+};
 
-export interface PortraitSession {
+export type PortraitSession = {
   /** 是否正在生成（同一时刻只跑一个任务） */
   busy: boolean;
   channel: PortraitChannel;
@@ -80,9 +80,9 @@ export interface PortraitSession {
   size: ShotSizeState;
   /** 成功 / 结果提示文案（与 error 互斥展示） */
   status: string;
-}
+};
 
-export interface PortraitSessionActions {
+export type PortraitSessionActions = {
   appendLog: (entry: PortraitLogEntry) => void;
   /** 按角色提示词生成一张定妆照，结果作为新候选并入该角色。
    *  overrides：本次使用的通道模型（不传则用会话里的当前选择）。 */
@@ -95,7 +95,7 @@ export interface PortraitSessionActions {
   remove: (characterId: string, url: string) => void;
   /** 把候选里的一张定为定妆照（后续分镜图的参考图） */
   select: (characterId: string, url: string) => void;
-}
+};
 
 /** 生成 / 导入期间项目被换掉时的归属提示（见 `writeBackCandidate`）。 */
 const PROJECT_SWITCHED_NOTICE =

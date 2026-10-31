@@ -23,7 +23,7 @@ import {
 export { COMFY_STATS_POLL_MS };
 export type { ComfyStatsPayload };
 
-export interface ComfyStatsController {
+export type ComfyStatsController = {
   /** ComfyUI 是否在线（online 且最近一次成功） */
   online: boolean;
   /** 主动触发一次刷新（如页面回前台） */
@@ -32,7 +32,7 @@ export interface ComfyStatsController {
   stale: boolean;
   /** 最近一次读到的指标；尚未返回时为 null */
   stats: ComfyStatsPayload | null;
-}
+};
 
 /**
  * 读同一份系统指标快照。

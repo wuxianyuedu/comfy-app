@@ -17,16 +17,16 @@ import { nextId } from "~/lib/unique-id";
 
 type ToastKind = "success" | "error" | "info" | "loading";
 
-export interface ToastItem {
+export type ToastItem = {
   description?: string;
   /** 自动关闭前的毫秒数；0 = 手动关闭前一直停留 */
   duration?: number;
   id: string;
   kind: ToastKind;
   title: string;
-}
+};
 
-export interface ToastContextValue {
+export type ToastContextValue = {
   dismiss: (id: string) => void;
   error: (title: string, description?: string, duration?: number) => string;
   /** `duration` 覆盖默认 3.2s 自动收起时间；用于「这句话是要照着做的」这类提示
@@ -36,7 +36,7 @@ export interface ToastContextValue {
   success: (title: string, description?: string, duration?: number) => string;
   toast: (t: Omit<ToastItem, "id">) => string;
   update: (id: string, patch: Partial<Omit<ToastItem, "id">>) => void;
-}
+};
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 

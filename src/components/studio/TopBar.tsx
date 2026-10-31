@@ -24,14 +24,14 @@ import { useDevtoolsLauncher } from "./use-devtools-launcher";
 import { viewHelp } from "./ViewHelp";
 import { ViewActionsHost } from "./ViewActions";
 
-export interface TopBarProps {
+export type TopBarProps = {
   /** 当前视图 —— 显示成标题，让用户知道自己在哪。 */
   active: WorkspaceView;
   /** 打开全局命令面板（⌘/Ctrl+K），由 `AppShell` 用 `useHotkey` 监听并透传。 */
   onOpenSearch: () => void;
   /** 打开设置（overlay，不跳 `/settings` 路由）。 */
   onOpenSettings: () => void;
-}
+};
 
 /**
  * 顶部工具条（规范 §12.1 里与 `AppShell` 并列的那个空位）。
