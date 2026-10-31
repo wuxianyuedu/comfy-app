@@ -24,7 +24,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 /* 去注释之后还要把控制流花括号归一化：这些断言钉的是「这条判据在不在」，
  * 而 oxlint `curly` 给单语句体补 `{}` 会让 `inFlight.has(id)) return` 变成多行。 */
 const code = (rel: string): string =>
-  normalizeControlFlow(stripComments(readFileSync(path.join(ROOT, rel), "utf-8")), rel);
+  normalizeControlFlow(stripComments(readFileSync(path.join(ROOT, rel), "utf8")), rel);
 
 const ORCHESTRATOR = "src/server/film/orchestrator.ts";
 

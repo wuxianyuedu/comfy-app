@@ -79,7 +79,7 @@ export function readExecutorEnvRaw({
     if (!fs.existsSync(envFilePath)) {
       return "";
     }
-    return parseEnvFile(fs.readFileSync(envFilePath, "utf-8")).get(EXECUTOR_ENV_KEY) ?? "";
+    return parseEnvFile(fs.readFileSync(envFilePath, "utf8")).get(EXECUTOR_ENV_KEY) ?? "";
   } catch {
     // 读不到 .env 不致命：按「未设」处理，与 host 侧 DATABASE_URL 那条同形。
     return "";
