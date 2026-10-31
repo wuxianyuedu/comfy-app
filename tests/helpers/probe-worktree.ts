@@ -152,14 +152,14 @@ export function createProbeTree(realRoot: string, io: ProbeTreeIo = realIo): Pro
   const dir = join(parent, "tree");
   try {
     git(realRoot, ["worktree", "add", "--detach", dir, "HEAD"]);
-  } catch (e) {
+  } catch (error) {
     rmSync(parent, { recursive: true, force: true });
     throw new Error(
       `建一次性工作树克隆失败 —— 本件**不退回真实树**（那等于把隔离关掉而账面照样绿）：` +
-        String(e instanceof Error ? e.message : e),
+        String(error instanceof Error ? error.message : error),
       /* cause 留着：这一句要说的是「不退回」这件事，而**为什么**建不出来是 git 的原文，
        * 少了 cause 排查的人只能去手跑一次 worktree add。 */
-      { cause: e },
+      { cause: error },
     );
   }
   const carried: Array<string> = [];
@@ -170,7 +170,7 @@ export function createProbeTree(realRoot: string, io: ProbeTreeIo = realIo): Pro
    * 拷贝那一步当场抛 ⇒ 一条登记留在了临时目录上。 */
   try {
     carryWorkingTreeChanges(realRoot, dir, carried, io);
-  } catch (e) {
+  } catch (error) {
     try {
       git(realRoot, ["worktree", "remove", "--force", dir]);
     } catch {
@@ -178,12 +178,12 @@ export function createProbeTree(realRoot: string, io: ProbeTreeIo = realIo): Pro
        * 但要把这条留在哪说清楚，否则人只能自己 `git worktree list` 去撞。 */
       rmSync(parent, { recursive: true, force: true });
       throw new Error(
-        `${String(e instanceof Error ? e.message : e)}` +
+        `${String(error instanceof Error ? error.message : error)}` +
           ` —— 且克隆注销失败，需要手工执行：git worktree remove --force ${dir}`,
       );
     }
     rmSync(parent, { recursive: true, force: true });
-    throw e;
+    throw error;
   }
   return {
     dir,

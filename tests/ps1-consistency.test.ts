@@ -137,8 +137,8 @@ function runGuard(overrides: Record<string, string | null>): string {
       stdio: "pipe",
     });
     return "CODE=0";
-  } catch (e: unknown) {
-    const err = /* SAFETY: 类型断言已复核 */ e as {
+  } catch (error: unknown) {
+    const err = /* SAFETY: 类型断言已复核 */ error as {
       status?: number;
       stderr?: string;
       stdout?: string;

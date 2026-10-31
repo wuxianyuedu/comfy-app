@@ -248,9 +248,9 @@ export async function runPreflightStage(ctx) {
    * （见 `ship.mjs` 的 `main`），两半共用同一条归属判据；读不出来就念「读不出来」，不圆成「无」。 */
   try {
     logInstanceReading(log, await readInstances(root));
-  } catch (e) {
+  } catch (error) {
     log(
-      `[ship] 本检出应用实例：读不出来（${e instanceof Error ? e.message : String(e)}）` +
+      `[ship] 本检出应用实例：读不出来（${error instanceof Error ? error.message : String(error)}）` +
         " ⇒ 这一格不构成结论，也不参与退码",
     );
   }

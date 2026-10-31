@@ -62,8 +62,8 @@ async function handlePost(req: http.IncomingMessage, res: http.ServerResponse): 
     });
     await mcp.connect(transport);
     await transport.handleRequest(req, res);
-  } catch (err) {
-    console.error("[workshop-mcp-http] 处理请求失败:", err);
+  } catch (error) {
+    console.error("[workshop-mcp-http] 处理请求失败:", error);
     if (!res.headersSent) {
       res.writeHead(500).end("Internal Server Error");
     }

@@ -112,9 +112,9 @@ function readLedger() {
   let parsed;
   try {
     parsed = JSON.parse(fs.readFileSync(LEDGER, "utf8"));
-  } catch (err) {
+  } catch (error) {
     problems.push(
-      `台账不可读（${path.relative(ROOT, LEDGER)}）：${err.message}\n` +
+      `台账不可读（${path.relative(ROOT, LEDGER)}）：${error.message}\n` +
         "      —— 本判据的对象就是它；读不到时**判失败**，不按「没有声明要查」放过（§11.23.3 同款）。",
     );
     return { entries: null, source: null };
@@ -368,9 +368,9 @@ if (entries) {
     let readerSrc;
     try {
       readerSrc = fs.readFileSync(readerPath, "utf8");
-    } catch (err) {
+    } catch (error) {
       problems.push(
-        `「${e.name}」的 reader（${e.reader}）读不到（${err.message}）——` + "核验面没有落点可对",
+        `「${e.name}」的 reader（${e.reader}）读不到（${error.message}）——` + "核验面没有落点可对",
       );
       continue;
     }
@@ -398,8 +398,8 @@ if (entries) {
     let readers = null;
     try {
       readers = JSON.parse(fs.readFileSync(READERS_LEDGER, "utf8"));
-    } catch (err) {
-      problems.push(`姊妹索引不是合法 JSON：${err.message}`);
+    } catch (error) {
+      problems.push(`姊妹索引不是合法 JSON：${error.message}`);
     }
     const carriers = readers?.carriers;
     if (Array.isArray(carriers)) {

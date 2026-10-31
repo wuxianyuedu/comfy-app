@@ -718,11 +718,11 @@ export function writeFreshness({ root, kind, who, key, how }) {
   });
   try {
     writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
-  } catch (err) {
+  } catch (error) {
     return {
       previous,
       note:
-        `（记账失败：${err instanceof Error ? err.message : String(err)} —— ` +
+        `（记账失败：${error instanceof Error ? error.message : String(error)} —— ` +
         `${track.label}的结论仍然有效，手工补 ${track.ledger}）`,
     };
   }
@@ -777,11 +777,11 @@ export function writeSkipRecord({ root, kind, who, reason, field }) {
   });
   try {
     writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
-  } catch (err) {
+  } catch (error) {
     return {
       previous,
       note:
-        `（记账失败：${err instanceof Error ? err.message : String(err)} —— ` +
+        `（记账失败：${error instanceof Error ? error.message : String(error)} —— ` +
         `手工补 ${track.ledger}）`,
     };
   }

@@ -375,9 +375,9 @@ function main(argv = process.argv.slice(2)) {
   let entries;
   try {
     entries = readLedger();
-  } catch (e) {
+  } catch (error) {
     process.stdout.write(
-      `[gate-thresholds] 账解析失败：${e instanceof Error ? e.message : String(e)} ⇒ 不构成结论\n`,
+      `[gate-thresholds] 账解析失败：${error instanceof Error ? error.message : String(error)} ⇒ 不构成结论\n`,
     );
     return 2;
   }

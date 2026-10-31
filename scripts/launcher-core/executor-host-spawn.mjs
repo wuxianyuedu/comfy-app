@@ -142,10 +142,10 @@ export function maybeSpawnExecutorHost({
       },
       platform,
     });
-  } catch (err) {
+  } catch (error) {
     logLine(
       `✗ 拉起 executor-host 失败（${
-        err instanceof Error ? err.message : String(err)
+        error instanceof Error ? error.message : String(error)
       }）：任务会留在队列，` +
         "改用 inline 重启即可恢复（去掉 " +
         EXECUTOR_ENV_KEY +

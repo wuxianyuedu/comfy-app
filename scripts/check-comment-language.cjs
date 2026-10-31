@@ -430,7 +430,7 @@ async function main() {
   process.exit(1);
 }
 
-main().catch((err) => {
-  console.error(`✗ 注释语言棘轮执行失败:${err?.message ?? err}`);
+main().catch((error) => {
+  console.error(`✗ 注释语言棘轮执行失败:${error?.message ?? error}`);
   process.exit(1);
 });

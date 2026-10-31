@@ -258,9 +258,9 @@ export function writeProof(gitDir, record) {
       `${JSON.stringify(body, null, 2)}\n`,
       "utf8",
     );
-  } catch (err) {
+  } catch (error) {
     process.stderr.write(
-      `[pre-push] 证明没能落盘（${err instanceof Error ? err.message : String(err)}）—— ` +
+      `[pre-push] 证明没能落盘（${error instanceof Error ? error.message : String(error)}）—— ` +
         `本次复算的结论仍然有效，下次 push 会再跑一遍。\n`,
     );
   }

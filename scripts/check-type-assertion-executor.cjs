@@ -331,16 +331,16 @@ function readTsconfigInclude() {
   let raw;
   try {
     raw = fs.readFileSync(abs, "utf8");
-  } catch (e) {
-    throw new Error(`读不到 tsconfig.json：${e.message}`, { cause: e });
+  } catch (error) {
+    throw new Error(`读不到 tsconfig.json：${error.message}`, { cause: error });
   }
   const stripped = blankJsonComments(raw).replaceAll(/,(\s*[}\]])/g, "$1");
   let json;
   try {
     json = JSON.parse(stripped);
-  } catch (e) {
-    throw new Error(`解析 tsconfig.json 失败（挖注释后仍不是合法 JSON）：${e.message}`, {
-      cause: e,
+  } catch (error) {
+    throw new Error(`解析 tsconfig.json 失败（挖注释后仍不是合法 JSON）：${error.message}`, {
+      cause: error,
     });
   }
   if (!Array.isArray(json?.include)) {
@@ -411,9 +411,9 @@ function main() {
   let include;
   try {
     include = readTsconfigInclude();
-  } catch (e) {
+  } catch (error) {
     console.error(
-      `[ERROR] 类型层断言判据**自己**没能解析出 tsconfig 的 include：${e.message}\n` +
+      `[ERROR] 类型层断言判据**自己**没能解析出 tsconfig 的 include：${error.message}\n` +
         "判据解析失败一律判失败 —— 静默退回「没有 include」会让本判据空转、照样报 OK\n" +
         "（§11.20 的判据③，与 §11.18.3 首版那个 `include: []` 却退 0 的 bug 同族）。",
     );
@@ -427,8 +427,8 @@ function main() {
   let includeRes;
   try {
     includeRes = include.map(includeEntryToRegExp);
-  } catch (e) {
-    console.error(`[ERROR] 解析 tsconfig 的 include 条目失败：${e.message}`);
+  } catch (error) {
+    console.error(`[ERROR] 解析 tsconfig 的 include 条目失败：${error.message}`);
     return 1;
   }
 

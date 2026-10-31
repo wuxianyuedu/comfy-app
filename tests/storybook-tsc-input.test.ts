@@ -680,9 +680,9 @@ function generatedStashFile(root: string, pid: number): string {
 function moveFileAcrossVolumes(from: string, to: string): void {
   try {
     fs.renameSync(from, to);
-  } catch (e) {
-    if (/* SAFETY: 类型断言已复核 */ (e as NodeJS.ErrnoException).code !== "EXDEV") {
-      throw e;
+  } catch (error) {
+    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code !== "EXDEV") {
+      throw error;
     }
     fs.copyFileSync(from, to);
     fs.unlinkSync(from);

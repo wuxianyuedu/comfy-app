@@ -114,8 +114,8 @@ function readVersion(src) {
   let text;
   try {
     text = fs.readFileSync(path.join(ROOT, src.file), "utf8");
-  } catch (e) {
-    return { error: `读不到 ${src.file}（${e.code || e.message}）` };
+  } catch (error) {
+    return { error: `读不到 ${src.file}（${error.code || error.message}）` };
   }
   const value = src.extract(text);
   if (value == null) {

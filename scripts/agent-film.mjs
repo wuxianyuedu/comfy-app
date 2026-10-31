@@ -297,8 +297,8 @@ export async function main(argv = process.argv.slice(2)) {
     }
     const status = snapshot?.run?.status;
     return status === "failed" || timedOut ? 1 : 0;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     process.stderr.write(`agent-film 失败：${msg}\n`);
     return 1;
   }

@@ -409,8 +409,8 @@ function readBaseline() {
   }
   try {
     return JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-  } catch (e) {
-    return { __broken: `基线文件不是合法 JSON：${e.message}` };
+  } catch (error) {
+    return { __broken: `基线文件不是合法 JSON：${error.message}` };
   }
 }
 
@@ -468,8 +468,8 @@ function main(io = {}) {
   let ts;
   try {
     ts = require("typescript");
-  } catch (e) {
-    console.error(`${TAG} ✗ 取不到 typescript（判决面对账要用它自己的 glob 引擎）：${e.message}`);
+  } catch (error) {
+    console.error(`${TAG} ✗ 取不到 typescript（判决面对账要用它自己的 glob 引擎）：${error.message}`);
     return 2;
   }
 

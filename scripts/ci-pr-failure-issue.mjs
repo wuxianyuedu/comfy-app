@@ -488,9 +488,9 @@ export function main(io = {}) {
     let parsed;
     try {
       parsed = JSON.parse(fs.readFileSync(from, "utf8"));
-    } catch (e) {
+    } catch (error) {
       log(
-        `[pr-failure-issue] --from 那份不是能解析的 JSON（${/** @type {Error} */ (e).message}）⇒ 不构成结论`,
+        `[pr-failure-issue] --from 那份不是能解析的 JSON（${/** @type {Error} */ (error).message}）⇒ 不构成结论`,
       );
       return finish(CODE.NO_FACT, "--from 读不了");
     }

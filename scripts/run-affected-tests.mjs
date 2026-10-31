@@ -345,8 +345,8 @@ async function main(argv) {
      * 后跑，噪音被收进固定清单那一段里隔离，受影响用例的失败落在日志尾部（平台保留尾部）。
      * 段开关下 `segFiles` 本来就只剩一段，这里天然产出该段的块。 */
     chunks = planSeparatedLaunches(segFiles);
-  } catch (e) {
-    process.stderr.write(`[affected-launch] ${e instanceof Error ? e.message : String(e)}\n`);
+  } catch (error) {
+    process.stderr.write(`[affected-launch] ${error instanceof Error ? error.message : String(error)}\n`);
     return 1;
   }
   /* 同上：读数档不碰 `node_modules`。它要的信息（清单份数 / 启动次数 / 最长一块）

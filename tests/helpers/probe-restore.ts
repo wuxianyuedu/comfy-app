@@ -57,8 +57,8 @@ export const realProbeIo: ProbeIo = {
           return;
         }
         last = "写回后读回的内容与快照不一致";
-      } catch (e) {
-        last = /* SAFETY: 类型断言已复核 */ (e as Error).message;
+      } catch (error) {
+        last = /* SAFETY: 类型断言已复核 */ (error as Error).message;
       }
     }
     throw new Error(`还原写不进去（${WRITE_ATTEMPTS} 次仍失败）：${last}`);
@@ -103,10 +103,10 @@ export function restoreToSnapshot(
     let now: SnapshotEntry;
     try {
       now = io.read(abs);
-    } catch (e) {
+    } catch (error) {
       failed.push({
         abs,
-        why: `读不到当前内容：${/* SAFETY: 类型断言已复核 */ (e as Error).message}`,
+        why: `读不到当前内容：${/* SAFETY: 类型断言已复核 */ (error as Error).message}`,
       });
       continue;
     }
@@ -121,8 +121,8 @@ export function restoreToSnapshot(
         io.write(abs, want);
       }
       restored.push(abs);
-    } catch (e) {
-      failed.push({ abs, why: /* SAFETY: 类型断言已复核 */ (e as Error).message });
+    } catch (error) {
+      failed.push({ abs, why: /* SAFETY: 类型断言已复核 */ (error as Error).message });
     }
   }
   return { restored, unchanged, failed };
