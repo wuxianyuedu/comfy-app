@@ -26,7 +26,7 @@ import type { CalibrationReport } from "~/lib/production/review-calibration";
 
 import { useShotReview } from "./hooks/use-shot-review";
 
-export interface ShotReviewDialogProps {
+export type ShotReviewDialogProps = {
   onOpenChange: (open: boolean) => void;
   /** 重生成成功后的回调（调用方据此刷新镜头列表）。 */
   onRegenerated?: () => void;
@@ -35,7 +35,7 @@ export interface ShotReviewDialogProps {
   projectId: string;
   /** 被评审的镜头（id = 统一项目的 production shot id）。 */
   shot: { id: string; name: string };
-}
+};
 
 export function ShotReviewDialog({
   open,

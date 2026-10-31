@@ -51,7 +51,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /** 进度节流的默认窗口：约等于「一秒 10 帧」，肉眼已是连续推进。 */
 export const PROGRESS_THROTTLE_MS = 100;
 
-export interface ThrottledProgress {
+export type ThrottledProgress = {
   /** 立刻写入并解除节流（任务落定时调 —— 终值不允许被窗口吃掉）。 */
   flush: (value: number) => void;
   /**
@@ -65,7 +65,7 @@ export interface ThrottledProgress {
   reset: () => void;
   /** 最近一次落进 state 的读数（首帧前为 `initial`）。 */
   value: number;
-}
+};
 
 /**
  * 把高频进度回调节流后写进 state（**单值**：一次只跑一个任务）。
@@ -161,7 +161,7 @@ export function useThrottledProgress(
  *
  * 返回的 `progress` 是 `Record`，调用处的读法（`progress[shot.id] ?? 0`）不变。
  */
-export interface ThrottledProgressMap {
+export type ThrottledProgressMap = {
   /** 清掉某一条（或不传 `key` 时清全部）。 */
   clear: (key?: string) => void;
   /** 立刻写入并解除该条目的节流（落定时调）。 */
@@ -170,7 +170,7 @@ export interface ThrottledProgressMap {
   progress: Record<string, number>;
   /** 节流后的写入器 —— 直接交给 `onProgress`。 */
   report: (key: string, value: number) => void;
-}
+};
 
 /**
  * 按条目的进度节流表。
@@ -270,7 +270,7 @@ export function useThrottledProgressMap(
  * 与上面两个 hook 共用 {@link PROGRESS_THROTTLE_MS} 的默认窗口 ——
  * 「一秒 10 帧」这条口径只有一处。
  */
-export interface ThrottleGate {
+export type ThrottleGate = {
   /**
    * 这一条在这一刻该不该写。
    *
@@ -279,7 +279,7 @@ export interface ThrottleGate {
   allow: (key?: string, tickMs?: number) => boolean;
   /** 清掉某一条的窗口（或不传 `key` 时清全部）—— 开始新一轮任务前调。 */
   reset: (key?: string) => void;
-}
+};
 
 /** 造一个节流闸门（见 {@link ThrottleGate}）。 */
 export function createThrottleGate(): ThrottleGate {

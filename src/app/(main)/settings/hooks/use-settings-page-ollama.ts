@@ -42,7 +42,7 @@ import type { OllamaStatus } from "./use-settings-page-types";
 const OLLAMA_START_POLL_TIMES = OLLAMA_READY.maxAttempts;
 const OLLAMA_START_POLL_INTERVAL_MS = OLLAMA_READY.baseMs;
 
-export interface UseSettingsOllama {
+export type UseSettingsOllama = {
   ollamaLog: RuntimeLogController & { active: boolean };
   ollamaModels: Array<OllamaModel>;
   ollamaStarting: boolean;
@@ -50,7 +50,7 @@ export interface UseSettingsOllama {
   ollamaStopping: boolean;
   startOllama: () => Promise<void>;
   stopOllama: () => Promise<void>;
-}
+};
 
 export function useSettingsOllama({
   llmBaseUrl,

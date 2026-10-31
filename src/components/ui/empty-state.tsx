@@ -53,7 +53,7 @@ import { cn } from "~/lib/utils";
  */
 export type EmptyStateVariant = "page" | "error" | "hint" | "panel";
 
-export interface EmptyStateProps {
+export type EmptyStateProps = {
   /** 操作区（按钮等），居中渲染在主文案下方。 */
   action?: ReactNode;
   className?: string;
@@ -67,7 +67,7 @@ export interface EmptyStateProps {
   title?: string;
   /** 形态（见组件注释）。 */
   variant?: EmptyStateVariant;
-}
+};
 
 /**
  * 图标形参的判据：`React.forwardRef` 产物也带 `$$typeof`，而它同时有 `render`；

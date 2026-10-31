@@ -41,14 +41,14 @@ const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition =>
  *
  *  刻意没有 onDragLeave：指针在同一行的子元素间移动时它同样会触发，据此清除
  *  高亮会频闪 —— 高亮统一由 dragover / drop / dragend 收敛。 */
-export interface RowDragHandlers {
+export type RowDragHandlers = {
   onDragEnd: () => void;
   onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
   onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
   onDrop: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
-}
+};
 
-export interface DynamicWorkflowFormController {
+export type DynamicWorkflowFormController = {
   /** 端口行被拿起时回传本 controller —— 端口行自身不持有拖拽状态。 */
   beginPortDrag: (ioKey: string) => void;
   dismissUploadError: () => void;
@@ -91,7 +91,7 @@ export interface DynamicWorkflowFormController {
   /** 可编辑参数行：非数值 widget（已分组的 pin 除外）。 */
   widgetSectionEntries: Array<EnrichedWidget>;
   wireInputs: Array<EnrichedWidget>;
-}
+};
 
 export function useDynamicWorkflowForm(
   props: DynamicWorkflowFormProps,

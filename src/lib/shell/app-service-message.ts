@@ -51,22 +51,22 @@ import type { AppServiceExitNotice } from "./app-service-exit";
 import type { DevServerState } from "./dev-server-status";
 
 /** 一条可直接 `push` 的消息文案。 */
-export interface AppServiceMessageText {
+export type AppServiceMessageText = {
   body: string;
   title: string;
-}
+};
 
 /* ── 判据：从「上一次看到什么」到「这一次该记什么」 ───────────────────────── */
 
 /** 边沿判据的游标：上一次看到的事实 + 尚未收尾的那一次断开。 */
-export interface AppServiceEventCursor {
+export type AppServiceEventCursor = {
   /** 本次页面会话里观测到的断开时刻；还没断开过为 null。 */
   offlineAt: number | null;
   /** 上一次看到的「这份进程是新的吗」。 */
   processIsNew: boolean;
   /** 上一次看到的四态。 */
   state: DevServerState;
-}
+};
 
 /** 一次待记录的事件。 */
 export type AppServiceEvent =
@@ -83,7 +83,7 @@ export type AppServiceEvent =
       unprobedMs: number;
     };
 
-export interface AppServiceFacts {
+export type AppServiceFacts = {
   /** 本次看到的「这份进程对本次页面会话来说是新的吗」。 */
   processIsNew: boolean;
   /** 本次看到的四态。 */
@@ -99,7 +99,7 @@ export interface AppServiceFacts {
    * `probeGapMs` 在探活那一侧，这里只消费）。
    */
   unprobedMs: number;
-}
+};
 
 /** 初始游标：首帧还没有任何事实，因此不会产出边沿。 */
 export function initialAppServiceCursor(): AppServiceEventCursor {
@@ -268,7 +268,7 @@ export function describeAppServiceRouteStale(at: number): AppServiceMessageText 
 }
 
 /** 启动/恢复那条的输入：时刻 +（若有）断开时刻 +（若有）上一次结束的原因。 */
-export interface AppServiceStartInput {
+export type AppServiceStartInput = {
   /** 本次应答的时刻（新进程已经起来了）。 */
   at: number;
   /** 上一份进程结束记录的落盘时刻（ISO 串或毫秒）；没有为 null。 */
@@ -286,7 +286,7 @@ export interface AppServiceStartInput {
    * 减掉等于宣称「服务在那一刻已经回来了」，而恢复点无从知道。
    */
   unprobedMs: number;
-}
+};
 
 /**
  * 启动/恢复那条：**时间 + 原因 + 该做什么** 一次给全。

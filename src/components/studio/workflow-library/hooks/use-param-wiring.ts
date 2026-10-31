@@ -21,7 +21,7 @@ import {
   type ParamWireEdit,
 } from "~/lib/workflow/workflow-param-wiring";
 
-export interface ParamWiringController {
+export type ParamWiringController = {
   /** 提交一份**完整** paramMap：先写本地 overlay（立刻回读），再落库。
    *
    *  左列（`connect` / `disconnect` / `resetToAuto`）已内建这套编排；右列的输出
@@ -50,16 +50,16 @@ export interface ParamWiringController {
   resetMany: (entryIds: ReadonlyArray<string>) => void;
   /** 恢复默认：撤销该对外参数在当前模式下的手工线。 */
   resetToAuto: (entryId: string) => void;
-}
+};
 
-export interface UseParamWiringArgs {
+export type UseParamWiringArgs = {
   /** 当前生效模式（`resolveWorkflowMode` 给出的那个）。 */
   mode: string | null | undefined;
   /** 落库回调（父级持有 workflowId 与 tRPC mutation）。 */
   onPatchParamMap?: (next: Record<string, unknown>) => void | Promise<void>;
   /** 工作流模板的 paramMap 原始列（外部事实源，GET 恢复 / 保存回写）。 */
   paramMap: Record<string, unknown>;
-}
+};
 
 export function useParamWiring({
   paramMap,

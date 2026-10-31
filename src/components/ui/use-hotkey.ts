@@ -36,7 +36,7 @@ import { useEffect, useRef } from "react";
  */
 
 /** `mod` 在 macOS 上是 ⌘、其它平台是 Ctrl。 */
-export interface HotkeySpec {
+export type HotkeySpec = {
   /** 要求 Alt。 */
   alt?: boolean;
   /** 显式要求 Ctrl（仅当行为**刻意**只在 Ctrl 上成立时用，写明理由）。 */
@@ -49,9 +49,9 @@ export interface HotkeySpec {
   mod?: boolean;
   /** 要求 Shift。 */
   shift?: boolean;
-}
+};
 
-export interface UseHotkeyOptions {
+export type UseHotkeyOptions = {
   /** 是否注册。`false` 时不注册（如面板未打开）。默认 `true`。 */
   enabled?: boolean;
   /**
@@ -63,7 +63,7 @@ export interface UseHotkeyOptions {
   preventDefault?: boolean;
   /** 监听目标。默认 `window`（`document` 在 iframe / portal 场景下等价）。 */
   target?: Window | Document;
-}
+};
 
 /** 单键是否可编辑元素 —— 焦点在输入类元素里时不该抢键。 */
 function isEditableTarget(target: EventTarget | null): boolean {

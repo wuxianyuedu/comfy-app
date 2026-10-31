@@ -24,7 +24,7 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
  */
 export const LOG_PAGE_SIZE = 2000;
 
-export interface LogEntry {
+export type LogEntry = {
   /** nanoid 风格的短 id */
   id: string;
   level: LogLevel;
@@ -46,7 +46,7 @@ export interface LogEntry {
   source: "console" | "tauri" | "system";
   /** 日志写入时刻（毫秒）。排序、展示、会话边界判定都用它。 */
   time: number;
-}
+};
 
 export type LogFilter = LogLevel | "all";
 

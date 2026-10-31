@@ -14,14 +14,14 @@
 
 import { create } from "zustand";
 
-export interface DebugStoreState {
+export type DebugStoreState = {
   /** 全局调试模式是否开启 */
   debugMode: boolean;
   /** 显式设置调试模式 */
   setDebugMode: (v: boolean) => void;
   /** 切换调试模式 */
   toggleDebugMode: () => void;
-}
+};
 
 export const useDebugStore = create<DebugStoreState>((set) => ({
   debugMode: false,

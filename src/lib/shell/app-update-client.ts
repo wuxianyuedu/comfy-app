@@ -11,15 +11,15 @@ import { errorText } from "~/lib/error-message";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 
 /** 一次「检测更新」的结果：是否有可用更新及其元信息。 */
-export interface AppUpdateInfo {
+export type AppUpdateInfo = {
   body?: string;
   currentVersion: string;
   date?: string;
   /** 远端可用版本；无更新时为 null。 */
   version: string | null;
-}
+};
 
-export interface AppUpdateCheckResult {
+export type AppUpdateCheckResult = {
   /** 是否确有可用更新。 */
   available: boolean;
   /** 可读结果 / 失败原因。 */
@@ -27,14 +27,14 @@ export interface AppUpdateCheckResult {
   ok: boolean;
   /** available 为 true 时附带的更新元信息。 */
   update?: AppUpdateInfo;
-}
+};
 
-export interface AppUpdateInstallResult {
+export type AppUpdateInstallResult = {
   detail: string;
   ok: boolean;
   /** 是否已触发安装/重启（Windows 端 install 后应用即退出）。 */
   triggered: boolean;
-}
+};
 
 /** 下载进度回调：已下载字节 / 总字节（contentLength 可能为空）。 */
 export type AppUpdateProgress = (downloaded: number, total?: number) => void;

@@ -5,10 +5,10 @@
 import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
 
-interface StageHintProps {
+type StageHintProps = {
   onGo: () => void;
   text: string;
-}
+};
 
 export function StageHint({ text, onGo }: StageHintProps) {
   return (

@@ -11,19 +11,19 @@ import { zClass } from "~/lib/shell/overlay-z";
 import { centerLineScrollTop, readLineHeight } from "~/lib/dom-rect";
 import { useHotkey } from "~/components/ui/use-hotkey";
 
-interface ScriptMarkdownEditorProps {
+type ScriptMarkdownEditorProps = {
   onCancel?: () => void;
   onChange: (value: string) => void;
   onSave?: () => void;
   title?: string;
   value: string;
-}
+};
 
-interface HistoryFrame {
+type HistoryFrame = {
   selectionEnd: number;
   selectionStart: number;
   value: string;
-}
+};
 
 const MAX_HISTORY = 50;
 

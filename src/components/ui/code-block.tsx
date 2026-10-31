@@ -51,12 +51,12 @@ export function extToLanguage(filePath: string): string {
 }
 
 /** shiki v4 codeToTokensBase 返回的单行 token（Token[][] 的成员） */
-interface ShikiToken {
+type ShikiToken = {
   color?: string;
   content: string;
   fontStyle?: number;
   offset?: number;
-}
+};
 
 type ShikiHighlighter = {
   codeToTokensBase: (

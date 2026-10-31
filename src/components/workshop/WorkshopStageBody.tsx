@@ -89,9 +89,9 @@ function StageBoundary({ label, children }: { children: React.ReactNode; label: 
   );
 }
 
-interface WorkshopStageBodyProps {
+type WorkshopStageBodyProps = {
   controller: WorkshopPipelineController;
-}
+};
 
 export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
   const {

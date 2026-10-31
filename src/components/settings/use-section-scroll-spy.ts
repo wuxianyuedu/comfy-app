@@ -48,7 +48,7 @@ export const SECTION_TOP_LINE_PX = 96;
  */
 export const SECTION_ROOT_MARGIN = `-${SECTION_TOP_LINE_PX}px 0px -100% 0px`;
 
-export interface UseSectionScrollSpyOptions<Id extends string = string> {
+export type UseSectionScrollSpyOptions<Id extends string = string> = {
   /** 当前分区（受控：点击导航要立刻改高亮，不必等滚动落定）。 */
   activeId: Id;
   /** 滚动容器（分区节在它里面滚动）。 */
@@ -57,9 +57,9 @@ export interface UseSectionScrollSpyOptions<Id extends string = string> {
   onActiveChange: (id: Id) => void;
   /** 分区 id 列表（**顺序即文档顺序** —— 「最后一条」靠它定序）。 */
   sectionIds: ReadonlyArray<Id>;
-}
+};
 
-export interface SectionScrollSpy<Id extends string = string> {
+export type SectionScrollSpy<Id extends string = string> = {
   /** 挂到**每个分区节**上的 `ref` 回调（`sectionId` 即锚点 id）。 */
   registerSection: (sectionId: Id) => (el: HTMLElement | null) => void;
   /**
@@ -73,7 +73,7 @@ export interface SectionScrollSpy<Id extends string = string> {
    * 先报「当前视图里那几节」，高亮会闪一下再跳到位。
    */
   scrollToSection: (sectionId: Id, behavior?: ScrollBehavior) => boolean;
-}
+};
 
 /**
  * 观察容器里各分区节的可见性，产出「当前分区」并支持滚到指定分区。

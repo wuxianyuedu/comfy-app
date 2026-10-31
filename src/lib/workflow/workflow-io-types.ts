@@ -8,7 +8,7 @@
 import { z } from "zod";
 
 /* 一个暴露出来的引脚，形状与 GET /api/workflows/[id] 返回的一致。 */
-export interface WorkflowIOEntry {
+export type WorkflowIOEntry = {
   defaultValue?: unknown;
   direction: "input" | "output";
   /** 用户自定义的展示顺序。 */
@@ -51,10 +51,10 @@ export interface WorkflowIOEntry {
   slotLabel?: string;
   /** ComfyUI 的数据类型：STRING / INT / FLOAT / BOOLEAN / IMAGE / VIDEO … */
   type?: string;
-}
+};
 
 /** 单个参数在某一个模式下的覆盖项。 */
-export interface WorkflowIOModeOverride {
+export type WorkflowIOModeOverride = {
   /** 覆盖该模式下的默认值；undefined = 不覆盖，回退到通用默认值。 */
   defaultValue?: unknown;
   /** 该模式下是否标记为必填；undefined = 不覆盖，回退到条目级 required。 */
@@ -64,7 +64,7 @@ export interface WorkflowIOModeOverride {
   seedMode?: string;
   /** 该模式下是否显示此参数；undefined = 显示（默认可见）。 */
   visible?: boolean;
-}
+};
 
 /** 方向 × 种类判别联合：合法的 (direction, kind) 组合只有 `input+param`、
  *  `input+widget`、`output+output` 三种；`output+param` 这类非法组合在类型层面

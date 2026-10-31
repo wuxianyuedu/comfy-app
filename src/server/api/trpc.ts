@@ -23,11 +23,11 @@ import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
 
 const trpcRuntimeLog = createAppRuntimeLogger("trpc");
 
-export interface TRPCUser {
+export type TRPCUser = {
   email: string;
   id: string;
   name: string | null;
-}
+};
 
 /**
  * 1. CONTEXT

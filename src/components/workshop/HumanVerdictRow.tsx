@@ -51,7 +51,7 @@ function RatingStars({
   );
 }
 
-export interface HumanVerdictRowProps {
+export type HumanVerdictRowProps = {
   /** 弹窗整体在途（AI 评审 / 重生成中）时禁动。 */
   disabled?: boolean;
   /** 星评变更回调（镜头场景注入 `run.setHumanRating`）；不给 = 不显示星评。 */
@@ -62,7 +62,7 @@ export interface HumanVerdictRowProps {
   rating?: number | null;
   /** 已落库的人工裁决（展示「人已拍板」状态）；没裁决过 → null。 */
   verdict: HumanVerdict | null;
-}
+};
 
 export function HumanVerdictRow({
   verdict,

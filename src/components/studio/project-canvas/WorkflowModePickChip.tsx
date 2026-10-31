@@ -10,12 +10,12 @@ import { useStore } from "@xyflow/react";
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import { OptionListPopover } from "~/components/ui/option-list-popover";
 
-interface WorkflowModePickChipProps {
+type WorkflowModePickChipProps = {
   defaultMode: string | null;
   disabled?: boolean;
   modes: Array<string>;
   onChange: (modes: Array<string>, defaultMode: string) => void;
-}
+};
 
 /* transform 订阅收敛（商业级性能）。
  * 之前 ModePickChip 顶层常驻订阅 state.transform —— 画布每 pan/zoom 一次，

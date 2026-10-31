@@ -39,7 +39,7 @@ import { paramClassStyle } from "./workflow-param-mapping-ui";
 /** 卡片宽度：与项目画布节点同宽，两列并排时仍放得下。 */
 const CARD_WIDTH = 220;
 
-export interface WorkflowParamCardColumnProps {
+export type WorkflowParamCardColumnProps = {
   /** 是否允许连线：库里也允许（拖圆点改落点）—— 没有模式时不给（写入无归属）。 */
   canWire?: boolean;
   /** 契约口清单（`modeContractEntries` / `exposedParamsForMode` 的产物）。
@@ -63,7 +63,7 @@ export interface WorkflowParamCardColumnProps {
   resolved: Record<string, string | null>;
   /** 作者手里正选中的条目（线被点选 / 卡片被点）。 */
   selectedEntryId?: string | null;
-}
+};
 
 export function WorkflowParamCardColumn({
   entries,

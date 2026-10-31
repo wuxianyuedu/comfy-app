@@ -15,12 +15,12 @@ export async function cancelTask(taskId: string): Promise<void> {
 }
 
 /** 任务的权威状态快照（只取终态判定要用的两个字段）。 */
-export interface TaskStatusSnapshot {
+export type TaskStatusSnapshot = {
   /** 失败原因（仅失败态有意义）。 */
   error: string | null;
   /** DB 里的权威状态；查不到（行已删 / 网络抖动）时为 null。 */
   status: string | null;
-}
+};
 
 /**
  * 取任务的**权威**状态。

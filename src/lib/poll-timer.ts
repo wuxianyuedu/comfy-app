@@ -25,7 +25,7 @@ import { fireAndForget } from "~/lib/async-action";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 
 /** 启动一条轮询；返回停止函数。 */
-export interface PollTimerOptions {
+export type PollTimerOptions = {
   /** 启动时是否立即先跑一次（默认 true）。 */
   immediate?: boolean;
   /** 间隔毫秒数；`null` / `0` 表示不跑。
@@ -57,7 +57,7 @@ export interface PollTimerOptions {
   pauseWhenHidden?: boolean;
   /** 窗口失焦时是否也暂停；缺省跟随 `isDesktopShell()`。 */
   pauseWhenUnfocused?: boolean;
-}
+};
 
 /**
  * 立刻按当前配置跑一次（`immediate` 时），并在窗口重新可见/重新聚焦时补跑；

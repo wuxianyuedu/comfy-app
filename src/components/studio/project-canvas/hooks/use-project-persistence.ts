@@ -29,14 +29,14 @@ import {
 } from "~/lib/project-canvas/canvas-store";
 import { useSyncRefusalNotice } from "./use-sync-refusal-notice";
 
-export interface UseProjectPersistenceParams {
+export type UseProjectPersistenceParams = {
   edges: Array<Edge>;
   /** 项目是否已完成首次加载（!hydrating）；false 时不触发持久化。 */
   loaded: boolean;
   nodes: Array<CanvasNodeType>;
   projectId: string | null;
   projectName: string;
-}
+};
 
 export function useProjectPersistence({
   projectId,

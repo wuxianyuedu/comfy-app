@@ -78,11 +78,11 @@ function makeShot(patch: Partial<Shot> = {}): Shot {
   };
 }
 
-interface RenderOptions {
+type RenderOptions = {
   apiChannels?: ApiChannelsView | null;
   shots?: Array<Shot>;
   workflowId?: string;
-}
+};
 
 function renderStudio(options: RenderOptions = {}) {
   const onShotsChange = vi.fn();

@@ -9,11 +9,11 @@ import type { FilmStudioController } from "./hooks/use-film-studio";
 import { STAGE_LABEL } from "./film-studio-config";
 import { sizeSpecSummary } from "~/lib/media/size-presets";
 
-interface FilmStudioPreviewPanelProps {
+type FilmStudioPreviewPanelProps = {
   c: FilmStudioController;
   isPlaying: boolean;
   onTogglePlay: () => void;
-}
+};
 
 export function FilmStudioPreviewPanel({
   c,

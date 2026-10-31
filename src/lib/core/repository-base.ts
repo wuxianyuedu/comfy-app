@@ -45,15 +45,15 @@ import type { Task, TaskImage } from "~/server/db/schema";
 export type TaskWithCover = Task & { images: Array<TaskImage> };
 
 /** 所有可被 Repository 管理的实体都需具备可比较的字符串主键。 */
-export interface Identifiable {
+export type Identifiable = {
   id: string;
-}
+};
 
 /**
  * 与 ORM 无关的持久化契约。任何业务模块都应面向该接口编程，
  * 而非直接依赖 Drizzle 客户端。
  */
-export interface Repository<T extends Identifiable> {
+export type Repository<T extends Identifiable> = {
   /** 插入一条。 */
   create(entity: T): Promise<T>;
   /** 删除；不存在静默忽略。 */
@@ -64,7 +64,7 @@ export interface Repository<T extends Identifiable> {
   findById(id: string): Promise<T | null>;
   /** 部分更新（仅覆盖传入字段）。 */
   update(id: string, patch: Partial<T>): Promise<T>;
-}
+};
 
 /**
  * 通用 Drizzle CRUD 基类。子类传入表对象即可获得一套标准、可单测的

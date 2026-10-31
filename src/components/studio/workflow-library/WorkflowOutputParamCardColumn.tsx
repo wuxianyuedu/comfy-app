@@ -29,7 +29,7 @@ import { outputPortLabel } from "./workflow-library-param-cards";
 /** 卡片宽度：与左侧输入卡片同宽，两列夹着宿主卡片时仍放得下。 */
 const CARD_WIDTH = 200;
 
-export interface WorkflowOutputParamCardColumnProps {
+export type WorkflowOutputParamCardColumnProps = {
   /** 是否允许拖改（有模式、且上层给了落库回调时才为真）。 */
   canWire?: boolean;
   /** 端点槽位：消费方注入 `<Handle>`（库里那层）或只读圆点。 */
@@ -45,7 +45,7 @@ export interface WorkflowOutputParamCardColumnProps {
   resolved?: Record<string, string | null>;
   /** 作者手里正选中的输出口。 */
   selectedOutputId?: string | null;
-}
+};
 
 export function WorkflowOutputParamCardColumn({
   outputs,

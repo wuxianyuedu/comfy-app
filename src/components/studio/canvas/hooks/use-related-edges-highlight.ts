@@ -98,13 +98,13 @@ export function readEdgeFocusRole(edge: Pick<Edge, "data">): EdgeFocusRole {
   return role === "upstream" || role === "downstream" || role === "related" ? role : "none";
 }
 
-export interface UseRelatedEdgesHighlightOptions {
+export type UseRelatedEdgesHighlightOptions = {
   /** 端点在当前画布坐标系下的解析（折叠锚点等）。默认按内部节点表恒等解析。 */
   resolveNodeId?: (visualNodeId: string) => string | null;
   /** 写回节点表：选中节点的相关端口行级别写进节点 data（见 `NODE_PORT_FOCUS_DATA_KEY`）。
    *  不传则只做连线高亮（部分画布没有节点级端口行，且这是历史行为）。 */
   setNodes?: NodeTableWriter;
-}
+};
 
 export function useRelatedEdgesHighlight(
   setEdges: (updater: (edges: Array<Edge>) => Array<Edge>) => void,

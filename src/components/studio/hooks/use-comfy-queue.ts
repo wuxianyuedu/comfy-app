@@ -30,10 +30,10 @@ export function formatElapsed(ms: number): string {
 }
 
 /** 状态栏那一格该说什么（纯函数，组件只管渲染）。返回 null = 不占位。 */
-export interface ComfyQueueNotice {
+export type ComfyQueueNotice = {
   text: string;
   title: string;
-}
+};
 
 export function comfyQueueNotice(view: ComfyQueueView): ComfyQueueNotice | null {
   /* ComfyUI 离线时不占位：状态栏已有「ComfyUI 未运行，显存/内存暂不可用」那条

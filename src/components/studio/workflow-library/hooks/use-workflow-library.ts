@@ -40,7 +40,7 @@ import { useWorkflowImport } from "./use-workflow-import";
  *  「加载中」换成可重试的提示，而不是让用户对着空列表猜（见 hook 内注释）。 */
 export const LIST_STALL_MS = 8_000;
 
-export interface WorkflowLibraryController {
+export type WorkflowLibraryController = {
   /* 错误：动作失败（不会自动消失） */
   actionError: string | null;
   /* 忙碌标志（由 `useItemAction` 给：id + 「这一条忙不忙」的判据） */
@@ -119,7 +119,7 @@ export interface WorkflowLibraryController {
   typeFilter: TypeFilter;
   /** 过滤后的已载入工作流。 */
   workflows: Array<WorkflowRow>;
-}
+};
 
 /** 列表数据与全部交互状态 —— 见文件头注释的分层说明。 */
 export function useWorkflowLibrary(

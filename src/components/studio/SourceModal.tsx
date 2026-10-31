@@ -26,23 +26,23 @@ const RAW_FORMAT_CHIP =
  * `widgets_values` …）—— 也就是库里的 `rawJson` 列。本应用只接受这一种格式，
  * 所以没有「另一种格式的兜底」这回事。
  */
-export interface SourceModalData {
+export type SourceModalData = {
   /** 当前 detail 是否来自子工作流 (drill-in 进 sub) 视图。用于文案区分。 */
   isSubgraph?: boolean;
   /** 工作流名（标题用） */
   name: string;
   /** 磁盘上的原始导入 JSON（ComfyUI 工作流格式）。 */
   source: unknown;
-}
+};
 
-export interface SourceModalProps {
+export type SourceModalProps = {
   data: SourceModalData | null;
   /** 加载/解析失败时显示 */
   error?: string;
   /** 仓库已经加载好的视图 — 等待期间显示 loading */
   loading?: boolean;
   onClose: () => void;
-}
+};
 
 export function SourceModal({ data, loading, error, onClose }: SourceModalProps) {
   const activeText = useMemo(() => {

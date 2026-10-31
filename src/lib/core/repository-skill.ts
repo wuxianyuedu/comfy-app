@@ -10,7 +10,7 @@ import { DrizzleRepository } from "./repository-base";
 import { eq, and, like, or, asc, desc, count } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
 
-export interface SkillSeed {
+export type SkillSeed = {
   category: string;
   coverUrl?: string;
   defaultParams?: Record<string, unknown>;
@@ -23,7 +23,7 @@ export interface SkillSeed {
   slug: string;
   sortOrder: number;
   tags: Array<string>;
-}
+};
 
 export class SkillRepository extends DrizzleRepository<Skill> {
   constructor() {

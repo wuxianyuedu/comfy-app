@@ -59,7 +59,7 @@ function toModelNames(raw: unknown): Array<string> {
   return names;
 }
 
-export interface LLMConfigController {
+export type LLMConfigController = {
   /** 当前生效配置（已做 hasApiKey 收窄）；首次加载完成前为 null。 */
   config: LLMConfigView | null;
   loading: boolean;
@@ -70,7 +70,7 @@ export interface LLMConfigController {
   remoteImageModels: Array<string>;
   /** 静态配置下的远端独立模型名（存 remoteModel 表，仅 chat 文本生成类型）。 */
   remoteModels: Array<string>;
-}
+};
 
 /** 候选模型分组：本地（Ollama）/ 远端文本（chat）/ 远端生图（image）。 */
 type ModelSplit = {
@@ -149,17 +149,17 @@ export function useLLMConfig(): LLMConfigController {
   };
 }
 
-export interface LLMConfigSaveInput {
+export type LLMConfigSaveInput = {
   /** 工坊弹窗切模型与提供方；其余字段省略 → 服务端保持原值不变 */
   model: string;
   provider?: "local" | "remote";
-}
+};
 
-export interface LLMConfigSaveController {
+export type LLMConfigSaveController = {
   /** 保存成功返回收窄后的视图配置；失败抛带可读文案的 Error。 */
   save: (input: LLMConfigSaveInput) => Promise<LLMConfigView>;
   saving: boolean;
-}
+};
 
 export function useLLMConfigSave(): LLMConfigSaveController {
   const trpc = useTRPC();

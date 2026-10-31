@@ -53,7 +53,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip
  * 互不吞并。回归判据：`TopBar.test.tsx` 的 `aria-haspopup` 断言（jsdom 能判，
  * 因为它是渲染结果）+ `e2e/top-bar-app-menu.spec.ts`（菜单真的弹出来只能真浏览器判）。
  */
-export interface HintProps {
+export type HintProps = {
   /** 纯图标按钮：把 `label` 同时写进子元素的 `aria-label`（已有则不覆盖）。 */
   accessibleName?: boolean;
   /** 被提示的控件本身（`<Button>` 或做锚点的元素），必须是单个元素。 */
@@ -68,7 +68,7 @@ export interface HintProps {
   side?: "top" | "bottom" | "left" | "right";
   /** 被提示的控件带 `disabled` 时置真：提示挂到外层锚点，禁用态也能弹。 */
   wrap?: boolean;
-}
+};
 
 function isEmptyLabel(label: ReactNode): boolean {
   return label === undefined || label === null || label === "" || label === false;

@@ -40,14 +40,14 @@ export type DraftElementKind = "scene" | "character" | "shot";
 
 /** 一份草稿的可判形状。三类都收 `readonly unknown[]`：
  *  判据**故意**不知道元素是什么类型 —— 它要回答的正是「这一项配不配那个类型」。 */
-export interface DraftElements {
+export type DraftElements = {
   characters: ReadonlyArray<unknown>;
   scenes: ReadonlyArray<unknown>;
   shots: ReadonlyArray<unknown>;
-}
+};
 
 /** 一处形状问题。`index` 是它在原数组里的下标（**不重排、不删除**，回写时按它定位）。 */
-export interface DraftElementIssue {
+export type DraftElementIssue = {
   /** 出问题的字段名（整条不是对象时为 null）。 */
   field: string | null;
   /** 元素自带的 id；读不到（正是问题之一）时为 null。 */
@@ -58,7 +58,7 @@ export interface DraftElementIssue {
   label: string;
   /** 怎么说都不为过的原因 —— 界面上「需要修复」后面跟的就是它。 */
   reason: string;
-}
+};
 
 /** 三类的中文名。**刻意不写「跳到哪个页签」** —— 页签是视图层的知识
  *  （`Tab` 定义在 `components/workshop/stage-config`），lib 反向 import 视图层
@@ -85,7 +85,7 @@ function notAnObject(value: unknown): boolean {
 }
 
 /** 单条元素的检查表：返回问题原因，或 null 表示这一条站得住。 */
-interface ElementCheck {
+type ElementCheck = {
   fields: Array<{
     key: string;
     ok: (value: unknown) => boolean;
@@ -93,7 +93,7 @@ interface ElementCheck {
   }>;
   /** 元素自带的 id 字段名（三类都是 `id`，抽出来是为了 label 与「id 本身就没了」）。 */
   idOf(source: Record<string, unknown>): string | null;
-}
+};
 
 /**
  * 三类元素各自的判据。每条 `reason` 都写着**下游哪一处会出事** —— 没有出事点的字段

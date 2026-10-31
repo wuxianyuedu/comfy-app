@@ -50,10 +50,10 @@ import type { Production } from "~/server/db/schema";
 export type ReviewKind = "shot" | "character";
 
 /** 一次剧本评审的产出：判定 + 完整分数曲线（旧→新，含本轮；FR-QA-07「每轮分数可回看」）。 */
-export interface ScriptReviewOutcome {
+export type ScriptReviewOutcome = {
   history: Array<ReviewVerdict>;
   verdict: ReviewVerdict;
-}
+};
 
 const KIND_LABEL: Record<ReviewKind, string> = {
   shot: "分镜镜头",
@@ -296,18 +296,18 @@ export async function reviewShotImage(
 // ── 自动优选：抽卡 N 选 1（FR-QA-04④ · #2612）──────────────────
 
 /** 单个候选的评分记录；verdict 为 null = 该候选没有产物可评（跳过）。 */
-export interface AutoselectCandidate {
+export type AutoselectCandidate = {
   imageUrl: string | null;
   taskId: string;
   verdict: ReviewVerdict | null;
-}
+};
 
-export interface AutoselectResult {
+export type AutoselectResult = {
   candidates: Array<AutoselectCandidate>;
   winnerImageUrl: string;
   winnerTaskId: string;
   winnerVerdict: ReviewVerdict;
-}
+};
 
 /**
  * 抽卡优选：对同一镜头的 2~4 个候选任务逐张打分（评审内核），均分最高者为

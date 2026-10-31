@@ -10,7 +10,7 @@
 import type { ApiWorkflowNode } from "~/lib/comfyui/raw";
 
 /** rawInputsById / raw_inputs 的单条输入元数据（镜像客户端 RawInputMeta）。 */
-export interface RawInputEntry {
+export type RawInputEntry = {
   /** wrapper 解析的内部暂存字段：代理目标 (class, field)，COMBO 解析后删除 */
   __comboClass?: string;
   __comboField?: string;
@@ -42,20 +42,20 @@ export interface RawInputEntry {
   type: string;
   widget?: { name: string };
   widgetValue?: unknown;
-}
+};
 
 /** outputs[] 单条元数据（镜像客户端 RawOutputMeta；isBoundary 仅子图路径写入）。 */
-export interface RawOutputEntry {
+export type RawOutputEntry = {
   isBoundary?: boolean;
   label?: string;
   links: Array<number>;
   localized?: string;
   name: string;
   type: string;
-}
+};
 
 /** sparse raw-node 元数据（detail.rawNodes / subgraph rawNodeMeta）。 */
-export interface RawNodeMeta {
+export type RawNodeMeta = {
   flags: Record<string, unknown>;
   id: string;
   mode: number;
@@ -63,10 +63,10 @@ export interface RawNodeMeta {
   /** 自定义节点 properties（rgthree Fast Groups Bypasser 等）；子图路径未采集 */
   properties?: Record<string, unknown>;
   widgets_values: Array<unknown>;
-}
+};
 
 /** detail.nodes / rawView.nodes / 子图 nodes 的条目形状（镜像客户端 ComfyGraphNode）。 */
-export interface DetailNodeView {
+export type DetailNodeView = {
   boundary_input?: { name: string; type: string; value: unknown } | null;
   boundary_output?: { name: string; type: string } | null;
   class_type: string;
@@ -79,11 +79,11 @@ export interface DetailNodeView {
   raw_inputs: Array<RawInputEntry>;
   size?: [number, number];
   title: string;
-}
+};
 
 /** RAW 视图数据包（从 rawJson 派生、保留 subgraph wrapper）。 */
-export interface RawViewPacket {
+export type RawViewPacket = {
   graph: Record<string, ApiWorkflowNode>;
   nodes: Array<DetailNodeView>;
   positions: Record<string, [number, number]>;
-}
+};

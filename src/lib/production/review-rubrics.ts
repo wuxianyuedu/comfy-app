@@ -14,7 +14,7 @@
 export type ReviewScoreAnchor = Record<1 | 2 | 3 | 4 | 5, string>;
 
 /** rubric 的一个评分维度。 */
-export interface ReviewRubricDimension {
+export type ReviewRubricDimension = {
   /** 分值锚点：1~5 每档一句「什么样子打这个分」。 */
   anchors: ReviewScoreAnchor;
   /** 一句话说明这个维度评什么。 */
@@ -23,16 +23,16 @@ export interface ReviewRubricDimension {
   key: string;
   /** 人读维度名（进提示词与展示）。 */
   label: string;
-}
+};
 
 /** 一张评分量表：评审对象 + 版本 + 维度集。 */
-export interface ReviewRubric {
+export type ReviewRubric = {
   dimensions: Array<ReviewRubricDimension>;
   /** 评审对象（与 `ReviewKind` 同族 + 剧本）。 */
   kind: ReviewRubricKind;
   /** 版本号（口径演进后旧分数仍可解释的判据；进 `ReviewVerdict.rubricVersion`）。 */
   version: string;
-}
+};
 
 /** 评审对象：剧本 / 角色卡 / 分镜镜头文本 / 生图（视觉评审 P8-2）。 */
 export type ReviewRubricKind = "script" | "character" | "shot" | "shotImage";

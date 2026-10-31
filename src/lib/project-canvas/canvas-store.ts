@@ -20,7 +20,7 @@ import {
 } from "~/lib/browser-storage";
 import { vanillaApi } from "~/trpc/vanilla";
 
-export interface CanvasProject {
+export type CanvasProject = {
   edges: Array<PersistedEdge>;
   id: string;
   name: string;
@@ -29,7 +29,7 @@ export interface CanvasProject {
    * 入口 `src/app/workspace/page.tsx` 静态 import 它（见 canvas-types 里的说明）。 */
   nodes: Array<PersistedNode>;
   updatedAt: number;
-}
+};
 
 const INDEX_KEY = "comfyapp.canvas.projects.v1";
 const ACTIVE_KEY = "comfyapp.canvas.active.v1";
@@ -170,14 +170,14 @@ export function deleteProject(id: string): void {
 }
 
 /** 服务端 `project` 表的一行（`project.list` 的出口形状）。 */
-export interface ServerProjectRow {
+export type ServerProjectRow = {
   edges?: unknown;
   id: string;
   name: string;
   nodes?: unknown;
   /** tRPC 走 SuperJSON 给 Date，REST 那路给 ISO 串 */
   updatedAt: string | Date;
-}
+};
 
 /**
  * 读服务端的项目列表（按用户，`project.list`）。
@@ -543,7 +543,7 @@ export function getActiveId(): string | null {
 /** 一行在「所有项目」屏里的出处。 */
 export type ProjectOrigin = "server" | "local" | "both";
 
-export interface ProjectListEntry {
+export type ProjectListEntry = {
   edges: CanvasProject["edges"];
   id: string;
   name: string;
@@ -551,7 +551,7 @@ export interface ProjectListEntry {
   origin: ProjectOrigin;
   /** 毫秒时间戳（本地索引与 `fetchServerProjects` 归一后的同一口径）。 */
   updatedAt: number;
-}
+};
 
 /**
  * 这一屏要显示的**全部**项目行：本地索引 ∪ 服务端，按 `updatedAt` 倒序。

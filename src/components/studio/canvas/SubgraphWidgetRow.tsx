@@ -19,13 +19,13 @@ import type { RawInputMeta } from "../workflow-types";
  *  不属于共享的 RawInputMeta 契约）。 */
 type ComboInputMeta = RawInputMeta & { comboOptions?: unknown };
 
-interface SubgraphWidgetRowProps {
+type SubgraphWidgetRowProps = {
   hostNodeId?: string;
   inp: RawInputMeta;
   io: IOEditContextValue | null;
   label: string;
   nodeId: string;
-}
+};
 
 export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: SubgraphWidgetRowProps) {
   const v: unknown = inp.widgetValue;

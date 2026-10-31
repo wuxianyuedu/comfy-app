@@ -70,7 +70,7 @@ const COMFY_KEEPALIVE_GRACE_MS = 15_000;
 const COMFY_KEEPALIVE_PROCESS_CHECK_INTERVAL_MS = 5_000;
 
 /** 宿主提供的能力（`lifecycle.ts` 注入；本模块不反向 import 它）。 */
-export interface LaunchHost {
+export type LaunchHost = {
   /** 写本次启动的 runtime 日志一行。 */
   appendRuntimeLog: (line: string) => void;
   /**
@@ -98,7 +98,7 @@ export interface LaunchHost {
     childDetached?: boolean;
     stopRequested?: boolean;
   };
-}
+};
 
 /** 启动编排的上下文：把「怎么记日志」「探到多少事实」显式传下去，让两条
  *  启动路径（keepAlive / bound）与等待循环都不再闭包捕获 `ensureComfyUiReady`

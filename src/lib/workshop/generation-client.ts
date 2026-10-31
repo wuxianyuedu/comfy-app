@@ -91,14 +91,14 @@ export const LOCAL_TASK_TIMEOUT_MS = 30 * 60 * 1000;
  *  既不带产物也不发 done 帧（产物只随 live 的 done 帧下发），订阅一个已经
  *  成功的任务拿不到 imageUrl。所以「刷新后恢复失联任务」必须先查这份真值：
  *  已终态直接回写，仍在跑才去重订阅等 done 帧。 */
-export interface TaskSnapshot {
+export type TaskSnapshot = {
   /** 终态失败时的原因（任务表 error 列）。 */
   error?: string;
   /** 已落盘产物（本地任务 imageUrl / clipUrl 的真值来源）。 */
   outputs: Array<SavedOutput>;
   /** 任务表里的状态原文（SUCCEEDED / FAILED / CANCELLED / RUNNING / QUEUED…）。 */
   status: string;
-}
+};
 
 /** 查一个本地任务的状态与产物快照；任务不存在 / 查询失败返回 null
  *（调用方按「任务失联」如实收尾，不假装它还在跑）。 */
@@ -128,7 +128,7 @@ export async function fetchTaskSnapshot(taskId: string): Promise<TaskSnapshot | 
 export type WorkshopWorkflowCategory = "image" | "video";
 
 /** 工作流库里的一个可选工作流（工坊「生成资源」下拉用）。 */
-export interface WorkshopWorkflowOption {
+export type WorkshopWorkflowOption = {
   /** 服务端富化的内容类别（image / video / audio；未知按 image 处理）。 */
   category: WorkshopWorkflowCategory;
   /** 对外参数封装就绪：契约必备口「提示词」已有落点，工坊可直接驱动。 */
@@ -140,7 +140,7 @@ export interface WorkshopWorkflowOption {
   modes: Array<string>;
   name: string;
   taskType?: string;
-}
+};
 
 /** 工作流列表项 → 工坊选项；字段缺失/异常时给出安全缺省。
  *
@@ -257,7 +257,7 @@ export async function fetchWorkshopStyles(): Promise<Array<StyleRef>> {
 }
 
 /** 一次封装结果 + 该工作流在库里的模式信息（供调用方按模式做提示/校验）。 */
-export interface LibraryWorkflowBuildResult {
+export type LibraryWorkflowBuildResult = {
   input: GenerateInput;
   /** 本次实际使用的模式码（服务端默认模式，缺省回退 taskType / modes[0]）。 */
   mode: string | null;
@@ -269,7 +269,7 @@ export interface LibraryWorkflowBuildResult {
   /** 本次生成会用到首帧 / 尾帧图（按模式判定，供调用方决定要不要预传图）。 */
   usesFirstFrame: boolean;
   usesLastFrame: boolean;
-}
+};
 
 /** 用选定的工作流库工作流封装一次生成请求。
  *
@@ -337,23 +337,23 @@ export async function buildLibraryWorkflowInput(
 }
 
 /** 进度事件附带的节点级信息（ComfyUI progress 消息里的当前节点与步数）。 */
-export interface TaskProgressNode {
+export type TaskProgressNode = {
   id: string;
   label?: string;
   max: number;
   value: number;
-}
+};
 
 /** 一条执行步骤日志（对应项目画布 /api/tasks/:id/stream 的 `log` 帧），
  *  字段与后端 LogEntry 一致。工作流库就地运行也据此展示「执行日志」。 */
-export interface TaskLogEntry {
+export type TaskLogEntry = {
   level: "info" | "progress" | "warn" | "error" | "success";
   msg: string;
   src?: string;
   t: number;
-}
+};
 
-export interface TaskWatchHandlers {
+export type TaskWatchHandlers = {
   /** 每条执行步骤日志（SSE `log` 帧）。供调用方累积展示。 */
   onLog?: (entry: TaskLogEntry) => void;
   /* 任务完成过程中，每落盘一个产物文件就回调一次。 */
@@ -361,7 +361,7 @@ export interface TaskWatchHandlers {
   onProgress?: (progress: number, node?: TaskProgressNode) => void;
   /* 任务到达终态时**恰好**回调一次。 */
   onSettled: (result: { message?: string; ok: boolean }) => void;
-}
+};
 
 /* 把 SSE `log` 帧的 unknown 载荷收窄成 TaskLogEntry；收窄不了则为 null。 */
 function narrowLogEntry(raw: unknown): TaskLogEntry | null {
@@ -647,12 +647,12 @@ export async function apiGenerateImage(req: {
   return url;
 }
 
-export interface ApiVideoSubmitResult {
+export type ApiVideoSubmitResult = {
   /* 否则用 apiPollVideo 轮询的异步任务 id。 */
   remoteTaskId?: string;
   /* 上游同步返回时给出的成品视频 URL。 */
   url?: string;
-}
+};
 
 /* API 通道：提交一个（图生）视频任务。 */
 export async function apiSubmitVideo(req: {

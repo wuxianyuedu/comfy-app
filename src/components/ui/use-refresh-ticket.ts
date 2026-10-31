@@ -41,12 +41,12 @@ import { useCallback, useState } from "react";
  * 重跑。这样「什么时候该重新取」只有一个入口，而「怎么取」仍然完整地住在
  * effect 里（不搬走、不复制）。
  */
-export interface RefreshTicket {
+export type RefreshTicket = {
   /** 换一张新票（effect 依赖它 → 重跑一次取数）。 */
   refresh: () => void;
   /** 票号：放进取数 effect 的依赖数组。调用处**不该**读它的数值。 */
   ticket: number;
-}
+};
 
 /**
  * 造一张票据。

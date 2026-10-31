@@ -81,7 +81,7 @@ const subscribe = (cb: () => void) => {
   };
 };
 
-export interface WidePanel {
+export type WidePanel = {
   /** 显式设置（供「恢复默认」这类动作）。 */
   set: (wide: boolean) => void;
   /** 在窄 / 宽之间切换（并记忆）。 */
@@ -92,7 +92,7 @@ export interface WidePanel {
   wide: boolean;
   /** 当前档位对应的宽度类 —— 直接交给 `popupClassName` / `className`。 */
   widthClass: string;
-}
+};
 
 /**
  * 面板加宽档的出口。

@@ -69,14 +69,14 @@ import { cn } from "~/lib/utils";
  * - **不管布局**：整行的外边距由调用处给（`className`）；本组件只管行**内部**
  *   的标签 / 控件 / 错误三件的位置关系。
  */
-export interface FormFieldA11y {
+export type FormFieldA11y = {
   /** 有错误时才有：错误行的 `id`。 */
   "aria-describedby"?: string;
   /** 有错误时才有：`true`。 */
   "aria-invalid"?: true;
   /** 控件的 `id`（给 `htmlFor` 用）。 */
   id: string;
-}
+};
 
 export function FormField({
   label,

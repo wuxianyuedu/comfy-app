@@ -20,11 +20,11 @@ import {
 import { findLogPathTokens } from "~/lib/log/log-path-tokens";
 
 /** 行文本里识别出的词法分片。`style` 为空 = 按级别默认色渲染。 */
-export interface RowToken {
+export type RowToken = {
   /** 语义样式键（与 ANSI 样式键同一套，视图映射成 className）。 */
   style?: AnsiStyleKey;
   text: string;
-}
+};
 
 /** 日志级别的徽标配色（视图与测试共用同一份表）。级别是**状态语义**，
  *  走项目语义 token（§4.11.1 / P71）：info→`--color-info`、warn→
@@ -115,11 +115,11 @@ const TOKEN_STYLES: Array<{ pattern: RegExp; style: AnsiStyleKey }> = [
 const PATH_STYLE: AnsiStyleKey = "magenta-bright";
 
 /** 行里被命中的一段（半开区间 `[start, end)`）。 */
-interface StyledSpan {
+type StyledSpan = {
   end: number;
   start: number;
   style: AnsiStyleKey;
-}
+};
 
 /** 一段命中文本 → 它的语义样式键；不命中任何一档回 `undefined`（按级别默认色渲染）。 */
 function styleOfToken(text: string): AnsiStyleKey | undefined {
@@ -249,12 +249,12 @@ export const TOKEN_CLASS: Record<AnsiStyleKey, string> = {
 /* ── 行内文本选区判定（「日志一直在动、选不中想复制的行」的另一半）────── */
 
 /** 选区判定需要的最小 DOM 视图（真实 `Selection` / `window` 都满足它）。 */
-export interface SelectionLike {
+export type SelectionLike = {
   readonly anchorNode: Node | null;
   readonly focusNode: Node | null;
   isCollapsed: boolean;
   readonly rangeCount: number;
-}
+};
 
 /**
  * 日志行的文本容器标记。视图在每个 `LogRow` 的消息元素上打这个属性，

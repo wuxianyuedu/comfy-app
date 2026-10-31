@@ -56,10 +56,10 @@ export const PARAM_OUTPUT_STYLE: ParamClassStyle = {
   color: "#7c5cfc",
 };
 
-export interface ParamClassStyle {
+export type ParamClassStyle = {
   color: string;
   label: string;
-}
+};
 
 /** 取分类的展示名与配色（未知分类回落到「参数」）。 */
 export function paramClassStyle(cls: string): ParamClassStyle {

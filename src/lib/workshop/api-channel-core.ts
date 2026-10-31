@@ -36,14 +36,14 @@ export type WorkshopApiSettings = Record<ApiChannelKind, ApiChannelStored>;
 export const WORKSHOP_API_SETTINGS_FILE = "workshop-api-settings.json";
 
 /** 远端模型连接参数（设置页「远端模型」条目）——生图优先走它直连。 */
-export interface ApiUpstreamTarget {
+export type ApiUpstreamTarget = {
   apiKey: string;
   endpoint: string;
   model: string;
-}
+};
 
 /** 生图请求：字段与工坊「统一输入」的对应关系由适配器决定，见调用方。 */
-export interface ApiImageRequest {
+export type ApiImageRequest = {
   /** 统一输入：宽高比 / 百万像素 / 宽高对齐倍数 / 输入图。 */
   aspectRatio?: string;
   image?: string;
@@ -56,25 +56,25 @@ export interface ApiImageRequest {
   negative?: string;
   prompt: string;
   size?: string;
-}
+};
 
 /** 视频提交请求（同步 URL 与异步任务两种上游都走它）。 */
-export interface ApiVideoSubmitRequest {
+export type ApiVideoSubmitRequest = {
   fps?: number;
   frames?: number;
   /* 图生视频用的参考首帧图（内联 data URL）。 */
   imageDataUrl?: string;
   negative?: string;
   prompt: string;
-}
+};
 
 /** 视频提交结果：同步返回 URL，或给一个待轮询的任务 id。 */
-export interface ApiVideoSubmitResult {
+export type ApiVideoSubmitResult = {
   /* 上游是「任务式」接口时，用来轮询的任务 id（经 pollVideoViaApi）。 */
   remoteTaskId?: string;
   /* 上游同步返回成品视频时给出的直链 URL。 */
   url?: string;
-}
+};
 
 /** 把一份可能残缺的配置归一化：字符串字段取默认、path 强制根相对。 */
 export function sanitizeChannel(raw: unknown, fallback: ApiChannelStored): ApiChannelStored {
@@ -219,14 +219,14 @@ function videoBody(req: ApiVideoSubmitRequest, model: string): Record<string, un
 const GENERATE_TIMEOUT_MS = 180_000;
 const POLL_TIMEOUT_MS = 30_000;
 
-export interface ApiChannelFetchOptions {
+export type ApiChannelFetchOptions = {
   /** 请求体覆盖（远端模型的模式适配器翻译统一输入后给出；缺省走 OpenAI 兼容默认映射）。 */
   bodyOverride?: Record<string, unknown>;
   /** 上游结果字段路径（适配器的 outputField）：命中即直接当结果 URL 返回。 */
   outputField?: string;
   /** 上游响应体解析器（Next 侧传 `readUpstreamJson`，MCP 侧用默认）。 */
   readJson?: UpstreamJsonReader;
-}
+};
 
 /**
  * 调 OpenAI 兼容生图端点，返回可用 URL（远程或 inline data URL）。

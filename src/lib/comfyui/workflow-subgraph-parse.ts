@@ -34,7 +34,7 @@ export type {
   SubgraphLinkEntry,
 } from "./workflow-subgraph-parse-graph";
 
-export interface BoundaryPin {
+export type BoundaryPin = {
   id: string;
   /** 作者在节点编辑器里设的业务标签（如 `FRAMES`、`IMAGE_FINAL`、
    *  `MODEL_HIGH_1st`）。渲染时优先用它，内层 IO 栏杆才能与父卡片上的
@@ -47,7 +47,7 @@ export interface BoundaryPin {
   name: string;
   pos: [number, number];
   type: string;
-}
+};
 
 /**
  * 解析子图暴露的 IO pin（`sub.inputs` / `sub.outputs`）。
@@ -120,13 +120,13 @@ export function parseSubgraphPins(sub: RawSubgraphDef): {
 /** 带哨兵的线解析成的「边界 pin ↔ 内部节点槽位」配对
  *  （客户端据此从 pin 的 handle 向内部节点对应的输入/输出 handle
  *  画一条 React Flow 边）。 */
-export interface BoundaryLink {
+export type BoundaryLink = {
   innerNodeId: string;
   innerSlotName: string;
   kind: "input" | "output";
   linkId: number;
   pinId: string;
-}
+};
 
 /**
  * 把前面收集的哨兵连线表解析成给客户端用的 `boundaryLinks`。

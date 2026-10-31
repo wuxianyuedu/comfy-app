@@ -17,12 +17,12 @@ import { Button } from "~/components/ui/button";
 import type { WorkspaceView } from "../NavItems";
 import type { ProjectOverview } from "~/lib/production/project-home";
 
-export interface ProjectHomeStatusProps {
+export type ProjectHomeStatusProps = {
   /** 首次取数完成前为真：计数显示占位符而不是 0（「还没读到」≠「一个都没有」）。 */
   loading: boolean;
   onNavigate: (view: WorkspaceView) => void;
   overview: ProjectOverview;
-}
+};
 
 /** 阶段行的图标：完成 → 勾、当前 → 转圈、未开始 → 空圈。 */
 function StageIcon({ done, current }: { current: boolean; done: boolean }) {

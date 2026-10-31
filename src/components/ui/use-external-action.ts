@@ -45,7 +45,7 @@ import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
  * **这是调用处的表现层选择**，不是本 hook 的判据。所以 `report` 由调用处给，
  * 本 hook 只负责「什么时候报、报什么」。
  */
-export interface ExternalActionOptions {
+export type ExternalActionOptions = {
   /**
    * 反馈通道。`kind` 为 `"ok"` / `"err"`，`detail` 是**已经归一化并翻译过**的
    * 可读文案 —— 调用处直接渲染即可，不必再判一次。
@@ -53,9 +53,9 @@ export interface ExternalActionOptions {
   report: (kind: "ok" | "err", detail: string) => void;
   /** 动作目标类别（决定失败文案里的动词，`~/lib/external-open`）。 */
   target: ExternalTarget;
-}
+};
 
-export interface ExternalActionResult {
+export type ExternalActionResult = {
   /** 当前是否正在执行（调用处据此禁用按钮 / 显示「打开中…」）。 */
   busy: boolean;
   /**
@@ -89,7 +89,7 @@ export interface ExternalActionResult {
       triggered?: boolean;
     }>,
   ) => Promise<void>;
-}
+};
 
 export function useExternalAction({ target, report }: ExternalActionOptions): ExternalActionResult {
   const [busy, setBusy] = useState(false);

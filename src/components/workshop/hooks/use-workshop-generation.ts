@@ -31,7 +31,7 @@ import type { Character, Shot } from "~/lib/workshop/types";
 /** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别）。 */
 export type ShotProgressMap = Record<string, { label?: string; pct: number }>;
 
-export interface WorkshopGenerationDeps {
+export type WorkshopGenerationDeps = {
   /** 角色卡表：镜头相关角色选了定妆照时，按它取参考图下发（流程 §4）。 */
   characters: Array<Character>;
   /** 需要引起用户注意的失败/阻断文案通道（由主管线决定怎么渲染，不用 alert）。 */
@@ -48,16 +48,16 @@ export interface WorkshopGenerationDeps {
   setShots: React.Dispatch<React.SetStateAction<Array<Shot>>>;
   /** 本地链路的唯一可执行来源（空串 = 未选工作流）。 */
   workflowId: string;
-}
+};
 
-export interface WorkshopGenerationApi {
+export type WorkshopGenerationApi = {
   generateShot: (shot: Shot) => Promise<void>;
   generating: boolean;
   shotProgress: ShotProgressMap;
   /** 观察一个本地任务直到落定，结果回写对应镜头（生图 / 视频共用）。
    *  主管线的「恢复失联任务」也走它 —— 重挂载后要有人重新订阅那条 SSE。 */
   watchShotTask: (shotId: string, taskId: string, target?: "image" | "video") => Promise<void>;
-}
+};
 
 export function useWorkshopGeneration({
   workflowId,

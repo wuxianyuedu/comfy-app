@@ -37,7 +37,7 @@ import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
 import { TaskLogEmptyHint, TaskLogTimeline } from "~/components/studio/logs/TaskLogTimeline";
 
-export interface WorkflowRunLogModalProps {
+export type WorkflowRunLogModalProps = {
   onClose: () => void;
   onViewTaskIdChange: (taskId: string | null) => void;
   open: boolean;
@@ -47,7 +47,7 @@ export interface WorkflowRunLogModalProps {
   viewTaskId: string | null;
   /** 所属工作流：日志只展示当前工作流的运行（切换工作流独立显示）。 */
   workflowId: string;
-}
+};
 
 /* 弹窗宽度档：默认 5xl（行是「时刻 + 级别 + 正文」，与执行日志同密度）；
  * 加宽档统一贴视线两边。写`w-*` 而不是`max-w-*` 的理由见

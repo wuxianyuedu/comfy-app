@@ -32,7 +32,7 @@ export const TYPE_CHIP: Record<string, string> = {
 };
 
 /** 拆分件自己声明 props 形状（窄接口），不 import 父组件的 controller。 */
-export interface ProjectOutputsMetadataSheetProps {
+export type ProjectOutputsMetadataSheetProps = {
   /** 复制动作的反馈位（父组件的 useFlashState / 失败位）。 */
   copyFailed: boolean;
   copySucceeded: boolean;
@@ -41,7 +41,7 @@ export interface ProjectOutputsMetadataSheetProps {
   onExport: () => void;
   projectId: string | null;
   selected: ProjectOutputItem | null;
-}
+};
 
 export function ProjectOutputsMetadataSheet({
   selected,

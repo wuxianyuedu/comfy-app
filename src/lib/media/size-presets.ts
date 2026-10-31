@@ -18,10 +18,10 @@ import { upperToken } from "~/lib/upper-token";
 export type SizeScene = "image" | "video";
 
 /** 一个比例预设：`label` 是 UI 上的显示名（含方位后缀），`ratio` = 宽 / 高。 */
-export interface SizeRatioPreset {
+export type SizeRatioPreset = {
   label: string;
   ratio: number;
-}
+};
 
 /** 比例预设（8 档）。宽高两侧都列出，避免用户手算倒数比例。
  *
@@ -56,19 +56,19 @@ export const DEFAULT_ALIGN_MULTIPLE: AlignMultiple = 64;
 export const MIN_SIZE = 64;
 export const MAX_SIZE = 4096;
 
-export interface SizeDims {
+export type SizeDims = {
   height: number;
   width: number;
-}
+};
 
 /** 单场景的「比例 → 各分辨率档的宽高」表。 */
 export type SceneResolutionTable = Record<string, Record<ResolutionTier, SizeDims>>;
 
 /** 全场景尺寸表。 */
-export interface SizePresetTable {
+export type SizePresetTable = {
   image: SceneResolutionTable;
   video: SceneResolutionTable;
-}
+};
 
 const dims = (width: number, height: number): SizeDims => ({ width, height });
 
@@ -354,7 +354,7 @@ export function toMegapixelSpec(
 
 export type ClarityKind = "resolution" | "megapixel";
 
-export interface SizeClarityPreset {
+export type SizeClarityPreset = {
   kind: ClarityKind;
   /** 显示名（"1k" / "2M"），也是 `SizeSpec.clarity` 的取值。 */
   label: string;
@@ -362,7 +362,7 @@ export interface SizeClarityPreset {
   megapixels?: number;
   /** 分辨率档：档位名。 */
   tier?: ResolutionTier;
-}
+};
 
 /** 清晰度档位目录。类型是非空数组，同 {@link SIZE_RATIO_PRESETS}
  *  ——首项即默认档，调用点不必再补 `!`。 */
@@ -467,7 +467,7 @@ export function megapixelTierOfLabel(label: string): number | null {
  * 目标要是「宽 + 高」时，用 `sizeSpecDims` 由上面任一种**算**出来（派生值，
  * 不是第二种表达）。 */
 
-export interface SizeSpec {
+export type SizeSpec = {
   /** 清晰度标签：档位表里的（`SIZE_CLARITY_PRESETS[].label`，如 "1k" / "2M"），
    *  或**任意百万像素值**（如 `"2.5M"` —— 界面上的步进器写出来的就是它：
    *  百万像素在端口上是 FLOAT，1M/2M/4M 只是常用档位，不是值域边界）。 */
@@ -476,7 +476,7 @@ export interface SizeSpec {
   multiple: AlignMultiple;
   /** 比例预设 label（`SIZE_RATIO_PRESETS[].label`，如 "16:9 横屏" / "3:4"）。 */
   ratio: string;
-}
+};
 
 /** 默认尺寸：竖屏 1k（3:4，图片场景表 → 768×1024）。 */
 export const DEFAULT_SIZE_SPEC: SizeSpec = {

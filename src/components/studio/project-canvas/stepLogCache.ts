@@ -38,7 +38,7 @@ import { tailWindow } from "~/lib/page-window";
  * 形状与 runner.ts 的 LogEntry 一致（即 TaskEvent 联合里 "log" 那条的载荷），
  * 只多一个**纯界面**扩展：`client?: boolean` 标记「浏览器自己推的」条目
  *（订阅状态、卡死检测告警 …），好让它们以低饱和斜体渲染。 */
-export interface StepLogEntry {
+export type StepLogEntry = {
   client?: boolean;
   level: "info" | "progress" | "warn" | "error" | "success";
   msg: string;
@@ -46,9 +46,9 @@ export interface StepLogEntry {
    *  只在调试开关打开时渲染。 */
   src?: string;
   t: number;
-}
+};
 
-export interface StepLogPanelState {
+export type StepLogPanelState = {
   /** 该 taskId 的面板首次打开以来推入的全部日志条目。 */
   logs: Array<StepLogEntry>;
   /** 触发该任务的画布节点 id，用于日志面板按 #1/#2… 短序号筛选。 */
@@ -60,7 +60,7 @@ export interface StepLogPanelState {
   /* 任务级元数据，好让任务切换下拉框显示「工作流名 · 状态」，
    *  而不是一串被截断的 id。由 GlobalStepLogPanel 在每次 SSE `state` 事件时填充。 */
   workflowName?: string;
-}
+};
 
 const MAX_ENTRIES = 256;
 

@@ -55,7 +55,7 @@ export const LIB_NODE_TYPES = /* SAFETY: 类型断言已复核 */ {
 /** 落点失败时给用户的原因（人类可读）——「拖了没反应」不许是静默的。 */
 export type LibraryDropHint = string | null;
 
-export interface LibraryWireFlowArgs {
+export type LibraryWireFlowArgs = {
   /** 背景板尺寸（画布量到容器尺寸后给出；不传用兜底值，见 `buildLibraryNodes`）。 */
   backdropSize?: { height: number; width: number };
   /** 是否允许编辑（有模式 + 上层给了落库回调）。为 false 时连线不可单独点选 /
@@ -78,13 +78,13 @@ export interface LibraryWireFlowArgs {
   paramsNode: LibraryNodeContent["params"];
   /** 画布上当前点选中的边 id 集合（来自 `onEdgeClick`）。命中即注入高亮描边。 */
   selectedEdgeIds?: ReadonlySet<string>;
-}
+};
 
 /** 三列节点的首帧布局尺寸（面板靠 fitView 收进视口，这里只需稳定可读）。
  *
  *  `envelopeHeight` 与 `fillHeight` 是**两个不同的高度**，见
  *  `LibraryNodeSizing` 的说明：前者是卡片列的首帧声明高度，后者是背景板高度。 */
-export interface LayoutSizing {
+export type LayoutSizing = {
   columnGap: number;
   /** 宿主节点的首帧声明高度（真实高度由内容撑开，见 `buildLibraryNodes`）。 */
   envelopeHeight: number;
@@ -95,7 +95,7 @@ export interface LayoutSizing {
   originY: number;
   outputsWidth: number;
   paramsWidth: number;
-}
+};
 
 export const LAYOUT_SIZING: LayoutSizing = /* SAFETY: 类型断言已复核 */ {
   paramsWidth: 220,
@@ -403,10 +403,10 @@ export type LibraryConnection = Pick<
 >;
 
 /** 闸门需要的上下文：IO 表（端口分类） + 契约条目表。 */
-export interface LibraryGateContext {
+export type LibraryGateContext = {
   entries: ReadonlyArray<ParamEntry>;
   io: WorkflowIOMap | null | undefined;
-}
+};
 
 /** 库内连线的**类型闸门**（纯函数，可单测）。
  *

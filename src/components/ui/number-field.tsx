@@ -20,7 +20,7 @@ import { fixed } from "~/lib/number-format";
  * clamp 回写会在输入中途把 "0." / 清空 / 小于 step 的值瞬间顶回去，等于
  * 没法打字）；blur 或点 +/- 时才把草稿 clamp 成合法值提交。
  */
-interface NumberFieldProps {
+type NumberFieldProps = {
   /** 外层容器的额外 CSS 类 */
   className?: string;
   /** 显示的小数位（默认 0 = 整数） */
@@ -37,7 +37,7 @@ interface NumberFieldProps {
   step?: number;
   /** 当前数值 */
   value: number;
-}
+};
 
 export function NumberField({
   value,

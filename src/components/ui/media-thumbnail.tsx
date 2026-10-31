@@ -66,10 +66,7 @@ const OWN_PROPS = /* SAFETY: 类型断言已复核 */ [
 ] as const;
 
 /** 额外透传给底层 `<img>` / `<video>` 的属性（`onClick` / `title` 等）。 */
-export interface MediaThumbnailProps extends OmitOwnProps<
-  React.ImgHTMLAttributes<HTMLImageElement> & React.VideoHTMLAttributes<HTMLVideoElement>,
-  (typeof OWN_PROPS)[number]
-> {
+export type MediaThumbnailProps = {
   alt?: string;
   /**
    * 强制按图片 / 视频渲染，覆盖按 `src` 后缀的推断。
@@ -96,7 +93,10 @@ export interface MediaThumbnailProps extends OmitOwnProps<
   /** 加载失败时回调（如上报 / 记日志）；兜底渲染由 `fallback` 决定。 */
   onLoadError?: (src: string) => void;
   src?: string | null;
-}
+} & OmitOwnProps<
+  React.ImgHTMLAttributes<HTMLImageElement> & React.VideoHTMLAttributes<HTMLVideoElement>,
+  (typeof OWN_PROPS)[number]
+>;
 
 /**
  * 中性失败占位：与调用处的盒子同尺寸（`h-full w-full` + 继承圆角），

@@ -44,16 +44,16 @@ const EMPTY: ComfyQueueStatus = {
 
 const SERVER_SNAPSHOT: ComfyQueueView = { ...EMPTY, elapsedMs: null };
 
-export interface ComfyQueueView extends ComfyQueueStatus {
+export type ComfyQueueView = {
   /** 当前任务已运行的毫秒数；没有在跑的任务时为 null。 */
   elapsedMs: number | null;
-}
+} & ComfyQueueStatus;
 
 let snapshot: ComfyQueueView = SERVER_SNAPSHOT;
 
-interface Subscription {
+type Subscription = {
   onChange: () => void;
-}
+};
 const subscriptions = new Set<Subscription>();
 
 let subscriberCount = 0;

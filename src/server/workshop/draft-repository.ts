@@ -57,11 +57,11 @@ export async function getDraft(id: string): Promise<WorkshopDraftDto | null> {
 }
 
 /** 服务端镜像的项目摘要（列表恢复用：全量清空 localStorage 后按此重建索引）。 */
-export interface DraftSummary {
+export type DraftSummary = {
   id: string;
   title: string;
   updatedAt: string;
-}
+};
 
 /** 按用户列出其所有服务端镜像摘要（用于在本地索引缺失时把云端项目找回来）。 */
 export async function listDraftsByUser(userId: string | null): Promise<Array<DraftSummary>> {

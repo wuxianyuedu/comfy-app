@@ -49,7 +49,7 @@ export type AppServiceExitKind =
   | "unknown";
 
 /** 落盘的结束记录（`run/app-service-exit.json`）。 */
-export interface AppServiceExitRecord {
+export type AppServiceExitRecord = {
   /** 记录时刻（ISO）。 */
   at: string;
   /** 退出码；拿不到为 null（不是 0——0 是「正常退出」这个具体结论）。 */
@@ -64,7 +64,7 @@ export interface AppServiceExitRecord {
   runId: string | null;
   /** 终止信号（SIGKILL 等）；没有为 null。 */
   signal: string | null;
-}
+};
 
 /** 记录文件的固定名（写在 `run/` 下，与 `launch-status.json` 并列）。 */
 export const APP_SERVICE_EXIT_FILE = "app-service-exit.json";
@@ -115,7 +115,7 @@ function asExitKind(value: unknown): AppServiceExitKind {
 }
 
 /** 界面直接可渲染的「为什么 + 能做什么」。 */
-export interface AppServiceExitNotice {
+export type AppServiceExitNotice = {
   /** 可执行的动作（规范 §10.3.1 第 2 问：不要只陈述现象）。 */
   action: string;
   /** 退出事实的技术摘要（退出码 / 信号，见 {@link summarizeAppServiceExit}）。
@@ -124,7 +124,7 @@ export interface AppServiceExitNotice {
   detail: string;
   /** 一句话原因（状态栏 title 首行 / 通知标题）。 */
   why: string;
-}
+};
 
 /** 终止信号的通俗解释（`signal` 是给排查者看的原始值，这里是给人看的）。 */
 const SIGNAL_HINT: Record<string, string> = {
@@ -233,12 +233,12 @@ export const APP_SERVICE_EXIT_ENDPOINT = "/api/dev/last-exit";
 export const APP_SERVICE_EXIT_TIMEOUT_MS = 2500;
 
 /** 端点的响应形状。 */
-export interface AppServiceExitProbe {
+export type AppServiceExitProbe = {
   /** 当前应用服务进程的 runId；拿不到为 null。 */
   currentRunId: string | null;
   /** 上一次结束的记录；没有 / 读不懂时为 null。 */
   record: AppServiceExitRecord | null;
-}
+};
 
 /**
  * 判断这份记录说的是不是**上一次**运行。

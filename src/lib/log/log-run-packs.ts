@@ -89,7 +89,7 @@ export function parsePackScopedId(id: string): { fileName: string; packName: str
 }
 
 /** `runs/` 里的一个运行包（读目录与 `run.json` 归 `log-run-packs.server.ts`）。 */
-export interface RunPack {
+export type RunPack = {
   /** `run.json` 的 `crashed` —— 崩溃现场恰恰最值得看，界面上要标出来。 */
   crashed: boolean;
   /** 这一包里该来源的份（新→旧）；空数组 = 那次运行没启动过这个服务。 */
@@ -98,25 +98,25 @@ export interface RunPack {
   name: string;
   /** `run.json` 的 `startedAt`（毫秒）；读不到时退回名字里的时刻，再读不到为 null。 */
   startedAt: number | null;
-}
+};
 
 /** 包内的一份启动日志。 */
-export interface PackLogFile {
+export type PackLogFile = {
   /** 包内相对文件名（如 `comfyui-runtime-20261005-093612.log`）。 */
   name: string;
   /** 该份的启动时刻（毫秒）；迁移前的旧固定名读不出时刻，为 null。 */
   startedAt: number | null;
   /** 下拉文案的时刻段（调用方把它视作 `LogSessionMeta.title`）。 */
   title: string;
-}
+};
 
 /** 下拉的一项：跨包之后每条都带「它属于哪一次运行」。 */
-export interface RunScopedOption extends LogSessionMeta {
+export type RunScopedOption = {
   /** 该次运行异常退出（`run.json` 的 `crashed`）；`current` 恒为 false。 */
   crashed: boolean;
   /** `current` = 正在写的本次运行；`runs` = 已归档的历史包。 */
   scope: "current" | "runs";
-}
+} & LogSessionMeta;
 
 /**
  * 把「本次运行的份」与「各历史包里的份」拼成一条时间线（新→旧）。

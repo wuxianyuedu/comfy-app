@@ -15,16 +15,16 @@ import type { ComfyStatsPayload } from "~/lib/comfy/comfy-stats-client";
 import { useComfyStats } from "./use-comfy-stats";
 
 /** 状态栏要展示的一项占用条（显存/内存），null 表示该项应隐藏。 */
-export interface StatBar {
+export type StatBar = {
   /** 用量百分比（四舍五入取整，clamp 到 100） */
   pct: number;
   /** 总量（字节） */
   total: number;
   /** 已用（字节） */
   used: number;
-}
+};
 
-export interface ComfyStatusViewModel {
+export type ComfyStatusViewModel = {
   /** 已连接但首个采样还没回来（轮询空窗），占用条暂不显示但不应报「未连接」 */
   connecting: boolean;
   /** ComfyUI CUDA 逻辑口径；非 NVIDIA 卡上仍是唯一可显示的口径 */
@@ -39,7 +39,7 @@ export interface ComfyStatusViewModel {
   /** 数据陈旧：处于迟滞容忍期、当前显示的是上一次好数据（视图据此弱化占用条） */
   stale: boolean;
   stats: ComfyStatsPayload | null;
-}
+};
 
 const DEGRADED_NOTE = "ComfyUI 未运行，显存/内存暂不可用";
 

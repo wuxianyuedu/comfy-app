@@ -46,7 +46,7 @@ import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-
  *
  *  这些值是**工坊的业务语义**（镜头图 / 首帧 / 尾帧各是什么），与「落到工作流的
  *  哪一行」是两件事：后者由作者在工作流库里的连线声明。 */
-export interface WorkshopExposedValues {
+export type WorkshopExposedValues = {
   /** **自定义口**的值（契约口 id → 值，如 `{ "custom-text-1": "水彩" }`）。
    *
    *  预制的几个口各有业务语义（提示词 / 尺寸 / 首帧…），所以各占一个字段；
@@ -80,27 +80,27 @@ export interface WorkshopExposedValues {
    *  本层落到哪个尺寸端口由作者连线决定，值按该端口的形态派（宽高 / 比例标签 /
    *  百万像素 / 分辨率档 / 对齐倍数）。 */
   size?: SizeSpecValue;
-}
+};
 
 /** 尺寸表达（结构上与 `lib/size-presets` 的 `SizeSpec` 一致）。
  *
  *  在类型上**不**从 size-presets 取 `SizeSpec`：本模块的入参来自调用方拼装的
  *  plain object（工坊表单 / 服务端编排），用结构子集能少一层耦合；规范化由
  *  `normalizeSizeSpec` 在运行期做。 */
-export interface SizeSpecValue {
+export type SizeSpecValue = {
   clarity?: unknown;
   multiple?: unknown;
   ratio?: unknown;
-}
+};
 
 /** 一次封装的结果。 */
-export interface EncapsulatedInputs {
+export type EncapsulatedInputs = {
   /** 用户给了值、但落不到任何端口的口（未连线 / 作者显式断开 / 端口已消失）。
    *  以前这里会按名字猜一个端口兜住，现在如实上报 —— 没连线就是「未配置」。 */
   unmatched: Array<string>;
   /** 下发给 generate.generate 的 workflowInputs（**只含作者连过线的口**）。 */
   workflowInputs: Array<{ name: string; nodeId: string; value: unknown }>;
-}
+};
 
 /** 该时长端口按「帧」还是按「秒」表达。
  *

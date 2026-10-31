@@ -43,7 +43,7 @@ function modeLabel(code: string): string {
   return ALL_WORKFLOW_TYPES.find((type) => type.code === code)?.label ?? code;
 }
 
-export interface WorkflowIoPreviewPanelProps {
+export type WorkflowIoPreviewPanelProps = {
   defaultMode: string | null;
   detailIOMap: WorkflowIOMap | null;
   /** 工作流支持的模式（模板 modes 列，与库详情「类型」同源）。 */
@@ -52,7 +52,7 @@ export interface WorkflowIoPreviewPanelProps {
   /** 模式集合 / 默认模式变更（编辑器落库并同步本地 detail）。 */
   onModesChange: (modes: Array<string>, defaultMode: string) => void;
   workflowIO: Record<string, WorkflowIOParam>;
-}
+};
 
 export function WorkflowIoPreviewPanel({
   workflowIO,

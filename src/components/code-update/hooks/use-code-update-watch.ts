@@ -49,7 +49,7 @@ export const DEV_RESTART_NOTIFIED_KEY = "comfyapp:dev-restart-notified-bootid";
 /** 记录「最近一次已就哪种依赖面陈旧提示过」的键（跨刷新去重，按 `depsState`）。 */
 export const DEPS_STALE_NOTIFIED_KEY = "comfyapp:deps-stale-notified-state";
 
-export interface UseCodeUpdateWatchArgs {
+export type UseCodeUpdateWatchArgs = {
   /** 观测到依赖面陈旧时回调（需要「停服务 + `pnpm install`」这个动作）。
    *
    *  `state` 给出陈旧的具体形态，供文案分流。**同一形态只上报一次**（跨刷新，
@@ -63,7 +63,7 @@ export interface UseCodeUpdateWatchArgs {
    *  · `detail` = 启动器懒归因产出的人话短句（「本次代码更新改了路由结构…」），
    *    归因失败 / 无归因为 null。 */
   onDevServerRestart?: (reason: string | null, detail: string | null) => void;
-}
+};
 
 export function useCodeUpdateWatch({
   onDevServerRestart,

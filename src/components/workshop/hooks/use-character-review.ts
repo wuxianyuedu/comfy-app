@@ -13,13 +13,13 @@ import { reviewCharacter } from "~/lib/production/run-client";
 import type { ReviewVerdict } from "~/lib/production/review-types";
 import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";
 
-export interface CharacterReviewController {
+export type CharacterReviewController = {
   error: string;
   reset: () => void;
   review: (characterId: string) => Promise<void>;
   reviewing: boolean;
   verdict: ReviewVerdict | null;
-}
+};
 
 export function useCharacterReview(projectId: string): CharacterReviewController {
   const [verdict, setVerdict] = useState<ReviewVerdict | null>(null);

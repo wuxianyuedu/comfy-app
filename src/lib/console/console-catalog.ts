@@ -17,7 +17,7 @@
 // 又会让用户以为它拦得住（同 §12.18 的判断反模式：会静默失效的清单）。
 
 /** 预设命令的一个分组（界面上按组分块展示）。 */
-export interface ConsolePresetGroup {
+export type ConsolePresetGroup = {
   /** 一句话说明这一组是干什么的（分组标题下方的灰字）。 */
   hint: string;
   /** 分组机器名（也是 React key）。 */
@@ -25,10 +25,10 @@ export interface ConsolePresetGroup {
   items: Array<ConsolePreset>;
   /** 分组标题。 */
   label: string;
-}
+};
 
 /** 一条预设命令。 */
-export interface ConsolePreset {
+export type ConsolePreset = {
   /** 要填进输入框的完整命令行（**就是**用户会敲的那行文本）。 */
   command: string;
   /** 这条命令做什么、什么时候用它。 */
@@ -37,7 +37,7 @@ export interface ConsolePreset {
   id: string;
   /** 展示名。 */
   label: string;
-}
+};
 
 /**
  * 预设命令表。

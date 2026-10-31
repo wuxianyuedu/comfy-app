@@ -23,10 +23,10 @@ function localPathFor(src: string): string | null {
   return artifactDiskPath(src);
 }
 
-export interface ResolvedMedia {
+export type ResolvedMedia = {
   buffer: Buffer;
   mime: string;
-}
+};
 
 /**
  * 从 data URL、本地生成路径或绝对 http(s) URL 加载图片字节。

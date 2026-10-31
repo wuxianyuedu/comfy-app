@@ -21,12 +21,12 @@ import {
 
 const LANDSCAPE = { width: 1600, height: 1200 };
 
-interface ProbeProps {
+type ProbeProps = {
   natural: { height: number; width: number } | null;
   padding?: number;
   viewportHeight: number | null;
   viewportWidth: number | null;
-}
+};
 
 const INITIAL: ProbeProps = {
   natural: LANDSCAPE,

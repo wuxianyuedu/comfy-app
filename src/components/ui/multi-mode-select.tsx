@@ -83,7 +83,7 @@ const CATEGORY_ACCENT: Record<WorkflowCategory, string> = {
   audio: "bg-warning",
 };
 
-interface MultiModeSelectProps {
+type MultiModeSelectProps = {
   className?: string;
   /** 默认模式码（defaultMode 必须 ∈ `modes`）。 */
   defaultMode: string;
@@ -94,7 +94,7 @@ interface MultiModeSelectProps {
   /** 全部已选模式码（defaultMode ⊆ modes）。空数组 → 空 chip。 */
   modes: Array<string>;
   onChange: (modes: Array<string>, defaultMode: string) => void;
-}
+};
 
 const POPOVER_MAX_H = 360;
 

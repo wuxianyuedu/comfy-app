@@ -51,7 +51,7 @@ function nowMs(): number {
 }
 
 /** 发起一次运行所需的全部参数（容器组装；运行器只管状态机与订阅）。 */
-interface RunPayload {
+type RunPayload = {
   effectiveMode: string | null;
   /** 载荷按**映射表**组装（不是裸的「暴露 pin 全量下发」）——
    *  生效映射（含本地 overlay）由容器的 `useParamWiring` 持有。 */
@@ -62,7 +62,7 @@ interface RunPayload {
   workflowId: string;
   workflowIO: WorkflowIOMap | null;
   workflowName: string;
-}
+};
 
 /** 组装运行期载荷并提交到本机生成，订阅 SSE 直到落定。
  *

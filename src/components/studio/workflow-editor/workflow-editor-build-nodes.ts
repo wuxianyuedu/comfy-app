@@ -54,7 +54,7 @@ type GraphEntry = { inputs?: WorkflowNodeData["inputs"] };
  *  两个数组的元素形状相同。 */
 type BoundaryPin = NonNullable<WorkflowDetail["boundaryPins"]>["inputs"][number];
 
-export interface BuildInitialNodesCtx {
+export type BuildInitialNodesCtx = {
   detail: WorkflowDetail | null;
   /** 当前视图的宿主（外层封装）节点 id —— 仅当视图是「下钻后的子工作流内部」
    *  时传入。本层节点都是子图内部节点，勾选时把它一并带上，运行期据此还原
@@ -71,7 +71,7 @@ export interface BuildInitialNodesCtx {
   paramMap: Record<string, unknown>;
   rawMetaById: Record<string, RawNodeMeta>;
   scopeDetail: WorkflowDetail | null;
-}
+};
 
 /**
  * 边界 pin → wfGroup(wfIoPort …) 栏杆布局（从 `buildInitialNodes` 拆出，§12.13）。

@@ -14,7 +14,7 @@ import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
 import { cn } from "~/lib/utils";
 
-export interface WorkshopStageItemProps {
+export type WorkshopStageItemProps = {
   /** 占位方式由调用处决定（见文件头）。 */
   className?: string;
   /** 是否当前所在段（决定 `aria-current` 与选中配色）。 */
@@ -28,7 +28,7 @@ export interface WorkshopStageItemProps {
   ratio: number;
   /** 完成度小字，由 `stageSubtitle` 算好传入 —— 本件不重复判进度。 */
   subtitle: string;
-}
+};
 
 export function WorkshopStageItem({
   label,

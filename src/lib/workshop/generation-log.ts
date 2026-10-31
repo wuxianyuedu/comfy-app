@@ -21,7 +21,7 @@ export const GENERATION_LOG_STAGE_LABELS: Record<GenerationLogStage, string> = {
 
 /** 落盘条目（与界面的 ExtractLogEntry / PortraitLogEntry 保持字段兼容：
  *  summary 是单行摘要，detail 是可选的多行正文）。 */
-export interface GenerationLogEntry {
+export type GenerationLogEntry = {
   /** 可选多行正文（模型输入 / 输出原文） */
   detail?: string;
   /** 环节内的小类（提取日志的 init/request/output/…，定妆照的 info/success/error） */
@@ -30,7 +30,7 @@ export interface GenerationLogEntry {
   summary: string;
   /** 产生时刻（ms）；非法输入归一为落盘时刻 */
   ts: number;
-}
+};
 
 /** 单行正文 / 摘要的落盘上限：超长截断，防单条日志撑爆文件与读取。 */
 export const MAX_LOG_SUMMARY_CHARS = 600;

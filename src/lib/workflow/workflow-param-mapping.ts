@@ -267,12 +267,12 @@ export const MODE_KEY_PREFIX = "mode:";
 /** 逐模式映射：模式码 → (对外参数 id → 目标 ioKey)。空对象 = 各模式用同一张图。 */
 export type ParamMappingByMode = Record<string, Record<string, string | null>>;
 
-export interface ParamMapping {
+export type ParamMapping = {
   /** 作者改过的「对外参数名」（ioKey → 名字）。 */
   labels?: Record<string, string>;
   /** 作者画的线，按模式分开（`{ [mode]: { [entryId]: ioKey | null } }`）。 */
   manualByMode?: ParamMappingByMode;
-}
+};
 
 /** 解析某一模式下生效的「对外参数 id → 目标 ioKey」表。
  *
@@ -528,11 +528,11 @@ export function buildSourceOverrides(
   return out;
 }
 
-export interface MappedInput {
+export type MappedInput = {
   name: string;
   nodeId: string;
   value: unknown;
-}
+};
 
 /** 运行期节点 id：库内 `nodeId` 是「勾选所在视图的节点 id」。
  *

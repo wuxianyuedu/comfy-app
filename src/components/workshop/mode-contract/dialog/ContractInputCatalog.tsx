@@ -36,7 +36,7 @@ import {
   customInputKindLabel,
 } from "../mode-contract-config";
 
-interface ContractInputCatalogProps {
+type ContractInputCatalogProps = {
   /** 本契约的自定义口定义。 */
   customInputs: ReadonlyArray<ModeContractCustomInput>;
   /** 本契约已经有的口（判断「已添加」）。 */
@@ -49,7 +49,7 @@ interface ContractInputCatalogProps {
   onRemoveCustom: (id: ModeContractCustomInput["id"]) => void;
   /** 改一个自定义口的名字。 */
   onRenameCustom: (id: ModeContractCustomInput["id"], label: string) => void;
-}
+};
 
 export function ContractInputCatalog({
   inputs,

@@ -13,7 +13,7 @@ import type { WorkflowIOModeOverride, IOParamSlot } from "~/lib/workflow/workflo
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 /* ── 类型定义 ── */
-export interface RawInputMeta {
+export type RawInputMeta = {
   /** 当这个 IMAGE 输入由 LoadImage 一族的上游节点馈入时，服务端解析出上游
    *  上传的文件名并盖在这里，画布便能经 /api/images 代理渲染内联缩略图。
    *
@@ -77,9 +77,9 @@ export interface RawInputMeta {
    *  `widget` 不存在时为 undefined（即纯连线行 —— 内部节点的值不经封装节点
    *  暴露出来）。 */
   widgetValue?: unknown;
-}
+};
 
-export interface ComfyGraphNode {
+export type ComfyGraphNode = {
   /** 边界输入口的细节，供 wfIoPort 渲染（v3）。
    *  只在 `is_input_endpoint` 为真时设置。由子图路由从哨兵 -10 连线 +
    *  配对的 widget 值里取出。 */
@@ -113,7 +113,7 @@ export interface ComfyGraphNode {
    *  `h` **只算主体**：30px 的标题栏画在外框之上，不含在这里面。 */
   size?: [number, number];
   title: string;
-}
+};
 
 /** IO 编辑模式下勾选出来的一个暴露参数。`ioKey` 是对象的键
  *  （`${nodeId}::${kind}::${name}`）；值记录它是什么，这样最终的工作流 IO
@@ -181,7 +181,7 @@ export type WorkflowIOParam = IOParamSlot & {
  *  只带**身份字段**：显示名不进库（画布行上的名字与 IO 面板里的名字都由富化链
  *  一处给，抄一份下来只会在两处口径不一致时固化出陈旧名字）。作者想改名走
  *  IO 面板的 ✎ 改名框（`setIOLabel`）。 */
-export interface IoRef {
+export type IoRef = {
   direction: "input" | "output";
   /** 宿主（外层封装）节点 id：当前视图是子工作流内部时，由画布把「从哪一层
    *  钻进来」的宿主 id 一并带上，落库后运行期据它还原 `host:inner` 拼接 id。 */
@@ -189,7 +189,7 @@ export interface IoRef {
   kind: "param" | "widget" | "output";
   name: string;
   nodeId: string;
-}
+};
 
 /** 拖拽落点在目标行的上半区（插到它之前）还是下半区（插到它之后）。
  *  指示线与实际插入位置同源 —— 所见即所得。 */
@@ -198,7 +198,7 @@ export type WorkflowIODropPosition = "before" | "after";
 /** 共享 context：让每个自定义节点（WorkflowNode / WorkflowSubgraphNode）都能读到
  *  当前 IO 编辑模式与实时勾选集合，而不必在每次切换时重建节点的 `data`。
  *  切换只在这里更新 `workflowIO` 状态，所有消费节点经 context 直接重渲染。 */
-export interface IOEditContextValue {
+export type IOEditContextValue = {
   ioEditMode: boolean;
   /** IO 预览里的拖拽排序：把 `fromKey` 移到渲染列表中 `targetKey` 的前方
    *  （`before`）或后方（`after`）；传 `null` 表示移到末尾。插入点由指针在
@@ -219,14 +219,14 @@ export interface IOEditContextValue {
    *  required 只对已勾选的 pin 有意义。 */
   toggleIORequired: (key: string) => void;
   workflowIO: Record<string, WorkflowIOParam>;
-}
-export interface RgthreeGroupsContextValue {
+};
+export type RgthreeGroupsContextValue = {
   /** 某个分组 id 的**生效**旁路状态（本地覆盖 > detail）。 */
   getBypass: (groupId: string) => boolean;
   /** 翻转分组的旁路状态；PATCH 服务端并设置本地覆盖。 */
   setBypass: (groupId: string, bypass: boolean) => void;
-}
-export interface NodeJsonViewerRequest {
+};
+export type NodeJsonViewerRequest = {
   /** 触发浮层的 `#id` 芯片的 `DOMRect`。用户点下时抓取一次，随后在浮层
    *  存续期间冻结 —— 否则重渲染（或平移/缩放）会在阅读过程中把它拖着走。 */
   /** 形状由 `~/lib/dom-rect` 的 `rectToAnchorRect` 给出（规范 16 §16.2.4.41）——
@@ -237,8 +237,8 @@ export interface NodeJsonViewerRequest {
   /** ComfyUI 工作流 JSON 的键 —— `data.nodeId`。子图**同样是**这个键
    *  （子图封装节点是 `graph` 里的顶层条目，不是嵌套的）。 */
   nodeId: string;
-}
-export interface NodeJsonViewerContextValue {
+};
+export type NodeJsonViewerContextValue = {
   /** 手动关闭。ESC 与点击外部都会调它。 */
   dismiss: () => void;
   /** 取原始的 `detail.graph[nodeId]` 条目。纯读 —— `detail` 还没加载
@@ -264,7 +264,7 @@ export interface NodeJsonViewerContextValue {
   /** 实时浮层状态 —— Provider 只把它暴露给浮层组件本身；
    *  下游消费方通常只需要 requestShow / getNodeJson。 */
   viewer: NodeJsonViewerRequest | null;
-}
+};
 /** 稀疏的原始节点元数据（与 `WorkflowDetail.rawNodes[]` 同源）。
  *  `flags` / `properties` / `mode` 在原件里可能缺失（并非每个节点都写全），
  *  因此按可选对待 —— 与 `rawNodes` 口径一致；`getNodeView().raw` 也复用它。 */
@@ -279,7 +279,7 @@ export type RawMetaEntry = {
 /** 边界 pin 实体（来自 ComfyGraphNode 的 subgraph.inputs/outputs）。
  *  每个 pin 有 UUID、名字、类型、保存位置，以及指向跨边界连线的 linkIds。
  *  `boundaryPins.inputs` / `.outputs` 共用这一形状（原本两处逐字段抄写，已抽出来）。 */
-export interface BoundaryPin {
+export type BoundaryPin = {
   id: string;
   label?: string;
   linkIds: Array<number>;
@@ -287,9 +287,9 @@ export interface BoundaryPin {
   name: string;
   pos: [number, number];
   type: string;
-}
+};
 
-export interface WorkflowDetail {
+export type WorkflowDetail = {
   /** 多模式：该工作流可运行的全部模式码（由模板 `modes` 列解析），与库详情的
    *  「类型」同源；IO 预览面板的模式页签从这里取。子图变体缺省。改名 `availableModes`
    *  是为了和 `WorkflowIOParam.modeOverrides`（按模式码的覆盖层）区分开 —— 两者
@@ -372,9 +372,9 @@ export interface WorkflowDetail {
    *  `${nodeId}::${kind}::${name}`。只有在用户打开 IO 编辑模式并勾选参数后
    *  才有内容；空对象表示「什么都没暴露」。 */
   workflowIO: Record<string, WorkflowIOParam>;
-}
+};
 
-export interface RawOutputMeta {
+export type RawOutputMeta = {
   /** 至少有一条出边指向边界哨兵 `-20` 时为真（该输出被父级子图封装节点
    *  暴露出去）。由 /api/workflows/[id]/subgraph 盖章。外层工作流恒为 false。 */
   isBoundary?: boolean;
@@ -387,9 +387,9 @@ export interface RawOutputMeta {
   localized?: string;
   name: string;
   type: string;
-}
+};
 
-export interface WorkflowGroup {
+export type WorkflowGroup = {
   bounding: [number, number, number, number];
   /** 分组旁路状态。镜像 `rawJson.groups[i].flags.bypass`，也是 rgthree
    *  Fast Groups Bypasser 集成用的抓手：点该节点主体里的开关会翻转这个字段
@@ -398,9 +398,9 @@ export interface WorkflowGroup {
   color: string;
   id: string;
   title: string;
-}
+};
 
-export interface WorkflowNote {
+export type WorkflowNote = {
   color: string;
   id: string;
   pos: [number, number];
@@ -408,13 +408,13 @@ export interface WorkflowNote {
   text: string;
   /** 显示标题 —— 从 `title` 字段或第一行 `#` 标题里取出。 */
   title: string;
-}
+};
 
 /** 从便签的原始 JSON 里取出显示标题。ComfyUI 把标题存在根级（较新版本），
  *  或者写成正文里的第一行 markdown 标题（`# 标题`）。没有 markdown 标题时
  *  回落到第一个非空行，连它都没有则回落成 ""。开头的 "Note:" 前缀会被剥掉，
  *  否则标题栏会回显成 "Note: Note: Foo"。 */
-export interface WorkflowNodeData {
+export type WorkflowNodeData = {
   [key: string]: unknown;
   /** 该节点被指派了哪个端口角色（如果有） */
   assignedRole: string | null;
@@ -494,10 +494,10 @@ export interface WorkflowNodeData {
    *  undefined → 按内容驱动。 */
   size?: { h: number; w: number };
   title: string;
-}
+};
 
 /** 分组数据。行尺寸用于把 target Handle 摆在每个输入行旁边。 */
-export interface WorkflowGroupData {
+export type WorkflowGroupData = {
   [key: string]: unknown;
   color: string;
   /** 为真时分组成为真正可拖拽的单元：pointerEvents 翻成 auto、光标提示
@@ -507,9 +507,9 @@ export interface WorkflowGroupData {
    *  `group` 矩形的历史行为。 */
   draggable?: boolean;
   title: string;
-}
+};
 
-export interface WorkflowIoPortData {
+export type WorkflowIoPortData = {
   [key: string]: unknown;
   /** 馈入本端点（输出侧）的第一个中间节点 —— 用来在右列把端口与它的产出方
    *  纵向对齐。 */
@@ -523,16 +523,16 @@ export interface WorkflowIoPortData {
   title: string;
   type?: string;
   value?: unknown;
-}
+};
 
-export interface WorkflowNoteData {
+export type WorkflowNoteData = {
   [key: string]: unknown;
   color: string;
   text: string;
   title: string;
-}
+};
 
-export interface WorkflowSubgraphData {
+export type WorkflowSubgraphData = {
   [key: string]: unknown;
   /** 在**父级**工作流里有外部连线的输入**名字**（与 `inputs[i].name`
    *  对应）。WorkflowSubgraphNode 只为名字出现在这里的输入渲染 target
@@ -570,4 +570,4 @@ export interface WorkflowSubgraphData {
   title: string;
   uid: string; // class_type 的前 8 个字符 —— 用作副标题
   widgetValues: Array<unknown>;
-}
+};

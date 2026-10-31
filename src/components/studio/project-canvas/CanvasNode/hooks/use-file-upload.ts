@@ -14,20 +14,15 @@ import React from "react";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { errorMessage } from "~/lib/error-message";
-import {
-  uploadImageFile,
-  uploadMediaFile,
-} from "~/lib/project-canvas/canvas-api";
+import { uploadImageFile, uploadMediaFile } from "~/lib/project-canvas/canvas-api";
 
-export interface UseFileUploadArgs {
+export type UseFileUploadArgs = {
   patch: (p: Partial<CanvasNodeData>) => void;
-}
+};
 
 export function useFileUpload({ patch }: UseFileUploadArgs) {
   /* 文件上传辅助 */
-  const uploadTo = React.useRef<
-    "inputImage" | "firstFrame" | "lastFrame" | "media"
-  >("inputImage");
+  const uploadTo = React.useRef<"inputImage" | "firstFrame" | "lastFrame" | "media">("inputImage");
 
   const imagePicker = useFilePicker({
     accept: "image/*",
@@ -35,18 +30,12 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
      * 会得到一个没人接的 Promise（eslint 的 no-misused-promises 直接拦）。 */
     onPick: (f) => {
       void uploadImageFile(f)
-        .then((name) =>
-          patch({ [uploadTo.current]: name, upstreamId: undefined }),
-        )
-        .catch((err: unknown) =>
-          patch({ error: errorMessage(err, "上传失败"), status: "error" }),
-        );
+        .then((name) => patch({ [uploadTo.current]: name, upstreamId: undefined }))
+        .catch((err: unknown) => patch({ error: errorMessage(err, "上传失败"), status: "error" }));
     },
   });
 
-  const pickFile = (
-    target: "inputImage" | "firstFrame" | "lastFrame" | "media",
-  ) => {
+  const pickFile = (target: "inputImage" | "firstFrame" | "lastFrame" | "media") => {
     uploadTo.current = target;
     imagePicker.open();
   };
@@ -60,12 +49,8 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
     accept: "image/*,video/*",
     onPick: (f) => {
       void uploadMediaFile(f)
-        .then(({ name }) =>
-          patch({ mediaPath: name, mediaName: f.name, upstreamId: undefined }),
-        )
-        .catch((err: unknown) =>
-          patch({ error: errorMessage(err, "上传失败"), status: "error" }),
-        );
+        .then(({ name }) => patch({ mediaPath: name, mediaName: f.name, upstreamId: undefined }))
+        .catch((err: unknown) => patch({ error: errorMessage(err, "上传失败"), status: "error" }));
     },
   });
 

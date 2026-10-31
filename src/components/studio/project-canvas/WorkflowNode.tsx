@@ -59,7 +59,7 @@ import {
 /* 共享类型下沉到叶子模块（断环，规范 12.7/18）；按原样 re-export 保住既有导入路径。 */
 export type { WorkflowSourceFilter, WorkflowModesState } from "./workflow-node-types";
 
-export interface WorkflowNodeProps {
+export type WorkflowNodeProps = {
   data: CanvasNodeData;
   id: string;
   /** 画布节点会话级模型筛选值（"all" 或某标签名）。 */
@@ -91,7 +91,7 @@ export interface WorkflowNodeProps {
   workflowListLoading?: boolean;
   /** 当前工作流的 modes 配置（来自 /api/workflows/[id] 的 modes/defaultMode）。 */
   workflowModes?: WorkflowModesState | null;
-}
+};
 
 /* 节点序号 chip 文字色——`bg-overlay-accent-surface`（语义底）上的**装饰**
  * 文字，让 `#1` / `#2` 序号在小胶囊里跳出来。cyan-700/200 是"高对比冷色标签"

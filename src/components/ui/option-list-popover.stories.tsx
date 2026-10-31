@@ -38,7 +38,7 @@ function ChipTrigger({ label, count }: { count: number; label: string }) {
  * ReactNode 参数（`trigger`）与回调（`onSelect`）不在其中 —— 前者由 story 的
  * `render` 给，后者是空实现（见文件头「三条口径」第 3 条）。
  */
-interface StoryArgs {
+type StoryArgs = {
   align?: "start" | "center" | "end";
   contentClassName?: string;
   disabled?: boolean;
@@ -50,7 +50,7 @@ interface StoryArgs {
   triggerLabel: string;
   triggerTitle?: string;
   value: string;
-}
+};
 
 /** 适配件：把 Args 里那几项拼成一个真触发器，并补上选中回调。 */
 function PopoverWithTrigger({ triggerLabel, triggerCount, ...rest }: StoryArgs) {

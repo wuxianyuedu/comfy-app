@@ -9,12 +9,12 @@ import { toDisplayPath } from "~/lib/path-display";
 
 const LOG_DIR = path.join(process.cwd(), "log");
 
-interface LogFileInfo {
+type LogFileInfo = {
   mtimeMs: number;
   name: string;
   relativePath: string;
   size: number;
-}
+};
 
 /**
  * 递归列 `log/` 下的 `.log`。异步（ISSUE #2193）：这一份是整棵日志树

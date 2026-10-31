@@ -11,9 +11,9 @@
  * 注意：匿名限流依赖 `x-forwarded-for`（反代注入），本地直连时回退 "anon"。
  */
 
-interface SlidingWindowEntry {
+type SlidingWindowEntry = {
   timestamps: Array<number>;
-}
+};
 
 const buckets = new Map<string, SlidingWindowEntry>();
 

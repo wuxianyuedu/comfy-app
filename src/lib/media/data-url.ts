@@ -39,12 +39,12 @@
 // data URL 之后怎么编码与解码」（纯算术）。两者方向相反。
 
 /** data URL 的组成：MIME 与 base64 载荷（不含 `;base64` 之前的那段 meta）。 */
-export interface ParsedDataUrl {
+export type ParsedDataUrl = {
   /** 逗号之后的 base64 载荷（原样，未解码）。 */
   base64: string;
   /** `data:` 与第一个 `,` 之间的 MIME（无声明时为 `""`）。 */
   mime: string;
-}
+};
 
 /** data URL 的前缀。收口前它以字面量出现在 9 处（写的一侧 3、读的一侧 6）。 */
 export const DATA_URL_PREFIX = "data:";

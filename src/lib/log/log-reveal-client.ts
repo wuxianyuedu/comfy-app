@@ -14,10 +14,10 @@ import { errorText } from "~/lib/error-message";
 import { vanillaApi } from "~/trpc/vanilla";
 
 /** 打开动作的结果：`detail` 是**已可直接显示**的文案（成功也带，见硬规则 4）。 */
-export interface RevealLogPathOutcome {
+export type RevealLogPathOutcome = {
   detail: string;
   ok: boolean;
-}
+};
 
 /**
  * 在文件管理器里定位一个从日志里扫出来的路径。

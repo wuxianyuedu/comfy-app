@@ -14,11 +14,11 @@
 import { withQuery } from "~/lib/query-string";
 import { errorMessage } from "~/lib/error-message";
 
-export interface RemoteModelCatalog {
+export type RemoteModelCatalog = {
   detail: string;
   models: Array<string>;
   ok: boolean;
-}
+};
 
 async function getModels(
   provider: "local" | "remote",

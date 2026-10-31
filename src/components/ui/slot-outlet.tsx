@@ -29,11 +29,11 @@ import { createPortal } from "react-dom";
 
 import { cn } from "~/lib/utils";
 
-interface SlotOutletContextValue {
+type SlotOutletContextValue = {
   /** 落点节点；`null` = 现在没有落点。 */
   node: HTMLElement | null;
   setNode: (node: HTMLElement | null) => void;
-}
+};
 
 const SlotOutletContext = createContext<SlotOutletContextValue | null>(null);
 

@@ -75,7 +75,7 @@ import {
  *
  * `messages` / `open` 都由场景决定 —— 见文件头第 3 条（`open` 是场景的一部分）。
  */
-export interface MessageScene {
+export type MessageScene = {
   /** 这个场景解决什么、真机上什么时候会出现（故事读者看这一段才知道在看什么）。 */
   readonly about: string;
   /**
@@ -91,7 +91,7 @@ export interface MessageScene {
   readonly open: boolean;
   /** 这一档要 push 的那几条 —— 每条都由**生产方**给出，不在这里手抄文案。 */
   readonly produced: ReadonlyArray<ProducedMessage>;
-}
+};
 
 /**
  * 一条消息的**生产方**：`kind` 是渲染分档（`KIND_META` 的取值集合），
@@ -103,10 +103,10 @@ export interface MessageScene {
  *
  * `make()` 而不是字面量：文案住在生产方那一侧，改了它故事跟着变。
  */
-export interface ProducedMessage {
+export type ProducedMessage = {
   readonly kind: MessageKind;
   readonly make: () => { body: string; title: string };
-}
+};
 
 /**
  * 陈旧实例的文案 —— 直接从 `CodeUpdateWatcher` 的回调体里取。

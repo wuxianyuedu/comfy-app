@@ -141,14 +141,14 @@ function materializeProductionShots(
   return result;
 }
 
-interface ProjectCanvasProps {
+type ProjectCanvasProps = {
   onConsumePending?: () => void;
   onConsumeSeed?: () => void;
   /** 设置后（来自工作区「工作流库 → 使用」动作）画布会为这条工作流
    *  往当前打开的项目里放一个 `kind="workflow"` 节点。 */
   pendingWorkflow?: { id: string; name: string; taskType: string } | null;
   seedNew?: boolean;
-}
+};
 
 /* ── 内层画布（必须在 ReactFlowProvider 里） ── */
 function CanvasInner({

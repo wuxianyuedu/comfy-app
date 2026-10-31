@@ -43,10 +43,10 @@ export const ERROR_AUTO_EXPAND_RE =
   /not found|not installed|out of memory|cannot find model|checkpoint.*not exists|missing\s+\w+\s+model|ValueError|IndexError|KeyError|BackendError|server_busy|insufficient/i;
 
 /** 一条建议规则：先命中先返回（顺序即优先级）。 */
-interface AdviceRule {
+type AdviceRule = {
   advice: (error: string) => string;
   pattern: RegExp;
-}
+};
 
 /* 顺序即优先级。三条刻意排在最前：
  *  · comfy-cli 解释器缺失 —— 报错原文带着 Windows 绝对路径，会被后面的规则按

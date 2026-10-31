@@ -36,7 +36,7 @@ import type { AppServiceExitNotice } from "./app-service-exit";
 /** 应用服务四态：尚未探通 / 在线 / 不可达 / 探活端点 404。 */
 export type DevServerState = "starting" | "online" | "offline" | "stale";
 
-export interface DevServerStatusInput {
+export type DevServerStatusInput = {
   /** 本次会话是否曾成功探测到进程标识。 */
   everOnline: boolean;
   /**
@@ -63,9 +63,9 @@ export interface DevServerStatusInput {
    * （见 `use-dev-server-liveness` 的 `routeTableStale`）。
    */
   routeTableStale?: boolean;
-}
+};
 
-export interface DevServerStatus {
+export type DevServerStatus = {
   /** 上一次结束的原因与动作；没有可讲的原因时为 null（视图据此决定要不要开口）。 */
   exitNotice: AppServiceExitNotice | null;
   /** 状态栏可读文案（短，供右下角窄位展示）。 */
@@ -73,7 +73,7 @@ export interface DevServerStatus {
   state: DevServerState;
   /** 悬停 `title`：一句话说明含义与此刻能做什么。 */
   title: string;
-}
+};
 
 export function deriveDevServerStatus(input: DevServerStatusInput): DevServerStatus {
   const { everOnline, reachable, restarted, lastRestartAt } = input;

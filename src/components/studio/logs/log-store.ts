@@ -75,7 +75,7 @@ function welcomeEntry(): LogEntry {
   };
 }
 
-export interface LogStoreState {
+export type LogStoreState = {
   addEntry: (entry: Omit<LogEntry, "id" | "time" | "seq">) => void;
   /**
    * 第 1 页窗口的**锚点**：用户「正在看的那一段」的头一条 id（null = 不锚定）。
@@ -230,7 +230,7 @@ export interface LogStoreState {
    * 所以「面板说有几条新的」与「实际滚到哪」永远不会各说各话。
    */
   viewSeenIds: ReadonlySet<string>;
-}
+};
 
 /** 面板渲染一帧需要的全部状态（`LogPanelState` 的别称，视图侧更短的写法）。 */
 export type LogPanelState = LogStoreState;
@@ -242,7 +242,7 @@ export type LogPanelState = LogStoreState;
  * 因此选它不会引入逐帧比较。这样写而不是在视图里用 `useShallow` 现拼对象，
  * 是为了让「面板读哪些状态」这件事只写一遍、只在一个文件里（视图层零状态拼装）。
  */
-export interface LogPanelSlice {
+export type LogPanelSlice = {
   /** 第 1 页窗口的锚点（见 {@link LogStoreState.anchorId}）。 */
   anchorId: string | null;
   /** 贴底看最新（见 {@link LogStoreState.autoScroll}）。 */
@@ -259,7 +259,7 @@ export interface LogPanelSlice {
   search: string;
   /** 「已翻过去的历史」条数（见 {@link LogStoreState.viewBaselineAfter}）。 */
   viewBaselineAfter: number;
-}
+};
 
 /**
  * 派生出「时间线 + 计数」这两件随时间线走的东西。
@@ -334,7 +334,7 @@ function viewOf(state: LogStoreState): LogPanelView {
 }
 
 /** 视图状态（筛选条件 + 页码 + 收缩状态），`applyView` 的入参。 */
-interface LogPanelView {
+type LogPanelView = {
   anchorId: string | null;
   autoScroll: boolean;
   bootId: string | null;
@@ -345,7 +345,7 @@ interface LogPanelView {
   pageSize: number;
   search: string;
   viewBaselineAfter: number;
-}
+};
 
 /**
  * 把视图状态与派生字段合成一次 `set` 的载荷。

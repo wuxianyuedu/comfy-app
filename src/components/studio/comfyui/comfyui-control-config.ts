@@ -16,7 +16,7 @@
 import type { StatusDotState } from "~/components/ui/status-dot";
 
 /** 本页消费的运行态四态（与 `setting.comfyStatus` 出口逐字段一致）。 */
-export interface ComfyRuntimeStatus {
+export type ComfyRuntimeStatus = {
   base: string | null;
   /** 库里**已保存**的 ComfyUI 路径（`setting.comfyuiPath`）——本页只读展示。
    *
@@ -29,7 +29,7 @@ export interface ComfyRuntimeStatus {
   stopping: boolean;
   up: boolean;
   via: string | null;
-}
+};
 
 /** 一个运行态快照里所有「正在过渡」的信号 —— 动作按钮的禁用判据只用它。 */
 export function isComfyBusy(

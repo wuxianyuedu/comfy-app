@@ -50,7 +50,7 @@ import { Slider } from "~/components/ui/slider";
  * / slider-track / slider-range / slider-thumb` 五层）—— 这是**预期**的
  * 快照漂移、不是回归，用 `pnpm exec vitest run -u` 更新。
  */
-export interface RangeSliderProps {
+export type RangeSliderProps = {
   "aria-label"?: string;
   "aria-labelledby"?: string;
   /** 轨道额外类名（shadcn Slider 是 `data-horizontal:w-full`，一般不用给）。 */
@@ -65,7 +65,7 @@ export interface RangeSliderProps {
   step?: number;
   /** 当前值（受控）。 */
   value: number;
-}
+};
 
 export function RangeSlider({
   value,

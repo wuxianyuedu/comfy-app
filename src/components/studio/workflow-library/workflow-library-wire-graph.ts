@@ -94,13 +94,13 @@ export function libraryEdgeOwner(
 }
 
 /** 一条库内边的两端锚点（来自映射表）。 */
-export interface LibraryWire {
+export type LibraryWire = {
   /** 对外参数条目 id（输入侧）或输出口 ioKey（输出侧）。 */
   entryId: string;
   namespace: "param" | "output";
   /** 输入侧：落点的 ioKey；输出侧：取值那一行的 ioKey。 */
   targetIoKey: string;
-}
+};
 
 /** 作者画过的线的描边色。 */
 export const MANUAL_STROKE = "#a78bfa";
@@ -122,7 +122,7 @@ export const DRAG_STROKE = "#c4b5fd";
 export const SELECTED_STROKE = "#c4b5fd";
 
 /** 三列节点的首帧布局尺寸（px）。 */
-export interface LibraryNodeSizing {
+export type LibraryNodeSizing = {
   /** 三列之间的横向间距 —— 留出走线的空间，线不至于贴着卡片拐出尖角。 */
   columnGap: number;
   /* ── 两套高度尺寸（不是一个值）────────────────────────────────────────
@@ -164,7 +164,7 @@ export interface LibraryNodeSizing {
   outputsWidth: number;
   /** 左列卡片宽度。 */
   paramsWidth: number;
-}
+};
 
 /** 三列节点的布局：左列参数卡片 → 宿主卡片 → 右列输出卡片，横向排开。
  *
@@ -229,7 +229,7 @@ export function libraryBackdropSize(
  *  为什么渲染内容**不进 `node.data`**：那会把「每帧都变的表单子树」塞进 React
  *  Flow 的状态里 —— 要么冻在首帧（表单永远停在未播种的那一帧），要么每帧
  *  `setNodes` 刷新它（setNodes → 重渲染 → setNodes 无限循环）。 */
-export interface LibraryNodeContent {
+export type LibraryNodeContent = {
   host: { host: ReactNode };
   outputs: {
     canWire: boolean;
@@ -247,4 +247,4 @@ export interface LibraryNodeContent {
     onSelect: (entryId: string | null) => void;
     selectedEntryId: string | null;
   };
-}
+};

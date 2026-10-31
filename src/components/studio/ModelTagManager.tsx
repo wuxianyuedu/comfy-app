@@ -18,14 +18,14 @@ import { useModelTags, type TagItem } from "./hooks/use-model-tags";
 const TAG_ICON_COLOR = "text-fuchsia-700 dark:text-fuchsia-300";
 // p71-allow:end
 
-interface ModelTagManagerProps {
+type ModelTagManagerProps = {
   /** 初始标签（来自父级缓存的标签库列表）。 */
   initialTags: Array<TagItem>;
   /** 任何创建 / 删除之后调用，好让父级刷新列表。 */
   onChanged: () => void;
   /** 用户关闭对话框时调用。 */
   onClose: () => void;
-}
+};
 
 /** 管理用户级工作流模型标签库的弹窗。
  *  标签在用户的所有工作流之间共享（如 "z-image"、

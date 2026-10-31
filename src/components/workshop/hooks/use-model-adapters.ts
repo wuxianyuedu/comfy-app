@@ -20,13 +20,13 @@ import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-
 import { useTRPC } from "~/trpc/react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 
-export interface AdapterCandidate {
+export type AdapterCandidate = {
   baseUrl: string | null;
   kind: "image" | "video" | "chat";
   name: string;
-}
+};
 
-export interface ModelAdaptersController {
+export type ModelAdaptersController = {
   /** 给选中模型追加一个模式的适配器草稿（预填该模式的默认输入清单）。 */
   addMode: (mode: string) => void;
   /** 可配置适配器的远端模型（kind=image / video）。 */
@@ -42,7 +42,7 @@ export interface ModelAdaptersController {
   selectedModel: string;
   selectModel: (name: string) => void;
   setDraft: React.Dispatch<React.SetStateAction<Array<RemoteModeAdapter>>>;
-}
+};
 
 export function useModelAdapters(): ModelAdaptersController {
   const trpc = useTRPC();

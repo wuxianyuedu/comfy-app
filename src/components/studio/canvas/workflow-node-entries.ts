@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { inferOutputTypeAll } from "../workflow-utils";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
 
-export interface FlowNodeEntries {
+export type FlowNodeEntries = {
   /** 组装好的输入行：先是 rawInputs（服务端配对的 widget 值），再是 data.inputs。 */
   allEntries: Array<[string, unknown]>;
   /** 纯类型端口行（rawInputs[i].widget 缺省）—— 在左边缘拿一个 Handle。 */
@@ -25,7 +25,7 @@ export interface FlowNodeEntries {
   visibleWidgetEntries: Array<[string, unknown]>;
   /** 背后是 widgets_values 槽位的行（rawInputs[i].widget 存在）。 */
   widgetEntries: Array<[string, unknown]>;
-}
+};
 
 /**
  * 把一个节点的输入分桶成连接行（顶部针脚）与 widget 行

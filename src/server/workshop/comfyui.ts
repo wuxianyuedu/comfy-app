@@ -20,11 +20,11 @@ import { DEFAULT_SIZE_SPEC, sizeSpecDims, type SizeSpec } from "~/lib/media/size
 const OUTPUT_DIR = path.join(process.cwd(), "data", "workshop-outputs");
 const SETTINGS_FILE = path.join(process.cwd(), "data", "workshop-comfy-settings.json");
 
-export interface ComfySettings {
+export type ComfySettings = {
   checkpoint?: string;
   imageWorkflow?: unknown;
   videoWorkflow?: unknown;
-}
+};
 
 let resolvedBase: string | null = null;
 
@@ -39,11 +39,11 @@ function settingsFileFingerprint(file: string): string | null {
 }
 
 /** settings 文件 IO 的注入面（真实形状；用例换临时目录）。 */
-export interface SettingsFileIo {
+export type SettingsFileIo = {
   fingerprint(file: string): string | null;
   read(file: string): string;
   write(file: string, content: string): Promise<void>;
-}
+};
 
 const realSettingsFileIo: SettingsFileIo = {
   read: (file) => readFileSync(file, "utf-8"),
@@ -171,10 +171,10 @@ function comfyBase(): string {
   return resolvedBase ?? process.env.COMFYUI_BASE ?? comfyUiBaseUrl(COMFYUI_DEFAULT_PORT);
 }
 
-export interface ComfyPromptResult {
+export type ComfyPromptResult = {
   error?: string;
   prompt_id?: string;
-}
+};
 
 export async function postComfyPrompt(prompt: unknown): Promise<ComfyPromptResult> {
   const base = await resolveComfyBase();
@@ -375,9 +375,9 @@ export function substitutePlaceholders(
   return /* SAFETY: 类型断言已复核 */ JSON.parse(json) as unknown;
 }
 
-export interface ComfyRunResult {
+export type ComfyRunResult = {
   files: Array<string>;
-}
+};
 
 /**
  * 提交工作流、轮询历史、取回输出并落盘到 data/workshop-outputs[/{sessionId}]。

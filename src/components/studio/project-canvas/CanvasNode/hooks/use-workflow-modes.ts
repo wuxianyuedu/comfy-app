@@ -14,19 +14,19 @@ import { errorMessage } from "~/lib/error-message";
 import { patchWorkflow } from "~/lib/workflow/workflow-mutations";
 import type { WorkflowModesState } from "~/components/studio/project-canvas/WorkflowNode";
 
-export interface UseWorkflowModesArgs {
+export type UseWorkflowModesArgs = {
   /** 当前模式状态（乐观更新前的快照，用于失败回滚）。 */
   modes: WorkflowModesState | null;
   /** 保存失败时的节点级报错（写进 d.error + status: "error"）。 */
   onFailed: (reason: string) => void;
   setModes: (next: WorkflowModesState) => void;
   workflowId?: string;
-}
+};
 
-export interface WorkflowModesController {
+export type WorkflowModesController = {
   /** 写入新模式并落库；失败自动回滚 + 报错。 */
   saveModes: (next: WorkflowModesState) => Promise<void>;
-}
+};
 
 export function useWorkflowModes({
   workflowId,

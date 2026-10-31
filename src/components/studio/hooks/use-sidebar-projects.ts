@@ -20,10 +20,10 @@ import { subscribeAppEvent } from "~/lib/app-events";
 import { listProjectsWithServer } from "~/lib/project-canvas/canvas-store";
 
 /** 侧栏里列出的一条项目（与 `AppShell` 的 `SidebarProject` 同形）。 */
-export interface SidebarProjectEntry {
+export type SidebarProjectEntry = {
   id: string;
   name: string;
-}
+};
 
 /** 侧栏「项目」分组最多列几条 —— 列表长了该去「所有项目」那一屏看。 */
 export const SIDEBAR_PROJECT_LIMIT = 8;

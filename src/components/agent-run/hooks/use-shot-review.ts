@@ -21,7 +21,7 @@ import {
 import type { HumanVerdict, ReviewMode, ReviewVerdict } from "~/lib/production/review-types";
 import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";
 
-export interface ShotReviewController {
+export type ShotReviewController = {
   /** 评审失败文案（就地展示，不外抛）。 */
   error: string;
   /** 人工裁决结果（本次会话内提交过的；切换镜头即清）。 */
@@ -42,7 +42,7 @@ export interface ShotReviewController {
   submitVerdict: (shotId: string, pass: boolean, note: string) => Promise<void>;
   /** 最近一次评审判定（未评 / 已重置 → null）。 */
   verdict: ReviewVerdict | null;
-}
+};
 
 const REGEN_SUCCESS: Record<ReviewMode, string> = {
   gacha: "已抽卡：镜头已退回，将在下次执行时换种子重出",

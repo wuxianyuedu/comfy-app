@@ -50,12 +50,12 @@ function statusMetaFor(status: string): StatusMeta {
     : STATUS_META.QUEUED;
 }
 
-export interface VideoQueueModalProps {
+export type VideoQueueModalProps = {
   onClose: () => void;
   /** 点某个片段时调用 —— 让父级打开它的详情视图。 */
   onOpenTask?: (taskId: string) => void;
   open: boolean;
-}
+};
 
 export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalProps) {
   const [tasks, setTasks] = useState<Array<VideoTask>>([]);

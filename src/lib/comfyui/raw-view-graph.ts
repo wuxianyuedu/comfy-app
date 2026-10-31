@@ -74,13 +74,13 @@ const FALLBACK_FULL: Record<string, Array<string>> = {
   DualCLIPLoader: ["clip_name1", "clip_name2", "type", "device"],
 };
 
-interface NodeInputSlot {
+type NodeInputSlot = {
   link: number | null;
   name: string;
   type?: string;
-}
+};
 
-interface IndexedNode {
+type IndexedNode = {
   id: string;
   /** 按槽位顺序排列，索引即 slot index */
   inputs: Array<NodeInputSlot>;
@@ -89,12 +89,12 @@ interface IndexedNode {
   raw: RawNode;
   type: string;
   virtual: boolean;
-}
+};
 
-interface LinkRef {
+type LinkRef = {
   originId: string;
   originSlot: number;
-}
+};
 
 /** link id → 起点。每条 link 是 [link_id, src_id, src_slot, dst_id, dst_slot, type]。 */
 function buildLinkIndex(raw: RawWorkflow): Map<number, LinkRef> {

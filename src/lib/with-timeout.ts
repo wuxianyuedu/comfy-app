@@ -35,7 +35,7 @@ export class TimeoutError extends Error {
   }
 }
 
-export interface WithTimeoutOptions {
+export type WithTimeoutOptions = {
   label?: string;
   /**
    * 超时时抛出的错误文案。给了 `message` 用它；只给 `label` 则由出口拼
@@ -52,7 +52,7 @@ export interface WithTimeoutOptions {
    * 收尾失败不该改变「这是一次超时」这个结论。
    */
   onTimeout?: () => void;
-}
+};
 
 /** 超时文案的默认拼法（带量纲，与收口前的 `加载超时（25s）` 同形）。 */
 function timeoutMessage(ms: number, label?: string): string {

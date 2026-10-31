@@ -39,7 +39,7 @@ export function formatTime(ts: number, opts?: { alwaysDate?: boolean }): string 
 }
 
 /** 一条日志里与格式化相关的字段（结构化类型，避免依赖 store 的 `LogEntry`）。 */
-export interface FormattableLog {
+export type FormattableLog = {
   level: string;
   /** 调用位置（`src/…:123` 或 `pkg → fn`）；无位置的行是 undefined。 */
   location?: string;
@@ -47,7 +47,7 @@ export interface FormattableLog {
   /** 来源（`console` / `app-runtime` / …）；缺省则不写进文本。 */
   origin?: string;
   time: number;
-}
+};
 
 /**
  * 单条日志 → 可复制的文本（行内复制按钮与导出共用这一条口径）。

@@ -32,7 +32,7 @@ import { enterCommit } from "~/components/ui/use-enter-commit";
 import { ExitReminder, exitReminderSignal } from "~/components/ui/use-exit-reminder";
 import type { ExtractSession, ExtractSessionActions } from "./hooks/use-workshop-pipeline";
 
-interface Props {
+type Props = {
   characters: Array<Character>;
   /** 提取会话（busy/progress/日志）已收归工坊 controller，经 props 注入；
    * 未注入（遗留/独立使用场景）时退化为本组件内的局部会话。 */
@@ -44,7 +44,7 @@ interface Props {
   /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
   scriptMarkdown?: string;
   styles: Array<StyleRef>; // available Skill styles
-}
+};
 
 /** 判断导入内容是否为 JSON(角色卡 JSON 走结构化解析,其余按剧本 markdown 解析) */
 /** 把角色描述字符串拆成下拉选项数组（兼容中/英文逗号、顿号与空白分隔）。

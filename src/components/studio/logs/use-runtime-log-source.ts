@@ -37,7 +37,7 @@ const MAX_SEGMENTS = 4000;
 /** `\r`（Windows 行尾）在日志面板里只添乱；SGR 颜色序列保留给视图层渲染。 */
 const CR_RE = /\r/g;
 
-export interface RuntimeLogSourceState {
+export type RuntimeLogSourceState = {
   /** 重新拉取当前会话（「刷新」按钮）。 */
   refresh: () => Promise<void>;
   /** 正文解析出的带样式片段（视图只渲染它）。 */
@@ -61,12 +61,12 @@ export interface RuntimeLogSourceState {
   truncated: boolean;
   /** 该份日志过大、服务端只扫了尾部窗口（界面提示「这次启动只显示了一段」）。 */
   windowed: boolean;
-}
+};
 
 /** 视图消费的日志来源：来源状态 + 「是否正在跟随本次启动」（由 controller 给）。 */
 export type RuntimeLogController = RuntimeLogSourceState & { active: boolean };
 
-interface Snapshot {
+type Snapshot = {
   segments: Array<AnsiSegment>;
   sessionId: string | null;
   sessions: Array<LogSessionMeta>;
@@ -74,7 +74,7 @@ interface Snapshot {
   total: number;
   truncated: boolean;
   windowed: boolean;
-}
+};
 
 const EMPTY_SNAPSHOT: Snapshot = {
   text: "",
@@ -91,7 +91,7 @@ function capSegments(segments: Array<AnsiSegment>): Array<AnsiSegment> {
   return tailWindow(segments, MAX_SEGMENTS);
 }
 
-export interface RuntimeLogSourceOptions {
+export type RuntimeLogSourceOptions = {
   /** 正在启动：每秒跟随该次启动的新增输出；否则只在挂载 / 切换 / 刷新时取一次。 */
   active: boolean;
   /**
@@ -101,7 +101,7 @@ export interface RuntimeLogSourceOptions {
    */
   parse?: (text: string) => Array<AnsiSegment>;
   source: RuntimeLogSourceKind;
-}
+};
 
 export function useRuntimeLogSource({
   source,

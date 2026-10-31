@@ -18,7 +18,7 @@ import { ModelTagPicker } from "./MetaEditor";
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
 import { zClass } from "~/lib/shell/overlay-z";
 
-interface DetailHeaderProps {
+type DetailHeaderProps = {
   busyDownload: boolean;
   busyResync: boolean;
   canResync: boolean;
@@ -34,7 +34,7 @@ interface DetailHeaderProps {
   onUse: () => void;
   usable: boolean;
   workflow: WorkflowRow;
-}
+};
 
 export function DetailHeader({
   workflow,

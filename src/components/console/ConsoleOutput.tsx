@@ -19,7 +19,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { cn } from "~/lib/utils";
 
-export interface ConsoleOutputProps {
+export type ConsoleOutputProps = {
   /** 空态提示。 */
   emptyHint: string;
   output: string;
@@ -31,7 +31,7 @@ export interface ConsoleOutputProps {
   verdict: string | null;
   /** 结论是否为成功（决定图标与颜色）。 */
   verdictOk: boolean;
-}
+};
 
 export function ConsoleOutput({
   output,

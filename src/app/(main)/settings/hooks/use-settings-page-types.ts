@@ -93,18 +93,18 @@ export type Section =
   | "logs";
 export type OllamaStatus = "checking" | "starting" | "up" | "down";
 
-export interface FlashMessage {
+export type FlashMessage = {
   kind: "ok" | "err";
   text: string;
-}
+};
 
 /** 两份草稿都已就绪 —— 视图只在 `drafts` 非空时渲染，避免逐处判空。 */
-export interface SettingsPageDrafts {
+export type SettingsPageDrafts = {
   llm: LlmConfig;
   settings: Settings;
-}
+};
 
-export interface SettingsPageController {
+export type SettingsPageController = {
   /** 跳转目标真正落定 —— 外壳命中锚点后调它（清空 `pendingJump` + 消费载荷）。 */
   ackJumpSection: () => void;
   /* 入参形状由 lib 里那一份草稿→条目桥给出（`remoteModelEntryFromDraft` 的返回类型）：
@@ -263,7 +263,7 @@ export interface SettingsPageController {
     name: string,
     patch: Partial<RemoteModelDraftEntry>,
   ) => Promise<{ error?: string; ok: boolean }>;
-}
+};
 
 export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "appearance", label: "外观" },

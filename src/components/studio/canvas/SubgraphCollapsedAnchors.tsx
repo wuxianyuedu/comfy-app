@@ -9,14 +9,14 @@ import { resolveAnchorCylinder } from "./workflow-node-palette";
 import { CollapsedAnchorCylinder, CollapsedPortHandles } from "./FlowNodeCollapsedAnchors";
 import type { RawInputMeta, RawOutputMeta } from "../workflow-types";
 
-interface SubgraphCollapsedAnchorsProps {
+type SubgraphCollapsedAnchorsProps = {
   connectedInputs?: Set<string>;
   connectedOutputs?: Set<string>;
   /** 纯连接型输入端口（已滤掉空标签行）。 */
   connInputs: Array<{ inp: RawInputMeta; label: string }>;
   /** 暴露的输出端口（已滤掉空标签行）。 */
   outputs: Array<{ display: string; out: RawOutputMeta }>;
-}
+};
 
 export function SubgraphCollapsedAnchors({
   connInputs,

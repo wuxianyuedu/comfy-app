@@ -7,13 +7,13 @@ import { asRecord } from "~/lib/is-record";
 import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 
 /** 与 use-workshop-pipeline 中 localStorage WorkshopDraft 对齐的线上结构。 */
-export interface WorkshopDraftDto {
+export type WorkshopDraftDto = {
   characters: Array<Character>;
   meta: ProjectMeta;
   scenes: Array<Scene>;
   scriptMarkdown: string;
   shots: Array<Shot>;
-}
+};
 
 /** 未知值 → 草稿线上结构：逐字段校验类型，损坏字段回退空值（不抛）。
  *

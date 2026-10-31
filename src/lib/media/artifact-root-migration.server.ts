@@ -31,7 +31,7 @@ import { generatedRoot, legacyGeneratedRoot } from "./output-paths";
 const log = createAppRuntimeLogger("artifact-root");
 
 /** 一次迁移的结果形状（调用点据此决定说什么话）。 */
-export interface ArtifactRootMigrationReport {
+export type ArtifactRootMigrationReport = {
   /** 没能搬走的条目（被占用 / 权限），名字与 errno 码成对。 */
   blocked: Array<{ code: string; name: string }>;
   /** 成功搬到新根的顶层条目名。 */
@@ -39,7 +39,7 @@ export interface ArtifactRootMigrationReport {
   /** 新根里已有同名条目 ⇒ 原样留在原地，绝不覆盖。 */
   skipped: Array<string>;
   status: "nothing-to-do" | "moved" | "left-behind";
-}
+};
 
 /** 把一个顶层条目从旧根挪到新根。ENOENT 视为「别的进程已经搬走了」，不算失败。 */
 function moveEntry(

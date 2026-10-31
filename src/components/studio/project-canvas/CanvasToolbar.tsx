@@ -4,11 +4,11 @@
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 
-interface CanvasToolbarProps {
+type CanvasToolbarProps = {
   onClear: () => void;
   onExport: () => void;
   onFitView: () => void;
-}
+};
 
 /** 悬浮工具条上的三个文字动作共用同一套「幽灵」外观。 */
 const ghostTool =

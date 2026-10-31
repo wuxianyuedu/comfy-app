@@ -20,7 +20,7 @@ export const WORKFLOW_CATEGORIES = /* SAFETY: 类型断言已复核 */ [
 export type WorkflowCategory = (typeof WORKFLOW_CATEGORIES)[number];
 
 /* ── 图像侧（静态） ── */
-export interface WorkflowTypeDefinition {
+export type WorkflowTypeDefinition = {
   /** 所属一级分类 */
   category: WorkflowCategory;
   /** 缩写码，如 T2I / I2V / S2V */
@@ -37,7 +37,7 @@ export interface WorkflowTypeDefinition {
   label: string;
   /** 更详细的子分类标签（可选） */
   subCategory?: string;
-}
+};
 
 export const IMAGE_WORKFLOW_TYPES: Array<WorkflowTypeDefinition> = [
   {

@@ -32,17 +32,17 @@ import { MAX_HISTORY_ENTRIES } from "~/lib/console/console-limits";
 import { fixed } from "~/lib/number-format";
 
 /** 一条**已跑过**的命令（本次会话的历史；只在内存里）。 */
-export interface ConsoleHistoryItem {
+export type ConsoleHistoryItem = {
   command: string;
   durationMs: number;
   ok: boolean;
   /** 结果文案（判据在控制器，视图不重算）。 */
   verdict: string;
-}
+};
 
 export type ConsolePhase = "idle" | "running" | "done" | "stopped";
 
-export interface ConsoleController {
+export type ConsoleController = {
   /** 命令是否可提交（非空 + 没在跑 + 不超长）。 */
   canRun: boolean;
   /** 清空输出与结论（保留历史）。 */
@@ -79,7 +79,7 @@ export interface ConsoleController {
   verdict: string;
   /** 结论是否为「成功」（决定颜色）。 */
   verdictOk: boolean;
-}
+};
 
 /** 用时的人话（<1s 给毫秒、<60s 给秒、再往上给分秒）。
  *

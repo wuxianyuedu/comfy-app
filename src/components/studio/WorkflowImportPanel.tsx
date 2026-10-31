@@ -23,11 +23,11 @@ const IMPORT_LABEL_CLASS = "text-ink-soft mb-1 text-xs font-medium";
 
 type ImportState = ReturnType<typeof useWorkflowImport>;
 
-interface WorkflowImportPanelProps {
+type WorkflowImportPanelProps = {
   onClose: () => void;
   onImport: () => void;
   state: ImportState;
-}
+};
 
 export function WorkflowImportPanel({ state, onClose, onImport }: WorkflowImportPanelProps) {
   const {

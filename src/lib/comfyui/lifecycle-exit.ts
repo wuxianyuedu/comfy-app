@@ -31,7 +31,7 @@ import fs from "node:fs";
 import { formatDurationMs } from "~/lib/time-format";
 import type { PidLookup } from "./proc-detect";
 
-export interface ComfyExitFacts {
+export type ComfyExitFacts = {
   /** 退出码（`exit` / `close` 事件的第一个参数）。 */
   code: number | null;
   /** 会话模式 —— 决定「拿不到退出码」这句话该怎么讲。
@@ -46,16 +46,16 @@ export interface ComfyExitFacts {
   stopRequested: boolean;
   /** 进程存活时长（毫秒）；未知为 null。 */
   uptimeMs: number | null;
-}
+};
 
-export interface ComfyExitReport {
+export type ComfyExitReport = {
   /** 值得额外做的动作（null = 不需要）。 */
   advice: string | null;
   /** 结构化明细（key=value，便于事后 grep 与贴给别人看）。 */
   detail: string;
   /** 一句话结论（进 `[exit]` 行与会话横幅）。 */
   reason: string;
-}
+};
 
 /** 时长 → `1h02m` / `3m20s` / `42s`（日志里读着顺即可，不做精度承诺）。
  *  档位定义在 `~/lib/time-format`（同一件事只有一处），这里只补本模块的话术：
@@ -142,7 +142,7 @@ export function describeComfyExit(facts: ComfyExitFacts): ComfyExitReport {
 
 /* ── 保活模式的退出监督 ─────────────────────────────────────────────── */
 
-export interface ComfyExitWatcherDeps {
+export type ComfyExitWatcherDeps = {
   clearTimer?: (handle: ReturnType<typeof setInterval>) => void;
   /** 查「跑着 main.py 的进程」的 pid；区分「真的查不到」(`failed=false`) 与
    *  「查询本身失败」(`failed=true`，如 PowerShell 超时)。后者证据不足，
@@ -161,7 +161,7 @@ export interface ComfyExitWatcherDeps {
   onExit: (facts: { pid: number | null; uptimeMs: number | null }) => void;
   /** 定时器工厂（测试传入可控实现）。 */
   setTimer?: (fn: () => void, ms: number) => ReturnType<typeof setInterval>;
-}
+};
 
 /**
  * 轮询进程表，发现「跑着 main.py 的进程」消失时报一次退出。
@@ -263,14 +263,14 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
 }
 
 /** 一次会话的落盘标记（`log/services/comfyui-last-session.json`）。 */
-export interface ComfySessionMark {
+export type ComfySessionMark = {
   /** 退出记录；null = **有开始没结束**。 */
   exited: { at: string; reason: string } | null;
   mode: ComfyExitFacts["mode"];
   pid: number | null;
   /** 会话开始时刻（ISO）。 */
   startedAt: string;
-}
+};
 
 /**
  * 对账：上一次会话是不是「有开始没结束」。

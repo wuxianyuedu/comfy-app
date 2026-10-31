@@ -46,13 +46,13 @@ const TARGET_VERB: Record<ExternalTarget, string> = {
  * `detail`），归一成这一份之后，调用点不必再记得「这个动作读哪个字段」——
  * 那正是三族写法各自记错的地方。
  */
-export interface ExternalOpenResult {
+export type ExternalOpenResult = {
   /** 给用户看的说明。**成功也带** —— 一句「已交给系统浏览器」是用户唯一
    *  能确认「点了有反应」的证据（硬规则 4：失败路径必须有可见出口）。 */
   detail: string;
   /** 动作是否真的发出去了（不代表外部程序一定成功，见 `detail`）。 */
   ok: boolean;
-}
+};
 
 /** 本机目录打开助手（`comfyapp://` 协议）的接管状态。 */
 export type FolderHelperState = "unknown" | "handled" | "missing";

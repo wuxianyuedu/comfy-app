@@ -49,7 +49,7 @@ export type QueryScalar = string | number | boolean | null | undefined;
 
 export type QueryValue = QueryScalar | ReadonlyArray<QueryScalar>;
 
-export interface BuildQueryOptions {
+export type BuildQueryOptions = {
   /**
    * 空串是否也算「有这个参数」。
    *
@@ -58,7 +58,7 @@ export interface BuildQueryOptions {
    * 表示清空筛选），而此时 URL 里必须留下那个键。
    */
   keepEmpty?: boolean;
-}
+};
 
 /** 单值 → 字符串；不该写进查询串的返回 `null`（表示省略）。 */
 function encodeValue(

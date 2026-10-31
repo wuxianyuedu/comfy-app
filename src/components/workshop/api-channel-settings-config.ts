@@ -6,7 +6,7 @@ import type { ApiChannelKind } from "~/lib/workshop/api-channel-shared";
 /** 弹层内可选的两个通道，顺序即页签顺序。 */
 export const API_CHANNEL_KINDS: ReadonlyArray<ApiChannelKind> = ["image", "video"];
 
-export interface ApiChannelKindMeta {
+export type ApiChannelKindMeta = {
   /** 页签下方的一句说明，解释该通道的协议形态。 */
   hint: string;
   /** 模型名输入框的 placeholder。 */
@@ -14,7 +14,7 @@ export interface ApiChannelKindMeta {
   /** 请求路径输入框的 placeholder（各 provider 默认值不同）。 */
   pathPlaceholder: string;
   title: string;
-}
+};
 
 export const API_CHANNEL_KIND_META: Record<ApiChannelKind, ApiChannelKindMeta> = {
   image: {

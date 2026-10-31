@@ -22,7 +22,7 @@ import type { OptionGroup } from "~/lib/workshop/character-options";
  * 定位与关闭语义本就不该由每个调用点各写一遍。翻上/翻下、右边界收边、随触发
  * 元素滚动重定位全部交给 base-ui Positioner。
  */
-interface AttributeMultiSelectProps {
+type AttributeMultiSelectProps = {
   className?: string;
   disabled?: boolean;
   groups: Array<OptionGroup>;
@@ -31,7 +31,7 @@ interface AttributeMultiSelectProps {
   placeholder?: string;
   /** 当前已选中值（源即 Character 对应字段） */
   value: Array<string>;
-}
+};
 
 export function AttributeMultiSelect({
   label,

@@ -42,12 +42,12 @@ import {
  * 一次运行的订阅回调。**第一个参数永远是 taskId**：恢复路径下调用方手里
  * 没有它（那是上一次挂载的事），而日志累积与状态 patch 都要按它落。
  */
-export interface WorkflowRunHandlers {
+export type WorkflowRunHandlers = {
   onLog: (taskId: string, entry: TaskLogEntry) => void;
   onOutput: (taskId: string, output: SavedOutput) => void;
   onProgress: (taskId: string, pct: number, node?: TaskProgressNode) => void;
   onSettled: (taskId: string, result: { message?: string; ok: boolean }) => void;
-}
+};
 
 /**
  * 订阅一次运行的 SSE，并把**进度 / 产物 / 终态**同步进运行登记表。
@@ -94,12 +94,12 @@ export function watchWorkflowRun(taskId: string, handlers: WorkflowRunHandlers):
   });
 }
 
-export interface UseWorkflowRunResumeArgs {
+export type UseWorkflowRunResumeArgs = {
   handlers: WorkflowRunHandlers;
   /** 恢复哪个入口发起的运行（画布节点 / 工坊封装各自独立）。 */
   source: WorkflowRunSource;
   workflowId: string;
-}
+};
 
 /**
  * 挂载时从运行登记表恢复本入口最近一次运行的视角（见文件头）。

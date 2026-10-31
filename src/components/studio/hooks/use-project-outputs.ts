@@ -9,7 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { useTRPC } from "~/trpc/react";
 
-export interface ProjectOutputImage {
+export type ProjectOutputImage = {
   height: number | null;
   id: string;
   isCover: boolean;
@@ -17,9 +17,9 @@ export interface ProjectOutputImage {
   mediaType: string;
   seed: string | null;
   width: number | null;
-}
+};
 
-export interface ProjectOutputItem {
+export type ProjectOutputItem = {
   cfg: number | null;
   checkpoint: string | null;
   createdAt: string;
@@ -37,14 +37,14 @@ export interface ProjectOutputItem {
   steps: number | null;
   type: string;
   workflowName: string | null;
-}
+};
 
-export interface ProjectOutputsController {
+export type ProjectOutputsController = {
   loading: boolean;
   outputs: Array<ProjectOutputItem>;
   refetch: () => void;
   refetching: boolean;
-}
+};
 
 export function useProjectOutputs(projectId: string | null): ProjectOutputsController {
   const trpc = useTRPC();

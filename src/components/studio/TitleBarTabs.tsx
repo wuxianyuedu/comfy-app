@@ -35,7 +35,7 @@ import { useTitleBarDrag, useWindowMaximized, WindowControls } from "./WindowCon
 import { Button } from "~/components/ui/button";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 
-interface TitleBarTabsProps {
+type TitleBarTabsProps = {
   activeTabId: string;
   activeViewKey?: string;
   onActivate: (id: string) => void;
@@ -53,7 +53,7 @@ interface TitleBarTabsProps {
    * 不传时行为与从前一致。
    */
   viewTabs?: Array<ViewTab>;
-}
+};
 
 /** 单个页签：标题 + 可选关闭按钮（点击不触发拖拽，见 data-no-drag）。 */
 function TitleBarTab({

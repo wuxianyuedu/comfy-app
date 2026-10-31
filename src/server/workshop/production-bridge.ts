@@ -24,7 +24,7 @@ import { production, project, user, type Production } from "~/server/db/schema";
 import { workshopDb } from "./db";
 
 /** 会话里「属于界面真值」的内容面：绑定后由 production 承载。 */
-export interface SessionContent {
+export type SessionContent = {
   characters: Array<Character>;
   logline: string;
   scenes: Array<Scene>;
@@ -33,7 +33,7 @@ export interface SessionContent {
   title: string;
   tone: string;
   type: string;
-}
+};
 
 /** 解析会话内容的归属用户：显式 id 必须存在；缺省取本机最早的账号（确定性）。 */
 export async function resolveOwnerUserId(explicit: string | null): Promise<string> {

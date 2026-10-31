@@ -21,14 +21,14 @@ import {
  * 名字（`missing.png`）—— 后者才是这张 story 的主角。
  */
 /** Args 的形状 = 可调的那几个（`src` 由注入层给，不进 Args）。 */
-interface StoryArgs {
+type StoryArgs = {
   alt?: string;
   className?: string;
   /** 失败兜底形态：`placeholder`（默认）/ `none`；自定义节点走 `render`。 */
   fallback?: MediaThumbnailProps["fallback"];
   /** 注入层的数据源旋钮（真文件的名字，见 `.storybook/data-sources.tsx`）。 */
   sourceName: MediaSourceName;
-}
+};
 
 /** 适配件：把 `sourceName` 经注入层解析成真地址再交给真组件（见 `data-sources.tsx`）。 */
 function ThumbnailWithSource({ sourceName, ...rest }: StoryArgs) {

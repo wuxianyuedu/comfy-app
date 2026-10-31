@@ -28,10 +28,10 @@ import { type ViewTab } from "./workspace-tabs";
 import { ViewActionsProvider } from "./ViewActions";
 
 /** 侧栏底部「项目」分组里列出的一条项目（只需 id + 展示名）。 */
-export interface SidebarProject {
+export type SidebarProject = {
   id: string;
   name: string;
-}
+};
 
 /**
  * 一条项目的**缩略图标**。
@@ -65,7 +65,7 @@ function ProjectGlyph() {
   );
 }
 
-export interface AppShellProps {
+export type AppShellProps = {
   /** 当前视图（决定侧栏高亮与顶部标题）。 */
   active: WorkspaceView;
   /** 当前活跃项目 id。
@@ -102,7 +102,7 @@ export interface AppShellProps {
   /** 底部「项目」分组列出的项目（来自 canvas-store）。 */
   projects: Array<SidebarProject>;
   viewTabs?: Array<ViewTab>;
-}
+};
 
 /**
  * 应用外壳 —— 左侧栏（官方 `ui/sidebar`）+ 顶部工具条（`TopBar`）+ 主内容。

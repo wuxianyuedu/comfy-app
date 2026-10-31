@@ -30,7 +30,7 @@ import {
   WorkflowStaticChip,
 } from "~/components/studio/workflow-form/WorkflowNodeParts";
 
-export interface LibraryHostCardProps {
+export type LibraryHostCardProps = {
   /** 生成按钮。 */
   actions: React.ReactNode;
   effectiveMode: string | null;
@@ -51,7 +51,7 @@ export interface LibraryHostCardProps {
   statusLabel: string;
   taskType: string;
   workflowName: string;
-}
+};
 
 export function LibraryHostCard({
   workflowName,

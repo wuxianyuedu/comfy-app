@@ -8,11 +8,11 @@ import { isRecord } from "~/lib/is-record";
 /** 探测超时：Ollama 没起时连接会挂住，宁可早失败也别让页面一直转圈。 */
 const PROBE_TIMEOUT_MS = 3000;
 
-export interface OllamaModel {
+export type OllamaModel = {
   modified_at: string;
   name: string;
   size: number;
-}
+};
 
 export type OllamaProbe = { models: Array<OllamaModel>; up: true } | { up: false };
 

@@ -50,7 +50,7 @@ function logBadgeLabel(kind: ExtractLogEntry["kind"]): string {
   }
 }
 
-interface ExtractToolbarProps {
+type ExtractToolbarProps = {
   busy: boolean;
   /** 完整下拉选项值（local::<model> | remote::<model>） */
   channelValue: string;
@@ -74,7 +74,7 @@ interface ExtractToolbarProps {
   statusText?: string;
   /** 区块标题，如「从剧本提取角色」 */
   title: string;
-}
+};
 
 /** 剧本提取区块：分组模型下拉（工具/本地/远端）+ 提取按钮 + 外部导入。
  * 选完模型点「提取」即开始；模型通道的提取过程实时展示在下方。 */

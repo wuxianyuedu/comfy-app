@@ -74,7 +74,7 @@ import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 /** 回调用「复制结果」这一件事：`true` = 已进剪贴板。 */
 export type CopyFeedback = (ok: boolean) => void;
 
-export interface UseCopyFeedbackOptions {
+export type UseCopyFeedbackOptions = {
   /**
    * 失败之后的反馈。
    *
@@ -85,7 +85,7 @@ export interface UseCopyFeedbackOptions {
   onFailure?: CopyFeedback | "silent";
   /** 成功之后的反馈（不给 = 成功静默，是有意为之的常见选择）。 */
   onSuccess?: CopyFeedback;
-}
+};
 
 /**
  * 复制一段**文本**，并把成败交给调用处的反馈。
@@ -109,7 +109,7 @@ export type CopyProducer = (produce: () => Promise<boolean>) => void;
  * 见 {@link useCopyResult}：那种落点要的是「不报反馈、只给结果」，
  * 把两件事塞进同一个返回值会让调用处分不清这次到底报没报。
  */
-export interface CopyController extends CopyRunner, CopyProducer {}
+export type CopyController = {} & CopyRunner & CopyProducer;
 
 /**
  * 复制失败的提示文案 —— 出口给上半句与下半句，调用处只补「可复制物在哪」。

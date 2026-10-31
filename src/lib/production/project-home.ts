@@ -49,7 +49,7 @@ function isStageDone(stage: ProductionStage, view: ProductionRunView): boolean {
 }
 
 /** 一个阶段在主页上的展示态。 */
-export interface ProjectStageRow {
+export type ProjectStageRow = {
   /** 当前游标是否停在这个阶段（未完成时才可能为真）。 */
   current: boolean;
   /** 「3/8 镜」这类计数；无可报计数时为空串（不编造 0/0）。 */
@@ -57,7 +57,7 @@ export interface ProjectStageRow {
   done: boolean;
   id: ProductionStage;
   label: string;
-}
+};
 
 function stageDetail(stage: ProductionStage, view: ProductionRunView): string {
   const total = view.shots.length;
@@ -84,7 +84,7 @@ function stageDetail(stage: ProductionStage, view: ProductionRunView): string {
 }
 
 /** 主页要展示的项目状态总览。 */
-export interface ProjectOverview {
+export type ProjectOverview = {
   characterCount: number;
   clipDoneCount: number;
   /** 已完成阶段数 / 总数（进度条用）。 */
@@ -101,7 +101,7 @@ export interface ProjectOverview {
   /** 六个阶段按流水线顺序。 */
   stages: Array<ProjectStageRow>;
   totalCount: number;
-}
+};
 
 /**
  * production 视图 + 持久化进度 → 主页状态总览。

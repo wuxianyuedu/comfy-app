@@ -24,14 +24,14 @@ import { tailWindowAppend } from "~/lib/page-window";
  * 累积侧先截，长任务（几千条 progress 行）也不会把 state 撑大。 */
 const STREAM_MAX_LOGS = 300;
 
-export interface TaskLogStreamState {
+export type TaskLogStreamState = {
   /** 已收到的日志（新在后，已按上限截尾）。 */
   logs: Array<TaskLogEntry>;
   /** 终态落定信息；null = 还没落定（排队 / 在跑）。 */
   settled: { message?: string; ok: boolean } | null;
   /** 收到过进度帧吗：排队中的任务开跑后，徽标从「排队中」翻「运行中」用。 */
   started: boolean;
-}
+};
 
 export function useTaskLogStream(taskId: string | null): TaskLogStreamState {
   const [logs, setLogs] = useState<Array<TaskLogEntry>>([]);

@@ -95,7 +95,7 @@ vi.mock("~/lib/log/log-file-client", () => {
   };
 });
 
-interface Behavior {
+type Behavior = {
   /** comfyui.status 返回的 base（非空即「运行中」，供「打开查看」使用）。 */
   comfyBase?: string | null;
   /** comfyEmbeddable 探测结论（决定页签里渲染 iframe 还是可读说明）。 */
@@ -110,7 +110,7 @@ interface Behavior {
   /** comfyui.status 返回的**已保存**路径（启动动作实际会用的那一条）。 */
   comfyPath?: string;
   comfyStart?: { detail: string; ok: boolean };
-}
+};
 
 let behavior: Behavior = {};
 /* comfyStatus 端点的调用次数：「事件到了要立刻重问一次」那条判据靠它数。 */

@@ -32,7 +32,7 @@ import { layoutRows, LOG_ROW_SINGLE, scrollHeightOf, visibleRange } from "./log-
  * **绝对下标**（同一行在窗口滑动后下标不变，便于稳定 key 与测试断言）。 */
 export type RenderLogRow<T> = (entry: T, index: number) => ReactNode;
 
-export interface VirtualLogListProps<T> {
+export type VirtualLogListProps<T> = {
   className?: string;
   /** 条目为空时展示的内容（通常是一个居中占位）。 */
   emptySlot?: ReactNode;
@@ -54,7 +54,7 @@ export interface VirtualLogListProps<T> {
   watch?: unknown;
   /** 折行估高（默认 true，与 `LogPanel` 一致：`wrap-break-word whitespace-pre-wrap`）。 */
   wrap?: boolean;
-}
+};
 
 export function VirtualLogList<T>({
   entries,

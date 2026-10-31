@@ -10,11 +10,11 @@ import type { ActionReport } from "~/lib/async-action";
 
 import { useImageRedraw, type ImageRedrawController } from "./use-image-redraw";
 
-export interface ImageRedrawClientInput {
+export type ImageRedrawClientInput = {
   parentTaskId: string;
   projectId?: string | null;
   prompt: string;
-}
+};
 
 /** 视图层唯一入口：给提示词 / 归属 / 反馈通道，拿回完整控制器。 */
 export function useImageRedrawClient(

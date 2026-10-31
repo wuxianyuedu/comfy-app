@@ -35,13 +35,13 @@ export type ConsoleClientEvent =
     }
   | { message: string; type: "error" };
 
-export interface RunConsoleOptions {
+export type RunConsoleOptions = {
   command: string;
   /** 每收到一帧回调一次（**按到达顺序**，调用方不要在这里做重排）。 */
   onEvent: (event: ConsoleClientEvent) => void;
   /** 中止（用户点「停止」/ 关界面）：会断开请求，服务端据此回收整棵进程树。 */
   signal?: AbortSignal;
-}
+};
 
 /** 一次请求的结局：跑完 / 被拒 / 断了，三种都要能区分（界面文案不同）。 */
 export type RunConsoleOutcome =

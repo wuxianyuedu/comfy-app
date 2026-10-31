@@ -27,20 +27,20 @@ import { useTRPC } from "~/trpc/react";
 import type { ActionReport } from "~/lib/async-action";
 
 /** 一份可选备份（与服务端 `listBackupEntries` 的形状同源）。 */
-export interface BackupEntry {
+export type BackupEntry = {
   /** 文件名里的时刻（毫秒）；形态认不出时 null。 */
   at: number | null;
   name: string;
   size: number;
-}
+};
 
 /** 待恢复标记（写入后到下次启动之间一直有效）。 */
-export interface PendingRestore {
+export type PendingRestore = {
   at: string | null;
   file: string;
-}
+};
 
-export interface UseSettingsBackup {
+export type UseSettingsBackup = {
   backupBusy: boolean;
   backups: Array<BackupEntry>;
   createBackupNow: () => Promise<void>;
@@ -49,7 +49,7 @@ export interface UseSettingsBackup {
   pending: PendingRestore | null;
   restoreBusy: boolean;
   restoreFrom: (name: string) => Promise<void>;
-}
+};
 
 export function useSettingsBackup({
   statusQueriesEnabled,

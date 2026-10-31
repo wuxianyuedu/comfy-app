@@ -36,7 +36,7 @@ export type RunStatus =
   | "cancelled";
 
 /** 一条执行日志：引擎每执行一个动作追加一条，供 CLI / 控制条展示「跑了什么」。 */
-export interface RunStep {
+export type RunStep = {
   /** 人读摘要（产出了什么 / 失败原因）。 */
   detail: string;
   /** 动作 kind（generate_script / extract_characters / plan_storyboard / render_images / render_film / done / failed…）。 */
@@ -44,9 +44,9 @@ export interface RunStep {
   ok: boolean;
   /** ISO 时间戳。 */
   ts: string;
-}
+};
 
-export interface ProductionRun {
+export type ProductionRun = {
   approvalMode: ApprovalMode;
   /**
    * 自动评审（Phase 8 · P8-1c）：生图后逐镜 AI 评审，不合格自动抽卡重生成（换种子），有界重试。
@@ -93,7 +93,7 @@ export interface ProductionRun {
   storyboardScriptDigest: string;
   updatedAt: string;
   videoWorkflowId: string;
-}
+};
 
 export const DEFAULT_PRODUCTION_RUN: ProductionRun = {
   status: "idle",
@@ -223,7 +223,7 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
 }
 
 /** 规划器消费的镜头视图（从 `production.shots` 的未知项归一）。 */
-export interface ShotRunView {
+export type ShotRunView = {
   hasClip: boolean;
   hasImage: boolean;
   /** 人工评分 0~5（#2480，校准读数的人侧输入）；没评 → null/缺省。 */
@@ -233,10 +233,10 @@ export interface ShotRunView {
   id: string;
   /** 用户每改一次该镜就 +1（写入点在 P6-2/P6-3）；缺省 0。 */
   rev: number;
-}
+};
 
 /** 由整份 production 归一的规划视图。 */
-export interface ProductionRunView {
+export type ProductionRunView = {
   characterCount: number;
   filmRendered: boolean;
   hasScript: boolean;
@@ -245,16 +245,16 @@ export interface ProductionRunView {
   /** 剧本人工裁决（#2480）：`digest` 快照与当前剧本指纹相等才新鲜（有效）。没裁决过 → null/缺省。 */
   scriptHumanVerdict?: HumanVerdict | null;
   shots: Array<ShotRunView>;
-}
+};
 
 /** production 行的最浅读法（字段都可能是未知 JSON，这里宽容读）。 */
-export interface ProductionLike {
+export type ProductionLike = {
   characters?: unknown;
   progress?: unknown;
   scriptMarkdown?: unknown;
   scriptReview?: unknown;
   shots?: unknown;
-}
+};
 
 /**
  * 剧本指纹（轻量 djb2 十六进制，纯 JS、无 Node 依赖——本文件同时被客户端消费）：

@@ -25,7 +25,7 @@ import { errorMessage } from "~/lib/error-message";
 import { withTimeoutResult, sleep } from "~/lib/with-timeout";
 import { Button } from "~/components/ui/button";
 
-interface Props {
+type Props = {
   apiChannels: ApiChannelsView | null;
   /** 取消一个进行中的本机视频任务（控制器统一出口）。 */
   onCancelShot: (shot: Shot) => void;
@@ -41,7 +41,7 @@ interface Props {
   /** 选定的视频工作流 id：本地通道的唯一可执行来源（内置模板已移除）。
    * 按封装口径暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
   workflowId: string;
-}
+};
 
 type Channel = "local" | "api";
 

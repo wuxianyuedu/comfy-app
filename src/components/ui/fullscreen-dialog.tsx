@@ -26,7 +26,7 @@ import { cn } from "~/lib/utils";
 import { FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS } from "~/lib/full-screen-layer";
 import { dialogBackdropClass } from "~/components/ui/dialog-overlay";
 
-export interface FullScreenDialogProps {
+export type FullScreenDialogProps = {
   children: ReactNode;
   /** 该视图自身的布局 class（`bg-bg` 之外的补充）。 */
   className?: string;
@@ -36,7 +36,7 @@ export interface FullScreenDialogProps {
   open: boolean;
   /** 面板内定位层的 z-index 工具类，须高于它要盖住的那层浮层（默认 `z-100`）。 */
   zClass?: string;
-}
+};
 
 export function FullScreenDialog({
   open,

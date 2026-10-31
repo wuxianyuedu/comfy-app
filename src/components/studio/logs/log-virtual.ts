@@ -132,15 +132,15 @@ export function countLines(message: string, availableWidth = 0): number {
 }
 
 /** 一条日志在列表里的位置与高度（见 {@link layoutRows}）。 */
-export interface RowLayout {
+export type RowLayout = {
   /** 该行的估算高度（像素）。 */
   size: number;
   /** 该行上边缘距列表顶部（不含顶部留白）的像素数。 */
   start: number;
-}
+};
 
 /** {@link layoutRows} 的两类**按 id 点名**的行（见下方说明）。 */
-export interface LogLayoutOptions {
+export type LogLayoutOptions = {
   /** 已展开的行 id：固定为 {@link LOG_ROW_EXPANDED}。 */
   expandedIds?: ReadonlySet<string>;
   /**
@@ -152,7 +152,7 @@ export interface LogLayoutOptions {
    * 参与换行估高。
    */
   singleLineIds?: ReadonlySet<string>;
-}
+};
 
 /**
  * 估算整页每一行的位置与高度。

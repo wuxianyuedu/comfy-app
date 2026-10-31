@@ -33,7 +33,7 @@ import { useWorkflowRunResume, watchWorkflowRun } from "./use-workflow-run-resum
 import { readFileAsDataUrl } from "~/lib/file-io";
 import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
 
-export interface EncapsulationTestRunArgs {
+export type EncapsulationTestRunArgs = {
   /** 该模式**生效的契约口清单**（含作者自定义的口）。
    *
    *  组载荷要按它认口：不传就等于只认内置契约，作者给自定义口填的值落不下去
@@ -44,9 +44,9 @@ export interface EncapsulationTestRunArgs {
   workflowId: string;
   /** 展示名（工坊下拉 / 徽标用的那个）。 */
   workflowName: string;
-}
+};
 
-export interface EncapsulationTestRunController {
+export type EncapsulationTestRunController = {
   /** 失败原因（每次都重置）。 */
   error: string;
   /** 0–100（无进度帧时为 0）。 */
@@ -66,7 +66,7 @@ export interface EncapsulationTestRunController {
   /** 把用户选的本地图片送进 ComfyUI 输入目录，返回可直接落进工作流的文件名。
    *  读文件与上传都在这一层（§17.2 第②层），视图只拿结果字符串。 */
   uploadImage: (file: File) => Promise<string>;
-}
+};
 
 /** 流程测试的运行编排：登记进共享运行态 + 订阅 SSE。 */
 export function useEncapsulationTestRun({
