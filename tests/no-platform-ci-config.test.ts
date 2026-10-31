@@ -386,6 +386,126 @@ const PR_MOVED_TO_DAILY: Array<[string, string, string, string]> = [
 ];
 
 /**
+ * 门格总账（#2640，2026-10-31）：每一格「在哪个档跑」的权威登记。
+ *
+ * 为什么要有这一份：§13.5.30 把「某一格该属哪一级」判成工程判断（三条门槛机器判不了），
+ * 但「撤出某一档后必须登记在册、且登记的名字不许还在跑」可以判 —— 否则「悄悄删掉」与
+ * 「降级登记」在 `.cnb.yml` 里逐字同形。下面的「门格总账」判据做两件事：
+ *   ① 三份清单（PR / push / 每日）各自 ⇄ 总账双向相等（清单多/少一格而总账没同批改 ⇒ 红）；
+ *   ② 记成 `retired` 的格：不许再出现在任何清单里（降级≠删除），且必须带理由。
+ * 三条门槛（确定性 / 快 / 本地可复现）仍只在规范 §13.5.30 由人判，本账不碰。
+ */
+type GateTier = "PR" | "push" | "daily" | "retired";
+interface LedgerEntry {
+  name: string;
+  tier: GateTier;
+  note?: string;
+}
+const GATE_TIER_LEDGER: Array<LedgerEntry> = [
+  // ── PR 档（COMFYAPP_CI_GATES）──
+  { name: "镜像身份", tier: "PR" },
+  { name: "工作区复用读数", tier: "PR" },
+  { name: "缓存槽读数", tier: "PR" },
+  { name: "环境前提", tier: "PR" },
+  { name: "Install dependencies", tier: "PR" },
+  { name: "分支守卫", tier: "PR" },
+  { name: "提交声明核对", tier: "PR" },
+  { name: "同步数据库表结构", tier: "PR" },
+  { name: "类型检查", tier: "PR" },
+  { name: "受影响用例", tier: "PR" },
+  { name: "标题行让位", tier: "PR" },
+  { name: "文件结构硬规则", tier: "PR" },
+  { name: "跨平台动作对照", tier: "PR" },
+  { name: "import 别名统一", tier: "PR" },
+  { name: "ComfyUI 端口口径", tier: "PR" },
+  { name: "内联样式注入", tier: "PR" },
+  { name: "跨文件重复块", tier: "PR" },
+  { name: "函数长度 TS", tier: "PR" },
+  { name: "函数长度 Rust", tier: "PR" },
+  { name: "模块循环依赖", tier: "PR" },
+  { name: "端口推导跨语言一致性", tier: "PR" },
+  { name: "CHANGELOG 碎片", tier: "PR" },
+  { name: "主题色扫描", tier: "PR" },
+  { name: "UI/逻辑分离", tier: "PR" },
+  { name: "lib Node-only 声明", tier: "PR" },
+  { name: "oxfmt 格式", tier: "PR" },
+  { name: "格式化提交分离", tier: "PR" },
+  { name: "覆盖率上报", tier: "PR" },
+  { name: "core 骨架单一事实源", tier: "PR" },
+  { name: "零消费导出", tier: "PR" },
+  { name: "core 出口纪律与基类纯度", tier: "PR" },
+  { name: "重档静态判据", tier: "PR" },
+  { name: "固定结构用例", tier: "PR" },
+  // ── push 档（COMFYAPP_CI_PUSH_GATES，树级校验档）──
+  { name: "合并形态复核", tier: "push" },
+  { name: "安装依赖", tier: "push" },
+  { name: "生成态文档与源同步", tier: "push" },
+  { name: "API 文档生成与自检", tier: "push" },
+  { name: "文档引用与权威源一致", tier: "push" },
+  { name: "工作区出处", tier: "push" },
+  // ── 每日档（COMFYAPP_CI_DAILY_GATES）──
+  { name: "每日失败立案", tier: "daily" },
+  { name: "每日令牌权限读数", tier: "daily" },
+  { name: "每日工具链自证", tier: "daily" },
+  { name: "每日安装依赖", tier: "daily" },
+  { name: "每日 Python 可用性", tier: "daily" },
+  { name: "每日 Python 探针读数", tier: "daily" },
+  { name: "每日同步数据库表结构", tier: "daily" },
+  { name: "每日新鲜度账", tier: "daily" },
+  { name: "每日生产构建", tier: "daily" },
+  { name: "每日 ESLint 零警告", tier: "daily" },
+  { name: "每日浏览器安装", tier: "daily" },
+  { name: "每日全量E2E", tier: "daily" },
+  { name: "每日单元测试", tier: "daily" },
+  // ── retired（降级登记，必须带理由；§13.5.30）──
+  {
+    name: "工具链自证",
+    tier: "retired",
+    note: "2026-10-19 撤到每日档（每日工具链自证）：只判节点事实，不必每 PR 判（§13.5.23）",
+  },
+  {
+    name: "Python 可用性",
+    tier: "retired",
+    note: "同上，撤到每日 Python 可用性",
+  },
+  {
+    name: "Python 探针读数",
+    tier: "retired",
+    note: "同上，撤到每日 Python 探针读数",
+  },
+  {
+    name: "浏览器安装",
+    tier: "retired",
+    note: "同上，撤到每日浏览器安装：PR 上已无一步用浏览器（§13.5.23）",
+  },
+  {
+    name: "ESLint 零警告",
+    tier: "retired",
+    note: "起一堆子进程、并行 PR 下读数不可信，撤到每日 ESLint 零警告（§13.5.21）",
+  },
+  {
+    name: "新鲜度账",
+    tier: "retired",
+    note: "主体=master，判的是主干调度，撤到每日新鲜度账（ISSUE #2300）",
+  },
+  {
+    name: "生产构建",
+    tier: "retired",
+    note: "2026-10-18 撤到每日生产构建，PR 上一条都不剩（§13.5.23）",
+  },
+  {
+    name: "单元测试",
+    tier: "retired",
+    note: "撤到每日单元测试：全量单测只在 01:00 跑（§13.5.23）",
+  },
+  {
+    name: "E2E 关键流程",
+    tier: "retired",
+    note: "2026-10-19 撤成每日全量E2E：整档不带 --grep，@critical 是其子集",
+  },
+];
+
+/**
  * **同一份实现长在另一条流水线上**的那几格（另一档的名字 → PR 的名字），比的是逐字同形。
  *
  * 名字不同是刻意的（按名字取块的解析器会撞车），所以「同一件事」只能由 script 相同来保证。
@@ -2861,6 +2981,49 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
           `「${dailyName}」丢了 ${flag} —— 它与别的格共用同一份脚本，是这一面旗标把它分成另一格`,
         ).toContain(flag);
       }
+    }
+  });
+
+  it("门格总账：每一格的档位登记 ⇄ 三份清单实际在跑的格名（双向相等，#2640）", () => {
+    /* §13.5.30 把「某一格该属哪一级」判成工程判断（三条门槛机器判不了），但「撤出某一档
+     * 后必须登记在册、且登记的名字不许还在跑」可以判。这份 `GATE_TIER_LEDGER` 就是那个
+     * 册子（每格的档位归属手写登记）。下面做两件事：
+     *   ① 三份清单各自 ⇄ 总账双向相等 —— 清单上多/少了一格而总账没同批改，或总账漏登记，
+     *      都红（这就是「清单↔流水线」双向判据在「两边一起被删」时仍绿的那一个洞：两边
+     *      同烧 = 全绿，而格其实谁都不判了）；
+     *   ② retired 的格不许再出现在任何清单里（降级≠删除），且必须带理由。 */
+    const text = readRegisteredConfig();
+    const prOrder = new Set(registeredGateOrder(text));
+    const pushOrder = new Set(registeredPushGateOrder(text));
+    const dailyOrder = new Set(registeredDailyGateOrder(text));
+    const running = new Set([...prOrder, ...pushOrder, ...dailyOrder]);
+
+    const tiers: Array<[GateTier, Set<string>, string]> = [
+      ["PR", prOrder, "COMFYAPP_CI_GATES"],
+      ["push", pushOrder, "COMFYAPP_CI_PUSH_GATES"],
+      ["daily", dailyOrder, "COMFYAPP_CI_DAILY_GATES"],
+    ];
+    for (const [tier, actual, envKey] of tiers) {
+      const booked = new Set(
+        GATE_TIER_LEDGER.filter((e) => e.tier === tier).map((e) => e.name),
+      );
+      expect(
+        [...booked].sort(),
+        `门格总账记成 ${tier} 档的格 ⇄ ${envKey} 实际在跑的格名不一致（` +
+          "多/少了一格却没同批改总账，或登记漏了这一格）",
+      ).toEqual([...actual].sort());
+    }
+
+    for (const entry of GATE_TIER_LEDGER.filter((e) => e.tier === "retired")) {
+      expect(
+        running.has(entry.name),
+        `「${entry.name}」记成 retired（降级登记）却仍出现在某份清单里 —— ` +
+          "降级≠删除，撤档必须同批改总账；否则与「悄悄删掉」逐字同形（§13.5.30）",
+      ).toBe(false);
+      expect(
+        (entry.note ?? "").trim(),
+        `「${entry.name}」进了降级登记却没有理由 —— 观察登记必须写下「为什么撤、撤到哪」`,
+      ).not.toBe("");
     }
   });
 
