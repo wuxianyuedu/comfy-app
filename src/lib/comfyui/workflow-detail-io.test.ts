@@ -344,7 +344,7 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
               type: "INT",
               isConnection: false,
               widget: { name: "value_1" },
-              widgetValue: 12345,
+              widgetValue: 12_345,
               ...rawExtra,
             },
           ],
@@ -363,7 +363,7 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
     );
     expect(result["1::widget::value_1"]!.label).toBe("随机种子");
     expect(result["1::widget::value_1"]!.type).toBe("INT");
-    expect(result["1::widget::value_1"]!.defaultValue).toBe(12345);
+    expect(result["1::widget::value_1"]!.defaultValue).toBe(12_345);
   });
 
   it("内部字段没有 label 时退到 localized，再退到字段名（不是别名）", async () => {

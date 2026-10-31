@@ -38,59 +38,40 @@ import { useWorkflowImport } from "./use-workflow-import";
 
 /** 列表首次拉取超过这个时长仍未返回，就认为「等太久了」：视图据此把
  *  「加载中」换成可重试的提示，而不是让用户对着空列表猜（见 hook 内注释）。 */
-export const LIST_STALL_MS = 8_000;
+export const LIST_STALL_MS = 8000;
 
-export interface WorkflowLibraryController {
-  /** 过滤后的已载入工作流。 */
-  workflows: Array<WorkflowRow>;
-  /** 过滤后的本地待载入项。 */
-  pendingRows: Array<PendingRow>;
-  sourceCounts: ReturnType<typeof countBySource>;
-  typeCounts: ReturnType<typeof countByType>;
-  /** 模型标签（用于模型筛选页签）。 */
-  modelTags: Array<{ id: string; name: string; count: number }>;
-  /* 筛选 / 搜索状态 */
-  search: string;
-  setSearch: (value: string) => void;
-  sourceFilter: SourceFilter;
-  setSourceFilter: (value: SourceFilter) => void;
-  typeFilter: TypeFilter;
-  setTypeFilter: (value: TypeFilter) => void;
-  modelFilter: string;
-  setModelFilter: (value: string) => void;
-  /* 选择 */
-  selectedId: string | null;
-  selectedRow: WorkflowRow | null;
-  setSelectedId: (id: string | null) => void;
-  /* 弹层开关 */
-  editingId: string | null;
-  setEditingId: (id: string | null) => void;
-  showModelManager: boolean;
-  setShowModelManager: (value: boolean) => void;
-  showImport: boolean;
-  toggleImport: () => void;
-  closeImport: () => void;
-  importState: ReturnType<typeof useWorkflowImport>;
-  /* 删除确认 */
-  pendingDelete: { id: string; name: string } | null;
-  deleting: boolean;
-  cancelDelete: () => void;
-  confirmDelete: (id: string) => Promise<void>;
-  /* 忙碌标志（由 `useItemAction` 给：id + 「这一条忙不忙」的判据） */
-  bundleBusy: string | null;
-  resyncBusy: string | null;
-  isBundleBusy: (id: string) => boolean;
-  isResyncBusy: (id: string) => boolean;
-  /** 单个待载入项的「载入中」标志 —— 列表按 id 查表。 */
-  pendingLoading: Record<string, boolean>;
+export type WorkflowLibraryController = {
   /* 错误：动作失败（不会自动消失） */
   actionError: string | null;
+  /* 忙碌标志（由 `useItemAction` 给：id + 「这一条忙不忙」的判据） */
+  bundleBusy: string | null;
+  cancelDelete: () => void;
+  closeImport: () => void;
+  confirmDelete: (id: string) => Promise<void>;
+  deleting: boolean;
+  /* 弹层开关 */
+  editingId: string | null;
+  handleDeleteClick: (id: string, name: string) => void;
+  handleDownload: (id: string, name: string) => Promise<void>;
+  handleEdit: (id: string) => void;
+  /** 关闭画布编辑器：清 editingId 并失效该工作流的详情缓存（ISSUE #288）。 */
+  handleEditorClose: () => void;
+  handleLoadPending: (pending: PendingRow) => Promise<void>;
+  handleResync: (id: string, name: string) => Promise<void>;
+  handleUse: (id: string, meta?: { name: string; taskType: string }) => void;
+  importState: ReturnType<typeof useWorkflowImport>;
+  isBundleBusy: (id: string) => boolean;
+  isResyncBusy: (id: string) => boolean;
+  /* 动作 */
+  load: () => void;
   /* 错误：列表拉取失败（重新拉取成功即消失） */
   loadError: string | null;
   /* 列表仍在首次拉取中（未失败、未拿到数据）。视图据此区分「加载中」与
    * 「真的没有」——否则加载卡住时界面显示的是「未找到匹配的工作流」，
    * 用户看到的是「工作流没了」。 */
   loading: boolean;
+  /** 模型标签变更后重新拉取（标签管理弹层关闭时由视图调用）。 */
+  loadModelTags: () => void;
   /* 首次拉取超时：服务在响应（HTTP 层通），但 tRPC 查询迟迟不 resolve。
    * 视图据此给可操作出口（重试 + 打开日志面板），不再无限转圈。 */
   loadStalled: boolean;
@@ -98,28 +79,47 @@ export interface WorkflowLibraryController {
    * 目录里没有工作流文件。服务端一直在返回 localRoots，此前前端把它丢掉了，
    * 于是空态只能说「还没有工作流」——用户看到的是「工作流全没了」。 */
   localRootsHint: string | null;
-  /* 动作 */
-  load: () => void;
-  refresh: () => void;
-  /** 模型标签变更后重新拉取（标签管理弹层关闭时由视图调用）。 */
-  loadModelTags: () => void;
-  handleUse: (id: string, meta?: { name: string; taskType: string }) => void;
-  /** 持久化工作流类型（modes + defaultMode，defaultMode 回写 taskType）。 */
-  patchModes: (id: string, modes: Array<string>, defaultMode: string) => Promise<void>;
+  modelFilter: string;
+  /** 模型标签（用于模型筛选页签）。 */
+  modelTags: Array<{ count: number; id: string; name: string }>;
   /** 持久化模型标签绑定。 */
   patchModelTags: (id: string, names: Array<string>) => Promise<void>;
-  /** 整体落库 workflowIO（详情预览的 seed「控件后行为」等参数级配置）。 */
-  patchWorkflowIO: (id: string, workflowIO: Record<string, unknown>) => Promise<void>;
+  /** 持久化工作流类型（modes + defaultMode，defaultMode 回写 taskType）。 */
+  patchModes: (id: string, modes: Array<string>, defaultMode: string) => Promise<void>;
   /** 整体落库 paramMap（详情预览拖线改对外参数落点）。 */
   patchParamMap: (id: string, paramMap: Record<string, unknown>) => Promise<void>;
-  handleDeleteClick: (id: string, name: string) => void;
-  handleDownload: (id: string, name: string) => Promise<void>;
-  handleResync: (id: string, name: string) => Promise<void>;
-  handleLoadPending: (pending: PendingRow) => Promise<void>;
-  handleEdit: (id: string) => void;
-  /** 关闭画布编辑器：清 editingId 并失效该工作流的详情缓存（ISSUE #288）。 */
-  handleEditorClose: () => void;
-}
+  /** 整体落库 workflowIO（详情预览的 seed「控件后行为」等参数级配置）。 */
+  patchWorkflowIO: (id: string, workflowIO: Record<string, unknown>) => Promise<void>;
+  /* 删除确认 */
+  pendingDelete: { id: string; name: string } | null;
+  /** 单个待载入项的「载入中」标志 —— 列表按 id 查表。 */
+  pendingLoading: Record<string, boolean>;
+  /** 过滤后的本地待载入项。 */
+  pendingRows: Array<PendingRow>;
+  refresh: () => void;
+  resyncBusy: string | null;
+  /* 筛选 / 搜索状态 */
+  search: string;
+  /* 选择 */
+  selectedId: string | null;
+  selectedRow: WorkflowRow | null;
+  setEditingId: (id: string | null) => void;
+  setModelFilter: (value: string) => void;
+  setSearch: (value: string) => void;
+  setSelectedId: (id: string | null) => void;
+  setShowModelManager: (value: boolean) => void;
+  setSourceFilter: (value: SourceFilter) => void;
+  setTypeFilter: (value: TypeFilter) => void;
+  showImport: boolean;
+  showModelManager: boolean;
+  sourceCounts: ReturnType<typeof countBySource>;
+  sourceFilter: SourceFilter;
+  toggleImport: () => void;
+  typeCounts: ReturnType<typeof countByType>;
+  typeFilter: TypeFilter;
+  /** 过滤后的已载入工作流。 */
+  workflows: Array<WorkflowRow>;
+};
 
 /** 列表数据与全部交互状态 —— 见文件头注释的分层说明。 */
 export function useWorkflowLibrary(
@@ -213,7 +213,9 @@ export function useWorkflowLibrary(
   const [loadStalled, setLoadStalled] = useState(false);
   const awaitingData = listQ.isLoading || listQ.isFetching;
   useEffect(() => {
-    if (!awaitingData || listQ.data) return;
+    if (!awaitingData || listQ.data) {
+      return;
+    }
     const timer = setTimeout(() => setLoadStalled(true), LIST_STALL_MS);
     return () => clearTimeout(timer);
   }, [awaitingData, listQ.data]);
@@ -222,7 +224,9 @@ export function useWorkflowLibrary(
      * 不是常驻状态；下一次拉取若又卡住会重新点亮。
      * 后置到 render 提交后执行（规范 08 §8.6 写法二）：effect 体里同步
      * setState 会被 React 19 的 set-state-in-effect 规则拦下。 */
-    if (!listQ.data && !listQ.isError) return;
+    if (!listQ.data && !listQ.isError) {
+      return;
+    }
     const timer = setTimeout(() => setLoadStalled(false), 0);
     return () => clearTimeout(timer);
   }, [listQ.data, listQ.isError]);
@@ -231,12 +235,16 @@ export function useWorkflowLibrary(
    *  用快照比对避免同一份数据反复 setState。 */
   const lastSyncedRef = useRef<string>("");
   useEffect(() => {
-    if (!listQ.data) return;
+    if (!listQ.data) {
+      return;
+    }
     const snapshot = JSON.stringify({
       wf: listQ.data.workflows ?? [],
       pend: listQ.data.localPending ?? [],
     });
-    if (snapshot === lastSyncedRef.current) return;
+    if (snapshot === lastSyncedRef.current) {
+      return;
+    }
     lastSyncedRef.current = snapshot;
     setWorkflows(listQ.data.workflows ?? []);
     setLocalPending(listQ.data.localPending ?? []);
@@ -257,9 +265,9 @@ export function useWorkflowLibrary(
   const modelTags = useMemo(
     () =>
       /* SAFETY: 类型断言已复核 */ (tagsQ.data?.tags ?? []) as Array<{
+        count: number;
         id: string;
         name: string;
-        count: number;
       }>,
     [tagsQ.data],
   );
@@ -357,7 +365,9 @@ export function useWorkflowLibrary(
   const handleEditorClose = useCallback(() => {
     const id = editingId;
     setEditingId(null);
-    if (!id) return;
+    if (!id) {
+      return;
+    }
     void queryClient.invalidateQueries(trpc.workflow.detail.queryFilter({ id }));
     void queryClient.invalidateQueries(trpc.workflow.detailFull.queryFilter({ id }));
   }, [editingId, trpc, queryClient]);

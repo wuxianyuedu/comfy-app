@@ -74,51 +74,51 @@ function DimensionControl({
   visibilityMode,
   onVisibilityChange,
 }: {
-  group: DimensionGroup;
-  values: Record<string, unknown>;
-  set: (ioKey: string, v: unknown) => void;
-  setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
-  workflowId?: string;
+  group: DimensionGroup;
+  /** 多模式作者态：按该模式解析必填。 */
+  mode?: string | null;
   /** 画布 / 库内的紧凑版式：控件按内容收窄（`w-fit`），不再占满整行。
    * 与宽版表单的区别**只是宽度**：录入能力、下拉、落点锚点全部一致。 */
   narrow?: boolean;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
-  /** 多模式作者态：按该模式解析必填。 */
-  mode?: string | null;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  set: (ioKey: string, v: unknown) => void;
+  setMany: (patch: Record<string, unknown>) => void;
+  values: Record<string, unknown>;
   /** IO 编辑态：按该模式解析可见性。 */
   visibilityMode?: string | null;
-  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  workflowId?: string;
 }) {
   if (group.width && group.height) {
     return (
       <DimensionSizeControl
-        group={{ ...group, width: group.width, height: group.height }}
-        values={values}
-        set={set}
-        setMany={setMany}
         disabled={disabled}
-        workflowId={workflowId}
+        group={{ ...group, width: group.width, height: group.height }}
+        mode={mode}
         narrow={narrow}
         onRequiredChange={onRequiredChange}
-        mode={mode}
-        visibilityMode={visibilityMode}
         onVisibilityChange={onVisibilityChange}
+        set={set}
+        setMany={setMany}
+        values={values}
+        visibilityMode={visibilityMode}
+        workflowId={workflowId}
       />
     );
   }
   if (group.aspect && group.megapixels) {
     return (
       <AspectMegapixelControl
-        group={{ ...group, aspect: group.aspect, megapixels: group.megapixels }}
-        values={values}
-        setMany={setMany}
         disabled={disabled}
+        group={{ ...group, aspect: group.aspect, megapixels: group.megapixels }}
+        mode={mode}
         narrow={narrow}
         onRequiredChange={onRequiredChange}
-        mode={mode}
-        visibilityMode={visibilityMode}
         onVisibilityChange={onVisibilityChange}
+        setMany={setMany}
+        values={values}
+        visibilityMode={visibilityMode}
       />
     );
   }
@@ -138,17 +138,17 @@ function DimensionSizeControl({
   visibilityMode,
   onVisibilityChange,
 }: {
-  group: SizeGroup;
-  values: Record<string, unknown>;
-  set: (ioKey: string, v: unknown) => void;
-  setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
-  workflowId?: string;
+  group: SizeGroup;
+  mode?: string | null;
   narrow?: boolean;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
-  mode?: string | null;
-  visibilityMode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  set: (ioKey: string, v: unknown) => void;
+  setMany: (patch: Record<string, unknown>) => void;
+  values: Record<string, unknown>;
+  visibilityMode?: string | null;
+  workflowId?: string;
 }) {
   const w0 = Number(values[group.width.ioKey] ?? group.width.defaultValue ?? 1024);
   const h0 = Number(values[group.height.ioKey] ?? group.height.defaultValue ?? 1024);
@@ -294,9 +294,9 @@ function DimensionSizeControl({
          *`clarityPresetFor` 认出它。 */
         extra: (
           <MegapixelStepper
-            value={currentMegapixels}
             disabled={disabled}
             onChange={(megapixels) => applyPreset(ratio, megapixelLabel(megapixels))}
+            value={currentMegapixels}
           />
         ),
       },
@@ -343,28 +343,28 @@ function DimensionSizeControl({
           </span>
           <div className={narrow ? "w-28 min-w-0" : "min-w-0 flex-1"}>
             <MultiSegmentPopover
-              ariaLabel="选择比例与像素"
-              triggerContent={`${shortRatioLabel(ratio)} / ${clarity}${clarityKind === "megapixel" ? ` / ${alignMultiple}` : ""}`}
-              sections={sections}
               align="right"
+              ariaLabel="选择比例与像素"
               footer={
                 <SizeTableFooter
-                  scene={scene}
-                  onOpen={() => setTableOpen(true)}
                   extra={
                     <span className="text-ink-faint text-3xs">{CLARITY_HINT[clarityKind]}</span>
                   }
+                  onOpen={() => setTableOpen(true)}
+                  scene={scene}
                 />
               }
+              sections={sections}
+              triggerContent={`${shortRatioLabel(ratio)} / ${clarity}${clarityKind === "megapixel" ? ` / ${alignMultiple}` : ""}`}
             />
           </div>
         </div>
         <RequiredChips
-          pins={[group.width, group.height]}
-          onRequiredChange={onRequiredChange}
           mode={mode}
-          visibilityMode={visibilityMode}
+          onRequiredChange={onRequiredChange}
           onVisibilityChange={onVisibilityChange}
+          pins={[group.width, group.height]}
+          visibilityMode={visibilityMode}
         />
       </div>
 
@@ -378,28 +378,28 @@ function DimensionSizeControl({
         <div className="grid grid-cols-2 gap-2">
           <Field label="宽度">
             <NumberField
-              value={w0}
-              min={64}
-              max={GROUPED_SIZE_MAX}
-              step={alignMultiple}
               disabled={disabled}
+              max={GROUPED_SIZE_MAX}
+              min={64}
               onChange={handleW}
+              step={alignMultiple}
+              value={w0}
             />
           </Field>
           <Field label="高度">
             <NumberField
-              value={h0}
-              min={64}
-              max={GROUPED_SIZE_MAX}
-              step={alignMultiple}
               disabled={disabled}
+              max={GROUPED_SIZE_MAX}
+              min={64}
               onChange={handleH}
+              step={alignMultiple}
+              value={h0}
             />
           </Field>
         </div>
       )}
 
-      {tableOpen && <SizePresetTableModal scene={scene} onClose={() => setTableOpen(false)} />}
+      {tableOpen && <SizePresetTableModal onClose={() => setTableOpen(false)} scene={scene} />}
     </div>
   );
 }

@@ -9,14 +9,14 @@ import { resolveAnchorCylinder } from "./workflow-node-palette";
 import { CollapsedAnchorCylinder, CollapsedPortHandles } from "./FlowNodeCollapsedAnchors";
 import type { RawInputMeta, RawOutputMeta } from "../workflow-types";
 
-interface SubgraphCollapsedAnchorsProps {
+type SubgraphCollapsedAnchorsProps = {
+  connectedInputs?: Set<string>;
+  connectedOutputs?: Set<string>;
   /** 纯连接型输入端口（已滤掉空标签行）。 */
   connInputs: Array<{ inp: RawInputMeta; label: string }>;
   /** 暴露的输出端口（已滤掉空标签行）。 */
-  outputs: Array<{ out: RawOutputMeta; display: string }>;
-  connectedInputs?: Set<string>;
-  connectedOutputs?: Set<string>;
-}
+  outputs: Array<{ display: string; out: RawOutputMeta }>;
+};
 
 export function SubgraphCollapsedAnchors({
   connInputs,
@@ -33,10 +33,10 @@ export function SubgraphCollapsedAnchors({
   return (
     <>
       {wiredInputs.length > 0 && (
-        <CollapsedAnchorCylinder side="left" count={wiredInputs.length} anchor={anchor} />
+        <CollapsedAnchorCylinder anchor={anchor} count={wiredInputs.length} side="left" />
       )}
       {outputs.length > 0 && (
-        <CollapsedAnchorCylinder side="right" count={outputs.length} anchor={anchor} />
+        <CollapsedAnchorCylinder anchor={anchor} count={outputs.length} side="right" />
       )}
       <CollapsedPortHandles
         items={wiredInputs.map(({ inp, label }, idx) => ({

@@ -30,18 +30,18 @@ import { launcherCommandCandidates, readRegisteredLauncher } from "./status";
 export type InstanceDiscoverySource = "process" | "launcher" | "any";
 
 export type InstanceQuery = {
-  /** 配置的实例是否确有进程在跑（命令行匹配，不靠端口探测）。 */
-  running: boolean;
   /** 命中进程的 PID（未命中为 null）。 */
   pid: number | null;
   /** 该进程实际监听的端口（拿不到为 null——可能还在加载、或还没绑定）。 */
   port: number | null;
+  /** 配置的实例是否确有进程在跑（命令行匹配，不靠端口探测）。 */
+  running: boolean;
   /** 哪一条判据命中的（未命中为 null）。 */
   source: InstanceDiscoverySource | null;
-  /** 命中的进程是用什么起的（中文短语，供日志/提示）。 */
-  via: string | null;
   /** 进程表查询本身失败（超时 / 无权限）——没命中**不等于**没在跑。 */
   unverified: boolean;
+  /** 命中的进程是用什么起的（中文短语，供日志/提示）。 */
+  via: string | null;
 };
 
 /** 空结果（未配置路径 / 一条判据都问不到）。 */
@@ -66,7 +66,9 @@ function noProcess(extra: Partial<InstanceQuery> = {}): InstanceQuery {
  */
 export async function queryInstanceByPath(comfyuiPath: string): Promise<InstanceQuery> {
   const root = comfyuiPath?.trim();
-  if (!root) return noProcess();
+  if (!root) {
+    return noProcess();
+  }
 
   let unverified = false;
   const plan = resolveComfyLaunchPlan(root);
@@ -77,7 +79,9 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
     if (lookup.pid) {
       return withPort(lookup.pid, "process", "配置路径的实例");
     }
-    if (lookup.failed) unverified = true;
+    if (lookup.failed) {
+      unverified = true;
+    }
   }
 
   // ② 启动器形态：Comfy Desktop 由 standalone-env（uv）起，命令行里没有
@@ -86,8 +90,8 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
   const registered = readRegisteredLauncher(classify.instanceRoot ?? root);
   const candidates: Array<{
     cmd: string;
-    via: string;
     source: InstanceDiscoverySource;
+    via: string;
   }> = [];
   if (registered) {
     candidates.push({
@@ -117,8 +121,12 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
     const lookup = lookups[i];
     // `Promise.all` 与 `Array.map` 都保长度，理论上这两行取不到 undefined；
     // `noUncheckedIndexedAccess` 下用空值守卫取代 `!`，判据与窄化在同一行落地。
-    if (!candidate || !lookup) continue;
-    if (lookup.failed) unverified = true;
+    if (!candidate || !lookup) {
+      continue;
+    }
+    if (lookup.failed) {
+      unverified = true;
+    }
     if (lookup.pid) {
       return withPort(lookup.pid, candidate.source, candidate.via);
     }
@@ -152,9 +160,11 @@ async function withPort(
  * 场景下端口事实没有意义——返回 null，由调用方走既有的探测链路。
  */
 export function baseForLocalPort(port: number | null): string | null {
-  if (port == null || !Number.isInteger(port) || port <= 0 || port > 65535) {
+  if (port == null || !Number.isInteger(port) || port <= 0 || port > 65_535) {
     return null;
   }
-  if (process.env.COMFYUI_BASE) return null;
+  if (process.env.COMFYUI_BASE) {
+    return null;
+  }
   return comfyUiBaseUrl(port);
 }

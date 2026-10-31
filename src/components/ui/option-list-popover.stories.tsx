@@ -24,7 +24,7 @@ const ITEMS: Array<OptionListItem> = [
 ];
 
 /** chip 触发器：真机上由调用处给外观（配色 / 尺寸 / 圆角），这里照画布口径给。 */
-function ChipTrigger({ label, count }: { label: string; count: number }) {
+function ChipTrigger({ label, count }: { count: number; label: string }) {
   return (
     <span className="border-border-strong bg-canvas-deep flex items-center gap-1.5 rounded-lg border px-2 py-0.5">
       <span className="text-ink-muted text-[10px]">{label}</span>
@@ -38,27 +38,27 @@ function ChipTrigger({ label, count }: { label: string; count: number }) {
  * ReactNode 参数（`trigger`）与回调（`onSelect`）不在其中 —— 前者由 story 的
  * `render` 给，后者是空实现（见文件头「三条口径」第 3 条）。
  */
-interface StoryArgs {
-  value: string;
-  items: Array<OptionListItem>;
-  triggerLabel: string;
-  triggerCount: number;
-  triggerTitle?: string;
-  triggerClassName?: string;
-  contentClassName?: string;
-  listClassName?: string;
-  emptyHint?: React.ReactNode;
+type StoryArgs = {
   align?: "start" | "center" | "end";
+  contentClassName?: string;
   disabled?: boolean;
-}
+  emptyHint?: React.ReactNode;
+  items: Array<OptionListItem>;
+  listClassName?: string;
+  triggerClassName?: string;
+  triggerCount: number;
+  triggerLabel: string;
+  triggerTitle?: string;
+  value: string;
+};
 
 /** 适配件：把 Args 里那几项拼成一个真触发器，并补上选中回调。 */
 function PopoverWithTrigger({ triggerLabel, triggerCount, ...rest }: StoryArgs) {
   return (
     <OptionListPopover
       {...rest}
-      trigger={<ChipTrigger label={triggerLabel} count={triggerCount} />}
       onSelect={() => undefined}
+      trigger={<ChipTrigger count={triggerCount} label={triggerLabel} />}
     />
   );
 }
@@ -72,12 +72,12 @@ function ControlledOpenSample() {
   return (
     <div className="flex flex-col items-start gap-3">
       <OptionListPopover
-        value="form"
         items={ITEMS}
-        onSelect={() => undefined}
         onOpenChange={(open) => setOpenNote(open ? "已开" : "已关")}
-        trigger={<ChipTrigger label="形态" count={3} />}
+        onSelect={() => undefined}
+        trigger={<ChipTrigger count={3} label="形态" />}
         triggerClassName="border-border-strong bg-canvas-deep shrink-0 rounded-lg border px-2 py-0.5"
+        value="form"
       />
       <span className="text-ink-muted font-mono text-[11px]">onOpenChange：{openNote}</span>
     </div>

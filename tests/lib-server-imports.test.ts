@@ -55,11 +55,15 @@ const SPECIFIER_RE = /(?:from|import|require|vi\.mock)\s*\(?\s*["']([^"']+)["']/
 /** 把说明符解析到仓库内的实际文件（只处理本仓库的 `~/` 与 `@/` 别名）。 */
 function resolveSpec(spec: string): string | null {
   const m = /^(?:~|@)\/(.+)$/.exec(spec);
-  if (!m?.[1]) return null;
+  if (!m?.[1]) {
+    return null;
+  }
   const base = join(ROOT, "src", m[1]);
   for (const candidate of [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
     try {
-      if (statSync(candidate).isFile()) return relative(ROOT, candidate).split("\\").join("/");
+      if (statSync(candidate).isFile()) {
+        return relative(ROOT, candidate).split("\\").join("/");
+      }
     } catch {
       /* 不存在就试下一个形态 */
     }
@@ -74,7 +78,9 @@ function walk(dir: string, out: Array<string> = []): Array<string> {
       walk(full, out);
       continue;
     }
-    if (/\.tsx?$/.test(name)) out.push(full);
+    if (/\.tsx?$/.test(name)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -125,10 +131,16 @@ function collectEdges(): Array<Edge> {
     const src = stripComments(readFileSync(file, "utf8"));
     for (const match of src.matchAll(SPECIFIER_RE)) {
       const spec = match[1];
-      if (typeof spec !== "string") continue;
+      if (typeof spec !== "string") {
+        continue;
+      }
       const target = resolveSpec(spec);
-      if (!target?.startsWith("src/server/")) continue;
-      if (!SERVER_OWNED_RE.test(target) && !(rel in REGISTERED)) continue;
+      if (!target?.startsWith("src/server/")) {
+        continue;
+      }
+      if (!SERVER_OWNED_RE.test(target) && !(rel in REGISTERED)) {
+        continue;
+      }
       const edge = { from: rel, to: target };
       edges.set(key(edge), edge);
     }

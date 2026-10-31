@@ -111,10 +111,18 @@ export function topCpuConsumers(entries, limit = 6) {
  */
 export function formatThroughput(entry) {
   const parts = [];
-  if (entry.bigWriteMbps !== null) parts.push(`顺序写 ${entry.bigWriteMbps} MB/s`);
-  if (entry.bigReadMbps !== null) parts.push(`顺序读 ${entry.bigReadMbps} MB/s`);
-  if (entry.smallCreatePerSec !== null) parts.push(`小文件创建 ${entry.smallCreatePerSec} 个/秒`);
-  if (entry.smallReadPerSec !== null) parts.push(`小文件读 ${entry.smallReadPerSec} 个/秒`);
+  if (entry.bigWriteMbps !== null) {
+    parts.push(`顺序写 ${entry.bigWriteMbps} MB/s`);
+  }
+  if (entry.bigReadMbps !== null) {
+    parts.push(`顺序读 ${entry.bigReadMbps} MB/s`);
+  }
+  if (entry.smallCreatePerSec !== null) {
+    parts.push(`小文件创建 ${entry.smallCreatePerSec} 个/秒`);
+  }
+  if (entry.smallReadPerSec !== null) {
+    parts.push(`小文件读 ${entry.smallReadPerSec} 个/秒`);
+  }
   return parts.join(" ｜ ");
 }
 
@@ -129,14 +137,15 @@ export function formatThroughput(entry) {
 export function compareTargets(dev, reference) {
   /** @type {Record<string, number | null>} */
   const ratios = { bigWrite: null, bigRead: null, smallCreate: null, smallRead: null };
-  if (!reference) return { comparable: false, devFaster: null, ratios };
+  if (!reference) {
+    return { comparable: false, devFaster: null, ratios };
+  }
   /**
    * @param {number | null} a
    * @param {number | null} b
    * @returns {number | null}
    */
-  const ratio = (a, b) =>
-    a !== null && b !== null && b > 0 ? Number((a / b).toFixed(2)) : null;
+  const ratio = (a, b) => (a !== null && b !== null && b > 0 ? Number((a / b).toFixed(2)) : null);
   ratios.bigWrite = ratio(dev.bigWriteMbps, reference.bigWriteMbps);
   ratios.bigRead = ratio(dev.bigReadMbps, reference.bigReadMbps);
   ratios.smallCreate = ratio(dev.smallCreatePerSec, reference.smallCreatePerSec);
@@ -144,9 +153,13 @@ export function compareTargets(dev, reference) {
   /** @type {number[]} */
   const numbers = [];
   for (const value of Object.values(ratios)) {
-    if (typeof value === "number") numbers.push(value);
+    if (typeof value === "number") {
+      numbers.push(value);
+    }
   }
-  if (numbers.length === 0) return { comparable: false, devFaster: null, ratios };
+  if (numbers.length === 0) {
+    return { comparable: false, devFaster: null, ratios };
+  }
   return {
     comparable: true,
     devFaster: numbers.every((value) => value >= 1),
@@ -176,13 +189,17 @@ export function compareTargets(dev, reference) {
 export function thirdPartyEngineUsage(bench, thirdPartyFilters) {
   /** @type {EngineUsage} */
   const empty = { state: "unknown", label: "未知", seconds: 0, process: "" };
-  if (!bench || !bench.ran) return empty;
+  if (!bench || !bench.ran) {
+    return empty;
+  }
   for (const target of bench.targets) {
     for (const watched of target.watched) {
       if (!thirdPartyFilters.some((name) => name.toLowerCase() === watched.filter.toLowerCase())) {
         continue;
       }
-      if (!watched.known) return { state: "unknown", label: watched.label, seconds: 0, process: watched.process };
+      if (!watched.known) {
+        return { state: "unknown", label: watched.label, seconds: 0, process: watched.process };
+      }
       if (!watched.present) {
         return { state: "idle", label: watched.label, seconds: 0, process: watched.process };
       }
@@ -225,7 +242,9 @@ function snapshotCpu(platform) {
       "Select-Object Name,IDProcess,PercentProcessorTime | ConvertTo-Json -Compress",
     platform,
   );
-  if (!result.ok) return [];
+  if (!result.ok) {
+    return [];
+  }
   /** @type {CpuSample[]} */
   const out = [];
   let parsed;
@@ -236,11 +255,15 @@ function snapshotCpu(platform) {
   }
   const rows = Array.isArray(parsed) ? parsed : [parsed];
   for (const row of rows) {
-    if (!row || typeof row !== "object") continue;
+    if (!row || typeof row !== "object") {
+      continue;
+    }
     const name = typeof row.Name === "string" ? row.Name : null;
     const pid = Number(row.IDProcess);
     const ticks = Number(row.PercentProcessorTime);
-    if (!name || !Number.isFinite(pid) || !Number.isFinite(ticks)) continue;
+    if (!name || !Number.isFinite(pid) || !Number.isFinite(ticks)) {
+      continue;
+    }
     out.push({ pid, name, ticks });
   }
   return out;
@@ -260,11 +283,17 @@ function diffCpu(before, after) {
   /** @type {Map<string, number>} */
   const byName = new Map();
   for (const sample of after) {
-    if (sample.name === "_Total" || sample.name === "Idle") continue;
+    if (sample.name === "_Total" || sample.name === "Idle") {
+      continue;
+    }
     const previous = beforeByPid.get(sample.pid);
-    if (previous === undefined) continue;
+    if (previous === undefined) {
+      continue;
+    }
     const delta = sample.ticks - previous;
-    if (delta <= 0) continue;
+    if (delta <= 0) {
+      continue;
+    }
     byName.set(sample.name, (byName.get(sample.name) ?? 0) + delta);
   }
   return byName;
@@ -283,12 +312,18 @@ function watchProcess(before, after, processName) {
   let present = false;
   let ticks = 0;
   for (const sample of after) {
-    if (sample.name.toLowerCase() !== wanted) continue;
+    if (sample.name.toLowerCase() !== wanted) {
+      continue;
+    }
     const previous = beforeByPid.get(sample.pid);
-    if (previous === undefined) continue;
+    if (previous === undefined) {
+      continue;
+    }
     present = true;
     const delta = sample.ticks - previous;
-    if (delta > 0) ticks += delta;
+    if (delta > 0) {
+      ticks += delta;
+    }
   }
   return { present, seconds: Number((ticks / 1e7).toFixed(3)) };
 }
@@ -306,9 +341,13 @@ function watchProcess(before, after, processName) {
  */
 function measureTarget(dir, bigMB, smallCount) {
   const chunk = Buffer.allocUnsafe(1 << 20);
-  for (let i = 0; i < chunk.length; i += 1) chunk[i] = (i * 31) & 0xff;
+  for (let i = 0; i < chunk.length; i += 1) {
+    chunk[i] = (i * 31) & 0xff;
+  }
   const small = Buffer.allocUnsafe(4096);
-  for (let i = 0; i < small.length; i += 1) small[i] = (i * 17) & 0xff;
+  for (let i = 0; i < small.length; i += 1) {
+    small[i] = (i * 17) & 0xff;
+  }
 
   fs.mkdirSync(dir, { recursive: true });
   const bigFile = path.join(dir, "big.bin");
@@ -317,7 +356,9 @@ function measureTarget(dir, bigMB, smallCount) {
 
   const started = performance.now();
   const writeFd = fs.openSync(bigFile, "w");
-  for (let i = 0; i < bigMB; i += 1) fs.writeSync(writeFd, chunk);
+  for (let i = 0; i < bigMB; i += 1) {
+    fs.writeSync(writeFd, chunk);
+  }
   fs.closeSync(writeFd);
   const writeMs = performance.now() - started;
 
@@ -325,7 +366,9 @@ function measureTarget(dir, bigMB, smallCount) {
   const readFd = fs.openSync(bigFile, "r");
   const readBuffer = Buffer.allocUnsafe(1 << 20);
   let readBytes = 0;
-  for (let i = 0; i < bigMB; i += 1) readBytes += fs.readSync(readFd, readBuffer);
+  for (let i = 0; i < bigMB; i += 1) {
+    readBytes += fs.readSync(readFd, readBuffer);
+  }
   fs.closeSync(readFd);
   const readMs = performance.now() - readStarted;
 
@@ -394,7 +437,9 @@ export function runIoBench(options = {}) {
 
   /** @type {{ label: string, dir: string }[]} */
   const sides = [{ label: "开发卷", dir: devDir }];
-  if (comparable) sides.push({ label: "参考卷", dir: referenceDir });
+  if (comparable) {
+    sides.push({ label: "参考卷", dir: referenceDir });
+  }
 
   try {
     for (const side of sides) {

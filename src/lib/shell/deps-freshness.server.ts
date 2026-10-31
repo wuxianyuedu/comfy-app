@@ -34,14 +34,14 @@ import {
 import type { DepsFreshnessState } from "./code-update-since-load";
 
 /** 依赖面新鲜度的判定结果。 */
-export interface DepsFreshness {
+export type DepsFreshness = {
+  /** 解析不到的包名；仅 `state === "unresolved"` 时非空（供文案点名）。 */
+  missing: Array<string>;
   /** 是否需要「停服务 + 重装依赖」这一动作。 */
   stale: boolean;
   /** 陈旧的形态（供文案分流），取值与客户端共用一个定义。 */
   state: DepsFreshnessState;
-  /** 解析不到的包名；仅 `state === "unresolved"` 时非空（供文案点名）。 */
-  missing: Array<string>;
-}
+};
 
 /**
  * 读一次依赖面新鲜度。
@@ -53,11 +53,15 @@ export interface DepsFreshness {
 export function readDepsFreshness(root: string = process.cwd()): DepsFreshness | null {
   /* 只有 `next dev` 这一档判：生产形态的依赖面由打包链路负责，这里既没有动作
    * 出口、也会对一棵本就该由构建决定的依赖树误报。 */
-  if (process.env.NODE_ENV !== "development") return null;
+  if (process.env.NODE_ENV !== "development") {
+    return null;
+  }
 
   const drift = lockfileDrift(root);
   /* 仓库根没有 lockfile ⇒ 这不是一个源码检出（桌包 / 纯 web）。 */
-  if (drift.state === "no-lockfile") return null;
+  if (drift.state === "no-lockfile") {
+    return null;
+  }
   if (drift.state === "drift") {
     return { stale: true, state: "drift", missing: [] };
   }

@@ -27,7 +27,7 @@ function Probe({
   useEffect(() => {
     onBox(box);
   }, [box, onBox]);
-  return unmountTarget ? <div /> : <div ref={ref} data-testid="target" />;
+  return unmountTarget ? <div /> : <div data-testid="target" ref={ref} />;
 }
 
 describe("useElementBox", () => {

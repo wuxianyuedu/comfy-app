@@ -4,14 +4,7 @@
 // 纯展示；「导入画布」与右上角按钮同款式。
 
 import { useState } from "react";
-import {
-  Download,
-  Edit3,
-  FileJson,
-  Plus,
-  RefreshCw,
-  Trash2,
-} from "lucide-react";
+import { Download, Edit3, FileJson, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
@@ -25,23 +18,23 @@ import { ModelTagPicker } from "./MetaEditor";
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
 import { zClass } from "~/lib/shell/overlay-z";
 
-interface DetailHeaderProps {
-  workflow: WorkflowRow;
-  usable: boolean;
-  canResync: boolean;
-  missing: boolean;
-  isTechnical: boolean;
+type DetailHeaderProps = {
   busyDownload: boolean;
   busyResync: boolean;
+  canResync: boolean;
+  isTechnical: boolean;
   /** 类型 / 模型编辑器（含多模式与模型标签），渲染在头部内。 */
   meta: MetaEditorController;
-  onEdit: () => void;
-  onResync: () => void;
-  onDownload: () => void;
+  missing: boolean;
   onDelete: () => void;
+  onDownload: () => void;
+  onEdit: () => void;
   onOpenSource: () => void;
+  onResync: () => void;
   onUse: () => void;
-}
+  usable: boolean;
+  workflow: WorkflowRow;
+};
 
 export function DetailHeader({
   workflow,
@@ -94,6 +87,7 @@ export function DetailHeader({
           <div className="mt-2 flex flex-wrap items-center gap-2 leading-none">
             <span className="relative">
               <Hint
+                accessibleName
                 label={
                   modes.length > 1
                     ? "该工作流支持多种模式，点击查看全部"
@@ -101,18 +95,19 @@ export function DetailHeader({
                       ? `${modeLabel(modes[0])}（${modes[0]}）`
                       : undefined
                 }
-                accessibleName
                 wrap
               >
                 <Button
-                  variant="ghost"
-                  onClick={() => {
-                    if (modes.length > 1) setShowAllModes((value) => !value);
-                  }}
-                  disabled={modes.length <= 1}
                   className={`h-auto gap-0 p-0 disabled:opacity-100 ${
                     modes.length > 1 ? "cursor-pointer" : "cursor-default"
                   }`}
+                  disabled={modes.length <= 1}
+                  onClick={() => {
+                    if (modes.length > 1) {
+                      setShowAllModes((value) => !value);
+                    }
+                  }}
+                  variant="ghost"
                 >
                   <TaskTypeChip taskType={workflow.taskType} />
                 </Button>
@@ -123,12 +118,12 @@ export function DetailHeader({
                 >
                   {modes.map((code) => (
                     <span
-                      key={code}
                       className={`text-2xs rounded px-2 py-0.5 ${
                         code === workflow.defaultMode
                           ? "bg-primary/15 text-primary-strong"
                           : "text-ink-faint"
                       }`}
+                      key={code}
                     >
                       {modeLabel(code)}
                       {code === workflow.defaultMode ? "（默认）" : ""}
@@ -140,11 +135,11 @@ export function DetailHeader({
             <SourceTag source={workflow.source} />
             {(workflow.modelTags ?? []).map((tag) => (
               <span
-                key={tag}
                 /* 边框走 `ring` 而不是 `border`：1px `border` 会把这枚胶囊的
                    盒子撑高 2px，与旁边没有边框的胶囊再不齐 —— 而 `ring` 是
                    box-shadow，不参与布局，视觉上仍是那圈浅描边。 */
                 className="bg-subtle text-ink-faint ring-border text-3xs rounded-full px-2 py-0.5 ring-1 ring-inset"
+                key={tag}
               >
                 {tag}
               </span>
@@ -178,53 +173,45 @@ export function DetailHeader({
           data-testid="detail-actions"
         >
           <ActionButton
-            onClick={onUse}
+            disabled={!usable}
             icon={<Plus className="size-3.5" />}
             label="导入画布"
-            title={
-              usable
-                ? "把该工作流导入项目画布"
-                : "当前工作流没有工作流(RAW)原件，无法生成"
-            }
-            disabled={!usable}
+            onClick={onUse}
+            title={usable ? "把该工作流导入项目画布" : "当前工作流没有工作流(RAW)原件，无法生成"}
           />
           {/* 模型标签绑定：与导入画布同款描边样式，点开多选管理 */}
           <ModelTagPicker meta={meta} />
           <ActionButton
-            onClick={onEdit}
             icon={<Edit3 className="size-3.5" />}
             label="编辑"
+            onClick={onEdit}
             title="在工作流编辑器中打开"
           />
           {canResync && (
             <ActionButton
-              onClick={onResync}
+              disabled={busyResync}
               icon={
-                busyResync ? (
-                  <Spinner className="size-3.5" />
-                ) : (
-                  <RefreshCw className="size-3.5" />
-                )
+                busyResync ? <Spinner className="size-3.5" /> : <RefreshCw className="size-3.5" />
               }
               label={busyResync ? "同步中" : "同步"}
-              disabled={busyResync}
+              onClick={onResync}
             />
           )}
           <ActionButton
-            onClick={onOpenSource}
             icon={<FileJson className="size-3.5" />}
             label="源文件"
+            onClick={onOpenSource}
           />
           <ActionButton
-            onClick={onDownload}
+            disabled={busyDownload}
             icon={<Download className="size-3.5" />}
             label={busyDownload ? "准备中" : "下载"}
-            disabled={busyDownload}
+            onClick={onDownload}
           />
           <ActionButton
-            onClick={onDelete}
             icon={<Trash2 className="size-3.5" />}
             label="删除"
+            onClick={onDelete}
             variant="danger"
           />
         </div>

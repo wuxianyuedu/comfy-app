@@ -1,13 +1,7 @@
 "use client";
 
 import { ButtonLink } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { Separator } from "~/components/ui/separator";
 import { StatusBadge } from "~/components/ui/status-badge";
@@ -43,44 +37,24 @@ import { useComfyReadiness } from "./hooks/use-comfy-readiness";
  *     失败镜头数据源；两者都没有现成出口，凭原型的样子写一份假数据比不写更糟。
  */
 export function LocalComputeCard() {
-  const {
-    stats,
-    online,
-    stale,
-    connecting,
-    degradedNote,
-    cudaVram,
-    smiVram,
-    ram,
-  } = useComfyReadiness();
+  const { stats, online, stale, connecting, degradedNote, cudaVram, smiVram, ram } =
+    useComfyReadiness();
 
   const metrics = selectVisibleResourceMetrics({ cudaVram, smiVram, ram });
 
   /* 圆点档位与状态栏同一套语义：连着且新鲜 = up，连着但这一轮没读到 = busy（迟滞容忍期），
      连着而首帧未到 = probing（正在探），不在线 = down。 */
-  const dotState = online
-    ? stale
-      ? "busy"
-      : connecting
-        ? "probing"
-        : "up"
-    : "down";
+  const dotState = online ? (stale ? "busy" : connecting ? "probing" : "up") : "down";
 
   return (
-    <Card
-      data-component="home-local-compute"
-      className="border-border bg-surface-1 rounded-2xl"
-    >
+    <Card className="border-border bg-surface-1 rounded-2xl" data-component="home-local-compute">
       <CardHeader className="flex-row items-center gap-2">
         <CardTitle className="text-ink-bright flex-1">本机算力</CardTitle>
-        <StatusBadge
-          status={online ? "ACTIVE" : "IDLE"}
-          label={online ? "在线" : "离线"}
-        />
+        <StatusBadge label={online ? "在线" : "离线"} status={online ? "ACTIVE" : "IDLE"} />
       </CardHeader>
       <CardContent>
         <div className="flex items-center gap-2">
-          <StatusDot state={dotState} pulse={connecting} />
+          <StatusDot pulse={connecting} state={dotState} />
           <span className="text-ink-bright text-sm font-medium">ComfyUI</span>
           {/* 设备名来自同一份采样：读不到就不占一行，不写「未知设备」这种废话占位。 */}
           {stats?.gpuName && (
@@ -94,27 +68,21 @@ export function LocalComputeCard() {
         </div>
 
         {metrics.length > 0 && (
-          <div
-            className={cn(
-              "mt-3 grid gap-2.5 sm:grid-cols-2",
-              stale && "opacity-60",
-            )}
-          >
+          <div className={cn("mt-3 grid gap-2.5 sm:grid-cols-2", stale && "opacity-60")}>
             {metrics.map(({ descriptor, bar }) => (
               <ProgressBar
-                key={descriptor.key}
-                value={bar.pct}
-                minVisible={4}
                 ariaLabel={`${descriptor.label} ${bar.pct}%`}
+                key={descriptor.key}
                 label={
                   <>
                     <span title={descriptor.title}>{descriptor.label}</span>
                     <span className="text-ink-fainter ml-1.5 tabular-nums">
-                      {displayValue(fmtBytes(bar.used))}/
-                      {displayValue(fmtBytes(bar.total))}
+                      {displayValue(fmtBytes(bar.used))}/{displayValue(fmtBytes(bar.total))}
                     </span>
                   </>
                 }
+                minVisible={4}
+                value={bar.pct}
               />
             ))}
           </div>
@@ -122,28 +90,17 @@ export function LocalComputeCard() {
 
         {/* 三条互斥的可见说明：未运行 / 首帧未到 / 显示的是上一次数据。
             只留 title 不给正文 = 用户看不出「读不到」和「没用」的区别。 */}
-        {degradedNote && (
-          <p className="text-ink-muted mt-2.5 text-xs">{degradedNote}</p>
-        )}
+        {degradedNote && <p className="text-ink-muted mt-2.5 text-xs">{degradedNote}</p>}
         {!degradedNote && connecting && (
-          <p className="text-ink-muted mt-2.5 text-xs">
-            {WAIT_FIRST_SAMPLE_NOTE}
-          </p>
+          <p className="text-ink-muted mt-2.5 text-xs">{WAIT_FIRST_SAMPLE_NOTE}</p>
         )}
         {!degradedNote && !connecting && stale && (
-          <p className="text-warning-strong mt-2.5 text-xs">
-            {STALE_RESOURCE_NOTE}
-          </p>
+          <p className="text-warning-strong mt-2.5 text-xs">{STALE_RESOURCE_NOTE}</p>
         )}
       </CardContent>
       <CardFooter className="gap-2">
         <Separator className="bg-border mb-2" />
-        <ButtonLink
-          href="/settings"
-          size="xs"
-          variant="ghost"
-          className="text-ink-muted"
-        >
+        <ButtonLink className="text-ink-muted" href="/settings" size="xs" variant="ghost">
           去设置
         </ButtonLink>
       </CardFooter>

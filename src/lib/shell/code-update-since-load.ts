@@ -21,12 +21,12 @@ export const BUILD_ID_ENDPOINT = "/api/dev/build-id";
 /** 读取构建标识的短超时；取不到就当作「无法判定」，绝不阻塞任何交互。 */
 export const BUILD_ID_TIMEOUT_MS = 2500;
 
-export interface CodeUpdateSignal {
-  /** 页面加载后模块被替换过（热更新 / 实时重载）。 */
-  updatedSinceLoad: boolean;
+export type CodeUpdateSignal = {
   /** 页面加载时的构建标识就已经落后于当前构建。 */
   pageOlderThanBuild: boolean;
-}
+  /** 页面加载后模块被替换过（热更新 / 实时重载）。 */
+  updatedSinceLoad: boolean;
+};
 
 /** 是否应认定「本会话跑过一段代码更新」。 */
 export function hasCodeUpdated(signal: CodeUpdateSignal): boolean {
@@ -41,7 +41,9 @@ export function hasCodeUpdated(signal: CodeUpdateSignal): boolean {
  * 建立基准时单独记录（见条件 ②）。
  */
 export function isBuildIdChange(baseline: string | null, next: string | null): boolean {
-  if (baseline === null || next === null) return false;
+  if (baseline === null || next === null) {
+    return false;
+  }
   return baseline !== next;
 }
 
@@ -52,7 +54,9 @@ export function isBuildIdChange(baseline: string | null, next: string | null): b
  * 不等于过期**，宁可漏报也不误报「页面是旧的」。
  */
 export function isPageOlderThanBuild(loadedAt: string | null, current: string | null): boolean {
-  if (loadedAt === null || current === null) return false;
+  if (loadedAt === null || current === null) {
+    return false;
+  }
   return loadedAt !== current;
 }
 
@@ -65,7 +69,9 @@ export function isPageOlderThanBuild(loadedAt: string | null, current: string | 
  * 任一侧取不到 bootId（端点未就绪 / 旧版壳）时返回 false：无法判定不等于重启。
  */
 export function isBootIdChange(prev: string | null, next: string | null): boolean {
-  if (prev === null || next === null) return false;
+  if (prev === null || next === null) {
+    return false;
+  }
   return prev !== next;
 }
 
@@ -86,20 +92,20 @@ export type DepsFreshnessState =
   | "unresolved";
 
 /** 构建标识的读取结果：字段为 null = 这一次没读到（服务端未就绪 / 接口不可达）。 */
-export interface BuildIdProbe {
-  buildId: string | null;
+export type BuildIdProbe = {
   /** 进程启动标识；单独解析出来用于区分「重启」与「仅源码变」。 */
   bootId: string | null;
-  /** 启动器自愈重启 dev server 时注入的原因（如 route-404-heal）；无则 null。 */
-  restartReason: string | null;
-  /** 启动器给的「为什么重启」人话短句（懒归因的产物）；无则 null。 */
-  restartDetail: string | null;
+  buildId: string | null;
   /** 依赖面是否陈旧（需要「停服务 + `pnpm install`」）。**无法判定为 null**，
    *  与 `false`（判定为新鲜）是不同事实，消费方据此决定提示与否。 */
   depsStale: boolean | null;
   /** 依赖面陈旧的形态（供文案分流）；无法判定为 null。 */
   depsState: DepsFreshnessState | null;
-}
+  /** 启动器给的「为什么重启」人话短句（懒归因的产物）；无则 null。 */
+  restartDetail: string | null;
+  /** 启动器自愈重启 dev server 时注入的原因（如 route-404-heal）；无则 null。 */
+  restartReason: string | null;
+};
 
 /** 读一次构建标识；任何失败都退化为全 null，绝不抛出、绝不阻塞交互。 */
 export async function fetchBuildId(): Promise<BuildIdProbe> {
@@ -116,14 +122,16 @@ export async function fetchBuildId(): Promise<BuildIdProbe> {
       cache: "no-store",
       signal: AbortSignal.timeout(BUILD_ID_TIMEOUT_MS),
     });
-    if (!res.ok) return empty;
+    if (!res.ok) {
+      return empty;
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      buildId?: unknown;
       bootId?: unknown;
-      restartReason?: unknown;
-      restartDetail?: unknown;
+      buildId?: unknown;
       depsStale?: unknown;
       depsState?: unknown;
+      restartDetail?: unknown;
+      restartReason?: unknown;
     };
     return {
       buildId: typeof data.buildId === "string" && data.buildId ? data.buildId : null,
@@ -146,9 +154,11 @@ function asDepsFreshnessState(value: unknown): DepsFreshnessState | null {
     case "fresh":
     case "drift":
     case "no-install":
-    case "unresolved":
+    case "unresolved": {
       return value;
-    default:
+    }
+    default: {
       return null;
+    }
   }
 }

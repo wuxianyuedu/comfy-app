@@ -25,18 +25,15 @@ function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
-function DialogOverlay({
-  className,
-  ...props
-}: DialogPrimitive.Backdrop.Props) {
+function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) {
   return (
     <DialogPrimitive.Backdrop
-      data-slot="dialog-overlay"
       className={cn(
         "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 isolate",
         dialogBackdropClass(),
         className,
       )}
+      data-slot="dialog-overlay"
       {...props}
     />
   );
@@ -69,11 +66,11 @@ function DialogContent({
   overlayClassName,
   ...props
 }: DialogPrimitive.Popup.Props & {
+  overlayClassName?: string;
   /** 弹窗本体（Popup）自身的 class，便于调用处只改形态、不动外层定位。 */
   popupClassName?: string;
   showCloseButton?: boolean;
   showOverlay?: boolean;
-  overlayClassName?: string;
 }) {
   return (
     <DialogPortal>
@@ -89,7 +86,6 @@ function DialogContent({
           `ui/sheet` 的 `SheetContent` 共用同一份。 */}
       {showOverlay && <DialogOverlay className={overlayClassName} />}
       <DialogPrimitive.Popup
-        data-slot="dialog-content"
         className={cn(
           /* 默认卡片。宽度**只有一处下限**：`max-w-[calc(100%-2rem)]`（不贴满
              视口两侧），**不再在 sm 断点压到 `max-w-sm`**（ISSUE #720）。
@@ -113,19 +109,14 @@ function DialogContent({
           popupClassName,
           className,
         )}
+        data-slot="dialog-content"
         {...props}
       >
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            render={
-              <Button
-                variant="ghost"
-                className="absolute top-2 right-2"
-                size="icon-sm"
-              />
-            }
+            render={<Button className="absolute top-2 right-2" size="icon-sm" variant="ghost" />}
           >
             <XIcon />
             <span className="sr-only">Close</span>
@@ -138,11 +129,7 @@ function DialogContent({
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div
-      data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
-      {...props}
-    />
+    <div className={cn("flex flex-col gap-2", className)} data-slot="dialog-header" {...props} />
   );
 }
 
@@ -156,18 +143,16 @@ function DialogFooter({
 }) {
   return (
     <div
-      data-slot="dialog-footer"
       className={cn(
         "bg-muted/50 -mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t p-4 sm:flex-row sm:justify-end",
         className,
       )}
+      data-slot="dialog-footer"
       {...props}
     >
       {children}
       {showCloseButton && (
-        <DialogPrimitive.Close render={<Button variant="outline" />}>
-          Close
-        </DialogPrimitive.Close>
+        <DialogPrimitive.Close render={<Button variant="outline" />}>Close</DialogPrimitive.Close>
       )}
     </div>
   );
@@ -176,27 +161,21 @@ function DialogFooter({
 function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
+      className={cn("font-heading text-base leading-none font-medium", className)}
       data-slot="dialog-title"
-      className={cn(
-        "font-heading text-base leading-none font-medium",
-        className,
-      )}
       {...props}
     />
   );
 }
 
-function DialogDescription({
-  className,
-  ...props
-}: DialogPrimitive.Description.Props) {
+function DialogDescription({ className, ...props }: DialogPrimitive.Description.Props) {
   return (
     <DialogPrimitive.Description
-      data-slot="dialog-description"
       className={cn(
         "text-muted-foreground *:[a]:hover:text-foreground text-sm *:[a]:underline *:[a]:underline-offset-3",
         className,
       )}
+      data-slot="dialog-description"
       {...props}
     />
   );

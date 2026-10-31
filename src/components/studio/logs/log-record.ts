@@ -61,16 +61,22 @@ export function bracketDepthDelta(line: string): number {
       continue;
     }
     if (inString) {
-      if (ch === "\\") escaped = true;
-      else if (ch === '"') inString = false;
+      if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
       continue;
     }
     if (ch === '"') {
       inString = true;
       continue;
     }
-    if (ch === "{" || ch === "[") depth += 1;
-    else if (ch === "}" || ch === "]") depth -= 1;
+    if (ch === "{" || ch === "[") {
+      depth += 1;
+    } else if (ch === "}" || ch === "]") {
+      depth -= 1;
+    }
   }
   return depth;
 }
@@ -89,14 +95,14 @@ export function looksLikeJsonFragment(line: string): boolean {
 }
 
 /** 一条「记录」= 起始物理行 + 后续并入的物理行。 */
-export interface RawRecord {
+export type RawRecord = {
   /** 记录起始行（解析层用它认时刻 / 级别）。 */
   head: string;
-  /** 记录全文（head + 续行，行之间保留 `\n`）。 */
-  text: string;
   /** 续行（无续行时为空串）。解析层把它拼回正文尾巴。 */
   rest: string;
-}
+  /** 记录全文（head + 续行，行之间保留 `\n`）。 */
+  text: string;
+};
 
 /**
  * 剥掉行内残留的 ANSI SGR（**出口在** `~/lib/log/log-ansi`，规范 16 §16.2.4.58）。
@@ -133,7 +139,9 @@ export function splitLogRecords(
   let headIsLogLine = false;
 
   const flush = () => {
-    if (head === "") return;
+    if (head === "") {
+      return;
+    }
     const text = lines.join("\n");
     records.push({
       head,

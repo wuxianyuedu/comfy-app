@@ -68,11 +68,12 @@ export const skillRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const existing = await skillRepository.findBySlug(input.slug);
-      if (existing)
+      if (existing) {
         throw new TRPCError({
           code: "CONFLICT",
           message: "该 slug 已存在，换一个名字",
         });
+      }
       const skill = await skillRepository.createUserSkill({
         name: input.name,
         slug: input.slug,

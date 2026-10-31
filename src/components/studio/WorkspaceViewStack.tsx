@@ -84,13 +84,15 @@ function lazyView<P extends object>(
     () =>
       loader()
         .then((mod) => withViewOpenReport(view, mod))
-        .catch((err: unknown) => {
+        .catch((error: unknown) => {
           /* 刷新的那一跳返回一个永不 settle 的 promise：页面正在被换掉，
            * 让它悬着比立刻抛错更好（抛了会先闪一下 error boundary 再被导航覆盖）；
            * 没触发刷新（不是分块问题 / 本会话已刷过）时照常抛，错误照旧落到
            * error boundary。 */
-          if (reloadOnceForChunkError(err)) return NEVER_SETTLES;
-          throw err;
+          if (reloadOnceForChunkError(error)) {
+            return NEVER_SETTLES;
+          }
+          throw error;
         }),
     { ssr: false },
   );
@@ -156,40 +158,40 @@ const ProjectCanvas = lazyView("canvas", () =>
 );
 
 /** 页面侧交给视图栈的全部接线 —— 每一屏要用什么都在这里，栈自己不取数。 */
-export interface WorkspaceViewStackProps {
-  /** 打开的页签（顺序即叠放顺序；`ViewTab.key` 当 React key 与锚点）。 */
-  tabs: Array<ViewTab>;
+export type WorkspaceViewStackProps = {
   /** 当前页签 key。 */
   activeKey: string;
-  /** 当前页签对应的**视图**（同一视图两个页签算同一屏）—— 打开耗时按它归属。 */
-  activeView: WorkspaceView;
   /** 活跃项目 id —— 项目类视图与「项目优先闸门」判据。 */
   activeProjectId: string | null;
-  /** 最近项目（项目主页取名字用）。 */
-  recentProjects: Array<RecentProject>;
-  /** 项目页签无活跃项目时，闸门的两个出口。 */
-  onEnterProject: () => void;
-  onExitProject: () => void;
-  onNewProject: () => void;
-  onOpenProject: (id: string) => void;
-  onOpenCanvasProject: (id: string) => void;
-  /** 项目视图内部的跳转（项目主页的四张卡）。 */
-  onNavigate: (view: WorkspaceView) => void;
-  /** 首页入口卡的跳转 —— 与 `onNavigate` 分开：首页把「再点首页」当空操作。 */
-  onHomeNavigate: (view: WorkspaceView) => void;
-  onShowAllProjects: () => void;
-  /** 队列屏的离线出口：切到侧栏「ComfyUI」页。 */
-  onOpenComfyui: () => void;
-  onUseWorkflow: (id: string, meta?: { name: string; taskType: string }) => void;
+  /** 当前页签对应的**视图**（同一视图两个页签算同一屏）—— 打开耗时按它归属。 */
+  activeView: WorkspaceView;
   /** 画布：开一个新命名项目 / 消费这两枚一次性载荷。 */
   canvasSeedNew: boolean;
   onConsumeCanvasSeed: () => void;
-  pendingCanvasWorkflow: { id: string; name: string; taskType: string } | null;
   onConsumePendingWorkflow: () => void;
+  onConsumeSettingsSection: () => void;
+  /** 项目页签无活跃项目时，闸门的两个出口。 */
+  onEnterProject: () => void;
+  onExitProject: () => void;
+  /** 首页入口卡的跳转 —— 与 `onNavigate` 分开：首页把「再点首页」当空操作。 */
+  onHomeNavigate: (view: WorkspaceView) => void;
+  /** 项目视图内部的跳转（项目主页的四张卡）。 */
+  onNavigate: (view: WorkspaceView) => void;
+  onNewProject: () => void;
+  onOpenCanvasProject: (id: string) => void;
+  /** 队列屏的离线出口：切到侧栏「ComfyUI」页。 */
+  onOpenComfyui: () => void;
+  onOpenProject: (id: string) => void;
+  onShowAllProjects: () => void;
+  onUseWorkflow: (id: string, meta?: { name: string; taskType: string }) => void;
+  pendingCanvasWorkflow: { id: string; name: string; taskType: string } | null;
+  /** 最近项目（项目主页取名字用）。 */
+  recentProjects: Array<RecentProject>;
   /** 设置：跳转时指定的目标分区（一次性载荷，交给设置视图落定后消费）。 */
   settingsSection: string | null;
-  onConsumeSettingsSection: () => void;
-}
+  /** 打开的页签（顺序即叠放顺序；`ViewTab.key` 当 React key 与锚点）。 */
+  tabs: Array<ViewTab>;
+};
 
 export function WorkspaceViewStack({
   tabs,
@@ -224,12 +226,12 @@ export function WorkspaceViewStack({
     if (view === "home") {
       return (
         <HomePage
-          onNewProject={onNewProject}
-          recentProjects={recentProjects}
-          onOpenProject={onOpenProject}
-          onOpenCanvasProject={onOpenCanvasProject}
           onNavigate={onHomeNavigate}
+          onNewProject={onNewProject}
+          onOpenCanvasProject={onOpenCanvasProject}
+          onOpenProject={onOpenProject}
           onShowAllProjects={onShowAllProjects}
+          recentProjects={recentProjects}
         />
       );
     }
@@ -238,33 +240,39 @@ export function WorkspaceViewStack({
       return <ProjectGate onEnter={onEnterProject} onExit={onExitProject} />;
     }
     switch (view) {
-      case "project":
+      case "project": {
         return (
           <ProjectHomePage
-            projectName={recentProjects.find((p) => p.id === activeProjectId)?.name ?? "未命名项目"}
             onNavigate={onNavigate}
             projectId={activeProjectId ?? ""}
+            projectName={recentProjects.find((p) => p.id === activeProjectId)?.name ?? "未命名项目"}
           />
         );
+      }
 
-      case "works":
+      case "works": {
         return (
-          <WorksGallery onOpenTask={onOpenProject} onOpenCanvasProject={onOpenCanvasProject} />
+          <WorksGallery onOpenCanvasProject={onOpenCanvasProject} onOpenTask={onOpenProject} />
         );
+      }
 
-      case "models":
+      case "models": {
         return <ModelLibrary />;
+      }
 
-      case "history":
+      case "history": {
         return <HistoryList onOpenTask={onOpenProject} />;
+      }
 
-      case "queue":
+      case "queue": {
         return <QueueMonitor onOpenComfyui={onOpenComfyui} />;
+      }
 
-      case "comfyui":
+      case "comfyui": {
         return <ComfyuiControl />;
+      }
 
-      case "settings":
+      case "settings": {
         return (
           <SettingsView
             fillHeight
@@ -272,43 +280,54 @@ export function WorkspaceViewStack({
             onConsumeSection={onConsumeSettingsSection}
           />
         );
+      }
 
-      case "model-adapters":
+      case "model-adapters": {
         return <ModelAdaptersView />;
+      }
 
-      case "mode-contract":
+      case "mode-contract": {
         return <ModeContractView />;
+      }
 
-      case "canvas":
+      case "canvas": {
         return (
           <ProjectCanvas
-            seedNew={canvasSeedNew}
+            onConsumePending={onConsumePendingWorkflow}
             onConsumeSeed={onConsumeCanvasSeed}
             pendingWorkflow={pendingCanvasWorkflow}
-            onConsumePending={onConsumePendingWorkflow}
+            seedNew={canvasSeedNew}
           />
         );
+      }
 
-      case "film":
+      case "film": {
         return <FilmStudio />;
+      }
 
-      case "workflows":
+      case "workflows": {
         return <WorkflowLibrary onUse={onUseWorkflow} />;
+      }
 
-      case "console":
+      case "console": {
         return <ConsoleView />;
+      }
 
-      case "outputs":
+      case "outputs": {
         return <ProjectOutputs />;
+      }
 
-      case "library":
+      case "library": {
         return <ResourceLibrary />;
+      }
 
-      case "workshop":
+      case "workshop": {
         return <WorkshopPipeline />;
+      }
 
-      default:
+      default: {
         return null;
+      }
     }
   };
 
@@ -323,8 +342,8 @@ export function WorkspaceViewStack({
    * 计时刻意放在 **effect** 里：渲染期调用 `performance.now()` 属 React 的不纯
    * 调用（`react-hooks/purity` 会红），effect 里则是合规的。 */
   const [opened, setOpened] = useState<{
-    view: WorkspaceView;
     at: number;
+    view: WorkspaceView;
   } | null>(null);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -359,10 +378,10 @@ export function WorkspaceViewStack({
         );
         return (
           <div
-            key={tab.key}
-            data-view={tab.view}
             aria-hidden={!isActive}
             className={isActive ? "h-full" : "hidden h-full"}
+            data-view={tab.view}
+            key={tab.key}
           >
             {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感。
                 挂在各自的 wrapper 里（只有非 home 需要）——放在栈外层会让首页也多一层

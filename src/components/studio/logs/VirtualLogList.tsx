@@ -32,29 +32,29 @@ import { layoutRows, LOG_ROW_SINGLE, scrollHeightOf, visibleRange } from "./log-
  * **绝对下标**（同一行在窗口滑动后下标不变，便于稳定 key 与测试断言）。 */
 export type RenderLogRow<T> = (entry: T, index: number) => ReactNode;
 
-export interface VirtualLogListProps<T> {
-  /** 全部（已裁剪 / 已过滤）的日志条目；本组件只渲染视口内的那一小段。 */
-  entries: ReadonlyArray<T>;
-  /** 取用于折行估高的文本（行高估算依赖它；与 `LogPanel` 的 `entry.message` 同义）。 */
-  getMessage: (entry: T) => string;
-  /** 稳定 id（可选）：展开 / 单行特判用；缺省时按绝对下标。 */
-  getId?: (entry: T) => string | undefined;
-  /** 渲染单行。 */
-  renderRow: RenderLogRow<T>;
-  /** 折行估高（默认 true，与 `LogPanel` 一致：`wrap-break-word whitespace-pre-wrap`）。 */
-  wrap?: boolean;
-  /** 受控的「跟随底部」态；不给则非受控，组件自持。 */
-  following?: boolean;
-  /** 受控模式下跟随态变化回调（用户上滚 → `false`；点回「自动滚动」→ `true`）。 */
-  onFollowingChange?: (following: boolean) => void;
-  /** 「内容变了」的依赖值：变了就在跟随态下重新贴底。由调用处给（条数 / 筛选）。 */
-  watch?: unknown;
-  /** 列表之前、同处滚动容器内的静态内容（如验证错误 / 运行错误横幅）。 */
-  topSlot?: ReactNode;
+export type VirtualLogListProps<T> = {
+  className?: string;
   /** 条目为空时展示的内容（通常是一个居中占位）。 */
   emptySlot?: ReactNode;
-  className?: string;
-}
+  /** 全部（已裁剪 / 已过滤）的日志条目；本组件只渲染视口内的那一小段。 */
+  entries: ReadonlyArray<T>;
+  /** 受控的「跟随底部」态；不给则非受控，组件自持。 */
+  following?: boolean;
+  /** 稳定 id（可选）：展开 / 单行特判用；缺省时按绝对下标。 */
+  getId?: (entry: T) => string | undefined;
+  /** 取用于折行估高的文本（行高估算依赖它；与 `LogPanel` 的 `entry.message` 同义）。 */
+  getMessage: (entry: T) => string;
+  /** 受控模式下跟随态变化回调（用户上滚 → `false`；点回「自动滚动」→ `true`）。 */
+  onFollowingChange?: (following: boolean) => void;
+  /** 渲染单行。 */
+  renderRow: RenderLogRow<T>;
+  /** 列表之前、同处滚动容器内的静态内容（如验证错误 / 运行错误横幅）。 */
+  topSlot?: ReactNode;
+  /** 「内容变了」的依赖值：变了就在跟随态下重新贴底。由调用处给（条数 / 筛选）。 */
+  watch?: unknown;
+  /** 折行估高（默认 true，与 `LogPanel` 一致：`wrap-break-word whitespace-pre-wrap`）。 */
+  wrap?: boolean;
+};
 
 export function VirtualLogList<T>({
   entries,
@@ -124,9 +124,13 @@ export function VirtualLogList<T>({
    * DOM——后者不触发窗口重算（虚拟化前无所谓，现在窗口是 `scrollTop` 算出来的）。
    * 不依赖 scroll 事件触发，jsdom 里也能正确落位。 */
   useEffect(() => {
-    if (!following) return;
+    if (!following) {
+      return;
+    }
     const el = containerRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const next = el.scrollHeight;
     el.scrollTop = next;
     setScrollTop(next);
@@ -134,9 +138,13 @@ export function VirtualLogList<T>({
 
   const setFollowing = useCallback(
     (next: boolean) => {
-      if (followingRef.current === next) return;
+      if (followingRef.current === next) {
+        return;
+      }
       followingRef.current = next;
-      if (controlled === undefined) setInternalFollowing(next);
+      if (controlled === undefined) {
+        setInternalFollowing(next);
+      }
       notifyRef.current?.(next);
     },
     [controlled],
@@ -144,7 +152,9 @@ export function VirtualLogList<T>({
 
   const onScroll = useCallback(() => {
     const el = containerRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     /* 滚动位置是渲染输入（决定窗口取哪一段），因此进 state 而非只留 ref。 */
     setScrollTop(el.scrollTop);
     /* 「用户有没有接管滚动」：离底超过阈值就退出跟随，给出可见出口（自动滚动
@@ -154,6 +164,8 @@ export function VirtualLogList<T>({
 
   return (
     <div
+      className={`custom-scrollbar flex-1 overflow-y-auto ${className ?? ""}`}
+      onScroll={onScroll}
       ref={(el) => {
         containerRef.current = el;
         boxRef(el);
@@ -161,8 +173,6 @@ export function VirtualLogList<T>({
          * 数变化、进而改变滚动范围，这里在外部系统通知里同步，不靠 effect setState。 */
         setScrollTop(el?.scrollTop ?? 0);
       }}
-      onScroll={onScroll}
-      className={`custom-scrollbar flex-1 overflow-y-auto ${className ?? ""}`}
     >
       {topSlot}
       {entries.length === 0 ? (
@@ -170,12 +180,12 @@ export function VirtualLogList<T>({
       ) : (
         /* 外层撑出估算总高（滚动条长度与真实内容一致），内层 `translateY` 到当前
          * 窗口起点——只挂视口内的几十行。 */
-        <div style={{ height: `${scrollHeight}px` }} className="relative w-full">
+        <div className="relative w-full" style={{ height: `${scrollHeight}px` }}>
           <div
+            className="absolute top-0 left-0 w-full"
             style={{
               transform: `translateY(${rows[rowWindow.start]?.start ?? 0}px)`,
             }}
-            className="absolute top-0 left-0 w-full"
           >
             {rowWindow.entries.map((entry, offset) => {
               const index = rowWindow.start + offset;

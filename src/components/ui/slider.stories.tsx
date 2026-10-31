@@ -27,7 +27,7 @@ type Story = StoryObj<typeof meta>;
 export const Single: Story = {
   render: (args) => (
     <div className="w-80">
-      <Slider {...args} defaultValue={[42]} min={0} max={100} step={1} />
+      <Slider {...args} defaultValue={[42]} max={100} min={0} step={1} />
     </div>
   ),
 };
@@ -37,8 +37,8 @@ export const Single: Story = {
 export const Range: Story = {
   render: () => (
     <div className="flex w-80 flex-col gap-6">
-      <Slider defaultValue={[20, 80]} min={0} max={100} step={1} />
-      <Slider defaultValue={[46, 54]} min={0} max={100} step={1} />
+      <Slider defaultValue={[20, 80]} max={100} min={0} step={1} />
+      <Slider defaultValue={[46, 54]} max={100} min={0} step={1} />
     </div>
   ),
 };
@@ -48,8 +48,8 @@ export const Range: Story = {
 export const Stepped: Story = {
   render: () => (
     <div className="flex w-80 flex-col gap-6">
-      <Slider defaultValue={[30]} min={0} max={100} step={10} />
-      <Slider defaultValue={[30]} min={0} max={100} step={1} />
+      <Slider defaultValue={[30]} max={100} min={0} step={10} />
+      <Slider defaultValue={[30]} max={100} min={0} step={1} />
     </div>
   ),
 };
@@ -58,7 +58,7 @@ export const Stepped: Story = {
 export const Disabled: Story = {
   render: () => (
     <div className="w-80">
-      <Slider defaultValue={[60]} min={0} max={100} disabled />
+      <Slider defaultValue={[60]} disabled max={100} min={0} />
     </div>
   ),
 };

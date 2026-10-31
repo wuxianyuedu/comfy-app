@@ -22,11 +22,11 @@ import { readStorageItem, writeStorageItem } from "~/lib/browser-storage";
 export const APPEARANCE_STORAGE_KEY = "comfyapp:appearance-v1";
 
 /** 一档可选值：id 用于持久化，label 是界面文案，value 是写进 CSS 变量的值。 */
-export interface AppearanceStep {
+export type AppearanceStep = {
   id: string;
   label: string;
   value: string;
-}
+};
 
 /**
  * 圆角档位。`中` 就是 `globals.css` 里 `--radius` 那颗基数（1rem）——
@@ -51,10 +51,10 @@ export const FONT_SCALE_STEPS: Array<AppearanceStep> = [
   { id: "125", label: "宽松 125%", value: "1.25" },
 ];
 
-export interface AppearancePrefs {
-  radius: string;
+export type AppearancePrefs = {
   fontScale: string;
-}
+  radius: string;
+};
 
 /** 默认值 = `globals.css` 里 `--radius` / `--font-scale` 的基数（两者必须同批改）。 */
 export const DEFAULT_APPEARANCE: AppearancePrefs = {
@@ -72,7 +72,9 @@ function stepValue(steps: Array<AppearanceStep>, id: string, fallbackId: string)
  * 半份生效会让界面出现"圆角是新的、字号是旧的"这种无法解释的组合。
  */
 export function parseAppearance(raw: string | null | undefined): AppearancePrefs {
-  if (!raw) return { ...DEFAULT_APPEARANCE };
+  if (!raw) {
+    return { ...DEFAULT_APPEARANCE };
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -83,8 +85,8 @@ export function parseAppearance(raw: string | null | undefined): AppearancePrefs
     return { ...DEFAULT_APPEARANCE };
   }
   const record = /* SAFETY: 类型断言已复核 */ parsed as {
-    radius?: unknown;
     fontScale?: unknown;
+    radius?: unknown;
   };
   if (
     typeof record.radius !== "string" ||
@@ -116,7 +118,9 @@ export function applyAppearance(
     ? null
     : document.documentElement,
 ): void {
-  if (!element) return;
+  if (!element) {
+    return;
+  }
   for (const [name, value] of Object.entries(appearanceVars(prefs))) {
     element.style.setProperty(name, value);
   }

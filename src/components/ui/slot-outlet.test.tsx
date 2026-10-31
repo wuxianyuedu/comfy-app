@@ -30,7 +30,9 @@ describe("SlotOutlet", () => {
       </SlotOutletProvider>,
     );
     const outlet = container.querySelector('[data-slot="slot-outlet"]');
-    if (!outlet) throw new Error("没渲染出落点");
+    if (!outlet) {
+      throw new Error("没渲染出落点");
+    }
     expect(outlet.textContent).toContain("刷新");
     /* 原地不许有第二份：有第二份就是同一块 UI 在一屏里出现两次。 */
     expect(container.querySelectorAll("button")).toHaveLength(1);

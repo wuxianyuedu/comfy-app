@@ -23,7 +23,7 @@ vi.mock("~/lib/comfy/comfy-stats-client", () => ({
 const crashListeners = vi.hoisted(
   () =>
     /* SAFETY: 类型断言已复核 */ [] as Array<
-      (s: { seq: number; at: number; reason: string; userStopped: boolean }) => void
+      (s: { at: number; reason: string; seq: number; userStopped: boolean }) => void
     >,
 );
 vi.mock("~/lib/comfy/comfy-liveness-client", () => ({
@@ -31,7 +31,9 @@ vi.mock("~/lib/comfy/comfy-liveness-client", () => ({
     crashListeners.push(l);
     return () => {
       const i = crashListeners.indexOf(l);
-      if (i >= 0) crashListeners.splice(i, 1);
+      if (i >= 0) {
+        crashListeners.splice(i, 1);
+      }
     };
   },
 }));
@@ -278,7 +280,9 @@ describe("进程级判活（与 /api/comfy/queue 同口径）", () => {
     const goodStats = getComfyStatsSnapshot().stats;
 
     fetchMock.mockResolvedValue(ALIVE_BUT_NO_ANSWER);
-    for (let i = 0; i < 5; i++) await refreshComfyStats(); // 远超离线阈值也不该翻
+    for (let i = 0; i < 5; i++) {
+      await refreshComfyStats();
+    } // 远超离线阈值也不该翻
 
     const snapshot = getComfyStatsSnapshot();
     expect(snapshot.online).toBe(true);
@@ -289,7 +293,9 @@ describe("进程级判活（与 /api/comfy/queue 同口径）", () => {
   it("从没读到过数据 + 进程在跑：算在线（连接中），不报未运行", async () => {
     subscribeComfyStats(noop);
     fetchMock.mockResolvedValue(ALIVE_BUT_NO_ANSWER);
-    for (let i = 0; i < 5; i++) await refreshComfyStats();
+    for (let i = 0; i < 5; i++) {
+      await refreshComfyStats();
+    }
 
     const snapshot = getComfyStatsSnapshot();
     expect(snapshot.online).toBe(true);
@@ -387,7 +393,7 @@ describe("事件驱动 + 连续失败阈值（ISSUE #1351）", () => {
 describe("收到崩溃信号后的复核与换档（ISSUE #1351）", () => {
   /** 驱动 store 注册进 `subscribeComfyCrashes` 的那个回调（即事件到达）。 */
   function emitExit(): void {
-    crashListeners.forEach((l) => l({ seq: 1, at: 1_000, reason: "exit 1", userStopped: false }));
+    crashListeners.forEach((l) => l({ seq: 1, at: 1000, reason: "exit 1", userStopped: false }));
   }
 
   it("复核期间阶段是 verifying（间隔 0），复核完回到原档", async () => {
@@ -437,7 +443,7 @@ describe("收到崩溃信号后的复核与换档（ISSUE #1351）", () => {
     await refreshComfyStats();
     off(); // 最后一个订阅者退订：表已停
     const startedAfterOff = startCalls.started;
-    listeners.forEach((l) => l({ seq: 1, at: 1_000, reason: "exit 1", userStopped: false }));
+    listeners.forEach((l) => l({ seq: 1, at: 1000, reason: "exit 1", userStopped: false }));
     /* 复核本身仍会发一次（事件那一路不依赖订阅），但不该把表拉起来：
        `reschedule` 见到「没有表」就该早退。 */
     await expect

@@ -189,9 +189,9 @@ describe("app-port 四语言共享校验向量", () => {
     fs.readFileSync(path.join(process.cwd(), "tests", "fixtures", "app-port-vectors.json"), "utf8"),
   ) as {
     vectors: Array<{
+      fnv1a32: number;
       input: string;
       normalized: string;
-      fnv1a32: number;
       port: number;
     }>;
   };

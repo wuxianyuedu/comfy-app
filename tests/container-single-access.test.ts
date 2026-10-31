@@ -35,7 +35,9 @@ function walk(dir: string, out: Array<string> = []): Array<string> {
       walk(full, out);
       continue;
     }
-    if (/\.(ts|tsx)$/.test(name)) out.push(full);
+    if (/\.(ts|tsx)$/.test(name)) {
+      out.push(full);
+    }
   }
   return out;
 }

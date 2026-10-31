@@ -62,14 +62,11 @@ export function platformDefaultBrowsersRoot({
   const p = platform === "win32" ? path.win32 : path.posix;
   const home = env.USERPROFILE ?? env.HOME ?? "";
   if (platform === "win32") {
-    const local =
-      env.LOCALAPPDATA ?? (home ? p.join(home, "AppData", "Local") : "");
+    const local = env.LOCALAPPDATA ?? (home ? p.join(home, "AppData", "Local") : "");
     return local ? p.join(local, "ms-playwright") : "ms-playwright";
   }
   if (platform === "darwin") {
-    return home
-      ? p.join(home, "Library", "Caches", "ms-playwright")
-      : "ms-playwright";
+    return home ? p.join(home, "Library", "Caches", "ms-playwright") : "ms-playwright";
   }
   return home ? p.join(home, ".cache", "ms-playwright") : "ms-playwright";
 }
@@ -85,12 +82,11 @@ export function platformDefaultBrowsersRoot({
  * @param {{platform?: NodeJS.Platform, env?: Record<string, string | undefined>}} [options]
  * @returns {string}
  */
-export function playwrightBrowsersRoot({
-  platform = process.platform,
-  env = process.env,
-} = {}) {
+export function playwrightBrowsersRoot({ platform = process.platform, env = process.env } = {}) {
   const override = env.PLAYWRIGHT_BROWSERS_PATH;
-  if (override) return override;
+  if (override) {
+    return override;
+  }
   return platformDefaultBrowsersRoot({ platform, env });
 }
 
@@ -103,10 +99,7 @@ export function playwrightBrowsersRoot({
  * @param {{platform?: NodeJS.Platform, env?: Record<string, string | undefined>}} [options]
  * @returns {{primary: string, fallback: string | null}}
  */
-export function playwrightRootCandidates({
-  platform = process.platform,
-  env = process.env,
-} = {}) {
+export function playwrightRootCandidates({ platform = process.platform, env = process.env } = {}) {
   const primary = playwrightBrowsersRoot({ platform, env });
   const fallback = platformDefaultBrowsersRoot({ platform, env });
   return { primary, fallback: fallback === primary ? null : fallback };
@@ -122,7 +115,9 @@ export function playwrightRootCandidates({
  * @returns {string | null}
  */
 function findFileUnder(dir, name, depth, join) {
-  if (depth < 0) return null;
+  if (depth < 0) {
+    return null;
+  }
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
@@ -130,12 +125,18 @@ function findFileUnder(dir, name, depth, join) {
     return null;
   }
   for (const e of entries) {
-    if (e.isSymbolicLink()) continue;
+    if (e.isSymbolicLink()) {
+      continue;
+    }
     const full = join(dir, e.name);
-    if (e.isFile() && e.name === name) return full;
+    if (e.isFile() && e.name === name) {
+      return full;
+    }
     if (e.isDirectory()) {
       const hit = findFileUnder(full, name, depth - 1, join);
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
   }
   return null;
@@ -171,20 +172,13 @@ export function findBrowserExecutable({
   if (!dir) {
     return {
       found: null,
-      miss: `${root} 下没有 chromium_headless_shell-*（现有：${
-        entries.join(", ") || "空目录"
-      }）`,
+      miss: `${root} 下没有 chromium_headless_shell-*（现有：${entries.join(", ") || "空目录"}）`,
     };
   }
-  const exe =
-    platform === "win32"
-      ? "chrome-headless-shell.exe"
-      : "chrome-headless-shell";
+  const exe = platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
   /* 拼路径按**目标平台**的分隔符（同 `playwrightBrowsersRoot` 那条口径）。 */
   const p = platform === "win32" ? path.win32 : path.posix;
   const under = p.join(root, dir);
   const found = findFileUnder(under, exe, 3, p.join);
-  return found
-    ? { found, miss: "" }
-    : { found: null, miss: `${under} 下找不到 ${exe}` };
+  return found ? { found, miss: "" } : { found: null, miss: `${under} 下找不到 ${exe}` };
 }

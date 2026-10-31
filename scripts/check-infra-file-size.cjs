@@ -58,10 +58,15 @@ const SCAN_ROOTS = [
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+    if (entry.name.startsWith(".") || entry.name === "node_modules") {
+      continue;
+    }
     const abs = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(abs, out);
-    else out.push(abs);
+    if (entry.isDirectory()) {
+      walk(abs, out);
+    } else {
+      out.push(abs);
+    }
   }
   return out;
 }
@@ -82,13 +87,19 @@ function collect() {
   let scanned = 0;
   for (const { dir, ext } of SCAN_ROOTS) {
     const base = path.join(ROOT, dir);
-    if (!fs.existsSync(base)) continue;
+    if (!fs.existsSync(base)) {
+      continue;
+    }
     for (const abs of walk(base)) {
       const rel = relOf(abs);
-      if (!ext.test(rel)) continue;
+      if (!ext.test(rel)) {
+        continue;
+      }
       scanned += 1;
       const lines = countLines(abs);
-      if (lines > SPLIT_HINT_LINES) oversized.set(rel, lines);
+      if (lines > SPLIT_HINT_LINES) {
+        oversized.set(rel, lines);
+      }
     }
   }
   return { oversized, scanned };
@@ -134,4 +145,6 @@ function main() {
   return 1;
 }
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}

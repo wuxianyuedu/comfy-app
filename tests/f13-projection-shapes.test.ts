@@ -56,10 +56,15 @@ const AS_NEVER_LEDGER: Record<string, { count: number; reason: string }> = {
 /** 递归收集 `src/**` 的非测试 `.ts` / `.tsx`。 */
 function collectSource(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules" || entry === ".next") continue;
+    if (entry === "node_modules" || entry === ".next") {
+      continue;
+    }
     const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) collectSource(full, out);
-    else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(full);
+    if (statSync(full).isDirectory()) {
+      collectSource(full, out);
+    } else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -97,7 +102,9 @@ describe("F13：形状判据不许把「调用点写错了」咽掉", () => {
     const found = new Map<string, number>();
     for (const { rel, text } of files) {
       const n = text.match(AS_NEVER)?.length ?? 0;
-      if (n > 0) found.set(rel, n);
+      if (n > 0) {
+        found.set(rel, n);
+      }
     }
     const unregistered = [...found.entries()]
       .filter(([rel]) => !AS_NEVER_LEDGER[rel])
@@ -110,15 +117,20 @@ describe("F13：形状判据不许把「调用点写错了」咽掉", () => {
   });
 
   it("每条登记都写着「为什么」", () => {
-    for (const [rel, entry] of Object.entries(AS_NEVER_LEDGER))
+    for (const [rel, entry] of Object.entries(AS_NEVER_LEDGER)) {
       expect(entry.reason.length, `${rel} 的理由是空的`).toBeGreaterThan(20);
+    }
   });
 
   it("投影类参数不许是 unknown / any，也不许出现 .select(… as never)", () => {
     const hits: Array<string> = [];
     for (const { rel, text } of files) {
-      for (const m of text.matchAll(UNKNOWN_PROJECTION)) hits.push(`${rel} → ${m[0].trim()}`);
-      for (const m of text.matchAll(SELECT_AS_NEVER)) hits.push(`${rel} → ${m[0]}`);
+      for (const m of text.matchAll(UNKNOWN_PROJECTION)) {
+        hits.push(`${rel} → ${m[0].trim()}`);
+      }
+      for (const m of text.matchAll(SELECT_AS_NEVER)) {
+        hits.push(`${rel} → ${m[0]}`);
+      }
     }
     expect(hits).toEqual([]);
   });
@@ -126,8 +138,12 @@ describe("F13：形状判据不许把「调用点写错了」咽掉", () => {
   it("仓储层签名里不许有以 _ 开头的参数（空气能力的来源）", () => {
     const hits: Array<string> = [];
     for (const { rel, text } of files) {
-      if (!/src\/lib\/core\/repository[^/]*\.ts$/.test(rel)) continue;
-      for (const m of text.matchAll(UNDERSCORE_PARAM)) hits.push(`${rel} → ${m[0].trim()}`);
+      if (!/src\/lib\/core\/repository[^/]*\.ts$/.test(rel)) {
+        continue;
+      }
+      for (const m of text.matchAll(UNDERSCORE_PARAM)) {
+        hits.push(`${rel} → ${m[0].trim()}`);
+      }
     }
     expect(hits).toEqual([]);
   });
@@ -140,7 +156,9 @@ describe("F13：形状判据不许把「调用点写错了」咽掉", () => {
     expect(mcpFiles.length, "MCP 面一个文件都没扫到 = 这条判据是空的").toBeGreaterThan(0);
     const hits: Array<string> = [];
     for (const { rel, text } of mcpFiles) {
-      for (const m of text.matchAll(MCP_ANY)) hits.push(`${rel} → ${m[0]}`);
+      for (const m of text.matchAll(MCP_ANY)) {
+        hits.push(`${rel} → ${m[0]}`);
+      }
     }
     expect(hits).toEqual([]);
   });

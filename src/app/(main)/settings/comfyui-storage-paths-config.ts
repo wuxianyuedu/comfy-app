@@ -8,11 +8,11 @@ import type { DesktopStoragePaths, StorageDirInfo } from "~/lib/comfyui/desktop-
 
 /** 一行 = 一个标签 + 它对应的目录列表（共享组可能多条）。 */
 export type StoragePathRow = {
+  dirs: Array<StorageDirInfo>;
   key: string;
   label: string;
   /** 目录被启动参数或 yaml 顶层 base_path 覆盖时的来源标注；否则 null。 */
   source: string | null;
-  dirs: Array<StorageDirInfo>;
 };
 
 /** 六组目录的标签与顺序（模型 → 共享模型 → 输入 → 共享输入 → 输出 → 共享输出）。 */

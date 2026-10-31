@@ -21,11 +21,7 @@
  */
 import { createContext, useContext, type ReactNode } from "react";
 
-import {
-  SlotContent,
-  SlotOutlet,
-  SlotOutletProvider,
-} from "~/components/ui/slot-outlet";
+import { SlotContent, SlotOutlet, SlotOutletProvider } from "~/components/ui/slot-outlet";
 
 /**
  * 「这一屏现在是当前页签吗」—— 由 `WorkspaceViewStack` 按页签逐个提供。
@@ -45,11 +41,7 @@ export function ViewTabActiveProvider({
   active: boolean;
   children: ReactNode;
 }) {
-  return (
-    <ViewTabActiveContext.Provider value={active}>
-      {children}
-    </ViewTabActiveContext.Provider>
-  );
+  return <ViewTabActiveContext.Provider value={active}>{children}</ViewTabActiveContext.Provider>;
 }
 
 /** 提供者 —— 挂在 `AppShell` 上（顶栏与所有视图都是它的后代）。 */
@@ -82,8 +74,8 @@ export function ViewActions({ children }: { children: ReactNode }) {
            按钮塞进顶栏 —— 所以这一档是「什么都不渲染」，不是「就地渲染」。 */
         active ? (
           <div
-            data-slot="view-actions-inline"
             className="mb-6 flex flex-wrap items-center justify-end gap-2"
+            data-slot="view-actions-inline"
           >
             {children}
           </div>

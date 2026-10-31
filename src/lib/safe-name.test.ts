@@ -9,7 +9,7 @@ describe("safeFileNameSegment", () => {
 
   it("其它字符连成一段换成单个下划线", () => {
     expect(safeFileNameSegment("a b  c")).toBe("a_b_c");
-    expect(safeFileNameSegment("a/b\\c")).toBe("a_b_c");
+    expect(safeFileNameSegment(String.raw`a/b\c`)).toBe("a_b_c");
     expect(safeFileNameSegment("a:b*c?d")).toBe("a_b_c_d");
   });
 

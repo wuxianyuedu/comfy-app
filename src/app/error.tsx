@@ -45,16 +45,12 @@ export default function Error({
           </p>
         </div>
         <div className="flex gap-3">
-          <Button
-            variant="primary-solid"
-            onClick={reset}
-            className="h-auto rounded-xl px-5 py-2.5"
-          >
+          <Button className="h-auto rounded-xl px-5 py-2.5" onClick={reset} variant="primary-solid">
             重试
           </Button>
           <Link
-            href="/"
             className="border-border bg-surface hover:bg-subtle rounded-xl border px-5 py-2.5 text-sm font-semibold transition-colors"
+            href="/"
           >
             返回首页
           </Link>

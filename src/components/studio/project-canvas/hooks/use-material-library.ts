@@ -24,44 +24,46 @@ const SEARCH_DEBOUNCE_MS = 250;
 
 export type MaterialScope = "project" | "cross";
 
-export interface MaterialLibraryController {
-  scope: MaterialScope;
-  folder: string | null;
-  search: string;
-  folders: Array<MaterialFolder>;
-  items: Array<MaterialItem>;
-  loading: boolean;
-  uploading: boolean;
+export type MaterialLibraryController = {
+  /** 面包屑路径段，每段可点击返回该级。 */
+  breadcrumbSegments: Array<{ key: string | null; label: string }>;
+  enterFolder: (folder: string | null) => void;
   /**
    * 当前要展示的错误文案；null 表示无错误。
    * 动作错误优先于拉取错误——否则一次后台刷新会把刚报出来的
    * 「上传失败」悄悄吞掉（用户看到提示条闪一下就没了）。
    */
   error: string | null;
+  folder: string | null;
+  folders: Array<MaterialFolder>;
+  items: Array<MaterialItem>;
+  loading: boolean;
+  refresh: () => void;
+  remove: (item: MaterialItem) => Promise<void>;
+  scope: MaterialScope;
+  search: string;
   /** 是否处于搜索态。 */
   searching: boolean;
-  /** 展示条目视图的条件：搜索中，或已进入某分类。 */
-  showItems: boolean;
-  /** 面包屑路径段，每段可点击返回该级。 */
-  breadcrumbSegments: Array<{ label: string; key: string | null }>;
   setScope: (scope: MaterialScope) => void;
   setSearch: (value: string) => void;
-  enterFolder: (folder: string | null) => void;
+  /** 展示条目视图的条件：搜索中，或已进入某分类。 */
+  showItems: boolean;
   upload: (files: FileList | null) => Promise<void>;
-  remove: (item: MaterialItem) => Promise<void>;
-  refresh: () => void;
-}
+  uploading: boolean;
+};
 
-export interface UseMaterialLibraryOptions {
+export type UseMaterialLibraryOptions = {
   /** 当前画布项目 id；为空时只能看共享素材，上传会被禁用。 */
   projectId?: string | null;
-}
+};
 
 /** 把 unknown 抛值捞成中文消息——失败路径始终有可读文案（硬规则）。 */
 function errMsg(e: unknown, fallback: string): string {
   if (typeof e === "object" && e !== null && "message" in e) {
     const m: unknown = /* SAFETY: 类型断言已复核 */ (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
+    if (typeof m === "string") {
+      return m;
+    }
   }
   return fallback;
 }
@@ -123,9 +125,9 @@ export function useMaterialLibrary({
           setFolders(result.folders);
           setItems(result.items);
         });
-      } catch (e) {
+      } catch (error) {
         guard.commit(() => {
-          setLoadError(errMsg(e, "读取素材库失败"));
+          setLoadError(errMsg(error, "读取素材库失败"));
           setFolders([]);
           setItems([]);
         });
@@ -149,7 +151,9 @@ export function useMaterialLibrary({
   /* ── 上传（分类列表页上传时默认丢进「参考素材」）── */
   const upload = useCallback(
     async (files: FileList | null) => {
-      if (!files || files.length === 0) return;
+      if (!files || files.length === 0) {
+        return;
+      }
       const target = folder ?? "ref";
       setActionError(null);
       try {
@@ -159,8 +163,8 @@ export function useMaterialLibrary({
           }
         });
         refresh();
-      } catch (e) {
-        setActionError(errMsg(e, "上传失败"));
+      } catch (error) {
+        setActionError(errMsg(error, "上传失败"));
       }
     },
     [folder, projectId, refresh, uploadBusy],
@@ -175,8 +179,8 @@ export function useMaterialLibrary({
         // 乐观移除，再拉一次校准计数
         setItems((prev) => prev.filter((prev) => prev.id !== item.id));
         refresh();
-      } catch (e) {
-        setActionError(errMsg(e, "删除失败"));
+      } catch (error) {
+        setActionError(errMsg(error, "删除失败"));
       }
     },
     [refresh],
@@ -185,7 +189,7 @@ export function useMaterialLibrary({
   const searching = normalizeNeedle(search).length > 0;
   const showItems = searching || folder !== null;
 
-  const breadcrumbSegments: Array<{ label: string; key: string | null }> = searching
+  const breadcrumbSegments: Array<{ key: string | null; label: string }> = searching
     ? [{ label: `搜索结果 · ${items.length}`, key: null }]
     : folder
       ? [

@@ -16,11 +16,11 @@ import { cn } from "~/lib/utils";
 import { countPendingStages } from "~/components/workshop/stage-config";
 import type { HealthRow } from "~/components/workshop/stage-config";
 
-interface WorkshopHeaderProps {
-  title: string;
-  progressPct: number;
+type WorkshopHeaderProps = {
   health: Array<HealthRow>;
-}
+  progressPct: number;
+  title: string;
+};
 
 export function WorkshopHeader({ title, progressPct, health }: WorkshopHeaderProps) {
   /* 唯一一份进度账在 health 里：段数与「差哪几段」都由它派生，头部不再自己数一遍。 */
@@ -49,25 +49,25 @@ export function WorkshopHeader({ title, progressPct, health }: WorkshopHeaderPro
           总进度 {progressPct}%
         </span>
         <div
-          role="group"
           aria-label="工坊流程健康度"
           className="flex min-w-0 flex-1 items-center gap-2"
+          role="group"
         >
           {health.map((row) => (
             <ProgressBar
-              key={row.id}
+              ariaLabel={row.label}
               className="min-w-0 flex-1"
-              value={toPct(row.ratio, 1)}
+              fillClassName={row.ratio >= 1 ? "bg-success" : undefined}
+              key={row.id}
               /* 可见段名走两字缩略：这一格只有几十像素宽，全名会被截成「场景分…」。
                  可访问名仍是全名 —— 读屏不受宽度约束，没必要跟着缩。 */
               label={row.shortLabel}
-              showValue={false}
-              ariaLabel={row.label}
               /* 段宽只有几十像素，2% 画不出可辨识的一格，会和「还没开始」看着
                  一样。`minVisible` 就是这条差异的既有出口（0 仍然恒为 0）。 */
               minVisible={10}
+              showValue={false}
               trackClassName="bg-elevated h-1.5"
-              fillClassName={row.ratio >= 1 ? "bg-success" : undefined}
+              value={toPct(row.ratio, 1)}
             />
           ))}
         </div>

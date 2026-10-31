@@ -33,20 +33,20 @@ import type { Character } from "~/lib/workshop/types";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 
 /** 定妆照区块需要的全部上下文：会话（controller 常驻）+ 生成通道配置。 */
-export interface CharacterPortraitContext {
-  session: PortraitSession;
+export type CharacterPortraitContext = {
   actions: PortraitSessionActions;
   /** API 直连通道的脱敏配置（远端通道的门禁） */
   apiChannels: ApiChannelsView | null;
+  onOpenModelAdapters: () => void;
+  session: PortraitSession;
   /** 工作流库可选项（本地通道按模型标签挑选已封装的生图工作流）。 */
   workflows: Array<WorkshopWorkflowOption>;
-  onOpenModelAdapters: () => void;
-}
+};
 
-interface Props {
+type Props = {
   character: Character;
   portrait: CharacterPortraitContext;
-}
+};
 
 /** 单张角色卡里的「定妆照」区块：生成 / 导入 / 挑选。 */
 export function CharacterPortraitStudio({ character, portrait }: Props) {
@@ -73,7 +73,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   const tagCounts = new Map<string, number>();
   for (const w of localWorkflows) {
     const tag = w.modelTags[0];
-    if (tag) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+    if (tag) {
+      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+    }
   }
   for (const w of localWorkflows) {
     const tag = w.modelTags[0];
@@ -95,7 +97,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   const [history, setHistory] = React.useState<Array<PersistableGenerationLog> | null>(null);
   const loadHistory = () => {
     setHistoryOpen(true);
-    if (history) return;
+    if (history) {
+      return;
+    }
     void fetchGenerationLogs("portrait", 100).then(setHistory);
   };
 
@@ -108,15 +112,15 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。
             与镜头台 / 影片台的「生成通道」是同一族：手搓的
             `variant="outline"` + 选中三元，缺「已选中时的悬停值」那一半。 */}
-        <div role="radiogroup" aria-label="定妆照生成通道" className="flex gap-2">
+        <div aria-label="定妆照生成通道" className="flex gap-2" role="radiogroup">
           {
             /* SAFETY: 类型断言已复核 */ (["local", "remote"] as const).map((channel) => (
               <SelectChip
-                key={channel}
-                shape="compact"
-                selected={session.channel === channel}
-                onClick={() => actions.patch({ channel })}
                 disabled={session.busy || session.importing}
+                key={channel}
+                onClick={() => actions.patch({ channel })}
+                selected={session.channel === channel}
+                shape="compact"
               >
                 {channel === "local" ? "本地（ComfyUI）" : "远端 API"}
               </SelectChip>
@@ -125,35 +129,35 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         </div>
         {session.channel === "local" && (
           <SelectMenu
-            value={session.localWorkflowId}
+            className="bg-subtle! border-border! text-2xs"
+            disabled={session.busy || session.importing}
+            labels={localOptionLabels}
             onChange={(value) => actions.patch({ localWorkflowId: value })}
             options={localOptions}
-            labels={localOptionLabels}
             placeholder="选择本地生图模型"
-            disabled={session.busy || session.importing}
-            className="bg-subtle! border-border! text-2xs"
             popoverMinWidth={240}
+            value={session.localWorkflowId}
           />
         )}
         {session.channel === "remote" && remoteImageModels.length > 0 && (
           <SelectMenu
-            value={effectiveRemoteModel}
+            className="bg-subtle! border-border! text-2xs"
+            disabled={session.busy || session.importing}
             onChange={(value) => actions.patch({ remoteModel: value })}
             options={remoteImageModels}
             placeholder="选择远端生图模型"
-            disabled={session.busy || session.importing}
-            className="bg-subtle! border-border! text-2xs"
             popoverMinWidth={220}
+            value={effectiveRemoteModel}
           />
         )}
         <ShotSizePicker
-          value={session.size}
-          onChange={(size) => actions.patch({ size })}
           disabled={session.busy}
+          onChange={(size) => actions.patch({ size })}
+          value={session.size}
         />
         <Button
-          variant="primary-solid"
-          size="xs"
+          className="h-auto rounded-md px-3 py-1.5"
+          disabled={!canGenerate}
           onClick={() =>
             void actions.generate(
               character,
@@ -167,17 +171,17 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   : undefined,
             )
           }
-          disabled={!canGenerate}
-          className="h-auto rounded-md px-3 py-1.5"
+          size="xs"
+          variant="primary-solid"
         >
           {busy ? "生成中…" : candidates.length > 0 ? "再生成一张" : "生成定妆照"}
         </Button>
         <Button
-          variant="outline"
-          size="xs"
-          onClick={importPicker.open}
-          disabled={session.busy || session.importing}
           className="border-border text-ink hover:bg-surface h-auto rounded-md px-3 py-1.5"
+          disabled={session.busy || session.importing}
+          onClick={importPicker.open}
+          size="xs"
+          variant="outline"
         >
           {importing ? "导入中…" : "导入图片"}
         </Button>
@@ -197,9 +201,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           远端 API 生图未配置 —— 在<span className="font-medium">设置 → 模型</span>
           里添加一条「图片」类型的远端模型即可直接使用；或
           <Button
-            variant="link"
-            onClick={onOpenModelAdapters}
             className="text-2xs h-auto p-0 underline underline-offset-2"
+            onClick={onOpenModelAdapters}
+            variant="link"
           >
             打开模型适配
           </Button>
@@ -220,25 +224,25 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                 正在用 {session.modelLabel || "当前通道"} 生成定妆照…
               </p>
               <Progress
+                className="bg-elevated h-1 gap-0"
                 /* 通道不提供进度（远端一次性请求）传 null：base-ui 渲染成不确定
  进度条（脉动），不拿 0 装成 4% 的确定性进度。 */
                 value={session.progress}
-                className="bg-elevated h-1 gap-0"
               />
             </>
           )}
           {session.status && !session.error && (
-            <p role="status" className="text-primary text-2xs">
+            <p className="text-primary text-2xs" role="status">
               {session.status}
             </p>
           )}
           {session.error && (
             <Alert
-              variant="danger"
               /* 行内错误行：保持原有的紧凑尺寸与「无可见边框」观感 ——
  基元只接管「危险色怎么取」（此前写死 bg-red-100 + 深色档
  文字，浅底在深色主题下会与文字糊在一起）。 */
               className="text-2xs block rounded-md border-transparent px-2 py-1"
+              variant="danger"
             >
               {session.error}
             </Alert>
@@ -252,9 +256,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             <div className="bg-bg/60 rounded-md px-2 py-1">
               <div className="text-primary text-3xs flex items-center gap-2">
                 <Disclosure
-                  open={busy ? true : undefined}
-                  marker="caret"
                   className="min-w-0 items-center gap-2"
+                  marker="caret"
+                  open={busy ? true : undefined}
                   panelClassName="text-3xs"
                   trigger={`生成过程${
                     session.log.length > 0 ? `（${session.log.length} 条）` : ""
@@ -263,7 +267,6 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   <ul className="mt-1 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
                     {session.log.map((entry) => (
                       <li
-                        key={`${entry.ts}-${entry.text}`}
                         className={`text-2xs leading-relaxed ${
                           entry.level === "error"
                             ? "text-destructive"
@@ -271,6 +274,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                               ? "text-success-strong"
                               : "text-muted-foreground"
                         }`}
+                        key={`${entry.ts}-${entry.text}`}
                       >
                         <span className="text-faint mr-1">{formatClock(entry.ts)}</span>
                         {entry.text}
@@ -279,9 +283,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   </ul>
                 </Disclosure>
                 <Button
-                  variant="link"
-                  onClick={() => loadHistory()}
                   className="text-muted-foreground hover:text-primary text-2xs h-auto shrink-0 p-0 underline underline-offset-2"
+                  onClick={() => loadHistory()}
+                  variant="link"
                 >
                   历史
                 </Button>
@@ -299,7 +303,6 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                     <ul className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
                       {history.map((entry, i) => (
                         <li
-                          key={`${entry.ts}-${i}`}
                           className={`text-2xs leading-relaxed ${
                             entry.kind === "error"
                               ? "text-destructive"
@@ -307,6 +310,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                                 ? "text-success-strong"
                                 : "text-muted-foreground"
                           }`}
+                          key={`${entry.ts}-${i}`}
                         >
                           <span className="text-faint mr-1">{formatClock(entry.ts)}</span>
                           {entry.summary}
@@ -331,11 +335,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           {candidates.map((candidate) => {
             const selected = character.portraitUrl === candidate.url;
             return (
-              <div key={candidate.url} className="relative">
+              <div className="relative" key={candidate.url}>
                 <Hint label={selected ? "已定为定妆照" : "设为定妆照"}>
                   <Button
-                    variant="ghost"
-                    onClick={() => actions.select(character.id, candidate.url)}
                     aria-label={
                       selected
                         ? "当前定妆照"
@@ -344,11 +346,13 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                     className={`block overflow-hidden rounded-lg border-2 transition-colors ${
                       selected ? "border-primary" : "border-border hover:border-primary/60"
                     }`}
+                    onClick={() => actions.select(character.id, candidate.url)}
+                    variant="ghost"
                   >
                     <MediaThumbnail
-                      src={candidate.url}
                       alt={`定妆照候选（${PORTRAIT_SOURCE_LABELS[candidate.source]}）`}
                       className="size-24 object-cover"
+                      src={candidate.url}
                     />
                   </Button>
                 </Hint>
@@ -361,12 +365,12 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   </span>
                 )}
                 <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => actions.remove(character.id, candidate.url)}
-                  disabled={session.busy || session.importing}
                   aria-label="删除这张定妆照候选"
                   className="text-muted-foreground hover:text-danger-strong absolute -top-1.5 -right-1.5 rounded-full bg-black/70"
+                  disabled={session.busy || session.importing}
+                  onClick={() => actions.remove(character.id, candidate.url)}
+                  size="icon-xs"
+                  variant="ghost"
                 >
                   ✕
                 </Button>

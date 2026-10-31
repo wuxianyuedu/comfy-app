@@ -24,9 +24,11 @@ const CLI_LOG_PREFIX = /^\[comfy-cli (原始|stdout|stderr)\]\s?/;
  * 不是 comfy-cli 原文行（前缀不匹配）时返回 `null` —— 调用处据此按普通日志
  * 处理，不会把无关的 `[comfy-cli …]` 文本吞掉。
  */
-export function splitCliLogLine(message: string): { tag: CliLogTag; payload: string } | null {
+export function splitCliLogLine(message: string): { payload: string; tag: CliLogTag } | null {
   const match = CLI_LOG_PREFIX.exec(message);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   return {
     tag: /* SAFETY: 类型断言已复核 */ match[1] as CliLogTag,
     payload: message.slice(match[0].length).trimStart(),
@@ -43,7 +45,9 @@ export function splitCliLogLine(message: string): { tag: CliLogTag; payload: str
  */
 export function isCliJsonLine(message: string): boolean {
   const split = splitCliLogLine(message);
-  if (!split) return false;
+  if (!split) {
+    return false;
+  }
   const first = split.payload.charAt(0);
   return first === "{" || first === "[";
 }
@@ -57,9 +61,13 @@ export function isCliJsonLine(message: string): boolean {
  */
 export function parseCliJsonLine(message: string): { tag: CliLogTag; value: unknown } | null {
   const split = splitCliLogLine(message);
-  if (!split) return null;
+  if (!split) {
+    return null;
+  }
   const first = split.payload.charAt(0);
-  if (first !== "{" && first !== "[") return null;
+  if (first !== "{" && first !== "[") {
+    return null;
+  }
   try {
     const value: unknown = JSON.parse(split.payload);
     if (value && typeof value === "object") {

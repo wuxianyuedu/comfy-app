@@ -17,10 +17,10 @@ import { describe, expect, it } from "vitest";
 import { createUsageFieldEditor } from "./usage-field-editor";
 import { makeUsageField, type UsageField } from "~/lib/llm/usage-test-config";
 
-interface State {
-  kind: "chat" | "image" | "video";
+type State = {
   fields: Array<UsageField>;
-}
+  kind: "chat" | "image" | "video";
+};
 
 function useEditor(initial: State) {
   const [state, setState] = useState<State | null>(initial);

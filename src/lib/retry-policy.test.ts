@@ -30,9 +30,7 @@ import {
 describe("backoffDelayMs", () => {
   it("fixed：恒定不变（attempt 无关）", () => {
     for (const attempt of [0, 1, 5, 100]) {
-      expect(backoffDelayMs({ shape: "fixed", baseMs: 250, attempt })).toBe(
-        250,
-      );
+      expect(backoffDelayMs({ shape: "fixed", baseMs: 250, attempt })).toBe(250);
     }
   });
 
@@ -41,7 +39,7 @@ describe("backoffDelayMs", () => {
       backoffDelayMs({
         shape: "exponential",
         baseMs: 1000,
-        maxMs: 15000,
+        maxMs: 15_000,
         attempt,
       });
     expect(at(0)).toBe(1000);
@@ -55,10 +53,10 @@ describe("backoffDelayMs", () => {
       backoffDelayMs({
         shape: "exponential",
         baseMs: 1000,
-        maxMs: 15000,
+        maxMs: 15_000,
         attempt: 10,
       }),
-    ).toBe(15000);
+    ).toBe(15_000);
   });
 
   it("exponential：maxAttempt 夹住 `2 ** attempt`（防 Infinity，不是「最多几次」）", () => {
@@ -66,18 +64,18 @@ describe("backoffDelayMs", () => {
     const huge = backoffDelayMs({
       shape: "exponential",
       baseMs: 1000,
-      maxMs: 15000,
+      maxMs: 15_000,
       maxAttempt: 8,
       attempt: 1024,
     });
-    expect(huge).toBe(15000);
+    expect(huge).toBe(15_000);
     expect(Number.isFinite(huge)).toBe(true);
     /* 夹取后的值与 attempt 恰好到 8 时相同 —— 就是「不再涨」的意思。 */
     expect(
       backoffDelayMs({
         shape: "exponential",
         baseMs: 1000,
-        maxMs: 15000,
+        maxMs: 15_000,
         maxAttempt: 8,
         attempt: 8,
       }),
@@ -85,12 +83,8 @@ describe("backoffDelayMs", () => {
   });
 
   it("负数 attempt 当 0 处理（不返回比基数更小的等待）", () => {
-    expect(
-      backoffDelayMs({ shape: "exponential", baseMs: 1000, attempt: -3 }),
-    ).toBe(1000);
-    expect(backoffDelayMs({ shape: "fixed", baseMs: 250, attempt: -3 })).toBe(
-      250,
-    );
+    expect(backoffDelayMs({ shape: "exponential", baseMs: 1000, attempt: -3 })).toBe(1000);
+    expect(backoffDelayMs({ shape: "fixed", baseMs: 250, attempt: -3 })).toBe(250);
   });
 });
 
@@ -98,7 +92,7 @@ describe("具名策略（本条账的核心：策略不同、且各有理由）"
   it("WS 重连是指数退避档", () => {
     expect(WS_RECONNECT.shape).toBe("exponential");
     expect(WS_RECONNECT.baseMs).toBe(1000);
-    expect(WS_RECONNECT.maxMs).toBe(15000);
+    expect(WS_RECONNECT.maxMs).toBe(15_000);
     expect(WS_RECONNECT.maxAttempt).toBe(8);
   });
 
@@ -112,8 +106,7 @@ describe("具名策略（本条账的核心：策略不同、且各有理由）"
     /* 这几个总数此前散在注释里，且行文与实现已经对不上过一次
      *（ollama-stop 的注释写「最多 5s」，实现是 10 × 500ms —— 恰好相等，
      *  但那条注释并没有把两个因子写出来）。这里把因子与总数都钉住。 */
-    const total = (p: { baseMs: number; maxAttempts: number }) =>
-      p.baseMs * p.maxAttempts;
+    const total = (p: { baseMs: number; maxAttempts: number }) => p.baseMs * p.maxAttempts;
     expect(total(HISTORY_READ)).toBe(3000); // 12 × 250ms
     expect(total(OLLAMA_READY)).toBe(40_000); // 20 × 2s
     expect(total(COMFY_STOP_PROBE)).toBe(2500); // 5 × 500ms
@@ -135,14 +128,12 @@ describe("具名策略（本条账的核心：策略不同、且各有理由）"
      * 基数小、次数少；穷尽之后就归还槽位让回收器接管，收口一路等在库里没有意义。 */
     expect(TERMINAL_DB_WRITE.shape).toBe("exponential");
     expect(TERMINAL_DB_WRITE.maxAttempts).toBe(4);
-    const waits = [0, 1, 2].map((attempt) =>
-      backoffDelayMs({ ...TERMINAL_DB_WRITE, attempt }),
-    );
+    const waits = [0, 1, 2].map((attempt) => backoffDelayMs({ ...TERMINAL_DB_WRITE, attempt }));
     expect(waits).toEqual([40, 80, 160]);
     expect(waits.reduce((a, b) => a + b, 0)).toBe(280);
     // 退避不许冲破封顶（`2 ** attempt` 在 attempt 大时会爆炸）。
-    expect(
-      backoffDelayMs({ ...TERMINAL_DB_WRITE, attempt: 30 }),
-    ).toBeLessThanOrEqual(TERMINAL_DB_WRITE.maxMs);
+    expect(backoffDelayMs({ ...TERMINAL_DB_WRITE, attempt: 30 })).toBeLessThanOrEqual(
+      TERMINAL_DB_WRITE.maxMs,
+    );
   });
 });

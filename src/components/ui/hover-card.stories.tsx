@@ -72,7 +72,7 @@ export const Sides: Story = {
       {
         /* SAFETY: 类型断言已复核 */ (["top", "right", "bottom", "left"] as const).map((side) => (
           <HoverCard key={side}>
-            <HoverCardTrigger render={<Button variant="outline" size="sm" />}>
+            <HoverCardTrigger render={<Button size="sm" variant="outline" />}>
               side={side}
             </HoverCardTrigger>
             <HoverCardContent side={side}>

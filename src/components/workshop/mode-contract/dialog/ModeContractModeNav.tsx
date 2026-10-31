@@ -55,10 +55,10 @@ export function ModeContractModeNav({
 }: {
   /** 当前选中的模式码（null = 未选）。 */
   activeMode: string | null;
-  /** 注册表里已被用户改过的模式（标「已改」）。 */
-  storedCustomized: (mode: string) => boolean;
   /** 选一个模式。 */
   onSelect: (mode: string) => void;
+  /** 注册表里已被用户改过的模式（标「已改」）。 */
+  storedCustomized: (mode: string) => boolean;
 }) {
   /* 类别 → 是否展开。**初始全部展开**（把每个类别先表一次态），收起是「先看别的
      类别」的临时动作，默认折着等于把当前模式藏起来。 */
@@ -71,55 +71,53 @@ export function ModeContractModeNav({
     /* 一排模式里只有一个能选中 —— 单选语义（`role="radiogroup"` / `radio`），
        与「模型适配」的模型清单同一条契约。折叠与否不改变这一块的职责，
        所以 `aria-label` 仍是「选择要配置的模式」。 */
-    <div role="radiogroup" aria-label="选择要配置的模式" className="mb-3">
+    <div aria-label="选择要配置的模式" className="mb-3" role="radiogroup">
       {groups.map((group) => {
         const open = categoryExpansion.isExpanded(group.category);
         return (
           <Disclosure
+            className="hover:text-ink mb-3 gap-1 px-2 text-xs font-medium"
             key={group.category}
+            marker="caret"
+            onOpenChange={() => categoryExpansion.toggle(group.category)}
             /* 受控：展开态就是**哪些类别折着**这份集合（§16.2.4.17）。
                交给基元的那部分只有「父行怎么折」——`aria-expanded` /
                `aria-controls` / 键盘 / `hidden="until-found"` 都在它里头。 */
             open={open}
-            onOpenChange={() => categoryExpansion.toggle(group.category)}
-            marker="caret"
-            className="hover:text-ink mb-3 gap-1 px-2 text-xs font-medium"
             /* 折起来时那一摞走 `TreeChildren`（缩进档 + 引导线一处给全，
                §16.2.4.39）；`data-category` 是给用例锚「哪一类」的记号。 */
             panelClassName="mb-3"
             trigger={
               <span
-                data-category={group.category}
                 className="text-ink-fainter min-w-0 flex-1 truncate"
+                data-category={group.category}
               >
                 {group.label}
               </span>
             }
           >
-            <TreeChildren depth={1} className="flex flex-col gap-0.5">
+            <TreeChildren className="flex flex-col gap-0.5" depth={1}>
               {group.modes.map((t) => {
                 const active = activeMode === t.code;
                 const customized = storedCustomized(t.code);
                 return (
                   <Button
-                    key={t.code}
-                    variant="ghost"
-                    /* `data-mode` 是给用例锚「这一行是哪条模式」的记号（按可访问名
-                       找会随文案变，code 才是身份）。 */
-                    data-mode={t.code}
-                    role="radio"
                     aria-checked={active}
-                    onClick={() => onSelect(t.code)}
                     className={cn(
                       "h-auto w-full justify-start gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium",
                       active
                         ? "bg-primary-soft text-primary-strong hover:bg-primary-soft hover:text-primary-strong"
                         : "text-ink-muted hover:text-ink",
                     )}
+                    /* `data-mode` 是给用例锚「这一行是哪条模式」的记号（按可访问名
+                       找会随文案变，code 才是身份）。 */
+                    data-mode={t.code}
+                    key={t.code}
+                    onClick={() => onSelect(t.code)}
+                    role="radio"
+                    variant="ghost"
                   >
-                    <span className="min-w-0 flex-1 truncate text-left">
-                      {t.label}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate text-left">{t.label}</span>
                     {customized && (
                       <span
                         className={cn(

@@ -98,18 +98,89 @@ export function resolveMaxWorkers(raw, fallback) {
  * 抓下来之后仍要**原样回吐**（`process.stdout.write`），否则日志里就看不见失败原因了 ——
  * 那正是 `run-affected` 当初被造出来要避免的形态（「跑的是 0 个用例、原因读不出」）。
  *
- * @returns {{status: number|null, output: string}}
+ * ## 为什么带 `timeout`（2026-10-30 的现场）
+ *
+ * 早先这一跳**没有任何上界**：`spawnSync` 不给 `timeout`，于是一次改动面膨胀就能让它
+ * 一直跑到 node / 平台把它掐掉为止。而掐掉时的那一跑**一条读数都不剩** ——
+ * 实测 `cnb-l0u-1k66agmv9`（PR #2760）：808 份、`--maxWorkers=1`，跑满
+ * **3240104ms（54.0 分钟）** 被平台的 `timeout of 3240000ms exceeded` 掐断，
+ * 日志里连一个用例名都没有（`--reporter=dot` 在第一份跑完之前只往同一行打点，
+ * 而平台保留的是日志**尾部**）。所以那一格既不是某条用例红，也不是某条断言超时 ——
+ * 是「这一遍根本装不下」。
+ *
+ * `timeout` 那一档必须与既有判决链对齐：掐断之后 `res.status` 是 `null`、
+ * `res.signal` 是 `SIGTERM`，而 `signal` **要一起回吐**，否则 `classifyFirstPass`
+ * 会把「没跑完」读成「跑完了但退出码怪」——那是另一回事（§13.6.2：没判 ≠ 红）。
+ *
+ * @param {string} entry vitest 入口
+ * @param {string[]} args 交给它的参数
+ * @param {{timeoutMs?: number, filterLine?: (line: string) => boolean}} [options]
+ *   `timeoutMs` 缺省**不设界**（与这一格存在之前逐字同形）：界由调用点按现场预算决定，
+ *   不在这一层拍一个常数。`filterLine` 是「受影响用例」门在 CI 里屏蔽良性 stderr 噪音用的
+ *   —— 给的话，回吐给平台前按行过它，命中即丢（见 `affected-launch-noise-reporter.mjs`）。
+ *   本地不设该变量 ⇒ 不过滤，开发者照常看到全部日志。
+ * @returns {{status: number|null, signal?: string|null, timedOut?: boolean, output: string}}
  */
-export function spawnVitest(entry, args) {
+
+/**
+ * 把抓到的 stdout / stderr 合成 `output`（超时 / 装载指纹的取数面）时按行过滤噪音。
+ * 抽出成纯函数是为了能被单测直接断言（不真起 vitest，见
+ * `tests/affected-launch-noise-reporter.test.ts`）。`filterLine` 不给时行为与改动前逐字一致
+ * （`${stdout}${stderr}`）。
+ * @param {string|Buffer|null} stdout
+ * @param {string|Buffer|null} stderr
+ * @param {(line: string) => boolean} [filterLine]
+ * @returns {string}
+ */
+export function filterSpawnOutput(stdout, stderr, filterLine) {
+  if (!filterLine) return `${stdout ?? ""}${stderr ?? ""}`;
+  const keep = (s) =>
+    String(s ?? "")
+      .split("\n")
+      .filter((l) => !filterLine(l))
+      .join("\n");
+  return `${keep(stdout)}${keep(stderr)}`;
+}
+
+export function spawnVitest(entry, args, options = {}) {
+  const { timeoutMs, filterLine } = options;
   const res = spawnSync(process.execPath, [entry, ...args], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeout: timeoutMs } : {}),
   });
-  const output = `${res.stdout ?? ""}${res.stderr ?? ""}`;
-  process.stdout.write(res.stdout ?? "");
-  process.stderr.write(res.stderr ?? "");
-  if (res.error) throw res.error;
-  return { status: res.status, output };
+  /* 噪音屏蔽（CI）：`filterLine` 给的话，把 stdout / stderr 按行过滤后再回吐；不给时逐字回吐
+   * （与改动前逐字一致）。注意：本函数体内**始终保留 `process.stdout.write` /
+   * `process.stderr.write` 这两个字面 token** —— 那是「输出真被抓在手里、没有退化成
+   * inherit 直通」的源码判据（见 `tests/hook-affected-launch.test.ts`；那条判据同时禁止
+   * 本函数体出现 stdio 加 inherit 的直通写法，注释里也不行），所以这里用
+   * 内联分支而不是包一层闭包把它藏没。`output`（超时 / 装载指纹的取数面）同样用过滤后的版本，
+   * 由 `filterSpawnOutput` 算（噪音清单里不含任何指纹，过滤不会吞掉判决文本）。 */
+  if (!filterLine) {
+    process.stdout.write(res.stdout ?? "");
+    process.stderr.write(res.stderr ?? "");
+  } else {
+    for (const line of String(res.stdout ?? "").split("\n")) {
+      if (!filterLine(line)) process.stdout.write(line + "\n");
+    }
+    for (const line of String(res.stderr ?? "").split("\n")) {
+      if (!filterLine(line)) process.stderr.write(line + "\n");
+    }
+  }
+  const output = filterSpawnOutput(res.stdout, res.stderr, filterLine);
+  /* `ETIMEDOUT` 是 `spawnSync` 掐断自己子进程时给出的 `error.code` —— 它是**没跑完**的
+   * 证据，不是「跑起来失败」的证据，所以在这里标成 `timedOut` 而不是 `throw`
+   * （真起不来的是 `ENOENT` / `EACCES` 那一族，照旧抛）。 */
+  const timedOut = res.error?.code === "ETIMEDOUT";
+  if (res.error && !timedOut) {
+    throw res.error;
+  }
+  return {
+    status: timedOut ? null : res.status,
+    signal: res.signal ?? null,
+    ...(timedOut ? { timedOut: true } : {}),
+    output,
+  };
 }
 
 /**
@@ -124,7 +195,9 @@ export function planLaunches(files, budget = SAFE_ARGV_BUDGET) {
   let length = 0;
   for (const file of files) {
     const name = String(file).trim();
-    if (!name) continue;
+    if (!name) {
+      continue;
+    }
     if (name.length + 1 > budget) {
       throw new Error(
         `[affected-launch] 单个路径就超过命令行长预算（${name.length} > ${budget}）——` +
@@ -142,7 +215,9 @@ export function planLaunches(files, budget = SAFE_ARGV_BUDGET) {
     current.push(name);
     length = next;
   }
-  if (current.length > 0) chunks.push(current);
+  if (current.length > 0) {
+    chunks.push(current);
+  }
   return chunks;
 }
 

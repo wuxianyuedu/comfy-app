@@ -60,7 +60,7 @@ import { VIDEO_POLL_TOTAL_MS } from "~/lib/llm/video-task-util";
 const fetchMock = vi.fn<typeof fetch>();
 
 /** 取第 n 次 fetch 调用的 (url, init)，并把 init 收成可安全访问的形状。 */
-function callAt(n = 0): { url: string; init: RequestInit } {
+function callAt(n = 0): { init: RequestInit; url: string } {
   const call = fetchMock.mock.calls[n]!;
   // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
@@ -92,7 +92,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 function reqOf(body: unknown, opts: { throw?: boolean } = {}): Request {
   return /* SAFETY: 类型断言已复核 */ {
     json: async () => {
-      if (opts.throw) throw new Error("bad json");
+      if (opts.throw) {
+        throw new Error("bad json");
+      }
       return body;
     },
   } as unknown as Request;
@@ -420,7 +422,7 @@ describe("callVideo（提交 + 内置一轮轮询）", () => {
         .mockResolvedValueOnce(jsonResponse({ task_id: "t1" }))
         .mockResolvedValue(jsonResponse({ data: [{ url: "https://v/done.mp4" }] }));
       const p = callVideo(UP, "m", "p", {});
-      await vi.advanceTimersByTimeAsync(6_000);
+      await vi.advanceTimersByTimeAsync(6000);
       await expect(p).resolves.toEqual({
         status: "done",
         url: "https://v/done.mp4",
@@ -435,7 +437,7 @@ describe("callVideo（提交 + 内置一轮轮询）", () => {
     try {
       fetchMock.mockResolvedValue(jsonResponse({ task_id: "t2" }));
       const p = callVideo(UP, "m", "p", {});
-      await vi.advanceTimersByTimeAsync(VIDEO_POLL_TOTAL_MS + 6_000);
+      await vi.advanceTimersByTimeAsync(VIDEO_POLL_TOTAL_MS + 6000);
       await expect(p).resolves.toEqual({ status: "pending", taskId: "t2" });
     } finally {
       vi.useRealTimers();
@@ -468,7 +470,7 @@ describe("queryVideoTask（继续等待，绝不重新提交）", () => {
     try {
       fetchMock.mockResolvedValue(jsonResponse({ data: [{ url: "https://v/x.mp4" }] }));
       const p = queryVideoTask(UP, "m", "t");
-      await vi.advanceTimersByTimeAsync(6_000);
+      await vi.advanceTimersByTimeAsync(6000);
       await expect(p).resolves.toEqual({ done: true, url: "https://v/x.mp4" });
 
       // 只发查询请求：不重新提交、不带 body —— 这是「不重复扣费」的机器判据

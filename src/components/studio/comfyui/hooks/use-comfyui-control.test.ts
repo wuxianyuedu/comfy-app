@@ -69,8 +69,8 @@ vi.mock("~/lib/shell/desktop-shell-client", () => ({
  * 真带上那一次的 id」这条判据靠它。 */
 const { sessionLogRequests } = vi.hoisted(() => ({
   sessionLogRequests: /* SAFETY: 类型断言已复核 */ [] as Array<{
-    source: string;
     session: string | null;
+    source: string;
   }>,
 }));
 vi.mock("~/lib/log/log-file-client", () => {
@@ -79,9 +79,13 @@ vi.mock("~/lib/log/log-file-client", () => {
   const fetchLogSessions = vi.fn(async (source: string, sessionId?: string) => {
     sessionLogRequests.push({ source, session: sessionId ?? null });
     const query = new URLSearchParams({ source });
-    if (sessionId) query.set("session", sessionId);
+    if (sessionId) {
+      query.set("session", sessionId);
+    }
     const res = await fetch(`/api/logs/sessions?${query.toString()}`);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as unknown;
   });
   return {
@@ -91,22 +95,22 @@ vi.mock("~/lib/log/log-file-client", () => {
   };
 });
 
-interface Behavior {
-  comfyStart?: { ok: boolean; detail: string };
+type Behavior = {
   /** comfyui.status 返回的 base（非空即「运行中」，供「打开查看」使用）。 */
   comfyBase?: string | null;
-  /** comfyui.status 返回的**已保存**路径（启动动作实际会用的那一条）。 */
-  comfyPath?: string;
   /** comfyEmbeddable 探测结论（决定页签里渲染 iframe 还是可读说明）。 */
   comfyEmbeddable?: { embeddable: boolean; reason: string };
-  /** comfyOpen（在浏览器打开）的返回文案；默认成功。 */
-  comfyOpen?: { ok: boolean; detail: string };
   comfyInstance?: {
-    pathConfigured: boolean;
-    instanceType: "desktop" | "portable" | "venv" | null;
     desktopManaged: boolean;
+    instanceType: "desktop" | "portable" | "venv" | null;
+    pathConfigured: boolean;
   };
-}
+  /** comfyOpen（在浏览器打开）的返回文案；默认成功。 */
+  comfyOpen?: { detail: string; ok: boolean };
+  /** comfyui.status 返回的**已保存**路径（启动动作实际会用的那一条）。 */
+  comfyPath?: string;
+  comfyStart?: { detail: string; ok: boolean };
+};
 
 let behavior: Behavior = {};
 /* comfyStatus 端点的调用次数：「事件到了要立刻重问一次」那条判据靠它数。 */
@@ -132,7 +136,7 @@ const mockRouter = t.router({
         starting: false,
         /* 库里已保存的路径：启动动作按它拉起，视图把它写在页上（ISSUE #1900
          * 那条「改了路径没保存」的可见解）。 */
-        path: behavior.comfyPath ?? "D:\\ComfyUI",
+        path: behavior.comfyPath ?? String.raw`D:\ComfyUI`,
       };
     }),
     /* 安装形态与运行态**分开取**（fs-only，与首屏配置同批）：这里给一份便携版默认。 */
@@ -203,11 +207,11 @@ function mockSessionsFor(
   payload: {
     content: string;
     sessions?: Array<{
-      id: string;
-      title: string;
-      startedAt: number | null;
-      scope: "current" | "runs";
       crashed: boolean;
+      id: string;
+      scope: "current" | "runs";
+      startedAt: number | null;
+      title: string;
     }>;
     truncated?: boolean;
     windowed?: boolean;
@@ -316,12 +320,12 @@ describe("useComfyuiControl", () => {
    * 写不出来时，「在设置页改了路径没保存、来这边点启动」就没人告诉用户跑的是谁
    * （本页无草稿，这一格是唯一事实出口）。 */
   it("已保存路径投影到 status.path（视图据此写明「会按哪条启动」）", async () => {
-    behavior = { comfyBase: "http://127.0.0.1:8188", comfyPath: "E:\\ComfyUI" };
+    behavior = { comfyBase: "http://127.0.0.1:8188", comfyPath: String.raw`E:\ComfyUI` };
     const { result } = renderHook(() => useComfyuiControl(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.status).not.toBeNull();
-    expect(result.current.status?.path).toBe("E:\\ComfyUI");
+    expect(result.current.status?.path).toBe(String.raw`E:\ComfyUI`);
   });
 
   /* 这一页是**独享**状态查询的屏：它一挂载就该订阅（不像设置页那一版要等首屏
@@ -424,7 +428,7 @@ describe("useComfyuiControl", () => {
       {
         id: "12",
         title: "11-05 09:30:00 · 本次运行",
-        startedAt: 1_000,
+        startedAt: 1000,
         scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
@@ -457,14 +461,14 @@ describe("useComfyuiControl", () => {
       {
         id: "40",
         title: "11-05 09:36:12 · 本次运行",
-        startedAt: 2_000,
+        startedAt: 2000,
         scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
       {
         id: "12",
         title: "11-05 09:30:00 · 本次运行",
-        startedAt: 1_000,
+        startedAt: 1000,
         scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
@@ -488,14 +492,14 @@ describe("useComfyuiControl", () => {
       {
         id: "comfyui-runtime-20261005-093612.log",
         title: "10-05 09:36:12 · 本次运行",
-        startedAt: 2_000,
+        startedAt: 2000,
         scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
       {
         id: archived,
         title: "10-04 14:00:00 · 正常退出 · bbbbbb",
-        startedAt: 1_000,
+        startedAt: 1000,
         scope: /* SAFETY: 类型断言已复核 */ "runs" as const,
         crashed: false,
       },
@@ -538,14 +542,14 @@ describe("useComfyuiControl", () => {
       {
         id: "40",
         title: "11-05 09:36:12 · 本次运行",
-        startedAt: 2_000,
+        startedAt: 2000,
         scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },
       {
         id: "12",
         title: "11-05 09:30:00 · 本次运行",
-        startedAt: 1_000,
+        startedAt: 1000,
         scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
       },

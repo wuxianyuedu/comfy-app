@@ -33,17 +33,17 @@
 // 「直连 `/prompt`」形态留的正确实现，帧哪天回来就得是对的。
 
 /** ComfyUI WS 消息的最小结构视图（原始载荷是 `any`）。 */
-export interface ComfyWsMessage {
-  type?: string;
+export type ComfyWsMessage = {
   data?: {
-    prompt_id?: unknown;
-    node?: unknown;
-    value?: unknown;
-    max?: unknown;
-    exception_message?: unknown;
     [k: string]: unknown;
+    exception_message?: unknown;
+    max?: unknown;
+    node?: unknown;
+    prompt_id?: unknown;
+    value?: unknown;
   };
-}
+  type?: string;
+};
 
 /** 执行器会响应的统一信号类别。 */
 export type ComfySignal =
@@ -97,12 +97,24 @@ export class ComfyProtocolAdapter {
 
   /** 执行器消息处理器调用的单点分类入口。 */
   classify(msg: ComfyWsMessage): ComfySignal {
-    if (this.isNodeStarted(msg)) return "node-started";
-    if (this.isNodeFinished(msg)) return "node-finished";
-    if (this.isProgress(msg)) return "progress";
-    if (this.isCompletion(msg)) return "completion";
-    if (this.isError(msg)) return "error";
-    if (this.isActivity(msg)) return "activity";
+    if (this.isNodeStarted(msg)) {
+      return "node-started";
+    }
+    if (this.isNodeFinished(msg)) {
+      return "node-finished";
+    }
+    if (this.isProgress(msg)) {
+      return "progress";
+    }
+    if (this.isCompletion(msg)) {
+      return "completion";
+    }
+    if (this.isError(msg)) {
+      return "error";
+    }
+    if (this.isActivity(msg)) {
+      return "activity";
+    }
     return "other";
   }
 }

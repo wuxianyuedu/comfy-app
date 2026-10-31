@@ -35,21 +35,21 @@ type LlmCfgInput = RouterInputs["llm"]["configSave"];
 type SettingsInput = RouterInputs["setting"]["save"];
 
 export function useSettingsSave(input: {
-  settingsDraft: Settings | null;
-  llmDraft: LlmConfig | null;
   /** 「留空不改」语义的 apiKey 输入框值（保存成功后清空）。 */
   llmApiKey: string;
-  setSaving: (value: boolean) => void;
-  setLlmApiKey: (value: string) => void;
-  showFlash: (kind: "ok" | "err", text: string) => void;
-  saveSettingM: MutationLike<SettingsInput>;
-  settingsQ: QueryLike;
-  saveLlmCfgM: MutationLike<LlmCfgInput>;
+  llmDraft: LlmConfig | null;
   llmQ: QueryLike;
   /** 装安装形态（依赖 comfyuiPath），偏好保存后必须重判一次。 */
   refetchComfyInstance: () => Promise<void>;
   /** 装桌面实例的六个存储目录（与形态同源，同一时机重取）。 */
   refetchComfyStorage: () => Promise<void>;
+  saveLlmCfgM: MutationLike<LlmCfgInput>;
+  saveSettingM: MutationLike<SettingsInput>;
+  setLlmApiKey: (value: string) => void;
+  setSaving: (value: boolean) => void;
+  settingsDraft: Settings | null;
+  settingsQ: QueryLike;
+  showFlash: (kind: "ok" | "err", text: string) => void;
 }) {
   const {
     settingsDraft,
@@ -69,7 +69,7 @@ export function useSettingsSave(input: {
   /** 把给定草稿落库。远程模型的添加 / 编辑 / 移除即时保存也走这里；
    *  apiKey 是「留空不改」语义：llmApiKey 为空就不传。 */
   const persistLlmDraft = useCallback(
-    async (draft: LlmConfig): Promise<{ ok: boolean; error?: string }> => {
+    async (draft: LlmConfig): Promise<{ error?: string; ok: boolean }> => {
       setSaving(true);
       /* 这一处**同时**要「反馈通道」与「返回值给调用方继续用」：
        * 出口的返回值正是为此给的（收口前这里是 `catch` 里再拼一次
@@ -93,7 +93,9 @@ export function useSettingsSave(input: {
               temperatureByTask: draft.temperatureByTask,
               maxTokens: draft.maxTokens,
             });
-            if (llmApiKey) setLlmApiKey("");
+            if (llmApiKey) {
+              setLlmApiKey("");
+            }
             await llmQ.refetch();
           },
           {
@@ -116,12 +118,16 @@ export function useSettingsSave(input: {
   );
 
   const saveLlm = useCallback(async () => {
-    if (!llmDraft) return;
+    if (!llmDraft) {
+      return;
+    }
     await persistLlmDraft(llmDraft);
   }, [llmDraft, persistLlmDraft]);
 
   const savePrefs = useCallback(async () => {
-    if (!settingsDraft) return;
+    if (!settingsDraft) {
+      return;
+    }
     setSaving(true);
     try {
       await runAsyncAction(

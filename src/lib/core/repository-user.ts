@@ -101,17 +101,17 @@ function encryptInput(
  * 「路由多传一格，而那一格在保存路径上被静默丢掉」。
  * 每一格都是**三态**：缺键 = 不动，`undefined` 同义；显式给值才覆盖。
  */
-export interface LlmConfigPatch {
-  provider?: string;
+export type LlmConfigPatch = {
+  apiKey?: string | null;
   baseUrl?: string;
-  model?: string;
   /** 候选模型：旧纯名字字符串 / 新条目对象（远端条目可带独立 baseUrl、apiKey） */
   extraModels?: Array<RawExtraModel> | null;
-  apiKey?: string | null;
+  maxTokens?: number;
+  model?: string;
+  provider?: string;
   temperature?: number;
   temperatureByTask?: unknown;
-  maxTokens?: number;
-}
+};
 
 export class LlmConfigRepository {
   /**
@@ -155,14 +155,30 @@ export class LlmConfigRepository {
       return decryptRow(firstRowRequired(rows, "LLM 配置写入"));
     }
     const patch: Partial<LlmConfig> = {};
-    if (input.provider !== undefined) patch.provider = input.provider;
-    if (input.baseUrl !== undefined) patch.baseUrl = input.baseUrl;
-    if (input.model !== undefined) patch.model = input.model;
-    if (input.extraModels !== undefined) patch.extraModels = extraModelsJson;
-    if (input.apiKey !== undefined) patch.apiKey = enc.apiKey ?? null;
-    if (input.temperature !== undefined) patch.temperature = input.temperature;
-    if (input.temperatureByTask !== undefined) patch.temperatureByTask = taskJson;
-    if (input.maxTokens !== undefined) patch.maxTokens = input.maxTokens;
+    if (input.provider !== undefined) {
+      patch.provider = input.provider;
+    }
+    if (input.baseUrl !== undefined) {
+      patch.baseUrl = input.baseUrl;
+    }
+    if (input.model !== undefined) {
+      patch.model = input.model;
+    }
+    if (input.extraModels !== undefined) {
+      patch.extraModels = extraModelsJson;
+    }
+    if (input.apiKey !== undefined) {
+      patch.apiKey = enc.apiKey ?? null;
+    }
+    if (input.temperature !== undefined) {
+      patch.temperature = input.temperature;
+    }
+    if (input.temperatureByTask !== undefined) {
+      patch.temperatureByTask = taskJson;
+    }
+    if (input.maxTokens !== undefined) {
+      patch.maxTokens = input.maxTokens;
+    }
     const rows = await exec
       .update(llmConfig)
       .set(patch)
@@ -208,14 +224,16 @@ async function syncRemoteModels(
   const keyByName = new Map(rows.map((r) => [r.name, r.apiKey ?? null]));
   const seen = new Set<string>();
   const cleaned: Array<{
-    name: string;
-    baseUrl: string | null;
     apiKey: string | null;
+    baseUrl: string | null;
     kind: string;
+    name: string;
   }> = [];
   for (const e of entries) {
     const name = e.name.trim();
-    if (!name || seen.has(name)) continue;
+    if (!name || seen.has(name)) {
+      continue;
+    }
     seen.add(name);
     /* `apiKey` 的三态（与 `~/lib/llm/types` 的 `normalizeEntryApiKey` 同一语义）：
      *   · `undefined`（缺键）→ 继承库里那把，不二次加密、也不清空；
@@ -323,14 +341,18 @@ export class RemoteModelRepository {
   /** 读取某条远端模型的工坊模式适配器（JSON 列；未配置返回空数组）。 */
   async getWorkshopAdapters(name: string) {
     const row = await this.findByName(name);
-    if (!row) return [];
+    if (!row) {
+      return [];
+    }
     return parseAdaptersJson(row.workshopAdapters);
   }
 
   /** 保存某条远端模型的工坊模式适配器（整份覆盖）。模型不存在返回空数组。 */
   async saveWorkshopAdapters(name: string, adapters: Array<RemoteModeAdapter>) {
     const row = await this.findByName(name);
-    if (!row) return [];
+    if (!row) {
+      return [];
+    }
     await db
       .update(remoteModel)
       .set({
@@ -344,7 +366,9 @@ export class RemoteModelRepository {
 
 /** 解析 remoteModel.workshopAdapters JSON 列（坏数据按空处理）。 */
 export function parseAdaptersJson(raw: string | null): Array<RemoteModeAdapter> {
-  if (!raw) return [];
+  if (!raw) {
+    return [];
+  }
   try {
     return parseRemoteModeAdapters(JSON.parse(raw));
   } catch {
@@ -383,7 +407,9 @@ export async function saveLlmSettings(input: LlmConfigPatch): Promise<void> {
   await runWithSqliteBusyRetry(
     () =>
       db.transaction(async (tx) => {
-        if (split) await syncRemoteModels(tx, split.remoteEntries);
+        if (split) {
+          await syncRemoteModels(tx, split.remoteEntries);
+        }
         await llmConfigRepository.upsertSingleton(
           { ...input, extraModels: split ? split.localNames : undefined },
           tx,

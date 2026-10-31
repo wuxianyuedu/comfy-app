@@ -31,7 +31,7 @@ export const dynamic = "force-dynamic";
 /** 单次请求内最多等多久。拉起的实例冷加载通常远超这个时长，所以这里只负责
  *  「等一小会儿」，等不到就回 202 让前端继续重试——把等待拆成多次短请求，
  *  用户才能在中途看到「正在启动」而不是一个挂了十几秒的请求。 */
-const ENSURE_WAIT_MS = 8_000;
+const ENSURE_WAIT_MS = 8000;
 
 export async function POST() {
   const user = await requireRequestUser();
@@ -39,13 +39,14 @@ export async function POST() {
     return unauthorizedResponse();
   }
 
-  const up = await probeComfyUi(1_500);
-  if (up)
+  const up = await probeComfyUi(1500);
+  if (up) {
     return NextResponse.json({
       ok: true,
       base: up,
       detail: "ComfyUI 已在运行",
     });
+  }
 
   try {
     const r = await ensureComfyUiReady({
@@ -54,8 +55,9 @@ export async function POST() {
       // 否则请求挂死、reaper 的启动窗口也会被一起拉长。
       onLog: (msg) => logger.info(`[comfyui-ensure] ${msg}`),
     });
-    if (r.ok)
+    if (r.ok) {
       return NextResponse.json({ ok: true, base: r.base, detail: r.detail });
+    }
     return NextResponse.json(
       {
         ok: false,
@@ -65,12 +67,9 @@ export async function POST() {
       },
       { status: 202 },
     );
-  } catch (e) {
-    const detail = errorMessage(e, "启动失败");
+  } catch (error) {
+    const detail = errorMessage(error, "启动失败");
     logger.error(`[comfyui-ensure] 启动失败：${detail}`);
-    return NextResponse.json(
-      { ok: false, pending: false, detail },
-      { status: 503 },
-    );
+    return NextResponse.json({ ok: false, pending: false, detail }, { status: 503 });
   }
 }

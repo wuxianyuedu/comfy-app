@@ -30,9 +30,9 @@ const { spawnMock, openSyncMock, closeSyncMock, warnMock, spawned } = vi.hoisted
 
 type EmitterChild = EventEmitter & {
   pid: number;
-  unref: () => void;
-  stdout: EventEmitter | null;
   stderr: EventEmitter | null;
+  stdout: EventEmitter | null;
+  unref: () => void;
 };
 
 vi.mock("child_process", () => ({ spawn: spawnMock }));
@@ -80,7 +80,9 @@ function lastSpawn(): [string, Array<string>, Record<string, unknown>] {
   const call = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls.at(-1) as
     | [string, Array<string>, Record<string, unknown>]
     | undefined;
-  if (!call) throw new Error("这一条用例没有调到 spawn —— 判据落空，先查分支");
+  if (!call) {
+    throw new Error("这一条用例没有调到 spawn —— 判据落空，先查分支");
+  }
   return call;
 }
 
@@ -122,7 +124,9 @@ afterEach(() => {
 
 describe("escapePwshSingle", () => {
   it("普通路径原样包进单引号", () => {
-    expect(escapePwshSingle("D:\\ComfyUI\\python.exe")).toBe("'D:\\ComfyUI\\python.exe'");
+    expect(escapePwshSingle(String.raw`D:\ComfyUI\python.exe`)).toBe(
+      String.raw`'D:\ComfyUI\python.exe'`,
+    );
   });
 
   it("含单引号转义为双单引号（防注入）", () => {
@@ -139,7 +143,7 @@ describe("escapePwshSingle", () => {
 
 describe("buildStartProcessArgumentList", () => {
   it("多参数整体写成一个 @() 数组字面量（裸排会被 PS5.1 当位置参数拒绝）", () => {
-    expect(buildStartProcessArgumentList(["-s", "D:\\x\\main.py"])).toBe(
+    expect(buildStartProcessArgumentList(["-s", String.raw`D:\x\main.py`])).toBe(
       `@('"-s"','"D:\\x\\main.py"')`,
     );
   });
@@ -249,9 +253,9 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
   it("其余三条拉起路径同样把非 Error 的抛错收成一句话", () => {
     const paths: Array<{
       name: string;
-      shellExe?: string;
       platform: NodeJS.Platform;
       run: () => string | undefined;
+      shellExe?: string;
     }> = [
       {
         name: "POSIX keepAlive",
@@ -289,8 +293,11 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
       },
     ];
     for (const path of paths) {
-      if (path.shellExe) process.env.COMFYAPP_SHELL_EXE = path.shellExe;
-      else delete process.env.COMFYAPP_SHELL_EXE;
+      if (path.shellExe) {
+        process.env.COMFYAPP_SHELL_EXE = path.shellExe;
+      } else {
+        delete process.env.COMFYAPP_SHELL_EXE;
+      }
       spawnMock.mockImplementationOnce(() => hostileThrow(`${path.name} 抛的字符串`));
       expect(path.run(), path.name).toBe(`${path.name} 抛的字符串`);
     }

@@ -29,12 +29,12 @@ import { appendFilmLog } from "./film-log";
 
 // ── 回写：成片合成完成 → 统一项目逐镜 clip + 完成状态（Phase 5 / §6.3 + §7）──
 /** 合成成片里一个镜头的结果（用于把逐镜视频回写进统一项目的对应 Shot）。 */
-export interface FilmShotClip {
+export type FilmShotClip = {
   /** 关联的统一镜头 id（production.shots[].id）；自由建片的镜头为 null（跳过）。 */
   shotId: string | null;
-  videoPath: string | null;
   status: ShotStatus;
-}
+  videoPath: string | null;
+};
 
 /** 把「从项目建的片」合成完成后的结果，回写进来源统一项目：
  *   1) 逐镜视频 —— 按 `shotId` 命中 `production.shots` 里的对应 Shot，写入 clipUrl / clipStatus；
@@ -47,21 +47,26 @@ export async function syncFilmToProject(
   filmShots: Array<FilmShotClip>,
 ): Promise<void> {
   const row = await productionRepository.getForUser(userId, projectId);
-  if (!row) return;
+  if (!row) {
+    return;
+  }
   const progress = normalizeProductionProgress(row.progress);
-  const rawShots = Array.isArray(row.shots)
-    ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>)
-    : [];
+  /* SAFETY: 类型断言已复核 */
+  const rawShots = Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [];
 
   // 按 shotId 索引成片结果（只取有 videoPath 的镜头回写 clip）。
   const clipByShotId = new Map<string, FilmShotClip>();
   for (const fs of filmShots) {
-    if (fs.shotId && fs.videoPath) clipByShotId.set(fs.shotId, fs);
+    if (fs.shotId && fs.videoPath) {
+      clipByShotId.set(fs.shotId, fs);
+    }
   }
 
   const nextShots: Array<Shot> = rawShots.map((shot) => {
     const clip = clipByShotId.get(shot.id);
-    if (!clip) return shot;
+    if (!clip) {
+      return shot;
+    }
     return {
       ...shot,
       clipUrl: clip.videoPath ?? undefined,
@@ -86,7 +91,9 @@ export async function syncFilmToProject(
 // ── ffmpeg helpers ─────────────────────────────────────────
 let _ffmpegOk: boolean | null = null;
 export async function isFFmpegAvailable(): Promise<boolean> {
-  if (_ffmpegOk !== null) return _ffmpegOk;
+  if (_ffmpegOk !== null) {
+    return _ffmpegOk;
+  }
   try {
     await runFFmpeg(["-version"], undefined, 8000);
     _ffmpegOk = true;
@@ -99,7 +106,7 @@ export async function isFFmpegAvailable(): Promise<boolean> {
 function runFFmpeg(
   args: Array<string>,
   cwd?: string,
-  timeout = 120000,
+  timeout = 120_000,
 ): Promise<{ code: number; stderr: string }> {
   const bin = process.env.FFMPEG_BIN ?? "ffmpeg";
   const cp = spawn(/*turbopackIgnore: true*/ bin, args, { cwd });
@@ -122,8 +129,12 @@ function runFFmpeg(
 // ── compose ────────────────────────────────────────────────
 export async function composeFilm(id: string) {
   const film = await filmRepository.findById(id);
-  if (!film) return;
-  if (film.status === "COMPOSING" || film.status === "DONE") return;
+  if (!film) {
+    return;
+  }
+  if (film.status === "COMPOSING" || film.status === "DONE") {
+    return;
+  }
 
   await filmRepository.markComposing(id);
   await appendFilmLog(id, "info", "所有镜头完成，开始合成影片…");
@@ -226,10 +237,11 @@ export async function composeFilm(id: string) {
       ["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", concatPath],
       tmpDir,
     );
-    if (cres.code !== 0)
+    if (cres.code !== 0) {
       throw new Error(
         `拼接失败：${clampText(cres.stderr, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
       );
+    }
 
     const finalPath = path.join(filmsRoot(), `${id}.mp4`);
     /* 地址与磁盘同一处派生：写进 Film 行的这条就是前端 `<video src>` 拿到的那条，
@@ -296,13 +308,13 @@ export async function composeFilm(id: string) {
             status: /* SAFETY: 类型断言已复核 */ s.status as ShotStatus,
           })),
         );
-      } catch (e) {
-        await appendFilmLog(id, "warn", `已合成，但回写项目失败：${errorText(e, "未知错误")}`);
+      } catch (error) {
+        await appendFilmLog(id, "warn", `已合成，但回写项目失败：${errorText(error, "未知错误")}`);
       }
     }
-  } catch (e) {
-    await filmRepository.markFailed(id, errorMessage(e, "合成失败"));
-    await appendFilmLog(id, "error", errorText(e, "合成失败"));
+  } catch (error) {
+    await filmRepository.markFailed(id, errorMessage(error, "合成失败"));
+    await appendFilmLog(id, "error", errorText(error, "合成失败"));
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
   }

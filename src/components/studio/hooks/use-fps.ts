@@ -11,9 +11,15 @@ import { useEffect, useState } from "react";
 export type FpsTone = "ok" | "warn" | "bad" | "unknown";
 
 export function fpsTone(fps: number | null): FpsTone {
-  if (fps === null) return "unknown";
-  if (fps >= 50) return "ok";
-  if (fps >= 30) return "warn";
+  if (fps === null) {
+    return "unknown";
+  }
+  if (fps >= 50) {
+    return "ok";
+  }
+  if (fps >= 30) {
+    return "warn";
+  }
   return "bad";
 }
 
@@ -28,7 +34,9 @@ export function useFps(): number | null {
     let last = 0;
 
     const tick = (now: number) => {
-      if (stopped) return;
+      if (stopped) {
+        return;
+      }
       if (!primed) {
         primed = true;
         last = now;

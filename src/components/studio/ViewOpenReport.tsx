@@ -35,9 +35,7 @@ import { pageHeaderTitle, type WorkspaceView } from "./NavItems";
 /** 当前屏「打开时刻」的查询口：不是当前屏（还没激活）、或还没落定时返回 null。 */
 export type ViewOpenedAtLookup = (view: WorkspaceView) => number | null;
 
-export const ViewOpenedAtContext = createContext<ViewOpenedAtLookup | null>(
-  null,
-);
+export const ViewOpenedAtContext = createContext<ViewOpenedAtLookup | null>(null);
 
 /**
  * 把一屏内容包一层：内容挂载时补记一条「界面打开：<屏名> 耗时 <n>ms」。
@@ -45,19 +43,15 @@ export const ViewOpenedAtContext = createContext<ViewOpenedAtLookup | null>(
  * 收 `children` 而不是「收组件」，是为了两种用法共用同一份判据：即时加载的视图由
  * 视图栈直接包；懒加载的视图经 `withViewOpenReport` 包在**解析后**的组件外。
  */
-export function ViewOpenReport({
-  view,
-  children,
-}: {
-  view: WorkspaceView;
-  children: ReactNode;
-}) {
+export function ViewOpenReport({ view, children }: { children: ReactNode; view: WorkspaceView }) {
   const openedAt = useContext(ViewOpenedAtContext)?.(view) ?? null;
   /* 同一个打开时刻只记一次：既挡 StrictMode 双跑 effect，也挡「时刻没变的重渲染」。
      换了一个新的打开时刻（= 这一屏又被打开一次，比如关掉页签再开）就重新记。 */
   const reportedRef = useRef<number | null>(null);
   useEffect(() => {
-    if (openedAt === null || reportedRef.current === openedAt) return;
+    if (openedAt === null || reportedRef.current === openedAt) {
+      return;
+    }
     reportedRef.current = openedAt;
     const durationMs = Math.round(performance.now() - openedAt);
     void postAppRuntimeLog(

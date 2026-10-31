@@ -51,9 +51,15 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
   try {
     const row = await llmConfigRepository.findSingleton();
     if (row) {
-      if (row.provider) cfg.provider = /* SAFETY: 类型断言已复核 */ row.provider as LLMProviderType;
-      if (row.baseUrl) cfg.baseUrl = row.baseUrl;
-      if (row.model) cfg.model = row.model;
+      if (row.provider) {
+        cfg.provider = /* SAFETY: 类型断言已复核 */ row.provider as LLMProviderType;
+      }
+      if (row.baseUrl) {
+        cfg.baseUrl = row.baseUrl;
+      }
+      if (row.model) {
+        cfg.model = row.model;
+      }
       // 两类候选分开存：`llmConfig.extraModels` 是本地 ollama 候选（纯名字，无
       // apiKey），远端独立模型在 `remoteModel` 表。读取时合并两者，保证下游
       //（运行时按名找 baseUrl/apiKey、设置页候选清单、工坊分组）行为不变。
@@ -80,24 +86,35 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
         ...remoteEntries,
         ...split.remoteEntries,
       ];
-      if (row.apiKey) cfg.apiKey = row.apiKey;
-      if (row.temperature != null) cfg.temperature = row.temperature;
+      if (row.apiKey) {
+        cfg.apiKey = row.apiKey;
+      }
+      if (row.temperature != null) {
+        cfg.temperature = row.temperature;
+      }
       // temperatureByTask 是 json 列，读出来是 unknown —— 形状由 resolveTaskTemperature 消费，
       const raw = /* SAFETY: 类型断言已复核 */ row as Record<string, unknown>;
-      if (raw.temperatureByTask)
+      if (raw.temperatureByTask) {
         cfg.temperatureByTask = /* SAFETY: 类型断言已复核 */ raw.temperatureByTask as Record<
           TaskType,
           number
         >;
-      if (row.maxTokens != null) cfg.maxTokens = row.maxTokens;
+      }
+      if (row.maxTokens != null) {
+        cfg.maxTokens = row.maxTokens;
+      }
     }
   } catch {
     // 数据库不可用 —— 回落到环境变量里的默认值
   }
 
   if (override) {
-    if (override.provider) cfg.provider = override.provider;
-    if (override.baseUrl) cfg.baseUrl = override.baseUrl;
+    if (override.provider) {
+      cfg.provider = override.provider;
+    }
+    if (override.baseUrl) {
+      cfg.baseUrl = override.baseUrl;
+    }
     if (override.model) {
       cfg.model = override.model;
       // 工坊 / 设置页按名字切换模型：命中带独立连接参数的候选条目时改走该条目
@@ -105,8 +122,12 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
         (e) => e.name === override.model && !!(e.baseUrl ?? e.apiKey),
       );
       if (entry) {
-        if (entry.baseUrl) cfg.baseUrl = entry.baseUrl;
-        if (entry.apiKey) cfg.apiKey = entry.apiKey;
+        if (entry.baseUrl) {
+          cfg.baseUrl = entry.baseUrl;
+        }
+        if (entry.apiKey) {
+          cfg.apiKey = entry.apiKey;
+        }
       }
     }
     cfg.temperature = resolveTaskTemperature({
@@ -115,7 +136,9 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       overrides: cfg.temperatureByTask ?? null,
       fallback: cfg.temperature,
     });
-    if (override.maxTokens != null) cfg.maxTokens = override.maxTokens;
+    if (override.maxTokens != null) {
+      cfg.maxTokens = override.maxTokens;
+    }
   }
 
   return cfg;
@@ -194,7 +217,9 @@ function headersFor(cfg: LLMConfig): Record<string, string> {
 export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
   /* 非 TypeError（未预期的抛值形态）：与全库同一个取值出口，
    * 免得 `String(e)` 那一路把非 Error 抛值渲染成 `[object Object]`。 */
-  if (!(e instanceof TypeError)) return errorMessage(e, "网络请求失败");
+  if (!(e instanceof TypeError)) {
+    return errorMessage(e, "网络请求失败");
+  }
   const cause = /* SAFETY: 类型断言已复核 */ (e as { cause?: unknown }).cause;
   const causeMsg =
     cause instanceof Error
@@ -251,7 +276,9 @@ function messagesToWire(
         .filter((p): p is Extract<LLMContentPart, { type: "image_url" }> => p.type === "image_url")
         .map((p) => p.image_url.url);
       base.content = texts;
-      if (images.length > 0) base.images = images;
+      if (images.length > 0) {
+        base.images = images;
+      }
     } else {
       base.content = m.content.map((p) =>
         p.type === "text"
@@ -259,8 +286,12 @@ function messagesToWire(
           : { type: "image_url", image_url: p.image_url },
       );
     }
-    if (m.tool_calls) base.tool_calls = m.tool_calls;
-    if (m.tool_call_id) base.tool_call_id = m.tool_call_id;
+    if (m.tool_calls) {
+      base.tool_calls = m.tool_calls;
+    }
+    if (m.tool_call_id) {
+      base.tool_call_id = m.tool_call_id;
+    }
     return base;
   });
 }
@@ -273,7 +304,9 @@ function messagesToWire(
 export async function getVisionLLMConfig(override?: LLMRequestOptions): Promise<LLMConfig> {
   const cfg = await getLLMConfig(override);
   const visionModel = pickVisionModelName(cfg, override);
-  if (visionModel === cfg.model) return cfg;
+  if (visionModel === cfg.model) {
+    return cfg;
+  }
   const entry = cfg.extraModels?.find((e) => e.name === visionModel && !!(e.baseUrl ?? e.apiKey));
   return {
     ...cfg,
@@ -296,8 +329,8 @@ async function upstreamChat(cfg: LLMConfig, body: Record<string, unknown>): Prom
       headers: headersFor(cfg),
       body: JSON.stringify(body),
     });
-  } catch (e) {
-    throw new Error(describeFetchFailure(e, cfg), { cause: e });
+  } catch (error) {
+    throw new Error(describeFetchFailure(error, cfg), { cause: error });
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -318,7 +351,9 @@ const ERR_MODEL_UNCONFIGURED =
   "尚未配置生效模型：请先在「设置 → 本地模型/远程模型」中选择或填写要使用的模型名";
 
 function assertModelConfigured(cfg: LLMConfig): void {
-  if (!cfg.model?.trim()) throw new Error(ERR_MODEL_UNCONFIGURED);
+  if (!cfg.model?.trim()) {
+    throw new Error(ERR_MODEL_UNCONFIGURED);
+  }
 }
 
 /* 一次性（非流式）补全。 */
@@ -367,7 +402,9 @@ export async function streamLLM(
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      break;
+    }
     buffer += decoder.decode(value, { stream: true });
 
     const lines = buffer.split("\n");
@@ -375,9 +412,13 @@ export async function streamLLM(
 
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
+      if (!trimmed.startsWith("data:")) {
+        continue;
+      }
       const data = trimmed.slice(5).trim();
-      if (data === "[DONE]") continue;
+      if (data === "[DONE]") {
+        continue;
+      }
       try {
         const json = /* SAFETY: 类型断言已复核 */ JSON.parse(data) as {
           choices?: Array<{ delta?: { content?: string } }>;
@@ -434,14 +475,14 @@ export async function completeLLMStructured<T>(
  * 兼容 OpenAI / Ollama / LM Studio / vLLM —— 它们都实现 OpenAI 的
  * `tools` 参数与 tool_calls 回包结构。
  */
-export interface CompleteToolsResult {
+export type CompleteToolsResult = {
   content: string;
   toolCalls: Array<{
+    function: { arguments: string; name: string };
     id: string;
     type: "function";
-    function: { name: string; arguments: string };
   }>;
-}
+};
 
 export async function completeLLMTools(
   cfg: LLMConfig,
@@ -463,9 +504,9 @@ export async function completeLLMTools(
       message?: {
         content?: string | null;
         tool_calls?: Array<{
+          function?: { arguments?: string; name?: string };
           id?: string;
           type?: string;
-          function?: { name?: string; arguments?: string };
         }>;
       };
     }>;
@@ -477,7 +518,9 @@ export async function completeLLMTools(
   // filter 回调的类型谓词推断不一致，显式守卫在两种版本下都能收窄。
   const toolCalls = rawCalls.flatMap((call) => {
     const fn = call?.function;
-    if (!call?.id || !fn?.name || typeof fn.arguments !== "string") return [];
+    if (!call?.id || !fn?.name || typeof fn.arguments !== "string") {
+      return [];
+    }
     return [
       {
         id: call.id,

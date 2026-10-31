@@ -33,14 +33,16 @@ import {
 const tempDirs: Array<string> = [];
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /**
  * 造一个只含「组件 + 故事」的临时仓库，跑一遍扫描。
  * @param {{component?: string, story: string, componentName?: string}} input
  */
-function scan(input: { component?: string; story: string; componentName?: string }) {
+function scan(input: { component?: string; componentName?: string; story: string; }) {
   const root = mkdtempSync(join(tmpdir(), "story-surface-"));
   tempDirs.push(root);
   const dir = join(root, "src", "components", "ui");

@@ -68,7 +68,7 @@ describe("extOfPath", () => {
 
   it("hash / Windows 反斜杠路径同样切干净", () => {
     expect(extOfPath("a/b.pNg#frag")).toBe("png");
-    expect(extOfPath("C:\\\\dir\\\\clip.MP4")).toBe("mp4");
+    expect(extOfPath(String.raw`C:\\dir\\clip.MP4`)).toBe("mp4");
   });
 });
 
@@ -100,9 +100,7 @@ describe("contentTypeForPath", () => {
 
   it("非媒体档（api/generated 的域需求）在这里也只有一处定义", () => {
     expect(contentTypeForPath("/x/a.txt")).toBe("text/plain; charset=utf-8");
-    expect(contentTypeForPath("/x/a.json")).toBe(
-      "application/json; charset=utf-8",
-    );
+    expect(contentTypeForPath("/x/a.json")).toBe("application/json; charset=utf-8");
   });
 
   it("日志类文本也走 text/plain（md / log 与 txt 同档）", () => {

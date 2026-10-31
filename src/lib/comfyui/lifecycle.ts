@@ -28,7 +28,6 @@
 // 成功取决于 `log-paths` 已摘 server-only（#1074）。
 // 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 import type { spawn } from "node:child_process";
-import fs from "node:fs";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { probeComfyBase, probeComfyAtPort } from "./client";
 import { logger } from "~/lib/core/logger";
@@ -48,20 +47,15 @@ import {
 } from "./status";
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 import { sleep } from "~/lib/with-timeout";
-import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
-import {
-  openRuntimeLogWriter,
-  pruneRuntimeLogFiles,
-  type RuntimeLogWriter,
-} from "~/lib/log/runtime-log-pack.server";
-import {
-  describeStaleSession,
-  type ComfyExitReport,
-  type ComfySessionMark,
-} from "./lifecycle-exit";
-import { formatLocalStamp } from "~/lib/time-format";
 import { COMFY_STOP_PROBE } from "../retry-policy";
-import { noteComfyExit } from "./liveness-signal";
+import {
+  appendRuntimeLog,
+  beginRuntimeSession,
+  localTimestamp,
+  markComfySessionEnd,
+  markComfySessionStart,
+  warnStaleComfySession,
+} from "./lifecycle-session-log";
 import {
   noteComfyLaunchSettled,
   noteComfyStartRequested,
@@ -78,46 +72,24 @@ import {
 } from "./lifecycle-derive";
 
 export type ComfyUiStatus = {
-  up: boolean;
   base: string | null;
-  starting: boolean;
-  /** 用户点了「关闭 ComfyUI」且进程树尚未确认退出：设置页据此保持「关闭中…」。 */
-  stopping: boolean;
-  /** 本次判定的探测是否仍在进行：UI 据此显示「检测中…」而不是先报「未运行」
-   *  再跳「运行中」（外部已启动 ComfyUI 时尤其明显，ISSUE #339）。 */
-  probing: boolean;
   pid?: number;
   /** 进程级快照定位到的端口（HTTP 未就绪时也可能有值，供「正在启动」提示）。 */
   port?: number | null;
+  /** 本次判定的探测是否仍在进行：UI 据此显示「检测中…」而不是先报「未运行」
+   *  再跳「运行中」（外部已启动 ComfyUI 时尤其明显，ISSUE #339）。 */
+  probing: boolean;
+  starting: boolean;
+  /** 用户点了「关闭 ComfyUI」且进程树尚未确认退出：设置页据此保持「关闭中…」。 */
+  stopping: boolean;
+  up: boolean;
   /** 该实例是用什么起的（中文短语，如「配置路径的实例」）——状态行提示用。 */
   via?: string | null;
 };
 
-export type EnsureResult = { ok: boolean; base: string | null; detail: string };
+export type EnsureResult = { base: string | null; detail: string; ok: boolean };
 
 type LifecycleGlobal = {
-  child?: ReturnType<typeof spawn>;
-  /** 当前 `child` 是否以 detached 方式拉起（= POSIX 下的进程组组长）。
-   *  keepAlive 走 `spawn({detached:true})`，bound 是普通 spawn —— 回收时
-   *  「能不能杀进程组」全看这个标记，判错不报错、只静默留孤儿（见
-   *  kill-process-tree 的实测对照）。 */
-  childDetached?: boolean;
-  starting?: Promise<EnsureResult>;
-  /** 用户点了「关闭 ComfyUI」：启动等待循环见到它就中止，不再报「秒退」。 */
-  stopRequested?: boolean;
-  /** 「关闭中」窗口的开始时刻（毫秒）：设置页在窗口内显示关闭进行态，
-   *  进程树确认退出后清零。 */
-  stoppingAt?: number;
-  /** 最近一次「拉起流程进行中」的时刻（毫秒）：设置页状态行在窗口内不落
-   *  「未运行」。见 COMFY_STARTING_WINDOW_MS。 */
-  startingAt?: number;
-  /** 最近一次**探明**「没在跑」的时刻（毫秒）：结论可信度高于任何在途探测，
-   *  见 COMFY_NOT_RUNNING_HOLD_MS。 */
-  notRunningAt?: number;
-  /** 用户手动点了「关闭 ComfyUI」：此后自动启动路径（WS 重连 / 状态轮询触发的
-   *  ensureComfyUiReady）不再自动拉起，直到用户手动点「启动 ComfyUI」或
-   *  重新开启自动启动。解决「关闭后切个页签 ComfyUI 又被重连循环拉起」的困惑。 */
-  manualStop?: boolean;
   /** 一次自动启动以「明确的失败」收尾（保活进程已退出 / 拉起后进程未出现 /
    *  秒退等）：此后自动启动路径不再反复重试，直到用户手动点「启动 ComfyUI」
    *  或重新开启自动启动。解决「启动失败后一直自动重试」——重试只是把同一段
@@ -126,6 +98,28 @@ type LifecycleGlobal = {
   /** 最近一次自动启动失败的 detail：重试被拦时原样回报，让队列任务仍能看到
    *  「上次为什么失败」，而不是只收到一句泛泛的「已跳过」。 */
   autoStartFailureDetail?: string;
+  child?: ReturnType<typeof spawn>;
+  /** 当前 `child` 是否以 detached 方式拉起（= POSIX 下的进程组组长）。
+   *  keepAlive 走 `spawn({detached:true})`，bound 是普通 spawn —— 回收时
+   *  「能不能杀进程组」全看这个标记，判错不报错、只静默留孤儿（见
+   *  kill-process-tree 的实测对照）。 */
+  childDetached?: boolean;
+  /** 用户手动点了「关闭 ComfyUI」：此后自动启动路径（WS 重连 / 状态轮询触发的
+   *  ensureComfyUiReady）不再自动拉起，直到用户手动点「启动 ComfyUI」或
+   *  重新开启自动启动。解决「关闭后切个页签 ComfyUI 又被重连循环拉起」的困惑。 */
+  manualStop?: boolean;
+  /** 最近一次**探明**「没在跑」的时刻（毫秒）：结论可信度高于任何在途探测，
+   *  见 COMFY_NOT_RUNNING_HOLD_MS。 */
+  notRunningAt?: number;
+  starting?: Promise<EnsureResult>;
+  /** 最近一次「拉起流程进行中」的时刻（毫秒）：设置页状态行在窗口内不落
+   *  「未运行」。见 COMFY_STARTING_WINDOW_MS。 */
+  startingAt?: number;
+  /** 「关闭中」窗口的开始时刻（毫秒）：设置页在窗口内显示关闭进行态，
+   *  进程树确认退出后清零。 */
+  stoppingAt?: number;
+  /** 用户点了「关闭 ComfyUI」：启动等待循环见到它就中止，不再报「秒退」。 */
+  stopRequested?: boolean;
 };
 
 declare global {
@@ -168,12 +162,6 @@ export const COMFY_STARTING_WINDOW_MS = 12_000;
  *  的抖动打回。 */
 export const COMFY_NOT_RUNNING_HOLD_MS = 10_000;
 
-/** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的，
- *  toISOString 的 UTC 在 +8 时区会凭空差出 8 小时。 */
-function localTimestamp(): string {
-  return formatLocalStamp(new Date());
-}
-
 /** 探测 ComfyUI 是否可达；成功返回实际可用的 base（可能带端口偏移）。
  *
  * 走 `probeComfyBase()`（按次探测）而不是 `resolveComfyBase()`：后者是带会话
@@ -202,8 +190,8 @@ export async function probeComfyUi(_timeoutMs = 2500): Promise<string | null> {
  *     「不是本应用启动的」而永远关不掉上一会话保活下来的 ComfyUI（ISSUE #100）。
  */
 export async function stopComfyUiProcess(): Promise<{
-  ok: boolean;
   detail: string;
+  ok: boolean;
 }> {
   // 无论有没有本应用拉起的子进程，都先落「用户要求停止」标记：若此刻正有
   // 一个启动等待在跑，等待循环会以「已手动关闭」收尾，而不是误报「进程秒退」。
@@ -232,7 +220,9 @@ export async function stopComfyUiProcess(): Promise<{
   const stillUp = await probeComfyUi(1500);
   if (!pid && stillUp && !("error" in plan)) {
     pid = await findPidForMainPy(plan.mainPy);
-    if (pid) child = undefined; // 无句柄，仅用定位到的 PID
+    if (pid) {
+      child = undefined;
+    } // 无句柄，仅用定位到的 PID
   }
   const stopDecision = decideStop({
     hasChild: !!child,
@@ -249,7 +239,9 @@ export async function stopComfyUiProcess(): Promise<{
     ) {
       st.stoppingAt = undefined;
     }
-    if (stopDecision.kind !== "foreign-running") markComfyNotRunningProven();
+    if (stopDecision.kind !== "foreign-running") {
+      markComfyNotRunningProven();
+    }
     return stopDecision.kind === "foreign-running"
       ? {
           ok: false,
@@ -284,7 +276,9 @@ export async function stopComfyUiProcess(): Promise<{
     await sleep(COMFY_STOP_PROBE.baseMs);
     const probe = await probeComfyUi(800);
     stopProbes.push(probe);
-    if (!probe) break;
+    if (!probe) {
+      break;
+    }
   }
   const outcome = decideStopOutcome(stopProbes);
   // 进程树刚被改动过：快照必须失效，否则状态行会继续沿用关闭前的结论。
@@ -300,7 +294,9 @@ export async function stopComfyUiProcess(): Promise<{
     /* 非 bound（keepAlive / 接管场景）没有 `child.on("exit")` 会落退出行 ——
      * 这里补一条，让每一份启动日志都有自己的收尾（文件里读到的最后一行就是
      * 「为什么结束」）。 */
-    if (!child) appendRuntimeLog("■ ComfyUI 已手动关闭");
+    if (!child) {
+      appendRuntimeLog("■ ComfyUI 已手动关闭");
+    }
     clearComfyStopping();
     return outcome;
   }
@@ -455,7 +451,9 @@ export async function getComfyUiStatus(opts: { force?: boolean } = {}): Promise<
   }
   /* 在途去重：并发查询（tRPC 批处理 / 连点刷新）共享同一次判定，
    * force 也一样——「强制」的语义是「不吃已有结论」，不是「再起一次重复探测」。 */
-  if (cs.inflight) return cs.inflight;
+  if (cs.inflight) {
+    return cs.inflight;
+  }
   const task = computeComfyUiStatus().then((status) => {
     cs.entry = { at: Date.now(), status };
     cs.inflight = undefined;
@@ -469,7 +467,9 @@ export async function getComfyUiStatus(opts: { force?: boolean } = {}): Promise<
 function withTransientFlags(status: ComfyUiStatus): ComfyUiStatus {
   const starting = isComfyStarting();
   const stopping = isComfyStopping();
-  if (status.starting === starting && status.stopping === stopping) return status;
+  if (status.starting === starting && status.stopping === stopping) {
+    return status;
+  }
   return { ...status, starting, stopping };
 }
 
@@ -551,12 +551,12 @@ async function computeComfyUiStatus(): Promise<ComfyUiStatus> {
  *    · 「进程在、端口未绑定」→ 这就是「真的还在启动」：窗口跟着续期（好让紧随
  *      其后的探针抖动不打回「未运行」），「未运行」标记不动。 */
 function deriveAndLatch(facts: {
-  starting: boolean;
-  stopping: boolean;
-  startingWindow: boolean;
   notRunningHeld: boolean;
-  snap: ComfyRuntimeSnapshot;
   probe: string | null;
+  snap: ComfyRuntimeSnapshot;
+  starting: boolean;
+  startingWindow: boolean;
+  stopping: boolean;
 }): ComfyUiStatus {
   const { snap, probe } = facts;
   const status = deriveComfyUiStatus({
@@ -567,8 +567,9 @@ function deriveAndLatch(facts: {
     startingWindow: facts.startingWindow,
     notRunningHeld: facts.notRunningHeld,
   });
-  if (status.up) clearComfyDownLatch();
-  else if (status.probing) {
+  if (status.up) {
+    clearComfyDownLatch();
+  } else if (status.probing) {
     /* 「检测中…」= 事实不可信：既不能坐实「未运行」，也不该让上一笔「探明没在跑」
      * 提前过期（那正是相邻两轮结论相反的来源）。 */
   } else if (snap.running || facts.starting) {
@@ -582,100 +583,10 @@ function deriveAndLatch(facts: {
      * 启动…」，连「启动 ComfyUI」按钮都跟着一起锁死。窗口是给「拉起动作 →
      * 就绪」那段空窗的缓冲，它的寿命只由真实时间与这两条证据决定。 */
     st.startingAt = Date.now();
-  } else if (snap.didQueryProcTable && !snap.unverified) markComfyNotRunningProven();
+  } else if (snap.didQueryProcTable && !snap.unverified) {
+    markComfyNotRunningProven();
+  }
   return status;
-}
-
-/** 「上一次 ComfyUI 会话」的标记文件。
- *
- *  存在的理由：**应用/系统也一起没了**那一档（编排器退出时 Windows Job Object
- *  连带静默杀树、强制关机、任务管理器结束进程）没有任何活着的进程能写日志 ——
- *  只能在下一次启动时读这个文件反推「上次那家伙不是正常结束的」。
- *  「有开始没结束」就是那类情况的指纹。 */
-const COMFY_SESSION_MARK = `${SERVICES_LOG_DIR}/comfyui-last-session.json`;
-
-function readSessionMark(): ComfySessionMark | null {
-  try {
-    const parsed: unknown = JSON.parse(fs.readFileSync(COMFY_SESSION_MARK, "utf-8"));
-    if (parsed === null || typeof parsed !== "object") return null;
-    return /* SAFETY: 类型断言已复核 */ parsed as ComfySessionMark;
-  } catch {
-    return null;
-  }
-}
-
-function writeSessionMark(mark: ComfySessionMark): void {
-  try {
-    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
-    fs.writeFileSync(COMFY_SESSION_MARK, JSON.stringify(mark), "utf-8");
-  } catch {
-    /* 标记写不进去不该影响启动本身：最坏的结果只是下次启动少一条对账提示 */
-  }
-}
-
-function markComfySessionStart(info: { pid: number | null; mode: ComfySessionMark["mode"] }): void {
-  writeSessionMark({
-    pid: info.pid,
-    mode: info.mode,
-    startedAt: new Date().toISOString(),
-    exited: null,
-  });
-}
-
-function markComfySessionEnd(report: ComfyExitReport): void {
-  /* 先发信号、再落盘（ISSUE #1351）：退出事件的**唯一**客户端通路在这里 ——
-   * bound 的 `child.on("exit")` 与保活的窗口监督器都汇到这一步，所以只需要
-   * 一处就能把「毫秒级事件」推向浏览器。放在 `prev === null` 的早退之前：
-   * 「没有会话标记」是**对账**这件事无话可说，不是「没发生退出」——
-   * 把它一起吞掉会让客户端在最需要立刻知道的时候反而等下一拍轮询。 */
-  noteComfyExit(report);
-  const prev = readSessionMark();
-  if (prev === null) return;
-  writeSessionMark({
-    ...prev,
-    exited: { at: new Date().toISOString(), reason: report.reason },
-  });
-}
-
-/** 每进程只对一次账（启动尝试可能被 WS 重连反复触发，重复提示是噪音）。 */
-let staleSessionChecked = false;
-
-/** 下次启动时反推「上一次会话为什么没有结局」。
- *  @param comfyUp 这次启动时 ComfyUI 是否还活着（保活移交时据此闭嘴）。 */
-function warnStaleComfySession(note: (msg: string) => void, comfyUp: boolean): void {
-  if (staleSessionChecked) return;
-  staleSessionChecked = true;
-  const stale = describeStaleSession(readSessionMark(), comfyUp);
-  if (stale !== null) note(`⚠ ${stale}`);
-}
-
-/** 本次启动的 runtime 日志写入器（`comfyui-runtime-<时刻>.log`）。
- *
- * 一次启动一份文件（ISSUE #1326）：句柄**跟着这一次启动走**，启动时由
- * `beginRuntimeSession()` 换一份新的，因此「这个文件属于哪一次启动」不再需要
- * 靠行时刻或横幅去推断 —— 它就是文件本身。
- *
- * 为 null（还没启动过任何一次）时写日志静默跳过：状态行 / 启动流程本来就会
- * 各自 `note()` 到 logger 与面板，缺一份文件不该把流程带崩。 */
-let runtimeWriter: RuntimeLogWriter | null = null;
-
-/**
- * 开一次启动的日志：轮转旧文件 → 换上新的一份 → 落首行标题。
- *
- * **必须在写第一条业务行之前调用**（`runEnsureLaunch` 拉起前那一步）：
- * 顺序反了会把本次的头几行写进上一次的文件里，而那正是「日志看起来少了一次」
- * 的现场（没有报错、只是归属错了）。同秒内重复启动由写入器自己分叉
- * （`-2` / `-3`），不会覆盖前一次的现场。
- */
-export function beginRuntimeSession(at: Date = new Date()): string {
-  pruneRuntimeLogFiles();
-  runtimeWriter = openRuntimeLogWriter("comfyui-runtime", at);
-  appendRuntimeLog("▶ ComfyUI 启动会话");
-  return runtimeWriter.file;
-}
-
-function appendRuntimeLog(line: string): void {
-  runtimeWriter?.write(`${localTimestamp()} ${line}`);
 }
 
 /**
@@ -690,9 +601,9 @@ function appendRuntimeLog(line: string): void {
  */
 export async function ensureComfyUiReady(
   opts: {
-    timeoutMs?: number | null;
-    onLog?: (msg: string) => void;
     manual?: boolean;
+    onLog?: (msg: string) => void;
+    timeoutMs?: number | null;
   } = {},
 ): Promise<EnsureResult> {
   const note = (msg: string) => {
@@ -868,7 +779,7 @@ export async function ensureComfyUiReady(
  * 服务端命令（start / open / xdg-open），不需要动 Rust、不需重编壳。
  * 返回 ok=false 时 detail 给出可行动的提示。
  */
-export async function openComfyUi(): Promise<{ ok: boolean; detail: string }> {
+export async function openComfyUi(): Promise<{ detail: string; ok: boolean }> {
   const base = await probeComfyUi(2000);
   if (!base) {
     return {

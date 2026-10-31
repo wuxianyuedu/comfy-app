@@ -96,7 +96,9 @@ export const LOG_SCROLL_MAX = 8_000_000;
  * 「不低估」：低估会让下面几行被推到视口外，高估只是多留一点空白。
  */
 export function estimateRowHeight(message: string, wrap: boolean): number {
-  if (!wrap) return LOG_ROW_SINGLE;
+  if (!wrap) {
+    return LOG_ROW_SINGLE;
+  }
   const lines = Math.max(1, countLines(message));
   return LOG_ROW_SINGLE + (lines - 1) * LOG_ROW_LINE;
 }
@@ -119,7 +121,9 @@ export function countLines(message: string, availableWidth = 0): number {
   while (segments.length > 1 && segments[segments.length - 1] === "") {
     segments.pop();
   }
-  if (availableWidth <= 0) return segments.length;
+  if (availableWidth <= 0) {
+    return segments.length;
+  }
   let total = 0;
   for (const segment of segments) {
     total += Math.max(1, Math.ceil((segment.length * 13) / availableWidth));
@@ -128,15 +132,15 @@ export function countLines(message: string, availableWidth = 0): number {
 }
 
 /** 一条日志在列表里的位置与高度（见 {@link layoutRows}）。 */
-export interface RowLayout {
-  /** 该行上边缘距列表顶部（不含顶部留白）的像素数。 */
-  start: number;
+export type RowLayout = {
   /** 该行的估算高度（像素）。 */
   size: number;
-}
+  /** 该行上边缘距列表顶部（不含顶部留白）的像素数。 */
+  start: number;
+};
 
 /** {@link layoutRows} 的两类**按 id 点名**的行（见下方说明）。 */
-export interface LogLayoutOptions {
+export type LogLayoutOptions = {
   /** 已展开的行 id：固定为 {@link LOG_ROW_EXPANDED}。 */
   expandedIds?: ReadonlySet<string>;
   /**
@@ -148,7 +152,7 @@ export interface LogLayoutOptions {
    * 参与换行估高。
    */
   singleLineIds?: ReadonlySet<string>;
-}
+};
 
 /**
  * 估算整页每一行的位置与高度。
@@ -162,7 +166,7 @@ export interface LogLayoutOptions {
  * 仍是同一行。
  */
 export function layoutRows(
-  entries: ReadonlyArray<{ message: string; id?: string }>,
+  entries: ReadonlyArray<{ id?: string; message: string }>,
   wrap: boolean,
   availableWidth = 0,
   options: LogLayoutOptions = {},
@@ -207,9 +211,11 @@ export function visibleRange(
   scrollTop: number,
   viewportHeight: number,
   overscan = LOG_VIRTUAL_OVERSCAN,
-): { start: number; end: number } {
+): { end: number; start: number } {
   const count = rows.length;
-  if (count === 0) return { start: 0, end: 0 };
+  if (count === 0) {
+    return { start: 0, end: 0 };
+  }
   const top = Number.isFinite(scrollTop) ? Math.max(0, scrollTop) : 0;
   const height = Number.isFinite(viewportHeight) ? Math.max(0, viewportHeight) : 0;
   const pad = Math.max(0, overscan);
@@ -228,13 +234,18 @@ export function visibleRange(
  * 会直接体现在滚动掉帧上。`rows` 的 `start` 单调递增，因此二分成立。
  */
 export function firstVisibleRow(rows: ReadonlyArray<RowLayout>, offset: number): number {
-  if (rows.length === 0) return 0;
+  if (rows.length === 0) {
+    return 0;
+  }
   let low = 0;
   let high = rows.length - 1;
   while (low < high) {
     const mid = (low + high + 1) >> 1;
-    if ((rows.at(mid)?.start ?? Number.POSITIVE_INFINITY) <= offset) low = mid;
-    else high = mid - 1;
+    if ((rows.at(mid)?.start ?? Number.POSITIVE_INFINITY) <= offset) {
+      low = mid;
+    } else {
+      high = mid - 1;
+    }
   }
   return low;
 }
@@ -246,8 +257,8 @@ export function firstVisibleRow(rows: ReadonlyArray<RowLayout>, offset: number):
  * 滚一半对应的其实是真实高度里的另一处。
  */
 export function scrollHeightOf(estimated: number): {
-  height: number;
   compressed: boolean;
+  height: number;
 } {
   /* 取不到 / 负数一律当 0：`Math.max(0, NaN)` 是 NaN，直接交给 style 会得到
    * 一个非法的 `height: NaNpx`（浏览器静默忽略，滚动条长度就与内容对不上了）。 */
@@ -298,7 +309,7 @@ export function pinTargetIndex(baseline: number, applied: number, bottomIndex: n
  * `scrollTop` 会被静默忽略（位置不更新）。
  */
 export function pinScrollTop(
-  geometry: { start: number; size: number },
+  geometry: { size: number; start: number },
   viewportHeight: number,
 ): number {
   const viewport = Number.isFinite(viewportHeight) ? Math.max(0, viewportHeight) : 0;
@@ -318,11 +329,11 @@ export function pinScrollTop(
  *      小数位取整，同一位置的读写不必逐位相等。
  */
 export function pinPlan(input: {
-  baseline: number;
   applied: number;
+  appliedTop: number;
+  baseline: number;
   bottomIndex: number;
   scrollTop: number;
-  appliedTop: number;
 }): number | null {
   const targetIndex = pinTargetIndex(input.baseline, input.applied, input.bottomIndex);
   const userTookOver =

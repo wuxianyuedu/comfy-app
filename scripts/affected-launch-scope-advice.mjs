@@ -30,10 +30,7 @@
  */
 import process from "node:process";
 
-import {
-  changedFromEnv,
-  spawnAffected,
-} from "./affected-launch-changed-list.mjs";
+import { changedFromEnv, spawnAffected } from "./affected-launch-changed-list.mjs";
 /* 「毫秒→秒」的格式归话术层（`affected-launch-rerun-report.mjs`）—— 抄一份的漂移形态是
  * 静默的：一处改了进位、另一处照旧，而同一次收尾里会同时出现两种写法。 */
 import { fmtSec } from "./affected-launch-rerun-report.mjs";
@@ -53,12 +50,12 @@ export function collectAttribute() {
   }
   try {
     const parsed = JSON.parse(String(res.stdout ?? "[]"));
-    if (!Array.isArray(parsed)) throw new Error("不是数组");
+    if (!Array.isArray(parsed)) {
+      throw new Error("不是数组");
+    }
     return parsed;
   } catch {
-    process.stderr.write(
-      "[affected-launch] 改动面归因输出读不懂（仅影响下面那条建议）\n",
-    );
+    process.stderr.write("[affected-launch] 改动面归因输出读不懂（仅影响下面那条建议）\n");
     return [];
   }
 }
@@ -121,8 +118,7 @@ export function scopeAdvice(input) {
         .slice(0, 3)
         .map(
           (t) =>
-            `    · ${t.file} → 受影响 ${t.affected} 份` +
-            (t === biggest ? "（最大的一刀）" : ""),
+            `    · ${t.file} → 受影响 ${t.affected} 份` + (t === biggest ? "（最大的一刀）" : ""),
         ),
     );
     if (rest > 0) {

@@ -33,30 +33,30 @@ export function MegapixelStepper({
   disabled = false,
   className,
 }: {
-  /** 当前百万像素值。 */
-  value: number;
+  className?: string;
+  disabled?: boolean;
   /** 用新的（已 clamp 的）百万像素值调用。 */
   onChange: (megapixels: number) => void;
-  disabled?: boolean;
-  className?: string;
+  /** 当前百万像素值。 */
+  value: number;
 }) {
   return (
     <div
+      className={`flex items-center gap-1.5 ${className ?? ""}`}
       /* 与同一块控件里的宽/高 `NumberField` 区分开（它们的步进按钮 title 长得
          一样，按 title 查会同时命中三个）。 */
       data-testid="megapixel-stepper"
-      className={`flex items-center gap-1.5 ${className ?? ""}`}
     >
       <span className="text-ink-faint text-3xs shrink-0">自定义</span>
       <NumberField
-        value={value}
-        onChange={onChange}
-        min={MEGAPIXEL_MIN}
-        max={MEGAPIXEL_MAX}
-        step={MEGAPIXEL_STEP}
+        className="h-6 w-26"
         decimalPlaces={MEGAPIXEL_DECIMALS}
         disabled={disabled}
-        className="h-6 w-26"
+        max={MEGAPIXEL_MAX}
+        min={MEGAPIXEL_MIN}
+        onChange={onChange}
+        step={MEGAPIXEL_STEP}
+        value={value}
       />
       <span className="text-ink-faint text-3xs shrink-0">M</span>
     </div>

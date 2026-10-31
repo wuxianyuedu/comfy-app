@@ -40,11 +40,11 @@ function renderComposer(shots: Array<Shot>, rendered = false) {
   const onRendered = vi.fn();
   render(
     <FinalComposer
+      onRendered={onRendered}
+      onShotsChange={onShotsChange}
+      rendered={rendered}
       shots={shots}
       title="测试项目"
-      onShotsChange={onShotsChange}
-      onRendered={onRendered}
-      rendered={rendered}
     />,
   );
   return { onShotsChange, onRendered };
@@ -98,12 +98,12 @@ describe("FinalComposer 成片出口（#2476）", () => {
     const onComposeFilm = vi.fn();
     render(
       <FinalComposer
+        onComposeFilm={onComposeFilm}
+        onRendered={vi.fn()}
+        onShotsChange={vi.fn()}
+        rendered
         shots={[makeShot({ clipUrl: "/api/generated/1.mp4" })]}
         title="测试项目"
-        onShotsChange={vi.fn()}
-        onRendered={vi.fn()}
-        rendered
-        onComposeFilm={onComposeFilm}
       />,
     );
     const btn = screen.getByRole("button", { name: /去成片合成 MP4/ });

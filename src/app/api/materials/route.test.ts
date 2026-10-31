@@ -19,7 +19,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const { dirEntries, fileStats, disk, userMock } = vi.hoisted(() => ({
   dirEntries: new Map<string, { names?: Array<string>; subdirs?: Array<string> }>(),
-  fileStats: new Map<string, { size: number; mtime: Date }>(),
+  fileStats: new Map<string, { mtime: Date; size: number }>(),
   disk: {
     reads: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
     mkdir: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
@@ -34,18 +34,23 @@ vi.mock("fs", () => ({
     readdir: async (dir: string, opts?: { withFileTypes?: boolean }) => {
       disk.reads.push(`readdir:${dir}`);
       const entry = dirEntries.get(dir);
-      if (!entry) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
-      if (opts?.withFileTypes)
+      if (!entry) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
+      if (opts?.withFileTypes) {
         return (entry.subdirs ?? []).map((name) => ({
           name,
           isDirectory: () => true,
         }));
+      }
       return entry.names ?? [];
     },
     stat: async (p: string) => {
       disk.reads.push(`stat:${p}`);
       const f = fileStats.get(p);
-      if (!f) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      if (!f) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
       return { isFile: () => true, size: f.size, mtime: f.mtime };
     },
     mkdir: async (p: string) => {
@@ -55,11 +60,15 @@ vi.mock("fs", () => ({
       disk.writeFile.push(p);
     },
     unlink: async (p: string) => {
-      if (!fileStats.has(p)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      if (!fileStats.has(p)) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
       disk.unlink.push(p);
     },
     access: async (p: string) => {
-      if (!fileStats.has(p)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      if (!fileStats.has(p)) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
     },
   },
 }));
@@ -101,12 +110,12 @@ function urlOf(query: string): string {
 
 /** multipart 上传体（形状与浏览器送上来的那份一致）。 */
 function uploadForm(init: {
-  type?: string;
-  name?: string;
-  sizeOverMax?: boolean;
-  projectId?: string;
   folder?: string;
+  name?: string;
+  projectId?: string;
   shared?: string;
+  sizeOverMax?: boolean;
+  type?: string;
 }): FormData {
   const file = new File(["abcd"], init.name ?? "note.txt", {
     type: init.type ?? "text/plain",
@@ -117,9 +126,15 @@ function uploadForm(init: {
   }
   const form = new FormData();
   form.set("file", file);
-  if (init.projectId !== undefined) form.set("projectId", init.projectId);
-  if (init.folder !== undefined) form.set("folder", init.folder);
-  if (init.shared !== undefined) form.set("shared", init.shared);
+  if (init.projectId !== undefined) {
+    form.set("projectId", init.projectId);
+  }
+  if (init.folder !== undefined) {
+    form.set("folder", init.folder);
+  }
+  if (init.shared !== undefined) {
+    form.set("shared", init.shared);
+  }
   return form;
 }
 
@@ -129,7 +144,9 @@ beforeEach(() => {
   tdb.$reset();
   dirEntries.clear();
   fileStats.clear();
-  for (const list of Object.values(disk)) list.length = 0;
+  for (const list of Object.values(disk)) {
+    list.length = 0;
+  }
   userMock.mockResolvedValue({ id: "user-a" });
   seedUser(tdb, { id: "user-a", email: "a@test.dev" });
   seedUser(tdb, { id: "user-b", email: "b@test.dev" });
@@ -180,8 +197,8 @@ describe("GET /api/materials —— 读侧归属", () => {
     const res = await GET(reqOf(urlOf("?scope=cross&folder=ref")));
     expect(res.status).toBe(200);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      items: Array<{ scope: string }>;
       folders: Array<unknown>;
+      items: Array<{ scope: string }>;
     };
     // 只剩共享区那一份（它是末尾统一补的，不依赖能不能枚举到目录）
     expect(body.items.map((i) => i.scope)).toEqual([SHARED_SCOPE]);
@@ -273,7 +290,7 @@ describe("POST /api/materials —— 上传", () => {
       uploadForm({
         projectId: "proj-a",
         folder: "docs",
-        name: "..\\..\\evil.txt",
+        name: String.raw`..\..\evil.txt`,
       }),
     );
     expect(disk.writeFile[0]).toBe(path.join(ROOT, "proj-a", "docs", "evil.txt"));

@@ -20,24 +20,24 @@ import { fixed } from "~/lib/number-format";
  * clamp 回写会在输入中途把 "0." / 清空 / 小于 step 的值瞬间顶回去，等于
  * 没法打字）；blur 或点 +/- 时才把草稿 clamp 成合法值提交。
  */
-interface NumberFieldProps {
-  /** 当前数值 */
-  value: number;
-  /** 用新的（已 clamp 的）值调用 */
-  onChange: (v: number) => void;
-  /** 允许的最小值（默认 0） */
-  min?: number;
-  /** 允许的最大值（默认 9999） */
-  max?: number;
-  /** 步进增 / 减量（默认 1） */
-  step?: number;
-  /** 显示的小数位（默认 0 = 整数） */
-  decimalPlaces?: number;
+type NumberFieldProps = {
   /** 外层容器的额外 CSS 类 */
   className?: string;
+  /** 显示的小数位（默认 0 = 整数） */
+  decimalPlaces?: number;
   /** 字段是否禁用 */
   disabled?: boolean;
-}
+  /** 允许的最大值（默认 9999） */
+  max?: number;
+  /** 允许的最小值（默认 0） */
+  min?: number;
+  /** 用新的（已 clamp 的）值调用 */
+  onChange: (v: number) => void;
+  /** 步进增 / 减量（默认 1） */
+  step?: number;
+  /** 当前数值 */
+  value: number;
+};
 
 export function NumberField({
   value,
@@ -54,8 +54,7 @@ export function NumberField({
   /* 「按某档小数位写数」走唯一出口（`~/lib/number-format`，规范 16 §16.2.4.54）——
    * 本基元只是把小数位当 props 传下去，不自己拼一份。 */
   const fmt = useCallback(
-    (v: number) =>
-      decimalPlaces > 0 ? (fixed(v, decimalPlaces) ?? "") : String(v),
+    (v: number) => (decimalPlaces > 0 ? (fixed(v, decimalPlaces) ?? "") : String(v)),
     [decimalPlaces],
   );
 
@@ -70,7 +69,9 @@ export function NumberField({
   const commitText = useCallback(
     (text: string) => {
       const n = parseFloat(text);
-      if (!isNaN(n)) onChange(clampToStep(n));
+      if (!isNaN(n)) {
+        onChange(clampToStep(n));
+      }
     },
     [clampToStep, onChange],
   );
@@ -91,36 +92,38 @@ export function NumberField({
       } ${className ?? ""}`}
     >
       <Button
-        variant="ghost"
+        className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0"
+        disabled={disabled || value <= min}
         onMouseDown={(event) => {
           event.preventDefault();
           decr();
         }}
-        disabled={disabled || value <= min}
-        className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0"
         title={`减少 ${step}`}
+        variant="ghost"
       >
         <Minus data-icon="inline-start" size={12} strokeWidth={2.5} />
       </Button>
       {/* 数值**左对齐**（ComfyUI 的数值 widget 同款）：居中时同一列里的数字会随
           位数/小数点左右跳动，参数行读起来不齐。 */}
       <input
-        type="text"
         inputMode="decimal"
-        value={draft ?? fmt(value)}
-        onChange={(event) => {
-          const text = event.target.value;
-          setDraft(text);
-          /* 合法前缀实时上抛（clamp 只影响提交值，不打断击键回显） */
-          const n = parseFloat(text);
-          if (!isNaN(n)) onChange(clampToStep(n));
-        }}
         onBlur={() => {
           if (draft !== null) {
             commitText(draft);
             setDraft(null);
           }
         }}
+        onChange={(event) => {
+          const text = event.target.value;
+          setDraft(text);
+          /* 合法前缀实时上抛（clamp 只影响提交值，不打断击键回显） */
+          const n = parseFloat(text);
+          if (!isNaN(n)) {
+            onChange(clampToStep(n));
+          }
+        }}
+        type="text"
+        value={draft ?? fmt(value)}
         /* Enter = 提交：走 `onBlur` 的落盘路径（**用事件目标而不是 ref** ——
          * 渲染期读 `ref.current` 会触发 `react-hooks/refs`，而这里要的本来就是
          * 「让这个输入框失焦」，事件目标就是它）。Esc 无「取消」语义：数值框没有
@@ -128,18 +131,18 @@ export function NumberField({
         {...enterCommit({
           onCommit: ({ currentTarget }) => currentTarget.blur(),
         })}
-        disabled={disabled}
         className="text-ink-bright h-6 min-w-9 flex-1 [appearance:textfield] bg-transparent py-0 text-left font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        disabled={disabled}
       />
       <Button
-        variant="ghost"
+        className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0"
+        disabled={disabled || value >= max}
         onMouseDown={(event) => {
           event.preventDefault();
           incr();
         }}
-        disabled={disabled || value >= max}
-        className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0"
         title={`增加 ${step}`}
+        variant="ghost"
       >
         <Plus data-icon="inline-start" size={12} strokeWidth={2.5} />
       </Button>

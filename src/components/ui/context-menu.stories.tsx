@@ -71,10 +71,7 @@ export const AtPointer: Story = {
     <ContextMenu>
       <ContextMenuTrigger className="grid h-40 w-96 grid-cols-2 grid-rows-2 gap-px rounded-lg border bg-[repeating-linear-gradient(45deg,transparent_0_8px,var(--color-surface-2)_8px_16px)]">
         {["左上", "右上", "左下", "右下"].map((corner) => (
-          <span
-            key={corner}
-            className="text-ink-muted flex items-center justify-center text-xs"
-          >
+          <span className="text-ink-muted flex items-center justify-center text-xs" key={corner}>
             在{corner}右键
           </span>
         ))}
@@ -102,9 +99,7 @@ export const FullParts: Story = {
           <ContextMenuItem inset>复制 class_type</ContextMenuItem>
         </ContextMenuGroup>
         <ContextMenuSeparator />
-        <ContextMenuCheckboxItem defaultChecked>
-          显示提示词
-        </ContextMenuCheckboxItem>
+        <ContextMenuCheckboxItem defaultChecked>显示提示词</ContextMenuCheckboxItem>
         <ContextMenuCheckboxItem>显示输出</ContextMenuCheckboxItem>
         <ContextMenuSeparator />
         <ContextMenuLabel>颜色</ContextMenuLabel>

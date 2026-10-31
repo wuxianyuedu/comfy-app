@@ -23,52 +23,47 @@ import { useToast } from "../../ToastProvider";
  *  所以适配器住在这里而不是出口里 —— 设置页接的是整页提示条，
  *  工作流库接的也是 toast，但带第二行说明的写法不同。 */
 function toastReport(toast: {
-  success: (t: string, d?: string) => unknown;
   error: (t: string, d?: string) => unknown;
+  success: (t: string, d?: string) => unknown;
 }): ActionReport {
-  return (kind, detail) =>
-    kind === "ok" ? toast.success(detail) : toast.error(detail);
+  return (kind, detail) => (kind === "ok" ? toast.success(detail) : toast.error(detail));
 }
 
 /** comfyapp:// 协议未接管的引导状态：为 null 表示尚未发起过导航。 */
-export interface FolderPopover {
-  path: string;
+export type FolderPopover = {
   /** true = 2s 内页面未失焦，视为助手未注册，展示安装引导。 */
   helperMissing: boolean;
-}
+  path: string;
+};
 
-export interface HistoryDetailActions {
-  folderPopover: FolderPopover | null;
-  /** 「打开目录」进行中（防双击）。 */
-  openFolderBusy: boolean;
-  /** 「下载工作流」进行中。 */
-  downloading: boolean;
-  openFolder: (taskId: string) => Promise<void>;
-  downloadWorkflow: (taskId: string) => Promise<void>;
+export type HistoryDetailActions = {
   copyPath: () => void;
   dismissFolderPopover: () => void;
-}
+  /** 「下载工作流」进行中。 */
+  downloading: boolean;
+  downloadWorkflow: (taskId: string) => Promise<void>;
+  folderPopover: FolderPopover | null;
+  openFolder: (taskId: string) => Promise<void>;
+  /** 「打开目录」进行中（防双击）。 */
+  openFolderBusy: boolean;
+};
 
 /**
  * 动作层：接收两个 tRPC 调用（由调用方注入，便于测试替换）。
  * 注入而非直接 import vanillaApi，是为了让逻辑层可脱离网络单测。
  */
-export interface HistoryDetailActionsDeps {
+export type HistoryDetailActionsDeps = {
+  fetchWorkflow: (id: string) => Promise<{ workflow?: unknown } | null>;
   openFolder: (id: string) => Promise<{
-    comfyappUrl?: string | null;
     absolutePath?: string | null;
+    comfyappUrl?: string | null;
     error?: string | null;
   }>;
-  fetchWorkflow: (id: string) => Promise<{ workflow?: unknown } | null>;
-}
+};
 
-export function useHistoryDetailActions(
-  deps: HistoryDetailActionsDeps,
-): HistoryDetailActions {
+export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): HistoryDetailActions {
   const toast = useToast();
-  const [folderPopover, setFolderPopover] = useState<FolderPopover | null>(
-    null,
-  );
+  const [folderPopover, setFolderPopover] = useState<FolderPopover | null>(null);
   /* 两个忙碌位走唯一出口（规范 16 §16.2.4.71）：`downloading` 的复位此前
    * 写在动作之后，`runAsyncAction` 之外的任意一行抛错就永远停在「下载中」。 */
   const openFolderAction = useBusyAction();
@@ -99,9 +94,7 @@ export function useHistoryDetailActions(
             helperMissing: false,
           });
           const helper = detectFolderHelper(() =>
-            setFolderPopover((prev) =>
-              prev ? { ...prev, helperMissing: false } : prev,
-            ),
+            setFolderPopover((prev) => (prev ? { ...prev, helperMissing: false } : prev)),
           );
           window.location.href = result.comfyappUrl;
           const state = await helper.settle();
@@ -112,10 +105,7 @@ export function useHistoryDetailActions(
             });
           }
         } else if (result.error === "directory missing") {
-          toast.error(
-            "该任务尚未生成文件目录",
-            result.absolutePath ?? undefined,
-          );
+          toast.error("该任务尚未生成文件目录", result.absolutePath ?? undefined);
         } else {
           /* 服务端没给具体原因（`result.error` 是别的值 / 缺席）——
            * 出口的失败文案就是这一句。 */
@@ -141,12 +131,13 @@ export function useHistoryDetailActions(
   /* 路径复制走 toast 通道（这一族动作的既有表现层选择）。反馈形态是调用处
    * 的事，但**成败两条都要有出口**归出口管（规范 16 §16.2.4.43）。 */
   const copyPathFeedback = useCopyFeedback({
-    onSuccess: () =>
-      toast.success("路径已复制", "粘贴到资源管理器地址栏（Alt+D）即可跳转"),
+    onSuccess: () => toast.success("路径已复制", "粘贴到资源管理器地址栏（Alt+D）即可跳转"),
     onFailure: () => toast.error("复制失败", "请手动选择路径复制"),
   });
   const copyPath = useCallback(() => {
-    if (!folderPopover) return;
+    if (!folderPopover) {
+      return;
+    }
     copyPathFeedback(folderPopover.path);
   }, [folderPopover, copyPathFeedback]);
 
@@ -158,7 +149,9 @@ export function useHistoryDetailActions(
         runAsyncAction(
           async () => {
             const result = await deps.fetchWorkflow(taskId);
-            if (!result?.workflow) return false;
+            if (!result?.workflow) {
+              return false;
+            }
             downloadJson(result.workflow, "workflow.json");
             return true;
           },

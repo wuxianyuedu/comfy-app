@@ -23,18 +23,18 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import eslintConfig from "@/../eslint.config.js";
 
-type ElementDef = { type: string; pattern: string };
+type ElementDef = { pattern: string; type: string; };
 type Policy = {
-  from?: { element?: { type?: string } };
   disallow?: { to?: { element?: { type?: string } } };
+  from?: { element?: { type?: string } };
 };
 
 /** 从扁平配置里取出 boundaries 那一节（含 elements 声明与策略）。 */
 function boundariesSection(): { elements: Array<ElementDef>; policies: Array<Policy> } {
   const configs = /* SAFETY: 类型断言已复核 */ eslintConfig as unknown as Array<{
     plugins?: Record<string, unknown>;
-    settings?: Record<string, unknown>;
     rules?: Record<string, unknown>;
+    settings?: Record<string, unknown>;
   }>;
   const section = configs.find((c) => c.plugins?.boundaries);
   expect(section, "eslint.config.js 里找不到 boundaries 配置节").toBeTruthy();
@@ -87,7 +87,9 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
           walk(full);
           continue;
         }
-        if (!/\.tsx?$/.test(name) || /\.test\.tsx?$/.test(name)) continue;
+        if (!/\.tsx?$/.test(name) || /\.test\.tsx?$/.test(name)) {
+          continue;
+        }
         const src = readFileSync(full, "utf8");
         // 只匹配模块说明符，注释里提到的路径不算（规范 §18.3 的注释惯例）
         const matches = [
@@ -95,7 +97,9 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
           ...src.matchAll(/import\s*\(\s*["']([^"']+)["']\s*\)/g),
         ].map((m) => m[1]);
         for (const spec of matches) {
-          if (typeof spec !== "string") continue;
+          if (typeof spec !== "string") {
+            continue;
+          }
           if (/^((~|@)\/)(components|app)\//.test(spec)) {
             hits.push(`${relative(root, full)} → ${spec}`);
           }

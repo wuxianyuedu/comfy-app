@@ -66,12 +66,10 @@ const RELOAD_COOLDOWN_MS = 60_000;
  */
 export function isChunkLoadFailure(err: unknown): boolean {
   const text =
-    err instanceof Error
-      ? `${err.name}: ${err.message}`
-      : typeof err === "string"
-        ? err
-        : "";
-  if (!text) return false;
+    err instanceof Error ? `${err.name}: ${err.message}` : typeof err === "string" ? err : "";
+  if (!text) {
+    return false;
+  }
   return (
     /ChunkLoadError/i.test(text) ||
     /Failed to load chunk/i.test(text) ||
@@ -90,22 +88,22 @@ export function isChunkLoadFailure(err: unknown): boolean {
  * 非浏览器环境（SSR / 单测）与生产构建一律不刷，直接返回 false。
  */
 export function reloadOnceForChunkError(err: unknown): boolean {
-  if (typeof window === "undefined") return false;
-  if (process.env.NODE_ENV === "production") return false;
-  if (!isChunkLoadFailure(err)) return false;
+  if (typeof window === "undefined") {
+    return false;
+  }
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+  if (!isChunkLoadFailure(err)) {
+    return false;
+  }
 
   /* 同一轮刷过就不再刷：分块真的没了时，第二次刷新同样拿不到它——那会变成
    * 死循环，比把错误抛给 error boundary 更坏。判据是**距上次刷新的间隔**，不是
    * 「有没有刷过」：后者没有任何地方会清，自愈能力会用一次就永久消失
    * （见 `RELOAD_COOLDOWN_MS`）。 */
-  const lastReloadAt = Number.parseInt(
-    readStorageItem(RELOAD_GUARD_KEY) ?? "",
-    10,
-  );
-  if (
-    Number.isFinite(lastReloadAt) &&
-    Date.now() - lastReloadAt < RELOAD_COOLDOWN_MS
-  ) {
+  const lastReloadAt = Number.parseInt(readStorageItem(RELOAD_GUARD_KEY) ?? "", 10);
+  if (Number.isFinite(lastReloadAt) && Date.now() - lastReloadAt < RELOAD_COOLDOWN_MS) {
     return false;
   }
 

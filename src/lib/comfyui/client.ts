@@ -92,7 +92,9 @@ export function shouldLogProbeMiss(key: string, now: number = Date.now()): boole
     probeLog.key === key &&
     probeLog.lastAt !== undefined &&
     now - probeLog.lastAt < COMFY_PROBE_LOG_REPEAT_MS;
-  if (repeat) return false;
+  if (repeat) {
+    return false;
+  }
   probeLog.key = key;
   probeLog.lastAt = now;
   return true;
@@ -116,7 +118,9 @@ function forceIpv4Host(raw: string): string {
   try {
     const url = new URL(raw);
 
-    if (url.hostname === "localhost") url.hostname = LOOPBACK_HOST;
+    if (url.hostname === "localhost") {
+      url.hostname = LOOPBACK_HOST;
+    }
 
     return url.toString().replace(/\/$/, "");
   } catch {
@@ -142,7 +146,9 @@ async function probePort(_host: string, port: number): Promise<boolean> {
  * 依次试：配置端口 → +1 … 到 +PROBE_RANGE。结果缓存到进程生命周期结束。
  */
 export async function resolveComfyBase(): Promise<string> {
-  if (_resolvedBase) return _resolvedBase;
+  if (_resolvedBase) {
+    return _resolvedBase;
+  }
 
   const settings = getSettingsSync();
   // 连接地址固定本机（ComfyUI 由本应用按 comfyuiPath 拉起）；远程实例用
@@ -227,7 +233,9 @@ export async function resolveComfyBase(): Promise<string> {
    * `_resolvedBase` 就记住了，本函数不会再走到这里。 */
   const targets = probeTargets(configuredPort);
   for (const target of targets.slice(1)) {
-    if (!(await probePort(host, target.port))) continue;
+    if (!(await probePort(host, target.port))) {
+      continue;
+    }
     _resolvedBase = target.url;
     if (target.port === COMFY_WINDOW_PORT) {
       logger.warn(
@@ -297,7 +305,9 @@ export async function probeComfyBase(): Promise<string | null> {
  * 会改变状态的调用（上传 / 提交 prompt）请用 resolveComfyBase()。
  */
 export function comfyBase(): string {
-  if (_resolvedBase) return forceIpv4Host(_resolvedBase);
+  if (_resolvedBase) {
+    return forceIpv4Host(_resolvedBase);
+  }
   const settings = getSettingsSync();
   const port =
     settings.comfyuiPort && settings.comfyuiPort > 0 ? settings.comfyuiPort : COMFYUI_DEFAULT_PORT;
@@ -358,7 +368,9 @@ export async function getView(filename: string, subfolder: string, type: string)
     signal: AbortSignal.timeout(60_000),
   });
 
-  if (!res.ok) throw new ComfyViewError(res.status, `getView failed: ${res.status}`);
+  if (!res.ok) {
+    throw new ComfyViewError(res.status, `getView failed: ${res.status}`);
+  }
 
   return Buffer.from(await res.arrayBuffer());
 }
@@ -367,9 +379,11 @@ export async function getView(filename: string, subfolder: string, type: string)
 export async function listModels(folder: string): Promise<Array<string>> {
   try {
     const res = await fetch(`${comfyBase()}/api/models/${encodeURIComponent(folder)}`, {
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      return [];
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as Array<string>;
     return Array.isArray(data) ? data : [];
   } catch {
@@ -391,7 +405,9 @@ export async function listModelFolders(): Promise<Array<string>> {
     const res = await fetch(`${comfyBase()}/api/models`, {
       signal: AbortSignal.timeout(3000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      return [];
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as Array<string>;
     return Array.isArray(data)
       ? data.filter((datum) => typeof datum === "string" && datum.length > 0)
@@ -433,7 +449,7 @@ export async function interrupt(): Promise<void> {
   const base = await resolveComfyBase();
   const res = await fetch(`${base}/api/interrupt`, {
     method: "POST",
-    signal: AbortSignal.timeout(5_000),
+    signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) {
     throw new Error(`POST /api/interrupt -> ${res.status}`);
@@ -444,40 +460,42 @@ export async function interrupt(): Promise<void> {
  * ComfyUI 系统状态：返回 GPU（devices）与系统内存（system）容量与占用，
  * 底部状态栏据此显示显存/内存占用；进程离线时返回 null（调用方降级展示）。 */
 /** 折叠成状态栏关心的聚合视图，保留原始字段便于扩展 */
-export interface ComfySystemStats {
-  online: boolean;
+export type ComfySystemStats = {
   /** GPU 型号（取第一块可用 GPU）；无 GPU 时为 undefined */
   gpuName?: string;
-  /** 显存占用（字节）：vram_total - vram_free 推导 */
-  vramUsed: number;
-  /** 显存总量（字节） */
-  vramTotal: number;
-  /** 显存剩余可用（字节）：ComfyUI 上报的 vram_free 原值 */
-  vramFree: number;
-  /** nvidia-smi 物理专用显存占用（字节）；不适用/查询失败为 undefined */
-  smiVramUsed?: number;
-  /** nvidia-smi 物理专用显存总量（字节）；不适用/查询失败为 undefined */
-  smiVramTotal?: number;
-  /** 系统内存占用（字节） */
-  ramUsed: number;
+  online: boolean;
   /** 系统内存总量（字节） */
   ramTotal: number;
-}
+  /** 系统内存占用（字节） */
+  ramUsed: number;
+  /** nvidia-smi 物理专用显存总量（字节）；不适用/查询失败为 undefined */
+  smiVramTotal?: number;
+  /** nvidia-smi 物理专用显存占用（字节）；不适用/查询失败为 undefined */
+  smiVramUsed?: number;
+  /** 显存剩余可用（字节）：ComfyUI 上报的 vram_free 原值 */
+  vramFree: number;
+  /** 显存总量（字节） */
+  vramTotal: number;
+  /** 显存占用（字节）：vram_total - vram_free 推导 */
+  vramUsed: number;
+};
 
 /** 从 `/system_stats.devices` 中挑出真正在用的 GPU。
  *  ComfyUI 的 devices 首项未必是 GPU——CPU/纯 CPU 后端会把 type="cpu" 设备排前，
  *  其 vram_* 恒为 0，直接取 devices[0] 会让显存占用恒读成 0%。这里先过滤出
  *  显存容量 >0 的 GPU，取不到才回退到首项（调用方据此判定纯 CPU 并隐藏占用条）。 */
-interface ComfyDevice {
+type ComfyDevice = {
   name?: string;
   type?: string;
+  vram_free?: number;
   vram_total?: number;
   vram_used?: number;
-  vram_free?: number;
-}
+};
 
 function pickGpu(devices: Array<ComfyDevice> | undefined): ComfyDevice | undefined {
-  if (!Array.isArray(devices) || devices.length === 0) return undefined;
+  if (!Array.isArray(devices) || devices.length === 0) {
+    return undefined;
+  }
   return devices.find((d) => d.type !== "cpu" && (d.vram_total ?? 0) > 0) ?? devices[0];
 }
 
@@ -492,10 +510,12 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
     const res = await fetch(`${comfyBase()}/system_stats`, {
       signal: AbortSignal.timeout(2500),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      system?: { ram_total?: number; ram_free?: number };
       devices?: Array<ComfyDevice>;
+      system?: { ram_free?: number; ram_total?: number };
     };
     const dev = pickGpu(data.devices);
     const vramTotal = dev?.vram_total ?? 0;
@@ -536,7 +556,9 @@ export async function getComfyQueue(): Promise<unknown> {
     const res = await fetch(`${comfyBase()}/queue`, {
       signal: AbortSignal.timeout(2500),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     return await res.json();
   } catch {
     return null;

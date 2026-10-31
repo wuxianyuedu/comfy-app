@@ -11,10 +11,15 @@ import { withQuery } from "~/lib/query-string";
 import { LOG_SLICE_ENDPOINT } from "./panel-self-poll";
 import type { LogSessionsPayload } from "./log-sessions";
 
-export interface FileLogSlice {
+export type FileLogSlice = {
+  /**
+   * 服务端进程标识。客户端存下它，下一轮带上比对；不一致即「应用服务真重启过」，
+   * 面板据此重置时间线与游标（否则重启前后的行会混成一条线）。
+   */
+  bootId?: string;
   content: string;
-  /** 文件当前总字节数（下一轮增量读取的游标）。 */
-  size: number;
+  /** true = 本轮请求带的服务进程标识与响应不一致（详见 route.ts）。 */
+  mismatch?: boolean;
   /** 本次返回内容在文件中的起点。 */
   offset: number;
   /**
@@ -22,14 +27,9 @@ export interface FileLogSlice {
    * null = 读不到锚点（非双击链路启动），面板此时不做时间线截断。
    */
   sessionStart?: number | null;
-  /**
-   * 服务端进程标识。客户端存下它，下一轮带上比对；不一致即「应用服务真重启过」，
-   * 面板据此重置时间线与游标（否则重启前后的行会混成一条线）。
-   */
-  bootId?: string;
-  /** true = 本轮请求带的服务进程标识与响应不一致（详见 route.ts）。 */
-  mismatch?: boolean;
-}
+  /** 文件当前总字节数（下一轮增量读取的游标）。 */
+  size: number;
+};
 
 export type LogSourceKind =
   | "dev"
@@ -46,7 +46,9 @@ export type LogSourceKind =
 
 /** source 参数 → /api/logs/current 的 source 查询值。 */
 function sourceQuery(source: LogSourceKind): string {
-  if (source === "dev") return "dev-launcher";
+  if (source === "dev") {
+    return "dev-launcher";
+  }
   return source;
 }
 
@@ -71,7 +73,9 @@ export async function fetchFileLogSlice(
       bootId: bootId ?? undefined,
     }),
   );
-  if (!res.ok) return null;
+  if (!res.ok) {
+    return null;
+  }
   return /* SAFETY: 类型断言已复核 */ (await res.json()) as FileLogSlice;
 }
 
@@ -103,7 +107,9 @@ export async function fetchLogSessions(
   try {
     /* 会话 id 可选：空值由出口省略（不再自己 `if` 一次再 `set`）。 */
     const res = await fetch(withQuery("/api/logs/sessions", { source, session: sessionId }));
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as LogSessionsPayload;
   } catch {
     return null;
@@ -111,12 +117,12 @@ export async function fetchLogSessions(
 }
 
 /** 列出 log/ 下的归档日志文件（供「历史日志」选择）。 */
-export interface LogFileInfo {
+export type LogFileInfo = {
+  mtimeMs: number;
   name: string;
   relativePath: string;
-  mtimeMs: number;
   size: number;
-}
+};
 
 /* ── 日志导出到本地文件（客户端 → 服务端）─────────────────────────────
  * 面板的「保存到本地」经 `POST /api/logs/export` 由服务端写进 `log/exports/`，
@@ -124,13 +130,13 @@ export interface LogFileInfo {
  */
 
 /** 导出的结果：成功时给出服务端写下的**绝对路径**与相对 `log/` 的路径。 */
-export interface SavedLogExport {
+export type SavedLogExport = {
+  bytes?: number;
+  error?: string;
   ok: boolean;
   path?: string;
   relativePath?: string;
-  bytes?: number;
-  error?: string;
-}
+};
 
 /**
  * 把一段日志文本保存到本机 `log/exports/`。

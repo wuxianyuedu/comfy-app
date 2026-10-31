@@ -33,10 +33,7 @@ const httpServer = http.createServer((req, res) => {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Accept, MCP-Protocol-Version",
-    );
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, MCP-Protocol-Version");
   }
 
   if (req.method === "OPTIONS") {
@@ -49,15 +46,10 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
-  res
-    .writeHead(405, { "Content-Type": "text/plain" })
-    .end("Method Not Allowed");
+  res.writeHead(405, { "Content-Type": "text/plain" }).end("Method Not Allowed");
 });
 
-async function handlePost(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-): Promise<void> {
+async function handlePost(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   try {
     const mcp = buildWorkshopMcpServer();
     const transport = new StreamableHTTPServerTransport({
@@ -72,7 +64,9 @@ async function handlePost(
     await transport.handleRequest(req, res);
   } catch (err) {
     console.error("[workshop-mcp-http] 处理请求失败:", err);
-    if (!res.headersSent) res.writeHead(500).end("Internal Server Error");
+    if (!res.headersSent) {
+      res.writeHead(500).end("Internal Server Error");
+    }
   }
 }
 

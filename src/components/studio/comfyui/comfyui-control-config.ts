@@ -16,32 +16,28 @@
 import type { StatusDotState } from "~/components/ui/status-dot";
 
 /** 本页消费的运行态四态（与 `setting.comfyStatus` 出口逐字段一致）。 */
-export interface ComfyRuntimeStatus {
-  up: boolean;
-  starting: boolean;
-  probing: boolean;
-  stopping: boolean;
+export type ComfyRuntimeStatus = {
   base: string | null;
-  port: number;
-  via: string | null;
   /** 库里**已保存**的 ComfyUI 路径（`setting.comfyuiPath`）——本页只读展示。
    *
    *  启动动作按这一行拉起，所以它必须写在页上：用户若刚在设置页改了路径**没保存**，
    *  这一行仍是旧值，一眼就能看出「现在会按哪条路径启动」，不必跨屏共享草稿。 */
   path: string;
-}
+  port: number;
+  probing: boolean;
+  starting: boolean;
+  stopping: boolean;
+  up: boolean;
+  via: string | null;
+};
 
 /** 一个运行态快照里所有「正在过渡」的信号 —— 动作按钮的禁用判据只用它。 */
 export function isComfyBusy(
   status: ComfyRuntimeStatus | null,
-  flags: { starting: boolean; stopping: boolean; opening: boolean },
+  flags: { opening: boolean; starting: boolean; stopping: boolean },
 ): boolean {
   return (
-    flags.opening ||
-    flags.starting ||
-    flags.stopping ||
-    !!status?.starting ||
-    !!status?.stopping
+    flags.opening || flags.starting || flags.stopping || !!status?.starting || !!status?.stopping
   );
 }
 
@@ -55,16 +51,15 @@ export function comfyDotState(
   status: ComfyRuntimeStatus | null,
   flags: { starting: boolean; stopping: boolean },
 ): StatusDotState {
-  if (status?.up) return "up";
-  if (
-    flags.starting ||
-    flags.stopping ||
-    status?.starting ||
-    status?.stopping
-  ) {
+  if (status?.up) {
+    return "up";
+  }
+  if (flags.starting || flags.stopping || status?.starting || status?.stopping) {
     return "busy";
   }
-  if (status?.probing) return "probing";
+  if (status?.probing) {
+    return "probing";
+  }
   return "down";
 }
 
@@ -83,9 +78,15 @@ export function comfyStatusText(
     const via = status.via ? `·${status.via}` : "";
     return `ComfyUI 运行中${base}${via}`;
   }
-  if (flags.stopping || status?.stopping) return "ComfyUI 关闭中…";
-  if (flags.starting || status?.starting) return "ComfyUI 正在启动…";
-  if (status?.probing) return "ComfyUI 状态检测中…";
+  if (flags.stopping || status?.stopping) {
+    return "ComfyUI 关闭中…";
+  }
+  if (flags.starting || status?.starting) {
+    return "ComfyUI 正在启动…";
+  }
+  if (status?.probing) {
+    return "ComfyUI 状态检测中…";
+  }
   return "ComfyUI 未运行";
 }
 
@@ -95,18 +96,15 @@ export function comfyStatusText(
  * 只在**明确运行中**时给地址：探测中 / 未运行时给一个空 title 或半截结论，
  * 都比不给更坏（悬停出来的东西看起来就是权威结论）。
  */
-export function comfyDotTitle(
-  status: ComfyRuntimeStatus | null,
-): string | undefined {
-  if (!status?.up) return undefined;
+export function comfyDotTitle(status: ComfyRuntimeStatus | null): string | undefined {
+  if (!status?.up) {
+    return undefined;
+  }
   return comfyStatusText(status, { starting: false, stopping: false });
 }
 
 /** 安装形态 → 徽标文案。 */
-export const INSTANCE_KIND_LABEL: Record<
-  "desktop" | "portable" | "venv" | "unknown",
-  string
-> = {
+export const INSTANCE_KIND_LABEL: Record<"desktop" | "portable" | "venv" | "unknown", string> = {
   desktop: "桌面版（ComfyUI Desktop）",
   portable: "便携版",
   venv: "venv",
@@ -114,9 +112,7 @@ export const INSTANCE_KIND_LABEL: Record<
 };
 
 /** 一个安装形态键 → 徽标文案（判不出形态时按 `unknown` 档说，不猜）。 */
-export function instanceKindLabel(
-  kind: "desktop" | "portable" | "venv" | null,
-): string {
+export function instanceKindLabel(kind: "desktop" | "portable" | "venv" | null): string {
   return INSTANCE_KIND_LABEL[kind ?? "unknown"];
 }
 
@@ -150,6 +146,8 @@ export function comfyConfigHint(
     pathConfigured: boolean;
   } | null,
 ): string | null {
-  if (instance?.pathConfigured) return null;
+  if (instance?.pathConfigured) {
+    return null;
+  }
   return "还没配置 ComfyUI 路径 —— 在「设置 → 创作后端」里填源码根或桌面实例根，再回来启动。";
 }

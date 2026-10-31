@@ -8,25 +8,27 @@ import { isRecord } from "~/lib/is-record";
 import { normalizeProductionProgress, type ProductionProgress } from "~/lib/production/progress";
 
 /** 一次生产数据写入的载荷（字段与 production 表列一一对应）。 */
-export interface ProductionPayload {
-  title: string;
-  type: string;
-  tone: string;
-  logline: string;
-  scriptMarkdown: string;
-  scenes: Array<unknown>;
+export type ProductionPayload = {
   characters: Array<unknown>;
-  shots: Array<unknown>;
+  logline: string;
   /** 完成状态单一来源（Phase 4 / 设计 §7）：阶段游标 + rendered。 */
   progress: ProductionProgress;
-}
+  scenes: Array<unknown>;
+  scriptMarkdown: string;
+  shots: Array<unknown>;
+  title: string;
+  tone: string;
+  type: string;
+};
 
 /** 读回的生产数据（与写入载荷同形）。 */
 export type ProductionData = ProductionPayload;
 
 /** 把某项目的生产数据写穿到服务端 production 表（按 proj_* upsert）。静默失败。 */
 export async function pushProduction(projectId: string, payload: ProductionPayload): Promise<void> {
-  if (!projectId) return;
+  if (!projectId) {
+    return;
+  }
   try {
     await fetch("/api/production", {
       method: "PUT",
@@ -40,10 +42,14 @@ export async function pushProduction(projectId: string, payload: ProductionPaylo
 
 /** 拉取某项目的生产数据；无该行 / 请求失败 → null。 */
 export async function fetchProduction(projectId: string): Promise<ProductionData | null> {
-  if (!projectId) return null;
+  if (!projectId) {
+    return null;
+  }
   try {
     const res = await fetch(withQuery("/api/production", { project: projectId }));
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     const data: unknown = await res.json();
     if (isRecord(data) && data.exists === true && isRecord(data.production)) {
       return /* SAFETY: 类型断言已复核 */ data.production as unknown as ProductionData;
@@ -60,6 +66,8 @@ export async function fetchProductionProgress(
   projectId: string,
 ): Promise<ProductionProgress | null> {
   const prod = await fetchProduction(projectId);
-  if (!prod) return null;
+  if (!prod) {
+    return null;
+  }
   return normalizeProductionProgress(prod.progress);
 }

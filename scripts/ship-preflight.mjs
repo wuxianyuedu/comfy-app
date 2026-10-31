@@ -26,18 +26,9 @@
  */
 import process from "node:process";
 
-import {
-  CODE,
-  decideCreateBranch,
-  planCommands,
-  readFreshnessState,
-} from "./ship-core.mjs";
+import { CODE, decideCreateBranch, planCommands, readFreshnessState } from "./ship-core.mjs";
 import { HANDLE_SOURCES } from "./dev-handle.mjs";
-import {
-  DEV_HANDLE_ENV_KEY,
-  issueAuthoring,
-  ticketReading,
-} from "./ship-ticket.mjs";
+import { DEV_HANDLE_ENV_KEY, issueAuthoring, ticketReading } from "./ship-ticket.mjs";
 import { logInstanceReading } from "./ship-reap.mjs";
 import { parsePorcelain } from "./ship-local.mjs";
 import { envInitHint } from "./env-preflight.mjs";
@@ -101,9 +92,7 @@ export async function runPreflightStage(ctx) {
   const head = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
   let branch = head.stdout.trim();
   if (head.status !== 0 || !branch) {
-    log(
-      "[ship] 取不到 HEAD ⇒ 非 git 检出 / 游离 HEAD，这一格没有结论（不是「通过」）",
-    );
+    log("[ship] 取不到 HEAD ⇒ 非 git 检出 / 游离 HEAD，这一格没有结论（不是「通过」）");
     return { action: "stop", codes, code: CODE.NOT_RUN };
   }
   /* ── 建分支那一格（`--branch`，显式才动 ref）──────────────────
@@ -116,12 +105,7 @@ export async function runPreflightStage(ctx) {
     requested: wantName || null,
     current: branch,
     existsLocal: wantName
-      ? run("git", [
-          "show-ref",
-          "--verify",
-          "--quiet",
-          `refs/heads/${wantName}`,
-        ]).status === 0
+      ? run("git", ["show-ref", "--verify", "--quiet", `refs/heads/${wantName}`]).status === 0
       : false,
     existsRemote: wantName
       ? run("git", [
@@ -231,8 +215,7 @@ export async function runPreflightStage(ctx) {
    * 放在这里而不是别处的理由：这是整条链上唯一一处「碎片文件名 + 首行段落」都还在手边、
    * 而写动作一个都没发生的时刻。此前的读数时机只有最危险那一格（`--close-issue` 在
    * **合并已发生之后**才发现标题里没有号），那等于让「没立案」一路走到主干。 */
-  const ticket =
-    frags.length > 0 ? ticketReading({ root, fragments: frags }) : null;
+  const ticket = frags.length > 0 ? ticketReading({ root, fragments: frags }) : null;
   if (ticket) {
     for (const l of ticket.lines) {
       log(l);
@@ -276,11 +259,11 @@ export async function runPreflightStage(ctx) {
    * 在这里只看到别的读数，看不到「跑一次 `env:init` 会补哪些键」（其中就有留痕那一行）。
    * 与上面那两格同口径：**只念不改**，不写文件、不参与退码。 */
   const envHint = envInitHint(root);
-  if (envHint) log(`[ship] 环境配置提醒：${envHint}`);
+  if (envHint) {
+    log(`[ship] 环境配置提醒：${envHint}`);
+  }
   if (unstagedModified.length + untracked.length > 0 && opt.adds.length === 0) {
-    log(
-      "[ship] 还有未暂存的改动，而本次没给 --add ⇒ 暂存面由你负责，脚本不替你 `git add -A`。",
-    );
+    log("[ship] 还有未暂存的改动，而本次没给 --add ⇒ 暂存面由你负责，脚本不替你 `git add -A`。");
   }
   if (baseRef === null) {
     log(
@@ -329,12 +312,8 @@ export async function runPreflightStage(ctx) {
     return { action: "dry-run", codes };
   }
   if (!cnbOk) {
-    log(
-      "[ship] 这台机器上没有可用的 cnb ⇒ 平台侧那几段（PR / 轮询 / 合并）没有执行者。",
-    );
-    log(
-      "[ship] 本地两段照跑；跑完请自己开 PR。这一格记「没跑起来」，不记「已完成」。",
-    );
+    log("[ship] 这台机器上没有可用的 cnb ⇒ 平台侧那几段（PR / 轮询 / 合并）没有执行者。");
+    log("[ship] 本地两段照跑；跑完请自己开 PR。这一格记「没跑起来」，不记「已完成」。");
   }
 
   /* ── 依赖新鲜度（硬规则 25 / 规范 §13.5.13）────────────────────────
@@ -355,9 +334,7 @@ export async function runPreflightStage(ctx) {
   if (freshState === "clean") {
     codes.push(CODE.GREEN);
   } else if (freshState === "drift") {
-    log(
-      "[ship] 依赖新鲜度红了（硬规则 25）⇒ 先 `git pull` + `pnpm install` 再回来。",
-    );
+    log("[ship] 依赖新鲜度红了（硬规则 25）⇒ 先 `git pull` + `pnpm install` 再回来。");
     codes.push(CODE.RED);
     return { action: "finish", codes };
   } else if (freshState === "no-install") {

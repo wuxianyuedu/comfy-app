@@ -139,9 +139,9 @@ const PROBE_BY = "2026-11-09T00:00:00Z";
  * 且**判据仍然会问**另外那几条（key 字面量 / 不撞退化形状 / 一把锁只给一份清单）。
  */
 const PROBE_LOCK_EXEMPT: Array<{
-  event: string;
   /** 这一条的锁**故意**不写 `cancel-in-progress`，锚点名写在这里（其余一条都不许借）。 */
   cancelFalse?: string;
+  event: string;
   /** 这一条**故意**一条锁都不写（对照组）。 */
   noLock?: boolean;
 }> = [
@@ -154,10 +154,14 @@ const PROBE_LOCK_EXEMPT: Array<{
 function configEventBlock(text: string, event: string): string {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex((l) => l === `  ${event}:`);
-  if (start < 0) return "";
+  if (start < 0) {
+    return "";
+  }
   const out: Array<string> = [];
   for (const line of lines.slice(start + 1)) {
-    if (/^ {2}\S/.test(line)) break;
+    if (/^ {2}\S/.test(line)) {
+      break;
+    }
     out.push(line);
   }
   return out.join("\n");
@@ -209,7 +213,7 @@ const CONFIG_SHAPE: Array<{ mustMatch: RegExp; why: string }> = [
  * 判据按**码位**扫 script 块的代码行（先剥行内注释），只认那几种「7 有、5.1 没有」
  * 的形状；每一条都是解析期错误、不会有「其实 5.1 也认」的中间态。
  */
-const PS7_ONLY: Array<{ pattern: RegExp; what: string; instead: string }> = [
+const PS7_ONLY: Array<{ instead: string; pattern: RegExp; what: string; }> = [
   {
     pattern: /\?\./,
     what: "`?.` null 条件运算符（PS 7+）",
@@ -253,7 +257,9 @@ export function ps7OnlySyntaxIn(text: string): Array<string> {
       bodyIndent = (scriptStart[1] ?? "").length + 2;
       return;
     }
-    if (bodyIndent === null) return;
+    if (bodyIndent === null) {
+      return;
+    }
     // 块结束：出现缩进不比正文深的非空行。
     if (raw.trim() !== "" && raw.length - raw.trimStart().length < bodyIndent) {
       bodyIndent = null;
@@ -456,7 +462,9 @@ function dropPrOnlyEnvLines(env: Array<string>, onlyOnPr: Array<string>): Array<
 /** `45m` / `30m` / `3h` → 分钟。解析不出时回 0（调用方的断言会把它读成「没预算」）。 */
 function stageBudgetMinutes(raw: string | undefined): number {
   const m = /^(\d+)([smh])$/.exec(String(raw ?? "").trim());
-  if (!m) return 0;
+  if (!m) {
+    return 0;
+  }
   const n = Number(m[1]);
   return m[2] === "h" ? n * 60 : m[2] === "s" ? n / 60 : n;
 }
@@ -488,16 +496,26 @@ function executableScriptLines(text: string, name: string): Array<string> {
  */
 function stageEnvAssignments(text: string, name: string): Array<string> {
   const block = stageBlock(text, name);
-  if (!block) return [];
+  if (!block) {
+    return [];
+  }
   const lines = block.split(/\r?\n/);
   const at = lines.findIndex((l) => /^\s*env:\s*$/.test(l));
-  if (at < 0) return [];
+  if (at < 0) {
+    return [];
+  }
   const out: Array<string> = [];
   for (const line of lines.slice(at + 1)) {
-    if (/^\s*(script|timeout|ifModify|name|retries|jobs|runs_on|image):/.test(line)) break;
+    if (/^\s*(script|timeout|ifModify|name|retries|jobs|runs_on|image):/.test(line)) {
+      break;
+    }
     const t = line.trim();
-    if (t === "" || t.startsWith("#") || t.startsWith("-")) continue;
-    if (!/^[A-Za-z_][A-Za-z0-9_]*\s*:/.test(t)) continue;
+    if (t === "" || t.startsWith("#") || t.startsWith("-")) {
+      continue;
+    }
+    if (!/^[A-Za-z_][A-Za-z0-9_]*\s*:/.test(t)) {
+      continue;
+    }
     out.push(t);
   }
   return out;
@@ -511,16 +529,26 @@ function stageEnvAssignments(text: string, name: string): Array<string> {
  */
 function stageScriptLine(text: string, name: string): string {
   const block = stageBlock(text, name);
-  if (!block) return "";
+  if (!block) {
+    return "";
+  }
   const lines = block.split(/\r?\n/);
   const at = lines.findIndex((l) => /^\s*script:/.test(l));
-  if (at < 0) return "";
+  if (at < 0) {
+    return "";
+  }
   const first = lines[at]?.replace(/^\s*script:[ \t]*/, "") ?? "";
-  if (first && !/^[|>][-+]?\s*$/.test(first)) return first.trim();
+  if (first && !/^[|>][-+]?\s*$/.test(first)) {
+    return first.trim();
+  }
   const body: Array<string> = [];
   for (const line of lines.slice(at + 1)) {
-    if (/^\s*(timeout|env|ifModify|name|retries):/.test(line)) break;
-    if (line.trim() === "") continue;
+    if (/^\s*(timeout|env|ifModify|name|retries):/.test(line)) {
+      break;
+    }
+    if (line.trim() === "") {
+      continue;
+    }
     body.push(line.replace(/^\s+/, "").trimEnd());
   }
   return body.join("\n");
@@ -543,8 +571,8 @@ function stageScriptLine(text: string, name: string): string {
  */
 export function crontabEvents(
   text: string,
-): Array<{ branch: string; event: string; cron: string }> {
-  const out: Array<{ branch: string; event: string; cron: string }> = [];
+): Array<{ branch: string; cron: string; event: string; }> {
+  const out: Array<{ branch: string; cron: string; event: string; }> = [];
   let branch = "";
   for (const line of text.split("\n")) {
     /* 顶层分支键：顶格、以 `:` 结尾（`master:` / `"dev/*":` / `$:`）。 */
@@ -556,7 +584,9 @@ export function crontabEvents(
     /* 事件键：两格缩进、带引号。**只有**引号形态能被平台当成 crontab 事件 ——
      * 裸的 `crontab:` 是映射键，不是事件名。 */
     const ev = /^ {2}"(crontab: [^"]*)":\s*$/.exec(line);
-    if (ev?.[1] === undefined) continue;
+    if (ev?.[1] === undefined) {
+      continue;
+    }
     out.push({
       branch,
       event: ev[1],
@@ -586,7 +616,9 @@ export function registeredDailyGateOrder(text: string): Array<string> {
       text,
     );
   const body = m?.[1];
-  if (body === undefined) return [];
+  if (body === undefined) {
+    return [];
+  }
   return body
     .split(",")
     .map((n) => n.trim())
@@ -611,7 +643,9 @@ export function registeredPushGateOrder(text: string): Array<string> {
       text,
     );
   const body = m?.[1];
-  if (body === undefined) return [];
+  if (body === undefined) {
+    return [];
+  }
   return body
     .split(",")
     .map((n) => n.trim())
@@ -646,34 +680,48 @@ export function pipelineStageNames(text: string, pipelineName: string): Array<st
       break;
     }
   }
-  if (start < 0) return [];
+  if (start < 0) {
+    return [];
+  }
   /* 流水线项的缩进 = 它 `name:` 那一行的缩进；`stages:` 的键在它**下一层**。 */
   const itemIndent = (lines[start] ?? "").length - (lines[start] ?? "").trimStart().length;
   const out: Array<string> = [];
   let stageIndent: number | null = null;
   for (let i = start + 1; i < lines.length; i += 1) {
     const raw = lines[i] ?? "";
-    if (raw.trim() === "" || raw.trim().startsWith("#")) continue;
+    if (raw.trim() === "" || raw.trim().startsWith("#")) {
+      continue;
+    }
     const indent = raw.length - raw.trimStart().length;
     const body = raw.trim();
     if (stageIndent === null) {
       /* 还没见到 `stages:`：缩进**比流水线项更浅** ⇒ 这一条结束了。
        * 同级的 `- <<: *anchor` / `name:` 仍在同一条里，不能当成收尾（`push` 那条的
        * `- <<:` 就在这一层）。 */
-      if (indent < itemIndent) break;
+      if (indent < itemIndent) {
+        break;
+      }
       /* `stages: *daily_gates` 这种**引用形态**：清单在锚点里，去那儿读。
        * 每日那七格现在是两个触发口共用一份（02:00 定时 + 页面上的手点按钮），写成两份
        * 的那一刻就是它俩开始各漂的那一刻。解析器必须认得引用，否则「手点那条跑的是不是
        * 同一份」这件事根本没有判据能问。 */
       const alias = /^stages:[ \t]*\*(\S+)[ \t]*$/.exec(body);
-      if (alias?.[1] !== undefined) return anchorStageNames(text, alias[1]);
-      if (body.startsWith("stages:")) stageIndent = indent;
+      if (alias?.[1] !== undefined) {
+        return anchorStageNames(text, alias[1]);
+      }
+      if (body.startsWith("stages:")) {
+        stageIndent = indent;
+      }
       continue;
     }
     /* 已在 `stages:` 里：更浅或同级的键 ⇒ 这一条流水线结束了。 */
-    if (indent <= stageIndent && !body.startsWith("- ")) break;
+    if (indent <= stageIndent && !body.startsWith("- ")) {
+      break;
+    }
     const item = /^- name:[ \t]*(\S.*?)[ \t]*$/.exec(body);
-    if (item?.[1] !== undefined) out.push(item[1]);
+    if (item?.[1] !== undefined) {
+      out.push(item[1]);
+    }
   }
   return out;
 }
@@ -699,13 +747,21 @@ export function anchorStageNames(text: string, anchor: string): Array<string> {
       break;
     }
   }
-  if (start < 0) return [];
+  if (start < 0) {
+    return [];
+  }
   const out: Array<string> = [];
   for (const raw of lines.slice(start + 1)) {
-    if (raw.trim() === "" || raw.trim().startsWith("#")) continue;
-    if (/^\S/.test(raw)) break;
+    if (raw.trim() === "" || raw.trim().startsWith("#")) {
+      continue;
+    }
+    if (/^\S/.test(raw)) {
+      break;
+    }
     const item = /^-\s+name:[ \t]*(\S.*?)[ \t]*$/.exec(raw.trim());
-    if (item?.[1] !== undefined) out.push(item[1]);
+    if (item?.[1] !== undefined) {
+      out.push(item[1]);
+    }
   }
   return out;
 }
@@ -745,7 +801,9 @@ export function resolveAnchoredRunner(
   // 抽出 `.common` 锚点块里的 runner（缩进两层：`  runner:` 下跟两键）。
   const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S)/m.exec(text);
   const body = anchor?.[1];
-  if (body === undefined) return [];
+  if (body === undefined) {
+    return [];
+  }
   const runnerNS = /^\s+namespace:\s*(\S+)\s*$/m.exec(body);
   const tagLines = body.match(/^\s+-\s*(\S+)\s*$/gm) ?? [];
   return [
@@ -799,15 +857,21 @@ export function stageBlock(text: string, name: string): string | null {
       break;
     }
   }
-  if (start < 0) return null;
+  if (start < 0) {
+    return null;
+  }
   const out: Array<string> = [lines[start] ?? ""];
   for (let i = start + 1; i < lines.length; i += 1) {
     const raw = lines[i] ?? "";
     /* 下一个**同级或更浅**的列表项 / 更浅的键都算收尾（空行不算 —— 配置里正文之间有空行）。 */
     const nextItem = /^( *)-\s/.exec(raw);
-    if (nextItem && (nextItem[1] ?? "").length <= itemIndent) break;
+    if (nextItem && (nextItem[1] ?? "").length <= itemIndent) {
+      break;
+    }
     const key = /^( *)\S/.exec(raw);
-    if (key && (key[1] ?? "").length < itemIndent) break;
+    if (key && (key[1] ?? "").length < itemIndent) {
+      break;
+    }
     out.push(raw);
   }
   return out.join("\n");
@@ -835,7 +899,9 @@ export function commentedStageBlock(text: string, name: string): string | null {
       break;
     }
   }
-  if (start < 0) return null;
+  if (start < 0) {
+    return null;
+  }
   const strip = (l: string) => l.replace(/^#\s?/, "");
   const out: Array<string> = [strip(lines[start] ?? "")];
   for (let i = start + 1; i < lines.length; i += 1) {
@@ -843,7 +909,9 @@ export function commentedStageBlock(text: string, name: string): string | null {
     /* 收尾：下一个同级（注释态）stage 项，或**回到未注释的顶格键**（`master:` 那一层）。
      * ⚠️ 判据不能写成「`^\S` 就收尾」—— 注释块里的每一行都以 `#` 开头，那也是 `\S`，
      * 于是块内容会被切在第一行之后（`- name: X` 一行）。 */
-    if (/^#\s+-\s+name:/.test(raw) || (/^\S/.test(raw) && !raw.startsWith("#"))) break;
+    if (/^#\s+-\s+name:/.test(raw) || (/^\S/.test(raw) && !raw.startsWith("#"))) {
+      break;
+    }
     out.push(strip(raw));
   }
   return out.join("\n");
@@ -858,7 +926,9 @@ export function stageTimeouts(text: string): Map<string, string> {
   /** 当前子 Job 的缩进；`null` = 这一项没有 `jobs:`（键直接挂在 stage 上）。 */
   let jobIndent: number | null = null;
   for (const raw of lines) {
-    if (raw.trim() === "") continue;
+    if (raw.trim() === "") {
+      continue;
+    }
     const indent = raw.length - raw.trimStart().length;
     const body = raw.trim();
     // stage 列表项：`- name: X`（`stages:` 的直接子项，缩进按原文计 —— 不在正则里
@@ -885,11 +955,15 @@ export function stageTimeouts(text: string): Map<string, string> {
       jobIndent = null;
       continue;
     }
-    if (current === null || currentIndent === null) continue;
+    if (current === null || currentIndent === null) {
+      continue;
+    }
     const ownIndent = jobIndent ?? currentIndent;
     /* 这一项自己的键：比它自己那一层深一层（Job 项深一层；没有 `jobs:` 的项就是
      * stage 项深一层）。更深的是 `env:` 里的同名键，不算。 */
-    if (indent !== ownIndent + 2 || !body.startsWith("timeout:")) continue;
+    if (indent !== ownIndent + 2 || !body.startsWith("timeout:")) {
+      continue;
+    }
     out.set(current, body.slice("timeout:".length).trim());
   }
   return out;
@@ -915,7 +989,9 @@ export function hasPipelineLockCancelInProgress(text: string): boolean {
    * 夹具会解析不出来（真 `.cnb.yml` 里 `.common` 后面还有 `.gates`，看不出来）。 */
   const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(text);
   const body = anchor?.[1];
-  if (body === undefined) return false;
+  if (body === undefined) {
+    return false;
+  }
   // `lock:` 块内出现 `cancel-in-progress: true`（同一块里的 `timeout`/`key` 不算）。
   return /^\s+lock:\s*$[\s\S]*?^\s+cancel-in-progress:\s*true\s*$/m.test(body);
 }
@@ -938,10 +1014,14 @@ export function hasPipelineLockCancelInProgress(text: string): boolean {
 export function pipelineLockKeyTemplate(text: string): string | null {
   const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(text);
   const body = anchor?.[1];
-  if (body === undefined) return null;
+  if (body === undefined) {
+    return null;
+  }
   const lock = /^(\s+)lock:[ \t]*\r?\n([\s\S]*?)(?=^\1\S|\s*$(?![\s\S]))/m.exec(body);
   const block = lock?.[2];
-  if (block === undefined) return null;
+  if (block === undefined) {
+    return null;
+  }
   const key = /^\s+key:[ \t]*(\S.*?)[ \t]*$/m.exec(block);
   return key?.[1] ?? null;
 }
@@ -973,14 +1053,16 @@ export function resolveLockKey(template: string, vars: Record<string, string | u
 /** `.lock-*` 那几把**类锁**的定义：锚点名 → `{ key 原文, cancel-in-progress 原文 }`（`null` = 没写）。 */
 export function lockAnchorDefinitions(
   text: string,
-): Map<string, { key: string; cancelInProgress: boolean | null }> {
-  const out = new Map<string, { key: string; cancelInProgress: boolean | null }>();
+): Map<string, { cancelInProgress: boolean | null; key: string; }> {
+  const out = new Map<string, { cancelInProgress: boolean | null; key: string; }>();
   const def = /^\.lock-[\w-]+:[ \t]*&(lock_\w+)[ \t]*$([\s\S]*?)(?=^\S|$(?![\s\S]))/gm;
   for (const m of text.matchAll(def)) {
     const name = m[1];
     const body = m[2] ?? "";
     const key = /^[ \t]+key:[ \t]*(\S.*?)[ \t]*$/m.exec(body)?.[1];
-    if (name === undefined || key === undefined) continue;
+    if (name === undefined || key === undefined) {
+      continue;
+    }
     /* `null` = 这一行**没写**；`false` 是「写了、值是 false」—— 两者不同：
      * 漏写会让同一件事重复排队，而 `false` 是有意的取舍（逐笔留读数，见 R2）。 */
     const rawCancel = /^[ \t]+cancel-in-progress:[ \t]*(true|false)[ \t]*$/m.exec(body)?.[1];
@@ -1006,14 +1088,14 @@ export function lockAnchorDefinitions(
  */
 export function pipelineLockAssignments(text: string): Array<{
   event: string;
-  name: string;
   lockRef: string | null;
+  name: string;
   stagesRef: string | null;
 }> {
   const out: Array<{
     event: string;
-    name: string;
     lockRef: string | null;
+    name: string;
     stagesRef: string | null;
   }> = [];
   let inMaster = false;
@@ -1027,9 +1109,15 @@ export function pipelineLockAssignments(text: string): Array<{
       continue;
     }
     /* 下一个顶层键 ⇒ `master:` 块结束。 */
-    if (inMaster && /^\S/.test(raw) && !raw.startsWith("#")) inMaster = false;
-    if (!inMaster) continue;
-    if (raw.trim() === "" || /^\s*#/.test(raw)) continue;
+    if (inMaster && /^\S/.test(raw) && !raw.startsWith("#")) {
+      inMaster = false;
+    }
+    if (!inMaster) {
+      continue;
+    }
+    if (raw.trim() === "" || /^\s*#/.test(raw)) {
+      continue;
+    }
     const eventKey = /^ {2}(\S.*):[ \t]*$/.exec(raw);
     if (eventKey?.[1] !== undefined) {
       event = eventKey[1].replace(/^"|"$/g, "").trim();
@@ -1193,15 +1281,22 @@ export function lockClassViolations(text: string, prIid = "1982"): Array<string>
       );
     }
     const seen = lockToWork.get(def.key);
-    if (seen === undefined) lockToWork.set(def.key, new Set([row.stagesRef]));
-    else seen.add(row.stagesRef);
+    if (seen === undefined) {
+      lockToWork.set(def.key, new Set([row.stagesRef]));
+    } else {
+      seen.add(row.stagesRef);
+    }
   }
   /* R6：`push` 那一档逐提交卖读数，「只留最新那一笔」等于删掉前一笔的结论。
    * 判的是**代出来的 key**，不是锚点名 —— 改名 / 换锚点都逃不掉。 */
   for (const row of rows) {
-    if (row.lockRef === null) continue;
+    if (row.lockRef === null) {
+      continue;
+    }
     const def = defs.get(row.lockRef);
-    if (def?.key !== "push") continue;
+    if (def?.key !== "push") {
+      continue;
+    }
     if (def.cancelInProgress !== false) {
       bad.push(
         `锁 *${row.lockRef}（key「${def.key}」）的 cancel-in-progress 不是 false —— ` +
@@ -1261,10 +1356,14 @@ export function missingAnchors(
 export function topLevelKeys(text: string): Array<string> {
   const out: Array<string> = [];
   for (const raw of text.split("\n")) {
-    if (raw === "" || raw.startsWith("#")) continue;
+    if (raw === "" || raw.startsWith("#")) {
+      continue;
+    }
     if (/^\S/.test(raw)) {
       const m = /^([^:]+):/.exec(raw.trimEnd());
-      if (m?.[1] !== undefined) out.push(m[1].trim());
+      if (m?.[1] !== undefined) {
+        out.push(m[1].trim());
+      }
     }
   }
   return out;
@@ -1303,7 +1402,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const runners = resolveAnchoredRunner(text);
     expect(runners.length, "没解析出 .common 锚点里的 runner —— 锚点被删了或换了形状").toBe(1);
     const runner = runners[0];
-    if (runner === undefined) throw new Error("锚点里的 runner 解析不出来");
+    if (runner === undefined) {
+      throw new Error("锚点里的 runner 解析不出来");
+    }
     expect(runner.namespace).toBe("group");
     expect(runner.tags?.length ?? 0).toBeGreaterThan(0);
     // 每条流水线都必须引用那个锚点：少引用一条 = 那一条悄悄回落到计费的平台池
@@ -1352,7 +1453,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      */
     const text = readRegisteredConfig();
     const alive = PROBE_PIPELINES.filter((name) => text.includes(`  ${name}:\n`));
-    if (alive.length === 0) return;
+    if (alive.length === 0) {
+      return;
+    }
     expect(
       Date.parse(PROBE_BY),
       `探针已经过期（PROBE_BY=${PROBE_BY}）—— 读数早该取完了，把 .cnb.yml 里那三条探针` +
@@ -1505,7 +1608,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const drifted: Array<string> = [];
     for (const { file, mustContain } of DOC_ANCHORS) {
       const missing = missingAnchors(file, mustContain);
-      if (missing.length > 0) drifted.push(`${file} 缺：${missing.join(" / ")}`);
+      if (missing.length > 0) {
+        drifted.push(`${file} 缺：${missing.join(" / ")}`);
+      }
     }
     expect(drifted).toEqual([]);
   });
@@ -1548,7 +1653,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "`.cnb.yml` 的 env 里没有 COMFYAPP_CI_PYTHON_PROBE —— 缺 Python 时「跳过的是哪几条」" +
         "又变成只能靠人自己拼（`scripts/python-probe.mjs` 因此没有调用方）",
     ).toBeTruthy();
-    if (!declared) throw new Error("解析不出探测入口");
+    if (!declared) {
+      throw new Error("解析不出探测入口");
+    }
     /* 它必须是**盘上真有的**文件：`env` 的值不经过 shell，写错了不会报任何错，
      * 只会在真要用的那一刻答「文件不存在」—— 那时候人正在查「为什么少判了几格」。 */
     expect(
@@ -1861,7 +1968,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       const raw = timeouts.get(name) ?? "";
       const m = /^(\d+)([smh])$/.exec(raw);
       expect(m, `${name} 的 timeout 写法认不出：${raw}`).not.toBeNull();
-      if (!m) continue;
+      if (!m) {
+        continue;
+      }
       const minutes = Number(m[1]) * (m[2] === "h" ? 60 : m[2] === "s" ? 1 / 60 : 1);
       expect(
         minutes,
@@ -1896,7 +2005,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         "任意两条并行 PR 互相掐停（现场：PR #1980 掐了 #1982）。" +
         "代价不是「慢」，是白跑一整条",
     ).not.toBeNull();
-    if (template === null) return;
+    if (template === null) {
+      return;
+    }
     // ① 代入的变量必须在白名单里 —— `CNB_BRANCH` 正是那个会退化成目标分支的。
     const used = [...template.matchAll(/\$\{?([A-Za-z0-9_]+)\}?/g)].map((m) => m[1] ?? "");
     const stray = used.filter(
@@ -2034,7 +2145,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 一条锁都不写」这条例外根本没有对象，而探针 A 的 `false` 也测不到它自己要测的
      * 那把锁（`.cnb.yml` 那段注释早就点了这个坏形态，判据这一侧据此补上）。
      * 顺带钉住例外的**边界**：豁免只覆盖「漏写」与「一条都不写」，别的规则一条都不放过。 */
-    const probeFixture = (o: { cancel?: string | null; probeB?: string; extra?: string }) =>
+    const probeFixture = (o: { cancel?: string | null; extra?: string; probeB?: string; }) =>
       [
         ".common: &common",
         "  lock:",
@@ -2495,7 +2606,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         stage,
         `\`${kind}\` 没有登记平台侧执行者（ciStage）—— 那一档现在没有任何执行者`,
       ).toBeTruthy();
-      if (subject !== "master") continue;
+      if (subject !== "master") {
+        continue;
+      }
       expect(
         dailyOrder,
         `「${stage}」（${kind}，主体=master）不在 \`COMFYAPP_CI_DAILY_GATES\` 里 —— ` +
@@ -2906,7 +3019,9 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
    */
   function stageBody(text: string, name: string): string | null {
     const block = stageBlock(text, name);
-    if (block === null) return null;
+    if (block === null) {
+      return null;
+    }
     return block
       .split("\n")
       .slice(1)
@@ -2999,7 +3114,9 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
   it("反向自检：四种坏形状都要被各自的判据点名，而现役形状一条都不许被抓", () => {
     const text = readRegisteredConfig();
     const e2e = ONESHOT_TARGETS.find((t) => t.gate.daily === "每日全量E2E");
-    if (!e2e) throw new Error("注册表里没有「每日全量E2E」那一行，这条自检没有基准");
+    if (!e2e) {
+      throw new Error("注册表里没有「每日全量E2E」那一行，这条自检没有基准");
+    }
     const pipeline = e2e.pipelineWeb;
     const live = pipelineStageNames(text, pipeline);
 
@@ -3007,7 +3124,9 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
      * 「这一档根本没跑」，所以变异必须真的少一格）。 */
     const browserAt = text.indexOf("  - name: 单跑E2E·浏览器安装");
     const e2eAt = text.indexOf("  - name: 单跑E2E·全量E2E", browserAt);
-    if (browserAt < 0 || e2eAt < 0) throw new Error("单跑E2E 那张锚点表里找不到浏览器/目标那两格");
+    if (browserAt < 0 || e2eAt < 0) {
+      throw new Error("单跑E2E 那张锚点表里找不到浏览器/目标那两格");
+    }
     const dropped = text.slice(0, browserAt) + text.slice(e2eAt);
     const droppedList = pipelineStageNames(dropped, pipeline);
     expect(droppedList, "① 漏一格必须让清单变短").not.toEqual(live);

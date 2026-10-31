@@ -46,29 +46,25 @@ export type LaunchPhase =
   | "error";
 
 /** 启动页在「壳已接手、编排器还没写字」这段空档期里的兜底快照。 */
-export interface LaunchFallback {
+export type LaunchFallback = {
+  /** 诊断出口（壳写下的路径，页面不自己拼）——见 idleFallback 的说明。 */
+  diagnostics: {
+    launchLog: string;
+    projectRoot: string;
+    shellLog: string;
+    statusFile: string;
+  };
+  error: boolean;
+  /** 标记这是壳的常驻快照（不是编排器的权威进度）。 */
+  fallback: true;
+  message: string;
   /** 阶段标签（启动页的 PHASE_LABELS 直接消费）。 */
   phase: LaunchPhase;
   /** 进度 0~1；判据是 progress < 1 —— 大于等于 1 会被启动页画成「✓」。 */
   progress: number;
-  message: string;
-  error: boolean;
-  /** 标记这是壳的常驻快照（不是编排器的权威进度）。 */
-  fallback: true;
-  /** 诊断出口（壳写下的路径，页面不自己拼）——见 idleFallback 的说明。 */
-  diagnostics: {
-    projectRoot: string;
-    launchLog: string;
-    shellLog: string;
-    statusFile: string;
-  };
-}
+};
 
-export interface LaunchPaths {
-  /** 项目根（<root>/run 与 <root>/log 的锚点）。 */
-  root: string;
-  /** run/launch-status.json：编排器与壳共写的进度文件。 */
-  statusFile: string;
+export type LaunchPaths = {
   /** log/current/launcher/：编排日志目录。 */
   launcherDir: string;
   /** 编排器「本次运行」日志（dev-launcher.log）。 */
@@ -77,11 +73,15 @@ export interface LaunchPaths {
   orchestratorSentinel: string;
   /** 编排器 stderr 与壳 stderr 共用文件（dev-launcher-stderr.log）。 */
   orchestratorStderr: string;
-  /** 壳自持日志（release，log/shell/shell.log）。 */
-  shellLog: string;
+  /** 项目根（<root>/run 与 <root>/log 的锚点）。 */
+  root: string;
   /** 壳侧编排链路日志（log/launcher/shell-launch.log）。 */
   shellLaunchLog: string;
-}
+  /** 壳自持日志（release，log/shell/shell.log）。 */
+  shellLog: string;
+  /** run/launch-status.json：编排器与壳共写的进度文件。 */
+  statusFile: string;
+};
 
 /**
  * 项目根下的启动链路路径。
@@ -107,10 +107,10 @@ export function launchPaths(root: string): LaunchPaths {
 }
 
 /** 报告里要展示的一项（key + value，启动页按原样落在日志面板里）。 */
-export interface LaunchReportItem {
+export type LaunchReportItem = {
   key: string;
   value: string;
-}
+};
 
 /**
  * 壳接手那一刻的常驻快照。
@@ -158,8 +158,8 @@ export function orchestratingFallback(root = ""): LaunchFallback {
  * 面板也照它去取。
  */
 export function fallbackDiagnostics(root: string): {
-  projectRoot: string;
   launchLog: string;
+  projectRoot: string;
   shellLog: string;
   statusFile: string;
 } {

@@ -114,10 +114,11 @@ function materializeProductionShots(
   screenToFlowPosition: PlaceFlowFn,
 ): Array<CanvasNodeType> {
   const shots =
-    prod && Array.isArray(prod.shots)
-      ? /* SAFETY: 类型断言已复核 */ (prod.shots as Array<Shot>)
-      : [];
-  if (shots.length === 0) return nodes;
+    /* SAFETY: 类型断言已复核 */
+    prod && Array.isArray(prod.shots) ? (prod.shots as Array<Shot>) : [];
+  if (shots.length === 0) {
+    return nodes;
+  }
   const existingShotIds = new Set(
     nodes
       .map((n) => /* SAFETY: 类型断言已复核 */ (n.data as { shotId?: string } | undefined)?.shotId)
@@ -128,7 +129,9 @@ function materializeProductionShots(
   const byId = new Map(shots.map((s) => [s.id, s]));
   for (const sid of newShotIds) {
     const shot = byId.get(sid);
-    if (!shot) continue;
+    if (!shot) {
+      continue;
+    }
     result = placeCanvasNode({
       nodes: result,
       flow: { screenToFlowPosition },
@@ -138,14 +141,14 @@ function materializeProductionShots(
   return result;
 }
 
-interface ProjectCanvasProps {
-  seedNew?: boolean;
+type ProjectCanvasProps = {
+  onConsumePending?: () => void;
   onConsumeSeed?: () => void;
   /** 设置后（来自工作区「工作流库 → 使用」动作）画布会为这条工作流
    *  往当前打开的项目里放一个 `kind="workflow"` 节点。 */
   pendingWorkflow?: { id: string; name: string; taskType: string } | null;
-  onConsumePending?: () => void;
-}
+  seedNew?: boolean;
+};
 
 /* ── 内层画布（必须在 ReactFlowProvider 里） ── */
 function CanvasInner({
@@ -250,7 +253,9 @@ function CanvasInner({
    *  挂载前先清掉历史会话遗留的「空默认」行，
    *  免得最近项目列表一直脏着。 */
   useEffect(() => {
-    if (loadedRef.current) return;
+    if (loadedRef.current) {
+      return;
+    }
     loadedRef.current = true;
     void (async () => {
       // 在读取当前项目**之前**先把服务端项目对账进 localStorage，
@@ -263,7 +268,9 @@ function CanvasInner({
         proj = createDraftProject();
       } else {
         const activeId = getActiveId();
-        if (activeId) proj = getProject(activeId);
+        if (activeId) {
+          proj = getProject(activeId);
+        }
         proj ??= listProjects()[0] ?? null;
         proj ??= createDraftProject();
       }
@@ -356,17 +363,20 @@ function CanvasInner({
       onDrop={onCanvasDrop}
     >
       <ReactFlow
-        nodes={nodes}
+        defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+        /* 选中节点后按 Backspace / Delete 删除（⌫ 工具栏按钮走 deleteSelf）。
+         * React Flow 会自动忽略输入框 / textarea 聚焦时的按键，不会误删。 */
+        deleteKeyCode={["Backspace", "Delete"]}
         edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onPaneContextMenu={onPaneContextMenu}
-        onPaneClick={() => setMenu(null)}
-        onNodeClick={onNodeClick}
-        onEdgeClick={onEdgeClick}
-        nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        fitView
+        maxZoom={2}
+        minZoom={0.2}
+        nodes={nodes}
+        nodeTypes={nodeTypes}
+        onConnect={onConnect}
+        onEdgeClick={onEdgeClick}
+        onEdgesChange={onEdgesChange}
         /* 商业级性能 —— 只挂载与视口
          *  相交的节点 / 边（与工作流画布同一处理）。
          *  此前含大量工作流 / 素材节点的项目图每帧都把
@@ -374,22 +384,19 @@ function CanvasInner({
          *  DOM 与可见内容成正比，拖拽 / 平移 / 缩放的开销因此保持
          *  一个小常数。 */
         onlyRenderVisibleElements
-        fitView
-        minZoom={0.2}
-        maxZoom={2}
-        /* 选中节点后按 Backspace / Delete 删除（⌫ 工具栏按钮走 deleteSelf）。
-         * React Flow 会自动忽略输入框 / textarea 聚焦时的按键，不会误删。 */
-        deleteKeyCode={["Backspace", "Delete"]}
-        defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+        onNodeClick={onNodeClick}
+        onNodesChange={onNodesChange}
+        onPaneClick={() => setMenu(null)}
+        onPaneContextMenu={onPaneContextMenu}
         /* 惰性边交互 —— 未碰过的边保持
          *  惰性（不接删除 / 重连管线）；onEdgeClick 在首次使用时
          *  激活它们。 */
         proOptions={PRO_OPTIONS}
       >
         {/* 渐变描边定义（粉彩 6 色 → 端口/连线渐变） */}
-        <svg style={{ position: "absolute", width: 0, height: 0 }} aria-hidden>
+        <svg aria-hidden style={{ position: "absolute", width: 0, height: 0 }}>
           <defs>
-            <linearGradient id="canvas-edge-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <linearGradient id="canvas-edge-gradient" x1="0%" x2="100%" y1="0%" y2="0%">
               {/* 四档色相取自 `--color-edge-flow-*`（与工作流编辑器同一套
                   连线渐变观感，规范 03 §3.6.1 的类型色例外）。 */}
               <stop offset="0%" stopColor="var(--color-edge-flow-1)" />
@@ -402,10 +409,10 @@ function CanvasInner({
         {/* 点阵底纹的颜色必须随主题 —— 写死 rgba(255,255,255,0.08) 时
             Light 下是「白点压白底」，网格整片消失。 */}
         <Background
-          variant={BackgroundVariant.Dots}
+          color="var(--color-canvas-grid-dot)"
           gap={22}
           size={1}
-          color="var(--color-canvas-grid-dot)"
+          variant={BackgroundVariant.Dots}
         />
         {/* Controls / MiniMap 的配色由 globals.css 的 `.react-flow__controls*`
             / `.react-flow__minimap*` token 规则统一负责（工作流画布与项目
@@ -413,24 +420,24 @@ function CanvasInner({
             `#0D0818` / `#0B0712`，Light 下两条浮层仍是黑块。 */}
         <Controls />
         <MiniMap
-          pannable
-          zoomable
           ariaLabel="小地图：拖动或点击切换主画布焦点"
-          nodeColor={miniMapNodeColor}
           maskColor="var(--color-canvas-minimap-mask)"
+          nodeColor={miniMapNodeColor}
           onClick={onMiniMapJump}
+          pannable
           style={{
             width: 200,
             height: 140,
           }}
+          zoomable
         />
       </ReactFlow>
 
       {/* 浮动工具栏（居中） */}
       <CanvasToolbar
-        onFitView={() => fitView({ padding: 0.2, duration: 400 })}
-        onExport={exportJson}
         onClear={clearCanvas}
+        onExport={exportJson}
+        onFitView={() => fitView({ padding: 0.2, duration: 400 })}
       />
 
       {/* 生产进度（与工坊共读 production 行的 progress 一份，Phase 4b / §7）——
@@ -456,34 +463,33 @@ function CanvasInner({
 
       {menu && (
         <CanvasContextMenu
-          x={menu.x}
-          y={menu.y}
+          onClose={() => setMenu(null)}
           onPick={createNode}
           onPickTest={createTestWorkflowNode}
-          onClose={() => setMenu(null)}
+          x={menu.x}
+          y={menu.y}
         />
       )}
 
       {/* ── 用自定义深色弹窗替换 window.confirm ── */}
       <ConfirmDialog
-        open={confirmClear}
-        onClose={() => setConfirmClear(false)}
-        title="清空当前画布？"
-        description="画布上的所有节点和连线将被移除，但项目本身会保留。"
-        confirmLabel="清空"
         cancelLabel="取消"
+        confirmLabel="清空"
         danger
+        description="画布上的所有节点和连线将被移除，但项目本身会保留。"
+        onClose={() => setConfirmClear(false)}
         onConfirm={applyClearCanvas}
+        open={confirmClear}
+        title="清空当前画布？"
       />
 
       {/* ── 画布面板系统：工具栏 + 滑出面板 ── */}
       {activePanel ? (
         /* 面板打开时：工具栏紧贴面板左侧，同一 flex 容器内 */
         <div className="z-canvas-ui absolute inset-y-0 left-0 flex">
-          <CanvasPanelToolbar active={activePanel} onSelect={setActivePanel} floating={false} />
+          <CanvasPanelToolbar active={activePanel} floating={false} onSelect={setActivePanel} />
           {activePanel === "materials" && (
             <MaterialLibraryPanel
-              projectId={projectId}
               onClose={() => setActivePanel(null)}
               onUse={(item) =>
                 placeMediaNode({
@@ -492,11 +498,11 @@ function CanvasInner({
                   mediaType: item.kind,
                 })
               }
+              projectId={projectId}
             />
           )}
           {activePanel === "history" && (
             <HistoryPanel
-              projectId={projectId}
               onClose={() => setActivePanel(null)}
               onUse={(template) =>
                 placeMediaNode({
@@ -505,6 +511,7 @@ function CanvasInner({
                   mediaType: template.mediaType,
                 })
               }
+              projectId={projectId}
             />
           )}
         </div>

@@ -40,8 +40,11 @@ function parseArgs(argv) {
   let full = false;
   const passthrough = [];
   for (const a of argv) {
-    if (a === "--full" || a === "-Full") full = true;
-    else passthrough.push(a);
+    if (a === "--full" || a === "-Full") {
+      full = true;
+    } else {
+      passthrough.push(a);
+    }
   }
   return { full, passthrough: passthrough.filter((a) => a !== "--") };
 }
@@ -57,8 +60,12 @@ function parseArgs(argv) {
  */
 export function hasNameFilter(args) {
   for (const a of args) {
-    if (a === "-t" || a === "--testNamePattern") return true;
-    if (a.startsWith("-t=") || a.startsWith("--testNamePattern=")) return true;
+    if (a === "-t" || a === "--testNamePattern") {
+      return true;
+    }
+    if (a.startsWith("-t=") || a.startsWith("--testNamePattern=")) {
+      return true;
+    }
   }
   return false;
 }
@@ -78,7 +85,9 @@ export function junitExecutedCount(xml) {
   for (const m of String(xml ?? "").matchAll(/<testsuite\b[^>]*>/g)) {
     const tag = m[0];
     const t = /tests="(\d+)"/.exec(tag);
-    if (!t) continue;
+    if (!t) {
+      continue;
+    }
     saw = true;
     const s = /skipped="(\d+)"/.exec(tag);
     tests += Number(t[1]);
@@ -105,11 +114,7 @@ function main() {
     passthrough.some((a) => a.startsWith("--outputFile"));
   const junitPath = path.join(tmpdir(), `comfy-run-tests-${process.pid}.xml`);
   if (filterUsed && !ownReporter) {
-    args.push(
-      "--reporter=default",
-      "--reporter=junit",
-      `--outputFile.junit=${junitPath}`,
-    );
+    args.push("--reporter=default", "--reporter=junit", `--outputFile.junit=${junitPath}`);
   }
   if (passthrough.length > 0) {
     console.log(
@@ -123,10 +128,10 @@ function main() {
       );
     }
   } else if (KNOWN_FAILED_FILES.length > 0) {
-    console.log(
-      `[INFO] 排除已知基线失败文件：${KNOWN_FAILED_FILES.join(" / ")}`,
-    );
-    for (const f of KNOWN_FAILED_FILES) args.push("--exclude", f);
+    console.log(`[INFO] 排除已知基线失败文件：${KNOWN_FAILED_FILES.join(" / ")}`);
+    for (const f of KNOWN_FAILED_FILES) {
+      args.push("--exclude", f);
+    }
   }
 
   console.log("");
@@ -145,9 +150,7 @@ function main() {
     console.error(
       `[ERROR] 起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}`,
     );
-    console.log(
-      `        [INFO] 实际命令：${formatCommandLine(result.command, result.args)}`,
-    );
+    console.log(`        [INFO] 实际命令：${formatCommandLine(result.command, result.args)}`);
     console.log("        [INFO] 自查：pnpm check:toolchain");
     return 1;
   }
@@ -174,9 +177,7 @@ function main() {
           "[ERROR] 用例过滤（-t / --testNamePattern）一条都没命中 —— vitest 对此退 0，" +
             "那不是「跑过且绿」。这一跑不构成校验（exit 2，与「未校验」同口径）。",
         );
-        console.log(
-          "        [INFO] 核对过滤词，或去掉 -t 重跑：pnpm test:file <文件>",
-        );
+        console.log("        [INFO] 核对过滤词，或去掉 -t 重跑：pnpm test:file <文件>");
         return 2;
       }
       if (executed !== null) {
@@ -187,16 +188,15 @@ function main() {
        * 退出码保持 vitest 的原值 —— 不把「没读到」圆成「已核对」。 */
     }
     console.log("[OK] vitest 全部通过。");
-  } else console.error(`[ERROR] vitest 存在未通过的用例（exit ${code}）。`);
+  } else {
+    console.error(`[ERROR] vitest 存在未通过的用例（exit ${code}）。`);
+  }
   return code;
 }
 
 /* 只在被直接执行时跑 main。被 import 时（测试要读上面的纯函数）不得再起
  * 一轮嵌套的 vitest —— 此前没有这道守卫，import 它会在导入方 worker 里
  * process.exit(main())：本单开发时真撞上（那两轮"全量套件"就是嵌套跑的输出）。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main());
 }

@@ -51,9 +51,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /** 进度节流的默认窗口：约等于「一秒 10 帧」，肉眼已是连续推进。 */
 export const PROGRESS_THROTTLE_MS = 100;
 
-export interface ThrottledProgress {
-  /** 最近一次落进 state 的读数（首帧前为 `initial`）。 */
-  value: number;
+export type ThrottledProgress = {
+  /** 立刻写入并解除节流（任务落定时调 —— 终值不允许被窗口吃掉）。 */
+  flush: (value: number) => void;
   /**
    * 节流后的写入器 —— 直接交给 `onProgress`。
    *
@@ -61,11 +61,11 @@ export interface ThrottledProgress {
    * 中间值没有意义，丢掉不损失信息）。
    */
   report: (value: number) => void;
-  /** 立刻写入并解除节流（任务落定时调 —— 终值不允许被窗口吃掉）。 */
-  flush: (value: number) => void;
   /** 复位（开始新一轮任务前调，回到 `initial`）。 */
   reset: () => void;
-}
+  /** 最近一次落进 state 的读数（首帧前为 `initial`）。 */
+  value: number;
+};
 
 /**
  * 把高频进度回调节流后写进 state（**单值**：一次只跑一个任务）。
@@ -101,8 +101,12 @@ export function useThrottledProgress(
     (next: number) => {
       /* 卸载守卫：回调可能在组件消失之后才到达（`watchTask` 的关闭由调用处
        * 负责，漏一次就是这里兜住）。 */
-      if (!mountedRef.current) return;
-      if (!Number.isFinite(next)) return;
+      if (!mountedRef.current) {
+        return;
+      }
+      if (!Number.isFinite(next)) {
+        return;
+      }
       const now = Date.now();
       if (tickMs <= 0 || now - lastAtRef.current >= tickMs) {
         lastAtRef.current = now;
@@ -116,15 +120,21 @@ export function useThrottledProgress(
   );
 
   const flush = useCallback((next: number) => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) {
+      return;
+    }
     lastAtRef.current = Date.now();
-    if (!Number.isFinite(next)) return;
+    if (!Number.isFinite(next)) {
+      return;
+    }
     setValue((prev) => (prev === next ? prev : next));
   }, []);
 
   const reset = useCallback(() => {
     lastAtRef.current = 0;
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) {
+      return;
+    }
     setValue(initial);
   }, [initial]);
 
@@ -151,16 +161,16 @@ export function useThrottledProgress(
  *
  * 返回的 `progress` 是 `Record`，调用处的读法（`progress[shot.id] ?? 0`）不变。
  */
-export interface ThrottledProgressMap {
+export type ThrottledProgressMap = {
+  /** 清掉某一条（或不传 `key` 时清全部）。 */
+  clear: (key?: string) => void;
+  /** 立刻写入并解除该条目的节流（落定时调）。 */
+  flush: (key: string, value: number) => void;
   /** 各条目最近一次落进 state 的读数。 */
   progress: Record<string, number>;
   /** 节流后的写入器 —— 直接交给 `onProgress`。 */
   report: (key: string, value: number) => void;
-  /** 立刻写入并解除该条目的节流（落定时调）。 */
-  flush: (key: string, value: number) => void;
-  /** 清掉某一条（或不传 `key` 时清全部）。 */
-  clear: (key?: string) => void;
-}
+};
 
 /**
  * 按条目的进度节流表。
@@ -186,15 +196,17 @@ export function useThrottledProgressMap(
   /* 写一条：**值没变就不换对象** —— 收口前无条件 `{ ...prev, [k]: v }`
    * 每次都新建对象，`Object.is` 判不出相等，同值也会触发重渲染。 */
   const write = useCallback((key: string, next: number) => {
-    setProgress((prev) =>
-      prev[key] === next ? prev : { ...prev, [key]: next },
-    );
+    setProgress((prev) => (prev[key] === next ? prev : { ...prev, [key]: next }));
   }, []);
 
   const report = useCallback(
     (key: string, next: number) => {
-      if (!mountedRef.current) return;
-      if (!Number.isFinite(next)) return;
+      if (!mountedRef.current) {
+        return;
+      }
+      if (!Number.isFinite(next)) {
+        return;
+      }
       const now = Date.now();
       if (tickMs <= 0 || now - (lastAtRef.current[key] ?? 0) >= tickMs) {
         lastAtRef.current[key] = now;
@@ -206,16 +218,22 @@ export function useThrottledProgressMap(
 
   const flush = useCallback(
     (key: string, next: number) => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) {
+        return;
+      }
       lastAtRef.current[key] = Date.now();
-      if (!Number.isFinite(next)) return;
+      if (!Number.isFinite(next)) {
+        return;
+      }
       write(key, next);
     },
     [write],
   );
 
   const clear = useCallback((key?: string) => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) {
+      return;
+    }
     if (key === undefined) {
       lastAtRef.current = {};
       setProgress({});
@@ -223,7 +241,9 @@ export function useThrottledProgressMap(
     }
     delete lastAtRef.current[key];
     setProgress((prev) => {
-      if (!(key in prev)) return prev;
+      if (!(key in prev)) {
+        return prev;
+      }
       const next = { ...prev };
       delete next[key];
       return next;
@@ -250,7 +270,7 @@ export function useThrottledProgressMap(
  * 与上面两个 hook 共用 {@link PROGRESS_THROTTLE_MS} 的默认窗口 ——
  * 「一秒 10 帧」这条口径只有一处。
  */
-export interface ThrottleGate {
+export type ThrottleGate = {
   /**
    * 这一条在这一刻该不该写。
    *
@@ -259,22 +279,29 @@ export interface ThrottleGate {
   allow: (key?: string, tickMs?: number) => boolean;
   /** 清掉某一条的窗口（或不传 `key` 时清全部）—— 开始新一轮任务前调。 */
   reset: (key?: string) => void;
-}
+};
 
 /** 造一个节流闸门（见 {@link ThrottleGate}）。 */
 export function createThrottleGate(): ThrottleGate {
   let lastAt: Record<string, number> = {};
   return {
     allow(key = "", tickMs = PROGRESS_THROTTLE_MS) {
-      if (tickMs <= 0) return true;
+      if (tickMs <= 0) {
+        return true;
+      }
       const now = Date.now();
-      if (now - (lastAt[key] ?? 0) < tickMs) return false;
+      if (now - (lastAt[key] ?? 0) < tickMs) {
+        return false;
+      }
       lastAt[key] = now;
       return true;
     },
     reset(key) {
-      if (key === undefined) lastAt = {};
-      else delete lastAt[key];
+      if (key === undefined) {
+        lastAt = {};
+      } else {
+        delete lastAt[key];
+      }
     },
   };
 }

@@ -23,57 +23,58 @@ import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 /** 「磁盘与库不一致」的四个手动同步标记。在线行（没有 `sourcePath`）这四项
  *  都为 null/false。 */
-interface DiskSyncFlags {
+type DiskSyncFlags = {
   /** `diskMtimeSec > sourceMtimeSec` —— 磁盘上的文件在上次导入之后被改过。 */
   diskDirty: boolean;
   /** 来源文件在磁盘上已不存在。 */
   diskMissing: boolean;
   diskMtimeSec: number | null;
   sourceMtimeSec: number | null;
-}
+};
 
 /** 可执行性标记：`hasRaw` 是「RAW 原件列有没有内容」，`usable` 由它推出。 */
-interface ExecutionFlags {
+type ExecutionFlags = {
   hasRaw: boolean;
   usable: boolean;
-}
+};
 
 /** 列表里的一条工作流（已导入、落库的那些）。
  *
  *  「本地待导入」占位行的形状刻意与它同构（`WorkflowListPendingRow`），
  *  让前端的合并不必做额外适配。 */
-export interface WorkflowListRow extends DiskSyncFlags, ExecutionFlags {
-  id: string;
-  name: string;
-  taskType: string;
-  /** 一条工作流可以同时声明多个模式；为空时 UI 退回用 `[taskType]` 展示。 */
-  modes: Array<string>;
-  /** 默认模式码；必须出现在 `modes` 里。 */
-  defaultMode: string | null;
+export type WorkflowListRow = {
   /** 落库时间。**是 `Date`**（superjson 保真，见文件头）。 */
   createdAt: Date;
-  /** `paramMap` JSON 列，形状见 `WorkflowParamMap`。 */
-  paramMap: WorkflowParamMap | null;
-  /** 导入来源在磁盘上的绝对路径；在线行为 null。 */
-  sourcePath: string | null;
-  /** 该文件落在哪个已配置的 `LOCAL_WORKFLOWS_PATH`（原样路径）下。 */
-  sourceRoot?: string;
-  /** 分类：有 `sourcePath` 即 local，否则 online；`"local-pending"` 只出现在
-   *  「本地待导入」占位行上（`workflow-local-roots` 的 `LocalPendingRow`）。 */
-  source: "local" | "online" | "local-pending";
-  /** 服务端盖的分类戳（类型元数据的三个派生字段）。 */
-  typeLabel: string;
-  typeCategory: string;
-  typeDescription: string;
-  isGenerative: boolean;
-  /** 紧凑预览（节点/边/宽高），没有 rawJson 时是空图。 */
-  preview: WorkflowPreview;
-  /** 用户维护的对外 IO。 */
-  workflowIO: WorkflowIOMap;
-  /** 挂在这条工作流上的模型标签名。 */
-  modelTags: Array<string>;
+  /** 默认模式码；必须出现在 `modes` 里。 */
+  defaultMode: string | null;
   /** 服务端检测到来源文件被改名并已自动重指。 */
   diskRenamed: boolean;
   /** 给人读的 `old.json → new.json` 摘要；没改名时为 null。 */
   diskRenamedTo: string | null;
-}
+  id: string;
+  isGenerative: boolean;
+  /** 挂在这条工作流上的模型标签名。 */
+  modelTags: Array<string>;
+  /** 一条工作流可以同时声明多个模式；为空时 UI 退回用 `[taskType]` 展示。 */
+  modes: Array<string>;
+  name: string;
+  /** `paramMap` JSON 列，形状见 `WorkflowParamMap`。 */
+  paramMap: WorkflowParamMap | null;
+  /** 紧凑预览（节点/边/宽高），没有 rawJson 时是空图。 */
+  preview: WorkflowPreview;
+  /** 分类：有 `sourcePath` 即 local，否则 online；`"local-pending"` 只出现在
+   *  「本地待导入」占位行上（`workflow-local-roots` 的 `LocalPendingRow`）。 */
+  source: "local" | "online" | "local-pending";
+  /** 导入来源在磁盘上的绝对路径；在线行为 null。 */
+  sourcePath: string | null;
+  /** 该文件落在哪个已配置的 `LOCAL_WORKFLOWS_PATH`（原样路径）下。 */
+  sourceRoot?: string;
+  taskType: string;
+  typeCategory: string;
+  typeDescription: string;
+  /** 服务端盖的分类戳（类型元数据的三个派生字段）。 */
+  typeLabel: string;
+  /** 用户维护的对外 IO。 */
+  workflowIO: WorkflowIOMap;
+} & DiskSyncFlags &
+  ExecutionFlags;

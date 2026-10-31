@@ -63,17 +63,23 @@ export const MAX_RAW_JSON_LINES = 300;
  * 字段（它是 {code, message, hint, details}），于是 6 条逐字段清单从未渲染。
  */
 export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
-  if (!root || typeof root !== "object") return undefined;
+  if (!root || typeof root !== "object") {
+    return undefined;
+  }
   const seen = new WeakSet<object>();
-  const stack: Array<{ node: JsonRecord; d: number }> = [
+  const stack: Array<{ d: number; node: JsonRecord }> = [
     { node: /* SAFETY: 类型断言已复核 */ root as JsonRecord, d: 0 },
   ];
   while (stack.length) {
     /* 判据与取值同一处：`stack.pop()` 在非空循环里必然有值。 */
     const top = stack.pop();
-    if (!top) break;
+    if (!top) {
+      break;
+    }
     const { node, d } = top;
-    if (d > depth || seen.has(node)) continue;
+    if (d > depth || seen.has(node)) {
+      continue;
+    }
     seen.add(node);
     const ne = node.node_errors;
     if (
@@ -83,11 +89,12 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
       return ne;
     }
     for (const v of Object.values(node)) {
-      if (v && typeof v === "object")
+      if (v && typeof v === "object") {
         stack.push({
           node: /* SAFETY: 类型断言已复核 */ v as JsonRecord,
           d: d + 1,
         });
+      }
     }
   }
   return undefined;
@@ -99,7 +106,9 @@ export function extractEnvelopeValidationErrors(
   patched?: Record<string, unknown>,
 ): Array<ValidationError> | undefined {
   const carrier = findNodeErrorsCarrier(env);
-  if (!carrier) return undefined;
+  if (!carrier) {
+    return undefined;
+  }
   return extractValidationErrors(carrier, patched);
 }
 
@@ -110,7 +119,9 @@ export function envelopeErrorMessage(env: unknown): string {
       ? /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error
       : undefined;
   const str = (o: unknown, key: string): string | undefined => {
-    if (o == null || typeof o !== "object") return undefined;
+    if (o == null || typeof o !== "object") {
+      return undefined;
+    }
     const v = /* SAFETY: 类型断言已复核 */ (o as JsonRecord)[key];
     return typeof v === "string" ? v : undefined;
   };
@@ -126,11 +137,16 @@ export function envelopeErrorMessage(env: unknown): string {
  *
  *  返回 `null` 表示不是这种错误（交给下方兜底逻辑按原样落盘）。 */
 export function translateWorkflowUnknownNodesError(env: unknown): string | null {
-  if (env == null || typeof env !== "object") return null;
-  const err = /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error;
-  if (err == null || typeof err !== "object") return null;
-  if (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).code !== "workflow_unknown_nodes")
+  if (env == null || typeof env !== "object") {
     return null;
+  }
+  const err = /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error;
+  if (err == null || typeof err !== "object") {
+    return null;
+  }
+  if (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).code !== "workflow_unknown_nodes") {
+    return null;
+  }
   const details = /* SAFETY: 类型断言已复核 */ (err as JsonRecord).details;
   const list =
     details != null && typeof details === "object"
@@ -151,28 +167,21 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
       return `  · ${node}${field}：${hint}${tail}`;
     });
     const more = list.length > 12 ? `\n  …还有 ${list.length - 12} 处` : "";
-    return (
-      "工作流校验未通过（comfy-cli 对照服务端校验），请修正后重新执行：\n" + lines.join("\n") + more
-    );
+    return `工作流校验未通过（comfy-cli 对照服务端校验），请修正后重新执行：\n${lines.join("\n")}${more}`;
   }
   const message =
+    /* SAFETY: 类型断言已复核 */
     typeof (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).message) === "string"
-      ? /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ ((err as JsonRecord)
-          .message as string)
+      ? /* SAFETY: 类型断言已复核 */ ((err as JsonRecord).message as string)
       : "未知校验错误";
   return `工作流校验未通过（comfy-cli 对照服务端校验）：${message}`;
 }
 
-export interface EnvelopeParserDeps {
-  taskId: string;
-  /** 面板日志。 */
-  log: LogFn;
-  /** 已应用 overrides / 剔除 UI 节点的最终工作流（校验错误定位用）。 */
-  patched?: Record<string, unknown>;
+export type EnvelopeParserDeps = {
   /** 收到 envelope 事件时收口（ok = envelope.ok；env = 原文）。 */
   finish: (ok: boolean, env: unknown) => void;
-  /** 记下 prompt_id（写库 + 建立 prompt→task 索引由调用方做）。 */
-  onPromptId: (promptId: string) => void;
+  /** 面板日志。 */
+  log: LogFn;
   /** 进度百分比（已从 completed/total 换算）；`node` 是事件自带的当前节点信息。
    *
    *  两类事件的形状不一样，是实测出来的（真出图那一轮，见 ADR §24）：
@@ -190,26 +199,31 @@ export interface EnvelopeParserDeps {
   onProgress: (
     percent: number,
     node?: {
-      id: string;
-      value: number;
-      max: number;
       classType?: string;
+      id: string;
       label?: string;
+      max: number;
+      value: number;
     },
   ) => void;
-  /** 可注入的 trace（默认全局 trace）。 */
-  trace?: TraceFn;
+  /** 记下 prompt_id（写库 + 建立 prompt→task 索引由调用方做）。 */
+  onPromptId: (promptId: string) => void;
+  /** 已应用 overrides / 剔除 UI 节点的最终工作流（校验错误定位用）。 */
+  patched?: Record<string, unknown>;
   /** 完整原始行（不截断）收集：供前端「查看完整输出」入口。默认不收集
    *  （测试不传），生产由 executor-cli 注入 runner-state 的 appendRawCli。 */
   rawCli?: (taskId: string, line: string) => void;
-}
+  taskId: string;
+  /** 可注入的 trace（默认全局 trace）。 */
+  trace?: TraceFn;
+};
 
 /** stdout 解析器：喂 chunk 的回调 + 未消费尾部（进程退出时落 trace 用）。 */
-export interface CliEnvelopeParser {
-  sink: (chunk: Buffer | string) => void;
+export type CliEnvelopeParser = {
   /** 尚未成行的 stdout 残留（close 时落 trace，不丢现场）。 */
   leftover: () => string;
-}
+  sink: (chunk: Buffer | string) => void;
+};
 
 /**
  * 「面向节点的日志行」里那一段 `[id] 中文名（ClassType）` 的唯一算法。
@@ -249,7 +263,9 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
   let cachedNodes = 0;
 
   const handleLine = (line: string): void => {
-    if (!line) return;
+    if (!line) {
+      return;
+    }
     let ev: unknown;
     try {
       ev = JSON.parse(line);
@@ -261,7 +277,7 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
       doTrace("cli", taskId, "stdout 非 JSON 行", { line });
       if (nonJsonLines <= MAX_NON_JSON_LINES) {
         const trimmed =
-          line.length > NON_JSON_LINE_CHARS ? line.slice(0, NON_JSON_LINE_CHARS) + "…" : line;
+          line.length > NON_JSON_LINE_CHARS ? `${line.slice(0, NON_JSON_LINE_CHARS)}…` : line;
         log(taskId, "info", `[comfy-cli stdout] ${trimmed}`);
       } else if (nonJsonLines === MAX_NON_JSON_LINES + 1) {
         log(taskId, "info", `[comfy-cli stdout] …后续非 JSON 行已省略（查看后端日志）`);
@@ -396,23 +412,23 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
   };
 }
 
-export interface StderrSinkDeps {
-  taskId: string;
+export type StderrSinkDeps = {
   /** 面板日志。 */
   log: LogFn;
-  trace?: TraceFn;
   /** 完整原始行（不截断）收集：供前端「查看完整输出」入口。 */
   rawCli?: (taskId: string, line: string) => void;
-}
+  taskId: string;
+  trace?: TraceFn;
+};
 
 /** stderr 汇总态：调用方在 close 时读 `summary()` 落 tail。 */
-export interface StderrSink {
-  sink: (chunk: Buffer | string) => void;
-  /** 完整 stderr 原文（不截断，close 时 tail 用）。 */
-  raw: () => string;
+export type StderrSink = {
   /** 噪声行数（Python Deprecation/Syntax 警告）。 */
   noisyWarningLines: () => number;
-}
+  /** 完整 stderr 原文（不截断，close 时 tail 用）。 */
+  raw: () => string;
+  sink: (chunk: Buffer | string) => void;
+};
 
 const NOISY_WARNING_RE = /DeprecationWarning|SyntaxWarning: invalid escape sequence/i;
 
@@ -434,7 +450,9 @@ export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
     errBuf += d;
     for (const line of d.split(/\r?\n/)) {
       const trimmed = line.trim();
-      if (!trimmed) continue;
+      if (!trimmed) {
+        continue;
+      }
       if (NOISY_WARNING_RE.test(trimmed)) {
         noisy++;
         continue;
@@ -443,7 +461,7 @@ export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
       deps.rawCli?.(taskId, `[comfy-cli stderr] ${trimmed}`);
       if (errLines <= STDERR_MAX_LINES) {
         const t =
-          trimmed.length > STDERR_LINE_CHARS ? trimmed.slice(0, STDERR_LINE_CHARS) + "…" : trimmed;
+          trimmed.length > STDERR_LINE_CHARS ? `${trimmed.slice(0, STDERR_LINE_CHARS)}…` : trimmed;
         log(taskId, "warn", `[comfy-cli stderr] ${t}`);
       } else if (errLines === STDERR_MAX_LINES + 1) {
         log(taskId, "warn", `[comfy-cli stderr] …后续行已省略（完整内容在进程退出汇总）`);
@@ -459,16 +477,7 @@ export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
  * `settle` 由调用方注入（幂等守卫 + 清 guard + 摘 cliProcs 表）。
  */
 
-export interface CliFinisherDeps {
-  taskId: string;
-  /** 面板日志。 */
-  log: LogFn;
-  /** 已应用 overrides / 剔除 UI 节点的最终工作流（定位错误节点用）。 */
-  patched?: Record<string, unknown>;
-  /** 幂等收口守卫：第一次返回 true（并做好清理），重复调用返回 false。 */
-  settle: () => boolean;
-  /** 当前 promptId（可能在收口前才拿到，故为取值函数）。 */
-  promptId: () => string | null;
+export type CliFinisherDeps = {
   /** 成功收口。**注入**而不是直接 import `executor-finalize`：那个模块经
    *  `core/repository` 拖进 DB / `.env`，会让本模块无法脱离环境单测。 */
   complete: (taskId: string, promptId: string) => void;
@@ -479,7 +488,16 @@ export interface CliFinisherDeps {
     detail: string,
     validationErrors?: Array<ValidationError>,
   ) => void;
-}
+  /** 面板日志。 */
+  log: LogFn;
+  /** 已应用 overrides / 剔除 UI 节点的最终工作流（定位错误节点用）。 */
+  patched?: Record<string, unknown>;
+  /** 当前 promptId（可能在收口前才拿到，故为取值函数）。 */
+  promptId: () => string | null;
+  /** 幂等收口守卫：第一次返回 true（并做好清理），重复调用返回 false。 */
+  settle: () => boolean;
+  taskId: string;
+};
 
 export type CliFinisher = (ok: boolean, env: unknown) => void;
 
@@ -487,7 +505,9 @@ export type CliFinisher = (ok: boolean, env: unknown) => void;
 export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
   const { taskId, log } = deps;
   return (ok: boolean, env: unknown) => {
-    if (!deps.settle()) return;
+    if (!deps.settle()) {
+      return;
+    }
     if (ok) {
       deps.complete(taskId, deps.promptId() ?? "");
       return;
@@ -503,9 +523,9 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
         log(
           taskId,
           "error",
-          `  · 节点 ${ve.nodeId}${ve.classType ? ` (${ve.classType})` : ""}` +
-            (ve.field ? ` · 字段 ${ve.field}` : "") +
-            `：${ve.message}`,
+          `  · 节点 ${ve.nodeId}${ve.classType ? ` (${ve.classType})` : ""}${
+            ve.field ? ` · 字段 ${ve.field}` : ""
+          }：${ve.message}`,
         );
       });
       if (validationErrors.length > 12) {

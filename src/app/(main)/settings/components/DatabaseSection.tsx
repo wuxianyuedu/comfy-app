@@ -22,8 +22,12 @@ import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 /** Drizzle Studio 状态 → 圆点语义（过渡态优先，口径同 ComfyUI 那条）。 */
 function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
-  if (c.dbStudioStatus?.up) return "up";
-  if (c.dbStudioStatus?.starting || c.dbStudioStarting) return "busy";
+  if (c.dbStudioStatus?.up) {
+    return "up";
+  }
+  if (c.dbStudioStatus?.starting || c.dbStudioStarting) {
+    return "busy";
+  }
   return "down";
 }
 
@@ -38,9 +42,7 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
         <code className="text-ink/80">local.drizzle.studio</code>
         ），本地只起一个回连端口；点「打开查看」会用系统默认浏览器打开它。
       </p>
-      <div
-        className={`border-border bg-surface-1 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
-      >
+      <div className={`border-border bg-surface-1 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}>
         <StatusDot state={dbStudioDotState(c)} />
         <span
           className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
@@ -66,25 +68,23 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
               「看」走软底、`outline` 给并列出口、**当前这一态该按的那一颗**
               才是实心。此前三颗都是实心品牌紫，一屏里三颗主按钮。 */}
           <StatusButton
+            disabled={c.dbStudioOpening || c.dbStudioStarting || !c.dbStudioStatus?.up}
             onClick={() => void c.openDbStudio()}
             variant="primary"
-            disabled={
-              c.dbStudioOpening || c.dbStudioStarting || !c.dbStudioStatus?.up
-            }
           >
             {c.dbStudioOpening ? "打开中…" : "打开查看"}
           </StatusButton>
           <StatusButton
+            disabled={c.dbStudioStarting || c.dbStudioStatus?.up === true}
             onClick={() => void c.startDbStudio()}
             variant={c.dbStudioStatus?.up ? "primary" : "primary-solid"}
-            disabled={c.dbStudioStarting || c.dbStudioStatus?.up === true}
           >
             {c.dbStudioStarting ? "启动中…" : "启动 Drizzle Studio"}
           </StatusButton>
           <StatusButton
+            disabled={c.dbStudioStopping || !c.dbStudioStatus?.up}
             onClick={() => void c.stopDbStudio()}
             variant={c.dbStudioStatus?.up ? "primary-solid" : "primary"}
-            disabled={c.dbStudioStopping || !c.dbStudioStatus?.up}
           >
             {c.dbStudioStopping ? "关闭中…" : "关闭 Drizzle Studio"}
           </StatusButton>
@@ -94,21 +94,20 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
           log/services/drizzle-studio-runtime.log（同 ComfyUI 的用户可见出口）。
           下拉按「每次启动」切换、可全屏，见 RuntimeLogBox。 */}
       <RuntimeLogBox
-        fileName="drizzle-studio-runtime.log"
-        log={c.dbStudioLog}
         className="mt-4"
         emptyHint={
           <>
-            暂无日志 —— 点「启动 Drizzle Studio」后这里会实时输出拉起
-            过程（spawn 参数与 drizzle-kit 输出）；也可点「刷新」查看
-            最近一次启动日志。
+            暂无日志 —— 点「启动 Drizzle Studio」后这里会实时输出拉起 过程（spawn 参数与 drizzle-kit
+            输出）；也可点「刷新」查看 最近一次启动日志。
           </>
         }
+        fileName="drizzle-studio-runtime.log"
+        log={c.dbStudioLog}
       />
       <p className="text-muted-foreground mt-3 text-xs">
         说明：Drizzle Studio 需要本机开发依赖 （node_modules 里的
-        drizzle-kit）。双击桌面壳的开发模式可用； 若当前是不可携带完整
-        node_modules 的 standalone 打包，启动时会 提示未找到 drizzle-kit。
+        drizzle-kit）。双击桌面壳的开发模式可用； 若当前是不可携带完整 node_modules 的 standalone
+        打包，启动时会 提示未找到 drizzle-kit。
       </p>
     </SettingsCard>
   );

@@ -36,10 +36,10 @@ import { parseFileLogs, useLogStore, type LogEntry } from "~/components/studio/l
  * 通道**自己的格式**——启动链路写 `[HH:MM:SS]`、应用服务与运行期写 ISO 时刻带
  * 级别段。三个正则各不相同，所以一段原文**不能**同时冒充三条通道。
  */
-export interface OriginBlock {
+export type OriginBlock = {
   readonly origin: NonNullable<LogEntry["origin"]>;
   readonly text: string;
-}
+};
 
 /**
  * 一个 store 场景：给若干段**真格式的日志原文**，让 store 自己解析入库。
@@ -49,12 +49,12 @@ export interface OriginBlock {
  * 最容易糊弄过去的地方：把三通道的行抄成一种格式、全按一个 origin 入库，
  * 画布上「来源」那一列会整列同名，而来源分桶的计数也就没有被真的验过。
  */
-export interface LogStoreScene {
+export type LogStoreScene = {
   /** 这个场景解决什么、真数据长什么样（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
   /** 按通道分块的原文（每块一个真实来源通道）。 */
   readonly blocks: ReadonlyArray<OriginBlock>;
-}
+};
 
 /* ── 真格式的日志原文 ──────────────────────────────────────────────────────
  *
@@ -109,11 +109,11 @@ const APP_RUNTIME_TEXT = [
  * 一改就跟着变。
  */
 function appLines(spec: {
-  count: number;
   baseMs: number;
-  stepMs: number;
+  count: number;
   levels?: ReadonlyArray<string>;
   message: (index: number) => string;
+  stepMs: number;
 }): string {
   const levels = spec.levels ?? ["INFO", "INFO", "WARN"];
   const pad = (value: number, width = 2) => String(value).padStart(width, "0");
@@ -132,8 +132,8 @@ function appLines(spec: {
 
 /** 同一毫秒里堆若干行（`sameMillisecond` 那一档的现场）。 */
 function sameMsLines(spec: {
-  count: number;
   atMs: number;
+  count: number;
   message: (index: number) => string;
 }): string {
   return appLines({
@@ -361,7 +361,9 @@ function seedScene(name: string): void {
   useLogStore.getState().clear();
   useLogStore.setState({ sessionStart: null });
   const entries = sceneEntries(name);
-  if (entries.length === 0) return;
+  if (entries.length === 0) {
+    return;
+  }
   /* 一次 `appendFileLogs` 收全部块：合并、去重、分桶、计数都由 store 自己算
      （分多次写会让计数经过几个中间态，story 看到的末态相同、没意义）。 */
   useLogStore.getState().appendFileLogs(entries);
@@ -382,6 +384,7 @@ function seedScene(name: string): void {
 export function sceneEntries(name: string): Array<LogEntry> {
   /* `parameters` 里那个名字是不可信输入（story 里手写的字符串），所以按
      `string` 查、查不到就抛 —— 与值源的 `load()` 同一条口径。 */
+  /* SAFETY: 类型断言已复核 */
   const scene: LogStoreScene | undefined = LOG_STORE_SCENES[name as SceneName];
   if (scene === undefined) {
     throw new Error(
@@ -419,7 +422,10 @@ export function sceneEntries(name: string): Array<LogEntry> {
  * 缺席时**什么都不做**：别的 story（用真实 store 的那些）不该被搅。
  */
 export const withStoreScene: Decorator = (Story, context) => {
+  /* SAFETY: 类型断言已复核 */
   const name = (context.parameters as { storeScene?: unknown }).storeScene;
-  if (typeof name === "string") seedScene(name);
+  if (typeof name === "string") {
+    seedScene(name);
+  }
   return <Story />;
 };

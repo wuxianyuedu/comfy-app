@@ -56,13 +56,13 @@ vi.mock("~/lib/shell/desktop-shell-client", () => ({
 // 只 spy `postAppRuntimeLog` 并记录调用参数。
 const { postAppRuntimeLogMock, runtimeLogCalls, sessionLogRequests } = vi.hoisted(() => {
   const calls: Array<{
-    ns: string;
+    fields?: unknown;
     level: string;
     msg: string;
-    fields?: unknown;
+    ns: string;
   }> = [];
   /** 启动日志「按会话取」的请求记账（来源 + 请求的会话 id） */
-  const logRequests: Array<{ source: string; session: string | null }> = [];
+  const logRequests: Array<{ session: string | null; source: string }> = [];
   return {
     postAppRuntimeLogMock: vi.fn(
       (ns: string, level: string, msg: string, fields?: unknown): Promise<void> => {
@@ -82,22 +82,28 @@ vi.mock("~/lib/log/log-file-client", () => {
     async (
       source: string,
       offset: number,
-    ): Promise<{ content: string; size: number; offset: number } | null> => {
+    ): Promise<{ content: string; offset: number; size: number } | null> => {
       const res = await fetch(`/api/logs/current?source=${source}&offset=${offset}`);
-      if (!res.ok) return null;
+      if (!res.ok) {
+        return null;
+      }
       return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
         content: string;
-        size: number;
         offset: number;
+        size: number;
       };
     },
   );
   const fetchLogSessions = vi.fn(async (source: string, sessionId?: string) => {
     sessionLogRequests.push({ source, session: sessionId ?? null });
     const query = new URLSearchParams({ source });
-    if (sessionId) query.set("session", sessionId);
+    if (sessionId) {
+      query.set("session", sessionId);
+    }
     const res = await fetch(`/api/logs/sessions?${query.toString()}`);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as unknown;
   });
   return {
@@ -131,25 +137,25 @@ const LLM: LlmConfig = {
   apiKey: null,
 };
 
-interface Behavior {
-  settings?: Settings;
+type Behavior = {
+  /** comfyui.status 返回的 base（非空即「运行中」，供「打开查看」使用）。 */
+  comfyBase?: string | null;
+  comfyInstance?: {
+    desktopManaged: boolean;
+    instanceType: "desktop" | "portable" | "venv" | null;
+    pathConfigured: boolean;
+  };
+  comfyStatusPending?: boolean;
+  dbStudioStatusError?: string;
+  dbStudioUp?: boolean;
   llm?: LlmConfig;
-  /** setting.get 失败时抛出的文案（模拟服务端报错）。 */
-  settingsError?: string;
   llmError?: string;
   saveLlmError?: string;
   saveSettingsError?: string;
-  /** comfyui.status 返回的 base（非空即「运行中」，供「打开查看」使用）。 */
-  comfyBase?: string | null;
-  comfyStatusPending?: boolean;
-  comfyInstance?: {
-    pathConfigured: boolean;
-    instanceType: "desktop" | "portable" | "venv" | null;
-    desktopManaged: boolean;
-  };
-  dbStudioStatusError?: string;
-  dbStudioUp?: boolean;
-}
+  settings?: Settings;
+  /** setting.get 失败时抛出的文案（模拟服务端报错）。 */
+  settingsError?: string;
+};
 
 /** 永不 settle 的 promise：让某个端点「一直不返回」。
  *  写 `() => undefined` 而不是 `() => {}`：后者会被 eslint 的 no-empty-function 拦下。 */
@@ -193,7 +199,9 @@ const mockRouter = t.router({
      * 那是**假红**（判据被环境吃掉），所以留一个必定计数的桩。 */
     comfyStatus: t.procedure.query(async () => {
       comfyStatusCalls += 1;
-      if (behavior.comfyStatusPending) await neverSettle();
+      if (behavior.comfyStatusPending) {
+        await neverSettle();
+      }
       return {
         up: behavior.comfyBase != null,
         base: behavior.comfyBase ?? null,
@@ -492,7 +500,7 @@ describe("useSettingsPage", () => {
       /* 挂载链在假时钟上跑到落定：首探排在 `setTimeout(…, 0)`，推进 1s 一定跨过它，
        * 而这一秒是**虚拟的**（不占墙钟预算）。 */
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(1_000);
+        await vi.advanceTimersByTimeAsync(1000);
       });
       expect(result.current.ollamaStatus).toBe("down");
       expect(result.current.ollamaStarting).toBe(false);
@@ -525,7 +533,7 @@ describe("useSettingsPage", () => {
         wrapper: makeWrapper(),
       });
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(1_000);
+        await vi.advanceTimersByTimeAsync(1000);
       });
       expect(result.current.ollamaStatus).toBe("down");
 
@@ -536,13 +544,13 @@ describe("useSettingsPage", () => {
       expect(result.current.ollamaStatus).toBe("starting");
 
       // 推进两轮轮询（探测都 down），状态行必须保持 starting
-      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(5000);
       expect(result.current.ollamaStatus).toBe("starting");
       expect(result.current.ollamaStarting).toBe(true);
 
       // 第 3 轮起探测 up → 状态行一次性落到 up
       probeMock.mockResolvedValue({ up: true, models: [] });
-      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(5000);
       await act(async () => {
         await starting;
       });
@@ -668,8 +676,8 @@ describe("useSettingsPage", () => {
 
     const entry = /* SAFETY: 类型断言已复核 */ (
       runtimeLogCalls as unknown as Array<{
-        level: string;
         fields?: { query?: string; raw?: string };
+        level: string;
       }>
     ).find((c) => c.level === "error");
     expect(entry?.fields?.query).toBe("llm.configGet");
@@ -697,8 +705,8 @@ describe("useSettingsPage", () => {
 
     const entry = /* SAFETY: 类型断言已复核 */ (
       runtimeLogCalls as unknown as Array<{
-        level: string;
         fields?: { query?: string };
+        level: string;
       }>
     ).find((c) => c.level === "error");
     expect(entry?.fields?.query).toContain("setting.get");
@@ -756,7 +764,7 @@ describe("useSettingsPage", () => {
     // 设置页只做配置：初始清单 = 候选条目（不含「当前模型」虚拟行）
     expect(result.current.remoteModelList.map((e) => e.name)).toEqual([]);
 
-    let out: { ok: boolean; error?: string } = { ok: false };
+    let out: { error?: string; ok: boolean } = { ok: false };
     await act(async () => {
       out = await result.current.addRemoteModel({ name: "gpt-4o" });
     });
@@ -807,7 +815,7 @@ describe("useSettingsPage", () => {
     });
     await expect.poll(() => result.current.drafts).not.toBeNull();
 
-    let out: { ok: boolean; error?: string } = { ok: false };
+    let out: { error?: string; ok: boolean } = { ok: false };
     await act(async () => {
       out = await result.current.addRemoteModel({ name: "gpt-4o" });
     });
@@ -918,7 +926,7 @@ describe("useSettingsPage", () => {
     await act(async () => {
       await result.current.addRemoteModel({ name: "gpt-4o", apiKey: "sk-1" });
     });
-    let out: { ok: boolean; error?: string } = { ok: false };
+    let out: { error?: string; ok: boolean } = { ok: false };
     await act(async () => {
       out = await result.current.updateRemoteModel("gpt-4o", {
         name: "gpt-4o-2024",
@@ -1006,7 +1014,7 @@ describe("useSettingsPage", () => {
     await expect.poll(() => result.current.drafts).not.toBeNull();
 
     // llm.model 初始 = "qwen3:14b"，候选为空 —— 不再虚拟「当前模型」行可编辑
-    let out: { ok: boolean; error?: string } = { ok: false };
+    let out: { error?: string; ok: boolean } = { ok: false };
     await act(async () => {
       out = await result.current.updateRemoteModel("qwen3:14b", {
         baseUrl: "https://api.example.com/v1",

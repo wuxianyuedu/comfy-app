@@ -16,10 +16,10 @@ import { useUpdateCheckStore } from "../update-check-store";
 /** 需重启类文件的改动频率低，轮询间隔放宽，不打扰、不空转。 */
 export const UPDATE_CHECK_POLL_MS = 30_000;
 
-export interface UpdateCheckHookOptions {
+export type UpdateCheckHookOptions = {
   /** 轮询发现「干净→脏」时触发一次（容器层据此弹应用内提示）。 */
-  onDirty?: (groups: Array<{ key: string; label: string; hint: string }>) => void;
-}
+  onDirty?: (groups: Array<{ hint: string; key: string; label: string }>) => void;
+};
 
 /** 主动检测一次；返回是否真正执行（false = 请求失败/服务端未就绪）。 */
 export type CheckNow = () => Promise<boolean>;
@@ -43,7 +43,9 @@ export function useUpdateCheck(opts: UpdateCheckHookOptions = {}): {
     return runChecking(async () => {
       const payload = await fetchUpdateCheck();
       // 服务端尚未建立基线（首轮）或请求失败：不改变脏态、不提示。
-      if (!payload.ok || !payload.armed) return false;
+      if (!payload.ok || !payload.armed) {
+        return false;
+      }
       const dirty = payload.dirty;
       const wasDirty = wasDirtyRef.current;
       wasDirtyRef.current = dirty;

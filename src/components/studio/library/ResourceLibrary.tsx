@@ -41,7 +41,7 @@ import { pageHeaderTitle } from "../NavItems";
 import { useResourceLibrary } from "./hooks/use-resource-library";
 
 /** 两个作用域档 —— 顺序与画布抽屉一致（本项目在前）。 */
-const SCOPES: Array<{ id: MaterialScope; label: string; hint: string }> = [
+const SCOPES: Array<{ hint: string; id: MaterialScope; label: string }> = [
   { id: "project", label: "本项目", hint: "当前项目的素材 + 共享素材" },
   { id: "cross", label: "跨项目", hint: "所有项目的素材聚合" },
 ];
@@ -63,10 +63,7 @@ export function ResourceLibrary() {
   const needsProject = library.scope === "project" && c.projectId === null;
 
   return (
-    <DocumentFrame
-      width="wide"
-      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
-    >
+    <DocumentFrame className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8" width="wide">
       {/* ── 页头：动作（屏名由页签给出，说明问号在顶栏标题右侧） ── */}
       <PageHeader srTitle={pageHeaderTitle("library")} />
 
@@ -76,10 +73,10 @@ export function ResourceLibrary() {
         <uploadPicker.Input />
         <Hint label="上传素材" wrap>
           <Button
-            variant="primary"
-            onClick={uploadPicker.open}
-            disabled={library.uploading || needsProject}
             className="h-auto gap-1.5 rounded-lg px-4 py-2"
+            disabled={library.uploading || needsProject}
+            onClick={uploadPicker.open}
+            variant="primary"
           >
             {library.uploading ? (
               <Spinner className="size-4" />
@@ -102,26 +99,26 @@ export function ResourceLibrary() {
             只能选一个）。现在由 `data-active` 一处驱动（字色 + 下划线两层），
             两枚同高同基线。 */}
         <Tabs
-          value={library.scope}
+          className="gap-0"
           onValueChange={(value: unknown) => {
             /* 基元的 `onValueChange` 出参是 `any`：收窄放在这里，
                别拿 `as MaterialScope` 把判据抹掉（§16.2.4.68 的同一取向）。 */
-            if (value === "project" || value === "cross") c.setScope(value);
+            if (value === "project" || value === "cross") {
+              c.setScope(value);
+            }
           }}
-          className="gap-0"
+          value={library.scope}
         >
-          <TabsList variant="line" aria-label="素材作用域" className="gap-3">
+          <TabsList aria-label="素材作用域" className="gap-3" variant="line">
             {SCOPES.map((scope) => (
               <Hint key={scope.id} label={scope.hint} wrap>
                 <TabsTrigger
-                  value={scope.id}
                   className="h-auto flex-none rounded-none px-0 pb-2.5 text-sm font-medium"
+                  value={scope.id}
                 >
                   {scope.label}
                   {library.scope === scope.id && c.totalCount > 0 ? (
-                    <span className="text-ink-fainter text-2xs tabular-nums">
-                      {c.totalCount}
-                    </span>
+                    <span className="text-ink-fainter text-2xs tabular-nums">{c.totalCount}</span>
                   ) : null}
                 </TabsTrigger>
               </Hint>
@@ -131,28 +128,24 @@ export function ResourceLibrary() {
 
         {/* 显示密度：纯视觉偏好，与业务数据无关（与画布抽屉同一取舍）。
             三处逐字相同的孪生对已收口到基元（ISSUE #1925）。 */}
-        <DisplayDensityToggle
-          value={display}
-          onChange={setDisplay}
-          className="ml-auto"
-        />
+        <DisplayDensityToggle className="ml-auto" onChange={setDisplay} value={display} />
 
         <div className="border-border bg-subtle flex w-full items-center gap-2 rounded-lg border px-3 py-2 sm:w-72">
-          <Search size={14} className="text-ink-muted shrink-0" />
+          <Search className="text-ink-muted shrink-0" size={14} />
           <Input
-            type="text"
-            value={library.search}
+            className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
             onChange={textHandler(library.setSearch)}
             placeholder={library.folder ? "在当前分类搜索" : "搜索全部素材"}
-            className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
+            type="text"
+            value={library.search}
           />
           {library.search ? (
-            <Hint label="清空" accessibleName>
+            <Hint accessibleName label="清空">
               <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => library.setSearch("")}
                 className="text-ink-fainter hover:text-ink-soft h-auto shrink-0 p-0 hover:bg-transparent"
+                onClick={() => library.setSearch("")}
+                size="icon-xs"
+                variant="ghost"
               >
                 <X data-icon="inline-start" size={12} strokeWidth={2.5} />
               </Button>
@@ -165,10 +158,10 @@ export function ResourceLibrary() {
           走 `~/components/ui/breadcrumb-path`（规范 16 §16.2.4.72）。 */}
       {!needsProject && (
         <BreadcrumbPath
-          segments={library.breadcrumbSegments}
+          className="mb-3"
           navigable={!library.searching}
           onNavigate={library.enterFolder}
-          className="mb-3"
+          segments={library.breadcrumbSegments}
         />
       )}
 
@@ -179,9 +172,9 @@ export function ResourceLibrary() {
             {library.error}
           </span>
           <Button
-            variant="ghost"
-            onClick={library.refresh}
             className="text-destructive h-auto shrink-0 p-0 text-xs underline hover:bg-transparent"
+            onClick={library.refresh}
+            variant="ghost"
           >
             重试
           </Button>
@@ -191,27 +184,27 @@ export function ResourceLibrary() {
       {/* ── 结果区 ── */}
       {needsProject ? (
         <EmptyState
-          icon={FolderOpen}
-          title="还没有打开的项目"
-          description="素材按项目归档。先在画布 / 工坊里打开一个项目，这里就会列出它的素材；切换上方「跨项目」也可以先浏览全部项目的素材。"
-          minHeightClass="min-h-75"
           action={
             <Button
-              variant="outline"
-              onClick={() => c.setScope("cross")}
               className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary mt-4 h-auto rounded-lg px-4 py-2"
+              onClick={() => c.setScope("cross")}
+              variant="outline"
             >
               看跨项目素材
             </Button>
           }
+          description="素材按项目归档。先在画布 / 工坊里打开一个项目，这里就会列出它的素材；切换上方「跨项目」也可以先浏览全部项目的素材。"
+          icon={FolderOpen}
+          minHeightClass="min-h-75"
+          title="还没有打开的项目"
         />
       ) : (
         <MaterialLibraryContent
           c={library}
           display={display}
-          onOpenUploadPicker={uploadPicker.open}
-          gridColsClass="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
           folderColsClass="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+          gridColsClass="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+          onOpenUploadPicker={uploadPicker.open}
         />
       )}
     </DocumentFrame>

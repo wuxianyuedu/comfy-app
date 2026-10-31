@@ -89,7 +89,9 @@ function walk(dir: string, out: Array<string> = []): Array<string> {
       walk(full, out);
       continue;
     }
-    if (/\.(ts|tsx)$/.test(name)) out.push(full);
+    if (/\.(ts|tsx)$/.test(name)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -100,8 +102,12 @@ describe("日志实现只有一处（ISSUE #568）", () => {
     for (const dir of SCAN_DIRS) {
       for (const file of walk(join(ROOT, dir))) {
         const rel = relative(ROOT, file).split("\\").join("/");
-        if (/\.test\.(ts|tsx)$/.test(rel)) continue; // 用例自己会打点/断言输出
-        if (CLIENT_ONLY.includes(rel)) continue; // 浏览器侧唯一通道，见上方清单
+        if (/\.test\.(ts|tsx)$/.test(rel)) {
+          continue;
+        } // 用例自己会打点/断言输出
+        if (CLIENT_ONLY.includes(rel)) {
+          continue;
+        } // 浏览器侧唯一通道，见上方清单
         const src = stripComments(readFileSync(file, "utf8"));
         if (/\bconsole\s*\.\s*(log|info|warn|error|debug)\s*\(/.test(src)) {
           offenders.push(rel);

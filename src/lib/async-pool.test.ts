@@ -53,7 +53,9 @@ describe("runWithConcurrency", () => {
     const processed: Array<number> = [];
     await expect(
       runWithConcurrency([1, 2, 3, 4], 2, async (item) => {
-        if (item === 1) throw new Error("第一条炸了");
+        if (item === 1) {
+          throw new Error("第一条炸了");
+        }
         processed.push(item);
       }),
     ).rejects.toThrow("第一条炸了");

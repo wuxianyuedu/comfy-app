@@ -7,7 +7,9 @@ export function collectReferenceImages(d: CanvasNodeData): Array<string> {
   const set = new Set<string>();
   for (const v of [d.inputImage, d.firstFrame, d.lastFrame]) {
     const s = typeof v === "string" ? v.trim() : "";
-    if (s) set.add(s);
+    if (s) {
+      set.add(s);
+    }
   }
   return [...set];
 }
@@ -25,12 +27,16 @@ function toComfySeedMode(mode: string): string {
 export function seedModeOverrides(
   io: WorkflowIOMap | null,
   seedModes: Record<string, string> | undefined,
-): Array<{ nodeId: string; name: string; value: string }> {
-  if (!io || !seedModes) return [];
-  const out: Array<{ nodeId: string; name: string; value: string }> = [];
+): Array<{ name: string; nodeId: string; value: string }> {
+  if (!io || !seedModes) {
+    return [];
+  }
+  const out: Array<{ name: string; nodeId: string; value: string }> = [];
   for (const [ioKey, mode] of Object.entries(seedModes)) {
     const entry = io[ioKey];
-    if (!entry?.nodeId || !mode) continue;
+    if (!entry?.nodeId || !mode) {
+      continue;
+    }
     out.push({
       nodeId: entry.nodeId,
       name: "control_after_generate",

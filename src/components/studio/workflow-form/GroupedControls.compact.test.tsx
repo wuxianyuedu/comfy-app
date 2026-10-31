@@ -68,12 +68,12 @@ function renderCompact() {
   const groups = inferGroups(widgets());
   const { container } = render(
     <GroupedControls
-      dimension={groups.dimension}
-      video={groups.video}
-      values={{}}
-      onChange={() => undefined}
-      compact
       collapseGrouped
+      compact
+      dimension={groups.dimension}
+      onChange={() => undefined}
+      values={{}}
+      video={groups.video}
     />,
   );
   return container;

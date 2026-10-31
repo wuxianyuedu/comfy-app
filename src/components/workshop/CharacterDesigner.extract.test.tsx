@@ -52,9 +52,9 @@ describe("CharacterDesigner 提取后回写角色列表", () => {
     render(
       <CharacterDesigner
         characters={[]}
-        styles={[]}
         onCharactersChange={onCharactersChange}
         scriptMarkdown={SCRIPT}
+        styles={[]}
       />,
     );
 

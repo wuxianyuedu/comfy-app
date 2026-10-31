@@ -41,18 +41,18 @@ import {
 } from "./runtime-log-file";
 
 /** 列包时的参数（路径与文件名从布局常量来，不在本模块写死）。 */
-export interface ScanRunPacksOptions {
-  /** `runs/` 的绝对路径。 */
-  runsDir: string;
-  /** 该来源在包内的相对目录（如 `services`）。 */
-  sourceDir: string;
-  /** `run.json` 的文件名（从 `run.mjs` 的 `LOG_LAYOUT.runJson` 来）。 */
-  runJsonName: string;
+export type ScanRunPacksOptions = {
   /** 最多列几个包（更老的翻不到，列出来只是噪声）。 */
   maxPacks: number;
+  /** `run.json` 的文件名（从 `run.mjs` 的 `LOG_LAYOUT.runJson` 来）。 */
+  runJsonName: string;
+  /** `runs/` 的绝对路径。 */
+  runsDir: string;
   /** 要列哪个来源的份。 */
   source: RuntimeLogSource;
-}
+  /** 该来源在包内的相对目录（如 `services`）。 */
+  sourceDir: string;
+};
 
 /** 读一个包目录的 `run.json`（无 / 坏 → null，不让一个坏包把整个列表带崩）。 */
 async function readPackMeta(
@@ -73,7 +73,9 @@ async function readPackMeta(
 /** `run.json` 的 `startedAt`（ISO 串）→ 毫秒；缺失 / 读不出给 null。 */
 function startedAtMs(meta: Record<string, unknown> | null): number | null {
   const raw = meta?.startedAt;
-  if (typeof raw !== "string") return null;
+  if (typeof raw !== "string") {
+    return null;
+  }
   const ms = new Date(raw).getTime();
   return Number.isFinite(ms) ? ms : null;
 }
@@ -99,13 +101,17 @@ async function listPackSourceFiles(
   }
   const out: Array<PackLogFile> = [];
   for (const name of names) {
-    if (!name.endsWith(".log")) continue;
+    if (!name.endsWith(".log")) {
+      continue;
+    }
     if (name === legacyRuntimeLogFileName(source)) {
       out.push({ name, startedAt: null, title: formatFileTime(null) });
       continue;
     }
     const parsed = parseRuntimeLogFileName(name);
-    if (parsed?.source !== source) continue;
+    if (parsed?.source !== source) {
+      continue;
+    }
     out.push({
       name,
       startedAt: parsed.startedAt,
@@ -153,7 +159,9 @@ export async function scanRunPacks(options: ScanRunPacksOptions): Promise<{
   for (const name of sortPackNames(names)) {
     const dir = path.join(/*turbopackIgnore: true*/ runsDir, name);
     const files = await listPackSourceFiles(dir, sourceDir, source);
-    if (files.length === 0) continue;
+    if (files.length === 0) {
+      continue;
+    }
     total += files.length;
     const meta = await readPackMeta(dir, runJsonName);
     packs.push({

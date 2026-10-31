@@ -49,12 +49,9 @@ const LazyWorkflowRunLogModal = React.lazy(() =>
   })),
 );
 
-interface WorkshopEncapsulationPanelProps {
-  workflowId: string;
+type WorkshopEncapsulationPanelProps = {
   /** 工坊下拉/徽标展示名（模型标签优先；仅用于文案）。 */
   displayName: string;
-  workflowIO: WorkflowIOMap | null;
-  paramMap: Record<string, unknown> | null;
   /** 当前模式（详情层持有，与「画布节点」页签同一份）。 */
   mode: string | null | undefined;
   /** 该工作流可跑的模式码（多于一个时渲染模式下拉）。 */
@@ -63,7 +60,10 @@ interface WorkshopEncapsulationPanelProps {
    * 模式跑一次流程测试 —— 文生图 / 图生图两条链路的封装口往往不同，只看默认
    * 模式测不出另一条能不能用。 */
   onModeChange?: (mode: string) => void;
-}
+  paramMap: Record<string, unknown> | null;
+  workflowId: string;
+  workflowIO: WorkflowIOMap | null;
+};
 
 /** 契约口状态徽标的形态（配色表；文案由`entryStateBadge` 按缺口给）。
  *  走语义 token（§4.11.1 / P71）：已落点→success、必填未落点→destructive。
@@ -87,8 +87,8 @@ const MISSING_REQUIRED_BADGE_CLASS = "bg-destructive/15 text-destructive";
  * 琥珀在这里刻意不用：没落点且必填 = 缺件，是问题状态（同「未配置」总览的
  * 红系），不是「待办提示」。 */
 function entryStateBadge(entry: EncapsulationEntryStatus): {
-  label: string;
   className: string;
+  label: string;
 } | null {
   if (entry.targetIoKey !== null) {
     return { label: "已落点", className: RESOLVED_BADGE_CLASS };
@@ -158,7 +158,9 @@ export function WorkshopEncapsulationPanel({
   /* 表单交上来的就是**工坊对外值**本身（口子清单 = 该模式的契约口，见
    *`EncapsulationTestForm`），这里不再做第二道字段过滤。 */
   const runTest = (values: WorkshopExposedValues) => {
-    if (test.running || !status.ready) return;
+    if (test.running || !status.ready) {
+      return;
+    }
     test.run(values);
   };
 
@@ -178,18 +180,18 @@ export function WorkshopEncapsulationPanel({
  与画布节点页签各自独立（ISSUE #611 旧形态：两个页签各写各的）。 */}
       <div className="flex flex-wrap items-center gap-2">
         <WorkflowRunLogButton
-          workflowId={workflowId}
+          onOpen={() => setLogOpen(true)}
           source="encapsulation-test"
           taskId={logViewTaskId}
-          onOpen={() => setLogOpen(true)}
+          workflowId={workflowId}
         />
         <h3 className="text-ink-strong text-sm font-medium">工坊封装</h3>
         {status.ready ? (
-          <Badge tone="success" size="pill-md">
+          <Badge size="pill-md" tone="success">
             已配置 · 工坊可用
           </Badge>
         ) : (
-          <Badge tone="warning" size="pill-md">
+          <Badge size="pill-md" tone="warning">
             未配置
           </Badge>
         )}
@@ -203,13 +205,13 @@ export function WorkshopEncapsulationPanel({
          * 只看默认模式测不出另一条能不能用）。只改当前模式，不改默认模式。 */}
         {modes && modes.length > 1 && onModeChange && (
           <SelectMenu
-            value={mode ?? modes.at(0) ?? ""}
-            onChange={onModeChange}
-            options={[...modes]}
-            labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
-            popoverMinWidth={160}
             autoFitFromOptions={false}
             className="border-border-strong! text-2xs h-auto bg-transparent! px-2 py-0.5"
+            labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
+            onChange={onModeChange}
+            options={[...modes]}
+            popoverMinWidth={160}
+            value={mode ?? modes.at(0) ?? ""}
           />
         )}
         <span className="text-muted-foreground text-2xs">
@@ -242,11 +244,8 @@ export function WorkshopEncapsulationPanel({
  标签 + 口 id，右侧「值」是生效落点。此前这一段是与其它四处
  「标签 + 值」行**各写一份**的`flex items-center` 布局。 */
             <KeyValueRows
-              key={entry.id}
               className="border-border/60 bg-surface rounded-lg border px-3 py-2"
               itemClassName="text-xs"
-              keyClassName="text-ink flex min-w-0 items-center gap-2 font-medium"
-              valueClassName="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-3xs"
               items={[
                 {
                   id: entry.id,
@@ -283,6 +282,9 @@ export function WorkshopEncapsulationPanel({
                   value: displayValue(entry.targetIoKey),
                 },
               ]}
+              key={entry.id}
+              keyClassName="text-ink flex min-w-0 items-center gap-2 font-medium"
+              valueClassName="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-3xs"
             />
           );
         })}
@@ -301,24 +303,24 @@ export function WorkshopEncapsulationPanel({
  同一份清单，不看有没有落点（没落点的口照样能填，值落不下去时由
  工作流图内的默认值兜底）。 */}
           <EncapsulationTestForm
-            entries={status.entries}
-            scene={sceneFromMode(mode)}
-            running={test.running}
             canRun={status.ready}
+            entries={status.entries}
+            onRun={runTest}
             runDisabledReason={
               status.ready
                 ? undefined
                 : `${status.missingRequired.join("、") || "必备口"}未落到端口，工坊无法驱动这条工作流`
             }
-            onRun={runTest}
+            running={test.running}
+            scene={sceneFromMode(mode)}
             uploadImage={test.uploadImage}
           />
           {test.running && (
             <ProgressBar
-              value={test.progress}
               minVisible={4}
               showValue={false}
               trackClassName="bg-elevated h-1"
+              value={test.progress}
             />
           )}
           {test.error && (
@@ -330,9 +332,9 @@ export function WorkshopEncapsulationPanel({
             <div className="flex flex-col gap-1">
               <p className="text-primary text-2xs">流程测试通过 —— {displayName} 在工坊中可用。</p>
               <MediaThumbnail
-                src={test.resultUrl}
                 alt="流程测试产物"
                 className="border-border max-h-56 rounded-lg border"
+                src={test.resultUrl}
               />
             </div>
           )}
@@ -342,12 +344,12 @@ export function WorkshopEncapsulationPanel({
         </div>
       </div>
       <LazyWorkflowRunLogModal
+        onClose={() => setLogOpen(false)}
+        onViewTaskIdChange={setLogTaskId}
         open={logOpen}
-        workflowId={workflowId}
         source="encapsulation-test"
         viewTaskId={logViewTaskId}
-        onViewTaskIdChange={setLogTaskId}
-        onClose={() => setLogOpen(false)}
+        workflowId={workflowId}
       />
     </div>
   );

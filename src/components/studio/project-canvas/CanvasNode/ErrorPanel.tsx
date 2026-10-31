@@ -13,18 +13,12 @@ import { Hint } from "~/components/ui/hint";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import {
-  copyFailureText,
-  useCopyFeedback,
-} from "~/components/ui/use-copy-feedback";
+import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { Alert } from "~/components/ui/alert";
 import { Disclosure } from "~/components/ui/disclosure";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import { formatLocalStamp } from "~/lib/time-format";
-import {
-  adviseOnError,
-  shouldAutoExpandError,
-} from "~/lib/comfyui/error-advice";
+import { adviseOnError, shouldAutoExpandError } from "~/lib/comfyui/error-advice";
 
 /** JSON.stringify 的兜底形态：序列化失败（循环引用等）回落 `String()`。
  *  展示给用户的错误详情永不抛错。 */
@@ -36,20 +30,20 @@ function jsonOrString(value: unknown, pretty = false): string {
   }
 }
 
-interface ErrorPanelProps {
-  nodeId: string;
-  kind: CanvasNodeData["kind"];
-  status: CanvasNodeData["status"];
+type ErrorPanelProps = {
   error: CanvasNodeData["error"];
-  errorStatus: CanvasNodeData["errorStatus"];
   errorContext: CanvasNodeData["errorContext"];
-  validationErrors: CanvasNodeData["validationErrors"];
-  taskId: CanvasNodeData["taskId"];
-  workflowId: CanvasNodeData["workflowId"];
-  workflowName: CanvasNodeData["workflowName"];
+  errorStatus: CanvasNodeData["errorStatus"];
+  kind: CanvasNodeData["kind"];
+  nodeId: string;
   /* 复用上次记录的 payload 重新跑一遍（见 use-generate 的 retryGenerate）。 */
   onRetry: (req: unknown) => void;
-}
+  status: CanvasNodeData["status"];
+  taskId: CanvasNodeData["taskId"];
+  validationErrors: CanvasNodeData["validationErrors"];
+  workflowId: CanvasNodeData["workflowId"];
+  workflowName: CanvasNodeData["workflowName"];
+};
 
 export function ErrorPanel({
   nodeId,
@@ -79,22 +73,23 @@ export function ErrorPanel({
   const [prevStatus, setPrevStatus] = useState(status);
   if (status !== prevStatus) {
     setPrevStatus(status);
-    if (status === "running" || status === "idle") setErrExpanded(false);
+    if (status === "running" || status === "idle") {
+      setErrExpanded(false);
+    }
   }
 
   /* 结构化 / 可行动的错误上自动展开，好让建议 +
    * 请求 payload 区不用多点一次就看得见。 */
-  const shouldAutoExpand = shouldAutoExpandError(
-    error,
-    validationErrors?.length ?? 0,
-  );
+  const shouldAutoExpand = shouldAutoExpandError(error, validationErrors?.length ?? 0);
   /* 可行动错误上自动展开（渲染期间调整，React 19
    * 模式）。 */
   const [prevErrCtx, setPrevErrCtx] = useState(`${status}|${shouldAutoExpand}`);
   const errCtx = `${status}|${shouldAutoExpand}`;
   if (errCtx !== prevErrCtx) {
     setPrevErrCtx(errCtx);
-    if (status === "error" && shouldAutoExpand) setErrExpanded(true);
+    if (status === "error" && shouldAutoExpand) {
+      setErrExpanded(true);
+    }
   }
 
   /* 两枚复制按钮的成败反馈（规范 16 §16.2.4.43）：详情那枚失败时改口（旁边
@@ -110,10 +105,7 @@ export function ErrorPanel({
   /* 对错误文本做模式匹配，给出一行可行动的提示。
    * 认不出失败形态时返回 null（UI 保留通用的原始错误块，
    * 而不是编造不靠谱的建议）。 */
-  const errorSuggestion: string | null = useMemo(
-    () => adviseOnError(error),
-    [error],
-  );
+  const errorSuggestion: string | null = useMemo(() => adviseOnError(error), [error]);
 
   /* 展开态的错误详情派生 —— 防御性转换：`d.error` 的类型是`string`，
    * 但遗留行 / 较老代码路径可能存过字面量"[object Object]"（例如
@@ -124,11 +116,7 @@ export function ErrorPanel({
   let errText = "(no error detail)";
   if (typeof raw === "string") {
     const trimmed = raw.trim();
-    if (
-      trimmed &&
-      trimmed !== "[object Object]" &&
-      trimmed !== "[unserializable error]"
-    ) {
+    if (trimmed && trimmed !== "[object Object]" && trimmed !== "[unserializable error]") {
       errText = trimmed;
     }
   } else if (raw && typeof raw === "object") {
@@ -142,10 +130,7 @@ export function ErrorPanel({
     ts = Number.isNaN(dt.getTime()) ? rawTs : formatLocalStamp(dt);
   }
   const hasCtx =
-    Boolean(taskId) ||
-    Boolean(ts) ||
-    Boolean(errorContext?.request) ||
-    Boolean(errorSuggestion);
+    Boolean(taskId) || Boolean(ts) || Boolean(errorContext?.request) || Boolean(errorSuggestion);
 
   /* 节点没在显示可行动错误时整体隐藏。放在 hooks 之后
    * （而不是在父级拦住挂载），好让展开 / 重置生命周期
@@ -158,11 +143,7 @@ export function ErrorPanel({
   return (
     <div className="nodrag nopan border-destructive/30 bg-destructive/6 text-2xs border-t px-3 py-2">
       <div className="flex items-start gap-1.5">
-        <Icon
-          name="alert"
-          size={12}
-          className="text-danger-strong mt-px shrink-0"
-        />
+        <Icon className="text-danger-strong mt-px shrink-0" name="alert" size={12} />
         <div className="min-w-0 flex-1">
           {/* 头部行：状态徽标 + 工作流名 + 动作 */}
           <div className="flex items-center justify-between gap-1.5">
@@ -198,24 +179,21 @@ export function ErrorPanel({
               {Boolean(errorContext?.request) && taskId && (
                 <Hint label="用相同参数重跑一次">
                   <Button
-                    variant="outline"
+                    className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
                     onClick={() => {
                       void onRetry(errorContext?.request);
                     }}
-                    className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
+                    variant="outline"
                   >
                     ↻ 重试
                   </Button>
                 </Hint>
               )}
-              <Hint
-                label={errExpanded ? "收起错误详情" : "展开错误详情"}
-                accessibleName
-              >
+              <Hint accessibleName label={errExpanded ? "收起错误详情" : "展开错误详情"}>
                 <Button
-                  variant="outline"
-                  onClick={() => setErrExpanded((value) => !value)}
                   className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
+                  onClick={() => setErrExpanded((value) => !value)}
+                  variant="outline"
                 >
                   {errExpanded ? "▲" : "▼"}
                 </Button>
@@ -228,7 +206,7 @@ export function ErrorPanel({
                 }
               >
                 <Button
-                  variant="outline"
+                  className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
                   onClick={() => {
                     copyDetail(
                       JSON.stringify(
@@ -239,20 +217,16 @@ export function ErrorPanel({
                           taskId: taskId ?? null,
                           errorStatus: errorStatus ?? null,
                           validationErrors: validationErrors ?? null,
-                          error:
-                            typeof error === "string"
-                              ? error
-                              : jsonOrString(error),
+                          error: typeof error === "string" ? error : jsonOrString(error),
                           request: errorContext?.request ?? null,
-                          ts:
-                            errorContext?.timestamp ?? new Date().toISOString(),
+                          ts: errorContext?.timestamp ?? new Date().toISOString(),
                         },
                         null,
                         2,
                       ),
                     );
                   }}
-                  className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
+                  variant="outline"
                 >
                   {detailCopyFailed ? "复制失败" : "⧉"}
                 </Button>
@@ -265,8 +239,7 @@ export function ErrorPanel({
            * 就不用占竖向空间。 */}
           {!errExpanded && (validationErrors?.length ?? 0) > 0 && (
             <p className="nodrag nopan text-danger-strong text-3xs mt-1 font-medium">
-              发现 {(validationErrors ?? []).length} 项节点配置错误（点击 ▼
-              查看明细）
+              发现 {(validationErrors ?? []).length} 项节点配置错误（点击 ▼ 查看明细）
             </p>
           )}
           {!errExpanded && (
@@ -291,8 +264,8 @@ export function ErrorPanel({
                     节点配置校验（{(validationErrors ?? []).length} 项）
                   </div>
                   <ValidationErrorList
-                    errors={validationErrors}
                     className="text-danger-strong/80"
+                    errors={validationErrors}
                   />
                 </div>
               )}
@@ -304,9 +277,9 @@ export function ErrorPanel({
                       <span className="text-danger-strong/60">taskId</span>
                       <Hint label="点击复制 taskId">
                         <Button
-                          variant="ghost"
-                          onClick={() => copyTaskId(taskId)}
                           className="nodrag nopan text-danger-strong/90 hover:text-danger-strong h-auto min-w-0 truncate p-0 text-left font-mono font-normal hover:bg-transparent"
+                          onClick={() => copyTaskId(taskId)}
+                          variant="ghost"
                         >
                           {taskId}
                         </Button>
@@ -316,9 +289,7 @@ export function ErrorPanel({
                   {ts && (
                     <>
                       <span className="text-danger-strong/60">时间</span>
-                      <span className="text-danger-strong/80 truncate">
-                        {ts}
-                      </span>
+                      <span className="text-danger-strong/80 truncate">{ts}</span>
                     </>
                   )}
                 </div>
@@ -327,8 +298,8 @@ export function ErrorPanel({
               {/* 2) 自动建议 — 正则推断的纠错提示 */}
               {errorSuggestion && (
                 <Alert
-                  variant="warning"
                   className="text-3xs block rounded px-2 py-1 leading-relaxed"
+                  variant="warning"
                 >
                   <span className="mr-1 font-semibold">建议</span>
                   {errorSuggestion}
@@ -338,9 +309,9 @@ export function ErrorPanel({
               {/* 3) 请求参数快照 */}
               {errorContext?.request ? (
                 <Disclosure
+                  className="text-danger-strong text-3xs hover:brightness-110"
                   defaultOpen
                   marker="caret"
-                  className="text-danger-strong text-3xs hover:brightness-110"
                   panelClassName="text-3xs"
                   trigger="请求参数"
                 >
@@ -354,9 +325,9 @@ export function ErrorPanel({
 
               {/* 4) 原始错误详情（保持旧版的 <pre> 风格） */}
               <Disclosure
+                className="text-danger-strong text-3xs hover:brightness-110"
                 defaultOpen
                 marker="caret"
-                className="text-danger-strong text-3xs hover:brightness-110"
                 panelClassName="text-3xs"
                 trigger="原始错误"
               >

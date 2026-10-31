@@ -56,10 +56,15 @@ const SCRIPT_EXTS = new Set([".mjs", ".cjs"]);
 /** 递归收集待扫文件（跳过 `node_modules` 与隐藏目录）。 */
 function collect(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir)) {
-    if (entry.startsWith(".") || entry === "node_modules") continue;
+    if (entry.startsWith(".") || entry === "node_modules") {
+      continue;
+    }
     const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) collect(full, out);
-    else if (SCRIPT_EXTS.has(path.extname(entry))) out.push(full);
+    if (statSync(full).isDirectory()) {
+      collect(full, out);
+    } else if (SCRIPT_EXTS.has(path.extname(entry))) {
+      out.push(full);
+    }
   }
   return out;
 }

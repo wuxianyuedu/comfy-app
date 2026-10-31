@@ -46,13 +46,13 @@ export const Default: Story = {
         <TabsTrigger value="nodes">节点</TabsTrigger>
         <TabsTrigger value="history">历史</TabsTrigger>
       </TabsList>
-      <TabsContent value="params" className="text-ink-muted px-2">
+      <TabsContent className="text-ink-muted px-2" value="params">
         这里是对外参数（workflowIO）的编辑区。
       </TabsContent>
-      <TabsContent value="nodes" className="text-ink-muted px-2">
+      <TabsContent className="text-ink-muted px-2" value="nodes">
         这里是节点包解析出来的节点列表。
       </TabsContent>
-      <TabsContent value="history" className="text-ink-muted px-2">
+      <TabsContent className="text-ink-muted px-2" value="history">
         这里是这个工作流的运行记录。
       </TabsContent>
     </Tabs>
@@ -65,7 +65,7 @@ export const ListVariants: Story = {
   render: () => (
     <div className="flex flex-col gap-6">
       {VARIANTS.map((variant) => (
-        <Tabs key={variant} defaultValue="a" className="w-lg">
+        <Tabs className="w-lg" defaultValue="a" key={variant}>
           <span className="text-ink-muted font-mono text-[11px]">TabsList variant={variant}</span>
           <TabsList variant={variant}>
             <TabsTrigger value="a">概览</TabsTrigger>
@@ -87,16 +87,16 @@ export const Orientations: Story = {
   render: () => (
     <div className="flex items-start gap-10">
       {ORIENTATIONS.map((orientation) => (
-        <Tabs key={orientation} orientation={orientation} defaultValue="a" className="w-64">
+        <Tabs className="w-64" defaultValue="a" key={orientation} orientation={orientation}>
           <span className="text-ink-muted font-mono text-[11px]">orientation={orientation}</span>
           <TabsList variant="line">
             <TabsTrigger value="a">参数</TabsTrigger>
             <TabsTrigger value="b">节点</TabsTrigger>
           </TabsList>
-          <TabsContent value="a" className="text-ink-muted px-2">
+          <TabsContent className="text-ink-muted px-2" value="a">
             参数面板
           </TabsContent>
-          <TabsContent value="b" className="text-ink-muted px-2">
+          <TabsContent className="text-ink-muted px-2" value="b">
             节点面板
           </TabsContent>
         </Tabs>
@@ -108,10 +108,10 @@ export const Orientations: Story = {
 /** 禁用档：`disabled` 的触发项 `pointer-events-none` + 半透明，键盘也进不去。 */
 export const WithDisabled: Story = {
   render: () => (
-    <Tabs defaultValue="a" className="w-lg">
+    <Tabs className="w-lg" defaultValue="a">
       <TabsList>
         <TabsTrigger value="a">可用</TabsTrigger>
-        <TabsTrigger value="b" disabled>
+        <TabsTrigger disabled value="b">
           暂不可用
         </TabsTrigger>
         <TabsTrigger value="c">可用</TabsTrigger>

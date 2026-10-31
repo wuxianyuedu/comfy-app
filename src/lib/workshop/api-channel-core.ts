@@ -36,45 +36,45 @@ export type WorkshopApiSettings = Record<ApiChannelKind, ApiChannelStored>;
 export const WORKSHOP_API_SETTINGS_FILE = "workshop-api-settings.json";
 
 /** 远端模型连接参数（设置页「远端模型」条目）——生图优先走它直连。 */
-export interface ApiUpstreamTarget {
-  endpoint: string;
+export type ApiUpstreamTarget = {
   apiKey: string;
+  endpoint: string;
   model: string;
-}
+};
 
 /** 生图请求：字段与工坊「统一输入」的对应关系由适配器决定，见调用方。 */
-export interface ApiImageRequest {
-  prompt: string;
-  negative?: string;
-  size?: string;
-  /** 设置页「远端模型」的名字：按 remoteModel 表条目的连接参数直连生图 */
-  model?: string;
-  /** 工坊模式码（T2I / I2I / …）：有适配器时按它取字段映射 */
-  mode?: string;
+export type ApiImageRequest = {
   /** 统一输入：宽高比 / 百万像素 / 宽高对齐倍数 / 输入图。 */
   aspectRatio?: string;
-  megapixels?: string;
-  multiple?: number;
   image?: string;
-}
+  megapixels?: string;
+  /** 工坊模式码（T2I / I2I / …）：有适配器时按它取字段映射 */
+  mode?: string;
+  /** 设置页「远端模型」的名字：按 remoteModel 表条目的连接参数直连生图 */
+  model?: string;
+  multiple?: number;
+  negative?: string;
+  prompt: string;
+  size?: string;
+};
 
 /** 视频提交请求（同步 URL 与异步任务两种上游都走它）。 */
-export interface ApiVideoSubmitRequest {
-  prompt: string;
-  negative?: string;
+export type ApiVideoSubmitRequest = {
+  fps?: number;
+  frames?: number;
   /* 图生视频用的参考首帧图（内联 data URL）。 */
   imageDataUrl?: string;
-  frames?: number;
-  fps?: number;
-}
+  negative?: string;
+  prompt: string;
+};
 
 /** 视频提交结果：同步返回 URL，或给一个待轮询的任务 id。 */
-export interface ApiVideoSubmitResult {
-  /* 上游同步返回成品视频时给出的直链 URL。 */
-  url?: string;
+export type ApiVideoSubmitResult = {
   /* 上游是「任务式」接口时，用来轮询的任务 id（经 pollVideoViaApi）。 */
   remoteTaskId?: string;
-}
+  /* 上游同步返回成品视频时给出的直链 URL。 */
+  url?: string;
+};
 
 /** 把一份可能残缺的配置归一化：字符串字段取默认、path 强制根相对。 */
 export function sanitizeChannel(raw: unknown, fallback: ApiChannelStored): ApiChannelStored {
@@ -140,7 +140,9 @@ export function maskChannels(settings: WorkshopApiSettings): ApiChannelsView {
 /** 请求头：总是 JSON，有 apiKey 才带 Authorization。 */
 export function headersFor(c: ApiChannelStored): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (c.apiKey) h.Authorization = `Bearer ${c.apiKey}`;
+  if (c.apiKey) {
+    h.Authorization = `Bearer ${c.apiKey}`;
+  }
   return h;
 }
 
@@ -171,13 +173,17 @@ function upstreamError(label: string, status: number, payload: unknown): Error {
 
 /** 按点分字段路径取一个字符串（适配器的 outputField；未指定/未命中返回 null）。 */
 function pickStringByPath(payload: unknown, fieldPath?: string): string | null {
-  if (!fieldPath) return null;
+  if (!fieldPath) {
+    return null;
+  }
   let cur: unknown = payload;
   for (const seg of fieldPath.split(".").filter(Boolean)) {
     /* 用 isRecord（含数组）而非 isPlainRecord：本函数按点分路径下钻，
      * 路径段是字符串，但数组索引 "0" 在 JS 里也能取到元素 —— 收口前的
      * 实现正是「数组也算对象」，改用严格版会静默改变收窄结果。 */
-    if (!isRecord(cur)) return null;
+    if (!isRecord(cur)) {
+      return null;
+    }
     cur = cur[seg];
   }
   return typeof cur === "string" && cur.length > 0 ? cur : null;
@@ -213,14 +219,14 @@ function videoBody(req: ApiVideoSubmitRequest, model: string): Record<string, un
 const GENERATE_TIMEOUT_MS = 180_000;
 const POLL_TIMEOUT_MS = 30_000;
 
-export interface ApiChannelFetchOptions {
-  /** 上游响应体解析器（Next 侧传 `readUpstreamJson`，MCP 侧用默认）。 */
-  readJson?: UpstreamJsonReader;
+export type ApiChannelFetchOptions = {
   /** 请求体覆盖（远端模型的模式适配器翻译统一输入后给出；缺省走 OpenAI 兼容默认映射）。 */
   bodyOverride?: Record<string, unknown>;
   /** 上游结果字段路径（适配器的 outputField）：命中即直接当结果 URL 返回。 */
   outputField?: string;
-}
+  /** 上游响应体解析器（Next 侧传 `readUpstreamJson`，MCP 侧用默认）。 */
+  readJson?: UpstreamJsonReader;
+};
 
 /**
  * 调 OpenAI 兼容生图端点，返回可用 URL（远程或 inline data URL）。
@@ -255,16 +261,20 @@ export async function callImageGeneration(
       body: JSON.stringify(options.bodyOverride ?? defaultImageBody(req, target.model)),
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
-  } catch (e) {
-    throw new Error(errorText(e, "API 生图请求失败"), { cause: e });
+  } catch (error) {
+    throw new Error(errorText(error, "API 生图请求失败"), { cause: error });
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
-  if (!res.ok) throw upstreamError("API 生图失败", res.status, payload);
+  if (!res.ok) {
+    throw upstreamError("API 生图失败", res.status, payload);
+  }
   /* 适配器指定了结果字段：只认那个字段（不再做通配提取，避免取到无关的
    * 同名字段）。命中即返回，未命中回落通配提取——与既有行为一致。 */
   const picked = pickStringByPath(payload, options.outputField);
   const url = picked ?? extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
-  if (!url) throw new Error("API 生图响应中未找到图片 URL / b64 数据");
+  if (!url) {
+    throw new Error("API 生图响应中未找到图片 URL / b64 数据");
+  }
   return url;
 }
 
@@ -274,7 +284,9 @@ export async function callVideoSubmit(
   channel: ApiChannelStored,
   options: ApiChannelFetchOptions = {},
 ): Promise<ApiVideoSubmitResult> {
-  if (!channel.baseUrl) throw new Error("API 视频通道未配置：请先填写 Base URL 与 API Key");
+  if (!channel.baseUrl) {
+    throw new Error("API 视频通道未配置：请先填写 Base URL 与 API Key");
+  }
   let res: Response;
   try {
     res = await fetch(endpointFor(channel), {
@@ -283,15 +295,21 @@ export async function callVideoSubmit(
       body: JSON.stringify(videoBody(req, channel.model)),
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
-  } catch (e) {
-    throw new Error(errorText(e, "API 视频提交失败"), { cause: e });
+  } catch (error) {
+    throw new Error(errorText(error, "API 视频提交失败"), { cause: error });
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
-  if (!res.ok) throw upstreamError("API 视频提交失败", res.status, payload);
+  if (!res.ok) {
+    throw upstreamError("API 视频提交失败", res.status, payload);
+  }
   const url = extractMediaUrl(payload);
-  if (url) return { url };
+  if (url) {
+    return { url };
+  }
   const remoteTaskId = extractRemoteTaskId(payload);
-  if (remoteTaskId) return { remoteTaskId };
+  if (remoteTaskId) {
+    return { remoteTaskId };
+  }
   throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
 }
 
@@ -300,8 +318,10 @@ export async function callVideoPoll(
   remoteTaskId: string,
   channel: ApiChannelStored,
   options: ApiChannelFetchOptions = {},
-): Promise<{ url?: string; pending: boolean }> {
-  if (!channel.baseUrl) throw new Error("API 视频通道未配置");
+): Promise<{ pending: boolean; url?: string }> {
+  if (!channel.baseUrl) {
+    throw new Error("API 视频通道未配置");
+  }
   let res: Response;
   try {
     res = await fetch(pollEndpointFor(channel.baseUrl, remoteTaskId), {
@@ -309,12 +329,16 @@ export async function callVideoPoll(
       headers: headersFor(channel),
       signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
     });
-  } catch (e) {
-    throw new Error(errorText(e, "API 视频轮询失败"), { cause: e });
+  } catch (error) {
+    throw new Error(errorText(error, "API 视频轮询失败"), { cause: error });
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
-  if (!res.ok) throw upstreamError("API 视频轮询失败", res.status, payload);
+  if (!res.ok) {
+    throw upstreamError("API 视频轮询失败", res.status, payload);
+  }
   const mediaUrl = extractMediaUrl(payload);
-  if (mediaUrl) return { url: mediaUrl, pending: false };
+  if (mediaUrl) {
+    return { url: mediaUrl, pending: false };
+  }
   return { pending: true };
 }

@@ -40,11 +40,11 @@ export function PackageFooter({
   classType,
   name,
 }: {
+  classType: string;
   /** 可选 —— 传 `config.custom`/`config.rawCategory` 能得到更丰富的兜底
    *  解析。没有 `NodeTypeConfig` 的调用方（例如工作区编辑器里的 WorkflowNode）
    *  可以省略它，直接给 `name`。 */
   config?: NodeTypeConfig;
-  classType: string;
   /** 覆盖解析出的名字。给了就原样使用（例如调用方
    *  已经用 `getCustomNodePackage()` 算出了正确的包名）。 */
   name?: string;
@@ -65,7 +65,9 @@ export function PackageFooter({
         ? resolved.slice("ComfyUI-".length)
         : resolved;
 
-  if (!display) return null;
+  if (!display) {
+    return null;
+  }
 
   return (
     <div

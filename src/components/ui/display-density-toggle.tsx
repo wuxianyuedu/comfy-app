@@ -40,39 +40,36 @@ export function DisplayDensityToggle({
   onChange,
   className,
 }: {
-  /** 当前档位。 */
-  value: DisplayDensity;
-  onChange: (next: DisplayDensity) => void;
   /** 外层容器的类（各落点的间距不同，底色 `bg-subtle` / 内边距由这里给）。 */
   className?: string;
+  onChange: (next: DisplayDensity) => void;
+  /** 当前档位。 */
+  value: DisplayDensity;
 }) {
   return (
     <div
-      role="radiogroup"
       aria-label="显示密度"
-      className={cn(
-        "bg-subtle flex items-center gap-0.5 rounded-lg p-0.5",
-        className,
-      )}
+      className={cn("bg-subtle flex items-center gap-0.5 rounded-lg p-0.5", className)}
+      role="radiogroup"
     >
-      <Hint label="网格视图" accessibleName>
+      <Hint accessibleName label="网格视图">
         <SelectChip
-          shape="compact"
-          className="h-auto rounded-md p-1"
-          selected={value === "grid"}
-          onClick={() => onChange("grid")}
           aria-label="网格视图"
+          className="h-auto rounded-md p-1"
+          onClick={() => onChange("grid")}
+          selected={value === "grid"}
+          shape="compact"
         >
           <LayoutGrid data-icon="inline-start" size={14} />
         </SelectChip>
       </Hint>
-      <Hint label="列表视图" accessibleName>
+      <Hint accessibleName label="列表视图">
         <SelectChip
-          shape="compact"
-          className="h-auto rounded-md p-1"
-          selected={value === "list"}
-          onClick={() => onChange("list")}
           aria-label="列表视图"
+          className="h-auto rounded-md p-1"
+          onClick={() => onChange("list")}
+          selected={value === "list"}
+          shape="compact"
         >
           <List data-icon="inline-start" size={14} />
         </SelectChip>

@@ -10,7 +10,7 @@ export function LoadingSkeleton() {
   return (
     <div className="flex flex-col gap-2">
       {[0, 1, 2].map((index) => (
-        <div key={`skeleton-${index}`} className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" key={`skeleton-${index}`}>
           <Skeleton className="bg-subtle h-2.5 w-16 rounded" />
           <Skeleton className="bg-subtle h-8 w-full rounded-lg" />
         </div>

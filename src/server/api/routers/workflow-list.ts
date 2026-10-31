@@ -110,16 +110,16 @@ export const workflowListProcedures = {
       // ── 磁盘上的本地根目录 ──
       const localRoots = getLocalWorkflowRoots();
       let localRootsSummary: Array<{
-        rawPath: string;
         absPath: string;
-        exists: boolean;
         count: number;
         error?: string;
+        exists: boolean;
+        rawPath: string;
       }> | null = null;
       let localRootsList: Array<{
-        rawPath: string;
         absPath: string;
         exists: boolean;
+        rawPath: string;
       }> = [];
       let localAllFiles: Array<LocalWorkflowFile> = [];
       if (localRoots.length > 0) {
@@ -155,7 +155,9 @@ export const workflowListProcedures = {
       // ── 按绝对路径建「磁盘 mtime」索引 ──
       const diskMtimeByPath = new Map<string, number>();
       for (const f of localAllFiles) {
-        if (!f.absPath) continue;
+        if (!f.absPath) {
+          continue;
+        }
         diskMtimeByPath.set(pathKey(f.absPath), f.mtimeMs);
       }
 
@@ -165,7 +167,9 @@ export const workflowListProcedures = {
         const checksumEntries = await scanLocalWorkflowChecksums(localRoots);
         const checksumIndex = new Map<string, { absPath: string; mtimeMs: number }>();
         for (const e of checksumEntries) {
-          if (!e.checksum) continue;
+          if (!e.checksum) {
+            continue;
+          }
           const cur = checksumIndex.get(e.checksum);
           if (!cur || e.mtimeMs > cur.mtimeMs) {
             checksumIndex.set(e.checksum, {
@@ -175,10 +179,16 @@ export const workflowListProcedures = {
           }
         }
         for (const w of list) {
-          if (!w.sourcePath || !w.sourceChecksum) continue;
-          if (diskMtimeByPath.has(pathKey(w.sourcePath))) continue;
+          if (!w.sourcePath || !w.sourceChecksum) {
+            continue;
+          }
+          if (diskMtimeByPath.has(pathKey(w.sourcePath))) {
+            continue;
+          }
           const hit = checksumIndex.get(w.sourceChecksum);
-          if (!hit) continue;
+          if (!hit) {
+            continue;
+          }
           /* 末段取文件名进「改名对账」展示文本——出口走 path-display 的
            * lastSegments（P56），空段语义由出口统一。 */
           const oldName = lastSegments(w.sourcePath, 1) || w.sourcePath;
@@ -192,8 +202,8 @@ export const workflowListProcedures = {
             w.sourceMtime = Math.floor(hit.mtimeMs / 1000);
             diskMtimeByPath.set(pathKey(hit.absPath), hit.mtimeMs);
             renamedFromTo.set(w.id, `${oldName} → ${newName}`);
-          } catch (e: unknown) {
-            const msg = errorMessage(e, String(e));
+          } catch (error: unknown) {
+            const msg = errorMessage(error, String(error));
             logger.warn(`[workflow.list] relink failed for ${w.id}: ${msg}`);
           }
         }
@@ -207,8 +217,9 @@ export const workflowListProcedures = {
         const def = getWorkflowType(normalizeTaskType(list.taskType));
         const rawView = asRawWorkflow(list.rawJson);
         const graphObj =
+          /* SAFETY: 类型断言已复核 */
           rawView && Array.isArray(rawView.nodes)
-            ? /* SAFETY: 类型断言已复核 */ (rawView as unknown as Record<string, unknown>)
+            ? (rawView as unknown as Record<string, unknown>)
             : null;
         const exec = executionShapeOf(list);
 
@@ -261,13 +272,19 @@ export const workflowListProcedures = {
       if (localRoots.length > 0) {
         const existingByPath = new Set<string>();
         for (const w of enriched) {
-          if (!w.sourcePath) continue;
+          if (!w.sourcePath) {
+            continue;
+          }
           existingByPath.add(pathKey(w.sourcePath));
         }
         for (const f of localAllFiles) {
-          if (!f.absPath) continue;
+          if (!f.absPath) {
+            continue;
+          }
           const key = pathKey(f.absPath);
-          if (existingByPath.has(key)) continue;
+          if (existingByPath.has(key)) {
+            continue;
+          }
           const friendly = f.name.replace(/\.(json|workflow)$/i, "").trim() || "未命名工作流";
           localPending.push({
             id: pendingId(f.absPath),

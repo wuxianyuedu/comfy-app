@@ -14,18 +14,11 @@
 // 3200..3999 区间）找服务 —— 两边不一致时表现为「服务起来了但连不上」。
 // `pnpm start` 已因同类问题修过（scripts/start.mjs），这里补齐 dev 一侧。
 import { spawnSync } from "node:child_process";
-import {
-  APP_PORT_ENV_KEY,
-  resolveAppPortWithSource,
-  resolveRepoRoot,
-} from "./app-port.mjs";
+import { APP_PORT_ENV_KEY, resolveAppPortWithSource, resolveRepoRoot } from "./app-port.mjs";
 import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
-import {
-  echoCommandLine,
-  formatCommandLine,
-} from "./launcher-core/command-echo.mjs";
+import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { maybeSpawnExecutorHost } from "./launcher-core/executor-host-spawn.mjs";
 import { runStamp } from "./launcher-core/log.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
@@ -53,13 +46,18 @@ function parseArgs(argv) {
     const a = argv[i];
     /* `noUncheckedIndexedAccess` 之下按下标取到的是 `string | undefined`；
      * `i < argv.length` 已保证这一格有值，守卫只把这件事写给类型检查器看。 */
-    if (a === undefined) continue;
-    if (a === "-p" || a === "--port") port = argv[i + 1] ?? port;
-    else if (a.startsWith("--port=")) port = a.slice("--port=".length);
-    else if (a === "-H" || a === "--hostname")
+    if (a === undefined) {
+      continue;
+    }
+    if (a === "-p" || a === "--port") {
+      port = argv[i + 1] ?? port;
+    } else if (a.startsWith("--port=")) {
+      port = a.slice("--port=".length);
+    } else if (a === "-H" || a === "--hostname") {
       hostname = argv[i + 1] ?? hostname;
-    else if (a.startsWith("--hostname="))
+    } else if (a.startsWith("--hostname=")) {
       hostname = a.slice("--hostname=".length);
+    }
   }
   return { port, hostname };
 }
@@ -73,9 +71,7 @@ const port = explicit ? parsed : resolved.port;
 // 端口来源一并打印：与壳「两侧读同一处」的判据就是这个值（ISSUE #821）。
 // 只给数字的日志在「dev server 在 3100、壳在等 3809」时归不了因 —— 一眼看不出
 // 是 .env 写的还是路径推出来的，而这两种情况的修法完全不同。
-const sourceLabel = explicit
-  ? "命令行 -p/--port"
-  : PORT_SOURCE_LABEL[resolved.source];
+const sourceLabel = explicit ? "命令行 -p/--port" : PORT_SOURCE_LABEL[resolved.source];
 process.stdout.write(
   `[dev.mjs] COMFYAPP_PORT=${port}${hostname ? ` host=${hostname}` : ""}（来源：${sourceLabel}）\n`,
 );
@@ -85,13 +81,7 @@ process.stdout.write(
 // 这正是壳 3809 / dev server 3100 那类「永远对不上」的来源。不阻断启动（命令行是
 // 权威入口），但必须说出来，否则用户只能看到一个连不上的端口。
 const envPort = Number.parseInt(process.env[APP_PORT_ENV_KEY] ?? "", 10);
-if (
-  explicit &&
-  Number.isInteger(envPort) &&
-  envPort >= 1 &&
-  envPort <= 65535 &&
-  envPort !== port
-) {
+if (explicit && Number.isInteger(envPort) && envPort >= 1 && envPort <= 65535 && envPort !== port) {
   process.stderr.write(
     `[dev.mjs] ⚠ 环境变量 ${APP_PORT_ENV_KEY}=${envPort} 与本次实际监听端口 ${port} 不一致：\n` +
       "[dev.mjs]   命令行的 -p/--port 优先，本次以它为准；但请确认调用方算端口的口径\n" +
@@ -155,7 +145,9 @@ maybeSpawnExecutorHost({
 const nextArgs = ["exec", "next", "dev", "--turbo", "-p", String(port)];
 // 显式指定监听地址时透传：Windows 上不固定 127.0.0.1 会被解析到 ::1（IPv6），
 // 导致按 127.0.0.1 做的健康检查失败（启动器传 -H 127.0.0.1 即为此）。
-if (hostname) nextArgs.push("-H", hostname);
+if (hostname) {
+  nextArgs.push("-H", hostname);
+}
 
 // pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）：Windows 上
 // 写死 `pnpm.cmd` 会选中 Node 起不来的批处理，spawnSync 于是「命令没起来」，
@@ -200,9 +192,7 @@ if (result.error) {
   process.exit(1);
 }
 if (result.status === null) {
-  process.stderr.write(
-    "[dev.mjs] ✗ pnpm 进程未正常结束（可能被信号终止），无退出码可报。\n",
-  );
+  process.stderr.write("[dev.mjs] ✗ pnpm 进程未正常结束（可能被信号终止），无退出码可报。\n");
   process.exit(1);
 }
 process.exit(result.status);

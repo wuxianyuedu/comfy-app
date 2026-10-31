@@ -19,8 +19,8 @@ import type { GenerateInput } from "~/lib/workflow/workflow-generate-input";
 
 /** 单次 /api/upload 的结果：成功给出文件名，失败给出可读原因与可否重试。 */
 type UploadAttempt =
-  | { ok: true; name: string }
-  | { ok: false; retryable: boolean; message: string };
+  | { name: string; ok: true }
+  | { message: string; ok: false; retryable: boolean };
 
 /** 单次 POST /api/upload；不成功时返回可读原因与是否值得重试。 */
 async function postUpload(file: File): Promise<UploadAttempt> {
@@ -45,7 +45,9 @@ async function postUpload(file: File): Promise<UploadAttempt> {
   }
   const obj = asRecord(d);
   const name = typeof obj?.name === "string" ? obj.name : "";
-  if (name) return { ok: true, name };
+  if (name) {
+    return { ok: true, name };
+  }
   const errRaw = obj?.error;
   /* ComfyUI 未运行时的 503（`hint: comfyui-unreachable`）是可重试的：服务端
    * 此时会顺手把实例拉起来，调用方等一会儿再传就能成功（ISSUE #345）。 */
@@ -74,18 +76,26 @@ export async function uploadImageFile(
   } = {},
 ): Promise<string> {
   const first = await postUpload(file);
-  if (first.ok) return first.name;
-  if (!first.retryable) throw new Error(first.message);
+  if (first.ok) {
+    return first.name;
+  }
+  if (!first.retryable) {
+    throw new Error(first.message);
+  }
 
   opts.onProgress?.(first.message);
   const ready = await waitForComfyReady({
     timeoutMs: opts.readyTimeoutMs,
     onProgress: (message) => opts.onProgress?.(message),
   });
-  if (!ready.ok) throw new Error(ready.message);
+  if (!ready.ok) {
+    throw new Error(ready.message);
+  }
 
   const retry = await postUpload(file);
-  if (retry.ok) return retry.name;
+  if (retry.ok) {
+    return retry.name;
+  }
   throw new Error(retry.message);
 }
 
@@ -96,10 +106,14 @@ const importCache = new Map<string, string>();
 
 export async function importOutputAsInput(localPath: string): Promise<string> {
   const cached = importCache.get(localPath);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    return cached;
+  }
   const abs = localPath.startsWith("/") ? localPath : `/${localPath}`;
   const res = await fetch(abs);
-  if (!res.ok) throw new Error("读取上游输出失败");
+  if (!res.ok) {
+    throw new Error("读取上游输出失败");
+  }
   const blob = await res.blob();
   const fname = lastSegments(localPath, 1) || "input.png";
   const file = new File([blob], fname, { type: blob.type || "image/png" });
@@ -131,32 +145,34 @@ export async function uploadMediaFile(file: File): Promise<{ name: string; url: 
  */
 export async function startGenerate(input: GenerateInput): Promise<string> {
   const d = await vanillaApi.generate.generate.mutate(input);
-  if (!d.taskId) throw new Error("生成失败");
+  if (!d.taskId) {
+    throw new Error("生成失败");
+  }
   return d.taskId;
 }
 
-export interface TaskResult {
+export type TaskResult = {
   localPath: string;
   mediaType: string;
   taskId?: string;
-}
+};
 
 /* `pollTask` 在服务端任务没产出结果就结束时返回它
  *（FAILED / CANCELLED / ERROR / TIMEOUT）。它带上任务行 `error` 列里
  * 底层后端的错误信息，好让界面给出有意义的解释，
  * 而不是一句通用的「生成失败或无结果」。 */
-export interface TaskFailure {
-  taskId: string;
-  status: "FAILED" | "CANCELLED" | "ERROR" | "TIMEOUT";
+export type TaskFailure = {
   /** 后端 / ComfyUI 的原始错误信息，已解码成纯文本。 */
   error: string;
   /** 原始请求载荷的快照（任务行 `params` 列），
    *  好让错误界面把「发了什么」和「哪里失败了」并排展示。 */
   params?: unknown;
+  status: "FAILED" | "CANCELLED" | "ERROR" | "TIMEOUT";
+  taskId: string;
   /** 结构化的 ComfyUI /prompt 校验错误（摊平后的 `node_errors`），
    *  好让界面渲染出精确到字段的列表，而不是去解析 `error` 里那句英文摘要。 */
   validationErrors?: Array<ValidationError>;
-}
+};
 
 /* 轮询一个任务，直到它有结果、失败或超时。
  * 成功时返回 `TaskResult`（真值）；终态失败时返回结构化的 `TaskFailure`，
@@ -175,7 +191,7 @@ export async function pollTask(
       return {
         taskId,
         status: "TIMEOUT",
-        error: `轮询超时（${Math.round(timeoutMs / 60000)} 分钟无响应）`,
+        error: `轮询超时（${Math.round(timeoutMs / 60_000)} 分钟无响应）`,
       };
     }
     try {

@@ -77,7 +77,9 @@ function collectRelativeClosure(entry: string): Array<string> {
   const seen = new Set<string>();
   const walk = (file: string): void => {
     const rel = relative(scriptsRoot, file).split("\\").join("/");
-    if (seen.has(rel)) return;
+    if (seen.has(rel)) {
+      return;
+    }
     seen.add(rel);
     const code = readFileSync(file, "utf8")
       .split("\n")
@@ -87,12 +89,18 @@ function collectRelativeClosure(entry: string): Array<string> {
       .join("\n");
     for (const m of code.matchAll(/from\s+"(\.[^"]+)"|import\(\s*"(\.[^"]+)"\s*\)/g)) {
       const spec = m[1] ?? m[2];
-      if (!spec) continue;
+      if (!spec) {
+        continue;
+      }
       const target = resolve(dirname(file), spec);
       // `../src/**` 由 Next 的编译产物提供（不在 scripts/ 的白名单管辖内），
       // `.d.mts` 之类的类型声明也不参与运行期加载
-      if (!target.startsWith(scriptsRoot) || !target.endsWith(".mjs")) continue;
-      if (!existsSync(target)) continue;
+      if (!target.startsWith(scriptsRoot) || !target.endsWith(".mjs")) {
+        continue;
+      }
+      if (!existsSync(target)) {
+        continue;
+      }
       walk(target);
     }
   };
@@ -265,19 +273,19 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
  * 该脚本在 `require.main !== module` 时不会 `process.exit`（见文件尾的守卫）。
  */
 interface CheckerExports {
+  ALLOWED_SRC_FILES: Array<string>;
+  allowedTopLevelFor: (label: string) => Array<string>;
+  checkDir: (dir: string, label: string) => boolean;
+  collectFiles: (dir: string, followLinks: boolean) => Array<string>;
   FORBIDDEN: Array<[string, RegExp]>;
-  REQUIRED_RUNTIME_FILES: Array<string>;
+  isAllowedSrcPath: (rel: string) => boolean;
+  missingRequiredRuntimeFiles: (dir: string) => Array<string>;
   REQUIRED_HOST_FILES: Array<string>;
   REQUIRED_PAYLOAD_FILES: Array<string>;
+  REQUIRED_RUNTIME_FILES: Array<string>;
   RUNTIME_DIR: string;
   STANDALONE_ALLOWED_TOPLEVEL: Array<string>;
   STATIC_ALLOWED_TOPLEVEL: Array<string>;
-  ALLOWED_SRC_FILES: Array<string>;
-  allowedTopLevelFor: (label: string) => Array<string>;
-  isAllowedSrcPath: (rel: string) => boolean;
-  collectFiles: (dir: string, followLinks: boolean) => Array<string>;
-  missingRequiredRuntimeFiles: (dir: string) => Array<string>;
-  checkDir: (dir: string, label: string) => boolean;
 }
 
 function checkerExports(): CheckerExports {
@@ -420,8 +428,12 @@ describe("产物层的形状级剔除（stripForbiddenShapes）", () => {
       }
       const removed = stripForbiddenShapes(dir);
       expect(removed.sort()).toEqual([...hits].sort());
-      for (const rel of hits) expect(existsSync(join(dir, rel))).toBe(false);
-      for (const rel of keeps) expect(existsSync(join(dir, rel))).toBe(true);
+      for (const rel of hits) {
+        expect(existsSync(join(dir, rel))).toBe(false);
+      }
+      for (const rel of keeps) {
+        expect(existsSync(join(dir, rel))).toBe(true);
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -836,7 +848,9 @@ describe("产物顶层的默认拒绝（ISSUE #1217）", () => {
       // src 是「祖先放行、叶子逐文件判」：RUNTIME_SRC 那条要留着，旁边的一起删掉。
       // 取 [0] 要判空（`noUncheckedIndexedAccess`），而这条用例的前提就是它存在。
       const runtimeSrcFile = RUNTIME_SRC[0];
-      if (!runtimeSrcFile) throw new Error("RUNTIME_SRC 为空，本用例无从判断");
+      if (!runtimeSrcFile) {
+        throw new Error("RUNTIME_SRC 为空，本用例无从判断");
+      }
       const keep = join(dir, "src", ...runtimeSrcFile.split("/"));
       mkdirSync(dirname(keep), { recursive: true });
       writeFileSync(keep, "// runtime");

@@ -11,9 +11,9 @@
  * 注意：匿名限流依赖 `x-forwarded-for`（反代注入），本地直连时回退 "anon"。
  */
 
-interface SlidingWindowEntry {
+type SlidingWindowEntry = {
   timestamps: Array<number>;
-}
+};
 
 const buckets = new Map<string, SlidingWindowEntry>();
 
@@ -45,7 +45,9 @@ export function checkRateLimit(key: string, max = 20, windowMs = 10_000): boolea
   if (buckets.size > MAX_BUCKETS) {
     for (const [k, v] of buckets) {
       v.timestamps = v.timestamps.filter((timestamp) => now - timestamp < windowMs);
-      if (v.timestamps.length === 0) buckets.delete(k);
+      if (v.timestamps.length === 0) {
+        buckets.delete(k);
+      }
     }
   }
 

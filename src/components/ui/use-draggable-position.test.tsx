@@ -84,8 +84,8 @@ function Harness({
   elementShown,
   onController,
 }: {
-  onClick?: () => void;
   elementShown: boolean;
+  onClick?: () => void;
   onController: (c: DraggablePositionController<HTMLButtonElement>) => void;
 }) {
   const controller = useDraggablePosition<HTMLButtonElement>({
@@ -94,7 +94,9 @@ function Harness({
     onClick,
   });
   onController(controller);
-  if (!elementShown) return null;
+  if (!elementShown) {
+    return null;
+  }
   return (
     <button
       /* 夹具按钮（元素几何被桩掉，jsdom 里不可见）—— 给它一个可访问名，
@@ -102,7 +104,9 @@ function Harness({
       aria-label="被测按钮"
       ref={(el) => {
         /* 让这个按钮的尺寸可预期（jsdom 不做布局，真按钮量出来恒为 0）。 */
-        if (el) el.getBoundingClientRect = stubRect;
+        if (el) {
+          el.getBoundingClientRect = stubRect;
+        }
         controller.elementCallbackRef(el);
       }}
     />
@@ -110,9 +114,9 @@ function Harness({
 }
 
 /** 渲染被测组件；`controller()` 始终拿到最新一份 controller。 */
-function setup(options: { onClick?: () => void; elementShown?: boolean } = {}): {
-  controller: () => DraggablePositionController<HTMLButtonElement>;
+function setup(options: { elementShown?: boolean; onClick?: () => void } = {}): {
   attach: (shown: boolean) => void;
+  controller: () => DraggablePositionController<HTMLButtonElement>;
 } {
   let latest: DraggablePositionController<HTMLButtonElement> | null = null;
   const onController = (c: DraggablePositionController<HTMLButtonElement>) => {
@@ -120,8 +124,8 @@ function setup(options: { onClick?: () => void; elementShown?: boolean } = {}): 
   };
   const view = render(
     <Harness
-      onClick={options.onClick}
       elementShown={options.elementShown ?? true}
+      onClick={options.onClick}
       onController={onController}
     />,
   );
@@ -129,7 +133,7 @@ function setup(options: { onClick?: () => void; elementShown?: boolean } = {}): 
     controller: () => latest!,
     attach: (shown) => {
       view.rerender(
-        <Harness onClick={options.onClick} elementShown={shown} onController={onController} />,
+        <Harness elementShown={shown} onClick={options.onClick} onController={onController} />,
       );
     },
   };
@@ -187,8 +191,8 @@ describe("useDraggablePosition", () => {
     drag(first.controller().handleProps, { x: 900, y: 700 }, { x: 700, y: 600 });
     await expect.poll(() => window.localStorage.getItem(KEY)).not.toBeNull();
     const saved = /* SAFETY: 类型断言已复核 */ JSON.parse(window.localStorage.getItem(KEY)!) as {
-      right: number;
       bottom: number;
+      right: number;
     };
     expect(saved.right).toBeGreaterThan(DEFAULT.right);
     expect(saved.bottom).toBeGreaterThan(DEFAULT.bottom);

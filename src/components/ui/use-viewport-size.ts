@@ -25,10 +25,10 @@ import { useEffect, useState } from "react";
  * 跟随时用 CSS 的 `dvh` 表达，本 hook 是给「必须在 JS 里知道视口尺寸」的
  * 判据（二选一的分支、像素级夹取）用的。
  */
-export interface ViewportSize {
-  width: number;
+export type ViewportSize = {
   height: number;
-}
+  width: number;
+};
 
 export function useViewportSize(): ViewportSize | null {
   /* 首帧 `null`：服务端与客户端首帧都渲染成「还不知道」（同一种结果，
@@ -38,9 +38,7 @@ export function useViewportSize(): ViewportSize | null {
   useEffect(() => {
     const measure = () => {
       setSize((prev) =>
-        prev !== null &&
-        prev.width === window.innerWidth &&
-        prev.height === window.innerHeight
+        prev !== null && prev.width === window.innerWidth && prev.height === window.innerHeight
           ? /* 取值没变就返回原引用 —— `resize` 在高频拖动窗口时每帧都发，
              * 不判等会让整棵树按帧重渲染。 */
             prev

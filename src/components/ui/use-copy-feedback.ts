@@ -74,9 +74,7 @@ import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 /** 回调用「复制结果」这一件事：`true` = 已进剪贴板。 */
 export type CopyFeedback = (ok: boolean) => void;
 
-export interface UseCopyFeedbackOptions {
-  /** 成功之后的反馈（不给 = 成功静默，是有意为之的常见选择）。 */
-  onSuccess?: CopyFeedback;
+export type UseCopyFeedbackOptions = {
   /**
    * 失败之后的反馈。
    *
@@ -85,7 +83,9 @@ export interface UseCopyFeedbackOptions {
    * - 不给 → 与 `"silent"` 同样静默，但**读起来像忘了写** —— 新增落点请显式选一个。
    */
   onFailure?: CopyFeedback | "silent";
-}
+  /** 成功之后的反馈（不给 = 成功静默，是有意为之的常见选择）。 */
+  onSuccess?: CopyFeedback;
+};
 
 /**
  * 复制一段**文本**，并把成败交给调用处的反馈。
@@ -109,7 +109,7 @@ export type CopyProducer = (produce: () => Promise<boolean>) => void;
  * 见 {@link useCopyResult}：那种落点要的是「不报反馈、只给结果」，
  * 把两件事塞进同一个返回值会让调用处分不清这次到底报没报。
  */
-export interface CopyController extends CopyRunner, CopyProducer {}
+export type CopyController = {} & CopyRunner & CopyProducer;
 
 /**
  * 复制失败的提示文案 —— 出口给上半句与下半句，调用处只补「可复制物在哪」。
@@ -153,8 +153,8 @@ export function useCopyFeedback({
    * effect 在**提交后**跑，而 `copy` 只可能由事件触发（那是提交之后的事），
    * 所以这一帧的延迟对调用点是透明的。 */
   const handlersRef = useRef<{
-    success?: CopyFeedback;
     failure?: CopyFeedback | "silent";
+    success?: CopyFeedback;
   }>({ success: onSuccess, failure: onFailure });
   useEffect(() => {
     handlersRef.current = { success: onSuccess, failure: onFailure };
@@ -169,12 +169,17 @@ export function useCopyFeedback({
    *（连点两下仍然发两次写入）—— 本用例集正是钉住这一点的。 */
   const report = useCallback(
     (start: () => Promise<boolean>) => {
-      if (!lock.tryEnter()) return;
+      if (!lock.tryEnter()) {
+        return;
+      }
       void start()
         .then((ok) => {
           const handlers = handlersRef.current;
-          if (ok) handlers.success?.(true);
-          else if (handlers.failure !== "silent") handlers.failure?.(false);
+          if (ok) {
+            handlers.success?.(true);
+          } else if (handlers.failure !== "silent") {
+            handlers.failure?.(false);
+          }
         })
         .finally(() => {
           lock.exit();
@@ -186,14 +191,14 @@ export function useCopyFeedback({
   /* 两种调用形态共用同一条重入判据与同一份反馈：
    *   · `copy("文本")` —— 最常见；
    *   · `copy(() => copyAllFromStore())` —— 文本由点击那一刻现算（日志面板）。 */
-  const run = useCallback(
-    (text: string) => report(() => copyText(text)),
-    [report],
-  );
+  const run = useCallback((text: string) => report(() => copyText(text)), [report]);
   return useCallback(
     (arg: string | (() => Promise<boolean>)) => {
-      if (typeof arg === "string") run(arg);
-      else report(arg);
+      if (typeof arg === "string") {
+        run(arg);
+      } else {
+        report(arg);
+      }
     },
     [report, run],
   );
@@ -216,7 +221,9 @@ export function useCopyResult(): (text: string) => Promise<boolean> {
   const lock = useReentrancyLock();
   return useCallback(
     (text: string): Promise<boolean> => {
-      if (!lock.tryEnter()) return Promise.resolve(false);
+      if (!lock.tryEnter()) {
+        return Promise.resolve(false);
+      }
       return copyText(text).finally(() => {
         lock.exit();
       });

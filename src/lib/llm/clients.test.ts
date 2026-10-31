@@ -22,7 +22,7 @@ import { saveMediaToLocalTemp } from "~/lib/llm/video-task-util";
 const fetchMock = vi.fn<typeof fetch>();
 
 /** 取第 n 次 fetch 调用的 (url, init)，并把 init 收成可安全访问的形状。 */
-function callAt(n = 0): { url: string; init: RequestInit } {
+function callAt(n = 0): { init: RequestInit; url: string } {
   const call = fetchMock.mock.calls[n]!;
   // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。

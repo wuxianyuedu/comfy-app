@@ -37,10 +37,10 @@ import { cn } from "~/lib/utils";
  */
 
 /** 路径的一段：`key` 为 `null` 表示不可导航（末段常为当前项）。 */
-export interface BreadcrumbSegment {
-  label: string;
+export type BreadcrumbSegment = {
   key: string | null;
-}
+  label: string;
+};
 
 /**
  * 路径行（`A / B / 当前 C`）。
@@ -55,13 +55,15 @@ export function BreadcrumbPath({
   className,
   label = "路径",
 }: {
-  segments: ReadonlyArray<BreadcrumbSegment>;
-  onNavigate: (key: string) => void;
-  navigable?: boolean;
   className?: string;
   label?: string;
+  navigable?: boolean;
+  onNavigate: (key: string) => void;
+  segments: ReadonlyArray<BreadcrumbSegment>;
 }) {
-  if (segments.length === 0) return null;
+  if (segments.length === 0) {
+    return null;
+  }
   return (
     <Breadcrumb aria-label={label} className={className}>
       <BreadcrumbList className="gap-0 text-xs">
@@ -75,10 +77,7 @@ export function BreadcrumbPath({
            * 改一处漏一处就是运行时 `undefined`。收成 `navKey` 之后
            * `typeof navKey === "string"` 既是渲染分支的判据、也是取值的来源
            * （与 `ui/` 别的基元同款，见 §18 的类型安全口径）。 */
-          const navKey =
-            navigable && !isLast && typeof seg.key === "string"
-              ? seg.key
-              : null;
+          const navKey = navigable && !isLast && typeof seg.key === "string" ? seg.key : null;
           return (
             <React.Fragment key={seg.key ?? `seg-${String(i)}`}>
               {i > 0 && (
@@ -89,9 +88,9 @@ export function BreadcrumbPath({
               <BreadcrumbItem>
                 {navKey !== null ? (
                   <Button
-                    variant="ghost"
-                    onClick={() => onNavigate(navKey)}
                     className="text-ink-muted hover:text-primary-strong h-auto p-0 text-xs font-normal hover:bg-transparent hover:underline"
+                    onClick={() => onNavigate(navKey)}
+                    variant="ghost"
                   >
                     {seg.label}
                   </Button>
@@ -99,9 +98,7 @@ export function BreadcrumbPath({
                   <BreadcrumbPage
                     className={cn(
                       "text-xs",
-                      isLast && navigable
-                        ? "text-ink-bright font-medium"
-                        : "text-ink-soft",
+                      isLast && navigable ? "text-ink-bright font-medium" : "text-ink-soft",
                     )}
                   >
                     {seg.label}

@@ -65,16 +65,24 @@ function collectSources(): Array<SourceFile> {
         /* 只跳这两类：`generated` 在本仓库是**产物根**的名字，
          * 别处抄来的「跳过名为 generated 的目录」会把真源文件一起摘掉
          * （同一份扫描工具在不同目录语义不同，实测踩过一次）。 */
-        if (entry.name === "node_modules" || entry.name === ".next") continue;
+        if (entry.name === "node_modules" || entry.name === ".next") {
+          continue;
+        }
         walk(path.join(dir, entry.name));
         continue;
       }
-      if (!/\.(ts|tsx)$/.test(entry.name)) continue;
-      if (/\.(test|spec)\./.test(entry.name)) continue;
+      if (!/\.(ts|tsx)$/.test(entry.name)) {
+        continue;
+      }
+      if (/\.(test|spec)\./.test(entry.name)) {
+        continue;
+      }
       const abs = path.join(dir, entry.name);
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");
       /* 定义处不算任何一端：它的类型注释里会写出每个事件名。 */
-      if (rel === TABLE_FILE) continue;
+      if (rel === TABLE_FILE) {
+        continue;
+      }
       out.push({ rel, text: fs.readFileSync(abs, "utf8") });
     }
   };
@@ -84,13 +92,20 @@ function collectSources(): Array<SourceFile> {
 
 /** 表里的事件名（键带引号或不带引号都认）。 */
 function readEventTable(source: string): Array<string> {
-  const start = source.indexOf("export interface AppEvents");
-  if (start < 0) return [];
+  /* 表的声明形态两种都认：`interface` 与 `type =`。声明形态归 lint 规则管，
+   * 这条判据只认「这张表在哪儿」 —— 只认一种写法会在改写声明形态那一批把扫描面
+   * 静默打成 0（0 条恰好像「都齐了」，见本文件头注）。 */
+  const start = source.search(/export (?:interface AppEvents \{|type AppEvents = \{)/);
+  if (start < 0) {
+    return [];
+  }
   const block = source.slice(start, source.indexOf("\n}", start));
   const names: Array<string> = [];
   for (const match of block.matchAll(/^\s{2}(?:"([^"]+)"|([A-Za-z_$][\w$]*))\s*:/gm)) {
     const name = match[1] ?? match[2];
-    if (name) names.push(name);
+    if (name) {
+      names.push(name);
+    }
   }
   return names;
 }
@@ -108,7 +123,9 @@ function readNameConstants(sources: Array<SourceFile>): Map<string, string> {
     )) {
       const identifier = match[1];
       const name = match[2];
-      if (identifier && name) map.set(identifier, name);
+      if (identifier && name) {
+        map.set(identifier, name);
+      }
     }
   }
   return map;
@@ -127,8 +144,12 @@ function resolveEventName(
   identifier: string | undefined,
   names: Map<string, string>,
 ): string | null {
-  if (literal !== undefined) return literal;
-  if (identifier === undefined) return null;
+  if (literal !== undefined) {
+    return literal;
+  }
+  if (identifier === undefined) {
+    return null;
+  }
   return names.get(identifier) ?? null;
 }
 
@@ -147,15 +168,17 @@ function sidesOf(
       new RegExp(`\\b${fn}\\s*\\(\\s*(?:"([^"]+)"|([A-Za-z_$][\\w$]*))`, "g"),
     )) {
       const name = resolveEventName(match[1], match[2], names);
-      if (name) bucket.push(name);
+      if (name) {
+        bucket.push(name);
+      }
     }
   }
   return { emitted, subscribed };
 }
 
 interface PairingRow {
-  event: string;
   emitters: Array<string>;
+  event: string;
   subscribers: Array<string>;
 }
 
@@ -226,13 +249,13 @@ describe("AppEvents 表的两端成对", () => {
 
   it("反向证明：只剩一端的通道会被点名，两端都在的不报", () => {
     const table = [
-      "export interface AppEvents {",
+      "export type AppEvents = {",
       '  "only:emit": undefined;',
       '  "only:subscribe": { id: string };',
       '  "both:ways": undefined;',
       '  "self:loop": undefined;',
       '  "mixed:ends": undefined;',
-      "}",
+      "};",
     ].join("\n");
     const synthetic: Array<SourceFile> = [
       {

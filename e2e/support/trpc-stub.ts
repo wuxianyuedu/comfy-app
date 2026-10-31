@@ -101,7 +101,9 @@ export function trpcJsonlBody(results: Array<unknown>): string {
 function proceduresOf(rawUrl: string): Array<string> {
   const { pathname } = new URL(rawUrl);
   const prefix = "/api/trpc/";
-  if (!pathname.startsWith(prefix)) return [];
+  if (!pathname.startsWith(prefix)) {
+    return [];
+  }
   return pathname.slice(prefix.length).split(",").filter(Boolean);
 }
 
@@ -126,11 +128,15 @@ export function planStubResults(
   handlers: Record<string, unknown>,
 ): Array<unknown> | null {
   const procedures = proceduresOf(rawUrl);
-  if (procedures.length === 0) return null;
+  if (procedures.length === 0) {
+    return null;
+  }
   const results = procedures.map(
     (procedure) => Object.entries(handlers).find(([name]) => procedure.includes(name))?.[1],
   );
-  if (results.some((result) => result === undefined)) return null;
+  if (results.some((result) => result === undefined)) {
+    return null;
+  }
   return results;
 }
 

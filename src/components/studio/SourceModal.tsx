@@ -26,37 +26,36 @@ const RAW_FORMAT_CHIP =
  * `widgets_values` …）—— 也就是库里的 `rawJson` 列。本应用只接受这一种格式，
  * 所以没有「另一种格式的兜底」这回事。
  */
-export interface SourceModalData {
+export type SourceModalData = {
+  /** 当前 detail 是否来自子工作流 (drill-in 进 sub) 视图。用于文案区分。 */
+  isSubgraph?: boolean;
   /** 工作流名（标题用） */
   name: string;
   /** 磁盘上的原始导入 JSON（ComfyUI 工作流格式）。 */
   source: unknown;
-  /** 当前 detail 是否来自子工作流 (drill-in 进 sub) 视图。用于文案区分。 */
-  isSubgraph?: boolean;
-}
+};
 
-export interface SourceModalProps {
+export type SourceModalProps = {
   data: SourceModalData | null;
-  /** 仓库已经加载好的视图 — 等待期间显示 loading */
-  loading?: boolean;
   /** 加载/解析失败时显示 */
   error?: string;
+  /** 仓库已经加载好的视图 — 等待期间显示 loading */
+  loading?: boolean;
   onClose: () => void;
-}
+};
 
-export function SourceModal({
-  data,
-  loading,
-  error,
-  onClose,
-}: SourceModalProps) {
+export function SourceModal({ data, loading, error, onClose }: SourceModalProps) {
   const activeText = useMemo(() => {
-    if (data?.source == null) return "";
+    if (data?.source == null) {
+      return "";
+    }
     return JSON.stringify(data.source, null, 2);
   }, [data]);
 
   const downloadCurrent = () => {
-    if (!data || !activeText) return;
+    if (!data || !activeText) {
+      return;
+    }
     downloadText(activeText, `${data.name}.json`);
   };
 
@@ -64,14 +63,14 @@ export function SourceModal({
      监听 + 自绘遮罩 `onClick`，焦点也不会锁在弹窗内、关闭后不归还。
      `open={data !== null}` 与调用方的条件渲染同义，多一层兜底。 */
   return (
-    <Dialog open={data !== null} onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open={data !== null}>
       {/* 关闭按钮由下面的 header 自绘 —— 必须关掉基元的内置那枚，
           否则会渲染出两枚重叠的 ✕（见 `ui/dialog` 的 `showCloseButton`）。 */}
       <DialogContent
         aria-label="查看源文件"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"
+        showCloseButton={false}
       >
         <div className="border-border-strong bg-panel flex h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60">
           {/* Header */}
@@ -80,8 +79,8 @@ export function SourceModal({
               <h2 className="text-ink-bright flex items-center gap-2 text-sm font-semibold">
                 查看源文件 · {displayValue(data?.name)}
                 <span
-                  title="ComfyUI 原始 JSON（nodes[] / links[] / widgets_values）"
                   className={RAW_FORMAT_CHIP}
+                  title="ComfyUI 原始 JSON（nodes[] / links[] / widgets_values）"
                 >
                   RAW 原件
                 </span>
@@ -97,11 +96,11 @@ export function SourceModal({
                 念不出「关闭」，所以名字显式给 `aria-label`，说明文字走 `<Hint>`。 */}
             <Hint label="关闭">
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onClose}
-                className="text-ink-muted hover:text-ink-soft"
                 aria-label="关闭"
+                className="text-ink-muted hover:text-ink-soft"
+                onClick={onClose}
+                size="icon-sm"
+                variant="ghost"
               >
                 ✕
               </Button>
@@ -112,11 +111,11 @@ export function SourceModal({
           <div className="border-border-strong flex items-center gap-3 border-b px-5 py-2">
             <span className="flex-1" />
             <Button
-              variant="outline"
-              size="xs"
-              onClick={downloadCurrent}
-              disabled={!activeText}
               className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-md px-3 py-1.5"
+              disabled={!activeText}
+              onClick={downloadCurrent}
+              size="xs"
+              variant="outline"
             >
               下载当前
             </Button>
@@ -129,15 +128,13 @@ export function SourceModal({
             ) : error ? (
               <p className="text-destructive px-5 py-3 text-sm">{error}</p>
             ) : data?.source == null ? (
-              <p className="text-ink-muted px-5 py-3 text-sm">
-                没有可显示的数据
-              </p>
+              <p className="text-ink-muted px-5 py-3 text-sm">没有可显示的数据</p>
             ) : (
               <LazyJsonViewer
-                key="source"
                 data={data.source}
-                title="工作流(RAW)格式"
                 initialCollapsedDepth={1}
+                key="source"
+                title="工作流(RAW)格式"
               />
             )}
           </div>
@@ -145,8 +142,7 @@ export function SourceModal({
           {/* Footer */}
           <div className="border-border-strong border-t px-5 py-2.5">
             <p className="text-ink-muted text-xs">
-              下载 = 导出当前 JSON · ⌘/Ctrl+F 在视图内搜索 · 点击 chevron
-              折叠/展开
+              下载 = 导出当前 JSON · ⌘/Ctrl+F 在视图内搜索 · 点击 chevron 折叠/展开
             </p>
           </div>
         </div>

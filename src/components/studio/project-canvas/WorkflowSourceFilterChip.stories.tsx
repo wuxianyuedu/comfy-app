@@ -34,9 +34,9 @@ export const AllValues: Story = {
   render: () => (
     <div className="flex items-center gap-3">
       {OPTIONS.map((value) => (
-        <div key={value} className="flex flex-col items-start gap-1.5">
+        <div className="flex flex-col items-start gap-1.5" key={value}>
           <span className="text-ink-muted font-mono text-[11px]">value = {value}</span>
-          <WorkflowSourceFilterChip value={value} onChange={() => undefined} />
+          <WorkflowSourceFilterChip onChange={() => undefined} value={value} />
         </div>
       ))}
     </div>
@@ -55,7 +55,7 @@ export const Local: Story = {
 export const RoomToOpen: Story = {
   render: () => (
     <div className="flex min-h-64 items-start">
-      <WorkflowSourceFilterChip value="all" onChange={() => undefined} />
+      <WorkflowSourceFilterChip onChange={() => undefined} value="all" />
     </div>
   ),
 };

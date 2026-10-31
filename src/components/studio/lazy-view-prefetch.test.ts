@@ -133,7 +133,7 @@ describe("lazy-view-prefetch — 懒加载分块的空闲预热", () => {
     mod.startLazyViewPrefetch();
     expect(calls).toEqual([]);
 
-    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(1000);
     expect(calls).toEqual([1]);
   });
 });

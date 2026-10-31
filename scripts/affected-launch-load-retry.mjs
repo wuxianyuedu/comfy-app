@@ -87,7 +87,9 @@ export function isTimeoutShaped(output) {
 export function failureSectionOf(output) {
   const text = String(output ?? "");
   const start = text.indexOf("Failed Tests");
-  if (start === -1) return text;
+  if (start === -1) {
+    return text;
+  }
   /* 必须**从行首**的那一行开始算：`indexOf("Failed Tests")` 会命中汇总行
    * `Test Files 1 failed` 之外的第一处出现，也就是 `------- Failed Tests 3 -------`。
    * 从那一行往下取到末尾 —— 失败明细只会越写越多，而**上面**那一段才是噪声
@@ -145,10 +147,14 @@ const LAUNCH_FAILURE_SIGNATURES = [
  */
 export function isLaunchFailureShaped(output) {
   const text = String(output ?? "");
-  if (text === "") return false;
+  if (text === "") {
+    return false;
+  }
   /* 真断言红优先：栈里带 `AggregateError` 的断言红不许被读成环境问题
    * （放行一条真回归比多查一次环境贵得多）。 */
-  if (/AssertionError/.test(text)) return false;
+  if (/AssertionError/.test(text)) {
+    return false;
+  }
   return LAUNCH_FAILURE_SIGNATURES.some((re) => re.test(text));
 }
 
@@ -249,6 +255,8 @@ export async function waitForLoadToSettle(options = {}) {
  * @returns {number}
  */
 export function remainingWaitMs(waitBudget) {
-  if (!waitBudget) return RETRY_BUDGET_MS;
+  if (!waitBudget) {
+    return RETRY_BUDGET_MS;
+  }
   return Math.max(0, waitBudget.deadline - Date.now());
 }

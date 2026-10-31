@@ -30,9 +30,9 @@ export const Ratios: Story = {
     <div className="flex flex-wrap items-end gap-4">
       {[16 / 9, 4 / 3, 1, 3 / 4].map((ratio) => (
         <AspectRatio
+          className="bg-subtle border-border flex w-40 items-center justify-center rounded-lg border border-dashed text-xs"
           key={ratio}
           ratio={ratio}
-          className="bg-subtle border-border flex w-40 items-center justify-center rounded-lg border border-dashed text-xs"
         >
           {fixed(ratio, 2)}
         </AspectRatio>
@@ -45,12 +45,10 @@ export const Ratios: Story = {
 export const MediaSlot: Story = {
   render: () => (
     <AspectRatio
-      ratio={832 / 1216}
       className="bg-subtle border-border w-48 rounded-lg border border-dashed"
+      ratio={832 / 1216}
     >
-      <div className="text-ink-faint grid h-full place-items-center text-xs">
-        832 × 1216
-      </div>
+      <div className="text-ink-faint grid h-full place-items-center text-xs">832 × 1216</div>
     </AspectRatio>
   ),
 };

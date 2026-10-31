@@ -21,14 +21,14 @@ import type { WorkflowIOMap } from "../../workflow-io";
 import type { deriveLibraryOutputCards } from "../workflow-library-param-cards";
 
 export function useOutputWiring(params: {
-  workflowIO: WorkflowIOMap | null;
+  commitParamMap: (next: Record<string, unknown>) => void;
   effectiveMode: string | null;
-  onPatchParamMap?: (next: Record<string, unknown>) => void | Promise<void>;
-  outputCards: ReturnType<typeof deriveLibraryOutputCards>;
   /* 本地 overlay 已经并入的生效 paramMap（useParamWiring 吐出的那份）——
    * 卡片列与连线要读的是同一份。 */
   effectiveParamMap: Record<string, unknown>;
-  commitParamMap: (next: Record<string, unknown>) => void;
+  onPatchParamMap?: (next: Record<string, unknown>) => void | Promise<void>;
+  outputCards: ReturnType<typeof deriveLibraryOutputCards>;
+  workflowIO: WorkflowIOMap | null;
 }) {
   /* 解构出两个稳定引用再进 useMemo：params 每次渲染都是新对象，回调里直接写
    * `params.x` 会被 eslint 要求依赖整个 params（那样 useMemo 每次都重算）。 */
@@ -38,28 +38,21 @@ export function useOutputWiring(params: {
     () => ({
       isManual: (ioKey: string) => outputCards.isManual(ioKey),
       connect: (outputIoKey: string, targetIoKey: string) => {
-        if (!effectiveMode || !onPatchParamMap) return;
-        if (
-          !canApplyOutputBindingEdit(
-            { ioKey: targetIoKey, mode: effectiveMode },
-            workflowIO,
-          )
-        )
+        if (!effectiveMode || !onPatchParamMap) {
           return;
+        }
+        if (!canApplyOutputBindingEdit({ ioKey: targetIoKey, mode: effectiveMode }, workflowIO)) {
+          return;
+        }
         /* 连回它**默认**取值的那一行 = 撤销这条手工线（而不是把它写成一条
          *  多余的覆盖）—— 否则「恢复默认」与「拖回来」会留下两种等价状态。
          *  但这只对**已有手工绑定**的口成立：单输出行的工作流（images → images）
          *  连的是它唯一的那一行，按旧判据会被当成「撤销一条不存在的手工线」
          *  静默吃掉 —— 用户看到的就是「拖了没反应、输出线永远连不上」。没有
          *  手工绑定时应写入显式绑定让线出现（卡片头 ↺ 仍可一键撤掉）。 */
-        const revert =
-          outputIoKey === targetIoKey && outputCards.isManual(outputIoKey);
+        const revert = outputIoKey === targetIoKey && outputCards.isManual(outputIoKey);
         const next = revert
-          ? clearOutputBindingEdit(
-              effectiveParamMap,
-              outputIoKey,
-              effectiveMode,
-            )
+          ? clearOutputBindingEdit(effectiveParamMap, outputIoKey, effectiveMode)
           : applyOutputBindingEdit(effectiveParamMap, {
               outputIoKey,
               ioKey: targetIoKey,
@@ -68,7 +61,9 @@ export function useOutputWiring(params: {
         commitParamMap(next);
       },
       disconnect: (outputIoKey: string) => {
-        if (!effectiveMode || !onPatchParamMap) return;
+        if (!effectiveMode || !onPatchParamMap) {
+          return;
+        }
         commitParamMap(
           applyOutputBindingEdit(effectiveParamMap, {
             outputIoKey,
@@ -78,20 +73,13 @@ export function useOutputWiring(params: {
         );
       },
       reset: (outputIoKey: string) => {
-        if (!effectiveMode || !onPatchParamMap) return;
-        commitParamMap(
-          clearOutputBindingEdit(effectiveParamMap, outputIoKey, effectiveMode),
-        );
+        if (!effectiveMode || !onPatchParamMap) {
+          return;
+        }
+        commitParamMap(clearOutputBindingEdit(effectiveParamMap, outputIoKey, effectiveMode));
       },
     }),
-    [
-      outputCards,
-      effectiveMode,
-      onPatchParamMap,
-      effectiveParamMap,
-      commitParamMap,
-      workflowIO,
-    ],
+    [outputCards, effectiveMode, onPatchParamMap, effectiveParamMap, commitParamMap, workflowIO],
   );
   return outputWiring;
 }

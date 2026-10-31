@@ -58,8 +58,8 @@ function renderNav(
   render(
     <ModeContractModeNav
       activeMode={activeMode}
-      storedCustomized={storedCustomized}
       onSelect={onSelect}
+      storedCustomized={storedCustomized}
     />,
   );
   return onSelect;
@@ -75,7 +75,7 @@ describe("模式导航的树形结构（ISSUE #1870）", () => {
 
   it("每个类别都是一个父行 + 它的子行集合", () => {
     const { container } = render(
-      <ModeContractModeNav activeMode={null} storedCustomized={() => false} onSelect={vi.fn()} />,
+      <ModeContractModeNav activeMode={null} onSelect={vi.fn()} storedCustomized={() => false} />,
     );
     const tree = contractModeTree();
     for (const group of tree) {
@@ -103,7 +103,7 @@ describe("模式导航的树形结构（ISSUE #1870）", () => {
     /* 按 `data-mode` 取行而不是按可访问名：模式中文名互为子串（「图生图」是
        「参考图生图」「图文混合条件生图」的一部分），按名字找会命中多枚。 */
     const { container } = render(
-      <ModeContractModeNav activeMode={null} storedCustomized={() => false} onSelect={onSelect} />,
+      <ModeContractModeNav activeMode={null} onSelect={onSelect} storedCustomized={() => false} />,
     );
     const row = container.querySelector(`[data-mode="${target.code}"]`);
     expect(row).toBeTruthy();

@@ -25,9 +25,13 @@ export async function GET(): Promise<Response> {
       let unsubscribe: () => void = () => undefined;
 
       const cleanup = (): void => {
-        if (closed) return;
+        if (closed) {
+          return;
+        }
         closed = true;
-        if (heartbeat !== null) clearInterval(heartbeat);
+        if (heartbeat !== null) {
+          clearInterval(heartbeat);
+        }
         unsubscribe();
         try {
           controller.close();
@@ -37,11 +41,11 @@ export async function GET(): Promise<Response> {
       };
 
       const send = (obj: unknown): void => {
-        if (closed) return;
+        if (closed) {
+          return;
+        }
         try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(obj)}\n\n`),
-          );
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
         } catch {
           cleanup();
         }
@@ -50,12 +54,12 @@ export async function GET(): Promise<Response> {
       // 连上先推一帧，让客户端立刻拉一次当前状态（即使还没发生任何变化）。
       send({ changed: true, at: Date.now() });
 
-      unsubscribe = subscribeQueueChanged(() =>
-        send({ changed: true, at: Date.now() }),
-      );
+      unsubscribe = subscribeQueueChanged(() => send({ changed: true, at: Date.now() }));
 
       heartbeat = setInterval(() => {
-        if (closed) return;
+        if (closed) {
+          return;
+        }
         try {
           controller.enqueue(encoder.encode(`: hb ${Date.now()}\n\n`));
         } catch {

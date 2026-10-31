@@ -142,7 +142,9 @@ describe("ensureKeepAliveWatchOnAdoption —— 接管场景补挂保活退出�
    * （`startComfyExitWatcher` 返回 `{stop}`），这条不会真起定时器。 */
   afterEach(() => {
     const deps = lastWatcherDeps();
-    if (!deps) return;
+    if (!deps) {
+      return;
+    }
     deps.onExit({ pid: 1, uptimeMs: 0 });
     vi.mocked(startComfyExitWatcher).mockClear();
   });
@@ -204,7 +206,9 @@ describe("pruneKeepAliveLogs —— 按次命名的保活日志只建不删会�
   }
 
   function keepAliveFiles(): Array<string> {
-    if (!fs.existsSync(SERVICES_LOG_DIR)) return [];
+    if (!fs.existsSync(SERVICES_LOG_DIR)) {
+      return [];
+    }
     return fs.readdirSync(SERVICES_LOG_DIR).filter((name) => name.startsWith("comfyui-keepalive-"));
   }
 
@@ -267,7 +271,7 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
     vi.mocked(getComfyRuntimeSnapshot).mockResolvedValue(
       /* SAFETY: 类型断言已复核 */ {
         running: true,
-        pid: 97356,
+        pid: 97_356,
         port: 8188,
         via: "配置路径的实例",
         unverified: false,

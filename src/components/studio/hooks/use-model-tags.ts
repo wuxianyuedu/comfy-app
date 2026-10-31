@@ -19,18 +19,19 @@ import { vanillaApi } from "~/trpc/vanilla";
 /** 快照去重 key 的分隔符：标签名不含 \u0000，用它拼不会撞车。 */
 const SNAPSHOT_KEY_SEP = "\u0000";
 
-export interface TagItem {
+export type TagItem = {
+  count: number;
   id: string;
   name: string;
-  count: number;
-}
+};
 
-export interface ModelTagsController {
-  tags: Array<TagItem>;
+export type ModelTagsController = {
+  addTag: () => Promise<void>;
+  busy: boolean;
+  /** 删除：count>0 时先弹二次确认（删掉会一并解除工作流绑定）。 */
+  deleteTag: (name: string, count: number) => Promise<void>;
   /** 新增框草稿。 */
   draft: string;
-  setDraft: (value: string) => void;
-  busy: boolean;
   /**
    * 按条目挂的错误（规范 16 §16.2.4.33）。
    *
@@ -40,15 +41,14 @@ export interface ModelTagsController {
    * `errors.get(null)` 承载整表级错误（如列表刷新失败）。
    */
   errors: ItemErrors;
-  addTag: () => Promise<void>;
-  /** 删除：count>0 时先弹二次确认（删掉会一并解除工作流绑定）。 */
-  deleteTag: (name: string, count: number) => Promise<void>;
   /**
    * 重命名。成功后本地立即改名（不等父组件刷新，避免「旧名闪一下」），
    * 返回 true 表示成功——调用方据此关闭内联编辑器。
    */
   renameTag: (oldName: string, newName: string) => Promise<boolean>;
-}
+  setDraft: (value: string) => void;
+  tags: Array<TagItem>;
+};
 
 /** 把父组件的快照并入本地列表：只补本地没有的，不覆盖已有的。 */
 export function mergeTagSnapshots(local: Array<TagItem>, snapshot: Array<TagItem>): Array<TagItem> {
@@ -57,12 +57,12 @@ export function mergeTagSnapshots(local: Array<TagItem>, snapshot: Array<TagItem
   return fresh.length > 0 ? [...fresh, ...local] : local;
 }
 
-export interface UseModelTagsOptions {
+export type UseModelTagsOptions = {
   /** 父组件的缓存快照（首次渲染的种子值）。 */
   initialTags: Array<TagItem>;
   /** 任一写操作成功后回调，让父组件刷新自己的列表。 */
   onChanged?: () => void;
-}
+};
 
 export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): ModelTagsController {
   const [tags, setTags] = useState<Array<TagItem>>(initialTags);
@@ -94,7 +94,9 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
   const refresh = useCallback(async () => {
     try {
       const d = await vanillaApi.workflowModel.list.query();
-      if (Array.isArray(d.tags)) setTags(d.tags);
+      if (Array.isArray(d.tags)) {
+        setTags(d.tags);
+      }
     } catch {
       /* 拉取失败保留旧列表，弹窗仍可用 */
     }
@@ -102,7 +104,9 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
 
   const addTag = useCallback(async () => {
     const name = draft.trim();
-    if (!name) return;
+    if (!name) {
+      return;
+    }
     /* 「新增」还没有对应的条目，错误挂在 `null` 那档（整表）—— 它呈现的位置
      * 就是新增框下方那块错误条。 */
     errors.clear(null);
@@ -113,7 +117,9 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
       runAsyncAction(
         async () => {
           const d = await vanillaApi.workflowModel.create.mutate({ name });
-          if (!d.tag) throw new Error("添加失败");
+          if (!d.tag) {
+            throw new Error("添加失败");
+          }
           setDraft("");
           await refresh();
           onChanged?.();
@@ -136,12 +142,16 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
         const ok = window.confirm(
           `该标签「${name}」已绑定 ${count} 个工作流。\n删除后这些工作流将一并解除绑定，且不可撤销。\n\n确定要继续吗？`,
         );
-        if (!ok) return;
+        if (!ok) {
+          return;
+        }
       }
       await runAsyncAction(
         async () => {
           const d = await vanillaApi.workflowModel.delete.mutate({ name });
-          if (!d.ok) throw new Error("删除失败");
+          if (!d.ok) {
+            throw new Error("删除失败");
+          }
           await refresh();
           onChanged?.();
         },
@@ -160,14 +170,18 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
     async (oldName: string, newName: string): Promise<boolean> => {
       const trimmed = newName.trim();
       // 同名或空名视为 no-op 成功：调用方直接关闭编辑器（原组件行为）。
-      if (!trimmed || trimmed === oldName) return true;
+      if (!trimmed || trimmed === oldName) {
+        return true;
+      }
       const result = await runAsyncAction(
         async () => {
           const d = await vanillaApi.workflowModel.rename.mutate({
             oldName,
             newName: trimmed,
           });
-          if (!d.tag) throw new Error("重命名失败");
+          if (!d.tag) {
+            throw new Error("重命名失败");
+          }
           errors.clear(oldName);
           // 本地先换名，让弹窗立刻反映重命名，不等父组件 onChanged 的往返。
           setTags((prev) =>

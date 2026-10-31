@@ -29,26 +29,26 @@ import { errorMessage } from "~/lib/error-message";
 import { useStoryboardExtractFlow } from "./useStoryboardExtractFlow";
 
 /** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别），由管线页传入。 */
-export type ShotProgress = Record<string, { pct: number; label?: string }>;
+export type ShotProgress = Record<string, { label?: string; pct: number }>;
 
-export interface Props {
-  scenes: Array<Scene>;
+export type Props = {
   characters: Array<Character>;
-  styles: Array<StyleRef>;
-  shots: Array<Shot>;
-  onShotsChange: (s: Array<Shot>) => void;
-  onGenerate: (shot: Shot) => Promise<void>;
-  generating: boolean;
-  /** 镜头节点上的实时生成进度（running 时在节点内渲染进度条） */
-  progressByShot?: ShotProgress;
-  /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
-  scriptMarkdown?: string;
-  /** 分镜阶段导入角色卡 JSON 时的角色写入口(可选,未接入时仅提示) */
-  onCharactersChange?: (c: Array<Character>) => void;
   /** 分镜「从剧本提取」会话(busy/progress/日志)已收归 controller，经 props 注入；
    *  未注入(遗留/独立使用)时退化为本 hook 局部会话。 */
-  extract?: { session: ExtractSession; actions: ExtractSessionActions };
-}
+  extract?: { actions: ExtractSessionActions; session: ExtractSession };
+  generating: boolean;
+  /** 分镜阶段导入角色卡 JSON 时的角色写入口(可选,未接入时仅提示) */
+  onCharactersChange?: (c: Array<Character>) => void;
+  onGenerate: (shot: Shot) => Promise<void>;
+  onShotsChange: (s: Array<Shot>) => void;
+  /** 镜头节点上的实时生成进度（running 时在节点内渲染进度条） */
+  progressByShot?: ShotProgress;
+  scenes: Array<Scene>;
+  /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
+  scriptMarkdown?: string;
+  shots: Array<Shot>;
+  styles: Array<StyleRef>;
+};
 
 /** 条目 → 既有 Shot 结构(场景/角色关联与提示词重算复用既有链路) */
 function recompute(
@@ -147,7 +147,9 @@ export function useStoryboardPlanner(props: Props) {
   function updateShot(id: string, patch: Partial<Shot>) {
     onShotsChange(
       shots.map((shot) => {
-        if (shot.id !== id) return shot;
+        if (shot.id !== id) {
+          return shot;
+        }
         const next = { ...shot, ...patch };
         const scene = scenes.find((sc) => sc.id === next.sceneId);
         const chars = characters.filter((character) => next.characterIds.includes(character.id));
@@ -162,11 +164,15 @@ export function useStoryboardPlanner(props: Props) {
   }
 
   function clearShots() {
-    if (confirm("确定清空当前所有分镜？")) onShotsChange([]);
+    if (confirm("确定清空当前所有分镜？")) {
+      onShotsChange([]);
+    }
   }
 
   async function handleAISplit() {
-    if (scenes.length === 0) return;
+    if (scenes.length === 0) {
+      return;
+    }
     if (!config) {
       openSettings();
       return;
@@ -214,8 +220,8 @@ export function useStoryboardPlanner(props: Props) {
       });
       onShotsChange([...shots, ...built]);
       setAiProgress(`已用 AI 生成 ${built.length} 个镜头`);
-    } catch (e: unknown) {
-      setAiError(errorMessage(e, "AI 拆镜失败"));
+    } catch (error: unknown) {
+      setAiError(errorMessage(error, "AI 拆镜失败"));
     }
   }
 
@@ -266,10 +272,12 @@ export function useStoryboardPlanner(props: Props) {
           opts: { temperature: 0.7 },
         });
         const polished = full.trim();
-        if (!polished) throw new Error("模型未返回提示词");
+        if (!polished) {
+          throw new Error("模型未返回提示词");
+        }
         updateShot(shot.id, { prompt: polished });
-      } catch (e: unknown) {
-        polishErrors.report(shot.id)("err", errorMessage(e, "提示词润色失败"));
+      } catch (error: unknown) {
+        polishErrors.report(shot.id)("err", errorMessage(error, "提示词润色失败"));
       }
       /* 忙标记由出口的 `finally` 清。 */
     });

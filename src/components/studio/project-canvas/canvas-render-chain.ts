@@ -117,6 +117,8 @@ const KIND_CHAIN: Record<NodeKind, Array<RenderChainModule>> = {
  */
 export function getProjectCanvasRenderChain(kind: NodeKind): Array<RenderChainModule> {
   const extra = KIND_CHAIN[kind];
-  if (!extra) return [...CANVAS_COMMON];
+  if (!extra) {
+    return [...CANVAS_COMMON];
+  }
   return [...CANVAS_COMMON, ...extra];
 }

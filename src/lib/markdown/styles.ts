@@ -14,19 +14,19 @@
  */
 
 /** 一种元素在产物里的写法。 */
-export interface StyleRule {
+export type StyleRule = {
+  /**
+   * `style` 之外的属性（形如 ` target="_blank" rel="noreferrer"`，**自带前导空格**）。
+   * 默认空串。链接与图片会用到。
+   */
+  extra?: string;
   /**
    * 直接写进开标签的 `style` 值。**省略 = 这个标签不注入样式**（不是「注入一个空
    * `style=""`」—— 空属性会给产物的每个标签多出十几字节噪音，且让 `style=""` 与
    * 「明确的零样式」这两种含义混在一起）。
    */
   style?: string;
-  /**
-   * `style` 之外的属性（形如 ` target="_blank" rel="noreferrer"`，**自带前导空格**）。
-   * 默认空串。链接与图片会用到。
-   */
-  extra?: string;
-}
+};
 
 const MONO = "font-family:ui-monospace,SFMono-Regular,Menlo,monospace;";
 
@@ -158,7 +158,9 @@ function openTag(name: string, rule: StyleRule, rest: string): string {
 export function applyElementStyles(html: string): string {
   return html.replace(OPEN_TAG, (whole, nameRaw: string, attrs: string) => {
     const ruleEntry = MARKDOWN_ELEMENT_STYLES[nameRaw.toLowerCase()];
-    if (!ruleEntry) return whole;
+    if (!ruleEntry) {
+      return whole;
+    }
     return openTag(nameRaw, ruleEntry, `${attrs}${ruleEntry.extra ?? ""}`);
   });
 }

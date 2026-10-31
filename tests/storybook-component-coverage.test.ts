@@ -36,8 +36,8 @@ const UI = join(COMPONENTS, "ui");
 const BASELINE_PATH = join(ROOT, "scripts", ".storybook-coverage-baseline.json");
 
 const BASELINE = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(BASELINE_PATH, "utf8")) as {
-  uiSurfaces: number;
   covered: number;
+  uiSurfaces: number;
 };
 
 const STAT = uiCoverage({ componentsRoot: COMPONENTS });

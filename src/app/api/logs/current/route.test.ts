@@ -72,7 +72,7 @@ function writeLines(n: number, startIndex = 0): void {
     const idx = startIndex + i;
     return `[2026-09-11 15:${String(Math.floor(idx / 60) % 60).padStart(2, "0")}:${String(idx % 60).padStart(2, "0")}.123] [INFO] [task] 任务里程碑 ${idx}`;
   });
-  fs.appendFileSync(logFile, lines.join("\n") + "\n", "utf8");
+  fs.appendFileSync(logFile, `${lines.join("\n")}\n`, "utf8");
 }
 
 async function read(source: string, offset = 0) {
@@ -81,9 +81,9 @@ async function read(source: string, offset = 0) {
   );
   return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
     content: string;
-    size: number;
     offset: number;
     sessionStart: number | null;
+    size: number;
   };
 }
 
@@ -210,14 +210,16 @@ describe("GET /api/logs/current 无新增时的快速路径", () => {
 describe("GET /api/logs/current — 服务端进程标识", () => {
   async function readWithBoot(source: string, offset: number, bootId?: string) {
     const query = new URLSearchParams({ source, offset: String(offset) });
-    if (bootId !== undefined) query.set("bootId", bootId);
+    if (bootId !== undefined) {
+      query.set("bootId", bootId);
+    }
     const res = await GET(new Request(`http://localhost/api/logs/current?${query.toString()}`));
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      content: string;
-      size: number;
-      offset: number;
       bootId?: string;
+      content: string;
       mismatch?: boolean;
+      offset: number;
+      size: number;
     };
   }
 

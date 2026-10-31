@@ -28,7 +28,9 @@ function tempDir(): string {
 afterEach(() => {
   while (tempDirs.length) {
     const dir = tempDirs.pop();
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
 
@@ -97,9 +99,9 @@ describe("formatReportItem", () => {
     expect(
       formatReportItem({
         key: "编排器",
-        value: "c:\\p\\scripts\\dev-launcher.mjs",
+        value: String.raw`c:\p\scripts\dev-launcher.mjs`,
       }),
-    ).toBe("编排器: c:\\p\\scripts\\dev-launcher.mjs");
+    ).toBe(String.raw`编排器: c:\p\scripts\dev-launcher.mjs`);
   });
 });
 

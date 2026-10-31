@@ -164,10 +164,10 @@ test("同一句里并列的两个章节各报一条（不是只报一个）", ({
   const { code, output } = repo.run(["--commit", "HEAD", "--json"]);
   repoExpect(code).toBe(1);
   const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(output) as {
-    verdict: string;
     audits: Array<{
       rows: Array<{ claim: { target: string }; verdict: string }>;
     }>;
+    verdict: string;
   };
   repoExpect(parsed.verdict).toBe("contradicted");
   const targets = parsed.audits[0]!.rows.filter((r) => r.verdict === "contradicted")
@@ -422,8 +422,8 @@ describe("真历史（本仓库）", () => {
       } catch (err) {
         const e = /* SAFETY: 类型断言已复核 */ err as {
           status?: number;
-          stdout?: string;
           stderr?: string;
+          stdout?: string;
         };
         code = e.status ?? -1;
         out = `${e.stdout ?? ""}${e.stderr ?? ""}`;

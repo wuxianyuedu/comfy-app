@@ -93,7 +93,9 @@ describe("useModelTags", () => {
       ({ tags }: { tags: Array<TagItem> }) => useModelTags({ initialTags: tags }),
       { initialProps: { tags: [tag("z-image")] } },
     );
-    for (let i = 0; i < 5; i++) rerender({ tags: [tag("z-image")] });
+    for (let i = 0; i < 5; i++) {
+      rerender({ tags: [tag("z-image")] });
+    }
     expect(vanilla.workflowModel.list.query).not.toHaveBeenCalled();
   });
 

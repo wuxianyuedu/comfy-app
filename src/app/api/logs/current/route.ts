@@ -50,8 +50,9 @@ async function sizeOrNull(file: string): Promise<number | null> {
     const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
     return stat.size;
   } catch (error) {
-    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code === "ENOENT")
+    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code === "ENOENT") {
       return null;
+    }
     throw error;
   }
 }
@@ -69,10 +70,14 @@ async function sizeOrNull(file: string): Promise<number | null> {
  */
 async function readBytes(file: string, start: number, length: number): Promise<Buffer | null> {
   const size = await sizeOrNull(file);
-  if (size === null) return null;
+  if (size === null) {
+    return null;
+  }
   const from = clamp(start, 0, size);
   const len = clamp(length, 0, size - from);
-  if (len === 0) return Buffer.alloc(0);
+  if (len === 0) {
+    return Buffer.alloc(0);
+  }
   const buf = Buffer.alloc(len);
   const handle = await fs.promises.open(/*turbopackIgnore: true*/ file, "r");
   try {
@@ -85,9 +90,13 @@ async function readBytes(file: string, start: number, length: number): Promise<B
 
 /** 把窗口起点向后对齐到第一个完整行（丢弃被截断的头半行），避免解析出乱码。 */
 function alignToLineStart(buf: Buffer, start: number, fileSize: number): number {
-  if (start <= 0) return 0;
+  if (start <= 0) {
+    return 0;
+  }
   const nl = buf.indexOf(0x0a);
-  if (nl < 0) return fileSize;
+  if (nl < 0) {
+    return fileSize;
+  }
   return start + nl + 1;
 }
 
@@ -106,7 +115,9 @@ async function sessionStartMs(): Promise<number | null> {
 }
 
 async function resolveCurrentLog(source: string): Promise<string> {
-  if (source === "launcher") return LAUNCHER_LOG_FILE;
+  if (source === "launcher") {
+    return LAUNCHER_LOG_FILE;
+  }
   try {
     const raw = await fs.promises.readFile(/*turbopackIgnore: true*/ SENTINEL_FILE, "utf8");
     const sentinel = raw.trim();
@@ -119,10 +130,22 @@ async function resolveCurrentLog(source: string): Promise<string> {
   return DEV_LAUNCHER_LOG;
 }
 
-interface Slice {
+type Slice = {
+  /**
+   * 当前提供本响应的应用服务进程标识。客户端存下它，下一轮轮询比对——
+   * 它同时承担两件事：
+   *   1. **排障**：面板页脚展示「服务:xxxx」，用户报障时能说清自己连的是哪个进程；
+   *   2. **重启可见**：进程换了（重启 / 另一实例接管端口）时客户端能立刻发现并
+   *      重读日志，而不是把两个进程的输出混成一条时间线。
+   */
+  bootId?: string;
   content: string;
-  /** 文件当前总字节数：客户端下一轮的增量读取游标。 */
-  size: number;
+  /**
+   * 服务端进程启动标识与客户端缓存的**不一致**（见下方 `bootId` 的完整说明）。
+   * true = 客户端拿到的这份状态来自「另一个应用服务进程」，应视为一次真正的
+   * 重启：清掉时间线、重置游标并重新拉取，而不是继续往旧时间线上追加。
+   */
+  mismatch?: boolean;
   /** 本次返回内容在文件中的起点。 */
   offset: number;
   /**
@@ -134,21 +157,9 @@ interface Slice {
    * ——用户读到的就是「启动和启动器日志丢失」（ISSUE #262 复审）。
    */
   sessionStart: number | null;
-  /**
-   * 服务端进程启动标识与客户端缓存的**不一致**（见下方 `bootId` 的完整说明）。
-   * true = 客户端拿到的这份状态来自「另一个应用服务进程」，应视为一次真正的
-   * 重启：清掉时间线、重置游标并重新拉取，而不是继续往旧时间线上追加。
-   */
-  mismatch?: boolean;
-  /**
-   * 当前提供本响应的应用服务进程标识。客户端存下它，下一轮轮询比对——
-   * 它同时承担两件事：
-   *   1. **排障**：面板页脚展示「服务:xxxx」，用户报障时能说清自己连的是哪个进程；
-   *   2. **重启可见**：进程换了（重启 / 另一实例接管端口）时客户端能立刻发现并
-   *      重读日志，而不是把两个进程的输出混成一条时间线。
-   */
-  bootId?: string;
-}
+  /** 文件当前总字节数：客户端下一轮的增量读取游标。 */
+  size: number;
+};
 
 /**
  * 增量读取一段日志：

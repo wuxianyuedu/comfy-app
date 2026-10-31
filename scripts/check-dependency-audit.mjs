@@ -85,7 +85,9 @@ const FIXTURE = (() => {
 // `--json` 是给管道读的，而 `runPnpmSync` 会把即将执行的命令行回显到**本进程的 stdout**
 // （`launcher-core/command-echo.mjs` 的默认 sink）。两种模式都不该带这行，所以按它自己的
 // 开关关掉；关掉的是回显，不是审计。
-if (AS_JSON || FIXTURE) process.env.COMFYAPP_ECHO_COMMANDS = "0";
+if (AS_JSON || FIXTURE) {
+  process.env.COMFYAPP_ECHO_COMMANDS = "0";
+}
 
 /** 记账键：`(包名, advisory id)`。 */
 export function advisoryKey(advisory) {
@@ -104,7 +106,9 @@ export function collectBlocked(audit) {
   const advisories = audit?.advisories ?? {};
   const out = [];
   for (const raw of Object.values(advisories)) {
-    if (!BLOCKED_SEVERITIES.includes(raw?.severity)) continue;
+    if (!BLOCKED_SEVERITIES.includes(raw?.severity)) {
+      continue;
+    }
     out.push({
       key: advisoryKey(raw),
       module: raw.module_name,
@@ -118,8 +122,7 @@ export function collectBlocked(audit) {
   // 稳定序：critical 在前、同严重级按包名 —— 输出与基线文件都不该随 registry 返回顺序漂。
   out.sort(
     (a, b) =>
-      BLOCKED_SEVERITIES.indexOf(b.severity) -
-        BLOCKED_SEVERITIES.indexOf(a.severity) ||
+      BLOCKED_SEVERITIES.indexOf(b.severity) - BLOCKED_SEVERITIES.indexOf(a.severity) ||
       a.module.localeCompare(b.module) ||
       a.advisoryId.localeCompare(b.advisoryId),
   );
@@ -140,9 +143,13 @@ function summarizePaths(findings) {
       const names = String(chain)
         .split(/\s*>\s*/)
         .filter((seg) => seg.length > 0 && seg !== ".");
-      if (names.length === 0) continue;
+      if (names.length === 0) {
+        continue;
+      }
       chains.push(names.slice(0, 4).join(" > "));
-      if (chains.length >= 2) return dedupe(chains);
+      if (chains.length >= 2) {
+        return dedupe(chains);
+      }
     }
   }
   return dedupe(chains);
@@ -172,9 +179,7 @@ export function diffAgainstBaseline(blocked, baseline) {
     // 命中且在基线里的：绿，但缺 reason 的仍要拦
     known: blocked.filter((b) => baselineKeys.has(b.key)),
     // 基线里「在且空 reason」的条目：登记了却没人写为什么修不了
-    unexplained: entries.filter(
-      (e) => hitKeys.has(e.key) && !String(e.reason ?? "").trim(),
-    ),
+    unexplained: entries.filter((e) => hitKeys.has(e.key) && !String(e.reason ?? "").trim()),
   };
 }
 
@@ -230,7 +235,9 @@ function firstLine(text) {
 }
 
 function readBaseline() {
-  if (!fs.existsSync(BASELINE_PATH)) return null;
+  if (!fs.existsSync(BASELINE_PATH)) {
+    return null;
+  }
   return JSON.parse(fs.readFileSync(BASELINE_PATH, "utf8"));
 }
 
@@ -253,9 +260,7 @@ function printAdded(added) {
   for (const a of added) {
     // 把**台账键原文**也印出来：出路那句要求「逐条补 key + reason」，不印键的话
     // 人得自己按 `(包名, advisory id)` 拼一遍 —— 拼错的那条会静默不生效。
-    console.error(
-      `  · ${a.key}  [${a.severity}]  受影响版本 ${a.vulnerable}`,
-    );
+    console.error(`  · ${a.key}  [${a.severity}]  受影响版本 ${a.vulnerable}`);
     console.error(
       a.patched
         ? `      修复版本：${a.patched} —— 优先升/override 到它，别登记进基线`
@@ -389,20 +394,18 @@ function main() {
     failed = true;
   }
   if (diff.unexplained.length > 0) {
-    console.error(
-      `[dep-audit] 基线里有 ${diff.unexplained.length} 条命中项没写 reason：`,
-    );
-    for (const e of diff.unexplained) console.error(`  · ${e.key}`);
-    console.error(
-      "  「登记了但没人写为什么修不了」的条目没有记账价值；补上原因，或把它修掉。",
-    );
+    console.error(`[dep-audit] 基线里有 ${diff.unexplained.length} 条命中项没写 reason：`);
+    for (const e of diff.unexplained) {
+      console.error(`  · ${e.key}`);
+    }
+    console.error("  「登记了但没人写为什么修不了」的条目没有记账价值；补上原因，或把它修掉。");
     failed = true;
   }
   if (diff.stale.length > 0) {
-    console.error(
-      `[dep-audit] 基线里有 ${diff.stale.length} 条已经不再命中：`,
-    );
-    for (const e of diff.stale) console.error(`  · ${e.key}`);
+    console.error(`[dep-audit] 基线里有 ${diff.stale.length} 条已经不再命中：`);
+    for (const e of diff.stale) {
+      console.error(`  · ${e.key}`);
+    }
     console.error(
       "  修法：`node scripts/check-dependency-audit.mjs --update` 收紧（台账型判据要双向拦，\n" +
         "        留着不动会让下一次同种漏洞进来时没人看得出来）。",

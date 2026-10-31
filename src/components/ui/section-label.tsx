@@ -24,18 +24,18 @@ import { cn } from "~/lib/utils";
  * 见规范 03 §3.10 的三档对照），**不要**塞进这个 `hint` —— 它是「说明」不是
  * 「记号」，两者混档正是这一批要治的漂移。
  */
-export interface SectionLabelProps {
+export type SectionLabelProps = {
   children: ReactNode;
+  className?: string;
   /** 标题右侧的补充口径（整句中文说明，落 12px）。不传就不渲染。 */
   hint?: ReactNode;
-  className?: string;
-}
+};
 
 export function SectionLabel({ children, hint, className }: SectionLabelProps) {
   return (
     <div
-      data-slot="section-label"
       className={cn("mb-2 flex flex-wrap items-baseline gap-x-2", className)}
+      data-slot="section-label"
     >
       <h4 className="text-ink text-sm font-semibold">{children}</h4>
       {hint && <span className="text-muted-foreground text-xs">{hint}</span>}

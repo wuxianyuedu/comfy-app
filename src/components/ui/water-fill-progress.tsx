@@ -25,15 +25,15 @@ export function WaterFillProgress({
   progress,
   className = "",
 }: {
+  className?: string;
   /** 0..100. 超出范围会被钳制。 */
   progress: number;
-  className?: string;
 }) {
   const pct = clampPct(progress);
   return (
     <div
-      className={`pointer-events-none absolute inset-0 overflow-hidden rounded-xl ${className}`}
       aria-hidden
+      className={`pointer-events-none absolute inset-0 overflow-hidden rounded-xl ${className}`}
     >
       {/* 水层：用 translateY 代替 height 动画（只触发合成层、不引发重排），
        * 从底向上涨；progress 跳变时是滑动而不是闪烁。整层高度恒为 100%，
@@ -55,14 +55,11 @@ export function WaterFillProgress({
         <svg
           aria-hidden
           className="wf-wave absolute inset-x-0 top-0 w-full"
+          preserveAspectRatio="none"
           style={{ height: "10px", transform: "translateY(-5px)" }}
           viewBox="0 0 120 10"
-          preserveAspectRatio="none"
         >
-          <path
-            d="M0 5 Q 15 0, 30 5 T 60 5 T 90 5 T 120 5 V 10 H 0 Z"
-            fill="rgba(24,24,34,0.94)"
-          />
+          <path d="M0 5 Q 15 0, 30 5 T 60 5 T 90 5 T 120 5 V 10 H 0 Z" fill="rgba(24,24,34,0.94)" />
         </svg>
       </div>
       {/* 百分比：永远居中（在整张图之上，无论水位多高都可见）。 */}

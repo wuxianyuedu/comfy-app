@@ -12,18 +12,18 @@ export function timeAgo(iso: string): string {
   return timeAgoImpl(iso) ?? "刚刚";
 }
 
-export interface StatusStyle {
-  label: string;
-  pillCls: string;
+export type StatusStyle = {
   // 左缘 3px accent（Tailwind border-l-4 系列）
   accentCls: string;
   // 整卡边框（失败/进行中/排队中加深）
   cardBorderCls: string;
-  isActive: boolean;
-  showProgress: boolean;
   // 失败错误转修复建议
   failureSuggestion?: (err?: string | null) => string;
-}
+  isActive: boolean;
+  label: string;
+  pillCls: string;
+  showProgress: boolean;
+};
 
 /** 任务状态 → pill / 左缘 accent / 卡边框样式（**状态语义**，全部走语义 token）。
  *  §4.11.1 + P71：`--color-destructive` / `--color-success` / `--color-primary`
@@ -102,8 +102,12 @@ export function dateBucket(iso: string): string {
   };
   const today = startOfDay(now).getTime();
   const task = startOfDay(date).getTime();
-  if (task === today) return "今天";
-  if (task === today - 86400000) return "昨天";
+  if (task === today) {
+    return "今天";
+  }
+  if (task === today - 86_400_000) {
+    return "昨天";
+  }
   return formatDate(date);
 }
 

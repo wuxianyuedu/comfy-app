@@ -22,17 +22,17 @@ import { textHandler } from "~/lib/form-props";
 import { MaskCanvas } from "./MaskCanvas";
 import { useImageRedrawClient } from "./hooks/use-image-redraw-client";
 
-export interface ImageRedrawPanelProps {
-  /** 原任务的提示词（预填，可改）。 */
-  prompt: string;
-  projectId?: string | null;
-  /** 原任务 id（parentId 追溯）。 */
-  parentTaskId: string;
+export type ImageRedrawPanelProps = {
   /** 产物图的页面内地址（历史详情当前选中的那张）。 */
   imageUrl: string;
+  /** 原任务 id（parentId 追溯）。 */
+  parentTaskId: string;
+  projectId?: string | null;
+  /** 原任务的提示词（预填，可改）。 */
+  prompt: string;
   /** 动作反馈通道（调用方接 toast）。 */
   toastReport: ActionReport;
-}
+};
 
 export function ImageRedrawPanel({
   prompt,
@@ -57,25 +57,25 @@ export function ImageRedrawPanel({
       <Field>
         <FieldLabel>模式</FieldLabel>
         <RadioGroup
-          value={controller.mode}
+          className="flex flex-row gap-4"
           onValueChange={(v) =>
             controller.setMode(/* SAFETY: 类型断言已复核 */ v as "upscale" | "inpaint")
           }
-          className="flex flex-row gap-4"
+          value={controller.mode}
         >
           {/* 点击区走 radio-group 的 children 语义（P78）：文字进 Item，
               组件自渲染 children 并带扩大的点击热区。 */}
           <RadioGroupItem
-            value="upscale"
-            disabled={controller.busy}
             className="text-ink-soft flex items-center gap-1.5 text-xs font-normal"
+            disabled={controller.busy}
+            value="upscale"
           >
             放大重出
           </RadioGroupItem>
           <RadioGroupItem
-            value="inpaint"
-            disabled={controller.busy}
             className="text-ink-soft flex items-center gap-1.5 text-xs font-normal"
+            disabled={controller.busy}
+            value="inpaint"
           >
             局部重绘
           </RadioGroupItem>
@@ -88,14 +88,14 @@ export function ImageRedrawPanel({
           {controller.mode === "inpaint" ? "，第二个 = 蒙版" : ""}）
         </FieldLabel>
         <Select
-          value={controller.selectedTemplateId || null}
-          onValueChange={(next) => controller.selectTemplate(next ?? "")}
           disabled={controller.busy}
+          onValueChange={(next) => controller.selectTemplate(next ?? "")}
+          value={controller.selectedTemplateId || null}
         >
           <SelectTrigger
-            size="sm"
             aria-label="选择工作流模板"
             className="text-ink-soft w-full text-xs"
+            size="sm"
           >
             <SelectValue>
               {(selected) =>
@@ -124,9 +124,9 @@ export function ImageRedrawPanel({
         <Field>
           <FieldLabel>蒙版</FieldLabel>
           <MaskCanvas
-            value={controller.mask}
-            onChange={controller.setMask}
             disabled={controller.busy}
+            onChange={controller.setMask}
+            value={controller.mask}
           />
         </Field>
       )}
@@ -135,23 +135,23 @@ export function ImageRedrawPanel({
         <FieldLabel>提示词（预填原任务，可改）</FieldLabel>
         <Textarea
           aria-label="重绘提示词"
-          value={controller.prompt}
-          rows={2}
           disabled={controller.busy}
           onChange={textHandler(controller.setPrompt)}
+          rows={2}
+          value={controller.prompt}
         />
       </Field>
 
       <div className="flex items-center gap-2">
         <Button
-          type="button"
-          size="sm"
           disabled={
             controller.busy ||
             !controller.selectedTemplateId ||
             (controller.mode === "inpaint" && !controller.mask)
           }
           onClick={() => void controller.run(imageUrl)}
+          size="sm"
+          type="button"
         >
           {controller.busy ? "提交中…" : "提交"}
         </Button>

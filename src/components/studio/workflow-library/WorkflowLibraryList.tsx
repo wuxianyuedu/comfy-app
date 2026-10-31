@@ -21,36 +21,36 @@ import { EmptyState } from "~/components/ui/empty-state";
 import { StatusDot } from "~/components/ui/status-dot";
 import { ListBadge } from "~/components/ui/list-badge";
 
-interface WorkflowLibraryListProps {
-  workflows: Array<WorkflowRow>;
-  pendingRows?: Array<PendingRow>;
-  selectedId?: string | null;
-  search: string;
-  onSearchChange: (value: string) => void;
-  onSelect: (id: string) => void;
-  onLoadPending?: (pending: PendingRow) => void;
-  /** 列表仍在拉取中；此时「一条都没有」不代表「没有工作流」。 */
-  loading?: boolean;
-  /** 拉取超过预期时长仍未返回（服务在响应但查询没回来）。 */
-  stalled?: boolean;
-  /** 重试拉取（超时提示里的动作）。 */
-  onRefresh?: () => void;
-  /** 本地工作流目录侧的可读原因（没解析到根 / 根不可访问 / 目录里没有文件）；
-   * 非空时用它替换默认空态文案，说明「为什么是空」。 */
-  localRootsHint?: string | null;
+type WorkflowLibraryListProps = {
   /** 拖入 JSON 导入：整片列表侧栏就是投放区，这里接管高亮与投放事件
    * （与导入面板共用同一个文件漏斗，见 useWorkflowImport）。 */
   dragActive?: boolean;
-  onDragOver?: DragEventHandler<HTMLDivElement>;
-  onDragEnter?: DragEventHandler<HTMLDivElement>;
-  onDragLeave?: DragEventHandler<HTMLDivElement>;
-  onDrop?: DragEventHandler<HTMLDivElement>;
   /** 文件入口（拖入）失败的可读原因。 */
   fileErr?: string | null;
+  /** 列表仍在拉取中；此时「一条都没有」不代表「没有工作流」。 */
+  loading?: boolean;
+  /** 本地工作流目录侧的可读原因（没解析到根 / 根不可访问 / 目录里没有文件）；
+   * 非空时用它替换默认空态文案，说明「为什么是空」。 */
+  localRootsHint?: string | null;
+  onDragEnter?: DragEventHandler<HTMLDivElement>;
+  onDragLeave?: DragEventHandler<HTMLDivElement>;
+  onDragOver?: DragEventHandler<HTMLDivElement>;
+  onDrop?: DragEventHandler<HTMLDivElement>;
+  onLoadPending?: (pending: PendingRow) => void;
+  /** 重试拉取（超时提示里的动作）。 */
+  onRefresh?: () => void;
+  onSearchChange: (value: string) => void;
+  onSelect: (id: string) => void;
   /** 单个待载入项的「载入中」标志（按 id 查表）：载入按钮据此禁用并改文案，
    * 避免重复点击把同一份磁盘文件重复载入。 */
   pendingLoading?: Record<string, boolean>;
-}
+  pendingRows?: Array<PendingRow>;
+  search: string;
+  selectedId?: string | null;
+  /** 拉取超过预期时长仍未返回（服务在响应但查询没回来）。 */
+  stalled?: boolean;
+  workflows: Array<WorkflowRow>;
+};
 
 /**
  * 左侧工作流列表：搜索 + 可滚动条目。选中项高亮，右侧详情面板联动。
@@ -83,15 +83,15 @@ export function WorkflowLibraryList({
   const empty = workflows.length === 0 && pendingRows.length === 0;
   return (
     <div
-      onDragOver={onDragOver}
-      onDragEnter={onDragEnter}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
       className={[
         "border-border-subtle bg-panel-deep flex h-full w-full min-w-0 flex-col border-r",
         /* 拖入高亮用 outline：不参与布局，不会让列表在拖拽时抖一下。 */
         dragActive ? "outline-info/60 outline-2 -outline-offset-2" : "",
       ].join("")}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
     >
       {/* 搜索栏。`shrink-0` 必须有：排查过的一个现场是搜索框连同下面的列表一起
  纵向压缩 —— flex 列容器里`p-3` 的固定块默认`flex-shrink: 1`，
@@ -100,11 +100,11 @@ export function WorkflowLibraryList({
         <div className="relative">
           <Search className="text-ink-fainter pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
           <Input
-            type="text"
-            value={search}
+            className="border-border bg-subtle text-ink-bright placeholder:text-ink-fainter focus-visible:border-primary-500/40 focus-visible:ring-primary/30 h-8 w-full rounded-lg border pr-3 pl-8 text-xs"
             onChange={textHandler(onSearchChange)}
             placeholder="搜索工作流名称…"
-            className="border-border bg-subtle text-ink-bright placeholder:text-ink-fainter focus-visible:border-primary-500/40 focus-visible:ring-primary/30 h-8 w-full rounded-lg border pr-3 pl-8 text-xs"
+            type="text"
+            value={search}
           />
         </div>
       </div>
@@ -124,17 +124,23 @@ export function WorkflowLibraryList({
       <div className="flex-1 overflow-y-auto px-1.5 py-1.5">
         {empty && loading ? (
           <EmptyState
-            minHeightClass="min-h-40"
-            title="正在加载工作流…"
             description="本地目录会一起扫描，文件多时首次载入需要几秒。"
             icon={<Spinner className="size-6" />}
+            minHeightClass="min-h-40"
+            title="正在加载工作流…"
           />
         ) : empty && stalled ? (
           <EmptyState
-            minHeightClass="min-h-40"
-            variant="error"
-            icon={AlertTriangle}
-            title="工作流列表还没返回"
+            action={
+              <Button
+                className="border-border text-muted-foreground hover:bg-subtle text-2xs h-auto rounded-lg px-3 py-1"
+                onClick={onRefresh}
+                size="sm"
+                variant="outline"
+              >
+                重试
+              </Button>
+            }
             description={
               <>
                 应用服务可能在编译或重启。可稍候重试；若持续如此，按{""}
@@ -143,36 +149,30 @@ export function WorkflowLibraryList({
                 打开日志面板查看具体原因。
               </>
             }
-            action={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onRefresh}
-                className="border-border text-muted-foreground hover:bg-subtle text-2xs h-auto rounded-lg px-3 py-1"
-              >
-                重试
-              </Button>
-            }
+            icon={AlertTriangle}
+            minHeightClass="min-h-40"
+            title="工作流列表还没返回"
+            variant="error"
           />
         ) : empty ? (
           <EmptyState
-            minHeightClass="min-h-40"
-            title={search ? "未找到匹配的工作流" : "还没有工作流"}
             description={
               search
                 ? "换个关键词，或清空搜索框看全部。"
                 : (localRootsHint ??
                   "点右上角「导入工作流」粘贴 JSON，或在设置里配置本地工作流目录后自动扫描。")
             }
+            minHeightClass="min-h-40"
+            title={search ? "未找到匹配的工作流" : "还没有工作流"}
           />
         ) : (
           <ul className="flex flex-col gap-1">
             {workflows.map((workflow) => (
               <WorkflowListItem
                 key={workflow.id}
-                workflow={workflow}
-                selected={selectedId === workflow.id}
                 onClick={() => onSelect(workflow.id)}
+                selected={selectedId === workflow.id}
+                workflow={workflow}
               />
             ))}
           </ul>
@@ -184,7 +184,7 @@ export function WorkflowLibraryList({
             <p className="text-info-strong text-3xs mb-2 flex items-center gap-1.5 font-medium">
               {/* 状态点走`ui/status-dot`（全库唯一实现，规范 16 §16.2.4.5）；
 `probing` 表达「还没载入、等待中」。 */}
-              <StatusDot state="probing" sizeClass="size-1.5" />
+              <StatusDot sizeClass="size-1.5" state="probing" />
               未载入的本地工作流
             </p>
             <ul className="flex flex-col gap-1">
@@ -200,12 +200,12 @@ export function WorkflowLibraryList({
                       </span>
                       <Hint label={`载入「${pending.name}」`} wrap>
                         <Button
-                          variant="info"
-                          onClick={() => onLoadPending?.(pending)}
-                          disabled={loadingPending}
                           className="text-3xs h-auto shrink-0 gap-1 rounded-md px-2 py-1 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={loadingPending}
+                          onClick={() => onLoadPending?.(pending)}
+                          variant="info"
                         >
-                          <Download data-icon="inline-start" className="size-3" />
+                          <Download className="size-3" data-icon="inline-start" />
                           {loadingPending ? "载入中…" : "载入"}
                         </Button>
                       </Hint>
@@ -249,9 +249,9 @@ function WorkflowListItem({
   selected,
   onClick,
 }: {
-  workflow: WorkflowRow;
-  selected: boolean;
   onClick: () => void;
+  selected: boolean;
+  workflow: WorkflowRow;
 }) {
   const { usable } = deriveFormatFlags(workflow);
   const { missing, canResync } = deriveSyncFlags(workflow);
@@ -266,14 +266,14 @@ function WorkflowListItem({
   return (
     <li>
       <Button
-        variant="ghost"
-        onClick={onClick}
         className={[
           "h-auto w-full min-w-0 rounded-lg border px-2 py-1.5 text-left font-normal hover:bg-transparent",
           selected
             ? "border-primary/40 from-primary/15 to-accent/10 bg-linear-to-br"
             : "bg-subtle hover:border-border hover:bg-subtle border-transparent",
         ].join("")}
+        onClick={onClick}
+        variant="ghost"
       >
         {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}
         <div className="flex min-w-0 items-center gap-1.5">
@@ -288,7 +288,7 @@ function WorkflowListItem({
             {workflow.name}
           </span>
           {!usable && (
-            <ListBadge tone="danger" title="没有工作流(RAW)原件 —— 没有可执行内容">
+            <ListBadge title="没有工作流(RAW)原件 —— 没有可执行内容" tone="danger">
               无可执行内容
             </ListBadge>
           )}
@@ -298,19 +298,19 @@ function WorkflowListItem({
  文字长度来承载（`title` 里给全口径：已配置几个口 / 缺哪些口）。 */}
           {usable && (
             <ListBadge
-              tone={encapsulation.ready ? "success" : "warning"}
               className={encapsulation.ready ? "" : "text-encap-pending bg-warning/12"}
               title={
                 encapsulation.ready
                   ? `对外参数已配置（${encapsulation.resolvedCount}/${encapsulation.entries.length}）`
                   : `对外参数未配置：${encapsulation.missingLabels.join("、") || "提示词口未落到端口"}`
               }
+              tone={encapsulation.ready ? "success" : "warning"}
             >
               {encapsulation.ready ? "✓" : "！"}
             </ListBadge>
           )}
           {canResync && (
-            <ListBadge tone="warning" title={missing ? "本地文件已丢失" : "本地文件有更新"}>
+            <ListBadge title={missing ? "本地文件已丢失" : "本地文件有更新"} tone="warning">
               {missing ? "已丢失" : "有更新"}
             </ListBadge>
           )}
@@ -322,10 +322,10 @@ function WorkflowListItem({
             <TaskTypeChip taskType={workflow.taskType} />
             {workflow.modelTags?.slice(0, 2).map((tag) => (
               <ListBadge
-                key={tag}
-                tone="neutral"
-                title={tag}
                 className="max-w-18 truncate rounded-full"
+                key={tag}
+                title={tag}
+                tone="neutral"
               >
                 {tag}
               </ListBadge>

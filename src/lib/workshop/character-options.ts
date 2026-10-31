@@ -2,10 +2,10 @@
 // 穷举式下拉（多选），减少手写歧义、保证可稳定映射到生图提示词。
 // 分组仅用于 UI 分类展示；最终均以逗号合并写入对应 Character 字符串字段。
 
-export interface OptionGroup {
-  title: string;
+export type OptionGroup = {
   options: Array<string>;
-}
+  title: string;
+};
 
 /** 服装 · 按年代/类型分组（穷举常见题材服装） */
 export const COSTUME_OPTIONS: Array<OptionGroup> = [
@@ -271,11 +271,11 @@ export const STYLE_TAG_OPTIONS: Array<OptionGroup> = [
   },
 ];
 
-export interface AttributeOptionSet {
+export type AttributeOptionSet = {
+  groups: Array<OptionGroup>;
   id: string;
   label: string;
-  groups: Array<OptionGroup>;
-}
+};
 
 /* 标成**非空数组**：调用方（`CharacterDesigner.attrSet`）把首项当作
  * 「id 对不上时」的兜底维度，类型上直接是元素而非 `| undefined`。 */

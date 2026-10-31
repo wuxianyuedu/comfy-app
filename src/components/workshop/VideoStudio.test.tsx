@@ -78,11 +78,11 @@ function makeShot(patch: Partial<Shot> = {}): Shot {
   };
 }
 
-interface RenderOptions {
+type RenderOptions = {
+  apiChannels?: ApiChannelsView | null;
   shots?: Array<Shot>;
   workflowId?: string;
-  apiChannels?: ApiChannelsView | null;
-}
+};
 
 function renderStudio(options: RenderOptions = {}) {
   const onShotsChange = vi.fn();
@@ -91,16 +91,16 @@ function renderStudio(options: RenderOptions = {}) {
   const onOpenModelAdapters = vi.fn();
   render(
     <VideoStudio
+      apiChannels={options.apiChannels === undefined ? videoReady : options.apiChannels}
+      onCancelShot={onCancelShot}
+      onNextStage={() => undefined}
+      onNotice={onNotice}
+      onOpenModelAdapters={onOpenModelAdapters}
+      onPrevStage={() => undefined}
+      onShotsChange={onShotsChange}
+      projectId="proj-1"
       shots={options.shots ?? [makeShot()]}
       workflowId={options.workflowId ?? "vwf-1"}
-      projectId="proj-1"
-      apiChannels={options.apiChannels === undefined ? videoReady : options.apiChannels}
-      onOpenModelAdapters={onOpenModelAdapters}
-      onShotsChange={onShotsChange}
-      onNotice={onNotice}
-      onCancelShot={onCancelShot}
-      onPrevStage={() => undefined}
-      onNextStage={() => undefined}
     />,
   );
   return { onShotsChange, onNotice, onCancelShot, onOpenModelAdapters };

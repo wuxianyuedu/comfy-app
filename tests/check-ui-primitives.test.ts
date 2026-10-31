@@ -58,7 +58,9 @@ function demoteToRatchet(repo: GateRepo, ...ids: Array<string>): void {
    * 登记项、把判据的分档自检打成红（实测 7 条用例连坐）。**赌「没有第二处」的
    * 判据会在第二处出现的那天静默改错地方**（§13.5.12 同族），所以补锚点。 */
   const decl = DECL_RE.exec(src);
-  if (!decl) throw new Error("读不到 HARD_GATE_RULES 的声明 —— 改测试");
+  if (!decl) {
+    throw new Error("读不到 HARD_GATE_RULES 的声明 —— 改测试");
+  }
   const declAt = src.indexOf(decl[0]);
   const head = src.slice(0, declAt);
   let body = decl[0];
@@ -2094,6 +2096,27 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
+  test("catch 形参叫 error 但信封里没有 error 键，不算 P41（纯改名不判红）", ({ repo }) => {
+    repo.write(
+      "src/app/api/widgets/route.ts",
+      [
+        "export async function POST(req: Request) {",
+        "  try {",
+        "    await req.json();",
+        "    return NextResponse.json({ ok: true });",
+        "  } catch (error) {",
+        "    return NextResponse.json({",
+        "      ok: false,",
+        '      detail: String(error),',
+        "    });",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
   /* ── P42：错误文案的「动作前缀」（规范 §16.2.4.45）────────────────────
    *
    * 判据取「**动作前缀 + 冒号 + 紧跟一个错误取值动作**」这个签名。
@@ -3888,7 +3911,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline(repo);
     const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       repo.read("scripts/.ui-primitives-baseline.json"),
-    ) as { total: number; rules: Record<string, string> };
+    ) as { rules: Record<string, string>; total: number; };
     expect(baseline.total).toBe(1);
     expect(baseline.rules.P1).toBeTruthy();
     expect(baseline.rules.P2).toBeTruthy();

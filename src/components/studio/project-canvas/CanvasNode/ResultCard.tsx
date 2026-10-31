@@ -3,11 +3,7 @@
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import {
-  NODE_META,
-  type CanvasNodeData,
-  type NodeKind,
-} from "~/lib/project-canvas/canvas-types";
+import { NODE_META, type CanvasNodeData, type NodeKind } from "~/lib/project-canvas/canvas-types";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { isVideo as isVideoSource } from "~/lib/media/media-kind";
@@ -28,12 +24,12 @@ export function ResultCard({
   onReplace,
 }: {
   kind: NodeKind;
-  name?: string;
-  status: CanvasNodeData["status"];
-  path?: string;
   mediaType?: string;
-  text?: string;
+  name?: string;
   onReplace: () => void;
+  path?: string;
+  status: CanvasNodeData["status"];
+  text?: string;
 }) {
   /* 这枚「下载」（实为复制文本）的失败**显式静默**：产出文本就在下面的
    * 只读块里印着，用户能直接手动选中复制（规范 16 §16.2.4.43）。 */
@@ -41,8 +37,7 @@ export function ResultCard({
 
   /* 业务事实（节点类型 / 产出元数据）与文件事实（扩展名）分层判断：扩展名那份
    * 判据收敛在 `media-kind.ts`（ISSUE #571），视图层不再自带第四份正则。 */
-  const isVideo =
-    kind === "video" || mediaType === "video" || isVideoSource(path);
+  const isVideo = kind === "video" || mediaType === "video" || isVideoSource(path);
   const src = path?.startsWith("/") ? path : path ? `/${path}` : undefined;
   const meta = NODE_META[kind];
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空字符串名视为无输出，需用 || 回退到 meta.label
@@ -61,16 +56,16 @@ export function ResultCard({
         <div className="border-border-strong bg-canvas-deep flex items-center justify-center gap-1 border-b px-2 py-1.5">
           <Hint label="字号减小">
             <Button
-              variant="ghost"
               className="text-ink-soft hover:bg-subtle text-2xs h-auto rounded-md px-2 py-1 font-medium"
+              variant="ghost"
             >
               A-
             </Button>
           </Hint>
           <Hint label="字号增大">
             <Button
-              variant="ghost"
               className="text-ink-soft hover:bg-subtle text-2xs h-auto rounded-md px-2 py-1 font-medium"
+              variant="ghost"
             >
               A+
             </Button>
@@ -78,32 +73,24 @@ export function ResultCard({
           <span className="bg-border-strong mx-1 h-3 w-px" />
           <Hint label="编辑">
             <Button
-              variant="ghost"
               className="text-ink-soft hover:bg-subtle text-2xs h-auto rounded-md px-2 py-1 font-normal"
+              variant="ghost"
             >
-              <Icon
-                data-icon="inline-start"
-                name="pen"
-                size={11}
-                className="mr-1"
-              />
+              <Icon className="mr-1" data-icon="inline-start" name="pen" size={11} />
               编辑
             </Button>
           </Hint>
           <Hint label="下载">
             <Button
-              variant="ghost"
-              onClick={() => {
-                if (text) copyResult(text);
-              }}
               className="text-ink-soft hover:bg-subtle text-2xs h-auto rounded-md px-2 py-1 font-normal"
+              onClick={() => {
+                if (text) {
+                  copyResult(text);
+                }
+              }}
+              variant="ghost"
             >
-              <Icon
-                data-icon="inline-start"
-                name="download"
-                size={11}
-                className="mr-1"
-              />
+              <Icon className="mr-1" data-icon="inline-start" name="download" size={11} />
               下载
             </Button>
           </Hint>
@@ -116,9 +103,9 @@ export function ResultCard({
         </div>
         <div className="border-border-strong flex items-center justify-center border-t py-2">
           <Button
-            variant="outline"
-            onClick={onReplace}
             className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 text-2xs flex h-auto items-center gap-1.5 rounded-full px-3 py-1.5 font-normal ring-1"
+            onClick={onReplace}
+            variant="outline"
           >
             <Icon data-icon="inline-start" name="refresh" size={11} />
             替换
@@ -138,37 +125,29 @@ export function ResultCard({
       </div>
       <div className="from-subtle to-canvas-deep relative flex aspect-video items-center justify-center bg-linear-to-br">
         {!src ? (
-          <Icon
-            name={isVideo ? "film" : "image"}
-            size={32}
-            className="text-ink-fainter"
-          />
+          <Icon className="text-ink-fainter" name={isVideo ? "film" : "image"} size={32} />
         ) : isVideo ? (
           <MediaThumbnail
-            src={src}
             /* `as="video"`：`mediaType` / `kind` 已判过视频，而媒体路径
              * 可能是 `.png`（ComfyUI 把视频帧存成图片后缀）—— 语义判断
              * 优先于后缀推断（§16.2.4.21 的口径）。 */
             as="video"
-            controls
             autoPlay
+            className="max-h-56 w-full object-contain"
+            controls
             loop
             muted
-            className="max-h-56 w-full object-contain"
+            src={src}
           />
         ) : (
-          <MediaThumbnail
-            src={src}
-            alt="result"
-            className="max-h-56 w-full object-contain"
-          />
+          <MediaThumbnail alt="result" className="max-h-56 w-full object-contain" src={src} />
         )}
       </div>
       <div className="border-border-strong flex items-center justify-center border-t py-2">
         <Button
-          variant="outline"
-          onClick={onReplace}
           className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 text-2xs flex h-auto items-center gap-1.5 rounded-full px-3 py-1.5 font-normal ring-1"
+          onClick={onReplace}
+          variant="outline"
         >
           <Icon data-icon="inline-start" name="refresh" size={11} />
           替换

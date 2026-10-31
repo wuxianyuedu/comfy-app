@@ -34,14 +34,18 @@ function themeGroup(): HTMLElement {
   const group = screen
     .getAllByRole("radiogroup")
     .find((g) => g.getAttribute("aria-label") === "主题外观");
-  if (!group) throw new Error("找不到「主题外观」radiogroup");
+  if (!group) {
+    throw new Error("找不到「主题外观」radiogroup");
+  }
   return group;
 }
 
 /** 组内的第 n 个 radio —— `getAllByRole` 的元素带 `undefined`，逐个取要显式收窄。 */
 function radioAt(n: number): HTMLElement {
   const radio = within(themeGroup()).getAllByRole("radio")[n];
-  if (!radio) throw new Error(`「主题外观」组里没有第 ${n} 个 radio`);
+  if (!radio) {
+    throw new Error(`「主题外观」组里没有第 ${n} 个 radio`);
+  }
   return radio;
 }
 

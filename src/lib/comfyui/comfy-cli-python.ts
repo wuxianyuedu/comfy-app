@@ -32,7 +32,9 @@ export function comfyCliInterpreter(
   platform: NodeJS.Platform = process.platform,
 ): string {
   const trimmed = (configured ?? "").trim();
-  if (trimmed) return trimmed;
+  if (trimmed) {
+    return trimmed;
+  }
   const [binDir, pyName] = venvPythonParts(platform);
   /* 分隔符按**目标平台**而不是宿主：`path.join` 只会用宿主的规则，那样这个函数在
    * 另一块机器上就测不准（用例要喂 win32/linux 两种平台断言两种形状）。Node 在两个

@@ -39,7 +39,7 @@ function healthOf(overrides: Partial<Record<string, boolean | number>> = {}): Ar
 }
 
 function renderHeader(health: Array<HealthRow>) {
-  return render(<WorkshopHeader title="雾中来信" progressPct={40} health={health} />);
+  return render(<WorkshopHeader health={health} progressPct={40} title="雾中来信" />);
 }
 
 afterEach(cleanup);

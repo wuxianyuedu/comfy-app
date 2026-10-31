@@ -49,11 +49,11 @@ export function ShotSizePicker({
   disabled,
   scene = "image",
 }: {
-  value: ShotSizeState;
-  onChange: (next: ShotSizeState) => void;
   disabled?: boolean;
+  onChange: (next: ShotSizeState) => void;
   /** 尺寸表口径：生图走图片场景，视频走行业标准场景。 */
   scene?: SizeScene;
+  value: ShotSizeState;
 }) {
   const state = value;
   const [tableOpen, setTableOpen] = useState(false);
@@ -94,9 +94,9 @@ export function ShotSizePicker({
          *  所以换算 / 摘要 / 下发都不需要为「自由值」多认一种形状。 */
         extra: (
           <MegapixelStepper
-            value={currentMegapixels}
             disabled={disabled}
             onChange={(megapixels) => onChange({ ...state, clarity: megapixelLabel(megapixels) })}
+            value={currentMegapixels}
           />
         ),
       },
@@ -123,18 +123,16 @@ export function ShotSizePicker({
   return (
     <>
       <MultiSegmentPopover
-        ariaLabel="选择生图比例与像素"
-        triggerContent={shotSizeSummary(state)}
-        sections={sections}
         align="right"
+        ariaLabel="选择生图比例与像素"
         disabled={disabled}
         footer={
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
-              size="xs"
-              onClick={() => setTableOpen(true)}
               className="border-border-strong text-ink-muted hover:bg-subtle hover:text-ink-bright text-3xs h-auto rounded-md px-2 py-1"
+              onClick={() => setTableOpen(true)}
+              size="xs"
+              variant="outline"
             >
               尺寸表（{SIZE_SCENE_LABELS[scene]}场景）…
             </Button>
@@ -143,8 +141,10 @@ export function ShotSizePicker({
             </span>
           </div>
         }
+        sections={sections}
+        triggerContent={shotSizeSummary(state)}
       />
-      {tableOpen && <SizePresetTableModal scene={scene} onClose={() => setTableOpen(false)} />}
+      {tableOpen && <SizePresetTableModal onClose={() => setTableOpen(false)} scene={scene} />}
     </>
   );
 }

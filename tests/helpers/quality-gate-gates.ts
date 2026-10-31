@@ -20,10 +20,10 @@
 
 /** 一条门禁在某一侧的形状。 */
 export interface GateEntry {
-  /** 门禁名（两侧应当一致）。 */
-  name: string;
   /** 入口脚本体现在 `args` 里出现的那些路径（`../scripts/x.mjs` 形态，未归一化）。 */
   args: Array<string>;
+  /** 门禁名（两侧应当一致）。 */
+  name: string;
   /** 只在该侧**显式点名**时才跑（`.mjs` 的 `run: false` / `.ps1` 的 `Run = $false`）。 */
   onDemand: boolean;
 }
@@ -62,7 +62,9 @@ export function parsePs1Gates(src: string): Array<GateEntry> {
   // 前者会在默认档里凭空多出一条 `id`（实测就是这条把两个平台的默认档集合判成了不等）。
   const start = src.indexOf("$Blocks = @(");
   const end = start < 0 ? -1 : src.indexOf("\n)", start);
-  if (start < 0 || end < 0) return [];
+  if (start < 0 || end < 0) {
+    return [];
+  }
   const region = src.slice(start, end);
   const blocks = [...region.matchAll(/@\{([\s\S]*?)\}/g)].map((m) => stripForParsing(m[1] ?? ""));
   return blocks
@@ -86,7 +88,9 @@ export function parsePs1Gates(src: string): Array<GateEntry> {
 export function parseMjsGates(src: string): Array<GateEntry> {
   const start = src.indexOf("const GATES = {");
   const end = src.indexOf("function parseArgs");
-  if (start < 0 || end < 0 || end < start) return [];
+  if (start < 0 || end < 0 || end < start) {
+    return [];
+  }
   const block = src.slice(start, end);
   return [
     ...block.matchAll(/^ {2}([A-Za-z0-9_]+): \{([\s\S]*?)(?=^ {2}[A-Za-z0-9_]+: \{|^\};)/gm),

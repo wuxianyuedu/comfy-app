@@ -10,25 +10,23 @@
 import { vanillaApi } from "~/trpc/vanilla";
 import { errorMessage } from "~/lib/error-message";
 
-export interface RenderFilmInput {
+export type RenderFilmInput = {
+  /** 文生视频镜头合成首帧用的图类工作流 id（可选）。 */
+  imageWorkflowId?: string;
   /** 目标统一项目 id（proj_*）；无活跃项目传 null。 */
   projectId: string | null;
   /** 逐镜生成视频用的工作流库视频工作流 id（本地链路唯一来源）。 */
   videoWorkflowId?: string;
-  /** 文生视频镜头合成首帧用的图类工作流 id（可选）。 */
-  imageWorkflowId?: string;
-}
+};
 
-export interface RenderFilmResult {
+export type RenderFilmResult = {
+  detail?: string;
   ok: boolean;
   summary: string;
-  detail?: string;
-}
+};
 
 /** 用当前项目的镜头触发一键成片（服务端逐镜生成视频 + 合成 + 回写进度）。 */
-export async function renderProjectFilm(
-  input: RenderFilmInput,
-): Promise<RenderFilmResult> {
+export async function renderProjectFilm(input: RenderFilmInput): Promise<RenderFilmResult> {
   if (!input.projectId) {
     return { ok: false, summary: "当前没有活跃项目，无法成片" };
   }
@@ -42,19 +40,16 @@ export async function renderProjectFilm(
     const { id } = await vanillaApi.film.createFromProject.mutate({
       projectId: input.projectId,
       videoWorkflowId: input.videoWorkflowId,
-      ...(input.imageWorkflowId
-        ? { imageWorkflowId: input.imageWorkflowId }
-        : {}),
+      ...(input.imageWorkflowId ? { imageWorkflowId: input.imageWorkflowId } : {}),
     });
     await vanillaApi.film.start.mutate({ id });
     return {
       ok: true,
-      summary:
-        "已启动成片：将按项目镜头逐镜生成视频并合成，完成后自动更新项目进度",
+      summary: "已启动成片：将按项目镜头逐镜生成视频并合成，完成后自动更新项目进度",
       detail: id,
     };
-  } catch (e: unknown) {
-    const msg = errorMessage(e, "未知错误");
+  } catch (error: unknown) {
+    const msg = errorMessage(error, "未知错误");
     return { ok: false, summary: "启动成片失败", detail: msg };
   }
 }

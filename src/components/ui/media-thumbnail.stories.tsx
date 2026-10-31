@@ -21,14 +21,14 @@ import {
  * 名字（`missing.png`）—— 后者才是这张 story 的主角。
  */
 /** Args 的形状 = 可调的那几个（`src` 由注入层给，不进 Args）。 */
-interface StoryArgs {
-  /** 注入层的数据源旋钮（真文件的名字，见 `.storybook/data-sources.tsx`）。 */
-  sourceName: MediaSourceName;
+type StoryArgs = {
   alt?: string;
   className?: string;
   /** 失败兜底形态：`placeholder`（默认）/ `none`；自定义节点走 `render`。 */
   fallback?: MediaThumbnailProps["fallback"];
-}
+  /** 注入层的数据源旋钮（真文件的名字，见 `.storybook/data-sources.tsx`）。 */
+  sourceName: MediaSourceName;
+};
 
 /** 适配件：把 `sourceName` 经注入层解析成真地址再交给真组件（见 `data-sources.tsx`）。 */
 function ThumbnailWithSource({ sourceName, ...rest }: StoryArgs) {
@@ -69,8 +69,8 @@ export const RealSources: Story = {
         /* SAFETY: 类型断言已复核 */ (
           ["sample-landscape.svg", "sample-portrait.svg", "sample-wide.svg"] as const
         ).map((name) => (
-          <div key={name} className="flex flex-col items-center gap-1.5">
-            <ThumbnailWithSource {...args} sourceName={name} alt={name} />
+          <div className="flex flex-col items-center gap-1.5" key={name}>
+            <ThumbnailWithSource {...args} alt={name} sourceName={name} />
             <span className="text-ink-muted font-mono text-[11px]">{name}</span>
           </div>
         ))
@@ -100,12 +100,12 @@ export const LoadFailure: Story = {
       <div className="flex flex-col items-center gap-1.5">
         <ThumbnailWithSource
           {...args}
+          alt="自定义兜底"
           fallback={
             <span className="text-ink-muted bg-canvas-deep flex h-40 w-64 items-center justify-center rounded-lg text-[11px]">
               自定义兜底节点
             </span>
           }
-          alt="自定义兜底"
         />
         <span className="text-ink-muted font-mono text-[11px]">fallback=自定义</span>
       </div>
@@ -119,7 +119,7 @@ export const NoSource: Story = {
   render: (args) => (
     <div className="flex items-center gap-3">
       <div className="border-border-subtle h-40 w-64 rounded-lg border border-dashed" />
-      <MediaThumbnail {...args} src={null} alt="空 src" />
+      <MediaThumbnail {...args} alt="空 src" src={null} />
       <span className="text-ink-muted text-[11px]">右边是 `src=null`（组件返回 null）</span>
     </div>
   ),

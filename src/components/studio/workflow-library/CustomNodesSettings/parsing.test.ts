@@ -41,12 +41,12 @@ describe("pathKey 路径归一化", () => {
   });
 
   it("反斜杠统一为正斜杠并整体小写", () => {
-    expect(pathKey("D:\\Foo\\Bar")).toBe("d:/foo/bar");
+    expect(pathKey(String.raw`D:\Foo\Bar`)).toBe("d:/foo/bar");
   });
 
   it("目录根的尾斜杠被去掉", () => {
     expect(pathKey("D:/pkgs/foo/")).toBe("d:/pkgs/foo");
-    expect(pathKey("D:\\pkgs\\foo\\\\")).toBe("d:/pkgs/foo");
+    expect(pathKey(String.raw`D:\pkgs\foo\\`)).toBe("d:/pkgs/foo");
   });
 
   it("根路径 / 长度为 1,尾斜杠保留", () => {
@@ -54,7 +54,7 @@ describe("pathKey 路径归一化", () => {
   });
 
   it("大小写不同但同一路径归一化后相等", () => {
-    expect(pathKey("D:\\PKGS\\Foo")).toBe(pathKey("d:\\pkgs\\foo"));
+    expect(pathKey(String.raw`D:\PKGS\Foo`)).toBe(pathKey(String.raw`d:\pkgs\foo`));
   });
 
   it("已归一化路径保持不变", () => {
@@ -72,36 +72,27 @@ describe("deriveRowState 行状态推导", () => {
   });
 
   it("status=missing 时为 missing(即使 saved 已有记录)", () => {
-    expect(deriveRowState(makeSub({ status: "missing" }), makeSaved())).toEqual(
-      { kind: "missing" },
-    );
+    expect(deriveRowState(makeSub({ status: "missing" }), makeSaved())).toEqual({
+      kind: "missing",
+    });
   });
 
   it("status=empty 且包文件数为 0 时为 empty", () => {
-    expect(
-      deriveRowState(
-        makeSub({ status: "empty", packageFileCount: 0 }),
-        undefined,
-      ),
-    ).toEqual({ kind: "empty" });
+    expect(deriveRowState(makeSub({ status: "empty", packageFileCount: 0 }), undefined)).toEqual({
+      kind: "empty",
+    });
   });
 
   it("status=empty 且 packageFileCount 未定义时视为 empty", () => {
     expect(
-      deriveRowState(
-        makeSub({ status: "empty", packageFileCount: undefined }),
-        undefined,
-      ),
+      deriveRowState(makeSub({ status: "empty", packageFileCount: undefined }), undefined),
     ).toEqual({ kind: "empty" });
   });
 
   it("status=empty 但有包文件时不判 empty,未导入时为 unimported", () => {
-    expect(
-      deriveRowState(
-        makeSub({ status: "empty", packageFileCount: 3 }),
-        undefined,
-      ),
-    ).toEqual({ kind: "unimported" });
+    expect(deriveRowState(makeSub({ status: "empty", packageFileCount: 3 }), undefined)).toEqual({
+      kind: "unimported",
+    });
   });
 
   it("无已保存清单时为 unimported", () => {
@@ -122,9 +113,7 @@ describe("deriveRowState 行状态推导", () => {
   });
 
   it("saved.status=error 且无错误信息时回退默认文案 解析出错", () => {
-    expect(
-      deriveRowState(makeSub(), makeSaved({ status: "error", errors: [] })),
-    ).toEqual({
+    expect(deriveRowState(makeSub(), makeSaved({ status: "error", errors: [] }))).toEqual({
       kind: "error",
       reason: "解析出错",
     });
@@ -139,34 +128,28 @@ describe("deriveRowState 行状态推导", () => {
   });
 
   it("saved.status=missing 时为 missing", () => {
-    expect(deriveRowState(makeSub(), makeSaved({ status: "missing" }))).toEqual(
-      {
-        kind: "missing",
-      },
-    );
+    expect(deriveRowState(makeSub(), makeSaved({ status: "missing" }))).toEqual({
+      kind: "missing",
+    });
   });
 
   it("任一侧缺少 hash 且 saved.status=ok 时视为 loaded(空 savedHash)", () => {
-    expect(
-      deriveRowState(makeSub({ contentHash: "" }), makeSaved({ status: "ok" })),
-    ).toEqual({ kind: "loaded", savedHash: "", nodeCount: 5 });
+    expect(deriveRowState(makeSub({ contentHash: "" }), makeSaved({ status: "ok" }))).toEqual({
+      kind: "loaded",
+      savedHash: "",
+      nodeCount: 5,
+    });
   });
 
   it("任一侧缺少 hash 且 saved.status 非 ok 时为 unimported", () => {
     expect(
-      deriveRowState(
-        makeSub(),
-        makeSaved({ status: "pending", contentHash: undefined }),
-      ),
+      deriveRowState(makeSub(), makeSaved({ status: "pending", contentHash: undefined })),
     ).toEqual({ kind: "unimported" });
   });
 
   it("两侧 hash 一致时为 loaded", () => {
     expect(
-      deriveRowState(
-        makeSub({ contentHash: "hash-x" }),
-        makeSaved({ contentHash: "hash-x" }),
-      ),
+      deriveRowState(makeSub({ contentHash: "hash-x" }), makeSaved({ contentHash: "hash-x" })),
     ).toEqual({ kind: "loaded", savedHash: "hash-x", nodeCount: 5 });
   });
 
@@ -205,11 +188,7 @@ describe("splitPaths 路径列表解析", () => {
   });
 
   it("每段首尾空白被 trim", () => {
-    expect(splitPaths("  D:/a ,  D:/b \n\tD:/c\t")).toEqual([
-      "D:/a",
-      "D:/b",
-      "D:/c",
-    ]);
+    expect(splitPaths("  D:/a ,  D:/b \n\tD:/c\t")).toEqual(["D:/a", "D:/b", "D:/c"]);
   });
 
   it("尾换行与尾逗号不产生空项", () => {

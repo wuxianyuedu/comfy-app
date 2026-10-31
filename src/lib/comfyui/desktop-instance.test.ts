@@ -13,9 +13,7 @@ import {
 
 describe("parseInstanceId", () => {
   it("读取单行实例 ID，去空白", () => {
-    expect(parseInstanceId("  inst-1782874099613\n")).toBe(
-      "inst-1782874099613",
-    );
+    expect(parseInstanceId("  inst-1782874099613\n")).toBe("inst-1782874099613");
   });
   it("空内容返回 null", () => {
     expect(parseInstanceId("  \n")).toBeNull();
@@ -51,9 +49,7 @@ describe("findInstallationById", () => {
 
 describe("launchArgsToHeadless", () => {
   it("抽取 --port（空格写法）并保留其余参数", () => {
-    const r = launchArgsToHeadless(
-      "--enable-manager --port 8191 --listen 0.0.0.0",
-    );
+    const r = launchArgsToHeadless("--enable-manager --port 8191 --listen 0.0.0.0");
     expect(r.port).toBe(8191);
     expect(r.args).toContain("--enable-manager");
     expect(r.args).toContain("--listen");
@@ -75,8 +71,8 @@ describe("launchArgsToHeadless", () => {
     expect(r.args).toContain("--enable-manager");
   });
   it("字符串含双引号路径 → 保留含空格路径为整体", () => {
-    const r = launchArgsToHeadless('--input-directory "D:\\My Comfy\\input"');
-    expect(r.args).toEqual(["--input-directory", "D:\\My Comfy\\input"]);
+    const r = launchArgsToHeadless(String.raw`--input-directory "D:\My Comfy\input"`);
+    expect(r.args).toEqual(["--input-directory", String.raw`D:\My Comfy\input`]);
   });
   it("数组入参", () => {
     const r = launchArgsToHeadless(["--port", "8200", "--enable-manager"]);
@@ -110,9 +106,9 @@ describe("parseDesktopLaunchArgs", () => {
 
 describe("splitArgTokens", () => {
   it("切分带引号路径的字符串", () => {
-    expect(splitArgTokens('--input-directory "D:\\A B" --x')).toEqual([
+    expect(splitArgTokens(String.raw`--input-directory "D:\A B" --x`)).toEqual([
       "--input-directory",
-      "D:\\A B",
+      String.raw`D:\A B`,
       "--x",
     ]);
   });

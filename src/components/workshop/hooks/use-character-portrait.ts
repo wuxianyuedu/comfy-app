@@ -45,57 +45,57 @@ export type PortraitSessionPatch = Partial<
 
 /** 单次生成的覆盖项：调用方算好的「本次用哪个模型」，不传则回落到会话里的当前选择。
  *  `localLabel` 只进展示文案（工作流库里的模型名），不参与请求组装。 */
-export interface PortraitGenerateOverrides {
-  /** 本次使用的设置页「远端模型」名（远端通道）。 */
-  remoteModel?: string;
-  /** 本次使用的工作流库工作流 id（本地通道）。 */
-  localWorkflowId?: string;
+export type PortraitGenerateOverrides = {
   /** 本地通道的展示标签（工作流库里的模型名）。 */
   localLabel?: string;
-}
+  /** 本次使用的工作流库工作流 id（本地通道）。 */
+  localWorkflowId?: string;
+  /** 本次使用的设置页「远端模型」名（远端通道）。 */
+  remoteModel?: string;
+};
 
-export interface PortraitSession {
+export type PortraitSession = {
+  /** 是否正在生成（同一时刻只跑一个任务） */
+  busy: boolean;
+  channel: PortraitChannel;
+  /** 本次会话的失败原因（可行动文案）；空串 = 当前没有失败 */
+  error: string;
   /** 会话消息（状态 / 错误 / 日志 / 进度）归属的角色 id；空串 = 还没发起过。
    *  跑完之后继续保留，好让发起的那张角色卡还能看到自己的结果与日志。 */
   focusCharacterId: string;
-  /** 是否正在生成（同一时刻只跑一个任务） */
-  busy: boolean;
   /** 是否正在导入图片 */
   importing: boolean;
-  channel: PortraitChannel;
-  /** 远端通道使用的模型名（设置页「远端模型」kind=image 的条目；空串 = 未选） */
-  remoteModel: string;
   /** 本地通道使用的工作流（工作流库中已配置对外参数的条目）—— 本地通道的
    *  唯一可执行来源（内置模板已移除），空串 = 未选。 */
   localWorkflowId: string;
-  /** 定妆照尺寸（复用镜头生图的比例 / 像素 / 对齐三段选择） */
-  size: ShotSizeState;
+  log: Array<PortraitLogEntry>;
+  /** 本次生成实际调用的「通道 · 模型」标签，用于进度与结果文案 */
+  modelLabel: string;
   /** 本机任务的完成度 0~100；`null` = 该通道不提供进度（远端为一次性请求）。
    *  不要把「不知道」写成 0：视图对两者的渲染不同（0 是刚起步，null 是不确定）。 */
   progress: number | null;
-  /** 本次生成实际调用的「通道 · 模型」标签，用于进度与结果文案 */
-  modelLabel: string;
+  /** 远端通道使用的模型名（设置页「远端模型」kind=image 的条目；空串 = 未选） */
+  remoteModel: string;
+  /** 定妆照尺寸（复用镜头生图的比例 / 像素 / 对齐三段选择） */
+  size: ShotSizeState;
   /** 成功 / 结果提示文案（与 error 互斥展示） */
   status: string;
-  /** 本次会话的失败原因（可行动文案）；空串 = 当前没有失败 */
-  error: string;
-  log: Array<PortraitLogEntry>;
-}
+};
 
-export interface PortraitSessionActions {
-  /** 更新用户选择（通道 / 尺寸 / 模型）。顺带清掉已不成立的错误提示。 */
-  patch: (p: PortraitSessionPatch) => void;
+export type PortraitSessionActions = {
   appendLog: (entry: PortraitLogEntry) => void;
   /** 按角色提示词生成一张定妆照，结果作为新候选并入该角色。
    *  overrides：本次使用的通道模型（不传则用会话里的当前选择）。 */
   generate: (character: Character, overrides?: PortraitGenerateOverrides) => Promise<void>;
   /** 外部导入一张现成定妆照（写进素材库「角色」分类） */
   importFile: (character: Character, file: File) => Promise<void>;
-  /** 把候选里的一张定为定妆照（后续分镜图的参考图） */
-  select: (characterId: string, url: string) => void;
+  /** 更新用户选择（通道 / 尺寸 / 模型）。顺带清掉已不成立的错误提示。 */
+  patch: (p: PortraitSessionPatch) => void;
   /** 删除一张候选 */
   remove: (characterId: string, url: string) => void;
-}
+  /** 把候选里的一张定为定妆照（后续分镜图的参考图） */
+  select: (characterId: string, url: string) => void;
+};
 
 /** 生成 / 导入期间项目被换掉时的归属提示（见 `writeBackCandidate`）。 */
 const PROJECT_SWITCHED_NOTICE =
@@ -125,9 +125,9 @@ function initialSession(): PortraitSession {
 }
 
 export function useCharacterPortrait(opts: {
-  setCharacters: React.Dispatch<React.SetStateAction<Array<Character>>>;
   /** 工坊项目 id：导入的定妆照落到素材库的本项目目录 */
   projectId: string;
+  setCharacters: React.Dispatch<React.SetStateAction<Array<Character>>>;
 }): [PortraitSession, PortraitSessionActions] {
   const { setCharacters, projectId } = opts;
   const [session, setSession] = React.useState<PortraitSession>(initialSession);
@@ -218,7 +218,9 @@ export function useCharacterPortrait(opts: {
   const generate = React.useCallback(
     async (character: Character, overrides?: PortraitGenerateOverrides) => {
       /* 并发守卫用同步闸门，不读 session.busy（它是渲染态）：*/
-      if (!taskLock.tryEnter()) return;
+      if (!taskLock.tryEnter()) {
+        return;
+      }
       /* 拿到锁之后的每一条路径（含门禁早退）都必须走到 finally 归还 ——
        * 旧实现里「提示词为空 / 未选工作流」的门禁早退直接 return，锁被
        * 永久占住，之后所有生成 / 导入都静默无响应（点了没反应）。 */
@@ -287,13 +289,17 @@ export function useCharacterPortrait(opts: {
               onProgress: (pct) => {
                 /* 高频回调：节流判据与别处同源（规范 16 §16.2.4.68）；
                  * 「焦点还是不是这个角色」是本域的判据，留在调用处。 */
-                if (!progressGate.current.allow(character.id)) return;
+                if (!progressGate.current.allow(character.id)) {
+                  return;
+                }
                 setSession((prev) =>
                   prev.focusCharacterId === character.id ? { ...prev, progress: pct } : prev,
                 );
               },
               onLog: (entry) => {
-                if (entry.level === "progress") return;
+                if (entry.level === "progress") {
+                  return;
+                }
                 appendLog(makePortraitLog(entry.level === "error" ? "error" : "info", entry.msg));
               },
             },
@@ -309,7 +315,9 @@ export function useCharacterPortrait(opts: {
             },
             originProjectId,
           );
-          if (!attached) return;
+          if (!attached) {
+            return;
+          }
           setSession((prev) => ({
             ...prev,
             progress: 100,
@@ -332,15 +340,17 @@ export function useCharacterPortrait(opts: {
             },
             originProjectId,
           );
-          if (!attached) return;
+          if (!attached) {
+            return;
+          }
           setSession((prev) => ({
             ...prev,
             status: `已生成一张定妆照（${modelLabel}），可在下方候选里挑选`,
           }));
           appendLog(makePortraitLog("success", "远端 API 返回图片完成"));
         }
-      } catch (e: unknown) {
-        const message = errorMessage(e, "定妆照生成失败");
+      } catch (error: unknown) {
+        const message = errorMessage(error, "定妆照生成失败");
         fail(message);
         appendLog(makePortraitLog("error", message));
       } finally {
@@ -366,7 +376,9 @@ export function useCharacterPortrait(opts: {
   const importFile = React.useCallback(
     async (character: Character, file: File) => {
       /* 与生成共用同一把锁：导入与生成不允许叠加。 */
-      if (!taskLock.tryEnter()) return;
+      if (!taskLock.tryEnter()) {
+        return;
+      }
       /* 拿到锁之后的每一条路径（含「非图片文件」的门禁早退）都必须走到
        * finally 归还 —— 旧实现里类型检查失败直接 return，之后所有生成 /
        * 导入都被这把没还的锁静默挡死（同 generate 的回归口径）。 */
@@ -389,13 +401,15 @@ export function useCharacterPortrait(opts: {
           { url, source: "import", createdAt: Date.now() },
           originProjectId,
         );
-        if (!attached) return;
+        if (!attached) {
+          return;
+        }
         setSession((prev) => ({
           ...prev,
           status: `已导入 ${file.name}，可在下方候选里挑选`,
         }));
-      } catch (e: unknown) {
-        const message = errorMessage(e, "导入定妆照失败");
+      } catch (error: unknown) {
+        const message = errorMessage(error, "导入定妆照失败");
         fail(message);
         /* 与生成失败同款：导入失败也进执行日志，否则「生成过程」面板与
          *  log/workshop/ 的落盘历史里完全看不到这次失败。 */

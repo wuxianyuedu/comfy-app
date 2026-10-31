@@ -57,21 +57,35 @@ export function inheritDerivedFields(
 ): Array<unknown> {
   const byId = new Map<string, Record<string, unknown>>();
   for (const raw of existing) {
-    if (!isRecord(raw)) continue;
+    if (!isRecord(raw)) {
+      continue;
+    }
     const id = raw.id;
-    if (typeof id === "string") byId.set(id, raw);
+    if (typeof id === "string") {
+      byId.set(id, raw);
+    }
   }
   return incoming.map((raw) => {
-    if (!isRecord(raw)) return raw;
+    if (!isRecord(raw)) {
+      return raw;
+    }
     const id = raw.id;
-    if (typeof id !== "string") return raw;
+    if (typeof id !== "string") {
+      return raw;
+    }
     const prior = byId.get(id);
-    if (!prior) return raw;
+    if (!prior) {
+      return raw;
+    }
     let next: Record<string, unknown> | null = null;
     for (const field of fields) {
-      if (raw[field] !== undefined) continue;
+      if (raw[field] !== undefined) {
+        continue;
+      }
       const value = prior[field];
-      if (value === undefined) continue;
+      if (value === undefined) {
+        continue;
+      }
       next ??= { ...raw };
       next[field] = value;
     }

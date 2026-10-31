@@ -7,11 +7,9 @@ import { Hint } from "~/components/ui/hint";
 
 export type CanvasPanelType = "materials" | "history" | null;
 
-interface CanvasPanelToolbarProps {
+type CanvasPanelToolbarProps = {
   /** 当前打开的面板（null = 无） */
   active: CanvasPanelType;
-  /** 用户切换面板时调用 */
-  onSelect: (panel: CanvasPanelType) => void;
   /**
    * 为 true 时：渲染成画布内绝对定位的浮动元素
    *（没有面板打开时用）。
@@ -19,7 +17,9 @@ interface CanvasPanelToolbarProps {
    *  与面板竖向居中并排）。
    */
   floating?: boolean;
-}
+  /** 用户切换面板时调用 */
+  onSelect: (panel: CanvasPanelType) => void;
+};
 
 /**
  * 竖向工具栏，用于切换素材库 / 历史面板。
@@ -29,7 +29,7 @@ interface CanvasPanelToolbarProps {
  * - **行内**（`floating=false`）：普通 flex 子元素，坐在打开的面板左侧。
  */
 export function CanvasPanelToolbar({ active, onSelect, floating = true }: CanvasPanelToolbarProps) {
-  const items: Array<{ id: CanvasPanelType; label: string; icon: React.ReactNode }> = [
+  const items: Array<{ icon: React.ReactNode; id: CanvasPanelType; label: string }> = [
     {
       id: "materials",
       label: "素材库",
@@ -51,10 +51,8 @@ export function CanvasPanelToolbar({ active, onSelect, floating = true }: Canvas
       {items.map((item) => {
         const isActive = active === item.id;
         return (
-          <Hint label={item.label} key={item.id}>
+          <Hint key={item.id} label={item.label}>
             <Button
-              variant="ghost"
-              onClick={() => onSelect(isActive ? null : item.id)}
               /* 选中档**钉住悬停值**（`hover:bg-primary/20` / `hover:text-primary-strong`）：
                  `ghost` 变体自带 `hover:bg-muted hover:text-foreground`，而选中
                  分支原本没写 `hover:` —— 划过**当前打开**的那一枚时悬停档胜出，
@@ -67,6 +65,8 @@ export function CanvasPanelToolbar({ active, onSelect, floating = true }: Canvas
                   ? "bg-primary/20 text-primary-strong hover:bg-primary/20 hover:text-primary-strong shadow-primary/10 ring-primary/25 shadow-sm ring-1"
                   : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
               }`}
+              onClick={() => onSelect(isActive ? null : item.id)}
+              variant="ghost"
             >
               {item.icon}
               {/* Tooltip —— 悬停或激活时显示在按钮右侧 */}

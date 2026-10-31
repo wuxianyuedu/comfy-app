@@ -243,24 +243,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS episode_character_uniq ON episode_character (e
 `;
 
 export interface TestTables {
-  users: Array<Row>;
-  projects: Array<Row>;
-  workflowTemplates: Array<Row>;
-  workflowModelTags: Array<Row>;
-  tasks: Array<Row>;
-  taskImages: Array<Row>;
   llmConfig: Array<Row>;
-  posts: Array<Row>;
   models: Array<Row>;
+  posts: Array<Row>;
+  projects: Array<Row>;
   remoteModels: Array<Row>;
+  taskImages: Array<Row>;
+  tasks: Array<Row>;
+  users: Array<Row>;
+  workflowModelTags: Array<Row>;
+  workflowTemplates: Array<Row>;
 }
 
 export interface TestDb {
+  [key: string]: unknown;
   $reset(): void;
-  $tables: TestTables;
   /** 本条用例经过宿主的 SQL 顺序（`$reset()` 清空）。判「读有没有落在事务内」用它。 */
   $sqlTrace: Array<string>;
-  [key: string]: unknown;
+  $tables: TestTables;
 }
 
 let currentSqlite: Database.Database | null = null;
@@ -294,27 +294,41 @@ function parseRow(_table: string, row: Record<string, unknown>): Row {
 }
 
 function serializeValue(col: string, v: unknown): unknown {
-  if (v === null || v === undefined) return v;
+  if (v === null || v === undefined) {
+    return v;
+  }
   // better-sqlite3 只接受 number/string/bigint/buffer/null 绑定值：boolean 必须
   // 先转 0/1（schema.ts 的 boolean 列是 integer({ mode: "boolean" })，存 0/1）。
-  if (typeof v === "boolean") return v ? 1 : 0;
-  if (v instanceof Date) return v.toISOString();
-  if (jsonColumns.has(col)) return JSON.stringify(v);
+  if (typeof v === "boolean") {
+    return v ? 1 : 0;
+  }
+  if (v instanceof Date) {
+    return v.toISOString();
+  }
+  if (jsonColumns.has(col)) {
+    return JSON.stringify(v);
+  }
   // better-sqlite3（v13 / Node 24 编译）拒绝绑定 boolean，需按 schema 的
   // INTEGER 列语义归一为 1/0（旧版 better-sqlite3 曾隐式强转 true→1）。
-  if (typeof v === "boolean") return v ? 1 : 0;
+  if (typeof v === "boolean") {
+    return v ? 1 : 0;
+  }
   return v;
 }
 
 function allRows(table: string): Array<Row> {
-  if (!currentSqlite) throw new Error("test db 未初始化");
+  if (!currentSqlite) {
+    throw new Error("test db 未初始化");
+  }
   return /* SAFETY: 类型断言已复核 */ (
     currentSqlite.prepare(`SELECT * FROM "${table}"`).all() as Array<Record<string, unknown>>
   ).map((r) => parseRow(table, r));
 }
 
 function insertInto(table: string, obj: Record<string, unknown>): void {
-  if (!currentSqlite) throw new Error("test db 未初始化");
+  if (!currentSqlite) {
+    throw new Error("test db 未初始化");
+  }
   const entries = Object.entries(obj).filter(([, v]) => v !== undefined);
   const cols = entries.map(([k]) => k);
   const vals = entries.map(([k, v]) => serializeValue(k, v));
@@ -324,11 +338,15 @@ function insertInto(table: string, obj: Record<string, unknown>): void {
 }
 
 function getRow(table: string, id: string): Row {
-  if (!currentSqlite) throw new Error("test db 未初始化");
+  if (!currentSqlite) {
+    throw new Error("test db 未初始化");
+  }
   const raw = /* SAFETY: 类型断言已复核 */ currentSqlite
     .prepare(`SELECT * FROM "${table}" WHERE id = ?`)
     .get(id) as Record<string, unknown> | undefined;
-  if (!raw) throw new Error(`row not found: ${table} ${id}`);
+  if (!raw) {
+    throw new Error(`row not found: ${table} ${id}`);
+  }
   return parseRow(table, raw);
 }
 
@@ -343,10 +361,10 @@ function getRow(table: string, id: string): Row {
  * 所以它的作用域就是**一条用例**。忘了摘也不会传染下一条。
  */
 type StatementHook = {
-  match: (sql: string, method: string) => boolean;
-  makeError: () => Error;
-  left: number;
   hits: number;
+  left: number;
+  makeError: () => Error;
+  match: (sql: string, method: string) => boolean;
 };
 const statementHooks: Array<StatementHook> = [];
 /** 本条用例经过宿主的 SQL 顺序（`$reset()` 清空）——「读有没有落在事务内」只有靠它判。 */
@@ -450,10 +468,10 @@ export function createTestDb(): TestDb {
          JOIN workflowModelTag t ON wm.workflowModelTag = t.id`,
       )
       .all() as Array<{
-      tagId: string;
-      wtId: string;
       name: string;
+      tagId: string;
       userId: string;
+      wtId: string;
     }>;
     const byWt = new Map<string, Array<{ id: string; name: string; userId: string }>>();
     for (const r of tagRows) {
@@ -501,7 +519,9 @@ export function createTestDb(): TestDb {
   };
 
   const reset = (): void => {
-    for (const t of TABLES) sqlite.prepare(`DELETE FROM "${t}"`).run();
+    for (const t of TABLES) {
+      sqlite.prepare(`DELETE FROM "${t}"`).run();
+    }
     /* 钩子与 trace 就地清空（不是重新赋值）：`$sqlTrace` 是把这份数组**引用**挂在实例上的，
      * 换掉引用会让先前取到的读取者看到一份永久的旧账。 */
     statementHooks.length = 0;
@@ -537,13 +557,15 @@ let seedSeq = 0;
  * 「密文形态」恰恰是 `LlmConfigRepository` / `RemoteModelRepository` 的关键行为。
  */
 function encryptSeedLlmKey(plain: string | null | undefined): string | null {
-  if (plain == null || plain === "") return null;
+  if (plain == null || plain === "") {
+    return null;
+  }
   return encryptLlmKey(plain);
 }
 
 export function seedUser(
   _tdb: TestDb,
-  input: { id: string; email: string; name?: string | null },
+  input: { email: string; id: string; name?: string | null },
 ): Row {
   const now = new Date().toISOString();
   insertInto("user", {
@@ -557,21 +579,21 @@ export function seedUser(
 }
 
 export interface SeedWorkflowTemplateInput {
+  createdAt?: Date;
+  defaultMode?: string | null;
   id?: string;
-  userId: string;
+  modelTags?: Array<{ id: string; name: string; userId: string }>;
+  modes?: string | null;
   name?: string;
-  taskType?: string;
-  rawJson?: unknown;
   paramMap?: unknown;
   positions?: unknown;
-  workflowIO?: unknown;
-  modes?: string | null;
-  defaultMode?: string | null;
-  sourcePath?: string | null;
+  rawJson?: unknown;
   sourceChecksum?: string | null;
   sourceMtime?: number | null;
-  modelTags?: Array<{ id: string; name: string; userId: string }>;
-  createdAt?: Date;
+  sourcePath?: string | null;
+  taskType?: string;
+  userId: string;
+  workflowIO?: unknown;
 }
 
 export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateInput): Row {
@@ -616,26 +638,26 @@ export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateIn
 }
 
 export interface SeedTaskInput {
-  id?: string;
-  userId: string;
-  type?: string;
-  status?: string;
-  prompt?: string;
-  negativePrompt?: string | null;
-  params?: unknown;
-  workflowName?: string;
-  projectId?: string | null;
-  images?: Array<Row>;
-  workflowSnapshot?: unknown;
-  referenceImages?: unknown;
-  /** 来源任务（重绘 / 放大的追溯用例用）。 */
-  parentId?: string | null;
+  createdAt?: Date;
+  error?: string | null;
   /** 提交时刻的 RAW 执行载荷（task.retry 用例要区分「有载荷可原样重跑」与
    *  「execPayload 为空的历史遗留行」两态）。 */
   execPayload?: unknown;
+  id?: string;
+  images?: Array<Row>;
+  negativePrompt?: string | null;
+  params?: unknown;
+  /** 来源任务（重绘 / 放大的追溯用例用）。 */
+  parentId?: string | null;
   progress?: number;
-  error?: string | null;
-  createdAt?: Date;
+  projectId?: string | null;
+  prompt?: string;
+  referenceImages?: unknown;
+  status?: string;
+  type?: string;
+  userId: string;
+  workflowName?: string;
+  workflowSnapshot?: unknown;
 }
 
 export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
@@ -683,12 +705,12 @@ export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
 export function seedProject(
   _tdb: TestDb,
   input: {
+    edges?: unknown;
     id?: string;
-    userId: string;
     name: string;
     nodes?: unknown;
-    edges?: unknown;
     updatedAt?: Date;
+    userId: string;
   },
 ): Row {
   const id = input.id ?? `seed-proj-${++seedSeq}`;
@@ -706,6 +728,41 @@ export function seedProject(
 }
 
 /**
+ * 种一条生产数据（production 表，id = 项目 id）。FR-SR 双向同步用例用：
+ * 给 `characters` 列预置角色卡，验证 提升 / 注入。其余列一律吃 schema 默认值。
+ */
+export function seedProduction(
+  _tdb: TestDb,
+  input: {
+    characters?: unknown;
+    id?: string;
+    name?: string;
+    userId: string;
+  },
+): Row {
+  const id = input.id ?? `seed-prod-${++seedSeq}`;
+  const at = new Date();
+  insertInto("production", {
+    id,
+    userId: input.userId,
+    title: input.name ?? "未命名项目",
+    type: "short_video",
+    tone: "",
+    logline: "",
+    scriptMarkdown: "",
+    scenes: [],
+    characters: input.characters ?? [],
+    shots: [],
+    progress: {},
+    run: {},
+    scriptReview: {},
+    createdAt: at,
+    updatedAt: at,
+  });
+  return getRow("production", id);
+}
+
+/**
  * 种一条成片。给归属类用例用（`films/<id>.mp4` 的落点名字里就是成片行 id），
  * 其余列一律吃 schema 默认值 —— 这些用例只关心 `userId` 那一格。
  * 与 `filmRepository.create` 的取舍：那条会生成 cuid，路径断言就得先读回 id；
@@ -714,12 +771,12 @@ export function seedProject(
 export function seedFilm(
   _tdb: TestDb,
   input: {
-    id?: string;
-    userId: string;
-    projectId?: string | null;
-    title?: string;
-    script?: string;
     finalVideo?: string | null;
+    id?: string;
+    projectId?: string | null;
+    script?: string;
+    title?: string;
+    userId: string;
   },
 ): Row {
   const id = input.id ?? `seed-film-${++seedSeq}`;
@@ -738,12 +795,12 @@ export function seedFilm(
 }
 
 export interface SeedRemoteModelInput {
-  id?: string;
-  name: string;
-  baseUrl?: string | null;
   /** 明文密钥；helper 内部按 schema 约定加密后再落库（与运行时写入同形）。 */
   apiKey?: string | null;
+  baseUrl?: string | null;
+  id?: string;
   kind?: string;
+  name: string;
   workshopAdapters?: unknown;
 }
 

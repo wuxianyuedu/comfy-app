@@ -86,7 +86,7 @@ export const SelectedVsHover: Story = {
 export const RadioGroupUsage: Story = {
   args: { children: "gpt-image-1" },
   render: (args) => (
-    <div role="radiogroup" aria-label="选择远端模型" className="flex flex-wrap items-center gap-2">
+    <div aria-label="选择远端模型" className="flex flex-wrap items-center gap-2" role="radiogroup">
       {["gpt-image-1", "flux-pro-ultra", "seedream-4"].map((name, i) => (
         <SelectChip key={name} {...args} selected={i === 0}>
           {name}
@@ -104,7 +104,7 @@ export const DashedAction: Story = {
       <SelectChip {...args} selected>
         文生图
       </SelectChip>
-      <SelectChip {...args} shape="dashed" selected={false}>
+      <SelectChip {...args} selected={false} shape="dashed">
         ＋ 添加模式
       </SelectChip>
     </div>
@@ -116,7 +116,7 @@ export const Disabled: Story = {
   args: { children: "提示词" },
   render: (args) => (
     <div className="flex flex-wrap items-center gap-2">
-      <SelectChip {...args} shape="compact" selected disabled>
+      <SelectChip {...args} disabled selected shape="compact">
         ✓ 提示词
       </SelectChip>
       <SelectChip {...args} shape="compact">

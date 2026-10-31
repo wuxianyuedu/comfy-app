@@ -131,10 +131,14 @@ export function parseTimings(pairs) {
   const out = [];
   for (const raw of pairs) {
     const at = String(raw).lastIndexOf("=");
-    if (at <= 0) continue;
+    if (at <= 0) {
+      continue;
+    }
     const name = raw.slice(0, at);
     const ms = Number(raw.slice(at + 1));
-    if (!Number.isFinite(ms) || ms < 0) continue;
+    if (!Number.isFinite(ms) || ms < 0) {
+      continue;
+    }
     out.push({ name, ms: Math.round(ms) });
   }
   return out;
@@ -149,7 +153,9 @@ export function parseTimings(pairs) {
  */
 export function appendRun({ gitDir, record }) {
   const file = ledgerPath(gitDir);
-  if (!file) return { ok: false, reason: "不在 git 检出里" };
+  if (!file) {
+    return { ok: false, reason: "不在 git 检出里" };
+  }
   try {
     fs.appendFileSync(file, `${JSON.stringify(record)}\n`, "utf8");
     return { ok: true };
@@ -167,7 +173,9 @@ export function appendRun({ gitDir, record }) {
  */
 export function readRuns(gitDir) {
   const file = ledgerPath(gitDir);
-  if (!file) return [];
+  if (!file) {
+    return [];
+  }
   let text;
   try {
     text = fs.readFileSync(file, "utf8");
@@ -179,10 +187,14 @@ export function readRuns(gitDir) {
   const out = [];
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
-    if (!trimmed) continue;
+    if (!trimmed) {
+      continue;
+    }
     try {
       const parsed = JSON.parse(trimmed);
-      if (parsed && typeof parsed === "object") out.push(parsed);
+      if (parsed && typeof parsed === "object") {
+        out.push(parsed);
+      }
     } catch {
       /* 半截行（上一次写入被 Ctrl-C 打断）不构成一条记录。 */
     }
@@ -258,9 +270,13 @@ export function parseJunitXml(xml) {
   for (const tag of suiteTags(xml)) {
     const name = /\bname="([^"]*)"/.exec(tag)?.[1];
     const time = /\btime="([^"]*)"/.exec(tag)?.[1];
-    if (!name || time === undefined) continue;
+    if (!name || time === undefined) {
+      continue;
+    }
     const secs = Number(time);
-    if (!Number.isFinite(secs) || secs < 0) continue;
+    if (!Number.isFinite(secs) || secs < 0) {
+      continue;
+    }
     out.push({ name, ms: Math.round(secs * 1000) });
   }
   return out;
@@ -285,13 +301,17 @@ export function failingSuitesFromJunit(xml) {
   const out = [];
   for (const tag of suiteTags(xml)) {
     const name = /\bname="([^"]*)"/.exec(tag)?.[1];
-    if (!name) continue;
+    if (!name) {
+      continue;
+    }
     const bad = ["failures", "errors"].some((key) => {
       const raw = new RegExp(`\\b${key}="([^"]*)"`).exec(tag)?.[1];
       const n = Number(raw);
       return raw !== undefined && Number.isFinite(n) && n > 0;
     });
-    if (bad) out.push(name);
+    if (bad) {
+      out.push(name);
+    }
   }
   return out;
 }
@@ -320,13 +340,17 @@ export function failingSuiteTextsFromJunit(xml) {
   for (let m = openRe.exec(text); m !== null; m = openRe.exec(text)) {
     const tag = m[0];
     const name = /\bname="([^"]*)"/.exec(tag)?.[1];
-    if (!name) continue;
+    if (!name) {
+      continue;
+    }
     const bad = ["failures", "errors"].some((key) => {
       const raw = new RegExp(`\\b${key}="([^"]*)"`).exec(tag)?.[1];
       const n = Number(raw);
       return raw !== undefined && Number.isFinite(n) && n > 0;
     });
-    if (!bad) continue;
+    if (!bad) {
+      continue;
+    }
     const nextOpen = text.indexOf("<testsuite", openRe.lastIndex);
     const nextClose = text.indexOf("</testsuite>", openRe.lastIndex);
     const stops = [nextOpen, nextClose].filter((i) => i !== -1);
@@ -365,7 +389,9 @@ export function collectFileTimings({ dir, fsLike = realFs }) {
     .sort((a, b) => {
       const pa = new RegExp(`^${C_FILES_PREFIX}(\\d+)-(\\d+)\\.xml$`).exec(a);
       const pb = new RegExp(`^${C_FILES_PREFIX}(\\d+)-(\\d+)\\.xml$`).exec(b);
-      if (!pa || !pb) return a < b ? -1 : 1;
+      if (!pa || !pb) {
+        return a < b ? -1 : 1;
+      }
       return Number(pa[1]) - Number(pb[1]) || Number(pa[2]) - Number(pb[2]);
     });
   for (const file of xmls) {
@@ -377,8 +403,12 @@ export function collectFileTimings({ dir, fsLike = realFs }) {
       continue;
     }
     const entries = parseJunitXml(text);
-    if (entries.length === 0) dropped += 1;
-    for (const e of entries) byName.set(e.name, e.ms);
+    if (entries.length === 0) {
+      dropped += 1;
+    }
+    for (const e of entries) {
+      byName.set(e.name, e.ms);
+    }
   }
   const files = [...byName.entries()].map(([name, ms]) => ({ name, ms }));
   /* 清单读不到 ⇒ `expected = 0`，而**不是**「等于取到读数的份数」。
@@ -406,7 +436,9 @@ export function collectFileTimings({ dir, fsLike = realFs }) {
  * @returns {number}
  */
 export function median(values) {
-  if (values.length === 0) return 0;
+  if (values.length === 0) {
+    return 0;
+  }
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   /* 下标取值在这里会是 `number | undefined`（`noUncheckedIndexedAccess`）—— 上面那条
@@ -497,9 +529,7 @@ export function formatReport(runs, opts = {}) {
     for (const step of ranked.slice(0, 10)) {
       lines.push(
         `    ${secs(step.ms).padStart(7)}  ${step.name}` +
-          (step.n < shown.length
-            ? `（${step.n}/${shown.length} 次有记录）`
-            : ""),
+          (step.n < shown.length ? `（${step.n}/${shown.length} 次有记录）` : ""),
       );
     }
   }
@@ -514,7 +544,9 @@ export function formatReport(runs, opts = {}) {
     const arr = Array.isArray(run.files) ? run.files : [];
     filesSeen = Math.max(filesSeen, arr.length);
     for (const f of arr) {
-      if (!f || typeof f.name !== "string") continue;
+      if (!f || typeof f.name !== "string") {
+        continue;
+      }
       byFile.set(f.name, [...(byFile.get(f.name) ?? []), Number(f.ms) || 0]);
     }
   }
@@ -526,10 +558,7 @@ export function formatReport(runs, opts = {}) {
     const expected = Number(lastRun.filesExpected) || 0;
     const missing = Number(lastRun.filesMissing) || 0;
     const cGroup = groupsOf(lastRun).find((g) => g.name === "C");
-    const sumMs = ranked.reduce(
-      (s, r) => s + median(byFile.get(r.name) ?? []),
-      0,
-    );
+    const sumMs = ranked.reduce((s, r) => s + median(byFile.get(r.name) ?? []), 0);
     lines.push("");
     lines.push(
       `  组 C 各文件（中位数，前 ${Math.min(10, ranked.length)} 名；` +
@@ -573,10 +602,14 @@ function collect(argv, name) {
      * 就当没有这一格」处理而不是断言 —— 与文件头那条同口径：记账线路**不阻断**提交，
      * 参数形状读不出只是少一格账，抛出来才是把记账变成了必经之路。 */
     const arg = argv[i];
-    if (arg === undefined) continue;
+    if (arg === undefined) {
+      continue;
+    }
     if (arg === name) {
       const next = argv[i + 1];
-      if (next !== undefined) out.push(next);
+      if (next !== undefined) {
+        out.push(next);
+      }
       i += 1;
     } else if (arg.startsWith(`${name}=`)) {
       out.push(arg.slice(name.length + 1));
@@ -618,8 +651,7 @@ export function recordRun(argv, cwd = process.cwd()) {
   const gitDir = resolveGitDir(cwd);
   const groups = parseTimings(collect(argv, "--group"));
   const steps = parseTimings(collect(argv, "--step"));
-  const declared =
-    collect(argv, "--group").length + collect(argv, "--step").length;
+  const declared = collect(argv, "--group").length + collect(argv, "--step").length;
   const dropped = declared - groups.length - steps.length;
   /* 组 C 的分文件读数：钩子只把**目录**递过来（shell 里解析 XML 会变成第二份实现，
    * 而那正是本钩子刻意不写的东西）。没递目录时这一格是空数组 —— 与「这次跑了但没有
@@ -643,17 +675,13 @@ export function recordRun(argv, cwd = process.cwd()) {
   const { ok, reason } = appendRun({ gitDir, record });
   if (!ok) {
     /* 记账失败**只是少一行账**，不是提交失败。往 stderr 说一句就够。 */
-    process.stderr.write(
-      `[precommit-timing] 本次耗时没能落盘（${reason}）—— 不影响提交。\n`,
-    );
+    process.stderr.write(`[precommit-timing] 本次耗时没能落盘（${reason}）—— 不影响提交。\n`);
     return 0;
   }
   process.stdout.write(
     `[precommit-timing] 已记录本次耗时：总 ${secs(record.totalMs)}` +
       `（${groups.length} 组 / ${steps.length} 步` +
-      (cRead.files.length > 0
-        ? ` / 组 C 分文件 ${cRead.files.length} 份`
-        : "") +
+      (cRead.files.length > 0 ? ` / 组 C 分文件 ${cRead.files.length} 份` : "") +
       "）\n" +
       (cRead.missing > 0
         ? `[precommit-timing] 组 C 清单 ${cRead.expected} 份里有 ${cRead.missing} 份没给出读数` +
@@ -662,9 +690,7 @@ export function recordRun(argv, cwd = process.cwd()) {
       (cRead.dropped > 0
         ? `[precommit-timing] 有 ${cRead.dropped} 个 junit 读数解析不出，已跳过\n`
         : "") +
-      (dropped > 0
-        ? `[precommit-timing] 有 ${dropped} 条耗时读数解析不出，已跳过\n`
-        : ""),
+      (dropped > 0 ? `[precommit-timing] 有 ${dropped} 条耗时读数解析不出，已跳过\n` : ""),
   );
   return 0;
 }
@@ -678,9 +704,7 @@ function viewRun(argv) {
   if (flag(argv, "--clear")) {
     const file = ledgerPath(gitDir);
     if (!file) {
-      process.stderr.write(
-        "[precommit-timing] 不在 git 检出里，没有账本可清。\n",
-      );
+      process.stderr.write("[precommit-timing] 不在 git 检出里，没有账本可清。\n");
       return 0;
     }
     try {
@@ -701,10 +725,7 @@ function viewRun(argv) {
   return 0;
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   /* `record` 是唯一的子命令，其余一切 argv 都是「看账」的参数 —— 所以**不能**把
    * 第一个位置参数一律当子命令剥掉：`--clear` / `--json` / `--last` 都是看账的开关，
    * 剥掉它们等于「敲了没反应」（第一版就是这么错的）。 */

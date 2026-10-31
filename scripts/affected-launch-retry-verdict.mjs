@@ -65,15 +65,14 @@ export function classifyRetry(input) {
       unknown.push(f);
       continue;
     }
-    if (isTimeoutShaped(body)) timedOut.push(f);
-    else hardFail.push(f);
+    if (isTimeoutShaped(body)) {
+      timedOut.push(f);
+    } else {
+      hardFail.push(f);
+    }
   }
   const kind =
-    hardFail.length > 0
-      ? "hard-fail"
-      : unknown.length > 0
-        ? "unattributed"
-        : "unverified";
+    hardFail.length > 0 ? "hard-fail" : unknown.length > 0 ? "unattributed" : "unverified";
   return { kind, timedOut, hardFail, unknown };
 }
 
@@ -104,17 +103,19 @@ export function mergePerFileReads(verdict, perFile) {
   const green = [];
   for (const one of perFile) {
     const at = unknown.indexOf(one.file);
-    if (at !== -1) unknown.splice(at, 1);
-    if (one.status === 0) green.push(one.file);
-    else if (isTimeoutShaped(one.output)) timedOut.push(one.file);
-    else hardFail.push(one.file);
+    if (at !== -1) {
+      unknown.splice(at, 1);
+    }
+    if (one.status === 0) {
+      green.push(one.file);
+    } else if (isTimeoutShaped(one.output)) {
+      timedOut.push(one.file);
+    } else {
+      hardFail.push(one.file);
+    }
   }
   const kind =
-    hardFail.length > 0
-      ? "hard-fail"
-      : unknown.length > 0
-        ? "unattributed"
-        : "unverified";
+    hardFail.length > 0 ? "hard-fail" : unknown.length > 0 ? "unattributed" : "unverified";
   return { kind, timedOut, hardFail, unknown, green };
 }
 
@@ -144,8 +145,7 @@ export function mergePerFileReads(verdict, perFile) {
  */
 export function classifyFirstPass({ status, output }) {
   /** @param {string} what */
-  const how = (what) =>
-    status === null ? "被信号终止" : `退出码 ${status}${what}`;
+  const how = (what) => (status === null ? "被信号终止" : `退出码 ${status}${what}`);
   if (isLaunchFailureShaped(output)) {
     return {
       kind: "launch-failed",

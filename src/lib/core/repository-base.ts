@@ -45,26 +45,26 @@ import type { Task, TaskImage } from "~/server/db/schema";
 export type TaskWithCover = Task & { images: Array<TaskImage> };
 
 /** 所有可被 Repository 管理的实体都需具备可比较的字符串主键。 */
-export interface Identifiable {
+export type Identifiable = {
   id: string;
-}
+};
 
 /**
  * 与 ORM 无关的持久化契约。任何业务模块都应面向该接口编程，
  * 而非直接依赖 Drizzle 客户端。
  */
-export interface Repository<T extends Identifiable> {
-  /** 按主键取单条；不存在返回 `null`。 */
-  findById(id: string): Promise<T | null>;
-  /** 取全部（**不保证顺序**；需要稳定顺序时在子类里 `orderBy`）。 */
-  findAll(): Promise<Array<T>>;
+export type Repository<T extends Identifiable> = {
   /** 插入一条。 */
   create(entity: T): Promise<T>;
-  /** 部分更新（仅覆盖传入字段）。 */
-  update(id: string, patch: Partial<T>): Promise<T>;
   /** 删除；不存在静默忽略。 */
   delete(id: string): Promise<void>;
-}
+  /** 取全部（**不保证顺序**；需要稳定顺序时在子类里 `orderBy`）。 */
+  findAll(): Promise<Array<T>>;
+  /** 按主键取单条；不存在返回 `null`。 */
+  findById(id: string): Promise<T | null>;
+  /** 部分更新（仅覆盖传入字段）。 */
+  update(id: string, patch: Partial<T>): Promise<T>;
+};
 
 /**
  * 通用 Drizzle CRUD 基类。子类传入表对象即可获得一套标准、可单测的
@@ -82,7 +82,9 @@ export class DrizzleRepository<T extends Identifiable> implements Repository<T> 
 
   private get id(): AnySQLiteColumn {
     const explicit = this.idColumn;
-    if (explicit) return explicit;
+    if (explicit) {
+      return explicit;
+    }
     /* 表对象上的 `id` 列：子类不传 `idColumn` 时的约定。缺席属**装配错误**
      *  （基类拿到了一张没有 id 的表），在这里显式失败 —— 原来的 `!` 会把
      *  它变成下游某次 SQL 上的莫名报错。 */
@@ -114,7 +116,9 @@ export class DrizzleRepository<T extends Identifiable> implements Repository<T> 
 
   async update(id: string, patch: Partial<T>): Promise<T> {
     const existing = await this.findById(id);
-    if (!existing) throw new NotFoundError(`记录不存在: ${id}`);
+    if (!existing) {
+      throw new NotFoundError(`记录不存在: ${id}`);
+    }
     const rows = await db
       .update(this.table)
       .set(/* SAFETY: 类型断言已复核 */ patch as Record<string, unknown>)

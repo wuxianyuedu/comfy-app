@@ -162,8 +162,8 @@ describe("边的两端与 handle 取值", () => {
 describe("类型闸门（libraryConnectionAllowed）", () => {
   const allowed = (connection: {
     source: string;
-    target: string;
     sourceHandle: string;
+    target: string;
     targetHandle: string;
   }) => libraryConnectionAllowed(connection, { io, entries });
 
@@ -258,8 +258,8 @@ describe("落点被拒的原因（libraryConnectionRefusal）", () => {
    * 报 —— 用户报「连不上也没有提示」，一半是这样「有提示但说错因」的提示。 */
   const why = (connection: {
     source: string;
-    target: string;
     sourceHandle: string;
+    target: string;
     targetHandle: string;
   }) => libraryConnectionRefusal(connection, { io, entries });
 

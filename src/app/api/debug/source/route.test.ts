@@ -19,7 +19,7 @@ import { NextRequest } from "next/server";
 const { requireRequestUser, readFile, stat } = vi.hoisted(() => ({
   requireRequestUser: vi.fn<() => Promise<{ id: string } | null>>(),
   readFile: vi.fn<(p: string) => Promise<string>>(),
-  stat: vi.fn<(p: string) => Promise<{ size: number; mtime: Date }>>(),
+  stat: vi.fn<(p: string) => Promise<{ mtime: Date; size: number }>>(),
 }));
 
 vi.mock("~/server/auth/request-user", () => ({
@@ -37,7 +37,9 @@ const LOGGED_IN = { id: "u-1" };
 
 function requestWith(file: string | null): NextRequest {
   const url = new URL("http://x/api/debug/source");
-  if (file !== null) url.searchParams.set("file", file);
+  if (file !== null) {
+    url.searchParams.set("file", file);
+  }
   return new NextRequest(url);
 }
 

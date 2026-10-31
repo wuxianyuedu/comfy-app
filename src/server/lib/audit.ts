@@ -25,8 +25,8 @@ export type AuditEvent =
 export async function audit(
   event: AuditEvent,
   ctx: {
-    session: { user?: { id: string } } | null;
     headers: Headers;
+    session: { user?: { id: string } } | null;
   },
   meta: Record<string, unknown> = {},
 ): Promise<void> {
@@ -43,8 +43,8 @@ export async function audit(
       ip,
       meta: JSON.stringify(meta),
     })
-    .catch((err) => {
+    .catch((error) => {
       // 审计失败不能影响主流程，只记日志
-      logger.error({ err, event }, "audit_write_failed");
+      logger.error({ error, event }, "audit_write_failed");
     });
 }

@@ -46,8 +46,8 @@ const USER = "user-a";
 const PROJ = "proj_rev";
 
 async function seed(content: {
-  scriptMarkdown?: string;
   characters?: Array<unknown>;
+  scriptMarkdown?: string;
   shots?: Array<unknown>;
 }) {
   await productionRepository.upsertForUser(USER, {
@@ -382,12 +382,12 @@ describe("reviewShotImage（P8-2 生图视觉评审）", () => {
     // 消息里带图：镜头图 + 定妆照都进了 image_url 块
     const [, userMsg] = /* SAFETY: 类型断言已复核 */ completeLLMStructured.mock
       .calls[0]![1] as Array<{
-      role: string;
       content: unknown;
+      role: string;
     }>;
     const parts = /* SAFETY: 类型断言已复核 */ userMsg!.content as Array<{
-      type: string;
       image_url?: unknown;
+      type: string;
     }>;
     const imageUrls = parts
       .filter((p) => p.type === "image_url")

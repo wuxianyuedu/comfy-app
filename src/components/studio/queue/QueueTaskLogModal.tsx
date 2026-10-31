@@ -26,10 +26,7 @@ import { Hint } from "~/components/ui/hint";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
-import {
-  TaskLogEmptyHint,
-  TaskLogTimeline,
-} from "~/components/studio/logs/TaskLogTimeline";
+import { TaskLogEmptyHint, TaskLogTimeline } from "~/components/studio/logs/TaskLogTimeline";
 import { WorkflowRunRawCliModal } from "~/components/studio/workflow-library/WorkflowRunRawCliModal";
 import { useCancelTask } from "~/components/studio/project-canvas/hooks/use-cancel-task";
 import { taskStatusLabel } from "~/lib/task-state";
@@ -37,14 +34,14 @@ import { taskStatusLabel } from "~/lib/task-state";
 import { useTaskLogStream } from "./hooks/use-task-log-stream";
 
 /** 打开日志弹窗要的最小任务信息（由 controller 从 `task.list` 行 / 跑动中卡收窄）。 */
-export interface QueueTaskLogTarget {
-  id: string;
-  workflowName: string | null;
-  /** 打开那一刻的行状态；排队中开跑 / 终态由流内的 progress / settled 更新。 */
-  status: string;
+export type QueueTaskLogTarget = {
   /** 行上的失败原因（有就随错误卡一起展示）。 */
   error?: string | null;
-}
+  id: string;
+  /** 打开那一刻的行状态；排队中开跑 / 终态由流内的 progress / settled 更新。 */
+  status: string;
+  workflowName: string | null;
+};
 
 /* 弹窗宽度档与工作流库执行日志同密度（时刻 + 级别 + 正文）；写`w-*` 的理由见
  * `~/components/ui/dialog-width` 的文件头（ISSUE #720）。 */
@@ -54,8 +51,8 @@ export function QueueTaskLogModal({
   task,
   onClose,
 }: {
-  task: QueueTaskLogTarget | null;
   onClose: () => void;
+  task: QueueTaskLogTarget | null;
 }) {
   const stream = useTaskLogStream(task?.id ?? null);
   /* 「查看完整输出」弹窗：comfy-cli 未经截断的完整原文。 */
@@ -68,7 +65,9 @@ export function QueueTaskLogModal({
     onFailed: () => undefined,
   });
 
-  if (!task) return null;
+  if (!task) {
+    return null;
+  }
 
   /* 徽标状态：流内终态 > 流内进度帧 > 打开那一刻的行状态。排队中的任务开跑、
    * 被取消、跑完，都在弹窗里直接翻面，不用等列表那边的轮询。 */
@@ -80,19 +79,17 @@ export function QueueTaskLogModal({
       ? "RUNNING"
       : task.status;
   /* 还没落定才谈得上「在跑」：raw-cli 弹窗据此决定要不要保持 1.5s 轮询。 */
-  const running =
-    !stream.settled && (stream.started || task.status === "RUNNING");
-  const failureMessage =
-    stream.settled && !stream.settled.ok ? stream.settled.message : null;
+  const running = !stream.settled && (stream.started || task.status === "RUNNING");
+  const failureMessage = stream.settled && !stream.settled.ok ? stream.settled.message : null;
 
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
         aria-label="执行日志"
-        data-testid="queue-log-modal"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
+        data-testid="queue-log-modal"
         popupClassName={panel.widthClass}
+        showCloseButton={false}
       >
         <div
           className={`border-border bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60 ${panel.widthClass}`}
@@ -100,10 +97,8 @@ export function QueueTaskLogModal({
           {/* Header */}
           <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <FileText size={16} className="text-primary-strong shrink-0" />
-              <span className="text-ink truncate text-[15px] font-semibold">
-                执行日志
-              </span>
+              <FileText className="text-primary-strong shrink-0" size={16} />
+              <span className="text-ink truncate text-[15px] font-semibold">执行日志</span>
               <span
                 className="text-ink-muted text-2xs max-w-55 truncate"
                 title={task.workflowName ?? undefined}
@@ -111,10 +106,10 @@ export function QueueTaskLogModal({
                 {task.workflowName ?? "（未知工作流）"}
               </span>
               <StatusBadge
-                status={status}
-                label={taskStatusLabel(status)}
-                dot={false}
                 className="text-3xs px-1.5 py-px"
+                dot={false}
+                label={taskStatusLabel(status)}
+                status={status}
               />
             </div>
 
@@ -122,39 +117,36 @@ export function QueueTaskLogModal({
               {!stream.settled && (
                 <Hint label="取消当前查看的任务" wrap>
                   <Button
-                    variant="danger"
-                    onClick={() => void cancel()}
-                    disabled={cancelling}
-                    data-testid="queue-log-cancel"
                     className="text-2xs h-auto rounded-md px-2 py-0.5"
+                    data-testid="queue-log-cancel"
+                    disabled={cancelling}
+                    onClick={() => void cancel()}
+                    variant="danger"
                   >
                     {cancelling ? "× 取消中…" : "× 取消"}
                   </Button>
                 </Hint>
               )}
-              <Hint
-                label="查看 comfy-cli 完整输出（未经截断、可格式化 JSON）"
-                wrap
-              >
+              <Hint label="查看 comfy-cli 完整输出（未经截断、可格式化 JSON）" wrap>
                 <Button
-                  variant="ghost"
-                  onClick={() => setRawOpen(true)}
-                  data-testid="queue-log-raw"
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong text-2xs rounded-md px-2 py-0.5"
+                  data-testid="queue-log-raw"
+                  onClick={() => setRawOpen(true)}
+                  variant="ghost"
                 >
                   查看完整输出
                 </Button>
               </Hint>
               <WidePanelToggle
-                panel={panel}
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                panel={panel}
               />
-              <Hint label="关闭" accessibleName>
+              <Hint accessibleName label="关闭">
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={onClose}
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                  onClick={onClose}
+                  size="icon-sm"
+                  variant="ghost"
                 >
                   <X data-icon="inline-start" size={16} />
                 </Button>
@@ -164,18 +156,6 @@ export function QueueTaskLogModal({
 
           {/* 时间线主体（级别筛选 + 自动滚动 + 虚拟列表 + 底栏计数）—— 共享组件 */}
           <TaskLogTimeline
-            logs={stream.logs}
-            rowTestId="queue-log-line"
-            listClassName="bg-panel-deep/60"
-            topSlot={
-              (failureMessage ?? task.error) ? (
-                <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
-                  <div className="wrap-break-word whitespace-pre-wrap">
-                    {failureMessage ?? task.error}
-                  </div>
-                </div>
-              ) : null
-            }
             emptySlot={
               <TaskLogEmptyHint
                 message={
@@ -185,14 +165,26 @@ export function QueueTaskLogModal({
                 }
               />
             }
+            listClassName="bg-panel-deep/60"
+            logs={stream.logs}
+            rowTestId="queue-log-line"
+            topSlot={
+              (failureMessage ?? task.error) ? (
+                <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
+                  <div className="wrap-break-word whitespace-pre-wrap">
+                    {failureMessage ?? task.error}
+                  </div>
+                </div>
+              ) : null
+            }
           />
         </div>
       </DialogContent>
       <WorkflowRunRawCliModal
-        taskId={task.id}
-        running={running}
-        open={rawOpen}
         onClose={() => setRawOpen(false)}
+        open={rawOpen}
+        running={running}
+        taskId={task.id}
       />
     </Dialog>
   );

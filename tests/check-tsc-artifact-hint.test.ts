@@ -22,14 +22,14 @@ import { describe, expect, it } from "vitest";
 // 按仓库惯例给 mod 显式标注返回形状。
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const mod = /* SAFETY: 类型断言已复核 */ require("../scripts/check-tsc-artifact-hint.cjs") as {
-  classifyTscErrors: (text: string) => {
-    total: number;
-    files: Array<string>;
-    artifactFiles: Array<string>;
-    codeFiles: Array<string>;
-    artifactOnly: boolean;
-  };
   buildHint: (v: unknown) => string;
+  classifyTscErrors: (text: string) => {
+    artifactFiles: Array<string>;
+    artifactOnly: boolean;
+    codeFiles: Array<string>;
+    files: Array<string>;
+    total: number;
+  };
   isArtifact: (filePath: string) => boolean;
 };
 

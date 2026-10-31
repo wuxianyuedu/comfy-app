@@ -68,7 +68,7 @@ const {
   ),
   clearManualStopMock: vi.fn<() => void>(),
   clearAutoStartFailureMock: vi.fn<() => void>(),
-  ensureReadyMock: vi.fn<() => Promise<{ ok: boolean; detail: string }>>(async () => ({
+  ensureReadyMock: vi.fn<() => Promise<{ detail: string; ok: boolean }>>(async () => ({
     ok: true,
     detail: "已就绪",
   })),
@@ -81,7 +81,7 @@ const {
     port: null,
     via: "external",
   })),
-  openComfyMock: vi.fn<() => Promise<{ ok: boolean; detail: string }>>(async () => ({
+  openComfyMock: vi.fn<() => Promise<{ detail: string; ok: boolean }>>(async () => ({
     ok: true,
     detail: "已打开",
   })),
@@ -187,7 +187,9 @@ function installFakeChild() {
       kill: vi.fn(),
     };
     setTimeout(() => {
-      for (const cb of handlers.spawn ?? []) cb();
+      for (const cb of handlers.spawn ?? []) {
+        cb();
+      }
     }, 0);
     return handle;
   });
@@ -247,7 +249,7 @@ describe("setting.save", () => {
   it.for(
     /* SAFETY: 类型断言已复核 */ [
       [{ comfyuiPort: -1 }],
-      [{ comfyuiPort: 65536 }],
+      [{ comfyuiPort: 65_536 }],
       [{ comfyuiPort: 1.5 }],
     ] as const,
   )("端口非法 %j → BAD_REQUEST 且一次都不写", async ([input]) => {

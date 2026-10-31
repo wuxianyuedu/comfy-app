@@ -43,11 +43,7 @@ function Boom({ explode }: { explode: boolean }) {
   if (explode) {
     throw new Error("渲染期炸了：这个子树的 props 不合法");
   }
-  return (
-    <p className="text-ink-muted text-sm">
-      子树正常渲染。点上面的按钮让它抛一次。
-    </p>
-  );
+  return <p className="text-ink-muted text-sm">子树正常渲染。点上面的按钮让它抛一次。</p>;
 }
 
 /** 默认降级 UI（不传 `fallback`）：红色卡片 + 重试。
@@ -65,20 +61,16 @@ function BoomDemo() {
   return (
     <div className="flex w-lg flex-col gap-3">
       <div className="flex gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setExplode((e) => !e)}
-        >
+        <Button onClick={() => setExplode((e) => !e)} size="sm" variant="outline">
           {explode ? "停止抛错" : "让子树抛错"}
         </Button>
         <Button
-          size="sm"
-          variant="ghost"
           onClick={() => {
             setExplode(false);
             setAttempt((a) => a + 1);
           }}
+          size="sm"
+          variant="ghost"
         >
           重挂边界（换 key）
         </Button>
@@ -111,9 +103,7 @@ export const FallbackWithError: Story = {
       <ErrorBoundary
         fallback={(error) => (
           <div className="border-destructive/30 bg-destructive/5 flex flex-col gap-2 rounded-lg border p-3">
-            <span className="text-destructive text-sm font-semibold">
-              这块面板炸了
-            </span>
+            <span className="text-destructive text-sm font-semibold">这块面板炸了</span>
             <pre className="text-ink-muted font-mono text-xs whitespace-pre-wrap">
               {error?.message ?? "没有错误对象"}
             </pre>

@@ -165,7 +165,9 @@ describe("page-window —— 尾部窗口的增量追加", () => {
 
   it("封顶后长度恒定（不会一边 shift 一边长胖）", () => {
     let logs: Array<number> = [];
-    for (let i = 0; i < 100; i++) logs = tailWindowAppend(logs, i, 10);
+    for (let i = 0; i < 100; i++) {
+      logs = tailWindowAppend(logs, i, 10);
+    }
     expect(logs).toHaveLength(10);
     expect(logs).toEqual([90, 91, 92, 93, 94, 95, 96, 97, 98, 99]);
   });

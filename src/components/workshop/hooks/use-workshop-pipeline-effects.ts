@@ -29,8 +29,8 @@ import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 
 export function useWorkshopBootstrapData(input: {
-  setStyles: (styles: Array<StyleRef>) => void;
   setApiChannels: (channels: ApiChannelsView | null) => void;
+  setStyles: (styles: Array<StyleRef>) => void;
   setWorkflowOptions: (workflows: Array<WorkshopWorkflowOption>) => void;
 }) {
   const { setStyles, setApiChannels, setWorkflowOptions } = input;
@@ -65,8 +65,8 @@ export function useWorkshopBootstrapData(input: {
 export function useWorkshopTaskRecovery(input: {
   /** 每次渲染后同步的最新草稿（镜头列表从它读，避免闭包捕获旧 state）。 */
   latestDraftRef: { current: WorkshopDraft };
-  setShots: (updater: (prev: Array<Shot>) => Array<Shot>) => void;
   setNotice: (message: string | null) => void;
+  setShots: (updater: (prev: Array<Shot>) => Array<Shot>) => void;
   /** 重订阅入口（`useWorkshopGeneration` 的 watchShotTask 原样传入）。 */
   watchShotTask: (shotId: string, taskId: string, target?: "image" | "video") => Promise<void>;
 }) {
@@ -74,7 +74,9 @@ export function useWorkshopTaskRecovery(input: {
   const resumedRef = useRef(false);
 
   useEffect(() => {
-    if (resumedRef.current) return;
+    if (resumedRef.current) {
+      return;
+    }
     resumedRef.current = true;
     /** 恢复一个失联任务：查真值 → 已终态直接回写，仍在跑才重订阅。 */
     const resumeTask = (shotId: string, taskId: string, target: "image" | "video") => {
@@ -85,7 +87,9 @@ export function useWorkshopTaskRecovery(input: {
         const patchIfOwned = (p: Partial<Shot>) =>
           setShots((prev) =>
             prev.map((item) => {
-              if (item.id !== shotId) return item;
+              if (item.id !== shotId) {
+                return item;
+              }
               const owned =
                 target === "video" ? item.clipTaskId === taskId : item.taskId === taskId;
               return owned ? { ...item, ...p } : item;

@@ -42,7 +42,9 @@ const roots: Array<string> = [];
 afterEach(() => {
   while (roots.length) {
     const r = roots.pop();
-    if (r) rmSync(r, { recursive: true, force: true });
+    if (r) {
+      rmSync(r, { recursive: true, force: true });
+    }
   }
 });
 
@@ -83,7 +85,7 @@ function gate(
       }),
     };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
     return { ok: false, root, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }

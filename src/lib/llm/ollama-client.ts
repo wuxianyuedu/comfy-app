@@ -8,13 +8,13 @@ import { isRecord } from "~/lib/is-record";
 /** 探测超时：Ollama 没起时连接会挂住，宁可早失败也别让页面一直转圈。 */
 const PROBE_TIMEOUT_MS = 3000;
 
-export interface OllamaModel {
+export type OllamaModel = {
+  modified_at: string;
   name: string;
   size: number;
-  modified_at: string;
-}
+};
 
-export type OllamaProbe = { up: true; models: Array<OllamaModel> } | { up: false };
+export type OllamaProbe = { models: Array<OllamaModel>; up: true } | { up: false };
 
 /** Ollama 的 /api/tags 在 OpenAI 兼容 base URL（…/v1）后面，需要剥掉后缀。 */
 export function ollamaTagsUrl(baseUrl: string): string {
@@ -32,7 +32,9 @@ export async function probeOllama(baseUrl: string): Promise<OllamaProbe> {
     const res = await fetch(ollamaTagsUrl(baseUrl), {
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
-    if (!res.ok) return { up: false };
+    if (!res.ok) {
+      return { up: false };
+    }
     let body: unknown;
     try {
       body = await res.json();
@@ -45,9 +47,8 @@ export async function probeOllama(baseUrl: string): Promise<OllamaProbe> {
     const models = isRecord(body) ? body.models : undefined;
     return {
       up: true,
-      models: Array.isArray(models)
-        ? /* SAFETY: 类型断言已复核 */ (models as Array<OllamaModel>)
-        : [],
+      /* SAFETY: 类型断言已复核 */
+      models: Array.isArray(models) ? (models as Array<OllamaModel>) : [],
     };
   } catch {
     return { up: false };

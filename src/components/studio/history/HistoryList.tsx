@@ -31,15 +31,15 @@ function HistoryGroupTaskList({
   onRetry,
   onRemove,
 }: {
-  items: Array<TaskItem>;
-  progressMap: Record<string, number>;
   /** 「这一条在重试吗」的判据由导出它的出口给（规范 16 §16.2.4.40）——
    * 视图不再自己写`retryingId === task.id`。 */
   isRetrying: (id: string) => boolean;
-  onOpenDetail: (id: string) => void;
+  items: Array<TaskItem>;
   onCancel: (id: string) => void;
-  onRetry: (task: TaskItem) => void;
+  onOpenDetail: (id: string) => void;
   onRemove: (id: string) => void;
+  onRetry: (task: TaskItem) => void;
+  progressMap: Record<string, number>;
 }) {
   // 仅用 transform/opacity 的 FLIP 位移与淡入淡出（规范 §2.7），不动画
   // width/height/left/top/margin 等触发整树 layout 重排的属性。
@@ -56,13 +56,13 @@ function HistoryGroupTaskList({
       {items.map((task) => (
         <HistoryTaskCard
           key={task.id}
-          task={task}
+          onCancel={onCancel}
+          onOpenDetail={onOpenDetail}
+          onRemove={onRemove}
+          onRetry={onRetry}
           progress={progressMap[task.id] ?? 0}
           retrying={isRetrying(task.id)}
-          onOpenDetail={onOpenDetail}
-          onCancel={onCancel}
-          onRetry={onRetry}
-          onRemove={onRemove}
+          task={task}
         />
       ))}
     </div>
@@ -83,9 +83,9 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
 
   return (
     <DocumentFrame
-      width="wide"
-      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       backdrop={<AuroraBackground />}
+      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
+      width="wide"
     >
       {/* ── Header：标题与侧栏 / 页签同一个出处（`pageHeaderTitle`）。
              这一屏**没有** `viewLabel`：此前页头写「历史记录」，与侧栏 / 页签的
@@ -98,18 +98,18 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
           那一行只剩右对齐的两颗按钮、左边一整行空气（ISSUE #1871）。 */}
       <ViewActions>
         <SelectMenu
-          value={c.sort}
-          onChange={(value) => c.setSort(/* SAFETY: 类型断言已复核 */ value as SortKey)}
-          options={["newest", "oldest"]}
-          labels={{ newest: "时间倒序", oldest: "时间正序" }}
           aria-label="排序"
           className="text-xs"
+          labels={{ newest: "时间倒序", oldest: "时间正序" }}
+          onChange={(value) => c.setSort(/* SAFETY: 类型断言已复核 */ value as SortKey)}
+          options={["newest", "oldest"]}
+          value={c.sort}
         />
         <Button
-          variant="outline"
-          size="xs"
-          onClick={c.refresh}
           className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-1.5"
+          onClick={c.refresh}
+          size="xs"
+          variant="outline"
         >
           ↻ 刷新
         </Button>
@@ -127,19 +127,19 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
           现在整排交给 `ui/select-chip`（「一排里选一个」的全库唯一实现，
           规范 16 §16.2.4）：选中态有底色 / 字色 / 描边 / 字重四层，且自带
           与常态同值的 `hover:`，不会被 `Button` 的默认悬停档吃掉。 */}
-      <div role="radiogroup" aria-label="按状态筛选任务" className="mb-6 flex flex-wrap gap-2">
+      <div aria-label="按状态筛选任务" className="mb-6 flex flex-wrap gap-2" role="radiogroup">
         {FILTERS.map((filterOption) => {
           const isActive = c.filter === filterOption.key;
           const count = c.counts[filterOption.key] ?? 0;
           return (
             <SelectChip
+              className="gap-2"
               key={filterOption.key}
+              onClick={() => c.switchFilter(filterOption.key)}
               selected={isActive}
               shape="pill"
-              onClick={() => c.switchFilter(filterOption.key)}
-              className="gap-2"
             >
-              {filterOption.tone && <StatusDot state={filterOption.tone} sizeClass="size-1.5" />}
+              {filterOption.tone && <StatusDot sizeClass="size-1.5" state={filterOption.tone} />}
               <span>{filterOption.label}</span>
               <span
                 /* 计数徽标：底色取**当前字色**的淡底（`bg-current/N`），
@@ -161,7 +161,7 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
       {c.loading ? (
         <p className="text-ink-muted text-sm">加载中…</p>
       ) : c.filteredCount === 0 ? (
-        <EmptyState title={c.empty.title} description={c.empty.hint} minHeightClass="min-h-75" />
+        <EmptyState description={c.empty.hint} minHeightClass="min-h-75" title={c.empty.title} />
       ) : (
         <div className="flex-col gap-6">
           {c.visibleGroups.map((group) => (
@@ -176,13 +176,13 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
 
               {/* ── 任务列表 ── */}
               <HistoryGroupTaskList
-                items={group.items}
-                progressMap={c.progressMap}
                 isRetrying={c.isRetrying}
-                onOpenDetail={c.openDetail}
+                items={group.items}
                 onCancel={c.cancel}
-                onRetry={c.retry}
+                onOpenDetail={c.openDetail}
                 onRemove={c.remove}
+                onRetry={c.retry}
+                progressMap={c.progressMap}
               />
             </section>
           ))}
@@ -194,10 +194,10 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
             </span>
             {c.canLoadMore ? (
               <Button
-                variant="outline"
-                size="xs"
-                onClick={c.loadMore}
                 className="border-border bg-subtle text-ink-strong hover:bg-surface-2 h-auto rounded-lg px-4 py-1.5"
+                onClick={c.loadMore}
+                size="xs"
+                variant="outline"
               >
                 加载更多
               </Button>
@@ -209,12 +209,12 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
       )}
 
       <HistoryDetailModal
-        detailId={c.detailId}
         detail={c.detail}
+        detailId={c.detailId}
         detailLoading={c.detailLoading}
-        workflowIO={c.workflowIO}
         modeContracts={c.modeContracts}
         onClose={c.closeDetail}
+        workflowIO={c.workflowIO}
       />
     </DocumentFrame>
   );

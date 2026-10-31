@@ -79,7 +79,7 @@ describe("WorkflowSubgraphNode — 封装节点暴露口的显示名（ISSUE #34
         type: "INT",
         isConnection: false,
         widget: { name: "value_1" },
-        widgetValue: 12345,
+        widgetValue: 12_345,
         proxyField: { nodeId: "12", field: "seed", label: "随机种子" },
       },
       {

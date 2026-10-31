@@ -16,22 +16,19 @@ import { useBusyAction } from "~/components/ui/use-busy-action";
 import { errorText } from "~/lib/error-message";
 import { cancelTask } from "~/lib/task-cancel-client";
 
-export interface UseCancelTaskArgs {
-  /** 当前要取消的任务 id（可能还没就绪 —— 见下方取消回调注释）。 */
-  taskId?: string | null;
+export type UseCancelTaskArgs = {
   /** 失败时的本地回滚，形态由调用方决定（画布节点 patch，日志面板 setError）。 */
   onFailed: (reason: string) => void;
-}
+  /** 当前要取消的任务 id（可能还没就绪 —— 见下方取消回调注释）。 */
+  taskId?: string | null;
+};
 
-export interface CancelTaskController {
-  cancelling: boolean;
+export type CancelTaskController = {
   cancel: () => Promise<void>;
-}
+  cancelling: boolean;
+};
 
-export function useCancelTask({
-  taskId,
-  onFailed,
-}: UseCancelTaskArgs): CancelTaskController {
+export function useCancelTask({ taskId, onFailed }: UseCancelTaskArgs): CancelTaskController {
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const cancelBusy = useBusyAction();
 
@@ -57,8 +54,8 @@ export function useCancelTask({
     try {
       await cancelBusy.run(() => cancelTask(currentTaskId));
       // 取消请求已送达，收尾交给 SSE 的 error 事件。
-    } catch (e) {
-      onFailedRef.current(errorText(e, "取消请求异常"));
+    } catch (error) {
+      onFailedRef.current(errorText(error, "取消请求异常"));
     }
   }, [cancelBusy]);
 

@@ -75,14 +75,14 @@ export function runtimeLogFileName(source: RuntimeLogSource, at: Date, ordinal =
 }
 
 /** 解析结果：这份文件属于哪个来源、哪一刻、以及同秒内的第几份。 */
-export interface RuntimeLogFileName {
+export type RuntimeLogFileName = {
+  /** 同秒内第几份（1 = 第一份）。 */
+  ordinal: number;
   /** 由名字反解出的来源（前缀匹配，不按表查——见 {@link parseRuntimeLogFileName}）。 */
   source: string;
   /** 名字里的时刻（毫秒）；形态不符时 null。 */
   startedAt: number | null;
-  /** 同秒内第几份（1 = 第一份）。 */
-  ordinal: number;
-}
+};
 
 /**
  * 解析一份 runtime 日志的文件名；不是这个形态时返回 null。
@@ -94,10 +94,14 @@ export interface RuntimeLogFileName {
  */
 export function parseRuntimeLogFileName(name: string): RuntimeLogFileName | null {
   const m = FILE_RE.exec(name);
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   const [, source, stampText, ordinalText] = m;
   const sm = STAMP_RE.exec(stampText ?? "");
-  if (!source || !sm) return null;
+  if (!source || !sm) {
+    return null;
+  }
   const [, y, mo, d, h, mi, s] = sm;
   const startedAt = new Date(
     Number(y),
@@ -142,7 +146,9 @@ const LAUNCH_STAMP_RE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
  */
 export function parseLaunchStamp(value: string | undefined): Date | null {
   const m = value ? LAUNCH_STAMP_RE.exec(value) : null;
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   const [, y, mo, d, h, mi, s] = m;
   const at = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
   return Number.isFinite(at.getTime()) ? at : null;
@@ -207,7 +213,9 @@ function ordinalOf(name: string): number {
  * 被重启了三次），把运行包的「退出形态」借过来会给出错误暗示。
  */
 export function runtimeLogFileLabel(file: RuntimeLogFileName): string {
-  if (file.startedAt === null) return "更早的日志";
+  if (file.startedAt === null) {
+    return "更早的日志";
+  }
   const d = new Date(file.startedAt);
   const p = (n: number) => String(n).padStart(2, "0");
   return (

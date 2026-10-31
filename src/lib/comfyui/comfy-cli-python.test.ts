@@ -13,12 +13,8 @@ import { comfyCliInterpreter, comfyCliMissingHint } from "./comfy-cli-python";
 describe("comfyCliInterpreter：设置项优先，留空退回项目根 venv", () => {
   it("设置项给了就用它，并 trim 掉首尾空白", () => {
     expect(
-      comfyCliInterpreter(
-        "  D:\\tools\\py\\python.exe  ",
-        "C:\\ignored",
-        "win32",
-      ),
-    ).toBe("D:\\tools\\py\\python.exe");
+      comfyCliInterpreter(String.raw`  D:\tools\py\python.exe  `, String.raw`C:\ignored`, "win32"),
+    ).toBe(String.raw`D:\tools\py\python.exe`);
   });
 
   it("留空 / 未给 / 只有空白 → 退回 <cwd>/python-venv/comfy-cli 的平台落点", () => {
@@ -26,9 +22,9 @@ describe("comfyCliInterpreter：设置项优先，留空退回项目根 venv", (
     // 判成「已配置」会让执行链去 spawn 一个不存在的路径。
     for (const blank of ["", "   ", undefined]) {
       expect(
-        comfyCliInterpreter(blank, "D:\\apps\\ComfyAPP", "win32"),
+        comfyCliInterpreter(blank, String.raw`D:\apps\ComfyAPP`, "win32"),
         `win32 / ${JSON.stringify(blank)}`,
-      ).toBe("D:\\apps\\ComfyAPP\\python-venv\\comfy-cli\\Scripts\\python.exe");
+      ).toBe(String.raw`D:\apps\ComfyAPP\python-venv\comfy-cli\Scripts\python.exe`);
       expect(
         comfyCliInterpreter(blank, "/opt/app", "linux"),
         `linux / ${JSON.stringify(blank)}`,
@@ -48,8 +44,8 @@ describe("comfyCliMissingHint：按形态给可执行的出口", () => {
 
   it("开发检出：保留 venv + pip 三条命令，并同时说出另两条出口", () => {
     const win = comfyCliMissingHint({ inCheckout: true, platform: "win32" });
-    expect(win).toContain("python -m venv python-venv\\comfy-cli");
-    expect(win).toContain("Scripts\\python.exe -m pip install comfy-cli");
+    expect(win).toContain(String.raw`python -m venv python-venv\comfy-cli`);
+    expect(win).toContain(String.raw`Scripts\python.exe -m pip install comfy-cli`);
     expect(win).toContain("COMFY_CLI_PYTHON");
     const nix = comfyCliMissingHint({ inCheckout: true, platform: "linux" });
     expect(nix).toContain("python3 -m venv python-venv/comfy-cli");

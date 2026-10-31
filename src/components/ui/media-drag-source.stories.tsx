@@ -55,9 +55,9 @@ function MediaDragCard({
   kind,
   canDrag = true,
 }: {
-  url?: string | null;
-  kind: MediaDragPayload["mediaType"];
   canDrag?: boolean;
+  kind: MediaDragPayload["mediaType"];
+  url?: string | null;
 }) {
   return (
     <div

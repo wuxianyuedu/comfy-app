@@ -37,26 +37,28 @@ function GroupedControls({
   onVisibilityChange,
   collapseGrouped,
 }: {
-  dimension: DimensionGroup | null;
-  video: VideoGroup | null;
-  values: Record<string, unknown>;
-  onChange: (next: Record<string, unknown>) => void;
-  workflowId?: string;
-  compact?: boolean;
-  disabled?: boolean;
   /** 画布 / 库内（`compact`）把组合控件收窄成一块（宽度按内容），而不是摊成
    * 逐行参数清单。`false` 保留宽版整块录入（宽版表单 / CreatePanel）。 */
   collapseGrouped?: boolean;
-
-  /** 编辑态：组合行替代了独立参数行，把必填/可选切换透传进组合卡。 */
-  onRequiredChange?: (ioKey: string, required: boolean) => void;
+  compact?: boolean;
+  dimension: DimensionGroup | null;
+  disabled?: boolean;
   /** 多模式作者态：透传给组合卡按该模式解析必填/可见性（与独立参数行一致）。 */
   mode?: string | null;
+  onChange: (next: Record<string, unknown>) => void;
+  /** 编辑态：组合行替代了独立参数行，把必填/可选切换透传进组合卡。 */
+  onRequiredChange?: (ioKey: string, required: boolean) => void;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+
+  values: Record<string, unknown>;
+  video: VideoGroup | null;
   /** IO 编辑态：行内 👁 切换参数在 visibilityMode 模式下的可见性。 */
   visibilityMode?: string | null;
-  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  workflowId?: string;
 }) {
-  if (!dimension && !video) return null;
+  if (!dimension && !video) {
+    return null;
+  }
   const count = (dimension ? 1 : 0) + (video ? 1 : 0);
 
   const set = (ioKey: string, v: unknown) => onChange({ ...values, [ioKey]: v });
@@ -66,7 +68,9 @@ function GroupedControls({
   const keys = new Set<string>();
   for (const group of [dimension, video]) {
     for (const entry of groupEntries(group)) {
-      if (entry?.ioKey) keys.add(entry.ioKey);
+      if (entry?.ioKey) {
+        keys.add(entry.ioKey);
+      }
     }
   }
   /* 画布 / 库内（`compact`）把组合控件**收窄成同一块控件** —— 控件本身照旧画出来
@@ -83,32 +87,32 @@ function GroupedControls({
 
   return (
     <>
-      {!compact && <SectionHeader label="组合参数" accent={SECTION_ACCENT} count={count} />}
+      {!compact && <SectionHeader accent={SECTION_ACCENT} count={count} label="组合参数" />}
       <div className="flex-col gap-3">
         {dimension && (
           <DimensionControl
-            group={dimension}
-            values={values}
-            set={set}
-            setMany={setMany}
             disabled={disabled}
-            workflowId={workflowId}
+            group={dimension}
+            mode={mode}
             /* 画布 / 库内：控件按内容收窄（`w-fit`），不再占满整行。 */
             narrow={narrow}
             onRequiredChange={onRequiredChange}
-            mode={mode}
-            visibilityMode={visibilityMode}
             onVisibilityChange={onVisibilityChange}
+            set={set}
+            setMany={setMany}
+            values={values}
+            visibilityMode={visibilityMode}
+            workflowId={workflowId}
           />
         )}
         {video && (
           <VideoControl
-            group={video}
-            values={values}
-            set={set}
-            workflowId={workflowId}
             disabled={disabled}
+            group={video}
             narrow={narrow}
+            set={set}
+            values={values}
+            workflowId={workflowId}
           />
         )}
       </div>
@@ -118,7 +122,9 @@ function GroupedControls({
 
 /** 组合控件覆盖到的端口（顺序 = 声明顺序，两端稳定）。 */
 function groupEntries(group: DimensionGroup | VideoGroup | null): Array<EnrichedWidget> {
-  if (!group) return [];
+  if (!group) {
+    return [];
+  }
   return [
     "width" in group ? group.width : undefined,
     "height" in group ? group.height : undefined,

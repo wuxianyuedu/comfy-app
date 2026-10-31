@@ -68,22 +68,22 @@ function Demo({
   onOpenChange,
   open,
 }: {
-  showCloseButton?: boolean;
-  showOverlay?: boolean;
-  popupClassName?: string;
   className?: string;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
+  popupClassName?: string;
+  showCloseButton?: boolean;
+  showOverlay?: boolean;
 }) {
   return (
     <div id="host">
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog onOpenChange={onOpenChange} open={open}>
         <DialogTrigger>打开设置</DialogTrigger>
         <DialogContent
+          className={className}
+          popupClassName={popupClassName}
           showCloseButton={showCloseButton}
           showOverlay={showOverlay}
-          popupClassName={popupClassName}
-          className={className}
         >
           <DialogHeader>
             <DialogTitle>弹窗标题</DialogTitle>
@@ -105,14 +105,18 @@ async function openDialog(user: ReturnType<typeof userEvent.setup>) {
      再把元素取回来（§11.14.3 的口径：等一个条件变成真一律写 `expect.poll`）。 */
   await expect.poll(() => document.querySelector(CONTENT_MARK)).not.toBeNull();
   const el = document.querySelector<HTMLElement>(CONTENT_MARK);
-  if (!el) throw new Error("点开后没有渲染出弹窗本体");
+  if (!el) {
+    throw new Error("点开后没有渲染出弹窗本体");
+  }
   return el;
 }
 
 /** 受控形态下弹窗一开始就是开的；此时触发器已被移出无障碍树（见下面那条用例）。 */
 function alreadyOpenPopup(): HTMLElement {
   const el = document.querySelector<HTMLElement>(CONTENT_MARK);
-  if (!el) throw new Error("受控 open 下应当直接渲染出弹窗本体");
+  if (!el) {
+    throw new Error("受控 open 下应当直接渲染出弹窗本体");
+  }
   return el;
 }
 
@@ -163,7 +167,7 @@ describe("ui/dialog 的关闭按钮", () => {
   it("关闭按钮回传 false，并带上原因 close-press", async () => {
     const onOpenChange = vi.fn();
     const user = userEvent.setup();
-    render(<Demo showCloseButton={false} onOpenChange={onOpenChange} />);
+    render(<Demo onOpenChange={onOpenChange} showCloseButton={false} />);
     const popup = await openDialog(user);
 
     await user.click(popup.querySelector<HTMLElement>(CLOSE_MARK)!);
@@ -176,7 +180,7 @@ describe("ui/dialog 的关闭按钮", () => {
   it("Esc 回传 false（reason=escape-key）；关掉后重开仍带那层遮罩", async () => {
     const onOpenChange = vi.fn();
     const user = userEvent.setup();
-    render(<Demo showCloseButton={false} onOpenChange={onOpenChange} />);
+    render(<Demo onOpenChange={onOpenChange} showCloseButton={false} />);
     await openDialog(user);
 
     await user.keyboard("{Escape}");
@@ -279,7 +283,7 @@ describe("ui/dialog 的宽度写法", () => {
 
   it(`同族宽度同时传时 className 取胜（\`cn()\` 同组后者胜、把输家摘掉）`, async () => {
     const user = userEvent.setup();
-    render(<Demo popupClassName="w-6xl" className="w-3xl" />);
+    render(<Demo className="w-3xl" popupClassName="w-6xl" />);
     const popup = await openDialog(user);
     expect(popup.className).toContain("w-3xl");
     expect(popup.className).not.toContain("w-6xl");
@@ -290,7 +294,7 @@ describe("ui/dialog 的受控形态", () => {
   it("受控时点关闭只回传、不自己关（由调用方的 state 决定）", async () => {
     const onOpenChange = vi.fn();
     const user = userEvent.setup();
-    render(<Demo open showCloseButton={false} onOpenChange={onOpenChange} />);
+    render(<Demo onOpenChange={onOpenChange} open showCloseButton={false} />);
     const popup = alreadyOpenPopup();
 
     await user.click(popup.querySelector<HTMLElement>(CLOSE_MARK)!);

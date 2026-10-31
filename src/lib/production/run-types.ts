@@ -36,64 +36,64 @@ export type RunStatus =
   | "cancelled";
 
 /** 一条执行日志：引擎每执行一个动作追加一条，供 CLI / 控制条展示「跑了什么」。 */
-export interface RunStep {
-  /** ISO 时间戳。 */
-  ts: string;
+export type RunStep = {
+  /** 人读摘要（产出了什么 / 失败原因）。 */
+  detail: string;
   /** 动作 kind（generate_script / extract_characters / plan_storyboard / render_images / render_film / done / failed…）。 */
   kind: string;
   ok: boolean;
-  /** 人读摘要（产出了什么 / 失败原因）。 */
-  detail: string;
-}
+  /** ISO 时间戳。 */
+  ts: string;
+};
 
-export interface ProductionRun {
-  status: RunStatus;
+export type ProductionRun = {
   approvalMode: ApprovalMode;
-  /** 当前阶段游标（与 progress.stage 同源，run 期间由引擎推进）。 */
-  stage: ProductionStage;
-  /** 用户的一句话目标 / 意图（可选，供模型规划参考）。 */
-  goal: string;
-  /** status=awaiting_approval 时，在等哪个阶段被确认。 */
-  awaitingStage: ProductionStage | null;
-  /** 逐镜生图 / 出片用的工作流库工作流 id（本地链路唯一来源，由 start 带入、存进 run）。 */
-  imageWorkflowId: string;
-  videoWorkflowId: string;
-  /** 已触发出片的时间戳（非空=已 kick render，引擎下一步只等 rendered、不重复起）。 */
-  filmStartedAt: string;
-  /**
-   * 每个镜头「上次被本 run 处理完时」的 rev 快照。当前镜头 rev > 快照值 → 用户在之后改过
-   * （换图 / 改提示词 / 退回），规划器据此把该镜重新纳入待办——这是「基于改动续跑」的判据。
-   */
-  processedShotRev: Record<string, number>;
   /**
    * 自动评审（Phase 8 · P8-1c）：生图后逐镜 AI 评审，不合格自动抽卡重生成（换种子），有界重试。
    * 默认 false（不改既有 run 行为）；由 `run.start` 带入。
    */
   autoReview: boolean;
-  /** 每个镜头「上次被本 run 评审并定稿（通过 / 达重试上限保留）」时的 rev 快照。当前 rev > 快照 → 该镜需（再）评审。 */
-  reviewedShotRev: Record<string, number>;
+  /** status=awaiting_approval 时，在等哪个阶段被确认。 */
+  awaitingStage: ProductionStage | null;
+  error: string | null;
+  /** 已触发出片的时间戳（非空=已 kick render，引擎下一步只等 rendered、不重复起）。 */
+  filmStartedAt: string;
+  /** 用户的一句话目标 / 意图（可选，供模型规划参考）。 */
+  goal: string;
+  /** 逐镜生图 / 出片用的工作流库工作流 id（本地链路唯一来源，由 start 带入、存进 run）。 */
+  imageWorkflowId: string;
+  /** 执行日志（引擎每步追加，有界；见 appendRunStep）。 */
+  log: Array<RunStep>;
+  /**
+   * 每个镜头「上次被本 run 处理完时」的 rev 快照。当前镜头 rev > 快照值 → 用户在之后改过
+   * （换图 / 改提示词 / 退回），规划器据此把该镜重新纳入待办——这是「基于改动续跑」的判据。
+   */
+  processedShotRev: Record<string, number>;
   /** 每个镜头已被自动抽卡重出的次数；达 `REVIEW_MAX_RETRY` 后保留当前结果、停止返工（避免无限循环）。 */
   reviewAttempts: Record<string, number>;
+  /** 每个镜头「上次被本 run 评审并定稿（通过 / 达重试上限保留）」时的 rev 快照。当前 rev > 快照 → 该镜需（再）评审。 */
+  reviewedShotRev: Record<string, number>;
+  /** 已完成的剧本评审轮数（与镜头 `reviewAttempts` 同口径：达上限保留、停止返工）。 */
+  scriptReviewAttempts: number;
   /**
    * 剧本质量闭环（FR-QA-07 ④ · #2478）：上次剧本评审收口时的剧本指纹
    * （`scriptDigestOf`）。与当前剧本指纹不等 → 剧本变过（AI 改写 / 人手改）→ 待（再）评审；
    * 相等 → 剧本质量节点已收口。空串 = 还没评过。
    */
   scriptReviewDigest: string;
-  /** 已完成的剧本评审轮数（与镜头 `reviewAttempts` 同口径：达上限保留、停止返工）。 */
-  scriptReviewAttempts: number;
   /** 评审提出改写、尚未改写 → true；规划器先出 `revise_script`，改完剧本变 → 回到待评审。 */
   scriptRevisionPending: boolean;
+  /** 当前阶段游标（与 progress.stage 同源，run 期间由引擎推进）。 */
+  stage: ProductionStage;
+  status: RunStatus;
   /**
    * 分镜联动：上次规划分镜时的剧本指纹。与当前不等 → 剧本在分镜之后变过
    * （AI 改写定稿 / 人手改）→ 重排分镜，让下游真的吃到新剧本（仅 autoReview 生效）。
    */
   storyboardScriptDigest: string;
-  /** 执行日志（引擎每步追加，有界；见 appendRunStep）。 */
-  log: Array<RunStep>;
-  error: string | null;
   updatedAt: string;
-}
+  videoWorkflowId: string;
+};
 
 export const DEFAULT_PRODUCTION_RUN: ProductionRun = {
   status: "idle",
@@ -151,9 +151,13 @@ const APPROVAL_MODES: ReadonlyArray<ApprovalMode> = ["auto", "stage", "shot"];
 function parseRevMap(raw: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   const source = asRecord(raw);
-  if (!source) return out;
+  if (!source) {
+    return out;
+  }
   for (const [key, value] of Object.entries(source)) {
-    if (typeof value === "number" && Number.isFinite(value)) out[key] = value;
+    if (typeof value === "number" && Number.isFinite(value)) {
+      out[key] = value;
+    }
   }
   return out;
 }
@@ -161,20 +165,26 @@ function parseRevMap(raw: unknown): Record<string, number> {
 /** 未知值（production.run 列）→ 规范化 ProductionProgress run；非法/缺字段回落默认，不抛。 */
 export function normalizeProductionRun(raw: unknown): ProductionRun {
   const obj = asRecord(raw);
-  if (!obj) return { ...DEFAULT_PRODUCTION_RUN };
+  if (!obj) {
+    return { ...DEFAULT_PRODUCTION_RUN };
+  }
+  /* SAFETY: 类型断言已复核 */
   const status = RUN_STATUSES.includes(/* SAFETY: 类型断言已复核 */ obj.status as RunStatus)
-    ? /* SAFETY: 类型断言已复核 */ (obj.status as RunStatus)
+    ? (obj.status as RunStatus)
     : "idle";
+  /* SAFETY: 类型断言已复核 */
   const approvalMode = APPROVAL_MODES.includes(
     /* SAFETY: 类型断言已复核 */ obj.approvalMode as ApprovalMode,
   )
-    ? /* SAFETY: 类型断言已复核 */ (obj.approvalMode as ApprovalMode)
+    ? (obj.approvalMode as ApprovalMode)
     : "stage";
   const log: Array<RunStep> = [];
   if (Array.isArray(obj.log)) {
     for (const raw of obj.log) {
       const rec = asRecord(raw);
-      if (!rec || typeof rec.ts !== "string") continue;
+      if (!rec || typeof rec.ts !== "string") {
+        continue;
+      }
       log.push({
         ts: rec.ts,
         kind: typeof rec.kind === "string" ? rec.kind : "info",
@@ -213,38 +223,38 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
 }
 
 /** 规划器消费的镜头视图（从 `production.shots` 的未知项归一）。 */
-export interface ShotRunView {
+export type ShotRunView = {
+  hasClip: boolean;
+  hasImage: boolean;
+  /** 人工评分 0~5（#2480，校准读数的人侧输入）；没评 → null/缺省。 */
+  humanRating?: number | null;
+  /** 人工裁决（#2480）：`rev` 快照与镜头当前 rev 相等才新鲜（有效）。没裁决过 → null/缺省。 */
+  humanVerdict?: HumanVerdict | null;
   id: string;
   /** 用户每改一次该镜就 +1（写入点在 P6-2/P6-3）；缺省 0。 */
   rev: number;
-  hasImage: boolean;
-  hasClip: boolean;
-  /** 人工裁决（#2480）：`rev` 快照与镜头当前 rev 相等才新鲜（有效）。没裁决过 → null/缺省。 */
-  humanVerdict?: HumanVerdict | null;
-  /** 人工评分 0~5（#2480，校准读数的人侧输入）；没评 → null/缺省。 */
-  humanRating?: number | null;
-}
+};
 
 /** 由整份 production 归一的规划视图。 */
-export interface ProductionRunView {
+export type ProductionRunView = {
+  characterCount: number;
+  filmRendered: boolean;
   hasScript: boolean;
   /** 当前剧本的指纹（`scriptDigestOf`）：剧本变了指纹就变，是「基于改动续跑」的剧本侧判据。 */
   scriptDigest: string;
-  characterCount: number;
-  shots: Array<ShotRunView>;
-  filmRendered: boolean;
   /** 剧本人工裁决（#2480）：`digest` 快照与当前剧本指纹相等才新鲜（有效）。没裁决过 → null/缺省。 */
   scriptHumanVerdict?: HumanVerdict | null;
-}
+  shots: Array<ShotRunView>;
+};
 
 /** production 行的最浅读法（字段都可能是未知 JSON，这里宽容读）。 */
-export interface ProductionLike {
-  scriptMarkdown?: unknown;
+export type ProductionLike = {
   characters?: unknown;
-  shots?: unknown;
   progress?: unknown;
+  scriptMarkdown?: unknown;
   scriptReview?: unknown;
-}
+  shots?: unknown;
+};
 
 /**
  * 剧本指纹（轻量 djb2 十六进制，纯 JS、无 Node 依赖——本文件同时被客户端消费）：
@@ -264,7 +274,9 @@ export function toRunView(production: ProductionLike | null): ProductionRunView 
   const shots: Array<ShotRunView> = [];
   for (const item of shotsRaw) {
     const rec = asRecord(item);
-    if (!rec || typeof rec.id !== "string") continue;
+    if (!rec || typeof rec.id !== "string") {
+      continue;
+    }
     shots.push({
       id: rec.id,
       rev: typeof rec.rev === "number" && Number.isFinite(rec.rev) ? rec.rev : 0,
@@ -314,17 +326,23 @@ export type RunAction =
  */
 export function planNextRunAction(view: ProductionRunView, run: ProductionRun): RunAction {
   switch (run.status) {
-    case "awaiting_approval":
+    case "awaiting_approval": {
       return { kind: "await_approval", stage: run.awaitingStage ?? run.stage };
-    case "running":
+    }
+    case "running": {
       break;
-    case "done":
+    }
+    case "done": {
       return { kind: "done" };
-    default:
+    }
+    default: {
       // idle / paused / failed / cancelled → 引擎不动作。
       return { kind: "idle" };
+    }
   }
-  if (!view.hasScript) return { kind: "generate_script" };
+  if (!view.hasScript) {
+    return { kind: "generate_script" };
+  }
   // 剧本质量闭环（FR-QA-07 ④ · #2478）：剧本指纹 ≠ 评审收口快照 → 待评审（首评 =
   // 快照还是空串，同样命中）；评审提出改写 → 先定向改写（改完剧本变 → 指纹变 → 回到待评审）。
   // 「人机接力」靠同一把指纹：人改剧本 → 指纹变 → AI 从人改的版本继续评。
@@ -332,31 +350,43 @@ export function planNextRunAction(view: ProductionRunView, run: ProductionRun): 
   // → 视为已收口，AI 不再评；人否决不产生豁免（不收口，AI 循环照跑——改写后指纹变，
   // 旧裁决自然失效）。
   if (run.autoReview) {
-    if (run.scriptRevisionPending) return { kind: "revise_script" };
+    if (run.scriptRevisionPending) {
+      return { kind: "revise_script" };
+    }
     const humanApproved =
       view.scriptHumanVerdict?.pass === true &&
       view.scriptHumanVerdict.digest === view.scriptDigest;
-    if (run.scriptReviewDigest !== view.scriptDigest && !humanApproved)
+    if (run.scriptReviewDigest !== view.scriptDigest && !humanApproved) {
       return { kind: "review_script" };
+    }
   }
-  if (view.characterCount === 0) return { kind: "extract_characters" };
-  if (view.shots.length === 0) return { kind: "plan_storyboard" };
+  if (view.characterCount === 0) {
+    return { kind: "extract_characters" };
+  }
+  if (view.shots.length === 0) {
+    return { kind: "plan_storyboard" };
+  }
   // 分镜联动（#2478 ④）：分镜之后剧本变过（AI 改写定稿 / 人手改）→ 重排分镜，
   // 让下游真的吃到新剧本（FR-QA-01「改剧本重跑分镜，镜头描述随之改变」）。
   // 分镜是整幅覆盖（既有语义），因此只在 autoReview 的自动链路里生效；快照在
   // 引擎执行 plan_storyboard 时写入 —— 没变过的剧本不会反复重排。
-  if (run.autoReview && run.storyboardScriptDigest !== view.scriptDigest)
+  if (run.autoReview && run.storyboardScriptDigest !== view.scriptDigest) {
     return { kind: "plan_storyboard" };
+  }
   const needImage = view.shots
     .filter((s) => {
-      if (!s.hasImage) return true;
+      if (!s.hasImage) {
+        return true;
+      }
       // 仅当「本 run 之前处理过该镜」且当前 rev 又变新（用户在其后改过 / 退回），才重做；
       // 从未被本 run 处理过（快照缺省）时，已有图的镜头视为已完成、不纳入。
       const done = run.processedShotRev[s.id];
       return done !== undefined && done < s.rev;
     })
     .map((s) => s.id);
-  if (needImage.length > 0) return { kind: "render_images", shotIds: needImage };
+  if (needImage.length > 0) {
+    return { kind: "render_images", shotIds: needImage };
+  }
   // 自动评审：图齐后，把「已出图但评审定稿快照落后于当前 rev」的镜头纳入待评审。
   // 评审不合格的抽卡会抬高该镜 rev → 重新出现在 needImage → 重出后再评，直到通过或达上限。
   // 人工裁决优先（#2480 · FR-AG-02 质量停点由人拍板）：
@@ -368,9 +398,13 @@ export function planNextRunAction(view: ProductionRunView, run: ProductionRun): 
   if (run.autoReview) {
     const needReview = view.shots
       .filter((s) => {
-        if (!s.hasImage) return false;
+        if (!s.hasImage) {
+          return false;
+        }
         const human = s.humanVerdict;
-        if (human?.pass === true && human.rev === s.rev) return false;
+        if (human?.pass === true && human.rev === s.rev) {
+          return false;
+        }
         if ((run.reviewedShotRev[s.id] ?? -1) >= s.rev) {
           return (
             human?.pass === false &&
@@ -381,9 +415,13 @@ export function planNextRunAction(view: ProductionRunView, run: ProductionRun): 
         return true;
       })
       .map((s) => s.id);
-    if (needReview.length > 0) return { kind: "review_shots", shotIds: needReview };
+    if (needReview.length > 0) {
+      return { kind: "review_shots", shotIds: needReview };
+    }
   }
-  if (!view.filmRendered) return { kind: "render_film" };
+  if (!view.filmRendered) {
+    return { kind: "render_film" };
+  }
   return { kind: "done" };
 }
 
@@ -405,11 +443,14 @@ export function markActionProcessed(
       const revById = new Map(view.shots.map((s) => [s.id, s.rev]));
       for (const shotId of action.shotIds) {
         const rev = revById.get(shotId);
-        if (rev !== undefined) next.processedShotRev[shotId] = rev;
+        if (rev !== undefined) {
+          next.processedShotRev[shotId] = rev;
+        }
       }
       return next;
     }
-    default:
+    default: {
       return next;
+    }
   }
 }

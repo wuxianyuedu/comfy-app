@@ -37,11 +37,7 @@
 import { clampInt } from "~/lib/clamp";
 
 /** 判据所需的**事实**（全部由调用方从设置与平台读，本模块不做 IO）。 */
-export interface CpuLimitFacts {
-  /** 设置里的档位；缺省（老设置文件里没有这个键）按 `yield` 处理。 */
-  mode: CpuLimitMode | undefined;
-  /** 目标平台（注入以便用例喂两种平台断言两种形状）。 */
-  platform: NodeJS.Platform;
+export type CpuLimitFacts = {
   /**
    * 当前进程是否处于**桌面壳内**（Tauri）。
    *
@@ -50,7 +46,11 @@ export interface CpuLimitFacts {
    * 那一种场景发明的。这条只影响**默认值**，用户显式选过的档一律照办。
    */
   desktopShell: boolean;
-}
+  /** 设置里的档位；缺省（老设置文件里没有这个键）按 `yield` 处理。 */
+  mode: CpuLimitMode | undefined;
+  /** 目标平台（注入以便用例喂两种平台断言两种形状）。 */
+  platform: NodeJS.Platform;
+};
 
 /** CPU 档位：不动 / 让路（后台优先）/ 限核。 */
 export type CpuLimitMode = "off" | "yield" | "throttle";
@@ -78,8 +78,9 @@ export const CPU_LIMIT_LABELS: Record<CpuLimitMode, string> = {
 
 /** 档位的取值校验（设置项从 JSON 读进来时是 `unknown`）。 */
 export function toCpuLimitMode(value: unknown): CpuLimitMode {
+  /* SAFETY: 类型断言已复核 */
   return CPU_LIMIT_MODES.includes(/* SAFETY: 类型断言已复核 */ value as CpuLimitMode)
-    ? /* SAFETY: 类型断言已复核 */ (value as CpuLimitMode)
+    ? (value as CpuLimitMode)
     : "yield";
 }
 
@@ -91,7 +92,9 @@ export function toCpuLimitMode(value: unknown): CpuLimitMode {
  * 因为那里没有「用户在同一个窗口里干别的活」这回事，凭空降速只会让人困惑。
  */
 export function resolveCpuLimitMode(facts: CpuLimitFacts): CpuLimitMode {
-  if (facts.mode !== undefined) return facts.mode;
+  if (facts.mode !== undefined) {
+    return facts.mode;
+  }
   return facts.desktopShell ? "yield" : "off";
 }
 
@@ -113,14 +116,14 @@ export function resolveCpuLimitMode(facts: CpuLimitFacts): CpuLimitMode {
  *     BSD 基座的常备件，但**仍可能缺失** —— 缺失时按「本档不生效」处理并
  *     留一行日志，绝不让它把启动搞挂（见 `apply`）。
  */
-export interface CpuLimitCommand {
-  /** 可执行文件。 */
-  command: string;
+export type CpuLimitCommand = {
   /** 参数数组。 */
   args: Array<string>;
+  /** 可执行文件。 */
+  command: string;
   /** 这一档实际做了什么（写进运行日志的一句话）。 */
   describe: string;
-}
+};
 
 /** 本机逻辑核数（`os.cpus().length`，取不到时按 2 兜底 —— 见 `throttleCores`）。 */
 export function throttleCores(
@@ -149,14 +152,16 @@ export const POSIX_NICE_INCREMENT = 10;
  * 两格，也就不会有人以为它们互斥。
  */
 export function cpuLimitCommands(input: {
-  mode: CpuLimitMode;
-  platform: NodeJS.Platform;
-  pid: number;
   /** 本机逻辑核数（只有 `throttle` 档用得上）。 */
   cpuCount: number;
-}): { priority: CpuLimitCommand | null; affinity: CpuLimitCommand | null } {
+  mode: CpuLimitMode;
+  pid: number;
+  platform: NodeJS.Platform;
+}): { affinity: CpuLimitCommand | null; priority: CpuLimitCommand | null } {
   const { mode, platform, pid } = input;
-  if (mode === "off") return { priority: null, affinity: null };
+  if (mode === "off") {
+    return { priority: null, affinity: null };
+  }
 
   const win = platform === "win32";
   /* 优先级那一半：两档都要。Windows 走 WMI SetPriority（`Set-CimInstance`
@@ -183,7 +188,9 @@ export function cpuLimitCommands(input: {
         describe: `nice +${POSIX_NICE_INCREMENT}（让路给前台）`,
       };
 
-  if (mode === "yield") return { priority, affinity: null };
+  if (mode === "yield") {
+    return { priority, affinity: null };
+  }
 
   /* 限核档：亲和性那一半。Windows 用 WMI 的 `ProcessorAffinity`，
    * POSIX 用 `taskset -c 0-<n-1>`。 */

@@ -37,10 +37,14 @@ type LlmDraftSetter = Dispatch<SetStateAction<LlmConfig | null>>;
  */
 function mergeExtraModels(current: Array<string>, model: string, toggled: string): Array<string> {
   const next = model.trim() !== "" ? [model, ...current.filter((m) => m !== model)] : [...current];
-  if (!toggled.trim()) return next;
+  if (!toggled.trim()) {
+    return next;
+  }
   if (next.includes(toggled)) {
     // 取消勾选：主模型不可移除
-    if (toggled === model) return next;
+    if (toggled === model) {
+      return next;
+    }
     return next.filter((m) => m !== toggled);
   }
   return [...next, toggled];
@@ -48,10 +52,10 @@ function mergeExtraModels(current: Array<string>, model: string, toggled: string
 
 export function useSettingsRemoteModels(input: {
   llmDraft: LlmConfig | null;
-  setLlmDraft: LlmDraftSetter;
   patchLlm: (patch: Partial<LlmConfig>) => void;
   /** 增删改的即时落库出口（主 hook 的 `persistLlmDraft` 原样传入）。 */
-  persistLlmDraft: (draft: LlmConfig) => Promise<{ ok: boolean; error?: string }>;
+  persistLlmDraft: (draft: LlmConfig) => Promise<{ error?: string; ok: boolean }>;
+  setLlmDraft: LlmDraftSetter;
 }) {
   const { llmDraft, setLlmDraft, patchLlm, persistLlmDraft } = input;
 
@@ -61,7 +65,9 @@ export function useSettingsRemoteModels(input: {
   const toggleExtraModel = useCallback(
     (name: string) => {
       setLlmDraft((draft) => {
-        if (!draft) return draft;
+        if (!draft) {
+          return draft;
+        }
         const nextNames = mergeExtraModels(draft.localCandidates, draft.model, name);
         const unchanged =
           nextNames.length === draft.localCandidates.length &&
@@ -78,10 +84,14 @@ export function useSettingsRemoteModels(input: {
    * 增删改即时落库（无需再点保存按钮），失败时提示条给出可读错误。
    * 连通性 / 实际调用测试走服务端代理（apiKey 不直接打远端）。 */
   const addRemoteModel = useCallback(
-    async (entry: RemoteModelDraftEntry): Promise<{ ok: boolean; error?: string }> => {
-      if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
+    async (entry: RemoteModelDraftEntry): Promise<{ error?: string; ok: boolean }> => {
+      if (!llmDraft) {
+        return { ok: false, error: "配置未就绪，请稍后重试" };
+      }
       const name = entry.name.trim();
-      if (!name) return { ok: false, error: "请填写模型名称" };
+      if (!name) {
+        return { ok: false, error: "请填写模型名称" };
+      }
       if (llmDraft.extraModels.some((e) => e.name === name)) {
         return { ok: false, error: `模型「${name}」已在列表中` };
       }
@@ -102,10 +112,14 @@ export function useSettingsRemoteModels(input: {
   );
 
   const removeRemoteModel = useCallback(
-    async (name: string): Promise<{ ok: boolean; error?: string }> => {
-      if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
+    async (name: string): Promise<{ error?: string; ok: boolean }> => {
+      if (!llmDraft) {
+        return { ok: false, error: "配置未就绪，请稍后重试" };
+      }
       const next = llmDraft.extraModels.filter((e) => e.name !== name);
-      if (next.length === llmDraft.extraModels.length) return { ok: true };
+      if (next.length === llmDraft.extraModels.length) {
+        return { ok: true };
+      }
       const nextDraft = { ...llmDraft, extraModels: next };
       setLlmDraft(nextDraft);
       return persistLlmDraft(nextDraft);
@@ -119,10 +133,14 @@ export function useSettingsRemoteModels(input: {
     async (
       name: string,
       patch: Partial<RemoteModelDraftEntry>,
-    ): Promise<{ ok: boolean; error?: string }> => {
-      if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
+    ): Promise<{ error?: string; ok: boolean }> => {
+      if (!llmDraft) {
+        return { ok: false, error: "配置未就绪，请稍后重试" };
+      }
       const nextName = (patch.name ?? name).trim();
-      if (!nextName) return { ok: false, error: "请填写模型名称" };
+      if (!nextName) {
+        return { ok: false, error: "请填写模型名称" };
+      }
       const existing = llmDraft.extraModels.find((e) => e.name === name);
       if (!existing) {
         return { ok: false, error: `模型「${name}」不存在，请刷新后重试` };
@@ -156,7 +174,7 @@ export function useSettingsRemoteModels(input: {
   );
 
   const probeRemote = useCallback(
-    async (input: { baseUrl?: string; apiKey?: string; model?: string }) => probeRemoteApi(input),
+    async (input: { apiKey?: string; baseUrl?: string; model?: string }) => probeRemoteApi(input),
     [],
   );
 
@@ -177,7 +195,9 @@ export function useSettingsRemoteModels(input: {
 
   const setTaskTemperature = useCallback(
     (task: TaskType, raw: string) => {
-      if (!llmDraft) return;
+      if (!llmDraft) {
+        return;
+      }
       const base = llmDraft.temperatureByTask ?? {};
       /* 清空输入框 = 删掉该 key（而不是写入 undefined），否则「已覆盖」徽标
        * 会一直亮着，且保存时会把 undefined 一并发给后端。 */
@@ -187,9 +207,8 @@ export function useSettingsRemoteModels(input: {
           : { ...base, [task]: Number(raw) };
       patchLlm({
         temperatureByTask:
-          Object.keys(next).length > 0
-            ? /* SAFETY: 类型断言已复核 */ (next as Record<TaskType, number>)
-            : undefined,
+          /* SAFETY: 类型断言已复核 */
+          Object.keys(next).length > 0 ? (next as Record<TaskType, number>) : undefined,
       });
     },
     [llmDraft, patchLlm],

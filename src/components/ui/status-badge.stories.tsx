@@ -37,7 +37,7 @@ export const Tones: Story = {
   render: () => (
     <div className="flex flex-wrap items-center gap-2">
       {STATUSES.map((status) => (
-        <StatusBadge key={status} status={status} label={status} />
+        <StatusBadge key={status} label={status} status={status} />
       ))}
     </div>
   ),
@@ -47,8 +47,8 @@ export const Tones: Story = {
 export const WithoutDot: Story = {
   render: () => (
     <div className="flex flex-wrap items-center gap-2">
-      <StatusBadge status="SUCCEEDED" label="已完成" dot={false} />
-      <StatusBadge status="FAILED" label="已失败" dot={false} />
+      <StatusBadge dot={false} label="已完成" status="SUCCEEDED" />
+      <StatusBadge dot={false} label="已失败" status="FAILED" />
     </div>
   ),
 };
@@ -58,9 +58,9 @@ export const WithoutDot: Story = {
 export const CustomLabels: Story = {
   render: () => (
     <div className="flex flex-wrap items-center gap-2">
-      <StatusBadge status="SUCCEEDED" label="已完成" />
-      <StatusBadge status="SUCCEEDED" label="运行后生成" />
-      <StatusBadge status="SUCCEEDED" label="片段就绪" />
+      <StatusBadge label="已完成" status="SUCCEEDED" />
+      <StatusBadge label="运行后生成" status="SUCCEEDED" />
+      <StatusBadge label="片段就绪" status="SUCCEEDED" />
     </div>
   ),
 };

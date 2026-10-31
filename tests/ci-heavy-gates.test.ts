@@ -67,7 +67,9 @@ describe("复合档 —— 判决面只在「本次改动」上的那一步（IS
   it("带 `--staged` 的步骤照旧剥掉：判全量档，判决面还在", () => {
     const got = heavyGateArgv(["node", "scripts/check-dead-exports.cjs", "--staged"]);
     expect(got.ok).toBe(true);
-    if (!got.ok) return;
+    if (!got.ok) {
+      return;
+    }
     expect(got.argv).toEqual(["node", "scripts/check-dead-exports.cjs"]);
     expect(got.notRunCodes).toEqual([]);
   });
@@ -75,14 +77,18 @@ describe("复合档 —— 判决面只在「本次改动」上的那一步（IS
   it("check-format --staged ⇒ 换发 --changed（printWidth 迁移期全库档恒红，ISSUE #2729）", () => {
     const got = heavyGateArgv(["node", "scripts/check-format.cjs", "--staged"]);
     expect(got.ok).toBe(true);
-    if (!got.ok) return;
+    if (!got.ok) {
+      return;
+    }
     expect(got.argv).toEqual(["node", "scripts/check-format.cjs", "--changed"]);
     expect(got.via).toContain("改动面");
     expect(got.notRunCodes).toEqual([]);
     /* 对照：别的步骤不沾这个换发 —— 剥旗标进全库照旧。 */
     const other = heavyGateArgv(["node", "scripts/check-dead-exports.cjs", "--staged"]);
     expect(other.ok).toBe(true);
-    if (!other.ok) return;
+    if (!other.ok) {
+      return;
+    }
     expect(other.argv).toEqual(["node", "scripts/check-dead-exports.cjs"]);
   });
 
@@ -91,7 +97,9 @@ describe("复合档 —— 判决面只在「本次改动」上的那一步（IS
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
     });
     expect(got.ok).toBe(true);
-    if (!got.ok) return;
+    if (!got.ok) {
+      return;
+    }
     expect(got.argv).toEqual(["node", "scripts/shell-gate.mjs", "--base", "abc123"]);
     /* 这一族把「没跑起来」报成 2（仓库三态），这一档必须认它 —— 不然「拿不到
      * 基线」会被读成「判红」。 */
@@ -104,7 +112,9 @@ describe("复合档 —— 判决面只在「本次改动」上的那一步（IS
       env: {},
     });
     expect(got.ok).toBe(false);
-    if (got.ok) return;
+    if (got.ok) {
+      return;
+    }
     expect(got.reason).toContain("取不到");
   });
 
@@ -261,7 +271,9 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
     /* 反查：登记表里那一条的脚本 ⇒ 它的面就是登记表里那组 glob。 */
     const entry = INCREMENTAL_GATES.find((e) => e.script === "scripts/check-theme-colors.cjs");
     expect(entry, "收窄登记表里没有「主题色扫描」这一条").toBeTruthy();
-    if (!entry) return;
+    if (!entry) {
+      return;
+    }
     expect(narrowingEntryForScript("scripts/check-theme-colors.cjs")?.globs).toEqual(entry.globs);
     /* 不在登记表里的判据（这里拿一条没有收窄面的）⇒ 查不到 ⇒ 不许收窄。 */
     expect(narrowingEntryForScript("scripts/check-gate-executors.cjs")).toBeNull();
@@ -353,7 +365,9 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
     });
     expect(got.ok).toBe(true);
-    if (!got.ok) return;
+    if (!got.ok) {
+      return;
+    }
     /* `--staged` 必须不在：这条判据「剥掉旗标之后判的仍是暂存集」，两个都挂着
      * 就分不清它到底按哪个面判。 */
     expect(got.argv).toEqual(["node", "scripts/check-doc-mirror-pairing.cjs", "--base", "abc123"]);
@@ -365,7 +379,9 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
     });
     expect(got.ok).toBe(true);
-    if (!got.ok) return;
+    if (!got.ok) {
+      return;
+    }
     expect(got.argv).toEqual([
       "node",
       "scripts/known-failed-selftest-gate.mjs",

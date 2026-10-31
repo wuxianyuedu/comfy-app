@@ -41,7 +41,6 @@ function renderTopBar() {
   return render(
     <WFStoresProvider stores={makeStores()}>
       <WorkflowEditorTopBar
-        onClose={noop}
         detail={
           /* SAFETY: 类型断言已复核 */ {
             name: "wf",
@@ -52,18 +51,19 @@ function renderTopBar() {
             positions: {},
           } as never
         }
-        rootWorkflowName="wf"
-        subgraphStack={[]}
-        setSubgraphStack={/* SAFETY: 类型断言已复核 */ noop as never}
-        fetchDetail={vi.fn(async () => undefined)}
-        onExitSubgraph={noop}
-        forceReloadDetail={noop}
-        setViewJsonOpen={/* SAFETY: 类型断言已复核 */ noop as never}
-        resetLayout={noop}
-        viewHostNodeId=""
-        handleSave={noop}
-        saving={false}
         error=""
+        fetchDetail={vi.fn(async () => undefined)}
+        forceReloadDetail={noop}
+        handleSave={noop}
+        onClose={noop}
+        onExitSubgraph={noop}
+        resetLayout={noop}
+        rootWorkflowName="wf"
+        saving={false}
+        setSubgraphStack={/* SAFETY: 类型断言已复核 */ noop as never}
+        setViewJsonOpen={/* SAFETY: 类型断言已复核 */ noop as never}
+        subgraphStack={[]}
+        viewHostNodeId=""
       />
     </WFStoresProvider>,
   );
@@ -80,7 +80,9 @@ describe("顶栏按钮全部走 ui/button 基元（ISSUE #672 P1）", () => {
        * 实例渲染出来的 —— 所以这里改判**基元自己的类**在不在，而不是只认
        * `data-slot="button"`，否则「加了悬停提示」会被误读成「退回手写 button」。 */
       const slot = b.getAttribute("data-slot");
-      if (slot === "button") continue;
+      if (slot === "button") {
+        continue;
+      }
       expect(slot).toBe("tooltip-trigger");
       expect(b.className).toContain("group/button");
     }

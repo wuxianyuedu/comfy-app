@@ -13,35 +13,35 @@ import { isRecord } from "~/lib/is-record";
 export type ApiChannelKind = "image" | "video";
 
 /* 浏览器看到的「每通道配置」（已脱敏；apiKey 从不离开服务端）。 */
-export interface ApiChannelView {
+export type ApiChannelView = {
+  baseUrl: string;
   /* 配好了 baseUrl（视频还要配到可用的端点）→ 该通道可用。 */
   configured: boolean;
-  baseUrl: string;
+  hasApiKey: boolean;
+  model: string;
   /* 追加到 baseUrl 后面的请求路径，例如 "/images/generations"。 */
   path: string;
-  model: string;
-  hasApiKey: boolean;
-}
+};
 
 /* 两个通道的脱敏视图，按通道种类作键。 */
 export type ApiChannelsView = Record<ApiChannelKind, ApiChannelView>;
 
 /* 配置保存接口接受的局部通道配置。 */
-export interface ApiChannelSaveInput {
-  baseUrl?: string;
-  path?: string;
-  model?: string;
+export type ApiChannelSaveInput = {
   /* 不传表示保留已存的密钥；传空串表示清除它。 */
   apiKey?: string;
-}
+  baseUrl?: string;
+  model?: string;
+  path?: string;
+};
 
 /* 服务端落库的嵌套通道配置（存于 data/workshop-api-settings.json）。 */
-export interface ApiChannelStored {
-  baseUrl: string;
-  path: string;
-  model: string;
+export type ApiChannelStored = {
   apiKey: string;
-}
+  baseUrl: string;
+  model: string;
+  path: string;
+};
 
 const MAX_EXTRACT_DEPTH = 8;
 /* 超过这个长度的「像 URL 的值」几乎肯定不是 URL
@@ -54,23 +54,33 @@ const MAX_URL_LENGTH = 2048;
  * 各家特有的信封结构），而不必硬编码每种形状。
  */
 export function findStringUnderKeys(value: unknown, keys: Array<string>, depth = 0): string | null {
-  if (depth > MAX_EXTRACT_DEPTH) return null;
+  if (depth > MAX_EXTRACT_DEPTH) {
+    return null;
+  }
   if (Array.isArray(value)) {
     for (const item of value) {
       const hit = findStringUnderKeys(item, keys, depth + 1);
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
     return null;
   }
-  if (!isRecord(value)) return null;
+  if (!isRecord(value)) {
+    return null;
+  }
   for (const key of keys) {
     const v: unknown = value[key];
-    if (typeof v === "string" && v.length > 0 && v.length <= MAX_URL_LENGTH) return v;
+    if (typeof v === "string" && v.length > 0 && v.length <= MAX_URL_LENGTH) {
+      return v;
+    }
   }
   for (const v of Object.values(value)) {
     if (isRecord(v) || Array.isArray(v)) {
       const hit = findStringUnderKeys(v, keys, depth + 1);
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
   }
   return null;
@@ -115,25 +125,33 @@ export function extractRemoteTaskId(payload: unknown): string | null {
 /* 取出 base64 媒体载荷并包装成 data URL；取不到则为 null。 */
 export function extractBase64DataUrl(payload: unknown, mime = "image/png"): string | null {
   const b64 = findStringUnderKeys(payload, B64_KEYS, 2);
-  if (!b64) return null;
+  if (!b64) {
+    return null;
+  }
   /* 有些上游直接内联一个 data URL。 */
-  if (isDataUrl(b64)) return b64;
+  if (isDataUrl(b64)) {
+    return b64;
+  }
   /* 「怎么拼 data URL」只有一处定义（`~/lib/media/data-url`，规范 16 §16.2.4.56）。 */
   return wrapBase64(b64, mime);
 }
 
 /* 按文件路径 / URL 的扩展名猜媒体类型（SSE 输出里两种都有）。 */
 export function guessMediaKind(pathOrUrl: string): "image" | "video" | "other" {
-  if (/\.(mp4|webm|mov|mkv|avi|gif)(\?.*)?$/i.test(pathOrUrl)) return "video";
-  if (/\.(png|jpe?g|webp|bmp|avif)(\?.*)?$/i.test(pathOrUrl)) return "image";
+  if (/\.(mp4|webm|mov|mkv|avi|gif)(\?.*)?$/i.test(pathOrUrl)) {
+    return "video";
+  }
+  if (/\.(png|jpe?g|webp|bmp|avif)(\?.*)?$/i.test(pathOrUrl)) {
+    return "image";
+  }
   return "other";
 }
 
 /* 已完成任务的一个落盘产物文件（来自 SSE 的 `done` 帧）。 */
-export interface SavedOutput {
-  url: string;
+export type SavedOutput = {
   kind: "image" | "video" | "other";
-}
+  url: string;
+};
 
 /**
  * 把任务的 `done.images` 载荷（unknown[]）归一成「URL + 类型」对。
@@ -148,9 +166,13 @@ export function extractSavedOutputs(value: unknown): Array<SavedOutput> {
       out.push({ url: entry, kind: guessMediaKind(entry) });
       continue;
     }
-    if (!isRecord(entry)) continue;
+    if (!isRecord(entry)) {
+      continue;
+    }
     const rawPath: unknown = entry.localPath ?? entry.url ?? entry.path;
-    if (typeof rawPath !== "string" || rawPath.length === 0) continue;
+    if (typeof rawPath !== "string" || rawPath.length === 0) {
+      continue;
+    }
     const rawKind: unknown = entry.mediaType ?? entry.type;
     const kind =
       rawKind === "video" || rawKind === "image" || rawKind === "other"
@@ -172,7 +194,11 @@ export function resolveImagesGenerationsEndpoint(baseUrl: string): string {
   const base = String(baseUrl ?? "")
     .trim()
     .replace(/\/+$/, "");
-  if (/\/images\/generations$/i.test(base)) return base;
-  if (/\/images$/i.test(base)) return `${base}/generations`;
+  if (/\/images\/generations$/i.test(base)) {
+    return base;
+  }
+  if (/\/images$/i.test(base)) {
+    return `${base}/generations`;
+  }
   return `${base}/images/generations`;
 }

@@ -14,7 +14,9 @@ vi.mock("~/lib/comfyui/queue-signal.server", () => ({
     subscribers.push(l);
     return () => {
       const i = subscribers.indexOf(l);
-      if (i >= 0) subscribers.splice(i, 1);
+      if (i >= 0) {
+        subscribers.splice(i, 1);
+      }
     };
   },
 }));

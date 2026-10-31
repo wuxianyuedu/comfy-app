@@ -32,15 +32,15 @@ const ROOT = path.resolve(__dirname, "..");
 const CONFIG = path.join(ROOT, ".cnb.yml");
 
 type FetchResult = {
-  ok: boolean;
-  status: number;
   body: string;
   error?: string | null;
+  ok: boolean;
+  status: number;
 };
 type FetchFn = (
-  ctx: { base: string; token: string; repo: string },
+  ctx: { base: string; repo: string; token: string; },
   subPath: string,
-  extra?: { method?: string; body?: string },
+  extra?: { body?: string; method?: string; },
 ) => Promise<FetchResult>;
 
 /** 平台真实的响应原文（字段名与嵌套都照抄，别自己编形状）。 */
@@ -124,7 +124,7 @@ describe("probeAll：每一条探针都只读，且只用平台无条件注入�
   });
 
   it("OIDC 那一问默认不发；`oidc: true` 才进清单，且它是唯一带请求体的一条", async () => {
-    const seen: Array<{ path: string; hasBody: boolean }> = [];
+    const seen: Array<{ hasBody: boolean; path: string; }> = [];
     const fn: FetchFn = async (_ctx, subPath, extra) => {
       seen.push({ path: subPath, hasBody: Boolean(extra?.body) });
       return reply(ok(), 200);
@@ -185,7 +185,9 @@ describe("formatReadout：三档措辞各自代表不同的事实", () => {
     // 族那一行是「两空格 + 族名 + 空白 + 结论」；探针行是四空格，别混进来。
     const groupLines = lines.filter((l) => /^ {2}\S+\s{2,}/.test(l));
     expect(groupLines.length).toBeGreaterThan(4);
-    for (const line of groupLines) expect(line).toContain("获授权");
+    for (const line of groupLines) {
+      expect(line).toContain("获授权");
+    }
     expect(lines.filter((l) => l.includes("→ 缺 ")).length).toBe(0);
   });
 

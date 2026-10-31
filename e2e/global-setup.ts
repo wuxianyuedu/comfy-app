@@ -57,12 +57,12 @@ import {
 
 /** 一次探针的观测结果。 */
 export interface FakeSlotObservation {
-  /** HTTP 状态码；连不上（服务不在）是 **0**，不是错误。 */
-  status: number;
-  /** 200 时的响应体（解析不出 JSON 时是 null）。 */
-  payload?: unknown;
   /** 连不上时的原因，仅供日志。 */
   error?: string;
+  /** 200 时的响应体（解析不出 JSON 时是 null）。 */
+  payload?: unknown;
+  /** HTTP 状态码；连不上（服务不在）是 **0**，不是错误。 */
+  status: number;
 }
 
 /**
@@ -87,7 +87,7 @@ export interface FakeSlotObservation {
  * 应答」而不是「端口上有人」）。
  */
 export async function probeFakeComfySlot(
-  options: { url?: string; timeoutMs?: number } = {},
+  options: { timeoutMs?: number; url?: string; } = {},
 ): Promise<FakeSlotObservation> {
   const url = options.url ?? fakeComfyuiStatsUrl();
   /* 1500ms 是**本地回环**上探一个已经起来的服务，本机实测 13ms —— 给两个数量级
@@ -96,7 +96,9 @@ export async function probeFakeComfySlot(
   const timeoutMs = options.timeoutMs ?? 1500;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-    if (res.status !== 200) return { status: res.status };
+    if (res.status !== 200) {
+      return { status: res.status };
+    }
     let payload: unknown = null;
     try {
       payload = await res.json();
@@ -125,10 +127,14 @@ export async function probeFakeComfySlot(
  * @param {unknown} err
  */
 function connectionRefused(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false;
+  if (!err || typeof err !== "object") {
+    return false;
+  }
   /* 预算耗尽（含手动 abort）一律**不算**「空着」—— 它回答不了那个问题。 */
   const name = /* SAFETY: 类型断言已复核 */ (err as { name?: unknown }).name;
-  if (name === "TimeoutError" || name === "AbortError") return false;
+  if (name === "TimeoutError" || name === "AbortError") {
+    return false;
+  }
   const code = /* SAFETY: 类型断言已复核 */ (err as { cause?: { code?: unknown } }).cause?.code;
   if (typeof code === "string") {
     return ["ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH", "ENETUNREACH"].includes(code);
@@ -163,7 +169,9 @@ export function readAppServerPreflight(
   env: Record<string, string | undefined> = process.env,
 ): { occupiedBefore: boolean } | null {
   const preflight = decodePreflight(env[E2E_PREFLIGHT_ENV_KEY]);
-  if (!preflight) return null;
+  if (!preflight) {
+    return null;
+  }
   return { occupiedBefore: preflight.appOccupied };
 }
 
@@ -181,7 +189,9 @@ export function readFakeSlotPreflight(
   env: Record<string, string | undefined> = process.env,
 ): { occupiedBefore: boolean } | null {
   const preflight = decodePreflight(env[E2E_PREFLIGHT_ENV_KEY]);
-  if (!preflight) return null;
+  if (!preflight) {
+    return null;
+  }
   return { occupiedBefore: preflight.fakeOccupied };
 }
 

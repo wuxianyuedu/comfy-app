@@ -31,13 +31,13 @@
 import { clamp } from "~/lib/clamp";
 
 /** 一页 / 一个窗口的条目数与它在原列表里的位置（左闭右开）。 */
-export interface PageWindow<T> {
+export type PageWindow<T> = {
   entries: Array<T>;
   /** 钳回有效区间之后的页码（从 1 起）。 */
   page: number;
   /** 总页数，**至少 1**（空列表也是「1 页」，只是这一页有 0 条）。 */
   totalPages: number;
-}
+};
 
 /** `pageSize` 的合法下限：0 / 负数 / `NaN` 都会让 `ceil(total / size)` 变成 `Infinity`。 */
 function safeSize(pageSize: number): number {
@@ -125,7 +125,9 @@ export const LOG_MODAL_MAX_ROWS = 300;
  */
 export function tailWindow<T>(items: ReadonlyArray<T>, size: number): Array<T> {
   const n = safeSize(size);
-  if (n >= items.length) return items.slice();
+  if (n >= items.length) {
+    return items.slice();
+  }
   return items.slice(items.length - n);
 }
 
@@ -153,7 +155,9 @@ export function tailWindowAppend<T>(items: ReadonlyArray<T>, item: T, size: numb
   /* 窗口未满：复制 + 追加（必须换引用，见上）。这一支就是
    * `tailWindow([...items, item], n)` 本身 —— 归一口径不必在这里再算一遍，
    * 直接借 `tailWindow` 的那一处定义。 */
-  if (items.length < n) return tailWindow([...items, item], n);
+  if (items.length < n) {
+    return tailWindow([...items, item], n);
+  }
   /* 窗口已满：原数组长度就是上限，`shift` + `push` 后仍恰为 `n` 条，
    * 不必再切片。 */
   const next = /* SAFETY: 类型断言已复核 */ items as Array<T>;
@@ -163,12 +167,12 @@ export function tailWindowAppend<T>(items: ReadonlyArray<T>, item: T, size: numb
 }
 
 /** 分块遍历：第 `index` 块在原列表里的位置（左闭右开）。 */
-export interface ChunkRange {
-  start: number;
+export type ChunkRange = {
   end: number;
+  start: number;
   /** 总块数，至少 1（空列表也是「1 块」的空块）。 */
   total: number;
-}
+};
 
 /**
  * **平行分块**：把列表从头按固定片长切开，返回第 `index` 块的范围。

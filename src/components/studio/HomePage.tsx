@@ -35,16 +35,16 @@ import { type WorkspaceView } from "./NavItems";
   └────┴──────────────────────────────────────────┘
 */
 
-export interface RecentProject {
+export type RecentProject = {
   id: string;
-  name: string;
-  updatedAt: string;
-  thumbnails?: Array<string>;
   /** 项目种类 —— 决定图标与视觉处理 */
   kind?: "canvas" | "generation" | "workflow" | "video";
+  name: string;
   /** Secondary line: e.g. "12 节点", "4 张图", "Wan I2V" */
   subtitle?: string;
-}
+  thumbnails?: Array<string>;
+  updatedAt: string;
+};
 
 /* 卡片类型徽标文案与图标 */
 /* 项目类别色 + 图标。
@@ -57,7 +57,7 @@ export interface RecentProject {
  * 色值本身属规范 03 §3.6.1 的**类型色例外**（项目类别色与
  * `lib/project-canvas/canvas-types.ts` 的 `NODE_META.color` 同构），
  * 已在 `scripts/check-theme-colors.cjs` 的 `EXEMPT_TABLES` 登记。 */
-type KindConfig = { label: string; color: string; icon: React.ReactNode };
+type KindConfig = { color: string; icon: React.ReactNode; label: string };
 
 const KIND_CONFIG: Record<"canvas" | "generation" | "workflow" | "video", KindConfig> = {
   canvas: {
@@ -112,27 +112,27 @@ function ResumeProjectCard({
   proj,
   onOpen,
 }: {
-  proj: RecentProject;
   onOpen: (proj: RecentProject) => void;
+  proj: RecentProject;
 }) {
   const cfg = kindConfigOf(proj.kind);
   const thumbs = (proj.thumbnails ?? []).slice(0, 3);
   return (
     <Button
-      variant="ghost"
-      onClick={() => onOpen(proj)}
       aria-label={`继续编辑 ${proj.name}`}
       className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 mt-6 flex h-auto w-full items-stretch gap-4 rounded-xl border p-4 text-left font-normal active:scale-[0.995]"
+      onClick={() => onOpen(proj)}
+      variant="ghost"
     >
       {/* 左：缩略图条；一张图都没有时落回类别图标块（不留空洞） */}
       <div className="flex w-42 shrink-0 gap-1.5 overflow-hidden rounded-xl">
         {thumbs.length > 0 ? (
           thumbs.map((thumb, i) => (
             <MediaThumbnail
-              key={`${proj.id}-resume-thumb-${i}`}
-              src={thumb}
               alt=""
               className="ring-border-strong size-full min-w-0 rounded-xl object-cover ring-1"
+              key={`${proj.id}-resume-thumb-${i}`}
+              src={thumb}
             />
           ))
         ) : (
@@ -176,17 +176,17 @@ function ResumeProjectCard({
   );
 }
 
-export interface HomePageProps {
-  onNewProject?: () => void;
-  recentProjects?: Array<RecentProject>;
-  onOpenProject?: (id: string) => void;
-  /** 打开一个画布项目（设为活跃 + 跳到项目主页）。 */
-  onOpenCanvasProject?: (id: string) => void;
+export type HomePageProps = {
   /** 跳到一个工作区视图（模型 / 工作流 / 画布等） */
   onNavigate?: (view: WorkspaceView) => void;
+  onNewProject?: () => void;
+  /** 打开一个画布项目（设为活跃 + 跳到项目主页）。 */
+  onOpenCanvasProject?: (id: string) => void;
+  onOpenProject?: (id: string) => void;
   /** 切到「项目」（works）视图，看全部项目 */
   onShowAllProjects?: () => void;
-}
+  recentProjects?: Array<RecentProject>;
+};
 
 export function HomePage({
   onNewProject,
@@ -216,10 +216,6 @@ export function HomePage({
 
   return (
     <DocumentFrame
-      width="narrow"
-      /* `pt-10`（而不是跟着欢迎区时代的 `py-16`）：上沿现在直接是四张入口卡，
-        64px 的顶留白在整条内容列之上等于又加回半块欢迎区。 */
-      className="px-10 pt-10 pb-16"
       backdrop={
         /* ── 顶部渐隐带（替代原先两团极光光斑）────────────────────
            换掉的理由不是审美偏好，是两条实测：
@@ -229,10 +225,14 @@ export function HomePage({
            新做法不给颜色、只给纵深（surface → canvas 的单向渐隐），深浅两态同一份
            令牌，不需要各写一套。 */
         <div
-          className="from-surface-1 pointer-events-none absolute inset-x-0 top-0 h-56 bg-linear-to-b to-transparent"
           aria-hidden
+          className="from-surface-1 pointer-events-none absolute inset-x-0 top-0 h-56 bg-linear-to-b to-transparent"
         />
       }
+      /* `pt-10`（而不是跟着欢迎区时代的 `py-16`）：上沿现在直接是四张入口卡，
+        64px 的顶留白在整条内容列之上等于又加回半块欢迎区。 */
+      className="px-10 pt-10 pb-16"
+      width="narrow"
     >
       {/* ── 主内容区 ────────────────────────
           侧栏（`ui/sidebar`）与顶栏（`TopBar`）由 `AppShell` 统一提供 ——
@@ -272,27 +272,27 @@ export function HomePage({
             desc: "导入和复用工作流",
             icon: (
               <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
                 fill="none"
+                height="22"
                 stroke="currentColor"
-                strokeWidth="1.8"
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                strokeWidth="1.8"
+                viewBox="0 0 24 24"
+                width="22"
               >
-                <rect x="3" y="3" width="7" height="7" rx="1.5" />
-                <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                <rect height="7" rx="1.5" width="7" x="3" y="3" />
+                <rect height="7" rx="1.5" width="7" x="14" y="14" />
                 <path d="M10 6.5h4a3 3 0 013 3v4.5" />
               </svg>
             ),
           },
         ].map((card) => (
           <Button
-            key={card.id}
-            variant="ghost"
-            onClick={() => onNavigate?.(/* SAFETY: 类型断言已复核 */ card.id as WorkspaceView)}
             className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto flex-col items-start gap-2.5 rounded-2xl border p-4 text-left font-normal transition-all hover:shadow-lg hover:shadow-black/5 dark:shadow-black/10"
+            key={card.id}
+            onClick={() => onNavigate?.(/* SAFETY: 类型断言已复核 */ card.id as WorkspaceView)}
+            variant="ghost"
           >
             <span className="bg-primary/10 text-primary-strong group-hover:bg-primary/15 flex size-10 items-center justify-center rounded-xl transition-colors">
               {card.icon}
@@ -318,9 +318,9 @@ export function HomePage({
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-ink-field text-[17px] font-semibold">最近项目</h2>
           <Button
-            variant="link"
-            onClick={() => onShowAllProjects?.()}
             className="text-ink-faint hover:text-ink-strong h-auto p-0 text-xs"
+            onClick={() => onShowAllProjects?.()}
+            variant="link"
           >
             查看全部 →
           </Button>
@@ -328,15 +328,15 @@ export function HomePage({
 
         {/* 第一个项目由大卡占位 —— 同一条项目不该在页面上出现两次，
                   所以下面的栅格从第二个开始取。 */}
-        {resumeProject && <ResumeProjectCard proj={resumeProject} onOpen={openRecent} />}
+        {resumeProject && <ResumeProjectCard onOpen={openRecent} proj={resumeProject} />}
 
         <div className="mt-3 grid grid-cols-2 gap-3">
           {/* 新建项目卡片 —— 画布风入口 */}
           <Button
-            variant="ghost"
+            className="group border-border bg-surface-1 hover:bg-info/5 flex h-auto flex-col items-center justify-center gap-2.5 rounded-lg border border-dashed py-7 font-normal active:scale-[0.98]"
 
             onClick={onNewProject}
-            className="group border-border bg-surface-1 hover:bg-info/5 flex h-auto flex-col items-center justify-center gap-2.5 rounded-lg border border-dashed py-7 font-normal active:scale-[0.98]"
+            variant="ghost"
           >
             <div className="text-info-strong/70 group-hover:text-info-strong flex size-7 items-center justify-center rounded-xl transition-colors">
               <Plus size={24} strokeWidth={1.6} />
@@ -352,10 +352,10 @@ export function HomePage({
                 const cfg = kindConfigOf(proj.kind);
                 return (
                   <Button
-                    key={proj.id}
-                    variant="ghost"
-                    onClick={() => openRecent(proj)}
                     className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto items-start gap-3 rounded-lg border p-3.5 text-left font-normal active:scale-[0.98]"
+                    key={proj.id}
+                    onClick={() => openRecent(proj)}
+                    variant="ghost"
                   >
                     {/* Kind icon */}
                     <div
@@ -398,10 +398,10 @@ export function HomePage({
                         <div className="mt-2.5 flex gap-1 overflow-hidden">
                           {proj.thumbnails.slice(0, 3).map((thumb, ti) => (
                             <MediaThumbnail
-                              key={ti}
-                              src={thumb}
                               alt=""
                               className="ring-border-strong size-10 shrink-0 rounded-lg object-cover ring-1"
+                              key={ti}
+                              src={thumb}
                             />
                           ))}
                         </div>
@@ -420,8 +420,8 @@ export function HomePage({
                 const cfg = kindConfigOf(kinds[index - 1]);
                 return (
                   <div
-                    key={kinds[index - 1]}
                     className="border-border bg-surface-1 flex items-start gap-3 rounded-lg border p-3.5 opacity-60"
+                    key={kinds[index - 1]}
                   >
                     <div
                       className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl"

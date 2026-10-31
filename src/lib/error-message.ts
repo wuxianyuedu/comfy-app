@@ -35,7 +35,9 @@ const NETWORK_ERROR_TRANSLATIONS: Array<[RegExp, string]> = [
 /** 把网络层原始报错翻译成可读文案；无法识别时返回 null（走原 message）。 */
 function translateNetworkError(message: string): string | null {
   for (const [pattern, readable] of NETWORK_ERROR_TRANSLATIONS) {
-    if (pattern.test(message)) return readable;
+    if (pattern.test(message)) {
+      return readable;
+    }
   }
   return null;
 }
@@ -65,7 +67,9 @@ function pickUnderlyingMessage(e: object): string | null {
   const shapeStr =
     shape && typeof shape.message === "string" && shape.message.length > 0 ? shape.message : null;
   // 服务端原文更能说明问题；与顶层重复时不必替换。
-  if (shapeStr && shapeStr !== topStr) return shapeStr;
+  if (shapeStr && shapeStr !== topStr) {
+    return shapeStr;
+  }
   return topStr;
 }
 
@@ -140,7 +144,9 @@ export function errorText(e: unknown, action: string, fallback = "未知错误")
  * 可能有人自己挂了一个。取不到（不是字符串、或空串）返回 `null`。
  */
 export function errorCode(e: unknown): string | null {
-  if (typeof e !== "object" || e === null) return null;
+  if (typeof e !== "object" || e === null) {
+    return null;
+  }
   const obj = /* SAFETY: 类型断言已复核 */ e as {
     code?: unknown;
     data?: { code?: unknown };
@@ -168,27 +174,35 @@ export function errorCode(e: unknown): string | null {
  * 上限与截断标记都收在那处，见 §16.2.4.48）。
  */
 export function rawErrorDetail(e: unknown, maxLen = LOG_DETAIL_MAX): string {
-  if (e === null || e === undefined) return "";
+  if (e === null || e === undefined) {
+    return "";
+  }
   const parts: Array<string> = [];
   if (typeof e === "string") {
     parts.push(e);
   } else if (typeof e === "object") {
     const obj = /* SAFETY: 类型断言已复核 */ e as {
-      name?: unknown;
-      message?: unknown;
+      cause?: unknown;
       code?: unknown;
       data?: { code?: unknown; httpStatus?: unknown };
-      cause?: unknown;
+      message?: unknown;
+      name?: unknown;
+      shape?: { code?: unknown; message?: unknown };
       stack?: unknown;
-      shape?: { message?: unknown; code?: unknown };
     };
-    if (typeof obj.name === "string" && obj.name) parts.push(obj.name);
+    if (typeof obj.name === "string" && obj.name) {
+      parts.push(obj.name);
+    }
     const message = typeof obj.message === "string" && obj.message ? obj.message : null;
-    if (message) parts.push(message);
+    if (message) {
+      parts.push(message);
+    }
     /* 码的取值链与 {@link errorCode} 同一条（两份实现会漂移：一处认 `shape.code`、
      * 另一处不认，日志里就查不到那个码，而分支代码看不见同一个错误）。 */
     const code = errorCode(e);
-    if (code) parts.push(`code=${code}`);
+    if (code) {
+      parts.push(`code=${code}`);
+    }
     if (typeof obj.data?.httpStatus === "number") {
       parts.push(`http=${obj.data.httpStatus}`);
     }
@@ -198,7 +212,9 @@ export function rawErrorDetail(e: unknown, maxLen = LOG_DETAIL_MAX): string {
     }
     if (typeof obj.stack === "string" && obj.stack) {
       const head = obj.stack.split("\n").slice(0, 3).join(" | ");
-      if (head && !message?.includes(head)) parts.push(head);
+      if (head && !message?.includes(head)) {
+        parts.push(head);
+      }
     }
   }
   const text = parts.join(" — ");

@@ -90,9 +90,9 @@ export function WorkflowEditorInner({
   onClose,
   onSave,
 }: {
-  workflowId: string;
   onClose: () => void;
   onSave?: () => void;
+  workflowId: string;
 }) {
   /* 3 个按实例创建的 Zustand store，每次挂载只建一次。
    * 用 useState 的惰性初始化让它们保持稳定，又不必在渲染期去碰 ref
@@ -110,16 +110,16 @@ export function WorkflowEditorInner({
   }));
   return (
     <WFStoresProvider stores={stores}>
-      <WorkflowEditorBody workflowId={workflowId} onClose={onClose} onSave={onSave} />
+      <WorkflowEditorBody onClose={onClose} onSave={onSave} workflowId={workflowId} />
     </WFStoresProvider>
   );
 }
 
-interface WFStoresHelper {
+type WFStoresHelper = {
   io: ReturnType<typeof createIOEditStore>;
   rgthree: ReturnType<typeof createRgthreeGroupsStore>;
   viewer: ReturnType<typeof createNodeJsonViewerStore>;
-}
+};
 
 /* 内层：全部既有逻辑。经 useIOEditApi/useRgthreeApi/useViewerApi 直读直写
  * store（hook 在 <WFStoresProvider> 之下才合法，故体逻辑用 *Api 访问）。 */
@@ -128,9 +128,9 @@ function WorkflowEditorBody({
   onClose,
   onSave,
 }: {
-  workflowId: string;
   onClose: () => void;
   onSave?: () => void;
+  workflowId: string;
 }) {
   const ioApi = useIOEditApi();
   const rgthreeApi = useRgthreeApi();
@@ -178,12 +178,12 @@ function WorkflowEditorBody({
    *  而不必让每个节点各自发一次 /api 请求。
    *  manifest 在首次解析后已经在服务端缓存，因此每次打开页面只花一次廉价往返。 */
   useEffect(() => {
-    refreshCustomNodes().catch((e) => console.warn("[we] 节点清单刷新失败", e));
+    refreshCustomNodes().catch((error_) => console.warn("[we] 节点清单刷新失败", error_));
   }, []);
   /* 子工作流导航栈。查看顶层工作流时为空。
    *  每一项是 {uid, name}，供面包屑显示；点某一级会退回到那一层。 */
   const [subgraphStack, setSubgraphStack] = useState<
-    Array<{ uid: string; name: string; nodeId: string }>
+    Array<{ name: string; nodeId: string; uid: string }>
   >([]);
   /* 根工作流的显示名在**第一次**顶层拉取时记下，之后跨越子工作流导航一直保留，
    *  于是面包屑总能渲染成「<根工作流> / <子工作流 1> / <子工作流 2> …」。
@@ -335,7 +335,9 @@ function WorkflowEditorBody({
    * 而整张图不会为没人碰的连线白白付交互开销。 */
   const onEdgeClick = useCallback(
     (_event: React.MouseEvent, edge: Edge) => {
-      if (edge.deletable === true && edge.reconnectable === true) return;
+      if (edge.deletable === true && edge.reconnectable === true) {
+        return;
+      }
       setEdges((eds) =>
         eds.map((e) => (e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e)),
       );
@@ -387,23 +389,23 @@ function WorkflowEditorBody({
   }
 
   return (
-    <FullScreenLayer zClass={zClass("modal")} className="bg-canvas flex flex-col pb-6">
+    <FullScreenLayer className="bg-canvas flex flex-col pb-6" zClass={zClass("modal")}>
       {/* ── Top bar ── */}
       <WorkflowEditorTopBar
-        onClose={onClose}
         detail={detail}
-        rootWorkflowName={rootWorkflowName}
-        subgraphStack={subgraphStack}
-        setSubgraphStack={setSubgraphStack}
-        fetchDetail={fetchDetail}
-        onExitSubgraph={onExitSubgraph}
-        forceReloadDetail={forceReloadDetail}
-        viewHostNodeId={viewHostNodeId}
-        setViewJsonOpen={setViewJsonOpen}
-        resetLayout={resetLayout}
-        handleSave={handleSave}
-        saving={saving}
         error={error}
+        fetchDetail={fetchDetail}
+        forceReloadDetail={forceReloadDetail}
+        handleSave={handleSave}
+        onClose={onClose}
+        onExitSubgraph={onExitSubgraph}
+        resetLayout={resetLayout}
+        rootWorkflowName={rootWorkflowName}
+        saving={saving}
+        setSubgraphStack={setSubgraphStack}
+        setViewJsonOpen={setViewJsonOpen}
+        subgraphStack={subgraphStack}
+        viewHostNodeId={viewHostNodeId}
       />
 
       {/* ── Canvas ── */}
@@ -439,26 +441,26 @@ function WorkflowEditorBody({
          *  叠上去，这样未保存的重命名立即生效。 */}
         {ioPreviewOpen && (
           <WorkflowIoPreviewPanel
-            workflowIO={workflowIO}
+            defaultMode={detail.defaultMode ?? null}
             detailIOMap={ioDetailMap}
             modes={detail.availableModes ?? []}
-            defaultMode={detail.defaultMode ?? null}
-            onModesChange={handleModesChange}
             onClose={() => setIoPreviewOpen(false)}
+            onModesChange={handleModesChange}
+            workflowIO={workflowIO}
           />
         )}
         <WorkflowEditorCanvas
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onNodeDragStop={onNodeDragStop}
           canvasSettings={canvasSettings}
           canvasSettingsHydrated={canvasSettingsHydrated}
+          edges={edges}
+          nodes={nodes}
+          onEdgeClick={onEdgeClick}
+          onEdgesChange={onEdgesChange}
           onMiniMapJump={onMiniMapJump}
+          onNodeDragStop={onNodeDragStop}
+          onNodesChange={onNodesChange}
           onOpenSettings={() => setCanvasSettingsOpen(true)}
           onRecenter={recenterCanvas}
-          onEdgeClick={onEdgeClick}
           /* 选中节点后由画布把「相关连线」与「相关端口行」标记分别写回 edges /
            * 节点 data（连线加粗提亮，落到的端口行同步提亮）。 */
           setEdges={setEdges}
@@ -471,10 +473,10 @@ function WorkflowEditorBody({
          *  点击齿轮按钮时渲染。 */}
         {canvasSettingsOpen && (
           <CanvasSettingsPanel
+            onClose={() => setCanvasSettingsOpen(false)}
+            reset={resetCanvasSettings}
             settings={canvasSettings}
             update={updateCanvasSetting}
-            reset={resetCanvasSettings}
-            onClose={() => setCanvasSettingsOpen(false)}
           />
         )}
         {/* 工作流编辑画布是纯配置界面（不存在执行），不再挂执行日志入口；

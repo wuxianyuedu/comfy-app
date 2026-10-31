@@ -49,17 +49,17 @@ import { tmpdir } from "node:os";
 
 /** 一份一次性克隆：`dir` 是它的工作树根，`dispose()` 注销它。 */
 export interface ProbeTree {
-  dir: string;
   /** 覆盖进克隆的那些相对路径（带状态前缀）。出问题第一个该看的就是这份清单。 */
   carried: Array<string>;
+  dir: string;
   dispose: () => void;
 }
 
 /** `git status --porcelain=v1 -z` 的一条记录。 */
 interface StatusEntry {
+  path: string;
   /** 两格状态码（`??` = 未跟踪） */
   xy: string;
-  path: string;
 }
 
 /**
@@ -75,11 +75,15 @@ function parseStatusZ(out: string): Array<StatusEntry> {
   const entries: Array<StatusEntry> = [];
   for (let i = 0; i < fields.length; i += 1) {
     const field = fields[i];
-    if (field === undefined || field === "") continue;
+    if (field === undefined || field === "") {
+      continue;
+    }
     const xy = field.slice(0, 2);
     const path = field.slice(3);
     entries.push({ xy, path });
-    if (xy.startsWith("R") || xy.startsWith("C")) i += 1;
+    if (xy.startsWith("R") || xy.startsWith("C")) {
+      i += 1;
+    }
   }
   return entries;
 }
@@ -89,9 +93,14 @@ function listFilesRec(dir: string): Array<string> {
   const out: Array<string> = [];
   for (const ent of readdirSync(dir, { withFileTypes: true })) {
     const abs = join(dir, ent.name);
-    if (ent.isSymbolicLink()) continue;
-    if (ent.isDirectory()) out.push(...listFilesRec(abs));
-    else if (ent.isFile()) out.push(abs);
+    if (ent.isSymbolicLink()) {
+      continue;
+    }
+    if (ent.isDirectory()) {
+      out.push(...listFilesRec(abs));
+    } else if (ent.isFile()) {
+      out.push(abs);
+    }
   }
   return out;
 }
@@ -217,7 +226,9 @@ function carryWorkingTreeChanges(
       carried.push(`D ${path}`);
       continue;
     }
-    if (!existsSync(src)) continue;
+    if (!existsSync(src)) {
+      continue;
+    }
     if (lstatSync(src).isDirectory()) {
       /* 未跟踪**目录**在 porcelain 里是一条目录记录（不展开）⇒ 自己展开；
        * 不展开就等于「克隆里没有这批新文档」，而那正是探针要判的东西。 */

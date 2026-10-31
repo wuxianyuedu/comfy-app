@@ -55,14 +55,14 @@ function run(args: Array<string>, cwd = REPO_ROOT) {
 
 /** 账本一条记录的形状（判据只读下面这几个字段）。 */
 type LedgerRun = {
-  totalMs: number;
-  stagedFiles: number;
-  groups: Array<{ name: string; ms: number }>;
-  steps: Array<{ name: string; ms: number }>;
   /** 组 C 的分文件读数（后加的一格，旧记录里没有 —— 报表那侧不许为它打空表）。 */
-  files?: Array<{ name: string; ms: number }>;
+  files?: Array<{ ms: number; name: string; }>;
   filesExpected?: number;
   filesMissing?: number;
+  groups: Array<{ ms: number; name: string; }>;
+  stagedFiles: number;
+  steps: Array<{ ms: number; name: string; }>;
+  totalMs: number;
 };
 
 /**
@@ -90,7 +90,9 @@ function readLedger(result: { out: string }): Array<LedgerRun> {
  */
 function firstRun(result: { out: string }): LedgerRun {
   const [run] = readLedger(result);
-  if (!run) throw new Error(`账本是空的（--json 输出：${result.out}）`);
+  if (!run) {
+    throw new Error(`账本是空的（--json 输出：${result.out}）`);
+  }
   return run;
 }
 

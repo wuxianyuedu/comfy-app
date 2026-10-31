@@ -27,10 +27,7 @@ import { Button, buttonVariants } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { Hint } from "~/components/ui/hint";
 import { PageLoading } from "~/components/ui/page-loading";
-import {
-  copyFailureText,
-  useCopyFeedback,
-} from "~/components/ui/use-copy-feedback";
+import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { cn } from "~/lib/utils";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
@@ -38,7 +35,7 @@ import { useLogPanel } from "~/components/studio/logs/LogProvider";
 import { SettingsPageView } from "~/app/(main)/settings/SettingsPageView";
 import { useSettingsPage } from "~/app/(main)/settings/hooks/use-settings-page";
 
-export interface SettingsViewProps {
+export type SettingsViewProps = {
   /** 撑满父级高度（工作区视图里由外层给视口高度）；缺省走外壳自己的视口档。 */
   fillHeight?: boolean;
   /**
@@ -49,13 +46,9 @@ export interface SettingsViewProps {
   initialSection?: string | null;
   /** 目标分区已落定后回调（容器据此清空一次性载荷）。 */
   onConsumeSection?: () => void;
-}
+};
 
-export function SettingsView({
-  fillHeight,
-  initialSection,
-  onConsumeSection,
-}: SettingsViewProps) {
+export function SettingsView({ fillHeight, initialSection, onConsumeSection }: SettingsViewProps) {
   const c = useSettingsPage({
     initialSection,
     onConsumeInitialSection: onConsumeSection,
@@ -78,10 +71,7 @@ export function SettingsView({
   /* 打开即先渲染「外壳 + 分区导航」，内容区走三态；不再用整屏 loading 挡导航。 */
   if (c.isInitialLoad) {
     return (
-      <SettingsShell
-        {...frame}
-        fallback={<PageLoading className="bg-bg min-h-[60vh] pb-6" />}
-      />
+      <SettingsShell {...frame} fallback={<PageLoading className="bg-bg min-h-[60vh] pb-6" />} />
     );
   }
 
@@ -132,13 +122,7 @@ export function SettingsView({
  * 现在：完整错误可展开、可复制；并提示打开日志面板（Ctrl+Shift+L）看
  * 全局错误与启动日志——错误本身也已由 LogProvider 的全局钩子收进面板。
  * 渲染在「设置外壳」内容区：去掉整屏高度，仅居中于内容区，随外壳滚动。 */
-function SettingsLoadError({
-  errorText,
-  onRetry,
-}: {
-  errorText: string;
-  onRetry: () => void;
-}) {
+function SettingsLoadError({ errorText, onRetry }: { errorText: string; onRetry: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const copied = useFlashState();
   /* 成败都改口（规范 16 §16.2.4.43）：收口前这里是
@@ -157,19 +141,13 @@ function SettingsLoadError({
   /* 复制的是用户看到的这段可读文案（`errorText` 也已优先取服务端原文）；
    * 原始报错（tRPC code / 服务端 message / 堆栈首行）另见日志面板的同条记录
    * —— 视图不再手拼第二份原文，避免两处措辞漂移。 */
-  const copyErrorText = useCallback(
-    () => copyError(errorText),
-    [copyError, errorText],
-  );
+  const copyErrorText = useCallback(() => copyError(errorText), [copyError, errorText]);
 
   return (
     <div className="grid min-h-[60vh] place-items-center overflow-y-auto p-6">
       <div className="w-full max-w-xl text-center">
         <p className="text-danger-strong">加载设置失败，请刷新重试</p>
-        <p
-          className="text-muted-foreground mt-2 truncate text-xs"
-          title={errorText}
-        >
+        <p className="text-muted-foreground mt-2 truncate text-xs" title={errorText}>
           {errorText}
         </p>
         {/* 「完整错误」是一个 disclosure：点它把下面的`<pre>` 展开 —— 用
@@ -181,47 +159,40 @@ function SettingsLoadError({
  按钮，直接穿`buttonVariants` 的 outline 档），整排的排布在
 `rootClassName`，面板靠`basis-full` 独占一行。 */}
         <Disclosure
-          open={expanded}
-          onOpenChange={setExpanded}
-          marker="none"
-          rootClassName="mt-3 flex flex-wrap items-center justify-center gap-2"
           className={cn(
             buttonVariants({ variant: "outline" }),
             "text-muted-foreground h-auto w-auto gap-1 rounded-lg px-3 py-2 text-xs",
           )}
-          panelClassName="basis-full"
           leading={
-            <Button
-              onClick={onRetry}
-              className="h-auto rounded-lg px-4 py-2 text-sm"
-            >
+            <Button className="h-auto rounded-lg px-4 py-2 text-sm" onClick={onRetry}>
               重试
             </Button>
           }
-          trigger={
-            <>
-              <ChevronRight
-                size={13}
-                className={`transition-transform group-aria-expanded/disclosure:rotate-90`}
-              />
-              完整错误
-            </>
-          }
+          marker="none"
+          onOpenChange={setExpanded}
+          open={expanded}
+          panelClassName="basis-full"
+          rootClassName="mt-3 flex flex-wrap items-center justify-center gap-2"
           trailing={
-            <Hint
-              label={
-                copyFailed ? copyFailureText("下方展开区") : "复制这段错误文案"
-              }
-            >
+            <Hint label={copyFailed ? copyFailureText("下方展开区") : "复制这段错误文案"}>
               <Button
-                variant="outline"
-                onClick={copyErrorText}
                 className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
+                onClick={copyErrorText}
+                variant="outline"
               >
                 <Copy data-icon="inline-start" size={13} />
                 {copyFailed ? "复制失败" : copied.on ? "已复制" : "复制"}
               </Button>
             </Hint>
+          }
+          trigger={
+            <>
+              <ChevronRight
+                className={`transition-transform group-aria-expanded/disclosure:rotate-90`}
+                size={13}
+              />
+              完整错误
+            </>
           }
         >
           <pre className="border-border bg-surface-1 custom-scrollbar text-2xs mt-3 max-h-64 overflow-auto rounded-lg border p-3 text-left font-mono break-all whitespace-pre-wrap">
@@ -231,23 +202,16 @@ function SettingsLoadError({
         <div className="text-muted-foreground mt-4 flex flex-col gap-1 text-xs">
           <p>
             本次失败已写入日志面板（按{""}
-            <kbd className="border-border rounded border px-1 font-mono">
-              Ctrl+Shift+L
-            </kbd>
+            <kbd className="border-border rounded border px-1 font-mono">Ctrl+Shift+L</kbd>
             {""}
             打开，筛选「错误」可快速定位）。
           </p>
           <p>
-            若反复出现，先看日志面板里这条错误：启动阶段（应用服务未就绪 /
-            正在重启） 和运行阶段的读取失败（如数据库表 /
-            字段缺失）都可能是原因——只当“服务在
+            若反复出现，先看日志面板里这条错误：启动阶段（应用服务未就绪 / 正在重启）
+            和运行阶段的读取失败（如数据库表 / 字段缺失）都可能是原因——只当“服务在
             重启”处理会漏掉后者，重试也不会好。
           </p>
-          <Button
-            variant="link"
-            onClick={togglePanel}
-            className="text-primary mt-1 h-auto p-0"
-          >
+          <Button className="text-primary mt-1 h-auto p-0" onClick={togglePanel} variant="link">
             打开日志面板查看
           </Button>
         </div>

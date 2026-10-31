@@ -26,7 +26,9 @@ export async function POST(req: NextRequest) {
    * 展开成 `typeof body === "object" && body !== null` —— 与别处同一条判据、
    * 写出来却看不出是同一件事。 */
   const rec = await readJsonRecord(req);
-  if (isErrorResponse(rec)) return rec;
+  if (isErrorResponse(rec)) {
+    return rec;
+  }
   const stage = parseGenerationLogStage(rec.stage);
   if (!stage) {
     return NextResponse.json(

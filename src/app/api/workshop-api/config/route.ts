@@ -6,10 +6,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";
-import {
-  getMaskedChannels,
-  saveWorkshopApiSettings,
-} from "~/lib/workshop/api-channel.server";
+import { getMaskedChannels, saveWorkshopApiSettings } from "~/lib/workshop/api-channel.server";
 import { isRecord } from "~/lib/is-record";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { apiErrorBody } from "~/lib/api-error";
@@ -33,22 +30,25 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await readJsonRecord(req);
-  if (isErrorResponse(body)) return body;
+  if (isErrorResponse(body)) {
+    return body;
+  }
 
   const patch: { image?: unknown; video?: unknown } = {};
-  if (isRecord(body.image)) patch.image = body.image;
-  if (isRecord(body.video)) patch.video = body.video;
+  if (isRecord(body.image)) {
+    patch.image = body.image;
+  }
+  if (isRecord(body.video)) {
+    patch.video = body.video;
+  }
   if (patch.image === undefined && patch.video === undefined) {
-    return NextResponse.json(
-      { error: "缺少 image / video 配置" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "缺少 image / video 配置" }, { status: 400 });
   }
 
   try {
     await saveWorkshopApiSettings(patch);
     return NextResponse.json({ channels: getMaskedChannels() });
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "保存失败"), { status: 500 });
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "保存失败"), { status: 500 });
   }
 }

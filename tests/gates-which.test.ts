@@ -16,12 +16,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
 import { DOC_READING_MAP, matchDocReading } from "../scripts/doc-reading-map.mjs";
-import {
-  affectedTests,
-  classifyHeavySteps,
-  parseArgs,
-  scriptOf,
-} from "../scripts/gates-which.mjs";
+import { affectedTests, classifyHeavySteps, parseArgs, scriptOf } from "../scripts/gates-which.mjs";
 
 const SCRIPT = join(process.cwd(), "scripts", "gates-which.mjs");
 const AGENTS = join(process.cwd(), "AGENTS.md");
@@ -39,8 +34,8 @@ function run(args: Array<string> = []) {
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: typeof e.status === "number" ? e.status : 1,
@@ -139,7 +134,7 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
 });
 
 /** 一次子进程读数的形状（只列 `affectedTests` 真正读的那几个字段）。 */
-type FakeResult = { status: number | null; stdout?: string; stderr?: string };
+type FakeResult = { status: number | null; stderr?: string; stdout?: string; };
 
 /**
  * 造一个假的 `spawnSync`。
@@ -147,14 +142,9 @@ type FakeResult = { status: number | null; stdout?: string; stderr?: string };
  * `affectedTests` 的 JSDoc 写的是 `typeof spawnSync`，而它的重载与 `stdio` 联合类型
  * 套不进一个手写假件 —— 这里显式过一道 cast，并保证假件的参数形状与真实调用同形。
  */
-function fakeSpawn(
-  impl: (args: string[], opts: { input?: string }) => FakeResult,
-) {
-  const fn = (
-    _cmd: string,
-    args: string[],
-    opts: { input?: string },
-  ): FakeResult => impl(args, opts);
+function fakeSpawn(impl: (args: string[], opts: { input?: string }) => FakeResult) {
+  const fn = (_cmd: string, args: string[], opts: { input?: string }): FakeResult =>
+    impl(args, opts);
   return /* SAFETY: 只用 affectedTests 实际读的字段（status/stdout/stderr），与 spawnSync 的重载等价于此形状 */ fn as unknown as typeof spawnSync;
 }
 
@@ -235,14 +225,20 @@ function agentsTableRows() {
   const rows: Array<{ scope: string; spec: string }> = [];
   for (let i = start; i < lines.length; i++) {
     const line = (lines[i] ?? "").trim();
-    if (!line.startsWith("|")) break;
+    if (!line.startsWith("|")) {
+      break;
+    }
     const cells = line
       .replace(/^\|/, "")
       .replace(/\|$/, "")
       .split("|")
       .map((c) => c.trim());
-    if ((cells[0] ?? "") === "范围") continue; // 表头
-    if (/^-+$/.test((cells[1] ?? "").replace(/\s/g, ""))) continue; // 分隔行
+    if ((cells[0] ?? "") === "范围") {
+      continue;
+    } // 表头
+    if (/^-+$/.test((cells[1] ?? "").replace(/\s/g, ""))) {
+      continue;
+    } // 分隔行
     /* 表里有一行的范围名带括注（`跨平台动作（新增/删除 …）`），数据里没有 —— 归一后再比。 */
     const scope = (cells[0] ?? "").replace(/（[^）]*）\s*$/, "").trim();
     rows.push({ scope, spec: cells[2] ?? "" });
@@ -266,7 +262,9 @@ describe("gates:which —— AGENTS.md 的表与机器可读副本双向对账",
       const want = entry.spec.match(/§\d+(?:\.\d+)*/g) ?? [];
       const have = new Set(cell.match(/§\d+(?:\.\d+)*/g) ?? []);
       expect(want.length).toBeGreaterThan(0);
-      for (const token of want) expect(have.has(token)).toBe(true);
+      for (const token of want) {
+        expect(have.has(token)).toBe(true);
+      }
     }
   });
 
@@ -320,7 +318,10 @@ describe("gates:which —— 入口本身", () => {
      * 三态口径 —— 取不到就明说「没有结论」，不许静默退 0 冒充「查过了」。 */
     const { code, output } = run([]);
     expect([0, 2]).toContain(code);
-    if (code === 2) expect(output).toContain("没有结论");
-    else expect(output).toContain("改动面");
+    if (code === 2) {
+      expect(output).toContain("没有结论");
+    } else {
+      expect(output).toContain("改动面");
+    }
   }, 120_000);
 });

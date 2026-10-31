@@ -49,22 +49,22 @@ export type AppServiceExitKind =
   | "unknown";
 
 /** 落盘的结束记录（`run/app-service-exit.json`）。 */
-export interface AppServiceExitRecord {
+export type AppServiceExitRecord = {
   /** 记录时刻（ISO）。 */
   at: string;
-  /** 成因，取值见 {@link AppServiceExitKind}。 */
-  kind: AppServiceExitKind;
   /** 退出码；拿不到为 null（不是 0——0 是「正常退出」这个具体结论）。 */
   code: number | null;
-  /** 终止信号（SIGKILL 等）；没有为 null。 */
-  signal: string | null;
-  /** 一句话原因摘要（写入侧给的**具体**描述，如退出码或壳的处置建议）。 */
-  reason: string;
+  /** 成因，取值见 {@link AppServiceExitKind}。 */
+  kind: AppServiceExitKind;
   /** 应用服务监听端口；拿不到为 null。 */
   port: number | null;
+  /** 一句话原因摘要（写入侧给的**具体**描述，如退出码或壳的处置建议）。 */
+  reason: string;
   /** 本次运行标识（`run.json` 的 runId），便于与归档日志对上。 */
   runId: string | null;
-}
+  /** 终止信号（SIGKILL 等）；没有为 null。 */
+  signal: string | null;
+};
 
 /** 记录文件的固定名（写在 `run/` 下，与 `launch-status.json` 并列）。 */
 export const APP_SERVICE_EXIT_FILE = "app-service-exit.json";
@@ -80,10 +80,16 @@ export const APP_SERVICE_EXIT_FILE = "app-service-exit.json";
  * 「服务退出了，退出码 N」——升级前后版本混跑时这条尤其常见。
  */
 export function parseAppServiceExitRecord(raw: unknown): AppServiceExitRecord | null {
-  if (typeof raw !== "object" || raw === null) return null;
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
   const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
-  if (typeof o.at !== "string" || o.at === "") return null;
-  if (typeof o.reason !== "string") return null;
+  if (typeof o.at !== "string" || o.at === "") {
+    return null;
+  }
+  if (typeof o.reason !== "string") {
+    return null;
+  }
   return {
     at: o.at,
     kind: asExitKind(o.kind),
@@ -101,24 +107,26 @@ function asExitKind(value: unknown): AppServiceExitKind {
     case "shell-self-exited":
     case "shell-terminated":
     case "abandoned":
-    case "sidecar":
+    case "sidecar": {
       return value;
-    default:
+    }
+    default: {
       return "unknown";
+    }
   }
 }
 
 /** 界面直接可渲染的「为什么 + 能做什么」。 */
-export interface AppServiceExitNotice {
-  /** 一句话原因（状态栏 title 首行 / 通知标题）。 */
-  why: string;
+export type AppServiceExitNotice = {
   /** 可执行的动作（规范 §10.3.1 第 2 问：不要只陈述现象）。 */
   action: string;
   /** 退出事实的技术摘要（退出码 / 信号，见 {@link summarizeAppServiceExit}）。
    *  与 `why` 分开：`why` 说「这类故障意味着什么」，这条说「这一次具体是什么结束的」
    *  —— 排查时两者的用途不同，混成一句会让任一侧缺信息。 */
   detail: string;
-}
+  /** 一句话原因（状态栏 title 首行 / 通知标题）。 */
+  why: string;
+};
 
 /** 终止信号的通俗解释（`signal` 是给排查者看的原始值，这里是给人看的）。 */
 const SIGNAL_HINT: Record<string, string> = {
@@ -148,13 +156,14 @@ export function describeAppServiceExit(record: AppServiceExitRecord): AppService
    * 因此在这里算一次、由每个分支带上，而不是让七个分支各写一遍。 */
   const detail = summarizeAppServiceExit(record);
   switch (record.kind) {
-    case "abandoned":
+    case "abandoned": {
       return {
         why: "上一次启动被放弃（启动页被关闭），本地服务随之退出",
         action: "这是设计内行为：重新双击启动入口即可，等启动页自动切到主界面",
         detail,
       };
-    case "shell-self-exited":
+    }
+    case "shell-self-exited": {
       return {
         why: "本地服务随桌面壳一起退出了（壳自身以非零码结束）",
         action:
@@ -162,7 +171,8 @@ export function describeAppServiceExit(record: AppServiceExitRecord): AppService
           "否则重新双击一次启动入口，并对照 log/launcher/ 下的日志",
         detail,
       };
-    case "shell-terminated":
+    }
+    case "shell-terminated": {
       return {
         why: "本地服务随桌面壳一起退出了，且壳没有留下任何收尾标记（被强行收走或崩溃）",
         action:
@@ -170,24 +180,28 @@ export function describeAppServiceExit(record: AppServiceExitRecord): AppService
           "若反复发生，把 log/launcher/ 与 log/shell/ 一起带上排查",
         detail,
       };
-    case "sidecar":
+    }
+    case "sidecar": {
       return {
         why: `内嵌的本地服务已终止${record.code === null ? "" : `（退出码 ${record.code}）`}`,
         action: "关掉应用窗口重新启动一次；若反复出现，把 log/nextjs/ 带上排查",
         detail,
       };
-    case "dev-server":
+    }
+    case "dev-server": {
       return {
         why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
         action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
         detail,
       };
-    default:
+    }
+    default: {
       return {
         why: `本地服务已退出${record.code === null ? "" : `（退出码 ${record.code}）`}`,
         action: "重新启动一次应用；若反复出现，把 log/ 下的诊断包带上排查",
         detail,
       };
+    }
   }
 }
 
@@ -208,7 +222,9 @@ export function summarizeAppServiceExit(record: AppServiceExitRecord): string {
     const hint = CODE_HINT[record.code];
     return hint ? `服务${hint}（退出码 ${record.code}）` : `服务以退出码 ${record.code} 结束`;
   }
-  if (record.code === 0) return "服务正常退出（退出码 0）";
+  if (record.code === 0) {
+    return "服务正常退出（退出码 0）";
+  }
   return "服务已退出，但未拿到退出码或信号";
 }
 
@@ -225,12 +241,12 @@ export const APP_SERVICE_EXIT_ENDPOINT = "/api/dev/last-exit";
 export const APP_SERVICE_EXIT_TIMEOUT_MS = 2500;
 
 /** 端点的响应形状。 */
-export interface AppServiceExitProbe {
-  /** 上一次结束的记录；没有 / 读不懂时为 null。 */
-  record: AppServiceExitRecord | null;
+export type AppServiceExitProbe = {
   /** 当前应用服务进程的 runId；拿不到为 null。 */
   currentRunId: string | null;
-}
+  /** 上一次结束的记录；没有 / 读不懂时为 null。 */
+  record: AppServiceExitRecord | null;
+};
 
 /**
  * 判断这份记录说的是不是**上一次**运行。
@@ -247,7 +263,9 @@ export function isPreviousRunExit(
   record: AppServiceExitRecord,
   currentRunId: string | null,
 ): boolean {
-  if (record.runId === null || currentRunId === null) return true;
+  if (record.runId === null || currentRunId === null) {
+    return true;
+  }
   return record.runId !== currentRunId;
 }
 
@@ -260,7 +278,9 @@ export function isPreviousRunExit(
  * 半截 JSON）归到「没有原因可讲」。
  */
 export function parseAppServiceExitRaw(raw: string | null): AppServiceExitRecord | null {
-  if (typeof raw !== "string" || raw.trim() === "") return null;
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return null;
+  }
   try {
     return parseAppServiceExitRecord(/* SAFETY: 类型断言已复核 */ JSON.parse(raw) as unknown);
   } catch {
@@ -294,7 +314,9 @@ export function isCurrentDisconnectExit(
     return record.runId === currentRunId;
   }
   const writtenAt = Date.parse(record.at);
-  if (!Number.isFinite(writtenAt)) return false;
+  if (!Number.isFinite(writtenAt)) {
+    return false;
+  }
   const age = now - writtenAt;
   /* 负值 = 时钟漂移 / 记录来自另一台机器写的文件，同样不可用作「刚刚」。 */
   return age >= 0 && age <= RECENT_EXIT_WINDOW_MS;
@@ -333,7 +355,9 @@ export async function fetchCurrentDisconnectExit(
    * `desktop-shell-client` 里其它调用点同一取向）。非壳环境它自己回 null。 */
   const { readAppServiceExitRecord } = await import("./desktop-shell-client");
   const record = parseAppServiceExitRaw(await readAppServiceExitRecord());
-  if (record === null) return null;
+  if (record === null) {
+    return null;
+  }
   return isCurrentDisconnectExit(record, currentRunId, now) ? record : null;
 }
 
@@ -350,10 +374,12 @@ export async function fetchAppServiceExit(): Promise<AppServiceExitProbe> {
       cache: "no-store",
       signal: AbortSignal.timeout(APP_SERVICE_EXIT_TIMEOUT_MS),
     });
-    if (!res.ok) return empty;
+    if (!res.ok) {
+      return empty;
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      record?: unknown;
       currentRunId?: unknown;
+      record?: unknown;
     };
     return {
       record: parseAppServiceExitRecord(data.record),

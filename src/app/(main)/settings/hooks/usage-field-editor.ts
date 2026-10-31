@@ -30,22 +30,22 @@ import {
  *  刻意**不** import 主 hook 的 `UsageTestDialogState` —— 那会形成双向依赖
  *  （主 hook 要 import 本模块的构造函数），由 `tests/check-circular-deps.test.ts`
  *  拦下。这里按「我需要什么」声明，主 hook 的完整状态**结构上**满足它。 */
-export interface UsageFieldEditorState {
-  kind: RemoteModelKind;
+export type UsageFieldEditorState = {
   fields: Array<UsageField>;
-}
+  kind: RemoteModelKind;
+};
 
 /** 字段行编辑器的动作集合（挂在 `RemoteModelDialogs` 上透给视图）。 */
-export interface UsageFieldEditor {
-  patchField: (index: number, patch: Partial<UsageField>) => void;
+export type UsageFieldEditor = {
   addField: (key?: string) => void;
   addPresetField: (key: string) => void;
-  removeField: (index: number) => void;
+  patchField: (index: number, patch: Partial<UsageField>) => void;
   pickFieldImage: (index: number, file: File | undefined) => Promise<void>;
-  setVideoMode: (mode: string) => void;
+  removeField: (index: number) => void;
   rescueMediaFromMode: (index: number, url: string) => void;
+  setVideoMode: (mode: string) => void;
   usageFieldsToSend: (state: UsageFieldEditorState) => Array<UsageField>;
-}
+};
 
 /** 造出字段行编辑器的动作集合。`update` 即 `setUsageTest`。 */
 export function createUsageFieldEditor<T extends UsageFieldEditorState>(
@@ -55,7 +55,9 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
    *  纯视图交互，不入库；随弹窗关闭即丢弃。 */
   function patchField(index: number, patch: Partial<UsageField>) {
     update((prev) => {
-      if (!prev) return prev;
+      if (!prev) {
+        return prev;
+      }
       const fields = prev.fields.map((f, i) => (i === index ? { ...f, ...patch } : f));
       return { ...prev, fields };
     });
@@ -80,12 +82,14 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
     );
   }
   async function pickFieldImage(index: number, file: File | undefined) {
-    if (!file) return;
+    if (!file) {
+      return;
+    }
     try {
       const dataUrl = await readFileAsDataUrl(file);
       patchField(index, { value: dataUrl });
-    } catch (err) {
-      patchField(index, { value: errorText(err, "读取图片失败") });
+    } catch (error) {
+      patchField(index, { value: errorText(error, "读取图片失败") });
     }
   }
   /** 随请求发送的字段行：视频 mode=text 时媒体字段已被隐藏（不渲染也不发送），
@@ -100,7 +104,9 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
    *  填进了 mode 行或首行默认值——先把它搬移过去再设 mode，避免丢图。 */
   function setVideoMode(mode: string) {
     update((prev) => {
-      if (!prev) return prev;
+      if (!prev) {
+        return prev;
+      }
       const idx = prev.fields.findIndex((f) => f.key === "mode");
       if (idx >= 0) {
         const fields = prev.fields.map((f, i) => (i === idx ? { ...f, value: mode } : f));
@@ -121,7 +127,9 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
    *  这里手抄一份 `"text"` 就是同一件事的两个名字（§12.14）。 */
   function rescueMediaFromMode(index: number, url: string) {
     update((prev) => {
-      if (!prev) return prev;
+      if (!prev) {
+        return prev;
+      }
       const fields = prev.fields.map((f, i) =>
         i === index ? { ...f, value: sanitizeModeValue(f.value) } : f,
       );

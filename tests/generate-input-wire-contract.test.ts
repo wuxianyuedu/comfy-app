@@ -30,10 +30,7 @@ import { buildCanvasGeneratePayload } from "~/components/studio/project-canvas/C
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { defaultData } from "~/lib/project-canvas/canvas-types";
-import {
-  generateInputSchema,
-  parseGenerateInput,
-} from "~/lib/workflow/workflow-generate-input";
+import { generateInputSchema, parseGenerateInput } from "~/lib/workflow/workflow-generate-input";
 import { createCallerFactory } from "~/server/api/trpc";
 import { generateRouter } from "~/server/api/routers/generate";
 import { getTestDb, seedUser, seedWorkflowTemplate } from "./helpers/test-db";
@@ -46,8 +43,7 @@ import { throughJsonWire } from "./helpers/wire-contract";
  * 实测报 `Cannot access '__vi_import_N__' before initialization`）。
  * 里程碑日志那块的临时目录名按文件给（不再需要 `vi.hoisted`：路径落在工厂里算）。 */
 vi.mock("~/lib/log/app-runtime-log", async (importOriginal) => {
-  const { runtimeLogMockBoundary } =
-    await import("./helpers/wire-mock-boundary");
+  const { runtimeLogMockBoundary } = await import("./helpers/wire-mock-boundary");
   return runtimeLogMockBoundary(
     await importOriginal<typeof AppRuntimeLogModule>(),
     "generate-input-contract",
@@ -66,8 +62,7 @@ vi.mock("~/lib/core/logger", async (importOriginal) => {
   return loggerMockBoundary(await importOriginal<typeof LoggerModule>());
 });
 vi.mock("~/lib/comfyui/executor-continuation", async () => {
-  const { continuationMockBoundary } =
-    await import("./helpers/wire-mock-boundary");
+  const { continuationMockBoundary } = await import("./helpers/wire-mock-boundary");
   return continuationMockBoundary(vi.fn());
 });
 
@@ -148,9 +143,7 @@ describe("画布载荷 ⇄ generate 的入参判据", () => {
     /* 构造出的形状本身就过判据（这一步还不经过传输，先把「客户端以为的合法」钉住）。 */
     expect(generateInputSchema.safeParse(input).success).toBe(true);
 
-    const stored = throughJsonWire<Record<string, unknown>>(
-      storedParams(res.taskId),
-    );
+    const stored = throughJsonWire<Record<string, unknown>>(storedParams(res.taskId));
     expect(stored.workflow).toBe(WORKFLOW_ID);
     expect(stored.inputImage).toBe("up.png");
     expect(stored.projectId).toBe("proj-1");
@@ -175,13 +168,13 @@ describe("画布载荷 ⇄ generate 的入参判据", () => {
      * 后者让 `message` 那格退化成 `any`，而这一条判的正是「文案里点名了缺哪一列」。 */
     const rejected = parseGenerateInput(input);
     expect(rejected.ok).toBe(false);
-    if (rejected.ok) throw new Error("这一形必须被拒");
+    if (rejected.ok) {
+      throw new Error("这一形必须被拒");
+    }
     expect(rejected.message).toContain("缺少要执行的工作流");
     /* 码与文案两维一起取（`errorEnvelope` 的理由就在这里：只比消息的话，
      * 「参数不对」与「工作流不存在」可以是同一句）。 */
-    const envelope = await errorEnvelope(
-      createCaller(makeCtx()).generate(input),
-    );
+    const envelope = await errorEnvelope(createCaller(makeCtx()).generate(input));
     expect(envelope.code).toBe("BAD_REQUEST");
     expect(envelope.message).toContain("缺少要执行的工作流");
     expect(tdb.$tables.tasks).toHaveLength(0);
@@ -190,14 +183,15 @@ describe("画布载荷 ⇄ generate 的入参判据", () => {
   it("从库里翻出来的载荷再判一次仍然过，第二次真建得出任务", async () => {
     const { res } = await submitCanvas();
     const parsed = parseGenerateInput(storedParams(res.taskId));
-    if (!parsed.ok) throw new Error(`预检意外失败：${parsed.message}`);
+    if (!parsed.ok) {
+      throw new Error(`预检意外失败：${parsed.message}`);
+    }
     const again = await createCaller(makeCtx()).generate(parsed.input);
     expect(typeof again.taskId).toBe("string");
     /* 两次的载荷只差归属之外的部分：幂等判的是「同形状再过一次」，不是「大概能过」。 */
-    expect(
-      throughJsonWire<Record<string, unknown>>(storedParams(again.taskId))
-        .workflow,
-    ).toBe(WORKFLOW_ID);
+    expect(throughJsonWire<Record<string, unknown>>(storedParams(again.taskId)).workflow).toBe(
+      WORKFLOW_ID,
+    );
   });
 
   it("重绘 / 放大的追溯载荷（parentId）被 router 收下并落到任务行", async () => {
@@ -222,7 +216,9 @@ describe("画布载荷 ⇄ generate 的入参判据", () => {
       workflow: WORKFLOW_ID,
       workflowInputs: { "1::widget::text": "一只猫" },
     });
-    if (parsed.ok) throw new Error("这一形必须被拒");
+    if (parsed.ok) {
+      throw new Error("这一形必须被拒");
+    }
     expect(parsed.message).toContain("workflowInputs");
     expect(parsed.message).toContain("没有发出去");
     /* 出路要落在用户做得出的动作上，而不只是「参数错误」。 */
@@ -243,7 +239,9 @@ describe("画布载荷 ⇄ generate 的入参判据", () => {
       workflowInputs: [{ nodeId: "1", name: "text", value: "一只猫" }],
       paramMap,
     });
-    if (!parsed.ok) throw new Error(`不该被拒：${parsed.message}`);
+    if (!parsed.ok) {
+      throw new Error(`不该被拒：${parsed.message}`);
+    }
     expect(parsed.input.paramMap).toEqual(paramMap);
   });
 });

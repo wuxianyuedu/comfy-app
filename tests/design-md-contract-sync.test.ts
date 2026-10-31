@@ -43,7 +43,9 @@ const COLOR_TOKEN = /^--color-[a-z0-9-]+$/;
 function collectBareTokenCitations(text: string): Array<string> {
   const names = new Set<string>();
   for (const match of text.matchAll(/`(--color-[a-z0-9-]+)`/g)) {
-    if (match[1]) names.add(match[1]);
+    if (match[1]) {
+      names.add(match[1]);
+    }
   }
   return [...names].sort();
 }
@@ -54,16 +56,18 @@ function findUnknownTokens(cited: Array<string>, exists: (name: string) => boole
 }
 
 type HexRow = {
-  token: string;
+  dark?: string;
   /** 该态文档写的是单一 `#rrggbb`；否则为 undefined（跳过，不猜）。 */
   light?: string;
-  dark?: string;
+  token: string;
 };
 
 /** 单元格必须是**单独一颗**且**形如** `shape` 的行内代码。 */
 function singleCodeSpan(cell: string, shape: RegExp): string | null {
   const match = /^`([^`]+)`$/.exec(cell);
-  if (!match?.[1]) return null;
+  if (!match?.[1]) {
+    return null;
+  }
   return shape.test(match[1]) ? match[1] : null;
 }
 
@@ -78,18 +82,26 @@ function parseHexCell(cell: string): string | null {
 function collectHexRows(section: string): Array<HexRow> {
   const rows: Array<HexRow> = [];
   for (const line of section.split(/\r?\n/)) {
-    if (!line.trimStart().startsWith("|")) continue;
+    if (!line.trimStart().startsWith("|")) {
+      continue;
+    }
     const cells = line
       .split("|")
       .slice(1, -1)
       .map((c) => c.trim());
-    if (cells.length < 5) continue;
+    if (cells.length < 5) {
+      continue;
+    }
     // slice(1, -1) 已去掉首尾两个空格子 ⇒ 列序是 0 角色 / 1 token / 2 浅色 / 3 深色 / 4 用途
     const token = singleCodeSpan(cells[1] ?? "", COLOR_TOKEN);
-    if (!token) continue;
+    if (!token) {
+      continue;
+    }
     const light = parseHexCell(cells[2] ?? "");
     const dark = (cells[3] ?? "").includes("同值") ? light : parseHexCell(cells[3] ?? "");
-    if (!light && !dark) continue;
+    if (!light && !dark) {
+      continue;
+    }
     rows.push({
       token,
       ...(light ? { light } : {}),
@@ -101,7 +113,9 @@ function collectHexRows(section: string): Array<HexRow> {
 
 function sectionBetween(text: string, heading: string): string | null {
   const start = text.indexOf(heading);
-  if (start < 0) return null;
+  if (start < 0) {
+    return null;
+  }
   const body = text.slice(start + heading.length);
   const end = body.search(/^###\s/m);
   return end < 0 ? body : body.slice(0, end);
@@ -109,10 +123,14 @@ function sectionBetween(text: string, heading: string): string | null {
 
 /** 归一化产物值：只认 `#rrggbb` / `#rgb`，其余返回 null（该格不比）。 */
 function normalizeCssHex(value: string | undefined): string | null {
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
   const raw = value.trim().toLowerCase();
   const six = /^#([0-9a-f]{6})$/.exec(raw);
-  if (six?.[1]) return `#${six[1]}`;
+  if (six?.[1]) {
+    return `#${six[1]}`;
+  }
   const three = /^#([0-9a-f]{3})$/.exec(raw);
   if (three?.[1]) {
     return `#${[...three[1]].map((c) => c + c).join("")}`;
@@ -129,9 +147,13 @@ function findHexMismatch(
   for (const row of rows) {
     for (const state of /* SAFETY: 类型断言已复核 */ ["light", "dark"] as const) {
       const doc = row[state];
-      if (!doc) continue;
+      if (!doc) {
+        continue;
+      }
       const actual = normalizeCssHex(resolve(row.token, state)) ?? "(产物里不是单一 hex)";
-      if (actual !== doc) bad.push(`${row.token} ${state}: 文档 ${doc} / 产物 ${actual}`);
+      if (actual !== doc) {
+        bad.push(`${row.token} ${state}: 文档 ${doc} / 产物 ${actual}`);
+      }
     }
   }
   return bad;
@@ -232,7 +254,9 @@ function collectProductFiles(dir: string, out: Array<string> = []): Array<string
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (!SKIP_DIRS.has(e.name)) collectProductFiles(p, out);
+      if (!SKIP_DIRS.has(e.name)) {
+        collectProductFiles(p, out);
+      }
     } else if (
       /\.(ts|tsx)$/.test(e.name) &&
       !/\.stories\.tsx?$/.test(e.name) &&
@@ -254,7 +278,9 @@ function scanProduct(pattern: RegExp): Array<{ file: string; value: string }> {
     const code = stripComments(readFileSync(abs, "utf8"));
     const rel = path.relative(ROOT_DIR, abs).split(path.sep).join("/");
     for (const m of code.matchAll(pattern)) {
-      if (m[1]) hits.push({ file: rel, value: m[1] });
+      if (m[1]) {
+        hits.push({ file: rel, value: m[1] });
+      }
     }
   }
   return hits;
@@ -296,11 +322,17 @@ function firstSubtitleViolation(text: string): Array<number> {
   const hits: Array<number> = [];
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
-    if (!/\bu-title-page\b/.test(lines[i] ?? "")) continue;
+    if (!/\bu-title-page\b/.test(lines[i] ?? "")) {
+      continue;
+    }
     /* 标题行之后 4 行内找第一个 `<p>` 开标签 —— 找到就判、判完就停。 */
     for (const line of lines.slice(i + 1, i + 5)) {
-      if (!/<p[\s>]/.test(line)) continue;
-      if (BELOW_BODY_TIERS.test(line)) hits.push(i + 1);
+      if (!/<p[\s>]/.test(line)) {
+        continue;
+      }
+      if (BELOW_BODY_TIERS.test(line)) {
+        hits.push(i + 1);
+      }
       break;
     }
   }
@@ -642,22 +674,28 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     /** 值 → 出现的来路（报错时要能指出「是谁把它带进来的」）。 */
     const inUse = new Map<string, Set<string>>();
     const add = (value: string, source: string) => {
-      if (!inUse.has(value)) inUse.set(value, new Set());
+      if (!inUse.has(value)) {
+        inUse.set(value, new Set());
+      }
       inUse.get(value)!.add(source);
     };
 
     /* 来路 ①：调用点的 arbitrary 字面量 —— 与棘轮同一个面（产品文件、剥注释）。 */
-    for (const hit of scanProduct(TEXT_LITERAL)) add(hit.value, `调用点（如 ${hit.file}）`);
+    for (const hit of scanProduct(TEXT_LITERAL)) {
+      add(hit.value, `调用点（如 ${hit.file}）`);
+    }
     /* 来路 ②：globals.css 里 `@theme` 之外的裸 font-size 声明。
      * `@theme` 里那些是 `--text-*: 11px`，不带 `font-size:` 这个属性名，所以这条匹配
      * 天然只收声明侧 —— 不必再去切块。 */
     const css = readFileSync(GLOBALS_PATH, "utf8");
-    for (const m of css.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g))
+    for (const m of css.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) {
       add(m[1]!, "globals.css 的裸声明");
+    }
     /* 来路 ③：markdown 渲染器拼的内联样式串（既不是 token 也不是候选名）。 */
     const mdStyles = stripComments(readFileSync(MD_STYLES_PATH, "utf8"));
-    for (const m of mdStyles.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g))
+    for (const m of mdStyles.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) {
       add(m[1]!, "markdown 渲染器的内联串");
+    }
 
     expect(
       inUse.size,
@@ -1018,12 +1056,12 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
      否则标记写漂了就永远全绿，那是比红更糟的失效形态。
      `scope: "line"` 的族把命中收窄到**同一枚 class 字符串**上（理由见下面那一族的注释）。 */
   const FAMILIES: Array<{
+    marks: Array<RegExp>;
     name: string;
     owner: string;
-    use: string;
-    marks: Array<RegExp>;
     sample: string;
     scope?: "file" | "line";
+    use: string;
   }> = [
     {
       name: "序号圆",

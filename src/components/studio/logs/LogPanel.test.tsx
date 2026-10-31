@@ -39,7 +39,7 @@ function makeEntry(index: number, overrides: Partial<LogEntry> = {}): LogEntry {
   return {
     id: `e-${index}`,
     seq: index + 1,
-    time: 1_700_000_000_000 + index * 1_000,
+    time: 1_700_000_000_000 + index * 1000,
     level: "info",
     message: `事件 ${index}`,
     source: "system",
@@ -130,7 +130,9 @@ afterEach(async () => {
   for (let i = 0; i < 30; i++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
     const body = document.body.innerHTML;
-    if (body === prevBody) break;
+    if (body === prevBody) {
+      break;
+    }
     prevBody = body;
   }
   document
@@ -154,7 +156,9 @@ function levelButton(label: string): HTMLElement {
   const button = screen
     .getAllByRole("button")
     .find((item) => item.getAttribute("title")?.startsWith(`当前来源的${label}：`));
-  if (!button) throw new Error(`找不到级别按钮「${label}」`);
+  if (!button) {
+    throw new Error(`找不到级别按钮「${label}」`);
+  }
   return button;
 }
 
@@ -201,7 +205,7 @@ describe("LogPanel 日志面板", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
 
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(9_999, { message: "新来的" })]));
+    act(() => useLogStore.getState().appendFileLogs([makeEntry(9999, { message: "新来的" })]));
     const banner = screen.getByRole("button", { name: /有 1 条新的日志/ });
     await user.click(banner);
 
@@ -652,7 +656,7 @@ describe("LogPanel 日志面板", () => {
      * 别把我拽走」）。 */
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 2 \/ 4 页/)).toBeInTheDocument();
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(9_999, { message: "新来的" })]));
+    act(() => useLogStore.getState().appendFileLogs([makeEntry(9999, { message: "新来的" })]));
     /* 正好来了 1 条新的（页面仍停在第 2 页，因为还没点「回到最新」） */
     expect(screen.getByText(/第 2 \/ 5 页/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /有 1 条新的日志/ })).toBeInTheDocument();
@@ -756,7 +760,7 @@ describe("LogPanel 日志面板", () => {
       ok: true,
       json: async () => ({
         ok: true,
-        path: "F:\\proj\\log\\exports\\logs-all-20260101-100000.txt",
+        path: String.raw`F:\proj\log\exports\logs-all-20260101-100000.txt`,
         relativePath: "exports/logs-all-20260101-100000.txt",
         bytes: 42,
       }),
@@ -796,7 +800,7 @@ describe("LogPanel 日志面板", () => {
       ok: true,
       json: async () => ({
         ok: true,
-        path: "F:\\proj\\log\\exports\\diagnostics-20260101-100000-a1b2c3.zip",
+        path: String.raw`F:\proj\log\exports\diagnostics-20260101-100000-a1b2c3.zip`,
         relativePath: "exports/diagnostics-20260101-100000-a1b2c3.zip",
         bytes: 1024,
       }),
@@ -934,10 +938,16 @@ describe("LogPanel 日志面板", () => {
       expect(rowCount()).toBeLessThan(200);
     } finally {
       /* 还原原型上的取值：本文件其余用例要靠「量不到视口」走整页渲染那一支。 */
-      if (heights) Object.defineProperty(prototype, "clientHeight", heights);
-      else Reflect.deleteProperty(prototype, "clientHeight");
-      if (widths) Object.defineProperty(prototype, "clientWidth", widths);
-      else Reflect.deleteProperty(prototype, "clientWidth");
+      if (heights) {
+        Object.defineProperty(prototype, "clientHeight", heights);
+      } else {
+        Reflect.deleteProperty(prototype, "clientHeight");
+      }
+      if (widths) {
+        Object.defineProperty(prototype, "clientWidth", widths);
+      } else {
+        Reflect.deleteProperty(prototype, "clientWidth");
+      }
     }
   });
 
@@ -987,10 +997,16 @@ describe("LogPanel 日志面板", () => {
       const lastIndex = Number(nodes[nodes.length - 1]!.getAttribute("data-log-index"));
       expect(lastIndex).toBe(199);
     } finally {
-      if (heights) Object.defineProperty(prototype, "clientHeight", heights);
-      else Reflect.deleteProperty(prototype, "clientHeight");
-      if (widths) Object.defineProperty(prototype, "clientWidth", widths);
-      else Reflect.deleteProperty(prototype, "clientWidth");
+      if (heights) {
+        Object.defineProperty(prototype, "clientHeight", heights);
+      } else {
+        Reflect.deleteProperty(prototype, "clientHeight");
+      }
+      if (widths) {
+        Object.defineProperty(prototype, "clientWidth", widths);
+      } else {
+        Reflect.deleteProperty(prototype, "clientWidth");
+      }
     }
   });
 

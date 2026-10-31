@@ -37,11 +37,11 @@ export const SHOT_STATUS_BAR_CLASS: Record<Shot["status"], string> = {
 };
 
 /** 胶片带一帧的完整展示输入。 */
-export interface ShotFrameView {
-  status: Shot["status"];
-  label: string;
+export type ShotFrameView = {
   barClass: string;
-}
+  label: string;
+  status: Shot["status"];
+};
 
 export function shotFrameView(status: Shot["status"]): ShotFrameView {
   return {

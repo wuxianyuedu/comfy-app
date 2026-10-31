@@ -30,15 +30,15 @@ export const stackedStringRow = (inp: RawInputMeta): boolean => {
   );
 };
 
-interface SubgraphWidgetStackedStringProps {
-  inp: RawInputMeta;
-  label: string;
-  io: IOEditContextValue | null;
-  nodeId: string;
-  hostNodeId?: string;
+type SubgraphWidgetStackedStringProps = {
   /** 定尺寸节点（导入配置带显式尺寸）时 textarea 接入 flex 链填满剩余高度。 */
   hasSize: boolean;
-}
+  hostNodeId?: string;
+  inp: RawInputMeta;
+  io: IOEditContextValue | null;
+  label: string;
+  nodeId: string;
+};
 
 export function SubgraphWidgetStackedString({
   inp,
@@ -56,9 +56,9 @@ export function SubgraphWidgetStackedString({
       /* STRING widget 上下堆叠：标签 + 字数章占顶行，
        *  textarea 借行轨道的 `1fr` 填满剩余竖向空间。 */
       className="group text-2xs relative flex min-h-0 flex-col gap-1.5 py-1.5 pr-2 pl-5"
-      style={{ gridColumn: "1 / -1" }}
       data-sub-widget-name={inp.name}
       data-sub-widget-value={String(v)}
+      style={{ gridColumn: "1 / -1" }}
     >
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex shrink-0 items-center gap-1.5">
@@ -79,9 +79,7 @@ export function SubgraphWidgetStackedString({
              *  理由与 WorkflowNode 内联分支相同。 */
             className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
             style={{
-              color: isConn
-                ? "var(--color-ink-strong)"
-                : "var(--color-ink-subtle)",
+              color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
             }}
             title={label}
           >
@@ -96,7 +94,7 @@ export function SubgraphWidgetStackedString({
           </span>
         </div>
         {stringText.length > 0 ? (
-          <StringTextarea value={stringText} mono hasSize={hasSize} />
+          <StringTextarea hasSize={hasSize} mono value={stringText} />
         ) : (
           <div
             className="border-border-strong bg-canvas-deep text-ink-fainter text-2xs flex-1 rounded border px-2 py-1.5 leading-snug"

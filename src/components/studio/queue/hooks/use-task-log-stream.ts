@@ -24,20 +24,20 @@ import { tailWindowAppend } from "~/lib/page-window";
  * 累积侧先截，长任务（几千条 progress 行）也不会把 state 撑大。 */
 const STREAM_MAX_LOGS = 300;
 
-export interface TaskLogStreamState {
+export type TaskLogStreamState = {
   /** 已收到的日志（新在后，已按上限截尾）。 */
   logs: Array<TaskLogEntry>;
   /** 终态落定信息；null = 还没落定（排队 / 在跑）。 */
-  settled: { ok: boolean; message?: string } | null;
+  settled: { message?: string; ok: boolean } | null;
   /** 收到过进度帧吗：排队中的任务开跑后，徽标从「排队中」翻「运行中」用。 */
   started: boolean;
-}
+};
 
 export function useTaskLogStream(taskId: string | null): TaskLogStreamState {
   const [logs, setLogs] = useState<Array<TaskLogEntry>>([]);
   const [settled, setSettled] = useState<{
-    ok: boolean;
     message?: string;
+    ok: boolean;
   } | null>(null);
   const [started, setStarted] = useState(false);
   /* 换任务（含变 null）在**渲染期**重置（React 19 的渲染期 state 调整范式，
@@ -57,7 +57,9 @@ export function useTaskLogStream(taskId: string | null): TaskLogStreamState {
 
   useEffect(() => {
     stoppedRef.current = false;
-    if (taskId === null) return;
+    if (taskId === null) {
+      return;
+    }
 
     /* onProgress 是高频回调（SSE 每帧一次），经节流闸门再落 state ——
      * 出口与窗口收在 `ui/use-throttled-progress`（规范 16 §16.2.4.68）。
@@ -65,16 +67,24 @@ export function useTaskLogStream(taskId: string | null): TaskLogStreamState {
     const progressGate = createThrottleGate();
     const closer = watchTask(taskId, {
       onLog: (entry) => {
-        if (stoppedRef.current) return;
+        if (stoppedRef.current) {
+          return;
+        }
         setLogs((prev) => tailWindowAppend(prev, entry, STREAM_MAX_LOGS));
       },
       onProgress: () => {
-        if (stoppedRef.current) return;
-        if (!progressGate.allow()) return;
+        if (stoppedRef.current) {
+          return;
+        }
+        if (!progressGate.allow()) {
+          return;
+        }
         setStarted(true);
       },
       onSettled: (result) => {
-        if (stoppedRef.current) return;
+        if (stoppedRef.current) {
+          return;
+        }
         setSettled(result);
       },
     });

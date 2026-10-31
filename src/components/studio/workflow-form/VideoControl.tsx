@@ -36,14 +36,14 @@ function VideoControl({
   disabled,
   narrow,
 }: {
-  group: VideoGroup;
-  values: Record<string, unknown>;
-  set: (ioKey: string, v: unknown) => void;
-  workflowId?: string;
   disabled?: boolean;
+  group: VideoGroup;
   /** 画布 / 库内的紧凑版式：控件按内容收窄（`w-fit`），不再占满整行。
    * 与宽版表单的区别**只是宽度**：录入能力、下拉、落点锚点全部一致。 */
   narrow?: boolean;
+  set: (ioKey: string, v: unknown) => void;
+  values: Record<string, unknown>;
+  workflowId?: string;
 }) {
   const [style, setStyle] = useState<GroupStyle>(() => loadGroupStyle(workflowId, group.groupId));
   const onStyle = (newStyle: GroupStyle) => {
@@ -51,33 +51,39 @@ function VideoControl({
     saveGroupStyle(workflowId, group.groupId, newStyle);
   };
 
-  const entries: Array<{ role: VideoRole; entry: EnrichedWidget }> = [];
-  if (group.length) entries.push({ role: "length", entry: group.length });
-  if (group.aspect) entries.push({ role: "aspect", entry: group.aspect });
-  if (group.quality) entries.push({ role: "quality", entry: group.quality });
+  const entries: Array<{ entry: EnrichedWidget; role: VideoRole }> = [];
+  if (group.length) {
+    entries.push({ role: "length", entry: group.length });
+  }
+  if (group.aspect) {
+    entries.push({ role: "aspect", entry: group.aspect });
+  }
+  if (group.quality) {
+    entries.push({ role: "quality", entry: group.quality });
+  }
 
   if (style === "split") {
     return (
       <div className={narrow ? "flex w-fit max-w-full flex-col gap-2" : "flex flex-col gap-2"}>
         <StyleSwitcher
-          style={style}
-          onChange={onStyle}
           narrow={narrow}
+          onChange={onStyle}
           options={[
             { value: "split", label: "分别填写" },
             { value: "preset", label: "时长 + 画质 + 比例" },
           ]}
+          style={style}
         />
         <div className="grid grid-cols-1 gap-2">
           {entries.map(({ role, entry }) => (
             <VideoField
-              key={entry.ioKey}
-              role={role}
-              entry={entry}
-              preset={false}
-              values={values}
-              set={set}
               disabled={disabled}
+              entry={entry}
+              key={entry.ioKey}
+              preset={false}
+              role={role}
+              set={set}
+              values={values}
             />
           ))}
         </div>
@@ -100,7 +106,9 @@ function VideoControl({
         })),
         onChange: (lbl: string) => {
           const preset = presets.find((item) => item.label === lbl);
-          if (preset) set(entry.ioKey, preset.value);
+          if (preset) {
+            set(entry.ioKey, preset.value);
+          }
         },
       };
     }
@@ -116,7 +124,9 @@ function VideoControl({
         })),
         onChange: (lbl: string) => {
           const preset = presets.find((item) => item.label === lbl);
-          if (preset) set(entry.ioKey, preset.value);
+          if (preset) {
+            set(entry.ioKey, preset.value);
+          }
         },
       };
     }
@@ -144,7 +154,9 @@ function VideoControl({
       })),
       onChange: (lbl: string) => {
         const preset = presets.find((item) => item.label === lbl);
-        if (preset) set(entry.ioKey, preset.ratio);
+        if (preset) {
+          set(entry.ioKey, preset.ratio);
+        }
       },
     };
   });
@@ -154,19 +166,19 @@ function VideoControl({
   return (
     <div className={narrow ? "flex w-fit max-w-full flex-col gap-2" : "flex flex-col gap-2"}>
       <StyleSwitcher
-        style={style}
-        onChange={onStyle}
         narrow={narrow}
+        onChange={onStyle}
         options={[
           { value: "split", label: "分别填写" },
           { value: "preset", label: "时长 + 画质 + 比例" },
         ]}
+        style={style}
       />
       <div className={narrow ? "w-42 max-w-full" : undefined}>
         <MultiSegmentPopover
-          triggerContent={summary}
           ariaLabel="选择时长、画质与比例"
           sections={sections}
+          triggerContent={summary}
         />
       </div>
     </div>

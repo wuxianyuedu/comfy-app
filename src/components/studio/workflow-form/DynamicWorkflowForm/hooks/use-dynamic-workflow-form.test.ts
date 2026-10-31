@@ -52,7 +52,9 @@ function renderFormWithPicker(props: DynamicWorkflowFormProps) {
 
 function pickPickerFile(file: File) {
   const input = document.querySelector<HTMLInputElement>('input[type="file"]');
-  if (!input) throw new Error("没有渲染 ui/file-picker 的 input");
+  if (!input) {
+    throw new Error("没有渲染 ui/file-picker 的 input");
+  }
   const files = /* SAFETY: 类型断言已复核 */ {
     0: file,
     length: 1,

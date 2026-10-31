@@ -48,7 +48,7 @@ export const TextButton: Story = {
  *  子元素的 `aria-label`。 */
 export const IconOnlyButton: Story = {
   render: () => (
-    <Hint label="删除这个工作流" accessibleName>
+    <Hint accessibleName label="删除这个工作流">
       <Button size="icon-sm" variant="danger">
         <Trash2 />
       </Button>
@@ -95,15 +95,15 @@ export const DisabledNeedsWrap: Story = {
     <div className="flex items-center gap-6">
       <div className="flex flex-col items-center gap-1.5">
         <Hint label="这样不会有提示（disabled 不发指针事件）">
-          <Button variant="outline" disabled>
+          <Button disabled variant="outline">
             禁用（无 wrap）
           </Button>
         </Hint>
         <span className="text-ink-muted font-mono text-[11px]">不给 wrap</span>
       </div>
       <div className="flex flex-col items-center gap-1.5">
-        <Hint wrap label="工作流正在运行，先停掉再删除">
-          <Button variant="outline" disabled>
+        <Hint label="工作流正在运行，先停掉再删除" wrap>
+          <Button disabled variant="outline">
             禁用（带 wrap）
           </Button>
         </Hint>

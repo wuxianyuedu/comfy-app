@@ -175,19 +175,18 @@ const PURE_NODE_HOSTS = [
   // 判据（档位 → 命令）在纯模块 `./cpu-limit`，它零 Node 内建 import，
   // 按 scanner 视角是「无需声明的纯模块」，**刻意不登记在这里**。
   "src/lib/comfyui/cpu-limit-apply.ts",
-  // lifecycle.ts：P3 lib 层地基批·**最后一站**。comfyui 目录里最后一个还带
-  // `import "server-only"` 的重模块。它自身只有一条 Node 内建 value import
-  // （`fs`）+ 一条 type-only `import type { spawn } from "child_process"`
-  // （scanner 忽略 type 形态）；剩下 12 条静态依赖全在前批里逐个纯化了。
-  // 关键解锁：line 561 的 top-level `const COMFY_SESSION_MARK = \`${SERVICES_LOG_DIR}/…\``
-  // 是**加载即求值**——`SERVICES_LOG_DIR` 来自 `~/lib/log/log-paths`，只要
-  // log-paths 带 server-only 本模块就崩；#1074 摘 log-paths 后这条边通了。
-  // 登记进本清单后**整条 comfyui 执行链**（runner-state / enqueue / reaper /
-  // executor-* / client / lifecycle-* / status / trace / gpu-vram / launch-path /
-  // proc-detect / instance-kind / env-python / desktop-instance / open-in-browser /
-  // logger / app-runtime-log / log-paths / process-launch）都进 §18.4 第三类，
-  // P3 §5 第 2 期 `scripts/executor-host.mjs` 起手时的静态边已经扫清。
-  "src/lib/comfyui/lifecycle.ts",
+  // `lifecycle.ts` 自身**不再**在册：它把那两件「加载即求值」的落盘活（上次会话
+  // 标记的 `COMFY_SESSION_MARK`、本次 runtime 日志写入器）搬进了
+  // `lifecycle-session-log.ts`，顶层 Node 内建 import 随之清零（scanner 不再把它
+  // 读成 offenders）。搬走的理由见那个文件头注；这条登记按「清单只许变短」的判据
+  // 同步删掉 —— 留着它就是一条已失效的登记。
+  "src/lib/comfyui/lifecycle-session-log.ts",
+  // `lifecycle-session-log.ts`：从 `lifecycle.ts` 按职责拆出的「会话落盘两件事」
+  // （上次会话标记 + 本次 runtime 日志写入器，都只做读回与写盘）。它顶层 import 的
+  // 是 `fs` / `~/lib/log/log-paths` / `~/lib/log/runtime-log-pack.server`——与
+  // `lifecycle.ts` 一字不差的同一条静态边，形态按 §18.4 第三类，理由全同（见上面
+  // 那条）；拆出来不给它换一种声明形态，否则「谁和谁同族」就成了拆文件时的副作用。
+  "src/lib/comfyui/lifecycle-session-log.ts",
   // db-schema-ready.ts：P3 lib 地基批·**reaper 侧最后一颗钉子**。它是 rule 16
   // 的 `comment.language.asciiOnly` 白名单成员（`docs/reference-facts.md` 里
   // 登记），文件本身保持纯 ASCII + 英文注释（`next-code-frame` 会渲染它、
@@ -231,6 +230,14 @@ const PURE_NODE_HOSTS = [
   // 「浏览器图别引我」由 scanner 的 `clientReachable` 判据盯：它的消费方是
   // `console-run.ts`（第三类）与 `scripts/**`，两者都不在 `"use client"` 可达路径上。
   "src/lib/process/executable-resolve.ts",
+  // 上面那两块从 `executable-resolve.ts` 按职责拆出来（它越过文件长度硬闸时切的），
+  // 形态**完全相同**、所以登记也一起：`pnpm-resolve.ts` 顶层 import `fs` / `path`
+  // （读落点上那份 `package.json` 的 `bin` 字段），`version-compare.ts` 虽然零 Node
+  // 内建 import，但它是前者唯一的纯函数依赖 —— 登记在册是因为扫描器按「顶层 import
+  // Node 内建」判，它本来就不在 offenders 里；真正要登记的是 `pnpm-resolve.ts`。
+  // 两块都必须能被 `.mjs` 静态 import（同一条跨宿主链），`server-only` 会让启动
+  // 编排加载阶段就 throw，`.server.ts` 则会让「真喂文件与真起进程」的用例碍事。
+  "src/lib/process/pnpm-resolve.ts",
   // `process/probe-exe.ts`（ISSUE #2316）：只依赖 `node:child_process` 的**叶子**
   // —— 一次 `spawnSync` 回答「这个候选真起得来吗、还是只是退非零 / 没量到」。
   // 消费方横跨三个世界：测试侧（`tests/check-file-structure.test.ts` 的两处「这台机器
@@ -242,10 +249,10 @@ const PURE_NODE_HOSTS = [
 ];
 
 type Report = {
-  unguarded: Array<string>;
-  libOnlyReachable: Array<{ module: string; chain: Array<string> }>;
-  clientReachable: Array<{ module: string; chain: Array<string> }>;
+  clientReachable: Array<{ chain: Array<string>; module: string; }>;
   counts: Record<string, number>;
+  libOnlyReachable: Array<{ chain: Array<string>; module: string; }>;
+  unguarded: Array<string>;
 };
 
 /** 跑一次可达性分析（实现收在 `scripts/lib-node-only-scan.mjs`，本用例不复制一份）。 */

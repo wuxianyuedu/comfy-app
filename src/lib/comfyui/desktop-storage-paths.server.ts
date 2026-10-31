@@ -56,7 +56,7 @@ function extraPathsCandidates(baseDir: string, instanceRoot: string): Array<stri
 async function readExtraPathsFile(
   candidates: Array<string>,
   readFile: (p: string, enc: "utf8") => Promise<string>,
-): Promise<{ file: string; content: string } | null> {
+): Promise<{ content: string; file: string } | null> {
   for (const candidate of candidates) {
     try {
       return { file: candidate, content: await readFile(candidate, "utf8") };
@@ -71,7 +71,7 @@ async function readExtraPathsFile(
 function expandEntry(
   entry: ExtraModelPathEntry,
   exists: (p: string) => boolean,
-): Array<{ slot: StorageSlot; dir: StorageDirInfo }> {
+): Array<{ dir: StorageDirInfo; slot: StorageSlot }> {
   return entry.paths.map((item) => ({
     slot: classifyStorageSlot(item),
     dir: {
@@ -97,7 +97,9 @@ export async function resolveDesktopStoragePaths(
   deps: DesktopStorageDeps = {},
 ): Promise<DesktopStoragePaths | null> {
   const dir = (comfyuiPath ?? "").trim();
-  if (!dir) return null;
+  if (!dir) {
+    return null;
+  }
 
   const exists = deps.exists ?? fs.existsSync;
   const readFile = deps.readFile ?? ((p: string, enc: "utf8") => fs.promises.readFile(p, enc));
@@ -113,7 +115,9 @@ export async function resolveDesktopStoragePaths(
       ).extraArgs);
 
   const classified = classifyComfyInstall(dir, exists);
-  if (classified.kind !== "desktop" || !classified.instanceRoot) return null;
+  if (classified.kind !== "desktop" || !classified.instanceRoot) {
+    return null;
+  }
 
   const instanceRoot = classified.instanceRoot;
   const baseDir = detectBaseDir(instanceRoot, exists);
@@ -135,7 +139,9 @@ export async function resolveDesktopStoragePaths(
   for (const cfg of configFiles) {
     try {
       const parsed = parseExtraModelPathsYaml(await readFile(cfg, "utf8"));
-      if (parsed.basePath && !configBase) configBase = parsed.basePath;
+      if (parsed.basePath && !configBase) {
+        configBase = parsed.basePath;
+      }
       mergedEntries.push(...parsed.entries);
     } catch {
       // 配置文件缺失/读不到：不是错误，按「没有这一份」处理。
@@ -182,7 +188,9 @@ export async function resolveDesktopStoragePaths(
   for (const entry of parsed.entries) {
     for (const { slot, dir } of expandEntry(entry, exists)) {
       const key = normalizeDirKey(dir.path);
-      if (seen.has(key)) continue;
+      if (seen.has(key)) {
+        continue;
+      }
       seen.add(key);
       shared[slot].push(dir);
     }

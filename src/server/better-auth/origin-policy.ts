@@ -34,7 +34,9 @@ export const AUTH_LOOPBACK_HOST_PATTERNS = ["127.0.0.1:*", "localhost:*"];
 
 /** 配置项（`BETTER_AUTH_URL`）给出的 host（带端口）；没给或不是 URL 就是空。 */
 function configuredHost(configuredBaseUrl?: string): Array<string> {
-  if (!configuredBaseUrl) return [];
+  if (!configuredBaseUrl) {
+    return [];
+  }
   try {
     return [new URL(configuredBaseUrl).host];
   } catch {
@@ -44,7 +46,9 @@ function configuredHost(configuredBaseUrl?: string): Array<string> {
 
 /** 配置项给出的 origin（scheme + host）；没给或不是 URL 就是空。 */
 function configuredOrigin(configuredBaseUrl?: string): Array<string> {
-  if (!configuredBaseUrl) return [];
+  if (!configuredBaseUrl) {
+    return [];
+  }
   try {
     return [new URL(configuredBaseUrl).origin];
   } catch {

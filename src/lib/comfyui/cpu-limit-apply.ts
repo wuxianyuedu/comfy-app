@@ -24,19 +24,19 @@ import { execFile } from "node:child_process";
 import { cpuLimitCommands, type resolveCpuLimitMode } from "./cpu-limit";
 
 /** 施加结果的形状：给调用方写日志 / 给用例断言（纯数据，无副作用）。 */
-export interface CpuLimitOutcome {
+export type CpuLimitOutcome = {
   /** 生效档位（`off` 表示什么都不做）。 */
   mode: ReturnType<typeof resolveCpuLimitMode>;
   /** 每条命令的执行结论（命令不存在 / 权限不足 / 超时都在这里）。 */
-  results: Array<{ describe: string; ok: boolean; detail: string }>;
-}
+  results: Array<{ describe: string; detail: string; ok: boolean }>;
+};
 
 /** 一条命令的执行：stderr 也收进来（`renice` 的「权限不足」只在 stderr 上）。 */
 function runCommand(
   command: string,
   args: Array<string>,
   timeoutMs = 5000,
-): Promise<{ ok: boolean; detail: string }> {
+): Promise<{ detail: string; ok: boolean }> {
   return new Promise((resolve) => {
     execFile(command, args, { timeout: timeoutMs, windowsHide: true }, (err, _stdout, stderr) => {
       if (err) {
@@ -63,17 +63,17 @@ function runCommand(
  * （那会污染跑用例的机器，且需要管理员权益才能跑通）。
  */
 export async function applyComfyCpuLimit(input: {
-  pid: number | null;
-  mode: ReturnType<typeof resolveCpuLimitMode>;
-  platform?: NodeJS.Platform;
   cpuCount?: number;
   exec?: (
     command: string,
     args: Array<string>,
   ) => Promise<{
-    ok: boolean;
     detail: string;
+    ok: boolean;
   }>;
+  mode: ReturnType<typeof resolveCpuLimitMode>;
+  pid: number | null;
+  platform?: NodeJS.Platform;
 }): Promise<CpuLimitOutcome> {
   const mode = input.mode;
   /* pid 拿不到（keepAlive 的孙进程还没出现在进程表里 / 探测失败）→ 不施加，
@@ -93,7 +93,9 @@ export async function applyComfyCpuLimit(input: {
   /* 逐条串行：两条命令都很快（毫秒级），并行只会让日志里的顺序不确定，
    * 而顺序正是排查时读的唯一线索。 */
   for (const cmd of [priority, affinity]) {
-    if (!cmd) continue;
+    if (!cmd) {
+      continue;
+    }
     const r = await executed(cmd.command, cmd.args);
     results.push({ describe: cmd.describe, ok: r.ok, detail: r.detail });
   }

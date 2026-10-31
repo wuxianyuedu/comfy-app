@@ -13,10 +13,10 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type ProgressRow = {
-  status: string;
+  error: string | null;
   progress: number;
   resultImages: unknown;
-  error: string | null;
+  status: string;
 } | null;
 
 /* 每轮轮询读到的行：用例按序喂值，`findExecutionProgress` 每次调用消费一条；
@@ -139,7 +139,7 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
     );
 
     const pending = mod.synthesizeFirstFrame(opts);
-    await vi.advanceTimersByTimeAsync(2_000);
+    await vi.advanceTimersByTimeAsync(2000);
 
     await expect(pending).resolves.toBe("ff_ff-task.png");
     expect(mocks.progress).toHaveBeenCalledTimes(2);

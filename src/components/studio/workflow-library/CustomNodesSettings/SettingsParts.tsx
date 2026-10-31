@@ -24,10 +24,10 @@ export function PortRow({
   type,
   name,
 }: {
-  side: "in" | "out";
   color: string;
-  type: string;
   name: string;
+  side: "in" | "out";
+  type: string;
 }) {
   const isOut = side === "out";
   // ComfyUI 给输出固定用青色调，输入则按类别派生。
@@ -54,8 +54,8 @@ export function PortRow({
         className={`text-ink-soft text-2xs min-w-0 truncate font-semibold ${
           isOut ? "text-right" : ""
         }`}
-        title={name}
         style={isOut ? { textAlign: "right" } : undefined}
+        title={name}
       >
         {name}
       </span>
@@ -73,18 +73,34 @@ export function PortRow({
  * 「空值显示什么」由调用处经`displayValue` 决定 —— 这里只负责「有值时
  * 怎么成文本」，返回空串即表示「没值」。 */
 function widgetValueToText(v: unknown): string {
-  if (v == null) return "";
-  if (typeof v === "object") return JSON.stringify(v);
-  if (typeof v === "string") return v;
-  if (typeof v === "number") return String(v);
-  if (typeof v === "boolean") return v ? "true" : "false";
-  if (typeof v === "bigint") return v.toString();
-  if (typeof v === "symbol") return v.toString();
-  if (typeof v === "function") return v.toString();
+  if (v == null) {
+    return "";
+  }
+  if (typeof v === "object") {
+    return JSON.stringify(v);
+  }
+  if (typeof v === "string") {
+    return v;
+  }
+  if (typeof v === "number") {
+    return String(v);
+  }
+  if (typeof v === "boolean") {
+    return v ? "true" : "false";
+  }
+  if (typeof v === "bigint") {
+    return v.toString();
+  }
+  if (typeof v === "symbol") {
+    return v.toString();
+  }
+  if (typeof v === "function") {
+    return v.toString();
+  }
   return "";
 }
 
-export function WidgetValueChip({ widget, value }: { widget: string | null; value: unknown }) {
+export function WidgetValueChip({ widget, value }: { value: unknown; widget: string | null }) {
   if (widget === "toggle") {
     const on = value === true || value === "true" || value === "True";
     return (
@@ -149,7 +165,7 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
       {/* 顶行：当前阶段 + 包计数（用户最关心的）。.py 文件数
  已去掉 —— 用户明说它没用。 */}
       <div className="flex items-center gap-2">
-        <StatusDot state="busy" sizeClass="size-2" pulse />
+        <StatusDot pulse sizeClass="size-2" state="busy" />
         {progress.phase === "hash" && progress.total > 0 ? (
           <span className="text-ink">
             🔎 正在处理{""}
@@ -183,15 +199,15 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
  所以条子能干净地从扫描（不定态）过渡到哈希（确定态）。
  「总数未知 → 不确定态」的换算收在`~/lib/progress` 的`toPct`。 */}
       <ProgressBar
+        className="mt-2"
+        fillClassName="duration-300 ease-out"
+        showValue={false}
+        trackClassName="bg-surface-2 h-1.5"
         value={
           progress.phase === "hash" && progress.total > 0
             ? toPct(progress.done, progress.total)
             : null
         }
-        showValue={false}
-        className="mt-2"
-        trackClassName="bg-surface-2 h-1.5"
-        fillClassName="duration-300 ease-out"
       />
       {progress.msg && (
         <div
@@ -214,18 +230,18 @@ export function ParseConsole({
   logsRef,
   consoleRef,
 }: {
-  logs: Array<{ level: string; msg: string }>;
-  parsing: boolean;
-  logsRef: RefObject<HTMLDivElement | null>;
   consoleRef: RefObject<HTMLDivElement | null>;
+  logs: Array<{ level: string; msg: string }>;
+  logsRef: RefObject<HTMLDivElement | null>;
+  parsing: boolean;
 }) {
   return (
-    <div ref={logsRef} className="mb-4">
+    <div className="mb-4" ref={logsRef}>
       <div className="mb-1 flex items-center justify-between">
         <span className="text-muted-foreground text-xs font-medium">解析日志</span>
         {parsing && (
           <span className="text-primary flex items-center gap-1.5 text-xs">
-            <StatusDot state="busy" sizeClass="size-2" pulse />
+            <StatusDot pulse sizeClass="size-2" state="busy" />
             解析中…
           </span>
         )}
@@ -236,14 +252,14 @@ export function ParseConsole({
         </div>
       ) : (
         <div
-          ref={consoleRef}
           className="border-border text-2xs h-48 overflow-y-auto rounded-lg border bg-black/70 p-3 font-mono leading-relaxed"
+          ref={consoleRef}
         >
           {logs.map((log, idx) => (
             <div
-              key={`log-${idx}`}
-              data-log-row
               className={log.level === "error" ? "text-destructive" : "text-success-strong"}
+              data-log-row
+              key={`log-${idx}`}
             >
               {log.msg}
             </div>
@@ -273,16 +289,16 @@ export function ReportCards({ report }: { report: ParseReport }) {
         {(report.packages ?? []).map((pkg) => {
           const st = STATUS_STYLE[pkg.status] ?? OK_STATUS_STYLE;
           return (
-            <div key={pkg.name} className="border-border bg-bg rounded-xl border p-3">
+            <div className="border-border bg-bg rounded-xl border p-3" key={pkg.name}>
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-ink font-medium">{pkg.name}</span>
                     <StatusBadge
-                      status={pkg.status === "ok" ? "SUCCEEDED" : pkg.status}
-                      label={st.label}
-                      dot={false}
                       className="text-2xs px-2 py-0.5"
+                      dot={false}
+                      label={st.label}
+                      status={pkg.status === "ok" ? "SUCCEEDED" : pkg.status}
                     />
                   </div>
                   <div
@@ -303,8 +319,8 @@ export function ReportCards({ report }: { report: ParseReport }) {
                 <div className="mt-2 flex flex-wrap gap-1">
                   {pkg.nodeTypes.slice(0, 24).map((ct) => (
                     <span
-                      key={ct}
                       className="bg-subtle text-muted-foreground text-2xs rounded-md px-1.5 py-0.5 font-mono"
+                      key={ct}
                     >
                       {ct}
                     </span>
@@ -319,7 +335,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
               {pkg.errors?.length > 0 && (
                 <div className="mt-2 flex flex-col gap-1">
                   {pkg.errors.map((er, j) => (
-                    <div key={j} className="text-destructive text-2xs font-mono">
+                    <div className="text-destructive text-2xs font-mono" key={j}>
                       ⚠ {er.file}: {er.error}
                     </div>
                   ))}

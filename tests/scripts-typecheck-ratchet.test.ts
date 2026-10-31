@@ -84,8 +84,8 @@ function runCheck(args: Array<string>, root = fixture): { code: number; output: 
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: typeof e.status === "number" ? e.status : 1,
@@ -104,8 +104,8 @@ function write(rel: string, body: string): string {
 /** 账本的形状（判据写出去的那一份，读侧只认这三格）。 */
 type Ledger = {
   face: number;
-  total: number;
   files: Record<string, Record<string, number>>;
+  total: number;
 };
 
 /** 夹具里那份账本（判「`--update` 到底写没写」的唯一证据来源）。 */
@@ -132,7 +132,9 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  for (const dir of created) rmSync(dir, { recursive: true, force: true });
+  for (const dir of created) {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("脚本档判决面 —— 面必须是全量", () => {
@@ -265,7 +267,9 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       const abs = join(dir, e.name);
       const rel = abs.slice(REPO_ROOT.length + 1).replace(/\\/g, "/");
       if (e.isDirectory()) {
-        if (e.name.startsWith(".")) continue;
+        if (e.name.startsWith(".")) {
+          continue;
+        }
         walkMjs(abs, out);
       } else if (e.isFile() && e.name.endsWith(".mjs")) {
         out.push(rel);
@@ -305,25 +309,58 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     );
   }
 
+  /**
+   * `scripts/eslint-gate-canary.mjs` 落临时样本用的目录前缀 —— **从它的源码里对账取回来**。
+   *
+   * 为什么这一格必须认得它：eslint@10 的 project service 要求样本**落在 tsconfig 项目里**
+   * （`--stdin --stdin-filename` 会报 was not found by the project service），所以 canary
+   * 只能在 `scripts/` 下落一份 `eslint-canary-<pid>-<时间戳>/` 的真目录、跑完 `finally` 删；
+   * 而「受影响用例」那一格是**并发**跑的（`--maxWorkers=2`），下面那条「盘上没有未入库的
+   * `.mjs`」于是会撞上同一次运行里另一份用例正在用的样本 —— 2026-10-30 PR #2783 的实测
+   * 现场就是 `scripts/eslint-canary-151192-1793363720066/` 下那两份。
+   *
+   * 前缀不在这里写死（与 `tests/ci-daily-failure-issue.test.ts` 拿 `check-bundle-budget.cjs`
+   * 源码对账判决行同一条口径 —— 两处各写一遍必然漂）：canary 改了命名 ⇒ 这里取不到 ⇒
+   * 调用那侧把这一格判成「没判」，而不是当成「没有残留」。
+   */
+  function canaryScratchPrefix(): string | null {
+    const src = readFileSync(join(REPO_ROOT, "scripts", "eslint-gate-canary.mjs"), "utf8");
+    return /([A-Za-z0-9_-]*canary-)/.exec(src)?.[1] ?? null;
+  }
+
+  it("同跑兄弟件那一格：canary 的临时样本认得出，别的残留不认进去", () => {
+    const prefix = canaryScratchPrefix();
+    expect(
+      prefix,
+      "认不出 canary 的临时样本目录前缀 ⇒ 这一格的豁免口径与它漂了，两边要一起改",
+    ).not.toBeNull();
+    if (prefix === null) {return;}
+    const scratch = new RegExp(`^scripts/${prefix}[^/]*/`);
+    expect(scratch.test(`scripts/${prefix}151192-1793363720066/node-global.mjs`)).toBe(true);
+    /* 反向的两条：同名的入库脚本目录、与 canary 落在 `tests/` 那一半，都不许被豁免掉。 */
+    expect(scratch.test("scripts/stray-scratch/node-global.mjs")).toBe(false);
+    expect(scratch.test(`tests/${prefix}151192-1793363720066/x.mjs`)).toBe(false);
+  });
+
   it("账本里的 `face` 与 `total` 与配置展开同数（面与账不许两份口径）", () => {
     const judge = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(
       "../scripts/check-scripts-typecheck.cjs",
     ) as {
       configFace: (ts: unknown) => {
-        ok: boolean;
-        mjs?: Array<string>;
         excludes?: Array<string>;
+        mjs?: Array<string>;
+        ok: boolean;
         reason?: string;
       };
       diskFace: (
         list: Array<string>,
         excludes: Array<string>,
       ) => { all: Array<string>; missed: Array<string> };
-      trackedMjs: (root: string) => Set<string> | null;
       splitTrackedFace: (
         mjs: Array<string>,
         tracked: Set<string> | null,
-      ) => { face: Array<string>; untracked: Array<string>; filtered: boolean };
+      ) => { face: Array<string>; filtered: boolean; untracked: Array<string>; };
+      trackedMjs: (root: string) => Set<string> | null;
     };
     /* `require("typescript")` 的返回是 `any` —— 这里只把它当**不透明句柄**交给判据
      * （判据那边只调 `readConfigFile` / `parseJsonConfigFileContent` 两件事），
@@ -335,13 +372,29 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
      * 用例若拿未筛的磁盘展开去比，就把刚修掉的那条耦合又请回来了 ——
      * 平台上任何一份落在工作区的未入库产物都会让它红一次，而且指不出是谁。 */
     const { face, untracked } = judge.splitTrackedFace(cfg.mjs ?? [], judge.trackedMjs(REPO_ROOT));
+    /* 面外那几份里的「同跑兄弟件」要先认出来：canary 与这一格**同一次运行里并发**，
+     * 它的临时样本此刻正合法地躺在 `scripts/` 下（清理归它自己 `finally`），
+     * 落进这一条断言就会变成「谁都没改、但红了」—— 而指不出是谁的绿与红都不能算结论。 */
+    const prefix = canaryScratchPrefix();
     expect(
-      untracked,
-      `磁盘上有、git 清单里没有的这几份不该出现在真仓库的工作区里：${untracked.join("、")}`,
+      prefix,
+      "认不出 canary 的临时样本目录前缀 ⇒ 这一格的豁免口径与它漂了，两边要一起改",
+    ).not.toBeNull();
+    if (prefix === null) {return;}
+    const scratch = new RegExp(`^scripts/${prefix}[^/]*/`);
+    const strays = untracked.filter((p) => !scratch.test(String(p)));
+    if (strays.length !== untracked.length) {
+      console.log(
+        `[scripts-typecheck-ratchet] 面外 ${untracked.length} 份里 ${untracked.length - strays.length} 份是同跑的 eslint canary 临时样本（由它自己 finally 清理）⇒ 不计入下面那条`,
+      );
+    }
+    expect(
+      strays,
+      `磁盘上有、git 清单里没有的这几份不该出现在真仓库的工作区里：${strays.join("、")}`,
     ).toEqual([]);
     const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".scripts-typecheck-baseline.json"), "utf8"),
-    ) as { face: number; total: number; files: Record<string, Record<string, number>> };
+    ) as { face: number; files: Record<string, Record<string, number>>; total: number; };
     /* 面收了、账没跟着记（或反过来）都会在这一格现形 —— 那两种形态在账面读数上
      * 长得一模一样，只有拿配置原值对才分得开。 */
     expect(
@@ -378,11 +431,11 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
  */
 describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
   const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {
-    trackedMjs: (root: string) => Set<string> | null;
     splitTrackedFace: (
       mjs: Array<string>,
       tracked: Set<string> | null,
-    ) => { face: Array<string>; untracked: Array<string>; filtered: boolean };
+    ) => { face: Array<string>; filtered: boolean; untracked: Array<string>; };
+    trackedMjs: (root: string) => Set<string> | null;
   };
 
   it("求交给出两侧；取不到 git 清单时明写「没筛」而不是「都不算」", () => {

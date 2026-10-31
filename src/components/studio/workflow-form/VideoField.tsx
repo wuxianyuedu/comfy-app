@@ -29,34 +29,28 @@ function VideoField({
   set,
   disabled,
 }: {
-  role: VideoRole;
+  disabled?: boolean;
   entry: EnrichedWidget;
   preset: boolean;
-  values: Record<string, unknown>;
+  role: VideoRole;
   set: (ioKey: string, v: unknown) => void;
-  disabled?: boolean;
+  values: Record<string, unknown>;
 }) {
   const current = values[entry.ioKey];
   const label = roleLabel(role);
 
   // COMBO 已解析出候选项 → 一律用下拉（两种范式都是）。
-  if (
-    entry.control === "select" &&
-    Array.isArray(entry.options) &&
-    entry.options.length > 0
-  ) {
+  if (entry.control === "select" && Array.isArray(entry.options) && entry.options.length > 0) {
     const opts = entry.options;
     const val =
-      typeof current === "string" && opts.includes(current)
-        ? current
-        : (opts.at(0) ?? "");
+      typeof current === "string" && opts.includes(current) ? current : (opts.at(0) ?? "");
     return (
       <Field label={label}>
         <SelectMenu
-          value={val}
-          options={opts}
           disabled={disabled}
           onChange={(value) => set(entry.ioKey, value)}
+          options={opts}
+          value={val}
         />
       </Field>
     );
@@ -66,44 +60,43 @@ function VideoField({
   if (preset) {
     if (role === "length") {
       const presets = VIDEO_DURATION_PRESETS;
-      const cur = Number(
-        current ?? entry.defaultValue ?? DEFAULT_VIDEO_DURATION_PRESET.value,
-      );
+      const cur = Number(current ?? entry.defaultValue ?? DEFAULT_VIDEO_DURATION_PRESET.value);
       const val =
         presets.find((preset) => preset.value === cur)?.label ??
         DEFAULT_VIDEO_DURATION_PRESET.label;
       return (
         <Field label={label}>
           <SelectMenu
-            value={val}
-            options={presets.map((preset) => preset.label)}
             disabled={disabled}
             onChange={(value) => {
               const preset = presets.find((item) => item.label === value);
-              if (preset) set(entry.ioKey, preset.value);
+              if (preset) {
+                set(entry.ioKey, preset.value);
+              }
             }}
+            options={presets.map((preset) => preset.label)}
+            value={val}
           />
         </Field>
       );
     }
     if (role === "quality") {
       const presets = VIDEO_QUALITY_PRESETS;
-      const cur = Number(
-        current ?? entry.defaultValue ?? DEFAULT_VIDEO_QUALITY_PRESET.value,
-      );
+      const cur = Number(current ?? entry.defaultValue ?? DEFAULT_VIDEO_QUALITY_PRESET.value);
       const val =
-        presets.find((preset) => preset.value === cur)?.label ??
-        DEFAULT_VIDEO_QUALITY_PRESET.label;
+        presets.find((preset) => preset.value === cur)?.label ?? DEFAULT_VIDEO_QUALITY_PRESET.label;
       return (
         <Field label={label}>
           <SelectMenu
-            value={val}
-            options={presets.map((preset) => preset.label)}
             disabled={disabled}
             onChange={(value) => {
               const preset = presets.find((item) => item.label === value);
-              if (preset) set(entry.ioKey, preset.value);
+              if (preset) {
+                set(entry.ioKey, preset.value);
+              }
             }}
+            options={presets.map((preset) => preset.label)}
+            value={val}
           />
         </Field>
       );
@@ -111,22 +104,22 @@ function VideoField({
     if (role === "aspect") {
       // 数值比例 → 写浮点比值的形式预设
       const presets = DIM_RATIO_PRESETS;
-      const cur = Number(
-        current ?? entry.defaultValue ?? DEFAULT_DIM_RATIO_PRESET.ratio,
-      );
+      const cur = Number(current ?? entry.defaultValue ?? DEFAULT_DIM_RATIO_PRESET.ratio);
       const val =
         presets.find((preset) => Math.abs(preset.ratio - cur) < 0.05)?.label ??
         DEFAULT_DIM_RATIO_PRESET.label;
       return (
         <Field label={label}>
           <SelectMenu
-            value={val}
-            options={presets.map((preset) => preset.label)}
             disabled={disabled}
             onChange={(value) => {
               const preset = presets.find((item) => item.label === value);
-              if (preset) set(entry.ioKey, preset.ratio);
+              if (preset) {
+                set(entry.ioKey, preset.ratio);
+              }
             }}
+            options={presets.map((preset) => preset.label)}
+            value={val}
           />
         </Field>
       );
@@ -140,13 +133,13 @@ function VideoField({
     return (
       <Field label={label}>
         <NumberField
-          value={value}
-          min={bounds.min}
-          max={bounds.max}
-          step={bounds.step}
           decimalPlaces={bounds.decimalPlaces}
           disabled={disabled}
+          max={bounds.max}
+          min={bounds.min}
           onChange={(nextValue) => set(entry.ioKey, nextValue)}
+          step={bounds.step}
+          value={value}
         />
       </Field>
     );
@@ -156,11 +149,11 @@ function VideoField({
   return (
     <Field label={label}>
       <input
-        value={str}
-        disabled={disabled}
         aria-label={label}
         className="nodrag nopan bg-canvas-deep text-ink-soft focus:ring-primary/40 text-2xs w-full rounded-md px-2.5 py-2 outline-none focus:ring-1"
+        disabled={disabled}
         onChange={textHandler((value) => set(entry.ioKey, value))}
+        value={str}
       />
     </Field>
   );

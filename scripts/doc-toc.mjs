@@ -47,9 +47,7 @@ import process from "node:process";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { ROOT, SCOPED_DOCS, GENERATED_DOCS_DIR, generatedPathFor } = require(
-  "./doc-facts.cjs",
-);
+const { ROOT, SCOPED_DOCS, GENERATED_DOCS_DIR, generatedPathFor } = require("./doc-facts.cjs");
 
 /**
  * 从 Markdown 正文里取标题行（跳过围栏代码块里的 `# 注释`）。
@@ -71,26 +69,30 @@ export function parseHeadings(text) {
     const line = lines[i] ?? "";
     const fenceMark = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
     if (fenceMark !== undefined) {
-      if (fence === null) fence = fenceMark;
-      else if (
-        fenceMark[0] === fence[0] &&
-        fenceMark.length >= fence.length
-      ) {
+      if (fence === null) {
+        fence = fenceMark;
+      } else if (fenceMark[0] === fence[0] && fenceMark.length >= fence.length) {
         fence = null;
       }
       continue;
     }
-    if (fence !== null) continue;
+    if (fence !== null) {
+      continue;
+    }
     /* 最多三个前导空格是 Markdown 对 ATX 标题的合法缩进；本仓规范把子小节写在
      * 列表项里（两个空格），少了这一段，`13.6.2.1` 这一层会整层消失 ——
      * 目录照样完整、只是少了几小节，而「少的那几节」恰好是最常被问到的细则。
      * 四个空格起是缩进代码块，按 Markdown 的定义不是标题。 */
     const m = /^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*$/.exec(line);
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     const hashes = m[1] ?? "";
     /* ATX 标题允许以 `#` 收尾（`## 标题 ##`），那些是装饰不是标题的一部分。 */
     const title = (m[2] ?? "").replace(/[ \t]+#+[ \t]*$/, "").trim();
-    if (title === "") continue;
+    if (title === "") {
+      continue;
+    }
     out.push({ level: hashes.length, title, line: i + 1 });
   }
   return out;
@@ -110,7 +112,9 @@ export function parseHeadings(text) {
  */
 export function sectionRange(headings, index, totalLines) {
   const h = headings[index];
-  if (h === undefined) return { start: 1, end: 0, limit: 0 };
+  if (h === undefined) {
+    return { start: 1, end: 0, limit: 0 };
+  }
   let end = totalLines;
   for (let j = index + 1; j < headings.length; j++) {
     const next = headings[j];
@@ -147,15 +151,16 @@ export function resolveDoc(name) {
   }));
 
   const asSource = docs.find((d) => d.src.replace(/\.md$/i, "") === bare);
-  if (asSource) return { ok: true, src: asSource.src, rendered: false };
+  if (asSource) {
+    return { ok: true, src: asSource.src, rendered: false };
+  }
 
   const asMirror = docs.find(
-    (d) =>
-      generatedPathFor(d.src)
-        .replace(/\\/g, "/")
-        .replace(/\.md$/i, "") === bare,
+    (d) => generatedPathFor(d.src).replace(/\\/g, "/").replace(/\.md$/i, "") === bare,
   );
-  if (asMirror) return { ok: true, src: asMirror.src, rendered: true };
+  if (asMirror) {
+    return { ok: true, src: asMirror.src, rendered: true };
+  }
 
   const flat = bare.split("/").pop() ?? bare;
   const exact = docs.filter((d) => d.key === flat);
@@ -289,9 +294,7 @@ function main(argv) {
     resolved.rendered || argv.includes("--rendered") || argv.includes("--mirror");
   /* 输出与 `Read` 参数一律用正斜杠：`generatedPathFor` 走 `path.join`，Windows 上给的是
    * 反斜杠 —— 读数要能原样粘进 `Read(offset=…)` 的说明里，两套分隔符只会制造一次改写。 */
-  const rel = (
-    wantRendered ? generatedPathFor(resolved.src) : resolved.src
-  ).replace(/\\/g, "/");
+  const rel = (wantRendered ? generatedPathFor(resolved.src) : resolved.src).replace(/\\/g, "/");
   let text;
   try {
     text = fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -319,9 +322,6 @@ function main(argv) {
 }
 
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main(process.argv.slice(2)));
 }

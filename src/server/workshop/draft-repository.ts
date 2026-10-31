@@ -37,13 +37,12 @@ export function rowToDto(row: WorkshopDraftRow): WorkshopDraftDto {
       scriptMarkdown: row.scriptMarkdown,
     },
     scriptMarkdown: row.scriptMarkdown,
-    scenes: Array.isArray(row.scenes)
-      ? /* SAFETY: 类型断言已复核 */ (row.scenes as Array<Scene>)
-      : [],
-    characters: Array.isArray(row.characters)
-      ? /* SAFETY: 类型断言已复核 */ (row.characters as Array<Character>)
-      : [],
-    shots: Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>) : [],
+    /* SAFETY: 类型断言已复核 */
+    scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
+    /* SAFETY: 类型断言已复核 */
+    characters: Array.isArray(row.characters) ? (row.characters as Array<Character>) : [],
+    /* SAFETY: 类型断言已复核 */
+    shots: Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [],
   });
 }
 
@@ -58,11 +57,11 @@ export async function getDraft(id: string): Promise<WorkshopDraftDto | null> {
 }
 
 /** 服务端镜像的项目摘要（列表恢复用：全量清空 localStorage 后按此重建索引）。 */
-export interface DraftSummary {
+export type DraftSummary = {
   id: string;
   title: string;
   updatedAt: string;
-}
+};
 
 /** 按用户列出其所有服务端镜像摘要（用于在本地索引缺失时把云端项目找回来）。 */
 export async function listDraftsByUser(userId: string | null): Promise<Array<DraftSummary>> {
@@ -101,7 +100,9 @@ export async function upsertDraft(
   if (existing) {
     // update 分支：只改内容列（id / 时间戳不动），Partial 即可。
     const patch = draftToRow(draft);
-    if (userId !== null) patch.userId = userId;
+    if (userId !== null) {
+      patch.userId = userId;
+    }
     await workshopDb.update(workshopDraft).set(patch).where(eq(workshopDraft.id, id));
     return;
   }

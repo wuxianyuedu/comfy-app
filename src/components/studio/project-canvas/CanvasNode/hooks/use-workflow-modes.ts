@@ -14,19 +14,19 @@ import { errorMessage } from "~/lib/error-message";
 import { patchWorkflow } from "~/lib/workflow/workflow-mutations";
 import type { WorkflowModesState } from "~/components/studio/project-canvas/WorkflowNode";
 
-export interface UseWorkflowModesArgs {
-  workflowId?: string;
+export type UseWorkflowModesArgs = {
   /** 当前模式状态（乐观更新前的快照，用于失败回滚）。 */
   modes: WorkflowModesState | null;
-  setModes: (next: WorkflowModesState) => void;
   /** 保存失败时的节点级报错（写进 d.error + status: "error"）。 */
   onFailed: (reason: string) => void;
-}
+  setModes: (next: WorkflowModesState) => void;
+  workflowId?: string;
+};
 
-export interface WorkflowModesController {
+export type WorkflowModesController = {
   /** 写入新模式并落库；失败自动回滚 + 报错。 */
   saveModes: (next: WorkflowModesState) => Promise<void>;
-}
+};
 
 export function useWorkflowModes({
   workflowId,
@@ -36,7 +36,9 @@ export function useWorkflowModes({
 }: UseWorkflowModesArgs): WorkflowModesController {
   const saveModes = useCallback(
     async (next: WorkflowModesState) => {
-      if (!workflowId) return;
+      if (!workflowId) {
+        return;
+      }
       setModes(next);
       try {
         await patchWorkflow({
@@ -44,10 +46,10 @@ export function useWorkflowModes({
           modes: next.modes,
           defaultMode: next.defaultMode,
         });
-      } catch (err) {
+      } catch (error) {
         // 回滚本地状态，避免出现「僵尸模式章」
         setModes(modes ?? { modes: [], defaultMode: null });
-        onFailed(errorMessage(err, "保存模式失败，请重试"));
+        onFailed(errorMessage(error, "保存模式失败，请重试"));
       }
     },
     [workflowId, modes, setModes, onFailed],

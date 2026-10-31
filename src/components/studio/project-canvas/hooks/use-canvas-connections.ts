@@ -20,12 +20,12 @@ import { uniqueStamp } from "~/lib/unique-id";
 import { importOutputAsInput } from "~/lib/project-canvas/canvas-api";
 import { isCanvasNode, type CanvasNodeType } from "~/lib/project-canvas/canvas-types";
 
-export interface UseCanvasConnectionsArgs {
-  nodesRef: { current: Array<CanvasNodeType> };
+export type UseCanvasConnectionsArgs = {
   edgesRef: { current: Array<Edge> };
-  setNodes: Dispatch<SetStateAction<Array<CanvasNodeType>>>;
+  nodesRef: { current: Array<CanvasNodeType> };
   setEdges: Dispatch<SetStateAction<Array<Edge>>>;
-}
+  setNodes: Dispatch<SetStateAction<Array<CanvasNodeType>>>;
+};
 
 export function useCanvasConnections({
   nodesRef,
@@ -36,13 +36,17 @@ export function useCanvasConnections({
   const propagateFrom = useCallback(
     async (sourceId: string, resultPathOverride?: string, edgesOverride?: Array<Edge>) => {
       const srcNode = nodesRef.current.find((current) => current.id === sourceId);
-      if (!srcNode || !isCanvasNode(srcNode)) return;
+      if (!srcNode || !isCanvasNode(srcNode)) {
+        return;
+      }
       const src = srcNode.data;
       const rPath = resultPathOverride ?? src.resultPath;
       const rType = src.resultMediaType;
       const es = edgesOverride ?? edgesRef.current;
       const outEdges = es.filter((edge) => edge.source === sourceId);
-      if (outEdges.length === 0) return;
+      if (outEdges.length === 0) {
+        return;
+      }
 
       // 只在至少一个下游端口需要时才导入生成出的图片。
       // 当某个连线输入是 IMAGE 类型针脚时，工作流目标也需要
@@ -120,7 +124,9 @@ export function useCanvasConnections({
    * 之后就与原来完全一样地支持删除键 / 拖拽重连。 */
   const onEdgeClick = useCallback(
     (_event: ReactMouseEvent, edge: Edge) => {
-      if (edge.deletable === true && edge.reconnectable === true) return;
+      if (edge.deletable === true && edge.reconnectable === true) {
+        return;
+      }
       setEdges((eds) =>
         eds.map((e) => (e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e)),
       );

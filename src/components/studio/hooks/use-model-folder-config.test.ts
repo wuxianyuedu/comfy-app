@@ -21,29 +21,29 @@ import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 import { useModelFolderConfig } from "./use-model-folder-config";
 
 type Folder = {
-  folder: string;
-  type: string;
-  label: string;
-  enabled: boolean;
-  hasConfig: boolean;
   count: number;
+  enabled: boolean;
+  folder: string;
+  hasConfig: boolean;
+  label: string;
+  type: string;
 };
 
-interface Behavior {
-  folders: Array<Folder>;
+type Behavior = {
   comfyReachable?: boolean;
+  /** 非空时 configDelete 抛错 */
+  deleteError?: string;
+  folders: Array<Folder>;
   /** 非空时 configList 抛错 */
   listError?: string;
   /** 非空时 configSave 抛错 */
   saveError?: string;
-  /** 非空时 configDelete 抛错 */
-  deleteError?: string;
   /** 非空时 sync 抛错 */
   syncError?: string;
-}
+};
 
 let behavior: Behavior = { folders: [], comfyReachable: true };
-const saveInputs: Array<{ folder: string; enabled: boolean }> = [];
+const saveInputs: Array<{ enabled: boolean; folder: string }> = [];
 /** 记录 configList 被调用的次数 —— 断言「挂载时加载一次」不随重渲染复发。 */
 let configListCalls = 0;
 const deleteInputs: Array<{ folder: string }> = [];

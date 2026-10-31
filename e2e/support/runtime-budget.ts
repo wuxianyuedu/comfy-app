@@ -83,10 +83,10 @@ export const DISCARD_ROUNDS = 4;
 
 /** 一次导航的读数（毫秒，相对 `navigationStart`）。 */
 export interface NavigationSample {
-  /** `navigation` 时序的 `loadEventEnd`。 */
-  loadEventEnd: number;
   /** `paint` 时序里 `first-contentful-paint` 的 `startTime`。 */
   firstContentfulPaint: number;
+  /** `navigation` 时序的 `loadEventEnd`。 */
+  loadEventEnd: number;
 }
 
 /**
@@ -100,8 +100,8 @@ export interface NavigationSample {
  * 所以它同样必须能表达「没有」。
  */
 export function readNavigationSample(page: Page): Promise<{
-  loadEventEnd: number | null;
   firstContentfulPaint: number | null;
+  loadEventEnd: number | null;
 }> {
   return page.evaluate(() => {
     const nav = /* SAFETY: 类型断言已复核 */ performance.getEntriesByType("navigation")[0] as
@@ -135,9 +135,13 @@ export function steadyMin(
   samples: Array<number | null>,
   discard: number = DISCARD_ROUNDS,
 ): number | null {
-  if (samples.length <= discard) return null;
+  if (samples.length <= discard) {
+    return null;
+  }
   const kept = samples.slice(discard);
-  if (kept.some((v) => v === null || !Number.isFinite(v))) return null;
+  if (kept.some((v) => v === null || !Number.isFinite(v))) {
+    return null;
+  }
   return Math.min(.../* SAFETY: 类型断言已复核 */ (kept as Array<number>));
 }
 
@@ -183,8 +187,8 @@ export async function collectSamples(
  * @returns `{ loadEventEnd, firstContentfulPaint }`（稳态段 `min`，判不了时 `null`）
  */
 export function summarize(samples: Array<NavigationSample>): {
-  loadEventEnd: number | null;
   firstContentfulPaint: number | null;
+  loadEventEnd: number | null;
 } {
   return {
     loadEventEnd: steadyMin(samples.map((s) => s.loadEventEnd)),

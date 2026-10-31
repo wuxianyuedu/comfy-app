@@ -20,16 +20,16 @@ import {
 } from "~/lib/browser-storage";
 import { vanillaApi } from "~/trpc/vanilla";
 
-export interface CanvasProject {
+export type CanvasProject = {
+  edges: Array<PersistedEdge>;
   id: string;
   name: string;
-  updatedAt: number;
   /* 形状取 `Persisted*` 而不是 `@xyflow/react` 的 `Node` / `Edge`（规范 §12.19）：
    * 本模块只做 localStorage 读写，不该为了两个类型把画布引擎钉进静态图 ——
    * 入口 `src/app/workspace/page.tsx` 静态 import 它（见 canvas-types 里的说明）。 */
   nodes: Array<PersistedNode>;
-  edges: Array<PersistedEdge>;
-}
+  updatedAt: number;
+};
 
 const INDEX_KEY = "comfyapp.canvas.projects.v1";
 const ACTIVE_KEY = "comfyapp.canvas.active.v1";
@@ -77,7 +77,9 @@ export function getProject(id: string): CanvasProject | null {
 function adoptServerProject(row: ServerProjectRow, byId: Map<string, CanvasProject>): boolean {
   const serverCopy = toCanvasProject(row);
   const local = byId.get(row.id);
-  if (local && local.updatedAt > serverCopy.updatedAt) return false;
+  if (local && local.updatedAt > serverCopy.updatedAt) {
+    return false;
+  }
   byId.set(row.id, serverCopy);
   return true;
 }
@@ -93,7 +95,9 @@ function adoptServerProject(row: ServerProjectRow, byId: Map<string, CanvasProje
  * 例如从 3100 换到 3102）。
  */
 function persistProjectToServer(p: CanvasProject): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") {
+    return;
+  }
   /* 走 `fireAndForget` 而不是 `void fn()`：那条地基的语义就是「不 await、不抛、
    * 失败必须落到一个显式 onError」，`onError` 没有默认值 —— 通道恰恰是这里
    * 最不该被悄悄通用掉的东西（见 `~/lib/async-action`）。 */
@@ -121,7 +125,9 @@ function persistProjectToServer(p: CanvasProject): void {
  * 所以也不能只是 `.catch(() => undefined)`。
  */
 function deleteProjectOnServer(p: CanvasProject): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") {
+    return;
+  }
   fireAndForget(
     vanillaApi.project.delete.mutate({ projectId: p.id }).then(() => {
       clearSyncFailure(p.id);
@@ -136,8 +142,11 @@ export function upsertProject(p: CanvasProject): void {
   const all = readIndex();
   const idx = all.findIndex((item) => item.id === p.id);
   const next: CanvasProject = { ...p, updatedAt: Date.now() };
-  if (idx >= 0) all[idx] = next;
-  else all.push(next);
+  if (idx >= 0) {
+    all[idx] = next;
+  } else {
+    all.push(next);
+  }
   writeIndex(all);
   emitChanged();
   // 同步到服务端（持久、跨来源的存储）。不阻塞。
@@ -150,21 +159,25 @@ export function deleteProject(id: string): void {
    * 而删掉之后索引里已经没有这一条了。 */
   const removed = before.find((project) => project.id === id);
   writeIndex(before.filter((project) => project.id !== id));
-  if (getActiveId() === id) removeStorageItem(ACTIVE_KEY);
+  if (getActiveId() === id) {
+    removeStorageItem(ACTIVE_KEY);
+  }
   emitChanged();
   // 尽力在服务端也删掉。
-  if (removed) deleteProjectOnServer(removed);
+  if (removed) {
+    deleteProjectOnServer(removed);
+  }
 }
 
 /** 服务端 `project` 表的一行（`project.list` 的出口形状）。 */
-export interface ServerProjectRow {
+export type ServerProjectRow = {
+  edges?: unknown;
   id: string;
   name: string;
+  nodes?: unknown;
   /** tRPC 走 SuperJSON 给 Date，REST 那路给 ISO 串 */
   updatedAt: string | Date;
-  nodes?: unknown;
-  edges?: unknown;
-}
+};
 
 /**
  * 读服务端的项目列表（按用户，`project.list`）。
@@ -204,8 +217,12 @@ function toCanvasProject(row: ServerProjectRow): CanvasProject {
  */
 let hydrated = false;
 export async function hydrateFromServer(): Promise<void> {
-  if (typeof window === "undefined") return;
-  if (hydrated) return;
+  if (typeof window === "undefined") {
+    return;
+  }
+  if (hydrated) {
+    return;
+  }
   hydrated = true;
   try {
     const serverProjects = await fetchServerProjects();
@@ -213,7 +230,9 @@ export async function hydrateFromServer(): Promise<void> {
     const byId = readMap();
     let changed = false;
     for (const sp of serverProjects) {
-      if (adoptServerProject(sp, byId)) changed = true;
+      if (adoptServerProject(sp, byId)) {
+        changed = true;
+      }
     }
     // 把只存在于本地的项目推上去（迁移修复前的数据）。
     for (const lp of localAll) {
@@ -226,12 +245,12 @@ export async function hydrateFromServer(): Promise<void> {
       writeIndex(merged);
       emitChanged();
     }
-  } catch (e) {
+  } catch (error) {
     /* 拉不到服务端列表 ⇒ 这一轮只用本地索引（local-first 的承诺），并把
      * `hydrated` 退回 false 让下一次挂载再试。但「静默重试」不等于「静默」：
      * 这一行日志是「我的画布为什么没出现在列表里」唯一的可查出口（硬规则 4），
      * 而它走的是 `sync-notice` 那一条诊断口 —— 本文件不许自己写 console。 */
-    logSyncIssue("读取服务端画布列表失败，本轮只用本地索引", e);
+    logSyncIssue("读取服务端画布列表失败，本轮只用本地索引", error);
     hydrated = false;
   }
 }
@@ -255,24 +274,32 @@ export async function hydrateFromServer(): Promise<void> {
  * 那一条诊断口，本文件不许自己写 console。
  */
 export async function hydrateProjectFromServer(id: string): Promise<CanvasProject | null> {
-  if (typeof window === "undefined") return null;
-  if (getProject(id)) return getProject(id);
+  if (typeof window === "undefined") {
+    return null;
+  }
+  if (getProject(id)) {
+    return getProject(id);
+  }
   try {
     const wanted = (await fetchServerProjects()).find((row) => row.id === id);
     /* 服务端没有这一行 ⇒ 没有东西可落，交回 null。**不顺手把整表并进来**：
      * 本函数回答的是「怎么打开 `id`」，别的行为不归它管 —— 那种「多做了没人
      * 要的一件事」正是下一轮分叉的来源（整表并进来还会把已有条目的时间戳换成
      * 本机这一轮的，下一轮对账就分不出谁是新的）。 */
-    if (!wanted) return null;
+    if (!wanted) {
+      return null;
+    }
     /* 起点是**当前索引**（不是一张空表）：`adoptServerProject` 要在「索引里
      * 已经有一行」时按 `updatedAt` 决定听谁的，喂空表等于把那条判据跳过去。 */
     const index = readMap();
-    if (!adoptServerProject(wanted, index)) return null;
+    if (!adoptServerProject(wanted, index)) {
+      return null;
+    }
     writeIndex(sortByUpdated(index));
     emitChanged();
     return getProject(id);
-  } catch (e) {
-    logSyncIssue("读取服务端画布列表失败，这一行没能拉到本机", e);
+  } catch (error) {
+    logSyncIssue("读取服务端画布列表失败，这一行没能拉到本机", error);
     return null;
   }
 }
@@ -287,7 +314,9 @@ export const EMPTY_DRAFT_NAME = EMPTY_DRAFT_NAMES[0];
 /* 当且仅当 `name` 是空草稿哨兵名时为真。用它代替在每个回收判据里
  * 硬编码「未命名」，让默认名只有一处事实源、不会漂移。 */
 export function isEmptyDraftName(name: string | undefined | null): boolean {
-  if (!name) return false;
+  if (!name) {
+    return false;
+  }
   return name === EMPTY_DRAFT_NAME;
 }
 
@@ -300,7 +329,11 @@ export function isEmptyDraftName(name: string | undefined | null): boolean {
 export function getAllProjectNames(excludeId?: string): Set<string> {
   const all = listProjects();
   const set = new Set<string>();
-  for (const p of all) if (p.id !== excludeId) set.add(p.name.trim());
+  for (const p of all) {
+    if (p.id !== excludeId) {
+      set.add(p.name.trim());
+    }
+  }
   return set;
 }
 
@@ -324,7 +357,9 @@ export function isProjectNameTaken(name: string, excludeId?: string): boolean {
 export function findNextAvailableName(base: string, excludeId?: string): string {
   const baseClean = base.trim() || EMPTY_DRAFT_NAME;
   const taken = getAllProjectNames(excludeId);
-  if (!taken.has(baseClean)) return baseClean;
+  if (!taken.has(baseClean)) {
+    return baseClean;
+  }
   // 匹配候选后缀末尾的「_<数字>」，避免 base 本身以「_<n>」结尾时
   // 陷入死循环 —— 例如用户
   // already named a project "灵感_3" and we start from "灵感_3", we'd
@@ -333,7 +368,9 @@ export function findNextAvailableName(base: string, excludeId?: string): string 
 
   while (true) {
     const candidate = `${baseClean}_${suffix}`;
-    if (!taken.has(candidate)) return candidate;
+    if (!taken.has(candidate)) {
+      return candidate;
+    }
     suffix += 1;
     if (suffix > 9999) {
       // 病态情形：撞了 10000 次。直接粘一段时间戳切片。
@@ -386,7 +423,9 @@ export function createDraftProject(name?: string): CanvasProject {
  * 用户离开一张从未写过内容的崭新画布时调用。
  */
 export function clearActiveIfDraft(pid: string): void {
-  if (getActiveId() === pid) removeStorageItem(ACTIVE_KEY);
+  if (getActiveId() === pid) {
+    removeStorageItem(ACTIVE_KEY);
+  }
 }
 
 /* 「这条能不能回收」的唯一判据，「回收一条」与「清扫一批」共用它 ——
@@ -405,8 +444,12 @@ export function clearActiveIfDraft(pid: string): void {
  *（这里根本没它），而 `createProject` 造的是**真的进了索引**的行 ——
  * 清扫要对后者负责，但不能对「用户正在用的那一行」负责。 */
 function isReapableEmptyDraft(project: CanvasProject, activeId: string | null): boolean {
-  if (project.id === activeId) return false;
-  if (project.name !== EMPTY_DRAFT_NAME) return false;
+  if (project.id === activeId) {
+    return false;
+  }
+  if (project.name !== EMPTY_DRAFT_NAME) {
+    return false;
+  }
   return (project.nodes?.length ?? 0) === 0 && (project.edges?.length ?? 0) === 0;
 }
 
@@ -419,8 +462,12 @@ function isReapableEmptyDraft(project: CanvasProject, activeId: string | null): 
 export function reapEmptyProject(pid: string): boolean {
   const all = readIndex();
   const p = all.find((all) => all.id === pid);
-  if (!p) return false;
-  if (!isReapableEmptyDraft(p, getActiveId())) return false;
+  if (!p) {
+    return false;
+  }
+  if (!isReapableEmptyDraft(p, getActiveId())) {
+    return false;
+  }
   deleteProject(pid);
   return true;
 }
@@ -446,8 +493,12 @@ export function reapAllEmptyDrafts(): number {
    * `未命名_3` 就是这么攒出来的（ISSUE #1501）。
    * 逐条删的代价可以忽略：这是挂载时的一次性清扫，且删到最后就是空转。 */
   const doomed = all.filter((project) => isReapableEmptyDraft(project, activeId));
-  if (doomed.length === 0) return 0;
-  for (const project of doomed) deleteProject(project.id);
+  if (doomed.length === 0) {
+    return 0;
+  }
+  for (const project of doomed) {
+    deleteProject(project.id);
+  }
   /* 活跃项目本身不在 `doomed` 里，所以走到这里它没被删。但 active-id 可能指向
    * 一条**索引里根本没有的行**（它本来就是个 draft、或索引被外部清过）——
    * 那种悬空 active 指向谁都不存在，留着只会让上层以为「我有项目」而六个
@@ -492,15 +543,15 @@ export function getActiveId(): string | null {
 /** 一行在「所有项目」屏里的出处。 */
 export type ProjectOrigin = "server" | "local" | "both";
 
-export interface ProjectListEntry {
+export type ProjectListEntry = {
+  edges: CanvasProject["edges"];
   id: string;
   name: string;
+  nodes: CanvasProject["nodes"];
+  origin: ProjectOrigin;
   /** 毫秒时间戳（本地索引与 `fetchServerProjects` 归一后的同一口径）。 */
   updatedAt: number;
-  nodes: CanvasProject["nodes"];
-  edges: CanvasProject["edges"];
-  origin: ProjectOrigin;
-}
+};
 
 /**
  * 这一屏要显示的**全部**项目行：本地索引 ∪ 服务端，按 `updatedAt` 倒序。
@@ -538,11 +589,11 @@ export async function listProjectsWithServer(): Promise<{
       byId.set(row.id, { ...newer, origin: "both" });
     }
     return { entries: sortByUpdated(byId), ok: true };
-  } catch (e) {
+  } catch (error) {
     /* 「服务端那份没拉到」与「服务端确实没有这一行」是两件事，读侧要能分辨
      * （`ok: false` ⇒ 界面别把「看不到」说成「不存在」）。日志照旧走
      * `sync-notice` 那一条诊断口 —— 本文件不许自己写 console。 */
-    logSyncIssue("读取服务端项目列表失败，本屏只列出本地项目", e);
+    logSyncIssue("读取服务端项目列表失败，本屏只列出本地项目", error);
     return { entries: sortByUpdated(byId), ok: false };
   }
 }
@@ -581,7 +632,9 @@ export function deleteProjectEverywhere(id: string, name?: string): void {
    * 概率极低（索引都没有它），但真指向了就得一起清 —— 否则上层以为「我有
    * 一个项目」，六个项目页签点进去全落空（与 `reapAllEmptyDrafts` 尾部
    * 那条悬空 active 的处理同一口径）。 */
-  if (getActiveId() === id) removeStorageItem(ACTIVE_KEY);
+  if (getActiveId() === id) {
+    removeStorageItem(ACTIVE_KEY);
+  }
   deleteProjectOnServer({
     id,
     name: name ?? "",

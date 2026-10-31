@@ -26,10 +26,10 @@ import { collectShapes, main } from "../scripts/check-comment-headers.mjs";
 import { headerShape } from "../scripts/ship-ticket.mjs";
 
 type FakeResult = {
-  status: number;
-  stdout: string;
-  stderr: string;
   error: string | null;
+  status: number;
+  stderr: string;
+  stdout: string;
 };
 
 const ok = (stdout: string): FakeResult => ({
@@ -43,13 +43,13 @@ const HEAD = (name: string) => `**[评论人：${name}]**`;
 
 /** 假执行者：按子命令答；`bodies` 是「单号 → 正文」，缺键的那张答非 JSON（演「读不到」）。 */
 function fake(opts: {
-  issues?: Array<{ number: string; title: string }>;
   bodies?: Record<string, string>;
-  /** PR 列表那一条的**形状**（`body` 恒为空串 —— 与实测的 `list-pulls` 一致，见文件头 ④）。 */
-  pulls?: Array<{ number: string; title: string }>;
+  issues?: Array<{ number: string; title: string }>;
+  listsDown?: boolean;
   /** PR 正文只能从 `get-pull` 拿：`prBodies` 是「PR 号 → 正文」，缺键的那张答非 JSON。 */
   prBodies?: Record<string, string>;
-  listsDown?: boolean;
+  /** PR 列表那一条的**形状**（`body` 恒为空串 —— 与实测的 `list-pulls` 一致，见文件头 ④）。 */
+  pulls?: Array<{ number: string; title: string }>;
 }) {
   const calls: Array<string> = [];
   const run = (_cmd: string, args: Array<string>): FakeResult => {
@@ -63,7 +63,9 @@ function fake(opts: {
     if (args[0] === "issues" && args[1] === "get-issue") {
       const number = args[args.indexOf("--number") + 1] ?? "";
       const body = opts.bodies?.[number];
-      if (body === undefined) return ok("不是 JSON");
+      if (body === undefined) {
+        return ok("不是 JSON");
+      }
       return ok(json({ body }));
     }
     if (args[0] === "pulls" && args[1] === "list-pulls") {
@@ -238,8 +240,8 @@ describe("main：三态与点名", () => {
     /* 追一行人类总结会让机器侧 `JSON.parse` 撞「尾部多余内容」，看起来像数据坏了。 */
     expect(heard).toHaveLength(1);
     const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(heard.join("\n")) as {
-      total: number;
       rows: Array<{ number: string }>;
+      total: number;
     };
     expect(parsed.total).toBe(3);
     expect(parsed.rows.map((r: { number: string }) => r.number)).toEqual(["2195", "2194"]);

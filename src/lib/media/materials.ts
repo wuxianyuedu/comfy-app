@@ -82,10 +82,16 @@ export function materialsRoot(): string {
  * 从源头上掐死路径穿越。
  */
 export function sanitizeScope(raw: string | null | undefined): string | null {
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   const s = raw.trim();
-  if (!s || s.length > 128) return null;
-  if (!/^[A-Za-z0-9_-]+$/.test(s)) return null;
+  if (!s || s.length > 128) {
+    return null;
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(s)) {
+    return null;
+  }
   return s;
 }
 
@@ -94,12 +100,18 @@ export function sanitizeScope(raw: string | null | undefined): string | null {
  * 的字符。返回 null 表示该名字不可用。
  */
 export function sanitizeFileName(raw: string | null | undefined): string | null {
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   // 同时按两种分隔符切，避免 Windows 上 "a/b\\c.png" 漏网
   const base = lastSegments(raw, 1).trim();
-  if (!base || base === "." || base === "..") return null;
+  if (!base || base === "." || base === "..") {
+    return null;
+  }
   const cleaned = base.replace(/[\x00-\x1f<>:"|?*]/g, "_");
-  if (!cleaned || cleaned.length > 200) return null;
+  if (!cleaned || cleaned.length > 200) {
+    return null;
+  }
   return cleaned;
 }
 
@@ -133,9 +145,13 @@ export async function materialScopeOwnership(
   userId: string,
   scope: string,
 ): Promise<MaterialScopeOwnership> {
-  if (scope === SHARED_SCOPE) return "unclaimed";
+  if (scope === SHARED_SCOPE) {
+    return "unclaimed";
+  }
   const row = await projectRepository.findById(scope);
-  if (!row) return "unclaimed";
+  if (!row) {
+    return "unclaimed";
+  }
   return row.userId === userId ? "mine" : "foreign";
 }
 
@@ -148,7 +164,9 @@ export async function visibleMaterialScopes(
   if (opts.cross) {
     const out: Array<string> = [];
     for (const scope of await listScopes()) {
-      if (scope === SHARED_SCOPE) continue; // 末尾统一补，避免重复
+      if (scope === SHARED_SCOPE) {
+        continue;
+      } // 末尾统一补，避免重复
       if ((await materialScopeOwnership(userId, scope)) !== "foreign") {
         out.push(scope);
       }
@@ -172,25 +190,27 @@ export async function canWriteMaterialScope(userId: string, scope: string): Prom
 
 /* ── 读取 ── */
 
-export interface MaterialItem {
-  /** 稳定 id：`scope/folder/name`，前端删除时原样回传即可。 */
-  id: string;
-  name: string;
+export type MaterialItem = {
   folder: string;
   folderName: string;
+  /** 稳定 id：`scope/folder/name`，前端删除时原样回传即可。 */
+  id: string;
   kind: MaterialKind;
-  /** 浏览器可直接消费的 URL（走 /api/generated 读盘）。 */
-  url: string;
-  size: number;
-  updatedAt: string;
+  name: string;
   /** 所属 scope：项目 id 或 SHARED_SCOPE。 */
   scope: string;
-}
+  size: number;
+  updatedAt: string;
+  /** 浏览器可直接消费的 URL（走 /api/generated 读盘）。 */
+  url: string;
+};
 
 /** 列出单个 scope/folder 下的素材。目录不存在时返回空数组（不是错误）。 */
 export async function listFolderItems(scope: string, folder: string): Promise<Array<MaterialItem>> {
   const dir = folderDir(scope, folder);
-  if (!dir) return [];
+  if (!dir) {
+    return [];
+  }
   let entries: Array<string>;
   try {
     entries = await fs.readdir(dir);
@@ -199,12 +219,16 @@ export async function listFolderItems(scope: string, folder: string): Promise<Ar
   }
   const items: Array<MaterialItem> = [];
   for (const name of entries) {
-    if (name.startsWith(".")) continue; // 跳过 .DS_Store 之类
+    if (name.startsWith(".")) {
+      continue;
+    } // 跳过 .DS_Store 之类
     try {
       const st = await fs.stat(
         /*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ dir, name),
       );
-      if (!st.isFile()) continue;
+      if (!st.isFile()) {
+        continue;
+      }
       items.push({
         id: `${scope}/${folder}/${name}`,
         name,
@@ -246,15 +270,21 @@ export async function collectByFolder(
   scopes: Array<string>,
 ): Promise<Map<string, Array<MaterialItem>>> {
   const map = new Map<string, Array<MaterialItem>>();
-  for (const f of MATERIAL_FOLDERS) map.set(f.id, []);
+  for (const f of MATERIAL_FOLDERS) {
+    map.set(f.id, []);
+  }
   for (const scope of scopes) {
     for (const f of MATERIAL_FOLDERS) {
       const items = await listFolderItems(scope, f.id);
-      if (items.length) getOrCreate(map, f.id, () => []).push(...items);
+      if (items.length) {
+        getOrCreate(map, f.id, () => []).push(...items);
+      }
     }
   }
   for (const [, arr] of map)
-    /* 同上：降序即比较参数相反。 */
+  /* 同上：降序即比较参数相反。 */
+  {
     arr.sort((left, right) => compareText(right.updatedAt, left.updatedAt));
+  }
   return map;
 }

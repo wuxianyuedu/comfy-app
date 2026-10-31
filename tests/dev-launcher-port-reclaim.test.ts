@@ -41,7 +41,9 @@ function decidePort(script: string): unknown {
     encoding: "utf8",
     cwd: ROOT,
   });
-  if (out.status !== 0) throw new Error(out.stderr || out.stdout);
+  if (out.status !== 0) {
+    throw new Error(out.stderr || out.stdout);
+  }
   return JSON.parse(out.stdout);
 }
 
@@ -65,9 +67,9 @@ function verdictFor(
     process.stdout.write(JSON.stringify(result));
   `;
   return /* SAFETY: 类型断言已复核 */ decidePort(script) as {
+    foreignPids: Array<number>;
     ownership: string;
     ownPids: Array<number>;
-    foreignPids: Array<number>;
   };
 }
 

@@ -57,15 +57,15 @@ const VIEWPORT_PADDING = 16;
 const VIEWER_POPUP_WIDTH = "w-[min(96vw,1400px)]";
 const VIEWER_BODY_HEIGHT = "h-[min(86vh,880px)]";
 
-export interface ImageViewerProps {
-  /** 要查看的图片地址；`null` 时组件不渲染（调用处据此表达「关着」）。 */
-  src: string | null;
+export type ImageViewerProps = {
   alt?: string;
   /** 弹窗标题；缺省回退到 `alt`，再回退到一句通用文案。 */
   label?: string;
   /** 关闭（Esc / 点遮罩 / 右上角 ✕ 都走它）。 */
   onClose: () => void;
-}
+  /** 要查看的图片地址；`null` 时组件不渲染（调用处据此表达「关着」）。 */
+  src: string | null;
+};
 
 /**
  * 受控的图片查看器。渲染时 `src` 必须有值 —— 需要「关着」的调用处传 `null`。
@@ -74,8 +74,8 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
   /* 已解码图片的尺寸与它对应的地址：地址换了旧尺寸立刻失效（否则新图会先按
    * 上一张的尺寸渲染一帧，尺寸差得远时肉眼可见地跳一下）。 */
   const [loaded, setLoaded] = useState<{
-    src: string;
     size: NaturalSize;
+    src: string;
   } | null>(null);
   const natural = loaded?.src === src ? loaded.size : null;
 
@@ -118,8 +118,8 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
    * 里还是旧尺寸，写进去会被旧的内容范围夹掉。存下来、等这一轮渲染提交完
    * 再由 effect 应用（`scale` 表示它属于哪一轮，避免残留值被下一轮误用）。 */
   const pendingScrollRef = useRef<{
-    scale: number;
     left: number;
+    scale: number;
     top: number;
   } | null>(null);
 
@@ -135,15 +135,21 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
 
   useEffect(() => {
     const el = scrollerRef.current;
-    if (!el || naturalWidth === null || naturalHeight === null) return;
+    if (!el || naturalWidth === null || naturalHeight === null) {
+      return;
+    }
 
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       const current = scaleRef.current;
       const next = clampNext(current, event.deltaY < 0);
-      if (next === current) return;
+      if (next === current) {
+        return;
+      }
       const rect = readElementBox(el);
-      if (!rect) return;
+      if (!rect) {
+        return;
+      }
       const offsetX = event.clientX - rect.left;
       const offsetY = event.clientY - rect.top;
       /* 光标下的**内容坐标**保持不变：新滚动位置 = 该内容坐标 × 缩放比 − 光标在视口里的偏移。 */
@@ -164,7 +170,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
   useEffect(() => {
     const el = scrollerRef.current;
     const pending = pendingScrollRef.current;
-    if (!el || pending?.scale !== zoom.scale) return;
+    if (!el || pending?.scale !== zoom.scale) {
+      return;
+    }
     pendingScrollRef.current = null;
     el.scrollLeft = pending.left;
     el.scrollTop = pending.top;
@@ -183,20 +191,22 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
    * 指针捕获让指针移出容器后仍能收到事件（否则拖到边缘就断）。 */
   const innerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    scrollLeft: number;
-    scrollTop: number;
     dx: number;
     dy: number;
+    pointerId: number;
+    scrollLeft: number;
+    scrollTop: number;
+    startX: number;
+    startY: number;
   } | null>(null);
   /* 本帧是否已排过一次写入（同一帧内的多个 pointermove 合并成一次）。 */
   const panFrameRef = useRef<CancelNextFrame | null>(null);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const el = scrollerRef.current;
-    if (event.button !== 0 || !el) return;
+    if (event.button !== 0 || !el) {
+      return;
+    }
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -207,7 +217,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
       dy: 0,
     };
     /* 拖拽期间把内层提为合成层（松手即撤），免得每帧重新栅格化整张图。 */
-    if (innerRef.current) innerRef.current.style.willChange = "transform";
+    if (innerRef.current) {
+      innerRef.current.style.willChange = "transform";
+    }
     if (typeof el.setPointerCapture === "function") {
       el.setPointerCapture(event.pointerId);
     }
@@ -215,15 +227,21 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
-    if (!drag) return;
+    if (!drag) {
+      return;
+    }
     drag.dx = event.clientX - drag.startX;
     drag.dy = event.clientY - drag.startY;
-    if (panFrameRef.current) return;
+    if (panFrameRef.current) {
+      return;
+    }
     panFrameRef.current = onNextFrame(() => {
       panFrameRef.current = null;
       const inner = innerRef.current;
       const current = dragRef.current;
-      if (!inner || !current) return;
+      if (!inner || !current) {
+        return;
+      }
       inner.style.transform = `translate3d(${current.dx}px, ${current.dy}px, 0)`;
     });
   };
@@ -250,7 +268,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
   /* 卸载时撤掉可能还排着的那一帧（弹窗在拖拽中被关掉）。 */
   useEffect(() => () => panFrameRef.current?.(), []);
 
-  if (!src) return null;
+  if (!src) {
+    return null;
+  }
 
   const title = firstText(label, alt) ?? "图片查看";
   /* 尺寸未知（解码中）时先按「不超过可视区」显示，读到自然尺寸再切成像素尺寸
@@ -270,19 +290,19 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
     zoom.mode === "fit" ? "适应窗口" : zoom.mode === "actual" ? "原始大小" : "自定义缩放";
 
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
-        data-slot="image-viewer"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
+        data-slot="image-viewer"
         popupClassName={VIEWER_POPUP_WIDTH}
+        showCloseButton={false}
       >
         <div
           className={`border-border bg-panel flex flex-col overflow-hidden rounded-2xl border ${VIEWER_BODY_HEIGHT}`}
         >
           <div className="border-border-subtle flex h-11 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <ZoomIn size={15} className="text-ink-muted shrink-0" aria-hidden="true" />
+              <ZoomIn aria-hidden="true" className="text-ink-muted shrink-0" size={15} />
               <DialogTitle className="text-ink min-w-0 truncate text-sm font-semibold">
                 {title}
               </DialogTitle>
@@ -295,12 +315,12 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
 
             <div className="flex shrink-0 items-center gap-1">
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={zoom.zoomOut}
                 aria-label="缩小"
-                title="缩小"
                 className="text-ink-muted hover:text-ink rounded-md"
+                onClick={zoom.zoomOut}
+                size="icon-sm"
+                title="缩小"
+                variant="ghost"
               >
                 <Minus data-icon="inline-start" size={14} />
               </Button>
@@ -311,12 +331,12 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
                 {zoom.percent}%
               </span>
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={zoom.zoomIn}
                 aria-label="放大"
-                title="放大"
                 className="text-ink-muted hover:text-ink rounded-md"
+                onClick={zoom.zoomIn}
+                size="icon-sm"
+                title="放大"
+                variant="ghost"
               >
                 <Plus data-icon="inline-start" size={14} />
               </Button>
@@ -327,32 +347,32 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
                   注意 `zoom.mode` 还有第三种 `manual`（滚轮 / ± 按钮缩出来的
                   自由倍数）—— 那时两枚都不选中，正是单选组「可以都不选」的
                   合法状态（双击画布的 toggle 会把它收回前两档）。 */}
-              <div role="radiogroup" aria-label="缩放档位" className="flex items-center gap-0.5">
+              <div aria-label="缩放档位" className="flex items-center gap-0.5" role="radiogroup">
                 <SelectChip
-                  shape="compact"
                   className="gap-1 px-2 py-1"
-                  selected={zoom.mode === "fit"}
                   onClick={zoom.fit}
+                  selected={zoom.mode === "fit"}
+                  shape="compact"
                 >
                   适应窗口
                 </SelectChip>
                 <SelectChip
-                  shape="compact"
                   className="gap-1 px-2 py-1"
-                  selected={zoom.mode === "actual"}
                   onClick={zoom.actualSize}
+                  selected={zoom.mode === "actual"}
+                  shape="compact"
                 >
                   <Maximize2 data-icon="inline-start" size={11} />
                   原始大小
                 </SelectChip>
               </div>
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onClose}
                 aria-label="关闭"
-                title="关闭"
                 className="text-ink-muted hover:text-ink rounded-md"
+                onClick={onClose}
+                size="icon-sm"
+                title="关闭"
+                variant="ghost"
               >
                 <X data-icon="inline-start" size={15} />
               </Button>
@@ -361,35 +381,37 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
 
           {/* 画布：双击切换适应窗口 / 原始大小；滚轮与拖拽见上方 handler。 */}
           <div
-            ref={setScroller}
+            className="bg-canvas-deep relative min-h-0 flex-1 cursor-grab touch-none overflow-auto overscroll-contain active:cursor-grabbing"
             data-testid="image-viewer-canvas"
             onDoubleClick={zoom.toggleFitActual}
+            onPointerCancel={handlePointerUp}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            className="bg-canvas-deep relative min-h-0 flex-1 cursor-grab touch-none overflow-auto overscroll-contain active:cursor-grabbing"
+            ref={setScroller}
           >
             {/* 内层用 `w-max min-w-full h-max min-h-full` + 居中：图比可视区小时
                 居中显示，比可视区大时内层恰好等于图宽/高，`justify-center` 不再
                 产生偏移（经典 flex 居中会裁掉溢出内容的左/上边缘）。 */}
             <div
-              ref={innerRef}
-              data-testid="image-viewer-content"
               className="flex h-max min-h-full w-max min-w-full items-center justify-center"
+              data-testid="image-viewer-content"
+              ref={innerRef}
               style={{ padding: VIEWPORT_PADDING }}
             >
               <MediaThumbnail
-                src={src}
                 alt={alt}
-                fallback={<span className="text-ink-fainter text-xs">图片不可用</span>}
                 className={mediaClass}
-                style={mediaStyle}
                 draggable={false}
+                fallback={<span className="text-ink-fainter text-xs">图片不可用</span>}
                 onLoad={(media) => {
                   const size = readNaturalSize(media);
-                  if (size) setLoaded({ src, size });
+                  if (size) {
+                    setLoaded({ src, size });
+                  }
                 }}
+                src={src}
+                style={mediaStyle}
               />
             </div>
           </div>
@@ -427,18 +449,18 @@ function firstText(...values: Array<string | undefined>): string | null {
   return values.find((value) => (value ?? "").trim() !== "") ?? null;
 }
 
-export interface ViewableImageProps {
-  src?: string | null;
+export type ViewableImageProps = {
   alt?: string;
   /** 缩略图自身的 class（与 `MediaThumbnail` 同义）。 */
   className?: string;
-  /** 查看器标题；缺省用 `alt`。 */
-  label?: string;
   /** 加载失败兜底（透传 `MediaThumbnail`）。 */
   fallback?: MediaFallback;
+  /** 查看器标题；缺省用 `alt`。 */
+  label?: string;
+  src?: string | null;
   /** 缩略图上的提示文案（鼠标悬停）。 */
   title?: string;
-}
+};
 
 /**
  * 缩略图 + 点开查看的组合形态：把原来的 `MediaThumbnail` 换成它即可获得
@@ -453,24 +475,26 @@ export function ViewableImage({
   title = "点击查看大图",
 }: ViewableImageProps) {
   const [open, setOpen] = useState(false);
-  if (!src) return null;
+  if (!src) {
+    return null;
+  }
   const name = firstText(label, alt);
   return (
     <>
       <Button
-        variant="ghost"
-        onClick={() => setOpen(true)}
-        title={title}
         aria-label={name ? `查看大图：${name}` : "查看大图"}
         /* `h-full` 而不是 `h-auto`：调用处常在**有确定高度**的盒子里塞它
            （`aspect-square` 网格、定高缩略图位），缩略图的 `h-full` 要有参照
            才撑得满；父级高度是 auto 时 `h-full` 计算为 auto，行为不变。 */
         className="h-full w-full cursor-zoom-in rounded-xl p-0 hover:bg-transparent"
+        onClick={() => setOpen(true)}
+        title={title}
+        variant="ghost"
       >
-        <MediaThumbnail src={src} alt={alt} className={className} fallback={fallback} />
+        <MediaThumbnail alt={alt} className={className} fallback={fallback} src={src} />
       </Button>
       {open && (
-        <ImageViewer src={src} alt={alt} label={name ?? undefined} onClose={() => setOpen(false)} />
+        <ImageViewer alt={alt} label={name ?? undefined} onClose={() => setOpen(false)} src={src} />
       )}
     </>
   );

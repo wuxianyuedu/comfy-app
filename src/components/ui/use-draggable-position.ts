@@ -4,10 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { clamp } from "~/lib/clamp";
 import { readStorageJson, writeStorageJson } from "~/lib/browser-storage";
-import {
-  useViewportSize,
-  type ViewportSize,
-} from "~/components/ui/use-viewport-size";
+import { useViewportSize, type ViewportSize } from "~/components/ui/use-viewport-size";
 
 /**
  * useDraggablePosition —— 「让一个悬浮元素可以被拖着摆到任意位置」的**唯一实现**。
@@ -63,41 +60,41 @@ export const DRAG_SLOP_PX = 4;
 export const DRAG_EDGE_GAP_PX = 8;
 
 /** 元素在视口内的落点（左上角坐标 + 自身尺寸）。 */
-export interface DraggableBox {
+export type DraggableBox = {
+  height: number;
+  width: number;
   x: number;
   y: number;
-  width: number;
-  height: number;
-}
+};
 
 /** 持久化的位置：距视口右 / 下的偏移（跟角走，不跟绝对坐标走）。 */
-export interface DraggableOffset {
-  right: number;
+export type DraggableOffset = {
   bottom: number;
-}
+  right: number;
+};
 
-export interface UseDraggablePositionOptions {
-  /** `localStorage` 键名（含自己的版本策略，例如 `comfyapp:agent-fab:v1`）。 */
-  storageKey: string;
+export type UseDraggablePositionOptions = {
   /** 没存过 / 读失败 / 落点已失效时用的默认偏移。 */
   defaultOffset: DraggableOffset;
   /** 用户真的点了（位移没超阈值）时的回调。 */
   onClick?: () => void;
-}
+  /** `localStorage` 键名（含自己的版本策略，例如 `comfyapp:agent-fab:v1`）。 */
+  storageKey: string;
+};
 
-export interface DraggablePositionController<T extends HTMLElement> {
-  /** 当前位置；`null` = 还没量到（首帧之前不渲染，避免闪一下再跳位）。 */
-  offset: DraggableOffset | null;
+export type DraggablePositionController<T extends HTMLElement> = {
   /** 是否正在拖动 —— 调用处据此关掉「悬停提示」这类会打架的浮层。 */
   dragging: boolean;
+  /** 挂在被拖元素上的 ref 回调 —— **必须挂上**：本 hook 靠它知道元素什么时候
+   *  进的 DOM，「取回记住的位置」与「按真实尺寸夹取」都在那之后才成立。 */
+  elementCallbackRef: (el: T | null) => void;
   /** 挂到被拖元素上的指针事件。 */
   handleProps: {
     onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
   };
-  /** 挂在被拖元素上的 ref 回调 —— **必须挂上**：本 hook 靠它知道元素什么时候
-   *  进的 DOM，「取回记住的位置」与「按真实尺寸夹取」都在那之后才成立。 */
-  elementCallbackRef: (el: T | null) => void;
-}
+  /** 当前位置；`null` = 还没量到（首帧之前不渲染，避免闪一下再跳位）。 */
+  offset: DraggableOffset | null;
+};
 
 /* 元素尺寸与视口尺寸都从现场量，不缓存 —— 悬浮元素会随内容换行改变高度
  * （例如徽标数字从 9 变 99+），缓存一份就会在夹取时算错边界。 */
@@ -121,14 +118,8 @@ function clampOffset(
   /* `right` 的可取上限 = 视口宽 − 元素宽 − 两边留白；下限就是留白本身
    * （元素贴住右边）。`Math.max` 兜住「元素比视口还宽」这一档：那时上限
    * 会小于下限，`clamp` 的区间被写反 —— 取留白让它靠左显示，至少读得到。 */
-  const maxRight = Math.max(
-    DRAG_EDGE_GAP_PX,
-    viewport.width - box.width - DRAG_EDGE_GAP_PX,
-  );
-  const maxBottom = Math.max(
-    DRAG_EDGE_GAP_PX,
-    viewport.height - box.height - DRAG_EDGE_GAP_PX,
-  );
+  const maxRight = Math.max(DRAG_EDGE_GAP_PX, viewport.width - box.width - DRAG_EDGE_GAP_PX);
+  const maxBottom = Math.max(DRAG_EDGE_GAP_PX, viewport.height - box.height - DRAG_EDGE_GAP_PX);
   return {
     right: clamp(offset.right, DRAG_EDGE_GAP_PX, maxRight),
     bottom: clamp(offset.bottom, DRAG_EDGE_GAP_PX, maxBottom),
@@ -158,11 +149,11 @@ export function useDraggablePosition<T extends HTMLElement>({
    * 是点击」。放 ref 而不是 state —— pointermove 每帧都写，走 state 会把
    * 整棵树按帧重渲染。 */
   const dragRef = useRef<{
+    moved: boolean;
     pointerId: number;
+    startOffset: DraggableOffset;
     startX: number;
     startY: number;
-    startOffset: DraggableOffset;
-    moved: boolean;
   } | null>(null);
 
   /* 点击回调放 ref 同步：`onClick` 是调用处每次渲染新造的箭头函数，
@@ -217,9 +208,13 @@ export function useDraggablePosition<T extends HTMLElement>({
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLElement>) => {
       /* 只接主键：右键 / 中键留给上下文菜单与原生的中键行为。 */
-      if (event.button !== 0) return;
+      if (event.button !== 0) {
+        return;
+      }
       const dragged = element;
-      if (!dragged || offset === null) return;
+      if (!dragged || offset === null) {
+        return;
+      }
 
       dragRef.current = {
         pointerId: event.pointerId,
@@ -231,18 +226,24 @@ export function useDraggablePosition<T extends HTMLElement>({
 
       const onMove = (moveEvent: PointerEvent) => {
         const drag = dragRef.current;
-        if (drag?.pointerId !== moveEvent.pointerId) return;
+        if (drag?.pointerId !== moveEvent.pointerId) {
+          return;
+        }
         const dx = moveEvent.clientX - drag.startX;
         const dy = moveEvent.clientY - drag.startY;
         if (!drag.moved) {
-          if (Math.hypot(dx, dy) < DRAG_SLOP_PX) return;
+          if (Math.hypot(dx, dy) < DRAG_SLOP_PX) {
+            return;
+          }
           drag.moved = true;
           setDragging(true);
         }
         /* 指针右移 = 离右边更近 → `right` 变小，所以是减 `dx`；
          * 下移同理减 `dy`。夹取每一帧都做，元素不会跟出视口。 */
         const nextViewport = viewportRef.current;
-        if (nextViewport === null) return;
+        if (nextViewport === null) {
+          return;
+        }
         setManual(
           clampOffset(
             {
@@ -261,7 +262,9 @@ export function useDraggablePosition<T extends HTMLElement>({
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
         window.removeEventListener("pointercancel", onUp);
-        if (drag?.pointerId !== upEvent.pointerId) return;
+        if (drag?.pointerId !== upEvent.pointerId) {
+          return;
+        }
         setDragging(false);
         if (!drag.moved) {
           /* 位移没超阈值 = 点击：交回调用处（打开浮层 / 收起面板）。 */
@@ -271,7 +274,9 @@ export function useDraggablePosition<T extends HTMLElement>({
         /* 真的拖过：把新落点记住。写失败（隐私模式 / 配额满）静默 ——
          * 记忆是增强不是功能，本次会话内拖到哪仍然在哪。 */
         setManual((current) => {
-          if (current !== null) writeStorageJson(storageKey, current);
+          if (current !== null) {
+            writeStorageJson(storageKey, current);
+          }
           return current;
         });
       };

@@ -34,11 +34,11 @@ describe("OptionListPopover", () => {
   it("默认收起：选项不在可见树里", () => {
     render(
       <OptionListPopover
-        value="all"
         items={TAGS}
         onSelect={vi.fn()}
         trigger="全部模型"
         triggerTitle="筛选"
+        value="all"
       />,
     );
     expect(screen.queryByRole("option", { name: /SDXL/ })).toBeNull();
@@ -47,11 +47,11 @@ describe("OptionListPopover", () => {
   it("点开后面板里出现全部选项，且是可滚动列表", () => {
     const { container } = render(
       <OptionListPopover
-        value="all"
         items={TAGS}
         onSelect={vi.fn()}
         trigger="全部模型"
         triggerTitle="筛选"
+        value="all"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /全部模型/ }));
@@ -66,11 +66,11 @@ describe("OptionListPopover", () => {
   it("选中项带 aria-selected=true，其余为 false", () => {
     render(
       <OptionListPopover
-        value="flux"
         items={TAGS}
         onSelect={vi.fn()}
         trigger="FLUX"
         triggerTitle="筛选"
+        value="flux"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /FLUX/ }));
@@ -82,11 +82,11 @@ describe("OptionListPopover", () => {
     const onSelect = vi.fn();
     render(
       <OptionListPopover
-        value="all"
         items={TAGS}
         onSelect={onSelect}
         trigger="全部模型"
         triggerTitle="筛选"
+        value="all"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /全部模型/ }));
@@ -98,12 +98,12 @@ describe("OptionListPopover", () => {
   it("items 为空时显示 emptyHint", () => {
     render(
       <OptionListPopover
-        value="all"
+        emptyHint="标签库为空"
         items={[]}
         onSelect={vi.fn()}
         trigger="全部模型"
         triggerTitle="筛选"
-        emptyHint="标签库为空"
+        value="all"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /全部模型/ }));
@@ -113,11 +113,11 @@ describe("OptionListPopover", () => {
   it("选中项配色走语义 token，不落原生调色板字面量", () => {
     render(
       <OptionListPopover
-        value="flux"
         items={TAGS}
         onSelect={vi.fn()}
         trigger="FLUX"
         triggerTitle="筛选"
+        value="flux"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /FLUX/ }));
@@ -134,12 +134,12 @@ describe("OptionListPopover", () => {
     const seen: Array<boolean> = [];
     render(
       <OptionListPopover
-        value="all"
         items={TAGS}
-        onSelect={vi.fn()}
         onOpenChange={(open) => seen.push(open)}
+        onSelect={vi.fn()}
         trigger="全部模型"
         triggerTitle="筛选"
+        value="all"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /全部模型/ }));
@@ -149,12 +149,12 @@ describe("OptionListPopover", () => {
   it("disabled 时点不开", () => {
     render(
       <OptionListPopover
-        value="all"
+        disabled
         items={TAGS}
         onSelect={vi.fn()}
-        disabled
         trigger="全部模型"
         triggerTitle="筛选"
+        value="all"
       />,
     );
     const trigger = screen.getByRole("button", { name: /全部模型/ });

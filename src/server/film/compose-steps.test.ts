@@ -70,7 +70,7 @@ describe("buildNormalizeArgs", () => {
 
 describe("clipPathOf", () => {
   /* 期望值一律现算，且根从唯一出处取（在测试里重抄落点 = 搬根那天假红）。 */
-  const CWD = path.resolve(path.sep + "proj");
+  const CWD = path.resolve(`${path.sep}proj`);
   const at = (...segs: Array<string>) => path.join(generatedRoot(CWD), ...segs);
 
   it("执行器写进库里的 /api/generated/… 解析到产物根，不是 public/api/…", () => {

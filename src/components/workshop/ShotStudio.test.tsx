@@ -110,11 +110,11 @@ function buildResult(patch: Partial<LibraryWorkflowBuildResult> = {}): LibraryWo
   };
 }
 
-interface RenderOptions {
+type RenderOptions = {
+  apiChannels?: ApiChannelsView | null;
   shots?: Array<Shot>;
   workflowId?: string;
-  apiChannels?: ApiChannelsView | null;
-}
+};
 
 function renderStudio(options: RenderOptions = {}) {
   const onShotsChange = vi.fn();
@@ -122,18 +122,18 @@ function renderStudio(options: RenderOptions = {}) {
   const onCancelShot = vi.fn();
   const utils = render(
     <ShotStudio
-      shots={options.shots ?? [makeShot()]}
-      scenes={[scene]}
-      characters={[character]}
-      styles={[]}
-      workflowId={options.workflowId ?? ""}
-      projectId="proj-1"
       apiChannels={options.apiChannels === undefined ? channelsConfigured : options.apiChannels}
-      onOpenModelAdapters={() => undefined}
-      onShotsChange={onShotsChange}
-      onNotice={onNotice}
+      characters={[character]}
       onCancelShot={onCancelShot}
       onNextStage={() => undefined}
+      onNotice={onNotice}
+      onOpenModelAdapters={() => undefined}
+      onShotsChange={onShotsChange}
+      projectId="proj-1"
+      scenes={[scene]}
+      shots={options.shots ?? [makeShot()]}
+      styles={[]}
+      workflowId={options.workflowId ?? ""}
     />,
   );
   return { onShotsChange, onNotice, onCancelShot, ...utils };

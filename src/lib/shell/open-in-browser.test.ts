@@ -39,11 +39,14 @@ function installFakeChild(errorCode?: string) {
     };
     setTimeout(() => {
       if (errorCode) {
-        for (const cb of handlers.error ?? [])
+        for (const cb of handlers.error ?? []) {
           cb(Object.assign(new Error(`spawn ${errorCode}`), { code: errorCode }));
+        }
         return;
       }
-      for (const cb of handlers.spawn ?? []) cb();
+      for (const cb of handlers.spawn ?? []) {
+        cb();
+      }
     }, 0);
     return handle;
   });

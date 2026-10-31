@@ -37,25 +37,25 @@
 
 /** jsdom 发出的错误对象（只声明本文件用到的那几个字段，不依赖 jsdom 的类型包）。 */
 type JsdomErrorLike = {
-  type?: string;
-  message: string;
   cause?: { stack?: string };
+  message: string;
+  type?: string;
 };
 
 /** `jsdom.virtualConsole` 的结构面（它继承 `node:events` 的 EventEmitter）。 */
 type VirtualConsoleLike = {
   listeners(event: string): Array<unknown>;
-  removeAllListeners(event: string): unknown;
   on(event: string, listener: (error: JsdomErrorLike) => void): unknown;
+  removeAllListeners(event: string): unknown;
 };
 
 export interface JsdomCapabilityGap {
+  /** 撤拦 ≠ 撤账：这一档的覆盖真正落在哪儿。 */
+  coveredBy: string;
   /** jsdom 的原文，**逐字相等**才吞（见文件头第 ① 条）。 */
   message: string;
   /** 为什么 jsdom 做不到这件事。 */
   why: string;
-  /** 撤拦 ≠ 撤账：这一档的覆盖真正落在哪儿。 */
-  coveredBy: string;
 }
 
 /**
@@ -90,12 +90,12 @@ export const KNOWN_JSDOM_GAPS: ReadonlyArray<JsdomCapabilityGap> = [
 export interface JsdomCapabilityController {
   /** 处置一条 `jsdomError`：按白名单吞掉并计数返回 `true`，需要转发返回 `false`。 */
   consume: (error: JsdomErrorLike) => boolean;
-  /** 已吞掉的条数（全部缺口相加）。 */
-  suppressedCount: () => number;
-  /** 汇总行；一条都没吞过则是空数组（不打「0 条」那种废话）。 */
-  summaryLines: () => Array<string>;
   /** 还原 jsdom 原本的 `jsdomError` 监听。 */
   detach: () => void;
+  /** 汇总行；一条都没吞过则是空数组（不打「0 条」那种废话）。 */
+  summaryLines: () => Array<string>;
+  /** 已吞掉的条数（全部缺口相加）。 */
+  suppressedCount: () => number;
 }
 
 /**

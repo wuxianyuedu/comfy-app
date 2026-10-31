@@ -27,8 +27,8 @@ function run(args: Array<string> = []) {
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: typeof e.status === "number" ? e.status : 1,
@@ -58,9 +58,7 @@ describe("doc-toc —— 标题解析", () => {
   });
 
   test("ATX 标题的收尾井号是装饰，不算进标题", () => {
-    expect(parseHeadings("## 标题 ##\n")).toEqual([
-      { level: 2, title: "标题", line: 1 },
-    ]);
+    expect(parseHeadings("## 标题 ##\n")).toEqual([{ level: 2, title: "标题", line: 1 }]);
   });
 });
 
@@ -96,7 +94,9 @@ describe("doc-toc —— 文档名解析（输入面 = SCOPED_DOCS）", () => {
   test("前缀、完整路径、镜像路径都认，且区分源与镜像", () => {
     const byPrefix = resolveDoc("13");
     expect(byPrefix.ok).toBe(true);
-    if (!byPrefix.ok) return;
+    if (!byPrefix.ok) {
+      return;
+    }
     expect(byPrefix.src.endsWith("13-提交与-code-review.md")).toBe(true);
     expect(byPrefix.rendered).toBe(false);
 
@@ -105,7 +105,9 @@ describe("doc-toc —— 文档名解析（输入面 = SCOPED_DOCS）", () => {
 
     const byMirror = resolveDoc("docs/generated/13-提交与-code-review.md");
     expect(byMirror.ok).toBe(true);
-    if (!byMirror.ok) return;
+    if (!byMirror.ok) {
+      return;
+    }
     expect(byMirror.src).toBe(byPrefix.src);
     expect(byMirror.rendered).toBe(true);
   });
@@ -113,14 +115,18 @@ describe("doc-toc —— 文档名解析（输入面 = SCOPED_DOCS）", () => {
   test("前缀命中多份 ⇒ 拒答并列出候选（挑错的那份也像证据）", () => {
     const got = resolveDoc("guide");
     expect(got.ok).toBe(false);
-    if (got.ok) return;
+    if (got.ok) {
+      return;
+    }
     expect(got.candidates?.length ?? 0).toBeGreaterThan(1);
   });
 
   test("不在 SCOPED_DOCS 里 ⇒ 拒答，不猜一份同名的文件", () => {
     const got = resolveDoc("nope-not-a-doc");
     expect(got.ok).toBe(false);
-    if (got.ok) return;
+    if (got.ok) {
+      return;
+    }
     expect(got.reason).toContain("SCOPED_DOCS");
   });
 });

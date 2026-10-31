@@ -62,7 +62,7 @@ export const WithAction: Story = {
         <CardTitle>角色一致性 · 三视图</CardTitle>
         <CardDescription>27 个节点 · 昨天更新</CardDescription>
         <CardAction>
-          <Button size="icon-sm" variant="ghost" aria-label="更多操作">
+          <Button aria-label="更多操作" size="icon-sm" variant="ghost">
             <MoreHorizontal />
           </Button>
         </CardAction>
@@ -100,7 +100,7 @@ export const Sizes: Story = {
   render: () => (
     <div className="flex items-start gap-6">
       {SIZES.map((size) => (
-        <Card key={size} size={size} className="w-[18rem]">
+        <Card className="w-[18rem]" key={size} size={size}>
           <CardHeader>
             <CardTitle>size={size}</CardTitle>
             <CardDescription>内边距由 --card-spacing 给</CardDescription>

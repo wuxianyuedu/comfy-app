@@ -56,7 +56,9 @@ function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
  * 两处分头拼 `with`，不如把「按 id 装载」收到这里，保证两种取法给出同一形状。
  */
 async function attachImages(rows: Array<Task>): Promise<Array<TaskWithCover>> {
-  if (!rows.length) return [];
+  if (!rows.length) {
+    return [];
+  }
   const ids = rows.map((r) => r.id);
   const images = await db
     .select()
@@ -78,17 +80,6 @@ export class TaskRepository extends DrizzleRepository<Task> {
   }
 
   async createQueued(input: {
-    userId: string;
-    type: string;
-    prompt: string;
-    negativePrompt?: string | null;
-    params: unknown;
-    workflowName: string;
-    projectId?: string | null;
-    /** 工坊镜头号（归属用；NULL = 不是按镜生成，或归属未知）。 */
-    shotId?: string | null;
-    referenceImages?: unknown;
-    workflowSnapshot?: unknown;
     /** 执行归属（P3 §5 ADR §6）：提交侧按 `resolveExecutorClaim()` 显式传
      *  `'inline'|'host'`；缺省 null 只服务「调用方尚未接入灰度」的兼容路径
      *  （NULL 语义归 inline 片，领取/回收两侧等价）。 */
@@ -96,8 +87,19 @@ export class TaskRepository extends DrizzleRepository<Task> {
     /** 提交时刻的 RAW 执行载荷（ADR §13-3B1 决定 1）：host 由它重建 Job，
      *  不经 workflowName 回查模板（模板改/删不影响在队任务）。 */
     execPayload?: unknown;
+    negativePrompt?: string | null;
+    params: unknown;
     /** 来源任务（#2483 FR-QA-09）：重绘 / 放大指回原任务，只作追溯。 */
     parentId?: string | null;
+    projectId?: string | null;
+    prompt: string;
+    referenceImages?: unknown;
+    /** 工坊镜头号（归属用；NULL = 不是按镜生成，或归属未知）。 */
+    shotId?: string | null;
+    type: string;
+    userId: string;
+    workflowName: string;
+    workflowSnapshot?: unknown;
   }): Promise<Task> {
     const rows = await db
       .insert(task)
@@ -124,31 +126,31 @@ export class TaskRepository extends DrizzleRepository<Task> {
   async listByUser(
     userId: string,
     opts: {
+      includeImages: true;
       projectId?: string;
-      take?: number;
       skip?: number;
       statusList?: Array<string>;
-      includeImages: true;
+      take?: number;
     },
   ): Promise<Array<TaskCardRow & { images: Array<TaskImage> }>>;
   async listByUser(
     userId: string,
     opts?: {
+      includeImages?: boolean;
       projectId?: string;
-      take?: number;
       skip?: number;
       statusList?: Array<string>;
-      includeImages?: boolean;
+      take?: number;
     },
   ): Promise<Array<Task>>;
   async listByUser(
     userId: string,
     opts?: {
+      includeImages?: boolean;
       projectId?: string;
-      take?: number;
       skip?: number;
       statusList?: Array<string>;
-      includeImages?: boolean;
+      take?: number;
     },
   ): Promise<
     Array<Task> | Array<TaskWithCover> | Array<TaskCardRow & { images: Array<TaskImage> }>
@@ -210,9 +212,13 @@ export class TaskRepository extends DrizzleRepository<Task> {
     extra?: Partial<Task>,
   ): Promise<Task> {
     const existing = await this.findByIdForUser(userId, id);
-    if (!existing) throw new NotFoundError(`任务不存在: ${id}`);
+    if (!existing) {
+      throw new NotFoundError(`任务不存在: ${id}`);
+    }
     const data: Partial<Task> = { status };
-    if (extra) Object.assign(data, extra);
+    if (extra) {
+      Object.assign(data, extra);
+    }
     const rows = await db.update(task).set(data).where(eq(task.id, id)).returning();
     return firstRowOfExisting(rows, `任务不存在: ${id}`);
   }
@@ -239,7 +245,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
 
   async findSnapshotById(
     id: string,
-  ): Promise<{ workflowSnapshot: unknown; projectId: string | null } | null> {
+  ): Promise<{ projectId: string | null; workflowSnapshot: unknown } | null> {
     const rows = await db
       .select({
         workflowSnapshot: task.workflowSnapshot,
@@ -271,10 +277,10 @@ export class TaskRepository extends DrizzleRepository<Task> {
    *  `status=FAILED`，用户拿到的解释就从「显存不足」退化成「首帧生成失败」——
    *  一条 text 列的代价，换回的是排障时唯一有用的那句话。 */
   async findExecutionProgress(taskId: string): Promise<{
-    status: string;
+    error: string | null;
     progress: number;
     resultImages: unknown;
-    error: string | null;
+    status: string;
   } | null> {
     const rows = await db
       .select({
@@ -298,12 +304,14 @@ export class TaskRepository extends DrizzleRepository<Task> {
   async findExecutionProgressMany(taskIds: Array<string>): Promise<
     Array<{
       id: string;
-      status: string;
       progress: number;
       resultImages: unknown;
+      status: string;
     }>
   > {
-    if (!taskIds.length) return [];
+    if (!taskIds.length) {
+      return [];
+    }
     return db
       .select({
         id: task.id,
@@ -321,14 +329,14 @@ export class TaskRepository extends DrizzleRepository<Task> {
    *  `workflowSnapshot`（整份工作流 JSON）与 `logs`（全量日志）单行可达数 MB，
    *  拉回来只为了读状态和进度。 */
   async findSseSnapshot(id: string): Promise<{
-    status: string;
-    progress: number;
     error: string | null;
+    logs: unknown;
+    progress: number;
+    progressNode: unknown;
+    resultImages: unknown;
+    status: string;
     validationErrors: string | null;
     workflowName: string | null;
-    resultImages: unknown;
-    progressNode: unknown;
-    logs: unknown;
   } | null> {
     const rows = await db
       .select({
@@ -371,13 +379,13 @@ export class TaskRepository extends DrizzleRepository<Task> {
    *  行没有开始时刻，用提交时刻近似总好过让状态栏那一格空着（新写的 RUNNING 行
    *  一律带 `claimedAt`——领取与 `markRunning` / 首条进度帧都会定格它）。 */
   async findRunningForStatusBar(): Promise<{
-    id: string;
-    workflowName: string;
-    progress: number;
-    progressNode: unknown;
     claimedAt: Date | null;
     createdAt: Date;
     execPayload: unknown;
+    id: string;
+    progress: number;
+    progressNode: unknown;
+    workflowName: string;
   } | null> {
     const rows = await db
       .select({

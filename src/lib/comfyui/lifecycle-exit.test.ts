@@ -138,7 +138,9 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
       stopped: () => stopped,
       /** 跑一轮（等它内部的 await 落定）。 */
       tick: async () => {
-        for (const fn of ticks) fn();
+        for (const fn of ticks) {
+          fn();
+        }
         await new Promise((resolve) => setImmediate(resolve));
       },
     };
@@ -242,7 +244,7 @@ describe("reportKeepAliveExit —— 把保活崩溃尾部带进 runtime 日志"
     fs.writeFileSync(outFile, "started ok\n");
     const runtime: Array<string> = [];
     reportKeepAliveExit({
-      facts: { pid: 149720, uptimeMs: 26 * 60_000 + 13_000 },
+      facts: { pid: 149_720, uptimeMs: 26 * 60_000 + 13_000 },
       stopRequested: false,
       keepAliveLogs: { out: outFile, err: errFile },
       appendRuntimeLog: (l) => runtime.push(l),

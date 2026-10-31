@@ -29,29 +29,29 @@ export function viewTabLabel(view: WorkspaceView, projectName?: string | null): 
   return name ? `${base}·${name}` : base;
 }
 
-export interface ViewTabStripProps {
-  tabs: Array<ViewTab>;
+export type ViewTabStripProps = {
   activeKey: string;
-  /** 项目 id → 项目名；缺失时退化为只显示视图名（不显示 id，也不显示 undefined）。 */
-  projectNameOf?: (projectId: string | null) => string | null | undefined;
-  onSelect: (key: string) => void;
+  /** 标题行内嵌时去掉自己的边框/背景（那条横条的视觉由标题行统一持有）。 */
+  inTitleBar?: boolean;
   onClose: (key: string) => void;
+  /** 从「+」菜单里选了一个视图。 */
+  onOpenView?: (view: WorkspaceView) => void;
+  onSelect: (key: string) => void;
   /**
    * 「+」菜单里可打开的视图。由调用处给 —— 哪些视图能开是页面知识（有没有活跃项目
    * 决定项目内那六个能不能开），不是页签条的知识。不传就不渲染「+」。
    */
   openableViews?: Array<OpenableView>;
-  /** 从「+」菜单里选了一个视图。 */
-  onOpenView?: (view: WorkspaceView) => void;
-  /** 标题行内嵌时去掉自己的边框/背景（那条横条的视觉由标题行统一持有）。 */
-  inTitleBar?: boolean;
-}
+  /** 项目 id → 项目名；缺失时退化为只显示视图名（不显示 id，也不显示 undefined）。 */
+  projectNameOf?: (projectId: string | null) => string | null | undefined;
+  tabs: Array<ViewTab>;
+};
 
 /** 「+」菜单里的一项：视图 id + 展示名。 */
-export interface OpenableView {
-  view: WorkspaceView;
+export type OpenableView = {
   label: string;
-}
+  view: WorkspaceView;
+};
 
 /**
  * 视图页签条 —— 桌面壳内嵌进窗口标题行，浏览器/dev 里单独一条。
@@ -76,14 +76,14 @@ export function ViewTabStrip({
 }: ViewTabStripProps) {
   return (
     <div
-      role="tablist"
       aria-label="已打开的视图"
-      data-component="workspace-view-tabstrip"
       className={
         inTitleBar
           ? "flex min-w-0 shrink items-center gap-1"
           : "border-border bg-sidebar/40 flex shrink-0 items-center gap-1 border-b px-2 py-1.5"
       }
+      data-component="workspace-view-tabstrip"
+      role="tablist"
     >
       {tabs.map((tab) => {
         const active = tab.key === activeKey;
@@ -91,38 +91,39 @@ export function ViewTabStrip({
         return (
           /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：键出口是 `simpleKeyHandler` 的展开。 */
           <div
-            key={tab.key}
-            role="tab"
             aria-selected={active}
-            tabIndex={active ? 0 : -1}
             data-no-drag
+            key={tab.key}
             onClick={() => onSelect(tab.key)}
+            role="tab"
+            tabIndex={active ? 0 : -1}
             {...simpleKeyHandler(["Space", "Enter"], () => onSelect(tab.key))}
             className={
               /* 选中态走 `.u-tab-active`（更亮的表面 + 顶部一条品牌色），两种形态
                  共用同一套语言 —— 原来标题行里给的是 `bg-canvas/70`，暗色下比
                  标题行的底还暗，肉眼读不出「哪张是当前页」。
                  基串带 `relative`：工具类的色条是伪元素，要有定位祖先。 */
-              "relative flex max-w-56 min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors select-none " +
-              (active
-                ? "u-tab-active"
-                : inTitleBar
-                  ? "text-ink-muted hover:bg-canvas/40"
-                  : "text-ink-muted hover:bg-surface-2")
+              `relative flex max-w-56 min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors select-none ${
+                active
+                  ? "u-tab-active"
+                  : inTitleBar
+                    ? "text-ink-muted hover:bg-canvas/40"
+                    : "text-ink-muted hover:bg-surface-2"
+              }`
             }
           >
             <span className="min-w-0 truncate">{label}</span>
             {isTabClosable(tab) ? (
               <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
                 aria-label={`关闭 ${displayValue(label)}`}
+                className="text-ink-fainter hover:text-ink -mr-1 shrink-0"
                 onClick={(event) => {
                   event.stopPropagation();
                   onClose(tab.key);
                 }}
-                className="text-ink-fainter hover:text-ink -mr-1 shrink-0"
+                size="icon-xs"
+                type="button"
+                variant="ghost"
               >
                 <X data-icon="inline-start" size={12} />
               </Button>
@@ -139,11 +140,11 @@ export function ViewTabStrip({
           <DropdownMenuTrigger
             render={
               <Button
-                variant="ghost"
-                size="icon-xs"
                 aria-label="新页签"
-                data-no-drag
                 className="text-ink-muted hover:text-ink shrink-0"
+                data-no-drag
+                size="icon-xs"
+                variant="ghost"
               >
                 <Plus data-icon="inline-start" size={14} />
               </Button>

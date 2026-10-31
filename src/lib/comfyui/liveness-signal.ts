@@ -29,23 +29,23 @@ import { noteComfyStateChange } from "./state-watch";
 import type { ComfyExitReport } from "./lifecycle-exit";
 
 /** 一次「进程退出」事件。 */
-export interface ComfyLivenessSignal {
-  /** 单调纪元：每记一次退出 +1。客户端据此判「这是不是我没见过的那一次」。 */
-  seq: number;
+export type ComfyLivenessSignal = {
   /** 记录时刻（毫秒）。 */
   at: number;
   /** 退出原因摘要（`describeComfyExit` 的一句话结论），供提示文案用。 */
   reason: string;
+  /** 单调纪元：每记一次退出 +1。客户端据此判「这是不是我没见过的那一次」。 */
+  seq: number;
   /** 退出是否由用户主动关闭触发。**主动关闭不是崩溃** —— 客户端据此跳过
    *  「崩溃复核」那一条（我们自己让它退的，不需要再探一次证明它没了）。 */
   userStopped: boolean;
-}
+};
 
 /** 此刻的信号快照（无订阅者时也要能读 —— 客户端首次连上就得知道现状）。 */
-export interface ComfyLivenessSnapshot {
-  seq: number;
+export type ComfyLivenessSnapshot = {
   last: ComfyLivenessSignal | null;
-}
+  seq: number;
+};
 
 export type Listener = (signal: ComfyLivenessSignal) => void;
 
@@ -55,14 +55,14 @@ export type Listener = (signal: ComfyLivenessSignal) => void;
  * 另一个订阅者从此收不到通知（静默失效）。同一个坑与
  * `comfy-stats-store` 的 `Subscription` 同款，两处都刻意用包装。
  */
-interface Subscription {
+type Subscription = {
   onChange: Listener;
-}
+};
 
 type SignalGlobal = {
-  seq?: number;
   last?: ComfyLivenessSignal | null;
   listeners?: Set<Subscription>;
+  seq?: number;
 };
 
 declare global {

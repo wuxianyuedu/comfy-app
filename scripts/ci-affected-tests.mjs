@@ -50,17 +50,8 @@ import process from "node:process";
 
 import { resolveChangedFiles } from "./changed-scope.mjs";
 import { resolveCiWorkers } from "./ci-load.mjs";
-import {
-  describeWorktreeDeps,
-  worktreeDepsProblem,
-} from "./ci-worktree-deps.mjs";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  rmSync,
-} from "node:fs";
+import { describeWorktreeDeps, worktreeDepsProblem } from "./ci-worktree-deps.mjs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 
 /* 「改动面怎么算」那一跳已经搬进 `scripts/changed-scope.mjs` —— 桌面壳门禁
  * （`scripts/shell-gate.mjs` 的 `--base` 形态）也要问同一个问题，两边各算一次
@@ -144,9 +135,7 @@ export function main(deps = {}) {
    * 这里把它分开：前提不成立 ⇒ 退 2（没判 ≠ 绿），并说出下一动作。
    * 判据与 `ci-install-deps.mjs` / 启动器同一份口径（`pnpm` 自己写的
    * `node_modules/.modules.yaml`），不是「目录在不在」。 */
-  const installed =
-    deps.installed ??
-    existsSync(path.join(ROOT, "node_modules", ".modules.yaml"));
+  const installed = deps.installed ?? existsSync(path.join(ROOT, "node_modules", ".modules.yaml"));
   /** 两件读数走可注入的通道 —— 平台截日志后要能在**尾部**读到它们（ISSUE #2317）。 */
   const writeOut = deps.writeOut ?? ((t) => process.stdout.write(t));
   const writeErr = deps.writeErr ?? ((t) => process.stderr.write(t));
@@ -161,9 +150,7 @@ export function main(deps = {}) {
   writeOut(depsText);
   const changed = resolveChangedFiles(deps);
   if (!changed.ok) {
-    writeErr(
-      `[ci-affected] ✗ ${changed.reason}（退 2 —— 这一格没判，不构成证据）\n`,
-    );
+    writeErr(`[ci-affected] ✗ ${changed.reason}（退 2 —— 这一格没判，不构成证据）\n`);
     return 2;
   }
   if (changed.files.length === 0) {
@@ -192,9 +179,7 @@ export function main(deps = {}) {
     ? (deps.makeLedgerDir ?? (() => makeLedgerDir(ROOT)))()
     : deps.ledgerDir;
   if (ledgerDir) {
-    writeOut(
-      `[ci-affected] 分文件读数落点 ${ledgerDir}（junit + 清单；随本次跑清理）\n`,
-    );
+    writeOut(`[ci-affected] 分文件读数落点 ${ledgerDir}（junit + 清单；随本次跑清理）\n`);
   } else {
     writeErr(
       "[ci-affected] ⚠ 造不出分文件读数目录 ⇒ 这一跑没有 junit：" +
@@ -231,7 +216,9 @@ export function main(deps = {}) {
     try {
       return spawn(path.join(HERE, "run-affected-tests.mjs"), childEnv);
     } finally {
-      if (ledgerDir) junitCount = countJunitFiles(ledgerDir);
+      if (ledgerDir) {
+        junitCount = countJunitFiles(ledgerDir);
+      }
       if (ownLedger && ledgerDir) {
         rmSync(ledgerDir, { recursive: true, force: true });
       }
@@ -244,13 +231,7 @@ export function main(deps = {}) {
   writeErr(
     `[ci-affected] 收尾复述：并发 --maxWorkers=${workers}（${cores} 核，${source}）` +
       `· 子进程原值退出码 ${r.status}· 分文件读数 ` +
-      `${
-        junitCount === null
-          ? ledgerDir
-            ? "取不到"
-            : "没有落点"
-          : `${junitCount} 份`
-      }\n`,
+      `${junitCount === null ? (ledgerDir ? "取不到" : "没有落点") : `${junitCount} 份`}\n`,
   );
   /* 原值透传，**不改写**（三档：0 通过/已确认全是超时，1 真红，2 未判定）。
    * 平台把非零读成 stage 失败，所以 2 这一档在这一侧**不会被算进绿** —— 那正是
@@ -263,9 +244,6 @@ export function main(deps = {}) {
 }
 
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main());
 }

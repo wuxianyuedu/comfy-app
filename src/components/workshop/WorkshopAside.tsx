@@ -36,19 +36,19 @@ function WorkshopWorkflowSelect({
   value,
   onChange,
 }: {
-  label: string;
-  placeholder: string;
   category: WorkshopWorkflowCategory;
-  options: Array<WorkshopWorkflowOption>;
-  value: string;
+  label: string;
   onChange: (value: string) => void;
+  options: Array<WorkshopWorkflowOption>;
+  placeholder: string;
+  value: string;
 }) {
   const scoped = options.filter((option) => option.category === category);
   return (
     <FieldLabel className="mt-3 block">
       <span className="text-muted-foreground text-2xs mb-1 block">{label}</span>
-      <Select value={value} onValueChange={(next) => onChange(next ?? "")}>
-        <SelectTrigger size="sm" className="border-border bg-bg text-ink w-full text-xs">
+      <Select onValueChange={(next) => onChange(next ?? "")} value={value}>
+        <SelectTrigger className="border-border bg-bg text-ink w-full text-xs" size="sm">
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
@@ -72,22 +72,22 @@ function WorkshopWorkflowSelect({
   );
 }
 
-interface WorkshopAsideProps {
+type WorkshopAsideProps = {
+  apiChannels: ApiChannelsView | null;
+  characterCount: number;
+  clipDoneCount: number;
+  imageDoneCount: number;
   missing: Array<MissingItem>;
-  /** 工作流库里的可选工作流（ISSUE #145）：本地通道的唯一可执行来源。
-   * 按内容类别分栏：面板只列出当前阶段对应的那一栏。 */
-  workflowOptions: Array<WorkshopWorkflowOption>;
-  workflowId: string;
+  onGoScript: () => void;
+  onVideoWorkflowChange: (value: string) => void;
   onWorkflowChange: (value: string) => void;
   /** 视频通道选定的工作流 id。 */
   videoWorkflowId: string;
-  onVideoWorkflowChange: (value: string) => void;
-  apiChannels: ApiChannelsView | null;
-  characterCount: number;
-  imageDoneCount: number;
-  clipDoneCount: number;
-  onGoScript: () => void;
-}
+  workflowId: string;
+  /** 工作流库里的可选工作流（ISSUE #145）：本地通道的唯一可执行来源。
+   * 按内容类别分栏：面板只列出当前阶段对应的那一栏。 */
+  workflowOptions: Array<WorkshopWorkflowOption>;
+};
 
 export function WorkshopAside({
   missing,
@@ -129,10 +129,10 @@ export function WorkshopAside({
         </div>
         <div className="flex-col gap-2.5">
           {missing.map((item) => (
-            <div key={item.label} className="flex items-center gap-3">
+            <div className="flex items-center gap-3" key={item.label}>
               <span
-                className={cn("size-2.5 rounded-full", item.done ? "bg-success" : "bg-warning")}
                 aria-hidden
+                className={cn("size-2.5 rounded-full", item.done ? "bg-success" : "bg-warning")}
               />
               <span className="text-ink flex-1 text-[12.5px]">{item.label}</span>
               <span className="text-faint text-2xs">
@@ -146,10 +146,10 @@ export function WorkshopAside({
           ))}
         </div>
         <Button
-          type="button"
-          onClick={onGoScript}
-          variant="ghost"
           className="bg-amber/10 text-amber hover:bg-amber/15 mt-3 w-full rounded-lg py-2.5 text-xs font-semibold"
+          onClick={onGoScript}
+          type="button"
+          variant="ghost"
         >
           补齐缺失素材 →
         </Button>
@@ -164,20 +164,20 @@ export function WorkshopAside({
           </span>
         </div>
         <WorkshopWorkflowSelect
-          label="生图工作流（工作流库）"
-          placeholder="选择生图工作流…"
           category="image"
-          options={workflowOptions}
-          value={workflowId}
+          label="生图工作流（工作流库）"
           onChange={onWorkflowChange}
+          options={workflowOptions}
+          placeholder="选择生图工作流…"
+          value={workflowId}
         />
         <WorkshopWorkflowSelect
-          label="视频工作流（工作流库）"
-          placeholder="选择视频工作流…"
           category="video"
-          options={workflowOptions}
-          value={videoWorkflowId}
+          label="视频工作流（工作流库）"
           onChange={onVideoWorkflowChange}
+          options={workflowOptions}
+          placeholder="选择视频工作流…"
+          value={videoWorkflowId}
         />
       </div>
 
@@ -186,9 +186,9 @@ export function WorkshopAside({
         <div className="text-ink mb-3 text-sm font-semibold">资源库</div>
         <div className="gap-3">
           {resourceRows.map(([name, tag]) => (
-            <div key={name} className="flex items-center gap-3">
+            <div className="flex items-center gap-3" key={name}>
               <span className="bg-elevated grid size-8 place-items-center rounded-lg">
-                <Icon name="file" size={14} className="text-muted-foreground" />
+                <Icon className="text-muted-foreground" name="file" size={14} />
               </span>
               <span className="text-ink flex-1 truncate text-[12.5px]">{name}</span>
               <span className="text-faint bg-subtle text-2xs rounded-md px-2 py-1">{tag}</span>
@@ -199,10 +199,10 @@ export function WorkshopAside({
             这里只留计数与一个入口 —— 刻意的分工：工坊右栏回答「这一步的材料够不够」，
             真正的分类 / 搜索 / 上传 / 删除都在那一页里做，不在两处各摆一套。 */}
         <Button
+          className="text-muted-foreground bg-subtle hover:bg-surface-2 mt-3 w-full rounded-lg py-2.5 text-xs"
+          onClick={() => emitAppEvent("workspace:navigate", { view: "library" })}
           type="button"
           variant="ghost"
-          onClick={() => emitAppEvent("workspace:navigate", { view: "library" })}
-          className="text-muted-foreground bg-subtle hover:bg-surface-2 mt-3 w-full rounded-lg py-2.5 text-xs"
         >
           在资源库中打开 →
         </Button>

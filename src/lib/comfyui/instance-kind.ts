@@ -26,30 +26,29 @@ import path from "node:path";
 export type ComfyInstallKind = "desktop" | "portable" | "venv" | "unknown";
 
 export type ComfyInstallClassify = {
-  kind: ComfyInstallKind;
+  /** 命中的桌面标记文件完整路径（如 <实例根>/.comfyui-desktop-2）。
+   *  仅 kind === "desktop" 且存在标记文件时非空；用于反查实例 ID →
+   *  Comfy Desktop installations.json（见 desktop-instance.ts）。 */
+  instanceIdFile: string | null;
   /**
    * 可判定的「实例根」：comfyuiPath 指向实例根时即它本身；指向实例内
    * ComfyUI/ 源码根时会向上取父级。桌面版元数据读取据此定位。
    */
   instanceRoot: string | null;
-  /** 命中的桌面标记文件完整路径（如 <实例根>/.comfyui-desktop-2）。
-   *  仅 kind === "desktop" 且存在标记文件时非空；用于反查实例 ID →
-   *  Comfy Desktop installations.json（见 desktop-instance.ts）。 */
-  instanceIdFile: string | null;
+  kind: ComfyInstallKind;
 };
 
 /** 从目录里找出桌面标记文件路径（优先 .comfyui-desktop-*，作为实例 ID 源）。 */
-function pickDesktopFile(
-  dir: string,
-  exists: (p: string) => boolean,
-): string | null {
+function pickDesktopFile(dir: string, exists: (p: string) => boolean): string | null {
   const candidates = [
     path.join(dir, ".comfyui-desktop-2"),
     path.join(dir, ".comfyui-desktop-1"),
     path.join(dir, ".comfyui-desktop-3"),
   ];
   for (const c of candidates) {
-    if (exists(/*turbopackIgnore: true*/ c)) return c;
+    if (exists(/*turbopackIgnore: true*/ c)) {
+      return c;
+    }
   }
   // manifest.json 可作为存在标记，但它不是实例 ID 源，返回 null 让上层知道
   // 「没有可反查实例 ID 的文件」。
@@ -112,10 +111,7 @@ export function classifyComfyInstall(
   //                  canonical 运行时；注意与 root 直接放 main.py 的便携区分开）。
   //   便携版的解释器目录是 python_embeded；venv 的则是 .venv 或 venv。
   const desktopLayout =
-    hasSubMain &&
-    exists(
-      /*turbopackIgnore: true*/ path.join(root, "standalone-env", "python.exe"),
-    );
+    hasSubMain && exists(/*turbopackIgnore: true*/ path.join(root, "standalone-env", "python.exe"));
   if (desktopLayout) {
     return { kind: "desktop", instanceRoot: root, instanceIdFile: null };
   }
@@ -123,36 +119,14 @@ export function classifyComfyInstall(
   // 便携 / venv：解释器与 main.py 同层（源码根或其父级）。
   const bases = [root, path.dirname(root)];
   for (const base of bases) {
-    if (
-      exists(
-        /*turbopackIgnore: true*/ path.join(
-          base,
-          "python_embeded",
-          "python.exe",
-        ),
-      )
-    ) {
+    if (exists(/*turbopackIgnore: true*/ path.join(base, "python_embeded", "python.exe"))) {
       return { kind: "portable", instanceRoot: root, instanceIdFile: null };
     }
   }
   for (const base of bases) {
     if (
-      exists(
-        /*turbopackIgnore: true*/ path.join(
-          base,
-          ".venv",
-          "Scripts",
-          "python.exe",
-        ),
-      ) ||
-      exists(
-        /*turbopackIgnore: true*/ path.join(
-          base,
-          "venv",
-          "Scripts",
-          "python.exe",
-        ),
-      )
+      exists(/*turbopackIgnore: true*/ path.join(base, ".venv", "Scripts", "python.exe")) ||
+      exists(/*turbopackIgnore: true*/ path.join(base, "venv", "Scripts", "python.exe"))
     ) {
       return { kind: "venv", instanceRoot: root, instanceIdFile: null };
     }
@@ -169,12 +143,12 @@ function isInstanceIdSource(file: string): boolean {
 
 /** 设置页要的安装形态视图（只有这三件事，多一项就是没人消费的字段）。 */
 export type ComfyInstanceView = {
-  /** 配置里是否填了路径。与形态同源：它也是**设置行**的事实，不该等运行态探测。 */
-  pathConfigured: boolean;
-  /** 桌面版 / 便携版 / venv；未配置路径或判不出形态时为 null。 */
-  instanceType: Exclude<ComfyInstallKind, "unknown"> | null;
   /** 桌面实例且能读到实例 ID → 端口/启动参数由 Comfy Desktop 元数据决定。 */
   desktopManaged: boolean;
+  /** 桌面版 / 便携版 / venv；未配置路径或判不出形态时为 null。 */
+  instanceType: Exclude<ComfyInstallKind, "unknown"> | null;
+  /** 配置里是否填了路径。与形态同源：它也是**设置行**的事实，不该等运行态探测。 */
+  pathConfigured: boolean;
 };
 
 /**
@@ -192,8 +166,9 @@ export function describeComfyInstance(
   exists: (p: string) => boolean = fs.existsSync,
 ): ComfyInstanceView {
   const dir = (installDir ?? "").trim();
-  if (!dir)
+  if (!dir) {
     return { pathConfigured: false, instanceType: null, desktopManaged: false };
+  }
   const c = classifyComfyInstall(dir, exists);
   return {
     pathConfigured: true,

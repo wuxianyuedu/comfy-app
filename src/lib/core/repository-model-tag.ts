@@ -15,11 +15,11 @@ import { DrizzleRepository } from "./repository-base";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import { eq, and, asc, count, inArray, exists, sql, type SQL } from "drizzle-orm";
 
-export interface WorkflowModelTagView {
+export type WorkflowModelTagView = {
+  count: number;
   id: string;
   name: string;
-  count: number;
-}
+};
 
 export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelTag> {
   constructor() {
@@ -74,21 +74,27 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
    *  一条多值 INSERT 补齐缺的，最后按**输入顺序**返回 id（与逐个版同样确定；
    *  count 视图不需要，`setModelTags` 只吃 id）。 */
   async upsertByNames(userId: string, names: Array<string>): Promise<Array<string>> {
-    if (!names.length) return [];
+    if (!names.length) {
+      return [];
+    }
     const wanted = [...new Set(names)];
     const idByName = new Map<string, string>();
     const existing = await db
       .select({ id: workflowModelTag.id, name: workflowModelTag.name })
       .from(workflowModelTag)
       .where(and(eq(workflowModelTag.userId, userId), inArray(workflowModelTag.name, wanted)));
-    for (const row of existing) idByName.set(row.name, row.id);
+    for (const row of existing) {
+      idByName.set(row.name, row.id);
+    }
     const missing = wanted.filter((name) => !idByName.has(name));
     if (missing.length > 0) {
       const inserted = await db
         .insert(workflowModelTag)
         .values(missing.map((name) => ({ userId, name })))
         .returning({ id: workflowModelTag.id, name: workflowModelTag.name });
-      for (const row of inserted) idByName.set(row.name, row.id);
+      for (const row of inserted) {
+        idByName.set(row.name, row.id);
+      }
     }
     return names.map((name) => idByName.get(name)).filter((id): id is string => id !== undefined);
   }
@@ -125,7 +131,9 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
   }
 
   async listIdsByNames(userId: string, names: Array<string>): Promise<Array<{ id: string }>> {
-    if (!names.length) return [];
+    if (!names.length) {
+      return [];
+    }
     return db
       .select({ id: workflowModelTag.id })
       .from(workflowModelTag)
@@ -135,8 +143,10 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
   /** 批量取出模板→模型标签名映射，替代 router 内裸写 join。 */
   async getTemplateTagRows(
     templateIds: Array<string>,
-  ): Promise<Array<{ templateId: string; name: string }>> {
-    if (!templateIds.length) return [];
+  ): Promise<Array<{ name: string; templateId: string }>> {
+    if (!templateIds.length) {
+      return [];
+    }
     return db
       .select({
         templateId: workflowModelTagToWorkflowTemplate.workflowTemplate,

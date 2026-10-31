@@ -39,12 +39,12 @@ export { BACKUP_KEEP, backupDir, createBackup, listBackups, pruneBackups };
 export { readRestoreRequest, requestRestore, verifyBackupFile };
 
 /** 一份可选备份在**界面上**的形状（不含绝对路径 —— 视图层不需要、也不该有）。 */
-export interface BackupEntry {
-  name: string;
-  size: number;
+export type BackupEntry = {
   /** 文件名里的时刻（毫秒）；形态认不出时 null。 */
   at: number | null;
-}
+  name: string;
+  size: number;
+};
 
 /** 备份目录里认得出的那批，新→旧。用户自己丢进来的文件不在其中。 */
 export function listBackupEntries(root: string): Array<BackupEntry> {

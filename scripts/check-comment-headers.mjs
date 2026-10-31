@@ -46,8 +46,12 @@ const SHADES = ["正常", "缺", "重复", "不在首行", "读不到"];
 /** @param {any} json @returns {any[]} */
 function asList(json) {
   const raw = json?.data;
-  if (Array.isArray(raw)) return raw;
-  if (Array.isArray(raw?.data)) return raw.data;
+  if (Array.isArray(raw)) {
+    return raw;
+  }
+  if (Array.isArray(raw?.data)) {
+    return raw.data;
+  }
   return [];
 }
 
@@ -77,21 +81,17 @@ export function collectShapes(ctx) {
       String(pageSize),
       "-v",
     ]);
-    if (!got) break;
+    if (!got) {
+      break;
+    }
     ran = true;
     const list = asList(got.json);
     for (const item of list) {
       const number = String(item?.number ?? "");
-      if (!number) continue;
-      const one = cnbJson(run, [
-        "issues",
-        "get-issue",
-        "--repo",
-        slug,
-        "--number",
-        number,
-        "-v",
-      ]);
+      if (!number) {
+        continue;
+      }
+      const one = cnbJson(run, ["issues", "get-issue", "--repo", slug, "--number", number, "-v"]);
       const body = one?.json?.data?.body;
       rows.push({
         kind: "单",
@@ -101,22 +101,18 @@ export function collectShapes(ctx) {
         shape: typeof body === "string" ? headerShape(body) : "读不到",
       });
     }
-    if (list.length < pageSize) break;
+    if (list.length < pageSize) {
+      break;
+    }
   }
-  const pulls = cnbJson(run, [
-    "pulls",
-    "list-pulls",
-    "--repo",
-    slug,
-    "--state",
-    "open",
-    "-v",
-  ]);
+  const pulls = cnbJson(run, ["pulls", "list-pulls", "--repo", slug, "--state", "open", "-v"]);
   if (pulls) {
     ran = true;
     for (const item of asList(pulls.json)) {
       const number = String(item?.number ?? "");
-      if (!number) continue;
+      if (!number) {
+        continue;
+      }
       /* 正文**逐张 `get-pull` 取**，与上面单子那一侧同一个形状。
        *
        * 曾经这里直接用 `list-pulls` 带回来的 `item.body`，理由是「PR 列表自带 `body`
@@ -124,17 +120,9 @@ export function collectShapes(ctx) {
        * **空串**（ISSUE #2788 实测四张 open PR 全为 0 长度，同几张 `get-pull` 有正文）。
        * 于是 `typeof body === "string"` 守卫放行，`headerShape("")` 给「缺」⇒
        * **每一条 open PR 都被判成缺署名**，与本单自己口径 ③（「读不到 ≠ 缺」）相反，
-       * 而第 178 行那句 `shape !== "读不到"` 把这份假阳性一路带进退码（红）。
+       * 而下面那句 `shape !== "读不到"` 把这份假阳性一路带进退码（红）。
        * 「字段存在」不等于「字段有值」—— 拿缺字段当结论是这一族反复在收的形状。 */
-      const one = cnbJson(run, [
-        "pulls",
-        "get-pull",
-        "--repo",
-        slug,
-        "--number",
-        number,
-        "-v",
-      ]);
+      const one = cnbJson(run, ["pulls", "get-pull", "--repo", slug, "--number", number, "-v"]);
       const body = one?.json?.data?.body;
       rows.push({
         kind: "PR",
@@ -176,7 +164,9 @@ export function main(deps = {}) {
   }
   /** @type {Record<string, number>} */
   const tally = {};
-  for (const r of rows) tally[r.shape] = (tally[r.shape] ?? 0) + 1;
+  for (const r of rows) {
+    tally[r.shape] = (tally[r.shape] ?? 0) + 1;
+  }
   const bad = rows.filter((r) => r.shape !== "正常");
   if (deps.json) {
     /* `--json` 只发一份 JSON 文档：再追一行人类读的总结，机器侧 `JSON.parse`
@@ -199,10 +189,7 @@ export function main(deps = {}) {
 }
 
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const argv = process.argv.slice(2);
   const pi = argv.indexOf("--pages");
   process.exit(

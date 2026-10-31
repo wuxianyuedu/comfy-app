@@ -42,27 +42,27 @@ import { type OpenableView } from "./ViewTabStrip";
 import { type WorkspaceView } from "./NavItems";
 import { Button } from "~/components/ui/button";
 
-interface ShellTabsProps {
+type ShellTabsProps = {
+  /** 当前视图页签 key。 */
+  activeViewKey?: string;
   /** 主应用页签的内容（即 workspace 整套界面）。 */
   children: React.ReactNode;
+  /** 关闭某个视图页签。 */
+  onCloseViewTab?: (key: string) => void;
+  /** 从「+」菜单里选了一个视图。 */
+  onOpenView?: (view: WorkspaceView) => void;
+  /** 选中某个视图页签。 */
+  onSelectViewTab?: (key: string) => void;
+  /** 「+」菜单里可打开的视图（页面知识，见 ViewTabStrip）。 */
+  openableViews?: Array<OpenableView>;
+  /** 项目 id → 项目名（页签标题用「工坊·雾中来信」区分同视图多页）。 */
+  projectNameOf?: (projectId: string | null) => string | null | undefined;
   /**
    * 视图页签（首页 / 模型 / 工坊·项目名 …）。不传时本组件行为与从前一致：
    * 只渲染 iframe 页签，主应用是唯一的「主应用」页签。
    */
   viewTabs?: Array<ViewTab>;
-  /** 当前视图页签 key。 */
-  activeViewKey?: string;
-  /** 项目 id → 项目名（页签标题用「工坊·雾中来信」区分同视图多页）。 */
-  projectNameOf?: (projectId: string | null) => string | null | undefined;
-  /** 选中某个视图页签。 */
-  onSelectViewTab?: (key: string) => void;
-  /** 关闭某个视图页签。 */
-  onCloseViewTab?: (key: string) => void;
-  /** 「+」菜单里可打开的视图（页面知识，见 ViewTabStrip）。 */
-  openableViews?: Array<OpenableView>;
-  /** 从「+」菜单里选了一个视图。 */
-  onOpenView?: (view: WorkspaceView) => void;
-}
+};
 
 /**
  * 无法内嵌时在**页签内**渲染的说明。
@@ -105,17 +105,17 @@ function TabBlockedNotice({
         <div className="border-border-subtle bg-subtle/40 flex max-w-xl items-center gap-2 rounded-md border px-3 py-2">
           <code className="text-ink-muted truncate text-xs">{url}</code>
           <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => copyUrl(url)}
             className="text-ink-muted hover:bg-subtle hover:text-ink-strong h-auto shrink-0 rounded px-2 py-1"
+            onClick={() => copyUrl(url)}
+            size="xs"
+            variant="ghost"
           >
             {/* 文案自己换掉是「已复制」唯一的存在感 —— 而它在密集的工具条里
                 只是一次极轻的字形变化，很容易被当成没反应。闪一下（`value-tick`，
                 规范 06 §6.7 第 ③ 档）把这一格变成「按下去有东西发生」；
                 时长 220ms、位移 0，与 `useFlashState` 的 1.5s 亮起期叠加不冲突。
                 `key` 换值即重播，连点两次就有两次反馈（不必额外做重入判据）。 */}
-            <span key={copied.on ? "done" : "idle"} className="value-tick">
+            <span className="value-tick" key={copied.on ? "done" : "idle"}>
               {copied.on ? "已复制" : "复制地址"}
             </span>
           </Button>
@@ -151,25 +151,25 @@ export function ShellTabs({
 
   return (
     <div
+      className="bg-canvas text-ink flex h-screen w-screen flex-col overflow-hidden"
       // 桌面壳里顶部有自定义标题行（TitleBarTabs）；打 data-shell 让全局 CSS 把
       // fixed 的 shadcn 侧栏容器让出标题行高度（否则侧栏顶部会被那条标题行盖住）。
       // 浏览器 / dev 无标题行，不打此属性，侧栏仍从视口顶起。
       data-shell={useTitleBar ? "" : undefined}
-      className="bg-canvas text-ink flex h-screen w-screen flex-col overflow-hidden"
     >
       {useTitleBar ? (
         <TitleBarTabs
-          tabs={tabs}
           activeTabId={activeTabId}
+          activeViewKey={activeViewKey}
           onActivate={activateTab}
           onClose={closeTab}
-          viewTabs={viewTabs}
-          activeViewKey={activeViewKey}
-          projectNameOf={projectNameOf}
-          onSelectViewTab={onSelectViewTab}
           onCloseViewTab={onCloseViewTab}
-          openableViews={openableViews}
           onOpenView={onOpenView}
+          onSelectViewTab={onSelectViewTab}
+          openableViews={openableViews}
+          projectNameOf={projectNameOf}
+          tabs={tabs}
+          viewTabs={viewTabs}
         />
       ) : null}
 
@@ -194,18 +194,18 @@ export function ShellTabs({
         {/* 已打开的非主应用页签（iframe），同样保持挂载 */}
         {contentTabs.map((tab) => (
           <div
-            key={tab.id}
-            className={activeTabId === tab.id ? "h-full" : "hidden h-full"}
             aria-hidden={activeTabId !== tab.id}
+            className={activeTabId === tab.id ? "h-full" : "hidden h-full"}
+            key={tab.id}
           >
             {tab.blockedReason ? (
               <TabBlockedNotice label={tab.label} reason={tab.blockedReason} url={tab.blockedUrl} />
             ) : tab.url ? (
               <iframe
-                src={tab.url}
-                title={tab.label}
                 className="h-full w-full border-0"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock"
+                src={tab.url}
+                title={tab.label}
               />
             ) : (
               <div className="text-ink-muted flex h-full items-center justify-center">

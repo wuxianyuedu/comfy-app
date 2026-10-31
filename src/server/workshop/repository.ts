@@ -96,13 +96,12 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
       logline: row.logline,
       scriptMarkdown: row.scriptMarkdown,
     },
-    scenes: Array.isArray(row.scenes)
-      ? /* SAFETY: 类型断言已复核 */ (row.scenes as Array<Scene>)
-      : [],
-    characters: Array.isArray(row.characters)
-      ? /* SAFETY: 类型断言已复核 */ (row.characters as Array<Character>)
-      : [],
-    shots: Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>) : [],
+    /* SAFETY: 类型断言已复核 */
+    scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
+    /* SAFETY: 类型断言已复核 */
+    characters: Array.isArray(row.characters) ? (row.characters as Array<Character>) : [],
+    /* SAFETY: 类型断言已复核 */
+    shots: Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [],
     stage: isStage(row.stage) ? row.stage : "script",
     projectId: row.projectId ?? null,
   };
@@ -128,17 +127,17 @@ function summarize(row: WorkshopSession): WorkshopSessionSummary {
   };
 }
 
-export interface CreateSessionInput {
-  title?: string;
-  type?: string;
-  tone?: string;
-  logline?: string;
+export type CreateSessionInput = {
   idea?: string;
-  userId?: string | null;
+  logline?: string;
   /** 可选：绑定界面侧**既有**项目（proj_* = production.id）。缺省新建一对
    *  project + production 行；给了就必须存在且归属一致（桥的口径，#2482）。 */
   projectId?: string | null;
-}
+  title?: string;
+  tone?: string;
+  type?: string;
+  userId?: string | null;
+};
 
 export async function createSession(input: CreateSessionInput = {}): Promise<string> {
   const id = createId();
@@ -171,13 +170,17 @@ export async function getSession(id: string): Promise<WorkshopSessionState | nul
     .where(eq(workshopSession.id, id))
     .limit(1);
   const row = rows[0];
-  if (!row) return null;
+  if (!row) {
+    return null;
+  }
   const state = rowToState(row);
   // 桥（#2482）：绑定过的会话，内容权威读在 production——人在界面改了，
   // AI 下一次 get 读到的就是新的（FR-AG-01①「人改 AI 见」）。
   if (row.projectId) {
     const content = await readProductionContent(row.projectId);
-    if (content) return applyContentToState(state, content);
+    if (content) {
+      return applyContentToState(state, content);
+    }
   }
   return state;
 }
@@ -197,7 +200,9 @@ export async function updateState(id: string, state: WorkshopSessionState): Prom
     .where(eq(workshopSession.id, id))
     .limit(1);
   const row = rows[0];
-  if (!row) return; // 既有语义：无行不写（编排器先 load，正常到不了这里）。
+  if (!row) {
+    return;
+  } // 既有语义：无行不写（编排器先 load，正常到不了这里）。
   let projectId = row.projectId;
   if (!projectId) {
     // 遗留会话（桥之前建的）首次写 → 桥接：以当前内容为初始值新建项目，

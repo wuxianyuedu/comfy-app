@@ -16,17 +16,11 @@ import { zClass } from "~/lib/shell/overlay-z";
  * 且无法定位根因。接入后崩溃时停留在编辑器内并显示错误详情 +
  * 「返回」按钮（用户主动点击才回工作流库），console 同步打印
  * componentStack 供排查。 */
-function EditorCrashFallback({
-  error,
-  onClose,
-}: {
-  error: Error | null;
-  onClose: () => void;
-}) {
+function EditorCrashFallback({ error, onClose }: { error: Error | null; onClose: () => void }) {
   return (
     <FullScreenLayer
-      zClass={zClass("modal")}
       className="bg-canvas flex items-center justify-center"
+      zClass={zClass("modal")}
     >
       <div className="border-destructive/25 bg-destructive/5 w-[min(560px,90vw)] rounded-2xl border p-6">
         <p className="text-destructive text-sm font-semibold">编辑器渲染出错</p>
@@ -34,9 +28,9 @@ function EditorCrashFallback({
           {error?.message ?? "未知错误（详见控制台 componentStack）"}
         </p>
         <Button
-          variant="secondary"
-          onClick={onClose}
           className="bg-subtle text-ink-bright hover:bg-surface-2 mt-4 h-auto rounded-lg px-4 py-2"
+          onClick={onClose}
+          variant="secondary"
         >
           返回工作流库
         </Button>
@@ -51,28 +45,24 @@ export function WorkflowCanvasEditor({
   onClose,
   onSave,
 }: {
-  workflowId: string;
-  open: boolean;
   onClose: () => void;
   onSave?: () => void;
+  open: boolean;
+  workflowId: string;
 }) {
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   return (
     <ErrorBoundary
-      fallback={(error) => (
-        <EditorCrashFallback error={error} onClose={onClose} />
-      )}
+      fallback={(error) => <EditorCrashFallback error={error} onClose={onClose} />}
       onError={(error) => {
         console.error("[WorkflowCanvasEditor] 渲染异常，编辑器已降级", error);
       }}
     >
       <ReactFlowProvider>
-        <WorkflowEditorInner
-          workflowId={workflowId}
-          onClose={onClose}
-          onSave={onSave}
-        />
+        <WorkflowEditorInner onClose={onClose} onSave={onSave} workflowId={workflowId} />
       </ReactFlowProvider>
     </ErrorBoundary>
   );

@@ -24,20 +24,16 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
  */
 export const LOG_PAGE_SIZE = 2000;
 
-export interface LogEntry {
+export type LogEntry = {
   /** nanoid 风格的短 id */
   id: string;
-  /** 日志写入时刻（毫秒）。排序、展示、会话边界判定都用它。 */
-  time: number;
   level: LogLevel;
-  /** Serialized message */
-  message: string;
-  /** Where the log came from（console / tauri / system）。 */
-  source: "console" | "tauri" | "system";
-  /** 文件来源：dev-launcher / launcher / 应用服务输出 / app-runtime 的文件行带此标记。 */
-  origin?: "dev" | "launcher" | "app" | "app-runtime" | "shell" | "shell-launch";
   /** console 日志的调用位置（文件:行号） */
   location?: string;
+  /** Serialized message */
+  message: string;
+  /** 文件来源：dev-launcher / launcher / 应用服务输出 / app-runtime 的文件行带此标记。 */
+  origin?: "dev" | "launcher" | "app" | "app-runtime" | "shell" | "shell-launch";
   /**
    * 入库顺序：只在同一毫秒内作为稳定排序次键（时间戳相同时保持确定的先后），
    * 以及「去重后是否为新内容」的判据。
@@ -46,7 +42,11 @@ export interface LogEntry {
    * 的定义本身（ISSUE #262）。
    */
   seq: number;
-}
+  /** Where the log came from（console / tauri / system）。 */
+  source: "console" | "tauri" | "system";
+  /** 日志写入时刻（毫秒）。排序、展示、会话边界判定都用它。 */
+  time: number;
+};
 
 export type LogFilter = LogLevel | "all";
 

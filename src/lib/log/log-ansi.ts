@@ -10,11 +10,11 @@
  */
 
 /** 一段带样式的日志文本。text 为原文（不含转义序列）。 */
-export interface AnsiSegment {
-  text: string;
+export type AnsiSegment = {
   /** 活动样式（前景/背景/字重等可同时生效）；空 = 默认样式 */
   styles?: Array<AnsiStyleKey>;
-}
+  text: string;
+};
 
 export type AnsiStyleKey =
   | "bold"
@@ -201,31 +201,43 @@ export function parseAnsiSegments(text: string): Array<AnsiSegment> {
 
 /** 汇总当前活动样式：前景/背景/字重可叠加，由视图层逐个映射成 class。 */
 function composeStyles(state: {
+  bg?: AnsiStyleKey;
   bold: boolean;
   dim: boolean;
+  fg?: AnsiStyleKey;
   italic: boolean;
   underline: boolean;
-  fg?: AnsiStyleKey;
-  bg?: AnsiStyleKey;
 }): Array<AnsiStyleKey> {
   const styles: Array<AnsiStyleKey> = [];
-  if (state.fg) styles.push(state.fg);
-  if (state.bg) styles.push(state.bg);
-  if (state.bold) styles.push("bold");
-  if (state.dim) styles.push("dim");
-  if (state.italic) styles.push("italic");
-  if (state.underline) styles.push("underline");
+  if (state.fg) {
+    styles.push(state.fg);
+  }
+  if (state.bg) {
+    styles.push(state.bg);
+  }
+  if (state.bold) {
+    styles.push("bold");
+  }
+  if (state.dim) {
+    styles.push("dim");
+  }
+  if (state.italic) {
+    styles.push("italic");
+  }
+  if (state.underline) {
+    styles.push("underline");
+  }
   return styles;
 }
 
-interface SgrState {
+type SgrState = {
+  bg?: AnsiStyleKey;
   bold: boolean;
   dim: boolean;
+  fg?: AnsiStyleKey;
   italic: boolean;
   underline: boolean;
-  fg?: AnsiStyleKey;
-  bg?: AnsiStyleKey;
-}
+};
 
 function applySgr(codes: string, set: (state: SgrState) => void, get: () => SgrState): void {
   const parts = codes
@@ -299,20 +311,28 @@ const LOGRUS_DIM_PREFIX_RE = /^(\[[^\]]*\]\s*)*(time=\S+\s+)?/;
 /** 单行 logrus 文本 → 带样式片段；行内没有 level= 字段时返回 null（交回 ANSI 解析）。 */
 export function colorizeLogrusLine(line: string): Array<AnsiSegment> | null {
   const matched = LOGRUS_LEVEL_RE.exec(line);
-  if (!matched) return null;
+  if (!matched) {
+    return null;
+  }
   const levelToken = `level=${matched[1]}`;
   const levelIdx = line.indexOf(levelToken);
   const head = line.slice(0, levelIdx);
   const segments: Array<AnsiSegment> = [];
   const dimLen = LOGRUS_DIM_PREFIX_RE.exec(head)?.[0].length ?? 0;
-  if (dimLen > 0) segments.push({ text: head.slice(0, dimLen), styles: ["dim"] });
-  if (head.length > dimLen) segments.push({ text: head.slice(dimLen) });
+  if (dimLen > 0) {
+    segments.push({ text: head.slice(0, dimLen), styles: ["dim"] });
+  }
+  if (head.length > dimLen) {
+    segments.push({ text: head.slice(dimLen) });
+  }
   segments.push({
     text: levelToken,
     styles: [LOGRUS_LEVEL_STYLE[matched[1] ?? "INFO"] ?? "green"],
   });
   const tail = line.slice(levelIdx + levelToken.length);
-  if (tail) segments.push({ text: tail });
+  if (tail) {
+    segments.push({ text: tail });
+  }
   return segments;
 }
 
@@ -324,7 +344,9 @@ export function parseOllamaLogText(text: string): Array<AnsiSegment> {
   lines.forEach((line, index) => {
     const colored = colorizeLogrusLine(line);
     segments.push(...(colored ?? parseAnsiSegments(line)));
-    if (index < lines.length - 1) segments.push({ text: "\n" });
+    if (index < lines.length - 1) {
+      segments.push({ text: "\n" });
+    }
   });
   return segments;
 }

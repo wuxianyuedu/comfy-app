@@ -22,12 +22,24 @@ function inferMediaType(
   /* 文件事实（扩展名）优先于元数据（mediaType），元数据优先于任务类型推断：
    * 越靠前的来源越接近「磁盘上到底是什么」。 */
   const byName = kindOf(coverPath);
-  if (byName === "video" || byName === "audio") return byName;
-  if (coverMediaType === "video") return "video";
-  if (coverMediaType === "audio") return "audio";
-  if (coverMediaType === "image") return "image";
-  if (/video|2V$|^T2V|^I2V|FLF/i.test(taskType)) return "video";
-  if (/audio|tts|voice/i.test(taskType)) return "audio";
+  if (byName === "video" || byName === "audio") {
+    return byName;
+  }
+  if (coverMediaType === "video") {
+    return "video";
+  }
+  if (coverMediaType === "audio") {
+    return "audio";
+  }
+  if (coverMediaType === "image") {
+    return "image";
+  }
+  if (/video|2V$|^T2V|^I2V|FLF/i.test(taskType)) {
+    return "video";
+  }
+  if (/audio|tts|voice/i.test(taskType)) {
+    return "audio";
+  }
   return "image";
 }
 
@@ -108,10 +120,16 @@ export const taskRouter = createTRPCRouter({
       for (let round = 0; round < MAX_ROUNDS; round += 1) {
         const page = await scanOnce(round * PAGE);
         for (const card of page) {
-          if (card.mediaType === input.media) matched.push(card);
-          if (matched.length >= PAGE) break;
+          if (card.mediaType === input.media) {
+            matched.push(card);
+          }
+          if (matched.length >= PAGE) {
+            break;
+          }
         }
-        if (matched.length >= PAGE || page.length < PAGE) break;
+        if (matched.length >= PAGE || page.length < PAGE) {
+          break;
+        }
       }
       return { tasks: matched };
     }),
@@ -226,7 +244,7 @@ export const taskRouter = createTRPCRouter({
       return {
         opened: true,
         absolutePath: dir,
-        comfyappUrl: "comfyapp://open?path=" + encodeURIComponent(dir),
+        comfyappUrl: `comfyapp://open?path=${encodeURIComponent(dir)}`,
       };
     }),
 
@@ -237,11 +255,13 @@ export const taskRouter = createTRPCRouter({
       throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
     }
     const task = await taskRepository.findSnapshotById(input.id);
-    if (!task) throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
+    if (!task) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
+    }
     const snap = /* SAFETY: 类型断言已复核 */ task.workflowSnapshot as {
-      workflow?: unknown;
       capturedAt?: string;
       source?: string;
+      workflow?: unknown;
     } | null;
     return {
       workflow: snap?.workflow ?? null,
@@ -279,9 +299,9 @@ export const taskRouter = createTRPCRouter({
       } else {
         fsPromises
           .rm(dir, { recursive: true, force: true })
-          .catch((e: unknown) =>
+          .catch((error: unknown) =>
             logger.warn(
-              `[task.delete] 产物目录没删掉（库行照删）：${dir} — ${errorMessage(e, String(e))}`,
+              `[task.delete] 产物目录没删掉（库行照删）：${dir} — ${errorMessage(error, String(error))}`,
             ),
           );
       }
@@ -304,11 +324,12 @@ export const taskRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const image = await taskRepository.findImageById(input.imageId);
-      if (image?.userId !== ctx.user.id)
+      if (image?.userId !== ctx.user.id) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "找不到这张产物图",
         });
+      }
       await taskRepository.patchImageFeedback(input.imageId, {
         humanRating: input.humanRating,
         isFavorite: input.isFavorite,

@@ -15,21 +15,21 @@ import { tailWindow } from "~/lib/page-window";
 import { clamp } from "~/lib/clamp";
 
 /** 单个维度的评分：1~5 分 + 一句话依据（人读，中文）。 */
-export interface ReviewScore {
-  /** 维度分（1~5，越界在归一时夹取）。 */
-  score: number;
+export type ReviewScore = {
   /** 打这个分的一句话依据；模型漏给时为空串。 */
   note: string;
-}
+  /** 维度分（1~5，越界在归一时夹取）。 */
+  score: number;
+};
 
 /** 一次评审判定：过 / 不过 + 缺陷清单 + 改进建议 + 维度评分 + 打分时间。 */
-export interface ReviewVerdict {
-  /** 是否合格。false → 触发抽卡 / 改提示词重生成的入口对用户可见。 */
-  pass: boolean;
+export type ReviewVerdict = {
   /** 逐条缺陷（人读，中文）。合格时通常为空数组。 */
   issues: Array<string>;
-  /** 改进方向（不合格时给出的一句话建议）。 */
-  suggestion: string;
+  /** 是否合格。false → 触发抽卡 / 改提示词重生成的入口对用户可见。 */
+  pass: boolean;
+  /** 评分所用的 rubric 版本（口径演进后旧分数仍可解释）；未评分时缺省。 */
+  rubricVersion?: string;
   /** ISO 打分时间戳。 */
   scoredAt: string;
   /**
@@ -38,9 +38,9 @@ export interface ReviewVerdict {
    * 给出。分数与 `pass` 判定相互独立：低分但勉强可用可以 pass=true。
    */
   scores?: Record<string, ReviewScore>;
-  /** 评分所用的 rubric 版本（口径演进后旧分数仍可解释）；未评分时缺省。 */
-  rubricVersion?: string;
-}
+  /** 改进方向（不合格时给出的一句话建议）。 */
+  suggestion: string;
+};
 
 /** 实体上保留的历次判定上限（`reviewHistory` 只存**本轮之前**的判定；当前判定在 `review`）。 */
 export const REVIEW_HISTORY_LIMIT = 9;
@@ -63,8 +63,9 @@ const MODES: ReadonlyArray<ReviewMode> = ["gacha", "reprompt"];
 
 /** 宽容解析重生成方式；非法/缺省回落 `gacha`（抽卡是默认动作）。 */
 export function normalizeReviewMode(raw: unknown): ReviewMode {
+  /* SAFETY: 类型断言已复核 */
   return MODES.includes(/* SAFETY: 类型断言已复核 */ raw as ReviewMode)
-    ? /* SAFETY: 类型断言已复核 */ (raw as ReviewMode)
+    ? (raw as ReviewMode)
     : "gacha";
 }
 
@@ -75,13 +76,19 @@ export function normalizeReviewMode(raw: unknown): ReviewMode {
  */
 function normalizeScores(raw: unknown): Record<string, ReviewScore> | undefined {
   const obj = asRecord(raw);
-  if (!obj) return undefined;
+  if (!obj) {
+    return undefined;
+  }
   const out: Record<string, ReviewScore> = {};
   for (const [key, value] of Object.entries(obj)) {
     const trimmedKey = key.trim();
     const item = asRecord(value);
-    if (!item || trimmedKey === "") continue;
-    if (typeof item.score !== "number" || !Number.isFinite(item.score)) continue;
+    if (!item || trimmedKey === "") {
+      continue;
+    }
+    if (typeof item.score !== "number" || !Number.isFinite(item.score)) {
+      continue;
+    }
     out[trimmedKey] = {
       score: clamp(item.score, 1, 5),
       note: typeof item.note === "string" ? item.note.trim() : "",
@@ -98,7 +105,9 @@ function normalizeScores(raw: unknown): Record<string, ReviewScore> | undefined 
  */
 export function normalizeReviewVerdict(raw: unknown): ReviewVerdict | null {
   const obj = asRecord(raw);
-  if (!obj || typeof obj.pass !== "boolean") return null;
+  if (!obj || typeof obj.pass !== "boolean") {
+    return null;
+  }
   const issues = Array.isArray(obj.issues)
     ? obj.issues
         .filter((item): item is string => typeof item === "string")
@@ -121,16 +130,22 @@ export function normalizeReviewVerdict(raw: unknown): ReviewVerdict | null {
 /** 维度均分（收敛判据的输入）；未评分 / 无有效维度 → null（调用方据此走「不过」旧路）。 */
 export function reviewScoreMean(verdict: ReviewVerdict): number | null {
   const scores = verdict.scores;
-  if (!scores) return null;
+  if (!scores) {
+    return null;
+  }
   const values = Object.values(scores).map((item) => item.score);
-  if (values.length === 0) return null;
+  if (values.length === 0) {
+    return null;
+  }
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 /** 读某条记录（分镜镜头 / 角色卡的未知记录）上已存的评审判定；没评过 → null。 */
 export function getRecordReview(raw: unknown): ReviewVerdict | null {
   const rec = asRecord(raw);
-  if (!rec) return null;
+  if (!rec) {
+    return null;
+  }
   return normalizeReviewVerdict(rec.review);
 }
 
@@ -140,7 +155,9 @@ export function getRecordReview(raw: unknown): ReviewVerdict | null {
  */
 export function getRecordImageReview(raw: unknown): ReviewVerdict | null {
   const rec = asRecord(raw);
-  if (!rec) return null;
+  if (!rec) {
+    return null;
+  }
   return normalizeReviewVerdict(rec.imageReview);
 }
 
@@ -156,7 +173,9 @@ export function applyImageReview(
 ): Array<unknown> {
   let hit = false;
   const next = entities.map((raw) => {
-    if (!isRecord(raw) || raw.id !== id) return raw;
+    if (!isRecord(raw) || raw.id !== id) {
+      return raw;
+    }
     hit = true;
     return { ...raw, imageReview: verdict };
   });
@@ -180,11 +199,14 @@ export function applyReview(
 ): Array<unknown> {
   let hit = false;
   const next = entities.map((raw) => {
-    if (!isRecord(raw) || raw.id !== id) return raw;
+    if (!isRecord(raw) || raw.id !== id) {
+      return raw;
+    }
     hit = true;
     // Array.isArray 把 unknown 收窄成 any[]：显式标 unknown[] 再展开，避免 any 混入数组。
+    /* SAFETY: 类型断言已复核 */
     const prevHistory: Array<unknown> = Array.isArray(raw.reviewHistory)
-      ? /* SAFETY: 类型断言已复核 */ (raw.reviewHistory as Array<unknown>)
+      ? (raw.reviewHistory as Array<unknown>)
       : [];
     const prevVerdict = normalizeReviewVerdict(raw.review);
     const history = prevVerdict
@@ -204,29 +226,31 @@ export function applyReview(
 // 上面实体那套「review + reviewHistory」的语义在这里用列形状复刻。
 
 /** `production.scriptReview` 列的形状：当前判定 + 本轮之前的历次判定 + 改写前留档 + 人工裁决。 */
-export interface ScriptReviewState {
-  /** 当前有效判定；没评过 / 列里判定非法 → null。 */
-  review: ReviewVerdict | null;
+export type ScriptReviewState = {
   /** 本轮之前的历次判定（旧→新，超限裁剪）；曲线 = `[...history, review]`。 */
   history: Array<ReviewVerdict>;
-  /** 改写前的旧剧本全文（旧→新，超限从头裁剪）；缺省 = 还没有过 AI 改写。 */
-  revisions: Array<ScriptRevision>;
   /** 人工裁决（#2480）：`digest` 记裁决时剧本指纹，剧本变过 → 裁决作废。 */
   humanVerdict: HumanVerdict | null;
-}
+  /** 当前有效判定；没评过 / 列里判定非法 → null。 */
+  review: ReviewVerdict | null;
+  /** 改写前的旧剧本全文（旧→新，超限从头裁剪）；缺省 = 还没有过 AI 改写。 */
+  revisions: Array<ScriptRevision>;
+};
 
 /** 一次 AI 改写留档：改写发生的时间 + 改写前的完整剧本。 */
-export interface ScriptRevision {
+export type ScriptRevision = {
   /** ISO 时间戳（改写发生时）。 */
   at: string;
   /** 改写前的完整剧本 Markdown。 */
   markdown: string;
-}
+};
 
 /** 宽容读取 `production.scriptReview` 列（未知 JSON → 形状）；缺省/畸形不抛，回落「没评过」。 */
 export function normalizeScriptReviewState(raw: unknown): ScriptReviewState {
   const obj = asRecord(raw);
-  if (!obj) return { review: null, history: [], revisions: [], humanVerdict: null };
+  if (!obj) {
+    return { review: null, history: [], revisions: [], humanVerdict: null };
+  }
   const history = (Array.isArray(obj.history) ? obj.history : [])
     .map((item) => normalizeReviewVerdict(item))
     .filter((item): item is ReviewVerdict => item !== null)
@@ -234,7 +258,9 @@ export function normalizeScriptReviewState(raw: unknown): ScriptReviewState {
   const revisions = (Array.isArray(obj.revisions) ? obj.revisions : [])
     .map((item) => {
       const rec = asRecord(item);
-      if (!rec || typeof rec.markdown !== "string" || rec.markdown === "") return null;
+      if (!rec || typeof rec.markdown !== "string" || rec.markdown === "") {
+        return null;
+      }
       return {
         at: typeof rec.at === "string" ? rec.at : "",
         markdown: rec.markdown,
@@ -296,9 +322,11 @@ export function recordScriptRevision(
 export function weakScoreEntries(
   verdict: ReviewVerdict,
   maxScore = 3,
-): Array<{ key: string; score: number; note: string }> {
+): Array<{ key: string; note: string; score: number }> {
   const scores = verdict.scores;
-  if (!scores) return [];
+  if (!scores) {
+    return [];
+  }
   return Object.entries(scores)
     .filter(([, item]) => item.score <= maxScore)
     .map(([key, item]) => ({ key, score: item.score, note: item.note }))
@@ -312,23 +340,25 @@ export function weakScoreEntries(
 // 剧本指纹变了）→ 旧裁决不再作数，回到 AI 评审循环。
 
 /** 一次人工裁决：通过 / 否决 + 一句话理由 + 裁决时的实体快照（失效判据）。 */
-export interface HumanVerdict {
-  /** 人拍板的结果：true = 定稿放行；false = 否决（触发重出 / 转人改）。 */
-  pass: boolean;
-  /** 一句话理由（人读，中文；可空——点个按钮不写字也合法）。 */
-  note: string;
+export type HumanVerdict = {
   /** ISO 裁决时间戳。 */
   at: string;
-  /** 裁决时的实体 rev（镜头 / 角色侧）；实体此后被改过（rev 变大）→ 裁决作废。 */
-  rev?: number;
   /** 裁决时的剧本指纹（仅剧本侧，`scriptDigestOf`）；剧本此后变过 → 裁决作废。 */
   digest?: string;
-}
+  /** 一句话理由（人读，中文；可空——点个按钮不写字也合法）。 */
+  note: string;
+  /** 人拍板的结果：true = 定稿放行；false = 否决（触发重出 / 转人改）。 */
+  pass: boolean;
+  /** 裁决时的实体 rev（镜头 / 角色侧）；实体此后被改过（rev 变大）→ 裁决作废。 */
+  rev?: number;
+};
 
 /** 宽容解析人工裁决；缺 `pass` 布尔判据 → null（没裁决过 / 脏数据，不硬造）。不抛。 */
 export function normalizeHumanVerdict(raw: unknown): HumanVerdict | null {
   const obj = asRecord(raw);
-  if (!obj || typeof obj.pass !== "boolean") return null;
+  if (!obj || typeof obj.pass !== "boolean") {
+    return null;
+  }
   return {
     pass: obj.pass,
     note: typeof obj.note === "string" ? obj.note.trim() : "",
@@ -343,7 +373,9 @@ export function normalizeHumanVerdict(raw: unknown): HumanVerdict | null {
 /** 读某条记录上已存的人工裁决；没裁决过 → null。 */
 export function getRecordHumanVerdict(raw: unknown): HumanVerdict | null {
   const rec = asRecord(raw);
-  if (!rec) return null;
+  if (!rec) {
+    return null;
+  }
   return normalizeHumanVerdict(rec.humanVerdict);
 }
 
@@ -360,7 +392,9 @@ export function applyHumanVerdict(
 ): Array<unknown> {
   let hit = false;
   const next = entities.map((raw) => {
-    if (!isRecord(raw) || raw.id !== id) return raw;
+    if (!isRecord(raw) || raw.id !== id) {
+      return raw;
+    }
     hit = true;
     return { ...raw, humanVerdict: verdict };
   });
@@ -372,14 +406,18 @@ export function applyHumanVerdict(
  * 挂在镜头记录上（`shot.humanRating`），是校准读数的人侧输入（对比 AI 维度分）。
  */
 export function normalizeHumanRating(raw: unknown): number | null {
-  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return null;
+  }
   return Math.round(clamp(raw, 0, 5));
 }
 
 /** 读某条记录上已存的人评分；没评过 → null。 */
 export function getRecordHumanRating(raw: unknown): number | null {
   const rec = asRecord(raw);
-  if (!rec) return null;
+  if (!rec) {
+    return null;
+  }
   return normalizeHumanRating(rec.humanRating);
 }
 
@@ -391,7 +429,9 @@ export function applyHumanRating(
 ): Array<unknown> {
   let hit = false;
   const next = entities.map((raw) => {
-    if (!isRecord(raw) || raw.id !== id) return raw;
+    if (!isRecord(raw) || raw.id !== id) {
+      return raw;
+    }
     hit = true;
     const value = normalizeHumanRating(rating);
     // undefined 键不落：序列化后 null 与缺省在宽容读下等价，这里保留 null 显式语义。

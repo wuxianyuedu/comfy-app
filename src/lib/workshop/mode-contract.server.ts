@@ -46,7 +46,9 @@ export async function loadModeContracts(
 ): Promise<Array<ModeContract>> {
   for (const rel of [MODE_CONTRACTS_REL_PATH, LEGACY_CONFIG_REL_PATH]) {
     const override = await readOverrideFile(path.join(root, rel));
-    if (override && override.length > 0) return override;
+    if (override && override.length > 0) {
+      return override;
+    }
   }
   return configuredModeContracts();
 }
@@ -65,13 +67,13 @@ export async function saveModeContracts(
   try {
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
-  } catch (err) {
+  } catch (error) {
     /* 失败必须说出来：「保存了但没落盘」是最坏的形态（用户以为配置生效、
      *  实际下一次读取回到旧值），而它唯一的痕迹就是这里。文案走 `errorText`
      * （动作前缀 + 详情的唯一出口，规范 16 §16.2.4.45），并把**文件路径**带上：
      *  它是这条路唯一能定位的东西。 */
-    throw new Error(errorText(err, `模式契约写入失败（${file}）`), {
-      cause: err,
+    throw new Error(errorText(error, `模式契约写入失败（${file}）`), {
+      cause: error,
     });
   }
   return normalized;

@@ -59,7 +59,9 @@ describe("build-desktop 念得出每一步多久（ISSUE #2574）", () => {
 
   it("每一步都在自己的起点附近掐表（变量声明在场，不是拿全程冒充分步）", () => {
     for (const [, variable] of STEPS) {
-      if (variable === "scriptStartedAt") continue; // 全程那一个声明在文件头
+      if (variable === "scriptStartedAt") {
+        continue;
+      } // 全程那一个声明在文件头
       expect(src, `${variable} 没有起点声明`).toMatch(
         new RegExp(`const ${variable} = performance\\.now\\(\\)`),
       );

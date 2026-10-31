@@ -8,10 +8,7 @@ import { extractRuntimeParams } from "./executor-outputs";
 
 /** 造一条 history entry：prompt[2] 是被执行图（class_type + inputs）。 */
 function entryWithGraph(
-  graph: Record<
-    string,
-    { class_type: string; inputs: Record<string, unknown> }
-  >,
+  graph: Record<string, { class_type: string; inputs: Record<string, unknown> }>,
 ): unknown {
   return { prompt: ["id", "number", graph, {}, {}] };
 }
@@ -104,7 +101,7 @@ describe("extractRuntimeParams 采样器提取", () => {
         "5:5": { class_type: "KSampler", inputs: { seed: "9007199254740991" } },
       }),
     );
-    expect(out.seed).toBe(9007199254740991);
+    expect(out.seed).toBe(9_007_199_254_740_991);
     expect(out.samplers?.[0]?.steps).toBeUndefined();
   });
 

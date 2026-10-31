@@ -36,19 +36,21 @@ function readEnabled(): CategoryEnabled {
   const stored = readStorageJson<Partial<CategoryEnabled>>(STORAGE_KEY, {});
   const base = defaultEnabled();
   for (const category of LOG_CATEGORY_FILTERS) {
-    if (typeof stored[category] === "boolean") base[category] = stored[category];
+    if (typeof stored[category] === "boolean") {
+      base[category] = stored[category];
+    }
   }
   return base;
 }
 
-export interface LogCategoryState {
+export type LogCategoryState = {
   /** 每个分类的开关状态（true = 在面板显示）。 */
   enabled: CategoryEnabled;
-  /** 切换某个分类的显示开关；副作用是把新状态写回 localStorage。 */
-  setEnabled: (category: LogCategoryFilter, value: boolean) => void;
   /** 某分类当前是否开启（避免调用方直接读 `enabled[c]` 再判 undefined）。 */
   isEnabled: (category: LogCategoryFilter) => boolean;
-}
+  /** 切换某个分类的显示开关；副作用是把新状态写回 localStorage。 */
+  setEnabled: (category: LogCategoryFilter, value: boolean) => void;
+};
 
 export const useLogCategoryStore = create<LogCategoryState>((set, get) => ({
   enabled: readEnabled(),

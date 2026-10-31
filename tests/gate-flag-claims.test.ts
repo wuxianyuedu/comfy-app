@@ -87,7 +87,7 @@ function writeTables(
     covered = "",
     retired = "",
     flips = "",
-  }: { covered?: string; retired?: string; flips?: string },
+  }: { covered?: string; flips?: string; retired?: string; },
 ): void {
   writeFileSync(
     join(dir, "tests", "ratchet-update-guards.test.ts"),

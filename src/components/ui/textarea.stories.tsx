@@ -32,10 +32,8 @@ export const AutoGrowing: Story = {
   render: (args) => (
     <div className="flex w-md flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <span className="text-ink-muted font-mono text-[11px]">
-          短内容（min-h-16 保底）
-        </span>
-        <Textarea {...args} defaultValue="一只灯塔" aria-label="短提示词" />
+        <span className="text-ink-muted font-mono text-[11px]">短内容（min-h-16 保底）</span>
+        <Textarea {...args} aria-label="短提示词" defaultValue="一只灯塔" />
       </div>
       <div className="flex flex-col gap-1.5">
         <span className="text-ink-muted font-mono text-[11px]">
@@ -62,16 +60,12 @@ export const Invalid: Story = {
     <div className="flex w-md flex-col gap-4">
       <Textarea
         {...args}
-        aria-label="错误态"
         aria-invalid
+        aria-label="错误态"
         defaultValue=""
         placeholder="提示词不能为空"
       />
-      <Textarea
-        {...args}
-        aria-label="正常态对照"
-        defaultValue="watermark, text, extra fingers"
-      />
+      <Textarea {...args} aria-label="正常态对照" defaultValue="watermark, text, extra fingers" />
     </div>
   ),
 };
@@ -81,10 +75,10 @@ export const Disabled: Story = {
   render: (args) => (
     <Textarea
       {...args}
-      className="w-md"
       aria-label="只读回显"
-      disabled
+      className="w-md"
       defaultValue="这个工作流的提示词由节点给出，不可在此修改。"
+      disabled
     />
   ),
 };

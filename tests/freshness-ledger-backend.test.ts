@@ -159,19 +159,24 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
   function onPlatform<T>(fn: () => T): T {
     const saved = new Map<string, string | undefined>(KEYS.map((k) => [k, process.env[k]]));
     try {
-      for (const [k, v] of Object.entries(LEDGER_ENV)) process.env[k] = v;
+      for (const [k, v] of Object.entries(LEDGER_ENV)) {
+        process.env[k] = v;
+      }
       delete process.env.FRESHNESS_LEDGER_BRANCH;
       return fn();
     } finally {
       for (const [k, v] of saved) {
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
+        if (v === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = v;
+        }
       }
     }
   }
 
   /** 记账式 git：按脚本给的回执依次返回，并把每次的参数留下来。 */
-  function fakeGit(script: Array<{ status: number; stdout?: string; stderr?: string }>) {
+  function fakeGit(script: Array<{ status: number; stderr?: string; stdout?: string; }>) {
     const calls: Array<Array<string>> = [];
     const run = (args: Array<string>) => {
       const step = script[calls.length] ?? { status: 0 };
@@ -273,7 +278,9 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
       const r = pushFreshnessLedger({ root: ROOT, kinds: ["e2e"] });
       expect(r.reason).toBe("not-platform");
     } finally {
-      if (saved !== undefined) process.env.CNB_BUILD_USER_NICKNAME = saved;
+      if (saved !== undefined) {
+        process.env.CNB_BUILD_USER_NICKNAME = saved;
+      }
     }
   });
 });

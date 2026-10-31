@@ -69,17 +69,14 @@ function makeWindowsToolchain(
   dir: string,
   name: string,
   opts: {
-    shim?: boolean;
     cmd?: boolean;
-    ps1?: boolean;
     host?: boolean;
+    ps1?: boolean;
+    shim?: boolean;
   } = {},
 ) {
   if (opts.shim !== false) {
-    writeExec(
-      path.join(dir, name),
-      "#!/usr/bin/env node\nconsole.log('1.0.0')\n",
-    );
+    writeExec(path.join(dir, name), "#!/usr/bin/env node\nconsole.log('1.0.0')\n");
   }
   if (opts.cmd !== false) {
     writeExec(path.join(dir, `${name}.CMD`), "@ECHO off\r\n@SETLOCAL\r\n");
@@ -155,22 +152,19 @@ describe("executableKind：读内容形态，不看扩展名", () => {
 });
 
 describe("resolveCommandInvocation：控制台起进程前的那一问", () => {
-  platformTest(
-    "POSIX：PATH 上找到就用绝对路径（这就是那条 ENOENT 的解法）",
-    ({ makeHost }) => {
-      const dir = freshDir();
-      const bin = path.join(dir, "mytool");
-      writeExec(bin, "#!/bin/sh\necho ok\n");
-      const r = resolveCommandInvocation("mytool", ["--flag"], {
-        env: { PATH: dir },
-        platform: "linux",
-        probe: makeHost([bin]),
-      });
-      expect(r.resolved).toBe(true);
-      expect(r.command).toBe(bin);
-      expect(r.args).toEqual(["--flag"]);
-    },
-  );
+  platformTest("POSIX：PATH 上找到就用绝对路径（这就是那条 ENOENT 的解法）", ({ makeHost }) => {
+    const dir = freshDir();
+    const bin = path.join(dir, "mytool");
+    writeExec(bin, "#!/bin/sh\necho ok\n");
+    const r = resolveCommandInvocation("mytool", ["--flag"], {
+      env: { PATH: dir },
+      platform: "linux",
+      probe: makeHost([bin]),
+    });
+    expect(r.resolved).toBe(true);
+    expect(r.command).toBe(bin);
+    expect(r.args).toEqual(["--flag"]);
+  });
 
   it("查无此命令：不改写、`resolved: false`（调用方据此给可读出口）", () => {
     const dir = freshDir();
@@ -257,27 +251,24 @@ describe("resolveCommandInvocation：控制台起进程前的那一问", () => {
 });
 
 describe("whichCommand：只认「真的能跑」的候选", () => {
-  platformTest(
-    "前一个目录里的同名候选没有执行位 → 跳过去找后面那个能跑的",
-    ({ makeHost }) => {
-      /* 「扫到一个同名文件」不等于「能跑」—— 这条判据存在的全部理由。两个目录都在
-       * PATH 上，前一个里的 `mytool` 没执行位（POSIX 上是常态：装了一半、软链指错），
-       * 按「见到就用」就会把一个起不来的路径交出去，而调用方只会看到一句新的错。 */
-      const dirA = freshDir();
-      const dirB = freshDir();
-      const noPerm = path.join(dirA, "mytool");
-      const runnable = path.join(dirB, "mytool");
-      writeExec(noPerm, "#!/bin/sh\necho a\n");
-      writeExec(runnable, "#!/bin/sh\necho b\n");
-      expect(
-        whichCommand("mytool", {
-          env: { PATH: [dirA, dirB].join(path.delimiter) },
-          platform: "linux",
-          probe: makeHost([runnable]),
-        }),
-      ).toBe(runnable);
-    },
-  );
+  platformTest("前一个目录里的同名候选没有执行位 → 跳过去找后面那个能跑的", ({ makeHost }) => {
+    /* 「扫到一个同名文件」不等于「能跑」—— 这条判据存在的全部理由。两个目录都在
+     * PATH 上，前一个里的 `mytool` 没执行位（POSIX 上是常态：装了一半、软链指错），
+     * 按「见到就用」就会把一个起不来的路径交出去，而调用方只会看到一句新的错。 */
+    const dirA = freshDir();
+    const dirB = freshDir();
+    const noPerm = path.join(dirA, "mytool");
+    const runnable = path.join(dirB, "mytool");
+    writeExec(noPerm, "#!/bin/sh\necho a\n");
+    writeExec(runnable, "#!/bin/sh\necho b\n");
+    expect(
+      whichCommand("mytool", {
+        env: { PATH: [dirA, dirB].join(path.delimiter) },
+        platform: "linux",
+        probe: makeHost([runnable]),
+      }),
+    ).toBe(runnable);
+  });
 
   platformTest(
     "候选存在但不可执行：判否，返回 null（不许返回一个注定失败的路径）",
@@ -321,23 +312,16 @@ describe("whichCommand：只认「真的能跑」的候选", () => {
     },
   );
 
-  platformTest(
-    "记忆化按 env 分键：换 PATH 必须换结论（不许串扰）",
-    ({ makeHost }) => {
-      const a = freshDir();
-      const b = freshDir();
-      const binA = path.join(a, "tool");
-      writeExec(binA, "#!/bin/sh\necho a\n");
-      const probe = makeHost([binA]);
-      expect(
-        whichCommand("tool", { env: { PATH: a }, platform: "linux", probe }),
-      ).toBe(binA);
-      // b 里没有这个命令 —— 若缓存只看名字，这里会错误地回 a 的路径。
-      expect(
-        whichCommand("tool", { env: { PATH: b }, platform: "linux", probe }),
-      ).toBeNull();
-    },
-  );
+  platformTest("记忆化按 env 分键：换 PATH 必须换结论（不许串扰）", ({ makeHost }) => {
+    const a = freshDir();
+    const b = freshDir();
+    const binA = path.join(a, "tool");
+    writeExec(binA, "#!/bin/sh\necho a\n");
+    const probe = makeHost([binA]);
+    expect(whichCommand("tool", { env: { PATH: a }, platform: "linux", probe })).toBe(binA);
+    // b 里没有这个命令 —— 若缓存只看名字，这里会错误地回 a 的路径。
+    expect(whichCommand("tool", { env: { PATH: b }, platform: "linux", probe })).toBeNull();
+  });
 });
 
 /**
@@ -413,10 +397,7 @@ describe("whichCommand：环境变量的键大小写（Windows 的 `Path`）", (
  */
 describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", () => {
   /** 造一个带包真身的 pnpm 落点。`bin` 用字符串形态（corepack 那一形）。 */
-  function writePnpmPackage(
-    dir: string,
-    opts: { bin: unknown; entry?: string },
-  ) {
+  function writePnpmPackage(dir: string, opts: { bin: unknown; entry?: string }) {
     const pkgDir = path.join(dir, "node_modules", "pnpm");
     fs.mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
     fs.writeFileSync(
@@ -531,7 +512,9 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     expect(pnpmJsEntry(dir)).toBeNull();
     const inv = pnpmInvocation(["install"], { env: { PATH: dir } });
     // 「没走 JS 入口」= 起的那条命令不是 `process.execPath` + `node_modules` 里的入口
-    if (inv) expect(inv.command).not.toBe(process.execPath);
+    if (inv) {
+      expect(inv.command).not.toBe(process.execPath);
+    }
   });
 
   it("PATH 上只有垫片、包真身在本机落点上：仍走 JS 入口（不退回宿主）", () => {
@@ -540,10 +523,7 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
      * 否则 `pnpmInvocation` 会退回 `.ps1` 宿主那一跳。 */
     const bin = freshDir();
     writeExec(path.join(bin, "pnpm"), "#!/bin/sh\nexit 0\n");
-    fs.writeFileSync(
-      path.join(bin, "pnpm.CMD"),
-      "@ECHO off\r\necho 12.4.1\r\n",
-    );
+    fs.writeFileSync(path.join(bin, "pnpm.CMD"), "@ECHO off\r\necho 12.4.1\r\n");
     const home = freshDir();
     const home2 = freshDir();
     const localAppData = freshDir();

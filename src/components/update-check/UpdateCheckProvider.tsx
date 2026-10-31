@@ -26,7 +26,7 @@ function readEnabledDefault(): boolean {
   return readStorageItem(STORAGE_KEY) !== "0";
 }
 
-function summaryOf(groups: Array<{ key: string; label: string; files?: Array<string> }>): string {
+function summaryOf(groups: Array<{ files?: Array<string>; key: string; label: string }>): string {
   return groups
     .map((g) => {
       const detail =
@@ -39,7 +39,7 @@ function summaryOf(groups: Array<{ key: string; label: string; files?: Array<str
 }
 /** 生成全屏消息正文：逐组列出改动的文件清单（比 toast 概要更全）。 */
 function bodyOf(
-  groups: Array<{ key: string; label: string; hint?: string; files?: Array<string> }>,
+  groups: Array<{ files?: Array<string>; hint?: string; key: string; label: string }>,
 ): string {
   const parts = groups.map((g) => {
     const head = `${g.label}${g.hint ? `（${g.hint}）` : ""}`;
@@ -96,7 +96,9 @@ export function UpdateCheckProvider() {
   const checkFromShortcut = useCallback(() => {
     void (async () => {
       const ok = await checkNow();
-      if (!ok) return;
+      if (!ok) {
+        return;
+      }
       const { dirty, groups } = useUpdateCheckStore.getState();
       if (!dirty) {
         toast.info(MANUAL_SHORTCUT, "本地文件无需重启的改动。");

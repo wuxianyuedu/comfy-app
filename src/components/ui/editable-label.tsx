@@ -12,8 +12,8 @@ export function EditableLabel({
   onChange,
 }: {
   label: string;
-  title?: string;
   onChange?: (next: string) => void;
+  title?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(label);
@@ -50,17 +50,17 @@ export function EditableLabel({
           /* 需求：直接点击变量名称即可进入改名，不再依赖 ✎ 小按钮。
            * editable 时整个名称是可交互的文本按钮（点击进入编辑态）。 */
           <Button
-            variant="ghost"
             aria-label="点击重命名"
+            className="nodrag nopan text-ink-bright hover:text-ink-strong h-auto min-w-0 flex-1 cursor-text justify-start truncate rounded-none px-0 text-left text-xs font-semibold"
             onClick={(event) => {
               event.stopPropagation();
               setDraft(label);
               setEditing(true);
             }}
-            onMouseDown={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
-            className="nodrag nopan text-ink-bright hover:text-ink-strong h-auto min-w-0 flex-1 cursor-text justify-start truncate rounded-none px-0 text-left text-xs font-semibold"
+            onMouseDown={(event) => event.stopPropagation()}
             style={{ fontFamily: "var(--font-sans)" }}
+            variant="ghost"
           >
             {label}
           </Button>
@@ -75,8 +75,11 @@ export function EditableLabel({
     const next = draft.trim();
     /* trim 后的值没变时是空操作 —— 免得
      * 每次 blur 都把 workflowIO 表弄脏。 */
-    if (next && next !== label) onChange?.(next);
-    else setDraft(label);
+    if (next && next !== label) {
+      onChange?.(next);
+    } else {
+      setDraft(label);
+    }
     setEditing(false);
   };
 
@@ -86,11 +89,11 @@ export function EditableLabel({
      * 输入框自身仍为固定 w-32，编辑时只占标签行左侧。 */
     <span className="flex min-w-0 flex-1 items-center gap-1">
       <input
+        onBlur={commit}
+        onChange={textHandler(setDraft)}
         ref={inputRef}
         type="text"
         value={draft}
-        onChange={textHandler(setDraft)}
-        onBlur={commit}
         {...enterCommit({
           onCommit: commit,
           /* Esc 显式回退原值：编辑态与草稿一起复位，下次点开看到的是当前值
@@ -100,17 +103,17 @@ export function EditableLabel({
             setEditing(false);
           },
         })}
-        onClick={(event) => event.stopPropagation()}
-        onMouseDown={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
-        title={title}
         /* 与展示态字体一致 — text-xs font-semibold
          *  text-ink-bright + 'Inter'，避免编辑切回展示态时出现字重跳变。
          *  其余形态（`border-input` / `rounded-lg` / focus 换边不出阴影）照
          *  `ui/input.tsx` 的缺省档：此前这里自己写了 `border-violet-400/40`
          *  —— 既写死调色板、又不是全站其余输入框那一档（ISSUE #2031）。 */
         className="nodrag nopan border-input text-ink-bright focus-visible:border-ring focus-visible:ring-ring/50 w-32 max-w-full min-w-0 shrink rounded-lg border bg-transparent px-2 py-px text-xs font-semibold outline-none focus-visible:ring-3"
+        onClick={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
         style={{ fontFamily: "var(--font-sans)" }}
+        title={title}
       />
     </span>
   );

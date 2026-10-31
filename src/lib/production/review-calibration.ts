@@ -29,32 +29,32 @@ export function humanRatingOnScale5(rating: number): number {
 }
 
 /** 单个维度的偏差读数：AI 在该维度上的均分 vs 同样本集人评均分（映射到 1~5）。 */
-export interface DimensionCalibration {
-  /** rubric 维度 key（生图 rubric 的 promptAlignment 等）。 */
-  key: string;
+export type DimensionCalibration = {
   /** AI 在该维度上的均分（1~5）。 */
   aiAvg: number;
   /** 同一批镜头的人评均分（已映射到 1~5）；这批镜头全都没人评分 → null。 */
   humanAvg: number | null;
+  /** rubric 维度 key（生图 rubric 的 promptAlignment 等）。 */
+  key: string;
   /** 参与该维度聚合的样本数。 */
   samples: number;
-}
+};
 
 /** 校准读数（只读查询的回包形状）。样本 = 同时有 AI 视觉判定与人评分的镜头。 */
-export interface CalibrationReport {
-  /** 样本数（有 AI 判定且有人评分的镜头数）；0 → 其余读数全 null（样本不足，不硬造）。 */
-  samples: number;
+export type CalibrationReport = {
   /** AI 维度均分的均值（1~5）。 */
   aiMeanAvg: number | null;
+  /** 判定一致率：AI pass ↔ 人评 ≥ `HUMAN_PASS_THRESHOLD` 的吻合比例（0~1）。 */
+  decisionAgreement: number | null;
   /** 人评均分（0~5 原量纲）。 */
   humanAvg: number | null;
   /** 平均绝对偏差：|AI 均分 − 人评映射分| 的均值（1~5 同量纲）。 */
   mae: number | null;
-  /** 判定一致率：AI pass ↔ 人评 ≥ `HUMAN_PASS_THRESHOLD` 的吻合比例（0~1）。 */
-  decisionAgreement: number | null;
   /** 按维度聚合：每个 rubric 维度的 AI 均分 vs 人评均分（偏差大的维度先调）。 */
   perDimension: Array<DimensionCalibration>;
-}
+  /** 样本数（有 AI 判定且有人评分的镜头数）；0 → 其余读数全 null（样本不足，不硬造）。 */
+  samples: number;
+};
 
 /** 空读数（没样本时的回落，各读数 null 不硬造）。 */
 export function emptyCalibrationReport(): CalibrationReport {
@@ -82,22 +82,28 @@ export function calibrateFromShots(shots: Array<unknown>): CalibrationReport {
   /** 有人评分的样本对（MAE 与判定一致率只在这上面算——两个均值要对齐才可比）。 */
   const pairs: Array<{
     ai: number;
+    aiPass: boolean;
     human: number;
     rating: number;
-    aiPass: boolean;
   }> = [];
   /** 维度 key → { ai 总分, ai 样本数, 人映射分累计, 人样本数 }。 */
   const dimAcc = new Map<
     string,
-    { aiSum: number; aiCount: number; humanSum: number; humanCount: number }
+    { aiCount: number; aiSum: number; humanCount: number; humanSum: number }
   >();
 
   for (const raw of shots) {
-    if (!isRecord(raw)) continue;
+    if (!isRecord(raw)) {
+      continue;
+    }
     const verdict = getRecordImageReview(raw);
-    if (!verdict) continue;
+    if (!verdict) {
+      continue;
+    }
     const mean = reviewScoreMean(verdict);
-    if (mean === null) continue;
+    if (mean === null) {
+      continue;
+    }
     const rating = normalizeHumanRating(getRecordHumanRating(raw));
     const hasHuman = rating !== null;
 

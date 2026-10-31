@@ -72,7 +72,9 @@ export const FIELD_TO_FOLDERS: Record<string, Array<string>> = {
 const FOLDER_TO_FIELDS: Record<string, Array<string>> = (() => {
   const m: Record<string, Array<string>> = {};
   for (const [field, folders] of Object.entries(FIELD_TO_FOLDERS)) {
-    for (const f of folders) (m[f] ??= []).push(field);
+    for (const f of folders) {
+      (m[f] ??= []).push(field);
+    }
   }
   return m;
 })();
@@ -83,11 +85,15 @@ const FOLDER_TO_FIELDS: Record<string, Array<string>> = (() => {
  * 返回目录名（它们**就是**模型类型）。
  */
 export function modelFoldersForField(field: string): Array<string> {
-  if (!field) return [];
+  if (!field) {
+    return [];
+  }
 
   const exact = FIELD_TO_FOLDERS[field];
 
-  if (exact) return exact;
+  if (exact) {
+    return exact;
+  }
 
   const lowerField = field.toLowerCase();
 
@@ -134,14 +140,16 @@ export function modelFoldersForField(field: string): Array<string> {
   ];
 
   for (const [re, folders] of rules) {
-    if (re.test(lowerField)) return folders;
+    if (re.test(lowerField)) {
+      return folders;
+    }
   }
 
   return [];
 }
 
 /* 为常见 ComfyUI 目录手工整理的展示元数据。 */
-const FOLDER_META: Record<string, { label: string; color: string }> = {
+const FOLDER_META: Record<string, { color: string; label: string }> = {
   checkpoints: {
     label: "Checkpoint",
     color: "text-violet-700 dark:text-violet-300 bg-violet-500/15",
@@ -264,15 +272,19 @@ const FALLBACK_PALETTE: [string, ...Array<string>] = [
 function hashString(s: string): number {
   let hash = 0;
 
-  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) | 0;
+  for (let i = 0; i < s.length; i++) {
+    hash = (hash * 31 + s.charCodeAt(i)) | 0;
+  }
 
   return Math.abs(hash);
 }
 
 /* 某个目录名的展示元数据（手工整理的标签 / 配色，或推导得出）。 */
-export function folderMeta(folder: string): { label: string; color: string } {
+export function folderMeta(folder: string): { color: string; label: string } {
   const curated = FOLDER_META[folder];
-  if (curated) return curated;
+  if (curated) {
+    return curated;
+  }
   return {
     label: prettyFolder(folder),
     color: FALLBACK_PALETTE.at(hashString(folder) % FALLBACK_PALETTE.length) ?? FALLBACK_PALETTE[0],

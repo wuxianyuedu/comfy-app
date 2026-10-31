@@ -38,14 +38,24 @@ const PROBE = createProbeTree(REAL_ROOT);
 const REPO_ROOT = PROBE.dir;
 const CHECK = join(REPO_ROOT, "scripts", "check-doc-references.cjs");
 
+/** 「文档怎么引用门禁」那三条判据的分片（它们在 `check-doc-gate-refs.cjs`）。
+ *
+ *  为什么要分成两份读：那一半判的**不是**「硬编码值 / 路径 / 端口」，两半合住一份文件
+ *  时越过了文件长度硬闸；而它的**接入点**仍在 `check-doc-references.cjs` 的 `main` 里。
+ *  于是「函数定义在哪」与「有没有人调它」是两个文件、两条读法 —— 拿哪一份去找另一件
+ *  都会落空，那是判据搬了家、不是判据没了。 */
+function gateRefsSource(): string {
+  return readFileSync(join(REPO_ROOT, "scripts", "check-doc-gate-refs.cjs"), "utf8");
+}
+
 /** 把脚本真正引入的内存态 FACTS 拿来做结构断言（与脚本同源，见 doc-facts.cjs）。 */
 type Fact = {
+  extract: () => unknown;
   key: string;
   kind: string;
-  placeholder?: string;
   onlyDocs?: Array<string>;
   otherDocs?: Array<string>;
-  extract: () => unknown;
+  placeholder?: string;
 };
 
 async function loadFacts(): Promise<Array<Fact>> {
@@ -67,8 +77,8 @@ function runCheck(): { code: number; output: string } {
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: typeof e.status === "number" ? e.status : 1,
@@ -119,12 +129,15 @@ afterEach(() => {
       continue;
     }
     const same = now === null || want === null ? now === want : now.equals(want);
-    if (!same) touched.push(abs);
+    if (!same) {
+      touched.push(abs);
+    }
   }
   expect(
     touched,
     "探针不该写真实工作树（ISSUE #2665）：下面这些真实入库文件在本文件跑的过程中被改过 —— " +
-      "写探针要落在克隆里（`REPO_ROOT`），不是 `REAL_ROOT`。\n  " + touched.join("\n  "),
+      "写探针要落在克隆里（`REPO_ROOT`），不是 `REAL_ROOT`。\n  " +
+      touched.join("\n  "),
   ).toEqual([]);
 });
 
@@ -145,7 +158,9 @@ function writeText(abs: string, text: string): void {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
       writeFileSync(abs, text, "utf8");
-      if (readFileSync(abs, "utf8") === text) return;
+      if (readFileSync(abs, "utf8") === text) {
+        return;
+      }
       lastError = "写回后读回的内容与预期不一致";
     } catch (err) {
       lastError = /* SAFETY: 类型断言已复核 */ (err as Error).message;
@@ -282,9 +297,9 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
    * 过期端口也没人报错——「全量纳管」只是人工承诺。 */
 
   type ScopeMod = {
-    SCOPED_DOCS: Array<string>;
     SCOPED_DOC_DIRS: Array<string>;
     SCOPED_DOC_EXEMPTIONS: Record<string, string>;
+    SCOPED_DOCS: Array<string>;
   };
 
   async function loadScope(): Promise<ScopeMod> {
@@ -307,8 +322,12 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
           walk(rel);
           continue;
         }
-        if (!name.endsWith(".md")) continue;
-        if (!scoped.has(rel) && !(rel in SCOPED_DOC_EXEMPTIONS)) offenders.push(rel);
+        if (!name.endsWith(".md")) {
+          continue;
+        }
+        if (!scoped.has(rel) && !(rel in SCOPED_DOC_EXEMPTIONS)) {
+          offenders.push(rel);
+        }
       }
     };
     SCOPED_DOC_DIRS.forEach(walk);
@@ -370,7 +389,9 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
     ]) {
       const lines = docText(doc).split("\n");
       lines.forEach((line, i) => {
-        if (!/(^|[\s`(（])(npm\s+run|npx)\b/.test(line)) return;
+        if (!/(^|[\s`(（])(npm\s+run|npx)\b/.test(line)) {
+          return;
+        }
         expect(
           /改为|修正|修正为|pnpm|禁止|违反|原记录|不要用|应使用/.test(line),
           `${doc}:${i + 1} 出现 npm/npx 可执行命令且未标注为说明：${line.trim()}`,
@@ -490,7 +511,9 @@ describe("用户面文档不许教跑不通的驱动（ISSUE #2580）", () => {
       "指南里必须有讲明「为什么不能用它」的散文，否则下面那条绿没有对象",
     ).toBeGreaterThan(0);
     for (const line of guide.split("\n")) {
-      if (!line.includes("better-sqlite3")) continue;
+      if (!line.includes("better-sqlite3")) {
+        continue;
+      }
       expect(line, "散文可以提名字，但不许留成能被复制粘贴执行的那一行").not.toMatch(
         /require\(\s*["']better-sqlite3["']\s*\)|from\s+["']better-sqlite3["']/,
       );
@@ -665,9 +688,15 @@ describe("文档不许用「第 N 步」引用门禁步骤（ISSUE #1374）", ()
   }
 
   it("已接入 main 流程（不是定义了却没人调用）", () => {
+    /* 判据本体住在 `check-doc-gate-refs.cjs`（与上文那一半「硬编码值 / 路径 / 端口」
+     * 不是一件事，两份合住一份时越过文件长度硬闸），而**接入点**仍在 `main` 里：
+     * 所以两件事各读一份文件 —— 拿 `check-doc-references.cjs` 去找函数定义会落空，
+     * 那是「它搬了家」而不是「它没接上」。 */
+    expect(gateRefsSource()).toContain("function checkGateStepIndexRefs(problems)");
     const script = readFileSync(CHECK, "utf8");
-    expect(script).toContain("function checkGateStepIndexRefs()");
-    expect(isCalledInMain(script, "checkGateStepIndexRefs()")).toBe(true);
+    /* 接入形态是 `checkGateStepIndexRefs(problems)`：判据把结论 push 进主脚本的
+     * `problems` 数组（探针树里跑的是真脚本，全局变量不存在）。 */
+    expect(isCalledInMain(script, "checkGateStepIndexRefs(problems)")).toBe(true);
   });
 
   it("量具自己没坏：注释掉的调用不算「已接入」", () => {
@@ -683,12 +712,16 @@ describe("文档不许用「第 N 步」引用门禁步骤（ISSUE #1374）", ()
     const docs = await gateDocs();
     let scanned = 0;
     for (const doc of docs) {
-      if (!existsSync(join(REPO_ROOT, doc))) continue;
+      if (!existsSync(join(REPO_ROOT, doc))) {
+        continue;
+      }
       scanned += 1;
       docText(doc)
         .split("\n")
         .forEach((line, i) => {
-          if (!STEP_RE.test(line) || !GATE_RE.test(line)) return;
+          if (!STEP_RE.test(line) || !GATE_RE.test(line)) {
+            return;
+          }
           expect(
             EXPLAIN_RE.test(line),
             `${doc}:${i + 1} 用「第 N 步」引用门禁步骤且未标注为说明：${line.trim().slice(0, 80)}`,
@@ -815,16 +848,18 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
   }
 
   it("已接入 main 流程（不是定义了却没人调用）", () => {
-    const script = readFileSync(CHECK, "utf8");
-    expect(script).toContain("function checkGateChecklistMatchesHook()");
-    expect(isCalledInMain(script, "checkGateChecklistMatchesHook()")).toBe(true);
+    expect(gateRefsSource()).toContain("function checkGateChecklistMatchesHook(problems)");
+    /* 接入点读主脚本：函数定义在分片、调用在 `main`，两件事读两个文件。 */
+    expect(
+      isCalledInMain(readFileSync(CHECK, "utf8"), "checkGateChecklistMatchesHook(problems)"),
+    ).toBe(true);
   });
 
   it("量具自己没坏：注释掉的调用不算「已接入」", () => {
-    const wired = "function main() {\n  checkGateChecklistMatchesHook();\n}\n";
-    const muted = "function main() {\n  // checkGateChecklistMatchesHook();\n}\n";
-    expect(isCalledInMain(wired, "checkGateChecklistMatchesHook()")).toBe(true);
-    expect(isCalledInMain(muted, "checkGateChecklistMatchesHook()")).toBe(false);
+    const wired = "function main() {\n  checkGateChecklistMatchesHook(problems);\n}\n";
+    const muted = "function main() {\n  // checkGateChecklistMatchesHook(problems);\n}\n";
+    expect(isCalledInMain(wired, "checkGateChecklistMatchesHook(problems)")).toBe(true);
+    expect(isCalledInMain(muted, "checkGateChecklistMatchesHook(problems)")).toBe(false);
   });
 
   it("存量 = 0：钩子 D 组的每一步都在清单里，且 flag 逐字一致", () => {
@@ -914,29 +949,35 @@ describe("门禁的步数也不许写进文档（ISSUE #1407，签字口径 (a)�
   }
 
   it("已接入 main 流程（定义了却没人调用 = 假判据）", () => {
-    const script = readFileSync(CHECK, "utf8");
-    expect(script).toContain("function checkGateStepCounts()");
-    expect(isCalledInMain(script, "checkGateStepCounts()")).toBe(true);
+    expect(gateRefsSource()).toContain("function checkGateStepCounts(problems)");
+    /* 同上：定义在分片、调用在 `main`。 */
+    expect(isCalledInMain(readFileSync(CHECK, "utf8"), "checkGateStepCounts(problems)")).toBe(true);
   });
 
   it("量具自己没坏：注释掉的调用不算「已接入」", () => {
-    const wired = "function main() {\n  checkGateStepCounts();\n}\n";
-    const muted = "function main() {\n  // checkGateStepCounts();\n}\n";
-    expect(isCalledInMain(wired, "checkGateStepCounts()")).toBe(true);
-    expect(isCalledInMain(muted, "checkGateStepCounts()")).toBe(false);
+    const wired = "function main() {\n  checkGateStepCounts(problems);\n}\n";
+    const muted = "function main() {\n  // checkGateStepCounts(problems);\n}\n";
+    expect(isCalledInMain(wired, "checkGateStepCounts(problems)")).toBe(true);
+    expect(isCalledInMain(muted, "checkGateStepCounts(problems)")).toBe(false);
   });
 
   it("存量 = 0：扫描面上每条「裸计数 + 门禁锚点」同行都带纠正词", async () => {
     const docs = await gateDocs();
     let scanned = 0;
     for (const doc of docs) {
-      if (!existsSync(join(REPO_ROOT, doc))) continue;
+      if (!existsSync(join(REPO_ROOT, doc))) {
+        continue;
+      }
       scanned += 1;
       docText(doc)
         .split("\n")
         .forEach((line, i) => {
-          if (ORDINAL_RE.test(line)) return; // 序号形态归 checkGateStepIndexRefs，不双报
-          if (!COUNT_RE.test(line) || !GATE_RE.test(line)) return;
+          if (ORDINAL_RE.test(line)) {
+            return;
+          } // 序号形态归 checkGateStepIndexRefs，不双报
+          if (!COUNT_RE.test(line) || !GATE_RE.test(line)) {
+            return;
+          }
           expect(
             EXPLAIN_RE.test(line),
             `${doc}:${i + 1} 写了门禁步数且未标注为说明：${line.trim().slice(0, 80)}`,
@@ -1048,8 +1089,8 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
     } catch (err) {
       const e = /* SAFETY: 类型断言已复核 */ err as {
         status?: number;
-        stdout?: string;
         stderr?: string;
+        stdout?: string;
       };
       return {
         code: typeof e.status === "number" ? e.status : 1,
@@ -1082,7 +1123,9 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
   }
 
   afterEach(() => {
-    if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true });
+    if (fixtureRoot) {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
     fixtureRoot = "";
   });
 
@@ -1168,8 +1211,8 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
     } catch (err) {
       const e = /* SAFETY: 类型断言已复核 */ err as {
         status?: number;
-        stdout?: string;
         stderr?: string;
+        stdout?: string;
       };
       return {
         code: typeof e.status === "number" ? e.status : 1,
@@ -1203,7 +1246,9 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
   }
 
   afterEach(() => {
-    if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true });
+    if (fixtureRoot) {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
     fixtureRoot = "";
   });
 

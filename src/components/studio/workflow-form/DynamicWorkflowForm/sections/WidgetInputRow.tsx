@@ -21,40 +21,40 @@ import { WidgetControl } from "./WidgetControl";
 import { Hint } from "~/components/ui/hint";
 import { TypeChip } from "~/components/studio/TypeChip";
 
-interface WidgetInputRowProps {
-  entry: EnrichedWidget;
+type WidgetInputRowProps = {
   /** 全量 pin —— ioLabel() 靠它在标签撞名时回退到原始 name，保持可辨识。 */
   allPins: ReadonlyArray<WorkflowIOEntry>;
-  value: unknown;
   compact: boolean;
-  disabled: boolean;
-  /** 该行是当前上传目标且上传进行中。 */
-  uploading: boolean;
-  seedMode?: string;
-  onSeedModeChange?: (mode: string) => void;
-  onValueChange: (value: unknown) => void;
-  onPickFile: () => void;
-  /** 该行用户刚选过图时的本地预览地址（data URL）；无则回退到按值算的 ComfyUI 代理地址。 */
-  previewSrc?: string;
-  onLabelChange?: (label: string) => void;
-  onRequiredChange?: (required: boolean) => void;
-  /** IO 编辑态：该参数在当前模式下的可见性（undefined = 不渲染 👁）。 */
-  visible?: boolean;
-  onVisibilityChange?: (visible: boolean) => void;
   /** 当前模式下被隐藏（IO 编辑预览置灰呈现，眼睛可恢复）。 */
   dimmed?: boolean;
-  /** 挂左侧可连接端点（画布节点用），圆心骑跨卡片左缘。 */
-  withHandle?: boolean;
+  disabled: boolean;
+  entry: EnrichedWidget;
   /** 左侧端点的 handle id。
    *
    *  画布上 handle id 必须**全局唯一**：同一个 pin 名出现在两个节点上时（自定义
    *  节点重复命名很常见），边会接到同名 handle 的第一处 —— 表现就是「线连到了
    *  别的节点上」。缺省仍用 ioKey（画布未富化时它就是唯一键）。 */
   handleId?: string;
+  onLabelChange?: (label: string) => void;
+  onPickFile: () => void;
+  onRequiredChange?: (required: boolean) => void;
+  onSeedModeChange?: (mode: string) => void;
+  onValueChange: (value: unknown) => void;
+  onVisibilityChange?: (visible: boolean) => void;
+  /** 该行用户刚选过图时的本地预览地址（data URL）；无则回退到按值算的 ComfyUI 代理地址。 */
+  previewSrc?: string;
+  seedMode?: string;
   /** 行尾附加的只读徽标（工作流库画布节点用它标出该参数连到的「对外参数」）。
    *  缺省不渲染——画布 / 表单等等价场景不受影响。 */
   trailing?: ReactNode;
-}
+  /** 该行是当前上传目标且上传进行中。 */
+  uploading: boolean;
+  value: unknown;
+  /** IO 编辑态：该参数在当前模式下的可见性（undefined = 不渲染 👁）。 */
+  visible?: boolean;
+  /** 挂左侧可连接端点（画布节点用），圆心骑跨卡片左缘。 */
+  withHandle?: boolean;
+};
 
 export function WidgetInputRow({
   entry,
@@ -100,8 +100,8 @@ export function WidgetInputRow({
         )}
         <EditableLabel
           label={label}
-          title={`${entry.nodeTitle ?? ""} · ${entry.name}`}
           onChange={onLabelChange}
+          title={`${entry.nodeTitle ?? ""} · ${entry.name}`}
         />
       </span>
       {/* 操作区：「必填 / 👁」与类型徽章始终固定在行右侧 —— 与编辑态与否无关，
@@ -110,12 +110,12 @@ export function WidgetInputRow({
         {onRequiredChange && (
           <Hint label={entry.required ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}>
             <Button
-              variant={entry.required ? "danger" : "ghost"}
-              onClick={() => onRequiredChange(!entry.required)}
-              onMouseDown={(event) => event.stopPropagation()}
               className={`nodrag nopan text-3xs h-auto shrink-0 rounded px-1.5 py-px font-medium ${
                 entry.required ? "" : "border-border-strong bg-subtle text-ink-muted border"
               }`}
+              onClick={() => onRequiredChange(!entry.required)}
+              onMouseDown={(event) => event.stopPropagation()}
+              variant={entry.required ? "danger" : "ghost"}
             >
               {entry.required ? "必填" : "可选"}
             </Button>
@@ -131,14 +131,14 @@ export function WidgetInputRow({
             }
           >
             <Button
-              variant="ghost"
-              onClick={() => onVisibilityChange(visible === false)}
-              onMouseDown={(event) => event.stopPropagation()}
               className={`nodrag nopan h-auto shrink-0 rounded p-0.5 ${
                 visible === false
                   ? "text-ink-fainter hover:text-ink-soft"
                   : "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
               }`}
+              onClick={() => onVisibilityChange(visible === false)}
+              onMouseDown={(event) => event.stopPropagation()}
+              variant="ghost"
             >
               {visible === false ? (
                 <EyeOff data-icon="inline-start" size={11} />
@@ -160,10 +160,10 @@ export function WidgetInputRow({
         <div className={`relative ${dimmed ? "opacity-50" : ""}`} data-io-key={entry.ioKey}>
           {withHandle && (
             <PortHandle
-              id={handleId ?? entry.ioKey}
               dir="in"
-              type={entry.type}
+              id={handleId ?? entry.ioKey}
               style={{ top: 16, transform: "translateY(-50%)" }}
+              type={entry.type}
             />
           )}
           <div className="px-3.5 pt-1.5">{labelRow}</div>
@@ -175,7 +175,7 @@ export function WidgetInputRow({
     }
     return (
       <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
-        {withHandle && <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />}
+        {withHandle && <PortHandle dir="in" id={handleId ?? entry.ioKey} type={entry.type} />}
         <div className="bg-canvas-deep flex items-center gap-2 rounded-md px-2.5 py-1.5 pr-3.5 pl-3.5">
           <span className="size-2 shrink-0 rounded-full" style={{ background: accent }} />
           <span className="text-ink-soft text-2xs min-w-0 flex-1 truncate">{label}</span>
@@ -189,17 +189,17 @@ export function WidgetInputRow({
 
   const control = (
     <WidgetControl
-      entry={entry}
-      label={label}
-      value={value}
       compact={compact}
       disabled={disabled}
-      uploading={uploading}
-      seedMode={seedMode}
+      entry={entry}
+      label={label}
+      onPickFile={onPickFile}
       onSeedModeChange={onSeedModeChange}
       onValueChange={onValueChange}
-      onPickFile={onPickFile}
       previewSrc={previewSrc}
+      seedMode={seedMode}
+      uploading={uploading}
+      value={value}
     />
   );
 
@@ -217,10 +217,10 @@ export function WidgetInputRow({
           /* 圆心锁到标签行中线（pt-1.5 = 6 + h-5 / 2 = 10 = 16px）：默认的
            * top:50% 会让圆点掉在两行之间、与参数名错位。 */
           <PortHandle
-            id={handleId ?? entry.ioKey}
             dir="in"
-            type={entry.type}
+            id={handleId ?? entry.ioKey}
             style={{ top: 16, transform: "translateY(-50%)" }}
+            type={entry.type}
           />
         )}
         <div className="px-3.5 pt-1.5">{labelRow}</div>
@@ -233,7 +233,7 @@ export function WidgetInputRow({
    * 卡片左缘 —— 放进带 padding 的子行会让圆心内缩 14px，与端口行错位。 */
   return (
     <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
-      {withHandle && <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />}
+      {withHandle && <PortHandle dir="in" id={handleId ?? entry.ioKey} type={entry.type} />}
       <div className="px-3.5 pt-1.5">{labelRow}</div>
       {control}
     </div>

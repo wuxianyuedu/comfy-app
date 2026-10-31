@@ -73,14 +73,14 @@ const ANCHOR_EDGES: Array<Edge> = [
 /** 观测棚：hook 跑在画布内，测试侧通过它取边表 / 触发选中。
  *  用对象字面量持有可变字段（而不是改 hook 参数），避免踩 React 19 的
  *  immutability 规则；写入放在 usePublish 的 effect 里，不在渲染期。 */
-interface Sink {
+type Sink = {
+  /** 删掉一条连线（模拟作者断开映射 / 上游节点被删）。 */
+  dropEdge: (edgeId: string) => void;
   edges: Array<Edge>;
   /** 最新节点表（带端口关注标记的那一份）。 */
   nodes: Array<Node>;
   select: (nodeId: string, selected: boolean) => void;
-  /** 删掉一条连线（模拟作者断开映射 / 上游节点被删）。 */
-  dropEdge: (edgeId: string) => void;
-}
+};
 
 function Stage({
   sink,
@@ -88,10 +88,10 @@ function Stage({
   edges,
   resolveNodeId,
 }: {
-  sink: Sink;
-  nodeIds: ReadonlyArray<string>;
   edges: Array<Edge>;
+  nodeIds: ReadonlyArray<string>;
   resolveNodeId?: (visualNodeId: string) => string | null;
+  sink: Sink;
 }) {
   const [nodes, setNodes] = useNodesState(asNodes(nodeIds));
   const [currentEdges, setEdges, onEdgesChange] = useEdgesState(edges);
@@ -115,7 +115,9 @@ function Stage({
   const select = useCallback(
     (nodeId: string, selected: boolean) => {
       const internal = store.getState().nodeLookup.get(nodeId);
-      if (!internal) return;
+      if (!internal) {
+        return;
+      }
       internal.internals.userNode.selected = selected;
       store.setState({});
     },
@@ -142,7 +144,7 @@ function Stage({
 
   return (
     <div style={{ width: 800, height: 600, position: "relative" }}>
-      <ReactFlow nodes={nodes} edges={currentEdges} onEdgesChange={onEdgesChange} fitView={false}>
+      <ReactFlow edges={currentEdges} fitView={false} nodes={nodes} onEdgesChange={onEdgesChange}>
         <div data-testid="canvas-ready" />
       </ReactFlow>
     </div>
@@ -151,8 +153,8 @@ function Stage({
 
 function renderStage(
   options: {
-    nodeIds?: ReadonlyArray<string>;
     edges?: Array<Edge>;
+    nodeIds?: ReadonlyArray<string>;
     resolveNodeId?: (visualNodeId: string) => string | null;
   } = {},
 ): Sink {
@@ -165,10 +167,10 @@ function renderStage(
   render(
     <ReactFlowProvider>
       <Stage
-        sink={sink}
-        nodeIds={options.nodeIds ?? ["1", "2", "3"]}
         edges={options.edges ?? EDGES}
+        nodeIds={options.nodeIds ?? ["1", "2", "3"]}
         resolveNodeId={options.resolveNodeId}
+        sink={sink}
       />
     </ReactFlowProvider>,
   );

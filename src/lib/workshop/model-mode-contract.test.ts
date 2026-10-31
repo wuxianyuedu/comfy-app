@@ -45,7 +45,9 @@ describe("模式契约口 id 值域", () => {
   it("两套 id 互不接受：适配器侧的细分类型不会混进契约", () => {
     const bothSides = ["prompt", "negative", "first-frame", "last-frame", "duration", "seed"];
     for (const t of WORKSHOP_INPUT_TYPES) {
-      if (bothSides.includes(t.type)) continue;
+      if (bothSides.includes(t.type)) {
+        continue;
+      }
       expect(isModeContractInputId(t.type), t.type).toBe(false);
     }
   });

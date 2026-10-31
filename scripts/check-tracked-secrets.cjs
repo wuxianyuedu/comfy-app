@@ -126,10 +126,18 @@ const TEMPLATE_VALUE_RE = /<[A-Za-z_][\w.-]*>|\$\{[^}]*\}|\{\{ *\w+/;
  */
 function charClasses(value) {
   let n = 0;
-  if (/[a-z]/.test(value)) n += 1;
-  if (/[A-Z]/.test(value)) n += 1;
-  if (/[0-9]/.test(value)) n += 1;
-  if (/[^a-zA-Z0-9]/.test(value)) n += 1;
+  if (/[a-z]/.test(value)) {
+    n += 1;
+  }
+  if (/[A-Z]/.test(value)) {
+    n += 1;
+  }
+  if (/[0-9]/.test(value)) {
+    n += 1;
+  }
+  if (/[^a-zA-Z0-9]/.test(value)) {
+    n += 1;
+  }
   return n;
 }
 
@@ -149,8 +157,12 @@ function scanText(text) {
   }
   for (const m of text.matchAll(ASSIGNMENT_RE)) {
     const value = m[2] ?? "";
-    if (TEMPLATE_VALUE_RE.test(value)) continue;
-    if (charClasses(value) < MIN_VALUE_CLASSES) continue;
+    if (TEMPLATE_VALUE_RE.test(value)) {
+      continue;
+    }
+    if (charClasses(value) < MIN_VALUE_CLASSES) {
+      continue;
+    }
     hits.push({
       shape: "赋值式凭据（键名含 SECRET / TOKEN / KEY / PASSWORD）",
       offset: m.index ?? 0,
@@ -158,11 +170,14 @@ function scanText(text) {
   }
   for (const m of text.matchAll(URL_CREDENTIAL_RE)) {
     const pass = m[1] ?? "";
-    if (pass.length < MIN_URL_PASS_LEN) continue;
+    if (pass.length < MIN_URL_PASS_LEN) {
+      continue;
+    }
     // 模板形态的口令（`${TOKEN}` / `{{ token }}` / `<token>`）不是凭据实体：真泄漏落的是**展开后**的值。
     // 这一条同时解决那一格自指面 —— 源码里写 `https://admin:${FAKE}@host` 的那一行是**造样本的代码**。
-    if (PLACEHOLDER_PASS_RE.test(pass) || TEMPLATE_VALUE_RE.test(pass))
+    if (PLACEHOLDER_PASS_RE.test(pass) || TEMPLATE_VALUE_RE.test(pass)) {
       continue;
+    }
     hits.push({ shape: "URL 内嵌凭据", offset: m.index ?? 0 });
   }
   return hits;
@@ -213,7 +228,9 @@ function toUnits(rows) {
     cur.push(r);
     last = r.line;
   }
-  if (cur.length > 0) units.push(cur);
+  if (cur.length > 0) {
+    units.push(cur);
+  }
   return units;
 }
 
@@ -224,11 +241,11 @@ function toUnits(rows) {
  * @returns {Map<string, Array<{line: number, text: string}>>} 文件 → 新增行
  */
 function stagedAddedLines() {
-  const out = execFileSync(
-    "git",
-    ["diff", "--cached", "-U0", "--no-color", "--diff-filter=ACMR"],
-    { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
-  );
+  const out = execFileSync("git", ["diff", "--cached", "-U0", "--no-color", "--diff-filter=ACMR"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
   /** @type {Map<string, Array<{line: number, text: string}>>} */
   const byFile = new Map();
   let file = "";
@@ -245,7 +262,9 @@ function stagedAddedLines() {
       line = Number(hunk[1]) - 1;
       continue;
     }
-    if (!file) continue;
+    if (!file) {
+      continue;
+    }
     if (raw.startsWith("+")) {
       line += 1;
       const rows = byFile.get(file) ?? [];
@@ -286,10 +305,14 @@ function trackedTexts() {
   /** @type {string[]} */
   const unreadable = [];
   for (const f of list) {
-    if (ALL_EXCLUDES.some((re) => re.test(f))) continue;
+    if (ALL_EXCLUDES.some((re) => re.test(f))) {
+      continue;
+    }
     try {
       const buf = fs.readFileSync(path.join(ROOT, f));
-      if (buf.subarray(0, 8000).includes(0)) continue;
+      if (buf.subarray(0, 8000).includes(0)) {
+        continue;
+      }
       texts.push({ file: f, text: buf.toString("utf8") });
     } catch {
       // 读不到不等于「干净」：单独点名，让结论的分母是真的分母。
@@ -387,9 +410,7 @@ function main(argv = process.argv.slice(2), deps = {}) {
   }
 
   if (STAGED && scanned === 0) {
-    write(
-      "[tracked-secrets] 暂存区没有新增行 ⇒ 没有什么可判（这不是「已通过」）。\n",
-    );
+    write("[tracked-secrets] 暂存区没有新增行 ⇒ 没有什么可判（这不是「已通过」）。\n");
     return 0;
   }
 
@@ -432,4 +453,6 @@ module.exports = {
   MIN_URL_PASS_LEN,
 };
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}

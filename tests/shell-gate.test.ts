@@ -141,7 +141,9 @@ describe("桌面壳提交门禁的触发面（§11.10.4 / 硬规则 5）", () =>
       "src-tauri/src/lib.rs",
       "src-tauri/splash-assets/splash.html",
     ];
-    for (const f of covered) expect(SHELL_INPUT_RE.test(f), f).toBe(true);
+    for (const f of covered) {
+      expect(SHELL_INPUT_RE.test(f), f).toBe(true);
+    }
   });
 
   it("复用 launcher 的时效判据，不自己重抄一份比时间戳的逻辑（§12.18）", () => {
@@ -200,7 +202,9 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
   const temps: Array<string> = [];
 
   afterEach(() => {
-    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+    for (const dir of temps.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   /** 建一个临时仓库；返仓库根。`git` 用户名/邮箱按仓库级设，不污染全局。 */
@@ -331,7 +335,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
   const temps: Array<string> = [];
 
   afterEach(() => {
-    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+    for (const dir of temps.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   const HOUR = 3_600_000;
@@ -430,7 +436,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
   describe("cargo 寻址：PATH 优先、工具链默认安装位兜底（ISSUE #1555）", () => {
     const temps: Array<string> = [];
     afterEach(() => {
-      for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+      for (const dir of temps.splice(0)) {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
 
     /**
@@ -469,9 +477,11 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
         return findCargo();
       } finally {
         for (const [k, v] of Object.entries(saved)) {
-          if (v === undefined)
+          if (v === undefined) {
             delete process.env[/* SAFETY: 类型断言已复核 */ k as keyof typeof saved];
-          else process.env[/* SAFETY: 类型断言已复核 */ k as keyof typeof saved] = v;
+          } else {
+            process.env[/* SAFETY: 类型断言已复核 */ k as keyof typeof saved] = v;
+          }
         }
       }
     }
@@ -566,14 +576,26 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
         // 而不是逐字等于 onPath。
         expect(found?.startsWith(bin)).toBe(true);
       } finally {
-        if (savedPath === undefined) delete process.env.PATH;
-        else process.env.PATH = savedPath;
-        if (savedHome === undefined) delete process.env.HOME;
-        else process.env.HOME = savedHome;
-        if (savedProfile === undefined) delete process.env.USERPROFILE;
-        else process.env.USERPROFILE = savedProfile;
-        if (savedCargoHome === undefined) delete process.env.CARGO_HOME;
-        else process.env.CARGO_HOME = savedCargoHome;
+        if (savedPath === undefined) {
+          delete process.env.PATH;
+        } else {
+          process.env.PATH = savedPath;
+        }
+        if (savedHome === undefined) {
+          delete process.env.HOME;
+        } else {
+          process.env.HOME = savedHome;
+        }
+        if (savedProfile === undefined) {
+          delete process.env.USERPROFILE;
+        } else {
+          process.env.USERPROFILE = savedProfile;
+        }
+        if (savedCargoHome === undefined) {
+          delete process.env.CARGO_HOME;
+        } else {
+          process.env.CARGO_HOME = savedCargoHome;
+        }
       }
     });
 
@@ -581,7 +603,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       // 不假设开发机装了 cargo：只判「探针这向不空转」——PATH 上有就到手，
       // 没有也不会返回一个不存在的路径。
       const found = findCargo();
-      if (found !== null) expect(existsSync(found)).toBe(true);
+      if (found !== null) {
+        expect(existsSync(found)).toBe(true);
+      }
     });
   });
 
@@ -598,7 +622,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
   describe("CARGO_HOME 的落点要真的进判据（ISSUE #2293）", () => {
     const temps: Array<string> = [];
     afterEach(() => {
-      for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+      for (const dir of temps.splice(0)) {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
 
     /** 造一个假 `CARGO_HOME`（里面放 `bin/cargo`），返回它的绝对路径。 */
@@ -728,7 +754,9 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     describe("「装在哪」读 rustup 记着的事实与用户家目录，不只读环境变量（ISSUE #2374）", () => {
       const temps: Array<string> = [];
       afterEach(() => {
-        for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+        for (const dir of temps.splice(0)) {
+          rmSync(dir, { recursive: true, force: true });
+        }
       });
 
       /** 造一个「`cargo` 就装在这儿」的目录，返回它的上一级（= `cargo_home`）。 */
@@ -1010,7 +1038,9 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
 describe("shell-gate —— 平台合成的 merge 提交不许把别人的壳改动算进来（#2325）", () => {
   const temps: Array<string> = [];
   afterEach(() => {
-    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+    for (const dir of temps.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   function git(dir: string, ...args: Array<string>): string {
@@ -1035,7 +1065,7 @@ describe("shell-gate —— 平台合成的 merge 提交不许把别人的壳改
    * ISSUE #2325 的拓扑：基线 B → 目标分支上别人的壳改动 T → 本 PR 只改前端 →
    * 平台把 PR 并进 T 生成合并提交（`--no-ff`）。
    */
-  function syntheticMerge(): { dir: string; base: string; source: string } {
+  function syntheticMerge(): { base: string; dir: string; source: string } {
     const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-merge-"));
     temps.push(dir);
     git(dir, "init", "-q", "-b", "main");

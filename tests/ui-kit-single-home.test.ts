@@ -38,7 +38,9 @@ function collectTsx(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "__snapshots__" || entry.name === "__tests__") continue;
+      if (entry.name === "__snapshots__" || entry.name === "__tests__") {
+        continue;
+      }
       collectTsx(full, out);
     } else if (entry.name.endsWith(".tsx") && !entry.name.includes(".test.")) {
       out.push(full);
@@ -78,12 +80,16 @@ describe("UI kit 目录只有一处（规范 16 §16.2.4）", () => {
     for (const abs of collectTsx(ROOT)) {
       const rel = relative(ROOT, abs);
       const top = rel.split(sep)[0];
-      if (top && ALLOWED_UI_DIRS.has(top)) continue;
+      if (top && ALLOWED_UI_DIRS.has(top)) {
+        continue;
+      }
       const base = rel
         .split(sep)
         .pop()!
         .replace(/\.tsx$/, "");
-      if (uiNames.has(base)) offenders.push(rel.split(sep).join("/"));
+      if (uiNames.has(base)) {
+        offenders.push(rel.split(sep).join("/"));
+      }
     }
     expect(offenders).toEqual([]);
   });

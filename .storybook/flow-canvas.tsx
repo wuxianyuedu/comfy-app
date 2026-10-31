@@ -43,18 +43,11 @@ import type { ReactNode } from "react";
 /** 一个节点在被摆上真画布时所需要的最小形状（与业务侧同一份 `Node` 类型）。 */
 export type FlowNodeSpec = Node;
 
-export interface CanvasScene {
+export type CanvasScene = {
   /** 这个场景解决什么、真数据长什么样（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
-  readonly nodes: ReadonlyArray<FlowNodeSpec>;
   readonly edges: ReadonlyArray<Edge>;
-  /**
-   * 初始视口（受控）。`zoom` 会真的进转换矩阵 —— 「细网格在 0.3 以下淡出」
-   * 这类判据看的就是它。
-   *
-   * 消费方传 `fit` 时它会**被忽略**（React Flow 自己算一个缩到装得下的视口）。
-   */
-  readonly viewport: { x: number; y: number; zoom: number };
+  readonly nodes: ReadonlyArray<FlowNodeSpec>;
   /**
    * 这一档的**被测对象就是那个缩放**（细网格在阈值下淡出、端点圆点在放大档的
    * 像素尺度、密集负载下现算的标尺步长）。
@@ -64,7 +57,14 @@ export interface CanvasScene {
    * 的消费方要么传 `fit`、要么用带本标记的场景，判据 `tests/storybook-fit-viewport.test.ts`。
    */
   readonly pinZoom?: true;
-}
+  /**
+   * 初始视口（受控）。`zoom` 会真的进转换矩阵 —— 「细网格在 0.3 以下淡出」
+   * 这类判据看的就是它。
+   *
+   * 消费方传 `fit` 时它会**被忽略**（React Flow 自己算一个缩到装得下的视口）。
+   */
+  readonly viewport: { x: number; y: number; zoom: number };
+};
 
 /**
  * 画布铺底的尺寸：够摆一张卡片与它周围的留白，又不至于把侧栏挤走。
@@ -315,6 +315,7 @@ export type CanvasSceneName = keyof typeof CANVAS_SCENES;
  * 与值源的 `load()` 同一条口径）。
  */
 export function canvasScene(name: string): CanvasScene {
+  /* SAFETY: 类型断言已复核 */
   const scene: CanvasScene | undefined = CANVAS_SCENES[name as CanvasSceneName];
   if (scene === undefined) {
     throw new Error(`画布场景里没有叫「${name}」的那种。现有的：${CANVAS_SCENE_NAMES.join(" / ")}`);
@@ -359,7 +360,14 @@ export function StorybookFlowCanvas({
   fit = false,
   children,
 }: {
-  scene: CanvasScene;
+  children?: ReactNode;
+  /**
+   * 把整场缩到框里（`fitView`），而不是用场景里钉住的视口。
+   *
+   * 传它的判据只有一条：**我的节点渲染器装不进 560px 的框**。装得下就照旧钉住
+   * 视口 —— 缩放本身是有些档的被测对象。
+   */
+  fit?: boolean;
   /**
    * 业务节点渲染器。`nodeTypes` 是 React Flow 认节点的唯一入口，而「用哪个
    * 渲染器」是 story 的事（画布节点 / 库预览 / 子图各一）。
@@ -370,21 +378,14 @@ export function StorybookFlowCanvas({
    * 渲染器缺席时静默退成白框、看起来像「节点坏了」）。
    */
   nodeTypes?: NodeTypes;
-  /**
-   * 把整场缩到框里（`fitView`），而不是用场景里钉住的视口。
-   *
-   * 传它的判据只有一条：**我的节点渲染器装不进 560px 的框**。装得下就照旧钉住
-   * 视口 —— 缩放本身是有些档的被测对象。
-   */
-  fit?: boolean;
-  children?: ReactNode;
+  scene: CanvasScene;
 }) {
   return (
     <div className={`${CANVAS_FRAME_CLASS} bg-canvas relative`}>
       <ReactFlowProvider>
         <ReactFlow
-          nodes={[...scene.nodes]}
           edges={[...scene.edges]}
+          nodes={[...scene.nodes]}
           nodeTypes={nodeTypes}
           /* 两种视口口径互斥：`fit` 时 React Flow 自己算视口、`viewport` 不传
              （传了也不会被用，但留着会让人以为「钉住 + 自适应」能同时成立）。 */
@@ -397,27 +398,27 @@ export function StorybookFlowCanvas({
                 viewport: scene.viewport,
                 onViewportChange: () => undefined,
               })}
-          proOptions={{ hideAttribution: true }}
-          nodesDraggable={false}
-          nodesConnectable={false}
           elementsSelectable={false}
+          nodesConnectable={false}
+          nodesDraggable={false}
+          proOptions={{ hideAttribution: true }}
         >
           {/* 细网格 + 主参考线：与 `WorkflowCanvasDecorations` 的 `CanvasGrid`
               同一个判据来源（缩放太低时细线淡出、底色留下）。这里用 React Flow
               自带的 `<Background>` 摆一份等价的底，好让「底色在不在」这件事在
               画布上看得见 —— 它是画布有没有渲染出来的唯一直观凭据。 */}
           <Background
-            variant={BackgroundVariant.Lines}
+            color="var(--color-border)"
             gap={10}
             lineWidth={1}
-            color="var(--color-border)"
+            variant={BackgroundVariant.Lines}
           />
           <Background
-            id="major"
-            variant={BackgroundVariant.Lines}
-            gap={100}
-            lineWidth={1}
             color="var(--color-border-strong)"
+            gap={100}
+            id="major"
+            lineWidth={1}
+            variant={BackgroundVariant.Lines}
           />
           {children}
         </ReactFlow>

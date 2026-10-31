@@ -31,26 +31,29 @@ import { generatedRoot, legacyGeneratedRoot } from "./output-paths";
 const log = createAppRuntimeLogger("artifact-root");
 
 /** 一次迁移的结果形状（调用点据此决定说什么话）。 */
-export interface ArtifactRootMigrationReport {
-  status: "nothing-to-do" | "moved" | "left-behind";
+export type ArtifactRootMigrationReport = {
+  /** 没能搬走的条目（被占用 / 权限），名字与 errno 码成对。 */
+  blocked: Array<{ code: string; name: string }>;
   /** 成功搬到新根的顶层条目名。 */
   moved: Array<string>;
   /** 新根里已有同名条目 ⇒ 原样留在原地，绝不覆盖。 */
   skipped: Array<string>;
-  /** 没能搬走的条目（被占用 / 权限），名字与 errno 码成对。 */
-  blocked: Array<{ name: string; code: string }>;
-}
+  status: "nothing-to-do" | "moved" | "left-behind";
+};
 
 /** 把一个顶层条目从旧根挪到新根。ENOENT 视为「别的进程已经搬走了」，不算失败。 */
 function moveEntry(
   from: string,
   to: string,
-): { kind: "moved" } | { kind: "already-gone" } | { kind: "blocked"; code: string } {
+): { kind: "moved" } | { kind: "already-gone" } | { code: string; kind: "blocked" } {
   try {
     fs.renameSync(from, to);
     return { kind: "moved" };
-  } catch (e) {
-    const code = typeof e === "object" && e !== null && "code" in e ? String(e.code) : "UNKNOWN";
+  } catch (error) {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String(error.code)
+        : "UNKNOWN";
     // 两个宿主同时起（Next 与执行器宿主）时这条会撞上：先动的那个已经把名字搬走了
     return code === "ENOENT" ? { kind: "already-gone" } : { kind: "blocked", code };
   }
@@ -74,7 +77,9 @@ export function migrateLegacyArtifactRoot(
 
   let entries: Array<string>;
   try {
-    if (!fs.existsSync(legacy) || !fs.statSync(legacy).isDirectory()) return report;
+    if (!fs.existsSync(legacy) || !fs.statSync(legacy).isDirectory()) {
+      return report;
+    }
     entries = fs.readdirSync(legacy);
   } catch {
     // 读不到旧根（权限 / 正被删）：记成「留在原地」，让调用点有话可说，不阻断启动
@@ -91,8 +96,11 @@ export function migrateLegacyArtifactRoot(
         continue;
       }
       const outcome = moveEntry(path.join(legacy, name), to);
-      if (outcome.kind === "moved") report.moved.push(name);
-      else if (outcome.kind === "blocked") report.blocked.push({ name, code: outcome.code });
+      if (outcome.kind === "moved") {
+        report.moved.push(name);
+      } else if (outcome.kind === "blocked") {
+        report.blocked.push({ name, code: outcome.code });
+      }
     }
   }
   // 只有「一条都没留下」才试着收掉空壳；留着旧目录不是错误，而是下面这句话的

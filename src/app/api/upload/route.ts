@@ -30,7 +30,9 @@ export async function POST(req: NextRequest) {
 
   const form = await req.formData();
   const file = /* SAFETY: 类型断言已复核 */ form.get("image") as File | null;
-  if (!file) return NextResponse.json({ error: "未收到文件" }, { status: 400 });
+  if (!file) {
+    return NextResponse.json({ error: "未收到文件" }, { status: 400 });
+  }
   if (!ALLOWED_MIME.has(file.type)) {
     return NextResponse.json({ error: "仅支持 PNG / JPG / WebP / GIF 图片" }, { status: 400 });
   }
@@ -49,10 +51,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const res = await uploadImage(buf, filename, "input");
-    if (!res.name) return NextResponse.json({ error: "上传失败" }, { status: 500 });
+    if (!res.name) {
+      return NextResponse.json({ error: "上传失败" }, { status: 500 });
+    }
     return NextResponse.json({ name: res.name });
-  } catch (e) {
-    const msg = apiErrorDetail(e, "上传失败");
+  } catch (error) {
+    const msg = apiErrorDetail(error, "上传失败");
     const base = comfyBase();
     if (isUnreachable(msg)) {
       /* ComfyUI 没在运行 / 配置路径的实例没起来。上传本身要求它已经跑着

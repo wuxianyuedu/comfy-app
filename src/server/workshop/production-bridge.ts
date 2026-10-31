@@ -24,16 +24,16 @@ import { production, project, user, type Production } from "~/server/db/schema";
 import { workshopDb } from "./db";
 
 /** 会话里「属于界面真值」的内容面：绑定后由 production 承载。 */
-export interface SessionContent {
-  title: string;
-  type: string;
-  tone: string;
-  logline: string;
-  scriptMarkdown: string;
-  scenes: Array<Scene>;
+export type SessionContent = {
   characters: Array<Character>;
+  logline: string;
+  scenes: Array<Scene>;
+  scriptMarkdown: string;
   shots: Array<Shot>;
-}
+  title: string;
+  tone: string;
+  type: string;
+};
 
 /** 解析会话内容的归属用户：显式 id 必须存在；缺省取本机最早的账号（确定性）。 */
 export async function resolveOwnerUserId(explicit: string | null): Promise<string> {
@@ -100,7 +100,9 @@ async function ensureProductionRow(
     .from(production)
     .where(eq(production.id, projectId))
     .limit(1);
-  if (rows[0]) return;
+  if (rows[0]) {
+    return;
+  }
   await workshopDb.insert(production).values({ id: projectId, userId: ownerId, title });
 }
 
@@ -149,19 +151,20 @@ export async function readProductionContent(projectId: string): Promise<SessionC
     .where(eq(production.id, projectId))
     .limit(1);
   const row: Production | undefined = rows[0];
-  if (!row) return null;
+  if (!row) {
+    return null;
+  }
   return {
     title: row.title,
     type: row.type,
     tone: row.tone,
     logline: row.logline,
     scriptMarkdown: row.scriptMarkdown,
-    scenes: Array.isArray(row.scenes)
-      ? /* SAFETY: 类型断言已复核 */ (row.scenes as Array<Scene>)
-      : [],
-    characters: Array.isArray(row.characters)
-      ? /* SAFETY: 类型断言已复核 */ (row.characters as Array<Character>)
-      : [],
-    shots: Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>) : [],
+    /* SAFETY: 类型断言已复核 */
+    scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
+    /* SAFETY: 类型断言已复核 */
+    characters: Array.isArray(row.characters) ? (row.characters as Array<Character>) : [],
+    /* SAFETY: 类型断言已复核 */
+    shots: Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [],
   };
 }

@@ -68,9 +68,7 @@ const LazyFinalComposer = React.lazy(() =>
 
 /** 懒加载占位：保留版面高度，避免 stage 切换瞬间塌陷。 */
 function StageFallback() {
-  return (
-    <Skeleton className="border-border bg-surface min-h-65 rounded-2xl border p-5" />
-  );
+  return <Skeleton className="border-border bg-surface min-h-65 rounded-2xl border p-5" />;
 }
 
 /**
@@ -82,13 +80,7 @@ function StageFallback() {
  * `label` 是用户能认出来的那一段的名字 —— 只说「加载失败」等于让用户自己在
  * 六个卡片里找哪块坏了。
  */
-function StageBoundary({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function StageBoundary({ label, children }: { children: React.ReactNode; label: string }) {
   const fallback = useLazyChunkFallback(label);
   return (
     <ErrorBoundary fallback={fallback}>
@@ -97,9 +89,9 @@ function StageBoundary({
   );
 }
 
-interface WorkshopStageBodyProps {
+type WorkshopStageBodyProps = {
   controller: WorkshopPipelineController;
-}
+};
 
 export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
   const {
@@ -194,14 +186,14 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
 
       {notice && (
         <div className="border-destructive/30 bg-destructive/10 text-destructive mb-4 flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs">
-          <Icon name="info" size={13} className="shrink-0" />
+          <Icon className="shrink-0" name="info" size={13} />
           <span className="flex-1">{notice}</span>
           <Button
+            className="hover:bg-destructive/15"
+            onClick={dismissNotice}
+            size="xs"
             type="button"
             variant="ghost"
-            size="xs"
-            onClick={dismissNotice}
-            className="hover:bg-destructive/15"
           >
             关闭
           </Button>
@@ -231,10 +223,10 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                   {/* 剧本评审闭环入口（FR-QA-07 ④ · #2478）：改写成功把新剧本喂回编辑器。 */}
                   <ScriptReviewButton onScriptRevised={setScriptMarkdown} />
                   <Button
+                    className="px-4"
+                    onClick={openScriptEditor}
                     type="button"
                     variant="gradient"
-                    onClick={openScriptEditor}
-                    className="px-4"
                   >
                     编辑剧本
                   </Button>
@@ -260,18 +252,18 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
+                      className="bg-subtle text-ink hover:bg-surface-2 px-4"
+                      onClick={scriptPicker.open}
                       type="button"
                       variant="ghost"
-                      onClick={scriptPicker.open}
-                      className="bg-subtle text-ink hover:bg-surface-2 px-4"
                     >
                       导入剧本
                     </Button>
                     <Button
+                      className="px-4"
+                      onClick={openScriptEditor}
                       type="button"
                       variant="gradient"
-                      onClick={openScriptEditor}
-                      className="px-4"
                     >
                       新建剧本
                     </Button>
@@ -299,21 +291,17 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Character ── */}
       {tab === "character" && (
         <>
-          {prereq && (
-            <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
-          )}
+          {prereq && <StageHint onGo={() => setTab(prereq.go)} text={prereq.text} />}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <h3 className="text-ink u-title mb-3">角色工具</h3>
             <StageBoundary label="角色工具">
               <LazyCharacterDesigner
                 characters={characters}
-                styles={styles}
-                onCharactersChange={setCharacters}
-                scriptMarkdown={scriptMarkdown}
                 extract={{
                   session: characterExtract,
                   actions: characterExtractActions,
                 }}
+                onCharactersChange={setCharacters}
                 portrait={{
                   session: characterPortrait,
                   actions: characterPortraitActions,
@@ -321,6 +309,8 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                   workflows: workflowOptions,
                   onOpenModelAdapters: openModelAdapters,
                 }}
+                scriptMarkdown={scriptMarkdown}
+                styles={styles}
               />
             </StageBoundary>
           </section>
@@ -330,15 +320,13 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Storyboard ── */}
       {tab === "storyboard" && (
         <>
-          {prereq && (
-            <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
-          )}
+          {prereq && <StageHint onGo={() => setTab(prereq.go)} text={prereq.text} />}
           <div className="mt-4 flex justify-end">
             <Button
+              className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-xl px-6 py-3 text-sm font-semibold"
+              onClick={() => setTab("shots")}
               type="button"
               variant="ghost"
-              onClick={() => setTab("shots")}
-              className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-xl px-6 py-3 text-sm font-semibold"
             >
               下一阶段 →
             </Button>
@@ -348,20 +336,20 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             <h3 className="text-ink u-title mb-3">分镜工具</h3>
             <StageBoundary label="分镜工具">
               <LazyStoryboardPlanner
-                scenes={scenes}
                 characters={characters}
-                styles={styles}
-                shots={shots}
-                onShotsChange={setShots}
-                onGenerate={generateShot}
-                generating={generating}
-                progressByShot={shotProgress}
-                scriptMarkdown={scriptMarkdown}
-                onCharactersChange={setCharacters}
                 extract={{
                   session: storyboardExtract,
                   actions: storyboardExtractActions,
                 }}
+                generating={generating}
+                onCharactersChange={setCharacters}
+                onGenerate={generateShot}
+                onShotsChange={setShots}
+                progressByShot={shotProgress}
+                scenes={scenes}
+                scriptMarkdown={scriptMarkdown}
+                shots={shots}
+                styles={styles}
               />
             </StageBoundary>
           </section>
@@ -371,9 +359,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Shot images (镜头生图) ── */}
       {tab === "shots" && (
         <>
-          {prereq && (
-            <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
-          )}
+          {prereq && <StageHint onGo={() => setTab(prereq.go)} text={prereq.text} />}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-ink u-title">生图工具</h3>
@@ -383,18 +369,18 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             </div>
             <StageBoundary label="生图工具">
               <LazyShotStudio
-                shots={shots}
-                scenes={scenes}
-                characters={characters}
-                styles={styles}
-                workflowId={workflowId}
-                projectId={activeProjectId}
                 apiChannels={apiChannels}
-                onOpenModelAdapters={openModelAdapters}
-                onShotsChange={setShots}
-                onNotice={showNotice}
+                characters={characters}
                 onCancelShot={(shot) => void cancelShotTask(shot, "image")}
                 onNextStage={() => setTab("video")}
+                onNotice={showNotice}
+                onOpenModelAdapters={openModelAdapters}
+                onShotsChange={setShots}
+                projectId={activeProjectId}
+                scenes={scenes}
+                shots={shots}
+                styles={styles}
+                workflowId={workflowId}
               />
             </StageBoundary>
           </section>
@@ -404,9 +390,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Video generation (视频生成) ── */}
       {tab === "video" && (
         <>
-          {prereq && (
-            <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
-          )}
+          {prereq && <StageHint onGo={() => setTab(prereq.go)} text={prereq.text} />}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-ink u-title">视频工具</h3>
@@ -416,16 +400,16 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             </div>
             <StageBoundary label="视频工具">
               <LazyVideoStudio
+                apiChannels={apiChannels}
+                onCancelShot={(shot) => void cancelShotTask(shot, "video")}
+                onNextStage={() => setTab("render")}
+                onNotice={showNotice}
+                onOpenModelAdapters={openModelAdapters}
+                onPrevStage={() => setTab("shots")}
+                onShotsChange={setShots}
+                projectId={activeProjectId}
                 shots={shots}
                 workflowId={videoWorkflowId}
-                projectId={activeProjectId}
-                apiChannels={apiChannels}
-                onOpenModelAdapters={openModelAdapters}
-                onShotsChange={setShots}
-                onNotice={showNotice}
-                onCancelShot={(shot) => void cancelShotTask(shot, "video")}
-                onPrevStage={() => setTab("shots")}
-                onNextStage={() => setTab("render")}
               />
             </StageBoundary>
           </section>
@@ -435,18 +419,16 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Final composition (成片合成) ── */}
       {tab === "render" && (
         <>
-          {prereq && (
-            <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
-          )}
+          {prereq && <StageHint onGo={() => setTab(prereq.go)} text={prereq.text} />}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <StageBoundary label="成片合成">
               <LazyFinalComposer
-                shots={shots}
-                title={meta.title || "未命名项目"}
+                onComposeFilm={goToFilm}
+                onRendered={markRendered}
                 onShotsChange={setShots}
                 rendered={rendered}
-                onRendered={markRendered}
-                onComposeFilm={goToFilm}
+                shots={shots}
+                title={meta.title || "未命名项目"}
               />
             </StageBoundary>
           </section>
@@ -457,11 +439,11 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {isScriptEditorOpen && (
         <StageBoundary label="剧本编辑器">
           <LazyScriptMarkdownEditor
-            title={meta.title || "编辑剧本"}
-            value={scriptMarkdown}
+            onCancel={closeScriptEditor}
             onChange={setScriptMarkdown}
             onSave={saveScriptEditor}
-            onCancel={closeScriptEditor}
+            title={meta.title || "编辑剧本"}
+            value={scriptMarkdown}
           />
         </StageBoundary>
       )}

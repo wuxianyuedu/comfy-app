@@ -531,7 +531,7 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
     /* 与 `updateProgress` / `markRunning` 那两处的 COALESCE 相反，这里是无条件覆写：
      * 一次领取就是新一轮执行的起点，崩溃后重领的行不该带着上一轮的耗时基准。 */
     expect(stamped).toBeGreaterThan(staleAt.getTime());
-    expect(Math.abs((stamped ?? 0) - Date.now())).toBeLessThan(5_000);
+    expect(Math.abs((stamped ?? 0) - Date.now())).toBeLessThan(5000);
   });
 });
 

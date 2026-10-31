@@ -18,10 +18,10 @@ import { upperToken } from "~/lib/upper-token";
 export type SizeScene = "image" | "video";
 
 /** 一个比例预设：`label` 是 UI 上的显示名（含方位后缀），`ratio` = 宽 / 高。 */
-export interface SizeRatioPreset {
+export type SizeRatioPreset = {
   label: string;
   ratio: number;
-}
+};
 
 /** 比例预设（8 档）。宽高两侧都列出，避免用户手算倒数比例。
  *
@@ -56,19 +56,19 @@ export const DEFAULT_ALIGN_MULTIPLE: AlignMultiple = 64;
 export const MIN_SIZE = 64;
 export const MAX_SIZE = 4096;
 
-export interface SizeDims {
-  width: number;
+export type SizeDims = {
   height: number;
-}
+  width: number;
+};
 
 /** 单场景的「比例 → 各分辨率档的宽高」表。 */
 export type SceneResolutionTable = Record<string, Record<ResolutionTier, SizeDims>>;
 
 /** 全场景尺寸表。 */
-export interface SizePresetTable {
+export type SizePresetTable = {
   image: SceneResolutionTable;
   video: SceneResolutionTable;
-}
+};
 
 const dims = (width: number, height: number): SizeDims => ({ width, height });
 
@@ -179,9 +179,15 @@ export const SIZE_SCENE_LABELS: Record<SizeScene, string> = {
  *  （与 `workflow-encapsulation` 的 `isVideoMode` 同一口径）。 */
 export function sceneFromMode(mode: string | null | undefined): SizeScene {
   const code = upperToken(mode);
-  if (!code) return "image";
-  if (code.includes("VIDEO")) return "video";
-  if (code.endsWith("V")) return "video";
+  if (!code) {
+    return "image";
+  }
+  if (code.includes("VIDEO")) {
+    return "video";
+  }
+  if (code.endsWith("V")) {
+    return "video";
+  }
   return "image";
 }
 
@@ -217,7 +223,9 @@ export function resolutionDims(
 ): SizeDims {
   const row = table[scene]?.[nearestRatioPreset(ratio).label];
   const hit = row?.[tier];
-  if (hit && hit.width > 0 && hit.height > 0) return { ...hit };
+  if (hit && hit.width > 0 && hit.height > 0) {
+    return { ...hit };
+  }
   const safe = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
   const longEdge = tier === "4k" ? 3840 : tier === "2k" ? 2048 : 1024;
   return safe >= 1
@@ -238,7 +246,9 @@ export function totalPixelsOf(size: SizeDims): number {
 /** 宽高 → 百万像素（默认保留 3 位小数，够表达 1024×576 = 0.59M 这档差异）。 */
 export function megapixelsOf(size: SizeDims, digits = 3): number {
   const raw = totalPixelsOf(size) / 1_000_000;
-  if (!Number.isFinite(raw) || raw <= 0) return 1;
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return 1;
+  }
   const factor = 10 ** digits;
   return Math.round(raw * factor) / factor;
 }
@@ -256,9 +266,13 @@ export function megapixelsForSize(
   height: number,
   defaultValue?: unknown,
 ): number | null {
-  if (!(width > 0) || !(height > 0)) return null;
+  if (!(width > 0) || !(height > 0)) {
+    return null;
+  }
   const raw = (width * height) / 1_000_000;
-  if (!Number.isFinite(raw) || raw <= 0) return null;
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return null;
+  }
   const digits = typeof defaultValue === "number" && !Number.isInteger(defaultValue) ? 1 : 0;
   const factor = 10 ** digits;
   const rounded = Math.round(raw * factor) / factor;
@@ -340,15 +354,15 @@ export function toMegapixelSpec(
 
 export type ClarityKind = "resolution" | "megapixel";
 
-export interface SizeClarityPreset {
+export type SizeClarityPreset = {
   kind: ClarityKind;
   /** 显示名（"1k" / "2M"），也是 `SizeSpec.clarity` 的取值。 */
   label: string;
-  /** 分辨率档：档位名。 */
-  tier?: ResolutionTier;
   /** 百万像素档：总像素档位（1 = 1M）。 */
   megapixels?: number;
-}
+  /** 分辨率档：档位名。 */
+  tier?: ResolutionTier;
+};
 
 /** 清晰度档位目录。类型是非空数组，同 {@link SIZE_RATIO_PRESETS}
  *  ——首项即默认档，调用点不必再补 `!`。 */
@@ -383,7 +397,9 @@ export const CLARITY_SUBGROUP_LABELS: Record<ClarityKind, string> = {
  *  null（`"1k"` / `""` / 乱串），由调用方决定怎么回退。 */
 export function parseMegapixelLabel(label: string): number | null {
   const match = /^(\d+(?:\.\d+)?)\s*M$/i.exec(label.trim());
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   const value = Number(match[1]);
   return Number.isFinite(value) && value > 0 ? value : null;
 }
@@ -414,7 +430,9 @@ export function megapixelLabel(value: number): string {
  *  而界面上还显示着 2.5M）。 */
 export function clarityPresetOfLabel(label: string): SizeClarityPreset {
   const known = SIZE_CLARITY_PRESETS.find((preset) => preset.label === label);
-  if (known) return known;
+  if (known) {
+    return known;
+  }
   const free = parseMegapixelLabel(label);
   return free === null ? SIZE_CLARITY_PRESETS[0] : { kind: "megapixel", label, megapixels: free };
 }
@@ -433,7 +451,9 @@ export function resolutionTierOfLabel(label: string): ResolutionTier | null {
 /** 百万像素 label（`"2M"` / `"2.5M"`）→ 数值（2 / 2.5）；不是百万像素返回 null。 */
 export function megapixelTierOfLabel(label: string): number | null {
   const preset = SIZE_CLARITY_PRESETS.find((item) => item.label === label);
-  if (preset) return preset.megapixels ?? null;
+  if (preset) {
+    return preset.megapixels ?? null;
+  }
   return parseMegapixelLabel(label);
 }
 
@@ -447,16 +467,16 @@ export function megapixelTierOfLabel(label: string): number | null {
  * 目标要是「宽 + 高」时，用 `sizeSpecDims` 由上面任一种**算**出来（派生值，
  * 不是第二种表达）。 */
 
-export interface SizeSpec {
-  /** 比例预设 label（`SIZE_RATIO_PRESETS[].label`，如 "16:9 横屏" / "3:4"）。 */
-  ratio: string;
+export type SizeSpec = {
   /** 清晰度标签：档位表里的（`SIZE_CLARITY_PRESETS[].label`，如 "1k" / "2M"），
    *  或**任意百万像素值**（如 `"2.5M"` —— 界面上的步进器写出来的就是它：
    *  百万像素在端口上是 FLOAT，1M/2M/4M 只是常用档位，不是值域边界）。 */
   clarity: string;
   /** 百万像素档的宽高对齐倍数；分辨率档不读它（宽高由场景表给定）。 */
   multiple: AlignMultiple;
-}
+  /** 比例预设 label（`SIZE_RATIO_PRESETS[].label`，如 "16:9 横屏" / "3:4"）。 */
+  ratio: string;
+};
 
 /** 默认尺寸：竖屏 1k（3:4，图片场景表 → 768×1024）。 */
 export const DEFAULT_SIZE_SPEC: SizeSpec = {
@@ -471,7 +491,7 @@ export const DEFAULT_SIZE_SPEC: SizeSpec = {
  *  方（MCP / 接口）按直觉给的是短标签，落到最接近的预设行即可；缺项与识别不出的
  *  值回退默认。 */
 export function normalizeSizeSpec(
-  raw: { ratio?: unknown; clarity?: unknown; multiple?: unknown } | null | undefined,
+  raw: { clarity?: unknown; multiple?: unknown; ratio?: unknown } | null | undefined,
 ): SizeSpec {
   const ratioLabel = normalizeRatioLabel(raw?.ratio);
   const clarityLabel =
@@ -488,12 +508,18 @@ export function normalizeSizeSpec(
 /** 比例写法 → 预设 label：预设 label 原样、短标签（"16:9"）落到最接近的预设行、
  *  识别不出回退默认。 */
 export function normalizeRatioLabel(raw: unknown): string {
-  if (typeof raw !== "string" || !raw.trim()) return DEFAULT_SIZE_SPEC.ratio;
+  if (typeof raw !== "string" || !raw.trim()) {
+    return DEFAULT_SIZE_SPEC.ratio;
+  }
   const text = raw.trim();
   const exact = SIZE_RATIO_PRESETS.find((preset) => preset.label === text);
-  if (exact) return exact.label;
+  if (exact) {
+    return exact.label;
+  }
   const ratio = parseRatioFromText(text);
-  if (ratio === null) return DEFAULT_SIZE_SPEC.ratio;
+  if (ratio === null) {
+    return DEFAULT_SIZE_SPEC.ratio;
+  }
   const preset = nearestRatioPreset(ratio);
   /* 差得太远（如 "42:1"）不硬掰到标准比例 —— 回退默认，让调用方给个像样的比例；
    * 邻近的写法（"2.39:1" → 21:9、"1.85:1" → 16:9）则照常吸附。 */
@@ -523,7 +549,9 @@ export function sizeSpecDims(
 ): SizeDims {
   const ratio = sizeSpecRatio(spec);
   const tier = resolutionTierOfLabel(spec.clarity);
-  if (tier) return resolutionDims(scene, ratio, tier, table);
+  if (tier) {
+    return resolutionDims(scene, ratio, tier, table);
+  }
   return megapixelDims(
     ratio,
     megapixelTierOfLabel(spec.clarity) ?? 1,
@@ -552,7 +580,9 @@ export function sizeSpecMegapixels(
   table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
 ): number {
   const preset = clarityPresetOfLabel(spec.clarity);
-  if (preset.kind === "resolution") return megapixelsOf(sizeSpecDims(spec, scene, table));
+  if (preset.kind === "resolution") {
+    return megapixelsOf(sizeSpecDims(spec, scene, table));
+  }
   return preset.megapixels ?? 1;
 }
 
@@ -592,7 +622,9 @@ export function sizeSpecLongEdge(
   scene: SizeScene = "image",
   table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
 ): number | undefined {
-  if (sizeSpecKind(spec) !== "resolution") return undefined;
+  if (sizeSpecKind(spec) !== "resolution") {
+    return undefined;
+  }
   return longEdgeOf(sizeSpecDims(spec, scene, table));
 }
 
@@ -612,7 +644,9 @@ export function clarityLabelOfDims(
   scene: SizeScene = "image",
   table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
 ): string {
-  if (!(width > 0) || !(height > 0)) return DEFAULT_SIZE_SPEC.clarity;
+  if (!(width > 0) || !(height > 0)) {
+    return DEFAULT_SIZE_SPEC.clarity;
+  }
   const ratio = width / height;
   let best = SIZE_CLARITY_PRESETS[0];
   let bestDist = Number.POSITIVE_INFINITY;
@@ -636,7 +670,9 @@ export function sizeSpecFromDims(
   scene: SizeScene = "image",
   table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
 ): SizeSpec {
-  if (!(width > 0) || !(height > 0)) return { ...DEFAULT_SIZE_SPEC };
+  if (!(width > 0) || !(height > 0)) {
+    return { ...DEFAULT_SIZE_SPEC };
+  }
   return {
     ratio: nearestRatioPreset(width / height).label,
     clarity: clarityLabelOfDims(width, height, scene, table),
@@ -646,12 +682,18 @@ export function sizeSpecFromDims(
 
 /** 解析 "832x1216" → 宽高；无法识别返回 null。 */
 export function parseSizeText(text: unknown): SizeDims | null {
-  if (typeof text !== "string" || !text.trim()) return null;
+  if (typeof text !== "string" || !text.trim()) {
+    return null;
+  }
   const match = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(text.trim());
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   const width = Number(match[1]);
   const height = Number(match[2]);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
+  }
   return { width, height };
 }
 
@@ -664,7 +706,9 @@ export function sizeSpecFromText(
   table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
 ): SizeSpec {
   const dims = parseSizeText(raw);
-  if (!dims) return { ...DEFAULT_SIZE_SPEC };
+  if (!dims) {
+    return { ...DEFAULT_SIZE_SPEC };
+  }
   return sizeSpecFromDims(dims.width, dims.height, scene, table);
 }
 
@@ -674,7 +718,9 @@ export function sizeSpecFromText(
  *  `"1280x720"`、老请求体里的 `size` 字段 —— 新版一律写 `SizeSpec`，识别不出的
  *  值（含 `undefined` / 脏 JSON）回退默认，不抛错。 */
 export function toSizeSpec(raw: unknown): SizeSpec {
-  if (typeof raw === "string") return sizeSpecFromText(raw);
+  if (typeof raw === "string") {
+    return sizeSpecFromText(raw);
+  }
   if (raw && typeof raw === "object") {
     return normalizeSizeSpec(raw);
   }
@@ -692,21 +738,31 @@ export function aspectLabelForDims(
   height: number,
   options?: ReadonlyArray<string>,
 ): string | null {
-  if (!(width > 0) || !(height > 0)) return null;
+  if (!(width > 0) || !(height > 0)) {
+    return null;
+  }
   const target = width / height;
   const ranked = [...SIZE_RATIO_PRESETS].sort(
     (a, b) => Math.abs(a.ratio - target) - Math.abs(b.ratio - target),
   );
   for (const preset of ranked) {
-    if (Math.abs(preset.ratio - target) / target > 0.02) continue;
+    if (Math.abs(preset.ratio - target) / target > 0.02) {
+      continue;
+    }
     const label = shortRatio(preset.label);
-    if (!options || options.length === 0) return label;
+    if (!options || options.length === 0) {
+      return label;
+    }
     const hit = options.find((option) => {
-      if (option === label) return true;
+      if (option === label) {
+        return true;
+      }
       const optionRatio = parseRatioFromText(option);
       return optionRatio !== null && Math.abs(optionRatio - preset.ratio) / preset.ratio < 0.02;
     });
-    if (hit) return hit;
+    if (hit) {
+      return hit;
+    }
   }
   return null;
 }
@@ -714,10 +770,14 @@ export function aspectLabelForDims(
 /** 从自由文本里解出宽高比（`"16:9 (Widescreen)"` → 16/9）；解不出返回 null。 */
 export function parseRatioFromText(text: string): number | null {
   const match = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(text);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   const w = Number(match[1]);
   const h = Number(match[2]);
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    return null;
+  }
   return w / h;
 }
 
@@ -729,8 +789,12 @@ export function sceneIsModified(scene: SizeScene, table: SizePresetTable): boole
     for (const tier of RESOLUTION_TIERS) {
       const a = current[preset.label]?.[tier];
       const b = fallback[preset.label]?.[tier];
-      if (!a || !b) return true;
-      if (a.width !== b.width || a.height !== b.height) return true;
+      if (!a || !b) {
+        return true;
+      }
+      if (a.width !== b.width || a.height !== b.height) {
+        return true;
+      }
     }
   }
   return false;
@@ -743,9 +807,13 @@ export function resolutionTierOf(
   height: number,
   table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
 ): ResolutionTier | null {
-  if (!(width > 0) || !(height > 0)) return null;
+  if (!(width > 0) || !(height > 0)) {
+    return null;
+  }
   const row = table[scene]?.[nearestRatioPreset(width / height).label];
-  if (!row) return null;
+  if (!row) {
+    return null;
+  }
   let best: ResolutionTier | null = null;
   let bestDist = Number.POSITIVE_INFINITY;
   for (const tier of RESOLUTION_TIERS) {

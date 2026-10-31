@@ -21,7 +21,9 @@ describe("REVIEW_RUBRICS", () => {
     for (const kind of KINDS) {
       const keys = REVIEW_RUBRICS[kind].dimensions.map((d) => d.key);
       expect(keys).toEqual([...new Set(keys)]);
-      for (const key of keys) expect(key.trim()).not.toBe("");
+      for (const key of keys) {
+        expect(key.trim()).not.toBe("");
+      }
     }
   });
 

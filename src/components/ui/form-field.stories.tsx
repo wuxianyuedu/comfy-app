@@ -67,18 +67,18 @@ export const WithError: Story = {
 export const NonInputControl: Story = {
   render: () => (
     <div className="w-96">
-      <FormField label="输出规格" id="out-size" hint="写进工作流模板">
+      <FormField hint="写进工作流模板" id="out-size" label="输出规格">
         {(a11y) => (
           <SelectMenu
-            value="1024"
-            onChange={() => undefined}
-            options={["512", "1024", "2048"]}
+            aria-label="输出规格"
             labels={{
               "512": "512 × 512",
               "1024": "1024 × 1024",
               "2048": "2048 × 2048",
             }}
-            aria-label="输出规格"
+            onChange={() => undefined}
+            options={["512", "1024", "2048"]}
+            value="1024"
             {...a11y}
           />
         )}

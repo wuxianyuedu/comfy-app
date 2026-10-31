@@ -8,27 +8,27 @@ import { normalizeShotType, type ShotType } from "~/lib/workshop/types";
 import { SUMMARY_MAX, clampText } from "~/lib/text-clamp";
 
 /** Agent 执行工具时需要调用的 controller 操作。 */
-export interface AgentToolHandlers {
+export type AgentToolHandlers = {
+  getCharacters: () => WorkshopDraftDto["characters"];
   getDraft: () => WorkshopDraftDto;
   getMeta: () => WorkshopDraftDto["meta"];
+  getScriptMarkdown: () => string;
+  getShots: () => WorkshopDraftDto["shots"];
+  /** 用当前项目镜头一键成片（服务端逐镜视频 + 合成 + 回写进度）。缺省表示该上下文不支持。 */
+  renderFilm?: () => Promise<{ detail?: string; ok: boolean; summary: string }>;
+  setCharacters: (characters: WorkshopDraftDto["characters"]) => void;
   setMeta: (patch: Partial<WorkshopDraftDto["meta"]>) => void;
   setScriptMarkdown: (markdown: string) => void;
-  getScriptMarkdown: () => string;
-  getCharacters: () => WorkshopDraftDto["characters"];
-  setCharacters: (characters: WorkshopDraftDto["characters"]) => void;
-  getShots: () => WorkshopDraftDto["shots"];
   setShots: (shots: WorkshopDraftDto["shots"]) => void;
-  /** 用当前项目镜头一键成片（服务端逐镜视频 + 合成 + 回写进度）。缺省表示该上下文不支持。 */
-  renderFilm?: () => Promise<{ ok: boolean; summary: string; detail?: string }>;
-}
+};
 
 /** 一个待执行的工具（已解析出参数摘要）。 */
-export interface ResolvedAgentTool {
-  toolName: string;
-  summary: string;
+export type ResolvedAgentTool = {
   argSummary: string;
-  execute: () => Promise<{ ok: boolean; summary: string; detail?: string }>;
-}
+  execute: () => Promise<{ detail?: string; ok: boolean; summary: string }>;
+  summary: string;
+  toolName: string;
+};
 
 /** 安全解析 JSON 参数串为对象。 */
 function safeParseJson(json: string): Record<string, unknown> {
@@ -55,9 +55,9 @@ function summarizeArgs(argsJson: string, maxLen = 200): string {
 
 /** 从 LLM 输出文本中解析角色 JSON 数组（扫描走全库唯一的 `extractJsonArray`）。 */
 function parseCharactersFromJson(text: string): Array<{
-  name: string;
   appearance?: string;
   costume?: string;
+  name: string;
   personality?: string;
 }> {
   try {
@@ -85,7 +85,9 @@ function parseCharacterFull(
 ): { appearance: string; costume: string; personality: string } | null {
   try {
     const parsed: unknown = extractJson(text);
-    if (!isRecord(parsed)) return null;
+    if (!isRecord(parsed)) {
+      return null;
+    }
     const rec = parsed;
     return {
       appearance: typeof rec.appearance === "string" ? rec.appearance : "",
@@ -103,10 +105,10 @@ function parseCharacterFull(
  *  的地方。它一度是 `shotType: string` 然后在下游写 `s.shotType as never`，
  *  于是「模型返回什么景别都直接进库」这件事在类型层完全看不见（台账 F13）。 */
 function parseShotsFromJson(text: string): Array<{
-  sceneHeading: string;
-  description: string;
-  shotType: ShotType;
   characterNames: Array<string>;
+  description: string;
+  sceneHeading: string;
+  shotType: ShotType;
 }> {
   try {
     const arr = extractJsonArray(text);
@@ -168,9 +170,15 @@ export function resolveAgentTool(
     case "set_project_meta": {
       const args = safeParseJson(argsJson);
       const patch: Partial<WorkshopDraftDto["meta"]> = {};
-      if (typeof args.title === "string") patch.title = args.title;
-      if (typeof args.tone === "string") patch.tone = args.tone;
-      if (typeof args.logline === "string") patch.logline = args.logline;
+      if (typeof args.title === "string") {
+        patch.title = args.title;
+      }
+      if (typeof args.tone === "string") {
+        patch.tone = args.tone;
+      }
+      if (typeof args.logline === "string") {
+        patch.logline = args.logline;
+      }
       if (typeof args.type === "string") {
         const valid = ["short_video", "micro_film", "animation", "ad", "comic", "other"];
         if (valid.includes(args.type)) {
@@ -329,7 +337,9 @@ ${script.slice(0, 8000)}`,
         summary: `添加角色「${charName}」`,
         argSummary,
         execute: async () => {
-          if (!charName.trim()) return { ok: false, summary: "角色名为空" };
+          if (!charName.trim()) {
+            return { ok: false, summary: "角色名为空" };
+          }
           const existing = hd.getCharacters();
           if (existing.some((c) => c.name === charName)) {
             return { ok: false, summary: `角色「${charName}」已存在` };
@@ -445,7 +455,7 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
       };
     }
 
-    default:
+    default: {
       return {
         toolName: name,
         summary: `未知工具：${name}`,
@@ -455,5 +465,6 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
           summary: `未知工具「${name}」`,
         }),
       };
+    }
   }
 }

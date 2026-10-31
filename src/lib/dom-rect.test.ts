@@ -21,12 +21,12 @@ import {
 
 /** 造一个「像元素」的假对象（jsdom 的 `getBoundingClientRect` 恒为 0）。 */
 function fakeEl(opts: {
-  rect?: Partial<DOMRect>;
-  clientWidth?: number;
   clientHeight?: number;
-  scrollWidth?: number;
+  clientWidth?: number;
+  rect?: Partial<DOMRect>;
   scrollHeight?: number;
   scrollTop?: number;
+  scrollWidth?: number;
 }): Element {
   const rect = {
     x: 0,

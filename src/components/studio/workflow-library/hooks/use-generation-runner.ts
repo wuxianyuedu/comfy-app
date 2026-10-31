@@ -17,23 +17,14 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 import { errorMessage } from "~/lib/error-message";
-import {
-  startLocalGenerate,
-  type TaskProgressNode,
-} from "~/lib/workshop/generation-client";
+import { startLocalGenerate, type TaskProgressNode } from "~/lib/workshop/generation-client";
 import {
   applyParamMapping,
   buildParamEntries,
   parseParamMapping,
 } from "~/lib/workflow/workflow-param-mapping";
-import {
-  appendWorkflowRunLog,
-  registerWorkflowRun,
-} from "~/lib/workflow/workflow-run-store";
-import {
-  toWorkflowInputsPayload,
-  type WorkflowIOMap,
-} from "~/components/studio/workflow-io";
+import { appendWorkflowRunLog, registerWorkflowRun } from "~/lib/workflow/workflow-run-store";
+import { toWorkflowInputsPayload, type WorkflowIOMap } from "~/components/studio/workflow-io";
 import { seedModeOverrides } from "~/components/studio/project-canvas/CanvasNode/helpers";
 
 import {
@@ -45,8 +36,8 @@ import {
 export type Phase =
   | { kind: "idle" }
   | { kind: "starting" }
-  | { kind: "running"; pct: number; node?: TaskProgressNode }
-  | { kind: "done"; imageUrl?: string }
+  | { kind: "running"; node?: TaskProgressNode; pct: number }
+  | { imageUrl?: string; kind: "done" }
   | { kind: "failed"; message: string };
 
 /** 当前时间戳（毫秒）。
@@ -60,18 +51,18 @@ function nowMs(): number {
 }
 
 /** 发起一次运行所需的全部参数（容器组装；运行器只管状态机与订阅）。 */
-interface RunPayload {
-  workflowId: string;
-  workflowName: string;
-  taskType: string;
-  workflowIO: WorkflowIOMap | null;
+type RunPayload = {
   effectiveMode: string | null;
-  values: Record<string, unknown>;
   /** 载荷按**映射表**组装（不是裸的「暴露 pin 全量下发」）——
    *  生效映射（含本地 overlay）由容器的 `useParamWiring` 持有。 */
   effectiveParamMap: Record<string, unknown>;
   seedModes: Record<string, string>;
-}
+  taskType: string;
+  values: Record<string, unknown>;
+  workflowId: string;
+  workflowIO: WorkflowIOMap | null;
+  workflowName: string;
+};
 
 /** 组装运行期载荷并提交到本机生成，订阅 SSE 直到落定。
  *
@@ -80,8 +71,8 @@ interface RunPayload {
 async function executeRun(
   payload: RunPayload,
   run: {
-    setPhase: (p: Phase) => void;
     handlers: WorkflowRunHandlers;
+    setPhase: (p: Phase) => void;
   },
 ) {
   const {
@@ -138,8 +129,8 @@ async function executeRun(
         },
       });
     });
-  } catch (e) {
-    setPhase({ kind: "failed", message: errorMessage(e, String(e)) });
+  } catch (error) {
+    setPhase({ kind: "failed", message: errorMessage(error, String(error)) });
   }
 }
 
@@ -152,10 +143,7 @@ async function executeRun(
  *   这样「生效映射」等容器侧派生不必倒灌进本 hook（否则与 `useParamWiring`
  *   的回调依赖会互相成环）。
  */
-export function useGenerationRunner(params: {
-  workflowId: string;
-  enabled: boolean;
-}) {
+export function useGenerationRunner(params: { enabled: boolean; workflowId: string }) {
   const { workflowId, enabled } = params;
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   /* 节点相位的节流闸门（`~/components/ui/use-throttled-progress`）。
@@ -178,7 +166,9 @@ export function useGenerationRunner(params: {
     () => ({
       onProgress: (taskId, pct, node) => {
         /* 高频回调：按任务节流（规范 16 §16.2.4.68）。 */
-        if (!progressGate.current.allow(taskId)) return;
+        if (!progressGate.current.allow(taskId)) {
+          return;
+        }
         setPhase({ kind: "running", pct, ...(node ? { node } : {}) });
       },
       onLog: (taskId, entry) => {

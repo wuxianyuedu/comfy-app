@@ -47,10 +47,10 @@ function ShellHarness({
   withTabs = false,
   children = <WorksGallery />,
 }: {
-  extraProjects: ReadonlyArray<string>;
-  withTabs?: boolean;
   /** 壳里装的那一屏（默认给真视图 `WorksGallery`）。 */
   children?: React.ReactNode;
+  extraProjects: ReadonlyArray<string>;
+  withTabs?: boolean;
 }) {
   const projects = useSeededProjects({
     primary: projectScene("namedProject"),
@@ -71,23 +71,23 @@ function ShellHarness({
     <div className="bg-bg h-180 w-full overflow-hidden">
       <AppShell
         active="works"
-        onSelect={() => undefined}
+        activeProjectId={projects[0]?.id ?? null}
+        activeViewKey={withTabs ? activeTab?.key : undefined}
+        onCloseViewTab={() => undefined}
+        onNewProject={() => undefined}
+        onOpenProject={() => undefined}
         onOpenSettings={() => undefined}
+        onSelect={() => undefined}
+        onSelectViewTab={() => undefined}
+        onShowAllProjects={() => undefined}
+        projectNameOf={(projectId) =>
+          projects.find((project) => project.id === projectId)?.name ?? null
+        }
         projects={projects.map((project) => ({
           id: project.id,
           name: project.name,
         }))}
-        activeProjectId={projects[0]?.id ?? null}
-        onOpenProject={() => undefined}
-        onShowAllProjects={() => undefined}
-        onNewProject={() => undefined}
         viewTabs={withTabs ? tabs : undefined}
-        activeViewKey={withTabs ? activeTab?.key : undefined}
-        projectNameOf={(projectId) =>
-          projects.find((project) => project.id === projectId)?.name ?? null
-        }
-        onSelectViewTab={() => undefined}
-        onCloseViewTab={() => undefined}
       >
         {children}
       </AppShell>

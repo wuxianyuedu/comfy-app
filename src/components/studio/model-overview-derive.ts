@@ -7,39 +7,39 @@
  */
 
 /** `model.configList` 返回的目录行里，本模块用到的那几项。 */
-export interface OverviewFolder {
+export type OverviewFolder = {
+  count: number;
   folder: string;
   label: string;
-  count: number;
-}
+};
 
 /** 概览里的一类模型。 */
-export interface ModelOverviewGroup {
+export type ModelOverviewGroup = {
+  count: number;
   /** 目录名（计数口径的身份）。 */
   folder: string;
   /** 展示名（与模型目录配置弹层同一个出处 `folderMeta`）。 */
   label: string;
-  count: number;
-}
+};
 
-export interface ModelOverviewState {
-  /** 有模型的目录，按数量降序；空目录不列（列出来只会稀释信息）。 */
-  groups: Array<ModelOverviewGroup>;
-  /** 本机可用模型的总数。 */
-  total: number;
+export type ModelOverviewState = {
   /** 有多少个目录一个模型都没有 —— 用一句话交代，而不是不声不响地少列。 */
   emptyFolderCount: number;
-  loading: boolean;
   /** 取数失败时给一句可见说明（硬规则 4：失败路径要有用户可见出口）。 */
   error: string | null;
-}
+  /** 有模型的目录，按数量降序；空目录不列（列出来只会稀释信息）。 */
+  groups: Array<ModelOverviewGroup>;
+  loading: boolean;
+  /** 本机可用模型的总数。 */
+  total: number;
+};
 
 export function deriveModelOverview(input: {
   folders: Array<OverviewFolder> | undefined;
-  loading: boolean;
   /** 只传「是不是失败了」这个布尔：错误文案的唯一出处在本模块，
    *  把 Error 对象传进来等于允许调用方各写一句。 */
   isError: boolean;
+  loading: boolean;
 }): ModelOverviewState {
   const folders = input.folders ?? [];
   const withModels = folders

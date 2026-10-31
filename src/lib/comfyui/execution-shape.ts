@@ -12,17 +12,19 @@
  */
 
 /** 一条工作流模板里与「可执行形态」相关的列（其余列无关）。 */
-export interface ExecutionShapes {
+export type ExecutionShapes = {
   /** 工作流(RAW)格式列（可空）。 */
   rawJson?: unknown;
-}
+};
 
 /** 该值是不是一份「有内容」的 RAW 工作流原件（对象，且带非空 `nodes` 数组）。
  *
  *  `nodes` 是 RAW 形态的成立条件：litegraph 存盘一定有它，空数组等于没有节点，
  *  拿去 comfy-cli 只会得到一份空图。 */
 export function hasRawContent(rawJson: unknown): boolean {
-  if (!rawJson || typeof rawJson !== "object" || Array.isArray(rawJson)) return false;
+  if (!rawJson || typeof rawJson !== "object" || Array.isArray(rawJson)) {
+    return false;
+  }
   const nodes = /* SAFETY: 类型断言已复核 */ (rawJson as Record<string, unknown>).nodes;
   return Array.isArray(nodes) && nodes.length > 0;
 }

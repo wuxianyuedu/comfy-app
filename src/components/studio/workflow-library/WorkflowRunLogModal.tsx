@@ -14,13 +14,7 @@
  * `logs/TaskLogTimeline`（队列页执行日志弹窗同款），本文件只保留头部与外壳。
  */
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FileText, X } from "lucide-react";
 import {
   getWorkflowRunStoreSnapshot,
@@ -41,22 +35,19 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
-import {
-  TaskLogEmptyHint,
-  TaskLogTimeline,
-} from "~/components/studio/logs/TaskLogTimeline";
+import { TaskLogEmptyHint, TaskLogTimeline } from "~/components/studio/logs/TaskLogTimeline";
 
-export interface WorkflowRunLogModalProps {
-  /** 所属工作流：日志只展示当前工作流的运行（切换工作流独立显示）。 */
-  workflowId: string;
+export type WorkflowRunLogModalProps = {
+  onClose: () => void;
+  onViewTaskIdChange: (taskId: string | null) => void;
+  open: boolean;
   /** 可选：只看某个来源的运行（画布节点 / 工坊封装各自独立入口时传入）。 */
   source?: WorkflowRunSource;
   /** 当前要查看的运行（受控：节点卡片点击时上抛）。 */
   viewTaskId: string | null;
-  onViewTaskIdChange: (taskId: string | null) => void;
-  open: boolean;
-  onClose: () => void;
-}
+  /** 所属工作流：日志只展示当前工作流的运行（切换工作流独立显示）。 */
+  workflowId: string;
+};
 
 /* 弹窗宽度档：默认 5xl（行是「时刻 + 级别 + 正文」，与执行日志同密度）；
  * 加宽档统一贴视线两边。写`w-*` 而不是`max-w-*` 的理由见
@@ -78,9 +69,7 @@ export function WorkflowRunLogModal({
    * 传入 source 时进一步按来源过滤（画布节点 / 工坊封装各自只看自己的）。 */
   const runs = useMemo(
     () =>
-      snapshot.runs.filter(
-        (r) => r.workflowId === workflowId && (!source || r.source === source),
-      ),
+      snapshot.runs.filter((r) => r.workflowId === workflowId && (!source || r.source === source)),
     [snapshot.runs, workflowId, source],
   );
 
@@ -94,7 +83,9 @@ export function WorkflowRunLogModal({
       openedRef.current = false;
       return;
     }
-    if (openedRef.current) return;
+    if (openedRef.current) {
+      return;
+    }
     openedRef.current = true;
     const active = runs.find((r) => r.status === "running" || !r.status);
     const target = active ?? runs[0];
@@ -104,8 +95,7 @@ export function WorkflowRunLogModal({
   }, [open, runs, viewTaskId, onViewTaskIdChange]);
 
   const run: WorkflowRunMeta | null = useMemo(
-    () =>
-      viewTaskId ? (runs.find((r) => r.taskId === viewTaskId) ?? null) : null,
+    () => (viewTaskId ? (runs.find((r) => r.taskId === viewTaskId) ?? null) : null),
     [viewTaskId, runs],
   );
   const logs = run?.logs ?? [];
@@ -118,13 +108,14 @@ export function WorkflowRunLogModal({
     onFailed: () => undefined,
   });
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   const status = run?.status ?? "running";
   /* 文案在这里，配色走`ui/status-badge` 的同一份状态 → 语义 token 映射
    *（规范 16 §16.2.4.5）。 */
-  const statusLabel =
-    status === "done" ? "完成" : status === "failed" ? "失败" : `运行中`;
+  const statusLabel = status === "done" ? "完成" : status === "failed" ? "失败" : `运行中`;
 
   const onCancel = () => {
     void cancel();
@@ -133,13 +124,13 @@ export function WorkflowRunLogModal({
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
         aria-label="执行日志"
-        data-testid="wflib-log-modal"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
+        data-testid="wflib-log-modal"
         popupClassName={panel.widthClass}
+        showCloseButton={false}
       >
         <div
           className={`border-border bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60 ${panel.widthClass}`}
@@ -147,10 +138,8 @@ export function WorkflowRunLogModal({
           {/* Header */}
           <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <FileText size={16} className="text-primary-strong shrink-0" />
-              <span className="text-ink truncate text-[15px] font-semibold">
-                执行日志
-              </span>
+              <FileText className="text-primary-strong shrink-0" size={16} />
+              <span className="text-ink truncate text-[15px] font-semibold">执行日志</span>
               {run && (
                 <span
                   className="text-ink-muted text-2xs max-w-55 truncate"
@@ -160,16 +149,16 @@ export function WorkflowRunLogModal({
                 </span>
               )}
               {run && (
-                <Badge tone="neutral" size="pill-sm">
+                <Badge size="pill-sm" tone="neutral">
                   {runLogSourceLabel(run.source)}
                 </Badge>
               )}
               {run && (
                 <StatusBadge
-                  status={status}
-                  label={statusLabel}
-                  dot={false}
                   className="text-3xs px-1.5 py-px"
+                  dot={false}
+                  label={statusLabel}
+                  status={status}
                 />
               )}
             </div>
@@ -178,11 +167,11 @@ export function WorkflowRunLogModal({
               {viewTaskId && status === "running" && (
                 <Hint label="取消当前查看的任务" wrap>
                   <Button
-                    variant="danger"
-                    onClick={onCancel}
-                    disabled={cancelling}
-                    data-testid="wflib-log-cancel"
                     className="text-2xs h-auto rounded-md px-2 py-0.5"
+                    data-testid="wflib-log-cancel"
+                    disabled={cancelling}
+                    onClick={onCancel}
+                    variant="danger"
                   >
                     {cancelling ? "× 取消中…" : "× 取消"}
                   </Button>
@@ -190,49 +179,42 @@ export function WorkflowRunLogModal({
               )}
               {runs.length > 1 && (
                 <SelectMenu
-                  value={viewTaskId ?? ""}
-                  onChange={(v) => onViewTaskIdChange(v || null)}
-                  options={runs.map((r) => r.taskId)}
+                  aria-label="切换查看的任务"
+                  className="text-2xs max-w-50"
                   labels={Object.fromEntries(
                     runs.map((r) => [
                       r.taskId,
                       `${r.workflowName} · ${
-                        r.status === "done"
-                          ? "完成"
-                          : r.status === "failed"
-                            ? "失败"
-                            : "运行中"
+                        r.status === "done" ? "完成" : r.status === "failed" ? "失败" : "运行中"
                       }`,
                     ]),
                   )}
-                  aria-label="切换查看的任务"
-                  className="text-2xs max-w-50"
+                  onChange={(v) => onViewTaskIdChange(v || null)}
+                  options={runs.map((r) => r.taskId)}
+                  value={viewTaskId ?? ""}
                 />
               )}
-              <Hint
-                label="查看 comfy-cli 完整输出（未经截断、可格式化 JSON）"
-                wrap
-              >
+              <Hint label="查看 comfy-cli 完整输出（未经截断、可格式化 JSON）" wrap>
                 <Button
-                  variant="ghost"
-                  onClick={() => setRawOpen(true)}
-                  disabled={!viewTaskId}
-                  data-testid="wflib-log-raw"
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong text-2xs rounded-md px-2 py-0.5"
+                  data-testid="wflib-log-raw"
+                  disabled={!viewTaskId}
+                  onClick={() => setRawOpen(true)}
+                  variant="ghost"
                 >
                   查看完整输出
                 </Button>
               </Hint>
               <WidePanelToggle
-                panel={panel}
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                panel={panel}
               />
-              <Hint label="关闭" accessibleName>
+              <Hint accessibleName label="关闭">
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={onClose}
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                  onClick={onClose}
+                  size="icon-sm"
+                  variant="ghost"
                 >
                   <X data-icon="inline-start" size={16} />
                 </Button>
@@ -242,31 +224,27 @@ export function WorkflowRunLogModal({
 
           {/* 时间线主体（级别筛选 + 自动滚动 + 虚拟列表 + 底栏计数）—— 共享组件 */}
           <TaskLogTimeline
+            emptySlot={
+              <TaskLogEmptyHint message={run ? "等待日志…" : "运行生成后此处会显示执行步骤日志"} />
+            }
+            listClassName="bg-panel-deep/60"
             logs={logs}
             rowTestId="wflib-modal-log-line"
-            listClassName="bg-panel-deep/60"
             topSlot={
               run?.errorMessage ? (
                 <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
-                  <div className="wrap-break-word whitespace-pre-wrap">
-                    {run.errorMessage}
-                  </div>
+                  <div className="wrap-break-word whitespace-pre-wrap">{run.errorMessage}</div>
                 </div>
               ) : null
-            }
-            emptySlot={
-              <TaskLogEmptyHint
-                message={run ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
-              />
             }
           />
         </div>
       </DialogContent>
       <WorkflowRunRawCliModal
-        taskId={viewTaskId}
-        running={status === "running"}
-        open={rawOpen}
         onClose={() => setRawOpen(false)}
+        open={rawOpen}
+        running={status === "running"}
+        taskId={viewTaskId}
       />
     </Dialog>
   );

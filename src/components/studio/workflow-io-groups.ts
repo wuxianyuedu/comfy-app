@@ -61,7 +61,6 @@ import {
 
 /** 富化后的 widget 条目，由 `splitWorkflowIO().widgetInputs` 产出。 */
 export type EnrichedWidget = WorkflowIOEntry & {
-  ioKey: string;
   control: ControlKind;
   /** 控件种类是**推断**出来的（条目没有声明 ComfyUI 类型）。
    *  区别于「声明的类型」（富化链路给的 INT / FLOAT / STRING / COMBO …）。
@@ -69,30 +68,31 @@ export type EnrichedWidget = WorkflowIOEntry & {
    *  `defaultInputValues` 据此**不**给推断出的数值控件造默认值，避免离线时
    *  静默下发一个猜出来的数字（见该函数的注释）。 */
   controlInferred?: boolean;
+  ioKey: string;
 };
 
-export interface DimensionGroup {
-  kind: "dimension";
-  groupId: string;
-  /** 常规的 W/H 成对项 —— 渲染「比例 + 清晰度」选择器。 */
-  width?: EnrichedWidget;
-  height?: EnrichedWidget;
+export type DimensionGroup = {
   /** ResolutionSelector 风格的成对项 —— 渲染「比例 + 像素」快捷选择器，
    *  直接写进那两个暴露出来的 widget。 */
   aspect?: EnrichedWidget;
+  groupId: string;
+  height?: EnrichedWidget;
+  kind: "dimension";
   megapixels?: EnrichedWidget;
   /** 倍数（upscale multiple）—— 存在时并入「比例 + 像素」popover 的
    *  第三段，而不是散落成独立数字框。 */
   multiple?: EnrichedWidget;
-}
+  /** 常规的 W/H 成对项 —— 渲染「比例 + 清晰度」选择器。 */
+  width?: EnrichedWidget;
+};
 
-export interface VideoGroup {
-  kind: "video";
-  groupId: string;
-  length?: EnrichedWidget;
+export type VideoGroup = {
   aspect?: EnrichedWidget;
+  groupId: string;
+  kind: "video";
+  length?: EnrichedWidget;
   quality?: EnrichedWidget;
-}
+};
 
 export type InferredGroup = DimensionGroup | VideoGroup;
 
@@ -127,13 +127,13 @@ export const DIM_RATIO_PRESETS: [
  *  **档位目录只有一个出处**：`lib/size-presets` 的 `SIZE_CLARITY_PRESETS`。
  *  这里保留 studio 视图一直在用的形状（`kind` + `label` + `totalPixels`）做一层
  *  再导出，避免同一份档位表在视图层再抄一遍（抄一份就必然漂移）。 */
-export interface DimClarityPreset {
+export type DimClarityPreset = {
   kind: ClarityKind;
   /** 弹层芯片上显示的标签（如 "1k"、"1M"）。 */
   label: string;
   /** 百万像素的种类：总像素数（宽 × 高）。 */
   totalPixels?: number;
-}
+};
 
 const dimClarityPresetOf = (preset: (typeof SIZE_CLARITY_PRESETS)[number]): DimClarityPreset => ({
   kind: preset.kind,
@@ -165,7 +165,9 @@ export const DEFAULT_DIM_CLARITY_PRESET: DimClarityPreset = DIM_CLARITY_PRESETS[
  *  填的 2.5 悄悄变回 1k（界面上还显示着 2.5M）。 */
 export function clarityPresetFor(label: string): DimClarityPreset {
   const known = DIM_CLARITY_PRESETS.find((preset) => preset.label === label);
-  if (known) return known;
+  if (known) {
+    return known;
+  }
   const megapixels = parseMegapixelLabel(label);
   return megapixels === null
     ? DEFAULT_DIM_CLARITY_PRESET
@@ -189,8 +191,8 @@ export { clarityKindOfLabel, megapixelTierOfLabel, resolutionTierOfLabel };
  *  spells the option differently ("16:9 宽屏", "16:9") still highlights
  *  the right chip instead of silently falling back to "自定义". */
 export const ASPECT_RATIO_LABEL_PRESETS: [
-  { label: string; value: string; ratio: number },
-  ...Array<{ label: string; value: string; ratio: number }>,
+  { label: string; ratio: number; value: string },
+  ...Array<{ label: string; ratio: number; value: string }>,
 ] = [
   { label: "1:1", value: "1:1 (Square)", ratio: 1 },
   { label: "4:3", value: "4:3 (Standard)", ratio: 4 / 3 },
@@ -213,10 +215,14 @@ export const MEGAPIXEL_VALUE_PRESETS: Array<{ label: string; value: number }> = 
  *  字符串里没有可识别的比例时返回 null。 */
 export function parseRatioFromLabel(value: string): number | null {
   const match = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(value);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   const w = Number(match[1]);
   const h = Number(match[2]);
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    return null;
+  }
   return w / h;
 }
 
@@ -236,7 +242,7 @@ export function dimsForRatio(
   alignMultiple: number = DEFAULT_ALIGN_MULTIPLE,
   scene: SizeScene = "image",
   table?: SizePresetTable,
-): { width: number; height: number } {
+): { height: number; width: number } {
   /* 防退化 / 缺失的比例：NaN / 0 / 负数一律回落到 1:1 正方形，
    * 表单拿到的永远是一个有限值。 */
   const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
@@ -309,7 +315,9 @@ export function inferDimensionGroup(widgets: Array<EnrichedWidget>): DimensionGr
   /* 解构 + 明确守卫：`[0]` 与「数组非空」是同一个判据，写两遍就得多一个 `!`。 */
   const [width, height] = [widthWidgets[0], heightWidgets[0]];
   if (width && height) {
-    if (width.ioKey === height.ioKey) return null;
+    if (width.ioKey === height.ioKey) {
+      return null;
+    }
     return {
       kind: "dimension",
       groupId: `dim:${width.ioKey}|${height.ioKey}`,
@@ -325,7 +333,9 @@ export function inferDimensionGroup(widgets: Array<EnrichedWidget>): DimensionGr
   const mpWidgets = widgets.filter(isDimMegapixels);
   const [aspect, megapixels] = [aspectWidgets[0], mpWidgets[0]];
   if (aspect && megapixels) {
-    if (aspect.ioKey === megapixels.ioKey) return null;
+    if (aspect.ioKey === megapixels.ioKey) {
+      return null;
+    }
     /* 倍数（可选伴随）：存在时并入组合 popover 的第三段。 */
     const multiple = widgets.find(
       (w) => w.ioKey !== aspect.ioKey && w.ioKey !== megapixels.ioKey && isDimMultiple(w),
@@ -348,10 +358,14 @@ export function inferVideoGroup(widgets: Array<EnrichedWidget>): VideoGroup | nu
   const asp = widgets.filter(isVideoAspect);
   const quality = widgets.filter(isVideoQuality);
   const [length] = len;
-  if (!length) return null;
+  if (!length) {
+    return null;
+  }
   const [aspect] = asp;
   const [qualityFirst] = quality;
-  if (!aspect && !qualityFirst) return null;
+  if (!aspect && !qualityFirst) {
+    return null;
+  }
   return {
     kind: "video",
     groupId: `video:${length.ioKey}|${aspect?.ioKey ?? ""}|${qualityFirst?.ioKey ?? ""}`,
@@ -366,8 +380,8 @@ export function inferVideoGroup(widgets: Array<EnrichedWidget>): VideoGroup | nu
  *  以及它们消费掉的完整 ioKey 集合（调用方据此把那些 pin 的通用逐行渲染抑制掉）。 */
 export function inferGroups(widgets: Array<EnrichedWidget>): {
   dimension: DimensionGroup | null;
-  video: VideoGroup | null;
   groupedKeys: Set<string>;
+  video: VideoGroup | null;
 } {
   const dimension = inferDimensionGroup(widgets);
   /* 尺寸组可能是 W/H 成对，也可能是别的形态，
@@ -375,19 +389,35 @@ export function inferGroups(widgets: Array<EnrichedWidget>): {
    *  而不是假定一定存在 `width`/`height`。 */
   const dimKeys = new Set<string>();
   if (dimension) {
-    if (dimension.width) dimKeys.add(dimension.width.ioKey);
-    if (dimension.height) dimKeys.add(dimension.height.ioKey);
-    if (dimension.aspect) dimKeys.add(dimension.aspect.ioKey);
-    if (dimension.megapixels) dimKeys.add(dimension.megapixels.ioKey);
-    if (dimension.multiple) dimKeys.add(dimension.multiple.ioKey);
+    if (dimension.width) {
+      dimKeys.add(dimension.width.ioKey);
+    }
+    if (dimension.height) {
+      dimKeys.add(dimension.height.ioKey);
+    }
+    if (dimension.aspect) {
+      dimKeys.add(dimension.aspect.ioKey);
+    }
+    if (dimension.megapixels) {
+      dimKeys.add(dimension.megapixels.ioKey);
+    }
+    if (dimension.multiple) {
+      dimKeys.add(dimension.multiple.ioKey);
+    }
   }
   const rest = widgets.filter((widget) => !dimKeys.has(widget.ioKey));
   const video = inferVideoGroup(rest);
   const groupedKeys = new Set<string>(dimKeys);
   if (video) {
-    if (video.length) groupedKeys.add(video.length.ioKey);
-    if (video.aspect) groupedKeys.add(video.aspect.ioKey);
-    if (video.quality) groupedKeys.add(video.quality.ioKey);
+    if (video.length) {
+      groupedKeys.add(video.length.ioKey);
+    }
+    if (video.aspect) {
+      groupedKeys.add(video.aspect.ioKey);
+    }
+    if (video.quality) {
+      groupedKeys.add(video.quality.ioKey);
+    }
   }
   return { dimension, video, groupedKeys };
 }

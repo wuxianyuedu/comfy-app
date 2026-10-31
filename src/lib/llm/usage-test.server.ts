@@ -50,28 +50,30 @@ export function strField(rec: Record<string, unknown>, key: string): string {
 }
 
 /** 取第一个非空白字符串（空串视为未填，继续向后回落）。 */
-export function firstNonEmpty(
-  ...vals: Array<string | null | undefined>
-): string {
+export function firstNonEmpty(...vals: Array<string | null | undefined>): string {
   for (const v of vals) {
-    if (typeof v === "string" && v.trim() !== "") return v;
+    if (typeof v === "string" && v.trim() !== "") {
+      return v;
+    }
   }
   return "";
 }
 
 /** 端点路径归一：非空时必须根相对，否则 `${base}${path}` 拼不出合法地址。 */
 export function normalizeEndpointPath(raw: string): string {
-  if (raw !== "" && !raw.startsWith("/")) return `/${raw}`;
+  if (raw !== "" && !raw.startsWith("/")) {
+    return `/${raw}`;
+  }
   return raw;
 }
 
-export interface ResolvedUpstream {
+export type ResolvedUpstream = {
   /** 去掉尾斜杠的连接基址。 */
   base: string;
+  headers: Record<string, string>;
   /** 根相对的端点路径（空串 = 直接用 base）。 */
   path: string;
-  headers: Record<string, string>;
-}
+};
 
 /** 连接参数解析（**两个路由同一口径**，解析顺序改了只有这一处）：
  *  弹窗内填的 → 该条目已保存的 → 全局配置。 */
@@ -93,7 +95,9 @@ export async function resolveUpstream(
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
   return {
     base: baseUrl.replace(/\/+$/, ""),
     path: normalizeEndpointPath(rawPath),
@@ -114,20 +118,20 @@ export async function resolveUpstream(
  *  抛异常会让「空接口地址」这类**用户可修正**的输入走成 500。 */
 export type UsageTestPrologue =
   | {
-      ok: true;
       name: string;
+      ok: true;
       rec: Record<string, unknown>;
       up: ResolvedUpstream;
     }
-  | { ok: false; detail: string };
+  | { detail: string; ok: false };
 
-export async function readUsageTestPrologue(
-  req: Request,
-): Promise<UsageTestPrologue> {
+export async function readUsageTestPrologue(req: Request): Promise<UsageTestPrologue> {
   const body: unknown = await req.json().catch(() => ({}));
   const rec = isRecord(body) ? body : {};
   const name = strField(rec, "name");
-  if (!name) return { ok: false, detail: "缺少模型名" };
+  if (!name) {
+    return { ok: false, detail: "缺少模型名" };
+  }
 
   const up = await resolveUpstream(
     name,
@@ -135,7 +139,9 @@ export async function readUsageTestPrologue(
     strField(rec, "apiKey"),
     strField(rec, "path"),
   );
-  if ("error" in up) return { ok: false, detail: up.error };
+  if ("error" in up) {
+    return { ok: false, detail: up.error };
+  }
 
   return { ok: true, name, rec, up };
 }
@@ -161,11 +167,7 @@ async function readRawText(res: Response): Promise<string> {
  *  `HTTP 503` 这条兜底，拼出来是 **`HTTP 503：HTTP 503`** —— 状态码说了两遍，
  *  而上游真正写的原因一个字都没带上，用户只能看到一个没有信息量的重复。
  *  现在把原始文本截断带出（同样限 240 字符，不把整页 HTML 灌进界面）。 */
-export function httpFailureDetail(
-  status: number,
-  payload: unknown,
-  rawText = "",
-): string {
+export function httpFailureDetail(status: number, payload: unknown, rawText = ""): string {
   if (isRecord(payload)) {
     return `HTTP ${status}：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`;
   }
@@ -179,36 +181,41 @@ export function httpFailureDetail(
 /** 额外参数（JSON 对象字符串）→ 逐键合并用的对象。 */
 export function parseExtraJson(
   extraJson: string,
-):
-  | { ok: true; extra: Record<string, unknown> }
-  | { ok: false; detail: string } {
-  if (extraJson === "") return { ok: true, extra: {} };
+): { extra: Record<string, unknown>; ok: true } | { detail: string; ok: false } {
+  if (extraJson === "") {
+    return { ok: true, extra: {} };
+  }
   try {
     const parsed: unknown = JSON.parse(extraJson);
-    if (!isRecord(parsed)) throw new Error("不是 JSON 对象");
+    if (!isRecord(parsed)) {
+      throw new Error("不是 JSON 对象");
+    }
     return { ok: true, extra: parsed };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
-      detail: `额外参数不是有效的 JSON 对象：${errorMessage(e, "解析失败")}`,
+      detail: `额外参数不是有效的 JSON 对象：${errorMessage(error, "解析失败")}`,
     };
   }
 }
 
 /** chat 响应 → 助手文本（OpenAI 的 string 与分片数组两种形态都认）。 */
 export function chatTextFrom(payload: unknown): string {
-  if (!isRecord(payload)) return "";
+  if (!isRecord(payload)) {
+    return "";
+  }
   const choices: unknown = payload.choices;
   const first: unknown = Array.isArray(choices) ? choices[0] : undefined;
-  const message =
-    isRecord(first) && isRecord(first.message) ? first.message : null;
+  const message = isRecord(first) && isRecord(first.message) ? first.message : null;
   const content: unknown = message?.content;
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
+  if (typeof content === "string") {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return "";
+  }
   return content
-    .map((part) =>
-      isRecord(part) && typeof part.text === "string" ? part.text : "",
-    )
+    .map((part) => (isRecord(part) && typeof part.text === "string" ? part.text : ""))
     .join("");
 }
 
@@ -218,7 +225,7 @@ export async function callChat(
   model: string,
   prompt: string,
   extra: Record<string, unknown>,
-): Promise<{ ok: true; text: string } | { ok: false; detail: string }> {
+): Promise<{ ok: true; text: string } | { detail: string; ok: false }> {
   const res = await fetch(`${up.base}${up.path}`, {
     method: "POST",
     headers: up.headers,
@@ -253,7 +260,7 @@ export async function callImage(
   prompt: string,
   size: string,
   extra: Record<string, unknown>,
-): Promise<{ ok: true; url: string } | { ok: false; detail: string }> {
+): Promise<{ ok: true; url: string } | { detail: string; ok: false }> {
   const res = await fetch(`${up.base}${up.path}`, {
     method: "POST",
     headers: up.headers,
@@ -290,7 +297,7 @@ export async function callImage(
 export type VideoSubmitOutcome =
   | { status: "done"; url: string }
   | { status: "pending"; taskId: string }
-  | { status: "error"; detail: string };
+  | { detail: string; status: "error" };
 
 export async function callVideo(
   up: ResolvedUpstream,
@@ -312,7 +319,9 @@ export async function callVideo(
     };
   }
   const directUrl = extractMediaUrl(payload);
-  if (directUrl) return { status: "done", url: directUrl };
+  if (directUrl) {
+    return { status: "done", url: directUrl };
+  }
   const taskId = extractRemoteTaskId(payload);
   if (!taskId) {
     return {
@@ -320,16 +329,8 @@ export async function callVideo(
       detail: `响应中未找到视频 URL 或任务 ID：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`,
     };
   }
-  const doneUrl = await pollRemoteVideoTask(
-    up.base,
-    up.path,
-    model,
-    taskId,
-    up.headers,
-  );
-  return doneUrl
-    ? { status: "done", url: doneUrl }
-    : { status: "pending", taskId };
+  const doneUrl = await pollRemoteVideoTask(up.base, up.path, model, taskId, up.headers);
+  return doneUrl ? { status: "done", url: doneUrl } : { status: "pending", taskId };
 }
 
 /** 「继续等待」一轮：只查既有任务，**绝不重新提交**（不重复扣费）。 */
@@ -338,13 +339,7 @@ export async function queryVideoTask(
   model: string,
   taskId: string,
 ): Promise<{ done: true; url: string } | { done: false }> {
-  const url = await pollRemoteVideoTask(
-    up.base,
-    up.path,
-    model,
-    taskId,
-    up.headers,
-  );
+  const url = await pollRemoteVideoTask(up.base, up.path, model, taskId, up.headers);
   return url ? { done: true, url } : { done: false };
 }
 

@@ -50,11 +50,7 @@
  * 形态是静默的（§12.12 孪生对、§12.18「写之前先查」）。
  */
 const path = require("node:path");
-const {
-  readForScan,
-  vanishedNote,
-  walkForScan,
-} = require("./gate-scan-read.cjs");
+const { readForScan, vanishedNote, walkForScan } = require("./gate-scan-read.cjs");
 
 /** 默认只收 `.ts` / `.tsx`；要别的后缀由调用方传 `fileRe`。 */
 const TS_FILE_RE = /\.tsx?$/;
@@ -117,7 +113,9 @@ function parseSources({
 }) {
   const ts = deps.ts ?? tsOrNull();
   if (!ts) {
-    if (deps.onMissingTs) deps.onMissingTs();
+    if (deps.onMissingTs) {
+      deps.onMissingTs();
+    }
     return { files: 0, missing: 0 };
   }
 
@@ -127,8 +125,12 @@ function parseSources({
     const base = path.join(root, dir);
     for (const abs of walkForScan(base, fileRe)) {
       const name = path.basename(abs);
-      if (skipFileRe && skipFileRe.test(name)) continue;
-      if (name.endsWith(".d.ts")) continue;
+      if (skipFileRe && skipFileRe.test(name)) {
+        continue;
+      }
+      if (name.endsWith(".d.ts")) {
+        continue;
+      }
       const text = readForScan(abs);
       /* 条目级消失（列到名字、读时已没）：不是「文件里没有站点」，是这一轮没读到，
        * 必须计数 —— 静默跳过等于让判据在它其实没读过的文件上假装绿。 */
@@ -136,13 +138,10 @@ function parseSources({
         missing += 1;
         continue;
       }
-      const rel = (trimRel
-        ? path.relative(base, abs)
-        : path.relative(root, abs)
-      ).split(path.sep).join("/");
-      const display = trimRel
-        ? `${dir}/${rel}`
-        : rel;
+      const rel = (trimRel ? path.relative(base, abs) : path.relative(root, abs))
+        .split(path.sep)
+        .join("/");
+      const display = trimRel ? `${dir}/${rel}` : rel;
       const sourceFile = ts.createSourceFile(
         display,
         text,

@@ -19,22 +19,17 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Button } from "./button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "./tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
 afterEach(cleanup);
 
 /** Base UI 把定位层（Positioner）渲染成浮层的外层节点。 */
 function findPositioner(): HTMLElement {
   const popup = screen.getByText("贴边提示");
-  const positioner = popup.closest(
-    '[data-slot="tooltip-content"]',
-  )?.parentElement;
-  if (!positioner) throw new Error("没找到定位层");
+  const positioner = popup.closest('[data-slot="tooltip-content"]')?.parentElement;
+  if (!positioner) {
+    throw new Error("没找到定位层");
+  }
   return positioner;
 }
 

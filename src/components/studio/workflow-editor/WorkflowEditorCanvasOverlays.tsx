@@ -54,9 +54,9 @@ export function WorkflowEditorErrorScreen({
       <div className="text-center">
         <p className="text-destructive">{error ?? "未知错误"}</p>
         <Button
-          variant="outline"
-          onClick={onClose}
           className="hover:bg-surface-2 mt-3 h-auto px-4 py-2 text-sm"
+          onClick={onClose}
+          variant="outline"
         >
           返回
         </Button>
@@ -73,10 +73,7 @@ export function SubgraphLoadingOverlay() {
   return (
     <div className="bg-canvas-deep z-base pointer-events-none absolute inset-0 flex items-center justify-center">
       <div className="bg-canvas border-border-strong pointer-events-auto rounded-xl border px-6 py-4 shadow-2xl shadow-black/10">
-        <PageLoading
-          label="加载子工作流…"
-          className="flex-row items-center gap-3"
-        />
+        <PageLoading className="flex-row items-center gap-3" label="加载子工作流…" />
       </div>
     </div>
   );
@@ -86,30 +83,23 @@ export function SubgraphLoadingOverlay() {
 export function IoEditModeBanner() {
   return (
     <div className="border-warning/40 bg-warning/15 text-warning-strong z-canvas-ui pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 rounded-full border px-4 py-1.5 text-xs font-medium shadow-lg">
-      📌 IO
-      编辑模式：勾选节点参数前的复选框，即可将其暴露为工作流的「输入」或「输出」
+      📌 IO 编辑模式：勾选节点参数前的复选框，即可将其暴露为工作流的「输入」或「输出」
     </div>
   );
 }
 
 /** 子工作流下钻失败：内联错误提示，父图保持可见（绝不回退到工作流库）。 */
-export function SubgraphErrorToast({
-  error,
-  onDismiss,
-}: {
-  error: string;
-  onDismiss: () => void;
-}) {
+export function SubgraphErrorToast({ error, onDismiss }: { error: string; onDismiss: () => void }) {
   return (
     <div className="z-canvas-max pointer-events-none absolute top-3 left-1/2 -translate-x-1/2">
       <div className="border-destructive/40 bg-destructive/15 text-danger-strong pointer-events-auto flex items-center gap-3 rounded-lg border px-4 py-2 text-xs shadow-lg">
         <span>⚠ {error}</span>
         <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={onDismiss}
-          className="hover:bg-subtle text-danger-strong h-auto w-auto rounded px-1.5 py-0.5"
           aria-label="关闭"
+          className="hover:bg-subtle text-danger-strong h-auto w-auto rounded px-1.5 py-0.5"
+          onClick={onDismiss}
+          size="icon-xs"
+          variant="ghost"
         >
           ×
         </Button>

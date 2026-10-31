@@ -41,10 +41,10 @@ const REPO_ROOT = process.cwd();
 const SRC = join(REPO_ROOT, "src");
 
 type Report = {
-  unguarded: Array<string>;
-  libOnlyReachable: Array<{ module: string; chain: Array<string> }>;
-  clientReachable: Array<{ module: string; chain: Array<string> }>;
+  clientReachable: Array<{ chain: Array<string>; module: string; }>;
   counts: Record<string, number>;
+  libOnlyReachable: Array<{ chain: Array<string>; module: string; }>;
+  unguarded: Array<string>;
 };
 
 /** 跑一次依赖图分析（实现收在扫描器里，本文件不复制一份 —— 见文件头的归属说明）。 */
@@ -83,7 +83,9 @@ function runScanOnFixture(files: Record<string, string>): Report {
     dirs: ["src"],
   });
   try {
-    for (const [rel, content] of Object.entries(files)) repo.write(rel, content);
+    for (const [rel, content] of Object.entries(files)) {
+      repo.write(rel, content);
+    }
     const r = repo.run(["--json"]);
     /* 先判「跑起来了」再判内容（拿不到测量不是判据红，§13.6.4）；
      * `--json` 那一档恒退 0，所以这一格退非 0 就是夹具或脚本坏了。 */

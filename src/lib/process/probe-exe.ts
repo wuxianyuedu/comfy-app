@@ -99,17 +99,17 @@ function emit(tag: LoggerTag, message: string): void {
 /** 一次探测的三种结局（语义见文件头）。 */
 export type ProbeFailure =
   /** 进程压根没起来（`error.code` 是 libuv 给的那个码；它认不出时是 `UNKNOWN`）。 */
-  | { kind: "spawn-error"; code: string }
+  | { code: string; kind: "spawn-error" }
   /** 起来了但退非零（或被信号杀掉）。 */
-  | { kind: "nonzero-exit"; status: number | null; signal: string | null }
+  | { kind: "nonzero-exit"; signal: string | null; status: number | null }
   /** 超过了探测预算，**没有读数**。 */
   | { kind: "timeout"; timeoutMs: number };
 
 /** 一次探测的结论：`failure` 为 `null` 才是「起得来且退 0」。 */
-export interface ProbeOutcome {
-  ok: boolean;
+export type ProbeOutcome = {
   failure: ProbeFailure | null;
-}
+  ok: boolean;
+};
 
 /**
  * 一次探测的预算（毫秒）。
@@ -161,7 +161,9 @@ export function probeExecutable(
   }
   /* 起来了 ⇒ 认退出码：`status === 0` 才算可用。`status === null`（被信号干掉、或压根
    * 没等到状态）与退非零一样 —— **都不是「它可用」的证据**。 */
-  if (probe.status === 0) return { ok: true, failure: null };
+  if (probe.status === 0) {
+    return { ok: true, failure: null };
+  }
   /* 两个字段的 `?? null` 是**同一件事的两半**（`spawnSync` 的类型写着可空）：一条
    * 「起了但没等到状态」的读数要被如实交出去，而不是被读成「退 0」。 */
   const status = probe.status ?? null;
@@ -170,9 +172,13 @@ export function probeExecutable(
 }
 
 /** `firstRunnable()` 的入参（候选表 + 每个候选要喂的参数 + 探测预算）。 */
-export interface FirstRunnableOptions {
+export type FirstRunnableOptions = {
   /** 依次试的候选名，顺序即优先级。 */
   candidates: ReadonlyArray<string>;
+  /** 人读的名字（`PowerShell` / `Python`）：只在「探不到」那一句话里出现。 */
+  label: string;
+  /** 注入点：缺省真起进程（单测用它钉两个平台的候选顺序，不必装两套解释器）。 */
+  probe?: (candidate: string, args: Array<string>) => ProbeOutcome;
   /**
    * 每个候选要喂的参数：**必须与真跑那一跳同形**。
    *
@@ -181,12 +187,6 @@ export interface FirstRunnableOptions {
    * 收口（同 `pythonProbeArgs()` 的理由）。
    */
   probeArgs: (candidate: string) => Array<string>;
-  /** 人读的名字（`PowerShell` / `Python`）：只在「探不到」那一句话里出现。 */
-  label: string;
-  /** 这一次探测的预算（缺省 `EXE_PROBE_TIMEOUT_MS`）。 */
-  timeoutMs?: number;
-  /** 注入点：缺省真起进程（单测用它钉两个平台的候选顺序，不必装两套解释器）。 */
-  probe?: (candidate: string, args: Array<string>) => ProbeOutcome;
   /**
    * 探不到时那一行的**第二只眼睛**（缺省不打）。
    *
@@ -196,7 +196,9 @@ export interface FirstRunnableOptions {
    * 直写 console 会绕开脱敏与 ERROR 镜像（`tests/single-logger-channel.test.ts`）。
    */
   report?: (line: string) => void;
-}
+  /** 这一次探测的预算（缺省 `EXE_PROBE_TIMEOUT_MS`）。 */
+  timeoutMs?: number;
+};
 
 /**
  * `firstRunnable().hit ?? ""`，并在探不到时**打印一行「哪个候选、什么原因」**。
@@ -215,16 +217,19 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
     ((candidate: string, args: Array<string>) =>
       probeExecutable(candidate, args, options.timeoutMs));
   const got = firstRunnable(options.candidates, options.probeArgs, probe);
-  if (got.hit) return got.hit;
+  if (got.hit) {
+    return got.hit;
+  }
   /* 一行读数走**两条出口**，它们答的是两件不同的事：
    *   · `emit("warn", …)` —— 应用侧的那条唯一日志通道（`process-launch.ts` 注入了
    *     `~/lib/core/logger`，因此落 `log/` 面板、过 redact）。本模块自己**不** import
    *     日志实现：那是跨宿主地基层，裸 Node 加载期会 `ERR_MODULE_NOT_FOUND`（见文件头）；
    *   · `options.report` —— 调用方自己那只眼睛。测试夹具要的是**屏幕上**那一眼，
    *     logger 写到盘上去了，跑用例的人在终端上是看不见的。 */
-  const line =
-    `本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
-    describeProbeMisses(got.missed, got.timeouts);
+  const line = `本机没有可用的 ${options.label}，相关用例跳过（不是通过）：${describeProbeMisses(
+    got.missed,
+    got.timeouts,
+  )}`;
   emit("warn", `[probe] ${line}`);
   try {
     options.report?.(line);
@@ -235,11 +240,11 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
 }
 
 /** 一个「试过但没成」的候选（日志与话术里要用它，别把探针喂的参数抄第二遍）。 */
-export interface ProbedCandidate {
+export type ProbedCandidate = {
   /** 探测里用的那个名字（`powershell` / `python3` / …）。 */
   candidate: string;
   failure: ProbeFailure;
-}
+};
 
 /**
  * 把一条 `missed` 摊平成话术用的形状。
@@ -285,7 +290,9 @@ export function firstRunnable(
   const timeouts: Array<ProbedCandidate> = [];
   for (const candidate of candidates) {
     const outcome = probe(candidate, probeArgs(candidate));
-    if (outcome.ok) return { hit: candidate, missed, timeouts };
+    if (outcome.ok) {
+      return { hit: candidate, missed, timeouts };
+    }
     const failure = outcome.failure ?? { kind: "spawn-error", code: "UNKNOWN" };
     (failure.kind === "timeout" ? timeouts : missed).push({
       candidate,
@@ -321,7 +328,9 @@ export function describeProbeMisses(
 
 /** 单个 `ProbeFailure` 的一句话（三条出口各一句，别糊成「不可用」）。 */
 export function describeProbeFailure(failure: ProbeFailure): string {
-  if (failure.kind === "spawn-error") return `起不来（${failure.code}）`;
+  if (failure.kind === "spawn-error") {
+    return `起不来（${failure.code}）`;
+  }
   if (failure.kind === "timeout") {
     return `没在预算内给出读数（${failure.timeoutMs}ms，属「没量到」而不是「起不来」）`;
   }
@@ -331,7 +340,9 @@ export function describeProbeFailure(failure: ProbeFailure): string {
    * 后果是 Windows 节点上每日一跑恒红）。否则给退出码。
    * 两种都没有的形态（libuv 既不给码也不给信号）写「没有读数」—— 不许编一个 `0`
    * 出来充数（那会被读成「成功了」）。 */
-  if (failure.signal !== null) return `起来了但被信号 ${failure.signal} 结束`;
+  if (failure.signal !== null) {
+    return `起来了但被信号 ${failure.signal} 结束`;
+  }
   return failure.status === null
     ? "起来了但没拿到退出码（这一档没有读数）"
     : `起来了但退非零（exit ${failure.status}）`;

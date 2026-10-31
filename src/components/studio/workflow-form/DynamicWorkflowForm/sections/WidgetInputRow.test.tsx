@@ -29,14 +29,14 @@ function renderRow(
   const onValueChange = vi.fn();
   render(
     <WidgetInputRow
-      entry={entry}
       allPins={[entry]}
-      value={undefined}
       compact={false}
       disabled={false}
-      uploading={false}
-      onValueChange={onValueChange}
+      entry={entry}
       onPickFile={onPickFile}
+      onValueChange={onValueChange}
+      uploading={false}
+      value={undefined}
       {...over}
     />,
   );

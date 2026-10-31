@@ -132,16 +132,24 @@ const LIFECYCLE_SCRIPTS = ["preinstall", "install", "postinstall"];
 function readAllowBuildsKeys(text) {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex((l) => /^allowBuilds:\s*$/.test(l));
-  if (start < 0) return { keys: new Set(), blockFound: false };
+  if (start < 0) {
+    return { keys: new Set(), blockFound: false };
+  }
 
   const keys = new Set();
   for (const line of lines.slice(start + 1)) {
     // 块结束：遇到第一条「顶到行首」的非空行（下一个顶层键或注释）。
-    if (/^\S/.test(line)) break;
+    if (/^\S/.test(line)) {
+      break;
+    }
     const trimmed = line.trim();
-    if (trimmed === "" || trimmed.startsWith("#")) continue;
+    if (trimmed === "" || trimmed.startsWith("#")) {
+      continue;
+    }
     const matched = /^"?([^":]+)"?\s*:/.exec(trimmed);
-    if (matched) keys.add(matched[1].trim());
+    if (matched) {
+      keys.add(matched[1].trim());
+    }
   }
   return { keys, blockFound: true };
 }
@@ -163,26 +171,27 @@ function collectInstalledPackages() {
   let vanished = 0;
 
   const storeDirs = readdirForScan(PNPM_DIR);
-  if (storeDirs === null) return { entries, vanished: vanished + 1 };
+  if (storeDirs === null) {
+    return { entries, vanished: vanished + 1 };
+  }
 
   for (const storeDir of storeDirs) {
-    if (!storeDir.isDirectory()) continue;
-    const inner = readdirForScan(
-      path.join(PNPM_DIR, storeDir.name, "node_modules"),
-    );
+    if (!storeDir.isDirectory()) {
+      continue;
+    }
+    const inner = readdirForScan(path.join(PNPM_DIR, storeDir.name, "node_modules"));
     if (inner === null) {
       vanished += 1;
       continue;
     }
     for (const item of inner) {
-      if (item.isSymbolicLink()) continue;
-      const full = path.join(
-        PNPM_DIR,
-        storeDir.name,
-        "node_modules",
-        item.name,
-      );
-      if (!item.isDirectory()) continue;
+      if (item.isSymbolicLink()) {
+        continue;
+      }
+      const full = path.join(PNPM_DIR, storeDir.name, "node_modules", item.name);
+      if (!item.isDirectory()) {
+        continue;
+      }
       if (!item.name.startsWith("@")) {
         entries.push({
           name: item.name,
@@ -197,7 +206,9 @@ function collectInstalledPackages() {
         continue;
       }
       for (const child of scoped) {
-        if (child.isSymbolicLink() || !child.isDirectory()) continue;
+        if (child.isSymbolicLink() || !child.isDirectory()) {
+          continue;
+        }
         entries.push({
           name: `${item.name}/${child.name}`,
           absPath: path.join(full, child.name, "package.json"),
@@ -226,14 +237,22 @@ function scriptBearingPackage(raw) {
     // 它不会静默消失：结论行报「几个条目没读到」（同 gate-scan-read 那句口径）。
     return null;
   }
-  if (!parsed || typeof parsed !== "object") return null;
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
   const scripts = parsed.scripts;
-  if (!scripts || typeof scripts !== "object") return null;
+  if (!scripts || typeof scripts !== "object") {
+    return null;
+  }
   const hits = LIFECYCLE_SCRIPTS.filter(
     (key) => typeof scripts[key] === "string" && scripts[key].trim() !== "",
   );
-  if (hits.length === 0) return null;
-  if (typeof parsed.name !== "string" || parsed.name.trim() === "") return null;
+  if (hits.length === 0) {
+    return null;
+  }
+  if (typeof parsed.name !== "string" || parsed.name.trim() === "") {
+    return null;
+  }
   return {
     name: parsed.name.trim(),
     version: typeof parsed.version === "string" ? parsed.version : "未知版本",
@@ -297,11 +316,17 @@ if (!dirExists(WORKSPACE_FILE)) {
           continue;
         }
         const found = scriptBearingPackage(raw);
-        if (found === null) continue;
-        if (seenNames.has(found.name)) continue;
+        if (found === null) {
+          continue;
+        }
+        if (seenNames.has(found.name)) {
+          continue;
+        }
         seenNames.add(found.name);
         bearing.push(found);
-        if (keys.has(found.name)) continue;
+        if (keys.has(found.name)) {
+          continue;
+        }
         problems.push(
           `「${found.name}@${found.version}」带 ${found.scripts.join(" / ")} 构建脚本，` +
             `但 pnpm-workspace.yaml 的 allowBuilds 里没有它（AGENTS 硬规则 8）。\n` +
@@ -317,7 +342,9 @@ if (!dirExists(WORKSPACE_FILE)) {
 
 if (problems.length > 0) {
   console.error("❌ 依赖构建脚本与 allowBuilds 未对账：");
-  for (const problem of problems) console.error(`  · ${problem}`);
+  for (const problem of problems) {
+    console.error(`  · ${problem}`);
+  }
   console.error(
     `\n  本轮扫描 ${scanned} 个安装条目，其中 ${bearing.length} 个带构建脚本。${vanishedNote(unread)}`,
   );

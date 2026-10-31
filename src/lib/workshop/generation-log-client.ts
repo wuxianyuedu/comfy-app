@@ -8,12 +8,12 @@ import { isRecord } from "~/lib/is-record";
 import type { GenerationLogStage } from "./generation-log";
 
 /** 一条待落盘的执行日志（与界面条目同形：ts / kind / summary / detail?）。 */
-export interface PersistableGenerationLog {
-  ts: number | string;
+export type PersistableGenerationLog = {
+  detail?: string;
   kind: string;
   summary: string;
-  detail?: string;
-}
+  ts: number | string;
+};
 
 const LOGS_ENDPOINT = "/api/workshop/logs";
 
@@ -22,7 +22,9 @@ export function persistGenerationLogs(
   stage: GenerationLogStage,
   entries: Array<PersistableGenerationLog>,
 ): void {
-  if (entries.length === 0) return;
+  if (entries.length === 0) {
+    return;
+  }
   const payload = JSON.stringify({ stage, entries });
   try {
     void fetch(LOGS_ENDPOINT, {
@@ -49,10 +51,14 @@ export async function fetchGenerationLogs(
   } catch {
     return [];
   }
-  if (!res.ok) return [];
+  if (!res.ok) {
+    return [];
+  }
   try {
     const data: unknown = await res.json();
-    if (!isRecord(data) || !Array.isArray(data.entries)) return [];
+    if (!isRecord(data) || !Array.isArray(data.entries)) {
+      return [];
+    }
     return data.entries.filter(
       (e): e is PersistableGenerationLog =>
         isRecord(e) && typeof e.summary === "string" && e.summary !== "",

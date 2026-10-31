@@ -39,33 +39,33 @@ import type { ShotStatus } from "~/lib/film/film-status";
 import { appendFilmLog } from "./film-log";
 import { composeFilm } from "./compose-film";
 
-export interface FilmShotInput {
+export type FilmShotInput = {
+  heading?: string;
+  negative?: string;
   order: number;
+  prompt: string;
   /** 关联的统一镜头 id（Phase 5 逐镜回写用）；自由建片（剧本自解析）时无来源，留空。 */
   shotId?: string;
-  heading?: string;
-  prompt: string;
-  negative?: string;
-}
+};
 
-export interface CreateFilmInput {
-  userId: string;
-  title: string;
+export type CreateFilmInput = {
+  bgmName?: string | null;
+  fps?: number;
+  framesPerShot?: number;
+  /** 文生视频镜头合成首帧用的**图类工作流 id**；镜头自带首帧时不需要。 */
+  imageWorkflowId?: string | null;
   script: string;
-  type?: string;
-  styleSlug?: string | null;
   /** 成片画幅（尺寸表达：比例 + 分辨率 / 比例 + 百万像素 + 倍数）。缺省走视频
    *  场景 16:9 1k；仍传 "1280x720" 这类老字符串时由 `toSizeSpec` 归一。 */
   size?: unknown;
-  fps?: number;
-  framesPerShot?: number;
+  styleSlug?: string | null;
   subtitleOn?: boolean;
-  bgmName?: string | null;
+  title: string;
+  type?: string;
+  userId: string;
   /** 逐镜生成用的**工作流库视频工作流 id**（本地链路唯一来源，内置模板已移除）。 */
   videoWorkflowId?: string | null;
-  /** 文生视频镜头合成首帧用的**图类工作流 id**；镜头自带首帧时不需要。 */
-  imageWorkflowId?: string | null;
-}
+};
 
 const FILM_NEGATIVE =
   "low quality, blurry, deformed, watermark, text, distorted, extra limbs, bad anatomy";
@@ -95,9 +95,9 @@ const ShotSchema = z.object({
 
 async function expandScriptLLM(raw: string): Promise<
   Array<{
-    heading: string;
     action: string;
     dialogue: string;
+    heading: string;
     shotCount: number;
   }>
 > {
@@ -133,7 +133,7 @@ async function parseScriptToShots(
   stylePrompt?: string,
   styleNegative?: string,
 ): Promise<Array<FilmShotInput>> {
-  let scenes: Array<{ heading: string; action: string; shotCount: number }>;
+  let scenes: Array<{ action: string; heading: string; shotCount: number }>;
   try {
     const expanded = await expandScriptLLM(raw);
     scenes = expanded.map((expanded) => ({
@@ -151,7 +151,7 @@ async function parseScriptToShots(
     });
     scenes = sc.map((scene) => ({
       heading: scene.heading,
-      action: `${scene.action}${scene.dialogue ? " " + scene.dialogue : ""}`,
+      action: `${scene.action}${scene.dialogue ? ` ${scene.dialogue}` : ""}`,
       shotCount: scene.shotCount,
     }));
   }
@@ -163,7 +163,9 @@ async function parseScriptToShots(
       const cam = CAMERA_KEYWORDS[order % CAMERA_KEYWORDS.length];
       const base = sc.action.trim() || raw.trim();
       const parts = [base, cam];
-      if (stylePrompt) parts.push(stylePrompt);
+      if (stylePrompt) {
+        parts.push(stylePrompt);
+      }
       const prompt = parts.filter(Boolean).join(", ");
       const negative = [FILM_NEGATIVE, styleNegative].filter(Boolean).join(", ");
       shots.push({
@@ -181,20 +183,20 @@ async function parseScriptToShots(
 /** 落库一份成片 + 其镜头行。`createFilm`（剧本自解析）与 `createFilmFromProject`
  *  （读统一项目 Shot[]）共用的唯一落点 —— 逐镜 params 的折算只此一处（§12.12）。 */
 async function persistFilmWithShots(args: {
-  userId: string;
-  projectId?: string | null;
-  title: string;
-  script: string;
-  type: string;
-  styleSlug?: string | null;
-  sizeSpec: unknown;
+  bgmName?: string | null;
   fps: number;
   framesPerShot: number;
-  subtitleOn: boolean;
-  bgmName?: string | null;
-  videoWorkflowId: string;
   imageWorkflowId: string;
+  projectId?: string | null;
+  script: string;
   shotInputs: Array<FilmShotInput>;
+  sizeSpec: unknown;
+  styleSlug?: string | null;
+  subtitleOn: boolean;
+  title: string;
+  type: string;
+  userId: string;
+  videoWorkflowId: string;
 }): Promise<string> {
   const film = await filmRepository.create({
     userId: args.userId,
@@ -273,30 +275,30 @@ export async function createFilm(input: CreateFilmInput) {
   return { id: filmId, shots: shots.length };
 }
 
-export interface CreateFilmFromProjectInput {
-  userId: string;
-  /** 统一项目 id（proj_*）；镜头取自该项目的 production.shots。 */
-  projectId: string;
-  /** 逐镜生成用的工作流库视频工作流 id（本地链路唯一来源）。 */
-  videoWorkflowId?: string | null;
-  /** 文生视频镜头合成首帧用的图类工作流 id。 */
-  imageWorkflowId?: string | null;
-  title?: string;
-  type?: string;
-  size?: unknown;
+export type CreateFilmFromProjectInput = {
+  bgmName?: string | null;
   fps?: number;
   framesPerShot?: number;
+  /** 文生视频镜头合成首帧用的图类工作流 id。 */
+  imageWorkflowId?: string | null;
+  /** 统一项目 id（proj_*）；镜头取自该项目的 production.shots。 */
+  projectId: string;
+  size?: unknown;
   subtitleOn?: boolean;
-  bgmName?: string | null;
-}
+  title?: string;
+  type?: string;
+  userId: string;
+  /** 逐镜生成用的工作流库视频工作流 id（本地链路唯一来源）。 */
+  videoWorkflowId?: string | null;
+};
 
 /** 从统一项目的 `production.shots` 直接建片（Phase 5 接入，设计 §6.3）：
  *  工坊已产出的镜头不再走「自建剧本 → LLM 平行分镜」，而是逐条映射为成片镜头。
  *  镜头的 prompt / negative 已是工坊定稿（含风格），这里不二次加工；顺序按镜号 index。 */
 export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
   const row = await productionRepository.getForUser(input.userId, input.projectId);
-  const rawShots =
-    row && Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>) : [];
+  /* SAFETY: 类型断言已复核 */
+  const rawShots = row && Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [];
   const shots = [...rawShots].sort((a, b) => a.index - b.index);
   if (!shots.length) {
     throw new Error("该项目还没有镜头，请先在工坊产出镜头再成片");
@@ -343,7 +345,7 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
 // 进 unmatched、用工作流图内 seed），运行期绝不改写工作流节点。
 async function generateVideoShot(
   userId: string,
-  shot: { prompt: string; negative?: string | null; params?: unknown },
+  shot: { negative?: string | null; params?: unknown; prompt: string },
 ): Promise<string> {
   const params = /* SAFETY: 类型断言已复核 */ (shot.params ?? {}) as Record<string, unknown>;
 
@@ -395,11 +397,17 @@ async function generateVideoShot(
 // ── start (autopilot) ───────────────────────────────────────
 export async function startFilm(id: string) {
   const film = await filmRepository.findById(id);
-  if (!film) throw new Error("影片不存在");
-  if (film.status === "GENERATING" || film.status === "COMPOSING") return;
+  if (!film) {
+    throw new Error("影片不存在");
+  }
+  if (film.status === "GENERATING" || film.status === "COMPOSING") {
+    return;
+  }
 
   const shots = await filmShotRepository.listByFilm(id, { status: "IDLE" });
-  if (!shots.length) throw new Error("没有可生成的镜头，请重新创建");
+  if (!shots.length) {
+    throw new Error("没有可生成的镜头，请重新创建");
+  }
 
   await filmRepository.markGenerating(id);
   await appendFilmLog(id, "info", `开始逐镜生成（共 ${shots.length} 镜）`);
@@ -412,9 +420,9 @@ export async function startFilm(id: string) {
         params: shot.params,
       });
       await filmShotRepository.markQueued(shot.id, taskId);
-    } catch (e) {
+    } catch (error) {
       await filmShotRepository.markFailed(shot.id);
-      await appendFilmLog(id, "error", errorText(e, `镜头 ${shot.order + 1} 提交失败`));
+      await appendFilmLog(id, "error", errorText(error, `镜头 ${shot.order + 1} 提交失败`));
     }
   }
 
@@ -428,7 +436,7 @@ export async function startFilm(id: string) {
  * 另一个不会跟着改。 */
 const WATCH_POLL_MS = 4000;
 const WATCH_MAX_ITER = 240;
-const WATCH_BUDGET_MIN = Math.round((WATCH_POLL_MS * WATCH_MAX_ITER) / 60000);
+const WATCH_BUDGET_MIN = Math.round((WATCH_POLL_MS * WATCH_MAX_ITER) / 60_000);
 
 /* **监看在飞表**（跨模块实例）。`watchFilm` 是被 `void` 起来的常驻循环，而
  * dev 的热重启不会杀掉旧模块那条 promise 链 —— 旧循环还在跑，本模块的新实例
@@ -448,7 +456,9 @@ function inFlightFilms(): Set<string> {
 /** 监看一部影片直到出片 / 判失败；同一部影片在本进程内**至多一条**循环。 */
 async function watchFilm(id: string, opts: { resumed?: boolean } = {}) {
   const inFlight = inFlightFilms();
-  if (inFlight.has(id)) return;
+  if (inFlight.has(id)) {
+    return;
+  }
   inFlight.add(id);
   try {
     await watchLoop(id, opts);
@@ -465,7 +475,9 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
   }
   for (let i = 0; i < WATCH_MAX_ITER; i++) {
     const film = await filmRepository.findById(id);
-    if (!film || film.status === "CANCELLED" || film.status === "FAILED") return;
+    if (!film || film.status === "CANCELLED" || film.status === "FAILED") {
+      return;
+    }
     if (film.status !== "GENERATING") {
       // 已经走掉了（例如合成已开始）
     }
@@ -502,8 +514,11 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
        * SUCCEEDED 无 taskId 的镜头就让影片停在 progress 50）。
        * 真正「没任务又不是终态」的（IDLE / 提交前就崩的 QUEUED）照旧算等待。 */
       if (shot.status === "SUCCEEDED" || shot.status === "FAILED") {
-        if (shot.status === "SUCCEEDED") done++;
-        else failed++;
+        if (shot.status === "SUCCEEDED") {
+          done++;
+        } else {
+          failed++;
+        }
         continue;
       }
       if (!shot.taskId) {
@@ -515,7 +530,9 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
 
     const taskIds: Array<string> = [];
     for (const shot of awaiting) {
-      if (shot.taskId) taskIds.push(shot.taskId);
+      if (shot.taskId) {
+        taskIds.push(shot.taskId);
+      }
     }
     const progressById = new Map(
       (await taskRepository.findExecutionProgressMany(taskIds)).map(
@@ -542,8 +559,8 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
       if (next === "SUCCEEDED") {
         const imgs =
           /* SAFETY: 类型断言已复核 */ (task.resultImages as Array<{
-            mediaType?: unknown;
             localPath?: string;
+            mediaType?: unknown;
           }> | null) ?? [];
 
         const vid = imgs.find((img) => img.mediaType === "video") ?? imgs[0];
@@ -570,9 +587,13 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
           duration: duration ?? null,
         });
       }
-      if (next === "SUCCEEDED") done++;
-      else if (next === "FAILED") failed++;
-      else pending++;
+      if (next === "SUCCEEDED") {
+        done++;
+      } else if (next === "FAILED") {
+        failed++;
+      } else {
+        pending++;
+      }
     }
 
     const total = shots.length;
@@ -605,8 +626,8 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
  * 用，调用方不据它做决策。
  */
 export async function resumeStalledFilms(): Promise<{
-  resumed: Array<string>;
   abandoned: Array<string>;
+  resumed: Array<string>;
 }> {
   /* 表还没建就整轮跳过，与回收器同一口径（`sweepOnce` 也判这一条）。哨兵表是
    * `task`，而首启是一次把整套 DDL 应用上去的 ⇒ `task` 在时 `filmProject` 也在。
@@ -626,7 +647,9 @@ export async function resumeStalledFilms(): Promise<{
     for (const film of await filmRepository.listByStatus(["GENERATING"])) {
       /* 本进程已有循环在跑（HMR 之后旧循环还活着）就不再起第二条 ——
        * 判据与 `watchFilm` 内部那道是同一份在飞表，两处各自判就会漂开。 */
-      if (inFlightFilms().has(film.id)) continue;
+      if (inFlightFilms().has(film.id)) {
+        continue;
+      }
       resumed.push(film.id);
       void watchFilm(film.id, { resumed: true });
     }
@@ -645,8 +668,8 @@ export async function resumeStalledFilms(): Promise<{
       );
       abandoned.push(film.id);
     }
-  } catch (err) {
-    logger.warn(`[film] ${errorText(err, "resumeStalledFilms 失败（重启恢复扫描）")}`);
+  } catch (error) {
+    logger.warn(`[film] ${errorText(error, "resumeStalledFilms 失败（重启恢复扫描）")}`);
   }
 
   if (resumed.length || abandoned.length) {
@@ -660,10 +683,14 @@ export async function resumeStalledFilms(): Promise<{
 // ── cancel ──────────────────────────────────────────────────
 export async function cancelFilm(id: string) {
   const film = await filmRepository.findById(id);
-  if (!film) return;
+  if (!film) {
+    return;
+  }
   const shots = await filmShotRepository.listActiveWithTask(id);
   for (const s of shots) {
-    if (s.taskId) await cancelTask(s.taskId).catch(() => undefined);
+    if (s.taskId) {
+      await cancelTask(s.taskId).catch(() => undefined);
+    }
   }
   await filmShotRepository.markAllActiveFailed(id);
   await filmRepository.markCancelled(id);

@@ -17,14 +17,14 @@
  */
 
 /** 一帧调用栈解析出的位置（`path` 已剥协议前缀，`lineNo` 仅数字时保留）。 */
-interface StackFrame {
-  /** 原始行（判 `node_modules` / 框架特征时看它）。 */
-  raw: string;
-  /** 位置段解析出的路径（已做前缀清理）。 */
-  path: string;
+type StackFrame = {
   /** 行号（非数字时为空串）。 */
   lineNo: string;
-}
+  /** 位置段解析出的路径（已做前缀清理）。 */
+  path: string;
+  /** 原始行（判 `node_modules` / 框架特征时看它）。 */
+  raw: string;
+};
 
 /**
  * 面板自身那一族模块的帧：栈顶永远是这些包装 / 采集函数，必须跳过。
@@ -40,8 +40,7 @@ interface StackFrame {
  * 拆文件、改后缀都不会再让它失效（这类「按当时的文件名写死」的判据，失效方式是
  * 静默给出**看似有效**的错答案，比返回空更难发现）。
  */
-const LOGGER_SELF_RE =
-  /(?:^|\/)logs\/(?:log-[\w.-]+\.(?:tsx?|jsx?)|LogProvider\.tsx?)\b/i;
+const LOGGER_SELF_RE = /(?:^|\/)logs\/(?:log-[\w.-]+\.(?:tsx?|jsx?)|LogProvider\.tsx?)\b/i;
 /** 框架 / 编译产物的特征帧（找业务帧时跳过）。 */
 const FRAMEWORK_FRAME_RE =
   /node_modules|react-dom|react\.production|react\.development|next\/(?:dist|server|client)|@tauri-apps|scheduler|webpack[/](?:runtime|bootstrap)|\[native code\]/i;
@@ -57,26 +56,29 @@ const PROJECT_SOURCE_RE = /\.(?:tsx?|mts|cts)$/i;
  */
 function parseStackFrame(raw: string): StackFrame | null {
   const line = raw.trim();
-  if (!line.startsWith("at ")) return null;
-  if (LOGGER_SELF_RE.test(line)) return null;
+  if (!line.startsWith("at ")) {
+    return null;
+  }
+  if (LOGGER_SELF_RE.test(line)) {
+    return null;
+  }
 
   // 取 frame 中的位置部分：优先用最后一个 (...) 里的内容，否则取整行
   const parenMatch = /\(([^)]+)\)\s*$/.exec(line);
   const loc = parenMatch ? parenMatch[1] : line.replace(/^at\s+/, "");
-  if (!loc) return null;
+  if (!loc) {
+    return null;
+  }
 
   // 位置段末尾一定是 :line:col，取最后两个冒号分割
   const lastColon = loc.lastIndexOf(":");
-  if (lastColon <= 0) return null;
+  if (lastColon <= 0) {
+    return null;
+  }
   const secondLastColon = loc.lastIndexOf(":", lastColon - 1);
   const lineNo =
-    secondLastColon >= 0
-      ? loc.slice(secondLastColon + 1, lastColon)
-      : loc.slice(lastColon + 1);
-  let path =
-    secondLastColon >= 0
-      ? loc.slice(0, secondLastColon)
-      : loc.slice(0, lastColon);
+    secondLastColon >= 0 ? loc.slice(secondLastColon + 1, lastColon) : loc.slice(lastColon + 1);
+  let path = secondLastColon >= 0 ? loc.slice(0, secondLastColon) : loc.slice(0, lastColon);
 
   // 清理常见前缀 / 协议
   path = path.replace(/^webpack-internal:\/\/\/\.\//, "");
@@ -94,7 +96,9 @@ function parseStackFrame(raw: string): StackFrame | null {
 
   // 取 /src/ 之后的路径作为最简可读形式
   const srcIdx = path.indexOf("/src/");
-  if (srcIdx !== -1) path = path.slice(srcIdx + 1);
+  if (srcIdx !== -1) {
+    path = path.slice(srcIdx + 1);
+  }
 
   return { raw: line, path, lineNo };
 }
@@ -110,15 +114,21 @@ function parseStackFrame(raw: string): StackFrame | null {
  */
 function libraryNameOf(raw: string): string | null {
   const idx = raw.lastIndexOf("node_modules/");
-  if (idx === -1) return null;
+  if (idx === -1) {
+    return null;
+  }
   const rest = raw.slice(idx + "node_modules/".length);
   const segs = rest.split("/");
   const first = segs[0] ?? "";
-  if (first === "") return null;
+  if (first === "") {
+    return null;
+  }
   if (first.startsWith(".pnpm")) {
     /* `.pnpm/<pkg>@<ver>…/node_modules/<pkg>/…`：重来一次，从这一段之后再取。 */
     const inner = rest.indexOf("node_modules/");
-    if (inner === -1) return null;
+    if (inner === -1) {
+      return null;
+    }
     return libraryNameOf(rest.slice(inner));
   }
   if (first.startsWith("@")) {
@@ -136,7 +146,9 @@ function libraryNameOf(raw: string): string | null {
  */
 function describeLibraryFrame(frame: StackFrame): string | null {
   const pkg = libraryNameOf(frame.raw);
-  if (!pkg) return null;
+  if (!pkg) {
+    return null;
+  }
   const fn = /\bat\s+([^\s(]+)\s*\(/.exec(frame.raw)?.[1];
   const clean = fn && fn !== "" ? fn : undefined;
   return clean ? `${pkg} → ${clean}` : pkg;
@@ -162,7 +174,9 @@ function describeLibraryFrame(frame: StackFrame): string | null {
  * 是业务代码，也不指向任何能点开的东西，只配落进第 2 层（说出是哪个库）。
  */
 export function locateInStack(stack: string | undefined): string | undefined {
-  if (!stack) return undefined;
+  if (!stack) {
+    return undefined;
+  }
   try {
     const frames = stack
       .split("\n")
@@ -172,7 +186,9 @@ export function locateInStack(stack: string | undefined): string | undefined {
     /* 第 1 层：业务帧。原先的两遍扫描（先跳框架、再全收）收成一遍 —— 判据是
      * 「这个帧像不像业务源码」，与「第几遍」无关。 */
     for (const frame of frames) {
-      if (FRAMEWORK_FRAME_RE.test(frame.raw)) continue;
+      if (FRAMEWORK_FRAME_RE.test(frame.raw)) {
+        continue;
+      }
       if (
         frame.path &&
         PROJECT_SOURCE_RE.test(frame.path) &&
@@ -186,9 +202,13 @@ export function locateInStack(stack: string | undefined): string | undefined {
     /* 第 2 层：库帧。取**第一个**落在 node_modules 里的帧 —— 它离调用点最近，
      * 也就是真正打印这条日志的那一层。 */
     for (const frame of frames) {
-      if (!frame.raw.includes("node_modules")) continue;
+      if (!frame.raw.includes("node_modules")) {
+        continue;
+      }
       const described = describeLibraryFrame(frame);
-      if (described) return described;
+      if (described) {
+        return described;
+      }
     }
   } catch {
     // 解析失败不应影响日志记录

@@ -53,7 +53,7 @@ export const Orientations: Story = {
   render: () => (
     <div className="flex w-xl flex-col gap-6">
       {ORIENTATIONS.map((orientation) => (
-        <div key={orientation} className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" key={orientation}>
           <span className="text-ink-muted font-mono text-[11px]">orientation={orientation}</span>
           <Field orientation={orientation}>
             <FieldLabel htmlFor={`name-${orientation}`}>模型名称</FieldLabel>
@@ -74,11 +74,11 @@ export const GroupedSet: Story = {
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="field-width">宽度</FieldLabel>
-          <Input id="field-width" defaultValue="1024" />
+          <Input defaultValue="1024" id="field-width" />
         </Field>
         <Field>
           <FieldLabel htmlFor="field-height">高度</FieldLabel>
-          <Input id="field-height" defaultValue="1024" />
+          <Input defaultValue="1024" id="field-height" />
         </Field>
       </FieldGroup>
       <FieldSeparator>高级</FieldSeparator>
@@ -103,12 +103,12 @@ export const WithError: Story = {
       <FieldGroup>
         <Field data-invalid="true">
           <FieldLabel htmlFor="field-bad">提示词</FieldLabel>
-          <Input id="field-bad" defaultValue="" aria-invalid />
+          <Input aria-invalid defaultValue="" id="field-bad" />
           <FieldError>提示词不能为空</FieldError>
         </Field>
         <Field>
           <FieldLabel htmlFor="field-good">负向提示词</FieldLabel>
-          <Input id="field-good" defaultValue="watermark" />
+          <Input defaultValue="watermark" id="field-good" />
           {/* `FieldError` 不判校验（那是 schema 的事）—— 给它 `errors` 它就渲染，
               所以「这行没有错」的现场是**不传** `errors`。 */}
           <FieldError />
@@ -143,9 +143,9 @@ export const SelectionRow: Story = {
   render: () => (
     <FieldGroup className="w-xl">
       {["本地模型", "工作流库", "项目产物"].map((label, index) => (
-        <FieldLabel key={label} htmlFor={`pick-${String(index)}`}>
+        <FieldLabel htmlFor={`pick-${String(index)}`} key={label}>
           <Field orientation="horizontal">
-            <Checkbox id={`pick-${String(index)}`} defaultChecked={index === 0} />
+            <Checkbox defaultChecked={index === 0} id={`pick-${String(index)}`} />
             <FieldContent>
               <FieldTitle>{label}</FieldTitle>
               <FieldDescription>扫这个来源下的条目</FieldDescription>

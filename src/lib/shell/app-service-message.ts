@@ -51,43 +51,43 @@ import type { AppServiceExitNotice } from "./app-service-exit";
 import type { DevServerState } from "./dev-server-status";
 
 /** 一条可直接 `push` 的消息文案。 */
-export interface AppServiceMessageText {
-  title: string;
+export type AppServiceMessageText = {
   body: string;
-}
+  title: string;
+};
 
 /* ── 判据：从「上一次看到什么」到「这一次该记什么」 ───────────────────────── */
 
 /** 边沿判据的游标：上一次看到的事实 + 尚未收尾的那一次断开。 */
-export interface AppServiceEventCursor {
-  /** 上一次看到的四态。 */
-  state: DevServerState;
-  /** 上一次看到的「这份进程是新的吗」。 */
-  processIsNew: boolean;
+export type AppServiceEventCursor = {
   /** 本次页面会话里观测到的断开时刻；还没断开过为 null。 */
   offlineAt: number | null;
-}
+  /** 上一次看到的「这份进程是新的吗」。 */
+  processIsNew: boolean;
+  /** 上一次看到的四态。 */
+  state: DevServerState;
+};
 
 /** 一次待记录的事件。 */
 export type AppServiceEvent =
-  | { type: "disconnect"; at: number }
+  | { at: number; type: "disconnect" }
   /** 路由表不完整：服务在应答、但探活端点 404。用户此刻能做的是重启应用，
    *  而这条消息就是那个出口（状态栏那格只有 24px，说不完整）。 */
-  | { type: "route-stale"; at: number }
+  | { at: number; type: "route-stale" }
   | {
-      type: "start";
       at: number;
       /** 这次启动之前的断开时刻；本次会话没观测到断开为 null（= 冷启动 / 刷新后才恢复）。 */
       offlineAt: number | null;
+      type: "start";
       /** 上面那一段断开里**没人在探测**的毫秒数（0 = 每一拍都在探）。 */
       unprobedMs: number;
     };
 
-export interface AppServiceFacts {
-  /** 本次看到的四态。 */
-  state: DevServerState;
+export type AppServiceFacts = {
   /** 本次看到的「这份进程对本次页面会话来说是新的吗」。 */
   processIsNew: boolean;
+  /** 本次看到的四态。 */
+  state: DevServerState;
   /**
    * 这一拍之前有多少毫秒**没人在探测**（0 = 紧接上一拍）。
    *
@@ -99,7 +99,7 @@ export interface AppServiceFacts {
    * `probeGapMs` 在探活那一侧，这里只消费）。
    */
   unprobedMs: number;
-}
+};
 
 /** 初始游标：首帧还没有任何事实，因此不会产出边沿。 */
 export function initialAppServiceCursor(): AppServiceEventCursor {
@@ -185,13 +185,19 @@ export const UNPROBED_ANNOTATE_MS = 10_000;
 export function formatOfflineSpan(offlineAt: number, at: number): string | null {
   const ms = at - offlineAt;
   /* 时钟漂移 / 跨机器写入的记录会算出负数：负时长说成「持续 -3 秒」比说没有更糟。 */
-  if (!Number.isFinite(ms) || ms < 0) return null;
+  if (!Number.isFinite(ms) || ms < 0) {
+    return null;
+  }
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours} 小时 ${pad2(minutes)} 分 ${pad2(seconds)} 秒`;
-  if (minutes > 0) return `${minutes} 分 ${pad2(seconds)} 秒`;
+  if (hours > 0) {
+    return `${hours} 小时 ${pad2(minutes)} 分 ${pad2(seconds)} 秒`;
+  }
+  if (minutes > 0) {
+    return `${minutes} 分 ${pad2(seconds)} 秒`;
+  }
   return `${seconds} 秒`;
 }
 
@@ -228,16 +234,15 @@ export function describeAppServiceDisconnect(
   if (notice) {
     return {
       title: "应用服务已断开",
-      body: head + `原因：${notice.why}。${notice.detail}。\n` + `建议：${notice.action}。`,
+      body: `${head}原因：${notice.why}。${notice.detail}。\n` + `建议：${notice.action}。`,
     };
   }
   return {
     title: "应用服务已断开",
     body:
-      head +
-      "这一刻读不到结束原因（记录由进程结束那一刻的旁证人写入 run/app-service-exit.json，" +
-      "浏览器环境没有壳这条存活通道时读不到它，也可能是这一次断开根本没留下记录）。" +
-      "服务恢复后会作为「应用服务已恢复」再记一条，能拿到的原因与建议都在那条里。",
+      `${head}这一刻读不到结束原因（记录由进程结束那一刻的旁证人写入 run/app-service-exit.json，` +
+      `浏览器环境没有壳这条存活通道时读不到它，也可能是这一次断开根本没留下记录）。` +
+      `服务恢复后会作为「应用服务已恢复」再记一条，能拿到的原因与建议都在那条里。`,
   };
 }
 
@@ -262,15 +267,15 @@ export function describeAppServiceRouteStale(at: number): AppServiceMessageText 
 }
 
 /** 启动/恢复那条的输入：时刻 +（若有）断开时刻 +（若有）上一次结束的原因。 */
-export interface AppServiceStartInput {
+export type AppServiceStartInput = {
   /** 本次应答的时刻（新进程已经起来了）。 */
   at: number;
-  /** 本次会话观测到的断开时刻；冷启动为 null。 */
-  offlineAt: number | null;
   /** 上一份进程结束记录的落盘时刻（ISO 串或毫秒）；没有为 null。 */
   exitAt: number | null;
   /** 上一份进程为什么结束；没有为 null。 */
   notice: AppServiceExitNotice | null;
+  /** 本次会话观测到的断开时刻；冷启动为 null。 */
+  offlineAt: number | null;
   /**
    * 上面那一段断开里**没人在探测**的毫秒数（0 = 每一拍都在探）。
    *
@@ -280,7 +285,7 @@ export interface AppServiceStartInput {
    * 减掉等于宣称「服务在那一刻已经回来了」，而恢复点无从知道。
    */
   unprobedMs: number;
-}
+};
 
 /**
  * 启动/恢复那条：**时间 + 原因 + 该做什么** 一次给全。
@@ -302,9 +307,9 @@ export function describeAppServiceStart(input: AppServiceStartInput): AppService
   const lines: Array<string> = [];
   if (recovered) {
     lines.push(
-      `${formatClock(offlineAt)} 断开，${formatClock(at)} 恢复` +
-        (span === null ? "" : `，持续 ${span}`) +
-        "。",
+      `${formatClock(offlineAt)} 断开，${formatClock(at)} 恢复${
+        span === null ? "" : `，持续 ${span}`
+      }。`,
     );
     /* 探活停表那一段**如实标注**而不是从时长里减掉（手验现场：窗口失焦两分多钟，
      * 恢复消息把「没人在问」的那整段算成了断开时长，看起来像服务真的死了两分多
@@ -328,8 +333,9 @@ export function describeAppServiceStart(input: AppServiceStartInput): AppService
   if (notice) {
     const exitedAt = exitAt === null ? null : formatClock(exitAt);
     lines.push(
-      (exitedAt === null ? "上一次它是怎么结束的：" : `上一次它在 ${exitedAt} 结束：`) +
-        `${notice.why}。${notice.detail}。`,
+      `${
+        exitedAt === null ? "上一次它是怎么结束的：" : `上一次它在 ${exitedAt} 结束：`
+      }${notice.why}。${notice.detail}。`,
     );
     lines.push(`建议：${notice.action}。`);
   } else {

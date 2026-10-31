@@ -27,13 +27,13 @@ import {
 
 /** 受控弹窗：`ImageViewer` 要求 `src` 有值时渲染，所以 story 自己持开关。 */
 type StoryArgs = {
-  sourceName: MediaSourceName;
   label?: string;
   /**
    * 是否打开。`ImageViewer` 是**受控**的（`src` 有值即渲染、`onClose` 表示关），
    * 真机上由调用处持开关；story 里同样要有一个真开关，否则关掉之后就没法再开。
    */
   open: boolean;
+  sourceName: MediaSourceName;
 };
 
 function ViewerWithSource({ sourceName, label, open: initialOpen }: StoryArgs) {
@@ -41,19 +41,13 @@ function ViewerWithSource({ sourceName, label, open: initialOpen }: StoryArgs) {
   const src = String(resolveSource("media", sourceName));
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+      <Button onClick={() => setOpen(true)} size="sm" variant="outline">
         打开查看器
       </Button>
-      {open && (
-        <ImageViewer
-          src={src}
-          label={label ?? sourceName}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      {open && <ImageViewer label={label ?? sourceName} onClose={() => setOpen(false)} src={src} />}
       <p className="text-ink-muted text-xs">
-        弹窗由 story 自己持有开关（组件是受控的）：点「打开查看器」再开， Esc /
-        点遮罩 / 右上角 ✕ 都能关。
+        弹窗由 story 自己持有开关（组件是受控的）：点「打开查看器」再开， Esc / 点遮罩 / 右上角 ✕
+        都能关。
       </p>
     </div>
   );
@@ -97,28 +91,24 @@ export const ViewableImageGrid: Story = {
       <div className="flex flex-col items-center gap-2">
         <div className="size-40">
           <ViewableImage
-            src={String(resolveSource("media", "sample-landscape.svg"))}
             alt="能加载的缩略图"
-            label="能加载"
             className="rounded-xl object-cover"
+            label="能加载"
+            src={String(resolveSource("media", "sample-landscape.svg"))}
           />
         </div>
-        <span className="text-ink-muted font-mono text-[11px]">
-          能加载 → 点开查看器
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">能加载 → 点开查看器</span>
       </div>
       <div className="flex flex-col items-center gap-2">
         <div className="size-40">
           <ViewableImage
-            src={String(resolveSource("media", "missing.png"))}
             alt="加载失败的缩略图"
-            label="加载失败"
             className="rounded-xl object-cover"
+            label="加载失败"
+            src={String(resolveSource("media", "missing.png"))}
           />
         </div>
-        <span className="text-ink-muted font-mono text-[11px]">
-          加载失败 → 占位兜底
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">加载失败 → 占位兜底</span>
       </div>
     </div>
   ),

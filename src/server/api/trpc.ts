@@ -23,11 +23,11 @@ import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
 
 const trpcRuntimeLog = createAppRuntimeLogger("trpc");
 
-export interface TRPCUser {
-  id: string;
+export type TRPCUser = {
   email: string;
+  id: string;
   name: string | null;
-}
+};
 
 /**
  * 1. CONTEXT
@@ -158,18 +158,20 @@ const timingMiddleware = t.middleware(async ({ next, path, type }) => {
     // 仅当调用明显变慢（预期外的慢）才在面板给一条 warn，正常调用不打扰用户。
     if (durationMs >= SLOW_QUERY_THRESHOLD_MS) {
       const text = recordSlowQuery(path, durationMs, type);
-      if (text) trpcRuntimeLog.warn(text, { type });
+      if (text) {
+        trpcRuntimeLog.warn(text, { type });
+      }
     }
     return result;
-  } catch (cause) {
+  } catch (error) {
     const durationMs = Date.now() - start;
     logger.debug({ path, durationMs, type }, "trpc_timing");
     // 调用抛错 = 出问题：在面板可见通道记一条 error，便于用户当场定位。
     trpcRuntimeLog.error(`${path} 失败 ${durationMs}ms`, {
       type,
-      error: cause instanceof Error ? cause.message : String(cause),
+      error: error instanceof Error ? error.message : String(error),
     });
-    throw cause;
+    throw error;
   }
 });
 

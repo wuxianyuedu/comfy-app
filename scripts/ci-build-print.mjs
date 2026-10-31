@@ -27,10 +27,7 @@
  *
  * 消费方仍从 `ci-build-readout.mjs` 导入（那一份按既有写法转发），消费口一字不改。
  */
-import {
-  downstreamSkipped,
-  progressReadout,
-} from "./ci-build-classify.mjs";
+import { downstreamSkipped, progressReadout } from "./ci-build-classify.mjs";
 
 /* 这一族的入参类型都来自分类那一份（`ReturnType<typeof …>` 只在 JSDoc 里用）。 */
 /**
@@ -95,7 +92,9 @@ export function stageLogExcerpt(text, opts = {}) {
   const loose = [];
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
-    if (!line || !line.trim()) continue;
+    if (!line || !line.trim()) {
+      continue;
+    }
     if (FAILURE_ANCHORS.some((re) => re.test(line))) {
       anchors.push({ line: i + 1, text: line.trimEnd() });
     } else if (FAILURE_MARKERS.some((re) => re.test(line))) {
@@ -104,17 +103,19 @@ export function stageLogExcerpt(text, opts = {}) {
   }
   const anchored = anchors.length > 0;
   const failure = (anchored ? anchors : loose).slice(0, maxFailureLines);
-  const demoted = anchored
-    ? loose.length
-    : Math.max(0, loose.length - failure.length);
+  const demoted = anchored ? loose.length : Math.max(0, loose.length - failure.length);
   let end = lines.length;
-  while (end > 0 && !(lines[end - 1] ?? "").trim()) end -= 1;
+  while (end > 0 && !(lines[end - 1] ?? "").trim()) {
+    end -= 1;
+  }
   const start = Math.max(0, end - tailLines);
   /** @type {Array<{line: number, text: string}>} */
   const tail = [];
   for (let i = start; i < end; i += 1) {
     const line = lines[i] ?? "";
-    if (!line.trim()) continue;
+    if (!line.trim()) {
+      continue;
+    }
     tail.push({ line: i + 1, text: line.trimEnd() });
   }
   return { failure, tail, totalLines: lines.length, demoted, anchored };
@@ -143,9 +144,7 @@ export function formatOutcome(outcome, extra = {}) {
   };
   lines.push(`${tag} build ${sn} → 结论：${head[outcome.state]}`);
   for (const p of outcome.pipelines) {
-    lines.push(
-      `${tag}   流水线：${p.name || "(无名)"}（status=${p.status || "(无)"}）`,
-    );
+    lines.push(`${tag}   流水线：${p.name || "(无名)"}（status=${p.status || "(无)"}）`);
   }
   /* 「还在跑」那一支以前只念一句「等它跑完再读一次」，而**轮询那行念的是格子进度**
    * （`…/pending/0-1+30/37`）—— 同一个事实两个读者面，看诊断的人只能去翻原始 JSON，
@@ -163,14 +162,10 @@ export function formatOutcome(outcome, extra = {}) {
     );
   }
   for (const s of outcome.failed) {
-    lines.push(
-      `${tag}   红的那一格：${s.name || s.id}（${s.id}，status=${s.status}）`,
-    );
+    lines.push(`${tag}   红的那一格：${s.name || s.id}（${s.id}，status=${s.status}）`);
   }
   for (const s of outcome.cancelled) {
-    lines.push(
-      `${tag}   被取消的那一格：${s.name || s.id}（${s.id}，status=${s.status}）`,
-    );
+    lines.push(`${tag}   被取消的那一格：${s.name || s.id}（${s.id}，status=${s.status}）`);
   }
   /* 被终止的**原话**必须先于「下一动作」被念出来：这一档的全部价值就是让人不用去翻
    * 完整日志就能回答「是取消还是真红，被谁顶掉的」（ISSUE #2406）。 */
@@ -187,13 +182,13 @@ export function formatOutcome(outcome, extra = {}) {
         ? ` · 抢走锁的流水线：${r.holder}`
         : "";
     lines.push(`${tag}   ${where}${who}`);
-    if (r.reason) lines.push(`${tag}   平台原话：${r.reason}`);
+    if (r.reason) {
+      lines.push(`${tag}   平台原话：${r.reason}`);
+    }
   }
   const skipped = downstreamSkipped(outcome);
   for (const s of skipped) {
-    lines.push(
-      `${tag}   下面这些格根本没跑：${s.name || s.id}（${s.id}，status=skipped）`,
-    );
+    lines.push(`${tag}   下面这些格根本没跑：${s.name || s.id}（${s.id}，status=skipped）`);
   }
   /* `extra.reason` 是 `fetchStageReason()` 单独取回来的那份原话。上面 `reasons` 已经
    * 逐条念过它了 ⇒ 这里只在**上面一条都没念到**时兜底，避免同一句原话念两遍。 */
@@ -201,13 +196,9 @@ export function formatOutcome(outcome, extra = {}) {
     lines.push(`${tag}   平台给的原因：${extra.reason}`);
   }
   if (outcome.state === "failed") {
-    lines.push(
-      `${tag}   下一动作：查那一格的日志：https://cnb.cool/${slug}/-/build/logs/${sn}`,
-    );
+    lines.push(`${tag}   下一动作：查那一格的日志：https://cnb.cool/${slug}/-/build/logs/${sn}`);
   } else if (outcome.state === "cancelled") {
-    lines.push(
-      `${tag}   下一动作：重跑这一格（锁被另一跑顶掉 / 人为终止），不要去查产物。`,
-    );
+    lines.push(`${tag}   下一动作：重跑这一格（锁被另一跑顶掉 / 人为终止），不要去查产物。`);
   } else if (outcome.state === "running") {
     lines.push(`${tag}   下一动作：等它跑完再读一次。`);
   }

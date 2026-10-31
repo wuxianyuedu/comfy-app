@@ -37,9 +37,9 @@ export const VariantsAndSizes: Story = {
   render: (args) => (
     <div className="flex flex-col gap-4">
       {VARIANTS.map((variant) => (
-        <div key={variant} className="flex items-center gap-3">
+        <div className="flex items-center gap-3" key={variant}>
           {SIZES.map((size) => (
-            <Toggle key={size} {...args} variant={variant} size={size}>
+            <Toggle key={size} {...args} size={size} variant={variant}>
               <Bold />
               {size}
             </Toggle>
@@ -57,10 +57,10 @@ export const States: Story = {
       <Toggle aria-label="加粗">
         <Bold />
       </Toggle>
-      <Toggle pressed aria-label="斜体">
+      <Toggle aria-label="斜体" pressed>
         <Italic />
       </Toggle>
-      <Toggle disabled aria-label="下划线">
+      <Toggle aria-label="下划线" disabled>
         <Underline />
       </Toggle>
     </div>
@@ -71,13 +71,13 @@ export const States: Story = {
 export const Toolbar: Story = {
   render: () => (
     <div className="border-border inline-flex items-center gap-1 rounded-lg border p-1">
-      <Toggle size="sm" pressed aria-label="加粗">
+      <Toggle aria-label="加粗" pressed size="sm">
         <Bold />
       </Toggle>
-      <Toggle size="sm" aria-label="斜体">
+      <Toggle aria-label="斜体" size="sm">
         <Italic />
       </Toggle>
-      <Toggle size="sm" variant="outline" aria-label="下划线">
+      <Toggle aria-label="下划线" size="sm" variant="outline">
         <Underline />
       </Toggle>
     </div>

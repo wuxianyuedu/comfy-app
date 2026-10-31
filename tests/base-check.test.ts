@@ -101,8 +101,8 @@ function runBaseCheckOnce(
   args: Array<string>,
 ): {
   code: number;
-  stdout: string;
   stderr: string;
+  stdout: string;
 } {
   try {
     const stdout = execFileSync(process.execPath, [SCRIPT, ...args], {
@@ -114,8 +114,8 @@ function runBaseCheckOnce(
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: e.status ?? -1,
@@ -136,8 +136,8 @@ function runBaseCheckOnce(
  * 手写引用只能覆盖候选顺序的后半段，恰好绕开了最常走的那一条。
  */
 function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}): {
-  work: string;
   bare: string;
+  work: string;
 } {
   const bare = mkdtempSync(join(tmpdir(), "base-check-bare-"));
   git(bare, "init", "-q", "--bare", "-b", "master", ".");
@@ -161,7 +161,9 @@ function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}
   );
   writeFileSync(join(work, "seed.txt"), "seed\n");
   /* 「违规已经落进主干」那一档：基线上就带着 marker ⇒ 两侧都红。 */
-  if (opts.markerOnBase) writeFileSync(join(work, "marker.txt"), "x\n");
+  if (opts.markerOnBase) {
+    writeFileSync(join(work, "marker.txt"), "x\n");
+  }
   /* 「基线侧一条用例都没收集到」那一档（ISSUE #1652）：判据脚本在**基线之后**被
    * 改成会收集用例的形态，于是基线那一版的 `node gate.cjs` 打印一段
    * vitest 形态的 `Tests  no tests` 并退 **1** —— 与「判据跑了且红」逐字同形。 */
@@ -209,7 +211,7 @@ function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}
 }
 
 /** 清掉一对（work + bare）临时目录。 */
-function dropRepo(r: { work: string; bare: string }): void {
+function dropRepo(r: { bare: string; work: string; }): void {
   rmSync(r.work, { recursive: true, force: true });
   rmSync(r.bare, { recursive: true, force: true });
 }
@@ -224,9 +226,11 @@ function dropRepo(r: { work: string; bare: string }): void {
 function runBaseCheck(
   cwd: string,
   args: Array<string>,
-): { code: number; stdout: string; stderr: string } {
+): { code: number; stderr: string; stdout: string; } {
   const first = runBaseCheckOnce(cwd, args);
-  if (first.code === 0 || first.stdout || first.stderr) return first;
+  if (first.code === 0 || first.stdout || first.stderr) {
+    return first;
+  }
   return runBaseCheckOnce(cwd, args);
 }
 
@@ -680,7 +684,7 @@ describe("base-check —— 真仓库上的四态", () => {
    * 合了进来（还没推）。此时按旧口径拿 `@{u}` 当基线 = 拿**不含那批合并改动**的
    * 自己跟自己比 ⇒ 主干自带的红会被判成 `yours`，把别线的债算到复算的人头上。
    */
-  function makeMergedPrFixture(): { work: string; bare: string } {
+  function makeMergedPrFixture(): { bare: string; work: string; } {
     const bare = mkdtempSync(join(tmpdir(), "base-check-pr-bare-"));
     git(bare, "init", "-q", "--bare", "-b", "master", ".");
     const work = mkdtempSync(join(tmpdir(), "base-check-pr-work-"));
@@ -899,7 +903,9 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
   test("默认面 = 钩子里的全仓判据，且含 A 组的 tsc 与 B 组的 eslint", () => {
     const r = resolveMergeBatch([]);
     expect(r.ok).toBe(true);
-    if (!r.ok) return;
+    if (!r.ok) {
+      return;
+    }
     const labels = r.commands.map((c) => c.label);
     /* 这两条就是 ISSUE #1591 立案的那两条：它们在钩子里是 `run_group`（并行成组）、
      * 不是 `run "<标签>"`，所以只读 `run` 的解析器看不见它们 —— 只读 `run` 会让
@@ -952,7 +958,9 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
   test("默认面里不含任何「只在改动上作答」的判据", () => {
     const r = resolveMergeBatch([]);
     expect(r.ok).toBe(true);
-    if (!r.ok) return;
+    if (!r.ok) {
+      return;
+    }
     for (const c of r.commands) {
       expect(mayDecideOnCleanSnapshot(c.argv), c.label).toBe(true);
     }
@@ -1081,7 +1089,9 @@ describe("base-check --base —— 真仓库上的端到端", () => {
         "",
       ].join("\n"),
     );
-    if (opts.baselineRed) writeFileSync(join(work, "marker.txt"), "x\n");
+    if (opts.baselineRed) {
+      writeFileSync(join(work, "marker.txt"), "x\n");
+    }
     writeFileSync(join(work, "seed.txt"), "seed\n");
     git(work, "add", ".");
     git(work, "commit", "-qm", "chore: seed");
@@ -1152,13 +1162,13 @@ describe("base-check --base —— 真仓库上的端到端", () => {
     try {
       const { stdout } = runBaseCheck(r.work, ["--base", "--json"]);
       const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(stdout) as {
-        summary: string;
         ref: string;
         rows: Array<{
+          baseCode: number | null;
           label: string;
           verdict: string;
-          baseCode: number | null;
         }>;
+        summary: string;
       };
       expect(parsed.summary).toBe("baseline-red");
       expect(parsed.ref).toMatch(/up\/master/);

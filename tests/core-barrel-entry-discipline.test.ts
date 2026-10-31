@@ -29,8 +29,8 @@ const requireCjs = createRequire(import.meta.url);
 const reader = /* SAFETY: 类型断言已复核 */ requireCjs("../scripts/gate-scan-read.cjs") as {
   dirExists: (dir: string) => boolean;
   readForScan: (abs: string) => string | null;
-  walkForScan: (dir: string, fileRe: RegExp, opts?: { skipDirs?: Set<string> }) => Array<string>;
   vanishedNote: (count: number) => string;
+  walkForScan: (dir: string, fileRe: RegExp, opts?: { skipDirs?: Set<string> }) => Array<string>;
 };
 
 const ROOT = process.cwd();
@@ -152,15 +152,25 @@ function walkAll(dir: string): Array<string> {
 function hasCycle(graph: Map<string, Array<string>>): boolean {
   const state = new Map<string, 1 | 2>();
   const visit = (node: string): boolean => {
-    if (state.get(node) === 1) return true;
-    if (state.get(node) === 2) return false;
+    if (state.get(node) === 1) {
+      return true;
+    }
+    if (state.get(node) === 2) {
+      return false;
+    }
     state.set(node, 1);
     for (const next of graph.get(node) ?? []) {
-      if (visit(next)) return true;
+      if (visit(next)) {
+        return true;
+      }
     }
     state.set(node, 2);
     return false;
   };
-  for (const node of graph.keys()) if (visit(node)) return true;
+  for (const node of graph.keys()) {
+    if (visit(node)) {
+      return true;
+    }
+  }
   return false;
 }

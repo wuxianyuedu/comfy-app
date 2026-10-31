@@ -20,11 +20,11 @@ import { DEFAULT_SIZE_SPEC, sizeSpecDims, type SizeSpec } from "~/lib/media/size
 const OUTPUT_DIR = path.join(process.cwd(), "data", "workshop-outputs");
 const SETTINGS_FILE = path.join(process.cwd(), "data", "workshop-comfy-settings.json");
 
-export interface ComfySettings {
+export type ComfySettings = {
   checkpoint?: string;
   imageWorkflow?: unknown;
   videoWorkflow?: unknown;
-}
+};
 
 let resolvedBase: string | null = null;
 
@@ -39,11 +39,11 @@ function settingsFileFingerprint(file: string): string | null {
 }
 
 /** settings 文件 IO 的注入面（真实形状；用例换临时目录）。 */
-export interface SettingsFileIo {
-  read(file: string): string;
+export type SettingsFileIo = {
   fingerprint(file: string): string | null;
+  read(file: string): string;
   write(file: string, content: string): Promise<void>;
-}
+};
 
 const realSettingsFileIo: SettingsFileIo = {
   read: (file) => readFileSync(file, "utf-8"),
@@ -72,7 +72,9 @@ export function createSettingsFileMemo(file: string, io: SettingsFileIo = realSe
   return {
     load(): ComfySettings {
       const fp = io.fingerprint(file);
-      if (cache && fp === fingerprint) return cache;
+      if (cache && fp === fingerprint) {
+        return cache;
+      }
       let parsed: ComfySettings;
       try {
         parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(io.read(file)) as ComfySettings;
@@ -126,7 +128,9 @@ function isNetworkFailure(e: unknown): boolean {
 /** 网络层失败时复位 base 缓存再把错误抛出去（重新探测交给下一次调用的
  * `resolveComfyBase` —— 本模块的调用链里它是每个提交 / 上传动作的第一跳）。 */
 function guardNetworkFailure(e: unknown): never {
-  if (isNetworkFailure(e)) resetWorkshopComfyBase();
+  if (isNetworkFailure(e)) {
+    resetWorkshopComfyBase();
+  }
   throw e;
 }
 
@@ -137,7 +141,9 @@ function guardNetworkFailure(e: unknown): never {
  * 分叉：同一实例一边判活、这边判死。本模块是纯 Node 宿主（MCP），probe.ts
  * 是零依赖叶子（只有 fetch + 地址拼接），import 安全。 */
 export async function resolveComfyBase(): Promise<string> {
-  if (resolvedBase) return resolvedBase;
+  if (resolvedBase) {
+    return resolvedBase;
+  }
   const raw = process.env.COMFYUI_BASE ?? comfyUiBaseUrl(COMFYUI_DEFAULT_PORT);
   let host;
   let port;
@@ -165,10 +171,10 @@ function comfyBase(): string {
   return resolvedBase ?? process.env.COMFYUI_BASE ?? comfyUiBaseUrl(COMFYUI_DEFAULT_PORT);
 }
 
-export interface ComfyPromptResult {
-  prompt_id?: string;
+export type ComfyPromptResult = {
   error?: string;
-}
+  prompt_id?: string;
+};
 
 export async function postComfyPrompt(prompt: unknown): Promise<ComfyPromptResult> {
   const base = await resolveComfyBase();
@@ -185,8 +191,8 @@ export async function postComfyPrompt(prompt: unknown): Promise<ComfyPromptResul
       );
     }
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as ComfyPromptResult;
-  } catch (e) {
-    guardNetworkFailure(e);
+  } catch (error) {
+    guardNetworkFailure(error);
   }
 }
 
@@ -196,10 +202,12 @@ export async function getComfyHistory(promptId: string): Promise<Record<string, 
     const res = await fetch(`${base}/api/history/${promptId}`, {
       signal: AbortSignal.timeout(30_000),
     });
-    if (!res.ok) throw new Error(`ComfyUI /api/history 失败 (${res.status})`);
+    if (!res.ok) {
+      throw new Error(`ComfyUI /api/history 失败 (${res.status})`);
+    }
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, unknown>;
-  } catch (e) {
-    guardNetworkFailure(e);
+  } catch (error) {
+    guardNetworkFailure(error);
   }
 }
 
@@ -217,10 +225,12 @@ export async function getComfyView(
     const res = await fetch(url.toString(), {
       signal: AbortSignal.timeout(60_000),
     });
-    if (!res.ok) throw new Error(`ComfyUI /api/view 失败 (${res.status})`);
+    if (!res.ok) {
+      throw new Error(`ComfyUI /api/view 失败 (${res.status})`);
+    }
     return Buffer.from(await res.arrayBuffer());
-  } catch (e) {
-    guardNetworkFailure(e);
+  } catch (error) {
+    guardNetworkFailure(error);
   }
 }
 
@@ -235,15 +245,18 @@ export async function uploadComfyImage(buffer: Buffer, filename: string): Promis
       body: form,
       signal: AbortSignal.timeout(30_000),
     });
-    if (!res.ok)
+    if (!res.ok) {
       throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       name?: string;
     };
-    if (!data.name) throw new Error("ComfyUI 上传未返回文件名");
+    if (!data.name) {
+      throw new Error("ComfyUI 上传未返回文件名");
+    }
     return data.name;
-  } catch (e) {
-    guardNetworkFailure(e);
+  } catch (error) {
+    guardNetworkFailure(error);
   }
 }
 
@@ -266,11 +279,15 @@ export async function fetchToBuffer(ref: string): Promise<Buffer> {
      * `indexOf` 给 `-1`，`slice(0)` 会把**整个 data URL** 当 base64
      * 交给 `Buffer.from`（它跳过非法字符）→ 静默解出垃圾字节。 */
     const base64 = base64PayloadOf(ref);
-    if (base64 === null) throw new Error("参考图 data URL 格式无效");
+    if (base64 === null) {
+      throw new Error("参考图 data URL 格式无效");
+    }
     return Buffer.from(base64, "base64");
   }
   const res = await fetch(ref, { signal: AbortSignal.timeout(30_000) });
-  if (!res.ok) throw new Error(`获取参考图失败 (${res.status})`);
+  if (!res.ok) {
+    throw new Error(`获取参考图失败 (${res.status})`);
+  }
   return Buffer.from(await res.arrayBuffer());
 }
 
@@ -284,19 +301,19 @@ export async function saveComfySettings(patch: Partial<ComfySettings>): Promise<
  *  服务端也吃同一套尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见
  *  `lib/size-presets`）：缺省按图片场景的默认档（3:4 1k），不写像素字面量。 */
 export function sizeDimsForImage(spec?: SizeSpec): {
-  width: number;
   height: number;
+  width: number;
 } {
   return sizeSpecDims(spec ?? DEFAULT_SIZE_SPEC, "image");
 }
 
 /** 模型无关的默认 SDXL txt2img 图（SaveImage 输出，供 /api/view 取回）。 */
 export function buildTxt2ImgWorkflow(input: {
-  prompt: string;
-  negative?: string;
-  size?: SizeSpec;
   checkpoint?: string;
+  negative?: string;
+  prompt: string;
   seed?: number;
+  size?: SizeSpec;
 }): unknown {
   const ckpt =
     input.checkpoint ??
@@ -346,7 +363,7 @@ export function buildTxt2ImgWorkflow(input: {
 /** 把模板里的 {{prompt}}/{{negative}}/{{image}} 替换为实际值。 */
 export function substitutePlaceholders(
   template: unknown,
-  vars: { prompt: string; negative?: string; image?: string },
+  vars: { image?: string; negative?: string; prompt: string },
 ): unknown {
   const json = JSON.stringify(template)
     .split("{{prompt}}")
@@ -358,9 +375,9 @@ export function substitutePlaceholders(
   return /* SAFETY: 类型断言已复核 */ JSON.parse(json) as unknown;
 }
 
-export interface ComfyRunResult {
+export type ComfyRunResult = {
   files: Array<string>;
-}
+};
 
 /**
  * 提交工作流、轮询历史、取回输出并落盘到 data/workshop-outputs[/{sessionId}]。
@@ -372,7 +389,9 @@ export async function runComfyWorkflow(
 ): Promise<ComfyRunResult> {
   const posted = await postComfyPrompt(workflow);
   const promptId = posted.prompt_id;
-  if (!promptId) throw new Error(`ComfyUI 未返回 prompt_id：${JSON.stringify(posted)}`);
+  if (!promptId) {
+    throw new Error(`ComfyUI 未返回 prompt_id：${JSON.stringify(posted)}`);
+  }
 
   const deadline = Date.now() + 10 * 60_000;
   let history: Record<string, unknown> = {};
@@ -383,7 +402,9 @@ export async function runComfyWorkflow(
       | undefined;
     const done = entry?.status?.completed === true || entry?.status?.status_str === "success";
     const failed = entry?.status?.status_str === "error";
-    if (done || failed) break;
+    if (done || failed) {
+      break;
+    }
     await sleep(1500);
   }
 
@@ -396,8 +417,8 @@ export async function runComfyWorkflow(
   await fs.mkdir(outDir, { recursive: true });
   for (const nodeOut of Object.values(outputs)) {
     const rec = /* SAFETY: 类型断言已复核 */ nodeOut as {
-      images?: Array<{ filename: string; subfolder: string; type: string }>;
       gifs?: Array<{ filename: string; subfolder: string; type: string }>;
+      images?: Array<{ filename: string; subfolder: string; type: string }>;
     };
     const items = [...(rec.images ?? []), ...(rec.gifs ?? [])];
     for (const item of items) {
@@ -408,7 +429,9 @@ export async function runComfyWorkflow(
       files.push(`file://${outPath}`);
     }
   }
-  if (files.length === 0) throw new Error("ComfyUI 任务完成但没有输出文件");
+  if (files.length === 0) {
+    throw new Error("ComfyUI 任务完成但没有输出文件");
+  }
   return { files };
 }
 
@@ -416,11 +439,11 @@ export async function runComfyWorkflow(
  * 生成图（comfyui 通道）：有自定义 imageWorkflow 模板则用模板，否则用默认 SDXL 图。
  */
 export async function generateImageViaComfyUI(input: {
-  prompt: string;
   negative?: string;
+  prompt: string;
+  sessionId?: string;
   /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）；缺省走图片场景默认档。 */
   size?: SizeSpec;
-  sessionId?: string;
 }): Promise<string> {
   const settings = loadSettings();
   const workflow = settings.imageWorkflow
@@ -445,9 +468,9 @@ export async function generateImageViaComfyUI(input: {
  * 因为 i2v 依赖具体模型，无法内置通用图。
  */
 export async function submitVideoViaComfyUI(input: {
-  prompt: string;
-  negative?: string;
   imageDataUrl?: string;
+  negative?: string;
+  prompt: string;
   sessionId?: string;
 }): Promise<{ url?: string }> {
   const settings = loadSettings();

@@ -42,7 +42,9 @@ import { C_MANIFEST_NAME, cFileXmlName } from "./precommit-timing.mjs";
  *   `node scripts/run-affected-tests.mjs --full` 时没有 `$LOGD`，不该被塞读数）
  */
 export function junitReportArgs(dir, chunkId, attempt) {
-  if (!dir) return [];
+  if (!dir) {
+    return [];
+  }
   return [
     "--reporter=default",
     "--reporter=junit",
@@ -63,13 +65,11 @@ export function junitReportArgs(dir, chunkId, attempt) {
  * @returns {boolean} 是否落盘成功
  */
 export function writeFilesManifest(dir, files) {
-  if (!dir) return false;
+  if (!dir) {
+    return false;
+  }
   try {
-    writeFileSync(
-      path.join(dir, C_MANIFEST_NAME),
-      `${files.join("\n")}\n`,
-      "utf8",
-    );
+    writeFileSync(path.join(dir, C_MANIFEST_NAME), `${files.join("\n")}\n`, "utf8");
     return true;
   } catch {
     return false;
