@@ -483,14 +483,16 @@ function staleReason(result) {
  */
 export function schemaNotice(result) {
   switch (result.state) {
-    case "ready":
+    case "ready": {
       return null;
-    case "synced":
+    }
+    case "synced": {
       return {
         level: "info",
         lines: ["数据库 schema 已自动同步到当前版本（这次改动不涉及丢数据）。"],
       };
-    case "missing":
+    }
+    case "missing": {
       return {
         level: "warn",
         lines: [
@@ -498,7 +500,8 @@ export function schemaNotice(result) {
           "先执行：pnpm db:push（见 docs/standards/launch-and-build.md §9.1）",
         ],
       };
-    case "stale":
+    }
+    case "stale": {
       return {
         level: "warn",
         lines: [
@@ -507,7 +510,8 @@ export function schemaNotice(result) {
           "请先确认这次 schema 变更确实可以丢弃那些数据）",
         ],
       };
-    default:
+    }
+    default: {
       return {
         level: "warn",
         lines: [
@@ -515,6 +519,7 @@ export function schemaNotice(result) {
           "必要时手动跑一次：pnpm db:push",
         ],
       };
+    }
   }
 }
 
