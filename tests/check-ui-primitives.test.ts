@@ -6,6 +6,11 @@
  *
  * 为什么用子进程跑：门禁由 pre-commit 以 `node scripts/xxx.cjs` 调用，且内部以
  * `__dirname/..` 定位扫描根 —— 复用同一调用方式才等价于真实门禁。
+ *
+ * 夹具里**纯样例**的文件路径一律写成不存在的 `fixture-*`（ISSUE #2830）：写成真路径时，
+ * 「按路径引用」那一档会把这份 70s+ 的自测算成那些业务文件的消费方。按**精确路径**登记在
+ * 豁免表 / 迁移落点里的那几份（`ui-primitives-exempt-files.cjs`）必须保持真实路径 ——
+ * 那一条测的正是「这个文件被显式放行」。
  */
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
@@ -1960,7 +1965,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("帧循环（回调里再次 rAF 自己）不算 P39（那是采样器，不是等一帧）", ({ repo }) => {
     repo.write(
-      "src/components/studio/hooks/use-fps.ts",
+      "src/components/studio/hooks/fixture-use-fps.ts",
       [
         "export function useFps() {",
         "  let raf = 0;",
@@ -2107,7 +2112,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "  } catch (error) {",
         "    return NextResponse.json({",
         "      ok: false,",
-        '      detail: String(error),',
+        "      detail: String(error),",
         "    });",
         "  }",
         "}",
@@ -2896,7 +2901,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("服务端手工相对化路径直接阻断（规范 P56）", ({ repo }) => {
     repo.write(
-      "src/app/api/logs/list/route.ts",
+      "src/app/api/fixture/logs-list/route.ts",
       ["import path from 'node:path';", "export const R = () => path.relative('/a', '/a/b');"].join(
         "\n",
       ),
@@ -2935,7 +2940,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test('包含判据（startsWith("..") / isAbsolute）不算 P56（那不是展示）', ({ repo }) => {
     repo.write(
-      "src/app/api/debug/source/route.ts",
+      "src/app/api/fixture/debug-source/route.ts",
       [
         "import path from 'node:path';",
         "export const inRoot = (root: string, p: string) => {",
@@ -3764,7 +3769,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("ui/ 基元自身实现放行（Button 里本来就是 <button>）", ({ repo }) => {
-    repo.write("src/components/ui/button.tsx", BUTTON_VIEW);
+    repo.write("src/components/ui/fixture-button.tsx", BUTTON_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(0);
     expect(output).toContain("0 处");
@@ -3911,7 +3916,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline(repo);
     const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       repo.read("scripts/.ui-primitives-baseline.json"),
-    ) as { rules: Record<string, string>; total: number; };
+    ) as { rules: Record<string, string>; total: number };
     expect(baseline.total).toBe(1);
     expect(baseline.rules.P1).toBeTruthy();
     expect(baseline.rules.P2).toBeTruthy();
@@ -4555,11 +4560,11 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("studio/P76RawSelect.tsx");
   });
 
-  test("P76 `ui/native-select.tsx` 是这条账要收口的唯一出口，走 EXEMPT_DIRS 天然豁免", ({
+  test("P76 ui/ 下的基元自身实现走 EXEMPT_DIRS 天然豁免（native-select 那条账的出口）", ({
     repo,
   }) => {
     repo.write(
-      "src/components/ui/native-select.tsx",
+      "src/components/ui/fixture-native-select.tsx",
       [
         "export function NativeSelect() {",
         "  return <select data-slot='native-select' />;",
@@ -4601,15 +4606,13 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("studio/P78RawLabel.tsx");
   });
 
-  test("P78 ui/label.tsx 与 ui/field.tsx 是这条账要收口的出口，走 EXEMPT_DIRS 天然豁免", ({
-    repo,
-  }) => {
+  test("P78 ui/ 下的基元自身实现走 EXEMPT_DIRS 天然豁免（label / field 两条出口）", ({ repo }) => {
     repo.write(
-      "src/components/ui/label.tsx",
+      "src/components/ui/fixture-label.tsx",
       ["export function Label() {", "  return <label htmlFor='x'>ok</label>;", "}"].join("\n"),
     );
     repo.write(
-      "src/components/ui/field.tsx",
+      "src/components/ui/fixture-field.tsx",
       ["export function FieldLabel() {", "  return <label htmlFor='y'>ok</label>;", "}"].join("\n"),
     );
     const { code, output } = repo.run();
@@ -4696,11 +4699,11 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("studio/P77ManualToggle.tsx");
   });
 
-  test("P77 `ui/toggle-group.tsx` 是这条账要收口的唯一出口，走 EXEMPT_DIRS 天然豁免", ({
+  test("P77 ui/ 下的基元自身实现走 EXEMPT_DIRS 天然豁免（toggle-group 那条账的出口）", ({
     repo,
   }) => {
     repo.write(
-      "src/components/ui/toggle-group.tsx",
+      "src/components/ui/fixture-toggle-group.tsx",
       [
         "export function ToggleGroupItem() {",
         "  return <button aria-pressed={true}>x</button>;",
@@ -5413,7 +5416,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* `ui/` 走 EXEMPT_DIRS 天然豁免（基元自身实现）；这一条同时钉住
      * 「判据不会把出口的 map + 分隔符算成违规」。 */
     repo.write(
-      "src/components/ui/breadcrumb-path.tsx",
+      "src/components/ui/fixture-breadcrumb-path.tsx",
       [
         "export function BreadcrumbPath({ segments }) {",
         "  return (",
