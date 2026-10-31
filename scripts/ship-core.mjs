@@ -186,6 +186,54 @@ export function decideCleanBranch({ requested, landedVerified, branch }) {
 }
 
 /**
+ * push 失败的**现场分型** —— 只读 push 自己吐回来的原话，不猜。
+ *
+ * 为什么要分型（ISSUE #2825 的现场）：远端回 `Repository Not Found`（exit 128）的那一跳，
+ * pre-push 复算根本没跑过 —— 固定说「多半是 premerge」会把人引去查一条没执行的门禁，
+ * 而真因（git 凭据失效）藏在被顶掉的输出里。两类失败的修法完全不同：
+ *   · `remote` —— 服务端拒了（凭据 / 仓库可达性）：stderr 带 `remote:` 前缀，或
+ *     `Repository Not Found` / `仓库不存在` / `Authentication failed` /
+ *     `could not read Username` 这类原话；
+ *   · `hook` —— pre-push 钩子拒了：钩子的输出（本仓钩子带 `[pre-push]` 抬头）会
+ *     被 git 原样转发到 push 的输出里；
+ *   · `unknown` —— 两类特征都没有 ⇒ 不编因，让读的人看原话。
+ *
+ * 两类特征**同时**在场时按 `remote` 判：钩子跑过但放行、随后传输被服务端拒，
+ * 终止原因是服务端那一跳；钩子真拒了就不会走到传输。
+ *
+ * @param {string | null | undefined} stdout push 的 stdout
+ * @param {string | null | undefined} stderr push 的 stderr（远端 / 钩子的原话都在这一侧）
+ * @returns {{kind: "remote" | "hook" | "unknown", note: string}} 分型与给人看的下一动作
+ */
+export function classifyPushFailure(stdout, stderr) {
+  const text = `${stdout ?? ""}\n${stderr ?? ""}`;
+  const remoteHit =
+    /(^|\n)\s*remote:/.test(text) ||
+    text.includes("Repository Not Found") ||
+    text.includes("仓库不存在") ||
+    text.includes("Authentication failed") ||
+    text.includes("could not read Username");
+  if (remoteHit) {
+    return {
+      kind: "remote",
+      note:
+        "远端拒了（凭据 / 仓库可达性那一类）⇒ premerge 与本仓门禁都无关；" +
+        "先查 git 凭据与远端权限（cnb：可走 `cnb git-credential` helper），别去翻门禁日志。",
+    };
+  }
+  if (text.includes("[pre-push]")) {
+    return {
+      kind: "hook",
+      note: "pre-push 的合并前复算没放行（钩子原话在上面）。先修，或按 §13.6.2 复算归属。",
+    };
+  }
+  return {
+    kind: "unknown",
+    note: "输出里没有可分辨的远端 / 钩子特征 ⇒ 看上面的 push 原话定因，不猜。",
+  };
+}
+
+/**
  * PR 标题 / squash 那一行的取数 —— 只从给它的读数里推，不起进程。
  *
  * 为什么不是 `git log -1 --pretty=%s`：那一格取的是**这条分支当前顶端**那一笔，而本仓
