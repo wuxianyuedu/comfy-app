@@ -63,15 +63,19 @@ export type ShotListItem = {
 /** production 的镜头状态（idle/queued/running/done/failed/stale）→ 成片列表大写态。 */
 function shotStatusToFilmStatus(status: unknown): ShotStatus {
   switch (status) {
-    case "done":
+    case "done": {
       return "SUCCEEDED";
+    }
     case "running":
-    case "queued":
+    case "queued": {
       return "RUNNING";
-    case "failed":
+    }
+    case "failed": {
       return "FAILED";
-    default:
+    }
+    default: {
       return "IDLE";
+    }
   }
 }
 

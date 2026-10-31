@@ -93,19 +93,26 @@ export function controlTypeFallback(control: ControlKind): string {
   switch (control) {
     case "textarea":
     case "text":
-    case "select":
+    case "select": {
       return "STRING";
-    case "int":
+    }
+    case "int": {
       return "INT";
-    case "float":
+    }
+    case "float": {
       return "FLOAT";
-    case "switch":
+    }
+    case "switch": {
       return "BOOLEAN";
-    case "image":
+    }
+    case "image": {
       return "IMAGE";
-    case "link":
+    }
+    case "link": {
       return "*";
-    default:
+    }
+    default: {
       return "INT";
+    }
   }
 }

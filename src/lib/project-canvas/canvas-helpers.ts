@@ -187,7 +187,7 @@ export function applyPropagationToNodes(
 
     const next: CanvasNodeData = { ...td };
     switch (edge.targetHandle) {
-      case "prompt":
+      case "prompt": {
         // 文本载体节点喂它自己的自由文本；其它节点则喂 prompt 字段。
         if (src.kind === "text") {
           if (src.content?.trim()) {
@@ -197,28 +197,33 @@ export function applyPropagationToNodes(
           next.prompt = src.prompt;
         }
         break;
-      case "negative":
+      }
+      case "negative": {
         if (src.negative?.trim()) {
           next.negative = src.negative;
         }
         break;
-      case "steps":
+      }
+      case "steps": {
         if (src.steps != null) {
           next.steps = src.steps;
         }
         break;
-      case "cfg":
+      }
+      case "cfg": {
         if (src.cfg != null) {
           next.cfg = src.cfg;
         }
         break;
-      case "seed":
+      }
+      case "seed": {
         if (src.seed?.trim()) {
           next.seed = src.seed;
         }
         break;
+      }
       case "inputImage":
-      default:
+      default: {
         if (importedFile) {
           next.inputImage = importedFile;
           next.upstreamId = sourceId;
@@ -242,6 +247,7 @@ export function applyPropagationToNodes(
           }
         }
         break;
+      }
     }
     return { ...node, data: next };
   });

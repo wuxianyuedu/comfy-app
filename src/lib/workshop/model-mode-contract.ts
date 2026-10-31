@@ -92,29 +92,40 @@ export function defaultInputsForMode(mode: string): Array<{
     { type: "prompt", field: "prompt" },
   ];
   switch (code) {
-    case "T2I":
+    case "T2I": {
       return [...base, ...size];
+    }
     case "TI2I":
-    case "R2I":
+    case "R2I": {
       return [...base, { type: "image", field: "image" }, ...size];
-    case "I2I":
+    }
+    case "I2I": {
       return [{ type: "image", field: "image" }, ...base, ...size];
-    case "E2I":
+    }
+    case "E2I": {
       return [...base, { type: "edge", field: "edge_image" }, ...size];
-    case "D2I":
+    }
+    case "D2I": {
       return [...base, { type: "depth", field: "depth_image" }, ...size];
-    case "P2I":
+    }
+    case "P2I": {
       return [...base, { type: "pose", field: "pose_image" }, ...size];
-    case "S2I":
+    }
+    case "S2I": {
       return [...base, { type: "lineart", field: "lineart_image" }, ...size];
-    case "M2I":
+    }
+    case "M2I": {
       return [...base, { type: "mask", field: "mask_image" }, ...size];
-    case "INPAINT":
+    }
+    case "INPAINT": {
       return [...base, { type: "image", field: "image" }, { type: "mask", field: "mask" }];
-    case "OUTPAINT":
+    }
+    case "OUTPAINT": {
       return [...base, { type: "image", field: "image" }, ...size];
-    default:
+    }
+    default: {
       break;
+    }
   }
   if (isVideoMode(code)) {
     if (/^I2V$/.test(code)) {

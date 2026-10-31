@@ -28,16 +28,21 @@ const LEVEL_STYLES: Record<Level, string> = {
 
 function levelLabel(level: Level): string {
   switch (level) {
-    case "error":
+    case "error": {
       return "ERROR";
-    case "warn":
+    }
+    case "warn": {
       return "WARN";
-    case "success":
+    }
+    case "success": {
       return "OK";
-    case "progress":
+    }
+    case "progress": {
       return "PROG";
-    default:
+    }
+    default: {
       return "INFO";
+    }
   }
 }
 

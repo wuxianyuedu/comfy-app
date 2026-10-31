@@ -455,7 +455,7 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
       };
     }
 
-    default:
+    default: {
       return {
         toolName: name,
         summary: `未知工具：${name}`,
@@ -465,5 +465,6 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
           summary: `未知工具「${name}」`,
         }),
       };
+    }
   }
 }

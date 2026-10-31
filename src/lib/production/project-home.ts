@@ -33,18 +33,24 @@ export const STAGE_LABEL: Record<ProductionStage, string> = {
 /** 每个阶段的完成判据。**这是本文件的核心判据表**，不是展示数据： */
 function isStageDone(stage: ProductionStage, view: ProductionRunView): boolean {
   switch (stage) {
-    case "script":
+    case "script": {
       return view.hasScript;
-    case "character":
+    }
+    case "character": {
       return view.characterCount > 0;
-    case "storyboard":
+    }
+    case "storyboard": {
       return view.shots.length > 0;
-    case "shots":
+    }
+    case "shots": {
       return view.shots.length > 0 && view.shots.every((s) => s.hasImage);
-    case "video":
+    }
+    case "video": {
       return view.shots.length > 0 && view.shots.every((s) => s.hasClip);
-    case "render":
+    }
+    case "render": {
       return view.filmRendered;
+    }
   }
 }
 
@@ -62,10 +68,12 @@ export type ProjectStageRow = {
 function stageDetail(stage: ProductionStage, view: ProductionRunView): string {
   const total = view.shots.length;
   switch (stage) {
-    case "character":
+    case "character": {
       return view.characterCount > 0 ? `${view.characterCount} 个` : "";
-    case "storyboard":
+    }
+    case "storyboard": {
       return total > 0 ? `${total} 镜` : "";
+    }
     case "shots": {
       if (total === 0) {
         return "";
@@ -78,8 +86,9 @@ function stageDetail(stage: ProductionStage, view: ProductionRunView): string {
       }
       return `${view.shots.filter((s) => s.hasClip).length}/${total} 镜`;
     }
-    default:
+    default: {
       return "";
+    }
   }
 }
 
