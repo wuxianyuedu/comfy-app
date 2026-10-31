@@ -78,7 +78,7 @@ describe("限核档的核数", () => {
   });
 
   it("核数取不到 / 非法时按 2 算，绝不给 0", () => {
-    for (const bad of [0, -1, NaN, Infinity]) {
+    for (const bad of [0, -1, Number.NaN, Infinity]) {
       expect(throttleCores(bad)).toBeGreaterThanOrEqual(THROTTLE_MIN_CORES);
     }
   });

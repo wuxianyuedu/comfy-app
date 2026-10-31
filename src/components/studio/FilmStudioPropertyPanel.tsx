@@ -65,7 +65,7 @@ export function FilmStudioPropertyPanel({
               }
               step="0.1"
               type="number"
-              value={parseFloat(selectedShot.duration)}
+              value={Number.parseFloat(selectedShot.duration)}
             />
           )}
         </FormField>

@@ -59,7 +59,7 @@ export function normalizeGenerationLogEntry(raw: unknown): GenerationLogEntry | 
       ? rec.ts
       : typeof rec.ts === "string" && rec.ts
         ? Date.parse(rec.ts)
-        : NaN;
+        : Number.NaN;
   const detail =
     typeof rec.detail === "string" && rec.detail
       ? rec.detail.slice(0, MAX_LOG_DETAIL_CHARS)

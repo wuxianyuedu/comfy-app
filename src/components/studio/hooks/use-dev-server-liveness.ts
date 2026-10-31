@@ -161,7 +161,7 @@ export function probeGapMs(previousStartedAt: number | null, startedAt: number):
 function readSessionNumber(key: string): number | null {
   try {
     const raw = sessionStorage.getItem(key);
-    const n = raw === null ? NaN : Number(raw);
+    const n = raw === null ? Number.NaN : Number(raw);
     return Number.isFinite(n) ? n : null;
   } catch {
     return null;

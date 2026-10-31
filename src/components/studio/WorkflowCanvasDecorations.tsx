@@ -169,7 +169,7 @@ export function ZoomIndicator({
   };
 
   const commit = () => {
-    const n = parseInt(draft, 10);
+    const n = Number.parseInt(draft, 10);
     if (!Number.isNaN(n) && n > 0) {
       applyZoom(n / 100);
     }
