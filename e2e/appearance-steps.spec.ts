@@ -52,7 +52,7 @@ test.describe("外观两档 @critical", () => {
     const buttonRadius = await radiusGroup(page)
       .getByRole("radio", { name: /特大/ })
       .evaluate((el) => getComputedStyle(el).borderTopLeftRadius);
-    expect(parseFloat(buttonRadius)).toBeGreaterThan(12);
+    expect(Number.parseFloat(buttonRadius)).toBeGreaterThan(12);
 
     await page.reload();
     await page
@@ -89,7 +89,7 @@ test.describe("外观两档 @critical", () => {
     const titleAfter = await title.evaluate(
       (el) => getComputedStyle(el).fontSize,
     );
-    expect(parseFloat(titleAfter)).toBeGreaterThan(parseFloat(titleBefore));
+    expect(Number.parseFloat(titleAfter)).toBeGreaterThan(Number.parseFloat(titleBefore));
     /* 正文锚定：这一档的作用范围必须与设置页那句说明一致。 */
     const bodyAfter = await bodyText.evaluate(
       (el) => getComputedStyle(el).fontSize,
