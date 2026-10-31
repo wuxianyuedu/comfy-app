@@ -19,7 +19,7 @@
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { vi } from "vitest";
 
@@ -514,6 +514,40 @@ describe("pre-commit 现场：必须判「暂存区」而不是上一次提交",
     const r = repo.run(["--range", "HEAD~1..HEAD"]);
     expect(r.code).toBe(1);
     expect(r.output).toContain("纯格式化 12 个");
+  });
+
+  /* 上面两条都把 `MERGE_HEAD` 写在 `<根>/.git/` 下面 —— 那是**主检出**的形状。
+   * 链接工作树（`git worktree add` 出来的那种检出）里 `.git` 是一个
+   * `gitdir: …` **文件**，硬拼 `<根>/.git/MERGE_HEAD` 永远读不到 ⇒ 这一档豁免
+   * 在那种检出里**永不点火**（ISSUE #2785 的本体：同族缺陷 #2747 修在
+   * `check-format.cjs`，而这一处没人看见，因为防这一族的扫描面当时只收 `.mjs`）。 */
+  test("链接工作树里豁免照样点火（那里的 `.git` 是文件，不是目录）", ({ repo }) => {
+    seedDirty(repo, 12);
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    repo.git("add", "-A");
+    const wt = mkdtempSync(join(tmpdir(), "reformat-wt-"));
+    // git 不许在已有非空目录上挂工作树 ⇒ 先腾出那个空目录。
+    rmSync(wt, { recursive: true, force: true });
+    try {
+      repo.git("worktree", "add", "--detach", wt, "HEAD");
+      /* 工作树自己的 gitdir 由 **git 自己说**，不猜 `<主>/.git/worktrees/<名>`
+       * （那一层 git 会按目录名归一，Windows 上还大小写不敏感 —— 猜中就是一次
+       * 偶绿的用例）。 */
+      const gitDir = execFileSync("git", ["rev-parse", "--git-dir"], {
+        cwd: wt,
+        encoding: "utf8",
+      }).trim();
+      writeFileSync(resolve(wt, gitDir, "MERGE_HEAD"), `${headSha(repo)}\n`);
+
+      const r = repo.run([], { cwd: wt });
+      expect(r.code, `output=${r.output}`).toBe(0);
+      expect(r.output).toContain("合并提交");
+    } finally {
+      repo.git("worktree", "prune");
+    }
   });
 });
 
