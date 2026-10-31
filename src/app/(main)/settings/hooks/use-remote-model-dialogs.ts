@@ -38,7 +38,7 @@ export type ModelDialogForm = RemoteModelFieldValues;
 
 export type ModelDialog =
   | { mode: "add" }
-  | { mode: "edit"; original: string; entry: RemoteModelEntry }
+  | { entry: RemoteModelEntry; mode: "edit"; original: string }
   | null;
 
 /** 字段级错误的键（与 `ModelDialogForm` 同域）。 */

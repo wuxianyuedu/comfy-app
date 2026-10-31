@@ -32,9 +32,9 @@ const ROOT = path.resolve(__dirname, "..");
  * 用「含 PYTHONUNBUFFERED」当选择器是错的（ComfyUI 那一份没有这个键），
  * 第一版就是这么判的、直接把另一条链路判成「找不到」。
  */
-function pythonEnvKeys(rel: string): { name: string; keys: Array<string> } {
+function pythonEnvKeys(rel: string): { keys: Array<string>; name: string; } {
   const src = stripComments(readFileSync(path.join(ROOT, rel), "utf8")).replace(/\r\n/g, "\n");
-  const found: Array<{ name: string; keys: Array<string> }> = [];
+  const found: Array<{ keys: Array<string>; name: string; }> = [];
   const head = /(?:^|[\s,(])(env|stdioEnv|childEnv)\s*:\s*\{/g;
   let m: RegExpExecArray | null;
   while ((m = head.exec(src))) {

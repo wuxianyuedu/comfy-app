@@ -94,7 +94,6 @@ export function buildParamEntries(
   io: WorkflowIOMap | null | undefined,
   labels?: Record<string, string>,
   options?: {
-    mode?: string | null;
     /** **该模式生效的契约口清单**（`modeContractEntries(mode, storedContracts)`
      *  的 id）。不传 = 按内置默认（`exposedParamsForMode`）。
      *
@@ -102,6 +101,7 @@ export function buildParamEntries(
      *  「没改过时」的回落 —— 拿它当口径会让画布多列出契约里没有的口（用户报的
      *  「画布上有时长，模式契约里没有」），也会漏掉用户在契约里**新增**的口。 */
     contractIds?: ReadonlyArray<string>;
+    mode?: string | null;
   },
 ): Array<ParamEntry> {
   /* 只有一条构造路径：契约（按模式 / 按该模式生效的契约清单）。没有模式语境时退
@@ -122,7 +122,7 @@ function buildContractEntries(
 
   /* 口子的来源：调用方给的**生效契约**优先；没给才回落内置默认。两边都只提供
    * 「有哪些口、按什么顺序」，落点仍由映射表决定。 */
-  const defs: Array<{ id: string; cls: ParamClass | null }> = contractIds
+  const defs: Array<{ cls: ParamClass | null; id: string }> = contractIds
     ? contractIds.map((id) => ({ id, cls: exposedClassOf(id) }))
     : exposedParamsForMode(mode).map((def) => ({ id: def.id, cls: def.cls }));
 
@@ -544,7 +544,7 @@ export interface MappedInput {
  *  之所以要把宿主 id 一起存下来，而不是运行期「拿裸 id 去所有子图定义里扫
  *  一遍」：后者在同名内部 id 或子图定义缺失时会静默失效（表现为「改了参数
  *  没生效」），拼出来的 id 才是确定性事实。 */
-export function runtimeNodeId(entry: { nodeId: string; hostNodeId?: string }): string {
+export function runtimeNodeId(entry: { hostNodeId?: string; nodeId: string }): string {
   /* 已经是拼接形式（旧数据或嵌套场景已带冒号）→ 不重复拼。 */
   if (entry.nodeId.includes(":") || !entry.hostNodeId) {
     return entry.nodeId;
@@ -633,11 +633,11 @@ function sizeValueForPin(
  *  · 没画线的口：**不认用户值**（没有落点可落，不替作者猜），只按工作流默认值
  *    兜底 —— 与「未连线的口就用工作流自己的默认值」一致。 */
 export function applyParamMapping(args: {
-  io: WorkflowIOMap | null | undefined;
   entries: ReadonlyArray<ParamEntry>;
+  io: WorkflowIOMap | null | undefined;
   mapping: ParamMapping | null | undefined;
-  values: Record<string, unknown>;
   mode?: string | null;
+  values: Record<string, unknown>;
 }): { inputs: Array<MappedInput>; unmatched: Array<string> } {
   const { io, entries, mapping, values, mode } = args;
   const resolved = resolveMapping(entries, io, mapping, mode);

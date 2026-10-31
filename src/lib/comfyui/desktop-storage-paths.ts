@@ -19,10 +19,10 @@ import { normalizeSlashes } from "~/lib/path-display";
 
 /** 一条额外目录配置（`extra_model_paths.yaml` 里除 `base_path` 外的每个顶层键）。 */
 export type ExtraModelPathEntry = {
-  /** YAML 里的顶层键名（Comfy Desktop 写的是 `comfyui_shared`）。 */
-  key: string;
   /** 该条目的根目录。 */
   basePath: string;
+  /** YAML 里的顶层键名（Comfy Desktop 写的是 `comfyui_shared`）。 */
+  key: string;
   /** 该条目要并进来的相对路径列表（`models/` `input/` …）。 */
   paths: Array<string>;
 };
@@ -39,27 +39,27 @@ export type StorageSlot = "models" | "input" | "output";
 
 /** 一个待展示的目录。 */
 export type StorageDirInfo = {
-  /** 绝对路径。 */
-  path: string;
   /** 磁盘上是否存在（缺失时界面要给出提示，而不是留一串看不见的路径）。 */
   exists: boolean;
+  /** 绝对路径。 */
+  path: string;
   /** 来源：extra_model_paths.yaml 的键名或启动参数名；实例自带目录为 null。 */
   source: string | null;
 };
 
 /** 桌面实例的六个目录（组）。 */
 export type DesktopStoragePaths = {
-  /** 实例根（ComfyUI Desktop 的安装目录，如 `ComfyUI-Installs/ComfyUI2`）。 */
-  instanceRoot: string;
   /** ComfyUI 的 base 目录（Comfy Desktop 布局下即 `<实例根>/ComfyUI`）。 */
   baseDir: string;
   /** 实际读到的 extra_model_paths.yaml 路径；该文件不存在时为 null。 */
   extraModelPathsFile: string | null;
-  modelDir: StorageDirInfo;
-  sharedModelDirs: Array<StorageDirInfo>;
   inputDir: StorageDirInfo;
-  sharedInputDirs: Array<StorageDirInfo>;
+  /** 实例根（ComfyUI Desktop 的安装目录，如 `ComfyUI-Installs/ComfyUI2`）。 */
+  instanceRoot: string;
+  modelDir: StorageDirInfo;
   outputDir: StorageDirInfo;
+  sharedInputDirs: Array<StorageDirInfo>;
+  sharedModelDirs: Array<StorageDirInfo>;
   sharedOutputDirs: Array<StorageDirInfo>;
 };
 

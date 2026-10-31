@@ -184,8 +184,8 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
 
       expect(spawnInGroup).toHaveBeenCalledTimes(1);
       const call = /* SAFETY: 类型断言已复核 */ spawnInGroup.mock.calls[0]?.[0] as {
-        command: string;
         args: Array<string>;
+        command: string;
         cwd: string;
         env: Record<string, string>;
         platform: string;

@@ -33,12 +33,7 @@ interface PanelProps {
   onClose: () => void;
 }
 
-export function CanvasSettingsPanel({
-  settings,
-  update,
-  reset,
-  onClose,
-}: PanelProps) {
+export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelProps) {
   /* 抽屉走 ui/sheet（规范 16 §16.2.3 P2）：Esc 关闭、点遮罩关闭、遮罩让出
  标题行与 ProjectSettingsDrawer 是同一件事，此前两边各写一份。 */
   return (
@@ -168,10 +163,7 @@ export function CanvasSettingsPanel({
             />
           </Section>
 
-          <Section
-            title="调试"
-            subtitle="日志入口开关；节点渲染链路标签由顶栏「调试」按钮控制"
-          >
+          <Section title="调试" subtitle="日志入口开关；节点渲染链路标签由顶栏「调试」按钮控制">
             <ToggleRow
               label="日志面板"
               value={settings.debugMode}
@@ -205,19 +197,15 @@ function Section({
   subtitle,
   children,
 }: {
-  title: string;
-  subtitle?: string;
   children: ReactNode;
+  subtitle?: string;
+  title: string;
 }) {
   return (
     <section className="mb-5 last:mb-0">
       <header className="mb-2">
-        <h3 className="text-ink-soft text-2xs font-semibold tracking-wider uppercase">
-          {title}
-        </h3>
-        {subtitle && (
-          <p className="text-ink-muted text-2xs mt-0.5">{subtitle}</p>
-        )}
+        <h3 className="text-ink-soft text-2xs font-semibold tracking-wider uppercase">{title}</h3>
+        {subtitle && <p className="text-ink-muted text-2xs mt-0.5">{subtitle}</p>}
       </header>
       <div className="border-border-strong bg-subtle flex flex-col gap-2.5 rounded-lg border p-3">
         {children}
@@ -236,14 +224,14 @@ function SliderRow({
   format,
   tooltip,
 }: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (value: number) => void;
   format: (value: number) => string;
+  label: string;
+  max: number;
+  min: number;
+  onChange: (value: number) => void;
+  step: number;
   tooltip?: string;
+  value: number;
 }) {
   return (
     <FieldLabel className="block">
@@ -251,17 +239,9 @@ function SliderRow({
         <span className="text-ink-soft" title={tooltip}>
           {label}
         </span>
-        <span className="text-ink-soft font-mono tabular-nums">
-          {format(value)}
-        </span>
+        <span className="text-ink-soft font-mono tabular-nums">{format(value)}</span>
       </div>
-      <RangeSlider
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={onChange}
-      />
+      <RangeSlider min={min} max={max} step={step} value={value} onChange={onChange} />
     </FieldLabel>
   );
 }
@@ -273,9 +253,9 @@ function ToggleRow({
   tooltip,
 }: {
   label: string;
-  value: boolean;
   onChange: (value: boolean) => void;
   tooltip?: string;
+  value: boolean;
 }) {
   return (
     <FieldLabel className="flex cursor-pointer items-center justify-between gap-2 text-[11.5px]">

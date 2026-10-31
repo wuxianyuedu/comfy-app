@@ -90,9 +90,9 @@ export function WorkflowEditorInner({
   onClose,
   onSave,
 }: {
-  workflowId: string;
   onClose: () => void;
   onSave?: () => void;
+  workflowId: string;
 }) {
   /* 3 个按实例创建的 Zustand store，每次挂载只建一次。
    * 用 useState 的惰性初始化让它们保持稳定，又不必在渲染期去碰 ref
@@ -128,9 +128,9 @@ function WorkflowEditorBody({
   onClose,
   onSave,
 }: {
-  workflowId: string;
   onClose: () => void;
   onSave?: () => void;
+  workflowId: string;
 }) {
   const ioApi = useIOEditApi();
   const rgthreeApi = useRgthreeApi();
@@ -183,7 +183,7 @@ function WorkflowEditorBody({
   /* 子工作流导航栈。查看顶层工作流时为空。
    *  每一项是 {uid, name}，供面包屑显示；点某一级会退回到那一层。 */
   const [subgraphStack, setSubgraphStack] = useState<
-    Array<{ uid: string; name: string; nodeId: string }>
+    Array<{ name: string; nodeId: string; uid: string }>
   >([]);
   /* 根工作流的显示名在**第一次**顶层拉取时记下，之后跨越子工作流导航一直保留，
    *  于是面包屑总能渲染成「<根工作流> / <子工作流 1> / <子工作流 2> …」。

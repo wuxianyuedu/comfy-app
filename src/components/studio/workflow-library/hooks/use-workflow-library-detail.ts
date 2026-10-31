@@ -41,7 +41,7 @@ export interface MetaEditorController {
   /** 已绑定的模型标签名。 */
   modelTags: Array<string>;
   /** 全部可选模型标签。 */
-  allModelTags: Array<{ id: string; name: string; count: number }>;
+  allModelTags: Array<{ count: number; id: string; name: string }>;
   busy: boolean;
   patchModes: (modes: Array<string>, defaultMode: string) => Promise<void>;
   patchModelTags: (names: Array<string>) => Promise<void>;
@@ -109,7 +109,7 @@ export interface WorkflowLibraryDetailController {
  *     （`undefined === undefined`）从而去读一个空的 `modeOverride` —— 直接抛错；
  *   · 分支（切过 / 没切过 / 换过工作流）可以单测，不必挂载整个详情面板。 */
 export function resolveActiveMode(
-  override: { workflowId: string; mode: string | null } | null,
+  override: { mode: string | null; workflowId: string } | null,
   workflowId: string | null,
   defaultMode: string | null,
 ): string | null {
@@ -171,8 +171,8 @@ export function useWorkflowLibraryDetail(
    *  `null` = 用户主动切到了「自动（工作流默认）」——与「还没初始化」靠 workflow.id
    *  区分，故用一个「记住初值来自哪条工作流」的 ref 而不是 effect 里 setState。 */
   const [modeOverride, setModeOverride] = useState<{
-    workflowId: string;
     mode: string | null;
+    workflowId: string;
   } | null>(null);
   const setActiveMode = useCallback(
     (mode: string) => {

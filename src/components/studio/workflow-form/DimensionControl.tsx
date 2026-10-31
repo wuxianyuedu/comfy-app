@@ -74,21 +74,21 @@ function DimensionControl({
   visibilityMode,
   onVisibilityChange,
 }: {
-  group: DimensionGroup;
-  values: Record<string, unknown>;
-  set: (ioKey: string, v: unknown) => void;
-  setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
-  workflowId?: string;
+  group: DimensionGroup;
+  /** 多模式作者态：按该模式解析必填。 */
+  mode?: string | null;
   /** 画布 / 库内的紧凑版式：控件按内容收窄（`w-fit`），不再占满整行。
    * 与宽版表单的区别**只是宽度**：录入能力、下拉、落点锚点全部一致。 */
   narrow?: boolean;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
-  /** 多模式作者态：按该模式解析必填。 */
-  mode?: string | null;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  set: (ioKey: string, v: unknown) => void;
+  setMany: (patch: Record<string, unknown>) => void;
+  values: Record<string, unknown>;
   /** IO 编辑态：按该模式解析可见性。 */
   visibilityMode?: string | null;
-  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  workflowId?: string;
 }) {
   if (group.width && group.height) {
     return (
@@ -138,17 +138,17 @@ function DimensionSizeControl({
   visibilityMode,
   onVisibilityChange,
 }: {
-  group: SizeGroup;
-  values: Record<string, unknown>;
-  set: (ioKey: string, v: unknown) => void;
-  setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
-  workflowId?: string;
+  group: SizeGroup;
+  mode?: string | null;
   narrow?: boolean;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
-  mode?: string | null;
-  visibilityMode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  set: (ioKey: string, v: unknown) => void;
+  setMany: (patch: Record<string, unknown>) => void;
+  values: Record<string, unknown>;
+  visibilityMode?: string | null;
+  workflowId?: string;
 }) {
   const w0 = Number(values[group.width.ioKey] ?? group.width.defaultValue ?? 1024);
   const h0 = Number(values[group.height.ioKey] ?? group.height.defaultValue ?? 1024);

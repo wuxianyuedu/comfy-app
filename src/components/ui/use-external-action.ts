@@ -69,10 +69,10 @@ export interface ExternalActionResult {
    */
   run: (
     action: () => Promise<{
-      ok?: boolean;
-      triggered?: boolean;
       detail?: string | null;
       error?: string | null;
+      ok?: boolean;
+      triggered?: boolean;
     }>,
     guard?: () => Promise<boolean>,
   ) => Promise<void>;
@@ -83,10 +83,10 @@ export interface ExternalActionResult {
   runWithTarget: (
     target: string | null | undefined,
     action: (target: string) => Promise<{
-      ok?: boolean;
-      triggered?: boolean;
       detail?: string | null;
       error?: string | null;
+      ok?: boolean;
+      triggered?: boolean;
     }>,
   ) => Promise<void>;
 }

@@ -13,10 +13,10 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type ProgressRow = {
-  status: string;
+  error: string | null;
   progress: number;
   resultImages: unknown;
-  error: string | null;
+  status: string;
 } | null;
 
 /* 每轮轮询读到的行：用例按序喂值，`findExecutionProgress` 每次调用消费一条；

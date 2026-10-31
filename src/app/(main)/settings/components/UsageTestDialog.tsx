@@ -432,9 +432,9 @@ function UsageTestResultPanel({
 }: {
   c: ReadySettingsPageController;
   d: RemoteModelDialogs;
-  usageTest: NonNullable<UsageTestDialogState>;
   /** 非空由调用方保证：仅在有结果且不在调用中时渲染。 */
   result: NonNullable<UsageTestDialogState["result"]>;
+  usageTest: NonNullable<UsageTestDialogState>;
 }) {
   return (
     <>

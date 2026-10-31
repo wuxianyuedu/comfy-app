@@ -8,11 +8,11 @@ import { inferSourceOutNames } from "../workflow-utils";
  *  properties 字典都是不透明的 raw-JSON 负载，保持 `unknown`（此前
  *  是 `any`；消费方本来就当它们不透明处理）。 */
 export type RawNodeMeta = {
-  widgets_values: Array<unknown>;
-  outputs: Array<RawOutputMeta>;
   flags: Record<string, unknown>;
-  properties: Record<string, unknown>;
   mode: number;
+  outputs: Array<RawOutputMeta>;
+  properties: Record<string, unknown>;
+  widgets_values: Array<unknown>;
 };
 
 export interface WorkflowDerivedData {

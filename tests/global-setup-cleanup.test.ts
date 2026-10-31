@@ -107,8 +107,8 @@ function runProbe(source: string, name: string): { code: number; output: string 
   } catch (error) {
     const e = /* SAFETY: 类型断言已复核 */ error as {
       status?: number | null;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: typeof e.status === "number" ? e.status : -1,

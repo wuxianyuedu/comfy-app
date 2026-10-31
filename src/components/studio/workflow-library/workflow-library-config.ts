@@ -141,9 +141,9 @@ export function deriveFormatFlags(row: WorkflowRow): {
  *  missing，好让卡片显示「📁 文件已不存在」而不是同步按钮。
  *  按钮。 */
 export function deriveSyncFlags(row: WorkflowRow): {
+  canResync: boolean;
   dirty: boolean;
   missing: boolean;
-  canResync: boolean;
 } {
   const dirty = !!row.diskDirty;
   const missing = !!row.diskMissing;
@@ -201,10 +201,10 @@ function categoryOf(workflow: Pick<WorkflowRow, "taskType">): string | undefined
 export function filterWorkflows(
   workflows: Array<WorkflowRow>,
   filters: {
-    source: SourceFilter;
-    type: TypeFilter;
     model: string;
     search: string;
+    source: SourceFilter;
+    type: TypeFilter;
   },
 ): Array<WorkflowRow> {
   const needle = normalizeNeedle(filters.search);
@@ -226,7 +226,7 @@ export function filterWorkflows(
 /** 待载入行：切到「在线工作流」时不该出现本地待载入项。 */
 export function filterPending(
   pending: Array<PendingRow>,
-  filters: { source: SourceFilter; search: string },
+  filters: { search: string; source: SourceFilter },
 ): Array<PendingRow> {
   if (filters.source === "online") {
     return [];

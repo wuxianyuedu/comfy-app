@@ -38,14 +38,14 @@ export interface ArtifactRootMigrationReport {
   /** 新根里已有同名条目 ⇒ 原样留在原地，绝不覆盖。 */
   skipped: Array<string>;
   /** 没能搬走的条目（被占用 / 权限），名字与 errno 码成对。 */
-  blocked: Array<{ name: string; code: string }>;
+  blocked: Array<{ code: string; name: string }>;
 }
 
 /** 把一个顶层条目从旧根挪到新根。ENOENT 视为「别的进程已经搬走了」，不算失败。 */
 function moveEntry(
   from: string,
   to: string,
-): { kind: "moved" } | { kind: "already-gone" } | { kind: "blocked"; code: string } {
+): { kind: "moved" } | { kind: "already-gone" } | { code: string; kind: "blocked" } {
   try {
     fs.renameSync(from, to);
     return { kind: "moved" };

@@ -32,11 +32,11 @@ export function AutoResizeTextarea({
   minHeight = 28,
   maxHeight = 120,
 }: {
-  value: string;
-  placeholder?: string;
-  onChange: (v: string) => void;
-  minHeight?: number;
   maxHeight?: number;
+  minHeight?: number;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  value: string;
 }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const resize = useCallback(() => {

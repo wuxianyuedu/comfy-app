@@ -31,23 +31,23 @@ function pageSummary(
 }
 
 export function LogPanelFooter(input: {
-  safePage: number;
-  totalPages: number;
+  bootId: string | null;
+  droppedTotal: number;
+  filter: LogFilter;
+  jumpToLatest: () => void;
+  newLogCount: number;
+  origin: LogOriginFilter | null;
   pageSize: number;
+  safePage: number;
+  search: string;
+  setFilter: (value: LogFilter) => void;
+  setOrigin: (value: LogOriginFilter) => void;
+  setPage: (page: number) => void;
+  setSearch: (value: string) => void;
+  shouldPin: boolean;
   total: number;
   totalAll: number;
-  search: string;
-  droppedTotal: number;
-  bootId: string | null;
-  shouldPin: boolean;
-  newLogCount: number;
-  jumpToLatest: () => void;
-  setPage: (page: number) => void;
-  origin: LogOriginFilter | null;
-  setOrigin: (value: LogOriginFilter) => void;
-  filter: LogFilter;
-  setFilter: (value: LogFilter) => void;
-  setSearch: (value: string) => void;
+  totalPages: number;
 }) {
   const {
     safePage,

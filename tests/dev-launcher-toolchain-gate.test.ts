@@ -76,9 +76,9 @@ afterEach(() => {
 /** 造一个「Windows 上的 pnpm」目录：corepack 的三个文件同名不同扩展。 */
 function makeWindowsPnpmDir(
   options: {
-    shim?: "broken" | "working" | "none";
-    ps1?: boolean;
     cmd?: boolean;
+    ps1?: boolean;
+    shim?: "broken" | "working" | "none";
   } = {},
 ) {
   const dir = path.join(tmp, "bin");

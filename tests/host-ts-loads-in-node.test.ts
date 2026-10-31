@@ -58,7 +58,7 @@ function crossHostModules(): Array<string> {
 }
 
 /** 在**真 Node 进程**里加载一个模块（不注册任何 loader）。 */
-function loadInRealNode(absPath: string): { ok: boolean; message: string } {
+function loadInRealNode(absPath: string): { message: string; ok: boolean; } {
   const r = spawnSync(
     process.execPath,
     [

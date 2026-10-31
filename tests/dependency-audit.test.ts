@@ -95,15 +95,15 @@ function advisory(over: Record<string, unknown> = {}) {
  * 字符串，读成 `any` 就等于用例跟着实现漂。
  */
 type LedgerEntry = {
+  advisoryId?: string;
   key: string;
   module?: string;
-  advisoryId?: string;
-  severity?: string;
-  vulnerable?: string;
   patched?: string | null;
   reason?: string;
+  severity?: string;
+  vulnerable?: string;
 };
-type LedgerFile = { ruleVersion: number; entries: Array<LedgerEntry> };
+type LedgerFile = { entries: Array<LedgerEntry>; ruleVersion: number; };
 
 const LEDGER_REL = path.join("scripts", ".dependency-audit-baseline.json");
 
@@ -228,8 +228,8 @@ describe("真脚本：--update 只许降（验收点名要求的形态）", () =
     } catch (error) {
       const e = /* SAFETY: 类型断言已复核 */ error as {
         status?: number;
-        stdout?: string;
         stderr?: string;
+        stdout?: string;
       };
       return { code: e.status ?? 1, out: `${e.stdout ?? ""}${e.stderr ?? ""}` };
     }

@@ -47,7 +47,7 @@ export interface ParsedWorkflow {
 
 /* 读一个本地文件，返回它的文本与 mtime（毫秒）。
  * 路径缺失或不可读时抛出带可读说明的错误。 */
-export async function readLocalFile(absPath: string): Promise<{ text: string; mtimeMs: number }> {
+export async function readLocalFile(absPath: string): Promise<{ mtimeMs: number; text: string }> {
   let stat;
   try {
     stat = await fs.stat(absPath);
@@ -80,8 +80,8 @@ export function checksum(text: string): string {
 export async function parseWorkflowContent(
   content: string,
   opts: {
-    preferredTaskType?: string;
     defaultName?: string;
+    preferredTaskType?: string;
   } = {},
 ): Promise<ParsedWorkflow> {
   let candidate: unknown;
@@ -143,8 +143,8 @@ export interface ImportedFromFile extends ParsedWorkflow {
 export async function importFromLocalPath(
   absPath: string,
   opts: {
-    preferredTaskType?: string;
     defaultName?: string;
+    preferredTaskType?: string;
   } = {},
 ): Promise<ImportedFromFile> {
   const { text, mtimeMs } = await readLocalFile(absPath);
@@ -164,14 +164,14 @@ export interface ReimportResult {
   unchanged?: boolean;
   /* 文件变了 → 重新解析出的字段，要写回数据库 */
   update?: {
-    rawJson: unknown;
-    positions: Record<string, [number, number]> | null;
     /* 重导入**不碰**这一列（磁盘文件里没有「作者画的线」），恒为 null ——
      *  类型按权威形状声明，不写一份自己的窄声明。 */
     paramMap: WorkflowParamMap | null;
-    taskType: string;
+    positions: Record<string, [number, number]> | null;
+    rawJson: unknown;
     sourceChecksum: string;
     sourceMtime: number;
+    taskType: string;
   };
 }
 
@@ -190,12 +190,12 @@ export interface ReimportResult {
  * taskType（旧逻辑会重新推断并覆盖用户已手动设置的值），传 `existingTaskType`
  * 透传过来 —— 用户的显式选择优先级最高。 */
 export async function reimportFromSource(tpl: {
-  sourcePath: string;
-  sourceMtime?: number | null;
-  sourceChecksum?: string | null;
   /** 已存在的 taskType（用户在 UI 里手动设过的）。透传给 parseWorkflowContent
    *  作为 preferredTaskType，避免重导入时把空值回写覆盖。 */
   existingTaskType?: string | null;
+  sourceChecksum?: string | null;
+  sourceMtime?: number | null;
+  sourcePath: string;
 }): Promise<ReimportResult> {
   let stat;
   try {

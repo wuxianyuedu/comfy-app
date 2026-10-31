@@ -177,13 +177,13 @@ interface FakeLink {
  * @param input.targetExists 目标在不在（默认在 —— 这才是本条发现ing的形状）
  */
 function fake(input: {
-  links: Array<FakeLink>;
   brokenRels?: Array<string>;
-  rebuildResult?: { ok: boolean; error: string };
-  targetExists?: boolean;
   dirExists?: boolean;
-  throwOnReadText?: boolean;
+  links: Array<FakeLink>;
+  rebuildResult?: { error: string; ok: boolean; };
   siblingInstalled?: boolean;
+  targetExists?: boolean;
+  throwOnReadText?: boolean;
 }) {
   const links = input.links;
   const brokenRels = new Set(input.brokenRels ?? links.map((l) => l.rel));

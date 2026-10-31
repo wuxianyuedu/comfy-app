@@ -17,9 +17,7 @@ import { errorText } from "~/lib/error-message";
 import { isHttpUrl } from "~/lib/url-scheme";
 import { spawn } from "node:child_process";
 
-export async function openUrlInBrowser(
-  url: string,
-): Promise<{ ok: boolean; detail: string }> {
+export async function openUrlInBrowser(url: string): Promise<{ detail: string; ok: boolean }> {
   /* 协议闸门：只把 http(s) 交给系统浏览器。
    * 这一层的语义是「把控制权交给外部程序」，而调用点里至少有一条
    * （`setting.openExternal`）的目标地址**来自请求方**、且此前只有 `z.url()`

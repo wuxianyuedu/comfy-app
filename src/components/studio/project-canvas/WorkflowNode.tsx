@@ -70,17 +70,17 @@ export interface WorkflowNodeProps {
   /** 完整工作流列表（含 sourcePath / taskType）。 */
   workflowList: Array<{
     id: string;
-    name: string;
-    taskType?: string;
-    sourcePath?: string | null;
     modelTags?: Array<string>;
+    name: string;
+    sourcePath?: string | null;
+    taskType?: string;
   }>;
   /** 当前工作流的 modes 配置（来自 /api/workflows/[id] 的 modes/defaultMode）。 */
   workflowModes?: WorkflowModesState | null;
   /** 父级（CanvasNode）持的来源筛选 — 影响 chip2 列表。 */
   sourceFilter?: WorkflowSourceFilter;
   /** 用户级模型标签库（全局），驱动 chip4 的模型筛选列表。 */
-  modelTagLib?: Array<{ id: string; name: string; count: number }>;
+  modelTagLib?: Array<{ count: number; id: string; name: string }>;
   /** 画布节点会话级模型筛选值（"all" 或某标签名）。 */
   modelFilter?: string;
   onPatch: (p: Partial<CanvasNodeData>) => void;

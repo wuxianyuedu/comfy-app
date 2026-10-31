@@ -37,10 +37,10 @@ export interface RawInputEntry {
    *  这里把解析结果随条目下发，让富化（workflow-detail-io）能在别名之外
    *  找到真实字段名与它的 label / localized。 */
   proxyField?: {
-    nodeId: string;
     field: string;
     label?: string;
     localized?: string;
+    nodeId: string;
   };
 }
 

@@ -441,8 +441,8 @@ export interface RgthreeGroupsActions {
 }
 export type RgthreeGroupsStore = RgthreeGroupsState & RgthreeGroupsActions;
 export type RgthreeGroupsStoreParams = {
-  workflowId: string;
   detail: WorkflowDetail | null;
+  workflowId: string;
 };
 
 export function createRgthreeGroupsStore(
@@ -515,8 +515,8 @@ export type NodeJsonViewerStore = NodeJsonViewerState &
   NodeJsonViewerLookup;
 export type NodeJsonViewerStoreParams = {
   detail: WorkflowDetail | null;
-  rawMetaById: Record<string, RawMetaEntry>;
   positions: Record<string, [number, number]> | null;
+  rawMetaById: Record<string, RawMetaEntry>;
   subgraphRawContext: { parentRawJson: unknown; subUid: string } | null;
   subgraphStackLength: number;
 };
@@ -659,8 +659,8 @@ export function WFStoresProvider({
   stores,
   children,
 }: {
-  stores: WFStores;
   children: React.ReactNode;
+  stores: WFStores;
 }) {
   return (
     <WFStoresContext.Provider value={stores}>

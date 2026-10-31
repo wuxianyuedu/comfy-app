@@ -45,9 +45,9 @@ export function WindowButton({
   onClick,
   danger,
 }: {
+  danger?: boolean;
   kind: WindowButtonKind;
   onClick: () => void;
-  danger?: boolean;
 }) {
   const label = WINDOW_BUTTON_LABELS[kind];
   const icon =

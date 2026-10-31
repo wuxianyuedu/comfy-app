@@ -272,10 +272,10 @@ export function effectiveProviderType(
  *   该任务的用户覆盖值 → 调用方显式指定的温度 → 该任务推荐默认 → 全局默认。
  */
 export function resolveTaskTemperature(opts: {
-  taskType?: TaskType;
   explicitTemperature?: number | null;
-  overrides?: Record<TaskType, number> | null;
   fallback: number;
+  overrides?: Record<TaskType, number> | null;
+  taskType?: TaskType;
 }): number {
   const { taskType, explicitTemperature, overrides, fallback } = opts;
   if (taskType && overrides?.[taskType] != null) {
@@ -327,8 +327,8 @@ export interface LLMConfigView {
  * 与 `data:` base64；本地 Ollama 可直接喂 `http://localhost:…` 的图，远端模型喂公网可达址。
  */
 export type LLMContentPart =
-  | { type: "text"; text: string }
-  | { type: "image_url"; image_url: { url: string } };
+  | { text: string; type: "text" }
+  | { image_url: { url: string }; type: "image_url" };
 
 export interface LLMMessage {
   role: "system" | "user" | "assistant" | "tool";
@@ -336,9 +336,9 @@ export interface LLMMessage {
   content: string | Array<LLMContentPart>;
   /** 仅 role === "assistant" 时可能出现：携带 tool_calls 的消息回灌。 */
   tool_calls?: Array<{
+    function: { arguments: string; name: string };
     id: string;
     type: "function";
-    function: { name: string; arguments: string };
   }>;
   /** 仅 role === "tool" 时需要：标识对应哪个 tool_call。 */
   tool_call_id?: string;
@@ -347,8 +347,8 @@ export interface LLMMessage {
 export interface LLMTool {
   type: "function";
   function: {
-    name: string;
     description: string;
+    name: string;
     parameters?: Record<string, unknown>;
   };
 }
@@ -358,8 +358,8 @@ export interface LLMToolCall {
   id: string;
   type: "function";
   function: {
-    name: string;
     arguments: string;
+    name: string;
   };
 }
 

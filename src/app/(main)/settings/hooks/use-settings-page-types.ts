@@ -29,35 +29,35 @@ import type { RemoteModelDraftEntry } from "~/lib/llm/remote-model-schema";
 import type { CpuLimitMode } from "~/lib/comfyui/cpu-limit";
 
 export type Settings = {
-  comfyuiPath: string;
-  comfyuiExtraArgs: string;
+  /** 查看绑定到本地文件的工作流时，是否自动把磁盘最新内容同步回库（默认 false=手动，更新入口是「同步」按钮）。 */
+  autoSyncLocalWorkflow: boolean;
   /** comfy-cli 的 Python 解释器（桌包不随包 Python，用户自备后在这里指路径）。 */
   comfyCliPython: string;
   comfyuiAutoStart: boolean;
   /** 出图进程的 CPU 档位（ISSUE #1959）；缺值按环境默认（见 `~/lib/comfyui/cpu-limit`）。 */
   comfyuiCpuLimit?: CpuLimitMode;
+  comfyuiExtraArgs: string;
+  comfyuiPath: string;
   /** ComfyUI 监听端口；0 = 默认 8188（启动时按需显式传 --port）。 */
   comfyuiPort: number;
   /** 应用退出是否连带关闭自己拉起的 ComfyUI（默认 false=保活，退出后继续运行）。 */
   exitKillComfyui: boolean;
   /** 应用退出是否连带关闭自己拉起的 Ollama（默认 true=连带关闭）。 */
   exitKillOllama: boolean;
-  /** 查看绑定到本地文件的工作流时，是否自动把磁盘最新内容同步回库（默认 false=手动，更新入口是「同步」按钮）。 */
-  autoSyncLocalWorkflow: boolean;
 };
 
 export type LlmConfig = {
-  provider: "local" | "remote";
+  apiKey: string | null;
   baseUrl: string;
-  model: string;
-  /** 本地 Ollama 启用的候选模型名（纯名字，无 apiKey）—— option C 与远端分开。 */
-  localCandidates: Array<string>;
   /** 远端独立模型条目（可带独立 baseUrl / apiKey）—— option C 存 remoteModel 表。 */
   extraModels: Array<RemoteModelEntry>;
+  /** 本地 Ollama 启用的候选模型名（纯名字，无 apiKey）—— option C 与远端分开。 */
+  localCandidates: Array<string>;
+  maxTokens: number;
+  model: string;
+  provider: "local" | "remote";
   temperature: number;
   temperatureByTask?: Record<TaskType, number>;
-  maxTokens: number;
-  apiKey: string | null;
 };
 
 /**
@@ -75,10 +75,10 @@ export type QueryLlmConfig = Omit<
   apiKey?: string | null;
   /** 混合清单：字符串 = 本地候选，对象 = 远端独立模型。 */
   extraModels: Array<string | RemoteModelEntry>;
-  /** 服务端可能下发 null（表示「未配置覆盖」），草稿层归一为 undefined。 */
-  temperatureByTask?: Record<TaskType, number> | null;
   /** 下发形状不含该栏（它是草稿侧拆出来的），容错为可选。 */
   localCandidates?: Array<string>;
+  /** 服务端可能下发 null（表示「未配置覆盖」），草稿层归一为 undefined。 */
+  temperatureByTask?: Record<TaskType, number> | null;
 };
 
 export type Section =
@@ -161,13 +161,13 @@ export interface SettingsPageController {
    * 而形态只需毫秒级 fs 判定；合在一起时徽标与「端口/启动参数是否隐藏」会被拖到
    * 探测结束才出现（改路径保存后也一样）。这条与首屏的 `setting.get` 同批返回。 */
   comfyInstance: {
-    /** 配置里是否填了路径（与形态同源，都是设置行的事实）。 */
-    pathConfigured: boolean;
-    /** 桌面版 / 便携版 / venv；未配置路径或判不出形态时为 null。 */
-    instanceType: "desktop" | "portable" | "venv" | null;
     /** 桌面实例且能读到实例 ID → 端口/参数由 Comfy Desktop 元数据决定，
      *  设置页据此隐藏 端口/启动参数 输入。 */
     desktopManaged: boolean;
+    /** 桌面版 / 便携版 / venv；未配置路径或判不出形态时为 null。 */
+    instanceType: "desktop" | "portable" | "venv" | null;
+    /** 配置里是否填了路径（与形态同源，都是设置行的事实）。 */
+    pathConfigured: boolean;
   } | null;
   /** 桌面实例的六个存储目录（模型 / 共享模型 / 输入 / 共享输入 / 输出 /
    *  共享输出）——**只读**。
@@ -178,9 +178,9 @@ export interface SettingsPageController {
   comfyStorage: DesktopStoragePaths | null;
   /* Drizzle Studio（本地数据库可视化）：状态 + 启动/关闭/打开查看 */
   dbStudioStatus: {
-    up: boolean;
-    starting: boolean;
     port: number;
+    starting: boolean;
+    up: boolean;
   } | null;
   dbStudioStarting: boolean;
   dbStudioStopping: boolean;
@@ -225,18 +225,18 @@ export interface SettingsPageController {
   /* 入参形状由 lib 里那一份草稿→条目桥给出（`remoteModelEntryFromDraft` 的返回类型）：
    * 这一层过去另写一遍字段，于是「弹窗拼的那枚条目」与「controller 收的那枚条目」
    * 是两个各自自洽的形状。 */
-  addRemoteModel: (entry: RemoteModelDraftEntry) => Promise<{ ok: boolean; error?: string }>;
+  addRemoteModel: (entry: RemoteModelDraftEntry) => Promise<{ error?: string; ok: boolean }>;
   /** 编辑既有条目（只作用于已配置条目）；重名校验排除自身，改名时若生效
    *  模型引用旧名会同步更新。
    *  patch.baseUrl = null / clearApiKey = true 表示清掉独立配置、跟随全局。 */
   updateRemoteModel: (
     name: string,
     patch: Partial<RemoteModelDraftEntry>,
-  ) => Promise<{ ok: boolean; error?: string }>;
-  removeRemoteModel: (name: string) => Promise<{ ok: boolean; error?: string }>;
+  ) => Promise<{ error?: string; ok: boolean }>;
+  removeRemoteModel: (name: string) => Promise<{ error?: string; ok: boolean }>;
   probeRemote: (input: {
-    baseUrl?: string;
     apiKey?: string;
+    baseUrl?: string;
     model?: string;
   }) => Promise<RemoteProbeResult>;
   /** 按用途发起一次真实调用（图片 / 视频会真实生成、消耗额度） */
@@ -245,20 +245,20 @@ export interface SettingsPageController {
   queryUsageTask: (input: UsageTaskQueryInput) => Promise<UsageTestResult>;
   /* 应用自更新（Tauri updater + process）：检测 / 下载安装 / 重启 */
   appUpdate: {
-    /** 是否在桌面壳内（决定「检测更新」是否可用）。 */
-    inShell: boolean;
-    /** 一次操作的进行态；idle 表示空闲。 */
-    busy: "idle" | "checking" | "installing";
     /** 最近一次检测是否发现可用更新。 */
     available: boolean;
-    /** 可用的远端版本号（available 时非空）。 */
-    version: string | null;
+    /** 一次操作的进行态；idle 表示空闲。 */
+    busy: "idle" | "checking" | "installing";
     /** 当前本地版本号（可用时从检测结果读取）。 */
     currentVersion: string | null;
+    /** 是否在桌面壳内（决定「检测更新」是否可用）。 */
+    inShell: boolean;
     /** 最近一次检测/安装的可读结果或提示。 */
     message: string | null;
     /** 下载进度（bytes，total 可能为空），installing 时非空。 */
     progress: { downloaded: number; total?: number } | null;
+    /** 可用的远端版本号（available 时非空）。 */
+    version: string | null;
   };
   checkAppUpdate: () => Promise<void>;
   installAppUpdate: () => Promise<void>;

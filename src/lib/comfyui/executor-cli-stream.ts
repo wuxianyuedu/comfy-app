@@ -67,7 +67,7 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
     return undefined;
   }
   const seen = new WeakSet<object>();
-  const stack: Array<{ node: JsonRecord; d: number }> = [
+  const stack: Array<{ d: number; node: JsonRecord }> = [
     { node: /* SAFETY: 类型断言已复核 */ root as JsonRecord, d: 0 },
   ];
   while (stack.length) {
@@ -206,11 +206,11 @@ export interface EnvelopeParserDeps {
   onProgress: (
     percent: number,
     node?: {
-      id: string;
-      value: number;
-      max: number;
       classType?: string;
+      id: string;
       label?: string;
+      max: number;
+      value: number;
     },
   ) => void;
   /** 可注入的 trace（默认全局 trace）。 */

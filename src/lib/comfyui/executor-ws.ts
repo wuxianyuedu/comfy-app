@@ -385,11 +385,11 @@ export async function handleMessage(raw: string) {
     // 发给前端，画布与管线节点才能显示「当前节点 + 百分比」而不仅是总数。
     let node:
       | {
+          classType?: string;
           id: string;
           label?: string;
-          classType?: string;
-          value: number;
           max: number;
+          value: number;
         }
       | undefined;
     const rawNodeId: unknown = data.node;

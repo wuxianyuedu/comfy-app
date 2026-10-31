@@ -155,11 +155,11 @@ function StepRow({
   value,
   onChange,
 }: {
-  label: string;
   hint: string;
+  label: string;
+  onChange: (id: string) => void;
   steps: Array<AppearanceStep>;
   value: string;
-  onChange: (id: string) => void;
 }) {
   return (
     <div className="mt-5">

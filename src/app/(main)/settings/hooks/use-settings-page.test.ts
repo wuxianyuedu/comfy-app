@@ -56,13 +56,13 @@ vi.mock("~/lib/shell/desktop-shell-client", () => ({
 // 只 spy `postAppRuntimeLog` 并记录调用参数。
 const { postAppRuntimeLogMock, runtimeLogCalls, sessionLogRequests } = vi.hoisted(() => {
   const calls: Array<{
-    ns: string;
+    fields?: unknown;
     level: string;
     msg: string;
-    fields?: unknown;
+    ns: string;
   }> = [];
   /** 启动日志「按会话取」的请求记账（来源 + 请求的会话 id） */
-  const logRequests: Array<{ source: string; session: string | null }> = [];
+  const logRequests: Array<{ session: string | null; source: string }> = [];
   return {
     postAppRuntimeLogMock: vi.fn(
       (ns: string, level: string, msg: string, fields?: unknown): Promise<void> => {
@@ -82,15 +82,15 @@ vi.mock("~/lib/log/log-file-client", () => {
     async (
       source: string,
       offset: number,
-    ): Promise<{ content: string; size: number; offset: number } | null> => {
+    ): Promise<{ content: string; offset: number; size: number } | null> => {
       const res = await fetch(`/api/logs/current?source=${source}&offset=${offset}`);
       if (!res.ok) {
         return null;
       }
       return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
         content: string;
-        size: number;
         offset: number;
+        size: number;
       };
     },
   );
@@ -149,9 +149,9 @@ interface Behavior {
   comfyBase?: string | null;
   comfyStatusPending?: boolean;
   comfyInstance?: {
-    pathConfigured: boolean;
-    instanceType: "desktop" | "portable" | "venv" | null;
     desktopManaged: boolean;
+    instanceType: "desktop" | "portable" | "venv" | null;
+    pathConfigured: boolean;
   };
   dbStudioStatusError?: string;
   dbStudioUp?: boolean;
@@ -676,8 +676,8 @@ describe("useSettingsPage", () => {
 
     const entry = /* SAFETY: 类型断言已复核 */ (
       runtimeLogCalls as unknown as Array<{
-        level: string;
         fields?: { query?: string; raw?: string };
+        level: string;
       }>
     ).find((c) => c.level === "error");
     expect(entry?.fields?.query).toBe("llm.configGet");
@@ -705,8 +705,8 @@ describe("useSettingsPage", () => {
 
     const entry = /* SAFETY: 类型断言已复核 */ (
       runtimeLogCalls as unknown as Array<{
-        level: string;
         fields?: { query?: string };
+        level: string;
       }>
     ).find((c) => c.level === "error");
     expect(entry?.fields?.query).toContain("setting.get");
@@ -764,7 +764,7 @@ describe("useSettingsPage", () => {
     // 设置页只做配置：初始清单 = 候选条目（不含「当前模型」虚拟行）
     expect(result.current.remoteModelList.map((e) => e.name)).toEqual([]);
 
-    let out: { ok: boolean; error?: string } = { ok: false };
+    let out: { error?: string; ok: boolean } = { ok: false };
     await act(async () => {
       out = await result.current.addRemoteModel({ name: "gpt-4o" });
     });
@@ -815,7 +815,7 @@ describe("useSettingsPage", () => {
     });
     await expect.poll(() => result.current.drafts).not.toBeNull();
 
-    let out: { ok: boolean; error?: string } = { ok: false };
+    let out: { error?: string; ok: boolean } = { ok: false };
     await act(async () => {
       out = await result.current.addRemoteModel({ name: "gpt-4o" });
     });
@@ -926,7 +926,7 @@ describe("useSettingsPage", () => {
     await act(async () => {
       await result.current.addRemoteModel({ name: "gpt-4o", apiKey: "sk-1" });
     });
-    let out: { ok: boolean; error?: string } = { ok: false };
+    let out: { error?: string; ok: boolean } = { ok: false };
     await act(async () => {
       out = await result.current.updateRemoteModel("gpt-4o", {
         name: "gpt-4o-2024",
@@ -1014,7 +1014,7 @@ describe("useSettingsPage", () => {
     await expect.poll(() => result.current.drafts).not.toBeNull();
 
     // llm.model 初始 = "qwen3:14b"，候选为空 —— 不再虚拟「当前模型」行可编辑
-    let out: { ok: boolean; error?: string } = { ok: false };
+    let out: { error?: string; ok: boolean } = { ok: false };
     await act(async () => {
       out = await result.current.updateRemoteModel("qwen3:14b", {
         baseUrl: "https://api.example.com/v1",

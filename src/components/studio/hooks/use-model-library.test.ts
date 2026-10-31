@@ -21,13 +21,13 @@ import { useModelLibrary } from "./use-model-library";
 import { ALL_TYPES } from "../model-library-config";
 
 type Row = {
+  createdAt: string;
+  fileName: string;
+  fileSize?: number | null;
   id: string;
+  isAvailable: boolean;
   name: string;
   type: string;
-  fileName: string;
-  isAvailable: boolean;
-  fileSize?: number | null;
-  createdAt: string;
 };
 
 interface Behavior {
@@ -40,7 +40,7 @@ interface Behavior {
 
 let behavior: Behavior = { models: [] };
 /** 记录 list 收到的入参，用于断言筛选真的传到了后端 */
-const listInputs: Array<{ type?: string; q?: string } | undefined> = [];
+const listInputs: Array<{ q?: string; type?: string } | undefined> = [];
 /** 记录 sync 被调用的次数 —— 断言「挂载时同步一次」不会随重渲染复发。 */
 let syncCalls = 0;
 

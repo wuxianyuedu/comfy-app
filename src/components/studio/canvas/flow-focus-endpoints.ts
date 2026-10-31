@@ -164,8 +164,8 @@ export const PORT_ROW_TONES: Record<PortRowTone, PortRowStyle> = {
  *  且标了关注级别的行不压暗。未选中任何东西时全图原样 —— 用户只是滚动 / 阅读
  *  画布，不该因为一次误点整片变灰。 */
 export function resolvePortRowTone(args: {
-  role: EdgeFocusRole;
   hasSelection: boolean;
+  role: EdgeFocusRole;
 }): PortRowTone {
   if (args.role === "upstream" || args.role === "downstream") {
     return "focused";

@@ -30,18 +30,18 @@ import { launcherCommandCandidates, readRegisteredLauncher } from "./status";
 export type InstanceDiscoverySource = "process" | "launcher" | "any";
 
 export type InstanceQuery = {
-  /** 配置的实例是否确有进程在跑（命令行匹配，不靠端口探测）。 */
-  running: boolean;
   /** 命中进程的 PID（未命中为 null）。 */
   pid: number | null;
   /** 该进程实际监听的端口（拿不到为 null——可能还在加载、或还没绑定）。 */
   port: number | null;
+  /** 配置的实例是否确有进程在跑（命令行匹配，不靠端口探测）。 */
+  running: boolean;
   /** 哪一条判据命中的（未命中为 null）。 */
   source: InstanceDiscoverySource | null;
-  /** 命中的进程是用什么起的（中文短语，供日志/提示）。 */
-  via: string | null;
   /** 进程表查询本身失败（超时 / 无权限）——没命中**不等于**没在跑。 */
   unverified: boolean;
+  /** 命中的进程是用什么起的（中文短语，供日志/提示）。 */
+  via: string | null;
 };
 
 /** 空结果（未配置路径 / 一条判据都问不到）。 */
@@ -90,8 +90,8 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
   const registered = readRegisteredLauncher(classify.instanceRoot ?? root);
   const candidates: Array<{
     cmd: string;
-    via: string;
     source: InstanceDiscoverySource;
+    via: string;
   }> = [];
   if (registered) {
     candidates.push({

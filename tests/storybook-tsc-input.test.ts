@@ -168,9 +168,9 @@ async function provisionNextEnv(outDir: string): Promise<string> {
       writeAppTypeDeclarations: (options: {
         baseDir: string;
         distDir: string;
-        imageImportsEnabled: boolean;
-        hasPagesDir: boolean;
         hasAppDir: boolean;
+        hasPagesDir: boolean;
+        imageImportsEnabled: boolean;
         strictRouteTypes: boolean;
         typedRoutes: boolean;
       }) => Promise<void>;
@@ -206,8 +206,8 @@ async function provisionNextEnv(outDir: string): Promise<string> {
  * 「仓库内的输入 + 仓库外的临时目录」这条组合判死过一回。
  */
 async function writeNarrowTsconfig(): Promise<{
-  dir: string;
   cfg: string;
+  dir: string;
   envDts: string;
 }> {
   const dir = fs.mkdtempSync(path.join(ROOT, "node_modules", ".cache", "sb-narrow-tsc-"));
@@ -728,8 +728,8 @@ function restoreGeneratedFile(
  *  `typescript`（实为 `@typescript/typescript6`）的 `tsc6`），顶层 `node_modules/`
  *  下只是链接 —— 按包名 + `bin` 字段解，别按路径猜。 */
 function resolveTscBin(): {
-  run: (args: Array<string>) => { status: number | null; output: string };
-  runIn: (cwd: string, args: Array<string>) => { status: number | null; output: string };
+  run: (args: Array<string>) => { output: string; status: number | null; };
+  runIn: (cwd: string, args: Array<string>) => { output: string; status: number | null; };
 } | null {
   for (const [pkg, binName] of /* SAFETY: 类型断言已复核 */ [
     ["@typescript/native", "tsc"],

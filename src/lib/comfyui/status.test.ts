@@ -411,8 +411,8 @@ describe("快照缓存 — 便宜但不失时效", () => {
   it("在途查询挂起时，动作后的查询不再复用它（否则拿到动作前的事实）", async () => {
     // 现场：动作前发出的那次进程表查询还没回来，用户点了启动 / 刷新。
     // 只清缓存的写法挡不住它——复用的在途查询答的是动作前那一问。
-    let releasePrev: (v: { pid: number | null; failed: boolean }) => void = () => undefined;
-    const hanging = new Promise<{ pid: number | null; failed: boolean }>((resolve) => {
+    let releasePrev: (v: { failed: boolean; pid: number | null }) => void = () => undefined;
+    const hanging = new Promise<{ failed: boolean; pid: number | null }>((resolve) => {
       releasePrev = resolve;
     });
     vi.mocked(findPidForMainPyDetailed)

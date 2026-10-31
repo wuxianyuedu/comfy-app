@@ -17,9 +17,7 @@ export interface OpenFolderResult {
 }
 
 /** 打开任务输出目录：失败路径分「目录未生成」与其它错误两种，由 hook 决定提示文案。 */
-export async function openTaskFolder(
-  taskId: string,
-): Promise<OpenFolderResult> {
+export async function openTaskFolder(taskId: string): Promise<OpenFolderResult> {
   return vanillaApi.task.openFolder.mutate({ id: taskId });
 }
 
@@ -36,9 +34,7 @@ export async function openTaskFolder(
  * 输出目录」而资源管理器一动不动。`revealPath` 的闸门（存在 + 在检出目录内）
  * 对产物目录天然成立：它由 `taskOutputDir()` 算自 `<cwd>/generated`。
  */
-export async function revealTaskFolder(
-  taskId: string,
-): Promise<{ ok: boolean; detail: string }> {
+export async function revealTaskFolder(taskId: string): Promise<{ detail: string; ok: boolean }> {
   const folder = await openTaskFolder(taskId);
   if (!folder.opened || !folder.absolutePath) {
     return {

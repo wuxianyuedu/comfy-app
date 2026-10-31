@@ -39,8 +39,8 @@ export type SnapshotEntry = Buffer | null;
  */
 export type ProbeIo = {
   read: (abs: string) => SnapshotEntry;
-  write: (abs: string, bytes: Buffer) => void;
   remove: (abs: string) => void;
+  write: (abs: string, bytes: Buffer) => void;
 };
 
 /** Windows 上刚被子进程读过的文件会短暂占用，实测 `writeFileSync` 会连抛 `UNKNOWN`。 */
@@ -92,9 +92,9 @@ export function restoreToSnapshot(
   snapshot: ReadonlyMap<string, SnapshotEntry>,
   io: ProbeIo = realProbeIo,
 ): {
+  failed: Array<{ abs: string; why: string }>;
   restored: Array<string>;
   unchanged: Array<string>;
-  failed: Array<{ abs: string; why: string }>;
 } {
   const restored: Array<string> = [];
   const unchanged: Array<string> = [];

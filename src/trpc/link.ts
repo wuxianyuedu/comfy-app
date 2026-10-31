@@ -21,8 +21,8 @@ export type TrpcClientSource = "vanilla" | "nextjs-react";
  *     原生客户端不挂（它服务的是 store 持久化这类后台动作，不需要噪声）。
  */
 export function trpcHttpLink(options: {
-  source: TrpcClientSource;
   origin?: string;
+  source: TrpcClientSource;
   withLogger?: boolean;
 }): Array<TRPCLink<never>> {
   const url = options.origin === undefined ? getTrpcEndpoint() : getTrpcEndpointFor(options.origin);

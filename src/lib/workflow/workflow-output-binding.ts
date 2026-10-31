@@ -34,7 +34,7 @@ export const OUTPUT_BINDING_NAMESPACE = "output";
  *  刻意不给「每个输出口自动挑一个」的启发式：输出没有运行期语义，硬凑一个默认
  *  落点只会在作者没连过时凭空挪动取值来源。 */
 export function defaultOutputSource(
-  outputs: ReadonlyArray<{ ioKey: string; displayOrder?: number }>,
+  outputs: ReadonlyArray<{ displayOrder?: number; ioKey: string }>,
 ): string | null {
   const [firstOutput] = outputs;
   if (!firstOutput) {
@@ -54,8 +54,8 @@ export function defaultOutputSource(
 
 /** 该输出口的 default 落点是否就是它自己（没有任何手工覆盖时的判定依据）。 */
 export function isDefaultOutputBinding(
-  output: { ioKey: string; displayOrder?: number },
-  outputs: ReadonlyArray<{ ioKey: string; displayOrder?: number }>,
+  output: { displayOrder?: number; ioKey: string },
+  outputs: ReadonlyArray<{ displayOrder?: number; ioKey: string }>,
 ): boolean {
   return defaultOutputSource(outputs) === output.ioKey;
 }
@@ -126,8 +126,8 @@ export function hasManualOutputBinding(
  *  那一行（default 落点）。 */
 export function resolveOutputSource(
   paramMap: unknown,
-  output: { ioKey: string; displayOrder?: number },
-  outputs: ReadonlyArray<{ ioKey: string; displayOrder?: number }>,
+  output: { displayOrder?: number; ioKey: string },
+  outputs: ReadonlyArray<{ displayOrder?: number; ioKey: string }>,
   mode: string | null | undefined,
   io?: WorkflowIOMap | null,
 ): string | null {
@@ -152,7 +152,7 @@ export function resolveOutputSource(
  *  `paramMap` 里其它命名空间（`source` / `positiveNode` …）原样保留。 */
 export function applyOutputBindingEdit(
   paramMap: Record<string, unknown> | null | undefined,
-  edit: { outputIoKey: string; ioKey: string | null; mode: string | null },
+  edit: { ioKey: string | null; mode: string | null; outputIoKey: string },
 ): Record<string, unknown> {
   const base = paramMap && typeof paramMap === "object" ? { ...paramMap } : {};
   if (!edit.mode) {

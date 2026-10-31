@@ -100,9 +100,9 @@ function Shell({
   defaultOpen = true,
 }: {
   collapsible?: "offcanvas" | "icon" | "none";
-  variant?: "sidebar" | "floating" | "inset";
-  side?: "left" | "right";
   defaultOpen?: boolean;
+  side?: "left" | "right";
+  variant?: "sidebar" | "floating" | "inset";
 }) {
   return (
     <SidebarProvider defaultOpen={defaultOpen}>

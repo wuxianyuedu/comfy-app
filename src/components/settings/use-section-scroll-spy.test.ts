@@ -51,7 +51,7 @@ class FakeIntersectionObserver {
   }
 
   /** 投递一次「谁进入了 / 谁离开了」。 */
-  emit(entries: Array<{ target: Element; isIntersecting: boolean }>) {
+  emit(entries: Array<{ isIntersecting: boolean; target: Element }>) {
     this.callback(
       entries.map(
         (e) =>

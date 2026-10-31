@@ -294,12 +294,12 @@ function liblibSubgraphFixture() {
 }
 
 type FixtureResult = {
-  nodes: Array<{ id: number; widgets_values: Array<unknown> }>;
   definitions: {
     subgraphs: Array<{
       nodes: Array<{ id: number; widgets_values: Array<unknown> }>;
     }>;
   };
+  nodes: Array<{ id: number; widgets_values: Array<unknown> }>;
 };
 
 describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () => {

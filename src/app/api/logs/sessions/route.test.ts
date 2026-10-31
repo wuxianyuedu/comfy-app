@@ -53,11 +53,11 @@ const { GET } = await import("./route");
 
 interface Payload {
   sessions: Array<{
-    id: string;
-    title: string;
-    startedAt: number | null;
-    scope: "current" | "runs";
     crashed: boolean;
+    id: string;
+    scope: "current" | "runs";
+    startedAt: number | null;
+    title: string;
   }>;
   selectedId: string | null;
   content: string;
@@ -68,7 +68,7 @@ interface Payload {
   error?: string;
 }
 
-async function get(query: string): Promise<{ status: number; data: Payload }> {
+async function get(query: string): Promise<{ data: Payload; status: number }> {
   const res = await GET(new Request(`http://localhost/api/logs/sessions?${query}`));
   return {
     status: res.status,

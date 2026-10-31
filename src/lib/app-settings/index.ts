@@ -25,27 +25,17 @@ import type { CpuLimitMode } from "~/lib/comfyui/cpu-limit";
 
 export type AppSettings = {
   /**
-   * ComfyUI 安装目录。
-   * comfyuiPath 语义（配置的目录可以不是源码根本身）：
-   *   - 便携版：<path>\python_embeded\python.exe + <path>\main.py
-   *   - 桌面版：配置「实例根」（如 ComfyUI-Installs\ComfyUI2）——
-   *     <path>\standalone-env\python.exe + <path>\ComfyUI\main.py（解释器 + 源码）
-   *     也可直接配置实例内的 ComfyUI/ 源码根，解释器会向上查找。
-   *   - venv：<path>\.venv\Scripts\python.exe + <path>\main.py（同上两件）
-   * 配置后任务执行前若 ComfyUI 未运行会自动拉起（comfyuiAutoStart）。
-   */
-  comfyuiPath: string;
-  /** 传给 ComfyUI main.py 的额外命令行参数（如 --input-directory ...）。 */
-  comfyuiExtraArgs: string;
-  /**
-   * 出图进程的 CPU 占用档位（ISSUE #1959）。
+   * 查看「绑定到本地文件的工作流」详情时，是否自动把磁盘上的最新内容同步回库。
    *
-   * 出图是**可长跑的后台负载**，占满机器时用户手里的编辑器 / 浏览器 / 画布
-   * 拖拽都在抢同一批核。三档语义与平台手段见 `~/lib/comfyui/cpu-limit`。
-   * 留空（老设置文件里没有这个键）→ 桌面壳内默认 `yield`、浏览器形态默认
-   * `off`（那里没有「同一个窗口里干别的活」这回事）。
+   * 默认 false（手动）：进详情只**检出**磁盘有没有更新、不写库，真正的更新入口
+   * 是工作流库里的「同步」按钮（`workflow.resync`）—— 否则「切界面」就等于
+   * 「同步」，用户还没决定内容就变了、标记也翻回无更新（PR #806 修的就是这个）。
+   *
+   * 开启后，「进详情」等价于「点同步」：检出到磁盘有更新就立刻重导入并落库，
+   * 用户无需回到列表点按钮。两种入口复用同一条重导入链路（`reimportFromSource`），
+   * 产物一致。
    */
-  comfyuiCpuLimit?: CpuLimitMode;
+  autoSyncLocalWorkflow: boolean;
   /**
    * 驱动 ComfyUI 的 **comfy-cli Python 解释器**（执行链用它跑 `-m comfy_cli run`）。
    *
@@ -61,17 +51,33 @@ export type AppSettings = {
   /** 提交任务发现 ComfyUI 未运行时，是否自动按 comfyuiPath 启动。 */
   comfyuiAutoStart: boolean;
   /**
+   * 出图进程的 CPU 占用档位（ISSUE #1959）。
+   *
+   * 出图是**可长跑的后台负载**，占满机器时用户手里的编辑器 / 浏览器 / 画布
+   * 拖拽都在抢同一批核。三档语义与平台手段见 `~/lib/comfyui/cpu-limit`。
+   * 留空（老设置文件里没有这个键）→ 桌面壳内默认 `yield`、浏览器形态默认
+   * `off`（那里没有「同一个窗口里干别的活」这回事）。
+   */
+  comfyuiCpuLimit?: CpuLimitMode;
+  /** 传给 ComfyUI main.py 的额外命令行参数（如 --input-directory ...）。 */
+  comfyuiExtraArgs: string;
+  /**
+   * ComfyUI 安装目录。
+   * comfyuiPath 语义（配置的目录可以不是源码根本身）：
+   *   - 便携版：<path>\python_embeded\python.exe + <path>\main.py
+   *   - 桌面版：配置「实例根」（如 ComfyUI-Installs\ComfyUI2）——
+   *     <path>\standalone-env\python.exe + <path>\ComfyUI\main.py（解释器 + 源码）
+   *     也可直接配置实例内的 ComfyUI/ 源码根，解释器会向上查找。
+   *   - venv：<path>\.venv\Scripts\python.exe + <path>\main.py（同上两件）
+   * 配置后任务执行前若 ComfyUI 未运行会自动拉起（comfyuiAutoStart）。
+   */
+  comfyuiPath: string;
+  /**
    * ComfyUI 监听端口。留空 = 默认 8188；非默认端口会在启动时显式传
    * `--port`，保证「界面显示端口 = 实际端口」。连接地址固定 127.0.0.1
    * （ComfyUI 由本应用拉起；远程实例可用环境变量 COMFYUI_BASE 覆盖）。
    */
   comfyuiPort: number;
-  /**
-   * 是否要求登录才能调用 REST 接口（自定义节点解析 / 素材 / 上传 /
-   * 日志 / LLM 配置等）。false（默认，本机单用户模式）= 未登录自动落到
-   * 演示用户，与 tRPC authedProcedure 的回退一致；true = 严格 401。
-   */
-  loginRequired: boolean;
   /**
    * 应用进程退出时是否连带关闭自己拉起的 ComfyUI（进程保活开关，默认 false）。
    * 语义：桌面壳退出是 taskkill /T /F 杀整棵进程树，被杀进程没有任何清理
@@ -84,20 +90,6 @@ export type AppSettings = {
    * 连杀会让每次打开应用都要重付一遍；且被杀时正在跑的任务没有机会收尾。
    */
   exitKillComfyui: boolean;
-  /** 同 exitKillComfyui，作用于应用拉起的 Ollama serve 进程。 */
-  exitKillOllama: boolean;
-  /**
-   * 查看「绑定到本地文件的工作流」详情时，是否自动把磁盘上的最新内容同步回库。
-   *
-   * 默认 false（手动）：进详情只**检出**磁盘有没有更新、不写库，真正的更新入口
-   * 是工作流库里的「同步」按钮（`workflow.resync`）—— 否则「切界面」就等于
-   * 「同步」，用户还没决定内容就变了、标记也翻回无更新（PR #806 修的就是这个）。
-   *
-   * 开启后，「进详情」等价于「点同步」：检出到磁盘有更新就立刻重导入并落库，
-   * 用户无需回到列表点按钮。两种入口复用同一条重导入链路（`reimportFromSource`），
-   * 产物一致。
-   */
-  autoSyncLocalWorkflow: boolean;
   /**
    * exitKillComfyui 默认值迁移标记（一次性，非用户可见开关）。
    * 该开关的历史默认值是 true，而 saveSettings 会把整个对象（含默认值）写盘 ——
@@ -105,6 +97,14 @@ export type AppSettings = {
    * 首次读到没有本标记的文件时把值落成新默认并写标记；之后用户手动勾选不再被覆盖。
    */
   exitKillComfyuiDefaultMigrated?: boolean;
+  /** 同 exitKillComfyui，作用于应用拉起的 Ollama serve 进程。 */
+  exitKillOllama: boolean;
+  /**
+   * 是否要求登录才能调用 REST 接口（自定义节点解析 / 素材 / 上传 /
+   * 日志 / LLM 配置等）。false（默认，本机单用户模式）= 未登录自动落到
+   * 演示用户，与 tRPC authedProcedure 的回退一致；true = 严格 401。
+   */
+  loginRequired: boolean;
 };
 
 export const DEFAULTS: AppSettings = {

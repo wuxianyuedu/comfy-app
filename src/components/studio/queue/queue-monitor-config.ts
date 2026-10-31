@@ -75,7 +75,7 @@ export function bucketQueueRows(rows: ReadonlyArray<QueueRow>): QueueBuckets {
  */
 export function queuedWithPosition(
   queued: ReadonlyArray<QueueRow>,
-): Array<{ row: QueueRow; position: number }> {
+): Array<{ position: number; row: QueueRow }> {
   const total = queued.length;
   return queued
     .map((row, index) => ({ row, position: total - index }))
@@ -132,7 +132,7 @@ export function runningElapsedText(elapsedMs: number | null): string {
  * 离线但列表里还有任务时不说这句 —— 那种情形列表照常铺开，只在顶部放一条横幅
  * （见 `offlineBannerText`），整页被空态替换正是「状态闪一下」观感的放大器。
  */
-export function offlineEmptyText(): { title: string; description: string } {
+export function offlineEmptyText(): { description: string; title: string } {
   return {
     title: "ComfyUI 未运行",
     description: "队列里的任务不会开始。启动后端后这一屏会自动接上，不用手动刷新。",
@@ -143,7 +143,7 @@ export function offlineEmptyText(): { title: string; description: string } {
  * 离线横幅（列表还在时顶部的提示条）：只说「现在不会开始 + 连上会自动接上」，
  * 不报排队数 —— 排队数在页头和列表里都看得见，横幅再报一遍是同一件事说两遍。
  */
-export function offlineBannerText(): { title: string; description: string } {
+export function offlineBannerText(): { description: string; title: string } {
   return {
     title: "ComfyUI 未连接",
     description: "队列里的任务暂时不会开始；连接恢复后这一屏自动接上，不用手动刷新。",
@@ -160,7 +160,7 @@ export function offlineBannerText(): { title: string; description: string } {
 export function runningHintText(
   online: boolean,
   waitingCount: number,
-): { title: string; description: string } {
+): { description: string; title: string } {
   if (!online) {
     return {
       title: "没有在跑的任务",

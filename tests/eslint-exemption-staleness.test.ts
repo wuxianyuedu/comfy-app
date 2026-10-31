@@ -40,27 +40,27 @@ interface JudgeModule {
   ) => { entries: string[]; mentionedAnywhere: boolean };
   scanViolations: (p: {
     files: string[];
-    ruleId: string;
-    root: string;
-    readFile?: (absPath: string) => string;
     makeLinter?: () => FakeLinter;
+    readFile?: (absPath: string) => string;
+    root: string;
+    ruleId: string;
   }) => {
-    violating: string[];
     failed: { file: string; why: string }[];
     scanned: number;
+    violating: string[];
   };
   judge: (input: JudgeInput) => {
-    state: "pass" | "stale" | "inconclusive";
-    ruleId: string;
-    removalCriterion: string;
-    stale: string[];
-    failed: { file: string; why: string }[];
-    unresolvable: string[];
     entries: number;
-    violating: number;
+    failed: { file: string; why: string }[];
+    removalCriterion: string;
+    ruleId: string;
     scanned: number;
+    stale: string[];
+    state: "pass" | "stale" | "inconclusive";
+    unresolvable: string[];
+    violating: number;
   };
-  FILE_LEVEL_EXEMPTIONS: { ruleId: string; removalCriterion: string }[];
+  FILE_LEVEL_EXEMPTIONS: { removalCriterion: string; ruleId: string; }[];
 }
 
 interface JudgeInput {

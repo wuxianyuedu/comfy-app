@@ -50,12 +50,12 @@ export const REAL_ROOT = path.resolve(__dirname, "../..");
 /** 判据的导出面（`scripts/check-a11y-rules.cjs` 的 `module.exports`）。 */
 /** 判据归一的台账形状（`readLedger` 的产物，也是 `judge` 的入参）。 */
 export interface Ledger {
-  dialect: Array<{ rule: string; decision: string; why: string; keeper: string }>;
+  dialect: Array<{ decision: string; keeper: string; rule: string; why: string; }>;
   inlineExemptions: Array<{
-    rule: string;
     file: string;
-    why: string;
     keeper: string;
+    rule: string;
+    why: string;
   }>;
 }
 

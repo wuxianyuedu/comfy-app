@@ -56,7 +56,7 @@ function extraPathsCandidates(baseDir: string, instanceRoot: string): Array<stri
 async function readExtraPathsFile(
   candidates: Array<string>,
   readFile: (p: string, enc: "utf8") => Promise<string>,
-): Promise<{ file: string; content: string } | null> {
+): Promise<{ content: string; file: string } | null> {
   for (const candidate of candidates) {
     try {
       return { file: candidate, content: await readFile(candidate, "utf8") };
@@ -71,7 +71,7 @@ async function readExtraPathsFile(
 function expandEntry(
   entry: ExtraModelPathEntry,
   exists: (p: string) => boolean,
-): Array<{ slot: StorageSlot; dir: StorageDirInfo }> {
+): Array<{ dir: StorageDirInfo; slot: StorageSlot }> {
   return entry.paths.map((item) => ({
     slot: classifyStorageSlot(item),
     dir: {

@@ -15,7 +15,7 @@ import { resetComfyStateClientForTest, subscribeComfyStateChanges } from "./comf
 const fetches: Array<string> = [];
 
 /** 装一个「按脚本逐次回答」的 fetch 替身。 */
-function stubFetch(answers: Array<{ status: number; body?: unknown }>): () => number {
+function stubFetch(answers: Array<{ body?: unknown; status: number }>): () => number {
   let i = 0;
   vi.stubGlobal(
     "fetch",

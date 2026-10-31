@@ -36,7 +36,7 @@ export interface RunWorkflowInput {
  *  变成「任务创建了但没有图」，比直接报错难查。 */
 export async function createWorkflowRunTask(
   input: RunWorkflowInput,
-): Promise<{ taskId: string; workflowName: string; taskType: string }> {
+): Promise<{ taskId: string; taskType: string; workflowName: string }> {
   const tpl = await workflowTemplateRepository.findByIdForUser(input.userId, input.workflowId);
   if (!tpl) {
     throw new Error(`工作流不存在：${input.workflowId}`);

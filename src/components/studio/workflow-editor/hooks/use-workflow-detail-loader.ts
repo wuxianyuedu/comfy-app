@@ -170,7 +170,7 @@ export function useWorkflowDetailLoader({
     (
       data: WorkflowDetail,
       isSubgraph: boolean,
-      o?: { subgraphUid?: string; parentTitle?: string; hostNodeId?: string },
+      o?: { hostNodeId?: string; parentTitle?: string; subgraphUid?: string },
     ) => {
       applyDetailState(data, isSubgraph);
       if (isSubgraph && o?.subgraphUid) {
@@ -186,10 +186,10 @@ export function useWorkflowDetailLoader({
 
   const fetchDetail = useCallback(
     async (opts?: {
-      subgraphUid?: string;
-      parentTitle?: string;
       bust?: boolean;
       hostNodeId?: string;
+      parentTitle?: string;
+      subgraphUid?: string;
     }) => {
       const subgraphUid = opts?.subgraphUid;
       const isSubgraph = Boolean(subgraphUid);

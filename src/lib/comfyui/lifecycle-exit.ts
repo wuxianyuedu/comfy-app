@@ -349,13 +349,13 @@ function readTailLines(filePath: string, maxLines = 40, maxLineLen = 600): Array
  * 但崩溃前的真实输出在重定向文件里，一并带进面板（见 `keepAliveLogs`）。
  */
 export function reportKeepAliveExit(opts: {
-  facts: { pid: number | null; uptimeMs: number | null };
-  stopRequested: boolean;
   appendRuntimeLog: (line: string) => void;
-  log: (msg: string) => void;
+  facts: { pid: number | null; uptimeMs: number | null };
   /** 本次会话保活拉起时重定向到的 stdout / stderr 文件；传入则把其末尾带进
    *  `[exit][out]` / `[exit][err]`，让崩溃原因直接出现在面板里（不必翻文件）。 */
-  keepAliveLogs?: { out?: string; err?: string };
+  keepAliveLogs?: { err?: string; out?: string };
+  log: (msg: string) => void;
+  stopRequested: boolean;
 }): ComfyExitReport {
   const report = describeComfyExit({
     code: null,

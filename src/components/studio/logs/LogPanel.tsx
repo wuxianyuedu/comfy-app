@@ -51,12 +51,12 @@ import { isCliJsonLine } from "~/lib/log/log-cli-json";
  *  性能优化，不该变成「内容看不见」的判据——取不到值时说「全都要」最安全，
  *  与改动前的行为一致。jsdom 里的单测正是走这一支。 */
 function useVirtualWindow(input: {
-  pageLogs: Array<LogEntry>;
-  wrap: boolean;
-  viewportWidth: number;
-  viewportHeight: number;
-  scrollTop: number;
   expansionMap: Record<string, boolean>;
+  pageLogs: Array<LogEntry>;
+  scrollTop: number;
+  viewportHeight: number;
+  viewportWidth: number;
+  wrap: boolean;
 }) {
   const { pageLogs, wrap, viewportWidth, viewportHeight, scrollTop, expansionMap } = input;
   const cliJsonIds = useMemo(() => {

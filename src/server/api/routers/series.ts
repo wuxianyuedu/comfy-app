@@ -16,37 +16,37 @@ import {
 
 /** 生产数据里的角色卡（JSON 列，形状见 `src/lib/workshop/types.ts` 的 `Character`）。 */
 type ProductionCharacter = {
-  id?: string;
-  name?: string;
   ageGender?: string;
   appearance?: string;
   costume?: string;
-  personality?: string;
-  temperament?: string;
-  styleTags?: Array<unknown>;
-  skillSlug?: string | null;
-  positivePrompt?: string;
+  id?: string;
+  name?: string;
   negativePrompt?: string;
   params?: unknown;
-  portraitUrl?: string | null;
+  personality?: string;
   portraits?: Array<unknown>;
+  portraitUrl?: string | null;
+  positivePrompt?: string;
+  skillSlug?: string | null;
+  styleTags?: Array<unknown>;
+  temperament?: string;
 };
 
 /** 把生产数据里的角色卡映射成系列角色库实体的可写字段（FR-SR-03：引用而非拷贝）。 */
 function productionCharacterToLibrary(pc: ProductionCharacter): {
-  name: string;
   ageGender: string;
   appearance: string;
   costume: string;
-  personality: string;
-  temperament: string;
-  styleTags: Array<unknown>;
-  skillSlug: string | null;
-  positivePrompt: string;
+  name: string;
   negativePrompt: string;
   params: unknown;
-  portraitUrl: string | null;
+  personality: string;
   portraits: Array<unknown>;
+  portraitUrl: string | null;
+  positivePrompt: string;
+  skillSlug: string | null;
+  styleTags: Array<unknown>;
+  temperament: string;
 } {
   return {
     name: pc.name ?? "",
@@ -67,20 +67,20 @@ function productionCharacterToLibrary(pc: ProductionCharacter): {
 
 /** 系列角色库实体 → 生产数据角色卡（注入时落回 `production.characters`）。 */
 function libraryCharacterToProduction(c: {
-  id: string;
-  name: string;
   ageGender: string;
   appearance: string;
   costume: string;
-  personality: string;
-  temperament: string;
-  styleTags: unknown;
-  skillSlug: string | null;
-  positivePrompt: string;
+  id: string;
+  name: string;
   negativePrompt: string;
   params: unknown;
-  portraitUrl: string | null;
+  personality: string;
   portraits: unknown;
+  portraitUrl: string | null;
+  positivePrompt: string;
+  skillSlug: string | null;
+  styleTags: unknown;
+  temperament: string;
 }): Record<string, unknown> {
   return {
     id: c.id,

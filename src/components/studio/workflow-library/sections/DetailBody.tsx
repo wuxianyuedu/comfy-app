@@ -54,8 +54,8 @@ interface DetailBodyProps {
   onEdit: () => void;
   /** 多模式工作流的模式切换（画布预览节点的类型 chip 可点选默认模式）。 */
   meta?: {
-    modes: Array<string>;
     defaultMode: string;
+    modes: Array<string>;
     onModeChange: (code: string) => void;
   };
   /** seed 类参数的「控件后行为」持久化（画布预览节点与 IO 编辑一致）。 */

@@ -57,12 +57,12 @@ const SCRIPT_SOURCE = normalizeControlFlow(
 // 判据脚本是 CJS（`@ts-nocheck`，require 进来是 any），按仓库惯例显式标注返回形状。
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const judge = /* SAFETY: 类型断言已复核 */ require("../scripts/check-app-port-vectors.cjs") as {
-  isTimeoutLike: (e: unknown) => boolean;
-  probeCommand: (cmd: string, args: Array<string>) => ProbeState;
   decidePythonVerdict: (
     first: Measure,
     second: Measure | null,
   ) => { problems: Array<string>; unverified: Array<string> };
+  isTimeoutLike: (e: unknown) => boolean;
+  probeCommand: (cmd: string, args: Array<string>) => ProbeState;
 };
 
 /**

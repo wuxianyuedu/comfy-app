@@ -36,12 +36,12 @@ function WorkshopWorkflowSelect({
   value,
   onChange,
 }: {
-  label: string;
-  placeholder: string;
   category: WorkshopWorkflowCategory;
-  options: Array<WorkshopWorkflowOption>;
-  value: string;
+  label: string;
   onChange: (value: string) => void;
+  options: Array<WorkshopWorkflowOption>;
+  placeholder: string;
+  value: string;
 }) {
   const scoped = options.filter((option) => option.category === category);
   return (

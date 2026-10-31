@@ -88,10 +88,10 @@ function Stage({
   edges,
   resolveNodeId,
 }: {
-  sink: Sink;
-  nodeIds: ReadonlyArray<string>;
   edges: Array<Edge>;
+  nodeIds: ReadonlyArray<string>;
   resolveNodeId?: (visualNodeId: string) => string | null;
+  sink: Sink;
 }) {
   const [nodes, setNodes] = useNodesState(asNodes(nodeIds));
   const [currentEdges, setEdges, onEdgesChange] = useEdgesState(edges);
@@ -153,8 +153,8 @@ function Stage({
 
 function renderStage(
   options: {
-    nodeIds?: ReadonlyArray<string>;
     edges?: Array<Edge>;
+    nodeIds?: ReadonlyArray<string>;
     resolveNodeId?: (visualNodeId: string) => string | null;
   } = {},
 ): Sink {

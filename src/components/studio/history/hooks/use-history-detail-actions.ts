@@ -23,8 +23,8 @@ import { useToast } from "../../ToastProvider";
  *  所以适配器住在这里而不是出口里 —— 设置页接的是整页提示条，
  *  工作流库接的也是 toast，但带第二行说明的写法不同。 */
 function toastReport(toast: {
-  success: (t: string, d?: string) => unknown;
   error: (t: string, d?: string) => unknown;
+  success: (t: string, d?: string) => unknown;
 }): ActionReport {
   return (kind, detail) => (kind === "ok" ? toast.success(detail) : toast.error(detail));
 }
@@ -54,8 +54,8 @@ export interface HistoryDetailActions {
  */
 export interface HistoryDetailActionsDeps {
   openFolder: (id: string) => Promise<{
-    comfyappUrl?: string | null;
     absolutePath?: string | null;
+    comfyappUrl?: string | null;
     error?: string | null;
   }>;
   fetchWorkflow: (id: string) => Promise<{ workflow?: unknown } | null>;

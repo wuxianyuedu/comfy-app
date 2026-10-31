@@ -422,13 +422,13 @@ export function shellSyntaxWarning(line: string): string | null {
 /** 一次「命令行 → 待执行计划」的解析结果。 */
 export type ParsedConsoleLine =
   | {
-      ok: true;
-      /** 交给 `spawn` 的可执行文件。 */
-      file: string;
       /** 交给 `spawn` 的参数数组（逐项，**不经过 shell 二次解析**）。 */
       args: Array<string>;
       /** 供界面回显与实际执行对齐的规范化命令行。 */
       display: string;
+      /** 交给 `spawn` 的可执行文件。 */
+      file: string;
+      ok: true;
     }
   | { ok: false; reason: string };
 

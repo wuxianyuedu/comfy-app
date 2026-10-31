@@ -35,12 +35,12 @@ const filmRepo = vi.hoisted(() => ({
 }));
 type ShotRow = { id: string; taskId: string | null };
 type CreatedShot = {
-  order: number;
-  shotId?: string | null;
-  params: Record<string, unknown>;
-  prompt: string;
   heading?: string | null;
   negative?: string | null;
+  order: number;
+  params: Record<string, unknown>;
+  prompt: string;
+  shotId?: string | null;
 };
 
 const shotRepo = vi.hoisted(() => ({
@@ -79,9 +79,9 @@ const createRunTaskMock = vi.hoisted(() =>
   vi.fn<
     (input: {
       userId: string;
-      workflowId: string;
       values: { seed?: number } & Record<string, unknown>;
-    }) => Promise<{ taskId: string; workflowName: string; taskType: string }>
+      workflowId: string;
+    }) => Promise<{ taskId: string; taskType: string; workflowName: string }>
   >(async () => ({ taskId: "task-1", workflowName: "wf", taskType: "T2V" })),
 );
 const synthFirstFrameMock = vi.hoisted(() =>

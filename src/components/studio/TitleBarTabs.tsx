@@ -62,10 +62,10 @@ function TitleBarTab({
   onActivate,
   onClose,
 }: {
-  tab: ShellTab;
   active: boolean;
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
+  tab: ShellTab;
 }) {
   return (
     /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 键等价物是下面那行 `{...simpleKeyHandler(["Space", "Enter"], …)}`（§16.2.4.57）—— 规则认不出属性展开。 */

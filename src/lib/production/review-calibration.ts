@@ -82,14 +82,14 @@ export function calibrateFromShots(shots: Array<unknown>): CalibrationReport {
   /** 有人评分的样本对（MAE 与判定一致率只在这上面算——两个均值要对齐才可比）。 */
   const pairs: Array<{
     ai: number;
+    aiPass: boolean;
     human: number;
     rating: number;
-    aiPass: boolean;
   }> = [];
   /** 维度 key → { ai 总分, ai 样本数, 人映射分累计, 人样本数 }。 */
   const dimAcc = new Map<
     string,
-    { aiSum: number; aiCount: number; humanSum: number; humanCount: number }
+    { aiCount: number; aiSum: number; humanCount: number; humanSum: number }
   >();
 
   for (const raw of shots) {

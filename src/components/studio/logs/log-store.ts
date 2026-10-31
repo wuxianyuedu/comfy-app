@@ -294,8 +294,8 @@ export const LOG_STORE_MAX = 5000;
  * 摘键是 O(被折叠条数)，与「重建整张表」的 O(时间线) 差一个量级。
  */
 function capTimeline(logs: Array<LogEntry>): {
-  logs: Array<LogEntry>;
   dropped: number;
+  logs: Array<LogEntry>;
 } {
   if (logs.length <= LOG_STORE_MAX) {
     return { logs, dropped: 0 };
@@ -849,8 +849,7 @@ export function selectShouldPinToLatest(page: number, autoScroll: boolean): bool
  * 含新行」当成已读，报出 0（用户读到的就是「翻页翻不动、提示不出现」）。
  */
 export function selectNewLogCount(state: {
-  /** 当前窗口之后还有多少条更新的日志。 */
-  unseenAfterView: number;
+  autoScroll: boolean;
   /**
    * 用户翻到这一页那一刻，窗口之后本来就有多少条（「已翻过去的历史」）。
    *
@@ -860,7 +859,8 @@ export function selectNewLogCount(state: {
    */
   baselineAfterView: number;
   page: number;
-  autoScroll: boolean;
+  /** 当前窗口之后还有多少条更新的日志。 */
+  unseenAfterView: number;
 }): number {
   if (!selectShouldPinToLatest(state.page, state.autoScroll)) {
     return 0;

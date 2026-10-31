@@ -54,14 +54,14 @@ const SIDEBAR_WIDTH_ICON = `${NAV_WIDTH_COLLAPSED_PX}px`;
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 type SidebarContextProps = {
-  state: "expanded" | "collapsed";
-  open: boolean;
-  setOpen: (open: boolean) => void;
-  openMobile: boolean;
-  setOpenMobile: (open: boolean) => void;
-  isMobile: boolean;
   /** 当前收起是不是「布局纪律替用户收的」，而不是用户自己点的。 */
   collapsedByAuto: boolean;
+  isMobile: boolean;
+  open: boolean;
+  openMobile: boolean;
+  setOpen: (open: boolean) => void;
+  setOpenMobile: (open: boolean) => void;
+  state: "expanded" | "collapsed";
   toggleSidebar: () => void;
 };
 
@@ -86,8 +86,8 @@ function SidebarProvider({
   ...props
 }: React.ComponentProps<"div"> & {
   defaultOpen?: boolean;
-  open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  open?: boolean;
 }) {
   const isMobile = useIsMobile();
   /* 窄窗判据与跨越次数（阈值那笔账在 ~/lib/layout-budget）。 */
@@ -199,9 +199,9 @@ function Sidebar({
   dir,
   ...props
 }: React.ComponentProps<"div"> & {
+  collapsible?: "offcanvas" | "icon" | "none";
   side?: "left" | "right";
   variant?: "sidebar" | "floating" | "inset";
-  collapsible?: "offcanvas" | "icon" | "none";
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
 
@@ -721,8 +721,8 @@ function SidebarMenuSubButton({
   ...props
 }: useRender.ComponentProps<"a"> &
   React.ComponentProps<"a"> & {
-    size?: "sm" | "md";
     isActive?: boolean;
+    size?: "sm" | "md";
   }) {
   return useRender({
     defaultTagName: "a",

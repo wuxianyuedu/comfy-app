@@ -23,7 +23,7 @@ import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
  新视频的唯一真实入口是创作台「视频」模式，那条路一直在）。本弹窗只读地看队列。
 */
 
-type StatusMeta = { icon: string; label: string; cls: string };
+type StatusMeta = { cls: string; icon: string; label: string };
 
 const STATUS_META: Record<"QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED", StatusMeta> =
   {

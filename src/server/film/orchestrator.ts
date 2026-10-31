@@ -95,9 +95,9 @@ const ShotSchema = z.object({
 
 async function expandScriptLLM(raw: string): Promise<
   Array<{
-    heading: string;
     action: string;
     dialogue: string;
+    heading: string;
     shotCount: number;
   }>
 > {
@@ -133,7 +133,7 @@ async function parseScriptToShots(
   stylePrompt?: string,
   styleNegative?: string,
 ): Promise<Array<FilmShotInput>> {
-  let scenes: Array<{ heading: string; action: string; shotCount: number }>;
+  let scenes: Array<{ action: string; heading: string; shotCount: number }>;
   try {
     const expanded = await expandScriptLLM(raw);
     scenes = expanded.map((expanded) => ({
@@ -183,20 +183,20 @@ async function parseScriptToShots(
 /** 落库一份成片 + 其镜头行。`createFilm`（剧本自解析）与 `createFilmFromProject`
  *  （读统一项目 Shot[]）共用的唯一落点 —— 逐镜 params 的折算只此一处（§12.12）。 */
 async function persistFilmWithShots(args: {
-  userId: string;
-  projectId?: string | null;
-  title: string;
-  script: string;
-  type: string;
-  styleSlug?: string | null;
-  sizeSpec: unknown;
+  bgmName?: string | null;
   fps: number;
   framesPerShot: number;
-  subtitleOn: boolean;
-  bgmName?: string | null;
-  videoWorkflowId: string;
   imageWorkflowId: string;
+  projectId?: string | null;
+  script: string;
   shotInputs: Array<FilmShotInput>;
+  sizeSpec: unknown;
+  styleSlug?: string | null;
+  subtitleOn: boolean;
+  title: string;
+  type: string;
+  userId: string;
+  videoWorkflowId: string;
 }): Promise<string> {
   const film = await filmRepository.create({
     userId: args.userId,
@@ -345,7 +345,7 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
 // 进 unmatched、用工作流图内 seed），运行期绝不改写工作流节点。
 async function generateVideoShot(
   userId: string,
-  shot: { prompt: string; negative?: string | null; params?: unknown },
+  shot: { negative?: string | null; params?: unknown; prompt: string },
 ): Promise<string> {
   const params = /* SAFETY: 类型断言已复核 */ (shot.params ?? {}) as Record<string, unknown>;
 
@@ -559,8 +559,8 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
       if (next === "SUCCEEDED") {
         const imgs =
           /* SAFETY: 类型断言已复核 */ (task.resultImages as Array<{
-            mediaType?: unknown;
             localPath?: string;
+            mediaType?: unknown;
           }> | null) ?? [];
 
         const vid = imgs.find((img) => img.mediaType === "video") ?? imgs[0];
@@ -626,8 +626,8 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
  * 用，调用方不据它做决策。
  */
 export async function resumeStalledFilms(): Promise<{
-  resumed: Array<string>;
   abandoned: Array<string>;
+  resumed: Array<string>;
 }> {
   /* 表还没建就整轮跳过，与回收器同一口径（`sweepOnce` 也判这一条）。哨兵表是
    * `task`，而首启是一次把整套 DDL 应用上去的 ⇒ `task` 在时 `filmProject` 也在。

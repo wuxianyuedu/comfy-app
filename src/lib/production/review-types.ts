@@ -320,7 +320,7 @@ export function recordScriptRevision(
 export function weakScoreEntries(
   verdict: ReviewVerdict,
   maxScore = 3,
-): Array<{ key: string; score: number; note: string }> {
+): Array<{ key: string; note: string; score: number }> {
   const scores = verdict.scores;
   if (!scores) {
     return [];

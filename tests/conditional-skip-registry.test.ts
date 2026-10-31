@@ -36,12 +36,12 @@ const TIERS = /* SAFETY: 类型断言已复核 */ ["env", "platform", "artifact"
 type Tier = (typeof TIERS)[number];
 
 type Registration = {
+  /** 该文件内这个守卫的站点数（别名按调用点计）。 */
+  count: number;
   /** 仓库相对路径。 */
   file: string;
   /** `skipIf` 括号里的守卫文本（已去空白）；无条件 skip 记 `"skip"`。 */
   guard: string;
-  /** 该文件内这个守卫的站点数（别名按调用点计）。 */
-  count: number;
   tier: Tier;
   why: string;
 };

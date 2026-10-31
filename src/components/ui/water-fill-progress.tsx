@@ -25,9 +25,9 @@ export function WaterFillProgress({
   progress,
   className = "",
 }: {
+  className?: string;
   /** 0..100. 超出范围会被钳制。 */
   progress: number;
-  className?: string;
 }) {
   const pct = clampPct(progress);
   return (
@@ -59,10 +59,7 @@ export function WaterFillProgress({
           viewBox="0 0 120 10"
           preserveAspectRatio="none"
         >
-          <path
-            d="M0 5 Q 15 0, 30 5 T 60 5 T 90 5 T 120 5 V 10 H 0 Z"
-            fill="rgba(24,24,34,0.94)"
-          />
+          <path d="M0 5 Q 15 0, 30 5 T 60 5 T 90 5 T 120 5 V 10 H 0 Z" fill="rgba(24,24,34,0.94)" />
         </svg>
       </div>
       {/* 百分比：永远居中（在整张图之上，无论水位多高都可见）。 */}

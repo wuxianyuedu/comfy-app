@@ -5,13 +5,13 @@ import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 
 /** Agent 对话中的消息类型（与服务端/浏览器共享）。 */
 export type AgentMessageLike =
-  | { role: "user"; content: string }
+  | { content: string; role: "user" }
   | {
-      role: "assistant";
       content: string;
-      tool_calls?: Array<{ id: string; name: string; arguments: string }>;
+      role: "assistant";
+      tool_calls?: Array<{ arguments: string; id: string; name: string }>;
     }
-  | { role: "tool"; tool_call_id: string; content: string };
+  | { content: string; role: "tool"; tool_call_id: string };
 
 /** 客户端 → 服务端的 Agent 请求体。 */
 export interface AgentChatRequest {
@@ -23,7 +23,7 @@ export interface AgentChatRequest {
 /** 服务端返回给客户端的 Agent 响应。 */
 export interface AgentChatResponse {
   reply?: string;
-  tool_calls?: Array<{ id: string; name: string; arguments: string }>;
+  tool_calls?: Array<{ arguments: string; id: string; name: string }>;
   done?: boolean;
   fallback_instruction?: Record<string, unknown>;
 }

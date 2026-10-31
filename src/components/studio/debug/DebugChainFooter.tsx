@@ -129,7 +129,7 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
   }, []);
 
   const pillClick = (
-    e: { stopPropagation: () => void; preventDefault: () => void },
+    e: { preventDefault: () => void; stopPropagation: () => void },
     module: RenderChainModule,
   ) => {
     e.stopPropagation();

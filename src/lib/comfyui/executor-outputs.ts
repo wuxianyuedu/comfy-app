@@ -18,11 +18,11 @@ export type CollectedOutputFile = {
 };
 
 export type CollectedOutputs = {
-  images: Array<CollectedOutputFile>;
-  videos: Array<CollectedOutputFile>;
   audios: Array<CollectedOutputFile>;
+  images: Array<CollectedOutputFile>;
   others: Array<CollectedOutputFile>;
   texts: Array<string>;
+  videos: Array<CollectedOutputFile>;
 };
 
 /**
@@ -108,27 +108,27 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
  * 都读它），保留它让下游零改动；要看全部采样器就读 `samplers`。
  */
 export type SamplerRuntime = {
-  nodeId: string;
-  classType: string;
-  seed?: number;
-  steps?: number;
   cfg?: number;
+  classType: string;
+  denoise?: number;
+  nodeId: string;
   sampler_name?: string;
   scheduler?: string;
-  denoise?: number;
+  seed?: number;
+  steps?: number;
 };
 
 export type RuntimeParams = {
-  seed?: number;
-  steps?: number;
   cfg?: number;
-  sampler_name?: string;
-  scheduler?: string;
   denoise?: number;
-  samplerNodeId?: string;
+  sampler_name?: string;
   samplerClassType?: string;
+  samplerNodeId?: string;
   /** graph 里全部采样节点（按出现顺序）；只有一个时也是长度 1 的数组。 */
   samplers?: Array<SamplerRuntime>;
+  scheduler?: string;
+  seed?: number;
+  steps?: number;
 };
 
 /** 采样节点类名判定：KSamplerAdvanced 用 noise_seed，KSampler / SamplerCustom 用 seed。 */

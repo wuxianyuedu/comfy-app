@@ -72,8 +72,8 @@ function CountColumn({
   tone,
 }: {
   label: string;
-  value: number;
   tone: "muted" | "warn" | "error";
+  value: number;
 }) {
   const color =
     value === 0
@@ -191,9 +191,9 @@ function OriginSelect({
   countsByOrigin,
   onChange,
 }: {
-  value: LogOriginFilter;
   countsByOrigin: Record<LogOriginFilter, LogLevelCounts>;
   onChange: (next: LogOriginFilter) => void;
+  value: LogOriginFilter;
 }) {
   return (
     <Select value={value} onValueChange={(next) => onChange(next ?? "all")}>

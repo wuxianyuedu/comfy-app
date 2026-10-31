@@ -108,8 +108,8 @@ function PortDot({
   color,
   top,
 }: {
-  side: "left" | "right";
   color: string;
+  side: "left" | "right";
   /** 距 wrapper 顶部 px（按 Ardot 实测绝对位置） */
   top: number;
 }) {

@@ -46,13 +46,13 @@ const MEGAPIXEL_OPTIONS = MEGAPIXEL_TIERS.map((tier) => ({
 
 /** 这一族 story 的 Args：只看**能序列化**的那部分（面板形态由代码给）。 */
 type StoryArgs = {
-  /** 触发器上折成一行的那句摘要（真机上是「16:9 / 2K」这种）。 */
-  summary: string;
-  /** 面板里画几段（比例一段、像素一段、倍数一段）。 */
-  sectionCount: 1 | 2 | 3;
   /** 面板宽窄两档：窄档要在画布节点里也放得下。 */
   align: "left" | "right";
   disabled?: boolean;
+  /** 面板里画几段（比例一段、像素一段、倍数一段）。 */
+  sectionCount: 1 | 2 | 3;
+  /** 触发器上折成一行的那句摘要（真机上是「16:9 / 2K」这种）。 */
+  summary: string;
 };
 
 /** 按真机的拼法把段拼出来（`DimensionControl` 的 `sections` 同形）。 */

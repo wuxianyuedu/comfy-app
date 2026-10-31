@@ -29,17 +29,17 @@ type CharacterEpisodeRef = RouterOutputs["series"]["characterEpisodes"][number];
 
 /** 角色可改字段（UI 编辑面）。params / portraits 由生产侧/导入携带，UI 不直编。 */
 export type CharacterPatch = Partial<{
-  name: string;
   ageGender: string;
   appearance: string;
   costume: string;
-  personality: string;
-  temperament: string;
-  styleTags: Array<string>;
-  skillSlug: string | undefined;
-  positivePrompt: string;
+  name: string;
   negativePrompt: string;
+  personality: string;
   portraitUrl: string | undefined;
+  positivePrompt: string;
+  skillSlug: string | undefined;
+  styleTags: Array<string>;
+  temperament: string;
 }>;
 
 export interface SeriesOrganizerController {

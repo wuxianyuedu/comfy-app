@@ -46,7 +46,7 @@ export interface WorkflowRunHandlers {
   onProgress: (taskId: string, pct: number, node?: TaskProgressNode) => void;
   onLog: (taskId: string, entry: TaskLogEntry) => void;
   onOutput: (taskId: string, output: SavedOutput) => void;
-  onSettled: (taskId: string, result: { ok: boolean; message?: string }) => void;
+  onSettled: (taskId: string, result: { message?: string; ok: boolean }) => void;
 }
 
 /**

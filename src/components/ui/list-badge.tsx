@@ -36,12 +36,7 @@ import { Badge } from "~/components/ui/badge";
  * 语义色一律走 token（规范 03 §3.6.2），调用处不写 `bg-emerald-500/12`
  * 这类字面量。
  */
-export type ListBadgeTone =
-  | "neutral"
-  | "success"
-  | "warning"
-  | "danger"
-  | "primary";
+export type ListBadgeTone = "neutral" | "success" | "warning" | "danger" | "primary";
 
 export function ListBadge({
   children,
@@ -50,12 +45,12 @@ export function ListBadge({
   className,
 }: {
   children: React.ReactNode;
-  /** 语义档；缺省中性（`bg-subtle` + `text-ink-faint`）。 */
-  tone?: ListBadgeTone;
+  className?: string;
   /** 悬停说明。文案通常比徽标本身长得多（「未配置：提示词口未落到端口」），
    *  这正是把长文案收进 tooltip、只留短标记的原因。 */
   title?: string;
-  className?: string;
+  /** 语义档；缺省中性（`bg-subtle` + `text-ink-faint`）。 */
+  tone?: ListBadgeTone;
 }) {
   return (
     <Badge

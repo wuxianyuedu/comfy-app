@@ -238,7 +238,7 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
 export async function scanLocalWorkflowRoots(
   rawPaths: Array<string>,
   opts: { recursive?: boolean } = {},
-): Promise<{ roots: Array<ScannedRoot>; allFiles: Array<LocalWorkflowFile> }> {
+): Promise<{ allFiles: Array<LocalWorkflowFile>; roots: Array<ScannedRoot> }> {
   const recursive = !!opts.recursive;
   const allFiles: Array<LocalWorkflowFile> = [];
   const trimmedPaths = rawPaths.map((raw) => raw.trim()).filter((trimmed) => trimmed.length > 0);
@@ -311,7 +311,7 @@ export interface LocalChecksumEntry {
  *  容量有上限：文件被删 / 改名后旧键会留在表里，不设界就是慢性泄漏。 */
 const CHECKSUM_CACHE_MAX = 512;
 
-type ChecksumMemo = { mtimeMs: number; size: number; checksum: string };
+type ChecksumMemo = { checksum: string; mtimeMs: number; size: number };
 
 declare global {
   var __localWorkflowChecksums_v1: Map<string, ChecksumMemo> | undefined;

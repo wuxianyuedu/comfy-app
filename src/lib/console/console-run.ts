@@ -42,29 +42,29 @@ import { MAX_OUTPUT_CHARS } from "./console-limits";
 /** 一条命令的执行事件（路由按顺序翻成 SSE 的 `data:` 行）。 */
 export type ConsoleEvent =
   | {
-      type: "start";
-      runId: string;
+      args: Array<string>;
       /** 回显的命令行（已规范化，可能与用户输入的空格不同）。 */
       command: string;
-      /** 实际可执行文件与参数（排障时「到底跑的是谁」的唯一答案）。 */
-      file: string;
-      args: Array<string>;
       /** 工作目录（项目根）。 */
       cwd: string;
+      /** 实际可执行文件与参数（排障时「到底跑的是谁」的唯一答案）。 */
+      file: string;
+      runId: string;
       startedAt: number;
+      type: "start";
     }
-  | { type: "out"; stream: "stdout" | "stderr"; text: string }
+  | { stream: "stdout" | "stderr"; text: string; type: "out" }
   | {
-      type: "exit";
       code: number | null;
-      signal: string | null;
+      durationMs: number;
       /** 是否被看门狗 / 用户主动取消掐掉（比 code 更能说明「为什么没跑完」）。 */
       killed: boolean;
+      signal: string | null;
       /** 被截断的说明；null = 输出完整。 */
       truncatedNote: string | null;
-      durationMs: number;
+      type: "exit";
     }
-  | { type: "error"; message: string };
+  | { message: string; type: "error" };
 
 /** 一次执行的收尾事实（供运行日志与界面共用）。 */
 export interface ConsoleRunResult {
@@ -88,7 +88,7 @@ export interface StartRunOptions {
 /** 控制台执行器的对外形状（单槽 + 取消）。 */
 export interface ConsoleRunner {
   /** 当前是否有命令在跑；忙时回「是谁、跑了多久」（界面据此禁用输入）。 */
-  busy: () => { runId: string; command: string; startedAt: number } | null;
+  busy: () => { command: string; runId: string; startedAt: number } | null;
   /** 起一条命令，逐事件推给 `onEvent`。返回收尾事实。 */
   run: (opts: StartRunOptions, onEvent: (event: ConsoleEvent) => void) => Promise<ConsoleRunResult>;
   /** 取消当前命令（杀整棵树）。没有在跑的命令时返回 false。 */
@@ -132,12 +132,12 @@ function startFailureMessage(
  */
 export function createConsoleRunner(): ConsoleRunner {
   let current: {
-    runId: string;
-    command: string;
-    startedAt: number;
     child: ReturnType<typeof spawn>;
+    command: string;
     /** 用户 / 看门狗是否已经判它「该死了」（用于 exit 事件里区分「失败」与「掐掉」）。 */
     killed: boolean;
+    runId: string;
+    startedAt: number;
   } | null = null;
 
   const busy = () =>

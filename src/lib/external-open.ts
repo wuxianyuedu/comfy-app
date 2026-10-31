@@ -65,10 +65,10 @@ export type FolderHelperState = "unknown" | "handled" | "missing";
  * 概念），改它们的代价大于在这里收一次。
  */
 export function toExternalResult(raw: {
-  ok?: boolean;
-  triggered?: boolean;
   detail?: string | null;
   error?: string | null;
+  ok?: boolean;
+  triggered?: boolean;
 }): ExternalOpenResult {
   const ok = raw.ok ?? raw.triggered ?? false;
   const detail =

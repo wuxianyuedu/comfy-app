@@ -127,10 +127,10 @@ function warmTree(overrides: Record<string, { birth?: number; mtime?: number }> 
  */
 function entryOf(
   over: {
-    cwd?: string;
-    gitBornMs?: number;
-    gitAgeS?: number;
     atMs?: number;
+    cwd?: string;
+    gitAgeS?: number;
+    gitBornMs?: number;
   } = {},
 ) {
   return {

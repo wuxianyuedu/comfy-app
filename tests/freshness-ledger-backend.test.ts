@@ -176,7 +176,7 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
   }
 
   /** 记账式 git：按脚本给的回执依次返回，并把每次的参数留下来。 */
-  function fakeGit(script: Array<{ status: number; stdout?: string; stderr?: string }>) {
+  function fakeGit(script: Array<{ status: number; stderr?: string; stdout?: string; }>) {
     const calls: Array<Array<string>> = [];
     const run = (args: Array<string>) => {
       const step = script[calls.length] ?? { status: 0 };

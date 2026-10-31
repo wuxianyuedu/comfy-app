@@ -259,9 +259,9 @@ export const taskRouter = createTRPCRouter({
       throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
     }
     const snap = /* SAFETY: 类型断言已复核 */ task.workflowSnapshot as {
-      workflow?: unknown;
       capturedAt?: string;
       source?: string;
+      workflow?: unknown;
     } | null;
     return {
       workflow: snap?.workflow ?? null,

@@ -161,7 +161,7 @@ function citedBaselineNames(line: string): Array<string> {
   return [...out];
 }
 
-type Finding = { file: string; line: number; baseline: string; text: string };
+type Finding = { baseline: string; file: string; line: number; text: string };
 
 /**
  * 判据本体：出现「已删基线 + 该行没有历史口径」。

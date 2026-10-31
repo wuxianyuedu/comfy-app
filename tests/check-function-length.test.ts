@@ -28,7 +28,7 @@ function writeFunction(
   rel: string,
   name: string,
   bodyLines: number,
-  opts: { async?: boolean; asConst?: boolean } = {},
+  opts: { asConst?: boolean; async?: boolean; } = {},
 ): string {
   const body = Array.from(
     { length: bodyLines },

@@ -19,7 +19,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const AUTOSTART_TIMEOUT_MS = 120_000;
 
 /** `ensureComfyUiReady` 的入参形状（路由传的是短窗口 timeoutMs + onLog）。 */
-type EnsureOptions = { timeoutMs: number; onLog: (msg: string) => void };
+type EnsureOptions = { onLog: (msg: string) => void; timeoutMs: number };
 
 const { requireRequestUser, probeComfyUi, ensureComfyUiReady, logger } = vi.hoisted(() => ({
   requireRequestUser: vi.fn<() => Promise<{ id: string } | null>>(),
@@ -121,9 +121,9 @@ describe("POST /api/comfy/ensure", () => {
     const res = await POST();
     expect(res.status).toBe(503);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      detail: string;
       ok: boolean;
       pending: boolean;
-      detail: string;
     };
     expect(body).toEqual({
       ok: false,

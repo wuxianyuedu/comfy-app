@@ -87,17 +87,17 @@ export interface ParamCardWire {
  *  才成立（`source.mode:<模式>`）。没有模式时不承认任何线 —— 落点全空，
  *  卡片如实显示成「未配置」。 */
 export function deriveLibraryParamCards(args: {
-  io: WorkflowIOMap | null | undefined;
-  paramMap: Record<string, unknown> | null | undefined;
-  mode: string | null | undefined;
-  /** 宿主表单把哪些端口交给了组合控件（卡片不再重复列；连线仍指向那块控件）。 */
-  groupedKeys?: ReadonlySet<string>;
   /** **该模式生效的契约口清单**（`modeContractEntries` 的 id；未改过的模式不用
    *  传 —— 不传即内置默认）。
    *
    *  卡片列必须与「模式契约」编辑器说同一份清单（用户报的就是两者的差集：
    *  画布按内置默认列出「时长」，而契约里那一口已被删掉）。 */
   contractIds?: ReadonlyArray<string>;
+  /** 宿主表单把哪些端口交给了组合控件（卡片不再重复列；连线仍指向那块控件）。 */
+  groupedKeys?: ReadonlySet<string>;
+  io: WorkflowIOMap | null | undefined;
+  mode: string | null | undefined;
+  paramMap: Record<string, unknown> | null | undefined;
 }): LibraryParamCards {
   const { io, paramMap, mode, groupedKeys, contractIds } = args;
   /* 卡片列 = 该模式统一对外暴露的参数（提示词 / 负向提示词 / 尺寸 / 首帧…），
@@ -192,8 +192,8 @@ export interface LibraryOutputCards {
 
 export function deriveLibraryOutputCards(args: {
   io: WorkflowIOMap | null | undefined;
-  paramMap?: Record<string, unknown> | null;
   mode?: string | null;
+  paramMap?: Record<string, unknown> | null;
 }): LibraryOutputCards {
   const { io, paramMap, mode } = args;
   /* 顺序与宿主卡片上的输出行**同一份**（`splitWorkflowIO` 里按作者拖出的
@@ -244,8 +244,8 @@ export function deriveLibraryOutputCards(args: {
 
 /** 输出侧的「恢复默认」是否可用（该模式下有任何输出口被改过）。 */
 export function hasManualLibraryOutput(args: {
-  paramMap?: Record<string, unknown> | null;
   mode?: string | null;
+  paramMap?: Record<string, unknown> | null;
 }): boolean {
   return hasManualOutputBinding(args.paramMap, args.mode);
 }

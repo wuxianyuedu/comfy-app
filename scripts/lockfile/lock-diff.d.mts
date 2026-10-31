@@ -54,7 +54,7 @@ export interface EntryDiff {
 
 export interface LockDiff {
   lockfileVersion: string;
-  duplicates: { old: Array<string>; new: Array<string> };
+  duplicates: { new: Array<string>; old: Array<string>; };
   settings: FlatDiff;
   overrides: FlatDiff;
   importers: Record<string, Record<string, GroupDiff>>;
@@ -64,8 +64,8 @@ export interface LockDiff {
 
 export function stripBundledSection(text: string): string;
 export function splitTopSections(text: string): {
-  sections: Map<string, Array<string>>;
   duplicates: Array<string>;
+  sections: Map<string, Array<string>>;
 };
 export function splitTopKeys(lines: Array<string>): Map<string, Array<string>>;
 export function flatEntries(lines: Array<string>): Map<string, string>;

@@ -30,6 +30,7 @@ export function TypeChip({
   children,
 }: {
   children?: React.ReactNode;
+  className?: string;
   /**
    * `xs` = 10px 字 + 最紧内距（1 处）；`sm` = 10px 字（4 处，缺省档）；
    * `md` = 12px 字（5 处），走 `text-xs`。
@@ -40,10 +41,9 @@ export function TypeChip({
    * 那一档）⇒ **这 5 处的行盒从 18px 收到 16px，是有意的变化，不是等价替换**。
    */
   size?: "xs" | "sm" | "md";
+  style?: CSSProperties;
   /** `none` = 不加任何颜色类，颜色全部由 `style` 决定。 */
   tone?: "neutral" | "none";
-  className?: string;
-  style?: CSSProperties;
 }) {
   return (
     <span

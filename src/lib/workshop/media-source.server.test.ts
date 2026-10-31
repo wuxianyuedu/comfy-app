@@ -142,7 +142,7 @@ describe("resolveMediaBytes —— 内联 data URL", () => {
  * 两支互斥的联合，`in` 收窄后抛值仍是 unknown —— 判据要钉的正是「上游拒绝出来的东西
  * 未必是 Error」，所以这里不许把它收窄成 Error。 */
 function stubFetch(
-  reply: { body?: BodyInit; status?: number; contentType?: string | null } | { throws: unknown },
+  reply: { body?: BodyInit; contentType?: string | null; status?: number } | { throws: unknown },
 ) {
   const spy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
     if ("throws" in reply) {

@@ -39,10 +39,10 @@ const reviewContent = vi.hoisted(() =>
       _k: string,
       _id: string,
     ): Promise<{
-      pass: boolean;
       issues: Array<string>;
-      suggestion: string;
+      pass: boolean;
       scoredAt: string;
+      suggestion: string;
     }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
   ),
 );
@@ -53,10 +53,10 @@ const reviewShotImage = vi.hoisted(() =>
       _p: string,
       _id: string,
     ): Promise<{
-      pass: boolean;
       issues: Array<string>;
-      suggestion: string;
+      pass: boolean;
       scoredAt: string;
+      suggestion: string;
     }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
   ),
 );
@@ -66,13 +66,13 @@ const reviewScript = vi.hoisted(() =>
       _u: string,
       _p: string,
     ): Promise<{
-      verdict: {
-        pass: boolean;
-        issues: Array<string>;
-        suggestion: string;
-        scoredAt: string;
-      };
       history: Array<unknown>;
+      verdict: {
+        issues: Array<string>;
+        pass: boolean;
+        scoredAt: string;
+        suggestion: string;
+      };
     }> => ({
       verdict: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
       history: [],
@@ -111,10 +111,10 @@ const PROJ = "proj_run";
 /** 建/改生产数据行：内容列 + progress + run 列（run 直接写库，模拟 start 之后的状态）。 */
 async function seed(
   content: Partial<{
-    scriptMarkdown: string;
     characters: Array<unknown>;
-    shots: Array<unknown>;
     rendered: boolean;
+    scriptMarkdown: string;
+    shots: Array<unknown>;
   }>,
   run: Partial<ProductionRun>,
 ) {
@@ -200,8 +200,8 @@ describe("advanceRunLoop", () => {
     const shots = /* SAFETY: 类型断言已复核 */ row!.shots as Array<{
       index: number;
       prompt: string;
-      status: string;
       rev: number;
+      status: string;
     }>;
     expect(shots).toHaveLength(2);
     expect(shots[0]).toMatchObject({

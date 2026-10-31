@@ -85,10 +85,10 @@ describe("useExternalAction", () => {
 
   it("同一批事件里连点两下只发起一次（状态提交晚一拍挡不住）", async () => {
     const report = vi.fn();
-    let resolve!: (v: { ok: boolean; detail: string }) => void;
+    let resolve!: (v: { detail: string; ok: boolean }) => void;
     const action = vi.fn(
       () =>
-        new Promise<{ ok: boolean; detail: string }>((r) => {
+        new Promise<{ detail: string; ok: boolean }>((r) => {
           resolve = r;
         }),
     );
@@ -120,13 +120,13 @@ describe("useExternalAction", () => {
   });
 
   it("动作进行中 busy 为 true（界面据此显示「打开中…」）", async () => {
-    let resolve!: (v: { ok: boolean; detail: string }) => void;
+    let resolve!: (v: { detail: string; ok: boolean }) => void;
     const { result } = renderHook(() => useExternalAction({ target: "browser", report: vi.fn() }));
     let p!: Promise<void>;
     act(() => {
       p = result.current.run(
         () =>
-          new Promise<{ ok: boolean; detail: string }>((r) => {
+          new Promise<{ detail: string; ok: boolean }>((r) => {
             resolve = r;
           }),
       );

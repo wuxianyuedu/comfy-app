@@ -151,12 +151,12 @@ export const POSIX_NICE_INCREMENT = 10;
  * 两格，也就不会有人以为它们互斥。
  */
 export function cpuLimitCommands(input: {
-  mode: CpuLimitMode;
-  platform: NodeJS.Platform;
-  pid: number;
   /** 本机逻辑核数（只有 `throttle` 档用得上）。 */
   cpuCount: number;
-}): { priority: CpuLimitCommand | null; affinity: CpuLimitCommand | null } {
+  mode: CpuLimitMode;
+  pid: number;
+  platform: NodeJS.Platform;
+}): { affinity: CpuLimitCommand | null; priority: CpuLimitCommand | null } {
   const { mode, platform, pid } = input;
   if (mode === "off") {
     return { priority: null, affinity: null };

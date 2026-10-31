@@ -41,11 +41,11 @@ export type TaskRepoForReaper = Pick<
 >;
 
 export type ReaperDeps = {
-  taskRepo: TaskRepoForReaper;
   /** 本进程扫哪一归属片（P3 §5 ADR §6 的灰度互斥）：Next 侧缺省 `'inline'`
    *  （NULL 归 inline，与全 NULL 的现存行集等价、零行为变化）；executor host
    *  boot 时注入 `'host'`，只收自己那份孤儿。 */
   owner: TaskClaimMode;
+  taskRepo: TaskRepoForReaper;
 };
 let depsOverride: Partial<ReaperDeps> = {};
 
@@ -247,8 +247,8 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
       return null;
     }
     const qd = /* SAFETY: 类型断言已复核 */ (await q.json()) as {
-      queue_running?: Array<{ prompt_id?: string }>;
       queue_pending?: Array<{ prompt_id?: string }>;
+      queue_running?: Array<{ prompt_id?: string }>;
     } | null;
     const all = [...(qd?.queue_running ?? []), ...(qd?.queue_pending ?? [])];
     /* 队列非空 → 本应用（MAX_CONCURRENCY=1）必有任务在跑。raw 路径的
@@ -486,8 +486,8 @@ export async function reapStaleRunningTasks(): Promise<void> {
             if (entry) {
               const status = /* SAFETY: 类型断言已复核 */ entry.status as
                 | {
-                    executed?: unknown;
                     errored?: unknown;
+                    executed?: unknown;
                     messages?: unknown;
                   }
                 | undefined;
@@ -514,8 +514,8 @@ export async function reapStaleRunningTasks(): Promise<void> {
                 });
                 if (q.ok) {
                   const qd = /* SAFETY: 类型断言已复核 */ (await q.json()) as {
-                    queue_running?: Array<{ prompt_id?: string }>;
                     queue_pending?: Array<{ prompt_id?: string }>;
+                    queue_running?: Array<{ prompt_id?: string }>;
                   } | null;
                   const all = [...(qd?.queue_running ?? []), ...(qd?.queue_pending ?? [])];
                   inQueue = all.some((all) => all?.prompt_id === t.promptId);

@@ -40,7 +40,7 @@ interface Props {
   scriptMarkdown?: string;
   /** 提取会话（busy/progress/日志）已收归工坊 controller，经 props 注入；
    * 未注入（遗留/独立使用场景）时退化为本组件内的局部会话。 */
-  extract?: { session: ExtractSession; actions: ExtractSessionActions };
+  extract?: { actions: ExtractSessionActions; session: ExtractSession };
   /** 定妆照会话与生成通道配置（同样收归 controller，经 props 注入）。
    * 未注入时不渲染定妆照区块，遗留/独立使用场景不受影响。 */
   portrait?: CharacterPortraitContext;
@@ -410,9 +410,9 @@ function Field({
   placeholder,
 }: {
   label: string;
-  value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  value: string;
 }) {
   return (
     <FormField label={label} labelClassName="text-muted-foreground mb-1 text-xs">

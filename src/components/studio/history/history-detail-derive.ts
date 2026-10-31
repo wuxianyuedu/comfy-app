@@ -182,7 +182,7 @@ export interface WorkflowParamRow {
  * 如实显示 pin 名。
  */
 export function resolveParamLabel(
-  input: { nodeId?: string; name: string },
+  input: { name: string; nodeId?: string },
   io: WorkflowIOMap | null | undefined,
 ): string {
   const entry = findIoEntry(io, input.nodeId, input.name);
@@ -225,14 +225,14 @@ export function deriveWorkflowParams(
   detail: TaskDetail | null,
   io: WorkflowIOMap | null | undefined,
 ): {
+  hasAny: boolean;
   rows: Array<WorkflowParamRow>;
   topLevelEntries: Array<[string, unknown]>;
-  hasAny: boolean;
 } {
   const params = paramsOf(detail);
   const rows = workflowInputsOf<{
-    nodeId?: string;
     name: string;
+    nodeId?: string;
     value: unknown;
   }>(detail).map((input, index) => ({
     id: `${input.nodeId ?? "?"}:${input.name}:${index}`,

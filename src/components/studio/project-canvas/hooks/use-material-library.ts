@@ -43,7 +43,7 @@ export interface MaterialLibraryController {
   /** 展示条目视图的条件：搜索中，或已进入某分类。 */
   showItems: boolean;
   /** 面包屑路径段，每段可点击返回该级。 */
-  breadcrumbSegments: Array<{ label: string; key: string | null }>;
+  breadcrumbSegments: Array<{ key: string | null; label: string }>;
   setScope: (scope: MaterialScope) => void;
   setSearch: (value: string) => void;
   enterFolder: (folder: string | null) => void;
@@ -189,7 +189,7 @@ export function useMaterialLibrary({
   const searching = normalizeNeedle(search).length > 0;
   const showItems = searching || folder !== null;
 
-  const breadcrumbSegments: Array<{ label: string; key: string | null }> = searching
+  const breadcrumbSegments: Array<{ key: string | null; label: string }> = searching
     ? [{ label: `搜索结果 · ${items.length}`, key: null }]
     : folder
       ? [

@@ -29,11 +29,11 @@ import { sleep } from "~/lib/with-timeout";
  */
 export type ComfyHistoryEntry = {
   outputs?: Record<string, unknown>;
-  status?: {
-    status_str?: string;
-    messages?: Array<unknown>;
-  };
   prompt?: unknown;
+  status?: {
+    messages?: Array<unknown>;
+    status_str?: string;
+  };
 };
 
 /** 轮询 history —— ComfyUI 是「先广播完成、后写 history」，直接读会扑空。

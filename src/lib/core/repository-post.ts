@@ -11,15 +11,11 @@ import { firstRowRequired } from "./repository-row";
 
 export class PostRepository {
   async getLatest(): Promise<Post | null> {
-    const rows = await db
-      .select()
-      .from(post)
-      .orderBy(desc(post.createdAt))
-      .limit(1);
+    const rows = await db.select().from(post).orderBy(desc(post.createdAt)).limit(1);
     return rows[0] ?? null;
   }
 
-  async create(input: { name: string; createdById: string }): Promise<Post> {
+  async create(input: { createdById: string; name: string }): Promise<Post> {
     const rows = await db.insert(post).values(input).returning();
     return firstRowRequired(rows, "动态记录插入");
   }

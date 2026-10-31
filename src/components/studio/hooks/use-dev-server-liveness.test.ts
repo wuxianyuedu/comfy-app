@@ -45,9 +45,9 @@ function stubFetch({
   record = EXIT_RECORD,
 }: {
   bootId?: string;
-  runId?: string | null;
   currentRunId?: string | null;
   record?: unknown;
+  runId?: string | null;
 } = {}) {
   const calls = { serverId: 0, lastExit: 0 };
   vi.stubGlobal(

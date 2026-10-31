@@ -41,19 +41,19 @@ export function ShotRow({
   onRemove,
   onGenerate,
 }: {
-  shot: Shot;
   characters: Array<Character>;
-  styles: Array<StyleRef>;
-  progressByShot?: ShotProgress;
   generating: boolean;
+  onGenerate: (shot: Shot) => void;
+  onPolish?: () => void;
+  onRemove: (id: string) => void;
+  onUpdate: (id: string, patch: Partial<Shot>) => void;
   /** 该镜头的 AI 提示词润色进行中 */
   polishBusy?: boolean;
   /** 该镜头润色失败的文案（错误挂在**这一条**上，规范 16 §16.2.4.33）。 */
   polishError?: string | null;
-  onPolish?: () => void;
-  onUpdate: (id: string, patch: Partial<Shot>) => void;
-  onRemove: (id: string) => void;
-  onGenerate: (shot: Shot) => void;
+  progressByShot?: ShotProgress;
+  shot: Shot;
+  styles: Array<StyleRef>;
 }) {
   const linkedChars = characters.filter((character) => shot.characterIds.includes(character.id));
   /* 本镜头的实时生成进度（ComfyUI 当前节点 + 百分比）。 */

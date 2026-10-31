@@ -44,13 +44,13 @@ export const DRIZZLE_STUDIO_DEFAULT_PORT = 4983;
 export const DRIZZLE_STUDIO_HOST = "https://local.drizzle.studio";
 
 export type DrizzleStudioStatus = {
-  up: boolean;
+  pid?: number;
   port: number;
   starting: boolean;
-  pid?: number;
+  up: boolean;
 };
 
-export type EnsureResult = { ok: boolean; port: number; detail: string };
+export type EnsureResult = { detail: string; ok: boolean; port: number };
 
 type LifecycleGlobal = {
   child?: ReturnType<typeof spawn>;
@@ -153,9 +153,9 @@ function appendRuntimeLog(line: string): void {
 /** 确保 studio 本地端口就绪：可达则直接返回；否则按解析出的 drizzle-kit 拉起。 */
 export async function ensureDrizzleStudioUp(
   opts: {
+    onLog?: (msg: string) => void;
     port?: number;
     timeoutMs?: number;
-    onLog?: (msg: string) => void;
   } = {},
 ): Promise<EnsureResult> {
   const port = opts.port ?? DRIZZLE_STUDIO_DEFAULT_PORT;
@@ -275,7 +275,7 @@ export async function ensureDrizzleStudioUp(
  */
 export async function stopDrizzleStudio(
   port = DRIZZLE_STUDIO_DEFAULT_PORT,
-): Promise<{ ok: boolean; detail: string }> {
+): Promise<{ detail: string; ok: boolean }> {
   const child = st.child;
   const pid = child?.pid;
   const stillUp = await probeDrizzleStudio(port);
@@ -319,7 +319,7 @@ export async function stopDrizzleStudio(
  */
 export async function openDrizzleStudio(
   port = DRIZZLE_STUDIO_DEFAULT_PORT,
-): Promise<{ ok: boolean; detail: string }> {
+): Promise<{ detail: string; ok: boolean }> {
   if (!(await probeDrizzleStudio(port))) {
     return {
       ok: false,

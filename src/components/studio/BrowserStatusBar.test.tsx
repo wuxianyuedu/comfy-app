@@ -56,11 +56,7 @@ vi.mock("./hooks/use-comfy-queue", async (importOriginal) => {
 // 状态栏需要 LogProvider 上下文；这里只关心指标项，换成透传壳。
 vi.mock("./logs/LogProvider", () => ({
   useLogPanel: <T,>(
-    selector: (state: {
-      isOpen: boolean;
-      counts: { error: number };
-      toggleOpen: () => void;
-    }) => T,
+    selector: (state: { counts: { error: number }; isOpen: boolean; toggleOpen: () => void }) => T,
   ) => selector({ isOpen: false, counts: { error: 0 }, toggleOpen: noop }),
 }));
 // 应用服务那一格的 controller 换成桩：判据本身在 ~/lib/dev-server-status
@@ -72,16 +68,13 @@ vi.mock("./hooks/use-dev-server-status", () => ({
 // 「断开 / 启动」记进消息中心那条接线也换桩：它会真的去打
 // `/api/dev/last-exit`，而这份用例关心的是状态栏那一格的渲染（那个 hook 有
 // 自己的用例，见 message-center/hooks/use-app-service-message-log.test.ts）。
-vi.mock(
-  "~/components/message-center/hooks/use-app-service-message-log",
-  () => ({
-    /* 桩函数带一句说明而不是空函数体（`no-empty-function`）：空桩看不出「这里是
-     * 有意不做」，将来若有人忘了换桩，那条静默的网络调用更难查。 */
-    useAppServiceMessageLog: () => {
-      /* 消息记录不在这份用例的断言面里（它有独立用例） */
-    },
-  }),
-);
+vi.mock("~/components/message-center/hooks/use-app-service-message-log", () => ({
+  /* 桩函数带一句说明而不是空函数体（`no-empty-function`）：空桩看不出「这里是
+   * 有意不做」，将来若有人忘了换桩，那条静默的网络调用更难查。 */
+  useAppServiceMessageLog: () => {
+    /* 消息记录不在这份用例的断言面里（它有独立用例） */
+  },
+}));
 vi.mock("next/navigation", () => ({ usePathname: () => "/workspace" }));
 
 function noop() {
@@ -95,9 +88,7 @@ afterEach(() => {
 
 const GIB = 1024 * 1024 * 1024;
 
-function viewModel(
-  over: Partial<ComfyStatusViewModel> = {},
-): ComfyStatusViewModel {
+function viewModel(over: Partial<ComfyStatusViewModel> = {}): ComfyStatusViewModel {
   const online = over.online ?? true;
   return {
     stats: null,
@@ -112,9 +103,7 @@ function viewModel(
   };
 }
 
-function devServer(
-  over: Partial<DevServerStatusViewModel> = {},
-): DevServerStatusViewModel {
+function devServer(over: Partial<DevServerStatusViewModel> = {}): DevServerStatusViewModel {
   return {
     state: "online",
     label: "应用服务运行中",
@@ -156,9 +145,7 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
   });
 
   it("双口径同时可用：nvidia-smi 与 ComfyUI 两项并列且有可读标签", () => {
-    renderBar(
-      viewModel({ smiVram: { used: 3 * GIB, total: 12 * GIB, pct: 25 } }),
-    );
+    renderBar(viewModel({ smiVram: { used: 3 * GIB, total: 12 * GIB, pct: 25 } }));
 
     expect(screen.getByTitle(/nvidia-smi 物理专用显存/)).toBeInTheDocument();
     expect(screen.getByText("显存")).toBeInTheDocument();
@@ -179,9 +166,7 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
 
     expect(screen.queryByText("显存·ComfyUI")).toBeNull();
     expect(screen.queryByText("内存")).toBeNull();
-    expect(
-      screen.getByText("ComfyUI 未运行，显存/内存暂不可用"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("ComfyUI 未运行，显存/内存暂不可用")).toBeInTheDocument();
     // 「显存/内存不可用」已经等于「ComfyUI 没启动」，不再重复一格的连接态。
     expect(screen.queryByLabelText(/ComfyUI 未连接/)).toBeNull();
   });
@@ -234,8 +219,7 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
       devServer({
         state: "offline",
         label: "应用服务已断开",
-        title:
-          "本地服务自身退出了。服务被 SIGKILL 结束。看 log/nextjs/ 下最新一份输出。",
+        title: "本地服务自身退出了。服务被 SIGKILL 结束。看 log/nextjs/ 下最新一份输出。",
         exitNotice: {
           why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
           detail:

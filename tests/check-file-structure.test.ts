@@ -96,8 +96,8 @@ function runWith(args: Array<string>): { code: number; output: string } {
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: typeof e.status === "number" ? e.status : 1,
@@ -1291,18 +1291,18 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
   ];
 
   const splashWindow = (): {
+    decorations?: boolean;
+    height: number;
     label?: string;
     width: number;
-    height: number;
-    decorations?: boolean;
   } => {
     const conf = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(CONF, "utf8")) as {
       app: {
         windows: Array<{
+          decorations?: boolean;
+          height: number;
           label?: string;
           width: number;
-          height: number;
-          decorations?: boolean;
         }>;
       };
     };

@@ -114,8 +114,8 @@ export interface BoundaryLinkInfo {
  * 干净的做法是把边界 **pin**（definitions.subgraphs[u].inputs / .outputs）
  * 当作一等实体，见下面的 `boundaryPins`。 */
 export function parseSubgraphLinks(sub: RawSubgraphDef): {
-  linkById: Record<number, SubgraphLinkEntry>;
   boundaryLinkInfoById: Record<number, BoundaryLinkInfo>;
+  linkById: Record<number, SubgraphLinkEntry>;
 } {
   const linkById: Record<number, SubgraphLinkEntry> = {};
   const boundaryLinkInfoById: Record<number, BoundaryLinkInfo> = {};
@@ -221,8 +221,8 @@ export function parseSubgraphSlots(
   boundarySlotsByNodeId?: Record<string, Array<number>>,
 ): {
   inputNameByNodeSlot: Record<string, Array<string>>;
-  outputNameByNodeSlot: Record<string, Array<string>>;
   inputWidgetValueByNodeSlot: Record<string, Array<unknown>>;
+  outputNameByNodeSlot: Record<string, Array<string>>;
 } {
   const inputNameByNodeSlot: Record<string, Array<string>> = {};
   const outputNameByNodeSlot: Record<string, Array<string>> = {};

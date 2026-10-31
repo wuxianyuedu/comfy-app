@@ -60,27 +60,12 @@ export function WirePortRows({
   onPortDragStart,
   onPortDragEnd,
 }: {
-  wireInputs: Array<WorkflowIOEntry & { ioKey: string; control: ControlKind }>;
-  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
-  values: Record<string, unknown>;
-  set: (ioKey: string, v: unknown) => void;
-  pickFile: (ioKey: string) => void;
-  uploading: boolean;
-  uploadTarget: string | null;
-  /** 内联渲染在类 seed 的数值行上，好让
-   * 用户不离开画布节点就能切 control_after_generate（固定值 / 递增值 / 递减值 / 随机值）。
-   * 可选 —— 非画布调用方可以
-   * 两个都不传。 */
-  seedModes?: Record<string, string>;
-  onSeedModeChange?: (ioKey: string, mode: string) => void;
-  /** 内部 OutputRow 守卫。 false 时不渲染 outputs 段。 */
-  showOutputs?: boolean;
   /** 见 DynamicWorkflowForm。传了就每行端口
    * 都可拖；不传则行渲染时
    * 不带拖拽提示。 */
   draggingKey?: string | null;
   dragOverKey?: string | null;
-  onReorder?: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
+  onPortDragEnd?: () => void;
   /** 回调，好让父级在被拖的是
    * 端口行时同步它的`draggingKey` 状态。镜像
    * widget 行用的契约（DynamicWorkflowForm 自己的
@@ -88,7 +73,22 @@ export function WirePortRows({
    * 完成`drop` /`reorder`，只是丢掉活跃行的
    * 高亮。 */
   onPortDragStart?: (ioKey: string) => void;
-  onPortDragEnd?: () => void;
+  onReorder?: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
+  onSeedModeChange?: (ioKey: string, mode: string) => void;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  pickFile: (ioKey: string) => void;
+  /** 内联渲染在类 seed 的数值行上，好让
+   * 用户不离开画布节点就能切 control_after_generate（固定值 / 递增值 / 递减值 / 随机值）。
+   * 可选 —— 非画布调用方可以
+   * 两个都不传。 */
+  seedModes?: Record<string, string>;
+  set: (ioKey: string, v: unknown) => void;
+  /** 内部 OutputRow 守卫。 false 时不渲染 outputs 段。 */
+  showOutputs?: boolean;
+  uploading: boolean;
+  uploadTarget: string | null;
+  values: Record<string, unknown>;
+  wireInputs: Array<WorkflowIOEntry & { control: ControlKind; ioKey: string }>;
 }) {
   /* 行级内联处理器 —— 每次渲染都重建，因为它们很小，
    * 且每轮渲染重绑闭包能让`draggingKey` 保持

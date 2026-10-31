@@ -25,8 +25,8 @@ export type AuditEvent =
 export async function audit(
   event: AuditEvent,
   ctx: {
-    session: { user?: { id: string } } | null;
     headers: Headers;
+    session: { user?: { id: string } } | null;
   },
   meta: Record<string, unknown> = {},
 ): Promise<void> {

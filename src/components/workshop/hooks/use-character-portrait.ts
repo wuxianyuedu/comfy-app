@@ -125,9 +125,9 @@ function initialSession(): PortraitSession {
 }
 
 export function useCharacterPortrait(opts: {
-  setCharacters: React.Dispatch<React.SetStateAction<Array<Character>>>;
   /** 工坊项目 id：导入的定妆照落到素材库的本项目目录 */
   projectId: string;
+  setCharacters: React.Dispatch<React.SetStateAction<Array<Character>>>;
 }): [PortraitSession, PortraitSessionActions] {
   const { setCharacters, projectId } = opts;
   const [session, setSession] = React.useState<PortraitSession>(initialSession);

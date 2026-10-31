@@ -39,7 +39,7 @@ import { useHotkey } from "~/components/ui/use-hotkey";
  * 于是「加了一档分档、忘了配图标与色调」不会拖到运行期才显形（此前这里是
  * `Record<string, …>` + 运行时 `?? KIND_META.info!` 兜底，配色表漏一档就静默
  * 退化成 info 那一档）。 */
-const KIND_META: Record<MessageKind, { icon: typeof Bell; tint: string; ring: string }> = {
+const KIND_META: Record<MessageKind, { icon: typeof Bell; ring: string; tint: string }> = {
   update: {
     icon: RefreshCw,
     tint: "text-primary-strong bg-primary/15",

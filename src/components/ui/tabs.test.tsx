@@ -32,8 +32,8 @@ function Demo({
 }: {
   initialValue?: string;
   onValueChange?: (value: string) => void;
-  variant?: "default" | "line";
   orientation?: "horizontal" | "vertical";
+  variant?: "default" | "line";
 }) {
   return (
     <Tabs defaultValue={initialValue} onValueChange={onValueChange} orientation={orientation}>

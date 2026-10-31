@@ -84,8 +84,8 @@ function Harness({
   elementShown,
   onController,
 }: {
-  onClick?: () => void;
   elementShown: boolean;
+  onClick?: () => void;
   onController: (c: DraggablePositionController<HTMLButtonElement>) => void;
 }) {
   const controller = useDraggablePosition<HTMLButtonElement>({
@@ -114,9 +114,9 @@ function Harness({
 }
 
 /** 渲染被测组件；`controller()` 始终拿到最新一份 controller。 */
-function setup(options: { onClick?: () => void; elementShown?: boolean } = {}): {
-  controller: () => DraggablePositionController<HTMLButtonElement>;
+function setup(options: { elementShown?: boolean; onClick?: () => void } = {}): {
   attach: (shown: boolean) => void;
+  controller: () => DraggablePositionController<HTMLButtonElement>;
 } {
   let latest: DraggablePositionController<HTMLButtonElement> | null = null;
   const onController = (c: DraggablePositionController<HTMLButtonElement>) => {
@@ -191,8 +191,8 @@ describe("useDraggablePosition", () => {
     drag(first.controller().handleProps, { x: 900, y: 700 }, { x: 700, y: 600 });
     await expect.poll(() => window.localStorage.getItem(KEY)).not.toBeNull();
     const saved = /* SAFETY: 类型断言已复核 */ JSON.parse(window.localStorage.getItem(KEY)!) as {
-      right: number;
       bottom: number;
+      right: number;
     };
     expect(saved.right).toBeGreaterThan(DEFAULT.right);
     expect(saved.bottom).toBeGreaterThan(DEFAULT.bottom);

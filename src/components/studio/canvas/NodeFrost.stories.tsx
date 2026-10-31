@@ -49,7 +49,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** 节点卡片的摆法（`relative` + `overflow-hidden` 是毛玻璃能被裁回边界的前提）。 */
-function FrostCard({ zoom, nodeMode, label }: { zoom: number; nodeMode: number; label: string }) {
+function FrostCard({ zoom, nodeMode, label }: { label: string; nodeMode: number; zoom: number }) {
   const palette = computeNodePalette(
     /* SAFETY: 类型断言已复核 */ { mode: nodeMode } as Parameters<typeof computeNodePalette>[0],
     { color: ROLE_COLOR },

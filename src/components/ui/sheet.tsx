@@ -47,8 +47,8 @@ function SheetContent({
   ...props
 }: SheetPrimitive.Popup.Props & {
   panelClassName?: string;
-  side?: "top" | "right" | "bottom" | "left";
   showCloseButton?: boolean;
+  side?: "top" | "right" | "bottom" | "left";
 }) {
   return (
     /* Base UI 的 `Dialog.Popup` **必须有 `Dialog.Portal` 祖先**，这一点与 Radix
@@ -73,13 +73,7 @@ function SheetContent({
         {showCloseButton && (
           <SheetPrimitive.Close
             data-slot="sheet-close"
-            render={
-              <Button
-                variant="ghost"
-                className="absolute top-3 right-3"
-                size="icon-sm"
-              />
-            }
+            render={<Button variant="ghost" className="absolute top-3 right-3" size="icon-sm" />}
           >
             <XIcon />
             <span className="sr-only">Close</span>
@@ -114,19 +108,13 @@ function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn(
-        "font-heading text-foreground text-base font-medium",
-        className,
-      )}
+      className={cn("font-heading text-foreground text-base font-medium", className)}
       {...props}
     />
   );
 }
 
-function SheetDescription({
-  className,
-  ...props
-}: SheetPrimitive.Description.Props) {
+function SheetDescription({ className, ...props }: SheetPrimitive.Description.Props) {
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"

@@ -48,16 +48,16 @@ function channelProvider(channel: ExtractChannel): "local" | "remote" {
 }
 
 export function useStoryboardExtractFlow(input: {
-  shots: Array<Shot>;
-  scenes: Array<Scene>;
   characters: Array<Character>;
-  styles: Array<StyleRef>;
-  onShotsChange: (s: Array<Shot>) => void;
-  onCharactersChange?: (c: Array<Character>) => void;
-  scriptMarkdown?: string;
-  extract?: { session: ExtractSession; actions: ExtractSessionActions };
   config: LLMConfigView | null;
+  extract?: { actions: ExtractSessionActions; session: ExtractSession };
+  onCharactersChange?: (c: Array<Character>) => void;
+  onShotsChange: (s: Array<Shot>) => void;
   openSettings: () => void;
+  scenes: Array<Scene>;
+  scriptMarkdown?: string;
+  shots: Array<Shot>;
+  styles: Array<StyleRef>;
 }) {
   const {
     shots,

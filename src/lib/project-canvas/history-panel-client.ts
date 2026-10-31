@@ -47,9 +47,9 @@ function parseHistoryRows(raw: unknown): Array<HistoryTaskRow> {
 }
 
 export type HistoryListParams = {
-  take?: number;
-  projectId?: string;
   media?: "image" | "video" | "audio";
+  projectId?: string;
+  take?: number;
 };
 
 /** 拉取任务列表。响应行的 mediaType 由服务端 inferMediaType 给出，

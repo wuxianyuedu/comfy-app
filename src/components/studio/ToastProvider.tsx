@@ -48,7 +48,7 @@ export function useToast(): ToastContextValue {
   return ctx;
 }
 
-const KIND_STYLE: Record<ToastKind, { ring: string; icon: string; iconColor: string }> = {
+const KIND_STYLE: Record<ToastKind, { icon: string; iconColor: string; ring: string }> = {
   success: {
     ring: "border-success-strong/30",
     icon: "check",

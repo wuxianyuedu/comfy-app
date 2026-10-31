@@ -63,22 +63,17 @@ export function StatusBadge({
   dot = true,
   className,
 }: {
-  status: string;
-  /** 显示文案，缺省直接用 status */
-  label?: string;
+  className?: string;
   /** 是否渲染状态圆点（叠在媒体上的角标传 false） */
   dot?: boolean;
-  className?: string;
+  /** 显示文案，缺省直接用 status */
+  label?: string;
+  status: string;
 }) {
   const tone: StatusTone = STATUS_TONE[status.toUpperCase()] ?? "neutral";
   return (
     <Badge tone={tone} className={className}>
-      {dot && (
-        <span
-          className="size-1.5 shrink-0 rounded-full bg-current opacity-80"
-          aria-hidden
-        />
-      )}
+      {dot && <span className="size-1.5 shrink-0 rounded-full bg-current opacity-80" aria-hidden />}
       {label ?? status}
     </Badge>
   );

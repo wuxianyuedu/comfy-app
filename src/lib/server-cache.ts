@@ -12,7 +12,7 @@
  *   因此按 TTL 失效是安全的。
  */
 
-type Entry<T> = { value: T; expiresAt: number };
+type Entry<T> = { expiresAt: number; value: T };
 
 interface CacheStore {
   map: Map<string, Entry<unknown>>;

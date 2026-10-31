@@ -68,16 +68,16 @@ export function MaterialLibraryContent({
   c: MaterialLibraryController;
   /** 显示密度（网格/列表）：纯视觉偏好，由父组件持有。 */
   display: "grid" | "list";
-  onUse?: (item: MaterialItem) => void;
-  onOpenUploadPicker: () => void;
+  /** 分类（文件夹）网格形态下的列数，同上。 */
+  folderColsClass?: string;
   /**
    * 网格形态下的列数。**默认值是画布抽屉（360px 宽）的口径**——本组件因此
    * 在窄栏与整页两种容器里都能用，而条目 / 骨架 / 空态四态仍只有一份实现。
    * 传断点类（如 `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`）即可按容器拉宽。
    */
   gridColsClass?: string;
-  /** 分类（文件夹）网格形态下的列数，同上。 */
-  folderColsClass?: string;
+  onOpenUploadPicker: () => void;
+  onUse?: (item: MaterialItem) => void;
 }) {
   const { folders, items, loading, showItems, searching, enterFolder, remove } = c;
 

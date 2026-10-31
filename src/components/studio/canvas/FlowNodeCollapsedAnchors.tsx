@@ -28,9 +28,9 @@ export function CollapsedAnchorCylinder({
   count,
   anchor,
 }: {
-  side: "left" | "right";
-  count: number;
   anchor: AnchorCylinderTheme;
+  count: number;
+  side: "left" | "right";
 }) {
   return (
     <div
@@ -59,11 +59,11 @@ export function CollapsedPortHandles({
   items,
 }: {
   items: Array<{
+    color: string;
+    id: string;
     key: string;
     side: "left" | "right";
-    id: string;
     title: string;
-    color: string;
   }>;
 }) {
   const total = items.length;

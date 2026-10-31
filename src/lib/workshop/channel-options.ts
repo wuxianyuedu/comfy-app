@@ -29,7 +29,7 @@ export function parseChannelOption(value: string): {
 export function resolveChannelSelection(
   value: string,
   config: LLMConfigView | null,
-): { provider: LLMProviderType; model: string } {
+): { model: string; provider: LLMProviderType } {
   if (value) {
     const parsed = parseChannelOption(value);
     return { provider: parsed.channel, model: parsed.model };

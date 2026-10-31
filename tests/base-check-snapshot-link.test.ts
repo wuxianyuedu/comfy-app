@@ -72,7 +72,7 @@ function makeFakeCheckout(name: string): string {
 function addWorktree(
   checkout: string,
   name: string,
-): { path: string; git: (args: Array<string>) => void } {
+): { git: (args: Array<string>) => void; path: string; } {
   const wt = mkdtempSync(join(tmpdir(), `base-check-snap-${name}-wt-`));
   dirs.push(wt);
   const run = (args: Array<string>) => {

@@ -546,7 +546,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
      *     `getByTitle` 是对的，别顺手一起换。
      */
     /** 弹层矩形的四元组（`settleBox` 的返回形状）。 */
-    type Box = { x: number; y: number; width: number; height: number };
+    type Box = { height: number; width: number; x: number; y: number; };
 
     /** 相邻两次量到同一矩形即视为落定（与动画时长解耦）。 */
     function sameBox(a: Box | null, b: Box | null): boolean {

@@ -45,9 +45,9 @@ function LivePicker({
   initial,
   ...rest
 }: {
+  disabled?: boolean;
   initial: ShotSizeState;
   scene?: "image" | "video";
-  disabled?: boolean;
 }) {
   const [value, setValue] = useState(initial);
   return (

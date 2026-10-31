@@ -31,10 +31,7 @@
  * 那份生成件：它缺了只是一种**常态**（没跑过工作台的新检出）。
  */
 /** 后缀写全的理由见 `main.ts` 那段说明（同一件事：Node 侧 loader 的 deprecation）。 */
-import {
-  APP_ORIGIN_DEFAULTS,
-  type AppOriginOverride,
-} from "./app-origin-defaults.ts";
+import { APP_ORIGIN_DEFAULTS, type AppOriginOverride } from "./app-origin-defaults.ts";
 
 /** `main.ts` 注入的三个键（一处定义，两侧共用）。 */
 export const APP_ORIGIN_ENV_KEYS = {
@@ -45,8 +42,8 @@ export const APP_ORIGIN_ENV_KEYS = {
 
 /** 形状守卫：字段名/类型与 `AppOriginOverride` 对不上就当没读到，退回缺省。 */
 export function parseOverride(value: {
-  APP_DEV_PORT: unknown;
   APP_DEV_ORIGIN: unknown;
+  APP_DEV_PORT: unknown;
   APP_DEV_PORT_SOURCE: unknown;
 }): AppOriginOverride | null {
   const port = Number(value.APP_DEV_PORT);
