@@ -472,7 +472,7 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
     continue;
   }
   const text = fs.readFileSync(abs, "utf8");
-  if (!colorHitsInLine(text).length && !/[^\x00-\x7F]/.test(text)) {
+  if (!colorHitsInLine(text).length && !/[^\u0000-\u007F]/.test(text)) {
     /* 没有色值就没得报；中文只用于豁免清单命中时的说明，跳过纯 ASCII 快路。 */
   }
   const lines = text.split("\n");
