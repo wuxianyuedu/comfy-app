@@ -257,7 +257,7 @@ describe("ImageViewer", () => {
     expect(frames.length - before).toBe(1);
     expect(inner.style.transform).toBe("");
 
-    frames[frames.length - 1]!(0);
+    frames.at(-1)!(0);
     expect(inner.style.transform).toBe("translate3d(-20px, 0px, 0)");
   });
 

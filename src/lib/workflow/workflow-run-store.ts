@@ -232,7 +232,7 @@ export function failWorkflowRun(taskId: string, message: string): void {
   }
   const reason = message || "生成失败";
   const logs = prev.logs ?? [];
-  const last = logs[logs.length - 1];
+  const last = logs.at(-1);
   const duplicatedAsLogLine =
     last?.level === "error" &&
     typeof last.msg === "string" &&

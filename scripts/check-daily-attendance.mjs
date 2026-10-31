@@ -298,7 +298,7 @@ function fetchBuildPage(run, slug, page, pageSize = FETCH_PAGE_SIZE) {
  */
 function oldestCreateTime(builds) {
   const rows = Array.isArray(builds) ? builds : [];
-  const last = rows[rows.length - 1];
+  const last = rows.at(-1);
   const parsed = Date.parse(String(last?.createTime ?? ""));
   return Number.isNaN(parsed) ? null : parsed;
 }

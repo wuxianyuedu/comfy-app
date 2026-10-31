@@ -437,7 +437,7 @@ export function probePnpmStore(platform) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const storePath = store.ok ? (lines[lines.length - 1] ?? "") : "";
+  const storePath = store.ok ? (lines.at(-1) ?? "") : "";
   /** @type {string | null} */
   let importMethod = null;
   try {

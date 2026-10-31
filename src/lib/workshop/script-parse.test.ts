@@ -187,7 +187,7 @@ describe("parseShotDrafts 从剧本拆分镜头", () => {
     const block2 = drafts.filter((d) => d.sceneHeading.includes("1-2"));
     expect(block2[0]?.firstInScene).toBe(true);
     expect(block1[0]?.characterNames).toEqual(["小满"]);
-    const last = drafts[drafts.length - 1];
+    const last = drafts.at(-1);
     expect(last?.sceneHeading).toContain("天台对峙");
     expect(last?.characterNames).toContain("小满");
     expect(last?.characterNames).toContain("阿声");

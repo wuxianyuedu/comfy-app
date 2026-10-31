@@ -468,7 +468,7 @@ export function buildSubgraphGraph(
              *  原始 JSON 里它既是 widget，又有 `link` 指向边界哨兵；
              *  我们要的是 widget 的默认值（真正的提示词文本），
              *  而不是一个连接元组。 */
-            const last = rawInputs[rawInputs.length - 1];
+            const last = rawInputs.at(-1);
             if (last) {
               last.isBoundary = true;
             }

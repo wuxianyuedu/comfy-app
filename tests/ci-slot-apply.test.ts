@@ -484,7 +484,7 @@ describe("LRU 与作业侧补写", () => {
       // 名字越靠前越旧，且落在配额之外的那两个必须**超出 TTL** 才可淘汰。
       markSlotUsed(dir, now - (keys.length - Number(k.slice(1))) * 10 * 60 * 60 * 1000);
     }
-    const current = keys[keys.length - 1] ?? "";
+    const current = keys.at(-1) ?? "";
     const out = pruneSlots({ cacheRoot: cache, currentKey: current, now });
     expect(out.evicted.length).toBe(2);
     expect(out.evicted).not.toContain(current);

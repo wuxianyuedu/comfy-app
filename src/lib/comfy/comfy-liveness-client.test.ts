@@ -41,7 +41,7 @@ beforeEach(() => {
   vi.stubGlobal("EventSource", FakeEventSource);
   resetComfyLivenessClientForTest();
   subscribeComfyCrashes(() => undefined);
-  last = FakeEventSource.instances[FakeEventSource.instances.length - 1]!;
+  last = FakeEventSource.instances.at(-1)!;
 });
 
 afterEach(() => {
@@ -114,7 +114,7 @@ describe("subscribeComfyCrashes", () => {
       永远不成立（listeners 不会归零），断言就测不到断开。 */
     resetComfyLivenessClientForTest();
     const offA = subscribeComfyCrashes(vi.fn());
-    const conn = FakeEventSource.instances[FakeEventSource.instances.length - 1]!;
+    const conn = FakeEventSource.instances.at(-1)!;
     const before = FakeEventSource.instances.length;
     const offB = subscribeComfyCrashes(vi.fn());
     // 订阅者增加不新建连接：`ensureConnected` 幂等。

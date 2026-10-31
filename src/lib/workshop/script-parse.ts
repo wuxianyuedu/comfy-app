@@ -345,7 +345,7 @@ export function parseShotDrafts(
       if (!text) {
         continue;
       }
-      const last = cur.items[cur.items.length - 1];
+      const last = cur.items.at(-1);
       if (last) {
         last.dialogue.push(text);
       } else {

@@ -554,7 +554,7 @@ export function formatReport(runs, opts = {}) {
     const ranked = [...byFile.entries()]
       .map(([name, values]) => ({ name, ms: median(values), n: values.length }))
       .sort((a, b) => b.ms - a.ms);
-    const lastRun = shown[shown.length - 1] ?? {};
+    const lastRun = shown.at(-1) ?? {};
     const expected = Number(lastRun.filesExpected) || 0;
     const missing = Number(lastRun.filesMissing) || 0;
     const cGroup = groupsOf(lastRun).find((g) => g.name === "C");

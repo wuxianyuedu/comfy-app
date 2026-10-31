@@ -191,6 +191,6 @@ describe("appendPortraitLog 日志上限", () => {
     }
     expect(list).toHaveLength(MAX_PORTRAIT_LOG);
     expect(list[0]?.text).toBe("第 10 条");
-    expect(list[list.length - 1]?.text).toBe(`第 ${MAX_PORTRAIT_LOG + 9} 条`);
+    expect(list.at(-1)?.text).toBe(`第 ${MAX_PORTRAIT_LOG + 9} 条`);
   });
 });

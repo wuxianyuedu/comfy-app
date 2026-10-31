@@ -284,7 +284,7 @@ describe("useCharacterPortrait 生成", () => {
     expect(result.current.session.error).toBe("连接中断");
     expect(result.current.session.busy).toBe(false);
     expect(result.current.characters[0]!.portraits ?? []).toHaveLength(0);
-    expect(result.current.session.log[result.current.session.log.length - 1]).toMatchObject({
+    expect(result.current.session.log.at(-1)).toMatchObject({
       level: "error",
       text: "连接中断",
     });
@@ -413,7 +413,7 @@ describe("useCharacterPortrait 导入", () => {
     });
 
     expect(result.current.session.error).toBe("素材库写入失败");
-    expect(result.current.session.log[result.current.session.log.length - 1]).toMatchObject({
+    expect(result.current.session.log.at(-1)).toMatchObject({
       level: "error",
       text: "素材库写入失败",
     });

@@ -442,7 +442,7 @@ function countButtonTitle(text) {
     const titles = props.filter((p) => p.name === "title");
     if (titles.length) {
       /* 同名重复时取最后一个（JSX 后者覆盖前者）。 */
-      const tier = classifyTitleValue(titles[titles.length - 1]);
+      const tier = classifyTitleValue(titles.at(-1));
       res[tier]++;
       if (tier === "static" || tier === "dynamic") {
         res.violations++;

@@ -1839,7 +1839,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 逐条相等由上面「跑的就是 `COMFYAPP_CI_DAILY_GATES` 那几格」那条判住，
      * 这里再钉一次「最后」，两边就都动不了了。 */
     const stages = pipelineStageNames(readRegisteredConfig(), "每日生产构建");
-    const last = stages[stages.length - 1];
+    const last = stages.at(-1);
     expect(
       stages.length,
       "crontab 那条流水线里解析不出 stage —— 这条判据没有对象了",

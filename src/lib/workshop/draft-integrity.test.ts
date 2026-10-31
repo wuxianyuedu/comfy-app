@@ -193,7 +193,7 @@ describe("② 不静默：每一种脏法都要被点名", () => {
 
   it("枚举取值跟着 types.ts 走：新增一个 ShotStatus 不必改判据", async () => {
     const { SHOT_STATUSES } = await import("./types");
-    const known = SHOT_STATUSES[SHOT_STATUSES.length - 1];
+    const known = SHOT_STATUSES.at(-1);
     expect(auditDraftElements(draftOf({ shots: [{ ...CLEAN_SHOTS[0], status: known }] }))).toEqual(
       [],
     );
