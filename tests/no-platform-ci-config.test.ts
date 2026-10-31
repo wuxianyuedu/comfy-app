@@ -3451,19 +3451,94 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
     }
   });
 
-  it("每个单跑格的正文与它对应的每日格逐字相同（副本不许漂）", () => {
+  it("每个单跑格的正文与它对应的真身格逐字相同（副本不许漂）", () => {
     const text = readRegisteredConfig();
     for (const target of ONESHOT_TARGETS) {
       for (const pair of oneshotPairs(target)) {
+        /* 真身默认是每日那一格；写了 `source` 的那一行跟着它登记的真身（目前只有
+         * `单跑单测·安装依赖` → push 的 `安装依赖`，理由整段写在注册表头注里，#2853）。
+         * 这里**不放宽比较面** —— 比的仍是同一个 `stageBody`（script / env / timeout），
+         * 换的只是"与谁相同"。 */
+        const sourceName = pair.source ?? pair.daily;
         const oneshotBody = stageBody(text, pair.oneshot);
-        const dailyBody = stageBody(text, pair.daily);
+        const dailyBody = stageBody(text, sourceName);
         expect(oneshotBody, `${pair.oneshot} 在配置里找不到那一项`).not.toBeNull();
-        expect(dailyBody, `${pair.daily} 在配置里找不到那一项`).not.toBeNull();
+        expect(dailyBody, `${sourceName} 在配置里找不到那一项`).not.toBeNull();
         expect(
           oneshotBody,
-          `${pair.oneshot} 的正文与 ${pair.daily} 不再逐字相同 —— 这就是「同一份脚本长在两条流水线上各漂一份」（ISSUE #2081 那一族）`,
+          `${pair.oneshot} 的正文与 ${sourceName} 不再逐字相同 —— 这就是「同一份脚本长在两条流水线上各漂一份」（ISSUE #2081 那一族）`,
         ).toBe(dailyBody);
       }
+    }
+  });
+
+  /**
+   * 接槽与构建消费者的那条线，**双向**都要有执行者（ISSUE #2853 / #2883 / #2851）：
+   *
+   *  · 一个方向是安全前提：置了 `COMFY_CI_SLOT` 的安装格，它所在那条档后面**不许**有会真构建的
+   *    格子（接槽把 `node_modules` 接成指向项目根之外的 junction，Turbopack 对此有硬要求 ——
+   *    #2081 那次 13.8s 就死 + 后面整片 `skipped`）；
+   *  · 另一个方向是防静默回退：注册表里指了 `source` 为接槽那一族的那些格，**必须真的**带着那枚
+   *    env —— 否则"按判据它该接"与"配置里它接了"两句话可以各自漂（摘掉那一行不会有任何一格红）。
+   *
+   * ⚠️ 这里刻意**不**判反过来的那一句（「没有构建格的档就必须接槽」）：`单跑E2E` 就是那条
+   * 不成立的逆命题 —— 它清单里没有构建消费者，但它后面那格带 `COMFY_E2E_SERVER: start`
+   * 而这一档没有构建格，`.next` 从哪来这件事没有读数（#2853 期望 2）。把"没判"写成"必须"
+   * 就是拿配置在场抵一次没跑过的前提。
+   */
+  it("接槽开关与构建消费者两两对得上：置了的必须有没构建的格，注册表认了的必须真置着", () => {
+    const text = readRegisteredConfig();
+    /** 每档：流水线名 → 它那一格的安装格名（名字逐字取自身配置，不做拼接）。 */
+    const laneInstall = [
+      { pipeline: "质量门禁", install: "Install dependencies" },
+      { pipeline: "master 合并复核", install: "安装依赖" },
+      { pipeline: "每日生产构建", install: "每日安装依赖" },
+      { pipeline: "桌面成品包", install: "打包·安装依赖" },
+      { pipeline: "单跑生产构建（手动触发）", install: "单跑构建·安装依赖" },
+      { pipeline: "单跑全量E2E（手动触发）", install: "单跑E2E·安装依赖" },
+      { pipeline: "单跑全量单测（手动触发）", install: "单跑单测·安装依赖" },
+    ];
+    /* 「这一格接了槽」认的是**那枚开关被置成 1**，不是"正文里出现过这个名字"：
+     * 判据 `ci-install-deps.mjs` 读的是 `COMFY_CI_SLOT === "1"`，所以把键改名
+     * （`COMFY_CI_SLOT_MUTATED: "1"`）或置成 `0` 都等于**没接**—— 用 `includes("COMFY_CI_SLOT")`
+     * 去认，改名那一形会同时骗过这里两个方向（安全侧假装"接了"、防回退侧假装"真接了"）。
+     * 单/双引号都认（env 值在 YAML 里两种写法等价），其余一律算"没接"。 */
+    const slotOn = (body: string): boolean => /COMFY_CI_SLOT:\s*["']1["']/.test(body);
+    for (const row of laneInstall) {
+      const stages = pipelineStageNames(text, row.pipeline);
+      expect(
+        stages.length,
+        `${row.pipeline} 那条流水线解析不出 stage —— 判据在这里没有对象`,
+      ).toBeGreaterThan(0);
+      const withBuild = stagesWithBuildConsumer(
+        new Map(stages.map((n) => [n, executableScriptLines(text, n)])),
+      );
+      if (slotOn(stageBody(text, row.install) ?? "")) {
+        expect(
+          withBuild,
+          `${row.pipeline} 的「${row.install}」把 \`COMFY_CI_SLOT\` 置成 1，而这一档后面有会真构建的格子` +
+            `（${withBuild.join(" / ")}）—— 接槽形态下 Turbopack 会拒那条链（#2081 那一形）`,
+        ).toEqual([]);
+      }
+    }
+    /* 注册表指了 `source` 的那些格：它们跟着的是**接槽那一族**，就必须真把那枚开关置成 1。 */
+    const followingSlotFamily = ONESHOT_TARGETS.flatMap((t) =>
+      (Array.isArray(t.prereqs) ? t.prereqs : [])
+        .filter((p) => typeof p?.source === "string" && p.source !== "")
+        .map((p) => p.oneshot),
+    );
+    expect(
+      followingSlotFamily.length,
+      "注册表里没有一格登记 `source` —— 上面那段因果就没有对象了（注册表被改回去而这里没跟上）",
+    ).toBeGreaterThan(0);
+    for (const name of followingSlotFamily) {
+      const body = stageBody(text, name) ?? "";
+      expect(
+        slotOn(body),
+        `「${name}」在注册表里跟着接槽那一族（source 指向置着开关的那一格），配置里却没把 ` +
+          '`COMFY_CI_SLOT` 置成 1 —— 摘掉那一行不会有任何别处红，所以这一句要在这里红。' +
+          `（该格正文：\n${body}）`,
+      ).toBe(true);
     }
   });
 

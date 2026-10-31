@@ -1200,6 +1200,18 @@
     timeout: 45m
 .oneshot-unit: &oneshot_unit
   - name: 单跑单测·安装依赖
+    # ⚠️ 这一格的真身是**上面 push 那一档的 `安装依赖`**，不是 `每日安装依赖`
+    # （注册表 `scripts/ci-oneshot-gates.mjs` 里这一行登记了 `source`，#2853）。为什么允许换真身：
+    # 「能不能接依赖缓存槽」判的是**这一档后面有没有会真构建的格子**（#2851 定的那条线，
+    # 执行者是 `BUILD_CONSUMER_MARKERS`），不是档名 —— 这一档后面只有 `单跑单测·全量单测`
+    # （`full-suite-run.mjs`，vitest 不是 Turbopack 消费者；同一类消费者在 PR 档的
+    # `受影响用例` 上早已在接槽形态下每跑都绿 —— **不是 push 档**，那份清单里没有测试格）。
+    # 反过来 `单跑构建` / `打包` 两档**不许**跟着改：它们后面有真构建格
+    # （#2883 把那条按现役配置扫过一遍，`打包·安装依赖` 出现这枚键会当场红）。
+    # 收益的读数不写在这里（跨天不可引用、且并发在场时墙钟不可读）：`pnpm ship --stage-log
+    # <sn> 安装依赖` 现取，规范 §13.5.3.4.3 是那份出处。
+    env:
+      COMFY_CI_SLOT: "1"
     timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
@@ -1663,8 +1675,10 @@
     # ⚠️ **这一行必须与 `每日安装依赖` / push 那一格 `安装依赖` 逐字相同**：判据
     # `tests/no-platform-ci-config.test.ts` 的 `CROSS_LANE_SCRIPT_MIRRORS` 三样都比 ——
     # 命令行、env 赋值、`timeout`（三份副本各漂一份就是这条链最难查的形态）。
-    # `单跑*·安装依赖` / `打包·安装依赖` 那几格不在这一对面里，它们由
-    # `scripts/ci-oneshot-gates.mjs` 登记成 `每日安装依赖` 的副本（同一条不接槽的口径）。
+    # 那几格 `单跑*·安装依赖` / `打包·安装依赖` 不在这一对面里，它们由
+    # `scripts/ci-oneshot-gates.mjs` 逐格登记自己的真身：默认是 `每日安装依赖`（不接槽那一族），
+    # 而 `单跑单测·安装依赖` 登记的是**本格**（接槽那一族 —— 判的是「后面有没有真构建格」，
+    # 不是档名；#2853 换真身的那一步，注册表头注写着整段因果）。
     timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
