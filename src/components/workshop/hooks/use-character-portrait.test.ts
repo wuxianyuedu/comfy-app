@@ -22,8 +22,8 @@ import type { Character } from "~/lib/workshop/types";
 import { useCharacterPortrait } from "./use-character-portrait";
 
 vi.mock("~/lib/workshop/character-portrait-client", () => ({
-  generateWorkflowPortrait: vi.fn(),
   generateRemotePortrait: vi.fn(),
+  generateWorkflowPortrait: vi.fn(),
   importPortraitFile: vi.fn(),
 }));
 vi.mock("~/lib/workshop/generation-log-client", () => ({
@@ -37,17 +37,17 @@ const mockedPersist = vi.mocked(persistGenerationLogs);
 
 function makeCharacter(patch: Partial<Character> = {}): Character {
   return {
-    id: "c1",
-    name: "阿澈",
     ageGender: "",
     appearance: "",
     costume: "",
-    personality: "",
-    temperament: "",
-    styleTags: [],
-    positivePrompt: "a young man, cinematic lighting",
+    id: "c1",
+    name: "阿澈",
     negativePrompt: "",
     params: {},
+    personality: "",
+    positivePrompt: "a young man, cinematic lighting",
+    styleTags: [],
+    temperament: "",
     ...patch,
   };
 }
@@ -55,8 +55,8 @@ function makeCharacter(patch: Partial<Character> = {}): Character {
 /** 被测 hook 的宿主：真实持有 characters state，候选写没写进去一目了然。 */
 function useHarness(projectId: string) {
   const [characters, setCharacters] = React.useState<Array<Character>>([makeCharacter()]);
-  const [session, actions] = useCharacterPortrait({ setCharacters, projectId });
-  return { characters, session, actions };
+  const [session, actions] = useCharacterPortrait({ projectId, setCharacters });
+  return { actions, characters, session };
 }
 
 /** 生成永不 resolve 的桩，用来制造「进行中」窗口。 */
@@ -181,8 +181,8 @@ describe("useCharacterPortrait 生成", () => {
 
     await act(async () => {
       await result.current.actions.generate(character, {
-        localWorkflowId: "wf-1",
         localLabel: "sdxl",
+        localWorkflowId: "wf-1",
       });
     });
 
@@ -190,10 +190,10 @@ describe("useCharacterPortrait 生成", () => {
     const portraits = result.current.characters[0]!.portraits ?? [];
     expect(portraits).toHaveLength(1);
     expect(portraits[0]).toMatchObject({
-      url: "/api/generated/a.png",
-      source: "local",
       model: "sdxl",
+      source: "local",
       taskId: "task-1234567890abc",
+      url: "/api/generated/a.png",
     });
     /* 角色还没有定妆照时第一张自动选中 —— 后续分镜图就能拿它当参考图 */
     expect(result.current.characters[0]!.portraitUrl).toBe("/api/generated/a.png");
@@ -213,9 +213,9 @@ describe("useCharacterPortrait 生成", () => {
   it("本地进行中：进度与执行日志实时进会话，progress 帧不混进日志", async () => {
     let resolveTask!: (value: { taskId: string; url: string }) => void;
     mockedLocal.mockImplementation((_req, _opts, handlers) => {
-      handlers?.onLog?.({ t: 1, level: "info", msg: "模型已加载" });
+      handlers?.onLog?.({ level: "info", msg: "模型已加载", t: 1 });
       // progress 帧是进度条语义，不该在「生成过程」里刷屏
-      handlers?.onLog?.({ t: 2, level: "progress", msg: "采样中" });
+      handlers?.onLog?.({ level: "progress", msg: "采样中", t: 2 });
       handlers?.onProgress?.(37);
       return new Promise<{ taskId: string; url: string }>((resolve) => {
         resolveTask = resolve;
@@ -259,13 +259,13 @@ describe("useCharacterPortrait 生成", () => {
 
     expect(mockedRemote).toHaveBeenCalledWith(
       expect.objectContaining({ prompt: character.positivePrompt }),
-      expect.objectContaining({ projectId: "p1", model: "dall-e-3" }),
+      expect.objectContaining({ model: "dall-e-3", projectId: "p1" }),
     );
     const portraits = result.current.characters[0]!.portraits ?? [];
     expect(portraits[0]).toMatchObject({
-      url: "/api/materials/characters/remote.png",
-      source: "remote",
       model: "dall-e-3",
+      source: "remote",
+      url: "/api/materials/characters/remote.png",
     });
     /* 远端一次性请求没有进度可言：null 是「不确定」，不是 0% */
     expect(result.current.session.progress).toBeNull();
@@ -321,7 +321,7 @@ describe("useCharacterPortrait 生成", () => {
 
   it("生成期间切了项目：不写回角色候选，并把原因如实告知（不静默丢结果）", async () => {
     const resolve = stallLocal();
-    const { result, rerender } = renderHook(
+    const { rerender, result } = renderHook(
       ({ projectId }: { projectId: string }) => useHarness(projectId),
       { initialProps: { projectId: "p1" } },
     );
@@ -395,8 +395,8 @@ describe("useCharacterPortrait 导入", () => {
     expect(mockedImport).toHaveBeenCalledWith(file, { projectId: "p1" });
     const portraits = result.current.characters[0]!.portraits ?? [];
     expect(portraits[0]).toMatchObject({
-      url: "/api/materials/characters/up.png",
       source: "import",
+      url: "/api/materials/characters/up.png",
     });
     expect(portraits[0]!.model).toBeUndefined();
     expect(result.current.session.status).toContain("portrait.png");

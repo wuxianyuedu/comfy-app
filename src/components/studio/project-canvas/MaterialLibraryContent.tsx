@@ -33,10 +33,10 @@ import type { MaterialLibraryController } from "./hooks/use-material-library";
 
 // p71-allow:start 媒体分类识别色 + 文件夹装饰色——§3.6.1 文档化例外，颜色本身即语义
 const KIND_STYLE: Record<string, string> = {
-  image: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  video: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
   audio: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   doc: "bg-subtle text-ink-soft",
+  image: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  video: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
 };
 
 /** 文件夹图标块（列表 / 网格两处都用；容器边长/圆角由调用方加）。 */
@@ -60,10 +60,10 @@ function KindIcon({ kind }: { kind: string }) {
 export function MaterialLibraryContent({
   c,
   display,
-  onUse,
-  onOpenUploadPicker,
-  gridColsClass = "grid-cols-2",
   folderColsClass = "grid-cols-3",
+  gridColsClass = "grid-cols-2",
+  onOpenUploadPicker,
+  onUse,
 }: {
   c: MaterialLibraryController;
   /** 显示密度（网格/列表）：纯视觉偏好，由父组件持有。 */
@@ -79,7 +79,7 @@ export function MaterialLibraryContent({
   onOpenUploadPicker: () => void;
   onUse?: (item: MaterialItem) => void;
 }) {
-  const { folders, items, loading, showItems, searching, enterFolder, remove } = c;
+  const { enterFolder, folders, items, loading, remove, searching, showItems } = c;
 
   return (
     <div className="min-w-0 flex-1 overflow-y-auto px-2 pb-4">
@@ -128,11 +128,11 @@ export function MaterialLibraryContent({
               <div
                 key={item.id}
                 {...mediaDragSourceProps({
-                  url: item.url,
-                  displayName: item.name,
-                  kind: item.kind,
                   className:
                     "group border-border-strong bg-subtle relative overflow-hidden rounded-lg border",
+                  displayName: item.name,
+                  kind: item.kind,
+                  url: item.url,
                 })}
               >
                 <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
@@ -186,11 +186,11 @@ export function MaterialLibraryContent({
               <div
                 key={item.id}
                 {...mediaDragSourceProps({
-                  url: item.url,
-                  displayName: item.name,
-                  kind: item.kind,
                   className:
                     "hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors",
+                  displayName: item.name,
+                  kind: item.kind,
+                  url: item.url,
                 })}
               >
                 {item.kind === "image" || item.kind === "video" ? (

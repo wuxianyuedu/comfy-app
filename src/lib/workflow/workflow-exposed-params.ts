@@ -90,14 +90,14 @@ export type ExposedParamDef = {
  *  「尺寸」在工坊里是一个「比例 + 分辨率 / (百万像素 + 倍数)」的组合控件，
  *  只写「尺寸」用户答不出这个控件到底要填什么。 */
 export const EXPOSED_PARAM_LABEL: Record<ExposedParamClass, string> = {
-  prompt: "提示词",
-  negative: "负面提示词",
-  size: "尺寸",
-  "reference-image": "参考图",
+  duration: "时长",
   "first-frame": "首帧",
   "last-frame": "尾帧",
-  duration: "时长",
+  negative: "负面提示词",
+  prompt: "提示词",
+  "reference-image": "参考图",
   seed: "种子",
+  size: "尺寸",
 };
 
 /** 各口的**界面展示名** —— 整个仓库的**唯一出处**。
@@ -113,14 +113,14 @@ export const EXPOSED_PARAM_LABEL: Record<ExposedParamClass, string> = {
  *  措辞与具体形态无关的一律不带括号：括号是给「同一类的多种写法」用的，
  *  只有 `size` 与 `duration` 各有两类等价表达，需要在这里说清。 */
 export const EXPOSED_PARAM_DISPLAY_LABEL: Record<ExposedParamClass, string> = {
-  prompt: "提示词",
-  negative: "负向提示词",
-  size: "尺寸（比例 + 分辨率 / (百万像素 + 倍数)）",
-  "reference-image": "参考图",
+  duration: "时长（秒）",
   "first-frame": "首帧图片",
   "last-frame": "尾帧图片",
-  duration: "时长（秒）",
+  negative: "负向提示词",
+  prompt: "提示词",
+  "reference-image": "参考图",
   seed: "种子",
+  size: "尺寸（比例 + 分辨率 / (百万像素 + 倍数)）",
 };
 
 /** 内置默认给几张参考图槽 —— 只是默认值，契约编辑器里可以继续加，不设上限。 */
@@ -245,9 +245,9 @@ export function exposedCustomKindOf(id: string): ExposedCustomKind | null {
 
 /** 自定义口类型 → 复用的对外参数类（见上方注释）。 */
 const EXPOSED_CUSTOM_CLASS: Record<ExposedCustomKind, ExposedParamClass> = {
-  text: "prompt",
   image: "first-frame",
   number: "duration",
+  text: "prompt",
 };
 
 /** 任意契约口 id 的**界面展示名**（带序号的参考图口显示为「参考图 2」）。

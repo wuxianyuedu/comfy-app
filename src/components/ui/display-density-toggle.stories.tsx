@@ -14,12 +14,12 @@ import { DisplayDensityToggle } from "~/components/ui/display-density-toggle";
  * 它应当与常态逐像素相同（ISSUE #1925）。
  */
 const meta = {
-  title: "UI/DisplayDensityToggle",
-  component: DisplayDensityToggle,
-  args: { value: "grid", onChange: () => undefined },
+  args: { onChange: () => undefined, value: "grid" },
   argTypes: {
     value: { control: "select", options: ["grid", "list"] },
   },
+  component: DisplayDensityToggle,
+  title: "UI/DisplayDensityToggle",
 } satisfies Meta<typeof DisplayDensityToggle>;
 
 export default meta;
@@ -30,12 +30,12 @@ type Story = StoryObj<typeof meta>;
  * a11y 那一档按 Storybook 的语义合 `meta.args` 与 `story.args`，两种写法都读得到 ——
  * 但它只在**两边都没有**时才退成裸组件，所以初值给全这件事仍由故事自己负责。 */
 export const Default: Story = {
-  args: { value: "grid", onChange: () => undefined },
+  args: { onChange: () => undefined, value: "grid" },
 };
 
 /** 两档对照 —— 选中态由 `aria-checked` 一处驱动（不是 `aria-pressed` 开关）。 */
 export const BothStates: Story = {
-  args: { value: "grid", onChange: () => undefined },
+  args: { onChange: () => undefined, value: "grid" },
   render: (args) => (
     <div className="flex flex-col gap-4">
       <div>
@@ -54,7 +54,7 @@ export const BothStates: Story = {
 
 /** 与它并列时的样子：一排工具条尾部的那一格。 */
 export const InToolbar: Story = {
-  args: { value: "grid", onChange: () => undefined },
+  args: { onChange: () => undefined, value: "grid" },
   render: (args) => (
     <div className="border-border bg-panel flex items-center gap-2 rounded-lg border px-3 py-2">
       <span className="text-ink text-xs">历史记录</span>

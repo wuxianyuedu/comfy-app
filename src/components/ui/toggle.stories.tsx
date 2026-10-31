@@ -16,13 +16,13 @@ const VARIANTS: Array<ToggleVariant> = ["default", "outline"];
 const SIZES: Array<ToggleSize> = ["default", "sm", "lg"];
 
 const meta = {
-  title: "UI/Toggle",
-  component: Toggle,
   args: { children: "粗体" },
   argTypes: {
-    variant: { control: "select", options: VARIANTS },
     size: { control: "select", options: SIZES },
+    variant: { control: "select", options: VARIANTS },
   },
+  component: Toggle,
+  title: "UI/Toggle",
 } satisfies Meta<typeof Toggle>;
 
 export default meta;

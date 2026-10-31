@@ -40,10 +40,10 @@ export type DisclosureMarker = "none" | "caret" | "chevron";
 const MARKER_BASE = "shrink-0 transition-transform";
 
 export function Disclosure({
-  open,
   defaultOpen,
-  onOpenChange,
   disabled,
+  onOpenChange,
+  open,
   /** 触发行的内容（标题 / 摘要）。 */
   trigger,
   /**

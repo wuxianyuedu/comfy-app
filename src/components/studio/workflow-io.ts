@@ -251,26 +251,26 @@ export function numericBounds(e: WorkflowIOEntry): {
   const name = `${e.name} ${e.label ?? ""}`.toLowerCase();
   const isFloat = upperToken(e.type) === "FLOAT";
   if (/seed|noise_seed/.test(name)) {
-    return { min: 0, max: 4294967295, step: 1, decimalPlaces: 0 };
+    return { decimalPlaces: 0, max: 4294967295, min: 0, step: 1 };
   }
   if (name.includes("steps")) {
-    return { min: 1, max: 200, step: 1, decimalPlaces: 0 };
+    return { decimalPlaces: 0, max: 200, min: 1, step: 1 };
   }
   if (/^cfg|cfg$|guidance/.test(name)) {
-    return { min: 0, max: 30, step: 0.5, decimalPlaces: 1 };
+    return { decimalPlaces: 1, max: 30, min: 0, step: 0.5 };
   }
   if (/denoise|strength|weight|scale|ratio/.test(name)) {
-    return { min: 0, max: 2, step: 0.05, decimalPlaces: 2 };
+    return { decimalPlaces: 2, max: 2, min: 0, step: 0.05 };
   }
   if (/width|height|size|resolution/.test(name)) {
-    return { min: 64, max: 4096, step: 64, decimalPlaces: 0 };
+    return { decimalPlaces: 0, max: 4096, min: 64, step: 64 };
   }
   if (/batch|count|frames|length/.test(name)) {
-    return { min: 1, max: 512, step: 1, decimalPlaces: 0 };
+    return { decimalPlaces: 0, max: 512, min: 1, step: 1 };
   }
   return isFloat
-    ? { min: 0, max: 1000, step: 0.1, decimalPlaces: 2 }
-    : { min: 0, max: 1_000_000, step: 1, decimalPlaces: 0 };
+    ? { decimalPlaces: 2, max: 1000, min: 0, step: 0.1 }
+    : { decimalPlaces: 0, max: 1_000_000, min: 0, step: 1 };
 }
 
 /** 两条记录是不是同一个 pin —— 撞名判定必须先排除「条目自己」。
@@ -428,8 +428,8 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
     } else {
       const enriched = {
         ...entry,
-        ioKey,
         control: controlForEntry(entry),
+        ioKey,
         /* 控件种类是推断出来的（条目没有声明类型）就打标：defaultInputValues
          * 据此不给它造默认值，分组 / 渲染照常。 */
         controlInferred: !hasDeclaredType(entry),
@@ -471,10 +471,10 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
   widgetInputs.sort(byDisplayOrder);
   outputs.sort(byDisplayOrder);
   return {
-    wireInputs,
-    widgetInputs,
     inputs: [...wireInputs, ...widgetInputs],
     outputs,
+    widgetInputs,
+    wireInputs,
   };
 }
 
@@ -664,8 +664,8 @@ export function toWorkflowInputsPayload(
     /* 运行期节点 id：子图内部勾选的条目把落库的宿主 id 拼成 comfy-cli 展开后的
      * `host:inner` 形式（见 runtimeNodeId），顶层勾选原样下发。 */
     payload.push({
-      nodeId: runtimeNodeId(entry),
       name: entry.name,
+      nodeId: runtimeNodeId(entry),
       value: value,
     });
   }

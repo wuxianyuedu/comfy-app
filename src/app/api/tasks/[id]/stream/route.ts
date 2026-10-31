@@ -32,9 +32,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
        * 增量 diff 发 log 帧（P3 §5 ADR §13-3C：SSE 单源化，log/state 都以
        * DB 为准；初始回放读内存是为了接住 persistLogs 200ms 防抖窗口）。 */
       const lastSent: { nodeKey: string; progress: number; status: string } = {
-        status: "",
-        progress: 0,
         nodeKey: "",
+        progress: 0,
+        status: "",
       };
       let sentLogCount = 0;
 
@@ -60,15 +60,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
             // 终态（FAILED/CANCELLED/ERROR）分支时会立即 settle 并关闭 EventSource，
             // 若把 state 排在日志前面，后续 log 帧会被丢弃，用户只看到「等待日志…」
             // 而看不到失败原因（任务在 SSE 建立前就已终态时必现）。
-            replaySrc.forEach((entry) => send({ type: "log", entry }));
+            replaySrc.forEach((entry) => send({ entry, type: "log" }));
             sentLogCount = replaySrc.length;
             // 把结构化校验错误透出去，好让消费方（CreatePanel）
             // 渲染出精确到字段的列表，而不是 `error` 里那句英文摘要。
             send({
-              type: "state",
-              status: task.status,
-              progress: task.progress,
               error: task.error,
+              progress: task.progress,
+              status: task.status,
+              type: "state",
               validationErrors: parseValidationErrors(task.validationErrors),
               /* 把 workflowName 透出去，好让 GlobalStepLogPanel 的任务切换器
                * 用「<名称> · 状态」给条目打标签，而不是一个光秃秃的 14 字符 id。 */
@@ -178,7 +178,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
                 sentLogCount = logs.length;
               }
               for (const entry of logs.slice(sentLogCount)) {
-                send({ type: "log", entry });
+                send({ entry, type: "log" });
               }
               sentLogCount = Math.max(sentLogCount, logs.length);
               if (changed) {
@@ -186,13 +186,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
                 lastSent.progress = cur.progress ?? 0;
                 lastSent.nodeKey = nodeKey;
                 send({
-                  type: "state",
-                  status: cur.status,
-                  progress: cur.progress ?? 0,
                   error: cur.error,
+                  node: cur.progressNode,
+                  progress: cur.progress ?? 0,
+                  status: cur.status,
+                  type: "state",
                   validationErrors: parseValidationErrors(cur.validationErrors),
                   workflowName: cur.workflowName,
-                  node: cur.progressNode,
                   /* 只在终态附带产出清单（与初始回放的 state 帧同形）：
                    * host 执行的任务没有进程内 done 帧，客户端靠这份 images
                    * 收口成功态（#1151）；非终态不带上，轮询帧保持轻量。 */
@@ -224,9 +224,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   return new NextResponse(stream, {
     headers: {
-      "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "Content-Type": "text/event-stream",
     },
   });
 }

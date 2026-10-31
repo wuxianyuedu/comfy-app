@@ -114,14 +114,14 @@ export function buildShotNegative(characters: Array<Character>, style?: StyleRef
 }
 
 const SHOT_KEYWORDS: Record<string, string> = {
-  extreme_wide: "extreme wide shot, vast landscape, epic scale",
-  wide: "wide shot, full environment",
-  full: "full body shot",
-  medium: "medium shot, waist-up",
   close: "close-up shot",
   extreme_close: "extreme close-up, detailed face",
-  poi: "low angle shot, looking up",
+  extreme_wide: "extreme wide shot, vast landscape, epic scale",
+  full: "full body shot",
+  medium: "medium shot, waist-up",
   pod: "high angle shot, looking down",
+  poi: "low angle shot, looking up",
+  wide: "wide shot, full environment",
 };
 
 /* 合并风格与角色各自的推荐参数；冲突时以角色为准。 */

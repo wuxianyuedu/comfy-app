@@ -84,8 +84,8 @@ export async function ensureProductionProject(
     return projectId;
   }
   const id = `proj_${createId()}`;
-  await workshopDb.insert(project).values({ id, userId: ownerId, name: title });
-  await workshopDb.insert(production).values({ id, userId: ownerId, title });
+  await workshopDb.insert(project).values({ id, name: title, userId: ownerId });
+  await workshopDb.insert(production).values({ id, title, userId: ownerId });
   return id;
 }
 
@@ -103,7 +103,7 @@ async function ensureProductionRow(
   if (rows[0]) {
     return;
   }
-  await workshopDb.insert(production).values({ id: projectId, userId: ownerId, title });
+  await workshopDb.insert(production).values({ id: projectId, title, userId: ownerId });
 }
 
 /** 把会话内容写进 production。**只写内容列**——进度 / run / 评审是另外的字段
@@ -114,32 +114,32 @@ export async function writeContentToProduction(
   content: SessionContent,
 ): Promise<void> {
   const values = {
-    id: projectId,
-    userId: fallbackOwnerId,
-    title: content.title,
-    type: content.type,
-    tone: content.tone,
-    logline: content.logline,
-    scriptMarkdown: content.scriptMarkdown,
-    scenes: content.scenes,
     characters: content.characters,
+    id: projectId,
+    logline: content.logline,
+    scenes: content.scenes,
+    scriptMarkdown: content.scriptMarkdown,
     shots: content.shots,
+    title: content.title,
+    tone: content.tone,
+    type: content.type,
+    userId: fallbackOwnerId,
   };
   await workshopDb
     .insert(production)
     .values(values)
     .onConflictDoUpdate({
-      target: production.id,
       set: {
-        title: values.title,
-        type: values.type,
-        tone: values.tone,
-        logline: values.logline,
-        scriptMarkdown: values.scriptMarkdown,
-        scenes: values.scenes,
         characters: values.characters,
+        logline: values.logline,
+        scenes: values.scenes,
+        scriptMarkdown: values.scriptMarkdown,
         shots: values.shots,
+        title: values.title,
+        tone: values.tone,
+        type: values.type,
       },
+      target: production.id,
     });
 }
 
@@ -155,11 +155,11 @@ export async function readProductionContent(projectId: string): Promise<SessionC
     return null;
   }
   return {
-    title: row.title,
-    type: row.type,
-    tone: row.tone,
     logline: row.logline,
     scriptMarkdown: row.scriptMarkdown,
+    title: row.title,
+    tone: row.tone,
+    type: row.type,
     /* SAFETY: 类型断言已复核 */
     scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
     /* SAFETY: 类型断言已复核 */

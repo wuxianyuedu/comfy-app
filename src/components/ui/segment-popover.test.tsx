@@ -23,12 +23,12 @@ afterEach(cleanup);
 function ratioSection(onChange: (value: string) => void = vi.fn()): SegmentSection<string> {
   return {
     label: "比例",
-    value: "16:9",
-    options: [
-      { value: "1:1", label: "1:1" },
-      { value: "16:9", label: "16:9" },
-    ],
     onChange,
+    options: [
+      { label: "1:1", value: "1:1" },
+      { label: "16:9", value: "16:9" },
+    ],
+    value: "16:9",
   };
 }
 

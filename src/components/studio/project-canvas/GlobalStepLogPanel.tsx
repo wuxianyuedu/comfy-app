@@ -84,14 +84,14 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
   /* 监听该任务的执行日志流：SSE 建连 / 帧解析 / 关流 / 播种 / 空闲卡住检测
    * 全收在 `hooks/use-task-step-log-stream`，视图零 IO（规范 17 / 硬规则 10）。 */
-  const { logs, validationErrors, status, progress, error, connected, setError, clear } =
+  const { clear, connected, error, logs, progress, setError, status, validationErrors } =
     useTaskStepLogStream(taskId);
 
   /* 从面板内部取消当前查看的任务。
    * 「取消中…」态与失败文案都在 useCancelTask 里（视图零 IO）。 */
-  const { cancelling: cancellingFromPanel, cancel: cancelFromPanel } = useCancelTask({
-    taskId,
+  const { cancel: cancelFromPanel, cancelling: cancellingFromPanel } = useCancelTask({
     onFailed: setError,
+    taskId,
   });
   const onCancelFromPanel = () => {
     // 无任务时按钮本就禁用（下方 disabled），这里只是防重复点击的兜底。

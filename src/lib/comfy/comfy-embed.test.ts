@@ -79,9 +79,9 @@ describe("judgeEmbeddable — 判决表", () => {
   it("同源 → 可嵌（浏览器不做内嵌校验）", () => {
     const v = judgeEmbeddable({
       base: HOST,
+      contentSecurityPolicy: "frame-ancestors 'none'",
       hostOrigin: HOST,
       xFrameOptions: "DENY",
-      contentSecurityPolicy: "frame-ancestors 'none'",
     });
     expect(v.embeddable).toBe(true);
   });
@@ -89,9 +89,9 @@ describe("judgeEmbeddable — 判决表", () => {
   it("跨源 + X-Frame-Options: DENY → 不可嵌（本次回归的现场）", () => {
     const v = judgeEmbeddable({
       base: COMFY,
+      contentSecurityPolicy: null,
       hostOrigin: HOST,
       xFrameOptions: "DENY",
-      contentSecurityPolicy: null,
     });
     expect(v.embeddable).toBe(false);
     expect(v.reason).toContain("X-Frame-Options");
@@ -100,9 +100,9 @@ describe("judgeEmbeddable — 判决表", () => {
   it("跨源 + SAMEORIGIN → 不可嵌（宿主不是同一源）", () => {
     const v = judgeEmbeddable({
       base: COMFY,
+      contentSecurityPolicy: null,
       hostOrigin: HOST,
       xFrameOptions: "SAMEORIGIN",
-      contentSecurityPolicy: null,
     });
     expect(v.embeddable).toBe(false);
   });
@@ -110,9 +110,9 @@ describe("judgeEmbeddable — 判决表", () => {
   it("跨源 + CSP 显式放行宿主 → 可嵌（优先于 XFO 缺失）", () => {
     const v = judgeEmbeddable({
       base: COMFY,
+      contentSecurityPolicy: `frame-ancestors ${HOST}`,
       hostOrigin: HOST,
       xFrameOptions: null,
-      contentSecurityPolicy: `frame-ancestors ${HOST}`,
     });
     expect(v.embeddable).toBe(true);
   });
@@ -120,9 +120,9 @@ describe("judgeEmbeddable — 判决表", () => {
   it("跨源 + 两个头都没有 → 不可嵌（拿不到放行证据时不赌）", () => {
     const v = judgeEmbeddable({
       base: COMFY,
+      contentSecurityPolicy: null,
       hostOrigin: HOST,
       xFrameOptions: null,
-      contentSecurityPolicy: null,
     });
     expect(v.embeddable).toBe(false);
   });
@@ -157,9 +157,9 @@ describe("shouldUseBrowserTab — 浏览器形态走新浏览器页签", () => {
 describe("probeComfyEmbeddable — 取事实（IO）", () => {
   const res = (headers: Record<string, string>, status = 200) =>
     /* SAFETY: 类型断言已复核 */ ({
+      headers: new Headers(headers),
       ok: status < 400,
       status,
-      headers: new Headers(headers),
     }) as Response;
 
   it("同源不发请求，直接可嵌", async () => {
@@ -214,10 +214,10 @@ describe("judgeEmbeddable — 403 优先于其它头", () => {
   it("403 即便同时缺头，也给「该开 --enable-cors-header」的结论", () => {
     const v = judgeEmbeddable({
       base: COMFY,
-      hostOrigin: HOST,
-      xFrameOptions: null,
       contentSecurityPolicy: null,
+      hostOrigin: HOST,
       status: 403,
+      xFrameOptions: null,
     });
     expect(v.embeddable).toBe(false);
     expect(v.reason).toContain("--enable-cors-header");
@@ -225,11 +225,11 @@ describe("judgeEmbeddable — 403 优先于其它头", () => {
 
   it("有 Access-Control-Allow-Origin 即放行（跨源确证）", () => {
     const v = judgeEmbeddable({
+      allowOrigin: "*",
       base: COMFY,
+      contentSecurityPolicy: null,
       hostOrigin: HOST,
       xFrameOptions: null,
-      contentSecurityPolicy: null,
-      allowOrigin: "*",
     });
     expect(v.embeddable).toBe(true);
   });
@@ -246,11 +246,11 @@ describe("judgeEmbeddable — 403 优先于其它头", () => {
 describe("judgeEmbeddable — 非 http(s) 源一律判不出", () => {
   it("宿主是 about:blank（壳内 main 窗初始 URL）→ 不可嵌", () => {
     const v = judgeEmbeddable({
+      allowOrigin: "*",
       base: COMFY,
+      contentSecurityPolicy: null,
       hostOrigin: "about:blank",
       xFrameOptions: null,
-      contentSecurityPolicy: null,
-      allowOrigin: "*",
     });
     expect(v.embeddable).toBe(false);
     expect(v.reason).toContain("--enable-cors-header");
@@ -261,9 +261,9 @@ describe("judgeEmbeddable — 非 http(s) 源一律判不出", () => {
       expect(
         judgeEmbeddable({
           base,
+          contentSecurityPolicy: null,
           hostOrigin: HOST,
           xFrameOptions: null,
-          contentSecurityPolicy: null,
         }).embeddable,
       ).toBe(false);
     }
@@ -273,9 +273,9 @@ describe("judgeEmbeddable — 非 http(s) 源一律判不出", () => {
     expect(
       judgeEmbeddable({
         base: "about:blank",
+        contentSecurityPolicy: null,
         hostOrigin: "about:blank",
         xFrameOptions: null,
-        contentSecurityPolicy: null,
       }).embeddable,
     ).toBe(false);
   });

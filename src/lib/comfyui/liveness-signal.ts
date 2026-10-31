@@ -81,9 +81,9 @@ const st: SignalGlobal = (globalThis.__comfyLivenessSignal_v1 ??= {});
  */
 export function noteComfyExit(report: ComfyExitReport): ComfyLivenessSignal {
   const signal: ComfyLivenessSignal = {
-    seq: (st.seq ?? 0) + 1,
     at: Date.now(),
     reason: report.reason,
+    seq: (st.seq ?? 0) + 1,
     /* `describeComfyExit` 的判据顺序把「用户主动关闭」放在最前，所以这一项
      * 就是它的 reason —— 不再在两边各抄一份字符串常量（抄错了会静默把
      * 「用户关的」判成崩溃）。 */
@@ -114,7 +114,7 @@ export function noteComfyExit(report: ComfyExitReport): ComfyLivenessSignal {
 
 /** 此刻的纪元与最近一次退出（首次连上的客户端据此判定现状）。 */
 export function getLivenessSnapshot(): ComfyLivenessSnapshot {
-  return { seq: st.seq ?? 0, last: st.last ?? null };
+  return { last: st.last ?? null, seq: st.seq ?? 0 };
 }
 
 /** 订阅后续的退出事件；返回退订函数。

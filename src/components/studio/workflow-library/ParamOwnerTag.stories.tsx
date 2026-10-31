@@ -12,9 +12,9 @@ import { ParamOwnerTag } from "~/components/studio/workflow-library/ParamOwnerTa
  * 会让人以为每个参数行都会挂一个徽标。
  */
 const meta = {
-  title: "Studio/ParamOwnerTag",
-  component: ParamOwnerTag,
   args: { label: "提示词" },
+  component: ParamOwnerTag,
+  title: "Studio/ParamOwnerTag",
 } satisfies Meta<typeof ParamOwnerTag>;
 
 export default meta;
@@ -35,9 +35,7 @@ export const NoOwnerRendersNothing: Story = {
   args: { label: undefined },
   render: (args) => (
     <div className="flex items-center gap-3">
-      <span className="text-ink-muted font-mono text-[11px]">
-        label = undefined →
-      </span>
+      <span className="text-ink-muted font-mono text-[11px]">label = undefined →</span>
       <span className="border-border text-ink-faint rounded border border-dashed px-3 py-1 text-[11px]">
         <ParamOwnerTag {...args} />
       </span>

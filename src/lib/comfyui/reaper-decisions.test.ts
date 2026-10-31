@@ -16,10 +16,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../core/repository", () => ({
   taskRepository: {
-    listStaleUnownedQueued: vi.fn().mockResolvedValue([]),
-    listStaleRunning: vi.fn().mockResolvedValue([]),
     finalizeFailure: vi.fn().mockResolvedValue(undefined),
     finalizeFromReaper: vi.fn().mockResolvedValue(undefined),
+    listStaleRunning: vi.fn().mockResolvedValue([]),
+    listStaleUnownedQueued: vi.fn().mockResolvedValue([]),
   },
 }));
 vi.mock("./lifecycle", () => ({
@@ -30,7 +30,7 @@ vi.mock("./client", () => ({
 }));
 vi.mock("./executor-cli", () => ({ cliProcs: new Map() }));
 vi.mock("~/lib/core/logger", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
 import { taskRepository } from "../core/repository";
@@ -72,16 +72,16 @@ function logsOf(taskId: string): Array<string> {
  *  （ISSUE #1204 起，这是本 sweeper 唯一的命中形状），createdAt 早于 STALE_MS。 */
 function queuedRow(id: string, promptId: string | null = null) {
   return {
-    id,
-    promptId,
     claimedBy: "worker",
     createdAt: new Date(Date.now() - 120_000),
+    id,
+    promptId,
   };
 }
 
 /** 造一条 RUNNING 行（promptId 已写，finishedAt 未写）。 */
 function runningRow(id: string, promptId: string | null) {
-  return { id, promptId, createdAt: new Date(Date.now() - 300_000) };
+  return { createdAt: new Date(Date.now() - 300_000), id, promptId };
 }
 
 /** 清掉 runner 的 in-memory 足迹，确保每个用例从「冷启动」开始。 */
@@ -124,7 +124,7 @@ function stubComfyIdle() {
     "fetch",
     vi.fn(async (url: string) => {
       if (String(url).includes("/queue")) {
-        return new Response(JSON.stringify({ queue_running: [], queue_pending: [] }), {
+        return new Response(JSON.stringify({ queue_pending: [], queue_running: [] }), {
           status: 200,
         });
       }
@@ -202,8 +202,8 @@ describe("QUEUED 死信判决矩阵（ISSUE #1204 起：只判没有任何宿主
         if (String(url).includes("/queue")) {
           return new Response(
             JSON.stringify({
-              queue_running: [{ prompt_id: "p-x" }],
               queue_pending: [],
+              queue_running: [{ prompt_id: "p-x" }],
             }),
             { status: 200 },
           );
@@ -245,7 +245,7 @@ describe("QUEUED 死信判决矩阵（ISSUE #1204 起：只判没有任何宿主
       "fetch",
       vi.fn(async (url: string) => {
         if (String(url).includes("/queue")) {
-          return new Response(JSON.stringify({ queue_running: [], queue_pending: [] }), {
+          return new Response(JSON.stringify({ queue_pending: [], queue_running: [] }), {
             status: 200,
           });
         }
@@ -271,7 +271,7 @@ describe("QUEUED 死信判决矩阵（ISSUE #1204 起：只判没有任何宿主
     repoMock("listStaleUnownedQueued").mockResolvedValue([queuedRow("t-a"), queuedRow("t-b")]);
     const fetchSpy = vi.fn(
       async () =>
-        new Response(JSON.stringify({ queue_running: [], queue_pending: [] }), {
+        new Response(JSON.stringify({ queue_pending: [], queue_running: [] }), {
           status: 200,
         }),
     );
@@ -419,7 +419,7 @@ describe("RUNNING reaper 判决矩阵", () => {
     repoMock("listStaleRunning").mockResolvedValue([runningRow("t-err", "p-2")]);
     mockFetchOnce({
       history: json({
-        "p-2": { status: { errored: true }, error: { message: "OOM" } },
+        "p-2": { error: { message: "OOM" }, status: { errored: true } },
       }),
     });
 
@@ -435,7 +435,7 @@ describe("RUNNING reaper 判决矩阵", () => {
     repoMock("listStaleRunning").mockResolvedValue([runningRow("t-lost", "p-3")]);
     mockFetchOnce({
       history: json({}),
-      queue: json({ queue_running: [], queue_pending: [] }),
+      queue: json({ queue_pending: [], queue_running: [] }),
     });
 
     await reaper.reapStaleRunningTasks!();

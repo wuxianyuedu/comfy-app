@@ -26,12 +26,12 @@ export default function WorkspacePage() {
   /* 页签状态、恢复/落盘、打开/选中/关闭都在 `useWorkspaceTabs`（§12.13：组件已经
      在函数长度阈值附近，按职责拆而不是在里面加注释分段）。 */
   const {
-    tabs: viewTabs,
     activeKey: activeViewKey,
-    viewMode,
+    closeTab: closeViewTabByKey,
     navigateTo,
     selectTab: selectViewTab,
-    closeTab: closeViewTabByKey,
+    tabs: viewTabs,
+    viewMode,
   } = useWorkspaceTabs();
 
   /* 「请求切到某个视图」的应用事件订阅（唯一订阅侧）。
@@ -46,7 +46,7 @@ export default function WorkspacePage() {
   const consumeSettingsSection = useCallback(() => setPendingSettingsSection(null), []);
   useEffect(
     () =>
-      subscribeAppEvent("workspace:navigate", ({ view, section }) => {
+      subscribeAppEvent("workspace:navigate", ({ section, view }) => {
         const target = WORKSPACE_VIEWS.find((candidate) => candidate === view);
         if (!target) {
           return;
@@ -120,13 +120,13 @@ export default function WorkspacePage() {
             const edgeCount = project.edges?.length ?? 0;
             return {
               id: project.id,
+              kind: /* SAFETY: 类型断言已复核 */ "canvas" as const,
               name: (project.name || "未命名项目").slice(0, 28),
+              subtitle: nodeCount > 0 ? `${nodeCount} 节点 · ${edgeCount} 连线` : "空画布",
+              thumbnails: [],
               updatedAt: project.updatedAt
                 ? (timeAgo(project.updatedAt, { suffix: "修改" }) ?? "刚刚修改")
                 : "刚刚",
-              kind: /* SAFETY: 类型断言已复核 */ "canvas" as const,
-              subtitle: nodeCount > 0 ? `${nodeCount} 节点 · ${edgeCount} 连线` : "空画布",
-              thumbnails: [],
             };
           }),
       );
@@ -248,9 +248,9 @@ export default function WorkspacePage() {
 
   const openableViews = useMemo(
     () => [
-      ...globalNavItems().map((item) => ({ view: item.id, label: item.label })),
+      ...globalNavItems().map((item) => ({ label: item.label, view: item.id })),
       ...(activeProjectId
-        ? projectTabs().map((item) => ({ view: item.id, label: item.label }))
+        ? projectTabs().map((item) => ({ label: item.label, view: item.id }))
         : []),
     ],
     [activeProjectId],

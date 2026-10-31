@@ -121,19 +121,19 @@ export type ProducedMessage = {
  */
 function staleStoreNotice(): { body: string; title: string } {
   return {
-    title: "运行中的页面落后于源码",
     body:
       "检测到源码已被改动，而当前页面是改动之前加载的。\n" +
       "表现可能是：新加的界面点不开、已有的按钮点了没反应。\n" +
       "处理：重载一次页面（Ctrl/Cmd + R）即恢复；正在跑的任务不受影响。",
+    title: "运行中的页面落后于源码",
   };
 }
 
 /** 更新检查那一处的文案 —— 与 `UpdateCheckProvider.onDirty` 的 push 同源。 */
 function updateNotice(): { body: string; title: string } {
   return {
-    title: "检测到本地更新，需重启应用",
     body: "3 个包有新版本：next 16.3.8、react 19.4.0、zustand 5.2.1。需重启应用才生效。",
+    title: "检测到本地更新，需重启应用",
   };
 }
 
@@ -172,15 +172,15 @@ function serviceDisconnectNotice(): { body: string; title: string } {
 function serviceRecoveredNotice(): { body: string; title: string } {
   return describeAppServiceStart({
     at: SERVICE_UP_AT,
-    offlineAt: SERVICE_DOWN_AT,
     exitAt: SERVICE_DOWN_AT,
+    offlineAt: SERVICE_DOWN_AT,
     /* 这个示例摆的是「每一拍都在探」的一次干净恢复（停表那一段为 0，不标注）。 */
-    unprobedMs: 0,
     notice: {
-      why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
       action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
       detail: "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
+      why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
     },
+    unprobedMs: 0,
   });
 }
 
@@ -316,8 +316,8 @@ export type SceneName = keyof typeof MESSAGE_SCENES;
 /** Args 面板里那条「消息场景」旋钮（选项取自注册表）。 */
 export function messageSceneArgType() {
   return {
-    description: "写进真 store 的消息场景（文案由各自的生产方现算）",
     control: { type: "select" as const },
+    description: "写进真 store 的消息场景（文案由各自的生产方现算）",
     options: MESSAGE_SCENE_NAMES,
   };
 }

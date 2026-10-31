@@ -14,9 +14,9 @@ export const btnCls =
   "rounded-md btn-gradient px-2.5 py-1 text-xs font-medium text-white disabled:opacity-40";
 
 export function Field({
+  children,
   label,
   port,
-  children,
 }: {
   children: React.ReactNode;
   label: string;
@@ -34,16 +34,16 @@ export function Field({
               id={port.id}
               position={Position.Left}
               style={{
-                position: "absolute",
-                width: 10,
-                height: 10,
                 background: s.gradient,
                 border: `1.5px solid ${s.color}`,
+                borderRadius: 9999,
                 boxShadow: `0 0 8px ${s.glow}, 0 0 0 1px rgba(255,255,255,0.06)`,
+                height: 10,
                 left: -14,
+                position: "absolute",
                 top: "50%",
                 transform: "translateY(-50%)",
-                borderRadius: 9999,
+                width: 10,
               }}
               type="target"
             />
@@ -69,13 +69,13 @@ export function Field({
               id={port.id}
               position={Position.Right}
               style={{
-                width: 10,
-                height: 10,
                 background: s.gradient,
                 border: `1.5px solid ${s.color}`,
                 boxShadow: `0 0 8px ${s.glow}, 0 0 0 1px rgba(255,255,255,0.08)`,
+                height: 10,
                 right: -14,
                 top: 1,
+                width: 10,
               }}
               type="source"
             />
@@ -90,53 +90,53 @@ export function Field({
    灵感来源：用户偏好柔和粉彩渐变（紫粉/蓝青/黄橙/青绿/蓝紫/粉红）。
    端口用大圆点 + 渐变 + 同色发光，hover/连线时更醒目。 */
 export const PORT_STYLE = /* SAFETY: 类型断言已复核 */ {
-  model: {
-    gradient: "linear-gradient(135deg, #5BC6FF 0%, #6BEBEB 100%)",
-    color: "#5BC6FF",
-    glow: "rgba(91,198,255,0.55)",
-    label: "模型",
-  },
-  latent: {
-    gradient: "linear-gradient(135deg, #B584FF 0%, #FF9DCD 100%)",
-    color: "#B584FF",
-    glow: "rgba(181,132,255,0.55)",
-    label: "LATENT",
-  },
   condition: {
-    gradient: "linear-gradient(135deg, #FFD571 0%, #FF9C5B 100%)",
     color: "#FF9C5B",
     glow: "rgba(255,156,91,0.55)",
+    gradient: "linear-gradient(135deg, #FFD571 0%, #FF9C5B 100%)",
     label: "条件",
   },
-  negative: {
-    gradient: "linear-gradient(135deg, #FF8FB0 0%, #FF7AC0 100%)",
-    color: "#FF7AC0",
-    glow: "rgba(255,122,192,0.55)",
-    label: "负条件",
-  },
-  image: {
-    gradient: "linear-gradient(135deg, #5BE3C4 0%, #67E89D 100%)",
-    color: "#5BE3C4",
-    glow: "rgba(91,227,196,0.55)",
-    label: "图像",
-  },
-  seed: {
-    gradient: "linear-gradient(135deg, #7891FF 0%, #A584FF 100%)",
-    color: "#A584FF",
-    glow: "rgba(165,132,255,0.55)",
-    label: "种子",
-  },
-  int: {
-    gradient: "linear-gradient(135deg, #B584FF 0%, #FF9DCD 100%)",
-    color: "#B584FF",
-    glow: "rgba(181,132,255,0.55)",
-    label: "整数值",
-  },
   float: {
-    gradient: "linear-gradient(135deg, #FFD571 0%, #FF9C5B 100%)",
     color: "#FFD571",
     glow: "rgba(255,213,113,0.55)",
+    gradient: "linear-gradient(135deg, #FFD571 0%, #FF9C5B 100%)",
     label: "浮点值",
+  },
+  image: {
+    color: "#5BE3C4",
+    glow: "rgba(91,227,196,0.55)",
+    gradient: "linear-gradient(135deg, #5BE3C4 0%, #67E89D 100%)",
+    label: "图像",
+  },
+  int: {
+    color: "#B584FF",
+    glow: "rgba(181,132,255,0.55)",
+    gradient: "linear-gradient(135deg, #B584FF 0%, #FF9DCD 100%)",
+    label: "整数值",
+  },
+  latent: {
+    color: "#B584FF",
+    glow: "rgba(181,132,255,0.55)",
+    gradient: "linear-gradient(135deg, #B584FF 0%, #FF9DCD 100%)",
+    label: "LATENT",
+  },
+  model: {
+    color: "#5BC6FF",
+    glow: "rgba(91,198,255,0.55)",
+    gradient: "linear-gradient(135deg, #5BC6FF 0%, #6BEBEB 100%)",
+    label: "模型",
+  },
+  negative: {
+    color: "#FF7AC0",
+    glow: "rgba(255,122,192,0.55)",
+    gradient: "linear-gradient(135deg, #FF8FB0 0%, #FF7AC0 100%)",
+    label: "负条件",
+  },
+  seed: {
+    color: "#A584FF",
+    glow: "rgba(165,132,255,0.55)",
+    gradient: "linear-gradient(135deg, #7891FF 0%, #A584FF 100%)",
+    label: "种子",
   },
 } as const;
 type PortType = keyof typeof PORT_STYLE;
@@ -206,8 +206,8 @@ export function NodeChip({
         }`}
         style={{
           background: `linear-gradient(135deg, ${meta.color}30 0%, ${meta.color}15 100%)`,
-          color: meta.color,
           boxShadow: `0 0 8px ${meta.color}33, inset 0 0 0 1px ${meta.color}40`,
+          color: meta.color,
         }}
       >
         {meta.typeChar}

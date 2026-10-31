@@ -59,7 +59,7 @@ async function readExtraPathsFile(
 ): Promise<{ content: string; file: string } | null> {
   for (const candidate of candidates) {
     try {
-      return { file: candidate, content: await readFile(candidate, "utf8") };
+      return { content: await readFile(candidate, "utf8"), file: candidate };
     } catch {
       // 换下一个候选；全都不存在时返回 null（这不是错误：没有 yaml 就是没有共享目录）。
     }
@@ -73,18 +73,18 @@ function expandEntry(
   exists: (p: string) => boolean,
 ): Array<{ dir: StorageDirInfo; slot: StorageSlot }> {
   return entry.paths.map((item) => ({
-    slot: classifyStorageSlot(item),
     dir: {
-      path: path.resolve(entry.basePath, item),
       exists: exists(path.resolve(entry.basePath, item)),
+      path: path.resolve(entry.basePath, item),
       source: entry.key,
     },
+    slot: classifyStorageSlot(item),
   }));
 }
 
 /** 三组「主目录 + 共享目录」的空盘面。 */
 function emptySlots(): Record<StorageSlot, Array<StorageDirInfo>> {
-  return { models: [], input: [], output: [] };
+  return { input: [], models: [], output: [] };
 }
 
 /**
@@ -108,9 +108,9 @@ export async function resolveDesktopStoragePaths(
     (async (target: string) =>
       (
         await resolveEffectiveLaunch({
+          comfyuiExtraArgs: "",
           comfyuiPath: target,
           comfyuiPort: 0,
-          comfyuiExtraArgs: "",
         })
       ).extraArgs);
 
@@ -158,8 +158,8 @@ export async function resolveDesktopStoragePaths(
   const primaryBase = overrides.baseDir ?? parsed.basePath ?? baseDir;
 
   const modelDir: StorageDirInfo = {
-    path: path.join(primaryBase, "models"),
     exists: exists(path.join(primaryBase, "models")),
+    path: path.join(primaryBase, "models"),
     source: overrides.baseDir
       ? "--base-directory"
       : parsed.basePath
@@ -167,13 +167,13 @@ export async function resolveDesktopStoragePaths(
         : null,
   };
   const inputDir: StorageDirInfo = {
-    path: overrides.inputDir ?? path.join(primaryBase, "input"),
     exists: exists(overrides.inputDir ?? path.join(primaryBase, "input")),
+    path: overrides.inputDir ?? path.join(primaryBase, "input"),
     source: overrides.inputDir ? "--input-directory" : null,
   };
   const outputDir: StorageDirInfo = {
-    path: overrides.outputDir ?? path.join(primaryBase, "output"),
     exists: exists(overrides.outputDir ?? path.join(primaryBase, "output")),
+    path: overrides.outputDir ?? path.join(primaryBase, "output"),
     source: overrides.outputDir ? "--output-directory" : null,
   };
 
@@ -186,7 +186,7 @@ export async function resolveDesktopStoragePaths(
     normalizeDirKey(outputDir.path),
   ]);
   for (const entry of parsed.entries) {
-    for (const { slot, dir } of expandEntry(entry, exists)) {
+    for (const { dir, slot } of expandEntry(entry, exists)) {
       const key = normalizeDirKey(dir.path);
       if (seen.has(key)) {
         continue;
@@ -197,14 +197,14 @@ export async function resolveDesktopStoragePaths(
   }
 
   return {
-    instanceRoot,
     baseDir,
     extraModelPathsFile: extra?.file ?? null,
-    modelDir,
-    sharedModelDirs: shared.models,
     inputDir,
-    sharedInputDirs: shared.input,
+    instanceRoot,
+    modelDir,
     outputDir,
+    sharedInputDirs: shared.input,
+    sharedModelDirs: shared.models,
     sharedOutputDirs: shared.output,
   };
 }

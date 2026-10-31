@@ -25,7 +25,7 @@ import {
 } from "./use-draggable-position";
 
 const KEY = "comfyapp:test-fab:v1";
-const DEFAULT = { right: 24, bottom: 40 };
+const DEFAULT = { bottom: 40, right: 24 };
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -37,13 +37,13 @@ afterEach(cleanup);
 function setViewport(width: number, height: number) {
   Object.defineProperty(window, "innerWidth", {
     configurable: true,
-    writable: true,
     value: width,
+    writable: true,
   });
   Object.defineProperty(window, "innerHeight", {
     configurable: true,
-    writable: true,
     value: height,
+    writable: true,
   });
 }
 
@@ -56,12 +56,12 @@ function setViewport(width: number, height: number) {
  */
 function stubRect(this: HTMLElement) {
   return /* SAFETY: 类型断言已复核 */ {
-    width: 40,
+    bottom: 40,
     height: 40,
-    top: 0,
     left: 0,
     right: 40,
-    bottom: 40,
+    top: 0,
+    width: 40,
     x: 0,
     y: 0,
     /* `DOMRect` 要求 `toJSON`，但本 hook 只读尺寸与坐标 —— 给一个返回自身的
@@ -80,8 +80,8 @@ function stubRect(this: HTMLElement) {
  * 避免「渲染期写 ref」这类会触发 `react-hooks/refs` 的写法。
  */
 function Harness({
-  onClick,
   elementShown,
+  onClick,
   onController,
 }: {
   elementShown: boolean;
@@ -89,9 +89,9 @@ function Harness({
   onController: (c: DraggablePositionController<HTMLButtonElement>) => void;
 }) {
   const controller = useDraggablePosition<HTMLButtonElement>({
-    storageKey: KEY,
     defaultOffset: DEFAULT,
     onClick,
+    storageKey: KEY,
   });
   onController(controller);
   if (!elementShown) {
@@ -130,12 +130,12 @@ function setup(options: { elementShown?: boolean; onClick?: () => void } = {}): 
     />,
   );
   return {
-    controller: () => latest!,
     attach: (shown) => {
       view.rerender(
         <Harness elementShown={shown} onClick={options.onClick} onController={onController} />,
       );
     },
+    controller: () => latest!,
   };
 }
 
@@ -149,9 +149,9 @@ function drag(
     handleProps.onPointerDown(
       /* SAFETY: 类型断言已复核 */ {
         button: 0,
-        pointerId: 1,
         clientX: from.x,
         clientY: from.y,
+        pointerId: 1,
       } as unknown as React.PointerEvent<HTMLElement>,
     );
   });
@@ -160,9 +160,9 @@ function drag(
     for (let i = 1; i <= steps; i++) {
       window.dispatchEvent(
         new PointerEvent("pointermove", {
-          pointerId: 1,
           clientX: from.x + ((to.x - from.x) * i) / steps,
           clientY: from.y + ((to.y - from.y) * i) / steps,
+          pointerId: 1,
         }),
       );
     }
@@ -170,9 +170,9 @@ function drag(
   act(() => {
     window.dispatchEvent(
       new PointerEvent("pointerup", {
-        pointerId: 1,
         clientX: to.x,
         clientY: to.y,
+        pointerId: 1,
       }),
     );
   });
@@ -208,18 +208,18 @@ describe("useDraggablePosition", () => {
    * 第一版就是在这条路径上把记住的位置**静默丢弃**的（拿到默认值去夹，没重读
    * storage），表现是「拖过之后重开应用，图标又跳回右下角」。 */
   it("元素首轮还没挂上：也要给位置，挂上后位置不跳变", async () => {
-    window.localStorage.setItem(KEY, JSON.stringify({ right: 500, bottom: 300 }));
-    const { controller, attach } = setup({ elementShown: false });
+    window.localStorage.setItem(KEY, JSON.stringify({ bottom: 300, right: 500 }));
+    const { attach, controller } = setup({ elementShown: false });
 
     /* 第一态：元素不在 DOM 里。这里**仍要给出位置** —— 调用处按「有没有偏移」
      * 决定要不要渲染被拖的元素，不给值它永远不渲染、也就永远挂不上（死结）。
      * 此时按零尺寸的占位盒子夹取，读到的已是 storage 里那个值。 */
-    await expect.poll(() => controller().offset).toEqual({ right: 500, bottom: 300 });
+    await expect.poll(() => controller().offset).toEqual({ bottom: 300, right: 500 });
 
     /* 第二态：元素挂上 —— 位置**不该跳变**（这一条正是第一版丢掉记住位置时
      * 会红的地方：挂上后它拿默认值去夹，图标倏地跳回右下角）。 */
     act(() => attach(true));
-    await expect.poll(() => controller().offset).toEqual({ right: 500, bottom: 300 });
+    await expect.poll(() => controller().offset).toEqual({ bottom: 300, right: 500 });
   });
 
   it("拖出视口时被夹住——元素整体留在视口内", async () => {
@@ -235,14 +235,14 @@ describe("useDraggablePosition", () => {
         message: "夹取后右下都要留出通行留白",
       })
       .toBeGreaterThanOrEqual(DRAG_EDGE_GAP_PX);
-    const { right, bottom } = controller().offset!;
+    const { bottom, right } = controller().offset!;
     expect(right).toBeLessThanOrEqual(1000 - 40 - DRAG_EDGE_GAP_PX);
     expect(bottom).toBeLessThanOrEqual(800 - 40 - DRAG_EDGE_GAP_PX);
   });
 
   it("窗口缩小后原先的落点被收紧回视口内", async () => {
     /* 先把元素摆到靠右下的远处（存进 storage），再把窗口缩到很小。 */
-    window.localStorage.setItem(KEY, JSON.stringify({ right: 900, bottom: 700 }));
+    window.localStorage.setItem(KEY, JSON.stringify({ bottom: 700, right: 900 }));
     const { controller } = setup();
     await expect.poll(() => controller().offset).not.toBeNull();
     act(() => {
@@ -252,7 +252,7 @@ describe("useDraggablePosition", () => {
     await expect
       .poll(
         () => {
-          const { right, bottom } = controller().offset!;
+          const { bottom, right } = controller().offset!;
           return Math.max(
             right - (1000 - 40 - DRAG_EDGE_GAP_PX),
             bottom - (800 - 40 - DRAG_EDGE_GAP_PX),
@@ -288,18 +288,18 @@ describe("useDraggablePosition", () => {
       controller().handleProps.onPointerDown(
         /* SAFETY: 类型断言已复核 */ {
           button: 2,
-          pointerId: 1,
           clientX: 900,
           clientY: 700,
+          pointerId: 1,
         } as unknown as React.PointerEvent<HTMLElement>,
       );
     });
     act(() => {
       window.dispatchEvent(
         new PointerEvent("pointermove", {
-          pointerId: 1,
           clientX: 400,
           clientY: 300,
+          pointerId: 1,
         }),
       );
     });

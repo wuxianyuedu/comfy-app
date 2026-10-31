@@ -29,8 +29,8 @@ import {
  * `open: true`（「面板开着但列表空着」是个真形态，不是「空」的开关）。
  */
 const meta = {
-  title: "MessageCenter/Panel",
   component: MessageCenterPanel,
+  title: "MessageCenter/Panel",
   /* 场景旋钮走 `args`：Args 面板只认 args，不认 `parameters` 里的嵌套键
      （与值源那条同口径）。装饰器读的是 `parameters.messageScene`，所以下面
      每一档 story 自己把 args 那个值搬进 parameters —— 见 `sceneStory()`。 */

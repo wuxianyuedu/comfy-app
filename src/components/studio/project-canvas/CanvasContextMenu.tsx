@@ -31,7 +31,7 @@ type CanvasContextMenuProps = {
   y: number;
 };
 
-export function CanvasContextMenu({ x, y, onPick, onPickTest, onClose }: CanvasContextMenuProps) {
+export function CanvasContextMenu({ onClose, onPick, onPickTest, x, y }: CanvasContextMenuProps) {
   return (
     <DropdownMenu onOpenChange={(open) => !open && onClose()} open>
       {/* 零尺寸定位锚点：菜单开在右键那个点上，而不是某个可见控件旁边。 */}

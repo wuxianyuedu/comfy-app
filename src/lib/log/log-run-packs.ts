@@ -85,7 +85,7 @@ export function parsePackScopedId(id: string): { fileName: string; packName: str
   if (fileName.includes(PACK_SEP)) {
     return null;
   }
-  return { packName, fileName };
+  return { fileName, packName };
 }
 
 /** `runs/` 里的一个运行包（读目录与 `run.json` 归 `log-run-packs.server.ts`）。 */
@@ -150,22 +150,22 @@ export function buildRunScopedOptions(
   /* 本次运行：倒序（最新那次启动在最上面，与整条列表同向）。 */
   for (const file of current.slice().reverse()) {
     out.push({
-      id: file.name,
-      title: formatScopedLabel(file.title, "本次运行", null),
-      startedAt: file.startedAt,
-      scope: "current",
       crashed: false,
+      id: file.name,
+      scope: "current",
+      startedAt: file.startedAt,
+      title: formatScopedLabel(file.title, "本次运行", null),
     });
   }
   for (const pack of packs) {
     const runId = stripRunId(pack.name);
     for (const file of pack.files) {
       out.push({
-        id: packScopedId(pack.name, file.name),
-        title: formatScopedLabel(file.title, exitText(pack.crashed), runId),
-        startedAt: file.startedAt,
-        scope: "runs",
         crashed: pack.crashed,
+        id: packScopedId(pack.name, file.name),
+        scope: "runs",
+        startedAt: file.startedAt,
+        title: formatScopedLabel(file.title, exitText(pack.crashed), runId),
       });
     }
   }

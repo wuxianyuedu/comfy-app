@@ -23,31 +23,31 @@ beforeEach(() => {
 
 describe("ProductionRepository", () => {
   it("upsert 新建后 getForUser 读回，JSON 列还原为对象", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     await productionRepository.upsertForUser("u1", {
       id: "proj_1",
-      title: "我的短剧",
+      progress: { rendered: false, stage: "storyboard" },
       shots: [{ id: "s1", index: 1, prompt: "p" }],
-      progress: { stage: "storyboard", rendered: false },
+      title: "我的短剧",
     });
     const got = await productionRepository.getForUser("u1", "proj_1");
     expect(got).not.toBeNull();
     expect(got?.title).toBe("我的短剧");
     expect(got?.shots).toEqual([{ id: "s1", index: 1, prompt: "p" }]);
-    expect(got?.progress).toEqual({ stage: "storyboard", rendered: false });
+    expect(got?.progress).toEqual({ rendered: false, stage: "storyboard" });
   });
 
   it("同 id 二次 upsert 走更新分支（title 变、不新增行）", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     await productionRepository.upsertForUser("u1", {
       id: "proj_1",
-      title: "v1",
       shots: [],
+      title: "v1",
     });
     await productionRepository.upsertForUser("u1", {
       id: "proj_1",
-      title: "v2",
       shots: [{ id: "s9" }],
+      title: "v2",
     });
     const got = await productionRepository.getForUser("u1", "proj_1");
     expect(got?.title).toBe("v2");
@@ -55,24 +55,22 @@ describe("ProductionRepository", () => {
   });
 
   it("跨用户读不到（getForUser 带 userId 过滤）", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
-    seedUser(tdb, { id: "u2", email: "u2@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
+    seedUser(tdb, { email: "u2@test.dev", id: "u2" });
     await productionRepository.upsertForUser("u1", {
       id: "proj_1",
       title: "u1 的",
     });
     expect(await productionRepository.getForUser("u2", "proj_1")).toBeNull();
-    expect(
-      await productionRepository.getForUser("u1", "proj_1"),
-    ).not.toBeNull();
+    expect(await productionRepository.getForUser("u1", "proj_1")).not.toBeNull();
   });
 
   it("patchContent 支持 scriptReview（FR-QA-07）：JSON 列序列化落库且还原为对象", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     await productionRepository.upsertForUser("u1", { id: "proj_1" });
     const state = {
-      review: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
       history: [],
+      review: { issues: [], pass: true, scoredAt: "t", suggestion: "" },
     };
     expect(
       await productionRepository.patchContent("u1", "proj_1", {

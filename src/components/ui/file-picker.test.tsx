@@ -26,10 +26,10 @@ import { FilePicker, FilePickerButton, useFilePicker, type FilePickerHandle } fr
 function pick(input: HTMLInputElement, ...files: Array<File>) {
   const list = /* SAFETY: 类型断言已复核 */ {
     ...files,
-    length: files.length,
     item: (i: number) => files[i],
+    length: files.length,
   } as unknown as FileList;
-  Object.defineProperty(input, "files", { value: list, configurable: true });
+  Object.defineProperty(input, "files", { configurable: true, value: list });
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
@@ -91,7 +91,7 @@ describe("FilePicker", () => {
     const onPick = vi.fn();
     render(<FilePicker onPick={onPick} />);
     const input = fileInput();
-    Object.defineProperty(input, "files", { value: null, configurable: true });
+    Object.defineProperty(input, "files", { configurable: true, value: null });
     input.dispatchEvent(new Event("change", { bubbles: true }));
     expect(onPick).not.toHaveBeenCalled();
   });

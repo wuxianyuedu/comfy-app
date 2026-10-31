@@ -13,12 +13,12 @@ const { completeLLM, completeLLMStructured, getLLMConfig } = vi.hoisted(() => ({
   getLLMConfig: vi.fn(async () => ({})),
 }));
 vi.mock("~/lib/llm/server", () => ({
-  getLLMConfig,
   completeLLM,
   completeLLMStructured,
+  getLLMConfig,
 }));
 vi.mock("~/lib/llm/prompts", () => ({
-  buildScriptMarkdownMessages: () => [{ role: "user", content: "x" }],
+  buildScriptMarkdownMessages: () => [{ content: "x", role: "user" }],
 }));
 const synthesizeFirstFrame = vi.hoisted(() =>
   vi.fn(async (_opts: unknown) => "/api/generated/shot.png"),
@@ -43,7 +43,7 @@ const reviewContent = vi.hoisted(() =>
       pass: boolean;
       scoredAt: string;
       suggestion: string;
-    }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
+    }> => ({ issues: [], pass: true, scoredAt: "t", suggestion: "" }),
   ),
 );
 const reviewShotImage = vi.hoisted(() =>
@@ -57,7 +57,7 @@ const reviewShotImage = vi.hoisted(() =>
       pass: boolean;
       scoredAt: string;
       suggestion: string;
-    }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
+    }> => ({ issues: [], pass: true, scoredAt: "t", suggestion: "" }),
   ),
 );
 const reviewScript = vi.hoisted(() =>
@@ -74,8 +74,8 @@ const reviewScript = vi.hoisted(() =>
         suggestion: string;
       };
     }> => ({
-      verdict: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
       history: [],
+      verdict: { issues: [], pass: true, scoredAt: "t", suggestion: "" },
     }),
   ),
 );
@@ -83,8 +83,8 @@ const reviseScript = vi.hoisted(() => vi.fn(async (_u: string, _p: string) => "#
 vi.mock("~/server/agent/review", () => ({
   reviewContent,
   reviewScript,
-  reviseScript,
   reviewShotImage,
+  reviseScript,
 }));
 
 vi.mock("~/server/db", async () => {
@@ -120,16 +120,16 @@ async function seed(
 ) {
   const { rendered, ...rest } = content;
   await productionRepository.upsertForUser(USER, {
-    id: PROJ,
-    title: "T",
-    type: "short_video",
-    tone: "",
-    logline: "",
-    scriptMarkdown: rest.scriptMarkdown ?? "",
-    scenes: [],
     characters: rest.characters ?? [],
+    id: PROJ,
+    logline: "",
+    progress: { rendered: Boolean(rendered), stage: "script" },
+    scenes: [],
+    scriptMarkdown: rest.scriptMarkdown ?? "",
     shots: rest.shots ?? [],
-    progress: { stage: "script", rendered: Boolean(rendered) },
+    title: "T",
+    tone: "",
+    type: "short_video",
   });
   const row = await productionRepository.getForUser(USER, PROJ);
   const base = normalizeProductionRun(row?.run);
@@ -141,7 +141,7 @@ const readRow = () => productionRepository.getForUser(USER, PROJ);
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
-  seedUser(tdb, { id: USER, email: "a@test.dev" });
+  seedUser(tdb, { email: "a@test.dev", id: USER });
 });
 
 describe("advanceRunLoop", () => {
@@ -153,15 +153,15 @@ describe("advanceRunLoop", () => {
   });
 
   it("stage 模式：跑完剧本这一步就停下等点头，不越界", async () => {
-    await seed({}, { status: "running", approvalMode: "stage" });
+    await seed({}, { approvalMode: "stage", status: "running" });
     await advanceRunLoop(USER, PROJ);
     expect(completeLLM).toHaveBeenCalledTimes(1);
     const row = await readRow();
     expect(row!.scriptMarkdown).toBe("# 生成的剧本");
     expect(normalizeProductionRun(row!.run)).toMatchObject({
-      status: "awaiting_approval",
       awaitingStage: "script",
       stage: "script",
+      status: "awaiting_approval",
     });
     // 执行日志：这一步追加了一条 generate_script 成功记录（含产出摘要）
     const steps = normalizeProductionRun(row!.run).log;
@@ -174,8 +174,8 @@ describe("advanceRunLoop", () => {
   });
 
   it("角色步：completeLLMStructured 产出写入 characters 后停在角色阶段等确认", async () => {
-    completeLLMStructured.mockResolvedValueOnce([{ name: "阿宁", appearance: "短发" }]);
-    await seed({ scriptMarkdown: "# 剧本" }, { status: "running", approvalMode: "stage" });
+    completeLLMStructured.mockResolvedValueOnce([{ appearance: "短发", name: "阿宁" }]);
+    await seed({ scriptMarkdown: "# 剧本" }, { approvalMode: "stage", status: "running" });
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
     expect(
@@ -188,12 +188,12 @@ describe("advanceRunLoop", () => {
 
   it("分镜步：产出 shots（带 index/rev/prompt），停在分镜阶段", async () => {
     completeLLMStructured.mockResolvedValueOnce([
-      { sceneHeading: "海边", description: "日景" },
+      { description: "日景", sceneHeading: "海边" },
       { description: "特写" },
     ]);
     await seed(
-      { scriptMarkdown: "# 剧本", characters: [{ id: "c1" }] },
-      { status: "running", approvalMode: "stage" },
+      { characters: [{ id: "c1" }], scriptMarkdown: "# 剧本" },
+      { approvalMode: "stage", status: "running" },
     );
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
@@ -207,8 +207,8 @@ describe("advanceRunLoop", () => {
     expect(shots[0]).toMatchObject({
       index: 0,
       prompt: "日景",
-      status: "idle",
       rev: 0,
+      status: "idle",
     });
     expect(normalizeProductionRun(row!.run).awaitingStage).toBe("storyboard");
   });
@@ -216,12 +216,12 @@ describe("advanceRunLoop", () => {
   it("auto 模式：逐镜生图（synthesizeFirstFrame）→ 记 rev 快照 → 已 rendered 则直达 done，不逐步停", async () => {
     await seed(
       {
-        scriptMarkdown: "# 剧本",
         characters: [{ id: "c1" }],
-        shots: [{ id: "a", index: 0, prompt: "p", rev: 0 }],
         rendered: true, // 生图后规划器直接判 done（避开出片等待分支）
+        scriptMarkdown: "# 剧本",
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0 }],
       },
-      { status: "running", approvalMode: "auto", imageWorkflowId: "wf-img" },
+      { approvalMode: "auto", imageWorkflowId: "wf-img", status: "running" },
     );
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
@@ -236,8 +236,8 @@ describe("advanceRunLoop", () => {
       row!.shots as Array<{ imageUrl?: string; status: string }>
     )[0];
     expect(shot).toMatchObject({
-      status: "done",
       imageUrl: "/api/generated/shot.png",
+      status: "done",
     });
     const run = normalizeProductionRun(row!.run);
     expect(run.processedShotRev).toEqual({ a: 0 });
@@ -247,16 +247,16 @@ describe("advanceRunLoop", () => {
   it("抽卡重生成（rev 比快照新）：出图带一个新的随机 seed", async () => {
     await seed(
       {
-        scriptMarkdown: "# 剧本",
         characters: [{ id: "c1" }],
-        shots: [{ id: "a", index: 0, prompt: "p", rev: 1 }],
         rendered: true,
+        scriptMarkdown: "# 剧本",
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 1 }],
       },
       {
-        status: "running",
         approvalMode: "auto",
         imageWorkflowId: "wf-img",
         processedShotRev: { a: 0 }, // 之前处理过 rev0，如今 rev1 → 这是退回后的重出
+        status: "running",
       },
     );
     await advanceRunLoop(USER, PROJ);
@@ -275,11 +275,11 @@ describe("advanceRunLoop", () => {
   it("生图缺 imageWorkflowId → 该步失败落 failed", async () => {
     await seed(
       {
-        scriptMarkdown: "# 剧本",
         characters: [{ id: "c1" }],
+        scriptMarkdown: "# 剧本",
         shots: [{ id: "a", index: 0, prompt: "p" }],
       },
-      { status: "running", approvalMode: "stage" }, // 无 imageWorkflowId
+      { approvalMode: "stage", status: "running" }, // 无 imageWorkflowId
     );
     await advanceRunLoop(USER, PROJ);
     const run = normalizeProductionRun((await readRow())!.run);
@@ -289,7 +289,7 @@ describe("advanceRunLoop", () => {
 
   it("剧本模型空返回 → 落 failed，带可行动原因", async () => {
     completeLLM.mockResolvedValueOnce("");
-    await seed({}, { status: "running", approvalMode: "stage" });
+    await seed({}, { approvalMode: "stage", status: "running" });
     await advanceRunLoop(USER, PROJ);
     const run = normalizeProductionRun((await readRow())!.run);
     expect(run.status).toBe("failed");
@@ -312,23 +312,23 @@ describe("advanceRunLoop · 自动评审", () => {
 
   it("评审通过：定稿 reviewedShotRev，不再重出，直达 done", async () => {
     reviewContent.mockResolvedValue({
-      pass: true,
       issues: [],
-      suggestion: "",
+      pass: true,
       scoredAt: "t",
+      suggestion: "",
     });
     await seed(
       {
-        scriptMarkdown: SCRIPT,
         characters: [{ id: "c1" }],
-        shots: [{ id: "a", index: 0, prompt: "p", rev: 1, imageUrl: "/x.png" }],
         rendered: true,
+        scriptMarkdown: SCRIPT,
+        shots: [{ id: "a", imageUrl: "/x.png", index: 0, prompt: "p", rev: 1 }],
       },
       {
-        status: "running",
         approvalMode: "auto",
         autoReview: true,
         processedShotRev: { a: 1 },
+        status: "running",
         ...settled(SCRIPT),
       },
     );
@@ -343,24 +343,24 @@ describe("advanceRunLoop · 自动评审", () => {
 
   it("评审持续不合格：抽卡重出封顶 REVIEW_MAX_RETRY 后保留、收敛到 done", async () => {
     reviewContent.mockResolvedValue({
-      pass: false,
       issues: ["含混"],
-      suggestion: "更具体",
+      pass: false,
       scoredAt: "t",
+      suggestion: "更具体",
     });
     await seed(
       {
-        scriptMarkdown: SCRIPT,
         characters: [{ id: "c1" }],
-        shots: [{ id: "a", index: 0, prompt: "p", rev: 1, imageUrl: "/x.png" }],
         rendered: true,
+        scriptMarkdown: SCRIPT,
+        shots: [{ id: "a", imageUrl: "/x.png", index: 0, prompt: "p", rev: 1 }],
       },
       {
-        status: "running",
         approvalMode: "auto",
         autoReview: true,
         imageWorkflowId: "wf-img",
         processedShotRev: { a: 1 },
+        status: "running",
         ...settled(SCRIPT),
       },
     );
@@ -377,30 +377,30 @@ describe("advanceRunLoop · 自动评审", () => {
   it("双裁判（P8-2）：文本过但视觉不过 → 镜头判不合格、抽卡重出直到达上限收敛", async () => {
     // 文本评审明明说「过」，但视觉评审说「崩了」——判不合格的唯一来源是图。
     reviewContent.mockResolvedValue({
-      pass: true,
       issues: [],
-      suggestion: "",
+      pass: true,
       scoredAt: "t",
+      suggestion: "",
     });
     reviewShotImage.mockResolvedValue({
-      pass: false,
       issues: ["手畸"],
-      suggestion: "修手",
+      pass: false,
       scoredAt: "t",
+      suggestion: "修手",
     });
     await seed(
       {
-        scriptMarkdown: SCRIPT,
         characters: [{ id: "c1" }],
-        shots: [{ id: "a", index: 0, prompt: "p", rev: 1, imageUrl: "/x.png" }],
         rendered: true,
+        scriptMarkdown: SCRIPT,
+        shots: [{ id: "a", imageUrl: "/x.png", index: 0, prompt: "p", rev: 1 }],
       },
       {
-        status: "running",
         approvalMode: "auto",
         autoReview: true,
         imageWorkflowId: "wf-img",
         processedShotRev: { a: 1 },
+        status: "running",
         ...settled(SCRIPT),
       },
     );
@@ -420,30 +420,30 @@ describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () =
   it("未达标 → revise_script → 复评达标：写收口快照、按 pass 收敛", async () => {
     reviewScript
       .mockResolvedValueOnce({
-        verdict: {
-          pass: false,
-          issues: ["高潮缺失"],
-          suggestion: "补对峙",
-          scoredAt: "t1",
-        },
         history: [],
+        verdict: {
+          issues: ["高潮缺失"],
+          pass: false,
+          scoredAt: "t1",
+          suggestion: "补对峙",
+        },
       })
       .mockResolvedValueOnce({
-        verdict: {
-          pass: true,
-          issues: [],
-          suggestion: "",
-          scoredAt: "t2",
-        },
         history: [],
+        verdict: {
+          issues: [],
+          pass: true,
+          scoredAt: "t2",
+          suggestion: "",
+        },
       });
     reviseScript.mockResolvedValue("# 改写后的剧本");
     await seed(
       { scriptMarkdown: SCRIPT },
       {
-        status: "running",
         approvalMode: "auto",
         autoReview: true,
+        status: "running",
       },
     );
     await advanceRunLoop(USER, PROJ);
@@ -461,21 +461,21 @@ describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () =
 
   it("持续不达标：改写轮次封顶 REVIEW_MAX_RETRY 后保留当前版本、不再返工", async () => {
     reviewScript.mockResolvedValue({
-      verdict: {
-        pass: false,
-        issues: ["弱"],
-        suggestion: "加强",
-        scoredAt: "t",
-      },
       history: [],
+      verdict: {
+        issues: ["弱"],
+        pass: false,
+        scoredAt: "t",
+        suggestion: "加强",
+      },
     });
     reviseScript.mockResolvedValue("# 又一版剧本");
     await seed(
       { scriptMarkdown: SCRIPT },
       {
-        status: "running",
         approvalMode: "auto",
         autoReview: true,
+        status: "running",
       },
     );
     await advanceRunLoop(USER, PROJ);
@@ -492,35 +492,35 @@ describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () =
     const revised = "# 改写定稿后的剧本";
     reviewScript
       .mockResolvedValueOnce({
-        verdict: {
-          pass: true,
-          issues: [],
-          suggestion: "",
-          scoredAt: "t1",
-        },
         history: [],
+        verdict: {
+          issues: [],
+          pass: true,
+          scoredAt: "t1",
+          suggestion: "",
+        },
       })
       .mockResolvedValueOnce({
-        verdict: {
-          pass: true,
-          issues: [],
-          suggestion: "",
-          scoredAt: "t2",
-        },
         history: [],
+        verdict: {
+          issues: [],
+          pass: true,
+          scoredAt: "t2",
+          suggestion: "",
+        },
       });
     completeLLMStructured.mockResolvedValueOnce([{ description: "日景街拍" }]); // plan_storyboard（新剧本；角色步因已有角色被规划器跳过）
     await seed(
       {
-        scriptMarkdown: revised,
         characters: [{ id: "c1" }],
-        shots: [{ id: "old", index: 0, prompt: "旧剧本的镜", rev: 0 }],
         rendered: false,
+        scriptMarkdown: revised,
+        shots: [{ id: "old", index: 0, prompt: "旧剧本的镜", rev: 0 }],
       },
       {
-        status: "running",
         approvalMode: "auto",
         autoReview: true,
+        status: "running",
         storyboardScriptDigest: scriptDigestOf("# 旧剧本"), // 分镜还停在旧版
       },
     );

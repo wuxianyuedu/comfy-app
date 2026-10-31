@@ -57,25 +57,25 @@ type WidgetInputRowProps = {
 };
 
 export function WidgetInputRow({
-  entry,
   allPins,
-  value,
   compact,
+  dimmed = false,
   disabled,
-  uploading,
-  seedMode,
+  entry,
+  handleId,
+  onLabelChange,
+  onPickFile,
+  onRequiredChange,
   onSeedModeChange,
   onValueChange,
-  onPickFile,
-  previewSrc,
-  onLabelChange,
-  onRequiredChange,
-  visible,
   onVisibilityChange,
-  dimmed = false,
-  withHandle = false,
-  handleId,
+  previewSrc,
+  seedMode,
   trailing,
+  uploading,
+  value,
+  visible,
+  withHandle = false,
 }: WidgetInputRowProps) {
   const accent = ACCENT[entry.control];
   const label = ioLabel(entry, allPins);

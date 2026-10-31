@@ -37,7 +37,7 @@ describe("useRefreshTicket", () => {
   });
 
   it("`refresh` 的身份恒定（可以安全进 effect 依赖 / 传给子组件）", () => {
-    const { result, rerender } = renderHook(() => useRefreshTicket());
+    const { rerender, result } = renderHook(() => useRefreshTicket());
     const first = result.current.refresh;
     act(() => result.current.refresh());
     rerender();

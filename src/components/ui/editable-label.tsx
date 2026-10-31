@@ -8,8 +8,8 @@ import { enterCommit } from "~/components/ui/use-enter-commit";
 
 export function EditableLabel({
   label,
-  title,
   onChange,
+  title,
 }: {
   label: string;
   onChange?: (next: string) => void;

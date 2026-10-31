@@ -46,10 +46,10 @@ import { Card as ShadcnCard, CardContent, CardHeader, CardTitle } from "~/compon
  * 就不传 —— 不传就不渲染那一行，卡片立刻矮下来）。
  */
 export function SettingsCard({
-  title,
-  description,
   children,
   className,
+  description,
+  title,
 }: {
   children: React.ReactNode;
   className?: string;

@@ -129,15 +129,15 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
   const pendingDelete = projects.find((project) => project.id === pendingDeleteId) ?? null;
 
   return {
-    projects,
-    loading,
-    serverOk,
-    openProject,
-    requestDelete,
-    pendingDelete,
     cancelDelete,
     confirmDelete,
     deleting,
+    loading,
+    openProject,
+    pendingDelete,
+    projects,
     refresh: () => void load(),
+    requestDelete,
+    serverOk,
   };
 }

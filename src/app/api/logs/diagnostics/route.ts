@@ -52,16 +52,13 @@ export async function POST() {
       /** 绝对路径：用户要能直接把它发给别人 / 在文件管理器里找到。 */
       path: file,
       /** 相对 log/ 的路径：面板空间窄，展示这一截即可。 */
-      relativePath: toDisplayPath(file, LOG_ROOT),
       bytes: await fileSize(file),
+      relativePath: toDisplayPath(file, LOG_ROOT),
     });
   } catch (error) {
     // 失败如实回 500 + 原因（诊断包打不出来通常意味着 log/ 权限或磁盘问题，
     // 而「点了没反应」会把这两类问题一起藏起来）。
-    return NextResponse.json(
-      apiErrorBody(error, "打包诊断失败", { ok: false }),
-      { status: 500 },
-    );
+    return NextResponse.json(apiErrorBody(error, "打包诊断失败", { ok: false }), { status: 500 });
   }
 }
 

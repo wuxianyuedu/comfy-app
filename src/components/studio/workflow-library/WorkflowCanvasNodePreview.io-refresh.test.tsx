@@ -55,23 +55,23 @@ afterEach(cleanup);
 /** steps=20 / cfg=7 两个 widget 参数。 */
 function ioWith(steps: number, cfg: number): WorkflowIOMap {
   return {
-    "7::widget::steps": {
-      direction: "input",
-      kind: "widget",
-      nodeId: "7",
-      name: "steps",
-      label: "步数",
-      type: "INT",
-      defaultValue: steps,
-    },
     "7::widget::cfg": {
+      defaultValue: cfg,
       direction: "input",
       kind: "widget",
-      nodeId: "7",
-      name: "cfg",
       label: "引导系数",
+      name: "cfg",
+      nodeId: "7",
       type: "FLOAT",
-      defaultValue: cfg,
+    },
+    "7::widget::steps": {
+      defaultValue: steps,
+      direction: "input",
+      kind: "widget",
+      label: "步数",
+      name: "steps",
+      nodeId: "7",
+      type: "INT",
     },
   };
 }
@@ -162,23 +162,23 @@ describe("WorkflowCanvasNodePreview — 默认值刷新", () => {
 function promptSizeIO(): WorkflowIOMap {
   return {
     "9::widget::positive_prompt": {
+      defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
       direction: "input",
       kind: "widget",
-      nodeId: "9",
       name: "positive_prompt",
+      nodeId: "9",
       type: "STRING",
-      defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
     },
     /* 只有「宽高比」一个口 —— 成对的宽/高会被并成同一个控件（组合参数），
      * 没有独立的一行可以标徽标；这里刻意用单口形状测行尾徽标。 */
     "5::widget::aspect_ratio": {
+      defaultValue: "16:9",
       direction: "input",
       kind: "widget",
-      nodeId: "5",
-      name: "aspect_ratio",
       label: "宽高比",
+      name: "aspect_ratio",
+      nodeId: "5",
       type: "COMBO",
-      defaultValue: "16:9",
     },
   };
 }
@@ -338,22 +338,22 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         workflowId="wf-1"
         workflowIO={{
           "5::widget::aspect_ratio": {
+            defaultValue: "16:9",
             direction: "input",
             kind: "widget",
-            nodeId: "5",
-            name: "aspect_ratio",
             label: "宽高比",
+            name: "aspect_ratio",
+            nodeId: "5",
             type: "COMBO",
-            defaultValue: "16:9",
           },
           "5::widget::megapixels": {
+            defaultValue: 1,
             direction: "input",
             kind: "widget",
-            nodeId: "5",
-            name: "megapixels",
             label: "像素量",
+            name: "megapixels",
+            nodeId: "5",
             type: "FLOAT",
-            defaultValue: 1,
           },
         }}
         workflowName="测试工作流"
@@ -424,22 +424,22 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         workflowId="wf-1"
         workflowIO={{
           "5::widget::aspect_ratio": {
+            defaultValue: "16:9",
             direction: "input",
             kind: "widget",
-            nodeId: "5",
-            name: "aspect_ratio",
             label: "宽高比",
+            name: "aspect_ratio",
+            nodeId: "5",
             type: "COMBO",
-            defaultValue: "16:9",
           },
           "5::widget::megapixels": {
+            defaultValue: 1,
             direction: "input",
             kind: "widget",
-            nodeId: "5",
-            name: "megapixels",
             label: "像素量",
+            name: "megapixels",
+            nodeId: "5",
             type: "FLOAT",
-            defaultValue: 1,
           },
         }}
         workflowName="测试工作流"

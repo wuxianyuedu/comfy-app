@@ -28,7 +28,7 @@ export type CancelTaskController = {
   cancelling: boolean;
 };
 
-export function useCancelTask({ taskId, onFailed }: UseCancelTaskArgs): CancelTaskController {
+export function useCancelTask({ onFailed, taskId }: UseCancelTaskArgs): CancelTaskController {
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const cancelBusy = useBusyAction();
 
@@ -59,5 +59,5 @@ export function useCancelTask({ taskId, onFailed }: UseCancelTaskArgs): CancelTa
     }
   }, [cancelBusy]);
 
-  return { cancelling: cancelBusy.busy, cancel };
+  return { cancel, cancelling: cancelBusy.busy };
 }

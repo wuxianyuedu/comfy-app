@@ -28,17 +28,17 @@ type CanvasPanelToolbarProps = {
  * - **浮动**（`floating=true`，默认）：绝对定位在画布 left-3。
  * - **行内**（`floating=false`）：普通 flex 子元素，坐在打开的面板左侧。
  */
-export function CanvasPanelToolbar({ active, onSelect, floating = true }: CanvasPanelToolbarProps) {
+export function CanvasPanelToolbar({ active, floating = true, onSelect }: CanvasPanelToolbarProps) {
   const items: Array<{ icon: React.ReactNode; id: CanvasPanelType; label: string }> = [
     {
+      icon: <Folder size={20} strokeWidth={1.8} />,
       id: "materials",
       label: "素材库",
-      icon: <Folder size={20} strokeWidth={1.8} />,
     },
     {
+      icon: <Clock size={20} strokeWidth={1.8} />,
       id: "history",
       label: "历史记录",
-      icon: <Clock size={20} strokeWidth={1.8} />,
     },
   ];
 

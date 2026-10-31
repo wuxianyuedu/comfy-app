@@ -41,11 +41,11 @@ type Story = StoryObj<typeof meta>;
 function FilePickerDemo({ accept, multiple }: { accept?: string; multiple?: boolean }) {
   const [picked, setPicked] = useState<Array<string>>([]);
   const picker = useFilePicker({
+    accept,
+    multiple,
     onPick: (file, files) => {
       setPicked(multiple ? Array.from(files).map((f) => f.name) : [file.name]);
     },
-    accept,
-    multiple,
   });
   return (
     <div className="flex w-120 flex-col gap-3">

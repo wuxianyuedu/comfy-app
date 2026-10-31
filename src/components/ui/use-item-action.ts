@@ -132,11 +132,11 @@ export function useItemAction(keys?: ReadonlyArray<string>): ItemAction {
 
   return useMemo(
     () => ({
-      busyId: visibleBusy,
-      isBusy,
       anyBusy: visibleBusy !== null,
-      run,
+      busyId: visibleBusy,
       clear,
+      isBusy,
+      run,
     }),
     [visibleBusy, isBusy, run, clear],
   );

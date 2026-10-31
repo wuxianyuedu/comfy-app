@@ -39,10 +39,10 @@ describe("patchWorkflow", () => {
 
 describe("patchWorkflowSilently", () => {
   it("成功时发出请求", () => {
-    patchWorkflowSilently({ id: "wf-1", groups: [{ id: "g1", bypass: true }] });
+    patchWorkflowSilently({ groups: [{ bypass: true, id: "g1" }], id: "wf-1" });
     expect(updateMutate).toHaveBeenCalledWith({
+      groups: [{ bypass: true, id: "g1" }],
       id: "wf-1",
-      groups: [{ id: "g1", bypass: true }],
     });
   });
 

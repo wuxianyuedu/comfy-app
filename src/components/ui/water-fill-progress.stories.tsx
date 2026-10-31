@@ -10,12 +10,12 @@ import { WaterFillProgress } from "~/components/ui/water-fill-progress";
  * `~/lib/clamp` 夹取 —— 越界的输入在这一屏看得到。
  */
 const meta = {
-  title: "UI/WaterFillProgress",
-  component: WaterFillProgress,
   args: { progress: 45 },
   argTypes: {
-    progress: { control: { type: "range", min: 0, max: 100 } },
+    progress: { control: { max: 100, min: 0, type: "range" } },
   },
+  component: WaterFillProgress,
+  title: "UI/WaterFillProgress",
 } satisfies Meta<typeof WaterFillProgress>;
 
 export default meta;

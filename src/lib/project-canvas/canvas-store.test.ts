@@ -22,13 +22,13 @@ vi.mock("~/trpc/vanilla", () => ({
        * 后者会把 mock 的**同步抛错**当成 fulfilled 的值吞下去，
        * 于是「服务端拒收这一份」这条路上永远测不到 —— 而这条镜像链的
        * 缺陷恰恰长在失败分支上（台账 A3 装上归属闸之后才有的那一格）。 */
-      upsert: {
-        mutate: (...args: Array<unknown>) =>
-          Promise.resolve().then(() => projectUpsertMutate(...args)),
-      },
       delete: {
         mutate: (...args: Array<unknown>) =>
           Promise.resolve().then(() => projectDeleteMutate(...args)),
+      },
+      upsert: {
+        mutate: (...args: Array<unknown>) =>
+          Promise.resolve().then(() => projectUpsertMutate(...args)),
       },
     },
   },
@@ -71,7 +71,7 @@ async function settled(): Promise<void> {
 function trpcError(code: string, message: string): unknown {
   return Object.assign(new Error(message), {
     data: { code },
-    shape: { message, code },
+    shape: { code, message },
   });
 }
 
@@ -114,19 +114,19 @@ describe("空草稿名哨兵", () => {
 
 describe("reapEmptyProject", () => {
   it("默认名 + 零节点零边 → 回收", () => {
-    seed([{ id: "p1", name: "未命名", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "p1", name: "未命名", nodes: [], updatedAt: 1 }]);
     expect(reapEmptyProject("p1")).toBe(true);
     expect(listProjects()).toHaveLength(0);
   });
 
   it("旧版 legacy 默认名不再被回收（仅当前默认名是哨兵）", () => {
-    seed([{ id: "p1", name: "未命名项目", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "p1", name: "未命名项目", nodes: [], updatedAt: 1 }]);
     expect(reapEmptyProject("p1")).toBe(false);
     expect(listProjects()).toHaveLength(1);
   });
 
   it("已被用户命名的空画布不被回收（刻意保存的空白板）", () => {
-    seed([{ id: "p1", name: "空白灵感板", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "p1", name: "空白灵感板", nodes: [], updatedAt: 1 }]);
     expect(reapEmptyProject("p1")).toBe(false);
     expect(listProjects()).toHaveLength(1);
   });
@@ -134,11 +134,11 @@ describe("reapEmptyProject", () => {
   it("有节点或有边就不回收（哪怕名字还是默认名）", () => {
     seed([
       {
+        edges: [],
         id: "p1",
         name: "未命名",
-        updatedAt: 1,
         nodes: [{ id: "n1" }],
-        edges: [],
+        updatedAt: 1,
       },
     ]);
     expect(reapEmptyProject("p1")).toBe(false);
@@ -152,9 +152,9 @@ describe("reapEmptyProject", () => {
 describe("reapAllEmptyDrafts", () => {
   it("只清默认的空草稿，返回清理条数", () => {
     seed([
-      { id: "p1", name: "未命名", updatedAt: 3, nodes: [], edges: [] },
-      { id: "p2", name: "我的项目", updatedAt: 2, nodes: [], edges: [] },
-      { id: "p3", name: "未命名项目", updatedAt: 1, nodes: [], edges: [] },
+      { edges: [], id: "p1", name: "未命名", nodes: [], updatedAt: 3 },
+      { edges: [], id: "p2", name: "我的项目", nodes: [], updatedAt: 2 },
+      { edges: [], id: "p3", name: "未命名项目", nodes: [], updatedAt: 1 },
     ]);
     // p1 当前哨兵被清；p3 legacy 名已不识别，保留
     expect(reapAllEmptyDrafts()).toBe(1);
@@ -162,7 +162,7 @@ describe("reapAllEmptyDrafts", () => {
   });
 
   it("没有可清理项时不写 localStorage（避免无谓的 changed 事件）", () => {
-    seed([{ id: "p1", name: "我的项目", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "p1", name: "我的项目", nodes: [], updatedAt: 1 }]);
     const setItem = vi.spyOn(localStorage, "setItem");
     expect(reapAllEmptyDrafts()).toBe(0);
     expect(setItem).not.toHaveBeenCalled();
@@ -191,7 +191,7 @@ describe("活跃项目不可回收（ISSUE #1501）", () => {
   });
 
   it("同一批里非活跃的空草稿照旧被清（新闸没把回收关掉）", () => {
-    seed([{ id: "stale", name: "未命名", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "stale", name: "未命名", nodes: [], updatedAt: 1 }]);
     const live = createProject();
     /* `createProject` 会把 active 指到它自己，这里挪开 —— 好让上面那行
      * 陈旧草稿成为「非活跃」的，从而落进清扫范围。 */
@@ -224,9 +224,9 @@ describe("活跃项目不可回收（ISSUE #1501）", () => {
 describe("清扫要连服务端一起删（ISSUE #1501 的孤儿行）", () => {
   it("reapAllEmptyDrafts 对每条被清的空草稿发一次删除", async () => {
     seed([
-      { id: "d1", name: "未命名", updatedAt: 3, nodes: [], edges: [] },
-      { id: "d2", name: "未命名", updatedAt: 2, nodes: [], edges: [] },
-      { id: "keep", name: "我的项目", updatedAt: 1, nodes: [], edges: [] },
+      { edges: [], id: "d1", name: "未命名", nodes: [], updatedAt: 3 },
+      { edges: [], id: "d2", name: "未命名", nodes: [], updatedAt: 2 },
+      { edges: [], id: "keep", name: "我的项目", nodes: [], updatedAt: 1 },
     ]);
     setActive("keep");
 
@@ -240,7 +240,7 @@ describe("清扫要连服务端一起删（ISSUE #1501 的孤儿行）", () => {
   });
 
   it("没有可清的就一条删除都不发", async () => {
-    seed([{ id: "keep", name: "我的项目", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "keep", name: "我的项目", nodes: [], updatedAt: 1 }]);
     setActive("keep");
     expect(reapAllEmptyDrafts()).toBe(0);
     await settled();
@@ -250,20 +250,20 @@ describe("清扫要连服务端一起删（ISSUE #1501 的孤儿行）", () => {
 
 describe("findNextAvailableName", () => {
   it("名字空闲就原样返回", () => {
-    seed([{ id: "p1", name: "灵感", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "p1", name: "灵感", nodes: [], updatedAt: 1 }]);
     expect(findNextAvailableName("草稿")).toBe("草稿");
   });
 
   it("重名时按 _2 / _3 递增", () => {
     seed([
-      { id: "p1", name: "未命名", updatedAt: 2, nodes: [], edges: [] },
-      { id: "p2", name: "未命名_2", updatedAt: 1, nodes: [], edges: [] },
+      { edges: [], id: "p1", name: "未命名", nodes: [], updatedAt: 2 },
+      { edges: [], id: "p2", name: "未命名_2", nodes: [], updatedAt: 1 },
     ]);
     expect(findNextAvailableName("未命名")).toBe("未命名_3");
   });
 
   it("base 本身以 _<n> 结尾时仍能找到空位（不会自撞）", () => {
-    seed([{ id: "p1", name: "灵感_3", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "p1", name: "灵感_3", nodes: [], updatedAt: 1 }]);
     expect(findNextAvailableName("灵感_3")).toBe("灵感_3_2");
   });
 
@@ -272,7 +272,7 @@ describe("findNextAvailableName", () => {
   });
 
   it("excludeId 让重命名时的自撞不成问题", () => {
-    seed([{ id: "p1", name: "灵感", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "p1", name: "灵感", nodes: [], updatedAt: 1 }]);
     expect(isProjectNameTaken("灵感", "p1")).toBe(false);
     expect(isProjectNameTaken("灵感")).toBe(true);
   });
@@ -281,8 +281,8 @@ describe("findNextAvailableName", () => {
 describe("getAllProjectNames", () => {
   it("按 trim 后的名字去重", () => {
     seed([
-      { id: "p1", name: "灵感", updatedAt: 2, nodes: [], edges: [] },
-      { id: "p2", name: "  灵感  ", updatedAt: 1, nodes: [], edges: [] },
+      { edges: [], id: "p1", name: "灵感", nodes: [], updatedAt: 2 },
+      { edges: [], id: "p2", name: "  灵感  ", nodes: [], updatedAt: 1 },
     ]);
     expect([...getAllProjectNames()]).toEqual(["灵感"]);
   });
@@ -312,8 +312,8 @@ describe("createProject / createDraftProject", () => {
 
   it("listProjects 按 updatedAt 倒序", () => {
     seed([
-      { id: "old", name: "旧", updatedAt: 100, nodes: [], edges: [] },
-      { id: "new", name: "新", updatedAt: 200, nodes: [], edges: [] },
+      { edges: [], id: "old", name: "旧", nodes: [], updatedAt: 100 },
+      { edges: [], id: "new", name: "新", nodes: [], updatedAt: 200 },
     ]);
     expect(listProjects().map((p) => p.id)).toEqual(["new", "old"]);
   });
@@ -321,14 +321,14 @@ describe("createProject / createDraftProject", () => {
 
 describe("hydrateFromServer", () => {
   it("服务端 updatedAt 更新时覆盖本地，并落盘", async () => {
-    seed([{ id: "p1", name: "本地旧", updatedAt: 100, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "p1", name: "本地旧", nodes: [], updatedAt: 100 }]);
     projectListQuery.mockResolvedValue([
       {
+        edges: [],
         id: "p1",
         name: "服务端新",
-        updatedAt: new Date(500),
         nodes: [],
-        edges: [],
+        updatedAt: new Date(500),
       },
     ]);
 
@@ -340,14 +340,14 @@ describe("hydrateFromServer", () => {
   });
 
   it("本地更新时保留本地副本，不倒退", async () => {
-    seed([{ id: "p1", name: "本地新", updatedAt: 900, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "p1", name: "本地新", nodes: [], updatedAt: 900 }]);
     projectListQuery.mockResolvedValue([
       {
+        edges: [],
         id: "p1",
         name: "服务端旧",
-        updatedAt: new Date(500),
         nodes: [],
-        edges: [],
+        updatedAt: new Date(500),
       },
     ]);
     await hydrateFromServer();
@@ -355,7 +355,7 @@ describe("hydrateFromServer", () => {
   });
 
   it("拉取失败不抛错（local-first：本地数据不能因为网络问题丢）", async () => {
-    seed([{ id: "p1", name: "本地", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "p1", name: "本地", nodes: [], updatedAt: 1 }]);
     projectListQuery.mockRejectedValue(new Error("offline"));
     await expect(hydrateFromServer()).resolves.toBeUndefined();
     expect(listProjects()).toHaveLength(1);
@@ -374,11 +374,11 @@ describe("服务端镜像的失败出口", () => {
       throw trpcError("FORBIDDEN", "该项目 id 已属于其他用户，不能覆盖");
     });
     upsertProject({
+      edges: [],
       id: "proj_m1",
       name: "灵感板",
-      updatedAt: 1,
       nodes: [],
-      edges: [],
+      updatedAt: 1,
     });
     await settled();
 
@@ -395,11 +395,11 @@ describe("服务端镜像的失败出口", () => {
       throw new Error("Failed to fetch");
     });
     upsertProject({
+      edges: [],
       id: "proj_m2",
       name: "A",
-      updatedAt: 1,
       nodes: [],
-      edges: [],
+      updatedAt: 1,
     });
     await settled();
 
@@ -412,28 +412,28 @@ describe("服务端镜像的失败出口", () => {
       throw trpcError("FORBIDDEN", "该项目 id 已属于其他用户");
     });
     upsertProject({
+      edges: [],
       id: "proj_m3",
       name: "A",
-      updatedAt: 1,
       nodes: [],
-      edges: [],
+      updatedAt: 1,
     });
     await settled();
     expect(noticesFor("proj_m3")).toHaveLength(1);
 
     upsertProject({
+      edges: [],
       id: "proj_m3",
       name: "我的灵感板",
-      updatedAt: 2,
       nodes: [],
-      edges: [],
+      updatedAt: 2,
     });
     await settled();
     expect(noticesFor("proj_m3")).toHaveLength(0);
   });
 
   it("删除被服务端拒收 → 说的是「没能从服务端删掉」，不是「同步失败」", async () => {
-    seed([{ id: "proj_m4", name: "该删的", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "proj_m4", name: "该删的", nodes: [], updatedAt: 1 }]);
     projectDeleteMutate.mockImplementationOnce(() => {
       throw trpcError("UNAUTHORIZED", "会话已失效");
     });
@@ -452,11 +452,11 @@ describe("服务端镜像的失败出口", () => {
       throw trpcError("FORBIDDEN", "该项目 id 已属于其他用户");
     });
     const p = {
+      edges: [],
       id: "proj_m5",
       name: "A",
-      updatedAt: 1,
       nodes: [],
-      edges: [],
+      updatedAt: 1,
     };
     upsertProject(p);
     upsertProject(p);
@@ -481,9 +481,9 @@ describe("setActive", () => {
  */
 describe("listProjectsWithServer（并集 + 出处标注）", () => {
   it("服务端独有行也在列表里，标 origin=server", async () => {
-    seed([{ id: "proj_local", name: "本地的", updatedAt: 2, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "proj_local", name: "本地的", nodes: [], updatedAt: 2 }]);
     projectListQuery.mockResolvedValue([
-      { id: "proj_orphan", name: "未命名", updatedAt: 3, nodes: [], edges: [] },
+      { edges: [], id: "proj_orphan", name: "未命名", nodes: [], updatedAt: 3 },
     ]);
     const { entries, ok } = await listProjectsWithServer();
     expect(ok).toBe(true);
@@ -493,9 +493,9 @@ describe("listProjectsWithServer（并集 + 出处标注）", () => {
   });
 
   it("两侧都有的同一 id 只出现一行，取较新的一侧，标 origin=both", async () => {
-    seed([{ id: "proj_both", name: "旧的", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "proj_both", name: "旧的", nodes: [], updatedAt: 1 }]);
     projectListQuery.mockResolvedValue([
-      { id: "proj_both", name: "新的", updatedAt: 9, nodes: [], edges: [] },
+      { edges: [], id: "proj_both", name: "新的", nodes: [], updatedAt: 9 },
     ]);
     const { entries } = await listProjectsWithServer();
     expect(entries).toHaveLength(1);
@@ -504,9 +504,9 @@ describe("listProjectsWithServer（并集 + 出处标注）", () => {
   });
 
   it("本地更新时以本地为准（不把用户刚改的名字冲回去）", async () => {
-    seed([{ id: "proj_b", name: "我刚改的", updatedAt: 9, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "proj_b", name: "我刚改的", nodes: [], updatedAt: 9 }]);
     projectListQuery.mockResolvedValue([
-      { id: "proj_b", name: "服务端旧的", updatedAt: 1, nodes: [], edges: [] },
+      { edges: [], id: "proj_b", name: "服务端旧的", nodes: [], updatedAt: 1 },
     ]);
     const { entries } = await listProjectsWithServer();
     expect(entries[0]?.name).toBe("我刚改的");
@@ -514,7 +514,7 @@ describe("listProjectsWithServer（并集 + 出处标注）", () => {
   });
 
   it("拉不到服务端时 ok=false 且照常列本地项目（不是空列表）", async () => {
-    seed([{ id: "proj_off", name: "离线也有", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "proj_off", name: "离线也有", nodes: [], updatedAt: 1 }]);
     projectListQuery.mockRejectedValue(new Error("ECONNREFUSED"));
     const { entries, ok } = await listProjectsWithServer();
     expect(ok).toBe(false);
@@ -533,7 +533,7 @@ describe("deleteProjectEverywhere（索引里没有那一行也删得掉）", ()
   });
 
   it("索引里有这行时走既有出口：本地清掉 + 服务端也删", async () => {
-    seed([{ id: "proj_has", name: "有的", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "proj_has", name: "有的", nodes: [], updatedAt: 1 }]);
     projectDeleteMutate.mockResolvedValue({ ok: true });
     deleteProjectEverywhere("proj_has", "有的");
     await settled();
@@ -573,11 +573,11 @@ describe("hydrateProjectFromServer（打开只在服务端的项目的前置）"
   it("索引里没有这一行 → 从服务端拉下来并写进索引", async () => {
     projectListQuery.mockResolvedValue([
       {
+        edges: [],
         id: "proj_server",
         name: "只在服务端的项目",
-        updatedAt: 7,
         nodes: [],
-        edges: [],
+        updatedAt: 7,
       },
     ]);
 
@@ -591,7 +591,7 @@ describe("hydrateProjectFromServer（打开只在服务端的项目的前置）"
   });
 
   it("索引里已经有这一行 → 不碰网络（每次点开项目都发一次请求是另一码事）", async () => {
-    seed([{ id: "proj_local", name: "本地的", updatedAt: 3, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "proj_local", name: "本地的", nodes: [], updatedAt: 3 }]);
 
     const project = await hydrateProjectFromServer("proj_local");
 
@@ -601,7 +601,7 @@ describe("hydrateProjectFromServer（打开只在服务端的项目的前置）"
 
   it("服务端没有这一行 → 交回 null，且不往索引里塞任何东西（调用方照旧渲染闸门）", async () => {
     projectListQuery.mockResolvedValue([
-      { id: "proj_other", name: "别人的", updatedAt: 1, nodes: [], edges: [] },
+      { edges: [], id: "proj_other", name: "别人的", nodes: [], updatedAt: 1 },
     ]);
 
     await expect(hydrateProjectFromServer("proj_missing")).resolves.toBeNull();
@@ -622,21 +622,21 @@ describe("hydrateProjectFromServer（打开只在服务端的项目的前置）"
   });
 
   it("只并进新增的行：已有条目的 updatedAt 不被这一轮重写", async () => {
-    seed([{ id: "proj_keep", name: "已有的", updatedAt: 5, nodes: [], edges: [] }]);
+    seed([{ edges: [], id: "proj_keep", name: "已有的", nodes: [], updatedAt: 5 }]);
     projectListQuery.mockResolvedValue([
       {
+        edges: [],
         id: "proj_keep",
         name: "服务端那份",
-        updatedAt: 1,
         nodes: [],
-        edges: [],
+        updatedAt: 1,
       },
       {
+        edges: [],
         id: "proj_server",
         name: "新拉到的",
-        updatedAt: 7,
         nodes: [],
-        edges: [],
+        updatedAt: 7,
       },
     ]);
 

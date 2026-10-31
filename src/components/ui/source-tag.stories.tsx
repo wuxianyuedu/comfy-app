@@ -8,9 +8,9 @@ import { SourceTag } from "~/components/ui/source-tag";
  * 这一屏同时是「改 token 后两档跟不跟得上」的对照面。
  */
 const meta = {
-  title: "UI/SourceTag",
+  args: { local: true, source: "workflow.json" },
   component: SourceTag,
-  args: { source: "workflow.json", local: true },
+  title: "UI/SourceTag",
 } satisfies Meta<typeof SourceTag>;
 
 export default meta;

@@ -67,7 +67,6 @@ export function describeDevServerRestart(
      * 现象（「接口层持续返回 404」），不编一个成因 —— 归因猜错会把排查引向另一条
      * 路（同 `app-service-exit` 的 `describeAppServiceStart` 那条口径）。 */
     return {
-      title: "应用服务已自动重启",
       body:
         `检测到${
           detail ?? "接口层持续返回 404"
@@ -75,20 +74,21 @@ export function describeDevServerRestart(
         "请按 Ctrl+R 重载当前页面：这个页面是重启前由旧进程送来的，" +
         "继续用可能出现按钮点了没反应这类陈旧模块现象。\n" +
         "无需手动操作；若反复出现，可在终端重启一次开发服务。",
+      title: "应用服务已自动重启",
     };
   }
   if (reason === "stale-route-table") {
     return {
-      title: "应用服务已自动重启",
       body:
         "启动时检测到路由表与源码不一致（部分接口无响应），" +
         "已自动清空编译缓存并重启应用服务一次，现已恢复正常。" +
         "无需你手动操作；若反复出现，可在终端重启一次开发服务。",
+      title: "应用服务已自动重启",
     };
   }
   return {
-    title: "应用服务已重启",
     body: "本地开发服务（dev server）重启了一次。进行中的生成任务连接可能已断开，可在执行记录里回看。",
+    title: "应用服务已重启",
   };
 }
 
@@ -108,7 +108,6 @@ export function describeDepsStale(state: DepsFreshnessState): {
   title: string;
 } {
   return {
-    title: "依赖与代码不一致，需重装依赖",
     body:
       `${DEPS_STALE_WHY[state]}。\n` +
       "请在**关掉应用窗口之后**，于项目目录依次执行：\n" +
@@ -117,15 +116,16 @@ export function describeDepsStale(state: DepsFreshnessState): {
       "然后重新双击启动入口。\n" +
       "应用内无法替你完成这一步：重装依赖会锁住正在使用的原生模块，必须先停服务。\n" +
       "不重装的后果是：新代码引用的依赖解析不到，接口会持续报错。",
+    title: "依赖与代码不一致，需重装依赖",
   };
 }
 
 /** 依赖面各形态的「为什么」（与 `DepsFreshnessState` 一一对应）。 */
 const DEPS_STALE_WHY: Record<DepsFreshnessState, string> = {
   drift: "安装时的依赖清单与仓库 pnpm-lock.yaml 已不一致（多半是刚拉到的新代码动了依赖面）",
+  fresh: "依赖面与代码一致",
   "no-install": "本地依赖没有装好（缺安装记录）",
   unresolved: "本地依赖树里有个别声明的依赖解析不到（树停在它们被加入之前）",
-  fresh: "依赖面与代码一致",
 };
 
 /* ── 通知合并：一次自愈只留一条可行动消息 ──────────────────────────────── */
@@ -172,27 +172,27 @@ export function CodeUpdateWatcher() {
   const toast = useToast();
 
   useCodeUpdateWatch({
+    onDepsStale: (state) => {
+      const { body, title } = describeDepsStale(state);
+      toast.info(title, `${body}（可到消息中心查看）`, 12_000);
+      useMessageCenterStore.getState().push({
+        body,
+        kind: MESSAGE_KIND,
+        title,
+      });
+    },
     onDevServerRestart: (reason, detail) => {
       /* 只对启动器发起的自愈做合并（见文件头）；用户手动重启那一族没有 reason，
        * 它的「断开 → 恢复」是要留的记录。 */
       if (reason !== null) {
         dropHealPairFromCenter(Date.now());
       }
-      const { title, body } = describeDevServerRestart(reason, detail);
+      const { body, title } = describeDevServerRestart(reason, detail);
       toast.info(title, `${body}（可到消息中心查看）`, 8000);
       useMessageCenterStore.getState().push({
+        body,
         kind: MESSAGE_KIND,
         title,
-        body,
-      });
-    },
-    onDepsStale: (state) => {
-      const { title, body } = describeDepsStale(state);
-      toast.info(title, `${body}（可到消息中心查看）`, 12_000);
-      useMessageCenterStore.getState().push({
-        kind: MESSAGE_KIND,
-        title,
-        body,
       });
     },
   });
@@ -206,9 +206,9 @@ export function CodeUpdateWatcher() {
         8000,
       );
       useMessageCenterStore.getState().push({
+        body: notification.body,
         kind: MESSAGE_KIND,
         title: notification.title,
-        body: notification.body,
       });
     });
     return () => registerStaleStoreDeliver(null);

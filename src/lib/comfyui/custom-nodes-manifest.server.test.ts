@@ -36,7 +36,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(root, { force: true, recursive: true });
 });
 
 describe("路径：解析器与读取侧共用同一个字面量", () => {

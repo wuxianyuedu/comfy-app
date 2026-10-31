@@ -55,9 +55,9 @@ export async function saveApiChannels(payload: ApiChannelSavePayload): Promise<A
   let res: Response;
   try {
     res = await fetch(SAVE_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
     });
   } catch {
     // 网络层断掉（dev server 未起 / 断网）时 fetch 直接 reject，

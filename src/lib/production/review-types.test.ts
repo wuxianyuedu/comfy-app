@@ -44,33 +44,33 @@ describe("normalizeReviewVerdict", () => {
 
   it("完整判定原样读出", () => {
     const v = normalizeReviewVerdict({
-      pass: false,
       issues: ["画面含混", "与基调不符"],
-      suggestion: "补充光线与人物动作",
+      pass: false,
       scoredAt: "t1",
+      suggestion: "补充光线与人物动作",
     });
     expect(v).toEqual({
-      pass: false,
       issues: ["画面含混", "与基调不符"],
-      suggestion: "补充光线与人物动作",
+      pass: false,
       scoredAt: "t1",
+      suggestion: "补充光线与人物动作",
     });
   });
 
   it("pass=true 也认（合格是有效判定）；可选字段缺省回落", () => {
     const v = normalizeReviewVerdict({ pass: true });
     expect(v).toEqual({
-      pass: true,
       issues: [],
-      suggestion: "",
+      pass: true,
       scoredAt: "",
+      suggestion: "",
     });
   });
 
   it("issues 只收非空字符串、trim；非数组丢弃；suggestion 非字符串回落空", () => {
     const v = normalizeReviewVerdict({
-      pass: false,
       issues: ["  缺陷A  ", "", 1, null, "缺陷B"],
+      pass: false,
       suggestion: 42,
     });
     expect(v?.issues).toEqual(["缺陷A", "缺陷B"]);
@@ -81,15 +81,15 @@ describe("normalizeReviewVerdict", () => {
     const v = normalizeReviewVerdict({
       pass: false,
       scores: {
-        画面: { score: 9, note: " 太空 " },
         一致性: { score: -1 },
-        节奏: { score: "4" },
         废维度: { nope: true },
+        画面: { note: " 太空 ", score: 9 },
+        节奏: { score: "4" },
       },
     });
     expect(v?.scores).toEqual({
-      画面: { score: 5, note: "太空" },
-      一致性: { score: 1, note: "" },
+      一致性: { note: "", score: 1 },
+      画面: { note: "太空", score: 5 },
       // 「节奏」给了字符串分 → 非有限 number，整条丢弃（不硬转，防模型噪声）
     });
   });
@@ -112,10 +112,10 @@ describe("normalizeReviewVerdict", () => {
 describe("getRecordReview", () => {
   it("读记录上的 review；非对象 / 无 review / 非法 review → null", () => {
     const verdict: ReviewVerdict = {
-      pass: false,
       issues: ["x"],
-      suggestion: "y",
+      pass: false,
       scoredAt: "t",
+      suggestion: "y",
     };
     expect(getRecordReview({ id: "a", review: verdict })?.pass).toBe(false);
     expect(getRecordReview("字符串")).toBeNull();
@@ -126,10 +126,10 @@ describe("getRecordReview", () => {
 
 describe("applyReview", () => {
   const verdict: ReviewVerdict = {
-    pass: false,
     issues: ["画面含混"],
-    suggestion: "更具体",
+    pass: false,
     scoredAt: "t",
+    suggestion: "更具体",
   };
 
   it("按 id 命中写回 review；其它记录原样引用（镜头 / 角色共用）", () => {
@@ -156,18 +156,18 @@ describe("applyReview", () => {
 
   it("轮次历史：记录上已有的有效判定进 reviewHistory，当前判定始终在 review", () => {
     const first: ReviewVerdict = {
-      pass: false,
       issues: ["第一轮缺陷"],
-      suggestion: "改",
+      pass: false,
       scoredAt: "t1",
-      scores: { 画面: { score: 2, note: "差" } },
+      scores: { 画面: { note: "差", score: 2 } },
+      suggestion: "改",
     };
     const second: ReviewVerdict = {
-      pass: true,
       issues: [],
-      suggestion: "",
+      pass: true,
       scoredAt: "t2",
-      scores: { 画面: { score: 4, note: "好了" } },
+      scores: { 画面: { note: "好了", score: 4 } },
+      suggestion: "",
     };
     const out = /* SAFETY: 类型断言已复核 */ applyReview(
       applyReview([{ id: "a" }], "a", first),
@@ -209,11 +209,11 @@ describe("applyReview", () => {
 
 describe("applyImageReview / getRecordImageReview（P8-2 视觉评审写回）", () => {
   const verdict: ReviewVerdict = {
-    pass: false,
     issues: ["手畸"],
-    suggestion: "修手",
+    pass: false,
     scoredAt: "t",
-    scores: { artifacts: { score: 2, note: "畸形" } },
+    scores: { artifacts: { note: "畸形", score: 2 } },
+    suggestion: "修手",
   };
 
   it("写回 shot.imageReview，不污染 shot.review（两者独立）", () => {
@@ -221,7 +221,7 @@ describe("applyImageReview / getRecordImageReview（P8-2 视觉评审写回）",
       [
         {
           id: "a",
-          review: { pass: true, issues: [], suggestion: "", scoredAt: "x" },
+          review: { issues: [], pass: true, scoredAt: "x", suggestion: "" },
         },
       ],
       "a",
@@ -229,10 +229,10 @@ describe("applyImageReview / getRecordImageReview（P8-2 视觉评审写回）",
     ) as Array<Record<string, unknown>>;
     expect(out[0]?.imageReview).toEqual(verdict);
     expect(out[0]?.review).toEqual({
-      pass: true,
       issues: [],
-      suggestion: "",
+      pass: true,
       scoredAt: "x",
+      suggestion: "",
     });
   });
 
@@ -252,19 +252,19 @@ describe("reviewScoreMean", () => {
   it("维度均分；未评分 / 空评分 → null（调用方走「不过」旧路）", () => {
     expect(
       reviewScoreMean({
-        pass: true,
         issues: [],
-        suggestion: "",
+        pass: true,
         scoredAt: "t",
-        scores: { a: { score: 2, note: "" }, b: { score: 5, note: "" } },
+        scores: { a: { note: "", score: 2 }, b: { note: "", score: 5 } },
+        suggestion: "",
       }),
     ).toBe(3.5);
     expect(
       reviewScoreMean({
-        pass: true,
         issues: [],
-        suggestion: "",
+        pass: true,
         scoredAt: "t",
+        suggestion: "",
       }),
     ).toBeNull();
   });
@@ -272,14 +272,14 @@ describe("reviewScoreMean", () => {
 
 describe("剧本评审位 · 改写留档与低分维度（#2478）", () => {
   const verdict: ReviewVerdict = {
-    pass: false,
     issues: ["高潮缺失"],
-    suggestion: "补对峙",
+    pass: false,
     scoredAt: "t1",
     scores: {
-      structure: { score: 2, note: "无高潮" },
-      concreteness: { score: 4, note: "尚可" },
+      concreteness: { note: "尚可", score: 4 },
+      structure: { note: "无高潮", score: 2 },
     },
+    suggestion: "补对峙",
   };
 
   it("recordScriptRevision：改写前旧版进 revisions（尾部追加、超限从头裁剪）", () => {
@@ -307,29 +307,29 @@ describe("剧本评审位 · 改写留档与低分维度（#2478）", () => {
   });
 
   it("weakScoreEntries：低分维度升序（最差先改）；未评分 → 空数组", () => {
-    expect(weakScoreEntries(verdict)).toEqual([{ key: "structure", score: 2, note: "无高潮" }]);
+    expect(weakScoreEntries(verdict)).toEqual([{ key: "structure", note: "无高潮", score: 2 }]);
     expect(
       weakScoreEntries({
-        pass: false,
         issues: [],
-        suggestion: "",
+        pass: false,
         scoredAt: "t",
         scores: {
-          b: { score: 3, note: "bb" },
-          a: { score: 2, note: "aa" },
-          c: { score: 4, note: "" },
+          a: { note: "aa", score: 2 },
+          b: { note: "bb", score: 3 },
+          c: { note: "", score: 4 },
         },
+        suggestion: "",
       }),
     ).toEqual([
-      { key: "a", score: 2, note: "aa" },
-      { key: "b", score: 3, note: "bb" },
+      { key: "a", note: "aa", score: 2 },
+      { key: "b", note: "bb", score: 3 },
     ]);
     expect(
       weakScoreEntries({
-        pass: true,
         issues: [],
-        suggestion: "",
+        pass: true,
         scoredAt: "t",
+        suggestion: "",
       }),
     ).toEqual([]);
   });
@@ -339,26 +339,26 @@ describe("剧本评审位 · 改写留档与低分维度（#2478）", () => {
 
 describe("人工裁决 / 人评分（#2480）", () => {
   const verdict: HumanVerdict = {
-    pass: false,
-    note: "构图崩了",
     at: "t1",
+    note: "构图崩了",
+    pass: false,
     rev: 3,
   };
 
   it("normalizeHumanVerdict：缺 pass 布尔 → null；note 裁边 / rev / digest 宽容收", () => {
     expect(normalizeHumanVerdict(null)).toBeNull();
     expect(normalizeHumanVerdict({ note: "x" })).toBeNull();
-    expect(normalizeHumanVerdict({ pass: true, note: "  可以  " })).toEqual({
-      pass: true,
+    expect(normalizeHumanVerdict({ note: "  可以  ", pass: true })).toEqual({
+      at: "",
       note: "可以",
-      at: "",
+      pass: true,
     });
-    expect(normalizeHumanVerdict({ pass: false, rev: 2.7, digest: " d " })).toEqual({
-      pass: false,
-      note: "",
+    expect(normalizeHumanVerdict({ digest: " d ", pass: false, rev: 2.7 })).toEqual({
       at: "",
-      rev: 2.7,
       digest: "d",
+      note: "",
+      pass: false,
+      rev: 2.7,
     });
   });
 
@@ -366,8 +366,8 @@ describe("人工裁决 / 人评分（#2480）", () => {
     const entities = [
       {
         id: "a",
-        review: { pass: true, issues: [], suggestion: "", scoredAt: "x" },
-        imageReview: { pass: true, issues: [], suggestion: "", scoredAt: "y" },
+        imageReview: { issues: [], pass: true, scoredAt: "y", suggestion: "" },
+        review: { issues: [], pass: true, scoredAt: "x", suggestion: "" },
       },
     ];
     const out = /* SAFETY: 类型断言已复核 */ applyHumanVerdict(entities, "a", verdict) as Array<
@@ -413,19 +413,19 @@ describe("人工裁决 / 人评分（#2480）", () => {
   it("剧本裁决：applyScriptHumanVerdict 只动 humanVerdict，AI 判定 / 曲线 / 留档保留", () => {
     let state = normalizeScriptReviewState(null);
     state = applyScriptReview(state, {
-      pass: false,
       issues: ["高潮缺失"],
-      suggestion: "",
+      pass: false,
       scoredAt: "t1",
+      suggestion: "",
     });
     state = recordScriptRevision(state, "v0", "t0");
     state = applyScriptHumanVerdict(state, {
-      pass: true,
-      note: "人拍板过",
       at: "t2",
       digest: "d1",
+      note: "人拍板过",
+      pass: true,
     });
-    expect(state.humanVerdict).toMatchObject({ pass: true, digest: "d1" });
+    expect(state.humanVerdict).toMatchObject({ digest: "d1", pass: true });
     expect(state.review?.pass).toBe(false);
     expect(state.revisions.map((r) => r.markdown)).toEqual(["v0"]);
     // normalize 往返：脏 JSON 里的人工裁决也能宽容读回

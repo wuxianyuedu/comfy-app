@@ -14,15 +14,15 @@ export function buildProductionPayload(
   rendered: boolean,
 ): ProductionPayload {
   return {
-    title: draft.meta.title,
-    type: draft.meta.type,
-    tone: draft.meta.tone,
-    logline: draft.meta.logline,
-    scriptMarkdown: draft.scriptMarkdown,
-    scenes: draft.scenes,
     characters: draft.characters,
+    logline: draft.meta.logline,
+    progress: { rendered, stage },
+    scenes: draft.scenes,
+    scriptMarkdown: draft.scriptMarkdown,
     shots: draft.shots,
-    progress: { stage, rendered },
+    title: draft.meta.title,
+    tone: draft.meta.tone,
+    type: draft.meta.type,
   };
 }
 

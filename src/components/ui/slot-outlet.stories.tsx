@@ -16,8 +16,8 @@ import { SlotContent, SlotOutlet, SlotOutletProvider } from "~/components/ui/slo
  * 要浮层请用 `ui/dialog` / `ui/popover`。
  */
 const meta = {
-  title: "UI/SlotOutlet",
   component: SlotOutlet,
+  title: "UI/SlotOutlet",
 } satisfies Meta<typeof SlotOutlet>;
 
 export default meta;

@@ -44,9 +44,9 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
       .groupBy(workflowModelTag.id)
       .orderBy(asc(workflowModelTag.name));
     return rows.map((r) => ({
+      count: Number(r.count),
       id: r.id,
       name: r.name,
-      count: Number(r.count),
     }));
   }
 
@@ -59,14 +59,14 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
     const row =
       existing[0] ??
       firstRowRequired(
-        await db.insert(workflowModelTag).values({ userId, name }).returning(),
+        await db.insert(workflowModelTag).values({ name, userId }).returning(),
         "模型标签插入",
       );
     const [c] = await db
       .select({ v: count() })
       .from(workflowModelTagToWorkflowTemplate)
       .where(eq(workflowModelTagToWorkflowTemplate.workflowModelTag, row.id));
-    return { id: row.id, name: row.name, count: Number(c?.v ?? 0) };
+    return { count: Number(c?.v ?? 0), id: row.id, name: row.name };
   }
 
   /** `upsertByName` 的批量版：保存工作流时一次要落一整套标签，逐个调用就是
@@ -90,7 +90,7 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
     if (missing.length > 0) {
       const inserted = await db
         .insert(workflowModelTag)
-        .values(missing.map((name) => ({ userId, name })))
+        .values(missing.map((name) => ({ name, userId })))
         .returning({ id: workflowModelTag.id, name: workflowModelTag.name });
       for (const row of inserted) {
         idByName.set(row.name, row.id);
@@ -120,9 +120,9 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
       .where(eq(workflowModelTagToWorkflowTemplate.workflowModelTag, id));
     const renamed = firstRowOfExisting(updated, `模型标签不存在: ${id}`);
     return {
+      count: Number(c?.v ?? 0),
       id: renamed.id,
       name: renamed.name,
-      count: Number(c?.v ?? 0),
     };
   }
 
@@ -149,8 +149,8 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
     }
     return db
       .select({
-        templateId: workflowModelTagToWorkflowTemplate.workflowTemplate,
         name: workflowModelTag.name,
+        templateId: workflowModelTagToWorkflowTemplate.workflowTemplate,
       })
       .from(workflowModelTagToWorkflowTemplate)
       .innerJoin(

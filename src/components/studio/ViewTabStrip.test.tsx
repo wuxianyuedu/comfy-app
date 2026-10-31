@@ -76,7 +76,7 @@ describe("ViewTabStrip", () => {
   it("点页签回抛 key；点关闭只回抛关闭、不重复触发选中", () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();
-    strip({ onSelect, onClose });
+    strip({ onClose, onSelect });
     fireEvent.click(screen.getByText("队列"));
     expect(onSelect).toHaveBeenCalledWith("queue:");
     expect(onClose).not.toHaveBeenCalled();

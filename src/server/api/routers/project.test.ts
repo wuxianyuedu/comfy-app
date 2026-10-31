@@ -25,7 +25,7 @@ vi.mock("~/server/better-auth", () => ({
 }));
 vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
@@ -44,17 +44,16 @@ const createCaller = createCallerFactory(projectRouter);
 const tdb = getTestDb();
 
 /** user-b 的 context（越权用例的请求方；`makeCtx()` 缺省是 user-a）。 */
-const ctxB = () =>
-  makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } });
+const ctxB = () => makeCtx({ user: { email: "b@test.dev", id: "user-b", name: null } });
 
-const NODES = [{ id: "n1", type: "workflow", position: { x: 0, y: 0 } }];
+const NODES = [{ id: "n1", position: { x: 0, y: 0 }, type: "workflow" }];
 const EDGES = [{ id: "e1", source: "n1", target: "n1" }];
 
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
-  seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-  seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+  seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+  seedUser(tdb, { email: "b@test.dev", id: "user-b" });
 });
 
 // ───────────────────────────────────── list ─────────────────────────────────────
@@ -63,17 +62,17 @@ describe("project.list", () => {
   it("只返回自己的项目，按 updatedAt 倒序", async () => {
     seedProject(tdb, {
       id: "p-old",
-      userId: "user-a",
       name: "旧",
       updatedAt: new Date("2026-01-01"),
+      userId: "user-a",
     });
     seedProject(tdb, {
       id: "p-new",
-      userId: "user-a",
       name: "新",
       updatedAt: new Date("2026-06-01"),
+      userId: "user-a",
     });
-    seedProject(tdb, { id: "p-b", userId: "user-b", name: "别人的" });
+    seedProject(tdb, { id: "p-b", name: "别人的", userId: "user-b" });
 
     const res = await createCaller(makeCtx()).list();
     expect(res.map((p) => p.id)).toEqual(["p-new", "p-old"]);
@@ -89,10 +88,10 @@ describe("project.list", () => {
 describe("project.upsert", () => {
   it("新建：行落在请求方名下，nodes/edges 原样存", async () => {
     const res = await createCaller(ctxB()).upsert({
+      edges: EDGES,
       id: "proj_b1",
       name: "画布一",
       nodes: NODES,
-      edges: EDGES,
     });
     expect(res.userId).toBe("user-b");
     const row = tdb.$tables.projects.find((p) => p.id === "proj_b1")!;
@@ -102,7 +101,7 @@ describe("project.upsert", () => {
   });
 
   it("覆盖自己的项目：仍然一行，内容换掉", async () => {
-    seedProject(tdb, { id: "p1", userId: "user-a", name: "旧名" });
+    seedProject(tdb, { id: "p1", name: "旧名", userId: "user-a" });
     await createCaller(makeCtx()).upsert({
       id: "p1",
       name: "新名",
@@ -116,18 +115,18 @@ describe("project.upsert", () => {
 
   it("他人项目的 id → FORBIDDEN，且对方那一行一字不动（越权写）", async () => {
     seedProject(tdb, {
+      edges: EDGES,
       id: "p-victim",
-      userId: "user-a",
       name: "受害者画布",
       nodes: NODES,
-      edges: EDGES,
+      userId: "user-a",
     });
     await expect(
       createCaller(ctxB()).upsert({
+        edges: [],
         id: "p-victim",
         name: "被覆盖",
         nodes: [],
-        edges: [],
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
 
@@ -137,9 +136,7 @@ describe("project.upsert", () => {
     expect(row.userId).toBe("user-a");
     // 拒绝要有可查的出口（硬规则 4）：这条链路的客户端是「尽力而为的镜像」，
     // 失败被前端吞掉，服务端这一行 warn 是唯一留下的痕迹。
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("p-victim"),
-    );
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("p-victim"));
   });
 
   it("Zod 校验：空 id / 空 name → BAD_REQUEST", async () => {
@@ -157,21 +154,20 @@ describe("project.upsert", () => {
 
 describe("project.get", () => {
   it("返回自己的项目", async () => {
-    seedProject(tdb, { id: "p1", userId: "user-a", name: "我的" });
+    seedProject(tdb, { id: "p1", name: "我的", userId: "user-a" });
     const res = await createCaller(makeCtx()).get({ projectId: "p1" });
     expect(res?.name).toBe("我的");
   });
 
   it("他人项目 / 不存在 → 同一个错误信封，且码是 NOT_FOUND（不给探测 id 用）", async () => {
-    seedProject(tdb, { id: "p-b", userId: "user-b", name: "别人的" });
+    seedProject(tdb, { id: "p-b", name: "别人的", userId: "user-b" });
     const caller = createCaller(makeCtx());
     /** 把错误信封整个取出来比 —— 只比 `message` 的话，500 与 404 可以同文案，
      *  「同形」就成了假的；码进比较才是那句口径的机器判据。 */
     const envelope = (p: Promise<unknown>) =>
       p.then(
         () => "OK",
-        (e: { code?: string; message?: string }) =>
-          `${e?.code ?? "?"}|${e?.message ?? "?"}`,
+        (e: { code?: string; message?: string }) => `${e?.code ?? "?"}|${e?.message ?? "?"}`,
       );
     const foreign = await envelope(caller.get({ projectId: "p-b" }));
     const missing = await envelope(caller.get({ projectId: "nope" }));
@@ -186,38 +182,38 @@ describe("project.patch", () => {
   it("只覆盖传入的字段，未传的保持原值", async () => {
     seedProject(tdb, {
       id: "p1",
-      userId: "user-a",
       name: "旧名",
       nodes: NODES,
+      userId: "user-a",
     });
     const res = await createCaller(makeCtx()).patch({
-      projectId: "p1",
       name: "新名",
+      projectId: "p1",
     });
     expect(res.name).toBe("新名");
     expect(res.nodes).toEqual(NODES);
   });
 
   it("三个字段都给 → 一起写回", async () => {
-    seedProject(tdb, { id: "p1", userId: "user-a", name: "旧名" });
+    seedProject(tdb, { id: "p1", name: "旧名", userId: "user-a" });
     const res = await createCaller(makeCtx()).patch({
-      projectId: "p1",
+      edges: EDGES,
       name: "新名",
       nodes: NODES,
-      edges: EDGES,
+      projectId: "p1",
     });
-    expect(res).toMatchObject({ name: "新名", nodes: NODES, edges: EDGES });
+    expect(res).toMatchObject({ edges: EDGES, name: "新名", nodes: NODES });
   });
 
   it("他人项目 → 不改一行、抛NOT_FOUND", async () => {
     seedProject(tdb, {
       id: "p-a",
-      userId: "user-a",
       name: "受害画布",
       nodes: NODES,
+      userId: "user-a",
     });
     await expect(
-      createCaller(ctxB()).patch({ projectId: "p-a", name: "改掉" }),
+      createCaller(ctxB()).patch({ name: "改掉", projectId: "p-a" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     const row = tdb.$tables.projects.find((p) => p.id === "p-a")!;
     expect(row.name).toBe("受害画布");
@@ -229,7 +225,7 @@ describe("project.patch", () => {
 
 describe("project.delete（rateLimitedProcedure）", () => {
   it("删自己的项目", async () => {
-    seedProject(tdb, { id: "p1", userId: "user-a", name: "我的" });
+    seedProject(tdb, { id: "p1", name: "我的", userId: "user-a" });
     expect(await createCaller(makeCtx()).delete({ projectId: "p1" })).toEqual({
       ok: true,
     });
@@ -237,7 +233,7 @@ describe("project.delete（rateLimitedProcedure）", () => {
   });
 
   it("他人项目 → 回 ok 但那一行还在（deleteForUser 的 id+userId 双条件）", async () => {
-    seedProject(tdb, { id: "p-b", userId: "user-b", name: "别人的" });
+    seedProject(tdb, { id: "p-b", name: "别人的", userId: "user-b" });
     expect(await createCaller(makeCtx()).delete({ projectId: "p-b" })).toEqual({
       ok: true,
     });
@@ -249,102 +245,102 @@ describe("project.delete（rateLimitedProcedure）", () => {
 
 describe("project.outputs", () => {
   const IMG = (id: string, localPath: string): Row => ({
+    height: 512,
     id,
+    isCover: true,
     localPath,
     mediaType: "image",
     seed: "7",
-    width: 512,
-    height: 512,
-    isCover: true,
     sortIndex: 0,
+    width: 512,
   });
 
   it("返回该项目下任务的投影（params 拆字段 + 产出图列表）", async () => {
-    seedProject(tdb, { id: "p1", userId: "user-a", name: "我的" });
+    seedProject(tdb, { id: "p1", name: "我的", userId: "user-a" });
     seedTask(tdb, {
       id: "t1",
-      userId: "user-a",
-      projectId: "p1",
-      type: "TXT2IMG",
-      prompt: "cat",
+      images: [IMG("i1", "/api/generated/p1/t1/img_0.png")],
       params: {
+        cfg: 6.5,
+        checkpoint: "sd.safetensors",
+        sampler: "euler_a",
         seed: 7,
         size: "1024x1024",
         steps: 20,
-        cfg: 6.5,
-        sampler: "euler_a",
-        checkpoint: "sd.safetensors",
       },
+      projectId: "p1",
+      prompt: "cat",
       referenceImages: ["/api/generated/ref.png"],
-      images: [IMG("i1", "/api/generated/p1/t1/img_0.png")],
+      type: "TXT2IMG",
+      userId: "user-a",
     });
     // 再种一条「别的项目」的任务：outputs 按项目取任务（项目本身已判过归属），
     // 这条不许混进结果。
-    seedTask(tdb, { id: "t2", userId: "user-a", projectId: "p-other" });
+    seedTask(tdb, { id: "t2", projectId: "p-other", userId: "user-a" });
 
     const res = await createCaller(makeCtx()).outputs({ projectId: "p1" });
     expect(res.outputs).toHaveLength(1);
     const [out] = res.outputs;
     expect(out).toMatchObject({
-      id: "t1",
-      type: "TXT2IMG",
-      prompt: "cat",
-      seed: "7",
-      size: "1024x1024",
-      sampler: "euler_a",
-      steps: 20,
       cfg: 6.5,
       checkpoint: "sd.safetensors",
+      id: "t1",
+      prompt: "cat",
+      sampler: "euler_a",
+      seed: "7",
+      size: "1024x1024",
+      steps: 20,
+      type: "TXT2IMG",
     });
     expect(out!.referenceImages).toEqual(["/api/generated/ref.png"]);
     expect(out!.images.map((i: { id: string }) => i.id)).toEqual(["i1"]);
   });
 
   it("params 是标量或整列为空时不炸，字段一律为 null", async () => {
-    seedProject(tdb, { id: "p1", userId: "user-a", name: "我的" });
+    seedProject(tdb, { id: "p1", name: "我的", userId: "user-a" });
     // 两种「不是对象」的形状都要走通：库里存的标量（脏数据）与整列 NULL（老行）
     seedTask(tdb, {
       id: "t-num",
-      userId: "user-a",
-      projectId: "p1",
       params: 42,
+      projectId: "p1",
+      userId: "user-a",
     });
     seedTask(tdb, {
       id: "t-null",
-      userId: "user-a",
-      projectId: "p1",
       params: null,
+      projectId: "p1",
+      userId: "user-a",
     });
     const res = await createCaller(makeCtx()).outputs({ projectId: "p1" });
     expect(res.outputs.map((o) => o.id).sort()).toEqual(["t-null", "t-num"]);
     for (const out of res.outputs) {
       expect(out).toMatchObject({
+        cfg: null,
+        checkpoint: null,
+        sampler: null,
         seed: null,
         size: null,
         steps: null,
-        cfg: null,
-        sampler: null,
-        checkpoint: null,
       });
     }
   });
 
   it("他人项目 → 抛NOT_FOUND（台账 A3）", async () => {
-    seedProject(tdb, { id: "p-b", userId: "user-b", name: "别人的" });
+    seedProject(tdb, { id: "p-b", name: "别人的", userId: "user-b" });
     seedTask(tdb, {
       id: "t-b",
-      userId: "user-b",
-      projectId: "p-b",
       images: [IMG("i-b", "/api/generated/p-b/t-b/img_0.png")],
+      projectId: "p-b",
+      userId: "user-b",
     });
-    await expect(
-      createCaller(makeCtx()).outputs({ projectId: "p-b" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(createCaller(makeCtx()).outputs({ projectId: "p-b" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 
   it("不存在的项目 → 同一句NOT_FOUND", async () => {
-    await expect(
-      createCaller(makeCtx()).outputs({ projectId: "nope" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(createCaller(makeCtx()).outputs({ projectId: "nope" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 });

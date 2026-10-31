@@ -31,11 +31,11 @@ function Command({ className, ...props }: React.ComponentProps<typeof CommandPri
 }
 
 function CommandDialog({
-  title = "命令面板",
-  description = "搜索要执行的命令…",
   children,
   className,
+  description = "搜索要执行的命令…",
   showCloseButton = false,
+  title = "命令面板",
   ...props
 }: OmitOwnProps<React.ComponentProps<typeof Dialog>, "children"> & {
   children: React.ReactNode;
@@ -144,8 +144,8 @@ function CommandSeparator({
 }
 
 function CommandItem({
-  className,
   children,
+  className,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Item>) {
   return (

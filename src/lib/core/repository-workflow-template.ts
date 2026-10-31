@@ -16,26 +16,26 @@ import { firstRowRequired } from "./repository-row";
 
 /** 列表页需要的列：除 `positions`（列表页不读、且是大 JSON blob）外的全部。 */
 const LIST_ROW_COLUMNS = /* SAFETY: 类型断言已复核 */ {
-  id: workflowTemplate.id,
-  userId: workflowTemplate.userId,
-  name: workflowTemplate.name,
-  taskType: workflowTemplate.taskType,
-  modes: workflowTemplate.modes,
+  createdAt: workflowTemplate.createdAt,
   defaultMode: workflowTemplate.defaultMode,
+  id: workflowTemplate.id,
+  modes: workflowTemplate.modes,
+  name: workflowTemplate.name,
   paramMap: workflowTemplate.paramMap,
-  workflowIO: workflowTemplate.workflowIO,
   rawJson: workflowTemplate.rawJson,
-  sourcePath: workflowTemplate.sourcePath,
   sourceChecksum: workflowTemplate.sourceChecksum,
   sourceMtime: workflowTemplate.sourceMtime,
-  createdAt: workflowTemplate.createdAt,
+  sourcePath: workflowTemplate.sourcePath,
+  taskType: workflowTemplate.taskType,
+  userId: workflowTemplate.userId,
+  workflowIO: workflowTemplate.workflowIO,
 } as const;
 
 /** 详情加载时用来判断「磁盘上有没有新版本」的最小列集：只要这三列。 */
 const SOURCE_META_COLUMNS = /* SAFETY: 类型断言已复核 */ {
   id: workflowTemplate.id,
-  sourcePath: workflowTemplate.sourcePath,
   sourceMtime: workflowTemplate.sourceMtime,
+  sourcePath: workflowTemplate.sourcePath,
 } as const;
 
 /** {@link WorkflowTemplateRepository.listForUser} 的行形状（列投影的结果）。 */
@@ -127,17 +127,17 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
     const rows = await db
       .insert(workflowTemplate)
       .values({
-        userId: input.userId,
+        defaultMode: input.defaultMode ?? undefined,
+        modes: input.modes?.length ? JSON.stringify(input.modes) : "[]",
         name: input.name,
-        taskType: input.taskType,
         paramMap: input.paramMap,
-        rawJson: input.rawJson,
         positions: input.positions,
-        sourcePath: input.sourcePath ?? undefined,
+        rawJson: input.rawJson,
         sourceChecksum: input.sourceChecksum ?? undefined,
         sourceMtime: input.sourceMtime ?? undefined,
-        modes: input.modes?.length ? JSON.stringify(input.modes) : "[]",
-        defaultMode: input.defaultMode ?? undefined,
+        sourcePath: input.sourcePath ?? undefined,
+        taskType: input.taskType,
+        userId: input.userId,
       })
       .returning();
     return firstRowRequired(rows, "工作流模板插入");
@@ -149,7 +149,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
   ): Promise<void> {
     await db
       .update(workflowTemplate)
-      .set({ sourcePath: data.sourcePath, sourceMtime: data.sourceMtime })
+      .set({ sourceMtime: data.sourceMtime, sourcePath: data.sourcePath })
       .where(eq(workflowTemplate.id, id));
   }
 

@@ -31,10 +31,10 @@ export type NodePaletteBase = {
 /** 浅色底色 —— 应用 `@theme` 块里的默认值。 */
 export const LIGHT_PALETTE_BASE: NodePaletteBase = {
   body: "#ffffff",
-  header: "#f2eeff",
   borderFallback: "#d6d8dd",
-  titleFallback: "#18181b",
   dotFallback: "#6b6b76",
+  header: "#f2eeff",
+  titleFallback: "#18181b",
 };
 
 /** 深色底色 —— 与 `.dark` 块的 `--color-node` / `--color-node-accent` 同源
@@ -44,10 +44,10 @@ export const LIGHT_PALETTE_BASE: NodePaletteBase = {
  *  在暗色下看不出边界（用户口径：「和黑色背景相比有些看不清」），现在是一档灰。 */
 export const DARK_PALETTE_BASE: NodePaletteBase = {
   body: "#2B2B36",
-  header: "#34343F",
   borderFallback: "#26262e",
-  titleFallback: "#E2E2EA",
   dotFallback: "#6b7280",
+  header: "#34343F",
+  titleFallback: "#E2E2EA",
 };
 
 export type NodePalette = {
@@ -91,14 +91,14 @@ export function computeNodePalette(
   const dotBg = effectiveColor ?? base.dotFallback;
 
   return {
-    nodeMode,
-    modeColor,
+    dotBg,
     effectiveColor,
     headerBg,
+    modeColor,
     nodeBg,
     nodeBorder,
+    nodeMode,
     titleColor,
-    dotBg,
   };
 }
 
@@ -117,18 +117,18 @@ export type AnchorCylinderTheme = {
 
 /** 浅色：金属圆柱读作带深色包边的中灰药丸。 */
 export const LIGHT_ANCHOR_CYLINDER: AnchorCylinderTheme = {
-  gradient: "linear-gradient(180deg, #f4f4f5 0%, #a1a1aa 50%, #52525b 100%)",
   border: "1px solid rgba(0,0,0,0.35)",
   boxShadow:
     "inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.18)",
+  gradient: "linear-gradient(180deg, #f4f4f5 0%, #a1a1aa 50%, #52525b 100%)",
 };
 
 /** 深色：原始值，未改。 */
 export const DARK_ANCHOR_CYLINDER: AnchorCylinderTheme = {
-  gradient: "linear-gradient(180deg, #d4d4d8 0%, #52525b 50%, #18181b 100%)",
   border: "1px solid rgba(255,255,255,0.45)",
   boxShadow:
     "inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.6)",
+  gradient: "linear-gradient(180deg, #d4d4d8 0%, #52525b 50%, #18181b 100%)",
 };
 
 /** 由 `next-themes` 的 `resolvedTheme` 解析锚点主题。 */

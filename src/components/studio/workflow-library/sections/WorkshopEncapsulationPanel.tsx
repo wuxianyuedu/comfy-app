@@ -91,22 +91,22 @@ function entryStateBadge(entry: EncapsulationEntryStatus): {
   label: string;
 } | null {
   if (entry.targetIoKey !== null) {
-    return { label: "已落点", className: RESOLVED_BADGE_CLASS };
+    return { className: RESOLVED_BADGE_CLASS, label: "已落点" };
   }
   if (entry.required) {
-    return { label: "未落点", className: MISSING_REQUIRED_BADGE_CLASS };
+    return { className: MISSING_REQUIRED_BADGE_CLASS, label: "未落点" };
   }
   return null;
 }
 
 export function WorkshopEncapsulationPanel({
-  workflowId,
   displayName,
-  workflowIO,
-  paramMap,
   mode,
   modes,
   onModeChange,
+  paramMap,
+  workflowId,
+  workflowIO,
 }: WorkshopEncapsulationPanelProps) {
   /* 模式契约注册表：用户改过的模式用自定义口径，未改过的用内置默认 ——
    * 封装视图与远端适配器、实际生成链路同说一套话。清单本身经
@@ -137,10 +137,10 @@ export function WorkshopEncapsulationPanel({
   const status = React.useMemo(
     () =>
       deriveEncapsulationStatus({
-        io: workflowIO,
-        paramMap,
-        mode: mode ?? null,
         contractEntries,
+        io: workflowIO,
+        mode: mode ?? null,
+        paramMap,
         requiredInputs,
       }),
     [workflowIO, paramMap, mode, contractEntries, requiredInputs],
@@ -149,10 +149,10 @@ export function WorkshopEncapsulationPanel({
   /* 流程测试的运行编排（规范 §17.2 第②层）：与画布节点那次运行共用同一份
    * 运行登记表与日志弹窗，只是带自己的来源标记。视图这里只消费 controller。 */
   const test = useEncapsulationTestRun({
+    contractIds,
+    mode: mode ?? null,
     workflowId,
     workflowName: displayName,
-    mode: mode ?? null,
-    contractIds,
   });
 
   /* 表单交上来的就是**工坊对外值**本身（口子清单 = 该模式的契约口，见

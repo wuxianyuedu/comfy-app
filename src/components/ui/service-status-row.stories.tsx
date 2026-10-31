@@ -25,8 +25,8 @@ const BASE = `http://127.0.0.1:${String(COMFYUI_DEFAULT_PORT)}`;
  * 当前这一态该按的那颗。缺省档（软底）留给了「打开查看」这类并列出口。
  */
 const meta = {
-  title: "UI/ServiceStatusRow",
   component: StatusButton,
+  title: "UI/ServiceStatusRow",
   /* 默认 args 自带可访问名与 `onClick`：这一档的 story 全用 `render` 摆整行，
    * meta 上的初值是给「直接在 Args 面板里看裸组件」那一档留的。
    * `tests/a11y-axe-stories.test.ts` 按 Storybook 的语义渲染（先 `render`，

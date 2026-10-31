@@ -22,8 +22,8 @@ import {
  *    不是自己写底色。
  */
 const meta = {
-  title: "UI/Pagination",
   component: Pagination,
+  title: "UI/Pagination",
 } satisfies Meta<typeof Pagination>;
 
 export default meta;

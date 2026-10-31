@@ -52,7 +52,7 @@ export async function cacheJson<T>(
   }
 
   const value = await build();
-  const entry: Entry<T> = { value, expiresAt: now + ttlMs };
+  const entry: Entry<T> = { expiresAt: now + ttlMs, value };
   store.map.delete(key);
   store.map.set(key, entry);
 

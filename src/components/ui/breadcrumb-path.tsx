@@ -49,11 +49,11 @@ export type BreadcrumbSegment = {
  * 层级已无意义，回退由「清空搜索」那一处承担）。
  */
 export function BreadcrumbPath({
-  segments,
-  onNavigate,
-  navigable = true,
   className,
   label = "路径",
+  navigable = true,
+  onNavigate,
+  segments,
 }: {
   className?: string;
   label?: string;

@@ -40,14 +40,14 @@ type NumberFieldProps = {
 };
 
 export function NumberField({
-  value,
-  onChange,
-  min = 0,
-  max = 9999,
-  step = 1,
-  decimalPlaces = 0,
   className,
+  decimalPlaces = 0,
   disabled = false,
+  max = 9999,
+  min = 0,
+  onChange,
+  step = 1,
+  value,
 }: NumberFieldProps) {
   const [draft, setDraft] = useState<string | null>(null);
 

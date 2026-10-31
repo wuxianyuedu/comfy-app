@@ -20,25 +20,25 @@ afterEach(cleanup);
  * 常态同值的悬停值。
  */
 const cfg: LLMConfigView = {
-  provider: "local",
   baseUrl: "http://127.0.0.1:11434",
-  model: "qwen2.5:7b",
   extraModels: ["llama3.2", "qwen2.5:7b"],
-  temperature: 0.7,
-  maxTokens: 1024,
   hasApiKey: false,
+  maxTokens: 1024,
+  model: "qwen2.5:7b",
+  provider: "local",
+  temperature: 0.7,
 };
 
 vi.mock("./hooks/use-llm-config", () => ({
   useLLMConfig: (): LLMConfigController => ({
     config: cfg,
-    localModels: [],
-    remoteModels: [],
-    remoteImageModels: [],
     loading: false,
+    localModels: [],
     refresh: vi.fn(),
+    remoteImageModels: [],
+    remoteModels: [],
   }),
-  useLLMConfigSave: () => ({ saving: false, save: vi.fn() }),
+  useLLMConfigSave: () => ({ save: vi.fn(), saving: false }),
 }));
 
 const { LLMProvider, LLMSettingsButton } = await import("./LLMContext");
@@ -62,10 +62,7 @@ describe("LLM 设置的提供方 / 模型清单 chip（ISSUE #1925）", () => {
       .getAllByRole("radio")
       .filter((c) => /Ollama|OpenAI/.test(c.textContent ?? ""));
     expect(providerChips).toHaveLength(2);
-    expect(providerChips.map((c) => c.getAttribute("aria-checked"))).toEqual([
-      "true",
-      "false",
-    ]);
+    expect(providerChips.map((c) => c.getAttribute("aria-checked"))).toEqual(["true", "false"]);
   });
 
   it("模型清单也是单选 radiogroup，且选中档四层俱在、悬停回钉常态", async () => {

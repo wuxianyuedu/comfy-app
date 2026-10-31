@@ -24,13 +24,13 @@ import {
  * 依据（它们的步进按钮 `title` 长得一样，按 title 查会同时命中三个）。
  */
 const meta = {
-  title: "Studio/MegapixelStepper",
-  component: MegapixelStepper,
-  args: { value: 1, onChange: () => undefined },
+  args: { onChange: () => undefined, value: 1 },
   argTypes: {
-    value: { control: { type: "number" } },
     disabled: { control: { type: "boolean" } },
+    value: { control: { type: "number" } },
   },
+  component: MegapixelStepper,
+  title: "Studio/MegapixelStepper",
 } satisfies Meta<typeof MegapixelStepper>;
 
 export default meta;

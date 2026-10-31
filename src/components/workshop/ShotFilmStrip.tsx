@@ -28,8 +28,8 @@ export function formatShotIndex(index: number): string {
  *     生成中的百分比在下面的镜头卡里给，那里有真实回报的数。
  */
 export function ShotFilmStrip({
-  shots,
   onJump,
+  shots,
 }: {
   /** 跳到某一镜（由调用处决定是滚动定位还是同时展开那张卡）。 */
   onJump: (shot: Shot) => void;

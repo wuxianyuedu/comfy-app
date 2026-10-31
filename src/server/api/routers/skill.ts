@@ -10,9 +10,9 @@ export const skillRouter = createTRPCRouter({
     .input(
       z
         .object({
+          all: z.boolean().optional(),
           category: z.string().optional(),
           q: z.string().optional(),
-          all: z.boolean().optional(),
         })
         .optional(),
     )
@@ -20,8 +20,8 @@ export const skillRouter = createTRPCRouter({
       await skillRepository.ensureBuiltIns(BUILTIN_SKILLS);
       const skills = await skillRepository.list({
         category: input?.category ?? null,
-        q: input?.q?.trim() ?? undefined,
         includeInactive: input?.all === true,
+        q: input?.q?.trim() ?? undefined,
       });
       const parsed = skills.map((skill) => {
         const obj = /* SAFETY: 类型断言已复核 */ skill as unknown as Record<string, unknown>;
@@ -35,12 +35,12 @@ export const skillRouter = createTRPCRouter({
       });
       const categories = await skillRepository.groupByActiveCategory();
       return {
-        skills: parsed,
         categories: categories.map((category) => ({
+          count: category.count,
           id: category.category,
           label: CATEGORY_LABELS[category.category] ?? category.category,
-          count: category.count,
         })),
+        skills: parsed,
       };
     }),
 
@@ -48,22 +48,22 @@ export const skillRouter = createTRPCRouter({
   create: authedProcedure
     .input(
       z.object({
+        category: z.string().default("style"),
+        coverUrl: z.string().optional(),
+        defaultParams: z.record(z.string(), z.unknown()).optional(),
+        description: z.string().min(1).max(200),
+        icon: z.string().default("sparkles"),
         name: z.string().min(1).max(60),
+        negativePrompt: z.string().optional(),
+        promptTemplate: z.string().min(1),
+        recommendedModel: z.string().optional(),
         slug: z
           .string()
           .min(1)
           .max(80)
           .regex(/^[a-z0-9-]+$/),
-        description: z.string().min(1).max(200),
-        icon: z.string().default("sparkles"),
-        category: z.string().default("style"),
-        promptTemplate: z.string().min(1),
-        negativePrompt: z.string().optional(),
-        defaultParams: z.record(z.string(), z.unknown()).optional(),
-        recommendedModel: z.string().optional(),
-        tags: z.array(z.string()).default([]),
-        coverUrl: z.string().optional(),
         sortOrder: z.number().int().default(0),
+        tags: z.array(z.string()).default([]),
       }),
     )
     .mutation(async ({ input }) => {
@@ -75,16 +75,16 @@ export const skillRouter = createTRPCRouter({
         });
       }
       const skill = await skillRepository.createUserSkill({
-        name: input.name,
-        slug: input.slug,
+        category: input.category,
+        coverUrl: input.coverUrl,
+        defaultParams: input.defaultParams,
         description: input.description,
         icon: input.icon,
-        category: input.category,
-        promptTemplate: input.promptTemplate,
+        name: input.name,
         negativePrompt: input.negativePrompt,
-        defaultParams: input.defaultParams,
+        promptTemplate: input.promptTemplate,
         recommendedModel: input.recommendedModel,
-        coverUrl: input.coverUrl,
+        slug: input.slug,
         sortOrder: input.sortOrder,
         tags: input.tags,
       });

@@ -61,18 +61,18 @@ export type ImageGenerationPanelProps = {
 };
 
 export function ImageGenerationPanel({
-  kind,
   d,
-  patch,
-  wfList,
+  kind,
   modelTagLib,
-  wfIO,
-  wfIOLoading,
-  wfListLoading = false,
-  seededFor,
-  setWfModes,
   onGenerate,
   onReplaceResult,
+  patch,
+  seededFor,
+  setWfModes,
+  wfIO,
+  wfIOLoading,
+  wfList,
+  wfListLoading = false,
 }: ImageGenerationPanelProps) {
   /* 执行步骤日志迁移到独立 GlobalStepLogPanel。
    * 本组件只负责生成交互；生成开始（d.taskId 就绪）时通过 setActiveTaskId()
@@ -80,9 +80,9 @@ export function ImageGenerationPanel({
 
   /* stuck-task cancel affordance —— 按钮的
    * 「取消中…」态与失败回滚都在 useCancelTask 里（视图零 IO）。 */
-  const { cancelling, cancel: onCancel } = useCancelTask({
+  const { cancel: onCancel, cancelling } = useCancelTask({
+    onFailed: (reason) => patchRef.current({ error: reason, status: "error" }),
     taskId: d.taskId,
-    onFailed: (reason) => patchRef.current({ status: "error", error: reason }),
   });
 
   // 把`patch` 放在 ref 里，好让取消处理器（由异步
@@ -227,14 +227,14 @@ export function ImageGenerationPanel({
     }
     const keepTag = genTag && newAvailTags.has(genTag) ? genTag : "";
     patch({
-      mode: code,
       genModelTag: keepTag,
-      workflowId: undefined,
-      workflowName: undefined,
-      workflowTaskType: undefined,
-      workflowInputs: {},
+      mode: code,
       paramMap: undefined,
+      workflowId: undefined,
+      workflowInputs: {},
+      workflowName: undefined,
       workflowSinkId: undefined,
+      workflowTaskType: undefined,
     });
   };
   const selectModelTag = (name: string) => {
@@ -254,22 +254,22 @@ export function ImageGenerationPanel({
     if (onlyWf) {
       patch({
         genModelTag: name,
-        workflowId: onlyWf.id,
-        workflowName: onlyWf.name,
-        workflowTaskType: onlyWf.taskType ?? undefined,
-        workflowInputs: {},
         paramMap: undefined,
+        workflowId: onlyWf.id,
+        workflowInputs: {},
+        workflowName: onlyWf.name,
         workflowSinkId: undefined,
+        workflowTaskType: onlyWf.taskType ?? undefined,
       });
     } else {
       patch({
         genModelTag: name,
-        workflowId: undefined,
-        workflowName: undefined,
-        workflowTaskType: undefined,
-        workflowInputs: {},
         paramMap: undefined,
+        workflowId: undefined,
+        workflowInputs: {},
+        workflowName: undefined,
         workflowSinkId: undefined,
+        workflowTaskType: undefined,
       });
     }
   };
@@ -278,12 +278,12 @@ export function ImageGenerationPanel({
     // eslint-disable-next-line react-hooks/immutability -- 重选工作流时重置种子
     seededFor.current = null;
     patch({
-      workflowId: wfId,
-      workflowName: wf?.name,
-      workflowTaskType: wf?.taskType ?? undefined,
-      workflowInputs: {},
       paramMap: undefined,
+      workflowId: wfId,
+      workflowInputs: {},
+      workflowName: wf?.name,
       workflowSinkId: undefined,
+      workflowTaskType: wf?.taskType ?? undefined,
     });
   };
 

@@ -92,12 +92,12 @@ export function parseAppServiceExitRecord(raw: unknown): AppServiceExitRecord | 
   }
   return {
     at: o.at,
-    kind: asExitKind(o.kind),
     code: typeof o.code === "number" ? o.code : null,
-    signal: typeof o.signal === "string" && o.signal ? o.signal : null,
-    reason: o.reason,
+    kind: asExitKind(o.kind),
     port: typeof o.port === "number" ? o.port : null,
+    reason: o.reason,
     runId: typeof o.runId === "string" && o.runId ? o.runId : null,
+    signal: typeof o.signal === "string" && o.signal ? o.signal : null,
   };
 }
 
@@ -128,11 +128,11 @@ export type AppServiceExitNotice = {
 
 /** 终止信号的通俗解释（`signal` 是给排查者看的原始值，这里是给人看的）。 */
 const SIGNAL_HINT: Record<string, string> = {
-  SIGKILL: "被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
-  SIGTERM: "收到结束请求后退出",
-  SIGINT: "被中断（如终端里的 Ctrl-C）",
-  SIGSEGV: "自身异常崩溃",
   SIGABRT: "自身异常中止",
+  SIGINT: "被中断（如终端里的 Ctrl-C）",
+  SIGKILL: "被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
+  SIGSEGV: "自身异常崩溃",
+  SIGTERM: "收到结束请求后退出",
 };
 
 /** 退出码的通俗解释（只列本项目真会撞上的几个）。 */
@@ -156,43 +156,43 @@ export function describeAppServiceExit(record: AppServiceExitRecord): AppService
   switch (record.kind) {
     case "abandoned":
       return {
-        why: "上一次启动被放弃（启动页被关闭），本地服务随之退出",
         action: "这是设计内行为：重新双击启动入口即可，等启动页自动切到主界面",
         detail,
+        why: "上一次启动被放弃（启动页被关闭），本地服务随之退出",
       };
     case "shell-self-exited":
       return {
-        why: "本地服务随桌面壳一起退出了（壳自身以非零码结束）",
         action:
           "若只是把已在运行的窗口唤到前台，本次双击不会启动新进程；" +
           "否则重新双击一次启动入口，并对照 log/launcher/ 下的日志",
         detail,
+        why: "本地服务随桌面壳一起退出了（壳自身以非零码结束）",
       };
     case "shell-terminated":
       return {
-        why: "本地服务随桌面壳一起退出了，且壳没有留下任何收尾标记（被强行收走或崩溃）",
         action:
           "重新双击一次启动入口并**只双击一次**、等启动页自己切换；" +
           "若反复发生，把 log/launcher/ 与 log/shell/ 一起带上排查",
         detail,
+        why: "本地服务随桌面壳一起退出了，且壳没有留下任何收尾标记（被强行收走或崩溃）",
       };
     case "sidecar":
       return {
-        why: `内嵌的本地服务已终止${record.code === null ? "" : `（退出码 ${record.code}）`}`,
         action: "关掉应用窗口重新启动一次；若反复出现，把 log/nextjs/ 带上排查",
         detail,
+        why: `内嵌的本地服务已终止${record.code === null ? "" : `（退出码 ${record.code}）`}`,
       };
     case "dev-server":
       return {
-        why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
         action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
         detail,
+        why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
       };
     default:
       return {
-        why: `本地服务已退出${record.code === null ? "" : `（退出码 ${record.code}）`}`,
         action: "重新启动一次应用；若反复出现，把 log/ 下的诊断包带上排查",
         detail,
+        why: `本地服务已退出${record.code === null ? "" : `（退出码 ${record.code}）`}`,
       };
   }
 }
@@ -360,7 +360,7 @@ export async function fetchCurrentDisconnectExit(
  * 难查。取不到一律回 `{ record: null, currentRunId: null }`（= 没有原因可讲）。
  */
 export async function fetchAppServiceExit(): Promise<AppServiceExitProbe> {
-  const empty: AppServiceExitProbe = { record: null, currentRunId: null };
+  const empty: AppServiceExitProbe = { currentRunId: null, record: null };
   try {
     const res = await fetch(APP_SERVICE_EXIT_ENDPOINT, {
       cache: "no-store",
@@ -374,9 +374,9 @@ export async function fetchAppServiceExit(): Promise<AppServiceExitProbe> {
       record?: unknown;
     };
     return {
-      record: parseAppServiceExitRecord(data.record),
       currentRunId:
         typeof data.currentRunId === "string" && data.currentRunId ? data.currentRunId : null,
+      record: parseAppServiceExitRecord(data.record),
     };
   } catch {
     return empty;

@@ -10,8 +10,8 @@ import { sendAgentMessage } from "./client";
 import type { AgentChatRequest } from "./shared";
 
 const REQ: AgentChatRequest = {
-  messages: [{ role: "user", content: "hi" }],
   draft: /* SAFETY: 类型断言已复核 */ {} as AgentChatRequest["draft"],
+  messages: [{ content: "hi", role: "user" }],
 };
 
 function mockFetch(impl: () => Promise<Response> | Response) {
@@ -28,10 +28,10 @@ describe("sendAgentMessage", () => {
       () =>
         new Response(
           JSON.stringify({
-            reply: "好的",
-            tool_calls: [{ id: "c1", name: "generate_script", arguments: '{"idea":"x"}' }],
             done: true,
             fallback_instruction: { action: "get_project_state" },
+            reply: "好的",
+            tool_calls: [{ arguments: '{"idea":"x"}', id: "c1", name: "generate_script" }],
           }),
           { status: 200 },
         ),
@@ -39,7 +39,7 @@ describe("sendAgentMessage", () => {
     const res = await sendAgentMessage(REQ);
     expect(res.reply).toBe("好的");
     expect(res.tool_calls).toEqual([
-      { id: "c1", name: "generate_script", arguments: '{"idea":"x"}' },
+      { arguments: '{"idea":"x"}', id: "c1", name: "generate_script" },
     ]);
     expect(res.done).toBe(true);
     expect(res.fallback_instruction).toEqual({ action: "get_project_state" });
@@ -51,11 +51,11 @@ describe("sendAgentMessage", () => {
         new Response(
           JSON.stringify({
             tool_calls: [
-              { id: "ok", name: "f", arguments: "{}" },
+              { arguments: "{}", id: "ok", name: "f" },
               // 缺 name
-              { id: "bad1", arguments: "{}" },
+              { arguments: "{}", id: "bad1" },
               // 空 id（执行层按 id 回传结果，空 id 会串台）
-              { id: "", name: "f", arguments: "{}" },
+              { arguments: "{}", id: "", name: "f" },
               // 不是对象
               "nonsense",
               // arguments 缺失 → 用 "{}" 兜底，而不是 undefined
@@ -67,15 +67,15 @@ describe("sendAgentMessage", () => {
     );
     const res = await sendAgentMessage(REQ);
     expect(res.tool_calls).toEqual([
-      { id: "ok", name: "f", arguments: "{}" },
-      { id: "ok2", name: "g", arguments: "{}" },
+      { arguments: "{}", id: "ok", name: "f" },
+      { arguments: "{}", id: "ok2", name: "g" },
     ]);
   });
 
   it("done 只在真为 true 时带出（false / 缺省都不带）", async () => {
     mockFetch(
       () =>
-        new Response(JSON.stringify({ reply: "x", done: false }), {
+        new Response(JSON.stringify({ done: false, reply: "x" }), {
           status: 200,
         }),
     );

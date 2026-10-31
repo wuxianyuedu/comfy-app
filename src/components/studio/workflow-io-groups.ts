@@ -194,13 +194,13 @@ export const ASPECT_RATIO_LABEL_PRESETS: [
   { label: string; ratio: number; value: string },
   ...Array<{ label: string; ratio: number; value: string }>,
 ] = [
-  { label: "1:1", value: "1:1 (Square)", ratio: 1 },
-  { label: "4:3", value: "4:3 (Standard)", ratio: 4 / 3 },
-  { label: "3:2", value: "3:2 (Photo)", ratio: 3 / 2 },
-  { label: "16:9", value: "16:9 (Widescreen)", ratio: 16 / 9 },
-  { label: "21:9", value: "21:9 (Ultrawide)", ratio: 21 / 9 },
-  { label: "9:16", value: "9:16 (Portrait)", ratio: 9 / 16 },
-  { label: "2:3", value: "2:3 (Portrait Photo)", ratio: 2 / 3 },
+  { label: "1:1", ratio: 1, value: "1:1 (Square)" },
+  { label: "4:3", ratio: 4 / 3, value: "4:3 (Standard)" },
+  { label: "3:2", ratio: 3 / 2, value: "3:2 (Photo)" },
+  { label: "16:9", ratio: 16 / 9, value: "16:9 (Widescreen)" },
+  { label: "21:9", ratio: 21 / 9, value: "21:9 (Ultrawide)" },
+  { label: "9:16", ratio: 9 / 16, value: "9:16 (Portrait)" },
+  { label: "2:3", ratio: 2 / 3, value: "2:3 (Portrait Photo)" },
 ];
 /** 比例标签预设的首项（同上，「回退首档」的唯一出处）。 */
 export const DEFAULT_ASPECT_RATIO_LABEL_PRESET = ASPECT_RATIO_LABEL_PRESETS[0];
@@ -250,8 +250,8 @@ export function dimsForRatio(
   if (typeof presetOrBase === "number") {
     const horizontal = safeRatio >= 1;
     return {
-      width: Math.max(1, Math.round(horizontal ? presetOrBase : presetOrBase * safeRatio)),
       height: Math.max(1, Math.round(horizontal ? presetOrBase / safeRatio : presetOrBase)),
+      width: Math.max(1, Math.round(horizontal ? presetOrBase : presetOrBase * safeRatio)),
     };
   }
 
@@ -288,7 +288,7 @@ export function pickClarityPreset(
   let best: DimClarityPreset = DEFAULT_DIM_CLARITY_PRESET;
   let bestDist = Number.POSITIVE_INFINITY;
   for (const preset of DIM_CLARITY_PRESETS) {
-    const { width: dw, height: dh } = dimsForRatio(ratio, preset, alignM, scene, table);
+    const { height: dh, width: dw } = dimsForRatio(ratio, preset, alignM, scene, table);
     const dist = Math.abs(width - dw) + Math.abs(height - dh);
     if (dist < bestDist) {
       best = preset;
@@ -319,10 +319,10 @@ export function inferDimensionGroup(widgets: Array<EnrichedWidget>): DimensionGr
       return null;
     }
     return {
-      kind: "dimension",
       groupId: `dim:${width.ioKey}|${height.ioKey}`,
-      width,
       height,
+      kind: "dimension",
+      width,
     };
   }
 
@@ -341,9 +341,9 @@ export function inferDimensionGroup(widgets: Array<EnrichedWidget>): DimensionGr
       (w) => w.ioKey !== aspect.ioKey && w.ioKey !== megapixels.ioKey && isDimMultiple(w),
     );
     return {
-      kind: "dimension",
-      groupId: `aspect-mp:${aspect.ioKey}|${megapixels.ioKey}${multiple ? `|${multiple.ioKey}` : ""}`,
       aspect,
+      groupId: `aspect-mp:${aspect.ioKey}|${megapixels.ioKey}${multiple ? `|${multiple.ioKey}` : ""}`,
+      kind: "dimension",
       megapixels,
       multiple,
     };
@@ -367,10 +367,10 @@ export function inferVideoGroup(widgets: Array<EnrichedWidget>): VideoGroup | nu
     return null;
   }
   return {
-    kind: "video",
-    groupId: `video:${length.ioKey}|${aspect?.ioKey ?? ""}|${qualityFirst?.ioKey ?? ""}`,
-    length,
     aspect,
+    groupId: `video:${length.ioKey}|${aspect?.ioKey ?? ""}|${qualityFirst?.ioKey ?? ""}`,
+    kind: "video",
+    length,
     quality: qualityFirst,
   };
 }
@@ -419,5 +419,5 @@ export function inferGroups(widgets: Array<EnrichedWidget>): {
       groupedKeys.add(video.quality.ioKey);
     }
   }
-  return { dimension, video, groupedKeys };
+  return { dimension, groupedKeys, video };
 }

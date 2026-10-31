@@ -42,7 +42,6 @@ export async function writeTerminal<T>(
 ): Promise<T> {
   try {
     return await runWithSqliteBusyRetry(write, {
-      policy: TERMINAL_DB_WRITE,
       onBusy: (attempt) => {
         if (attempt === 0) {
           // 只在第一次重试时写一行：撞锁是同一件事，逐次写会把行日志刷成噪音。
@@ -54,6 +53,7 @@ export async function writeTerminal<T>(
         }
       },
       onGiveUp: (err, tries) => giveUp(taskId, label, err, tries),
+      policy: TERMINAL_DB_WRITE,
     });
   } catch (err) {
     throw new Error(describeSqliteWriteError(err, `终态${label}写库失败`), {
@@ -68,12 +68,7 @@ export async function writeTerminal<T>(
  * 顺序有意：摘足迹放在最前，这样即使后面那行日志也写不出去，这一行在回收器眼里
  * 已经是孤儿了（接管只依赖库里的状态与本进程的足迹，不依赖那行日志）。
  */
-function giveUp(
-  taskId: string,
-  label: string,
-  err: unknown,
-  tried: number,
-): void {
+function giveUp(taskId: string, label: string, err: unknown, tried: number): void {
   forgetTaskClaimEntirely(taskId);
   log(
     taskId,

@@ -69,9 +69,9 @@ function CardRow({
  *     无读数环境里 `getVirtualItems()` 为空，直接用会把清单渲染成一片空白。
  */
 function NodeCardList({
-  nodeTypeList,
   manifestByNode,
   nodeCardExpansion,
+  nodeTypeList,
 }: {
   manifestByNode: CustomNodesSettingsController["manifestByNode"];
   nodeCardExpansion: CustomNodesSettingsController["nodeCardExpansion"];
@@ -83,10 +83,10 @@ function NodeCardList({
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: nodeTypeList.length,
-    getScrollElement: () => scrollEl,
     estimateSize: () => CARD_ROW_ESTIMATE_PX + CARD_GAP_PX,
-    overscan: 6,
     gap: CARD_GAP_PX,
+    getScrollElement: () => scrollEl,
+    overscan: 6,
   });
   const measured = (scrollEl?.clientHeight ?? 0) > 0;
 
@@ -113,8 +113,8 @@ function NodeCardList({
     <div className={CARD_LIST_MAX_H_CLASS} ref={setScrollEl}>
       <div
         style={{
-          position: "relative",
           height: virtualizer.getTotalSize(),
+          position: "relative",
           width: "100%",
         }}
       >
@@ -129,11 +129,11 @@ function NodeCardList({
               key={vi.key}
               ref={virtualizer.measureElement}
               style={{
+                left: 0,
                 position: "absolute",
                 top: 0,
-                left: 0,
-                width: "100%",
                 transform: `translateY(${vi.start}px)`,
+                width: "100%",
               }}
             >
               <CardRow
@@ -151,22 +151,22 @@ function NodeCardList({
 
 export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
   const {
-    saveErr,
-    onParseAll,
-    summary,
     loading,
-    progress,
-    savedPaths,
-    parsing,
-    totalAcrossParents,
-    parentBlocks,
-    parentExpansion,
-    perPkgParsing,
-    onParseAllParent,
-    nodeListExpansion,
     manifestByNode,
     nodeCardExpansion,
+    nodeListExpansion,
+    onParseAll,
+    onParseAllParent,
     onParseSingle,
+    parentBlocks,
+    parentExpansion,
+    parsing,
+    perPkgParsing,
+    progress,
+    savedPaths,
+    saveErr,
+    summary,
+    totalAcrossParents,
   } = ctrl;
   return (
     <>
@@ -271,7 +271,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
           </div>
         )}
         <div className="flex flex-col gap-2">
-          {parentBlocks.map(({ parent, subs, cnt, total }) => {
+          {parentBlocks.map(({ cnt, parent, subs, total }) => {
             const isOpen = parentExpansion.isExpanded(parent);
             const parentParsed = total > 0 && cnt.unimported + cnt.missing + cnt.empty === 0;
             return (
@@ -356,7 +356,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                     className="border-border bg-surface/50 flex flex-col gap-1.5 border-t p-2"
                     depth={0}
                   >
-                    {subs.map(({ sub, saved, state }) => {
+                    {subs.map(({ saved, state, sub }) => {
                       const preset = ROW_STATE_PRESET[state.kind];
                       const toolTip =
                         state.kind === "outdated"

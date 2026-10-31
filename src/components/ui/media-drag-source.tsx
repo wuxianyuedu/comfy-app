@@ -82,14 +82,15 @@ export function displayNameFromUrl(url: string): string {
  * `<div key={item.id} {...mediaDragSourceProps({ url: item.url, kind: item.kind, className: "rounded-lg border" })} />`。
  */
 export function mediaDragSourceProps({
-  url,
-  displayName,
-  kind,
   canDrag = true,
   className = "",
+  displayName,
+  kind,
+  url,
 }: MediaDragSourceArgs): MediaDragSourceProps {
   const draggable = canDrag && !!url;
   return {
+    className: className + (draggable ? " cursor-grab active:cursor-grabbing" : ""),
     draggable,
     onDragStart: (event) => {
       if (!url) {
@@ -98,13 +99,12 @@ export function mediaDragSourceProps({
         return;
       }
       const payload: MediaDragPayload = {
-        url,
         displayName: displayName ?? displayNameFromUrl(url),
         mediaType: kind,
+        url,
       };
       event.dataTransfer.setData(MEDIA_DRAG_MIME, JSON.stringify(payload));
       event.dataTransfer.effectAllowed = "copy";
     },
-    className: className + (draggable ? " cursor-grab active:cursor-grabbing" : ""),
   };
 }

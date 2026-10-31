@@ -3,16 +3,16 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { reviewShot, regenerateShot } = vi.hoisted(() => ({
-  reviewShot: vi.fn(),
+const { regenerateShot, reviewShot } = vi.hoisted(() => ({
   regenerateShot: vi.fn(),
+  reviewShot: vi.fn(),
 }));
-vi.mock("~/lib/production/run-client", () => ({ reviewShot, regenerateShot }));
+vi.mock("~/lib/production/run-client", () => ({ regenerateShot, reviewShot }));
 
 const toast = vi.hoisted(() => ({
-  success: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
+  success: vi.fn(),
 }));
 vi.mock("~/components/studio/ToastProvider", () => ({ useToast: () => toast }));
 
@@ -25,10 +25,10 @@ beforeEach(() => {
 describe("useShotReview.review", () => {
   it("成功 → 写入 verdict", async () => {
     const verdict = {
-      pass: false,
       issues: ["含混"],
-      suggestion: "更具体",
+      pass: false,
       scoredAt: "t",
+      suggestion: "更具体",
     };
     reviewShot.mockResolvedValue(verdict);
     const { result } = renderHook(() => useShotReview("proj_1"));

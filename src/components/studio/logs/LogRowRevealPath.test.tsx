@@ -38,12 +38,12 @@ const ROOT = "F:\\AI\\Other\\comfy-app-t3-branch4";
 function entry(message: string): LogEntry {
   return {
     id: "e-1",
-    seq: 1,
-    time: 1_700_000_000_000,
     level: "info",
     message,
-    source: "system",
     origin: "shell-launch",
+    seq: 1,
+    source: "system",
+    time: 1_700_000_000_000,
   };
 }
 
@@ -142,7 +142,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
   });
 
   it("点带空格的路径，参数是整条（不是截断的 C:\\Program）", async () => {
-    mutateMock.mockResolvedValue({ ok: true, detail: "已在文件管理器里定位" });
+    mutateMock.mockResolvedValue({ detail: "已在文件管理器里定位", ok: true });
     const user = userEvent.setup();
     renderRow('>>> "C:\\Program Files\\PowerShell\\7\\pwsh.EXE" -NoProfile');
     await user.click(
@@ -161,7 +161,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
   });
 
   it("点一下发一次请求，参数是扫出来的那段路径", async () => {
-    mutateMock.mockResolvedValue({ ok: true, detail: "已在文件管理器里定位" });
+    mutateMock.mockResolvedValue({ detail: "已在文件管理器里定位", ok: true });
     const user = userEvent.setup();
     renderRow(`项目根: ${ROOT}`);
     await user.click(screen.getByRole("button", { name: `在文件管理器里定位 ${ROOT}` }));
@@ -170,7 +170,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
   });
 
   it("成功时按钮改口「已定位」（点一下要看得出有反应）", async () => {
-    mutateMock.mockResolvedValue({ ok: true, detail: "已在文件管理器里定位" });
+    mutateMock.mockResolvedValue({ detail: "已在文件管理器里定位", ok: true });
     const user = userEvent.setup();
     renderRow(`项目根: ${ROOT}`);
     const button = screen.getByRole("button", {
@@ -182,8 +182,8 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
 
   it("失败时改口「打开失败」，悬停提示里给出服务端那句原因（硬规则 4）", async () => {
     mutateMock.mockResolvedValue({
-      ok: false,
       detail: "找不到可在文件管理器里打开的路径：F:\\nope",
+      ok: false,
     });
     const user = userEvent.setup();
     renderRow(`项目根: ${ROOT}`);
@@ -230,6 +230,6 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
     const second = user.click(button);
     await Promise.all([first, second]);
     expect(mutateMock).toHaveBeenCalledTimes(1);
-    resolveIt({ ok: true, detail: "已在文件管理器里定位" });
+    resolveIt({ detail: "已在文件管理器里定位", ok: true });
   });
 });

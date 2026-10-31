@@ -38,25 +38,25 @@ export type HistoryTaskRow = {
 };
 
 export const STATUS_PILL: Record<string, { cls: string; label: string }> = {
+  CANCELLED: { cls: "bg-surface-2 text-ink-soft", label: "已取消" },
+  FAILED: {
+    cls: "bg-red-500/15 text-red-700 dark:text-red-400",
+    label: "失败",
+  },
   QUEUED: {
-    label: "排队中",
     cls: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300",
+    label: "排队中",
   },
   RUNNING: {
-    label: "生成中",
     cls: "bg-violet-500/20 text-violet-700 dark:text-violet-300",
+    label: "生成中",
   },
-  FAILED: {
-    label: "失败",
-    cls: "bg-red-500/15 text-red-700 dark:text-red-400",
-  },
-  CANCELLED: { label: "已取消", cls: "bg-surface-2 text-ink-soft" },
 };
 
 export const KIND_STYLE: Record<TaskMediaType, string> = {
+  audio: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   image: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
   video: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  audio: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
 };
 
 /**
@@ -69,8 +69,8 @@ export function timeAgo(iso: string): string {
   return (
     timeAgoImpl(iso, { maxDays: 30 }) ??
     new Date(iso).toLocaleDateString("zh-CN", {
-      month: "short",
       day: "numeric",
+      month: "short",
     })
   );
 }

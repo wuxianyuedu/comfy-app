@@ -37,8 +37,8 @@ export const SCROLLBAR_VISIBLE_CLASSES = "soft-scrollbar overflow-y-auto";
 /* ── Toolbar primitives ── */
 export function ToolbarButton({
   children,
-  onClick,
   hint,
+  onClick,
 }: {
   children: ReactNode;
   hint: string;
@@ -69,14 +69,14 @@ export function ToolbarDivider() {
 /* ── Full toolbar(标题 / 行内样式 / 列表引用 / 媒体 / 撤销重做 / 预览) ── */
 export function EditorToolbar({
   insertAtLineStart,
-  wrapSelection,
-  insertList,
-  insertLink,
   insertImage,
+  insertLink,
+  insertList,
   insertTable,
+  onTogglePreview,
   restoreHistory,
   showPreview,
-  onTogglePreview,
+  wrapSelection,
 }: {
   insertAtLineStart: (prefix: string) => void;
   insertImage: () => void;
@@ -182,8 +182,8 @@ export function EditorToolbar({
 
 /* ── Outline sidebar(点击目录跳转) ── */
 export function OutlineSidebar({
-  outline,
   onJump,
+  outline,
 }: {
   onJump: (line: number) => void;
   outline: Array<OutlineItem>;
@@ -225,14 +225,14 @@ export function OutlineSidebar({
 
 /* ── Editor body:编辑态 textarea / 预览态渲染视图 ── */
 export function EditorBody({
-  textareaRef,
-  value,
-  showPreview,
-  previewHtml,
   emitChange,
-  pushHistory,
   getSelection,
   onChange,
+  previewHtml,
+  pushHistory,
+  showPreview,
+  textareaRef,
+  value,
 }: {
   emitChange: (next: string) => void;
   getSelection: () => { end: number; start: number; text: string };
@@ -269,7 +269,7 @@ export function EditorBody({
              * 这里只写「按下 Tab 要为这段文本做什么」—— 而这三件事现在都
              * 写在同一个地方（`simpleKeyHandler`），不再与动作混在一个`if` 里。 */
             const tabHandler = simpleKeyHandler(["Tab"], () => {
-              const { start, end } = getSelection();
+              const { end, start } = getSelection();
               const nextValue = value.slice(0, start) + "" + value.slice(end);
               emitChange(nextValue);
               pushHistory(nextValue, start + 2, start + 2);

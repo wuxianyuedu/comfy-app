@@ -87,23 +87,23 @@ describe("SelectChip", () => {
   it("四种形态各自带自己的形状档（圆形胶囊 / 方角分段 / 紧凑 / 虚线动作）", () => {
     const shapes = [
       {
-        shape: /* SAFETY: 类型断言已复核 */ "pill" as const,
         expect: "rounded-full",
+        shape: /* SAFETY: 类型断言已复核 */ "pill" as const,
       },
       {
-        shape: /* SAFETY: 类型断言已复核 */ "segment" as const,
         expect: "rounded-lg",
+        shape: /* SAFETY: 类型断言已复核 */ "segment" as const,
       },
       {
-        shape: /* SAFETY: 类型断言已复核 */ "compact" as const,
         expect: "rounded",
+        shape: /* SAFETY: 类型断言已复核 */ "compact" as const,
       },
       {
-        shape: /* SAFETY: 类型断言已复核 */ "dashed" as const,
         expect: "border-dashed",
+        shape: /* SAFETY: 类型断言已复核 */ "dashed" as const,
       },
     ];
-    for (const { shape, expect: token } of shapes) {
+    for (const { expect: token, shape } of shapes) {
       const { unmount } = render(
         <SelectChip data-testid="chip" shape={shape}>
           x

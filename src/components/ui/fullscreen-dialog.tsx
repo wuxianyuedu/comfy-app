@@ -39,12 +39,12 @@ export type FullScreenDialogProps = {
 };
 
 export function FullScreenDialog({
-  open,
-  onOpenChange,
-  label,
-  zClass = "z-100",
-  className,
   children,
+  className,
+  label,
+  onOpenChange,
+  open,
+  zClass = "z-100",
 }: FullScreenDialogProps) {
   return (
     /* 全屏视图铺满标题行下方后，弹窗外唯一可点的就是窗口标题栏；base-ui

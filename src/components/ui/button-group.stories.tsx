@@ -33,12 +33,12 @@ type ButtonGroupOrientation = NonNullable<React.ComponentProps<typeof ButtonGrou
 const ORIENTATIONS: Array<ButtonGroupOrientation> = ["horizontal", "vertical"];
 
 const meta = {
-  title: "UI/ButtonGroup",
-  component: ButtonGroup,
   args: { orientation: "horizontal" },
   argTypes: {
     orientation: { control: "select", options: ORIENTATIONS },
   },
+  component: ButtonGroup,
+  title: "UI/ButtonGroup",
 } satisfies Meta<typeof ButtonGroup>;
 
 export default meta;

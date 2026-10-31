@@ -39,26 +39,18 @@ describe("isDetailLoadingFor", () => {
 describe("resolveActiveMode", () => {
   it("未选中工作流 → 回落默认模式（不读空的 override）", () => {
     expect(resolveActiveMode(null, null, "T2I")).toBe("T2I");
-    expect(
-      resolveActiveMode({ workflowId: "wf-1", mode: "I2I" }, null, "T2I"),
-    ).toBe("T2I");
+    expect(resolveActiveMode({ mode: "I2I", workflowId: "wf-1" }, null, "T2I")).toBe("T2I");
   });
 
   it("这条工作流上切过模式 → 用切过的", () => {
-    expect(
-      resolveActiveMode({ workflowId: "wf-1", mode: "I2I" }, "wf-1", "T2I"),
-    ).toBe("I2I");
+    expect(resolveActiveMode({ mode: "I2I", workflowId: "wf-1" }, "wf-1", "T2I")).toBe("I2I");
   });
 
   it("换到另一条工作流 → 回落到该工作流的默认模式（不带着上一条的查看模式）", () => {
-    expect(
-      resolveActiveMode({ workflowId: "wf-1", mode: "I2I" }, "wf-2", "T2I"),
-    ).toBe("T2I");
+    expect(resolveActiveMode({ mode: "I2I", workflowId: "wf-1" }, "wf-2", "T2I")).toBe("T2I");
   });
 
   it("切过但模式为空（没有模式语境）→ 如实返回 null", () => {
-    expect(
-      resolveActiveMode({ workflowId: "wf-1", mode: null }, "wf-1", "T2I"),
-    ).toBeNull();
+    expect(resolveActiveMode({ mode: null, workflowId: "wf-1" }, "wf-1", "T2I")).toBeNull();
   });
 });

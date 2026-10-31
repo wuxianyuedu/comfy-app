@@ -104,13 +104,13 @@ export function useSettingsAppUpdate(): UseSettingsAppUpdate {
 
   return {
     appUpdate: {
-      inShell: isDesktopShell(),
-      busy,
       available,
-      version,
+      busy,
       currentVersion,
+      inShell: isDesktopShell(),
       message,
       progress,
+      version,
     },
     checkAppUpdate,
     installAppUpdate,

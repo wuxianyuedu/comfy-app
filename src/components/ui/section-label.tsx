@@ -31,7 +31,7 @@ export type SectionLabelProps = {
   hint?: ReactNode;
 };
 
-export function SectionLabel({ children, hint, className }: SectionLabelProps) {
+export function SectionLabel({ children, className, hint }: SectionLabelProps) {
   return (
     <div
       className={cn("mb-2 flex flex-wrap items-baseline gap-x-2", className)}

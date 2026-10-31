@@ -63,17 +63,17 @@ function channelProvider(channel: ExtractChannel): "local" | "remote" {
 
 export function newCharacter(): Character {
   return {
-    id: workshopUid("char"),
-    name: "",
     ageGender: "",
     appearance: "",
     costume: "",
-    personality: "",
-    temperament: "",
-    styleTags: [],
-    positivePrompt: "",
+    id: workshopUid("char"),
+    name: "",
     negativePrompt: "",
     params: {},
+    personality: "",
+    positivePrompt: "",
+    styleTags: [],
+    temperament: "",
   };
 }
 export function useCharacterExtractFlow(input: {
@@ -85,7 +85,7 @@ export function useCharacterExtractFlow(input: {
   scriptMarkdown?: string;
   styles: Array<StyleRef>;
 }) {
-  const { characters, styles, onCharactersChange, scriptMarkdown, extract, config, openSettings } =
+  const { characters, config, extract, onCharactersChange, openSettings, scriptMarkdown, styles } =
     input;
 
   // ── 三通道提取(工具 / 本地模型 / 远端API)+ 外部导入 ──
@@ -94,20 +94,20 @@ export function useCharacterExtractFlow(input: {
   // controller 跨阶段页签常驻，提取中切页签再切回状态不丢，无需模块级缓存。
   // 遗留/独立使用（未注入 extract prop）时，退化为本组件局部会话。
   const localExtract = useExtractSession("local", "character");
-  const { session: extractSession, actions: extractActions } = extract ?? {
-    session: localExtract[0],
+  const { actions: extractActions, session: extractSession } = extract ?? {
     actions: localExtract[1],
+    session: localExtract[0],
   };
   const {
-    channelValue: extractChannelValue,
     busy: extractBusy,
-    status: extractStatus,
-    progress: extractProgress,
+    channelValue: extractChannelValue,
     error: extractError,
     log: extractionLog,
+    progress: extractProgress,
+    status: extractStatus,
   } = extractSession;
   const extractChannel = parseChannelOption(extractChannelValue).channel;
-  const { patch: cacheExtractPatch, appendProgress, appendLog, setLog } = extractActions;
+  const { appendLog, appendProgress, patch: cacheExtractPatch, setLog } = extractActions;
 
   const hasScript = !!scriptMarkdown?.trim();
 
@@ -126,9 +126,9 @@ export function useCharacterExtractFlow(input: {
     }
     cacheExtractPatch({
       busy: true,
+      error: "",
       progress: "",
       status: "正在调用模型提取角色卡…",
-      error: "",
     });
     // 新一次提取：重置日志为仅含 init 一条（上次执行记录随组件保留在面板里，
     // 此处只清空面板以展示本次的输入→输出→结果链路）。
@@ -149,11 +149,11 @@ export function useCharacterExtractFlow(input: {
       );
       const full = await streamChat({
         messages: requestMessages,
-        opts: {
-          provider: channelProvider(extractChannel),
-          model: parseChannelOption(extractChannelValue).model,
-        },
         onToken: (token) => appendProgress(token),
+        opts: {
+          model: parseChannelOption(extractChannelValue).model,
+          provider: channelProvider(extractChannel),
+        },
       });
       appendLog(makeExtractLog("output", "模型返回完成，正在解析…", full));
       const drafts = parseExtractedCharacters(full);
@@ -194,7 +194,7 @@ export function useCharacterExtractFlow(input: {
 
   /** 外部导入:角色卡 JSON 按既有 Character 字段解析;markdown 走工具解析器 */
   async function handleImportFile(file: File) {
-    cacheExtractPatch({ busy: true, status: "", error: "" });
+    cacheExtractPatch({ busy: true, error: "", status: "" });
     try {
       /* 读取收在唯一出口里（§16.2.4.27）—— 此前两处各写一遍`file.text()`，
        * 而「读失败」与「文件为空」在它们那里压成同一个结果。 */
@@ -230,16 +230,16 @@ export function useCharacterExtractFlow(input: {
   }
 
   return {
-    extractChannelValue,
-    setExtractChannelValue: (value: string) => cacheExtractPatch({ channelValue: value }),
     extractBusy,
-    extractStatus,
-    extractProgress,
+    extractChannelValue,
     extractError,
     extractionLog,
-    hasScript,
+    extractProgress,
+    extractStatus,
     handleExtract,
     handleImportFile,
+    hasScript,
+    setExtractChannelValue: (value: string) => cacheExtractPatch({ channelValue: value }),
   };
 }
 export function useCharacterAiFlow(input: {
@@ -253,7 +253,7 @@ export function useCharacterAiFlow(input: {
   /** 主组件的既有更新路径：润色结果经它重算提示词。 */
   update: (id: string, patch: Partial<Character>) => void;
 }) {
-  const { characters, styles, onCharactersChange, update, brief, setBrief, config, openSettings } =
+  const { brief, characters, config, onCharactersChange, openSettings, setBrief, styles, update } =
     input;
   const gen = useBusyAction();
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）：这段 try/catch/finally 此前把
@@ -302,8 +302,8 @@ export function useCharacterAiFlow(input: {
         streamChat({
           messages: buildCharacterFromBriefMessages(brief),
           // 显式 provider+model：命中所选模型独立连接参数时改走该参数（与「从剧本提取」一致）
-          opts: model ? { provider, model } : undefined,
           onToken: (token) => setGenProgress((prev) => prev + token),
+          opts: model ? { model, provider } : undefined,
         }),
       );
       const r = parseCharacterFull(full);
@@ -339,12 +339,12 @@ export function useCharacterAiFlow(input: {
         const style = styles.find((style) => style.slug === character.skillSlug);
         const full = await streamChat({
           messages: buildCharacterMessages({
-            name: character.name,
             appearance: character.appearance,
             costume: character.costume,
+            name: character.name,
             personality: character.personality,
-            styleTags: character.styleTags,
             skillName: style?.name,
+            styleTags: character.styleTags,
           }),
           /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
         });
@@ -362,16 +362,16 @@ export function useCharacterAiFlow(input: {
   }
 
   return {
-    genEffective,
-    genSelectValue,
-    gen,
-    genProgress,
-    genStatus,
-    genError,
-    setGenSel,
-    handleAIGenerate,
-    handleAICard,
     aiAction,
     aiErrors,
+    gen,
+    genEffective,
+    genError,
+    genProgress,
+    genSelectValue,
+    genStatus,
+    handleAICard,
+    handleAIGenerate,
+    setGenSel,
   };
 }

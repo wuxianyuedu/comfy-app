@@ -19,17 +19,17 @@ import {
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     run: {
-      status: { query: vi.fn() },
-      start: { mutate: vi.fn() },
-      pause: { mutate: vi.fn() },
-      resume: { mutate: vi.fn() },
       approve: { mutate: vi.fn() },
       cancel: { mutate: vi.fn() },
-      reviewShot: { mutate: vi.fn() },
+      pause: { mutate: vi.fn() },
+      regenerateShot: { mutate: vi.fn() },
+      resume: { mutate: vi.fn() },
       reviewCharacter: { mutate: vi.fn() },
       reviewScript: { mutate: vi.fn() },
+      reviewShot: { mutate: vi.fn() },
       reviseScript: { mutate: vi.fn() },
-      regenerateShot: { mutate: vi.fn() },
+      start: { mutate: vi.fn() },
+      status: { query: vi.fn() },
     },
   },
 }));
@@ -60,11 +60,11 @@ describe("fetchRunStatus", () => {
 
   it("脏 run 回包 → 归一", async () => {
     statusQuery.mockResolvedValue({
-      run: /* SAFETY: 类型断言已复核 */ {
-        status: "乱",
-        approvalMode: "stage",
-      } as never,
       action: { kind: "generate_script" },
+      run: /* SAFETY: 类型断言已复核 */ {
+        approvalMode: "stage",
+        status: "乱",
+      } as never,
     });
     const r = await fetchRunStatus("proj_1");
     expect(r.run.status).toBe("idle"); // 非法回落
@@ -75,17 +75,17 @@ describe("fetchRunStatus", () => {
 describe("run 控制动作", () => {
   it("start 透传入参 + 回快照", async () => {
     startMutate.mockResolvedValue({
-      run: /* SAFETY: 类型断言已复核 */ {
-        status: "running",
-        approvalMode: "auto",
-      } as never,
       action: { kind: "generate_script" },
+      run: /* SAFETY: 类型断言已复核 */ {
+        approvalMode: "auto",
+        status: "running",
+      } as never,
     });
-    const r = await startRun("proj_1", { goal: "g", approvalMode: "auto" });
+    const r = await startRun("proj_1", { approvalMode: "auto", goal: "g" });
     expect(startMutate).toHaveBeenCalledWith({
-      projectId: "proj_1",
-      goal: "g",
       approvalMode: "auto",
+      goal: "g",
+      projectId: "proj_1",
     });
     expect(r.run.status).toBe("running");
     expect(r.run.approvalMode).toBe("auto");
@@ -93,13 +93,13 @@ describe("run 控制动作", () => {
 
   it("pause / resume / approve / cancel 各调对应 mutation 并回快照", async () => {
     const snap = {
-      run: /* SAFETY: 类型断言已复核 */ { status: "paused" } as never,
       action: { kind: /* SAFETY: 类型断言已复核 */ "idle" as const },
+      run: /* SAFETY: 类型断言已复核 */ { status: "paused" } as never,
     };
     pauseMutate.mockResolvedValue(snap);
     resumeMutate.mockResolvedValue({
-      run: /* SAFETY: 类型断言已复核 */ { status: "running" } as never,
       action: snap.action,
+      run: /* SAFETY: 类型断言已复核 */ { status: "running" } as never,
     });
     approveMutate.mockResolvedValue(snap);
     cancelMutate.mockResolvedValue(snap);
@@ -115,10 +115,10 @@ describe("run 控制动作", () => {
 describe("评审 / 重生成封装（P8-1b）", () => {
   it("reviewShot 透传 projectId+shotId，回 verdict", async () => {
     const verdict = {
-      pass: false,
       issues: ["含混"],
-      suggestion: "更具体",
+      pass: false,
       scoredAt: "t",
+      suggestion: "更具体",
     };
     reviewShotMutate.mockResolvedValue({ verdict });
     const r = await reviewShot("proj_1", "s1");
@@ -131,29 +131,29 @@ describe("评审 / 重生成封装（P8-1b）", () => {
 
   it("reviewCharacter 透传 projectId+characterId，回 verdict", async () => {
     const verdict = {
-      pass: true,
       issues: [],
-      suggestion: "",
+      pass: true,
       scoredAt: "t",
+      suggestion: "",
     };
     reviewCharacterMutate.mockResolvedValue({ verdict });
     const r = await reviewCharacter("proj_1", "c1");
     expect(reviewCharacterMutate).toHaveBeenCalledWith({
-      projectId: "proj_1",
       characterId: "c1",
+      projectId: "proj_1",
     });
     expect(r.pass).toBe(true);
   });
 
   it("reviewScript 透传 projectId（剧本无实体 id），回判定与完整曲线", async () => {
     const verdict = {
-      pass: false,
       issues: ["高潮缺失"],
-      suggestion: "补一场对峙",
-      scoredAt: "t",
+      pass: false,
       rubricVersion: "script-v1",
+      scoredAt: "t",
+      suggestion: "补一场对峙",
     };
-    reviewScriptMutate.mockResolvedValue({ verdict, history: [verdict] });
+    reviewScriptMutate.mockResolvedValue({ history: [verdict], verdict });
     const r = await reviewScript("proj_1");
     expect(reviewScriptMutate).toHaveBeenCalledWith({ projectId: "proj_1" });
     expect(r.verdict.rubricVersion).toBe("script-v1");
@@ -173,9 +173,9 @@ describe("评审 / 重生成封装（P8-1b）", () => {
     regenerateShotMutate.mockResolvedValue({ ok: true });
     await regenerateShot("proj_1", "s1", "gacha");
     expect(regenerateShotMutate).toHaveBeenCalledWith({
+      mode: "gacha",
       projectId: "proj_1",
       shotId: "s1",
-      mode: "gacha",
     });
   });
 
@@ -183,10 +183,10 @@ describe("评审 / 重生成封装（P8-1b）", () => {
     regenerateShotMutate.mockResolvedValue({ ok: true });
     await regenerateShot("proj_1", "s1", "reprompt", "改进提示词");
     expect(regenerateShotMutate).toHaveBeenCalledWith({
-      projectId: "proj_1",
-      shotId: "s1",
       mode: "reprompt",
       newPrompt: "改进提示词",
+      projectId: "proj_1",
+      shotId: "s1",
     });
   });
 });

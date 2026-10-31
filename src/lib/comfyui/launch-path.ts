@@ -28,8 +28,8 @@ export type ComfyLaunchPlan = {
  *  不含 pythonw / pythonw.exe —— 它们吞掉 stdout/stderr，ComfyUI 启动出错时
  *  看不到任何日志（排查不了），工坊只把 ComfyUI 当后端服务用。 */
 const INTERPRETER_NAMES: Record<"win32" | "posix", ReadonlyArray<string>> = {
-  win32: ["python.exe"],
   posix: ["python3", "python"],
+  win32: ["python.exe"],
 };
 
 /** venv 目录候选（含平台特定的可执行子目录）。
@@ -186,7 +186,7 @@ export function resolveComfyLaunchPlan(
           src, // 极简：源码根直接带解释器
         ];
     const present = pyDirs
-      .map((pyDir) => ({ pyDir, py: findInterpreterIn(pyDir, exists) }))
+      .map((pyDir) => ({ py: findInterpreterIn(pyDir, exists), pyDir }))
       .filter((c): c is { py: string; pyDir: string } => c.py !== null);
     /* 取首项与「这个源码根下有没有解释器」是同一个判据：写 `length === 0`
      * 再在下面用 `present[0]!` 会把它判两遍。 */
@@ -203,11 +203,11 @@ export function resolveComfyLaunchPlan(
     const chosen = withDeps ?? firstPresent;
     const mainPy = path.join(src, "main.py");
     return {
-      cmd: chosen.py,
       baseArgs: ["-s", mainPy],
+      cmd: chosen.py,
       cwd: src,
-      mainPy,
       hasDeps: !!withDeps,
+      mainPy,
     };
   }
 

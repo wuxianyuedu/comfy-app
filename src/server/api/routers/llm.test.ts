@@ -23,16 +23,16 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { llmServer, contracts } = vi.hoisted(() => ({
-  llmServer: {
-    getConfigForClient: vi.fn(async () => ({
-      provider: "remote",
-      hasApiKey: true,
-    })),
-  },
+const { contracts, llmServer } = vi.hoisted(() => ({
   contracts: {
     loadModeContracts: vi.fn(async () => [{ mode: "TXT2IMG" }]),
     saveModeContracts: vi.fn(async (c: unknown) => c),
+  },
+  llmServer: {
+    getConfigForClient: vi.fn(async () => ({
+      hasApiKey: true,
+      provider: "remote",
+    })),
   },
 }));
 
@@ -44,7 +44,7 @@ vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
 vi.mock("~/lib/core/logger", () => ({
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock("~/lib/llm/server", () => ({
   getConfigForClient: llmServer.getConfigForClient,
@@ -114,7 +114,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
       .spyOn(llmConfigRepository, "upsertSingleton")
       .mockResolvedValue(/* SAFETY: 类型断言已复核 */ undefined as never);
     await caller().configSave({
-      extraModels: ["llama3", { name: "gpt-x", baseUrl: "https://api.example/v1", apiKey: "k" }],
+      extraModels: ["llama3", { apiKey: "k", baseUrl: "https://api.example/v1", name: "gpt-x" }],
     });
     expect(upsert.mock.calls[0]?.[0]).toMatchObject({
       extraModels: ["llama3"],
@@ -125,8 +125,8 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     const rows = await remoteModelRepository.list();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      name: "gpt-x",
       baseUrl: "https://api.example/v1",
+      name: "gpt-x",
     });
     expect(String(rows[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
     upsert.mockRestore();
@@ -150,7 +150,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
       .spyOn(llmConfigRepository, "upsertSingleton")
       .mockResolvedValue(/* SAFETY: 类型断言已复核 */ undefined as never);
     const res = await caller().configSave({ model: "m1" });
-    expect(res.config).toEqual({ provider: "remote", hasApiKey: true });
+    expect(res.config).toEqual({ hasApiKey: true, provider: "remote" });
     upsert.mockRestore();
   });
 
@@ -169,12 +169,12 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
       await codeOf(
         caller().configSave({
           temperatureByTask: {
-            txt2img: 0.7,
-            img2video: 0.5,
             chat: 0.3,
             code: 0.2,
             creative: 0.8,
+            img2video: 0.5,
             review: 0.1,
+            txt2img: 0.7,
           },
         }),
       ),
@@ -188,8 +188,8 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
   const contract = (inputs: Array<string>) => ({
     contracts: [
       {
-        mode: "TXT2IMG",
         inputs,
+        mode: "TXT2IMG",
         output: /* SAFETY: 类型断言已复核 */ "image" as const,
       },
     ],
@@ -213,16 +213,16 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
         caller().modeContractsSave({
           contracts: [
             {
-              mode: "TXT2IMG",
-              inputs: ["prompt"],
-              output: /* SAFETY: 类型断言已复核 */ "image" as const,
               customInputs: [
                 {
                   id,
-                  label: "参考",
                   kind: /* SAFETY: 类型断言已复核 */ "image" as const,
+                  label: "参考",
                 },
               ],
+              inputs: ["prompt"],
+              mode: "TXT2IMG",
+              output: /* SAFETY: 类型断言已复核 */ "image" as const,
             },
           ],
         }),
@@ -247,14 +247,14 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
       .spyOn(remoteModelRepository, "saveWorkshopAdapters")
       .mockResolvedValue(/* SAFETY: 类型断言已复核 */ [] as never);
     await caller().workshopAdaptersSave({
-      name: "gpt-x",
       adapters: [
         {
-          mode: "txt2img",
           endpointPath: "/v1/images",
-          inputs: [{ type: "prompt", field: "prompt" }],
+          inputs: [{ field: "prompt", type: "prompt" }],
+          mode: "txt2img",
         },
       ],
+      name: "gpt-x",
     });
     const passed = /* SAFETY: 类型断言已复核 */ save.mock.calls[0]?.[1] as Array<{
       mode: string;
@@ -268,8 +268,8 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
     expect(
       await codeOf(
         caller().workshopAdaptersSave({
+          adapters: [{ endpointPath: "/x", inputs: [], mode: "img2img" }],
           name: "gpt-x",
-          adapters: [{ mode: "img2img", endpointPath: "/x", inputs: [] }],
         }),
       ),
     ).toBe("BAD_REQUEST");

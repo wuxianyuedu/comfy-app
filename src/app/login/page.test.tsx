@@ -16,7 +16,7 @@ afterEach(cleanup);
  * 调用处不可能只改一半。这里钉的就是这条 —— 单选语义 + 选中档四层俱在 + 悬停回钉。
  */
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -32,15 +32,10 @@ const { default: LoginPage } = await import("./page");
 describe("登录页模式切换 chip（ISSUE #1925）", () => {
   it("是单选语义的 radiogroup，两枚各自带 aria-checked", () => {
     render(<LoginPage />);
-    expect(
-      screen.getByRole("radiogroup", { name: "登录或创建账号" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "登录或创建账号" })).toBeTruthy();
     const chips = screen.getAllByRole("radio");
     expect(chips.map((c) => c.textContent)).toEqual(["登录", "创建账号"]);
-    expect(chips.map((c) => c.getAttribute("aria-checked"))).toEqual([
-      "true",
-      "false",
-    ]);
+    expect(chips.map((c) => c.getAttribute("aria-checked"))).toEqual(["true", "false"]);
   });
 
   it("选中档四层俱在，悬停值钉回常态（字色不会被悬停翻掉）", () => {

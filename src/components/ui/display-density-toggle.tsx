@@ -36,9 +36,9 @@ import { cn } from "~/lib/utils";
 export type DisplayDensity = "grid" | "list";
 
 export function DisplayDensityToggle({
-  value,
-  onChange,
   className,
+  onChange,
+  value,
 }: {
   /** 外层容器的类（各落点的间距不同，底色 `bg-subtle` / 内边距由这里给）。 */
   className?: string;

@@ -26,13 +26,13 @@ beforeEach(() => {
 
 describe("resolveOwnerUserId", () => {
   it("显式 userId 必须存在", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
     await expect(resolveOwnerUserId("user-a")).resolves.toBe("user-a");
     await expect(resolveOwnerUserId("user-missing")).rejects.toThrow(/userId 不存在/);
   });
 
   it("缺省落本机最早创建的用户（确定性兜底）", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
     await expect(resolveOwnerUserId(null)).resolves.toBe("user-a");
   });
 
@@ -43,8 +43,8 @@ describe("resolveOwnerUserId", () => {
 
 describe("ensureProductionProject", () => {
   beforeEach(() => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-    seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+    seedUser(tdb, { email: "b@test.dev", id: "user-b" });
   });
 
   it("不给 projectId → 新建 proj_* 的 project + production 两行", async () => {
@@ -57,7 +57,7 @@ describe("ensureProductionProject", () => {
   });
 
   it("绑定既有项目：行不重复建；缺 production 行的画布项目补建 production", async () => {
-    seedProject(tdb, { id: "proj_ui", userId: "user-a", name: "界面项目" });
+    seedProject(tdb, { id: "proj_ui", name: "界面项目", userId: "user-a" });
     const id = await ensureProductionProject("proj_ui", "user-a", "新标题");
     expect(id).toBe("proj_ui");
     expect((await workshopDb.select().from(project)).length).toBe(1);
@@ -70,20 +70,20 @@ describe("ensureProductionProject", () => {
     await expect(ensureProductionProject("proj_missing", "user-a", "x")).rejects.toThrow(
       /项目不存在/,
     );
-    seedProject(tdb, { id: "proj_b", userId: "user-b", name: "别人的" });
+    seedProject(tdb, { id: "proj_b", name: "别人的", userId: "user-b" });
     await expect(ensureProductionProject("proj_b", "user-a", "x")).rejects.toThrow(/归属.*冲突/);
   });
 });
 
 describe("会话桥：create / update / get 与界面同一份真值", () => {
   beforeEach(() => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
   });
 
   it("createSession 即绑定：会话行带 projectId，production 行在场", async () => {
     const sessionId = await repo.createSession({
-      title: "桥测试",
       idea: "灵感",
+      title: "桥测试",
     });
     const rows = await workshopDb
       .select()
@@ -100,19 +100,19 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
   it("AI 写 → production 与会话行镜像一致；界面直改 production → AI 下一次 get 读到", async () => {
     const sessionId = await repo.createSession({ title: "双向" });
     await repo.updateState(sessionId, {
+      characters: [],
       idea: "灵感",
       meta: {
-        title: "双向",
-        type: "short_video",
-        tone: "",
         logline: "",
         scriptMarkdown: "# AI 写的剧本",
+        title: "双向",
+        tone: "",
+        type: "short_video",
       },
+      projectId: null,
       scenes: [],
-      characters: [],
       shots: [],
       stage: "script",
-      projectId: null,
     });
     const rows = await workshopDb
       .select()
@@ -138,25 +138,25 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
   it("遗留会话（projectId 为 NULL）首次写时桥接：建项目并落当前内容", async () => {
     await workshopDb.insert(workshopSession).values({
       id: "sess-legacy",
-      userId: "user-a",
-      title: "遗留",
       idea: "旧灵感",
       scriptMarkdown: "# 旧剧本",
+      title: "遗留",
+      userId: "user-a",
     });
     await repo.updateState("sess-legacy", {
+      characters: [],
       idea: "旧灵感",
       meta: {
-        title: "遗留",
-        type: "short_video",
-        tone: "",
         logline: "",
         scriptMarkdown: "# 新剧本",
+        title: "遗留",
+        tone: "",
+        type: "short_video",
       },
+      projectId: null,
       scenes: [],
-      characters: [],
       shots: [],
       stage: "character",
-      projectId: null,
     });
     const rows = await workshopDb
       .select()
@@ -176,19 +176,19 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
   it("updateState 对不存在的会话保持既有语义：不抛、不建行", async () => {
     await expect(
       repo.updateState("sess-none", {
+        characters: [],
         idea: "",
         meta: {
-          title: "x",
-          type: "short_video",
-          tone: "",
           logline: "",
           scriptMarkdown: "",
+          title: "x",
+          tone: "",
+          type: "short_video",
         },
+        projectId: null,
         scenes: [],
-        characters: [],
         shots: [],
         stage: "script",
-        projectId: null,
       }),
     ).resolves.toBeUndefined();
     expect((await workshopDb.select().from(workshopSession)).length).toBe(0);

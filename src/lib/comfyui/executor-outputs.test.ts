@@ -8,10 +8,7 @@ import { extractRuntimeParams } from "./executor-outputs";
 
 /** 造一条 history entry：prompt[2] 是被执行图（class_type + inputs）。 */
 function entryWithGraph(
-  graph: Record<
-    string,
-    { class_type: string; inputs: Record<string, unknown> }
-  >,
+  graph: Record<string, { class_type: string; inputs: Record<string, unknown> }>,
 ): unknown {
   return { prompt: ["id", "number", graph, {}, {}] };
 }
@@ -23,12 +20,12 @@ describe("extractRuntimeParams 采样器提取", () => {
         "76:69": {
           class_type: "KSampler",
           inputs: {
-            seed: 123,
-            steps: 25,
             cfg: 4,
+            denoise: 1,
             sampler_name: "res_multistep",
             scheduler: "simple",
-            denoise: 1,
+            seed: 123,
+            steps: 25,
           },
         },
       }),
@@ -38,8 +35,8 @@ describe("extractRuntimeParams 采样器提取", () => {
     expect(out.samplerClassType).toBe("KSampler");
     expect(out.samplers).toHaveLength(1);
     expect(out.samplers?.[0]).toMatchObject({
-      nodeId: "76:69",
       classType: "KSampler",
+      nodeId: "76:69",
       seed: 123,
       steps: 25,
     });
@@ -50,11 +47,11 @@ describe("extractRuntimeParams 采样器提取", () => {
       entryWithGraph({
         "1:1": {
           class_type: "KSampler",
-          inputs: { seed: 111, steps: 20, cfg: 3.5 },
+          inputs: { cfg: 3.5, seed: 111, steps: 20 },
         },
         "2:2": {
           class_type: "KSampler",
-          inputs: { seed: 222, steps: 8, cfg: 7 },
+          inputs: { cfg: 7, seed: 222, steps: 8 },
         },
       }),
     );
@@ -70,16 +67,16 @@ describe("extractRuntimeParams 采样器提取", () => {
   it("KSamplerAdvanced 读 noise_seed；混排时 samplers 保留各自类名", () => {
     const out = extractRuntimeParams(
       entryWithGraph({
+        "10:10": { class_type: "KSampler", inputs: { seed: 666 } },
         "9:9": {
           class_type: "KSamplerAdvanced",
           inputs: { noise_seed: 555, steps: 30 },
         },
-        "10:10": { class_type: "KSampler", inputs: { seed: 666 } },
       }),
     );
     expect(out.samplers?.[0]).toMatchObject({
-      nodeId: "9:9",
       classType: "KSamplerAdvanced",
+      nodeId: "9:9",
       seed: 555,
     });
     expect(out.samplers?.[1]?.seed).toBe(666);

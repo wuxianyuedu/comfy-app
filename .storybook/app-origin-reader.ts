@@ -35,8 +35,8 @@ import { APP_ORIGIN_DEFAULTS, type AppOriginOverride } from "./app-origin-defaul
 
 /** `main.ts` 注入的三个键（一处定义，两侧共用）。 */
 export const APP_ORIGIN_ENV_KEYS = {
-  APP_DEV_PORT: "SB_APP_DEV_PORT",
   APP_DEV_ORIGIN: "SB_APP_DEV_ORIGIN",
+  APP_DEV_PORT: "SB_APP_DEV_PORT",
   APP_DEV_PORT_SOURCE: "SB_APP_DEV_PORT_SOURCE",
 } as const;
 
@@ -56,8 +56,8 @@ export function parseOverride(value: {
     return null;
   }
   return {
-    APP_DEV_PORT: port,
     APP_DEV_ORIGIN: value.APP_DEV_ORIGIN,
+    APP_DEV_PORT: port,
     APP_DEV_PORT_SOURCE: value.APP_DEV_PORT_SOURCE,
   };
 }
@@ -66,8 +66,8 @@ export function parseOverride(value: {
 export function readAppOrigin(): AppOriginOverride {
   return (
     parseOverride({
-      APP_DEV_PORT: process.env[APP_ORIGIN_ENV_KEYS.APP_DEV_PORT],
       APP_DEV_ORIGIN: process.env[APP_ORIGIN_ENV_KEYS.APP_DEV_ORIGIN],
+      APP_DEV_PORT: process.env[APP_ORIGIN_ENV_KEYS.APP_DEV_PORT],
       APP_DEV_PORT_SOURCE: process.env[APP_ORIGIN_ENV_KEYS.APP_DEV_PORT_SOURCE],
     }) ?? APP_ORIGIN_DEFAULTS
   );

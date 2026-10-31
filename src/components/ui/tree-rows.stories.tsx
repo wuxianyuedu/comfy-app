@@ -25,9 +25,9 @@ import { TREE_INDENT_STEP, TreeChildren, TreeRow, indentClass } from "~/componen
  * 所以 story 按**层级深度**分组 —— 那是本件唯一真正在表达的东西。
  */
 const meta = {
-  title: "UI/TreeRows",
-  component: TreeRow,
   args: { row: "一行" },
+  component: TreeRow,
+  title: "UI/TreeRows",
 } satisfies Meta<typeof TreeRow>;
 
 export default meta;

@@ -27,17 +27,17 @@ function narrowMessages(raw: AgentChatRequest["messages"]): Array<LLMMessage> {
         return null;
       }
       const msg: LLMMessage = {
-        role,
         content: typeof m.content === "string" ? m.content : "",
+        role,
       };
       if (role === "assistant" && Array.isArray(m.tool_calls)) {
         msg.tool_calls = m.tool_calls.map((call) => ({
+          function: {
+            arguments: call.arguments,
+            name: call.name,
+          },
           id: call.id,
           type: /* SAFETY: 类型断言已复核 */ "function" as const,
-          function: {
-            name: call.name,
-            arguments: call.arguments,
-          },
         }));
       }
       if (role === "tool" && typeof m.tool_call_id === "string") {
@@ -78,8 +78,8 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
   // 构造给模型的系统消息 + 项目状态上下文
   const sysMessages: Array<LLMMessage> = [
     {
-      role: "system",
       content: `${AGENT_SYSTEM_PROMPT}\n\n${context}`,
+      role: "system",
     },
     ...messages,
   ];
@@ -92,9 +92,9 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
         return {
           ...(content.trim() ? { reply: content.trim() } : {}),
           tool_calls: toolCalls.map((call) => ({
+            arguments: call.function.arguments,
             id: call.id,
             name: call.function.name,
-            arguments: call.function.arguments,
           })),
         };
       }
@@ -110,8 +110,8 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
   // 方案 2：JSON 指令序列回退（lightweight MVP）
   const fallbackMessages: Array<LLMMessage> = [
     {
-      role: "system",
       content: `${AGENT_FALLBACK_SYSTEM_PROMPT}\n\n${context}`,
+      role: "system",
     },
     ...messages,
   ];
@@ -121,8 +121,8 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
   const instruction = parseJsonInstruction(content);
   if (!instruction) {
     return {
-      reply: content.trim() || "抱歉，我暂时无法理解你的意思。",
       done: true,
+      reply: content.trim() || "抱歉，我暂时无法理解你的意思。",
     };
   }
 
@@ -140,8 +140,8 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
   }
   if (instruction.done === true && hasReply) {
     return {
-      reply: /* SAFETY: 类型断言已复核 */ instruction.reply as string,
       done: true,
+      reply: /* SAFETY: 类型断言已复核 */ instruction.reply as string,
     };
   }
   if (hasReply) {
@@ -150,7 +150,7 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
     };
   }
   return {
-    reply: content.trim() || "我已收到你的请求，但暂时无法处理。",
     done: true,
+    reply: content.trim() || "我已收到你的请求，但暂时无法处理。",
   };
 }

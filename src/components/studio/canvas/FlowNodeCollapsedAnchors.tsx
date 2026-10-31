@@ -24,9 +24,9 @@ const cylH = (count: number) => clamp(12 + count * 4, 16, 64);
 
 /** 折叠态的一根端口圆柱（左 / 右各一）。 */
 export function CollapsedAnchorCylinder({
-  side,
-  count,
   anchor,
+  count,
+  side,
 }: {
   anchor: AnchorCylinderTheme;
   count: number;
@@ -38,14 +38,14 @@ export function CollapsedAnchorCylinder({
       className="pointer-events-none absolute"
       style={{
         ...(side === "left" ? { left: -3 } : { right: -3 }),
+        background: anchor.gradient,
+        border: anchor.border,
+        borderRadius: 999,
+        boxShadow: anchor.boxShadow,
+        height: cylH(count),
         top: "50%",
         transform: "translateY(-50%)",
         width: 6,
-        height: cylH(count),
-        borderRadius: 999,
-        background: anchor.gradient,
-        border: anchor.border,
-        boxShadow: anchor.boxShadow,
         zIndex: Z.base,
       }}
     />
@@ -80,9 +80,9 @@ export function CollapsedPortHandles({
             position={item.side === "left" ? Position.Left : Position.Right}
             style={{
               ...(item.side === "left" ? { left: 0 } : { right: 0 }),
-              top: `calc(50% + ${offset}px)`,
               background: item.color,
               opacity: 0,
+              top: `calc(50% + ${offset}px)`,
             }}
             title={item.title}
             type={item.side === "left" ? "target" : "source"}
@@ -128,21 +128,21 @@ export function FlowNodeCollapsedAnchors({
         items={connectedInputs.map(([k], idx) => {
           const inputType = data.rawInputs?.find((raw) => raw.name === k)?.type ?? "*";
           return {
+            color: portColor(inputType),
+            id: String(k),
             key: `collapsed-in-${k}-${idx}`,
             side: /* SAFETY: 类型断言已复核 */ "left" as const,
-            id: String(k),
             title: `${String(k)} (${inputType})`,
-            color: portColor(inputType),
           };
         })}
       />
       <CollapsedPortHandles
         items={connectedOutputs.map(([name, type], idx) => ({
+          color: portColor(type),
+          id: `out:${name}`,
           key: `collapsed-out-${name}-${idx}`,
           side: /* SAFETY: 类型断言已复核 */ "right" as const,
-          id: `out:${name}`,
           title: `Output: ${name} (${type})`,
-          color: portColor(type),
         }))}
       />
     </>

@@ -45,19 +45,19 @@ export function deriveModelOverview(input: {
   const withModels = folders
     .filter((folder) => folder.count > 0)
     .map((folder) => ({
+      count: folder.count,
       folder: folder.folder,
       label: folder.label,
-      count: folder.count,
     }))
     .sort((a, b) => b.count - a.count);
 
   return {
+    emptyFolderCount: folders.length - withModels.length,
     groups: withModels,
     total: withModels.reduce((sum, group) => sum + group.count, 0),
-    emptyFolderCount: folders.length - withModels.length,
     /* 只有「确实失败了」才算失败。首帧 isLoading 且还没有数据时是 loading，
        不该被说成错误 —— 那会让每次冷启动都闪一句「读不到」。 */
-    loading: input.loading,
     error: input.isError ? "模型计数暂时读不到" : null,
+    loading: input.loading,
   };
 }

@@ -42,10 +42,10 @@ export type CanvasGeneratePayloadArgs = {
 /** 把「这个节点要点一次生成」翻译成 tRPC 入参。 */
 export function buildCanvasGeneratePayload({
   d,
-  wfIO,
-  wfParamMap,
-  wfMode,
   projectId,
+  wfIO,
+  wfMode,
+  wfParamMap,
 }: CanvasGeneratePayloadArgs): GenerateInput {
   /* 有映射表时按「对外参数 → 目标端口」解析：作者画过线的对外口只覆盖他连到的
    * 那个端口（不把该节点别的默认值也塞进去），没连线的对外口仍按工作流默认值
@@ -57,11 +57,11 @@ export function buildCanvasGeneratePayload({
    * 表单同一份（`inferGroups`），不另算一遍避免漂移。 */
   const mapped = wfIO
     ? applyParamMapping({
-        io: wfIO,
         entries: buildParamEntries(wfIO, undefined, { mode }),
+        io: wfIO,
         mapping: parseParamMapping(wfParamMap ?? d.paramMap),
-        values: d.workflowInputs ?? {},
         mode,
+        values: d.workflowInputs ?? {},
       })
     : null;
   const baseInputs =

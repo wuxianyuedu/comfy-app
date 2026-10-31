@@ -30,18 +30,18 @@ import { seriesRouter } from "~/server/api/routers/series";
  * 是同一套归属判据的两扇门，而界面只走 REST 那扇。**别再为素材库补第二扇 tRPC 门。**
  */
 export const appRouter = createTRPCRouter({
-  project: projectRouter,
-  task: taskRouter,
   film: filmRouter,
-  workflow: workflowRouter,
-  model: modelRouter,
-  skill: skillRouter,
-  llm: llmRouter,
-  setting: settingRouter,
-  workflowModel: workflowModelRouter,
   generate: generateRouter,
+  llm: llmRouter,
+  model: modelRouter,
+  project: projectRouter,
   run: runRouter,
   series: seriesRouter,
+  setting: settingRouter,
+  skill: skillRouter,
+  task: taskRouter,
+  workflow: workflowRouter,
+  workflowModel: workflowModelRouter,
 });
 
 // 对外导出 API 的类型定义

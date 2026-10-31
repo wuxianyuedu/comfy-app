@@ -79,7 +79,7 @@ function isNarrowNow(): boolean {
   return typeof window !== "undefined" ? window.innerWidth <= NAV_AUTO_COLLAPSE_MAX_PX : false;
 }
 
-let snapshot: NarrowNavState = { narrow: isNarrowNow(), crossings: 0 };
+let snapshot: NarrowNavState = { crossings: 0, narrow: isNarrowNow() };
 
 /* 取值时惰性推进：窗宽档真的变了才 +1 并**换快照身份**（`useSyncExternalStore`
    按身份判等，身份不变就不会重复渲染）。provider 拿这个次数判断「这条表态是不是
@@ -87,7 +87,7 @@ let snapshot: NarrowNavState = { narrow: isNarrowNow(), crossings: 0 };
 function getSnapshot(): NarrowNavState {
   const narrow = isNarrowNow();
   if (narrow !== snapshot.narrow) {
-    snapshot = { narrow, crossings: snapshot.crossings + 1 };
+    snapshot = { crossings: snapshot.crossings + 1, narrow };
   }
   return snapshot;
 }
@@ -97,7 +97,7 @@ function getSnapshot(): NarrowNavState {
    ⚠️ 必须是**同一个对象**：每次新建会让 hydration 后的快照比较失去意义，
    窄窗首屏就停在服务端那份「展开」上（实测 innerWidth 1100 且查询命中，
    `data-state` 仍是 expanded）。身份稳定，值变了才认。 */
-const SERVER_SNAPSHOT: NarrowNavState = { narrow: false, crossings: 0 };
+const SERVER_SNAPSHOT: NarrowNavState = { crossings: 0, narrow: false };
 
 function getServerSnapshot(): NarrowNavState {
   return SERVER_SNAPSHOT;

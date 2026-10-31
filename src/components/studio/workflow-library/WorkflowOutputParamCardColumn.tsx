@@ -48,14 +48,14 @@ export type WorkflowOutputParamCardColumnProps = {
 };
 
 export function WorkflowOutputParamCardColumn({
-  outputs,
-  resolved,
   canWire = false,
-  selectedOutputId = null,
-  onSelect,
+  endpoint,
   isManual,
   onReset,
-  endpoint,
+  onSelect,
+  outputs,
+  resolved,
+  selectedOutputId = null,
 }: WorkflowOutputParamCardColumnProps) {
   if (outputs.length === 0) {
     return null;
@@ -94,9 +94,9 @@ export function WorkflowOutputParamCardColumn({
             cls="output"
             endpoint={() =>
               endpoint?.({
+                handleId,
                 name: portLabel,
                 type,
-                handleId,
               })
             }
             entryId={output.ioKey}
@@ -115,8 +115,8 @@ export function WorkflowOutputParamCardColumn({
                 connected: manual,
                 ioKey: output.ioKey,
                 /* 锚点 = 输出的 ioKey（与边两端同一份取值）。 */
-                handleId,
                 active: manual || resolved?.[output.ioKey] === undefined,
+                handleId,
               },
             ]}
             readOnly={!canWire}

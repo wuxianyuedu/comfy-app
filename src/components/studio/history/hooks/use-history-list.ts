@@ -162,7 +162,7 @@ export function useHistoryList(): HistoryListController {
     [tasks, filter, sort],
   );
   const counts = useMemo(() => countByStatus(tasks), [tasks]);
-  const { visibleGroups, visibleTotal, canLoadMore } = useMemo(
+  const { canLoadMore, visibleGroups, visibleTotal } = useMemo(
     () => paginateGroups(groupByDate(filtered), displayCount),
     [filtered, displayCount],
   );
@@ -194,8 +194,8 @@ export function useHistoryList(): HistoryListController {
   const cancel = useCallback(
     async (id: string) => {
       await runAsyncAction(() => cancelTask(id), {
-        report,
         failureText: "取消失败，请稍后重试",
+        report,
         successText: "已发送取消请求",
       });
       refresh();
@@ -221,7 +221,7 @@ export function useHistoryList(): HistoryListController {
             setDetailId(null);
           }
         },
-        { report, failureText: "删除失败", successText: "已删除任务" },
+        { failureText: "删除失败", report, successText: "已删除任务" },
       );
     },
     [deleteTask, detailId, report, queryClient, trpc],
@@ -237,11 +237,11 @@ export function useHistoryList(): HistoryListController {
         await runAsyncAction(
           async () => {
             const { taskId } = await retryTask.mutateAsync({ id: task.id });
-            return { ok: true, detail: taskId };
+            return { detail: taskId, ok: true };
           },
           {
-            report,
             failureText: "重试失败",
+            report,
             successText: (r) => `已原样重新入队：新任务 ${r.detail}，可在队列或历史观察进度`,
           },
         );
@@ -254,32 +254,32 @@ export function useHistoryList(): HistoryListController {
   );
 
   return {
-    tasks,
-    loading,
-    filter,
-    sort,
-    counts,
-    visibleGroups,
-    visibleTotal,
-    filteredCount: filtered.length,
-    canLoadMore,
-    empty,
-    progressMap,
-    retryingId: retryAction.busyId,
-    isRetrying: retryAction.isBusy,
-    detailId,
-    detail,
-    detailLoading,
-    workflowIO,
-    modeContracts,
-    setSort,
-    switchFilter,
-    loadMore,
-    refresh,
-    openDetail,
-    closeDetail,
     cancel,
+    canLoadMore,
+    closeDetail,
+    counts,
+    detail,
+    detailId,
+    detailLoading,
+    empty,
+    filter,
+    filteredCount: filtered.length,
+    isRetrying: retryAction.isBusy,
+    loading,
+    loadMore,
+    modeContracts,
+    openDetail,
+    progressMap,
+    refresh,
     remove,
     retry,
+    retryingId: retryAction.busyId,
+    setSort,
+    sort,
+    switchFilter,
+    tasks,
+    visibleGroups,
+    visibleTotal,
+    workflowIO,
   };
 }

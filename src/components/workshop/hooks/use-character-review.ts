@@ -62,10 +62,10 @@ export function useCharacterReview(projectId: string): CharacterReviewController
   }, []);
 
   return {
-    verdict,
-    reviewing: reviewBusy.busy,
     error,
-    review,
     reset,
+    review,
+    reviewing: reviewBusy.busy,
+    verdict,
   };
 }

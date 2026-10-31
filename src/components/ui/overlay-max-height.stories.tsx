@@ -1,9 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import {
-  EMBEDDED_SCROLL_MAX_HEIGHT,
-  OVERLAY_MAX_HEIGHT,
-} from "~/components/ui/overlay-max-height";
+import { EMBEDDED_SCROLL_MAX_HEIGHT, OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 
 /**
  * `ui/overlay-max-height` 是浮层**最大高**两档的唯一定义处，对外面就是这两个串 ——
@@ -26,9 +23,9 @@ import {
  * 而非视口，量的不是同一件事）。
  */
 const meta = {
-  title: "UI/OverlayMaxHeight",
   component: CapDemo,
   render: () => <CapDemo />,
+  title: "UI/OverlayMaxHeight",
 } satisfies Meta<typeof CapDemo>;
 
 export default meta;
@@ -80,10 +77,9 @@ function CapDemo() {
         </div>
       </div>
       <p className="text-ink-muted text-xs">
-        真形态（谁在什么场景取哪一档）见 <code>Dialog</code> /{" "}
-        <code>Sheet</code> 与 <code>Studio/ModelLibrary</code> 那批
-        story；调用点一律 import 这两个常量，别在调用处再写字面量 —— 契约
-        §Shapes 第 ⑦ 条按具名出处放行， 其余落点直接红。
+        真形态（谁在什么场景取哪一档）见 <code>Dialog</code> / <code>Sheet</code> 与{" "}
+        <code>Studio/ModelLibrary</code> 那批 story；调用点一律 import
+        这两个常量，别在调用处再写字面量 —— 契约 §Shapes 第 ⑦ 条按具名出处放行， 其余落点直接红。
       </p>
     </div>
   );

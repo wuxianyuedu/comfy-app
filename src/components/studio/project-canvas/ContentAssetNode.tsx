@@ -27,22 +27,22 @@ import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
  * 标题由 CanvasNode 既有 NodeChip 头承载（与画布其它节点一致，不浮出边框）。 */
 
 const ASSET_ACCENT: Record<"text" | "picture" | "movie", string> = {
-  text: "#FF5CA8",
-  picture: "#7C5CFC",
   movie: "#FB923C",
+  picture: "#7C5CFC",
+  text: "#FF5CA8",
 };
 
 export function ContentAssetBody({
-  kind,
   data,
+  kind,
   onPatch,
   onPickMedia,
   onUploadFile,
   /* 生成进行中的进度覆盖层。
    *  只在 status === "running" 时渲染；否则卡片体
    *  回落到既有的空 / 有内容预览。 */
-  status,
   progress,
+  status,
 }: {
   data: CanvasNodeData;
   kind: "text" | "picture" | "movie";
@@ -64,8 +64,8 @@ export function ContentAssetBody({
   /* 多图相册：数据（图片列表）+ 开关/下标都在 hook 里，视图只消费。
    * movie / text 节点不拉（enabled=false），避免无谓请求。 */
   const gallery = useContentAssetGallery({
-    taskId: data.taskId,
     enabled: kind === "picture",
+    taskId: data.taskId,
   });
   if (kind === "text") {
     return (

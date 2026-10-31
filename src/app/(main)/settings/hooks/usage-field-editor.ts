@@ -146,13 +146,13 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
   }
 
   return {
-    patchField,
     addField,
     addPresetField,
-    removeField,
+    patchField,
     pickFieldImage,
-    setVideoMode,
+    removeField,
     rescueMediaFromMode,
+    setVideoMode,
     usageFieldsToSend,
   };
 }

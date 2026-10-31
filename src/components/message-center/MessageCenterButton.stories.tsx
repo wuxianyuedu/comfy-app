@@ -27,9 +27,8 @@ import { messageSceneArgType } from "../../../.storybook/message-center-sources"
  * 都不该亮。
  */
 const meta = {
-  title: "MessageCenter/Button",
-  component: MessageCenterButton,
   argTypes: { sceneName: messageSceneArgType() },
+  component: MessageCenterButton,
   decorators: [
     /* 真机上它长在底部状态栏那一条里（`h-6` 的一条）。摆进同形状的行内，
        否则量到的是孤立按钮的尺寸、不是它在状态栏里的样子。 */
@@ -39,6 +38,7 @@ const meta = {
       </div>
     ),
   ],
+  title: "MessageCenter/Button",
 } satisfies Meta<{ sceneName: string }>;
 
 export default meta;
@@ -85,5 +85,5 @@ export const OpenAndAllRead: Story = {
   /* 只换 `open`：消息仍是「都已读」那批（`allRead` 场景 push 完且 `markAllRead`
      过了），而面板不铺出来 —— 见上面那段。`open` 那一维由按钮自己的 class 表达
      （`open || unread > 0` ⇒ `text-primary`），不必真的把面板画出来。 */
-  parameters: { messageScene: "allRead", messagePanelHidden: true },
+  parameters: { messagePanelHidden: true, messageScene: "allRead" },
 };

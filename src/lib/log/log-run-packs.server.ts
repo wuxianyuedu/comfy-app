@@ -138,7 +138,7 @@ export async function scanRunPacks(options: ScanRunPacksOptions): Promise<{
   packs: Array<RunPack>;
   total: number;
 }> {
-  const { runsDir, sourceDir, runJsonName, maxPacks, source } = options;
+  const { maxPacks, runJsonName, runsDir, source, sourceDir } = options;
   let names: Array<string>;
   try {
     names = (
@@ -168,9 +168,9 @@ export async function scanRunPacks(options: ScanRunPacksOptions): Promise<{
       name,
       /* `run.json` 的更准（它是写进去的启动时刻）；读不到时退回名字里那个
        * —— 两者都是那次运行的启动时刻。 */
-      startedAt: startedAtMs(meta) ?? packNameToMs(name),
       crashed: meta?.crashed === true,
       files,
+      startedAt: startedAtMs(meta) ?? packNameToMs(name),
     });
   }
   /* 名字升序 → 时间升序，取末尾 maxPacks 个 = 最新的几次，再倒成新→旧。 */

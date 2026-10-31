@@ -77,25 +77,25 @@ type Props = {
 
 /* 相位 → 状态胶囊文案（running 的百分比是动态的，查表只覆盖静态四种）。 */
 const STATUS_LABEL: Record<Exclude<Phase["kind"], "running">, string> = {
-  idle: "待开始",
-  starting: "提交中…",
   done: "已完成",
   failed: "失败",
+  idle: "待开始",
+  starting: "提交中…",
 };
 
 export function WorkflowCanvasNodePreview({
-  workflowId,
-  workflowName,
-  taskType,
-  workflowIO,
-  paramMap,
-  usable,
-  modes,
   defaultMode,
+  modes,
   onModeChange,
-  onSeedModeChange,
   onPatchParamMap,
+  onSeedModeChange,
+  paramMap,
+  taskType,
+  usable,
   viewMode: viewModeProp,
+  workflowId,
+  workflowIO,
+  workflowName,
 }: Props) {
   /* 视图模式归一：未指定按 "edit"（首个页签，见 Props 注释）。 */
   const viewMode = viewModeProp ?? "edit";
@@ -112,15 +112,15 @@ export function WorkflowCanvasNodePreview({
    * 卡片列、宿主表单、seed 模式、必填判定全都按它解析，不会再出现「chip 显示着
    * 单图生视频、卡片却说需要先选模式」这类自相矛盾。 */
   const effectiveMode = useMemo(
-    () => resolveWorkflowMode({ modes, defaultMode, taskType }),
+    () => resolveWorkflowMode({ defaultMode, modes, taskType }),
     [modes, defaultMode, taskType],
   );
 
   /* 输入值状态 + 模式默认值播种（见 use-default-value-seeding）。 */
-  const { values, setValues } = useDefaultValueSeeding({
+  const { setValues, values } = useDefaultValueSeeding({
+    effectiveMode,
     workflowId,
     workflowIO,
-    effectiveMode,
   });
 
   /* 与画布 WorkflowNode 同源的双行结构：inputs 由 DynamicWorkflowForm(compact)
@@ -171,9 +171,9 @@ export function WorkflowCanvasNodePreview({
   /* 生成运行器。`enabled` 是除「已在运行」外的可运行条件；载荷（含生效映射）
    * 由下面的 run() 在点击时组装 —— 生效映射持有在 wiring 里，倒灌进运行器
    * 会与 useParamWiring 的回调依赖互相成环。 */
-  const { phase, running, canRun, resultUrl, startRun, clearFailure } = useGenerationRunner({
-    workflowId,
+  const { canRun, clearFailure, phase, resultUrl, running, startRun } = useGenerationRunner({
     enabled: usable && missing.length === 0 && viewMode === "use",
+    workflowId,
   });
 
   /* 失败态只保留到用户采取行动前：改输入值或改落点都算「采取了行动」。 */
@@ -238,9 +238,9 @@ export function WorkflowCanvasNodePreview({
   /* 映射编辑编排：本地 overlay + 落库。没有 `onPatchParamMap`（只读消费方）时
    * 仍然派生正确的落点，只是拖不动。 */
   const wiring = useParamWiring({
-    paramMap: paramMap ?? {},
     mode: effectiveMode,
     onPatchParamMap: handlePatchParamMap,
+    paramMap: paramMap ?? {},
   });
   /* 本地 overlay 已经并入 wiring 内部的生效 paramMap，但卡片列与连线要读的
    * 是同一份 —— 故把 overlay 之后的 paramMap 回传给派生。`reportParamMap`
@@ -248,10 +248,10 @@ export function WorkflowCanvasNodePreview({
   const paramCards = useMemo(
     () =>
       deriveLibraryParamCards({
-        io: workflowIO,
-        paramMap: wiring.effectiveParamMap,
-        mode: effectiveMode,
         groupedKeys,
+        io: workflowIO,
+        mode: effectiveMode,
+        paramMap: wiring.effectiveParamMap,
         /* 卡片列的口子清单与上面那份**同一份**（用户改过契约的模式必须按改过的
          *  清单列 —— 用内置默认会多列出契约里没有的口，见 `deriveLibraryParamCards`）。 */
         contractIds: contractEntries.map((item) => item.id),
@@ -267,8 +267,8 @@ export function WorkflowCanvasNodePreview({
     () =>
       deriveLibraryOutputCards({
         io: workflowIO,
-        paramMap: wiring.effectiveParamMap,
         mode: effectiveMode,
+        paramMap: wiring.effectiveParamMap,
       }),
     [workflowIO, wiring.effectiveParamMap, effectiveMode],
   );
@@ -279,12 +279,12 @@ export function WorkflowCanvasNodePreview({
     [effectiveMode, taskType],
   );
   const outputWiring = useOutputWiring({
-    workflowIO,
+    commitParamMap: wiring.commitParamMap,
     effectiveMode,
+    effectiveParamMap: wiring.effectiveParamMap,
     onPatchParamMap,
     outputCards,
-    effectiveParamMap: wiring.effectiveParamMap,
-    commitParamMap: wiring.commitParamMap,
+    workflowIO,
   });
 
   /** 提交到本机生成并等待落定（相位与 SSE 订阅在 use-generation-runner）。 */
@@ -293,14 +293,14 @@ export function WorkflowCanvasNodePreview({
       return;
     }
     startRun({
-      workflowId,
-      workflowName,
-      taskType,
-      workflowIO,
       effectiveMode,
-      values,
       effectiveParamMap: wiring.effectiveParamMap,
       seedModes,
+      taskType,
+      values,
+      workflowId,
+      workflowIO,
+      workflowName,
     });
   }
 
@@ -323,8 +323,8 @@ export function WorkflowCanvasNodePreview({
              契约（含作者自定义的口），否则自定义口的圆点拖到宿主行上会被判成
              「这一行不收这个口子」，而卡片列明明画着它。 */
           entries={buildParamEntries(workflowIO ?? null, undefined, {
-            mode: effectiveMode,
             contractIds: contractEntries.map((item) => item.id),
+            mode: effectiveMode,
           })}
           host={
             <LibraryHostCard

@@ -70,6 +70,10 @@ export type ReentrancyLock = {
 export function createReentrancyLock(): ReentrancyLock {
   let locked = false;
   return {
+    exit: () => {
+      locked = false;
+    },
+    isLocked: () => locked,
     tryEnter: () => {
       if (locked) {
         return false;
@@ -77,10 +81,6 @@ export function createReentrancyLock(): ReentrancyLock {
       locked = true;
       return true;
     },
-    exit: () => {
-      locked = false;
-    },
-    isLocked: () => locked,
   };
 }
 
@@ -126,5 +126,5 @@ export function useReentrancyLock(): ReentrancyLock {
     lockedRef.current = false;
   }, []);
   const isLocked = useCallback(() => lockedRef.current, []);
-  return { tryEnter, exit, isLocked };
+  return { exit, isLocked, tryEnter };
 }

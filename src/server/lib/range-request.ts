@@ -105,7 +105,7 @@ export function resolveByteRange(header: string | null, size: number): ByteRange
     }
     return {
       kind: "partial",
-      window: { start: Math.max(size - last, 0), endInclusive: size - 1 },
+      window: { endInclusive: size - 1, start: Math.max(size - last, 0) },
     };
   }
   // 超出安全整数的数字（`bytes=0-99999999999999999999`）算不认识，
@@ -129,7 +129,7 @@ export function resolveByteRange(header: string | null, size: number): ByteRange
   if (lastRaw === "") {
     return {
       kind: "partial",
-      window: { start: first, endInclusive: size - 1 },
+      window: { endInclusive: size - 1, start: first },
     };
   }
   if (last === null) {
@@ -138,7 +138,7 @@ export function resolveByteRange(header: string | null, size: number): ByteRange
   // 终点超出文件长度时裁到末尾（RFC 要求服务端收边界，不许回一段不存在的字节）。
   return {
     kind: "partial",
-    window: { start: first, endInclusive: Math.min(last, size - 1) },
+    window: { endInclusive: Math.min(last, size - 1), start: first },
   };
 }
 

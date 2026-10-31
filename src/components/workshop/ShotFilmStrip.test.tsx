@@ -14,16 +14,16 @@ afterEach(() => {
 
 function shot(over: Partial<Shot> = {}): Shot {
   return {
+    characterIds: [],
+    description: "海面推到岸边",
     id: `s-${Math.random().toString(36).slice(2)}`,
     index: 1,
-    sceneId: "sc1",
-    sceneHeading: "海边·日",
-    shotType: "wide",
-    description: "海面推到岸边",
-    characterIds: [],
-    prompt: "p",
     negativePrompt: "",
     params: {},
+    prompt: "p",
+    sceneHeading: "海边·日",
+    sceneId: "sc1",
+    shotType: "wide",
     status: "idle",
     ...over,
   };
@@ -40,9 +40,9 @@ describe("formatShotIndex", () => {
 describe("ShotFilmStrip", () => {
   it("帧数等于镜头数，且每帧都点得动、回调带上那一镜", () => {
     const shots = [
-      shot({ index: 1, id: "a" }),
-      shot({ index: 2, id: "b" }),
-      shot({ index: 3, id: "c" }),
+      shot({ id: "a", index: 1 }),
+      shot({ id: "b", index: 2 }),
+      shot({ id: "c", index: 3 }),
     ];
     const onJump = vi.fn<(shot: Shot) => void>();
     render(<ShotFilmStrip onJump={onJump} shots={shots} />);
@@ -77,7 +77,7 @@ describe("ShotFilmStrip", () => {
     const { container } = render(
       <ShotFilmStrip
         onJump={vi.fn()}
-        shots={[shot({ index: 3, imageUrl: "/api/outputs/x/3.png" })]}
+        shots={[shot({ imageUrl: "/api/outputs/x/3.png", index: 3 })]}
       />,
     );
     expect(container.querySelector('img[src="/api/outputs/x/3.png"]')).toBeTruthy();

@@ -17,25 +17,19 @@ import type { ComfyStatusViewModel } from "./hooks/use-comfy-readiness";
 const GIB = 1024 * 1024 * 1024;
 
 function bar(usedGiB: number, totalGiB: number, pct: number) {
-  return { used: usedGiB * GIB, total: totalGiB * GIB, pct };
+  return { pct, total: totalGiB * GIB, used: usedGiB * GIB };
 }
 
 /** 只给选择器需要的三档，其余字段与本题无关。 */
 function view(
-  over: Partial<
-    Pick<ComfyStatusViewModel, "smiVram" | "cudaVram" | "ram">
-  > = {},
+  over: Partial<Pick<ComfyStatusViewModel, "smiVram" | "cudaVram" | "ram">> = {},
 ): Pick<ComfyStatusViewModel, "smiVram" | "cudaVram" | "ram"> {
-  return { smiVram: null, cudaVram: null, ram: null, ...over };
+  return { cudaVram: null, ram: null, smiVram: null, ...over };
 }
 
 describe("RESOURCE_METRICS 口径命名", () => {
   it("次序固定为 物理显存 → ComfyUI 显存 → 内存", () => {
-    expect(RESOURCE_METRICS.map((m) => m.key)).toEqual([
-      "smiVram",
-      "cudaVram",
-      "ram",
-    ]);
+    expect(RESOURCE_METRICS.map((m) => m.key)).toEqual(["smiVram", "cudaVram", "ram"]);
   });
 
   it("两条显存口径各自有名、且都在 title 里点名口径来源", () => {
@@ -64,16 +58,12 @@ describe("selectVisibleResourceMetrics", () => {
   it("三档都有读数时按固定次序全部返回", () => {
     const out = selectVisibleResourceMetrics(
       view({
-        ram: bar(16, 32, 50),
         cudaVram: bar(2, 8, 25),
+        ram: bar(16, 32, 50),
         smiVram: bar(3, 12, 25),
       }),
     );
-    expect(out.map((m) => m.descriptor.key)).toEqual([
-      "smiVram",
-      "cudaVram",
-      "ram",
-    ]);
+    expect(out.map((m) => m.descriptor.key)).toEqual(["smiVram", "cudaVram", "ram"]);
     expect(out[0]?.bar.used).toBe(3 * GIB);
   });
 

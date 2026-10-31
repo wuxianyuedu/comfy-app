@@ -135,7 +135,7 @@ export function useSettingsPage(options?: {
     setPendingJump(null);
     onConsumeInitialSection?.();
   }, [onConsumeInitialSection]);
-  const { theme, setTheme } = useTheme();
+  const { setTheme, theme } = useTheme();
   const [saving, setSaving] = useState(false);
 
   /* 应用自更新：检测 / 下载安装 / 重启的三个动作与其全部暂态沉在
@@ -223,8 +223,8 @@ export function useSettingsPage(options?: {
       ...llmConfig,
       apiKey: null,
       /* 本地候选（字符串）与远端独立模型（对象）从同一下发清单里拆开存，互不混写 */
-      localCandidates: split.localNames.filter((n) => n !== llmConfig.model),
       extraModels: split.remoteEntries.filter((e) => e.name !== llmConfig.model),
+      localCandidates: split.localNames.filter((n) => n !== llmConfig.model),
       temperatureByTask: llmConfig.temperatureByTask ?? undefined,
     });
   }
@@ -254,8 +254,8 @@ export function useSettingsPage(options?: {
     setLlmDraft({
       ...cached,
       apiKey: cached.apiKey ?? null,
-      localCandidates: split.localNames.filter((n) => n !== cached.model),
       extraModels: split.remoteEntries.filter((e) => e.name !== cached.model),
+      localCandidates: split.localNames.filter((n) => n !== cached.model),
       temperatureByTask: cached.temperatureByTask ?? undefined,
     });
   }
@@ -278,11 +278,11 @@ export function useSettingsPage(options?: {
    * 与两个动作（startOllama / stopOllama）逐字段展开到 controller。 */
   const llmBaseUrl = llmDraft?.baseUrl ?? "";
   const {
-    ollamaStatus,
+    ollamaLog,
     ollamaModels,
     ollamaStarting,
+    ollamaStatus,
     ollamaStopping,
-    ollamaLog,
     startOllama,
     stopOllama,
   } = useSettingsOllama({
@@ -303,34 +303,34 @@ export function useSettingsPage(options?: {
    * 状态与动作沉在 sub-hook；enabled 门控与 comfyStatus 同口径（首屏两份配置
    * 就绪前不发探测）。返回形状逐字段展开到 controller。 */
   const {
-    dbStudioStatus,
-    dbStudioStarting,
-    dbStudioStopping,
-    dbStudioOpening,
     dbStudioLog,
+    dbStudioOpening,
+    dbStudioStarting,
+    dbStudioStatus,
+    dbStudioStopping,
+    openDbStudio,
     startDbStudio,
     stopDbStudio,
-    openDbStudio,
-  } = useSettingsDbStudio({ statusQueriesEnabled, showFlash });
+  } = useSettingsDbStudio({ showFlash, statusQueriesEnabled });
 
   /* ── 数据库备份 / 恢复（D6）：清单 + 手动备份 + 登记恢复 ──
    * 与 Drizzle Studio 同一门控；「恢复」是两步（写标记 → 下次启动换文件），
    * 所以产出里有一个 `pending` 供视图说清「重启后生效」。 */
   const {
-    backups,
-    pending: pendingRestore,
-    loading: backupListLoading,
     backupBusy,
-    restoreBusy,
+    backups,
     createBackupNow,
+    loading: backupListLoading,
+    pending: pendingRestore,
+    restoreBusy,
     restoreFrom,
-  } = useSettingsBackup({ statusQueriesEnabled, showFlash });
+  } = useSettingsBackup({ showFlash, statusQueriesEnabled });
 
   /** 用系统默认浏览器打开生成的远程资源（视频 / 公网图片等）。
    *  桌面壳内 target=_blank 外链打不开，统一走服务端 openExternal。 */
   const openExternalAction = useExternalAction({
-    target: "browser",
     report: showFlash,
+    target: "browser",
   });
   const openExternalUrl = useCallback(
     async (url: string) => {
@@ -346,18 +346,18 @@ export function useSettingsPage(options?: {
    * 实例元数据（安装形态 + 桌面实例的六个存储目录）。注入的是两份草稿、保存
    * 指示器与反馈通道 —— 与 ComfyUI / DbStudio 的运行态无共享 state。 */
   const { persistLlmDraft, saveLlm, savePrefs } = useSettingsSave({
-    settingsDraft,
-    llmDraft,
     llmApiKey,
-    setSaving,
-    setLlmApiKey,
-    showFlash,
-    saveSettingM: saveSetting,
-    settingsQ,
-    saveLlmCfgM: saveLlmCfg,
+    llmDraft,
     llmQ,
     refetchComfyInstance,
     refetchComfyStorage,
+    saveLlmCfgM: saveLlmCfg,
+    saveSettingM: saveSetting,
+    setLlmApiKey,
+    setSaving,
+    settingsDraft,
+    settingsQ,
+    showFlash,
   });
 
   /* ── 按任务温度 ─────────────────────────────────────────── */
@@ -373,24 +373,24 @@ export function useSettingsPage(options?: {
    * 这一块只依赖「当前 llm 草稿 + 草稿编辑 + 即时落库出口」，与 ComfyUI /
    * DbStudio / Ollama 无任何共享 state。返回形状与原 controller 逐字段一致。 */
   const {
-    toggleExtraModel,
-    remoteModelList,
     addRemoteModel,
-    updateRemoteModel,
-    removeRemoteModel,
     probeRemote,
-    testModelUsage: testModelUsageFn,
     queryUsageTask: queryUsageTaskFn,
+    remoteModelList,
+    removeRemoteModel,
     setTaskTemperature,
+    testModelUsage: testModelUsageFn,
+    toggleExtraModel,
+    updateRemoteModel,
   } = useSettingsRemoteModels({
     llmDraft,
-    setLlmDraft,
     patchLlm,
     persistLlmDraft,
+    setLlmDraft,
   });
 
   /* 加载失败判定与补记日志（沉在 sub-hook；说明见其文件头）。 */
-  const { queryFailed, isInitialLoad, errorText } = useSettingsLoadStatus();
+  const { errorText, isInitialLoad, queryFailed } = useSettingsLoadStatus();
 
   const retry = useCallback(() => {
     void settingsQ.refetch();
@@ -404,71 +404,71 @@ export function useSettingsPage(options?: {
   return {
     /* ComfyUI 默认端口（未配置端口时的兜底）。视图的 placeholder 与说明文案
      * 直接用它，避免把 8188 在文案里再写一遍（规范 §12.14：默认端口单点定义）。 */
+    ackJumpSection,
     comfyDefaultPort: COMFYUI_DEFAULT_PORT,
+    hasError: queryFailed && !drafts,
+    isInitialLoad: isInitialLoad && !queryFailed && !settingsQ.data && !llmQ.data,
+    pendingJump,
     section,
     setSection,
-    pendingJump,
-    ackJumpSection,
-    theme: theme === "light" ? "light" : "dark",
     setTheme: (value: "light" | "dark") => setTheme(value),
-    isInitialLoad: isInitialLoad && !queryFailed && !settingsQ.data && !llmQ.data,
-    hasError: queryFailed && !drafts,
+    theme: theme === "light" ? "light" : "dark",
     /* 既没在加载、也没失败，草稿却仍为空——正常状态机不可达。视图据此给
      * 可操作出口（重试 + 日志面板），不再渲染冻住用户的死胡同文案。 */
-    notReady: !drafts && !queryFailed && !isInitialLoad,
     errorText,
+    notReady: !drafts && !queryFailed && !isInitialLoad,
     retry,
     /* 有草稿可用时，失败不再等价于「打不开」：界面照常渲染，只把原因放在一条
      * 非阻塞提示里。用户真正被冻住的场景（草稿也没有）仍走 hasError 全页降级。 */
-    serveState: queryFailed && drafts ? { errorText } : null,
-    drafts,
-    patchLlm,
-    patchSettings,
-    toggleExtraModel,
-    remoteModelList,
     addRemoteModel,
-    updateRemoteModel,
-    removeRemoteModel,
-    probeRemote,
-    testModelUsage: testModelUsageFn,
-    queryUsageTask: queryUsageTaskFn,
-    llmApiKey,
-    setLlmApiKey,
-    ollamaStatus,
-    ollamaModels,
-    ollamaStarting,
-    startOllama,
+    appUpdate,
+    backupBusy,
+    backupListLoading,
+    backups,
+    checkAppUpdate,
     comfyInstance,
     comfyStorage,
-    dbStudioStatus,
-    dbStudioStarting,
-    dbStudioStopping,
-    dbStudioOpening,
-    startDbStudio,
-    stopDbStudio,
-    openDbStudio,
-    backups,
-    pendingRestore,
-    backupListLoading,
-    backupBusy,
-    restoreBusy,
     createBackupNow,
-    restoreFrom,
-    openExternalUrl,
     dbStudioLog,
+    dbStudioOpening,
+    dbStudioStarting,
+    dbStudioStatus,
+    dbStudioStopping,
+    dismissFlash: flashLatch.reset,
+    drafts,
+    flash: flashLatch.value,
+    installAppUpdate,
+    llmApiKey,
     ollamaLog,
+    ollamaModels,
+    ollamaStarting,
+    ollamaStatus,
     ollamaStopping,
-    stopOllama,
-    saving,
+    openDbStudio,
+    openExternalUrl,
+    patchLlm,
+    patchSettings,
+    pendingRestore,
+    probeRemote,
+    queryUsageTask: queryUsageTaskFn,
+    relaunchApp,
+    remoteModelList,
+    removeRemoteModel,
+    restoreBusy,
+    restoreFrom,
     saveLlm,
     savePrefs,
-    flash: flashLatch.value,
-    dismissFlash: flashLatch.reset,
+    saving,
+    serveState: queryFailed && drafts ? { errorText } : null,
+    setLlmApiKey,
     setTaskTemperature,
-    appUpdate,
-    checkAppUpdate,
-    installAppUpdate,
-    relaunchApp,
+    startDbStudio,
+    startOllama,
+    stopDbStudio,
+    stopOllama,
+    testModelUsage: testModelUsageFn,
+    toggleExtraModel,
+    updateRemoteModel,
   };
 }
 

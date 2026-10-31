@@ -17,9 +17,9 @@ import { RangeSlider } from "~/components/ui/range-slider";
  * 与 `ui/number-field` 的分工：想**精确输入**用后者，想**大致瞄一眼**用本件。
  */
 const meta = {
-  title: "UI/RangeSlider",
+  args: { max: 1, min: 0, onChange: () => void 0, value: 0.5 },
   component: RangeSlider,
-  args: { value: 0.5, min: 0, max: 1, onChange: () => void 0 },
+  title: "UI/RangeSlider",
 } satisfies Meta<typeof RangeSlider>;
 
 export default meta;

@@ -10,10 +10,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover
  *  ComfyUI 取值、中文标签，以及浮层里用的两行说明
  *（对应 Ardot「控件后行为」四选项面板）。 */
 const SEED_MODES: Array<{ hint: string; label: string; value: string }> = [
-  { value: "fixed", label: "固定值", hint: "数值不变" },
-  { value: "increment", label: "递增值", hint: "数值+1 或切换到下一个选项" },
-  { value: "decrement", label: "递减值", hint: "数值-1 或切换到上一个选项" },
-  { value: "random", label: "随机值", hint: "每次运行后随机化该值" },
+  { hint: "数值不变", label: "固定值", value: "fixed" },
+  { hint: "数值+1 或切换到下一个选项", label: "递增值", value: "increment" },
+  { hint: "数值-1 或切换到上一个选项", label: "递减值", value: "decrement" },
+  { hint: "每次运行后随机化该值", label: "随机值", value: "random" },
 ];
 
 /** 是不是 seed 类 widget 输入？（KSampler / 自定义节点的 seed 针脚）。 */

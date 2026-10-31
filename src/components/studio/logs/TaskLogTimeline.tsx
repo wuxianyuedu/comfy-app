@@ -36,10 +36,10 @@ import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 type Level = TaskLogEntry["level"];
 const LEVEL_STYLES: Record<Level, string> = {
   error: "bg-destructive/15 text-destructive border-destructive/20",
-  warn: "bg-warning/15 text-warning-strong border-warning/20",
-  success: "bg-success/15 text-success-strong border-success/20",
-  progress: "bg-primary/15 text-primary-strong border-primary/20",
   info: "bg-info/15 text-info-strong border-info/20",
+  progress: "bg-primary/15 text-primary-strong border-primary/20",
+  success: "bg-success/15 text-success-strong border-success/20",
+  warn: "bg-warning/15 text-warning-strong border-warning/20",
 };
 function levelLabel(level: Level): string {
   switch (level) {
@@ -88,12 +88,12 @@ export type TaskLogTimelineProps = {
 /** 弹窗里的行数是一处界面预算，不是「倒数 300 条」这段算式各写一遍 ——
  * 尾部窗口收在`~/lib/page-window`（规范 16 §16.2.4.67）。 */
 export function TaskLogTimeline({
-  logs,
-  rowTestId,
-  topSlot,
   emptySlot,
   listClassName,
+  logs,
   renderRow,
+  rowTestId,
+  topSlot,
 }: TaskLogTimelineProps) {
   const [filter, setFilter] = useState<Level | "all">("all");
   /* 贴底与「用户有没有接管滚动」的判据收在`ui/use-scroll-follow`

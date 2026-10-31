@@ -35,7 +35,7 @@ vi.mock("~/lib/log/log-paths", async () => {
 let authed = true;
 vi.mock("~/server/auth/request-user", () => ({
   requireRequestUser: async () =>
-    authed ? { id: "u1", email: "t@example.com", name: null } : null,
+    authed ? { email: "t@example.com", id: "u1", name: null } : null,
 }));
 
 const { POST } = await import("./route");
@@ -65,11 +65,11 @@ print("\\n".join(sorted(z.namelist())))
 
 beforeEach(() => {
   authed = true;
-  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.rmSync(tmp, { force: true, recursive: true });
   // 造「本次运行」的 current/（含 run.json 与一份日志）
   const cur = path.join(logRoot, "current");
   fs.mkdirSync(path.join(cur, "launcher"), { recursive: true });
-  fs.writeFileSync(path.join(cur, "run.json"), JSON.stringify({ runId: "a1b2c3", crashed: false }));
+  fs.writeFileSync(path.join(cur, "run.json"), JSON.stringify({ crashed: false, runId: "a1b2c3" }));
   fs.writeFileSync(path.join(cur, "launcher", "dev-launcher.log"), "本次\n");
   // 造两次历史归档
   for (const name of ["2026-09-29_100000-aaaaaa", "2026-09-30_193612-a1b2c3"]) {
@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.rmSync(tmp, { force: true, recursive: true });
 });
 
 describe("/api/logs/diagnostics", () => {

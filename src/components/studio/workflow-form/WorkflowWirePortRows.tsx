@@ -34,15 +34,15 @@ const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]
  * 与实测一致。字符串行（86h）= subrow 中心；数字行（33h 整行即 subrow）
  * = 16.5 ≈ 17 → 与 Ardot H-seed-in 圆心 265 一致。 */
 export function WirePortRows({
-  wireInputs,
+  onSeedModeChange,
   outputs,
-  values,
-  set,
   pickFile,
+  seedModes,
+  set,
   uploading,
   uploadTarget,
-  seedModes,
-  onSeedModeChange,
+  values,
+  wireInputs,
   /** 画布 workflow 节点是叶节点，不会有下游接线；
    * 默认 false（即不展示 output 行）。CreatePanel / IO-edit 预览面板仍
    * 传 true。L583 调用处已按`showOutputs ? outputs : []` 过滤过 props，
@@ -56,9 +56,9 @@ export function WirePortRows({
    * 下拉 / 按钮上起手会在 dragstart 里被取消（与 widget 行同守卫）。 */
   draggingKey,
   dragOverKey,
-  onReorder,
-  onPortDragStart,
   onPortDragEnd,
+  onPortDragStart,
+  onReorder,
 }: {
   /** 见 DynamicWorkflowForm。传了就每行端口
    * 都可拖；不传则行渲染时
@@ -115,6 +115,21 @@ export function WirePortRows({
     }
     return {
       draggable: true,
+      onDragEnd: () => {
+        setPortDropPosition("before");
+        onPortDragEnd?.();
+      },
+      onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
+        if (!draggingKey || draggingKey === ioKey) {
+          return;
+        }
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const pos = positionOf(e);
+        if (portDropPosition !== pos) {
+          setPortDropPosition(pos);
+        }
+      },
       onDragStart: (e: React.DragEvent<HTMLDivElement>) => {
         /* 输入框 / 下拉 / 按钮上起手不拖（与 widget 行同守卫）。 */
         const target = /* SAFETY: 类型断言已复核 */ e.target as HTMLElement | null;
@@ -130,17 +145,6 @@ export function WirePortRows({
         }
         onPortDragStart?.(ioKey);
       },
-      onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
-        if (!draggingKey || draggingKey === ioKey) {
-          return;
-        }
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        const pos = positionOf(e);
-        if (portDropPosition !== pos) {
-          setPortDropPosition(pos);
-        }
-      },
       onDrop: (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         if (!onReorder || !draggingKey || draggingKey === ioKey) {
@@ -149,10 +153,6 @@ export function WirePortRows({
         const pos = positionOf(e);
         setPortDropPosition("before");
         onReorder(draggingKey, ioKey, pos);
-      },
-      onDragEnd: () => {
-        setPortDropPosition("before");
-        onPortDragEnd?.();
       },
     };
   };

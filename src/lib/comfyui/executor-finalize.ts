@@ -208,7 +208,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
         `  · ComfyUI 原始回执已完整写入 log/comfyui/comfyui-trace.log（含 comfy-cli 全部 stdout/stderr 与 /history、/queue 原文）`,
     );
     await traceComfyQueue(taskId);
-    trace("session", taskId, "收口：未找到生成结果", { promptId, detail });
+    trace("session", taskId, "收口：未找到生成结果", { detail, promptId });
     await finalizeFailure(taskId, promptId, `未找到生成结果：${detail}`);
     return;
   }
@@ -256,15 +256,15 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     return;
   }
 
-  const { images, videos, audios, others, texts } = collectOutputs(entry.outputs ?? {});
+  const { audios, images, others, texts, videos } = collectOutputs(entry.outputs ?? {});
   const hasOutput =
     images.length || videos.length || audios.length || texts.length || others.length;
   if (!hasOutput) {
     /* ISSUE #216：outputs 非空但收集不到任何产物（未知输出键 / 输出被节点丢弃）
      *  时，把 outputs 原文落 trace，并提示去哪里核对，而不是只报「无输出内容」。 */
     trace("history", taskId, "history 有 outputs 但未收集到任何产物", {
-      promptId,
       outputs: entry.outputs ?? {},
+      promptId,
     });
     log(
       taskId,
@@ -398,9 +398,9 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   const workflowSnapshot =
     executedWorkflow != null
       ? {
-          workflow: executedWorkflow,
           capturedAt: new Date().toISOString(),
           source: "execution",
+          workflow: executedWorkflow,
         }
       : undefined;
 
@@ -415,8 +415,8 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   }
   const outcome = await writeTerminal(taskId, "成功收口", () =>
     taskRepository.finalizeSuccess(taskId, {
-      resultImages: saved,
       params: taskParamsPatched,
+      resultImages: saved,
       ...(workflowSnapshot ? { workflowSnapshot } : {}),
     }),
   );
@@ -438,30 +438,30 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   await taskRepository.createImages(
     taskId,
     saved.map((s2, i) => ({
-      localPath: s2.localPath,
-      sortIndex: i,
+      height: s2.mediaType === "image" ? (reqH ?? null) : null,
       isCover: i === 0,
+      localPath: s2.localPath,
       mediaType: s2.mediaType,
       seed: actualSeed !== undefined ? String(actualSeed) : (reqSeed ?? null),
+      sortIndex: i,
       width: s2.mediaType === "image" ? (reqW ?? null) : null,
-      height: s2.mediaType === "image" ? (reqH ?? null) : null,
     })),
   );
 
   // 项目级产出：写一份可复现的 manifest，便于「按项目归档 + 一键还原」。
   const manifest = {
-    taskId,
-    projectId,
-    workflowName: taskRow?.workflowName ?? null,
-    prompt: taskRow?.prompt ?? null,
-    negativePrompt: taskRow?.negativePrompt ?? null,
-    seed: actualSeed !== undefined ? String(actualSeed) : (reqSeed ?? null),
-    size: sizeStr || null,
-    referenceImages:
-      /* SAFETY: 类型断言已复核 */ (taskRow?.referenceImages as Array<string> | null) ?? [],
-    params: taskParams,
     createdAt: taskRow?.createdAt ?? null,
     files: saved,
+    negativePrompt: taskRow?.negativePrompt ?? null,
+    params: taskParams,
+    projectId,
+    prompt: taskRow?.prompt ?? null,
+    referenceImages:
+      /* SAFETY: 类型断言已复核 */ (taskRow?.referenceImages as Array<string> | null) ?? [],
+    seed: actualSeed !== undefined ? String(actualSeed) : (reqSeed ?? null),
+    size: sizeStr || null,
+    taskId,
+    workflowName: taskRow?.workflowName ?? null,
   };
   await fs
     .writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8")

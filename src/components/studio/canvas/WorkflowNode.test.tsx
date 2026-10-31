@@ -21,11 +21,11 @@ afterEach(cleanup);
 function makeStores(): WFStores {
   return {
     io: createIOEditStore("wf-test"),
-    rgthree: createRgthreeGroupsStore({ workflowId: "wf-test", detail: null }),
+    rgthree: createRgthreeGroupsStore({ detail: null, workflowId: "wf-test" }),
     viewer: createNodeJsonViewerStore({
       detail: null,
-      rawMetaById: {},
       positions: null,
+      rawMetaById: {},
       subgraphRawContext: null,
       subgraphStackLength: 0,
     }),
@@ -46,12 +46,12 @@ function renderFlowNode(data: WorkflowNodeData, stores: WFStores = makeStores())
  * LATENT 输出 → TOP PINS 会有对应的输出列。 */
 function nodeData(overrides: Partial<WorkflowNodeData> = {}): WorkflowNodeData {
   return {
-    nodeId: "9",
-    classType: "KSampler",
-    title: "主采样器",
-    inputs: {},
     assignedRole: null,
+    classType: "KSampler",
+    inputs: {},
     inputSources: {},
+    nodeId: "9",
+    title: "主采样器",
     ...overrides,
   };
 }
@@ -60,11 +60,11 @@ function nodeData(overrides: Partial<WorkflowNodeData> = {}): WorkflowNodeData {
  *  - model：纯连接（isConnection，无 widget）→ TOP PINS 连接行 + target Handle
  *  - seed：  widget 行（widget + widgetValue）→ 参数行，值 cell 显示 42 */
 const RAW_INPUTS = [
-  { name: "model", type: "MODEL", isConnection: true },
+  { isConnection: true, name: "model", type: "MODEL" },
   {
+    isConnection: false,
     name: "seed",
     type: "INT",
-    isConnection: false,
     widget: { name: "seed" },
     widgetValue: 42,
   },
@@ -93,7 +93,7 @@ describe("FlowNode（WorkflowNode 渲染冒烟）", () => {
   });
 
   it("flags.collapsed=true 时初始折叠，再点击恢复展开（用户切换接管状态）", async () => {
-    renderFlowNode(nodeData({ rawInputs: RAW_INPUTS, flags: { collapsed: true } }));
+    renderFlowNode(nodeData({ flags: { collapsed: true }, rawInputs: RAW_INPUTS }));
     expect(screen.getByRole("button", { name: "展开节点" })).toBeInTheDocument();
     expect(document.querySelector('[data-input-key="seed"]')).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "展开节点" }));

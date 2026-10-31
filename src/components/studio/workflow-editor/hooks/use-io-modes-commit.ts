@@ -20,7 +20,7 @@ export function useIoModesCommit(params: {
   setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
   workflowId: string;
 }) {
-  const { ioApi, detail, setDetail, savePatch, workflowId } = params;
+  const { detail, ioApi, savePatch, setDetail, workflowId } = params;
   return useCallback(
     (modes: Array<string>, defaultMode: string) => {
       /* 模式集合变更立即落库（与库详情「类型」同一存储），并同步
@@ -42,9 +42,9 @@ export function useIoModesCommit(params: {
           : prev,
       );
       savePatch.mutate({
+        defaultMode,
         id: workflowId,
         modes,
-        defaultMode,
         taskType: defaultMode,
         ...(cleanedIO ? { workflowIO: cleanedIO } : {}),
       });

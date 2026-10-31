@@ -76,27 +76,27 @@ async function executeRun(
   },
 ) {
   const {
-    workflowId,
-    workflowName,
-    taskType,
-    workflowIO,
     effectiveMode,
-    values,
     effectiveParamMap,
     seedModes,
+    taskType,
+    values,
+    workflowId,
+    workflowIO,
+    workflowName,
   } = payload;
-  const { setPhase, handlers } = run;
+  const { handlers, setPhase } = run;
   setPhase({ kind: "starting" });
   try {
     const mapped = workflowIO
       ? applyParamMapping({
-          io: workflowIO,
           entries: buildParamEntries(workflowIO, undefined, {
             mode: effectiveMode,
           }),
+          io: workflowIO,
           mapping: parseParamMapping(effectiveParamMap),
-          values,
           mode: effectiveMode,
+          values,
         })
       : null;
     const workflowInputs =
@@ -110,13 +110,13 @@ async function executeRun(
     });
     setPhase({ kind: "running", pct: 0 });
     registerWorkflowRun({
-      taskId,
-      workflowId,
-      workflowName,
-      taskType,
+      source: "canvas-node",
       startedAt: nowMs(),
       status: "running",
-      source: "canvas-node",
+      taskId,
+      taskType,
+      workflowId,
+      workflowName,
     });
     await new Promise<void>((resolve) => {
       /* onSettled 在共享回调里只做终态迁移；发起路径还要借此结束本次
@@ -144,7 +144,7 @@ async function executeRun(
  *   的回调依赖会互相成环）。
  */
 export function useGenerationRunner(params: { enabled: boolean; workflowId: string }) {
-  const { workflowId, enabled } = params;
+  const { enabled, workflowId } = params;
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   /* 节点相位的节流闸门（`~/components/ui/use-throttled-progress`）。
    * 发起与恢复两条订阅路径共用同一个闸门 —— 按任务分窗，不会互相挤掉。 */
@@ -164,13 +164,6 @@ export function useGenerationRunner(params: { enabled: boolean; workflowId: stri
   /* 发起与恢复共用的 SSE 回调（见文件头）。 */
   const handlers = useMemo<WorkflowRunHandlers>(
     () => ({
-      onProgress: (taskId, pct, node) => {
-        /* 高频回调：按任务节流（规范 16 §16.2.4.68）。 */
-        if (!progressGate.current.allow(taskId)) {
-          return;
-        }
-        setPhase({ kind: "running", pct, ...(node ? { node } : {}) });
-      },
       onLog: (taskId, entry) => {
         appendWorkflowRunLog(taskId, entry);
       },
@@ -180,11 +173,18 @@ export function useGenerationRunner(params: { enabled: boolean; workflowId: stri
           setResultUrl(output.url);
         }
       },
+      onProgress: (taskId, pct, node) => {
+        /* 高频回调：按任务节流（规范 16 §16.2.4.68）。 */
+        if (!progressGate.current.allow(taskId)) {
+          return;
+        }
+        setPhase({ kind: "running", pct, ...(node ? { node } : {}) });
+      },
       onSettled: (_taskId, result) => {
         if (result.ok) {
           setPhase({
-            kind: "done",
             imageUrl: resultUrlRef.current ?? undefined,
+            kind: "done",
           });
         } else {
           setPhase({ kind: "failed", message: result.message ?? "生成失败" });
@@ -200,9 +200,9 @@ export function useGenerationRunner(params: { enabled: boolean; workflowId: stri
    * （用户实测：「生成结束后也看不到产出内容」）。不自动弹全屏日志（避免
    * 打断用户），由用户点「执行日志」查看。 */
   useWorkflowRunResume({
-    workflowId,
-    source: "canvas-node",
     handlers,
+    source: "canvas-node",
+    workflowId,
   });
 
   const running = phase.kind === "running" || phase.kind === "starting";
@@ -210,10 +210,10 @@ export function useGenerationRunner(params: { enabled: boolean; workflowId: stri
 
   const startRun = useCallback(
     (payload: RunPayload) => {
-      void executeRun(payload, { setPhase, handlers });
+      void executeRun(payload, { handlers, setPhase });
     },
     [handlers],
   );
 
-  return { phase, running, canRun, resultUrl, startRun, clearFailure };
+  return { canRun, clearFailure, phase, resultUrl, running, startRun };
 }

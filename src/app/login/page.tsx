@@ -47,8 +47,8 @@ export default function LoginPage() {
         if (mode === "register") {
           const { error: signUpError } = await authClient.signUp.email({
             email,
-            password,
             name: name || "",
+            password,
           });
           if (signUpError) {
             setError(signUpError.message ?? "注册失败，请稍后重试");
@@ -285,13 +285,13 @@ export default function LoginPage() {
  * `~/components/ui/field` 的 `Field` 基元（本文件当前只 import FormField ·
  * 未来若加 Field/FieldLabel 会撞名）。 */
 function LoginFieldRow({
+  autoComplete,
   label,
-  type,
-  value,
   onChange,
   placeholder,
-  autoComplete,
   right,
+  type,
+  value,
 }: {
   autoComplete?: string;
   label: string;

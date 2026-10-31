@@ -9,9 +9,9 @@ import { ollamaTagsUrl, probeOllama, startOllama } from "./ollama-client";
 
 function jsonRes(status: number, body: unknown): Response {
   return /* SAFETY: 类型断言已复核 */ {
+    json: async () => body,
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
   } as unknown as Response;
 }
 
@@ -34,22 +34,22 @@ describe("probeOllama", () => {
   it("2xx 且带 models → up + 模型列表", async () => {
     const fetchMock: Mock<typeof fetch> = vi.fn().mockResolvedValue(
       jsonRes(200, {
-        models: [{ name: "qwen3:14b", size: 1, modified_at: "" }],
+        models: [{ modified_at: "", name: "qwen3:14b", size: 1 }],
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(probeOllama("http://localhost:11434/v1")).resolves.toEqual({
+      models: [{ modified_at: "", name: "qwen3:14b", size: 1 }],
       up: true,
-      models: [{ name: "qwen3:14b", size: 1, modified_at: "" }],
     });
   });
 
   it("2xx 但 models 缺失 → up + 空列表（UI 显示「0 个模型可用」）", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonRes(200, {})));
     await expect(probeOllama("http://x")).resolves.toEqual({
-      up: true,
       models: [],
+      up: true,
     });
   });
 
@@ -67,11 +67,11 @@ describe("probeOllama", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
         json: async () => {
           throw new Error("Unexpected token <");
         },
+        ok: true,
+        status: 200,
       }),
     );
     await expect(probeOllama("http://x")).resolves.toEqual({ up: false });

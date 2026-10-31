@@ -144,7 +144,7 @@ describe("killProcessTree POSIX：谁该被发信号", () => {
 
   it("② force 只换信号名，不换目标（SIGKILL 也必须是发给组）", async () => {
     installAsyncPs({ "2866": 2838, [OWN]: 9999 });
-    const r = await killProcessTreeWith({ pid: 2866, force: true }, { windows: false });
+    const r = await killProcessTreeWith({ force: true, pid: 2866 }, { windows: false });
     expect(r.via).toContain("SIGKILL");
     expect(killCalls).toEqual([[-2838, "SIGKILL"]]);
   });
@@ -179,7 +179,7 @@ describe("killProcessTree POSIX：谁该被发信号", () => {
 
   it("⑥ ps 不可用但调用方声明 detached → 仍试一次按 pid 的组信号（末位补救，不是主判据）", async () => {
     installAsyncPs({ [OWN]: 9999 });
-    const r = await killProcessTreeWith({ pid: 2866, detached: true }, { windows: false });
+    const r = await killProcessTreeWith({ detached: true, pid: 2866 }, { windows: false });
     expect(r.via).toContain("进程组·未探测");
     expect(killCalls).toEqual([[-2866, "SIGTERM"]]);
   });
@@ -202,7 +202,7 @@ describe("killProcessTree POSIX：谁该被发信号", () => {
   it("⑨ 目标与自身同组时，即使声明 detached 也不许按 pid 猜组（旧实现留孤儿的入口）", async () => {
     const own = 4242;
     installAsyncPs({ "2866": own, [OWN]: own });
-    await killProcessTreeWith({ pid: 2866, detached: true }, { windows: false });
+    await killProcessTreeWith({ detached: true, pid: 2866 }, { windows: false });
     expect(killCalls).toEqual([[2866, "SIGTERM"]]);
   });
 });
@@ -237,14 +237,14 @@ describe("killProcessTreeSync 与异步版同判据（两侧不许分叉）", ()
     asPlatform("linux");
     installSyncPs({ "2866": 2838, [OWN]: 9999 });
     installKillSpy({ "-2838": new Error("EPERM") });
-    const r = killProcessTreeSync({ pid: 2866, force: true });
+    const r = killProcessTreeSync({ force: true, pid: 2866 });
     expect(r.via).toBe("kill -SIGKILL 2866（单进程兜底）");
   });
 
   platformTest("ps 完全不可用 + detached → 进程组·未探测；都不行 → ok=false", ({ asPlatform }) => {
     asPlatform("linux");
     installSyncPs({ [OWN]: 9999 });
-    const tried = killProcessTreeSync({ pid: 2866, detached: true });
+    const tried = killProcessTreeSync({ detached: true, pid: 2866 });
     expect(tried.via).toContain("进程组·未探测");
 
     installKillSpy({
@@ -281,12 +281,12 @@ describe("killProcessTreeSync 与异步版同判据（两侧不许分叉）", ()
        * POSIX 侧则静默退化成单杀。两边都不是调用方要的那件事，所以宁可回一句话。 */
       asPlatform("linux");
       installSyncPs({ "4321": 2838, [OWN]: 9999 });
-      const r = killProcessTreeSync({ pid: 4321, mode: "image" });
+      const r = killProcessTreeSync({ mode: "image", pid: 4321 });
       expect(r.ok).toBe(false);
       expect(r.via).toContain("killProcessTreeByImage");
       expect(killCalls).toEqual([]);
 
-      const onWindows = killProcessTreeSync({ pid: 4321, mode: "image" });
+      const onWindows = killProcessTreeSync({ mode: "image", pid: 4321 });
       expect(onWindows.ok).toBe(false);
       expect(spawnMock).not.toHaveBeenCalled();
     },

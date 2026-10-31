@@ -39,7 +39,7 @@ export function useShotGenerationWriteback(d: CanvasNodeData): void {
     void recordCanvasShotGeneration(
       projectId,
       shotId,
-      nodeGenToShot({ status, taskId, resultPath }),
+      nodeGenToShot({ resultPath, status, taskId }),
     );
   }, [shotId, status, resultPath, taskId]);
 }

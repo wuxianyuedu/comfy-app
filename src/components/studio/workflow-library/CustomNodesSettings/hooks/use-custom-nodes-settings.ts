@@ -129,11 +129,11 @@ function parseSettingsBlob(
   }
   const paths = data.settings.paths || [];
   return {
+    byPath: data.byPath || {},
+    discoveredByParent: data.discoveredByParent || {},
+    lastReport: data.lastReport,
     paths,
     summary: data.summary,
-    lastReport: data.lastReport,
-    discoveredByParent: data.discoveredByParent || {},
-    byPath: data.byPath || {},
   };
 }
 async function consumeSettingsStream(
@@ -184,12 +184,12 @@ async function consumeSettingsStream(
       if (ev.type === "discover_start") {
         paths.push(...(ev.parents ?? []));
         sinks.setProgress({
-          phase: "queue",
-          done: 0,
-          total: 0,
           discovered: 0,
-          parent: "",
+          done: 0,
           msg: "准备扫描…",
+          parent: "",
+          phase: "queue",
+          total: 0,
         });
       } else if (ev.type === "progress") {
         sinks.setProgress((progress) => {
@@ -226,8 +226,8 @@ async function consumeSettingsStream(
         // （✔ ... done=M|total=M）。我们只刷新 header 里展示的 parent。
         sinks.setProgress((progress) => ({
           ...progress,
-          parent: ev.parent ?? progress.parent,
           msg: `✔ ${ev.parent ?? ""}`,
+          parent: ev.parent ?? progress.parent,
         }));
       } else if (ev.type === "summary") {
         summary = ev.summary ?? null;
@@ -240,7 +240,7 @@ async function consumeSettingsStream(
     }
   }
 
-  return { paths, summary, lastReport, byPath, discoveredByParent };
+  return { byPath, discoveredByParent, lastReport, paths, summary };
 }
 
 export function useCustomNodesSettings(): CustomNodesSettingsController {
@@ -253,12 +253,12 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   // 为已处理包数。进度条在 scan 期间用 CSS 动画（indeterminate），scan 宣布
   // total=M 时切换为确定的百分比。
   const [progress, setProgress] = useState<ParseProgress>({
-    phase: "",
-    done: 0,
-    total: 0,
     discovered: 0,
-    parent: "",
+    done: 0,
     msg: "",
+    parent: "",
+    phase: "",
+    total: 0,
   });
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const parseBusy = useBusyAction();
@@ -409,12 +409,12 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
             return;
           }
           setProgress({
-            phase: "",
-            done: 0,
-            total: 0,
             discovered: 0,
-            parent: "",
+            done: 0,
             msg: "",
+            parent: "",
+            phase: "",
+            total: 0,
           });
         }, 800);
       }
@@ -426,12 +426,12 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     setLoading(true);
     setSaveErr(null);
     setProgress({
-      phase: "",
-      done: 0,
-      total: 0,
       discovered: 0,
-      parent: "",
+      done: 0,
       msg: "",
+      parent: "",
+      phase: "",
+      total: 0,
     });
     return fetchSettings();
   }, [fetchSettings]);
@@ -526,9 +526,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     setLogs([]);
     try {
       const res = await fetch("/api/custom-nodes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(packages ? { action: "parse", packages } : { action: "parse" }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
       });
       await readNdjson(res, async (record, ok) => {
         if (ok && record) {
@@ -556,15 +556,15 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   /* 三个解析入口（全部 / 单条子包 / 单个父目录）在 `use-parse-actions.ts`：
    * 它们只读已配路径与已发现子包、写进度与错误，与本 hook 的状态编排是两件事
    * （拆分前它们是内联在这里的四段函数，见那个文件头注）。 */
-  const { onParseAll, onParseSingle, onParseAllParent } = createParseActions({
-    savedPaths,
+  const { onParseAll, onParseAllParent, onParseSingle } = createParseActions({
+    clearPerPkgParsing,
     discoveredByParent,
     parseBusy,
-    setError: setError_,
-    setReport,
-    setPerPkgParsing,
     runParse,
-    clearPerPkgParsing,
+    savedPaths,
+    setError: setError_,
+    setPerPkgParsing,
+    setReport,
   });
 
   // 跨所有已配置父目录的扁平子包列表。一个顶层包（如 Anima-Artist-Mixer）即便用户
@@ -576,20 +576,20 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       const subs = discoveredByParent[parent] ?? [];
       const enriched = subs.map((sub) => {
         const saved = byPath[pathKey(sub.path)];
-        return { sub, saved, state: deriveRowState(sub, saved) };
+        return { saved, state: deriveRowState(sub, saved), sub };
       });
       const cnt = {
+        empty: 0,
+        error: 0,
         loaded: 0,
+        missing: 0,
         outdated: 0,
         unimported: 0,
-        error: 0,
-        missing: 0,
-        empty: 0,
       };
       for (const e of enriched) {
         cnt[e.state.kind] += 1;
       }
-      return { parent, subs: enriched, cnt, total: enriched.length };
+      return { cnt, parent, subs: enriched, total: enriched.length };
     });
   }, [savedPaths, discoveredByParent, byPath]);
 
@@ -598,37 +598,37 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       (acc, b) => ({
         loaded: acc.loaded + b.cnt.loaded,
         outdated: acc.outdated + b.cnt.outdated,
-        unimported: acc.unimported + b.cnt.unimported,
         total: acc.total + b.total,
+        unimported: acc.unimported + b.cnt.unimported,
       }),
-      { loaded: 0, outdated: 0, unimported: 0, total: 0 },
+      { loaded: 0, outdated: 0, total: 0, unimported: 0 },
     );
   }, [parentBlocks]);
 
   return {
-    open,
-    setOpen,
-    savedPaths,
-    saveErr,
-    loading,
-    progress,
-    parsing: parseBusy.busy,
-    perPkgParsing,
-    report,
-    summary,
-    discoveredByParent,
     byPath,
-    parentExpansion,
-    logs,
     consoleRef,
+    discoveredByParent,
+    loading,
+    logs,
     logsRef,
     manifestByNode,
-    nodeListExpansion,
     nodeCardExpansion,
+    nodeListExpansion,
     onParseAll,
-    onParseSingle,
     onParseAllParent,
+    onParseSingle,
+    open,
     parentBlocks,
+    parentExpansion,
+    parsing: parseBusy.busy,
+    perPkgParsing,
+    progress,
+    report,
+    savedPaths,
+    saveErr,
+    setOpen,
+    summary,
     totalAcrossParents,
   };
 }

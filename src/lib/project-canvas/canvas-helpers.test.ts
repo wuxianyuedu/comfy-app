@@ -19,10 +19,10 @@ function node(id: string, data: Partial<CanvasNodeData>): CanvasNodeType {
   /* 断言收在工厂一处：`data` 是 `Partial`（夹具只给关心的字段），
    * 而 `CanvasNodeType` 要的是完整的 `CanvasNodeData`。 */
   return {
-    id,
-    type: "canvasNode",
     data: /* SAFETY: 类型断言已复核 */ data as CanvasNodeData,
+    id,
     position: { x: 0, y: 0 },
+    type: "canvasNode",
   };
 }
 
@@ -52,7 +52,7 @@ describe("makeNodeId", () => {
 
 describe("viewportCenter", () => {
   it("取浏览器视口中心（三处收口前各写一份，其中一处用容器尺寸）", () => {
-    const original = { w: window.innerWidth, h: window.innerHeight };
+    const original = { h: window.innerHeight, w: window.innerWidth };
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 1200,
@@ -85,12 +85,12 @@ describe("placeCanvasNode", () => {
   it("取落点 → 换算 → 组节点 → 追加（四步一次给全）", () => {
     const base = [node("existing", { kind: "text" })];
     const next = placeCanvasNode({
-      nodes: base,
-      point: { x: 30, y: 40 },
-      flow,
       data: /* SAFETY: 类型断言已复核 */ {
         kind: "image",
       } as CanvasNodeData,
+      flow,
+      nodes: base,
+      point: { x: 30, y: 40 },
     });
     expect(next).toHaveLength(2);
     expect(next[1]!.type).toBe("canvasNode");
@@ -101,16 +101,16 @@ describe("placeCanvasNode", () => {
   it("不给落点时落在视口中心（收口前三处的第二分支）", () => {
     let received: { x: number; y: number } | null = null;
     placeCanvasNode({
-      nodes: [],
+      data: /* SAFETY: 类型断言已复核 */ {
+        kind: "image",
+      } as CanvasNodeData,
       flow: {
         screenToFlowPosition: (p) => {
           received = p;
           return p;
         },
       },
-      data: /* SAFETY: 类型断言已复核 */ {
-        kind: "image",
-      } as CanvasNodeData,
+      nodes: [],
     });
     expect(received).toEqual(viewportCenter());
   });
@@ -118,17 +118,17 @@ describe("placeCanvasNode", () => {
   it("落点显式为 null 时同样回落视口中心", () => {
     let received: { x: number; y: number } | null = null;
     placeCanvasNode({
-      nodes: [],
-      point: null,
+      data: /* SAFETY: 类型断言已复核 */ {
+        kind: "image",
+      } as CanvasNodeData,
       flow: {
         screenToFlowPosition: (p) => {
           received = p;
           return p;
         },
       },
-      data: /* SAFETY: 类型断言已复核 */ {
-        kind: "image",
-      } as CanvasNodeData,
+      nodes: [],
+      point: null,
     });
     expect(received).toEqual(viewportCenter());
   });
@@ -136,12 +136,12 @@ describe("placeCanvasNode", () => {
   it("不改动传进来的节点表（返回新数组）", () => {
     const base = [node("existing", { kind: "text" })];
     const next = placeCanvasNode({
-      nodes: base,
-      point: { x: 0, y: 0 },
-      flow,
       data: /* SAFETY: 类型断言已复核 */ {
         kind: "image",
       } as CanvasNodeData,
+      flow,
+      nodes: base,
+      point: { x: 0, y: 0 },
     });
     expect(base).toHaveLength(1);
     expect(next).not.toBe(base);
@@ -154,17 +154,17 @@ describe("placeCanvasNode", () => {
      * 走错了支。 */
     let calls = 0;
     const next = placeCanvasNode({
-      nodes: [],
-      flowPosition: { x: 340, y: 10 },
+      data: /* SAFETY: 类型断言已复核 */ {
+        kind: "image",
+      } as CanvasNodeData,
       flow: {
         screenToFlowPosition: (p) => {
           calls += 1;
           return { x: p.x + 9999, y: p.y + 9999 };
         },
       },
-      data: /* SAFETY: 类型断言已复核 */ {
-        kind: "image",
-      } as CanvasNodeData,
+      flowPosition: { x: 340, y: 10 },
+      nodes: [],
     });
     expect(calls).toBe(0);
     expect(next[0]!.position).toEqual({ x: 340, y: 10 });
@@ -172,33 +172,33 @@ describe("placeCanvasNode", () => {
 
   it("可以显式指定 id（调用处要提前拿它建边）", () => {
     const next = placeCanvasNode({
-      nodes: [],
-      id: "n_sink",
-      flowPosition: { x: 0, y: 0 },
-      flow,
       data: /* SAFETY: 类型断言已复核 */ {
         kind: "image",
       } as CanvasNodeData,
+      flow,
+      flowPosition: { x: 0, y: 0 },
+      id: "n_sink",
+      nodes: [],
     });
     expect(next[0]!.id).toBe("n_sink");
   });
 
   it("每个新节点拿到不同的 id（连线引用目标不能撞）", () => {
     const first = placeCanvasNode({
+      data: /* SAFETY: 类型断言已复核 */ {
+        kind: "image",
+      } as CanvasNodeData,
+      flow,
       nodes: [],
       point: { x: 0, y: 0 },
-      flow,
-      data: /* SAFETY: 类型断言已复核 */ {
-        kind: "image",
-      } as CanvasNodeData,
     });
     const second = placeCanvasNode({
-      nodes: first,
-      point: { x: 0, y: 0 },
-      flow,
       data: /* SAFETY: 类型断言已复核 */ {
         kind: "image",
       } as CanvasNodeData,
+      flow,
+      nodes: first,
+      point: { x: 0, y: 0 },
     });
     expect(first[0]!.id).not.toBe(second[1]!.id);
   });
@@ -206,34 +206,34 @@ describe("placeCanvasNode", () => {
 
 describe("applyPropagationToNodes", () => {
   it("source 自身不被改写", () => {
-    const src = node("s", { kind: "text", content: "一只猫" });
+    const src = node("s", { content: "一只猫", kind: "text" });
     const out = applyPropagationToNodes([src], "s", {
-      srcData: src.data,
-      outEdges: [edge("s")],
       importedFile: null,
+      outEdges: [edge("s")],
+      srcData: src.data,
     });
     expect(out[0]).toBe(src);
   });
 
   it("text → prompt handle：写进 prompt", () => {
-    const src = node("s", { kind: "text", content: "一只猫" });
+    const src = node("s", { content: "一只猫", kind: "text" });
     const target = node("t", { kind: "image", prompt: "" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data,
-      outEdges: [edge("t", "prompt")],
       importedFile: null,
+      outEdges: [edge("t", "prompt")],
+      srcData: src.data,
     });
     expect(out[1]!.data.prompt).toBe("一只猫");
     expect(out[1]!.data.upstreamId).toBeUndefined();
   });
 
   it("text 内容为空时不覆盖下游已有的 prompt", () => {
-    const src = node("s", { kind: "text", content: "   " });
+    const src = node("s", { content: "   ", kind: "text" });
     const target = node("t", { kind: "image", prompt: "保留我" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data,
-      outEdges: [edge("t", "prompt")],
       importedFile: null,
+      outEdges: [edge("t", "prompt")],
+      srcData: src.data,
     });
     expect(out[1]!.data.prompt).toBe("保留我");
   });
@@ -250,9 +250,9 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "image", resultPath: "/outputs/a.png" });
     const target = node("t", { kind: "image", mode: "T2I" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data,
-      outEdges: [edge("t", "inputImage")],
       importedFile: "imported.png",
+      outEdges: [edge("t", "inputImage")],
+      srcData: src.data,
     });
     expect(out[1]!.data.inputImage).toBe("imported.png");
     expect(out[1]!.data.upstreamId).toBe("s");
@@ -264,9 +264,9 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "image", resultPath: "/outputs/a.png" });
     const target = node("t", { kind: "image", mode: "txt2img" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data,
-      outEdges: [edge("t", "inputImage")],
       importedFile: "imported.png",
+      outEdges: [edge("t", "inputImage")],
+      srcData: src.data,
     });
     expect(out[1]!.data.mode).toBe("img2img");
   });
@@ -275,9 +275,9 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "image", prompt: "上游提示词" });
     const target = node("t", { kind: "image", prompt: "" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data,
-      outEdges: [edge("t", "prompt")],
       importedFile: null,
+      outEdges: [edge("t", "prompt")],
+      srcData: src.data,
     });
     expect(out[1]!.data.prompt).toBe("上游提示词");
   });
@@ -286,9 +286,9 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "picture", mediaPath: "ref.png" });
     const target = node("t", { kind: "picture", mediaPath: "" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data,
-      outEdges: [edge("t")],
       importedFile: null,
+      outEdges: [edge("t")],
+      srcData: src.data,
     });
     expect(out[1]!.data.mediaPath).toBe("ref.png");
     expect(out[1]!.data.upstreamId).toBe("s");
@@ -298,40 +298,40 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "picture", mediaPath: "ref.png" });
     const target = node("t", { kind: "picture", mediaPath: "" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data,
-      outEdges: [edge("t")],
       importedFile: "fresh.png",
+      outEdges: [edge("t")],
+      srcData: src.data,
     });
     expect(out[1]!.data.mediaPath).toBe("fresh.png");
   });
 
   it("workflow 节点按 targetHandle 写进 workflowInputs", () => {
-    const src = node("s", { kind: "text", content: "参考" });
+    const src = node("s", { content: "参考", kind: "text" });
     const target = node("t", { kind: "workflow", workflowInputs: {} });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data,
-      outEdges: [edge("t", "3.inputs.text")],
       importedFile: null,
+      outEdges: [edge("t", "3.inputs.text")],
+      srcData: src.data,
     });
     expect(out[1]!.data.workflowInputs).toEqual({ "3.inputs.text": "参考" });
     expect(out[1]!.data.upstreamId).toBe("s");
   });
 
   it("seed / steps / cfg 按 handle 分派，空值不覆盖", () => {
-    const src = node("s", { kind: "image", steps: 30, cfg: 7.5, seed: "42" });
+    const src = node("s", { cfg: 7.5, kind: "image", seed: "42", steps: 30 });
     const withEmptySeed: CanvasNodeData = {
       ...src.data,
       seed: "",
     };
     const targets = [
       node("t1", { kind: "image", steps: 1 }),
-      node("t2", { kind: "image", cfg: 1 }),
+      node("t2", { cfg: 1, kind: "image" }),
       node("t3", { kind: "image", seed: "old" }),
     ];
     const out = applyPropagationToNodes([src, ...targets], "s", {
-      srcData: withEmptySeed,
-      outEdges: [edge("t1", "steps"), edge("t2", "cfg"), edge("t3", "seed")],
       importedFile: null,
+      outEdges: [edge("t1", "steps"), edge("t2", "cfg"), edge("t3", "seed")],
+      srcData: withEmptySeed,
     });
     expect(out[1]!.data.steps).toBe(30);
     expect(out[2]!.data.cfg).toBe(7.5);
@@ -342,20 +342,20 @@ describe("applyPropagationToNodes", () => {
   it("workflowArdot 纯视觉节点跳过（无 data 可写）", () => {
     const src = node("s", { kind: "image", prompt: "x" });
     const out = applyPropagationToNodes([src, ardotNode], "s", {
-      srcData: src.data,
-      outEdges: [edge("visual", "prompt")],
       importedFile: null,
+      outEdges: [edge("visual", "prompt")],
+      srcData: src.data,
     });
     expect(out[1]).toBe(ardotNode);
   });
 
   it("没有出边指向的节点保持原样（引用不变，避免无谓重渲染）", () => {
-    const src = node("s", { kind: "text", content: "x" });
+    const src = node("s", { content: "x", kind: "text" });
     const unrelated = node("u", { kind: "image" });
     const out = applyPropagationToNodes([src, unrelated], "s", {
-      srcData: src.data,
-      outEdges: [],
       importedFile: null,
+      outEdges: [],
+      srcData: src.data,
     });
     expect(out[1]).toBe(unrelated);
   });
@@ -363,16 +363,16 @@ describe("applyPropagationToNodes", () => {
   it("video 节点接 inputImage：小写 t2v 才切 i2v（大写 T2V 不切 — 同一缺陷）", () => {
     const src = node("s", { kind: "image", resultPath: "/o/a.png" });
     const lower = applyPropagationToNodes([src, node("t", { kind: "video", mode: "t2v" })], "s", {
-      srcData: src.data,
-      outEdges: [edge("t", "inputImage")],
       importedFile: "imported.png",
+      outEdges: [edge("t", "inputImage")],
+      srcData: src.data,
     });
     expect(lower[1]!.data.mode).toBe("i2v");
 
     const upper = applyPropagationToNodes([src, node("t", { kind: "video", mode: "T2V" })], "s", {
-      srcData: src.data,
-      outEdges: [edge("t", "inputImage")],
       importedFile: "imported.png",
+      outEdges: [edge("t", "inputImage")],
+      srcData: src.data,
     });
     expect(upper[1]!.data.mode).toBe("T2V");
   });

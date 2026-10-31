@@ -33,7 +33,7 @@ type PanelProps = {
   update: (patch: Partial<CanvasSettings>) => void;
 };
 
-export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelProps) {
+export function CanvasSettingsPanel({ onClose, reset, settings, update }: PanelProps) {
   /* 抽屉走 ui/sheet（规范 16 §16.2.3 P2）：Esc 关闭、点遮罩关闭、遮罩让出
  标题行与 ProjectSettingsDrawer 是同一件事，此前两边各写一份。 */
   return (
@@ -193,9 +193,9 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
 /* ── 小型的展示性行助手（模块私有：只有本面板在用） ── */
 
 function Section({
-  title,
-  subtitle,
   children,
+  subtitle,
+  title,
 }: {
   children: ReactNode;
   subtitle?: string;
@@ -215,14 +215,14 @@ function Section({
 }
 
 function SliderRow({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
   format,
+  label,
+  max,
+  min,
+  onChange,
+  step,
   tooltip,
+  value,
 }: {
   format: (value: number) => string;
   label: string;
@@ -248,9 +248,9 @@ function SliderRow({
 
 function ToggleRow({
   label,
-  value,
   onChange,
   tooltip,
+  value,
 }: {
   label: string;
   onChange: (value: boolean) => void;

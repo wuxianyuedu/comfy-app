@@ -34,6 +34,13 @@ let behavior: Behavior = { models: [] };
 const t = createTestTRPC();
 const mockRouter = t.router({
   model: t.router({
+    configDelete: t.procedure.mutation(() => ({ ok: true })),
+    configList: t.procedure.query(() => ({
+      comfyReachable: behavior.comfyReachable ?? true,
+      folders: [],
+      rows: [],
+    })),
+    configSave: t.procedure.mutation(() => ({ ok: true })),
     list: t.procedure.query(() => {
       if (behavior.listError) {
         throw new TRPCError({
@@ -44,16 +51,9 @@ const mockRouter = t.router({
       return { models: behavior.models };
     }),
     sync: t.procedure.mutation(() => ({
-      ok: true,
       count: behavior.models.length,
+      ok: true,
     })),
-    configList: t.procedure.query(() => ({
-      folders: [],
-      rows: [],
-      comfyReachable: behavior.comfyReachable ?? true,
-    })),
-    configSave: t.procedure.mutation(() => ({ ok: true })),
-    configDelete: t.procedure.mutation(() => ({ ok: true })),
   }),
 });
 
@@ -64,12 +64,12 @@ function setBehavior(b: Partial<Behavior>) {
 }
 
 const ONE_MODEL: ModelRow = {
-  id: "m1",
-  name: "dreamshaper-xl",
   fileName: "dreamshaper-xl.safetensors",
-  type: "checkpoints",
-  isAvailable: true,
   fileSize: 5120,
+  id: "m1",
+  isAvailable: true,
+  name: "dreamshaper-xl",
+  type: "checkpoints",
 };
 
 beforeAll(() => server.listen({ onUnhandledFrame: "error" }));

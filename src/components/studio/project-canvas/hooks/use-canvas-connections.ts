@@ -28,10 +28,10 @@ export type UseCanvasConnectionsArgs = {
 };
 
 export function useCanvasConnections({
-  nodesRef,
   edgesRef,
-  setNodes,
+  nodesRef,
   setEdges,
+  setNodes,
 }: UseCanvasConnectionsArgs) {
   const propagateFrom = useCallback(
     async (sourceId: string, resultPathOverride?: string, edgesOverride?: Array<Edge>) => {
@@ -71,9 +71,9 @@ export function useCanvasConnections({
       // targetHandle 分派与数据写入抽到 canvas-helpers（纯函数，可独立测试）。
       setNodes((nds) =>
         applyPropagationToNodes(nds, sourceId, {
-          srcData: src,
-          outEdges,
           importedFile,
+          outEdges,
+          srcData: src,
         }),
       );
     },
@@ -93,9 +93,9 @@ export function useCanvasConnections({
         addEdge(
           {
             ...c,
-            type: "smoothstep",
             animated: true,
             style: { stroke: "url(#canvas-edge-gradient)", strokeWidth: 2.5 },
+            type: "smoothstep",
           },
           eds,
         ),
@@ -134,5 +134,5 @@ export function useCanvasConnections({
     [setEdges],
   );
 
-  return { propagateFrom, onConnect, onEdgeClick };
+  return { onConnect, onEdgeClick, propagateFrom };
 }

@@ -72,7 +72,7 @@ export function classifyComfyInstall(
 ): ComfyInstallClassify {
   const root = path.resolve(installDir);
   if (!exists(/*turbopackIgnore: true*/ root)) {
-    return { kind: "unknown", instanceRoot: null, instanceIdFile: null };
+    return { instanceIdFile: null, instanceRoot: null, kind: "unknown" };
   }
 
   // 候选「实例根」：comfyuiPath 指向源码根（root 直接含 main.py）时其父级
@@ -81,16 +81,16 @@ export function classifyComfyInstall(
   const hasRootMain = hasMainPy(root, exists);
   if (!hasRootMain && !hasSubMain) {
     // 连 main.py 都没有——不是有效 ComfyUI 安装，无法判定形态。
-    return { kind: "unknown", instanceRoot: root, instanceIdFile: null };
+    return { instanceIdFile: null, instanceRoot: root, kind: "unknown" };
   }
 
   // 优先把 root 当实例根：带桌面标记 → desktop。
   const rootMarker = pickDesktopFile(root, exists);
   if (rootMarker) {
     return {
-      kind: "desktop",
-      instanceRoot: root,
       instanceIdFile: isInstanceIdSource(rootMarker) ? rootMarker : null,
+      instanceRoot: root,
+      kind: "desktop",
     };
   }
   // root 本身不带标记但指向源码根（root/main.py），父级带桌面标记 → desktop。
@@ -99,9 +99,9 @@ export function classifyComfyInstall(
     const parentMarker = pickDesktopFile(parent, exists);
     if (parentMarker) {
       return {
-        kind: "desktop",
-        instanceRoot: parent,
         instanceIdFile: isInstanceIdSource(parentMarker) ? parentMarker : null,
+        instanceRoot: parent,
+        kind: "desktop",
       };
     }
   }
@@ -113,14 +113,14 @@ export function classifyComfyInstall(
   const desktopLayout =
     hasSubMain && exists(/*turbopackIgnore: true*/ path.join(root, "standalone-env", "python.exe"));
   if (desktopLayout) {
-    return { kind: "desktop", instanceRoot: root, instanceIdFile: null };
+    return { instanceIdFile: null, instanceRoot: root, kind: "desktop" };
   }
 
   // 便携 / venv：解释器与 main.py 同层（源码根或其父级）。
   const bases = [root, path.dirname(root)];
   for (const base of bases) {
     if (exists(/*turbopackIgnore: true*/ path.join(base, "python_embeded", "python.exe"))) {
-      return { kind: "portable", instanceRoot: root, instanceIdFile: null };
+      return { instanceIdFile: null, instanceRoot: root, kind: "portable" };
     }
   }
   for (const base of bases) {
@@ -128,12 +128,12 @@ export function classifyComfyInstall(
       exists(/*turbopackIgnore: true*/ path.join(base, ".venv", "Scripts", "python.exe")) ||
       exists(/*turbopackIgnore: true*/ path.join(base, "venv", "Scripts", "python.exe"))
     ) {
-      return { kind: "venv", instanceRoot: root, instanceIdFile: null };
+      return { instanceIdFile: null, instanceRoot: root, kind: "venv" };
     }
   }
 
   // 有 main.py 但无上述特征：按便携兜底。
-  return { kind: "portable", instanceRoot: root, instanceIdFile: null };
+  return { instanceIdFile: null, instanceRoot: root, kind: "portable" };
 }
 
 /** 标记文件是否可作为实例 ID 的读取源（只有 .comfyui-desktop-* 是 ID 文件）。 */
@@ -167,12 +167,12 @@ export function describeComfyInstance(
 ): ComfyInstanceView {
   const dir = (installDir ?? "").trim();
   if (!dir) {
-    return { pathConfigured: false, instanceType: null, desktopManaged: false };
+    return { desktopManaged: false, instanceType: null, pathConfigured: false };
   }
   const c = classifyComfyInstall(dir, exists);
   return {
-    pathConfigured: true,
-    instanceType: c.kind === "unknown" ? null : c.kind,
     desktopManaged: c.kind === "desktop" && !!c.instanceIdFile,
+    instanceType: c.kind === "unknown" ? null : c.kind,
+    pathConfigured: true,
   };
 }

@@ -28,9 +28,9 @@ import { projectScene, useSeededProjects } from "../../../.storybook/screen-fram
  * 内层自己滚的那条契约 —— 历史上这里叠过两条滚动条）。
  */
 const meta = {
-  title: "Workshop/WorkshopPipeline",
   component: WorkshopPipeline,
   parameters: { layout: "fullscreen" },
+  title: "Workshop/WorkshopPipeline",
 } satisfies Meta<typeof WorkshopPipeline>;
 
 export default meta;
@@ -40,8 +40,8 @@ type Story = StoryObj<typeof WorkshopPipelineHarness>;
 /** 适配件：备好真项目，再把整屏摆出来。 */
 function WorkshopPipelineHarness({ extraNames = [] }: { extraNames?: ReadonlyArray<string> }) {
   useSeededProjects({
-    primary: projectScene("namedProject"),
     extraNames,
+    primary: projectScene("namedProject"),
   });
   return (
     <div className="bg-bg text-ink h-180 w-full overflow-hidden">

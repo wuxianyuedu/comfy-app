@@ -25,11 +25,11 @@ type WorkflowPickChipProps = {
 };
 
 export function WorkflowPickChip({
-  value,
-  options,
-  onSelect,
   emptyHint,
   loading = false,
+  onSelect,
+  options,
+  value,
 }: WorkflowPickChipProps) {
   const sel = options.find((option) => option.id === value);
 
@@ -47,9 +47,7 @@ export function WorkflowPickChip({
         )
       }
       items={options.map((option) => ({
-        value: option.id,
         label: option.name,
-        title: option.name,
         prefix: (
           <span
             className={`size-1.5 shrink-0 rounded-full ${
@@ -62,6 +60,8 @@ export function WorkflowPickChip({
             {option.taskType}
           </span>
         ) : undefined,
+        title: option.name,
+        value: option.id,
       }))}
       onSelect={onSelect}
       trigger={

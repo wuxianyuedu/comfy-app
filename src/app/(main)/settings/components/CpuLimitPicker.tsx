@@ -32,8 +32,8 @@ import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 /** 每一档要说的第二句话（第一句是人话名，取自 `CPU_LIMIT_LABELS`）。 */
 const CPU_LIMIT_HINTS: Record<CpuLimitMode, string> = {
   off: "出图占满能用的核（默认在浏览器里启动时）",
-  yield: "只在有人抢时才让路，机器闲着时照样全速",
   throttle: `最多用 ${THROTTLE_CPU_RATIO * 100}% 的核，出图本身会变慢`,
+  yield: "只在有人抢时才让路，机器闲着时照样全速",
 };
 
 export function CpuLimitPicker({ c }: { c: ReadySettingsPageController }) {

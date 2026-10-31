@@ -48,8 +48,8 @@ function setShellForm(on: boolean) {
 
 function resetTabs() {
   useShellTabs.setState({
-    tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
     activeTabId: MAIN_TAB_ID,
+    tabs: [{ closable: false, id: MAIN_TAB_ID, label: "主应用", url: null }],
   });
 }
 
@@ -60,12 +60,12 @@ function openComfyTab(patch: {
   url?: string | null;
 }) {
   useShellTabs.getState().openTab({
+    blockedReason: patch.blockedReason ?? null,
+    blockedUrl: patch.blockedUrl ?? null,
+    closable: true,
     id: "comfyui",
     label: "ComfyUI",
     url: patch.url ?? null,
-    closable: true,
-    blockedReason: patch.blockedReason ?? null,
-    blockedUrl: patch.blockedUrl ?? null,
   });
 }
 
@@ -124,9 +124,9 @@ describe("ShellTabs · 壳内 ComfyUI 页签", () => {
     setShellForm(true);
     const url = "http://127.0.0.1:8188";
     openComfyTab({
-      url,
       blockedReason: "目标拒绝了跨源内嵌（X-Frame-Options: DENY）",
       blockedUrl: url,
+      url,
     });
     const view = mountTabs();
     try {
@@ -188,9 +188,9 @@ describe("ShellTabs · 壳内 ComfyUI 页签", () => {
     setShellForm(true);
     const url = "http://127.0.0.1:8188";
     openComfyTab({
-      url,
       blockedReason: "目标拒绝了跨源内嵌（X-Frame-Options: DENY）",
       blockedUrl: url,
+      url,
     });
     const view = mountTabs();
     try {

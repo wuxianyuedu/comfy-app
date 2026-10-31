@@ -70,19 +70,19 @@ export type EncapsulationTestRunController = {
 
 /** 流程测试的运行编排：登记进共享运行态 + 订阅 SSE。 */
 export function useEncapsulationTestRun({
+  contractIds,
+  mode,
   workflowId,
   workflowName,
-  mode,
-  contractIds,
 }: EncapsulationTestRunArgs): EncapsulationTestRunController {
   const [running, setRunning] = useState(false);
   /* 进度是**单值**（一次只跑一个流程测试）—— 节流、同值短路与卸载守卫
    * 都收在出口里（规范 16 §16.2.4.68）。 */
   const {
-    value: progress,
-    report: reportProgress,
     flush: flushProgress,
+    report: reportProgress,
     reset: resetProgress,
+    value: progress,
   } = useThrottledProgress(0);
   const [error, setError] = useState("");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
@@ -96,16 +96,7 @@ export function useEncapsulationTestRun({
    * 取的是本工作流最近一次**流程测试**（不按模式细分 —— 逐模式测试是连续
    * 动作，最近一次就是用户刚才那次）。 */
   useWorkflowRunResume({
-    workflowId,
-    source: "encapsulation-test",
     handlers: {
-      onProgress: (taskId, pct) => {
-        /* 重入闸门也要跟着恢复：否则「恢复成生成中」之后点按钮会再发一次。 */
-        lock.tryEnter();
-        setTaskId(taskId);
-        setRunning(true);
-        reportProgress(pct);
-      },
       onLog: (taskId, entry) => {
         appendWorkflowRunLog(taskId, entry);
       },
@@ -116,6 +107,13 @@ export function useEncapsulationTestRun({
         }
         setResultUrl(output.url);
       },
+      onProgress: (taskId, pct) => {
+        /* 重入闸门也要跟着恢复：否则「恢复成生成中」之后点按钮会再发一次。 */
+        lock.tryEnter();
+        setTaskId(taskId);
+        setRunning(true);
+        reportProgress(pct);
+      },
       onSettled: (taskId, result) => {
         lock.exit();
         setTaskId(taskId);
@@ -125,6 +123,8 @@ export function useEncapsulationTestRun({
         }
       },
     },
+    source: "encapsulation-test",
+    workflowId,
   });
 
   const run = useCallback<EncapsulationTestRunController["run"]>(
@@ -159,20 +159,19 @@ export function useEncapsulationTestRun({
             /* 登记进共享运行登记表：日志弹窗（两个页签共用同一扇门）按 taskId
              *  找到它，切页签 / 关弹窗都不丢。 */
             registerWorkflowRun({
-              taskId: id,
-              workflowId,
-              workflowName,
-              taskType: mode ?? "",
+              source: "encapsulation-test",
               startedAt: Date.now(),
               status: "running",
-              source: "encapsulation-test",
+              taskId: id,
+              taskType: mode ?? "",
+              workflowId,
+              workflowName,
             });
             await new Promise<void>((resolve) => {
               /* 订阅走 `watchWorkflowRun`（与恢复路径同一份）：它顺手把进度 /
                * 产物 / 终态写进运行登记表 —— 切到「画布节点」页签再切回来时，
                * 这一页的运行视角才不会清零。 */
               watchWorkflowRun(id, {
-                onProgress: (_taskId, pct) => reportProgress(pct),
                 onLog: (taskId, entry) => {
                   appendWorkflowRunLog(taskId, entry);
                 },
@@ -183,6 +182,7 @@ export function useEncapsulationTestRun({
                   }
                   setResultUrl(output.url);
                 },
+                onProgress: (_taskId, pct) => reportProgress(pct),
                 onSettled: (_taskId, result) => {
                   /* 落定写终值：节流窗口会在边界上吃掉最后一次读数。 */
                   flushProgress(result.ok ? 100 : 0);
@@ -195,13 +195,13 @@ export function useEncapsulationTestRun({
             });
           },
           {
+            failureText: "流程测试失败",
+            readResultEnvelope: false,
             report: (kind, detail) => {
               if (kind === "err") {
                 setError(detail);
               }
             },
-            failureText: "流程测试失败",
-            readResultEnvelope: false,
           },
         );
         lock.exit();
@@ -229,12 +229,12 @@ export function useEncapsulationTestRun({
 
   return useMemo(
     () => ({
-      running,
-      progress,
       error,
+      progress,
       resultUrl,
-      taskId,
       run,
+      running,
+      taskId,
       uploadImage,
     }),
     [running, progress, error, resultUrl, taskId, run, uploadImage],

@@ -15,11 +15,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("~/lib/core/logger", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock("./executor-cli", () => ({
-  executeViaComfyCli: vi.fn(),
   cliProcs: new Map(),
+  executeViaComfyCli: vi.fn(),
 }));
 vi.mock("./executor-ws", () => ({ connect: vi.fn() }));
 vi.mock("./executor-finalize", () => ({ finalizeFailure: vi.fn() }));
@@ -34,7 +34,7 @@ const ws = await import("./executor-ws");
 const fin = await import("./executor-finalize");
 const continuation = await import("./executor-continuation");
 const runner = await import("./runner-state");
-const { state, MAX_CONCURRENCY } = runner;
+const { MAX_CONCURRENCY, state } = runner;
 
 /* `log()` 每写一行都排一个 200ms 防抖落库，而那次落库走 runner-state 的
  * `resolveDeps` → dynamic import barrel；本文件把 barrel mock 成「抛错」（用来验
@@ -57,8 +57,8 @@ type ExecJobRow = {
 function fakeRepo(overrides: Record<string, unknown> = {}) {
   return {
     claimNextQueued: vi.fn(async () => /* SAFETY: 类型断言已复核 */ [] as Array<string>),
-    findExecJob: vi.fn(async () => /* SAFETY: 类型断言已复核 */ null as ExecJobRow),
     finalizeFailure: vi.fn(async () => /* SAFETY: 类型断言已复核 */ "written" as const),
+    findExecJob: vi.fn(async () => /* SAFETY: 类型断言已复核 */ null as ExecJobRow),
     listQueuedIds: vi.fn(async () => /* SAFETY: 类型断言已复核 */ [] as Array<string>),
     ...overrides,
   };
@@ -101,10 +101,10 @@ beforeEach(() => {
   vi.mocked(fin.finalizeFailure).mockResolvedValue(undefined);
   vi.mocked(ws.connect).mockResolvedValue(undefined);
   // 每个用例默认注入一份「什么都领不到」的假仓储 + inline 归属。
-  mod.configureDispatch({ taskRepo: fakeRepo(), owner: "inline" });
+  mod.configureDispatch({ owner: "inline", taskRepo: fakeRepo() });
   runner.configureRunner({
-    taskRepo: runnerPersist,
     log: { warn: runnerWarn },
+    taskRepo: runnerPersist,
   });
 });
 
@@ -116,7 +116,7 @@ afterEach(() => {
 describe("就绪门控：不就绪就不领行", () => {
   it("WS 未 OPEN 时不领取，但把「在等什么」写进还在排队的行", async () => {
     const repo = fakeRepo({ listQueuedIds: vi.fn(async () => ["t-wait"]) });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
 
     expect(await mod.claimAndDispatchOnce()).toBeNull();
 
@@ -127,7 +127,7 @@ describe("就绪门控：不就绪就不领行", () => {
 
   it("同一条等待提示只写一次：2s 节拍反复撞不就绪也不能刷屏", async () => {
     const repo = fakeRepo({ listQueuedIds: vi.fn(async () => ["t-once"]) });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
 
     await mod.claimAndDispatchOnce();
     await mod.claimAndDispatchOnce();
@@ -140,7 +140,7 @@ describe("就绪门控：不就绪就不领行", () => {
     const repo = fakeRepo({
       listQueuedIds: vi.fn(async () => ["t-a", "t-b"]),
     });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
 
     await mod.claimAndDispatchOnce();
 
@@ -153,7 +153,7 @@ describe("槽位判据", () => {
   it("本进程在飞数已满时不领行（领了没人跑 = 悬挂）", async () => {
     openWs();
     const repo = fakeRepo();
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
     state().pendingDispatch.add("running-1");
     expect(state().pendingDispatch.size).toBe(MAX_CONCURRENCY);
 
@@ -165,7 +165,7 @@ describe("槽位判据", () => {
   it("库里没行可领时是幂等 no-op（循环每 2s 撞一次不产生副作用）", async () => {
     openWs();
     const repo = fakeRepo();
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
 
     await mod.claimAndDispatchOnce();
     await mod.claimAndDispatchOnce();
@@ -189,7 +189,7 @@ describe("槽位判据", () => {
         throw wrapped;
       }),
     });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
 
     expect(await mod.claimAndDispatchOnce()).toBeNull();
 
@@ -211,22 +211,22 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
     const repo = fakeRepo({
       claimNextQueued: vi.fn(async () => ["t-raw"]),
       findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
         execPayload: rawJson,
-        params: { workflowInputs: [{ nodeId: "1", name: "seed", value: 42 }] },
+        params: { workflowInputs: [{ name: "seed", nodeId: "1", value: 42 }] },
+        workflowName: "w",
       })),
     });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
 
     expect(await mod.claimAndDispatchOnce()).toBe("t-raw");
     // 谓词是本进程的归属，不是硬编码 host。
     expect(repo.claimNextQueued).toHaveBeenCalledWith("inline", 1);
     expect(cli.executeViaComfyCli).toHaveBeenCalledWith(
       expect.objectContaining({
+        overrides: [{ name: "seed", nodeId: "1", value: 42 }],
+        rawJson,
         taskId: "t-raw",
         workflowName: "w",
-        rawJson,
-        overrides: [{ nodeId: "1", name: "seed", value: 42 }],
       }),
     );
     expect(state().pendingDispatch.has("t-raw")).toBe(true);
@@ -239,14 +239,14 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
     const repo = fakeRepo({
       claimNextQueued: vi.fn(async () => ["t-log"]),
       findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
         execPayload: { nodes: [] },
         params: {
-          workflowInputs: [{ nodeId: "1", name: "text", value: "a cat" }],
+          workflowInputs: [{ name: "text", nodeId: "1", value: "a cat" }],
         },
+        workflowName: "w",
       })),
     });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
 
     await mod.claimAndDispatchOnce();
 
@@ -258,14 +258,14 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
   it("等待提示在同一条被领走之后仍在：缓冲重开时接回本轮排队期的行", async () => {
     const repo = fakeRepo({
       claimNextQueued: vi.fn(async () => ["t-rerun"]),
-      listQueuedIds: vi.fn(async () => ["t-rerun"]),
       findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
         execPayload: { nodes: [] },
         params: {},
+        workflowName: "w",
       })),
+      listQueuedIds: vi.fn(async () => ["t-rerun"]),
     });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
     state().settled.add("t-rerun");
     state().finalized.add("t-rerun");
 
@@ -294,9 +294,9 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
     const repo = fakeRepo({
       claimNextQueued: vi.fn(async () => ["t-once-seed"]),
     });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
     state().queuedEntries.set("t-once-seed", [
-      { t: 1, level: "warn", msg: "⏳ 等待 ComfyUI WebSocket 连接就绪…" },
+      { level: "warn", msg: "⏳ 等待 ComfyUI WebSocket 连接就绪…", t: 1 },
     ]);
 
     await mod.claimAndDispatchOnce();
@@ -310,12 +310,12 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
     const repo = fakeRepo({
       claimNextQueued: vi.fn(async () => ["t-empty"]),
       findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
         execPayload: null,
         params: {},
+        workflowName: "w",
       })),
     });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
 
     await mod.claimAndDispatchOnce();
 
@@ -333,7 +333,7 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
       claimNextQueued: vi.fn(async () => ["t-gone"]),
       findExecJob: vi.fn(async () => null),
     });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
 
     await mod.claimAndDispatchOnce();
 
@@ -350,12 +350,12 @@ describe("提交异常必须归还槽位", () => {
       // 领过的行在库里已是 RUNNING，不会再被领到——用 Once 表达这件事
       claimNextQueued: vi.fn().mockResolvedValueOnce(["t-err"]).mockResolvedValue([]),
       findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
         execPayload: { "1": {} },
         params: {},
+        workflowName: "w",
       })),
     });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
 
     await mod.claimAndDispatchOnce();
     await flush();
@@ -371,12 +371,12 @@ describe("提交异常必须归还槽位", () => {
     const repo = fakeRepo({
       claimNextQueued: vi.fn().mockResolvedValueOnce(["t-err-db"]).mockResolvedValue([]),
       findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
         execPayload: { "1": {} },
         params: {},
+        workflowName: "w",
       })),
     });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
 
     await mod.claimAndDispatchOnce();
     await flush();
@@ -393,12 +393,12 @@ describe("提交异常必须归还槽位", () => {
     const repo = fakeRepo({
       claimNextQueued: vi.fn(async () => ["t-ok"]),
       findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
         execPayload: { "1": {} },
         params: {},
+        workflowName: "w",
       })),
     });
-    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    mod.configureDispatch({ owner: "inline", taskRepo: repo });
 
     await mod.claimAndDispatchOnce();
     await flush();
@@ -413,7 +413,7 @@ describe("叶子总线接线（这一刀把它从一条回调扩成两条）", (
     const repo = fakeRepo({
       listQueuedIds: vi.fn(async () => ["t-q1", "t-q2"]),
     });
-    mod.configureDispatch({ taskRepo: repo, owner: "host" });
+    mod.configureDispatch({ owner: "host", taskRepo: repo });
 
     continuation.announceToQueuedTasks("ComfyUI 已就绪，继续执行工作流…", "success");
     await flush();

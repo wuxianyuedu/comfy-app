@@ -13,12 +13,12 @@ import { MESSAGE_CENTER_STORAGE_KEY, useMessageCenterStore } from "./message-cen
 /** 造一条可用的持久化记录（字段与 `MessageRecord` 一致）。 */
 function record(overrides: Record<string, unknown> = {}) {
   return {
+    body: "正文",
     id: "msg_1-1",
     kind: "restart",
-    title: "应用服务已恢复",
-    body: "正文",
-    time: 1_760_000_000_000,
     read: true,
+    time: 1_760_000_000_000,
+    title: "应用服务已恢复",
     ...overrides,
   };
 }
@@ -31,10 +31,10 @@ function stored(): unknown {
 beforeEach(() => {
   window.localStorage.clear();
   useMessageCenterStore.setState({
-    open: false,
-    messages: [],
-    hydrated: false,
     currentRunId: null,
+    hydrated: false,
+    messages: [],
+    open: false,
   });
 });
 
@@ -46,25 +46,25 @@ describe("消息中心持久化：写", () => {
   it("push 出来的消息落盘（含时刻与已读态）", () => {
     useMessageCenterStore
       .getState()
-      .push({ kind: "offline", title: "应用服务已断开", body: "正文" });
+      .push({ body: "正文", kind: "offline", title: "应用服务已断开" });
     const list = /* SAFETY: 类型断言已复核 */ stored() as Array<ReturnType<typeof record>>;
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
       kind: "offline",
-      title: "应用服务已断开",
       read: false,
+      title: "应用服务已断开",
     });
     expect(list[0]!.time).toBeGreaterThan(0);
   });
 
   it("clear 之后落盘的是空列表（不留旧消息的残影）", () => {
-    useMessageCenterStore.getState().push({ kind: "info", title: "A", body: "a" });
+    useMessageCenterStore.getState().push({ body: "a", kind: "info", title: "A" });
     useMessageCenterStore.getState().clear();
     expect(stored()).toEqual([]);
   });
 
   it("开关面板不碰存储（只有消息变化才写）", () => {
-    useMessageCenterStore.getState().push({ kind: "info", title: "A", body: "a" });
+    useMessageCenterStore.getState().push({ body: "a", kind: "info", title: "A" });
     const before = window.localStorage.getItem(MESSAGE_CENTER_STORAGE_KEY);
     useMessageCenterStore.getState().setOpen(true);
     useMessageCenterStore.getState().toggleOpen();
@@ -79,7 +79,7 @@ describe("消息中心持久化：恢复", () => {
       JSON.stringify([record({ id: "msg_a", title: "旧的那条" })]),
     );
     useMessageCenterStore.getState().hydrate();
-    const { messages, hydrated } = useMessageCenterStore.getState();
+    const { hydrated, messages } = useMessageCenterStore.getState();
     expect(hydrated).toBe(true);
     expect(messages).toHaveLength(1);
     expect(messages[0]!.title).toBe("旧的那条");
@@ -150,7 +150,7 @@ describe("消息中心持久化：启动戳（runId）", () => {
     useMessageCenterStore.getState().setCurrentRunId("a1b2c3");
     useMessageCenterStore
       .getState()
-      .push({ kind: "offline", title: "应用服务已断开", body: "正文" });
+      .push({ body: "正文", kind: "offline", title: "应用服务已断开" });
 
     const { messages } = useMessageCenterStore.getState();
     expect(messages[0]!.runId).toBe("a1b2c3");
@@ -161,7 +161,7 @@ describe("消息中心持久化：启动戳（runId）", () => {
     useMessageCenterStore.getState().setCurrentRunId("a1b2c3");
     useMessageCenterStore
       .getState()
-      .push({ kind: "offline", title: "T", body: "b", runId: "old001" });
+      .push({ body: "b", kind: "offline", runId: "old001", title: "T" });
     expect(useMessageCenterStore.getState().messages[0]!.runId).toBe("old001");
   });
 
@@ -169,7 +169,7 @@ describe("消息中心持久化：启动戳（runId）", () => {
     /* 这两者的区别就是上一条注释里说的那句：补成当前启动等于断言「它属于现在
      * 这次启动」——而面板正是拿它分组的，断言错了就是把两次启动并成一次。 */
     useMessageCenterStore.getState().setCurrentRunId("a1b2c3");
-    useMessageCenterStore.getState().push({ kind: "offline", title: "T", body: "b", runId: null });
+    useMessageCenterStore.getState().push({ body: "b", kind: "offline", runId: null, title: "T" });
     expect(useMessageCenterStore.getState().messages[0]!.runId).toBeNull();
   });
 
@@ -186,7 +186,7 @@ describe("消息中心持久化：启动戳（runId）", () => {
 
   it("currentRunId 是运行时事实，**不**落盘（刷新后由探活链路重新学到）", () => {
     useMessageCenterStore.getState().setCurrentRunId("a1b2c3");
-    useMessageCenterStore.getState().push({ kind: "info", title: "A", body: "a" });
+    useMessageCenterStore.getState().push({ body: "a", kind: "info", title: "A" });
     const raw = window.localStorage.getItem(MESSAGE_CENTER_STORAGE_KEY) ?? "";
     expect(raw).not.toContain("currentRunId");
   });

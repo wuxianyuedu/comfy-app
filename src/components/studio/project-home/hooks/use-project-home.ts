@@ -92,16 +92,16 @@ export function useProjectHome(): ProjectHomeController {
     () => {
       void load();
     },
-    { ms: runActive ? ACTIVE_REFRESH_MS : null, immediate: false },
+    { immediate: false, ms: runActive ? ACTIVE_REFRESH_MS : null },
   );
 
   const overview = deriveProjectOverview(runView, progress);
 
   return {
-    projectId,
-    overview,
     headline: overviewHeadline(overview),
     loading,
+    overview,
+    projectId,
     refresh: load,
     run,
   };

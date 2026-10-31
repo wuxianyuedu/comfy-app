@@ -23,8 +23,8 @@ afterEach(cleanup);
  * 单选语义 + 选中档四层俱在 + 悬停值回钉。
  */
 const logs: Array<TaskLogEntry> = [
-  { t: 1, level: "info", msg: "开始" },
-  { t: 2, level: "warn", msg: "慢" },
+  { level: "info", msg: "开始", t: 1 },
+  { level: "warn", msg: "慢", t: 2 },
 ];
 
 describe("任务日志级别筛选 chip（ISSUE #1925）", () => {

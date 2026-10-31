@@ -33,15 +33,15 @@ const ROLE_COLOR = portChipStyle("IMAGE").color;
  * 颜色由 `computeNodePalette()` 给出 —— 不手抄色值。
  */
 const meta = {
-  title: "Studio/Canvas/NodeFrost",
-  component: NodeFrost,
-  args: { zoom: 1, color: ROLE_COLOR, nodeMode: 4 },
+  args: { color: ROLE_COLOR, nodeMode: 4, zoom: 1 },
   argTypes: {
-    zoom: { control: { type: "range", min: 0.1, max: 2, step: 0.05 } },
     color: { control: { type: "color" } },
     nodeMode: { control: { type: "inline-radio" }, options: [0, 2, 4] },
+    zoom: { control: { max: 2, min: 0.1, step: 0.05, type: "range" } },
   },
+  component: NodeFrost,
   parameters: { layout: "fullscreen" },
+  title: "Studio/Canvas/NodeFrost",
 } satisfies Meta<typeof NodeFrost>;
 
 export default meta;
@@ -49,7 +49,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** 节点卡片的摆法（`relative` + `overflow-hidden` 是毛玻璃能被裁回边界的前提）。 */
-function FrostCard({ zoom, nodeMode, label }: { label: string; nodeMode: number; zoom: number }) {
+function FrostCard({ label, nodeMode, zoom }: { label: string; nodeMode: number; zoom: number }) {
   const palette = computeNodePalette(
     /* SAFETY: 类型断言已复核 */ { mode: nodeMode } as Parameters<typeof computeNodePalette>[0],
     { color: ROLE_COLOR },

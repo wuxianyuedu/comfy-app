@@ -62,25 +62,25 @@ import { ALL_WORKFLOW_TYPES, type WorkflowCategory } from "~/lib/workflow/workfl
 
 /* ── per-category pill colors（走语义 token，规范 03 §3.6.2）── */
 const CATEGORY_PILL: Record<WorkflowCategory, string> = {
+  audio: "bg-warning/15 ring-warning/25 ring-1 ring-inset",
   image: "bg-primary-500/15 ring-1 ring-inset ring-primary-500/25",
   video: "bg-info/15 ring-info/25 ring-1 ring-inset",
-  audio: "bg-warning/15 ring-warning/25 ring-1 ring-inset",
 };
 const CATEGORY_TEXT: Record<WorkflowCategory, string> = {
+  audio: "text-warning-strong",
   image: "text-primary-strong",
   video: "text-info-strong",
-  audio: "text-warning-strong",
 };
 const CATEGORY_LABEL: Record<WorkflowCategory, string> = {
+  audio: "音频",
   image: "图像",
   video: "视频",
-  audio: "音频",
 };
 /* 当前页签下划线的高亮色 */
 const CATEGORY_ACCENT: Record<WorkflowCategory, string> = {
+  audio: "bg-warning",
   image: "bg-primary-400",
   video: "bg-info",
-  audio: "bg-warning",
 };
 
 type MultiModeSelectProps = {
@@ -99,12 +99,12 @@ type MultiModeSelectProps = {
 const POPOVER_MAX_H = 360;
 
 export function MultiModeSelect({
-  modes,
-  defaultMode,
-  onChange,
   className = "",
+  defaultMode,
   disabled = false,
   hideExtraBadge = false,
+  modes,
+  onChange,
 }: MultiModeSelectProps) {
   const [open, setOpen] = useState(false);
   // 浮层当前展示的分类页签（图像/视频/音频）。

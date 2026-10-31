@@ -69,14 +69,14 @@ import { cn } from "~/lib/utils";
  *     ProgressTrack 自带、无测试依赖）。
  */
 export function ProgressBar({
-  value,
-  label,
-  showValue = true,
-  className,
-  trackClassName,
-  fillClassName,
-  minVisible,
   ariaLabel,
+  className,
+  fillClassName,
+  label,
+  minVisible,
+  showValue = true,
+  trackClassName,
+  value,
 }: {
   /**
    * 可访问名。只在**条上没有可见文字**时给（如分段健康度：一根细条代表一段

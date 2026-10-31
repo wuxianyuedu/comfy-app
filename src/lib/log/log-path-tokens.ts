@@ -400,7 +400,7 @@ export function findLogPathTokens(text: string): Array<LogPathToken> {
        * 起头的形态，盘符 / UNC 候选不受影响（它们在 Windows 上不可能是 URL）。 */
       !(cleaned.startsWith("/") && isUrlNotDiskPath(text, start))
     ) {
-      tokens.push({ start, end: start + cleaned.length, text: cleaned });
+      tokens.push({ end: start + cleaned.length, start, text: cleaned });
     }
     /* 从**候选的原始末尾**继续扫（不是从 `start + cleaned.length`）：被裁掉的
      * 尾巴里可能还藏着下一段路径（`F:\a\b, F:\c\d` 的逗号与空格由下一轮

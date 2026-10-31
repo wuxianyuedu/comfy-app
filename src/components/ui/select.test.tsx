@@ -24,11 +24,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 const OPTIONS = /* SAFETY: 类型断言已复核 */ ["png", "jpg", "webp"] as const;
 
 function Demo({
+  alignItemWithTrigger,
   defaultValue = "png",
   onValueChange,
-  size = "default",
   positionerClassName,
-  alignItemWithTrigger,
+  size = "default",
 }: {
   alignItemWithTrigger?: boolean;
   defaultValue?: string;

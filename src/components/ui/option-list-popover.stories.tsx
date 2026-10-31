@@ -16,15 +16,15 @@ import { OptionListPopover, type OptionListItem } from "~/components/ui/option-l
  * 行内容可以带前后装饰（画布 chip 靠它挂颜色点与计数）。
  */
 const ITEMS: Array<OptionListItem> = [
-  { value: "workflow", label: "工作流名", title: "按工作流名过滤" },
-  { value: "form", label: "形态", suffix: "3" },
-  { value: "source", label: "来源", suffix: "12" },
-  { value: "model", label: "模型标签" },
-  { value: "empty", label: "空目录（没有命中时的行）", suffix: "0" },
+  { label: "工作流名", title: "按工作流名过滤", value: "workflow" },
+  { label: "形态", suffix: "3", value: "form" },
+  { label: "来源", suffix: "12", value: "source" },
+  { label: "模型标签", value: "model" },
+  { label: "空目录（没有命中时的行）", suffix: "0", value: "empty" },
 ];
 
 /** chip 触发器：真机上由调用处给外观（配色 / 尺寸 / 圆角），这里照画布口径给。 */
-function ChipTrigger({ label, count }: { count: number; label: string }) {
+function ChipTrigger({ count, label }: { count: number; label: string }) {
   return (
     <span className="border-border-strong bg-canvas-deep flex items-center gap-1.5 rounded-lg border px-2 py-0.5">
       <span className="text-ink-muted text-[10px]">{label}</span>
@@ -53,7 +53,7 @@ type StoryArgs = {
 };
 
 /** 适配件：把 Args 里那几项拼成一个真触发器，并补上选中回调。 */
-function PopoverWithTrigger({ triggerLabel, triggerCount, ...rest }: StoryArgs) {
+function PopoverWithTrigger({ triggerCount, triggerLabel, ...rest }: StoryArgs) {
   return (
     <OptionListPopover
       {...rest}
@@ -85,17 +85,17 @@ function ControlledOpenSample() {
 }
 
 const meta = {
-  title: "UI/OptionListPopover",
-  component: PopoverWithTrigger,
   args: {
-    value: "form",
     items: ITEMS,
-    triggerLabel: "形态",
-    triggerCount: 3,
-    triggerTitle: "按形态过滤",
     triggerClassName:
       "border-border-strong bg-canvas-deep shrink-0 rounded-lg border transition-colors hover:border-primary/40",
+    triggerCount: 3,
+    triggerLabel: "形态",
+    triggerTitle: "按形态过滤",
+    value: "form",
   },
+  component: PopoverWithTrigger,
+  title: "UI/OptionListPopover",
 } satisfies Meta<StoryArgs>;
 
 export default meta;
@@ -113,21 +113,21 @@ export const DecoratedRows: Story = {
   args: {
     items: [
       {
-        value: "local",
         label: "本地模型",
         prefix: <span className="bg-success size-2 rounded-full" />,
         suffix: <span className="text-ink-faint text-[10px]">本机</span>,
+        value: "local",
       },
       {
-        value: "remote",
         label: "在线模型",
         prefix: <span className="bg-info size-2 rounded-full" />,
         suffix: <span className="text-ink-faint text-[10px]">API</span>,
+        value: "remote",
       },
       {
-        value: "missing",
         label: "未配置的条目",
         prefix: <span className="bg-warning size-2 rounded-full" />,
+        value: "missing",
       },
     ],
     value: "local",
@@ -139,7 +139,7 @@ export const DecoratedRows: Story = {
  * 说法不同：「没有可选的」与「还没有建过」是两件事）。
  */
 export const Empty: Story = {
-  args: { items: [], value: "", emptyHint: "还没有可选的工作流" },
+  args: { emptyHint: "还没有可选的工作流", items: [], value: "" },
 };
 
 /** 禁用态：触发器不可点开（画布锁定 / 权限不足时的形态）。 */

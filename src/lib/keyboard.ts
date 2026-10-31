@@ -19,14 +19,14 @@
 
 /** 本仓库用到的具名键（`event.key` 的 W3C 口径字面量）。 */
 export const KEY = /* SAFETY: 类型断言已复核 */ {
-  Enter: "Enter",
-  Escape: "Escape",
-  Tab: "Tab",
-  Space: "Space",
-  ArrowUp: "ArrowUp",
   ArrowDown: "ArrowDown",
   ArrowLeft: "ArrowLeft",
   ArrowRight: "ArrowRight",
+  ArrowUp: "ArrowUp",
+  Enter: "Enter",
+  Escape: "Escape",
+  Space: "Space",
+  Tab: "Tab",
 } as const;
 
 /** 具名键的字面量类型。 */

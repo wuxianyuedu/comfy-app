@@ -156,7 +156,6 @@ export function useConsole(): ConsoleController {
 
       void runConsoleCommand({
         command: line,
-        signal: controller.signal,
         onEvent: (event: ConsoleClientEvent) => {
           if (!aliveRef.current) {
             return;
@@ -198,15 +197,16 @@ export function useConsole(): ConsoleController {
           append(`\n[进程已退出，退出码 ${event.code ?? "未知"}]\n`);
           finish({
             command: echoed,
+            durationMs: event.durationMs,
+            ok: !event.killed && event.code === 0,
             verdict: event.killed
               ? "已停止"
               : event.code === 0
                 ? "成功"
                 : `失败（${event.code ?? "未知"}）`,
-            ok: !event.killed && event.code === 0,
-            durationMs: event.durationMs,
           });
         },
+        signal: controller.signal,
       }).then((outcome) => {
         if (!aliveRef.current) {
           return;
@@ -283,21 +283,21 @@ export function useConsole(): ConsoleController {
   );
 
   return {
+    canRun,
+    clear,
     command,
-    setCommand,
-    phase,
-    output,
-    runningCommand,
     exitCode,
+    fill,
+    history,
+    maxCommandChars: MAX_COMMAND_CHARS,
+    output,
+    phase,
+    run,
+    runningCommand,
+    setCommand,
+    stop,
+    syntaxWarning,
     verdict,
     verdictOk,
-    history,
-    canRun,
-    maxCommandChars: MAX_COMMAND_CHARS,
-    syntaxWarning,
-    run,
-    stop,
-    clear,
-    fill,
   };
 }

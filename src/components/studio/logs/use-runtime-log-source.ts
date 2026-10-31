@@ -77,13 +77,13 @@ type Snapshot = {
 };
 
 const EMPTY_SNAPSHOT: Snapshot = {
-  text: "",
   segments: [],
-  sessions: [],
   sessionId: null,
+  sessions: [],
+  text: "",
+  total: 0,
   truncated: false,
   windowed: false,
-  total: 0,
 };
 
 /** 解析结果按上限取尾部（与「只看最新一段」的口径一致）。 */
@@ -104,9 +104,9 @@ export type RuntimeLogSourceOptions = {
 };
 
 export function useRuntimeLogSource({
-  source,
   active,
   parse = parseAnsiSegments,
+  source,
 }: RuntimeLogSourceOptions): RuntimeLogSourceState {
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY_SNAPSHOT);
   /* 选中的会话放在 ref：轮询回调要读它，但不该因「用户切换下拉」重建定时器。 */
@@ -153,13 +153,13 @@ export function useRuntimeLogSource({
     sessionRef.current = slice.selectedId;
     const text = slice.content.replace(CR_RE, "");
     setSnapshot({
-      text,
       segments: capSegments(parse(text)),
-      sessions: slice.sessions,
       sessionId: slice.selectedId,
+      sessions: slice.sessions,
+      text,
+      total: slice.total,
       truncated: slice.truncated,
       windowed: slice.windowed,
-      total: slice.total,
     });
   }, [source, parse]);
 
@@ -181,5 +181,5 @@ export function useRuntimeLogSource({
     [pull],
   );
 
-  return { ...snapshot, selectSession, refresh: pull };
+  return { ...snapshot, refresh: pull, selectSession };
 }

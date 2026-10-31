@@ -103,7 +103,7 @@ export type AppServiceFacts = {
 
 /** 初始游标：首帧还没有任何事实，因此不会产出边沿。 */
 export function initialAppServiceCursor(): AppServiceEventCursor {
-  return { state: "starting", processIsNew: false, offlineAt: null };
+  return { offlineAt: null, processIsNew: false, state: "starting" };
 }
 
 /**
@@ -124,7 +124,7 @@ export function deriveAppServiceEvent(
   if (facts.state === "offline" && prev.state !== "offline") {
     return {
       cursor: { ...cursor, offlineAt: now },
-      event: { type: "disconnect", at: now },
+      event: { at: now, type: "disconnect" },
     };
   }
 
@@ -132,7 +132,7 @@ export function deriveAppServiceEvent(
    * 一条。不并入上面那一支，是因为用户能做的动作不同 —— 那边等它起来/恢复，
    * 这边只能重启应用；混成同一条消息等于把出口写错。 */
   if (facts.state === "stale" && prev.state !== "stale") {
-    return { cursor, event: { type: "route-stale", at: now } };
+    return { cursor, event: { at: now, type: "route-stale" } };
   }
 
   /* ② 进程换了一个（冷启动或真重启）：这一条同时覆盖「应用重启了」与「本次会话
@@ -140,11 +140,11 @@ export function deriveAppServiceEvent(
    * 「此刻为真」——后者每拍都成立，会把刷新也记成一次启动。 */
   if (facts.processIsNew && !prev.processIsNew) {
     return {
-      cursor: { ...cursor, processIsNew: true, offlineAt: null },
+      cursor: { ...cursor, offlineAt: null, processIsNew: true },
       event: {
-        type: "start",
         at: now,
         offlineAt: prev.offlineAt,
+        type: "start",
         unprobedMs: facts.unprobedMs,
       },
     };
@@ -157,9 +157,9 @@ export function deriveAppServiceEvent(
     return {
       cursor: { ...cursor, offlineAt: null },
       event: {
-        type: "start",
         at: now,
         offlineAt: prev.offlineAt,
+        type: "start",
         unprobedMs: facts.unprobedMs,
       },
     };
@@ -233,17 +233,17 @@ export function describeAppServiceDisconnect(
   const head = `断开时间 ${formatClock(at)}。` + "断开期间页面里的查询、保存与任务提交都会失败。\n";
   if (notice) {
     return {
-      title: "应用服务已断开",
       body: head + `原因：${notice.why}。${notice.detail}。\n` + `建议：${notice.action}。`,
+      title: "应用服务已断开",
     };
   }
   return {
-    title: "应用服务已断开",
     body:
       head +
       "这一刻读不到结束原因（记录由进程结束那一刻的旁证人写入 run/app-service-exit.json，" +
       "浏览器环境没有壳这条存活通道时读不到它，也可能是这一次断开根本没留下记录）。" +
       "服务恢复后会作为「应用服务已恢复」再记一条，能拿到的原因与建议都在那条里。",
+    title: "应用服务已断开",
   };
 }
 
@@ -256,7 +256,6 @@ export function describeAppServiceDisconnect(
  */
 export function describeAppServiceRouteStale(at: number): AppServiceMessageText {
   return {
-    title: "应用服务路由异常",
     body:
       `发现时间 ${formatClock(at)}。` +
       "应用服务在应答（页面还能打开），但它的探活端点返回 404 —— 说明这一次启动的路由表不完整，" +
@@ -264,6 +263,7 @@ export function describeAppServiceRouteStale(at: number): AppServiceMessageText 
       "这一步与你的代码无关，也不是数据丢了：它是 Turbopack 开发服务的会话级路由失效。" +
       "关闭应用窗口、重新启动一次即可重建路由表。\n" +
       "重启后仍如此，则删掉项目根目录下的 .next 目录再启动一次。",
+    title: "应用服务路由异常",
   };
 }
 
@@ -301,7 +301,7 @@ export type AppServiceStartInput = {
  * 「启动」。三档对三件事，不把「重启」说成「首次启动」。
  */
 export function describeAppServiceStart(input: AppServiceStartInput): AppServiceMessageText {
-  const { at, offlineAt, exitAt, notice, unprobedMs } = input;
+  const { at, exitAt, notice, offlineAt, unprobedMs } = input;
   const recovered = offlineAt !== null;
   const span = recovered ? formatOfflineSpan(offlineAt, at) : null;
 
@@ -374,5 +374,5 @@ export function describeAppServiceStart(input: AppServiceStartInput): AppService
     : notice !== null
       ? "应用服务已重启"
       : "应用服务已启动";
-  return { title, body: lines.join("\n") };
+  return { body: lines.join("\n"), title };
 }

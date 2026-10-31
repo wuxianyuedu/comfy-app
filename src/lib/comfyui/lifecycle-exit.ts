@@ -66,10 +66,10 @@ export function formatUptime(ms: number | null): string {
 
 /** 判断「被信号杀掉」时，最值得提醒用户去查的那几种。 */
 const SIGNAL_ADVICE: Record<string, string> = {
+  SIGINT: "SIGINT 来自 Ctrl+C：通常是有人在跑它的窗口里按了中断。",
   SIGKILL:
     "SIGKILL 是外部动作、不给进程留遗言：常见于任务管理器结束进程、Windows 上编排器/Job Object 关闭时的连带杀树、或系统内存不足被 OOM 杀手挑中。",
   SIGTERM: "SIGTERM 是请求退出：常见于关机/注销、或外部脚本调用 kill。",
-  SIGINT: "SIGINT 来自 Ctrl+C：通常是有人在跑它的窗口里按了中断。",
 };
 
 /** 非零退出码那一行的「下一步看什么」——按会话模式分。
@@ -98,45 +98,45 @@ export function describeComfyExit(facts: ComfyExitFacts): ComfyExitReport {
 
   if (facts.stopRequested) {
     return {
-      reason: "用户主动关闭",
-      detail: tail,
       advice: null,
+      detail: tail,
+      reason: "用户主动关闭",
     };
   }
 
   if (facts.signal !== null) {
     return {
-      reason: `被信号终止（${facts.signal}）`,
-      detail: tail,
       advice:
         SIGNAL_ADVICE[facts.signal] ??
         `进程被信号 ${facts.signal} 终止 —— 它自己不会发这个信号，通常是外部动作。`,
+      detail: tail,
+      reason: `被信号终止（${facts.signal}）`,
     };
   }
 
   if (facts.code === 0) {
     return {
-      reason: "正常收工（exit 0）",
-      detail: tail,
       advice:
         "退出码 0 说明它自己认为跑完了。若你并没有关它，留意是不是被别的入口（另一个实例 / 脚本）接管或顶掉了。",
+      detail: tail,
+      reason: "正常收工（exit 0）",
     };
   }
 
   if (facts.code !== null) {
     return {
-      reason: `异常退出（exit ${facts.code}）`,
-      detail: tail,
       advice: nonZeroExitAdvice(facts.mode),
+      detail: tail,
+      reason: `异常退出（exit ${facts.code}）`,
     };
   }
 
   /* 保活模式拿不到退出码（进程不是我们的子进程）——如实说清，别编一个原因。 */
   return {
-    reason: "进程消失（保活模式拿不到退出码）",
-    detail: tail,
     advice:
       "保活模式的进程故意脱离进程树，应用只能从外面看到它不在了。要看退出码请改用「关闭应用时连带关闭 ComfyUI」（bound 模式，直连 stdio 与退出事件）。",
+    detail: tail,
+    reason: "进程消失（保活模式拿不到退出码）",
   };
 }
 
@@ -205,7 +205,7 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
       stop();
       return;
     }
-    const lookup = await deps.findPid().catch(() => ({ pid: null, failed: true }));
+    const lookup = await deps.findPid().catch(() => ({ failed: true, pid: null }));
     if (stopped) {
       return;
     }
@@ -359,11 +359,11 @@ export function reportKeepAliveExit(opts: {
 }): ComfyExitReport {
   const report = describeComfyExit({
     code: null,
+    mode: "keepAlive",
+    pid: opts.facts.pid,
     signal: null,
     stopRequested: opts.stopRequested,
-    pid: opts.facts.pid,
     uptimeMs: opts.facts.uptimeMs,
-    mode: "keepAlive",
   });
   opts.appendRuntimeLog(`■ ComfyUI 保活进程已退出：${report.reason}`);
   opts.appendRuntimeLog(`[exit] ${report.reason}（${report.detail}）`);

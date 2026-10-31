@@ -71,10 +71,10 @@ export function FilmStudio() {
   const handleAddShot = useCallback(() => {
     const newId = `shot-${Date.now()}`;
     const newShot: ShotListItem = {
-      id: newId,
-      name: `镜头 ${shots.length + 1}`,
       duration: "00:03.0",
+      id: newId,
       mode: "img2video",
+      name: `镜头 ${shots.length + 1}`,
       status: "IDLE",
     };
     setShots((prev) => [...prev.map((prev) => ({ ...prev, selected: false })), newShot]);

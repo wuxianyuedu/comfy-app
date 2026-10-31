@@ -76,7 +76,6 @@ export function beginStaleRun(): StaleRunGuard {
   let stale = false;
   const isStale = () => stale;
   return {
-    isStale,
     commit(write) {
       if (!stale) {
         write();
@@ -85,6 +84,7 @@ export function beginStaleRun(): StaleRunGuard {
     dispose() {
       stale = true;
     },
+    isStale,
   };
 }
 

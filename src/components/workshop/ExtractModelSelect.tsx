@@ -22,8 +22,8 @@ function optionLabel(name: string, badge: string): React.ReactNode {
  *  在展开时实时探测服务。选完本地 / 远端模型后才去校验对应服务是否可达，
  *  并把结果以内联提示展示在下方。无「工具」通道（确定性解析已移除）。 */
 export function ExtractModelSelect({
-  value,
   onChange,
+  value,
 }: {
   onChange: (value: string) => void;
   value: string;
@@ -58,7 +58,7 @@ export function ExtractModelSelect({
       guard.commit(() =>
         setAvailByKey((prev) => ({
           ...prev,
-          [selKey]: res.ok ? { kind: "ok" } : { kind: "err", detail: res.detail },
+          [selKey]: res.ok ? { kind: "ok" } : { detail: res.detail, kind: "err" },
         })),
       );
     });

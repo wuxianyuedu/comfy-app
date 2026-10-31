@@ -16,20 +16,20 @@ import { STAGE_DEFS } from "~/components/workshop/stage-config";
  * 所以 story 里由两档摆放位置各给一次 —— 那正是这条约定要看到的形态。
  */
 const meta = {
-  title: "Workshop/WorkshopStageItem",
-  component: WorkshopStageItem,
   args: {
+    isCurrent: false,
     label: "场景分镜",
-    subtitle: "8 镜已排 · 3 个场景",
+    onSelect: () => undefined,
     ordinal: 3,
     ratio: 0.5,
-    isCurrent: false,
-    onSelect: () => undefined,
+    subtitle: "8 镜已排 · 3 个场景",
   },
   argTypes: {
-    ratio: { control: { type: "range", min: 0, max: 1, step: 0.05 } },
     isCurrent: { control: { type: "boolean" } },
+    ratio: { control: { max: 1, min: 0, step: 0.05, type: "range" } },
   },
+  component: WorkshopStageItem,
+  title: "Workshop/WorkshopStageItem",
 } satisfies Meta<typeof WorkshopStageItem>;
 
 export default meta;

@@ -16,13 +16,13 @@ afterEach(cleanup);
 
 function widget(overrides: Partial<EnrichedWidget>): EnrichedWidget {
   return {
-    ioKey: "5::widget::x",
-    direction: "input",
-    kind: "widget",
-    nodeId: "5",
-    name: "x",
-    type: "INT",
     control: "int",
+    direction: "input",
+    ioKey: "5::widget::x",
+    kind: "widget",
+    name: "x",
+    nodeId: "5",
+    type: "INT",
     ...overrides,
   };
 }
@@ -31,19 +31,19 @@ function renderSize(width: number, height: number) {
   const { container } = render(
     <DimensionControl
       group={{
-        kind: "dimension",
         groupId: "dim-1",
-        width: widget({
-          ioKey: "5::widget::width",
-          name: "width",
-          label: "宽度",
-          defaultValue: width,
-        }),
         height: widget({
-          ioKey: "5::widget::height",
-          name: "height",
-          label: "高度",
           defaultValue: height,
+          ioKey: "5::widget::height",
+          label: "高度",
+          name: "height",
+        }),
+        kind: "dimension",
+        width: widget({
+          defaultValue: width,
+          ioKey: "5::widget::width",
+          label: "宽度",
+          name: "width",
         }),
       }}
       set={() => undefined}

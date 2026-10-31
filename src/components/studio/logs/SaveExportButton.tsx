@@ -13,8 +13,8 @@ const SAVED_FLASH_MS = 8000;
 
 /* 「未亮起」的空载荷：模块级常量，身份稳定（见 `useFlashLatch`）。 */
 const EMPTY_SAVED: { failed: boolean; savedPath: string | null } = {
-  savedPath: null,
   failed: false,
+  savedPath: null,
 };
 
 /**
@@ -46,7 +46,7 @@ export function SaveExportButton({
    * 两个独立定时器在时长一改就会漂移，留下「已保存」还在、失败标记已经
    * 消失的自相矛盾画面。 */
   const saved = useFlashLatch(SAVED_FLASH_MS, EMPTY_SAVED);
-  const { savedPath, failed } = saved.value;
+  const { failed, savedPath } = saved.value;
 
   /* 用 `.then` 而不是 `async` 处理器：逻辑层已经是 Promise，这里只负责把
    * 结果翻成三种可见状态（不用在视图里写 async 状态机，见规范 17）。 */
@@ -55,7 +55,7 @@ export function SaveExportButton({
       /* `relativePath` 收成局部变量：`ok` 这个布尔量记不住「里面那个字段非空」，
        * 在原地补 `!` 等于让类型替运行时兜底。 */
       const relativePath = result.ok ? (result.relativePath ?? null) : null;
-      saved.flash({ savedPath: relativePath, failed: !relativePath });
+      saved.flash({ failed: !relativePath, savedPath: relativePath });
     });
   };
 

@@ -21,12 +21,12 @@ type FilmStudioShotListPanelProps = {
 
 export function FilmStudioShotListPanel({
   c,
-  listShots,
-  selectedShotId,
   isProjectSource,
-  onSelectShot,
+  listShots,
   onAddShot,
   onReviewShot,
+  onSelectShot,
+  selectedShotId,
 }: FilmStudioShotListPanelProps) {
   return (
     <aside className="border-border-subtle bg-panel-deep flex w-65 shrink-0 flex-col border-r">

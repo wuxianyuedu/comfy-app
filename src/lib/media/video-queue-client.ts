@@ -30,9 +30,9 @@ export const videoTaskRowSchema = z.object({
   /* `type` / `status` 刻意**不给默认值**：这两个是「这一行是不是视频任务」
    * 的判据（下方 `parseVideoRows` 按 `type` 过滤），补一个兜底会把「线上
    * 没发这一列」伪装成一条正常行 —— 同 `videoPath` 的理由，见下。 */
-  type: z.string(),
-  status: z.string(),
   prompt: z.string().default(""),
+  status: z.string(),
+  type: z.string(),
   workflowName: z.string().default(""),
   /**
    * 成片的本地路径；没有视频产出的任务为 **null**（不是缺键、也不是空串）。
@@ -42,8 +42,8 @@ export const videoTaskRowSchema = z.object({
    * 都没有视频」—— 那正是这一族此前静默坏掉的方式（见文件头的契约说明，
    * 反向验证在 `tests/task-list-wire-contract.test.ts`）。
    */
-  videoPath: z.string().nullable(),
   error: z.string().nullable().default(null),
+  videoPath: z.string().nullable(),
 });
 
 export type VideoTaskRow = z.infer<typeof videoTaskRowSchema>;
@@ -81,12 +81,12 @@ export function parseVideoRows(raw: unknown): Array<VideoTask> {
       continue;
     }
     out.push({
-      id: parsed.data.id,
-      status: parsed.data.status,
-      prompt: parsed.data.prompt,
-      workflowName: parsed.data.workflowName,
-      video: parsed.data.videoPath,
       error: parsed.data.error,
+      id: parsed.data.id,
+      prompt: parsed.data.prompt,
+      status: parsed.data.status,
+      video: parsed.data.videoPath,
+      workflowName: parsed.data.workflowName,
     });
   }
   return out;

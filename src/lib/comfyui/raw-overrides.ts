@@ -384,7 +384,7 @@ function collectSubgraphTargets(raw: JsonRecord, wrapper: RawUiNode): SubgraphTa
     }
   }
 
-  return { sub, innerById, targetByName, defInputs };
+  return { defInputs, innerById, sub, targetByName };
 }
 
 /** 宿主 inputs[] 里「控件型提升输入名 → widgets_values 下标」（**我们的判据**）。

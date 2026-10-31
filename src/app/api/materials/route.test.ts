@@ -17,20 +17,28 @@ import type { NextRequest } from "next/server";
 import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { dirEntries, fileStats, disk, userMock } = vi.hoisted(() => ({
+const { dirEntries, disk, fileStats, userMock } = vi.hoisted(() => ({
   dirEntries: new Map<string, { names?: Array<string>; subdirs?: Array<string> }>(),
-  fileStats: new Map<string, { mtime: Date; size: number }>(),
   disk: {
-    reads: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
     mkdir: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
-    writeFile: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    reads: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
     unlink: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    writeFile: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
   },
+  fileStats: new Map<string, { mtime: Date; size: number }>(),
   userMock: vi.fn<() => Promise<{ id: string } | null>>(),
 }));
 
 vi.mock("fs", () => ({
   promises: {
+    access: async (p: string) => {
+      if (!fileStats.has(p)) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
+    },
+    mkdir: async (p: string) => {
+      disk.mkdir.push(p);
+    },
     readdir: async (dir: string, opts?: { withFileTypes?: boolean }) => {
       disk.reads.push(`readdir:${dir}`);
       const entry = dirEntries.get(dir);
@@ -39,8 +47,8 @@ vi.mock("fs", () => ({
       }
       if (opts?.withFileTypes) {
         return (entry.subdirs ?? []).map((name) => ({
-          name,
           isDirectory: () => true,
+          name,
         }));
       }
       return entry.names ?? [];
@@ -51,13 +59,7 @@ vi.mock("fs", () => ({
       if (!f) {
         throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
       }
-      return { isFile: () => true, size: f.size, mtime: f.mtime };
-    },
-    mkdir: async (p: string) => {
-      disk.mkdir.push(p);
-    },
-    writeFile: async (p: string) => {
-      disk.writeFile.push(p);
+      return { isFile: () => true, mtime: f.mtime, size: f.size };
     },
     unlink: async (p: string) => {
       if (!fileStats.has(p)) {
@@ -65,10 +67,8 @@ vi.mock("fs", () => ({
       }
       disk.unlink.push(p);
     },
-    access: async (p: string) => {
-      if (!fileStats.has(p)) {
-        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
-      }
+    writeFile: async (p: string) => {
+      disk.writeFile.push(p);
     },
   },
 }));
@@ -99,8 +99,8 @@ function put(scope: string, folder: string, name: string): void {
   entry.names = [...(entry.names ?? []), name];
   dirEntries.set(dir, entry);
   fileStats.set(path.join(dir, name), {
-    size: 10,
     mtime: new Date("2026-01-01T00:00:00.000Z"),
+    size: 10,
   });
 }
 
@@ -138,7 +138,7 @@ function uploadForm(init: {
   return form;
 }
 
-const postWith = (form: FormData) => POST(reqOf(urlOf(""), { method: "POST", body: form }));
+const postWith = (form: FormData) => POST(reqOf(urlOf(""), { body: form, method: "POST" }));
 
 beforeEach(() => {
   tdb.$reset();
@@ -148,10 +148,10 @@ beforeEach(() => {
     list.length = 0;
   }
   userMock.mockResolvedValue({ id: "user-a" });
-  seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-  seedUser(tdb, { id: "user-b", email: "b@test.dev" });
-  seedProject(tdb, { id: "proj-a", userId: "user-a", name: "我的画布" });
-  seedProject(tdb, { id: "proj-b", userId: "user-b", name: "别人的画布" });
+  seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+  seedUser(tdb, { email: "b@test.dev", id: "user-b" });
+  seedProject(tdb, { id: "proj-a", name: "我的画布", userId: "user-a" });
+  seedProject(tdb, { id: "proj-b", name: "别人的画布", userId: "user-b" });
   dirEntries.set(ROOT, { subdirs: ["proj-a", "proj-b", SHARED_SCOPE] });
   put("proj-a", "ref", "mine.png");
   put("proj-b", "ref", "secret.png");
@@ -222,14 +222,14 @@ describe("GET /api/materials —— 读侧归属", () => {
 describe("POST /api/materials —— 上传", () => {
   it("写进自己的项目：落盘路径在素材库根之内", async () => {
     const res = await postWith(
-      uploadForm({ projectId: "proj-a", folder: "docs", name: "note.txt" }),
+      uploadForm({ folder: "docs", name: "note.txt", projectId: "proj-a" }),
     );
     expect(res.status).toBe(200);
     expect(disk.writeFile).toEqual([path.join(ROOT, "proj-a", "docs", "note.txt")]);
   });
 
   it("写别人的项目 → 404，且 mkdir / writeFile 都没发生", async () => {
-    const res = await postWith(uploadForm({ projectId: "proj-b", folder: "docs", name: "x.txt" }));
+    const res = await postWith(uploadForm({ folder: "docs", name: "x.txt", projectId: "proj-b" }));
     expect(res.status).toBe(404);
     expect(disk.mkdir).toEqual([]);
     expect(disk.writeFile).toEqual([]);
@@ -237,22 +237,22 @@ describe("POST /api/materials —— 上传", () => {
 
   it("shared=true 落到共享区（不设归属）", async () => {
     expect(
-      (await postWith(uploadForm({ shared: "true", folder: "docs", name: "s.txt" }))).status,
+      (await postWith(uploadForm({ folder: "docs", name: "s.txt", shared: "true" }))).status,
     ).toBe(200);
     expect(disk.writeFile[0]).toBe(path.join(ROOT, SHARED_SCOPE, "docs", "s.txt"));
   });
 
   it("重名不覆盖：追加 -1（同名上传不该把用户的旧文件冲掉）", async () => {
     put("proj-a", "docs", "note.txt");
-    await postWith(uploadForm({ projectId: "proj-a", folder: "docs", name: "note.txt" }));
+    await postWith(uploadForm({ folder: "docs", name: "note.txt", projectId: "proj-a" }));
     expect(disk.writeFile).toEqual([path.join(ROOT, "proj-a", "docs", "note-1.txt")]);
   });
 
   it("坏 MIME / 缺分类 / 缺 projectId：各自一个 400，且都不落盘", async () => {
     const cases: Array<Parameters<typeof uploadForm>[0]> = [
-      { type: "application/x-msdownload", projectId: "proj-a", folder: "docs" },
-      { projectId: "proj-a", folder: "../../outside" },
-      { projectId: "", folder: "docs" },
+      { folder: "docs", projectId: "proj-a", type: "application/x-msdownload" },
+      { folder: "../../outside", projectId: "proj-a" },
+      { folder: "docs", projectId: "" },
     ];
     for (const init of cases) {
       expect((await postWith(uploadForm(init))).status).toBe(400);
@@ -266,8 +266,8 @@ describe("POST /api/materials —— 上传", () => {
      * 101MB 内存），所以直接把 `formData()` 交给 handler —— 被测的判据本来就在
      * 拿到 File 之后。 */
     const form = uploadForm({
-      projectId: "proj-a",
       folder: "docs",
+      projectId: "proj-a",
       sizeOverMax: true,
     });
     const res = await POST(
@@ -288,9 +288,9 @@ describe("POST /api/materials —— 上传", () => {
   it("文件名里的目录成分被剥掉，只写 basename", async () => {
     await postWith(
       uploadForm({
-        projectId: "proj-a",
         folder: "docs",
         name: "..\\..\\evil.txt",
+        projectId: "proj-a",
       }),
     );
     expect(disk.writeFile[0]).toBe(path.join(ROOT, "proj-a", "docs", "evil.txt"));
@@ -319,6 +319,6 @@ describe("DELETE /api/materials —— 删除侧归属", () => {
   it("目标已经不在了 → 幂等成功（不报 500）", async () => {
     const res = await DELETE(reqOf(urlOf("?id=proj-a/ref/gone.png")));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, alreadyGone: true });
+    expect(await res.json()).toEqual({ alreadyGone: true, ok: true });
   });
 });

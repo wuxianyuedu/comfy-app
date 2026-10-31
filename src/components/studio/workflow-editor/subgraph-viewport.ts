@@ -114,7 +114,7 @@ export function normalizeBounds(
   if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
     return null;
   }
-  return { minX, maxX, minY, maxY };
+  return { maxX, maxY, minX, minY };
 }
 
 /**

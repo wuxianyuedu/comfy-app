@@ -42,13 +42,13 @@ beforeEach(() => {
 
 describe("getServerUser：已登录取真实用户，未登录回落演示用户", () => {
   it("会话命中已有用户 → 取库中用户，不重复建号", async () => {
-    seedUser(tdb, { id: "u-exist", email: "has@test.dev", name: "已有" });
+    seedUser(tdb, { email: "has@test.dev", id: "u-exist", name: "已有" });
     const user = await getServerUser({
       user: { email: "has@test.dev", name: "已有" },
     });
     expect(user).toEqual({
-      id: "u-exist",
       email: "has@test.dev",
+      id: "u-exist",
       name: "已有",
     });
     expect(tdb.$tables.users).toHaveLength(1);
@@ -85,9 +85,7 @@ describe("getServerUser：已登录取真实用户，未登录回落演示用户
     const a = await getServerUser(null);
     const b = await getServerUser(null);
     expect(b).toEqual(a);
-    expect(
-      tdb.$tables.users.filter((u) => u.email === DEMO_EMAIL),
-    ).toHaveLength(1);
+    expect(tdb.$tables.users.filter((u) => u.email === DEMO_EMAIL)).toHaveLength(1);
   });
 
   /* 下面这条钉住的是「缓存不许越过数据库」这个判决（不是缓存本身）。
@@ -132,7 +130,7 @@ describe("requireServerUser：loginRequired 是唯一开关", () => {
 
   it("loginRequired=true 但已登录 → 照常放行", async () => {
     loginRequired = true;
-    seedUser(tdb, { id: "u-1", email: "in@test.dev", name: "登录的" });
+    seedUser(tdb, { email: "in@test.dev", id: "u-1", name: "登录的" });
     const user = await requireServerUser({ user: { email: "in@test.dev" } });
     expect(user?.id).toBe("u-1");
   });

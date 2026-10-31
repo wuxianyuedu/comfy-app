@@ -52,10 +52,7 @@ export async function GET(request: NextRequest) {
   const resolved = path.resolve(/*turbopackIgnore: true*/ PROJECT_ROOT, file);
   const rel = path.relative(SRC_ROOT, resolved);
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
-    return NextResponse.json(
-      { error: "forbidden: outside src/" },
-      { status: 403 },
-    );
+    return NextResponse.json({ error: "forbidden: outside src/" }, { status: 403 });
   }
   if (!ALLOWED_EXT.has(path.extname(resolved).toLowerCase())) {
     return NextResponse.json({ error: "not a source file" }, { status: 400 });
@@ -69,8 +66,8 @@ export async function GET(request: NextRequest) {
       /** 绝对路径（正斜杠盘符格式，如 F:/AI/.../src/...），供 vscode://file/ 协议打开 */
       absolutePath: toDisplayPath(resolved),
       content,
-      size: stat.size,
       modifiedAt: stat.mtime.toISOString(),
+      size: stat.size,
     });
   } catch {
     return NextResponse.json({ error: "file not found" }, { status: 404 });

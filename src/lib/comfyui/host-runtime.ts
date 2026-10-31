@@ -46,8 +46,8 @@ import type { TaskRepoImpl } from "../core/repository-task-impl";
  *  各写一遍就必然漏一处（ISSUE #1282）。 */
 export async function createHostRepo(dbFile: string): Promise<TaskRepoImpl> {
   const client = createClient({
-    url: `file:${dbFile}`,
     timeout: SQLITE_BUSY_TIMEOUT_MS,
+    url: `file:${dbFile}`,
   });
   await applySqlitePragmas(client);
   return createTaskRepoImpl(drizzle(client), { owner: "host" });

@@ -34,7 +34,7 @@ export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
           humanRating: nextRating,
           isFavorite: nextFav,
         }),
-      { report, failureText: "保存失败", readResultEnvelope: false },
+      { failureText: "保存失败", readResultEnvelope: false, report },
     );
     if (!result.ok) {
       rollback();

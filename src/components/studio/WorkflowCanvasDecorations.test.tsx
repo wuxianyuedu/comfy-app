@@ -30,7 +30,7 @@ afterEach(cleanup);
 function renderGrid(settings?: Partial<CanvasSettings>) {
   return render(
     <ReactFlowProvider>
-      <div style={{ width: 800, height: 600, position: "relative" }}>
+      <div style={{ height: 600, position: "relative", width: 800 }}>
         <CanvasGrid settings={{ ...DEFAULT_CANVAS_SETTINGS, ...settings }} />
       </div>
     </ReactFlowProvider>,

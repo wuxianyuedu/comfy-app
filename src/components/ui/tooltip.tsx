@@ -36,13 +36,13 @@ function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {
 const TOOLTIP_COLLISION_PADDING = 12;
 
 function TooltipContent({
-  className,
-  side = "top",
-  sideOffset = 4,
   align = "center",
   alignOffset = 0,
-  collisionPadding = TOOLTIP_COLLISION_PADDING,
   children,
+  className,
+  collisionPadding = TOOLTIP_COLLISION_PADDING,
+  side = "top",
+  sideOffset = 4,
   ...props
 }: TooltipPrimitive.Popup.Props &
   Pick<

@@ -82,10 +82,10 @@ export type SectionScrollSpy<Id extends string = string> = {
  * 负责「滚动 → 当前分区」这一条方向。
  */
 export function useSectionScrollSpy<Id extends string>({
-  containerRef,
-  sectionIds,
   activeId,
+  containerRef,
   onActiveChange,
+  sectionIds,
 }: UseSectionScrollSpyOptions<Id>): SectionScrollSpy<Id> {
   /** 已挂上的分区节（id → 元素），观察器按它建立观察。 */
   const nodesRef = useRef(new Map<Id, HTMLElement>());
@@ -203,7 +203,7 @@ export function useSectionScrollSpy<Id extends string>({
         activeRef.current = sectionId;
         notifyRef.current(sectionId);
       }
-      el.scrollIntoView({ block: "start", behavior });
+      el.scrollIntoView({ behavior, block: "start" });
       return true;
     },
     [],

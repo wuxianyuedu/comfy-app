@@ -24,18 +24,18 @@ import { SECTION_ACCENT } from "./DynamicWorkflowForm/constants";
 import { SectionHeader } from "./DynamicWorkflowForm/SectionHeader";
 
 function GroupedControls({
-  dimension,
-  video,
-  values,
-  onChange,
-  workflowId,
-  compact,
-  disabled,
-  onRequiredChange,
-  mode,
-  visibilityMode,
-  onVisibilityChange,
   collapseGrouped,
+  compact,
+  dimension,
+  disabled,
+  mode,
+  onChange,
+  onRequiredChange,
+  onVisibilityChange,
+  values,
+  video,
+  visibilityMode,
+  workflowId,
 }: {
   /** 画布 / 库内（`compact`）把组合控件收窄成一块（宽度按内容），而不是摊成
    * 逐行参数清单。`false` 保留宽版整块录入（宽版表单 / CreatePanel）。 */

@@ -25,12 +25,12 @@ import {
 function fakeElement() {
   const store = new Map<string, string>();
   return {
+    store,
     style: {
       setProperty: (name: string, value: string) => {
         store.set(name, value);
       },
     },
-    store,
   };
 }
 
@@ -56,22 +56,22 @@ describe("parseAppearance：不认就整份回落", () => {
     ["坏 JSON", "{oops"],
     ["不是对象", "42"],
     ["缺字段", JSON.stringify({ radius: "lg" })],
-    ["未知圆角", JSON.stringify({ radius: "huge", fontScale: "100" })],
-    ["未知字阶", JSON.stringify({ radius: "md", fontScale: "999" })],
-    ["字段类型不对", JSON.stringify({ radius: 8, fontScale: 1 })],
+    ["未知圆角", JSON.stringify({ fontScale: "100", radius: "huge" })],
+    ["未知字阶", JSON.stringify({ fontScale: "999", radius: "md" })],
+    ["字段类型不对", JSON.stringify({ fontScale: 1, radius: 8 })],
   ])("%s ⇒ 回落默认", (_row) => {
     const [, raw] = _row;
     expect(parseAppearance(raw)).toEqual(DEFAULT_APPEARANCE);
   });
 
   it("一半合法一半非法也整份回落（不许圆角新的、字号旧的）", () => {
-    expect(parseAppearance(JSON.stringify({ radius: "xl", fontScale: "nope" }))).toEqual(
+    expect(parseAppearance(JSON.stringify({ fontScale: "nope", radius: "xl" }))).toEqual(
       DEFAULT_APPEARANCE,
     );
   });
 
   it("合法值原样读回", () => {
-    const prefs = { radius: "lg", fontScale: "110" };
+    const prefs = { fontScale: "110", radius: "lg" };
     expect(parseAppearance(serializeAppearance(prefs))).toEqual(prefs);
   });
 });
@@ -79,7 +79,7 @@ describe("parseAppearance：不认就整份回落", () => {
 describe("applyAppearance", () => {
   it("一次写入两个变量", () => {
     const el = fakeElement();
-    applyAppearance({ radius: "lg", fontScale: "125" }, /* SAFETY: 类型断言已复核 */ el as never);
+    applyAppearance({ fontScale: "125", radius: "lg" }, /* SAFETY: 类型断言已复核 */ el as never);
     expect(el.store.get("--radius")).toBe("1.25rem");
     expect(el.store.get("--font-scale")).toBe("1.25");
   });
@@ -119,15 +119,15 @@ describe("readAppearance / saveAppearance", () => {
   });
 
   it("存进去能原样读回", () => {
-    expect(saveAppearance({ radius: "xl", fontScale: "90" })).toBe(true);
-    expect(readAppearance()).toEqual({ radius: "xl", fontScale: "90" });
+    expect(saveAppearance({ fontScale: "90", radius: "xl" })).toBe(true);
+    expect(readAppearance()).toEqual({ fontScale: "90", radius: "xl" });
     expect(window.localStorage.getItem(APPEARANCE_STORAGE_KEY)).toBe(
       '{"radius":"xl","fontScale":"90"}',
     );
   });
 
   it("保存时同步写到 <html> 上（离开设置页也必须成立）", () => {
-    saveAppearance({ radius: "lg", fontScale: "110" });
+    saveAppearance({ fontScale: "110", radius: "lg" });
     expect(document.documentElement.style.getPropertyValue("--radius")).toBe("1.25rem");
     expect(document.documentElement.style.getPropertyValue("--font-scale")).toBe("1.1");
   });

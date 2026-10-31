@@ -42,7 +42,7 @@ export function tabKey(view: WorkspaceView, projectId: string | null): string {
 }
 
 export function homeTab(): ViewTab {
-  return { key: tabKey(HOME_VIEW, null), view: HOME_VIEW, projectId: null };
+  return { key: tabKey(HOME_VIEW, null), projectId: null, view: HOME_VIEW };
 }
 
 /**
@@ -55,7 +55,7 @@ export function makeTab(view: WorkspaceView, projectId: string | null): ViewTab 
     return null;
   }
   const bound = isProjectTab(view) ? projectId : null;
-  return { key: tabKey(view, bound), view, projectId: bound };
+  return { key: tabKey(view, bound), projectId: bound, view };
 }
 
 export function isTabClosable(tab: ViewTab): boolean {
@@ -96,7 +96,7 @@ function withTransientPruned(tabs: Array<ViewTab>, activeKey: string): Array<Vie
 function activated(tabs: Array<ViewTab>, activeKey: string): WorkspaceTabsState {
   const pruned = withHomeFirst(withTransientPruned(tabs, activeKey));
   const key = findTab(pruned, activeKey) ? activeKey : homeTab().key;
-  return { tabs: pruned, activeKey: key };
+  return { activeKey: key, tabs: pruned };
 }
 
 /**
@@ -154,7 +154,7 @@ export function closeViewTab(state: WorkspaceTabsState, key: string): WorkspaceT
 
   const tabs = [...state.tabs.slice(0, index), ...state.tabs.slice(index + 1)];
   if (state.activeKey !== key) {
-    return { tabs, activeKey: state.activeKey };
+    return { activeKey: state.activeKey, tabs };
   }
   /* 左邻：删掉本位之后，`index` 上坐的已经是**右邻**了，所以取 `index - 1`。
      与浏览器 / VSCode 关标签页的既有习惯一致（落右边会让用户跳到没预期的地方）。
@@ -177,14 +177,14 @@ export function dropProjectTabs(state: WorkspaceTabsState, projectId: string): W
   }
   const activeStillThere = kept.some((tab) => tab.key === state.activeKey);
   return {
-    tabs: withHomeFirst(kept),
     activeKey: activeStillThere ? state.activeKey : tabKey(HOME_VIEW, null),
+    tabs: withHomeFirst(kept),
   };
 }
 
 /** 初始状态：只有首页一页。 */
 export function initialWorkspaceTabs(): WorkspaceTabsState {
-  return { tabs: [homeTab()], activeKey: homeTab().key };
+  return { activeKey: homeTab().key, tabs: [homeTab()] };
 }
 
 /* ── 持久化（sessionStorage 的唯一一份视图状态）─────────────────────────
@@ -263,5 +263,5 @@ export function parseWorkspaceTabs(
   if (!normalized.some((tab) => tab.key === record.activeKey)) {
     return null;
   }
-  return { tabs: normalized, activeKey: record.activeKey };
+  return { activeKey: record.activeKey, tabs: normalized };
 }

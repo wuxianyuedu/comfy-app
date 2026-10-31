@@ -5,10 +5,10 @@ import { type SqliteBusyRetryPolicy, runWithSqliteBusyRetry } from "./sqlite-bus
 /* 预算取 0 毫秒：本文件判的是**循环形状**（试几次、什么算可重试、抛出的是不是
  * 原对象），退避算法本身由 `retry-policy` 自己的用例负责，这里不重判它。 */
 const POLICY: SqliteBusyRetryPolicy = {
-  shape: "exponential",
   baseMs: 0,
-  maxMs: 0,
   maxAttempts: 3,
+  maxMs: 0,
+  shape: "exponential",
 };
 
 /** drizzle 的真实包法：驱动错误挂在 `cause` 上（同 `sqlite-error.test.ts`）。 */
@@ -26,7 +26,7 @@ describe("runWithSqliteBusyRetry", () => {
   it("首次就成 ⇒ 一次也不重试，也不念 onBusy", async () => {
     const onBusy = vi.fn();
     const op = vi.fn(async () => "ok");
-    await expect(runWithSqliteBusyRetry(op, { policy: POLICY, onBusy })).resolves.toBe("ok");
+    await expect(runWithSqliteBusyRetry(op, { onBusy, policy: POLICY })).resolves.toBe("ok");
     expect(op).toHaveBeenCalledTimes(1);
     expect(onBusy).not.toHaveBeenCalled();
   });
@@ -42,7 +42,7 @@ describe("runWithSqliteBusyRetry", () => {
         }
         return calls;
       },
-      { policy: POLICY, onBusy: (attempt) => void seen.push(attempt) },
+      { onBusy: (attempt) => void seen.push(attempt), policy: POLICY },
     );
     expect(result).toBe(3);
     expect(seen).toEqual([0, 1]);
@@ -54,7 +54,7 @@ describe("runWithSqliteBusyRetry", () => {
       throw boom;
     });
     const onGiveUp = vi.fn();
-    await expect(runWithSqliteBusyRetry(op, { policy: POLICY, onGiveUp })).rejects.toBe(boom);
+    await expect(runWithSqliteBusyRetry(op, { onGiveUp, policy: POLICY })).rejects.toBe(boom);
     expect(op).toHaveBeenCalledTimes(1);
     expect(onGiveUp).toHaveBeenCalledTimes(1);
     expect(onGiveUp.mock.calls[0]?.[1]).toBe(1);
@@ -66,7 +66,7 @@ describe("runWithSqliteBusyRetry", () => {
       throw boom;
     });
     const onGiveUp = vi.fn();
-    await expect(runWithSqliteBusyRetry(op, { policy: POLICY, onGiveUp })).rejects.toBe(boom);
+    await expect(runWithSqliteBusyRetry(op, { onGiveUp, policy: POLICY })).rejects.toBe(boom);
     expect(op).toHaveBeenCalledTimes(POLICY.maxAttempts);
     expect(onGiveUp.mock.calls[0]?.[1]).toBe(POLICY.maxAttempts);
   });
@@ -113,10 +113,10 @@ describe("runWithSqliteBusyRetry", () => {
     const logBoom = new Error("日志通道自己炸了");
     await expect(
       runWithSqliteBusyRetry(op, {
-        policy: { ...POLICY, maxAttempts: 2 },
         onBusy: () => {
           throw logBoom;
         },
+        policy: { ...POLICY, maxAttempts: 2 },
       }),
     ).rejects.toBe(logBoom);
     expect(op).toHaveBeenCalledTimes(1);

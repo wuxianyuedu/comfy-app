@@ -112,10 +112,10 @@ export function useShotReview(projectId: string, onRegenerated?: () => void): Sh
             await regenerateShot(projectId, shotId, mode);
           },
           {
-            report,
             failureText: "重生成失败",
-            successText: REGEN_SUCCESS[mode],
             readResultEnvelope: false,
+            report,
+            successText: REGEN_SUCCESS[mode],
           },
         ),
       );
@@ -156,15 +156,15 @@ export function useShotReview(projectId: string, onRegenerated?: () => void): Sh
   }, []);
 
   return {
-    verdict,
-    reviewing: reviewBusy.busy,
-    regenerating: regenBusy.busy,
     error,
-    review,
-    regenerate,
-    submitVerdict,
     humanVerdict,
-    setRating,
+    regenerate,
+    regenerating: regenBusy.busy,
     reset,
+    review,
+    reviewing: reviewBusy.busy,
+    setRating,
+    submitVerdict,
+    verdict,
   };
 }

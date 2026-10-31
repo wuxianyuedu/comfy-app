@@ -4,9 +4,9 @@ import { readComfyErrorMessage, waitForComfyReady } from "./comfy-readiness-clie
 
 function jsonRes(status: number, body: unknown): Response {
   return /* SAFETY: 类型断言已复核 */ {
+    json: async () => body,
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
   } as unknown as Response;
 }
 
@@ -44,13 +44,13 @@ describe("waitForComfyReady", () => {
   it("202（正在启动）→ 轮询到可用为止，并把进行态上抛一次", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonRes(202, { ok: false, pending: true, detail: "正在启动 ComfyUI" }))
-      .mockResolvedValueOnce(jsonRes(202, { ok: false, pending: true, detail: "正在启动 ComfyUI" }))
+      .mockResolvedValueOnce(jsonRes(202, { detail: "正在启动 ComfyUI", ok: false, pending: true }))
+      .mockResolvedValueOnce(jsonRes(202, { detail: "正在启动 ComfyUI", ok: false, pending: true }))
       .mockResolvedValueOnce(jsonRes(200, { ok: true }));
     vi.stubGlobal("fetch", fetchMock);
     const onProgress = vi.fn();
 
-    await expect(waitForComfyReady({ timeoutMs: 5_000, pollMs: 1, onProgress })).resolves.toEqual({
+    await expect(waitForComfyReady({ onProgress, pollMs: 1, timeoutMs: 5_000 })).resolves.toEqual({
       ok: true,
     });
     expect(onProgress).toHaveBeenCalledTimes(1);
@@ -61,11 +61,11 @@ describe("waitForComfyReady", () => {
   it("明确失败（503 / pending=false）→ 立刻返回，不再空转重试", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonRes(503, { ok: false, pending: false, detail: "保活进程已退出" }));
+      .mockResolvedValue(jsonRes(503, { detail: "保活进程已退出", ok: false, pending: false }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const r = await waitForComfyReady({ timeoutMs: 5_000, pollMs: 1 });
-    expect(r).toEqual({ ok: false, pending: false, message: "保活进程已退出" });
+    const r = await waitForComfyReady({ pollMs: 1, timeoutMs: 5_000 });
+    expect(r).toEqual({ message: "保活进程已退出", ok: false, pending: false });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -74,14 +74,14 @@ describe("waitForComfyReady", () => {
       "fetch",
       vi.fn().mockResolvedValue(
         jsonRes(202, {
+          detail: "正在启动 ComfyUI",
           ok: false,
           pending: true,
-          detail: "正在启动 ComfyUI",
         }),
       ),
     );
 
-    const r = await waitForComfyReady({ timeoutMs: 20, pollMs: 5 });
+    const r = await waitForComfyReady({ pollMs: 5, timeoutMs: 20 });
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.pending).toBe(true);
@@ -93,7 +93,7 @@ describe("waitForComfyReady", () => {
   it("网络层异常按「还在启动」处理，最终超时也算 pending", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 
-    const r = await waitForComfyReady({ timeoutMs: 20, pollMs: 5 });
+    const r = await waitForComfyReady({ pollMs: 5, timeoutMs: 20 });
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.pending).toBe(true);

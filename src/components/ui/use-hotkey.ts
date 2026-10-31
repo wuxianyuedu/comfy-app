@@ -139,7 +139,7 @@ export function useHotkey(
     handlerRef.current = handler;
   }, [handler]);
 
-  const { key, mod, ctrl, meta, shift, alt } = spec;
+  const { alt, ctrl, key, meta, mod, shift } = spec;
 
   useEffect(() => {
     if (!enabled) {
@@ -152,7 +152,7 @@ export function useHotkey(
       if (filterInput && isEditableTarget(event.target)) {
         return;
       }
-      if (!matchesHotkey(event, { key, mod, ctrl, meta, shift, alt }, isMac)) {
+      if (!matchesHotkey(event, { alt, ctrl, key, meta, mod, shift }, isMac)) {
         return;
       }
       if (preventDefault) {

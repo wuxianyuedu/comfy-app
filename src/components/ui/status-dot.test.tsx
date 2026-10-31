@@ -46,11 +46,11 @@ describe("StatusDot", () => {
 
   it("缺省不带脉冲，pulse 才加 animate-pulse", () => {
     expect(dotOf({ state: "up" }).className).not.toContain("animate-pulse");
-    expect(dotOf({ state: "up", pulse: true }).className).toContain("animate-pulse");
+    expect(dotOf({ pulse: true, state: "up" }).className).toContain("animate-pulse");
   });
 
   it("尺寸类可覆盖（状态行 size-2 / 行内 size-1.5）", () => {
     expect(dotOf({ state: "up" }).className).toContain("size-2");
-    expect(dotOf({ state: "up", sizeClass: "size-1.5" }).className).toContain("size-1.5");
+    expect(dotOf({ sizeClass: "size-1.5", state: "up" }).className).toContain("size-1.5");
   });
 });

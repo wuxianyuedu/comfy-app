@@ -32,11 +32,10 @@ export function useOutputWiring(params: {
 }) {
   /* 解构出两个稳定引用再进 useMemo：params 每次渲染都是新对象，回调里直接写
    * `params.x` 会被 eslint 要求依赖整个 params（那样 useMemo 每次都重算）。 */
-  const { effectiveParamMap, commitParamMap } = params;
-  const { workflowIO, effectiveMode, onPatchParamMap, outputCards } = params;
+  const { commitParamMap, effectiveParamMap } = params;
+  const { effectiveMode, onPatchParamMap, outputCards, workflowIO } = params;
   const outputWiring = useMemo(
     () => ({
-      isManual: (ioKey: string) => outputCards.isManual(ioKey),
       connect: (outputIoKey: string, targetIoKey: string) => {
         if (!effectiveMode || !onPatchParamMap) {
           return;
@@ -54,9 +53,9 @@ export function useOutputWiring(params: {
         const next = revert
           ? clearOutputBindingEdit(effectiveParamMap, outputIoKey, effectiveMode)
           : applyOutputBindingEdit(effectiveParamMap, {
-              outputIoKey,
               ioKey: targetIoKey,
               mode: effectiveMode,
+              outputIoKey,
             });
         commitParamMap(next);
       },
@@ -66,12 +65,13 @@ export function useOutputWiring(params: {
         }
         commitParamMap(
           applyOutputBindingEdit(effectiveParamMap, {
-            outputIoKey,
             ioKey: null,
             mode: effectiveMode,
+            outputIoKey,
           }),
         );
       },
+      isManual: (ioKey: string) => outputCards.isManual(ioKey),
       reset: (outputIoKey: string) => {
         if (!effectiveMode || !onPatchParamMap) {
           return;

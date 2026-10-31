@@ -85,9 +85,9 @@ export function indentClass(depth = 0): string {
 export function TreeChildren({
   depth = 1,
   /** 引导线的状态色（如 `border-warning/20`）；留空则用默认边框色。 */
-  railClassName,
-  className,
   children,
+  className,
+  railClassName,
 }: {
   children: React.ReactNode;
   className?: string;
@@ -115,8 +115,8 @@ export function TreeChildren({
  * `~/components/ui/disclosure` 的 `<Disclosure>`；本组件只管层级。
  */
 export function TreeRow({
-  row,
   children,
+  row,
   /** 子行的缩进档（默认第一层）。 */
   depth = 1,
   railClassName,

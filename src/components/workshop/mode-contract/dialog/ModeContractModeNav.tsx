@@ -50,8 +50,8 @@ import { contractModeTree } from "../mode-contract-config";
 
 export function ModeContractModeNav({
   activeMode,
-  storedCustomized,
   onSelect,
+  storedCustomized,
 }: {
   /** 当前选中的模式码（null = 未选）。 */
   activeMode: string | null;

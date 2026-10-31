@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { deriveModelOverview } from "./model-overview-derive";
 
 function folder(folderName: string, label: string, count: number) {
-  return { folder: folderName, label, count };
+  return { count, folder: folderName, label };
 }
 
 describe("deriveModelOverview 分组与排序", () => {
@@ -22,8 +22,8 @@ describe("deriveModelOverview 分组与排序", () => {
         folder("checkpoints", "Checkpoint", 34),
         folder("vae", "VAE", 2),
       ],
-      loading: false,
       isError: false,
+      loading: false,
     });
     expect(out.groups.map((g) => g.folder)).toEqual(["checkpoints", "loras", "vae"]);
     expect(out.total).toBe(48);
@@ -37,8 +37,8 @@ describe("deriveModelOverview 分组与排序", () => {
         folder("sam", "SAM", 0),
         folder("gligen", "GLIGEN", 0),
       ],
-      loading: false,
       isError: false,
+      loading: false,
     });
     expect(out.groups.map((g) => g.folder)).toEqual(["checkpoints"]);
     expect(out.emptyFolderCount).toBe(2);
@@ -48,8 +48,8 @@ describe("deriveModelOverview 分组与排序", () => {
   it("一个模型都没有：列表为空、total 为 0，且不报错（这是「同步一下就有」的状态）", () => {
     const out = deriveModelOverview({
       folders: [folder("loras", "LoRA", 0)],
-      loading: false,
       isError: false,
+      loading: false,
     });
     expect(out.groups).toEqual([]);
     expect(out.total).toBe(0);
@@ -59,14 +59,14 @@ describe("deriveModelOverview 分组与排序", () => {
   it("0 与「没有这一档」不是一回事：count 缺失的行按 0 处理，不混进列表", () => {
     const out = deriveModelOverview({
       folders: [
-        { folder: "a", label: "A", count: 1 },
+        { count: 1, folder: "a", label: "A" },
         /* SAFETY: 类型断言已复核 */ {
           folder: "b",
           label: "B",
         } as never,
       ],
-      loading: false,
       isError: false,
+      loading: false,
     });
     expect(out.groups.map((g) => g.folder)).toEqual(["a"]);
     /* b 的 count 是 undefined → `> 0` 不成立，既不进列表也不该被算成空目录之外的数。 */
@@ -78,8 +78,8 @@ describe("deriveModelOverview 的加载与失败态", () => {
   it("首帧（还没有数据、正在取）是 loading，不是 error", () => {
     const out = deriveModelOverview({
       folders: undefined,
-      loading: true,
       isError: false,
+      loading: true,
     });
     expect(out.loading).toBe(true);
     expect(out.error).toBeNull();
@@ -89,8 +89,8 @@ describe("deriveModelOverview 的加载与失败态", () => {
   it("取数失败才给一句可见说明（硬规则 4：失败要有用户看得见的出口）", () => {
     const out = deriveModelOverview({
       folders: undefined,
-      loading: false,
       isError: true,
+      loading: false,
     });
     expect(out.error).toBeTruthy();
     expect(out.error).toContain("读不到");
@@ -99,8 +99,8 @@ describe("deriveModelOverview 的加载与失败态", () => {
   it("说明文案由本模块给，不接受调用方传进来的 Error 对象", () => {
     const out = deriveModelOverview({
       folders: undefined,
-      loading: false,
       isError: true,
+      loading: false,
     });
     /* 两处各写一句错误文案，就会漂成「模型计数暂时读不到」与「加载失败」。 */
     expect(out.error).toBe("模型计数暂时读不到");

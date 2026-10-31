@@ -22,13 +22,13 @@ export const workflowModelRouter = createTRPCRouter({
   rename: authedProcedure
     .input(
       z.object({
-        oldName: z.string().trim().min(1),
         newName: z.string().trim().min(1).max(64),
+        oldName: z.string().trim().min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       if (input.oldName === input.newName) {
-        return { ok: true, renamed: false, reason: "same-name" };
+        return { ok: true, reason: "same-name", renamed: false };
       }
       const existing = await workflowModelTagRepository.findByUserAndName(
         ctx.user.id,
@@ -54,9 +54,9 @@ export const workflowModelRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const existing = await workflowModelTagRepository.findByUserAndName(ctx.user.id, input.name);
       if (!existing) {
-        return { ok: true, deleted: false };
+        return { deleted: false, ok: true };
       }
       await workflowModelTagRepository.deleteById(existing.id);
-      return { ok: true, deleted: true };
+      return { deleted: true, ok: true };
     }),
 });

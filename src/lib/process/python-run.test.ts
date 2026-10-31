@@ -103,26 +103,26 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
   function fakeStream() {
     const cbs: Record<string, Array<(arg: unknown) => void>> = {};
     return {
-      stream: /* SAFETY: 类型断言已复核 */ {
-        on: (ev: string, cb: (arg: unknown) => void) => {
-          (cbs[ev] ??= []).push(cb);
-        },
-      } as NodeJS.ReadableStream,
-      push: (chunk: string) => {
-        for (const cb of cbs.data ?? []) {
-          cb(Buffer.from(chunk));
-        }
-      },
       end: () => {
         for (const cb of cbs.end ?? []) {
           cb(undefined);
         }
       },
+      push: (chunk: string) => {
+        for (const cb of cbs.data ?? []) {
+          cb(Buffer.from(chunk));
+        }
+      },
+      stream: /* SAFETY: 类型断言已复核 */ {
+        on: (ev: string, cb: (arg: unknown) => void) => {
+          (cbs[ev] ??= []).push(cb);
+        },
+      } as NodeJS.ReadableStream,
     };
   }
 
   it("一次 data 不等于一行：跨 chunk 的行拼回来", () => {
-    const { stream, push } = fakeStream();
+    const { push, stream } = fakeStream();
     const lines: Array<string> = [];
     forEachOutputLine(stream, (l) => lines.push(l));
     push("PROGRESS::scan|msg=前半");
@@ -131,7 +131,7 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
   });
 
   it("末尾不足一行的那一段在 end 时补发（解析器只在末尾打一次的结果 JSON 就是这一形）", () => {
-    const { stream, push, end } = fakeStream();
+    const { end, push, stream } = fakeStream();
     const lines: Array<string> = [];
     forEachOutputLine(stream, (l) => lines.push(l));
     push('{"packages":[]}');
@@ -141,7 +141,7 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
   });
 
   it("空行与只有空白的行不交出去（否则界面上会出现空进度）", () => {
-    const { stream, push, end } = fakeStream();
+    const { end, push, stream } = fakeStream();
     const lines: Array<string> = [];
     forEachOutputLine(stream, (l) => lines.push(l));
     push("\n   \n留着\n\n");

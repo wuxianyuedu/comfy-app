@@ -87,9 +87,9 @@ const toStr = (v: unknown): string => String(v);
 
 // ── script → storyboard ────────────────────────────────────
 const ShotSchema = z.object({
-  heading: z.unknown(),
   action: z.unknown(),
   dialogue: z.unknown(),
+  heading: z.unknown(),
   shotCount: z.unknown(),
 });
 
@@ -112,16 +112,16 @@ async function expandScriptLLM(raw: string): Promise<
   const shots = await completeLLMStructured(
     cfg,
     [
-      { role: "system", content: sys },
-      { role: "user", content: raw },
+      { content: sys, role: "system" },
+      { content: raw, role: "user" },
     ],
     z.array(ShotSchema),
   );
 
   return shots.map((rec) => ({
-    heading: toStr(rec.heading ?? "场景"),
     action: toStr(rec.action ?? raw),
     dialogue: toStr(rec.dialogue ?? ""),
+    heading: toStr(rec.heading ?? "场景"),
     shotCount: clamp(Number(rec.shotCount ?? 2) || 2, 1, 4),
   }));
 }
@@ -137,21 +137,21 @@ async function parseScriptToShots(
   try {
     const expanded = await expandScriptLLM(raw);
     scenes = expanded.map((expanded) => ({
-      heading: expanded.heading,
       action: expanded.action,
+      heading: expanded.heading,
       shotCount: expanded.shotCount,
     }));
   } catch {
     // 离线兜底 —— 复用工坊解析器
     const sc = parseIdeaToScenes(raw, {
-      title: "",
-      type: /* SAFETY: 类型断言已复核 */ (type as ProjectType) ?? "short_video",
-      tone: "",
       logline: "",
+      title: "",
+      tone: "",
+      type: /* SAFETY: 类型断言已复核 */ (type as ProjectType) ?? "short_video",
     });
     scenes = sc.map((scene) => ({
-      heading: scene.heading,
       action: `${scene.action}${scene.dialogue ? " " + scene.dialogue : ""}`,
+      heading: scene.heading,
       shotCount: scene.shotCount,
     }));
   }
@@ -169,14 +169,14 @@ async function parseScriptToShots(
       const prompt = parts.filter(Boolean).join(", ");
       const negative = [FILM_NEGATIVE, styleNegative].filter(Boolean).join(", ");
       shots.push({
-        order: order++,
         heading: sc.heading,
-        prompt,
         negative,
+        order: order++,
+        prompt,
       });
     }
   }
-  return shots.length ? shots : [{ order: 0, heading: "镜头 1", prompt: raw.trim() }];
+  return shots.length ? shots : [{ heading: "镜头 1", order: 0, prompt: raw.trim() }];
 }
 
 // ── create ─────────────────────────────────────────────────
@@ -199,33 +199,33 @@ async function persistFilmWithShots(args: {
   videoWorkflowId: string;
 }): Promise<string> {
   const film = await filmRepository.create({
-    userId: args.userId,
-    projectId: args.projectId ?? null,
-    title: args.title,
-    script: args.script,
-    type: args.type,
-    styleSlug: args.styleSlug ?? null,
-    size: JSON.stringify(args.sizeSpec),
+    bgmName: args.bgmName ?? null,
     fps: args.fps,
     framesPerShot: args.framesPerShot,
+    projectId: args.projectId ?? null,
+    script: args.script,
+    size: JSON.stringify(args.sizeSpec),
+    styleSlug: args.styleSlug ?? null,
     subtitleOn: args.subtitleOn,
-    bgmName: args.bgmName ?? null,
+    title: args.title,
+    type: args.type,
+    userId: args.userId,
   });
   await filmShotRepository.createMany(
     film.id,
     args.shotInputs.map((shot) => ({
-      order: shot.order,
-      shotId: shot.shotId ?? null,
       heading: shot.heading ?? null,
-      prompt: shot.prompt,
       negative: shot.negative ?? null,
+      order: shot.order,
       params: {
-        frames: args.framesPerShot,
         fps: args.fps,
+        frames: args.framesPerShot,
+        imageWorkflowId: args.imageWorkflowId,
         size: args.sizeSpec,
         videoWorkflowId: args.videoWorkflowId,
-        imageWorkflowId: args.imageWorkflowId,
       },
+      prompt: shot.prompt,
+      shotId: shot.shotId ?? null,
     })),
   );
   return film.id;
@@ -256,19 +256,19 @@ export async function createFilm(input: CreateFilmInput) {
   );
 
   const filmId = await persistFilmWithShots({
-    userId: input.userId,
-    title: input.title,
-    script: input.script,
-    type: input.type ?? "short_video",
-    styleSlug: input.styleSlug ?? null,
-    sizeSpec,
+    bgmName: input.bgmName ?? null,
     fps,
     framesPerShot,
-    subtitleOn: input.subtitleOn ?? true,
-    bgmName: input.bgmName ?? null,
-    videoWorkflowId: input.videoWorkflowId ?? "",
     imageWorkflowId: input.imageWorkflowId ?? "",
+    script: input.script,
     shotInputs: shots,
+    sizeSpec,
+    styleSlug: input.styleSlug ?? null,
+    subtitleOn: input.subtitleOn ?? true,
+    title: input.title,
+    type: input.type ?? "short_video",
+    userId: input.userId,
+    videoWorkflowId: input.videoWorkflowId ?? "",
   });
 
   await appendFilmLog(filmId, "success", `已生成分镜，共 ${shots.length} 个镜头`);
@@ -309,27 +309,27 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
   const framesPerShot = input.framesPerShot ?? 49;
 
   const shotInputs: Array<FilmShotInput> = shots.map((shot, i) => ({
-    order: i,
-    shotId: shot.id,
     heading: shot.sceneHeading || undefined,
-    prompt: shot.prompt,
     negative: shot.negativePrompt || undefined,
+    order: i,
+    prompt: shot.prompt,
+    shotId: shot.id,
   }));
 
   const filmId = await persistFilmWithShots({
-    userId: input.userId,
-    projectId: input.projectId,
-    title: input.title ?? row?.title ?? "未命名成片",
-    script: row?.scriptMarkdown ?? "",
-    type: input.type ?? row?.type ?? "short_video",
-    sizeSpec,
+    bgmName: input.bgmName ?? null,
     fps,
     framesPerShot,
-    subtitleOn: input.subtitleOn ?? true,
-    bgmName: input.bgmName ?? null,
-    videoWorkflowId: input.videoWorkflowId ?? "",
     imageWorkflowId: input.imageWorkflowId ?? "",
+    projectId: input.projectId,
+    script: row?.scriptMarkdown ?? "",
     shotInputs,
+    sizeSpec,
+    subtitleOn: input.subtitleOn ?? true,
+    title: input.title ?? row?.title ?? "未命名成片",
+    type: input.type ?? row?.type ?? "short_video",
+    userId: input.userId,
+    videoWorkflowId: input.videoWorkflowId ?? "",
   });
 
   await appendFilmLog(filmId, "success", `从项目镜头建片，共 ${shotInputs.length} 个镜头`);
@@ -369,26 +369,26 @@ async function generateVideoShot(
       throw new Error("镜头缺少首帧，且没有配置「工作流库图类工作流 id」可用于合成首帧");
     }
     inputImage = await synthesizeFirstFrame({
+      negative: shot.negative ?? undefined,
+      prompt: shot.prompt,
+      seed: randomSeed(),
+      size,
       userId,
       workflowId: imageWorkflowId,
-      prompt: shot.prompt,
-      negative: shot.negative ?? undefined,
-      size,
-      seed: randomSeed(),
     });
   }
 
   const { taskId } = await createWorkflowRunTask({
     userId,
-    workflowId: videoWorkflowId,
     values: {
       prompt: shot.prompt,
       ...(shot.negative ? { negativePrompt: shot.negative } : {}),
       firstFrame: inputImage,
       frames: /* SAFETY: 类型断言已复核 */ (params.frames ?? 81) as number,
-      size,
       seed: randomSeed(),
+      size,
     },
+    workflowId: videoWorkflowId,
   });
 
   return taskId;
@@ -415,9 +415,9 @@ export async function startFilm(id: string) {
   for (const shot of shots) {
     try {
       const taskId = await generateVideoShot(film.userId, {
-        prompt: shot.prompt,
         negative: shot.negative,
         params: shot.params,
+        prompt: shot.prompt,
       });
       await filmShotRepository.markQueued(shot.id, taskId);
     } catch (e) {
@@ -547,11 +547,11 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
         continue;
       }
       const map: Record<string, ShotStatus> = {
+        CANCELLED: "FAILED",
+        FAILED: "FAILED",
         QUEUED: "QUEUED",
         RUNNING: "RUNNING",
         SUCCEEDED: "SUCCEEDED",
-        FAILED: "FAILED",
-        CANCELLED: "FAILED",
       };
       const next = map[task.status] ?? "QUEUED";
       let videoPath: string | undefined;
@@ -581,10 +581,10 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
       const nextProgress = task.progress ?? 0;
       if (shot.status !== next || (shot.progress ?? 0) !== nextProgress) {
         await filmShotRepository.updateFromTask(shot.id, {
-          status: next,
-          progress: nextProgress,
-          videoPath: videoPath ?? undefined,
           duration: duration ?? null,
+          progress: nextProgress,
+          status: next,
+          videoPath: videoPath ?? undefined,
         });
       }
       if (next === "SUCCEEDED") {
@@ -637,7 +637,7 @@ export async function resumeStalledFilms(): Promise<{
    * 接片，所以必须留痕 —— 否则现场只能看到「影片停在生成中」而读不到任何原因。 */
   if (!isSchemaReady()) {
     logger.info("[film] 重启恢复扫描跳过（表还没建就绪）");
-    return { resumed: [], abandoned: [] };
+    return { abandoned: [], resumed: [] };
   }
 
   const resumed: Array<string> = [];
@@ -677,7 +677,7 @@ export async function resumeStalledFilms(): Promise<{
       `[film] 重启恢复扫描：续跑监看 ${resumed.length} 部，合成中断判失败 ${abandoned.length} 部`,
     );
   }
-  return { resumed, abandoned };
+  return { abandoned, resumed };
 }
 
 // ── cancel ──────────────────────────────────────────────────

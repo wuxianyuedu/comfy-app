@@ -34,13 +34,13 @@ type AttributeMultiSelectProps = {
 };
 
 export function AttributeMultiSelect({
-  label,
+  className = "",
+  disabled = false,
   groups,
-  value,
+  label,
   onChange,
   placeholder = "从下拉中选择…",
-  disabled = false,
-  className = "",
+  value,
 }: AttributeMultiSelectProps) {
   const panelId = useId();
   const [open, setOpen] = useState(false);

@@ -17,8 +17,8 @@ const NESTED_UUID = "11112222-2d3d-445f-9be5-6063f465757e";
 function primitiveInt(id: string, value: number) {
   return {
     id,
-    type: "PrimitiveInt",
     inputs: [{ name: "value", widget: { name: "value" } }],
+    type: "PrimitiveInt",
     widgets_values: [value],
   };
 }
@@ -26,14 +26,6 @@ function primitiveInt(id: string, value: number) {
 /** 外层 wrapper + 它的子图定义（内部含一个 PrimitiveInt 与一个嵌套 wrapper）。 */
 function nestedRaw() {
   return {
-    nodes: [
-      {
-        id: 4,
-        type: INNER_UUID,
-        inputs: [],
-        widgets_values: [],
-      },
-    ],
     definitions: {
       subgraphs: {
         [INNER_UUID]: {
@@ -42,8 +34,8 @@ function nestedRaw() {
             primitiveInt("1670", 1),
             {
               id: 5,
-              type: NESTED_UUID,
               inputs: [],
+              type: NESTED_UUID,
               widgets_values: [],
             },
           ],
@@ -54,6 +46,14 @@ function nestedRaw() {
         },
       },
     },
+    nodes: [
+      {
+        id: 4,
+        inputs: [],
+        type: INNER_UUID,
+        widgets_values: [],
+      },
+    ],
   };
 }
 
@@ -70,7 +70,7 @@ function widgetsOf(raw: unknown, subgraphUid: string, innerId: string): Array<un
 describe("resolveRawNode — 拼接 id 逐层下钻", () => {
   it("`宿主:内部` 写进对应子图定义里的内部节点", () => {
     const raw = nestedRaw();
-    const result = applyRawOverrides(raw, [{ nodeId: "4:1670", name: "value", value: 42 }]);
+    const result = applyRawOverrides(raw, [{ name: "value", nodeId: "4:1670", value: 42 }]);
 
     expect(widgetsOf(result, INNER_UUID, "1670")).toEqual([42]);
     /* 嵌套子图里同名的内部节点 1670 不受影响（正是「裸 id 扫描」会写错的场景）。 */
@@ -79,7 +79,7 @@ describe("resolveRawNode — 拼接 id 逐层下钻", () => {
 
   it("嵌套的 `宿主:内层宿主:内部` 三层链路也能写对", () => {
     const raw = nestedRaw();
-    const result = applyRawOverrides(raw, [{ nodeId: "4:5:1670", name: "value", value: 99 }]);
+    const result = applyRawOverrides(raw, [{ name: "value", nodeId: "4:5:1670", value: 99 }]);
 
     expect(widgetsOf(result, NESTED_UUID, "1670")).toEqual([99]);
     expect(widgetsOf(result, INNER_UUID, "1670")).toEqual([1]);
@@ -87,7 +87,7 @@ describe("resolveRawNode — 拼接 id 逐层下钻", () => {
 
   it("链路中断（宿主 id 不存在）时落空，不误写到别处", () => {
     const raw = nestedRaw();
-    const result = applyRawOverrides(raw, [{ nodeId: "999:1670", name: "value", value: 5 }]);
+    const result = applyRawOverrides(raw, [{ name: "value", nodeId: "999:1670", value: 5 }]);
 
     expect(widgetsOf(result, INNER_UUID, "1670")).toEqual([1]);
     expect(widgetsOf(result, NESTED_UUID, "1670")).toEqual([7]);
@@ -95,18 +95,18 @@ describe("resolveRawNode — 拼接 id 逐层下钻", () => {
 
   it("顶层节点 id 仍原样定位", () => {
     const raw = {
+      links: [],
       nodes: [
         {
           id: "24",
-          type: "LoadImage",
           inputs: [{ name: "image", widget: { name: "image" } }],
+          type: "LoadImage",
           widgets_values: ["old.png"],
         },
       ],
-      links: [],
     };
     const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
-      { nodeId: "24", name: "image", value: "new.png" },
+      { name: "image", nodeId: "24", value: "new.png" },
     ]) as { nodes: Array<{ id: string; widgets_values: Array<unknown> }> };
 
     expect(result.nodes[0]!.widgets_values).toEqual(["new.png"]);
@@ -114,7 +114,7 @@ describe("resolveRawNode — 拼接 id 逐层下钻", () => {
 
   it("存量裸内部 id（没有宿主前缀）仍按子图定义兜底定位", () => {
     const raw = nestedRaw();
-    const result = applyRawOverrides(raw, [{ nodeId: "1670", name: "value", value: 3 }]);
+    const result = applyRawOverrides(raw, [{ name: "value", nodeId: "1670", value: 3 }]);
 
     /* 旧数据只存内部 id：为已在库的行保留兜底，找得到就落值。 */
     expect(widgetsOf(result, INNER_UUID, "1670")).toEqual([3]);
@@ -137,7 +137,7 @@ function apiGraphWithSampler(): ApiGraph {
   return {
     "3": {
       class_type: "KSampler",
-      inputs: { seed: 111, steps: 20, cfg: 4, positive: ["6", 0] },
+      inputs: { cfg: 4, positive: ["6", 0], seed: 111, steps: 20 },
     },
   };
 }
@@ -145,7 +145,7 @@ function apiGraphWithSampler(): ApiGraph {
 describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
   it("值写进命名入参；数值入参的字符串值被收窄成数字", () => {
     const out = /* SAFETY: 类型断言已复核 */ applyApiOverrides(apiGraphWithSampler(), [
-      { nodeId: "3", name: "steps", value: "30" },
+      { name: "steps", nodeId: "3", value: "30" },
     ]) as ApiGraph;
 
     expect(out["3"]!.inputs.steps).toBe(30);
@@ -156,7 +156,7 @@ describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
 
   it("空串不参与数值收窄（清空输入框 = 没有值，不能把 steps 写成 0）", () => {
     const out = /* SAFETY: 类型断言已复核 */ applyApiOverrides(apiGraphWithSampler(), [
-      { nodeId: "3", name: "steps", value: "" },
+      { name: "steps", nodeId: "3", value: "" },
     ]) as ApiGraph;
 
     expect(out["3"]!.inputs.steps).toBe("");
@@ -164,7 +164,7 @@ describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
 
   it("control_after_generate=randomize：铸新 seed 且该键不入载荷", () => {
     const out = /* SAFETY: 类型断言已复核 */ applyApiOverrides(apiGraphWithSampler(), [
-      { nodeId: "3", name: "control_after_generate", value: "randomize" },
+      { name: "control_after_generate", nodeId: "3", value: "randomize" },
     ]) as ApiGraph;
 
     expect(out["3"]!.inputs.control_after_generate).toBeUndefined();
@@ -175,7 +175,7 @@ describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
 
   it("control_after_generate=fixed：只摘键，seed 保持原值", () => {
     const out = /* SAFETY: 类型断言已复核 */ applyApiOverrides(apiGraphWithSampler(), [
-      { nodeId: "3", name: "control_after_generate", value: "fixed" },
+      { name: "control_after_generate", nodeId: "3", value: "fixed" },
     ]) as ApiGraph;
 
     expect(out["3"]!.inputs.control_after_generate).toBeUndefined();
@@ -188,8 +188,8 @@ describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
       "4": { class_type: "Note" },
     };
     const out = /* SAFETY: 类型断言已复核 */ applyApiOverrides(graph, [
-      { nodeId: "999", name: "seed", value: 7 },
-      { nodeId: "4", name: "seed", value: 7 },
+      { name: "seed", nodeId: "999", value: 7 },
+      { name: "seed", nodeId: "4", value: 7 },
     ]) as Record<string, { inputs?: Record<string, unknown> }>;
 
     expect(out["3"]!.inputs!.seed).toBe(1);
@@ -197,8 +197,8 @@ describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
   });
 
   it("非对象输入（null / 数组）返回空对象而不是抛错", () => {
-    expect(applyApiOverrides(null, [{ nodeId: "3", name: "seed", value: 1 }])).toEqual({});
-    expect(applyApiOverrides([], [{ nodeId: "3", name: "seed", value: 1 }])).toEqual({});
+    expect(applyApiOverrides(null, [{ name: "seed", nodeId: "3", value: 1 }])).toEqual({});
+    expect(applyApiOverrides([], [{ name: "seed", nodeId: "3", value: 1 }])).toEqual({});
   });
 });
 
@@ -215,51 +215,51 @@ const DRIFT_UUID = "11111111-2222-3333-4444-555555555555";
 /** `socketInnerHasWidget` 决定是否产生漂移（内层目标带不带 widget 标记）。 */
 function driftRaw(socketInnerHasWidget: boolean) {
   return {
-    nodes: [
-      {
-        id: "9",
-        type: DRIFT_UUID,
-        inputs: [
-          /* 被转成插槽的引脚：宿主没有 widget，不占 widgets_values。 */
-          { name: "socket", widget: null },
-          { name: "clip_name", widget: { name: "clip_name" } },
-        ],
-        widgets_values: ["umt5_xxl_fp8.safetensors"],
-      },
-    ],
     definitions: {
       subgraphs: {
         [DRIFT_UUID]: {
           id: DRIFT_UUID,
-          nodes: [
-            {
-              id: "100",
-              type: "CLIPLoader",
-              inputs: [{ name: "clip_name", widget: { name: "clip_name" } }],
-              widgets_values: ["default.safetensors"],
-            },
-            {
-              id: "200",
-              type: "PrimitiveBoolean",
-              inputs: [
-                socketInnerHasWidget
-                  ? { name: "value", widget: { name: "value" } }
-                  : { name: "value", widget: null },
-              ],
-              widgets_values: [false],
-            },
-          ],
           inputs: [
-            { name: "socket", linkIds: ["1"] },
-            { name: "clip_name", linkIds: ["2"] },
+            { linkIds: ["1"], name: "socket" },
+            { linkIds: ["2"], name: "clip_name" },
           ],
           links: [
             { id: "1", origin_id: -10, target_id: "200", target_slot: 0 },
             { id: "2", origin_id: -10, target_id: "100", target_slot: 0 },
           ],
+          nodes: [
+            {
+              id: "100",
+              inputs: [{ name: "clip_name", widget: { name: "clip_name" } }],
+              type: "CLIPLoader",
+              widgets_values: ["default.safetensors"],
+            },
+            {
+              id: "200",
+              inputs: [
+                socketInnerHasWidget
+                  ? { name: "value", widget: { name: "value" } }
+                  : { name: "value", widget: null },
+              ],
+              type: "PrimitiveBoolean",
+              widgets_values: [false],
+            },
+          ],
         },
       },
     },
+    nodes: [
+      {
+        id: "9",
+        inputs: [
+          /* 被转成插槽的引脚：宿主没有 widget，不占 widgets_values。 */
+          { name: "socket", widget: null },
+          { name: "clip_name", widget: { name: "clip_name" } },
+        ],
+        type: DRIFT_UUID,
+        widgets_values: ["umt5_xxl_fp8.safetensors"],
+      },
+    ],
   };
 }
 

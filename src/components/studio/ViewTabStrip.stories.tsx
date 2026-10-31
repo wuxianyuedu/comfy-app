@@ -17,8 +17,8 @@ import { tabKey, type ViewTab } from "~/components/studio/workspace-tabs";
  *  · 关闭按钮是**页签内部**的按钮，点它不能连带切页签（`stopPropagation`）。
  */
 const PROJECTS: Record<string, string> = {
-  p_8f2a1c: "角色一致性",
   p_0b77e4: "城市夜景",
+  p_8f2a1c: "角色一致性",
 };
 
 const projectNameOf = (projectId: string | null): string | null =>
@@ -26,29 +26,29 @@ const projectNameOf = (projectId: string | null): string | null =>
 
 /** 真机上一条典型的页签组合：两个全局视图 + 两个项目内视图。 */
 const TABS: Array<ViewTab> = [
-  { key: tabKey("home", null), view: "home", projectId: null },
-  { key: tabKey("models", null), view: "models", projectId: null },
-  { key: tabKey("canvas", "p_8f2a1c"), view: "canvas", projectId: "p_8f2a1c" },
+  { key: tabKey("home", null), projectId: null, view: "home" },
+  { key: tabKey("models", null), projectId: null, view: "models" },
+  { key: tabKey("canvas", "p_8f2a1c"), projectId: "p_8f2a1c", view: "canvas" },
   {
     key: tabKey("workshop", "p_0b77e4"),
-    view: "workshop",
     projectId: "p_0b77e4",
+    view: "workshop",
   },
 ];
 
 const OPENABLE: Array<OpenableView> = [
-  { view: "home", label: "首页" },
-  { view: "models", label: "模型库" },
-  { view: "queue", label: "队列" },
-  { view: "history", label: "历史" },
+  { label: "首页", view: "home" },
+  { label: "模型库", view: "models" },
+  { label: "队列", view: "queue" },
+  { label: "历史", view: "history" },
 ];
 
 /** 适配件：页签条是受控组件（选中 / 关闭都要真发生），story 自己持状态。 */
 function InteractiveStrip({ inTitleBar, tabs }: { inTitleBar: boolean; tabs: Array<ViewTab> }) {
   const [state, setState] = useState({
-    tabs,
     activeKey: tabs[2]?.key ?? "",
     closed: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    tabs,
   });
   return (
     <div className="flex flex-col gap-3">
@@ -59,8 +59,8 @@ function InteractiveStrip({ inTitleBar, tabs }: { inTitleBar: boolean; tabs: Arr
           onClose={(key) =>
             setState((s) => ({
               ...s,
-              tabs: s.tabs.filter((t) => t.key !== key),
               closed: [...s.closed, key],
+              tabs: s.tabs.filter((t) => t.key !== key),
             }))
           }
           onOpenView={() => undefined}
@@ -85,8 +85,6 @@ function InteractiveStrip({ inTitleBar, tabs }: { inTitleBar: boolean; tabs: Arr
 }
 
 const meta = {
-  title: "Studio/ViewTabStrip",
-  component: InteractiveStrip,
   args: { inTitleBar: false, tabs: TABS },
   argTypes: {
     inTitleBar: {
@@ -94,6 +92,8 @@ const meta = {
       description: "壳内嵌入窗口标题行（去边框、换背景层级）",
     },
   },
+  component: InteractiveStrip,
+  title: "Studio/ViewTabStrip",
 } satisfies Meta<typeof InteractiveStrip>;
 
 export default meta;
@@ -114,7 +114,7 @@ export const InTitleBar: Story = {
  */
 export const SingleTab: Story = {
   args: {
-    tabs: [{ key: tabKey("home", null), view: "home", projectId: null }],
+    tabs: [{ key: tabKey("home", null), projectId: null, view: "home" }],
   },
 };
 
@@ -125,11 +125,11 @@ export const SingleTab: Story = {
 export const UnknownProject: Story = {
   args: {
     tabs: [
-      { key: tabKey("home", null), view: "home", projectId: null },
+      { key: tabKey("home", null), projectId: null, view: "home" },
       {
         key: tabKey("canvas", "p_gone"),
-        view: "canvas",
         projectId: "p_gone",
+        view: "canvas",
       },
     ],
   },

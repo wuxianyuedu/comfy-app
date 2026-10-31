@@ -47,15 +47,15 @@ export type CanvasSettings = {
 };
 
 export const DEFAULT_CANVAS_SETTINGS: CanvasSettings = {
-  gridMinorAlpha: 0.22,
-  gridMajorAlpha: 0.14,
+  debugMode: false,
   gridGap: 10,
-  gridMinorLineWidth: 1,
+  gridMajorAlpha: 0.14,
   gridMajorLineWidth: 1.25,
-  showGrid: true,
-  showRulers: true,
-  showMiniMap: true,
+  gridMinorAlpha: 0.22,
+  gridMinorLineWidth: 1,
   maxZoom: 2,
   minZoom: 0.15,
-  debugMode: false,
+  showGrid: true,
+  showMiniMap: true,
+  showRulers: true,
 };

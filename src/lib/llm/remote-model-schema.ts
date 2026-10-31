@@ -23,8 +23,8 @@ export const remoteModelFieldSchema = z.object({
   /* 接口地址与 API Key 都是「可留空回落全局」，所以默认空串而不是必填 ——
      把它们留成 `z.string()` 会让「只给 model」的调用方直接抛错，
      那正是字段级规则与表单形态脱节的信号。 */
-  baseUrl: z.string().default(""),
   apiKey: z.string().default(""),
+  baseUrl: z.string().default(""),
   kind: z.enum(REMOTE_MODEL_KINDS).default("chat"),
 });
 
@@ -46,8 +46,8 @@ export type RemoteModelFieldValues = z.infer<typeof remoteModelFieldSchema>;
  * 等于允许客户端替服务端宣布「这条存过密钥」。
  */
 export const remoteModelEntrySchema = z.object({
-  name: z.string().min(1),
   baseUrl: z.string().nullish(),
+  name: z.string().min(1),
   /** 三态由调用点决定「省略键」还是「写 null」（口径见 `~/lib/llm/types` 的 A11 那段）。 */
   apiKey: z.string().nullish(),
   kind: z.enum(REMOTE_MODEL_KINDS).nullish(),
@@ -84,10 +84,10 @@ export function remoteModelEntryFromDraft(draft: RemoteModelFieldValues): Remote
   const baseUrl = draft.baseUrl.trim();
   const apiKey = draft.apiKey.trim();
   return {
-    name: draft.model.trim(),
-    baseUrl: baseUrl === "" ? null : baseUrl,
     apiKey: apiKey === "" ? undefined : apiKey,
+    baseUrl: baseUrl === "" ? null : baseUrl,
     kind: draft.kind,
+    name: draft.model.trim(),
   };
 }
 
@@ -100,10 +100,10 @@ export function validateRemoteModelFields(
   values: Partial<Record<keyof RemoteModelFieldValues, unknown>>,
 ): Partial<Record<keyof RemoteModelFieldValues, string>> {
   const parsed = remoteModelFieldSchema.safeParse({
-    model: typeof values.model === "string" ? values.model : "",
-    baseUrl: typeof values.baseUrl === "string" ? values.baseUrl : "",
     apiKey: typeof values.apiKey === "string" ? values.apiKey : "",
+    baseUrl: typeof values.baseUrl === "string" ? values.baseUrl : "",
     kind: isKind(values.kind) ? values.kind : "chat",
+    model: typeof values.model === "string" ? values.model : "",
   });
   if (parsed.success) {
     return {};

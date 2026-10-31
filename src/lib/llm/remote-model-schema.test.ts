@@ -6,10 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  remoteModelFieldSchema,
-  validateRemoteModelFields,
-} from "./remote-model-schema";
+import { remoteModelFieldSchema, validateRemoteModelFields } from "./remote-model-schema";
 
 describe("validateRemoteModelFields", () => {
   it("名称为空 → 报「请填写模型名称」，挂在 model 字段上", () => {
@@ -25,17 +22,15 @@ describe("validateRemoteModelFields", () => {
   });
 
   it("只校验名称：接口地址与密钥可留空（回落全局配置）", () => {
-    expect(
-      validateRemoteModelFields({ model: "gpt-4o", baseUrl: "", apiKey: "" }),
-    ).toEqual({});
+    expect(validateRemoteModelFields({ apiKey: "", baseUrl: "", model: "gpt-4o" })).toEqual({});
   });
 
   it("通过时返回空对象（视图据此决定不渲染任何行内错误）", () => {
     expect(
       validateRemoteModelFields({
-        model: "openai/gpt-4o",
-        baseUrl: "https://api.example.com/v1",
         apiKey: "sk-x",
+        baseUrl: "https://api.example.com/v1",
+        model: "openai/gpt-4o",
       }),
     ).toEqual({});
   });
@@ -51,9 +46,7 @@ describe("remoteModelFieldSchema", () => {
   });
 
   it("kind 只接受三种用途，其它值判不通过", () => {
-    expect(
-      remoteModelFieldSchema.safeParse({ model: "m", kind: "audio" }).success,
-    ).toBe(false);
+    expect(remoteModelFieldSchema.safeParse({ kind: "audio", model: "m" }).success).toBe(false);
   });
 
   it("模型名不做额外格式限制（OpenAI 兼容侧的名字形态很杂）", () => {

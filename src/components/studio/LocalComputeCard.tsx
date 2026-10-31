@@ -37,10 +37,10 @@ import { useComfyReadiness } from "./hooks/use-comfy-readiness";
  *     失败镜头数据源；两者都没有现成出口，凭原型的样子写一份假数据比不写更糟。
  */
 export function LocalComputeCard() {
-  const { stats, online, stale, connecting, degradedNote, cudaVram, smiVram, ram } =
+  const { connecting, cudaVram, degradedNote, online, ram, smiVram, stale, stats } =
     useComfyReadiness();
 
-  const metrics = selectVisibleResourceMetrics({ cudaVram, smiVram, ram });
+  const metrics = selectVisibleResourceMetrics({ cudaVram, ram, smiVram });
 
   /* 圆点档位与状态栏同一套语义：连着且新鲜 = up，连着但这一轮没读到 = busy（迟滞容忍期），
      连着而首帧未到 = probing（正在探），不在线 = down。 */
@@ -69,7 +69,7 @@ export function LocalComputeCard() {
 
         {metrics.length > 0 && (
           <div className={cn("mt-3 grid gap-2.5 sm:grid-cols-2", stale && "opacity-60")}>
-            {metrics.map(({ descriptor, bar }) => (
+            {metrics.map(({ bar, descriptor }) => (
               <ProgressBar
                 ariaLabel={`${descriptor.label} ${bar.pct}%`}
                 key={descriptor.key}

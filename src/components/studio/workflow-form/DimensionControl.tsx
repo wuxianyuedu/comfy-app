@@ -62,17 +62,17 @@ import type { DimensionGroup } from "../workflow-io";
  * 分发发生在调用任何 hook **之前**，好让两个子控件各自拥有
  * 自己的 hook 集合（React 不允许条件式 hook）。 */
 function DimensionControl({
-  group,
-  values,
-  set,
-  setMany,
   disabled,
-  workflowId,
+  group,
+  mode,
   narrow,
   onRequiredChange,
-  mode,
-  visibilityMode,
   onVisibilityChange,
+  set,
+  setMany,
+  values,
+  visibilityMode,
+  workflowId,
 }: {
   disabled?: boolean;
   group: DimensionGroup;
@@ -94,7 +94,7 @@ function DimensionControl({
     return (
       <DimensionSizeControl
         disabled={disabled}
-        group={{ ...group, width: group.width, height: group.height }}
+        group={{ ...group, height: group.height, width: group.width }}
         mode={mode}
         narrow={narrow}
         onRequiredChange={onRequiredChange}
@@ -126,17 +126,17 @@ function DimensionControl({
 }
 
 function DimensionSizeControl({
-  group,
-  values,
-  set,
-  setMany,
   disabled,
-  workflowId,
+  group,
+  mode,
   narrow,
   onRequiredChange,
-  mode,
-  visibilityMode,
   onVisibilityChange,
+  set,
+  setMany,
+  values,
+  visibilityMode,
+  workflowId,
 }: {
   disabled?: boolean;
   group: SizeGroup;
@@ -212,7 +212,7 @@ function DimensionSizeControl({
    * 宽高推出来的那个量，所以起点与屏幕上看到的尺寸一致（选 1k 就是它的实际
    * 0.8M，而不是从 1M 跳一下）。用户改它 → 按同一比例换总像素预算，宽高随之
    * 吸附到倍数网格。 */
-  const currentMegapixels = useMemo(() => megapixelsOf({ width: w0, height: h0 }), [w0, h0]);
+  const currentMegapixels = useMemo(() => megapixelsOf({ height: h0, width: w0 }), [w0, h0]);
 
   const applyPreset = useCallback(
     (rLabel: string, cLabel: string) => {
@@ -222,9 +222,9 @@ function DimensionSizeControl({
        * 直接用`DIM_CLARITY_PRESETS.find` 会把用户填的 2.5 悄悄换成 1k。 */
       const cp = clarityPresetFor(cLabel);
       /* 分辨率档查场景表；百万像素档把用户选的倍数带进去吸附宽高。 */
-      const { width, height } = dimsForRatio(rp.ratio, cp, alignMultiple, scene, table);
+      const { height, width } = dimsForRatio(rp.ratio, cp, alignMultiple, scene, table);
       setExplicitClarity(cLabel);
-      setMany({ [group.width.ioKey]: width, [group.height.ioKey]: height });
+      setMany({ [group.height.ioKey]: height, [group.width.ioKey]: width });
     },
     [group, setMany, alignMultiple, scene, table],
   );
@@ -244,9 +244,9 @@ function DimensionSizeControl({
       const cp =
         DIM_CLARITY_PRESETS.find((preset) => preset.label === clarity) ??
         DEFAULT_DIM_CLARITY_PRESET;
-      const { width, height } = dimsForRatio(rp.ratio, cp, clamped, scene, table);
+      const { height, width } = dimsForRatio(rp.ratio, cp, clamped, scene, table);
       setExplicitClarity(null);
-      setMany({ [group.width.ioKey]: width, [group.height.ioKey]: height });
+      setMany({ [group.height.ioKey]: height, [group.width.ioKey]: width });
     },
     [ratio, clarity, group, setMany, setAlignMultiple, scene, table],
   );
@@ -270,25 +270,25 @@ function DimensionSizeControl({
     const list: Array<SegmentSection<string>> = [
       {
         label: "比例",
-        value: ratio,
+        onChange: (value) => applyPreset(value, clarity),
         options: DIM_RATIO_PRESETS.map((preset) => ({
-          value: preset.label,
           label: shortRatioLabel(preset.label),
           render: <RatioIcon ratio={preset.ratio} />,
+          value: preset.label,
         })),
-        onChange: (value) => applyPreset(value, clarity),
+        value: ratio,
       },
       {
         label: "像素",
         value: clarity,
         /* 子类分组：「分辨率」（1k/2k/4k，查场景表）与「百万像素」（1M/2M/4M，
          * 总像素预算）各占一行。 */
+        onChange: (value) => applyPreset(ratio, value),
         options: DIM_CLARITY_PRESETS.map((preset) => ({
-          value: preset.label,
           label: preset.label,
           subgroup: CLARITY_SUBGROUP_OF_KIND[preset.kind],
+          value: preset.label,
         })),
-        onChange: (value) => applyPreset(ratio, value),
         /* 百万像素是连续量：档位之外再给一个能填任意值的步进器（挨着「百万像素」
          * 那一组渲染）。写出去的 label 与档位同形（"2.5M"），`applyPreset` 经
          *`clarityPresetFor` 认出它。 */
@@ -305,12 +305,12 @@ function DimensionSizeControl({
     if (clarityKind === "megapixel") {
       list.push({
         label: "倍数",
-        value: String(alignMultiple),
-        options: ALIGN_MULTIPLE_OPTIONS.map((option) => ({
-          value: String(option),
-          label: String(option),
-        })),
         onChange: (value) => handleAlignChange(Number(value)),
+        options: ALIGN_MULTIPLE_OPTIONS.map((option) => ({
+          label: String(option),
+          value: String(option),
+        })),
+        value: String(alignMultiple),
       });
     }
     return list;

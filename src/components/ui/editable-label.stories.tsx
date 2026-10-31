@@ -13,9 +13,9 @@ import { EditableLabel } from "~/components/ui/editable-label";
  *    （`label !== prevLabel` 那条渲染期同步）。
  */
 const meta = {
-  title: "UI/EditableLabel",
-  component: EditableLabel,
   args: { label: "角色一致性 · 三视图" },
+  component: EditableLabel,
+  title: "UI/EditableLabel",
 } satisfies Meta<typeof EditableLabel>;
 
 export default meta;

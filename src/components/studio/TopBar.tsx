@@ -61,7 +61,7 @@ export type TopBarProps = {
  * 项目页签的主页 / 画布 / 工坊 / 资源库 / 产出 / 成片走 `ProjectTabBar` 高亮，见 `ProjectTabBar`）。
  * 只是那个名称行也不白占：顶部省下约 3.5rem 的纵向空间。
  */
-export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
+export function TopBar({ active, onOpenSearch, onOpenSettings }: TopBarProps) {
   const label = NAV_ITEMS.find((item) => item.id === active)?.label ?? "工作区";
   /* 这一屏的说明文案（没有登记的视图没有说明，问号整个不渲染）。 */
   const help = viewHelp(active);

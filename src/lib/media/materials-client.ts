@@ -96,10 +96,10 @@ export async function fetchMaterials(query: MaterialListQuery): Promise<Material
    * `undefined` 写成字符串 `"undefined"`，所以收口前得自己 `if` 一层。 */
   const res = await fetch(
     withQuery(ENDPOINT, {
-      projectId: query.projectId,
-      scope: query.scope,
-      q: query.q,
       folder: query.q ? undefined : query.folder,
+      projectId: query.projectId,
+      q: query.q,
+      scope: query.scope,
     }),
   );
   const body = await readJsonBody(res);
@@ -123,7 +123,7 @@ async function postMaterial(
     fd.append("shared", "true");
   }
 
-  const res = await fetch(ENDPOINT, { method: "POST", body: fd });
+  const res = await fetch(ENDPOINT, { body: fd, method: "POST" });
   const body = await readJsonBody(res);
   if (!res.ok) {
     throw new Error(readApiError(body) ?? `上传失败 (${res.status})`);
@@ -161,9 +161,9 @@ export async function uploadMaterialItem(
     throw new Error("上传成功但服务端未返回素材地址");
   }
   return {
-    url,
     id: isRecord(item) && typeof item.id === "string" ? item.id : url,
     name: isRecord(item) && typeof item.name === "string" ? item.name : file.name,
+    url,
   };
 }
 

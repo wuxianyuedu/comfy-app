@@ -17,32 +17,20 @@
 
 import React from "react";
 import { BaseEdge, getSmoothStepPath, type EdgeProps } from "@xyflow/react";
-import {
-  shouldDimEdge,
-  type EdgeFocusRole,
-} from "../canvas/flow-focus-endpoints";
+import { shouldDimEdge, type EdgeFocusRole } from "../canvas/flow-focus-endpoints";
 import { readEdgeFocusRole } from "../canvas/hooks/use-related-edges-highlight";
 
 export const ProjectEdge = React.memo(function ProjectEdge(props: EdgeProps) {
-  const {
-    id,
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-    style,
-    data,
-  } = props;
+  const { data, id, sourcePosition, sourceX, sourceY, style, targetPosition, targetX, targetY } =
+    props;
 
   const [edgePath] = getSmoothStepPath({
+    sourcePosition,
     sourceX,
     sourceY,
+    targetPosition,
     targetX,
     targetY,
-    sourcePosition,
-    targetPosition,
   });
 
   const edgeData = data;
@@ -59,8 +47,8 @@ export const ProjectEdge = React.memo(function ProjectEdge(props: EdgeProps) {
       path={edgePath}
       style={{
         ...style,
-        strokeWidth: focused ? 4 : dimmed ? 2 : 2.5,
         opacity: focused ? 1 : dimmed ? 0.3 : 1,
+        strokeWidth: focused ? 4 : dimmed ? 2 : 2.5,
         /* 提亮而不是换色：连线的渐变是画布的品牌观感，也是「这条线在流动」的
          * 视觉语义，换色会把两者一起丢掉。 */
         filter: focused

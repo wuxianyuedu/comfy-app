@@ -160,8 +160,8 @@ export function parseAnsiSegments(text: string): Array<AnsiSegment> {
 
   const flush = () => {
     if (plain) {
-      const styles = composeStyles({ bold, dim, italic, underline, fg, bg });
-      segments.push(styles.length > 0 ? { text: plain, styles } : { text: plain });
+      const styles = composeStyles({ bg, bold, dim, fg, italic, underline });
+      segments.push(styles.length > 0 ? { styles, text: plain } : { text: plain });
       plain = "";
     }
   };
@@ -190,7 +190,7 @@ export function parseAnsiSegments(text: string): Array<AnsiSegment> {
         fg = s.fg;
         bg = s.bg;
       },
-      () => ({ bold, dim, italic, underline, fg, bg }),
+      () => ({ bg, bold, dim, fg, italic, underline }),
     );
   }
   plain += text.slice(last);
@@ -298,12 +298,12 @@ function applySgr(codes: string, set: (state: SgrState) => void, get: () => SgrS
 
 const LOGRUS_LEVEL_RE = /\blevel=(INFO|WARN|ERROR|FATAL|DEBUG|TRACE)\b/;
 const LOGRUS_LEVEL_STYLE: Record<string, AnsiStyleKey> = {
-  INFO: "green",
-  WARN: "yellow",
+  DEBUG: "gray",
   ERROR: "red",
   FATAL: "red",
-  DEBUG: "gray",
+  INFO: "green",
   TRACE: "gray",
+  WARN: "yellow",
 };
 /** 行首的 runtime 写入前缀（[时间戳] [流]）与 logrus time=… 字段，统一调暗 */
 const LOGRUS_DIM_PREFIX_RE = /^(\[[^\]]*\]\s*)*(time=\S+\s+)?/;
@@ -320,14 +320,14 @@ export function colorizeLogrusLine(line: string): Array<AnsiSegment> | null {
   const segments: Array<AnsiSegment> = [];
   const dimLen = LOGRUS_DIM_PREFIX_RE.exec(head)?.[0].length ?? 0;
   if (dimLen > 0) {
-    segments.push({ text: head.slice(0, dimLen), styles: ["dim"] });
+    segments.push({ styles: ["dim"], text: head.slice(0, dimLen) });
   }
   if (head.length > dimLen) {
     segments.push({ text: head.slice(dimLen) });
   }
   segments.push({
-    text: levelToken,
     styles: [LOGRUS_LEVEL_STYLE[matched[1] ?? "INFO"] ?? "green"],
+    text: levelToken,
   });
   const tail = line.slice(levelIdx + levelToken.length);
   if (tail) {

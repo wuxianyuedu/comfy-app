@@ -50,9 +50,9 @@ afterAll(() => {
   cwdSpy.mockRestore();
   // Windows：句柄未释放时 rmSync 会 EPERM，按仓库既有做法带重试
   fs.rmSync(TMP, {
-    recursive: true,
     force: true,
     maxRetries: 10,
+    recursive: true,
     retryDelay: 100,
   });
 });
@@ -155,8 +155,8 @@ function stubFetch(
       headers["content-type"] = "";
     }
     return new Response(reply.body ?? "bytes", {
-      status: reply.status ?? 200,
       headers,
+      status: reply.status ?? 200,
     });
   });
   vi.stubGlobal("fetch", spy);
@@ -204,7 +204,7 @@ describe("resolveMediaBytes 的 http(s) 分支", () => {
   });
 
   it("HTTP 不成功 → 文案里带状态码（只说「失败了」等于没说）", async () => {
-    stubFetch({ status: 502, contentType: "text/plain" });
+    stubFetch({ contentType: "text/plain", status: 502 });
     await expect(resolveMediaBytes("https://cdn.example.com/a.png", "http://x")).rejects.toThrow(
       "502",
     );
@@ -264,7 +264,7 @@ describe("resolveMediaDataUrl", () => {
   });
 
   it("图源不可用时把错误原样交回调用方（不在这里咽成空串）", async () => {
-    stubFetch({ status: 404, contentType: "image/png" });
+    stubFetch({ contentType: "image/png", status: 404 });
     await expect(
       resolveMediaDataUrl("https://cdn.example.com/gone.png", "http://x"),
     ).rejects.toThrow("404");

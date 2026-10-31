@@ -61,35 +61,35 @@ export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
         return null;
       }
       return {
-        type: "start",
-        runId: payload.runId,
         command: typeof payload.command === "string" ? payload.command : "",
         cwd: typeof payload.cwd === "string" ? payload.cwd : "",
+        runId: payload.runId,
         startedAt: typeof payload.startedAt === "number" ? payload.startedAt : Date.now(),
+        type: "start",
       };
     case "out": {
       if (typeof payload.text !== "string") {
         return null;
       }
       return {
-        type: "out",
         stream: payload.stream === "stderr" ? "stderr" : "stdout",
         text: payload.text,
+        type: "out",
       };
     }
     case "exit":
       return {
-        type: "exit",
         code: typeof payload.code === "number" ? payload.code : null,
-        signal: typeof payload.signal === "string" ? payload.signal : null,
-        killed: payload.killed === true,
-        truncatedNote: typeof payload.truncatedNote === "string" ? payload.truncatedNote : null,
         durationMs: typeof payload.durationMs === "number" ? payload.durationMs : 0,
+        killed: payload.killed === true,
+        signal: typeof payload.signal === "string" ? payload.signal : null,
+        truncatedNote: typeof payload.truncatedNote === "string" ? payload.truncatedNote : null,
+        type: "exit",
       };
     case "error":
       return {
-        type: "error",
         message: typeof payload.message === "string" ? payload.message : "命令执行失败",
+        type: "error",
       };
     default:
       return null;
@@ -147,11 +147,11 @@ export async function runConsoleCommand(opts: RunConsoleOptions): Promise<RunCon
   let res: Response;
   try {
     res = await fetch("/api/console/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ command: opts.command }),
-      signal: opts.signal,
       cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+      signal: opts.signal,
     });
   } catch (e) {
     if (isAbortError(e)) {

@@ -233,8 +233,8 @@ export async function stopComfyUiProcess(): Promise<{
     // 目标已经不在了：立刻清「关闭中」标记，不留无意义的进行态窗口。
     if (
       shouldClearStoppingOnStopMiss({
-        stillUp: !!stillUp,
         starting: isComfyStarting(),
+        stillUp: !!stillUp,
       })
     ) {
       st.stoppingAt = undefined;
@@ -244,11 +244,11 @@ export async function stopComfyUiProcess(): Promise<{
     }
     return stopDecision.kind === "foreign-running"
       ? {
-          ok: false,
           detail:
             "ComfyUI 在运行但不是本应用（配置路径）启动的，请在 ComfyUI 自己的窗口/终端中手动关闭",
+          ok: false,
         }
-      : { ok: true, detail: "ComfyUI 未在运行" };
+      : { detail: "ComfyUI 未在运行", ok: true };
   }
   pid = stopDecision.pid;
 
@@ -261,8 +261,8 @@ export async function stopComfyUiProcess(): Promise<{
   // 分支是 `spawn({detached:true})`（组长），无句柄的接管场景也按 guard 时的
   // 标记传 —— 只有传对它才能命中 `kill(-pid)` 的进程组路径。
   const kill = await killProcessTree({
-    pid,
     detached: st.childDetached === true,
+    pid,
   });
   appendRuntimeLog(`[stop] 回收进程树：${kill.via}`);
   if (st.child === child) {
@@ -353,8 +353,8 @@ function clearComfyDownLatch(): void {
 /** 「关闭中」窗口是否仍然生效（见 COMFY_STOPPING_WINDOW_MS）。 */
 export function isComfyStopping(): boolean {
   return isWithinStoppingWindow({
-    stoppingAt: st.stoppingAt,
     nowMs: Date.now(),
+    stoppingAt: st.stoppingAt,
     windowMs: COMFY_STOPPING_WINDOW_MS,
   });
 }
@@ -519,21 +519,21 @@ async function computeComfyUiStatus(): Promise<ComfyUiStatus> {
       probeComfyUi(1500),
     ]);
     return deriveAndLatch({
-      starting,
-      stopping,
-      startingWindow,
       notRunningHeld,
-      snap: refreshed,
       probe: reprobe,
+      snap: refreshed,
+      starting,
+      startingWindow,
+      stopping,
     });
   }
   return deriveAndLatch({
-    starting,
-    stopping,
-    startingWindow,
     notRunningHeld,
-    snap,
     probe,
+    snap,
+    starting,
+    startingWindow,
+    stopping,
   });
 }
 
@@ -558,14 +558,14 @@ function deriveAndLatch(facts: {
   startingWindow: boolean;
   stopping: boolean;
 }): ComfyUiStatus {
-  const { snap, probe } = facts;
+  const { probe, snap } = facts;
   const status = deriveComfyUiStatus({
-    starting: facts.starting,
-    stopping: facts.stopping,
+    notRunningHeld: facts.notRunningHeld,
     probe,
     snap,
+    starting: facts.starting,
     startingWindow: facts.startingWindow,
-    notRunningHeld: facts.notRunningHeld,
+    stopping: facts.stopping,
   });
   if (status.up) {
     clearComfyDownLatch();
@@ -631,14 +631,14 @@ export async function ensureComfyUiReady(
   }
 
   const host: LaunchHost = {
-    st,
     appendRuntimeLog,
     beginRuntimeSession,
     clearComfyStopping,
     localTimestamp,
-    probeComfyUi,
-    markSessionStart: markComfySessionStart,
     markSessionEnd: markComfySessionEnd,
+    markSessionStart: markComfySessionStart,
+    probeComfyUi,
+    st,
   };
   const settings = getSettingsSync();
 
@@ -650,8 +650,8 @@ export async function ensureComfyUiReady(
      * `launchKeepAliveMode` 里的退出监督器不会为它启动。不补上的话，它之后真
      * 没了就只剩状态轮询里的「未运行」——原因一个字都没有，正是「保活莫名
      * 退出」的来源。幂等：反复轮询不会重挂。 */
-    ensureKeepAliveWatchOnAdoption({ host, settings, note });
-    return { ok: true, base: upBase, detail: "ComfyUI 已在运行" };
+    ensureKeepAliveWatchOnAdoption({ host, note, settings });
+    return { base: upBase, detail: "ComfyUI 已在运行", ok: true };
   }
 
   // 单飞：并发调用共享同一次启动
@@ -679,7 +679,7 @@ export async function ensureComfyUiReady(
   if (!opts.manual && st.autoStartFailed) {
     const last = st.autoStartFailureDetail ?? "未知原因";
     note(`上次自动启动已失败，跳过自动重试：${last}`);
-    return { ok: false, base: null, detail: last };
+    return { base: null, detail: last, ok: false };
   }
 
   /* 判决表（顺序即优先级）抽在 lifecycle-derive 的 decideEnsureLaunch 里：
@@ -688,36 +688,36 @@ export async function ensureComfyUiReady(
    * 翻成用户文案；「上次自动启动已失败」的闩锁在判决表之前单独拦下
    * （ISSUE #335，需要原样回报失败原因），故没有并入判决表。 */
   const decision = decideEnsureLaunch({
-    upBase,
-    manual: !!opts.manual,
-    manualStop: !!st.manualStop,
     autoStart: !!settings.comfyuiAutoStart,
     comfyuiPath: settings.comfyuiPath ?? "",
+    manual: !!opts.manual,
+    manualStop: !!st.manualStop,
+    upBase,
   });
   if (decision.kind === "already-up") {
-    return { ok: true, base: decision.base, detail: "ComfyUI 已在运行" };
+    return { base: decision.base, detail: "ComfyUI 已在运行", ok: true };
   }
   if (decision.kind === "skip-manual-stop") {
     note("ComfyUI 已被用户手动关闭，跳过自动启动");
     return {
-      ok: false,
       base: null,
       detail:
         "ComfyUI 已被手动关闭，未自动开始启动——如需启动请到 设置 → 创作后端 点「启动 ComfyUI」",
+      ok: false,
     };
   }
   if (decision.kind === "skip-autostart-off") {
     return {
-      ok: false,
       base: null,
       detail: "ComfyUI 未运行，且未开启自动启动（设置页可开启）",
+      ok: false,
     };
   }
   if (decision.kind === "skip-no-path") {
     return {
-      ok: false,
       base: null,
       detail: "ComfyUI 未运行，且未配置安装路径——请到 设置 → 创作后端 填写 ComfyUI 路径",
+      ok: false,
     };
   }
   /* 到这里才是「真的会拉起」：判决表摘掉 already-up / skip-* 后只剩「等已有
@@ -742,15 +742,15 @@ export async function ensureComfyUiReady(
   st.starting = existingRunning
     ? waitForExistingInstanceReady({
         host,
+        note,
         settings,
         timeoutMs: opts.timeoutMs ?? null,
-        note,
       })
     : runEnsureLaunch({
         host,
+        note,
         settings,
         timeoutMs: opts.timeoutMs,
-        note,
       });
 
   try {
@@ -783,13 +783,13 @@ export async function openComfyUi(): Promise<{ detail: string; ok: boolean }> {
   const base = await probeComfyUi(2000);
   if (!base) {
     return {
-      ok: false,
       detail: "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看",
+      ok: false,
     };
   }
   const r = await openUrlInBrowser(base);
   if (r.ok) {
-    return { ok: true, detail: `已用系统默认浏览器打开 ComfyUI（${base}）` };
+    return { detail: `已用系统默认浏览器打开 ComfyUI（${base}）`, ok: true };
   }
   return r;
 }

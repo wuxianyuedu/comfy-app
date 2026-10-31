@@ -39,13 +39,13 @@ const WORKS_CATEGORY_ICON_BG = "bg-cyan-400/12 text-cyan-700 dark:text-cyan-400"
 
 /* 「这一行从哪来」的界面上那半句。`both` 不给值（正常行不标）。 */
 const ORIGIN_BADGE: Partial<Record<ProjectOrigin, string>> = {
-  server: "仅服务端",
   local: "未同步",
+  server: "仅服务端",
 };
 
 const ORIGIN_HINT: Partial<Record<ProjectOrigin, string>> = {
-  server: "服务端有这一行，本机没有副本 —— 删掉它只动服务端那一份",
   local: "还没推上服务端（或推送被拒）—— 换设备时看不到这一份",
+  server: "服务端有这一行，本机没有副本 —— 删掉它只动服务端那一份",
 };
 
 /** 卡片上那一行「画布体量」。 */
@@ -60,18 +60,18 @@ export type WorksGalleryProps = {
   onOpenTask?: (id: string) => void;
 };
 
-export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryProps) {
+export function WorksGallery({ onOpenCanvasProject, onOpenTask }: WorksGalleryProps) {
   const toast = useToast();
   const controller = useWorksGallery(onOpenCanvasProject);
   const {
-    projects,
-    loading,
-    serverOk,
-    requestDelete,
-    pendingDelete,
     cancelDelete,
     confirmDelete,
     deleting,
+    loading,
+    pendingDelete,
+    projects,
+    requestDelete,
+    serverOk,
   } = controller;
 
   return (

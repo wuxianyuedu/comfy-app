@@ -34,11 +34,11 @@ import {
 /** 默认事实：未运行 / 非手动 / 无闩锁 / 开了自动启动 / 配了路径。 */
 function facts(over: Partial<EnsureFacts> = {}): EnsureFacts {
   return {
-    upBase: null,
-    manual: false,
-    manualStop: false,
     autoStart: true,
     comfyuiPath: "/x",
+    manual: false,
+    manualStop: false,
+    upBase: null,
     ...over,
   };
 }
@@ -46,23 +46,21 @@ function facts(over: Partial<EnsureFacts> = {}): EnsureFacts {
 describe("decideEnsureLaunch — 自动启动判决表", () => {
   it("已在运行（探测到 base）→ 直接复用，不再拉起第二个实例", () => {
     const d = decideEnsureLaunch(facts({ upBase: "http://127.0.0.1:8189" }));
-    expect(d).toEqual({ kind: "already-up", base: "http://127.0.0.1:8189" });
+    expect(d).toEqual({ base: "http://127.0.0.1:8189", kind: "already-up" });
   });
 
   it("已在运行时即便带了手动关闭闩锁也复用现有实例（闩锁只拦「拉起」）", () => {
-    const d = decideEnsureLaunch(
-      facts({ upBase: "http://127.0.0.1:8188", manualStop: true }),
-    );
+    const d = decideEnsureLaunch(facts({ manualStop: true, upBase: "http://127.0.0.1:8188" }));
     expect(d.kind).toBe("already-up");
   });
 
   it("自动启动来源 + 用户刚手动关闭过 → 让路，不把 ComfyUI 悄悄拉起（ISSUE #290）", () => {
-    const d = decideEnsureLaunch(facts({ manualStop: true, manual: false }));
+    const d = decideEnsureLaunch(facts({ manual: false, manualStop: true }));
     expect(d).toEqual({ kind: "skip-manual-stop" });
   });
 
   it("手动启动优先于闩锁：manual=true 时不被上一次手动关闭拦住", () => {
-    const d = decideEnsureLaunch(facts({ manualStop: true, manual: true }));
+    const d = decideEnsureLaunch(facts({ manual: true, manualStop: true }));
     expect(d).toEqual({ kind: "launch" });
   });
 
@@ -79,7 +77,7 @@ describe("decideEnsureLaunch — 自动启动判决表", () => {
   it("闩锁优先于「未开自动启动」：两条都命中时给的是「手动关闭」的结论", () => {
     // 顺序写反会让用户在「我刚关了它」时看到「你没开自动启动」，
     // 对着错误的原因去改设置，永远修不好。
-    const d = decideEnsureLaunch(facts({ manualStop: true, autoStart: false }));
+    const d = decideEnsureLaunch(facts({ autoStart: false, manualStop: true }));
     expect(d).toEqual({ kind: "skip-manual-stop" });
   });
 
@@ -106,8 +104,8 @@ describe("buildSpawnArgs — spawn 参数组装", () => {
   it("有效端口与默认端口一致时不传 --port（避免污染「界面端口=实际端口」对照）", () => {
     const args = buildSpawnArgs({
       baseArgs: ["-s", "/x/main.py"],
-      effectivePort: 8188,
       defaultPort: 8188,
+      effectivePort: 8188,
       extraArgs: [],
     });
     expect(args).toEqual(["-s", "/x/main.py", COMFY_EMBED_FLAG]);
@@ -117,25 +115,19 @@ describe("buildSpawnArgs — spawn 参数组装", () => {
   it("有效端口非默认 → 显式传 --port", () => {
     const args = buildSpawnArgs({
       baseArgs: ["-s", "/x/main.py"],
-      effectivePort: 8199,
       defaultPort: 8188,
+      effectivePort: 8199,
       extraArgs: [],
     });
-    expect(args).toEqual([
-      "-s",
-      "/x/main.py",
-      "--port",
-      "8199",
-      COMFY_EMBED_FLAG,
-    ]);
+    expect(args).toEqual(["-s", "/x/main.py", "--port", "8199", COMFY_EMBED_FLAG]);
   });
 
   it("端口为 0/undefined → 落到默认端口且不传 --port", () => {
     for (const port of [undefined, 0]) {
       const args = buildSpawnArgs({
         baseArgs: ["-s", "/x/main.py"],
-        effectivePort: port,
         defaultPort: 8188,
+        effectivePort: port,
         extraArgs: [],
       });
       expect(args).toEqual(["-s", "/x/main.py", COMFY_EMBED_FLAG]);
@@ -145,18 +137,11 @@ describe("buildSpawnArgs — spawn 参数组装", () => {
   it("附加参数追加在最后（不覆盖 --port 的位置语义）", () => {
     const args = buildSpawnArgs({
       baseArgs: ["main.py"],
-      effectivePort: 9001,
       defaultPort: 8188,
+      effectivePort: 9001,
       extraArgs: ["--cpu", "--lowvram"],
     });
-    expect(args).toEqual([
-      "main.py",
-      "--port",
-      "9001",
-      "--cpu",
-      "--lowvram",
-      COMFY_EMBED_FLAG,
-    ]);
+    expect(args).toEqual(["main.py", "--port", "9001", "--cpu", "--lowvram", COMFY_EMBED_FLAG]);
   });
 });
 
@@ -167,8 +152,8 @@ describe("shouldCheckKeepAliveProcess — 保活进程表查询节流", () => {
     expect(
       shouldCheckKeepAliveProcess({
         ...base,
-        sinceSpawnMs: 3_000,
         sinceLastCheckMs: 999_999,
+        sinceSpawnMs: 3_000,
       }),
     ).toBe(false);
   });
@@ -177,8 +162,8 @@ describe("shouldCheckKeepAliveProcess — 保活进程表查询节流", () => {
     expect(
       shouldCheckKeepAliveProcess({
         ...base,
-        sinceSpawnMs: 60_000,
         sinceLastCheckMs: 1_000,
+        sinceSpawnMs: 60_000,
       }),
     ).toBe(false);
   });
@@ -187,8 +172,8 @@ describe("shouldCheckKeepAliveProcess — 保活进程表查询节流", () => {
     expect(
       shouldCheckKeepAliveProcess({
         ...base,
-        sinceSpawnMs: 20_000,
         sinceLastCheckMs: 6_000,
+        sinceSpawnMs: 20_000,
       }),
     ).toBe(true);
   });
@@ -213,9 +198,7 @@ describe("buildEarlyExitDetail — 进程秒退文案", () => {
     ]);
     expect(detail).toContain("No module named 'torch'");
     expect(detail).toContain("comfyuiPath");
-    expect(
-      extractMissingModule(["ModuleNotFoundError: No module named 'torch'"]),
-    ).toBe("torch");
+    expect(extractMissingModule(["ModuleNotFoundError: No module named 'torch'"])).toBe("torch");
   });
 
   it("无缺依赖特征 → 退回通用提示并指向日志文件", () => {
@@ -283,16 +266,16 @@ describe("decideStop — 关闭流程判决", () => {
   it("握有 bound 子进程句柄 → 杀树，标签为 bound 子进程", () => {
     expect(decideStop({ hasChild: true, pid: 123, stillUp: true })).toEqual({
       kind: "kill",
-      pid: 123,
       kindLabel: "bound 子进程",
+      pid: 123,
     });
   });
 
   it("无句柄但按配置路径定位到 PID → 仍然杀树（ISSUE #100：保活/接管实例也必须关得掉）", () => {
     expect(decideStop({ hasChild: false, pid: 456, stillUp: true })).toEqual({
       kind: "kill",
-      pid: 456,
       kindLabel: "按配置路径定位到的进程",
+      pid: 456,
     });
   });
 
@@ -311,39 +294,33 @@ describe("decideStop — 关闭流程判决", () => {
 
 describe("closeStopping / stopping window", () => {
   it("目标已不在且无正在进行的启动 → 立刻清「关闭中」，不留无意义的进行态窗口", () => {
-    expect(
-      shouldClearStoppingOnStopMiss({ stillUp: false, starting: false }),
-    ).toBe(true);
+    expect(shouldClearStoppingOnStopMiss({ starting: false, stillUp: false })).toBe(true);
   });
 
   it("仍在响应 / 有启动在跑 → 不清，交给窗口时限兜底", () => {
-    expect(
-      shouldClearStoppingOnStopMiss({ stillUp: true, starting: false }),
-    ).toBe(false);
-    expect(
-      shouldClearStoppingOnStopMiss({ stillUp: false, starting: true }),
-    ).toBe(false);
+    expect(shouldClearStoppingOnStopMiss({ starting: false, stillUp: true })).toBe(false);
+    expect(shouldClearStoppingOnStopMiss({ starting: true, stillUp: false })).toBe(false);
   });
 
   it("「关闭中」窗口：未标记为 false，窗口内为 true，过期回 false", () => {
     expect(
       isWithinStoppingWindow({
-        stoppingAt: undefined,
         nowMs: 1000,
+        stoppingAt: undefined,
         windowMs: 30_000,
       }),
     ).toBe(false);
     expect(
       isWithinStoppingWindow({
-        stoppingAt: 1000,
         nowMs: 1500,
+        stoppingAt: 1000,
         windowMs: 30_000,
       }),
     ).toBe(true);
     expect(
       isWithinStoppingWindow({
-        stoppingAt: 1000,
         nowMs: 99_000,
+        stoppingAt: 1000,
         windowMs: 30_000,
       }),
     ).toBe(false);
@@ -352,10 +329,7 @@ describe("closeStopping / stopping window", () => {
 
 describe("decideStopOutcome — 关闭收尾结论", () => {
   it("最后一轮探测仍可达 → ok=false，提示用户手动确认", () => {
-    const r = decideStopOutcome([
-      "http://127.0.0.1:8188",
-      "http://127.0.0.1:8188",
-    ]);
+    const r = decideStopOutcome(["http://127.0.0.1:8188", "http://127.0.0.1:8188"]);
     expect(r.ok).toBe(false);
     expect(r.detail).toContain("仍在响应");
   });
@@ -410,8 +384,8 @@ describe("withEmbedClearanceFlag — 内嵌放行开关注入", () => {
   it("buildSpawnArgs 把开关放在最后一位", () => {
     const args = buildSpawnArgs({
       baseArgs: ["main.py"],
-      effectivePort: 8199,
       defaultPort: 8188,
+      effectivePort: 8199,
       extraArgs: ["--cpu", "--lowvram"],
     });
     expect(args[args.length - 1]).toBe(COMFY_EMBED_FLAG);
@@ -424,28 +398,26 @@ describe("withEmbedClearanceFlag — 内嵌放行开关注入", () => {
  * 也不必等 5s 轮询。 */
 function statusFacts(over: Partial<ComfyStatusFacts> = {}): ComfyStatusFacts {
   return {
-    starting: false,
-    stopping: false,
+    notRunningHeld: false,
     probe: null,
     snap: {
-      running: false,
+      didQueryProcTable: true,
       pid: null,
       port: null,
-      via: null,
+      running: false,
       unverified: false,
-      didQueryProcTable: true,
+      via: null,
     },
+    starting: false,
     startingWindow: false,
-    notRunningHeld: false,
+    stopping: false,
     ...over,
   };
 }
 
 describe("deriveComfyUiStatus — 运行状态结论", () => {
   it("HTTP 通了 → 运行中，base 用探测到的真实地址", () => {
-    const v = deriveComfyUiStatus(
-      statusFacts({ probe: "http://127.0.0.1:8190" }),
-    );
+    const v = deriveComfyUiStatus(statusFacts({ probe: "http://127.0.0.1:8190" }));
     expect(v.up).toBe(true);
     expect(v.base).toBe("http://127.0.0.1:8190");
     expect(v.starting).toBe(false);
@@ -455,12 +427,12 @@ describe("deriveComfyUiStatus — 运行状态结论", () => {
     const v = deriveComfyUiStatus(
       statusFacts({
         snap: {
-          running: true,
+          didQueryProcTable: true,
           pid: 7,
           port: 8188,
-          via: "配置路径的实例",
+          running: true,
           unverified: false,
-          didQueryProcTable: true,
+          via: "配置路径的实例",
         },
       }),
     );
@@ -473,12 +445,12 @@ describe("deriveComfyUiStatus — 运行状态结论", () => {
     const v = deriveComfyUiStatus(
       statusFacts({
         snap: {
-          running: true,
+          didQueryProcTable: true,
           pid: 7,
           port: null,
-          via: "配置路径的实例",
+          running: true,
           unverified: false,
-          didQueryProcTable: true,
+          via: "配置路径的实例",
         },
       }),
     );
@@ -513,12 +485,12 @@ describe("deriveComfyUiStatus — 运行状态结论", () => {
       statusFacts({
         notRunningHeld: true,
         snap: {
-          running: false,
+          didQueryProcTable: true,
           pid: null,
           port: null,
-          via: null,
+          running: false,
           unverified: true,
-          didQueryProcTable: true,
+          via: null,
         },
       }),
     );
@@ -530,12 +502,12 @@ describe("deriveComfyUiStatus — 运行状态结论", () => {
     const v = deriveComfyUiStatus(
       statusFacts({
         snap: {
-          running: false,
+          didQueryProcTable: false,
           pid: null,
           port: null,
-          via: null,
+          running: false,
           unverified: false,
-          didQueryProcTable: false,
+          via: null,
         },
       }),
     );
@@ -553,12 +525,12 @@ describe("deriveComfyUiStatus — 运行状态结论", () => {
     const v = deriveComfyUiStatus(
       statusFacts({
         snap: {
-          running: false,
+          didQueryProcTable: true,
           pid: null,
           port: null,
-          via: null,
+          running: false,
           unverified: false,
-          didQueryProcTable: true,
+          via: null,
         },
       }),
     );
@@ -571,12 +543,12 @@ describe("deriveComfyUiStatus — 运行状态结论", () => {
     const v = deriveComfyUiStatus(
       statusFacts({
         snap: {
-          running: false,
+          didQueryProcTable: true,
           pid: null,
           port: null,
-          via: null,
+          running: false,
           unverified: true,
-          didQueryProcTable: true,
+          via: null,
         },
       }),
     );
@@ -586,9 +558,9 @@ describe("deriveComfyUiStatus — 运行状态结论", () => {
   it("运行中优先于一切：启动窗口与黏滞都不影响", () => {
     const v = deriveComfyUiStatus(
       statusFacts({
+        notRunningHeld: true,
         probe: "http://127.0.0.1:8188",
         startingWindow: true,
-        notRunningHeld: true,
       }),
     );
     expect(v.up).toBe(true);
@@ -609,15 +581,9 @@ describe("deriveComfyUiStatus — 运行状态结论", () => {
 
 describe("isWithinWindow — 计时窗口判据", () => {
   it("没落过时刻 = 无窗口；窗口内为真、过窗为假", () => {
-    expect(isWithinWindow({ at: undefined, nowMs: 1_000, windowMs: 10 })).toBe(
-      false,
-    );
-    expect(isWithinWindow({ at: 1_000, nowMs: 1_005, windowMs: 10 })).toBe(
-      true,
-    );
-    expect(isWithinWindow({ at: 1_000, nowMs: 1_010, windowMs: 10 })).toBe(
-      false,
-    );
+    expect(isWithinWindow({ at: undefined, nowMs: 1_000, windowMs: 10 })).toBe(false);
+    expect(isWithinWindow({ at: 1_000, nowMs: 1_005, windowMs: 10 })).toBe(true);
+    expect(isWithinWindow({ at: 1_000, nowMs: 1_010, windowMs: 10 })).toBe(false);
   });
 });
 
@@ -633,9 +599,7 @@ describe("isPortConflictLine — 端口被占的 stderr 识别", () => {
 
   it("普通启动输出不误报", () => {
     expect(isPortConflictLine("Starting server")).toBe(false);
-    expect(
-      isPortConflictLine("To see the GUI go to: http://127.0.0.1:8188"),
-    ).toBe(false);
+    expect(isPortConflictLine("To see the GUI go to: http://127.0.0.1:8188")).toBe(false);
     expect(isPortConflictLine("")).toBe(false);
   });
 

@@ -113,7 +113,7 @@ function toRuntimeLogEntries(
       continue;
     }
     if (name === legacyRuntimeLogFileName(source)) {
-      out.push({ name, file: path.join(dir, name), startedAt: null });
+      out.push({ file: path.join(dir, name), name, startedAt: null });
       continue;
     }
     const parsed = parseRuntimeLogFileName(name);
@@ -121,8 +121,8 @@ function toRuntimeLogEntries(
       continue;
     }
     out.push({
-      name,
       file: path.join(dir, name),
+      name,
       startedAt: parsed.startedAt,
     });
   }

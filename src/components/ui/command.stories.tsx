@@ -32,8 +32,8 @@ import {
  * 同一项既有快捷键又是勾选项时，只会显示快捷键。
  */
 const meta = {
-  title: "UI/Command",
   component: Command,
+  title: "UI/Command",
 } satisfies Meta<typeof Command>;
 
 export default meta;

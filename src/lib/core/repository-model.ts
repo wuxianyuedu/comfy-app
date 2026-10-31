@@ -47,22 +47,22 @@ export class ModelRepository extends DrizzleRepository<Model> {
     await db
       .insert(model)
       .values({
+        baseModel: input.baseModel,
         fileName: input.fileName,
         folder: input.folder,
-        name: input.name,
-        type: input.type,
-        baseModel: input.baseModel,
         isAvailable: true,
+        name: input.name,
         source: "LOCAL",
+        type: input.type,
       })
       .onConflictDoUpdate({
-        target: [model.fileName, model.folder],
         set: {
+          baseModel: input.baseModel,
           isAvailable: true,
           name: input.name,
           type: input.type,
-          baseModel: input.baseModel,
         },
+        target: [model.fileName, model.folder],
       });
   }
 
@@ -88,23 +88,23 @@ export class ModelRepository extends DrizzleRepository<Model> {
         .insert(model)
         .values(
           chunk.map((input) => ({
+            baseModel: input.baseModel,
             fileName: input.fileName,
             folder: input.folder,
-            name: input.name,
-            type: input.type,
-            baseModel: input.baseModel,
             isAvailable: true,
+            name: input.name,
             source: /* SAFETY: 类型断言已复核 */ "LOCAL" as const,
+            type: input.type,
           })),
         )
         .onConflictDoUpdate({
-          target: [model.fileName, model.folder],
           set: {
+            baseModel: sql`excluded.baseModel`,
             isAvailable: true,
             name: sql`excluded.name`,
             type: sql`excluded.type`,
-            baseModel: sql`excluded.baseModel`,
           },
+          target: [model.fileName, model.folder],
         });
     }
   }
@@ -123,7 +123,7 @@ export class ModelRepository extends DrizzleRepository<Model> {
 
   async countsByFolder(): Promise<Record<string, number>> {
     const rows = await db
-      .select({ folder: model.folder, count: count() })
+      .select({ count: count(), folder: model.folder })
       .from(model)
       .where(eq(model.isAvailable, true))
       .groupBy(model.folder);
@@ -162,17 +162,17 @@ export class UserModelConfigRepository extends DrizzleRepository<UserModelConfig
     const rows = await db
       .insert(userModelConfig)
       .values({
-        userId,
+        enabled: true,
         folder,
+        isCustom: true,
+        label,
         type: folder,
         types: "[]",
-        label,
-        enabled: true,
-        isCustom: true,
+        userId,
       })
       .onConflictDoUpdate({
+        set: { enabled: true, label, type: folder, types: "[]" },
         target: [userModelConfig.userId, userModelConfig.folder],
-        set: { type: folder, types: "[]", label, enabled: true },
       })
       .returning();
     return firstRowRequired(rows, "用户模型条目写入");
@@ -186,17 +186,17 @@ export class UserModelConfigRepository extends DrizzleRepository<UserModelConfig
     const rows = await db
       .insert(userModelConfig)
       .values({
-        userId,
+        enabled: patch.enabled ?? true,
         folder,
+        isCustom: true,
+        label: patch.label ?? null,
         type: folder,
         types: "[]",
-        label: patch.label ?? null,
-        enabled: patch.enabled ?? true,
-        isCustom: true,
+        userId,
       })
       .onConflictDoUpdate({
-        target: [userModelConfig.userId, userModelConfig.folder],
         set: patch,
+        target: [userModelConfig.userId, userModelConfig.folder],
       })
       .returning();
     return firstRowRequired(rows, "用户模型条目写入");

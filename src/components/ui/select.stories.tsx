@@ -34,12 +34,12 @@ type SelectTriggerSize = NonNullable<React.ComponentProps<typeof SelectTrigger>[
 const TRIGGER_SIZES: Array<SelectTriggerSize> = ["sm", "default"];
 
 const meta = {
-  title: "UI/Select",
-  component: SelectTrigger,
   args: { size: "default" },
   argTypes: {
     size: { control: { type: "select" }, options: TRIGGER_SIZES },
   },
+  component: SelectTrigger,
+  title: "UI/Select",
 } satisfies Meta<typeof SelectTrigger>;
 
 export default meta;

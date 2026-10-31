@@ -24,14 +24,14 @@ import { ConfirmDialog } from "~/components/ui/confirm-dialog";
  *    多个弹窗同时挂载时撞车，读屏器念到别处的标题。
  */
 const meta = {
-  title: "UI/ConfirmDialog",
-  component: ConfirmDialog,
   args: {
-    open: false,
     onClose: () => void 0,
     onConfirm: () => void 0,
+    open: false,
     title: "确认操作",
   },
+  component: ConfirmDialog,
+  title: "UI/ConfirmDialog",
 } satisfies Meta<typeof ConfirmDialog>;
 
 export default meta;

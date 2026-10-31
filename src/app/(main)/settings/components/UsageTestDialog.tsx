@@ -427,8 +427,8 @@ function UsageFieldEditor({
 function UsageTestResultPanel({
   c,
   d,
-  usageTest,
   result,
+  usageTest,
 }: {
   c: ReadySettingsPageController;
   d: RemoteModelDialogs;

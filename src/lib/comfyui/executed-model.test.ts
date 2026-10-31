@@ -14,11 +14,11 @@ import { primaryModelName } from "./executed-model";
 describe("primaryModelName —— API 格式（字段名）", () => {
   it("认 CheckpointLoaderSimple 的 ckpt_name", () => {
     const graph = {
+      "3": { class_type: "KSampler", inputs: { seed: 1 } },
       "4": {
         class_type: "CheckpointLoaderSimple",
         inputs: { ckpt_name: "flux1-dev.safetensors" },
       },
-      "3": { class_type: "KSampler", inputs: { seed: 1 } },
     };
     expect(primaryModelName(graph)).toBe("flux1-dev.safetensors");
   });
@@ -65,7 +65,6 @@ describe("primaryModelName —— UI 格式（节点类型 + 下标）", () => {
       nodes: [
         {
           id: 9,
-          type: "Subgraph",
           subgraph: {
             nodes: [
               {
@@ -75,6 +74,7 @@ describe("primaryModelName —— UI 格式（节点类型 + 下标）", () => {
               },
             ],
           },
+          type: "Subgraph",
         },
       ],
     };

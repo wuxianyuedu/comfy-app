@@ -107,8 +107,8 @@ export function comfyDotTitle(status: ComfyRuntimeStatus | null): string | undef
 export const INSTANCE_KIND_LABEL: Record<"desktop" | "portable" | "venv" | "unknown", string> = {
   desktop: "桌面版（ComfyUI Desktop）",
   portable: "便携版",
-  venv: "venv",
   unknown: "未知安装",
+  venv: "venv",
 };
 
 /** 一个安装形态键 → 徽标文案（判不出形态时按 `unknown` 档说，不猜）。 */

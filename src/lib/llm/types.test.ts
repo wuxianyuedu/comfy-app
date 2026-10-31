@@ -25,10 +25,10 @@ describe("resolveTaskTemperature", () => {
   it("该任务配置了覆盖值 → 覆盖值优先（高于调用方显式温度）", () => {
     expect(
       resolveTaskTemperature({
-        taskType: "chat",
         explicitTemperature: 0.3,
-        overrides,
         fallback: 0.7,
+        overrides,
+        taskType: "chat",
       }),
     ).toBe(0.9);
   });
@@ -36,23 +36,23 @@ describe("resolveTaskTemperature", () => {
   it("无覆盖、调用方显式指定温度 → 用显式温度", () => {
     expect(
       resolveTaskTemperature({
-        taskType: "code",
         explicitTemperature: 0.3,
-        overrides,
         fallback: 0.7,
+        overrides,
+        taskType: "code",
       }),
     ).toBe(0.3);
   });
 
   it("无覆盖、无显式温度 → 用该任务类型的推荐默认（不再一律回落全局 0.7）", () => {
-    expect(resolveTaskTemperature({ taskType: "code", overrides, fallback: 0.7 })).toBe(
+    expect(resolveTaskTemperature({ fallback: 0.7, overrides, taskType: "code" })).toBe(
       TASK_TYPES.code.defaultTemperature,
     );
     expect(
       resolveTaskTemperature({
-        taskType: "creative",
-        overrides,
         fallback: 0.7,
+        overrides,
+        taskType: "creative",
       }),
     ).toBe(TASK_TYPES.creative.defaultTemperature);
     expect(TASK_TYPES.code.defaultTemperature).not.toBe(0.7);
@@ -60,14 +60,14 @@ describe("resolveTaskTemperature", () => {
 
   it("review 档（FR-QA-07）：低温档位存在，评审走它的推荐默认/用户覆盖", () => {
     expect(TASK_TYPES.review.defaultTemperature).toBeLessThanOrEqual(0.2);
-    expect(resolveTaskTemperature({ taskType: "review", overrides, fallback: 0.7 })).toBe(
+    expect(resolveTaskTemperature({ fallback: 0.7, overrides, taskType: "review" })).toBe(
       TASK_TYPES.review.defaultTemperature,
     );
     expect(
       resolveTaskTemperature({
-        taskType: "review",
-        overrides: { ...overrides, review: 0.05 },
         fallback: 0.7,
+        overrides: { ...overrides, review: 0.05 },
+        taskType: "review",
       }),
     ).toBe(0.05);
   });
@@ -80,9 +80,9 @@ describe("resolveTaskTemperature", () => {
   it("覆盖表为 null/缺失该 key 时按无覆盖处理", () => {
     expect(
       resolveTaskTemperature({
-        taskType: "txt2img",
-        overrides: null,
         fallback: 0.7,
+        overrides: null,
+        taskType: "txt2img",
       }),
     ).toBe(TASK_TYPES.txt2img.defaultTemperature);
   });
@@ -93,8 +93,8 @@ describe("normalizeExtraModels", () => {
     // 字符串形态只带了名字 —— 对连接参数**不提供意见**，所以不挂 `apiKey` 键
     // （挂 null 会被 `replaceAll` 读成「用户要清空密钥」，台账 A11）
     expect(normalizeExtraModels(["gpt-4o", "  ", "claude-3"])).toEqual([
-      { name: "gpt-4o", baseUrl: null, kind: null },
-      { name: "claude-3", baseUrl: null, kind: null },
+      { baseUrl: null, kind: null, name: "gpt-4o" },
+      { baseUrl: null, kind: null, name: "claude-3" },
     ]);
   });
 
@@ -102,24 +102,24 @@ describe("normalizeExtraModels", () => {
     expect(
       normalizeExtraModels([
         {
-          name: "gpt-4o",
-          baseUrl: "https://api.example.com/v1",
           apiKey: "sk-1",
+          baseUrl: "https://api.example.com/v1",
           kind: "chat",
+          name: "gpt-4o",
         },
-        { name: "qwen", baseUrl: "   ", apiKey: "" },
-        { name: "bad-kind", kind: "audio" },
+        { apiKey: "", baseUrl: "   ", name: "qwen" },
+        { kind: "audio", name: "bad-kind" },
       ]),
     ).toEqual([
       {
-        name: "gpt-4o",
-        baseUrl: "https://api.example.com/v1",
         apiKey: "sk-1",
+        baseUrl: "https://api.example.com/v1",
         kind: "chat",
+        name: "gpt-4o",
       },
-      { name: "qwen", baseUrl: null, apiKey: null, kind: null },
+      { apiKey: null, baseUrl: null, kind: null, name: "qwen" },
       // 条目根本没带 `apiKey` 键 → 不提供意见，不挂这个键（区别于上面「显式空串」）
-      { name: "bad-kind", baseUrl: null, kind: null },
+      { baseUrl: null, kind: null, name: "bad-kind" },
     ]);
   });
 
@@ -131,11 +131,11 @@ describe("normalizeExtraModels", () => {
     expect(normalizeEntryApiKey({ apiKey: "  sk-1  " })).toBe("sk-1");
     expect(normalizeEntryApiKey({ apiKey: "   " })).toBeNull();
     expect(normalizeEntryApiKey({ apiKey: null })).toBeNull();
-    const [kept] = normalizeExtraModels([{ name: "m", apiKey: " sk-1 " }]);
+    const [kept] = normalizeExtraModels([{ apiKey: " sk-1 ", name: "m" }]);
     expect(kept?.apiKey).toBe("sk-1");
-    const [cleared] = normalizeExtraModels([{ name: "m", apiKey: null }]);
+    const [cleared] = normalizeExtraModels([{ apiKey: null, name: "m" }]);
     expect(cleared?.apiKey).toBeNull();
-    const [bySplit] = splitExtraModels([{ name: "m", apiKey: null }]).remoteEntries;
+    const [bySplit] = splitExtraModels([{ apiKey: null, name: "m" }]).remoteEntries;
     expect(bySplit?.apiKey).toBeNull();
   });
 
@@ -159,7 +159,7 @@ describe("normalizeExtraModels", () => {
 describe("extraModelName", () => {
   it("兼容字符串与条目对象两种形状", () => {
     expect(extraModelName("gpt-4o")).toBe("gpt-4o");
-    expect(extraModelName({ name: "gpt-4o", apiKey: "sk" })).toBe("gpt-4o");
+    expect(extraModelName({ apiKey: "sk", name: "gpt-4o" })).toBe("gpt-4o");
   });
 });
 
@@ -182,29 +182,29 @@ describe("isMisplacedLocalOllama", () => {
   it("无 apiKey 且指向本机回环 → 判定为误存的本地 ollama", () => {
     expect(
       isMisplacedLocalOllama(
-        { baseUrl: "http://localhost:11434/v1", apiKey: null },
+        { apiKey: null, baseUrl: "http://localhost:11434/v1" },
         "http://localhost:11434/v1",
       ),
     ).toBe(true);
   });
   it("无 apiKey、baseUrl 空 → 回落到全局 llmConfig.baseUrl 判定", () => {
     expect(
-      isMisplacedLocalOllama({ baseUrl: null, apiKey: null }, "http://localhost:11434/v1"),
+      isMisplacedLocalOllama({ apiKey: null, baseUrl: null }, "http://localhost:11434/v1"),
     ).toBe(true);
     expect(
-      isMisplacedLocalOllama({ baseUrl: null, apiKey: null }, "https://api.openai.com/v1"),
+      isMisplacedLocalOllama({ apiKey: null, baseUrl: null }, "https://api.openai.com/v1"),
     ).toBe(false);
   });
   it("带独立 apiKey 或指向非回环地址 → 真远端，不判为本地", () => {
     expect(
       isMisplacedLocalOllama(
-        { baseUrl: "https://x/v1", apiKey: "sk-1" },
+        { apiKey: "sk-1", baseUrl: "https://x/v1" },
         "http://localhost:11434/v1",
       ),
     ).toBe(false);
     expect(
       isMisplacedLocalOllama(
-        { baseUrl: "https://huggingface-infer/v1", apiKey: null },
+        { apiKey: null, baseUrl: "https://huggingface-infer/v1" },
         "http://localhost:11434/v1",
       ),
     ).toBe(false);
@@ -216,17 +216,17 @@ describe("foldRemoteToLocal", () => {
     const folded = foldRemoteToLocal(
       [
         {
-          name: "qwen3:14b",
-          baseUrl: "http://localhost:11434/v1",
           apiKey: null,
+          baseUrl: "http://localhost:11434/v1",
           kind: "chat",
+          name: "qwen3:14b",
         },
-        { name: "llama3", baseUrl: null, apiKey: null, kind: null },
+        { apiKey: null, baseUrl: null, kind: null, name: "llama3" },
         {
-          name: "gpt-4o",
-          baseUrl: "https://api.openai.com/v1",
           apiKey: "sk-1",
+          baseUrl: "https://api.openai.com/v1",
           kind: "chat",
+          name: "gpt-4o",
         },
       ],
       ["qwen2.5"],
@@ -243,10 +243,10 @@ describe("foldRemoteToLocal", () => {
     const folded = foldRemoteToLocal(
       [
         {
-          name: "qwen3:14b",
-          baseUrl: "http://localhost:11434/v1",
           apiKey: null,
+          baseUrl: "http://localhost:11434/v1",
           kind: "chat",
+          name: "qwen3:14b",
         },
       ],
       ["qwen3:14b"],

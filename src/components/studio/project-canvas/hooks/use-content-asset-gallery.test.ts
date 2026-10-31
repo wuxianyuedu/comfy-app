@@ -22,29 +22,23 @@ afterEach(cleanup);
 describe("useContentAssetGallery", () => {
   it("两图以上才启用相册", async () => {
     mockedFetch.mockResolvedValue([
-      { id: "i1", localPath: "/a.png", isCover: true },
-      { id: "i2", localPath: "/b.png", isCover: false },
+      { id: "i1", isCover: true, localPath: "/a.png" },
+      { id: "i2", isCover: false, localPath: "/b.png" },
     ]);
-    const { result } = renderHook(() =>
-      useContentAssetGallery({ taskId: "t-1", enabled: true }),
-    );
+    const { result } = renderHook(() => useContentAssetGallery({ enabled: true, taskId: "t-1" }));
     await expect.poll(() => result.current.images).toHaveLength(2);
     expect(mockedFetch).toHaveBeenCalledWith("t-1");
   });
 
   it("单图不启用（images 为 null，视图走常规预览）", async () => {
-    mockedFetch.mockResolvedValue([
-      { id: "i1", localPath: "/a.png", isCover: true },
-    ]);
-    const { result } = renderHook(() =>
-      useContentAssetGallery({ taskId: "t-1", enabled: true }),
-    );
+    mockedFetch.mockResolvedValue([{ id: "i1", isCover: true, localPath: "/a.png" }]);
+    const { result } = renderHook(() => useContentAssetGallery({ enabled: true, taskId: "t-1" }));
     await expect.poll(() => mockedFetch).toHaveBeenCalled();
     expect(result.current.images).toBeNull();
   });
 
   it("enabled=false（movie / text 节点）完全不发请求", async () => {
-    renderHook(() => useContentAssetGallery({ taskId: "t-1", enabled: false }));
+    renderHook(() => useContentAssetGallery({ enabled: false, taskId: "t-1" }));
     await act(async () => {
       await Promise.resolve();
     });
@@ -52,7 +46,7 @@ describe("useContentAssetGallery", () => {
   });
 
   it("无 taskId 不发请求", async () => {
-    renderHook(() => useContentAssetGallery({ taskId: null, enabled: true }));
+    renderHook(() => useContentAssetGallery({ enabled: true, taskId: null }));
     await act(async () => {
       await Promise.resolve();
     });
@@ -61,21 +55,18 @@ describe("useContentAssetGallery", () => {
 
   it("拉取失败静默：images 保持 null，不抛错（单图模式照常显示）", async () => {
     mockedFetch.mockRejectedValue(new Error("任务不存在"));
-    const { result } = renderHook(() =>
-      useContentAssetGallery({ taskId: "t-1", enabled: true }),
-    );
+    const { result } = renderHook(() => useContentAssetGallery({ enabled: true, taskId: "t-1" }));
     await expect.poll(() => mockedFetch).toHaveBeenCalled();
     expect(result.current.images).toBeNull();
   });
 
   it("换任务时在渲染期清掉旧图（首帧不闪上一张任务的缩略图）", async () => {
     mockedFetch.mockResolvedValue([
-      { id: "i1", localPath: "/a.png", isCover: true },
-      { id: "i2", localPath: "/b.png", isCover: false },
+      { id: "i1", isCover: true, localPath: "/a.png" },
+      { id: "i2", isCover: false, localPath: "/b.png" },
     ]);
-    const { result, rerender } = renderHook(
-      ({ taskId }: { taskId: string }) =>
-        useContentAssetGallery({ taskId, enabled: true }),
+    const { rerender, result } = renderHook(
+      ({ taskId }: { taskId: string }) => useContentAssetGallery({ enabled: true, taskId }),
       { initialProps: { taskId: "t-1" } },
     );
     await expect.poll(() => result.current.images).toHaveLength(2);
@@ -87,12 +78,10 @@ describe("useContentAssetGallery", () => {
 
   it("开关与下标可由视图驱动，支持函数式更新（翻页基于上一张）", async () => {
     mockedFetch.mockResolvedValue([
-      { id: "i1", localPath: "/a.png", isCover: true },
-      { id: "i2", localPath: "/b.png", isCover: false },
+      { id: "i1", isCover: true, localPath: "/a.png" },
+      { id: "i2", isCover: false, localPath: "/b.png" },
     ]);
-    const { result } = renderHook(() =>
-      useContentAssetGallery({ taskId: "t-1", enabled: true }),
-    );
+    const { result } = renderHook(() => useContentAssetGallery({ enabled: true, taskId: "t-1" }));
     await expect.poll(() => result.current.images).toHaveLength(2);
 
     act(() => result.current.setOpen(true));

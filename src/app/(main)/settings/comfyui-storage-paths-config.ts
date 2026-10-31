@@ -31,18 +31,18 @@ export function buildStorageRows(storage: DesktopStoragePaths): Array<StoragePat
     (typeof ROW_SPECS)[number]["key"],
     { primary: StorageDirInfo; shared: Array<StorageDirInfo> }
   > = {
-    models: { primary: storage.modelDir, shared: storage.sharedModelDirs },
     input: { primary: storage.inputDir, shared: storage.sharedInputDirs },
+    models: { primary: storage.modelDir, shared: storage.sharedModelDirs },
     output: { primary: storage.outputDir, shared: storage.sharedOutputDirs },
   };
   return ROW_SPECS.map((spec) => {
     const slot = slots[spec.key];
     const dir = spec.shared ? null : slot.primary;
     return {
+      dirs: spec.shared ? slot.shared : [slot.primary],
       key: `${spec.key}-${spec.shared ? "shared" : "primary"}`,
       label: spec.label,
       source: dir?.source ?? null,
-      dirs: spec.shared ? slot.shared : [slot.primary],
     };
   });
 }

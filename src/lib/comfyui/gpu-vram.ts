@@ -47,7 +47,7 @@ export function parseNvidiaSmiOutput(raw: string): NvidiaSmiMem | null {
     return null;
   }
   // 已用可能极轻微超过总量（驱动读数抖动），clamp 到总量内。
-  return { usedMiB: Math.min(used, total), totalMiB: total };
+  return { totalMiB: total, usedMiB: Math.min(used, total) };
 }
 
 function execFileP(cmd: string, args: Array<string>, timeoutMs = 3000): Promise<string> {

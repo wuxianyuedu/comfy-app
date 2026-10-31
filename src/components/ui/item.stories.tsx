@@ -36,13 +36,13 @@ const SIZES: Array<ItemSize> = ["default", "sm", "xs"];
 const MEDIA_KINDS: Array<ItemMediaVariant> = ["default", "icon", "image"];
 
 const meta = {
-  title: "UI/Item",
-  component: Item,
-  args: { variant: "outline", size: "default" },
+  args: { size: "default", variant: "outline" },
   argTypes: {
-    variant: { control: "select", options: VARIANTS },
     size: { control: "select", options: SIZES },
+    variant: { control: "select", options: VARIANTS },
   },
+  component: Item,
+  title: "UI/Item",
 } satisfies Meta<typeof Item>;
 
 export default meta;

@@ -43,12 +43,12 @@ function runCommand(
         /* `err.message` 对 ENOENT（命令不存在）与 EPERM（权限不足）是两句话，
          * 直接带出去 —— 这两条恰好是用户唯一能动手修的情况。 */
         resolve({
-          ok: false,
           detail: (stderr || err.message || "未知错误").trim().slice(0, 200),
+          ok: false,
         });
         return;
       }
-      resolve({ ok: true, detail: stderr.trim().slice(0, 200) });
+      resolve({ detail: stderr.trim().slice(0, 200), ok: true });
     });
   });
 }
@@ -82,11 +82,11 @@ export async function applyComfyCpuLimit(input: {
   if (mode === "off" || input.pid === null || input.pid <= 0) {
     return { mode, results: [] };
   }
-  const { priority, affinity } = cpuLimitCommands({
-    mode,
-    platform: input.platform ?? process.platform,
-    pid: input.pid,
+  const { affinity, priority } = cpuLimitCommands({
     cpuCount: input.cpuCount ?? 2,
+    mode,
+    pid: input.pid,
+    platform: input.platform ?? process.platform,
   });
   const executed = input.exec ?? runCommand;
   const results: CpuLimitOutcome["results"] = [];
@@ -97,7 +97,7 @@ export async function applyComfyCpuLimit(input: {
       continue;
     }
     const r = await executed(cmd.command, cmd.args);
-    results.push({ describe: cmd.describe, ok: r.ok, detail: r.detail });
+    results.push({ describe: cmd.describe, detail: r.detail, ok: r.ok });
   }
   return { mode, results };
 }

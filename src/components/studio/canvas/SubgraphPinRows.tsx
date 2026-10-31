@@ -21,10 +21,10 @@ type SubgraphPinRowsProps = {
 
 export function SubgraphPinRows({
   connInputs,
-  outputs,
+  hostNodeId,
   io,
   nodeId,
-  hostNodeId,
+  outputs,
 }: SubgraphPinRowsProps) {
   /* 顶部 PINS 行：每个声明的输入端口与每个输出端口各占一行，
    *  左右拉链式成对、行高 22px（与普通 WorkflowNode 相同）。 */
@@ -69,9 +69,9 @@ export function SubgraphPinRows({
                   isConnectable={false}
                   position={Position.Left}
                   style={{
-                    left: 5,
                     background: inCol,
                     boxShadow: `0 0 6px ${inCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
+                    left: 5,
                   }}
                   title={`${inLabel} (${inType})`}
                   type="target"
@@ -84,11 +84,11 @@ export function SubgraphPinRows({
                   <IoCheckbox
                     io={io}
                     ioRef={{
-                      nodeId: String(nodeId),
-                      hostNodeId,
-                      name: inName,
-                      kind: "param",
                       direction: "input",
+                      hostNodeId,
+                      kind: "param",
+                      name: inName,
+                      nodeId: String(nodeId),
                     }}
                   />
                 )}
@@ -133,8 +133,8 @@ export function SubgraphPinRows({
                      *  并贴住右边缘（`right: 0`）。**别把 `right` 提到 spread 之前**：
                      *  同一属性会被指定两次，TS 报 2783「此扩张将始终覆盖此属性」。 */
                     ...(io?.ioEditMode
-                      ? { width: 4, height: 4, opacity: 0.35, right: 0 }
-                      : { width: 10, height: 10, right: 5 }),
+                      ? { height: 4, opacity: 0.35, right: 0, width: 4 }
+                      : { height: 10, right: 5, width: 10 }),
                   }}
                   title={`${outDisplay} (${outType})`}
                   type="source"

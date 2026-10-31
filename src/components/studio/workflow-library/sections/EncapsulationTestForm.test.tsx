@@ -20,10 +20,10 @@ afterEach(cleanup);
 /** 契约口（含落点信息；`targetIoKey: null` = 没连到工作流）。 */
 function entry(over: Partial<EncapsulationEntryStatus> & { id: string }): EncapsulationEntryStatus {
   return {
-    label: over.id,
     control: "text",
-    targetIoKey: null,
+    label: over.id,
     required: false,
+    targetIoKey: null,
     ...over,
   };
 }
@@ -33,11 +33,11 @@ const T2I_ENTRIES: Array<EncapsulationEntryStatus> = [
   entry({
     id: "prompt",
     label: "提示词",
-    targetIoKey: "76::widget::text",
     required: true,
+    targetIoKey: "76::widget::text",
   }),
   entry({ id: "negative", label: "负向提示词" }),
-  entry({ id: "size", label: "尺寸", control: "size" }),
+  entry({ control: "size", id: "size", label: "尺寸" }),
 ];
 
 /** 图生视频契约口：多出首帧与时长。 */
@@ -45,12 +45,12 @@ const I2V_ENTRIES: Array<EncapsulationEntryStatus> = [
   entry({
     id: "prompt",
     label: "提示词",
-    targetIoKey: "76::widget::text",
     required: true,
+    targetIoKey: "76::widget::text",
   }),
-  entry({ id: "first-frame", label: "首帧", control: "image" }),
-  entry({ id: "size", label: "尺寸", control: "size" }),
-  entry({ id: "duration", label: "时长", control: "duration" }),
+  entry({ control: "image", id: "first-frame", label: "首帧" }),
+  entry({ control: "size", id: "size", label: "尺寸" }),
+  entry({ control: "duration", id: "duration", label: "时长" }),
 ];
 
 function renderForm(
@@ -106,7 +106,7 @@ describe("EncapsulationTestForm", () => {
     /* 没填的负向 / 首帧不出现 —— 空串会把图内作者写好的值抹成空。 */
     expect(payload?.negativePrompt).toBeUndefined();
     expect(payload?.firstFrame).toBeUndefined();
-    expect(payload?.size).toMatchObject({ ratio: "3:4", clarity: "1k" });
+    expect(payload?.size).toMatchObject({ clarity: "1k", ratio: "3:4" });
     expect(payload?.duration).toBe(5);
   });
 

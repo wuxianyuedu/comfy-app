@@ -16,7 +16,7 @@ import {
  * 顶栏本身依赖 IO store 与 debug store（有默认值，无需 provider），
  * 因此可以直接挂载。 */
 vi.mock("../ToastProvider", () => ({
-  useToast: () => ({ info: vi.fn(), error: vi.fn(), success: vi.fn() }),
+  useToast: () => ({ error: vi.fn(), info: vi.fn(), success: vi.fn() }),
 }));
 
 afterEach(cleanup);
@@ -26,11 +26,11 @@ const noop = vi.fn();
 function makeStores(): WFStores {
   return {
     io: createIOEditStore("wf-test"),
-    rgthree: createRgthreeGroupsStore({ workflowId: "wf-test", detail: null }),
+    rgthree: createRgthreeGroupsStore({ detail: null, workflowId: "wf-test" }),
     viewer: createNodeJsonViewerStore({
       detail: null,
-      rawMetaById: {},
       positions: null,
+      rawMetaById: {},
       subgraphRawContext: null,
       subgraphStackLength: 0,
     }),
@@ -43,11 +43,11 @@ function renderTopBar() {
       <WorkflowEditorTopBar
         detail={
           /* SAFETY: 类型断言已复核 */ {
+            edges: [],
+            groups: [],
             name: "wf",
             nodes: [],
-            edges: [],
             notes: [],
-            groups: [],
             positions: {},
           } as never
         }

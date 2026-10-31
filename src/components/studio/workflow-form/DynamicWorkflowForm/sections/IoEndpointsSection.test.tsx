@@ -11,11 +11,11 @@ function wireInput(
   over: Partial<EnrichedWidget> & Pick<EnrichedWidget, "ioKey" | "name">,
 ): EnrichedWidget {
   return {
+    control: "link",
     direction: "input",
     kind: "param",
     nodeId: "10",
     type: "MODEL",
-    control: "link",
     ...over,
   };
 }
@@ -54,8 +54,8 @@ describe("IoEndpointsSection", () => {
         inputs={[
           wireInput({
             ioKey: "10::param::positive",
-            name: "positive",
             label: "正向提示",
+            name: "positive",
           }),
         ]}
         outputs={[]}
@@ -63,10 +63,10 @@ describe("IoEndpointsSection", () => {
         wireInputs={[
           wireInput({
             ioKey: "10::param::positive",
-            name: "positive",
             label: "正向提示",
-            type: "CONDITIONING",
+            name: "positive",
             nodeTitle: "K采样器",
+            type: "CONDITIONING",
           }),
         ]}
       />,
@@ -78,8 +78,8 @@ describe("IoEndpointsSection", () => {
   });
 
   it("ioLabel 冲突回退:多个 entry 共用同一 label 时改用 name 区分", () => {
-    const w1 = wireInput({ ioKey: "a", name: "inputImage", label: "图像" });
-    const w2 = wireInput({ ioKey: "b", name: "outputImage", label: "图像" });
+    const w1 = wireInput({ ioKey: "a", label: "图像", name: "inputImage" });
+    const w2 = wireInput({ ioKey: "b", label: "图像", name: "outputImage" });
     render(
       <IoEndpointsSection
         inputs={[w1, w2]}
@@ -98,7 +98,7 @@ describe("IoEndpointsSection", () => {
     render(
       <IoEndpointsSection
         inputs={[wireInput({ ioKey: "a", name: "model" })]}
-        outputs={[output({ ioKey: "o1", name: "IMAGE_FINAL", label: "最终图像" })]}
+        outputs={[output({ ioKey: "o1", label: "最终图像", name: "IMAGE_FINAL" })]}
         showOutputs={false}
         wireInputs={[wireInput({ ioKey: "a", name: "model" })]}
       />,
@@ -115,8 +115,8 @@ describe("IoEndpointsSection", () => {
         outputs={[
           output({
             ioKey: "o1",
-            name: "IMAGE_FINAL",
             label: "最终图像",
+            name: "IMAGE_FINAL",
             type: "IMAGE",
           }),
         ]}
@@ -156,12 +156,12 @@ describe("IoEndpointsSection", () => {
         showOutputs={false}
         wireInputs={[
           wireInput({
-            ioKey: "23::widget::upload",
-            name: "upload",
-            label: "选择文件上传",
-            type: "IMAGEUPLOAD",
             control: "image",
+            ioKey: "23::widget::upload",
             kind: "widget",
+            label: "选择文件上传",
+            name: "upload",
+            type: "IMAGEUPLOAD",
           }),
         ]}
       />,

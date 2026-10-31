@@ -100,8 +100,8 @@ export async function resolveUpstream(
   }
   return {
     base: baseUrl.replace(/\/+$/, ""),
-    path: normalizeEndpointPath(rawPath),
     headers,
+    path: normalizeEndpointPath(rawPath),
   };
 }
 
@@ -130,7 +130,7 @@ export async function readUsageTestPrologue(req: Request): Promise<UsageTestProl
   const rec = isRecord(body) ? body : {};
   const name = strField(rec, "name");
   if (!name) {
-    return { ok: false, detail: "缺少模型名" };
+    return { detail: "缺少模型名", ok: false };
   }
 
   const up = await resolveUpstream(
@@ -140,10 +140,10 @@ export async function readUsageTestPrologue(req: Request): Promise<UsageTestProl
     strField(rec, "path"),
   );
   if ("error" in up) {
-    return { ok: false, detail: up.error };
+    return { detail: up.error, ok: false };
   }
 
-  return { ok: true, name, rec, up };
+  return { name, ok: true, rec, up };
 }
 
 /** 上游响应体：非 JSON 或解析失败一律给 null（调用方按 HTTP 状态给文案）。 */
@@ -169,11 +169,11 @@ async function readRawText(res: Response): Promise<string> {
  *  现在把原始文本截断带出（同样限 240 字符，不把整页 HTML 灌进界面）。 */
 export function httpFailureDetail(status: number, payload: unknown, rawText = ""): string {
   if (isRecord(payload)) {
-    return `HTTP ${status}：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`;
+    return `HTTP ${status}：${clampText(JSON.stringify(payload), { marker: "", maxLength: INLINE_JSON_SNIPPET_MAX })}`;
   }
   const snippet = clampText(rawText.trim(), {
-    maxLength: INLINE_JSON_SNIPPET_MAX,
     marker: "",
+    maxLength: INLINE_JSON_SNIPPET_MAX,
   });
   return snippet ? `HTTP ${status}：${snippet}` : `HTTP ${status}`;
 }
@@ -183,18 +183,18 @@ export function parseExtraJson(
   extraJson: string,
 ): { extra: Record<string, unknown>; ok: true } | { detail: string; ok: false } {
   if (extraJson === "") {
-    return { ok: true, extra: {} };
+    return { extra: {}, ok: true };
   }
   try {
     const parsed: unknown = JSON.parse(extraJson);
     if (!isRecord(parsed)) {
       throw new Error("不是 JSON 对象");
     }
-    return { ok: true, extra: parsed };
+    return { extra: parsed, ok: true };
   } catch (e) {
     return {
-      ok: false,
       detail: `额外参数不是有效的 JSON 对象：${errorMessage(e, "解析失败")}`,
+      ok: false,
     };
   }
 }
@@ -227,27 +227,27 @@ export async function callChat(
   extra: Record<string, unknown>,
 ): Promise<{ ok: true; text: string } | { detail: string; ok: false }> {
   const res = await fetch(`${up.base}${up.path}`, {
-    method: "POST",
-    headers: up.headers,
     body: JSON.stringify({
+      messages: [{ content: prompt, role: "user" }],
       model,
-      messages: [{ role: "user", content: prompt }],
       ...extra,
     }),
+    headers: up.headers,
+    method: "POST",
     signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
   });
   const payload = await readPayload(res);
   if (!res.ok || !isRecord(payload)) {
     return {
-      ok: false,
       detail: httpFailureDetail(res.status, payload, await readRawText(res)),
+      ok: false,
     };
   }
   const text = chatTextFrom(payload);
   if (!text) {
     return {
+      detail: `调用成功但未解析到回复文本：${clampText(JSON.stringify(payload), { marker: "", maxLength: INLINE_JSON_SNIPPET_MAX })}`,
       ok: false,
-      detail: `调用成功但未解析到回复文本：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`,
     };
   }
   return { ok: true, text };
@@ -262,29 +262,29 @@ export async function callImage(
   extra: Record<string, unknown>,
 ): Promise<{ ok: true; url: string } | { detail: string; ok: false }> {
   const res = await fetch(`${up.base}${up.path}`, {
-    method: "POST",
-    headers: up.headers,
     body: JSON.stringify({
       model,
-      prompt,
       n: 1,
+      prompt,
       ...(size !== "" ? { size } : {}),
       ...extra,
     }),
+    headers: up.headers,
+    method: "POST",
     signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
   });
   const payload = await readPayload(res);
   if (!res.ok) {
     return {
-      ok: false,
       detail: httpFailureDetail(res.status, payload, await readRawText(res)),
+      ok: false,
     };
   }
   const url = extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
   if (!url) {
     return {
+      detail: `调用成功但未解析到图片 URL / b64 数据：${clampText(JSON.stringify(payload), { marker: "", maxLength: INLINE_JSON_SNIPPET_MAX })}`,
       ok: false,
-      detail: `调用成功但未解析到图片 URL / b64 数据：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`,
     };
   }
   return { ok: true, url };
@@ -306,16 +306,16 @@ export async function callVideo(
   extra: Record<string, unknown>,
 ): Promise<VideoSubmitOutcome> {
   const res = await fetch(`${up.base}${up.path}`, {
-    method: "POST",
-    headers: up.headers,
     body: JSON.stringify({ model, prompt, ...extra }),
+    headers: up.headers,
+    method: "POST",
     signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
   });
   const payload = await readPayload(res);
   if (!res.ok) {
     return {
-      status: "error",
       detail: httpFailureDetail(res.status, payload, await readRawText(res)),
+      status: "error",
     };
   }
   const directUrl = extractMediaUrl(payload);
@@ -325,8 +325,8 @@ export async function callVideo(
   const taskId = extractRemoteTaskId(payload);
   if (!taskId) {
     return {
+      detail: `响应中未找到视频 URL 或任务 ID：${clampText(JSON.stringify(payload), { marker: "", maxLength: INLINE_JSON_SNIPPET_MAX })}`,
       status: "error",
-      detail: `响应中未找到视频 URL 或任务 ID：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`,
     };
   }
   const doneUrl = await pollRemoteVideoTask(up.base, up.path, model, taskId, up.headers);

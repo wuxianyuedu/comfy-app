@@ -189,7 +189,7 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
     args.push(token);
   }
 
-  return { args, port, envVars: {} };
+  return { args, envVars: {}, port };
 }
 
 /** 从 installations.json 条目里解出 envVars（可能为对象或空）。 */
@@ -324,23 +324,23 @@ export async function resolveEffectiveLaunch(input: {
       : null;
     if (meta) {
       return {
-        port: meta.port ?? 0, // 0 → 调用方按 COMFYUI_DEFAULT_PORT 兜底
-        extraArgs: meta.args,
         envVars: meta.envVars,
+        extraArgs: meta.args,
+        port: meta.port ?? 0, // 0 → 调用方按 COMFYUI_DEFAULT_PORT 兜底
       };
     }
     // 桌面元数据缺失：回落默认 8188，不套用户手填端口/参数（桌面不暴露这两项）。
-    return { port: 0, extraArgs: [], envVars: {} };
+    return { envVars: {}, extraArgs: [], port: 0 };
   }
 
   return {
-    port: input.comfyuiPort ?? 0,
-    extraArgs: splitArgTokens(input.comfyuiExtraArgs ?? ""),
     envVars: {},
+    extraArgs: splitArgTokens(input.comfyuiExtraArgs ?? ""),
+    port: input.comfyuiPort ?? 0,
   };
 }
 
 function classifyLite(dir: string, exists?: (p: string) => boolean) {
   const c = classifyComfyInstall(dir, exists);
-  return { kind: c.kind, instanceIdFile: c.instanceIdFile ?? null };
+  return { instanceIdFile: c.instanceIdFile ?? null, kind: c.kind };
 }

@@ -3,9 +3,9 @@ import React from "react";
 import { Textarea } from "~/components/ui/textarea";
 
 export function StringTextarea({
-  value,
-  mono,
   hasSize,
+  mono,
+  value,
 }: {
   hasSize: boolean;
   mono?: boolean;
@@ -52,11 +52,11 @@ export function StringTextarea({
          *  而不是把标签顶出屏幕。（标签已单独占一行，此条
          *  现在无关紧要，但保留作防御。）
          * `overflowY: "auto"` 让多余内容可滚动。 */
-        width: "100%",
         flex: "1 1 0",
         minHeight: 0,
         minWidth: 0,
         overflowY: "auto",
+        width: "100%",
       }}
       title={value}
       value={value}

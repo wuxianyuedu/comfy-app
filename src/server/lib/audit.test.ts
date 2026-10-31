@@ -29,9 +29,9 @@ vi.mock("~/server/db", () => ({
 vi.mock("~/lib/core/logger", () => ({
   logger: {
     debug: vi.fn(),
+    error: loggerErrorMock,
     info: vi.fn(),
     warn: vi.fn(),
-    error: loggerErrorMock,
   },
 }));
 
@@ -39,8 +39,8 @@ import { audit } from "~/server/lib/audit";
 
 function ctx() {
   return {
-    session: null,
     headers: new Headers({ "x-forwarded-for": "1.2.3.4" }),
+    session: null,
   };
 }
 

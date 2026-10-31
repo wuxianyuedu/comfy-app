@@ -1,8 +1,8 @@
 import { cn } from "~/lib/utils";
 
 function AspectRatio({
-  ratio,
   className,
+  ratio,
   ...props
 }: React.ComponentProps<"div"> & { ratio: number }) {
   return (

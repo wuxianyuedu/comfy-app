@@ -55,8 +55,8 @@ const RAW_WF = { nodes: [{ id: "1", type: "KSampler" }] };
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
-  seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-  seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+  seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+  seedUser(tdb, { email: "b@test.dev", id: "user-b" });
 });
 
 // ────────────────────────────── 工作流库路径 ──────────────────────────────
@@ -65,17 +65,17 @@ describe("generate.generate（工作流库工作流）", () => {
   it("rawJson 工作流：建 QUEUED 任务并入队（workflowInputs 作 overrides）", async () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-lib",
-      userId: "user-a",
       name: "库生图",
-      taskType: "T2I",
       rawJson: RAW_WF,
+      taskType: "T2I",
+      userId: "user-a",
     });
     const res = await createCaller(makeCtx()).generate({
-      workflow: "wf-lib",
-      prompt: "a cat",
       negative: "blur",
+      prompt: "a cat",
       referenceImages: ["ref.png"],
-      workflowInputs: [{ nodeId: "1", name: "text", value: "a cat" }],
+      workflow: "wf-lib",
+      workflowInputs: [{ name: "text", nodeId: "1", value: "a cat" }],
     });
     expect(typeof res.taskId).toBe("string");
     const row = tdb.$tables.tasks.find((t) => t.id === res.taskId);
@@ -96,7 +96,7 @@ describe("generate.generate（工作流库工作流）", () => {
     expect(kickMock).toHaveBeenCalledTimes(1);
     expect(
       /* SAFETY: 类型断言已复核 */ (row?.params as { workflowInputs?: unknown }).workflowInputs,
-    ).toEqual([{ nodeId: "1", name: "text", value: "a cat" }]);
+    ).toEqual([{ name: "text", nodeId: "1", value: "a cat" }]);
   });
 
   /**
@@ -107,24 +107,24 @@ describe("generate.generate（工作流库工作流）", () => {
   it("带上 projectId / shotId 时落进归属列，缺省时落 NULL 而不是空串", async () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-lib",
-      userId: "user-a",
       name: "库生图",
-      taskType: "T2I",
       rawJson: RAW_WF,
+      taskType: "T2I",
+      userId: "user-a",
     });
     const attributed = await createCaller(makeCtx()).generate({
-      workflow: "wf-lib",
-      prompt: "a cat",
       projectId: "proj_1",
+      prompt: "a cat",
       shotId: "shot-3",
+      workflow: "wf-lib",
     });
     const rowA = tdb.$tables.tasks.find((t) => t.id === attributed.taskId);
     expect(rowA?.projectId).toBe("proj_1");
     expect(rowA?.shotId).toBe("shot-3");
 
     const bare = await createCaller(makeCtx()).generate({
-      workflow: "wf-lib",
       prompt: "a cat",
+      workflow: "wf-lib",
     });
     const rowB = tdb.$tables.tasks.find((t) => t.id === bare.taskId);
     expect(rowB?.projectId).toBeNull();
@@ -136,14 +136,14 @@ describe("generate.generate（工作流库工作流）", () => {
     try {
       seedWorkflowTemplate(tdb, {
         id: "wf-host",
-        userId: "user-a",
         name: "host生图",
-        taskType: "T2I",
         rawJson: RAW_WF,
+        taskType: "T2I",
+        userId: "user-a",
       });
       const res = await createCaller(makeCtx()).generate({
-        workflow: "wf-host",
         prompt: "a cat",
+        workflow: "wf-host",
       });
       // 执行整个让给 host：Next 不驱动这一行。kick 仍然会调一次，但双执行不成立
       // ——领取谓词 ownedBy("inline") 看不见 host 行（由 impl 的 §6 归属组钉住）。
@@ -169,7 +169,7 @@ describe("generate.generate（工作流库工作流）", () => {
   it("Zod 校验失败：超长 prompt / 空 workflow → BAD_REQUEST", async () => {
     const caller = createCaller(makeCtx());
     await expect(
-      caller.generate({ workflow: "wf-lib", prompt: "x".repeat(2001) }),
+      caller.generate({ prompt: "x".repeat(2001), workflow: "wf-lib" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(caller.generate({ workflow: "" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
@@ -186,13 +186,13 @@ describe("generate.generate（RAW 原件执行路径）", () => {
     const rawJson = { nodes: [{ id: "1", type: "KSampler" }] };
     seedWorkflowTemplate(tdb, {
       id: "wf-raw",
-      userId: "user-a",
-      taskType: "T2V",
       rawJson,
+      taskType: "T2V",
+      userId: "user-a",
     });
     const res = await createCaller(makeCtx()).generate({
       workflow: "wf-raw",
-      workflowInputs: [{ nodeId: "1", name: "text", value: "hi" }],
+      workflowInputs: [{ name: "text", nodeId: "1", value: "hi" }],
     });
     const row = tdb.$tables.tasks.find((t) => t.id === res.taskId);
     expect(row?.type).toBe("T2V");
@@ -202,15 +202,15 @@ describe("generate.generate（RAW 原件执行路径）", () => {
     expect(row?.execPayload).toEqual(rawJson);
     expect(
       /* SAFETY: 类型断言已复核 */ (row?.params as { workflowInputs?: unknown }).workflowInputs,
-    ).toEqual([{ nodeId: "1", name: "text", value: "hi" }]);
+    ).toEqual([{ name: "text", nodeId: "1", value: "hi" }]);
   });
 
   it("边界：模板 rawJson 为空 → 报「没有可执行内容」", async () => {
     /* rawJson 列可空：库里没有原件的行（历史数据 / 手工插行）走不通。 */
     seedWorkflowTemplate(tdb, {
       id: "wf-empty",
-      userId: "user-a",
       rawJson: null,
+      userId: "user-a",
     });
     const env = await errorEnvelope(createCaller(makeCtx()).generate({ workflow: "wf-empty" }));
     expect(env.code).toBe("PRECONDITION_FAILED");
@@ -221,8 +221,8 @@ describe("generate.generate（RAW 原件执行路径）", () => {
   it("越权与不存在同形：非本人和不存在的 workflow 给同一个码", async () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-b",
-      userId: "user-b",
       rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
+      userId: "user-b",
     });
     await expect(createCaller(makeCtx()).generate({ workflow: "wf-b" })).rejects.toMatchObject({
       code: "NOT_FOUND",

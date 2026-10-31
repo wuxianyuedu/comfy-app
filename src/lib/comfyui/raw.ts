@@ -315,23 +315,23 @@ function readInputSpec(spec: ObjectInfoInputSpec | undefined): {
     const options: Record<string, unknown> = spec[1] ?? {};
     // COMBO：候选值以数组形式直接放在首项
     if (Array.isArray(head)) {
-      return { type: "COMBO", options };
+      return { options, type: "COMBO" };
     }
-    return { type: typeof head === "string" ? head : null, options };
+    return { options, type: typeof head === "string" ? head : null };
   }
   if (spec && typeof spec === "object") {
     const type = spec.type;
 
     if (Array.isArray(type)) {
-      return { type: "COMBO", options: spec };
+      return { options: spec, type: "COMBO" };
     }
 
     if (typeof type === "string") {
-      return { type: type, options: spec };
+      return { options: spec, type: type };
     }
   }
 
-  return { type: null, options: {} };
+  return { options: {}, type: null };
 }
 
 export type ObjectInfo = Record<string, ObjectInfoClassDef>;
@@ -536,7 +536,7 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): Array<string> 
     if (!spec) {
       return;
     }
-    const { type, options } = readInputSpec(spec);
+    const { options, type } = readInputSpec(spec);
     if (!type) {
       return;
     }
@@ -568,6 +568,16 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): Array<string> 
  * 这里的顺序只按「控件输入」的显示顺序排（不含连接），
  * 与 `widgets_values` 在磁盘上的序列化顺序一致。 */
 const FALLBACK_WIDGETS: Record<string, Array<string>> = {
+  CheckpointLoaderSimple: ["ckpt_name"],
+  CLIPSetLastLayer: ["stop_at_clip_layer"],
+  CLIPTextEncode: ["text"],
+  CLIPVisionLoader: ["clip_name"],
+  ControlNetLoader: ["control_net_name"],
+  DualCLIPLoader: ["clip_name1", "clip_name2", "type", "device"],
+  EmptyLatentImage: ["width", "height", "batch_size"],
+  EmptySD3LatentImage: ["width", "height", "batch_size"],
+  ImageScale: ["width", "height", "upscale_method", "crop"],
+  ImageScaleBy: ["scale_by", "upscale_method"],
   KSampler: ["seed", CONTROL_SENTINEL, "steps", "cfg", "sampler_name", "scheduler", "denoise"],
   KSamplerAdvanced: [
     "add_noise",
@@ -581,25 +591,15 @@ const FALLBACK_WIDGETS: Record<string, Array<string>> = {
     "end_at_step",
     "return_with_leftover_noise",
   ],
-  CLIPTextEncode: ["text"],
-  CheckpointLoaderSimple: ["ckpt_name"],
+  LoadImage: ["image"],
   LoraLoader: ["lora_name", "strength_model", "strength_clip"],
   LoraLoaderModelOnly: ["lora_name", "strength_model"],
-  EmptyLatentImage: ["width", "height", "batch_size"],
-  EmptySD3LatentImage: ["width", "height", "batch_size"],
-  VAEEncode: [],
-  VAEDecode: [],
+  PreviewImage: [],
   SaveImage: ["filename_prefix"],
   SaveImageAdvanced: ["filename_prefix", "output_type"],
-  PreviewImage: [],
-  LoadImage: ["image"],
-  ImageScale: ["width", "height", "upscale_method", "crop"],
-  ImageScaleBy: ["scale_by", "upscale_method"],
-  VAELoader: ["vae_name"],
-  CLIPSetLastLayer: ["stop_at_clip_layer"],
-  CLIPVisionLoader: ["clip_name"],
-  DualCLIPLoader: ["clip_name1", "clip_name2", "type", "device"],
   UNETLoader: ["unet_name", "weight_dtype"],
-  ControlNetLoader: ["control_net_name"],
   UpscaleModelLoader: ["upscale_model_name"],
+  VAEDecode: [],
+  VAEEncode: [],
+  VAELoader: ["vae_name"],
 };

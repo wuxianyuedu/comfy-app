@@ -35,11 +35,11 @@ vi.mock("./probe", () => ({
 }));
 vi.mock("./client", () => ({
   probeComfyBase: vi.fn(async () => null),
-  resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
   resetComfyBase: vi.fn(),
+  resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
 }));
 vi.mock("~/lib/core/logger", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
 import {
@@ -59,8 +59,8 @@ import { collectComfyPythonCandidates } from "./env-python";
 import { probeComfyAtPort } from "./probe";
 
 const plan = {
-  cmd: "C:\\Comfy\\python_embeded\\python.exe",
   baseArgs: ["-s", "C:\\Comfy\\main.py"],
+  cmd: "C:\\Comfy\\python_embeded\\python.exe",
   cwd: "C:\\Comfy",
   mainPy: "C:\\Comfy\\main.py",
 };
@@ -75,14 +75,14 @@ beforeEach(() => {
   vi.mocked(resolveComfyLaunchPlan).mockReturnValue(plan);
   vi.mocked(classifyComfyInstall).mockReturnValue(
     /* SAFETY: 类型断言已复核 */ {
-      kind: "portable",
-      instanceRoot: "C:\\Comfy",
       instanceIdFile: null,
+      instanceRoot: "C:\\Comfy",
+      kind: "portable",
     } as never,
   );
   vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-    pid: null,
     failed: false,
+    pid: null,
   });
   vi.mocked(findPidListeningPort).mockResolvedValue(null);
   vi.mocked(collectComfyPythonCandidates).mockReturnValue([]);
@@ -104,8 +104,8 @@ afterEach(() => {
 describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
   it("配置路径进程表命中即「在跑」，并带出监听端口", async () => {
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: 4242,
       failed: false,
+      pid: 4242,
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
     const snap = await getComfyRuntimeSnapshot({ force: true });
@@ -118,8 +118,8 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
 
   it("进程表查询失败（超时/高负载）→ unverified，绝不当成「没在跑」", async () => {
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: null,
       failed: true,
+      pid: null,
     });
     const snap = await getComfyRuntimeSnapshot({ force: true });
     expect(snap.running).toBe(false);
@@ -129,7 +129,7 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
   it("解释器候选落空但 setup 登记的启动器命中（Comfy Desktop / uv 起法）", async () => {
     // 主 main.py 查询成功返回「没有」，登记的启动器命中。
     vi.mocked(findPidForMainPyDetailed).mockImplementation(async (needle: string) =>
-      needle.includes("uv.exe") ? { pid: 777, failed: false } : { pid: null, failed: false },
+      needle.includes("uv.exe") ? { failed: false, pid: 777 } : { failed: false, pid: null },
     );
     vi.mocked(findPidListeningPort).mockResolvedValue(8190);
     // 把登记启动器伪装成 uv.exe：用一个真实存在的小文件承载 .comfy-cli 内容。
@@ -153,9 +153,9 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
     });
     vi.mocked(classifyComfyInstall).mockReturnValue(
       /* SAFETY: 类型断言已复核 */ {
-        kind: "desktop",
-        instanceRoot: dir,
         instanceIdFile: null,
+        instanceRoot: dir,
+        kind: "desktop",
       } as never,
     );
 
@@ -174,7 +174,7 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
       { exe: uvExe, via: "standalone-env 的 pyvenv.cfg" },
     ]);
     vi.mocked(findPidForMainPyDetailed).mockImplementation(async (needle: string) =>
-      needle.includes("uv\\python") ? { pid: 888, failed: false } : { pid: null, failed: false },
+      needle.includes("uv\\python") ? { failed: false, pid: 888 } : { failed: false, pid: null },
     );
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
 
@@ -189,7 +189,7 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
   it("第 5 级也要在「配置路径的 main.py 查询失败」时照常兜底", async () => {
     // main.py 那次查询超时（unverified）不能提前 return：反查命中仍应报在跑。
     vi.mocked(findPidForMainPyDetailed).mockImplementation(async (needle: string) =>
-      needle.includes("uv.exe") ? { pid: 999, failed: false } : { pid: null, failed: true },
+      needle.includes("uv.exe") ? { failed: false, pid: 999 } : { failed: true, pid: null },
     );
     vi.mocked(collectComfyPythonCandidates).mockReturnValue([
       { exe: "C:\\uv\\uv.exe", via: "uv 托管的解释器" },
@@ -207,8 +207,8 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
       { exe: "C:\\uv\\python.exe", via: "uv 托管的解释器" },
     ]);
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: null,
       failed: false,
+      pid: null,
     });
     const snap = await getComfyRuntimeSnapshot({ force: true });
     expect(snap.running).toBe(false);
@@ -269,8 +269,8 @@ describe("配置端口抢跑 — 不让 Get-NetTCPConnection 一个人占满首�
       } as never,
     );
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: 4242,
       failed: false,
+      pid: 4242,
     });
     vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:8188");
     // sleep-ok: mock 内部延迟：权威查询（Get-NetTCPConnection）在真机上是 ~2.5s 的慢查询，这里用 5s 模拟它 —— 判据是「不被它拖住」（dt < 2000）。
@@ -296,8 +296,8 @@ describe("配置端口抢跑 — 不让 Get-NetTCPConnection 一个人占满首�
       } as never,
     );
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: 4242,
       failed: false,
+      pid: 4242,
     });
     // 实例偏移到了 8190，配置端口上没人应答。
     vi.mocked(probeComfyAtPort).mockResolvedValue(null);
@@ -325,8 +325,8 @@ describe("配置端口只探一次 — 失败路径不重复付超时", () => {
     );
     // 进程表命中，但配置端口没人应答（实例在别处 / 还没绑端口）。
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: 4242,
       failed: false,
+      pid: 4242,
     });
     vi.mocked(probeComfyAtPort).mockResolvedValue(null);
     vi.mocked(findPidListeningPort).mockResolvedValue(8190);
@@ -365,8 +365,8 @@ describe("快照缓存 — 便宜但不失时效", () => {
   it("TTL 内复用同一结果，不在途重复查进程表", async () => {
     // 已绑定端口的「在跑」结论才允许缓存：它不会在下一秒变成别的结论。
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: 1,
       failed: false,
+      pid: 1,
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
     await getComfyRuntimeSnapshot({ force: true });
@@ -380,8 +380,8 @@ describe("快照缓存 — 便宜但不失时效", () => {
     // 端口未绑定是「正在启动」的中间态，下一步就是绑定端口 —— 缓存它会
     // 把状态行按在「启动中」上不动。
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: 1,
       failed: false,
+      pid: 1,
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(null);
     const first = await getComfyRuntimeSnapshot({ force: true });
@@ -395,14 +395,14 @@ describe("快照缓存 — 便宜但不失时效", () => {
 
   it("force 绕过 TTL：外部刚启动的实例立刻能被认出来", async () => {
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: null,
       failed: false,
+      pid: null,
     });
     const first = await getComfyRuntimeSnapshot({ force: true });
     expect(first.running).toBe(false);
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: 99,
       failed: false,
+      pid: 99,
     });
     const second = await getComfyRuntimeSnapshot({ force: true });
     expect(second.running).toBe(true);
@@ -417,7 +417,7 @@ describe("快照缓存 — 便宜但不失时效", () => {
     });
     vi.mocked(findPidForMainPyDetailed)
       .mockReturnValueOnce(hanging)
-      .mockResolvedValue({ pid: 99, failed: false });
+      .mockResolvedValue({ failed: false, pid: 99 });
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
 
     const before = getComfyRuntimeSnapshot({ force: true });
@@ -428,7 +428,7 @@ describe("快照缓存 — 便宜但不失时效", () => {
     expect(after.running).toBe(true);
     expect(after.pid).toBe(99);
     // 旧那次随后落地：它只回答当初的调用者，不许回写缓存。
-    releasePrev({ pid: null, failed: false });
+    releasePrev({ failed: false, pid: null });
     await before;
     const third = await getComfyRuntimeSnapshot();
     expect(third.running).toBe(true);
@@ -437,8 +437,8 @@ describe("快照缓存 — 便宜但不失时效", () => {
 
   it("动作后连查两次只发一次进程表查询（作废在途后仍保留去重）", async () => {
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: 7,
       failed: false,
+      pid: 7,
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
     await getComfyRuntimeSnapshot({ force: true });
@@ -483,8 +483,8 @@ describe("候选查询并发化 — 冷启动等待不叠成 N 倍（ISSUE #339 
       inFlight -= 1;
       // 只有最后一个候选命中：前面几级都必须问过，判据链才完整。
       return needle.includes("pythonw")
-        ? { pid: 4321, failed: false }
-        : { pid: null, failed: false };
+        ? { failed: false, pid: 4321 }
+        : { failed: false, pid: null };
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
 
@@ -509,7 +509,7 @@ describe("候选查询并发化 — 冷启动等待不叠成 N 倍（ISSUE #339 
       const delay = call === 1 ? 40 : 5;
       // sleep-ok: mock 内部延迟：让后发出的请求先返回，用来暴露「并发实现按谁先返回取结论」这个错误形状。
       await new Promise((r) => setTimeout(r, delay));
-      return { pid: 100 + call, failed: false };
+      return { failed: false, pid: 100 + call };
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8190);
 
@@ -548,8 +548,8 @@ describe("readRegisteredLauncher — 读不到就静默返回 null", () => {
 describe("didQueryProcTable — 区分「查过没命中」与「根本没查」", () => {
   it("进程表命中（配置路径的实例）→ 查过", async () => {
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: 4242,
       failed: false,
+      pid: 4242,
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
     const snap = await getComfyRuntimeSnapshot({ force: true });
@@ -561,8 +561,8 @@ describe("didQueryProcTable — 区分「查过没命中」与「根本没查」
       { exe: "C:\\uv\\python.exe", via: "uv 托管的解释器" },
     ]);
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: null,
       failed: false,
+      pid: null,
     });
     const snap = await getComfyRuntimeSnapshot({ force: true });
     expect(snap.running).toBe(false);
@@ -575,9 +575,9 @@ describe("didQueryProcTable — 区分「查过没命中」与「根本没查」
     vi.mocked(resolveComfyLaunchPlan).mockReturnValue({ error: "路径不存在" });
     vi.mocked(classifyComfyInstall).mockReturnValue(
       /* SAFETY: 类型断言已复核 */ {
-        kind: "unknown",
-        instanceRoot: null,
         instanceIdFile: null,
+        instanceRoot: null,
+        kind: "unknown",
       } as never,
     );
     vi.mocked(collectComfyPythonCandidates).mockReturnValue([]);
@@ -620,8 +620,8 @@ describe("配置端口已应答 → 直接判「在跑」，不再枚举进程�
   it("端口没人应答 → 照旧走完整条判据链（不因快路径漏掉端口偏移的实例）", async () => {
     vi.mocked(probeComfyAtPort).mockResolvedValue(null);
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
-      pid: 4242,
       failed: false,
+      pid: 4242,
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8190);
     const snap = await getComfyRuntimeSnapshot({ force: true });

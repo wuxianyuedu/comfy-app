@@ -86,8 +86,8 @@ function TabBlockedNotice({
    * 界面上什么都不变，成没成全靠猜。 */
   const copied = useFlashState();
   const copyUrl = useCopyFeedback({
-    onSuccess: () => copied.flash(),
     onFailure: "silent",
+    onSuccess: () => copied.flash(),
   });
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
@@ -129,14 +129,14 @@ function TabBlockedNotice({
 }
 
 export function ShellTabs({
-  children,
-  viewTabs,
   activeViewKey,
-  projectNameOf,
-  onSelectViewTab,
+  children,
   onCloseViewTab,
-  openableViews,
   onOpenView,
+  onSelectViewTab,
+  openableViews,
+  projectNameOf,
+  viewTabs,
 }: ShellTabsProps) {
   const tabs = useShellTabs((s) => s.tabs);
   const activeTabId = useShellTabs((s) => s.activeTabId);

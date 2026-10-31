@@ -26,14 +26,14 @@ export type SubgraphHeaderProps = {
 };
 
 export function SubgraphHeader({
-  title,
-  nodeId,
   accent,
-  isCollapsed,
-  onToggle,
-  onEnter,
   io,
+  isCollapsed,
+  nodeId,
+  onEnter,
+  onToggle,
   outputRef,
+  title,
 }: SubgraphHeaderProps) {
   /* 标题栏底色 = 节点表面色与子图身份色 accent 的 20% 混色。混色基准此前
      写死 `#16161E`，Light 下整条标题栏仍是暗色（浅色节点配黑标题）。
@@ -43,9 +43,9 @@ export function SubgraphHeader({
     <div
       className="flex shrink-0 items-center gap-2 rounded-t-lg px-2 text-xs"
       style={{
-        height: NODE_TITLE_H,
         background: mixHex(mixBase, accent, 0.2),
         borderBottom: "1px solid var(--color-border-subtle)",
+        height: NODE_TITLE_H,
       }}
     >
       {/* 收起 / 展开开关。与 WorkflowNode 同一个箭头；
@@ -94,8 +94,8 @@ export function SubgraphHeader({
         className="text-4xs inline-flex size-3.5 shrink-0 items-center justify-center rounded font-bold"
         style={{
           background: accent,
-          color: "var(--color-canvas)",
           boxShadow: `0 0 6px ${accent}`,
+          color: "var(--color-canvas)",
         }}
         title="子工作流"
       >
@@ -118,10 +118,10 @@ export function SubgraphHeader({
         <IoCheckbox
           io={io}
           ioRef={{
-            nodeId: String(nodeId),
-            name: outputRef.name,
-            kind: "output",
             direction: "output",
+            kind: "output",
+            name: outputRef.name,
+            nodeId: String(nodeId),
           }}
         />
       )}

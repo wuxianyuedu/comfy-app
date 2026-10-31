@@ -40,9 +40,9 @@ describe("GET /api/schema", () => {
     fs.writeFileSync(
       statusFile,
       JSON.stringify({
-        phase: "synced",
-        detail: null,
         at: "2026-09-20T12:44:30.766Z",
+        detail: null,
+        phase: "synced",
       }),
       "utf8",
     );
@@ -50,11 +50,11 @@ describe("GET /api/schema", () => {
     const res = await GET();
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      ok: true,
-      canPush: true,
-      phase: "synced",
-      detail: null,
       at: "2026-09-20T12:44:30.766Z",
+      canPush: true,
+      detail: null,
+      ok: true,
+      phase: "synced",
     });
   });
 
@@ -62,7 +62,7 @@ describe("GET /api/schema", () => {
     fs.mkdirSync(path.dirname(statusFile), { recursive: true });
     fs.writeFileSync(
       statusFile,
-      JSON.stringify({ phase: "syncing", at: "2026-09-20T12:44:05.427Z" }),
+      JSON.stringify({ at: "2026-09-20T12:44:05.427Z", phase: "syncing" }),
       "utf8",
     );
     const { GET } = await import("./route");
@@ -78,9 +78,9 @@ describe("GET /api/schema", () => {
     const res = await GET();
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
+      canPush: true,
       ok: false,
       phase: "unknown",
-      canPush: true,
     });
   });
 
@@ -90,16 +90,16 @@ describe("GET /api/schema", () => {
 
     fs.writeFileSync(statusFile, "{ 这不是 JSON", "utf8");
     await expect((await GET()).json()).resolves.toEqual({
+      canPush: true,
       ok: false,
       phase: "unknown",
-      canPush: true,
     });
 
     fs.writeFileSync(statusFile, '"synced"', "utf8");
     await expect((await GET()).json()).resolves.toEqual({
+      canPush: true,
       ok: false,
       phase: "unknown",
-      canPush: true,
     });
   });
 

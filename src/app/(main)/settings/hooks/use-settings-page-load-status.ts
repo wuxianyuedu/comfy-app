@@ -76,5 +76,5 @@ export function useSettingsLoadStatus() {
     });
   }, [queryFailed, errorText, failedQueries, failedError]);
 
-  return { queryFailed, isInitialLoad, errorText };
+  return { errorText, isInitialLoad, queryFailed };
 }

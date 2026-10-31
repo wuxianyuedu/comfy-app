@@ -1,9 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import {
-  ExitReminder,
-  exitReminderSignal,
-} from "~/components/ui/use-exit-reminder";
+import { ExitReminder, exitReminderSignal } from "~/components/ui/use-exit-reminder";
 
 /**
  * 判据**全在 CSS**（`globals.css` 的 `[data-exit-reminder]:has(~ [data-dirty])`），
@@ -15,11 +12,11 @@ import {
  * 于是 story 反而会让人误判成组件坏了。铺开两种状态来定这件事。
  */
 const meta = {
-  title: "UI/ExitReminder",
-  component: ExitReminder,
   args: {
     children: "切走这一阶段后这里的内容会被清空，需要先导出或复制保留。",
   },
+  component: ExitReminder,
+  title: "UI/ExitReminder",
 } satisfies Meta<typeof ExitReminder>;
 
 export default meta;
@@ -34,9 +31,7 @@ export const Idle: Story = {
       <div className="border-border border border-dashed p-2">
         <div {...exitReminderSignal(false)}>
           <ExitReminder {...args} />
-          <span className="text-ink-faint text-xs">
-            （提示条在上面这一行里，看不见）
-          </span>
+          <span className="text-ink-faint text-xs">（提示条在上面这一行里，看不见）</span>
         </div>
       </div>
     </div>
@@ -50,9 +45,7 @@ export const Shown: Story = {
       <span>下面是「有脏数据」时的形态：</span>
       <div className="border-border border border-dashed p-2">
         <div {...exitReminderSignal(true)}>
-          <span className="text-ink-faint text-xs">
-            （这一层带着 data-dirty）
-          </span>
+          <span className="text-ink-faint text-xs">（这一层带着 data-dirty）</span>
           <ExitReminder {...args} className="text-ink-faint mt-1 text-[11px]" />
         </div>
       </div>

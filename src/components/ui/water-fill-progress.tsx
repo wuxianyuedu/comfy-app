@@ -22,8 +22,8 @@ import { clampPct } from "~/lib/progress";
  * "暗幕 + 隐约背景" 视觉（见截图 4 的 20% 节点预览）。
  * ───────────────────────────────────────────────────────────────────────── */
 export function WaterFillProgress({
-  progress,
   className = "",
+  progress,
 }: {
   className?: string;
   /** 0..100. 超出范围会被钳制。 */
@@ -42,10 +42,10 @@ export function WaterFillProgress({
       <div
         className="absolute inset-x-0 top-0 transition-transform duration-700 ease-out"
         style={{
-          height: "100%",
-          transform: `translateY(${100 - pct}%)`,
           background:
             "linear-gradient(180deg, rgba(18,18,26,0.86) 0%, rgba(24,24,34,0.94) 60%, rgba(30,30,42,0.98) 100%)",
+          height: "100%",
+          transform: `translateY(${100 - pct}%)`,
         }}
       >
         {/* 水面 SVG：10px 高，骑在水层 top-0 上沿（translateY(-5px) 让波形对称跨在

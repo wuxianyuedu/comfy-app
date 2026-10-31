@@ -18,53 +18,53 @@ export const ROW_STATE_PRESET: Record<
     status: string;
   }
 > = {
-  loaded: {
-    status: "SUCCEEDED",
-    label: "✓ 已加载",
-    rowCls: "border-success/20 bg-success/5",
-    railCls: "border-success/20",
-    btn: "border border-success/40 text-success-strong hover:bg-success/10",
-    btnLabel: "重新解析",
-  },
-  outdated: {
-    status: "QUEUED",
-    label: "↻ 有更新",
-    rowCls: "border-warning/20 bg-warning/5",
-    railCls: "border-warning/20",
-    btn: "bg-warning text-white hover:opacity-90",
-    btnLabel: "重新解析",
-  },
-  unimported: {
-    status: "IDLE",
-    label: "未导入",
-    rowCls: "border-border-strong bg-subtle",
-    railCls: "border-border-strong",
-    btn: "bg-primary text-white hover:opacity-90",
-    btnLabel: "导入此包",
-  },
-  error: {
-    status: "ERROR",
-    label: "解析出错",
-    rowCls: "border-destructive/30 bg-destructive/5",
-    railCls: "border-destructive/30",
-    btn: "bg-primary text-white hover:opacity-90",
-    btnLabel: "重新解析",
-  },
-  missing: {
-    status: "QUEUED",
-    label: "目录不存在",
-    rowCls: "border-warning/20 bg-warning/5",
-    railCls: "border-warning/20",
-    btn: "border border-border text-muted-foreground cursor-not-allowed",
-    btnLabel: "无法解析",
-  },
   empty: {
-    status: "IDLE",
-    label: "无 NODE_CLASS_MAPPINGS",
-    rowCls: "border-border-strong bg-subtle",
-    railCls: "border-border-strong",
     btn: "border border-border text-muted-foreground cursor-not-allowed",
     btnLabel: "无可导入节点",
+    label: "无 NODE_CLASS_MAPPINGS",
+    railCls: "border-border-strong",
+    rowCls: "border-border-strong bg-subtle",
+    status: "IDLE",
+  },
+  error: {
+    btn: "bg-primary text-white hover:opacity-90",
+    btnLabel: "重新解析",
+    label: "解析出错",
+    railCls: "border-destructive/30",
+    rowCls: "border-destructive/30 bg-destructive/5",
+    status: "ERROR",
+  },
+  loaded: {
+    btn: "border border-success/40 text-success-strong hover:bg-success/10",
+    btnLabel: "重新解析",
+    label: "✓ 已加载",
+    railCls: "border-success/20",
+    rowCls: "border-success/20 bg-success/5",
+    status: "SUCCEEDED",
+  },
+  missing: {
+    btn: "border border-border text-muted-foreground cursor-not-allowed",
+    btnLabel: "无法解析",
+    label: "目录不存在",
+    railCls: "border-warning/20",
+    rowCls: "border-warning/20 bg-warning/5",
+    status: "QUEUED",
+  },
+  outdated: {
+    btn: "bg-warning text-white hover:opacity-90",
+    btnLabel: "重新解析",
+    label: "↻ 有更新",
+    railCls: "border-warning/20",
+    rowCls: "border-warning/20 bg-warning/5",
+    status: "QUEUED",
+  },
+  unimported: {
+    btn: "bg-primary text-white hover:opacity-90",
+    btnLabel: "导入此包",
+    label: "未导入",
+    railCls: "border-border-strong",
+    rowCls: "border-border-strong bg-subtle",
+    status: "IDLE",
   },
 };
 
@@ -75,8 +75,8 @@ export const ROW_STATE_PRESET: Record<
 export const OK_STATUS_STYLE: { label: string } = { label: "已加载" };
 
 export const STATUS_STYLE: Record<string, { label: string }> = {
-  ok: OK_STATUS_STYLE,
-  missing: { label: "目录不存在" },
-  error: { label: "解析出错" },
   empty: { label: "无 NODE_CLASS_MAPPINGS" },
+  error: { label: "解析出错" },
+  missing: { label: "目录不存在" },
+  ok: OK_STATUS_STYLE,
 };

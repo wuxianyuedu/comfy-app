@@ -97,20 +97,20 @@ export function pnpmInvocation(
   args: Array<string> = [],
   {
     env = process.env,
-    platform = process.platform,
     name = "pnpm",
+    platform = process.platform,
   }: WhichCommandOptions & { name?: string } = {},
 ): PnpmInvocation | null {
   /* ① 能直接跑包真身的 JS 入口时，连垫片都不起（ISSUE #2562）：`process.execPath` +
    * 入口，`shell: false` 恒定、不需要宿主 —— 每一条 `pnpm …` 少付一次 PowerShell
    * 冷启动（实测那一跳 0.6~3s，见规范 §2.1.9）。判据只有 `pnpmJsEntry()` 一处。 */
-  const js = pnpmJsInvocation({ name, env, platform });
+  const js = pnpmJsInvocation({ env, name, platform });
   const candidate = js?.candidate ?? whichCommand(name, { env, platform });
   if (!candidate) {
     return null;
   }
   const usable = js
-    ? { ok: true, command: js.command, prefixArgs: js.prefixArgs, reason: null }
+    ? { command: js.command, ok: true, prefixArgs: js.prefixArgs, reason: null }
     : usableCommand(candidate, ["-v"], { env, platform });
   const invocation = usable.ok
     ? { command: usable.command, prefixArgs: usable.prefixArgs }
@@ -130,17 +130,17 @@ export function pnpmInvocation(
     }
   }
   return {
-    command: invocation.command,
     args: [...invocation.prefixArgs, ...args],
     candidate,
+    command: invocation.command,
     /* `osHost` 非空**且**真正 spawn 的就是它，才算「经宿主」。用 `candidate` 比会
      * 把「跑 JS 入口」（command = node，candidate = 落点）误读成经宿主 —— 而 PS 参数
      * 切分那道防线（`runPnpmSync` 的 `hostUnsafeArgs`）正是按这个布尔值决定要不要拦。 */
-    viaHost: Boolean(osHost) && invocation.command === osHost,
-    pathRaw,
-    pathEntries,
     onDisk,
     osHost,
+    pathEntries,
+    pathRaw,
+    viaHost: Boolean(osHost) && invocation.command === osHost,
   };
 }
 
@@ -238,8 +238,8 @@ function isPnpmEntryScript(candidate: string): boolean {
  * 垫片、但包真身就摆在旁边」的现场。与 `NodeJS.Platform` 无关：全平台同一条路。
  * 返回的 `candidate` 是落点目录，`entry` 是那个 JS 入口；没有包真身时 `null`。 */
 export function pnpmJsInvocation({
-  name,
   env,
+  name,
   platform,
 }: {
   env: NodeJS.ProcessEnv | Record<string, string | undefined>;
@@ -262,10 +262,10 @@ export function pnpmJsInvocation({
     const entry = pnpmJsEntry(dir);
     if (entry) {
       return {
-        command: process.execPath,
-        prefixArgs: [entry],
-        entry,
         candidate: dir,
+        command: process.execPath,
+        entry,
+        prefixArgs: [entry],
       };
     }
   }
@@ -300,10 +300,10 @@ export function pnpmJsInvocation({
       const entry = pnpmJsEntry(dropIn);
       if (entry) {
         return {
-          command: process.execPath,
-          prefixArgs: [entry],
-          entry,
           candidate: dropIn,
+          command: process.execPath,
+          entry,
+          prefixArgs: [entry],
         };
       }
     }
@@ -365,16 +365,16 @@ export function resolveCommandInvocation(
 ): ResolvedInvocation {
   const candidate = whichCommand(file, { env, platform, probe, probeArgs });
   if (!candidate) {
-    return { command: file, args, resolved: false };
+    return { args, command: file, resolved: false };
   }
   const usable = usableCommand(candidate, probeArgs, { env, platform, probe });
   // 可用即用宿主形态；不可用（如 `.cmd` 且无 `.ps1` 回退）仍把**绝对路径**
   // 交出去 —— 让 spawn 报一个带绝对路径的错，比报裸名字更有排障价值。
   return usable.ok
     ? {
-        command: usable.command,
         args: [...usable.prefixArgs, ...args],
+        command: usable.command,
         resolved: true,
       }
-    : { command: candidate, args, resolved: true };
+    : { args, command: candidate, resolved: true };
 }

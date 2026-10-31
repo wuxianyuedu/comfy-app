@@ -14,7 +14,7 @@ type CanvasToolbarProps = {
 const ghostTool =
   "text-ink-soft hover:bg-subtle h-auto rounded-full px-3 py-1 text-xs font-normal transition-colors";
 
-export function CanvasToolbar({ onFitView, onExport, onClear }: CanvasToolbarProps) {
+export function CanvasToolbar({ onClear, onExport, onFitView }: CanvasToolbarProps) {
   return (
     <div className="border-border-strong bg-panel shadow-shadow-strong z-canvas-ui absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border px-2 py-1.5 shadow-lg">
       <span className="text-primary-strong text-2xs flex items-center px-2 font-medium">

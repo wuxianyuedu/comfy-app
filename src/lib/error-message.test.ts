@@ -30,24 +30,18 @@ describe("errorMessage", () => {
 
 describe("errorText（带动作前缀）", () => {
   it("动作名与详情用全角冒号拼接（分隔符只有一处定义）", () => {
-    expect(errorText(new Error("连接被拒绝"), "读取配置")).toBe(
-      "读取配置：连接被拒绝",
-    );
+    expect(errorText(new Error("连接被拒绝"), "读取配置")).toBe("读取配置：连接被拒绝");
   });
 
   it("详情取不到时回落默认兜底，且**动作前缀一定在**", () => {
     // 裸 `errorMessage(e, "读取配置")` 在这里会把动作名当详情，于是
     // 「读取配置：读取配置」—— 前缀分开之后这种重复不可能再出现。
     expect(errorText("boom", "读取配置")).toBe("读取配置：未知错误");
-    expect(errorText("boom", "读取配置", "配置表缺失")).toBe(
-      "读取配置：配置表缺失",
-    );
+    expect(errorText("boom", "读取配置", "配置表缺失")).toBe("读取配置：配置表缺失");
   });
 
   it("网络层翻译照常生效（与 errorMessage 同一口径）", () => {
-    const e = new Error(
-      `Unexpected token '<', "<!DOCTYPE "...is not valid JSON`,
-    );
+    const e = new Error(`Unexpected token '<', "<!DOCTYPE "...is not valid JSON`);
     expect(errorText(e, "打开 ComfyUI")).toBe(
       "打开 ComfyUI：服务返回了非预期内容（通常是应用服务正在重启或未就绪），请稍候重试",
     );
@@ -64,9 +58,7 @@ describe("errorText（带动作前缀）", () => {
 
 describe("网络层报错翻译", () => {
   it("JSON 解析失败翻译成可读文案（ISSUE #220 设置页报错原文）", () => {
-    const e = new Error(
-      `Unexpected token '<', "<!DOCTYPE "...is not valid JSON`,
-    );
+    const e = new Error(`Unexpected token '<', "<!DOCTYPE "...is not valid JSON`);
     expect(errorMessage(e, "加载失败")).toBe(
       "服务返回了非预期内容（通常是应用服务正在重启或未就绪），请稍候重试",
     );
@@ -79,9 +71,7 @@ describe("网络层报错翻译", () => {
   });
 
   it("普通业务错误不受翻译影响，原样返回", () => {
-    expect(errorMessage(new Error("模型名称已存在"), "兜底")).toBe(
-      "模型名称已存在",
-    );
+    expect(errorMessage(new Error("模型名称已存在"), "兜底")).toBe("模型名称已存在");
   });
 
   it("翻译命中但配合空串仍走兜底", () => {
@@ -97,13 +87,13 @@ describe("网络层报错翻译", () => {
 describe("tRPC 传输层包装文案让位给服务端原文", () => {
   it("顶层是 abort 包装 + shape.message 有服务端报错 → 用服务端报错", () => {
     const e = {
-      name: "TRPCClientError",
-      message: "signal is aborted without reason",
-      shape: {
-        message: "no such table: llmConfig",
-        code: -32603,
-      },
       data: { code: "INTERNAL_SERVER_ERROR", httpStatus: 500 },
+      message: "signal is aborted without reason",
+      name: "TRPCClientError",
+      shape: {
+        code: -32603,
+        message: "no such table: llmConfig",
+      },
     };
     expect(errorMessage(e, "兜底")).toBe("no such table: llmConfig");
   });
@@ -113,16 +103,12 @@ describe("tRPC 传输层包装文案让位给服务端原文", () => {
       message: "Failed to fetch",
       shape: { message: "Failed to fetch" },
     };
-    expect(errorMessage(e, "兜底")).toBe(
-      "网络请求失败，请检查应用服务是否正在运行",
-    );
+    expect(errorMessage(e, "兜底")).toBe("网络请求失败，请检查应用服务是否正在运行");
   });
 
   it("只有顶层 abort 包装、没有服务端原文时，翻译成可读提示", () => {
     const e = { message: "signal is aborted without reason" };
-    expect(errorMessage(e, "兜底")).toBe(
-      "请求被中断，应用服务可能正在重启，请稍候重试",
-    );
+    expect(errorMessage(e, "兜底")).toBe("请求被中断，应用服务可能正在重启，请稍候重试");
   });
 
   it("shape 为空对象时不误取，回落顶层 message", () => {
@@ -137,9 +123,9 @@ describe("tRPC 传输层包装文案让位给服务端原文", () => {
 describe("rawErrorDetail 保留原始报错供排查", () => {
   it("拼出 name / message / tRPC code / httpStatus", () => {
     const e = {
-      name: "TRPCClientError",
-      message: "no such table: llmConfig",
       data: { code: "INTERNAL_SERVER_ERROR", httpStatus: 500 },
+      message: "no such table: llmConfig",
+      name: "TRPCClientError",
     };
     const out = rawErrorDetail(e);
     expect(out).toContain("TRPCClientError");
@@ -152,8 +138,8 @@ describe("rawErrorDetail 保留原始报错供排查", () => {
     const cause = new Error("signal is aborted without reason");
     cause.name = "AbortError";
     const out = rawErrorDetail({
-      message: "signal is aborted without reason",
       cause,
+      message: "signal is aborted without reason",
     });
     expect(out).toContain("cause=AbortError: signal is aborted without reason");
   });
@@ -161,12 +147,7 @@ describe("rawErrorDetail 保留原始报错供排查", () => {
   it("stack 只取头几行，不把整份堆栈塞进日志", () => {
     const e = {
       message: "boom",
-      stack: [
-        "boom",
-        "at a (x.ts:1:1)",
-        "at b (y.ts:2:2)",
-        "at c (z.ts:3:3)",
-      ].join("\n"),
+      stack: ["boom", "at a (x.ts:1:1)", "at b (y.ts:2:2)", "at c (z.ts:3:3)"].join("\n"),
     };
     const out = rawErrorDetail(e);
     // 头 3 行留在日志里，更深的帧不进（日志只需能定位入口）

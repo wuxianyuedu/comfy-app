@@ -29,24 +29,24 @@ function fakeEl(opts: {
   scrollWidth?: number;
 }): Element {
   const rect = {
+    bottom: 0,
+    height: 0,
+    left: 0,
+    right: 0,
+    toJSON: () => ({}),
+    top: 0,
+    width: 0,
     x: 0,
     y: 0,
-    left: 0,
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: 0,
-    height: 0,
-    toJSON: () => ({}),
     ...opts.rect,
   };
   return /* SAFETY: 类型断言已复核 */ {
-    clientWidth: opts.clientWidth ?? 0,
     clientHeight: opts.clientHeight ?? 0,
-    scrollWidth: opts.scrollWidth ?? 0,
+    clientWidth: opts.clientWidth ?? 0,
+    getBoundingClientRect: () => rect,
     scrollHeight: opts.scrollHeight ?? 0,
     scrollTop: opts.scrollTop ?? 0,
-    getBoundingClientRect: () => rect,
+    scrollWidth: opts.scrollWidth ?? 0,
   } as unknown as Element;
 }
 
@@ -54,18 +54,18 @@ describe("readElementBox", () => {
   it("量到就给出尺寸、视口位置与内容尺寸", () => {
     const box = readElementBox(
       fakeEl({
+        clientHeight: 50,
+        clientWidth: 100,
         rect: {
+          bottom: 70,
+          height: 50,
           left: 10,
+          right: 110,
           top: 20,
           width: 100,
-          height: 50,
-          right: 110,
-          bottom: 70,
         },
-        clientWidth: 100,
-        clientHeight: 50,
-        scrollWidth: 120,
         scrollHeight: 300,
+        scrollWidth: 120,
       }),
     );
     expect(box).not.toBeNull();
@@ -85,7 +85,7 @@ describe("readElementBox", () => {
   });
 
   it("noRect 跳过视口位置（滚动回调里避免强制布局）", () => {
-    const box = readElementBox(fakeEl({ rect: { left: 99, top: 99, width: 5, height: 5 } }), {
+    const box = readElementBox(fakeEl({ rect: { height: 5, left: 99, top: 99, width: 5 } }), {
       noRect: true,
     });
     expect(box!.left).toBe(0);
@@ -112,14 +112,14 @@ describe("offsetWithin", () => {
 
 describe("isWithinViewport", () => {
   it("相交即为真", () => {
-    const outer = fakeEl({ rect: { top: 0, bottom: 100 } });
-    const inner = fakeEl({ rect: { top: 50, bottom: 60 } });
+    const outer = fakeEl({ rect: { bottom: 100, top: 0 } });
+    const inner = fakeEl({ rect: { bottom: 60, top: 50 } });
     expect(isWithinViewport(inner, outer)).toBe(true);
   });
 
   it("完全在上方即为假", () => {
-    const outer = fakeEl({ rect: { top: 100, bottom: 200 } });
-    const inner = fakeEl({ rect: { top: 0, bottom: 50 } });
+    const outer = fakeEl({ rect: { bottom: 200, top: 100 } });
+    const inner = fakeEl({ rect: { bottom: 50, top: 0 } });
     expect(isWithinViewport(inner, outer)).toBe(false);
   });
 
@@ -160,25 +160,25 @@ describe("centerLineScrollTop", () => {
 describe("rectToAnchorRect", () => {
   it("把活着的 DOMRect 冻成可存对象（含 x / y）", () => {
     const rect = /* SAFETY: 类型断言已复核 */ {
+      bottom: 22,
+      height: 20,
+      left: 1,
+      right: 11,
+      toJSON: () => ({}),
+      top: 2,
+      width: 10,
       x: 1,
       y: 2,
-      left: 1,
-      top: 2,
-      right: 11,
-      bottom: 22,
-      width: 10,
-      height: 20,
-      toJSON: () => ({}),
     } as DOMRect;
     expect(rectToAnchorRect(rect)).toEqual({
+      bottom: 22,
+      height: 20,
+      left: 1,
+      right: 11,
+      top: 2,
+      width: 10,
       x: 1,
       y: 2,
-      left: 1,
-      top: 2,
-      right: 11,
-      bottom: 22,
-      width: 10,
-      height: 20,
     });
   });
 });
@@ -186,14 +186,14 @@ describe("rectToAnchorRect", () => {
 describe("anchorRectToVirtualElement", () => {
   it("装配出 Floating UI 需要的 getBoundingClientRect", () => {
     const rect: AnchorRect = {
+      bottom: 26,
+      height: 20,
+      left: 5,
+      right: 15,
+      top: 6,
+      width: 10,
       x: 0,
       y: 0,
-      left: 5,
-      top: 6,
-      right: 15,
-      bottom: 26,
-      width: 10,
-      height: 20,
     };
     const el = anchorRectToVirtualElement(rect);
     const got = el.getBoundingClientRect();

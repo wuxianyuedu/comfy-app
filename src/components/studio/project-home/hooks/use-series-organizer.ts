@@ -291,51 +291,51 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   );
 
   return {
-    seriesList: seriesList.data,
-    seasons: seasons.data,
-    episodes: episodes.data,
-    currentEp: currentEp.data,
-    characters: characterList.data,
-    episodeCharacters: episodeChars.data,
-    characterEpisodes: charEpisodes.data,
-    inspectedCharacterId,
-    seriesId,
-    seasonId,
-    episodeId,
-    selectSeries: (id) => {
-      setSeriesId(id);
-      setSeasonId(null);
-      setEpisodeId(null);
-    },
-    selectSeason: (id) => {
-      setSeasonId(id);
-      setEpisodeId(null);
-    },
-    selectEpisode: (id) => setEpisodeId(id),
-    createSeries: (title) => createSeries.mutate({ title }),
-    renameSeries: (id, title) => updateSeries.mutate({ id, title }),
-    deleteSeries: (id) => deleteSeries.mutate({ id }),
-    createSeason: (sid, title) => createSeason.mutate({ seriesId: sid, title }),
-    renameSeason: (id, title) => updateSeason.mutate({ id, title }),
-    deleteSeason: (id) => deleteSeason.mutate({ id }),
-    createEpisode: (sid, title) => createEpisode.mutate({ seasonId: sid, title }),
-    renameEpisode: (id, title) => updateEpisode.mutate({ id, title }),
-    deleteEpisode: (id) => deleteEpisode.mutate({ id }),
     assignCurrentProject: (epid) => {
       if (!projectId) {
         return;
       }
       assignProject.mutate({ episodeId: epid, projectId });
     },
-    createCharacter: (sid, name) => createCharacterMut.mutate({ seriesId: sid, name }),
-    updateCharacter: (id, patch) => updateCharacterMut.mutate({ id, ...patch }),
-    deleteCharacter: (id) => deleteCharacterMut.mutate({ id }),
-    linkCharacter: (epid, cid) => linkCharacterMut.mutate({ episodeId: epid, characterId: cid }),
-    unlinkCharacter: (epid, cid) =>
-      unlinkCharacterMut.mutate({ episodeId: epid, characterId: cid }),
-    inspectCharacterEpisodes: (cid) => setInspectedCharacterId(cid),
+    characterEpisodes: charEpisodes.data,
+    characters: characterList.data,
     clearInspectedCharacter: () => setInspectedCharacterId(null),
-    promoteFromProduction: (pid) => promoteMut.mutate({ projectId: pid }),
+    createCharacter: (sid, name) => createCharacterMut.mutate({ name, seriesId: sid }),
+    createEpisode: (sid, title) => createEpisode.mutate({ seasonId: sid, title }),
+    createSeason: (sid, title) => createSeason.mutate({ seriesId: sid, title }),
+    createSeries: (title) => createSeries.mutate({ title }),
+    currentEp: currentEp.data,
+    deleteCharacter: (id) => deleteCharacterMut.mutate({ id }),
+    deleteEpisode: (id) => deleteEpisode.mutate({ id }),
+    deleteSeason: (id) => deleteSeason.mutate({ id }),
+    deleteSeries: (id) => deleteSeries.mutate({ id }),
+    episodeCharacters: episodeChars.data,
+    episodeId,
+    episodes: episodes.data,
     injectToProduction: (pid) => injectMut.mutate({ projectId: pid }),
+    inspectCharacterEpisodes: (cid) => setInspectedCharacterId(cid),
+    inspectedCharacterId,
+    linkCharacter: (epid, cid) => linkCharacterMut.mutate({ characterId: cid, episodeId: epid }),
+    promoteFromProduction: (pid) => promoteMut.mutate({ projectId: pid }),
+    renameEpisode: (id, title) => updateEpisode.mutate({ id, title }),
+    renameSeason: (id, title) => updateSeason.mutate({ id, title }),
+    renameSeries: (id, title) => updateSeries.mutate({ id, title }),
+    seasonId,
+    seasons: seasons.data,
+    selectEpisode: (id) => setEpisodeId(id),
+    selectSeason: (id) => {
+      setSeasonId(id);
+      setEpisodeId(null);
+    },
+    selectSeries: (id) => {
+      setSeriesId(id);
+      setSeasonId(null);
+      setEpisodeId(null);
+    },
+    seriesId,
+    seriesList: seriesList.data,
+    unlinkCharacter: (epid, cid) =>
+      unlinkCharacterMut.mutate({ characterId: cid, episodeId: epid }),
+    updateCharacter: (id, patch) => updateCharacterMut.mutate({ id, ...patch }),
   };
 }

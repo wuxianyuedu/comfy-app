@@ -29,10 +29,10 @@ export type RevealLogPathOutcome = {
 export async function revealLogPath(path: string): Promise<RevealLogPathOutcome> {
   try {
     const result = await vanillaApi.setting.revealPath.mutate({ path });
-    return { ok: result.ok === true, detail: result.detail };
+    return { detail: result.detail, ok: result.ok === true };
   } catch (error) {
     /* 失败文案的动作前缀走唯一出口（规范 16 §16.2.4.45）：这里手拼一份就是全库
      * 又一处「动作 + 冒号 + 详情」的两段式，改措辞要挨个找。 */
-    return { ok: false, detail: errorText(error, "打开文件管理器失败") };
+    return { detail: errorText(error, "打开文件管理器失败"), ok: false };
   }
 }

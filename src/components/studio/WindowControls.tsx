@@ -41,9 +41,9 @@ import {
 
 /** 单个窗口控制按钮 —— `w-11` 全高方键，与系统标题栏的点击热区同形。 */
 export function WindowButton({
+  danger,
   kind,
   onClick,
-  danger,
 }: {
   danger?: boolean;
   kind: WindowButtonKind;
@@ -159,7 +159,7 @@ export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
     [setMaximized],
   );
 
-  return { onPointerDown: handlePointerDown, onDoubleClick: handleDoubleClick };
+  return { onDoubleClick: handleDoubleClick, onPointerDown: handlePointerDown };
 }
 
 /**

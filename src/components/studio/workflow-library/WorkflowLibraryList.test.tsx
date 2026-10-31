@@ -11,10 +11,10 @@ afterEach(cleanup);
 
 function row(over: Partial<WorkflowRow> = {}): WorkflowRow {
   return {
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
     id: "wf-1",
     name: "演示工作流",
     taskType: "t2i",
-    createdAt: new Date("2026-08-01T00:00:00.000Z"),
     ...over,
   };
 }
@@ -41,7 +41,7 @@ describe("WorkflowLibraryList 三态区分", () => {
   });
 
   it("加载超时：给出可重试出口与日志面板指引，不假装是空库", () => {
-    renderList({ stalled: true, onRefresh: vi.fn() });
+    renderList({ onRefresh: vi.fn(), stalled: true });
 
     expect(screen.getByText("工作流列表还没返回")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
@@ -82,7 +82,7 @@ describe("未载入的本地工作流：只有右侧按钮能载入", () => {
 
   it("点击整行（名称）不载入", () => {
     const onLoadPending = vi.fn();
-    renderList({ pendingRows: [pending], onLoadPending });
+    renderList({ onLoadPending, pendingRows: [pending] });
 
     fireEvent.click(screen.getByText(pending.name));
 
@@ -91,7 +91,7 @@ describe("未载入的本地工作流：只有右侧按钮能载入", () => {
 
   it("点击右侧「载入」按钮才载入该行", () => {
     const onLoadPending = vi.fn();
-    renderList({ pendingRows: [pending], onLoadPending });
+    renderList({ onLoadPending, pendingRows: [pending] });
 
     fireEvent.click(screen.getByRole("button", { name: "载入" }));
 
@@ -102,9 +102,9 @@ describe("未载入的本地工作流：只有右侧按钮能载入", () => {
   it("载入中：按钮禁用并改文案，避免重复载入同一份文件", () => {
     const onLoadPending = vi.fn();
     renderList({
-      pendingRows: [pending],
       onLoadPending,
       pendingLoading: { [pending.id]: true },
+      pendingRows: [pending],
     });
 
     const button = screen.getByRole("button", { name: /载入中/ });
@@ -159,35 +159,35 @@ describe("列表项：名称限长 + 对外参数精简显示", () => {
           name: "image_z_image_int8_t2i",
           /* T2I 模式的必备口全部有落点 = ready。两样都要：IO 给候选端口，
              paramMap 给作者画的线 —— 只给 IO 是「有候选没落点」，仍是未配置。 */
-          taskType: "T2I",
           defaultMode: "T2I",
+          taskType: "T2I",
           workflowIO: {
             "1::text": {
               direction: "input",
               kind: "widget",
-              nodeId: "1",
               name: "text",
+              nodeId: "1",
               type: "STRING",
             },
             "2::text": {
               direction: "input",
               kind: "widget",
-              nodeId: "2",
               name: "negative",
+              nodeId: "2",
               type: "STRING",
-            },
-            "3::width": {
-              direction: "input",
-              kind: "widget",
-              nodeId: "3",
-              name: "width",
-              type: "INT",
             },
             "3::height": {
               direction: "input",
               kind: "widget",
-              nodeId: "3",
               name: "height",
+              nodeId: "3",
+              type: "INT",
+            },
+            "3::width": {
+              direction: "input",
+              kind: "widget",
+              name: "width",
+              nodeId: "3",
               type: "INT",
             },
           },
@@ -196,10 +196,10 @@ describe("列表项：名称限长 + 对外参数精简显示", () => {
           paramMap: {
             source: {
               "mode:T2I": {
-                prompt: "1::text",
                 negative: "2::text",
-                "size-width": "3::width",
+                prompt: "1::text",
                 "size-height": "3::height",
+                "size-width": "3::width",
               },
             },
           },
@@ -227,7 +227,7 @@ describe("列表项：名称限长 + 对外参数精简显示", () => {
 
   it("不可执行的工作流仍显示「无可执行内容」（这条是闸门，不是元信息）", () => {
     renderList({
-      workflows: [row({ name: "坏掉的", hasRaw: false })],
+      workflows: [row({ hasRaw: false, name: "坏掉的" })],
     });
 
     expect(screen.getByText("无可执行内容")).toBeInTheDocument();

@@ -19,9 +19,9 @@ import { useLogPanel } from "~/components/studio/logs/LogProvider";
  * 以及**窄容器下整组折行、标签不被切成竖排单字**（判据是容器自己的 `min-w-fit`（内容固有宽度））。
  */
 const meta = {
-  title: "Studio/Logs/LogFilterBar",
   component: LogFilterBar,
   parameters: { storeScene: "mixed" },
+  title: "Studio/Logs/LogFilterBar",
 } satisfies Meta<typeof LogFilterBar>;
 
 export default meta;
@@ -33,8 +33,7 @@ type Story = StoryObj<typeof FilterBarHarness>;
 function FilterBarHarness() {
   const header = useLogPanel((state) => state.header);
   const origin = header.origin;
-  const originCounts =
-    header.countsByOrigin[origin] ?? header.countsByOrigin.all;
+  const originCounts = header.countsByOrigin[origin] ?? header.countsByOrigin.all;
   return (
     <div className="border-border-strong bg-surface-1 flex min-h-14 w-240 max-w-full flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
       <LogFilterBar originCounts={originCounts} />

@@ -33,8 +33,8 @@ import { AuroraBackground } from "~/components/ui/aurora-background";
  *  —— 请看画布**边缘与四角**的光晕，而不是中央。
  */
 const meta = {
-  title: "UI/AuroraBackground",
   component: AuroraBackground,
+  title: "UI/AuroraBackground",
 } satisfies Meta<typeof AuroraBackground>;
 
 export default meta;
@@ -47,9 +47,7 @@ export const Dark: Story = {
     <div className="relative h-96 w-full overflow-hidden rounded-lg border">
       <AuroraBackground className={args.className} />
       <div className="relative flex h-full items-center justify-center">
-        <p className="text-ink text-sm">
-          切到 light 再回来对比：这一档是 mix-blend-screen
-        </p>
+        <p className="text-ink text-sm">切到 light 再回来对比：这一档是 mix-blend-screen</p>
       </div>
     </div>
   ),
@@ -69,11 +67,10 @@ export const BlendModesSideBySide: Story = {
   render: () => (
     <div className="rounded-lg border p-6">
       <p className="text-ink-muted text-sm">
-        这一档的装饰层铺在**整个视口**（含标题行），所以你在画布里看到的是
-        它真实的样子。用工具栏切 <code>dark</code> / <code>light</code> 对比：
-        深色 <code>mix-blend-screen</code> + <code>opacity-60</code>； 浅色{" "}
-        <code>normal</code> + <code>opacity-10</code>（<code>screen</code>{" "}
-        在白底上产生不了可见效果）。
+        这一档的装饰层铺在**整个视口**（含标题行），所以你在画布里看到的是 它真实的样子。用工具栏切{" "}
+        <code>dark</code> / <code>light</code> 对比： 深色 <code>mix-blend-screen</code> +{" "}
+        <code>opacity-60</code>； 浅色 <code>normal</code> + <code>opacity-10</code>（
+        <code>screen</code> 在白底上产生不了可见效果）。
       </p>
     </div>
   ),
@@ -85,16 +82,12 @@ export const DoesNotBlockInteraction: Story = {
   render: () => (
     <div className="relative h-64 w-full overflow-hidden rounded-lg border">
       <div className="relative flex h-full flex-col items-center justify-center gap-3">
-        <p className="text-ink text-sm">
-          下面这排按钮能点，说明装饰层没吃掉指针事件
-        </p>
+        <p className="text-ink text-sm">下面这排按钮能点，说明装饰层没吃掉指针事件</p>
         <div className="flex gap-2">
           <button className="bg-primary text-primary-foreground rounded-md px-3 py-1 text-sm">
             按钮 A
           </button>
-          <button className="rounded-md border px-3 py-1 text-sm">
-            按钮 B
-          </button>
+          <button className="rounded-md border px-3 py-1 text-sm">按钮 B</button>
         </div>
       </div>
     </div>

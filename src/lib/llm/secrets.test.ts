@@ -1,12 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -31,7 +25,7 @@ beforeEach(() => {
 
 afterEach(() => {
   process.cwd = () => originalCwd;
-  rmSync(sandbox, { recursive: true, force: true });
+  rmSync(sandbox, { force: true, recursive: true });
   delete process.env.LLM_SECRET;
   delete process.env.llm_secret;
 });
@@ -47,7 +41,7 @@ describe("isEncrypted", () => {
 
 describe("encryptLlmKey / decryptLlmKey", () => {
   it("往返一致，且密文里不含明文", async () => {
-    const { encryptLlmKey, decryptLlmKey, isEncrypted } = await loadSecrets();
+    const { decryptLlmKey, encryptLlmKey, isEncrypted } = await loadSecrets();
     const enc = encryptLlmKey("sample-llm-key");
     expect(enc).not.toBeNull();
     expect(isEncrypted(enc!)).toBe(true);
@@ -56,7 +50,7 @@ describe("encryptLlmKey / decryptLlmKey", () => {
   });
 
   it("同一明文两次加密得到不同密文（每次新 IV），但都能解回", async () => {
-    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const { decryptLlmKey, encryptLlmKey } = await loadSecrets();
     const a = encryptLlmKey("same");
     const b = encryptLlmKey("same");
     expect(a).not.toBe(b);
@@ -80,7 +74,7 @@ describe("encryptLlmKey / decryptLlmKey", () => {
   });
 
   it("字段不足 / 非法 base64 / 篡改密文一律返回 null 而不抛错", async () => {
-    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const { decryptLlmKey, encryptLlmKey } = await loadSecrets();
     const good = encryptLlmKey("demo-payload")!;
     const parts = good.slice("enc:v1:".length).split(":");
 
@@ -90,18 +84,14 @@ describe("encryptLlmKey / decryptLlmKey", () => {
     const tamperedCt = Buffer.from(parts[2]!, "base64");
     tamperedCt[0] = tamperedCt[0]! ^ 0xff;
     expect(
-      decryptLlmKey(
-        `enc:v1:${parts[0]}:${parts[1]}:${tamperedCt.toString("base64")}`,
-      ),
+      decryptLlmKey(`enc:v1:${parts[0]}:${parts[1]}:${tamperedCt.toString("base64")}`),
     ).toBeNull();
 
     // 篡改 tag 同理。
     const tamperedTag = Buffer.from(parts[1]!, "base64");
     tamperedTag[0] = tamperedTag[0]! ^ 0xff;
     expect(
-      decryptLlmKey(
-        `enc:v1:${parts[0]}:${tamperedTag.toString("base64")}:${parts[2]}`,
-      ),
+      decryptLlmKey(`enc:v1:${parts[0]}:${tamperedTag.toString("base64")}:${parts[2]}`),
     ).toBeNull();
 
     expect(decryptLlmKey("enc:v1:!!!:!!!:!!!")).toBeNull();
@@ -118,7 +108,7 @@ describe("encryptLlmKey / decryptLlmKey", () => {
       const second = await loadSecrets();
       expect(second.decryptLlmKey(enc)).toBeNull();
     } finally {
-      rmSync(other, { recursive: true, force: true });
+      rmSync(other, { force: true, recursive: true });
     }
   });
 });
@@ -145,7 +135,7 @@ describe("密钥来源", () => {
     mkdirSync(join(sandbox, "data", "llm-secret.key"), { recursive: true });
     process.env.LLM_SECRET = "env-derived-value";
 
-    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const { decryptLlmKey, encryptLlmKey } = await loadSecrets();
     const enc = encryptLlmKey("demo-via-env")!;
     expect(decryptLlmKey(enc)).toBe("demo-via-env");
 
@@ -157,7 +147,7 @@ describe("密钥来源", () => {
       const second = await loadSecrets();
       expect(second.decryptLlmKey(enc)).toBe("demo-via-env");
     } finally {
-      rmSync(other, { recursive: true, force: true });
+      rmSync(other, { force: true, recursive: true });
     }
   });
 
@@ -166,14 +156,14 @@ describe("密钥来源", () => {
     mkdirSync(join(sandbox, "data", "llm-secret.key"), { recursive: true });
     process.env.llm_secret = "lowercase-env-value";
 
-    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const { decryptLlmKey, encryptLlmKey } = await loadSecrets();
     const enc = encryptLlmKey("demo-via-lower-env")!;
     expect(decryptLlmKey(enc)).toBe("demo-via-lower-env");
   });
 
   it("太短的 env 口令不被采用（回落进程内随机，仍可往返）", async () => {
     process.env.LLM_SECRET = "short";
-    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const { decryptLlmKey, encryptLlmKey } = await loadSecrets();
     const enc = encryptLlmKey("demo-fallback")!;
     expect(decryptLlmKey(enc)).toBe("demo-fallback");
   });
@@ -182,7 +172,7 @@ describe("密钥来源", () => {
     // 直接核对 deriveKey 的口径（它未导出，用行为等价的方式验证）：
     // 长短两种口令都能正常加解密，说明长度不参与密钥形状。
     process.env.LLM_SECRET = "a".repeat(200);
-    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const { decryptLlmKey, encryptLlmKey } = await loadSecrets();
     const enc = encryptLlmKey("demo-long-key")!;
     expect(decryptLlmKey(enc)).toBe("demo-long-key");
     expect(createHash("sha256").update("probe").digest().length).toBe(32);
@@ -194,7 +184,7 @@ describe("密钥来源", () => {
     writeFileSync(blockingFile, "not a directory");
     process.cwd = () => blockingFile;
 
-    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const { decryptLlmKey, encryptLlmKey } = await loadSecrets();
     const enc = encryptLlmKey("demo-readonly");
     expect(enc).not.toBeNull();
     expect(decryptLlmKey(enc)).toBe("demo-readonly");

@@ -33,47 +33,47 @@ export type StatusStyle = {
  * `STATUS_STYLE[x] ?? QUEUED_STATUS_STYLE` 而不必再补 `!`（表是索引签名，
  * 连 `STATUS_STYLE.QUEUED` 本身也是 `StatusStyle | undefined`）。 */
 export const QUEUED_STATUS_STYLE: StatusStyle = {
-  label: "排队中",
-  pillCls: "bg-info/15 text-info-strong border border-info/30 border-dashed",
   accentCls: "border-l-info",
   cardBorderCls: "border-info/30 border-dashed",
   isActive: true,
+  label: "排队中",
+  pillCls: "bg-info/15 text-info-strong border border-info/30 border-dashed",
   showProgress: false,
 };
 
 export const STATUS_STYLE: Record<string, StatusStyle> = {
-  QUEUED: QUEUED_STATUS_STYLE,
-  RUNNING: {
-    label: "生成中",
-    pillCls: "bg-primary/20 text-primary-strong",
-    accentCls: "border-l-primary",
-    cardBorderCls: "border-primary/30",
-    isActive: true,
-    showProgress: true,
-  },
-  SUCCEEDED: {
-    label: "已完成",
-    pillCls: "bg-success/15 text-success-strong",
-    accentCls: "border-l-success",
-    cardBorderCls: "border-border-subtle",
-    isActive: false,
-    showProgress: false,
-  },
-  FAILED: {
-    label: "失败",
-    pillCls: "bg-destructive/15 text-destructive",
-    accentCls: "border-l-destructive",
-    cardBorderCls: "border-destructive/30",
-    isActive: false,
-    showProgress: false,
-    failureSuggestion: (err) => suggestFix(err),
-  },
   CANCELLED: {
-    label: "已取消",
-    pillCls: "bg-surface-2 text-ink-faint",
     accentCls: "border-l-gray-500",
     cardBorderCls: "border-border-subtle",
     isActive: false,
+    label: "已取消",
+    pillCls: "bg-surface-2 text-ink-faint",
+    showProgress: false,
+  },
+  FAILED: {
+    accentCls: "border-l-destructive",
+    cardBorderCls: "border-destructive/30",
+    failureSuggestion: (err) => suggestFix(err),
+    isActive: false,
+    label: "失败",
+    pillCls: "bg-destructive/15 text-destructive",
+    showProgress: false,
+  },
+  QUEUED: QUEUED_STATUS_STYLE,
+  RUNNING: {
+    accentCls: "border-l-primary",
+    cardBorderCls: "border-primary/30",
+    isActive: true,
+    label: "生成中",
+    pillCls: "bg-primary/20 text-primary-strong",
+    showProgress: true,
+  },
+  SUCCEEDED: {
+    accentCls: "border-l-success",
+    cardBorderCls: "border-border-subtle",
+    isActive: false,
+    label: "已完成",
+    pillCls: "bg-success/15 text-success-strong",
     showProgress: false,
   },
 };
@@ -137,7 +137,7 @@ export function useSimulatedProgress(tasks: Array<TaskItem>) {
         return dirty ? next : prev;
       });
     },
-    { ms: 1500, immediate: false, pauseWhenHidden: false },
+    { immediate: false, ms: 1500, pauseWhenHidden: false },
   );
   return map;
 }

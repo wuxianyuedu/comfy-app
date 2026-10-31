@@ -29,9 +29,9 @@ import {
  *  · **空态占位**由消费方给（组件自己不编文案）。
  */
 const meta = {
-  title: "Studio/Logs/TaskLogTimeline",
   component: TaskLogTimeline,
   parameters: { runScene: "completed" },
+  title: "Studio/Logs/TaskLogTimeline",
 } satisfies Meta<typeof TaskLogTimeline>;
 
 export default meta;

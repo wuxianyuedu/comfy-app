@@ -35,16 +35,16 @@ export function useLogPanelPin(input: {
   visibleLogs: Array<{ id: string }>;
 }) {
   const {
-    isOpen,
     autoScroll,
-    safePage,
-    followResetAt,
-    revision,
-    visibleLogs,
-    rows,
     bodyRef,
-    setScrollTop,
+    followResetAt,
+    isOpen,
+    revision,
+    rows,
+    safePage,
     setFollowBottom,
+    setScrollTop,
+    visibleLogs,
   } = input;
 
   const baselineRef = useRef(0);
@@ -92,11 +92,11 @@ export function useLogPanelPin(input: {
     /* 目标行 + 「用户有没有接管滚动」的判据都在 `log-virtual` 的 `pinPlan`：
      * 用户自己滚到别处（例如滚到底看最新）时返回 `null`，本轮不动他的位置。 */
     const targetIndex = pinPlan({
-      baseline: baselineRef.current,
       applied: appliedRef.current,
+      appliedTop: appliedTopRef.current,
+      baseline: baselineRef.current,
       bottomIndex: visibleLogs.length - 1,
       scrollTop: el.scrollTop,
-      appliedTop: appliedTopRef.current,
     });
     if (targetIndex === null) {
       return;
@@ -117,7 +117,7 @@ export function useLogPanelPin(input: {
     if (!row) {
       return;
     }
-    const next = pinScrollTop({ start: row.start, size: row.size }, el.clientHeight);
+    const next = pinScrollTop({ size: row.size, start: row.start }, el.clientHeight);
     el.scrollTop = next;
     appliedTopRef.current = next;
     appliedRef.current = targetIndex;

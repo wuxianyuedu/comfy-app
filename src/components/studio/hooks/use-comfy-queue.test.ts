@@ -7,30 +7,26 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  comfyQueueNotice,
-  formatElapsed,
-  type ComfyQueueView,
-} from "./use-comfy-queue";
+import { comfyQueueNotice, formatElapsed, type ComfyQueueView } from "./use-comfy-queue";
 
 function view(over: Partial<ComfyQueueView> = {}): ComfyQueueView {
   return {
-    online: true,
-    comfy: { running: 0, pending: 0 },
-    running: null,
-    queued: 0,
+    comfy: { pending: 0, running: 0 },
     elapsedMs: null,
+    online: true,
+    queued: 0,
+    running: null,
     ...over,
   };
 }
 
 const RUNNING = {
+  model: "flux1-dev.safetensors",
+  nodeType: "KSampler",
+  progress: 42,
+  startedAt: 1_000_000,
   taskId: "t-1",
   workflowName: "文生图",
-  model: "flux1-dev.safetensors",
-  startedAt: 1_000_000,
-  progress: 42,
-  nodeType: "KSampler",
 };
 
 describe("formatElapsed", () => {
@@ -49,9 +45,7 @@ describe("formatElapsed", () => {
 describe("comfyQueueNotice", () => {
   it("ComfyUI 离线时不占位（降级提示已有一条，不重复报）", () => {
     expect(comfyQueueNotice(view({ online: false }))).toBeNull();
-    expect(
-      comfyQueueNotice(view({ online: false, running: RUNNING })),
-    ).toBeNull();
+    expect(comfyQueueNotice(view({ online: false, running: RUNNING }))).toBeNull();
   });
 
   it("空闲且无排队时不占位（状态栏不该常驻一个「没事发生」的格子）", () => {
@@ -59,9 +53,7 @@ describe("comfyQueueNotice", () => {
   });
 
   it("在跑：正文给出耗时 / 工作流 / 模型，title 里补进度与当前节点", () => {
-    const notice = comfyQueueNotice(
-      view({ running: RUNNING, elapsedMs: 65_000 }),
-    );
+    const notice = comfyQueueNotice(view({ elapsedMs: 65_000, running: RUNNING }));
     expect(notice?.text).toContain("01:05");
     expect(notice?.text).toContain("文生图");
     expect(notice?.text).toContain("flux1-dev.safetensors");
@@ -72,10 +64,10 @@ describe("comfyQueueNotice", () => {
   it("有排队时把队列数并进正文（含 ComfyUI 侧不是本应用提交的任务）", () => {
     const notice = comfyQueueNotice(
       view({
-        running: RUNNING,
+        comfy: { pending: 2, running: 1 },
         elapsedMs: 1_000,
         queued: 1,
-        comfy: { running: 1, pending: 2 },
+        running: RUNNING,
       }),
     );
     expect(notice?.text).toContain("排队 3");
@@ -83,9 +75,7 @@ describe("comfyQueueNotice", () => {
   });
 
   it("没在跑但有排队：只报队列，不编造一个「正在执行」", () => {
-    const notice = comfyQueueNotice(
-      view({ queued: 2, comfy: { running: 0, pending: 0 } }),
-    );
+    const notice = comfyQueueNotice(view({ comfy: { pending: 0, running: 0 }, queued: 2 }));
     expect(notice?.text).toBe("排队 2");
     expect(notice?.text).not.toContain("▶");
   });
@@ -93,8 +83,8 @@ describe("comfyQueueNotice", () => {
   it("工作流名 / 模型缺失时如实省略，不留空档", () => {
     const notice = comfyQueueNotice(
       view({
-        running: { ...RUNNING, workflowName: null, model: null },
         elapsedMs: 5_000,
+        running: { ...RUNNING, model: null, workflowName: null },
       }),
     );
     expect(notice?.text).toBe("▶ 00:05");

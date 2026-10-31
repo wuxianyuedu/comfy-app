@@ -194,27 +194,27 @@ export type WorkspaceViewStackProps = {
 };
 
 export function WorkspaceViewStack({
-  tabs,
   activeKey,
-  activeView,
   activeProjectId,
-  recentProjects,
-  onEnterProject,
-  onExitProject,
-  onNewProject,
-  onOpenProject,
-  onOpenCanvasProject,
-  onNavigate,
-  onHomeNavigate,
-  onShowAllProjects,
-  onOpenComfyui,
-  onUseWorkflow,
+  activeView,
   canvasSeedNew,
   onConsumeCanvasSeed,
-  pendingCanvasWorkflow,
   onConsumePendingWorkflow,
-  settingsSection,
   onConsumeSettingsSection,
+  onEnterProject,
+  onExitProject,
+  onHomeNavigate,
+  onNavigate,
+  onNewProject,
+  onOpenCanvasProject,
+  onOpenComfyui,
+  onOpenProject,
+  onShowAllProjects,
+  onUseWorkflow,
+  pendingCanvasWorkflow,
+  recentProjects,
+  settingsSection,
+  tabs,
 }: WorkspaceViewStackProps) {
   /**
    * 某一个视图该渲染什么 —— **按视图取值**，不再按「当前视图」取值。
@@ -330,7 +330,7 @@ export function WorkspaceViewStack({
   } | null>(null);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOpened({ view: activeView, at: performance.now() });
+    setOpened({ at: performance.now(), view: activeView });
   }, [activeView]);
 
   /* 懒加载分块的空闲预热：挂载即启动（幂等，StrictMode 双跑只排一次）。

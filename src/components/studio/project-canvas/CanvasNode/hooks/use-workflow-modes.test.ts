@@ -28,28 +28,28 @@ describe("useWorkflowModes", () => {
     const onFailed = vi.fn();
     const { result } = renderHook(() =>
       useWorkflowModes({
-        workflowId: "wf-1",
-        modes: { modes: ["默认"], defaultMode: "默认" },
-        setModes,
+        modes: { defaultMode: "默认", modes: ["默认"] },
         onFailed,
+        setModes,
+        workflowId: "wf-1",
       }),
     );
 
     await act(async () => {
       await result.current.saveModes({
-        modes: ["默认", "高清"],
         defaultMode: "高清",
+        modes: ["默认", "高清"],
       });
     });
 
     expect(setModes).toHaveBeenCalledWith({
-      modes: ["默认", "高清"],
       defaultMode: "高清",
+      modes: ["默认", "高清"],
     });
     expect(mockedPatch).toHaveBeenCalledWith({
+      defaultMode: "高清",
       id: "wf-1",
       modes: ["默认", "高清"],
-      defaultMode: "高清",
     });
     expect(onFailed).not.toHaveBeenCalled();
   });
@@ -58,20 +58,20 @@ describe("useWorkflowModes", () => {
     mockedPatch.mockRejectedValue(new Error("保存模式失败，请重试"));
     const setModes = vi.fn();
     const onFailed = vi.fn();
-    const previous = { modes: ["默认"], defaultMode: "默认" };
+    const previous = { defaultMode: "默认", modes: ["默认"] };
     const { result } = renderHook(() =>
       useWorkflowModes({
-        workflowId: "wf-1",
         modes: previous,
-        setModes,
         onFailed,
+        setModes,
+        workflowId: "wf-1",
       }),
     );
 
     await act(async () => {
       await result.current.saveModes({
-        modes: ["默认", "高清"],
         defaultMode: "高清",
+        modes: ["默认", "高清"],
       });
     });
 
@@ -84,15 +84,15 @@ describe("useWorkflowModes", () => {
     const onFailed = vi.fn();
     const { result } = renderHook(() =>
       useWorkflowModes({
-        workflowId: "wf-1",
         modes: null,
-        setModes: vi.fn(),
         onFailed,
+        setModes: vi.fn(),
+        workflowId: "wf-1",
       }),
     );
 
     await act(async () => {
-      await result.current.saveModes({ modes: ["a"], defaultMode: "a" });
+      await result.current.saveModes({ defaultMode: "a", modes: ["a"] });
     });
 
     expect(onFailed).toHaveBeenCalledWith("保存模式失败，请重试");
@@ -103,18 +103,18 @@ describe("useWorkflowModes", () => {
     const setModes = vi.fn();
     const { result } = renderHook(() =>
       useWorkflowModes({
-        workflowId: "wf-1",
         modes: null,
-        setModes,
         onFailed: vi.fn(),
+        setModes,
+        workflowId: "wf-1",
       }),
     );
 
     await act(async () => {
-      await result.current.saveModes({ modes: ["a"], defaultMode: "a" });
+      await result.current.saveModes({ defaultMode: "a", modes: ["a"] });
     });
 
-    expect(setModes).toHaveBeenLastCalledWith({ modes: [], defaultMode: null });
+    expect(setModes).toHaveBeenLastCalledWith({ defaultMode: null, modes: [] });
   });
 
   it("无 workflowId（节点还没选工作流）：不发请求也不报错", async () => {
@@ -122,15 +122,15 @@ describe("useWorkflowModes", () => {
     const onFailed = vi.fn();
     const { result } = renderHook(() =>
       useWorkflowModes({
-        workflowId: undefined,
         modes: null,
-        setModes,
         onFailed,
+        setModes,
+        workflowId: undefined,
       }),
     );
 
     await act(async () => {
-      await result.current.saveModes({ modes: ["a"], defaultMode: "a" });
+      await result.current.saveModes({ defaultMode: "a", modes: ["a"] });
     });
 
     expect(mockedPatch).not.toHaveBeenCalled();

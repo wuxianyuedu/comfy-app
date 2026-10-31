@@ -29,7 +29,7 @@ function file(name: string, startedAt: number | null): PackLogFile {
 
 /** 造一个包（`files` 按旧→新，与 IO 那层的输出同序）。 */
 function pack(name: string, files: Array<PackLogFile>, crashed = false): RunPack {
-  return { name, startedAt: packNameToMs(name), crashed, files };
+  return { crashed, files, name, startedAt: packNameToMs(name) };
 }
 
 describe("包目录名解析", () => {
@@ -56,8 +56,8 @@ describe("会话 id 的两种形态", () => {
   it("解析出的包名与文件名可反拼回原 id", () => {
     const parsed = parsePackScopedId("2026-09-30_193612-a1b2c3/x.log");
     expect(parsed).toEqual({
-      packName: "2026-09-30_193612-a1b2c3",
       fileName: "x.log",
+      packName: "2026-09-30_193612-a1b2c3",
     });
   });
 

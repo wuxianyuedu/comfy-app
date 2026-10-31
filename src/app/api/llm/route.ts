@@ -45,7 +45,7 @@ const BodySchema = {
             : entry.role === "tool"
               ? "tool"
               : "system";
-      const base: LLMMessage = { role, content: String(rawContent) };
+      const base: LLMMessage = { content: String(rawContent), role };
       // 透传 tool_calls（assistant 消息带）与 tool_call_id（tool 消息带）
       if (role === "assistant" && Array.isArray(entry.tool_calls)) {
         base.tool_calls = /* SAFETY: 类型断言已复核 */ entry.tool_calls as LLMMessage["tool_calls"];
@@ -77,7 +77,7 @@ const BodySchema = {
     if (Array.isArray(rec.tools)) {
       opts.tools = /* SAFETY: 类型断言已复核 */ rec.tools as NonNullable<typeof opts.tools>;
     }
-    return { messages, stream: rec.stream === true, opts };
+    return { messages, opts, stream: rec.stream === true };
   },
 };
 
@@ -147,9 +147,9 @@ export async function POST(req: NextRequest) {
 
   return new Response(stream, {
     headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "Content-Type": "text/event-stream; charset=utf-8",
     },
   });
 }

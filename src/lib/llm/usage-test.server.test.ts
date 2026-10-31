@@ -17,20 +17,20 @@ import { REMOTE_MODEL_KINDS } from "~/lib/llm/types";
 
 vi.mock("~/lib/llm/server", () => ({
   getLLMConfig: vi.fn(async () => ({
-    provider: "remote",
+    apiKey: "sk-global",
     baseUrl: "https://global/v1",
-    model: "m",
     extraModels: [
       {
-        name: "entry",
-        baseUrl: "https://entry/v1",
         apiKey: "sk-entry",
+        baseUrl: "https://entry/v1",
         kind: "chat",
+        name: "entry",
       },
     ],
-    apiKey: "sk-global",
-    temperature: 0.7,
     maxTokens: 2048,
+    model: "m",
+    provider: "remote",
+    temperature: 0.7,
   })),
 }));
 
@@ -66,7 +66,7 @@ function callAt(n = 0): { init: RequestInit; url: string } {
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
   const arg: unknown = call[0];
   const url = typeof arg === "string" ? arg : /* SAFETY: 类型断言已复核 */ (arg as Request).url;
-  return { url, init: call[1] ?? {} };
+  return { init: call[1] ?? {}, url };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
@@ -81,9 +81,9 @@ function sentBody(n = 0): Record<string, unknown> {
 /** 一次性响应替身（`json()` / `text()` 都可用）。 */
 function jsonResponse(body: unknown, status = 200): Response {
   return /* SAFETY: 类型断言已复核 */ {
+    json: async () => body,
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
     text: async () => JSON.stringify(body),
   } as unknown as Response;
 }
@@ -143,21 +143,21 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
     // 全部留空 → 条目值
     await expect(resolveUpstream("entry", "", "", "")).resolves.toEqual({
       base: "https://entry/v1",
-      path: "",
       headers: {
-        "Content-Type": "application/json",
         Authorization: "Bearer sk-entry",
+        "Content-Type": "application/json",
       },
+      path: "",
     });
 
     // 弹窗覆盖地址与密钥
     await expect(resolveUpstream("entry", "https://typed/v1/", "sk-typed", "x")).resolves.toEqual({
       base: "https://typed/v1",
-      path: "/x",
       headers: {
-        "Content-Type": "application/json",
         Authorization: "Bearer sk-typed",
+        "Content-Type": "application/json",
       },
+      path: "/x",
     });
 
     // 名字不在条目里 → 全局
@@ -172,13 +172,13 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
   it("没有任何可用地址 → 返回可修正的错误文案而不是抛错", async () => {
     const { getLLMConfig } = await import("~/lib/llm/server");
     vi.mocked(getLLMConfig).mockResolvedValueOnce({
-      provider: "remote",
-      baseUrl: "",
-      model: "m",
-      extraModels: [],
       apiKey: null,
-      temperature: 0.7,
+      baseUrl: "",
+      extraModels: [],
       maxTokens: 2048,
+      model: "m",
+      provider: "remote",
+      temperature: 0.7,
     });
     await expect(resolveUpstream("x", "", "", "")).resolves.toEqual({
       error: "接口地址为空：请在弹窗内填写，或先在条目里保存接口地址",
@@ -188,13 +188,13 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
   it("无密钥时不带 Authorization 头（本地 Ollama 不该被塞一个空 Bearer）", async () => {
     const { getLLMConfig } = await import("~/lib/llm/server");
     vi.mocked(getLLMConfig).mockResolvedValueOnce({
-      provider: "local",
-      baseUrl: "http://127.0.0.1:11434/v1",
-      model: "m",
-      extraModels: [],
       apiKey: null,
-      temperature: 0.7,
+      baseUrl: "http://127.0.0.1:11434/v1",
+      extraModels: [],
       maxTokens: 2048,
+      model: "m",
+      provider: "local",
+      temperature: 0.7,
     });
     const up = await resolveUpstream("x", "", "", "");
     expect(
@@ -207,32 +207,32 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
 describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
   it("缺模型名 → 判别式失败而不是异常", async () => {
     await expect(readUsageTestPrologue(reqOf({}))).resolves.toEqual({
-      ok: false,
       detail: "缺少模型名",
+      ok: false,
     });
     await expect(readUsageTestPrologue(reqOf({ name: "   " }))).resolves.toEqual({
-      ok: false,
       detail: "缺少模型名",
+      ok: false,
     });
   });
 
   it("body 不是 JSON 对象（解析抛错 / 数组）时同样给「缺少模型名」", async () => {
     await expect(readUsageTestPrologue(reqOf(null, { throw: true }))).resolves.toEqual({
-      ok: false,
       detail: "缺少模型名",
+      ok: false,
     });
   });
 
   it("连接参数解析失败时把错误原样带出（供路由回 200 + ok:false）", async () => {
     const { getLLMConfig } = await import("~/lib/llm/server");
     vi.mocked(getLLMConfig).mockResolvedValueOnce({
-      provider: "remote",
-      baseUrl: "",
-      model: "m",
-      extraModels: [],
       apiKey: null,
-      temperature: 0.7,
+      baseUrl: "",
+      extraModels: [],
       maxTokens: 2048,
+      model: "m",
+      provider: "remote",
+      temperature: 0.7,
     });
     const failed = await readUsageTestPrologue(reqOf({ name: "x" }));
     expect(failed.ok).toBe(false);
@@ -246,8 +246,8 @@ describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
       reqOf({ name: "entry", path: "v1/chat/completions", prompt: "hi" }),
     );
     expect(out).toMatchObject({
-      ok: true,
       name: "entry",
+      ok: true,
       up: { base: "https://entry/v1", path: "/v1/chat/completions" },
     });
     // `rec` 是透传的原始 body（类型为 Record<string, unknown>）：用判据取值，
@@ -261,11 +261,11 @@ describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () =
   it("readPayload：非 JSON 响应体给 null（调用方按状态给文案）", async () => {
     expect(await readPayload(jsonResponse({ a: 1 }))).toEqual({ a: 1 });
     const html = /* SAFETY: 类型断言已复核 */ {
-      ok: false,
-      status: 502,
       json: async () => {
         throw new Error("not json");
       },
+      ok: false,
+      status: 502,
     } as unknown as Response;
     expect(await readPayload(html)).toBeNull();
   });
@@ -287,11 +287,11 @@ describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () =
   });
 
   it("parseExtraJson：空串=无额外参数，非对象 / 坏 JSON 给可读文案", () => {
-    expect(parseExtraJson("")).toEqual({ ok: true, extra: {} });
-    expect(parseExtraJson('{"a":1}')).toEqual({ ok: true, extra: { a: 1 } });
+    expect(parseExtraJson("")).toEqual({ extra: {}, ok: true });
+    expect(parseExtraJson('{"a":1}')).toEqual({ extra: { a: 1 }, ok: true });
     // 数组是 typeof "object"：isRecord 认它，调用方另有 Array 判断 —— 这里钉住
     // 现状（数组会被当合法「对象」合并），而不是按想象断言它会失败
-    expect(parseExtraJson("[1]")).toEqual({ ok: true, extra: [1] });
+    expect(parseExtraJson("[1]")).toEqual({ extra: [1], ok: true });
     expect(parseExtraJson("{")).toMatchObject({ ok: false });
     expect(
       /* SAFETY: 类型断言已复核 */ (parseExtraJson("{") as { detail: string }).detail,
@@ -323,8 +323,8 @@ describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () =
 
 const UP = {
   base: "https://u/v1",
+  headers: { Authorization: "Bearer sk", "Content-Type": "application/json" },
   path: "/chat/completions",
-  headers: { "Content-Type": "application/json", Authorization: "Bearer sk" },
 };
 
 describe("callChat", () => {
@@ -338,15 +338,15 @@ describe("callChat", () => {
     expect(callAt().url).toBe("https://u/v1/chat/completions");
     const body = sentBody();
     expect(body).toMatchObject({ model: "m", top_p: 0.9 });
-    expect(body.messages).toEqual([{ role: "user", content: "问" }]);
+    expect(body.messages).toEqual([{ content: "问", role: "user" }]);
     expect(callAt().init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("非 2xx → HTTP 状态 + 响应片段", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: "bad" }, 500));
     await expect(callChat(UP, "m", "q", {})).resolves.toEqual({
-      ok: false,
       detail: 'HTTP 500：{"error":"bad"}',
+      ok: false,
     });
   });
 
@@ -362,9 +362,9 @@ describe("callChat", () => {
   it("2xx 但响应体不是对象 → 同样归为失败", async () => {
     fetchMock.mockResolvedValue(
       /* SAFETY: 类型断言已复核 */ {
+        json: async () => "纯文本",
         ok: true,
         status: 200,
-        json: async () => "纯文本",
       } as unknown as Response,
     );
     await expect(callChat(UP, "m", "q", {})).resolves.toMatchObject({
@@ -393,8 +393,8 @@ describe("callImage", () => {
   it("非 2xx → HTTP 文案；2xx 但没图 → 报未解析到 URL", async () => {
     fetchMock.mockResolvedValue(jsonResponse({}, 429));
     await expect(callImage(UP, "m", "p", "", {})).resolves.toEqual({
-      ok: false,
       detail: "HTTP 429：{}",
+      ok: false,
     });
 
     fetchMock.mockResolvedValue(jsonResponse({ data: [] }));
@@ -456,8 +456,8 @@ describe("callVideo（提交 + 内置一轮轮询）", () => {
   it("提交非 2xx → error 带 HTTP 文案", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ m: "x" }, 400));
     await expect(callVideo(UP, "m", "p", {})).resolves.toEqual({
-      status: "error",
       detail: 'HTTP 400：{"m":"x"}',
+      status: "error",
     });
   });
 });

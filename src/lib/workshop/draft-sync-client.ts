@@ -33,9 +33,9 @@ export async function fetchServerDraft(projectId: string): Promise<WorkshopDraft
 export async function pushServerDraft(projectId: string, draft: WorkshopDraftDto): Promise<void> {
   try {
     await fetch("/api/workshop/draft", {
-      method: "PUT",
+      body: JSON.stringify({ draft, project: projectId }),
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project: projectId, draft }),
+      method: "PUT",
     });
   } catch {
     /* 网络/服务不可用时静默降级：localStorage 仍是即时缓存，下次再补推 */

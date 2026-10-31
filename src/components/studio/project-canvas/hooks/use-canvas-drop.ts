@@ -35,7 +35,7 @@ export function useCanvasDrop({ screenToFlowPosition, setNodes }: UseCanvasDropA
 
   const placeMediaNode = useCallback(
     async (opts: MediaDropPayload) => {
-      const { url, displayName, mediaType, position } = opts;
+      const { displayName, mediaType, position, url } = opts;
       if (mediaType !== "image" && mediaType !== "video") {
         toast.info(
           mediaType === "audio" ? "音频暂不支持落地画布" : "该文件类型暂不支持落地画布",
@@ -57,15 +57,15 @@ export function useCanvasDrop({ screenToFlowPosition, setNodes }: UseCanvasDropA
            * 由出口的 `viewportCenter()` 给。 */
           setNodes((nds) =>
             placeCanvasNode({
-              nodes: nds,
-              point: position,
-              flow: { screenToFlowPosition },
               data: {
                 ...defaultData(kind),
-                mediaPath: name,
-                mediaName: displayName,
                 mediaKind: mediaType,
+                mediaName: displayName,
+                mediaPath: name,
               },
+              flow: { screenToFlowPosition },
+              nodes: nds,
+              point: position,
             }),
           );
           return true;
@@ -74,11 +74,11 @@ export function useCanvasDrop({ screenToFlowPosition, setNodes }: UseCanvasDropA
           /* 失败侧的两行 toast：标题由调用处给，第二行是出口翻译过的
            * 可读原因（`errorMessage` 的人话）。`failureText` 在这里只作为
            * 「抛出的值取不到 message」时的兜底 —— 与标题同源。 */
+          failureText: "加入画布失败",
           report: (kind, detail) =>
             kind === "ok"
               ? toast.success("已加入画布", displayName)
               : toast.error("加入画布失败", detail),
-          failureText: "加入画布失败",
         },
       );
     },
@@ -114,5 +114,5 @@ export function useCanvasDrop({ screenToFlowPosition, setNodes }: UseCanvasDropA
     [screenToFlowPosition, placeMediaNode],
   );
 
-  return { placeMediaNode, onCanvasDragOver, onCanvasDrop };
+  return { onCanvasDragOver, onCanvasDrop, placeMediaNode };
 }

@@ -9,89 +9,89 @@ const WRAPPER = "aaaaaaaa-1111-2222-3333-444444444444";
  *  （`value_1`），业务语义在内部节点上，靠 `properties.proxyWidgets`
  *  （[内部节点 id, 内部字段名]）关联。 */
 const wrapperWorkflow = /* SAFETY: 类型断言已复核 */ {
-  last_node_id: 12,
-  nodes: [
-    {
-      id: 1,
-      type: WRAPPER,
-      pos: [0, 0],
-      size: [300, 200],
-      properties: {
-        proxyWidgets: [
-          ["12", "seed"],
-          ["12", "steps"],
-        ],
-      },
-      widgets_values: [],
-      inputs: [
-        {
-          name: "value_1",
-          type: "INT",
-          link: null,
-          widget: { name: "value_1" },
-          idx: 0,
-        },
-        {
-          name: "value_2",
-          type: "INT",
-          link: null,
-          widget: { name: "value_2" },
-          idx: 1,
-        },
-      ],
-      outputs: [{ name: "LATENT", type: "LATENT", links: [] }],
-    },
-  ],
-  links: [],
   definitions: {
     subgraphs: [
       {
         id: WRAPPER,
+        inputs: [
+          {
+            id: "pin-a",
+            linkIds: [],
+            name: "value_1",
+            pos: [0, 0],
+            type: "INT",
+          },
+          {
+            id: "pin-b",
+            linkIds: [],
+            name: "value_2",
+            pos: [0, 50],
+            type: "INT",
+          },
+        ],
+        links: [],
         name: "Sampler",
         nodes: [
           {
             id: 12,
-            type: "KSampler",
             inputs: [
               { name: "model", type: "MODEL" },
               {
+                label: "随机种子",
                 name: "seed",
                 type: "INT",
                 widget: { name: "seed" },
-                label: "随机种子",
               },
               {
+                localized_name: "步数",
                 name: "steps",
                 type: "INT",
                 widget: { name: "steps" },
-                localized_name: "步数",
               },
             ],
+            outputs: [{ links: [], name: "LATENT", type: "LATENT" }],
+            type: "KSampler",
             widgets_values: [12345, "fixed", 20],
-            outputs: [{ name: "LATENT", type: "LATENT", links: [] }],
-          },
-        ],
-        links: [],
-        inputs: [
-          {
-            id: "pin-a",
-            name: "value_1",
-            type: "INT",
-            pos: [0, 0],
-            linkIds: [],
-          },
-          {
-            id: "pin-b",
-            name: "value_2",
-            type: "INT",
-            pos: [0, 50],
-            linkIds: [],
           },
         ],
         outputs: [],
       },
     ],
   },
+  last_node_id: 12,
+  links: [],
+  nodes: [
+    {
+      id: 1,
+      inputs: [
+        {
+          idx: 0,
+          link: null,
+          name: "value_1",
+          type: "INT",
+          widget: { name: "value_1" },
+        },
+        {
+          idx: 1,
+          link: null,
+          name: "value_2",
+          type: "INT",
+          widget: { name: "value_2" },
+        },
+      ],
+      outputs: [{ links: [], name: "LATENT", type: "LATENT" }],
+      pos: [0, 0],
+      properties: {
+        proxyWidgets: [
+          ["12", "seed"],
+          ["12", "steps"],
+        ],
+      },
+      size: [300, 200],
+      type: WRAPPER,
+      widgets_values: [],
+    },
+  ],
 } as unknown as RawWorkflow;
 
 async function noCombo(): Promise<undefined> {
@@ -110,15 +110,15 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
     expect(entries).toHaveLength(2);
     expect(entries[0]!.name).toBe("value_1");
     expect(entries[0]!.proxyField).toEqual({
-      nodeId: "12",
       field: "seed",
       label: "随机种子",
+      nodeId: "12",
     });
     expect(entries[1]!.name).toBe("value_2");
     expect(entries[1]!.proxyField).toEqual({
-      nodeId: "12",
       field: "steps",
       localized: "步数",
+      nodeId: "12",
     });
     /* 暴露口的值仍是内部节点的真实控件值（proxyWidgets 配对没被破坏）。 */
     expect(entries[0]!.widgetValue).toBe(12345);
@@ -128,16 +128,16 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
   it("普通（非封装）节点不带 proxyField", async () => {
     const plain = /* SAFETY: 类型断言已复核 */ {
       last_node_id: 1,
+      links: [],
       nodes: [
         {
           id: 7,
-          type: "KSampler",
+          inputs: [{ link: null, name: "seed", type: "INT", widget: { name: "seed" } }],
           pos: [0, 0],
-          inputs: [{ name: "seed", type: "INT", link: null, widget: { name: "seed" } }],
+          type: "KSampler",
           widgets_values: [42],
         },
       ],
-      links: [],
     } as unknown as RawWorkflow;
     const { rawInputsById } = await buildRawInputs(plain, noCombo, noMultiline);
     expect(rawInputsById["7"]![0]!.proxyField).toBeUndefined();
@@ -152,8 +152,8 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
     subs[key]!.nodes = [];
     const { rawInputsById } = await buildRawInputs(broken, noCombo, noMultiline);
     expect(rawInputsById["1"]![0]!.proxyField).toEqual({
-      nodeId: "12",
       field: "seed",
+      nodeId: "12",
     });
   });
 });
@@ -162,45 +162,45 @@ describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收�
   /** 真实导出形状：wrapper 本层只有自动编号的别名，`properties.proxyWidgets`
    *  被 ComfyUI 隔离掉（只剩 quarantine），作者名只留在子图边界 `inputs[]` 上。 */
   const quarantined = /* SAFETY: 类型断言已复核 */ {
-    last_node_id: 4,
-    nodes: [
-      {
-        id: 4,
-        type: WRAPPER,
-        pos: [0, 0],
-        inputs: [
-          {
-            name: "value_1",
-            type: "INT",
-            link: null,
-            widget: { name: "value_1" },
-          },
-          {
-            name: "value_2",
-            type: "INT",
-            link: null,
-            widget: { name: "value_2" },
-          },
-        ],
-        outputs: [],
-        properties: { proxyWidgetErrorQuarantine: [["12", "seed"]] },
-        widgets_values: [],
-      },
-    ],
-    links: [],
     definitions: {
       subgraphs: [
         {
           id: WRAPPER,
-          name: "I2V",
           inputs: [
-            { name: "value_1", label: "Seed", type: "INT" },
+            { label: "Seed", name: "value_1", type: "INT" },
             { name: "value_2", type: "INT" },
           ],
+          name: "I2V",
           nodes: [],
         },
       ],
     },
+    last_node_id: 4,
+    links: [],
+    nodes: [
+      {
+        id: 4,
+        inputs: [
+          {
+            link: null,
+            name: "value_1",
+            type: "INT",
+            widget: { name: "value_1" },
+          },
+          {
+            link: null,
+            name: "value_2",
+            type: "INT",
+            widget: { name: "value_2" },
+          },
+        ],
+        outputs: [],
+        pos: [0, 0],
+        properties: { proxyWidgetErrorQuarantine: [["12", "seed"]] },
+        type: WRAPPER,
+        widgets_values: [],
+      },
+    ],
   } as unknown as RawWorkflow;
 
   it("本层没写 label 时用边界 pin 的作者名", async () => {
@@ -224,24 +224,24 @@ describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收�
 
   it("普通节点的 pin 名不会被同名的子图边界 pin 覆盖", async () => {
     const plain = /* SAFETY: 类型断言已复核 */ {
+      definitions: quarantined.definitions,
       last_node_id: 7,
+      links: [],
       nodes: [
         {
           id: 7,
-          type: "PrimitiveInt",
           inputs: [
             {
+              link: null,
               name: "value_1",
               type: "INT",
-              link: null,
               widget: { name: "value_1" },
             },
           ],
+          type: "PrimitiveInt",
           widgets_values: [1],
         },
       ],
-      links: [],
-      definitions: quarantined.definitions,
     } as unknown as RawWorkflow;
     const { rawInputsById } = await buildRawInputs(plain, noCombo, noMultiline);
     expect(rawInputsById["7"]![0]!.label).toBeUndefined();
@@ -305,7 +305,7 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
      *  的 `value`，不是 KSampler 的 seed）。 */
     const { rawInputsById } = await buildRawInputs(
       withProxy({
-        proxyWidgets: { value_2: ["12", "steps"], value_1: ["12", "seed"] },
+        proxyWidgets: { value_1: ["12", "seed"], value_2: ["12", "steps"] },
       }),
       noCombo,
       noMultiline,

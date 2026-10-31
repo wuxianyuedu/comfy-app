@@ -15,8 +15,8 @@ import { Slider } from "~/components/ui/slider";
  * 强的地方，也是本项目换掉原生实现的原因（见 `range-slider.tsx` 文件头）。
  */
 const meta = {
-  title: "UI/Slider",
   component: Slider,
+  title: "UI/Slider",
 } satisfies Meta<typeof Slider>;
 
 export default meta;

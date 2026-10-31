@@ -106,9 +106,9 @@ export async function GET(req: NextRequest) {
     // 分类计数始终返回，面板顶部/返回上级都要用
     const byFolder = await collectByFolder(scopes);
     const folders = MATERIAL_FOLDERS.map((MATERIAL_FOLDERS) => ({
+      count: byFolder.get(MATERIAL_FOLDERS.id)?.length ?? 0,
       id: MATERIAL_FOLDERS.id,
       name: MATERIAL_FOLDERS.name,
-      count: byFolder.get(MATERIAL_FOLDERS.id)?.length ?? 0,
     }));
 
     let items: Array<MaterialItem> = [];
@@ -127,11 +127,11 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      scope: scopeMode === "cross" ? "cross" : "project",
-      projectId,
       folder,
       folders,
       items,
+      projectId,
+      scope: scopeMode === "cross" ? "cross" : "project",
     });
   } catch (e) {
     logger.error(`[materials] GET failed | ${apiErrorDetail(e, String(e))}`);
@@ -217,16 +217,16 @@ export async function POST(req: NextRequest) {
     await fs.writeFile(path.join(dir, finalName), buf);
 
     return NextResponse.json({
-      ok: true,
       item: {
-        id: `${scope}/${folder}/${finalName}`,
-        name: finalName,
         folder,
         folderName: folderName(folder),
-        url: artifactUrl(["materials", scope, folder, finalName].map(encodeURIComponent)),
-        size: buf.length,
+        id: `${scope}/${folder}/${finalName}`,
+        name: finalName,
         scope,
+        size: buf.length,
+        url: artifactUrl(["materials", scope, folder, finalName].map(encodeURIComponent)),
       },
+      ok: true,
     });
   } catch (e) {
     logger.error(`[materials] POST failed | ${apiErrorDetail(e, String(e))}`);
@@ -279,7 +279,7 @@ export async function DELETE(req: NextRequest) {
     } catch (e) {
       if (typeof e === "object" && e !== null && "code" in e && e.code === "ENOENT") {
         // 已经不在了，视作成功（幂等删除）
-        return NextResponse.json({ ok: true, alreadyGone: true });
+        return NextResponse.json({ alreadyGone: true, ok: true });
       }
       throw e;
     }

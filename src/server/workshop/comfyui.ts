@@ -46,8 +46,8 @@ export type SettingsFileIo = {
 };
 
 const realSettingsFileIo: SettingsFileIo = {
-  read: (file) => readFileSync(file, "utf-8"),
   fingerprint: settingsFileFingerprint,
+  read: (file) => readFileSync(file, "utf-8"),
   write: async (file, content) => {
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, content, "utf-8");
@@ -180,9 +180,9 @@ export async function postComfyPrompt(prompt: unknown): Promise<ComfyPromptResul
   const base = await resolveComfyBase();
   try {
     const res = await fetch(`${base}/api/prompt`, {
-      method: "POST",
+      body: JSON.stringify({ client_id: randomUUID(), prompt }),
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, client_id: randomUUID() }),
+      method: "POST",
       signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
@@ -241,8 +241,8 @@ export async function uploadComfyImage(buffer: Buffer, filename: string): Promis
   form.append("type", "input");
   try {
     const res = await fetch(`${base}/api/upload/image`, {
-      method: "POST",
       body: form,
+      method: "POST",
       signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
@@ -320,34 +320,34 @@ export function buildTxt2ImgWorkflow(input: {
     loadSettings().checkpoint ??
     process.env.WORKSHOP_COMFYUI_CHECKPOINT ??
     "sd_xl_base_1.0.safetensors";
-  const { width, height } = sizeDimsForImage(input.size);
+  const { height, width } = sizeDimsForImage(input.size);
   return {
     "3": {
       class_type: "KSampler",
       inputs: {
-        seed: input.seed ?? 0,
-        steps: 25,
         cfg: 7,
-        sampler_name: "euler",
-        scheduler: "normal",
         denoise: 1,
         model: ["4", 0],
-        positive: ["6", 0],
         negative: ["7", 0],
+        positive: ["6", 0],
+        sampler_name: "euler",
+        scheduler: "normal",
+        seed: input.seed ?? 0,
+        steps: 25,
       },
     },
     "4": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: ckpt } },
     "5": {
       class_type: "EmptyLatentImage",
-      inputs: { width, height, batch_size: 1 },
+      inputs: { batch_size: 1, height, width },
     },
     "6": {
       class_type: "CLIPTextEncode",
-      inputs: { text: input.prompt, clip: ["4", 1] },
+      inputs: { clip: ["4", 1], text: input.prompt },
     },
     "7": {
       class_type: "CLIPTextEncode",
-      inputs: { text: input.negative ?? "", clip: ["4", 1] },
+      inputs: { clip: ["4", 1], text: input.negative ?? "" },
     },
     "8": {
       class_type: "VAEDecode",
@@ -355,7 +355,7 @@ export function buildTxt2ImgWorkflow(input: {
     },
     "9": {
       class_type: "SaveImage",
-      inputs: { images: ["8", 0], filename_prefix: "workshop" },
+      inputs: { filename_prefix: "workshop", images: ["8", 0] },
     },
   };
 }
@@ -448,12 +448,12 @@ export async function generateImageViaComfyUI(input: {
   const settings = loadSettings();
   const workflow = settings.imageWorkflow
     ? substitutePlaceholders(settings.imageWorkflow, {
-        prompt: input.prompt,
         negative: input.negative,
+        prompt: input.prompt,
       })
     : buildTxt2ImgWorkflow({
-        prompt: input.prompt,
         negative: input.negative,
+        prompt: input.prompt,
         size: input.size,
       });
   const { files } = await runComfyWorkflow(workflow, {
@@ -485,9 +485,9 @@ export async function submitVideoViaComfyUI(input: {
     image = await uploadComfyImage(buf, `workshop-frame-${randomUUID().slice(0, 8)}.png`);
   }
   const workflow = substitutePlaceholders(settings.videoWorkflow, {
-    prompt: input.prompt,
-    negative: input.negative,
     image,
+    negative: input.negative,
+    prompt: input.prompt,
   });
   const { files } = await runComfyWorkflow(workflow, {
     sessionId: input.sessionId,

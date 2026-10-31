@@ -76,5 +76,5 @@ export function useRevealLogPath(
     [lock, onOutcome],
   );
 
-  return { busy, outcome, failure, reveal };
+  return { busy, failure, outcome, reveal };
 }

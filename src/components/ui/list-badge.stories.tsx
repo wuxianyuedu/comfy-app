@@ -12,12 +12,12 @@ type ListBadgeTone = NonNullable<React.ComponentProps<typeof ListBadge>["tone"]>
 const TONES: Array<ListBadgeTone> = ["neutral", "success", "warning", "danger", "primary"];
 
 const meta = {
-  title: "UI/ListBadge",
-  component: ListBadge,
   args: { children: "本地", tone: "neutral" },
   argTypes: {
     tone: { control: "select", options: TONES },
   },
+  component: ListBadge,
+  title: "UI/ListBadge",
 } satisfies Meta<typeof ListBadge>;
 
 export default meta;

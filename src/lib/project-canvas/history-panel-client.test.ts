@@ -26,17 +26,17 @@ afterEach(() => {
 /** 一条合法的行（Zod 校验通过所需的最小字段）。 */
 function row(over: Partial<HistoryTaskRow> = {}): HistoryTaskRow {
   return {
+    cover: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    error: null,
     id: "t-1",
+    mediaType: "image",
+    progress: 100,
+    projectId: "p-1",
+    prompt: "一只猫",
+    status: "SUCCEEDED",
     type: "image",
     workflowName: "wf",
-    status: "SUCCEEDED",
-    prompt: "一只猫",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    cover: null,
-    mediaType: "image",
-    projectId: "p-1",
-    progress: 100,
-    error: null,
     ...over,
   };
 }
@@ -45,14 +45,14 @@ describe("fetchHistoryTasks", () => {
   it("透传查询参数，并按契约校验后返回行", async () => {
     taskListQuery.mockResolvedValue({ tasks: [row()] });
     const out = await fetchHistoryTasks({
-      take: 80,
-      projectId: "p-1",
       media: "video",
+      projectId: "p-1",
+      take: 80,
     });
     expect(taskListQuery).toHaveBeenCalledWith({
-      take: 80,
-      projectId: "p-1",
       media: "video",
+      projectId: "p-1",
+      take: 80,
     });
     // 不再「原样透传」：行经 Zod 校验后返回（缺字段会被补齐默认值）
     expect(out).toEqual([row()]);
@@ -61,16 +61,16 @@ describe("fetchHistoryTasks", () => {
   it("行缺可选字段 → 按默认值补齐（不把 undefined 漏给下游）", async () => {
     // 只给最小必填：id / createdAt。其余由 schema 的 default 补齐。
     taskListQuery.mockResolvedValue({
-      tasks: [{ id: "t-9", createdAt: "2026-01-01T00:00:00.000Z" }],
+      tasks: [{ createdAt: "2026-01-01T00:00:00.000Z", id: "t-9" }],
     });
     const out = await fetchHistoryTasks({ take: 10 });
     expect(out).toEqual([
       expect.objectContaining({
+        error: null,
         id: "t-9",
         mediaType: "image",
         progress: 0,
         prompt: "",
-        error: null,
       }),
     ]);
   });

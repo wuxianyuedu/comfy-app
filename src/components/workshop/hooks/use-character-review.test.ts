@@ -16,10 +16,10 @@ beforeEach(() => {
 describe("useCharacterReview", () => {
   it("成功 → 写入 verdict", async () => {
     const verdict = {
-      pass: true,
       issues: [],
-      suggestion: "",
+      pass: true,
       scoredAt: "t",
+      suggestion: "",
     };
     reviewCharacter.mockResolvedValue(verdict);
     const { result } = renderHook(() => useCharacterReview("proj_1"));
@@ -52,10 +52,10 @@ describe("useCharacterReview", () => {
 
   it("reset → 清空 verdict 与 error", async () => {
     reviewCharacter.mockResolvedValue({
-      pass: false,
       issues: ["x"],
-      suggestion: "y",
+      pass: false,
       scoredAt: "t",
+      suggestion: "y",
     });
     const { result } = renderHook(() => useCharacterReview("proj_1"));
     await act(async () => {

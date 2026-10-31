@@ -61,9 +61,9 @@ export function nodeLabel(classType?: string): string {
     CLIPTextEncode: "编码提示词",
     EmptyLatentImage: "初始化潜空间",
     KSampler: "采样去噪",
-    VAEDecode: "VAE 解码",
-    SaveImage: "保存图像",
     LoraLoader: "加载 LoRA",
+    SaveImage: "保存图像",
+    VAEDecode: "VAE 解码",
   };
   return map[classType ?? ""] ?? classType ?? "未知节点";
 }

@@ -29,8 +29,8 @@ async function getModels(
      * 不再自己拼一个条件串再拼进模板（规范 16 §16.2.4.32）。 */
     const res = await fetch(
       withQuery("/api/llm/models", {
-        provider,
         model: provider === "remote" ? model : undefined,
+        provider,
       }),
       {
         signal: AbortSignal.timeout(8000),
@@ -42,7 +42,7 @@ async function getModels(
       ok?: unknown;
     };
     return {
-      ok: json.ok === true,
+      detail: typeof json.detail === "string" ? json.detail : `请求失败 (${res.status})`,
       models: Array.isArray(json.models)
         ? json.models
             // 只判 `m !== ""` 会把**全空白**的名字放进来（上游偶尔给出
@@ -53,13 +53,13 @@ async function getModels(
             .map((m) => m.trim())
             .filter((m) => m !== "")
         : [],
-      detail: typeof json.detail === "string" ? json.detail : `请求失败 (${res.status})`,
+      ok: json.ok === true,
     };
   } catch (e) {
     return {
-      ok: false,
-      models: [],
       detail: errorMessage(e, "网络请求失败"),
+      models: [],
+      ok: false,
     };
   }
 }

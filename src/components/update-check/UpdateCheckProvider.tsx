@@ -64,9 +64,9 @@ export function UpdateCheckProvider() {
         toast.info("检测到本地更新", `${summaryOf(groups)}。需重启应用才生效。`);
         // 同步收进消息中心，未读计数 +1，避免 toast 一闪而过无处回看
         useMessageCenterStore.getState().push({
+          body: bodyOf(groups),
           kind: "update",
           title: "检测到本地更新，需重启应用",
-          body: bodyOf(groups),
         });
       },
       [toast],

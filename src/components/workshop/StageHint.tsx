@@ -10,7 +10,7 @@ type StageHintProps = {
   text: string;
 };
 
-export function StageHint({ text, onGo }: StageHintProps) {
+export function StageHint({ onGo, text }: StageHintProps) {
   return (
     <div className="bg-amber/10 text-amber mt-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs">
       <Icon className="shrink-0" name="info" size={13} />

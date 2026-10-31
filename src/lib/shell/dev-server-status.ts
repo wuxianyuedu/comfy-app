@@ -76,46 +76,46 @@ export type DevServerStatus = {
 };
 
 export function deriveDevServerStatus(input: DevServerStatusInput): DevServerStatus {
-  const { everOnline, reachable, restarted, lastRestartAt } = input;
+  const { everOnline, lastRestartAt, reachable, restarted } = input;
   const exitNotice = input.lastExit ?? null;
 
   /* 探活端点答了 404：服务活着，坏的是路由表。**排在连通性两档之前**——它比
    * 「不可达」更具体（我们确实拿到了一个应答），也比「连接中」更贴事实。 */
   if (input.routeTableStale && !reachable) {
     return {
-      state: "stale",
       label: "应用服务路由异常",
+      state: "stale",
       /* 只说两件用户能做的：重启应用；重启不管用再删 .next。判据与措辞同
        * `docs/standards/launch-and-build.md` §5 里那条 Turbopack 会话级路由失效
        * —— 它是上游问题，本地唯一的解就是重建路由表。 */
+      exitNotice,
       title:
         "应用服务在应答，但它的探活端点返回 404：这一次启动的路由表不完整（Turbopack 会话级路由失效）。" +
         "关闭应用窗口重新启动即可重建路由表；仍不行则删掉项目根目录的 .next 再启动",
-      exitNotice,
     };
   }
 
   if (!reachable && everOnline) {
     return {
-      state: "offline",
       label: "应用服务已断开",
+      state: "offline",
       /* 原因已知就**一定**说出来（规范 §10.3.1：降级不得静默）——用户盯着
        * 「已断开」四个字，唯一能问的就是「为什么」，而这条原因正躺在磁盘上。
        * 未知时保留原来那句「怎么恢复」：拿不到原因时至少要给一个出口，不能
        * 因为没原因可讲就退回一句现象陈述。 */
+      exitNotice,
       title: exitNotice
         ? `${exitNotice.why}。${exitNotice.detail}。${exitNotice.action}`
         : "应用服务（dev server）当前不可达：页面里的查询与保存都会失败。应用窗口重新打开或服务重启后会自动恢复",
-      exitNotice,
     };
   }
 
   if (!reachable) {
     return {
-      state: "starting",
-      label: "应用服务连接中",
-      title: "正在连接应用服务（dev server）…",
       exitNotice: null,
+      label: "应用服务连接中",
+      state: "starting",
+      title: "正在连接应用服务（dev server）…",
     };
   }
 
@@ -125,18 +125,18 @@ export function deriveDevServerStatus(input: DevServerStatusInput): DevServerSta
      * 「刚重启」描述的正是那件事的后果。两句合起来才是一条完整的话——
      * 过去只有后果（「已重启」），用户仍不知道是崩溃还是被顶掉。 */
     return {
-      state: "online",
+      exitNotice,
       label: "应用服务已重启",
+      state: "online",
       title: exitNotice
         ? `应用服务刚重启过${at}：${exitNotice.why}。${exitNotice.detail}。当时进行中的任务已丢失，需要重新执行`
         : `应用服务刚重启过${at}：当时进行中的任务已丢失，需要重新执行`,
-      exitNotice,
     };
   }
 
   return {
-    state: "online",
     label: "应用服务运行中",
+    state: "online",
     title: "应用服务（dev server）在线：页面查询、保存与任务提交都走它",
     /* 在线且没刚重启过：上一次结束的原因与本格当前状态无关，不挂上去——
      * 否则一个几小时前的旧结论会一直贴在「运行中」后面。 */

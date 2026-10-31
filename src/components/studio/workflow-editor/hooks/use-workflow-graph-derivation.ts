@@ -46,16 +46,16 @@ export function useWorkflowGraphDerivation(params: {
 }) {
   const {
     detail,
-    paramMap,
     onEnterSubgraph,
-    viewHostNodeId,
-    workflowId,
-    viewerApi,
+    paramMap,
     rgthreeApi,
     subgraphRawContext,
     subgraphStackLength,
+    viewerApi,
+    viewHostNodeId,
+    workflowId,
   } = params;
-  const { rawMetaById, scopeDetail, outSlotNameById } = useWorkflowDerivedData(detail);
+  const { outSlotNameById, rawMetaById, scopeDetail } = useWorkflowDerivedData(detail);
 
   /* IO 预览的富化数据源。顶层视图直接用服务端产出的 `detail.workflowIO`；
    * 下钻到子工作流后该字段为空（子图路由不产出它），于是退回「按当前视图
@@ -72,12 +72,12 @@ export function useWorkflowGraphDerivation(params: {
     () =>
       buildInitialNodes({
         detail,
-        scopeDetail,
-        rawMetaById,
+        hostNodeId: viewHostNodeId || undefined,
+        onEnterSubgraph,
         outSlotNameById,
         paramMap,
-        onEnterSubgraph,
-        hostNodeId: viewHostNodeId || undefined,
+        rawMetaById,
+        scopeDetail,
       }),
     [detail, scopeDetail, rawMetaById, outSlotNameById, paramMap, onEnterSubgraph, viewHostNodeId],
   );
@@ -88,15 +88,15 @@ export function useWorkflowGraphDerivation(params: {
   useEffect(() => {
     viewerApi.setState({
       detail,
-      rawMetaById,
       positions: detail?.positions ?? null,
+      rawMetaById,
       subgraphRawContext,
       subgraphStackLength,
     });
     rgthreeApi.setState({
-      workflowId,
       detail,
       overrides: rgthreeApi.getState().overrides,
+      workflowId,
     });
     /* `workflowId` / `viewerApi` / `rgthreeApi` 有意不入依赖：
      *   · 两个 store 是模块级单例（`WorkflowStores` 的 hook 返回稳定引用），
@@ -109,5 +109,5 @@ export function useWorkflowGraphDerivation(params: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail, rawMetaById, subgraphRawContext, subgraphStackLength]);
 
-  return { rawMetaById, scopeDetail, outSlotNameById, ioDetailMap, graphNodes };
+  return { graphNodes, ioDetailMap, outSlotNameById, rawMetaById, scopeDetail };
 }

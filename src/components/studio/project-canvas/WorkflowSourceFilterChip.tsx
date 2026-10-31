@@ -18,12 +18,12 @@ const OPTIONS: Array<{
   local: boolean;
   v: WorkflowSourceFilter;
 }> = [
-  { v: "all", label: "全部", local: false },
-  { v: "local", label: "本机", local: true },
-  { v: "online", label: "在线", local: false },
+  { label: "全部", local: false, v: "all" },
+  { label: "本机", local: true, v: "local" },
+  { label: "在线", local: false, v: "online" },
 ];
 
-export function WorkflowSourceFilterChip({ value, onChange }: WorkflowSourceFilterChipProps) {
+export function WorkflowSourceFilterChip({ onChange, value }: WorkflowSourceFilterChipProps) {
   const isLocal = value === "local";
   const label = value === "all" ? "全部" : isLocal ? "本机" : "在线";
 
@@ -32,7 +32,6 @@ export function WorkflowSourceFilterChip({ value, onChange }: WorkflowSourceFilt
       align="start"
       contentClassName="w-40"
       items={OPTIONS.map((option) => ({
-        value: option.v,
         label: option.label,
         prefix: (
           <span
@@ -41,6 +40,7 @@ export function WorkflowSourceFilterChip({ value, onChange }: WorkflowSourceFilt
             }`}
           />
         ),
+        value: option.v,
       }))}
       onSelect={(next) => onChange(/* SAFETY: 类型断言已复核 */ next as WorkflowSourceFilter)}
       trigger={

@@ -24,11 +24,11 @@ import { FieldLabel } from "~/components/ui/field";
 
 /* ── 开关（内联，镜像 CanvasSettingsPanel 的 ToggleRow 观感） ── */
 function ToggleRow({
-  label,
   hint,
-  value,
+  label,
   onChange,
   tooltip,
+  value,
 }: {
   hint?: string;
   label: string;

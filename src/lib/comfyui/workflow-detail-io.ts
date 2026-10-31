@@ -218,16 +218,16 @@ export async function enrichWorkflowIO(
   params: WorkflowIOEnrichParams,
 ): Promise<Record<string, WorkflowIOEntry>> {
   const {
-    workflowIORaw,
-    rawInputsById,
-    innerInputsById,
-    rawNodeMeta,
-    graph,
-    nodeTitleById,
-    nodeTypeById,
     comboOptionsForClassField,
     comboOptionsForFieldName,
+    graph,
+    innerInputsById,
     multilineForClassField,
+    nodeTitleById,
+    nodeTypeById,
+    rawInputsById,
+    rawNodeMeta,
+    workflowIORaw,
   } = params;
 
   const workflowIO: Record<string, WorkflowIOEntry> = {};
@@ -503,9 +503,9 @@ export async function enrichWorkflowIO(
     workflowIO[ioKey] = {
       direction: v.direction,
       kind: v.kind,
-      nodeId: String(v.nodeId),
-      name: v.name,
       label: label ?? v.name,
+      name: v.name,
+      nodeId: String(v.nodeId),
       type,
       ...(defaultValue !== undefined ? { defaultValue } : {}),
       ...(options ? { options } : {}),

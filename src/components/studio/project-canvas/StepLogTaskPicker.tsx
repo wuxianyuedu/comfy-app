@@ -18,8 +18,8 @@ import { SelectMenu } from "~/components/ui/select-menu";
 
 export const StepLogTaskPicker = memo(function StepLogTaskPicker({
   cachedIds,
-  taskId,
   onSelect,
+  taskId,
 }: {
   cachedIds: Array<string>;
   onSelect: (next: string | null) => void;

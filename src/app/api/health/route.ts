@@ -52,23 +52,23 @@ export async function GET(request: Request) {
       logger.error({ schema }, "health_check_schema_not_ready");
       return NextResponse.json(
         {
-          status: "error",
           db: schema === "missing" ? "empty" : "unknown",
           hint: SCHEMA_HINT,
+          status: "error",
           t: new Date().toISOString(),
         },
-        { status: 503, headers: cors },
+        { headers: cors, status: 503 },
       );
     }
     return NextResponse.json(
-      { status: "ok", db: "up", t: new Date().toISOString() },
+      { db: "up", status: "ok", t: new Date().toISOString() },
       { headers: cors },
     );
   } catch (error) {
     logger.error({ err: error }, "health_check_failed");
     return NextResponse.json(
-      { status: "error", db: "down", t: new Date().toISOString() },
-      { status: 503, headers: cors },
+      { db: "down", status: "error", t: new Date().toISOString() },
+      { headers: cors, status: 503 },
     );
   }
 }

@@ -99,7 +99,7 @@ export function useDynamicWorkflowForm(
   /* 逐字段取出回调：React Compiler 不接受依赖写成 `props.x` 之外的可选链，
    * 也让 deps 表读起来是具体字段而不是整个 props 对象。 */
   const { onUploadError, onUploadProgress } = props;
-  const { io, values, onChange, onReorder, mode } = props;
+  const { io, mode, onChange, onReorder, values } = props;
 
   /* IO-edit 作者态：行内提供了「必填 / 可选」切换或 👁 可见性等编辑回调。
    *  此时数值类参数（seed/steps/cfg…）也要渲染成完整参数行，让作者能在
@@ -119,7 +119,7 @@ export function useDynamicWorkflowForm(
     onReorder
   );
 
-  const { wireInputs, widgetInputs, outputs } = useMemo(() => splitWorkflowIO(io), [io]);
+  const { outputs, widgetInputs, wireInputs } = useMemo(() => splitWorkflowIO(io), [io]);
 
   /* 多模式：按当前模式过滤掉 `visible === false` 的行。
    *  只是展示层过滤——被隐藏的参数仍留在 values 里（调用方用
@@ -226,6 +226,22 @@ export function useDynamicWorkflowForm(
       return null;
     }
     return {
+      onDragEnd: endDrag,
+      onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
+        const fromKey = dragFromRef.current;
+        if (!fromKey || fromKey === ioKey) {
+          return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        if (dragOverKey !== ioKey) {
+          setDragOverKey(ioKey);
+        }
+        const pos = positionOf(event);
+        if (dropPosition !== pos) {
+          setDropPosition(pos);
+        }
+      },
       onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         /* 输入框 / 下拉 / 按钮上起手不拖（用户口径：只能从不可编辑区域拖动）
          *  —— preventDefault 直接取消这次拖拽。 */
@@ -248,21 +264,6 @@ export function useDynamicWorkflowForm(
           /* 有些浏览器在用户手势之外调 setData 会抛异常；忽略即可。 */
         }
       },
-      onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
-        const fromKey = dragFromRef.current;
-        if (!fromKey || fromKey === ioKey) {
-          return;
-        }
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-        if (dragOverKey !== ioKey) {
-          setDragOverKey(ioKey);
-        }
-        const pos = positionOf(event);
-        if (dropPosition !== pos) {
-          setDropPosition(pos);
-        }
-      },
       onDrop: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         event.preventDefault();
         /* 来源一律取**起手那一刻记下的键**（ref）。落点行以事件目标为准，
@@ -277,7 +278,6 @@ export function useDynamicWorkflowForm(
         }
         onReorder(fromKey, toKey, pos);
       },
-      onDragEnd: endDrag,
     };
   }, [onReorder, dragOverKey, dropPosition, endDrag, beginDrag, rowKeyOf]);
 
@@ -367,29 +367,29 @@ export function useDynamicWorkflowForm(
   );
 
   return {
-    values,
-    onChange,
-    inputs,
-    outputs: shownOutputs,
-    wireInputs: shownWireInputs,
-    widgetInputs: shownWidgetInputs,
-    groups,
-    portEntries,
-    widgetSectionEntries,
-    isEmpty: inputs.length === 0 && shownOutputs.length === 0,
-    uploading,
-    uploadTarget,
-    FileInput: uploadPicker.Input,
-    pickFile,
-    localPreviewUrl,
-    uploadError,
+    beginPortDrag,
     dismissUploadError,
-    set,
-    dragHandlers,
     draggingKey,
+    dragHandlers,
     dragOverKey,
     dropPosition,
-    beginPortDrag,
     endDrag,
+    FileInput: uploadPicker.Input,
+    groups,
+    inputs,
+    isEmpty: inputs.length === 0 && shownOutputs.length === 0,
+    localPreviewUrl,
+    onChange,
+    outputs: shownOutputs,
+    pickFile,
+    portEntries,
+    set,
+    uploadError,
+    uploading,
+    uploadTarget,
+    values,
+    widgetInputs: shownWidgetInputs,
+    widgetSectionEntries,
+    wireInputs: shownWireInputs,
   };
 }

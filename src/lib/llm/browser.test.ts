@@ -48,7 +48,7 @@ describe("streamChat", () => {
     );
     const tokens: Array<string> = [];
     const full = await streamChat({
-      messages: [{ role: "user", content: "hi" }],
+      messages: [{ content: "hi", role: "user" }],
       onToken: (t) => tokens.push(t),
     });
     expect(tokens).toEqual(["你", "好"]);
@@ -191,7 +191,7 @@ describe("streamChat", () => {
     vi.stubGlobal("fetch", fetchMock);
     const controller = new AbortController();
     await streamChat({
-      messages: [{ role: "user", content: "q" }],
+      messages: [{ content: "q", role: "user" }],
       opts: { temperature: 0.2 },
       signal: controller.signal,
     });
@@ -259,16 +259,16 @@ describe("probeRemoteApi", () => {
         async () =>
           new Response(
             JSON.stringify({
-              ok: true,
               detail: "连通",
               models: ["a", "", 1, null, "b"],
+              ok: true,
             }),
             { status: 200 },
           ),
       ),
     );
     const got = await probeRemoteApi({ baseUrl: "https://x" });
-    expect(got).toEqual({ ok: true, detail: "连通", models: ["a", "b"] });
+    expect(got).toEqual({ detail: "连通", models: ["a", "b"], ok: true });
   });
 
   it("models 不是数组时返回 undefined（调用方不渲染清单）", async () => {
@@ -276,7 +276,7 @@ describe("probeRemoteApi", () => {
       "fetch",
       vi.fn(
         async () =>
-          new Response(JSON.stringify({ ok: true, detail: "ok", models: "a" }), { status: 200 }),
+          new Response(JSON.stringify({ detail: "ok", models: "a", ok: true }), { status: 200 }),
       ),
     );
     expect((await probeRemoteApi({})).models).toBeUndefined();
@@ -299,7 +299,7 @@ describe("probeRemoteApi", () => {
       "fetch",
       vi.fn(
         async () =>
-          new Response(JSON.stringify({ ok: false, error: "鉴权失败" }), {
+          new Response(JSON.stringify({ error: "鉴权失败", ok: false }), {
             status: 401,
           }),
       ),
@@ -322,7 +322,7 @@ describe("probeRemoteApi", () => {
       "fetch",
       vi.fn(
         async () =>
-          new Response(JSON.stringify({ ok: "true", detail: "d" }), {
+          new Response(JSON.stringify({ detail: "d", ok: "true" }), {
             status: 200,
           }),
       ),

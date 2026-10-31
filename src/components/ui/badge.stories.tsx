@@ -22,14 +22,14 @@ const TONES: Array<BadgeTone> = ["success", "warning", "danger", "primary", "neu
 const SIZES: Array<BadgeSize> = ["default", "sm", "xs", "pill-sm", "pill-md"];
 
 const meta = {
-  title: "UI/Badge",
-  component: Badge,
   args: { children: "徽标" },
   argTypes: {
-    variant: { control: "select", options: VARIANTS },
-    tone: { control: "select", options: TONES },
     size: { control: "select", options: SIZES },
+    tone: { control: "select", options: TONES },
+    variant: { control: "select", options: VARIANTS },
   },
+  component: Badge,
+  title: "UI/Badge",
 } satisfies Meta<typeof Badge>;
 
 export default meta;

@@ -23,13 +23,13 @@ import { FILTERS, type SortKey, type TaskItem } from "./history-types";
  * 同时不把 hook 放进 map 循环（hooks 规则）。纯展示，无业务规则（规范 17 §17.2 第③层）。
  */
 function HistoryGroupTaskList({
-  items,
-  progressMap,
   isRetrying,
-  onOpenDetail,
+  items,
   onCancel,
-  onRetry,
+  onOpenDetail,
   onRemove,
+  onRetry,
+  progressMap,
 }: {
   /** 「这一条在重试吗」的判据由导出它的出口给（规范 16 §16.2.4.40）——
    * 视图不再自己写`retryingId === task.id`。 */
@@ -46,9 +46,9 @@ function HistoryGroupTaskList({
   // 尊重系统减弱动画的限制已去掉：开启 disrespectUserMotionPreference，
   // 让列表条目级增删/排序在系统开启「减弱动态效果」时也保留适量过渡动画。
   const [listRef] = useAutoAnimate<HTMLDivElement>({
+    disrespectUserMotionPreference: true,
     duration: 250,
     easing: "ease-out",
-    disrespectUserMotionPreference: true,
   });
 
   return (

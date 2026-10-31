@@ -39,9 +39,9 @@ export const VIDEO_MODE_PRESETS = /* SAFETY: 类型断言已复核 */ [
 /** 各 mode 的取值要求与所需媒体字段说明（按 Agnes 文档措辞归纳，
  *  其它模型若取值不同可直接手改，不写死）。 */
 export const VIDEO_MODE_HINT: Record<string, string> = {
-  text: "文生视频：仅靠提示词生成，不能带 first_frame / images 等媒体字段",
   keyframe: "首帧/尾帧控制：需额外传入 first_frame（或 last_frame）图片",
   reference: "参考图/音频驱动：需额外传入 images 或 audios 至少一类",
+  text: "文生视频：仅靠提示词生成，不能带 first_frame / images 等媒体字段",
 };
 
 /**
@@ -214,12 +214,12 @@ export const USAGE_FIELD_PRESETS: ReadonlyArray<{
   hint: string;
   key: string;
 }> = [
-  { key: "seed", hint: "随机种子" },
-  { key: "duration", hint: "时长(秒)" },
-  { key: "images", hint: "参考图 / 输入图列表" },
-  { key: "first_frame", hint: "首帧图片" },
-  { key: "last_frame", hint: "尾帧图片" },
-  { key: "audios", hint: "参考音频" },
+  { hint: "随机种子", key: "seed" },
+  { hint: "时长(秒)", key: "duration" },
+  { hint: "参考图 / 输入图列表", key: "images" },
+  { hint: "首帧图片", key: "first_frame" },
+  { hint: "尾帧图片", key: "last_frame" },
+  { hint: "参考音频", key: "audios" },
 ];
 
 /** 判断某个固定名是否已被作为字段行加入（避免一键预设时重复堆空行）。 */
@@ -300,14 +300,14 @@ export function buildVideoPollUrls(
     /* 上游供应商的地址模板也走查询串出口：编码与省略口径同一处
      *（规范 16 §16.2.4.32）—— 它是跨域地址，但参数拼装是同一件事。 */
     agnes = withQuery(`${new URL(base).origin}/agnesapi`, {
-      video_id: taskId,
       model_name: model,
+      video_id: taskId,
     });
   } catch {
     agnes = null;
   }
   return {
-    rest: `${base}${dir}/${taskId.replace(/^\/+/, "")}`,
     agnes,
+    rest: `${base}${dir}/${taskId.replace(/^\/+/, "")}`,
   };
 }

@@ -25,9 +25,9 @@ function pin(name: string, label: string, type?: string): WorkflowIOEntry {
   return {
     direction: "input",
     kind: "widget",
-    nodeId: "7",
-    name,
     label,
+    name,
+    nodeId: "7",
     ...(type ? { type } : {}),
   };
 }
@@ -138,7 +138,7 @@ describe("inferGroups — groupedKeys 覆盖两种形态", () => {
   });
 
   it("无组合时不产出 groupedKeys", () => {
-    const { dimension, video, groupedKeys } = inferGroups(widgetsOf(pin("text", "提示词")));
+    const { dimension, groupedKeys, video } = inferGroups(widgetsOf(pin("text", "提示词")));
     expect(dimension).toBeNull();
     expect(video).toBeNull();
     expect(groupedKeys.size).toBe(0);
@@ -169,27 +169,27 @@ describe("splitWorkflowIO — kind 决定分组，客户端无 legacy 特判", (
   const entry = (kind: string, name: string, type?: string): WorkflowIOEntry => ({
     direction: "input",
     kind,
-    nodeId: "7",
     name,
+    nodeId: "7",
     ...(type ? { type } : {}),
   });
 
   it("kind=param 一律归 wireInputs（连线端口行）", () => {
     const map: WorkflowIOMap = {
-      "7::param::seed": entry("param", "seed", "INT"),
       "7::param::model": entry("param", "model", "MODEL"),
+      "7::param::seed": entry("param", "seed", "INT"),
     };
-    const { wireInputs, widgetInputs } = splitWorkflowIO(map);
+    const { widgetInputs, wireInputs } = splitWorkflowIO(map);
     expect(wireInputs).toHaveLength(2);
     expect(widgetInputs).toHaveLength(0);
   });
 
   it("kind=widget 一律归 widgetInputs", () => {
     const map: WorkflowIOMap = {
-      "7::widget::seed": entry("widget", "seed", "INT"),
       "7::widget::prompt": entry("widget", "prompt", "STRING"),
+      "7::widget::seed": entry("widget", "seed", "INT"),
     };
-    const { wireInputs, widgetInputs } = splitWorkflowIO(map);
+    const { widgetInputs, wireInputs } = splitWorkflowIO(map);
     expect(widgetInputs).toHaveLength(2);
     expect(widgetInputs[0]?.control).toBe("int");
     expect(wireInputs).toHaveLength(0);
@@ -219,13 +219,13 @@ describe("mergeRefreshedDefaults — IO 默认值刷新（保覆盖，ISSUE #288
   });
 
   it("同一张表里混合覆盖与未覆盖 —— 各自按自己的语义处理", () => {
-    const current = { steps: 8, cfg: 7, prompt: "旧提示词" };
-    const baseline = { steps: 20, cfg: 7, prompt: "旧提示词" };
-    const fresh = { steps: 30, cfg: 9, prompt: "新提示词" };
+    const current = { cfg: 7, prompt: "旧提示词", steps: 8 };
+    const baseline = { cfg: 7, prompt: "旧提示词", steps: 20 };
+    const fresh = { cfg: 9, prompt: "新提示词", steps: 30 };
     expect(resolve(current, baseline, fresh)).toEqual({
-      steps: 8, // 用户改成 8，保持
       cfg: 9, // 未覆盖，刷新
       prompt: "新提示词", // 未覆盖，刷新
+      steps: 8, // 用户改成 8，保持
     });
   });
 
@@ -240,7 +240,7 @@ describe("mergeRefreshedDefaults — IO 默认值刷新（保覆盖，ISSUE #288
   });
 
   it("被取消勾选的 pin 从值表里摘掉", () => {
-    expect(resolve({ steps: 8, gone: 1 }, { steps: 20, gone: 1 }, { steps: 20 })).toEqual({
+    expect(resolve({ gone: 1, steps: 8 }, { gone: 1, steps: 20 }, { steps: 20 })).toEqual({
       steps: 8,
     });
   });
@@ -315,13 +315,13 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
   /** 封装槽位条目：机器槽位名 + 作者业务名（服务端富化后的形状）。 */
   function wrapperSeed(extra?: Partial<WorkflowIOEntry>): EnrichedWidget {
     return {
-      direction: "input",
-      kind: "widget",
-      nodeId: "1512",
-      name: "value_1",
-      label: "Seed",
-      ioKey: "1512::widget::value_1",
       control: "int",
+      direction: "input",
+      ioKey: "1512::widget::value_1",
+      kind: "widget",
+      label: "Seed",
+      name: "value_1",
+      nodeId: "1512",
       ...extra,
     };
   }
@@ -336,9 +336,9 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
         {
           ...wrapperSeed(),
           ioKey: "23::widget::image",
-          nodeId: "23",
-          name: "image",
           label: "首帧图",
+          name: "image",
+          nodeId: "23",
         },
       ]),
     ).toBe("Seed");
@@ -354,22 +354,22 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
 
   it("不同 pin 真撞名时用 name 区分（保持既有行为）", () => {
     const first = /* SAFETY: 类型断言已复核 */ {
-      direction: "input",
-      kind: "param",
-      nodeId: "1",
-      name: "inputImage",
-      label: "图像",
-      ioKey: "1::param::inputImage",
       control: "link",
+      direction: "input",
+      ioKey: "1::param::inputImage",
+      kind: "param",
+      label: "图像",
+      name: "inputImage",
+      nodeId: "1",
     } as EnrichedWidget;
     const second = /* SAFETY: 类型断言已复核 */ {
-      direction: "input",
-      kind: "param",
-      nodeId: "2",
-      name: "outputImage",
-      label: "图像",
-      ioKey: "2::param::outputImage",
       control: "link",
+      direction: "input",
+      ioKey: "2::param::outputImage",
+      kind: "param",
+      label: "图像",
+      name: "outputImage",
+      nodeId: "2",
     } as EnrichedWidget;
     expect(ioLabel(first, [first, second])).toBe("inputImage");
     expect(ioLabel(second, [first, second])).toBe("outputImage");
@@ -378,13 +378,13 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
   it("撞名时区分标记绝不使用封装槽位的机器别名：改用宿主标题", () => {
     const seed = wrapperSeed({ nodeTitle: "Checkpoint settings" });
     const homonym = /* SAFETY: 类型断言已复核 */ {
-      direction: "input",
-      kind: "widget",
-      nodeId: "9",
-      name: "value_9",
-      label: "Seed",
-      ioKey: "9::widget::value_9",
       control: "int",
+      direction: "input",
+      ioKey: "9::widget::value_9",
+      kind: "widget",
+      label: "Seed",
+      name: "value_9",
+      nodeId: "9",
     } as EnrichedWidget;
     /* 两条都叫 Seed：不能把 value_1 露出来，用「Seed · 宿主标题」区分。 */
     expect(ioLabel(seed, [seed, homonym])).toBe("Seed · Checkpoint settings");
@@ -393,13 +393,13 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
   it("撞名且没有宿主标题时保留作者命名，不退化成 value_1", () => {
     const seed = wrapperSeed();
     const homonym = /* SAFETY: 类型断言已复核 */ {
-      direction: "input",
-      kind: "widget",
-      nodeId: "9",
-      name: "value_9",
-      label: "Seed",
-      ioKey: "9::widget::value_9",
       control: "int",
+      direction: "input",
+      ioKey: "9::widget::value_9",
+      kind: "widget",
+      label: "Seed",
+      name: "value_9",
+      nodeId: "9",
     } as EnrichedWidget;
     expect(ioLabel(seed, [seed, homonym])).toBe("Seed");
   });

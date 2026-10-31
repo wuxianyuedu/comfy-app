@@ -14,10 +14,6 @@ const STATUSES = /* SAFETY: 类型断言已复核 */ ["idle", "running", "done",
  * jsdom 会把渐变里的 hex 规范化为 rgb,但 toHaveStyle 会对期望值做同样的
  * cssstyle 规范化,因此可以直接写源码里的原始字符串。 */
 const DOT_STYLES: Record<Status, { background: string; boxShadow: string }> = {
-  running: {
-    background: "linear-gradient(135deg, #FFD571 0%, #FF9C5B 100%)",
-    boxShadow: "0 0 8px rgba(255,213,113,0.6)",
-  },
   done: {
     background: "linear-gradient(135deg, #5BE3C4 0%, #67E89D 100%)",
     boxShadow: "0 0 8px rgba(91,227,196,0.6)",
@@ -29,6 +25,10 @@ const DOT_STYLES: Record<Status, { background: string; boxShadow: string }> = {
   idle: {
     background: "linear-gradient(135deg, #7891FF 0%, #A584FF 100%)",
     boxShadow: "0 0 8px rgba(165,132,255,0.6)",
+  },
+  running: {
+    background: "linear-gradient(135deg, #FFD571 0%, #FF9C5B 100%)",
+    boxShadow: "0 0 8px rgba(255,213,113,0.6)",
   },
 };
 

@@ -22,23 +22,23 @@ import { emitAppEvent } from "~/lib/app-events";
 /* 把 ComfyUI 的原始分类字符串映射到强调色。对外导出，
  * 好让界面给节点预览卡渲染同一个分类配色，而不必先构建完整的 NodeTypeConfig。 */
 export const CATEGORY_COLORS: Record<string, string> = {
-  loaders: "#F59E0B",
-  loader: "#F59E0B",
-  model: "#F59E0B",
-  conditioners: "#8B5CF6",
-  conditioner: "#8B5CF6",
+  audio: "#A855F7",
   condition: "#8B5CF6",
-  samplers: "#06B6D4",
-  sampler: "#06B6D4",
-  latent: "#10B981",
+  conditioner: "#8B5CF6",
+  conditioners: "#8B5CF6",
+  custom: "#7C5CFC",
   image: "#3B82F6",
   images: "#3B82F6",
-  video: "#10B981",
-  audio: "#A855F7",
+  latent: "#10B981",
+  loader: "#F59E0B",
+  loaders: "#F59E0B",
   mask: "#64748B",
-  custom: "#7C5CFC",
-  utils: "#6B7280",
+  model: "#F59E0B",
+  sampler: "#06B6D4",
+  samplers: "#06B6D4",
   utility: "#6B7280",
+  utils: "#6B7280",
+  video: "#10B981",
 };
 
 function hashColor(s: string): string {
@@ -71,15 +71,15 @@ export function specToField(s: PortSpec): FieldDef {
     label: s.name,
     /* `widget` 来自 manifest（外部 JSON）、类型是不受约束的 string；
      * 经 `isFieldType` 收窄，认不出即按单行文本框。 */
-    type: isFieldType(s.widget) ? s.widget : "string",
     options: s.options,
+    type: isFieldType(s.widget) ? s.widget : "string",
     /* 与 String(s.default) 运行时一致（default 来自 manifest JSON，无 symbol），
      * 收窄以满足 no-base-to-string。 */
+    group: "参数",
     placeholder:
       s.default !== undefined && s.default !== null
         ? /* SAFETY: 类型断言已复核 */ (s.default as { toString(): string }).toString()
         : undefined,
-    group: "参数",
     // 纯连接端口渲染成连线手柄，而不是编辑字段。
     hidden: !s.widget,
   };
@@ -119,10 +119,10 @@ export type CustomNodesRegistryState = {
 };
 
 let registryState: CustomNodesRegistryState = {
-  version: 0,
   count: 0,
-  loaded: false,
   detail: null,
+  loaded: false,
+  version: 0,
 };
 
 /** 读当前状态（订阅侧挂载时的第一口，以及任何想知道「灌没灌进来」的地方）。 */
@@ -157,10 +157,10 @@ function recordRegistry(next: { count: number; detail: string | null; loaded: bo
     return;
   }
   registryState = {
-    version: next.loaded ? registryState.version + 1 : registryState.version,
     count: next.count,
-    loaded: next.loaded,
     detail: next.detail,
+    loaded: next.loaded,
+    version: next.loaded ? registryState.version + 1 : registryState.version,
   };
   emitAppEvent("comfyapp:custom-nodes-updated");
 }
@@ -178,16 +178,16 @@ type ManifestFailure =
 function classifyManifestFailure(status: number): ManifestFailure {
   if (status === 404) {
     return {
-      kind: "not-parsed",
       detail: "还没有解析过自定义节点清单（在「自定义节点」设置里点解析）",
+      kind: "not-parsed",
     };
   }
   if (status === 401 || status === 403) {
-    return { kind: "unauthorized", detail: "未登录或会话已失效" };
+    return { detail: "未登录或会话已失效", kind: "unauthorized" };
   }
   return {
-    kind: "unreachable",
     detail: `读取自定义节点清单失败（HTTP ${status}）`,
+    kind: "unreachable",
   };
 }
 
@@ -235,35 +235,35 @@ function buildInto(
       continue;
     }
     const inputs: Array<PortSpec> = (n.inputs ?? []).map((input) => ({
+      default: input.default,
       name: input.name,
+      options: input.options ?? undefined,
+      required: !!input.required,
       type: input.type,
       widget: isFieldType(input.widget) ? input.widget : undefined,
-      options: input.options ?? undefined,
-      default: input.default,
-      required: !!input.required,
     }));
     const outputs: Array<PortSpec> = (n.outputs ?? []).map((output) => ({
       name: output.name,
-      type: output.type,
       required: true,
+      type: output.type,
     }));
     target[ct] = {
-      label: n.displayName ?? ct,
-      color: colorFor(n.category),
-      icon: "\u{1F4E6}", // 📦 package — signals a custom node package
       category: "custom",
-      rawCategory: n.category,
+      color: colorFor(n.category),
       custom: true,
+      icon: "\u{1F4E6}", // 📦 package — signals a custom node package
+      label: n.displayName ?? ct,
+      rawCategory: n.category,
       // ⚠️ 概念澄清：OUTPUT_NODE（终端节点，后端仍执行）与 properties.frontend_only
       // （纯前端节点，后端不执行）是**两个不同概念**，此处必须分开。
-      outputNode: !!n.outputNode,
-      frontendOnly: !!n.frontend_only,
+      defaultFields: inputs.map(specToField),
       description: n.description ?? undefined,
-      width: 240,
+      frontendOnly: !!n.frontend_only,
       height: 90,
       inputsSpec: inputs,
+      outputNode: !!n.outputNode,
       outputsSpec: outputs,
-      defaultFields: inputs.map(specToField),
+      width: 240,
     };
     // 记下包来源（例如 "DaSiWa-Nodes"、"ComfyMath"），
     // 好让画布渲染 ComfyUI 原生的左下角页脚。
@@ -365,16 +365,16 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
   } catch (e) {
     /* 请求压根没出去（离线 / dev server 刚重启 / 端口被回收）。 */
     const detail = `连不上清单端点（${errorText(e, "读取节点清单")}）`;
-    recordRegistry({ loaded: false, count: 0, detail });
+    recordRegistry({ count: 0, detail, loaded: false });
     console.error(`[custom-nodes] ${detail}`);
     return 0;
   }
   if (!res.ok) {
     const failure = classifyManifestFailure(res.status);
     recordRegistry({
-      loaded: false,
       count: 0,
       detail: failure.detail,
+      loaded: false,
     });
     if (failure.kind !== "not-parsed") {
       /* 「还没有清单」是首屏正常态，不进错误日志；另两档必须留痕，
@@ -403,11 +403,11 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
     /* 表已经换完：把结论记进可读状态并广播一次，让订阅侧（画布的页脚 / 渲染链标注）
      * 在没有整页刷新的情况下重渲染。`count` 为 0 也算灌入成功 —— 那是「解析器
      * 确实一个自定义节点都没找到」，与上面的「没拿到清单」是两件事。 */
-    recordRegistry({ loaded: true, count, detail: null });
+    recordRegistry({ count, detail: null, loaded: true });
     return count;
   } catch (e) {
     const detail = `清单解析失败（${errorText(e, "解析节点清单")}）`;
-    recordRegistry({ loaded: false, count: 0, detail });
+    recordRegistry({ count: 0, detail, loaded: false });
     console.error(`[custom-nodes] ${detail}`);
     return 0;
   }

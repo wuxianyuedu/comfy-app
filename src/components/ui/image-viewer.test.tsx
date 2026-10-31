@@ -48,12 +48,12 @@ function emitLoad(base: HTMLElement, width: number, height: number) {
   const img = base.querySelector("img");
   expect(img, "画布里应当有一张 img").not.toBeNull();
   Object.defineProperty(img, "naturalWidth", {
-    value: width,
     configurable: true,
+    value: width,
   });
   Object.defineProperty(img, "naturalHeight", {
-    value: height,
     configurable: true,
+    value: height,
   });
   fireEvent.load(img!);
 }
@@ -64,8 +64,8 @@ function renderViewer(onClose: () => void = () => undefined) {
     ...view,
     canvas: () =>
       /* SAFETY: 类型断言已复核 */ view.getByTestId("image-viewer-canvas") as HTMLDivElement,
-    percent: () => view.getByTestId("image-viewer-percent").textContent?.trim() ?? "",
     mode: () => view.getByTestId("image-viewer-mode").textContent?.trim() ?? "",
+    percent: () => view.getByTestId("image-viewer-percent").textContent?.trim() ?? "",
   };
 }
 
@@ -195,11 +195,11 @@ describe("ImageViewer", () => {
 
     fireEvent.pointerDown(canvas, {
       button: 0,
-      pointerId: 1,
       clientX: 200,
       clientY: 200,
+      pointerId: 1,
     });
-    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 180, clientY: 190 });
+    fireEvent.pointerMove(canvas, { clientX: 180, clientY: 190, pointerId: 1 });
 
     /* 拖动中：内容只用 transform 挪位（合成器，不重排），滚动偏移按兵不动。 */
     expect(inner.style.transform).toBe("translate3d(-20px, -10px, 0)");
@@ -220,12 +220,12 @@ describe("ImageViewer", () => {
 
     fireEvent.pointerDown(canvas, {
       button: 0,
-      pointerId: 1,
       clientX: 200,
       clientY: 200,
+      pointerId: 1,
     });
     fireEvent.pointerUp(canvas, { pointerId: 1 });
-    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(canvas, { clientX: 100, clientY: 100, pointerId: 1 });
     expect(canvas.scrollLeft).toBe(100);
   });
 
@@ -245,13 +245,13 @@ describe("ImageViewer", () => {
 
     fireEvent.pointerDown(canvas, {
       button: 0,
-      pointerId: 1,
       clientX: 200,
       clientY: 200,
+      pointerId: 1,
     });
     const before = frames.length;
-    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 190, clientY: 200 });
-    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 180, clientY: 200 });
+    fireEvent.pointerMove(canvas, { clientX: 190, clientY: 200, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 180, clientY: 200, pointerId: 1 });
 
     /* 两次移动只排一帧，而且在它落地前什么都不写（少一次布局就少一次重绘）。 */
     expect(frames.length - before).toBe(1);
@@ -267,7 +267,7 @@ describe("ImageViewer", () => {
     const inner = viewer.getByTestId("image-viewer-content");
     canvas.scrollLeft = 33;
 
-    fireEvent.pointerMove(canvas, { pointerId: 9, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(canvas, { clientX: 10, clientY: 10, pointerId: 9 });
     fireEvent.pointerUp(canvas, { pointerId: 9 });
     expect(inner.style.transform).toBe("");
     expect(canvas.scrollLeft).toBe(33);
@@ -281,14 +281,14 @@ describe("ImageViewer", () => {
     const viewer = renderViewer();
     fireEvent.pointerDown(viewer.canvas(), {
       button: 0,
-      pointerId: 1,
       clientX: 1,
       clientY: 1,
+      pointerId: 1,
     });
     fireEvent.pointerMove(viewer.canvas(), {
-      pointerId: 1,
       clientX: 5,
       clientY: 5,
+      pointerId: 1,
     });
     viewer.unmount();
     expect(cancel).toHaveBeenCalledWith(7);

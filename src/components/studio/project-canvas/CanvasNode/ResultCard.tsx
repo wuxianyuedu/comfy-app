@@ -16,12 +16,12 @@ import { NodeChip, StatusBadge } from "./CanvasNodePrimitives";
  * 内容（图片 / 视频 / 文本）与一颗替换按钮。 */
 export function ResultCard({
   kind,
-  name,
-  status,
-  path,
   mediaType,
-  text,
+  name,
   onReplace,
+  path,
+  status,
+  text,
 }: {
   kind: NodeKind;
   mediaType?: string;

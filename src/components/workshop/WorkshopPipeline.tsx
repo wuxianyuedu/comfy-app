@@ -29,34 +29,34 @@ import { RunControlBar } from "~/components/agent-run/RunControlBar";
  * 这两个常量提到组件外：它们是 `useDraggablePosition` 的 effect 依赖，
  * 在渲染里新造对象会让量位置的 effect 每帧重跑。 */
 const AGENT_FAB_POSITION_KEY = "comfyapp:agent-fab-position:v1";
-const AGENT_FAB_DEFAULT_OFFSET = { right: 24, bottom: 40 };
+const AGENT_FAB_DEFAULT_OFFSET = { bottom: 40, right: 24 };
 
 export function WorkshopPipeline() {
   const controller = useWorkshopPipeline();
 
   // Agent 指挥助手：把 controller 的数据读写能力注入给 Agent hook。
   const agentHandlers: WorkshopAgentToolHandlers = {
+    getCharacters: () => controller.characters,
     getDraft: () => ({
-      meta: controller.meta,
-      scriptMarkdown: controller.scriptMarkdown,
-      scenes: controller.scenes,
       characters: controller.characters,
+      meta: controller.meta,
+      scenes: controller.scenes,
+      scriptMarkdown: controller.scriptMarkdown,
       shots: controller.shots,
     }),
     getMeta: () => controller.meta,
+    getScriptMarkdown: () => controller.scriptMarkdown,
+    getShots: () => controller.shots,
+    setCharacters: (characters) => controller.setCharacters(characters),
     setMeta: (patch) => controller.setMeta((prev) => ({ ...prev, ...patch })),
     setScriptMarkdown: (markdown) => controller.setScriptMarkdown(markdown),
-    getScriptMarkdown: () => controller.scriptMarkdown,
-    getCharacters: () => controller.characters,
-    setCharacters: (characters) => controller.setCharacters(characters),
-    getShots: () => controller.shots,
     setShots: (shots) => controller.setShots(shots),
     // Phase 5：Agent 用当前项目镜头一键成片（走服务端成片管线，含逐镜视频 + 合成 + 回写）。
     renderFilm: () =>
       renderProjectFilm({
+        imageWorkflowId: controller.workflowId || undefined,
         projectId: getActiveId(),
         videoWorkflowId: controller.videoWorkflowId || undefined,
-        imageWorkflowId: controller.workflowId || undefined,
       }),
   };
   const agentController = useWorkshopAgent(agentHandlers);
@@ -65,9 +65,9 @@ export function WorkshopPipeline() {
    * 浮层展开后跟着同一份偏移走，所以位置只在 hook 里存一次 —— 常量对象
    * 提出来，避免每次渲染新造一个把它变成 effect 的依赖。 */
   const agentFab = useDraggablePosition<HTMLButtonElement>({
-    storageKey: AGENT_FAB_POSITION_KEY,
     defaultOffset: AGENT_FAB_DEFAULT_OFFSET,
     onClick: agentController.openAgent,
+    storageKey: AGENT_FAB_POSITION_KEY,
   });
 
   return (

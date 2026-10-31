@@ -20,13 +20,13 @@ import { SettingsCard } from "~/components/ui/settings-card";
 
 /** 给每个分类一句简短说明，帮用户判断「这是不是我想关的那一类」。 */
 const CATEGORY_HINT: Record<LogCategoryFilter, string> = {
-  "app-runtime": "业务操作日志（appRuntimeLog 通道，写入 app-runtime.log）",
   app: "应用服务自身输出（Next dev server 的 stdout/stderr 转录）",
+  "app-runtime": "业务操作日志（appRuntimeLog 通道，写入 app-runtime.log）",
+  console: "浏览器 console 拦截 / Tauri 事件 / 全局未捕获错误",
   dev: "启动过程日志（dev-launcher）",
   launcher: "启动器日志（dev-launcher-stderr）",
-  "shell-launch": "壳侧编排链路日志（shell-launch，双击启动最早的现场）",
   shell: "壳自持日志（shell.log，壳的诊断与编排器输出转发）",
-  console: "浏览器 console 拦截 / Tauri 事件 / 全局未捕获错误",
+  "shell-launch": "壳侧编排链路日志（shell-launch，双击启动最早的现场）",
 };
 
 export function LogCategorySection() {

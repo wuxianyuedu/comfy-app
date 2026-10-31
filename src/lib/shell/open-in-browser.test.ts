@@ -30,12 +30,12 @@ function installFakeChild(errorCode?: string) {
   const handlers: Record<string, Array<Cb>> = {};
   spawnMock.mockImplementation(() => {
     const handle = {
+      kill: vi.fn(),
       on: (ev: string, cb: Cb) => {
         (handlers[ev] ??= []).push(cb);
       },
-      unref: vi.fn(),
-      kill: vi.fn(),
       pid: 4242,
+      unref: vi.fn(),
     };
     setTimeout(() => {
       if (errorCode) {

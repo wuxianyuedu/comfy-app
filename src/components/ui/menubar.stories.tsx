@@ -29,8 +29,8 @@ import {
  * 那一族），所以这里只铺一次全套，不按轴拆。
  */
 const meta = {
-  title: "UI/Menubar",
   component: Menubar,
+  title: "UI/Menubar",
 } satisfies Meta<typeof Menubar>;
 
 export default meta;

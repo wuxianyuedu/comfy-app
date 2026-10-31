@@ -26,10 +26,10 @@ export function CharacterReviewButton({ character }: CharacterReviewButtonProps)
     <ReviewVerdictDialogButton
       busyText="正在评审…"
       controller={{
-        verdict: review.verdict,
         busy: review.reviewing,
         error: review.error,
         review: () => review.review(character.id),
+        verdict: review.verdict,
       }}
       description="由 AI 对这张角色卡的文本设定做质检；不合格请照建议改上方字段后重出定妆照。"
       label="AI 评审这张角色卡"

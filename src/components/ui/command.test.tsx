@@ -44,23 +44,23 @@ beforeAll(() => {
   }
   if (!window.matchMedia) {
     window.matchMedia = (query: string): MediaQueryList => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener() {
-        void 0;
-      },
-      removeListener() {
-        void 0;
-      },
       addEventListener() {
         void 0;
       },
-      removeEventListener() {
+      addListener() {
         void 0;
       },
       dispatchEvent() {
         return false;
+      },
+      matches: false,
+      media: query,
+      onchange: null,
+      removeEventListener() {
+        void 0;
+      },
+      removeListener() {
+        void 0;
       },
     });
   }

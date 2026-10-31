@@ -1,12 +1,17 @@
-import {
-  defaultShouldDehydrateQuery,
-  QueryClient,
-} from "@tanstack/react-query";
+import { defaultShouldDehydrateQuery, QueryClient } from "@tanstack/react-query";
 import SuperJSON from "superjson";
 
 export const createQueryClient = () =>
   new QueryClient({
     defaultOptions: {
+      dehydrate: {
+        serializeData: SuperJSON.serialize,
+        shouldDehydrateQuery: (query) =>
+          defaultShouldDehydrateQuery(query) || query.state.status === "pending",
+      },
+      hydrate: {
+        deserializeData: SuperJSON.deserialize,
+      },
       queries: {
         // SSR 场景下我们通常把默认 staleTime 设成
         // 大于 0，避免客户端立刻重新拉取
@@ -16,15 +21,6 @@ export const createQueryClient = () =>
         // 等重接口）一次性打回网络，表现为「切回来就卡一下」。关掉全局默认，
         // 新鲜度交给 30s staleTime 与页面/前台时的显式刷新动作。
         refetchOnWindowFocus: false,
-      },
-      dehydrate: {
-        serializeData: SuperJSON.serialize,
-        shouldDehydrateQuery: (query) =>
-          defaultShouldDehydrateQuery(query) ||
-          query.state.status === "pending",
-      },
-      hydrate: {
-        deserializeData: SuperJSON.deserialize,
       },
     },
   });

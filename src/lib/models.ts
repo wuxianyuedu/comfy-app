@@ -92,21 +92,21 @@ export async function syncModels(userId?: string): Promise<number> {
   const enabledFolders = [...overrides].filter(([, ov]) => ov.enabled).map(([folder]) => folder);
   const perFolder = await Promise.all(
     enabledFolders.map(async (folder) => ({
-      folder,
       files: await listModels(folder),
+      folder,
     })),
   );
 
   const scanned: Array<ScannedFile> = [];
-  for (const { folder, files } of perFolder) {
+  for (const { files, folder } of perFolder) {
     for (const fileName of files) {
       const name = stripExt(fileName);
       scanned.push({
-        folder,
-        fileName,
-        type: folder,
-        name,
         baseModel: baseFromName(name),
+        fileName,
+        folder,
+        name,
+        type: folder,
       });
     }
   }

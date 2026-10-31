@@ -18,13 +18,13 @@ import { SeedAdvancedField } from "~/components/workshop/SeedAdvancedField";
  * 输入用官方 `Input`（P68）、折叠用官方 `Disclosure`（P10），本件不手搓。
  */
 const meta = {
-  title: "Workshop/SeedAdvancedField",
-  component: SeedAdvancedField,
-  args: { value: "", onChange: () => undefined },
+  args: { onChange: () => undefined, value: "" },
   argTypes: {
-    value: { control: { type: "text" } },
     disabled: { control: { type: "boolean" } },
+    value: { control: { type: "text" } },
   },
+  component: SeedAdvancedField,
+  title: "Workshop/SeedAdvancedField",
 } satisfies Meta<typeof SeedAdvancedField>;
 
 export default meta;
@@ -35,7 +35,7 @@ type Story = StoryObj<typeof meta>;
  * 受控适配：`value` 与「随机」按钮都要真发生（点随机应清空），
  * 所以 story 自己持一份状态 —— 这与真机上的控制方式一致。
  */
-function InteractiveSeed({ initial, disabled }: { disabled?: boolean; initial: string }) {
+function InteractiveSeed({ disabled, initial }: { disabled?: boolean; initial: string }) {
   const [value, setValue] = useState(initial);
   return (
     <div className="flex w-72 flex-col gap-2">

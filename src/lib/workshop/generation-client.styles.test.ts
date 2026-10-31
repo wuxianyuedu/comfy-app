@@ -21,12 +21,12 @@ vi.mock("~/trpc/vanilla", () => ({
 import { fetchWorkshopStyles } from "./generation-client";
 
 const row = (over: Record<string, unknown> = {}) => ({
-  slug: "pixar-animation",
-  name: "皮克斯动画风格",
+  defaultParams: { cfg: 7, steps: 30 },
   icon: "film",
-  promptTemplate: "Pixar-style 3D animation",
+  name: "皮克斯动画风格",
   negativePrompt: "ugly, blurry",
-  defaultParams: { steps: 30, cfg: 7 },
+  promptTemplate: "Pixar-style 3D animation",
+  slug: "pixar-animation",
   tags: ["style"],
   ...over,
 });
@@ -37,15 +37,15 @@ beforeEach(() => {
 
 describe("fetchWorkshopStyles —— 取数口与形状收窄", () => {
   it("走 skill.list，并把风格卡要的字段收窄出来", async () => {
-    query.mockResolvedValue({ skills: [row()], categories: [] });
+    query.mockResolvedValue({ categories: [], skills: [row()] });
     await expect(fetchWorkshopStyles()).resolves.toEqual([
       {
-        slug: "pixar-animation",
-        name: "皮克斯动画风格",
+        defaultParams: { cfg: 7, steps: 30 },
         icon: "film",
-        promptTemplate: "Pixar-style 3D animation",
+        name: "皮克斯动画风格",
         negativePrompt: "ugly, blurry",
-        defaultParams: { steps: 30, cfg: 7 },
+        promptTemplate: "Pixar-style 3D animation",
+        slug: "pixar-animation",
       },
     ]);
     expect(query).toHaveBeenCalledTimes(1);
@@ -54,22 +54,22 @@ describe("fetchWorkshopStyles —— 取数口与形状收窄", () => {
   it("库里那行的 null 与缺字段都归成 undefined，图标缺省给 ✨", async () => {
     query.mockResolvedValue({
       skills: [
-        row({ negativePrompt: null, defaultParams: null, icon: null }),
-        row({ slug: "no-icon", name: "没图标", icon: undefined }),
+        row({ defaultParams: null, icon: null, negativePrompt: null }),
+        row({ icon: undefined, name: "没图标", slug: "no-icon" }),
       ],
     });
     const list = await fetchWorkshopStyles();
     // 逐字比对：`null` 留在形状里也算错（视图按可选字段渲染，`null` 会画出「null」）
     expect(list).toEqual([
       {
-        slug: "pixar-animation",
-        name: "皮克斯动画风格",
-        icon: "✨",
-        promptTemplate: "Pixar-style 3D animation",
-        negativePrompt: undefined,
         defaultParams: undefined,
+        icon: "✨",
+        name: "皮克斯动画风格",
+        negativePrompt: undefined,
+        promptTemplate: "Pixar-style 3D animation",
+        slug: "pixar-animation",
       },
-      expect.objectContaining({ slug: "no-icon", icon: "✨" }),
+      expect.objectContaining({ icon: "✨", slug: "no-icon" }),
     ]);
   });
 
@@ -93,9 +93,7 @@ describe("fetchWorkshopStyles —— 取数口与形状收窄", () => {
     query.mockResolvedValue({ skills: "不是数组" });
     await expect(fetchWorkshopStyles()).resolves.toEqual([]);
     query.mockResolvedValue({ skills: [null, "字符串行", row({ slug: "x" })] });
-    await expect(fetchWorkshopStyles()).resolves.toEqual([
-      expect.objectContaining({ slug: "x" }),
-    ]);
+    await expect(fetchWorkshopStyles()).resolves.toEqual([expect.objectContaining({ slug: "x" })]);
   });
 
   it("口坏掉时把错误留给调用点（这里不自己吞成空列表）", async () => {

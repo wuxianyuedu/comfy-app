@@ -25,8 +25,8 @@ vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {
     .../* SAFETY: 类型断言已复核 */ (actual as Record<string, unknown>),
-    LOG_ROOT: tmp,
     LOG_EXPORT_DIR: exportDir,
+    LOG_ROOT: tmp,
   };
 });
 
@@ -34,8 +34,8 @@ vi.mock("~/lib/log/log-paths", async () => {
  * 落盘契约，不是鉴权（鉴权由 requireRequestUser 自身覆盖）。 */
 vi.mock("~/server/auth/request-user", () => ({
   requireRequestUser: async () => ({
-    id: "u1",
     email: "t@example.com",
+    id: "u1",
     name: null,
   }),
 }));
@@ -51,26 +51,26 @@ function exportFiles(): Array<string> {
 }
 
 beforeEach(() => {
-  fs.rmSync(exportDir, { recursive: true, force: true });
+  fs.rmSync(exportDir, { force: true, recursive: true });
 });
 
 afterEach(() => {
-  fs.rmSync(exportDir, { recursive: true, force: true });
+  fs.rmSync(exportDir, { force: true, recursive: true });
 });
 
 function post(body: unknown) {
   return POST(
     new Request("http://localhost/api/logs/export", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
     }),
   );
 }
 
 describe("/api/logs/export", () => {
   it("把内容写进 log/exports/ 并回绝对路径与相对路径", async () => {
-    const res = await post({ label: "app-runtime", content: "第一行\n第二行" });
+    const res = await post({ content: "第一行\n第二行", label: "app-runtime" });
     expect(res.status).toBe(200);
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       bytes: number;
@@ -86,8 +86,8 @@ describe("/api/logs/export", () => {
 
   it("文件名由服务端生成：非白名单标签退化为 all，路径不被客户端左右", async () => {
     const res = await post({
-      label: "../../../evil",
       content: "x",
+      label: "../../../evil",
     });
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       path: string;
@@ -97,15 +97,15 @@ describe("/api/logs/export", () => {
   });
 
   it("空内容不落盘，如实报 400", async () => {
-    const res = await post({ label: "all", content: "" });
+    const res = await post({ content: "", label: "all" });
     expect(res.status).toBe(400);
     expect(exportFiles()).toHaveLength(0);
   });
 
   it("超大内容不落盘，如实报 413", async () => {
     const res = await post({
-      label: "all",
       content: "x".repeat(9 * 1024 * 1024),
+      label: "all",
     });
     expect(res.status).toBe(413);
     expect(exportFiles()).toHaveLength(0);

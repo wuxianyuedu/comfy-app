@@ -45,9 +45,9 @@ import type {
 
 /** 三列节点的节点类型名（注册表在视图里，见 `WorkflowLibraryCanvasNodes`）。 */
 export const LIB_NODE_TYPES = /* SAFETY: 类型断言已复核 */ {
-  libParams: "libParams",
   libHost: "libHost",
   libOutputs: "libOutputs",
+  libParams: "libParams",
   /** 背景板（撑起画布高度，见 `buildLibraryNodes`）。 */
   libBackdrop: "libBackdrop",
 } as const;
@@ -98,12 +98,12 @@ export type LayoutSizing = {
 };
 
 export const LAYOUT_SIZING: LayoutSizing = /* SAFETY: 类型断言已复核 */ {
-  paramsWidth: 220,
-  outputsWidth: 200,
-  hostWidth: 380,
   columnGap: 96,
+  hostWidth: 380,
   originX: 0,
   originY: 0,
+  outputsWidth: 200,
+  paramsWidth: 220,
   /** 三列的首帧包络高度（真实高度由内容撑开，见 `defaultNodes`）。 */
   envelopeHeight: 720,
   /* 测量还没回来前的兜底（视口未知时按内容量级给）；真值由画布量到容器尺寸
@@ -112,17 +112,17 @@ export const LAYOUT_SIZING: LayoutSizing = /* SAFETY: 类型断言已复核 */ {
 } as const;
 
 export function useLibraryWireFlow({
-  io,
-  paramCards,
-  outputWires,
-  entries,
-  paramsNode,
-  hostNode,
-  outputsNode,
-  connect,
-  connectOutput,
   backdropSize,
   canWire,
+  connect,
+  connectOutput,
+  entries,
+  hostNode,
+  io,
+  outputsNode,
+  outputWires,
+  paramCards,
+  paramsNode,
   selectedEdgeIds,
 }: LibraryWireFlowArgs) {
   /* 落点失败的原因：`onConnectEnd` 的 `connectionState.isValid` 给三态
@@ -165,7 +165,7 @@ export function useLibraryWireFlow({
       buildLibraryNodes(
         LAYOUT_SIZING,
         backdropWidth !== undefined && backdropHeight !== undefined
-          ? { width: backdropWidth, height: backdropHeight }
+          ? { height: backdropHeight, width: backdropWidth }
           : undefined,
       ),
     [backdropWidth, backdropHeight],
@@ -191,7 +191,7 @@ export function useLibraryWireFlow({
    * 宿主输出行 → 右列卡片，同列与反向一律拒绝。 */
   const isValidConnection = useCallback(
     (connection: Connection | Edge): boolean =>
-      libraryConnectionAllowed(connection, { io, entries }),
+      libraryConnectionAllowed(connection, { entries, io }),
     [entries, io],
   );
 
@@ -200,7 +200,7 @@ export function useLibraryWireFlow({
    * 两个方向都要受理：卡片圆点起手（卡片 → 行）与**反向**（行圆点 → 卡片）。 */
   const onConnect = useCallback(
     (connection: Connection) => {
-      const { source, target, sourceHandle, targetHandle } = connection;
+      const { source, sourceHandle, target, targetHandle } = connection;
       if (!sourceHandle || !targetHandle) {
         return;
       }
@@ -245,7 +245,7 @@ export function useLibraryWireFlow({
          *  写死一句话的代价：方向不对也报「类型不同」，用户照着改类型永远改不对。 */
         const refused = connectionFromDrop(connectionState);
         showHint(
-          (refused && libraryConnectionRefusal(refused, { io, entries })) ??
+          (refused && libraryConnectionRefusal(refused, { entries, io })) ??
             "这一行不接受这个口子（类型不同：契约口与端口分类要匹配）",
         );
       }
@@ -254,13 +254,13 @@ export function useLibraryWireFlow({
   );
 
   return {
-    defaultNodes,
-    nodeContent: { params: paramsNode, host: hostNode, outputs: outputsNode },
     defaultEdges,
+    defaultNodes,
+    dropHint,
     isValidConnection,
+    nodeContent: { host: hostNode, outputs: outputsNode, params: paramsNode },
     onConnect,
     onConnectEnd,
-    dropHint,
   };
 }
 
@@ -311,8 +311,8 @@ export function buildLibraryNodes(
 ): Array<Node> {
   const at = layoutLibraryNodes(sizing);
   const extent = libraryBackdropSize(sizing, {
-    width: sizing.paramsWidth + sizing.hostWidth + sizing.outputsWidth,
     height: sizing.fillHeight,
+    width: sizing.paramsWidth + sizing.hostWidth + sizing.outputsWidth,
   });
   /* 三列内容节点的首帧尺寸**只用 `initialWidth` / `initialHeight`**。
    *
@@ -337,32 +337,32 @@ export function buildLibraryNodes(
    * `width` / `height`（视口变化时由画布 `setNodes` 改它的声明尺寸）。 */
   const contentNode = (id: LibNodeId, type: string, width: number): Node => ({
     id,
-    type,
-    position: at[id],
-    initialWidth: width,
     initialHeight: sizing.envelopeHeight,
+    initialWidth: width,
+    position: at[id],
+    type,
     /* 三列卡片是固定布局列：不可选中 / 不可删，否则点选会挂蓝框、按 Delete
      *  还会删掉整列；连线的选中与删除只针对 edge（见 buildInputEdge /
      *  buildOutputEdge 的 `selectable` / `deletable`）。卡片内的表单与端点
      *  交互不受影响（draggable / connectable 仍按全局开关生效）。 */
-    selectable: false,
-    deletable: false,
     data: {},
+    deletable: false,
+    selectable: false,
   });
 
   return [
     {
       id: LIB_NODE_BACKDROP,
       /* 背景板不可交互、不参与连线：它只是画布上的一块底。 */
-      type: LIB_NODE_TYPES.libBackdrop,
-      position: at[LIB_NODE_BACKDROP],
-      width: backdropSize?.width ?? extent.width,
-      height: backdropSize?.height ?? extent.height,
-      selectable: false,
-      draggable: false,
-      deletable: false,
       connectable: false,
       data: {},
+      deletable: false,
+      draggable: false,
+      height: backdropSize?.height ?? extent.height,
+      position: at[LIB_NODE_BACKDROP],
+      selectable: false,
+      type: LIB_NODE_TYPES.libBackdrop,
+      width: backdropSize?.width ?? extent.width,
     },
     contentNode(LIB_NODE_PARAMS, LIB_NODE_TYPES.libParams, sizing.paramsWidth),
     contentNode(LIB_NODE_HOST, LIB_NODE_TYPES.libHost, sizing.hostWidth),
@@ -435,7 +435,7 @@ export function libraryConnectionRefusal(
   connection: LibraryConnection,
   ctx: LibraryGateContext,
 ): string | null {
-  const { source, target, sourceHandle, targetHandle } = connection;
+  const { source, sourceHandle, target, targetHandle } = connection;
   if (!source || !target || source === target) {
     return "一条线要跨两列（同一列里的口不能相连）";
   }
@@ -550,12 +550,12 @@ export function buildInputEdge(wire: ParamCardWire, interactive: boolean, select
     targetHandle: wire.targetIoKey,
     /* 库里的线一律是作者画的（实线）：未连过的口不画线，见 `deriveLibraryOutputCards`。
      * 选中的线（点选欲删的那一条）加粗 + 换亮紫，和默认细线拉开对比。 */
+    deletable: interactive,
+    focusable: false,
+    selectable: interactive,
     style: selected
       ? { ...LIBRARY_EDGE_STYLE, stroke: SELECTED_STROKE, strokeWidth: 4 }
       : { ...LIBRARY_EDGE_STYLE },
-    selectable: interactive,
-    deletable: interactive,
-    focusable: false,
   };
 }
 
@@ -564,15 +564,15 @@ export function buildOutputEdge(wire: ParamCardWire, interactive: boolean, selec
   return {
     id: libraryEdgeId("output", wire.entryId, wire.handleId),
     source: LIB_NODE_HOST,
-    target: LIB_NODE_OUTPUTS,
     sourceHandle: wire.targetIoKey,
+    target: LIB_NODE_OUTPUTS,
     targetHandle: wire.handleId,
     /* 库里的线一律是作者画的（实线）：未连过的口不画线，见 `deriveLibraryOutputCards`。 */
+    deletable: interactive,
+    focusable: false,
+    selectable: interactive,
     style: selected
       ? { ...LIBRARY_EDGE_STYLE, stroke: SELECTED_STROKE, strokeWidth: 4 }
       : { ...LIBRARY_EDGE_STYLE },
-    selectable: interactive,
-    deletable: interactive,
-    focusable: false,
   };
 }

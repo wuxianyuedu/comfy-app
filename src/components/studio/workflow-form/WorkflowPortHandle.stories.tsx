@@ -26,15 +26,15 @@ import { StorybookFlowCanvas, canvasScene, withNodeType } from "../../../../.sto
  *    另一半，所以下面两档并排给。
  */
 const meta = {
-  title: "Studio/WorkflowForm/WorkflowPortHandle",
-  component: PortHandle,
-  args: { id: "3:images", dir: "out", type: "IMAGE" },
+  args: { dir: "out", id: "3:images", type: "IMAGE" },
   argTypes: {
-    id: { control: { type: "text" } },
     dir: { control: { type: "inline-radio" }, options: ["in", "out"] },
+    id: { control: { type: "text" } },
     type: { control: { type: "text" } },
   },
+  component: PortHandle,
   parameters: { layout: "fullscreen" },
+  title: "Studio/WorkflowForm/WorkflowPortHandle",
 } satisfies Meta<typeof PortHandle>;
 
 export default meta;
@@ -46,15 +46,15 @@ type Story = StoryObj<typeof meta>;
  * 自造的词会落到「未知类型」那一档、看不出差别）。
  */
 const PORT_ROWS: Array<{ dir: "in" | "out"; id: string; type?: string }> = [
-  { id: "3:model", dir: "in", type: "MODEL" },
-  { id: "3:positive", dir: "in", type: "CONDITIONING" },
-  { id: "3:latent_image", dir: "in", type: "LATENT" },
-  { id: "3:images", dir: "out", type: "IMAGE" },
-  { id: "12:video", dir: "out", type: "VIDEO" },
-  { id: "9:prompt", dir: "out", type: "STRING" },
-  { id: "9:steps", dir: "out", type: "INT" },
-  { id: "9:enabled", dir: "out", type: "BOOLEAN" },
-  { id: "9:custom", dir: "out", type: "IMAGEUPLOAD" },
+  { dir: "in", id: "3:model", type: "MODEL" },
+  { dir: "in", id: "3:positive", type: "CONDITIONING" },
+  { dir: "in", id: "3:latent_image", type: "LATENT" },
+  { dir: "out", id: "3:images", type: "IMAGE" },
+  { dir: "out", id: "12:video", type: "VIDEO" },
+  { dir: "out", id: "9:prompt", type: "STRING" },
+  { dir: "out", id: "9:steps", type: "INT" },
+  { dir: "out", id: "9:enabled", type: "BOOLEAN" },
+  { dir: "out", id: "9:custom", type: "IMAGEUPLOAD" },
 ];
 
 /**
@@ -63,7 +63,7 @@ const PORT_ROWS: Array<{ dir: "in" | "out"; id: string; type?: string }> = [
  * 骑在卡片边框上。把 `px-3.5` 放到卡片上时端点会压住标签 —— 那是这一层最容易
  * 摆错的一处，所以 story 里按真结构来。
  */
-function PortRow({ portId, dir, type }: { dir: "in" | "out"; portId: string; type?: string }) {
+function PortRow({ dir, portId, type }: { dir: "in" | "out"; portId: string; type?: string }) {
   /* 卡面取**节点调色板的底色**（`DARK_PALETTE_BASE.body`）而不是再写一遍 hex ——
      那是画布节点卡片表面的唯一出处（类型色则经 `portChipStyle()` 取，同源）。 */
   return (
@@ -106,53 +106,53 @@ function PortDemoNode() {
   const rows = useMemo(
     () => [
       {
+        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
         id: "model",
-        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
         type: "MODEL",
       },
       {
+        dir: /* SAFETY: 类型断言已复核 */ "out" as const,
         id: "out:model",
-        dir: /* SAFETY: 类型断言已复核 */ "out" as const,
         type: "MODEL",
       },
       {
+        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
         id: "vae",
-        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
         type: "VAE",
       },
       {
+        dir: /* SAFETY: 类型断言已复核 */ "out" as const,
         id: "out:vae",
-        dir: /* SAFETY: 类型断言已复核 */ "out" as const,
         type: "VAE",
       },
       {
+        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
         id: "clip",
-        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
         type: "CLIP",
       },
       {
+        dir: /* SAFETY: 类型断言已复核 */ "out" as const,
         id: "out:clip",
-        dir: /* SAFETY: 类型断言已复核 */ "out" as const,
         type: "CLIP",
       },
       {
+        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
         id: "images",
-        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
         type: "IMAGE",
       },
       {
-        id: "out:images",
         dir: /* SAFETY: 类型断言已复核 */ "out" as const,
+        id: "out:images",
         type: "IMAGE",
       },
       {
-        id: "text",
         dir: /* SAFETY: 类型断言已复核 */ "in" as const,
+        id: "text",
         type: "STRING",
       },
       {
-        id: "out:text",
         dir: /* SAFETY: 类型断言已复核 */ "out" as const,
+        id: "out:text",
         type: "STRING",
       },
     ],

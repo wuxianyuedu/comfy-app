@@ -14,10 +14,10 @@ import { buildNormalizeArgs, buildSegmentVf, buildSrtBody, clipPathOf } from "./
 describe("buildSegmentVf", () => {
   it("拼出 scale/pad/fps + 首尾淡入淡出的滤镜串", () => {
     const vf = buildSegmentVf({
-      width: 1280,
-      height: 720,
-      fps: 24,
       fadeOut: 2.7,
+      fps: 24,
+      height: 720,
+      width: 1280,
     });
     expect(vf).toContain("scale=1280:720:force_original_aspect_ratio=decrease");
     expect(vf).toContain("pad=1280:720:(1280-iw)/2:(720-ih)/2");
@@ -30,7 +30,7 @@ describe("buildSegmentVf", () => {
 
 describe("buildSrtBody", () => {
   it("产出一条字幕：0 → 镜头整秒，含文本", () => {
-    expect(buildSrtBody({ text: "开场", dur: 3.9 })).toBe(
+    expect(buildSrtBody({ dur: 3.9, text: "开场" })).toBe(
       "1\n00:00:00,000 --> 00:00:03,000\n开场\n",
     );
   });
@@ -39,9 +39,9 @@ describe("buildSrtBody", () => {
 describe("buildNormalizeArgs", () => {
   const base = {
     clip: "/abs/a.mp4",
-    vf: "scale=1:1",
     dur: 2,
     out: "/tmp/seg_0.mp4",
+    vf: "scale=1:1",
   };
 
   it("带字幕时接 subtitles 滤镜，且转义路径", () => {

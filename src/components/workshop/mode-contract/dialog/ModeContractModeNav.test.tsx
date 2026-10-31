@@ -45,8 +45,8 @@ afterEach(cleanup);
 function navProps() {
   return {
     activeMode: null,
-    storedCustomized: () => false,
     onSelect: vi.fn(),
+    storedCustomized: () => false,
   };
 }
 

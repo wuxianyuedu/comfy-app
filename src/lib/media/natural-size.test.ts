@@ -17,24 +17,24 @@ import {
 
 /** 图片元素的最小宿主（只暴露出口要读的四个读数）。 */
 const img = (width: number, height: number) => ({
-  naturalWidth: width,
   naturalHeight: height,
+  naturalWidth: width,
 });
 /** 视频元素：自然尺寸在 `video*` 上。 */
 const video = (width: number, height: number) => ({
-  videoWidth: width,
   videoHeight: height,
+  videoWidth: width,
 });
 
 describe("readNaturalSize", () => {
   it("读图片的 natural* 与视频的 video*", () => {
     expect(readNaturalSize(img(1102, 834))).toEqual({
-      width: 1102,
       height: 834,
+      width: 1102,
     });
     expect(readNaturalSize(video(1920, 1080))).toEqual({
-      width: 1920,
       height: 1080,
+      width: 1920,
     });
   });
 
@@ -62,9 +62,10 @@ describe("readNaturalSize", () => {
   });
 
   it("同时有两组读数时优先 natural*（图片宿主上 video* 恒为 0）", () => {
-    expect(
-      readNaturalSize({ naturalWidth: 10, naturalHeight: 5, videoWidth: 99 }),
-    ).toEqual({ width: 10, height: 5 });
+    expect(readNaturalSize({ naturalHeight: 5, naturalWidth: 10, videoWidth: 99 })).toEqual({
+      height: 5,
+      width: 10,
+    });
   });
 });
 

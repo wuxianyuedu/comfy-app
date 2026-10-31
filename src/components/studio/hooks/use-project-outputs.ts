@@ -63,9 +63,9 @@ export function useProjectOutputs(projectId: string | null): ProjectOutputsContr
   }, [outputsQ]);
 
   return {
-    outputs,
     loading: outputsQ.isLoading,
-    refetching: outputsQ.isFetching,
+    outputs,
     refetch,
+    refetching: outputsQ.isFetching,
   };
 }

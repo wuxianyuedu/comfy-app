@@ -107,16 +107,16 @@ export function canvasNodes(
   return specs.reduce<Array<CanvasNodeType>>(
     (nodes, spec) =>
       placeCanvasNode({
-        nodes,
         flowPosition: { x: spec.x, y: spec.y },
+        nodes,
         /* `placeCanvasNode` 只做追加、不读 `flow` 的字段（落点由 `flowPosition`
            给了），所以这里给一个不会被调用的换算函数即可 —— 与生产代码里
            「有画布坐标时直接给 `flowPosition`」那条分支同形。 */
-        flow: { screenToFlowPosition: () => ({ x: 0, y: 0 }) },
         data: {
           ...defaultData(spec.kind),
           ...(spec.prompt === undefined ? {} : { prompt: spec.prompt }),
         },
+        flow: { screenToFlowPosition: () => ({ x: 0, y: 0 }) },
         id: spec.id,
       }),
     [],
@@ -166,14 +166,37 @@ export const PROJECT_SCENES = {
    */
   filledProject: {
     about: "一个做过的项目：画布上四张真节点 + 三条连线 + 真视口",
+    edges: [
+      {
+        id: "e1-2",
+        source: "1",
+        sourceHandle: "output",
+        target: "2",
+        targetHandle: "inputImage",
+      },
+      {
+        id: "e2-4",
+        source: "2",
+        sourceHandle: "output",
+        target: "4",
+        targetHandle: "inputImage",
+      },
+      {
+        id: "e3-4",
+        source: "3",
+        sourceHandle: "output",
+        target: "4",
+        targetHandle: "inputImage",
+      },
+    ],
     name: "城市夜景 · 逐镜生成",
     nodes: canvasNodes([
       {
         id: "1",
         kind: "text",
+        prompt: "城市夜景，雨后的霓虹街道，电影感打光",
         x: 0,
         y: 0,
-        prompt: "城市夜景，雨后的霓虹街道，电影感打光",
       },
       /* 节点卡宽 380（`CanvasNode.tsx` 的 `w-95`），所以横向必须留出**一个整卡宽
          再加一条缝**：320 那版看起来像排开了，实测卡片是**叠在一起**的 ——
@@ -184,29 +207,6 @@ export const PROJECT_SCENES = {
       { id: "3", kind: "movie", x: 0, y: 520 },
       { id: "4", kind: "picture", x: 460, y: 520 },
     ]),
-    edges: [
-      {
-        id: "e1-2",
-        source: "1",
-        target: "2",
-        sourceHandle: "output",
-        targetHandle: "inputImage",
-      },
-      {
-        id: "e2-4",
-        source: "2",
-        target: "4",
-        sourceHandle: "output",
-        targetHandle: "inputImage",
-      },
-      {
-        id: "e3-4",
-        source: "3",
-        target: "4",
-        sourceHandle: "output",
-        targetHandle: "inputImage",
-      },
-    ],
   },
 } satisfies Record<string, ProjectScene>;
 
@@ -248,8 +248,8 @@ export function seedProject(scene: ProjectScene): CanvasProject {
      它写入的正是 `ProjectCanvas` 挂载时读回的那一份（`proj.nodes` / `proj.edges`）。 */
   const project: CanvasProject = {
     ...created,
-    nodes: scene.nodes ? [...scene.nodes] : created.nodes,
     edges: scene.edges ? [...scene.edges] : created.edges,
+    nodes: scene.nodes ? [...scene.nodes] : created.nodes,
   };
   upsertProject(project);
   setActive(project.id);
@@ -289,9 +289,9 @@ export function seedProjects(spec: {
  * 而路由本身是 `app/workspace/page.tsx` 的职责。
  */
 export function StorybookScreenFrame({
+  activeView = "works",
   children,
   projects,
-  activeView = "works",
 }: {
   activeView?: Parameters<typeof AppShell>[0]["active"];
   /** 真视图（必须是真的 —— 见文件头的第一条口径）。 */

@@ -15,9 +15,9 @@ import { CanvasSettingsButton } from "~/components/studio/canvas/CanvasSettingsB
  * 文案「只移动视口，不改动节点布局」就是那条差异的出口。
  */
 const meta = {
-  title: "Studio/CanvasRecenterButton",
-  component: CanvasRecenterButton,
   args: { onClick: () => undefined },
+  component: CanvasRecenterButton,
+  title: "Studio/CanvasRecenterButton",
 } satisfies Meta<typeof CanvasRecenterButton>;
 
 export default meta;

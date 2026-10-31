@@ -31,8 +31,8 @@ import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 const INSTANCE_KIND_LABEL: Record<"desktop" | "portable" | "venv" | "unknown", string> = {
   desktop: "桌面版（ComfyUI Desktop）",
   portable: "便携版",
-  venv: "venv",
   unknown: "未知安装",
+  venv: "venv",
 };
 
 export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {

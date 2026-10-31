@@ -60,7 +60,7 @@ import { ContractInputCatalog } from "./ContractInputCatalog";
 import { ModeContractModeNav } from "./ModeContractModeNav";
 
 /** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id。 */
-function LabelWithId({ label, id }: { id: string; label: string }) {
+function LabelWithId({ id, label }: { id: string; label: string }) {
   return (
     <>
       {label}
@@ -74,7 +74,7 @@ export function ModeContractEditorView({
 }: {
   controller: ModeContractEditorController;
 }) {
-  const { mode, draft, stored } = controller;
+  const { draft, mode, stored } = controller;
 
   return (
     /* 两栏分屏：高度由外层 `WorkspaceFrame` 给，这里只是把它切成一左一右。
@@ -141,7 +141,7 @@ function ModeContractDraftPanel({
   controller: ModeContractEditorController;
   draft: ModeContract;
 }) {
-  const { saving, saved, nextReferenceImageId } = controller;
+  const { nextReferenceImageId, saved, saving } = controller;
 
   return (
     <section className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-4">
@@ -213,9 +213,9 @@ function ModeContractDraftPanel({
           aria-label="该模式的输出类别"
           className="text-xs"
           labels={{
+            audio: "音频（audio）",
             image: "图片（image）",
             video: "视频（video）",
-            audio: "音频（audio）",
           }}
           onChange={(value) =>
             controller.setOutput(/* SAFETY: 类型断言已复核 */ value as ModeContract["output"])
@@ -256,8 +256,8 @@ function ModeContractDraftPanel({
 function ContractInputRow({
   controller,
   draft,
-  input,
   index,
+  input,
 }: {
   controller: ModeContractEditorController;
   draft: ModeContract;

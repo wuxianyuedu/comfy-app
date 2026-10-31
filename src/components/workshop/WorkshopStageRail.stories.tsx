@@ -22,31 +22,31 @@ import {
  * 真机上「还差几镜」的说法一旦改了，story 会在旁边继续显示旧口径。
  */
 const EMPTY_CTX: StageViewContext = {
-  scriptReady: false,
   characterCount: 0,
-  sceneCount: 0,
-  shotTarget: 0,
-  shotCount: 0,
-  imageDoneCount: 0,
   clipDoneCount: 0,
+  imageDoneCount: 0,
+  sceneCount: 0,
+  scriptReady: false,
+  shotCount: 0,
+  shotTarget: 0,
 };
 
 /** 真机上的中途态：剧本就绪、建了 2 个角色、8 镜排了 5 张图、2 个片段。 */
 const MIDWAY_CTX: StageViewContext = {
-  scriptReady: true,
   characterCount: 2,
-  sceneCount: 3,
-  shotTarget: 8,
-  shotCount: 8,
-  imageDoneCount: 5,
   clipDoneCount: 2,
+  imageDoneCount: 5,
+  sceneCount: 3,
+  scriptReady: true,
+  shotCount: 8,
+  shotTarget: 8,
 };
 
 /** 全部走完（成片已合成）：六段都满，副标题一路「已完成」。 */
 const DONE_CTX: StageViewContext = {
   ...MIDWAY_CTX,
-  imageDoneCount: 8,
   clipDoneCount: 8,
+  imageDoneCount: 8,
 };
 
 /** 只有剧本、还没拆场景：`shotTarget` 为 0 是「没有可派生的目标」那一档。 */
@@ -63,7 +63,7 @@ type StoryArgs = {
   tab: Tab;
 };
 
-function RailSample({ ctx, tab, rendered }: StoryArgs) {
+function RailSample({ ctx, rendered, tab }: StoryArgs) {
   const ratios = computeStageRatios(ctx, rendered);
   return (
     <div className="flex flex-col gap-4">
@@ -83,12 +83,10 @@ function RailSample({ ctx, tab, rendered }: StoryArgs) {
 }
 
 const meta = {
-  title: "Workshop/WorkshopStageRail",
-  component: RailSample,
   args: {
     ctx: MIDWAY_CTX,
-    tab: "shots",
     rendered: false,
+    tab: "shots",
   },
   argTypes: {
     tab: {
@@ -96,6 +94,8 @@ const meta = {
       options: STAGE_DEFS.map((stage) => stage.id),
     },
   },
+  component: RailSample,
+  title: "Workshop/WorkshopStageRail",
 } satisfies Meta<StoryArgs>;
 
 export default meta;
@@ -117,7 +117,7 @@ export const ScriptOnly: Story = {
 
 /** 全部走完 + 成片已渲染：一路「已完成」。 */
 export const Complete: Story = {
-  args: { ctx: DONE_CTX, tab: "render", rendered: true },
+  args: { ctx: DONE_CTX, rendered: true, tab: "render" },
 };
 
 /** 每一段各自被选中时的副标题（「进行中」只在当前段出现）。 */

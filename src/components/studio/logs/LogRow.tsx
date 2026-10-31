@@ -68,7 +68,7 @@ function fragmentsOf(text: string): Array<RowToken> {
   return out;
 }
 
-function HighlightedText({ text, keyword }: { keyword: string; text: string }) {
+function HighlightedText({ keyword, text }: { keyword: string; text: string }) {
   const fragments = fragmentsOf(text);
   /* 归一化走 `~/lib/list-filter`（规范 16 §16.2.4.16）：它与 `matchesSearch`
    * 必须同一口径 —— 命中判据折了小写而高亮没折，会出现「行被选中但字没高亮」。 */
@@ -175,7 +175,7 @@ function PathLinkedText({ text }: { text: string }): React.ReactNode {
  * 放常驻说明，而「点了有反应」这件事必须在**点的那一处**看得出来。失败的原因
  * （服务端给的那句）进 `title`，鼠标停一下就能看到。
  */
-function RevealPathButton({ path, children }: { children: React.ReactNode; path: string }) {
+function RevealPathButton({ children, path }: { children: React.ReactNode; path: string }) {
   /* 回执与成功态**必须同生共死**：两个独立定时器在时长一改就会漂移，留下
    * 「已定位」还在、绿色已经消失的自相矛盾画面（与 `SaveExportButton` 同款）。 */
   const hint = useFlashState(1200);
@@ -256,12 +256,12 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
   /* 成败都改口（§16.2.4.43）：失败时说「已复制」是撒谎，而**只在成功时才改口**
    * 同样是撒谎的另一半 —— 用户连点几次都没反应，以为按钮坏了。 */
   const copy = useCopyFeedback({
-    onSuccess: () => {
-      setOutcome("done");
-      flash.flash();
-    },
     onFailure: () => {
       setOutcome("failed");
+      flash.flash();
+    },
+    onSuccess: () => {
+      setOutcome("done");
       flash.flash();
     },
   });
@@ -328,11 +328,11 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
  */
 export const LogRow = memo(function LogRow({
   entry,
-  wrap,
-  keyword,
   expanded,
+  keyword,
   onToggleExpand,
   style,
+  wrap,
 }: {
   entry: LogEntry;
   /** 该行是否处于展开态（只对可展开的原始输出行有意义）。 */

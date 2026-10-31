@@ -71,8 +71,8 @@ export async function saveMediaToLocalTemp(
       await fs.writeFile(dest, Buffer.from(base64, "base64"));
     } else {
       const res = await fetch(url, {
-        signal: AbortSignal.timeout(120_000),
         headers: { Accept: "*/*" },
+        signal: AbortSignal.timeout(120_000),
       });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
@@ -99,7 +99,7 @@ export async function pollRemoteVideoTask(
   taskId: string,
   headers: Record<string, string>,
 ): Promise<string | null> {
-  const { rest, agnes } = buildVideoPollUrls(baseUrl, path, model, taskId);
+  const { agnes, rest } = buildVideoPollUrls(baseUrl, path, model, taskId);
   const pollUrls = [rest, ...(agnes ? [agnes] : [])];
   const deadline = Date.now() + VIDEO_POLL_TOTAL_MS;
   while (Date.now() < deadline) {

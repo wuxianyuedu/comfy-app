@@ -33,9 +33,9 @@ const entry = (
 ): WorkflowIOEntry & { ioKey: string } => ({
   direction: "output",
   kind: "output",
-  nodeId: "9",
-  name: "images",
   label: "输出图像",
+  name: "images",
+  nodeId: "9",
   type: "IMAGE",
   ...over,
 });
@@ -44,16 +44,16 @@ const OUTPUTS = [
   entry({ ioKey: "9:images", label: "输出图像", type: "IMAGE" }),
   entry({
     ioKey: "12:video",
-    nodeId: "12",
-    name: "video",
     label: "视频片段",
+    name: "video",
+    nodeId: "12",
     type: "VIDEO",
   }),
   entry({
     ioKey: "7:raw",
-    nodeId: "7",
-    name: "raw",
     label: "未声明类型的输出",
+    name: "raw",
+    nodeId: "7",
     type: undefined,
   }),
 ];
@@ -63,9 +63,9 @@ const OUTPUTS = [
  * 圆角 14 / 底部按钮贴合圆角这几条**整体**约定。所以这里给两档「怎么拼」。
  */
 function NodeCardSample({
-  title,
-  pill,
   actionLabel,
+  pill,
+  title,
   withHandle = false,
 }: {
   actionLabel: string;
@@ -105,14 +105,14 @@ function NodeCardSample({
 }
 
 const meta = {
-  title: "Studio/WorkflowNodeParts",
-  component: NodeCardSample,
   args: {
-    title: "角色一致性 · 三视图",
-    pill: <span className="text-ink-muted text-[10px]">节点 3</span>,
     actionLabel: "运行工作流",
+    pill: <span className="text-ink-muted text-[10px]">节点 3</span>,
+    title: "角色一致性 · 三视图",
     withHandle: false,
   },
+  component: NodeCardSample,
+  title: "Studio/WorkflowNodeParts",
 } satisfies Meta<typeof NodeCardSample>;
 
 export default meta;
@@ -122,8 +122,8 @@ type Story = StoryObj<typeof meta>;
 /** 库内形态：头部胶囊放**运行状态**，不渲染端点（没有 React Flow 上下文）。 */
 export const LibraryPreview: Story = {
   args: {
-    pill: <span className="text-ink-muted text-[10px]">已发布 · 27 节点</span>,
     actionLabel: "使用此工作流",
+    pill: <span className="text-ink-muted text-[10px]">已发布 · 27 节点</span>,
   },
 };
 
@@ -133,8 +133,8 @@ export const LibraryPreview: Story = {
  */
 export const CanvasNode: Story = {
   args: {
-    pill: <span className="text-ink-muted text-[10px]">#3</span>,
     actionLabel: "运行工作流",
+    pill: <span className="text-ink-muted text-[10px]">#3</span>,
     withHandle: true,
   },
 };

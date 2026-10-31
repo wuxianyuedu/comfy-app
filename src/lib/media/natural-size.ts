@@ -56,7 +56,7 @@ export function readNaturalSize(element: NaturalSizeSource | null | undefined): 
   if (!isPositiveFinite(width) || !isPositiveFinite(height)) {
     return null;
   }
-  return { width, height };
+  return { height, width };
 }
 
 function isPositiveFinite(value: number): boolean {

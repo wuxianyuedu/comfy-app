@@ -106,7 +106,7 @@ export async function fetchLogSessions(
 ): Promise<LogSessionsPayload | null> {
   try {
     /* 会话 id 可选：空值由出口省略（不再自己 `if` 一次再 `set`）。 */
-    const res = await fetch(withQuery("/api/logs/sessions", { source, session: sessionId }));
+    const res = await fetch(withQuery("/api/logs/sessions", { session: sessionId, source }));
     if (!res.ok) {
       return null;
     }
@@ -148,16 +148,16 @@ export type SavedLogExport = {
 export async function saveLogExport(label: string, content: string): Promise<SavedLogExport> {
   try {
     const res = await fetch("/api/logs/export", {
-      method: "POST",
+      body: JSON.stringify({ content, label }),
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label, content }),
+      method: "POST",
     });
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as SavedLogExport;
     return data;
   } catch (error) {
     return {
-      ok: false,
       error: error instanceof Error ? error.message : "network",
+      ok: false,
     };
   }
 }
@@ -180,8 +180,8 @@ export async function saveDiagnosticsPackage(): Promise<SavedLogExport> {
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as SavedLogExport;
   } catch (error) {
     return {
-      ok: false,
       error: error instanceof Error ? error.message : "network",
+      ok: false,
     };
   }
 }
@@ -212,9 +212,9 @@ export async function postAppRuntimeLog(
 ): Promise<void> {
   try {
     await fetch("/api/logs/app-runtime", {
-      method: "POST",
+      body: JSON.stringify({ fields, level, msg, ns }),
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ns, level, msg, fields }),
+      method: "POST",
     });
   } catch {
     // 网络/服务端写入失败绝不阻塞业务主流程

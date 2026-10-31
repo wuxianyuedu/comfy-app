@@ -29,8 +29,8 @@ import {
 type BadgeTone = NonNullable<React.ComponentProps<typeof Badge>["tone"]>;
 
 const meta = {
-  title: "UI/Table",
   component: Table,
+  title: "UI/Table",
 } satisfies Meta<typeof Table>;
 
 export default meta;

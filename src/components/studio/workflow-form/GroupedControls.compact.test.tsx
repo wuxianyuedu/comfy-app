@@ -28,39 +28,39 @@ afterEach(cleanup);
 
 const io: WorkflowIOMap = {
   "5::widget::aspect_ratio": {
+    defaultValue: "16:9",
     direction: "input",
     kind: "widget",
-    nodeId: "5",
-    name: "aspect_ratio",
     label: "宽高比",
+    name: "aspect_ratio",
+    nodeId: "5",
     type: "COMBO",
-    defaultValue: "16:9",
   },
   "5::widget::megapixels": {
+    defaultValue: 1,
     direction: "input",
     kind: "widget",
-    nodeId: "5",
-    name: "megapixels",
     label: "百万像素",
+    name: "megapixels",
+    nodeId: "5",
     type: "FLOAT",
-    defaultValue: 1,
   },
   "5::widget::multiple": {
+    defaultValue: 8,
     direction: "input",
     kind: "widget",
-    nodeId: "5",
-    name: "multiple",
     label: "倍数",
+    name: "multiple",
+    nodeId: "5",
     type: "INT",
-    defaultValue: 8,
   },
 };
 
 function widgets(): Array<EnrichedWidget> {
   return Object.entries(io).map(([ioKey, entry]) => ({
     ...entry,
-    ioKey,
     control: entry.type === "COMBO" ? "select" : entry.type === "INT" ? "int" : "float",
+    ioKey,
   }));
 }
 

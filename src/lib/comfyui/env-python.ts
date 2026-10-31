@@ -38,7 +38,7 @@ export type PyvenvConfig = {
  * 值可含空格与 Windows 反斜杠），未知键忽略。解析不出来返回全 null。
  */
 export function parsePyvenvCfg(content: string): PyvenvConfig {
-  const out: PyvenvConfig = { home: null, executable: null };
+  const out: PyvenvConfig = { executable: null, home: null };
   for (const rawLine of (content ?? "").split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) {
@@ -156,8 +156,8 @@ export function collectComfyPythonCandidates(
   // 默认从 process.env 只取本模块关心的三项，避免把整份 ProcessEnv 传进
   // 纯函数（也便于单测构造「空环境」）。
   const env: PythonEnvVars = deps.env ?? {
-    UV_PYTHON_INSTALL_DIR: process.env.UV_PYTHON_INSTALL_DIR,
     LOCALAPPDATA: process.env.LOCALAPPDATA,
+    UV_PYTHON_INSTALL_DIR: process.env.UV_PYTHON_INSTALL_DIR,
     XDG_DATA_HOME: process.env.XDG_DATA_HOME,
   };
   const platform = deps.platform ?? process.platform;

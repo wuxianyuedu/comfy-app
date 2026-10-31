@@ -63,7 +63,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
       return;
     }
     // 生成剧本可独立于全局配置选 本地/远端 模型：genSel 为空则沿用全局 config。
-    const { provider, model } = genEffective;
+    const { model, provider } = genEffective;
     setAiDraft("");
     setAiError("");
     setAiStatus("");
@@ -72,8 +72,8 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
         streamChat({
           messages: buildScriptMarkdownMessages(meta, idea),
           // 显式 provider+model：命中所选模型独立连接参数时改走该参数（与角色卡一致）
-          opts: model ? { provider, model } : undefined,
           onToken: (token) => setAiDraft((draft) => draft + token),
+          opts: model ? { model, provider } : undefined,
         }),
       );
       const markdown = full.trim();

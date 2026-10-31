@@ -17,24 +17,22 @@ import { DraftIntegrityHint } from "./DraftIntegrityHint";
 const CLEAN_CHARACTER = {
   id: "c1",
   name: "小美",
-  styleTags: ["皮克斯"],
   params: {},
+  styleTags: ["皮克斯"],
 };
 const CLEAN_SHOT = {
+  characterIds: ["c1"],
   id: "sh1",
   index: 1,
-  sceneId: "s1",
-  characterIds: ["c1"],
   prompt: "p",
+  sceneId: "s1",
   status: "idle",
 };
 
-function issuesOf(
-  over: Partial<Parameters<typeof auditDraftElements>[0]> = {},
-) {
+function issuesOf(over: Partial<Parameters<typeof auditDraftElements>[0]> = {}) {
   return auditDraftElements({
-    scenes: [],
     characters: [],
+    scenes: [],
     shots: [],
     ...over,
   });
@@ -127,10 +125,7 @@ describe("DraftIntegrityHint", () => {
       styleTags: 1,
     }));
     render(
-      <DraftIntegrityHint
-        issues={issuesOf({ characters: dirtyCharacters })}
-        onGoTo={vi.fn()}
-      />,
+      <DraftIntegrityHint issues={issuesOf({ characters: dirtyCharacters })} onGoTo={vi.fn()} />,
     );
     expect(screen.getAllByRole("listitem")).toHaveLength(6);
     expect(screen.getByText(/另有 3 条同类问题/)).toBeTruthy();
@@ -138,12 +133,7 @@ describe("DraftIntegrityHint", () => {
   });
 
   it("整条不是对象时也报得出（它连 id 都没有，更要被点名）", () => {
-    render(
-      <DraftIntegrityHint
-        issues={issuesOf({ shots: ["不是对象"] })}
-        onGoTo={vi.fn()}
-      />,
-    );
+    render(<DraftIntegrityHint issues={issuesOf({ shots: ["不是对象"] })} onGoTo={vi.fn()} />);
     expect(screen.getByText("镜头 #1")).toBeTruthy();
     expect(screen.getByText(/整条不是对象/)).toBeTruthy();
   });

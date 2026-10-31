@@ -23,16 +23,15 @@ import { LocalComputeCard } from "~/components/studio/LocalComputeCard";
  * `.storybook/data-sources.tsx` 的 `StorybookTrpcProvider` 注释里。
  */
 const meta = {
-  title: "Studio/LocalComputeCard",
   component: LocalComputeCard,
   parameters: {
     docs: {
       description: {
-        component:
-          "吃运行期数据的卡片：默认看到的是它真实的降级形态（后端不可用），不是假数据。",
+        component: "吃运行期数据的卡片：默认看到的是它真实的降级形态（后端不可用），不是假数据。",
       },
     },
   },
+  title: "Studio/LocalComputeCard",
 } satisfies Meta<typeof LocalComputeCard>;
 
 export default meta;

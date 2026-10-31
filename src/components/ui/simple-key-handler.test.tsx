@@ -15,7 +15,7 @@ import { simpleKeyHandler } from "./simple-key-handler";
 
 /** 造一个合成事件形状（`simpleKeyHandler` 只读这几个字段）。 */
 function ev(key: string, { repeat = false } = {}) {
-  return { key, repeat, preventDefault: vi.fn() };
+  return { key, preventDefault: vi.fn(), repeat };
 }
 
 describe("simpleKeyHandler", () => {

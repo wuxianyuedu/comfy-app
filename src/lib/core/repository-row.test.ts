@@ -21,7 +21,7 @@ import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 
 describe("firstRowRequired —— 写入路径取首行", () => {
   it("有行时原样返回（同一个引用，不复制）", () => {
-    const row = { id: "u1", email: "a@b.c" };
+    const row = { email: "a@b.c", id: "u1" };
     expect(firstRowRequired([row], "用户插入")).toBe(row);
   });
 

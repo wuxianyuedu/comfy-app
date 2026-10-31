@@ -39,20 +39,20 @@ export type UseProjectPersistenceParams = {
 };
 
 export function useProjectPersistence({
-  projectId,
-  nodes,
   edges,
-  projectName,
   loaded,
+  nodes,
+  projectId,
+  projectName,
 }: UseProjectPersistenceParams) {
   /* 镜像被拒的出口与本 hook 同生命周期：本文件已经在跑持久化了，
    * 再开一个组件级订阅点等于把「谁在管这件事」拆成两处。 */
   useSyncRefusalNotice();
 
   /** 始终指向最新快照，供 persistNow 读取，避免闭包过期。 */
-  const ref = useRef({ projectId, nodes, edges, projectName });
+  const ref = useRef({ edges, nodes, projectId, projectName });
   useEffect(() => {
-    ref.current = { projectId, nodes, edges, projectName };
+    ref.current = { edges, nodes, projectId, projectName };
   });
 
   /** hydrate 后首轮 setNodes/setEdges 会造成「空项目覆盖」误写，跳过一次。 */
@@ -62,9 +62,9 @@ export function useProjectPersistence({
    *  nameOverride：重命名提交时 ref 尚未同步到新名字，需显式传入。 */
   const persistNow = useCallback((nameOverride?: string) => {
     const {
-      projectId: pid,
-      nodes: liveNodes,
       edges: liveEdges,
+      nodes: liveNodes,
+      projectId: pid,
       projectName: liveName,
     } = ref.current;
     if (!pid) {
@@ -86,11 +86,11 @@ export function useProjectPersistence({
       return;
     }
     upsertProject({
+      edges: liveEdges,
       id: pid,
       name: nameLive,
-      updatedAt: Date.now(),
       nodes: liveNodes,
-      edges: liveEdges,
+      updatedAt: Date.now(),
     });
   }, []);
 

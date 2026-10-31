@@ -33,12 +33,12 @@ const MEDIA_VARIANTS: Array<EmptyMediaVariant> = ["default", "icon"];
    所以 `component` 指向 `EmptyMedia` —— Args 面板的控件是按 `component` 的
    props 生成的，挂在别的组件上会要么被类型挡住、要么运行期不生效。 */
 const meta = {
-  title: "UI/Empty",
-  component: EmptyMedia,
   args: { variant: "icon" },
   argTypes: {
     variant: { control: "select", options: MEDIA_VARIANTS },
   },
+  component: EmptyMedia,
+  title: "UI/Empty",
 } satisfies Meta<typeof EmptyMedia>;
 
 export default meta;

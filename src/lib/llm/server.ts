@@ -25,13 +25,13 @@ import type {
 } from "./types";
 
 const ENV_DEFAULTS: LLMConfig = {
-  provider: /* SAFETY: 类型断言已复核 */ (process.env.LLM_PROVIDER as LLMProviderType) || "local",
-  baseUrl: process.env.LLM_BASE_URL ?? OLLAMA_DEFAULT_BASE_URL,
-  model: process.env.LLM_MODEL ?? "",
-  extraModels: null,
   apiKey: process.env.LLM_API_KEY ?? null,
-  temperature: Number(process.env.LLM_TEMPERATURE ?? 0.7),
+  baseUrl: process.env.LLM_BASE_URL ?? OLLAMA_DEFAULT_BASE_URL,
+  extraModels: null,
   maxTokens: Number(process.env.LLM_MAX_TOKENS ?? 2048),
+  model: process.env.LLM_MODEL ?? "",
+  provider: /* SAFETY: 类型断言已复核 */ (process.env.LLM_PROVIDER as LLMProviderType) || "local",
+  temperature: Number(process.env.LLM_TEMPERATURE ?? 0.7),
 };
 
 /* 按层叠加出最终生效的 LLM 配置：
@@ -68,20 +68,20 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       );
       const remoteRows = await remoteModelRepository.list();
       const remoteEntries = remoteRows.map((r) => ({
-        name: r.name,
-        baseUrl: r.baseUrl,
         apiKey: r.apiKey,
+        baseUrl: r.baseUrl,
         kind: /* SAFETY: 类型断言已复核 */ (r.kind as RemoteModelKind) ?? null,
+        name: r.name,
       }));
       // 合并两来源：本地候选名 + 远端表条目。`split.remoteEntries` 在列里不该再
       // 出现（写入侧只落字符串），仍一并合并是因为**读侧不假设写入侧守规矩**——
       // 列里真混进对象时把它当远端条目读出来，总好过把整份候选清单判成畸形丢掉。
       cfg.extraModels = [
         ...split.localNames.map((n) => ({
-          name: n,
-          baseUrl: null,
           apiKey: null,
+          baseUrl: null,
           kind: /* SAFETY: 类型断言已复核 */ null as RemoteModelKind | null,
+          name: n,
         })),
         ...remoteEntries,
         ...split.remoteEntries,
@@ -131,10 +131,10 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       }
     }
     cfg.temperature = resolveTaskTemperature({
-      taskType: override.taskType,
       explicitTemperature: override.temperature,
-      overrides: cfg.temperatureByTask ?? null,
       fallback: cfg.temperature,
+      overrides: cfg.temperatureByTask ?? null,
+      taskType: override.taskType,
     });
     if (override.maxTokens != null) {
       cfg.maxTokens = override.maxTokens;
@@ -161,10 +161,10 @@ export async function getConfigForClient() {
     );
     const remoteRows = await remoteModelRepository.list();
     const tableEntries: Array<RemoteModelEntry> = remoteRows.map((r) => ({
-      name: r.name,
-      baseUrl: r.baseUrl,
       apiKey: r.apiKey,
+      baseUrl: r.baseUrl,
       kind: /* SAFETY: 类型断言已复核 */ (r.kind as RemoteModelKind) ?? null,
+      name: r.name,
     }));
     // 读取层兜底归并：`remoteModel` 表里若存着指向本机回环、且不带 apiKey 的条目，
     // 那是「本地 ollama 被错存成了远端」，折回本地候选字符串下发 —— 工坊下拉与设置页
@@ -183,9 +183,9 @@ export async function getConfigForClient() {
   );
   return {
     ...cfgSafe,
-    hasApiKey: Boolean(cfg.apiKey),
     apiKey: undefined,
     extraModels: extraSafe,
+    hasApiKey: Boolean(cfg.apiKey),
   };
 }
 
@@ -282,8 +282,8 @@ function messagesToWire(
     } else {
       base.content = m.content.map((p) =>
         p.type === "text"
-          ? { type: "text", text: p.text }
-          : { type: "image_url", image_url: p.image_url },
+          ? { text: p.text, type: "text" }
+          : { image_url: p.image_url, type: "image_url" },
       );
     }
     if (m.tool_calls) {
@@ -313,8 +313,8 @@ export async function getVisionLLMConfig(override?: LLMRequestOptions): Promise<
     model: visionModel,
     ...(entry
       ? {
-          baseUrl: entry.baseUrl ?? cfg.baseUrl,
           apiKey: entry.apiKey ?? cfg.apiKey,
+          baseUrl: entry.baseUrl ?? cfg.baseUrl,
         }
       : {}),
   };
@@ -325,9 +325,9 @@ async function upstreamChat(cfg: LLMConfig, body: Record<string, unknown>): Prom
   let res: Response;
   try {
     res = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: headersFor(cfg),
       body: JSON.stringify(body),
+      headers: headersFor(cfg),
+      method: "POST",
     });
   } catch (e) {
     throw new Error(describeFetchFailure(e, cfg), { cause: e });
@@ -338,7 +338,7 @@ async function upstreamChat(cfg: LLMConfig, body: Record<string, unknown>): Prom
     const hint =
       res.status === 401 || res.status === 403 ? "（API Key 无效或未授权，请检查后重试）" : "";
     const snippet = detail.trim()
-      ? `：${clampText(detail, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`
+      ? `：${clampText(detail, { marker: "", maxLength: INLINE_SNIPPET_MAX })}`
       : "";
     throw new Error(`LLM 请求失败 (${res.status})${hint}${snippet}`);
   }
@@ -360,11 +360,11 @@ function assertModelConfigured(cfg: LLMConfig): void {
 export async function completeLLM(cfg: LLMConfig, messages: Array<LLMMessage>): Promise<string> {
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {
-    model: cfg.model,
-    messages: messagesToWire(cfg, messages),
-    temperature: cfg.temperature,
     max_tokens: cfg.maxTokens,
+    messages: messagesToWire(cfg, messages),
+    model: cfg.model,
     stream: false,
+    temperature: cfg.temperature,
   });
 
   const json = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
@@ -385,11 +385,11 @@ export async function streamLLM(
 ): Promise<string> {
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {
-    model: cfg.model,
-    messages: messagesToWire(cfg, messages),
-    temperature: cfg.temperature,
     max_tokens: cfg.maxTokens,
+    messages: messagesToWire(cfg, messages),
+    model: cfg.model,
     stream: true,
+    temperature: cfg.temperature,
   });
   if (!res.body) {
     throw new Error("LLM 服务未返回数据流，请重试");
@@ -448,12 +448,12 @@ export async function completeLLMStructured<T>(
 ): Promise<T> {
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {
-    model: cfg.model,
-    messages: messagesToWire(cfg, messages),
-    temperature: cfg.temperature,
     max_tokens: cfg.maxTokens,
-    stream: false,
+    messages: messagesToWire(cfg, messages),
+    model: cfg.model,
     response_format: { type: "json_object" },
+    stream: false,
+    temperature: cfg.temperature,
   });
 
   const json = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
@@ -491,11 +491,11 @@ export async function completeLLMTools(
 ): Promise<CompleteToolsResult> {
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {
-    model: cfg.model,
-    messages: messagesToWire(cfg, messages),
-    temperature: cfg.temperature,
     max_tokens: cfg.maxTokens,
+    messages: messagesToWire(cfg, messages),
+    model: cfg.model,
     stream: false,
+    temperature: cfg.temperature,
     tools,
   });
 
@@ -523,9 +523,9 @@ export async function completeLLMTools(
     }
     return [
       {
+        function: { arguments: fn.arguments, name: fn.name },
         id: call.id,
         type: /* SAFETY: 类型断言已复核 */ "function" as const,
-        function: { name: fn.name, arguments: fn.arguments },
       },
     ];
   });

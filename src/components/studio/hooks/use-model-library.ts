@@ -110,17 +110,17 @@ export function useModelLibrary(): ModelLibraryController {
   const typeChips = useMemo(() => countByType(models), [models]);
 
   return {
-    models,
-    loading: listQ.isLoading,
-    refreshing: syncMut.isPending || listQ.isFetching,
-    q,
-    setQ,
-    filter,
-    setFilter,
-    filtered,
-    typeChips,
     configOpen,
-    setConfigOpen,
+    filter,
+    filtered,
+    loading: listQ.isLoading,
+    models,
+    q,
+    refreshing: syncMut.isPending || listQ.isFetching,
     reload,
+    setConfigOpen,
+    setFilter,
+    setQ,
+    typeChips,
   };
 }

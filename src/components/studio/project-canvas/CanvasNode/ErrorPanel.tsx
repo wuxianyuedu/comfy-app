@@ -46,17 +46,17 @@ type ErrorPanelProps = {
 };
 
 export function ErrorPanel({
-  nodeId,
-  kind,
-  status,
   error,
-  errorStatus,
   errorContext,
-  validationErrors,
+  errorStatus,
+  kind,
+  nodeId,
+  onRetry,
+  status,
   taskId,
+  validationErrors,
   workflowId,
   workflowName,
-  onRetry,
 }: ErrorPanelProps) {
   /* 错误面板状态 —— 默认收起（只有一行摘要），
    * 可展开查看后端原始错误（含 ComfyUI traceback）。
@@ -97,8 +97,8 @@ export function ErrorPanel({
    * 静默** —— 它本身就是一段可见文本，点它只是省一次选中。 */
   const [detailCopyFailed, setDetailCopyFailed] = useState(false);
   const copyDetail = useCopyFeedback({
-    onSuccess: () => setDetailCopyFailed(false),
     onFailure: () => setDetailCopyFailed(true),
+    onSuccess: () => setDetailCopyFailed(false),
   });
   const copyTaskId = useCopyFeedback({ onFailure: "silent" });
 
@@ -211,15 +211,15 @@ export function ErrorPanel({
                     copyDetail(
                       JSON.stringify(
                         {
+                          error: typeof error === "string" ? error : jsonOrString(error),
+                          errorStatus: errorStatus ?? null,
                           nodeId: nodeId,
+                          request: errorContext?.request ?? null,
+                          taskId: taskId ?? null,
+                          ts: errorContext?.timestamp ?? new Date().toISOString(),
+                          validationErrors: validationErrors ?? null,
                           workflowId: workflowId ?? null,
                           workflowName: workflowName ?? null,
-                          taskId: taskId ?? null,
-                          errorStatus: errorStatus ?? null,
-                          validationErrors: validationErrors ?? null,
-                          error: typeof error === "string" ? error : jsonOrString(error),
-                          request: errorContext?.request ?? null,
-                          ts: errorContext?.timestamp ?? new Date().toISOString(),
                         },
                         null,
                         2,
@@ -246,8 +246,8 @@ export function ErrorPanel({
             <p className="nodrag nopan text-danger-strong/80 text-3xs mt-1 line-clamp-2 wrap-break-word">
               {typeof error === "string"
                 ? clampText(error.replace(/\n/g, ""), {
-                    maxLength: INLINE_SNIPPET_MAX,
                     marker: "",
+                    maxLength: INLINE_SNIPPET_MAX,
                   })
                 : "（点击 ▼ 展开查看完整错误）"}
             </p>

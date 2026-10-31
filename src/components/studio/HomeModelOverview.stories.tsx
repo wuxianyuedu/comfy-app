@@ -21,16 +21,15 @@ import { HomeModelOverview } from "~/components/studio/HomeModelOverview";
  * 与 `.storybook/data-sources.tsx` 的 `StorybookTrpcProvider` 注释里。
  */
 const meta = {
-  title: "Studio/HomeModelOverview",
   component: HomeModelOverview,
   parameters: {
     docs: {
       description: {
-        component:
-          "吃运行期数据的卡片：骨架屏 / 错误态 / 空目录 / 有内容四态都由真读数决定。",
+        component: "吃运行期数据的卡片：骨架屏 / 错误态 / 空目录 / 有内容四态都由真读数决定。",
       },
     },
   },
+  title: "Studio/HomeModelOverview",
 } satisfies Meta<typeof HomeModelOverview>;
 
 export default meta;

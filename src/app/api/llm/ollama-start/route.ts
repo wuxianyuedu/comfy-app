@@ -131,8 +131,8 @@ async function ollamaServiceRunning(): Promise<boolean> {
     const { execFile } = await import("node:child_process");
     const { promisify } = await import("node:util");
     const { stdout } = await promisify(execFile)("sc", ["query", "ollama"], {
-      windowsHide: true,
       timeout: 3000,
+      windowsHide: true,
     });
     return /STATE\s*:\s*4\s+RUNNING/i.test(stdout);
   } catch {
@@ -155,10 +155,10 @@ async function spawnOllamaServe(
   if (keepAlive) {
     appendOllamaLog(`[keepAlive-spawn] cmd=${exe} args=${JSON.stringify(["serve"])}`);
     const launched = spawnManaged({
-      command: exe,
       args: ["serve"],
-      windowsHide: true,
+      command: exe,
       mode: "keepAlive",
+      windowsHide: true,
     });
     if (!launched.child || launched.error) {
       const msg = launched.error ?? "未知错误";
@@ -168,8 +168,8 @@ async function spawnOllamaServe(
           : msg;
       appendOllamaLog(`[err] 启动失败：${hint}`);
       return Promise.resolve({
-        ok: false,
         detail: `启动 Ollama 失败：${hint}`,
+        ok: false,
       });
     }
     /* Start-Process 参数被拒等拉起失败发生在 powershell 中介里，目标进程
@@ -177,15 +177,15 @@ async function spawnOllamaServe(
     const mediator = await waitForDetachMediator(launched.child);
     if (mediator.code !== null && mediator.code !== 0) {
       return Promise.resolve({
-        ok: false,
         detail: `启动 Ollama 失败（保活拉起被拒）：${
           mediator.stderr.trim() || `powershell 退出码 ${mediator.code}`
         }`,
+        ok: false,
       });
     }
     return Promise.resolve({
-      ok: true,
       detail: "Ollama 启动命令已执行（保活模式），正在等待服务就绪",
+      ok: true,
     });
   }
   {
@@ -197,9 +197,9 @@ async function spawnOllamaServe(
       // POSIX: 需要 detached 防子进程随父进程 SIGHUP 退出。
       detached: !isWindows,
       // 用 pipe 捕获 stdout/stderr → 写入 ollama-runtime.log，供设置页日志面板读取。
+      shell: false, // 直接执行二进制，不经 cmd.exe（防 Windows cmd 窗口）
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
-      shell: false, // 直接执行二进制，不经 cmd.exe（防 Windows cmd 窗口）
     });
     appendOllamaLog(
       `[spawn] pid=${child.pid ?? "unknown"} cmd=${exe} args=${JSON.stringify(["serve"])}`,
@@ -208,8 +208,8 @@ async function spawnOllamaServe(
     // Ollama 输出（serve 的 stdout/stderr）——截断每行避免日志文件膨胀
     child.stdout?.on("data", (d: Buffer) => {
       const text = clampText(d.toString("utf8").trimEnd(), {
-        maxLength: INLINE_STDERR_MAX,
         marker: "",
+        maxLength: INLINE_STDERR_MAX,
       });
       if (text) {
         appendOllamaLog(`[out] ${text}`);
@@ -217,8 +217,8 @@ async function spawnOllamaServe(
     });
     child.stderr?.on("data", (d: Buffer) => {
       const text = clampText(d.toString("utf8").trimEnd(), {
-        maxLength: INLINE_STDERR_MAX,
         marker: "",
+        maxLength: INLINE_STDERR_MAX,
       });
       if (text) {
         appendOllamaLog(`[err] ${text}`);
@@ -234,7 +234,7 @@ async function spawnOllamaServe(
         child.on("error", (err) => {
           const hint = ollamaFailureHint(err);
           appendOllamaLog(`[err] spawn error：${hint}`);
-          settle({ ok: false, detail: `启动 Ollama 失败：${hint}` });
+          settle({ detail: `启动 Ollama 失败：${hint}`, ok: false });
         });
 
         // 进程在观察期内退出 = 启动秒退（端口被占 / 配置错误 / 安装不完整）
@@ -242,15 +242,15 @@ async function spawnOllamaServe(
           appendOllamaLog(`■ Ollama 进程已退出（code=${code ?? "null"}）`);
           appendOllamaLog(`[exit] code=${code ?? "null"} signal=${signal ?? "none"}`);
           settle({
-            ok: false,
             detail:
               `Ollama 进程启动后立即退出（code=${code ?? "null"}, signal=${signal ?? "none"}）。` +
               "可能是端口已被占用或 Ollama 安装不完整，请在终端手动执行 ollama serve 查看详情",
+            ok: false,
           });
         });
       }),
       SPAWN_GRACE_MS,
-      { ok: true, detail: "Ollama 启动命令已执行，正在等待服务就绪" },
+      { detail: "Ollama 启动命令已执行，正在等待服务就绪", ok: true },
     );
   }
 }
@@ -289,9 +289,9 @@ export async function POST(_req: NextRequest) {
   if (await probeOllamaPort()) {
     appendOllamaLog("[state] Ollama 已在运行，跳过启动");
     return NextResponse.json({
-      ok: true,
       alreadyRunning: true,
       detail: "Ollama 已在运行",
+      ok: true,
     });
   }
 
@@ -299,18 +299,18 @@ export async function POST(_req: NextRequest) {
   if (await ollamaServiceRunning()) {
     appendOllamaLog("[state] Ollama 已注册为 Windows 服务并在后台运行");
     return NextResponse.json({
-      ok: true,
       alreadyRunning: true,
       detail: "Ollama 服务已在后台运行",
+      ok: true,
     });
   }
 
   // ── 互斥锁：防止并发 POST 重复 spawn ──
   if (st.starting) {
     return NextResponse.json({
-      ok: true,
       alreadyRunning: false,
       detail: "Ollama 正在启动中，请稍候",
+      ok: true,
     });
   }
   st.starting = true;
@@ -327,7 +327,7 @@ export async function POST(_req: NextRequest) {
     const result = await spawnOllamaServe(ollama, keepAlive);
 
     if (result.ok) {
-      return NextResponse.json({ ok: true, detail: result.detail });
+      return NextResponse.json({ detail: result.detail, ok: true });
     }
     return NextResponse.json({ error: result.detail }, { status: 500 });
   } catch (e) {

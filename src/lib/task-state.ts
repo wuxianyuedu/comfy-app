@@ -53,11 +53,11 @@ export function isActiveTaskStatus(status: string | null | undefined): boolean {
  * 本模块只放判据与这张表、不做 IO，客户端与服务端都能引（理由见文件头）。
  */
 export const TASK_STATUS_LABELS = /* SAFETY: 类型断言已复核 */ {
+  CANCELLED: "已取消",
+  FAILED: "失败",
   QUEUED: "排队中",
   RUNNING: "生成中",
   SUCCEEDED: "已完成",
-  FAILED: "失败",
-  CANCELLED: "已取消",
 } as const satisfies Record<string, string>;
 
 /** 读标签；未知状态原样回显（不静默转成「未知」把信息吞掉）。 */

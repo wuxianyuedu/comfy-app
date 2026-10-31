@@ -52,9 +52,9 @@ export async function GET(): Promise<Response> {
       };
 
       // 连上先推一帧，让客户端立刻拉一次当前状态（即使还没发生任何变化）。
-      send({ changed: true, at: Date.now() });
+      send({ at: Date.now(), changed: true });
 
-      unsubscribe = subscribeQueueChanged(() => send({ changed: true, at: Date.now() }));
+      unsubscribe = subscribeQueueChanged(() => send({ at: Date.now(), changed: true }));
 
       heartbeat = setInterval(() => {
         if (closed) {
@@ -73,9 +73,9 @@ export async function GET(): Promise<Response> {
 
   return new Response(stream, {
     headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "Content-Type": "text/event-stream; charset=utf-8",
       // 反向代理（若有）按此关闭缓冲，否则帧会攒到连接关闭才到客户端。
       "X-Accel-Buffering": "no",
     },

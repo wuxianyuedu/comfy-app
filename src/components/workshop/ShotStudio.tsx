@@ -109,7 +109,7 @@ function useAutoFillPrompts(
     if (!needsFill) {
       return;
     }
-    const { scenes, characters, styles } = inputsRef.current;
+    const { characters, scenes, styles } = inputsRef.current;
     onShotsChange((prev) =>
       prev.map((shot) => {
         if (shot.prompt.trim() || editedRef.current.has(shot.id)) {
@@ -120,8 +120,8 @@ function useAutoFillPrompts(
         const style = styles.find((st) => st.slug === shot.skillSlug);
         return {
           ...shot,
-          prompt: buildShotPrompt(shot, scene, chars, style),
           negativePrompt: shot.negativePrompt || buildShotNegative(chars, style),
+          prompt: buildShotPrompt(shot, scene, chars, style),
         };
       }),
     );
@@ -135,18 +135,18 @@ function useAutoFillPrompts(
  * 视频 stage / FinalComposer 原样消费。
  */
 export function ShotStudio({
-  shots,
-  scenes,
-  characters,
-  styles,
-  workflowId,
-  projectId,
   apiChannels,
-  onOpenModelAdapters,
-  onShotsChange,
-  onNotice,
+  characters,
   onCancelShot,
   onNextStage,
+  onNotice,
+  onOpenModelAdapters,
+  onShotsChange,
+  projectId,
+  scenes,
+  shots,
+  styles,
+  workflowId,
 }: Props) {
   const [channel, setChannel] = React.useState<Channel>("local");
   /** 高级 · 种子输入（空 = 每次自动随机；数字 = pin 住复现）。 */
@@ -158,7 +158,7 @@ export function ShotStudio({
   );
   /* 多镜头同时在跑时的**按条目**进度表（节流 + 同值短路 + 卸载守卫都收在
    * 出口里，规范 16 §16.2.4.68）。此前这一行在两个文件里逐字相同。 */
-  const { progress, report: reportProgress, flush: flushProgress } = useThrottledProgressMap();
+  const { flush: flushProgress, progress, report: reportProgress } = useThrottledProgressMap();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   /* 批处理的忙碌位走唯一出口（规范 16 §16.2.4.71）：它此前复位写在循环之后，
    * 循环里抛错就永远停在「批处理中」。 */
@@ -174,7 +174,7 @@ export function ShotStudio({
   );
 
   // ── 自动预填：分镜输出 → 图片提示词（逻辑收在 useAutoFillPrompts）──
-  useAutoFillPrompts(shots, { scenes, characters, styles }, onShotsChange, editedRef);
+  useAutoFillPrompts(shots, { characters, scenes, styles }, onShotsChange, editedRef);
 
   function patchShot(id: string, p: Partial<Shot>) {
     onShotsChange((prev) => prev.map((s) => (s.id === id ? { ...s, ...p } : s)));
@@ -202,12 +202,12 @@ export function ShotStudio({
     return withTimeoutResult(
       new Promise<void>((resolve) => {
         close = watchTask(taskId, {
-          onProgress: (p) => reportProgress(shotId, p),
           onOutput: (out) => {
             if (out.kind !== "video") {
               patchShot(shotId, { imageUrl: out.url });
             }
           },
+          onProgress: (p) => reportProgress(shotId, p),
           onSettled: (r) => {
             /* 落定即写终值（见 VideoStudio 同处注释）。 */
             flushProgress(shotId, 100);
@@ -266,8 +266,8 @@ export function ShotStudio({
          *（封装口径只暴露 提示词 / 尺寸 / 参考图，其余走工作流默认值），否则
          * 没有可执行的图。见 generateShot 入口的门禁。 */
         const built = await buildLibraryWorkflowInput(workflowId, {
-          prompt: shot.prompt,
           negativePrompt: shot.negativePrompt || undefined,
+          prompt: shot.prompt,
           size: sizeSpec,
           // 高级 · 种子：默认随机（留空每次新 seed），填数字则 pin 住（见 resolveSeed）。
           seed: resolveSeed(seedInput),
@@ -284,23 +284,23 @@ export function ShotStudio({
         const taskId = await startLocalGenerate(
           withGenerationAttribution(input, { projectId, shotId: shot.id }),
         );
-        patchShot(shot.id, { taskId, status: "running" });
+        patchShot(shot.id, { status: "running", taskId });
         await runLocalTask(shot.id, taskId);
         return taskId;
       } else {
         const url = await apiGenerateImage({
-          prompt: shot.prompt,
+          mode: "T2I",
           negative: shot.negativePrompt || undefined,
+          prompt: shot.prompt,
           size:
             shot.params.size !== undefined && shot.params.size !== ""
               ? paramString(shot.params.size, shotSizeToParam(shotSize))
               : shotSizeToParam(shotSize),
-          mode: "T2I",
           /* 远端通道认「宽高比 + 百万像素」：分辨率档也换算成实际总像素再下发
            * （透传"1k" 这类档位名对远端没有意义）。 */
           ...shotSizeToRelay(shotSize),
         });
-        patchShot(shot.id, { status: "done", imageUrl: url });
+        patchShot(shot.id, { imageUrl: url, status: "done" });
         return null;
       }
     } catch (e: unknown) {
@@ -331,9 +331,9 @@ export function ShotStudio({
       try {
         const res = await autoselectShot(projectId, shot.id, taskIds);
         patchShot(shot.id, {
-          taskId: res.winnerTaskId,
           imageUrl: res.winnerImageUrl,
           status: "done",
+          taskId: res.winnerTaskId,
         });
         const summary = res.candidates
           .map((c) => {
@@ -537,18 +537,18 @@ type ShotCardRowProps = {
 };
 
 function ShotCardRow({
-  shot,
-  progress,
-  error,
+  apiReady,
   busyCount,
   channel,
-  workflowId,
-  apiReady,
-  onGenerate,
-  onGacha,
+  error,
   gachaBusy,
   onCancel,
+  onGacha,
+  onGenerate,
   onPromptChange,
+  progress,
+  shot,
+  workflowId,
 }: ShotCardRowProps) {
   const [gachaCount, setGachaCount] = React.useState(2);
   return (

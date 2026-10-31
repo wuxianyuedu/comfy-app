@@ -25,10 +25,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { ToastProvider } from "./ToastProvider";
 import { WorksGallery } from "./WorksGallery";
 import type { ProjectListEntry } from "~/lib/project-canvas/canvas-store";
-import {
-  defaultData,
-  type CanvasNodeType,
-} from "~/lib/project-canvas/canvas-types";
+import { defaultData, type CanvasNodeType } from "~/lib/project-canvas/canvas-types";
 import type { WorksGalleryController } from "./works/hooks/use-works-gallery";
 
 const controllerMock = vi.hoisted(() => vi.fn<() => WorksGalleryController>());
@@ -54,32 +51,30 @@ function renderWith(over: Partial<WorksGalleryController> = {}): void {
   renderScreen();
 }
 
-function controller(
-  over: Partial<WorksGalleryController> = {},
-): WorksGalleryController {
+function controller(over: Partial<WorksGalleryController> = {}): WorksGalleryController {
   return {
-    projects: [],
-    loading: false,
-    serverOk: true,
-    openProject: () => undefined,
-    requestDelete: () => undefined,
-    pendingDelete: null,
     cancelDelete: () => undefined,
     confirmDelete: async () => null,
     deleting: false,
+    loading: false,
+    openProject: () => undefined,
+    pendingDelete: null,
+    projects: [],
     refresh: () => undefined,
+    requestDelete: () => undefined,
+    serverOk: true,
     ...over,
   };
 }
 
 function entry(over: Partial<ProjectListEntry> = {}): ProjectListEntry {
   return {
+    edges: [],
     id: "proj_a",
     name: "山与海",
-    updatedAt: Date.now(),
     nodes: [],
-    edges: [],
     origin: "both",
+    updatedAt: Date.now(),
     ...over,
   };
 }
@@ -89,10 +84,10 @@ function entry(over: Partial<ProjectListEntry> = {}): ProjectListEntry {
  * 那会随严格声明加字段而过期）。 */
 function node(id: string): CanvasNodeType {
   return {
-    id,
-    type: "canvasNode",
     data: defaultData("image"),
+    id,
     position: { x: 0, y: 0 },
+    type: "canvasNode",
   };
 }
 
@@ -133,9 +128,7 @@ describe("WorksGallery 说明文案", () => {
 
   it("拉到了就不出现降级那一句（它对正常态是噪声）", () => {
     renderWith({ serverOk: true });
-    expect(
-      screen.queryByText(/服务端列表这一轮没拉到/),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/服务端列表这一轮没拉到/)).not.toBeInTheDocument();
   });
 });
 
@@ -182,10 +175,10 @@ describe("WorksGallery 卡片", () => {
     renderWith({
       projects: [
         entry({
+          edges: [edge("e1")],
           id: "filled",
           name: "有内容",
           nodes: [node("n1"), node("n2")],
-          edges: [edge("e1")],
         }),
         entry({ id: "empty", name: "空的那张", origin: "local" }),
       ],
@@ -232,21 +225,16 @@ describe("WorksGallery 卡片", () => {
      * 底色要的是「有一档底色 token（`bg-card` / `bg-surface-*` …）」，
      * 层级要的是 §16.2.5 刻度表里的 `z-base`（卡片内遮罩那一档），
      * 不是裸数字 —— 裸数字由 `check-overlay-z.cjs` 硬闸拦下。 */
-    const hasBackground = classes.some((c) =>
-      /^bg-(card|surface|background)(\/|$)/.test(c),
-    );
-    expect(
-      hasBackground,
-      "删除按钮没有不透明底：长名字会从「删除」二字底下透出来",
-    ).toBe(true);
+    const hasBackground = classes.some((c) => /^bg-(card|surface|background)(\/|$)/.test(c));
+    expect(hasBackground, "删除按钮没有不透明底：长名字会从「删除」二字底下透出来").toBe(true);
     expect(classes).toContain("z-base");
   });
 
   it("点卡片把这一行的 id 交给 controller（打开项目不是视图自己的事）", () => {
     const openProject = vi.fn();
     renderWith({
-      projects: [entry({ id: "proj_x", name: "山与海" })],
       openProject,
+      projects: [entry({ id: "proj_x", name: "山与海" })],
     });
     /* 按可访问名精确取卡片那颗：同一行还有一颗「删除项目「山与海」」，
      * 模糊匹配会同时命中（而点错那颗的后果是删掉用户的项目）。 */
@@ -265,15 +253,13 @@ describe("WorksGallery 删除确认", () => {
     screen.getByRole("button", { name: "删除项目「山与海」" }).click();
     expect(requestDelete).toHaveBeenCalledWith("proj_a");
     // 确认框还没挂（controller 的 pendingDelete 仍为 null）。
-    expect(
-      screen.queryByRole("button", { name: "删除项目" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "删除项目" })).not.toBeInTheDocument();
   });
 
   it("确认框按出处分叉：删「仅服务端」那一行说的是服务端，不是普通那句", () => {
     renderWith({
-      projects: [entry({ id: "srv", name: "未命名", origin: "server" })],
       pendingDelete: entry({ id: "srv", name: "未命名", origin: "server" }),
+      projects: [entry({ id: "srv", name: "未命名", origin: "server" })],
     });
     expect(
       screen.getByText("删除服务端上的这条项目？"),
@@ -284,21 +270,17 @@ describe("WorksGallery 删除确认", () => {
 
   it("两侧都有的正常行走普通文案（说「服务端」会让人以为本机那份还在）", () => {
     renderWith({
-      projects: [entry({ id: "both", name: "山与海" })],
       pendingDelete: entry({ id: "both", name: "山与海" }),
+      projects: [entry({ id: "both", name: "山与海" })],
     });
     expect(screen.getByText("删除此画布项目？")).toBeInTheDocument();
-    expect(
-      screen.getByText(/画布内的节点与连线将一并丢失/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/画布内的节点与连线将一并丢失/)).toBeInTheDocument();
   });
 
   it("确认框关着的时候一个字都不该出现（controller 说没有待删项）", () => {
-    renderWith({ projects: [entry()], pendingDelete: null });
+    renderWith({ pendingDelete: null, projects: [entry()] });
     expect(screen.queryByText("删除此画布项目？")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("删除服务端上的这条项目？"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("删除服务端上的这条项目？")).not.toBeInTheDocument();
   });
 });
 

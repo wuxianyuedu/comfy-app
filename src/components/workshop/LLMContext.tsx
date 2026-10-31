@@ -38,7 +38,7 @@ export function useLLM(): LLMContextValue {
 }
 
 export function LLMProvider({ children }: { children: React.ReactNode }) {
-  const { config, localModels, remoteModels, remoteImageModels, loading, refresh } = useLLMConfig();
+  const { config, loading, localModels, refresh, remoteImageModels, remoteModels } = useLLMConfig();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -50,15 +50,15 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
    * 任何一次重渲染（含 `settingsOpen` 翻转本身）都会把整棵子树带着跑一遍。 */
   const value = React.useMemo<LLMContextValue>(
     () => ({
-      config,
-      localModels,
-      remoteModels,
-      remoteImageModels,
-      loading,
-      settingsOpen,
-      openSettings: () => setSettingsOpen(true),
       closeSettings: () => setSettingsOpen(false),
+      config,
+      loading,
+      localModels,
+      openSettings: () => setSettingsOpen(true),
       refresh,
+      remoteImageModels,
+      remoteModels,
+      settingsOpen,
     }),
     [config, localModels, remoteModels, remoteImageModels, loading, settingsOpen, refresh],
   );
@@ -119,7 +119,7 @@ function LLMSettingsModal({
     kind: "ok" | "err";
     text: string;
   } | null>(null);
-  const { saving, save } = useLLMConfigSave();
+  const { save, saving } = useLLMConfigSave();
 
   const provider = draftProvider ?? initial?.provider ?? "local";
   const baseUrl = initial?.baseUrl ?? "";
@@ -147,8 +147,8 @@ function LLMSettingsModal({
         onSaved(cfg);
       },
       {
-        report: (kind, detail) => setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
         failureText: "保存失败",
+        report: (kind, detail) => setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
       },
     );
   }
@@ -164,15 +164,15 @@ function LLMSettingsModal({
         async () => {
           const out = await completeChat({
             messages: [
-              { role: "system", content: "你是测试助手，只回复 OK。" },
-              { role: "user", content: "ping" },
+              { content: "你是测试助手，只回复 OK。", role: "system" },
+              { content: "ping", role: "user" },
             ],
             opts: {
-              provider,
               baseUrl,
-              model: activeModel,
-              temperature: 0.2,
               maxTokens: 16,
+              model: activeModel,
+              provider,
+              temperature: 0.2,
             },
           });
           return out.slice(0, 60);
@@ -181,8 +181,8 @@ function LLMSettingsModal({
           /* 成功文案是**动作结果**的函数（回显模型的前 60 个字符）——
            *`successText` 支持函数形式正是为这类落点（同`use-external-action`
            * 的`detail` 由端点给）。 */
-          report: (kind, detail) => setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
           failureText: "连接失败",
+          report: (kind, detail) => setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
           successText: (result) => `连接成功：${result.detail}`,
         },
       ),

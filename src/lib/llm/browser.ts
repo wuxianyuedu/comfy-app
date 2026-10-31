@@ -16,11 +16,11 @@ export type ChatArgs = {
  * 浏览器永远看不到它。SSE 分片形如 `{ token }`，
  * 末尾以 `[DONE]` 标记结束整条流。
  */
-export async function streamChat({ messages, opts, onToken, signal }: ChatArgs): Promise<string> {
+export async function streamChat({ messages, onToken, opts, signal }: ChatArgs): Promise<string> {
   const res = await fetch("/api/llm", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, stream: true, ...opts }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
     signal,
   });
 
@@ -104,9 +104,9 @@ export async function streamChat({ messages, opts, onToken, signal }: ChatArgs):
 /* 非流式的一次性对话。 */
 export async function completeChat({ messages, opts }: ChatArgs): Promise<string> {
   const res = await fetch("/api/llm", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, stream: false, ...opts }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
   });
   /* 错误信封的读法收在一处（规范 16 §16.2.4.35）。 */
   const json = /* SAFETY: 类型断言已复核 */ (await readJsonBody(res)) as {
@@ -139,14 +139,14 @@ export async function probeRemoteApi(input: {
   let res: Response;
   try {
     res = await fetch("/api/llm/test", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
     });
   } catch (e) {
     return {
-      ok: false,
       detail: errorMessage(e, "网络请求失败"),
+      ok: false,
     };
   }
   const json = /* SAFETY: 类型断言已复核 */ (await readJsonBody(res)) as {
@@ -162,10 +162,10 @@ export async function probeRemoteApi(input: {
       ? json.detail
       : (readApiError(json) ?? `请求失败 (${res.status})`);
   return {
-    ok: json.ok === true,
     detail,
     models: Array.isArray(json.models)
       ? json.models.filter((m): m is string => typeof m === "string" && m !== "")
       : undefined,
+    ok: json.ok === true,
   };
 }

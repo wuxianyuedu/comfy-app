@@ -25,9 +25,9 @@ function noop() {
 }
 
 const meta: Meta<typeof SettingsShell> = {
-  title: "Settings/SettingsShell",
   component: SettingsShell,
   parameters: { layout: "fullscreen" },
+  title: "Settings/SettingsShell",
 };
 export default meta;
 

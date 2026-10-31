@@ -91,9 +91,9 @@ describe("describeComfyInstance", () => {
   it("未配置路径（null / 空串 / 全空白）→ 都不判定", () => {
     for (const dir of [null, undefined, "", "   "]) {
       expect(describeComfyInstance(dir, makeExists(fakeFs()))).toEqual({
-        pathConfigured: false,
-        instanceType: null,
         desktopManaged: false,
+        instanceType: null,
+        pathConfigured: false,
       });
     }
   });
@@ -107,9 +107,9 @@ describe("describeComfyInstance", () => {
       path.join(root, "standalone-env", "python.exe"),
     );
     expect(describeComfyInstance(root, makeExists(fsSet))).toEqual({
-      pathConfigured: true,
-      instanceType: "desktop",
       desktopManaged: true,
+      instanceType: "desktop",
+      pathConfigured: true,
     });
   });
 
@@ -122,9 +122,9 @@ describe("describeComfyInstance", () => {
       path.join(root, "standalone-env", "python.exe"),
     );
     expect(describeComfyInstance(root, makeExists(fsSet))).toEqual({
-      pathConfigured: true,
-      instanceType: "desktop",
       desktopManaged: false,
+      instanceType: "desktop",
+      pathConfigured: true,
     });
   });
 
@@ -141,23 +141,23 @@ describe("describeComfyInstance", () => {
     );
     const exists = makeExists(fsSet);
     expect(describeComfyInstance(portable, exists)).toEqual({
-      pathConfigured: true,
-      instanceType: "portable",
       desktopManaged: false,
+      instanceType: "portable",
+      pathConfigured: true,
     });
     expect(describeComfyInstance(venv, exists)).toEqual({
-      pathConfigured: true,
-      instanceType: "venv",
       desktopManaged: false,
+      instanceType: "venv",
+      pathConfigured: true,
     });
   });
 
   it("不是有效安装（无 main.py）→ 路径算已配，但不判形态（UI 不显示徽标）", () => {
     const root = path.resolve("/comfy/empty");
     expect(describeComfyInstance(root, makeExists(fakeFs(root)))).toEqual({
-      pathConfigured: true,
-      instanceType: null,
       desktopManaged: false,
+      instanceType: null,
+      pathConfigured: true,
     });
   });
 });

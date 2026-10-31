@@ -87,7 +87,7 @@ export function useMaterialLibrary({
   const uploadBusy = useBusyAction();
   /** 递增触发重新拉取（上传/删除后刷新）。 */
   /* 「按需求重跑一遍取数」走唯一出口（规范 16 §16.2.4.70）。 */
-  const { ticket: reloadKey, refresh: reload } = useRefreshTicket();
+  const { refresh: reload, ticket: reloadKey } = useRefreshTicket();
 
   const refresh = useCallback(() => {
     setActionError(null);
@@ -190,34 +190,34 @@ export function useMaterialLibrary({
   const showItems = searching || folder !== null;
 
   const breadcrumbSegments: Array<{ key: string | null; label: string }> = searching
-    ? [{ label: `搜索结果 · ${items.length}`, key: null }]
+    ? [{ key: null, label: `搜索结果 · ${items.length}` }]
     : folder
       ? [
-          { label: "全部", key: null },
+          { key: null, label: "全部" },
           {
-            label: folders.find((fld) => fld.id === folder)?.name ?? folder,
             key: folder,
+            label: folders.find((fld) => fld.id === folder)?.name ?? folder,
           },
         ]
-      : [{ label: "全部", key: null }];
+      : [{ key: null, label: "全部" }];
 
   return {
-    scope,
+    breadcrumbSegments,
+    enterFolder,
+    error: actionError ?? loadError,
     folder,
-    search,
     folders,
     items,
     loading,
-    uploading: uploadBusy.busy,
-    error: actionError ?? loadError,
+    refresh,
+    remove,
+    scope,
+    search,
     searching,
-    showItems,
-    breadcrumbSegments,
     setScope,
     setSearch,
-    enterFolder,
+    showItems,
     upload,
-    remove,
-    refresh,
+    uploading: uploadBusy.busy,
   };
 }

@@ -26,11 +26,11 @@ import type { PidLookup } from "./proc-detect";
 function facts(over: Partial<ComfyExitFacts> = {}): ComfyExitFacts {
   return {
     code: null,
+    mode: "bound",
+    pid: 4242,
     signal: null,
     stopRequested: false,
-    pid: 4242,
     uptimeMs: 137_000,
-    mode: "bound",
     ...over,
   };
 }
@@ -50,7 +50,7 @@ describe("formatUptime", () => {
 
 describe("describeComfyExit", () => {
   it("用户主动关闭最先判（那是我们自己发起的）", () => {
-    const r = describeComfyExit(facts({ stopRequested: true, code: 0 }));
+    const r = describeComfyExit(facts({ code: 0, stopRequested: true }));
     expect(r.reason).toBe("用户主动关闭");
     expect(r.advice).toBeNull();
   });
@@ -79,7 +79,7 @@ describe("describeComfyExit", () => {
   });
 
   it("非零码的建议按模式分：Studio 是 Node 包，不该被念 Python / 显存", () => {
-    const crash = describeComfyExit(facts({ mode: "studio", code: 1 }));
+    const crash = describeComfyExit(facts({ code: 1, mode: "studio" }));
     expect(crash.reason).toContain("异常退出（exit 1）");
     expect(crash.advice).toContain("drizzle.config.ts");
     expect(crash.advice).not.toContain("Python");
@@ -87,18 +87,18 @@ describe("describeComfyExit", () => {
   });
 
   it("ComfyUI 那一侧仍给 Python / 显存那几个方向（分模式不等于把它改掉）", () => {
-    const r = describeComfyExit(facts({ mode: "bound", code: 1 }));
+    const r = describeComfyExit(facts({ code: 1, mode: "bound" }));
     expect(r.advice).toContain("显存");
   });
 
   it("studio 模式下用户主动关闭优先于退出码", () => {
-    const r = describeComfyExit(facts({ mode: "studio", code: 1, stopRequested: true }));
+    const r = describeComfyExit(facts({ code: 1, mode: "studio", stopRequested: true }));
     expect(r.reason).toBe("用户主动关闭");
     expect(r.advice).toBeNull();
   });
 
   it("保活模式拿不到 code/signal：如实说，不编一个 0", () => {
-    const r = describeComfyExit(facts({ mode: "keepAlive", signal: null, code: null }));
+    const r = describeComfyExit(facts({ code: null, mode: "keepAlive", signal: null }));
     expect(r.reason).toContain("拿不到退出码");
     expect(r.reason).not.toContain("exit 0");
   });
@@ -120,22 +120,22 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
     let stopped = false;
     const onExit = vi.fn();
     const watcher = startComfyExitWatcher({
+      clearTimer: () => {
+        stopped = true;
+      },
       findPid,
-      onExit,
       isStopped: () => stopRequested,
+      now: () => 1_000_000,
+      onExit,
       setTimer: (fn) => {
         ticks.push(fn);
         return /* SAFETY: 类型断言已复核 */ 0 as unknown as ReturnType<typeof setInterval>;
       },
-      clearTimer: () => {
-        stopped = true;
-      },
-      now: () => 1_000_000,
     });
     return {
       onExit,
-      watcher,
       stopped: () => stopped,
+      watcher,
       /** 跑一轮（等它内部的 await 落定）。 */
       tick: async () => {
         for (const fn of ticks) {
@@ -149,8 +149,8 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
   it("先见到进程、之后连续两次查不到 → 报一次退出并自停", async () => {
     const findPid = vi
       .fn<() => Promise<PidLookup>>()
-      .mockResolvedValueOnce({ pid: 7001, failed: false })
-      .mockResolvedValue({ pid: null, failed: false });
+      .mockResolvedValueOnce({ failed: false, pid: 7001 })
+      .mockResolvedValue({ failed: false, pid: null });
     const h = harness(findPid);
 
     await h.tick(); // 第一次见到它：记开头
@@ -167,7 +167,7 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
 
   it("还没第一次见到它就查不到 → 不抢答（拉起失败由启动循环自己报）", async () => {
     const h = harness(
-      vi.fn<() => Promise<PidLookup>>().mockResolvedValue({ pid: null, failed: false }),
+      vi.fn<() => Promise<PidLookup>>().mockResolvedValue({ failed: false, pid: null }),
     );
     await h.tick();
     await h.tick();
@@ -179,10 +179,10 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
   it("中间又见到进程 → miss 计数复位（冷启动抖动不误报）", async () => {
     const findPid = vi
       .fn<() => Promise<PidLookup>>()
-      .mockResolvedValueOnce({ pid: 7001, failed: false })
-      .mockResolvedValueOnce({ pid: null, failed: false })
-      .mockResolvedValueOnce({ pid: 7001, failed: false })
-      .mockResolvedValue({ pid: null, failed: false });
+      .mockResolvedValueOnce({ failed: false, pid: 7001 })
+      .mockResolvedValueOnce({ failed: false, pid: null })
+      .mockResolvedValueOnce({ failed: false, pid: 7001 })
+      .mockResolvedValue({ failed: false, pid: null });
     const h = harness(findPid);
     await h.tick();
     await h.tick(); // miss 1
@@ -193,7 +193,7 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
 
   it("用户主动关 → 监督器自停，不报「莫名退出」", async () => {
     const h = harness(
-      vi.fn<() => Promise<PidLookup>>().mockResolvedValue({ pid: null, failed: false }),
+      vi.fn<() => Promise<PidLookup>>().mockResolvedValue({ failed: false, pid: null }),
       true,
     );
     await h.tick();
@@ -203,7 +203,7 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
 
   it("stop() 之后不再回调（宿主重新拉起前会调它）", async () => {
     const h = harness(
-      vi.fn<() => Promise<PidLookup>>().mockResolvedValue({ pid: 7001, failed: false }),
+      vi.fn<() => Promise<PidLookup>>().mockResolvedValue({ failed: false, pid: 7001 }),
     );
     h.watcher.stop();
     await h.tick();
@@ -213,7 +213,7 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
   it("进程表查询失败（超时）不当作进程消失：连续失败不报退出，恢复后仍正常判死", async () => {
     const findPid = vi
       .fn<() => Promise<PidLookup>>()
-      .mockResolvedValue({ pid: null, failed: true });
+      .mockResolvedValue({ failed: true, pid: null });
     const h = harness(findPid);
     await h.tick();
     await h.tick();
@@ -222,8 +222,8 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
     expect(h.stopped()).toBe(false);
 
     // 之后恢复：见到进程 → 再两次查不到才判死
-    findPid.mockResolvedValueOnce({ pid: 7001, failed: false });
-    findPid.mockResolvedValue({ pid: null, failed: false });
+    findPid.mockResolvedValueOnce({ failed: false, pid: 7001 });
+    findPid.mockResolvedValue({ failed: false, pid: null });
     await h.tick(); // 见到
     await h.tick(); // miss 1
     await h.tick(); // miss 2 → 判死
@@ -244,11 +244,11 @@ describe("reportKeepAliveExit —— 把保活崩溃尾部带进 runtime 日志"
     fs.writeFileSync(outFile, "started ok\n");
     const runtime: Array<string> = [];
     reportKeepAliveExit({
-      facts: { pid: 149720, uptimeMs: 26 * 60_000 + 13_000 },
-      stopRequested: false,
-      keepAliveLogs: { out: outFile, err: errFile },
       appendRuntimeLog: (l) => runtime.push(l),
+      facts: { pid: 149720, uptimeMs: 26 * 60_000 + 13_000 },
+      keepAliveLogs: { err: errFile, out: outFile },
       log: vi.fn(),
+      stopRequested: false,
     });
     const tailErr = runtime.filter((l) => l.startsWith("[exit][err]"));
     const tailOut = runtime.filter((l) => l.startsWith("[exit][out]"));
@@ -262,10 +262,10 @@ describe("reportKeepAliveExit —— 把保活崩溃尾部带进 runtime 日志"
   it("没有 keepAliveLogs 时不带尾部（向后兼容）", () => {
     const runtime: Array<string> = [];
     reportKeepAliveExit({
-      facts: { pid: 1, uptimeMs: 1000 },
-      stopRequested: false,
       appendRuntimeLog: (l) => runtime.push(l),
+      facts: { pid: 1, uptimeMs: 1000 },
       log: vi.fn(),
+      stopRequested: false,
     });
     expect(runtime.some((l) => l.startsWith("[exit][err]"))).toBe(false);
   });
@@ -274,10 +274,10 @@ describe("reportKeepAliveExit —— 把保活崩溃尾部带进 runtime 日志"
 describe("describeStaleSession —— 应用自己也一起没了的那一档", () => {
   it("有开始没结束 → 反推出「应用或系统先没了」并给出那几类嫌疑", () => {
     const notice = describeStaleSession({
-      pid: 1234,
-      mode: "keepAlive",
-      startedAt: "2026-09-21T03:00:00.000Z",
       exited: null,
+      mode: "keepAlive",
+      pid: 1234,
+      startedAt: "2026-09-21T03:00:00.000Z",
     });
     expect(notice).toContain("没有退出记录");
     expect(notice).toContain("连带杀树");
@@ -286,13 +286,13 @@ describe("describeStaleSession —— 应用自己也一起没了的那一档", 
   it("有始有终 / 没有标记 → 不提示", () => {
     expect(
       describeStaleSession({
-        pid: 1,
-        mode: "bound",
-        startedAt: "2026-09-21T03:00:00.000Z",
         exited: {
           at: "2026-09-21T03:10:00.000Z",
           reason: "异常退出（exit 1）",
         },
+        mode: "bound",
+        pid: 1,
+        startedAt: "2026-09-21T03:00:00.000Z",
       }),
     ).toBeNull();
     expect(describeStaleSession(null)).toBeNull();
@@ -304,10 +304,10 @@ describe("describeStaleSession —— 应用自己也一起没了的那一档", 
     expect(
       describeStaleSession(
         {
-          pid: 1234,
-          mode: "keepAlive",
-          startedAt: "2026-09-21T03:00:00.000Z",
           exited: null,
+          mode: "keepAlive",
+          pid: 1234,
+          startedAt: "2026-09-21T03:00:00.000Z",
         },
         true,
       ),
@@ -318,10 +318,10 @@ describe("describeStaleSession —— 应用自己也一起没了的那一档", 
     expect(
       describeStaleSession(
         {
-          pid: 1234,
-          mode: "keepAlive",
-          startedAt: "2026-09-21T03:00:00.000Z",
           exited: null,
+          mode: "keepAlive",
+          pid: 1234,
+          startedAt: "2026-09-21T03:00:00.000Z",
         },
         false,
       ),
@@ -334,10 +334,10 @@ describe("describeStaleSession —— 应用自己也一起没了的那一档", 
     expect(
       describeStaleSession(
         {
-          pid: 1234,
-          mode: "bound",
-          startedAt: "2026-09-21T03:00:00.000Z",
           exited: null,
+          mode: "bound",
+          pid: 1234,
+          startedAt: "2026-09-21T03:00:00.000Z",
         },
         true,
       ),

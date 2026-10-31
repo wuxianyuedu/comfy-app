@@ -16,23 +16,23 @@ import { TopBar } from "./TopBar";
  * 本文件判的是「标题在哪、名称行还在不在」，与窗口宽度无关。 */
 if (!window.matchMedia) {
   window.matchMedia = (query: string): MediaQueryList => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener() {
-      void 0;
-    },
-    removeListener() {
-      void 0;
-    },
     addEventListener() {
       void 0;
     },
-    removeEventListener() {
+    addListener() {
       void 0;
     },
     dispatchEvent() {
       return false;
+    },
+    matches: false,
+    media: query,
+    onchange: null,
+    removeEventListener() {
+      void 0;
+    },
+    removeListener() {
+      void 0;
     },
   });
 }

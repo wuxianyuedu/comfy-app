@@ -100,7 +100,7 @@ function parseStackFrame(raw: string): StackFrame | null {
     path = path.slice(srcIdx + 1);
   }
 
-  return { raw: line, path, lineNo };
+  return { lineNo, path, raw: line };
 }
 
 /**

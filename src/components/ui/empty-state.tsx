@@ -85,13 +85,13 @@ function isIconComponent(value: LucideIcon | ReactNode): value is LucideIcon {
 }
 
 export function EmptyState({
-  title,
+  action,
+  className,
   description,
   icon,
-  variant = "page",
-  action,
   minHeightClass = "min-h-55",
-  className,
+  title,
+  variant = "page",
 }: EmptyStateProps) {
   if (variant === "hint") {
     return (

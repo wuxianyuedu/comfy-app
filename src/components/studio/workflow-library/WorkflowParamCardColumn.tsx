@@ -66,16 +66,16 @@ export type WorkflowParamCardColumnProps = {
 };
 
 export function WorkflowParamCardColumn({
-  entries,
-  contractEntries,
-  resolved,
-  io,
   canWire = false,
-  selectedEntryId = null,
-  onSelect,
+  contractEntries,
+  endpoint,
+  entries,
+  io,
   isManual,
   onReset,
-  endpoint,
+  onSelect,
+  resolved,
+  selectedEntryId = null,
 }: WorkflowParamCardColumnProps) {
   if (entries.length === 0) {
     return null;
@@ -132,13 +132,13 @@ export function WorkflowParamCardColumn({
                  *  宽度 / 高度 / 像素量 = FLOAT，分辨率档 / 倍数 = INT，宽高比 =
                  *  COMBO（见 `sizeSubTypeDisplay`）。 */
                 return {
-                  name: item.id,
-                  display: sizeSubLabel(item.cls),
-                  type: sizeSubTypeDisplay(item.cls),
-                  connected: !!target,
-                  ioKey: target ?? "",
-                  handleId: item.id,
                   active: !!target,
+                  connected: !!target,
+                  display: sizeSubLabel(item.cls),
+                  handleId: item.id,
+                  ioKey: target ?? "",
+                  name: item.id,
+                  type: sizeSubTypeDisplay(item.cls),
                 };
               })}
               readOnly={!canWire}

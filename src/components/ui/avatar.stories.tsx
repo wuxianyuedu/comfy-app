@@ -25,12 +25,12 @@ const PORTRAIT =
   );
 
 const meta = {
-  title: "UI/Avatar",
-  component: Avatar,
   args: { size: "default" },
   argTypes: {
     size: { control: "select", options: SIZES },
   },
+  component: Avatar,
+  title: "UI/Avatar",
 } satisfies Meta<typeof Avatar>;
 
 export default meta;

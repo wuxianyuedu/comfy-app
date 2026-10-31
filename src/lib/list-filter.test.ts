@@ -58,9 +58,9 @@ type Group = {
 };
 
 const GROUPS: Array<Group> = [
-  { title: "中式", options: ["唐装", "汉服", "旗袍"] },
-  { title: "日韩", options: ["和服", "JK制服"] },
-  { title: "西式", options: ["风衣", "燕尾服"] },
+  { options: ["唐装", "汉服", "旗袍"], title: "中式" },
+  { options: ["和服", "JK制服"], title: "日韩" },
+  { options: ["风衣", "燕尾服"], title: "西式" },
 ];
 
 describe("filterGroups", () => {
@@ -99,14 +99,14 @@ describe("filterGroups", () => {
   });
 
   it("默认命中判据对 `String(item)` 折小写子串匹配", () => {
-    const nums = [{ title: "数", items: [1, 10, 21] }];
+    const nums = [{ items: [1, 10, 21], title: "数" }];
     /* 1 / 10 / 21 的十进制写法都含 "1"；只有 21 含 "2"。 */
     expect(filterGroups(nums, "1", "items")[0]?.items).toEqual([1, 10, 21]);
     expect(filterGroups(nums, "2", "items")[0]?.items).toEqual([21]);
   });
 
   it("命中判据可换成「看多个字段」——那是调用处的域判据", () => {
-    const rows = [{ title: "组", items: [{ name: "a", file: "x.safetensors" }] }];
+    const rows = [{ items: [{ file: "x.safetensors", name: "a" }], title: "组" }];
     const out = filterGroups(rows, "safeten", "items", (item) =>
       matchesNeedle("safeten", `${item.name} ${item.file}`),
     );

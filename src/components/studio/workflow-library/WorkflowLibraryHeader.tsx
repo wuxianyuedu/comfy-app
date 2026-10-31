@@ -36,17 +36,17 @@ type WorkflowLibraryHeaderProps = {
 };
 
 export function WorkflowLibraryHeader({
-  onToggleImport,
-  sourceFilter,
-  onSourceFilterChange,
-  sourceCounts,
-  typeFilter,
-  onTypeFilterChange,
-  typeCounts,
   modelFilter,
-  onModelFilterChange,
   modelTags,
   onManageModels,
+  onModelFilterChange,
+  onSourceFilterChange,
+  onToggleImport,
+  onTypeFilterChange,
+  sourceCounts,
+  sourceFilter,
+  typeCounts,
+  typeFilter,
 }: WorkflowLibraryHeaderProps) {
   return (
     <div className="border-border-subtle flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-5 py-2.5">

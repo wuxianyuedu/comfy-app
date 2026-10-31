@@ -88,7 +88,7 @@ export function useCanvasSettings() {
     applySettings(DEFAULT_CANVAS_SETTINGS);
   }, []);
 
-  return { settings, update, reset, hydrated };
+  return { hydrated, reset, settings, update };
 }
 
 /* 只取「调试模式」开关的便捷访问器。 */

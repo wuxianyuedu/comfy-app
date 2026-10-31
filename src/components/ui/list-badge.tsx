@@ -40,9 +40,9 @@ export type ListBadgeTone = "neutral" | "success" | "warning" | "danger" | "prim
 
 export function ListBadge({
   children,
-  tone = "neutral",
-  title,
   className,
+  title,
+  tone = "neutral",
 }: {
   children: React.ReactNode;
   className?: string;

@@ -7,10 +7,10 @@ import { describe, it, expect, vi } from "vitest";
  * 把它们替换成空操作，既让 import 安全，又能测到那个纯助手。 */
 vi.mock("../core/repository", () => ({
   taskRepository: {
-    listStaleUnownedQueued: vi.fn().mockResolvedValue([]),
-    listStaleRunning: vi.fn().mockResolvedValue([]),
     finalizeFailure: vi.fn(),
     finalizeFromReaper: vi.fn(),
+    listStaleRunning: vi.fn().mockResolvedValue([]),
+    listStaleUnownedQueued: vi.fn().mockResolvedValue([]),
   },
 }));
 vi.mock("./lifecycle", () => ({
@@ -21,7 +21,7 @@ vi.mock("./client", () => ({
 }));
 vi.mock("./executor-cli", () => ({ cliProcs: new Map() }));
 vi.mock("~/lib/core/logger", () => ({
-  logger: { warn: vi.fn(), error: vi.fn() },
+  logger: { error: vi.fn(), warn: vi.fn() },
 }));
 
 import { isTaskClaimedInProcess } from "./reaper";
@@ -34,8 +34,8 @@ function fakeState(
   }>,
 ) {
   return {
-    pendingDispatch: overrides.pendingDispatch ?? new Set<string>(),
     executedWorkflow: overrides.executedWorkflow ?? new Map<string, unknown>(),
+    pendingDispatch: overrides.pendingDispatch ?? new Set<string>(),
     settled: overrides.settled ?? new Set<string>(),
   };
 }
@@ -89,10 +89,10 @@ describe("configureReaper 接缝", () => {
   it("接受 Partial<ReaperDeps>、两次调用是合并语义", async () => {
     const mod = await import("./reaper");
     const fakeRepo = {
-      listStaleUnownedQueued: async () => [],
-      listStaleRunning: async () => [],
       finalizeFailure: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
       finalizeFromReaper: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
+      listStaleRunning: async () => [],
+      listStaleUnownedQueued: async () => [],
     };
     expect(() => mod.configureReaper({ taskRepo: fakeRepo })).not.toThrow();
     // 再来一次空 Partial：合法、只是没覆盖任何东西。

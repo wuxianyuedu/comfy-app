@@ -38,8 +38,8 @@ export type ContentAssetGallery = {
 };
 
 export function useContentAssetGallery({
-  taskId,
   enabled,
+  taskId,
 }: UseContentAssetGalleryArgs): ContentAssetGallery {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
@@ -51,7 +51,7 @@ export function useContentAssetGallery({
   const [gallery, setGallery] = useState<{
     images: Array<TaskGalleryImage> | null;
     key: string;
-  }>({ key: ctxKey, images: null });
+  }>({ images: null, key: ctxKey });
   const images = gallery.key === ctxKey ? gallery.images : null;
 
   useEffect(() => {
@@ -66,8 +66,8 @@ export function useContentAssetGallery({
         const list = await fetchTaskImages(taskId);
         guard.commit(() =>
           setGallery({
-            key: ctxKey,
             images: list && list.length > 1 ? list : null,
+            key: ctxKey,
           }),
         );
       } catch {
@@ -77,5 +77,5 @@ export function useContentAssetGallery({
     return () => guard.dispose();
   }, [taskId, enabled, ctxKey]);
 
-  return { images, open, index, setOpen, setIndex };
+  return { images, index, open, setIndex, setOpen };
 }

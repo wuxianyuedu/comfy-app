@@ -26,9 +26,9 @@ type Layout = NonNullable<KeyValueLayout>;
 const LAYOUTS: Array<Layout> = ["rows", "stacked", "table", "inline"];
 
 const meta = {
-  title: "UI/KeyValueRows",
-  component: KeyValueRows,
   args: { items: [{ key: "样例", raw: "值" }] },
+  component: KeyValueRows,
+  title: "UI/KeyValueRows",
 } satisfies Meta<typeof KeyValueRows>;
 
 export default meta;

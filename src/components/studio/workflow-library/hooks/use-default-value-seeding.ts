@@ -16,7 +16,7 @@ export function useDefaultValueSeeding(params: {
   workflowId: string;
   workflowIO: WorkflowIOMap | null;
 }) {
-  const { workflowId, workflowIO, effectiveMode } = params;
+  const { effectiveMode, workflowId, workflowIO } = params;
   const [values, setValues] = useState<Record<string, unknown>>({});
   const seedRef = useRef<string | null>(null);
   /* 上一次播种下去的默认值表 —— 判断「用户有没有改过这一格」的基线（见
@@ -50,5 +50,5 @@ export function useDefaultValueSeeding(params: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在 workflow/模式变化时整表播种，IO 变化走上面的保覆盖刷新
   }, [workflowIO, workflowId, effectiveMode]);
 
-  return { values, setValues };
+  return { setValues, values };
 }

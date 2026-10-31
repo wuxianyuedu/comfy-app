@@ -48,13 +48,13 @@ export type ShotNodePatch = {
  *  视频片段（clipUrl）在 Phase 3c 接入视频节点，这里先只映镜头图。 */
 export function shotToNodePatch(shot: Shot): ShotNodePatch {
   return {
-    shotId: shot.id,
     kind: "image",
-    prompt: shot.prompt,
     negative: shot.negativePrompt,
+    prompt: shot.prompt,
+    resultPath: shot.imageUrl,
+    shotId: shot.id,
     status: shotStatusToNodeStatus(shot.status),
     taskId: shot.taskId,
-    resultPath: shot.imageUrl,
   };
 }
 
@@ -66,7 +66,7 @@ export type ShotEditPatch = {
 };
 
 export function nodeEditToShot(patch: { negative: string; prompt: string }): ShotEditPatch {
-  return { prompt: patch.prompt, negativePrompt: patch.negative };
+  return { negativePrompt: patch.negative, prompt: patch.prompt };
 }
 
 /** 把一批 Shot 同步进「已有节点」的规划：
@@ -85,7 +85,7 @@ export function planShotSync(
       newShotIds.push(shot.id);
     }
   }
-  return { patches, newShotIds };
+  return { newShotIds, patches };
 }
 
 /** 带 shotId 锚的最小节点形状（画布节点结构上满足；避免耦合 ReactFlow 完整类型）。 */
@@ -193,11 +193,11 @@ export function applyShotRedo(shots: Array<unknown>, shotId: string): Array<unkn
     const rev = typeof raw.rev === "number" && Number.isFinite(raw.rev) ? raw.rev : 0;
     return {
       ...raw,
-      imageUrl: undefined,
-      clipUrl: undefined,
-      status: "idle",
       clipStatus: "idle",
+      clipUrl: undefined,
+      imageUrl: undefined,
       rev: rev + 1,
+      status: "idle",
     };
   });
   return hit ? next : shots;

@@ -22,30 +22,30 @@ import {
 const OPTIONS: Array<WorkflowPickOption> = [
   {
     id: "wf_local",
-    name: "角色一致性 · 三视图",
-    taskType: "image",
-    sourcePath: "/workflows/character-3view.json",
     modelTags: ["SDXL"],
+    name: "角色一致性 · 三视图",
+    sourcePath: "/workflows/character-3view.json",
+    taskType: "image",
   },
   {
     id: "wf_online",
-    name: "首帧 → 逐镜生成",
-    taskType: "video",
-    sourcePath: null,
     modelTags: ["Wan2.2"],
+    name: "首帧 → 逐镜生成",
+    sourcePath: null,
+    taskType: "video",
   },
   { id: "wf_plain", name: "无类型标记的旧工作流", sourcePath: null },
 ];
 
 const meta = {
-  title: "Studio/WorkflowPickChip",
-  component: WorkflowPickChip,
-  args: { value: "wf_local", options: OPTIONS, onSelect: () => undefined },
+  args: { onSelect: () => undefined, options: OPTIONS, value: "wf_local" },
   argTypes: {
-    value: { control: { type: "text" } },
-    options: { control: { type: "object" } },
     loading: { control: { type: "boolean" } },
+    options: { control: { type: "object" } },
+    value: { control: { type: "text" } },
   },
+  component: WorkflowPickChip,
+  title: "Studio/WorkflowPickChip",
 } satisfies Meta<typeof WorkflowPickChip>;
 
 export default meta;
@@ -83,9 +83,9 @@ export const LoadingVersusEmpty: Story = {
 /** 自定义空提示：同一档空态，出口文案由调用处给（节点上说的是「去工作流库导入」）。 */
 export const CustomEmptyHint: Story = {
   args: {
-    value: "",
-    options: [],
     emptyHint: "本机还没有工作流，去工作室的「工作流库」导入",
+    options: [],
+    value: "",
   },
   render: (args) => (
     <div className="flex min-h-40 items-start">

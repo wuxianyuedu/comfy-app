@@ -59,8 +59,8 @@ export function SettingsView({ fillHeight, initialSection, onConsumeSection }: S
    * 不传 `title`，屏名以 `sr-only` 留在 DOM；独立路由 `/settings` 没有顶栏也不显示
    * 页签，屏名只在这一屏出现，仍给可见标题。 */
   const frame = {
-    section: c.section,
     onSelect: c.setSection,
+    section: c.section,
     /* 跳转载荷的落点透给外壳：三态壳也带着它 —— 加载壳没有分区节、滚不过去也
      * 不会消费载荷；就绪壳挂上后再滚到目标分区。 */
     jumpSection: c.pendingJump,
@@ -130,11 +130,11 @@ function SettingsLoadError({ errorText, onRetry }: { errorText: string; onRetry:
    * 用户以为复制到了。 */
   const [copyFailed, setCopyFailed] = useState(false);
   const copyError = useCopyFeedback({
+    onFailure: () => setCopyFailed(true),
     onSuccess: () => {
       setCopyFailed(false);
       copied.flash();
     },
-    onFailure: () => setCopyFailed(true),
   });
   const togglePanel = useLogPanel((s) => s.toggleOpen);
 

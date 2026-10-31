@@ -33,10 +33,10 @@ import { asRecord } from "~/lib/is-record";
  * 写入 bug）时下游会以「看起来是数组、元素却缺字段」的形态炸在渲染里。
  * 这里给出契约 schema，供读取侧收口（写作侧已由 ValidationError 类型约束）。 */
 const validationErrorSchema = z.object({
-  nodeId: z.string(),
   classType: z.string(),
   field: z.string(),
   message: z.string(),
+  nodeId: z.string(),
 });
 
 /** 校验并收窄任务表 JSON 列里的 validationErrors；不合法返回 undefined。 */
@@ -145,19 +145,19 @@ export function extractValidationErrors(
                 /* SAFETY: 类型断言已复核 */ (v as { details?: string })?.details ??
                 JSON.stringify(v)) ||
               "配置错误";
-        out.push({ nodeId: nid, classType, field, message });
+        out.push({ classType, field, message, nodeId: nid });
       }
     } else if (typeof errRec?.message === "string") {
-      out.push({ nodeId: nid, classType, field: "", message: errRec.message });
+      out.push({ classType, field: "", message: errRec.message, nodeId: nid });
     } else if (typeof err === "string") {
-      out.push({ nodeId: nid, classType, field: "", message: err });
+      out.push({ classType, field: "", message: err, nodeId: nid });
     } else if (err && typeof err === "object") {
       // 未知的结构化形状 —— 尽力序列化出来，绝不把信息丢掉。
       out.push({
-        nodeId: nid,
         classType,
         field: "",
         message: JSON.stringify(err),
+        nodeId: nid,
       });
     }
   }

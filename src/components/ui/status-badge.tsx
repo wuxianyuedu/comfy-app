@@ -33,35 +33,35 @@ type StatusTone = "success" | "warning" | "danger" | "primary" | "neutral";
 
 const STATUS_TONE: Record<string, StatusTone> = {
   // 成功/完成
-  SUCCEEDED: "success",
   ACTIVE: "success",
+  DONE: "success",
   PUBLISHED: "success",
   READY: "success",
-  DONE: "success",
+  SUCCEEDED: "success",
   // 进行中（品牌色）
   RUNNING: "primary",
   // 待处理/过渡（警告色）
-  QUEUED: "warning",
-  PENDING: "warning",
   DRAFT: "warning",
+  PENDING: "warning",
+  QUEUED: "warning",
   STARTING: "warning",
   // 失败/异常（走 shadcn 的 --destructive，与 Button 的 destructive 同源）
-  FAILED: "danger",
-  ERROR: "danger",
   BANNED: "danger",
+  ERROR: "danger",
+  FAILED: "danger",
   STALE: "danger",
   // 中性
-  IDLE: "neutral",
   DISABLED: "neutral",
+  IDLE: "neutral",
   INACTIVE: "neutral",
   LOCKED: "neutral",
 };
 
 export function StatusBadge({
-  status,
-  label,
-  dot = true,
   className,
+  dot = true,
+  label,
+  status,
 }: {
   className?: string;
   /** 是否渲染状态圆点（叠在媒体上的角标传 false） */

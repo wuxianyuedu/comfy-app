@@ -42,7 +42,7 @@ type Behavior = {
   syncError?: string;
 };
 
-let behavior: Behavior = { folders: [], comfyReachable: true };
+let behavior: Behavior = { comfyReachable: true, folders: [] };
 const saveInputs: Array<{ enabled: boolean; folder: string }> = [];
 /** 记录 configList 被调用的次数 —— 断言「挂载时加载一次」不随重渲染复发。 */
 let configListCalls = 0;
@@ -50,18 +50,28 @@ const deleteInputs: Array<{ folder: string }> = [];
 
 function folder(name: string, enabled = false): Folder {
   return {
-    folder: name,
-    type: name,
-    label: name,
-    enabled,
-    hasConfig: enabled,
     count: 0,
+    enabled,
+    folder: name,
+    hasConfig: enabled,
+    label: name,
+    type: name,
   };
 }
 
 const t = createTestTRPC();
 const mockRouter = t.router({
   model: t.router({
+    configDelete: t.procedure.input(z.object({ folder: z.string() })).mutation(({ input }) => {
+      deleteInputs.push(input);
+      if (behavior.deleteError) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: behavior.deleteError,
+        });
+      }
+      return { ok: true };
+    }),
     configList: t.procedure.query(() => {
       configListCalls += 1;
       if (behavior.listError) {
@@ -71,16 +81,16 @@ const mockRouter = t.router({
         });
       }
       return {
+        comfyReachable: behavior.comfyReachable ?? true,
         folders: behavior.folders,
         rows: [],
-        comfyReachable: behavior.comfyReachable ?? true,
       };
     }),
     configSave: t.procedure
       .input(
         z.object({
-          folder: z.string(),
           enabled: z.boolean(),
+          folder: z.string(),
           label: z.string().optional(),
         }),
       )
@@ -94,16 +104,6 @@ const mockRouter = t.router({
         }
         return { ok: true };
       }),
-    configDelete: t.procedure.input(z.object({ folder: z.string() })).mutation(({ input }) => {
-      deleteInputs.push(input);
-      if (behavior.deleteError) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: behavior.deleteError,
-        });
-      }
-      return { ok: true };
-    }),
     sync: t.procedure.mutation(() => {
       if (behavior.syncError) {
         throw new TRPCError({
@@ -111,7 +111,7 @@ const mockRouter = t.router({
           message: behavior.syncError,
         });
       }
-      return { ok: true, count: behavior.folders.length };
+      return { count: behavior.folders.length, ok: true };
     }),
   }),
 });
@@ -134,9 +134,9 @@ function makeWrapper(explicitClient?: QueryClient) {
       { client: qc },
       // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children，tRPC 的 ProviderProps 要求它带在 props 上
       createElement(TRPCProvider, {
-        trpcClient: client,
-        queryClient: qc,
         children,
+        queryClient: qc,
+        trpcClient: client,
       }),
     );
   };
@@ -145,7 +145,7 @@ function makeWrapper(explicitClient?: QueryClient) {
 beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 afterEach(() => {
   cleanup();
-  behavior = { folders: [], comfyReachable: true };
+  behavior = { comfyReachable: true, folders: [] };
   saveInputs.length = 0;
   deleteInputs.length = 0;
   configListCalls = 0;
@@ -156,8 +156,8 @@ afterAll(() => server.close());
 describe("useModelFolderConfig", () => {
   it("挂载：loading 收敛，目录按 enabled 拆成两组，comfyReachable 落到状态", async () => {
     behavior = {
-      folders: [folder("checkpoints", true), folder("loras")],
       comfyReachable: false,
+      folders: [folder("checkpoints", true), folder("loras")],
     };
     const { result } = renderHook(() => useModelFolderConfig(), {
       wrapper: makeWrapper(),
@@ -186,8 +186,8 @@ describe("useModelFolderConfig", () => {
    */
   it("缓存已热的第二次挂载：comfyReachable 不许停在乐观默认值上", async () => {
     behavior = {
-      folders: [folder("checkpoints", true), folder("loras")],
       comfyReachable: false,
+      folders: [folder("checkpoints", true), folder("loras")],
     };
     // 与真实应用同档：缓存跨挂载存活（createTestQueryClient 的 gcTime:0 会抹掉这一格）。
     const warm = new QueryClient({
@@ -216,7 +216,7 @@ describe("useModelFolderConfig", () => {
    * 显示成「已连接 + 没有目录」两条假结论。
    */
   it("configList 失败：错误必须可见，且不许冒充「已连接」", async () => {
-    behavior = { folders: [], comfyReachable: false, listError: "boom" };
+    behavior = { comfyReachable: false, folders: [], listError: "boom" };
     const { result } = renderHook(() => useModelFolderConfig(), {
       wrapper: makeWrapper(),
     });
@@ -231,7 +231,7 @@ describe("useModelFolderConfig", () => {
    * `model.configList` 每 25ms 打一次（5 秒 194 次，ISSUE #1803）。 */
   it("重渲染不复发首屏加载：configList 只在挂载时取一次", async () => {
     behavior = { folders: [folder("checkpoints", true)] };
-    const { result, rerender } = renderHook(() => useModelFolderConfig(), {
+    const { rerender, result } = renderHook(() => useModelFolderConfig(), {
       wrapper: makeWrapper(),
     });
     /* 基数要等挂载链**彻底落定**之后再取。挂载期不止一个来源：`useQuery` 自己首发一次，
@@ -265,7 +265,7 @@ describe("useModelFolderConfig", () => {
     await act(async () => {
       await result.current.toggle("loras", true);
     });
-    expect(saveInputs).toContainEqual({ folder: "loras", enabled: true });
+    expect(saveInputs).toContainEqual({ enabled: true, folder: "loras" });
     expect(result.current.err).toBeNull();
   });
 
@@ -282,7 +282,7 @@ describe("useModelFolderConfig", () => {
     await act(async () => {
       await result.current.remove("loras");
     });
-    expect(saveInputs).toContainEqual({ folder: "loras", enabled: true });
+    expect(saveInputs).toContainEqual({ enabled: true, folder: "loras" });
     expect(deleteInputs).toContainEqual({ folder: "loras" });
   });
 
@@ -316,7 +316,7 @@ describe("useModelFolderConfig", () => {
   });
 
   it("写操作抛非 Error：回落「网络错误」而不是把 unknown 抛给用户", async () => {
-    behavior = { folders: [folder("loras")], deleteError: "boom" };
+    behavior = { deleteError: "boom", folders: [folder("loras")] };
     const { result } = renderHook(() => useModelFolderConfig(), {
       wrapper: makeWrapper(),
     });

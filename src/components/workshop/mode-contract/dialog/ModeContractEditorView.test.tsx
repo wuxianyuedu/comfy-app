@@ -29,33 +29,31 @@ afterEach(cleanup);
 function stubController(mode: string | null): ModeContractEditorController {
   const draft = mode ? derivedModeContract(mode) : null;
   return {
-    mode,
+    addCustomInput: vi.fn(),
+    appendInput: vi.fn(),
     draft,
-    stored: [],
-    saving: false,
+    hasAnyRequired: true,
+    isRequired: () => false,
+    mode,
+    moveInput: vi.fn(),
+    nextReferenceImageId: draft?.inputs.length ? null : "reference-image",
+    removeInput: vi.fn(),
+    renameCustomInput: vi.fn(),
+    save: vi.fn(() => Promise.resolve()),
     saved: false,
+    saving: false,
     selectMode: vi.fn(),
     setDraft: vi.fn(),
-    appendInput: vi.fn(),
-    removeInput: vi.fn(),
-    moveInput: vi.fn(),
-    addCustomInput: vi.fn(),
-    renameCustomInput: vi.fn(),
-    isRequired: () => false,
-    toggleRequired: vi.fn(),
-    hasAnyRequired: true,
-    nextReferenceImageId: draft?.inputs.length ? null : "reference-image",
     setOutput: vi.fn(),
-    save: vi.fn(() => Promise.resolve()),
+    stored: [],
+    toggleRequired: vi.fn(),
   };
 }
 
 describe("模式契约编辑器的两栏布局（ISSUE #1870）", () => {
   it("左栏是模式导航、右栏是编辑区（未选模式时给空态）", () => {
     render(<ModeContractEditorView controller={stubController(null)} />);
-    expect(
-      screen.getByRole("radiogroup", { name: "选择要配置的模式" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "选择要配置的模式" })).toBeTruthy();
     expect(screen.getByText(/从左侧选一条模式/)).toBeTruthy();
   });
 
@@ -69,8 +67,6 @@ describe("模式契约编辑器的两栏布局（ISSUE #1870）", () => {
     });
     expect(heading.textContent).toContain("T2I");
     /* 左栏仍在（两栏是并列的，不是「选了才换屏」）。 */
-    expect(
-      screen.getByRole("radiogroup", { name: "选择要配置的模式" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "选择要配置的模式" })).toBeTruthy();
   });
 });

@@ -49,8 +49,8 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
         <div
           className="text-2xs absolute top-0 left-2 rounded-b px-1.5 py-0.25 leading-tight font-semibold"
           style={{
-            color: titleCol,
             background: titleBg,
+            color: titleCol,
             /* 用 1px 的侧边 / 底部分隔线把标题页签「融」进框边：
              *  分隔线取边框色并压到 0.5 alpha —— 页签视觉上挂住了框，
              *  又不必再加一圈硬描边。 */
@@ -132,9 +132,9 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
        *  圆点始终钉在 wfGroup 的那一侧。 */
       className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} text-ink-bright/90 text-2xs gap-1 px-1.5 py-0.25 leading-[1.4]`}
       style={{
-        width: IO_PORT_WIDTH,
         background: "transparent",
         border: "none",
+        width: IO_PORT_WIDTH,
       }}
       title={`${hoverLabel}${data.type ? ` · ${data.type}` : ""}${valueStr ? ` · ${valueStr}` : ""}`}
     >
@@ -165,9 +165,9 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
          *  字体族与 `font-medium` **刻意不动** —— 这一列只有 11px（行上是 `text-2xs`），
          *  500 字重正是合适的光学重量；渲染收拢之后再抬到 600 会显得过重。 */
         style={{
+          letterSpacing: "-0.01em",
           maxWidth: IO_PORT_WIDTH - (valueStr ? 56 : 24),
           textRendering: "geometricPrecision",
-          letterSpacing: "-0.01em",
         }}
       >
         {data.title}
@@ -245,10 +245,10 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
         <div
           className="flex shrink-0 items-center gap-1.5 px-2.5 text-[11.5px] leading-tight font-bold"
           style={{
-            height: NODE_TITLE_H,
             background: titleBg,
             borderBottom: `1.5px solid ${border}`,
             color: titleText,
+            height: NODE_TITLE_H,
             textShadow: `0 0 6px ${titleText}66`,
           }}
         >
@@ -283,11 +283,11 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
  *  workflow-library/WorkflowParamCardColumn 与 WorkflowParamWires）。勾选 IO
  *  只写 workflowIO / paramMap，不再产生任何画布节点。 */
 export const workflowNodeTypes = {
+  wfGroup: WorkflowGroupNode,
+  wfIoPort: WorkflowIoPortNode,
   wfNode: FlowNode,
   wfNote: WorkflowNoteNode,
-  wfGroup: WorkflowGroupNode,
   wfSubgraph: WorkflowSubgraphNode,
-  wfIoPort: WorkflowIoPortNode,
 };
 // 自定义边渲染器 —— 更圆的贝塞尔（曲率 0.85）+ ComfyUI 风格的
 // 曲线中点白心圆点。定义在模块作用域，React Flow 就不会每次渲染都

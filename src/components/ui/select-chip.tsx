@@ -81,6 +81,9 @@ const selectChipVariants = cva(
    * 分段控件里的用方角（`rounded-lg`），那是调用处的布局决定。 */
   "h-auto border font-medium tabular-nums transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
   {
+    defaultVariants: {
+      shape: "pill",
+    },
     variants: {
       /* 轴名取 `shape` 不取 `variant`：`Button` 自己已有一个 `variant`
        * （default / outline / ghost …），同名轴会在透传时被覆盖 —— 这一族
@@ -105,9 +108,6 @@ const selectChipVariants = cva(
         dashed:
           "rounded border-dashed border-primary/40 bg-transparent text-primary hover:bg-primary/10",
       },
-    },
-    defaultVariants: {
-      shape: "pill",
     },
   },
 );
@@ -159,7 +159,7 @@ export function SelectChip(rawProps: SelectChipProps) {
     <Button
       {...rest}
       aria-checked={selected}
-      className={cn(selectChipVariants({ shape, className: rest.className }))}
+      className={cn(selectChipVariants({ className: rest.className, shape }))}
       role="radio"
       /* 这三件由本件**写死**：它们正是 `OWN_PROPS` 里被摘掉的那几项 ——
        * 调用处传了也不生效，所以从类型上就不给传（免得写出「传了却没反应」）。 */

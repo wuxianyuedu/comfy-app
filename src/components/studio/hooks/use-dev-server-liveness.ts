@@ -215,10 +215,10 @@ async function probeBootId(): Promise<ProbeResult> {
     });
     if (!res.ok) {
       return {
-        ok: false,
         bootId: null,
-        runId: null,
+        ok: false,
         routeTableStale: res.status === 404,
+        runId: null,
       };
     }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
@@ -227,10 +227,10 @@ async function probeBootId(): Promise<ProbeResult> {
     };
     const runId = typeof data.runId === "string" && data.runId.length > 0 ? data.runId : null;
     return typeof data.bootId === "string" && data.bootId.length > 0
-      ? { ok: true, bootId: data.bootId, runId }
-      : { ok: false, bootId: null, runId: null, routeTableStale: false };
+      ? { bootId: data.bootId, ok: true, runId }
+      : { bootId: null, ok: false, routeTableStale: false, runId: null };
   } catch {
-    return { ok: false, bootId: null, runId: null, routeTableStale: false };
+    return { bootId: null, ok: false, routeTableStale: false, runId: null };
   }
 }
 
@@ -391,20 +391,20 @@ export function useDevServerLiveness(): DevServerLiveness {
   useInterval(probe, { ms: DEV_SERVER_PROBE_MS });
 
   return {
-    restarting,
-    processIsNew,
-    lastRestartAt,
     lastExit,
     lastExitAt,
+    lastRestartAt,
     probeOk,
+    processIsNew,
+    restarting,
     routeTableStale,
     /* 抗抖动后的可达性：还没到门槛的失败仍算可达（单拍抖动不是断开）。
      * `consecutiveFailures` 达门槛那一刻这一项翻 false，状态栏与消息中心
      * 随之各记一条（断开 / 恢复），而抖动期间它们什么都不记。 */
-    reachable: probeOk || consecutiveFailures < OFFLINE_CONFIRM_FAILURES,
     consecutiveFailures,
-    everOnline,
     currentRunId,
+    everOnline,
+    reachable: probeOk || consecutiveFailures < OFFLINE_CONFIRM_FAILURES,
     unprobedMs,
   };
 }

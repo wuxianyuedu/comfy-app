@@ -16,9 +16,9 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
 }
 
 function PopoverContent({
-  className,
   align = "center",
   alignOffset = 0,
+  className,
   side = "bottom",
   sideOffset = 4,
   /** 锚点元素 / 虚拟锚点 / `{ getBoundingClientRect }` 形状的函数。

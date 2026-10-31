@@ -43,8 +43,8 @@ export async function POST(req: NextRequest) {
 
   if (!baseUrl) {
     return NextResponse.json({
-      ok: false,
       detail: "接口地址为空，请先填写或保存 Base URL",
+      ok: false,
     });
   }
 
@@ -103,12 +103,12 @@ export async function POST(req: NextRequest) {
     }
     if (!res.ok) {
       const snippet = clampText(await res.text().catch(() => ""), {
-        maxLength: INLINE_SNIPPET_MAX,
         marker: "",
+        maxLength: INLINE_SNIPPET_MAX,
       });
       return NextResponse.json({
-        ok: false,
         detail: `HTTP ${res.status}${snippet ? `：${snippet}` : ""}`,
+        ok: false,
       });
     }
     const parsed: unknown = await res.json();
@@ -126,11 +126,11 @@ export async function POST(req: NextRequest) {
     if (model !== "" && !models.includes(model)) {
       detail = `连接成功，但「${model}」不在服务端模型列表中，请确认名称是否正确`;
     }
-    return NextResponse.json({ ok: true, detail, models });
+    return NextResponse.json({ detail, models, ok: true });
   } catch (e) {
     return NextResponse.json({
-      ok: false,
       detail: apiErrorDetail(e, "连接失败"),
+      ok: false,
     });
   }
 }

@@ -26,12 +26,12 @@ beforeEach(() => {
 
 describe("noteComfyStateChange", () => {
   it("纪元单调递增，快照跟着更新", () => {
-    expect(getComfyStateChange()).toEqual({ seq: 0, last: null });
+    expect(getComfyStateChange()).toEqual({ last: null, seq: 0 });
     const first = noteComfyStateChange("start", "用户启动了 ComfyUI");
     const second = noteComfyStateChange("ready", "ComfyUI 已就绪");
     expect(first.seq).toBe(1);
     expect(second.seq).toBe(2);
-    expect(getComfyStateChange()).toEqual({ seq: 2, last: second });
+    expect(getComfyStateChange()).toEqual({ last: second, seq: 2 });
   });
 
   it("订阅者拿到变化；退订后不再收到", () => {
@@ -68,9 +68,7 @@ describe("noteComfyStateChange", () => {
     subscribeComfyState(() => {
       reached += 1;
     });
-    expect(() =>
-      noteComfyStateChange("exit", "ComfyUI 进程退出"),
-    ).not.toThrow();
+    expect(() => noteComfyStateChange("exit", "ComfyUI 进程退出")).not.toThrow();
     expect(reached).toBe(1);
   });
 });
@@ -79,8 +77,8 @@ describe("waitForComfyStateChange", () => {
   it("已经有更新的变化时立刻返回（不让调用方白等满一个窗口）", async () => {
     noteComfyStateChange("ready", "ComfyUI 已就绪");
     await expect(waitForComfyStateChange(0, 1000)).resolves.toMatchObject({
-      seq: 1,
       kind: "ready",
+      seq: 1,
     });
   });
 
@@ -94,7 +92,7 @@ describe("waitForComfyStateChange", () => {
   it("等着的期间来了变化 → 拿到那一次，且不必等满窗口", async () => {
     const pending = waitForComfyStateChange(0, 5000);
     noteComfyStateChange("start", "用户启动了 ComfyUI");
-    await expect(pending).resolves.toMatchObject({ seq: 1, kind: "start" });
+    await expect(pending).resolves.toMatchObject({ kind: "start", seq: 1 });
   });
 
   it("超时即退订：不给订阅表留死回调（这张表只增不减）", async () => {
@@ -126,7 +124,7 @@ describe("resetComfyStateWatchForTest", () => {
   it("清干净纪元、最近一次与订阅者", () => {
     noteComfyStateChange("exit", "ComfyUI 进程退出");
     resetComfyStateWatchForTest();
-    expect(getComfyStateChange()).toEqual({ seq: 0, last: null });
+    expect(getComfyStateChange()).toEqual({ last: null, seq: 0 });
     let calls = 0;
     subscribeComfyState(() => {
       calls += 1;

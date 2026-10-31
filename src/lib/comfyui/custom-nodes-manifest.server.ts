@@ -73,14 +73,14 @@ export function readCustomNodesManifest(root: string = process.cwd()): CustomNod
     // （写侧是 `fs.writeFileSync`），而几百 KB 的读盘开销远小于一次 JSON.parse。
     return {
       kind: "ok",
-      text: fs.readFileSync(file, "utf8"),
       stamp: customNodesManifestStamp(root),
+      text: fs.readFileSync(file, "utf8"),
     };
   } catch (error) {
     const code = /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") {
       return { kind: "missing" };
     }
-    return { kind: "unreadable", detail: `${code ?? "unknown"}` };
+    return { detail: `${code ?? "unknown"}`, kind: "unreadable" };
   }
 }

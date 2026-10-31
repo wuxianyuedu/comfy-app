@@ -21,48 +21,48 @@ import {
 
 const CLEAN_SCENES = [
   {
-    id: "s1",
-    heading: "清晨的咖啡馆",
-    location: "咖啡馆",
-    time: "晨",
     action: "她推门进来",
     dialogue: "",
+    heading: "清晨的咖啡馆",
+    id: "s1",
+    location: "咖啡馆",
     shotCount: 3,
+    time: "晨",
   },
 ];
 const CLEAN_CHARACTERS = [
   {
-    id: "c1",
-    name: "小美",
     ageGender: "25 女",
     appearance: "",
     costume: "",
-    personality: "",
-    temperament: "",
-    styleTags: ["皮克斯", "厚涂"],
-    positivePrompt: "",
+    id: "c1",
+    name: "小美",
     negativePrompt: "",
+    personality: "",
+    positivePrompt: "",
+    styleTags: ["皮克斯", "厚涂"],
+    temperament: "",
   },
 ];
 const CLEAN_SHOTS = [
   {
+    characterIds: ["c1"],
+    description: "推门",
     id: "sh1",
     index: 1,
-    sceneId: "s1",
-    sceneHeading: "清晨的咖啡馆",
-    shotType: "medium",
-    description: "推门",
-    characterIds: ["c1"],
-    prompt: "a girl pushing the door",
     negativePrompt: "",
+    prompt: "a girl pushing the door",
+    sceneHeading: "清晨的咖啡馆",
+    sceneId: "s1",
+    shotType: "medium",
     status: "idle",
   },
 ];
 
 function draftOf(over: Partial<DraftElements> = {}): DraftElements {
   return {
-    scenes: CLEAN_SCENES,
     characters: CLEAN_CHARACTERS,
+    scenes: CLEAN_SCENES,
     shots: CLEAN_SHOTS,
     ...over,
   };
@@ -86,7 +86,7 @@ describe("③ 不挑刺：干净元素一条都不报", () => {
   });
 
   it("空数组不算问题（没写不等于写坏）", () => {
-    expect(auditDraftElements({ scenes: [], characters: [], shots: [] })).toEqual([]);
+    expect(auditDraftElements({ characters: [], scenes: [], shots: [] })).toEqual([]);
   });
 });
 
@@ -98,85 +98,85 @@ describe("② 不静默：每一种脏法都要被点名", () => {
     name: string;
   }> = [
     {
-      name: "场景缺 id",
       draft: draftOf({ scenes: [{ ...CLEAN_SCENES[0], id: "" }] }),
       expect: [["scene", "id"]],
+      name: "场景缺 id",
     },
     {
-      name: "场景 id 不是字符串",
       draft: draftOf({ scenes: [{ ...CLEAN_SCENES[0], id: 12 }] }),
       expect: [["scene", "id"]],
+      name: "场景 id 不是字符串",
     },
     {
-      name: "场景标题是数字",
       draft: draftOf({ scenes: [{ ...CLEAN_SCENES[0], heading: 3 }] }),
       expect: [["scene", "heading"]],
+      name: "场景标题是数字",
     },
     {
-      name: "建议镜数是 NaN",
       draft: draftOf({ scenes: [{ ...CLEAN_SCENES[0], shotCount: NaN }] }),
       expect: [["scene", "shotCount"]],
+      name: "建议镜数是 NaN",
     },
     {
-      name: "建议镜数是数字字符串",
       draft: draftOf({ scenes: [{ ...CLEAN_SCENES[0], shotCount: "3" }] }),
       expect: [["scene", "shotCount"]],
+      name: "建议镜数是数字字符串",
     },
     {
-      name: "角色 styleTags 是字符串",
       draft: draftOf({
         characters: [{ ...CLEAN_CHARACTERS[0], styleTags: "皮克斯" }],
       }),
       expect: [["character", "styleTags"]],
+      name: "角色 styleTags 是字符串",
     },
     {
-      name: "角色 styleTags 数组里混了数字",
       draft: draftOf({
         characters: [{ ...CLEAN_CHARACTERS[0], styleTags: ["皮克斯", 2] }],
       }),
       expect: [["character", "styleTags"]],
+      name: "角色 styleTags 数组里混了数字",
     },
     {
-      name: "角色 params 是数组",
       draft: draftOf({
         characters: [{ ...CLEAN_CHARACTERS[0], params: [] }],
       }),
       expect: [["character", "params"]],
+      name: "角色 params 是数组",
     },
     {
-      name: "镜头缺 id",
       draft: draftOf({ shots: [{ ...CLEAN_SHOTS[0], id: undefined }] }),
       expect: [["shot", "id"]],
+      name: "镜头缺 id",
     },
     {
-      name: "镜头镜号是字符串",
       draft: draftOf({ shots: [{ ...CLEAN_SHOTS[0], index: "1" }] }),
       expect: [["shot", "index"]],
+      name: "镜头镜号是字符串",
     },
     {
-      name: "镜头 prompt 是 null",
       draft: draftOf({ shots: [{ ...CLEAN_SHOTS[0], prompt: null }] }),
       expect: [["shot", "prompt"]],
+      name: "镜头 prompt 是 null",
     },
     {
-      name: "镜头状态是未知取值",
       draft: draftOf({ shots: [{ ...CLEAN_SHOTS[0], status: "waiting" }] }),
       expect: [["shot", "status"]],
+      name: "镜头状态是未知取值",
     },
     {
-      name: "整条角色是字符串",
       draft: draftOf({ characters: ["小美"] }),
       expect: [["character", null]],
+      name: "整条角色是字符串",
     },
     {
-      name: "整条镜头是 null",
       draft: draftOf({ shots: [null] }),
       expect: [["shot", null]],
+      name: "整条镜头是 null",
     },
     {
-      name: "整条场景是数组",
       draft: draftOf({ scenes: [[]] }),
       expect: [["scene", null]],
+      name: "整条场景是数组",
     },
   ];
 
@@ -204,8 +204,8 @@ describe("① 不丢数据：脏元素留在原地，下标指得回去", () => 
   it("脏元素还在原下标上，且入参没被改动", () => {
     const dirtyCharacter = { id: "c2", name: "老张", styleTags: "厚涂" };
     const draft: DraftElements = {
-      scenes: CLEAN_SCENES,
       characters: [CLEAN_CHARACTERS[0], dirtyCharacter],
+      scenes: CLEAN_SCENES,
       shots: CLEAN_SHOTS,
     };
     const snapshot = JSON.stringify(draft);
@@ -242,11 +242,11 @@ describe("① 不丢数据：脏元素留在原地，下标指得回去", () => 
 describe("与 parseDraftDto 配对：脏数据既还在、又被报出来", () => {
   /** 这份 raw 从 localStorage / 请求体进来的形状：一条好角色 + 一条 `styleTags` 是字符串的。 */
   const RAW = {
-    meta: { title: "T", type: "short_video", tone: "", logline: "" },
-    scriptMarkdown: "",
-    scenes: CLEAN_SCENES,
     characters: [CLEAN_CHARACTERS[0], { id: "c2", name: "老张", styleTags: "厚涂" }],
-    shots: [CLEAN_SHOTS[0], { index: "2", sceneId: "s1", characterIds: "c2" }],
+    meta: { logline: "", title: "T", tone: "", type: "short_video" },
+    scenes: CLEAN_SCENES,
+    scriptMarkdown: "",
+    shots: [CLEAN_SHOTS[0], { characterIds: "c2", index: "2", sceneId: "s1" }],
   };
 
   it("① 解析后脏元素**一条都没少**（改成过滤就是红 —— 那是静默删用户数据）", () => {
@@ -286,8 +286,8 @@ describe("界面那句话", () => {
   it("按种类合并计数，顺序稳定（场景 → 角色 → 镜头）", () => {
     const issues = auditDraftElements(
       draftOf({
-        scenes: [{ heading: "x" }],
         characters: [{ id: "c1", styleTags: 1 }],
+        scenes: [{ heading: "x" }],
         shots: [{ id: "" }],
       }),
     );

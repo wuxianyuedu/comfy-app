@@ -17,23 +17,23 @@ import { useAgentRun, type AgentRunController } from "./use-agent-run";
 import type { ApprovalMode, RunAction, RunStatus } from "~/lib/production/run-types";
 
 const STATUS_LABEL: Record<RunStatus, string> = {
-  idle: "未启动",
-  running: "执行中",
   awaiting_approval: "等待确认",
-  paused: "已暂停",
+  cancelled: "已取消",
   done: "已完成",
   failed: "失败",
-  cancelled: "已取消",
+  idle: "未启动",
+  paused: "已暂停",
+  running: "执行中",
 };
 
 const STATUS_BADGE: Record<RunStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  idle: "outline",
-  running: "default",
   awaiting_approval: "secondary",
-  paused: "secondary",
+  cancelled: "outline",
   done: "default",
   failed: "destructive",
-  cancelled: "outline",
+  idle: "outline",
+  paused: "secondary",
+  running: "default",
 };
 
 function actionLabel(action: RunAction): string {
@@ -58,9 +58,9 @@ function actionLabel(action: RunAction): string {
 }
 
 const APPROVAL_OPTIONS: Array<{ label: string; value: ApprovalMode }> = [
-  { value: "stage", label: "每阶段确认" },
-  { value: "shot", label: "逐镜确认" },
-  { value: "auto", label: "全自动跑完" },
+  { label: "每阶段确认", value: "stage" },
+  { label: "逐镜确认", value: "shot" },
+  { label: "全自动跑完", value: "auto" },
 ];
 
 /** 日志时间戳 → 本地时分秒；解析失败给空串。 */

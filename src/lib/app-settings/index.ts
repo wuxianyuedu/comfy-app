@@ -108,8 +108,8 @@ export type AppSettings = {
 };
 
 export const DEFAULTS: AppSettings = {
-  comfyuiPath: process.env.COMFYUI_PATH ?? "",
   comfyuiExtraArgs: "",
+  comfyuiPath: process.env.COMFYUI_PATH ?? "",
   /* 这里刻意**不写死**一个档位：默认值按「桌面壳 / 浏览器」分叉，判据在
    * `~/lib/comfyui/cpu-limit` 的 `resolveCpuLimitMode`。写死一处会让
    * 浏览器形态也跟着降速，而那里没有降速的理由。 */
@@ -118,9 +118,9 @@ export const DEFAULTS: AppSettings = {
   comfyCliPython: process.env.COMFY_CLI_PYTHON ?? "",
   comfyuiAutoStart: true,
   comfyuiPort: 0,
-  loginRequired: false,
   exitKillComfyui: false,
   exitKillOllama: true,
+  loginRequired: false,
   /** 绑定到本地文件的工作流：进详情是否自动把磁盘最新内容同步回库（默认手动）。 */
   autoSyncLocalWorkflow: false,
 };

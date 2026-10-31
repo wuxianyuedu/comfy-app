@@ -26,8 +26,8 @@ import { modalWidth } from "~/components/ui/dialog-width";
  *  · 操作按钮的成败反馈（复制失败是原地换文案，不是静静不变）。
  */
 const meta = {
-  title: "Studio/Logs/LogPanelHeader",
   component: LogPanelHeader,
+  title: "Studio/Logs/LogPanelHeader",
   /* 行头自身没有必填 props（它全部从 store / 适配件拿），这里只声明场景。 */
   parameters: { storeScene: "mixed" },
 } satisfies Meta<typeof LogPanelHeader>;

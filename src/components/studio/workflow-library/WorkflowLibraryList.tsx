@@ -61,24 +61,24 @@ type WorkflowLibraryListProps = {
  * 确实没有（且未筛选）→ 指引导入或配置本地目录。
  */
 export function WorkflowLibraryList({
-  workflows,
-  pendingRows = [],
-  selectedId,
-  search,
-  onSearchChange,
-  onSelect,
-  onLoadPending,
-  loading = false,
-  stalled = false,
-  onRefresh,
-  localRootsHint = null,
   dragActive = false,
-  onDragOver,
+  fileErr = null,
+  loading = false,
+  localRootsHint = null,
   onDragEnter,
   onDragLeave,
+  onDragOver,
   onDrop,
-  fileErr = null,
+  onLoadPending,
+  onRefresh,
+  onSearchChange,
+  onSelect,
   pendingLoading = {},
+  pendingRows = [],
+  search,
+  selectedId,
+  stalled = false,
+  workflows,
 }: WorkflowLibraryListProps) {
   const empty = workflows.length === 0 && pendingRows.length === 0;
   return (
@@ -245,22 +245,22 @@ export function WorkflowLibraryList({
 const NAME_MAX_WIDTH_CLASS = "max-w-33";
 
 function WorkflowListItem({
-  workflow,
-  selected,
   onClick,
+  selected,
+  workflow,
 }: {
   onClick: () => void;
   selected: boolean;
   workflow: WorkflowRow;
 }) {
   const { usable } = deriveFormatFlags(workflow);
-  const { missing, canResync } = deriveSyncFlags(workflow);
+  const { canResync, missing } = deriveSyncFlags(workflow);
   const isTech = isTechnicalName(workflow.name);
   /* 对外参数封装状态（与生成链路同口径）：提示词口已有落点 = 工坊可直接驱动。 */
   const encapsulation = deriveEncapsulationStatus({
     io: workflow.workflowIO ?? null,
-    paramMap: workflow.paramMap ?? null,
     mode: workflow.defaultMode ?? workflow.taskType ?? null,
+    paramMap: workflow.paramMap ?? null,
   });
 
   return (

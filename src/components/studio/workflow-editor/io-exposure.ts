@@ -93,9 +93,9 @@ export function enrichFromViewNodes(
       out[`${node.id}::widget::${input.name}`] = {
         direction: "input",
         kind: "widget",
-        nodeId: node.id,
-        name: input.name,
         label,
+        name: input.name,
+        nodeId: node.id,
         type: input.type ?? "*",
         ...(input.multiline !== undefined ? { multiline: input.multiline } : {}),
         ...(value !== undefined ? { defaultValue: value } : {}),

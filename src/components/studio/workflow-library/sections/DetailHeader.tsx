@@ -37,20 +37,20 @@ type DetailHeaderProps = {
 };
 
 export function DetailHeader({
-  workflow,
-  usable,
-  canResync,
-  missing,
-  isTechnical,
   busyDownload,
   busyResync,
+  canResync,
+  isTechnical,
   meta,
-  onEdit,
-  onResync,
-  onDownload,
+  missing,
   onDelete,
+  onDownload,
+  onEdit,
   onOpenSource,
+  onResync,
   onUse,
+  usable,
+  workflow,
 }: DetailHeaderProps) {
   /* 多模式时点击顶部模式徽标展开全部模式的小提示（问题：模式重复罗列，
    * 收敛到顶部一处）。 */

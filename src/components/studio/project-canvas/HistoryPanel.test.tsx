@@ -13,18 +13,18 @@ afterEach(() => {
  * 所以 controller hook 直接给一份最小快照。 */
 const controllerMock = vi.hoisted(() =>
   vi.fn<() => HistoryPanelController>(() => ({
-    tasks: [],
-    loading: false,
-    error: null,
-    scope: "project",
-    filter: "all",
-    display: "list",
     activeCount: 0,
+    display: "list",
+    error: null,
+    filter: "all",
     globalCount: null,
-    setScope: vi.fn(),
-    setFilter: vi.fn(),
-    setDisplay: vi.fn(),
+    loading: false,
     refresh: vi.fn(),
+    scope: "project",
+    setDisplay: vi.fn(),
+    setFilter: vi.fn(),
+    setScope: vi.fn(),
+    tasks: [],
   })),
 );
 
@@ -58,9 +58,7 @@ describe("HistoryPanel 类型筛选（ISSUE #1925）", () => {
     expect(group).toBeTruthy();
     /* 作用域里查 —— 同一屏还有「显示密度」那一组 radio（ISSUE #1925 复查
        收口），全局查会把它一起算进来。 */
-    expect(within(group).getAllByRole("radio")).toHaveLength(
-      FILTER_TABS.length,
-    );
+    expect(within(group).getAllByRole("radio")).toHaveLength(FILTER_TABS.length);
   });
 
   it("选中项经 aria-checked 表达，且只有一枚被勾选", () => {

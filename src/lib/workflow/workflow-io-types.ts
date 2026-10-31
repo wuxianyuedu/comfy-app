@@ -87,8 +87,8 @@ export type WorkflowIOMap = Record<string, WorkflowIOEntry>;
 const WorkflowIOEntrySchema = z.looseObject({
   direction: z.union([z.literal("input"), z.literal("output")]),
   kind: z.string(),
-  nodeId: z.string(),
   name: z.string(),
+  nodeId: z.string(),
 });
 const WorkflowIOMapSchema = z.record(z.string(), WorkflowIOEntrySchema);
 

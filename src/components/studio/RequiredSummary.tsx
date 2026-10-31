@@ -13,7 +13,7 @@ export function RequiredSummary({
     let required = 0;
     let optional = 0;
     if (!io) {
-      return { required, optional };
+      return { optional, required };
     }
     for (const e of Object.values(io)) {
       if (e?.direction !== "input") {
@@ -28,7 +28,7 @@ export function RequiredSummary({
         optional++;
       }
     }
-    return { required, optional };
+    return { optional, required };
   }, [io, mode]);
   return (
     <span className="ml-2 inline-flex items-center gap-1.5">
@@ -51,14 +51,14 @@ export function Chip({ color, label }: { color: string; label: string }) {
   return (
     <span
       style={{
-        fontSize: 10,
-        fontFamily: "var(--font-mono)",
-        padding: "2px 7px",
-        borderRadius: 999,
         background: `color-mix(in srgb, ${color} 12%, transparent)`,
         border: `1px solid color-mix(in srgb, ${color} 33%, transparent)`,
+        borderRadius: 999,
         color,
+        fontFamily: "var(--font-mono)",
+        fontSize: 10,
         letterSpacing: 0.2,
+        padding: "2px 7px",
       }}
     >
       {label}
@@ -74,19 +74,19 @@ export function FrontendOnlyBadge() {
     <div
       className="comfy-node__frontend-only"
       style={{
-        display: "inline-block",
         alignSelf: "flex-start",
-        marginTop: 4,
-        marginLeft: 2,
-        padding: "1px 5px",
-        fontSize: 9,
-        lineHeight: 1.2,
-        fontFamily: "var(--font-mono)",
-        fontStyle: "italic",
-        color: "var(--color-ink-muted)",
-        letterSpacing: 0.2,
         border: "1px solid var(--color-border-strong)",
         borderRadius: 4,
+        color: "var(--color-ink-muted)",
+        display: "inline-block",
+        fontFamily: "var(--font-mono)",
+        fontSize: 9,
+        fontStyle: "italic",
+        letterSpacing: 0.2,
+        lineHeight: 1.2,
+        marginLeft: 2,
+        marginTop: 4,
+        padding: "1px 5px",
         pointerEvents: "none",
         userSelect: "none",
         whiteSpace: "nowrap",

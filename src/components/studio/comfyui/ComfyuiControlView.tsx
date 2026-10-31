@@ -54,9 +54,9 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
   /* 三个进行态收成一份：三处派生（圆点 / 状态文案 / 按钮禁用）读的是同一份
    * 快照，各传各的必然会有一处漏掉某面旗（ISSUE #423 的形态）。 */
   const flags = {
+    opening: c.opening,
     starting: c.starting,
     stopping: c.stopping,
-    opening: c.opening,
   };
   const busy = isComfyBusy(c.status, flags);
   const running = !!c.status?.up;

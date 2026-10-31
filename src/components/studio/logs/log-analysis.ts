@@ -128,13 +128,13 @@ function serializeOne(a: unknown): string {
 
 /** 占位符 → 消费一个实参的方式；`drop` 表示消费但不进正文（`%c` 的样式表）。 */
 const PLACEHOLDER_KINDS: Record<string, "text" | "number" | "object" | "drop"> = {
-  s: "text",
+  c: "drop",
   d: "number",
-  i: "number",
   f: "number",
+  i: "number",
   o: "object",
   O: "object",
-  c: "drop",
+  s: "text",
 };
 
 /** 按 `kind` 渲染一个实参（`%c` 之外都复用 {@link serializeOne} 的口径）。 */
@@ -452,10 +452,10 @@ export function parseFileLogs(
       d.setHours(Number(hh ?? "0"), Number(mm ?? "0"), Number(ss ?? "0"), 0);
       push({
         id: nextId(d.getTime()),
-        time: d.getTime(),
         level: parseLogLevel(lv ?? "INFO"),
         message: withRest(msg ?? ""),
         source: "system",
+        time: d.getTime(),
         ...originOf,
       });
       continue;
@@ -498,20 +498,20 @@ export function parseFileLogs(
       );
       push({
         id: nextId(d.getTime()),
-        time: d.getTime(),
         level: "info",
         message: withRest(msg ?? ""),
         source: "system",
+        time: d.getTime(),
         ...originOf,
       });
       continue;
     }
     push({
       id: nextId(now),
-      time: now,
       level: "info",
       message: record.text,
       source: "system",
+      time: now,
       ...originOf,
     });
   }
@@ -576,7 +576,7 @@ export function dedupeRepeats(
 }
 
 function zeroCounts(): LogLevelCounts {
-  return { all: 0, debug: 0, info: 0, warn: 0, error: 0 };
+  return { all: 0, debug: 0, error: 0, info: 0, warn: 0 };
 }
 
 export function computeCounts(logs: Array<LogEntry>, search = ""): LogLevelCounts {
@@ -649,13 +649,13 @@ export function dedupeByIdentity(
 export function computeOriginCounts(logs: Array<LogEntry>, search = ""): LogOriginCounts {
   const table: LogOriginCounts = {
     all: zeroCounts(),
-    dev: zeroCounts(),
-    launcher: zeroCounts(),
-    "shell-launch": zeroCounts(),
-    shell: zeroCounts(),
     app: zeroCounts(),
     "app-runtime": zeroCounts(),
     [CONSOLE_ORIGIN]: zeroCounts(),
+    dev: zeroCounts(),
+    launcher: zeroCounts(),
+    shell: zeroCounts(),
+    "shell-launch": zeroCounts(),
   };
 
   for (const entry of logs) {

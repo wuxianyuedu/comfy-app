@@ -27,8 +27,8 @@ import {
 } from "../subgraph-viewport";
 
 const FIT_FALLBACK_SIZE = /* SAFETY: 类型断言已复核 */ {
-  width: 240,
   height: 80,
+  width: 240,
 } as const;
 /** 连续多少轮测量结果不再扩大就收手（超大图逐屏挂载时不必等全部量完）。 */
 const FIT_SETTLE_ROUNDS = 3;
@@ -85,7 +85,7 @@ function applyFitViewport(
 ): void {
   const viewport = computeFitViewport(bounds, container, zoomBounds);
   if (!viewport) {
-    void rf.fitView({ padding: 0.1, duration: 0 });
+    void rf.fitView({ duration: 0, padding: 0.1 });
     return;
   }
   void rf.setViewport(viewport, { duration: 0 });
@@ -103,7 +103,7 @@ export function useWorkflowViewportFit(params: {
   nodesCount: number;
   rf: ReactFlowInstance;
 }) {
-  const { rf, canvasSettings, fitKey, nodesCount } = params;
+  const { canvasSettings, fitKey, nodesCount, rf } = params;
   /* 本实例的容器尺寸从 React Flow **本实例的 store** 取，不用
    *  document.querySelector —— 判据见文件头与 applyFitViewport 的注释。 */
   const rfStore = useStoreApi();
@@ -122,12 +122,12 @@ export function useWorkflowViewportFit(params: {
    *  以及画布右上角「🎯 居中」按钮 —— 作者把节点拖出视野或缩得太小之后
    *  需要一条回到内容处的出口。纯视口动作：不移动节点、不写库。 */
   const fitToContent = useCallback(() => {
-    const { width, height } = rfStore.getState();
+    const { height, width } = rfStore.getState();
     applyFitViewport(
-      { width, height },
+      { height, width },
       rf,
       normalizeBounds(collectFitTargets(rf.getNodes()), FIT_FALLBACK_SIZE),
-      { minZoom: canvasSettings.minZoom, maxZoom: canvasSettings.maxZoom },
+      { maxZoom: canvasSettings.maxZoom, minZoom: canvasSettings.minZoom },
     );
   }, [rf, rfStore, canvasSettings.minZoom, canvasSettings.maxZoom]);
 
@@ -167,16 +167,16 @@ export function useWorkflowViewportFit(params: {
      *  （超大图逐屏挂载，此时以已量到的内容为准）。上限只是护栏。 */
     const stepper = createFitSettleStepper({
       fallbackSize: FIT_FALLBACK_SIZE,
-      settleRounds: FIT_SETTLE_ROUNDS,
       maxAttempts: FIT_MAX_ATTEMPTS,
+      settleRounds: FIT_SETTLE_ROUNDS,
     });
     let raf = 0;
     const step = () => {
       const { bounds, done } = stepper.next(() => collectFitTargets(rf.getNodes()));
-      const { width, height } = rfStore.getState();
-      applyFitViewport({ width, height }, rf, bounds, {
-        minZoom: canvasSettings.minZoom,
+      const { height, width } = rfStore.getState();
+      applyFitViewport({ height, width }, rf, bounds, {
         maxZoom: canvasSettings.maxZoom,
+        minZoom: canvasSettings.minZoom,
       });
       /* 收敛（测量已稳定、视口已下发）后才把这份图记为「聚焦过」：只排过程
        * 不算数，否则被 cleanup 取消的那次就补不回来了。提前在首帧记账也不

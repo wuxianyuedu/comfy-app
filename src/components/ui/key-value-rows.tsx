@@ -114,15 +114,15 @@ function renderValue(item: KeyValueItem, mono: boolean): ReactNode {
 }
 
 export function KeyValueRows({
-  items,
-  layout = "rows",
-  columns = 2,
   bordered = false,
-  striped = false,
-  mono = true,
   className,
+  columns = 2,
   itemClassName,
+  items,
   keyClassName,
+  layout = "rows",
+  mono = true,
+  striped = false,
   valueClassName,
 }: {
   /** `rows`：整块加外框（圆角 + 描边 + 裁切）。 */

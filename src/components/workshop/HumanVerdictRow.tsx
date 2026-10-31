@@ -17,9 +17,9 @@ import type { HumanVerdict } from "~/lib/production/review-types";
 
 /** 0~5 星：星级按钮组（点第 n 颗 = n 分；再点当前分 = 清除）。 */
 function RatingStars({
-  value,
   disabled,
   onPick,
+  value,
 }: {
   disabled: boolean;
   onPick: (rating: number | null) => void;
@@ -65,11 +65,11 @@ export type HumanVerdictRowProps = {
 };
 
 export function HumanVerdictRow({
-  verdict,
-  rating,
+  disabled = false,
   onRatingChange,
   onSubmit,
-  disabled = false,
+  rating,
+  verdict,
 }: HumanVerdictRowProps) {
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
@@ -96,9 +96,9 @@ export function HumanVerdictRow({
     busy.run(async () => {
       setError("");
       const result = await runAsyncAction(() => onSubmit(pass, note.trim()), {
-        report,
         failureText: "裁决失败",
         readResultEnvelope: false,
+        report,
       });
       if (result.ok) {
         setNote("");
@@ -112,9 +112,9 @@ export function HumanVerdictRow({
       return;
     }
     const result = await runAsyncAction(() => onRatingChange(value), {
-      report,
       failureText: "评分失败",
       readResultEnvelope: false,
+      report,
     });
     if (!result.ok) {
       setLocalRating(prev);

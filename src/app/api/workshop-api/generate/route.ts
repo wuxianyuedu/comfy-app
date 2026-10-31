@@ -53,13 +53,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "prompt 不能为空" }, { status: 400 });
       }
       const url = await generateImageViaApi({
-        prompt,
-        negative,
-        size,
-        model,
-        mode,
         aspectRatio,
         megapixels,
+        mode,
+        model,
+        negative,
+        prompt,
+        size,
         ...(multiple !== undefined ? { multiple } : {}),
         image,
       });
@@ -79,11 +79,11 @@ export async function POST(req: NextRequest) {
         ? await resolveMediaDataUrl(image, new URL(req.url).origin)
         : undefined;
       const result = await submitVideoViaApi({
-        prompt,
-        negative,
-        imageDataUrl,
-        frames,
         fps,
+        frames,
+        imageDataUrl,
+        negative,
+        prompt,
       });
       return NextResponse.json(result);
     }

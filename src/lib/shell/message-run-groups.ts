@@ -99,10 +99,10 @@ export function groupMessagesByRun<T extends RunScopedMessage>(
       continue;
     }
     drafts.push({
-      runId: m.runId,
       isCurrent: m.runId !== null && m.runId === currentRunId,
-      messages: [m],
       latestAt: m.time,
+      messages: [m],
+      runId: m.runId,
     });
   }
 
@@ -121,12 +121,12 @@ export function groupMessagesByRun<T extends RunScopedMessage>(
       seenNonCurrent = true;
     }
     return {
-      runId: d.runId,
-      label,
-      isCurrent: d.isCurrent,
-      messages: d.messages,
-      latestAt: d.latestAt,
       count: d.messages.length,
+      isCurrent: d.isCurrent,
+      label,
+      latestAt: d.latestAt,
+      messages: d.messages,
+      runId: d.runId,
     };
   });
 }

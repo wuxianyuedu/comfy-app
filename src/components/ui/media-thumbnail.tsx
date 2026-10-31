@@ -127,16 +127,16 @@ export const MediaThumbnail = React.memo(function MediaThumbnail(props: MediaThu
    * `OmitOwnProps` 与这里的 `splitDomProps` 读的是同一个数组。 */
   const { own, rest: mediaProps } = splitDomProps(props, OWN_PROPS);
   const {
-    src,
     alt = "",
-    className = "",
+    as,
     autoPlay = false,
-    muted = true,
+    className = "",
+    fallback = "placeholder",
     loop = false,
+    muted = true,
     onLoad,
     onLoadError,
-    fallback = "placeholder",
-    as,
+    src,
   } = own;
   /* 失败态收在这里 —— 这是**唯一**一处「渲染一张图」的状态机，
    * 所以调用处不必再各写一份 `useState(failed)`。

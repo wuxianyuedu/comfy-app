@@ -103,6 +103,17 @@ export async function POST(req: NextRequest) {
   let cancelOnClose = true;
 
   const stream = new ReadableStream<Uint8Array>({
+    async cancel() {
+      /* 用户断开连接（关界面 / 切视图 / 网络断）：把命令整棵树收走。
+       * 不在这里 await 日志写入 —— cancel 的调用方不保证会等我们。 */
+      if (cancelOnClose) {
+        const killed = await slot.runner.cancel();
+        logger.warn(
+          `[console] 客户端断开，${killed ? "已回收" : "无在跑的命令"}（runId=${runId}）`,
+        );
+      }
+    },
+
     async start(controller) {
       /** 本路由对 SSE 帧的唯一出口（与其余流式路由同形：`data: <json>\n\n`）。 */
       const send = (payload: unknown) => {
@@ -117,11 +128,11 @@ export async function POST(req: NextRequest) {
       try {
         const result = await slot.runner.run(
           {
-            runId,
-            command: parsed.display,
-            file: parsed.file,
             args: parsed.args,
+            command: parsed.display,
             cwd: process.cwd(),
+            file: parsed.file,
+            runId,
             timeoutMs: MAX_RUN_MS,
           },
           send,
@@ -129,12 +140,12 @@ export async function POST(req: NextRequest) {
         // 执行方已经发完 exit 帧，接下来的 close 由我们自己触发 —— 不要再回收。
         cancelOnClose = false;
         recordConsoleHistory(slot, {
-          runId: result.runId,
           command: result.command,
-          exitCode: result.exitCode,
-          killed: result.killed,
           durationMs: result.durationMs,
+          exitCode: result.exitCode,
           finishedAt: Date.now(),
+          killed: result.killed,
+          runId: result.runId,
         });
         logger.info(
           `[console] run 完成 command="${result.command}" exit=${result.exitCode ?? "null"}` +
@@ -143,7 +154,7 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         cancelOnClose = false;
         const message = errorMessage(e, "控制台命令执行失败");
-        send({ type: "error", message });
+        send({ message, type: "error" });
         logger.error(`[console] run 异常 command="${parsed.display}"：${message}`);
       } finally {
         try {
@@ -153,24 +164,13 @@ export async function POST(req: NextRequest) {
         }
       }
     },
-
-    async cancel() {
-      /* 用户断开连接（关界面 / 切视图 / 网络断）：把命令整棵树收走。
-       * 不在这里 await 日志写入 —— cancel 的调用方不保证会等我们。 */
-      if (cancelOnClose) {
-        const killed = await slot.runner.cancel();
-        logger.warn(
-          `[console] 客户端断开，${killed ? "已回收" : "无在跑的命令"}（runId=${runId}）`,
-        );
-      }
-    },
   });
 
   return new Response(stream, {
     headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-store, no-cache, must-revalidate",
       Connection: "keep-alive",
+      "Content-Type": "text/event-stream; charset=utf-8",
       // 反代/浏览器缓冲会让「逐行输出」变成「结束时一次性出现」——这是流式
       // 界面上最容易被误判成「没反应」的一件事，显式禁掉。
       "X-Accel-Buffering": "no",

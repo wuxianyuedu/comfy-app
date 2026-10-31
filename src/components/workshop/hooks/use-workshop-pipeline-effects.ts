@@ -33,7 +33,7 @@ export function useWorkshopBootstrapData(input: {
   setStyles: (styles: Array<StyleRef>) => void;
   setWorkflowOptions: (workflows: Array<WorkshopWorkflowOption>) => void;
 }) {
-  const { setStyles, setApiChannels, setWorkflowOptions } = input;
+  const { setApiChannels, setStyles, setWorkflowOptions } = input;
   /* 卸载守卫用 beginStaleRun（规范 16 §16.2.4.34）：本 effect 里三个请求各自
    * 落地自己的 set，组件若在请求返回前卸载，写状态既白跑也让旧闭包再多活
    * 一会儿（且并发渲染下还可能与后一轮交叠）。 */
@@ -70,7 +70,7 @@ export function useWorkshopTaskRecovery(input: {
   /** 重订阅入口（`useWorkshopGeneration` 的 watchShotTask 原样传入）。 */
   watchShotTask: (shotId: string, taskId: string, target?: "image" | "video") => Promise<void>;
 }) {
-  const { latestDraftRef, setShots, setNotice, watchShotTask } = input;
+  const { latestDraftRef, setNotice, setShots, watchShotTask } = input;
   const resumedRef = useRef(false);
 
   useEffect(() => {
@@ -106,7 +106,7 @@ export function useWorkshopTaskRecovery(input: {
           if (output) {
             patchIfOwned(
               isVideo
-                ? { clipUrl: output.url, clipStatus: "done" }
+                ? { clipStatus: "done", clipUrl: output.url }
                 : { imageUrl: output.url, status: "done" },
             );
           } else {

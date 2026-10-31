@@ -22,12 +22,12 @@ export { PRODUCTION_STAGES, type ProductionProgress, type ProductionStage };
  *  否则主页说「镜头生图」、工坊说「镜头」就成了同一件事的两种叫法。
  *  用工坊那套的 `label`（不是窄槽位用的 `shortLabel`）。 */
 export const STAGE_LABEL: Record<ProductionStage, string> = {
-  script: "剧本",
   character: "角色卡",
-  storyboard: "场景分镜",
-  shots: "镜头生图",
-  video: "视频生成",
   render: "成片合成",
+  script: "剧本",
+  shots: "镜头生图",
+  storyboard: "场景分镜",
+  video: "视频生成",
 };
 
 /** 每个阶段的完成判据。**这是本文件的核心判据表**，不是展示数据： */
@@ -116,9 +116,9 @@ export function deriveProjectOverview(
   const rows = PRODUCTION_STAGES.map((stage) => {
     const done = isStageDone(stage, view);
     return {
+      done,
       id: stage,
       label: STAGE_LABEL[stage],
-      done,
       /* 游标落在未完成阶段上才算「当前」。已完成阶段即便游标还停在那儿
          （用户没往前走）也不抢「当前」这个位置 —— 否则全部完成时主页会
          同时出现「已完成」与「当前：成片合成」。 */
@@ -129,17 +129,17 @@ export function deriveProjectOverview(
   const doneCount = rows.filter((row) => row.done).length;
   const next = rows.find((row) => !row.done) ?? null;
   return {
-    stages: rows,
-    doneCount,
-    totalCount: rows.length,
-    progressPct: Math.round((doneCount / rows.length) * 100),
-    nextStage: next?.id ?? null,
-    shotCount: view.shots.length,
-    imageDoneCount: view.shots.filter((s) => s.hasImage).length,
-    clipDoneCount: view.shots.filter((s) => s.hasClip).length,
     characterCount: view.characterCount,
-    hasScript: view.hasScript,
+    clipDoneCount: view.shots.filter((s) => s.hasClip).length,
+    doneCount,
     filmRendered: view.filmRendered,
+    hasScript: view.hasScript,
+    imageDoneCount: view.shots.filter((s) => s.hasImage).length,
+    nextStage: next?.id ?? null,
+    progressPct: Math.round((doneCount / rows.length) * 100),
+    shotCount: view.shots.length,
+    stages: rows,
+    totalCount: rows.length,
   };
 }
 

@@ -48,8 +48,8 @@ export type QueueTaskLogTarget = {
 const LOG_WIDTH = modalWidth("w-5xl");
 
 export function QueueTaskLogModal({
-  task,
   onClose,
+  task,
 }: {
   onClose: () => void;
   task: QueueTaskLogTarget | null;
@@ -60,9 +60,9 @@ export function QueueTaskLogModal({
   /* 加宽档与它的记忆收在`~/components/ui/wide-panel`（规范 16 §16.2.4.18）。 */
   const panel = useWidePanel("queue-task-log", LOG_WIDTH);
   /* 取消复用画布同款 hook（视图零 IO）。 */
-  const { cancelling, cancel } = useCancelTask({
-    taskId: task?.id ?? null,
+  const { cancel, cancelling } = useCancelTask({
     onFailed: () => undefined,
+    taskId: task?.id ?? null,
   });
 
   if (!task) {

@@ -32,12 +32,12 @@ export const workflowMutationProcedures = {
   create: authedProcedure
     .input(
       z.object({
-        name: z.string().max(200).optional(),
-        taskType: z.string().optional(),
-        modes: z.array(z.string()).optional(),
         defaultMode: z.string().nullable().optional(),
+        modes: z.array(z.string()).optional(),
+        name: z.string().max(200).optional(),
         raw: z.unknown().optional(),
         sourcePath: z.string().optional(),
+        taskType: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -61,8 +61,8 @@ export const workflowMutationProcedures = {
         let imported;
         try {
           imported = await importFromLocalPath(absSourcePath, {
-            preferredTaskType: typeof body.taskType === "string" ? body.taskType : undefined,
             defaultName: typeof body.name === "string" ? body.name : undefined,
+            preferredTaskType: typeof body.taskType === "string" ? body.taskType : undefined,
           });
         } catch (e: unknown) {
           const msg = errorMessage(e, String(e));
@@ -83,27 +83,27 @@ export const workflowMutationProcedures = {
         const defaultMode =
           typeof body.defaultMode === "string" && body.defaultMode ? body.defaultMode : modes?.[0];
         const tpl = await workflowTemplateRepository.createImported({
-          userId: ctx.user.id,
+          defaultMode,
+          modes,
           name,
-          taskType: defaultMode ?? imported.taskType,
-          rawJson: imported.rawJson,
           positions: imported.positions,
-          sourcePath: imported.sourcePath,
+          rawJson: imported.rawJson,
           sourceChecksum: imported.sourceChecksum,
           sourceMtime: imported.sourceMtime,
-          modes,
-          defaultMode,
+          sourcePath: imported.sourcePath,
+          taskType: defaultMode ?? imported.taskType,
+          userId: ctx.user.id,
         });
         return {
+          format: imported.format,
+          hasPositions: !!imported.positions,
           id: tpl.id,
           name: tpl.name,
-          taskType: tpl.taskType,
           paramMap: tpl.paramMap,
-          format: imported.format,
-          sourcePath: imported.sourcePath,
           source: imported.sourcePath ? "local" : "online",
+          sourcePath: imported.sourcePath,
+          taskType: tpl.taskType,
           warnings: imported.warnings.length ? imported.warnings : undefined,
-          hasPositions: !!imported.positions,
         };
       }
 
@@ -144,21 +144,21 @@ export const workflowMutationProcedures = {
       }
 
       const tpl = await workflowTemplateRepository.createImported({
-        userId: ctx.user.id,
-        name,
-        taskType,
-        rawJson: rawJson ?? undefined,
-        positions: positions ?? undefined,
-        modes,
         defaultMode,
+        modes,
+        name,
+        positions: positions ?? undefined,
+        rawJson: rawJson ?? undefined,
+        taskType,
+        userId: ctx.user.id,
       });
       return {
+        hasPositions: !!positions,
         id: tpl.id,
         name: tpl.name,
-        taskType: tpl.taskType,
         paramMap: tpl.paramMap,
+        taskType: tpl.taskType,
         warnings: warnings.length ? warnings : undefined,
-        hasPositions: !!positions,
       };
     }),
 
@@ -173,20 +173,20 @@ export const workflowMutationProcedures = {
          * 与 `workflow.list` 出口、视图声明同一份形状。此前这里是 `z.unknown()`
          * ——「相当于无校验」，而 `generate` 那边是 `z.record(z.string(),
          * z.string())`，两者表达不了同一个形状（ISSUE #1460）。 */
+        defaultMode: z.string().nullable().optional(),
+        mergePositions: z.boolean().optional(),
+        modelTags: z.array(z.string()).optional(),
+        modes: z.array(z.string()).optional(),
         paramMap: workflowParamMapInputSchema,
         positions: z.unknown().optional(),
-        workflowIO: z.unknown().optional(),
         taskType: z.string().optional(),
-        modes: z.array(z.string()).optional(),
-        defaultMode: z.string().nullable().optional(),
-        modelTags: z.array(z.string()).optional(),
-        mergePositions: z.boolean().optional(),
+        workflowIO: z.unknown().optional(),
         /** 「重置布局」用：删掉该命名空间下的全部坐标覆盖，让节点回到工作流
          *  自带的原始布局。空串表示顶层；子图视图传宿主链（`4` / `4:5`）。
          *  与 `positions` 互斥（重置是删除，不是写回）。 */
-        resetPositionsScope: z.string().optional(),
         groups: z.unknown().optional(),
         notes: z.unknown().optional(),
+        resetPositionsScope: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -200,14 +200,14 @@ export const workflowMutationProcedures = {
 
       // patch 为显式字段构造（不含 ...rest 展开），故 mergePositions / groups /
       // notes 无需在此排除——它们的读取走下方具名变量。
-      const { id, modelTags, mergePositions, groups, notes, ...rest } = input;
+      const { groups, id, mergePositions, modelTags, notes, ...rest } = input;
       const patch: Partial<WorkflowTemplate> = {
-        name: rest.name,
-        taskType: rest.taskType,
         defaultMode: rest.defaultMode,
-        rawJson: rest.rawJson,
+        name: rest.name,
         paramMap: rest.paramMap,
         positions: rest.positions,
+        rawJson: rest.rawJson,
+        taskType: rest.taskType,
         /* 保存 IO 映射时把类型 / 默认值固化进库（fix 4）：用图里当前字面量补全
          * 缺失的 type / defaultValue，离线也能做，不依赖 object_info 重算。 */
         workflowIO:
@@ -410,10 +410,10 @@ export const workflowMutationProcedures = {
       });
     }
     const result = await reimportFromSource({
-      sourcePath: existing.sourcePath ?? "",
-      sourceMtime: existing.sourceMtime,
-      sourceChecksum: existing.sourceChecksum,
       existingTaskType: existing.taskType,
+      sourceChecksum: existing.sourceChecksum,
+      sourceMtime: existing.sourceMtime,
+      sourcePath: existing.sourcePath ?? "",
     });
     if (result.missing) {
       return { missing: true };
@@ -426,17 +426,17 @@ export const workflowMutationProcedures = {
     }
     // 把重新导入的内容落回模板
     const updated = await workflowTemplateRepository.update(existing.id, {
-      rawJson: result.update.rawJson ?? existing.rawJson,
       paramMap: result.update.paramMap ?? existing.paramMap,
       positions: result.update.positions ?? existing.positions,
-      sourceMtime: result.update.sourceMtime ?? existing.sourceMtime,
+      rawJson: result.update.rawJson ?? existing.rawJson,
       sourceChecksum: result.update.sourceChecksum ?? existing.sourceChecksum,
+      sourceMtime: result.update.sourceMtime ?? existing.sourceMtime,
       taskType: result.update.taskType ?? existing.taskType,
     });
     /* 详情缓存的 TTL 是 30s：不清的话用户点完「同步」再进详情还是旧内容，
      * 而磁盘标记已经翻回「无更新」—— 那是最难解释的一种自相矛盾。
      * （这是**唯一**会写回磁盘内容的入口，缓存失效也就只在这一处需要。） */
     invalidateWorkflowDetailCache(ctx.user.id, existing.id);
-    return { updated: true, template: updated };
+    return { template: updated, updated: true };
   }),
 };

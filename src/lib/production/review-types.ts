@@ -90,8 +90,8 @@ function normalizeScores(raw: unknown): Record<string, ReviewScore> | undefined 
       continue;
     }
     out[trimmedKey] = {
-      score: clamp(item.score, 1, 5),
       note: typeof item.note === "string" ? item.note.trim() : "",
+      score: clamp(item.score, 1, 5),
     };
   }
   return Object.keys(out).length > 0 ? out : undefined;
@@ -116,10 +116,10 @@ export function normalizeReviewVerdict(raw: unknown): ReviewVerdict | null {
     : [];
   const scores = normalizeScores(obj.scores);
   return {
-    pass: obj.pass,
     issues,
-    suggestion: typeof obj.suggestion === "string" ? obj.suggestion : "",
+    pass: obj.pass,
     scoredAt: typeof obj.scoredAt === "string" ? obj.scoredAt : "",
+    suggestion: typeof obj.suggestion === "string" ? obj.suggestion : "",
     ...(scores ? { scores } : {}),
     ...(typeof obj.rubricVersion === "string" && obj.rubricVersion.trim() !== ""
       ? { rubricVersion: obj.rubricVersion }
@@ -249,7 +249,7 @@ export type ScriptRevision = {
 export function normalizeScriptReviewState(raw: unknown): ScriptReviewState {
   const obj = asRecord(raw);
   if (!obj) {
-    return { review: null, history: [], revisions: [], humanVerdict: null };
+    return { history: [], humanVerdict: null, review: null, revisions: [] };
   }
   const history = (Array.isArray(obj.history) ? obj.history : [])
     .map((item) => normalizeReviewVerdict(item))
@@ -269,10 +269,10 @@ export function normalizeScriptReviewState(raw: unknown): ScriptReviewState {
     .filter((item): item is ScriptRevision => item !== null)
     .slice(-SCRIPT_REVISION_LIMIT);
   return {
-    review: normalizeReviewVerdict(obj.review),
     history,
-    revisions,
     humanVerdict: normalizeHumanVerdict(obj.humanVerdict),
+    review: normalizeReviewVerdict(obj.review),
+    revisions,
   };
 }
 
@@ -283,10 +283,10 @@ export function applyScriptReview(prev: unknown, verdict: ReviewVerdict): Script
     ? tailWindow([...state.history, state.review], REVIEW_HISTORY_LIMIT)
     : state.history;
   return {
-    review: verdict,
     history,
-    revisions: state.revisions,
     humanVerdict: state.humanVerdict,
+    review: verdict,
+    revisions: state.revisions,
   };
 }
 
@@ -329,7 +329,7 @@ export function weakScoreEntries(
   }
   return Object.entries(scores)
     .filter(([, item]) => item.score <= maxScore)
-    .map(([key, item]) => ({ key, score: item.score, note: item.note }))
+    .map(([key, item]) => ({ key, note: item.note, score: item.score }))
     .sort((a, b) => a.score - b.score);
 }
 
@@ -360,9 +360,9 @@ export function normalizeHumanVerdict(raw: unknown): HumanVerdict | null {
     return null;
   }
   return {
-    pass: obj.pass,
-    note: typeof obj.note === "string" ? obj.note.trim() : "",
     at: typeof obj.at === "string" ? obj.at : "",
+    note: typeof obj.note === "string" ? obj.note.trim() : "",
+    pass: obj.pass,
     ...(typeof obj.rev === "number" && Number.isFinite(obj.rev) ? { rev: obj.rev } : {}),
     ...(typeof obj.digest === "string" && obj.digest.trim() !== ""
       ? { digest: obj.digest.trim() }

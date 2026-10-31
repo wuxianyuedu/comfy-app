@@ -22,9 +22,9 @@ import { logSceneArgType } from "../../../../.storybook/store-sources";
  * selector），不手抄一个 `total: 12` —— 那种数字在场景换了之后仍然显示旧值。
  */
 const meta = {
-  title: "Studio/Logs/LogPanelFooter",
   component: LogPanelFooter,
   parameters: { storeScene: "mixed" },
+  title: "Studio/Logs/LogPanelFooter",
 } satisfies Meta<typeof LogPanelFooter>;
 
 export default meta;
@@ -42,7 +42,7 @@ function FooterHarness({ withPage = false }: { withPage?: boolean }) {
   /* 与 `LogPanel` 里那几行**同一个 selector**（面板读 `header` 切片，
      `bootId` / `droppedTotal` 是它旁边两个独立 selector）——
      没有「story 版口径」。 */
-  const { filteredLogs, pageSize, counts, origin, filter, search, bootId, autoScroll } =
+  const { autoScroll, bootId, counts, filter, filteredLogs, origin, pageSize, search } =
     useLogPanel((state) => state.header);
   const droppedTotal = useLogPanel((state) => state.droppedTotal);
   const setOrigin = useLogPanel((state) => state.setOrigin);

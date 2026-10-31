@@ -30,7 +30,7 @@ const killProcessTreeMock = vi.hoisted(() => vi.fn(async () => ({ ok: true, via:
 vi.mock("~/lib/process/kill-process-tree", () => ({
   killProcessTree: killProcessTreeMock,
 }));
-const openUrlMock = vi.hoisted(() => vi.fn(async () => ({ ok: true, detail: "opened" })));
+const openUrlMock = vi.hoisted(() => vi.fn(async () => ({ detail: "opened", ok: true })));
 vi.mock("~/lib/shell/open-in-browser", () => ({
   openUrlInBrowser: openUrlMock,
 }));
@@ -49,7 +49,7 @@ vi.mock("~/lib/log/runtime-log-pack.server", () => ({
   pruneRuntimeLogFiles: () => 0,
 }));
 vi.mock("~/lib/core/logger", () => ({
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
 import {
@@ -70,7 +70,6 @@ function mockConnect(reachable: boolean) {
   connectMock.mockImplementation(() => {
     const handlers: Record<string, () => void> = {};
     const sock = {
-      setTimeout: () => undefined,
       destroy: () => undefined,
       once(event: string, cb: () => void) {
         handlers[event] = cb;
@@ -79,6 +78,7 @@ function mockConnect(reachable: boolean) {
         queueMicrotask(() => handlers[reachable ? "connect" : "error"]?.());
         return sock;
       },
+      setTimeout: () => undefined,
     };
     return sock;
   });
@@ -90,7 +90,7 @@ beforeEach(() => {
   killProcessTreeMock.mockReset();
   killProcessTreeMock.mockResolvedValue({ ok: true, via: "stub" });
   openUrlMock.mockReset();
-  openUrlMock.mockResolvedValue({ ok: true, detail: "opened" });
+  openUrlMock.mockResolvedValue({ detail: "opened", ok: true });
   logLines.length = 0;
   // 子进程句柄与「用户要求停止」标记挂在 globalThis 上（HMR 安全），用例之间
   // 必须清干净，否则上一例留下的 child 会让「未在运行」那两条读出 pid。
@@ -179,7 +179,7 @@ describe("退出记录的归属（ISSUE #2435）", () => {
     const child = fakeChild(pid);
     spawnMock.mockReturnValue(child);
     const kitSpy = vi.spyOn(fs, "existsSync").mockReturnValue(true);
-    await ensureDrizzleStudioUp({ timeoutMs: 0, onLog });
+    await ensureDrizzleStudioUp({ onLog, timeoutMs: 0 });
     kitSpy.mockRestore();
     expect(spawnMock).toHaveBeenCalled();
     return child;
@@ -198,8 +198,8 @@ describe("退出记录的归属（ISSUE #2435）", () => {
     const r = await stopDrizzleStudio();
 
     expect(killProcessTreeMock).toHaveBeenCalledWith({
-      pid: 4321,
       detached: false,
+      pid: 4321,
     });
     expect(r.ok).toBe(true);
     expect(exitText()).toContain("Drizzle Studio 进程已退出：用户主动关闭");
@@ -228,7 +228,7 @@ describe("stopDrizzleStudio — 不是本应用拉起的就不乱杀", () => {
   it("没记录到 pid 且端口不可达：判定「未在运行」", async () => {
     mockConnect(false);
     const r = await stopDrizzleStudio();
-    expect(r).toEqual({ ok: true, detail: "Drizzle Studio 未在运行" });
+    expect(r).toEqual({ detail: "Drizzle Studio 未在运行", ok: true });
     expect(killProcessTreeMock).not.toHaveBeenCalled();
   });
 

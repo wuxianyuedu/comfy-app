@@ -24,13 +24,13 @@ import type { PendingRow, WorkflowRow } from "../workflow-library-config";
 import { LIST_STALL_MS, useWorkflowLibrary } from "./use-workflow-library";
 
 const toast = {
-  success: vi.fn(),
+  dismiss: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
-  toast: vi.fn(),
   loading: vi.fn(),
+  success: vi.fn(),
+  toast: vi.fn(),
   update: vi.fn(),
-  dismiss: vi.fn(),
 };
 
 vi.mock("../../ToastProvider", () => ({
@@ -52,12 +52,22 @@ type Behavior = {
   workflows: Array<Record<string, unknown>>;
 };
 
-let behavior: Behavior = { workflows: [], localPending: [], tags: [] };
+let behavior: Behavior = { localPending: [], tags: [], workflows: [] };
 let listCalls = 0;
 
 const t = createTestTRPC();
 const mockRouter = t.router({
   workflow: t.router({
+    create: t.procedure.mutation(() => ({ id: "new", warnings: [] })),
+    delete: t.procedure.mutation(() => {
+      if (behavior.deleteError) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: behavior.deleteError,
+        });
+      }
+      return { ok: true };
+    }),
     list: t.procedure.query(async () => {
       listCalls += 1;
       if (behavior.listDelayMs && behavior.listDelayMs > 0) {
@@ -71,11 +81,11 @@ const mockRouter = t.router({
         });
       }
       return {
-        workflows: behavior.workflows,
         localPending: behavior.localPending,
+        workflows: behavior.workflows,
       };
     }),
-    create: t.procedure.mutation(() => ({ id: "new", warnings: [] })),
+    resync: t.procedure.mutation(() => ({ ok: true, updated: true })),
     update: t.procedure.mutation(() => {
       if (behavior.updateError) {
         throw new TRPCError({
@@ -85,16 +95,6 @@ const mockRouter = t.router({
       }
       return { ok: true };
     }),
-    delete: t.procedure.mutation(() => {
-      if (behavior.deleteError) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: behavior.deleteError,
-        });
-      }
-      return { ok: true };
-    }),
-    resync: t.procedure.mutation(() => ({ ok: true, updated: true })),
   }),
   workflowModel: t.router({
     list: t.procedure.query(() => ({ tags: behavior.tags })),
@@ -105,10 +105,10 @@ const server = setupTrpcServer(mockRouter);
 
 function row(overrides: Partial<WorkflowRow> = {}): Record<string, unknown> {
   return {
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
     id: "wf-1",
     name: "demo",
     taskType: "T2I",
-    createdAt: new Date("2026-08-01T00:00:00.000Z"),
     ...overrides,
   };
 }
@@ -139,9 +139,9 @@ function makeWrapper() {
       { client: qc },
       // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
       createElement(TRPCProvider, {
-        trpcClient: client,
-        queryClient: qc,
         children,
+        queryClient: qc,
+        trpcClient: client,
       }),
     );
   };
@@ -150,7 +150,7 @@ function makeWrapper() {
 beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 afterEach(() => {
   cleanup();
-  behavior = { workflows: [], localPending: [], tags: [] };
+  behavior = { localPending: [], tags: [], workflows: [] };
   listCalls = 0;
   vi.clearAllMocks();
   server.resetHandlers();
@@ -160,12 +160,12 @@ afterAll(() => server.close());
 describe("useWorkflowLibrary", () => {
   it("挂载后拿到列表与标签，并派生出来源 / 类型计数", async () => {
     behavior = {
+      localPending: [pending()],
+      tags: [{ count: 2, id: "t1", name: "flux" }],
       workflows: [
         row({ id: "1", name: "Alpha", sourcePath: "D:/a.json" }),
         row({ id: "2", name: "Beta", taskType: "I2V" }),
       ],
-      localPending: [pending()],
-      tags: [{ id: "t1", name: "flux", count: 2 }],
     };
     const { result } = renderHook(() => useWorkflowLibrary(), {
       wrapper: makeWrapper(),
@@ -180,21 +180,21 @@ describe("useWorkflowLibrary", () => {
     });
     expect(result.current.typeCounts).toEqual({
       all: 3,
+      audio: 0,
       image: 1,
       video: 1,
-      audio: 0,
     });
-    expect(result.current.modelTags).toEqual([{ id: "t1", name: "flux", count: 2 }]);
+    expect(result.current.modelTags).toEqual([{ count: 2, id: "t1", name: "flux" }]);
   });
 
   it("筛选与搜索都是本地派生，不打新请求", async () => {
     behavior = {
-      workflows: [
-        row({ id: "1", name: "Alpha", taskType: "T2I", modelTags: ["flux"] }),
-        row({ id: "2", name: "Beta", taskType: "I2V" }),
-      ],
       localPending: [],
       tags: [],
+      workflows: [
+        row({ id: "1", modelTags: ["flux"], name: "Alpha", taskType: "T2I" }),
+        row({ id: "2", name: "Beta", taskType: "I2V" }),
+      ],
     };
     const { result } = renderHook(() => useWorkflowLibrary(), {
       wrapper: makeWrapper(),
@@ -218,9 +218,9 @@ describe("useWorkflowLibrary", () => {
 
   it("选中项随列表联动；删除被选中项时清空选择", async () => {
     behavior = {
-      workflows: [row({ id: "1", name: "Alpha" }), row({ id: "2", name: "Beta" })],
       localPending: [],
       tags: [],
+      workflows: [row({ id: "1", name: "Alpha" }), row({ id: "2", name: "Beta" })],
     };
     const { result } = renderHook(() => useWorkflowLibrary(), {
       wrapper: makeWrapper(),
@@ -248,7 +248,7 @@ describe("useWorkflowLibrary", () => {
 
     await expect.poll(() => result.current.loadError).toContain("数据库不可用");
 
-    behavior = { workflows: [row()], localPending: [], tags: [] };
+    behavior = { localPending: [], tags: [], workflows: [row()] };
     await act(async () => {
       result.current.load();
     });
@@ -257,10 +257,10 @@ describe("useWorkflowLibrary", () => {
 
   it("§17.5.4：动作失败的错误不会被随后的列表刷新吞掉", async () => {
     behavior = {
-      workflows: [row({ id: "1" })],
+      deleteError: "删除失败：文件被占用",
       localPending: [],
       tags: [],
-      deleteError: "删除失败：文件被占用",
+      workflows: [row({ id: "1" })],
     };
     const { result } = renderHook(() => useWorkflowLibrary(), {
       wrapper: makeWrapper(),
@@ -289,7 +289,7 @@ describe("useWorkflowLibrary", () => {
   });
 
   it("动作成功后不残留错误", async () => {
-    behavior = { workflows: [row({ id: "1" })], localPending: [], tags: [] };
+    behavior = { localPending: [], tags: [], workflows: [row({ id: "1" })] };
     const { result } = renderHook(() => useWorkflowLibrary(), {
       wrapper: makeWrapper(),
     });
@@ -308,10 +308,10 @@ describe("useWorkflowLibrary", () => {
     // 结束后还原。
     vi.useFakeTimers();
     behavior = {
-      workflows: [],
+      listDelayMs: LIST_STALL_MS + 2_000,
       localPending: [],
       tags: [],
-      listDelayMs: LIST_STALL_MS + 2_000,
+      workflows: [],
     };
 
     const { result } = renderHook(() => useWorkflowLibrary(), {

@@ -22,10 +22,10 @@ export type UpdateCheckPayload = {
 };
 
 const EMPTY: UpdateCheckPayload = {
-  ok: false,
   armed: false,
   dirty: false,
   groups: [],
+  ok: false,
 };
 
 /** 拉一次更新检测；请求失败（路由不可达等）返回空态便于降级静默。 */
@@ -37,10 +37,10 @@ export async function fetchUpdateCheck(): Promise<UpdateCheckPayload> {
     }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as UpdateCheckPayload;
     return {
-      ok: true,
       armed: data.armed === true,
       dirty: data.dirty === true,
       groups: Array.isArray(data.groups) ? data.groups : [],
+      ok: true,
     };
   } catch {
     return EMPTY;

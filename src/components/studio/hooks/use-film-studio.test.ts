@@ -14,13 +14,13 @@ import { FILM_SIZE } from "../film-studio-config";
 import { useFilmStudio } from "./use-film-studio";
 
 const toast = {
-  success: vi.fn(),
+  dismiss: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
-  toast: vi.fn(),
   loading: vi.fn(),
+  success: vi.fn(),
+  toast: vi.fn(),
   update: vi.fn(),
-  dismiss: vi.fn(),
 };
 
 vi.mock("../ToastProvider", () => ({
@@ -46,16 +46,16 @@ vi.mock("~/lib/production/production-client", () => ({
 
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
-    skill: { list: { query: vi.fn() } },
     film: {
-      list: { query: vi.fn() },
-      detail: { query: vi.fn() },
-      create: { mutate: vi.fn() },
-      createFromProject: { mutate: vi.fn() },
-      start: { mutate: vi.fn() },
       cancel: { mutate: vi.fn() },
       compose: { mutate: vi.fn() },
+      create: { mutate: vi.fn() },
+      createFromProject: { mutate: vi.fn() },
+      detail: { query: vi.fn() },
+      list: { query: vi.fn() },
+      start: { mutate: vi.fn() },
     },
+    skill: { list: { query: vi.fn() } },
   },
 }));
 
@@ -66,39 +66,39 @@ const mockedUpload = vi.mocked(uploadBgm);
 const mockOf = (fn: unknown) => /* SAFETY: 类型断言已复核 */ fn as Mock;
 
 const vanilla = {
-  skill: { list: { query: mockOf(vanillaApi.skill.list.query) } },
   film: {
-    list: { query: mockOf(vanillaApi.film.list.query) },
-    detail: { query: mockOf(vanillaApi.film.detail.query) },
+    cancel: { mutate: mockOf(vanillaApi.film.cancel.mutate) },
+    compose: { mutate: mockOf(vanillaApi.film.compose.mutate) },
     create: { mutate: mockOf(vanillaApi.film.create.mutate) },
     createFromProject: {
       mutate: mockOf(vanillaApi.film.createFromProject.mutate),
     },
+    detail: { query: mockOf(vanillaApi.film.detail.query) },
+    list: { query: mockOf(vanillaApi.film.list.query) },
     start: { mutate: mockOf(vanillaApi.film.start.mutate) },
-    cancel: { mutate: mockOf(vanillaApi.film.cancel.mutate) },
-    compose: { mutate: mockOf(vanillaApi.film.compose.mutate) },
   },
+  skill: { list: { query: mockOf(vanillaApi.skill.list.query) } },
 };
 
 /** 一条处于生成中的成片（触发轮询） */
 function runningFilm(id = "f-1") {
   return {
-    id,
-    title: "未命名成片",
-    script: "s",
-    type: "short_video",
-    styleSlug: null,
-    size: "1280x720",
+    bgmName: null,
+    error: null,
+    finalVideo: null,
     fps: 16,
     framesPerShot: 49,
-    subtitleOn: true,
-    bgmName: null,
-    status: /* SAFETY: 类型断言已复核 */ "GENERATING" as const,
-    progress: 10,
-    finalVideo: null,
-    error: null,
+    id,
     logs: null,
+    progress: 10,
+    script: "s",
     shots: [],
+    size: "1280x720",
+    status: /* SAFETY: 类型断言已复核 */ "GENERATING" as const,
+    styleSlug: null,
+    subtitleOn: true,
+    title: "未命名成片",
+    type: "short_video",
   };
 }
 
@@ -110,8 +110,8 @@ beforeEach(() => {
   fetchProductionMock.mockResolvedValue(null);
   vanilla.skill.list.query.mockResolvedValue({ skills: [] });
   vanilla.film.list.query.mockResolvedValue({
-    films: [],
     ffmpegAvailable: true,
+    films: [],
   });
   vanilla.film.detail.query.mockResolvedValue({ film: runningFilm() });
   vanilla.film.create.mutate.mockResolvedValue({ id: "f-1" });
@@ -155,9 +155,9 @@ describe("useFilmStudio", () => {
     expect(vanilla.film.create.mutate).toHaveBeenCalledWith(
       /* 尺寸下发的是尺寸表达（比例 + 分辨率），不再是 "WxH" 字符串。 */
       expect.objectContaining({
-        title: "未命名成片",
-        size: FILM_SIZE,
         fps: 16,
+        size: FILM_SIZE,
+        title: "未命名成片",
       }),
     );
     expect(vanilla.film.start.mutate).toHaveBeenCalledWith({ id: "f-1" });
@@ -190,7 +190,7 @@ describe("useFilmStudio", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       vanilla.film.detail.query.mockResolvedValueOnce({ film: runningFilm() }).mockResolvedValue({
-        film: { ...runningFilm(), status: "DONE", finalVideo: "/v.mp4" },
+        film: { ...runningFilm(), finalVideo: "/v.mp4", status: "DONE" },
       });
       const { result } = renderHook(() => useFilmStudio());
       await act(async () => {
@@ -286,9 +286,9 @@ describe("useFilmStudio", () => {
 
     expect(vanilla.film.createFromProject.mutate).toHaveBeenCalledWith(
       expect.objectContaining({
+        fps: 16,
         projectId: "proj_9",
         size: FILM_SIZE,
-        fps: 16,
       }),
     );
     expect(vanilla.film.create.mutate).not.toHaveBeenCalled();

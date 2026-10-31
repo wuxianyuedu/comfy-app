@@ -26,12 +26,12 @@ import { Hint } from "~/components/ui/hint";
  * ⚠️ 提示要**悬停**才出现；禁用态那条要看 `wrap` 的现场（见下）。
  */
 const meta = {
-  title: "UI/Hint",
-  component: Hint,
   args: {
-    label: "提示文案",
     children: <Button variant="outline">目标</Button>,
+    label: "提示文案",
   },
+  component: Hint,
+  title: "UI/Hint",
 } satisfies Meta<typeof Hint>;
 
 export default meta;

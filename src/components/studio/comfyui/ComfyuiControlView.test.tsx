@@ -27,8 +27,7 @@ const { emitAppEventMock, emitCalls } = vi.hoisted(() => {
   };
 });
 vi.mock("~/lib/app-events", async () => {
-  const actual =
-    await vi.importActual<Record<string, unknown>>("~/lib/app-events");
+  const actual = await vi.importActual<Record<string, unknown>>("~/lib/app-events");
   return { ...actual, emitAppEvent: emitAppEventMock };
 });
 
@@ -39,50 +38,48 @@ beforeEach(() => {
   emitCalls.length = 0;
 });
 
-function controller(
-  over: Partial<ComfyuiControlController> = {},
-): ComfyuiControlController {
+function controller(over: Partial<ComfyuiControlController> = {}): ComfyuiControlController {
   return {
-    status: null,
-    instance: {
-      pathConfigured: true,
-      instanceType: "portable",
-      desktopManaged: false,
-    },
-    starting: false,
-    stopping: false,
-    opening: false,
     browserOpening: false,
-    startComfy: vi.fn(async () => undefined),
-    stopComfy: vi.fn(async () => undefined),
-    openComfy: vi.fn(async () => undefined),
-    openComfyInBrowser: vi.fn(async () => undefined),
-    refreshStatus: vi.fn(async () => undefined),
+    instance: {
+      desktopManaged: false,
+      instanceType: "portable",
+      pathConfigured: true,
+    },
     log: {
-      text: "",
+      active: false,
+      refresh: vi.fn(async () => undefined),
       segments: [],
-      sessions: [],
+      selectSession: vi.fn(),
       sessionId: null,
+      sessions: [],
+      text: "",
+      total: 0,
       truncated: false,
       windowed: false,
-      total: 0,
-      active: false,
-      selectSession: vi.fn(),
-      refresh: vi.fn(async () => undefined),
     },
+    openComfy: vi.fn(async () => undefined),
+    openComfyInBrowser: vi.fn(async () => undefined),
+    opening: false,
+    refreshStatus: vi.fn(async () => undefined),
+    startComfy: vi.fn(async () => undefined),
+    starting: false,
+    status: null,
+    stopComfy: vi.fn(async () => undefined),
+    stopping: false,
     ...over,
   };
 }
 
 const running = {
-  up: true,
-  starting: false,
-  probing: false,
-  stopping: false,
   base: "http://127.0.0.1:8188",
-  port: 8188,
-  via: "配置路径的实例",
   path: "D:\\ComfyUI",
+  port: 8188,
+  probing: false,
+  starting: false,
+  stopping: false,
+  up: true,
+  via: "配置路径的实例",
 };
 
 describe("ComfyuiControlView", () => {
@@ -124,14 +121,14 @@ describe("ComfyuiControlView", () => {
       <ComfyuiControlView
         c={controller({
           status: {
-            up: false,
-            starting: false,
-            probing: true,
-            stopping: false,
             base: null,
-            port: 0,
-            via: null,
             path: "D:\\ComfyUI",
+            port: 0,
+            probing: true,
+            starting: false,
+            stopping: false,
+            up: false,
+            via: null,
           },
         })}
       />,
@@ -146,18 +143,16 @@ describe("ComfyuiControlView", () => {
       <ComfyuiControlView
         c={controller({
           instance: {
-            pathConfigured: false,
-            instanceType: null,
             desktopManaged: false,
+            instanceType: null,
+            pathConfigured: false,
           },
         })}
       />,
     );
     expect(screen.getByRole("button", { name: "启动 ComfyUI" })).toBeDisabled();
     expect(screen.getByText(/还没配置 ComfyUI 路径/)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /去设置里配置/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /去设置里配置/ })).toBeInTheDocument();
   });
 
   it("点「去设置里配置」带上目标分区：直接停在「创作后端」那一节", () => {
@@ -165,9 +160,9 @@ describe("ComfyuiControlView", () => {
       <ComfyuiControlView
         c={controller({
           instance: {
-            pathConfigured: false,
-            instanceType: null,
             desktopManaged: false,
+            instanceType: null,
+            pathConfigured: false,
           },
         })}
       />,
@@ -177,7 +172,7 @@ describe("ComfyuiControlView", () => {
        `section: "comfyui"`（本页文案写的「设置 → 创作后端」）。 */
     expect(emitCalls).toContainEqual({
       name: "workspace:navigate",
-      payload: { view: "settings", section: "comfyui" },
+      payload: { section: "comfyui", view: "settings" },
     });
   });
 
@@ -195,7 +190,7 @@ describe("ComfyuiControlView", () => {
     render(
       <ComfyuiControlView
         c={controller({
-          status: { ...running, up: false, path: "" },
+          status: { ...running, path: "", up: false },
         })}
       />,
     );
@@ -218,9 +213,7 @@ describe("ComfyuiControlView", () => {
 
   it("启动日志框在页上（硬规则 4 的用户可见出口）", () => {
     render(<ComfyuiControlView c={controller()} />);
-    expect(
-      screen.getByText("启动日志（comfyui-runtime.log）"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("启动日志（comfyui-runtime.log）")).toBeInTheDocument();
     expect(screen.getByText(/暂无日志/)).toBeInTheDocument();
   });
 });

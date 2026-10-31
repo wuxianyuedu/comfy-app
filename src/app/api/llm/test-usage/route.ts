@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   /* 读 body / 取条目名 / 解析连接参数与「继续等待」路由同一份实现（§12.12）。 */
   const prologue = await readUsageTestPrologue(req);
   if (!prologue.ok) {
-    return NextResponse.json({ ok: false, detail: prologue.detail });
+    return NextResponse.json({ detail: prologue.detail, ok: false });
   }
   const { name, rec, up } = prologue;
 
@@ -49,12 +49,12 @@ export async function POST(req: NextRequest) {
 
   if (!(/* SAFETY: 类型断言已复核 */ (USAGE_TEST_KINDS as ReadonlyArray<string>).includes(kind))) {
     return NextResponse.json({
-      ok: false,
       detail: `未知用途：${kind || "(空)"}`,
+      ok: false,
     });
   }
   if (!prompt) {
-    return NextResponse.json({ ok: false, detail: "请填写提示词" });
+    return NextResponse.json({ detail: "请填写提示词", ok: false });
   }
 
   // 条目名即模型参数值（设置页清单按模型名建条目）
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
 
   const parsedExtra = parseExtraJson(extraJson);
   if (!parsedExtra.ok) {
-    return NextResponse.json({ ok: false, detail: parsedExtra.detail });
+    return NextResponse.json({ detail: parsedExtra.detail, ok: false });
   }
   const { extra } = parsedExtra;
 
@@ -71,59 +71,59 @@ export async function POST(req: NextRequest) {
     if (kind === "chat") {
       const r = await callChat(up, model, prompt, extra);
       if (!r.ok) {
-        return NextResponse.json({ ok: false, detail: r.detail });
+        return NextResponse.json({ detail: r.detail, ok: false });
       }
       return NextResponse.json({
-        ok: true,
-        detail: "调用成功",
         chatText: r.text,
+        detail: "调用成功",
         elapsedMs: Date.now() - startedAt,
+        ok: true,
       });
     }
 
     if (kind === "image") {
       const r = await callImage(up, model, prompt, size, extra);
       if (!r.ok) {
-        return NextResponse.json({ ok: false, detail: r.detail });
+        return NextResponse.json({ detail: r.detail, ok: false });
       }
       /* 产出的图片落到本地 temp 子目录一份（不是只给远端 URL） */
       const savedPath = await saveMediaToLocalTemp("image", name, r.url);
       return NextResponse.json({
-        ok: true,
         detail: "生成成功",
-        imageUrl: r.url,
-        savedPath,
         elapsedMs: Date.now() - startedAt,
+        imageUrl: r.url,
+        ok: true,
+        savedPath,
       });
     }
 
     // ── video：提交（同步 URL 或任务 ID），任务制则轮询到完成或超时 ──
     const outcome = await callVideo(up, model, prompt, extra);
     if (outcome.status === "error") {
-      return NextResponse.json({ ok: false, detail: outcome.detail });
+      return NextResponse.json({ detail: outcome.detail, ok: false });
     }
     if (outcome.status === "pending") {
       return NextResponse.json({
-        ok: true,
         detail: SUBMIT_PENDING_DETAIL,
-        taskId: outcome.taskId,
-        pending: true,
         elapsedMs: Date.now() - startedAt,
+        ok: true,
+        pending: true,
+        taskId: outcome.taskId,
       });
     }
     const savedPath = await saveMediaToLocalTemp("video", name, outcome.url);
     return NextResponse.json({
-      ok: true,
       detail: "生成成功",
-      videoUrl: outcome.url,
-      savedPath,
       elapsedMs: Date.now() - startedAt,
+      ok: true,
+      savedPath,
+      videoUrl: outcome.url,
     });
   } catch (e) {
     return NextResponse.json({
-      ok: false,
       detail: apiErrorDetail(e, "调用失败"),
       elapsedMs: Date.now() - startedAt,
+      ok: false,
     });
   }
 }

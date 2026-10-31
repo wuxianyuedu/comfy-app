@@ -167,7 +167,7 @@ export async function ensureDrizzleStudioUp(
   };
 
   if (await probeDrizzleStudio(port)) {
-    return { ok: true, port, detail: "Drizzle Studio 已在运行" };
+    return { detail: "Drizzle Studio 已在运行", ok: true, port };
   }
   if (st.starting) {
     note("Drizzle Studio 正在启动中，等待就绪…");
@@ -177,11 +177,11 @@ export async function ensureDrizzleStudioUp(
   const bin = resolveDrizzleKitBin();
   if (!bin) {
     return {
-      ok: false,
-      port,
       detail:
         "未找到 drizzle-kit：当前运行环境没有完整的 node_modules。" +
         "请在开发模式（双击桌面壳 / pnpm dev）下使用，打包后的 standalone 运行目录不含 drizzle-kit。",
+      ok: false,
+      port,
     };
   }
 
@@ -207,7 +207,7 @@ export async function ensureDrizzleStudioUp(
     } catch (e) {
       const detail = errorText(e, "启动 Drizzle Studio 失败");
       note(detail);
-      return { ok: false, port, detail };
+      return { detail, ok: false, port };
     }
     st.child = child;
     appendRuntimeLog(`[spawn] pid=${child.pid} cmd=${nodeExe} args=${JSON.stringify(args)}`);
@@ -226,29 +226,26 @@ export async function ensureDrizzleStudioUp(
     child.on(
       "exit",
       createChildExitHandler({
-        subject: "Drizzle Studio",
         appendRuntimeLog,
-        log: note,
         clearChild: () => {
           if (st.child === child) {
             st.child = undefined;
           }
         },
         context: () => ({
-          pid: child.pid ?? null,
-          uptimeMs: Date.now() - spawnedAt,
-          stopRequested: st.stopRequested === true,
           mode: "studio",
+          pid: child.pid ?? null,
+          stopRequested: st.stopRequested === true,
+          uptimeMs: Date.now() - spawnedAt,
         }),
+        log: note,
+        subject: "Drizzle Studio",
       }),
     );
 
     const r = await waitForComfyReady({
       deadline: Date.now() + timeoutMs,
-      timeoutDetail: `Drizzle Studio 启动超时（${Math.round(timeoutMs / 1000)}s 未就绪），详见 log/services/drizzle-studio-runtime.log`,
-      readyDetail: `Drizzle Studio 已就绪（端口 ${port}）`,
       intervalMs: 500,
-      probe: async () => ((await probeDrizzleStudio(port)) ? `127.0.0.1:${port}` : null),
       isDead: async () => {
         if (st.child === child) {
           return null;
@@ -260,8 +257,11 @@ export async function ensureDrizzleStudioUp(
           ? `Drizzle Studio 启动后立即退出：缺少依赖（${modErr[1] ?? modErr[2]}）——请确认已安装 drizzle-kit（pnpm install），详见 log/services/drizzle-studio-runtime.log`
           : "Drizzle Studio 进程启动后立即退出，详见 log/services/drizzle-studio-runtime.log";
       },
+      probe: async () => ((await probeDrizzleStudio(port)) ? `127.0.0.1:${port}` : null),
+      readyDetail: `Drizzle Studio 已就绪（端口 ${port}）`,
+      timeoutDetail: `Drizzle Studio 启动超时（${Math.round(timeoutMs / 1000)}s 未就绪），详见 log/services/drizzle-studio-runtime.log`,
     });
-    return { ok: r.ok, port, detail: r.detail };
+    return { detail: r.detail, ok: r.ok, port };
   })().finally(() => {
     st.starting = undefined;
   });
@@ -282,10 +282,10 @@ export async function stopDrizzleStudio(
   if (!pid) {
     return stillUp
       ? {
-          ok: false,
           detail: "Drizzle Studio 不是由本应用启动的，请在启动它的终端中手动 Ctrl+C 关闭",
+          ok: false,
         }
-      : { ok: true, detail: "Drizzle Studio 未在运行" };
+      : { detail: "Drizzle Studio 未在运行", ok: true };
   }
   // 回收整棵进程树（AGENTS 硬规则 3）：Windows taskkill /T /F，POSIX 杀进程组。
   // 平台判据集中在 kill-process-tree。旧实现的 POSIX 分支直接单杀 —— 虽然
@@ -296,18 +296,18 @@ export async function stopDrizzleStudio(
    * 「关闭」就会在日志里读到一次 Studio「异常退出」外加一句 Python/显存的
    * 排查建议（ISSUE #2435）。 */
   st.stopRequested = true;
-  const kill = await killProcessTree({ pid, detached: false });
+  const kill = await killProcessTree({ detached: false, pid });
   logger.info(`[drizzle-studio] 回收进程树：${kill.via}`);
   st.child = undefined;
   for (let i = 0; i < DRIZZLE_STOP_PROBE.maxAttempts; i++) {
     await sleep(DRIZZLE_STOP_PROBE.baseMs);
     if (!(await probeDrizzleStudio(port))) {
-      return { ok: true, detail: "Drizzle Studio 已关闭" };
+      return { detail: "Drizzle Studio 已关闭", ok: true };
     }
   }
   return {
-    ok: false,
     detail: "关闭命令已发送，但 Drizzle Studio 仍在响应，请手动确认进程已退出",
+    ok: false,
   };
 }
 
@@ -322,8 +322,8 @@ export async function openDrizzleStudio(
 ): Promise<{ detail: string; ok: boolean }> {
   if (!(await probeDrizzleStudio(port))) {
     return {
-      ok: false,
       detail: "Drizzle Studio 未在运行，请先点「启动 Drizzle Studio」再打开查看",
+      ok: false,
     };
   }
   const url = `${DRIZZLE_STUDIO_HOST}?port=${port}`;
@@ -366,9 +366,9 @@ export function resetDrizzleStudioProbeCache(): void {
 export function getDrizzleStudioStatus(port = DRIZZLE_STUDIO_DEFAULT_PORT): DrizzleStudioStatus {
   const fresh = probeCache && Date.now() - probeCache.at < PROBE_TTL_MS ? probeCache.up : false;
   return {
-    up: fresh,
+    pid: st.child?.pid,
     port,
     starting: isDrizzleStudioStarting(),
-    pid: st.child?.pid,
+    up: fresh,
   };
 }

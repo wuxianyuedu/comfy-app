@@ -74,7 +74,7 @@ async function persistAndPlan(
   }
   const row = await productionRepository.getForUser(userId, projectId);
   const action = planNextRunAction(toRunView(row ?? null), run);
-  return { run, action };
+  return { action, run };
 }
 
 export const runRouter = createTRPCRouter({
@@ -85,41 +85,41 @@ export const runRouter = createTRPCRouter({
       const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
       if (!row) {
         return {
-          run: normalizeProductionRun(null),
           action: /* SAFETY: 类型断言已复核 */ {
             kind: "idle",
           } as RunAction,
+          run: normalizeProductionRun(null),
         };
       }
       const run = normalizeProductionRun(row.run);
-      return { run, action: planNextRunAction(toRunView(row), run) };
+      return { action: planNextRunAction(toRunView(row), run), run };
     }),
 
   /** 启动 / 重启自主执行。默认审批粒度沿用已存的（首次为 stage）。 */
   start: authedProcedure
     .input(
       z.object({
-        projectId: z.string().min(1),
-        goal: z.string().max(500).optional(),
         approvalMode: approvalModeEnum.optional(),
-        imageWorkflowId: z.string().optional(),
-        videoWorkflowId: z.string().optional(),
         autoReview: z.boolean().optional(),
+        goal: z.string().max(500).optional(),
+        imageWorkflowId: z.string().optional(),
+        projectId: z.string().min(1),
+        videoWorkflowId: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const run = await loadRun(ctx.user.id, input.projectId);
       const next: ProductionRun = {
         ...run,
-        status: "running",
         approvalMode: input.approvalMode ?? run.approvalMode,
-        goal: input.goal ?? run.goal,
-        imageWorkflowId: input.imageWorkflowId ?? run.imageWorkflowId,
-        videoWorkflowId: input.videoWorkflowId ?? run.videoWorkflowId,
         autoReview: input.autoReview ?? run.autoReview,
         awaitingStage: null,
         error: null,
+        goal: input.goal ?? run.goal,
+        imageWorkflowId: input.imageWorkflowId ?? run.imageWorkflowId,
+        status: "running",
         updatedAt: new Date().toISOString(),
+        videoWorkflowId: input.videoWorkflowId ?? run.videoWorkflowId,
       };
       const result = await persistAndPlan(ctx.user.id, input.projectId, next);
       kickEngine(ctx.user.id, input.projectId);
@@ -133,10 +133,10 @@ export const runRouter = createTRPCRouter({
       const run = await loadRun(ctx.user.id, input.projectId);
       if (run.status !== "running" && run.status !== "awaiting_approval") {
         return {
-          run,
           action: /* SAFETY: 类型断言已复核 */ {
             kind: "idle",
           } as RunAction,
+          run,
         };
       }
       return persistAndPlan(ctx.user.id, input.projectId, {
@@ -153,10 +153,10 @@ export const runRouter = createTRPCRouter({
       const run = await loadRun(ctx.user.id, input.projectId);
       if (run.status !== "paused") {
         return {
-          run,
           action: /* SAFETY: 类型断言已复核 */ {
             kind: "idle",
           } as RunAction,
+          run,
         };
       }
       const result = await persistAndPlan(ctx.user.id, input.projectId, {
@@ -175,16 +175,16 @@ export const runRouter = createTRPCRouter({
       const run = await loadRun(ctx.user.id, input.projectId);
       if (run.status !== "awaiting_approval") {
         return {
-          run,
           action: /* SAFETY: 类型断言已复核 */ {
             kind: "idle",
           } as RunAction,
+          run,
         };
       }
       const result = await persistAndPlan(ctx.user.id, input.projectId, {
         ...run,
-        status: "running",
         awaitingStage: null,
+        status: "running",
         updatedAt: new Date().toISOString(),
       });
       kickEngine(ctx.user.id, input.projectId);
@@ -198,8 +198,8 @@ export const runRouter = createTRPCRouter({
       const run = await loadRun(ctx.user.id, input.projectId);
       return persistAndPlan(ctx.user.id, input.projectId, {
         ...run,
-        status: "cancelled",
         awaitingStage: null,
+        status: "cancelled",
         updatedAt: new Date().toISOString(),
       });
     }),
@@ -227,8 +227,8 @@ export const runRouter = createTRPCRouter({
   reviewCharacter: authedProcedure
     .input(
       z.object({
-        projectId: z.string().min(1),
         characterId: z.string().min(1),
+        projectId: z.string().min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -287,10 +287,10 @@ export const runRouter = createTRPCRouter({
   regenerateShot: authedProcedure
     .input(
       z.object({
-        projectId: z.string().min(1),
-        shotId: z.string().min(1),
         mode: reviewModeEnum,
         newPrompt: z.string().max(2000).optional(),
+        projectId: z.string().min(1),
+        shotId: z.string().min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -307,11 +307,11 @@ export const runRouter = createTRPCRouter({
   setHumanVerdict: authedProcedure
     .input(
       z.object({
-        projectId: z.string().min(1),
         kind: z.enum(["shot", "character"]),
-        targetId: z.string().min(1),
-        pass: z.boolean(),
         note: z.string().max(200).default(""),
+        pass: z.boolean(),
+        projectId: z.string().min(1),
+        targetId: z.string().min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -336,9 +336,9 @@ export const runRouter = createTRPCRouter({
       const revRaw = /* SAFETY: 类型断言已复核 */ (rec as { rev?: unknown }).rev;
       const rev = typeof revRaw === "number" && Number.isFinite(revRaw) ? revRaw : 0;
       const verdict = {
-        pass: input.pass,
-        note: input.note.trim(),
         at: new Date().toISOString(),
+        note: input.note.trim(),
+        pass: input.pass,
         rev,
       };
       const nextList = applyHumanVerdict(list, input.targetId, verdict);
@@ -353,8 +353,8 @@ export const runRouter = createTRPCRouter({
     .input(
       z.object({
         projectId: z.string().min(1),
-        shotId: z.string().min(1),
         rating: z.number().int().min(0).max(5).nullable(),
+        shotId: z.string().min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -380,9 +380,9 @@ export const runRouter = createTRPCRouter({
   setScriptHumanVerdict: authedProcedure
     .input(
       z.object({
-        projectId: z.string().min(1),
-        pass: z.boolean(),
         note: z.string().max(200).default(""),
+        pass: z.boolean(),
+        projectId: z.string().min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -392,10 +392,10 @@ export const runRouter = createTRPCRouter({
       }
       const script = typeof row.scriptMarkdown === "string" ? row.scriptMarkdown : "";
       const verdict = {
-        pass: input.pass,
-        note: input.note.trim(),
         at: new Date().toISOString(),
         digest: scriptDigestOf(script),
+        note: input.note.trim(),
+        pass: input.pass,
       };
       const next = applyScriptHumanVerdict(row.scriptReview, verdict);
       await productionRepository.patchContent(ctx.user.id, input.projectId, {

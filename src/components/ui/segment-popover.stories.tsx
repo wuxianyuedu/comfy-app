@@ -27,21 +27,21 @@ import {
  * 让 story 与真机漂移。
  */
 const RATIO_OPTIONS = SIZE_RATIO_PRESETS.map((preset) => ({
-  value: preset.label,
   label: shortRatioLabel(preset.label),
   render: <RatioIcon ratio={preset.ratio} />,
+  value: preset.label,
 }));
 
 const RESOLUTION_OPTIONS = RESOLUTION_TIERS.map((tier) => ({
-  value: tier,
   label: tier.toUpperCase(),
   subgroup: "分辨率",
+  value: tier,
 }));
 
 const MEGAPIXEL_OPTIONS = MEGAPIXEL_TIERS.map((tier) => ({
-  value: `${String(tier)}M`,
   label: `${String(tier)}M`,
   subgroup: "百万像素",
+  value: `${String(tier)}M`,
 }));
 
 /** 这一族 story 的 Args：只看**能序列化**的那部分（面板形态由代码给）。 */
@@ -60,34 +60,34 @@ function buildSections(count: 1 | 2 | 3): Array<SegmentSection<string>> {
   const list: Array<SegmentSection<string>> = [
     {
       label: "比例",
-      value: "16:9 横屏",
-      options: RATIO_OPTIONS,
       onChange: () => undefined,
+      options: RATIO_OPTIONS,
+      value: "16:9 横屏",
     },
   ];
   if (count >= 2) {
     list.push({
       label: "像素",
-      value: "2k",
-      options: [...RESOLUTION_OPTIONS, ...MEGAPIXEL_OPTIONS],
       onChange: () => undefined,
+      options: [...RESOLUTION_OPTIONS, ...MEGAPIXEL_OPTIONS],
+      value: "2k",
     });
   }
   if (count >= 3) {
     list.push({
       label: "倍数",
-      value: "64",
-      options: ALIGN_MULTIPLE_OPTIONS.map((option) => ({
-        value: String(option),
-        label: String(option),
-      })),
       onChange: () => undefined,
+      options: ALIGN_MULTIPLE_OPTIONS.map((option) => ({
+        label: String(option),
+        value: String(option),
+      })),
+      value: "64",
     });
   }
   return list;
 }
 
-function SegmentWithSummary({ summary, sectionCount, align, disabled }: StoryArgs) {
+function SegmentWithSummary({ align, disabled, sectionCount, summary }: StoryArgs) {
   return (
     <div className="w-72">
       <MultiSegmentPopover
@@ -102,13 +102,13 @@ function SegmentWithSummary({ summary, sectionCount, align, disabled }: StoryArg
 }
 
 const meta = {
-  title: "UI/MultiSegmentPopover",
-  component: SegmentWithSummary,
-  args: { summary: "16:9 / 2k / 64", sectionCount: 3, align: "left" },
+  args: { align: "left", sectionCount: 3, summary: "16:9 / 2k / 64" },
   argTypes: {
-    sectionCount: { control: { type: "inline-radio" }, options: [1, 2, 3] },
     align: { control: { type: "inline-radio" }, options: ["left", "right"] },
+    sectionCount: { control: { type: "inline-radio" }, options: [1, 2, 3] },
   },
+  component: SegmentWithSummary,
+  title: "UI/MultiSegmentPopover",
 } satisfies Meta<StoryArgs>;
 
 export default meta;

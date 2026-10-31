@@ -54,20 +54,20 @@ export type LibraryHostCardProps = {
 };
 
 export function LibraryHostCard({
-  workflowName,
-  statusLabel,
-  running,
-  phaseKind,
-  modes,
-  effectiveMode,
-  taskType,
-  effectiveModeLabel,
-  onModeChange,
-  hostRef,
-  form,
-  outputs,
-  inputs,
   actions,
+  effectiveMode,
+  effectiveModeLabel,
+  form,
+  hostRef,
+  inputs,
+  modes,
+  onModeChange,
+  outputs,
+  phaseKind,
+  running,
+  statusLabel,
+  taskType,
+  workflowName,
 }: LibraryHostCardProps) {
   return (
     <div className="relative" ref={hostRef}>
@@ -155,15 +155,15 @@ export function LibraryHostCard({
                 key={output.nodeId + ":" + output.name}
                 output={output}
                 outputs={[...outputs]}
-                renderHandle={({ id, dir, type }) => (
+                renderHandle={({ dir, id, type }) => (
                   <PortHandle
                     dir={dir}
                     id={id}
                     style={{
+                      boxShadow: "none",
                       right: -6,
                       top: 14,
                       transform: "translateY(-50%)",
-                      boxShadow: "none",
                     }}
                     type={type}
                   />

@@ -53,9 +53,9 @@ afterEach(cleanup);
 
 const asNodes = (ids: ReadonlyArray<string>): Array<Node> =>
   ids.map((id, index) => ({
+    data: {},
     id,
     position: { x: index * 200, y: 0 },
-    data: {},
   }));
 
 /** 1 → 2 → 3：选中 2 时，e-1-2 是上游、e-2-3 是下游。 */
@@ -83,10 +83,10 @@ type Sink = {
 };
 
 function Stage({
-  sink,
-  nodeIds,
   edges,
+  nodeIds,
   resolveNodeId,
+  sink,
 }: {
   edges: Array<Edge>;
   nodeIds: ReadonlyArray<string>;
@@ -143,7 +143,7 @@ function Stage({
   });
 
   return (
-    <div style={{ width: 800, height: 600, position: "relative" }}>
+    <div style={{ height: 600, position: "relative", width: 800 }}>
       <ReactFlow edges={currentEdges} fitView={false} nodes={nodes} onEdgesChange={onEdgesChange}>
         <div data-testid="canvas-ready" />
       </ReactFlow>
@@ -159,10 +159,10 @@ function renderStage(
   } = {},
 ): Sink {
   const sink: Sink = {
+    dropEdge: () => undefined,
     edges: [],
     nodes: [],
     select: () => undefined,
-    dropEdge: () => undefined,
   };
   render(
     <ReactFlowProvider>
@@ -212,7 +212,7 @@ describe("useRelatedEdgesHighlight 写回端口行级别", () => {
     const sink = renderStage({
       edges: [
         { id: "e-1-2", source: "1", target: "2", targetHandle: "seed" },
-        { id: "e-2-3", source: "2", target: "3", sourceHandle: "IMAGE" },
+        { id: "e-2-3", source: "2", sourceHandle: "IMAGE", target: "3" },
       ],
     });
     toggleSelected(sink, "2", true);
@@ -302,8 +302,8 @@ describe("useRelatedEdgesHighlight", () => {
 
   it("自定义端点解析：折叠锚点归位后仍能识别上下游", () => {
     const sink = renderStage({
-      nodeIds: ["2"],
       edges: ANCHOR_EDGES,
+      nodeIds: ["2"],
       /* 锚点 `anchor:2` 归位到节点 2；`anchor:1` / `anchor:3` 刻意解析不出去 ——
        * 正是折叠态下那些「看似没有对应节点」的端点，判据必须仍能靠剩下的一端
        * 认出相关性。 */

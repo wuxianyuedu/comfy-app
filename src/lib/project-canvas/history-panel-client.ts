@@ -18,17 +18,17 @@ import type { HistoryTaskRow } from "./history-panel-types";
  * 导出给 `tests/task-list-wire-contract.test.ts` 用：那份判据拿这份镜像的**列名**
  * 去核对服务端真实产出的行，镜像与线上分叉（多一列 / 少一列）当场红。 */
 export const historyTaskRowSchema = z.object({
+  cover: z.string().nullable().default(null),
+  createdAt: z.string(),
+  error: z.string().nullable().default(null),
   id: z.string(),
+  mediaType: z.enum(["image", "video", "audio"]).default("image"),
+  progress: z.number().default(0),
+  projectId: z.string().nullable().default(null),
+  prompt: z.string().default(""),
+  status: z.string().default("QUEUED"),
   type: z.string().default("image"),
   workflowName: z.string().default(""),
-  status: z.string().default("QUEUED"),
-  prompt: z.string().default(""),
-  createdAt: z.string(),
-  cover: z.string().nullable().default(null),
-  mediaType: z.enum(["image", "video", "audio"]).default("image"),
-  projectId: z.string().nullable().default(null),
-  progress: z.number().default(0),
-  error: z.string().nullable().default(null),
 });
 
 /** 把 tRPC 响应里的行数组收窄成 HistoryTaskRow[]；非法行丢弃。 */

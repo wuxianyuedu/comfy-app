@@ -8,15 +8,15 @@ type MiniNode = { id: string | number; type?: string };
 describe("stripUiOnlyNodes —— 提交前剔除纯 UI 节点", () => {
   it("顶层批注节点被剔除，与它相关的连线一并清掉", () => {
     const raw = {
-      nodes: [
-        { id: 1, type: "Bookmark (rgthree)" },
-        { id: 2, type: "KSampler" },
-        { id: 3, type: "Label (rgthree)" },
-      ],
       links: [
         [10, 1, 0, 2, 0, "INT"],
         [11, 2, 0, 3, 0, "INT"],
         [12, 2, 1, 2, 2, "LATENT"],
+      ],
+      nodes: [
+        { id: 1, type: "Bookmark (rgthree)" },
+        { id: 2, type: "KSampler" },
+        { id: 3, type: "Label (rgthree)" },
       ],
     };
 
@@ -32,7 +32,6 @@ describe("stripUiOnlyNodes —— 提交前剔除纯 UI 节点", () => {
 
   it("子图内部的批注节点也要剔除（现场 1512:1675 / 1512:1728 就是它）", () => {
     const raw = {
-      nodes: [{ id: "1512", type: "subgraph-wrapper-uuid" }],
       definitions: {
         subgraphs: {
           "0": {
@@ -61,6 +60,7 @@ describe("stripUiOnlyNodes —— 提交前剔除纯 UI 节点", () => {
           },
         },
       },
+      nodes: [{ id: "1512", type: "subgraph-wrapper-uuid" }],
     };
 
     const { raw: out, removed } = stripUiOnlyNodes(raw);

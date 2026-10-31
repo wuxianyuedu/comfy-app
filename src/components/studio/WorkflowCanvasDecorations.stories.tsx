@@ -30,8 +30,8 @@ import { DEFAULT_CANVAS_SETTINGS } from "~/components/studio/canvas/canvas-setti
  * 它们跟着怎么变）。
  */
 const meta = {
-  title: "Studio/Canvas/Decorations",
   component: CanvasGrid,
+  title: "Studio/Canvas/Decorations",
 } satisfies Meta<typeof CanvasGrid>;
 
 export default meta;
@@ -88,9 +88,7 @@ export const GridOff: Story = {
   render: () => (
     <div className="p-4">
       <StorybookFlowCanvas scene={canvasScene("twoNodes")}>
-        <CanvasGrid
-          settings={{ ...DEFAULT_CANVAS_SETTINGS, showGrid: false }}
-        />
+        <CanvasGrid settings={{ ...DEFAULT_CANVAS_SETTINGS, showGrid: false }} />
         <CanvasRulers />
       </StorybookFlowCanvas>
     </div>

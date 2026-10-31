@@ -61,10 +61,10 @@ export function markComfySessionStart(info: {
   pid: number | null;
 }): void {
   writeSessionMark({
-    pid: info.pid,
-    mode: info.mode,
-    startedAt: new Date().toISOString(),
     exited: null,
+    mode: info.mode,
+    pid: info.pid,
+    startedAt: new Date().toISOString(),
   });
 }
 

@@ -13,33 +13,33 @@ import {
 
 function row(partial: Partial<ModelRow> & { id: string }): ModelRow {
   return {
+    fileName: "unnamed.safetensors",
+    fileSize: null,
+    isAvailable: true,
     name: "unnamed",
     type: "checkpoints",
-    fileName: "unnamed.safetensors",
-    isAvailable: true,
-    fileSize: null,
     ...partial,
   };
 }
 
 const models: Array<ModelRow> = [
   row({
+    fileName: "ds-xl.safetensors",
     id: "1",
     name: "dreamshaper-xl",
     type: "checkpoints",
-    fileName: "ds-xl.safetensors",
   }),
   row({
+    fileName: "sub/detail.safetensors",
     id: "2",
     name: "Detail Tweaker",
     type: "loras",
-    fileName: "sub/detail.safetensors",
   }),
   row({
+    fileName: "anime.safetensors",
     id: "3",
     name: "Anime Style",
     type: "loras",
-    fileName: "anime.safetensors",
   }),
 ];
 
@@ -97,11 +97,11 @@ describe("fmtSize", () => {
 
 function folder(partial: Partial<FolderConfigRow> & { folder: string }): FolderConfigRow {
   return {
-    type: partial.folder,
-    label: partial.folder,
+    count: 0,
     enabled: false,
     hasConfig: false,
-    count: 0,
+    label: partial.folder,
+    type: partial.folder,
     ...partial,
   };
 }
@@ -124,18 +124,18 @@ describe("filterFolders", () => {
 
 describe("splitFolders", () => {
   const rows = [
-    folder({ folder: "checkpoints", enabled: true }),
-    folder({ folder: "loras", enabled: false }),
+    folder({ enabled: true, folder: "checkpoints" }),
+    folder({ enabled: false, folder: "loras" }),
   ];
 
   it("拆成已启用 / 可添加两组", () => {
-    const { enabled, available } = splitFolders(rows, "");
+    const { available, enabled } = splitFolders(rows, "");
     expect(enabled.map((r) => r.folder)).toEqual(["checkpoints"]);
     expect(available.map((r) => r.folder)).toEqual(["loras"]);
   });
 
   it("关键字先过滤再分组", () => {
-    const { enabled, available } = splitFolders(rows, "lora");
+    const { available, enabled } = splitFolders(rows, "lora");
     expect(enabled).toEqual([]);
     expect(available.map((r) => r.folder)).toEqual(["loras"]);
   });

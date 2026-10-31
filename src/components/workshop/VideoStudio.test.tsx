@@ -26,11 +26,11 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
+    apiPollVideo: vi.fn(),
+    apiSubmitVideo: vi.fn(),
     buildLibraryWorkflowInput: vi.fn(),
     prepareLocalInputImage: vi.fn(),
     startLocalGenerate: vi.fn(),
-    apiSubmitVideo: vi.fn(),
-    apiPollVideo: vi.fn(),
   };
 });
 /* 轮询节奏可控：sleep 替换为即时，apiPollVideo 的返回序列由用例编排。 */
@@ -44,36 +44,36 @@ const mockedPoll = vi.mocked(apiPollVideo);
 
 const videoReady: ApiChannelsView = {
   image: {
-    configured: false,
     baseUrl: "",
-    path: "/images/generations",
-    model: "",
+    configured: false,
     hasApiKey: false,
+    model: "",
+    path: "/images/generations",
   },
   video: {
-    configured: true,
     baseUrl: "https://api.example.com",
-    path: "/videos/generations",
-    model: "",
+    configured: true,
     hasApiKey: true,
+    model: "",
+    path: "/videos/generations",
   },
 };
 
 function makeShot(patch: Partial<Shot> = {}): Shot {
   return {
-    id: "shot-1",
-    index: 1,
-    sceneId: "scene-1",
-    sceneHeading: "场景1 · 清晨",
-    shotType: "medium",
-    description: "",
     characterIds: [],
-    prompt: "a cat, cinematic",
+    description: "",
+    dialogue: "",
+    id: "shot-1",
+    imageUrl: "/api/generated/1.png",
+    index: 1,
     negativePrompt: "",
     params: {},
+    prompt: "a cat, cinematic",
+    sceneHeading: "场景1 · 清晨",
+    sceneId: "scene-1",
+    shotType: "medium",
     status: "done",
-    imageUrl: "/api/generated/1.png",
-    dialogue: "",
     ...patch,
   };
 }
@@ -103,7 +103,7 @@ function renderStudio(options: RenderOptions = {}) {
       workflowId={options.workflowId ?? "vwf-1"}
     />,
   );
-  return { onShotsChange, onNotice, onCancelShot, onOpenModelAdapters };
+  return { onCancelShot, onNotice, onOpenModelAdapters, onShotsChange };
 }
 
 /** onShotsChange 是函数式补丁：折叠成最终一条 patch 里的镜头。 */
@@ -137,8 +137,8 @@ describe("VideoStudio 门禁与空态", () => {
   it("本地通道未选视频工作流：点生成被行内门禁拦下，不发起请求", async () => {
     const user = userEvent.setup();
     renderStudio({
-      workflowId: "",
       shots: [makeShot()],
+      workflowId: "",
     });
     await user.click(screen.getByRole("button", { name: "生成片段" }));
     /* 常驻放行提示（ChannelSwitch）+ 点按后的行内门禁 Alert 同时在场：
@@ -192,8 +192,8 @@ describe("VideoStudio API 通道出口", () => {
     await switchToApi(user);
     mockedSubmit.mockResolvedValue({ remoteTaskId: "remote-1" });
     mockedPoll.mockResolvedValueOnce({ pending: true }).mockResolvedValueOnce({
-      url: "/api/materials/remote.mp4",
       pending: false,
+      url: "/api/materials/remote.mp4",
     });
 
     await user.click(screen.getByRole("button", { name: "生成片段" }));

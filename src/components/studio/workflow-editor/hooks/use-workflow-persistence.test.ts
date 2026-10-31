@@ -16,27 +16,27 @@ import { useWorkflowPersistence } from "./use-workflow-persistence";
 
 function makeDetail(over: Partial<WorkflowDetail> = {}): WorkflowDetail {
   return {
+    graph: {},
+    groups: null,
     id: "wf-1",
     name: "wf",
-    taskType: "txt2img",
-    graph: {},
     nodes: [],
-    paramMap: {},
-    workflowIO: {},
-    positions: null,
-    groups: null,
     notes: null,
+    paramMap: {},
+    positions: null,
     rawNodes: [],
+    taskType: "txt2img",
+    workflowIO: {},
     ...over,
   };
 }
 
 function nodesOf(ids: Array<string>): WorkflowDetail["nodes"] {
   return ids.map((id) => ({
-    id,
     class_type: "KSampler",
-    title: id,
+    id,
     raw_inputs: [],
+    title: id,
   }));
 }
 
@@ -49,22 +49,22 @@ function renderReset(args: {
   const setDetail = vi.fn();
   const mutate = vi.fn();
   const fitToContent = args.fitToContent ?? vi.fn();
-  const { result, rerender } = renderHook(
+  const { rerender, result } = renderHook(
     (props: { detail: WorkflowDetail }) =>
       useWorkflowPersistence({
-        workflowId: "wf-1",
         detail: props.detail,
-        setDetail,
-        setNodes: vi.fn(),
-        paramMap: {},
-        workflowIO: {},
         fitToContent,
-        savePatch: { mutate, mutateAsync: vi.fn() },
-        onClose: vi.fn(),
-        setSaving: vi.fn(),
-        setError: vi.fn(),
-        reloadView: args.reloadView,
         hostNodeId: args.hostNodeId,
+        onClose: vi.fn(),
+        paramMap: {},
+        reloadView: args.reloadView,
+        savePatch: { mutate, mutateAsync: vi.fn() },
+        setDetail,
+        setError: vi.fn(),
+        setNodes: vi.fn(),
+        setSaving: vi.fn(),
+        workflowId: "wf-1",
+        workflowIO: {},
       }),
     {
       initialProps: { detail: args.detail },
@@ -76,7 +76,7 @@ function renderReset(args: {
     },
   );
   rerender({ detail: args.detail });
-  return { result, setDetail, mutate, fitToContent };
+  return { fitToContent, mutate, result, setDetail };
 }
 
 /** 从 setDetail 的 updater 里取出写回的 positions。 */
@@ -97,7 +97,7 @@ describe("resetLayout", () => {
       "1002": /* SAFETY: 类型断言已复核 */ [30, 40] as [number, number],
     };
     const detail = makeDetail({ positions });
-    const { result, setDetail, mutate } = renderReset({ detail });
+    const { mutate, result, setDetail } = renderReset({ detail });
 
     act(() => result.current.resetLayout());
 
@@ -118,7 +118,7 @@ describe("resetLayout", () => {
       },
     });
     const reloadView = vi.fn();
-    const { result, fitToContent } = renderReset({
+    const { fitToContent, result } = renderReset({
       detail,
       reloadView,
     });
@@ -140,7 +140,7 @@ describe("resetLayout", () => {
       nodes: nodesOf(["4"]),
       positions,
     });
-    const { result, setDetail, mutate } = renderReset({
+    const { mutate, result, setDetail } = renderReset({
       detail,
     });
 
@@ -180,7 +180,7 @@ describe("resetLayout · 子图 id 命名空间", () => {
       nodes: nodesOf(["1001", "1002"]),
       positions: { "4:1001": [1000, 1000], "4:1002": [1200, 1000] },
     });
-    const { result, mutate } = renderReset({
+    const { mutate, result } = renderReset({
       detail,
       hostNodeId: "4",
     });
@@ -188,14 +188,14 @@ describe("resetLayout · 子图 id 命名空间", () => {
     act(() =>
       result.current.onNodeDragStop(
         {},
-        { id: "1001", type: "wfNode", position: { x: 30, y: 0 }, data: {} },
+        { data: {}, id: "1001", position: { x: 30, y: 0 }, type: "wfNode" },
       ),
     );
 
     /* 锚点反演：wfNode 的 y 要加回 NODE_TITLE_H(30)。 */
     expect(mutate.mock.calls.at(-1)![0]).toMatchObject({
-      positions: { "4:1001": [30, 30] },
       mergePositions: true,
+      positions: { "4:1001": [30, 30] },
     });
   });
 
@@ -205,7 +205,7 @@ describe("resetLayout · 子图 id 命名空间", () => {
       nodes: nodesOf(["1670"]),
       positions: { "4:5:1670": [100, 100] },
     });
-    const { result, mutate } = renderReset({
+    const { mutate, result } = renderReset({
       detail,
       hostNodeId: "4:5",
     });
@@ -213,13 +213,13 @@ describe("resetLayout · 子图 id 命名空间", () => {
     act(() =>
       result.current.onNodeDragStop(
         {},
-        { id: "1670", type: "wfNode", position: { x: 10, y: 20 }, data: {} },
+        { data: {}, id: "1670", position: { x: 10, y: 20 }, type: "wfNode" },
       ),
     );
 
     expect(mutate.mock.calls.at(-1)![0]).toMatchObject({
-      positions: { "4:5:1670": [10, 50] },
       mergePositions: true,
+      positions: { "4:5:1670": [10, 50] },
     });
   });
 
@@ -238,7 +238,7 @@ describe("resetLayout · 子图 id 命名空间", () => {
       nodes: nodesOf(["1001", "1002"]),
       positions,
     });
-    const { result, setDetail, mutate } = renderReset({
+    const { mutate, result, setDetail } = renderReset({
       detail,
       hostNodeId: "4",
     });
@@ -257,16 +257,16 @@ describe("resetLayout · 子图 id 命名空间", () => {
 
   it("嵌套子图只清自己那一层，更深的 `4:5:1670` 留给下层视图", () => {
     const positions = {
+      "4:1671": /* SAFETY: 类型断言已复核 */ [700, 700] as [number, number],
       "4:5": /* SAFETY: 类型断言已复核 */ [0, 0] as [number, number],
       "4:5:1670": /* SAFETY: 类型断言已复核 */ [1000, 1000] as [number, number],
-      "4:1671": /* SAFETY: 类型断言已复核 */ [700, 700] as [number, number],
     };
     const detail = makeDetail({
       id: "wf-1#subgraph:nested",
       nodes: nodesOf(["1670"]),
       positions,
     });
-    const { result, setDetail, mutate } = renderReset({
+    const { mutate, result, setDetail } = renderReset({
       detail,
       hostNodeId: "4:5",
     });
@@ -278,8 +278,8 @@ describe("resetLayout · 子图 id 命名空间", () => {
       resetPositionsScope: "4:5",
     });
     expect(readWrittenPositions(setDetail, detail)).toEqual({
-      "4:5": [0, 0],
       "4:1671": [700, 700],
+      "4:5": [0, 0],
     });
   });
 

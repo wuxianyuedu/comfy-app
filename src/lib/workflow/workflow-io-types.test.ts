@@ -12,8 +12,8 @@ function entry(partial?: Partial<WorkflowIOEntry>): WorkflowIOEntry {
   return {
     direction: "input",
     kind: "widget",
-    nodeId: "7",
     name: "seed",
+    nodeId: "7",
     ...partial,
   };
 }
@@ -27,16 +27,16 @@ describe("resolveEntryRequired — required 的模式覆盖两级回退", () => 
 
   it("指定 mode 且该模式有 required 覆盖时优先用覆盖值", () => {
     const e = entry({
-      required: true,
       modeOverrides: { t2i: { required: false } },
+      required: true,
     });
     expect(resolveEntryRequired(e, "t2i")).toBe(false);
   });
 
   it("指定 mode 但该模式无 required 覆盖时回退条目级", () => {
     const e = entry({
-      required: true,
       modeOverrides: { i2i: { visible: false } },
+      required: true,
     });
     expect(resolveEntryRequired(e, "i2i")).toBe(true);
   });
@@ -50,16 +50,16 @@ describe("resolveEntrySeedMode — seedMode 的模式覆盖两级回退", () => 
 
   it("指定 mode 且该模式有 seedMode 覆盖时优先用覆盖值", () => {
     const e = entry({
-      seedMode: "fixed",
       modeOverrides: { t2i: { seedMode: "decrement" } },
+      seedMode: "fixed",
     });
     expect(resolveEntrySeedMode(e, "t2i")).toBe("decrement");
   });
 
   it("指定 mode 但该模式无 seedMode 覆盖时回退条目级", () => {
     const e = entry({
-      seedMode: "random",
       modeOverrides: { t2i: { visible: true } },
+      seedMode: "random",
     });
     expect(resolveEntrySeedMode(e, "t2i")).toBe("random");
   });
@@ -103,9 +103,9 @@ describe("parseWorkflowIOMap —— 列边界上的历史键归一", () => {
       "94::widget::aspect_ratio": {
         direction: "input",
         kind: "widget",
-        nodeId: "94",
-        name: "aspect_ratio",
         modes: { T2I: { defaultValue: "16:9" } },
+        name: "aspect_ratio",
+        nodeId: "94",
       },
     });
     expect(map["94::widget::aspect_ratio"]?.modeOverrides).toEqual({
@@ -122,10 +122,10 @@ describe("parseWorkflowIOMap —— 列边界上的历史键归一", () => {
       k: {
         direction: "input",
         kind: "widget",
-        nodeId: "1",
-        name: "n",
         modeOverrides: { T2I: { defaultValue: "new" } },
         modes: { T2I: { defaultValue: "old" } },
+        name: "n",
+        nodeId: "1",
       },
     });
     expect(map.k?.modeOverrides).toEqual({ T2I: { defaultValue: "new" } });
@@ -133,7 +133,7 @@ describe("parseWorkflowIOMap —— 列边界上的历史键归一", () => {
 
   it("两个键都不在 / 形状不符 → 空表（下游按空表处理，不抛）", () => {
     const map = parseWorkflowIOMap({
-      k: { direction: "input", kind: "widget", nodeId: "1", name: "n" },
+      k: { direction: "input", kind: "widget", name: "n", nodeId: "1" },
     });
     expect(map.k?.modeOverrides).toBeUndefined();
     expect(parseWorkflowIOMap("not-an-object")).toEqual({});

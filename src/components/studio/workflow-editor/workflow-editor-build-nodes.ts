@@ -118,16 +118,7 @@ const buildBoundaryPinNode = (
   relY: number,
   relX: number,
 ): Node => ({
-  id: `bpin:${pin.id}`,
-  type: "wfIoPort",
-  parentId,
-  extent: "parent",
-  position: { x: relX, y: relY },
-  zIndex: IO_PORT_Z,
-  draggable: false,
-  selectable: true,
   connectable: false,
-  style: { width: IO_PORT_WIDTH, height: IO_PORT_HEIGHT },
   data: {
     /* 显示名链路：边界 pin 的 `label` 是作者设的业务名（`FRAMES`、
      *  `IMAGE_FINAL`、`MODEL_HIGH_1st`），**优先**读它。取不到再回落
@@ -135,14 +126,23 @@ const buildBoundaryPinNode = (
      * 保证标题永远不会是空的。链路与 WfSubgraphNode.outputs.display
      * 一致，两层渲染出同一个字符串；`name === type` 时 tooltip 会补上
      * 解析出的类型以便区分。 */
-    title: pin.label ?? pin.localized ?? pin.name ?? "",
-    type: pin.type,
+    connectsFrom: null,
+    connectsTo: null,
     direction: kind,
     parentNodeId: null,
     parentNodeTitle: "",
-    connectsTo: null,
-    connectsFrom: null,
+    title: pin.label ?? pin.localized ?? pin.name ?? "",
+    type: pin.type,
   },
+  draggable: false,
+  extent: "parent",
+  id: `bpin:${pin.id}`,
+  parentId,
+  position: { x: relX, y: relY },
+  selectable: true,
+  style: { height: IO_PORT_HEIGHT, width: IO_PORT_WIDTH },
+  type: "wfIoPort",
+  zIndex: IO_PORT_Z,
 });
 /* wfIoPort 子节点在它所属栏杆分组里的 X 锚点。
  *
@@ -177,15 +177,15 @@ const buildBoundaryGroup = (
     return null;
   }
   return {
-    id,
-    type: "wfGroup",
-    position: pos,
-    zIndex: GROUP_Z,
-    draggable: true,
-    selectable: true,
     connectable: false,
-    data: { title, color: GROUP_RAIL_COLOR, draggable: true },
-    style: { width: IO_PORT_WIDTH + 2 * GROUP_PAD_X, height },
+    data: { color: GROUP_RAIL_COLOR, draggable: true, title },
+    draggable: true,
+    id,
+    position: pos,
+    selectable: true,
+    style: { height, width: IO_PORT_WIDTH + 2 * GROUP_PAD_X },
+    type: "wfGroup",
+    zIndex: GROUP_Z,
   };
 };
 /* 算出栏杆锚点位置，必要时回落到按包围盒锚定的默认值。
@@ -366,12 +366,12 @@ function layoutBoundaryPins(
 export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   const {
     detail,
-    scopeDetail,
-    rawMetaById,
+    hostNodeId,
+    onEnterSubgraph,
     outSlotNameById,
     paramMap,
-    onEnterSubgraph,
-    hostNodeId,
+    rawMetaById,
+    scopeDetail,
   } = ctx;
 
   if (!detail) {
@@ -458,34 +458,29 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
     GraphEntry | undefined
   >;
   const buildWfNode = (n: ComfyGraphNode, pos: { x: number; y: number }): Node => ({
-    id: n.id,
-    type: "wfNode",
-    position: { x: pos.x, y: pos.y - NODE_ANCHOR_OFFSET_Y },
-    style: n.size ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H } : undefined,
-    zIndex: NODE_Z,
     data: {
-      nodeId: n.id,
       classType: n.class_type,
+      nodeId: n.id,
       /* 下钻到子图内部时，本层节点 id 都是内部 id（`1670`）；带上宿主 id
        * 让勾选能落库「外层 + 内层」两个 id（见 IoRef.hostNodeId）。 */
-      hostNodeId,
-      title: n.title,
-      inputs: graphById[n.id]?.inputs ?? {},
-      inputSources: buildInputSources(graphById[n.id]?.inputs, nodesById),
       assignedRole:
         Object.entries(paramMap).find(
           ([key, value]) => value === n.id && !key.startsWith(MODE_KEY_PREFIX),
         )?.[0] ?? null,
+      connectedOutputs: connectedOutputsById[n.id],
+      hostNodeId,
+      inputs: graphById[n.id]?.inputs ?? {},
+      inputSources: buildInputSources(graphById[n.id]?.inputs, nodesById),
       rawInputs: n.raw_inputs ?? [],
       rawOutputs: rawMetaById[n.id]?.outputs ?? [],
       rawWidgetValues: rawMetaById[n.id]?.widgets_values ?? [],
-      connectedOutputs: connectedOutputsById[n.id],
+      title: n.title,
       /* 备用来源：从 detail.boundaryLinks 盖章，让还没带上
        *  rawOutputs[].isBoundary 盖章的节点（例如命中了 schema 变更之前
        *  的 detail 缓存形状）也照样挂上输出 Handle。这是一条**独立**通道 ——
        *  hasDownstream 经 `data.boundaryOutputs.has` 读它。 */
-      boundaryOutputs: boundaryOutputsByNodeId[n.id],
       boundaryInputs: boundaryInputsByNodeId[n.id],
+      boundaryOutputs: boundaryOutputsByNodeId[n.id],
       flags: rawMetaById[n.id]?.flags ?? {},
       mode: rawMetaById[n.id]?.mode ?? 0,
       /* 子图路由盖的边界章。外层（顶层）工作流这两个恒为 false ——
@@ -502,8 +497,13 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
        *  其它节点忽略这个字段。这里传的是**同一份引用**而不是克隆 ——
        *  节点数与工作流规模无关地把成本压在 O(1)。 */
       groups: detail.groups ?? [],
-      size: n.size ? { w: n.size[0], h: n.size[1] } : undefined,
+      size: n.size ? { h: n.size[1], w: n.size[0] } : undefined,
     },
+    id: n.id,
+    position: { x: pos.x, y: pos.y - NODE_ANCHOR_OFFSET_Y },
+    style: n.size ? { height: n.size[1] + NODE_TITLE_H, width: n.size[0] } : undefined,
+    type: "wfNode",
+    zIndex: NODE_Z,
   });
 
   /* 子图封装节点：class_type 是 UUID，ComfyUI 经 proxyWidgets 暴露输入，
@@ -530,26 +530,26 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
       // 锚点约定与 buildWfNode 相同（见构建器上方的注释）：
       // 卡片顶部 = 配置里的主体顶部 − NODE_TITLE_H，
       // 主体因此正好落在导入的 pos.y 上。
-      position: { x: pos.x, y: pos.y - NODE_ANCHOR_OFFSET_Y },
-      zIndex: SUBGRAPH_Z, // 画在普通节点之上，紫色描边才读得出来
-      style: n.size ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H } : undefined,
       data: {
         nodeId: n.id,
         /* 本层若是「子图内部的子图」，本卡片自身就是下一层的宿主，其内部
          *  勾选由下一层的 hostNodeId 表达；本层卡片的暴露口（boundary pin）
          *  仍属于当前视图，故沿用当前视图的 hostNodeId。 */
-        hostNodeId,
-        title: friendlyNodeTitle(n.class_type, n.title, "zh"),
-        uid: n.class_type.slice(0, 8),
-        inputs: n.raw_inputs ?? [],
-        outputs: rawMetaById[n.id]?.outputs ?? [],
-        widgetValues: rawMetaById[n.id]?.widgets_values ?? [],
-        connectedOutputs: connectedOutputsById[n.id],
         connectedInputs,
-        size: n.size ? { w: n.size[0], h: n.size[1] } : undefined,
+        connectedOutputs: connectedOutputsById[n.id],
+        hostNodeId,
+        inputs: n.raw_inputs ?? [],
         mode: rawMetaById[n.id]?.mode ?? 0,
         onEnter: () => onEnterSubgraph?.(n.id, n.class_type, n.title, hostNodeId),
+        outputs: rawMetaById[n.id]?.outputs ?? [],
+        size: n.size ? { h: n.size[1], w: n.size[0] } : undefined,
+        title: friendlyNodeTitle(n.class_type, n.title, "zh"),
+        uid: n.class_type.slice(0, 8),
+        widgetValues: rawMetaById[n.id]?.widgets_values ?? [],
       },
+      position: { x: pos.x, y: pos.y - NODE_ANCHOR_OFFSET_Y },
+      style: n.size ? { height: n.size[1] + NODE_TITLE_H, width: n.size[0] } : undefined,
+      zIndex: SUBGRAPH_Z, // 画在普通节点之上，紫色描边才读得出来
     };
   };
 
@@ -579,15 +579,15 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
       usedGroupIds.add(nodeId);
       return {
         id: nodeId,
-        type: "wfGroup",
         position: { x, y },
+        type: "wfGroup",
         // 嵌套越深 zIndex 越高，但始终在便签 / 节点之下
-        zIndex: GROUP_Z + 1 + Math.min(groupDepth[group.id] ?? 0, 3),
+        connectable: false,
+        data: { color: group.color, title: group.title },
         draggable: false,
         selectable: false,
-        connectable: false,
-        data: { title: group.title, color: group.color },
-        style: { width: w, height: h, pointerEvents: "none" },
+        style: { height: h, pointerEvents: "none", width: w },
+        zIndex: GROUP_Z + 1 + Math.min(groupDepth[group.id] ?? 0, 3),
       };
     });
 
@@ -602,25 +602,25 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
      *  便签的 onNodeDragStop 在落库前把 NODE_TITLE_H 加回来。 */
     const noteHasTitle = !!title;
     return {
+      connectable: false,
+      data: { color: note.color, text: note.text, title },
+      draggable: true,
       id: `note:${note.id}`,
-      type: "wfNote",
       position: {
         x: note.pos[0],
         y: note.pos[1] - (noteHasTitle ? NODE_ANCHOR_OFFSET_Y : 0),
       },
-      zIndex: NOTE_Z,
-      draggable: true,
       selectable: true,
-      connectable: false,
-      data: { title, text: note.text, color: note.color },
+      type: "wfNote",
+      zIndex: NOTE_Z,
       /* ComfyUI / litegraph 载荷里的 `size` 存的是**主体内容**高度
        *  （30px 标题栏**不含**在 `size[1]` 里，见 NODE_TITLE_H 的注释）。
        *  带标题的便签要在原始内容高度上再加一层标题栏，因此它的 React Flow
        *  外框是 `size[1] + NODE_TITLE_H`；无标题便签不画标题栏，
        *  `size[1]` 本身就是完整高度。 */
       style: {
-        width: note.size[0],
         height: note.size[1] + (noteHasTitle ? NODE_TITLE_H : 0),
+        width: note.size[0],
       },
     };
   });

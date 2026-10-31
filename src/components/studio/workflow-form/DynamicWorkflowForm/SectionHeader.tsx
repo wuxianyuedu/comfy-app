@@ -4,9 +4,9 @@
 import { Separator } from "~/components/ui/separator";
 
 export const SectionHeader = ({
-  label,
-  count,
   accent,
+  count,
+  label,
 }: {
   accent: string;
   count: number;

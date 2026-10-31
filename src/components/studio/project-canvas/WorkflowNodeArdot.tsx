@@ -44,9 +44,9 @@ import { Textarea } from "~/components/ui/textarea";
  * 集中在这里而不是散在 JSX 里 —— 「成组集中的常量表」才是规范 §3.6.1
  * 「类型色例外」的合法载体，也便于扫描器显式豁免。 */
 const PORT_TYPE_COLORS = /* SAFETY: 类型断言已复核 */ {
+  boolean: "#67E89D",
   image: "#7C5CFC",
   video: "#FF5CA8",
-  boolean: "#67E89D",
 } as const;
 
 /** 端点圆点的投影 —— Ardot 稿 DROP_SHADOW rgba(0,0,0,0.25) y4 blur4，
@@ -81,19 +81,19 @@ function PortChip({ type }: { type: string }) {
   const style = isImg
     ? {
         background: "var(--color-chip-type-image-bg)",
-        color: PORT_TYPE_COLORS.image,
         border: portChipBorder(PORT_TYPE_COLORS.image),
+        color: PORT_TYPE_COLORS.image,
       }
     : isVid
       ? {
           background: "var(--color-chip-type-video-bg)",
-          color: PORT_TYPE_COLORS.video,
           border: portChipBorder(PORT_TYPE_COLORS.video),
+          color: PORT_TYPE_COLORS.video,
         }
       : {
           background: "var(--color-subtle)",
-          color: "var(--color-ink-muted)",
           border: "1px solid var(--color-border-subtle)",
+          color: "var(--color-ink-muted)",
         };
   return (
     <TypeChip style={style} tone="none">
@@ -104,8 +104,8 @@ function PortChip({ type }: { type: string }) {
 
 /* ── 端点（外层 wrapper 的 absolute 子元素，半圆骑跨 Card 边框）── */
 function PortDot({
-  side,
   color,
+  side,
   top,
 }: {
   color: string;

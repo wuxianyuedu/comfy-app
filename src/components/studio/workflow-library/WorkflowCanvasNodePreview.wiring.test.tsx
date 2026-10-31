@@ -62,40 +62,40 @@ afterEach(cleanup);
 
 /** 「尺寸」口有宽 / 宽高比 / 像素量 三个候选。 */
 const io: WorkflowIOMap = {
-  "5::widget::aspect_ratio": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "5",
-    name: "aspect_ratio",
-    label: "宽高比",
-    type: "COMBO",
-    defaultValue: "16:9",
-  },
-  "5::widget::megapixels": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "5",
-    name: "megapixels",
-    label: "百万像素",
-    type: "FLOAT",
-    defaultValue: 1,
-  },
-  "5::widget::width": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "5",
-    name: "width",
-    label: "宽度",
-    type: "INT",
-    defaultValue: 1024,
-  },
   "5::output::IMAGE": {
     direction: "output",
     kind: "output",
-    nodeId: "5",
-    name: "images",
     label: "images",
+    name: "images",
+    nodeId: "5",
     type: "IMAGE",
+  },
+  "5::widget::aspect_ratio": {
+    defaultValue: "16:9",
+    direction: "input",
+    kind: "widget",
+    label: "宽高比",
+    name: "aspect_ratio",
+    nodeId: "5",
+    type: "COMBO",
+  },
+  "5::widget::megapixels": {
+    defaultValue: 1,
+    direction: "input",
+    kind: "widget",
+    label: "百万像素",
+    name: "megapixels",
+    nodeId: "5",
+    type: "FLOAT",
+  },
+  "5::widget::width": {
+    defaultValue: 1024,
+    direction: "input",
+    kind: "widget",
+    label: "宽度",
+    name: "width",
+    nodeId: "5",
+    type: "INT",
   },
 };
 
@@ -237,12 +237,12 @@ describe("尺寸卡：六行的类型与拖线后的线（回归）", () => {
      *  宽高比 = COMBO —— 形态语义固定，**连上之后也不改口**（落点那一行声明
      *  成什么只在行 title 里可查，见 `paramOutputPorts`）。 */
     const expectedByCls: Record<string, string> = {
-      "size-width": "FLOAT",
+      "size-aspect": "COMBO",
       "size-height": "FLOAT",
       "size-megapixels": "FLOAT",
-      "size-resolution": "INT",
       "size-multiple": "INT",
-      "size-aspect": "COMBO",
+      "size-resolution": "INT",
+      "size-width": "FLOAT",
     };
     const { container } = renderPreview({});
     SIZE_SUB_IDS.forEach((cls, index) => {
@@ -429,6 +429,7 @@ describe("尺寸各项各自可取外部值", () => {
      *  渲染本身由 React Flow 负责，jsdom 量不到 handleBounds。 */
     const paramCards = deriveLibraryParamCards({
       io,
+      mode: "T2I",
       paramMap: {
         source: {
           "mode:T2I": {
@@ -438,7 +439,6 @@ describe("尺寸各项各自可取外部值", () => {
           },
         },
       },
-      mode: "T2I",
     });
     const edges = deriveLibraryEdges(paramCards.wires, [], true);
     /* 尺寸那张卡的行 = 形态，所以圆点 handle 就是**子口 id**（卡片与边同一份算式）。 */

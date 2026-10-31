@@ -25,8 +25,8 @@ import { sceneEntries, type SceneName } from "../../../../.storybook/store-sourc
  *（对不上时滚动位置会与内容错开），以及不换行档被钉死的一行不会溢到下一行上。
  */
 const meta = {
-  title: "Studio/Logs/LogRow",
   component: LogRow,
+  title: "Studio/Logs/LogRow",
 } satisfies Meta<typeof LogRow>;
 
 export default meta;
@@ -43,10 +43,10 @@ type Story = StoryObj<typeof LogRowHarness>;
  * 正是「同一件事在视图里又写了一遍样板」，而 story 也是视图的一侧。
  */
 function LogRowHarness({
+  expandFirst = false,
+  keyword = "",
   scene = "rowShapes",
   wrap = true,
-  keyword = "",
-  expandFirst = false,
 }: {
   expandFirst?: boolean;
   keyword?: string;

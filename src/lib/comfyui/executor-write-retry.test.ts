@@ -21,11 +21,11 @@ import { isTaskClaimedInProcess } from "./reaper";
 import { configureRunner, isDispatchedHere, markDispatched, state } from "./runner-state";
 
 configureRunner({
+  log: { warn: () => undefined },
   taskRepo: {
     replaceLogs: async () => undefined,
     replaceRawCli: async () => undefined,
   },
-  log: { warn: () => undefined },
 });
 
 /** 照 drizzle 的真实包法造一条锁错误：原因在 `cause` 上。 */

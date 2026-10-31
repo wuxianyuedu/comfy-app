@@ -32,9 +32,9 @@ type Marker = NonNullable<DisclosureMarker>;
 const MARKERS: Array<Marker> = ["caret", "chevron", "none"];
 
 const meta = {
-  title: "UI/Disclosure",
+  args: { children: "这里是展开后的内容。", trigger: "折叠区域" },
   component: Disclosure,
-  args: { trigger: "折叠区域", children: "这里是展开后的内容。" },
+  title: "UI/Disclosure",
 } satisfies Meta<typeof Disclosure>;
 
 export default meta;

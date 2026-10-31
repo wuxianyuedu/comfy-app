@@ -55,9 +55,9 @@ async function ensureOnce(): Promise<ComfyReadyResult> {
     res = await fetch("/api/comfy/ensure", { method: "POST" });
   } catch (e) {
     return {
+      message: errorMessage(e, "无法连接应用服务，稍后重试"),
       ok: false,
       pending: true,
-      message: errorMessage(e, "无法连接应用服务，稍后重试"),
     };
   }
   let body: unknown;
@@ -76,9 +76,9 @@ async function ensureOnce(): Promise<ComfyReadyResult> {
     return { ok: true };
   }
   return {
+    message: detail,
     ok: false,
     pending: res.status === 202,
-    message: detail,
   };
 }
 
@@ -123,8 +123,8 @@ export async function waitForComfyReady(
     await sleep(pollMs);
   }
   return {
+    message: `${last.message}（等待超时，可到 设置 → 创作后端 手动启动 ComfyUI 后重试）`,
     ok: false,
     pending: true,
-    message: `${last.message}（等待超时，可到 设置 → 创作后端 手动启动 ComfyUI 后重试）`,
   };
 }

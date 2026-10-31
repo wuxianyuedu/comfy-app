@@ -14,13 +14,13 @@ import type { TaskItem } from "./history-types";
 
 function task(id: string, status: string, createdAt: string): TaskItem {
   return {
+    cover: null,
+    createdAt,
     id,
+    prompt: "",
+    status,
     type: "workflow",
     workflowName: "wf",
-    status,
-    prompt: "",
-    createdAt,
-    cover: null,
   };
 }
 
@@ -30,10 +30,7 @@ function daysAgo(days: number): string {
 }
 
 describe("filterTasks", () => {
-  const tasks = [
-    task("a", "SUCCEEDED", daysAgo(0)),
-    task("b", "FAILED", daysAgo(0)),
-  ];
+  const tasks = [task("a", "SUCCEEDED", daysAgo(0)), task("b", "FAILED", daysAgo(0))];
 
   it("ALL 不过滤", () => {
     expect(filterTasks(tasks, "ALL")).toHaveLength(2);
@@ -50,10 +47,7 @@ describe("filterTasks", () => {
 });
 
 describe("sortTasks", () => {
-  const tasks = [
-    task("old", "SUCCEEDED", daysAgo(3)),
-    task("new", "SUCCEEDED", daysAgo(0)),
-  ];
+  const tasks = [task("old", "SUCCEEDED", daysAgo(3)), task("new", "SUCCEEDED", daysAgo(0))];
 
   it("newest 时间倒序", () => {
     expect(sortTasks(tasks, "newest").map((t) => t.id)).toEqual(["new", "old"]);
@@ -77,7 +71,7 @@ describe("countByStatus", () => {
       task("b", "SUCCEEDED", daysAgo(0)),
       task("c", "RUNNING", daysAgo(0)),
     ]);
-    expect(counts).toEqual({ ALL: 3, SUCCEEDED: 2, RUNNING: 1 });
+    expect(counts).toEqual({ ALL: 3, RUNNING: 1, SUCCEEDED: 2 });
   });
 
   it("空列表时 ALL 为 0", () => {
@@ -109,13 +103,10 @@ describe("groupByDate", () => {
 describe("paginateGroups", () => {
   const groups = [
     {
+      items: [task("a", "SUCCEEDED", daysAgo(0)), task("b", "SUCCEEDED", daysAgo(0))],
       key: "今天",
-      items: [
-        task("a", "SUCCEEDED", daysAgo(0)),
-        task("b", "SUCCEEDED", daysAgo(0)),
-      ],
     },
-    { key: "昨天", items: [task("c", "SUCCEEDED", daysAgo(1))] },
+    { items: [task("c", "SUCCEEDED", daysAgo(1))], key: "昨天" },
   ];
 
   it("displayCount 覆盖全部时一次性展示", () => {

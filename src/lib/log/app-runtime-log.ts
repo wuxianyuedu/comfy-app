@@ -47,10 +47,10 @@ function localTimestamp(): string {
 }
 
 const LEVEL_TAG: Record<AppLogLevel, string> = {
+  debug: "DEBUG",
+  error: "ERROR",
   info: "INFO",
   warn: "WARN",
-  error: "ERROR",
-  debug: "DEBUG",
 };
 
 export type AppRuntimeLogger = {
@@ -130,11 +130,11 @@ function makeLogger(ns: string, file?: string): AppRuntimeLogger {
   };
 
   return {
+    child: (childNs) => makeLogger(ns ? `${ns}:${childNs}` : childNs, file),
+    debug: (message, fields) => emit("debug", message, fields),
+    error: (message, fields) => emit("error", message, fields),
     info: (message, fields) => emit("info", message, fields),
     warn: (message, fields) => emit("warn", message, fields),
-    error: (message, fields) => emit("error", message, fields),
-    debug: (message, fields) => emit("debug", message, fields),
-    child: (childNs) => makeLogger(ns ? `${ns}:${childNs}` : childNs, file),
   };
 }
 

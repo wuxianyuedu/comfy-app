@@ -14,7 +14,7 @@ import {
 afterEach(cleanup);
 
 /** 一份最小的 ComfyUI 原始工作流（RAW）；API 格式不受支持。 */
-const RAW_WF = { nodes: [{ id: 3, type: "KSampler", pos: [10, 20] }] };
+const RAW_WF = { nodes: [{ id: 3, pos: [10, 20], type: "KSampler" }] };
 const FILE_LABEL = "选择工作流 JSON 文件";
 
 /** 面板只消费 hook 返回的 state，所以让真 hook 跑起来、只把 mutation 换成假的。 */

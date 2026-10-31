@@ -150,8 +150,8 @@ declare global {
 
 const reaperState: ReaperGlobal = (globalThis.__comfyReaper_v2 ??= {
   handle: null,
-  reaping: new Set(),
   noPromptSeen: new Set(),
+  reaping: new Set(),
 });
 /**
  * 纯内存的认领检查：`taskId` 是否仍被**当前** dev server 进程持有

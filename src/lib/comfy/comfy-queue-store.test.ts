@@ -48,8 +48,8 @@ const fetchMock = vi.fn();
 
 function queueRes(payload: unknown): Response {
   return /* SAFETY: 类型断言已复核 */ {
-    ok: true,
     json: async () => payload,
+    ok: true,
   } as unknown as Response;
 }
 
@@ -73,30 +73,30 @@ async function flush(times = 5): Promise<void> {
 }
 
 const RUNNING = {
+  model: "sd_xl_base_1.0.safetensors",
+  nodeType: "KSampler",
+  progress: 40,
+  startedAt: 1_000,
   taskId: "task-1",
   workflowName: "文生图",
-  model: "sd_xl_base_1.0.safetensors",
-  startedAt: 1_000,
-  progress: 40,
-  nodeType: "KSampler",
 };
 
 /** 一次「在线 + 有在跑任务」的观测（queued 用入参区分不同拍）。 */
 function onlinePayload(queued: number): unknown {
   return {
+    comfy: { pending: 2, running: 1 },
     online: true,
-    comfy: { running: 1, pending: 2 },
-    running: RUNNING,
     queued,
+    running: RUNNING,
   };
 }
 
 function offlinePayload(queued: number): unknown {
   return {
+    comfy: { pending: 0, running: 0 },
     online: false,
-    comfy: { running: 0, pending: 0 },
-    running: null,
     queued,
+    running: null,
   };
 }
 
@@ -123,7 +123,7 @@ describe("comfy-queue-store", () => {
     const snap = mod.getComfyQueueSnapshot();
     expect(snap.online).toBe(true);
     expect(snap.queued).toBe(3);
-    expect(snap.comfy).toEqual({ running: 1, pending: 2 });
+    expect(snap.comfy).toEqual({ pending: 2, running: 1 });
     expect(snap.running?.taskId).toBe("task-1");
     expect(typeof snap.elapsedMs).toBe("number");
     expect(snap.elapsedMs).not.toBeNull();
@@ -238,17 +238,17 @@ describe("comfy-queue-store", () => {
 
     fetchMock.mockResolvedValue(
       queueRes({
-        online: true,
         comfy: "bad",
-        running: 7,
+        online: true,
         queued: "x",
+        running: 7,
       }),
     );
     FakeEventSource.last!.emit("bad-comfy");
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     await flush();
     const snap = mod.getComfyQueueSnapshot();
-    expect(snap.comfy).toEqual({ running: 0, pending: 0 });
+    expect(snap.comfy).toEqual({ pending: 0, running: 0 });
     expect(snap.running).toBeNull();
     expect(snap.queued).toBe(0);
     off();
@@ -260,10 +260,10 @@ describe("comfy-queue-store", () => {
 
     fetchMock.mockResolvedValue(
       queueRes({
+        comfy: { pending: 0, running: 0 },
         online: true,
-        comfy: { running: 0, pending: 0 },
-        running: { taskId: 5, startedAt: "x" },
         queued: 0,
+        running: { startedAt: "x", taskId: 5 },
       }),
     );
     FakeEventSource.last!.emit("bad-task-id");
@@ -273,29 +273,29 @@ describe("comfy-queue-store", () => {
 
     fetchMock.mockResolvedValue(
       queueRes({
+        comfy: { pending: 0, running: 0 },
         online: true,
-        comfy: { running: 0, pending: 0 },
+        queued: 0,
         running: {
-          taskId: "task-2",
-          startedAt: 5_000,
-          workflowName: 1,
           model: 2,
           nodeType: 3,
           progress: "bad",
+          startedAt: 5_000,
+          taskId: "task-2",
+          workflowName: 1,
         },
-        queued: 0,
       }),
     );
     FakeEventSource.last!.emit("partial-running");
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     await flush();
     expect(mod.getComfyQueueSnapshot().running).toEqual({
+      model: null,
+      nodeType: null,
+      progress: 0,
+      startedAt: 5_000,
       taskId: "task-2",
       workflowName: null,
-      model: null,
-      startedAt: 5_000,
-      progress: 0,
-      nodeType: null,
     });
     off();
   });
@@ -363,10 +363,10 @@ describe("comfy-queue-store", () => {
     /* running 为 null ⇒ elapsedMs 恒为 null ⇒ 两次观测字段全等 ⇒ publish 早退。
      * 这是 `useSyncExternalStore` 不无限重渲染的那一格。 */
     const steady = {
+      comfy: { pending: 2, running: 1 },
       online: true,
-      comfy: { running: 1, pending: 2 },
-      running: null,
       queued: 3,
+      running: null,
     };
     fetchMock.mockResolvedValue(queueRes(steady));
     const onChange = vi.fn();
@@ -389,7 +389,7 @@ describe("comfy-queue-store", () => {
 
     await vi.waitFor(
       () => expect(mod.getComfyQueueSnapshot().elapsedMs).toBeGreaterThan(first + 400),
-      { timeout: 4000, interval: 100 },
+      { interval: 100, timeout: 4000 },
     );
     // 秒表只走本地时钟，不新增探测请求
     expect(fetchMock.mock.calls.length).toBe(before);
@@ -398,11 +398,11 @@ describe("comfy-queue-store", () => {
 
   it("服务端快照恒为「无数据」：首帧不制造第三种状态", () => {
     expect(mod.getComfyQueueServerSnapshot()).toEqual({
-      online: false,
-      comfy: { running: 0, pending: 0 },
-      running: null,
-      queued: 0,
+      comfy: { pending: 0, running: 0 },
       elapsedMs: null,
+      online: false,
+      queued: 0,
+      running: null,
     });
   });
 });

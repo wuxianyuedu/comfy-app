@@ -120,35 +120,35 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
       const runId = toolRunId();
       const tool = resolveAgentTool(call.name, call.arguments, handlersRef.current);
       const run: AgentToolRun = {
+        argSummary: tool.argSummary,
         id: runId,
-        toolName: call.name,
         status: "running",
         summary: tool.summary,
-        argSummary: tool.argSummary,
+        toolName: call.name,
       };
       pushToolRun(run);
       try {
         const result = await tool.execute();
         patchToolRun(runId, {
-          status: result.ok ? "done" : "error",
           detail: result.detail,
+          status: result.ok ? "done" : "error",
         });
         return {
-          role: /* SAFETY: 类型断言已复核 */ "tool" as const,
-          tool_call_id: call.id,
           content: JSON.stringify({
             ok: result.ok,
             summary: result.summary,
             ...(result.detail ? { detail: result.detail } : {}),
           }),
+          role: /* SAFETY: 类型断言已复核 */ "tool" as const,
+          tool_call_id: call.id,
         } satisfies AgentMessageLike;
       } catch (err: unknown) {
         const msg = errorMessage(err, "工具执行失败");
-        patchToolRun(runId, { status: "error", detail: msg });
+        patchToolRun(runId, { detail: msg, status: "error" });
         return {
+          content: JSON.stringify({ error: msg, ok: false }),
           role: /* SAFETY: 类型断言已复核 */ "tool" as const,
           tool_call_id: call.id,
-          content: JSON.stringify({ ok: false, error: msg }),
         } satisfies AgentMessageLike;
       }
     },
@@ -166,16 +166,16 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
     setError("");
     setBusy(true);
     const userMsg: AgentPanelMessage = {
+      content: text,
       id: agentMsgId(),
       role: "user",
-      content: text,
     };
     pushMsg(userMsg);
 
     const wireOf = (): Array<AgentMessageLike> =>
       [...messagesRef.current, userMsg]
         .filter((m) => m.role !== "tool-run")
-        .map((m) => ({ role: m.role, content: m.content }));
+        .map((m) => ({ content: m.content, role: m.role }));
 
     const runLoop = async (): Promise<void> => {
       let currentMessages: Array<AgentMessageLike> = wireOf();
@@ -183,16 +183,16 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
 
       for (let round = 0; round < maxRounds; round++) {
         const response: AgentChatResponse = await sendAgentMessage({
-          messages: currentMessages,
           draft: handlersRef.current.getDraft(),
+          messages: currentMessages,
         });
 
         // 纯文本回复（无工具调用）→ 结束本轮
         if (response.reply && !(response.tool_calls && response.tool_calls.length > 0)) {
           pushMsg({
+            content: response.reply,
             id: agentMsgId(),
             role: "assistant",
-            content: response.reply,
           });
           break;
         }
@@ -203,16 +203,16 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
           const replyText = response.reply ?? "";
           if (replyText) {
             pushMsg({
+              content: replyText,
               id: agentMsgId(),
               role: "assistant",
-              content: replyText,
             });
           }
           currentMessages = [
             ...currentMessages,
             {
-              role: "assistant",
               content: replyText,
+              role: "assistant",
               tool_calls: response.tool_calls,
             } satisfies AgentMessageLike,
           ];
@@ -230,13 +230,13 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
           const instr = response.fallback_instruction;
           const action = typeof instr.action === "string" ? instr.action : "";
           const toolMsg = await executeOneTool({
+            arguments: JSON.stringify(instr),
             id: `fallback-${toolRunId()}`,
             name: action,
-            arguments: JSON.stringify(instr),
           });
           currentMessages = [
             ...currentMessages,
-            { role: "assistant", content: `执行了 ${action} 操作` },
+            { content: `执行了 ${action} 操作`, role: "assistant" },
             toolMsg,
           ];
           continue;
@@ -244,27 +244,27 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
 
         if (round === 0) {
           pushMsg({
+            content: "（模型未返回有效响应，请重试）",
             id: agentMsgId(),
             role: "assistant",
-            content: "（模型未返回有效响应，请重试）",
           });
         }
         break;
       }
     };
     await runAsyncAction(runLoop, {
+      failureText: "与 Agent 通信失败",
+      readResultEnvelope: false,
       report: (kind, detail) => {
         if (kind === "err") {
           setError(detail);
           pushMsg({
+            content: `抱歉，出错了：${detail}`,
             id: agentMsgId(),
             role: "assistant",
-            content: `抱歉，出错了：${detail}`,
           });
         }
       },
-      failureText: "与 Agent 通信失败",
-      readResultEnvelope: false,
     });
     setBusy(false);
   }, [input, busy, pushMsg, executeOneTool]);
@@ -277,16 +277,16 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
   }, []);
 
   return {
-    open,
-    messages,
-    input,
     busy,
-    error,
-    toolRuns,
-    openAgent,
-    closeAgent,
-    setInput,
-    send,
     clearToolRuns,
+    closeAgent,
+    error,
+    input,
+    messages,
+    open,
+    openAgent,
+    send,
+    setInput,
+    toolRuns,
   };
 }

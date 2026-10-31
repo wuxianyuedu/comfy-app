@@ -98,14 +98,12 @@ export function probeSchemaSync(databaseUrl?: string): SchemaReadiness {
       // Read-only: when the DB file is absent SQLite errors out instead of
       // silently creating an empty database, which would let dev/start keep
       // running behind the illusion of a usable DB.
-      readOnly: true,
       open: true,
+      readOnly: true,
     });
     try {
       const row = db
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
-        )
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?")
         .get(SENTINEL_TABLE);
       return row ? "ready" : "missing";
     } finally {

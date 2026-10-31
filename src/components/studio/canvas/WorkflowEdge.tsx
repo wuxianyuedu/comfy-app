@@ -30,10 +30,10 @@ import { readEdgeFocusRole } from "./hooks/use-related-edges-highlight";
  * —— 本组件只决定曲线怎么画。
  */
 const HANDLE_OUT: Record<Position, [number, number]> = {
+  [Position.Bottom]: [0, 1],
   [Position.Left]: [-1, 0],
   [Position.Right]: [1, 0],
   [Position.Top]: [0, -1],
-  [Position.Bottom]: [0, 1],
 };
 
 /** 可调参数：每个控制点沿句柄轴被拉出多远。 */
@@ -109,7 +109,7 @@ function parseHexColor(color: string): [number, number, number] | null {
 }
 
 export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
-  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, data } =
+  const { data, id, sourcePosition, sourceX, sourceY, style, targetPosition, targetX, targetY } =
     props;
 
   const sPos = sourcePosition ?? Position.Right;
@@ -154,10 +154,10 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
         path={edgePath}
         style={{
           ...style,
+          filter: focused ? "blur(3px)" : "blur(2.5px)",
+          opacity: focused ? 0.55 : dimmed ? 0.16 : 0.35,
           stroke: focused ? focusStroke : wireStroke,
           strokeWidth: focused ? 9 : 6,
-          opacity: focused ? 0.55 : dimmed ? 0.16 : 0.35,
-          filter: focused ? "blur(3px)" : "blur(2.5px)",
         }}
       />
       <BaseEdge
@@ -165,9 +165,9 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
         path={edgePath}
         style={{
           ...style,
+          opacity: focused ? 1 : dimmed ? 0.45 : 1,
           stroke: focused ? focusStroke : wireStroke,
           strokeWidth: focused ? 4 : dimmed ? 2 : 2.5,
-          opacity: focused ? 1 : dimmed ? 0.45 : 1,
         }}
       />
       {/* 曲线中点处的 ComfyUI 风格枢纽圆点。比默认的

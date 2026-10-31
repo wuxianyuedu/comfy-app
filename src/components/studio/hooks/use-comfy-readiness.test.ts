@@ -26,37 +26,33 @@ async function noopAsync() {
 function onlineStats(over: Partial<ComfyStatsPayload> = {}): ComfyStatsPayload {
   return {
     online: true,
-    vramUsed: 2 * GIB,
+    ramTotal: 32 * GIB,
+    ramUsed: 16 * GIB,
     vramFree: 6 * GIB,
     vramTotal: 8 * GIB,
-    ramUsed: 16 * GIB,
-    ramTotal: 32 * GIB,
+    vramUsed: 2 * GIB,
     ...over,
   };
 }
 
 const OFFLINE: ComfyStatsPayload = {
   online: false,
-  vramUsed: 0,
+  ramTotal: 0,
+  ramUsed: 0,
   vramFree: 0,
   vramTotal: 0,
-  ramUsed: 0,
-  ramTotal: 0,
+  vramUsed: 0,
 };
 
 /** 让 controller 读到指定数据形态（不改网络层，只换 hook 返回）。
  *  online 显式传入：connecting 态正是「已连上但首个采样未到」，stats 为 null
  *  但 online 为 true，不能由 stats 反推。 */
-function stubStats(
-  online: boolean,
-  stats: ComfyStatsPayload | null,
-  stale = false,
-) {
+function stubStats(online: boolean, stats: ComfyStatsPayload | null, stale = false) {
   return vi.spyOn(comfyStats, "useComfyStats").mockReturnValue({
-    stats,
     online,
-    stale,
     refresh: noopAsync,
+    stale,
+    stats,
   });
 }
 
@@ -94,31 +90,28 @@ describe("useComfyReadiness（数据形态折叠）", () => {
 
     expect(result.current.smiVram).toBeNull();
     expect(result.current.cudaVram).toEqual({
-      used: 2 * GIB,
-      total: 8 * GIB,
       pct: 25,
+      total: 8 * GIB,
+      used: 2 * GIB,
     });
     expect(result.current.ram).toEqual({
-      used: 16 * GIB,
-      total: 32 * GIB,
       pct: 50,
+      total: 32 * GIB,
+      used: 16 * GIB,
     });
     expect(result.current.online).toBe(true);
     expect(result.current.degradedNote).toBeNull();
   });
 
   it("双口径同时可用：两项并列且各自百分比独立计算", () => {
-    stubStats(
-      true,
-      onlineStats({ smiVramUsed: 3 * GIB, smiVramTotal: 12 * GIB }),
-    );
+    stubStats(true, onlineStats({ smiVramTotal: 12 * GIB, smiVramUsed: 3 * GIB }));
     const { result } = renderHook(() => useComfyReadiness());
 
     expect(result.current.cudaVram?.pct).toBe(25);
     expect(result.current.smiVram).toEqual({
-      used: 3 * GIB,
-      total: 12 * GIB,
       pct: 25,
+      total: 12 * GIB,
+      used: 3 * GIB,
     });
   });
 
@@ -126,11 +119,11 @@ describe("useComfyReadiness（数据形态折叠）", () => {
     stubStats(
       true,
       onlineStats({
-        vramUsed: 0,
+        smiVramTotal: 0,
+        smiVramUsed: 0,
         vramFree: 0,
         vramTotal: 0,
-        smiVramUsed: 0,
-        smiVramTotal: 0,
+        vramUsed: 0,
       }),
     );
     const { result } = renderHook(() => useComfyReadiness());
@@ -142,7 +135,7 @@ describe("useComfyReadiness（数据形态折叠）", () => {
   });
 
   it("用量百分比 clamp 到 100（驱动读数抖动不越界）", () => {
-    stubStats(true, onlineStats({ ramUsed: 40 * GIB, ramTotal: 32 * GIB }));
+    stubStats(true, onlineStats({ ramTotal: 32 * GIB, ramUsed: 40 * GIB }));
     const { result } = renderHook(() => useComfyReadiness());
 
     expect(result.current.ram?.pct).toBe(100);

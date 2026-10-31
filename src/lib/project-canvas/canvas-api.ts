@@ -28,13 +28,13 @@ async function postUpload(file: File): Promise<UploadAttempt> {
   fd.append("image", file);
   let res: Response;
   try {
-    res = await fetch("/api/upload", { method: "POST", body: fd });
+    res = await fetch("/api/upload", { body: fd, method: "POST" });
   } catch {
     // 网络层失败（应用服务重启窗口）：按可重试处理，不把 fetch 原文抛给用户。
     return {
+      message: "上传请求未送达，请稍候重试",
       ok: false,
       retryable: true,
-      message: "上传请求未送达，请稍候重试",
     };
   }
   let d: unknown;
@@ -46,7 +46,7 @@ async function postUpload(file: File): Promise<UploadAttempt> {
   const obj = asRecord(d);
   const name = typeof obj?.name === "string" ? obj.name : "";
   if (name) {
-    return { ok: true, name };
+    return { name, ok: true };
   }
   const errRaw = obj?.error;
   /* ComfyUI 未运行时的 503（`hint: comfyui-unreachable`）是可重试的：服务端
@@ -54,9 +54,9 @@ async function postUpload(file: File): Promise<UploadAttempt> {
   const retryable =
     res.status === 503 || (typeof obj?.hint === "string" && obj.hint === "comfyui-unreachable");
   return {
+    message: typeof errRaw === "string" && errRaw ? errRaw : "上传失败",
     ok: false,
     retryable,
-    message: typeof errRaw === "string" && errRaw ? errRaw : "上传失败",
   };
 }
 
@@ -85,8 +85,8 @@ export async function uploadImageFile(
 
   opts.onProgress?.(first.message);
   const ready = await waitForComfyReady({
-    timeoutMs: opts.readyTimeoutMs,
     onProgress: (message) => opts.onProgress?.(message),
+    timeoutMs: opts.readyTimeoutMs,
   });
   if (!ready.ok) {
     throw new Error(ready.message);
@@ -189,9 +189,9 @@ export async function pollTask(
   while (true) {
     if (Date.now() - start > timeoutMs) {
       return {
-        taskId,
-        status: "TIMEOUT",
         error: `轮询超时（${Math.round(timeoutMs / 60000)} 分钟无响应）`,
+        status: "TIMEOUT",
+        taskId,
       };
     }
     try {
@@ -209,7 +209,7 @@ export async function pollTask(
         // 让 noUncheckedIndexedAccess 下的窄化与判据同行，取代旧 `v!`。
         // else 分支是「编译器认为不可能」的兜底：走到这里就让轮询继续。
         if (v) {
-          return { taskId, localPath: v.localPath, mediaType: v.mediaType };
+          return { localPath: v.localPath, mediaType: v.mediaType, taskId };
         }
       }
       const st = /* SAFETY: 类型断言已复核 */ task?.status as string | undefined;
@@ -236,9 +236,9 @@ export async function pollTask(
         const isGarbage =
           !trimmed || trimmed === "[object Object]" || trimmed === "[unserializable error]";
         return {
-          taskId,
-          status: st,
           error: isGarbage ? `任务 ${st}（无详细错误，请查看后端日志）` : trimmed,
+          status: st,
+          taskId,
           /* 失败也回传请求 payload 快照，前端用于在失败面板里
            *  展示「执行了哪些参数」。task.params 由 /api/generate route.ts
            *  写入（任务表的 JSON 列）。 */

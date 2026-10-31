@@ -87,9 +87,9 @@ export async function GET(): Promise<Response> {
 
   return new Response(stream, {
     headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "Content-Type": "text/event-stream; charset=utf-8",
       // 反向代理（若有）按此关闭缓冲，否则帧会攒到连接关闭才到客户端。
       "X-Accel-Buffering": "no",
     },

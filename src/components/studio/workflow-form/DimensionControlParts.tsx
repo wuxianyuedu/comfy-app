@@ -37,8 +37,8 @@ export const GROUPED_SIZE_MAX = 8192;
 
 /** 「像素」大类两个子类的说明（弹层里显示，解释这一档宽高从哪来）。 */
 export const CLARITY_HINT: Record<DimClarityPreset["kind"], string> = {
-  resolution: "按场景尺寸表取宽高",
   megapixel: "总像素预算，宽高由倍数对齐",
+  resolution: "按场景尺寸表取宽高",
 };
 
 /** 组合参数子 pin 的必填 / 显隐控制：grouped 行替代了各自的独立参数行，
@@ -50,11 +50,11 @@ export const CLARITY_HINT: Record<DimClarityPreset["kind"], string> = {
  *  覆盖层，这里必须读同源回读，否则点完按钮 UI 不回读、看起来像“无法切换”
  *  （历史根因：原实现直读条目级 `pin.required`，与模式级写入错层）。 */
 export function RequiredChips({
-  pins,
-  onRequiredChange,
   mode,
-  visibilityMode,
+  onRequiredChange,
   onVisibilityChange,
+  pins,
+  visibilityMode,
 }: {
   /** 多模式作者态：按该模式解析必填（未设模式覆盖时回退条目级）。 */
   mode?: string | null;
@@ -134,9 +134,9 @@ export function RequiredChips({
 
 /** 尺寸表配置入口 + 当前场景提示（摆在弹层脚注里，两个子控件共用）。 */
 export function SizeTableFooter({
-  scene,
-  onOpen,
   extra,
+  onOpen,
+  scene,
 }: {
   extra?: ReactNode;
   onOpen: () => void;

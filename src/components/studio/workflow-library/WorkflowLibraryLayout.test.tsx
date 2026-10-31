@@ -36,15 +36,15 @@ function tagContaining(src: string, needle: string): string {
 }
 
 const meta: MetaEditorController = {
-  modes: ["T2I"],
-  defaultMode: "T2I",
-  modelTags: [],
   allModelTags: [],
   busy: false,
-  patchModes: async () => undefined,
+  defaultMode: "T2I",
+  modelTags: [],
+  modes: ["T2I"],
   patchModelTags: async () => undefined,
-  patchSeedMode: async () => undefined,
+  patchModes: async () => undefined,
   patchParamMap: async () => undefined,
+  patchSeedMode: async () => undefined,
 };
 
 /** 详情头部要的是一整行 `WorkflowRow`（不是「几字段就够」的窄接口），
@@ -52,22 +52,22 @@ const meta: MetaEditorController = {
  *  「形状对不对」这项检查换成了一次断言，字段改名不会红（ISSUE #1460）。 */
 function headerRow(over: Partial<WorkflowRow> = {}): WorkflowRow {
   return {
-    id: "wf-1",
-    name: "image_z_image_int8_t2i",
-    taskType: "T2I",
-    source: "local",
-    modes: ["T2I"],
-    defaultMode: "T2I",
-    modelTags: [],
     createdAt: new Date("2026-08-01T00:00:00.000Z"),
-    paramMap: null,
-    sourcePath: null,
+    defaultMode: "T2I",
     diskDirty: false,
     diskMissing: false,
     diskMtimeSec: null,
-    sourceMtimeSec: null,
     diskRenamed: false,
     diskRenamedTo: null,
+    id: "wf-1",
+    modelTags: [],
+    modes: ["T2I"],
+    name: "image_z_image_int8_t2i",
+    paramMap: null,
+    source: "local",
+    sourceMtimeSec: null,
+    sourcePath: null,
+    taskType: "T2I",
     ...over,
   };
 }

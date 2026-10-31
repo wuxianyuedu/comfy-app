@@ -16,9 +16,9 @@ import { cn } from "~/lib/utils";
  * 画出来是一条约 4×20px 的竖线。原来五处都恰好落在 flex 容器里才「碰巧」成立。
  */
 export function IndexDot({
+  className,
   index,
   size = "sm",
-  className,
 }: {
   className?: string;
   /** 圆里的内容：序号本身（调用点传 `i + 1` 或 `shot.index`）。 */

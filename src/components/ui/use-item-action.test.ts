@@ -89,7 +89,7 @@ describe("useItemAction", () => {
   });
 
   it("条目被删掉后忙标记随之消失（收敛生命周期）", async () => {
-    const { result, rerender } = renderHook(
+    const { rerender, result } = renderHook(
       ({ keys }: { keys: Array<string> }) => useItemAction(keys),
       { initialProps: { keys: ["a", "b"] } },
     );
@@ -134,7 +134,7 @@ describe("useItemAction", () => {
   });
 
   it("传 keys 且内容未变时不重建错误表（按内容指纹比较）", () => {
-    const { result, rerender } = renderHook(
+    const { rerender, result } = renderHook(
       ({ keys }: { keys: Array<string> }) => useItemAction(keys),
       { initialProps: { keys: ["a", "b"] } },
     );

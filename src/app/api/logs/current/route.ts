@@ -181,19 +181,19 @@ async function readLogSlice(
   const sessionStart = resumable ? await sessionStartMs() : null;
   const fileSize = await sizeOrNull(logFile);
   if (fileSize === null) {
-    return { content: "", size: 0, offset: 0, sessionStart, bootId, mismatch };
+    return { bootId, content: "", mismatch, offset: 0, sessionStart, size: 0 };
   }
   const cursorValid =
     Number.isFinite(requestedOffset) && requestedOffset > 0 && requestedOffset <= fileSize;
   /* 游标已被读到文件末尾：没有新增，直接回空（不必再读一次）。 */
   if (cursorValid && requestedOffset === fileSize) {
     return {
+      bootId,
       content: "",
-      size: fileSize,
+      mismatch,
       offset: fileSize,
       sessionStart,
-      bootId,
-      mismatch,
+      size: fileSize,
     };
   }
   let start = cursorValid ? requestedOffset : Math.max(0, fileSize - TAIL_BYTES);
@@ -205,21 +205,21 @@ async function readLogSlice(
     start = alignToLineStart(buf, start, fileSize);
     const skip = start - (fileSize - buf.length);
     return {
+      bootId,
       content: buf.subarray(Math.max(0, skip)).toString("utf8"),
-      size: fileSize,
+      mismatch,
       offset: start,
       sessionStart,
-      bootId,
-      mismatch,
+      size: fileSize,
     };
   }
   return {
+    bootId,
     content: buf.toString("utf8"),
-    size: fileSize,
+    mismatch,
     offset: start,
     sessionStart,
-    bootId,
-    mismatch,
+    size: fileSize,
   };
 }
 
@@ -283,12 +283,12 @@ export async function GET(request: Request) {
       /* 该来源本机一次也没启动过：**明确的空切片**（不是 404/500）——
        * 面板据此显示「还没有输出」，与「接口挂了」分开。 */
       return NextResponse.json({
+        bootId,
         content: "",
-        size: 0,
+        mismatch,
         offset: 0,
         sessionStart: null,
-        bootId,
-        mismatch,
+        size: 0,
       });
     }
     if (!resolved) {
@@ -296,13 +296,13 @@ export async function GET(request: Request) {
        * 而不是 404/500——面板据此区分「本次运行确实还没有输出」与「接口挂了」。 */
       return NextResponse.json({
         content: "",
-        size: 0,
         offset: 0,
+        size: 0,
         /* 无对应文件的来源（转录尚未落盘）：没有可累积的内容，不给起点——
          * 给了反而会让客户端去裁一条并不存在的「历史」。 */
-        sessionStart: null,
         bootId,
         mismatch,
+        sessionStart: null,
       });
     }
     return NextResponse.json(
@@ -317,12 +317,12 @@ export async function GET(request: Request) {
   } catch (error) {
     return NextResponse.json(
       apiErrorBody(error, "读取当前日志失败", {
+        bootId,
         content: "",
-        size: 0,
+        mismatch,
         offset: 0,
         sessionStart: null,
-        bootId,
-        mismatch,
+        size: 0,
       }),
       { status: 500 },
     );

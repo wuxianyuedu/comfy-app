@@ -39,28 +39,28 @@ import { applyWireEdit } from "~/lib/workflow/workflow-param-wiring";
 import { deriveLibraryParamCards, type ParamCardWire } from "./workflow-library-param-cards";
 
 const io: WorkflowIOMap = {
-  "9::widget::positive_prompt": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "9",
-    name: "positive_prompt",
-    type: "STRING",
-    defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
-  },
-  "5::widget::aspect_ratio": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "5",
-    name: "aspect_ratio",
-    type: "COMBO",
-    defaultValue: "16:9",
-  },
   "5::output::IMAGE": {
     direction: "output",
     kind: "output",
-    nodeId: "5",
     name: "images",
+    nodeId: "5",
     type: "IMAGE",
+  },
+  "5::widget::aspect_ratio": {
+    defaultValue: "16:9",
+    direction: "input",
+    kind: "widget",
+    name: "aspect_ratio",
+    nodeId: "5",
+    type: "COMBO",
+  },
+  "9::widget::positive_prompt": {
+    defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
+    direction: "input",
+    kind: "widget",
+    name: "positive_prompt",
+    nodeId: "9",
+    type: "STRING",
   },
 };
 
@@ -70,9 +70,9 @@ describe("边的身份（libraryEdgeId / libraryEdgeOwner）", () => {
   it("带 handle 的 id 可反查出「点的是哪个口的哪颗圆点」", () => {
     const id = libraryEdgeId("param", "size", "aspect_ratio");
     expect(libraryEdgeOwner(id)).toEqual({
-      namespace: "param",
       entryId: "size",
       handleId: "aspect_ratio",
+      namespace: "param",
     });
   });
 
@@ -95,16 +95,16 @@ describe("边的身份（libraryEdgeId / libraryEdgeOwner）", () => {
 describe("边的两端与 handle 取值", () => {
   const inputWire: ParamCardWire = {
     entryId: "prompt",
-    targetIoKey: "9::widget::positive_prompt",
-    handleId: "positive_prompt",
     grouped: false,
+    handleId: "positive_prompt",
+    targetIoKey: "9::widget::positive_prompt",
   };
   const outputWire: ParamCardWire = {
     entryId: "5::output::IMAGE",
-    targetIoKey: "5::output::IMAGE",
-    handleId: "images",
     grouped: false,
+    handleId: "images",
     kind: "hostToParam",
+    targetIoKey: "5::output::IMAGE",
   };
 
   it("输入侧：卡片圆点（source handle）→ 宿主行（target handle = ioKey）", () => {
@@ -144,7 +144,7 @@ describe("边的两端与 handle 取值", () => {
       expect(
         /* SAFETY: 类型断言已复核 */ (edge.style as { strokeDasharray?: string }).strokeDasharray,
       ).toBeUndefined();
-      expect(edge.style).toMatchObject({ strokeWidth: 2.5, opacity: 1 });
+      expect(edge.style).toMatchObject({ opacity: 1, strokeWidth: 2.5 });
     }
   });
 
@@ -165,7 +165,7 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
     sourceHandle: string;
     target: string;
     targetHandle: string;
-  }) => libraryConnectionAllowed(connection, { io, entries });
+  }) => libraryConnectionAllowed(connection, { entries, io });
 
   it("提示词口 → 提示词行：放行", () => {
     expect(
@@ -185,8 +185,8 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
     expect(
       allowed({
         source: LIB_NODE_PARAMS,
-        target: LIB_NODE_HOST,
         sourceHandle: "prompt",
+        target: LIB_NODE_HOST,
         targetHandle: "5::widget::aspect_ratio",
       }),
     ).toBe(false);
@@ -209,16 +209,16 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
     expect(
       allowed({
         source: LIB_NODE_HOST,
-        target: LIB_NODE_OUTPUTS,
         sourceHandle: "5::output::IMAGE",
+        target: LIB_NODE_OUTPUTS,
         targetHandle: "images",
       }),
     ).toBe(true);
     expect(
       allowed({
         source: LIB_NODE_OUTPUTS,
-        target: LIB_NODE_HOST,
         sourceHandle: "images",
+        target: LIB_NODE_HOST,
         targetHandle: "5::output::IMAGE",
       }),
     ).toBe(false);
@@ -228,24 +228,24 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
     expect(
       allowed({
         source: LIB_NODE_PARAMS,
-        target: LIB_NODE_PARAMS,
         sourceHandle: "prompt",
+        target: LIB_NODE_PARAMS,
         targetHandle: "prompt",
       }),
     ).toBe(false);
     expect(
       allowed({
         source: LIB_NODE_PARAMS,
-        target: LIB_NODE_HOST,
         sourceHandle: "",
+        target: LIB_NODE_HOST,
         targetHandle: "9::widget::positive_prompt",
       }),
     ).toBe(false);
     expect(
       allowed({
         source: LIB_NODE_PARAMS,
-        target: LIB_NODE_HOST,
         sourceHandle: "不存在的口",
+        target: LIB_NODE_HOST,
         targetHandle: "9::widget::positive_prompt",
       }),
     ).toBe(false);
@@ -261,14 +261,14 @@ describe("落点被拒的原因（libraryConnectionRefusal）", () => {
     sourceHandle: string;
     target: string;
     targetHandle: string;
-  }) => libraryConnectionRefusal(connection, { io, entries });
+  }) => libraryConnectionRefusal(connection, { entries, io });
 
   it("类型不匹配：说的是类型（契约口与端口分类要匹配）", () => {
     expect(
       why({
         source: LIB_NODE_PARAMS,
-        target: LIB_NODE_HOST,
         sourceHandle: "prompt",
+        target: LIB_NODE_HOST,
         targetHandle: "5::widget::aspect_ratio",
       }),
     ).toContain("类型不同");
@@ -278,16 +278,16 @@ describe("落点被拒的原因（libraryConnectionRefusal）", () => {
     expect(
       why({
         source: LIB_NODE_PARAMS,
-        target: LIB_NODE_PARAMS,
         sourceHandle: "prompt",
+        target: LIB_NODE_PARAMS,
         targetHandle: "prompt",
       }),
     ).toContain("跨两列");
     expect(
       why({
         source: LIB_NODE_OUTPUTS,
-        target: LIB_NODE_HOST,
         sourceHandle: "images",
+        target: LIB_NODE_HOST,
         targetHandle: "5::output::IMAGE",
       }),
     ).toContain("只能");
@@ -297,8 +297,8 @@ describe("落点被拒的原因（libraryConnectionRefusal）", () => {
     expect(
       why({
         source: LIB_NODE_PARAMS,
-        target: LIB_NODE_HOST,
         sourceHandle: "不存在的口",
+        target: LIB_NODE_HOST,
         targetHandle: "9::widget::positive_prompt",
       }),
     ).toContain("不在当前模式的契约里");
@@ -307,12 +307,12 @@ describe("落点被拒的原因（libraryConnectionRefusal）", () => {
   it("放行时没有原因 —— 与 libraryConnectionAllowed 是同一判据的两面", () => {
     const ok = {
       source: LIB_NODE_PARAMS,
-      target: LIB_NODE_HOST,
       sourceHandle: "prompt",
+      target: LIB_NODE_HOST,
       targetHandle: "9::widget::positive_prompt",
     };
     expect(why(ok)).toBeNull();
-    expect(libraryConnectionAllowed(ok, { io, entries })).toBe(true);
+    expect(libraryConnectionAllowed(ok, { entries, io })).toBe(true);
   });
 });
 
@@ -325,7 +325,7 @@ describe("handle id 就是条目 id（拖线落库的那条链）", () => {
       {},
       { entryId: "size-aspect", ioKey: "5::widget::aspect_ratio", mode: "T2I" },
     );
-    const cards = deriveLibraryParamCards({ io, paramMap: next, mode: "T2I" });
+    const cards = deriveLibraryParamCards({ io, mode: "T2I", paramMap: next });
     expect(cards.resolved["size-aspect"]).toBe("5::widget::aspect_ratio");
     expect(cards.wires.map((wire) => wire.handleId)).toEqual(["size-aspect"]);
   });
@@ -334,14 +334,14 @@ describe("handle id 就是条目 id（拖线落库的那条链）", () => {
 describe("三列布局", () => {
   it("左 → 宿主 → 右依次排开，列间留出走线的空间", () => {
     const at = layoutLibraryNodes({
-      paramsWidth: 220,
-      outputsWidth: 200,
-      hostWidth: 380,
       columnGap: 96,
-      originX: 0,
-      originY: 0,
       envelopeHeight: 720,
       fillHeight: 720,
+      hostWidth: 380,
+      originX: 0,
+      originY: 0,
+      outputsWidth: 200,
+      paramsWidth: 220,
     });
     /* `layoutLibraryNodes` 的返回类型是 `LibNodeLayout`（四个固定键，不是
      * 索引签名），`at[...]` 直接是坐标 —— 这里不再需要 `!`。 */
@@ -367,32 +367,32 @@ describe("三列布局", () => {
  *   · 只按内容算高 → 面板高时下方留白（用户报的就是这个）；
  *   · 只按内容算宽 → 面板窄时右列（对外输出参数）被挤出视野。 */
 const SIZING = {
-  paramsWidth: 220,
-  outputsWidth: 200,
-  hostWidth: 380,
   columnGap: 96,
-  originX: 0,
-  originY: 0,
   envelopeHeight: 720,
   fillHeight: 720,
+  hostWidth: 380,
+  originX: 0,
+  originY: 0,
+  outputsWidth: 200,
+  paramsWidth: 220,
 };
 
 describe("背景板尺寸：视口与内容取大", () => {
   it("面板比内容高时按视口给高（这才是不留白的那一条）", () => {
-    const size = libraryBackdropSize(SIZING, { width: 800, height: 1400 });
+    const size = libraryBackdropSize(SIZING, { height: 1400, width: 800 });
     expect(size.height).toBeGreaterThanOrEqual(1400);
     expect(size.width).toBeGreaterThanOrEqual(800);
   });
 
   it("面板比内容矮时按内容给（画不出比内容更小的画布，否则右列看不见）", () => {
     const content = libraryContentExtent(SIZING);
-    const size = libraryBackdropSize(SIZING, { width: 100, height: 100 });
+    const size = libraryBackdropSize(SIZING, { height: 100, width: 100 });
     expect(size.width).toBeGreaterThanOrEqual(content.width);
     expect(size.height).toBeGreaterThanOrEqual(content.height);
   });
 
   it("量不到视口（0 / 负数 / 首帧）时不退化成零尺寸", () => {
-    const size = libraryBackdropSize(SIZING, { width: 0, height: 0 });
+    const size = libraryBackdropSize(SIZING, { height: 0, width: 0 });
     expect(size.width).toBeGreaterThan(0);
     expect(size.height).toBeGreaterThan(0);
     expect(Number.isFinite(size.width)).toBe(true);

@@ -186,10 +186,10 @@ export function patchStepLogMeta(
   };
   touch(taskId, {
     logs: prev.logs,
+    nodeId: meta.nodeId ?? prev.nodeId,
+    status: meta.status ?? prev.status,
     validationErrors: prev.validationErrors,
     workflowName: meta.workflowName ?? prev.workflowName,
-    status: meta.status ?? prev.status,
-    nodeId: meta.nodeId ?? prev.nodeId,
   });
 }
 

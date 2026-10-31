@@ -23,9 +23,9 @@ type UseCanvasMenuArgs = {
 
 export function useCanvasMenu({
   menu,
+  screenToFlowPosition,
   setMenu,
   setNodes,
-  screenToFlowPosition,
 }: UseCanvasMenuArgs) {
   const onPaneContextMenu = useCallback(
     (e: MouseEvent | globalThis.MouseEvent) => {
@@ -46,10 +46,10 @@ export function useCanvasMenu({
       }
       setNodes((nds) =>
         placeCanvasNode({
+          data: defaultData(kind),
+          flow: { screenToFlowPosition },
           nodes: nds,
           point: menu,
-          flow: { screenToFlowPosition },
-          data: defaultData(kind),
         }),
       );
       setMenu(null);
@@ -64,10 +64,10 @@ export function useCanvasMenu({
     }
     setNodes((nds) =>
       placeCanvasNode({
+        data: defaultData("workflow"),
+        flow: { screenToFlowPosition },
         nodes: nds,
         point: menu,
-        flow: { screenToFlowPosition },
-        data: defaultData("workflow"),
       }),
     );
     setMenu(null);
@@ -75,5 +75,5 @@ export function useCanvasMenu({
 
   const onNodeClick: NodeMouseHandler = useCallback(() => setMenu(null), [setMenu]);
 
-  return { onPaneContextMenu, createNode, createTestWorkflowNode, onNodeClick };
+  return { createNode, createTestWorkflowNode, onNodeClick, onPaneContextMenu };
 }

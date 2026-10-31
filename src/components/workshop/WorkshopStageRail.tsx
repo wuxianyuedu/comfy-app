@@ -31,10 +31,10 @@ type WorkshopStageRailProps = {
 };
 
 export function WorkshopStageRail({
-  tab,
-  stageRatios,
-  viewContext,
   onTabChange,
+  stageRatios,
+  tab,
+  viewContext,
 }: WorkshopStageRailProps) {
   return (
     <nav

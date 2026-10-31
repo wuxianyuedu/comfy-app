@@ -72,17 +72,17 @@ function bodyOf(call: FetchCall | undefined): Record<string, unknown> {
 
 describe("fetchFileLogSlice —— 增量游标", () => {
   it("dev 档换成服务端的 source 名，offset=0 原样发出去（0 是游标不是缺值）", async () => {
-    const fetchMock = stubFetch({ body: { content: "", size: 0, offset: 0 } });
+    const fetchMock = stubFetch({ body: { content: "", offset: 0, size: 0 } });
     await expect(fetchFileLogSlice("dev", 0)).resolves.toEqual({
       content: "",
-      size: 0,
       offset: 0,
+      size: 0,
     });
     expect(urlOf(fetchMock.mock.calls[0])).toBe("/api/logs/current?source=dev-launcher&offset=0");
   });
 
   it("首轮没有 bootId 时整个键不发；带上时参与比对", async () => {
-    const fetchMock = stubFetch({ body: { content: "", size: 1, offset: 1 } });
+    const fetchMock = stubFetch({ body: { content: "", offset: 1, size: 1 } });
     await fetchFileLogSlice("app", 1);
     await fetchFileLogSlice("app", 1, "boot-7");
     expect(urlOf(fetchMock.mock.calls[0])).toBe("/api/logs/current?source=app&offset=1");
@@ -104,7 +104,7 @@ describe("fetchFileLogSlice —— 增量游标", () => {
     ];
     for (const [kind, expected] of cases) {
       const fetchMock = stubFetch({
-        body: { content: "", size: 0, offset: 0 },
+        body: { content: "", offset: 0, size: 0 },
       });
       await fetchFileLogSlice(kind, 0);
       expect(urlOf(fetchMock.mock.calls[0])).toContain(`source=${expected}`);
@@ -112,7 +112,7 @@ describe("fetchFileLogSlice —— 增量游标", () => {
   });
 
   it("HTTP 不成功 → null（这一轮面板什么都不改）", async () => {
-    stubFetch({ ok: false, body: { error: "missing" } });
+    stubFetch({ body: { error: "missing" }, ok: false });
     await expect(fetchFileLogSlice("app", 40)).resolves.toBeNull();
   });
 
@@ -128,22 +128,22 @@ describe("fetchFileLogSlice —— 增量游标", () => {
     stubFetch({
       body: {
         content: "x",
-        size: 1,
+        mismatch: true,
         offset: 0,
         sessionStart: null,
-        mismatch: true,
+        size: 1,
       },
     });
     await expect(fetchFileLogSlice("app", 0)).resolves.toMatchObject({
-      sessionStart: null,
       mismatch: true,
+      sessionStart: null,
     });
   });
 });
 
 describe("fetchLogSessions —— 会话视图", () => {
   it("缺省会话时只发 source；指定会话时带上 session", async () => {
-    const fetchMock = stubFetch({ body: { sessions: [], content: "" } });
+    const fetchMock = stubFetch({ body: { content: "", sessions: [] } });
     await fetchLogSessions("comfyui-runtime");
     await fetchLogSessions("comfyui-runtime", null);
     await fetchLogSessions("ollama-runtime", "s-2");
@@ -168,10 +168,10 @@ describe("fetchLogSessions —— 会话视图", () => {
 describe("saveLogExport —— 导出到本机", () => {
   it("POST 带上 label 与正文，并把服务端写下的路径原样回传", async () => {
     const payload = {
+      bytes: 12,
       ok: true,
       path: "C:\\log\\exports\\a.log",
       relativePath: "exports/a.log",
-      bytes: 12,
     };
     const fetchMock = stubFetch({ body: payload });
     await expect(saveLogExport("面板", "正文")).resolves.toEqual(payload);
@@ -181,22 +181,22 @@ describe("saveLogExport —— 导出到本机", () => {
     expect(call?.[1]?.headers).toMatchObject({
       "Content-Type": "application/json",
     });
-    expect(bodyOf(call)).toEqual({ label: "面板", content: "正文" });
+    expect(bodyOf(call)).toEqual({ content: "正文", label: "面板" });
   });
 
   it("网络失败收成 { ok:false, error: 原因 }，不抛（面板还要继续用）", async () => {
     stubFetch({ throws: new Error("ENOSPC 磁盘满") });
     await expect(saveLogExport("面板", "正文")).resolves.toEqual({
-      ok: false,
       error: "ENOSPC 磁盘满",
+      ok: false,
     });
   });
 
   it("拒绝的不是 Error 时给一个可读的兜底原因，而不是 undefined", async () => {
     stubFetch({ throws: "boom" });
     await expect(saveLogExport("面板", "正文")).resolves.toEqual({
-      ok: false,
       error: "network",
+      ok: false,
     });
   });
 
@@ -218,10 +218,10 @@ describe("saveDiagnosticsPackage —— 打包整份诊断现场", () => {
    * 所以「不该发 body、也不该带 Content-Type」是要钉住的那一半。 */
   it("POST 到诊断端点，不带请求体（现场由服务端自己收）", async () => {
     const payload = {
+      bytes: 4096,
       ok: true,
       path: "C:\\log\\exports\\diagnostics.zip",
       relativePath: "exports/diagnostics.zip",
-      bytes: 4096,
     };
     const fetchMock = stubFetch({ body: payload });
     await expect(saveDiagnosticsPackage()).resolves.toEqual(payload);
@@ -234,16 +234,16 @@ describe("saveDiagnosticsPackage —— 打包整份诊断现场", () => {
   it("网络失败收成 { ok:false, error }，与导出同一档（面板显示「打包失败」而不卡住）", async () => {
     stubFetch({ throws: new Error("ENOSPC 磁盘满") });
     await expect(saveDiagnosticsPackage()).resolves.toEqual({
-      ok: false,
       error: "ENOSPC 磁盘满",
+      ok: false,
     });
   });
 
   it("拒绝的不是 Error 时给兜底原因", async () => {
     stubFetch({ throws: "boom" });
     await expect(saveDiagnosticsPackage()).resolves.toEqual({
-      ok: false,
       error: "network",
+      ok: false,
     });
   });
 
@@ -266,10 +266,10 @@ describe("postAppRuntimeLog —— 补记必须绝不影响主流程", () => {
     expect(urlOf(call)).toBe("/api/logs/app-runtime");
     expect(methodOf(call)).toBe("POST");
     expect(bodyOf(call)).toEqual({
-      ns: "settings",
+      fields: { key: "x" },
       level: "warn",
       msg: "配置读不到",
-      fields: { key: "x" },
+      ns: "settings",
     });
   });
 
@@ -277,10 +277,10 @@ describe("postAppRuntimeLog —— 补记必须绝不影响主流程", () => {
     const fetchMock = stubFetch({ body: { ok: true } });
     await postAppRuntimeLog("app", "info", "一条");
     expect(bodyOf(fetchMock.mock.calls[0])).toEqual({
-      ns: "app",
+      fields: undefined,
       level: "info",
       msg: "一条",
-      fields: undefined,
+      ns: "app",
     });
   });
 

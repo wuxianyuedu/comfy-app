@@ -27,7 +27,7 @@ export function useMiniMapJump(rf: ReactFlowInstance) {
   return useCallback(
     (_event: React.MouseEvent, position: XYPosition) => {
       const { zoom } = rf.getViewport();
-      void rf.setCenter(position.x, position.y, { zoom, duration: 350 });
+      void rf.setCenter(position.x, position.y, { duration: 350, zoom });
     },
     [rf],
   );

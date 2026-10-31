@@ -56,14 +56,14 @@ export const SETTINGS_SCROLL_ORDER: Array<Section> = TREE_GROUPS.flatMap((group)
 
 /** 分区 → 一句话说明（导航行右侧那句）。 */
 const SECTION_SUMMARY: Record<Section, string> = {
-  llmLocal: "本机 Ollama 的连接、模型与按任务的温度",
-  llmRemote: "OpenAI 兼容接口的模型清单，按用途分组管理",
-  comfyui: "出图后端装在哪、端口与实例目录（启动与日志在侧栏「ComfyUI」页）",
-  database: "本地 SQLite 的可视化浏览与运行 SQL",
-  backup: "库的快照与恢复，换文件发生在下次启动",
   appearance: "主题、圆角与标题字阶",
   appUpdate: "检测并安装应用新版本",
+  backup: "库的快照与恢复，换文件发生在下次启动",
+  comfyui: "出图后端装在哪、端口与实例目录（启动与日志在侧栏「ComfyUI」页）",
+  database: "本地 SQLite 的可视化浏览与运行 SQL",
   exit: "退出应用时后台服务是保活还是连带关闭",
+  llmLocal: "本机 Ollama 的连接、模型与按任务的温度",
+  llmRemote: "OpenAI 兼容接口的模型清单，按用途分组管理",
   logs: "日志面板里显示哪几类来源",
 };
 

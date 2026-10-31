@@ -109,8 +109,8 @@ function readPgidSync(pid: number): number | null {
   try {
     // 同步路径用 execFileSync 直取：调用方（收尾）要立刻拿到结论。
     const out = execFileSync("ps", ["-o", "pgid=", "-p", String(pid)], {
-      timeout: 2000,
       encoding: "utf8",
+      timeout: 2000,
     });
     const pgid = Number.parseInt(String(out).trim().split(/\s+/)[0] ?? "", 10);
     return Number.isInteger(pgid) && pgid > 0 ? pgid : null;
@@ -152,7 +152,7 @@ function planPosixKill(input: {
   pgid: number | null;
   pid: number;
 }): PosixKillPlan {
-  const { pid, pgid, ownPgid, detached, force } = input;
+  const { detached, force, ownPgid, pgid, pid } = input;
   const sig: PosixSignal = force ? "SIGKILL" : "SIGTERM";
   const sharesCallerGroup = pgid !== null && (ownPgid === null || ownPgid === pgid);
 
@@ -166,22 +166,22 @@ function planPosixKill(input: {
   // 1) 向 OS 问「这个 pid 属于哪个进程组」——不猜。
   if (pgid !== null && !sharesCallerGroup) {
     return {
-      sig,
-      primary: { target: -pgid, via: `kill -${sig} -${pgid}（进程组）` },
       fallback,
+      primary: { target: -pgid, via: `kill -${sig} -${pgid}（进程组）` },
+      sig,
     };
   }
   // 2) 拿不到 PGID 时，若调用方声明了 detached（= 它认为 pid 就是组长），仍试一次
   //    `kill(-pid)`：这不是主判据，只是 ps 不可用时的补救。同组时跳过（会误伤自己）。
   if (pgid === null && detached && !sharesCallerGroup) {
     return {
-      sig,
-      primary: { target: -pid, via: `kill -${sig} -${pid}（进程组·未探测）` },
       fallback,
+      primary: { target: -pid, via: `kill -${sig} -${pid}（进程组·未探测）` },
+      sig,
     };
   }
   // 3) 不冒组的风险：直接单杀 leader（拿不到组 / 与调用者同组时不静默失败）。
-  return { sig, primary: null, fallback };
+  return { fallback, primary: null, sig };
 }
 
 /** POSIX 发信号：按 `planPosixKill` 的结论执行 —— 优先进程组，被拒再单杀。
@@ -194,11 +194,11 @@ async function killPosix(
   ownPgid: number | null,
 ): Promise<{ ok: boolean; via: string }> {
   const plan = planPosixKill({
-    pid,
-    pgid: await readPgid(pid),
-    ownPgid,
     detached,
     force,
+    ownPgid,
+    pgid: await readPgid(pid),
+    pid,
   });
   return executePosixPlan(plan);
 }
@@ -337,9 +337,9 @@ export async function killProcessTree(
  */
 export async function killProcessTreeWith(
   opts: KillProcessTreeOptions,
-  { windows = isWindowsPlatform(), image = "" }: { image?: string; windows?: boolean },
+  { image = "", windows = isWindowsPlatform() }: { image?: string; windows?: boolean },
 ): Promise<KillProcessTreeResult> {
-  const { pid, detached = false, force = false, mode = "tree", wait = false } = opts;
+  const { detached = false, force = false, mode = "tree", pid, wait = false } = opts;
   if (!pid || pid <= 0) {
     return { ok: false, via: "无有效 PID（跳过）" };
   }
@@ -372,7 +372,7 @@ export async function killProcessTreeWith(
  * （如 spawn 之后立刻失败要清理）。
  */
 export function killProcessTreeSync(opts: KillProcessTreeOptions): KillProcessTreeResult {
-  const { pid, detached = false, force = false, mode = "tree" } = opts;
+  const { detached = false, force = false, mode = "tree", pid } = opts;
   if (!pid || pid <= 0) {
     return { ok: false, via: "无有效 PID（跳过）" };
   }
@@ -397,11 +397,11 @@ export function killProcessTreeSync(opts: KillProcessTreeOptions): KillProcessTr
    * 收尾路径要立刻拿到结论，不能等一个 promise。 */
   return executePosixPlan(
     planPosixKill({
-      pid,
-      pgid: readPgidSync(pid),
-      ownPgid: readPgidSync(process.pid),
       detached,
       force,
+      ownPgid: readPgidSync(process.pid),
+      pgid: readPgidSync(pid),
+      pid,
     }),
   );
 }

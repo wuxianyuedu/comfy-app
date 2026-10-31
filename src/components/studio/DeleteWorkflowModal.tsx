@@ -20,10 +20,10 @@ type DeleteWorkflowModalProps = {
 };
 
 export function DeleteWorkflowModal({
-  pendingDelete,
   deleting,
-  onConfirm,
   onCancel,
+  onConfirm,
+  pendingDelete,
 }: DeleteWorkflowModalProps) {
   return (
     <ConfirmDialog

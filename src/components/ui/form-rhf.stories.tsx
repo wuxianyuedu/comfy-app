@@ -181,7 +181,11 @@ function ServerMessageSample() {
 }
 
 const meta = {
-  title: "UI/FormRHF",
+  args: { defaultName: "角色一致性", defaultPort: "3311" },
+  argTypes: {
+    defaultName: { control: { type: "text" }, description: "名称字段初值" },
+    defaultPort: { control: { type: "text" }, description: "端口字段初值" },
+  },
   component: RhfFormSample,
   parameters: {
     docs: {
@@ -191,11 +195,7 @@ const meta = {
       },
     },
   },
-  args: { defaultPort: "3311", defaultName: "角色一致性" },
-  argTypes: {
-    defaultPort: { control: { type: "text" }, description: "端口字段初值" },
-    defaultName: { control: { type: "text" }, description: "名称字段初值" },
-  },
+  title: "UI/FormRHF",
 } satisfies Meta<StoryArgs>;
 
 export default meta;

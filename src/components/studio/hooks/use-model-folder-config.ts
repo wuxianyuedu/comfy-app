@@ -120,12 +120,12 @@ export function useModelFolderConfig(): ModelFolderConfigController {
       /* 反馈通道是这块行内错误条（`setErr`），成功静默（列表刷新即结果）。
        * 出口负责「失败文案走 `errorMessage`」这一半（规范 16 §16.2.4.30）。 */
       await runAsyncAction(fn, {
+        failureText: "网络错误",
         report: (kind, detail) => {
           if (kind === "err") {
             setErr(detail);
           }
         },
-        failureText: "网络错误",
       });
       await load();
     },
@@ -133,11 +133,11 @@ export function useModelFolderConfig(): ModelFolderConfigController {
   );
 
   const toggle = useCallback(
-    (folder: string, enabled: boolean) => runMutate(() => saveMut.mutateAsync({ folder, enabled })),
+    (folder: string, enabled: boolean) => runMutate(() => saveMut.mutateAsync({ enabled, folder })),
     [runMutate, saveMut],
   );
   const add = useCallback(
-    (folder: string) => runMutate(() => saveMut.mutateAsync({ folder, enabled: true })),
+    (folder: string) => runMutate(() => saveMut.mutateAsync({ enabled: true, folder })),
     [runMutate, saveMut],
   );
   const remove = useCallback(
@@ -149,35 +149,35 @@ export function useModelFolderConfig(): ModelFolderConfigController {
     setErr(null);
     await scanBusy.run(() =>
       runAsyncAction(() => syncMut.mutateAsync(), {
+        failureText: "扫描失败",
         report: (kind, detail) => {
           if (kind === "err") {
             setErr(detail);
           }
         },
-        failureText: "扫描失败",
       }),
     );
     await load();
   }, [load, scanBusy, syncMut]);
 
-  const { enabled, available } = useMemo(() => splitFolders(folders, q), [folders, q]);
+  const { available, enabled } = useMemo(() => splitFolders(folders, q), [folders, q]);
 
   return {
-    folders,
-    comfyReachable,
-    loading,
-    scanning: scanBusy.busy,
-    err,
-    q,
-    setQ,
-    onlyEnabled,
-    setOnlyEnabled,
-    enabledRows: enabled,
-    availableRows: available,
-    totalCount: folders.length,
-    toggle,
     add,
+    availableRows: available,
+    comfyReachable,
+    enabledRows: enabled,
+    err,
+    folders,
+    loading,
+    onlyEnabled,
+    q,
     remove,
     rescan,
+    scanning: scanBusy.busy,
+    setOnlyEnabled,
+    setQ,
+    toggle,
+    totalCount: folders.length,
   };
 }

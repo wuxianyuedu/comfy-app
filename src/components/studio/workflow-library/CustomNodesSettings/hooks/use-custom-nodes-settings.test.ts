@@ -12,8 +12,8 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("~/config/custom-nodes", () => ({
-  refreshCustomNodes: vi.fn().mockResolvedValue(undefined),
   getCustomNodesManifest: vi.fn().mockResolvedValue(null),
+  refreshCustomNodes: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { getCustomNodesManifest, refreshCustomNodes } from "~/config/custom-nodes";
@@ -26,15 +26,15 @@ const mockedRefresh = vi.mocked(refreshCustomNodes);
 function ndjson(events: Array<unknown>): Response {
   const body = events.map((e) => JSON.stringify(e)).join("\n") + "\n";
   return new Response(body, {
-    status: 200,
     headers: { "content-type": "application/x-ndjson" },
+    status: 200,
   });
 }
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
-    status,
     headers: { "content-type": "application/json" },
+    status,
   });
 }
 
@@ -44,14 +44,14 @@ function settingsBlob(over: Record<string, unknown> = {}) {
   // 字段覆盖成调用方传的片段（漏掉 localWorkflowPaths 等必需字段）。
   const { settings, ...rest } = over;
   return jsonResponse({
-    summary: null,
-    lastReport: null,
-    discoveredByParent: {},
     byPath: {},
+    discoveredByParent: {},
+    lastReport: null,
+    summary: null,
     ...rest,
     settings: {
-      paths: ["D:/comfy/custom_nodes"],
       localWorkflowPaths: [],
+      paths: ["D:/comfy/custom_nodes"],
       .../* SAFETY: 类型断言已复核 */ (settings as object | undefined),
     },
   });
@@ -158,8 +158,8 @@ describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
   it("扫描流里发 error 事件 → saveErr 显示「扫描失败：<原因>」", async () => {
     fetchMock.mockResolvedValue(
       ndjson([
-        { type: "discover_start", parents: ["D:/x"] },
-        { type: "error", message: "目录不存在" },
+        { parents: ["D:/x"], type: "discover_start" },
+        { message: "目录不存在", type: "error" },
       ]),
     );
     const { result } = renderHook(() => useCustomNodesSettings());
@@ -206,9 +206,9 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
       const isParse = (init?.method ?? "GET").toUpperCase() === "POST";
       if (isParse) {
         return ndjson([
-          { type: "log", level: "info", msg: "开始解析…" },
-          { type: "log", level: "info", msg: "✔ 解析完成" },
-          { type: "done", ok: true, report },
+          { level: "info", msg: "开始解析…", type: "log" },
+          { level: "info", msg: "✔ 解析完成", type: "log" },
+          { ok: true, report, type: "done" },
         ]);
       }
       return settingsBlob({ lastReport: report });
@@ -253,7 +253,7 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
     const serverReport = { ok: true, packages: [{ from: "server" }] };
     fetchMock.mockImplementation(async (_input, init?: RequestInit) =>
       (init?.method ?? "GET").toUpperCase() === "POST"
-        ? ndjson([{ type: "done", ok: true, report: streamReport }])
+        ? ndjson([{ ok: true, report: streamReport, type: "done" }])
         : settingsBlob({ lastReport: serverReport }),
     );
 
@@ -292,7 +292,7 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
   it("单包解析：perPkgParsing 标记该包为进行中，结束后清除", async () => {
     fetchMock.mockImplementation(async (_i, init) =>
       (init?.method ?? "GET").toUpperCase() === "POST"
-        ? ndjson([{ type: "done", ok: true, report: { ok: true } }])
+        ? ndjson([{ ok: true, report: { ok: true }, type: "done" }])
         : settingsBlob(),
     );
 
@@ -325,8 +325,8 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
   it("解析流缺 body（服务端未流式返回）→ 明确报错而不是挂住", async () => {
     const noBody = new Response(null, {
-      status: 200,
       headers: { "content-type": "application/x-ndjson" },
+      status: 200,
     });
     fetchMock.mockImplementation(async (_i, init) =>
       (init?.method ?? "GET").toUpperCase() === "POST" ? noBody : settingsBlob(),
@@ -349,40 +349,40 @@ describe("useCustomNodesSettings — 派生数据（parentBlocks / 合计）", (
   it("按父目录分组，每组的计数来自各子包的行状态", async () => {
     fetchMock.mockResolvedValue(
       settingsBlob({
-        settings: { paths: ["D:/p"] },
+        byPath: {
+          "d:/p/a": {
+            contentHash: "h1",
+            errors: [],
+            name: "a",
+            nodeCount: 3,
+            nodeTypes: [],
+            path: "D:/p/a",
+            status: "ok",
+          },
+        },
         discoveredByParent: {
           "D:/p": [
             {
-              path: "D:/p/a",
-              name: "a",
-              parent: "D:/p",
-              exists: true,
-              packageFileCount: 1,
               contentHash: "h1",
+              exists: true,
+              name: "a",
+              packageFileCount: 1,
+              parent: "D:/p",
+              path: "D:/p/a",
               status: "ok",
             },
             {
-              path: "D:/p/b",
-              name: "b",
-              parent: "D:/p",
-              exists: true,
-              packageFileCount: 1,
               contentHash: "h2",
+              exists: true,
+              name: "b",
+              packageFileCount: 1,
+              parent: "D:/p",
+              path: "D:/p/b",
               status: "ok",
             },
           ],
         },
-        byPath: {
-          "d:/p/a": {
-            name: "a",
-            path: "D:/p/a",
-            status: "ok",
-            nodeCount: 3,
-            nodeTypes: [],
-            errors: [],
-            contentHash: "h1",
-          },
-        },
+        settings: { paths: ["D:/p"] },
       }),
     );
 
@@ -401,51 +401,51 @@ describe("useCustomNodesSettings — 派生数据（parentBlocks / 合计）", (
   it("合计跨父目录累加 loaded / outdated / unimported", async () => {
     fetchMock.mockResolvedValue(
       settingsBlob({
-        settings: { paths: ["D:/p1", "D:/p2"] },
+        byPath: {
+          "d:/p1/a": {
+            contentHash: "h",
+            errors: [],
+            name: "a",
+            nodeCount: 1,
+            nodeTypes: [],
+            path: "D:/p1/a",
+            status: "ok",
+          },
+          "d:/p2/b": {
+            contentHash: "OLD",
+            errors: [],
+            name: "b",
+            nodeCount: 1,
+            nodeTypes: [],
+            path: "D:/p2/b",
+            status: "ok",
+          },
+        },
         discoveredByParent: {
           "D:/p1": [
             {
-              path: "D:/p1/a",
-              name: "a",
-              parent: "D:/p1",
-              exists: true,
-              packageFileCount: 1,
               contentHash: "h",
+              exists: true,
+              name: "a",
+              packageFileCount: 1,
+              parent: "D:/p1",
+              path: "D:/p1/a",
               status: "ok",
             },
           ],
           "D:/p2": [
             {
-              path: "D:/p2/b",
-              name: "b",
-              parent: "D:/p2",
-              exists: true,
-              packageFileCount: 1,
               contentHash: "h2",
+              exists: true,
+              name: "b",
+              packageFileCount: 1,
+              parent: "D:/p2",
+              path: "D:/p2/b",
               status: "ok",
             },
           ],
         },
-        byPath: {
-          "d:/p1/a": {
-            name: "a",
-            path: "D:/p1/a",
-            status: "ok",
-            nodeCount: 1,
-            nodeTypes: [],
-            errors: [],
-            contentHash: "h",
-          },
-          "d:/p2/b": {
-            name: "b",
-            path: "D:/p2/b",
-            status: "ok",
-            nodeCount: 1,
-            nodeTypes: [],
-            errors: [],
-            contentHash: "OLD",
-          },
-        },
+        settings: { paths: ["D:/p1", "D:/p2"] },
       }),
     );
 

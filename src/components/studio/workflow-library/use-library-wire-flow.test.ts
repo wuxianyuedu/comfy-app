@@ -25,15 +25,15 @@ import {
 
 const inputWire = /* SAFETY: 类型断言已复核 */ {
   entryId: "size-width",
+  grouped: false,
   handleId: "size-width",
   targetIoKey: "node.width",
-  grouped: false,
 } as const;
 const outputWire = /* SAFETY: 类型断言已复核 */ {
   entryId: "image",
+  grouped: false,
   handleId: "image",
   targetIoKey: "node.image",
-  grouped: false,
 } as const;
 
 describe("deriveLibraryEdges — 单条线可单独选中 / 删除", () => {
@@ -64,15 +64,15 @@ describe("deriveLibraryEdges — 单条线可单独选中 / 删除", () => {
 
     const inOwner = libraryEdgeOwner(inEdge.id);
     expect(inOwner).toEqual({
-      namespace: "param",
       entryId: "size-width",
       handleId: "size-width",
+      namespace: "param",
     });
     const outOwner = libraryEdgeOwner(outEdge.id);
     expect(outOwner).toEqual({
-      namespace: "output",
       entryId: "image",
       handleId: "image",
+      namespace: "output",
     });
   });
 
@@ -124,23 +124,23 @@ describe("buildLibraryNodes — 首帧尺寸的声明方式", () => {
 
 describe("handleInventoryOf — 什么时候请 React Flow 重算落点", () => {
   const io: WorkflowIOMap = {
-    "9::widget::positive_prompt": {
-      direction: "input",
-      kind: "widget",
-      nodeId: "9",
-      name: "positive_prompt",
-      type: "STRING",
-      defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
-    },
     "5::output::IMAGE": {
       direction: "output",
       kind: "output",
-      nodeId: "5",
       name: "images",
+      nodeId: "5",
       type: "IMAGE",
     },
+    "9::widget::positive_prompt": {
+      defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
+      direction: "input",
+      kind: "widget",
+      name: "positive_prompt",
+      nodeId: "9",
+      type: "STRING",
+    },
   };
-  const cards = () => deriveLibraryParamCards({ io, paramMap: null, mode: "T2I" });
+  const cards = () => deriveLibraryParamCards({ io, mode: "T2I", paramMap: null });
   const outputs = () => deriveLibraryOutputCards({ io, mode: "T2I" });
 
   it("同一批口的新对象（纯重渲染）：清单不变，不发重算请求", () => {
@@ -157,8 +157,8 @@ describe("handleInventoryOf — 什么时候请 React Flow 重算落点", () => 
   it("IO 换了行（哪怕行数一样）：清单变", () => {
     /* 只数行数是不够的：工作流改版后同数量、不同键的输入行是另一批端点。 */
     const renamed: WorkflowIOMap = {
-      "9::widget::negative_prompt": io["9::widget::positive_prompt"]!,
       "5::output::IMAGE": io["5::output::IMAGE"]!,
+      "9::widget::negative_prompt": io["9::widget::positive_prompt"]!,
     };
     const base = handleInventoryOf(cards(), outputs(), io, true);
     expect(handleInventoryOf(cards(), outputs(), renamed, true)).not.toBe(base);

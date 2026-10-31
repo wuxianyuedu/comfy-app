@@ -79,15 +79,15 @@ export type FormFieldA11y = {
 };
 
 export function FormField({
-  label,
-  id,
-  error,
-  hint,
-  required,
   children,
   className,
-  labelClassName,
+  error,
   errorClassName,
+  hint,
+  id,
+  label,
+  labelClassName,
+  required,
 }: {
   /**
    * 控件。给函数时收到 `{ id, aria-invalid, aria-describedby }`。

@@ -95,10 +95,10 @@ describe("pino 脱敏契约（redact 生效）", () => {
     const log = createPinoLogger({ destination: dest });
     log.warn(
       {
-        userId: "u-1",
+        apiKey: "sample-key-明文",
         password: "sample-password-明文",
         token: "sample-token-明文",
-        apiKey: "sample-key-明文",
+        userId: "u-1",
       },
       "audit",
     );
@@ -120,8 +120,8 @@ describe("pino 脱敏契约（redact 生效）", () => {
     log.info(
       {
         client: {
-          secret: "sample-nested-明文",
           apiSecret: "sample-api-value-明文",
+          secret: "sample-nested-明文",
         },
         req: {
           headers: {
@@ -141,8 +141,8 @@ describe("pino 脱敏契约（redact 生效）", () => {
     expect(raw).not.toContain("sid=sample-session");
     const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Record<string, unknown>;
     expect(parsed.client).toEqual({
-      secret: "[Redacted]",
       apiSecret: "[Redacted]",
+      secret: "[Redacted]",
     });
     expect(parsed.req).toEqual({
       headers: { authorization: "[Redacted]", cookie: "[Redacted]" },
@@ -182,7 +182,7 @@ describe("日志不落 PII / prompt 原文（§11.5 埋点纪律扩展到日志�
   it("嵌套 prompt / negativePrompt 同样被脱敏", async () => {
     const { dest, lines } = capture();
     const log = createPinoLogger({ destination: dest });
-    log.info({ request: { prompt: "negative 明文", negativePrompt: "n-明文" } }, "gen");
+    log.info({ request: { negativePrompt: "n-明文", prompt: "negative 明文" } }, "gen");
     await flush();
 
     const raw = lines()[0]!;
@@ -241,7 +241,7 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
   });
 
   afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
+    rmSync(tmpDir, { force: true, recursive: true });
   });
 
   function readMirror(): string {
@@ -284,7 +284,7 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
   it("结构化埋点的 event 名同时充当命名空间", async () => {
     const { dest } = capture();
     const log = createPinoLogger({ destination: dest, ...makeMirror() });
-    log.error({ event: "audit_write_failed", err: new Error("disk full") }, "audit");
+    log.error({ err: new Error("disk full"), event: "audit_write_failed" }, "audit");
     await flush();
 
     const added = readMirror();
@@ -296,7 +296,7 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
   it("纯对象、无 msg/err 时给出可读文案（键名清单）且不整包倒出字段值", async () => {
     const { dest } = capture();
     const log = createPinoLogger({ destination: dest, ...makeMirror() });
-    log.error({ ns: "comfyui", detail: "启动超时" });
+    log.error({ detail: "启动超时", ns: "comfyui" });
     await flush();
 
     const added = readMirror();

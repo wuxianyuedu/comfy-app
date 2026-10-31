@@ -81,8 +81,8 @@ export function deriveStaleStoreNotification(
   ].join("\n");
 
   return {
-    title: "页面还跑着上一版代码，建议重载",
-    summary: "检测到新代码生效后仍有旧组件实例，重载一次即可恢复到最新版本。",
     body,
+    summary: "检测到新代码生效后仍有旧组件实例，重载一次即可恢复到最新版本。",
+    title: "页面还跑着上一版代码，建议重载",
   };
 }

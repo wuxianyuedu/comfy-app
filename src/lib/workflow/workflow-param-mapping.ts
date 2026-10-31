@@ -123,8 +123,8 @@ function buildContractEntries(
   /* 口子的来源：调用方给的**生效契约**优先；没给才回落内置默认。两边都只提供
    * 「有哪些口、按什么顺序」，落点仍由映射表决定。 */
   const defs: Array<{ cls: ParamClass | null; id: string }> = contractIds
-    ? contractIds.map((id) => ({ id, cls: exposedClassOf(id) }))
-    : exposedParamsForMode(mode).map((def) => ({ id: def.id, cls: def.cls }));
+    ? contractIds.map((id) => ({ cls: exposedClassOf(id), id }))
+    : exposedParamsForMode(mode).map((def) => ({ cls: def.cls, id: def.id }));
 
   const out: Array<ParamEntry> = [];
   for (const def of defs) {
@@ -151,11 +151,11 @@ function buildContractEntries(
         /* 卡片挂载 / 连线需要宿主节点 id：取候选端口所属的节点（首个候选）。
          * 契约条目跨节点的情况不存在（一个口子落到一个节点的某一行），首个候选
          * 即最近可用近似。 */
-        hostNodeId: nodeIdOfIoKey(pins[0]?.ioKey ?? ""),
-        nodeTitle: "",
         cls,
+        hostNodeId: nodeIdOfIoKey(pins[0]?.ioKey ?? ""),
         label:
           override ?? (def.cls === "size" ? sizeSubLabel(cls) : exposedParamDisplayLabel(def.id)),
+        nodeTitle: "",
         pins,
       });
     }
@@ -175,9 +175,9 @@ function classifyPins(io: WorkflowIOMap | null | undefined): Map<ParamClass, Par
    *  作者连哪一行、那一行就是它的落点。按名字筛候选等于替作者认定「这个口是
    *  宽度 / 这个口是正向」——那正是要消掉的那层猜测。 */
   const pools: Record<PinFamily, ParamEntry["pins"]> = {
-    text: [],
     image: [],
     number: [],
+    text: [],
   };
   for (const [ioKey, raw] of Object.entries(io ?? {})) {
     const entry = /* SAFETY: 类型断言已复核 */ raw as WorkflowIOEntry | undefined;
@@ -192,10 +192,10 @@ function classifyPins(io: WorkflowIOMap | null | undefined): Map<ParamClass, Par
       continue;
     }
     pools[family].push({
+      defaultValue: entry.defaultValue,
       ioKey,
       name: entry.name,
       type: entry.type ?? "*",
-      defaultValue: entry.defaultValue,
     });
   }
   const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
@@ -347,7 +347,7 @@ const LEGACY_SIZE_ENTRY_ID = "size";
  *  畸形数据（数字 / 数组 / 非对象模式表）同样丢弃——画布容不下脏数据。 */
 export function parseParamMapping(paramMap: unknown): ParamMapping {
   const manualByMode: Record<string, Record<string, string | null>> = {};
-  const out: ParamMapping = { manualByMode, labels: {} };
+  const out: ParamMapping = { labels: {}, manualByMode };
   if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) {
     return out;
   }
@@ -451,7 +451,7 @@ export function clearModeWiring(
   if (mode) {
     delete manualByMode[mode];
   }
-  return { manualByMode, labels: { ...(mapping?.labels ?? {}) } };
+  return { labels: { ...(mapping?.labels ?? {}) }, manualByMode };
 }
 
 /** 映射落点（`resolved` 的值，= ioKey）→ 画布渲染侧那条端口的 **React Flow
@@ -608,7 +608,7 @@ function sizeValueForPin(
     }
     case "size-multiple": {
       /* 倍数：由宽高反推能整除两侧的最大候选（与工坊 `sizeSpecMultiple` 同源）。 */
-      const multiple = alignMultipleOf({ width, height });
+      const multiple = alignMultipleOf({ height, width });
       const options = Array.isArray(raw.options) ? raw.options : [];
       if (options.length === 0) {
         return multiple;
@@ -639,7 +639,7 @@ export function applyParamMapping(args: {
   mode?: string | null;
   values: Record<string, unknown>;
 }): { inputs: Array<MappedInput>; unmatched: Array<string> } {
-  const { io, entries, mapping, values, mode } = args;
+  const { entries, io, mapping, mode, values } = args;
   const resolved = resolveMapping(entries, io, mapping, mode);
   const inputs: Array<MappedInput> = [];
   const unmatched: Array<string> = [];
@@ -654,7 +654,7 @@ export function applyParamMapping(args: {
       return;
     }
     seen.add(ioKey);
-    inputs.push({ nodeId: runtimeNodeId(raw), name: raw.name, value });
+    inputs.push({ name: raw.name, nodeId: runtimeNodeId(raw), value });
   };
 
   /* ①② 同一趟遍历：先看「用户给了值的口」落到哪，再给**没落上的口**按工作流默认值

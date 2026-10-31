@@ -49,19 +49,19 @@ function productionCharacterToLibrary(pc: ProductionCharacter): {
   temperament: string;
 } {
   return {
-    name: pc.name ?? "",
     ageGender: pc.ageGender ?? "",
     appearance: pc.appearance ?? "",
     costume: pc.costume ?? "",
-    personality: pc.personality ?? "",
-    temperament: pc.temperament ?? "",
-    styleTags: pc.styleTags ?? [],
-    skillSlug: pc.skillSlug ?? null,
-    positivePrompt: pc.positivePrompt ?? "",
+    name: pc.name ?? "",
     negativePrompt: pc.negativePrompt ?? "",
     params: pc.params ?? {},
-    portraitUrl: pc.portraitUrl ?? null,
+    personality: pc.personality ?? "",
     portraits: pc.portraits ?? [],
+    portraitUrl: pc.portraitUrl ?? null,
+    positivePrompt: pc.positivePrompt ?? "",
+    skillSlug: pc.skillSlug ?? null,
+    styleTags: pc.styleTags ?? [],
+    temperament: pc.temperament ?? "",
   };
 }
 
@@ -83,20 +83,20 @@ function libraryCharacterToProduction(c: {
   temperament: string;
 }): Record<string, unknown> {
   return {
-    id: c.id,
-    name: c.name,
     ageGender: c.ageGender,
     appearance: c.appearance,
     costume: c.costume,
+    id: c.id,
+    name: c.name,
+    negativePrompt: c.negativePrompt,
+    params: c.params ?? {},
     personality: c.personality,
-    temperament: c.temperament,
-    styleTags: c.styleTags,
-    skillSlug: c.skillSlug ?? undefined,
     portraits: c.portraits,
     portraitUrl: c.portraitUrl ?? undefined,
-    params: c.params ?? {},
     positivePrompt: c.positivePrompt,
-    negativePrompt: c.negativePrompt,
+    skillSlug: c.skillSlug ?? undefined,
+    styleTags: c.styleTags,
+    temperament: c.temperament,
   };
 }
 
@@ -164,6 +164,38 @@ async function assertEpisodeOwner(ctx: Ctx, id: string) {
 
 export const seriesRouter = createTRPCRouter({
   // ───────────────────────────── 系列 (FR-SR-01) ─────────────────────────────
+  create: authedProcedure
+    .input(
+      z.object({
+        coverUrl: z.string().optional(),
+        description: z.string().max(2000).optional(),
+        styleSlug: z.string().optional(),
+        title: z.string().min(1).max(120).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [row] = await ctx.db
+        .insert(series)
+        .values({
+          coverUrl: input.coverUrl ?? null,
+          description: input.description ?? "",
+          id: createId(),
+          styleSlug: input.styleSlug ?? null,
+          title: input.title ?? "未命名系列",
+          userId: ctx.user.id,
+        })
+        .returning();
+      return row;
+    }),
+
+  delete: authedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertSeriesOwner(ctx, input.id);
+      await ctx.db.delete(series).where(eq(series.id, input.id));
+      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
+    }),
+
   list: authedProcedure.query(async ({ ctx }) =>
     ctx.db
       .select()
@@ -172,38 +204,14 @@ export const seriesRouter = createTRPCRouter({
       .orderBy(desc(series.updatedAt)),
   ),
 
-  create: authedProcedure
-    .input(
-      z.object({
-        title: z.string().min(1).max(120).optional(),
-        description: z.string().max(2000).optional(),
-        coverUrl: z.string().optional(),
-        styleSlug: z.string().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const [row] = await ctx.db
-        .insert(series)
-        .values({
-          id: createId(),
-          userId: ctx.user.id,
-          title: input.title ?? "未命名系列",
-          description: input.description ?? "",
-          coverUrl: input.coverUrl ?? null,
-          styleSlug: input.styleSlug ?? null,
-        })
-        .returning();
-      return row;
-    }),
-
   update: authedProcedure
     .input(
       z.object({
-        id: z.string().min(1),
-        title: z.string().min(1).max(120).optional(),
-        description: z.string().max(2000).optional(),
         coverUrl: z.string().optional(),
+        description: z.string().max(2000).optional(),
+        id: z.string().min(1),
         styleSlug: z.string().optional(),
+        title: z.string().min(1).max(120).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -225,31 +233,12 @@ export const seriesRouter = createTRPCRouter({
       return (await ctx.db.select().from(series).where(eq(series.id, input.id)).limit(1))[0];
     }),
 
-  delete: authedProcedure
-    .input(z.object({ id: z.string().min(1) }))
-    .mutation(async ({ ctx, input }) => {
-      await assertSeriesOwner(ctx, input.id);
-      await ctx.db.delete(series).where(eq(series.id, input.id));
-      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
-    }),
-
   // ───────────────────────────── 季 (FR-SR-02) ─────────────────────────────
-  seasons: authedProcedure
-    .input(z.object({ seriesId: z.string().min(1) }))
-    .query(async ({ ctx, input }) => {
-      await assertSeriesOwner(ctx, input.seriesId);
-      return ctx.db
-        .select()
-        .from(season)
-        .where(eq(season.seriesId, input.seriesId))
-        .orderBy(asc(season.seasonNumber));
-    }),
-
   createSeason: authedProcedure
     .input(
       z.object({
-        seriesId: z.string().min(1),
         seasonNumber: z.number().int().positive().optional(),
+        seriesId: z.string().min(1),
         title: z.string().max(120).optional(),
       }),
     )
@@ -259,12 +248,31 @@ export const seriesRouter = createTRPCRouter({
         .insert(season)
         .values({
           id: createId(),
-          seriesId: input.seriesId,
           seasonNumber: input.seasonNumber ?? 1,
+          seriesId: input.seriesId,
           title: input.title ?? "",
         })
         .returning();
       return row;
+    }),
+
+  deleteSeason: authedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertSeasonOwner(ctx, input.id);
+      await ctx.db.delete(season).where(eq(season.id, input.id));
+      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
+    }),
+
+  seasons: authedProcedure
+    .input(z.object({ seriesId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      await assertSeriesOwner(ctx, input.seriesId);
+      return ctx.db
+        .select()
+        .from(season)
+        .where(eq(season.seriesId, input.seriesId))
+        .orderBy(asc(season.seasonNumber));
     }),
 
   updateSeason: authedProcedure
@@ -288,15 +296,45 @@ export const seriesRouter = createTRPCRouter({
       return (await ctx.db.select().from(season).where(eq(season.id, input.id)).limit(1))[0];
     }),
 
-  deleteSeason: authedProcedure
+  // ───────────────────────────── 集 (FR-SR-02) ─────────────────────────────
+  createEpisode: authedProcedure
+    .input(
+      z.object({
+        episodeNumber: z.number().int().positive().optional(),
+        projectId: z.string().nullable().optional(),
+        seasonId: z.string().min(1),
+        status: z.enum(["draft", "producing", "done"]).optional(),
+        synopsis: z.string().max(4000).optional(),
+        targetDurationSec: z.number().int().positive().optional(),
+        title: z.string().max(120).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertSeasonOwner(ctx, input.seasonId);
+      const [row] = await ctx.db
+        .insert(episode)
+        .values({
+          episodeNumber: input.episodeNumber ?? 1,
+          id: createId(),
+          projectId: input.projectId ?? null,
+          seasonId: input.seasonId,
+          status: input.status ?? "draft",
+          synopsis: input.synopsis ?? "",
+          targetDurationSec: input.targetDurationSec ?? null,
+          title: input.title ?? "",
+        })
+        .returning();
+      return row;
+    }),
+
+  deleteEpisode: authedProcedure
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      await assertSeasonOwner(ctx, input.id);
-      await ctx.db.delete(season).where(eq(season.id, input.id));
+      await assertEpisodeOwner(ctx, input.id);
+      await ctx.db.delete(episode).where(eq(episode.id, input.id));
       return { ok: /* SAFETY: 类型断言已复核 */ true as const };
     }),
 
-  // ───────────────────────────── 集 (FR-SR-02) ─────────────────────────────
   episodes: authedProcedure
     .input(z.object({ seasonId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
@@ -308,46 +346,16 @@ export const seriesRouter = createTRPCRouter({
         .orderBy(asc(episode.episodeNumber));
     }),
 
-  createEpisode: authedProcedure
-    .input(
-      z.object({
-        seasonId: z.string().min(1),
-        projectId: z.string().nullable().optional(),
-        episodeNumber: z.number().int().positive().optional(),
-        title: z.string().max(120).optional(),
-        synopsis: z.string().max(4000).optional(),
-        targetDurationSec: z.number().int().positive().optional(),
-        status: z.enum(["draft", "producing", "done"]).optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      await assertSeasonOwner(ctx, input.seasonId);
-      const [row] = await ctx.db
-        .insert(episode)
-        .values({
-          id: createId(),
-          seasonId: input.seasonId,
-          projectId: input.projectId ?? null,
-          episodeNumber: input.episodeNumber ?? 1,
-          title: input.title ?? "",
-          synopsis: input.synopsis ?? "",
-          targetDurationSec: input.targetDurationSec ?? null,
-          status: input.status ?? "draft",
-        })
-        .returning();
-      return row;
-    }),
-
   updateEpisode: authedProcedure
     .input(
       z.object({
+        episodeNumber: z.number().int().positive().optional(),
         id: z.string().min(1),
         projectId: z.string().nullable().optional(),
-        episodeNumber: z.number().int().positive().optional(),
-        title: z.string().max(120).optional(),
+        status: z.enum(["draft", "producing", "done"]).optional(),
         synopsis: z.string().max(4000).optional(),
         targetDurationSec: z.number().int().positive().optional(),
-        status: z.enum(["draft", "producing", "done"]).optional(),
+        title: z.string().max(120).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -373,14 +381,6 @@ export const seriesRouter = createTRPCRouter({
       }
       await ctx.db.update(episode).set(patch).where(eq(episode.id, input.id));
       return (await ctx.db.select().from(episode).where(eq(episode.id, input.id)).limit(1))[0];
-    }),
-
-  deleteEpisode: authedProcedure
-    .input(z.object({ id: z.string().min(1) }))
-    .mutation(async ({ ctx, input }) => {
-      await assertEpisodeOwner(ctx, input.id);
-      await ctx.db.delete(episode).where(eq(episode.id, input.id));
-      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
     }),
 
   /** 按 projectId 查它归属的集（系列层级下的定位）。无归属返回 null。 */
@@ -448,20 +448,20 @@ export const seriesRouter = createTRPCRouter({
   createCharacter: authedProcedure
     .input(
       z.object({
-        seriesId: z.string().min(1),
-        name: z.string().min(1).max(120),
         ageGender: z.string().max(200).optional(),
         appearance: z.string().max(4000).optional(),
         costume: z.string().max(4000).optional(),
-        personality: z.string().max(4000).optional(),
-        temperament: z.string().max(2000).optional(),
-        styleTags: z.array(z.string()).optional(),
-        skillSlug: z.string().optional(),
-        positivePrompt: z.string().max(8000).optional(),
+        name: z.string().min(1).max(120),
         negativePrompt: z.string().max(8000).optional(),
         params: z.unknown().optional(),
-        portraitUrl: z.string().optional(),
+        personality: z.string().max(4000).optional(),
         portraits: z.unknown().optional(),
+        portraitUrl: z.string().optional(),
+        positivePrompt: z.string().max(8000).optional(),
+        seriesId: z.string().min(1),
+        skillSlug: z.string().optional(),
+        styleTags: z.array(z.string()).optional(),
+        temperament: z.string().max(2000).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -469,43 +469,51 @@ export const seriesRouter = createTRPCRouter({
       const [row] = await ctx.db
         .insert(character)
         .values({
-          id: createId(),
-          seriesId: input.seriesId,
-          name: input.name,
           ageGender: input.ageGender ?? "",
           appearance: input.appearance ?? "",
           costume: input.costume ?? "",
-          personality: input.personality ?? "",
-          temperament: input.temperament ?? "",
-          styleTags: input.styleTags ?? [],
-          skillSlug: input.skillSlug ?? null,
-          positivePrompt: input.positivePrompt ?? "",
+          id: createId(),
+          name: input.name,
           negativePrompt: input.negativePrompt ?? "",
           params: input.params ?? {},
-          portraitUrl: input.portraitUrl ?? null,
+          personality: input.personality ?? "",
           portraits: input.portraits ?? [],
+          portraitUrl: input.portraitUrl ?? null,
+          positivePrompt: input.positivePrompt ?? "",
+          seriesId: input.seriesId,
+          skillSlug: input.skillSlug ?? null,
+          styleTags: input.styleTags ?? [],
+          temperament: input.temperament ?? "",
         })
         .returning();
       return row;
     }),
 
+  deleteCharacter: authedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCharacterOwner(ctx, input.id);
+      await ctx.db.delete(character).where(eq(character.id, input.id));
+      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
+    }),
+
   updateCharacter: authedProcedure
     .input(
       z.object({
-        id: z.string().min(1),
-        name: z.string().min(1).max(120).optional(),
         ageGender: z.string().max(200).optional(),
         appearance: z.string().max(4000).optional(),
         costume: z.string().max(4000).optional(),
-        personality: z.string().max(4000).optional(),
-        temperament: z.string().max(2000).optional(),
-        styleTags: z.array(z.string()).optional(),
-        skillSlug: z.string().optional(),
-        positivePrompt: z.string().max(8000).optional(),
+        id: z.string().min(1),
+        name: z.string().min(1).max(120).optional(),
         negativePrompt: z.string().max(8000).optional(),
         params: z.unknown().optional(),
-        portraitUrl: z.string().optional(),
+        personality: z.string().max(4000).optional(),
         portraits: z.unknown().optional(),
+        portraitUrl: z.string().optional(),
+        positivePrompt: z.string().max(8000).optional(),
+        skillSlug: z.string().optional(),
+        styleTags: z.array(z.string()).optional(),
+        temperament: z.string().max(2000).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -554,14 +562,6 @@ export const seriesRouter = createTRPCRouter({
       return (await ctx.db.select().from(character).where(eq(character.id, input.id)).limit(1))[0];
     }),
 
-  deleteCharacter: authedProcedure
-    .input(z.object({ id: z.string().min(1) }))
-    .mutation(async ({ ctx, input }) => {
-      await assertCharacterOwner(ctx, input.id);
-      await ctx.db.delete(character).where(eq(character.id, input.id));
-      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
-    }),
-
   /** 列出某集已关联的角色（含在本集中的定位 role）。 */
   episodeCharacters: authedProcedure
     .input(z.object({ episodeId: z.string().min(1) }))
@@ -587,12 +587,12 @@ export const seriesRouter = createTRPCRouter({
       return ctx.db
         .select({
           episodeId: episode.id,
-          title: episode.title,
           episodeNumber: episode.episodeNumber,
+          role: episodeCharacter.role,
           seasonId: season.id,
           seasonNumber: season.seasonNumber,
           seasonTitle: season.title,
-          role: episodeCharacter.role,
+          title: episode.title,
         })
         .from(episodeCharacter)
         .innerJoin(episode, eq(episodeCharacter.episodeId, episode.id))
@@ -605,8 +605,8 @@ export const seriesRouter = createTRPCRouter({
   linkCharacter: authedProcedure
     .input(
       z.object({
-        episodeId: z.string().min(1),
         characterId: z.string().min(1),
+        episodeId: z.string().min(1),
         role: z.string().max(200).optional(),
       }),
     )
@@ -623,9 +623,9 @@ export const seriesRouter = createTRPCRouter({
       await ctx.db
         .insert(episodeCharacter)
         .values({
-          id: createId(),
-          episodeId: input.episodeId,
           characterId: input.characterId,
+          episodeId: input.episodeId,
+          id: createId(),
           role: input.role ?? "",
         })
         .onConflictDoNothing();
@@ -647,8 +647,8 @@ export const seriesRouter = createTRPCRouter({
   unlinkCharacter: authedProcedure
     .input(
       z.object({
-        episodeId: z.string().min(1),
         characterId: z.string().min(1),
+        episodeId: z.string().min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -736,13 +736,13 @@ export const seriesRouter = createTRPCRouter({
         if (!linkedIds.has(charId)) {
           await ctx.db
             .insert(episodeCharacter)
-            .values({ id: createId(), episodeId: ep.id, characterId: charId, role: "" })
+            .values({ characterId: charId, episodeId: ep.id, id: createId(), role: "" })
             .onConflictDoNothing();
           linkedIds.add(charId);
           linked += 1;
         }
       }
-      return { created, updated, linked };
+      return { created, linked, updated };
     }),
 
   /**

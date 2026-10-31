@@ -23,9 +23,9 @@ import { NumberField } from "~/components/ui/number-field";
  * `NumberField`，渲染时用 `render` 换成带 state 的包装。
  */
 const meta = {
-  title: "UI/NumberField",
+  args: { onChange: () => void 0, value: 24 },
   component: NumberField,
-  args: { value: 24, onChange: () => void 0 },
+  title: "UI/NumberField",
 } satisfies Meta<typeof NumberField>;
 
 export default meta;

@@ -17,26 +17,26 @@ describe("classTypeForNode", () => {
 
   it("RAW（UI 格式）形状：类名在 nodes[].type，id 是数字也要按字符串认", () => {
     const graph = {
-      nodes: [
-        { id: 3, type: "KSampler", inputs: [], widgets_values: [] },
-        { id: 7, type: "VAEDecode", inputs: [], widgets_values: [] },
-      ],
       links: [],
+      nodes: [
+        { id: 3, inputs: [], type: "KSampler", widgets_values: [] },
+        { id: 7, inputs: [], type: "VAEDecode", widgets_values: [] },
+      ],
     };
     expect(classTypeForNode(graph, "7")).toBe("VAEDecode");
     /* comfy-cli 展开子图后 WS 回来的是带宿主链的 id（`4:1670`）——
      * 定位必须与画布覆盖注入那条（raw-overrides 的 resolveRawNode）同一条。 */
     const withSubgraph = {
-      nodes: [{ id: 4, type: "SUBGRAPH_ID", inputs: [], widgets_values: [] }],
       definitions: {
         // 子图定义按 `id` 登记（`SubgraphIdentitySchema`），wrapper 的 `type` 指它。
         subgraphs: [
           {
             id: "SUBGRAPH_ID",
-            nodes: [{ id: 1670, type: "CLIPTextEncode", inputs: [] }],
+            nodes: [{ id: 1670, inputs: [], type: "CLIPTextEncode" }],
           },
         ],
       },
+      nodes: [{ id: 4, inputs: [], type: "SUBGRAPH_ID", widgets_values: [] }],
     };
     expect(classTypeForNode(withSubgraph, "4:1670")).toBe("CLIPTextEncode");
   });
@@ -51,9 +51,7 @@ describe("classTypeForNode", () => {
 
   it("认不出就是 undefined，绝不猜", () => {
     expect(classTypeForNode({ "9": { class_type: "" } }, "9")).toBeUndefined();
-    expect(
-      classTypeForNode({ nodes: [{ id: 1, type: "" }] }, "1"),
-    ).toBeUndefined();
+    expect(classTypeForNode({ nodes: [{ id: 1, type: "" }] }, "1")).toBeUndefined();
     expect(classTypeForNode({ nodes: [] }, "3")).toBeUndefined();
     expect(classTypeForNode({}, "3")).toBeUndefined();
     /* 载荷不可信：null / undefined / 字符串 / 数字 / 数组 / 空图都不许抛，也认不出。 */

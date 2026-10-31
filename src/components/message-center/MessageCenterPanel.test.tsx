@@ -20,15 +20,15 @@ afterEach(cleanup);
 
 beforeEach(() => {
   useMessageCenterStore.setState({
-    open: true,
-    messages: [],
     currentRunId: null,
+    messages: [],
+    open: true,
   });
 });
 
 describe("MessageCenterPanel 键盘可达性", () => {
   it("消息行是原生按钮：Enter 也能标记已读（不是只有鼠标点得开）", async () => {
-    useMessageCenterStore.getState().push({ kind: "info", title: "标题甲", body: "正文甲" });
+    useMessageCenterStore.getState().push({ body: "正文甲", kind: "info", title: "标题甲" });
     const id = useMessageCenterStore.getState().messages[0]!.id;
     render(<MessageCenterPanel />);
 
@@ -44,7 +44,7 @@ describe("MessageCenterPanel 键盘可达性", () => {
   });
 
   it("删除按钮是行的兄弟节点（不嵌在行按钮里 → HTML 合法、也各自可 Tab 到）", () => {
-    useMessageCenterStore.getState().push({ kind: "info", title: "标题乙", body: "正文乙" });
+    useMessageCenterStore.getState().push({ body: "正文乙", kind: "info", title: "标题乙" });
     render(<MessageCenterPanel />);
 
     const row = screen.getByRole("button", { name: /标题乙/ });
@@ -54,7 +54,7 @@ describe("MessageCenterPanel 键盘可达性", () => {
   });
 
   it("删除按钮仍能独立触发（从行按钮里拆出来后事件没丢）", async () => {
-    useMessageCenterStore.getState().push({ kind: "info", title: "标题丙", body: "正文丙" });
+    useMessageCenterStore.getState().push({ body: "正文丙", kind: "info", title: "标题丙" });
     render(<MessageCenterPanel />);
 
     await userEvent.click(screen.getByRole("button", { name: "删除该消息" }));
@@ -67,7 +67,7 @@ describe("MessageCenterPanel 按「每一次启动」分组", () => {
   /** 按顺序推几条（最新在后推的会被排到更前，这里直接用 runId 显式表达批次）。 */
   function pushBatch(runId: string | null, titles: Array<string>) {
     for (const title of titles) {
-      useMessageCenterStore.getState().push({ kind: "info", title, body: "b", runId });
+      useMessageCenterStore.getState().push({ body: "b", kind: "info", runId, title });
     }
   }
 

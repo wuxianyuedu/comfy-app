@@ -38,10 +38,10 @@ function PopoverAutoClose({ onClose }: { onClose: () => void }) {
 }
 
 export function WorkflowModePickChip({
-  modes,
   defaultMode,
-  onChange,
   disabled,
+  modes,
+  onChange,
 }: WorkflowModePickChipProps) {
   /* 订阅只在弹层打开时挂载 —— 所以开合状态要留在本组件（受控传给基元），
    * 好决定 `PopoverAutoClose` 挂不挂。 */
@@ -78,8 +78,8 @@ export function WorkflowModePickChip({
         items={items.map((item) => {
           const isDef = defaultMode === item.code;
           return {
-            value: item.code,
             label: item.label,
+            value: item.code,
             /* radio dot — 单选，无 checkbox（选中时底色与勾由基元给）。 */
             prefix: (
               <span

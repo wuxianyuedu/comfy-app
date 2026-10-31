@@ -9,12 +9,12 @@ import { fixed } from "~/lib/number-format";
  * 所以这一屏也在核「变量真的被 tailwind 读到了」。
  */
 const meta = {
-  title: "UI/AspectRatio",
-  component: AspectRatio,
-  args: { ratio: 16 / 9, className: "bg-subtle w-72 rounded-lg" },
+  args: { className: "bg-subtle w-72 rounded-lg", ratio: 16 / 9 },
   argTypes: {
-    ratio: { control: { type: "number", step: 0.1 } },
+    ratio: { control: { step: 0.1, type: "number" } },
   },
+  component: AspectRatio,
+  title: "UI/AspectRatio",
 } satisfies Meta<typeof AspectRatio>;
 
 export default meta;

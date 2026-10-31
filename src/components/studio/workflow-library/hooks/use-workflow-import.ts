@@ -80,7 +80,7 @@ function useDropZone(
     [onError, onFile],
   );
 
-  return { active, onDragOver, onDragEnter, onDragLeave, onDrop };
+  return { active, onDragEnter, onDragLeave, onDragOver, onDrop };
 }
 
 export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
@@ -145,9 +145,9 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       runAsyncAction(
         async () => {
           const d = await createMut.mutateAsync({
-            name: importName.trim() || "未命名工作流",
-            modes: importModes,
             defaultMode: importDefaultMode,
+            modes: importModes,
+            name: importName.trim() || "未命名工作流",
             raw: parsed,
           });
           if (Array.isArray(d.warnings)) {
@@ -161,12 +161,12 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
           void load();
         },
         {
+          failureText: "导入失败",
           report: (kind, detail) => {
             if (kind === "err") {
               setImportErr(detail);
             }
           },
-          failureText: "导入失败",
         },
       ),
     );
@@ -250,36 +250,36 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   const panelDropZone = useDropZone(handlePickedFile, showFileError);
 
   return {
-    showImport,
-    setShowImport,
-    importName,
-    setImportName,
-    importModes,
-    setImportModes,
-    importDefaultMode,
-    setImportDefaultMode,
-    importJson,
-    setImportJson,
-    importing: importBusy.busy,
-    importErr,
-    importWarn,
-    showHelpTip,
-    setShowHelpTip,
     dropErr,
     handleImport,
+    importDefaultMode,
+    importErr,
+    importing: importBusy.busy,
+    importJson,
+    importModes,
+    importName,
+    importWarn,
+    setImportDefaultMode,
+    setImportJson,
+    setImportModes,
+    setImportName,
+    setShowHelpTip,
+    setShowImport,
+    showHelpTip,
+    showImport,
     /** 拖入 / 「选择文件」共用的文件漏斗（视图从 input 取到 File 后调它）。 */
     handlePickedFile,
     /* 列表侧栏投放区 */
     listDragActive: listDropZone.active,
-    onListDragOver: listDropZone.onDragOver,
     onListDragEnter: listDropZone.onDragEnter,
     onListDragLeave: listDropZone.onDragLeave,
+    onListDragOver: listDropZone.onDragOver,
     onListDrop: listDropZone.onDrop,
     /* 导入面板投放区 */
-    panelDragActive: panelDropZone.active,
-    onPanelDragOver: panelDropZone.onDragOver,
     onPanelDragEnter: panelDropZone.onDragEnter,
     onPanelDragLeave: panelDropZone.onDragLeave,
+    onPanelDragOver: panelDropZone.onDragOver,
     onPanelDrop: panelDropZone.onDrop,
+    panelDragActive: panelDropZone.active,
   };
 }

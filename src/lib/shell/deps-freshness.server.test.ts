@@ -47,48 +47,48 @@ describe("readDepsFreshness", () => {
   });
 
   it("仓库没有 lockfile → null（检出可能不完整，无法判定 ≠ 陈旧）", () => {
-    drift.mockReturnValue({ state: "no-lockfile", modulesLock: null });
+    drift.mockReturnValue({ modulesLock: null, state: "no-lockfile" });
     expect(readDepsFreshness("/nonexistent")).toBeNull();
     expect(missingProbe).not.toHaveBeenCalled();
   });
 
   it("lockfile 漂移 → stale drift", () => {
-    drift.mockReturnValue({ state: "drift", modulesLock: null });
+    drift.mockReturnValue({ modulesLock: null, state: "drift" });
     expect(readDepsFreshness("/nonexistent")).toEqual({
+      missing: [],
       stale: true,
       state: "drift",
-      missing: [],
     });
     expect(missingProbe).not.toHaveBeenCalled();
   });
 
   it("从未装好 / 装残 → stale no-install", () => {
-    drift.mockReturnValue({ state: "no-install", modulesLock: null });
+    drift.mockReturnValue({ modulesLock: null, state: "no-install" });
     expect(readDepsFreshness("/nonexistent")).toEqual({
+      missing: [],
       stale: true,
       state: "no-install",
-      missing: [],
     });
     expect(missingProbe).not.toHaveBeenCalled();
   });
 
   it("lockfile 一致但个别依赖解析不到 → stale unresolved + 缺失清单", () => {
-    drift.mockReturnValue({ state: "fresh", modulesLock: null });
+    drift.mockReturnValue({ modulesLock: null, state: "fresh" });
     missingProbe.mockReturnValue(["foo", "bar"]);
     expect(readDepsFreshness("/nonexistent")).toEqual({
+      missing: ["foo", "bar"],
       stale: true,
       state: "unresolved",
-      missing: ["foo", "bar"],
     });
   });
 
   it("lockfile 一致且全部可解析 → fresh（不陈旧）", () => {
-    drift.mockReturnValue({ state: "fresh", modulesLock: null });
+    drift.mockReturnValue({ modulesLock: null, state: "fresh" });
     missingProbe.mockReturnValue([]);
     expect(readDepsFreshness("/nonexistent")).toEqual({
+      missing: [],
       stale: false,
       state: "fresh",
-      missing: [],
     });
   });
 });

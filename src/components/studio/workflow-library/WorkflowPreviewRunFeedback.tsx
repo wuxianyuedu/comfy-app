@@ -28,16 +28,16 @@ type Props = {
 };
 
 export function WorkflowPreviewRunFeedback({
-  phase,
-  pct,
-  nodeLabel,
-  resultUrl,
-  workflowName,
-  viewMode,
-  running,
   missingLabels,
-  uploadNotice,
+  nodeLabel,
   onDismissUploadNotice,
+  pct,
+  phase,
+  resultUrl,
+  running,
+  uploadNotice,
+  viewMode,
+  workflowName,
 }: Props) {
   return (
     <>

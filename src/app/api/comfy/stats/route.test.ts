@@ -37,10 +37,10 @@ beforeEach(() => {
 describe("GET /api/comfy/stats", () => {
   it("在线：转发采集结果并补 processAlive，且不覆盖采集器自己的字段", async () => {
     const payload = {
+      memory: { gib_total: 8, gib_used: 6.5 },
       online: true,
-      vramUsed: 1,
-      memory: { gib_used: 6.5, gib_total: 8 },
       system: { os: "windows" },
+      vramUsed: 1,
     };
     getSystemStats.mockResolvedValueOnce(payload);
     const { GET } = await import("./route");

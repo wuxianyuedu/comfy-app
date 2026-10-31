@@ -68,7 +68,7 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
   }
   const seen = new WeakSet<object>();
   const stack: Array<{ d: number; node: JsonRecord }> = [
-    { node: /* SAFETY: 类型断言已复核 */ root as JsonRecord, d: 0 },
+    { d: 0, node: /* SAFETY: 类型断言已复核 */ root as JsonRecord },
   ];
   while (stack.length) {
     /* 判据与取值同一处：`stack.pop()` 在非空循环里必然有值。 */
@@ -76,7 +76,7 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
     if (!top) {
       break;
     }
-    const { node, d } = top;
+    const { d, node } = top;
     if (d > depth || seen.has(node)) {
       continue;
     }
@@ -91,8 +91,8 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
     for (const v of Object.values(node)) {
       if (v && typeof v === "object") {
         stack.push({
-          node: /* SAFETY: 类型断言已复核 */ v as JsonRecord,
           d: d + 1,
+          node: /* SAFETY: 类型断言已复核 */ v as JsonRecord,
         });
       }
     }
@@ -255,7 +255,7 @@ function nodeTag(evt: JsonRecord, patched: Record<string, unknown> | undefined):
  */
 export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopeParser {
   const doTrace = deps.trace ?? trace;
-  const { taskId, log } = deps;
+  const { log, taskId } = deps;
   let buf = "";
   let nonJsonLines = 0;
   let rawJsonLines = 0;
@@ -368,8 +368,8 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
         nodeId
           ? {
               id: nodeId,
-              value: evt.completed,
               max: evt.total,
+              value: evt.completed,
               ...(classType ? { classType, label: nodeLabel(classType) } : {}),
             }
           : undefined,
@@ -398,6 +398,7 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
   };
 
   return {
+    leftover: () => buf,
     sink: (chunk: Buffer | string) => {
       /* 原始 chunk 直送 trace（不截断不聚合）——面板只显示解析后的事件，
        * 出现「没找到生成结果」时唯一能回答「ComfyUI 到底回了什么」的就是这里。 */
@@ -410,7 +411,6 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
         handleLine(line);
       }
     },
-    leftover: () => buf,
   };
 }
 
@@ -440,7 +440,7 @@ const NOISY_WARNING_RE = /DeprecationWarning|SyntaxWarning: invalid escape seque
  */
 export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
   const doTrace = deps.trace ?? trace;
-  const { taskId, log } = deps;
+  const { log, taskId } = deps;
   let errBuf = "";
   let errLines = 0;
   let noisy = 0;
@@ -470,7 +470,7 @@ export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
       }
     }
   };
-  return { sink, raw: () => errBuf, noisyWarningLines: () => noisy };
+  return { noisyWarningLines: () => noisy, raw: () => errBuf, sink };
 }
 
 /* ── envelope 收口（finish）────────────────────────────────────────────
@@ -505,7 +505,7 @@ export type CliFinisher = (ok: boolean, env: unknown) => void;
 
 /** 构造 envelope 收口函数（完成 / 失败 + 校验错误落日志）。 */
 export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
-  const { taskId, log } = deps;
+  const { log, taskId } = deps;
   return (ok: boolean, env: unknown) => {
     if (!deps.settle()) {
       return;
@@ -560,8 +560,8 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
         if (/validation error/i.test(rawMsg) || errCode === "prompt_rejected") {
           try {
             const dump = clampText(JSON.stringify(env), {
-              maxLength: INLINE_DUMP_MAX,
               marker: "",
+              maxLength: INLINE_DUMP_MAX,
             });
             log(
               taskId,

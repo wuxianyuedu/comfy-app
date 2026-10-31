@@ -91,12 +91,12 @@ export function useScriptReview(
   }, [projectId, reviseBusy, onScriptRevised, review]);
 
   return {
-    verdict,
-    history,
-    reviewing: reviewBusy.busy,
-    revising: reviseBusy.busy,
     error,
+    history,
     review,
+    reviewing: reviewBusy.busy,
     revise,
+    revising: reviseBusy.busy,
+    verdict,
   };
 }

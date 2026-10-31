@@ -19,8 +19,8 @@ import { NEAR_BOTTOM_PX, useScrollFollow } from "./use-scroll-follow";
 
 /** 给宿主元素伪造可读的滚动几何（jsdom 不做布局）。 */
 function makeScroller({
-  scrollHeight = 1000,
   clientHeight = 200,
+  scrollHeight = 1000,
 }: { clientHeight?: number; scrollHeight?: number } = {}): HTMLDivElement {
   const el = document.createElement("div");
   Object.defineProperty(el, "scrollHeight", {
@@ -74,7 +74,7 @@ describe("useScrollFollow", () => {
   it("退出跟随后内容变化**不再**贴底（用户的位置不被覆盖）", () => {
     const el = makeScroller();
     const box = makeRef(el);
-    const { result, rerender } = renderHook(
+    const { rerender, result } = renderHook(
       ({ text }: { text: string }) => useScrollFollow({ containerRef: box, watch: text }),
       { initialProps: { text: "a" } },
     );
@@ -102,13 +102,13 @@ describe("useScrollFollow", () => {
     const changes: Array<boolean> = [];
     const el = makeScroller();
     const box = makeRef(el);
-    const { result, rerender } = renderHook(
+    const { rerender, result } = renderHook(
       ({ following }: { following: boolean }) =>
         useScrollFollow({
           containerRef: box,
-          watch: 0,
           following,
           onFollowingChange: (n) => changes.push(n),
+          watch: 0,
         }),
       { initialProps: { following: true } },
     );
@@ -128,8 +128,8 @@ describe("useScrollFollow", () => {
     const { result } = renderHook(() =>
       useScrollFollow({
         containerRef: makeRef(el),
-        watch: 0,
         thresholdPx: 200,
+        watch: 0,
       }),
     );
 

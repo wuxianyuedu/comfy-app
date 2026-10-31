@@ -40,7 +40,7 @@ type GlobalWithSlot = typeof globalThis & {
 /** 取（必要时建）当前进程的控制台槽。 */
 export function consoleSlot(): ConsoleSlot {
   const g = /* SAFETY: 类型断言已复核 */ globalThis as GlobalWithSlot;
-  g[SLOT_KEY] ??= { runner: createConsoleRunner(), history: [] };
+  g[SLOT_KEY] ??= { history: [], runner: createConsoleRunner() };
   return g[SLOT_KEY];
 }
 

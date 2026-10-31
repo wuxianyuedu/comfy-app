@@ -55,26 +55,26 @@ export type RenderResult = {
 /** 由分镜构建有序合成清单（与界面 FinalComposer.exportPlan 对齐）。 */
 export function buildCompositionPlan(title: string, shots: Array<Shot>): CompositionPlan {
   const segments: Array<CompositionSegment> = shots.map((shot, i) => ({
-    order: i + 1,
-    shotId: shot.id,
-    scene: shot.sceneHeading,
-    shotType: shot.shotType,
-    prompt: shot.prompt,
-    imageUrl: shot.imageUrl ?? null,
     clipUrl: shot.clipUrl ?? null,
-    durationSec: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
-    motion: shot.motion ?? "medium",
-    transition: shot.transition ?? "cut",
     dialogue: shot.dialogue ?? "",
+    durationSec: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
+    imageUrl: shot.imageUrl ?? null,
+    motion: shot.motion ?? "medium",
+    order: i + 1,
+    prompt: shot.prompt,
+    scene: shot.sceneHeading,
+    shotId: shot.id,
+    shotType: shot.shotType,
+    transition: shot.transition ?? "cut",
   }));
   const totalDurationSec = segments.reduce((acc, s) => acc + s.durationSec, 0);
   return {
-    project: title,
     exportedAt: new Date().toISOString(),
+    project: title,
     totalShots: segments.length,
     /* 「按一位小数写数」走 `~/lib/number-format`（规范 16 §16.2.4.54）。 */
-    totalDurationSec: Number(fixed(totalDurationSec, 1) ?? "0"),
     segments,
+    totalDurationSec: Number(fixed(totalDurationSec, 1) ?? "0"),
   };
 }
 
@@ -116,8 +116,8 @@ export async function renderComposition(
     await execFileP(ff, ["-version"], { timeout: 5000 });
   } catch {
     return {
-      ok: false,
       note: "未找到 ffmpeg（配置 FFMPEG_PATH 或加入 PATH 后可合成成片），本次仅产出合成清单",
+      ok: false,
     };
   }
 
@@ -177,10 +177,10 @@ export async function renderComposition(
   }
 
   if (segs.length === 0) {
-    await fs.rm(tmpDir, { recursive: true, force: true });
+    await fs.rm(tmpDir, { force: true, recursive: true });
     return {
-      ok: false,
       note: "没有可用的本地片段（clipUrl/imageUrl 需为本地路径），仅产出合成清单",
+      ok: false,
     };
   }
 
@@ -196,12 +196,12 @@ export async function renderComposition(
       timeout: 300_000,
     });
   } catch (e) {
-    await fs.rm(tmpDir, { recursive: true, force: true });
+    await fs.rm(tmpDir, { force: true, recursive: true });
     return {
-      ok: false,
       note: errorText(e, "ffmpeg 合成失败"),
+      ok: false,
     };
   }
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await fs.rm(tmpDir, { force: true, recursive: true });
   return { ok: true, outputPath: out };
 }

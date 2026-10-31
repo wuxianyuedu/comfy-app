@@ -37,12 +37,12 @@ export type WorkflowRunLogButtonProps = {
 };
 
 export function WorkflowRunLogButton({
-  workflowId,
-  taskId,
-  running,
-  source,
   alwaysVisible = false,
   onOpen,
+  running,
+  source,
+  taskId,
+  workflowId,
 }: WorkflowRunLogButtonProps) {
   const snapshot = useSyncExternalStore(
     subscribeWorkflowRunStore,

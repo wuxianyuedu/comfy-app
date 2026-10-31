@@ -28,8 +28,8 @@ import {
 /** 造一批等高行（不换行），几何断言才可手算。 */
 function flat(count: number, size = LOG_ROW_SINGLE): Array<RowLayout> {
   return Array.from({ length: count }, (_, i) => ({
-    start: i * size,
     size,
+    start: i * size,
   }));
 }
 
@@ -65,7 +65,7 @@ describe("行位置表", () => {
   it("start 是单调前缀和，总高等于各行之和", () => {
     const entries = [{ message: "a" }, { message: "a\nb" }, { message: "a" }];
     const { rows, totalSize } = layoutRows(entries, true, 0);
-    expect(rows[0]).toEqual({ start: 0, size: LOG_ROW_SINGLE });
+    expect(rows[0]).toEqual({ size: LOG_ROW_SINGLE, start: 0 });
     expect(rows[1]!.start).toBe(LOG_ROW_SINGLE);
     expect(rows[2]!.start).toBe(LOG_ROW_SINGLE * 2 + LOG_ROW_LINE);
     expect(totalSize).toBe(LOG_ROW_SINGLE * 3 + LOG_ROW_LINE);
@@ -91,8 +91,8 @@ describe("展开行与强制单行的原始输出行（按 id 点名）", () => 
     const { rows } = layoutRows(entries, true, 0, {
       expandedIds: new Set(["b"]),
     });
-    expect(rows[0]).toEqual({ start: 0, size: LOG_ROW_SINGLE });
-    expect(rows[1]).toEqual({ start: LOG_ROW_SINGLE, size: LOG_ROW_EXPANDED });
+    expect(rows[0]).toEqual({ size: LOG_ROW_SINGLE, start: 0 });
+    expect(rows[1]).toEqual({ size: LOG_ROW_EXPANDED, start: LOG_ROW_SINGLE });
   });
 
   it("强制单行的原始输出行在 wrap 下也只占一行（完整原文交给展开态）", () => {
@@ -113,7 +113,7 @@ describe("展开行与强制单行的原始输出行（按 id 点名）", () => 
       expandedIds: new Set(["a"]),
       singleLineIds: new Set(["a", "b"]),
     });
-    expect(rows[0]).toEqual({ start: 0, size: LOG_ROW_EXPANDED });
+    expect(rows[0]).toEqual({ size: LOG_ROW_EXPANDED, start: 0 });
     expect(rows[1]!.start).toBe(LOG_ROW_EXPANDED);
     expect(rows[2]!.start).toBe(LOG_ROW_EXPANDED + LOG_ROW_SINGLE);
     expect(totalSize).toBe(LOG_ROW_EXPANDED + LOG_ROW_SINGLE * 2);
@@ -124,7 +124,7 @@ describe("可见区间", () => {
   const rows = flat(2000);
 
   it("只给视口内的那一段，上下各留 overscan 行", () => {
-    const { start, end } = visibleRange(rows, 0, 600);
+    const { end, start } = visibleRange(rows, 0, 600);
     expect(start).toBe(0);
     /* 视口 600px 装得下几行单高行：`i × LOG_ROW_SINGLE < 600` 的 i 的个数
        （行是等高的，所以就是 ⌊600 / 行高⌋ + 1），再加上下 overscan。
@@ -145,28 +145,28 @@ describe("可见区间", () => {
   it("滚到底时区间末尾钳在行数上（不会 slice 出 undefined）", () => {
     /* 用常量而不是写死像素：这条的意图是「滚到 2000 行之底」，行高变了它
        仍然该成立 —— 写死 27 会让下一次字号调整把它变成假红。 */
-    const { start, end } = visibleRange(rows, 2000 * LOG_ROW_SINGLE, 600);
+    const { end, start } = visibleRange(rows, 2000 * LOG_ROW_SINGLE, 600);
     expect(end).toBe(2000);
     expect(start).toBeLessThan(2000);
   });
 
   it("行数不足一屏时给全量", () => {
     const few = flat(3);
-    expect(visibleRange(few, 0, 600)).toEqual({ start: 0, end: 3 });
+    expect(visibleRange(few, 0, 600)).toEqual({ end: 3, start: 0 });
   });
 
   it("空列表给出空区间（start/end 都不得为负）", () => {
-    expect(visibleRange([], 0, 600)).toEqual({ start: 0, end: 0 });
+    expect(visibleRange([], 0, 600)).toEqual({ end: 0, start: 0 });
   });
 
   it("scrollTop / 视口高度取不到值（NaN、负数）时当 0 处理", () => {
     expect(visibleRange(rows, Number.NaN, Number.NaN)).toEqual({
-      start: 0,
       end: LOG_VIRTUAL_OVERSCAN + 1,
+      start: 0,
     });
     expect(visibleRange(rows, -500, -100)).toEqual({
-      start: 0,
       end: LOG_VIRTUAL_OVERSCAN + 1,
+      start: 0,
     });
   });
 });
@@ -186,16 +186,16 @@ describe("二分定位", () => {
 describe("滚动条总高", () => {
   it("常规页远低于上限，按原值撑开", () => {
     expect(scrollHeightOf(2000 * LOG_ROW_SINGLE)).toEqual({
-      height: 2000 * LOG_ROW_SINGLE,
       compressed: false,
+      height: 2000 * LOG_ROW_SINGLE,
     });
   });
 
   it("超限时压到上限并标记（牺牲极端精度换滚动稳定）", () => {
     const huge = LOG_SCROLL_MAX * 4;
     expect(scrollHeightOf(huge)).toEqual({
-      height: LOG_SCROLL_MAX,
       compressed: true,
+      height: LOG_SCROLL_MAX,
     });
   });
 
@@ -219,11 +219,11 @@ describe("贴底目标", () => {
 
 describe("贴底该不该动", () => {
   const base = {
-    baseline: 0,
     applied: 0,
+    appliedTop: 0,
+    baseline: 0,
     bottomIndex: 1999,
     scrollTop: 0,
-    appliedTop: 0,
   };
 
   it("目标行变了就动（打开面板 / 回到最新 / 换页）", () => {
@@ -247,15 +247,15 @@ describe("贴底该不该动", () => {
 
 describe("贴底要写入的 scrollTop", () => {
   it("按位置表让目标行贴住视口底边", () => {
-    expect(pinScrollTop({ start: 2700, size: 27 }, 500)).toBe(2227);
+    expect(pinScrollTop({ size: 27, start: 2700 }, 500)).toBe(2227);
   });
 
   it("顶部的行给出 0（不出现负 scrollTop）", () => {
-    expect(pinScrollTop({ start: 0, size: 27 }, 500)).toBe(0);
+    expect(pinScrollTop({ size: 27, start: 0 }, 500)).toBe(0);
   });
 
   it("视口高度取不到时按 0 处理，且绝不给出负数", () => {
-    expect(pinScrollTop({ start: 10, size: 0 }, Number.NaN)).toBe(10);
-    expect(pinScrollTop({ start: 0, size: 0 }, -100)).toBe(0);
+    expect(pinScrollTop({ size: 0, start: 10 }, Number.NaN)).toBe(10);
+    expect(pinScrollTop({ size: 0, start: 0 }, -100)).toBe(0);
   });
 });

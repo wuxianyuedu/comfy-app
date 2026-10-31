@@ -73,7 +73,7 @@ function readCache(key: string): WorkflowDetail | null {
 
 function writeCache(key: string, data: WorkflowDetail): void {
   try {
-    sessionStorage.setItem(key, JSON.stringify({ t: Date.now(), d: data }));
+    sessionStorage.setItem(key, JSON.stringify({ d: data, t: Date.now() }));
   } catch {
     /* 配额超限，忽略 */
   }
@@ -107,20 +107,20 @@ export type WorkflowDetailLoaderArgs = {
  * 持有工作流详情加载 + 子图下钻/返回导航的逻辑。
  */
 export function useWorkflowDetailLoader({
-  workflowId,
   detail,
   detailRef,
   latestRequestIdRef,
   setDetail,
-  setLoading,
   setError,
+  setLoading,
   setParamMap,
-  setWorkflowIO,
-  setSubgraphStack,
   setRootWorkflowName,
+  setSubgraphError,
   setSubgraphLoading,
   setSubgraphRawContext,
-  setSubgraphError,
+  setSubgraphStack,
+  setWorkflowIO,
+  workflowId,
 }: WorkflowDetailLoaderArgs) {
   /* 子图栈的镜像引用：用于在 state updater 之外读取最新值（避免在 updater 里
    *  排副作用 —— React StrictMode 会双调用 updater，导致重复发请求）。所有栈
@@ -146,7 +146,7 @@ export function useWorkflowDetailLoader({
    *  拼到前面，否则嵌套层会双重前缀、坐标全部退回原始值。 */
   const pushSubgraphStack = useCallback(
     (uid: string, name: string, nodeId: string) => {
-      updateStack((prev) => [...prev, { uid, name, nodeId }]);
+      updateStack((prev) => [...prev, { name, nodeId, uid }]);
     },
     [updateStack],
   );
@@ -242,9 +242,9 @@ export function useWorkflowDetailLoader({
          *  不触碰子图栈。 */
         const bg = subgraphUid
           ? vanillaApi.workflow.subgraph.query({
+              hostId,
               id: workflowId,
               uid: subgraphUid,
-              hostId,
             })
           : vanillaApi.workflow.detailFull.query({ id: workflowId });
         void bg
@@ -272,13 +272,13 @@ export function useWorkflowDetailLoader({
         const d = /* SAFETY: 类型断言已复核 */ (await withTimeout(
           subgraphUid
             ? vanillaApi.workflow.subgraph.query({
+                hostId,
                 id: workflowId,
                 uid: subgraphUid,
-                hostId,
               })
             : vanillaApi.workflow.detailFull.query({
-                id: workflowId,
                 bust: opts?.bust ? true : undefined,
+                id: workflowId,
               }),
           60_000,
           {
@@ -386,9 +386,9 @@ export function useWorkflowDetailLoader({
       const hostChain = [parentHostId, nodeId].filter(Boolean).join(":");
       setTimeout(() => {
         void fetchDetail({
-          subgraphUid: uid,
-          parentTitle,
           hostNodeId: hostChain,
+          parentTitle,
+          subgraphUid: uid,
         });
       }, 0);
     },
@@ -415,19 +415,19 @@ export function useWorkflowDetailLoader({
        *  `宿主:内部`，不带前缀会退回原始坐标。 */
       setTimeout(() => {
         void fetchDetail({
-          subgraphUid: parent.uid,
-          parentTitle: parent.name,
           hostNodeId: parent.nodeId,
+          parentTitle: parent.name,
+          subgraphUid: parent.uid,
         });
       }, 0);
     }
   }, [fetchDetail, updateStack, setSubgraphLoading]);
 
   return {
-    pushSubgraphStack,
     fetchDetail,
     forceReloadDetail,
     onEnterSubgraph,
     onExitSubgraph,
+    pushSubgraphStack,
   };
 }

@@ -55,12 +55,12 @@ export type WorkflowIoPreviewPanelProps = {
 };
 
 export function WorkflowIoPreviewPanel({
-  workflowIO,
+  defaultMode,
   detailIOMap,
   modes,
-  defaultMode,
-  onModesChange,
   onClose,
+  onModesChange,
+  workflowIO,
 }: WorkflowIoPreviewPanelProps) {
   /* useIOEditApi 内部调 useContext，只能在组件顶层调用（Hook 套 Hook 会被
    * React 19 拦下）。context 持有的 StoreApi 按编辑器实例稳定。 */

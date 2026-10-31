@@ -55,8 +55,8 @@ afterEach(() => {
 /** handler 只要 `formData()`，用真 Request 顶替 NextRequest。 */
 function reqWith(form: FormData): NextRequest {
   return /* SAFETY: 类型断言已复核 */ new Request("http://localhost/api/film/bgm", {
-    method: "POST",
     body: form,
+    method: "POST",
   }) as unknown as NextRequest;
 }
 
@@ -99,9 +99,9 @@ describe("POST /api/film/bgm", () => {
 
   it("请求体不是 multipart → 400「表单解析失败」", async () => {
     const req = /* SAFETY: 类型断言已复核 */ new Request("http://localhost/api/film/bgm", {
-      method: "POST",
-      headers: { "content-type": "text/plain" },
       body: "not-a-form",
+      headers: { "content-type": "text/plain" },
+      method: "POST",
     }) as unknown as NextRequest;
     const res = await POST(req);
     expect(res.status).toBe(400);

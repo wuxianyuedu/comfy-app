@@ -17,46 +17,46 @@ vi.mock("~/server/agent/run-engine", () => ({
   advanceRunLoop: vi.fn(async () => undefined),
 }));
 // 评审 / 重生成的落库逻辑在 review.test.ts 覆盖；此处只验端点的入参校验 + 委派 seam。
-const { reviewContent, regenerateShot, reviewScript, reviewShotImage, reviseScript } = vi.hoisted(
+const { regenerateShot, reviewContent, reviewScript, reviewShotImage, reviseScript } = vi.hoisted(
   () => ({
-    reviewContent: vi.fn(async () => ({
-      pass: false,
-      issues: ["含混"],
-      suggestion: "更具体",
-      scoredAt: "t",
-    })),
     regenerateShot: vi.fn(async () => undefined),
+    reviewContent: vi.fn(async () => ({
+      issues: ["含混"],
+      pass: false,
+      scoredAt: "t",
+      suggestion: "更具体",
+    })),
     reviewScript: vi.fn(async () => ({
-      verdict: {
-        pass: true,
-        issues: [],
-        suggestion: "",
-        scoredAt: "t2",
-        scores: { structure: { score: 4, note: "结构完整" } },
-        rubricVersion: "script-v1",
-      },
       history: [],
+      verdict: {
+        issues: [],
+        pass: true,
+        rubricVersion: "script-v1",
+        scoredAt: "t2",
+        scores: { structure: { note: "结构完整", score: 4 } },
+        suggestion: "",
+      },
     })),
     reviewShotImage: vi.fn(async () => ({
-      pass: true,
       issues: [],
-      suggestion: "",
-      scoredAt: "t3",
-      scores: { artifacts: { score: 4, note: "无崩" } },
+      pass: true,
       rubricVersion: "shotImage-v1",
+      scoredAt: "t3",
+      scores: { artifacts: { note: "无崩", score: 4 } },
+      suggestion: "",
     })),
     reviseScript: vi.fn(async () => "# 改写后的剧本"),
   }),
 );
 vi.mock("~/server/agent/review", () => ({
   autoselectShotImage: vi.fn(async () => ({
-    winnerTaskId: "task-w",
-    winnerImageUrl: "/generated/task-w/1.png",
-    winnerVerdict: { pass: true, issues: [], suggestion: "", scoredAt: "" },
     candidates: [],
+    winnerImageUrl: "/generated/task-w/1.png",
+    winnerTaskId: "task-w",
+    winnerVerdict: { issues: [], pass: true, scoredAt: "", suggestion: "" },
   })),
-  reviewContent,
   regenerateShot,
+  reviewContent,
   reviewScript,
   reviewShotImage,
   reviseScript,
@@ -75,7 +75,7 @@ const tdb = getTestDb();
 
 beforeEach(() => {
   tdb.$reset();
-  seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+  seedUser(tdb, { email: "a@test.dev", id: "user-a" });
 });
 
 /** 建一条生产数据行（工坊会写的那几列），返回其 id。 */
@@ -88,16 +88,16 @@ async function seedProduction(
   }> = {},
 ) {
   await productionRepository.upsertForUser("user-a", {
-    id,
-    title: "T",
-    type: "short_video",
-    tone: "",
-    logline: "",
-    scriptMarkdown: over.scriptMarkdown ?? "",
-    scenes: [],
     characters: over.characters ?? [],
+    id,
+    logline: "",
+    progress: { rendered: false, stage: "script" },
+    scenes: [],
+    scriptMarkdown: over.scriptMarkdown ?? "",
     shots: over.shots ?? [],
-    progress: { stage: "script", rendered: false },
+    title: "T",
+    tone: "",
+    type: "short_video",
   });
   return id;
 }
@@ -131,8 +131,8 @@ describe("run.start / 生命周期", () => {
   it("空项目启动 → running + 下一步 generate_script，并持久化 run", async () => {
     await seedProduction("proj_1");
     const res = await createCaller(makeCtx()).start({
-      projectId: "proj_1",
       goal: "一句话",
+      projectId: "proj_1",
     });
     expect(res.run.status).toBe("running");
     expect(res.run.approvalMode).toBe("stage"); // 默认档位
@@ -144,10 +144,10 @@ describe("run.start / 生命周期", () => {
 
   it("图缺 → 启动后下一步 render_images（只列缺图的镜）", async () => {
     await seedProduction("proj_2", {
-      scriptMarkdown: "# 剧本",
       characters: [{ id: "c1" }],
+      scriptMarkdown: "# 剧本",
       shots: [
-        { id: "a", index: 1, prompt: "p", imageUrl: "/x.png" },
+        { id: "a", imageUrl: "/x.png", index: 1, prompt: "p" },
         { id: "b", index: 2, prompt: "p" },
       ],
     });
@@ -194,8 +194,8 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
 
   it("reviewCharacter → 以 character 种类委派", async () => {
     await createCaller(makeCtx()).reviewCharacter({
-      projectId: "proj_r",
       characterId: "c1",
+      projectId: "proj_r",
     });
     expect(reviewContent).toHaveBeenCalledWith("user-a", "proj_r", "character", "c1");
   });
@@ -234,9 +234,9 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
 
   it("regenerateShot(gacha) → 委派重生成，mode 透传，返回 ok", async () => {
     const res = await createCaller(makeCtx()).regenerateShot({
+      mode: "gacha",
       projectId: "proj_r",
       shotId: "s1",
-      mode: "gacha",
     });
     expect(regenerateShot).toHaveBeenCalledWith("user-a", "proj_r", "s1", "gacha", undefined);
     expect(res.ok).toBe(true);
@@ -244,10 +244,10 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
 
   it("regenerateShot(reprompt + newPrompt) → 把新提示词一并透传", async () => {
     await createCaller(makeCtx()).regenerateShot({
-      projectId: "proj_r",
-      shotId: "s1",
       mode: "reprompt",
       newPrompt: "改进后的提示词",
+      projectId: "proj_r",
+      shotId: "s1",
     });
     expect(regenerateShot).toHaveBeenCalledWith(
       "user-a",
@@ -261,9 +261,9 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
   it("regenerateShot：mode 非法被入参 schema 拒绝", async () => {
     await expect(
       createCaller(makeCtx()).regenerateShot({
+        mode: /* SAFETY: 类型断言已复核 */ "乱" as "gacha",
         projectId: "proj_r",
         shotId: "s1",
-        mode: /* SAFETY: 类型断言已复核 */ "乱" as "gacha",
       }),
     ).rejects.toThrow();
   });
@@ -274,18 +274,18 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
 describe("run 人工侧（#2480）", () => {
   it("setHumanVerdict → 写回 shot.humanVerdict（裁决快照带 rev）", async () => {
     await seedProduction("proj_h", {
-      shots: [{ id: "s1", rev: 2, imageUrl: "/x.png" }],
+      shots: [{ id: "s1", imageUrl: "/x.png", rev: 2 }],
     });
     const res = await createCaller(makeCtx()).setHumanVerdict({
-      projectId: "proj_h",
       kind: "shot",
-      targetId: "s1",
-      pass: false,
       note: "崩了",
+      pass: false,
+      projectId: "proj_h",
+      targetId: "s1",
     });
     expect(res.humanVerdict).toMatchObject({
-      pass: false,
       note: "崩了",
+      pass: false,
       rev: 2,
     });
     const row = await productionRepository.getForUser("user-a", "proj_h");
@@ -298,20 +298,20 @@ describe("run 人工侧（#2480）", () => {
       characters: [{ id: "c1", rev: 1 }],
     });
     const res = await createCaller(makeCtx()).setHumanVerdict({
-      projectId: "proj_h",
       kind: "character",
-      targetId: "c1",
-      pass: true,
       note: "",
+      pass: true,
+      projectId: "proj_h",
+      targetId: "c1",
     });
     expect(res.humanVerdict).toMatchObject({ pass: true, rev: 1 });
     await expect(
       createCaller(makeCtx()).setHumanVerdict({
-        projectId: "proj_h",
         kind: "shot",
-        targetId: "missing",
-        pass: true,
         note: "",
+        pass: true,
+        projectId: "proj_h",
+        targetId: "missing",
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
@@ -320,8 +320,8 @@ describe("run 人工侧（#2480）", () => {
     await seedProduction("proj_h", { shots: [{ id: "s1" }] });
     await createCaller(makeCtx()).setHumanRating({
       projectId: "proj_h",
-      shotId: "s1",
       rating: 3,
+      shotId: "s1",
     });
     let row = await productionRepository.getForUser("user-a", "proj_h");
     expect(
@@ -329,8 +329,8 @@ describe("run 人工侧（#2480）", () => {
     ).toBe(3);
     await createCaller(makeCtx()).setHumanRating({
       projectId: "proj_h",
-      shotId: "s1",
       rating: null,
+      shotId: "s1",
     });
     row = await productionRepository.getForUser("user-a", "proj_h");
     expect(
@@ -339,8 +339,8 @@ describe("run 人工侧（#2480）", () => {
     await expect(
       createCaller(makeCtx()).setHumanRating({
         projectId: "proj_h",
-        shotId: "missing",
         rating: 2,
+        shotId: "missing",
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
@@ -348,19 +348,19 @@ describe("run 人工侧（#2480）", () => {
   it("setScriptHumanVerdict → 写 scriptReview.humanVerdict（digest = 当前剧本指纹）", async () => {
     await seedProduction("proj_h", { scriptMarkdown: "# 剧本" });
     const res = await createCaller(makeCtx()).setScriptHumanVerdict({
-      projectId: "proj_h",
-      pass: true,
       note: "可以",
+      pass: true,
+      projectId: "proj_h",
     });
     expect(res.humanVerdict).toMatchObject({
-      pass: true,
       digest: scriptDigestOf("# 剧本"),
+      pass: true,
     });
     const row = await productionRepository.getForUser("user-a", "proj_h");
     const state = normalizeScriptReviewState(row?.scriptReview);
     expect(state.humanVerdict).toMatchObject({
-      pass: true,
       digest: scriptDigestOf("# 剧本"),
+      pass: true,
     });
   });
 
@@ -368,19 +368,19 @@ describe("run 人工侧（#2480）", () => {
     await seedProduction("proj_h", {
       shots: [
         {
-          id: "a",
-          imageUrl: "/a.png",
           humanRating: 4,
+          id: "a",
           imageReview: {
-            pass: true,
             issues: [],
-            suggestion: "",
+            pass: true,
             scoredAt: "t",
             scores: {
-              promptAlignment: { score: 4, note: "" },
-              characterConsistency: { score: 3, note: "" },
+              characterConsistency: { note: "", score: 3 },
+              promptAlignment: { note: "", score: 4 },
             },
+            suggestion: "",
           },
+          imageUrl: "/a.png",
         },
         { id: "b", imageUrl: "/b.png" }, // 没人评分也没判定 → 不进样本
       ],

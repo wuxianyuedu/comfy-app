@@ -52,12 +52,12 @@ type ContractInputCatalogProps = {
 };
 
 export function ContractInputCatalog({
-  inputs,
   customInputs,
-  onAddPredefined,
+  inputs,
   onAddCustom,
-  onRenameCustom,
+  onAddPredefined,
   onRemoveCustom,
+  onRenameCustom,
 }: ContractInputCatalogProps) {
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -159,8 +159,8 @@ export function ContractInputCatalog({
                  *`preventDefault` 与输入法组字态（中文拼音未上屏时的 Enter
                  * 是「确认候选」，不是提交）。 */
                 {...enterCommit({
-                  onCommit: () => submitCustom(),
                   onCancel: () => setAdding(false),
+                  onCommit: () => submitCustom(),
                 })}
                 aria-label="自定义参数名称"
                 className="h-7 w-44 text-xs"

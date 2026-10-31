@@ -31,13 +31,13 @@ export type WorkshopStageItemProps = {
 };
 
 export function WorkshopStageItem({
+  className,
+  isCurrent,
   label,
-  subtitle,
+  onSelect,
   ordinal,
   ratio,
-  isCurrent,
-  onSelect,
-  className,
+  subtitle,
 }: WorkshopStageItemProps) {
   const done = ratio >= 1;
   return (

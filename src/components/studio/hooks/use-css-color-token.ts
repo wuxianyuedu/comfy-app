@@ -32,8 +32,8 @@ function ensureObserver(): void {
     }
   });
   observer.observe(document.documentElement, {
-    attributes: true,
     attributeFilter: ["class"],
+    attributes: true,
   });
 }
 

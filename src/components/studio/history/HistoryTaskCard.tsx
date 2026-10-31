@@ -21,13 +21,13 @@ type HistoryTaskCardProps = {
 
 /** 历史记录列表中的单条任务卡片（缩略图 + 状态 + 错误 + 操作按钮）。 */
 export function HistoryTaskCard({
-  task,
+  onCancel,
+  onOpenDetail,
+  onRemove,
+  onRetry,
   progress,
   retrying,
-  onOpenDetail,
-  onCancel,
-  onRetry,
-  onRemove,
+  task,
 }: HistoryTaskCardProps) {
   const st = STATUS_STYLE[task.status] ?? QUEUED_STATUS_STYLE;
   return (

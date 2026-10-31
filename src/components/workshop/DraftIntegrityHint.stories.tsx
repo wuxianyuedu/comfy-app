@@ -23,38 +23,31 @@ const BAD_CHARACTER_NUMBER = {
 };
 
 const BAD_SHOT_INDEX = {
+  description: "推轨向前",
   id: "sh_2",
   index: "二",
-  description: "推轨向前",
   status: "done",
 };
 
 /** 3 条元素各有问题：结论句里三类都出现，能验聚合口径。 */
 const MIXED_DRAFT = {
-  scenes: [{ id: "sc_1", heading: "", shotCount: 4 }],
-  characters: [
-    BAD_CHARACTER_NUMBER,
-    { id: "ch_2", name: "阿岚", styleTags: "「护目镜」" },
-  ],
-  shots: [{ id: "sh_1", index: 1, description: "起幅" }, BAD_SHOT_INDEX],
+  characters: [BAD_CHARACTER_NUMBER, { id: "ch_2", name: "阿岚", styleTags: "「护目镜」" }],
+  scenes: [{ heading: "", id: "sc_1", shotCount: 4 }],
+  shots: [{ description: "起幅", id: "sh_1", index: 1 }, BAD_SHOT_INDEX],
 };
 
 /** 6 条镜头形状不对：`MAX_LINES` 是 5，所以这里必然出现「另有 N 条」。 */
 const MANY_BAD_SHOTS = {
-  scenes: [],
   characters: [],
+  scenes: [],
   shots: Array.from({ length: 6 }, (_, i) => ({
+    description: `镜 ${String(i + 1)}`,
     id: `sh_${String(i)}`,
     index: `第${String(i + 1)}`,
-    description: `镜 ${String(i + 1)}`,
   })),
 };
 
-function HintSample({
-  draft,
-}: {
-  draft: Parameters<typeof auditDraftElements>[0];
-}) {
+function HintSample({ draft }: { draft: Parameters<typeof auditDraftElements>[0] }) {
   const issues = auditDraftElements(draft);
   return (
     <div className="w-2xl">
@@ -67,9 +60,9 @@ function HintSample({
 }
 
 const meta = {
-  title: "Workshop/DraftIntegrityHint",
-  component: HintSample,
   args: { draft: MIXED_DRAFT },
+  component: HintSample,
+  title: "Workshop/DraftIntegrityHint",
 } satisfies Meta<typeof HintSample>;
 
 export default meta;
@@ -97,9 +90,9 @@ export const MoreThanMaxLines: Story = {
 export const CleanDraftRendersNothing: Story = {
   args: {
     draft: {
-      scenes: [{ id: "sc_1", heading: "雨夜天台", shotCount: 4 }],
       characters: [{ id: "ch_1", name: "小美", styleTags: ["赛博朋克"] }],
-      shots: [{ id: "sh_1", index: 1, description: "起幅", status: "done" }],
+      scenes: [{ heading: "雨夜天台", id: "sc_1", shotCount: 4 }],
+      shots: [{ description: "起幅", id: "sh_1", index: 1, status: "done" }],
     },
   },
 };

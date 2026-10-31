@@ -8,9 +8,9 @@ import { uploadImageFile } from "./canvas-api";
 
 function jsonRes(status: number, body: unknown): Response {
   return /* SAFETY: 类型断言已复核 */ {
+    json: async () => body,
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
   } as unknown as Response;
 }
 
@@ -71,15 +71,15 @@ describe("uploadImageFile", () => {
         }),
       () =>
         jsonRes(202, {
+          detail: "ComfyUI 未运行，且未开启自动启动（设置页可开启）",
           ok: false,
           pending: true,
-          detail: "ComfyUI 未运行，且未开启自动启动（设置页可开启）",
         }),
       () =>
         jsonRes(202, {
+          detail: "ComfyUI 未运行，且未开启自动启动（设置页可开启）",
           ok: false,
           pending: true,
-          detail: "ComfyUI 未运行，且未开启自动启动（设置页可开启）",
         }),
     ]);
 

@@ -17,10 +17,10 @@ const defaultTaskRepoMock = {
   replaceRawCli: vi.fn(async () => undefined),
 };
 const defaultLoggerMock = {
-  warn: vi.fn(),
+  debug: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
-  debug: vi.fn(),
+  warn: vi.fn(),
 };
 
 vi.mock("../core/repository", () => ({
@@ -41,8 +41,8 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
     // 相当于把 deps 重新指回 taskRepository / logger 的替身。
     const mod = await loadRunnerState();
     mod.configureRunner({
-      taskRepo: defaultTaskRepoMock,
       log: defaultLoggerMock,
+      taskRepo: defaultTaskRepoMock,
     });
   });
 
@@ -70,11 +70,11 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
     });
     const injectedWarn = vi.fn();
     mod.configureRunner({
+      log: { warn: injectedWarn },
       taskRepo: {
         replaceLogs: injectedReplace,
         replaceRawCli: vi.fn(async () => undefined),
       },
-      log: { warn: injectedWarn },
     });
 
     await mod.persistLogs("t-di-fail");

@@ -20,17 +20,17 @@ afterEach(() => {
 
 /** 一个配齐的通道；用例只改自己关心的字段。 */
 const IMAGE: ApiChannelStored = {
-  baseUrl: "https://api.example.com/v1",
-  path: "/images/generations",
-  model: "m1",
   apiKey: "k1",
+  baseUrl: "https://api.example.com/v1",
+  model: "m1",
+  path: "/images/generations",
 };
 
 const VIDEO: ApiChannelStored = {
-  baseUrl: "https://api.example.com/v1",
-  path: "/videos/generations",
-  model: "v1",
   apiKey: "k1",
+  baseUrl: "https://api.example.com/v1",
+  model: "v1",
+  path: "/videos/generations",
 };
 
 /** fetch 打桩：只记录调用，返回值由 impl 给。请求体用 `bodyOf` 读成对象。 */
@@ -59,9 +59,9 @@ function headersOf(mock: ReturnType<typeof stubFetch>, call = 0): Record<string,
 /** 上游响应桩：按上面的 mock 签名给回 Response 形状。 */
 function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 500) {
   return {
+    json: async () => body,
     ok,
     status,
-    json: async () => body,
     text: async () => JSON.stringify(body),
   };
 }
@@ -92,7 +92,7 @@ describe("defaultChannelsFromEnv / normalizeSettings", () => {
     expect(defaults.image.baseUrl).toBe("https://from-env");
     // 存量里**只**有 baseUrl（其余字段缺席）——缺席字段取 env / 内置默认
     const merged = normalizeSettings(
-      { image: { baseUrl: "https://stored", path: "", model: "", apiKey: "" } },
+      { image: { apiKey: "", baseUrl: "https://stored", model: "", path: "" } },
       defaults,
     );
     expect(merged.image.baseUrl).toBe("https://stored");
@@ -121,7 +121,7 @@ describe("sanitizeChannel", () => {
   });
 
   it("字符串字段去空白；apiKey 为空串不被默认值顶掉（显式清空合法）", () => {
-    const c = sanitizeChannel({ baseUrl: "  https://x  ", apiKey: "" }, IMAGE);
+    const c = sanitizeChannel({ apiKey: "", baseUrl: "  https://x  " }, IMAGE);
     expect(c.baseUrl).toBe("https://x");
     expect(c.apiKey).toBe("");
   });
@@ -162,8 +162,8 @@ describe("callImageGeneration", () => {
     const fetchMock = stubFetch(async () => jsonResponse({}));
     await expect(
       callImageGeneration({ prompt: "p" }, { ...IMAGE, baseUrl: "" }, () => ({
-        endpoint: "/images/generations",
         apiKey: "",
+        endpoint: "/images/generations",
         model: "",
       })),
     ).rejects.toThrow("远端 API 生图通道未配置");
@@ -173,7 +173,7 @@ describe("callImageGeneration", () => {
   it("请求体是 OpenAI 兼容默认映射，空串归一为省略字段", async () => {
     const fetchMock = stubFetch(async () => jsonResponse({ data: [{ url: "https://img/1.png" }] }));
     const url = await callImageGeneration(
-      { prompt: "p", negative: "", size: "" },
+      { negative: "", prompt: "p", size: "" },
       IMAGE,
       () => null,
     );
@@ -273,7 +273,7 @@ describe("callVideoSubmit", () => {
 
   it("首帧图同时写 image_url 与 image（兼容两种上游命名）", async () => {
     const fetchMock = stubFetch(async () => jsonResponse({ url: "u" }));
-    await callVideoSubmit({ prompt: "p", imageDataUrl: "data:image/png;base64,AAA" }, VIDEO);
+    await callVideoSubmit({ imageDataUrl: "data:image/png;base64,AAA", prompt: "p" }, VIDEO);
     const body = bodyOf(fetchMock);
     expect(body.image_url).toBe("data:image/png;base64,AAA");
     expect(body.image).toBe("data:image/png;base64,AAA");
@@ -291,8 +291,8 @@ describe("callVideoPoll", () => {
   it("拿到结果 → pending=false + url", async () => {
     stubFetch(async () => jsonResponse({ output_url: "https://v/done.mp4" }));
     await expect(callVideoPoll("t-1", VIDEO)).resolves.toEqual({
-      url: "https://v/done.mp4",
       pending: false,
+      url: "https://v/done.mp4",
     });
   });
 

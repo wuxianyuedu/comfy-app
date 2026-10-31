@@ -34,9 +34,9 @@ export type RowToken = {
  *  token 内部已含深浅两态，不再写 `dark:`。 */
 export const LEVEL_BADGE_STYLES: Record<LogLevel, string> = {
   debug: "border-border-strong bg-subtle text-ink-muted",
+  error: "border-destructive/20 bg-destructive/15 text-destructive",
   info: "border-info/20 bg-info/15 text-info-strong",
   warn: "border-warning/20 bg-warning/15 text-warning-strong",
-  error: "border-destructive/20 bg-destructive/15 text-destructive",
 };
 
 /**
@@ -73,9 +73,9 @@ export const FILTER_SELECTED_ITEM_STYLES = "bg-primary/12! ring-1 ring-primary/4
  *  `text-destructive`（与徽标同源）；info/debug 本就是 ink 系中性档。 */
 export const LEVEL_TEXT_STYLES: Record<LogLevel, string> = {
   debug: "text-ink-soft",
+  error: "text-destructive",
   info: "text-ink-field",
   warn: "text-warning-strong",
-  error: "text-destructive",
 };
 
 export function hasAnsi(text: string): boolean {
@@ -140,8 +140,8 @@ function styleOfToken(text: string): AnsiStyleKey | undefined {
  */
 function styledSpans(text: string): Array<StyledSpan> {
   const spans: Array<StyledSpan> = findLogPathTokens(text).map((token) => ({
-    start: token.start,
     end: token.end,
+    start: token.start,
     style: PATH_STYLE,
   }));
   for (const match of text.matchAll(TOKEN_RE)) {
@@ -155,7 +155,7 @@ function styledSpans(text: string): Array<StyledSpan> {
     if (inside) {
       continue;
     }
-    spans.push({ start, end, style });
+    spans.push({ end, start, style });
   }
   return spans.sort((a, b) => a.start - b.start);
 }
@@ -179,7 +179,7 @@ export function tokenizeRow(text: string): Array<RowToken> {
     if (span.start > cursor) {
       parts.push({ text: text.slice(cursor, span.start) });
     }
-    parts.push({ text: text.slice(span.start, span.end), style: span.style });
+    parts.push({ style: span.style, text: text.slice(span.start, span.end) });
     cursor = span.end;
   }
   if (cursor < text.length) {
@@ -198,14 +198,14 @@ export function rowFragments(text: string): Array<RowToken> {
   const logrus = colorizeLogrusLine(text);
   if (logrus) {
     return logrus.map((seg) => ({
-      text: seg.text,
       style: seg.styles?.[0],
+      text: seg.text,
     }));
   }
   if (hasAnsi(text)) {
     return parseAnsiSegments(text).map((seg) => ({
-      text: seg.text,
       style: seg.styles?.[0],
+      text: seg.text,
     }));
   }
   return tokenizeRow(text);
@@ -217,32 +217,32 @@ export function rowFragments(text: string): Array<RowToken> {
  *  对应语义 token，也不应被 token 化——所以整块走 P71 的 allow 标记。 */
 // p71-allow:start  ANSI SGR 终端 8 色是 §3.6.1 例外：颜色代表 terminal color identity、不是主题状态色
 export const TOKEN_CLASS: Record<AnsiStyleKey, string> = {
-  bold: "font-semibold",
-  dim: "opacity-60",
-  italic: "italic",
-  underline: "underline",
-  red: "text-red-600 dark:text-red-400",
-  green: "text-green-600 dark:text-green-400",
-  yellow: "text-amber-600 dark:text-amber-400",
   blue: "text-blue-600 dark:text-blue-400",
-  magenta: "text-purple-600 dark:text-purple-400",
-  cyan: "text-cyan-600 dark:text-cyan-400",
-  white: "text-ink-bright",
-  gray: "text-ink-muted",
-  "red-bright": "text-red-700 font-semibold dark:text-red-300",
-  "green-bright": "text-green-700 font-semibold dark:text-green-300",
-  "yellow-bright": "text-amber-700 font-semibold dark:text-amber-300",
-  "blue-bright": "text-blue-700 dark:text-blue-300",
-  "magenta-bright": "text-purple-700 dark:text-purple-300",
-  "cyan-bright": "text-cyan-700 font-semibold dark:text-cyan-300",
-  "white-bright": "text-ink-bright",
-  "red-bg": "bg-red-500/20",
-  "green-bg": "bg-green-500/20",
-  "yellow-bg": "bg-amber-500/20",
   "blue-bg": "bg-blue-500/20",
-  "magenta-bg": "bg-purple-500/20",
+  "blue-bright": "text-blue-700 dark:text-blue-300",
+  bold: "font-semibold",
+  cyan: "text-cyan-600 dark:text-cyan-400",
   "cyan-bg": "bg-cyan-500/20",
+  "cyan-bright": "text-cyan-700 font-semibold dark:text-cyan-300",
+  dim: "opacity-60",
+  gray: "text-ink-muted",
+  green: "text-green-600 dark:text-green-400",
+  "green-bg": "bg-green-500/20",
+  "green-bright": "text-green-700 font-semibold dark:text-green-300",
+  italic: "italic",
+  magenta: "text-purple-600 dark:text-purple-400",
+  "magenta-bg": "bg-purple-500/20",
+  "magenta-bright": "text-purple-700 dark:text-purple-300",
+  red: "text-red-600 dark:text-red-400",
+  "red-bg": "bg-red-500/20",
+  "red-bright": "text-red-700 font-semibold dark:text-red-300",
+  underline: "underline",
+  white: "text-ink-bright",
   "white-bg": "bg-subtle",
+  "white-bright": "text-ink-bright",
+  yellow: "text-amber-600 dark:text-amber-400",
+  "yellow-bg": "bg-amber-500/20",
+  "yellow-bright": "text-amber-700 font-semibold dark:text-amber-300",
 };
 // p71-allow:end
 

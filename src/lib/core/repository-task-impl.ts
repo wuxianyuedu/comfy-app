@@ -137,8 +137,8 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
       const claimed = await db
         .update(task)
         .set({
-          status: "RUNNING",
           claimedBy: mode,
+          status: "RUNNING",
           // 领走即开始：这里是**无条件覆写**（不是 `claimStamp()` 的 COALESCE），
           // 因为一次领取就是新一轮执行的起点（崩溃后重领的行不该带着上一轮的时刻）。
           claimedAt: new Date(),
@@ -162,9 +162,9 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
     } | null> {
       const rows = await db
         .select({
-          workflowName: task.workflowName,
           execPayload: task.execPayload,
           params: task.params,
+          workflowName: task.workflowName,
         })
         .from(task)
         .where(and(eq(task.id, taskId), ownedBy(owner)))
@@ -196,8 +196,8 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
     > {
       const rows = await db
         .select({
-          id: task.id,
           createdAt: task.createdAt,
+          id: task.id,
           workflowName: task.workflowName,
           /* 判死原因要把那个「没人领的归属值」说出来：用户重跑救不了它，能救的是
            *  把 `COMFY_EXECUTOR` 配回有宿主在跑的那一侧。 */
@@ -245,9 +245,9 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
     > {
       return db
         .select({
+          createdAt: task.createdAt,
           id: task.id,
           promptId: task.promptId,
-          createdAt: task.createdAt,
           workflowName: task.workflowName,
         })
         .from(task)
@@ -278,14 +278,14 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
     ): Promise<void> {
       await db.insert(taskImage).values(
         images.map((im) => ({
-          taskId,
-          localPath: im.localPath,
-          sortIndex: im.sortIndex,
+          height: im.height ?? null,
           isCover: im.isCover,
+          localPath: im.localPath,
           mediaType: im.mediaType,
           seed: im.seed,
+          sortIndex: im.sortIndex,
+          taskId,
           width: im.width ?? null,
-          height: im.height ?? null,
         })),
       );
     },
@@ -362,7 +362,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
   /** 「0 行受影响」时的原因分类——只在输掉的那条路径上多付一次读。 */
   async function classifySkipped(taskId: string): Promise<TaskWriteOutcome> {
     const rows = await db
-      .select({ status: task.status, claimedBy: task.claimedBy })
+      .select({ claimedBy: task.claimedBy, status: task.status })
       .from(task)
       .where(eq(task.id, taskId))
       .limit(1);
@@ -391,13 +391,13 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
     } | null> {
       const rows = await db
         .select({
-          projectId: task.projectId,
-          params: task.params,
-          prompt: task.prompt,
-          negativePrompt: task.negativePrompt,
-          workflowName: task.workflowName,
-          referenceImages: task.referenceImages,
           createdAt: task.createdAt,
+          negativePrompt: task.negativePrompt,
+          params: task.params,
+          projectId: task.projectId,
+          prompt: task.prompt,
+          referenceImages: task.referenceImages,
+          workflowName: task.workflowName,
         })
         .from(task)
         .where(eq(task.id, taskId))
@@ -431,9 +431,9 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
       const updated = await db
         .update(task)
         .set({
+          claimedAt: claimStamp(),
           progress: pct,
           status: "RUNNING",
-          claimedAt: claimStamp(),
           ...(node !== undefined ? { progressNode: node } : {}),
         })
         .where(writeGuard(taskId))
@@ -447,7 +447,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
     async markRunning(taskId: string, promptId: string): Promise<boolean> {
       const updated = await db
         .update(task)
-        .set({ status: "RUNNING", promptId, claimedAt: claimStamp() })
+        .set({ claimedAt: claimStamp(), promptId, status: "RUNNING" })
         .where(writeGuard(taskId))
         .returning({ id: task.id });
       return updated.length > 0;
@@ -467,11 +467,11 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
       const updated = await db
         .update(task)
         .set({
-          status: "SUCCEEDED",
-          progress: 100,
           finishedAt: new Date(),
-          resultImages: data.resultImages,
           params: data.params,
+          progress: 100,
+          resultImages: data.resultImages,
+          status: "SUCCEEDED",
           ...(data.workflowSnapshot !== undefined
             ? { workflowSnapshot: data.workflowSnapshot }
             : {}),
@@ -495,10 +495,10 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
       const updated = await db
         .update(task)
         .set({
-          status: "FAILED",
           error,
-          validationErrors: validationErrors?.length ? JSON.stringify(validationErrors) : null,
           finishedAt: new Date(),
+          status: "FAILED",
+          validationErrors: validationErrors?.length ? JSON.stringify(validationErrors) : null,
         })
         .where(writeGuard(taskId))
         .returning({ id: task.id });
@@ -517,7 +517,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
     async cancel(taskId: string): Promise<TaskWriteOutcome> {
       const updated = await db
         .update(task)
-        .set({ status: "CANCELLED", finishedAt: new Date() })
+        .set({ finishedAt: new Date(), status: "CANCELLED" })
         .where(and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)))
         .returning({ id: task.id });
       return updated.length > 0 ? "written" : classifySkipped(taskId);
@@ -534,7 +534,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
     ): Promise<TaskWriteOutcome> {
       const updated = await db
         .update(task)
-        .set({ status, finishedAt: new Date(), error })
+        .set({ error, finishedAt: new Date(), status })
         .where(writeGuard(taskId))
         .returning({ id: task.id });
       return updated.length > 0 ? "written" : classifySkipped(taskId);
@@ -546,7 +546,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
       taskId: string,
     ): Promise<{ promptId: string | null; status: string } | null> {
       const rows = await db
-        .select({ status: task.status, promptId: task.promptId })
+        .select({ promptId: task.promptId, status: task.status })
         .from(task)
         .where(eq(task.id, taskId))
         .limit(1);

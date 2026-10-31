@@ -44,13 +44,13 @@ function setShell(on: boolean) {
 function setViewport(width: number, height: number) {
   Object.defineProperty(window, "innerWidth", {
     configurable: true,
-    writable: true,
     value: width,
+    writable: true,
   });
   Object.defineProperty(window, "innerHeight", {
     configurable: true,
-    writable: true,
     value: height,
+    writable: true,
   });
 }
 
@@ -59,7 +59,7 @@ describe("useOverlayBoundary", () => {
     setShell(false);
     setViewport(1024, 768);
     const { result } = renderHook(() => useOverlayBoundary());
-    expect(result.current).toEqual({ x: 0, y: 0, width: 1024, height: 768 });
+    expect(result.current).toEqual({ height: 768, width: 1024, x: 0, y: 0 });
   });
 
   it("服务端渲染：给 null（还没有视口读数），不拿假矩形摆位", () => {
@@ -92,6 +92,6 @@ describe("useOverlayBoundary", () => {
     /* 让位量 = `--spacing-title-bar`（2.25rem × 16 = 36px），与 `globals.css`
      * 同源；这里钉的是**关系**（顶边下移 = 高度减少、左右不动），具体数字由
      * `full-screen-layer.test.ts` 对着常量钉。 */
-    expect(result.current).toEqual({ x: 0, y: 36, width: 1440, height: 864 });
+    expect(result.current).toEqual({ height: 864, width: 1440, x: 0, y: 36 });
   });
 });

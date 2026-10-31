@@ -28,12 +28,12 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
   return {
     ...actual,
     buildLibraryWorkflowInput: vi.fn(),
+    preparePortraitReferences: vi.fn(async () => ({
+      failedCount: 0,
+      files: [],
+    })),
     startLocalGenerate: vi.fn(),
     watchTask: vi.fn(),
-    preparePortraitReferences: vi.fn(async () => ({
-      files: [],
-      failedCount: 0,
-    })),
   };
 });
 
@@ -42,40 +42,40 @@ const mockedStart = vi.mocked(startLocalGenerate);
 const mockedWatch = vi.mocked(watchTask);
 
 const scene: Scene = {
-  id: "scene-1",
-  heading: "场景1 · 清晨",
-  location: "咖啡馆",
-  time: "清晨",
   action: "小满推门进入",
   dialogue: "你好",
+  heading: "场景1 · 清晨",
+  id: "scene-1",
+  location: "咖啡馆",
   shotCount: 1,
+  time: "清晨",
 };
 const character: Character = {
-  id: "c1",
-  name: "小满",
   ageGender: "少女",
   appearance: "短发",
   costume: "校服",
-  personality: "开朗",
-  temperament: "元气",
-  styleTags: [],
-  positivePrompt: "a schoolgirl, cinematic",
+  id: "c1",
+  name: "小满",
   negativePrompt: "blurry",
   params: {},
+  personality: "开朗",
+  positivePrompt: "a schoolgirl, cinematic",
+  styleTags: [],
+  temperament: "元气",
 };
 
 function makeShot(patch: Partial<Shot> = {}): Shot {
   return {
+    characterIds: ["c1"],
+    description: "",
     id: "shot-1",
     index: 1,
-    sceneId: "scene-1",
-    sceneHeading: "场景1 · 清晨",
-    shotType: "medium",
-    description: "",
-    characterIds: ["c1"],
-    prompt: "",
     negativePrompt: "",
     params: {},
+    prompt: "",
+    sceneHeading: "场景1 · 清晨",
+    sceneId: "scene-1",
+    shotType: "medium",
     status: "idle",
     ...patch,
   };
@@ -83,27 +83,27 @@ function makeShot(patch: Partial<Shot> = {}): Shot {
 
 const channelsConfigured: ApiChannelsView = {
   image: {
-    configured: true,
     baseUrl: "https://api.example.com",
-    path: "/images/generations",
-    model: "",
+    configured: true,
     hasApiKey: true,
+    model: "",
+    path: "/images/generations",
   },
   video: {
-    configured: false,
     baseUrl: "",
-    path: "/videos/generations",
-    model: "",
+    configured: false,
     hasApiKey: false,
+    model: "",
+    path: "/videos/generations",
   },
 };
 
 function buildResult(patch: Partial<LibraryWorkflowBuildResult> = {}): LibraryWorkflowBuildResult {
   return {
-    input: { workflow: "wf-1", prompt: "a cat" },
-    unmatched: [],
+    input: { prompt: "a cat", workflow: "wf-1" },
     mode: null,
     modes: [],
+    unmatched: [],
     usesFirstFrame: false,
     usesLastFrame: false,
     ...patch,
@@ -136,7 +136,7 @@ function renderStudio(options: RenderOptions = {}) {
       workflowId={options.workflowId ?? ""}
     />,
   );
-  return { onShotsChange, onNotice, onCancelShot, ...utils };
+  return { onCancelShot, onNotice, onShotsChange, ...utils };
 }
 
 /** onShotsChange 是函数式补丁：把它折叠成「最终一条 patch 里的镜头列表」。 */
@@ -158,7 +158,7 @@ afterEach(() => cleanup());
 describe("ShotStudio 门禁", () => {
   it("本地通道未选工作流：点单镜生成被行内门禁拦下，不发起请求", async () => {
     const user = userEvent.setup();
-    renderStudio({ workflowId: "", shots: [makeShot({ prompt: "a cat" })] });
+    renderStudio({ shots: [makeShot({ prompt: "a cat" })], workflowId: "" });
 
     await user.click(screen.getByRole("button", { name: "生成此镜头" }));
 
@@ -169,9 +169,9 @@ describe("ShotStudio 门禁", () => {
   it("API 通道未配置：切到 API 通道后批量禁用并给出放行提示", async () => {
     const user = userEvent.setup();
     renderStudio({
-      workflowId: "wf-1",
-      shots: [makeShot({ prompt: "a cat" })],
       apiChannels: null,
+      shots: [makeShot({ prompt: "a cat" })],
+      workflowId: "wf-1",
     });
     /* 通道 chip 是 `role="radio"`（一排里选一个，规范 16 §16.2.4.75）——
        不是 `role="button"`。改的是读法，不是它锁的那件事。 */
@@ -196,8 +196,8 @@ describe("ShotStudio 生图出口", () => {
   it("本地生成：unmatched 口在发起前经 onNotice 上屏（不静默丢输入）", async () => {
     const user = userEvent.setup();
     const { onNotice } = renderStudio({
-      workflowId: "wf-1",
       shots: [makeShot({ prompt: "a cat" })],
+      workflowId: "wf-1",
     });
     mockedBuild.mockResolvedValue(buildResult({ unmatched: ["seed"] }));
     mockedStart.mockResolvedValue("task-1");
@@ -213,14 +213,14 @@ describe("ShotStudio 生图出口", () => {
 
   it("进行中且有本机任务 id 的镜头显示「取消」，点击接 onCancelShot", () => {
     const { onCancelShot } = renderStudio({
-      workflowId: "wf-1",
       shots: [
         makeShot({
+          prompt: "a cat",
           status: "running",
           taskId: "task-live",
-          prompt: "a cat",
         }),
       ],
+      workflowId: "wf-1",
     });
     const cancel = screen.getByRole("button", { name: "取消" });
     fireEvent.click(cancel);
@@ -230,13 +230,13 @@ describe("ShotStudio 生图出口", () => {
   it("本地任务落定后按结果回写状态（成功 → done）", async () => {
     const user = userEvent.setup();
     const { onShotsChange } = renderStudio({
-      workflowId: "wf-1",
       shots: [makeShot({ prompt: "a cat" })],
+      workflowId: "wf-1",
     });
     mockedBuild.mockResolvedValue(buildResult());
     mockedStart.mockResolvedValue("task-1");
     mockedWatch.mockImplementation((_taskId, h) => {
-      h.onOutput?.({ url: "/api/generated/1.png", kind: "image" });
+      h.onOutput?.({ kind: "image", url: "/api/generated/1.png" });
       h.onSettled({ ok: true });
       return () => undefined;
     });

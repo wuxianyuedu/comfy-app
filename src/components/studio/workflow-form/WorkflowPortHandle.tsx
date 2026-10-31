@@ -93,15 +93,15 @@ export function portChipStyle(type?: string): {
   if (PORT_IMG.has(t)) {
     return {
       background: "var(--color-chip-type-image-bg)",
-      color: "#7C5CFC",
       border: "1px solid color-mix(in srgb, #7C5CFC 40%, transparent)",
+      color: "#7C5CFC",
     };
   }
   if (PORT_VID.has(t)) {
     return {
       background: "var(--color-chip-type-video-bg)",
-      color: "#FF5CA8",
       border: "1px solid color-mix(in srgb, #FF5CA8 40%, transparent)",
+      color: "#FF5CA8",
     };
   }
   return { background: "var(--color-border-strong)", color: "#9A9AAD" };
@@ -111,10 +111,10 @@ export function portChipStyle(type?: string): {
  *  现在也要复用这个端点。要避免飘移，handle 几何参数 / 锚点
  *  / 描边色规则都还在这里维护。 */
 export function PortHandle({
-  id,
   dir,
-  type,
+  id,
   style: extraStyle,
+  type,
 }: {
   dir: "in" | "out";
   id: string;
@@ -134,12 +134,12 @@ export function PortHandle({
   // 输出端点描边用卡片底色 `#16161C` 形成「半圆在外/半圆在内」观感。
   const stroke = dir === "out" ? "#16161C" : PORT_STROKE;
   const dotStyle: React.CSSProperties = {
-    position: "absolute",
-    width: 12,
-    height: 12,
-    borderRadius: 9999,
     background: color,
     border: `1px solid ${stroke}`,
+    borderRadius: 9999,
+    height: 12,
+    position: "absolute",
+    width: 12,
     // Ardot 稿：`DROP_SHADOW` rgba(0,0,0,0.25) y4 blur4，节点下方轻投影。
     boxShadow: "0 4px 4px rgba(0,0,0,0.25)",
     // v3: Handle 圆心必须挂在 subrow 中心才能精确对齐

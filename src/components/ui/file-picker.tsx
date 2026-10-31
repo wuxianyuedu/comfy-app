@@ -62,7 +62,7 @@ export type FilePickerHandle = {
  * `Input` 用 `useMemo` 固定身份：它在 JSX 里是组件位置，每次渲染重建会让
  * React 卸载再挂载 input（正在进行的文件对话框会被打断）。
  */
-export function useFilePicker({ onPick, accept, multiple, inputProps }: FilePickerProps) {
+export function useFilePicker({ accept, inputProps, multiple, onPick }: FilePickerProps) {
   const handleRef = React.useRef<FilePickerHandle | null>(null);
 
   /* `open` 必须身份稳定：调用方会把它放进 `onClick` 甚至依赖数组。 */
@@ -84,7 +84,7 @@ export function useFilePicker({ onPick, accept, multiple, inputProps }: FilePick
     [onPick, accept, multiple, inputProps],
   );
 
-  return { open, Input };
+  return { Input, open };
 }
 
 /**
@@ -92,11 +92,11 @@ export function useFilePicker({ onPick, accept, multiple, inputProps }: FilePick
  * 视图层一般用 `useFilePicker`（已封好 ref 转发），本组件是它的实现细节。
  */
 export function FilePicker({
-  onPick,
   accept,
-  multiple,
-  inputProps,
   handleRef,
+  inputProps,
+  multiple,
+  onPick,
 }: FilePickerProps & {
   handleRef?: React.RefObject<FilePickerHandle | null>;
 }) {
@@ -142,11 +142,11 @@ export function FilePicker({
  */
 
 export function FilePickerButton({
-  onPick,
   accept,
-  multiple,
-  inputProps,
   children,
+  inputProps,
+  multiple,
+  onPick,
   ...buttonProps
 }: FilePickerProps &
   OmitOwnProps<React.ComponentProps<typeof Button>, "children" | "onClick"> & {

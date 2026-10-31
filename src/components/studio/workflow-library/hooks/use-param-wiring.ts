@@ -62,9 +62,9 @@ export type UseParamWiringArgs = {
 };
 
 export function useParamWiring({
-  paramMap,
   mode,
   onPatchParamMap,
+  paramMap,
 }: UseParamWiringArgs): ParamWiringController {
   const activeMode = mode ?? null;
   /* 本地 overlay：库里改一条线不必等一次 PATCH 往返才看得见结果。
@@ -135,14 +135,14 @@ export function useParamWiring({
   );
 
   return {
-    mode: activeMode,
-    isManual,
+    commitParamMap: commit,
     connect,
     disconnect,
-    resetToAuto,
-    resetMany,
     effectiveParamMap: effective,
-    commitParamMap: commit,
+    isManual,
+    mode: activeMode,
+    resetMany,
+    resetToAuto,
   };
 }
 

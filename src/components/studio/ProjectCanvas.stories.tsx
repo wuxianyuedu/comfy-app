@@ -26,9 +26,9 @@ import {
  * 那不是 story 坏了。
  */
 const meta = {
-  title: "Studio/ProjectCanvas",
   component: ProjectCanvas,
   parameters: { layout: "fullscreen" },
+  title: "Studio/ProjectCanvas",
 } satisfies Meta<typeof ProjectCanvas>;
 
 export default meta;
@@ -38,7 +38,7 @@ type Story = StoryObj<typeof ProjectCanvasHarness>;
 /** 适配件：备好真项目，再把画布整屏摆出来。 */
 function ProjectCanvasHarness({ sceneName }: { sceneName: ProjectSceneName }) {
   /* 备好之后画布自己会从 canvas-store 读回同一批（真读，不是 props 传）。 */
-  useSeededProjects({ primary: projectScene(sceneName), extraNames: [] });
+  useSeededProjects({ extraNames: [], primary: projectScene(sceneName) });
   return (
     <div className="bg-canvas h-180 w-full overflow-hidden">
       <ProjectCanvas />

@@ -126,7 +126,7 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
   // 闭包里的「这个文件来自根目录 X」标记 —— 每推入一项就盖上，
   // by `visit` so callers can show "📂 <root 短名>" without re-computing
   // 让调用方能在自己那边做前缀匹配。
-  const stampRoot = () => ({ rootRawPath: rawDir, rootAbsPath: abs });
+  const stampRoot = () => ({ rootAbsPath: abs, rootRawPath: rawDir });
 
   let rootStat: fs.Stats;
   try {
@@ -134,26 +134,26 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
   } catch (e) {
     const code = /* SAFETY: 类型断言已复核 */ (e as NodeJS.ErrnoException | undefined)?.code;
     if (code === "ENOENT") {
-      return { rawPath: rawDir, absPath: abs, exists: false, files: [] };
+      return { absPath: abs, exists: false, files: [], rawPath: rawDir };
     }
     // e 为 unknown：`(e as Error)?.message ?? String(e)` 与旧 `e?.message ?? String(e)`
     // 的运行时语义逐字一致（node fs 抛的都是 Error 实例）。
     const msg = /* SAFETY: 类型断言已复核 */ (e as Error | undefined)?.message ?? String(e);
     return {
-      rawPath: rawDir,
       absPath: abs,
+      error: `无法访问：${msg}`,
       exists: false,
       files: [],
-      error: `无法访问：${msg}`,
+      rawPath: rawDir,
     };
   }
   if (!rootStat.isDirectory()) {
     return {
-      rawPath: rawDir,
       absPath: abs,
+      error: "配置的路径不是目录（指向的是一个文件）",
       exists: true,
       files: [],
-      error: "配置的路径不是目录（指向的是一个文件）",
+      rawPath: rawDir,
     };
   }
 
@@ -165,10 +165,10 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
     } catch {
       out.push({
         absPath: "",
+        mtimeMs: 0,
         name: `(无法读取 ${dir})`,
         rawPath: dir,
         size: 0,
-        mtimeMs: 0,
         ...stampRoot(),
       });
       // 兜底：读目录出错就跳过它，继续处理兄弟目录
@@ -205,10 +205,10 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
       }
       out.push({
         absPath: path.resolve(fullPath),
+        mtimeMs: st.mtimeMs,
         name: path.basename(fullPath),
         rawPath: fullPath,
         size: st.size,
-        mtimeMs: st.mtimeMs,
         ...stampRoot(),
       });
     }
@@ -218,17 +218,17 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
   } catch (e) {
     const msg = /* SAFETY: 类型断言已复核 */ (e as Error | undefined)?.message ?? String(e);
     return {
-      rawPath: rawDir,
       absPath: abs,
+      error: `扫描失败：${msg}`,
       exists: true,
       files: out,
-      error: `扫描失败：${msg}`,
+      rawPath: rawDir,
     };
   }
 
   /* 「按当前区域设置排序」走 `~/lib/ordered-set`（规范 16 §16.2.4.55）。 */
   out.sort((left, right) => compareText(left.name, right.name));
-  return { rawPath: rawDir, absPath: abs, exists: true, files: out };
+  return { absPath: abs, exists: true, files: out, rawPath: rawDir };
 }
 
 /** 扫描所有配置的根目录，产出：
@@ -258,7 +258,7 @@ export async function scanLocalWorkflowRoots(
     allFiles.push(file);
   }
 
-  return { roots, allFiles };
+  return { allFiles, roots };
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -361,7 +361,7 @@ function checksumOfFile(
       stream.on("error", () => resolve(null));
       stream.on("end", () => {
         const checksum = hash.digest("hex").slice(0, 16);
-        rememberChecksum(key, { mtimeMs, size, checksum });
+        rememberChecksum(key, { checksum, mtimeMs, size });
         resolve({ checksum, mtimeMs });
       });
     } catch {

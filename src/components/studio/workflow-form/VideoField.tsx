@@ -22,12 +22,12 @@ import {
 } from "./grouped-controls-presets";
 
 function VideoField({
-  role,
+  disabled,
   entry,
   preset,
-  values,
+  role,
   set,
-  disabled,
+  values,
 }: {
   disabled?: boolean;
   entry: EnrichedWidget;

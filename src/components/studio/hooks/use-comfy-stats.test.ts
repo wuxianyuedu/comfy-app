@@ -34,22 +34,22 @@ const GIB = 1024 * 1024 * 1024;
 function onlineStats(over: Partial<ComfyStatsPayload> = {}): ComfyStatsPayload {
   return {
     online: true,
-    vramUsed: 2 * GIB,
+    ramTotal: 32 * GIB,
+    ramUsed: 16 * GIB,
     vramFree: 6 * GIB,
     vramTotal: 8 * GIB,
-    ramUsed: 16 * GIB,
-    ramTotal: 32 * GIB,
+    vramUsed: 2 * GIB,
     ...over,
   };
 }
 
 const OFFLINE: ComfyStatsPayload = {
   online: false,
-  vramUsed: 0,
+  ramTotal: 0,
+  ramUsed: 0,
   vramFree: 0,
   vramTotal: 0,
-  ramUsed: 0,
-  ramTotal: 0,
+  vramUsed: 0,
 };
 
 /** 手动跑一轮轮询并等其异步落定。 */
@@ -130,11 +130,11 @@ describe("useComfyStats 进程级判活（与 /api/comfy/queue 同口径）", ()
   const aliveButNoAnswer: ComfyStatsPayload = {
     online: false,
     processAlive: true,
-    vramUsed: 0,
+    ramTotal: 0,
+    ramUsed: 0,
     vramFree: 0,
     vramTotal: 0,
-    ramUsed: 0,
-    ramTotal: 0,
+    vramUsed: 0,
   };
 
   it("成功后连续「进程在但没应答」：online 保持 true、保留旧数据置 stale、不翻离线", async () => {

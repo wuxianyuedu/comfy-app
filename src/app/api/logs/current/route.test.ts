@@ -46,8 +46,8 @@ vi.mock("~/lib/shell/launch-diagnostics", async () => {
       .../* SAFETY: 类型断言已复核 */ (
         actual as { launchPaths: (root: string) => Record<string, unknown> }
       ).launchPaths(tmp),
-      shellLog: shellLogFile,
       shellLaunchLog: shellLaunchLogFile,
+      shellLog: shellLogFile,
     }),
   };
 });
@@ -91,7 +91,7 @@ beforeEach(() => {
   fs.mkdirSync(servicesDir, { recursive: true });
   fs.writeFileSync(logFile, "", "utf8");
   /* 面板转录目录按用例重建：`source=app` 依赖它存在且含一份 nextjs-panel-* 文件。 */
-  fs.rmSync(nextjsLogDir, { recursive: true, force: true });
+  fs.rmSync(nextjsLogDir, { force: true, recursive: true });
   fs.mkdirSync(nextjsLogDir, { recursive: true });
   fs.writeFileSync(panelLogFile, "", "utf8");
 });
@@ -209,7 +209,7 @@ describe("GET /api/logs/current 无新增时的快速路径", () => {
  */
 describe("GET /api/logs/current — 服务端进程标识", () => {
   async function readWithBoot(source: string, offset: number, bootId?: string) {
-    const query = new URLSearchParams({ source, offset: String(offset) });
+    const query = new URLSearchParams({ offset: String(offset), source });
     if (bootId !== undefined) {
       query.set("bootId", bootId);
     }

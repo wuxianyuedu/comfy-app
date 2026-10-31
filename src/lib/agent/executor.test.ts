@@ -22,8 +22,8 @@ vi.mock("~/lib/llm/browser", () => ({
     /* SAFETY: 类型断言已复核 */ streamChat(...args) as Promise<string>,
 }));
 vi.mock("~/lib/llm/prompts", () => ({
-  buildScriptMarkdownMessages: () => [],
   buildCharacterFromBriefMessages: () => [],
+  buildScriptMarkdownMessages: () => [],
 }));
 
 beforeEach(() => {
@@ -33,37 +33,37 @@ beforeEach(() => {
 /** 内存 mock handlers（避免动态 import 链与真实 LLM 调用）。 */
 function makeMockContext() {
   const state: WorkshopDraftDto = {
-    meta: {
-      title: "测试项目",
-      type: "short_video",
-      tone: "",
-      logline: "",
-    },
-    scriptMarkdown: "",
-    scenes: [],
     characters: [],
+    meta: {
+      logline: "",
+      title: "测试项目",
+      tone: "",
+      type: "short_video",
+    },
+    scenes: [],
+    scriptMarkdown: "",
     shots: [],
   };
   const handlers = {
+    getCharacters: () => state.characters,
     getDraft: () => state,
     getMeta: () => state.meta,
+    getScriptMarkdown: () => state.scriptMarkdown,
+    getShots: () => state.shots,
+    setCharacters: (characters: WorkshopDraftDto["characters"]) => {
+      state.characters = characters;
+    },
     setMeta: (patch: Partial<WorkshopDraftDto["meta"]>) => {
       state.meta = { ...state.meta, ...patch };
     },
     setScriptMarkdown: (markdown: string) => {
       state.scriptMarkdown = markdown;
     },
-    getScriptMarkdown: () => state.scriptMarkdown,
-    getCharacters: () => state.characters,
-    setCharacters: (characters: WorkshopDraftDto["characters"]) => {
-      state.characters = characters;
-    },
-    getShots: () => state.shots,
     setShots: (shots: WorkshopDraftDto["shots"]) => {
       state.shots = shots;
     },
   };
-  return { state, handlers };
+  return { handlers, state };
 }
 
 describe("resolveAgentTool — get_project_state", () => {
@@ -80,7 +80,7 @@ describe("resolveAgentTool — get_project_state", () => {
 
 describe("resolveAgentTool — set_project_meta", () => {
   it("更新标题与基调", async () => {
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     const tool = resolveAgentTool(
       "set_project_meta",
       JSON.stringify({ title: "新标题", tone: "温馨治愈" }),
@@ -122,7 +122,7 @@ describe("resolveAgentTool — 前置校验", () => {
 describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", () => {
   it("generate_script：模型返回空 → 报「未返回剧本内容」，不写空剧本进 store", async () => {
     streamReturns("   ");
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     const tool = resolveAgentTool("generate_script", '{"idea":"海边"}', handlers);
     const res = await tool.execute();
     expect(res.ok).toBe(false);
@@ -131,7 +131,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
 
   it("generate_script：正常返回 → 落库并报字符数", async () => {
     streamReturns("  # 剧本\n第一场  ");
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     const res = await resolveAgentTool("generate_script", '{"idea":"海边"}', handlers).execute();
     expect(res.ok).toBe(true);
     expect(state.scriptMarkdown).toBe("# 剧本\n第一场");
@@ -153,7 +153,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
 
   it("edit_script：模型返回空 → 不改动现有剧本（避免把内容清空）", async () => {
     streamChat.mockResolvedValue("");
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     state.scriptMarkdown = "原剧本";
     const res = await resolveAgentTool("edit_script", '{"instruction":"润色"}', handlers).execute();
     expect(res.ok).toBe(false);
@@ -164,7 +164,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
     streamChat.mockResolvedValue(
       '好的，结果如下：\n```json\n[{"name":"阿宁","appearance":"短发"},"nonsense",{"appearance":"无名字"}]\n```',
     );
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     state.scriptMarkdown = "剧本内容";
     const res = await resolveAgentTool("extract_characters", "{}", handlers).execute();
     expect(res.ok).toBe(true);
@@ -179,7 +179,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
 
   it("extract_characters：解析不出角色 → ok=false，且不把空角色写进 store", async () => {
     streamChat.mockResolvedValue("模型说了些别的");
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     state.scriptMarkdown = "剧本内容";
     const res = await resolveAgentTool("extract_characters", "{}", handlers).execute();
     expect(res.ok).toBe(false);
@@ -187,7 +187,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
   });
 
   it("extract_characters：与**已有**角色同名时不重复加入", async () => {
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     state.scriptMarkdown = "剧本";
     streamChat.mockResolvedValue('[{"name":"阿宁"}]');
     await resolveAgentTool("extract_characters", "{}", handlers).execute();
@@ -203,7 +203,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
     // 「角色卡凭空多了一张」，没有任何报错。本批只登记现状，修不修是行为决策
     // （与「补测试」分开提交，§13.5.1 同口径）。
     streamChat.mockResolvedValue('[{"name":"阿宁"},{"name":"阿宁"}]');
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     state.scriptMarkdown = "剧本";
     await resolveAgentTool("extract_characters", "{}", handlers).execute();
     expect(state.characters).toHaveLength(2);
@@ -217,7 +217,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
   });
 
   it("add_character：重名 → 拒绝，且不产生第二张卡", async () => {
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     state.characters = [/* SAFETY: 类型断言已复核 */ { id: "c1", name: "阿宁" } as never];
     const res = await resolveAgentTool("add_character", '{"name":"阿宁"}', handlers).execute();
     expect(res.ok).toBe(false);
@@ -228,19 +228,19 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
     streamChat.mockResolvedValue(
       JSON.stringify([
         {
-          heading: "内景·教室",
-          description: "两人对坐",
           characterNames: ["阿宁", 1],
+          description: "两人对坐",
+          heading: "内景·教室",
         },
         {
+          characterNames: "不是数组",
           sceneHeading: "外景·操场",
           shotType: "wide",
-          characterNames: "不是数组",
         },
         { description: "   " },
       ]),
     );
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     state.scriptMarkdown = "剧本";
     const res = await resolveAgentTool("plan_storyboard", "{}", handlers).execute();
     expect(res.ok).toBe(true);
@@ -265,7 +265,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
         { description: "丁", shotType: "close" },
       ]),
     );
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     state.scriptMarkdown = "剧本";
     const res = await resolveAgentTool("plan_storyboard", "{}", handlers).execute();
     expect(res.ok).toBe(true);
@@ -279,7 +279,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
 
   it("plan_storyboard：解析不出镜头 → ok=false，不写空镜头", async () => {
     streamChat.mockResolvedValue("[]");
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     state.scriptMarkdown = "剧本";
     const res = await resolveAgentTool("plan_storyboard", "{}", handlers).execute();
     expect(res.ok).toBe(false);
@@ -304,9 +304,9 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
   it("render_film：有 renderFilm handler 时透传其结果", async () => {
     const { handlers } = makeMockContext();
     const renderFilm = vi.fn(async () => ({
+      detail: "film-42",
       ok: true,
       summary: "已启动成片",
-      detail: "film-42",
     }));
     const res = await resolveAgentTool("render_film", "{}", {
       ...handlers,
@@ -314,9 +314,9 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
     }).execute();
     expect(renderFilm).toHaveBeenCalledTimes(1);
     expect(res).toMatchObject({
+      detail: "film-42",
       ok: true,
       summary: "已启动成片",
-      detail: "film-42",
     });
   });
 });
@@ -347,16 +347,16 @@ describe("resolveAgentTool — 参数摘要", () => {
 
 describe("resolveAgentTool — set_project_meta 字段白名单", () => {
   it("非法 type 被丢弃，合法字段照常写入", () => {
-    const { state, handlers } = makeMockContext();
+    const { handlers, state } = makeMockContext();
     resolveAgentTool(
       "set_project_meta",
-      JSON.stringify({ title: "T", type: "rm -rf", tone: "温馨" }),
+      JSON.stringify({ title: "T", tone: "温馨", type: "rm -rf" }),
       handlers,
     );
     // 先 execute 才写入
     return resolveAgentTool(
       "set_project_meta",
-      JSON.stringify({ title: "T", type: "rm -rf", tone: "温馨" }),
+      JSON.stringify({ title: "T", tone: "温馨", type: "rm -rf" }),
       handlers,
     )
       .execute()

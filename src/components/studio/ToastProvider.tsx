@@ -49,27 +49,27 @@ export function useToast(): ToastContextValue {
 }
 
 const KIND_STYLE: Record<ToastKind, { icon: string; iconColor: string; ring: string }> = {
-  success: {
-    ring: "border-success-strong/30",
-    icon: "check",
-    iconColor: "text-success-strong",
-  },
   error: {
-    ring: "border-destructive/30",
     icon: "close",
     iconColor: "text-danger-strong",
+    ring: "border-destructive/30",
   },
   info: {
-    ring: "border-primary-500/30",
     icon: "info",
     iconColor: "text-primary-strong",
+    ring: "border-primary-500/30",
   },
   loading: {
-    ring: "border-border-strong",
     icon: "loader",
+    ring: "border-border-strong",
     /* 转圈动画由 <Spinner /> 自带（规范 16 §16.2.3 的 P3 判据：全库只留一处
        `animate-spin`），这里只留底色语义。 */
     iconColor: "text-ink-soft",
+  },
+  success: {
+    icon: "check",
+    iconColor: "text-success-strong",
+    ring: "border-success-strong/30",
   },
 };
 
@@ -138,15 +138,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<ToastContextValue>(
     () => ({
-      toast,
-      success: (title, description, duration) =>
-        toast({ kind: "success", title, description, duration }),
-      error: (title, description, duration) =>
-        toast({ kind: "error", title, description, duration }),
-      info: (title, description, duration) => toast({ kind: "info", title, description, duration }),
-      loading: (title, description) => toast({ kind: "loading", title, description, duration: 0 }),
-      update,
       dismiss,
+      error: (title, description, duration) =>
+        toast({ description, duration, kind: "error", title }),
+      info: (title, description, duration) => toast({ description, duration, kind: "info", title }),
+      loading: (title, description) => toast({ description, duration: 0, kind: "loading", title }),
+      success: (title, description, duration) =>
+        toast({ description, duration, kind: "success", title }),
+      toast,
+      update,
     }),
     [toast, update, dismiss],
   );

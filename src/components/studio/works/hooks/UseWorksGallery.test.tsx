@@ -34,8 +34,8 @@ vi.mock("../../project-canvas/hooks/use-sync-refusal-notice", () => ({
 }));
 
 vi.mock("~/lib/project-canvas/canvas-store", () => ({
-  listProjectsWithServer: () => listProjectsWithServerMock(),
   deleteProjectEverywhere: (id: string, name?: string) => deleteProjectEverywhereMock(id, name),
+  listProjectsWithServer: () => listProjectsWithServerMock(),
   reapAllEmptyDrafts: () => reapAllEmptyDraftsMock(),
 }));
 
@@ -43,12 +43,12 @@ import { useWorksGallery } from "./use-works-gallery";
 
 function entry(over: Partial<EntryRow> = {}): EntryRow {
   return {
+    edges: [],
     id: "proj_a",
     name: "山与海",
-    updatedAt: 2,
     nodes: [],
-    edges: [],
     origin: "both",
+    updatedAt: 2,
     ...over,
   };
 }

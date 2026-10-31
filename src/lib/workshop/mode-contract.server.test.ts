@@ -36,7 +36,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await fs.rm(root, { recursive: true, force: true });
+  await fs.rm(root, { force: true, recursive: true });
 });
 
 /** 读覆盖那份文件的原始文本（不存在返回 null）。 */
@@ -75,12 +75,12 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
   });
 
   it("覆盖存在且非空时整份压过成品配置（成品里删掉的模式不许被老覆盖复活）", async () => {
-    const only = [{ mode: "T2I", inputs: ["prompt", "size"], output: "image" }];
+    const only = [{ inputs: ["prompt", "size"], mode: "T2I", output: "image" }];
     await saveModeContracts(
       [
         {
-          mode: "t2i",
           inputs: ["prompt", "size"],
+          mode: "t2i",
           output: "image",
           required: ["prompt"],
         },
@@ -88,9 +88,7 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
       root,
     );
     // 归一化在小写模式码上也生效（存进去的键是大写口径）
-    await expect(loadModeContracts(root)).resolves.toEqual([
-      { ...only[0], required: ["prompt"] },
-    ]);
+    await expect(loadModeContracts(root)).resolves.toEqual([{ ...only[0], required: ["prompt"] }]);
     // 成品配置里的其它模式**一条都不在**：覆盖是整份替换，不是按模式合并。
     expect((await loadModeContracts(root)).length).toBe(1);
   });
@@ -98,18 +96,16 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
   it("覆盖是空数组时回落成品配置（`[]` = 这本机没改过）", async () => {
     await saveModeContracts([], root);
     await expect(readRaw()).resolves.toBe("[]\n");
-    await expect(loadModeContracts(root)).resolves.toEqual(
-      configuredModeContracts(),
-    );
+    await expect(loadModeContracts(root)).resolves.toEqual(configuredModeContracts());
   });
 
   it("老检出（曾落在 config/）升级后不丢配置，且读路径只读不搬", async () => {
     const legacy = await writeLegacy([
-      { mode: "I2I", inputs: ["prompt", "first-frame"], output: "image" },
+      { inputs: ["prompt", "first-frame"], mode: "I2I", output: "image" },
     ]);
 
     await expect(loadModeContracts(root)).resolves.toEqual([
-      { mode: "I2I", inputs: ["prompt", "first-frame"], output: "image" },
+      { inputs: ["prompt", "first-frame"], mode: "I2I", output: "image" },
     ]);
     // 读路径**不**产生副作用：老文件还在，新覆盖也不会被顺手建出来
     //（「读一次写一次」会让一次查看把内容钉进这台机器）。
@@ -119,18 +115,14 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
 
   it("老检出那份是空数组时回落成品配置（先前的空覆盖不该被后来者继承）", async () => {
     await writeLegacy([]);
-    await expect(loadModeContracts(root)).resolves.toEqual(
-      configuredModeContracts(),
-    );
+    await expect(loadModeContracts(root)).resolves.toEqual(configuredModeContracts());
   });
 
   it("坏 JSON 按「没有覆盖」处理，不把工坊打成 500", async () => {
     const file = path.join(root, MODE_CONTRACTS_REL_PATH);
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, "{ 这不是 JSON", "utf8");
-    await expect(loadModeContracts(root)).resolves.toEqual(
-      configuredModeContracts(),
-    );
+    await expect(loadModeContracts(root)).resolves.toEqual(configuredModeContracts());
   });
 
   it("写不进去时报错并带上路径（不静默吞掉）", async () => {
@@ -138,10 +130,7 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
     await fs.writeFile(path.join(root, "data"), "占位", "utf8");
 
     await expect(
-      saveModeContracts(
-        [{ mode: "T2I", inputs: ["prompt"], output: "image" }],
-        root,
-      ),
+      saveModeContracts([{ inputs: ["prompt"], mode: "T2I", output: "image" }], root),
     ).rejects.toThrow(/模式契约写入失败.*workshop-mode-contracts\.json/s);
   });
 });

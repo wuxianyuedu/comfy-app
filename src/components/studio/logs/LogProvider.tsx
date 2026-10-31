@@ -114,11 +114,11 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     }
 
     const originals = /* SAFETY: 类型断言已复核 */ {
-      log: console.log,
-      info: console.info,
-      warn: console.warn,
-      error: console.error,
       debug: console.debug,
+      error: console.error,
+      info: console.info,
+      log: console.log,
+      warn: console.warn,
     } as const;
 
     const makeLogger =
@@ -146,9 +146,9 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
         queueMicrotask(() => {
           addEntry({
             level,
+            location,
             message,
             source: "console",
-            location,
           });
         });
       };
@@ -249,10 +249,10 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
   // `app-runtime` 是追加不轮转的——上一次运行的行会随整段重读混进来。服务端在
   // 轮询响应里带回会话起点，这里用行时刻裁掉（log-store 的 dropStaleEntries）。
   const offsetsRef = useRef<Partial<Record<PollSource, number>>>({
-    dev: 0,
-    launcher: 0,
     app: 0,
     "app-runtime": 0,
+    dev: 0,
+    launcher: 0,
   });
   const setSessionStart = useLogStore((s) => s.setSessionStart);
   const setBootId = useLogStore((s) => s.setBootId);
@@ -316,8 +316,8 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
          * 保证面板时间线不会被未来的时间戳顶穿。 */
         const entries = parseFileLogs(data.content).map((entry) => ({
           ...entry,
-          time: clampLogTime(entry.time, Date.now()),
           origin: source,
+          time: clampLogTime(entry.time, Date.now()),
         }));
         /* 时间线截断的判据要比首帧条目先就位，否则历史行会先落板再被清掉，
          * 用户能观察到一次闪现。 */

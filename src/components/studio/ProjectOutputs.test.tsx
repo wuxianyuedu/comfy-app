@@ -17,30 +17,30 @@ import type { ProjectOutputItem } from "./hooks/use-project-outputs";
 
 function makeOutputs(n: number): Array<ProjectOutputItem> {
   return Array.from<ProjectOutputItem, ProjectOutputItem>({ length: n }, (_, i) => ({
-    id: `o${i}`,
-    status: "SUCCEEDED",
-    prompt: `p${i}`,
-    workflowName: "wf",
-    type: "IMAGE",
-    seed: "1",
-    createdAt: new Date(0).toISOString(),
-    negativePrompt: null,
-    size: null,
-    sampler: null,
-    steps: null,
     cfg: null,
     checkpoint: null,
-    referenceImages: [],
-    parentId: null,
+    createdAt: new Date(0).toISOString(),
+    id: `o${i}`,
     images: [],
+    negativePrompt: null,
+    parentId: null,
+    prompt: `p${i}`,
+    referenceImages: [],
+    sampler: null,
+    seed: "1",
+    size: null,
+    status: "SUCCEEDED",
+    steps: null,
+    type: "IMAGE",
+    workflowName: "wf",
   }));
 }
 
 const outputsMock = vi.fn<() => Array<ProjectOutputItem>>(() => []);
 vi.mock("./hooks/use-project-outputs", () => ({
   useProjectOutputs: () => ({
-    outputs: outputsMock(),
     loading: false,
+    outputs: outputsMock(),
     refetch: async () => undefined,
   }),
 }));

@@ -22,9 +22,9 @@
  *  `raw.ts` 的 CKPT_KEYS 清单：`CheckpointLoaderSimple: ["ckpt_name"]`、
  *  `UNETLoader: ["unet_name", "weight_dtype"]`）。 */
 const UI_PRIMARY_TYPES: Record<string, number> = {
+  CheckpointLoader: 0,
   CheckpointLoaderSimple: 0,
   UNETLoader: 0,
-  CheckpointLoader: 0,
 };
 
 /** API 格式里的主模型字段，按优先级排列（**分轮**扫描，见 `primaryModelName`）。 */

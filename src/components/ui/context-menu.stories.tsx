@@ -32,8 +32,8 @@ import {
  * ⚠️ 画布上要**右键**才弹得出来。
  */
 const meta = {
-  title: "UI/ContextMenu",
   component: ContextMenu,
+  title: "UI/ContextMenu",
 } satisfies Meta<typeof ContextMenu>;
 
 export default meta;

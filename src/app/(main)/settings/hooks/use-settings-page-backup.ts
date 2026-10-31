@@ -52,8 +52,8 @@ export type UseSettingsBackup = {
 };
 
 export function useSettingsBackup({
-  statusQueriesEnabled,
   showFlash,
+  statusQueriesEnabled,
 }: {
   /** 整页提示条通道，来自主 hook 的 useFlashLatch。 */
   showFlash: ActionReport;
@@ -106,7 +106,7 @@ export function useSettingsBackup({
               text: `已登记恢复 ${name} —— **重启应用**后生效（当前进程还连着数据库，不能就地换文件）`,
             };
           },
-          { report: showFlash, failureText: "登记恢复失败" },
+          { failureText: "登记恢复失败", report: showFlash },
         );
         await listQ.refetch();
       } finally {
@@ -117,12 +117,12 @@ export function useSettingsBackup({
   );
 
   return {
-    backups: listQ.data?.backups ?? [],
-    pending: listQ.data?.pending ?? null,
-    loading: listQ.isLoading,
     backupBusy,
-    restoreBusy,
+    backups: listQ.data?.backups ?? [],
     createBackupNow,
+    loading: listQ.isLoading,
+    pending: listQ.data?.pending ?? null,
+    restoreBusy,
     restoreFrom,
   };
 }

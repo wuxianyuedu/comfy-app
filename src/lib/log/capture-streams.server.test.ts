@@ -68,8 +68,8 @@ async function readCaptureWhenFilled(
   try {
     await expect
       .poll(() => readCapture(filePath).includes(needle), {
-        timeout: timeoutMs,
         interval: 25,
+        timeout: timeoutMs,
       })
       .toBe(true);
   } catch {

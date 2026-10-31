@@ -141,8 +141,8 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                         onFocus={(event) => event.currentTarget.select()}
                         value={editingDraft}
                         {...enterCommit({
-                          onCommit: () => void commitEdit(tag.id, tag.name),
                           onCancel: cancelEdit,
+                          onCommit: () => void commitEdit(tag.id, tag.name),
                         })}
                         className="bg-canvas-deep text-ink-bright border-primary/50 focus:border-primary min-w-0 flex-1 rounded-md border px-2 py-0.5 text-sm outline-none"
                         // 注意：刻意不设 onBlur → 提交。若用户以别的方式

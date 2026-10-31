@@ -64,7 +64,7 @@ export type PidLookup = {
  */
 export async function findPidForMainPyDetailed(mainPy: string): Promise<PidLookup> {
   if (!mainPy) {
-    return { pid: null, failed: false };
+    return { failed: false, pid: null };
   }
   // 规范化路径用于命令行匹配（Windows 大小写不敏感）
   const normalized = mainPy.replace(/[\\/]+/g, "/").toLowerCase();
@@ -95,15 +95,15 @@ export async function findPidForMainPyDetailed(mainPy: string): Promise<PidLooku
         10_000,
       );
       if (!ok) {
-        return { pid: null, failed: true };
+        return { failed: true, pid: null };
       }
       const pid = parseInt(out.trim().split(/\r?\n/)[0] ?? "", 10);
-      return { pid: isNaN(pid) ? null : pid, failed: false };
+      return { failed: false, pid: isNaN(pid) ? null : pid };
     } else {
       // POSIX：ps 输出包含 main.py 的行 → 提取 PID
       const { ok, out } = await execFilePTried("ps", ["-eo", "pid,args"]);
       if (!ok) {
-        return { pid: null, failed: true };
+        return { failed: true, pid: null };
       }
       for (const line of out.split("\n")) {
         const ll = line.toLowerCase();
@@ -111,14 +111,14 @@ export async function findPidForMainPyDetailed(mainPy: string): Promise<PidLooku
           const pidStr = line.trim().split(/\s+/)[0];
           const pid = parseInt(pidStr ?? "", 10);
           if (!isNaN(pid)) {
-            return { pid, failed: false };
+            return { failed: false, pid };
           }
         }
       }
-      return { pid: null, failed: false };
+      return { failed: false, pid: null };
     }
   } catch {
-    return { pid: null, failed: true };
+    return { failed: true, pid: null };
   }
 }
 

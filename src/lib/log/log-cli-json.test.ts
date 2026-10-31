@@ -1,20 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  isCliJsonLine,
-  parseCliJsonLine,
-  splitCliLogLine,
-} from "./log-cli-json";
+import { isCliJsonLine, parseCliJsonLine, splitCliLogLine } from "./log-cli-json";
 
 describe("comfy-cli 原文日志行解析", () => {
   it("拆出 tag 与载荷（剥掉前缀）", () => {
     expect(splitCliLogLine('[comfy-cli 原始] {"a":1}')).toEqual({
-      tag: "原始",
       payload: '{"a":1}',
+      tag: "原始",
     });
     expect(splitCliLogLine("[comfy-cli stderr] 警告文本")).toEqual({
-      tag: "stderr",
       payload: "警告文本",
+      tag: "stderr",
     });
   });
 

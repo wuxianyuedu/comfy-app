@@ -57,7 +57,7 @@ export function useSettingsRemoteModels(input: {
   persistLlmDraft: (draft: LlmConfig) => Promise<{ error?: string; ok: boolean }>;
   setLlmDraft: LlmDraftSetter;
 }) {
-  const { llmDraft, setLlmDraft, patchLlm, persistLlmDraft } = input;
+  const { llmDraft, patchLlm, persistLlmDraft, setLlmDraft } = input;
 
   /** 勾选/取消一个本地候选模型（多选集 = 主模型 + 勾选项）。
    *  option C：本地候选只存名字（字符串、无 apiKey），与远端独立模型(extraModels)
@@ -86,20 +86,20 @@ export function useSettingsRemoteModels(input: {
   const addRemoteModel = useCallback(
     async (entry: RemoteModelDraftEntry): Promise<{ error?: string; ok: boolean }> => {
       if (!llmDraft) {
-        return { ok: false, error: "配置未就绪，请稍后重试" };
+        return { error: "配置未就绪，请稍后重试", ok: false };
       }
       const name = entry.name.trim();
       if (!name) {
-        return { ok: false, error: "请填写模型名称" };
+        return { error: "请填写模型名称", ok: false };
       }
       if (llmDraft.extraModels.some((e) => e.name === name)) {
-        return { ok: false, error: `模型「${name}」已在列表中` };
+        return { error: `模型「${name}」已在列表中`, ok: false };
       }
       const cleaned: RemoteModelEntry = {
-        name,
-        baseUrl: entry.baseUrl?.trim() ? entry.baseUrl.trim() : null,
         apiKey: entry.apiKey?.trim() ? entry.apiKey.trim() : null,
+        baseUrl: entry.baseUrl?.trim() ? entry.baseUrl.trim() : null,
         kind: entry.kind ?? null,
+        name,
       };
       const nextDraft = {
         ...llmDraft,
@@ -114,7 +114,7 @@ export function useSettingsRemoteModels(input: {
   const removeRemoteModel = useCallback(
     async (name: string): Promise<{ error?: string; ok: boolean }> => {
       if (!llmDraft) {
-        return { ok: false, error: "配置未就绪，请稍后重试" };
+        return { error: "配置未就绪，请稍后重试", ok: false };
       }
       const next = llmDraft.extraModels.filter((e) => e.name !== name);
       if (next.length === llmDraft.extraModels.length) {
@@ -135,23 +135,23 @@ export function useSettingsRemoteModels(input: {
       patch: Partial<RemoteModelDraftEntry>,
     ): Promise<{ error?: string; ok: boolean }> => {
       if (!llmDraft) {
-        return { ok: false, error: "配置未就绪，请稍后重试" };
+        return { error: "配置未就绪，请稍后重试", ok: false };
       }
       const nextName = (patch.name ?? name).trim();
       if (!nextName) {
-        return { ok: false, error: "请填写模型名称" };
+        return { error: "请填写模型名称", ok: false };
       }
       const existing = llmDraft.extraModels.find((e) => e.name === name);
       if (!existing) {
-        return { ok: false, error: `模型「${name}」不存在，请刷新后重试` };
+        return { error: `模型「${name}」不存在，请刷新后重试`, ok: false };
       }
       if (nextName !== name && llmDraft.extraModels.some((e) => e.name === nextName)) {
-        return { ok: false, error: `模型「${nextName}」已在列表中` };
+        return { error: `模型「${nextName}」已在列表中`, ok: false };
       }
       const typedKey = patch.apiKey?.trim();
       const updated: RemoteModelEntry = {
-        name: nextName,
         baseUrl: patch.baseUrl === undefined ? (existing?.baseUrl ?? null) : patch.baseUrl,
+        name: nextName,
         /* `apiKey` 三态（台账 A11 的客户端这一半）：
          *   · 用户重填了 → 新值；
          *   · 显式勾了「清除密钥」→ `null`；
@@ -164,8 +164,8 @@ export function useSettingsRemoteModels(input: {
       };
       const nextDraft = {
         ...llmDraft,
-        model: llmDraft.model === name ? nextName : llmDraft.model,
         extraModels: llmDraft.extraModels.map((e) => (e.name === name ? updated : e)),
+        model: llmDraft.model === name ? nextName : llmDraft.model,
       };
       setLlmDraft(nextDraft);
       return persistLlmDraft(nextDraft);
@@ -215,14 +215,14 @@ export function useSettingsRemoteModels(input: {
   );
 
   return {
-    toggleExtraModel,
-    remoteModelList,
     addRemoteModel,
-    updateRemoteModel,
-    removeRemoteModel,
     probeRemote,
-    testModelUsage: testModelUsageFn,
     queryUsageTask: queryUsageTaskFn,
+    remoteModelList,
+    removeRemoteModel,
     setTaskTemperature,
+    testModelUsage: testModelUsageFn,
+    toggleExtraModel,
+    updateRemoteModel,
   };
 }

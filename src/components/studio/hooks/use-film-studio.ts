@@ -92,7 +92,7 @@ export type FilmStudioController = {
  * 无法校验 memo 化（rh/preserve-manual-memoization），局部函数语义等价。
  */
 export function useFilmStudio(): FilmStudioController {
-  const { success, error: toastError, info } = useToast();
+  const { error: toastError, info, success } = useToast();
 
   /* 反馈通道适配：这一批里**每条动作的成功通道本来就不同**（「已启动」
    * 与「已上传」走 `success`、「已取消」走 `info`），失败一律 `toastError`
@@ -195,8 +195,8 @@ export function useFilmStudio(): FilmStudioController {
               list.map((raw) => {
                 const s = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
                 return {
-                  slug: /* SAFETY: 类型断言已复核 */ s.slug as string,
                   name: /* SAFETY: 类型断言已复核 */ s.name as string,
+                  slug: /* SAFETY: 类型断言已复核 */ s.slug as string,
                 };
               }),
             );
@@ -273,7 +273,7 @@ export function useFilmStudio(): FilmStudioController {
             await vanillaApi.film.start.mutate({ id });
             await fetchDetail(id);
           },
-          { report: reportSuccess, failureText: "启动失败", successText },
+          { failureText: "启动失败", report: reportSuccess, successText },
         ),
       );
     },
@@ -288,15 +288,15 @@ export function useFilmStudio(): FilmStudioController {
     await launchFilm(
       () =>
         vanillaApi.film.create.mutate({
-          title,
-          script,
-          type,
-          styleSlug: styleSlug || null,
-          size,
+          bgmName,
           fps,
           framesPerShot: frames,
+          script,
+          size,
+          styleSlug: styleSlug || null,
           subtitleOn,
-          bgmName,
+          title,
+          type,
           ...(videoWorkflowId ? { videoWorkflowId } : {}),
           ...(imageWorkflowId ? { imageWorkflowId } : {}),
         }),
@@ -326,12 +326,12 @@ export function useFilmStudio(): FilmStudioController {
     await launchFilm(
       () =>
         vanillaApi.film.createFromProject.mutate({
-          projectId: activeProjectId,
-          size,
+          bgmName,
           fps,
           framesPerShot: frames,
+          projectId: activeProjectId,
+          size,
           subtitleOn,
-          bgmName,
           ...(videoWorkflowId ? { videoWorkflowId } : {}),
           ...(imageWorkflowId ? { imageWorkflowId } : {}),
         }),
@@ -360,7 +360,7 @@ export function useFilmStudio(): FilmStudioController {
         await vanillaApi.film.cancel.mutate({ id: film.id });
         await fetchDetail(film.id);
       },
-      { report: reportInfo, failureText: "取消失败", successText: "已取消" },
+      { failureText: "取消失败", report: reportInfo, successText: "已取消" },
     );
   }, [film, fetchDetail, reportInfo]);
 
@@ -375,7 +375,7 @@ export function useFilmStudio(): FilmStudioController {
           await vanillaApi.film.compose.mutate({ id: film.id });
           await fetchDetail(film.id);
         },
-        { report: reportInfo, failureText: "重新合成失败" },
+        { failureText: "重新合成失败", report: reportInfo },
       ),
     );
   }, [film, fetchDetail, reportInfo, actionBusy]);
@@ -390,8 +390,8 @@ export function useFilmStudio(): FilmStudioController {
           setBgmName(await uploadBgm(file));
         },
         {
-          report: reportSuccess,
           failureText: "BGM 上传失败",
+          report: reportSuccess,
           successText: "背景音乐已上传",
         },
       );
@@ -414,39 +414,39 @@ export function useFilmStudio(): FilmStudioController {
         void fetchDetail(pollId);
       }
     },
-    { ms: running ? FILM_POLL_MS : null, immediate: false },
+    { immediate: false, ms: running ? FILM_POLL_MS : null },
   );
 
   return {
-    title,
-    shotSource,
-    setShotSource,
     activeProjectId,
-    projectShotCount,
-    projectShots,
-    videoWorkflows,
-    videoWorkflowId,
-    setVideoWorkflowId,
-    imageWorkflows,
-    imageWorkflowId,
-    setImageWorkflowId,
-    size,
-    fps,
-    script,
-    setScript,
-    subtitleOn,
-    setSubtitleOn,
     bgmName,
-    ffmpegAvailable,
-    film,
-    running,
-    loading: actionBusy.busy,
+    cancel,
     create,
     createFromProject,
+    ffmpegAvailable,
+    film,
+    fps,
+    imageWorkflowId,
+    imageWorkflows,
+    loading: actionBusy.busy,
+    projectShotCount,
+    projectShots,
+    recompose,
     redoShot,
     reloadProjectShots,
-    cancel,
-    recompose,
+    running,
+    script,
+    setImageWorkflowId,
+    setScript,
+    setShotSource,
+    setSubtitleOn,
+    setVideoWorkflowId,
+    shotSource,
+    size,
+    subtitleOn,
+    title,
     uploadBgmFile,
+    videoWorkflowId,
+    videoWorkflows,
   };
 }

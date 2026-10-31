@@ -39,8 +39,8 @@ export type ResolveEdgeFocusArgs = {
 
 export function resolveEdgeFocus({
   endpoints,
-  resolveNodeId,
   isSelected,
+  resolveNodeId,
 }: ResolveEdgeFocusArgs): EdgeFocusRole {
   const source = endpoints.source;
   const target = endpoints.target;
@@ -133,28 +133,28 @@ export type PortRowStyle = {
 
 /** 端口行三档 + 提示档的样式表。端点色相由端口类型决定，这里只管「强弱」。 */
 export const PORT_ROW_TONES: Record<PortRowTone, PortRowStyle> = {
+  dimmed: {
+    dotGlowStrong: false,
+    dotSize: 10,
+    labelColor: "var(--color-ink-fainter)",
+    opacity: 0.45,
+  },
   focused: {
     background: "var(--color-surface-2)",
+    dotGlowStrong: true,
+    dotSize: 12,
     labelColor: "var(--color-ink-bright)",
     labelWeight: 500,
-    dotSize: 12,
-    dotGlowStrong: true,
-  },
-  related: {
-    labelColor: "var(--color-ink-bright)",
-    dotSize: 10,
-    dotGlowStrong: false,
   },
   plain: {
+    dotGlowStrong: false,
+    dotSize: 10,
     labelColor: "var(--color-ink-bright)",
-    dotSize: 10,
-    dotGlowStrong: false,
   },
-  dimmed: {
-    opacity: 0.45,
-    labelColor: "var(--color-ink-fainter)",
-    dotSize: 10,
+  related: {
     dotGlowStrong: false,
+    dotSize: 10,
+    labelColor: "var(--color-ink-bright)",
   },
 };
 
@@ -272,9 +272,9 @@ function assignPortRole(bucket: PortFocusBucket, handle: string, role: PortFocus
 
 export function resolvePortFocusRoles({
   connections,
-  selectedIds,
   resolveSourceId = (visualNodeId) => visualNodeId,
   resolveTargetId = (visualNodeId) => visualNodeId,
+  selectedIds,
 }: ResolvePortFocusArgs): { nodes: ReadonlyMap<string, NodePortFocus> } {
   const nodes = new Map<string, PortFocusBucket>();
   if (selectedIds.size === 0) {
@@ -287,9 +287,9 @@ export function resolvePortFocusRoles({
       return existing;
     }
     const created: PortFocusBucket = {
-      upstream: new Set(),
       downstream: new Set(),
       related: new Set(),
+      upstream: new Set(),
     };
     nodes.set(nodeId, created);
     return created;

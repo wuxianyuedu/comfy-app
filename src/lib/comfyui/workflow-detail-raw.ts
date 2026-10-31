@@ -52,14 +52,14 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): Array<RawNodeMeta> {
             continue;
           }
           outputs.push({
-            name: o.name,
             localized: typeof o.localized_name === "string" ? o.localized_name : undefined,
+            name: o.name,
             /* 业务标签（如 `FRAMES` / `IMAGE_FINAL`）。透传出去，
              *  父级 WorkflowSubgraphNode 的输出条与内层 WorkflowIoPortNode
              *  的显示才能一致。 */
             label: typeof o.label === "string" ? o.label : undefined,
-            type: typeof o.type === "string" ? o.type : "*",
             links: Array.isArray(o.links) ? o.links.map((n) => Number(n) || 0) : [],
+            type: typeof o.type === "string" ? o.type : "*",
           });
         }
       }
@@ -70,16 +70,16 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): Array<RawNodeMeta> {
       //  避免把类实例泄漏进 JSON 载荷。
       const flags = rn && typeof rn.flags === "object" && rn.flags !== null ? rn.flags : {};
       rawNodeMeta.push({
-        id: String(rn.id),
-        widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
-        outputs,
         flags,
+        id: String(rn.id),
+        outputs,
+        widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
         /* 自定义节点的 `properties`。透传出去，画布便能复现由 properties
          *  驱动的运行期 UI —— 最典型的例子是 rgthree 的
          *  `Fast Groups Bypasser`。 */
+        mode: typeof rn.mode === "number" ? rn.mode : 0,
         properties:
           rn && typeof rn.properties === "object" && rn.properties !== null ? rn.properties : {},
-        mode: typeof rn.mode === "number" ? rn.mode : 0,
       });
     }
   }
@@ -142,11 +142,11 @@ export function buildInnerNodeInputs(
         const widgetName =
           inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
         const entry: RawInputEntry = {
-          name: inp.name,
+          isConnection: inp.link != null,
           label: typeof inp.label === "string" ? inp.label : undefined,
           localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
+          name: inp.name,
           type: typeof inp.type === "string" ? inp.type : inp.link != null ? "*" : "STRING",
-          isConnection: inp.link != null,
         };
         if (widgetName) {
           entry.widget = { name: widgetName };
@@ -207,19 +207,19 @@ export function buildRawView(
         }
       }
       return {
-        id: nodeId,
         class_type: classType,
-        title: resolvedTitle ?? n?._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
+        id: nodeId,
         is_subgraph: isUuidClass,
         raw_inputs: rawInputsById[nodeId] ?? [],
         size: sizeById[nodeId],
+        title: resolvedTitle ?? n?._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
       };
     });
     const rawViewPositions = extractPositions(raw);
     rawView = {
+      graph: rawGraph,
       nodes: rawViewNodes,
       positions: rawViewPositions,
-      graph: rawGraph,
     };
   }
   return rawView;

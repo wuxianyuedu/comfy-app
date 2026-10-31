@@ -27,13 +27,13 @@ import { DEFAULT_SIZE_SPEC } from "~/lib/media/size-presets";
  * 默认档也从 `DEFAULT_SHOT_SIZE` 取（它就是 `DEFAULT_SIZE_SPEC` 的薄转发）。
  */
 const meta = {
-  title: "Workshop/ShotSizePicker",
-  component: ShotSizePicker,
-  args: { value: DEFAULT_SHOT_SIZE, onChange: () => undefined },
+  args: { onChange: () => undefined, value: DEFAULT_SHOT_SIZE },
   argTypes: {
-    scene: { control: { type: "select" }, options: ["image", "video"] },
     disabled: { control: { type: "boolean" } },
+    scene: { control: { type: "select" }, options: ["image", "video"] },
   },
+  component: ShotSizePicker,
+  title: "Workshop/ShotSizePicker",
 } satisfies Meta<typeof ShotSizePicker>;
 
 export default meta;

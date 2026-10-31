@@ -22,9 +22,9 @@ import {
  * （那边是自绘的文字行），所以这里补的是「组合形态」那一格。
  */
 const meta = {
-  title: "UI/Progress",
-  component: Progress,
   args: { value: 42 },
+  component: Progress,
+  title: "UI/Progress",
 } satisfies Meta<typeof Progress>;
 
 export default meta;

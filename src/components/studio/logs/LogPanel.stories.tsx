@@ -26,9 +26,9 @@ import { useEffect } from "react";
  *  · **贴底与「用户上滚后不被按回底部」**（`use-log-panel-pin` 的基线）。
  */
 const meta = {
-  title: "Studio/Logs/LogPanel",
   component: LogPanel,
   parameters: { storeScene: "mixed" },
+  title: "Studio/Logs/LogPanel",
 } satisfies Meta<typeof LogPanel>;
 
 export default meta;

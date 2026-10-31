@@ -64,7 +64,7 @@ export async function readLocalFile(absPath: string): Promise<{ mtimeMs: number;
     throw new Error(errorText(e, "无法读取本地文件"), { cause: e });
   }
   const text = await fs.readFile(absPath, "utf-8");
-  return { text, mtimeMs: stat.mtimeMs };
+  return { mtimeMs: stat.mtimeMs, text };
 }
 
 /* 轻量、快速的内容哈希，只用于判断「内容变没变」。 */
@@ -127,7 +127,7 @@ export async function parseWorkflowContent(
     logger.info(`[importSource] Unknown taskType "${taskType}", allowing as custom type`);
   }
 
-  return { rawJson, positions, taskType, warnings, format: "raw" };
+  return { format: "raw", positions, rawJson, taskType, warnings };
 }
 
 export type ImportedFromFile = {
@@ -147,13 +147,13 @@ export async function importFromLocalPath(
     preferredTaskType?: string;
   } = {},
 ): Promise<ImportedFromFile> {
-  const { text, mtimeMs } = await readLocalFile(absPath);
+  const { mtimeMs, text } = await readLocalFile(absPath);
   const parsed = await parseWorkflowContent(text, opts);
   return {
     ...parsed,
-    sourcePath: absPath,
     sourceChecksum: checksum(text),
     sourceMtime: Math.floor(mtimeMs / 1000),
+    sourcePath: absPath,
   };
 }
 
@@ -223,12 +223,12 @@ export async function reimportFromSource(tpl: {
   });
   return {
     update: {
-      rawJson: parsed.rawJson,
-      positions: parsed.positions,
       paramMap: null,
-      taskType: parsed.taskType,
+      positions: parsed.positions,
+      rawJson: parsed.rawJson,
       sourceChecksum: checksum(text),
       sourceMtime: mtimeSec,
+      taskType: parsed.taskType,
     },
   };
 }

@@ -55,20 +55,20 @@ export type WorkflowEditorTopBarProps = {
 };
 
 export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
-  onClose,
   detail,
-  rootWorkflowName,
-  subgraphStack,
-  setSubgraphStack,
-  fetchDetail,
-  onExitSubgraph,
-  forceReloadDetail,
-  setViewJsonOpen,
-  resetLayout,
-  viewHostNodeId,
-  handleSave,
-  saving,
   error,
+  fetchDetail,
+  forceReloadDetail,
+  handleSave,
+  onClose,
+  onExitSubgraph,
+  resetLayout,
+  rootWorkflowName,
+  saving,
+  setSubgraphStack,
+  setViewJsonOpen,
+  subgraphStack,
+  viewHostNodeId,
 }: WorkflowEditorTopBarProps) {
   const ioApi = useIOEditApi();
   const workflowIO = useIOEditStore(selectWorkflowIO);
@@ -192,9 +192,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                           .map((c) => c.nodeId)
                           .join(":");
                         void fetchDetail({
-                          subgraphUid: crumb.uid,
-                          parentTitle: crumb.name,
                           hostNodeId: hostChain,
+                          parentTitle: crumb.name,
+                          subgraphUid: crumb.uid,
                         });
                       }}
                       variant="ghost"

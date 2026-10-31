@@ -8,10 +8,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import {
-  applyOutputBindingEdit,
-  manualOutputSource,
-} from "~/lib/workflow/workflow-output-binding";
+import { applyOutputBindingEdit, manualOutputSource } from "~/lib/workflow/workflow-output-binding";
 import { useParamWiring } from "./use-param-wiring";
 
 describe("useParamWiring — commitParamMap 的本地 overlay（右列输出落点）", () => {
@@ -19,50 +16,42 @@ describe("useParamWiring — commitParamMap 的本地 overlay（右列输出落�
     const onPatch = vi.fn();
     const { result } = renderHook(() =>
       useParamWiring({
-        paramMap: {},
         mode: "T2I",
         onPatchParamMap: onPatch,
+        paramMap: {},
       }),
     );
     const next = applyOutputBindingEdit(result.current.effectiveParamMap, {
-      outputIoKey: "5::output::IMAGE",
       ioKey: "5::output::IMAGE",
       mode: "T2I",
+      outputIoKey: "5::output::IMAGE",
     });
     act(() => result.current.commitParamMap(next));
     /* 不 await onPatch：本地即可见。 */
-    expect(
-      manualOutputSource(
-        result.current.effectiveParamMap,
-        "5::output::IMAGE",
-        "T2I",
-      ),
-    ).toBe("5::output::IMAGE");
+    expect(manualOutputSource(result.current.effectiveParamMap, "5::output::IMAGE", "T2I")).toBe(
+      "5::output::IMAGE",
+    );
     expect(onPatch).toHaveBeenCalledTimes(1);
   });
 
   it("source 与 output 两个命名空间的本地改动可以叠加共存", () => {
     const { result } = renderHook(() =>
       useParamWiring({
-        paramMap: {},
         mode: "T2I",
         onPatchParamMap: vi.fn(),
+        paramMap: {},
       }),
     );
     const next = applyOutputBindingEdit(result.current.effectiveParamMap, {
-      outputIoKey: "5::output::IMAGE",
       ioKey: "5::output::IMAGE",
       mode: "T2I",
+      outputIoKey: "5::output::IMAGE",
     });
     act(() => result.current.commitParamMap(next));
     /* 左上（source）与右列（output）都经同一份 overlay，互不覆盖。 */
-    expect(
-      manualOutputSource(
-        result.current.effectiveParamMap,
-        "5::output::IMAGE",
-        "T2I",
-      ),
-    ).toBe("5::output::IMAGE");
+    expect(manualOutputSource(result.current.effectiveParamMap, "5::output::IMAGE", "T2I")).toBe(
+      "5::output::IMAGE",
+    );
     expect(result.current.effectiveParamMap).toHaveProperty("output");
   });
 });

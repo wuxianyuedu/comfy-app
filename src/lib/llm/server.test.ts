@@ -35,13 +35,13 @@ import { z } from "zod";
 const tdb = getTestDb();
 
 const CFG = (over: Partial<LLMConfig> = {}): LLMConfig => ({
-  provider: "local",
-  baseUrl: "http://127.0.0.1:11434/v1",
-  model: "llama3",
-  extraModels: null,
   apiKey: null,
-  temperature: 0.7,
+  baseUrl: "http://127.0.0.1:11434/v1",
+  extraModels: null,
   maxTokens: 2048,
+  model: "llama3",
+  provider: "local",
+  temperature: 0.7,
   ...over,
 });
 
@@ -49,11 +49,11 @@ const CFG = (over: Partial<LLMConfig> = {}): LLMConfig => ({
 function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}): Response {
   const status = init.status ?? 200;
   return /* SAFETY: 类型断言已复核 */ {
+    body: null,
+    json: async () => body,
     ok: init.ok ?? (status >= 200 && status < 300),
     status,
-    json: async () => body,
     text: async () => JSON.stringify(body),
-    body: null,
   } as unknown as Response;
 }
 
@@ -62,10 +62,6 @@ function streamResponse(chunks: Array<string>): Response {
   const encoder = new TextEncoder();
   let i = 0;
   return /* SAFETY: 类型断言已复核 */ {
-    ok: true,
-    status: 200,
-    json: async () => ({}),
-    text: async () => "",
     body: {
       getReader: () => ({
         read: async () =>
@@ -74,6 +70,10 @@ function streamResponse(chunks: Array<string>): Response {
             : { done: true, value: undefined },
       }),
     },
+    json: async () => ({}),
+    ok: true,
+    status: 200,
+    text: async () => "",
   } as unknown as Response;
 }
 
@@ -89,7 +89,7 @@ function callAt(n = 0): { init: RequestInit; url: string } {
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
   const arg: unknown = call[0];
   const url = typeof arg === "string" ? arg : /* SAFETY: 类型断言已复核 */ (arg as Request).url;
-  return { url, init: call[1] ?? {} };
+  return { init: call[1] ?? {}, url };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
@@ -124,51 +124,51 @@ describe("getLLMConfig 的三层叠加（env → DB → 请求覆盖）", () => 
   it("无 DB 行时回落 env 默认值（provider/baseUrl/model/maxTokens）", async () => {
     const cfg = await getLLMConfig();
     expect(cfg).toMatchObject({
-      provider: "local",
-      model: "",
-      extraModels: null,
       apiKey: null,
-      temperature: 0.7,
+      extraModels: null,
       maxTokens: 2048,
+      model: "",
+      provider: "local",
+      temperature: 0.7,
     });
     expect(cfg.baseUrl).toContain("127.0.0.1");
   });
 
   it("DB 行覆盖 env；请求覆盖再盖 DB（除 extraModels 外逐字段）", async () => {
     await llmConfigRepository.upsertSingleton({
-      provider: "remote",
-      baseUrl: "https://api.db/v1",
-      model: "db-model",
       apiKey: "sk-db",
-      temperature: 0.4,
+      baseUrl: "https://api.db/v1",
       maxTokens: 1024,
+      model: "db-model",
+      provider: "remote",
+      temperature: 0.4,
     });
 
     const fromDb = await getLLMConfig();
     expect(fromDb).toMatchObject({
-      provider: "remote",
-      baseUrl: "https://api.db/v1",
-      model: "db-model",
       apiKey: "sk-db",
-      temperature: 0.4,
+      baseUrl: "https://api.db/v1",
       maxTokens: 1024,
+      model: "db-model",
+      provider: "remote",
+      temperature: 0.4,
     });
 
     // 只给 override.model → 三个字段被覆盖，temperature 走 resolveTaskTemperature
     const over = await getLLMConfig({
-      provider: "local",
       baseUrl: "http://127.0.0.1:9999/v1",
-      model: "req-model",
-      temperature: 0.9,
       maxTokens: 64,
+      model: "req-model",
+      provider: "local",
+      temperature: 0.9,
     });
     expect(over).toMatchObject({
-      provider: "local",
-      baseUrl: "http://127.0.0.1:9999/v1",
-      model: "req-model",
       apiKey: "sk-db",
-      temperature: 0.9,
+      baseUrl: "http://127.0.0.1:9999/v1",
       maxTokens: 64,
+      model: "req-model",
+      provider: "local",
+      temperature: 0.9,
     });
   });
 
@@ -191,18 +191,18 @@ describe("getLLMConfig 的三层叠加（env → DB → 请求覆盖）", () => 
 
   it("override.model 命中带独立连接参数的远端条目时改走该条目的 baseUrl/apiKey", async () => {
     await llmConfigRepository.upsertSingleton({
-      provider: "remote",
-      baseUrl: "https://global/v1",
       apiKey: "sk-global",
+      baseUrl: "https://global/v1",
       extraModels: [
         {
-          name: "alt",
-          baseUrl: "https://alt/v1",
           apiKey: "sk-alt",
+          baseUrl: "https://alt/v1",
           kind: "chat",
+          name: "alt",
         },
         "local-only",
       ],
+      provider: "remote",
     });
 
     const hit = await getLLMConfig({ model: "alt" });
@@ -220,10 +220,10 @@ describe("getLLMConfig 的三层叠加（env → DB → 请求覆盖）", () => 
       baseUrl: "https://global/v1",
       extraModels: [
         "local-a",
-        { name: "legacy-remote", baseUrl: "https://legacy/v1", apiKey: "sk-l" },
+        { apiKey: "sk-l", baseUrl: "https://legacy/v1", name: "legacy-remote" },
       ],
     });
-    seedRemoteModel(tdb, { name: "tbl-remote", baseUrl: "https://t/v1" });
+    seedRemoteModel(tdb, { baseUrl: "https://t/v1", name: "tbl-remote" });
 
     const cfg = await getLLMConfig();
     const names = (cfg.extraModels ?? []).map((e) => e.name).sort();
@@ -231,8 +231,8 @@ describe("getLLMConfig 的三层叠加（env → DB → 请求覆盖）", () => 
     // 本地候选被对象化后 baseUrl/apiKey 为空
     const localEntry = cfg.extraModels!.find((e) => e.name === "local-a");
     expect(localEntry).toMatchObject({
-      baseUrl: null,
       apiKey: null,
+      baseUrl: null,
       kind: null,
     });
   });
@@ -244,14 +244,14 @@ describe("getConfigForClient", () => {
       baseUrl: "https://global/v1",
       extraModels: ["local-a"],
     });
-    seedRemoteModel(tdb, { name: "tbl-remote", baseUrl: "https://t/v1" });
+    seedRemoteModel(tdb, { baseUrl: "https://t/v1", name: "tbl-remote" });
 
     const out = await getConfigForClient();
     expect(out.extraModels).toEqual([
       "local-a",
       {
-        name: "tbl-remote",
         baseUrl: "https://t/v1",
+        name: "tbl-remote",
         // 给客户端的形态里密钥一律不出门（顶层与远端条目都是），连键都不挂 ——
         // 挂 `undefined` 与挂 `null` 在覆盖式保存里读起来不一样，见台账 A11。
         // 但「这条存没存过密钥」必须出门，否则客户端分不清「没配过」与「没重填」。
@@ -267,13 +267,13 @@ describe("getConfigForClient", () => {
      * 一起落盘」，所以断言不能只看 `apiKey` 那一个键：把整个出口对象序列化一遍，
      * 两把密钥一个字都不许出现（顶层与远端条目都算）。 */
     await llmConfigRepository.upsertSingleton({
-      baseUrl: "https://global/v1",
       apiKey: "sk-top-secret",
+      baseUrl: "https://global/v1",
     });
     seedRemoteModel(tdb, {
-      name: "tbl-keyed",
-      baseUrl: "https://t/v1",
       apiKey: "sk-remote-secret",
+      baseUrl: "https://t/v1",
+      name: "tbl-keyed",
     });
 
     const out = await getConfigForClient();
@@ -288,9 +288,9 @@ describe("getConfigForClient", () => {
       (e) => typeof e === "object" && e !== null && e.name === "tbl-keyed",
     );
     expect(remote).toMatchObject({
-      name: "tbl-keyed",
       baseUrl: "https://t/v1",
       hasApiKey: true,
+      name: "tbl-keyed",
     });
     expect(Object.keys(remote ?? {})).not.toContain("apiKey");
   });
@@ -300,7 +300,7 @@ describe("getConfigForClient", () => {
       baseUrl: "http://127.0.0.1:11434/v1",
     });
     // 指向回环且不带密钥 —— 属于「误存的本地 ollama」
-    seedRemoteModel(tdb, { name: "misplaced", baseUrl: null });
+    seedRemoteModel(tdb, { baseUrl: null, name: "misplaced" });
 
     const out = await getConfigForClient();
     expect(out.extraModels).toEqual(["misplaced"]);
@@ -321,7 +321,7 @@ describe("describeFetchFailure", () => {
   it("ECONNREFUSED + 本地 provider → 提示确认 Ollama 已启动", () => {
     const msg = describeFetchFailure(
       typeErr(Object.assign(new Error("connect ECONNREFUSED"), {})),
-      CFG({ provider: "local", baseUrl: "http://127.0.0.1:11434/v1" }),
+      CFG({ baseUrl: "http://127.0.0.1:11434/v1", provider: "local" }),
     );
     expect(msg).toContain("连不上本地服务");
     expect(msg).toContain("Ollama");
@@ -330,7 +330,7 @@ describe("describeFetchFailure", () => {
   it("ECONNREFUSED + 远端 provider → 提示检查网络与 Base URL", () => {
     const msg = describeFetchFailure(
       typeErr(new Error("connect ECONNRESET")),
-      CFG({ provider: "remote", baseUrl: "https://api.x/v1" }),
+      CFG({ baseUrl: "https://api.x/v1", provider: "remote" }),
     );
     expect(msg).toContain("连不上远端服务");
     expect(msg).toContain("网络");
@@ -339,7 +339,7 @@ describe("describeFetchFailure", () => {
   it("回环地址即便 provider=remote 也按本地口径给提示", () => {
     const msg = describeFetchFailure(
       typeErr(new Error("ECONNREFUSED")),
-      CFG({ provider: "remote", baseUrl: "http://localhost:11434/v1" }),
+      CFG({ baseUrl: "http://localhost:11434/v1", provider: "remote" }),
     );
     expect(msg).toContain("连不上本地服务");
   });
@@ -384,7 +384,7 @@ describe("completeLLM（一次性补全）", () => {
   it("请求形状：URL 去尾斜杠、Content-Type、非流式、截断参数", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ choices: [{ message: { content: "你好" } }] }));
     const text = await completeLLM(CFG({ baseUrl: "http://127.0.0.1:11434/v1/", maxTokens: 128 }), [
-      { role: "user", content: "hi" },
+      { content: "hi", role: "user" },
     ]);
     expect(text).toBe("你好");
 
@@ -393,21 +393,21 @@ describe("completeLLM（一次性补全）", () => {
     expect(sentHeaders()).toEqual({ "Content-Type": "application/json" });
     const body = sentBody();
     expect(body).toMatchObject({
-      model: "llama3",
       max_tokens: 128,
+      model: "llama3",
       stream: false,
     });
-    expect(body.messages).toEqual([{ role: "user", content: "hi" }]);
+    expect(body.messages).toEqual([{ content: "hi", role: "user" }]);
   });
 
   it("provider=remote 且有 apiKey 时带 Bearer；local 不带", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ choices: [] }));
-    await completeLLM(CFG({ provider: "remote", apiKey: "sk-1" }), []);
+    await completeLLM(CFG({ apiKey: "sk-1", provider: "remote" }), []);
     expect(sentHeaders().Authorization).toBe("Bearer sk-1");
 
     fetchMock.mockClear();
     fetchMock.mockResolvedValue(jsonResponse({ choices: [] }));
-    await completeLLM(CFG({ provider: "local", apiKey: "sk-1" }), []);
+    await completeLLM(CFG({ apiKey: "sk-1", provider: "local" }), []);
     expect(sentHeaders().Authorization).toBeUndefined();
   });
 
@@ -440,10 +440,10 @@ describe("completeLLM（一次性补全）", () => {
   it("错误响应体为空时不拼多余的冒号", async () => {
     fetchMock.mockResolvedValue(
       /* SAFETY: 类型断言已复核 */ {
+        json: async () => ({}),
         ok: false,
         status: 502,
         text: async () => "",
-        json: async () => ({}),
       } as unknown as Response,
     );
     await expect(completeLLM(CFG(), [])).rejects.toThrow(/LLM 请求失败 \(502\)$/);
@@ -483,10 +483,10 @@ describe("streamLLM（流式补全）", () => {
   it("服务端不返回 body → 明确报「未返回数据流」", async () => {
     fetchMock.mockResolvedValue(
       /* SAFETY: 类型断言已复核 */ {
-        ok: true,
-        status: 200,
         body: null,
         json: async () => ({}),
+        ok: true,
+        status: 200,
         text: async () => "",
       } as unknown as Response,
     );
@@ -499,7 +499,7 @@ describe("streamLLM（流式补全）", () => {
 });
 
 describe("completeLLMStructured（结构化补全）", () => {
-  const schema = z.object({ name: z.string(), n: z.number() });
+  const schema = z.object({ n: z.number(), name: z.string() });
 
   it("强制 JSON 输出并用 schema 校验；response_format 落在请求体里", async () => {
     fetchMock.mockResolvedValue(
@@ -508,7 +508,7 @@ describe("completeLLMStructured（结构化补全）", () => {
       }),
     );
     const out = await completeLLMStructured(CFG(), [], schema);
-    expect(out).toEqual({ name: "甲", n: 2 });
+    expect(out).toEqual({ n: 2, name: "甲" });
     expect(sentBody().response_format).toEqual({ type: "json_object" });
   });
 
@@ -540,9 +540,9 @@ describe("completeLLMTools（tools 协议）", () => {
               content: null,
               tool_calls: [
                 {
+                  function: { arguments: '{"q":"x"}', name: "search" },
                   id: "call_1",
                   type: "function",
-                  function: { name: "search", arguments: '{"q":"x"}' },
                 },
               ],
             },
@@ -552,17 +552,17 @@ describe("completeLLMTools（tools 协议）", () => {
     );
     const tools: Array<LLMTool> = [
       {
+        function: { description: "搜索", name: "search" },
         type: "function",
-        function: { name: "search", description: "搜索" },
       },
     ];
     const out = await completeLLMTools(CFG(), [], tools);
     expect(out.content).toBe("");
     expect(out.toolCalls).toEqual([
       {
+        function: { arguments: '{"q":"x"}', name: "search" },
         id: "call_1",
         type: "function",
-        function: { name: "search", arguments: '{"q":"x"}' },
       },
     ]);
     expect(sentBody().tools).toEqual(tools);
@@ -576,17 +576,17 @@ describe("completeLLMTools（tools 协议）", () => {
             message: {
               content: "纯文本回答",
               tool_calls: [
-                { type: "function", function: { name: "a", arguments: "{}" } },
-                { id: "i2", type: "function", function: { arguments: "{}" } },
+                { function: { arguments: "{}", name: "a" }, type: "function" },
+                { function: { arguments: "{}" }, id: "i2", type: "function" },
                 {
+                  function: { arguments: 1, name: "c" },
                   id: "i3",
                   type: "function",
-                  function: { name: "c", arguments: 1 },
                 },
                 {
+                  function: { arguments: "{}", name: "ok" },
                   id: "i4",
                   type: "function",
-                  function: { name: "ok", arguments: "{}" },
                 },
               ],
             },

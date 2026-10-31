@@ -125,15 +125,15 @@ export type PageHeaderProps = {
 };
 
 export function PageHeader({
-  title,
-  description,
-  help,
   actions,
   as: Heading = "h1",
-  srTitle,
-  extra,
-  titleSuffix,
   className,
+  description,
+  extra,
+  help,
+  srTitle,
+  title,
+  titleSuffix,
 }: PageHeaderProps) {
   /* `description` 常驻优先：两者传同一个值时不该在屏上出现两遍（正文那条口径）。 */
   const helpText = description ? undefined : help;

@@ -36,8 +36,8 @@ import type { NodeTypeConfig } from "~/lib/comfyui/node-config";
 import { getCustomNodePackage } from "~/config/custom-nodes";
 
 export function PackageFooter({
-  config,
   classType,
+  config,
   name,
 }: {
   classType: string;
@@ -74,26 +74,26 @@ export function PackageFooter({
       className="comfy-node__package"
       data-package={resolved}
       style={{
-        display: "inline-block",
         alignSelf: "flex-start",
-        marginTop: 4,
-        marginLeft: 2,
-        padding: "2px 6px",
+        display: "inline-block",
+        fontFamily: "var(--font-mono)",
         fontSize: 9,
         lineHeight: 1.2,
-        fontFamily: "var(--font-mono)",
+        marginLeft: 2,
+        marginTop: 4,
+        padding: "2px 6px",
         /* 包脚注叠在节点表面上（随主题），文本/边框都必须跟着走。
            写死 50% 白 + 22% 白两态都只对深色底成立。 */
-        color: "var(--color-ink-fainter)",
-        letterSpacing: 0.3,
         border: "1px solid var(--color-border-strong)",
         borderRadius: 4,
+        color: "var(--color-ink-fainter)",
+        letterSpacing: 0.3,
+        maxWidth: "calc(100% - 4px)",
+        overflow: "hidden",
         pointerEvents: "none",
+        textOverflow: "ellipsis",
         userSelect: "none",
         whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        maxWidth: "calc(100% - 4px)",
       }}
       title={`来源包: ${resolved}`}
     >

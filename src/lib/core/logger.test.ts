@@ -47,12 +47,12 @@ function makeLogger(ns: string) {
       .split("\n")
       .filter(Boolean)
       .map((l) => /* SAFETY: 类型断言已复核 */ JSON.parse(l) as Record<string, unknown>);
-  return { log, lines };
+  return { lines, log };
 }
 
 describe("core/logger — 核心层门面（实现只有一份，就是本模块）", () => {
   it("级别过滤走 pino：实例级别 debug 时四档全出", () => {
-    const { log, lines } = makeLogger("t");
+    const { lines, log } = makeLogger("t");
     log.debug("d");
     log.info("i");
     log.warn("w");
@@ -87,7 +87,7 @@ describe("core/logger — 核心层门面（实现只有一份，就是本模块
   });
 
   it("结构化字段原样进 JSON，不进 msg 字符串", () => {
-    const { log, lines } = makeLogger("repo");
+    const { lines, log } = makeLogger("repo");
     log.debug("create", { id: "t1" });
     const [entry] = lines();
     expect(entry?.msg).toBe("create");
@@ -96,7 +96,7 @@ describe("core/logger — 核心层门面（实现只有一份，就是本模块
   });
 
   it("child 的命名空间拼接为 parent:child", () => {
-    const { log, lines } = makeLogger("a");
+    const { lines, log } = makeLogger("a");
     log.child("b").info("hi");
     expect(lines()[0]?.ns).toBe("a:b");
   });
@@ -104,7 +104,7 @@ describe("core/logger — 核心层门面（实现只有一份，就是本模块
   /* 旧实现「零脱敏」正是本条要根治的缺口：同一条字段在 pino 那条通道会被
    * `REDACT_PATHS` 擦成 `[Redacted]`，在旧 `core/logger` 里则原文落盘。 */
   it("敏感字段被 pino redact 擦掉", () => {
-    const { log, lines } = makeLogger("auth");
+    const { lines, log } = makeLogger("auth");
     log.error("login", { password: "sample-password", token: "sample-token" });
     const raw = JSON.stringify(lines()[0]);
     expect(raw).toContain("[Redacted]");

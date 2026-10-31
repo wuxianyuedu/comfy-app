@@ -96,25 +96,25 @@ export type ProductionRun = {
 };
 
 export const DEFAULT_PRODUCTION_RUN: ProductionRun = {
-  status: "idle",
   approvalMode: "stage",
-  stage: "script",
-  goal: "",
-  awaitingStage: null,
-  imageWorkflowId: "",
-  videoWorkflowId: "",
-  filmStartedAt: "",
-  processedShotRev: {},
   autoReview: false,
-  reviewedShotRev: {},
-  reviewAttempts: {},
-  scriptReviewDigest: "",
-  scriptReviewAttempts: 0,
-  scriptRevisionPending: false,
-  storyboardScriptDigest: "",
-  log: [],
+  awaitingStage: null,
   error: null,
+  filmStartedAt: "",
+  goal: "",
+  imageWorkflowId: "",
+  log: [],
+  processedShotRev: {},
+  reviewAttempts: {},
+  reviewedShotRev: {},
+  scriptReviewAttempts: 0,
+  scriptReviewDigest: "",
+  scriptRevisionPending: false,
+  stage: "script",
+  status: "idle",
+  storyboardScriptDigest: "",
   updatedAt: "",
+  videoWorkflowId: "",
 };
 
 /** 执行日志上限：只保留最近 N 条，避免 run 列无限膨胀。 */
@@ -186,39 +186,39 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
         continue;
       }
       log.push({
-        ts: rec.ts,
+        detail: typeof rec.detail === "string" ? rec.detail : "",
         kind: typeof rec.kind === "string" ? rec.kind : "info",
         ok: rec.ok !== false,
-        detail: typeof rec.detail === "string" ? rec.detail : "",
+        ts: rec.ts,
       });
     }
   }
   return {
-    status,
     approvalMode,
-    stage: isProductionStage(obj.stage) ? obj.stage : "script",
-    goal: typeof obj.goal === "string" ? obj.goal : "",
-    awaitingStage: isProductionStage(obj.awaitingStage) ? obj.awaitingStage : null,
-    imageWorkflowId: typeof obj.imageWorkflowId === "string" ? obj.imageWorkflowId : "",
-    videoWorkflowId: typeof obj.videoWorkflowId === "string" ? obj.videoWorkflowId : "",
-    filmStartedAt: typeof obj.filmStartedAt === "string" ? obj.filmStartedAt : "",
-    processedShotRev: parseRevMap(obj.processedShotRev),
     autoReview: obj.autoReview === true,
-    reviewedShotRev: parseRevMap(obj.reviewedShotRev),
+    awaitingStage: isProductionStage(obj.awaitingStage) ? obj.awaitingStage : null,
+    error: typeof obj.error === "string" ? obj.error : null,
+    filmStartedAt: typeof obj.filmStartedAt === "string" ? obj.filmStartedAt : "",
+    goal: typeof obj.goal === "string" ? obj.goal : "",
+    imageWorkflowId: typeof obj.imageWorkflowId === "string" ? obj.imageWorkflowId : "",
+    log,
+    processedShotRev: parseRevMap(obj.processedShotRev),
     reviewAttempts: parseRevMap(obj.reviewAttempts),
-    scriptReviewDigest: typeof obj.scriptReviewDigest === "string" ? obj.scriptReviewDigest : "",
+    reviewedShotRev: parseRevMap(obj.reviewedShotRev),
     scriptReviewAttempts:
       typeof obj.scriptReviewAttempts === "number" &&
       Number.isFinite(obj.scriptReviewAttempts) &&
       obj.scriptReviewAttempts >= 0
         ? Math.floor(obj.scriptReviewAttempts)
         : 0,
+    scriptReviewDigest: typeof obj.scriptReviewDigest === "string" ? obj.scriptReviewDigest : "",
     scriptRevisionPending: obj.scriptRevisionPending === true,
+    stage: isProductionStage(obj.stage) ? obj.stage : "script",
+    status,
     storyboardScriptDigest:
       typeof obj.storyboardScriptDigest === "string" ? obj.storyboardScriptDigest : "",
-    log,
-    error: typeof obj.error === "string" ? obj.error : null,
     updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : "",
+    videoWorkflowId: typeof obj.videoWorkflowId === "string" ? obj.videoWorkflowId : "",
   };
 }
 
@@ -278,12 +278,12 @@ export function toRunView(production: ProductionLike | null): ProductionRunView 
       continue;
     }
     shots.push({
+      hasClip: Boolean(rec.clipUrl),
+      hasImage: Boolean(rec.imageUrl),
+      humanRating: normalizeHumanRating(rec.humanRating),
+      humanVerdict: normalizeHumanVerdict(rec.humanVerdict),
       id: rec.id,
       rev: typeof rec.rev === "number" && Number.isFinite(rec.rev) ? rec.rev : 0,
-      hasImage: Boolean(rec.imageUrl),
-      hasClip: Boolean(rec.clipUrl),
-      humanVerdict: normalizeHumanVerdict(rec.humanVerdict),
-      humanRating: normalizeHumanRating(rec.humanRating),
     });
   }
   const characters =
@@ -291,12 +291,12 @@ export function toRunView(production: ProductionLike | null): ProductionRunView 
   const script = typeof production?.scriptMarkdown === "string" ? production.scriptMarkdown : "";
   const scriptReviewRaw = asRecord(production?.scriptReview);
   return {
+    characterCount: characters.length,
+    filmRendered: normalizeProductionProgress(production?.progress).rendered,
     hasScript: script.trim().length > 0,
     scriptDigest: scriptDigestOf(script),
-    characterCount: characters.length,
-    shots,
-    filmRendered: normalizeProductionProgress(production?.progress).rendered,
     scriptHumanVerdict: normalizeHumanVerdict(scriptReviewRaw?.humanVerdict),
+    shots,
   };
 }
 

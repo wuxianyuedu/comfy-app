@@ -13,8 +13,8 @@ import { ScrollArea } from "~/components/ui/scroll-area";
  * 所以下面每条 story 都给死高度，这也是调用处的真实形态（面板 / 弹层）。
  */
 const meta = {
-  title: "UI/ScrollArea",
   component: ScrollArea,
+  title: "UI/ScrollArea",
 } satisfies Meta<typeof ScrollArea>;
 
 export default meta;

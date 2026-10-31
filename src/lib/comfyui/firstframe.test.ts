@@ -25,16 +25,16 @@ type ProgressRow = {
 const mocks = vi.hoisted(() => {
   const rows: Array<unknown> = [];
   return {
-    rows,
+    createTask: vi.fn(async () => ({ taskId: "ff-task" })),
     progress: vi.fn(async () => {
       const row = rows.shift();
       return row === undefined
-        ? { status: "RUNNING", progress: 0, resultImages: null, error: null }
+        ? { error: null, progress: 0, resultImages: null, status: "RUNNING" }
         : row;
     }),
-    createTask: vi.fn(async () => ({ taskId: "ff-task" })),
-    upload: vi.fn(async () => ({ name: "ff_ff-task.png" })),
     readFile: vi.fn(async () => Buffer.from("png-bytes")),
+    rows,
+    upload: vi.fn(async () => ({ name: "ff_ff-task.png" })),
   };
 });
 
@@ -52,18 +52,18 @@ import { generatedRoot } from "~/lib/media/output-paths";
 const mod = await import("./firstframe");
 
 const opts = {
+  prompt: "一只猫",
   userId: "u1",
   workflowId: "wf1",
-  prompt: "一只猫",
 };
 
 const succeeded = (localPath: string | null): ProgressRow => ({
-  status: "SUCCEEDED",
+  error: null,
   progress: 100,
   resultImages: localPath
     ? [{ localPath, mediaType: "image" }]
     : [{ localPath: "/api/generated/ff-task/vid_0.mp4", mediaType: "video" }],
-  error: null,
+  status: "SUCCEEDED",
 });
 
 beforeEach(() => {
@@ -111,10 +111,10 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
 
   it("FAILED：把库里那句失败原因原样抛出去，而不是只说「失败了」", async () => {
     mocks.rows.push({
-      status: "FAILED",
+      error: "CUDA out of memory",
       progress: 0,
       resultImages: null,
-      error: "CUDA out of memory",
+      status: "FAILED",
     });
 
     await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow("CUDA out of memory");
@@ -122,10 +122,10 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
 
   it("CANCELLED 且库里没有原因：退化成带状态的说明，不许抛 undefined", async () => {
     mocks.rows.push({
-      status: "CANCELLED",
+      error: null,
       progress: 0,
       resultImages: null,
-      error: null,
+      status: "CANCELLED",
     });
 
     await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow("首帧生成失败（CANCELLED）");
@@ -134,7 +134,7 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
   it("RUNNING → SUCCEEDED：一轮没到终态就再问一次（不是订阅一次就等）", async () => {
     vi.useFakeTimers();
     mocks.rows.push(
-      { status: "RUNNING", progress: 30, resultImages: null, error: null },
+      { error: null, progress: 30, resultImages: null, status: "RUNNING" },
       succeeded("/api/generated/ff-task/img_0.png"),
     );
 

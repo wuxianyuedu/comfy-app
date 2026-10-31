@@ -21,9 +21,9 @@ import { CodeBlock, extToLanguage } from "~/components/ui/code-block";
  * 否则 `one-dark-pro`）—— 用工具栏切明暗，代码块的底色与 token 色应一起换。
  */
 const meta = {
-  title: "UI/CodeBlock",
-  component: CodeBlock,
   args: { code: "", language: "typescript" },
+  component: CodeBlock,
+  title: "UI/CodeBlock",
 } satisfies Meta<typeof CodeBlock>;
 
 export default meta;

@@ -25,12 +25,12 @@ const ORIENTATIONS: Array<TabsOrientation> = ["horizontal", "vertical"];
 /* `variant` 这一轴住在 `TabsList` 上（`Tabs` 本体只有 `orientation`），
    所以 `component` 指向 `TabsList` —— Args 面板的控件按 `component` 的 props 生成。 */
 const meta = {
-  title: "UI/Tabs",
-  component: TabsList,
   args: { variant: "default" },
   argTypes: {
     variant: { control: "select", options: VARIANTS },
   },
+  component: TabsList,
+  title: "UI/Tabs",
 } satisfies Meta<typeof TabsList>;
 
 export default meta;

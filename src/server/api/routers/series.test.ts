@@ -24,7 +24,7 @@ vi.mock("~/server/better-auth", () => ({
 }));
 vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal()),
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
@@ -43,7 +43,7 @@ const tdb = getTestDb();
 const tdbDb = tdb as unknown as LibSQLDatabase<typeof schema>;
 const userCaller = () => createCaller(makeCtx());
 const otherCaller = () =>
-  createCaller(makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }));
+  createCaller(makeCtx({ user: { email: "b@test.dev", id: "user-b", name: null } }));
 
 /** 断言非空的种子 helper（create 类 procedure 返回 `T | undefined`）。 */
 async function addSeries(caller = userCaller(), title = "S") {
@@ -73,12 +73,12 @@ async function makeHierarchy(caller = userCaller()) {
   const s = await addSeries(caller, "S1");
   const se = await addSeason(s.id, caller);
   const ep = await addEpisode(se.id, caller);
-  return { s, se, ep };
+  return { ep, s, se };
 }
 
 /** 造一个角色库实体（createCharacter 返回 `T | undefined`）。 */
 async function addCharacter(seriesId: string, name = "角色", caller = userCaller()) {
-  const ch = await caller.createCharacter({ seriesId, name });
+  const ch = await caller.createCharacter({ name, seriesId });
   if (!ch) {
     throw new Error("seed character failed");
   }
@@ -88,8 +88,8 @@ async function addCharacter(seriesId: string, name = "角色", caller = userCall
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
-  seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-  seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+  seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+  seedUser(tdb, { email: "b@test.dev", id: "user-b" });
 });
 
 describe("series.list / create", () => {
@@ -160,8 +160,8 @@ describe("episode 列表 / 增改删", () => {
     expect(list.map((x) => x.id)).toContain(ep.id);
     const updated = await userCaller().updateEpisode({
       id: ep.id,
-      title: "E-改",
       status: "producing",
+      title: "E-改",
     });
     expect(updated?.title).toBe("E-改");
     expect(updated?.status).toBe("producing");
@@ -179,7 +179,7 @@ describe("episode 列表 / 增改删", () => {
 
 describe("episode.byProject / assignProject（项目挂载）", () => {
   it("把项目挂到集后，byProject 能定位回来", async () => {
-    seedProject(tdb, { id: "p1", userId: "user-a", name: "项目1" });
+    seedProject(tdb, { id: "p1", name: "项目1", userId: "user-a" });
     const { se } = await makeHierarchy();
     const ep = await addEpisode(se.id, userCaller());
     await userCaller().assignProject({ episodeId: ep.id, projectId: "p1" });
@@ -187,18 +187,18 @@ describe("episode.byProject / assignProject（项目挂载）", () => {
     expect(found?.id).toBe(ep.id);
   });
   it("未挂载的项目 → byProject 返回 null", async () => {
-    seedProject(tdb, { id: "p2", userId: "user-a", name: "项目2" });
+    seedProject(tdb, { id: "p2", name: "项目2", userId: "user-a" });
     expect(await userCaller().byProject({ projectId: "p2" })).toBeNull();
   });
   it("他人不可读我项目的归属（byProject 不越权泄漏）", async () => {
-    seedProject(tdb, { id: "p3", userId: "user-a", name: "项目3" });
+    seedProject(tdb, { id: "p3", name: "项目3", userId: "user-a" });
     const { se } = await makeHierarchy();
     const ep = await addEpisode(se.id, userCaller());
     await userCaller().assignProject({ episodeId: ep.id, projectId: "p3" });
     expect(await otherCaller().byProject({ projectId: "p3" })).toBeNull();
   });
   it("assignProject 改挂为 null 后 byProject 不再命中", async () => {
-    seedProject(tdb, { id: "p4", userId: "user-a", name: "项目4" });
+    seedProject(tdb, { id: "p4", name: "项目4", userId: "user-a" });
     const { se } = await makeHierarchy();
     const ep = await addEpisode(se.id, userCaller());
     await userCaller().assignProject({ episodeId: ep.id, projectId: "p4" });
@@ -227,7 +227,7 @@ describe("character 列表 / 增改删（FR-SR-03）", () => {
 
   it("他人系列的 createCharacter → FORBIDDEN", async () => {
     const s = await addSeries(otherCaller(), "别人的系列");
-    await expect(userCaller().createCharacter({ seriesId: s.id, name: "x" })).rejects.toMatchObject(
+    await expect(userCaller().createCharacter({ name: "x", seriesId: s.id })).rejects.toMatchObject(
       { code: "FORBIDDEN" },
     );
   });
@@ -242,17 +242,17 @@ describe("character 列表 / 增改删（FR-SR-03）", () => {
 
 describe("episode ↔ character 关联", () => {
   it("link / unlink + episodeCharacters 列表（重复关联幂等）", async () => {
-    const { s, ep } = await makeHierarchy();
+    const { ep, s } = await makeHierarchy();
     const ch1 = await addCharacter(s.id, "主角");
     await addCharacter(s.id, "配角");
-    await userCaller().linkCharacter({ episodeId: ep.id, characterId: ch1.id });
+    await userCaller().linkCharacter({ characterId: ch1.id, episodeId: ep.id });
     const linked = await userCaller().episodeCharacters({ episodeId: ep.id });
     expect(linked.map((l) => l.character.id)).toContain(ch1.id);
     expect(linked.find((l) => l.character.id === ch1.id)?.role).toBe("");
-    await userCaller().linkCharacter({ episodeId: ep.id, characterId: ch1.id });
+    await userCaller().linkCharacter({ characterId: ch1.id, episodeId: ep.id });
     const linked2 = await userCaller().episodeCharacters({ episodeId: ep.id });
     expect(linked2.filter((l) => l.character.id === ch1.id).length).toBe(1);
-    await userCaller().unlinkCharacter({ episodeId: ep.id, characterId: ch1.id });
+    await userCaller().unlinkCharacter({ characterId: ch1.id, episodeId: ep.id });
     const linked3 = await userCaller().episodeCharacters({ episodeId: ep.id });
     expect(linked3.find((l) => l.character.id === ch1.id)).toBeUndefined();
   });
@@ -262,14 +262,14 @@ describe("episode ↔ character 关联", () => {
     const otherSeries = await addSeries(userCaller(), "别的系列（同主）");
     const chOther = await addCharacter(otherSeries.id, "外人");
     await expect(
-      userCaller().linkCharacter({ episodeId: ep.id, characterId: chOther.id }),
+      userCaller().linkCharacter({ characterId: chOther.id, episodeId: ep.id }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("characterEpisodes 反向列出「该角色被哪些集引用」（FR-SR-03 ②）", async () => {
-    const { s, se, ep } = await makeHierarchy();
+    const { ep, s, se } = await makeHierarchy();
     const ch = await addCharacter(s.id, "主角");
-    await userCaller().linkCharacter({ episodeId: ep.id, characterId: ch.id, role: "男主" });
+    await userCaller().linkCharacter({ characterId: ch.id, episodeId: ep.id, role: "男主" });
     const refs = await userCaller().characterEpisodes({ characterId: ch.id });
     expect(refs.length).toBe(1);
     expect(refs[0]?.episodeId).toBe(ep.id);
@@ -277,7 +277,7 @@ describe("episode ↔ character 关联", () => {
     expect(refs[0]?.seasonNumber).toBe(1);
     expect(refs[0]?.episodeNumber).toBe(1);
     expect(refs[0]?.role).toBe("男主");
-    await userCaller().unlinkCharacter({ episodeId: ep.id, characterId: ch.id });
+    await userCaller().unlinkCharacter({ characterId: ch.id, episodeId: ep.id });
     expect(await userCaller().characterEpisodes({ characterId: ch.id })).toEqual([]);
   });
 
@@ -293,14 +293,14 @@ describe("episode ↔ character 关联", () => {
 describe("production ↔ 系列库 双向同步（提升 / 注入）", () => {
   it("promoteFromProduction 同名只建一份并关联到本集", async () => {
     seedProduction(tdb, {
+      characters: [
+        { ageGender: "男", appearance: "黑发", id: "pc1", name: "阿明" },
+        { ageGender: "男", appearance: "黑发", id: "pc2", name: "阿明" },
+      ],
       id: "p1",
       userId: "user-a",
-      characters: [
-        { id: "pc1", name: "阿明", ageGender: "男", appearance: "黑发" },
-        { id: "pc2", name: "阿明", ageGender: "男", appearance: "黑发" },
-      ],
     });
-    const { s, ep } = await makeHierarchy();
+    const { ep, s } = await makeHierarchy();
     await userCaller().assignProject({ episodeId: ep.id, projectId: "p1" });
     const res = await userCaller().promoteFromProduction({ projectId: "p1" });
     expect(res.created).toBe(1);
@@ -313,11 +313,11 @@ describe("production ↔ 系列库 双向同步（提升 / 注入）", () => {
 
   it("promoteFromProduction 重复跑只更新不新增", async () => {
     seedProduction(tdb, {
+      characters: [{ appearance: "红衣", id: "pc3", name: "小红" }],
       id: "p2",
       userId: "user-a",
-      characters: [{ id: "pc3", name: "小红", appearance: "红衣" }],
     });
-    const { s, ep } = await makeHierarchy();
+    const { ep, s } = await makeHierarchy();
     await userCaller().assignProject({ episodeId: ep.id, projectId: "p2" });
     await userCaller().promoteFromProduction({ projectId: "p2" });
     const res = await userCaller().promoteFromProduction({ projectId: "p2" });
@@ -329,14 +329,14 @@ describe("production ↔ 系列库 双向同步（提升 / 注入）", () => {
 
   it("injectToProduction 把本集关联角色合并进项目（同名覆盖、新增追加）", async () => {
     seedProduction(tdb, {
+      characters: [{ appearance: "旧", id: "pc4", name: "已有" }],
       id: "p3",
       userId: "user-a",
-      characters: [{ id: "pc4", name: "已有", appearance: "旧" }],
     });
-    const { s, ep } = await makeHierarchy();
+    const { ep, s } = await makeHierarchy();
     await userCaller().assignProject({ episodeId: ep.id, projectId: "p3" });
     const ch = await addCharacter(s.id, "新角");
-    await userCaller().linkCharacter({ episodeId: ep.id, characterId: ch.id });
+    await userCaller().linkCharacter({ characterId: ch.id, episodeId: ep.id });
     const res = await userCaller().injectToProduction({ projectId: "p3" });
     expect(res.injected).toBe(1);
     const [prodRow] = await tdbDb
@@ -352,9 +352,9 @@ describe("production ↔ 系列库 双向同步（提升 / 注入）", () => {
 
   it("他人项目的 promote / inject → FORBIDDEN", async () => {
     seedProduction(tdb, {
+      characters: [{ id: "pc5", name: "x" }],
       id: "p4",
       userId: "user-b",
-      characters: [{ id: "pc5", name: "x" }],
     });
     const { ep } = await makeHierarchy();
     await userCaller().assignProject({ episodeId: ep.id, projectId: "p4" });

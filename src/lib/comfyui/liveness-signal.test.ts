@@ -19,9 +19,9 @@ import type { ComfyExitReport } from "./lifecycle-exit";
 
 function report(over: Partial<ComfyExitReport> = {}): ComfyExitReport {
   return {
-    reason: "异常退出（exit 1）",
-    detail: "code=1",
     advice: null,
+    detail: "code=1",
+    reason: "异常退出（exit 1）",
     ...over,
   };
 }
@@ -32,7 +32,7 @@ beforeEach(() => {
 
 describe("noteComfyExit", () => {
   it("纪元单调递增，快照跟着更新", () => {
-    expect(getLivenessSnapshot()).toEqual({ seq: 0, last: null });
+    expect(getLivenessSnapshot()).toEqual({ last: null, seq: 0 });
     const first = noteComfyExit(report());
     const second = noteComfyExit(report({ reason: "被信号终止（SIGKILL）" }));
     expect(first.seq).toBe(1);

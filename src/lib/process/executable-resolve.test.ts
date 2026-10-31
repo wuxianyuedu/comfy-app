@@ -45,7 +45,7 @@ beforeEach(() => {
 });
 
 afterAll(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.rmSync(tmp, { force: true, recursive: true });
 });
 
 const WIN_ENV = (dir: string) => ({
@@ -173,8 +173,8 @@ describe("resolveCommandInvocation：控制台起进程前的那一问", () => {
       platform: "linux",
     });
     expect(r).toEqual({
-      command: "definitely-not-here",
       args: ["-v"],
+      command: "definitely-not-here",
       resolved: false,
     });
   });
@@ -182,7 +182,7 @@ describe("resolveCommandInvocation：控制台起进程前的那一问", () => {
   it("Windows：`.cmd` 垫底、选中经 PowerShell 宿主的 `.ps1` 形态", () => {
     const dir = freshDir();
     // 只有 .cmd 与 .ps1 并排（corepack 装出来的现场），且宿主可用。
-    makeWindowsToolchain(dir, "pnpm", { shim: false, host: true });
+    makeWindowsToolchain(dir, "pnpm", { host: true, shim: false });
     const r = resolveCommandInvocation("pnpm", ["-v"], {
       env: WIN_ENV(dir),
       platform: "win32",
@@ -235,7 +235,7 @@ describe("resolveCommandInvocation：控制台起进程前的那一问", () => {
 
   it("Windows：`.cmd` 没有 `.ps1` 回退也没有宿主 → 判「PATH 上没有可用形态」", () => {
     const dir = freshDir();
-    makeWindowsToolchain(dir, "pnpm", { shim: false, ps1: false, host: false });
+    makeWindowsToolchain(dir, "pnpm", { host: false, ps1: false, shim: false });
     const r = resolveCommandInvocation("pnpm", ["-v"], {
       env: WIN_ENV(dir),
       platform: "win32",
@@ -402,12 +402,12 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     fs.mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
     fs.writeFileSync(
       path.join(pkgDir, "package.json"),
-      JSON.stringify({ name: "pnpm", version: "12.4.1", bin: opts.bin }),
+      JSON.stringify({ bin: opts.bin, name: "pnpm", version: "12.4.1" }),
     );
     const entry = path.join(pkgDir, opts.entry ?? "bin/pnpm.cjs");
     fs.mkdirSync(path.dirname(entry), { recursive: true });
     writeExec(entry, 'process.stdout.write("12.4.1\\n");\n');
-    return { pkgDir, entry };
+    return { entry, pkgDir };
   }
 
   it("bin 是字符串：读它、用 process.execPath 起，不经宿主", () => {
@@ -444,7 +444,7 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     fs.mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
     fs.writeFileSync(
       path.join(pkgDir, "package.json"),
-      JSON.stringify({ name: "pnpm", bin: { pnpm: "pnpm" } }),
+      JSON.stringify({ bin: { pnpm: "pnpm" }, name: "pnpm" }),
     );
     // 原生二进制的最小复刻：MZ 头 + 一串不可打印字节
     fs.writeFileSync(
@@ -467,7 +467,7 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     fs.mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
     fs.writeFileSync(
       path.join(pkgDir, "package.json"),
-      JSON.stringify({ name: "pnpm", bin: { pnpm: "pnpm" } }),
+      JSON.stringify({ bin: { pnpm: "pnpm" }, name: "pnpm" }),
     );
     fs.writeFileSync(
       path.join(pkgDir, "pnpm"),
@@ -482,7 +482,7 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     fs.mkdirSync(path.join(bare, "bin"), { recursive: true });
     fs.writeFileSync(
       path.join(bare, "package.json"),
-      JSON.stringify({ name: "pnpm", bin: { pnpm: "pnpm" } }),
+      JSON.stringify({ bin: { pnpm: "pnpm" }, name: "pnpm" }),
     );
     fs.writeFileSync(path.join(bare, "pnpm"), "# not a shebang, not JS\nfoo\n");
     expect(pnpmJsEntry(bare)).toBeNull();
@@ -495,7 +495,7 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     fs.mkdirSync(path.join(root, "bin"), { recursive: true });
     fs.writeFileSync(
       path.join(root, "package.json"),
-      JSON.stringify({ name: "pnpm", bin: "./bin/pnpm.cjs" }),
+      JSON.stringify({ bin: "./bin/pnpm.cjs", name: "pnpm" }),
     );
     const entry = path.join(root, "bin", "pnpm.cjs");
     writeExec(entry, 'process.stdout.write("12.4.1\\n");\n');
@@ -532,17 +532,17 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     fs.mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
     fs.writeFileSync(
       path.join(pkgDir, "package.json"),
-      JSON.stringify({ name: "pnpm", bin: "./bin/pnpm.cjs" }),
+      JSON.stringify({ bin: "./bin/pnpm.cjs", name: "pnpm" }),
     );
     const entry = path.join(pkgDir, "bin", "pnpm.cjs");
     writeExec(entry, 'process.stdout.write("12.4.1\\n");\n');
     const inv = pnpmInvocation(["install"], {
       env: {
+        HOME: home2,
+        LOCALAPPDATA: localAppData,
         PATH: bin,
         PATHEXT: ".COM;.EXE;.BAT;.CMD",
-        LOCALAPPDATA: localAppData,
         USERPROFILE: home,
-        HOME: home2,
       },
       platform: "win32",
     });

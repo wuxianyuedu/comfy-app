@@ -29,17 +29,17 @@ export function ShotStatusBadge({ status }: { status: Shot["status"] }) {
 }
 
 export function ShotRow({
-  shot,
   characters,
-  styles,
-  progressByShot,
   generating,
+  onGenerate,
+  onPolish,
+  onRemove,
+  onUpdate,
   polishBusy,
   polishError,
-  onPolish,
-  onUpdate,
-  onRemove,
-  onGenerate,
+  progressByShot,
+  shot,
+  styles,
 }: {
   characters: Array<Character>;
   generating: boolean;

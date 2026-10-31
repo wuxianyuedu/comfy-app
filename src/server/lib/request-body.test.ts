@@ -13,9 +13,9 @@ import { isErrorResponse, readJsonRecord } from "./request-body";
 
 function reqWith(body: string): Request {
   return new Request("http://localhost/api/x", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
     body,
+    headers: { "content-type": "application/json" },
+    method: "POST",
   });
 }
 

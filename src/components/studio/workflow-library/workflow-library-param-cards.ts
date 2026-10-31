@@ -99,13 +99,13 @@ export function deriveLibraryParamCards(args: {
   mode: string | null | undefined;
   paramMap: Record<string, unknown> | null | undefined;
 }): LibraryParamCards {
-  const { io, paramMap, mode, groupedKeys, contractIds } = args;
+  const { contractIds, groupedKeys, io, mode, paramMap } = args;
   /* 卡片列 = 该模式统一对外暴露的参数（提示词 / 负向提示词 / 尺寸 / 首帧…），
    * **契约口一律常驻**：显示与否只由契约决定，与工作流内部长什么样无关；工作流
    * 只决定每张卡落到哪一行端口，落不到就如实显示成「未配置」。 */
   const entries = buildParamEntries(io, undefined, {
-    mode: mode ?? null,
     contractIds,
+    mode: mode ?? null,
   });
   /* 落点只由作者画的线决定（`resolveMapping` 只认 `manualByMode`）：没有线就是
    * 未配置。这里不做任何「猜一个落点」的兜底 —— 猜错了比不显示更难被发现。 */
@@ -136,8 +136,8 @@ export function deriveLibraryParamCards(args: {
         /* 卡片圆点的 handle id = **条目 id**（与 `paramOutputPorts` 同口径）：
          *  一个口一颗点，条目 id 在同一画布节点内天然唯一 —— 尺寸卡的六行各是子口
          *  id，普通卡就是契约口 id，两边都由它表达「线从哪张卡出发」。 */
-        handleId: entry.id,
         grouped: groupedKeys?.has(wired.ioKey) ?? false,
+        handleId: entry.id,
       });
       if (ownersByPin[wired.ioKey]) {
         continue;
@@ -155,10 +155,10 @@ export function deriveLibraryParamCards(args: {
     io: io ?? null,
     /* 有落点 = 作者画过线（以 `resolveMapping` 的解析结果为准）。 */
     isManual: (entryId: string) => !!resolved[entryId],
-    resolved,
     ownersByPin,
-    wires,
+    resolved,
     wiredDotKeys,
+    wires,
   };
 }
 
@@ -195,7 +195,7 @@ export function deriveLibraryOutputCards(args: {
   mode?: string | null;
   paramMap?: Record<string, unknown> | null;
 }): LibraryOutputCards {
-  const { io, paramMap, mode } = args;
+  const { io, mode, paramMap } = args;
   /* 顺序与宿主卡片上的输出行**同一份**（`splitWorkflowIO` 里按作者拖出的
    *  `displayOrder` 排过）：右列卡的先后与节点上那几行一一对应，读者不必自己
    *  配对谁是谁。 */
@@ -228,17 +228,17 @@ export function deriveLibraryOutputCards(args: {
       /* handle id = 输出的 **ioKey**：卡片锚点与线两端同一份取值。它全图唯一，
        *  也就是落库键（`onConnect` 直接取用）—— 用端口名当锚点会在两个输出口
        *  同名 / 名字为空时撞车，线量不到锚点整条不画（ISSUE #355）。 */
-      handleId: output.ioKey,
       grouped: false,
+      handleId: output.ioKey,
       kind: "hostToParam",
     });
   }
   return {
-    outputs,
-    wires,
-    resolved,
     isManual: (ioKey: string) => manualOutputSource(paramMap, ioKey, mode) !== undefined,
+    outputs,
+    resolved,
     wired: outputs.length > 0,
+    wires,
   };
 }
 

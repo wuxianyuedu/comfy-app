@@ -22,53 +22,47 @@ vi.mock("./hooks/use-queue-monitor", () => ({
  * 自己的 hook 测试覆盖，这里只锁「容器把它挂上 / 传对任务」。mock 刻意带上
  * 完整签名：从 mock.calls 取 handlers 时才有类型，不必写 any 断言。 */
 const watchTaskMock = vi.hoisted(() =>
-  vi.fn<(taskId: string, handlers: TaskWatchHandlers) => () => void>(
-    () => () => undefined,
-  ),
+  vi.fn<(taskId: string, handlers: TaskWatchHandlers) => () => void>(() => () => undefined),
 );
 vi.mock("~/lib/workshop/generation-client", () => ({
   watchTask: watchTaskMock,
 }));
 
-function row(
-  over: Partial<QueueRow> & Pick<QueueRow, "id" | "status">,
-): QueueRow {
+function row(over: Partial<QueueRow> & Pick<QueueRow, "id" | "status">): QueueRow {
   return {
-    type: "IMAGE",
-    workflowName: `工作流 ${over.id}`,
-    prompt: `提示词 ${over.id}`,
-    createdAt: new Date("2026-01-01T00:00:00Z"),
-    cover: null,
     checkpoint: null,
-    videoPath: null,
-    mediaType: "image",
-    projectId: null,
-    progress: 0,
+    cover: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
     error: null,
+    mediaType: "image",
+    progress: 0,
+    projectId: null,
+    prompt: `提示词 ${over.id}`,
+    type: "IMAGE",
+    videoPath: null,
+    workflowName: `工作流 ${over.id}`,
     ...over,
   };
 }
 
-function controller(
-  over: Partial<QueueMonitorController> = {},
-): QueueMonitorController {
+function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorController {
   return {
+    cancel: vi.fn(),
+    closeLog: vi.fn(),
+    copyForReprint: vi.fn(),
+    isBusy: () => false,
+    loadError: null,
+    loading: false,
+    logRow: null,
     online: true,
-    running: null,
-    runningRows: [],
+    openFolder: vi.fn(),
+    openLog: vi.fn(),
     queued: [],
     recent: [],
-    waitingCount: 0,
-    loading: false,
-    loadError: null,
-    logRow: null,
-    isBusy: () => false,
     refresh: vi.fn(),
-    cancel: vi.fn(),
-    openFolder: vi.fn(),
-    copyForReprint: vi.fn(),
-    openLog: vi.fn(),
-    closeLog: vi.fn(),
+    running: null,
+    runningRows: [],
+    waitingCount: 0,
     ...over,
   };
 }
@@ -84,17 +78,14 @@ describe("QueueMonitor", () => {
     monitorMock.mockReturnValue(
       controller({
         queued: [
-          { row: row({ id: "early", status: "QUEUED" }), position: 1 },
-          { row: row({ id: "late", status: "QUEUED" }), position: 2 },
+          { position: 1, row: row({ id: "early", status: "QUEUED" }) },
+          { position: 2, row: row({ id: "late", status: "QUEUED" }) },
         ],
       }),
     );
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     const lines = screen.getAllByText(/^工作流 (early|late)$/);
-    expect(lines.map((el) => el.textContent)).toEqual([
-      "工作流 early",
-      "工作流 late",
-    ]);
+    expect(lines.map((el) => el.textContent)).toEqual(["工作流 early", "工作流 late"]);
     expect(screen.getByText("第 1 位")).toBeInTheDocument();
     expect(screen.getByText("第 2 位")).toBeInTheDocument();
   });
@@ -103,17 +94,15 @@ describe("QueueMonitor", () => {
     monitorMock.mockReturnValue(
       controller({
         online: false,
-        waitingCount: 1,
-        queued: [{ row: row({ id: "q1", status: "QUEUED" }), position: 1 }],
+        queued: [{ position: 1, row: row({ id: "q1", status: "QUEUED" }) }],
         recent: [row({ id: "done1", status: "SUCCEEDED" })],
+        waitingCount: 1,
       }),
     );
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     /* 横幅与启动出口都在，但不是整页空态那套「ComfyUI 未运行」标题。 */
     expect(screen.getByText("ComfyUI 未连接")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /去「ComfyUI」页启动/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /去「ComfyUI」页启动/ })).toBeInTheDocument();
     expect(screen.queryByText("ComfyUI 未运行")).not.toBeInTheDocument();
     /* 三段列表都在：排队位次、跑动中段标题、最近结果行。 */
     expect(screen.getByText("第 1 位")).toBeInTheDocument();
@@ -138,8 +127,8 @@ describe("QueueMonitor", () => {
     monitorMock.mockReturnValue(
       controller({
         online: false,
+        runningRows: [row({ id: "r1", progress: 42, status: "RUNNING" })],
         waitingCount: 1,
-        runningRows: [row({ id: "r1", status: "RUNNING", progress: 42 })],
       }),
     );
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
@@ -151,9 +140,9 @@ describe("QueueMonitor", () => {
     const openLog = vi.fn();
     monitorMock.mockReturnValue(
       controller({
-        recent: [row({ id: "bad", status: "FAILED" })],
-        queued: [{ row: row({ id: "q1", status: "QUEUED" }), position: 1 }],
         openLog,
+        queued: [{ position: 1, row: row({ id: "q1", status: "QUEUED" }) }],
+        recent: [row({ id: "bad", status: "FAILED" })],
       }),
     );
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
@@ -163,21 +152,17 @@ describe("QueueMonitor", () => {
     expect(logButtons).toHaveLength(2);
     /* 读屏顺序：排队段在前、最近结果在后 —— 每个按钮各归属那一行。 */
     logButtons[0]!.click();
-    expect(openLog).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "q1", status: "QUEUED" }),
-    );
+    expect(openLog).toHaveBeenCalledWith(expect.objectContaining({ id: "q1", status: "QUEUED" }));
     logButtons[1]!.click();
-    expect(openLog).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "bad", status: "FAILED" }),
-    );
+    expect(openLog).toHaveBeenCalledWith(expect.objectContaining({ id: "bad", status: "FAILED" }));
   });
 
   it("logRow 非空时挂载执行日志弹窗，关闭回调交还 controller", () => {
     const closeLog = vi.fn();
     monitorMock.mockReturnValue(
       controller({
-        logRow: { id: "t-1", workflowName: "工作流 t-1", status: "RUNNING" },
         closeLog,
+        logRow: { id: "t-1", status: "RUNNING", workflowName: "工作流 t-1" },
       }),
     );
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
@@ -195,48 +180,40 @@ describe("QueueMonitor", () => {
       controller({
         recent: [
           row({
+            error: "CUDA out of memory",
             id: "bad",
             status: "FAILED",
-            error: "CUDA out of memory",
           }),
         ],
       }),
     );
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText("CUDA out of memory")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /复制这一条的提交内容/ }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /重试/ }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /复制这一条的提交内容/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /重试/ })).not.toBeInTheDocument();
   });
 
   it("进度未回报时剩余时间写「估算中」，不给一个看起来像数的值", () => {
     monitorMock.mockReturnValue(
       controller({
         running: {
+          elapsedText: "00:30",
           id: "r1",
-          workflowName: "正在跑的工作流",
           modelText: "sd.safetensors",
           nodeText: "尚未回报节点",
-          elapsedText: "00:30",
-          remainingText: "估算中",
           progressPct: 0,
+          remainingText: "估算中",
+          workflowName: "正在跑的工作流",
         },
       }),
     );
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText("估算中")).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: /正在跑的工作流/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /正在跑的工作流/ })).toBeInTheDocument();
   });
 
   it("读不到任务记录时说明读不到，而不是显示一套空的列表当作准数", () => {
-    monitorMock.mockReturnValue(
-      controller({ loadError: "读不到任务记录，后端可能刚重启" }),
-    );
+    monitorMock.mockReturnValue(controller({ loadError: "读不到任务记录，后端可能刚重启" }));
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText(/^读不到任务记录/)).toBeInTheDocument();
   });

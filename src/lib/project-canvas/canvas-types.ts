@@ -224,70 +224,70 @@ export const NODE_META: Record<
     typeChar: string;
   }
 > = {
-  image: {
-    label: "生图",
-    icon: "image",
-    color: "#8B5CF6",
-    desc: "文生图 / 图生图",
-    typeChar: "I",
-  },
-  video: {
-    label: "生视频",
-    icon: "film",
-    color: "#22D3EE",
-    desc: "文生视频 / 图生视频 / 首尾帧",
-    typeChar: "V",
-  },
-  script: {
-    label: "生成剧本",
-    icon: "filetext",
-    color: "#F59E0B",
-    desc: "一句话扩写为分镜剧本",
-    typeChar: "T",
-  },
   agent: {
-    label: "Agent 模式",
-    icon: "bot",
     color: "#34D399",
     desc: "多轮对话引导创作",
+    icon: "bot",
+    label: "Agent 模式",
     typeChar: "A",
   },
-  workflow: {
-    label: "自定义工作流",
-    icon: "puzzle",
-    color: "#A78BFA",
-    desc: "运行你上传的 ComfyUI 工作流",
-    typeChar: "W",
-  },
-  text: {
-    label: "文本",
-    icon: "filetext",
-    color: "#FBBF24",
-    desc: "输入提示词 / 参考文字",
-    typeChar: "T",
-  },
-  picture: {
-    label: "图片",
+  image: {
+    color: "#8B5CF6",
+    desc: "文生图 / 图生图",
     icon: "image",
-    color: "#FB7185",
-    desc: "上传图片作为参考图",
-    typeChar: "P",
+    label: "生图",
+    typeChar: "I",
   },
   movie: {
-    label: "视频",
-    icon: "film",
     color: "#818CF8",
     desc: "上传视频作为参考帧",
+    icon: "film",
+    label: "视频",
     typeChar: "V",
+  },
+  picture: {
+    color: "#FB7185",
+    desc: "上传图片作为参考图",
+    icon: "image",
+    label: "图片",
+    typeChar: "P",
+  },
+  script: {
+    color: "#F59E0B",
+    desc: "一句话扩写为分镜剧本",
+    icon: "filetext",
+    label: "生成剧本",
+    typeChar: "T",
+  },
+  text: {
+    color: "#FBBF24",
+    desc: "输入提示词 / 参考文字",
+    icon: "filetext",
+    label: "文本",
+    typeChar: "T",
+  },
+  video: {
+    color: "#22D3EE",
+    desc: "文生视频 / 图生视频 / 首尾帧",
+    icon: "film",
+    label: "生视频",
+    typeChar: "V",
+  },
+  workflow: {
+    color: "#A78BFA",
+    desc: "运行你上传的 ComfyUI 工作流",
+    icon: "puzzle",
+    label: "自定义工作流",
+    typeChar: "W",
   },
 };
 
 /* 状态徽标用的可读标签（节点头部与结果卡上都显示）。 */
 export const STATUS_LABEL: Record<CanvasNodeData["status"], string> = {
-  idle: "待开始",
-  running: "生成中…",
   done: "运行后生成",
   error: "生成失败",
+  idle: "待开始",
+  running: "生成中…",
 };
 
 /* 状态 → `ui/status-badge` 的状态键。
@@ -297,35 +297,35 @@ export const STATUS_LABEL: Record<CanvasNodeData["status"], string> = {
  * 映射写在这里而不是散在视图里：`CanvasNodePrimitives.StatusBadge` 与
  * `ResultCard` 用的是同一套 —— 此前两处各写一份，改一处漏一片。 */
 export const STATUS_BADGE_KEY: Record<CanvasNodeData["status"], string> = {
-  idle: "IDLE",
-  running: "RUNNING",
   done: "DONE",
   error: "ERROR",
+  idle: "IDLE",
+  running: "RUNNING",
 };
 
 /* 为指定节点类型构造一份全新的节点数据对象。 */
 export function defaultData(kind: NodeKind): CanvasNodeData {
   const base: CanvasNodeData = {
     kind,
-    status: "idle",
-    model: "",
-    prompt: "",
-    negative: "",
     mode: kind === "video" ? "T2V" : "T2I",
+    model: "",
+    negative: "",
+    prompt: "",
+    status: "idle",
     /* 尺寸默认取尺寸表：图片 1:1 1k（= 1024×1024，与旧默认一致）、
      * 视频 16:9 1k（视频场景表 → 1280×720）。 */
+    agentHistory: [],
+    cfg: kind === "video" ? 6 : 7,
+    content: "",
+    fps: 16,
+    frames: 49,
+    seed: "",
     size: {
       ...DEFAULT_SIZE_SPEC,
       ratio: kind === "video" ? "16:9 横屏" : "1:1 正方",
     },
     steps: kind === "video" ? 25 : 25,
-    cfg: kind === "video" ? 6 : 7,
-    seed: "",
-    content: "",
-    frames: 49,
-    fps: 16,
     theme: "",
-    agentHistory: [],
     workflowInputs: {},
   };
   return base;

@@ -33,7 +33,7 @@ vi.mock("~/server/better-auth", () => ({
 }));
 vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock("~/lib/envfile", async (importOriginal) => ({
   ...(await importOriginal<typeof EnvfileModule>()),
@@ -77,14 +77,14 @@ const tdb = getTestDb();
 
 /** 一份最小的 ComfyUI 原始工作流（RAW / LiteGraph）—— 唯一支持的导入形态。 */
 const RAW_WF = {
-  last_node_id: 3,
   last_link_id: 0,
-  nodes: [
-    { id: 1, type: "CheckpointLoaderSimple", pos: [10, 20] },
-    { id: 2, type: "CLIPTextEncode", pos: [30, 40] },
-    { id: 3, type: "KSampler", pos: [50, 60] },
-  ],
+  last_node_id: 3,
   links: [],
+  nodes: [
+    { id: 1, pos: [10, 20], type: "CheckpointLoaderSimple" },
+    { id: 2, pos: [30, 40], type: "CLIPTextEncode" },
+    { id: 3, pos: [50, 60], type: "KSampler" },
+  ],
 };
 
 beforeEach(() => {
@@ -97,7 +97,7 @@ beforeEach(() => {
 
 describe("workflow.list", () => {
   it("空库返回空列表且 localRoots 为 null", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
     const caller = createCaller(makeCtx());
     const res = await caller.list();
     expect(res.workflows).toEqual([]);
@@ -106,30 +106,30 @@ describe("workflow.list", () => {
   });
 
   it("按用户隔离返回并完成 enrichment（hasRaw/usable/typeLabel/modelTags）", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-    seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+    seedUser(tdb, { email: "b@test.dev", id: "user-b" });
     const withRaw = seedWorkflowTemplate(tdb, {
-      id: "wf-raw",
-      userId: "user-a",
-      name: "Raw One",
-      taskType: "T2I",
-      rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
-      modelTags: [{ id: "tag-1", userId: "user-a", name: "SDXL" }],
       createdAt: new Date(1000),
+      id: "wf-raw",
+      modelTags: [{ id: "tag-1", name: "SDXL", userId: "user-a" }],
+      name: "Raw One",
+      rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
+      taskType: "T2I",
+      userId: "user-a",
     });
     const noRaw = seedWorkflowTemplate(tdb, {
-      id: "wf-empty",
-      userId: "user-a",
-      name: "Empty One",
-      taskType: "T2I",
-      rawJson: null,
       createdAt: new Date(2000),
+      id: "wf-empty",
+      name: "Empty One",
+      rawJson: null,
+      taskType: "T2I",
+      userId: "user-a",
     });
     // 他人工作流不得出现
     seedWorkflowTemplate(tdb, {
       id: "wf-other",
-      userId: "user-b",
       name: "Other",
+      userId: "user-b",
     });
 
     const res = await createCaller(makeCtx()).list();
@@ -151,48 +151,48 @@ describe("workflow.list", () => {
   });
 
   it("type 过滤命中任务类型", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
     seedWorkflowTemplate(tdb, {
       id: "wf-img",
-      userId: "user-a",
       taskType: "T2I",
+      userId: "user-a",
     });
     seedWorkflowTemplate(tdb, {
       id: "wf-video",
-      userId: "user-a",
       taskType: "T2V",
+      userId: "user-a",
     });
     const res = await createCaller(makeCtx()).list({ type: "T2V" });
     expect(res.workflows.map((w) => w.id)).toEqual(["wf-video"]);
   });
 
   it("category 过滤（video → T2V/I2V 等 code 的 in 查询）", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
     seedWorkflowTemplate(tdb, {
       id: "wf-img",
-      userId: "user-a",
       taskType: "T2I",
+      userId: "user-a",
     });
     seedWorkflowTemplate(tdb, {
       id: "wf-video",
-      userId: "user-a",
       taskType: "T2V",
+      userId: "user-a",
     });
     const res = await createCaller(makeCtx()).list({ category: "video" });
     expect(res.workflows.map((w) => w.id)).toEqual(["wf-video"]);
   });
 
   it("model 过滤（逗号分隔 → modelTags some in）", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
     seedWorkflowTemplate(tdb, {
       id: "wf-sdxl",
+      modelTags: [{ id: "tag-1", name: "SDXL", userId: "user-a" }],
       userId: "user-a",
-      modelTags: [{ id: "tag-1", userId: "user-a", name: "SDXL" }],
     });
     seedWorkflowTemplate(tdb, {
       id: "wf-flux",
+      modelTags: [{ id: "tag-2", name: "FLUX", userId: "user-a" }],
       userId: "user-a",
-      modelTags: [{ id: "tag-2", userId: "user-a", name: "FLUX" }],
     });
     const res = await createCaller(makeCtx()).list({ model: "FLUX, Unknown" });
     expect(res.workflows.map((w) => w.id)).toEqual(["wf-flux"]);
@@ -211,7 +211,7 @@ const WF_ALLOWED_ROOT = path.join(process.cwd(), "wf-allowed-root");
 describe("workflow.create", () => {
   let previousRoots: string | undefined;
   beforeEach(() => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
     previousRoots = process.env.LOCAL_WORKFLOWS_PATH;
     process.env.LOCAL_WORKFLOWS_PATH = WF_ALLOWED_ROOT;
     // 根的取值链已收口到 readEnvVar：播种走被 mock 的同一出处
@@ -264,14 +264,14 @@ describe("workflow.create", () => {
 
   it("本地文件导入：成功路径（名称回退为文件名）", async () => {
     vi.mocked(importFromLocalPath).mockResolvedValueOnce({
-      taskType: "T2I",
-      rawJson: RAW_WF,
+      format: "raw",
       positions: null,
-      sourcePath: path.join(WF_ALLOWED_ROOT, "my-flow.json"),
+      rawJson: RAW_WF,
       sourceChecksum: "abc123",
       sourceMtime: 1234,
+      sourcePath: path.join(WF_ALLOWED_ROOT, "my-flow.json"),
+      taskType: "T2I",
       warnings: [],
-      format: "raw",
     });
     const res = await createCaller(makeCtx()).create({
       sourcePath: path.join(WF_ALLOWED_ROOT, "my-flow.json"),
@@ -315,15 +315,15 @@ describe("workflow.create", () => {
 
 describe("workflow.detail", () => {
   it("归属校验读取自己的模板", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-    seedWorkflowTemplate(tdb, { id: "wf-1", userId: "user-a", name: "Mine" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+    seedWorkflowTemplate(tdb, { id: "wf-1", name: "Mine", userId: "user-a" });
     const res = await createCaller(makeCtx()).detail({ id: "wf-1" });
     expect(res.template.name).toBe("Mine");
   });
 
   it("不存在 / 他人模板 → NOT_FOUND；非法输入 → BAD_REQUEST", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-    seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+    seedUser(tdb, { email: "b@test.dev", id: "user-b" });
     seedWorkflowTemplate(tdb, { id: "wf-b", userId: "user-b" });
     const caller = createCaller(makeCtx());
     await expect(caller.detail({ id: "nope" })).rejects.toMatchObject({
@@ -343,29 +343,29 @@ describe("workflow.detail", () => {
 /** 一份带内嵌子图的 RAW 工作流：外层只有 wrapper 节点 `4`，子图内部有节点 `7`。
  *  子图定义是**数组**（ComfyUI 的导出形态），按 `.id` 匹配 uid。 */
 const SUBGRAPH_WF = {
-  last_node_id: 5,
-  last_link_id: 0,
-  nodes: [{ id: 4, type: "PrimitiveNode", pos: [0, 0] }],
-  links: [],
   definitions: {
     subgraphs: [
       {
-        id: "sg-uuid-1",
-        name: "I2V 子图",
-        inputs: [{ name: "value_1", label: "Seed", type: "INT" }],
-        outputs: [],
-        nodes: [{ id: 7, type: "KSampler", pos: [1, 1] }],
-        links: [],
         groups: [],
+        id: "sg-uuid-1",
+        inputs: [{ label: "Seed", name: "value_1", type: "INT" }],
+        links: [],
+        name: "I2V 子图",
+        nodes: [{ id: 7, pos: [1, 1], type: "KSampler" }],
+        outputs: [],
       },
     ],
   },
+  last_link_id: 0,
+  last_node_id: 5,
+  links: [],
+  nodes: [{ id: 4, pos: [0, 0], type: "PrimitiveNode" }],
 };
 
 describe("workflow.detailFull", () => {
   it("派生详情的归属只看 ctx：他人的 id 与不存在的 id 逐字同形", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-    seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+    seedUser(tdb, { email: "b@test.dev", id: "user-b" });
     seedWorkflowTemplate(tdb, { id: "df-wf-b", userId: "user-b" });
     const caller = createCaller(makeCtx());
     const foreign = await errorEnvelope(caller.detailFull({ id: "df-wf-b" }));
@@ -376,30 +376,30 @@ describe("workflow.detailFull", () => {
   });
 
   it("input.bust 真的转到 lib：不带它拿服务端缓存，带它现读", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-    seedWorkflowTemplate(tdb, { id: "df-bust", userId: "user-a", name: "V1" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+    seedWorkflowTemplate(tdb, { id: "df-bust", name: "V1", userId: "user-a" });
     const caller = createCaller(makeCtx());
     expect((await caller.detailFull({ id: "df-bust" })).name).toBe("V1");
     // 让库里这一行变成 V2，而**不动那份缓存**（等价于另一个写入方改了名）：
     // 清表重播同 id 的一行，比在测试里手写 UPDATE 更接近「库和缓存各走各的」这个真实工况。
     tdb.$reset();
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-    seedWorkflowTemplate(tdb, { id: "df-bust", userId: "user-a", name: "V2" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+    seedWorkflowTemplate(tdb, { id: "df-bust", name: "V2", userId: "user-a" });
     // 先钉住「缓存确实在」：没有这一条，下面那句 bust 生效只是「缓存本来就没生效」的假象。
     expect((await caller.detailFull({ id: "df-bust" })).name).toBe("V1");
     // 顶栏「🔄 强制重载」的唯一实现路径就是这个入参被转给了 lib。
-    expect((await caller.detailFull({ id: "df-bust", bust: true })).name).toBe("V2");
+    expect((await caller.detailFull({ bust: true, id: "df-bust" })).name).toBe("V2");
   });
 });
 
 describe("workflow.subgraph", () => {
   it("派生子图视图：uid 与 hostId 都转到 lib（拖拽坐标按宿主链还原）", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
     seedWorkflowTemplate(tdb, {
       id: "sg-wf",
-      userId: "user-a",
-      rawJson: SUBGRAPH_WF,
       positions: { "4:7": [11, 22] },
+      rawJson: SUBGRAPH_WF,
+      userId: "user-a",
     });
     const caller = createCaller(makeCtx());
     const bare = await caller.subgraph({ id: "sg-wf", uid: "sg-uuid-1" });
@@ -409,21 +409,21 @@ describe("workflow.subgraph", () => {
     // 不带宿主链前缀时读不到「4:7」那条拖拽值，节点 7 退回原始坐标
     expect(bare.positions).toEqual({ "7": [1, 1] });
     const hosted = await caller.subgraph({
+      hostId: "4",
       id: "sg-wf",
       uid: "sg-uuid-1",
-      hostId: "4",
     });
     expect(hosted.positions).toEqual({ "7": [11, 22] });
   });
 
   it("三种 NOT_FOUND 各有其形，且他人一律塌成「未找到该工作流」", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-    seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+    seedUser(tdb, { email: "b@test.dev", id: "user-b" });
     seedWorkflowTemplate(tdb, { id: "sg-plain", userId: "user-a" });
     seedWorkflowTemplate(tdb, {
       id: "sg-with",
-      userId: "user-a",
       rawJson: SUBGRAPH_WF,
+      userId: "user-a",
     });
     seedWorkflowTemplate(tdb, { id: "sg-b", userId: "user-b" });
     const caller = createCaller(makeCtx());
@@ -449,33 +449,33 @@ describe("workflow.subgraph", () => {
 
 describe("workflow.update", () => {
   beforeEach(() => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
   });
 
   it("改名 + taskType 归一化 + positions merge + rawJson 节点回写 + modelTags 关系替换", async () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-1",
-      userId: "user-a",
       name: "Old",
-      taskType: "T2I",
-      rawJson: {
-        nodes: [{ id: "1", type: "KSampler", pos: [9, 9] }],
-        links: [],
-      },
       positions: { "5": [0, 0] },
+      rawJson: {
+        links: [],
+        nodes: [{ id: "1", pos: [9, 9], type: "KSampler" }],
+      },
+      taskType: "T2I",
+      userId: "user-a",
     });
     const res = await createCaller(makeCtx()).update({
       id: "wf-1",
-      name: "Renamed",
-      taskType: "t2i",
-      positions: { "1": [1, 2] },
       mergePositions: true,
       modelTags: ["SDXL"],
+      name: "Renamed",
+      positions: { "1": [1, 2] },
+      taskType: "t2i",
     });
     expect(res.template.name).toBe("Renamed");
     const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-1")!;
     expect(row.taskType).toBe("T2I"); // normalizeTaskType("t2i") → 规范大写 "T2I"
-    expect(row.positions).toEqual({ "5": [0, 0], "1": [1, 2] }); // merge 不清空另一命名空间
+    expect(row.positions).toEqual({ "1": [1, 2], "5": [0, 0] }); // merge 不清空另一命名空间
     const rawJson = /* SAFETY: 类型断言已复核 */ row.rawJson as {
       nodes: Array<{ pos?: unknown }>;
     };
@@ -487,9 +487,9 @@ describe("workflow.update", () => {
   it("仅 modelTags 更新：跳过模板列写入（drizzle 空 patch 抛 No values to set），标签关系照常落库", async () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-2",
-      userId: "user-a",
       name: "Keep",
       taskType: "T2I",
+      userId: "user-a",
     });
     const res = await createCaller(makeCtx()).update({
       id: "wf-2",
@@ -504,7 +504,7 @@ describe("workflow.update", () => {
   });
 
   it("不存在 / 他人模板 → NOT_FOUND", async () => {
-    seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+    seedUser(tdb, { email: "b@test.dev", id: "user-b" });
     seedWorkflowTemplate(tdb, { id: "wf-b", userId: "user-b" });
     const caller = createCaller(makeCtx());
     await expect(caller.update({ id: "nope", name: "X" })).rejects.toMatchObject({
@@ -518,16 +518,16 @@ describe("workflow.update", () => {
   it("resetPositionsScope 顶层：只清裸 id 与导轨，子图命名空间的坐标留着", async () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-reset-top",
-      userId: "user-a",
-      rawJson: {
-        nodes: [{ id: "1", type: "KSampler", pos: [9, 9] }],
-        links: [],
-      },
       positions: {
         "1": [111, 222],
-        "grp:bpin:inputs": [0, 0],
         "4:1670": [1000, 1000],
+        "grp:bpin:inputs": [0, 0],
       },
+      rawJson: {
+        links: [],
+        nodes: [{ id: "1", pos: [9, 9], type: "KSampler" }],
+      },
+      userId: "user-a",
     });
     await createCaller(makeCtx()).update({
       id: "wf-reset-top",
@@ -540,7 +540,6 @@ describe("workflow.update", () => {
   it("resetPositionsScope 子图：只清本层拼接键，wrapper 本体与更深一层都不动", async () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-reset-sub",
-      userId: "user-a",
       positions: {
         "4": [10, 10],
         "4:1670": [1000, 1000],
@@ -548,6 +547,7 @@ describe("workflow.update", () => {
         "4:5:1670": [500, 500],
         "9:1670": [700, 700],
       },
+      userId: "user-a",
     });
     await createCaller(makeCtx()).update({
       id: "wf-reset-sub",
@@ -564,8 +564,8 @@ describe("workflow.update", () => {
   it("重置清空后写入 null 而不是空对象（空对象会被当「有坐标」把节点堆到原点）", async () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-reset-empty",
-      userId: "user-a",
       positions: { "1": [1, 1] },
+      userId: "user-a",
     });
     await createCaller(makeCtx()).update({
       id: "wf-reset-empty",
@@ -578,13 +578,13 @@ describe("workflow.update", () => {
   it("resetPositionsScope 与 positions 互斥：重置时不被写回的数据覆盖", async () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-reset-excl",
-      userId: "user-a",
       positions: { "1": [1, 1] },
+      userId: "user-a",
     });
     await createCaller(makeCtx()).update({
       id: "wf-reset-excl",
-      resetPositionsScope: "",
       positions: { "1": [999, 999] },
+      resetPositionsScope: "",
     });
     const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-excl")!;
     expect(row.positions).toBeNull();
@@ -595,8 +595,8 @@ describe("workflow.update", () => {
 
 describe("workflow.delete", () => {
   it("删除自己的模板；不存在/他人 → NOT_FOUND", async () => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-    seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+    seedUser(tdb, { email: "b@test.dev", id: "user-b" });
     seedWorkflowTemplate(tdb, { id: "wf-1", userId: "user-a" });
     seedWorkflowTemplate(tdb, { id: "wf-b", userId: "user-b" });
     const caller = createCaller(makeCtx());
@@ -615,13 +615,13 @@ describe("workflow.delete", () => {
 
 describe("workflow.resync", () => {
   beforeEach(() => {
-    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { email: "a@test.dev", id: "user-a" });
     seedWorkflowTemplate(tdb, {
       id: "wf-1",
-      userId: "user-a",
-      sourcePath: "C:/wf/a.json",
       sourceChecksum: "chk-1",
       sourceMtime: 100,
+      sourcePath: "C:/wf/a.json",
+      userId: "user-a",
     });
   });
 
@@ -646,11 +646,11 @@ describe("workflow.resync", () => {
   it("重新导入成功 → 更新模板并返回 { updated: true, template }", async () => {
     vi.mocked(reimportFromSource).mockResolvedValueOnce({
       update: {
-        rawJson: RAW_WF,
         paramMap: null,
         positions: { "1": [3, 4] },
-        sourceMtime: 200,
+        rawJson: RAW_WF,
         sourceChecksum: "chk-2",
+        sourceMtime: 200,
         taskType: "T2I",
       },
     });
@@ -662,8 +662,8 @@ describe("workflow.resync", () => {
     expect(row.rawJson).toEqual(RAW_WF);
     expect(reimportFromSource).toHaveBeenCalledWith(
       expect.objectContaining({
-        sourcePath: "C:/wf/a.json",
         sourceChecksum: "chk-1",
+        sourcePath: "C:/wf/a.json",
       }),
     );
   });
@@ -689,14 +689,14 @@ describe("workflow 鉴权分支", () => {
   });
 
   it("createTRPCContext：session 有用户 email → 经 userRepository 解析出 ctx.user", async () => {
-    seedUser(tdb, { id: "db-u1", email: "sess@test.dev", name: "Sess" });
+    seedUser(tdb, { email: "sess@test.dev", id: "db-u1", name: "Sess" });
     getSessionMock.mockResolvedValueOnce({
-      user: { id: "auth-1", email: "sess@test.dev", name: "Sess" },
+      user: { email: "sess@test.dev", id: "auth-1", name: "Sess" },
     });
     const ctx = await createTRPCContext({ headers: new Headers() });
     expect(ctx.user).toEqual({
-      id: "db-u1",
       email: "sess@test.dev",
+      id: "db-u1",
       name: "Sess",
     });
   });

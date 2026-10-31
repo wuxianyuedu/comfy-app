@@ -7,9 +7,9 @@ import { PageLoading } from "~/components/ui/page-loading";
  * 全屏场景传 `h-screen`，页内场景传内容区高度。
  */
 const meta = {
-  title: "UI/PageLoading",
-  component: PageLoading,
   args: { className: "h-64 w-full" },
+  component: PageLoading,
+  title: "UI/PageLoading",
 } satisfies Meta<typeof PageLoading>;
 
 export default meta;

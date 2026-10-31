@@ -6,15 +6,15 @@ import type { DiscoveredSubpkg, SummaryPkg } from "./types";
 
 function makeSub(overrides: Partial<DiscoveredSubpkg> = {}): DiscoveredSubpkg {
   return {
-    path: "D:/pkgs/foo",
-    name: "foo",
-    parent: "D:/pkgs",
-    exists: true,
-    isLeaf: false,
-    fileCount: 3,
-    packageFileCount: 2,
-    sizeBytes: 1024,
     contentHash: "hash-sub",
+    exists: true,
+    fileCount: 3,
+    isLeaf: false,
+    name: "foo",
+    packageFileCount: 2,
+    parent: "D:/pkgs",
+    path: "D:/pkgs/foo",
+    sizeBytes: 1024,
     status: "ok",
     ...overrides,
   };
@@ -22,13 +22,13 @@ function makeSub(overrides: Partial<DiscoveredSubpkg> = {}): DiscoveredSubpkg {
 
 function makeSaved(overrides: Partial<SummaryPkg> = {}): SummaryPkg {
   return {
+    contentHash: "hash-sub",
+    errors: [],
     name: "foo",
-    path: "D:/pkgs/foo",
-    status: "ok",
     nodeCount: 5,
     nodeTypes: [],
-    errors: [],
-    contentHash: "hash-sub",
+    path: "D:/pkgs/foo",
+    status: "ok",
     ...overrides,
   };
 }
@@ -72,36 +72,27 @@ describe("deriveRowState 行状态推导", () => {
   });
 
   it("status=missing 时为 missing(即使 saved 已有记录)", () => {
-    expect(deriveRowState(makeSub({ status: "missing" }), makeSaved())).toEqual(
-      { kind: "missing" },
-    );
+    expect(deriveRowState(makeSub({ status: "missing" }), makeSaved())).toEqual({
+      kind: "missing",
+    });
   });
 
   it("status=empty 且包文件数为 0 时为 empty", () => {
-    expect(
-      deriveRowState(
-        makeSub({ status: "empty", packageFileCount: 0 }),
-        undefined,
-      ),
-    ).toEqual({ kind: "empty" });
+    expect(deriveRowState(makeSub({ packageFileCount: 0, status: "empty" }), undefined)).toEqual({
+      kind: "empty",
+    });
   });
 
   it("status=empty 且 packageFileCount 未定义时视为 empty", () => {
     expect(
-      deriveRowState(
-        makeSub({ status: "empty", packageFileCount: undefined }),
-        undefined,
-      ),
+      deriveRowState(makeSub({ packageFileCount: undefined, status: "empty" }), undefined),
     ).toEqual({ kind: "empty" });
   });
 
   it("status=empty 但有包文件时不判 empty,未导入时为 unimported", () => {
-    expect(
-      deriveRowState(
-        makeSub({ status: "empty", packageFileCount: 3 }),
-        undefined,
-      ),
-    ).toEqual({ kind: "unimported" });
+    expect(deriveRowState(makeSub({ packageFileCount: 3, status: "empty" }), undefined)).toEqual({
+      kind: "unimported",
+    });
   });
 
   it("无已保存清单时为 unimported", () => {
@@ -112,8 +103,8 @@ describe("deriveRowState 行状态推导", () => {
 
   it("saved.status=error 时透出首个错误信息", () => {
     const saved = makeSaved({
+      errors: [{ error: "SyntaxError: bad", file: "a.py" }],
       status: "error",
-      errors: [{ file: "a.py", error: "SyntaxError: bad" }],
     });
     expect(deriveRowState(makeSub(), saved)).toEqual({
       kind: "error",
@@ -122,16 +113,14 @@ describe("deriveRowState 行状态推导", () => {
   });
 
   it("saved.status=error 且无错误信息时回退默认文案 解析出错", () => {
-    expect(
-      deriveRowState(makeSub(), makeSaved({ status: "error", errors: [] })),
-    ).toEqual({
+    expect(deriveRowState(makeSub(), makeSaved({ errors: [], status: "error" }))).toEqual({
       kind: "error",
       reason: "解析出错",
     });
   });
 
   it("saved.status=error 且首条 error 非字符串时回退默认文案", () => {
-    const saved = makeSaved({ status: "error", errors: [{ error: 42 }] });
+    const saved = makeSaved({ errors: [{ error: 42 }], status: "error" });
     expect(deriveRowState(makeSub(), saved)).toEqual({
       kind: "error",
       reason: "解析出错",
@@ -139,35 +128,29 @@ describe("deriveRowState 行状态推导", () => {
   });
 
   it("saved.status=missing 时为 missing", () => {
-    expect(deriveRowState(makeSub(), makeSaved({ status: "missing" }))).toEqual(
-      {
-        kind: "missing",
-      },
-    );
+    expect(deriveRowState(makeSub(), makeSaved({ status: "missing" }))).toEqual({
+      kind: "missing",
+    });
   });
 
   it("任一侧缺少 hash 且 saved.status=ok 时视为 loaded(空 savedHash)", () => {
-    expect(
-      deriveRowState(makeSub({ contentHash: "" }), makeSaved({ status: "ok" })),
-    ).toEqual({ kind: "loaded", savedHash: "", nodeCount: 5 });
+    expect(deriveRowState(makeSub({ contentHash: "" }), makeSaved({ status: "ok" }))).toEqual({
+      kind: "loaded",
+      nodeCount: 5,
+      savedHash: "",
+    });
   });
 
   it("任一侧缺少 hash 且 saved.status 非 ok 时为 unimported", () => {
     expect(
-      deriveRowState(
-        makeSub(),
-        makeSaved({ status: "pending", contentHash: undefined }),
-      ),
+      deriveRowState(makeSub(), makeSaved({ contentHash: undefined, status: "pending" })),
     ).toEqual({ kind: "unimported" });
   });
 
   it("两侧 hash 一致时为 loaded", () => {
     expect(
-      deriveRowState(
-        makeSub({ contentHash: "hash-x" }),
-        makeSaved({ contentHash: "hash-x" }),
-      ),
-    ).toEqual({ kind: "loaded", savedHash: "hash-x", nodeCount: 5 });
+      deriveRowState(makeSub({ contentHash: "hash-x" }), makeSaved({ contentHash: "hash-x" })),
+    ).toEqual({ kind: "loaded", nodeCount: 5, savedHash: "hash-x" });
   });
 
   it("两侧 hash 不一致时为 outdated 并携带两侧 hash 与节点数", () => {
@@ -177,10 +160,10 @@ describe("deriveRowState 行状态推导", () => {
         makeSaved({ contentHash: "hash-old", nodeCount: 7 }),
       ),
     ).toEqual({
+      diskHash: "hash-new",
       kind: "outdated",
       savedHash: "hash-old",
       savedNodeCount: 7,
-      diskHash: "hash-new",
     });
   });
 });
@@ -205,11 +188,7 @@ describe("splitPaths 路径列表解析", () => {
   });
 
   it("每段首尾空白被 trim", () => {
-    expect(splitPaths("  D:/a ,  D:/b \n\tD:/c\t")).toEqual([
-      "D:/a",
-      "D:/b",
-      "D:/c",
-    ]);
+    expect(splitPaths("  D:/a ,  D:/b \n\tD:/c\t")).toEqual(["D:/a", "D:/b", "D:/c"]);
   });
 
   it("尾换行与尾逗号不产生空项", () => {

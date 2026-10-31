@@ -11,26 +11,17 @@ import { CUSTOM_NODE_TYPES } from "~/config/custom-nodes";
 
 /* ── 共享字段定义（在多种节点类型之间复用） ── */
 const F = {
-  text: (key: string, label: string, opts?: Partial<FieldDef>): FieldDef => ({
+  img: (key: string, label: string): FieldDef => ({
+    group: "输入",
     key,
     label,
-    type: "text",
-    multiline: true,
-    group: "提示词",
-    ...opts,
-  }),
-  str: (key: string, label: string, opts?: Partial<FieldDef>): FieldDef => ({
-    key,
-    label,
-    type: "string",
-    group: "参数",
-    ...opts,
+    type: "image",
   }),
   num: (key: string, label: string, opts?: Partial<FieldDef>): FieldDef => ({
+    group: "采样",
     key,
     label,
     type: "number",
-    group: "采样",
     ...opts,
   }),
   sel: (
@@ -39,24 +30,33 @@ const F = {
     options: Array<string>,
     opts?: Partial<FieldDef>,
   ): FieldDef => ({
+    group: "采样",
     key,
     label,
-    type: "select",
     options,
-    group: "采样",
+    type: "select",
     ...opts,
   }),
-  img: (key: string, label: string): FieldDef => ({
+  str: (key: string, label: string, opts?: Partial<FieldDef>): FieldDef => ({
+    group: "参数",
     key,
     label,
-    type: "image",
-    group: "输入",
+    type: "string",
+    ...opts,
+  }),
+  text: (key: string, label: string, opts?: Partial<FieldDef>): FieldDef => ({
+    group: "提示词",
+    key,
+    label,
+    multiline: true,
+    type: "text",
+    ...opts,
   }),
   toggle: (key: string, label: string): FieldDef => ({
+    group: "选项",
     key,
     label,
     type: "toggle",
-    group: "选项",
   }),
 };
 
@@ -105,235 +105,235 @@ const SCHEDULERS = [
 export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
   /* ── Model ── */
   CheckpointLoaderSimple: {
-    label: "加载模型",
-    color: "#F59E0B", // amber
-    icon: "\u{1F4BE}",
     category: "model",
-    width: 220,
-    height: 80,
+    color: "#F59E0B", // amber
     defaultFields: [
       F.sel("ckpt_name", "模型文件", [], {
         group: "模型",
-        placeholder: "选择 checkpoint...",
         modelFolder: "checkpoints",
+        placeholder: "选择 checkpoint...",
       }),
     ],
+    height: 80,
+    icon: "\u{1F4BE}",
+    label: "加载模型",
+    width: 220,
   },
   LoraLoader: {
-    label: "加载 LoRA",
-    color: "#EC4899", // pink
-    icon: "\u{1F3A8}",
     category: "model",
-    width: 240,
-    height: 100,
+    color: "#EC4899", // pink
     defaultFields: [
       F.sel("lora_name", "LoRA 文件", [], {
         group: "模型",
-        placeholder: "选择 LoRA...",
         modelFolder: "loras",
+        placeholder: "选择 LoRA...",
       }),
       F.num("strength_model", "模型强度", {
-        min: 0,
         max: 2,
-        step: 0.01,
+        min: 0,
         placeholder: "0.0 ~ 1.0",
+        step: 0.01,
       }),
       F.num("strength_clip", "CLIP 强度", {
-        min: 0,
         max: 2,
-        step: 0.01,
+        min: 0,
         placeholder: "0.0 ~ 1.0",
+        step: 0.01,
       }),
     ],
+    height: 100,
+    icon: "\u{1F3A8}",
+    label: "加载 LoRA",
+    width: 240,
   },
 
   /* ── Conditioning / Text ── */
   CLIPTextEncode: {
-    label: "编码提示词",
-    color: "#8B5CF6", // purple
-    icon: "\u{270D}\uFE0F",
     category: "conditioning",
-    width: 280,
-    height: 120,
+    color: "#8B5CF6", // purple
     defaultFields: [F.text("text", "提示词", { placeholder: "输入提示词..." })],
+    height: 120,
+    icon: "\u{270D}\uFE0F",
+    label: "编码提示词",
+    width: 280,
   },
   CLIPTextEncodeSDXL: {
-    label: "编码提示词 SDXL",
-    color: "#8B5CF6",
-    icon: "\u{270D}\uFE0F",
     category: "conditioning",
-    width: 280,
-    height: 160,
+    color: "#8B5CF6",
     defaultFields: [
       F.text("text", "主提示词 (G)", { placeholder: "主提示词..." }),
       F.text("text2", "副提示词 (L)", { placeholder: "风格/质量修饰..." }),
     ],
+    height: 160,
+    icon: "\u{270D}\uFE0F",
+    label: "编码提示词 SDXL",
+    width: 280,
   },
 
   /* ── Sampling ── */
   KSampler: {
-    label: "采样去噪",
-    color: "#06B6D4", // cyan
-    icon: "\u{26A1}",
     category: "process",
-    width: 260,
-    height: 200,
+    color: "#06B6D4", // cyan
     defaultFields: [
-      F.num("steps", "步数", { min: 1, max: 150, step: 1, placeholder: "20" }),
+      F.num("steps", "步数", { max: 150, min: 1, placeholder: "20", step: 1 }),
       F.sel("sampler_name", "采样器", SAMPLERS),
       F.sel("scheduler", "调度器", SCHEDULERS),
-      F.num("cfg", "CFG", { min: 0, max: 30, step: 0.5, placeholder: "7.0" }),
+      F.num("cfg", "CFG", { max: 30, min: 0, placeholder: "7.0", step: 0.5 }),
       F.num("seed", "种子", {
-        min: 0,
         max: 4294967295,
-        step: 1,
+        min: 0,
         placeholder: "-1 = 随机",
+        step: 1,
       }),
       F.num("denoise", "去噪强度", {
-        min: 0,
         max: 1,
-        step: 0.01,
+        min: 0,
         placeholder: "1.0",
+        step: 0.01,
       }),
     ],
+    height: 200,
+    icon: "\u{26A1}",
+    label: "采样去噪",
+    width: 260,
   },
   KSamplerAdvanced: {
-    label: "高级采样",
-    color: "#06B6D4",
-    icon: "\u{26A1}",
     category: "process",
-    width: 260,
-    height: 220,
+    color: "#06B6D4",
     defaultFields: [
-      F.num("steps", "步数", { min: 1, max: 150, step: 1, placeholder: "20" }),
+      F.num("steps", "步数", { max: 150, min: 1, placeholder: "20", step: 1 }),
       F.sel("sampler_name", "采样器", SAMPLERS),
       F.sel("scheduler", "调度器", SCHEDULERS),
-      F.num("cfg", "CFG", { min: 0, max: 30, step: 0.5, placeholder: "7.0" }),
+      F.num("cfg", "CFG", { max: 30, min: 0, placeholder: "7.0", step: 0.5 }),
       F.num("seed", "种子", {
-        min: 0,
         max: 4294967295,
-        step: 1,
+        min: 0,
         placeholder: "-1 = 随机",
+        step: 1,
       }),
       F.num("denoise", "去噪强度", {
-        min: 0,
         max: 1,
-        step: 0.01,
+        min: 0,
         placeholder: "1.0",
+        step: 0.01,
       }),
-      F.num("start_at_step", "起始步", { min: 0, max: 150, step: 1 }),
-      F.num("end_at_step", "结束步", { min: 0, max: 150, step: 1 }),
+      F.num("start_at_step", "起始步", { max: 150, min: 0, step: 1 }),
+      F.num("end_at_step", "结束步", { max: 150, min: 0, step: 1 }),
       F.toggle("return_with_leftover_noise", "保留噪声"),
     ],
+    height: 220,
+    icon: "\u{26A1}",
+    label: "高级采样",
+    width: 260,
   },
 
   /* ── Latent ── */
   EmptyLatentImage: {
-    label: "初始化潜空间",
-    color: "#10B981", // emerald
-    icon: "\u{1F5BC}\uFE0F",
     category: "latent",
-    width: 200,
-    height: 90,
+    color: "#10B981", // emerald
     defaultFields: [
       F.num("width", "宽度", {
-        min: 64,
-        max: 4096,
-        step: 8,
         group: "潜空间",
+        max: 4096,
+        min: 64,
         placeholder: "1024",
+        step: 8,
       }),
       F.num("height", "高度", {
-        min: 64,
-        max: 4096,
-        step: 8,
         group: "潜空间",
+        max: 4096,
+        min: 64,
         placeholder: "1024",
+        step: 8,
       }),
       F.num("batch_size", "批次", {
-        min: 1,
-        max: 64,
-        step: 1,
         group: "潜空间",
+        max: 64,
+        min: 1,
         placeholder: "1",
+        step: 1,
       }),
     ],
+    height: 90,
+    icon: "\u{1F5BC}\uFE0F",
+    label: "初始化潜空间",
+    width: 200,
   },
   VAEDecode: {
-    label: "VAE 解码",
-    color: "#10B981",
-    icon: "\u{1F504}",
     category: "latent",
-    width: 180,
-    height: 60,
+    color: "#10B981",
     defaultFields: [],
+    height: 60,
+    icon: "\u{1F504}",
+    label: "VAE 解码",
+    width: 180,
   },
   VAEEncode: {
-    label: "VAE 编码",
-    color: "#10B981",
-    icon: "\u{1F504}",
     category: "latent",
-    width: 180,
-    height: 60,
+    color: "#10B981",
     defaultFields: [],
+    height: 60,
+    icon: "\u{1F504}",
+    label: "VAE 编码",
+    width: 180,
   },
 
   /* ── Image I/O ── */
-  SaveImage: {
-    label: "保存图像",
-    color: "#EF4444", // red
-    icon: "\u{1F5BB}\uFE0F",
-    category: "output",
-    width: 180,
-    height: 60,
-    defaultFields: [F.str("filename_prefix", "文件名前缀", { placeholder: "ComfyAPP" })],
-  },
-  LoadImage: {
-    label: "加载图像",
-    color: "#3B82F6", // blue
-    icon: "\u{1F5BC}\uFE0F",
-    category: "input",
-    width: 200,
-    height: 90,
-    defaultFields: [F.img("image", "图像")],
-  },
   ImageScale: {
-    label: "缩放图像",
-    color: "#3B82F6",
-    icon: "\u{1F50D}",
     category: "image",
-    width: 200,
-    height: 90,
+    color: "#3B82F6",
     defaultFields: [
       F.str("upscale_method", "方法"),
       F.num("width", "宽度"),
       F.num("height", "高度"),
       F.toggle("crop", "裁剪"),
     ],
+    height: 90,
+    icon: "\u{1F50D}",
+    label: "缩放图像",
+    width: 200,
+  },
+  LoadImage: {
+    category: "input",
+    color: "#3B82F6", // blue
+    defaultFields: [F.img("image", "图像")],
+    height: 90,
+    icon: "\u{1F5BC}\uFE0F",
+    label: "加载图像",
+    width: 200,
+  },
+  SaveImage: {
+    category: "output",
+    color: "#EF4444", // red
+    defaultFields: [F.str("filename_prefix", "文件名前缀", { placeholder: "ComfyAPP" })],
+    height: 60,
+    icon: "\u{1F5BB}\uFE0F",
+    label: "保存图像",
+    width: 180,
   },
 
   /* ── ControlNet 等常见扩展 ── */
   ControlNetApply: {
-    label: "ControlNet 应用",
-    color: "#14B8A6", // teal
-    icon: "\u{1F3AF}",
     category: "process",
-    width: 220,
-    height: 100,
+    color: "#14B8A6", // teal
     defaultFields: [
       F.num("strength", "强度", { placeholder: "1.0" }),
       F.num("start_percent", "起始比例"),
       F.num("end_percent", "结束比例"),
     ],
+    height: 100,
+    icon: "\u{1F3AF}",
+    label: "ControlNet 应用",
+    width: 220,
   },
   ControlNetLoader: {
-    label: "加载 ControlNet",
-    color: "#14B8A6",
-    icon: "\u{1F3AF}",
     category: "model",
-    width: 220,
-    height: 80,
+    color: "#14B8A6",
     defaultFields: [F.str("control_net_name", "模型文件")],
+    height: 80,
+    icon: "\u{1F3AF}",
+    label: "加载 ControlNet",
+    width: 220,
   },
 };
 
@@ -344,13 +344,13 @@ export function getNodeConfig(classType: string): NodeTypeConfig {
   return (
     CUSTOM_NODE_TYPES[classType] ??
     NODE_TYPE_REGISTRY[classType] ?? {
-      label: classType,
-      color: "#6B7280",
-      icon: "\u{2699}\uFE0F",
       category: "process",
-      width: 200,
-      height: 70,
+      color: "#6B7280",
       defaultFields: [],
+      height: 70,
+      icon: "\u{2699}\uFE0F",
+      label: classType,
+      width: 200,
     }
   );
 }

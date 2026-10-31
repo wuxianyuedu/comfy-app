@@ -16,21 +16,21 @@ function dragEvent() {
   let effectAllowed = "";
   return {
     data,
-    get effectAllowed() {
-      return effectAllowed;
-    },
-    set effectAllowed(next: string) {
-      effectAllowed = next;
-    },
     dataTransfer: {
-      setData: (mime: string, value: string) => data.set(mime, value),
-      getData: (mime: string) => data.get(mime) ?? "",
       set effectAllowed(next: string) {
         effectAllowed = next;
       },
       get effectAllowed() {
         return effectAllowed;
       },
+      getData: (mime: string) => data.get(mime) ?? "",
+      setData: (mime: string, value: string) => data.set(mime, value),
+    },
+    get effectAllowed() {
+      return effectAllowed;
+    },
+    set effectAllowed(next: string) {
+      effectAllowed = next;
     },
   };
 }
@@ -39,22 +39,22 @@ describe("载荷形状由出口定义（源端与落点共用一份）", () => {
   it("写的是同一个 MIME，且载荷字段齐全", () => {
     const event = dragEvent();
     const props = mediaDragSourceProps({
-      url: "https://x.test/a.png",
       kind: "image",
+      url: "https://x.test/a.png",
     });
     props.onDragStart(/* SAFETY: 类型断言已复核 */ event as never);
     const raw = event.data.get(MEDIA_DRAG_MIME);
     expect(raw).toBeTypeOf("string");
     expect(JSON.parse(raw!)).toEqual({
-      url: "https://x.test/a.png",
       displayName: "a.png",
       mediaType: "image",
+      url: "https://x.test/a.png",
     });
   });
 
   it("effectAllowed 是 copy（拖拽是「加一份」，不是搬走）", () => {
     const event = dragEvent();
-    mediaDragSourceProps({ url: "/a.png", kind: "image" }).onDragStart(
+    mediaDragSourceProps({ kind: "image", url: "/a.png" }).onDragStart(
       /* SAFETY: 类型断言已复核 */ event as never,
     );
     expect(event.effectAllowed).toBe("copy");
@@ -63,9 +63,9 @@ describe("载荷形状由出口定义（源端与落点共用一份）", () => {
   it("显式给的 displayName 优先于从 URL 推导", () => {
     const event = dragEvent();
     mediaDragSourceProps({
-      url: "/x/a.png",
       displayName: "素材：封面",
       kind: "image",
+      url: "/x/a.png",
     }).onDragStart(/* SAFETY: 类型断言已复核 */ event as never);
     const payload = /* SAFETY: 类型断言已复核 */ JSON.parse(event.data.get(MEDIA_DRAG_MIME)!) as {
       displayName: string;
@@ -102,23 +102,23 @@ describe("displayNameFromUrl", () => {
 describe("可拖与光标类是同一个判据", () => {
   it("canDrag 为假时不可拖，且不追加光标类", () => {
     const props = mediaDragSourceProps({
-      url: "/a.png",
-      kind: "image",
       canDrag: false,
       className: "rounded-lg",
+      kind: "image",
+      url: "/a.png",
     });
     expect(props.draggable).toBe(false);
     expect(props.className).toBe("rounded-lg");
   });
 
   it("url 为空时同样不可拖（拖了只会丢投）", () => {
-    const props = mediaDragSourceProps({ url: null, kind: "image" });
+    const props = mediaDragSourceProps({ kind: "image", url: null });
     expect(props.draggable).toBe(false);
     expect(props.className).not.toContain("cursor-grab");
   });
 
   it("可拖时两种光标都加上（抓起来 / 抓着移动）", () => {
-    const props = mediaDragSourceProps({ url: "/a.png", kind: "image" });
+    const props = mediaDragSourceProps({ kind: "image", url: "/a.png" });
     expect(props.draggable).toBe(true);
     expect(props.className).toContain("cursor-grab");
     expect(props.className).toContain("active:cursor-grabbing");
@@ -126,9 +126,9 @@ describe("可拖与光标类是同一个判据", () => {
 
   it("调用处原有的类名不被吞掉", () => {
     const props = mediaDragSourceProps({
-      url: "/a.png",
-      kind: "image",
       className: "border-border rounded-lg",
+      kind: "image",
+      url: "/a.png",
     });
     expect(props.className).toContain("border-border");
     expect(props.className).toContain("rounded-lg");
@@ -136,7 +136,7 @@ describe("可拖与光标类是同一个判据", () => {
 
   it("不可拖时 onDragStart 不写任何数据（显式静默，而不是半份载荷）", () => {
     const event = dragEvent();
-    const props = mediaDragSourceProps({ url: null, kind: "image" });
+    const props = mediaDragSourceProps({ kind: "image", url: null });
     props.onDragStart(/* SAFETY: 类型断言已复核 */ event as never);
     expect(event.data.size).toBe(0);
   });
@@ -145,7 +145,7 @@ describe("可拖与光标类是同一个判据", () => {
 describe("audio / doc 也能拖（落点给「暂不支持」的提示）", () => {
   it("mediaType 原样透传", () => {
     const event = dragEvent();
-    mediaDragSourceProps({ url: "/a.mp3", kind: "audio" }).onDragStart(
+    mediaDragSourceProps({ kind: "audio", url: "/a.mp3" }).onDragStart(
       /* SAFETY: 类型断言已复核 */ event as never,
     );
     const payload = /* SAFETY: 类型断言已复核 */ JSON.parse(event.data.get(MEDIA_DRAG_MIME)!) as {
@@ -157,8 +157,8 @@ describe("audio / doc 也能拖（落点给「暂不支持」的提示）", () =
 
 describe("onDragStart 身份稳定（同一份参数复用不重建）", () => {
   it("相同参数不产生新的闭包行为", () => {
-    const a = mediaDragSourceProps({ url: "/a.png", kind: "image" });
-    const b = mediaDragSourceProps({ url: "/a.png", kind: "image" });
+    const a = mediaDragSourceProps({ kind: "image", url: "/a.png" });
+    const b = mediaDragSourceProps({ kind: "image", url: "/a.png" });
     const ev = dragEvent();
     a.onDragStart(/* SAFETY: 类型断言已复核 */ ev as never);
     const first = ev.data.get(MEDIA_DRAG_MIME);

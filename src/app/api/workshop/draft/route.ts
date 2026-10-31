@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     if (!draft || !draftHasContent(draft)) {
       return NextResponse.json({ exists: false });
     }
-    return NextResponse.json({ exists: true, draft });
+    return NextResponse.json({ draft, exists: true });
   } catch (e) {
     return NextResponse.json(apiErrorBody(e, "读取服务端草稿失败"), {
       status: 500,

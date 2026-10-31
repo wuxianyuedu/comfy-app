@@ -18,8 +18,8 @@ export const projectRouter = createTRPCRouter({
         id: z.string().min(1),
         name: z.string().min(1),
         // React Flow 节点/边 JSON,形状由前端持有;仓储层入参即 unknown,收口校验由调用方保证。
-        nodes: z.unknown().optional(),
         edges: z.unknown().optional(),
+        nodes: z.unknown().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -44,10 +44,10 @@ export const projectRouter = createTRPCRouter({
         });
       }
       return projectRepository.upsertForUser(ctx.user.id, {
+        edges: input.edges,
         id: input.id,
         name: input.name,
         nodes: input.nodes,
-        edges: input.edges,
       });
     }),
 
@@ -64,10 +64,10 @@ export const projectRouter = createTRPCRouter({
   patch: authedProcedure
     .input(
       z.object({
-        projectId: z.string(),
+        edges: z.unknown().optional(),
         name: z.string().optional(),
         nodes: z.unknown().optional(),
-        edges: z.unknown().optional(),
+        projectId: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -111,34 +111,34 @@ export const projectRouter = createTRPCRouter({
         const rawParams: unknown = task.params ?? {};
         const params: Record<string, unknown> = asRecord(rawParams) ?? {};
         return {
+          cfg: params.cfg ?? null,
+          checkpoint: params.checkpoint ?? null,
+          createdAt: task.createdAt,
           id: task.id,
-          type: task.type,
-          status: task.status,
-          workflowName: task.workflowName,
-          prompt: task.prompt,
+          images: task.images.map((img) => ({
+            height: img.height,
+            id: img.id,
+            isCover: img.isCover,
+            localPath: img.localPath,
+            mediaType: img.mediaType,
+            seed: img.seed,
+            width: img.width,
+          })),
           negativePrompt: task.negativePrompt,
+          parentId: task.parentId ?? null,
+          prompt: task.prompt,
+          referenceImages:
+            /* SAFETY: 类型断言已复核 */ (task.referenceImages as Array<string> | null) ?? [],
+          sampler: params.sampler ?? null,
           seed:
             typeof params.seed === "number" || typeof params.seed === "string"
               ? String(params.seed)
               : null,
           size: typeof params.size === "string" ? params.size : null,
-          sampler: params.sampler ?? null,
+          status: task.status,
           steps: params.steps ?? null,
-          cfg: params.cfg ?? null,
-          checkpoint: params.checkpoint ?? null,
-          referenceImages:
-            /* SAFETY: 类型断言已复核 */ (task.referenceImages as Array<string> | null) ?? [],
-          parentId: task.parentId ?? null,
-          createdAt: task.createdAt,
-          images: task.images.map((img) => ({
-            id: img.id,
-            localPath: img.localPath,
-            mediaType: img.mediaType,
-            seed: img.seed,
-            width: img.width,
-            height: img.height,
-            isCover: img.isCover,
-          })),
+          type: task.type,
+          workflowName: task.workflowName,
         };
       });
       return { outputs };

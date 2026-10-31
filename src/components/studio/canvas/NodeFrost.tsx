@@ -19,30 +19,30 @@ export const PSEUDO_FROST_BLOBS: Array<{
   w: string;
 }> = [
   {
+    alphaKey: "primary",
+    blurPx: 28,
+    h: "42%",
     left: "6%",
     top: "10%",
     w: "58%",
-    h: "42%",
-    alphaKey: "primary",
-    blurPx: 28,
   },
   {
+    alphaKey: "secondary",
+    blurPx: 22,
+    h: "32%",
     left: "18%",
     top: "62%",
     w: "62%",
-    h: "32%",
-    alphaKey: "secondary",
-    blurPx: 22,
   },
-  { left: "62%", top: "6%", w: "40%", h: "50%", alphaKey: "cool", blurPx: 32 },
-  { left: "30%", top: "30%", w: "32%", h: "32%", alphaKey: "warm", blurPx: 18 },
+  { alphaKey: "cool", blurPx: 32, h: "50%", left: "62%", top: "6%", w: "40%" },
+  { alphaKey: "warm", blurPx: 18, h: "32%", left: "30%", top: "30%", w: "32%" },
   {
+    alphaKey: "shadow",
+    blurPx: 24,
+    h: "34%",
     left: "66%",
     top: "56%",
     w: "30%",
-    h: "34%",
-    alphaKey: "shadow",
-    blurPx: 24,
   },
 ];
 
@@ -65,12 +65,12 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
           className="absolute rounded-full"
           key={`blob-${idx}`}
           style={{
+            background: palette[blob.alphaKey],
+            filter: `blur(${blob.blurPx}px)`,
+            height: blob.h,
             left: blob.left,
             top: blob.top,
             width: blob.w,
-            height: blob.h,
-            background: palette[blob.alphaKey],
-            filter: `blur(${blob.blurPx}px)`,
           }}
         />
       ))}
@@ -82,8 +82,8 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
         style={{
           backgroundImage: `url("${PSEUDO_FROST_NOISE_URL}")`,
           backgroundSize: "180px 180px",
-          opacity: 0.085,
           mixBlendMode: "overlay",
+          opacity: 0.085,
         }}
       />
     </div>
@@ -106,9 +106,9 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
  *  让各个缩放档下的有效屏幕模糊都约为 6px。结果就是：真实画布的真模糊视图，
  *  任何缩放档都不平铺。 */
 export function NodeFrost({
-  zoom,
   color,
   nodeMode,
+  zoom,
 }: {
   color: string | null;
   nodeMode: number;
@@ -128,11 +128,11 @@ export function NodeFrost({
       <div
         className="absolute inset-0"
         style={{
-          background: hexToRgba(color, nodeMode === 4 ? 0.16 : 0.11),
           backdropFilter: `blur(${blur}px)`,
-          WebkitBackdropFilter: `blur(${blur}px)`,
+          background: hexToRgba(color, nodeMode === 4 ? 0.16 : 0.11),
           transform: `scale(${scale})`,
           transformOrigin: "center center",
+          WebkitBackdropFilter: `blur(${blur}px)`,
         }}
       />
     </div>

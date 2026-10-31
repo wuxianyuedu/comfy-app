@@ -41,12 +41,12 @@ type SubgraphWidgetStackedStringProps = {
 };
 
 export function SubgraphWidgetStackedString({
-  inp,
-  label,
-  io,
-  nodeId,
-  hostNodeId,
   hasSize,
+  hostNodeId,
+  inp,
+  io,
+  label,
+  nodeId,
 }: SubgraphWidgetStackedStringProps) {
   const v: unknown = inp.widgetValue;
   const isConn = inp.isConnection === true || inp.isBoundary === true;
@@ -66,11 +66,11 @@ export function SubgraphWidgetStackedString({
             <IoCheckbox
               io={io}
               ioRef={{
-                nodeId: String(nodeId),
-                hostNodeId,
-                name: inp.name,
-                kind: "widget",
                 direction: "input",
+                hostNodeId,
+                kind: "widget",
+                name: inp.name,
+                nodeId: String(nodeId),
               }}
             />
           )}

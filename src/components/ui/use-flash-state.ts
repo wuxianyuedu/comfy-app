@@ -78,7 +78,7 @@ export function useFlashState(durationMs = DEFAULT_FLASH_MS): FlashState {
     setOn(false);
   }, [clear]);
 
-  return { on, flash, reset };
+  return { flash, on, reset };
 }
 
 /**
@@ -121,5 +121,5 @@ export function useFlashLatch<T>(durationMs: number, empty: T) {
     setValue(empty);
   }, [clear, empty]);
 
-  return { value, flash, reset };
+  return { flash, reset, value };
 }

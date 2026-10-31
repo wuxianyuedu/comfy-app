@@ -25,6 +25,6 @@ export type DebugStoreState = {
 
 export const useDebugStore = create<DebugStoreState>((set) => ({
   debugMode: false,
-  toggleDebugMode: () => set((state) => ({ debugMode: !state.debugMode })),
   setDebugMode: (value) => set({ debugMode: value }),
+  toggleDebugMode: () => set((state) => ({ debugMode: !state.debugMode })),
 }));

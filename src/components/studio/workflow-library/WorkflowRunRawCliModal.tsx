@@ -34,9 +34,9 @@ import { fetchRawCli } from "~/lib/comfyui/raw-cli-client";
 import { parseRawCliLine, sameRawCliLines, type ParsedCliLine } from "./raw-cli-lines";
 
 const TAG_STYLES: Record<string, string> = {
-  原始: "text-info-strong",
-  stdout: "text-ink-soft",
   stderr: "text-destructive",
+  stdout: "text-ink-soft",
+  原始: "text-info-strong",
 };
 
 /**
@@ -86,10 +86,10 @@ export type WorkflowRunRawCliModalProps = {
 };
 
 export function WorkflowRunRawCliModal({
-  taskId,
-  running = false,
-  open,
   onClose,
+  open,
+  running = false,
+  taskId,
 }: WorkflowRunRawCliModalProps) {
   const [lines, setLines] = useState<Array<string>>([]);
   const [loaded, setLoaded] = useState(false);
@@ -146,18 +146,19 @@ export function WorkflowRunRawCliModal({
 
   /* 运行期按需轮询刷新完整输出（统一走 useInterval，不自写 setInterval）。 */
   useInterval(() => loadRef.current(true), {
-    ms: running ? 1500 : null,
     immediate: false,
+    ms: running ? 1500 : null,
   });
 
   const scroller = useScrollFollow({
     containerRef: scrollerRef,
-    watch: `${lines.length}:${open}`,
     following: autoscroll,
     onFollowingChange: setAutoscroll,
+    watch: `${lines.length}:${open}`,
   });
 
   const copy = useCopyFeedback({
+    onFailure: "silent",
     onSuccess: () => {
       setCopied(true);
       if (copiedTimerRef.current) {
@@ -165,7 +166,6 @@ export function WorkflowRunRawCliModal({
       }
       copiedTimerRef.current = setTimeout(() => setCopied(false), 1500);
     },
-    onFailure: "silent",
   });
 
   if (!open) {

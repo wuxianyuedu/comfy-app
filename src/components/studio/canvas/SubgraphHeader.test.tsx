@@ -20,11 +20,11 @@ afterEach(cleanup);
 function makeStores(): WFStores {
   return {
     io: createIOEditStore("wf-test"),
-    rgthree: createRgthreeGroupsStore({ workflowId: "wf-test", detail: null }),
+    rgthree: createRgthreeGroupsStore({ detail: null, workflowId: "wf-test" }),
     viewer: createNodeJsonViewerStore({
       detail: null,
-      rawMetaById: {},
       positions: null,
+      rawMetaById: {},
       subgraphRawContext: null,
       subgraphStackLength: 0,
     }),
@@ -43,10 +43,10 @@ function renderHeader(ui: ReactNode, stores: WFStores = makeStores()) {
 }
 
 const base = {
-  title: "我的子图",
-  nodeId: "42",
   accent: "#8B5CF6",
   isCollapsed: false,
+  nodeId: "42",
+  title: "我的子图",
 };
 
 const OUTPUT_REF = { name: "IMAGE_FINAL" };
@@ -139,8 +139,8 @@ describe("SubgraphHeader", () => {
     await userEvent.click(checkbox);
     // key = `${nodeId}::kind::name`,direction/kind 均为 output
     expect(stores.io.getState().workflowIO["42::output::IMAGE_FINAL"]).toMatchObject({
-      name: "IMAGE_FINAL",
       kind: "output",
+      name: "IMAGE_FINAL",
       /* 显示名不进库：条目只记身份，名字由富化链一处给。 */
     });
     expect(stores.io.getState().workflowIO["42::output::IMAGE_FINAL"]!.label).toBeUndefined();

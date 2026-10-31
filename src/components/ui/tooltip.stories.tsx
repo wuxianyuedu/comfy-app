@@ -22,8 +22,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/comp
  * ⚠️ 悬停提示在画布上要点一下 / 悬停才出现；贴边那条请**把画布拖窄**再看。
  */
 const meta = {
-  title: "UI/Tooltip",
   component: Tooltip,
+  title: "UI/Tooltip",
 } satisfies Meta<typeof Tooltip>;
 
 export default meta;

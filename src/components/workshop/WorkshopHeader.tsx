@@ -22,7 +22,7 @@ type WorkshopHeaderProps = {
   title: string;
 };
 
-export function WorkshopHeader({ title, progressPct, health }: WorkshopHeaderProps) {
+export function WorkshopHeader({ health, progressPct, title }: WorkshopHeaderProps) {
   /* 唯一一份进度账在 health 里：段数与「差哪几段」都由它派生，头部不再自己数一遍。 */
   const pendingRows = health.filter((row) => row.pending);
   const pendingCount = countPendingStages(health);

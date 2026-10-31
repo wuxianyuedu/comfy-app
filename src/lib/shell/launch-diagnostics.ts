@@ -95,14 +95,14 @@ export function launchPaths(root: string): LaunchPaths {
   // 归档到 log/runs/（见 scripts/launcher-core/run.mjs 与规范 §4）。
   const launcherDir = path.join(root, "log", "current", "launcher");
   return {
-    root,
-    statusFile: path.join(root, "run", "launch-status.json"),
     launcherDir,
     orchestratorLog: path.join(launcherDir, "dev-launcher.log"),
     orchestratorSentinel: path.join(launcherDir, "dev-launcher-current.txt"),
     orchestratorStderr: path.join(launcherDir, "dev-launcher-stderr.log"),
-    shellLog: path.join(root, "log", "current", "shell", "shell.log"),
+    root,
     shellLaunchLog: path.join(launcherDir, "shell-launch.log"),
+    shellLog: path.join(root, "log", "current", "shell", "shell.log"),
+    statusFile: path.join(root, "run", "launch-status.json"),
   };
 }
 
@@ -129,23 +129,23 @@ export function idleFallback(phase: LaunchPhase = "shell-prepare", root = ""): L
     phase,
     // **必须 < 1**：启动页把 pct >= 100 画成「✓」，一个常驻快照若标成 100%
     // 会让「还在启动」看起来像「启动完了」。
-    progress: 0,
-    message: "桌面壳已接手启动编排，正在拉起本地服务…",
+    diagnostics: fallbackDiagnostics(root),
     error: false,
     fallback: true,
-    diagnostics: fallbackDiagnostics(root),
+    message: "桌面壳已接手启动编排，正在拉起本地服务…",
+    progress: 0,
   };
 }
 
 /** 编排器已拉起、等它写第一份状态时的快照。 */
 export function orchestratingFallback(root = ""): LaunchFallback {
   return {
-    phase: "shell-orchestrating",
-    progress: 0,
-    message: "正在等待本地服务就绪（编排器已启动，诊断见「查看日志」）…",
+    diagnostics: fallbackDiagnostics(root),
     error: false,
     fallback: true,
-    diagnostics: fallbackDiagnostics(root),
+    message: "正在等待本地服务就绪（编排器已启动，诊断见「查看日志」）…",
+    phase: "shell-orchestrating",
+    progress: 0,
   };
 }
 
@@ -165,8 +165,8 @@ export function fallbackDiagnostics(root: string): {
 } {
   const paths = launchPaths(root);
   return {
-    projectRoot: root,
     launchLog: paths.shellLaunchLog,
+    projectRoot: root,
     shellLog: paths.shellLog,
     statusFile: paths.statusFile,
   };

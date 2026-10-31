@@ -31,29 +31,29 @@ const seen = vi.hoisted(() => ({
 }));
 
 const orchestrator = vi.hoisted(() => ({
+  buildStoryboard: vi.fn(async () => ({ shotCount: 1 })),
+  composeFinal: vi.fn(async () => ({ filmUrl: "/api/generated/f.mp4" })),
   createSession: vi.fn(async () => "sess_1"),
-  listSessions: vi.fn(async () => [{ id: "sess_1" }]),
-  getSession: vi.fn(async () => ({ id: "sess_1", characters: [], shots: [] })),
   deleteSession: vi.fn(async () => true),
-  setMeta: vi.fn(async () => ({ ok: true })),
-  setIdea: vi.fn(async () => ({ ok: true })),
-  generateScript: vi.fn(async () => "# 剧本"),
-  setScript: vi.fn(async () => ({ ok: true })),
   extractCharacters: vi.fn(async () => ({ added: 1, skipped: 0, total: 1 })),
+  generateImage: vi.fn(async () => ({ taskId: "t1" })),
+  generateScript: vi.fn(async () => "# 剧本"),
+  getSession: vi.fn(async () => ({ characters: [], id: "sess_1", shots: [] })),
+  listSessions: vi.fn(async () => [{ id: "sess_1" }]),
+  pollVideo: vi.fn(async () => ({ status: "done" })),
   setCharacters: vi.fn(async (_id: string, list: Array<unknown>) => {
     seen.characters = list;
     return [{ id: "c1" }];
   }),
-  buildStoryboard: vi.fn(async () => ({ shotCount: 1 })),
+  setComfyWorkflow: vi.fn(async () => ({ ok: true })),
+  setIdea: vi.fn(async () => ({ ok: true })),
+  setMeta: vi.fn(async () => ({ ok: true })),
+  setScript: vi.fn(async () => ({ ok: true })),
   setStoryboard: vi.fn(async (_id: string, list: Array<unknown>) => {
     seen.shots = list;
     return [{ id: "s1" }];
   }),
-  generateImage: vi.fn(async () => ({ taskId: "t1" })),
   submitVideo: vi.fn(async () => ({ clipTaskId: "ct1" })),
-  pollVideo: vi.fn(async () => ({ status: "done" })),
-  composeFinal: vi.fn(async () => ({ filmUrl: "/api/generated/f.mp4" })),
-  setComfyWorkflow: vi.fn(async () => ({ ok: true })),
 }));
 
 /* 桩必须回一个能 `JSON.stringify` 出字符串的值：`json(undefined)` 会让
@@ -73,50 +73,50 @@ const SESSION = { sessionId: "sess_1" };
  * 新加工具却不写用例 = 红，这正是这一层此前的状态（17 条零执行者）。
  */
 const TOOL_CALLS: Record<string, Record<string, unknown>> = {
-  workshop_create_session: { title: "测试片", idea: "一只猫" },
-  workshop_list_sessions: {},
-  workshop_get_session: SESSION,
+  workshop_build_storyboard: SESSION,
+  workshop_compose_final: SESSION,
+  workshop_create_session: { idea: "一只猫", title: "测试片" },
   workshop_delete_session: SESSION,
-  workshop_set_meta: { ...SESSION, title: "改名" },
-  workshop_set_idea: { ...SESSION, idea: "新灵感" },
-  workshop_generate_script: SESSION,
-  workshop_set_script: { ...SESSION, markdown: "# 剧本" },
   workshop_extract_characters: SESSION,
+  workshop_generate_image: { ...SESSION, shotId: "s1" },
+  workshop_generate_script: SESSION,
+  workshop_get_session: SESSION,
+  workshop_list_sessions: {},
+  workshop_poll_video: { ...SESSION, shotId: "s1" },
   workshop_set_characters: {
     ...SESSION,
     characters: [{ id: "c1", name: "阿明", styleTags: "皮克斯" }],
   },
-  workshop_build_storyboard: SESSION,
+  workshop_set_comfy_workflow: { checkpoint: "sd_xl.safetensors" },
+  workshop_set_idea: { ...SESSION, idea: "新灵感" },
+  workshop_set_meta: { ...SESSION, title: "改名" },
+  workshop_set_script: { ...SESSION, markdown: "# 剧本" },
   workshop_set_storyboard: {
     ...SESSION,
-    shots: [{ id: "s1", index: 0, description: "猫走进雨里" }],
+    shots: [{ description: "猫走进雨里", id: "s1", index: 0 }],
   },
-  workshop_generate_image: { ...SESSION, shotId: "s1" },
   workshop_submit_video: { ...SESSION, shotId: "s1" },
-  workshop_poll_video: { ...SESSION, shotId: "s1" },
-  workshop_compose_final: SESSION,
-  workshop_set_comfy_workflow: { checkpoint: "sd_xl.safetensors" },
 };
 
 /** 工具名 → 应当被调到的 orchestrator 出口（`compose_final` 之类一对多的按实现取首跳）。 */
 const TOOL_TARGETS: Record<string, string> = {
-  workshop_create_session: "createSession",
-  workshop_list_sessions: "listSessions",
-  workshop_get_session: "getSession",
-  workshop_delete_session: "deleteSession",
-  workshop_set_meta: "setMeta",
-  workshop_set_idea: "setIdea",
-  workshop_generate_script: "generateScript",
-  workshop_set_script: "setScript",
-  workshop_extract_characters: "extractCharacters",
-  workshop_set_characters: "setCharacters",
   workshop_build_storyboard: "buildStoryboard",
-  workshop_set_storyboard: "setStoryboard",
-  workshop_generate_image: "generateImage",
-  workshop_submit_video: "submitVideo",
-  workshop_poll_video: "pollVideo",
   workshop_compose_final: "composeFinal",
+  workshop_create_session: "createSession",
+  workshop_delete_session: "deleteSession",
+  workshop_extract_characters: "extractCharacters",
+  workshop_generate_image: "generateImage",
+  workshop_generate_script: "generateScript",
+  workshop_get_session: "getSession",
+  workshop_list_sessions: "listSessions",
+  workshop_poll_video: "pollVideo",
+  workshop_set_characters: "setCharacters",
   workshop_set_comfy_workflow: "saveComfySettings",
+  workshop_set_idea: "setIdea",
+  workshop_set_meta: "setMeta",
+  workshop_set_script: "setScript",
+  workshop_set_storyboard: "setStoryboard",
+  workshop_submit_video: "submitVideo",
 };
 
 async function connect() {
@@ -160,8 +160,8 @@ describe("工坊 MCP 工具面", () => {
   it.for(Object.keys(TOOL_CALLS))("%s 翻译到对应的服务端出口", async (tool) => {
     resetCalls();
     const result = await client.callTool({
-      name: tool,
       arguments: TOOL_CALLS[tool],
+      name: tool,
     });
     /* 判 `isError` 而不是匹配文案：MCP 的失败就标在信封上，读文案会把
      * 「工具报错」与「用例假设错了」混成一团（这条断言把实际文本带进失败信息）。 */
@@ -177,8 +177,8 @@ describe("工坊 MCP 工具面", () => {
   it("set_characters 在边界上归一并补齐字段：单字符串标签收成数组、提示词由服务端重算", async () => {
     resetCalls();
     await client.callTool({
-      name: "workshop_set_characters",
       arguments: TOOL_CALLS.workshop_set_characters,
+      name: "workshop_set_characters",
     });
     expect(orchestrator.setCharacters).toHaveBeenCalledWith("sess_1", [
       expect.objectContaining({
@@ -199,18 +199,18 @@ describe("工坊 MCP 工具面", () => {
   it("set_storyboard 兜住景别与可选枚举：脏景别落默认档，认不出的可选枚举当没给", async () => {
     resetCalls();
     await client.callTool({
-      name: "workshop_set_storyboard",
       arguments: {
         ...SESSION,
         shots: [
           {
             id: "s1",
             index: 0,
-            shotType: "特写",
             motion: "hyper",
+            shotType: "特写",
           },
         ],
       },
+      name: "workshop_set_storyboard",
     });
     const shots = /* SAFETY: 类型断言已复核 */ seen.shots as Array<Record<string, unknown>>;
     expect(shots).toEqual([
@@ -220,8 +220,8 @@ describe("工坊 MCP 工具面", () => {
         shotType: "medium",
         /* 必填枚举严格（在 JSON Schema 里可见，脏值走拒收那一档，见下面一条）；
          * 可选枚举认不出 ⇒ 当没给，而不是把 "hyper" 写进草稿。 */
-        status: "idle",
         prompt: "",
+        status: "idle",
       }),
     ]);
     expect(shots[0]).not.toHaveProperty("motion", "hyper");
@@ -234,8 +234,8 @@ describe("工坊 MCP 工具面", () => {
   it("缺 name 的角色卡被拒收，且**一次都没落到服务端**", async () => {
     resetCalls();
     const result = await client.callTool({
-      name: "workshop_set_characters",
       arguments: { ...SESSION, characters: [{ id: "c9" }] },
+      name: "workshop_set_characters",
     });
     expect(orchestrator.setCharacters).not.toHaveBeenCalled();
     expect(result.isError).toBe(true);
@@ -244,8 +244,8 @@ describe("工坊 MCP 工具面", () => {
   it("shots 给成对象而不是数组同样被拒收（`z.array(z.any())` 时这是能直接落库的形状）", async () => {
     resetCalls();
     const result = await client.callTool({
-      name: "workshop_set_storyboard",
       arguments: { ...SESSION, shots: { id: "s1" } },
+      name: "workshop_set_storyboard",
     });
     expect(orchestrator.setStoryboard).not.toHaveBeenCalled();
     expect(result.isError).toBe(true);
@@ -256,11 +256,11 @@ describe("工坊 MCP 工具面", () => {
   it("必填枚举给脏值走边界拒收（status 不是可选字段，不兜默认）", async () => {
     resetCalls();
     const result = await client.callTool({
-      name: "workshop_set_storyboard",
       arguments: {
         ...SESSION,
         shots: [{ id: "s1", index: 0, status: "nonsense" }],
       },
+      name: "workshop_set_storyboard",
     });
     expect(orchestrator.setStoryboard).not.toHaveBeenCalled();
     expect(result.isError).toBe(true);
@@ -269,14 +269,14 @@ describe("工坊 MCP 工具面", () => {
   it("generate_image 的尺寸两种表达都归一成同一个 SizeSpec，一个都不给时传 undefined", async () => {
     resetCalls();
     await client.callTool({
-      name: "workshop_generate_image",
       arguments: { ...SESSION, shotId: "s1", size: "1024x1024" },
+      name: "workshop_generate_image",
     });
     const oldStyle = payloadOf();
     resetCalls();
     await client.callTool({
+      arguments: { ...SESSION, clarity: "1k", ratio: "1:1", shotId: "s1" },
       name: "workshop_generate_image",
-      arguments: { ...SESSION, shotId: "s1", ratio: "1:1", clarity: "1k" },
     });
     const modern = payloadOf();
     /* 判的是「两种表达等价」这条**语义**（老口径 `"1024x1024"` 必须换算成与新口径
@@ -287,8 +287,8 @@ describe("工坊 MCP 工具面", () => {
 
     resetCalls();
     await client.callTool({
-      name: "workshop_generate_image",
       arguments: { ...SESSION, shotId: "s1" },
+      name: "workshop_generate_image",
     });
     /* 一个都没给 ⇒ 传 undefined，让各通道走自己的默认档（不是传一个猜测的尺寸）。 */
     expect(payloadOf().size).toBeUndefined();
@@ -304,8 +304,8 @@ describe("工坊 MCP 工具面", () => {
     resetCalls();
     orchestrator.getSession.mockResolvedValueOnce(/* SAFETY: 类型断言已复核 */ null as never);
     const result = await client.callTool({
-      name: "workshop_get_session",
       arguments: SESSION,
+      name: "workshop_get_session",
     });
     expect(result.isError).toBe(true);
     /* 错误文案点名 sessionId：MCP 客户端拿着它才知道是哪一个会话没了。 */

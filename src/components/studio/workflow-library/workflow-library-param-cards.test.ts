@@ -23,35 +23,35 @@ import { exposedParamDisplayLabel } from "~/lib/workflow/workflow-exposed-params
 import { deriveLibraryOutputCards, deriveLibraryParamCards } from "./workflow-library-param-cards";
 
 const io: WorkflowIOMap = {
-  "9::widget::text": {
+  "5::widget::height": {
+    defaultValue: 512,
     direction: "input",
     kind: "widget",
-    nodeId: "9",
-    nodeTitle: "Text to Image",
-    name: "positive_prompt",
-    label: "提示词",
-    type: "STRING",
-    defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
+    label: "高度",
+    name: "height",
+    nodeId: "5",
+    nodeTitle: "分辨率选择器",
+    type: "INT",
   },
   "5::widget::width": {
+    defaultValue: 512,
     direction: "input",
     kind: "widget",
-    nodeId: "5",
-    nodeTitle: "分辨率选择器",
-    name: "width",
     label: "宽度",
-    type: "INT",
-    defaultValue: 512,
-  },
-  "5::widget::height": {
-    direction: "input",
-    kind: "widget",
+    name: "width",
     nodeId: "5",
     nodeTitle: "分辨率选择器",
-    name: "height",
-    label: "高度",
     type: "INT",
-    defaultValue: 512,
+  },
+  "9::widget::text": {
+    defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
+    direction: "input",
+    kind: "widget",
+    label: "提示词",
+    name: "positive_prompt",
+    nodeId: "9",
+    nodeTitle: "Text to Image",
+    type: "STRING",
   },
 };
 
@@ -66,8 +66,8 @@ describe("deriveLibraryParamCards", () => {
   it("作者没画线时 resolved 为空 → 卡片全部显示「未配置」", () => {
     const { entries: derived, resolved } = deriveLibraryParamCards({
       io,
-      paramMap: {},
       mode: "T2I",
+      paramMap: {},
     });
     /* 契约口径（文生图）：提示词 + 负向提示词 + 尺寸 —— 与具体工作流无关，
      * 「宽度/高度」这类同一语义的端口不再各占一张卡，契约口也一律常驻。 */
@@ -84,19 +84,19 @@ describe("deriveLibraryParamCards", () => {
   it("作者画的线就是落点", () => {
     const { resolved } = deriveLibraryParamCards({
       io,
+      mode: "T2I",
       paramMap: {
         source: { "mode:T2I": { [promptEntry.id]: "9::widget::text" } },
       },
-      mode: "T2I",
     });
     expect(resolved[promptEntry.id]).toBe("9::widget::text");
   });
 
   it("作者显式断开的条目不落任何一行", () => {
-    const { resolved, ownersByPin } = deriveLibraryParamCards({
+    const { ownersByPin, resolved } = deriveLibraryParamCards({
       io,
-      paramMap: { source: { "mode:T2I": { [promptEntry.id]: null } } },
       mode: "T2I",
+      paramMap: { source: { "mode:T2I": { [promptEntry.id]: null } } },
     });
     expect(resolved[promptEntry.id]).toBeNull();
     expect(ownersByPin["9::widget::text"]).toBeUndefined();
@@ -105,10 +105,10 @@ describe("deriveLibraryParamCards", () => {
   it("别的模式的线不影响当前模式（没有线 = 未配置）", () => {
     const { resolved } = deriveLibraryParamCards({
       io,
+      mode: "T2I",
       paramMap: {
         source: { "mode:I2I": { [promptEntry.id]: "9::widget::text" } },
       },
-      mode: "T2I",
     });
     expect(resolved[promptEntry.id]).toBeUndefined();
   });
@@ -116,10 +116,10 @@ describe("deriveLibraryParamCards", () => {
   it("没有模式时不承认任何线（不存在脱离模式的线）", () => {
     const { resolved } = deriveLibraryParamCards({
       io,
+      mode: null,
       paramMap: {
         source: { "mode:T2I": { [promptEntry.id]: "9::widget::text" } },
       },
-      mode: null,
     });
     expect(resolved).toEqual({});
   });
@@ -127,6 +127,7 @@ describe("deriveLibraryParamCards", () => {
   it("ownersByPin 把每个被连上的行映到对外参数名", () => {
     const { ownersByPin } = deriveLibraryParamCards({
       io,
+      mode: "T2I",
       paramMap: {
         source: {
           "mode:T2I": {
@@ -135,7 +136,6 @@ describe("deriveLibraryParamCards", () => {
           },
         },
       },
-      mode: "T2I",
     });
     expect(ownersByPin["9::widget::text"]).toBe(promptEntry.label);
     expect(ownersByPin["5::widget::width"]).toBe(sizeEntry.label);
@@ -146,16 +146,16 @@ describe("deriveLibraryParamCards", () => {
   it("两个对外参数落到同一行时，徽标只归第一个条目（同一行不重复标）", () => {
     const { ownersByPin } = deriveLibraryParamCards({
       io,
+      mode: "T2I",
       paramMap: {
         source: {
           "mode:T2I": {
             /* 尺寸与提示词被作者都落到同一行 —— 只保留先出现的那个。 */
-            [sizeEntry.id]: "9::widget::text",
             [promptEntry.id]: "9::widget::text",
+            [sizeEntry.id]: "9::widget::text",
           },
         },
       },
-      mode: "T2I",
     });
     expect(ownersByPin["9::widget::text"]).toBe(promptEntry.label);
   });
@@ -173,13 +173,13 @@ describe("deriveLibraryParamCards", () => {
     };
     const withRename = deriveLibraryParamCards({
       io: renamedIO,
-      paramMap: wired,
       mode: "T2I",
+      paramMap: wired,
     });
     const plain = deriveLibraryParamCards({
       io,
-      paramMap: wired,
       mode: "T2I",
+      paramMap: wired,
     });
     /* 措辞取自契约表的展示名（「尺寸」在工坊里是组合控件，名字里带它的两类
      * 写法），这里按同一份取值断言，不写字面量 —— 话术调整不该改这条用例。 */
@@ -205,8 +205,8 @@ describe("deriveLibraryParamCards", () => {
     for (const bad of [{ source: [] }, { source: 1 }, [], null, undefined]) {
       const { resolved } = deriveLibraryParamCards({
         io,
-        paramMap: /* SAFETY: 类型断言已复核 */ bad as Record<string, unknown>,
         mode: "T2I",
+        paramMap: /* SAFETY: 类型断言已复核 */ bad as Record<string, unknown>,
       });
       expect(resolved).toEqual({});
     }
@@ -217,6 +217,7 @@ describe("deriveLibraryParamCards", () => {
      *  一个口一颗点、一条线 —— 线从哪张卡出发由 handle id（= 条目 id）说清。 */
     const { wires } = deriveLibraryParamCards({
       io,
+      mode: "T2I",
       paramMap: {
         source: {
           "mode:T2I": {
@@ -225,7 +226,6 @@ describe("deriveLibraryParamCards", () => {
           },
         },
       },
-      mode: "T2I",
     });
     expect(wires).toEqual(
       expect.arrayContaining([
@@ -233,15 +233,15 @@ describe("deriveLibraryParamCards", () => {
           entryId: promptEntry.id,
           targetIoKey: "9::widget::text",
           /* 线从**这张卡**出发：handle id = 条目 id（一卡一颗点，天然唯一）。 */
-          handleId: promptEntry.id,
           grouped: false,
+          handleId: promptEntry.id,
         },
         {
           entryId: sizeEntry.id,
           targetIoKey: "5::widget::width",
           /* 尺寸那张卡的行 = 形态，handle 就是**子口 id**（= 条目 id）。 */
-          handleId: sizeEntry.id,
           grouped: false,
+          handleId: sizeEntry.id,
         },
       ]),
     );
@@ -250,8 +250,8 @@ describe("deriveLibraryParamCards", () => {
   it("作者都没连的口子一条线都不画（圆点悬空即「未配置」）", () => {
     const { wires } = deriveLibraryParamCards({
       io,
-      paramMap: {},
       mode: "T2I",
+      paramMap: {},
     });
     expect(wires).toHaveLength(0);
   });
@@ -259,10 +259,10 @@ describe("deriveLibraryParamCards", () => {
   it("只有作者画过的口才留线（库里不画「猜出来的」线）", () => {
     const { wires } = deriveLibraryParamCards({
       io,
+      mode: "T2I",
       paramMap: {
         source: { "mode:T2I": { [promptEntry.id]: "9::widget::text" } },
       },
-      mode: "T2I",
     });
     expect(wires.find((w) => w.entryId === promptEntry.id)).toBeTruthy();
     expect(wires.some((w) => w.entryId === sizeEntry.id)).toBe(false);
@@ -271,8 +271,8 @@ describe("deriveLibraryParamCards", () => {
   it("未连接 / 显式断开不留线（圆点悬空本身就在说没连上）", () => {
     const { wires } = deriveLibraryParamCards({
       io,
-      paramMap: { source: { "mode:T2I": { [promptEntry.id]: null } } },
       mode: "T2I",
+      paramMap: { source: { "mode:T2I": { [promptEntry.id]: null } } },
     });
     expect(wires.some((w) => w.entryId === promptEntry.id)).toBe(false);
   });
@@ -280,10 +280,10 @@ describe("deriveLibraryParamCards", () => {
   it("别的模式的线不影响当前模式的连线", () => {
     const { wires } = deriveLibraryParamCards({
       io,
+      mode: "T2I",
       paramMap: {
         source: { "mode:I2I": { [promptEntry.id]: "9::widget::text" } },
       },
-      mode: "T2I",
     });
     expect(wires.some((w) => w.entryId === promptEntry.id)).toBe(false);
   });
@@ -291,8 +291,8 @@ describe("deriveLibraryParamCards", () => {
   it("工作流一个可落点端口都没有时也列出契约口（零候选 = 未配置）", () => {
     const { entries: derived, wires } = deriveLibraryParamCards({
       io: {},
-      paramMap: {},
       mode: "T2I",
+      paramMap: {},
     });
     expect(derived.map((entry) => entry.id)).toEqual([
       "prompt",
@@ -311,37 +311,37 @@ describe("deriveLibraryParamCards", () => {
      *  像素量那几行。 */
     const groupedIO: WorkflowIOMap = {
       "5::widget::aspect_ratio": {
+        defaultValue: "16:9",
         direction: "input",
         kind: "widget",
-        nodeId: "5",
         name: "aspect_ratio",
+        nodeId: "5",
         type: "COMBO",
-        defaultValue: "16:9",
       },
       "5::widget::megapixels": {
+        defaultValue: 1,
         direction: "input",
         kind: "widget",
-        nodeId: "5",
         name: "megapixels",
+        nodeId: "5",
         type: "FLOAT",
-        defaultValue: 1,
       },
       "5::widget::width": {
+        defaultValue: 1024,
         direction: "input",
         kind: "widget",
-        nodeId: "5",
         name: "width",
+        nodeId: "5",
         type: "INT",
-        defaultValue: 1024,
       },
     };
     const { wires } = deriveLibraryParamCards({
+      groupedKeys: new Set(Object.keys(groupedIO)),
       io: groupedIO,
+      mode: "T2I",
       paramMap: {
         source: { "mode:T2I": { "size-width": "5::widget::width" } },
       },
-      mode: "T2I",
-      groupedKeys: new Set(Object.keys(groupedIO)),
     });
     expect(wires.map((wire) => wire.targetIoKey)).toEqual(["5::widget::width"]);
     /* 尺寸那张卡的行 = 形态，圆点 handle 就是**子口 id**（卡片与边同一份算式）。 */
@@ -351,37 +351,37 @@ describe("deriveLibraryParamCards", () => {
   it("作者把子口连到某一行后：只留那一条", () => {
     const groupedIO: WorkflowIOMap = {
       "5::widget::aspect_ratio": {
+        defaultValue: "16:9",
         direction: "input",
         kind: "widget",
-        nodeId: "5",
         name: "aspect_ratio",
+        nodeId: "5",
         type: "COMBO",
-        defaultValue: "16:9",
       },
       "5::widget::megapixels": {
+        defaultValue: 1,
         direction: "input",
         kind: "widget",
-        nodeId: "5",
         name: "megapixels",
+        nodeId: "5",
         type: "FLOAT",
-        defaultValue: 1,
       },
       "5::widget::width": {
+        defaultValue: 1024,
         direction: "input",
         kind: "widget",
-        nodeId: "5",
         name: "width",
+        nodeId: "5",
         type: "INT",
-        defaultValue: 1024,
       },
     };
     const { wires } = deriveLibraryParamCards({
+      groupedKeys: new Set(Object.keys(groupedIO)),
       io: groupedIO,
+      mode: "T2I",
       paramMap: {
         source: { "mode:T2I": { "size-megapixels": "5::widget::megapixels" } },
       },
-      mode: "T2I",
-      groupedKeys: new Set(Object.keys(groupedIO)),
     });
     /* 子口只画它连的那一条（形态由子口身份声明）。 */
     expect(wires.map((wire) => wire.targetIoKey)).toEqual(["5::widget::megapixels"]);
@@ -396,10 +396,10 @@ describe("deriveLibraryParamCards — 画了线的圆点（wiredDotKeys）", () 
      *  批（都吃 text 族），handle id（= 条目 id）就是分得开它们的那个字段。 */
     const { wires } = deriveLibraryParamCards({
       io,
+      mode: "T2I",
       paramMap: {
         source: { "mode:T2I": { negative: "9::widget::text" } },
       },
-      mode: "T2I",
     });
     expect(wires.map((wire) => wire.handleId)).toEqual(["negative"]);
   });
@@ -409,8 +409,10 @@ describe("deriveLibraryParamCards — 画了线的圆点（wiredDotKeys）", () 
      *  「生效落点才实心」上色，带线的圆点看着反而是断的（ISSUE #355：「这里连线
      *  断开是什么原因」）。 */
     const groupedKeys = inferGroups(splitWorkflowIO(io).widgetInputs).groupedKeys;
-    const { wires, wiredDotKeys } = deriveLibraryParamCards({
+    const { wiredDotKeys, wires } = deriveLibraryParamCards({
+      groupedKeys,
       io,
+      mode: "T2I",
       paramMap: {
         source: {
           "mode:T2I": {
@@ -419,8 +421,6 @@ describe("deriveLibraryParamCards — 画了线的圆点（wiredDotKeys）", () 
           },
         },
       },
-      mode: "T2I",
-      groupedKeys,
     });
     expect(wires.length).toBeGreaterThan(0);
     for (const wire of wires) {
@@ -436,9 +436,9 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     "9::output::IMAGE": {
       direction: "output",
       kind: "output",
-      nodeId: "9",
-      name: "images",
       label: "images",
+      name: "images",
+      nodeId: "9",
       type: "IMAGE",
     },
     "9::widget::text": io["9::widget::text"]!,
@@ -450,7 +450,7 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
   });
 
   it("未连过就不画线（用户口径：编辑对外参数时「未连过就不要连」）", () => {
-    const { wires, resolved } = deriveLibraryOutputCards({ io: outIO });
+    const { resolved, wires } = deriveLibraryOutputCards({ io: outIO });
     /* 默认取值来源照旧算出来（卡片与运行期读 `resolved`），但画布上不画它 ——
      * 库里只剩下作者真连过的实线，不再有一条虚线占位。 */
     expect(resolved["9::output::IMAGE"]).toBe("9::output::IMAGE");
@@ -462,11 +462,11 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
       "9::output::IMAGE": { ...outIO["9::output::IMAGE"]!, displayOrder: 0 },
       "9::output::MASK": {
         direction: "output",
-        kind: "output",
-        nodeId: "9",
-        name: "mask",
-        type: "MASK",
         displayOrder: 1,
+        kind: "output",
+        name: "mask",
+        nodeId: "9",
+        type: "MASK",
       },
     };
     const base = deriveLibraryOutputCards({ io: two, mode: "T2I" });
@@ -476,31 +476,31 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
       "9::output::MASK": null,
     });
     const paramMap = applyOutputBindingEdit(null, {
-      outputIoKey: "9::output::MASK",
       ioKey: "9::output::IMAGE",
       mode: "T2I",
+      outputIoKey: "9::output::MASK",
     });
-    const moved = deriveLibraryOutputCards({ io: two, paramMap, mode: "T2I" });
+    const moved = deriveLibraryOutputCards({ io: two, mode: "T2I", paramMap });
     expect(moved.resolved["9::output::MASK"]).toBe("9::output::IMAGE");
     /* 作者改过的那一个口才画线（未连过的不画，见上一条用例）。 */
     expect(moved.wires.map((wire) => wire.entryId)).toEqual(["9::output::MASK"]);
     expect(moved.isManual("9::output::MASK")).toBe(true);
     /* 别的模式不受影响。 */
     expect(
-      deriveLibraryOutputCards({ io: two, paramMap, mode: "T2V" }).isManual("9::output::MASK"),
+      deriveLibraryOutputCards({ io: two, mode: "T2V", paramMap }).isManual("9::output::MASK"),
     ).toBe(false);
   });
 
   it("作者显式断开 → 不画线（悬空本身就在说「没接」）", () => {
     const paramMap = applyOutputBindingEdit(null, {
-      outputIoKey: "9::output::IMAGE",
       ioKey: null,
       mode: "T2I",
+      outputIoKey: "9::output::IMAGE",
     });
-    const { wires, resolved } = deriveLibraryOutputCards({
+    const { resolved, wires } = deriveLibraryOutputCards({
       io: outIO,
-      paramMap,
       mode: "T2I",
+      paramMap,
     });
     expect(resolved["9::output::IMAGE"]).toBeNull();
     expect(wires).toHaveLength(0);
@@ -515,21 +515,21 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
       "9::output::EMPTY": {
         direction: "output",
         kind: "output",
-        nodeId: "9",
-        name: "   ",
         label: "",
+        name: "   ",
+        nodeId: "9",
         type: "IMAGE",
       },
     };
     const paramMap = applyOutputBindingEdit(null, {
-      outputIoKey: "9::output::EMPTY",
       ioKey: "9::output::EMPTY",
       mode: "T2I",
+      outputIoKey: "9::output::EMPTY",
     });
     const { wires } = deriveLibraryOutputCards({
       io: nameless,
-      paramMap,
       mode: "T2I",
+      paramMap,
     });
     /* 锚点 = 输出的 ioKey（全图唯一、也就是落库键）—— 名字为空不影响它。 */
     expect(wires[0]!.handleId).toBe("9::output::EMPTY");
@@ -548,23 +548,23 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
 
 /** 「工作流里没有任何一行叫 negative」的典型 T2I 工作流。 */
 const negativeLessIo: WorkflowIOMap = {
-  "9::widget::text": {
+  "5::widget::width": {
+    defaultValue: 512,
     direction: "input",
     kind: "widget",
+    name: "width",
+    nodeId: "5",
+    type: "INT",
+  },
+  "9::widget::text": {
+    defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
+    direction: "input",
+    kind: "widget",
+    label: "文本",
+    name: "text",
     nodeId: "9",
     nodeTitle: "CLIP Text Encode",
-    name: "text",
-    label: "文本",
     type: "STRING",
-    defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
-  },
-  "5::widget::width": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "5",
-    name: "width",
-    type: "INT",
-    defaultValue: 512,
   },
 };
 
@@ -572,8 +572,8 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
   it("工作流判不出负向时，负向卡片照样在列，落点为空（未配置）", () => {
     const { entries, resolved } = deriveLibraryParamCards({
       io: negativeLessIo,
-      paramMap: {},
       mode: "T2I",
+      paramMap: {},
     });
     const negative = entries.find((entry) => entry.id === "negative");
     expect(negative).toBeDefined();
@@ -587,8 +587,8 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
   it("契约里根本没有可落点的端口时也照样显示契约口", () => {
     const { entries } = deriveLibraryParamCards({
       io: {},
-      paramMap: {},
       mode: "T2I",
+      paramMap: {},
     });
     expect(entries.map((entry) => entry.id)).toEqual([
       "prompt",
@@ -602,25 +602,25 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
     const named: WorkflowIOMap = {
       ...negativeLessIo,
       "77::widget::negative_prompt": {
+        defaultValue: "lowres",
         direction: "input",
         kind: "widget",
-        nodeId: "77",
         name: "negative_prompt",
+        nodeId: "77",
         type: "STRING",
-        defaultValue: "lowres",
       },
     };
     /* 没有线 → 未配置（哪怕工作流里就有个名字叫 negative_prompt 的口）。 */
     const unwired = deriveLibraryParamCards({
       io: named,
-      paramMap: {},
       mode: "T2I",
+      paramMap: {},
     });
     expect(unwired.resolved.negative).toBeUndefined();
     const manual = deriveLibraryParamCards({
       io: negativeLessIo,
-      paramMap: { source: { "mode:T2I": { negative: "9::widget::text" } } },
       mode: "T2I",
+      paramMap: { source: { "mode:T2I": { negative: "9::widget::text" } } },
     });
     expect(manual.resolved.negative).toBe("9::widget::text");
   });
@@ -631,8 +631,8 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
      *  读它等于让一个本应显示「未配置」的口凭空多出落点。 */
     const legacy = deriveLibraryParamCards({
       io: negativeLessIo,
-      paramMap: { source: { "mode:T2I": { "5|negative": "9::widget::text" } } },
       mode: "T2I",
+      paramMap: { source: { "mode:T2I": { "5|negative": "9::widget::text" } } },
     });
     expect(legacy.resolved.negative ?? null).toBeNull();
     const negative = legacy.entries.find((entry) => entry.id === "negative")!;
@@ -643,10 +643,10 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
   it("作者显式断开 → 未配置，不被自动落点复活", () => {
     const { resolved } = deriveLibraryParamCards({
       io: negativeLessIo,
+      mode: "T2I",
       paramMap: {
         source: { "mode:T2I": { negative: null } },
       },
-      mode: "T2I",
     });
     expect(resolved.negative ?? null).toBeNull();
   });
@@ -660,8 +660,8 @@ describe("deriveEncapsulationStatus — 与画布节点页签同一份契约口"
       await import("~/lib/workshop/workshop-encapsulation-status");
     const status = deriveEncapsulationStatus({
       io: negativeLessIo,
-      paramMap: {},
       mode: "T2I",
+      paramMap: {},
     });
     const ids = status.entries.map((entry) => entry.id);
     expect(ids).toContain("negative");
@@ -677,15 +677,15 @@ describe("deriveLibraryParamCards — 卡片列跟着「该模式生效的契约
   it("契约里删掉的口不再列出来（单图生视频去掉时长）", () => {
     const byDefault = deriveLibraryParamCards({
       io,
-      paramMap: {},
       mode: "I2V",
+      paramMap: {},
     }).entries.map((entry) => entry.id);
     expect(byDefault).toContain("duration");
     const byContract = deriveLibraryParamCards({
-      io,
-      paramMap: {},
-      mode: "I2V",
       contractIds: ["prompt", "first-frame", "size"],
+      io,
+      mode: "I2V",
+      paramMap: {},
     }).entries.map((entry) => entry.id);
     expect(byContract).not.toContain("duration");
     expect(byContract).not.toContain("negative");
@@ -693,10 +693,10 @@ describe("deriveLibraryParamCards — 卡片列跟着「该模式生效的契约
 
   it("契约里新增的口也会列出来", () => {
     const ids = deriveLibraryParamCards({
-      io,
-      paramMap: {},
-      mode: "T2I",
       contractIds: ["prompt", "reference-image", "size"],
+      io,
+      mode: "T2I",
+      paramMap: {},
     }).entries.map((entry) => entry.id);
     expect(ids).toContain("reference-image");
   });

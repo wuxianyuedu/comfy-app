@@ -200,7 +200,7 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
         }
         continue;
       }
-      current = { key, basePath: "", paths: [] };
+      current = { basePath: "", key, paths: [] };
       continue;
     }
 

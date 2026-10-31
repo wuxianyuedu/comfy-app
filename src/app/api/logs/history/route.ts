@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const rel = searchParams.get("file") ?? "";
     if (!rel) {
-      return NextResponse.json({ content: "", size: 0, error: "missing file" }, { status: 400 });
+      return NextResponse.json({ content: "", error: "missing file", size: 0 }, { status: 400 });
     }
 
     // 安全校验：只能读取 log/ 目录下的 .log 文件
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
      * 构建期 tracing，而那条链的表现是「构建期过、出厂件缺件」。 */
     const invalidOrMissing = () =>
       NextResponse.json(
-        { content: "", size: 0, error: "invalid or missing file" },
+        { content: "", error: "invalid or missing file", size: 0 },
         { status: 400 },
       );
     if (!full.startsWith(resolvedLogDir + path.sep) || !full.endsWith(".log")) {

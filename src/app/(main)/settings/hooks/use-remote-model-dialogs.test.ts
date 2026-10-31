@@ -15,8 +15,8 @@ import { useRemoteModelDialogs } from "./use-remote-model-dialogs";
 /** 只补本文件用得到的那几个字段，其余以类型断言绕过（接口很大，且与本案无关）。 */
 function makeController(over: Record<string, unknown> = {}) {
   return /* SAFETY: 类型断言已复核 */ {
-    saving: false,
     addRemoteModel: vi.fn(async () => ({ ok: true })),
+    saving: false,
     updateRemoteModel: vi.fn(async () => ({ ok: true })),
     ...over,
   } as unknown as ReadySettingsPageController;
@@ -27,10 +27,10 @@ function setup(over: Record<string, unknown> = {}) {
 }
 
 const formDefaults = /* SAFETY: 类型断言已复核 */ {
-  baseUrl: "",
   apiKey: "",
-  model: "",
+  baseUrl: "",
   kind: "chat",
+  model: "",
 } as const;
 
 describe("useRemoteModelDialogs —— 字段级校验出口", () => {
@@ -78,8 +78,8 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
 
   it("集合级「重名」错位到 model 字段，而不是只给横幅", async () => {
     const addRemoteModel = vi.fn(async () => ({
-      ok: false,
       error: "模型「gpt-4o」已在列表中",
+      ok: false,
     }));
     const { result } = setup({ addRemoteModel });
 
@@ -95,8 +95,8 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
 
   it("没有对应字段的集合级失败仍走横幅（不硬塞给某个输入框）", async () => {
     const addRemoteModel = vi.fn(async () => ({
-      ok: false,
       error: "配置未就绪，请稍后重试",
+      ok: false,
     }));
     const { result } = setup({ addRemoteModel });
 

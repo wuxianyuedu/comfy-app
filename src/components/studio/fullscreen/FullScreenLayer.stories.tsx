@@ -41,7 +41,7 @@ const Z_TOAST = zClass("toast");
 type StoryArgs = { zClass: string };
 
 /** 适配件：`zClass` 进 Args，正文由各 story 的 `render` 给。 */
-function LayerSample({ zClass: z, children }: StoryArgs & { children?: React.ReactNode }) {
+function LayerSample({ children, zClass: z }: StoryArgs & { children?: React.ReactNode }) {
   return (
     <FullScreenLayer className="bg-bg flex flex-col" zClass={z}>
       {children}
@@ -50,8 +50,6 @@ function LayerSample({ zClass: z, children }: StoryArgs & { children?: React.Rea
 }
 
 const meta = {
-  title: "Studio/FullScreenLayer",
-  component: LayerSample,
   args: { zClass: zClass("modal") },
   argTypes: {
     zClass: {
@@ -59,6 +57,8 @@ const meta = {
       options: [zClass("modal"), zClass("base")],
     },
   },
+  component: LayerSample,
+  title: "Studio/FullScreenLayer",
 } satisfies Meta<StoryArgs & { children?: React.ReactNode }>;
 
 export default meta;
@@ -76,8 +76,8 @@ type Story = StoryObj<typeof meta>;
  * 并显式说明它就是 `titleBarHeightPx()` 那一条。
  */
 function ChromeFrame({
-  showStatusBar = false,
   children,
+  showStatusBar = false,
 }: {
   children: React.ReactNode;
   showStatusBar?: boolean;
@@ -122,10 +122,10 @@ function ChromeFrame({
  * —— 要验的正是它们。视图自身布局仍由调用处给（`className`）。
  */
 function InContainer({
-  zClass: z,
-  chrome = "title",
   a11y,
   children,
+  chrome = "title",
+  zClass: z,
 }: {
   a11y?: {
     "aria-label"?: string;
@@ -163,9 +163,9 @@ export const MaskedPanel: Story = {
   render: (args) => (
     <InContainer
       a11y={{
-        role: "dialog",
-        "aria-modal": true,
         "aria-label": "系统消息中心",
+        "aria-modal": true,
+        role: "dialog",
       }}
       zClass={args.zClass}
     >

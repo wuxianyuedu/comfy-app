@@ -38,9 +38,9 @@ const WORKFLOW = "wf-1";
 
 function makeHandlers(): WorkflowRunHandlers {
   return {
-    onProgress: vi.fn(),
     onLog: vi.fn(),
     onOutput: vi.fn(),
+    onProgress: vi.fn(),
     onSettled: vi.fn(),
   };
 }
@@ -55,12 +55,12 @@ function register(over: {
   taskId?: string;
 }) {
   registerWorkflowRun({
+    source: over.source ?? "canvas-node",
+    startedAt: 1,
     taskId: over.taskId ?? "t1",
+    taskType: "t2i",
     workflowId: WORKFLOW,
     workflowName: "工作流",
-    taskType: "t2i",
-    startedAt: 1,
-    source: over.source ?? "canvas-node",
     ...(over.status ? { status: over.status } : {}),
     ...(over.progress === undefined ? {} : { progress: over.progress }),
     ...(over.resultUrl ? { resultUrl: over.resultUrl } : {}),
@@ -83,9 +83,9 @@ describe("useWorkflowRunResume", () => {
     const handlers = makeHandlers();
     renderHook(() =>
       useWorkflowRunResume({
-        workflowId: WORKFLOW,
-        source: "canvas-node",
         handlers,
+        source: "canvas-node",
+        workflowId: WORKFLOW,
       }),
     );
     expect(handlers.onProgress).not.toHaveBeenCalled();
@@ -94,18 +94,18 @@ describe("useWorkflowRunResume", () => {
   });
 
   it("已完成的运行：恢复产物 + 成功终态（此前只认「还在跑」，产物因此丢失）", () => {
-    register({ status: "done", resultUrl: "/api/generated/a.png" });
+    register({ resultUrl: "/api/generated/a.png", status: "done" });
     const handlers = makeHandlers();
     renderHook(() =>
       useWorkflowRunResume({
-        workflowId: WORKFLOW,
-        source: "canvas-node",
         handlers,
+        source: "canvas-node",
+        workflowId: WORKFLOW,
       }),
     );
     expect(handlers.onOutput).toHaveBeenCalledWith("t1", {
-      url: "/api/generated/a.png",
       kind: "image",
+      url: "/api/generated/a.png",
     });
     expect(handlers.onSettled).toHaveBeenCalledWith("t1", { ok: true });
     /* 已经结束的运行不该再订阅一次。 */
@@ -117,9 +117,9 @@ describe("useWorkflowRunResume", () => {
     const handlers = makeHandlers();
     renderHook(() =>
       useWorkflowRunResume({
-        workflowId: WORKFLOW,
-        source: "canvas-node",
         handlers,
+        source: "canvas-node",
+        workflowId: WORKFLOW,
       }),
     );
     expect(handlers.onOutput).not.toHaveBeenCalled();
@@ -127,29 +127,29 @@ describe("useWorkflowRunResume", () => {
   });
 
   it("失败的运行：恢复失败原因", () => {
-    register({ status: "failed", errorMessage: "显存不足" });
+    register({ errorMessage: "显存不足", status: "failed" });
     const handlers = makeHandlers();
     renderHook(() =>
       useWorkflowRunResume({
-        workflowId: WORKFLOW,
-        source: "canvas-node",
         handlers,
+        source: "canvas-node",
+        workflowId: WORKFLOW,
       }),
     );
     expect(handlers.onSettled).toHaveBeenCalledWith("t1", {
-      ok: false,
       message: "显存不足",
+      ok: false,
     });
   });
 
   it("还在跑：先把最后已知进度交出去，再重订阅 SSE（历史帧由服务端回放补齐）", () => {
-    register({ status: "running", progress: 42 });
+    register({ progress: 42, status: "running" });
     const handlers = makeHandlers();
     renderHook(() =>
       useWorkflowRunResume({
-        workflowId: WORKFLOW,
-        source: "canvas-node",
         handlers,
+        source: "canvas-node",
+        workflowId: WORKFLOW,
       }),
     );
     expect(handlers.onProgress).toHaveBeenCalledWith("t1", 42);
@@ -159,16 +159,16 @@ describe("useWorkflowRunResume", () => {
 
   it("只看本来源的运行：另一个入口的成果不落到这一页", () => {
     register({
+      resultUrl: "/a.png",
       source: "encapsulation-test",
       status: "done",
-      resultUrl: "/a.png",
     });
     const handlers = makeHandlers();
     renderHook(() =>
       useWorkflowRunResume({
-        workflowId: WORKFLOW,
-        source: "canvas-node",
         handlers,
+        source: "canvas-node",
+        workflowId: WORKFLOW,
       }),
     );
     expect(handlers.onSettled).not.toHaveBeenCalled();
@@ -176,14 +176,14 @@ describe("useWorkflowRunResume", () => {
   });
 
   it("恢复出的订阅回调转发给**最新**的 handlers（不被首帧闭包钉死）", () => {
-    register({ status: "running", progress: 1 });
+    register({ progress: 1, status: "running" });
     const first = makeHandlers();
     const { rerender } = renderHook(
       ({ handlers }: { handlers: WorkflowRunHandlers }) =>
         useWorkflowRunResume({
-          workflowId: WORKFLOW,
-          source: "canvas-node",
           handlers,
+          source: "canvas-node",
+          workflowId: WORKFLOW,
         }),
       { initialProps: { handlers: first } },
     );
@@ -206,7 +206,7 @@ describe("watchWorkflowRun", () => {
     captured.onProgress?.(55);
     expect(getWorkflowRun("t1")?.progress).toBe(55);
 
-    captured.onOutput?.({ url: "/api/generated/a.png", kind: "image" });
+    captured.onOutput?.({ kind: "image", url: "/api/generated/a.png" });
     expect(getWorkflowRun("t1")?.resultUrl).toBe("/api/generated/a.png");
 
     captured.onSettled({ ok: true });
@@ -217,7 +217,7 @@ describe("watchWorkflowRun", () => {
     register({ status: "running" });
     watchWorkflowRun("t1", makeHandlers());
     const captured = vi.mocked(watchTask).mock.calls[0]![1];
-    captured.onOutput?.({ url: "/a.mp4", kind: "video" });
+    captured.onOutput?.({ kind: "video", url: "/a.mp4" });
     expect(getWorkflowRun("t1")?.resultUrl).toBeUndefined();
   });
 
@@ -225,7 +225,7 @@ describe("watchWorkflowRun", () => {
     register({ status: "running" });
     watchWorkflowRun("t1", makeHandlers());
     const captured = vi.mocked(watchTask).mock.calls[0]![1];
-    captured.onSettled({ ok: false, message: "显存不足" });
+    captured.onSettled({ message: "显存不足", ok: false });
 
     const run = getWorkflowRun("t1");
     expect(run?.status).toBe("failed");
@@ -241,9 +241,9 @@ describe("watchWorkflowRun", () => {
     watchWorkflowRun("t1", handlers);
     const captured = vi.mocked(watchTask).mock.calls[0]![1];
     const entry = {
-      t: 1,
       level: /* SAFETY: 类型断言已复核 */ "info" as const,
       msg: "开始",
+      t: 1,
     };
     captured.onLog?.(entry);
     expect(handlers.onLog).toHaveBeenCalledWith("t1", entry);

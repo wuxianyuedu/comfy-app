@@ -20,10 +20,10 @@ type Level = StepLogEntry["level"];
  * info→info。token 内部含深浅两态，不再写 dark:。 */
 const LEVEL_STYLES: Record<Level, string> = {
   error: "border-destructive/20 bg-destructive/15 text-destructive",
-  warn: "border-warning/20 bg-warning/15 text-warning-strong",
-  success: "border-success/20 bg-success/15 text-success-strong",
-  progress: "border-primary/20 bg-primary/15 text-primary-strong",
   info: "border-info/20 bg-info/15 text-info-strong",
+  progress: "border-primary/20 bg-primary/15 text-primary-strong",
+  success: "border-success/20 bg-success/15 text-success-strong",
+  warn: "border-warning/20 bg-warning/15 text-warning-strong",
 };
 
 function levelLabel(level: Level): string {

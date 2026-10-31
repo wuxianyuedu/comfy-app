@@ -54,12 +54,12 @@ export type LogCategoryState = {
 
 export const useLogCategoryStore = create<LogCategoryState>((set, get) => ({
   enabled: readEnabled(),
+  isEnabled: (category) => get().enabled[category] !== false,
   setEnabled: (category, value) => {
     set((state) => ({ enabled: { ...state.enabled, [category]: value } }));
     // 记忆是增强不是功能：写失败（隐私模式 / 配额满）仅内存态生效。
     writeStorageJson(STORAGE_KEY, get().enabled);
   },
-  isEnabled: (category) => get().enabled[category] !== false,
 }));
 
 /**

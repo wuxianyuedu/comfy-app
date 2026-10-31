@@ -31,13 +31,11 @@ type StoryArgs = {
 };
 
 /** 适配件：`width` 进 Args，正文由各 story 的 `render` 给。 */
-function FrameSample({ width, children }: StoryArgs & { children?: React.ReactNode }) {
+function FrameSample({ children, width }: StoryArgs & { children?: React.ReactNode }) {
   return <DocumentFrame width={width}>{children}</DocumentFrame>;
 }
 
 const meta = {
-  title: "Studio/ViewContainer",
-  component: FrameSample,
   args: { width: "wide" },
   argTypes: {
     width: {
@@ -45,6 +43,8 @@ const meta = {
       options: ["narrow", "medium", "wide", "full"],
     },
   },
+  component: FrameSample,
+  title: "Studio/ViewContainer",
 } satisfies Meta<StoryArgs & { children?: React.ReactNode }>;
 
 export default meta;
@@ -70,7 +70,7 @@ function Body({ rows = 24 }: { rows?: number }) {
 /** 演示用的外框。宽度可调 —— 宽度档位**只有在比最窄的档还宽的框里才看得出区别**：
  * 钉死 `w-160`（640px）时四个档位长得一模一样，story 说什么都行（这正是「文档写着
  * 四档、实现只有三档」长期没人发现的原因）。 */
-function Shell({ wide = false, children }: { children: React.ReactNode; wide?: boolean }) {
+function Shell({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
   return (
     <div
       className={cn(

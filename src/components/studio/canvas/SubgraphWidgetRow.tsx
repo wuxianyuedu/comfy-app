@@ -27,7 +27,7 @@ type SubgraphWidgetRowProps = {
   nodeId: string;
 };
 
-export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: SubgraphWidgetRowProps) {
+export function SubgraphWidgetRow({ hostNodeId, inp, io, label, nodeId }: SubgraphWidgetRowProps) {
   const v: unknown = inp.widgetValue;
   const isConn = inp.isConnection === true || inp.isBoundary === true;
   /* 图片类 widget（IMAGE / MASK / IMAGEUPLOAD）：画布上也要把选中的图
@@ -44,9 +44,9 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
       data-sub-widget-name={inp.name}
       data-sub-widget-value={String(v)}
       style={{
+        alignItems: "center",
         gridColumn: "1 / -1",
         gridTemplateColumns: "subgrid",
-        alignItems: "center",
       }}
     >
       {isConn && (
@@ -56,9 +56,9 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
           isConnectable={false}
           position={Position.Left}
           style={{
-            left: 5,
             background: typeCol,
             boxShadow: `0 0 6px ${typeCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
+            left: 5,
           }}
           title={`${label} (${inp.type})`}
           type="target"
@@ -72,11 +72,11 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
           <IoCheckbox
             io={io}
             ioRef={{
-              nodeId: String(nodeId),
-              hostNodeId,
-              name: inp.name,
-              kind: "widget",
               direction: "input",
+              hostNodeId,
+              kind: "widget",
+              name: inp.name,
+              nodeId: String(nodeId),
             }}
           />
         )}
@@ -135,12 +135,12 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
              *  余宽伸展），文本左对齐，超长省略（只缩略文字，
              *  节点宽度仍由用户控制）。颜色按「有没有连线」
              *  取两档（见 `valueCellColor`）。 */
-            display: "flex",
             alignItems: "center",
-            minHeight: 18,
             background: "var(--color-canvas-deep)",
             border: "1px solid var(--color-border-subtle)",
             color: valueCellColor(v, isConn),
+            display: "flex",
+            minHeight: 18,
           }}
           title={String(v)}
         >

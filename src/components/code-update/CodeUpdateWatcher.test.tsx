@@ -16,13 +16,13 @@ import {
 const toastInfo = vi.hoisted(() => vi.fn());
 vi.mock("~/components/studio/ToastProvider", () => ({
   useToast: () => ({
-    toast: vi.fn(),
-    success: vi.fn(),
+    dismiss: vi.fn(),
     error: vi.fn(),
     info: toastInfo,
     loading: vi.fn(),
+    success: vi.fn(),
+    toast: vi.fn(),
     update: vi.fn(),
-    dismiss: vi.fn(),
   }),
 }));
 // 观测器本身另有独立用例；这里把它换成空实现，只测「送达」这一段。
@@ -32,7 +32,7 @@ vi.mock("./hooks/use-code-update-watch", () => ({
 
 beforeEach(() => {
   resetStaleStoreNotify();
-  useMessageCenterStore.setState({ open: false, messages: [] });
+  useMessageCenterStore.setState({ messages: [], open: false });
 });
 
 afterEach(() => {

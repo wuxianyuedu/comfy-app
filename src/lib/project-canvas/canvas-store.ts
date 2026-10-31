@@ -104,10 +104,10 @@ function persistProjectToServer(p: CanvasProject): void {
   fireAndForget(
     vanillaApi.project.upsert
       .mutate({
+        edges: p.edges ?? [],
         id: p.id,
         name: p.name,
         nodes: p.nodes ?? [],
-        edges: p.edges ?? [],
       })
       /* 成功要把之前的拒收记录撤掉：用户照着提示把名字改对之后，
        * 旧提示继续留在界面上等于制造第二条假故障。 */
@@ -199,11 +199,11 @@ export async function fetchServerProjects(): Promise<Array<ServerProjectRow>> {
 /** 把一行服务端记录归一成本地索引用的 `CanvasProject`。 */
 function toCanvasProject(row: ServerProjectRow): CanvasProject {
   return {
+    edges: /* SAFETY: 类型断言已复核 */ (row.edges as CanvasProject["edges"]) ?? [],
     id: row.id,
     name: row.name,
-    updatedAt: new Date(row.updatedAt).getTime(),
     nodes: /* SAFETY: 类型断言已复核 */ (row.nodes as CanvasProject["nodes"]) ?? [],
-    edges: /* SAFETY: 类型断言已复核 */ (row.edges as CanvasProject["edges"]) ?? [],
+    updatedAt: new Date(row.updatedAt).getTime(),
   };
 }
 
@@ -381,11 +381,11 @@ export function findNextAvailableName(base: string, excludeId?: string): string 
 
 export function createProject(name?: string): CanvasProject {
   const p: CanvasProject = {
+    edges: [],
     id: `proj_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     name: findNextAvailableName(name?.trim() ?? EMPTY_DRAFT_NAME),
-    updatedAt: Date.now(),
     nodes: [],
-    edges: [],
+    updatedAt: Date.now(),
   };
   upsertProject(p);
   setActive(p.id);
@@ -407,11 +407,11 @@ export function createProject(name?: string): CanvasProject {
  */
 export function createDraftProject(name?: string): CanvasProject {
   const p: CanvasProject = {
+    edges: [],
     id: `proj_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     name: findNextAvailableName(name?.trim() ?? EMPTY_DRAFT_NAME),
-    updatedAt: Date.now(),
     nodes: [],
-    edges: [],
+    updatedAt: Date.now(),
   };
   setActive(p.id);
   emitChanged(); // so homepage re-reads the (unchanged) index
@@ -571,8 +571,8 @@ export async function listProjectsWithServer(): Promise<{
   for (const project of localAll) {
     byId.set(project.id, {
       ...project,
-      nodes: project.nodes ?? [],
       edges: project.edges ?? [],
+      nodes: project.nodes ?? [],
       origin: "local",
     });
   }
@@ -636,11 +636,11 @@ export function deleteProjectEverywhere(id: string, name?: string): void {
     removeStorageItem(ACTIVE_KEY);
   }
   deleteProjectOnServer({
+    edges: [],
     id,
     name: name ?? "",
-    updatedAt: Date.now(),
     nodes: [],
-    edges: [],
+    updatedAt: Date.now(),
   });
   emitChanged();
 }

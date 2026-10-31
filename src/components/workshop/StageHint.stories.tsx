@@ -11,12 +11,12 @@ import { StageHint } from "~/components/workshop/StageHint";
  * 两条并排放着看，下次想省一个文件把按钮改回「去完成」时能先看见代价。
  */
 const meta = {
-  title: "Workshop/StageHint",
-  component: StageHint,
   args: {
-    text: "还没有角色卡 —— 先生成角色卡，镜头生图才能带入人物一致性。",
     onGo: () => undefined,
+    text: "还没有角色卡 —— 先生成角色卡，镜头生图才能带入人物一致性。",
   },
+  component: StageHint,
+  title: "Workshop/StageHint",
 } satisfies Meta<typeof StageHint>;
 
 export default meta;

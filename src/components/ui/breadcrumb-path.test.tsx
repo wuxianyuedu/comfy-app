@@ -15,9 +15,9 @@ afterEach(cleanup);
  * 这里逐条钉住接管后的语义与交互契约：中间段可点、末段不可点。
  */
 const SEGMENTS = [
-  { label: "参考素材", key: null },
-  { label: "角色参考", key: "characters" },
-  { label: "小夜", key: null },
+  { key: null, label: "参考素材" },
+  { key: "characters", label: "角色参考" },
+  { key: null, label: "小夜" },
 ];
 
 describe("BreadcrumbPath", () => {

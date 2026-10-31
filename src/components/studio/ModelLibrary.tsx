@@ -215,8 +215,8 @@ function ModelList({ items }: { items: Array<ModelRow> }) {
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: items.length,
-    getScrollElement: () => scrollEl,
     estimateSize: () => MODEL_ROW_H,
+    getScrollElement: () => scrollEl,
     overscan: 12,
   });
   const measured = (scrollEl?.clientHeight ?? 0) > 0;
@@ -247,12 +247,12 @@ function ModelList({ items }: { items: Array<ModelRow> }) {
                 key={vi.key}
                 model={m}
                 style={{
+                  height: vi.size,
+                  left: 0,
                   position: "absolute",
                   top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: vi.size,
                   transform: `translateY(${vi.start}px)`,
+                  width: "100%",
                 }}
               />
             );
@@ -268,8 +268,8 @@ function ModelList({ items }: { items: Array<ModelRow> }) {
 }
 
 function ModelRowLine({
-  model,
   isLast,
+  model,
   style,
 }: {
   isLast: boolean;
@@ -486,10 +486,10 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
  * 说明。
  */
 function FolderConfigRow({
-  row,
-  onToggle,
   onAdd,
   onDelete,
+  onToggle,
+  row,
 }: {
   onAdd: (folder: string) => void;
   onDelete: (folder: string) => void;

@@ -46,8 +46,8 @@ function state(
   const built = tabs.map(([view, projectId]) => makeTab(view, projectId));
   const activeTab = makeTab(active[0], active[1]);
   return {
-    tabs: built.filter((tab): tab is NonNullable<typeof tab> => tab !== null),
     activeKey: activeTab?.key ?? homeTab().key,
+    tabs: built.filter((tab): tab is NonNullable<typeof tab> => tab !== null),
   };
 }
 
@@ -228,7 +228,7 @@ describe("项目消失后的页签", () => {
   it("当前页正是被关掉的页时落回首页", () => {
     let s = openViewTab(initialWorkspaceTabs(), "workshop", "p1");
     s = openViewTab(s, "queue", null);
-    const after = dropProjectTabs({ tabs: s.tabs, activeKey: tabKey("workshop", "p1") }, "p1");
+    const after = dropProjectTabs({ activeKey: tabKey("workshop", "p1"), tabs: s.tabs }, "p1");
     expect(after.activeKey).toBe(tabKey("home", null));
   });
 

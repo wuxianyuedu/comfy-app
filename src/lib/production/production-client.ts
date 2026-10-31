@@ -31,9 +31,9 @@ export async function pushProduction(projectId: string, payload: ProductionPaylo
   }
   try {
     await fetch("/api/production", {
-      method: "PUT",
+      body: JSON.stringify({ production: payload, project: projectId }),
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project: projectId, production: payload }),
+      method: "PUT",
     });
   } catch {
     /* 网络/服务不可用时静默降级：localStorage 仍是即时缓存 */

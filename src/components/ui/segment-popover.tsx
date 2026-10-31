@@ -46,7 +46,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 
 /** 用小矩形直观呈现宽高比。 */
-export function RatioIcon({ ratio, className = "" }: { className?: string; ratio: number }) {
+export function RatioIcon({ className = "", ratio }: { className?: string; ratio: number }) {
   const MAX = 18;
   const width = ratio >= 1 ? MAX : Math.max(4, Math.round(MAX * ratio));
   const height = ratio >= 1 ? Math.max(4, Math.round(MAX / ratio)) : MAX;
@@ -54,7 +54,7 @@ export function RatioIcon({ ratio, className = "" }: { className?: string; ratio
     <span
       aria-hidden
       className={`inline-block rounded-xs border-[1.5px] border-current ${className}`}
-      style={{ width: `${width}px`, height: `${height}px` }}
+      style={{ height: `${height}px`, width: `${width}px` }}
     />
   );
 }
@@ -109,12 +109,12 @@ const ITEM_CLASS =
   "nodrag nopan h-auto min-w-13 flex-col gap-1 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-2xs font-normal text-ink-muted hover:bg-subtle hover:text-ink-bright data-pressed:bg-primary/20 data-pressed:text-ink-bright data-pressed:ring-1 data-pressed:ring-primary/55 data-pressed:hover:bg-primary/20";
 
 export function MultiSegmentPopover({
-  triggerContent,
-  sections,
   align = "left",
   ariaLabel,
-  footer,
   disabled,
+  footer,
+  sections,
+  triggerContent,
 }: {
   align?: "left" | "right";
   ariaLabel?: string;
@@ -169,8 +169,8 @@ export function MultiSegmentPopover({
  *  此前的内联 `.map` 会在 CreatePanel 每敲一次键时重建 Map 与数组；
  *  叠加 `onChange` 回调每次重建，切换预设会感到发黏。 */
 const Section = React.memo(function Section({
-  section,
   first,
+  section,
 }: {
   first: boolean;
   section: SegmentSection<string>;

@@ -23,8 +23,8 @@ import type { TaskDetail } from "./history-types";
 function makeDetail(params: unknown, extra: Partial<TaskDetail> = {}): TaskDetail {
   return /* SAFETY: 类型断言已复核 */ {
     id: "t-1",
-    params,
     images: [],
+    params,
     ...extra,
   } as unknown as TaskDetail;
 }
@@ -36,8 +36,8 @@ function io(...entries: Array<[nodeId: string, name: string, label?: string]>): 
     map[`${nodeId}::widget::${name}`] = {
       direction: "input",
       kind: "widget",
-      nodeId,
       name,
+      nodeId,
       ...(label ? { label } : {}),
     };
   }
@@ -62,7 +62,7 @@ describe("taskWorkflowId", () => {
 
 describe("deriveTaskOrigin", () => {
   it("工坊发起：顶层带对外值（提示词 / 反向 / 首尾帧 / 帧数）", () => {
-    expect(deriveTaskOrigin(makeDetail({ workflow: "w", prompt: "少女" }))).toBe("workshop");
+    expect(deriveTaskOrigin(makeDetail({ prompt: "少女", workflow: "w" }))).toBe("workshop");
     expect(deriveTaskOrigin(makeDetail({ frames: 81 }))).toBe("workshop");
     expect(deriveTaskOrigin(makeDetail({ firstFrame: "a.png" }))).toBe("workshop");
   });
@@ -72,27 +72,27 @@ describe("deriveTaskOrigin", () => {
       deriveTaskOrigin(
         makeDetail({
           workflow: "w",
-          workflowInputs: [{ nodeId: "3", name: "text", value: "x" }],
+          workflowInputs: [{ name: "text", nodeId: "3", value: "x" }],
         }),
       ),
     ).toBe("workflow");
-    expect(deriveTaskOrigin(makeDetail({ workflow: "w", projectId: "p-1" }))).toBe("workflow");
+    expect(deriveTaskOrigin(makeDetail({ projectId: "p-1", workflow: "w" }))).toBe("workflow");
   });
 
   it("空白值不算「有」（空串 / null 不会把任务误判成工坊）", () => {
-    expect(deriveTaskOrigin(makeDetail({ prompt: "", negative: null }))).toBe("workflow");
+    expect(deriveTaskOrigin(makeDetail({ negative: null, prompt: "" }))).toBe("workflow");
   });
 });
 
 describe("deriveWorkshopParams", () => {
   it("T2I：按契约列出提示词 / 负向提示词 / 尺寸 / 种子四个口（空值也占位）", () => {
     const detail = makeDetail({
-      workflow: "w",
       prompt: "少女",
+      workflow: "w",
       workflowInputs: [
-        { nodeId: "23", name: "aspect_ratio", value: "3:4" },
-        { nodeId: "24", name: "megapixels", value: 1 },
-        { nodeId: "25", name: "multiple", value: 64 },
+        { name: "aspect_ratio", nodeId: "23", value: "3:4" },
+        { name: "megapixels", nodeId: "24", value: 1 },
+        { name: "multiple", nodeId: "25", value: 64 },
       ],
     });
     const rows = deriveWorkshopParams(detail, "T2I", null, null);
@@ -107,7 +107,7 @@ describe("deriveWorkshopParams", () => {
 
   it("负向提示词有值时如实显示", () => {
     const rows = deriveWorkshopParams(
-      makeDetail({ prompt: "a", negative: "blurry" }),
+      makeDetail({ negative: "blurry", prompt: "a" }),
       "T2I",
       null,
       null,
@@ -117,7 +117,7 @@ describe("deriveWorkshopParams", () => {
 
   it("用户改过的模式契约优先于内置默认", () => {
     const contracts = /* SAFETY: 类型断言已复核 */ [
-      { mode: "T2I", inputs: ["prompt", "size"], output: "image" },
+      { inputs: ["prompt", "size"], mode: "T2I", output: "image" },
     ] as unknown as Parameters<typeof deriveWorkshopParams>[2];
     const rows = deriveWorkshopParams(makeDetail({ prompt: "x" }), "T2I", contracts, null);
     expect(rows.map((r) => r.id)).toEqual(["prompt", "size"]);
@@ -133,7 +133,7 @@ describe("resolveParamLabel", () => {
   it("按 nodeId::widget::name 精确命中作者标签", () => {
     expect(
       resolveParamLabel(
-        { nodeId: "23", name: "aspect_ratio" },
+        { name: "aspect_ratio", nodeId: "23" },
         io(["23", "aspect_ratio", "宽高比"]),
       ),
     ).toBe("宽高比");
@@ -142,7 +142,7 @@ describe("resolveParamLabel", () => {
   it("节点 id 对不上时按 pin 名找（子图里用的是 host:inner 形态）", () => {
     expect(
       resolveParamLabel(
-        { nodeId: "5:23", name: "aspect_ratio" },
+        { name: "aspect_ratio", nodeId: "5:23" },
         io(["23", "aspect_ratio", "宽高比"]),
       ),
     ).toBe("宽高比");
@@ -150,10 +150,10 @@ describe("resolveParamLabel", () => {
 
   it("查不到标签 / 没有 IO 表时如实回落 pin 名（不编）", () => {
     expect(
-      resolveParamLabel({ nodeId: "23", name: "text" }, io(["23", "aspect_ratio", "宽高比"])),
+      resolveParamLabel({ name: "text", nodeId: "23" }, io(["23", "aspect_ratio", "宽高比"])),
     ).toBe("text");
     expect(resolveParamLabel({ name: "text" }, null)).toBe("text");
-    expect(resolveParamLabel({ nodeId: "23", name: "text" }, io(["23", "text"]))).toBe("text");
+    expect(resolveParamLabel({ name: "text", nodeId: "23" }, io(["23", "text"]))).toBe("text");
   });
 });
 
@@ -161,8 +161,8 @@ describe("deriveWorkflowParams", () => {
   it("展示名走作者标签，pin 名留在 name 里（悬停提示要用）", () => {
     const detail = makeDetail({
       workflowInputs: [
-        { nodeId: "23", name: "aspect_ratio", value: "3:4" },
-        { nodeId: "7", name: "text", value: "少女" },
+        { name: "aspect_ratio", nodeId: "23", value: "3:4" },
+        { name: "text", nodeId: "7", value: "少女" },
       ],
     });
     const { rows } = deriveWorkflowParams(detail, io(["23", "aspect_ratio", "宽高比"]));
@@ -173,8 +173,8 @@ describe("deriveWorkflowParams", () => {
   it("不再过滤 seed / steps 这类键（过滤是为了躲开已删除的生成参数卡）", () => {
     const detail = makeDetail({
       workflowInputs: [
-        { nodeId: "3", name: "seed", value: 317185474948100 },
-        { nodeId: "4", name: "prefix", value: "a photo of" },
+        { name: "seed", nodeId: "3", value: 317185474948100 },
+        { name: "prefix", nodeId: "4", value: "a photo of" },
       ],
     });
     expect(deriveWorkflowParams(detail, null).rows.map((row) => row.name)).toEqual([

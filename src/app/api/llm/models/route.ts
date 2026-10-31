@@ -35,15 +35,15 @@ export async function GET(req: NextRequest) {
   // 仅远端探测按所选模型解析独立连接参数；本地候选没有独立 baseUrl，传 model
   // 反而可能误命中同名的远端条目，故本地一律不带 model。
   const cfg = await getLLMConfig({
-    provider,
     model: provider === "remote" && model ? model : undefined,
+    provider,
   });
 
   if (!cfg.baseUrl) {
     return NextResponse.json({
-      ok: false,
-      models: [],
       detail: "尚未配置接口地址，请先在「LLM 设置」中保存 Base URL",
+      models: [],
+      ok: false,
     });
   }
 
@@ -75,9 +75,9 @@ export async function GET(req: NextRequest) {
                 .filter((n) => n !== "")
             : [];
           return NextResponse.json({
-            ok: true,
-            models,
             detail: `共 ${models.length} 个本地模型`,
+            models,
+            ok: true,
           });
         }
       } catch {
@@ -88,13 +88,13 @@ export async function GET(req: NextRequest) {
     res = await probe(cfg.baseUrl);
     if (!res.ok) {
       const snippet = clampText(await res.text().catch(() => ""), {
-        maxLength: INLINE_SNIPPET_MAX,
         marker: "",
+        maxLength: INLINE_SNIPPET_MAX,
       });
       return NextResponse.json({
-        ok: false,
-        models: [],
         detail: `HTTP ${res.status}${snippet ? `：${snippet}` : ""}`,
+        models: [],
+        ok: false,
       });
     }
     const parsed: unknown = await res.json();
@@ -115,17 +115,17 @@ export async function GET(req: NextRequest) {
           .filter((n) => n !== "")
       : [];
     return NextResponse.json({
-      ok: true,
-      models,
       detail: `共 ${models.length} 个模型`,
+      models,
+      ok: true,
     });
   } catch (e) {
     // 网络层 TypeError（如 fetch failed / ECONNREFUSED）翻译成可操作的人话，
     // 避免用户在工坊只看到一句生硬的 `fetch failed`。
     return NextResponse.json({
-      ok: false,
-      models: [],
       detail: describeFetchFailure(e, cfg),
+      models: [],
+      ok: false,
     });
   }
 }

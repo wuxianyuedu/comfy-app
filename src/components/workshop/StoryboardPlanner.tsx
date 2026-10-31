@@ -9,32 +9,32 @@ import { useStoryboardPlanner, type Props } from "./useStoryboardPlanner";
 import { ShotRow } from "./StoryboardPlanner.parts";
 
 export function StoryboardPlanner(props: Props) {
-  const { shots, scenes, characters, styles, onGenerate, generating, progressByShot } = props;
+  const { characters, generating, onGenerate, progressByShot, scenes, shots, styles } = props;
   const planner = useStoryboardPlanner(props);
   const {
     aiBusy,
-    aiProgress,
     aiError,
+    aiProgress,
+    clearShots,
     config,
-    extractChannelValue,
-    setExtractChannelValue,
     extractBusy,
-    extractProgress,
-    extractStatus,
+    extractChannelValue,
     extractError,
     extractionLog,
-    hasScript,
+    extractProgress,
+    extractStatus,
+    generateAll,
+    handleAISplit,
     handleExtract,
     handleImportFile,
+    hasScript,
     importFromScript,
-    handleAISplit,
-    clearShots,
-    generateAll,
-    polishIsBusy,
+    polishAll,
     polishAnyBusy,
     polishBusyAll,
+    polishIsBusy,
     polishOne,
-    polishAll,
+    setExtractChannelValue,
   } = planner;
 
   const idleCount = shots.filter(

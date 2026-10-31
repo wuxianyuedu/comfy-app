@@ -192,5 +192,5 @@ export function chunkRange(totalItems: number, size: number, index: number): Chu
   const total = Math.max(1, Math.ceil(count / s));
   const i = clamp(normalizeIndex(index, 0), 0, total - 1);
   const start = i * s;
-  return { start, end: Math.min(count, start + s), total };
+  return { end: Math.min(count, start + s), start, total };
 }

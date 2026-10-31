@@ -43,34 +43,34 @@ export const PORT_ROLES: Array<{
   label: string;
 }> = [
   {
+    bg: "rgba(167,139,250,0.15)",
+    color: "#a78bfa",
     key: "positiveNode",
     label: "正向提示词",
-    color: "#a78bfa",
-    bg: "rgba(167,139,250,0.15)",
   },
   {
+    bg: "rgba(248,113,113,0.15)",
+    color: "#f87171",
     key: "negativeNode",
     label: "反向提示词",
-    color: "#f87171",
-    bg: "rgba(248,113,113,0.15)",
   },
   {
+    bg: "rgba(96,165,250,0.15)",
+    color: "#60a5fa",
     key: "checkpointNode",
     label: "模型(Checkpoint)",
-    color: "#60a5fa",
-    bg: "rgba(96,165,250,0.15)",
   },
   {
+    bg: "rgba(251,146,60,0.15)",
+    color: "#fb923c",
     key: "samplerNode",
     label: "采样器",
-    color: "#fb923c",
-    bg: "rgba(251,146,60,0.15)",
   },
   {
+    bg: "rgba(34,211,238,0.15)",
+    color: "#22d3ee",
     key: "inputImageNode",
     label: "输入图像",
-    color: "#22d3ee",
-    bg: "rgba(34,211,238,0.15)",
   },
 ];
 
@@ -148,9 +148,9 @@ export const FlowNode = React.memo(function FlowNode({
         // 宽度在有 ComfyUI 保存的 `size.w` 时跟随它；高度交给
         // 内容驱动（`auto`），卡片随端口 / widget 长高，
         // 折叠时缩回标题栏高度。
-        width: hasSize ? data.size?.w : undefined,
         height: "auto",
         minWidth: hasSize ? data.size?.w : entries.outputs.length > 0 ? 268 : 248,
+        width: hasSize ? data.size?.w : undefined,
         // data.size.h 是**卡片体内容**高度；外层 div 还包含
         // 钉住的 NODE_TITLE_H 标题栏，所以下限是内容 + 标题。
         minHeight: isCollapsed
@@ -163,8 +163,8 @@ export const FlowNode = React.memo(function FlowNode({
         // 模式（旁路 / 停用）节点经 <FrostLayer> + 真实模糊着色，所以
         // 根节点透明（isolation 把磨砂限制在本节点内）。
         // 普通节点保留实心面板。
-        isolation: "isolate",
         background: palette.modeColor ? "transparent" : palette.nodeBg,
+        isolation: "isolate",
         outline: selected ? "2px solid rgba(56,189,248,0.9)" : "none",
         outlineOffset: selected ? "2px" : undefined,
       }}

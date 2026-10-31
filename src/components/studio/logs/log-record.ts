@@ -145,8 +145,8 @@ export function splitLogRecords(
     const text = lines.join("\n");
     records.push({
       head,
-      text,
       rest: lines.length > 1 ? text.slice(head.length + 1) : "",
+      text,
     });
     head = "";
     lines = [];

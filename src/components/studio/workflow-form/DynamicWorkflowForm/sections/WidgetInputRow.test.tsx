@@ -9,14 +9,14 @@ afterEach(cleanup);
 /** LoadImage 上传位（ComfyUI 自定义 frontend 类型 IMAGEUPLOAD）。 */
 function uploadPin(over: Partial<EnrichedWidget> = {}): EnrichedWidget {
   return {
-    direction: "input",
-    kind: "widget",
-    nodeId: "23",
-    name: "upload",
-    label: "choose 1st frame to upload",
-    type: "IMAGEUPLOAD",
     control: "image",
+    direction: "input",
     ioKey: "23::widget::upload",
+    kind: "widget",
+    label: "choose 1st frame to upload",
+    name: "upload",
+    nodeId: "23",
+    type: "IMAGEUPLOAD",
     ...over,
   };
 }
@@ -91,11 +91,11 @@ describe("WidgetInputRow — 类型徽章与 pin 声明一致", () => {
   it("声明 STRING 的普通文本行打印 STRING,不再被改写成 INT", () => {
     renderRow(
       uploadPin({
-        name: "text",
-        label: "正向提示词",
-        type: "STRING",
         control: "text",
         ioKey: "10::widget::text",
+        label: "正向提示词",
+        name: "text",
+        type: "STRING",
       }),
     );
     expect(screen.getByText("STRING")).toBeInTheDocument();
@@ -104,12 +104,12 @@ describe("WidgetInputRow — 类型徽章与 pin 声明一致", () => {
   it("COMBO 行仍打印 COMBO", () => {
     renderRow(
       uploadPin({
-        name: "sampler_name",
-        label: "采样器",
-        type: "COMBO",
         control: "select",
-        options: ["euler", "dpmpp_2m"],
         ioKey: "3::widget::sampler_name",
+        label: "采样器",
+        name: "sampler_name",
+        options: ["euler", "dpmpp_2m"],
+        type: "COMBO",
       }),
     );
     expect(screen.getByText("COMBO")).toBeInTheDocument();

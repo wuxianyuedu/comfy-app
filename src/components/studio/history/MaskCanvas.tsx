@@ -16,7 +16,7 @@ export type MaskCanvasProps = {
   value: string | null;
 };
 
-export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
+export function MaskCanvas({ disabled, onChange, value }: MaskCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);

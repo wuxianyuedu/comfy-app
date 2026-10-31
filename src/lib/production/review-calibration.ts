@@ -59,12 +59,12 @@ export type CalibrationReport = {
 /** 空读数（没样本时的回落，各读数 null 不硬造）。 */
 export function emptyCalibrationReport(): CalibrationReport {
   return {
-    samples: 0,
     aiMeanAvg: null,
+    decisionAgreement: null,
     humanAvg: null,
     mae: null,
-    decisionAgreement: null,
     perDimension: [],
+    samples: 0,
   };
 }
 
@@ -111,17 +111,17 @@ export function calibrateFromShots(shots: Array<unknown>): CalibrationReport {
     if (hasHuman && rating !== null) {
       pairs.push({
         ai: mean,
+        aiPass: verdict.pass,
         human: humanRatingOnScale5(rating),
         rating,
-        aiPass: verdict.pass,
       });
     }
     for (const [key, item] of Object.entries(verdict.scores ?? {})) {
       const acc = dimAcc.get(key) ?? {
-        aiSum: 0,
         aiCount: 0,
-        humanSum: 0,
+        aiSum: 0,
         humanCount: 0,
+        humanSum: 0,
       };
       acc.aiSum += item.score;
       acc.aiCount += 1;
@@ -136,23 +136,23 @@ export function calibrateFromShots(shots: Array<unknown>): CalibrationReport {
   const samples = pairs.length;
   const perDimension: Array<DimensionCalibration> = [...dimAcc.entries()]
     .map(([key, acc]) => ({
-      key,
       aiAvg: acc.aiSum / acc.aiCount,
       humanAvg: acc.humanCount > 0 ? acc.humanSum / acc.humanCount : null,
+      key,
       samples: acc.aiCount,
     }))
     .sort((a, b) => compareText(a.key, b.key));
 
   return {
-    samples,
     aiMeanAvg: avg(aiMeans),
-    humanAvg: avg(pairs.map((p) => p.rating)),
-    mae: samples > 0 ? avg(pairs.map((p) => Math.abs(p.ai - p.human))) : null,
     decisionAgreement:
       samples > 0
         ? pairs.filter((p) => p.rating >= HUMAN_PASS_THRESHOLD === p.aiPass).length / samples
         : null,
+    humanAvg: avg(pairs.map((p) => p.rating)),
+    mae: samples > 0 ? avg(pairs.map((p) => Math.abs(p.ai - p.human))) : null,
     perDimension,
+    samples,
   };
 }
 

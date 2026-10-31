@@ -243,14 +243,14 @@ export function failWorkflowRun(taskId: string, message: string): void {
         [
           ...logs,
           {
-            t: Date.now(),
             level: /* SAFETY: 类型断言已复核 */ "error" as const,
             msg: `✗ 生成失败：${reason}`,
+            t: Date.now(),
           },
         ],
         MAX_LOGS,
       );
-  touch({ ...prev, status: "failed", errorMessage: reason, logs: nextLogs });
+  touch({ ...prev, errorMessage: reason, logs: nextLogs, status: "failed" });
 }
 
 /** 按 taskId 查运行元信息。 */
@@ -341,9 +341,9 @@ let cachedSnapshot: WorkflowRunStoreSnapshot | null = null;
 function getSnapshot(): WorkflowRunStoreSnapshot {
   const active = latestActiveWorkflowRun();
   return {
-    version,
-    runs: listWorkflowRuns(),
     activeTaskId: active?.taskId ?? null,
+    runs: listWorkflowRuns(),
+    version,
   };
 }
 
