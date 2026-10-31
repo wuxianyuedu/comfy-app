@@ -744,7 +744,7 @@ describe("升级判不判：门限可注入，读不出不构成结论", () => {
       account: readBundleAccount(null),
       streak: noStreak,
     });
-    for (const j of [suspended, none, unknown]) expect(j.fired).toBe(false);
+    for (const j of [suspended, none, unknown]) {expect(j.fired).toBe(false);}
     expect(suspended.reason).toContain("#2634");
     expect(none.reason).toContain("没有违规读数");
     expect(unknown.reason).toContain("不构成结论");
@@ -840,7 +840,7 @@ describe("判决行与判据那一侧对账（改词要两边一起改）", () =
       "utf8",
     );
     for (const marker of Object.values(BUNDLE_GATE_MARKERS))
-      expect(src, `判据那侧没有这句判决行：${marker}`).toContain(marker);
+      {expect(src, `判据那侧没有这句判决行：${marker}`).toContain(marker);}
   });
 });
 
@@ -871,7 +871,7 @@ describe("连续红天数：逐日回看，读不出不是 0", () => {
       if (key.includes("get-build-logs")) {
         const at = args.indexOf("--page");
         const rows = input.page(Number(args[at + 1] ?? "1"));
-        if (rows === null) return { status: 1, stdout: "", stderr: "boom", error: null };
+        if (rows === null) {return { status: 1, stdout: "", stderr: "boom", error: null };}
         return json({ total: rows.length, data: rows });
       }
       if (key.includes("get-build-status")) {

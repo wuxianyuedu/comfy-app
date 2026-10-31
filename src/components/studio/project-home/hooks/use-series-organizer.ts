@@ -227,29 +227,39 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const createCharacterMut = useMutation(
     trpc.series.createCharacter.mutationOptions({
       onSuccess: () => {
-        if (seriesId) invalidateCharacters(seriesId);
+        if (seriesId) {
+          invalidateCharacters(seriesId);
+        }
       },
     }),
   );
   const updateCharacterMut = useMutation(
     trpc.series.updateCharacter.mutationOptions({
       onSuccess: () => {
-        if (seriesId) invalidateCharacters(seriesId);
+        if (seriesId) {
+          invalidateCharacters(seriesId);
+        }
       },
     }),
   );
   const deleteCharacterMut = useMutation(
     trpc.series.deleteCharacter.mutationOptions({
       onSuccess: () => {
-        if (seriesId) invalidateCharacters(seriesId);
-        if (episodeId) invalidateEpisodeChars(episodeId);
+        if (seriesId) {
+          invalidateCharacters(seriesId);
+        }
+        if (episodeId) {
+          invalidateEpisodeChars(episodeId);
+        }
       },
     }),
   );
   const linkCharacterMut = useMutation(
     trpc.series.linkCharacter.mutationOptions({
       onSuccess: (_data, vars) => {
-        if (episodeId) invalidateEpisodeChars(episodeId);
+        if (episodeId) {
+          invalidateEpisodeChars(episodeId);
+        }
         invalidateCharacterEpisodes(vars.characterId);
       },
     }),
@@ -257,7 +267,9 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const unlinkCharacterMut = useMutation(
     trpc.series.unlinkCharacter.mutationOptions({
       onSuccess: (_data, vars) => {
-        if (episodeId) invalidateEpisodeChars(episodeId);
+        if (episodeId) {
+          invalidateEpisodeChars(episodeId);
+        }
         invalidateCharacterEpisodes(vars.characterId);
       },
     }),
@@ -265,8 +277,12 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const promoteMut = useMutation(
     trpc.series.promoteFromProduction.mutationOptions({
       onSuccess: () => {
-        if (seriesId) invalidateCharacters(seriesId);
-        if (episodeId) invalidateEpisodeChars(episodeId);
+        if (seriesId) {
+          invalidateCharacters(seriesId);
+        }
+        if (episodeId) {
+          invalidateEpisodeChars(episodeId);
+        }
       },
     }),
   );

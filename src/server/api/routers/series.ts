@@ -104,7 +104,9 @@ function libraryCharacterToProduction(c: {
 async function assertCharacterOwner(ctx: Ctx, id: string) {
   const rows = await ctx.db.select().from(character).where(eq(character.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "角色不存在" });
+  if (!row) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "角色不存在" });
+  }
   await assertSeriesOwner(ctx, row.seriesId);
   return row;
 }
@@ -509,19 +511,45 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertCharacterOwner(ctx, input.id);
       const patch: Partial<typeof character.$inferInsert> = {};
-      if (input.name !== undefined) patch.name = input.name;
-      if (input.ageGender !== undefined) patch.ageGender = input.ageGender;
-      if (input.appearance !== undefined) patch.appearance = input.appearance;
-      if (input.costume !== undefined) patch.costume = input.costume;
-      if (input.personality !== undefined) patch.personality = input.personality;
-      if (input.temperament !== undefined) patch.temperament = input.temperament;
-      if (input.styleTags !== undefined) patch.styleTags = input.styleTags;
-      if (input.skillSlug !== undefined) patch.skillSlug = input.skillSlug ?? null;
-      if (input.positivePrompt !== undefined) patch.positivePrompt = input.positivePrompt;
-      if (input.negativePrompt !== undefined) patch.negativePrompt = input.negativePrompt;
-      if (input.params !== undefined) patch.params = input.params;
-      if (input.portraitUrl !== undefined) patch.portraitUrl = input.portraitUrl ?? null;
-      if (input.portraits !== undefined) patch.portraits = input.portraits;
+      if (input.name !== undefined) {
+        patch.name = input.name;
+      }
+      if (input.ageGender !== undefined) {
+        patch.ageGender = input.ageGender;
+      }
+      if (input.appearance !== undefined) {
+        patch.appearance = input.appearance;
+      }
+      if (input.costume !== undefined) {
+        patch.costume = input.costume;
+      }
+      if (input.personality !== undefined) {
+        patch.personality = input.personality;
+      }
+      if (input.temperament !== undefined) {
+        patch.temperament = input.temperament;
+      }
+      if (input.styleTags !== undefined) {
+        patch.styleTags = input.styleTags;
+      }
+      if (input.skillSlug !== undefined) {
+        patch.skillSlug = input.skillSlug ?? null;
+      }
+      if (input.positivePrompt !== undefined) {
+        patch.positivePrompt = input.positivePrompt;
+      }
+      if (input.negativePrompt !== undefined) {
+        patch.negativePrompt = input.negativePrompt;
+      }
+      if (input.params !== undefined) {
+        patch.params = input.params;
+      }
+      if (input.portraitUrl !== undefined) {
+        patch.portraitUrl = input.portraitUrl ?? null;
+      }
+      if (input.portraits !== undefined) {
+        patch.portraits = input.portraits;
+      }
       await ctx.db.update(character).set(patch).where(eq(character.id, input.id));
       return (await ctx.db.select().from(character).where(eq(character.id, input.id)).limit(1))[0];
     }),
@@ -678,7 +706,9 @@ export const seriesRouter = createTRPCRouter({
       const linkedIds = new Set<string>();
       for (const pc of prodChars) {
         const name = pc?.name ?? "";
-        if (!name) continue;
+        if (!name) {
+          continue;
+        }
         const [existing] = await ctx.db
           .select()
           .from(character)
@@ -753,7 +783,9 @@ export const seriesRouter = createTRPCRouter({
       const byName = new Map<string, Record<string, unknown>>();
       for (const c of prodChars) {
         const n = typeof c?.name === "string" ? c.name : "";
-        if (n) byName.set(n, c);
+        if (n) {
+          byName.set(n, c);
+        }
       }
       let injected = 0;
       let merged = 0;

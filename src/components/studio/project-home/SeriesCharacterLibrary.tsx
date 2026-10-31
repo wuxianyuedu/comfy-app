@@ -57,8 +57,11 @@ export const SeriesCharacterLibrary = ({ c, projectId }: SeriesCharacterLibraryP
                 <Button
                   className="h-7 px-2 text-xs"
                   onClick={() => {
-                    if (inspected) c.clearInspectedCharacter();
-                    else c.inspectCharacterEpisodes(ch.id);
+                    if (inspected) {
+                      c.clearInspectedCharacter();
+                    } else {
+                      c.inspectCharacterEpisodes(ch.id);
+                    }
                   }}
                   variant="ghost"
                 >

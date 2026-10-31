@@ -334,7 +334,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       prefix,
       "认不出 canary 的临时样本目录前缀 ⇒ 这一格的豁免口径与它漂了，两边要一起改",
     ).not.toBeNull();
-    if (prefix === null) return;
+    if (prefix === null) {return;}
     const scratch = new RegExp(`^scripts/${prefix}[^/]*/`);
     expect(scratch.test(`scripts/${prefix}151192-1793363720066/node-global.mjs`)).toBe(true);
     /* 反向的两条：同名的入库脚本目录、与 canary 落在 `tests/` 那一半，都不许被豁免掉。 */
@@ -380,7 +380,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       prefix,
       "认不出 canary 的临时样本目录前缀 ⇒ 这一格的豁免口径与它漂了，两边要一起改",
     ).not.toBeNull();
-    if (prefix === null) return;
+    if (prefix === null) {return;}
     const scratch = new RegExp(`^scripts/${prefix}[^/]*/`);
     const strays = untracked.filter((p) => !scratch.test(String(p)));
     if (strays.length !== untracked.length) {
