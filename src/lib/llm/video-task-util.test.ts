@@ -59,7 +59,7 @@ describe("saveMediaToLocalTemp · 路径落点", () => {
 
     for (const evil of [
       "../../../../etc/passwd",
-      "..\\..\\windows\\system32\\evil",
+      String.raw`..\..\windows\system32\evil`,
       "/absolute/path/model",
       "normal/../../../escape",
     ]) {

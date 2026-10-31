@@ -14,11 +14,9 @@ describe("LoadingSkeleton", () => {
     /* 骨架这件事只在 `ui/skeleton` 实现一次（规范 16 §16.2.3 P3）：
        这里断言 6 条都带 `data-slot="skeleton"`，自写 animate-pulse 的空 div
        会在这里失败。 */
-    expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(
-      6,
-    );
+    expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(6);
     // 标题条:窄矮的 h-2.5;内容条:整行 h-8
-    expect(container.querySelectorAll("div.h-2\\.5")).toHaveLength(3);
+    expect(container.querySelectorAll(String.raw`div.h-2\.5`)).toHaveLength(3);
     expect(container.querySelectorAll("div.h-8")).toHaveLength(3);
   });
 });

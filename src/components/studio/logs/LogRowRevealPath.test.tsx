@@ -33,7 +33,7 @@ import { LogRow } from "./LogRow";
 import type { LogEntry } from "./log-store";
 import { TooltipProvider } from "~/components/ui/tooltip";
 
-const ROOT = "F:\\AI\\Other\\comfy-app-t3-branch4";
+const ROOT = String.raw`F:\AI\Other\comfy-app-t3-branch4`;
 
 function entry(message: string): LogEntry {
   return {
@@ -133,21 +133,21 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
      * 目录（点了只会得到「找不到可在文件管理器里打开的路径」）。
      * 现在上色层直接用 `findLogPathTokens` 的区间，一条路径恒在一个分片里。 */
     renderRow(
-      '>>> "C:\\Program Files\\PowerShell\\7\\pwsh.EXE" -NoProfile -File "D:\\Program Files\\nodejs\\pnpm.ps1" -v',
+      String.raw`>>> "C:\Program Files\PowerShell\7\pwsh.EXE" -NoProfile -File "D:\Program Files\nodejs\pnpm.ps1" -v`,
     );
     expect(revealButtons().map((el) => el.getAttribute("aria-label"))).toEqual([
-      "在文件管理器里定位 C:\\Program Files\\PowerShell\\7\\pwsh.EXE",
-      "在文件管理器里定位 D:\\Program Files\\nodejs\\pnpm.ps1",
+      String.raw`在文件管理器里定位 C:\Program Files\PowerShell\7\pwsh.EXE`,
+      String.raw`在文件管理器里定位 D:\Program Files\nodejs\pnpm.ps1`,
     ]);
   });
 
-  it("点带空格的路径，参数是整条（不是截断的 C:\\Program）", async () => {
+  it(String.raw`点带空格的路径，参数是整条（不是截断的 C:\Program）`, async () => {
     mutateMock.mockResolvedValue({ ok: true, detail: "已在文件管理器里定位" });
     const user = userEvent.setup();
-    renderRow('>>> "C:\\Program Files\\PowerShell\\7\\pwsh.EXE" -NoProfile');
+    renderRow(String.raw`>>> "C:\Program Files\PowerShell\7\pwsh.EXE" -NoProfile`);
     await user.click(
       screen.getByRole("button", {
-        name: "在文件管理器里定位 C:\\Program Files\\PowerShell\\7\\pwsh.EXE",
+        name: String.raw`在文件管理器里定位 C:\Program Files\PowerShell\7\pwsh.EXE`,
       }),
     );
     await expect
@@ -157,7 +157,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
             | { path: string }
             | undefined,
       )
-      .toEqual({ path: "C:\\Program Files\\PowerShell\\7\\pwsh.EXE" });
+      .toEqual({ path: String.raw`C:\Program Files\PowerShell\7\pwsh.EXE` });
   });
 
   it("点一下发一次请求，参数是扫出来的那段路径", async () => {
@@ -183,7 +183,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
   it("失败时改口「打开失败」，悬停提示里给出服务端那句原因（硬规则 4）", async () => {
     mutateMock.mockResolvedValue({
       ok: false,
-      detail: "找不到可在文件管理器里打开的路径：F:\\nope",
+      detail: String.raw`找不到可在文件管理器里打开的路径：F:\nope`,
     });
     const user = userEvent.setup();
     renderRow(`项目根: ${ROOT}`);

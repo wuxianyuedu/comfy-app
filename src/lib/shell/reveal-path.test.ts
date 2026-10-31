@@ -64,16 +64,16 @@ beforeEach(() => {
 
 describe("最长存在前缀解析", () => {
   it("整串就存在时原样返回（不画蛇添足地退）", () => {
-    const exists = probeFor("F:\\a\\b\\c.log");
-    expect(resolveExistingPath("F:\\a\\b\\c.log", exists)).toBe("F:\\a\\b\\c.log");
+    const exists = probeFor(String.raw`F:\a\b\c.log`);
+    expect(resolveExistingPath(String.raw`F:\a\b\c.log`, exists)).toBe(String.raw`F:\a\b\c.log`);
   });
 
   it("尾随半段文字时在**最后一段内**退到存在的那一截", () => {
     /* 现场：候选为了 `Program Files` 让路而吃空格，于是 `…\dev.mjs --mode x`
      * 裁开关后可能残留半个词。退到存在的文件名为止。 */
-    const exists = probeFor("F:\\a\\b\\dev-launcher.mjs");
-    expect(resolveExistingPath("F:\\a\\b\\dev-launcher.mjs x", exists)).toBe(
-      "F:\\a\\b\\dev-launcher.mjs",
+    const exists = probeFor(String.raw`F:\a\b\dev-launcher.mjs`);
+    expect(resolveExistingPath(String.raw`F:\a\b\dev-launcher.mjs x`, exists)).toBe(
+      String.raw`F:\a\b\dev-launcher.mjs`,
     );
   });
 
@@ -81,8 +81,8 @@ describe("最长存在前缀解析", () => {
     /* `F:\a` 存在但 `F:\a\b` 不存在：正确结果是 null 而不是 `F:\a` ——
      * 跨段退会命中 `F:\a`，于是用户点 `F:\a\b` 打开了 `F:\a`，
      * 界面上没有任何东西解释为什么。这是本函数唯一一条「宁可漏」的判据。 */
-    expect(resolveExistingPath("F:\\a\\b", probeFor("F:\\a"))).toBeNull();
-    expect(resolveExistingPath("F:\\a\\b\\c\\d", probeFor("F:\\a\\b"))).toBeNull();
+    expect(resolveExistingPath(String.raw`F:\a\b`, probeFor(String.raw`F:\a`))).toBeNull();
+    expect(resolveExistingPath(String.raw`F:\a\b\c\d`, probeFor(String.raw`F:\a\b`))).toBeNull();
   });
 
   it("整段都多余时不退到父目录（宁可回 null 也不指错）", () => {
@@ -91,8 +91,8 @@ describe("最长存在前缀解析", () => {
      * 而猜错就是打开了用户没指的目录。所以这里回 null，用户拿到「路径不存在」
      * 的反馈（有出口、可纠正）。文本侧的尾巴（标点、开关）在扫描阶段就已收干净，
      * 不该留到这里。 */
-    const exists = probeFor("F:\\a\\b");
-    expect(resolveExistingPath("F:\\a\\b\\junky", exists)).toBeNull();
+    const exists = probeFor(String.raw`F:\a\b`);
+    expect(resolveExistingPath(String.raw`F:\a\b\junky`, exists)).toBeNull();
   });
 
   it("不退成「目录 + 尾分隔符」那一档（否则点一个不存在的文件会打开它的目录）", () => {
@@ -102,11 +102,11 @@ describe("最长存在前缀解析", () => {
      * 「结尾是分隔符」的候选一律跳过。 */
     const exists = probeFor("/workspace/");
     expect(resolveExistingPath("/workspace/no-such-file.txt", exists)).toBeNull();
-    expect(resolveExistingPath("F:\\a\\b\\missing.log", probeFor("F:\\a\\b\\"))).toBeNull();
+    expect(resolveExistingPath(String.raw`F:\a\b\missing.log`, probeFor("F:\\a\\b\\"))).toBeNull();
   });
 
   it("只退到最后一段的段首，盘符壳与根都不认", () => {
-    expect(resolveExistingPath("F:\\nothing\\here", probeFor("F:"))).toBeNull();
+    expect(resolveExistingPath(String.raw`F:\nothing\here`, probeFor("F:"))).toBeNull();
     expect(resolveExistingPath("/nothing/here", probeFor("/"))).toBeNull();
   });
 
@@ -118,7 +118,7 @@ describe("最长存在前缀解析", () => {
 
 describe("命令与参数形态", () => {
   it('Windows 用 `explorer /select,"<路径>"` 且路径与 /select 同属一个参数', async () => {
-    const target = process.platform === "win32" ? "C:\\a b\\c.log" : "/a b/c.log";
+    const target = process.platform === "win32" ? String.raw`C:\a b\c.log` : "/a b/c.log";
     const result = await revealPathInFileManager(target, probeFor(target));
     expect(result.ok).toBe(true);
     expect(spawnMock).toHaveBeenCalledTimes(1);
@@ -155,7 +155,7 @@ describe("命令与参数形态", () => {
   });
 
   it("路径不存在时不 spawn，并给出可读的失败说明", async () => {
-    const result = await revealPathInFileManager("F:\\nope\\missing.log", () => false);
+    const result = await revealPathInFileManager(String.raw`F:\nope\missing.log`, () => false);
     expect(result.ok).toBe(false);
     expect(result.detail).toContain("找不到可在文件管理器里打开的路径");
     expect(spawnMock).not.toHaveBeenCalled();
@@ -194,13 +194,12 @@ describe("命令与参数形态", () => {
 describe("与文本判据串起来（端到端形态）", () => {
   it("从真实日志行扫出候选，再定位到存在的那一截", async () => {
     const { findLogPathTokens } = await import("~/lib/log/log-path-tokens");
-    const line =
-      "拉起到编排器: node F:\\AI\\Other\\app\\scripts\\dev-launcher.mjs --mode prebuilt （端口 3847）";
+    const line = String.raw`拉起到编排器: node F:\AI\Other\app\scripts\dev-launcher.mjs --mode prebuilt （端口 3847）`;
     const tokens = findLogPathTokens(line);
     expect(tokens).toHaveLength(1);
-    const exists = probeFor("F:\\AI\\Other\\app\\scripts\\dev-launcher.mjs");
+    const exists = probeFor(String.raw`F:\AI\Other\app\scripts\dev-launcher.mjs`);
     const result = await revealPathInFileManager(tokens[0]!.text, exists);
     expect(result.ok).toBe(true);
-    expect(result.revealed).toBe("F:\\AI\\Other\\app\\scripts\\dev-launcher.mjs");
+    expect(result.revealed).toBe(String.raw`F:\AI\Other\app\scripts\dev-launcher.mjs`);
   });
 });

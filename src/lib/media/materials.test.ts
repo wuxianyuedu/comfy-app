@@ -97,7 +97,7 @@ describe("sanitizeScope —— scope 是目录名，不是路径片段", () => {
     expect(sanitizeScope("   ")).toBeNull();
     expect(sanitizeScope("x".repeat(129))).toBeNull();
     expect(sanitizeScope("a/b")).toBeNull();
-    expect(sanitizeScope("a\\b")).toBeNull();
+    expect(sanitizeScope(String.raw`a\b`)).toBeNull();
     expect(sanitizeScope("..")).toBeNull();
     expect(sanitizeScope("../evil")).toBeNull();
     // 白名单只留字母数字下划线连字符 —— 点号被排除，`.hidden` 这类进不来
@@ -108,7 +108,7 @@ describe("sanitizeScope —— scope 是目录名，不是路径片段", () => {
 describe("sanitizeFileName —— 先剥目录成分，再换掉有特殊含义的字符", () => {
   it("两种分隔符一起切，只留 basename", () => {
     expect(sanitizeFileName("a/b/c.png")).toBe("c.png");
-    expect(sanitizeFileName("a\\b\\c.png")).toBe("c.png");
+    expect(sanitizeFileName(String.raw`a\b\c.png`)).toBe("c.png");
   });
 
   it("空串与纯点判不可用；带目录成分的只留 basename", () => {
