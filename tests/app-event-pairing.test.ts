@@ -92,7 +92,10 @@ function collectSources(): Array<SourceFile> {
 
 /** 表里的事件名（键带引号或不带引号都认）。 */
 function readEventTable(source: string): Array<string> {
-  const start = source.indexOf("export interface AppEvents");
+  /* 表的声明形态两种都认：`interface` 与 `type =`。声明形态归 lint 规则管，
+   * 这条判据只认「这张表在哪儿」 —— 只认一种写法会在改写声明形态那一批把扫描面
+   * 静默打成 0（0 条恰好像「都齐了」，见本文件头注）。 */
+  const start = source.search(/export (?:interface AppEvents \{|type AppEvents = \{)/);
   if (start < 0) {
     return [];
   }
@@ -246,13 +249,13 @@ describe("AppEvents 表的两端成对", () => {
 
   it("反向证明：只剩一端的通道会被点名，两端都在的不报", () => {
     const table = [
-      "export interface AppEvents {",
+      "export type AppEvents = {",
       '  "only:emit": undefined;',
       '  "only:subscribe": { id: string };',
       '  "both:ways": undefined;',
       '  "self:loop": undefined;',
       '  "mixed:ends": undefined;',
-      "}",
+      "};",
     ].join("\n");
     const synthetic: Array<SourceFile> = [
       {
