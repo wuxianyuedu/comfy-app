@@ -143,9 +143,8 @@ export function WorkflowLibraryList({
             }
             description={
               <>
-                应用服务可能在编译或重启。可稍候重试；若持续如此，按{""}
+                应用服务可能在编译或重启。可稍候重试；若持续如此，按
                 <kbd className="border-border rounded border px-1 font-mono">Ctrl+Shift+L</kbd>
-                {""}
                 打开日志面板查看具体原因。
               </>
             }

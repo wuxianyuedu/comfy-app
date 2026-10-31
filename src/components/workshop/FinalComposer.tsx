@@ -237,7 +237,7 @@ export function FinalComposer({
         <div className="border-border bg-surface rounded-2xl border p-4">
           <div className="text-muted-foreground text-2xs mb-2 flex items-center justify-between">
             <span>
-              预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} /{""}
+              预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} /
               {String(timeline.length).padStart(2, "0")}
             </span>
             <span>{current.shot.sceneHeading}</span>

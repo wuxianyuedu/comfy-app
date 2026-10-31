@@ -181,7 +181,6 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
                 c.instance.desktopManaged ? "端口与启动参数由 Comfy Desktop 实例元数据决定。" : ""
               }`
             : "安装形态判读中…"}
-          {""}
           路径与启动参数在「设置 → 创作后端」里配置。
         </p>
         {/* 「这一点下去会按哪条路径启动」：写的是**库里已保存**的那条，所以用户

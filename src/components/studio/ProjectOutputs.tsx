@@ -87,8 +87,7 @@ function OutputCard({
       </div>
       <div className="p-3">
         <p className="text-ink-soft line-clamp-1 text-xs font-medium">
-          {TYPE_CHIP[output.type] ?? output.type} ·{""}
-          {displayValue(output.seed)}
+          {TYPE_CHIP[output.type] ?? output.type} ·{displayValue(output.seed)}
         </p>
         <p className="text-ink-fainter text-2xs mt-1">{displayValue(timeAgo(output.createdAt))}</p>
       </div>

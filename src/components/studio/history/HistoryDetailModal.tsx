@@ -159,18 +159,13 @@ export function HistoryDetailModal({
                   {actions.folderPopover.helperMissing ? (
                     <div className="border-warning/30 bg-warning/10 text-warning-strong text-2xs mb-2 rounded border px-2.5 py-1.5 leading-relaxed">
                       未检测到 ComfyApp 助手，浏览器没有弹出「打开外部应用」确认框。
-                      请双击运行项目内{""}
+                      请双击运行项目内
                       <code className="text-warning-strong">
                         scripts\install-comfyapp-helper.ps1
                       </code>
-                      {""}
                       注册
-                      <code className="text-warning-strong">
-                        {""}
-                        comfyapp://
-                      </code>
-                      {""}
-                      协议（仅本机、无需管理员）， 或直接{""}
+                      <code className="text-warning-strong">comfyapp://</code>
+                      协议（仅本机、无需管理员）， 或直接
                       <a className="hover:text-warning-strong underline" href="/api/helper/install">
                         下载安装脚本
                       </a>
