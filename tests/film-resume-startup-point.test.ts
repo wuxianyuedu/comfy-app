@@ -94,8 +94,10 @@ describe("去重与预算的同源性（漂开就静默失效的那两条）", (
     const src = code(ORCHESTRATOR);
     expect(src).toMatch("const WATCH_POLL_MS = 4000;");
     expect(src).toMatch("const WATCH_MAX_ITER = 240;");
+    /* 数字分隔符（`60_000`）与常量写法都归 lint 管，这里钉的是**除数 60 秒**这件事本身
+     * —— 照字面量写死会把一次纯排版改写读成「预算口径变了」（判据钉语义不钉行形状）。 */
     expect(src).toMatch(
-      "const WATCH_BUDGET_MIN = Math.round((WATCH_POLL_MS * WATCH_MAX_ITER) / 60000);",
+      /const WATCH_BUDGET_MIN = Math\.round\(\(WATCH_POLL_MS \* WATCH_MAX_ITER\) \/ 60_?000\);/,
     );
     // 两条给用户看的文案都插值同一个常量；写死「16 分钟」的那版改一个不动另一个。
     expect(src.match(/\$\{WATCH_BUDGET_MIN\} 分钟/g)).toHaveLength(2);
