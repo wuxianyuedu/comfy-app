@@ -625,7 +625,7 @@ export function applySlot(io = {}) {
       return {
         handled: false,
         action: plan.action,
-        why: status !== 0 ? `槽内安装退 ${status}` : "槽内安装退 0 但没有产物",
+        why: status === 0 ? "槽内安装退 0 但没有产物" : `槽内安装退 ${status}`,
       };
     }
     fs.writeFileSync(path.join(slot, FINGERPRINT_FILE), `${key}\n`);

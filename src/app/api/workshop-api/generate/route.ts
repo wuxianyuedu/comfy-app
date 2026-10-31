@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         mode,
         aspectRatio,
         megapixels,
-        ...(multiple !== undefined ? { multiple } : {}),
+        ...(multiple === undefined ? {} : { multiple }),
         image,
       });
       return NextResponse.json({ url });

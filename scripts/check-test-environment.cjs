@@ -413,12 +413,12 @@ function main() {
   }
 
   if (all.length === 0) {
-    if (!REPORT_ONLY) {
+    if (REPORT_ONLY) {
+      console.log(`[test-env] 盘点：${files.length} 份用例，无问题。` + note);
+    } else {
       console.log(
         `[test-env] OK —— ${files.length} 份用例：无环境早退，无目录档矛盾，无冗余文件头。` + note,
       );
-    } else {
-      console.log(`[test-env] 盘点：${files.length} 份用例，无问题。` + note);
     }
     return 0;
   }

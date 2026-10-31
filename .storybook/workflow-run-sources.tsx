@@ -259,10 +259,10 @@ function seedScene(name: string): void {
   if (scene.progress !== undefined) {
     patchWorkflowRun(SCENE_TASK_ID, { progress: scene.progress });
   }
-  if (scene.failWith !== undefined) {
-    failWorkflowRun(SCENE_TASK_ID, scene.failWith);
-  } else {
+  if (scene.failWith === undefined) {
     patchWorkflowRun(SCENE_TASK_ID, { status: "done" });
+  } else {
+    failWorkflowRun(SCENE_TASK_ID, scene.failWith);
   }
 }
 

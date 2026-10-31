@@ -97,8 +97,8 @@ export function enrichFromViewNodes(
         name: input.name,
         label,
         type: input.type ?? "*",
-        ...(input.multiline !== undefined ? { multiline: input.multiline } : {}),
-        ...(value !== undefined ? { defaultValue: value } : {}),
+        ...(input.multiline === undefined ? {} : { multiline: input.multiline }),
+        ...(value === undefined ? {} : { defaultValue: value }),
       };
     }
   }

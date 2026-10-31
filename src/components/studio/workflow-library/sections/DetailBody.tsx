@@ -181,14 +181,14 @@ export function DetailBody({
             <span className="text-ink-faint text-xs font-medium">工作流(RAW)格式原件</span>
           </div>
           <div className={`bg-canvas-deep ${EMBEDDED_SCROLL_MAX_HEIGHT} overflow-auto rounded-xl`}>
-            {sourceData?.source != null ? (
+            {sourceData?.source == null ? (
+              <p className="text-ink-fainter px-4 py-10 text-center text-xs">暂无源文件数据</p>
+            ) : (
               <LazyJsonViewer
                 data={sourceData.source}
                 initialCollapsedDepth={2}
                 title="工作流(RAW)格式"
               />
-            ) : (
-              <p className="text-ink-fainter px-4 py-10 text-center text-xs">暂无源文件数据</p>
             )}
           </div>
         </div>

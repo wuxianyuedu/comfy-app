@@ -137,7 +137,7 @@ export function LogPanelFooter(input: {
                   {ORIGIN_TEXT[origin ?? "all"]}
                 </Button>
               </Hint>
-              <Hint label={filter !== "all" ? "去掉级别筛选" : undefined} wrap>
+              <Hint label={filter === "all" ? undefined : "去掉级别筛选"} wrap>
                 <Button
                   className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
                   data-testid="logpanel-level-chip"

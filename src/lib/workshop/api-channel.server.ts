@@ -70,8 +70,8 @@ export async function saveWorkshopApiSettings(
 ): Promise<WorkshopApiSettings> {
   const current = getWorkshopApiSettingsSync();
   const next: WorkshopApiSettings = {
-    image: patch.image !== undefined ? sanitizeChannel(patch.image, current.image) : current.image,
-    video: patch.video !== undefined ? sanitizeChannel(patch.video, current.video) : current.video,
+    image: patch.image === undefined ? current.image : sanitizeChannel(patch.image, current.image),
+    video: patch.video === undefined ? current.video : sanitizeChannel(patch.video, current.video),
   };
   cache = next;
   await fs.mkdir(path.dirname(FILE), { recursive: true });

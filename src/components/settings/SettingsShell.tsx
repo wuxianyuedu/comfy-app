@@ -212,9 +212,7 @@ export function SettingsShell({
             className="custom-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto pb-6"
             ref={scrollRef}
           >
-            {fallback !== undefined ? (
-              fallback
-            ) : (
+            {fallback === undefined ? (
               <>
                 {banner}
                 {sectionIds.map((id) => (
@@ -234,6 +232,8 @@ export function SettingsShell({
                   </section>
                 ))}
               </>
+            ) : (
+              fallback
             )}
           </div>
         </div>

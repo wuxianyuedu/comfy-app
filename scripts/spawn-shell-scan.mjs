@@ -389,7 +389,7 @@ export function findShellOptions(root = ROOT) {
  * `--root` 供阳性对照（canary）：在临时树里放一个已知违例，确认本脚本退出码非 0。 */
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   const rootFlag = process.argv.indexOf("--root");
-  const scanRoot = rootFlag !== -1 ? process.argv[rootFlag + 1] : ROOT;
+  const scanRoot = rootFlag === -1 ? ROOT : process.argv[rootFlag + 1];
   const offenders = findShellOptions(scanRoot);
   if (offenders.length > 0) {
     process.stderr.write(

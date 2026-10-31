@@ -565,9 +565,9 @@ export function buildEdges(
       const srcSlot = Number(value[1] ?? 0);
       const srcClass = nodesById[srcId]?.class_type;
       const type =
-        edgeType(srcClass, srcSlot) !== "UNKNOWN"
-          ? edgeType(srcClass, srcSlot)
-          : edgeTypeByInputName(inputName);
+        edgeType(srcClass, srcSlot) === "UNKNOWN"
+          ? edgeTypeByInputName(inputName)
+          : edgeType(srcClass, srcSlot);
       const stroke = portColor(type);
       // 知道输出名时把线钉到精确的输出 handle 上；否则回落到每个节点都挂的
       // 通用隐藏 "out" handle。

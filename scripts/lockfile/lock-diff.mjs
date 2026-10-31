@@ -512,9 +512,7 @@ function diffImporters(a, b) {
       /** @type {DepChange[]} */
       const changed = [];
       for (const [pkg, val] of db) {
-        if (!da.has(pkg)) {
-          added.push({ name: pkg, value: val });
-        } else {
+        if (da.has(pkg)) {
           const old = da.get(pkg);
           if (old.version !== val.version || old.specifier !== val.specifier) {
             changed.push({
@@ -525,6 +523,8 @@ function diffImporters(a, b) {
               fromSpecifier: old.specifier,
             });
           }
+        } else {
+          added.push({ name: pkg, value: val });
         }
       }
       for (const [pkg, val] of da) {

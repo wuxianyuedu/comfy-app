@@ -353,7 +353,7 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
       name: usageTest.entry.name,
       baseUrl: usageTest.baseUrl.trim(),
       path: usageTest.path.trim(),
-      apiKey: typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
+      apiKey: typedKey === "" ? (usageTest.entry.apiKey ?? undefined) : typedKey,
       prompt: usageTest.prompt,
       size: usageTest.size.trim() || undefined,
       /* 由结构化字段行生成请求体 JSON（替代原先手填整段 JSON）；
@@ -381,7 +381,7 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
       name: usageTest.entry.name,
       baseUrl: usageTest.baseUrl.trim(),
       path: usageTest.path.trim(),
-      apiKey: typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
+      apiKey: typedKey === "" ? (usageTest.entry.apiKey ?? undefined) : typedKey,
       taskId,
     });
     setUsageTest((prev) => (prev ? { ...prev, querying: false, result: out } : prev));

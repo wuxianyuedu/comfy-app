@@ -106,7 +106,7 @@ export function buildSpawnArgs(facts: SpawnArgsFacts): Array<string> {
     facts.effectivePort && facts.effectivePort > 0 ? facts.effectivePort : facts.defaultPort;
   const args = [
     ...facts.baseArgs,
-    ...(port !== facts.defaultPort ? ["--port", String(port)] : []),
+    ...(port === facts.defaultPort ? [] : ["--port", String(port)]),
     ...facts.extraArgs,
   ];
   /* 无条件补上内嵌放行开关（幂等）：应用把 ComfyUI 内嵌进同一窗口的页签，

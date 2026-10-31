@@ -58,7 +58,7 @@ export function buildNormalizeArgs(opts: {
 }): Array<string> {
   const { clip, vf, dur, out, srtPath } = opts;
   const vfWithSub =
-    srtPath !== null ? `${vf},subtitles='${escapeFilter(normalizeSlashes(srtPath))}'` : vf;
+    srtPath === null ? vf : `${vf},subtitles='${escapeFilter(normalizeSlashes(srtPath))}'`;
   return [
     "-y",
     "-i",

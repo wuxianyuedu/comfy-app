@@ -260,11 +260,11 @@ export function decideAction({ state, failedNames, prIid, existing, lane = null 
 export function composeBody({ slug, target, stage, skipped, readout, handle }) {
   const lane = target.lane ?? null;
   const where =
-    target.prIid !== null
-      ? `PR #${target.prIid}`
-      : lane
+    target.prIid === null
+      ? lane
         ? `事件 \`${target.event || "(取不到)"}\`（没有 PR 可挂 ⇒ 落到「${lane}」这一族）`
-        : "（没有 PR 可挂）";
+        : "（没有 PR 可挂）"
+      : `PR #${target.prIid}`;
   return [
     commentHeader(handle),
     "",
@@ -297,9 +297,9 @@ export function composeBody({ slug, target, stage, skipped, readout, handle }) {
     "",
     "> 本段由 `scripts/ci-pr-failure-issue.mjs` 写。判据链复用既有那几份" +
       "（`ci-build-readout` 定性取逐格、`check-daily-attendance` 取详情），没有第二套判决。",
-    target.prIid !== null
-      ? "> 落点是这张 PR（一条诉求一张单）：同一笔改动再红就在同一处追加，不另开单。"
-      : "> 同一格再次红时**不新建**，在这张单下追加一条读数 —— 号一关，欠着的东西连可见性都没了。",
+    target.prIid === null
+      ? "> 同一格再次红时**不新建**，在这张单下追加一条读数 —— 号一关，欠着的东西连可见性都没了。"
+      : "> 落点是这张 PR（一条诉求一张单）：同一笔改动再红就在同一处追加，不另开单。",
   ].join("\n");
 }
 
@@ -423,7 +423,7 @@ export function main(io = {}) {
    * 自己在记账上还是绿的 —— 桌面成品包那一档今天就是这个形状，见 ISSUE #2550）。 */
   const laneAt = argv.indexOf("--lane");
   const laneArg = laneAt >= 0 ? String(argv[laneAt + 1] ?? "").trim() : "";
-  const lane = laneArg !== "" ? laneArg : null;
+  const lane = laneArg === "" ? null : laneArg;
 
   /**
    * 退码出口：`--no-block` 只改码，不改话术。
@@ -462,7 +462,7 @@ export function main(io = {}) {
     return finish(CODE.NO_FACT, `--lane 未登记：${lane}`);
   }
 
-  const slug = io.slug !== undefined ? io.slug : resolveRepoSlug(run);
+  const slug = io.slug === undefined ? resolveRepoSlug(run) : io.slug;
   if (!slug) {
     log("[pr-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。");
     return finish(CODE.NO_FACT, "推不出仓库 slug");
@@ -589,7 +589,7 @@ export function main(io = {}) {
     state: outcome.state,
     failedNames,
     prIid: target.prIid,
-    existing: target.prIid !== null ? [] : existing,
+    existing: target.prIid === null ? existing : [],
     lane,
   });
   if (decision.action === "none" || decision.action === "no-fact") {

@@ -184,7 +184,7 @@ export function WorkflowNode({
             className={`text-3xs font-mono font-semibold ${NODE_SEQ_CHIP_TEXT}`}
             style={{ fontFamily: "var(--font-mono)" }}
           >
-            {nodeSeq !== null ? `#${nodeSeq}` : `#${id.length > 10 ? `${id.slice(0, 9)}…` : id}`}
+            {nodeSeq === null ? `#${id.length > 10 ? `${id.slice(0, 9)}…` : id}` : `#${nodeSeq}`}
           </span>
         </WorkflowNodePill>
       </div>
@@ -211,11 +211,11 @@ export function WorkflowNode({
         <div className="flex h-7 min-w-0 items-center gap-1">
           <WorkflowPickChip
             emptyHint={
-              sourceFilter !== "all"
-                ? `当前筛选下没有工作流，切换「${sourceFilter === "local" ? "本机" : "在线"}」试试`
-                : modelFilter !== "all"
-                  ? `当前模型「${modelFilter}」下没有工作流`
-                  : "暂无工作流，先去工作流库导入"
+              sourceFilter === "all"
+                ? modelFilter === "all"
+                  ? "暂无工作流，先去工作流库导入"
+                  : `当前模型「${modelFilter}」下没有工作流`
+                : `当前筛选下没有工作流，切换「${sourceFilter === "local" ? "本机" : "在线"}」试试`
             }
             loading={workflowListLoading}
             onSelect={onSelectWorkflow}

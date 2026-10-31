@@ -97,82 +97,90 @@ export function NodePreviewCard({
         )}
       </Button>
 
-      {!data ? (
+      {data ? (
+        expanded ? (
+          <div className="px-2.5 pt-1.5 pb-2">
+            {/* 区 1 —— 类型端口（输入在左，输出在右） */}
+            {(typed.length > 0 || outputs.length > 0) && (
+              <div className="mb-1.5 grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+                <div className="flex flex-col gap-0.75">
+                  {typed.map((i, idx) => (
+                    <PortRow
+                      color={color}
+                      key={`ti-${idx}`}
+                      name={i.name}
+                      side="in"
+                      type={i.type}
+                    />
+                  ))}
+                </div>
+                <div className="flex flex-col items-end gap-0.75">
+                  {outputs.map((output, idx) => (
+                    <PortRow
+                      color={color}
+                      key={`to-${idx}`}
+                      name={output.name}
+                      side="out"
+                      type={output.type}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 区 2 —— widget（带标签的参数） */}
+            {widgets.length > 0 && (
+              <div
+                className="flex flex-col gap-0.5 border-t pt-1.5"
+                style={{ borderColor: "var(--color-border-subtle)" }}
+              >
+                {widgets.slice(0, 32).map((widget, idx) => (
+                  <div className="text-2xs flex items-center gap-1.5" key={`w-${idx}`}>
+                    <span
+                      className="inline-block shrink-0 rounded-full"
+                      style={{
+                        width: 6,
+                        height: 6,
+                        background: color,
+                        opacity: 0.7,
+                      }}
+                    />
+                    <span className="text-ink-soft min-w-0 flex-1 truncate" title={widget.name}>
+                      {widget.name}
+                    </span>
+                    <WidgetValueChip value={widget.default} widget={widget.widget ?? null} />
+                  </div>
+                ))}
+                {widgets.length > 32 && (
+                  <div className="text-muted-foreground text-3xs pl-3">
+                    … +{widgets.length - 32} more
+                  </div>
+                )}
+              </div>
+            )}
+
+            {typed.length === 0 && widgets.length === 0 && outputs.length === 0 && (
+              <div className="text-muted-foreground text-3xs py-1 text-center italic">
+                无输入 / 输出参数
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-ink-muted text-3xs flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5">
+            <span>
+              <span className="text-ink-bright font-mono">{typed.length}</span> typed
+            </span>
+            <span>
+              <span className="text-ink-bright font-mono">{widgets.length}</span> widget
+            </span>
+            <span>
+              <span className="text-ink-bright font-mono">{outputs.length}</span> output
+            </span>
+          </div>
+        )
+      ) : (
         <div className="text-muted-foreground text-3xs px-2.5 py-1.5 italic">
           清单中未找到该节点（可能解析后未重导入此包）
-        </div>
-      ) : !expanded ? (
-        <div className="text-ink-muted text-3xs flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5">
-          <span>
-            <span className="text-ink-bright font-mono">{typed.length}</span> typed
-          </span>
-          <span>
-            <span className="text-ink-bright font-mono">{widgets.length}</span> widget
-          </span>
-          <span>
-            <span className="text-ink-bright font-mono">{outputs.length}</span> output
-          </span>
-        </div>
-      ) : (
-        <div className="px-2.5 pt-1.5 pb-2">
-          {/* 区 1 —— 类型端口（输入在左，输出在右） */}
-          {(typed.length > 0 || outputs.length > 0) && (
-            <div className="mb-1.5 grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-              <div className="flex flex-col gap-0.75">
-                {typed.map((i, idx) => (
-                  <PortRow color={color} key={`ti-${idx}`} name={i.name} side="in" type={i.type} />
-                ))}
-              </div>
-              <div className="flex flex-col items-end gap-0.75">
-                {outputs.map((output, idx) => (
-                  <PortRow
-                    color={color}
-                    key={`to-${idx}`}
-                    name={output.name}
-                    side="out"
-                    type={output.type}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 区 2 —— widget（带标签的参数） */}
-          {widgets.length > 0 && (
-            <div
-              className="flex flex-col gap-0.5 border-t pt-1.5"
-              style={{ borderColor: "var(--color-border-subtle)" }}
-            >
-              {widgets.slice(0, 32).map((widget, idx) => (
-                <div className="text-2xs flex items-center gap-1.5" key={`w-${idx}`}>
-                  <span
-                    className="inline-block shrink-0 rounded-full"
-                    style={{
-                      width: 6,
-                      height: 6,
-                      background: color,
-                      opacity: 0.7,
-                    }}
-                  />
-                  <span className="text-ink-soft min-w-0 flex-1 truncate" title={widget.name}>
-                    {widget.name}
-                  </span>
-                  <WidgetValueChip value={widget.default} widget={widget.widget ?? null} />
-                </div>
-              ))}
-              {widgets.length > 32 && (
-                <div className="text-muted-foreground text-3xs pl-3">
-                  … +{widgets.length - 32} more
-                </div>
-              )}
-            </div>
-          )}
-
-          {typed.length === 0 && widgets.length === 0 && outputs.length === 0 && (
-            <div className="text-muted-foreground text-3xs py-1 text-center italic">
-              无输入 / 输出参数
-            </div>
-          )}
         </div>
       )}
     </div>

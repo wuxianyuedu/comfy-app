@@ -533,8 +533,8 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
       vramUsed,
       vramFree,
       vramTotal,
-      smiVramUsed: smi?.usedMiB != null ? smi.usedMiB * 1024 * 1024 : undefined,
-      smiVramTotal: smi?.totalMiB != null ? smi.totalMiB * 1024 * 1024 : undefined,
+      smiVramUsed: smi?.usedMiB == null ? undefined : smi.usedMiB * 1024 * 1024,
+      smiVramTotal: smi?.totalMiB == null ? undefined : smi.totalMiB * 1024 * 1024,
       ramUsed: ramTotal > 0 ? Math.max(0, ramTotal - ramFree) : 0,
       ramTotal,
     };

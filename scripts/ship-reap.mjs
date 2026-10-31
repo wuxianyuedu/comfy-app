@@ -166,11 +166,11 @@ export async function reapCheckoutInstances({ root, log, run, read = readAppInst
     for (const line of out.split("\n").filter(Boolean)) {
       log(`[ship]   ${pid}：${line}`);
     }
-    if (r.status !== 0) {
+    if (r.status === 0) {
+      codes.push(CODE.GREEN);
+    } else {
       log(`[ship]   ${pid}：回收入口退 ${r.status} ⇒ 这一格是红的（不假定它收掉了）`);
       codes.push(CODE.RED);
-    } else {
-      codes.push(CODE.GREEN);
     }
   }
 

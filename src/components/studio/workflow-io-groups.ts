@@ -138,7 +138,7 @@ export type DimClarityPreset = {
 const dimClarityPresetOf = (preset: (typeof SIZE_CLARITY_PRESETS)[number]): DimClarityPreset => ({
   kind: preset.kind,
   label: preset.label,
-  ...(preset.megapixels !== undefined ? { totalPixels: preset.megapixels * 1_000_000 } : {}),
+  ...(preset.megapixels === undefined ? {} : { totalPixels: preset.megapixels * 1_000_000 }),
 });
 
 /* 首项单独映射、其余走 `map` —— 这样类型是**非空数组**，`[0]` 即默认档

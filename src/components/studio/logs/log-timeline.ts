@@ -223,7 +223,7 @@ export function mergeTimelineIndexed(
     current.length === 0 || changed
       ? [...current.map((e) => ({ ...e })), ...added]
       : [...current, ...added];
-  merged.sort((a, b) => (a.time !== b.time ? a.time - b.time : a.seq - b.seq));
+  merged.sort((a, b) => (a.time === b.time ? a.seq - b.seq : a.time - b.time));
   return { logs: merged, index };
 }
 
