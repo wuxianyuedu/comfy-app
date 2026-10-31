@@ -103,7 +103,7 @@ export interface ParamEntry {
   label: string;
   /** 该契约口子在当前工作流里的候选端口（ioKey 保持 workflowIO 的原始键）。
    *  作者从这些候选里拖一条线选中一个作为落点。 */
-  pins: Array<{ ioKey: string; name: string; type: string; defaultValue: unknown }>;
+  pins: Array<{ defaultValue: unknown; ioKey: string; name: string; type: string }>;
 }
 
 /** 端口所属的节点 id（ioKey 形如 `<nodeId>::<kind>::<name>`）。
@@ -375,7 +375,7 @@ const NUMERIC_PORT_TYPES = /* SAFETY: 类型断言已复核 */ ["INT", "FLOAT", 
  *    （用户口径：「这是不行的」）。
  *
  *  类型未知（缺省 / `*`）的端口一律放行：拿不到事实时不替作者做决定。 */
-const SIZE_SUB_SPEC: Record<string, { display: string; accepts: ReadonlyArray<string> }> = {
+const SIZE_SUB_SPEC: Record<string, { accepts: ReadonlyArray<string>; display: string }> = {
   "size-width": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
   "size-height": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
   "size-megapixels": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
@@ -474,7 +474,7 @@ export function paramOutputPorts(
 export function wiredTargetsForEntry(args: {
   /** 当前模式下这个条目的落点（`resolveMapping` 的结果；`null` = 未连线/断开）。 */
   target: string | null | undefined;
-}): Array<{ ioKey: string; active: boolean }> {
+}): Array<{ active: boolean; ioKey: string }> {
   /* 只报作者连上的那一条 —— 候选圆点由 `paramOutputPorts` 照给，两件事分开。 */
   return args.target ? [{ ioKey: args.target, active: true }] : [];
 }

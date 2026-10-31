@@ -34,10 +34,10 @@ function FitHarness({
   nodeCount,
   applied,
 }: {
+  applied: Array<string>;
   graphKey: string;
   /** 会随节点整批同步而变化 —— 正是让 effect 重跑、并 cleanup 掉未触发 rAF 的依赖。 */
   nodeCount: number;
-  applied: Array<string>;
 }) {
   const schedulerRef = useRef<ReturnType<typeof createFitOnceScheduler> | null>(null);
   schedulerRef.current ??= createFitOnceScheduler();

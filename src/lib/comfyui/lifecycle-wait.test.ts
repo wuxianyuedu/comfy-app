@@ -124,9 +124,9 @@ describe("createRecentOutputLedger（进程秒退时报错来源）", () => {
 
 describe("createChildExitHandler（退出回调可单测）", () => {
   function handler(over: {
+    onBanner?: (b: string) => void;
     stopRequested?: boolean;
     subject?: string;
-    onBanner?: (b: string) => void;
   }) {
     const lines: Array<string> = [];
     const logs: Array<string> = [];

@@ -19,7 +19,7 @@ export interface AgentToolHandlers {
   getShots: () => WorkshopDraftDto["shots"];
   setShots: (shots: WorkshopDraftDto["shots"]) => void;
   /** 用当前项目镜头一键成片（服务端逐镜视频 + 合成 + 回写进度）。缺省表示该上下文不支持。 */
-  renderFilm?: () => Promise<{ ok: boolean; summary: string; detail?: string }>;
+  renderFilm?: () => Promise<{ detail?: string; ok: boolean; summary: string }>;
 }
 
 /** 一个待执行的工具（已解析出参数摘要）。 */
@@ -27,7 +27,7 @@ export interface ResolvedAgentTool {
   toolName: string;
   summary: string;
   argSummary: string;
-  execute: () => Promise<{ ok: boolean; summary: string; detail?: string }>;
+  execute: () => Promise<{ detail?: string; ok: boolean; summary: string }>;
 }
 
 /** 安全解析 JSON 参数串为对象。 */
@@ -55,9 +55,9 @@ function summarizeArgs(argsJson: string, maxLen = 200): string {
 
 /** 从 LLM 输出文本中解析角色 JSON 数组（扫描走全库唯一的 `extractJsonArray`）。 */
 function parseCharactersFromJson(text: string): Array<{
-  name: string;
   appearance?: string;
   costume?: string;
+  name: string;
   personality?: string;
 }> {
   try {
@@ -105,10 +105,10 @@ function parseCharacterFull(
  *  的地方。它一度是 `shotType: string` 然后在下游写 `s.shotType as never`，
  *  于是「模型返回什么景别都直接进库」这件事在类型层完全看不见（台账 F13）。 */
 function parseShotsFromJson(text: string): Array<{
-  sceneHeading: string;
-  description: string;
-  shotType: ShotType;
   characterNames: Array<string>;
+  description: string;
+  sceneHeading: string;
+  shotType: ShotType;
 }> {
   try {
     const arr = extractJsonArray(text);

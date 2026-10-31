@@ -118,7 +118,7 @@ describe("CP936 出口：写字节（只读、失败不抛）", () => {
   });
 
   it("Windows 上走 PowerShell + `-NoProfile`（配置脚本不许进这条链）", () => {
-    const calls: Array<{ cmd: string; args: Array<string>; input: string }> = [];
+    const calls: Array<{ args: Array<string>; cmd: string; input: string }> = [];
     const r = writeCp936("中文一二三", {
       platform: "win32",
       run: (cmd, args, input) => {
@@ -526,7 +526,7 @@ describe("CP936 出口：编排与退出码", () => {
      * （`spawn("pnpm.cmd")` 同样，因为 `.cmd` 只有 cmd.exe 会解释）。§2.1.1 已经为
      * 这件事收了一个唯一出口，所以本外壳**必须**过它，而不是自己写一个
      * 「Windows 用 pnpm.cmd」——那正是第四次踩同一个坑。 */
-    const seen: Array<{ cmd: string; args: Array<string> }> = [];
+    const seen: Array<{ args: Array<string>; cmd: string; }> = [];
     const child = fakeChild("ok\n", 0);
     await runWithCp936Exit(["--", "pnpm", "install", "--frozen-lockfile"], {
       platform: "win32",
@@ -567,7 +567,7 @@ describe("CP936 出口：编排与退出码", () => {
      * 正确的那一层是 `resolveCommandInvocation()`：收名字、交 `{command, args,
      * resolved}`。这条用例把那个口径钉住 —— 生产解析口必须是后者，注入面也必须
      * 交出这个形状。 */
-    const seen: Array<{ cmd: string; args: Array<string> }> = [];
+    const seen: Array<{ args: Array<string>; cmd: string; }> = [];
     const child = fakeChild("ok\n", 0);
     await runWithCp936Exit(["--", "some-thing", "x"], {
       platform: "win32",
@@ -1099,7 +1099,7 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
   it("Windows：**每一整行各转一次**，且 `stdio` 仍然是 `inherit`", async () => {
     /* 转码仍然按**整行**为单位过 PowerShell：按块转会在多字节字符中间截断
      * （GBK 变长），`splitStreamChunk` 正是为此而存在。 */
-    const seen: Array<{ text: string; stdio: unknown }> = [];
+    const seen: Array<{ stdio: unknown; text: string; }> = [];
     const child = streamingChild();
     const done = runWithCp936Exit(["--", "长跑"], {
       platform: "win32",

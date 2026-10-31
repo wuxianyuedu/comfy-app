@@ -27,10 +27,10 @@ export function Field({
   placeholder,
 }: {
   label: string;
-  value: string;
   onChange: (v: string) => void;
-  type?: string;
   placeholder?: string;
+  type?: string;
+  value: string;
 }) {
   /* 标签 / 控件 / ARIA 关联走 `ui/form-field`（规范 16 §16.2.4.26）；
    * 控件本体走 `ui/input`（shadcn Input、§16.2.3 / §12.18 · P67 f 治理）。

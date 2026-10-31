@@ -38,9 +38,9 @@ const sizeArgs = {
 
 /** 工具入参 → 尺寸表达；一个都没给时返回 undefined（各通道走自己的默认档）。 */
 function sizeSpecOf(args: {
-  ratio?: string;
   clarity?: string;
   multiple?: number;
+  ratio?: string;
   size?: string;
 }): SizeSpec | undefined {
   if (args.ratio || args.clarity || args.multiple !== undefined) {

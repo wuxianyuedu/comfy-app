@@ -139,8 +139,8 @@ export function useFilmStudio(): FilmStudioController {
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）：两个动作此前复位都写在动作之后。 */
   const actionBusy = useBusyAction();
   /** 未消费的技能列表：先取回来用于后续开放风格选择，暂不渲染。 */
-  const [, setSkills] = useState<Array<{ slug: string; name: string }>>([]);
-  const [, setRecent] = useState<Array<{ id: string; title: string; status: string }>>([]);
+  const [, setSkills] = useState<Array<{ name: string; slug: string }>>([]);
+  const [, setRecent] = useState<Array<{ id: string; status: string; title: string }>>([]);
 
   /* 拉一次详情。轮询本身由 `useInterval` 按「是否在跑」驱动，这里不再自己
    * 起停定时器（规范 16 §16.2.4.15）—— 此前 `fetchDetail` 里 `??= setInterval`

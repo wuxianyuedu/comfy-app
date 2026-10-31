@@ -65,7 +65,7 @@ export interface QueueMonitorController {
    * （富卡片的数据源不可达），离线兜底卡用它渲染。 */
   runningRows: Array<QueueRow>;
   /** 排队项，`position` 从 1 起（1 = 下一个开跑）。 */
-  queued: Array<{ row: QueueRow; position: number }>;
+  queued: Array<{ position: number; row: QueueRow }>;
   /** 最近结果（已截到窗口上限，新的在前）。 */
   recent: Array<QueueRow>;
   /** 本应用排队 + ComfyUI 自己排队，与状态栏那格同一算法；离线时退回

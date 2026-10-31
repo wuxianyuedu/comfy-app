@@ -139,9 +139,9 @@ const PROBE_BY = "2026-11-09T00:00:00Z";
  * 且**判据仍然会问**另外那几条（key 字面量 / 不撞退化形状 / 一把锁只给一份清单）。
  */
 const PROBE_LOCK_EXEMPT: Array<{
-  event: string;
   /** 这一条的锁**故意**不写 `cancel-in-progress`，锚点名写在这里（其余一条都不许借）。 */
   cancelFalse?: string;
+  event: string;
   /** 这一条**故意**一条锁都不写（对照组）。 */
   noLock?: boolean;
 }> = [
@@ -213,7 +213,7 @@ const CONFIG_SHAPE: Array<{ mustMatch: RegExp; why: string }> = [
  * 判据按**码位**扫 script 块的代码行（先剥行内注释），只认那几种「7 有、5.1 没有」
  * 的形状；每一条都是解析期错误、不会有「其实 5.1 也认」的中间态。
  */
-const PS7_ONLY: Array<{ pattern: RegExp; what: string; instead: string }> = [
+const PS7_ONLY: Array<{ instead: string; pattern: RegExp; what: string; }> = [
   {
     pattern: /\?\./,
     what: "`?.` null 条件运算符（PS 7+）",
@@ -571,8 +571,8 @@ function stageScriptLine(text: string, name: string): string {
  */
 export function crontabEvents(
   text: string,
-): Array<{ branch: string; event: string; cron: string }> {
-  const out: Array<{ branch: string; event: string; cron: string }> = [];
+): Array<{ branch: string; cron: string; event: string; }> {
+  const out: Array<{ branch: string; cron: string; event: string; }> = [];
   let branch = "";
   for (const line of text.split("\n")) {
     /* 顶层分支键：顶格、以 `:` 结尾（`master:` / `"dev/*":` / `$:`）。 */
@@ -1053,8 +1053,8 @@ export function resolveLockKey(template: string, vars: Record<string, string | u
 /** `.lock-*` 那几把**类锁**的定义：锚点名 → `{ key 原文, cancel-in-progress 原文 }`（`null` = 没写）。 */
 export function lockAnchorDefinitions(
   text: string,
-): Map<string, { key: string; cancelInProgress: boolean | null }> {
-  const out = new Map<string, { key: string; cancelInProgress: boolean | null }>();
+): Map<string, { cancelInProgress: boolean | null; key: string; }> {
+  const out = new Map<string, { cancelInProgress: boolean | null; key: string; }>();
   const def = /^\.lock-[\w-]+:[ \t]*&(lock_\w+)[ \t]*$([\s\S]*?)(?=^\S|$(?![\s\S]))/gm;
   for (const m of text.matchAll(def)) {
     const name = m[1];
@@ -1088,14 +1088,14 @@ export function lockAnchorDefinitions(
  */
 export function pipelineLockAssignments(text: string): Array<{
   event: string;
-  name: string;
   lockRef: string | null;
+  name: string;
   stagesRef: string | null;
 }> {
   const out: Array<{
     event: string;
-    name: string;
     lockRef: string | null;
+    name: string;
     stagesRef: string | null;
   }> = [];
   let inMaster = false;
@@ -2145,7 +2145,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 一条锁都不写」这条例外根本没有对象，而探针 A 的 `false` 也测不到它自己要测的
      * 那把锁（`.cnb.yml` 那段注释早就点了这个坏形态，判据这一侧据此补上）。
      * 顺带钉住例外的**边界**：豁免只覆盖「漏写」与「一条都不写」，别的规则一条都不放过。 */
-    const probeFixture = (o: { cancel?: string | null; probeB?: string; extra?: string }) =>
+    const probeFixture = (o: { cancel?: string | null; extra?: string; probeB?: string; }) =>
       [
         ".common: &common",
         "  lock:",

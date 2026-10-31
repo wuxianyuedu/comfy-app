@@ -36,12 +36,12 @@
 export interface ComfyWsMessage {
   type?: string;
   data?: {
-    prompt_id?: unknown;
-    node?: unknown;
-    value?: unknown;
-    max?: unknown;
-    exception_message?: unknown;
     [k: string]: unknown;
+    exception_message?: unknown;
+    max?: unknown;
+    node?: unknown;
+    prompt_id?: unknown;
+    value?: unknown;
   };
 }
 

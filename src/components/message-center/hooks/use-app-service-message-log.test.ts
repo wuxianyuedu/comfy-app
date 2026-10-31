@@ -30,9 +30,9 @@ function stubExitEndpoint({
   currentRunId = "run-new",
   fail = false,
 }: {
-  record?: unknown;
   currentRunId?: string | null;
   fail?: boolean;
+  record?: unknown;
 } = {}) {
   const calls = { lastExit: 0 };
   vi.stubGlobal(
@@ -75,10 +75,10 @@ function stubShellExitRecord(record: unknown = EXIT_RECORD) {
 }
 
 type Facts = {
-  state: "starting" | "online" | "offline" | "stale";
-  processIsNew: boolean;
   /** 当前是哪一次启动（runId）；null = 拿不到（手工 `pnpm dev` 等）。 */
   currentRunId: string | null;
+  processIsNew: boolean;
+  state: "starting" | "online" | "offline" | "stale";
   /** 最后一拍之前**没人在探测**的那一段（毫秒）；省缺 0（每一拍都在探）。 */
   unprobedMs: number;
 };

@@ -33,12 +33,12 @@ function writeRecord(body: unknown): void {
   fs.writeFileSync(FILE, JSON.stringify(body), "utf8");
 }
 
-async function get(): Promise<{ record: unknown; currentRunId: unknown }> {
+async function get(): Promise<{ currentRunId: unknown; record: unknown }> {
   const res = await GET();
   expect(res.headers.get("Cache-Control")).toBe("no-store");
   return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-    record: unknown;
     currentRunId: unknown;
+    record: unknown;
   };
 }
 

@@ -110,16 +110,16 @@ export const workflowListProcedures = {
       // ── 磁盘上的本地根目录 ──
       const localRoots = getLocalWorkflowRoots();
       let localRootsSummary: Array<{
-        rawPath: string;
         absPath: string;
-        exists: boolean;
         count: number;
         error?: string;
+        exists: boolean;
+        rawPath: string;
       }> | null = null;
       let localRootsList: Array<{
-        rawPath: string;
         absPath: string;
         exists: boolean;
+        rawPath: string;
       }> = [];
       let localAllFiles: Array<LocalWorkflowFile> = [];
       if (localRoots.length > 0) {

@@ -156,9 +156,9 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
      *  带归属条件是刻意的：这条读出来的就是**要交给 ComfyUI 执行的图**，跨片读到
      *  别人的载荷（比如误把 inline 的 id 递进 host 的 tick）等于替别的宿主起跑。 */
     async findExecJob(taskId: string): Promise<{
-      workflowName: string;
       execPayload: unknown;
       params: unknown;
+      workflowName: string;
     } | null> {
       const rows = await db
         .select({
@@ -188,10 +188,10 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
       take: number,
     ): Promise<
       Array<{
-        id: string;
-        createdAt: Date;
-        workflowName: string;
         claimedBy: string;
+        createdAt: Date;
+        id: string;
+        workflowName: string;
       }>
     > {
       const rows = await db
@@ -218,10 +218,10 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
       /* 谓词里已有 `claimedBy IS NOT NULL`，而 drizzle 不会据此把投影收窄成非空：
        * 在边界上断言一次，读侧（把陌生归属值写进用户可见的判死原因）不必再判空。 */
       return /* SAFETY: 类型断言已复核 */ rows as Array<{
-        id: string;
-        createdAt: Date;
-        workflowName: string;
         claimedBy: string;
+        createdAt: Date;
+        id: string;
+        workflowName: string;
       }>;
     },
 
@@ -237,9 +237,9 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
       owner: TaskClaimMode = "inline",
     ): Promise<
       Array<{
+        createdAt: Date;
         id: string;
         promptId: string | null;
-        createdAt: Date;
         workflowName: string;
       }>
     > {
@@ -267,13 +267,13 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
     async createImages(
       taskId: string,
       images: Array<{
-        localPath: string;
-        sortIndex: number;
+        height?: number | null;
         isCover: boolean;
+        localPath: string;
         mediaType: string;
         seed: string | null;
+        sortIndex: number;
         width?: number | null;
-        height?: number | null;
       }>,
     ): Promise<void> {
       await db.insert(taskImage).values(
@@ -381,13 +381,13 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
     /** executor-finalize 收口时读归属与请求参数（projectId / params / prompt /
      *  negativePrompt / workflowName / referenceImages / createdAt）。 */
     async findExecutionMeta(taskId: string): Promise<{
-      projectId: string | null;
-      params: unknown;
-      prompt: string;
-      negativePrompt: string | null;
-      workflowName: string;
-      referenceImages: unknown;
       createdAt: Date;
+      negativePrompt: string | null;
+      params: unknown;
+      projectId: string | null;
+      prompt: string;
+      referenceImages: unknown;
+      workflowName: string;
     } | null> {
       const rows = await db
         .select({
@@ -421,11 +421,11 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
       taskId: string,
       pct: number,
       node?: {
+        classType?: string;
         id: string;
         label?: string;
-        classType?: string;
-        value: number;
         max: number;
+        value: number;
       },
     ): Promise<boolean> {
       const updated = await db
@@ -459,8 +459,8 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
     async finalizeSuccess(
       taskId: string,
       data: {
-        resultImages: unknown;
         params: unknown;
+        resultImages: unknown;
         workflowSnapshot?: unknown;
       },
     ): Promise<TaskWriteOutcome> {
@@ -544,7 +544,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
      *  logs 这种大字段拉回来。 */
     async findStatusAndPromptById(
       taskId: string,
-    ): Promise<{ status: string; promptId: string | null } | null> {
+    ): Promise<{ promptId: string | null; status: string } | null> {
       const rows = await db
         .select({ status: task.status, promptId: task.promptId })
         .from(task)

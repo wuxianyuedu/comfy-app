@@ -267,7 +267,7 @@ test("动了 pnpm-workspace.yaml（名单自己）也算命中依赖面", ({ rep
 });
 
 /** D 组步骤：两空格缩进的 `run "<标签>" <命令>`，行首锚定只认真调用。 */
-function dGroupSteps(hookText: string): Array<{ label: string; cmd: string }> {
+function dGroupSteps(hookText: string): Array<{ cmd: string; label: string; }> {
   const re = /^ {2}run "([^"]+)" (.+)$/gm;
   return [...hookText.matchAll(re)].map((m) => ({
     label: m[1] ?? "",

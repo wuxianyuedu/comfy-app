@@ -42,18 +42,18 @@ const ROOT = path.resolve(__dirname, "..");
 const ENTRY = path.join(ROOT, "scripts", "ci-daily-failure-issue.mjs");
 
 /** 构建列表那一项（这一层只用得到四个字段）。 */
-type ListBuild = { sn: string; event: string; createTime: string; status: string };
+type ListBuild = { createTime: string; event: string; sn: string; status: string };
 
 type StageRow = { id: string; name: string; status: string };
 
 /** `get-build-status -v` 那份读数的最小形状（`classifyBuildOutcome()` 认的就是它）。 */
 type DetailJson = {
   data: {
-    status: string;
     pipelinesStatus: Record<
       string,
-      { id: string; name: string; status: string; stages: Array<StageRow> }
+      { id: string; name: string; stages: Array<StageRow>; status: string; }
     >;
+    status: string;
   };
 };
 
@@ -63,7 +63,7 @@ type Verdict = "green" | "failed" | "cancelled" | "running";
  * `pickPreviousDaily()` 的返回是判别联合（要么挑到、要么给一句为什么挑不到）。
  * 这里要的只是「读哪个字段」的形状，不是再写一套判决 —— 一次 `as`，字段全在这。
  */
-type PickedLike = { sn?: string; none?: string; outcome?: { state: string } };
+type PickedLike = { none?: string; outcome?: { state: string }; sn?: string; };
 const asPicked = (p: unknown): PickedLike => /* SAFETY: 类型断言已复核 */ p as PickedLike;
 
 /** 建单标题（去重键只认格名那一段，构建号 / 事件 / 时刻只给读者看 — ISSUE #2399）。 */
@@ -382,7 +382,7 @@ describe("正文只含读数，不含因果", () => {
 
 describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
   /** 写一份离线读数，返回它的路径与目录（每份用例自带目录，别往仓库里落东西）。 */
-  function fixture(list: Array<ListBuild>, details: Array<{ sn: string; json: DetailJson }>) {
+  function fixture(list: Array<ListBuild>, details: Array<{ json: DetailJson; sn: string; }>) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "daily-failure-issue-"));
     const file = path.join(dir, "read.json");
     fs.writeFileSync(file, JSON.stringify({ list, details }), "utf8");
@@ -528,10 +528,10 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
 
   /** 一整条假平台：列表按页答，详情按 sn 答，写命令记下来。 */
   function fakePlatform(input: {
-    pages: Record<number, Array<ListBuild> | null>;
+    comments?: Array<string>;
     detailsBySn: Record<string, Verdict>;
     openIssues: Array<{ number: number; title: string }>;
-    comments?: Array<string>;
+    pages: Record<number, Array<ListBuild> | null>;
   }) {
     /** @type {string[]} */
     const calls: Array<string> = [];
@@ -851,12 +851,12 @@ describe("判决行与判据那一侧对账（改词要两边一起改）", () =
  * 用例喂的是同一份平台形状，测的是「哪几跑算看过」与「什么时候必须放弃结论」。
  */
 describe("连续红天数：逐日回看，读不出不是 0", () => {
-  type FakeDay = { text: string; status?: string };
+  type FakeDay = { status?: string; text: string; };
 
   /** 假平台：列表按页答（`null` = 那一页取不到），逐格详情按 sn 答。 */
   function fakePlatform(input: {
-    page: (n: number) => Array<ListBuild> | null;
     days: Record<string, FakeDay>;
+    page: (n: number) => Array<ListBuild> | null;
   }) {
     const calls: Array<string> = [];
     const run = (_cmd: string, args: Array<string>) => {

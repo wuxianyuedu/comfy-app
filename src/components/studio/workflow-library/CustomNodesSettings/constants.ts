@@ -6,16 +6,16 @@ import type { RowState } from "./types";
 export const ROW_STATE_PRESET: Record<
   RowState["kind"],
   {
-    /** `ui/status-badge` 认的状态键（配色只有那一处，规范 16 §16.2.4.5）。 */
-    status: string;
-    label: string;
-    /** 整行的底色 / 边框（语义 token）。 */
-    rowCls: string;
-    /** 展开区左侧竖轨。 */
-    railCls: string;
     /** 行内动作按钮（配色走 Button 变体 + 本模块的排布补充）。 */
     btn: string;
     btnLabel: string;
+    label: string;
+    /** 展开区左侧竖轨。 */
+    railCls: string;
+    /** 整行的底色 / 边框（语义 token）。 */
+    rowCls: string;
+    /** `ui/status-badge` 认的状态键（配色只有那一处，规范 16 §16.2.4.5）。 */
+    status: string;
   }
 > = {
   loaded: {

@@ -81,9 +81,9 @@ async function read(source: string, offset = 0) {
   );
   return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
     content: string;
-    size: number;
     offset: number;
     sessionStart: number | null;
+    size: number;
   };
 }
 
@@ -215,11 +215,11 @@ describe("GET /api/logs/current — 服务端进程标识", () => {
     }
     const res = await GET(new Request(`http://localhost/api/logs/current?${query.toString()}`));
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      content: string;
-      size: number;
-      offset: number;
       bootId?: string;
+      content: string;
       mismatch?: boolean;
+      offset: number;
+      size: number;
     };
   }
 

@@ -25,7 +25,7 @@
 import { getSettingsSync } from "./app-settings/app-settings.server";
 import { userRepository } from "./core/repository";
 
-export type ServerUser = { id: string; email: string; name: string | null };
+export type ServerUser = { email: string; id: string; name: string | null };
 
 /** 会话里我们真正用到的部分（better-auth 的会话对象是它的超集）。 */
 export type SessionLike = {

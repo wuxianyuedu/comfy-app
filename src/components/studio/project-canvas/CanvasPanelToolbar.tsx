@@ -29,7 +29,7 @@ interface CanvasPanelToolbarProps {
  * - **行内**（`floating=false`）：普通 flex 子元素，坐在打开的面板左侧。
  */
 export function CanvasPanelToolbar({ active, onSelect, floating = true }: CanvasPanelToolbarProps) {
-  const items: Array<{ id: CanvasPanelType; label: string; icon: React.ReactNode }> = [
+  const items: Array<{ icon: React.ReactNode; id: CanvasPanelType; label: string }> = [
     {
       id: "materials",
       label: "素材库",

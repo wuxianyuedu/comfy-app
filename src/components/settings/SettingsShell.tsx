@@ -76,18 +76,6 @@ import { useSectionScrollSpy } from "./use-section-scroll-spy";
  *   · **三态**：给 `fallback`（整块内容区的替代品），导航仍在、右侧换成这一块。
  */
 type SettingsShellProps = {
-  /** 当前分区（导航高亮用）。 */
-  section: Section;
-  /** 分区变化（点击导航或滚动跟随都走它）。 */
-  onSelect: (section: Section) => void;
-  /**
-   * 屏级可见标题 —— 走 `.u-title-page`。**页签（或顶栏）已经在说屏名时不传**
-   * （ISSUE #1872）：那一次出现是重复的，不传时屏名以 `sr-only` 留在 DOM，
-   * 这一行也不再占位（口径与 `ui/page-header` 的 `title` / `srTitle` 同一份）。
-   */
-  title?: string;
-  /** 根容器高度 class（overlay 模式传 h-full 覆盖）。 */
-  className?: string;
   /**
    * 页面级提示条（保存结果 / 读取失败降级），落在滚动区**之内、分区之前**。
    *
@@ -95,6 +83,8 @@ type SettingsShellProps = {
    * 占位置；而放在分区之前则保证它不会被第一节的标题挡掉。
    */
   banner?: ReactNode;
+  /** 根容器高度 class（overlay 模式传 h-full 覆盖）。 */
+  className?: string;
   /**
    * 跳转载荷要求直接停驻的目标分区（尚未落定）。外壳在分区节挂好之后**瞬时**滚到
    * 它，并回调 `onJumpApplied`；三态壳（`fallback`）下没有分区节，滚不过去、
@@ -103,8 +93,19 @@ type SettingsShellProps = {
   jumpSection?: Section | null;
   /** 跳转目标真的滚过去了（外壳命中了锚点）—— 调用方据此消费一次性载荷。 */
   onJumpApplied?: () => void;
+  /** 分区变化（点击导航或滚动跟随都走它）。 */
+  onSelect: (section: Section) => void;
+  /** 当前分区（导航高亮用）。 */
+  section: Section;
+  /**
+   * 屏级可见标题 —— 走 `.u-title-page`。**页签（或顶栏）已经在说屏名时不传**
+   * （ISSUE #1872）：那一次出现是重复的，不传时屏名以 `sr-only` 留在 DOM，
+   * 这一行也不再占位（口径与 `ui/page-header` 的 `title` / `srTitle` 同一份）。
+   */
+  title?: string;
 } & (
   | {
+      fallback?: undefined;
       /**
        * 每个分区的正文（**一份映射，不许缺项**）。
        *
@@ -114,7 +115,6 @@ type SettingsShellProps = {
        * 比再加一条运行时判据直接。
        */
       sections: Record<Section, ReactNode>;
-      fallback?: undefined;
     }
   | {
       /**
@@ -287,8 +287,8 @@ function SettingsSectionNav({
   section,
   onSelect,
 }: {
-  section: Section;
   onSelect: (section: Section) => void;
+  section: Section;
 }) {
   return (
     <nav aria-label="设置分区" className="custom-scrollbar w-40 shrink-0 overflow-y-auto pb-2">

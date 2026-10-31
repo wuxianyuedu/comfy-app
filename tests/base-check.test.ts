@@ -101,8 +101,8 @@ function runBaseCheckOnce(
   args: Array<string>,
 ): {
   code: number;
-  stdout: string;
   stderr: string;
+  stdout: string;
 } {
   try {
     const stdout = execFileSync(process.execPath, [SCRIPT, ...args], {
@@ -114,8 +114,8 @@ function runBaseCheckOnce(
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: e.status ?? -1,
@@ -136,8 +136,8 @@ function runBaseCheckOnce(
  * 手写引用只能覆盖候选顺序的后半段，恰好绕开了最常走的那一条。
  */
 function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}): {
-  work: string;
   bare: string;
+  work: string;
 } {
   const bare = mkdtempSync(join(tmpdir(), "base-check-bare-"));
   git(bare, "init", "-q", "--bare", "-b", "master", ".");
@@ -211,7 +211,7 @@ function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}
 }
 
 /** 清掉一对（work + bare）临时目录。 */
-function dropRepo(r: { work: string; bare: string }): void {
+function dropRepo(r: { bare: string; work: string; }): void {
   rmSync(r.work, { recursive: true, force: true });
   rmSync(r.bare, { recursive: true, force: true });
 }
@@ -226,7 +226,7 @@ function dropRepo(r: { work: string; bare: string }): void {
 function runBaseCheck(
   cwd: string,
   args: Array<string>,
-): { code: number; stdout: string; stderr: string } {
+): { code: number; stderr: string; stdout: string; } {
   const first = runBaseCheckOnce(cwd, args);
   if (first.code === 0 || first.stdout || first.stderr) {
     return first;
@@ -684,7 +684,7 @@ describe("base-check —— 真仓库上的四态", () => {
    * 合了进来（还没推）。此时按旧口径拿 `@{u}` 当基线 = 拿**不含那批合并改动**的
    * 自己跟自己比 ⇒ 主干自带的红会被判成 `yours`，把别线的债算到复算的人头上。
    */
-  function makeMergedPrFixture(): { work: string; bare: string } {
+  function makeMergedPrFixture(): { bare: string; work: string; } {
     const bare = mkdtempSync(join(tmpdir(), "base-check-pr-bare-"));
     git(bare, "init", "-q", "--bare", "-b", "master", ".");
     const work = mkdtempSync(join(tmpdir(), "base-check-pr-work-"));
@@ -1162,13 +1162,13 @@ describe("base-check --base —— 真仓库上的端到端", () => {
     try {
       const { stdout } = runBaseCheck(r.work, ["--base", "--json"]);
       const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(stdout) as {
-        summary: string;
         ref: string;
         rows: Array<{
+          baseCode: number | null;
           label: string;
           verdict: string;
-          baseCode: number | null;
         }>;
+        summary: string;
       };
       expect(parsed.summary).toBe("baseline-red");
       expect(parsed.ref).toMatch(/up\/master/);

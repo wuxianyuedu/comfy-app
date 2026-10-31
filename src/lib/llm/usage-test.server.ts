@@ -118,12 +118,12 @@ export async function resolveUpstream(
  *  抛异常会让「空接口地址」这类**用户可修正**的输入走成 500。 */
 export type UsageTestPrologue =
   | {
-      ok: true;
       name: string;
+      ok: true;
       rec: Record<string, unknown>;
       up: ResolvedUpstream;
     }
-  | { ok: false; detail: string };
+  | { detail: string; ok: false };
 
 export async function readUsageTestPrologue(req: Request): Promise<UsageTestPrologue> {
   const body: unknown = await req.json().catch(() => ({}));
@@ -181,7 +181,7 @@ export function httpFailureDetail(status: number, payload: unknown, rawText = ""
 /** 额外参数（JSON 对象字符串）→ 逐键合并用的对象。 */
 export function parseExtraJson(
   extraJson: string,
-): { ok: true; extra: Record<string, unknown> } | { ok: false; detail: string } {
+): { extra: Record<string, unknown>; ok: true } | { detail: string; ok: false } {
   if (extraJson === "") {
     return { ok: true, extra: {} };
   }
@@ -225,7 +225,7 @@ export async function callChat(
   model: string,
   prompt: string,
   extra: Record<string, unknown>,
-): Promise<{ ok: true; text: string } | { ok: false; detail: string }> {
+): Promise<{ ok: true; text: string } | { detail: string; ok: false }> {
   const res = await fetch(`${up.base}${up.path}`, {
     method: "POST",
     headers: up.headers,
@@ -260,7 +260,7 @@ export async function callImage(
   prompt: string,
   size: string,
   extra: Record<string, unknown>,
-): Promise<{ ok: true; url: string } | { ok: false; detail: string }> {
+): Promise<{ ok: true; url: string } | { detail: string; ok: false }> {
   const res = await fetch(`${up.base}${up.path}`, {
     method: "POST",
     headers: up.headers,
@@ -297,7 +297,7 @@ export async function callImage(
 export type VideoSubmitOutcome =
   | { status: "done"; url: string }
   | { status: "pending"; taskId: string }
-  | { status: "error"; detail: string };
+  | { detail: string; status: "error" };
 
 export async function callVideo(
   up: ResolvedUpstream,

@@ -29,8 +29,8 @@ const requireCjs = createRequire(import.meta.url);
 const reader = /* SAFETY: 类型断言已复核 */ requireCjs("../scripts/gate-scan-read.cjs") as {
   dirExists: (dir: string) => boolean;
   readForScan: (abs: string) => string | null;
-  walkForScan: (dir: string, fileRe: RegExp, opts?: { skipDirs?: Set<string> }) => Array<string>;
   vanishedNote: (count: number) => string;
+  walkForScan: (dir: string, fileRe: RegExp, opts?: { skipDirs?: Set<string> }) => Array<string>;
 };
 
 const ROOT = process.cwd();

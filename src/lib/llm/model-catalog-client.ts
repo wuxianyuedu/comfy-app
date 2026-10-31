@@ -37,9 +37,9 @@ async function getModels(
       },
     );
     const json = /* SAFETY: 类型断言已复核 */ (await res.json().catch(() => ({}))) as {
-      ok?: unknown;
-      models?: unknown;
       detail?: unknown;
+      models?: unknown;
+      ok?: unknown;
     };
     return {
       ok: json.ok === true,

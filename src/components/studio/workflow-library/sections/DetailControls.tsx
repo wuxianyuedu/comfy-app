@@ -17,11 +17,11 @@ export function ActionButton({
   disabled,
   variant = "default",
 }: {
-  onClick: () => void;
+  disabled?: boolean;
   icon: ReactNode;
   label: string;
+  onClick: () => void;
   title?: string;
-  disabled?: boolean;
   variant?: "default" | "danger";
 }) {
   return (

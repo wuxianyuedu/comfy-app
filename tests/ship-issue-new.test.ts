@@ -89,9 +89,9 @@ function newIssue(
   run: unknown,
   log: (s: string) => void,
   opts: {
+    explicitHandle?: string | null;
     handle: string | null;
     handleSource?: string | null;
-    explicitHandle?: string | null;
   },
 ) {
   const { mkTmp, bodyFile } = mkTmpCtx();

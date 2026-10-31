@@ -114,12 +114,12 @@ function gateScripts(): Array<string> {
  * 而抄错的路径同样长得像产物路径。
  */
 const PRODUCT_ROOT_LITERALS: Array<{
-  /** 把这条路径当字面量写下来的那份门禁脚本 */
-  script: string;
-  /** 字面量本身（相对仓库根，但语义上相对产物根） */
-  path: string;
   /** 构建期生成它的脚本：登记理由由它承担 */
   generatedBy: string;
+  /** 字面量本身（相对仓库根，但语义上相对产物根） */
+  path: string;
+  /** 把这条路径当字面量写下来的那份门禁脚本 */
+  script: string;
 }> = [
   {
     script: "scripts/check-standalone-contents.cjs",
@@ -179,12 +179,12 @@ const PRODUCT_ROOT_LITERALS: Array<{
  * 判据会连它旁边那条**真**该存在的路径一起放走。
  */
 const CONDITIONAL_PATHS: Array<{
-  /** 把这条路径当字面量写下来的那份门禁脚本 */
-  script: string;
   /** 字面量本身（相对仓库根） */
   path: string;
   /** 为什么「不存在」是它的正常状态之一 */
   reason: string;
+  /** 把这条路径当字面量写下来的那份门禁脚本 */
+  script: string;
 }> = [];
 
 /** 读一份仓库内脚本的源码（读不到即返回空串，让断言去报「指不到东西」）。 */

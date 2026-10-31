@@ -63,11 +63,11 @@ export class ProductionRepository extends DrizzleRepository<Production> {
     userId: string,
     id: string,
     patch: {
-      scriptMarkdown?: string;
       characters?: unknown;
-      shots?: unknown;
+      scriptMarkdown?: string;
       /** 剧本评审位（FR-QA-07）：评审器写判定与轮次历史；工坊自动保存不传 = 不碰。 */
       scriptReview?: unknown;
+      shots?: unknown;
     },
   ): Promise<boolean> {
     const set: Record<string, unknown> = { updatedAt: new Date() };

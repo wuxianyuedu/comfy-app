@@ -44,7 +44,7 @@ export interface WorkflowOutputParamCardColumnProps {
   isManual?: (ioKey: string) => boolean;
   onReset?: (ioKey: string) => void;
   /** 端点槽位：消费方注入 `<Handle>`（库里那层）或只读圆点。 */
-  endpoint?: (port: { name: string; type: string; handleId: string }) => ReactNode;
+  endpoint?: (port: { handleId: string; name: string; type: string }) => ReactNode;
 }
 
 export function WorkflowOutputParamCardColumn({

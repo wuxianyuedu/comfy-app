@@ -82,7 +82,7 @@ export const NAV_COLLAPSE_LEAVES_VIEWPORT_PX =
  * 一次显式表态：用户点开关那一刻的目标状态，以及**当时的跨越次数**。
  * 跨越次数不等，就说明这条表态是「上一档窗宽」留下的，已经过期。
  */
-export type RailChoice = { open: boolean; atCrossing: number };
+export type RailChoice = { atCrossing: number; open: boolean };
 
 /**
  * 谁说了算，三档优先：
@@ -100,9 +100,9 @@ export type RailChoice = { open: boolean; atCrossing: number };
  * 宽窗生效 —— 拿记忆去否决当次的窄窗让位，等于让偏好挡住布局纪律。
  */
 export function resolveRailCollapsed(input: {
-  narrow: boolean;
-  crossings: number;
   choice: RailChoice | null;
+  crossings: number;
+  narrow: boolean;
   preferredOpen?: boolean;
 }): boolean {
   const { narrow, crossings, choice, preferredOpen = true } = input;

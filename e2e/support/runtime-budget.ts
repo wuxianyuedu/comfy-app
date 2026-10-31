@@ -100,8 +100,8 @@ export interface NavigationSample {
  * 所以它同样必须能表达「没有」。
  */
 export function readNavigationSample(page: Page): Promise<{
-  loadEventEnd: number | null;
   firstContentfulPaint: number | null;
+  loadEventEnd: number | null;
 }> {
   return page.evaluate(() => {
     const nav = /* SAFETY: 类型断言已复核 */ performance.getEntriesByType("navigation")[0] as
@@ -187,8 +187,8 @@ export async function collectSamples(
  * @returns `{ loadEventEnd, firstContentfulPaint }`（稳态段 `min`，判不了时 `null`）
  */
 export function summarize(samples: Array<NavigationSample>): {
-  loadEventEnd: number | null;
   firstContentfulPaint: number | null;
+  loadEventEnd: number | null;
 } {
   return {
     loadEventEnd: steadyMin(samples.map((s) => s.loadEventEnd)),

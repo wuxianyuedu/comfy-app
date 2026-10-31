@@ -25,7 +25,7 @@ export interface ComfyQueueStatus {
   /** ComfyUI 是否可达。不可达时其余字段一律是空值，前端显示「离线」。 */
   online: boolean;
   /** ComfyUI 自己的排队口径 —— **含不是本应用提交的任务**（用户在原生界面排的也在这里）。 */
-  comfy: { running: number; pending: number };
+  comfy: { pending: number; running: number };
   /** 本应用当前在跑的那个。 */
   running: ComfyRunningTask | null;
   /** 本应用排队中（还没轮到）的任务数。 */

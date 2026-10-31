@@ -68,7 +68,7 @@ const {
   ),
   clearManualStopMock: vi.fn<() => void>(),
   clearAutoStartFailureMock: vi.fn<() => void>(),
-  ensureReadyMock: vi.fn<() => Promise<{ ok: boolean; detail: string }>>(async () => ({
+  ensureReadyMock: vi.fn<() => Promise<{ detail: string; ok: boolean }>>(async () => ({
     ok: true,
     detail: "已就绪",
   })),
@@ -81,7 +81,7 @@ const {
     port: null,
     via: "external",
   })),
-  openComfyMock: vi.fn<() => Promise<{ ok: boolean; detail: string }>>(async () => ({
+  openComfyMock: vi.fn<() => Promise<{ detail: string; ok: boolean }>>(async () => ({
     ok: true,
     detail: "已打开",
   })),

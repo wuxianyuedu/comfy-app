@@ -30,11 +30,11 @@ function ToggleRow({
   onChange,
   tooltip,
 }: {
-  label: string;
   hint?: string;
-  value: boolean;
+  label: string;
   onChange: (v: boolean) => void;
   tooltip?: string;
+  value: boolean;
 }) {
   return (
     <FieldLabel
@@ -42,9 +42,7 @@ function ToggleRow({
       className="border-border-strong bg-subtle hover:border-border-strong flex cursor-pointer items-center justify-between gap-3 rounded-md border px-3 py-2.5 transition-colors"
     >
       <span className="flex min-w-0 flex-col">
-        <span className="text-ink-bright text-[12.5px] font-medium">
-          {label}
-        </span>
+        <span className="text-ink-bright text-[12.5px] font-medium">{label}</span>
         {hint && <span className="text-ink-muted text-2xs mt-0.5">{hint}</span>}
       </span>
       {/* 开关走 ui/switch（规范 16 §16.2.3）：此前这里自绘了一个
@@ -62,8 +60,7 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
    *  useCanvasSettings.debugMode（与工作流画布设置抽屉共享）。 */
   const debugMode = useDebugStore((state) => state.debugMode);
   const toggleDebugMode = useDebugStore((state) => state.toggleDebugMode);
-  const { debugMode: logPanelMode, setDebugMode: setLogPanelMode } =
-    useDebugMode();
+  const { debugMode: logPanelMode, setDebugMode: setLogPanelMode } = useDebugMode();
 
   /* 抽屉走 ui/sheet（规范 16 §16.2.3 P2）：Esc 关闭、点遮罩关闭、遮罩让出
      标题行此前是本文件手写的一份，`ui/sheet` 里还有一份同源实现。 */

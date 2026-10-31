@@ -22,7 +22,7 @@ export type LaunchPolicy = "bound" | "keepAlive";
 
 export type EnsureDecision =
   /** 已经在运行：直接用探测到的 base。 */
-  | { kind: "already-up"; base: string }
+  | { base: string; kind: "already-up" }
   /** 用户刚手动关闭过，自动启动路径必须让路。 */
   | { kind: "skip-manual-stop" }
   /** 未开启自动启动。 */
@@ -227,8 +227,8 @@ export type StopDecision =
   /** 杀进程树（平台机制由 `~/lib/process/kill-process-tree` 选）。 */
   | {
       kind: "kill";
-      pid: number;
       kindLabel: "bound 子进程" | "按配置路径定位到的进程";
+      pid: number;
     }
   /** 在跑但不是本应用按配置路径启动的：只能用户自己关。 */
   | { kind: "foreign-running" }
@@ -260,8 +260,8 @@ export function decideStop(facts: StopFacts): StopDecision {
  * 窗口期应立刻结束（其余情况交给 `COMFY_STOPPING_WINDOW_MS` 兜底）。
  */
 export function shouldClearStoppingOnStopMiss(facts: {
-  stillUp: boolean;
   starting: boolean;
+  stillUp: boolean;
 }): boolean {
   return !facts.stillUp && !facts.starting;
 }
@@ -280,8 +280,8 @@ export function isWithinWindow(facts: {
 
 /** 「关闭中」窗口内的时间判据（`isComfyStopping` 的纯实现）。 */
 export function isWithinStoppingWindow(facts: {
-  stoppingAt: number | undefined;
   nowMs: number;
+  stoppingAt: number | undefined;
   windowMs: number;
 }): boolean {
   if (facts.stoppingAt === undefined) {
@@ -295,8 +295,8 @@ export function isWithinStoppingWindow(facts: {
  * `probeResults` 按时间顺序给出每轮探测结果（null = 不可达）。
  */
 export function decideStopOutcome(probeResults: Array<string | null>): {
-  ok: boolean;
   detail: string;
+  ok: boolean;
 } {
   const stillUp = probeResults[probeResults.length - 1] !== null;
   return stillUp
@@ -382,14 +382,14 @@ export interface ComfyStatusFacts {
   probe: string | null;
   /** 进程级快照（见 comfyui/status.ts）。 */
   snap: {
-    running: boolean;
-    pid: number | null;
-    port: number | null;
-    via: string | null;
-    /** 进程表查询本身失败：本次结论不可信。 */
-    unverified: boolean;
     /** 本次是否**真的查过**进程表（0 条候选时「没命中」不构成「未运行」证据）。 */
     didQueryProcTable: boolean;
+    pid: number | null;
+    port: number | null;
+    running: boolean;
+    /** 进程表查询本身失败：本次结论不可信。 */
+    unverified: boolean;
+    via: string | null;
   };
   /** 是否仍在「启动流程进行中」的计时窗口内（见 COMFY_STARTING_WINDOW_MS）。 */
   startingWindow: boolean;

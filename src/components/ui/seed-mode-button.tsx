@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover
 /** seed 模式 —— ComfyUI `control_after_generate` 的映射。每条含
  *  ComfyUI 取值、中文标签，以及浮层里用的两行说明
  *（对应 Ardot「控件后行为」四选项面板）。 */
-const SEED_MODES: Array<{ value: string; label: string; hint: string }> = [
+const SEED_MODES: Array<{ hint: string; label: string; value: string }> = [
   { value: "fixed", label: "固定值", hint: "数值不变" },
   { value: "increment", label: "递增值", hint: "数值+1 或切换到下一个选项" },
   { value: "decrement", label: "递减值", hint: "数值-1 或切换到上一个选项" },
@@ -18,7 +18,7 @@ const SEED_MODES: Array<{ value: string; label: string; hint: string }> = [
 
 /** 是不是 seed 类 widget 输入？（KSampler / 自定义节点的 seed 针脚）。 */
 
-export function isSeedLike(e: { name: string; label?: string }): boolean {
+export function isSeedLike(e: { label?: string; name: string }): boolean {
   return /seed|noise_seed/i.test(`${e.name} ${e.label ?? ""}`);
 }
 

@@ -68,9 +68,7 @@ const LazyFinalComposer = React.lazy(() =>
 
 /** 懒加载占位：保留版面高度，避免 stage 切换瞬间塌陷。 */
 function StageFallback() {
-  return (
-    <Skeleton className="border-border bg-surface min-h-65 rounded-2xl border p-5" />
-  );
+  return <Skeleton className="border-border bg-surface min-h-65 rounded-2xl border p-5" />;
 }
 
 /**
@@ -82,13 +80,7 @@ function StageFallback() {
  * `label` 是用户能认出来的那一段的名字 —— 只说「加载失败」等于让用户自己在
  * 六个卡片里找哪块坏了。
  */
-function StageBoundary({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function StageBoundary({ label, children }: { children: React.ReactNode; label: string }) {
   const fallback = useLazyChunkFallback(label);
   return (
     <ErrorBoundary fallback={fallback}>
@@ -299,9 +291,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Character ── */}
       {tab === "character" && (
         <>
-          {prereq && (
-            <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
-          )}
+          {prereq && <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <h3 className="text-ink u-title mb-3">角色工具</h3>
             <StageBoundary label="角色工具">
@@ -330,9 +320,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Storyboard ── */}
       {tab === "storyboard" && (
         <>
-          {prereq && (
-            <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
-          )}
+          {prereq && <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />}
           <div className="mt-4 flex justify-end">
             <Button
               type="button"
@@ -371,9 +359,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Shot images (镜头生图) ── */}
       {tab === "shots" && (
         <>
-          {prereq && (
-            <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
-          )}
+          {prereq && <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-ink u-title">生图工具</h3>
@@ -404,9 +390,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Video generation (视频生成) ── */}
       {tab === "video" && (
         <>
-          {prereq && (
-            <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
-          )}
+          {prereq && <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-ink u-title">视频工具</h3>
@@ -435,9 +419,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Final composition (成片合成) ── */}
       {tab === "render" && (
         <>
-          {prereq && (
-            <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
-          )}
+          {prereq && <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <StageBoundary label="成片合成">
               <LazyFinalComposer

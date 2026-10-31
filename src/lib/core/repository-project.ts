@@ -25,7 +25,7 @@ export class ProjectRepository extends DrizzleRepository<Project> {
 
   async upsertForUser(
     userId: string,
-    data: { id: string; name: string; nodes?: unknown; edges?: unknown },
+    data: { edges?: unknown; id: string; name: string; nodes?: unknown },
   ): Promise<Project> {
     const existing = await db.select().from(project).where(eq(project.id, data.id)).limit(1);
     if (!existing[0]) {

@@ -65,7 +65,7 @@ function put(
   scope: string,
   folder: string,
   name: string,
-  opts: { mtimeMs?: number; asDir?: boolean } = {},
+  opts: { asDir?: boolean; mtimeMs?: number } = {},
 ): void {
   const dir = path.join(root, scope, folder);
   fs.mkdirSync(dir, { recursive: true });

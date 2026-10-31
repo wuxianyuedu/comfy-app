@@ -24,10 +24,10 @@ export function PortRow({
   type,
   name,
 }: {
-  side: "in" | "out";
   color: string;
-  type: string;
   name: string;
+  side: "in" | "out";
+  type: string;
 }) {
   const isOut = side === "out";
   // ComfyUI 给输出固定用青色调，输入则按类别派生。
@@ -100,7 +100,7 @@ function widgetValueToText(v: unknown): string {
   return "";
 }
 
-export function WidgetValueChip({ widget, value }: { widget: string | null; value: unknown }) {
+export function WidgetValueChip({ widget, value }: { value: unknown; widget: string | null }) {
   if (widget === "toggle") {
     const on = value === true || value === "true" || value === "True";
     return (
@@ -230,10 +230,10 @@ export function ParseConsole({
   logsRef,
   consoleRef,
 }: {
-  logs: Array<{ level: string; msg: string }>;
-  parsing: boolean;
-  logsRef: RefObject<HTMLDivElement | null>;
   consoleRef: RefObject<HTMLDivElement | null>;
+  logs: Array<{ level: string; msg: string }>;
+  logsRef: RefObject<HTMLDivElement | null>;
+  parsing: boolean;
 }) {
   return (
     <div ref={logsRef} className="mb-4">

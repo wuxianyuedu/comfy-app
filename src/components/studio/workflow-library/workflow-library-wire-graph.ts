@@ -69,7 +69,7 @@ export function libraryEdgeId(
 /** 从边 id 取回它属于哪个口（`null` = 不是库内映射线）。 */
 export function libraryEdgeOwner(
   edgeId: string,
-): { namespace: "param" | "output"; entryId: string; handleId: string } | null {
+): { entryId: string; handleId: string; namespace: "param" | "output" } | null {
   const parts = edgeId.split(":");
   if (parts.length < 3 || parts[0] !== LIB_EDGE_PREFIX) {
     return null;
@@ -197,8 +197,8 @@ export const BACKDROP_PADDING = 120;
 
 /** 三列的包围盒（含列宽与列间距），背景板至少要盖住它。 */
 export function libraryContentExtent(sizing: LibraryNodeSizing): {
-  width: number;
   height: number;
+  width: number;
 } {
   const { paramsWidth, hostWidth, outputsWidth, columnGap, envelopeHeight } = sizing;
   return {
@@ -210,8 +210,8 @@ export function libraryContentExtent(sizing: LibraryNodeSizing): {
 /** 背景板尺寸：视口与内容取大，各加 `BACKDROP_PADDING`。 */
 export function libraryBackdropSize(
   sizing: LibraryNodeSizing,
-  viewport: { width: number; height: number },
-): { width: number; height: number } {
+  viewport: { height: number; width: number },
+): { height: number; width: number } {
   const content = libraryContentExtent(sizing);
   const clamp = (viewportSide: number) => Math.max(1, Math.round(viewportSide));
   return {
@@ -231,20 +231,20 @@ export function libraryBackdropSize(
  *  `setNodes` 刷新它（setNodes → 重渲染 → setNodes 无限循环）。 */
 export interface LibraryNodeContent {
   params: {
+    canWire: boolean;
     cards: LibraryParamCards;
     /** 该模式生效的契约口清单（卡片头取名与「工坊封装」页签同一份）。 */
     contractEntries: ReadonlyArray<{ id: string; label: string }>;
-    canWire: boolean;
-    selectedEntryId: string | null;
-    onSelect: (entryId: string | null) => void;
     onReset: (entryId: string) => void;
+    onSelect: (entryId: string | null) => void;
+    selectedEntryId: string | null;
   };
   host: { host: ReactNode };
   outputs: {
-    cards: LibraryOutputCards;
     canWire: boolean;
-    selectedOutputId: string | null;
-    onSelect: (ioKey: string | null) => void;
+    cards: LibraryOutputCards;
     onReset: (ioKey: string) => void;
+    onSelect: (ioKey: string | null) => void;
+    selectedOutputId: string | null;
   };
 }

@@ -296,8 +296,8 @@ describe("POST /api/custom-nodes —— 鉴权与请求体", () => {
     });
     expect(res.status).toBe(200);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      paths: Array<string>;
       localWorkflowPaths: Array<string>;
+      paths: Array<string>;
     };
     expect(body.paths).toEqual(["C:/ComfyUI/custom_nodes"]);
     expect(body.localWorkflowPaths).toEqual(["C:/ComfyUI/workflows"]);
@@ -390,8 +390,8 @@ describe("POST parse —— argv 注入闸门（台账 A6）", () => {
     const res = await post({ action: "parse" });
     expect(res.status).toBe(400);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      ok: boolean;
       error: string;
+      ok: boolean;
     };
     expect(body.ok).toBe(false);
     expect(body.error).toContain("CUSTOM_NODES_PATH");
@@ -756,8 +756,8 @@ describe("GET 摘要：清单的六种坏法", () => {
     const summary = eventOf(events, "summary");
     expect(summary.summary).toBeNull();
     const settings = /* SAFETY: 类型断言已复核 */ summary.settings as {
-      paths: Array<string>;
       localWorkflowPaths: Array<string>;
+      paths: Array<string>;
     };
     // 两个伴随字段都得指向**同一个安装根**（对话框靠它们在同一屏里配对显示）。
     expect(settings.paths).toEqual([parent]);
@@ -1085,14 +1085,14 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
  * 就是「第 N 个子进程是谁、argv 落在哪个候选上」。
  */
 type ChildPlan = {
-  /** 逐行吐（自动补 `\n`），与 `scriptDiscover` 同义。 */
-  lines?: Array<string>;
   /** 逐 chunk 原样吐（**不**补换行）—— 用来造「一行被切断」。 */
   chunks?: Array<string>;
+  closeCode?: number | null;
   errChunks?: Array<string>;
   /** 异步 `error` 事件（真机上缺解释器就是这一形）。给了它默认不再发 close。 */
   error?: { code: string; message?: string };
-  closeCode?: number | null;
+  /** 逐行吐（自动补 `\n`），与 `scriptDiscover` 同义。 */
+  lines?: Array<string>;
   /** 显式要求发 close（配合 `error` 用）。 */
   noClose?: boolean;
 };

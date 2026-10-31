@@ -48,9 +48,9 @@ export function WorkflowNodeHeader({
   titleTitle,
   right,
 }: {
+  right?: React.ReactNode;
   title: string;
   titleTitle?: string;
-  right?: React.ReactNode;
 }) {
   return (
     <div className="flex h-8 min-w-0 items-center justify-between gap-2 pr-3.5 pl-3.5">
@@ -93,8 +93,8 @@ export function WorkflowNodePill({
   className,
 }: {
   children: React.ReactNode;
-  title?: string;
   className?: string;
+  title?: string;
 }) {
   return (
     <div
@@ -150,12 +150,12 @@ export function WorkflowNodeActionButton({
   hint,
   corner = "own",
 }: {
-  label: React.ReactNode;
-  disabled?: boolean;
-  onClick?: () => void;
-  hint?: string;
   /** `own` = 卡片不裁切，按钮自带下沿圆角；`clipped` = 卡片 `overflow-hidden`，四角交还给卡片。 */
   corner?: "own" | "clipped";
+  disabled?: boolean;
+  hint?: string;
+  label: React.ReactNode;
+  onClick?: () => void;
 }) {
   const button = (
     <Button
@@ -194,10 +194,10 @@ export function WorkflowNodeOutputsRow({
   outputs,
   renderHandle,
 }: {
-  output: WorkflowIOEntry & { ioKey: string };
   inputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  output: WorkflowIOEntry & { ioKey: string };
   outputs: Array<WorkflowIOEntry & { ioKey: string }>;
-  renderHandle?: (arg: { id: string; dir: "out"; type: string }) => React.ReactNode;
+  renderHandle?: (arg: { dir: "out"; id: string; type: string }) => React.ReactNode;
 }) {
   const oLabel = ioLabel(output, [...inputs, ...outputs]);
   const oType = output.type ?? "*";

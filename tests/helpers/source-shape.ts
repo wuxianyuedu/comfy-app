@@ -53,7 +53,7 @@ export function normalizeControlFlow(src: string, fileName = "source.ts"): strin
   const kind = scriptKindOf(fileName);
   const one = (text: string): string => {
     const sf = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, kind);
-    const edits: Array<{ start: number; end: number; text: string }> = [];
+    const edits: Array<{ end: number; start: number; text: string }> = [];
     const collapse = (block: ts.Block): void => {
       if (block.statements.length !== 1) {
         return;

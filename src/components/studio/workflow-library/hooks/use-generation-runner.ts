@@ -36,8 +36,8 @@ import {
 export type Phase =
   | { kind: "idle" }
   | { kind: "starting" }
-  | { kind: "running"; pct: number; node?: TaskProgressNode }
-  | { kind: "done"; imageUrl?: string }
+  | { kind: "running"; node?: TaskProgressNode; pct: number }
+  | { imageUrl?: string; kind: "done" }
   | { kind: "failed"; message: string };
 
 /** 当前时间戳（毫秒）。
@@ -71,8 +71,8 @@ interface RunPayload {
 async function executeRun(
   payload: RunPayload,
   run: {
-    setPhase: (p: Phase) => void;
     handlers: WorkflowRunHandlers;
+    setPhase: (p: Phase) => void;
   },
 ) {
   const {
@@ -143,7 +143,7 @@ async function executeRun(
  *   这样「生效映射」等容器侧派生不必倒灌进本 hook（否则与 `useParamWiring`
  *   的回调依赖会互相成环）。
  */
-export function useGenerationRunner(params: { workflowId: string; enabled: boolean }) {
+export function useGenerationRunner(params: { enabled: boolean; workflowId: string }) {
   const { workflowId, enabled } = params;
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   /* 节点相位的节流闸门（`~/components/ui/use-throttled-progress`）。

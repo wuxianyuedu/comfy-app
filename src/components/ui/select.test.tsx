@@ -30,14 +30,14 @@ function Demo({
   positionerClassName,
   alignItemWithTrigger,
 }: {
+  alignItemWithTrigger?: boolean;
   defaultValue?: string;
   /* 实参形状从基元的 props 类型上取，不在这里手抄一份：base-ui 的回传是
      `(value: string | null, eventDetails) => void`，自己写 `(value: string) => void`
      在 `tsc` 那一层就是不兼容的。 */
   onValueChange?: React.ComponentProps<typeof Select>["onValueChange"];
-  size?: "sm" | "default";
   positionerClassName?: string;
-  alignItemWithTrigger?: boolean;
+  size?: "sm" | "default";
 }) {
   return (
     <Select defaultValue={defaultValue} onValueChange={onValueChange}>

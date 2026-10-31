@@ -59,11 +59,11 @@ interface SplashInternals {
  * 分支）——日志正文由用例自己喂进去，测的是渲染那一侧。
  */
 function bootSplash(): {
-  scroll: HTMLElement;
-  setScrollTop: (value: number) => void;
-  renderLog: (text: string) => void;
   latestVisible: () => boolean;
   openPanel: () => void;
+  renderLog: (text: string) => void;
+  scroll: HTMLElement;
+  setScrollTop: (value: number) => void;
 } {
   document.documentElement.innerHTML = PAGE_HTML;
 

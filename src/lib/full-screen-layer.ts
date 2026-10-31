@@ -219,7 +219,7 @@ export interface ViewportRect {
  *                     见 `ShellTabs` 的 `shouldUseTitleBarTabs`）
  */
 export function anchoredOverlayBoundary(
-  viewport: { width: number; height: number } | null,
+  viewport: { height: number; width: number } | null,
   titleBarPx: number,
 ): ViewportRect | null {
   if (!viewport || viewport.width <= 0 || viewport.height <= 0) {

@@ -45,11 +45,11 @@ export async function findPidForMainPy(mainPy: string): Promise<number | null> {
 }
 
 export type PidLookup = {
-  /** 命中的进程 PID；未命中为 null。 */
-  pid: number | null;
   /** 查询本身失败（超时 / powershell 无法启动等）：结果不可信，
    *  「pid=null」不能作为「进程不存在」的证据。 */
   failed: boolean;
+  /** 命中的进程 PID；未命中为 null。 */
+  pid: number | null;
 };
 
 /**

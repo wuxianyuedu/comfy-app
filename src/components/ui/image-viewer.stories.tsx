@@ -27,13 +27,13 @@ import {
 
 /** 受控弹窗：`ImageViewer` 要求 `src` 有值时渲染，所以 story 自己持开关。 */
 type StoryArgs = {
-  sourceName: MediaSourceName;
   label?: string;
   /**
    * 是否打开。`ImageViewer` 是**受控**的（`src` 有值即渲染、`onClose` 表示关），
    * 真机上由调用处持开关；story 里同样要有一个真开关，否则关掉之后就没法再开。
    */
   open: boolean;
+  sourceName: MediaSourceName;
 };
 
 function ViewerWithSource({ sourceName, label, open: initialOpen }: StoryArgs) {
@@ -44,16 +44,10 @@ function ViewerWithSource({ sourceName, label, open: initialOpen }: StoryArgs) {
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         打开查看器
       </Button>
-      {open && (
-        <ImageViewer
-          src={src}
-          label={label ?? sourceName}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      {open && <ImageViewer src={src} label={label ?? sourceName} onClose={() => setOpen(false)} />}
       <p className="text-ink-muted text-xs">
-        弹窗由 story 自己持有开关（组件是受控的）：点「打开查看器」再开， Esc /
-        点遮罩 / 右上角 ✕ 都能关。
+        弹窗由 story 自己持有开关（组件是受控的）：点「打开查看器」再开， Esc / 点遮罩 / 右上角 ✕
+        都能关。
       </p>
     </div>
   );
@@ -103,9 +97,7 @@ export const ViewableImageGrid: Story = {
             className="rounded-xl object-cover"
           />
         </div>
-        <span className="text-ink-muted font-mono text-[11px]">
-          能加载 → 点开查看器
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">能加载 → 点开查看器</span>
       </div>
       <div className="flex flex-col items-center gap-2">
         <div className="size-40">
@@ -116,9 +108,7 @@ export const ViewableImageGrid: Story = {
             className="rounded-xl object-cover"
           />
         </div>
-        <span className="text-ink-muted font-mono text-[11px]">
-          加载失败 → 占位兜底
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">加载失败 → 占位兜底</span>
       </div>
     </div>
   ),

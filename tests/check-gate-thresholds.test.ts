@@ -15,15 +15,15 @@ import { gateChainScripts } from "../scripts/gate-chain-scripts.cjs";
 
 /** 账里一条的形状（`group` / `movedFrom` / `movedIssue` 都是可选位）。 */
 type Entry = {
-  file: string;
   const: string;
-  value: number;
-  kind: string;
-  strictness?: string;
-  unit?: string;
+  file: string;
   group?: string;
+  kind: string;
   movedFrom?: number;
   movedIssue?: string;
+  strictness?: string;
+  unit?: string;
+  value: number;
 };
 
 /** 一条 A 档阻断阈值 + 一条 B 档地板 + 一条 report，构成最小可判的账。 */

@@ -67,9 +67,9 @@ function verdictFor(
     process.stdout.write(JSON.stringify(result));
   `;
   return /* SAFETY: 类型断言已复核 */ decidePort(script) as {
+    foreignPids: Array<number>;
     ownership: string;
     ownPids: Array<number>;
-    foreignPids: Array<number>;
   };
 }
 

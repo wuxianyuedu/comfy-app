@@ -5,10 +5,7 @@ import { LOG_ROW_SINGLE } from "~/components/studio/logs/log-virtual";
 import { VirtualLogList } from "~/components/studio/logs/VirtualLogList";
 import { useExpansionSet } from "~/components/ui/expansion-set";
 import { EmptyState } from "~/components/ui/empty-state";
-import {
-  sceneEntries,
-  type SceneName,
-} from "../../../../.storybook/store-sources";
+import { sceneEntries, type SceneName } from "../../../../.storybook/store-sources";
 
 /**
  * 日志的**虚拟滚动容器** —— 两个弹窗（`GlobalStepLogPanel` /
@@ -49,8 +46,8 @@ function VirtualLogListHarness({
   following = true,
   wrap = true,
 }: {
-  scene?: SceneName;
   following?: boolean;
+  scene?: SceneName;
   wrap?: boolean;
 }) {
   const entries = sceneEntries(scene);
@@ -64,12 +61,7 @@ function VirtualLogListHarness({
         watch={entries.length}
         following={following}
         wrap={wrap}
-        emptySlot={
-          <EmptyState
-            title="还没有日志"
-            description="这一步还没轮到任何一路输出。"
-          />
-        }
+        emptySlot={<EmptyState title="还没有日志" description="这一步还没轮到任何一路输出。" />}
         renderRow={(entry) => (
           <LogRow
             entry={entry}

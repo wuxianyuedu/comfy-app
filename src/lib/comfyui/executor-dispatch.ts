@@ -76,7 +76,7 @@ let ownerOverride: TaskClaimMode | null = null;
 /** 宿主注入自带的 DB 句柄与归属声明（host 必调；Next 不调，走下方兜底）。
  *  `owner` 与 `createTaskRepoImpl(db, { owner })` 那次声明**必须同源**，
  *  否则领到的行与收口时的守卫判据不一致（同 reaper 那条约束）。 */
-export function configureDispatch(next: { taskRepo?: DispatchRepo; owner?: TaskClaimMode }): void {
+export function configureDispatch(next: { owner?: TaskClaimMode; taskRepo?: DispatchRepo }): void {
   if (next.taskRepo) {
     repoOverride = next.taskRepo;
   }
@@ -90,8 +90,8 @@ let warnedUnconfigured = false;
 /** 返回 `null` = 纯 Node 宿主且尚未注入：本轮跳过（幂等，下一拍还会来），
  *  但留一行——「不注入却安静什么都不领」是最难查的那种死法（规范硬规则 4）。 */
 async function resolveDispatch(): Promise<{
-  repo: DispatchRepo;
   owner: TaskClaimMode;
+  repo: DispatchRepo;
 } | null> {
   if (repoOverride && ownerOverride) {
     return { repo: repoOverride, owner: ownerOverride };

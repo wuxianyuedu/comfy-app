@@ -25,7 +25,7 @@ export interface ProjectHomeStatusProps {
 }
 
 /** 阶段行的图标：完成 → 勾、当前 → 转圈、未开始 → 空圈。 */
-function StageIcon({ done, current }: { done: boolean; current: boolean }) {
+function StageIcon({ done, current }: { current: boolean; done: boolean }) {
   if (done) {
     return <Check size={13} className="text-success-strong" aria-hidden />;
   }

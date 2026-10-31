@@ -78,20 +78,20 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   }
 
   async create(input: {
-    userId: string;
+    bgmName?: string | null;
+    fps: number;
+    framesPerShot: number;
     /** 关联的统一项目 id（proj_*）；纯文本自由建片时为空。 */
     projectId?: string | null;
-    title: string;
     script: string;
-    type: string;
-    styleSlug?: string | null;
     /** 成片画幅的**尺寸表达** JSON（`lib/size-presets` 的 `SizeSpec`）。
      *  老行里是 "1280x720" 字符串 —— 读的一律用 `toSizeSpec` 归一。 */
     size: string;
-    fps: number;
-    framesPerShot: number;
+    styleSlug?: string | null;
     subtitleOn: boolean;
-    bgmName?: string | null;
+    title: string;
+    type: string;
+    userId: string;
   }): Promise<FilmProject> {
     const rows = await db
       .insert(filmProject)
@@ -116,9 +116,9 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   async appendLog(
     id: string,
     entry: {
-      t: number;
       level: "info" | "progress" | "warn" | "error" | "success";
       msg: string;
+      t: number;
     },
   ): Promise<void> {
     const film = await db
@@ -194,13 +194,13 @@ export class FilmShotRepository {
   async createMany(
     filmId: string,
     shots: Array<{
+      heading?: string | null;
+      negative?: string | null;
       order: number;
+      params: unknown;
+      prompt: string;
       /** 关联的统一镜头 id（Phase 5 回写用）；自由建片时为空。 */
       shotId?: string | null;
-      heading?: string | null;
-      prompt: string;
-      negative?: string | null;
-      params: unknown;
     }>,
   ): Promise<void> {
     await db.insert(filmShot).values(
@@ -219,21 +219,21 @@ export class FilmShotRepository {
 
   async listByFilm(
     filmId: string,
-    opts: { status?: string; onlyWithVideo?: boolean } = {},
+    opts: { onlyWithVideo?: boolean; status?: string } = {},
   ): Promise<
     Array<{
-      id: string;
-      shotId: string | null;
-      order: number;
+      duration: number | null;
       heading: string | null;
-      prompt: string;
+      id: string;
       negative: string | null;
+      order: number;
+      params: unknown;
+      progress: number;
+      prompt: string;
+      shotId: string | null;
       status: string;
       taskId: string | null;
-      progress: number;
-      params: unknown;
       videoPath: string | null;
-      duration: number | null;
     }>
   > {
     const where = and(
@@ -258,10 +258,10 @@ export class FilmShotRepository {
   async updateFromTask(
     shotId: string,
     data: {
-      status: string;
-      progress: number;
-      videoPath?: string | null;
       duration?: number | null;
+      progress: number;
+      status: string;
+      videoPath?: string | null;
     },
   ): Promise<void> {
     await db

@@ -35,7 +35,7 @@ export interface WaitForComfyReadyOpts {
   /** 判死探测；返回非 null 表示「已判死」，其值为可行动的失败文案。 */
   isDead: () => Promise<string | null>;
   /** 每次轮询前的早退理由；返回非 null 立即结束（用户手动关闭 / 子进程消失）。 */
-  earlyExit?: () => { ok: false; base: null; detail: string } | null;
+  earlyExit?: () => { base: null; detail: string; ok: false } | null;
   /** 硬超时绝对时间戳（null = 不设硬超时，一直等）。 */
   deadline: number | null;
   /** 超时未就绪时的可行动文案（**唯一一处**，两条路径共用）。 */

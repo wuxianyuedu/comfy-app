@@ -35,8 +35,8 @@ const exitNotice = {
 function step(
   cursor: AppServiceEventCursor,
   facts: {
-    state: "starting" | "online" | "offline";
     processIsNew: boolean;
+    state: "starting" | "online" | "offline";
     /** 这一拍之前没人在探测的毫秒数；省缺 = 0。 */
     unprobedMs?: number;
   },

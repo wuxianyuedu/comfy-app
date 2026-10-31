@@ -40,9 +40,9 @@ export function makeUser(overrides: Partial<TRPCUser> = {}): TRPCUser {
 /** 构造 tRPC caller 所需的 context；`opts.user === null` 时显式传空用户。 */
 export function makeCtx(opts: { user?: TRPCUser | null } = {}): {
   db: TestDb;
+  headers: Headers;
   session: null;
   user: TRPCUser | null;
-  headers: Headers;
 } {
   const user = opts.user === undefined ? makeUser() : opts.user;
   return {

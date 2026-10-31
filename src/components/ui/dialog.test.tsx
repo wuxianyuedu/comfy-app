@@ -68,12 +68,12 @@ function Demo({
   onOpenChange,
   open,
 }: {
-  showCloseButton?: boolean;
-  showOverlay?: boolean;
-  popupClassName?: string;
   className?: string;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
+  popupClassName?: string;
+  showCloseButton?: boolean;
+  showOverlay?: boolean;
 }) {
   return (
     <div id="host">

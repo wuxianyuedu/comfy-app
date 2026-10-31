@@ -67,7 +67,7 @@ export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<Api
 /** 轮询一次异步视频任务。 */
 export async function pollVideoViaApi(
   remoteTaskId: string,
-): Promise<{ url?: string; pending: boolean }> {
+): Promise<{ pending: boolean; url?: string }> {
   return callVideoPoll(remoteTaskId, getWorkshopApiSettingsSync().video);
 }
 

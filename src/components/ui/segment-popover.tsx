@@ -46,7 +46,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 
 /** 用小矩形直观呈现宽高比。 */
-export function RatioIcon({ ratio, className = "" }: { ratio: number; className?: string }) {
+export function RatioIcon({ ratio, className = "" }: { className?: string; ratio: number }) {
   const MAX = 18;
   const width = ratio >= 1 ? MAX : Math.max(4, Math.round(MAX * ratio));
   const height = ratio >= 1 ? Math.max(4, Math.round(MAX / ratio)) : MAX;
@@ -72,13 +72,13 @@ export interface SegmentSection<T extends string = string> {
   value: T;
   /** 本分组的可选项。 */
   options: Array<{
-    value: T;
     label: string;
     render?: React.ReactNode;
     /** 可选的子分组标签。当两个选项带着不同的 `subgroup` 字符串时，
      *  分组会把它们渲染到不同行，并在行间插一条小号大写标签；
      *  不带子分组的选项默认落在同一行、不加标签。 */
     subgroup?: string;
+    value: T;
   }>;
   /** 用户在本分组中改选其他选项时调用。 */
   onChange: (value: T) => void;
@@ -116,8 +116,6 @@ export function MultiSegmentPopover({
   footer,
   disabled,
 }: {
-  triggerContent: React.ReactNode;
-  sections: Array<SegmentSection<string>>;
   align?: "left" | "right";
   ariaLabel?: string;
   /** 所属表单禁用时，置灰并阻止打开。 */
@@ -127,6 +125,8 @@ export function MultiSegmentPopover({
    *  `SegmentSection` 的形状）。刻意保持通用，好让后续场景
    * （如视频码率 / 帧率覆盖）复用同一套管线。 */
   footer?: React.ReactNode;
+  sections: Array<SegmentSection<string>>;
+  triggerContent: React.ReactNode;
 }) {
   return (
     <Popover>
@@ -172,8 +172,8 @@ const Section = React.memo(function Section({
   section,
   first,
 }: {
-  section: SegmentSection<string>;
   first: boolean;
+  section: SegmentSection<string>;
 }) {
   const grouped = useMemo(() => {
     const hasSubgroups = section.options.some((option) => option.subgroup);

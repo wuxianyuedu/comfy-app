@@ -33,12 +33,12 @@ export function MegapixelStepper({
   disabled = false,
   className,
 }: {
-  /** 当前百万像素值。 */
-  value: number;
+  className?: string;
+  disabled?: boolean;
   /** 用新的（已 clamp 的）百万像素值调用。 */
   onChange: (megapixels: number) => void;
-  disabled?: boolean;
-  className?: string;
+  /** 当前百万像素值。 */
+  value: number;
 }) {
   return (
     <div

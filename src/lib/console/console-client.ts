@@ -18,22 +18,22 @@ import { MAX_OUTPUT_CHARS } from "./console-limits";
 /** 客户端看到的一条命令事件（与路由发的帧一一对应）。 */
 export type ConsoleClientEvent =
   | {
-      type: "start";
-      runId: string;
       command: string;
       cwd: string;
+      runId: string;
       startedAt: number;
+      type: "start";
     }
-  | { type: "out"; stream: "stdout" | "stderr"; text: string }
+  | { stream: "stdout" | "stderr"; text: string; type: "out" }
   | {
-      type: "exit";
       code: number | null;
-      signal: string | null;
-      killed: boolean;
-      truncatedNote: string | null;
       durationMs: number;
+      killed: boolean;
+      signal: string | null;
+      truncatedNote: string | null;
+      type: "exit";
     }
-  | { type: "error"; message: string };
+  | { message: string; type: "error" };
 
 export interface RunConsoleOptions {
   command: string;

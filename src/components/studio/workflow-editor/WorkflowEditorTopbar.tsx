@@ -29,16 +29,16 @@ export interface WorkflowEditorTopBarProps {
   onClose: () => void;
   detail: WorkflowDetail;
   rootWorkflowName: string;
-  subgraphStack: Array<{ uid: string; name: string; nodeId: string }>;
+  subgraphStack: Array<{ name: string; nodeId: string; uid: string }>;
   setSubgraphStack: React.Dispatch<
-    React.SetStateAction<Array<{ uid: string; name: string; nodeId: string }>>
+    React.SetStateAction<Array<{ name: string; nodeId: string; uid: string }>>
   >;
   fetchDetail: (opts?: {
-    subgraphUid?: string;
-    parentTitle?: string;
     bust?: boolean;
     /** 目标层级的宿主链（`4` / `4:5`），子图坐标按它拼键读回。 */
     hostNodeId?: string;
+    parentTitle?: string;
+    subgraphUid?: string;
   }) => Promise<void>;
   onExitSubgraph: () => void;
   /** 强制重载当前视图：必须带上本视图的宿主链，否则子图里拖过的坐标

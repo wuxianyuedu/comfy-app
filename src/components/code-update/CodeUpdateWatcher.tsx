@@ -54,8 +54,8 @@ export function describeDevServerRestart(
   reason: string | null,
   detail: string | null = null,
 ): {
-  title: string;
   body: string;
+  title: string;
 } {
   if (reason === "route-404-heal") {
     /* 运行期自愈：故障发生时页面**已经在跑**，所以页面自己连着的是被换掉的那个
@@ -104,8 +104,8 @@ export function describeDevServerRestart(
  * 后者会把用户留在「它说修好了，可数据还是加载不出来」的状态里。
  */
 export function describeDepsStale(state: DepsFreshnessState): {
-  title: string;
   body: string;
+  title: string;
 } {
   return {
     title: "依赖与代码不一致，需重装依赖",

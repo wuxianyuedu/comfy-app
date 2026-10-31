@@ -55,10 +55,10 @@ export function useSettingsBackup({
   statusQueriesEnabled,
   showFlash,
 }: {
-  /** 首屏两份配置就绪前不发探测（同 dbStudio / comfyStatus 的口径）。 */
-  statusQueriesEnabled: boolean;
   /** 整页提示条通道，来自主 hook 的 useFlashLatch。 */
   showFlash: ActionReport;
+  /** 首屏两份配置就绪前不发探测（同 dbStudio / comfyStatus 的口径）。 */
+  statusQueriesEnabled: boolean;
 }): UseSettingsBackup {
   const trpc = useTRPC();
   const listQ = useQuery(

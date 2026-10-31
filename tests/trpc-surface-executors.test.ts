@@ -159,9 +159,9 @@ function callNeedle(proc: string): RegExp {
 /** 核心判据（纯函数，便于下面用合成输入自证它在工作）：
  *  返回「没有任何执行者」的 procedure 路径。 */
 function proceduresWithoutExecutor(input: {
-  procedurePaths: Array<string>;
-  mounts: Record<string, string>;
   closures: Record<string, Set<string>>;
+  mounts: Record<string, string>;
+  procedurePaths: Array<string>;
   tests: Array<{ file: string; text: string }>;
 }): Array<string> {
   const offenders: Array<string> = [];
@@ -333,9 +333,9 @@ function consumerNeedles(ns: string, proc: string): Array<RegExp> {
 }
 
 type ConsumerInput = {
-  mounts: Record<string, string>;
   closures: Record<string, Set<string>>;
   consumers: Array<{ base: string; text: string }>;
+  mounts: Record<string, string>;
 };
 
 /** 单条口有没有消费方 —— 本维度的唯一实现，主断言与登记表的两条陈旧判据共用。

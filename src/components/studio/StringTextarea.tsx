@@ -7,9 +7,9 @@ export function StringTextarea({
   mono,
   hasSize,
 }: {
-  value: string;
-  mono?: boolean;
   hasSize: boolean;
+  mono?: boolean;
+  value: string;
 }) {
   const ref = React.useRef<HTMLTextAreaElement>(null);
   React.useLayoutEffect(() => {

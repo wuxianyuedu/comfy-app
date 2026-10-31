@@ -37,8 +37,8 @@ function toModelNames(raw: unknown): Array<string> {
       }
     } else if (typeof item === "object" && item !== null) {
       const rec = /* SAFETY: 类型断言已复核 */ item as {
-        name?: unknown;
         kind?: unknown;
+        name?: unknown;
       };
       const name = typeof rec.name === "string" ? rec.name.trim() : "";
       if (name === "") {

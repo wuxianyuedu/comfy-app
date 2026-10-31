@@ -301,19 +301,19 @@ export async function saveComfySettings(patch: Partial<ComfySettings>): Promise<
  *  服务端也吃同一套尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见
  *  `lib/size-presets`）：缺省按图片场景的默认档（3:4 1k），不写像素字面量。 */
 export function sizeDimsForImage(spec?: SizeSpec): {
-  width: number;
   height: number;
+  width: number;
 } {
   return sizeSpecDims(spec ?? DEFAULT_SIZE_SPEC, "image");
 }
 
 /** 模型无关的默认 SDXL txt2img 图（SaveImage 输出，供 /api/view 取回）。 */
 export function buildTxt2ImgWorkflow(input: {
-  prompt: string;
-  negative?: string;
-  size?: SizeSpec;
   checkpoint?: string;
+  negative?: string;
+  prompt: string;
   seed?: number;
+  size?: SizeSpec;
 }): unknown {
   const ckpt =
     input.checkpoint ??
@@ -363,7 +363,7 @@ export function buildTxt2ImgWorkflow(input: {
 /** 把模板里的 {{prompt}}/{{negative}}/{{image}} 替换为实际值。 */
 export function substitutePlaceholders(
   template: unknown,
-  vars: { prompt: string; negative?: string; image?: string },
+  vars: { image?: string; negative?: string; prompt: string },
 ): unknown {
   const json = JSON.stringify(template)
     .split("{{prompt}}")
@@ -417,8 +417,8 @@ export async function runComfyWorkflow(
   await fs.mkdir(outDir, { recursive: true });
   for (const nodeOut of Object.values(outputs)) {
     const rec = /* SAFETY: 类型断言已复核 */ nodeOut as {
-      images?: Array<{ filename: string; subfolder: string; type: string }>;
       gifs?: Array<{ filename: string; subfolder: string; type: string }>;
+      images?: Array<{ filename: string; subfolder: string; type: string }>;
     };
     const items = [...(rec.images ?? []), ...(rec.gifs ?? [])];
     for (const item of items) {
@@ -439,11 +439,11 @@ export async function runComfyWorkflow(
  * 生成图（comfyui 通道）：有自定义 imageWorkflow 模板则用模板，否则用默认 SDXL 图。
  */
 export async function generateImageViaComfyUI(input: {
-  prompt: string;
   negative?: string;
+  prompt: string;
+  sessionId?: string;
   /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）；缺省走图片场景默认档。 */
   size?: SizeSpec;
-  sessionId?: string;
 }): Promise<string> {
   const settings = loadSettings();
   const workflow = settings.imageWorkflow
@@ -468,9 +468,9 @@ export async function generateImageViaComfyUI(input: {
  * 因为 i2v 依赖具体模型，无法内置通用图。
  */
 export async function submitVideoViaComfyUI(input: {
-  prompt: string;
-  negative?: string;
   imageDataUrl?: string;
+  negative?: string;
+  prompt: string;
   sessionId?: string;
 }): Promise<{ url?: string }> {
   const settings = loadSettings();

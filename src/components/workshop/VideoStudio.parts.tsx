@@ -37,19 +37,19 @@ export function ChannelSwitch({
   onNextStage,
   onOpenModelAdapters,
 }: {
-  channel: Channel;
-  onChannelChange: (c: Channel) => void;
   apiChannels: ApiChannelsView | null;
   apiReady: boolean;
-  /** 是否选定了工作流库的视频工作流（选定后走封装口径，不再要求 Checkpoint）。 */
-  workflowSelected: boolean;
-  fps: number;
-  onFpsChange: (fps: number) => void;
   batchRunning: boolean;
-  pendingCount: number;
+  channel: Channel;
+  fps: number;
+  onChannelChange: (c: Channel) => void;
+  onFpsChange: (fps: number) => void;
   onGenerateBatch: () => void;
   onNextStage: () => void;
   onOpenModelAdapters: () => void;
+  pendingCount: number;
+  /** 是否选定了工作流库的视频工作流（选定后走封装口径，不再要求 Checkpoint）。 */
+  workflowSelected: boolean;
 }) {
   return (
     <>
@@ -167,16 +167,16 @@ export function ShotCard({
   onGenerate,
   onCancel,
 }: {
-  shot: Shot;
-  progress: number;
-  error?: string;
-  channel: Channel;
   apiReady: boolean;
+  channel: Channel;
+  error?: string;
   fps: number;
-  onPatch: (patch: Partial<Shot>) => void;
-  onGenerate: () => void;
   /** 取消本条进行中的本机视频任务（有 clipTaskId 才显示按钮）。 */
   onCancel: () => void;
+  onGenerate: () => void;
+  onPatch: (patch: Partial<Shot>) => void;
+  progress: number;
+  shot: Shot;
 }) {
   const clipStatus = shot.clipStatus ?? "idle";
   return (

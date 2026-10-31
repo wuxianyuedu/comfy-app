@@ -28,11 +28,11 @@ const REQUEST_TIMEOUT_MS = 35_000;
 export type Listener = (change: ComfyStateChange) => void;
 
 type StateClientGlobal = {
-  seenSeq?: number;
   listeners?: Set<Listener>;
-  stop?: (() => void) | null;
   /** 在途请求的身份：迟到的回包不许再触发下一轮（否则会与新轮次打架）。 */
   runId?: number;
+  seenSeq?: number;
+  stop?: (() => void) | null;
 };
 
 declare global {

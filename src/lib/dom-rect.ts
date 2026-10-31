@@ -97,10 +97,10 @@ export function readElementBox(
    * 用 `typeof` 守卫而不是 `instanceof HTMLElement`：jsdom 与 SSR 的构造器
    * 可能不是同一个（跨 realm 时 `instanceof` 会假阴性）。 */
   const box = /* SAFETY: 类型断言已复核 */ el as Element & {
-    clientWidth?: number;
     clientHeight?: number;
-    scrollWidth?: number;
+    clientWidth?: number;
     scrollHeight?: number;
+    scrollWidth?: number;
   };
   if (typeof box.clientWidth !== "number") {
     return null;

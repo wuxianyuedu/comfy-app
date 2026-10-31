@@ -149,11 +149,11 @@ export function useDraggablePosition<T extends HTMLElement>({
    * 是点击」。放 ref 而不是 state —— pointermove 每帧都写，走 state 会把
    * 整棵树按帧重渲染。 */
   const dragRef = useRef<{
+    moved: boolean;
     pointerId: number;
+    startOffset: DraggableOffset;
     startX: number;
     startY: number;
-    startOffset: DraggableOffset;
-    moved: boolean;
   } | null>(null);
 
   /* 点击回调放 ref 同步：`onClick` 是调用处每次渲染新造的箭头函数，

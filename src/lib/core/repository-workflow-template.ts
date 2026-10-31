@@ -44,8 +44,8 @@ export type WorkflowTemplateListRow = Omit<WorkflowTemplate, "positions">;
 /** {@link WorkflowTemplateRepository.findSourceMetaForUser} 的行形状。 */
 export type WorkflowTemplateSourceMeta = {
   id: string;
-  sourcePath: string | null;
   sourceMtime: number | null;
+  sourcePath: string | null;
 };
 
 export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTemplate> {
@@ -102,7 +102,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
    *  收窄、在行为层只影响读了多少 —— 见 `repository.test.ts` 的断言。 */
   async listForUser(
     userId: string,
-    opts: { where?: SQL; orderBy?: Array<SQL> } = {},
+    opts: { orderBy?: Array<SQL>; where?: SQL } = {},
   ): Promise<Array<WorkflowTemplateListRow>> {
     return db
       .select(LIST_ROW_COLUMNS)
@@ -112,17 +112,17 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
   }
 
   async createImported(input: {
-    userId: string;
+    defaultMode?: string | null;
+    modes?: Array<string>;
     name: string;
-    taskType: string;
     paramMap?: unknown;
-    rawJson?: unknown;
     positions?: unknown;
-    sourcePath?: string | null;
+    rawJson?: unknown;
     sourceChecksum?: string | null;
     sourceMtime?: number | null;
-    modes?: Array<string>;
-    defaultMode?: string | null;
+    sourcePath?: string | null;
+    taskType: string;
+    userId: string;
   }): Promise<WorkflowTemplate> {
     const rows = await db
       .insert(workflowTemplate)
@@ -145,7 +145,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
 
   async relinkSourcePath(
     id: string,
-    data: { sourcePath: string; sourceMtime: number },
+    data: { sourceMtime: number; sourcePath: string },
   ): Promise<void> {
     await db
       .update(workflowTemplate)

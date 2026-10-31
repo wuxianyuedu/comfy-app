@@ -17,16 +17,16 @@ import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
 import { uploadImage } from "./client";
 
 export async function synthesizeFirstFrame(opts: {
-  userId: string;
-  /** 用来合成首帧的**图类**工作流库工作流 id。 */
-  workflowId: string;
-  prompt: string;
   negative?: string;
-  size?: SizeSpec;
   projectId?: string | null;
+  prompt: string;
   /** 采样种子：给了就落到工作流的「种子」口上（作者没连这一口则落不下去、用图内 seed）。
    *  「抽卡重生成」传一个新的随机值，让同提示词也能换图。 */
   seed?: number;
+  size?: SizeSpec;
+  userId: string;
+  /** 用来合成首帧的**图类**工作流库工作流 id。 */
+  workflowId: string;
 }): Promise<string> {
   const { userId, workflowId, prompt, negative, size, projectId, seed } = opts;
   const { taskId } = await createWorkflowRunTask({
@@ -78,8 +78,8 @@ async function waitForImage(taskId: string): Promise<string> {
       }
       const outputs =
         /* SAFETY: 类型断言已复核 */ (row.resultImages as Array<{
-          mediaType?: string;
           localPath?: string;
+          mediaType?: string;
         }> | null) ?? [];
       const first = outputs.find((im) => im.mediaType === "image");
       if (!first?.localPath) {

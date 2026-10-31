@@ -28,12 +28,12 @@ type Story = StoryObj<typeof meta>;
 
 /** 受控包装：story 自己持一份 state 才看得出拖动效果。 */
 function Demo(props: {
-  value: number;
-  min: number;
-  max: number;
-  step?: number;
-  disabled?: boolean;
   "aria-label"?: string;
+  disabled?: boolean;
+  max: number;
+  min: number;
+  step?: number;
+  value: number;
 }) {
   const [value, setValue] = React.useState(props.value);
   return (
@@ -47,17 +47,13 @@ function Demo(props: {
         disabled={props.disabled}
         aria-label={props["aria-label"]}
       />
-      <span className="text-ink-muted w-12 shrink-0 font-mono text-xs tabular-nums">
-        {value}
-      </span>
+      <span className="text-ink-muted w-12 shrink-0 font-mono text-xs tabular-nums">{value}</span>
     </div>
   );
 }
 
 export const Default: Story = {
-  render: () => (
-    <Demo value={0.5} min={0} max={1} step={0.01} aria-label="去噪强度" />
-  ),
+  render: () => <Demo value={0.5} min={0} max={1} step={0.01} aria-label="去噪强度" />,
 };
 
 /** 三档量纲并列：0..1 的浮点（`step=0.01`）/ 1..150 的整数（步数）/
@@ -68,13 +64,7 @@ export const Steps: Story = {
     <div className="flex flex-col gap-6">
       <Demo value={0.75} min={0} max={1} step={0.01} aria-label="强度" />
       <Demo value={24} min={1} max={150} step={1} aria-label="步数" />
-      <Demo
-        value={1024}
-        min={512}
-        max={2048}
-        step={64}
-        aria-label="边长（64 的倍数）"
-      />
+      <Demo value={1024} min={512} max={2048} step={64} aria-label="边长（64 的倍数）" />
     </div>
   ),
 };
@@ -92,7 +82,5 @@ export const Bounds: Story = {
 
 /** 禁用：`disabled` 时把手不可拖、键盘也不响应（`aria-disabled`）。 */
 export const Disabled: Story = {
-  render: () => (
-    <Demo value={42} min={0} max={100} disabled aria-label="被锁定的参数" />
-  ),
+  render: () => <Demo value={42} min={0} max={100} disabled aria-label="被锁定的参数" />,
 };

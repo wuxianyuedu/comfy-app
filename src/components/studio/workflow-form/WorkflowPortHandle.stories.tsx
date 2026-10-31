@@ -45,7 +45,7 @@ type Story = StoryObj<typeof meta>;
  * 端口行用的类型（ComfyUI 的真类型名 —— `normalizeTypeChip()` 只认那几个，
  * 自造的词会落到「未知类型」那一档、看不出差别）。
  */
-const PORT_ROWS: Array<{ id: string; dir: "in" | "out"; type?: string }> = [
+const PORT_ROWS: Array<{ dir: "in" | "out"; id: string; type?: string }> = [
   { id: "3:model", dir: "in", type: "MODEL" },
   { id: "3:positive", dir: "in", type: "CONDITIONING" },
   { id: "3:latent_image", dir: "in", type: "LATENT" },
@@ -63,7 +63,7 @@ const PORT_ROWS: Array<{ id: string; dir: "in" | "out"; type?: string }> = [
  * 骑在卡片边框上。把 `px-3.5` 放到卡片上时端点会压住标签 —— 那是这一层最容易
  * 摆错的一处，所以 story 里按真结构来。
  */
-function PortRow({ portId, dir, type }: { portId: string; dir: "in" | "out"; type?: string }) {
+function PortRow({ portId, dir, type }: { dir: "in" | "out"; portId: string; type?: string }) {
   /* 卡面取**节点调色板的底色**（`DARK_PALETTE_BASE.body`）而不是再写一遍 hex ——
      那是画布节点卡片表面的唯一出处（类型色则经 `portChipStyle()` 取，同源）。 */
   return (

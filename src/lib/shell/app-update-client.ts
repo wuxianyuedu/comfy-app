@@ -125,7 +125,7 @@ export async function downloadAndInstallUpdate(
 /**
  * 重启应用（不涉及更新）。由「重启应用」按钮调用，也作为更新流程的收尾兜底。
  */
-export async function relaunchApp(): Promise<{ ok: boolean; detail: string }> {
+export async function relaunchApp(): Promise<{ detail: string; ok: boolean }> {
   if (!isDesktopShell()) {
     return { ok: false, detail: NOT_SHELL };
   }

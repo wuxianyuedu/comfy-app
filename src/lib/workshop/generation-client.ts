@@ -360,7 +360,7 @@ export interface TaskWatchHandlers {
   /* 任务完成过程中，每落盘一个产物文件就回调一次。 */
   onOutput?: (output: SavedOutput) => void;
   /* 任务到达终态时**恰好**回调一次。 */
-  onSettled: (result: { ok: boolean; message?: string }) => void;
+  onSettled: (result: { message?: string; ok: boolean }) => void;
 }
 
 /* 把 SSE `log` 帧的 unknown 载荷收窄成 TaskLogEntry；收窄不了则为 null。 */
@@ -613,20 +613,20 @@ async function postRelay(body: Record<string, unknown>): Promise<RelayResponse> 
  * 当 `model` 传的是设置页里的远端模型名（remoteModel 表）时，服务端按该条目的
  * 连接参数生图；不传则回落到工坊 API 通道设置（旧行为）。 */
 export async function apiGenerateImage(req: {
-  prompt: string;
-  negative?: string;
-  size?: string;
-  /** 设置页配置的远端模型名（remoteModel 表按名取连接参数） */
-  model?: string;
-  /** 工坊模式码（T2I / I2I / …）：远端模型有该模式适配器时按它翻译字段 */
-  mode?: string;
   /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1.5"）/ 宽高对齐倍数 / 输入图。
    *  三者合起来就是工坊的「比例 + 百万像素 + 倍数」尺寸表达 —— 选「分辨率」时
    *  由调用方（`shotSizeToRelay`）换算后再传，不把 "1k" 这种档位名丢给远端。 */
   aspectRatio?: string;
-  megapixels?: string;
-  multiple?: number;
   image?: string;
+  megapixels?: string;
+  /** 工坊模式码（T2I / I2I / …）：远端模型有该模式适配器时按它翻译字段 */
+  mode?: string;
+  /** 设置页配置的远端模型名（remoteModel 表按名取连接参数） */
+  model?: string;
+  multiple?: number;
+  negative?: string;
+  prompt: string;
+  size?: string;
 }): Promise<string> {
   const data = await postRelay({
     kind: "image",
@@ -656,12 +656,12 @@ export interface ApiVideoSubmitResult {
 
 /* API 通道：提交一个（图生）视频任务。 */
 export async function apiSubmitVideo(req: {
-  prompt: string;
-  negative?: string;
+  fps?: number;
+  frames?: number;
   /* 参考首帧（任何可解析的来源都行：/generated/… 、data URL、http）。 */
   image?: string;
-  frames?: number;
-  fps?: number;
+  negative?: string;
+  prompt: string;
 }): Promise<ApiVideoSubmitResult> {
   const data = await postRelay({
     kind: "video",
@@ -686,7 +686,7 @@ export async function apiSubmitVideo(req: {
 /* API 通道：对异步视频任务做一次轮询。 */
 export async function apiPollVideo(
   remoteTaskId: string,
-): Promise<{ url?: string; pending: boolean }> {
+): Promise<{ pending: boolean; url?: string }> {
   const data = await postRelay({ kind: "video", remoteTaskId });
   if (!data) {
     return { pending: true };
@@ -737,7 +737,7 @@ const PORTRAIT_REF_CACHE_MAX = 32;
 export async function preparePortraitReferences(
   characters: Array<Character>,
   characterIds: ReadonlyArray<string>,
-): Promise<{ files: Array<string>; failedCount: number }> {
+): Promise<{ failedCount: number; files: Array<string> }> {
   const urls = characterIds
     .map((id) => characters.find((c) => c.id === id)?.portraitUrl)
     .filter((url): url is string => typeof url === "string" && url !== "")

@@ -93,9 +93,9 @@ describe("③ 不挑刺：干净元素一条都不报", () => {
 describe("② 不静默：每一种脏法都要被点名", () => {
   /** 每个用例给一份「只有某一处脏」的草稿，断言报出来的 `kind + field`。 */
   const cases: Array<{
-    name: string;
     draft: DraftElements;
     expect: Array<[string, string | null]>;
+    name: string;
   }> = [
     {
       name: "场景缺 id",

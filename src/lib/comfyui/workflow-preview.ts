@@ -12,8 +12,8 @@
 export type WorkflowPreviewNodeKind = "input" | "process" | "output";
 
 export type WorkflowPreviewNode = {
-  id: string;
   class_type: string;
+  id: string;
   kind: WorkflowPreviewNodeKind;
   /** 从左到右的层级下标（0 = 最左，越大越靠右）。 */
   level: number;
@@ -27,15 +27,15 @@ export type WorkflowPreviewEdge = {
 };
 
 export type WorkflowPreview = {
-  nodes: Array<WorkflowPreviewNode>;
   edges: Array<WorkflowPreviewEdge>;
+  height: number;
+  nodes: Array<WorkflowPreviewNode>;
   /** 节点总数（被截断时可能大于 nodes.length）。 */
   total: number;
-  /** SVG viewBox 的宽 / 高（单位 px）。 */
-  width: number;
-  height: number;
   /** 为真时表示 nodes[] 只展示了全部节点里有代表性的一部分。 */
   truncated: boolean;
+  /** SVG viewBox 的宽 / 高（单位 px）。 */
+  width: number;
 };
 
 /**
@@ -127,10 +127,10 @@ function classifyNode(classType: string): WorkflowPreviewNodeKind {
 type GraphTopology = {
   /** 每个节点的入边来源；`Record` 形态便于调用点直接索引。 */
   incoming: Record<string, Set<string>>;
-  /** 每个节点的出边去向。 */
-  outAdj: Record<string, Set<string>>;
   /** 节点 id → 层级下标（无入边为 0）。成环节点兜底为 0。 */
   level: Record<string, number>;
+  /** 每个节点的出边去向。 */
+  outAdj: Record<string, Set<string>>;
 };
 
 /**

@@ -48,9 +48,9 @@ const runnerWarn = vi.fn();
 
 /** `findExecJob` 的行形状（与 impl 一致，测试里不复制第二份判据）。 */
 type ExecJobRow = {
-  workflowName: string;
   execPayload: unknown;
   params: unknown;
+  workflowName: string;
 } | null;
 
 /** 注入用的假仓储：四条读写的调用都记下来，断言不依赖实现细节。 */

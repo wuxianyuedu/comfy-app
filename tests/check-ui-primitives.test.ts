@@ -3890,7 +3890,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline(repo);
     const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       repo.read("scripts/.ui-primitives-baseline.json"),
-    ) as { total: number; rules: Record<string, string> };
+    ) as { rules: Record<string, string>; total: number; };
     expect(baseline.total).toBe(1);
     expect(baseline.rules.P1).toBeTruthy();
     expect(baseline.rules.P2).toBeTruthy();

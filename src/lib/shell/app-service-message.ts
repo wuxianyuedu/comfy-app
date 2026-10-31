@@ -70,15 +70,15 @@ export interface AppServiceEventCursor {
 
 /** 一次待记录的事件。 */
 export type AppServiceEvent =
-  | { type: "disconnect"; at: number }
+  | { at: number; type: "disconnect" }
   /** 路由表不完整：服务在应答、但探活端点 404。用户此刻能做的是重启应用，
    *  而这条消息就是那个出口（状态栏那格只有 24px，说不完整）。 */
-  | { type: "route-stale"; at: number }
+  | { at: number; type: "route-stale" }
   | {
-      type: "start";
       at: number;
       /** 这次启动之前的断开时刻；本次会话没观测到断开为 null（= 冷启动 / 刷新后才恢复）。 */
       offlineAt: number | null;
+      type: "start";
       /** 上面那一段断开里**没人在探测**的毫秒数（0 = 每一拍都在探）。 */
       unprobedMs: number;
     };

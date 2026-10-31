@@ -102,7 +102,7 @@ function hasDeclaredType(e: WorkflowIOEntry): boolean {
  *  与分组判据（`isDimWidth` / `isDimHeight` / `isDimMultiple` / `isDimMegapixels`）
  *  **共用一份名字表**——避免「分组认得出这个 pin，控件推断却认不出」的错位
  *  （分组判据认中文标签 宽度/高度/横向/纵向/倍数/倍率，控件推断原先只认英文整词）。 */
-function isNumericPinName(e: { name?: string; label?: string }): boolean {
+function isNumericPinName(e: { label?: string; name?: string }): boolean {
   const name = (e.name ?? "").toLowerCase();
   const label = e.label ?? "";
   if (
@@ -243,10 +243,10 @@ export function controlForEntry(e: WorkflowIOEntry): ControlKind {
 
 /** 按众所周知的 ComfyUI widget 名给出合理的数值上下界。 */
 export function numericBounds(e: WorkflowIOEntry): {
-  min: number;
-  max: number;
-  step: number;
   decimalPlaces: number;
+  max: number;
+  min: number;
+  step: number;
 } {
   const name = `${e.name} ${e.label ?? ""}`.toLowerCase();
   const isFloat = upperToken(e.type) === "FLOAT";
@@ -377,45 +377,45 @@ export function ioLabel(e: WorkflowIOEntry, allEntries?: ReadonlyArray<WorkflowI
  *  `inputs` 保留成 wireInputs + widgetInputs 的扁平拼接，
  *  让还没区分这两组的消费方继续能用。 */
 export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
+  /** 向后兼容的扁平化：[wireInputs, widgetInputs]，顺序稳定。 */
+  inputs: Array<
+    WorkflowIOEntry & {
+      control: ControlKind;
+      controlInferred?: boolean;
+      ioKey: string;
+    }
+  >;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  /** 带 widget 值的输入（下拉 / 数字 / 布尔 / 多行字符串等）——
+   *  用户不连线也能直接编辑。 */
+  widgetInputs: Array<
+    WorkflowIOEntry & {
+      control: ControlKind;
+      controlInferred?: boolean;
+      ioKey: string;
+    }
+  >;
   /** 没有 widget 的输入 —— 必须从别的节点输出接过来。ComfyUI 里这类是
    *  「只认类型」的端口（positive_prompt、MODEL、CLIP 等），
    *  渲染成只读芯片。 */
   wireInputs: Array<
     WorkflowIOEntry & {
-      ioKey: string;
       control: ControlKind;
       controlInferred?: boolean;
-    }
-  >;
-  /** 带 widget 值的输入（下拉 / 数字 / 布尔 / 多行字符串等）——
-   *  用户不连线也能直接编辑。 */
-  widgetInputs: Array<
-    WorkflowIOEntry & {
       ioKey: string;
-      control: ControlKind;
-      controlInferred?: boolean;
     }
   >;
-  /** 向后兼容的扁平化：[wireInputs, widgetInputs]，顺序稳定。 */
-  inputs: Array<
-    WorkflowIOEntry & {
-      ioKey: string;
-      control: ControlKind;
-      controlInferred?: boolean;
-    }
-  >;
-  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
 } {
   const wireInputs: Array<
     WorkflowIOEntry & {
-      ioKey: string;
       control: ControlKind;
+      ioKey: string;
     }
   > = [];
   const widgetInputs: Array<
     WorkflowIOEntry & {
-      ioKey: string;
       control: ControlKind;
+      ioKey: string;
     }
   > = [];
   const outputs: Array<WorkflowIOEntry & { ioKey: string }> = [];
@@ -650,9 +650,9 @@ export function mergeRefreshedDefaults(
 export function toWorkflowInputsPayload(
   io: WorkflowIOMap | undefined | null,
   values: Record<string, unknown>,
-): Array<{ nodeId: string; name: string; value: unknown }> {
+): Array<{ name: string; nodeId: string; value: unknown }> {
   const { inputs } = splitWorkflowIO(io);
-  const payload: Array<{ nodeId: string; name: string; value: unknown }> = [];
+  const payload: Array<{ name: string; nodeId: string; value: unknown }> = [];
   for (const entry of inputs) {
     // 项目级产出：连线传入的 wire-input（link 控件）值也一并下发。
     // 这类 key 仅在用户真正连线时才会写进 values（reconcile 会丢弃无值的 link key），

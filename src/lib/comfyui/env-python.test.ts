@@ -103,9 +103,9 @@ describe("uvPythonDirs — uv 托管目录候选", () => {
 describe("collectComfyPythonCandidates — 反查到真正在跑的解释器", () => {
   /** 构造注入用的 fs 桩：exists 按集合，readFile/readdir 按表。 */
   function fakeFs(opts: {
+    dirs?: Record<string, Array<string>>;
     exists: Array<string>;
     files?: Record<string, string>;
-    dirs?: Record<string, Array<string>>;
   }) {
     const existsSet = new Set(opts.exists.map((p) => path.normalize(p)));
     return {

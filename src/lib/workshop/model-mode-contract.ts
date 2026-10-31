@@ -66,29 +66,29 @@ export interface RemoteModeAdapter {
   /** 上游端点路径（拼在条目 baseUrl 后），如 /v1/images/generations。 */
   endpointPath: string;
   /** 统一输入 → 请求体字段名。同一类型只能出现一次。 */
-  inputs: Array<{ type: WorkshopInputType; field: string }>;
+  inputs: Array<{ field: string; type: WorkshopInputType }>;
   /** 产物字段路径（响应 JSON 内，支持 a.b.0.c）；空 = 走通用提取。 */
   outputField: string;
 }
 
 /** 该模式默认的输入清单（适配器新建时预填；field 暂用类型名本身）。 */
 export function defaultInputsForMode(mode: string): Array<{
-  type: WorkshopInputType;
   field: string;
+  type: WorkshopInputType;
 }> {
   const code = upperToken(mode);
   /* 「尺寸」的默认三行：比例 + 百万像素 + 倍数（与契约层的 size 口同一口径）。 */
-  const size: Array<{ type: WorkshopInputType; field: string }> = [
+  const size: Array<{ field: string; type: WorkshopInputType }> = [
     { type: "aspect-ratio", field: "aspect_ratio" },
     { type: "megapixels", field: "megapixels" },
     { type: "multiple", field: "multiple" },
   ];
   /** 视频口：时长（秒）。 */
-  const durationRow: { type: WorkshopInputType; field: string } = {
+  const durationRow: { field: string; type: WorkshopInputType } = {
     type: "duration",
     field: "duration",
   };
-  const base: Array<{ type: WorkshopInputType; field: string }> = [
+  const base: Array<{ field: string; type: WorkshopInputType }> = [
     { type: "prompt", field: "prompt" },
   ];
   switch (code) {
@@ -172,7 +172,7 @@ export function parseRemoteModeAdapters(raw: unknown): Array<RemoteModeAdapter> 
     if (!mode || seen.has(mode)) {
       continue;
     }
-    const inputs: Array<{ type: WorkshopInputType; field: string }> = [];
+    const inputs: Array<{ field: string; type: WorkshopInputType }> = [];
     if (Array.isArray(rec.inputs)) {
       for (const row of rec.inputs) {
         if (typeof row !== "object" || row === null) {
@@ -736,7 +736,7 @@ export function contractToStatusEntries(contract: ModeContract): Array<ContractE
  */
 const CONTRACT_INPUT_TO_ADAPTER: Record<
   ModeContractInputType,
-  Array<{ type: WorkshopInputType; field: string }>
+  Array<{ field: string; type: WorkshopInputType }>
 > = {
   prompt: [{ type: "prompt", field: "prompt" }],
   negative: [{ type: "negative", field: "negative_prompt" }],
@@ -757,8 +757,8 @@ const CONTRACT_INPUT_TO_ADAPTER: Record<
 
 export function adapterInputsFromContract(
   contract: ModeContract,
-): Array<{ type: WorkshopInputType; field: string }> {
-  const out: Array<{ type: WorkshopInputType; field: string }> = [];
+): Array<{ field: string; type: WorkshopInputType }> {
+  const out: Array<{ field: string; type: WorkshopInputType }> = [];
   for (const id of contract.inputs) {
     // 带序号的参考图口 (`reference-image-${n}`) 与自定义口 (`custom-${k}-${n}`)
     // 由本地工作流侧连线声明落点，不进这张表；判据用 isModeContractInputType

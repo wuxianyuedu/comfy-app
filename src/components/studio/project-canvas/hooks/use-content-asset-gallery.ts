@@ -49,8 +49,8 @@ export function useContentAssetGallery({
    * 上下文变了就当作这一轮还没有图 —— 与原先在渲染期 `setImages(null)` 等价：
    * 新任务的首帧不会渲染上一任务的缩略图。 */
   const [gallery, setGallery] = useState<{
-    key: string;
     images: Array<TaskGalleryImage> | null;
+    key: string;
   }>({ key: ctxKey, images: null });
   const images = gallery.key === ctxKey ? gallery.images : null;
 

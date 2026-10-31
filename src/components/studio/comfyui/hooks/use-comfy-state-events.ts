@@ -21,10 +21,10 @@ import { useEffect, useRef } from "react";
 import { subscribeComfyStateChanges } from "~/lib/comfy/comfy-state-client";
 
 export function useComfyStateEvents(input: {
-  /** 是否订阅。false = 立刻退订（首屏未就绪 / 正在执行会自己 refetch 的动作）。 */
-  paused: boolean;
   /** 收到变化时的动作：重新问一次状态。 */
   onChange: () => void;
+  /** 是否订阅。false = 立刻退订（首屏未就绪 / 正在执行会自己 refetch 的动作）。 */
+  paused: boolean;
 }): void {
   const { paused, onChange } = input;
   /* 回调走 ref：它每次渲染都是新的箭头函数（内联在调用点），进依赖数组会让

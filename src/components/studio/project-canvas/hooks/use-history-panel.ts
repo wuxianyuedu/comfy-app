@@ -79,9 +79,9 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
       setLoading(true);
       setError(null);
       const params: {
-        take: number;
-        projectId?: string;
         media?: TaskMediaType;
+        projectId?: string;
+        take: number;
       } = { take: TAKE };
       if (scope === "project" && projectId) {
         params.projectId = projectId;

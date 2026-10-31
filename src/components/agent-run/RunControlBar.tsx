@@ -57,7 +57,7 @@ function actionLabel(action: RunAction): string {
   }
 }
 
-const APPROVAL_OPTIONS: Array<{ value: ApprovalMode; label: string }> = [
+const APPROVAL_OPTIONS: Array<{ label: string; value: ApprovalMode }> = [
   { value: "stage", label: "每阶段确认" },
   { value: "shot", label: "逐镜确认" },
   { value: "auto", label: "全自动跑完" },

@@ -34,7 +34,7 @@ export interface ComfyRuntimeStatus {
 /** 一个运行态快照里所有「正在过渡」的信号 —— 动作按钮的禁用判据只用它。 */
 export function isComfyBusy(
   status: ComfyRuntimeStatus | null,
-  flags: { starting: boolean; stopping: boolean; opening: boolean },
+  flags: { opening: boolean; starting: boolean; stopping: boolean },
 ): boolean {
   return (
     flags.opening || flags.starting || flags.stopping || !!status?.starting || !!status?.stopping

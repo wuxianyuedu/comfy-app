@@ -97,7 +97,7 @@ async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
  *  （浏览器侧跨域拿不到，引用时由服务端自行拉取）。 */
 async function localizePortraitImage(
   url: string,
-  opts: { projectId: string; name: string },
+  opts: { name: string; projectId: string },
 ): Promise<string> {
   if (!isInlineMedia(url)) {
     return url;
@@ -118,9 +118,9 @@ async function localizePortraitImage(
 export async function generateRemotePortrait(
   req: PortraitRequest,
   opts: {
-    projectId: string;
-    name: string;
     model?: string;
+    name: string;
+    projectId: string;
   },
 ): Promise<string> {
   const url = await apiGenerateImage({

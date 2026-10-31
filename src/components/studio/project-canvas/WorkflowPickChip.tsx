@@ -9,10 +9,10 @@ import { OptionListPopover } from "~/components/ui/option-list-popover";
 
 export type WorkflowPickOption = {
   id: string;
-  name: string;
-  taskType?: string;
-  sourcePath?: string | null;
   modelTags?: Array<string>;
+  name: string;
+  sourcePath?: string | null;
+  taskType?: string;
 };
 
 interface WorkflowPickChipProps {

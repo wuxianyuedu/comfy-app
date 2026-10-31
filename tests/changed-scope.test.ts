@@ -228,11 +228,11 @@ describe("changed-scope —— 平台合成 merge 提交上的对账（#2325）"
    * `base`（平台给的基线）/ `theirs`（目标分支自己落地的）/ `merged`（合成提交）。
    */
   function syntheticMerge(): {
-    dir: string;
     base: string;
-    theirs: string;
-    source: string;
+    dir: string;
     merged: string;
+    source: string;
+    theirs: string;
   } {
     const dir = initRepo();
     write(dir, "README.md", "x\n");

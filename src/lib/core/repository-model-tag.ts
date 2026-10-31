@@ -143,7 +143,7 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
   /** 批量取出模板→模型标签名映射，替代 router 内裸写 join。 */
   async getTemplateTagRows(
     templateIds: Array<string>,
-  ): Promise<Array<{ templateId: string; name: string }>> {
+  ): Promise<Array<{ name: string; templateId: string }>> {
     if (!templateIds.length) {
       return [];
     }

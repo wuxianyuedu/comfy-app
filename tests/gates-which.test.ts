@@ -34,8 +34,8 @@ function run(args: Array<string> = []) {
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: typeof e.status === "number" ? e.status : 1,
@@ -134,7 +134,7 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
 });
 
 /** 一次子进程读数的形状（只列 `affectedTests` 真正读的那几个字段）。 */
-type FakeResult = { status: number | null; stdout?: string; stderr?: string };
+type FakeResult = { status: number | null; stderr?: string; stdout?: string; };
 
 /**
  * 造一个假的 `spawnSync`。

@@ -87,8 +87,8 @@ const MISSING_REQUIRED_BADGE_CLASS = "bg-destructive/15 text-destructive";
  * 琥珀在这里刻意不用：没落点且必填 = 缺件，是问题状态（同「未配置」总览的
  * 红系），不是「待办提示」。 */
 function entryStateBadge(entry: EncapsulationEntryStatus): {
-  label: string;
   className: string;
+  label: string;
 } | null {
   if (entry.targetIoKey !== null) {
     return { label: "已落点", className: RESOLVED_BADGE_CLASS };

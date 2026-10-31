@@ -41,8 +41,8 @@ function pkg(status: "ok" | "missing" | "error" | "empty", name: string) {
     nodeCount: 0,
     nodeTypes: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
     errors: /* SAFETY: 类型断言已复核 */ [] as Array<{
-      file: string;
       error: string;
+      file: string;
     }>,
   };
 }

@@ -72,7 +72,7 @@ export interface LibraryWireFlowArgs {
   /** 输出侧取值行写入。 */
   connectOutput?: (outputIoKey: string, targetIoKey: string) => void;
   /** 背景板尺寸（画布量到容器尺寸后给出；不传用兜底值，见 `buildLibraryNodes`）。 */
-  backdropSize?: { width: number; height: number };
+  backdropSize?: { height: number; width: number };
   /** 是否允许编辑（有模式 + 上层给了落库回调）。为 false 时连线不可单独点选 /
    *  删除（只读预览，避免误删）。与画布的 `canWire` 同源。 */
   canWire?: boolean;
@@ -307,7 +307,7 @@ export function libraryFitViewOptions(): {
  */
 export function buildLibraryNodes(
   sizing: LayoutSizing,
-  backdropSize?: { width: number; height: number },
+  backdropSize?: { height: number; width: number },
 ): Array<Node> {
   const at = layoutLibraryNodes(sizing);
   const extent = libraryBackdropSize(sizing, {

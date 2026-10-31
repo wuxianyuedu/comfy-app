@@ -41,8 +41,8 @@ const SubgraphIdentitySchema = z.looseObject({ id: z.string() });
 
 /** 前端下发的工作流覆盖项（nodeId / name / value）。 */
 export type RawWorkflowOverride = {
-  nodeId: string;
   name: string;
+  nodeId: string;
   value?: unknown;
 };
 
@@ -62,8 +62,8 @@ export type RawUiNodeInput = {
  */
 export type RawUiNode = {
   id?: unknown;
-  type?: unknown;
   inputs?: Array<RawUiNodeInput>;
+  type?: unknown;
   widgets_values?: Array<unknown>;
 };
 /** 把 API 格式的节点 id（例如 "4:1670"）或顶层 id 映射到原始 UI 节点。
@@ -239,8 +239,8 @@ function hasSeedControlSlot(node: RawUiNode): boolean {
 const SUBGRAPH_INPUT_NODE_ID = -10;
 /** 子图定义 `inputs[]` 引脚列表里一项的最小视图。 */
 type SubgraphPin = {
-  name?: unknown;
   linkIds?: unknown;
+  name?: unknown;
 };
 /** 子图定义内部一条连线对象的最小视图（含 id、起止节点与槽位、类型等字段：
  *  依次是 id、源节点、源槽、目标节点、目标槽、类型。 */
@@ -253,9 +253,9 @@ type SubgraphLink = {
 /** 子图定义（`definitions.subgraphs[uid]`）的最小视图。 */
 type RawSubgraph = {
   id?: unknown;
-  nodes?: unknown;
-  links?: unknown;
   inputs?: unknown;
+  links?: unknown;
+  nodes?: unknown;
 };
 /** 收集所有子图定义，按其 UUID（`sub.id`）作键。 */
 function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {

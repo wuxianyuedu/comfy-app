@@ -156,7 +156,7 @@ export interface WorkshopPipelineController {
   stageDesc: string;
   stageRatios: StageRatios;
   progressPct: number;
-  prereq: { text: string; go: Tab } | null;
+  prereq: { go: Tab; text: string } | null;
   /** 六段的健康度快照（唯一一份进度账；「还差几段」由它派生）。 */
   health: Array<HealthRow>;
   viewContext: StageViewContext;

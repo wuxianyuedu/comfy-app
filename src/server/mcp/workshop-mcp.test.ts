@@ -137,7 +137,7 @@ function resetCalls(): void {
 /** MCP 的失败是**结果**（isError）而不是抛异常，取回文本便于断言与排错。 */
 function textOf(result: unknown): string {
   const content = /* SAFETY: 类型断言已复核 */ (
-    result as { content?: Array<{ type: string; text?: string }> }
+    result as { content?: Array<{ text?: string; type: string }> }
   ).content;
   return (content ?? []).map((part) => part.text ?? "").join("\n");
 }

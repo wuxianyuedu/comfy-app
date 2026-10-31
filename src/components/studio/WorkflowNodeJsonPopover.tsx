@@ -30,26 +30,26 @@ import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
  * 服务端返回的 LiteGraph 节点/RawMeta 荷载是无约束 JSON；组件只消费下述
  * 已声明字段，其余一律保持 unknown 接收，不再以 any 逃生。 */
 export type RawNodeJson = {
-  class_type?: string;
-  id?: string;
-  type?: string;
-  mode?: number;
-  widgets_values?: Array<unknown>;
-  inputs?: Record<string, unknown>;
-  outputs?: Array<unknown>;
   _meta?: Record<string, unknown>;
-  flags?: Record<string, unknown>;
-  properties?: Record<string, unknown>;
-  pos?: [number, number];
   [key: string]: unknown;
+  class_type?: string;
+  flags?: Record<string, unknown>;
+  id?: string;
+  inputs?: Record<string, unknown>;
+  mode?: number;
+  outputs?: Array<unknown>;
+  pos?: [number, number];
+  properties?: Record<string, unknown>;
+  type?: string;
+  widgets_values?: Array<unknown>;
 };
 
 export type RawNodeView = {
   entry: RawNodeJson | null;
+  pos: [number, number] | null;
   /** 与 `RawMetaEntry` 同源（同一份节点元数据，可选字段在原件里可能缺失）。 */
   raw?: RawMetaEntry;
   rawNode?: RawNodeJson | null;
-  pos: [number, number] | null;
 };
 
 /**
@@ -110,10 +110,10 @@ export function NodeJsonPopover({
   getView,
   onDismiss,
 }: {
-  request: NodeJsonViewerRequest;
   getJson: (nodeId: string) => RawNodeJson | null;
   getView: (nodeId: string) => RawNodeView | null;
   onDismiss: () => void;
+  request: NodeJsonViewerRequest;
 }) {
   const json = useMemo(() => getJson(request.nodeId), [getJson, request.nodeId]);
   const nodeView = useMemo(() => getView?.(request.nodeId) ?? null, [getView, request.nodeId]);

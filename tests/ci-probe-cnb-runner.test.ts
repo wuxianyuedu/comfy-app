@@ -24,10 +24,10 @@ import { cnbCall, formatReadingRow, readBuild } from "../scripts/ci-probe-lock-r
 
 /** `ExecResult` 形态（`makeRunner` 的返回）。 */
 type Spawned = {
-  status: number;
-  stdout: string;
-  stderr: string;
   error: string | null;
+  status: number;
+  stderr: string;
+  stdout: string;
 };
 
 /** 造一个「这一次平台调用长成这样」的取数出口：走真的 `cnbCall`，只假最外面那一层。 */

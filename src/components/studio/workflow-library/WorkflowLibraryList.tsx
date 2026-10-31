@@ -249,9 +249,9 @@ function WorkflowListItem({
   selected,
   onClick,
 }: {
-  workflow: WorkflowRow;
-  selected: boolean;
   onClick: () => void;
+  selected: boolean;
+  workflow: WorkflowRow;
 }) {
   const { usable } = deriveFormatFlags(workflow);
   const { missing, canResync } = deriveSyncFlags(workflow);

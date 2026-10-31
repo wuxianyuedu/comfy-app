@@ -30,9 +30,9 @@ const { spawnMock, openSyncMock, closeSyncMock, warnMock, spawned } = vi.hoisted
 
 type EmitterChild = EventEmitter & {
   pid: number;
-  unref: () => void;
-  stdout: EventEmitter | null;
   stderr: EventEmitter | null;
+  stdout: EventEmitter | null;
+  unref: () => void;
 };
 
 vi.mock("child_process", () => ({ spawn: spawnMock }));
@@ -251,9 +251,9 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
   it("其余三条拉起路径同样把非 Error 的抛错收成一句话", () => {
     const paths: Array<{
       name: string;
-      shellExe?: string;
       platform: NodeJS.Platform;
       run: () => string | undefined;
+      shellExe?: string;
     }> = [
       {
         name: "POSIX keepAlive",

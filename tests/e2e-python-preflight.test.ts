@@ -80,7 +80,7 @@ describe("e2e Python 前置：可用时给出绝对路径", () => {
      * 「列出已装版本」并退非零。第一处（`resolvePython`）修好而这里漏掉的话，
      * 这第二次 `whichCommand` 会按缺省 `["--version"]` 重探 —— 那次能过全靠
      * `whichCommand` 的记忆化键不含 `probeArgs`。判据不该建立在缓存顺序上。 */
-    const calls: Array<{ name: string; args: Array<string> }> = [];
+    const calls: Array<{ args: Array<string>; name: string; }> = [];
     const ready = checkPythonReady({
       platform: "win32",
       resolve: () => ({

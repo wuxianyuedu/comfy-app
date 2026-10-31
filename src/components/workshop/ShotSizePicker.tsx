@@ -49,11 +49,11 @@ export function ShotSizePicker({
   disabled,
   scene = "image",
 }: {
-  value: ShotSizeState;
-  onChange: (next: ShotSizeState) => void;
   disabled?: boolean;
+  onChange: (next: ShotSizeState) => void;
   /** 尺寸表口径：生图走图片场景，视频走行业标准场景。 */
   scene?: SizeScene;
+  value: ShotSizeState;
 }) {
   const state = value;
   const [tableOpen, setTableOpen] = useState(false);

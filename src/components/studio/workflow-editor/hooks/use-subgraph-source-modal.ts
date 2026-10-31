@@ -12,17 +12,17 @@ import type { WorkflowDetail } from "../../workflow-types";
 
 export function useSubgraphSourceModal(params: {
   detail: WorkflowDetail | null;
-  subgraphStackLength: number;
   subgraphRawContext: {
     parentRawJson: unknown;
     subUid: string;
   } | null;
+  subgraphStackLength: number;
 }) {
   const { detail, subgraphStackLength, subgraphRawContext } = params;
   return useMemo<{
+    isSubgraph: boolean;
     name: string;
     source: unknown;
-    isSubgraph: boolean;
   } | null>(() => {
     if (!detail) {
       return null;

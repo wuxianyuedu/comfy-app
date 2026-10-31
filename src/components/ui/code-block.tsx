@@ -71,8 +71,8 @@ function getHighlighter(): Promise<ShikiHighlighter> {
   highlighterPromise ??= (async () => {
     const shiki = /* SAFETY: 类型断言已复核 */ (await import("shiki/dist/bundle-web.mjs")) as {
       createHighlighter: (options: {
-        themes: Array<string>;
         langs: Array<string>;
+        themes: Array<string>;
       }) => Promise<ShikiHighlighter>;
     };
     return shiki.createHighlighter({

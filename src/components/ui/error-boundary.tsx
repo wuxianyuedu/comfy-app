@@ -19,9 +19,9 @@ export class ErrorBoundary extends React.Component<
     fallback?: React.ReactNode | ((error: Error | null) => React.ReactNode | null | undefined);
     onError?: (error: Error, info: React.ErrorInfo) => void;
   },
-  { hasError: boolean; error: Error | null }
+  { error: Error | null; hasError: boolean }
 > {
-  state: { hasError: boolean; error: Error | null } = {
+  state: { error: Error | null; hasError: boolean } = {
     hasError: false,
     error: null,
   };

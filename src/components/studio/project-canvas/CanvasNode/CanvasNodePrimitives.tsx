@@ -18,9 +18,9 @@ export function Field({
   port,
   children,
 }: {
-  label: string;
-  port?: { id: string; type: PortType; dir?: "in" | "out" };
   children: React.ReactNode;
+  label: string;
+  port?: { dir?: "in" | "out"; id: string; type: PortType };
 }) {
   const s = port ? PORT_STYLE[port.type] : null;
   const isOut = port?.dir === "out";

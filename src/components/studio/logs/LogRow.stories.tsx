@@ -3,10 +3,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { LogRow } from "~/components/studio/logs/LogRow";
 import { useExpansionSet } from "~/components/ui/expansion-set";
 import { LOG_ROW_SINGLE } from "~/components/studio/logs/log-virtual";
-import {
-  sceneEntries,
-  type SceneName,
-} from "../../../../.storybook/store-sources";
+import { sceneEntries, type SceneName } from "../../../../.storybook/store-sources";
 
 /**
  * 一行日志 —— 面板里被读得最多的那一格。
@@ -51,20 +48,16 @@ function LogRowHarness({
   keyword = "",
   expandFirst = false,
 }: {
+  expandFirst?: boolean;
+  keyword?: string;
   scene?: SceneName;
   wrap?: boolean;
-  keyword?: string;
-  expandFirst?: boolean;
 }) {
   const entries = sceneEntries(scene);
-  const expansion = useExpansionSet(
-    expandFirst && entries[0] ? { [entries[0].id]: true } : {},
-  );
+  const expansion = useExpansionSet(expandFirst && entries[0] ? { [entries[0].id]: true } : {});
   if (entries.length === 0) {
     return (
-      <div className="text-ink-muted p-4 text-sm">
-        场景「{scene}」没有条目 —— 换一个场景。
-      </div>
+      <div className="text-ink-muted p-4 text-sm">场景「{scene}」没有条目 —— 换一个场景。</div>
     );
   }
   return (

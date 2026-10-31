@@ -109,11 +109,11 @@ const APP_RUNTIME_TEXT = [
  * 一改就跟着变。
  */
 function appLines(spec: {
-  count: number;
   baseMs: number;
-  stepMs: number;
+  count: number;
   levels?: ReadonlyArray<string>;
   message: (index: number) => string;
+  stepMs: number;
 }): string {
   const levels = spec.levels ?? ["INFO", "INFO", "WARN"];
   const pad = (value: number, width = 2) => String(value).padStart(width, "0");
@@ -132,8 +132,8 @@ function appLines(spec: {
 
 /** 同一毫秒里堆若干行（`sameMillisecond` 那一档的现场）。 */
 function sameMsLines(spec: {
-  count: number;
   atMs: number;
+  count: number;
   message: (index: number) => string;
 }): string {
   return appLines({

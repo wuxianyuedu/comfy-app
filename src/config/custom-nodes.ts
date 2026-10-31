@@ -148,7 +148,7 @@ export function getCustomNodesRegistryVersion(): number {
  * 只在**结论真的变了**时才广播：自动刷新与手动重解析会反复命中同一档失败
  * （「还没有清单」），不去重就是把同一个提示刷屏（口径同 `sync-notice` 的按原因去重）。
  */
-function recordRegistry(next: { loaded: boolean; count: number; detail: string | null }): void {
+function recordRegistry(next: { count: number; detail: string | null; loaded: boolean }): void {
   const unchanged =
     registryState.loaded === next.loaded &&
     registryState.count === next.count &&
@@ -170,9 +170,9 @@ function recordRegistry(next: { loaded: boolean; count: number; detail: string |
  * 「还没有清单」是正常冷启动，「未登录」与「取不到」是两种完全不同的修法。
  */
 type ManifestFailure =
-  | { kind: "not-parsed"; detail: string }
-  | { kind: "unauthorized"; detail: string }
-  | { kind: "unreachable"; detail: string };
+  | { detail: string; kind: "not-parsed" }
+  | { detail: string; kind: "unauthorized" }
+  | { detail: string; kind: "unreachable" };
 
 /** 把一次非 2xx 的清单响应折成可说的一句话（状态码 → 用户能行动的措辞）。 */
 function classifyManifestFailure(status: number): ManifestFailure {
@@ -214,7 +214,7 @@ interface ManifestNode {
   function?: string | null;
   description?: string | null;
   inputs?: Array<ManifestInput>;
-  outputs?: Array<{ type: string; name: string }>;
+  outputs?: Array<{ name: string; type: string }>;
   /** 磁盘上的源文件（仅供参考）。 */
   source?: string;
   /** 来源包目录名（例如 "ComfyMath"、"DaSiWa-Nodes"）。
@@ -310,15 +310,15 @@ export interface ManifestNodeRaw {
   function?: string | null;
   description?: string | null;
   inputs?: Array<{
-    name: string;
-    type: string;
-    widget?: string | null;
-    options?: Array<string> | null;
     /** 控件的默认值（字符串 / 数字 / 布尔 … 原始 JSON 值），对本模块不透明。 */
     default?: unknown;
+    name: string;
+    options?: Array<string> | null;
     required?: boolean;
+    type: string;
+    widget?: string | null;
   }>;
-  outputs?: Array<{ type: string; name: string }>;
+  outputs?: Array<{ name: string; type: string }>;
   source?: string;
   package?: string;
 }

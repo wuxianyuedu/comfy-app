@@ -139,9 +139,9 @@ function runGuard(overrides: Record<string, string | null>): string {
     return "CODE=0";
   } catch (e: unknown) {
     const err = /* SAFETY: 类型断言已复核 */ e as {
-      stdout?: string;
-      stderr?: string;
       status?: number;
+      stderr?: string;
+      stdout?: string;
     };
     return `CODE=${err.status ?? 1}\n${err.stdout ?? ""}${err.stderr ?? ""}`;
   }

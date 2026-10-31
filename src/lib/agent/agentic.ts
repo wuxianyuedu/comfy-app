@@ -11,11 +11,11 @@ export interface AgentSpec {
 }
 
 export type AgentParams = {
-  steps?: number;
   cfg?: number;
   sampler?: string;
   scheduler?: string;
   size?: string;
+  steps?: number;
 };
 
 export interface ChatMessage {
@@ -124,11 +124,11 @@ function offlineAgent(history: Array<ChatMessage>): AgentTurnResult {
 }
 
 type RawSpec = {
-  prompt?: unknown;
-  negative?: unknown;
   kind?: unknown;
-  skillHint?: unknown;
+  negative?: unknown;
   params?: Partial<Record<"steps" | "cfg" | "sampler" | "scheduler" | "size", unknown>>;
+  prompt?: unknown;
+  skillHint?: unknown;
 };
 
 function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
@@ -169,8 +169,8 @@ export async function chatAgent(history: Array<ChatMessage>): Promise<AgentTurnR
       throw new Error("llm failed");
     }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      content?: string;
       choices?: Array<{ message?: { content?: string } }>;
+      content?: string;
     };
     const content = data.content ?? data.choices?.[0]?.message?.content ?? "";
     const jsonMatch = /\{[\s\S]*\}/.exec(content);

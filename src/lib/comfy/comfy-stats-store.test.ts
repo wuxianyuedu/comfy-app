@@ -23,7 +23,7 @@ vi.mock("~/lib/comfy/comfy-stats-client", () => ({
 const crashListeners = vi.hoisted(
   () =>
     /* SAFETY: 类型断言已复核 */ [] as Array<
-      (s: { seq: number; at: number; reason: string; userStopped: boolean }) => void
+      (s: { at: number; reason: string; seq: number; userStopped: boolean }) => void
     >,
 );
 vi.mock("~/lib/comfy/comfy-liveness-client", () => ({

@@ -25,8 +25,8 @@ export function ExtractModelSelect({
   value,
   onChange,
 }: {
-  value: string;
   onChange: (value: string) => void;
+  value: string;
 }) {
   const { localModels, remoteModels } = useLLM();
   const { channel, model } = parseChannelOption(value);
@@ -36,7 +36,7 @@ export function ExtractModelSelect({
    * 以 (key → 结果) 的缓存保存校验结果，异步回调里才 setState（不违反
    * react-hooks/set-state-in-effect）；重复选同一模型不重复探测。 */
   const [availByKey, setAvailByKey] = React.useState<
-    Record<string, { kind: "ok" } | { kind: "err"; detail: string }>
+    Record<string, { kind: "ok" } | { detail: string; kind: "err" }>
   >({});
   const probeStarted = React.useRef<Record<string, boolean>>({});
 

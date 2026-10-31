@@ -224,10 +224,10 @@ async function syncRemoteModels(
   const keyByName = new Map(rows.map((r) => [r.name, r.apiKey ?? null]));
   const seen = new Set<string>();
   const cleaned: Array<{
-    name: string;
-    baseUrl: string | null;
     apiKey: string | null;
+    baseUrl: string | null;
     kind: string;
+    name: string;
   }> = [];
   for (const e of entries) {
     const name = e.name.trim();

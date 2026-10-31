@@ -60,7 +60,7 @@ import { ContractInputCatalog } from "./ContractInputCatalog";
 import { ModeContractModeNav } from "./ModeContractModeNav";
 
 /** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id。 */
-function LabelWithId({ label, id }: { label: string; id: string }) {
+function LabelWithId({ label, id }: { id: string; label: string }) {
   return (
     <>
       {label}
@@ -261,8 +261,8 @@ function ContractInputRow({
 }: {
   controller: ModeContractEditorController;
   draft: ModeContract;
-  input: ModeContract["inputs"][number];
   index: number;
+  input: ModeContract["inputs"][number];
 }) {
   const label = modeContractInputIdLabel(input, draft.customInputs);
   const kind = customInputKindOf(input);

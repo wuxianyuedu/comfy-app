@@ -208,7 +208,7 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
   const hook = (): string => readFileSync(join(REPO_ROOT, ".githooks", "pre-commit"), "utf8");
 
   /** D 组步骤 = `  run "<标签>" <命令>`（与同族用例同款解析，不许 toContain）。 */
-  const steps = (): Array<{ label: string; cmd: string }> =>
+  const steps = (): Array<{ cmd: string; label: string; }> =>
     [...hook().matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
       label: m[1] ?? "",
       cmd: m[2] ?? "",

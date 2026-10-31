@@ -44,19 +44,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** 受控包装（story 里自己持一份 state 才点得开）。 */
-function Demo(props: { label: string; body: string }) {
+function Demo(props: { body: string; label: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
         打开全屏视图
       </Button>
-      <FullScreenDialog
-        open={open}
-        onOpenChange={setOpen}
-        label={props.label}
-        className="bg-bg"
-      >
+      <FullScreenDialog open={open} onOpenChange={setOpen} label={props.label} className="bg-bg">
         <div className="flex items-center justify-between border-b p-3">
           <span className="text-sm font-medium">{props.label}</span>
           <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>

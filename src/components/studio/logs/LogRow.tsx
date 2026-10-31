@@ -68,7 +68,7 @@ function fragmentsOf(text: string): Array<RowToken> {
   return out;
 }
 
-function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
+function HighlightedText({ text, keyword }: { keyword: string; text: string }) {
   const fragments = fragmentsOf(text);
   /* 归一化走 `~/lib/list-filter`（规范 16 §16.2.4.16）：它与 `matchesSearch`
    * 必须同一口径 —— 命中判据折了小写而高亮没折，会出现「行被选中但字没高亮」。 */
@@ -175,7 +175,7 @@ function PathLinkedText({ text }: { text: string }): React.ReactNode {
  * 放常驻说明，而「点了有反应」这件事必须在**点的那一处**看得出来。失败的原因
  * （服务端给的那句）进 `title`，鼠标停一下就能看到。
  */
-function RevealPathButton({ path, children }: { path: string; children: React.ReactNode }) {
+function RevealPathButton({ path, children }: { children: React.ReactNode; path: string }) {
   /* 回执与成功态**必须同生共死**：两个独立定时器在时长一改就会漂移，留下
    * 「已定位」还在、绿色已经消失的自相矛盾画面（与 `SaveExportButton` 同款）。 */
   const hint = useFlashState(1200);
@@ -335,13 +335,13 @@ export const LogRow = memo(function LogRow({
   style,
 }: {
   entry: LogEntry;
-  wrap: boolean;
-  keyword: string;
   /** 该行是否处于展开态（只对可展开的原始输出行有意义）。 */
   expanded: boolean;
+  keyword: string;
   /** 点标题行折叠 / 展开（`Disclosure` 的受控回调）；回调带 id 以便面板方用稳定引用。 */
   onToggleExpand: (id: string) => void;
   style: React.CSSProperties;
+  wrap: boolean;
 }) {
   /* 文件路径那枚的复制：**显式静默**失败 —— 整条路径就印在按钮上，
    * 旁边没有第二处可说的地方，而弹 toast 会盖住正在看的日志。 */

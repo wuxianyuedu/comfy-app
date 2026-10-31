@@ -78,9 +78,9 @@ interface Subscription {
 }
 
 type WatchGlobal = {
-  seq?: number;
   last?: ComfyStateChange | null;
   listeners?: Set<Subscription>;
+  seq?: number;
 };
 
 declare global {
@@ -124,8 +124,8 @@ export function noteComfyStateChange(
 
 /** 此刻的纪元与最近一次变化（首次连上的客户端据此判定现状）。 */
 export function getComfyStateChange(): {
-  seq: number;
   last: ComfyStateChange | null;
+  seq: number;
 } {
   return { seq: st.seq ?? 0, last: st.last ?? null };
 }

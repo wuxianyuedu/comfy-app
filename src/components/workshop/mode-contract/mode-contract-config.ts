@@ -107,9 +107,9 @@ export function addableContractInputs(inputs: ReadonlyArray<string>): Array<Mode
  *  数字。更细的形状（尺寸的组合控件、时长的秒/帧单位）都带语义，需要配套的换算
  *  规则，不是一次配置能说清的，所以不开放给作者自选。 */
 export const CUSTOM_INPUT_KINDS: ReadonlyArray<{
+  hint: string;
   kind: ModeContractCustomKind;
   label: string;
-  hint: string;
 }> = [
   { kind: "text", label: "文本", hint: "单行文本，可落到工作流的文本行" },
   { kind: "image", label: "图片", hint: "选本地图片上传，可落到图片行" },
@@ -128,7 +128,7 @@ export function customInputKindLabel(kind: ModeContractCustomKind): string {
  *  哪些口」——只看得见剩下的那几个，读起来像「这套系统只支持这些参数」。 */
 export function contractInputCatalog(
   inputs: ReadonlyArray<string>,
-): Array<{ type: ModeContractInputType; label: string; added: boolean }> {
+): Array<{ added: boolean; label: string; type: ModeContractInputType }> {
   return MODE_CONTRACT_INPUT_TYPES.map((item) => ({
     type: item.type,
     label: item.label,

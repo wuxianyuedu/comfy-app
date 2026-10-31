@@ -22,10 +22,10 @@ import { main } from "../scripts/ship.mjs";
 const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
 
 type FakeResult = {
-  status: number;
-  stdout: string;
-  stderr: string;
   error: string | null;
+  status: number;
+  stderr: string;
+  stdout: string;
 };
 
 /** 一条 PR 记录的最小形状（字段按平台原样：`head.ref` 带 `refs/heads/` 前缀）。 */
@@ -133,7 +133,7 @@ describe("fetchPullsForBranches：取不到就是取不到", () => {
 });
 
 /** `main()` 那一层需要的最小 io（形状同 `tests/ship.test.ts` 的 `issueMainIo`）。 */
-function branchesMainIo(opts: { pulls: Array<unknown>; branchList: string }) {
+function branchesMainIo(opts: { branchList: string; pulls: Array<unknown>; }) {
   const calls: Array<string> = [];
   const log: Array<string> = [];
   const ok = (stdout: string): FakeResult => ({

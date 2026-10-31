@@ -31,9 +31,9 @@ export function ShotFilmStrip({
   shots,
   onJump,
 }: {
-  shots: Array<Shot>;
   /** 跳到某一镜（由调用处决定是滚动定位还是同时展开那张卡）。 */
   onJump: (shot: Shot) => void;
+  shots: Array<Shot>;
 }) {
   if (shots.length === 0) {
     return null;

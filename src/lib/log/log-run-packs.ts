@@ -69,7 +69,7 @@ export function packScopedId(packName: string, fileName: string): string {
 }
 
 /** 解析归档份 id（不是这个形态时返回 null —— `current/` 的份就是裸文件名）。 */
-export function parsePackScopedId(id: string): { packName: string; fileName: string } | null {
+export function parsePackScopedId(id: string): { fileName: string; packName: string } | null {
   const at = id.indexOf(PACK_SEP);
   if (at <= 0) {
     return null;

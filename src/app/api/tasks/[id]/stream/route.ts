@@ -31,7 +31,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
        * `sentLogCount`：已发出的日志条数——日志是**追加数组**，轮询按它做
        * 增量 diff 发 log 帧（P3 §5 ADR §13-3C：SSE 单源化，log/state 都以
        * DB 为准；初始回放读内存是为了接住 persistLogs 200ms 防抖窗口）。 */
-      const lastSent: { status: string; progress: number; nodeKey: string } = {
+      const lastSent: { nodeKey: string; progress: number; status: string } = {
         status: "",
         progress: 0,
         nodeKey: "",

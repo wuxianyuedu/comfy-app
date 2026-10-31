@@ -27,10 +27,10 @@ import { normalizeSlashes } from "~/lib/path-display";
 
 /** pyvenv.cfg 里我们关心的字段：基础解释器所在目录与可执行文件全路径。 */
 export type PyvenvConfig = {
-  /** `home`：基础解释器所在目录。 */
-  home: string | null;
   /** `executable`：基础解释器全路径。 */
   executable: string | null;
+  /** `home`：基础解释器所在目录。 */
+  home: string | null;
 };
 
 /**
@@ -96,10 +96,10 @@ export function pythonPathsFromPyvenv(
 /** 本模块只关心这几个环境变量，用一个窄结构体承接，便于单测注入完整的
  *  「空环境」（Next 生成的 ProcessEnv 把所有键当必填，直接传 {} 通不过类型检查）。 */
 export type PythonEnvVars = {
-  /** uv 解释器托管目录（显式指定时优先于平台默认位置）。 */
-  UV_PYTHON_INSTALL_DIR?: string | undefined;
   /** Windows：`%LOCALAPPDATA%`。 */
   LOCALAPPDATA?: string | undefined;
+  /** uv 解释器托管目录（显式指定时优先于平台默认位置）。 */
+  UV_PYTHON_INSTALL_DIR?: string | undefined;
   /* POSIX 侧的基准目录由 `$XDG_DATA_HOME` 决定。 */
   XDG_DATA_HOME?: string | undefined;
 };
@@ -126,12 +126,12 @@ export type PythonCandidate = {
 export function collectComfyPythonCandidates(
   installRoot: string,
   deps: {
-    exists?: (p: string) => boolean;
-    readFile?: (p: string) => string;
-    readdir?: (p: string) => Array<string>;
     env?: PythonEnvVars;
-    platform?: NodeJS.Platform;
+    exists?: (p: string) => boolean;
     homedir?: string;
+    platform?: NodeJS.Platform;
+    readdir?: (p: string) => Array<string>;
+    readFile?: (p: string) => string;
   } = {},
 ): Array<PythonCandidate> {
   const exists = deps.exists ?? ((p: string) => fs.existsSync(p));

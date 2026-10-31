@@ -18,7 +18,7 @@ export interface PkgReport {
   status: "ok" | "missing" | "error" | "empty";
   nodeCount: number;
   nodeTypes: Array<string>;
-  errors: Array<{ file: string; error: string }>;
+  errors: Array<{ error: string; file: string }>;
 }
 
 export interface ParseReport {
@@ -27,7 +27,7 @@ export interface ParseReport {
   pathCount: number;
   errorCount: number;
   packages: Array<PkgReport>;
-  parseErrors?: Array<{ file: string; error: string }>;
+  parseErrors?: Array<{ error: string; file: string }>;
   /** 增量解析报告携带的模式标记（全量报告缺省为 undefined）。 */
   mode?: "subset" | "full";
   /** 增量解析时新增节点数（全量报告缺省为 undefined）。 */
@@ -63,14 +63,14 @@ export interface SummaryPkg {
 }
 
 export interface SettingsResp {
-  settings: { paths: Array<string>; localWorkflowPaths: Array<string> };
+  settings: { localWorkflowPaths: Array<string>; paths: Array<string> };
   summary: {
     generatedAt: string | null;
-    totalNodes: number;
-    packages: Array<SummaryPkg>;
     missingPaths: Array<string>;
-    parseErrors: Array<{ file: string; error: string }>;
+    packages: Array<SummaryPkg>;
+    parseErrors: Array<{ error: string; file: string }>;
     sources: Array<string>;
+    totalNodes: number;
   } | null;
   lastReport: ParseReport | null;
   discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
@@ -82,41 +82,41 @@ export interface SettingsResp {
 /** 设置/探测流的一行 ndjson 事件（`/api/custom-nodes` 探测端点发出）。按 `type`
  *  判别；`phase` 只取上线会出现的三态（不含 UI 初值 `""`）。 */
 export type SettingsStreamEvent =
-  | { type: "discover_start"; parents?: Array<string>; total?: number }
+  | { parents?: Array<string>; total?: number; type: "discover_start" }
   | {
-      type: "progress";
+      discovered?: number;
+      done?: number;
+      msg?: string;
       parent?: string;
       phase?: "queue" | "scan" | "hash";
-      msg?: string;
-      discovered?: number;
       total?: number;
-      done?: number;
+      type: "progress";
     }
   | {
-      type: "discover_done";
-      parent?: string;
-      packages?: Array<DiscoveredSubpkg>;
       cached?: boolean;
+      packages?: Array<DiscoveredSubpkg>;
+      parent?: string;
+      type: "discover_done";
     }
   | {
-      type: "summary";
-      summary?: SettingsResp["summary"];
-      lastReport?: ParseReport | null;
       byPath?: Record<string, SummaryPkg>;
-      settings?: { paths: Array<string>; localWorkflowPaths: Array<string> };
+      lastReport?: ParseReport | null;
+      settings?: { localWorkflowPaths: Array<string>; paths: Array<string> };
+      summary?: SettingsResp["summary"];
+      type: "summary";
     }
-  | { type: "error"; message?: string }
+  | { message?: string; type: "error" }
   | { type: "done" };
 
 /** 解析日志流的一行 ndjson 事件（`/api/custom-nodes` 解析端点发出）。 */
 export type ParseStreamEvent =
-  | { type: "log"; level?: string; msg?: string }
+  | { level?: string; msg?: string; type: "log" }
   | {
-      type: "done";
-      report?: ParseReport | null;
-      ok?: boolean;
-      /** 解析进程 stderr 摘要（失败诊断用）。 */
-      stderr?: string;
       /** 解析进程退出码（诊断用；进程未正常退出时为 null）。 */
       exitCode?: number | null;
+      ok?: boolean;
+      report?: ParseReport | null;
+      /** 解析进程 stderr 摘要（失败诊断用）。 */
+      stderr?: string;
+      type: "done";
     };

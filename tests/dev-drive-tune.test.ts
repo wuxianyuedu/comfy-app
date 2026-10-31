@@ -356,8 +356,8 @@ describe("其余杠杆的状态判定", () => {
  */
 function makeBench(
   options: {
-    engineSeconds?: number;
     enginePresent?: boolean;
+    engineSeconds?: number;
     known?: boolean;
   } = {},
 ) {

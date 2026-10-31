@@ -190,7 +190,7 @@ export function mergeTimelineIndexed(
   current: Array<LogEntry>,
   fresh: Array<LogEntry>,
   index: TimelineIndex,
-): { logs: Array<LogEntry>; index: TimelineIndex } {
+): { index: TimelineIndex; logs: Array<LogEntry> } {
   if (fresh.length === 0) {
     return { logs: current, index };
   }

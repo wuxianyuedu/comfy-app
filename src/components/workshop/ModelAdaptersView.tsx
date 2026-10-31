@@ -69,7 +69,7 @@ function modeLabel(mode: string): string {
  * id 是 `text-2xs` 且 `font-mono` —— 它**不是给读的文案**，是给「代码 / 日志 /
  * 配置里对得上」的记号，所以允许比正文小一档。中文名本身必须落在
  * `text-xs`(12px) 及以上，此前这里整条是 10px。 */
-function FieldLabelRow({ label, id }: { label: string; id?: string }) {
+function FieldLabelRow({ label, id }: { id?: string; label: string }) {
   return (
     <span className="text-ink/80 text-xs font-medium">
       {label}
@@ -89,11 +89,11 @@ function InputMappingRow({
   onChange,
   onRemove,
 }: {
-  mode: string;
-  row: { type: WorkshopInputType; field: string };
   index: number;
-  onChange: (next: { type: WorkshopInputType; field: string }) => void;
+  mode: string;
+  onChange: (next: { field: string; type: WorkshopInputType }) => void;
   onRemove: () => void;
+  row: { field: string; type: WorkshopInputType };
 }) {
   return (
     <div className="flex items-center gap-2">

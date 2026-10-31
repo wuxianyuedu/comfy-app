@@ -42,10 +42,10 @@ import { describe, expect, it, TestRunner } from "vitest";
  * 注入时就过不了类型 —— 而那正是这层接缝唯一的形状约束）。放在模块层是因为
  * 不止一组假执行者要用它（后面的 `describe` 各自那份是局部收窄，不冲突）。 */
 type FakeResult = {
-  status: number;
-  stdout: string;
-  stderr: string;
   error: string | null;
+  status: number;
+  stderr: string;
+  stdout: string;
 };
 
 /** `check-deps-freshness.mjs --json` 的「一致」读数（阶段 0 读它，见 ISSUE #2390）。 */
@@ -566,14 +566,14 @@ describe("decideCleanBranch：只跟在验真的合并之后，且只删这一�
 describe("closeIssues：回执不算结论，独立回读三件原值才算", () => {
   /** 按 cnb 的子命令答；`calls` 记录每一次伸手。 */
   function io(opts: {
-    update?: string | null;
-    state?: string;
-    stateReason?: string | null;
-    closedAt?: string | null;
     body?: string;
-    merged?: Array<{ number: number; is_merged: boolean; title: string }>;
+    closedAt?: string | null;
+    merged?: Array<{ is_merged: boolean; number: number; title: string }>;
     /** `--as-merged` 那条凭据 PR 的回读形状（ISSUE #2491）：`null` = 取不到（非 JSON）。 */
     pull?: { is_merged?: boolean; title?: string } | null;
+    state?: string;
+    stateReason?: string | null;
+    update?: string | null;
   }) {
     const calls: Array<string> = [];
     const log: Array<string> = [];
@@ -1230,10 +1230,10 @@ function fragRoot(files: Record<string, string>) {
 
 describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问一次事实", () => {
   type FakeResult = {
-    status: number;
-    stdout: string;
-    stderr: string;
     error: string | null;
+    status: number;
+    stderr: string;
+    stdout: string;
   };
 
   /**
@@ -1242,11 +1242,11 @@ describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问�
    */
   function gitIo(
     opts: {
-      remoteStillThere?: boolean;
-      lsRemoteFails?: boolean;
-      localStillThere?: boolean;
-      pushStatus?: number;
       branchStatus?: number;
+      localStillThere?: boolean;
+      lsRemoteFails?: boolean;
+      pushStatus?: number;
+      remoteStillThere?: boolean;
     } = {},
   ) {
     const calls: Array<string> = [];
@@ -1739,20 +1739,20 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
    */
   function issueIo(
     opts: {
-      state?: string;
-      labels?: Array<string>;
-      comments?: Array<string>;
-      getIssueFails?: boolean;
-      postCommentFails?: boolean;
       commentListFails?: boolean;
-      /** 平台落评论时把末尾那个换行收掉（实测口径，ISSUE #2719 的 ⑤）。 */
-      stripCommentTail?: boolean;
       /** 平台落下来的正文被别人改过（回读只剩「形似」，用于负控制）。 */
       commentRewrite?: (text: string) => string;
-      writeExtraHandler?: string | null;
+      comments?: Array<string>;
+      getIssueFails?: boolean;
+      labels?: Array<string>;
       listFails?: boolean;
       listRows?: Array<{ number: number; priority: string; title: string }>;
       pages?: Array<Array<{ number: number; priority: string; title: string }>>;
+      postCommentFails?: boolean;
+      state?: string;
+      /** 平台落评论时把末尾那个换行收掉（实测口径，ISSUE #2719 的 ⑤）。 */
+      stripCommentTail?: boolean;
+      writeExtraHandler?: string | null;
     } = {},
   ) {
     let state = opts.state ?? "open";
@@ -2729,7 +2729,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
 });
 
 describe("reapCheckoutInstances：只收 via port 那批，session 那一档不归它收", () => {
-  type Live = { running?: boolean; pids?: Array<number>; via?: string | null };
+  type Live = { pids?: Array<number>; running?: boolean; via?: string | null };
 
   /** 「判据 + 执行者」的替身：`before` 是收尾那一格第一次读到的形状。 */
   function io(before: Live | null | Error, after: Live | null | Error, reapStatus = 0) {
@@ -2884,10 +2884,10 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
    * 所以「签名没变」还要配「此刻没有一格在飞」才叫停滞
    * （下面「有一格在飞」与「所有格都已落定」那两条是这一判的正反钉子）。 */
   type FakeResult = {
-    status: number;
-    stdout: string;
-    stderr: string;
     error: string | null;
+    status: number;
+    stderr: string;
+    stdout: string;
   };
   const SHA = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
   const ok = (stdout: string): FakeResult => ({
@@ -2898,18 +2898,18 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
   });
 
   function io(opts: {
-    /** 每次 get-build-status 的 data.status；用完后重复最后一个。 */
-    statuses?: Array<string>;
-    /** 每次的 pipeline 计数（"0-1" 这种 `完成-总`），与 statuses 同长。 */
-    progress?: Array<string>;
-    /** 每次的 stage 计数（"12/33" 这种 `完成/总`）；不给就造不出 stages 字段。 */
-    stageProgress?: Array<string>;
+    /** `pulls get-pull` 回读的 blocked_on。 */
+    blockedOn?: string;
     /** false = 列表里没有这条 sha（平台还没开跑）。 */
     found?: boolean;
     /** `pulls get-pull` 回读的 mergeable_state；不给则这一问回空（读不到）。 */
     mergeableState?: string;
-    /** `pulls get-pull` 回读的 blocked_on。 */
-    blockedOn?: string;
+    /** 每次的 pipeline 计数（"0-1" 这种 `完成-总`），与 statuses 同长。 */
+    progress?: Array<string>;
+    /** 每次的 stage 计数（"12/33" 这种 `完成/总`）；不给就造不出 stages 字段。 */
+    stageProgress?: Array<string>;
+    /** 每次 get-build-status 的 data.status；用完后重复最后一个。 */
+    statuses?: Array<string>;
   }) {
     const log: Array<string> = [];
     const calls: Array<string> = [];
@@ -2951,24 +2951,24 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
         const pipelinesStatus: Record<
           string,
           {
-            status: string;
             stages?: Array<{
-              status: string;
               duration: number;
-              name: string;
               id: string;
+              name: string;
+              status: string;
             }>;
+            status: string;
           }
         > = {};
         for (let p = 0; p < Number(total); p += 1) {
           const pipeline: {
-            status: string;
             stages?: Array<{
-              status: string;
               duration: number;
-              name: string;
               id: string;
+              name: string;
+              status: string;
             }>;
+            status: string;
           } = { status: p < Number(done) ? "success" : "running" };
           pipelinesStatus[`p${p}`] = pipeline;
           if (stage) {
@@ -2976,10 +2976,10 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
              * 里面几十格）。运行中那一格的 `duration` 是占位 0 —— 平台按格缓冲。 */
             const [sDone, sTotal] = stage.split("/");
             const stages: Array<{
-              status: string;
               duration: number;
-              name: string;
               id: string;
+              name: string;
+              status: string;
             }> = [];
             for (let s = 0; s < Number(sTotal); s += 1) {
               stages.push({
@@ -3259,10 +3259,10 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
 
 describe("被取消的那一跑：结论是「没有结论」，不是「CI 红」（ISSUE #2158 第 2 条）", () => {
   type FakeResult = {
-    status: number;
-    stdout: string;
-    stderr: string;
     error: string | null;
+    status: number;
+    stderr: string;
+    stdout: string;
   };
   const SHA = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
   const ok = (stdout: string): FakeResult => ({
@@ -3897,7 +3897,7 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     ].join("\n");
 
   /** 直调 `createOrReusePull` 的量具：记下每一次命令，以及交给 `mkTmp` 的那份正文。 */
-  function pullHarness(env: { stat?: string; postPull?: FakeResult } = {}) {
+  function pullHarness(env: { postPull?: FakeResult; stat?: string; } = {}) {
     const calls: Array<string> = [];
     const bodies: Array<string> = [];
     const heard: Array<string> = [];
@@ -4603,9 +4603,9 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
 
   function diagnoseIo(opts: {
     build?: unknown;
-    stage?: unknown;
     builds?: Array<unknown>;
     headSha?: string;
+    stage?: unknown;
   }) {
     const calls: Array<string> = [];
     const log: Array<string> = [];
@@ -4747,7 +4747,7 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
  * 标题对不上 ⇒ 1（公开状态不是请求的那件事）。
  */
 describe("--new-issue：一步建单并回读", () => {
-  function newIssueIo(opts: { created?: unknown; readback?: unknown; labelsOk?: boolean }) {
+  function newIssueIo(opts: { created?: unknown; labelsOk?: boolean; readback?: unknown; }) {
     const calls: Array<string> = [];
     const log: Array<string> = [];
     const ok = (stdout: string): FakeResult => ({
@@ -5051,41 +5051,41 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
    * `Property 'branch' does not exist on type '{}'`）。
    */
   type FakeResult = {
-    status: number;
-    stdout: string;
-    stderr: string;
     error: string | null;
+    status: number;
+    stderr: string;
+    stdout: string;
   };
 
   /** 现场形状。 */
   type FakeEnv = {
-    branch?: string;
-    frags?: Array<string>;
-    cnbMissing?: boolean;
-    /** 假 `git commit` 往 **stderr** 写的话（钩子的输出面）。 */
-    commitStderr?: string;
-    commitStatus?: number;
-    /** 本次要暂存的文件（触发真提交那一支）。 */
-    dirty?: Array<string>;
-    /** 直接覆盖 `git status --porcelain` 的返回（喂非默认形状，见 #2073 那格）。 */
-    porcelain?: string;
-    /** 这条分支相对上游基线**已提交**的碎片（第二次跑那一向）。 */
-    branchFrags?: Array<string>;
-    /** HEAD 的上游（`git rev-parse --abbrev-ref --symbolic-full-name @{u}`）。 */
-    upstream?: string | null;
     /** 那条上游引用在不在本地（验不验得过）。false = `rev-parse --verify` 退非 0。 */
     baseExists?: boolean;
+    branch?: string;
+    /** 这条分支相对上游基线**已提交**的碎片（第二次跑那一向）。 */
+    branchFrags?: Array<string>;
+    /** 这条分支相对主干**自己带进来的**提交 subject（`log --no-merges --reverse`）。 */
+    branchSubjects?: Array<string>;
+    /** 答齐全链（轮询 / 合并 / 清理）那几跳 —— 默认关，见 `fake()` 里那段注释。 */
+    chain?: boolean;
+    cnbMissing?: boolean;
+    commitStatus?: number;
+    /** 假 `git commit` 往 **stderr** 写的话（钩子的输出面）。 */
+    commitStderr?: string;
+    /** 本次要暂存的文件（触发真提交那一支）。 */
+    dirty?: Array<string>;
+    frags?: Array<string>;
+    /** 当前顶端那一笔的 subject（`log -1 --pretty=%s`）—— 默认给一个合并节点形状。 */
+    headSubject?: string;
+    /** 直接覆盖 `git status --porcelain` 的返回（喂非默认形状，见 #2073 那格）。 */
+    porcelain?: string;
+    /** `show-ref --verify` 查得到那个 ref（--branch 那一跳的「名字已被占用」形态）。 */
+    refExists?: boolean;
     /** 远端默认分支的符号引用（`git symbolic-ref refs/remotes/<远端>/HEAD`）。
      *  `null` = 这台克隆没有它（那样就只能推 `<远端>/master`，且要读得出是推的）。 */
     remoteHead?: string | null;
-    /** 这条分支相对主干**自己带进来的**提交 subject（`log --no-merges --reverse`）。 */
-    branchSubjects?: Array<string>;
-    /** `show-ref --verify` 查得到那个 ref（--branch 那一跳的「名字已被占用」形态）。 */
-    refExists?: boolean;
-    /** 答齐全链（轮询 / 合并 / 清理）那几跳 —— 默认关，见 `fake()` 里那段注释。 */
-    chain?: boolean;
-    /** 当前顶端那一笔的 subject（`log -1 --pretty=%s`）—— 默认给一个合并节点形状。 */
-    headSubject?: string;
+    /** HEAD 的上游（`git rev-parse --abbrev-ref --symbolic-full-name @{u}`）。 */
+    upstream?: string | null;
   };
 
   /**
@@ -5822,7 +5822,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
    * `push` 那一段会读 `comfy-premerge-proof.json`，读不到就压上 `NOT_RUN` —— 开发机上它
    * 在（真推送过），CI 节点上没有，于是凡「断言走到 PR / 合并那一段的结论」的格子都会
    * **本地绿、节点红**（实测 #2064 第一条就这样）。凡要断退出码的走完整链的格子，都用这一份。 */
-  function proofRoot(tag: string): { tmpRoot: string; gitDir: string } {
+  function proofRoot(tag: string): { gitDir: string; tmpRoot: string; } {
     const tmpRoot = mkdtempSync(path.join(os.tmpdir(), `ship-${tag}-`));
     const gitDir = path.join(tmpRoot, "gitdir");
     fs.mkdirSync(gitDir, { recursive: true });
@@ -6329,8 +6329,8 @@ describe("stallReadout：慢、没推进、没派发起来 是三件事（#2304�
  */
 describe("--rerun-ci：空提交要说出自己的意图，否则 D0 把它读成「取不到面」", () => {
   type RunCall = {
-    cmd: string;
     args: Array<string>;
+    cmd: string;
     opts?: { env?: Record<string, string> };
   };
 
@@ -6460,9 +6460,9 @@ describe("--stage-log：只读取某一格的日志正文（绿跑也能用）",
 
   function stageIo(opts: {
     build?: unknown;
-    stage?: unknown;
     builds?: Array<unknown>;
     headSha?: string;
+    stage?: unknown;
   }) {
     const calls: Array<string> = [];
     const log: Array<string> = [];

@@ -143,12 +143,12 @@ function LogToolbar({
   onFollowChange,
   trailing,
 }: {
-  variant: "inline" | "full";
-  title: string;
-  log: RuntimeLogController;
   follow: boolean;
+  log: RuntimeLogController;
   onFollowChange: (next: boolean) => void;
+  title: string;
   trailing: ReactNode;
+  variant: "inline" | "full";
 }) {
   const full = variant === "full";
   return (
@@ -227,11 +227,11 @@ function LogBody({
   emptyHint,
   className,
 }: {
-  log: RuntimeLogController;
-  follow: boolean;
-  onFollowChange: (next: boolean) => void;
-  emptyHint: ReactNode;
   className: string;
+  emptyHint: ReactNode;
+  follow: boolean;
+  log: RuntimeLogController;
+  onFollowChange: (next: boolean) => void;
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const scroller = useScrollFollow({

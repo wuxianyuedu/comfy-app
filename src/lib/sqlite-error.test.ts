@@ -48,8 +48,8 @@ describe("describeSqliteWriteError", () => {
   });
 
   it("cause 自引用时不会把进程吊死（有层数上限）", () => {
-    const a: { message: string; cause?: unknown } = { message: "A" };
-    const b: { message: string; cause?: unknown } = { message: "B", cause: a };
+    const a: { cause?: unknown; message: string } = { message: "A" };
+    const b: { cause?: unknown; message: string } = { message: "B", cause: a };
     a.cause = b;
     expect(() => describeSqliteWriteError(a, "f")).not.toThrow();
     expect(isSqliteBusyError(a)).toBe(false);

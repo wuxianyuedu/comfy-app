@@ -90,7 +90,7 @@ export interface TextTiers {
 export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
   const collected = new Map<string, number>();
   const defaults = new Set<string>();
-  const sources: Array<{ text: string; fromProject: boolean }> = [
+  const sources: Array<{ fromProject: boolean; text: string; }> = [
     { text: readFileSync(tailwindThemeCss(), "utf8"), fromProject: false },
     { text: globalsCss, fromProject: true },
   ];

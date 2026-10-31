@@ -41,7 +41,7 @@ import { pageHeaderTitle } from "../NavItems";
 import { useResourceLibrary } from "./hooks/use-resource-library";
 
 /** 两个作用域档 —— 顺序与画布抽屉一致（本项目在前）。 */
-const SCOPES: Array<{ id: MaterialScope; label: string; hint: string }> = [
+const SCOPES: Array<{ hint: string; id: MaterialScope; label: string }> = [
   { id: "project", label: "本项目", hint: "当前项目的素材 + 共享素材" },
   { id: "cross", label: "跨项目", hint: "所有项目的素材聚合" },
 ];
