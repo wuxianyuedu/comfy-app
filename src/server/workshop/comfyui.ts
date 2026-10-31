@@ -150,7 +150,7 @@ export async function resolveComfyBase(): Promise<string> {
   try {
     const u = new URL(raw);
     host = u.hostname === "localhost" ? LOOPBACK_HOST : u.hostname;
-    port = parseInt(u.port) || COMFYUI_DEFAULT_PORT;
+    port = Number.parseInt(u.port) || COMFYUI_DEFAULT_PORT;
   } catch {
     return raw; /* 探测没法做就不缓存：实例随时可能起来（与 client.ts 同一句语义） */
   }

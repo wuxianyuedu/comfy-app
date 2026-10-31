@@ -180,7 +180,7 @@ export async function executeViaComfyCli(job: Job) {
   try {
     const u = new URL(base);
     host = u.hostname === "localhost" ? LOOPBACK_HOST : u.hostname;
-    port = parseInt(u.port) || COMFYUI_DEFAULT_PORT;
+    port = Number.parseInt(u.port) || COMFYUI_DEFAULT_PORT;
   } catch {
     /* keep defaults */
   }

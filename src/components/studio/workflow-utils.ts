@@ -329,9 +329,9 @@ export function sanitizeComboLabel(label: string | undefined | null): string {
  * 纯装饰：一个半透明填充、带彩色边框与标题芯片的矩形。它不带端口、
  * 也不拦截指针事件，因此落在真实图节点之后，点击直接穿过去。 */
 export function colorToRgba(hex: string, alpha: number): string {
-  const red = parseInt(hex.slice(1, 3), 16);
-  const green = parseInt(hex.slice(3, 5), 16);
-  const blue = parseInt(hex.slice(5, 7), 16);
+  const red = Number.parseInt(hex.slice(1, 3), 16);
+  const green = Number.parseInt(hex.slice(3, 5), 16);
+  const blue = Number.parseInt(hex.slice(5, 7), 16);
   return `rgba(${red},${green},${blue},${alpha})`;
 }
 
@@ -350,9 +350,9 @@ export function hexToRgba(hex: string, alpha: number): string {
   if (hexValue.length < 6) {
     return `rgba(120,120,135,${alpha})`;
   }
-  const red = parseInt(hexValue.slice(0, 2), 16);
-  const green = parseInt(hexValue.slice(2, 4), 16);
-  const blue = parseInt(hexValue.slice(4, 6), 16);
+  const red = Number.parseInt(hexValue.slice(0, 2), 16);
+  const green = Number.parseInt(hexValue.slice(2, 4), 16);
+  const blue = Number.parseInt(hexValue.slice(4, 6), 16);
   return `rgba(${red},${green},${blue},${alpha})`;
 }
 
@@ -372,9 +372,9 @@ export function lightenHex(hex: string, amt: number): string {
   if (hexValue.length < 6) {
     return hex;
   }
-  let red = parseInt(hexValue.slice(0, 2), 16);
-  let green = parseInt(hexValue.slice(2, 4), 16);
-  let blue = parseInt(hexValue.slice(4, 6), 16);
+  let red = Number.parseInt(hexValue.slice(0, 2), 16);
+  let green = Number.parseInt(hexValue.slice(2, 4), 16);
+  let blue = Number.parseInt(hexValue.slice(4, 6), 16);
   red = Math.round(red + (255 - red) * amt);
   green = Math.round(green + (255 - green) * amt);
   blue = Math.round(blue + (255 - blue) * amt);
@@ -397,9 +397,9 @@ export function parseHex(hex: string): [number, number, number] {
     return [120, 120, 135];
   }
   return [
-    parseInt(hexValue.slice(0, 2), 16),
-    parseInt(hexValue.slice(2, 4), 16),
-    parseInt(hexValue.slice(4, 6), 16),
+    Number.parseInt(hexValue.slice(0, 2), 16),
+    Number.parseInt(hexValue.slice(2, 4), 16),
+    Number.parseInt(hexValue.slice(4, 6), 16),
   ];
 }
 

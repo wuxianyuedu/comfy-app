@@ -97,8 +97,8 @@ export async function findPidForMainPyDetailed(mainPy: string): Promise<PidLooku
       if (!ok) {
         return { pid: null, failed: true };
       }
-      const pid = parseInt(out.trim().split(/\r?\n/)[0] ?? "", 10);
-      return { pid: isNaN(pid) ? null : pid, failed: false };
+      const pid = Number.parseInt(out.trim().split(/\r?\n/)[0] ?? "", 10);
+      return { pid: Number.isNaN(pid) ? null : pid, failed: false };
     } else {
       // POSIX：ps 输出包含 main.py 的行 → 提取 PID
       const { ok, out } = await execFilePTried("ps", ["-eo", "pid,args"]);
@@ -109,8 +109,8 @@ export async function findPidForMainPyDetailed(mainPy: string): Promise<PidLooku
         const ll = line.toLowerCase();
         if (ll.includes(normalized)) {
           const pidStr = line.trim().split(/\s+/)[0];
-          const pid = parseInt(pidStr ?? "", 10);
-          if (!isNaN(pid)) {
+          const pid = Number.parseInt(pidStr ?? "", 10);
+          if (!Number.isNaN(pid)) {
             return { pid, failed: false };
           }
         }
@@ -223,11 +223,11 @@ export function parseNetstatListeningPort(content: string, pid: number): number 
     if (cols[0] !== "TCP" || cols[3] !== "LISTENING") {
       continue;
     }
-    if (parseInt(cols[4] ?? "", 10) !== pid) {
+    if (Number.parseInt(cols[4] ?? "", 10) !== pid) {
       continue;
     }
     const local = cols[1] ?? "";
-    const port = parseInt(local.slice(local.lastIndexOf(":") + 1), 10);
+    const port = Number.parseInt(local.slice(local.lastIndexOf(":") + 1), 10);
     if (Number.isInteger(port) && port > 0) {
       return port;
     }

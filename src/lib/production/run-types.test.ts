@@ -67,7 +67,8 @@ describe("normalizeProductionRun", () => {
 
   it("processedShotRev 只收有限数字；非对象整体丢弃", () => {
     expect(
-      normalizeProductionRun({ processedShotRev: { a: 1, b: "x", c: NaN } }).processedShotRev,
+      normalizeProductionRun({ processedShotRev: { a: 1, b: "x", c: Number.NaN } })
+        .processedShotRev,
     ).toEqual({ a: 1 });
     expect(normalizeProductionRun({ processedShotRev: "no" }).processedShotRev).toEqual({});
   });
@@ -516,7 +517,7 @@ describe("normalizeProductionRun · 自动评审字段", () => {
   it("autoReview 只认 true；rev 映射只收有限数字", () => {
     const r = normalizeProductionRun({
       autoReview: true,
-      reviewedShotRev: { a: 2, b: "x", c: NaN },
+      reviewedShotRev: { a: 2, b: "x", c: Number.NaN },
       reviewAttempts: { a: 1 },
     });
     expect(r.autoReview).toBe(true);

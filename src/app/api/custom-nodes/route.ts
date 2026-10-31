@@ -415,7 +415,7 @@ function runDiscoverStreaming(
           const kvRegex = /\|?(discovered|done|total)=(\d+)/g;
           let kv: RegExpExecArray | null;
           while ((kv = kvRegex.exec(rest)) !== null) {
-            const n = parseInt(kv[2]!, 10);
+            const n = Number.parseInt(kv[2]!, 10);
             const k = kv[1]!;
             if (k === "discovered") {
               fields.discovered = n;
