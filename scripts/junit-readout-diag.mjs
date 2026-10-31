@@ -18,6 +18,18 @@ const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /**
+ * 落点诊断的产物（来自 `junitFileDiag` + `findJunitReport`），三态话术按它分流。
+ * @typedef {Object} JunitDiag
+ * @property {boolean} [foundElsewhere] 报告实际落在别处（落点基准漂移），已回退去读那份
+ * @property {string} [actualPath] 实际读到的报告绝对路径
+ * @property {boolean} [exists] 预期落点文件存在（但解析出 0 份）
+ * @property {number} [size] 预期落点文件字节数
+ * @property {string|null} [mtime] 预期落点文件 mtime
+ * @property {boolean} [dirIsLink] 落点目录是链接（realpath 指向别处）
+ * @property {string} [realDir] 落点目录的 realpath
+ */
+
+/**
  * 父进程算出的**预期**路径，与「实际能在盘上找到的报告」是不是一回事。
  *
  * @param {string} expectedAbs 父进程算出的绝对路径
@@ -83,7 +95,9 @@ export function findJunitReport(expectedAbs) {
     return { path: expectedAbs, found: false, drifted: false };
   }
   hits.sort((a, b) => b.m - a.m);
-  return { path: hits[0].p, found: true, drifted: true };
+  const best = hits[0];
+  if (!best) return { path: expectedAbs, found: false, drifted: false };
+  return { path: best.p, found: true, drifted: true };
 }
 
 /**
@@ -93,7 +107,7 @@ export function findJunitReport(expectedAbs) {
  *
  * @param {string} kind 榜名（分文件耗时 / 装载税）
  * @param {string} file 父进程算出的落点（绝对）
- * @param {object} [diag] `junitFileDiag` + `findJunitReport` 的产物
+ * @param {JunitDiag} [diag] `junitFileDiag` + `findJunitReport` 的产物
  * @returns {string[]}
  */
 export function junitMissingLine(kind, file, diag) {

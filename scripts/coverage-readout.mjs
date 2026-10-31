@@ -44,6 +44,8 @@ const ROOT = path.resolve(HERE, "..");
 
 const DIMENSIONS = /** @type {const} */ (["lines", "statements", "functions", "branches"]);
 
+/** @typedef {{lines:number, statements:number, functions:number, branches:number}} CovDim */
+
 /**
  * 读登记处（vitest.config.ts 的具名导出 COVERAGE_THRESHOLDS，四个维度都是百分比数）。
  * @returns {Promise<Record<string, {lines:number,statements:number,functions:number,branches:number}>>}
@@ -67,13 +69,13 @@ export async function readRegisteredThresholds() {
 }
 
 /** 配置里的 glob 是 gitignore 风格转义（圆括号），磁盘路径不是 —— 比之前先脱转义（§11.7 坑）。 */
-const unescapeGlob = (g) => g.replaceAll("\\", "");
+const unescapeGlob = /** @param {string} g @returns {string} */ (g) => g.replaceAll("\\", "");
 
 /**
  * 把一条登记 glob 落到报告里的文件并聚合四个维度的实际覆盖率（covered / total 求和后算 pct）。
  * @param {string} glob 登记处的 glob 键
  * @param {Record<string, any>} files 报告里的 files 表（键是相对仓根的路径）
- * @returns {{matched:number, pct?:Record<string,number>}}
+ * @returns {{matched:number, pct?:CovDim}}
  */
 export function aggregateForGlob(glob, files) {
   const re = globToRegExp(unescapeGlob(glob));
@@ -90,8 +92,8 @@ export function aggregateForGlob(glob, files) {
       tot[dim] += Number(d[dim]?.total ?? 0);
     }
   }
-  /** @type {Record<string, number>} */
-  const pct = {};
+  /** @type {CovDim} */
+  const pct = /** @type {any} */ ({});
   for (const dim of DIMENSIONS) {
     pct[dim] = tot[dim] === 0 ? 100 : (acc[dim] / tot[dim]) * 100;
   }
@@ -125,23 +127,22 @@ export async function buildCoverageReadout({ root = ROOT, summaryPath } = {}) {
   // istanbul `json-summary` 标准格式：文件路径是**顶层键**（没有 `files` 包裹层），
   // `total` 是汇总的那一条，剔掉它再比。
   const data = summary.data ?? {};
-  const files = Object.fromEntries(
-    Object.entries(data).filter(([k]) => k !== "total"),
-  );
-  /** @type {Array<{glob:string, matched:number, pct:Record<string,number>, reg:any, gap:Record<string,number>, maxGap:number}>} */
+  const files = Object.fromEntries(Object.entries(data).filter(([k]) => k !== "total"));
+  /** @type {Array<{glob:string, matched:number, pct:CovDim, reg:CovDim, gap:CovDim, maxGap:number}>} */
   const rows = [];
   for (const [glob, reg] of Object.entries(registered)) {
     const agg = aggregateForGlob(glob, files);
-    if (agg.matched === 0 || !agg.pct) continue;
-    /** @type {Record<string, number>} */
-    const gap = {};
+    const pct = agg.pct;
+    if (agg.matched === 0 || !pct) continue;
+    /** @type {CovDim} */
+    const gap = /** @type {any} */ ({});
     let maxGap = 0;
     for (const dim of DIMENSIONS) {
-      const g = reg[dim] - agg.pct[dim];
+      const g = reg[dim] - pct[dim];
       gap[dim] = g;
       if (g > maxGap) maxGap = g;
     }
-    rows.push({ glob, matched: agg.matched, pct: agg.pct, reg, gap, maxGap });
+    rows.push({ glob, matched: agg.matched, pct, reg, gap, maxGap });
   }
   rows.sort((a, b) => b.maxGap - a.maxGap);
   return {
@@ -152,8 +153,9 @@ export async function buildCoverageReadout({ root = ROOT, summaryPath } = {}) {
   };
 }
 
-const fmt = (n) => (Number.isFinite(n) ? n.toFixed(1) : "?");
-const signed = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
+const fmt = /** @param {number} n @returns {string} */ (n) =>
+  Number.isFinite(n) ? n.toFixed(1) : "?";
+const signed = /** @param {number} n @returns {string} */ (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
 
 /** CLI 入口：只读不判红（判红的执行者是 full-suite-run 的 --enforce-coverage，单一出处）。 */
 async function main() {
@@ -170,9 +172,11 @@ async function main() {
     );
     return 0;
   }
-  const ageMin = Math.round((Date.now() - new Date(r.reportMtime).getTime()) / 60000);
+  const reportMtime = r.reportMtime;
+  if (!reportMtime) return 0;
+  const ageMin = Math.round((Date.now() - new Date(reportMtime).getTime()) / 60000);
   console.log(
-    `[coverage-readout] 实况 vs 登记值（报告 mtime ${r.reportMtime.toISOString()} ≈ ${ageMin} 分钟前；` +
+    `[coverage-readout] 实况 vs 登记值（报告 mtime ${reportMtime.toISOString()} ≈ ${ageMin} 分钟前；` +
       `登记处 ${r.registeredCount} 条）。`,
   );
   console.log(
@@ -184,7 +188,9 @@ async function main() {
     );
   }
   for (const row of r.rows) {
-    const p = row.pct, g = row.gap, reg = row.reg;
+    const p = row.pct,
+      g = row.gap,
+      reg = row.reg;
     console.log(
       `[coverage-readout] ${row.glob}  (${row.matched} 文件)\n` +
         `    L ${fmt(p.lines)}/${reg.lines} (${signed(g.lines)})` +

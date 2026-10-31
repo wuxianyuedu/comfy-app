@@ -252,7 +252,7 @@ export function coverageGate(argv, env = process.env) {
  *    在日志里必须长得不一样（拿不到测量 ≠ 测量结果是 0，§13.6.4.1 同一条）。
  *
  * @param {string} xmlText junit XML 全文；读不到时调用方给空串
- * @param {{limit?: number, file?: string}} [opts]
+ * @param {{limit?: number, file?: string, diag?: {foundElsewhere?: boolean, actualPath?: string, exists?: boolean, size?: number, mtime?: string|null, dirIsLink?: boolean, realDir?: string}}} [opts]
  * @returns {string[]}
  */
 export function suiteRanking(xmlText, { limit = 10, file = "", diag } = {}) {
@@ -348,7 +348,7 @@ export function parseJunitPhaseCosts(xml) {
  * 可能同时被算进两份数里；出现负数就照实打，不夹到 0（夹了就是拿形状掩盖机制）。
  *
  * @param {string} xmlText junit XML 全文；读不到时调用方给空串
- * @param {{limit?: number, file?: string, wallMs?: number | null}} [opts]
+ * @param {{limit?: number, file?: string, wallMs?: number | null, diag?: {foundElsewhere?: boolean, actualPath?: string, exists?: boolean, size?: number, mtime?: string|null, dirIsLink?: boolean, realDir?: string}}} [opts]
  * @returns {string[]}
  */
 export function suitePhaseTax(xmlText, { limit = 10, file = "", wallMs = null, diag } = {}) {
