@@ -1578,9 +1578,19 @@ Turbopack 会 watch 整个根目录，而这里要罩住的是整块 `G:\`。剩
 要拿那一格的原值，得等一次真动 typedoc 输入面的合并 —— 那不是可以拿「配置在场」抵账的一格。
 
 ⚠️ **这一档敢接的唯一前提是「清单里没有构建格」**，而这句话现在是判据，不是注释：
-`tests/no-platform-ci-config.test.ts` 用 `BUILD_CONSUMER_MARKERS` 扫 push 那六格的**命令行**，
-出现 `ci-daily-build.mjs` / `build-desktop.mjs` / `next build` 任一形态即红并点名是哪一格。
+`tests/no-platform-ci-config.test.ts` 用 `BUILD_CONSUMER_MARKERS` 扫那一档每一格**真正执行的命令行**
+（`executableScriptLines()` 丢掉空行与 shell 注释 ⇒ **注释里出现的名字不进场**），
+出现 `ci-daily-build.mjs` / `build-desktop.mjs` / `next build` / `tauri build` 任一形态即红并点名是哪一格。
 往那份清单里加构建格的人因此必须先回答开关 —— 而不是等一次 13.8s 的死法重演。
+**同一张表现在也反向扫桌包那一档**（ISSUE #2883）：`打包·桌面成品构建` 执行的是 `pnpm tauri build`，
+它调起 `build-desktop.mjs` 这件事写在 `src-tauri/tauri.conf.json` 的 `beforeBuildCommand` 里、
+以及 `.cnb.yml` 那一格的**注释**里 —— 两处都不在上面那个扫描面上，所以补 `tauri build` 之前，
+这张表判现役桌包档给的是**假阴性**「没有构建格」（而它的自检用例是绿的，因为那条正例写的是
+理想形态 `node tools/build/build-desktop.mjs --release`，不是配置里那一行 ⇒ **正例必须长得像事实**）。
+现在两件事都钉住了：按**现役配置**解析出的桌包清单必须扫得出那一格是构建消费者，
+且 `打包·安装依赖` **不许**置 `COMFY_CI_SLOT`（要接得先证明 #2521 那扇门在这一档跑得通）。
+这一枚标记不是学术问题：#2853 的期望 1 原本要把「桌包的安装格」也接上槽，依据就是这张表的读数 ——
+按当时的量程它会答"可以接"。
 同批把镜像判据补齐：`DAILY_SCRIPT_MIRRORS` 改名为 `CROSS_LANE_SCRIPT_MIRRORS`（它管的早就不止
 每日一条），push 的 `安装依赖` 与 PR 的 `Install dependencies` 从此按**命令行 + env + `timeout`
 三样**逐字对账 —— `.cnb.yml` 里那句「`timeout` 也在比对面里」写到这一批**才有执行者**（此前不在）。
