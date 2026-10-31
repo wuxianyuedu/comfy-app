@@ -99,9 +99,9 @@ function emit(tag: LoggerTag, message: string): void {
 /** 一次探测的三种结局（语义见文件头）。 */
 export type ProbeFailure =
   /** 进程压根没起来（`error.code` 是 libuv 给的那个码；它认不出时是 `UNKNOWN`）。 */
-  | { kind: "spawn-error"; code: string }
+  | { code: string; kind: "spawn-error" }
   /** 起来了但退非零（或被信号杀掉）。 */
-  | { kind: "nonzero-exit"; status: number | null; signal: string | null }
+  | { kind: "nonzero-exit"; signal: string | null; status: number | null }
   /** 超过了探测预算，**没有读数**。 */
   | { kind: "timeout"; timeoutMs: number };
 

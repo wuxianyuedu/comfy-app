@@ -29,8 +29,8 @@ import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 
 export function useWorkshopBootstrapData(input: {
-  setStyles: (styles: Array<StyleRef>) => void;
   setApiChannels: (channels: ApiChannelsView | null) => void;
+  setStyles: (styles: Array<StyleRef>) => void;
   setWorkflowOptions: (workflows: Array<WorkshopWorkflowOption>) => void;
 }) {
   const { setStyles, setApiChannels, setWorkflowOptions } = input;
@@ -65,8 +65,8 @@ export function useWorkshopBootstrapData(input: {
 export function useWorkshopTaskRecovery(input: {
   /** 每次渲染后同步的最新草稿（镜头列表从它读，避免闭包捕获旧 state）。 */
   latestDraftRef: { current: WorkshopDraft };
-  setShots: (updater: (prev: Array<Shot>) => Array<Shot>) => void;
   setNotice: (message: string | null) => void;
+  setShots: (updater: (prev: Array<Shot>) => Array<Shot>) => void;
   /** 重订阅入口（`useWorkshopGeneration` 的 watchShotTask 原样传入）。 */
   watchShotTask: (shotId: string, taskId: string, target?: "image" | "video") => Promise<void>;
 }) {

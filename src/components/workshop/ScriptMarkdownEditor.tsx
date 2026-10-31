@@ -131,7 +131,7 @@ export function ScriptMarkdownEditor({
     [history, historyIndex, emitChange],
   );
 
-  function getSelection(): { start: number; end: number; text: string } {
+  function getSelection(): { end: number; start: number; text: string } {
     const el = textareaRef.current;
     if (!el) {
       return { start: value.length, end: value.length, text: "" };

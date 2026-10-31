@@ -44,17 +44,17 @@ type RowState = ReturnType<typeof deriveRowState>;
 export interface ParentBlock {
   parent: string;
   subs: Array<{
-    sub: DiscoveredSubpkg;
     saved: SummaryPkg | undefined;
     state: RowState;
+    sub: DiscoveredSubpkg;
   }>;
   cnt: {
+    empty: number;
+    error: number;
     loaded: number;
+    missing: number;
     outdated: number;
     unimported: number;
-    error: number;
-    missing: number;
-    empty: number;
   };
   total: number;
 }
@@ -92,8 +92,8 @@ export interface CustomNodesSettingsController {
   totalAcrossParents: {
     loaded: number;
     outdated: number;
-    unimported: number;
     total: number;
+    unimported: number;
   };
 }
 
@@ -116,11 +116,11 @@ function parseSettingsBlob(
   data: SettingsResp & { error?: { message?: string } | string },
   status: number,
 ): {
+  byPath: Record<string, SummaryPkg>;
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
+  lastReport: ParseReport | null;
   paths: Array<string>;
   summary: SettingsResp["summary"];
-  lastReport: ParseReport | null;
-  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
-  byPath: Record<string, SummaryPkg>;
 } {
   if (!data.settings) {
     const err = data.error;
@@ -143,11 +143,11 @@ async function consumeSettingsStream(
     setSaveErr: (msg: string) => void;
   },
 ): Promise<{
-  paths: Array<string>;
-  summary: SettingsResp["summary"];
-  lastReport: ParseReport | null;
   byPath: Record<string, SummaryPkg>;
   discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
+  lastReport: ParseReport | null;
+  paths: Array<string>;
+  summary: SettingsResp["summary"];
 }> {
   const reader = res.body?.getReader();
   if (!reader) {

@@ -23,7 +23,7 @@ const IDLE_SNAPSHOT: RunSnapshot = {
 };
 
 /** 归一 tRPC 回包（run/action 已是服务端类型，这里只兜 run 的脏 JSON）。 */
-function toSnapshot(res: { run: ProductionRun; action: RunAction }): RunSnapshot {
+function toSnapshot(res: { action: RunAction; run: ProductionRun }): RunSnapshot {
   return { run: normalizeProductionRun(res.run), action: res.action };
 }
 
@@ -93,8 +93,8 @@ export async function reviewCharacter(
 
 /** 评审整份剧本（FR-QA-07 ② · #2477），返回判定与完整分数曲线（服务端已落库 `production.scriptReview` 列）。 */
 export async function reviewScript(projectId: string): Promise<{
-  verdict: ReviewVerdict;
   history: Array<ReviewVerdict>;
+  verdict: ReviewVerdict;
 }> {
   return vanillaApi.run.reviewScript.mutate({ projectId });
 }

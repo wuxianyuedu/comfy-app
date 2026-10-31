@@ -22,8 +22,8 @@ import { Hint } from "~/components/ui/hint";
 
 /** W/H 形态的尺寸组（比例 + 分辨率 / 百万像素 → 算宽高）。 */
 export type SizeGroup = DimensionGroup & {
-  width: EnrichedWidget;
   height: EnrichedWidget;
+  width: EnrichedWidget;
 };
 /** 宽高比 + 百万像素 (+ 倍数) 形态的尺寸组（ResolutionSelector 类节点）。 */
 export type AspectMegaGroup = DimensionGroup & {
@@ -56,13 +56,13 @@ export function RequiredChips({
   visibilityMode,
   onVisibilityChange,
 }: {
-  pins: Array<EnrichedWidget | undefined>;
-  onRequiredChange?: (ioKey: string, required: boolean) => void;
   /** 多模式作者态：按该模式解析必填（未设模式覆盖时回退条目级）。 */
   mode?: string | null;
+  onRequiredChange?: (ioKey: string, required: boolean) => void;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  pins: Array<EnrichedWidget | undefined>;
   /** IO 编辑态：按该模式解析可见性（undefined 不渲染 👁）。 */
   visibilityMode?: string | null;
-  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
 }) {
   const live = pins.filter((pin): pin is EnrichedWidget => !!pin);
   const showAny = !!onRequiredChange || (!!onVisibilityChange && !!visibilityMode);
@@ -138,9 +138,9 @@ export function SizeTableFooter({
   onOpen,
   extra,
 }: {
-  scene: SizeScene;
-  onOpen: () => void;
   extra?: ReactNode;
+  onOpen: () => void;
+  scene: SizeScene;
 }) {
   return (
     <div className="flex items-center gap-2">

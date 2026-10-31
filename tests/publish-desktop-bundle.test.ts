@@ -166,10 +166,10 @@ describe("轮转（留 N 份）", () => {
 describe("发布那一跑（main）", () => {
   /** 跑一次发布，返回退出码 + 日志 + 落点。 */
   function runPublish(opts: {
-    repo?: string;
-    root?: string;
     argv?: Array<string>;
     env?: Record<string, string>;
+    repo?: string;
+    root?: string;
     runStore?: () => { status: number; stdout?: string };
   }) {
     const log: Array<string> = [];

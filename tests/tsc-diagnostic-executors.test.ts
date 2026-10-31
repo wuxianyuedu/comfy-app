@@ -34,7 +34,7 @@ interface Entry {
   paths: Array<string>;
   markers?: Array<string>;
   reader: string;
-  executor: { kind: string; test?: string; label?: string };
+  executor: { kind: string; label?: string; test?: string; };
   baseline: Record<string, number>;
   section: string;
   /** 条目声称**执行者逐条核过**的面（选填；写了就要核，见判据的 ①′）。 */

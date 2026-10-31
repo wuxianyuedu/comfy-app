@@ -126,8 +126,8 @@ export function ZoomIndicator({
   minZoom = DEFAULT_CANVAS_SETTINGS.minZoom,
   maxZoom = DEFAULT_CANVAS_SETTINGS.maxZoom,
 }: {
-  minZoom?: number;
   maxZoom?: number;
+  minZoom?: number;
 } = {}) {
   const zoom = useStore((state) => state.transform[2]);
   const rf = useReactFlow();
@@ -135,9 +135,9 @@ export function ZoomIndicator({
   const [draft, setDraft] = useState("");
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{
+    moved: boolean;
     startY: number;
     startZoom: number;
-    moved: boolean;
   } | null>(null);
   const justDraggedRef = useRef(false);
   // 拖拽缩放期间挂到 window 的监听器；卸载时若拖拽尚未结束（鼠标按住未松手）
@@ -286,13 +286,13 @@ export function CanvasRulers({
   const xLabels = useMemo(() => {
     if (zoom <= 0.01 || !width) {
       return /* SAFETY: 类型断言已复核 */ [] as Array<{
-        world: number;
         screen: number;
+        world: number;
       }>;
     }
     const start = Math.floor(-tx / zoom / labelStep) * labelStep;
     const end = Math.ceil((width - tx) / zoom / labelStep) * labelStep;
-    const out: Array<{ world: number; screen: number }> = [];
+    const out: Array<{ screen: number; world: number }> = [];
     for (let x = start; x <= end + 0.5; x += labelStep) {
       const sx = x * zoom + tx;
       if (sx < -4 || sx > width + 4) {
@@ -307,13 +307,13 @@ export function CanvasRulers({
   const yLabels = useMemo(() => {
     if (zoom <= 0.01 || !height) {
       return /* SAFETY: 类型断言已复核 */ [] as Array<{
-        world: number;
         screen: number;
+        world: number;
       }>;
     }
     const start = Math.floor(-ty / zoom / labelStep) * labelStep;
     const end = Math.ceil((height - ty) / zoom / labelStep) * labelStep;
-    const out: Array<{ world: number; screen: number }> = [];
+    const out: Array<{ screen: number; world: number }> = [];
     for (let y = start; y <= end + 0.5; y += labelStep) {
       const sy = y * zoom + ty;
       if (sy < -4 || sy > height + 4) {

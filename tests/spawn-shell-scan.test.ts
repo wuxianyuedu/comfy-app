@@ -354,7 +354,7 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
       pkgDir,
       pkg: /* SAFETY: 类型断言已复核 */ JSON.parse(
         fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"),
-      ) as { name: string; version: string; bin?: Record<string, string> },
+      ) as { bin?: Record<string, string>; name: string; version: string; },
     };
   };
 
@@ -405,7 +405,7 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
     ).not.toBe(byDepName);
     const aliasPkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(byDepName, "package.json"), "utf8"),
-    ) as { name: string; bin?: Record<string, string> };
+    ) as { bin?: Record<string, string>; name: string; };
     expect(resolvePackageBinEntry("typescript"), "按依赖名居然解析得到").toBeNull();
     expect(resolvePackageBinEntry("@typescript/native"), "按目录名居然解析得到").toBeNull();
     /* 「取第一个键」那条兜底会把 tsc 变成 tsc6 —— 判它，是因为它长得像正确答案。 */
@@ -510,7 +510,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
   const run = (
     argv: Array<string>,
     cwd = ROOT,
-  ): { status: number; stdout: string; stderr: string } => {
+  ): { status: number; stderr: string; stdout: string; } => {
     try {
       const stdout = execFileSync(process.execPath, argv, {
         cwd,
@@ -521,8 +521,8 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
     } catch (err) {
       const e = /* SAFETY: 类型断言已复核 */ err as {
         status?: number;
-        stdout?: string;
         stderr?: string;
+        stdout?: string;
       };
       return {
         status: e.status ?? 1,

@@ -44,9 +44,9 @@ function parseSignal(raw: unknown): ComfyLivenessSignal | null {
 export type Listener = (signal: ComfyLivenessSignal) => void;
 
 type LivenessClientGlobal = {
-  seenSeq?: number;
-  listeners?: Set<Listener>;
   es?: EventSource | null;
+  listeners?: Set<Listener>;
+  seenSeq?: number;
 };
 
 declare global {

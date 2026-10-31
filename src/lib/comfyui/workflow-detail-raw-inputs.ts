@@ -146,9 +146,6 @@ function isWrapperAliasSlot(name: string): boolean {
  * 每一行 widget 都是空白。
  */
 async function enrichSubgraphProxyWidgets(input: {
-  raw: RawWorkflow | null;
-  /** 原地更新：每个封装节点的条目列表会被整体替换。 */
-  rawInputsById: Record<string, Array<RawInputEntry>>;
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
@@ -157,6 +154,9 @@ async function enrichSubgraphProxyWidgets(input: {
     classType: string | undefined,
     field: string,
   ) => Promise<boolean | undefined>;
+  raw: RawWorkflow | null;
+  /** 原地更新：每个封装节点的条目列表会被整体替换。 */
+  rawInputsById: Record<string, Array<RawInputEntry>>;
 }): Promise<void> {
   const { raw, rawInputsById, comboOptionsForClassField, multilineForClassField } = input;
   if (raw?.definitions?.subgraphs) {
@@ -179,7 +179,7 @@ async function enrichSubgraphProxyWidgets(input: {
       internalByIdByKey.set(subKey, map);
     }
     /* 找出封装节点 UUID classType 对应的那个子图定义。 */
-    const resolveSubDef = (classType: string): { key: string; def: RawSubgraphDef } | null => {
+    const resolveSubDef = (classType: string): { def: RawSubgraphDef; key: string } | null => {
       const direct = subs[classType];
       if (direct) {
         return { key: classType, def: direct };

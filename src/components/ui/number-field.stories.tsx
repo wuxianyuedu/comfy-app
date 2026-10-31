@@ -34,12 +34,12 @@ type Story = StoryObj<typeof meta>;
 
 /** 受控包装：story 自己持一份 state，交互才看得出「失焦才提交」。 */
 function Demo(props: {
-  value: number;
-  min?: number;
-  max?: number;
-  step?: number;
   decimalPlaces?: number;
   disabled?: boolean;
+  max?: number;
+  min?: number;
+  step?: number;
+  value: number;
 }) {
   const [value, setValue] = React.useState(props.value);
   return (

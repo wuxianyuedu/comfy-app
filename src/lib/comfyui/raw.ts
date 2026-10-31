@@ -297,18 +297,18 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
 export type ObjectInfoInputSpec = [unknown, Record<string, unknown>?] | Record<string, unknown>;
 
 export interface ObjectInfoClassDef {
-  input_order?: { required?: Array<string>; optional?: Array<string> };
+  input_order?: { optional?: Array<string>; required?: Array<string> };
   input?: {
-    required?: Record<string, ObjectInfoInputSpec>;
     optional?: Record<string, ObjectInfoInputSpec>;
+    required?: Record<string, ObjectInfoInputSpec>;
   };
   [k: string]: unknown;
 }
 
 /** 把 /object_info 的输入定义规范化为 { type, options }。 */
 function readInputSpec(spec: ObjectInfoInputSpec | undefined): {
-  type: string | null;
   options: Record<string, unknown>;
+  type: string | null;
 } {
   if (Array.isArray(spec)) {
     const head = spec[0];

@@ -57,8 +57,8 @@ export class SkillRepository extends DrizzleRepository<Skill> {
 
   async list(opts: {
     category?: string | null;
-    q?: string;
     includeInactive?: boolean;
+    q?: string;
   }): Promise<Array<Skill>> {
     const conditions = [];
     if (!opts.includeInactive) {
@@ -98,16 +98,16 @@ export class SkillRepository extends DrizzleRepository<Skill> {
   }
 
   async createUserSkill(input: {
-    name: string;
-    slug: string;
+    category: string;
+    coverUrl?: string | null;
+    defaultParams?: unknown;
     description: string;
     icon: string;
-    category: string;
-    promptTemplate: string;
+    name: string;
     negativePrompt?: string | null;
-    defaultParams?: unknown;
+    promptTemplate: string;
     recommendedModel?: string | null;
-    coverUrl?: string | null;
+    slug: string;
     sortOrder: number;
     tags: Array<string>;
   }): Promise<Skill> {

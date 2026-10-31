@@ -41,13 +41,13 @@ const FIT_MAX_ATTEMPTS = 24;
  *  参与包围盒就会把中心拉偏、把工作流压成一条细缝。 */
 function collectFitTargets(
   nodes: ReadonlyArray<{
-    id: string;
-    type?: string;
-    position: { x: number; y: number };
-    measured?: { width?: number; height?: number };
-    width?: number;
     height?: number;
-    style?: { width?: number | string; height?: number | string };
+    id: string;
+    measured?: { height?: number; width?: number };
+    position: { x: number; y: number };
+    style?: { height?: number | string; width?: number | string };
+    type?: string;
+    width?: number;
   }>,
 ): Array<FitBoundsNode> {
   const out: Array<FitBoundsNode> = [];
@@ -72,16 +72,16 @@ function collectFitTargets(
  *  别的容器的宽高去算居中，打开时视口落在内容之外（ISSUE #717）。
  *  `width`/`height` 由 React Flow 自己按本实例容器测量，天然是实例私有的。 */
 function applyFitViewport(
-  container: { width: number; height: number },
+  container: { height: number; width: number },
   rf: {
-    fitView: (options?: { padding?: number; duration?: number }) => unknown;
+    fitView: (options?: { duration?: number; padding?: number }) => unknown;
     setViewport: (
       viewport: { x: number; y: number; zoom: number },
       options?: { duration?: number },
     ) => unknown;
   },
   bounds: Bounds | null,
-  zoomBounds: { minZoom: number; maxZoom: number },
+  zoomBounds: { maxZoom: number; minZoom: number },
 ): void {
   const viewport = computeFitViewport(bounds, container, zoomBounds);
   if (!viewport) {
@@ -98,10 +98,10 @@ function applyFitViewport(
  *  @param nodesCount —— 当前图节点数；为 0 时不动作（节点是异步填充的）。
  */
 export function useWorkflowViewportFit(params: {
-  rf: ReactFlowInstance;
-  canvasSettings: { minZoom: number; maxZoom: number };
+  canvasSettings: { maxZoom: number; minZoom: number };
   fitKey: string;
   nodesCount: number;
+  rf: ReactFlowInstance;
 }) {
   const { rf, canvasSettings, fitKey, nodesCount } = params;
   /* 本实例的容器尺寸从 React Flow **本实例的 store** 取，不用

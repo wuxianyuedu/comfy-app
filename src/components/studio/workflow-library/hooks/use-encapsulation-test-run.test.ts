@@ -28,9 +28,9 @@ vi.mock("~/lib/workshop/generation-client", () => ({
     (
       _id: string,
       h: {
-        onLog?: (e: { t: number; level: string; msg: string }) => void;
+        onLog?: (e: { level: string; msg: string; t: number }) => void;
         onOutput?: (o: { kind: string; url: string }) => void;
-        onSettled: (r: { ok: boolean; message?: string }) => void;
+        onSettled: (r: { message?: string; ok: boolean }) => void;
       },
     ) => {
       h.onLog?.({ t: 1, level: "info", msg: "开始执行" });

@@ -563,7 +563,7 @@ export function mergeCharacterDrafts(
   existing: Array<Character>,
   drafts: Array<ParsedCharacterDraft>,
   styles: Array<StyleRef>,
-): { list: Array<Character>; added: number; skipped: number } {
+): { added: number; list: Array<Character>; skipped: number } {
   const seen = new Set(existing.map((c) => c.name.trim()).filter(Boolean));
   const list = [...existing];
   let added = 0;

@@ -514,8 +514,8 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
       return null;
     }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      system?: { ram_total?: number; ram_free?: number };
       devices?: Array<ComfyDevice>;
+      system?: { ram_free?: number; ram_total?: number };
     };
     const dev = pickGpu(data.devices);
     const vramTotal = dev?.vram_total ?? 0;

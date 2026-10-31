@@ -28,7 +28,7 @@
 import "server-only";
 
 /** 一段字节窗口；`start` 与 `endInclusive` 都是闭区间、从 0 计数。 */
-export type ByteWindow = { start: number; endInclusive: number };
+export type ByteWindow = { endInclusive: number; start: number };
 
 /** 见文件头那三条口径。 */
 export type ByteRangeVerdict =

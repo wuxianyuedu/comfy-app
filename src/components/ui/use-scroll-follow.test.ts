@@ -21,7 +21,7 @@ import { NEAR_BOTTOM_PX, useScrollFollow } from "./use-scroll-follow";
 function makeScroller({
   scrollHeight = 1000,
   clientHeight = 200,
-}: { scrollHeight?: number; clientHeight?: number } = {}): HTMLDivElement {
+}: { clientHeight?: number; scrollHeight?: number } = {}): HTMLDivElement {
   const el = document.createElement("div");
   Object.defineProperty(el, "scrollHeight", {
     configurable: true,

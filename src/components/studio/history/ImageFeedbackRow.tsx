@@ -13,8 +13,8 @@ import { setImageFeedback } from "~/lib/history-detail-actions";
 
 export interface ImageFeedbackRowProps {
   image: {
-    id: string;
     humanRating: number | null;
+    id: string;
     isFavorite: boolean;
   };
 }

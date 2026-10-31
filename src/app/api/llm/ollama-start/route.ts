@@ -151,7 +151,7 @@ async function ollamaServiceRunning(): Promise<boolean> {
 async function spawnOllamaServe(
   exe: string,
   keepAlive: boolean,
-): Promise<{ ok: boolean; detail: string }> {
+): Promise<{ detail: string; ok: boolean }> {
   if (keepAlive) {
     appendOllamaLog(`[keepAlive-spawn] cmd=${exe} args=${JSON.stringify(["serve"])}`);
     const launched = spawnManaged({
@@ -229,7 +229,7 @@ async function spawnOllamaServe(
      * **观察期到仍未退出 → 启动成功**。后者正是「与时间赛跑、超时给兜底值」
      * 那一档 —— 交给 `withTimeoutResult`，定时器与重入判据都由出口管。 */
     return withTimeoutResult(
-      new Promise<{ ok: boolean; detail: string }>((settle) => {
+      new Promise<{ detail: string; ok: boolean }>((settle) => {
         // spawn 找不到可执行文件时触发（异步 error 事件）
         child.on("error", (err) => {
           const hint = ollamaFailureHint(err);

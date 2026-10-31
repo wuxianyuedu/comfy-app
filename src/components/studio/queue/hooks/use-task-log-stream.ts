@@ -28,7 +28,7 @@ export interface TaskLogStreamState {
   /** 已收到的日志（新在后，已按上限截尾）。 */
   logs: Array<TaskLogEntry>;
   /** 终态落定信息；null = 还没落定（排队 / 在跑）。 */
-  settled: { ok: boolean; message?: string } | null;
+  settled: { message?: string; ok: boolean } | null;
   /** 收到过进度帧吗：排队中的任务开跑后，徽标从「排队中」翻「运行中」用。 */
   started: boolean;
 }
@@ -36,8 +36,8 @@ export interface TaskLogStreamState {
 export function useTaskLogStream(taskId: string | null): TaskLogStreamState {
   const [logs, setLogs] = useState<Array<TaskLogEntry>>([]);
   const [settled, setSettled] = useState<{
-    ok: boolean;
     message?: string;
+    ok: boolean;
   } | null>(null);
   const [started, setStarted] = useState(false);
   /* 换任务（含变 null）在**渲染期**重置（React 19 的渲染期 state 调整范式，

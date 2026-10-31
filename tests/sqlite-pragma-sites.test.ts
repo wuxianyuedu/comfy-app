@@ -219,7 +219,7 @@ const RACE_CONTROL_ROUNDS = 6;
 const RACE_CASE_TIMEOUT_MS = RACE_CONTROL_ROUNDS * (ARRIVAL_DEADLINE_MS + 20_000) + 30_000;
 
 /** 一轮竞态的读数：每个进程的结论 + **实际到位数**（后者是 #1337 补的那一格）。 */
-type RaceRound = { outcomes: Array<string>; arrived: number };
+type RaceRound = { arrived: number; outcomes: Array<string>; };
 
 /**
  * `applySqlitePragmas` 的**撞锁重试**当场量出来（ISSUE #1282，形状重定于 #1337）。

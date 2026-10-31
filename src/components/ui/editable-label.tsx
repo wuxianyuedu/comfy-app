@@ -12,8 +12,8 @@ export function EditableLabel({
   onChange,
 }: {
   label: string;
-  title?: string;
   onChange?: (next: string) => void;
+  title?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(label);

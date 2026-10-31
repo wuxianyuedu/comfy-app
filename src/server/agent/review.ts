@@ -358,8 +358,8 @@ export async function autoselectShotImage(
     (
       c,
     ): c is AutoselectCandidate & {
-      verdict: ReviewVerdict;
       imageUrl: string;
+      verdict: ReviewVerdict;
     } => c.verdict !== null && c.imageUrl !== null,
   );
   if (scored.length === 0) {

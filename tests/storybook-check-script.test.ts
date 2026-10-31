@@ -92,7 +92,7 @@ function runIn(root: string): { ok: boolean; output: string } {
       }),
     };
   } catch (err) {
-    const e = /* SAFETY: 类型断言已复核 */ err as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ err as { stderr?: string; stdout?: string; };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }

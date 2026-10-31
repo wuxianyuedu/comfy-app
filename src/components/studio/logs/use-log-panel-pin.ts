@@ -18,21 +18,21 @@ import { selectionInsideLogs } from "./log-row-style";
 import { currentSelection } from "./log-panel-selection";
 
 export function useLogPanelPin(input: {
-  isOpen: boolean;
   autoScroll: boolean;
-  safePage: number;
-  followResetAt: number;
-  /** store 修订号：每次日志追加都重跑贴底判定。 */
-  revision: number;
-  /** 当前页渲染用的日志（锚定窗口 / 历史页固定窗口）。 */
-  visibleLogs: Array<{ id: string }>;
-  /** 行位置表（整页前缀和），与 visibleLogs 同源同长。 */
-  rows: Array<{ start: number; size: number }>;
   /** 滚动视口元素（父组件持有 ref，贴底 / 滚动都读写它）。 */
   bodyRef: { current: HTMLDivElement | null };
+  followResetAt: number;
+  isOpen: boolean;
+  /** store 修订号：每次日志追加都重跑贴底判定。 */
+  revision: number;
+  /** 行位置表（整页前缀和），与 visibleLogs 同源同长。 */
+  rows: Array<{ size: number; start: number }>;
+  safePage: number;
+  setFollowBottom: (near: boolean) => void;
   /** 滚动位置是渲染输入（决定窗口取哪一段），父组件据此进 state。 */
   setScrollTop: (top: number) => void;
-  setFollowBottom: (near: boolean) => void;
+  /** 当前页渲染用的日志（锚定窗口 / 历史页固定窗口）。 */
+  visibleLogs: Array<{ id: string }>;
 }) {
   const {
     isOpen,

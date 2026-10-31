@@ -149,7 +149,7 @@ export function useWidePanel(
  * 外观（尺寸、圆角、hover）仍由调用处经 `className` 给 —— 与
  * §16.2.4.2 第 9 条一致：验收标准是渲染结果不变。
  */
-export function WidePanelToggle({ panel, className }: { panel: WidePanel; className?: string }) {
+export function WidePanelToggle({ panel, className }: { className?: string; panel: WidePanel }) {
   return (
     <Button
       variant="ghost"

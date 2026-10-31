@@ -96,7 +96,7 @@ function resolveSeed(raw: string): number {
  *  重渲染都会让它跑一遍 O(N) 扫描（`onShotsChange` 是 setState，引用稳定）。 */
 function useAutoFillPrompts(
   shots: Array<Shot>,
-  inputs: { scenes: Array<Scene>; characters: Array<Character>; styles: Array<StyleRef> },
+  inputs: { characters: Array<Character>; scenes: Array<Scene>; styles: Array<StyleRef> },
   onShotsChange: React.Dispatch<React.SetStateAction<Array<Shot>>>,
   editedRef: React.RefObject<Set<string>>,
 ): void {

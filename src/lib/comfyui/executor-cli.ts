@@ -75,8 +75,8 @@ export type ResolveComfyBaseFn = () => Promise<string>;
  *  host 必用）通过 `configureExecutorCli` 覆盖任一条；未覆盖的走 lazy 兜底。 */
 export type ExecutorCliDeps = {
   logger: LoggerLike;
-  taskRepo: TaskRepoForCli;
   resolveComfyBase: ResolveComfyBaseFn;
+  taskRepo: TaskRepoForCli;
 };
 
 let depsOverride: Partial<ExecutorCliDeps> = {};
@@ -423,11 +423,11 @@ export async function executeViaComfyCli(job: Job) {
     onProgress: (
       progress: number,
       node?: {
-        id: string;
-        value: number;
-        max: number;
         classType?: string;
+        id: string;
         label?: string;
+        max: number;
+        value: number;
       },
     ) => {
       /* 进度同样落库（P3 §5 ADR §13-3C D1/D3）：SSE 已单源化走 DB，cli 路径

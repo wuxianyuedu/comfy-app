@@ -162,16 +162,16 @@ export function trace(
 
 /** ComfyUI /history 条目的关键结论，用于「有没有结果」的日志与判定。 */
 export type HistoryVerdict = {
+  /** `status.completed`（布尔，缺失为 undefined）。 */
+  completed?: boolean;
+  /** 从 `status.messages` 里取到的 execution_error 说明（有则说明是执行失败）。 */
+  executionError?: string;
   /** history 里是否有本 prompt 的条目。 */
   found: boolean;
   /** 条目的 outputs 里有多少个节点带输出。 */
   outputNodeCount: number;
   /** `status.status_str`（`success` / `error` / 缺失）。 */
   statusStr?: string;
-  /** `status.completed`（布尔，缺失为 undefined）。 */
-  completed?: boolean;
-  /** 从 `status.messages` 里取到的 execution_error 说明（有则说明是执行失败）。 */
-  executionError?: string;
 };
 
 function nonEmptyArray(v: unknown): boolean {
@@ -235,7 +235,7 @@ export function historyTraceSummary(
 export function historyOutputKeys(
   hist: Record<string, unknown> | null | undefined,
   promptId: string,
-): Array<{ nodeId: string; keys: Array<string> }> {
+): Array<{ keys: Array<string>; nodeId: string }> {
   const entry =
     /* SAFETY: 类型断言已复核 */
     hist && promptId ? (hist[promptId] as Record<string, unknown> | undefined) : undefined;
@@ -251,8 +251,8 @@ export function historyOutputKeys(
 
 /** /queue 快照摘要（在飞 + 排队 的 prompt_id 列表），用于「任务还在跑吗」。 */
 export function queueTraceSummary(qd: unknown): {
-  running: Array<string>;
   pending: Array<string>;
+  running: Array<string>;
 } {
   /* ComfyUI /queue 的条目是 `[number, prompt_id, prompt, extra, outputs]` 元组；
    *  也曾出现过 `{prompt_id}` 对象形态（第三方构建），两种都认。 */
@@ -276,8 +276,8 @@ export function queueTraceSummary(qd: unknown): {
     return ids;
   };
   const o = /* SAFETY: 类型断言已复核 */ (qd ?? {}) as {
-    queue_running?: unknown;
     queue_pending?: unknown;
+    queue_running?: unknown;
   };
   return { running: pick(o.queue_running), pending: pick(o.queue_pending) };
 }

@@ -166,7 +166,7 @@ export interface LogLayoutOptions {
  * 仍是同一行。
  */
 export function layoutRows(
-  entries: ReadonlyArray<{ message: string; id?: string }>,
+  entries: ReadonlyArray<{ id?: string; message: string }>,
   wrap: boolean,
   availableWidth = 0,
   options: LogLayoutOptions = {},
@@ -211,7 +211,7 @@ export function visibleRange(
   scrollTop: number,
   viewportHeight: number,
   overscan = LOG_VIRTUAL_OVERSCAN,
-): { start: number; end: number } {
+): { end: number; start: number } {
   const count = rows.length;
   if (count === 0) {
     return { start: 0, end: 0 };
@@ -257,8 +257,8 @@ export function firstVisibleRow(rows: ReadonlyArray<RowLayout>, offset: number):
  * 滚一半对应的其实是真实高度里的另一处。
  */
 export function scrollHeightOf(estimated: number): {
-  height: number;
   compressed: boolean;
+  height: number;
 } {
   /* 取不到 / 负数一律当 0：`Math.max(0, NaN)` 是 NaN，直接交给 style 会得到
    * 一个非法的 `height: NaNpx`（浏览器静默忽略，滚动条长度就与内容对不上了）。 */
@@ -309,7 +309,7 @@ export function pinTargetIndex(baseline: number, applied: number, bottomIndex: n
  * `scrollTop` 会被静默忽略（位置不更新）。
  */
 export function pinScrollTop(
-  geometry: { start: number; size: number },
+  geometry: { size: number; start: number },
   viewportHeight: number,
 ): number {
   const viewport = Number.isFinite(viewportHeight) ? Math.max(0, viewportHeight) : 0;
@@ -329,11 +329,11 @@ export function pinScrollTop(
  *      小数位取整，同一位置的读写不必逐位相等。
  */
 export function pinPlan(input: {
-  baseline: number;
   applied: number;
+  appliedTop: number;
+  baseline: number;
   bottomIndex: number;
   scrollTop: number;
-  appliedTop: number;
 }): number | null {
   const targetIndex = pinTargetIndex(input.baseline, input.applied, input.bottomIndex);
   const userTookOver =

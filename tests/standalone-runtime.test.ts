@@ -38,30 +38,30 @@ const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
  * 判据的形状必须由用例自己写清楚，否则模块改签名时用例会静默变宽。
  */
 type StaticAllowModule = {
-  isStaticPathAllowed: (rel: string) => boolean;
-  pruneStaticToAllowList: (dir: string, onRemoved?: (name: string) => void) => Array<string>;
-  RUNTIME_SRC: Array<string>;
-  PREBUNDLED_SRC_ROOTS: Array<string>;
-  RUNTIME_SCRIPTS: Array<string>;
   BUILT_RUNTIME_SCRIPTS: Array<string>;
+  isStaticPathAllowed: (rel: string) => boolean;
+  PREBUNDLED_SRC_ROOTS: Array<string>;
   PRIVATE_INPUTS: Array<string>;
+  pruneStaticToAllowList: (dir: string, onRemoved?: (name: string) => void) => Array<string>;
+  RUNTIME_SCRIPTS: Array<string>;
+  RUNTIME_SRC: Array<string>;
   stripPrivateInputs: (dir: string, onRemoved?: (name: string) => void) => Array<string>;
 };
 type RuntimeEnvModule = {
-  OAUTH_PLACEHOLDER: string;
   AUTH_SECRET_FILE_REL: string;
-  readOrCreateAuthSecret: (appRoot: string) => string;
-  standaloneDbFile: (appRoot: string) => string;
   buildStandaloneRuntimeEnv: (input: {
     appRoot: string;
-    port: number;
     env?: NodeJS.ProcessEnv;
+    port: number;
   }) => NodeJS.ProcessEnv;
   ensureStandaloneSchema: (input: { appRoot: string; dbFile?: string }) => {
     applied: boolean;
-    tablesBefore: number;
     tablesAfter: number;
+    tablesBefore: number;
   };
+  OAUTH_PLACEHOLDER: string;
+  readOrCreateAuthSecret: (appRoot: string) => string;
+  standaloneDbFile: (appRoot: string) => string;
 };
 
 const load = <T>(rel: string): Promise<T> =>
@@ -438,7 +438,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
       env: { ...process.env, PORT: port, ...extraEnv },
       timeout: 90_000,
     });
-  const both = (r: { stdout?: string; stderr?: string }) => `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  const both = (r: { stderr?: string; stdout?: string; }) => `${r.stdout ?? ""}${r.stderr ?? ""}`;
   /** 宿主自己的输出通道内容（入口把这两份路径写在 `host pid=` 那一行里）。 */
   function hostStdout() {
     const dir = path.join(workdir, "log", "current", "services");

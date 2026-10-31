@@ -57,8 +57,8 @@ function writeSessionMark(mark: ComfySessionMark): void {
 }
 
 export function markComfySessionStart(info: {
-  pid: number | null;
   mode: ComfySessionMark["mode"];
+  pid: number | null;
 }): void {
   writeSessionMark({
     pid: info.pid,

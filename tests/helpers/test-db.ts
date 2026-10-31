@@ -361,10 +361,10 @@ function getRow(table: string, id: string): Row {
  * 所以它的作用域就是**一条用例**。忘了摘也不会传染下一条。
  */
 type StatementHook = {
-  match: (sql: string, method: string) => boolean;
-  makeError: () => Error;
-  left: number;
   hits: number;
+  left: number;
+  makeError: () => Error;
+  match: (sql: string, method: string) => boolean;
 };
 const statementHooks: Array<StatementHook> = [];
 /** 本条用例经过宿主的 SQL 顺序（`$reset()` 清空）——「读有没有落在事务内」只有靠它判。 */
@@ -468,10 +468,10 @@ export function createTestDb(): TestDb {
          JOIN workflowModelTag t ON wm.workflowModelTag = t.id`,
       )
       .all() as Array<{
-      tagId: string;
-      wtId: string;
       name: string;
+      tagId: string;
       userId: string;
+      wtId: string;
     }>;
     const byWt = new Map<string, Array<{ id: string; name: string; userId: string }>>();
     for (const r of tagRows) {
@@ -565,7 +565,7 @@ function encryptSeedLlmKey(plain: string | null | undefined): string | null {
 
 export function seedUser(
   _tdb: TestDb,
-  input: { id: string; email: string; name?: string | null },
+  input: { email: string; id: string; name?: string | null },
 ): Row {
   const now = new Date().toISOString();
   insertInto("user", {
@@ -705,12 +705,12 @@ export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
 export function seedProject(
   _tdb: TestDb,
   input: {
+    edges?: unknown;
     id?: string;
-    userId: string;
     name: string;
     nodes?: unknown;
-    edges?: unknown;
     updatedAt?: Date;
+    userId: string;
   },
 ): Row {
   const id = input.id ?? `seed-proj-${++seedSeq}`;
@@ -734,10 +734,10 @@ export function seedProject(
 export function seedProduction(
   _tdb: TestDb,
   input: {
-    id?: string;
-    userId: string;
     characters?: unknown;
+    id?: string;
     name?: string;
+    userId: string;
   },
 ): Row {
   const id = input.id ?? `seed-prod-${++seedSeq}`;
@@ -771,12 +771,12 @@ export function seedProduction(
 export function seedFilm(
   _tdb: TestDb,
   input: {
-    id?: string;
-    userId: string;
-    projectId?: string | null;
-    title?: string;
-    script?: string;
     finalVideo?: string | null;
+    id?: string;
+    projectId?: string | null;
+    script?: string;
+    title?: string;
+    userId: string;
   },
 ): Row {
   const id = input.id ?? `seed-film-${++seedSeq}`;

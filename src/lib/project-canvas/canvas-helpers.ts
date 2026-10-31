@@ -56,6 +56,16 @@ export interface CanvasPlacementContext {
  * 工作流节点带 `workflowId`），出口只负责**基座**（id / type / position）。
  */
 export function placeCanvasNode(opts: {
+  /** 节点数据 —— 出口会把它铺在 `defaultData` 之上，缺字段由默认值兜住。 */
+  data: CanvasNodeData;
+  /** 画布坐标换算（`useReactFlow().screenToFlowPosition`）。 */
+  flow: CanvasPlacementContext;
+  /** **已经在画布坐标里**的落点 —— 当坐标本身来自画布（如「源节点右侧 340px」）
+   *  时用它，出口就不再换算。与 `point` 二选一。 */
+  flowPosition?: XYPosition | null;
+  /** 显式指定 id —— 只在**调用处需要提前拿到它**时给（自动连线要用同一个
+   *  id 建边：工作流跑完自动孵化下游节点时就是这种情形）。缺省由出口生成。 */
+  id?: string;
   /** 当前节点表（`setNodes` 的 updater 入参）。
    *
    *  ⚠️ 类型刻意取 React Flow 的 `Node[]` 而不是 `CanvasNodeType[]`：
@@ -67,16 +77,6 @@ export function placeCanvasNode(opts: {
   nodes: Array<Node>;
   /** 落点（**屏幕**坐标）；缺省落在视口中心。 */
   point?: DropPoint | null;
-  /** **已经在画布坐标里**的落点 —— 当坐标本身来自画布（如「源节点右侧 340px」）
-   *  时用它，出口就不再换算。与 `point` 二选一。 */
-  flowPosition?: XYPosition | null;
-  /** 画布坐标换算（`useReactFlow().screenToFlowPosition`）。 */
-  flow: CanvasPlacementContext;
-  /** 节点数据 —— 出口会把它铺在 `defaultData` 之上，缺字段由默认值兜住。 */
-  data: CanvasNodeData;
-  /** 显式指定 id —— 只在**调用处需要提前拿到它**时给（自动连线要用同一个
-   *  id 建边：工作流跑完自动孵化下游节点时就是这种情形）。缺省由出口生成。 */
-  id?: string;
 }): Array<CanvasNodeType> {
   const position =
     opts.flowPosition ?? opts.flow.screenToFlowPosition(opts.point ?? viewportCenter());
@@ -114,9 +114,9 @@ export function applyPropagationToNodes(
   nodes: Array<CanvasNodeType>,
   sourceId: string,
   opts: {
-    srcData: CanvasNodeData;
-    outEdges: Array<Edge>;
     importedFile: string | null;
+    outEdges: Array<Edge>;
+    srcData: CanvasNodeData;
   },
 ): Array<CanvasNodeType> {
   const { srcData: src, outEdges, importedFile } = opts;

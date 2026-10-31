@@ -22,8 +22,8 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
   onSelect,
 }: {
   cachedIds: Array<string>;
-  taskId: string | null;
   onSelect: (next: string | null) => void;
+  taskId: string | null;
 }) {
   /* 序号 = 任务所在画布节点的下标 + 1。查表走 `nodeSeqOf`：画布每帧换一份
    * nodes 引用，逐个 `findIndex` 会退化成 O(缓存任务数 × 节点数) 每帧。 */

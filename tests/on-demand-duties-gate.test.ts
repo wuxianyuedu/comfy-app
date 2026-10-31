@@ -55,14 +55,14 @@ interface DutyRow {
   id: string;
   name: string;
   notInHook: string;
-  fact: { kind: string; key?: string; gate?: string; script?: string };
+  fact: { gate?: string; key?: string; kind: string; script?: string };
   executor: string;
 }
 
 /** 一份「最小但双向都成立」的索引：六条按需档（下限是 5，留一格余量）。 */
 function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
-  why: string;
   duties: Array<DutyRow>;
+  why: string;
 } {
   return {
     why: "测试夹具",

@@ -211,8 +211,8 @@ export function sanitizeModeValue(value: string): string {
  *  key → 界面按钮文案说明；点对应「＋」即自动补一行该字段名的行。
  *  视频 reference / keyframe 必用的 images / first_frame 等都在列，命中即加。 */
 export const USAGE_FIELD_PRESETS: ReadonlyArray<{
-  key: string;
   hint: string;
+  key: string;
 }> = [
   { key: "seed", hint: "随机种子" },
   { key: "duration", hint: "时长(秒)" },

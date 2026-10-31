@@ -81,8 +81,8 @@ export function normalizeTypeChip(raw: string | undefined, fallback = "INT"): st
 
 export function portChipStyle(type?: string): {
   background: string;
-  color: string;
   border?: string;
+  color: string;
 } {
   const t = normalizeTypeChip(type);
   /* 底色是**表面**（随主题），只有文字是类型色（类型色例外，见 globals.css
@@ -116,13 +116,13 @@ export function PortHandle({
   type,
   style: extraStyle,
 }: {
-  id: string;
   dir: "in" | "out";
-  type?: string;
+  id: string;
   /** 覆盖 / 并入默认定位（如定高行用 { top: 14 }）。
    *  Ardot v2 锚点默认值仍然生效，除非
    *  在这里覆盖。 */
   style?: React.CSSProperties;
+  type?: string;
 }) {
   /* React Flow 的 <Handle> 只能在自定义 Node 内渲染——它内部靠 useNodeId
    * 取宿主节点 id，拿不到就抛 error#010（"No node id found"）。IO 预览

@@ -41,7 +41,7 @@ vi.mock("../../ToastProvider", () => ({
 interface Behavior {
   workflows: Array<Record<string, unknown>>;
   localPending: Array<Record<string, unknown>>;
-  tags: Array<{ id: string; name: string; count: number }>;
+  tags: Array<{ count: number; id: string; name: string }>;
   /** 非空时 workflow.list 抛错 —— 覆盖加载错误通道 */
   listError?: string;
   /** 非空时 workflow.update 抛错 —— 覆盖动作错误通道 */

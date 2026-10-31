@@ -84,7 +84,7 @@ async function setTheme(page: Page, dark: boolean): Promise<void> {
 async function readToken(
   page: Page,
   name: string,
-): Promise<{ raw: string; fill: string; stroke: string }> {
+): Promise<{ fill: string; raw: string; stroke: string }> {
   return page.evaluate((n) => {
     const raw = getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -121,7 +121,7 @@ async function readSurface(page: Page, cls: string): Promise<string> {
  * 最后一型是实测撞出来的：拿 `/^rgba?\(/` 去断 `color-mix()` 的结果，
  * 会得到一条「没解析」的红 —— 而值其实是对的。所以断言比**分量**，不比字符串。
  */
-type Color = { r: number; g: number; b: number; a: number };
+type Color = { a: number; b: number; g: number; r: number; };
 
 function parseColor(css: string): Color {
   const t = css.trim();
@@ -273,7 +273,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       /* 与 `gridLineColor()` 同一套取整口径：α 换算成百分数，不丢一位小数。 */
       const percent = Math.round(alpha * 1000) / 10;
       const expr = `color-mix(in srgb, var(--color-canvas-grid-line) ${percent}%, transparent)`;
-      const seen: Record<"light" | "dark", { stroke: string; color: Color; ratio: number }> =
+      const seen: Record<"light" | "dark", { color: Color; ratio: number; stroke: string; }> =
         /* SAFETY: 类型断言已复核 */ {} as never;
 
       for (const dark of [false, true]) {

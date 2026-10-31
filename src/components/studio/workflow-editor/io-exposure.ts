@@ -63,15 +63,15 @@ export function mergeExposedEntry<T extends WorkflowIOEntry>(
 export function enrichFromViewNodes(
   nodes:
     | Array<{
-        id: string;
         class_type?: string;
+        id: string;
         raw_inputs?: Array<{
-          name: string;
+          defaultValue?: unknown;
           label?: string;
           localized?: string;
-          type?: string;
-          defaultValue?: unknown;
           multiline?: boolean;
+          name: string;
+          type?: string;
           widgetValue?: unknown;
         }>;
       }>

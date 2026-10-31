@@ -182,13 +182,13 @@ export function rawErrorDetail(e: unknown, maxLen = LOG_DETAIL_MAX): string {
     parts.push(e);
   } else if (typeof e === "object") {
     const obj = /* SAFETY: 类型断言已复核 */ e as {
-      name?: unknown;
-      message?: unknown;
+      cause?: unknown;
       code?: unknown;
       data?: { code?: unknown; httpStatus?: unknown };
-      cause?: unknown;
+      message?: unknown;
+      name?: unknown;
+      shape?: { code?: unknown; message?: unknown };
       stack?: unknown;
-      shape?: { message?: unknown; code?: unknown };
     };
     if (typeof obj.name === "string" && obj.name) {
       parts.push(obj.name);

@@ -12,9 +12,9 @@ import { useEffect, useRef, useState } from "react";
 import { defaultInputValues, mergeRefreshedDefaults, type WorkflowIOMap } from "../../workflow-io";
 
 export function useDefaultValueSeeding(params: {
+  effectiveMode: string | null;
   workflowId: string;
   workflowIO: WorkflowIOMap | null;
-  effectiveMode: string | null;
 }) {
   const { workflowId, workflowIO, effectiveMode } = params;
   const [values, setValues] = useState<Record<string, unknown>>({});

@@ -87,12 +87,12 @@ afterAll(() => {
  */
 function makeFakeRepo(
   opts: {
-    lockfileText?: string;
     dropFiles?: Array<string>;
+    lockfileText?: string;
     /** 改写假检出里那份 `quality-gate.ps1`（验运行器自身的形状时用）。 */
     patchGateText?: (src: string) => string;
   } = {},
-): { root: string; installedLock: string } {
+): { installedLock: string; root: string; } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dep-precheck-"));
   tmpDirs.push(root);
   fs.mkdirSync(path.join(root, "scripts", "lockfile"), { recursive: true });
@@ -126,7 +126,7 @@ function makeFakeRepo(
 }
 
 /** 跑假检出的预检：拿退出码 + 合并后的输出。 */
-function runGate(root: string): { status: number; out: string } {
+function runGate(root: string): { out: string; status: number; } {
   const r = spawnSync(
     psExe,
     [

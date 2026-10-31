@@ -249,10 +249,10 @@ const PURE_NODE_HOSTS = [
 ];
 
 type Report = {
-  unguarded: Array<string>;
-  libOnlyReachable: Array<{ module: string; chain: Array<string> }>;
-  clientReachable: Array<{ module: string; chain: Array<string> }>;
+  clientReachable: Array<{ chain: Array<string>; module: string; }>;
   counts: Record<string, number>;
+  libOnlyReachable: Array<{ chain: Array<string>; module: string; }>;
+  unguarded: Array<string>;
 };
 
 /** 跑一次可达性分析（实现收在 `scripts/lib-node-only-scan.mjs`，本用例不复制一份）。 */

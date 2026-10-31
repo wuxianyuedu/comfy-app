@@ -12,13 +12,7 @@ import { timeAgo } from "~/lib/time-format";
 import type { QueueRow } from "./queue-monitor-config";
 
 /** 分区标题（h2）。图标是装饰，读屏靠文字本身。 */
-export function SectionHeading({
-  id,
-  children,
-}: {
-  id: string;
-  children: ReactNode;
-}) {
+export function SectionHeading({ id, children }: { children: ReactNode; id: string }) {
   return (
     <h2
       id={id}
@@ -31,13 +25,7 @@ export function SectionHeading({
 }
 
 /** 一条度量：上标签下数值。数值是「算出来的字符串」，空值不假装是 0。 */
-export function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: string;
-}) {
+export function Field({ label, children }: { children: string; label: string }) {
   return (
     <div className="min-w-0">
       <dt className="text-ink-fainter text-2xs truncate">{label}</dt>
@@ -71,13 +59,13 @@ export function QueueRowLine({
   onOpenFolder,
   onOpenLog,
 }: {
-  row: QueueRow;
-  leading?: string;
   busy: boolean;
+  leading?: string;
   onCancel: () => void;
   onCopy: () => void;
   onOpenFolder: () => void;
   onOpenLog: () => void;
+  row: QueueRow;
 }) {
   const terminal = isTerminalTaskStatus(row.status);
   const ago = timeAgo(row.createdAt.getTime());
@@ -92,13 +80,9 @@ export function QueueRowLine({
       <span className="text-ink-fainter min-w-0 basis-40 truncate text-xs sm:flex-1">
         {displayValue(row.prompt)}
       </span>
-      {terminal ? (
-        <StatusBadge status={row.status} label={taskStatusLabel(row.status)} />
-      ) : null}
+      {terminal ? <StatusBadge status={row.status} label={taskStatusLabel(row.status)} /> : null}
       {row.error ? (
-        <span className="text-danger-strong min-w-0 basis-full truncate text-xs">
-          {row.error}
-        </span>
+        <span className="text-danger-strong min-w-0 basis-full truncate text-xs">{row.error}</span>
       ) : null}
       <span className="flex shrink-0 items-center gap-1">
         <Button
@@ -121,11 +105,7 @@ export function QueueRowLine({
               aria-label="打开这一条的输出目录"
               className="h-auto gap-1"
             >
-              <FolderOpen
-                data-icon="inline-start"
-                className="size-3"
-                aria-hidden
-              />
+              <FolderOpen data-icon="inline-start" className="size-3" aria-hidden />
               输出目录
             </Button>
             <Button

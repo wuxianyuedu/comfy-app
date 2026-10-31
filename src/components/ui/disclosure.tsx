@@ -84,12 +84,10 @@ export function Disclosure({
   /** 展开面板的 class。 */
   panelClassName,
 }: {
-  open?: boolean;
-  defaultOpen?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  disabled?: boolean;
-  trigger: React.ReactNode;
   children?: React.ReactNode;
+  className?: string;
+  defaultOpen?: boolean;
+  disabled?: boolean;
   /**
    * 与触发行**同排、排在触发开关之前**的内容。
    * 用途：一排按钮里只有一个是折叠开关时（如设置页的「重试 / 完整错误 /
@@ -97,12 +95,14 @@ export function Disclosure({
    * 往它里面塞 `<Button>` 在 HTML 里非法。
    */
   leading?: React.ReactNode;
+  marker?: DisclosureMarker;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
+  panelClassName?: string;
+  rootClassName?: string;
   /** 与触发行**同排、排在触发开关之后**的内容（同 `leading` 的用途）。 */
   trailing?: React.ReactNode;
-  marker?: DisclosureMarker;
-  className?: string;
-  rootClassName?: string;
-  panelClassName?: string;
+  trigger: React.ReactNode;
 }) {
   return (
     <CollapsiblePrimitive.Root
@@ -139,10 +139,7 @@ export function Disclosure({
           <span
             aria-hidden
             data-slot="disclosure-marker"
-            className={cn(
-              MARKER_BASE,
-              "hidden group-aria-expanded/disclosure:inline",
-            )}
+            className={cn(MARKER_BASE, "hidden group-aria-expanded/disclosure:inline")}
           >
             ▾
           </span>
@@ -152,10 +149,7 @@ export function Disclosure({
             aria-hidden
             size={13}
             data-slot="disclosure-marker"
-            className={cn(
-              MARKER_BASE,
-              "group-aria-expanded/disclosure:rotate-90",
-            )}
+            className={cn(MARKER_BASE, "group-aria-expanded/disclosure:rotate-90")}
           />
         )}
         {trigger}

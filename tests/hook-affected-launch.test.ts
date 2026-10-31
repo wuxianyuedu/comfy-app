@@ -135,7 +135,7 @@ const SPAWN_LAYER_PATH = "scripts/affected-launch-spawn.mjs";
  * 所以**每一处**调用 `runChunk` 的用例都必须走它（或走下面那份委托它的 `runCapturing`），
  * 「不许有漏掉的调用点」由本文件末尾那条判据钉住（针尖的构造方式见它里面的说明）。
  */
-async function captureStderr<T>(fn: () => Promise<T>): Promise<{ value: T; text: string }> {
+async function captureStderr<T>(fn: () => Promise<T>): Promise<{ text: string; value: T; }> {
   const chunks: Array<string> = [];
   const realWrite = process.stderr.write.bind(process.stderr);
   process.stderr.write = (s: string | Uint8Array) => {
@@ -675,14 +675,14 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   const CHUNK = ["tests/a.test.ts", "tests/b.test.ts"];
 
   /** 一次假 spawn 的结果（与 launcher 里 `spawnVitest` 的返回形状同构）。 */
-  type SpawnResult = { status: number | null; output: string };
+  type SpawnResult = { output: string; status: number | null; };
   /** 一次假 spawn 的调用记录。 */
-  type SpawnCall = { entry: string; args: Array<string> };
+  type SpawnCall = { args: Array<string>; entry: string; };
 
   /** 造一个假 spawn：按调用次序回放预设的结果。 */
   function fakeSpawn(results: Array<SpawnResult>): {
-    spawn: (entry: string, args: Array<string>) => SpawnResult;
     calls: Array<SpawnCall>;
+    spawn: (entry: string, args: Array<string>) => SpawnResult;
   } {
     const calls: Array<SpawnCall> = [];
     const spawn = (entry: string, args: Array<string>): SpawnResult => {
@@ -725,16 +725,16 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
    */
   async function runCapturing(deps: {
     entry: string;
-    workers?: number;
-    spawn?: (entry: string, args: Array<string>) => SpawnResult;
+    onAttempt?: (record: { outcome: string; settled?: boolean; waitedMs?: number; }) => void;
+    onUnverified?: (files: Array<string>) => void;
     settle?: () => Promise<{
-      settled: boolean;
       load: number;
+      settled: boolean;
       waitedMs: number;
     }>;
+    spawn?: (entry: string, args: Array<string>) => SpawnResult;
     waitBudget?: { deadline: number };
-    onUnverified?: (files: Array<string>) => void;
-    onAttempt?: (record: { outcome: string; waitedMs?: number; settled?: boolean }) => void;
+    workers?: number;
   }): Promise<{ code: number; text: string }> {
     /* 委托给模块级那一份：抓取的**机制**只许有一处，各写一份就会漂成
      * 「有的调用点抓得到、有的抓不到」（§12.12 / §12.18）。 */
@@ -819,7 +819,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   });
 
   it("未校验那一格与「负载有没有回落」解耦 —— 等待没兑现不改变结论", async () => {
-    const settled: { settled: boolean; load: number; waitedMs: number } = {
+    const settled: { load: number; settled: boolean; waitedMs: number } = {
       settled: true,
       load: 0.2,
       waitedMs: 0,
@@ -1256,7 +1256,7 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
 
   it("runChunk 真的把这两段拼进两次 spawn，清单仍在最后", async () => {
     const dir = tempDir();
-    const calls: Array<{ entry: string; args: Array<string> }> = [];
+    const calls: Array<{ args: Array<string>; entry: string; }> = [];
     await captureStderr(() =>
       runChunk(["tests/a.test.ts"], {
         entry: "vitest.mjs",
@@ -1602,7 +1602,7 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
     );
 
   /** 按次序回放结果的假 spawn，同时把每次的清单记下来（补跑发生过没有要看它）。 */
-  function scripted(results: Array<{ status: number; output: string }>) {
+  function scripted(results: Array<{ output: string; status: number; }>) {
     const lists: Array<Array<string>> = [];
     return {
       lists,
@@ -1811,7 +1811,7 @@ describe("第 1 遍就没跑起来（装载 / 运行时级错误）", () => {
 
   /** 起一次 `runChunk` 并把 stderr 收在手里（与上面那节同一个抓取通道）。 */
   async function runWith(
-    results: Array<{ status: number; output: string }>,
+    results: Array<{ output: string; status: number; }>,
     extra: Partial<Parameters<typeof runChunk>[1]> = {},
   ) {
     const calls: Array<Array<string>> = [];

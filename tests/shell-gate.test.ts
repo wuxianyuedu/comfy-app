@@ -1065,7 +1065,7 @@ describe("shell-gate —— 平台合成的 merge 提交不许把别人的壳改
    * ISSUE #2325 的拓扑：基线 B → 目标分支上别人的壳改动 T → 本 PR 只改前端 →
    * 平台把 PR 并进 T 生成合并提交（`--no-ff`）。
    */
-  function syntheticMerge(): { dir: string; base: string; source: string } {
+  function syntheticMerge(): { base: string; dir: string; source: string } {
     const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-merge-"));
     temps.push(dir);
     git(dir, "init", "-q", "-b", "main");

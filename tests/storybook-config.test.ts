@@ -72,8 +72,8 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
   const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
     readFileSync(resolve(REPO_ROOT, "package.json"), "utf8"),
   ) as {
-    scripts: Record<string, string>;
     devDependencies: Record<string, string>;
+    scripts: Record<string, string>;
   };
 
   it("主配置扫的就是 src/ 下的 stories（glob 写错 = 侧栏空着但构建成功）", () => {

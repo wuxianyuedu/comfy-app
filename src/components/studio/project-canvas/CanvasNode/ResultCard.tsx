@@ -24,12 +24,12 @@ export function ResultCard({
   onReplace,
 }: {
   kind: NodeKind;
-  name?: string;
-  status: CanvasNodeData["status"];
-  path?: string;
   mediaType?: string;
-  text?: string;
+  name?: string;
   onReplace: () => void;
+  path?: string;
+  status: CanvasNodeData["status"];
+  text?: string;
 }) {
   /* 这枚「下载」（实为复制文本）的失败**显式静默**：产出文本就在下面的
    * 只读块里印着，用户能直接手动选中复制（规范 16 §16.2.4.43）。 */

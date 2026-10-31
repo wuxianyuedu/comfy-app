@@ -72,10 +72,10 @@ export interface RawInputMeta {
    *  上。画布与 IO 面板都按「内部字段 label → localized → 字段名」取名，
    *  避免同一 pin 在两处显示成不同字符串（ISSUE #349）。普通节点不携带。 */
   proxyField?: {
-    nodeId: string;
     field: string;
     label?: string;
     localized?: string;
+    nodeId: string;
   };
 }
 
@@ -125,8 +125,16 @@ export interface ComfyGraphNode {
 export type { IOParamSlot } from "~/lib/workflow/workflow-io-types";
 
 export type WorkflowIOParam = IOParamSlot & {
-  nodeId: string;
-  name: string;
+  /** 当前 widget 值 / 图里的字面量，用于预填动态表单。 */
+  defaultValue?: unknown;
+  /** 用户自定义的显示顺序，由 IO 编辑预览的拖拽排序手势写入。镜像
+   *  `WorkflowIOEntry.displayOrder`；排序契约见 workflow-io.ts。
+   *  与 `workflowIO` 的其余部分在同一次 PATCH 里落库。 */
+  displayOrder?: number;
+  /** 宿主（外层封装）节点 id。仅在「下钻到子工作流内部」勾选时写入：此时
+   *  `nodeId` 是子图内部节点 id（`1670`），运行期 comfy-cli 展开后是 `4:1670`
+   *  （宿主 id + 内部 id），两个 id 都存下来才能在运行期确定性还原。 */
+  hostNodeId?: string;
   /** 作者在 IO 面板里显式重命名的显示名（**唯一**写入点是面板的 ✎ 改名框）。
    *
    *  勾选 IO 那一刻画布透传的名字不再进库：它本来就是画布从同一个 raw 槽位
@@ -137,43 +145,35 @@ export type WorkflowIOParam = IOParamSlot & {
    *  （一个 T2I 节点上的 `text` / `text_1` 会拿到同一个标题），那样 IO 摘要
    *  反而没法看。 */
   label?: string;
-  /* ── 服务端富化字段（GET /api/workflows/[id]）──
-   * 刚在本地勾选出来的条目上没有它们（勾选框只写四个身份字段）；服务端会在
-   * 下一次读取时从 raw_inputs / rawNodes.outputs 重新推导，
-   * 因此这里一律按可选对待。 */
-  /** ComfyUI 数据类型："STRING" | "INT" | "FLOAT" | "BOOLEAN" | "IMAGE" 等。 */
-  type?: string;
-  /** 当前 widget 值 / 图里的字面量，用于预填动态表单。 */
-  defaultValue?: unknown;
-  /** 所属节点的标题 —— 用来区分不同节点上的同名 pin。 */
-  nodeTitle?: string;
-  /** 应渲染成多行文本框而非单行的 STRING 输入。 */
-  multiline?: boolean;
-  /** `WorkflowIOEntry.required` 的镜像字段。只在 `kind === "widget"` 时有意义
-   *  —— 在 IO 编辑模式里切换，下一次 PATCH 落库。 */
-  required?: boolean;
-  /** 用户自定义的显示顺序，由 IO 编辑预览的拖拽排序手势写入。镜像
-   *  `WorkflowIOEntry.displayOrder`；排序契约见 workflow-io.ts。
-   *  与 `workflowIO` 的其余部分在同一次 PATCH 里落库。 */
-  displayOrder?: number;
-  /** seed 类参数的「控件后行为」（fixed / increment / decrement / random）。
-   *  镜像 `WorkflowIOEntry.seedMode`，随 workflowIO 一起 PATCH 落库。 */
-  seedMode?: string;
   /** 多模式覆盖层：按模式码的覆盖（镜像 `WorkflowIOEntry.modeOverrides`）。
    *  落在同一个 workflowIO JSON 列里（因此新增模式无需改表）。由 IO 预览面板的
    *  「模式页签」编辑，随整体 workflowIO 一起 PATCH 落库。读取方见
    *  `src/lib/workflow/workflow-io-types.ts` 的 `isModeVisible` / `modeDefaultValue`
    *  等（它们吃的是 `WorkflowIOEntry.modeOverrides`，与本字段同名但属于不同模型）。 */
   modeOverrides?: Record<string, WorkflowIOModeOverride>;
-  /** 宿主（外层封装）节点 id。仅在「下钻到子工作流内部」勾选时写入：此时
-   *  `nodeId` 是子图内部节点 id（`1670`），运行期 comfy-cli 展开后是 `4:1670`
-   *  （宿主 id + 内部 id），两个 id 都存下来才能在运行期确定性还原。 */
-  hostNodeId?: string;
+  /** 应渲染成多行文本框而非单行的 STRING 输入。 */
+  multiline?: boolean;
+  name: string;
+  nodeId: string;
+  /** 所属节点的标题 —— 用来区分不同节点上的同名 pin。 */
+  nodeTitle?: string;
+  /** `WorkflowIOEntry.required` 的镜像字段。只在 `kind === "widget"` 时有意义
+   *  —— 在 IO 编辑模式里切换，下一次 PATCH 落库。 */
+  required?: boolean;
+  /** seed 类参数的「控件后行为」（fixed / increment / decrement / random）。
+   *  镜像 `WorkflowIOEntry.seedMode`，随 workflowIO 一起 PATCH 落库。 */
+  seedMode?: string;
   /** 本层槽位上作者写的业务名（服务端富化下发，与槽位名不同才有值）。
    *
    *  事实字段：富化链把它排在 `localized` 之后（通用翻译会盖住它），所以显示
    *  名算不到它；想按「作者在本层槽位上写的名字」取名时只有这里有。 */
   slotLabel?: string;
+  /* ── 服务端富化字段（GET /api/workflows/[id]）──
+   * 刚在本地勾选出来的条目上没有它们（勾选框只写四个身份字段）；服务端会在
+   * 下一次读取时从 raw_inputs / rawNodes.outputs 重新推导，
+   * 因此这里一律按可选对待。 */
+  /** ComfyUI 数据类型："STRING" | "INT" | "FLOAT" | "BOOLEAN" | "IMAGE" 等。 */
+  type?: string;
 };
 
 /** 用于切换 IO 暴露状态的一次参数引用。
@@ -249,11 +249,11 @@ export interface NodeJsonViewerContextValue {
    *  `pos` 分别是 `undefined` / `null`。 */
   getNodeView: (nodeId: string) => {
     entry: Record<string, unknown> | null;
+    pos: [number, number] | null;
     raw?: RawMetaEntry;
     /** 原始 RAW 节点（`detail.rawJson.nodes[i]`）—— 与整个工作流 RAW 视图
      *  里对应的那一片逐字节一致。找不到该节点时为 `null`。 */
     rawNode?: Record<string, unknown> | null;
-    pos: [number, number] | null;
   } | null;
   /** 打开浮层。`anchorEl` 应是那个 `#id` 芯片元素（只用于定位 ——
    *  指针事件是在浮层挂载**之后**才落到它上面的，
@@ -269,11 +269,11 @@ export interface NodeJsonViewerContextValue {
  *  `flags` / `properties` / `mode` 在原件里可能缺失（并非每个节点都写全），
  *  因此按可选对待 —— 与 `rawNodes` 口径一致；`getNodeView().raw` 也复用它。 */
 export type RawMetaEntry = {
-  widgets_values: Array<unknown>;
-  outputs: Array<RawOutputMeta>;
   flags?: Record<string, unknown>;
-  properties?: Record<string, unknown>;
   mode?: number;
+  outputs: Array<RawOutputMeta>;
+  properties?: Record<string, unknown>;
+  widgets_values: Array<unknown>;
 };
 
 /** 边界 pin 实体（来自 ComfyGraphNode 的 subgraph.inputs/outputs）。
@@ -309,9 +309,9 @@ export interface WorkflowDetail {
    *  wrapper），供 RAW 布局渲染原始 ComfyUI 节点（含 wrapper 紫色整卡）。
    *  null = 无 rawJson。 */
   rawView?: {
+    graph: Record<string, ApiWorkflowNode>;
     nodes: Array<ComfyGraphNode>;
     positions: Record<string, [number, number]> | null;
-    graph: Record<string, ApiWorkflowNode>;
   } | null;
   /** `paramMap` JSON 列。形状的唯一出处是 `WorkflowParamMap`（`~/lib/workflow/
    *  workflow-param-map`）—— 声明成「一层 key → string」曾与运行时不符
@@ -333,17 +333,17 @@ export interface WorkflowDetail {
    *  （例如 ResolutionSelector 这类自定义节点，或输出只能从原始 JSON 里
    *  发现的子图 UUID）。 */
   rawNodes: Array<{
-    id: string;
-    widgets_values: Array<unknown>;
-    outputs: Array<RawOutputMeta>;
     /** 每个节点的 LiteGraph 标记（如 `collapsed`）。原件里没有该字段时为空。
      *  Flow 侧原本经 `(rn as any).flags` 消费它们；
      *  在这里声明是为了让 JSON 浮层能在合成的「节点视图」页签里展示。 */
     flags?: Record<string, unknown>;
+    id: string;
+    mode?: number;
+    outputs: Array<RawOutputMeta>;
     /** 自定义节点属性（例如 rgthree 的 `Fast Groups Bypasser`
      *  从这里读 `matchTitle`）。原始数据缺失时为空。 */
     properties?: Record<string, unknown>;
-    mode?: number;
+    widgets_values: Array<unknown>;
   }> | null;
   /** 边界 pin 实体（来自 ComfyUI 原始的 subgraph.inputs/outputs）。
    *  每个 pin 有自己的 UUID、名字、类型、保存位置，以及指向跨边界连线的
@@ -354,11 +354,11 @@ export interface WorkflowDetail {
    *  在边界 pin 的 handle 与内部节点对应的输入/输出 handle 之间生成
    *  React Flow 边。 */
   boundaryLinks?: Array<{
-    linkId: number;
-    kind: "input" | "output";
-    pinId: string;
     innerNodeId: string;
     innerSlotName: string;
+    kind: "input" | "output";
+    linkId: number;
+    pinId: string;
   }>;
   /** 该工作流由本地文件支撑（经「本机路径」导入）时的绝对路径。
    *  文件一变，界面就会显示「磁盘文件有更新」等用户点「同步」。 */
@@ -424,7 +424,7 @@ export interface WorkflowNodeData {
   assignedRole: string | null;
   /** 对每个「连线型」输入（[srcId, slot]），记录源节点的 title 与
    *  class_type。用于渲染 "← <源节点> #xx" 标签，并推断线上流动的数据类型。 */
-  inputSources: Record<string, { id: string; title: string; slot: number; classType?: string }>;
+  inputSources: Record<string, { classType?: string; id: string; slot: number; title: string }>;
   /** 每个输入的显示元数据，来自原始 JSON（localized_name + type）。 */
   rawInputs?: Array<RawInputMeta>;
   /** 该节点是当前子图的 INPUT 端点时为真（它的输入槽从子图 -10 哨兵
@@ -486,7 +486,7 @@ export interface WorkflowNodeData {
   /** ComfyUI 的精确外框尺寸 { w, h }（只算主体，不含标题栏）。
    *  有值时卡片被强制成这个尺寸，不再走按内容驱动的 min/max 宽度布局。
    *  undefined → 按内容驱动。 */
-  size?: { w: number; h: number };
+  size?: { h: number; w: number };
   /** 当前视图的宿主（外层封装）节点 id —— 仅当视图是「下钻后的子工作流内部」
    *  时由编辑器注入（值 = 进入本层时的 wrapper 节点 id）。
    *
@@ -559,7 +559,7 @@ export interface WorkflowSubgraphData {
   connectedInputs?: Set<string>;
   /** ComfyUI 的精确外框尺寸 { w, h }（只算主体，不含标题栏）。
    *  有值时卡片被强制成这个尺寸。undefined → 按内容驱动。 */
-  size?: { w: number; h: number };
+  size?: { h: number; w: number };
   /** LiteGraph 的 `mode`（0 = Always / 2 = Never 静音 / 4 = Bypass）。
    *  语义与 WorkflowNodeData.mode 相同 —— 驱动三态配色覆盖层。 */
   mode?: number;

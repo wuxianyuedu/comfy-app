@@ -55,9 +55,9 @@ function resetTabs() {
 
 /** 按设置页那条真实路径开一个 ComfyUI 页签（字段照抄 `use-settings-page-comfy`）。 */
 function openComfyTab(patch: {
-  url?: string | null;
   blockedReason?: string | null;
   blockedUrl?: string | null;
+  url?: string | null;
 }) {
   useShellTabs.getState().openTab({
     id: "comfyui",

@@ -106,14 +106,14 @@ function displayLabel(id: string, contractLabel?: string): string {
  *  requiredInputs：该模式的**必备口**（同样可配置，见 `ModeContract.required`）。
  *  未传时回落内置默认（提示词）。「能不能用」= 这些口是否都有落点。 */
 export function deriveEncapsulationStatus(args: {
-  io: WorkflowIOMap | null | undefined;
-  paramMap: Record<string, unknown> | null | undefined;
-  mode: string | null | undefined;
   contractEntries?: Array<{
+    control: EncapsulationControl;
     id: string;
     label: string;
-    control: EncapsulationControl;
   }>;
+  io: WorkflowIOMap | null | undefined;
+  mode: string | null | undefined;
+  paramMap: Record<string, unknown> | null | undefined;
   requiredInputs?: ReadonlyArray<string>;
 }): EncapsulationStatus {
   const { io, paramMap, mode, contractEntries, requiredInputs } = args;
@@ -134,9 +134,9 @@ export function deriveEncapsulationStatus(args: {
    * 但「未配置」恰恰要在这里现形（否则用户看不到缺了什么、也不知道为什么
    * 工坊驱动不了）。按契约清单补齐缺失口（落点 null）。 */
   const canonical: Array<{
+    control: EncapsulationControl;
     id: string;
     label: string;
-    control: EncapsulationControl;
   }> =
     contractEntries ??
     exposedParamsForMode(mode ?? null).map((d) => ({

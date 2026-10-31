@@ -242,14 +242,14 @@ export function pnpmJsInvocation({
   env,
   platform,
 }: {
-  name: string;
   env: NodeJS.ProcessEnv | Record<string, string | undefined>;
+  name: string;
   platform: NodeJS.Platform;
 }): {
-  command: string;
-  prefixArgs: Array<string>;
-  entry: string;
   candidate: string;
+  command: string;
+  entry: string;
+  prefixArgs: Array<string>;
 } | null {
   /* 只有 pnpm 有「包真身 + 垫片」这一形（`pnpmInvocation()` 的 `name` 还被 `cnb`
    * 复用，那是另一种落点形状），所以按名字收口。 */

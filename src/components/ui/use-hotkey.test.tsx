@@ -21,10 +21,10 @@ afterEach(cleanup);
 function key(
   k: string,
   mods: {
+    alt?: boolean;
     ctrl?: boolean;
     meta?: boolean;
     shift?: boolean;
-    alt?: boolean;
   } = {},
 ) {
   return /* SAFETY: 类型断言已复核 */ {
@@ -113,9 +113,9 @@ function Probe({
   filterInput = true,
   spec = /* SAFETY: 类型断言已复核 */ { key: "l", mod: true } as const,
 }: {
-  onHit: () => void;
   enabled?: boolean;
   filterInput?: boolean;
+  onHit: () => void;
   spec?: { key: string; mod?: boolean; shift?: boolean };
 }) {
   useHotkey(spec, onHit, { enabled, filterInput });

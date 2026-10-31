@@ -37,24 +37,24 @@ function GroupedControls({
   onVisibilityChange,
   collapseGrouped,
 }: {
-  dimension: DimensionGroup | null;
-  video: VideoGroup | null;
-  values: Record<string, unknown>;
-  onChange: (next: Record<string, unknown>) => void;
-  workflowId?: string;
-  compact?: boolean;
-  disabled?: boolean;
   /** 画布 / 库内（`compact`）把组合控件收窄成一块（宽度按内容），而不是摊成
    * 逐行参数清单。`false` 保留宽版整块录入（宽版表单 / CreatePanel）。 */
   collapseGrouped?: boolean;
-
-  /** 编辑态：组合行替代了独立参数行，把必填/可选切换透传进组合卡。 */
-  onRequiredChange?: (ioKey: string, required: boolean) => void;
+  compact?: boolean;
+  dimension: DimensionGroup | null;
+  disabled?: boolean;
   /** 多模式作者态：透传给组合卡按该模式解析必填/可见性（与独立参数行一致）。 */
   mode?: string | null;
+  onChange: (next: Record<string, unknown>) => void;
+  /** 编辑态：组合行替代了独立参数行，把必填/可选切换透传进组合卡。 */
+  onRequiredChange?: (ioKey: string, required: boolean) => void;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+
+  values: Record<string, unknown>;
+  video: VideoGroup | null;
   /** IO 编辑态：行内 👁 切换参数在 visibilityMode 模式下的可见性。 */
   visibilityMode?: string | null;
-  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  workflowId?: string;
 }) {
   if (!dimension && !video) {
     return null;

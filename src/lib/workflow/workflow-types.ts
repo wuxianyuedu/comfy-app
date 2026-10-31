@@ -435,8 +435,8 @@ export function normalizeTaskType(raw: string): string {
  *  优先级：声明的 defaultMode（且必须仍在 modes 里）→ modes[0] → taskType。
  *  都为空 = 该工作流确实没有模式（此时才谈得上「未声明模式」）。 */
 export function resolveWorkflowMode(args: {
-  modes?: ReadonlyArray<string> | null;
   defaultMode?: string | null;
+  modes?: ReadonlyArray<string> | null;
   taskType?: string | null;
 }): string | null {
   const modes = (args.modes ?? []).filter(

@@ -99,9 +99,9 @@ export function canvasNodes(
   specs: ReadonlyArray<{
     id: string;
     kind: NodeKind;
+    prompt?: string;
     x: number;
     y: number;
-    prompt?: string;
   }>,
 ): Array<CanvasNodeType> {
   return specs.reduce<Array<CanvasNodeType>>(
@@ -263,8 +263,8 @@ export function seedProject(scene: ProjectScene): CanvasProject {
  * `findNextAvailableName()` 不会把它们挤成一个。
  */
 export function seedProjects(spec: {
-  primary: ProjectScene;
   extraNames: ReadonlyArray<string>;
+  primary: ProjectScene;
 }): Array<CanvasProject> {
   const created = [seedProject(spec.primary)];
   for (const name of spec.extraNames) {
@@ -293,11 +293,11 @@ export function StorybookScreenFrame({
   projects,
   activeView = "works",
 }: {
+  activeView?: Parameters<typeof AppShell>[0]["active"];
   /** 真视图（必须是真的 —— 见文件头的第一条口径）。 */
   children?: ReactNode;
   /** 侧栏分组里列出的项目（真 `CanvasProject[]`）。 */
   projects: ReadonlyArray<CanvasProject>;
-  activeView?: Parameters<typeof AppShell>[0]["active"];
 }) {
   const sidebarProjects = projects.map((project) => ({
     id: project.id,
@@ -371,8 +371,8 @@ export function StorybookDocumentFrame({ children }: { children?: ReactNode }) {
  * 这条边界写在这是为了下一个人不必再查一遍。
  */
 export function useSeededProjects(spec: {
-  primary: ProjectScene;
   extraNames: ReadonlyArray<string>;
+  primary: ProjectScene;
 }): Array<CanvasProject> {
   const [projects] = useState<Array<CanvasProject>>(() => seedProjects(spec));
   useEffect(() => {

@@ -24,7 +24,7 @@ const CLI_LOG_PREFIX = /^\[comfy-cli (原始|stdout|stderr)\]\s?/;
  * 不是 comfy-cli 原文行（前缀不匹配）时返回 `null` —— 调用处据此按普通日志
  * 处理，不会把无关的 `[comfy-cli …]` 文本吞掉。
  */
-export function splitCliLogLine(message: string): { tag: CliLogTag; payload: string } | null {
+export function splitCliLogLine(message: string): { payload: string; tag: CliLogTag } | null {
   const match = CLI_LOG_PREFIX.exec(message);
   if (!match) {
     return null;

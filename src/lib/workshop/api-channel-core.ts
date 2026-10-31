@@ -318,7 +318,7 @@ export async function callVideoPoll(
   remoteTaskId: string,
   channel: ApiChannelStored,
   options: ApiChannelFetchOptions = {},
-): Promise<{ url?: string; pending: boolean }> {
+): Promise<{ pending: boolean; url?: string }> {
   if (!channel.baseUrl) {
     throw new Error("API 视频通道未配置");
   }

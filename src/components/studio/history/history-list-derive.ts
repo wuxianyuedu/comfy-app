@@ -55,7 +55,7 @@ export function groupByDate(tasks: Array<TaskItem>): Array<TaskGroup> {
 export function paginateGroups(
   groups: Array<TaskGroup>,
   displayCount: number,
-): { visibleGroups: Array<TaskGroup>; visibleTotal: number; canLoadMore: boolean } {
+): { canLoadMore: boolean; visibleGroups: Array<TaskGroup>; visibleTotal: number } {
   let remaining = displayCount;
   const visibleGroups: Array<TaskGroup> = [];
   for (const group of groups) {
@@ -84,7 +84,7 @@ function total(groups: Array<TaskGroup>): number {
 export function emptyStateText(
   filter: FilterKey,
   filterLabel: string,
-): { title: string; hint: string } {
+): { hint: string; title: string } {
   if (filter === "ALL") {
     return {
       title: "暂无任务记录",

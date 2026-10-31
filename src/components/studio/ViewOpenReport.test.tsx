@@ -12,39 +12,29 @@ import type { WorkspaceView } from "./NavItems";
    `log-file-client` 的用法不被一起换掉）。 */
 const { postAppRuntimeLogMock, runtimeLogCalls } = vi.hoisted(() => {
   const calls: Array<{
-    ns: string;
+    fields?: unknown;
     level: string;
     msg: string;
-    fields?: unknown;
+    ns: string;
   }> = [];
   return {
-    postAppRuntimeLogMock: vi.fn(
-      (ns: string, level: string, msg: string, fields?: unknown) => {
-        calls.push({ ns, level, msg, fields });
-        return Promise.resolve();
-      },
-    ),
+    postAppRuntimeLogMock: vi.fn((ns: string, level: string, msg: string, fields?: unknown) => {
+      calls.push({ ns, level, msg, fields });
+      return Promise.resolve();
+    }),
     runtimeLogCalls: calls,
   };
 });
 vi.mock("~/lib/log/log-file-client", async () => {
-  const actual = await vi.importActual<Record<string, unknown>>(
-    "~/lib/log/log-file-client",
-  );
+  const actual = await vi.importActual<Record<string, unknown>>("~/lib/log/log-file-client");
   return { ...actual, postAppRuntimeLog: postAppRuntimeLogMock };
 });
 
 /** 渲染一个被包的屏；`openedAt` 即该屏的打开时刻（不是该屏时给 null）。 */
-function renderReport(
-  view: WorkspaceView,
-  openedAt: number | null,
-  strict = false,
-) {
+function renderReport(view: WorkspaceView, openedAt: number | null, strict = false) {
   const element = (
     <ViewOpenedAtContext.Provider
-      value={(candidate: WorkspaceView) =>
-        candidate === view ? openedAt : null
-      }
+      value={(candidate: WorkspaceView) => (candidate === view ? openedAt : null)}
     >
       <ViewOpenReport view={view}>
         <span>内容</span>

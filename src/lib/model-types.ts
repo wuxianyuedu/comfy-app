@@ -149,7 +149,7 @@ export function modelFoldersForField(field: string): Array<string> {
 }
 
 /* 为常见 ComfyUI 目录手工整理的展示元数据。 */
-const FOLDER_META: Record<string, { label: string; color: string }> = {
+const FOLDER_META: Record<string, { color: string; label: string }> = {
   checkpoints: {
     label: "Checkpoint",
     color: "text-violet-700 dark:text-violet-300 bg-violet-500/15",
@@ -280,7 +280,7 @@ function hashString(s: string): number {
 }
 
 /* 某个目录名的展示元数据（手工整理的标签 / 配色，或推导得出）。 */
-export function folderMeta(folder: string): { label: string; color: string } {
+export function folderMeta(folder: string): { color: string; label: string } {
   const curated = FOLDER_META[folder];
   if (curated) {
     return curated;

@@ -52,10 +52,10 @@ function mergeExtraModels(current: Array<string>, model: string, toggled: string
 
 export function useSettingsRemoteModels(input: {
   llmDraft: LlmConfig | null;
-  setLlmDraft: LlmDraftSetter;
   patchLlm: (patch: Partial<LlmConfig>) => void;
   /** 增删改的即时落库出口（主 hook 的 `persistLlmDraft` 原样传入）。 */
-  persistLlmDraft: (draft: LlmConfig) => Promise<{ ok: boolean; error?: string }>;
+  persistLlmDraft: (draft: LlmConfig) => Promise<{ error?: string; ok: boolean }>;
+  setLlmDraft: LlmDraftSetter;
 }) {
   const { llmDraft, setLlmDraft, patchLlm, persistLlmDraft } = input;
 
@@ -84,7 +84,7 @@ export function useSettingsRemoteModels(input: {
    * 增删改即时落库（无需再点保存按钮），失败时提示条给出可读错误。
    * 连通性 / 实际调用测试走服务端代理（apiKey 不直接打远端）。 */
   const addRemoteModel = useCallback(
-    async (entry: RemoteModelDraftEntry): Promise<{ ok: boolean; error?: string }> => {
+    async (entry: RemoteModelDraftEntry): Promise<{ error?: string; ok: boolean }> => {
       if (!llmDraft) {
         return { ok: false, error: "配置未就绪，请稍后重试" };
       }
@@ -112,7 +112,7 @@ export function useSettingsRemoteModels(input: {
   );
 
   const removeRemoteModel = useCallback(
-    async (name: string): Promise<{ ok: boolean; error?: string }> => {
+    async (name: string): Promise<{ error?: string; ok: boolean }> => {
       if (!llmDraft) {
         return { ok: false, error: "配置未就绪，请稍后重试" };
       }
@@ -133,7 +133,7 @@ export function useSettingsRemoteModels(input: {
     async (
       name: string,
       patch: Partial<RemoteModelDraftEntry>,
-    ): Promise<{ ok: boolean; error?: string }> => {
+    ): Promise<{ error?: string; ok: boolean }> => {
       if (!llmDraft) {
         return { ok: false, error: "配置未就绪，请稍后重试" };
       }
@@ -174,7 +174,7 @@ export function useSettingsRemoteModels(input: {
   );
 
   const probeRemote = useCallback(
-    async (input: { baseUrl?: string; apiKey?: string; model?: string }) => probeRemoteApi(input),
+    async (input: { apiKey?: string; baseUrl?: string; model?: string }) => probeRemoteApi(input),
     [],
   );
 

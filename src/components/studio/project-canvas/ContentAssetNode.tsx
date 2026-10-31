@@ -44,16 +44,16 @@ export function ContentAssetBody({
   status,
   progress,
 }: {
-  kind: "text" | "picture" | "movie";
   data: CanvasNodeData;
+  kind: "text" | "picture" | "movie";
   onPatch: (p: Partial<CanvasNodeData>) => void;
   onPickMedia: (k: "picture" | "movie") => void;
   /* 拖放到虚线区上传。
    *  该区域**曾**是带 onClick={onPickMedia} 的按钮元素；用户希望虚线区
    *  只接受拖放 —— 文件选择器现在只能从右下角 FAB 触发。 */
   onUploadFile?: (file: File) => void | Promise<void>;
-  status?: CanvasNodeData["status"];
   progress?: number;
+  status?: CanvasNodeData["status"];
 }) {
   const accent = ASSET_ACCENT[kind];
   /* 本地拖入高亮，好让用户看到落点在哪。

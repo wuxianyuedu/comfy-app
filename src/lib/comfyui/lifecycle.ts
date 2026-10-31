@@ -72,46 +72,24 @@ import {
 } from "./lifecycle-derive";
 
 export type ComfyUiStatus = {
-  up: boolean;
   base: string | null;
-  starting: boolean;
-  /** 用户点了「关闭 ComfyUI」且进程树尚未确认退出：设置页据此保持「关闭中…」。 */
-  stopping: boolean;
-  /** 本次判定的探测是否仍在进行：UI 据此显示「检测中…」而不是先报「未运行」
-   *  再跳「运行中」（外部已启动 ComfyUI 时尤其明显，ISSUE #339）。 */
-  probing: boolean;
   pid?: number;
   /** 进程级快照定位到的端口（HTTP 未就绪时也可能有值，供「正在启动」提示）。 */
   port?: number | null;
+  /** 本次判定的探测是否仍在进行：UI 据此显示「检测中…」而不是先报「未运行」
+   *  再跳「运行中」（外部已启动 ComfyUI 时尤其明显，ISSUE #339）。 */
+  probing: boolean;
+  starting: boolean;
+  /** 用户点了「关闭 ComfyUI」且进程树尚未确认退出：设置页据此保持「关闭中…」。 */
+  stopping: boolean;
+  up: boolean;
   /** 该实例是用什么起的（中文短语，如「配置路径的实例」）——状态行提示用。 */
   via?: string | null;
 };
 
-export type EnsureResult = { ok: boolean; base: string | null; detail: string };
+export type EnsureResult = { base: string | null; detail: string; ok: boolean };
 
 type LifecycleGlobal = {
-  child?: ReturnType<typeof spawn>;
-  /** 当前 `child` 是否以 detached 方式拉起（= POSIX 下的进程组组长）。
-   *  keepAlive 走 `spawn({detached:true})`，bound 是普通 spawn —— 回收时
-   *  「能不能杀进程组」全看这个标记，判错不报错、只静默留孤儿（见
-   *  kill-process-tree 的实测对照）。 */
-  childDetached?: boolean;
-  starting?: Promise<EnsureResult>;
-  /** 用户点了「关闭 ComfyUI」：启动等待循环见到它就中止，不再报「秒退」。 */
-  stopRequested?: boolean;
-  /** 「关闭中」窗口的开始时刻（毫秒）：设置页在窗口内显示关闭进行态，
-   *  进程树确认退出后清零。 */
-  stoppingAt?: number;
-  /** 最近一次「拉起流程进行中」的时刻（毫秒）：设置页状态行在窗口内不落
-   *  「未运行」。见 COMFY_STARTING_WINDOW_MS。 */
-  startingAt?: number;
-  /** 最近一次**探明**「没在跑」的时刻（毫秒）：结论可信度高于任何在途探测，
-   *  见 COMFY_NOT_RUNNING_HOLD_MS。 */
-  notRunningAt?: number;
-  /** 用户手动点了「关闭 ComfyUI」：此后自动启动路径（WS 重连 / 状态轮询触发的
-   *  ensureComfyUiReady）不再自动拉起，直到用户手动点「启动 ComfyUI」或
-   *  重新开启自动启动。解决「关闭后切个页签 ComfyUI 又被重连循环拉起」的困惑。 */
-  manualStop?: boolean;
   /** 一次自动启动以「明确的失败」收尾（保活进程已退出 / 拉起后进程未出现 /
    *  秒退等）：此后自动启动路径不再反复重试，直到用户手动点「启动 ComfyUI」
    *  或重新开启自动启动。解决「启动失败后一直自动重试」——重试只是把同一段
@@ -120,6 +98,28 @@ type LifecycleGlobal = {
   /** 最近一次自动启动失败的 detail：重试被拦时原样回报，让队列任务仍能看到
    *  「上次为什么失败」，而不是只收到一句泛泛的「已跳过」。 */
   autoStartFailureDetail?: string;
+  child?: ReturnType<typeof spawn>;
+  /** 当前 `child` 是否以 detached 方式拉起（= POSIX 下的进程组组长）。
+   *  keepAlive 走 `spawn({detached:true})`，bound 是普通 spawn —— 回收时
+   *  「能不能杀进程组」全看这个标记，判错不报错、只静默留孤儿（见
+   *  kill-process-tree 的实测对照）。 */
+  childDetached?: boolean;
+  /** 用户手动点了「关闭 ComfyUI」：此后自动启动路径（WS 重连 / 状态轮询触发的
+   *  ensureComfyUiReady）不再自动拉起，直到用户手动点「启动 ComfyUI」或
+   *  重新开启自动启动。解决「关闭后切个页签 ComfyUI 又被重连循环拉起」的困惑。 */
+  manualStop?: boolean;
+  /** 最近一次**探明**「没在跑」的时刻（毫秒）：结论可信度高于任何在途探测，
+   *  见 COMFY_NOT_RUNNING_HOLD_MS。 */
+  notRunningAt?: number;
+  starting?: Promise<EnsureResult>;
+  /** 最近一次「拉起流程进行中」的时刻（毫秒）：设置页状态行在窗口内不落
+   *  「未运行」。见 COMFY_STARTING_WINDOW_MS。 */
+  startingAt?: number;
+  /** 「关闭中」窗口的开始时刻（毫秒）：设置页在窗口内显示关闭进行态，
+   *  进程树确认退出后清零。 */
+  stoppingAt?: number;
+  /** 用户点了「关闭 ComfyUI」：启动等待循环见到它就中止，不再报「秒退」。 */
+  stopRequested?: boolean;
 };
 
 declare global {
@@ -190,8 +190,8 @@ export async function probeComfyUi(_timeoutMs = 2500): Promise<string | null> {
  *     「不是本应用启动的」而永远关不掉上一会话保活下来的 ComfyUI（ISSUE #100）。
  */
 export async function stopComfyUiProcess(): Promise<{
-  ok: boolean;
   detail: string;
+  ok: boolean;
 }> {
   // 无论有没有本应用拉起的子进程，都先落「用户要求停止」标记：若此刻正有
   // 一个启动等待在跑，等待循环会以「已手动关闭」收尾，而不是误报「进程秒退」。
@@ -551,12 +551,12 @@ async function computeComfyUiStatus(): Promise<ComfyUiStatus> {
  *    · 「进程在、端口未绑定」→ 这就是「真的还在启动」：窗口跟着续期（好让紧随
  *      其后的探针抖动不打回「未运行」），「未运行」标记不动。 */
 function deriveAndLatch(facts: {
-  starting: boolean;
-  stopping: boolean;
-  startingWindow: boolean;
   notRunningHeld: boolean;
-  snap: ComfyRuntimeSnapshot;
   probe: string | null;
+  snap: ComfyRuntimeSnapshot;
+  starting: boolean;
+  startingWindow: boolean;
+  stopping: boolean;
 }): ComfyUiStatus {
   const { snap, probe } = facts;
   const status = deriveComfyUiStatus({
@@ -601,9 +601,9 @@ function deriveAndLatch(facts: {
  */
 export async function ensureComfyUiReady(
   opts: {
-    timeoutMs?: number | null;
-    onLog?: (msg: string) => void;
     manual?: boolean;
+    onLog?: (msg: string) => void;
+    timeoutMs?: number | null;
   } = {},
 ): Promise<EnsureResult> {
   const note = (msg: string) => {
@@ -779,7 +779,7 @@ export async function ensureComfyUiReady(
  * 服务端命令（start / open / xdg-open），不需要动 Rust、不需重编壳。
  * 返回 ok=false 时 detail 给出可行动的提示。
  */
-export async function openComfyUi(): Promise<{ ok: boolean; detail: string }> {
+export async function openComfyUi(): Promise<{ detail: string; ok: boolean }> {
   const base = await probeComfyUi(2000);
   if (!base) {
     return {

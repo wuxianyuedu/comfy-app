@@ -56,9 +56,9 @@ import { decodeIncremental } from "~/lib/log/utf8-incremental";
 import { fireAndForget } from "~/lib/async-action";
 
 export type EnsureResult = {
-  ok: boolean;
   base: string | null;
   detail: string;
+  ok: boolean;
   /** 保活拉起的进程因端口被占而绑定失败（caller 据此转「等待已有实例就绪」）。 */
   portConflict?: boolean;
 };
@@ -92,7 +92,7 @@ export interface LaunchHost {
   /** 本地时间戳（保活重定向文件名用）。 */
   localTimestamp: () => string;
   /** 记下「本次会话开始了」（写 `log/services/comfyui-last-session.json`）。 */
-  markSessionStart: (info: { pid: number | null; mode: "keepAlive" | "bound" }) => void;
+  markSessionStart: (info: { mode: "keepAlive" | "bound"; pid: number | null }) => void;
   /** 记下「本次会话结束了」。应用自己也一起没了时这一步不会发生 ——
    *  那正是下次启动要反推的情况。 */
   markSessionEnd: (report: ComfyExitReport) => void;
@@ -104,21 +104,21 @@ export interface LaunchHost {
  *  启动路径（keepAlive / bound）与等待循环都不再闭包捕获 `ensureComfyUiReady`
  *  的局部状态 —— 这正是 ISSUE #570 第 1~3 项要拆掉的那 288 行 IIFE。 */
 type EnsureCtx = {
+  /** 最终启动参数（已含 --port / --enable-cors-header / 额外参数）。 */
+  args: Array<string>;
+  /** 生效的 CPU 档位（ISSUE #1959）。在拉起前解析一次、两条路径共用 ——
+   *  「哪一档」是用户设置，与「怎么起」无关，不该在两条路径里各判一遍。 */
+  cpuLimitMode: CpuLimitMode;
+  /** 硬超时绝对时间戳；null = 不设硬超时。 */
+  deadline: number | null;
   /** 记一条日志（logger + onLog + 运行日志文件）。 */
   note: (msg: string) => void;
   /** 解析出的启动计划（cmd / args / cwd / mainPy）。 */
   plan: { cmd: string; cwd: string; mainPy: string };
-  /** 最终启动参数（已含 --port / --enable-cors-header / 额外参数）。 */
-  args: Array<string>;
   /** 子进程环境（含 PYTHONIOENCODING / PYTHONUTF8 / 桌面实例 envVars）。 */
   stdioEnv: NodeJS.ProcessEnv;
-  /** 硬超时绝对时间戳；null = 不设硬超时。 */
-  deadline: number | null;
   /** 超时未就绪文案（**唯一一处**，两条路径共用）。 */
   timeoutDetail: string;
-  /** 生效的 CPU 档位（ISSUE #1959）。在拉起前解析一次、两条路径共用 ——
-   *  「哪一档」是用户设置，与「怎么起」无关，不该在两条路径里各判一遍。 */
-  cpuLimitMode: CpuLimitMode;
 };
 
 /**
@@ -133,9 +133,9 @@ type EnsureCtx = {
  * 时机被再调一次（见 `launchKeepAliveMode` 的 `isDead` 分支之外那条）。
  */
 function applyCpuLimitAsync(input: {
-  pid: number | null;
   mode: CpuLimitMode;
   note: (msg: string) => void;
+  pid: number | null;
 }): void {
   if (input.mode === "off") {
     return;
@@ -211,9 +211,9 @@ async function resolveAndApplyCpuLimitForKeepAlive(input: {
  */
 export async function runEnsureLaunch(input: {
   host: LaunchHost;
+  note: (msg: string) => void;
   settings: ReturnType<typeof getSettingsSync>;
   timeoutMs?: number | null;
-  note: (msg: string) => void;
 }): Promise<EnsureResult> {
   const { note, settings, host } = input;
   const plan = resolveComfyLaunchPlan(settings.comfyuiPath);
@@ -313,10 +313,10 @@ export async function runEnsureLaunch(input: {
  */
 export async function waitForExistingInstanceReady(input: {
   host: LaunchHost;
+  note: (msg: string) => void;
   settings: ReturnType<typeof getSettingsSync>;
   /** 硬超时时长（毫秒）；null = 不设硬超时（手动启动语义，与拉起路径一致）。 */
   timeoutMs: number | null;
-  note: (msg: string) => void;
 }): Promise<EnsureResult> {
   const { host, settings, note } = input;
   let goneStreak = 0;
@@ -461,7 +461,7 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
    * ComfyUI 的刷屏频率远高于本循环的 1s 节拍，所以这不是罕见情形。
    * 解码与留存交给 `~/lib/log/utf8-incremental`（纯函数、穷举切点验过）。 */
   const kaOffsets = { out: 0, err: 0 };
-  const kaCarry: { out: Uint8Array; err: Uint8Array } = {
+  const kaCarry: { err: Uint8Array; out: Uint8Array } = {
     out: new Uint8Array(0),
     err: new Uint8Array(0),
   };
@@ -616,11 +616,11 @@ let keepAliveExitWatcher: { stop: () => void } | null = null;
  */
 function startKeepAliveWatch(params: {
   host: LaunchHost;
-  mainPy: string;
+  isStopped: () => boolean;
   /** 崩溃尾部来源（本次拉起的重定向文件；接管场景给不出来时留空 ——
    *  监督照常工作，只是退出时带不出尾部）。 */
-  logs?: { out?: string; err?: string };
-  isStopped: () => boolean;
+  logs?: { err?: string; out?: string };
+  mainPy: string;
   note: (msg: string) => void;
 }): void {
   keepAliveExitWatcher?.stop();
@@ -650,7 +650,7 @@ function startKeepAliveWatch(params: {
  * 只能按 mtime 取最近被写入的那份（还在跑的实例还在写，基本就是它）。
  * 取不到就返回空对象 —— 退出时带不出尾部，但监督本身照常。
  */
-function findLatestKeepAliveLogs(): { out?: string; err?: string } {
+function findLatestKeepAliveLogs(): { err?: string; out?: string } {
   try {
     if (!fs.existsSync(SERVICES_LOG_DIR)) {
       return {};
@@ -728,8 +728,8 @@ export function pruneKeepAliveLogs(): void {
  */
 export function ensureKeepAliveWatchOnAdoption(input: {
   host: LaunchHost;
-  settings: ReturnType<typeof getSettingsSync>;
   note: (msg: string) => void;
+  settings: ReturnType<typeof getSettingsSync>;
 }): void {
   const { host, settings, note } = input;
   if (resolveLaunchPolicy(getExitPolicy().exitKillComfyui) !== "keepAlive") {

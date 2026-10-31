@@ -93,8 +93,8 @@ async function describeRunning(): Promise<ComfyRunningTask | null> {
 
 /** ComfyUI 自己的排队口径；不可达时 null（调用方降级成「离线」）。 */
 async function describeComfy(): Promise<{
-  running: number;
   pending: number;
+  running: number;
 } | null> {
   const raw = await getComfyQueue();
   if (raw === null) {

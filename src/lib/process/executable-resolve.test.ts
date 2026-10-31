@@ -69,10 +69,10 @@ function makeWindowsToolchain(
   dir: string,
   name: string,
   opts: {
-    shim?: boolean;
     cmd?: boolean;
-    ps1?: boolean;
     host?: boolean;
+    ps1?: boolean;
+    shim?: boolean;
   } = {},
 ) {
   if (opts.shim !== false) {

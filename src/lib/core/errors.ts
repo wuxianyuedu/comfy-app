@@ -108,7 +108,7 @@ export function normalizeError(err: unknown): AppError {
  * 故意**不包含** `stack`，避免泄露服务端实现细节。
  */
 export function toErrorEnvelope(err: AppError): {
-  error: { code: string; message: string; details?: unknown };
+  error: { code: string; details?: unknown; message: string };
 } {
   return {
     error: {

@@ -82,8 +82,8 @@ function serializeOne(a: unknown): string {
     typeof (/* SAFETY: 类型断言已复核 */ (a as { stack?: unknown }).stack) === "string"
   ) {
     const e = /* SAFETY: 类型断言已复核 */ a as {
-      name?: unknown;
       message?: unknown;
+      name?: unknown;
       stack: string;
     };
     const head = typeof e.message === "string" ? e.message : JSON.stringify(a);

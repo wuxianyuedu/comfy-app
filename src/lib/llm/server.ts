@@ -478,9 +478,9 @@ export async function completeLLMStructured<T>(
 export interface CompleteToolsResult {
   content: string;
   toolCalls: Array<{
+    function: { arguments: string; name: string };
     id: string;
     type: "function";
-    function: { name: string; arguments: string };
   }>;
 }
 
@@ -504,9 +504,9 @@ export async function completeLLMTools(
       message?: {
         content?: string | null;
         tool_calls?: Array<{
+          function?: { arguments?: string; name?: string };
           id?: string;
           type?: string;
-          function?: { name?: string; arguments?: string };
         }>;
       };
     }>;

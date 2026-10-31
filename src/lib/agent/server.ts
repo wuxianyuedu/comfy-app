@@ -56,8 +56,8 @@ async function callWithTools(
 ): Promise<{
   content: string;
   toolCalls: Array<{
+    function: { arguments: string; name: string };
     id: string;
-    function: { name: string; arguments: string };
   }>;
 }> {
   return completeLLMTools(cfg, messages, tools);

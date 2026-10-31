@@ -169,7 +169,7 @@ const PATH_FLAG_TOKENS = /* SAFETY: 类型断言已复核 */ [
  * 登记项是「文件 + 处数」的粒度（与条件性 skip 那套登记同型）：处数对不上就红 ——
  * 偷偷多一处没登记会红，登记了却已经修好也要红（豁免是负债，不是赦免名单）。
  */
-const EXEMPT: Array<{ file: string; count: number; why: string }> = [
+const EXEMPT: Array<{ count: number; file: string; why: string }> = [
   {
     file: "scripts/check-known-failed-stale.mjs",
     count: 1,

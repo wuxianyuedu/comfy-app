@@ -12,12 +12,12 @@ import { type useWorkflowSaveMutation } from "./use-workflow-save";
 import type { WorkflowDetail } from "../../workflow-types";
 
 export function useIoModesCommit(params: {
-  ioApi: ReturnType<typeof useIOEditApi>;
   /** 顶层 hook 调用点 detail 尚可为 null；回调只会由预览面板触发
    *  （面板仅在 detail 就绪后渲染），为 null 时按空模式集处理。 */
   detail: WorkflowDetail | null;
-  setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
+  ioApi: ReturnType<typeof useIOEditApi>;
   savePatch: ReturnType<typeof useWorkflowSaveMutation>;
+  setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
   workflowId: string;
 }) {
   const { ioApi, detail, setDetail, savePatch, workflowId } = params;

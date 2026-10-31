@@ -15,28 +15,24 @@ import { OriginSelect } from "./LogPanelOriginSelect";
 import { WidePanelToggle, type WidePanel } from "~/components/ui/wide-panel";
 import { copyFailureText } from "~/components/ui/use-copy-feedback";
 import { FILTER_SELECTED_STYLES } from "./log-row-style";
-import type {
-  LogLevelCounts,
-  LogOriginCounts,
-  LogOriginFilter,
-} from "./log-types";
+import type { LogLevelCounts, LogOriginCounts, LogOriginFilter } from "./log-types";
 
 export function LogPanelHeader(input: {
-  originCounts: LogLevelCounts;
-  countsByOrigin: LogOriginCounts;
-  origin: LogOriginFilter | null;
-  setOrigin: (value: LogOriginFilter) => void;
-  wrap: boolean;
-  setWrap: (updater: (prev: boolean) => boolean) => void;
-  copyFailed: boolean;
-  copyDone: boolean;
-  copyAllAction: () => void;
-  scopeLabel: string;
-  total: number;
-  download: () => void;
   clear: () => void;
+  copyAllAction: () => void;
+  copyDone: boolean;
+  copyFailed: boolean;
+  countsByOrigin: LogOriginCounts;
+  download: () => void;
+  origin: LogOriginFilter | null;
+  originCounts: LogLevelCounts;
   panel: WidePanel;
+  scopeLabel: string;
   setIsOpen: (open: boolean) => void;
+  setOrigin: (value: LogOriginFilter) => void;
+  setWrap: (updater: (prev: boolean) => boolean) => void;
+  total: number;
+  wrap: boolean;
 }) {
   const {
     originCounts,
@@ -136,9 +132,7 @@ export function LogPanelHeader(input: {
               onClick={copyAllAction}
               aria-label="复制当前筛选的全部日志"
               className={`rounded-md ${
-                copyFailed
-                  ? "text-danger-strong"
-                  : "text-ink-muted hover:bg-subtle hover:text-ink"
+                copyFailed ? "text-danger-strong" : "text-ink-muted hover:bg-subtle hover:text-ink"
               }`}
             >
               {copyFailed ? (
@@ -147,20 +141,13 @@ export function LogPanelHeader(input: {
                 /* 对勾替换掉复制图标是「按下去了」的唯一可见变化 —— 闪一下
                    （`value-tick`）把它从「图标不知什么时候换的」变成一次
                    明确的反馈；`key` 只在两态之间切换，值没变不重播。 */
-                <Check
-                  key="done"
-                  data-icon="inline-start"
-                  className="value-tick"
-                  size={16}
-                />
+                <Check key="done" data-icon="inline-start" className="value-tick" size={16} />
               ) : (
                 <Copy key="idle" data-icon="inline-start" size={16} />
               )}
             </Button>
           </Hint>
-          <Hint
-            label={`下载为文本文件（当前筛选的全部日志：${scopeLabel} · ${total} 条）`}
-          >
+          <Hint label={`下载为文本文件（当前筛选的全部日志：${scopeLabel} · ${total} 条）`}>
             <Button
               variant="ghost"
               size="icon"
@@ -172,11 +159,7 @@ export function LogPanelHeader(input: {
             </Button>
           </Hint>
           {/* 服务端落盘版导出（见 SaveExportButton）。 */}
-          <SaveExportButton
-            label={origin ?? "all"}
-            scopeLabel={scopeLabel}
-            total={total}
-          />
+          <SaveExportButton label={origin ?? "all"} scopeLabel={scopeLabel} total={total} />
           {/* 整份现场打包（见 DiagnosticsButton）：与上面那个分工不同 —— 它带
               走的是面板上看不到的环境信息与崩溃残留。 */}
           <DiagnosticsButton />

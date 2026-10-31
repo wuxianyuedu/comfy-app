@@ -82,8 +82,8 @@ beforeEach(() => {
 async function seedProduction(
   id: string,
   over: Partial<{
-    scriptMarkdown: string;
     characters: Array<unknown>;
+    scriptMarkdown: string;
     shots: Array<unknown>;
   }> = {},
 ) {

@@ -19,7 +19,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const { dirEntries, fileStats, disk, userMock } = vi.hoisted(() => ({
   dirEntries: new Map<string, { names?: Array<string>; subdirs?: Array<string> }>(),
-  fileStats: new Map<string, { size: number; mtime: Date }>(),
+  fileStats: new Map<string, { mtime: Date; size: number }>(),
   disk: {
     reads: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
     mkdir: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
@@ -110,12 +110,12 @@ function urlOf(query: string): string {
 
 /** multipart 上传体（形状与浏览器送上来的那份一致）。 */
 function uploadForm(init: {
-  type?: string;
-  name?: string;
-  sizeOverMax?: boolean;
-  projectId?: string;
   folder?: string;
+  name?: string;
+  projectId?: string;
   shared?: string;
+  sizeOverMax?: boolean;
+  type?: string;
 }): FormData {
   const file = new File(["abcd"], init.name ?? "note.txt", {
     type: init.type ?? "text/plain",
@@ -197,8 +197,8 @@ describe("GET /api/materials —— 读侧归属", () => {
     const res = await GET(reqOf(urlOf("?scope=cross&folder=ref")));
     expect(res.status).toBe(200);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      items: Array<{ scope: string }>;
       folders: Array<unknown>;
+      items: Array<{ scope: string }>;
     };
     // 只剩共享区那一份（它是末尾统一补的，不依赖能不能枚举到目录）
     expect(body.items.map((i) => i.scope)).toEqual([SHARED_SCOPE]);

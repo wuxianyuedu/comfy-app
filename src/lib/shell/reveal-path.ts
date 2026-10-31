@@ -119,7 +119,7 @@ export function resolveExistingPath(
  *  `isDir` 决定「直接打开进入（目录）」还是「选中（文件）」——
  *  对目录若也用 `/select`，窗口会停在父层并选中该目录，用户看到的是
  *  上一层而非 `target` 里面的内容（实测即「打开了但没进到我点的文件夹」）。 */
-function revealCommand(target: string, isDir: boolean): { cmd: string; args: Array<string> } {
+function revealCommand(target: string, isDir: boolean): { args: Array<string>; cmd: string } {
   const platform = process.platform;
   if (platform === "win32") {
     if (isDir) {

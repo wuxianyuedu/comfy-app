@@ -57,8 +57,8 @@ export interface LaunchFallback {
   fallback: true;
   /** 诊断出口（壳写下的路径，页面不自己拼）——见 idleFallback 的说明。 */
   diagnostics: {
-    projectRoot: string;
     launchLog: string;
+    projectRoot: string;
     shellLog: string;
     statusFile: string;
   };
@@ -158,8 +158,8 @@ export function orchestratingFallback(root = ""): LaunchFallback {
  * 面板也照它去取。
  */
 export function fallbackDiagnostics(root: string): {
-  projectRoot: string;
   launchLog: string;
+  projectRoot: string;
   shellLog: string;
   statusFile: string;
 } {

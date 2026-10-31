@@ -20,11 +20,11 @@ export function IndexDot({
   size = "sm",
   className,
 }: {
+  className?: string;
   /** 圆里的内容：序号本身（调用点传 `i + 1` 或 `shot.index`）。 */
   index: number | string;
   /** `sm` = 24px（五处里的四处），`lg` = 28px（`FinalComposer` 那一处）。 */
   size?: "sm" | "lg";
-  className?: string;
 }) {
   return (
     <span

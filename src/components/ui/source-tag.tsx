@@ -32,13 +32,7 @@ import { Badge } from "~/components/ui/badge";
  */
 const OUTLINE_RESET = "border-transparent";
 
-export function SourceTag({
-  source,
-  local,
-}: {
-  source?: string | null;
-  local?: boolean | null;
-}) {
+export function SourceTag({ source, local }: { local?: boolean | null; source?: string | null }) {
   const isLocal = local ?? source === "local";
   if (isLocal) {
     return (

@@ -54,11 +54,11 @@ export function customNodesManifestStamp(root: string = process.cwd()): string |
 
 /** 按相读取的结果：三相互斥，调用方据此给出不同的话与状态码。 */
 export type CustomNodesManifestRead =
-  | { kind: "ok"; text: string; stamp: string | null }
+  | { kind: "ok"; stamp: string | null; text: string }
   /** 文件不存在 —— 「还没有解析过」，是正常状态不是故障。 */
   | { kind: "missing" }
   /** 文件在但读不出来（权限 / 竞态删除 / IO 错）—— 真故障。 */
-  | { kind: "unreadable"; detail: string };
+  | { detail: string; kind: "unreadable" };
 
 /**
  * 读清单原文（不解析：谁需要结构化字段谁自己 `JSON.parse`，摘要端点要的只是其中一角）。

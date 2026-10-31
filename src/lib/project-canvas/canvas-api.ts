@@ -19,8 +19,8 @@ import type { GenerateInput } from "~/lib/workflow/workflow-generate-input";
 
 /** 单次 /api/upload 的结果：成功给出文件名，失败给出可读原因与可否重试。 */
 type UploadAttempt =
-  | { ok: true; name: string }
-  | { ok: false; retryable: boolean; message: string };
+  | { name: string; ok: true }
+  | { message: string; ok: false; retryable: boolean };
 
 /** 单次 POST /api/upload；不成功时返回可读原因与是否值得重试。 */
 async function postUpload(file: File): Promise<UploadAttempt> {

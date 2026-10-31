@@ -20,8 +20,8 @@
 export type Listener = () => void;
 
 type BusyGlobal = {
-  state?: { busy: boolean; since: number };
   listeners?: Set<Listener>;
+  state?: { busy: boolean; since: number };
 };
 
 declare global {

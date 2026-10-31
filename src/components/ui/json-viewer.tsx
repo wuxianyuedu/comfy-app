@@ -206,7 +206,7 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
     },
   });
 
-  type HitNode = { node: Text; count: number };
+  type HitNode = { count: number; node: Text };
   const targets: Array<HitNode> = [];
   let cur = walker.nextNode();
   while (cur) {

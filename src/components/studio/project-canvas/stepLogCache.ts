@@ -175,7 +175,7 @@ export function setStepLogValidationErrors(
  * 而不是逼用户去认一串被截断的 14 字符 id。 */
 export function patchStepLogMeta(
   taskId: string | null | undefined,
-  meta: { workflowName?: string; status?: string; nodeId?: string },
+  meta: { nodeId?: string; status?: string; workflowName?: string },
 ): void {
   if (!taskId) {
     return;

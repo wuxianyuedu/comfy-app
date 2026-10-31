@@ -78,22 +78,22 @@ export function ProgressBar({
   minVisible,
   ariaLabel,
 }: {
-  /** 0..100；**`null` = 不确定态**（总数未知 / 算不出来）。 */
-  value: number | null;
-  /** 左侧文案。给了才渲染标题行（右侧同时给百分比，`showValue` 控制）。 */
-  label?: ReactNode;
-  /** 是否在标题行右侧显示百分比。不确定态恒不显示。 */
-  showValue?: boolean;
-  className?: string;
-  trackClassName?: string;
-  fillClassName?: string;
-  /** 可见下限宽度（%）：`0 < pct < minVisible` 时抬到 minVisible，0 仍为 0。 */
-  minVisible?: number;
   /**
    * 可访问名。只在**条上没有可见文字**时给（如分段健康度：一根细条代表一段
    * 阶段，字都在别处）。可见文案 `label` 不构成命名关系，故两者不互相替代。
    */
   ariaLabel?: string;
+  className?: string;
+  fillClassName?: string;
+  /** 左侧文案。给了才渲染标题行（右侧同时给百分比，`showValue` 控制）。 */
+  label?: ReactNode;
+  /** 可见下限宽度（%）：`0 < pct < minVisible` 时抬到 minVisible，0 仍为 0。 */
+  minVisible?: number;
+  /** 是否在标题行右侧显示百分比。不确定态恒不显示。 */
+  showValue?: boolean;
+  trackClassName?: string;
+  /** 0..100；**`null` = 不确定态**（总数未知 / 算不出来）。 */
+  value: number | null;
 }) {
   const indeterminate = value === null;
   /* 百分比**先夹取再取整**：接口 / SSE 给的数不可信（`-1` / `120`），
@@ -121,17 +121,12 @@ export function ProgressBar({
         <div className="mb-1 flex items-center justify-between gap-2 text-xs">
           <span className="text-ink-muted truncate">{label}</span>
           {showValue && !indeterminate && (
-            <span className="text-primary shrink-0 font-medium tabular-nums">
-              {pct}%
-            </span>
+            <span className="text-primary shrink-0 font-medium tabular-nums">{pct}%</span>
           )}
         </div>
       )}
       <ProgressTrack
-        className={cn(
-          "bg-subtle h-1.5 w-full overflow-hidden rounded-full",
-          trackClassName,
-        )}
+        className={cn("bg-subtle h-1.5 w-full overflow-hidden rounded-full", trackClassName)}
       >
         {indeterminate ? (
           <div
@@ -142,10 +137,7 @@ export function ProgressBar({
         ) : (
           <div
             data-slot="progress-bar-fill"
-            className={cn(
-              "bg-primary h-full rounded-full transition-transform",
-              fillClassName,
-            )}
+            className={cn("bg-primary h-full rounded-full transition-transform", fillClassName)}
             style={{ transform: `translateX(${width - 100}%)` }}
           />
         )}

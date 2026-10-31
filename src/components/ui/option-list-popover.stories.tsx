@@ -24,7 +24,7 @@ const ITEMS: Array<OptionListItem> = [
 ];
 
 /** chip 触发器：真机上由调用处给外观（配色 / 尺寸 / 圆角），这里照画布口径给。 */
-function ChipTrigger({ label, count }: { label: string; count: number }) {
+function ChipTrigger({ label, count }: { count: number; label: string }) {
   return (
     <span className="border-border-strong bg-canvas-deep flex items-center gap-1.5 rounded-lg border px-2 py-0.5">
       <span className="text-ink-muted text-[10px]">{label}</span>

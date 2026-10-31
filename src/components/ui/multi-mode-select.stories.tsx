@@ -45,10 +45,10 @@ function Demo({
   disabled,
   hideExtraBadge,
 }: {
-  initialModes: Array<string>;
-  initialDefault: string;
   disabled?: boolean;
   hideExtraBadge?: boolean;
+  initialDefault: string;
+  initialModes: Array<string>;
 }) {
   const [modes, setModes] = useState(initialModes);
   const [defaultMode, setDefaultMode] = useState(initialDefault);

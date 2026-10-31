@@ -28,11 +28,11 @@ export function StyleSwitcher({
   options,
   narrow,
 }: {
-  style: GroupStyle;
-  onChange: (s: GroupStyle) => void;
-  options: Array<{ value: GroupStyle; label: string }>;
   /** 画布 / 库内的紧凑版式：下拉按内容收窄，不再拽满整行。 */
   narrow?: boolean;
+  onChange: (s: GroupStyle) => void;
+  options: Array<{ label: string; value: GroupStyle }>;
+  style: GroupStyle;
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -52,7 +52,7 @@ export function StyleSwitcher({
   );
 }
 
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+export function Field({ label, children }: { children: React.ReactNode; label: string }) {
   return (
     <div className="flex flex-col gap-1">
       <span className="text-ink-muted text-3xs">{label}</span>

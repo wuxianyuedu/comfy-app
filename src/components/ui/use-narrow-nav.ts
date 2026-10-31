@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 import { NAV_AUTO_COLLAPSE_MAX_PX, NAV_AUTO_COLLAPSE_QUERY } from "~/lib/layout-budget";
 
 /** 窄窗判据 + 「跨越过阈值的次数」。 */
-export type NarrowNavState = { narrow: boolean; crossings: number };
+export type NarrowNavState = { crossings: number; narrow: boolean };
 
 /* 已建立的订阅者。通知不发给自己，而是发给这张表 —— 于是「补一次通知」不再
    绑在某一次订阅的生命周期上（见下方 `scheduleInitialSync` 的说明）。 */

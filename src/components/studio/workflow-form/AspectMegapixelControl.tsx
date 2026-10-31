@@ -65,7 +65,7 @@ import { RequiredChips, SizeTableFooter, type AspectMegaGroup } from "./Dimensio
  *  「宽:高」解析比例，解析不出按 1:1（只影响图标的形状，不影响写回的值）。 */
 function buildAspectOptions(
   options: Array<string> | undefined,
-): Array<{ value: string; label: string; ratio: number }> {
+): Array<{ label: string; ratio: number; value: string }> {
   const source =
     Array.isArray(options) && options.length > 0
       ? options
@@ -82,22 +82,22 @@ function buildAspectOptions(
 
 /** 「像素」一栏的档位：分辨率（查场景表换算）与百万像素（直接给值）两行。 */
 function buildClarityOptions(input: {
-  scene: ReturnType<typeof sceneFromMode>;
   activeRatio: number;
-  table: ReturnType<typeof useSizePresetTable>["table"];
   currentMultiple: AlignMultiple;
+  scene: ReturnType<typeof sceneFromMode>;
+  table: ReturnType<typeof useSizePresetTable>["table"];
 }): Array<{
   label: string;
-  subgroup: string;
   megapixels: number;
   multiple: AlignMultiple;
+  subgroup: string;
 }> {
   const { scene, activeRatio, table, currentMultiple } = input;
   const rows: Array<{
     label: string;
-    subgroup: string;
     megapixels: number;
     multiple: AlignMultiple;
+    subgroup: string;
   }> = [];
   for (const tier of RESOLUTION_TIERS) {
     const size = resolutionDims(scene, activeRatio, tier, table);
@@ -122,9 +122,9 @@ function buildClarityOptions(input: {
 /** 倍数段候选：优先工作流自己的 options，否则 8/16/32/64；当前值不在候选里
  *  时动态补上并排序（自由倍数也要在列表里可见、可再次选中）。 */
 function buildMultipleOptions(input: {
-  multiple: EnrichedWidget | undefined;
   currentMultiple: AlignMultiple;
-}): Array<{ value: number; label: string }> {
+  multiple: EnrichedWidget | undefined;
+}): Array<{ label: string; value: number }> {
   const { multiple, currentMultiple } = input;
   const source =
     multiple && Array.isArray(multiple.options) && multiple.options.length > 0
@@ -149,15 +149,15 @@ export function AspectMegapixelControl({
   visibilityMode,
   onVisibilityChange,
 }: {
-  group: AspectMegaGroup;
-  values: Record<string, unknown>;
-  setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
+  group: AspectMegaGroup;
+  mode?: string | null;
   narrow?: boolean;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
-  mode?: string | null;
-  visibilityMode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  setMany: (patch: Record<string, unknown>) => void;
+  values: Record<string, unknown>;
+  visibilityMode?: string | null;
 }) {
   const { aspect, megapixels, multiple } = group;
 

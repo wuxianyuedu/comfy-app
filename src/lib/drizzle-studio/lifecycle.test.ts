@@ -160,8 +160,8 @@ describe("退出记录的归属（ISSUE #2435）", () => {
   function fakeChild(pid: number) {
     const child = /* SAFETY: 类型断言已复核 */ new EventEmitter() as EventEmitter & {
       pid: number;
-      stdout: EventEmitter;
       stderr: EventEmitter;
+      stdout: EventEmitter;
     };
     child.pid = pid;
     child.stdout = new EventEmitter();

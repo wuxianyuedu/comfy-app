@@ -67,7 +67,7 @@ async function persistAndPlan(
   userId: string,
   projectId: string,
   run: ProductionRun,
-): Promise<{ run: ProductionRun; action: RunAction }> {
+): Promise<{ action: RunAction; run: ProductionRun }> {
   const saved = await productionRepository.updateRun(userId, projectId, run);
   if (!saved) {
     throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });

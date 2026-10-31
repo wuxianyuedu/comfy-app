@@ -671,8 +671,8 @@ export function buildEdges(
 export function buildInputSources(
   inputs: Record<string, unknown> | undefined,
   nodesById: Record<string, ComfyGraphNode>,
-): Record<string, { id: string; title: string; slot: number; classType?: string }> {
-  const out: Record<string, { id: string; title: string; slot: number; classType?: string }> = {};
+): Record<string, { classType?: string; id: string; slot: number; title: string }> {
+  const out: Record<string, { classType?: string; id: string; slot: number; title: string }> = {};
   if (!inputs) {
     return out;
   }
@@ -704,10 +704,10 @@ export function buildConnectedOutputs(
   rawMetaById: Record<
     string,
     {
-      widgets_values: Array<unknown>;
-      outputs: Array<RawOutputMeta>;
       flags?: Record<string, unknown>;
+      outputs: Array<RawOutputMeta>;
       properties?: Record<string, unknown>;
+      widgets_values: Array<unknown>;
     }
   >,
   outSlotNameById?: Record<string, Array<string>>,
@@ -760,9 +760,9 @@ export function inferSourceOutNames(
   rawMetaById: Record<
     string,
     {
-      widgets_values: Array<unknown>;
-      outputs: Array<RawOutputMeta>;
       flags?: Record<string, unknown>;
+      outputs: Array<RawOutputMeta>;
+      widgets_values: Array<unknown>;
     }
   >,
 ): Record<string, Array<string>> {

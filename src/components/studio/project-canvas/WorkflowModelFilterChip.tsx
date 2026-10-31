@@ -7,7 +7,7 @@ import { OptionListPopover } from "~/components/ui/option-list-popover";
 
 interface WorkflowModelFilterChipProps {
   value: string;
-  tags: Array<{ id: string; name: string; count: number }>;
+  tags: Array<{ count: number; id: string; name: string }>;
   onChange: (v: string) => void;
 }
 

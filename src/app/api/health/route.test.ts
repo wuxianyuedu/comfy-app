@@ -61,9 +61,9 @@ describe("GET /api/health", () => {
     const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(503);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      status: string;
       db: string;
       hint: string;
+      status: string;
     };
     expect(body.db).toBe("empty");
     expect(body.status).toBe("error");

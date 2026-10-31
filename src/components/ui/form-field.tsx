@@ -89,21 +89,6 @@ export function FormField({
   labelClassName,
   errorClassName,
 }: {
-  /** 标签文案。给 `null` 时不渲染标签行（但**要**保留 `aria-label` 就自己加）。 */
-  label: ReactNode;
-  /**
-   * 控件的 `id`。不给则由 `useId` 生成 —— 生成的那份只在**没有** `htmlFor`
-   * 关联价值时才可接受（如标签行只是装饰），多数调用处应显式给一个稳定 id
-   * （E2E 与 Playwright 也按它定位）。
-   */
-  id?: string;
-  /** 字段级错误文案。给了才渲染错误行并自动上 ARIA。 */
-  error?: string | null;
-  /** 常驻说明（`<p>` 挂在控件下方），位于错误行**之上** —— 错误更靠下、更靠
-   *  近下一次交互，符合「先解释、再报错」的阅读顺序。 */
-  hint?: ReactNode;
-  /** 是否必填：标签右侧给一个 `*`（无错误时的静态标记）。 */
-  required?: boolean;
   /**
    * 控件。给函数时收到 `{ id, aria-invalid, aria-describedby }`。
    * **可省略** —— 行编辑器这类「标签 + 说明文字，控件在别处」的落点
@@ -111,8 +96,23 @@ export function FormField({
    */
   children?: ReactNode | ((a11y: FormFieldA11y) => ReactNode);
   className?: string;
-  labelClassName?: string;
+  /** 字段级错误文案。给了才渲染错误行并自动上 ARIA。 */
+  error?: string | null;
   errorClassName?: string;
+  /** 常驻说明（`<p>` 挂在控件下方），位于错误行**之上** —— 错误更靠下、更靠
+   *  近下一次交互，符合「先解释、再报错」的阅读顺序。 */
+  hint?: ReactNode;
+  /**
+   * 控件的 `id`。不给则由 `useId` 生成 —— 生成的那份只在**没有** `htmlFor`
+   * 关联价值时才可接受（如标签行只是装饰），多数调用处应显式给一个稳定 id
+   * （E2E 与 Playwright 也按它定位）。
+   */
+  id?: string;
+  /** 标签文案。给 `null` 时不渲染标签行（但**要**保留 `aria-label` 就自己加）。 */
+  label: ReactNode;
+  labelClassName?: string;
+  /** 是否必填：标签右侧给一个 `*`（无错误时的静态标记）。 */
+  required?: boolean;
 }) {
   /* `useId` 不能有条件调用，所以无条件取一次；`id` 给了就用给的。
    * `useId` 的产物含 `:`（React 19 起是 `«r0»` 之类），直接当 DOM id 是合法的，

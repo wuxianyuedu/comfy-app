@@ -96,7 +96,7 @@ export interface SizeSpecValue {
 /** 一次封装的结果。 */
 export interface EncapsulatedInputs {
   /** 下发给 generate.generate 的 workflowInputs（**只含作者连过线的口**）。 */
-  workflowInputs: Array<{ nodeId: string; name: string; value: unknown }>;
+  workflowInputs: Array<{ name: string; nodeId: string; value: unknown }>;
   /** 用户给了值、但落不到任何端口的口（未连线 / 作者显式断开 / 端口已消失）。
    *  以前这里会按名字猜一个端口兜住，现在如实上报 —— 没连线就是「未配置」。 */
   unmatched: Array<string>;
@@ -184,11 +184,11 @@ function durationValueFor(args: {
  *  首帧（first-frame）、尾帧（last-frame）、参考图（reference-image，可带序号）、
  *  时长（duration）—— 这些键与作者连线的键空间一致，映射层据此查落点。 */
 function toContractValues(args: {
+  entries: ReadonlyArray<{ cls: string; id: string }>;
   io: WorkflowIOMap;
   mode: string | null;
-  values: WorkshopExposedValues;
   resolved: Record<string, string | null>;
-  entries: ReadonlyArray<{ id: string; cls: string }>;
+  values: WorkshopExposedValues;
 }): Record<string, unknown> {
   const { io, mode, values, resolved, entries } = args;
   const out: Record<string, unknown> = {};
@@ -431,11 +431,11 @@ export function pruneEmptyExposedValues(values: WorkshopExposedValues): Workshop
  *      `unmatched`，不会静默丢）。有契约注册表的调用方必须传。
  */
 export function buildEncapsulatedInputs(args: {
-  io: WorkflowIOMap | null | undefined;
-  paramMap: unknown;
-  mode: string | null | undefined;
-  values: WorkshopExposedValues;
   contractIds?: ReadonlyArray<string>;
+  io: WorkflowIOMap | null | undefined;
+  mode: string | null | undefined;
+  paramMap: unknown;
+  values: WorkshopExposedValues;
 }): EncapsulatedInputs {
   const { io, paramMap, mode, values, contractIds } = args;
   if (!io || typeof io !== "object") {

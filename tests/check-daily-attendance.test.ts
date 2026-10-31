@@ -356,9 +356,9 @@ describe("daily-attendance：命令行那一跳", () => {
  * 列表项（`createTime` 允许缺 —— 有一条用例判的就是「认不出时刻」这一格）。
  */
 type PageRow = {
-  sn: string;
-  event: string;
   createTime?: string;
+  event: string;
+  sn: string;
   status: string;
 };
 

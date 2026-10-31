@@ -153,8 +153,8 @@ export function useCopyFeedback({
    * effect 在**提交后**跑，而 `copy` 只可能由事件触发（那是提交之后的事），
    * 所以这一帧的延迟对调用点是透明的。 */
   const handlersRef = useRef<{
-    success?: CopyFeedback;
     failure?: CopyFeedback | "silent";
+    success?: CopyFeedback;
   }>({ success: onSuccess, failure: onFailure });
   useEffect(() => {
     handlersRef.current = { success: onSuccess, failure: onFailure };

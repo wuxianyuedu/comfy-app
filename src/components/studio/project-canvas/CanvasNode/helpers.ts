@@ -27,11 +27,11 @@ function toComfySeedMode(mode: string): string {
 export function seedModeOverrides(
   io: WorkflowIOMap | null,
   seedModes: Record<string, string> | undefined,
-): Array<{ nodeId: string; name: string; value: string }> {
+): Array<{ name: string; nodeId: string; value: string }> {
   if (!io || !seedModes) {
     return [];
   }
-  const out: Array<{ nodeId: string; name: string; value: string }> = [];
+  const out: Array<{ name: string; nodeId: string; value: string }> = [];
   for (const [ioKey, mode] of Object.entries(seedModes)) {
     const entry = io[ioKey];
     if (!entry?.nodeId || !mode) {

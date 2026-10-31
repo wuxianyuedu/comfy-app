@@ -389,9 +389,9 @@ export function resetComfyStatsStoreForTest(): void {
  *  导出成函数而不是常量：阶段是**运行中**变的，常量只能表达「创建时那一档」，
  *  而那正是本次要修掉的东西。 */
 export function getComfyLivenessForTest(): {
-  phase: ReturnType<typeof classifyLivenessPhase>;
-  intervalMs: number;
   crashed: boolean;
+  intervalMs: number;
+  phase: ReturnType<typeof classifyLivenessPhase>;
 } {
   return { phase: currentPhase(), intervalMs: nextIntervalMs(), crashed };
 }

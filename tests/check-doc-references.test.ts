@@ -50,12 +50,12 @@ function gateRefsSource(): string {
 
 /** 把脚本真正引入的内存态 FACTS 拿来做结构断言（与脚本同源，见 doc-facts.cjs）。 */
 type Fact = {
+  extract: () => unknown;
   key: string;
   kind: string;
-  placeholder?: string;
   onlyDocs?: Array<string>;
   otherDocs?: Array<string>;
-  extract: () => unknown;
+  placeholder?: string;
 };
 
 async function loadFacts(): Promise<Array<Fact>> {
@@ -77,8 +77,8 @@ function runCheck(): { code: number; output: string } {
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: typeof e.status === "number" ? e.status : 1,
@@ -297,9 +297,9 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
    * 过期端口也没人报错——「全量纳管」只是人工承诺。 */
 
   type ScopeMod = {
-    SCOPED_DOCS: Array<string>;
     SCOPED_DOC_DIRS: Array<string>;
     SCOPED_DOC_EXEMPTIONS: Record<string, string>;
+    SCOPED_DOCS: Array<string>;
   };
 
   async function loadScope(): Promise<ScopeMod> {
@@ -1089,8 +1089,8 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
     } catch (err) {
       const e = /* SAFETY: 类型断言已复核 */ err as {
         status?: number;
-        stdout?: string;
         stderr?: string;
+        stdout?: string;
       };
       return {
         code: typeof e.status === "number" ? e.status : 1,
@@ -1211,8 +1211,8 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
     } catch (err) {
       const e = /* SAFETY: 类型断言已复核 */ err as {
         status?: number;
-        stdout?: string;
         stderr?: string;
+        stdout?: string;
       };
       return {
         code: typeof e.status === "number" ? e.status : 1,

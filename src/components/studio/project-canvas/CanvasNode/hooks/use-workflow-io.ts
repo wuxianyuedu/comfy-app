@@ -22,15 +22,15 @@ import { vanillaApi } from "~/trpc/vanilla";
  *  刻意不做 TTL 缓存:新建工作流后,后挂载的节点必须看到最新列表。 */
 type WfListItem = {
   id: string;
-  name: string;
-  taskType?: string;
-  sourcePath?: string | null;
   modelTags?: Array<string>;
+  name: string;
+  sourcePath?: string | null;
+  taskType?: string;
 };
-type TagLibItem = { id: string; name: string; count: number };
+type TagLibItem = { count: number; id: string; name: string };
 let sharedListsInflight: Promise<{
-  wfList: Array<WfListItem>;
   modelTagLib: Array<TagLibItem>;
+  wfList: Array<WfListItem>;
 }> | null = null;
 
 export interface UseWorkflowIoArgs {
@@ -61,7 +61,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
      *  模块级 in-flight 去重让并发挂载只发 2 次,且不做 TTL 缓存(不会把
      *  新建工作流的变更挡在过期列表外)。 */
     let alive = true;
-    const apply = (data: { wfList: Array<WfListItem>; modelTagLib: Array<TagLibItem> }) => {
+    const apply = (data: { modelTagLib: Array<TagLibItem>; wfList: Array<WfListItem> }) => {
       if (!alive) {
         return;
       }
@@ -77,7 +77,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
       });
     } else {
       const p = (async () => {
-        const data: { wfList: Array<WfListItem>; modelTagLib: Array<TagLibItem> } = {
+        const data: { modelTagLib: Array<TagLibItem>; wfList: Array<WfListItem> } = {
           wfList: [],
           modelTagLib: [],
         };

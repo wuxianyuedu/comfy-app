@@ -36,13 +36,13 @@ export function StatusDot({
   pulse = false,
   className,
 }: {
-  /** 状态语义（见组件注释的对照表）。 */
-  state: StatusDotState;
-  /** 尺寸类，默认 `size-2`（状态行）；行内小点传 `size-1.5`。 */
-  sizeClass?: string;
+  className?: string;
   /** 持续进行中（如日志「跟随中」）时加脉冲动画。 */
   pulse?: boolean;
-  className?: string;
+  /** 尺寸类，默认 `size-2`（状态行）；行内小点传 `size-1.5`。 */
+  sizeClass?: string;
+  /** 状态语义（见组件注释的对照表）。 */
+  state: StatusDotState;
 }) {
   return (
     <span

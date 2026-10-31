@@ -43,12 +43,12 @@ export interface ImageGenerationPanelProps {
   patch: (p: Partial<CanvasNodeData>) => void;
   wfList: Array<{
     id: string;
-    name: string;
-    taskType?: string | null;
-    sourcePath?: string | null;
     modelTags?: Array<string>;
+    name: string;
+    sourcePath?: string | null;
+    taskType?: string | null;
   }>;
-  modelTagLib: Array<{ id: string; name: string; count: number }>;
+  modelTagLib: Array<{ count: number; id: string; name: string }>;
   wfIO: WorkflowIOMap | null;
   wfIOLoading: boolean;
   /** 工作流列表是否仍在加载。为 true 时工作流/模型选择区显示"加载中"而非空态。 */
@@ -173,9 +173,9 @@ export function ImageGenerationPanel({
    * 此前，老的 inferWorkflowTypeFromGraph 把 WanVideoSampler+LoadImage
    * 误判为 T2I 落库；name 现在能正确识别为 I2V，必须以 name 为准避免泄漏。 */
   const effectiveTaskType = (w: {
-    taskType?: string | null;
-    name?: string | null;
     id?: string | null;
+    name?: string | null;
+    taskType?: string | null;
   }): string => {
     const fromName = inferTypeByName(w.name ?? "");
     if (fromName) {

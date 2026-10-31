@@ -48,12 +48,12 @@ export interface HistoryListController {
   /** 各状态计数，key 为 FilterKey 或任务 status。 */
   counts: Record<string, number>;
   /** 当前可见的日期分组（已按 displayCount 裁剪）。 */
-  visibleGroups: Array<{ key: string; items: Array<TaskItem> }>;
+  visibleGroups: Array<{ items: Array<TaskItem>; key: string }>;
   visibleTotal: number;
   filteredCount: number;
   canLoadMore: boolean;
   /** 空态文案（区分「一条都没有」与「当前筛选下没有」）。 */
-  empty: { title: string; hint: string };
+  empty: { hint: string; title: string };
   /** 进行中任务的模拟进度 Map。 */
   progressMap: Record<string, number>;
   retryingId: string | null;

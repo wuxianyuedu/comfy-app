@@ -132,8 +132,8 @@ export interface RemoteProbeResult {
  * 任何失败都返回 ok:false + 可读 detail，不抛异常——探测失败不是硬错误。
  */
 export async function probeRemoteApi(input: {
-  baseUrl?: string;
   apiKey?: string;
+  baseUrl?: string;
   model?: string;
 }): Promise<RemoteProbeResult> {
   let res: Response;
@@ -150,10 +150,10 @@ export async function probeRemoteApi(input: {
     };
   }
   const json = /* SAFETY: 类型断言已复核 */ (await readJsonBody(res)) as {
-    ok?: unknown;
     detail?: unknown;
     error?: unknown;
     models?: unknown;
+    ok?: unknown;
   };
   /* `detail` 优先（它是这条路由的**业务字段**：探测结论的说明），
    * 错误信封交唯一读法（规范 16 §16.2.4.35）。 */

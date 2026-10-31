@@ -27,7 +27,7 @@ interface WorkflowLibraryFiltersProps {
   sourceCounts: { all: number; local: number; online: number };
   typeFilter: TypeFilter;
   onTypeFilterChange: (v: TypeFilter) => void;
-  typeCounts: { all: number; image: number; video: number; audio: number };
+  typeCounts: { all: number; audio: number; image: number; video: number };
   modelFilter: string;
   onModelFilterChange: (v: string) => void;
   modelTags: Array<ModelTagCount>;

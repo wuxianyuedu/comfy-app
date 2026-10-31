@@ -47,10 +47,10 @@ function ShellHarness({
   withTabs = false,
   children = <WorksGallery />,
 }: {
-  extraProjects: ReadonlyArray<string>;
-  withTabs?: boolean;
   /** 壳里装的那一屏（默认给真视图 `WorksGallery`）。 */
   children?: React.ReactNode;
+  extraProjects: ReadonlyArray<string>;
+  withTabs?: boolean;
 }) {
   const projects = useSeededProjects({
     primary: projectScene("namedProject"),

@@ -54,16 +54,6 @@ import { logger } from "~/lib/core/logger";
 
 /** 进程/端口事实的快照：拿不到就都为空。 */
 export type ComfyRuntimeSnapshot = {
-  /** 有 ComfyUI 进程在跑（本进程拉起的、配置路径的、或任意解释器起的）。 */
-  running: boolean;
-  /** 从进程表定位到的 PID（拿不到为 null）。 */
-  pid: number | null;
-  /** PID 正在监听的端口（拿不到为 null）。 */
-  port: number | null;
-  /** 该进程用什么起的（中文短语，如「setup 中登记的启动器」），用于状态行提示。 */
-  via: string | null;
-  /** 进程表查询本身是否失败（超时/无权限）：结果不可信，不得当作「没在跑」。 */
-  unverified: boolean;
   /** 本次是否**真的查过**进程表。
    *
    *  与 `unverified` 不同：`unverified` 只说「没有一条事实可信」，而 0 条候选
@@ -73,10 +63,20 @@ export type ComfyRuntimeSnapshot = {
    *  取值同上：命中任一候选（含 bound 子进程 / 配置端口上的实例）即算查过——
    *  「端口有人应答」是比进程表更强的证据，不必再枚举一遍进程。 */
   didQueryProcTable: boolean;
+  /** 从进程表定位到的 PID（拿不到为 null）。 */
+  pid: number | null;
+  /** PID 正在监听的端口（拿不到为 null）。 */
+  port: number | null;
+  /** 有 ComfyUI 进程在跑（本进程拉起的、配置路径的、或任意解释器起的）。 */
+  running: boolean;
   /** 事实来源：bound=本进程持有的子进程；port=配置端口上已有人应答；
    *  process=配置路径进程表命中；launcher=setup 登记启动器；any=按环境反查
    *  （pyvenv.cfg / uv 托管解释器）出来的解释器进程。 */
   source: "bound" | "port" | "process" | "launcher" | "any" | null;
+  /** 进程表查询本身是否失败（超时/无权限）：结果不可信，不得当作「没在跑」。 */
+  unverified: boolean;
+  /** 该进程用什么起的（中文短语，如「setup 中登记的启动器」），用于状态行提示。 */
+  via: string | null;
 };
 
 /** 快照缓存时长：探针自身很快（见探针设计），缓存只为吸收「连点刷新 /

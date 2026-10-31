@@ -29,7 +29,7 @@ import { errorMessage } from "~/lib/error-message";
 import { useStoryboardExtractFlow } from "./useStoryboardExtractFlow";
 
 /** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别），由管线页传入。 */
-export type ShotProgress = Record<string, { pct: number; label?: string }>;
+export type ShotProgress = Record<string, { label?: string; pct: number }>;
 
 export interface Props {
   scenes: Array<Scene>;
@@ -47,7 +47,7 @@ export interface Props {
   onCharactersChange?: (c: Array<Character>) => void;
   /** 分镜「从剧本提取」会话(busy/progress/日志)已收归 controller，经 props 注入；
    *  未注入(遗留/独立使用)时退化为本 hook 局部会话。 */
-  extract?: { session: ExtractSession; actions: ExtractSessionActions };
+  extract?: { actions: ExtractSessionActions; session: ExtractSession };
 }
 
 /** 条目 → 既有 Shot 结构(场景/角色关联与提示词重算复用既有链路) */

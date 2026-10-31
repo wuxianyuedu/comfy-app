@@ -21,9 +21,9 @@ function RatingStars({
   disabled,
   onPick,
 }: {
-  value: number | null;
   disabled: boolean;
   onPick: (rating: number | null) => void;
+  value: number | null;
 }) {
   return (
     <div className="flex items-center gap-0.5">

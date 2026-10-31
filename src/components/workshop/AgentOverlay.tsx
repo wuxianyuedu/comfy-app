@@ -58,10 +58,10 @@ export function panelPlacement(
    *  `anchorBottom` 推不出「图标上方还剩多少」。 */
   viewportHeight: number,
 ): {
-  top?: string;
   bottom?: string;
   height: string;
   maxHeight: string;
+  top?: string;
 } {
   /* 图标**上方**还剩多少 = 视口高 − 图标底边距下沿 − 图标直径 − 留白。
    * 放不下 `PANEL_MIN_HEIGHT_PX` 就翻到图标下方。
@@ -101,10 +101,10 @@ export function AgentOverlay({
   controller,
   anchor,
 }: {
-  controller: WorkshopAgentController;
   /** 浮层入口当前所在位置（距视口右 / 下）—— 展开的对话窗跟着它走，见下方
    *  「面板与入口的相对位置」注释。 */
-  anchor: { right: number; bottom: number };
+  anchor: { bottom: number; right: number };
+  controller: WorkshopAgentController;
 }) {
   const { open, messages, input, busy, error, toolRuns, closeAgent, setInput, send } = controller;
   const taRef = React.useRef<HTMLTextAreaElement>(null);
@@ -359,16 +359,16 @@ export function AgentFab({
   dragging,
   handleProps,
 }: {
+  dragging: boolean;
   /** 挂在按钮上的 ref 回调（由 `useDraggablePosition` 给）——
    *  拖动逻辑靠它知道元素什么时候进的 DOM、也靠它量尺寸夹边界。 */
   elementRef: (el: HTMLButtonElement | null) => void;
-  onOpen: () => void;
-  /** 距视口右 / 下的偏移；`null` = 还没量到，先不渲染（避免闪一下再跳位）。 */
-  offset: { right: number; bottom: number } | null;
-  dragging: boolean;
   handleProps: {
     onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
   };
+  /** 距视口右 / 下的偏移；`null` = 还没量到，先不渲染（避免闪一下再跳位）。 */
+  offset: { bottom: number; right: number } | null;
+  onOpen: () => void;
 }) {
   if (offset === null) {
     return null;

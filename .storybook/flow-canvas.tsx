@@ -360,7 +360,14 @@ export function StorybookFlowCanvas({
   fit = false,
   children,
 }: {
-  scene: CanvasScene;
+  children?: ReactNode;
+  /**
+   * 把整场缩到框里（`fitView`），而不是用场景里钉住的视口。
+   *
+   * 传它的判据只有一条：**我的节点渲染器装不进 560px 的框**。装得下就照旧钉住
+   * 视口 —— 缩放本身是有些档的被测对象。
+   */
+  fit?: boolean;
   /**
    * 业务节点渲染器。`nodeTypes` 是 React Flow 认节点的唯一入口，而「用哪个
    * 渲染器」是 story 的事（画布节点 / 库预览 / 子图各一）。
@@ -371,14 +378,7 @@ export function StorybookFlowCanvas({
    * 渲染器缺席时静默退成白框、看起来像「节点坏了」）。
    */
   nodeTypes?: NodeTypes;
-  /**
-   * 把整场缩到框里（`fitView`），而不是用场景里钉住的视口。
-   *
-   * 传它的判据只有一条：**我的节点渲染器装不进 560px 的框**。装得下就照旧钉住
-   * 视口 —— 缩放本身是有些档的被测对象。
-   */
-  fit?: boolean;
-  children?: ReactNode;
+  scene: CanvasScene;
 }) {
   return (
     <div className={`${CANVAS_FRAME_CLASS} bg-canvas relative`}>

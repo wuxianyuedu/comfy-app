@@ -13,7 +13,7 @@ interface SubgraphCollapsedAnchorsProps {
   /** 纯连接型输入端口（已滤掉空标签行）。 */
   connInputs: Array<{ inp: RawInputMeta; label: string }>;
   /** 暴露的输出端口（已滤掉空标签行）。 */
-  outputs: Array<{ out: RawOutputMeta; display: string }>;
+  outputs: Array<{ display: string; out: RawOutputMeta }>;
   connectedInputs?: Set<string>;
   connectedOutputs?: Set<string>;
 }

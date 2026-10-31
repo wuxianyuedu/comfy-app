@@ -44,7 +44,7 @@ export interface Film {
   progress: number;
   finalVideo: string | null;
   error: string | null;
-  logs: Array<{ t: number; level: string; msg: string }> | null;
+  logs: Array<{ level: string; msg: string; t: number }> | null;
   shots: Array<FilmShot>;
 }
 
@@ -189,7 +189,7 @@ export const MODE_LABELS: Record<ShotMode, string> = {
   transition: "自动转场",
 };
 
-export const STATUS_BADGE: Record<ShotStatus, { bg: string; text: string; label: string }> = {
+export const STATUS_BADGE: Record<ShotStatus, { bg: string; label: string; text: string }> = {
   IDLE: { bg: "bg-subtle", text: "text-ink-fainter", label: "待处理" },
   QUEUED: {
     bg: "bg-info/15",

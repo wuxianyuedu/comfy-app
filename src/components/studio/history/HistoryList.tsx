@@ -31,15 +31,15 @@ function HistoryGroupTaskList({
   onRetry,
   onRemove,
 }: {
-  items: Array<TaskItem>;
-  progressMap: Record<string, number>;
   /** 「这一条在重试吗」的判据由导出它的出口给（规范 16 §16.2.4.40）——
    * 视图不再自己写`retryingId === task.id`。 */
   isRetrying: (id: string) => boolean;
-  onOpenDetail: (id: string) => void;
+  items: Array<TaskItem>;
   onCancel: (id: string) => void;
-  onRetry: (task: TaskItem) => void;
+  onOpenDetail: (id: string) => void;
   onRemove: (id: string) => void;
+  onRetry: (task: TaskItem) => void;
+  progressMap: Record<string, number>;
 }) {
   // 仅用 transform/opacity 的 FLIP 位移与淡入淡出（规范 §2.7），不动画
   // width/height/left/top/margin 等触发整树 layout 重排的属性。

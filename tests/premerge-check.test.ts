@@ -94,8 +94,8 @@ function run(args: Array<string> = [], baseline: string = headBaseline()) {
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: typeof e.status === "number" ? e.status : 1,
@@ -228,7 +228,7 @@ describe("premerge-check —— 段的筛选", () => {
     expect(code).toBe(0);
     const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(output) as {
       code: number;
-      segments: Array<{ key: string; code: number }>;
+      segments: Array<{ code: number; key: string; }>;
     };
     expect(parsed.code).toBe(0);
     expect(parsed.segments).toHaveLength(1);
@@ -326,7 +326,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
      * `tests/check-commit-claims.test.ts` 的 ①b 那组（同一夹具里「较早那笔说谎」）。 */
     /* 段表是 `Record<string, 联合>`，取数形状那一格在各成员上键不同 —— 这里按判据
      * 要问的三样取一个视图，而不是往生产类型里塞可选键。 */
-    const claims: { kind: string; shape?: string; args?: Array<string> } = SEGMENTS.claims!;
+    const claims: { args?: Array<string>; kind: string; shape?: string; } = SEGMENTS.claims!;
     expect(claims.kind).toBe("anchored");
     expect(claims.shape).toBe("range");
     /* 反向那半：这一段不许再带回「空 args」的旧形态 —— 那就是缺陷本身。 */
