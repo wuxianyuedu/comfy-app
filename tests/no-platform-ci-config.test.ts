@@ -399,8 +399,8 @@ const PR_MOVED_TO_DAILY: Array<[string, string, string, string]> = [
 type GateTier = "PR" | "push" | "daily" | "retired";
 type LedgerEntry = {
   name: string;
-  tier: GateTier;
   note?: string;
+  tier: GateTier;
 }
 const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   // ── PR 档（COMFYAPP_CI_GATES）──

@@ -78,12 +78,12 @@ describe("runChunk 透传 filterLine 到两遍 spawn", () => {
   });
 
   /** 与 `spawnVitest(entry, args, options)` 的形状对齐（scripts/affected-launch-spawn.mjs）。 */
-  type SpawnOpts = { timeoutMs?: number; filterLine?: (line: string) => boolean };
+  type SpawnOpts = { filterLine?: (line: string) => boolean; timeoutMs?: number };
   type SpawnFn = (
     entry: string,
     args: Array<string>,
     opts?: SpawnOpts,
-  ) => { status: number | null; output: string; signal?: string | null };
+  ) => { output: string; signal?: string | null; status: number | null };
   const baseDeps = (spawn: SpawnFn) => ({
     entry: "vitest.mjs",
     workers: 2,

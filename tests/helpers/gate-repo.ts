@@ -348,7 +348,7 @@ export type GateRepo = {
    */
   run: (
     args?: Array<string>,
-    overrides?: { env?: Record<string, string | undefined>; cwd?: string },
+    overrides?: { cwd?: string; env?: Record<string, string | undefined> },
   ) => GateRunResult;
   /** 在工作区里写一个文件（自动建父目录），`rel` 是仓库相对路径。 */
   write: (rel: string, content: string) => void;
