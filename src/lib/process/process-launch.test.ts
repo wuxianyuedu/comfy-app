@@ -124,7 +124,9 @@ afterEach(() => {
 
 describe("escapePwshSingle", () => {
   it("普通路径原样包进单引号", () => {
-    expect(escapePwshSingle("D:\\ComfyUI\\python.exe")).toBe("'D:\\ComfyUI\\python.exe'");
+    expect(escapePwshSingle(String.raw`D:\ComfyUI\python.exe`)).toBe(
+      String.raw`'D:\ComfyUI\python.exe'`,
+    );
   });
 
   it("含单引号转义为双单引号（防注入）", () => {
@@ -141,7 +143,7 @@ describe("escapePwshSingle", () => {
 
 describe("buildStartProcessArgumentList", () => {
   it("多参数整体写成一个 @() 数组字面量（裸排会被 PS5.1 当位置参数拒绝）", () => {
-    expect(buildStartProcessArgumentList(["-s", "D:\\x\\main.py"])).toBe(
+    expect(buildStartProcessArgumentList(["-s", String.raw`D:\x\main.py`])).toBe(
       `@('"-s"','"D:\\x\\main.py"')`,
     );
   });

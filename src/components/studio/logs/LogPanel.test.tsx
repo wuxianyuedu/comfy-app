@@ -760,7 +760,7 @@ describe("LogPanel 日志面板", () => {
       ok: true,
       json: async () => ({
         ok: true,
-        path: "F:\\proj\\log\\exports\\logs-all-20260101-100000.txt",
+        path: String.raw`F:\proj\log\exports\logs-all-20260101-100000.txt`,
         relativePath: "exports/logs-all-20260101-100000.txt",
         bytes: 42,
       }),
@@ -800,7 +800,7 @@ describe("LogPanel 日志面板", () => {
       ok: true,
       json: async () => ({
         ok: true,
-        path: "F:\\proj\\log\\exports\\diagnostics-20260101-100000-a1b2c3.zip",
+        path: String.raw`F:\proj\log\exports\diagnostics-20260101-100000-a1b2c3.zip`,
         relativePath: "exports/diagnostics-20260101-100000-a1b2c3.zip",
         bytes: 1024,
       }),

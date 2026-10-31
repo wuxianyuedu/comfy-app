@@ -30,7 +30,7 @@ describe("parseConsoleLine", () => {
   });
 
   it("反斜杠转义空格", () => {
-    const parsed = parseConsoleLine("echo a\\ b");
+    const parsed = parseConsoleLine(String.raw`echo a\ b`);
     expect(parsed.ok && parsed.args).toEqual(["a b"]);
   });
 
@@ -40,7 +40,7 @@ describe("parseConsoleLine", () => {
   });
 
   it("双引号里的转义引号", () => {
-    const parsed = parseConsoleLine('echo "say \\"hi\\""');
+    const parsed = parseConsoleLine(String.raw`echo "say \"hi\""`);
     expect(parsed.ok && parsed.args).toEqual(['say "hi"']);
   });
 

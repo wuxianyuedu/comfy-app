@@ -51,7 +51,7 @@ describe("createConsoleRunner", () => {
   it("stdout 与 stderr 各自成帧，顺序与内容如实（含中文，UTF-8 不花）", async () => {
     const { events, result } = await runOnce(process.execPath, [
       "-e",
-      "process.stdout.write('out-中文\\n');process.stderr.write('err-中文\\n')",
+      String.raw`process.stdout.write('out-中文\n');process.stderr.write('err-中文\n')`,
     ]);
     expect(result.exitCode).toBe(0);
     expect(textOf(events, "stdout")).toContain("out-中文");

@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  bracketDepthDelta,
-  looksLikeJsonFragment,
-  splitLogRecords,
-  stripSgr,
-} from "./log-record";
+import { bracketDepthDelta, looksLikeJsonFragment, splitLogRecords, stripSgr } from "./log-record";
 import { parseFileLogs } from "./log-store";
 
 /** 记录头判据（与 log-store 的 isLogLine 同口径的简写，用于纯函数用例）。 */
@@ -47,10 +42,9 @@ describe("多行 payload 归并", () => {
 
   it("每条独立日志各自成一条记录（括号闭合后不再吞并）", () => {
     const records = splitLogRecords(
-      [
-        "[2026-01-01 10:00:00.000] [INFO] 第一条",
-        "[2026-01-01 10:00:01.000] [WARN] 第二条",
-      ].join("\n"),
+      ["[2026-01-01 10:00:00.000] [INFO] 第一条", "[2026-01-01 10:00:01.000] [WARN] 第二条"].join(
+        "\n",
+      ),
       isLogLine,
     );
     expect(records).toHaveLength(2);
@@ -141,7 +135,7 @@ describe("空行与边界", () => {
     expect(out.map((e) => e.message)).toEqual(["第一条", "第二条"]);
   });
 
-  it("crlf 行尾被剥掉，不残留 \\r", () => {
+  it(String.raw`crlf 行尾被剥掉，不残留 \r`, () => {
     const out = parseFileLogs(
       "[2026-01-01 10:00:00.000] [INFO] 唯一一行\r\n",
       undefined,

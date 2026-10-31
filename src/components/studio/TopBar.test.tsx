@@ -131,8 +131,8 @@ describe("TopBar", () => {
   it("太阳与月亮同时存在，可见性交给 CSS（不靠首帧未定的 resolvedTheme）", () => {
     const { container } = renderTopBar("home");
     const icons = container.querySelectorAll("svg");
-    const sun = container.querySelector("svg.dark\\:hidden");
-    const moon = container.querySelector("svg.hidden.dark\\:block");
+    const sun = container.querySelector(String.raw`svg.dark\:hidden`);
+    const moon = container.querySelector(String.raw`svg.hidden.dark\:block`);
     expect(sun).toBeTruthy();
     expect(moon).toBeTruthy();
     expect(icons.length).toBeGreaterThanOrEqual(2);

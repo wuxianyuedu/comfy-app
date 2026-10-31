@@ -1296,7 +1296,7 @@ describe("壳写的启动会话标记在面板里的形态（ISSUE #1364）", ()
       [
         MARKER_LINE,
         "[2026-10-02 12:00:00.100] [INFO] === 启动报告：壳已接手（双击 app.exe） ===",
-        "[2026-10-02 12:00:00.200] [INFO]   项目根: F:\\AI\\Other\\comfy-app-t3",
+        String.raw`[2026-10-02 12:00:00.200] [INFO]   项目根: F:\AI\Other\comfy-app-t3`,
       ].join("\n"),
       undefined,
       "shell-launch",
@@ -1477,7 +1477,7 @@ describe("parseFileLogs 文件日志解析", () => {
     expect(entries[0]?.message).toBe("plain text line");
   });
 
-  it("空行被跳过且行尾 \\r 被剥离", () => {
+  it(String.raw`空行被跳过且行尾 \r 被剥离`, () => {
     const entries = parseFileLogs("a\r\n\nb");
     expect(entries.map((e) => e.message)).toEqual(["a", "b"]);
   });
