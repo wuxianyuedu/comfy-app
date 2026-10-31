@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 系列 / 季 / 集 组织者（FR-SR-01/02，#2508）。
+ * 系列 / 季 / 集 组织者（FR-SR-01/02/04，#2508）。
  *
  * 纯视图：所有 tRPC 取数与变更都来自 `useSeriesOrganizer`（逻辑层，规范 17 / 硬闸 S3），
  * 本文件不再出现 `useQuery(trpc.series…)`。把「一个项目 = 一集」的层级关系落地：
@@ -10,6 +10,7 @@
 
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
+import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
 import { textHandler } from "~/lib/form-props";
 import { cn } from "~/lib/utils";
 import { useSeriesOrganizer } from "./hooks/use-series-organizer";
@@ -25,8 +26,10 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
   const [newSeries, setNewSeries] = useState("");
   const [newSeason, setNewSeason] = useState("");
   const [newEpisode, setNewEpisode] = useState("");
+  const [genWorkflow, setGenWorkflow] = useState("");
 
   const ep = c.currentEp;
+  const progressById = new Map((c.seasonProgress ?? []).map((p) => [p.episodeId, p]));
 
   return (
     <section className="flex flex-col gap-3">
@@ -196,6 +199,17 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                     }
                   }}
                 />
+                {(() => {
+                  const p = progressById.get(e.id);
+                  if (!p) return null;
+                  return (
+                    <span className="text-ink-faint text-xs whitespace-nowrap">
+                      {p.total === 0
+                        ? "无镜"
+                        : `生成 ${p.done}/${p.total}${p.failed ? ` · 失败 ${p.failed}` : ""}`}
+                    </span>
+                  );
+                })()}
                 {projectId && (
                   <Button
                     className="h-7 px-2 text-xs"
@@ -249,6 +263,40 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
             >
               把当前项目归入此集
             </Button>
+          )}
+
+          {/* ── 整季生成（FR-SR-04）────────────────────── */}
+          {projectId && (
+            <div className="border-border flex flex-col gap-2 border-l-2 pl-3">
+              <div className="text-ink-muted text-sm font-medium">整季生成（FR-SR-04）</div>
+              <div className="flex items-center gap-2">
+                <NativeSelect
+                  className="flex-1"
+                  value={genWorkflow}
+                  onChange={(e) => setGenWorkflow(e.target.value)}
+                >
+                  <NativeSelectOption value="">选择工作流…</NativeSelectOption>
+                  {(c.workflows ?? []).map((w) => (
+                    <NativeSelectOption key={w.id} value={w.id}>
+                      {w.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+                <Button
+                  variant="primary-solid"
+                  className="h-8"
+                  disabled={!genWorkflow || c.batchGenerating}
+                  onClick={() => {
+                    if (genWorkflow) c.batchGenerateSeason(genWorkflow);
+                  }}
+                >
+                  {c.batchGenerating ? "提交中…" : "整季生成"}
+                </Button>
+              </div>
+              <span className="text-ink-faint text-xs">
+                一次提交本季所有未完成的镜；已完成的镜不会重排（断点续跑）。
+              </span>
+            </div>
           )}
         </div>
       )}

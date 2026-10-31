@@ -11,7 +11,9 @@
  * seasons/createSeason/updateSeason/deleteSeason + episodes/createEpisode/
  * updateEpisode/deleteEpisode + byProject/assignProject + 角色库全部分支：
  * characters/createCharacter/updateCharacter/deleteCharacter + episodeCharacters/
- * linkCharacter/unlinkCharacter + promoteFromProduction/injectToProduction），
+ * characterEpisodes/linkCharacter/unlinkCharacter + promoteFromProduction/
+ * injectToProduction），以及 `seriesGeneration.*` 的整季生成
+ * seasonGenerationProgress/batchGenerateSeason（FR-SR-04），
  * 满足 `tests/trpc-surface-executors.test.ts` 的消费方判据。
  */
 
@@ -26,6 +28,8 @@ type CharacterEntity = RouterOutputs["series"]["characters"][number];
 type EpisodeCharacterLink = RouterOutputs["series"]["episodeCharacters"][number];
 /** 反向：某角色被哪些集引用（FR-SR-03 ②）。 */
 type CharacterEpisodeRef = RouterOutputs["series"]["characterEpisodes"][number];
+/** 整季生成进度（FR-SR-04 ③）：按集 总/完成/失败/进行中/待生成。 */
+type SeasonProgressRow = RouterOutputs["seriesGeneration"]["seasonGenerationProgress"][number];
 
 /** 角色可改字段（UI 编辑面）。params / portraits 由生产侧/导入携带，UI 不直编。 */
 export type CharacterPatch = Partial<{
@@ -44,6 +48,10 @@ export type CharacterPatch = Partial<{
 
 export type SeriesOrganizerController = {
   assignCurrentProject: (episodeId: string) => void;
+  /** 整季一次提交生成（FR-SR-04 ①②）。 */
+  batchGenerateSeason: (workflowId: string) => void;
+  /** 整季生成是否进行中。 */
+  batchGenerating: boolean;
   /** 反向：当前正在查看的角色被哪些集引用（FR-SR-03 ②）。 */
   characterEpisodes?: Array<CharacterEpisodeRef>;
   /** 当前选中系列下的角色库列表。 */
@@ -54,7 +62,6 @@ export type SeriesOrganizerController = {
   createEpisode: (seasonId: string, title: string) => void;
   createSeason: (seriesId: string, title: string) => void;
   createSeries: (title: string) => void;
-
   /** 当前项目归属的集（无归属为 null）。 */
   currentEp?: Episode | null;
   deleteCharacter: (id: string) => void;
@@ -63,7 +70,6 @@ export type SeriesOrganizerController = {
   deleteSeries: (id: string) => void;
   /** 当前选中集已关联的角色（含定位 role）。 */
   episodeCharacters?: Array<EpisodeCharacterLink>;
-
   episodeId: string | null;
   /** 当前选中季下的集列表。 */
   episodes?: Array<Episode>;
@@ -79,8 +85,9 @@ export type SeriesOrganizerController = {
   renameEpisode: (id: string, title: string) => void;
   renameSeason: (id: string, title: string) => void;
   renameSeries: (id: string, title: string) => void;
-
   seasonId: string | null;
+  /** 整季生成进度（FR-SR-04 ③）：按集 总/完成/失败/进行中/待生成。 */
+  seasonProgress?: Array<SeasonProgressRow>;
   /** 当前选中系列下的季列表。 */
   seasons?: Array<Season>;
   selectEpisode: (id: string | null) => void;
@@ -91,6 +98,8 @@ export type SeriesOrganizerController = {
   seriesList?: Array<Series>;
   unlinkCharacter: (episodeId: string, characterId: string) => void;
   updateCharacter: (id: string, patch: CharacterPatch) => void;
+  /** 工作流模板列表（供「整季生成」选择用）。 */
+  workflows?: Array<{ id: string; name: string }>;
 };
 
 export function useSeriesOrganizer(projectId?: string): SeriesOrganizerController {
@@ -127,6 +136,13 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
       { enabled: !!inspectedCharacterId },
     ),
   );
+  const seasonProgressQuery = useQuery(
+    trpc.seriesGeneration.seasonGenerationProgress.queryOptions(
+      { seasonId: seasonId ?? "" },
+      { enabled: !!seasonId },
+    ),
+  );
+  const workflowList = useQuery(trpc.workflow.list.queryOptions(undefined));
 
   const invalidateSeries = () => void qc.invalidateQueries(trpc.series.list.queryFilter());
   const invalidateSeasons = (sid: string) =>
@@ -144,6 +160,10 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     void qc.invalidateQueries(trpc.series.episodeCharacters.queryFilter({ episodeId: eid }));
   const invalidateCharacterEpisodes = (cid: string) =>
     void qc.invalidateQueries(trpc.series.characterEpisodes.queryFilter({ characterId: cid }));
+  const invalidateSeasonProgress = () =>
+    void qc.invalidateQueries(
+      trpc.seriesGeneration.seasonGenerationProgress.queryFilter({ seasonId: seasonId ?? "" }),
+    );
 
   const createSeries = useMutation(
     trpc.series.create.mutationOptions({ onSuccess: invalidateSeries }),
@@ -290,6 +310,13 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     trpc.series.injectToProduction.mutationOptions({ onSuccess: invalidateCurrent }),
   );
 
+  // ── 整季生成（FR-SR-04 ①②）────────────────────────────
+  const batchGenerateMut = useMutation(
+    trpc.seriesGeneration.batchGenerateSeason.mutationOptions({
+      onSuccess: invalidateSeasonProgress,
+    }),
+  );
+
   return {
     seriesList: seriesList.data,
     seasons: seasons.data,
@@ -298,6 +325,9 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     characters: characterList.data,
     episodeCharacters: episodeChars.data,
     characterEpisodes: charEpisodes.data,
+    seasonProgress: seasonProgressQuery.data,
+    batchGenerating: batchGenerateMut.isPending,
+    workflows: workflowList.data?.workflows?.map((w) => ({ id: w.id, name: w.name })),
     inspectedCharacterId,
     seriesId,
     seasonId,
@@ -335,6 +365,10 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
       unlinkCharacterMut.mutate({ episodeId: epid, characterId: cid }),
     inspectCharacterEpisodes: (cid) => setInspectedCharacterId(cid),
     clearInspectedCharacter: () => setInspectedCharacterId(null),
+    batchGenerateSeason: (workflowId) => {
+      if (!seasonId) return;
+      batchGenerateMut.mutate({ seasonId, workflowId });
+    },
     promoteFromProduction: (pid) => promoteMut.mutate({ projectId: pid }),
     injectToProduction: (pid) => injectMut.mutate({ projectId: pid }),
   };
