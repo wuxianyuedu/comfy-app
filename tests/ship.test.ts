@@ -584,7 +584,7 @@ describe("classifyPushFailure：push 失败按原话分型，不固定猜 premer
   });
 
   it("接线判据：runPushStage 真把分型话术念出来（不再固定说 premerge）", () => {
-    const logs: string[] = [];
+    const logs: Array<string> = [];
     let pushed = 0;
     const ctx = {
       up: { remote: "origin" },

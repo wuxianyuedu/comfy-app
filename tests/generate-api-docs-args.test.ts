@@ -31,7 +31,7 @@ interface SpawnedFailure {
 }
 
 /** 跑一次入口并交出三件原值（非零退出时 `execFileSync` 会抛，那里带着 stdout/stderr）。 */
-function runBin(args: string[]) {
+function runBin(args: Array<string>) {
   try {
     const out = execFileSync(process.execPath, [SCRIPT, ...args], {
       encoding: "utf8",
