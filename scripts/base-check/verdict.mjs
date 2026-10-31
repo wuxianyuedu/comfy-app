@@ -216,7 +216,7 @@ export function judge({ currentCode, baseCode, currentOutput, baseOutput }) {
   if (baseCode !== 0 && isTimeoutShaped(currentOutput) && isTimeoutShaped(baseOutput)) {
     return "load-flake";
   }
-  return baseCode !== 0 ? "baseline-red" : "yours";
+  return baseCode === 0 ? "yours" : "baseline-red";
 }
 
 /**

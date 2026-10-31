@@ -371,8 +371,8 @@ export function describeAppServiceStart(input: AppServiceStartInput): AppService
 
   const title = recovered
     ? "应用服务已恢复"
-    : notice !== null
-      ? "应用服务已重启"
-      : "应用服务已启动";
+    : notice === null
+      ? "应用服务已启动"
+      : "应用服务已重启";
   return { title, body: lines.join("\n") };
 }

@@ -30,7 +30,7 @@ export function ExtractModelSelect({
 }) {
   const { localModels, remoteModels } = useLLM();
   const { channel, model } = parseChannelOption(value);
-  const selKey = !model ? "" : `${channel}::${model}`;
+  const selKey = model ? `${channel}::${model}` : "";
 
   /* 「选完再校验可用性」：选中本地 / 远端模型后才去探测对应服务是否可达。
    * 以 (key → 结果) 的缓存保存校验结果，异步回调里才 setState（不违反

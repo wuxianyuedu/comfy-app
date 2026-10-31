@@ -35,9 +35,9 @@ export async function synthesizeFirstFrame(opts: {
     projectId: projectId ?? null,
     values: {
       prompt,
-      ...(negative !== undefined ? { negativePrompt: negative } : {}),
-      ...(size !== undefined ? { size } : {}),
-      ...(seed !== undefined ? { seed } : {}),
+      ...(negative === undefined ? {} : { negativePrompt: negative }),
+      ...(size === undefined ? {} : { size }),
+      ...(seed === undefined ? {} : { seed }),
     },
   });
 

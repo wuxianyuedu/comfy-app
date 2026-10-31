@@ -76,7 +76,7 @@ function subscribe(onChange: () => void): () => void {
 /* 判据用 `innerWidth` 而不是 `mql.matches`：两者同源，但前者与 `NAV_AUTO_COLLAPSE_MAX_PX`
    是同一个数，只有一处要维护。 */
 function isNarrowNow(): boolean {
-  return typeof window !== "undefined" ? window.innerWidth <= NAV_AUTO_COLLAPSE_MAX_PX : false;
+  return typeof window === "undefined" ? false : window.innerWidth <= NAV_AUTO_COLLAPSE_MAX_PX;
 }
 
 let snapshot: NarrowNavState = { narrow: isNarrowNow(), crossings: 0 };

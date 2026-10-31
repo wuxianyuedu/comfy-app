@@ -328,9 +328,7 @@ async function main() {
 
   // ── ② Python 侧取证（两遍，形态说话）──
   const pyChecker = "scripts/check-app-port-vectors.py";
-  if (!fs.existsSync(path.join(ROOT, pyChecker))) {
-    problems.push(`缺少 Python 侧自检脚本：${pyChecker}`);
-  } else {
+  if (fs.existsSync(path.join(ROOT, pyChecker))) {
     const first = measurePythonOnce(pyChecker);
     let second = null;
     if (first.state === "timeout") {
@@ -346,19 +344,21 @@ async function main() {
     for (const note of verdict.unverified) {
       unverified.push(note);
     }
+  } else {
+    problems.push(`缺少 Python 侧自检脚本：${pyChecker}`);
   }
 
   // ── ③ Rust / PowerShell 侧锁引用（无法在此环境执行）──
   const rust = readIfExists("src-tauri/src/single_instance.rs");
-  if (!rust) {
-    problems.push("缺少 Rust 侧实现：src-tauri/src/single_instance.rs");
-  } else {
+  if (rust) {
     if (!rust.includes("fn normalize_root_for_port")) {
       problems.push("Rust 侧 normalize_root_for_port 缺失（端口推导实现被删？）");
     }
     if (!rust.includes("app-port-vectors.json")) {
       problems.push("Rust 侧测试未引用共享向量 app-port-vectors.json（四侧一致失效）");
     }
+  } else {
+    problems.push("缺少 Rust 侧实现：src-tauri/src/single_instance.rs");
   }
 
   // Rust 侧：`.env` 解析必须与 resolve 出口同源（否则壳又会按路径推导去等另一个端口）

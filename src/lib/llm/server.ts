@@ -224,11 +224,11 @@ export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
   const causeMsg =
     cause instanceof Error
       ? String(cause.message)
-      : cause != null
-        ? typeof cause === "string"
+      : cause == null
+        ? ""
+        : typeof cause === "string"
           ? cause
-          : (JSON.stringify(cause) ?? "")
-        : "";
+          : (JSON.stringify(cause) ?? "");
   const base = cfg.baseUrl.replace(/\/$/, "");
   const local = cfg.provider === "local" || isLoopbackBaseUrl(base);
   // 常见 Node undici 底层错误码

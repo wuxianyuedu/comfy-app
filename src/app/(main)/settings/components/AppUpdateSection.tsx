@@ -23,18 +23,14 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
     <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
       当前版本：
       <span className="text-ink tabular-nums">{c.appUpdate.currentVersion ?? "尚未读取"}</span>
-      {!c.appUpdate.currentVersion ? "（点「检测更新」后由本机应用信息读取）" : ""}
+      {c.appUpdate.currentVersion ? "" : "（点「检测更新」后由本机应用信息读取）"}
     </p>
   );
 
   return (
     <SettingsCard title="应用更新">
       {versionLine}
-      {!c.appUpdate.inShell ? (
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          当前运行在浏览器 / 开发模式，非桌面壳内，无法检测应用更新。 请使用打包后的桌面版。
-        </p>
-      ) : (
+      {c.appUpdate.inShell ? (
         <>
           <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
             检测 ComfyAPP 应用是否有新版本，需要时可下载并自动安装更新。 更新源与签名公钥由{" "}
@@ -121,6 +117,10 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
             </div>
           )}
         </>
+      ) : (
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          当前运行在浏览器 / 开发模式，非桌面壳内，无法检测应用更新。 请使用打包后的桌面版。
+        </p>
       )}
     </SettingsCard>
   );

@@ -532,7 +532,12 @@ export function envProbe({
         `解释器 ${python.path ?? python.command} 的版本号解析不出（原文：` +
           `${python.version}）—— 本步不据此判红（那是「不知道」，不是「不达标」）`,
       );
-    } else if (!floor.ok) {
+    } else if (floor.ok) {
+      notes.push(
+        `解释器 ${python.path ?? python.command} ${floor.triple.join(".")} ` +
+          `满足 ≥ ${PYTHON_MIN_TEXT}`,
+      );
+    } else {
       problems.push(
         `解释器 ${python.path ?? python.command} 是 ${floor.triple.join(".")}，` +
           `低于本仓写明的下限 Python ${PYTHON_MIN_TEXT}（唯一定义：本文件的 PYTHON_MIN_VERSION）。\n` +
@@ -541,11 +546,6 @@ export function envProbe({
           `      下一动作：在这台节点上装一个 ≥ ${PYTHON_MIN_TEXT} 的解释器并让构建账号的 ` +
           "PATH 看得见它（python.org 安装包勾「Add python.exe to PATH」；" +
           "默认的「Install for me only」只写安装者那个用户）。",
-      );
-    } else {
-      notes.push(
-        `解释器 ${python.path ?? python.command} ${floor.triple.join(".")} ` +
-          `满足 ≥ ${PYTHON_MIN_TEXT}`,
       );
     }
   } else {

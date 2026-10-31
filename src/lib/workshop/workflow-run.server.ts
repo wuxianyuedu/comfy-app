@@ -64,8 +64,8 @@ export async function createWorkflowRunTask(
 
   const params = {
     workflow: tpl.id,
-    ...(input.values.prompt !== undefined ? { prompt: input.values.prompt } : {}),
-    ...(input.values.negativePrompt !== undefined ? { negative: input.values.negativePrompt } : {}),
+    ...(input.values.prompt === undefined ? {} : { prompt: input.values.prompt }),
+    ...(input.values.negativePrompt === undefined ? {} : { negative: input.values.negativePrompt }),
     ...(workflowInputs.length > 0 ? { workflowInputs } : {}),
   };
 

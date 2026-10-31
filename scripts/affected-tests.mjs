@@ -563,7 +563,7 @@ export function attributeAffected(changedPaths, graph, testFiles, sourceFiles, t
   }
   // 稳定排序：同份数时按路径字典序，避免同样的改动在不同机器上给出不同顺序。
   return out.sort((a, b) =>
-    b.affected !== a.affected ? b.affected - a.affected : a.file < b.file ? -1 : 1,
+    b.affected === a.affected ? a.file < b.file ? -1 : 1 : b.affected - a.affected,
   );
 }
 

@@ -268,7 +268,7 @@ export async function callImage(
       model,
       prompt,
       n: 1,
-      ...(size !== "" ? { size } : {}),
+      ...(size === "" ? {} : { size }),
       ...extra,
     }),
     signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),

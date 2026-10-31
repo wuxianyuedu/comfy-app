@@ -16,9 +16,7 @@ function subscribe(onChange: () => void): () => void {
  * 但前者与 `MOBILE_BREAKPOINT` 是同一个数，只有一处要维护。返回布尔 —— 值稳定，
  * 不会让 `useSyncExternalStore` 反复重渲染。 */
 function isMobileNow(): boolean {
-  return typeof window !== "undefined"
-    ? window.innerWidth < MOBILE_BREAKPOINT
-    : false;
+  return typeof window === "undefined" ? false : window.innerWidth < MOBILE_BREAKPOINT;
 }
 
 /**

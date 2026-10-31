@@ -156,15 +156,15 @@ export function PageHeader({
       className={cn("flex flex-wrap items-center justify-between gap-3", className)}
       data-component="page-header"
     >
-      {hiddenTitle !== undefined ? <Heading className="sr-only">{hiddenTitle}</Heading> : null}
+      {hiddenTitle === undefined ? null : <Heading className="sr-only">{hiddenTitle}</Heading>}
       {hasTitleBlock ? (
         /* `min-w-0` 是给长标题留的截断位（规范 03 §3.8.1 的兜底顺序：先收标题、
            再换行，不压右侧按钮组）。 */
         <div className="min-w-0">
           <div className="flex items-baseline gap-2">
-            {title !== undefined ? (
+            {title === undefined ? null : (
               <Heading className="font-title u-title-page min-w-0 truncate">{title}</Heading>
-            ) : null}
+            )}
             {titleSuffix ? (
               <span className="text-ink-fainter shrink-0 text-xs">{titleSuffix}</span>
             ) : null}

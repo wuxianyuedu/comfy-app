@@ -36,7 +36,7 @@ type LlmDraftSetter = Dispatch<SetStateAction<LlmConfig | null>>;
  * 避免「主模型切换 → 勾选列表重算」引发受控组件输入抖动。
  */
 function mergeExtraModels(current: Array<string>, model: string, toggled: string): Array<string> {
-  const next = model.trim() !== "" ? [model, ...current.filter((m) => m !== model)] : [...current];
+  const next = model.trim() === "" ? [...current] : [model, ...current.filter((m) => m !== model)];
   if (!toggled.trim()) {
     return next;
   }

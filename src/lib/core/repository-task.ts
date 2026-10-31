@@ -175,7 +175,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
       const rows = await db.query.task.findMany({
         where,
         orderBy: [desc(task.createdAt)],
-        ...(opts.take !== undefined ? { limit: opts.take } : {}),
+        ...(opts.take === undefined ? {} : { limit: opts.take }),
         /* 列表卡只要十来个字段：`workflowSnapshot` 与 `logs` 单行可达数 MB，
          * take=60 时是几十 MB 的白拉白反序列化（router 只映射卡片字段）。
          * 详情查询（findByIdWithImages）不受影响，仍取全列。 */
@@ -190,13 +190,13 @@ export class TaskRepository extends DrizzleRepository<Task> {
     }
     const q = db.select().from(task).where(where).orderBy(desc(task.createdAt));
     if (opts?.skip === undefined) {
-      return opts?.take !== undefined ? q.limit(opts.take) : q;
+      return opts?.take === undefined ? q : q.limit(opts.take);
     }
     // `skip` 单独给时补 `LIMIT -1`（见上方 NO_LIMIT 的注释：不能写数字 -1，
     // drizzle 的 offset() 会把数字 limit 丢掉）。此前这条路径生成的是不带
     // limit 的 `… offset ?`，better-sqlite3 抛 `near "offset": syntax error`
     // —— 调用方拿到的是一次 500，而不是「第二页」。
-    const paged = opts.take !== undefined ? q.limit(opts.take) : limitAll(q);
+    const paged = opts.take === undefined ? limitAll(q) : q.limit(opts.take);
     return paged.offset(opts.skip);
   }
 

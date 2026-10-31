@@ -377,9 +377,9 @@ export const LogRow = memo(function LogRow({
     ? expanded
       ? "点击收起完整输出"
       : "点击展开完整 JSON"
-    : !wrap
-      ? entry.message
-      : undefined;
+    : wrap
+      ? undefined
+      : entry.message;
   const messageNode = (
     <span
       /* 选区判定的落点：面板贴底前要知道「用户框选的是不是日志正文」，
@@ -418,9 +418,9 @@ export const LogRow = memo(function LogRow({
   ) : null;
   const sourceNode = entry.origin ? (
     <span className="text-ink-fainter text-2xs shrink-0">{entry.origin}</span>
-  ) : entry.source !== "console" ? (
+  ) : entry.source === "console" ? null : (
     <span className="text-ink-fainter text-2xs shrink-0">{entry.source}</span>
-  ) : null;
+  );
   /* 复制按钮永远在**最后一列**：它是行的终点，位置固定用户才找得到；
      `self-center` 让它在多行（换行显示）的行里也贴住垂直中线。 */
   const copyNode = <RowCopyButton entry={entry} />;

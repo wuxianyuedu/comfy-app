@@ -76,12 +76,12 @@ export function branchLandingRows(
     const isMerged = rec ? rec.is_merged === true : null;
     /** @type {LandingVerdict} */
     let verdict;
-    if (!rec) {
+    if (rec) {
+      verdict = isMerged ? "landed" : "not-merged";
+    } else {
       /* 窗口取满还没有 ⇒ 「这条分支没提过 PR」是**正面事实**；
        * 没取满 ⇒ 只能说没取到。两种必须在账上长得不一样。 */
       verdict = meta.windowComplete ? "not-merged" : "no-pull-in-window";
-    } else {
-      verdict = isMerged ? "landed" : "not-merged";
     }
     return {
       name: b.name,
@@ -272,7 +272,7 @@ export function runBranches(ctx) {
   const candidates = trunk ? refs.branches.filter((b) => b.name !== trunk) : refs.branches;
   if (trunk && refs.branches.length !== candidates.length) {
     log(
-      `[ship] 已排除主干 \`${trunk}\`${rawTrunk !== trunk ? `（基线原值是 \`${rawTrunk}\`）` : ""}——它不是待删项。`,
+      `[ship] 已排除主干 \`${trunk}\`${rawTrunk === trunk ? "" : `（基线原值是 \`${rawTrunk}\`）`}——它不是待删项。`,
     );
   }
   if (candidates.length === 0) {
@@ -307,7 +307,7 @@ export function runBranches(ctx) {
   }
   log(
     `[ship] 取数覆盖：翻了 ${fetched.pages} 页 / ${fetched.pulls.length} 条 PR` +
-      (fetched.oldest !== null ? ` · 最老 #${fetched.oldest}` : "") +
+      (fetched.oldest === null ? "" : ` · 最老 #${fetched.oldest}`) +
       (fetched.windowComplete
         ? " · 窗口取满"
         : ` · **没取满**${fetched.note ? ` —— ${fetched.note}` : ""}`),

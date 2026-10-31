@@ -80,11 +80,11 @@ export function parseSubgraphPins(sub: RawSubgraphDef): {
     const pos: [number, number] = [Number(posRaw[0]) || 0, Number(posRaw[1]) || 0];
     const linkIdsRaw: Array<unknown> = Array.isArray(rec.linkIds)
       ? rec.linkIds
-      : rec.link !== undefined
-        ? [rec.link]
-        : Array.isArray(rec.links)
+      : rec.link === undefined
+        ? Array.isArray(rec.links)
           ? rec.links
-          : [];
+          : []
+        : [rec.link];
     return {
       id,
       name: typeof rec.name === "string" ? rec.name : "",

@@ -394,12 +394,7 @@ if (entries) {
 
   /* ① 与姊妹索引逐行同源：本台账**不是第二份真相来源**。
    * 两处各记一份的形态必然会分叉，而分叉之后「哪一份是真的」没有判据能回答。 */
-  if (!fs.existsSync(READERS_LEDGER)) {
-    problems.push(
-      `姊妹索引不存在：${path.relative(ROOT, READERS_LEDGER)} —— ` +
-        "本台账要与它逐行同源核对，读不到对侧时判失败（同 §11.23.3）",
-    );
-  } else {
+  if (fs.existsSync(READERS_LEDGER)) {
     let readers = null;
     try {
       readers = JSON.parse(fs.readFileSync(READERS_LEDGER, "utf8"));
@@ -407,9 +402,7 @@ if (entries) {
       problems.push(`姊妹索引不是合法 JSON：${err.message}`);
     }
     const carriers = readers?.carriers;
-    if (!Array.isArray(carriers)) {
-      problems.push("姊妹索引里 `carriers` 不是数组（同源核对没有比对对象）");
-    } else {
+    if (Array.isArray(carriers)) {
       const byId = new Map(carriers.map((c) => [c.id, c]));
       for (const e of entries) {
         if (!e?.id) {
@@ -438,7 +431,14 @@ if (entries) {
           report.push(`（姊妹索引另有条目 ${c.id}，不在本台账的判决面内）`);
         }
       }
+    } else {
+      problems.push("姊妹索引里 `carriers` 不是数组（同源核对没有比对对象）");
     }
+  } else {
+    problems.push(
+      `姊妹索引不存在：${path.relative(ROOT, READERS_LEDGER)} —— ` +
+        "本台账要与它逐行同源核对，读不到对侧时判失败（同 §11.23.3）",
+    );
   }
 }
 

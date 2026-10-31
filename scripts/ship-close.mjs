@@ -595,9 +595,7 @@ export function closeIssues(ctx) {
     );
     /* 「回读里没有正文这一格」与「正文是空的」必须分开念：前者不能念成「零条」
      * （拿缺字段当结论，正是这一族反复在收的那一型）。 */
-    if (typeof d?.body !== "string") {
-      log(`[ship] #${number} 条目读数：正文没读到（回读缺这一格）⇒ **不念成「零条」**。`);
-    } else {
+    if (typeof d?.body === "string") {
       const s = issueItemShapes(d.body);
       log(
         `[ship] #${number} 条目读数：\`###\` 小节 ${s.headings} · 复选 未勾 ${s.unchecked}/已勾 ${s.checked} · 序号 ${s.ordered}` +
@@ -605,6 +603,8 @@ export function closeIssues(ctx) {
           " —— 关的是**整张单**，这些条目的处置不随之判定；一条诉求一张单见规范 §13.10.9。" +
           "这一格是读数，不改退码。",
       );
+    } else {
+      log(`[ship] #${number} 条目读数：正文没读到（回读缺这一格）⇒ **不念成「零条」**。`);
     }
     if (state === "closed") {
       codes.push(CODE.GREEN);

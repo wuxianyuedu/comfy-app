@@ -124,23 +124,25 @@ export function ResultCard({
         <StatusBadge status={status} />
       </div>
       <div className="from-subtle to-canvas-deep relative flex aspect-video items-center justify-center bg-linear-to-br">
-        {!src ? (
-          <Icon className="text-ink-fainter" name={isVideo ? "film" : "image"} size={32} />
-        ) : isVideo ? (
-          <MediaThumbnail
-            /* `as="video"`：`mediaType` / `kind` 已判过视频，而媒体路径
-             * 可能是 `.png`（ComfyUI 把视频帧存成图片后缀）—— 语义判断
-             * 优先于后缀推断（§16.2.4.21 的口径）。 */
-            as="video"
-            autoPlay
-            className="max-h-56 w-full object-contain"
-            controls
-            loop
-            muted
-            src={src}
-          />
+        {src ? (
+          isVideo ? (
+            <MediaThumbnail
+              /* `as="video"`：`mediaType` / `kind` 已判过视频，而媒体路径
+               * 可能是 `.png`（ComfyUI 把视频帧存成图片后缀）—— 语义判断
+               * 优先于后缀推断（§16.2.4.21 的口径）。 */
+              as="video"
+              autoPlay
+              className="max-h-56 w-full object-contain"
+              controls
+              loop
+              muted
+              src={src}
+            />
+          ) : (
+            <MediaThumbnail alt="result" className="max-h-56 w-full object-contain" src={src} />
+          )
         ) : (
-          <MediaThumbnail alt="result" className="max-h-56 w-full object-contain" src={src} />
+          <Icon className="text-ink-fainter" name={isVideo ? "film" : "image"} size={32} />
         )}
       </div>
       <div className="border-border-strong flex items-center justify-center border-t py-2">
