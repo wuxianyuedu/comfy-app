@@ -124,8 +124,8 @@ export function hasSgr(text: string): boolean {
  * 只想要「严格 SGR」时显式写 `false`。
  */
 export function stripSgr(text: string, { includePartial = true } = {}): string {
-  const withoutFull = text.replaceAll(/\x1b\[[0-9;:]*m/g, "");
-  return includePartial ? withoutFull.replaceAll(PARTIAL_SGR_RE, "") : withoutFull;
+  const withoutFull = text.replace(/\x1b\[[0-9;:]*m/g, "");
+  return includePartial ? withoutFull.replace(PARTIAL_SGR_RE, "") : withoutFull;
 }
 
 /* ── 会话横幅的色板曾在这里（ISSUE #1326 之后随写侧一并移除）─────────
@@ -139,9 +139,9 @@ export function stripSgr(text: string, { includePartial = true } = {}): string {
 /** 剥掉全部 ANSI 转义序列（含非 SGR 的光标 / 清屏序列），保留纯文本。 */
 export function stripAnsi(text: string): string {
   return text
-    .replaceAll(NON_SGR_RE, "")
-    .replaceAll(/\x1b\[[0-9;:]*m/g, "")
-    .replaceAll("\r", "");
+    .replace(NON_SGR_RE, "")
+    .replace(/\x1b\[[0-9;:]*m/g, "")
+    .replace(/\r/g, "");
 }
 
 /**

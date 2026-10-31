@@ -124,7 +124,7 @@ function reconcileOptionValue(value: unknown, options: Array<string> | undefined
       return byRatio;
     }
   }
-  const norm = (s: string) => s.replaceAll(/\s+/g, " ").trim().toLowerCase();
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
   const target = norm(value);
   return options.find(
     (option) => norm(option).startsWith(target) || target.startsWith(norm(option)),

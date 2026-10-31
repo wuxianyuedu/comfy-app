@@ -67,7 +67,7 @@ export async function findPidForMainPyDetailed(mainPy: string): Promise<PidLooku
     return { pid: null, failed: false };
   }
   // 规范化路径用于命令行匹配（Windows 大小写不敏感）
-  const normalized = mainPy.replaceAll(/[\\/]+/g, "/").toLowerCase();
+  const normalized = mainPy.replace(/[\\/]+/g, "/").toLowerCase();
 
   try {
     if (process.platform === "win32") {
@@ -83,7 +83,7 @@ export async function findPidForMainPyDetailed(mainPy: string): Promise<PidLooku
       //     拉过来、再让 `Where-Object` 在 PowerShell 侧挑，本机实测 ~2.5s，
       //     冷启动高负载下直接顶到超时。`-Filter` 交给 WMI 仓储层过滤后，
       //     只有命中 `Name LIKE 'python%'` 的少数进程被物化。
-      const safeMain = normalized.replaceAll("'", "''");
+      const safeMain = normalized.replace(/'/g, "''");
       const ps =
         `$q=[char]34; ` +
         `Get-CimInstance Win32_Process -Filter ('Name LIKE '+$q+'python%'+$q) -ErrorAction SilentlyContinue | ` +

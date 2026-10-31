@@ -169,7 +169,7 @@ export const TITLE_BAR_BLOCKING_CLASS = "fixed inset-0";
  * @param className 组件上的完整 class 串（模板串请传拼好的结果）
  */
 export function blocksTitleBar(className: string): boolean {
-  const normalized = className.replaceAll(/\s+/g, " ").trim();
+  const normalized = className.replace(/\s+/g, " ").trim();
   if (!normalized.startsWith(TITLE_BAR_BLOCKING_CLASS)) {
     return false;
   }

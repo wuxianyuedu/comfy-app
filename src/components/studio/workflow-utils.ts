@@ -791,7 +791,7 @@ export function inferSourceOutNames(
           continue;
         }
         const slot = Number(value[1] ?? 0);
-        const stripped = inputKey.replaceAll(/_\d+$/g, "");
+        const stripped = inputKey.replace(/_\d+$/g, "");
         bySlot[slot] ??= [];
         if (!bySlot[slot].includes(stripped)) {
           bySlot[slot].push(stripped);

@@ -181,9 +181,9 @@ export function prettifyClassType(classType: string, lang: "zh" | "en" = "zh"): 
   }
   // 把 camelCase 与 PascalCase 拆成以空格分隔的单词。
   const spaced = name
-    .replaceAll(/([a-z])([A-Z])/g, "$1 $2")
-    .replaceAll(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
-    .replaceAll(/_+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/_+/g, " ")
     .trim();
   if (lang === "en") {
     return suffix ? `${spaced} (${suffix})` : spaced;

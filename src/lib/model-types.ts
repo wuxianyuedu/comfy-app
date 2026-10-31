@@ -16,8 +16,8 @@ export type ModelType = string;
 /* 把目录名格式化成好看的显示名：下划线 / 连字符分隔 → 首字母大写。 */
 export function prettyFolder(folder: string): string {
   return folder
-    .replaceAll(/[_-]+/g, " ")
-    .replaceAll(/\b\w/g, (char) => char.toUpperCase())
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase())
     .trim();
 }
 

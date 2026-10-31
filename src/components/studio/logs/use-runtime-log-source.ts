@@ -151,7 +151,7 @@ export function useRuntimeLogSource({
     }
     /* 服务端回落的选中项（请求的 id 已不在列表里时它会选最新）：以它为准。 */
     sessionRef.current = slice.selectedId;
-    const text = slice.content.replaceAll(CR_RE, "");
+    const text = slice.content.replace(CR_RE, "");
     setSnapshot({
       text,
       segments: capSegments(parse(text)),

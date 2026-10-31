@@ -365,7 +365,7 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
   // 保活：脱离进程树。没有直连 stdio/exit，但把 stdout/stderr 重定向到
   // 按次命名的文件里，等待循环会增量跟随进 comfyui-runtime.log ——
   // 保活模式下「启动日志」面板不再空白，完整输出也留得下文件。
-  const kaStamp = host.localTimestamp().replaceAll(/[: ]/g, "-");
+  const kaStamp = host.localTimestamp().replace(/[: ]/g, "-");
   const kaOutLog = path.join(SERVICES_LOG_DIR, `comfyui-keepalive-${kaStamp}.out.log`);
   const kaErrLog = path.join(SERVICES_LOG_DIR, `comfyui-keepalive-${kaStamp}.err.log`);
   /* 判死时从本次的重定向日志全文里识别根因：keepAlive 没有直连 stdio，进程

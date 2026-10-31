@@ -158,5 +158,5 @@ export function normalizeSlashes(raw: string | null | undefined): string {
   if (!raw) {
     return "";
   }
-  return raw.replaceAll("\\", "/").replace(/^\.\//, "");
+  return raw.replace(/\\/g, "/").replace(/^\.\//, "");
 }

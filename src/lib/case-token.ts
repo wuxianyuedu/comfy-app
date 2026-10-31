@@ -37,7 +37,7 @@
  * 与 `globals.css` 的 `@theme` 变量逐字一致）。
  */
 export function toKebabCase(value: string): string {
-  return value.replaceAll(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+  return value.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 }
 
 /**
@@ -49,5 +49,5 @@ export function toKebabCase(value: string): string {
  * 反查档名），所以**有测试、没有调用处**：判据先立着，比等人再猜一次划算。
  */
 export function toCamelCase(value: string): string {
-  return value.replaceAll(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+  return value.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 }

@@ -91,7 +91,7 @@ function parseStackFrame(raw: string): StackFrame | null {
   // 形成 "src_components_studio_15hhqk_logs_log-store.ts" 这种标识符。
   // 在肉眼可读性层面把它还原（heuristic：以 src_ 开头且没有 "/"）。
   if (!path.includes("/") && path.startsWith("src_")) {
-    path = path.replaceAll("_", "/");
+    path = path.replace(/_/g, "/");
   }
 
   // 取 /src/ 之后的路径作为最简可读形式
