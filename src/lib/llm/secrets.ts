@@ -42,9 +42,9 @@ function loadOrCreateKey(): Buffer {
       mkdirSync(join(process.cwd(), "data"), { recursive: true });
       // 文件里放一个随机口令，由它派生 AES 密钥；不直接存密钥字节。
       const fileKey = randomUUID().replace(/-/g, "") + randomBytes(16).toString("hex");
-      writeFileSync(KEY_FILE, fileKey, { encoding: "utf-8", mode: 0o600 });
+      writeFileSync(KEY_FILE, fileKey, { encoding: "utf8", mode: 0o600 });
     }
-    cachedKey = deriveKey(readFileSync(KEY_FILE, "utf-8").trim());
+    cachedKey = deriveKey(readFileSync(KEY_FILE, "utf8").trim());
     return cachedKey;
   } catch {
     const envSecret = process.env[ENV_VAR] ?? process.env[ENV_VAR.toLowerCase()];
@@ -68,7 +68,7 @@ export function encryptLlmKey(plaintext: string | null | undefined): string | nu
   }
   const iv = randomBytes(12);
   const cipher = createCipheriv(ALGO, loadOrCreateKey(), iv);
-  const ct = Buffer.concat([cipher.update(String(plaintext), "utf-8"), cipher.final()]);
+  const ct = Buffer.concat([cipher.update(String(plaintext), "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return `${PREFIX}${iv.toString("base64")}:${tag.toString("base64")}:${ct.toString("base64")}`;
 }
@@ -89,7 +89,7 @@ export function decryptLlmKey(enc: string | null | undefined): string | null {
     const decipher = createDecipheriv(ALGO, loadOrCreateKey(), Buffer.from(ivB64, "base64"));
     decipher.setAuthTag(Buffer.from(tagB64, "base64"));
     const pt = Buffer.concat([decipher.update(Buffer.from(ctB64, "base64")), decipher.final()]);
-    return pt.toString("utf-8");
+    return pt.toString("utf8");
   } catch {
     return null;
   }

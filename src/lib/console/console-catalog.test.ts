@@ -120,7 +120,7 @@ describe("预设命令表", () => {
 
   it("预设里的 pnpm 脚本都真的在 package.json 里（防「按钮点了报错」）", () => {
     const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      readFileSync(path.join(process.cwd(), "package.json"), "utf-8"),
+      readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
     ) as { scripts: Record<string, string> };
     const scriptNames = new Set(Object.keys(pkg.scripts));
     for (const preset of allPresets()) {

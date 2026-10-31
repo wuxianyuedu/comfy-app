@@ -357,7 +357,7 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
       // 模型名里的分隔符被剥掉，不产生路径穿越
       expect(dest).toContain(path.join("usage-test", "x"));
       expect(dest!.endsWith(".png")).toBe(true);
-      expect((await fs.readFile(dest!, "utf-8")).length).toBeGreaterThan(0);
+      expect((await fs.readFile(dest!, "utf8")).length).toBeGreaterThan(0);
     } finally {
       spy.mockRestore();
     }
@@ -369,7 +369,7 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
       const b64 = Buffer.from("hello").toString("base64");
       const dest = await saveMediaToLocalTemp("image", "m", `data:image/jpeg;base64,${b64}`);
       expect(dest!.endsWith(".jpg")).toBe(true);
-      expect(await fs.readFile(dest!, "utf-8")).toBe("hello");
+      expect(await fs.readFile(dest!, "utf8")).toBe("hello");
       expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       spy.mockRestore();

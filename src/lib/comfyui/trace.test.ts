@@ -120,16 +120,11 @@ describe("trace 落盘前过值形状守卫（与 pino 镜像共用一份实现�
   it("原始回执里的 PEM / JWT / 高熵串被擦成 [Redacted]", () => {
     // trace 直写文件、不经 pino，因此脱敏必须在写入边界自己做一次。
     // 这里断言的是「写入前的那次变换」（trace() 本身会真实写盘，测试不触发它）。
-    const pem =
-      "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----";
+    const pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----";
     const jwt =
       "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk";
-    expect(traceStringify(redactSecretShaped({ err: pem }))).toContain(
-      "[Redacted]",
-    );
-    expect(traceStringify(redactSecretShaped({ header: jwt }))).toContain(
-      "[Redacted]",
-    );
+    expect(traceStringify(redactSecretShaped({ err: pem }))).toContain("[Redacted]");
+    expect(traceStringify(redactSecretShaped({ header: jwt }))).toContain("[Redacted]");
   });
 
   it("正常回执（stdout chunk / prompt_id / 文件名）原样保留", () => {
@@ -163,11 +158,9 @@ describe("trace() 与 configureTraceLogPath 的落盘契约", () => {
       trace("cli", "t-1", "hello 世界", { extra: "meta" });
 
       expect(existsSync(file)).toBe(true);
-      const content = readFileSync(file, "utf-8");
+      const content = readFileSync(file, "utf8");
       // 行格式：`[本地时间戳] [INFO] [trace] <channel> [<taskId>] <text>[ metaText]\n`
-      expect(content).toMatch(
-        /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] /,
-      );
+      expect(content).toMatch(/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] /);
       expect(content).toContain("[INFO] [trace] cli [t-1] hello 世界");
       expect(content).toContain('"extra":"meta"');
       expect(content.endsWith("\n")).toBe(true);
@@ -186,8 +179,8 @@ describe("trace() 与 configureTraceLogPath 的落盘契约", () => {
       configureTraceLogPath(fileB);
       trace("ws", "t-b", "second");
 
-      const a = readFileSync(fileA, "utf-8");
-      const b = readFileSync(fileB, "utf-8");
+      const a = readFileSync(fileA, "utf8");
+      const b = readFileSync(fileB, "utf8");
       expect(a).toContain("first");
       expect(a).not.toContain("second");
       expect(b).toContain("second");

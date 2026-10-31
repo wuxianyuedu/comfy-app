@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       recursive: true,
     });
     const file = path.join(LOG_EXPORT_DIR, exportFileName(label));
-    await fs.promises.writeFile(/*turbopackIgnore: true*/ file, content, "utf-8");
+    await fs.promises.writeFile(/*turbopackIgnore: true*/ file, content, "utf8");
 
     return NextResponse.json({
       ok: true,
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
       path: file,
       /** 相对 log/ 的路径：面板空间窄，展示这一截即可。 */
       relativePath: toDisplayPath(file, LOG_ROOT),
-      bytes: Buffer.byteLength(content, "utf-8"),
+      bytes: Buffer.byteLength(content, "utf8"),
     });
   } catch (error) {
     return NextResponse.json(apiErrorBody(error, "导出日志失败", { ok: false }), { status: 500 });
