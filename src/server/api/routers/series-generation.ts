@@ -130,13 +130,13 @@ export const seriesGenerationRouter = createTRPCRouter({
         .select({ id: episode.id, projectId: episode.projectId })
         .from(episode)
         .where(eq(episode.seasonId, input.seasonId));
-      const projectIds = Array.from(
-        new Set(
+      const projectIds = [
+        ...new Set(
           eps
             .map((e) => e.projectId)
             .filter((p): p is string => typeof p === "string" && p.length > 0),
         ),
-      );
+      ];
       const existing = await ctx.db
         .select({ projectId: task.projectId, shotId: task.shotId, status: task.status })
         .from(task)
