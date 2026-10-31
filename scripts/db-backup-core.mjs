@@ -599,10 +599,10 @@ export function restoreNotice(result) {
       return {
         level: "info",
         lines: [
-          `数据库已从备份恢复（${result.from}）。` +
-            (result.safetyBackup
+          `数据库已从备份恢复（${result.from}）。${
+            result.safetyBackup
               ? `恢复前的那一份已另存为 ${result.safetyBackup}，需要回退时可在设置页选它。`
-              : ""),
+              : ""}`,
         ],
       };
     }
@@ -633,10 +633,9 @@ export function backupNotice(result, context = {}) {
     return {
       level: "info",
       lines: [
-        `${why}已自动备份数据库：${result.name}` +
-          (result.pruned.length > 0
+        `${why}已自动备份数据库：${result.name}${result.pruned.length > 0
             ? `（按最近 ${BACKUP_KEEP} 份轮转，删掉 ${result.pruned.length} 份更早的）`
-            : ""),
+            : ""}`,
       ],
     };
   }

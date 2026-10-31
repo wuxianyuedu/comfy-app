@@ -612,13 +612,13 @@ export function main(io = {}) {
     if (willWrite) {
       log(
         `[pr-failure-issue] ${offline ? "离线档" : "--dry-run"}：` +
-          `「${s.stage}」→ ` +
-          (decision.action === "recommend"
+          `「${s.stage}」→ ${
+          decision.action === "recommend"
             ? `评论在 PR #${target.prIid} 下（不新建单）`
             : s.number
               ? `在 #${s.number} 下追加一条读数（不新建）`
-              : `新建一张：${issueTitle(s.stage, lane ?? "pr")}`) +
-          ` · 正文 ${body.length} 字 · 一条都没写`,
+              : `新建一张：${issueTitle(s.stage, lane ?? "pr")}`
+          } · 正文 ${body.length} 字 · 一条都没写`,
       );
       continue;
     }

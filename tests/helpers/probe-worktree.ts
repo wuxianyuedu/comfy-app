@@ -155,8 +155,8 @@ export function createProbeTree(realRoot: string, io: ProbeTreeIo = realIo): Pro
   } catch (error) {
     rmSync(parent, { recursive: true, force: true });
     throw new Error(
-      `建一次性工作树克隆失败 —— 本件**不退回真实树**（那等于把隔离关掉而账面照样绿）：` +
-        String(error instanceof Error ? error.message : error),
+      `建一次性工作树克隆失败 —— 本件**不退回真实树**（那等于把隔离关掉而账面照样绿）：${
+        String(error instanceof Error ? error.message : error)}`,
       /* cause 留着：这一句要说的是「不退回」这件事，而**为什么**建不出来是 git 的原文，
        * 少了 cause 排查的人只能去手跑一次 worktree add。 */
       { cause: error },

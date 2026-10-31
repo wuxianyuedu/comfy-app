@@ -698,7 +698,7 @@ function main() {
   if (problems.length > 0) {
     console.error("\n[doc:check] 发现文档引用一致性问题：\n");
     for (const p of problems) {
-      console.error("  ✗ " + p);
+      console.error(`  ✗ ${p}`);
     }
     console.error(`\n共 ${problems.length} 项。请对照 docs/reference-facts.md 更新文档。`);
     process.exit(1);

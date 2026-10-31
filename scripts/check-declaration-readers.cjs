@@ -266,18 +266,18 @@ if (carriers) {
 
 if (REPORT_ONLY) {
   process.stdout.write(
-    `声明 ⇄ 读者索引（${carriers?.length ?? 0} 行）：\n` +
-      report.map((l) => "  " + l).join("\n") +
-      "\n",
+    `声明 ⇄ 读者索引（${carriers?.length ?? 0} 行）：\n${
+      report.map((l) => `  ${l}`).join("\n")
+      }\n`,
   );
   process.exit(0);
 }
 
 if (problems.length > 0) {
   console.error(
-    `[declaration-readers] 声明 ⇄ 读者索引有 ${problems.length} 处问题（规范 §11.23）：\n` +
-      problems.map((p) => "  · " + p).join("\n") +
-      "\n",
+    `[declaration-readers] 声明 ⇄ 读者索引有 ${problems.length} 处问题（规范 §11.23）：\n${
+      problems.map((p) => `  · ${p}`).join("\n")
+      }\n`,
   );
   process.exit(1);
 }

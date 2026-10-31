@@ -96,8 +96,8 @@ describe("tsc 生成物报错的点破（#1182）", () => {
 
   it("掺了一个真实源码文件的错 → **不**给生成物提示（不能让人忽略真错）", () => {
     const v = classifyTscErrors(
-      REAL_ARTIFACT_OUTPUT +
-        "src/lib/comfyui/executor-ws.ts(12,3): error TS2304: Cannot find name 'foo'.\n",
+      `${REAL_ARTIFACT_OUTPUT
+        }src/lib/comfyui/executor-ws.ts(12,3): error TS2304: Cannot find name 'foo'.\n`,
     );
     expect(v.total).toBe(3);
     expect(v.artifactOnly).toBe(false);

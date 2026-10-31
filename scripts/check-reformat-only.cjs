@@ -722,9 +722,9 @@ function report(files, reformatOnly, limit, migration, perCommit) {
         }
       }
       basis.push(
-        "重排的文件（照常点名，可审计）：" +
-          [...reformatOnly].sort().slice(0, 5).join(", ") +
-          (reformatOnly.size > 5 ? " …" : ""),
+        `重排的文件（照常点名，可审计）：${
+          [...reformatOnly].sort().slice(0, 5).join(", ")
+          }${reformatOnly.size > 5 ? " …" : ""}`,
       );
       for (const line of indentItems(basis)) {
         console.log(line);
@@ -733,10 +733,10 @@ function report(files, reformatOnly, limit, migration, perCommit) {
     }
     gateFail("格式化提交分离", [...reformatOnly].sort(), {
       detail:
-        `本次改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）` +
-        (migration?.declared === true
+        `本次改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）${
+        migration?.declared === true
           ? `；声明了 \`format-migration:\`，但**逐提交**看有提交把重排与功能改动混在一条里（${perCommit?.offenders.join("、") ?? "重排没有独占本次改动"}）⇒ 不按迁移读`
-          : ""),
+          : ""}`,
       hint:
         "为什么拦:格式化 diff 会把真实的功能改动埋掉 —— `git blame` 失效,\n" +
         "评审也无法从 diff 里看出改了什么（§13.7 的提交噪声口径）。\n" +
@@ -760,9 +760,9 @@ function report(files, reformatOnly, limit, migration, perCommit) {
       `本次改动 ${files.length} 个源文件，纯格式化 ${reformatOnly.size} 个（阈值 ${limit}，未达阈值）`,
     );
     for (const line of indentItems([
-      "放行但不计入噪声的：" +
-        [...reformatOnly].sort().slice(0, 5).join(", ") +
-        (reformatOnly.size > 5 ? " …" : ""),
+      `放行但不计入噪声的：${
+        [...reformatOnly].sort().slice(0, 5).join(", ")
+        }${reformatOnly.size > 5 ? " …" : ""}`,
     ])) {
       console.log(line);
     }

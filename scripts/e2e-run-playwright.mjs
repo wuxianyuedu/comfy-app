@@ -209,10 +209,9 @@ export function spawnFailureLine({ command, code, origin = "run" }) {
   const byTest = origin === "test";
   const tag = byTest ? "[e2e-run/test]" : "[e2e-run]";
   return (
-    `${tag} ✗ 起不了 Playwright（${command}）：失败码 ${code ?? "未知"}` +
-    " —— 盘上没有 / 起不来的形态见 resolveCommandInvocation（§2.1.1）" +
-    (byTest
+    `${tag} ✗ 起不了 Playwright（${command}）：失败码 ${code ?? "未知"} —— 盘上没有 / 起不来的形态见 resolveCommandInvocation（§2.1.1）${
+    byTest
       ? "\n          ↑ 这条是**判据按设计造的失败**（负向用例要的正是这个出口），不是这一跑起不来。\n"
-      : "\n")
+      : "\n"}`
   );
 }

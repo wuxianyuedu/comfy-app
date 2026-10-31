@@ -176,7 +176,7 @@ describe("diffLockfiles（两份 lockfile 的差异）", () => {
   });
 
   it("重复段落被识别出来（合并冲突 / install 写到一半的形态）", () => {
-    const dup = body + "\n" + body; // 同段落出现两次
+    const dup = `${body}\n${body}`; // 同段落出现两次
     const diff = diffLockfiles(body, dup);
     expect(diff.duplicates.new).toContain("importers");
     expect(diff.duplicates.old).toEqual([]);

@@ -385,7 +385,7 @@ function parseJsxProps(attrs) {
     }
     const vc = attrs[k];
     if (vc === '"' || vc === "'" || vc === "`") {
-      const after = skipJsxString(attrs + ">", k);
+      const after = skipJsxString(`${attrs}>`, k);
       props.push({ name, kind: "value", raw: attrs.slice(k, after) });
       i = after;
     } else if (vc === "{") {

@@ -257,7 +257,7 @@ function main() {
   );
 
   if (problems.length) {
-    console.error("[overlay-z] 违规（阻断）：\n  " + problems.join("\n  "));
+    console.error(`[overlay-z] 违规（阻断）：\n  ${problems.join("\n  ")}`);
     console.error(
       "  本判据是硬闸（无基线、无 --update）：存量已清零，新增即阻断。\n" +
         "  规范见 docs/standards/16-shadcn-ui与表单校验.md §16.2.5；\n" +

@@ -300,12 +300,11 @@ function main(argv) {
     text = fs.readFileSync(path.join(ROOT, rel), "utf8");
   } catch {
     process.stderr.write(
-      `[doc:toc] 读不到 ${rel} —— ` +
-        (wantRendered
-          ? "生成态镜像不在盘上（它不是入库产物），先 `pnpm run doc:render -- --only " +
-            resolved.src +
-            "`\n"
-          : "源文件不在盘上（SCOPED_DOCS 与实际树漂了）\n"),
+      `[doc:toc] 读不到 ${rel} —— ${
+        wantRendered
+          ? `生成态镜像不在盘上（它不是入库产物），先 \`pnpm run doc:render -- --only ${resolved.src}\`\n`
+          : "源文件不在盘上（SCOPED_DOCS 与实际树漂了）\n"
+      }`,
     );
     return 2;
   }

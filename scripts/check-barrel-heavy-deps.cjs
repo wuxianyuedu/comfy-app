@@ -286,7 +286,7 @@ function main() {
   }
 
   if (AS_JSON) {
-    process.stdout.write(JSON.stringify({ reports, findings }, null, 2) + "\n");
+    process.stdout.write(`${JSON.stringify({ reports, findings }, null, 2)}\n`);
     process.exit(findings.length > 0 ? 1 : 0);
   }
 

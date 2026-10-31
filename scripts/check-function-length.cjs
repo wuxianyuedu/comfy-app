@@ -151,7 +151,7 @@ const relOf = (p) =>
   p
     .split(path.sep)
     .join("/")
-    .replace(ROOT.split(path.sep).join("/") + "/", "");
+    .replace(`${ROOT.split(path.sep).join("/")}/`, "");
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
@@ -379,7 +379,7 @@ function scanFile(rel, source) {
   const kept = [];
   const seen = new Set();
   for (const f of rows) {
-    const key = f.start + ":" + f.end;
+    const key = `${f.start}:${f.end}`;
     if (seen.has(key)) {
       continue;
     }
@@ -433,11 +433,11 @@ if (longFunctions.length) {
     subject: `${SCAN_DIR}/**`,
     detail: `超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个`,
     hint:
-      "判据：函数体超过 " +
-      HINT_LINES +
-      " 行即应拆分（按职责切子函数 / 子组件 / 子 hook），\n" +
-      "不是靠「在一个函数里加注释分段」（规范 §12.13）。\n" +
-      "本判据是硬闸（无基线、无 --update）：巨型函数存量已清零，新增即阻断。",
+      `判据：函数体超过 ${
+      HINT_LINES
+      } 行即应拆分（按职责切子函数 / 子组件 / 子 hook），\n` +
+      `不是靠「在一个函数里加注释分段」（规范 §12.13）。\n` +
+      `本判据是硬闸（无基线、无 --update）：巨型函数存量已清零，新增即阻断。`,
   });
   process.exit(1);
 }

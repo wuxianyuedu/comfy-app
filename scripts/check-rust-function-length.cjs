@@ -159,7 +159,7 @@ const relOf = (p) =>
   p
     .split(path.sep)
     .join("/")
-    .replace(ROOT.split(path.sep).join("/") + "/", "");
+    .replace(`${ROOT.split(path.sep).join("/")}/`, "");
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
@@ -220,15 +220,15 @@ if (longFunctions.length) {
     `[rust-function-length] 扫描 ${SCAN_DIR}/**：超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个：`,
   );
   console.log(
-    "[rust-function-length] 拆分候选（按行数降序）：\n" + longFunctions.map(fmt).join("\n"),
+    `[rust-function-length] 拆分候选（按行数降序）：\n${longFunctions.map(fmt).join("\n")}`,
   );
   console.error(
-    "[rust-function-length] 超长 Rust 函数（规范 §12.13）：\n" +
-      "  判据：函数体超过 " +
-      HINT_LINES +
-      " 行即应拆分（按职责切子函数），\n" +
-      "  不是靠「在一个函数里加注释分段」。\n" +
-      "  本判据是硬闸（无基线、无 --update）：超长函数存量已清零，新增即阻断。",
+    `[rust-function-length] 超长 Rust 函数（规范 §12.13）：\n` +
+      `  判据：函数体超过 ${
+      HINT_LINES
+      } 行即应拆分（按职责切子函数），\n` +
+      `  不是靠「在一个函数里加注释分段」。\n` +
+      `  本判据是硬闸（无基线、无 --update）：超长函数存量已清零，新增即阻断。`,
   );
   process.exit(1);
 }

@@ -182,7 +182,7 @@ function main() {
 
   if (REPORT_ONLY) {
     console.log(
-      `[test-it-each] 盘点：${total} 处 / ${sites.size} 份文件。` + vanishedNote(vanished),
+      `[test-it-each] 盘点：${total} 处 / ${sites.size} 份文件。${vanishedNote(vanished)}`,
     );
     for (const [rel, list] of [...sites.entries()].sort()) {
       console.log(`  · ${rel}: ${list.length} 处（第 ${list.map((s) => s.line).join(",")} 行）`);
@@ -208,18 +208,18 @@ function main() {
     );
     for (const [rel, list] of [...sites.entries()].sort()) {
       console.error(
-        `  · ${rel}: ${list.length} 处\n` +
+        `  · ${rel}: ${list.length} 处\n${
           list
             .slice(0, 8)
             .map((s) => `      ${s.line}: ${s.text}`)
-            .join("\n"),
+            .join("\n")}`,
       );
     }
     console.error("\n口径见 docs/standards/11-测试与可观测性.md §11.15。");
     return 1;
   }
 
-  console.log("[test-it-each] OK —— 无 `it.each` 站点" + vanishedNote(vanished));
+  console.log(`[test-it-each] OK —— 无 \`it.each\` 站点${vanishedNote(vanished)}`);
   return 0;
 }
 

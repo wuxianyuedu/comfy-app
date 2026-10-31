@@ -143,7 +143,7 @@ describe("app-port 端口解析", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "app-port-prefix-"));
     try {
       for (const bad of ["3100abc", "3100.5", "0x0C4C", "3100abc3100"]) {
-        fs.writeFileSync(tmp + "/.env", `COMFYAPP_PORT=${bad}\n`, "utf8");
+        fs.writeFileSync(`${tmp}/.env`, `COMFYAPP_PORT=${bad}\n`, "utf8");
         expect(readEnvPort(tmp), `COMFYAPP_PORT=${bad}`).toBeNull();
         // 「未配置」的落点是退回路径推导，不是兜底 3100 —— 否则多检出会撞同一个端口。
         expect(resolveAppPort(tmp)).toBe(derivePortFromPath(tmp));
@@ -151,11 +151,11 @@ describe("app-port 端口解析", () => {
       // 前导 `+` 必须**收**：Rust / PowerShell / Python 三侧都认（ISSUE #1941）。
       // 这一格以前 Node 侧也是 null —— 不收就是新的一处四侧分叉。
       for (const ok of ["+3100", "  +3100  ", "  3100  "]) {
-        fs.writeFileSync(tmp + "/.env", `COMFYAPP_PORT=${ok}\n`, "utf8");
+        fs.writeFileSync(`${tmp}/.env`, `COMFYAPP_PORT=${ok}\n`, "utf8");
         expect(readEnvPort(tmp), `COMFYAPP_PORT=${ok}`).toBe(3100);
       }
       // Unicode 数字位不算：只有 Python 的 `int()` 会收，另三侧都不收。
-      fs.writeFileSync(tmp + "/.env", "COMFYAPP_PORT=\u0663\u0661\u0660\u0660\n", "utf8");
+      fs.writeFileSync(`${tmp}/.env`, "COMFYAPP_PORT=\u0663\u0661\u0660\u0660\n", "utf8");
       expect(readEnvPort(tmp)).toBeNull();
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });

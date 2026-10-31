@@ -351,8 +351,7 @@ if (asJson) {
   }
   for (const s of mainRows) {
     console.log(
-      `  ${String(s.count).padStart(4)} 处  ${s.raw}  →  ${s.to}` +
-        (s.snapshots ? `（含快照 ${s.snapshots} 处）` : ""),
+      `  ${String(s.count).padStart(4)} 处  ${s.raw}  →  ${s.to}${s.snapshots ? `（含快照 ${s.snapshots} 处）` : ""}`,
     );
   }
   const testRows = sorted.filter((s) => s.inTests > 0);

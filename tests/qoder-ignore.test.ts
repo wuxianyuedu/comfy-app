@@ -133,12 +133,12 @@ describe("入库那份 ⇄ 工具会写的那份", () => {
     const delta = diffIgnore(disk, WANTED);
     expect(
       delta.same,
-      `.qoderignore 与工具输出不一致：+${delta.added.length} / -${delta.removed.length}\n` +
+      `.qoderignore 与工具输出不一致：+${delta.added.length} / -${delta.removed.length}\n${
         [
           ...delta.added.map((l) => `  + ${l}`),
           ...delta.removed.map((l) => `  - ${l}`),
-        ].join("\n") +
-        `\n修法：pnpm qoder:ignore 后把结果一并提交（人别手改产物）`,
+        ].join("\n")
+        }\n修法：pnpm qoder:ignore 后把结果一并提交（人别手改产物）`,
     ).toBe(true);
   });
 

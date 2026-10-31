@@ -80,7 +80,7 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
     const missingRoots = roots.filter((r) => !reader.dirExists(r));
     expect(
       missingRoots,
-      "扫描根缺失 ⇒ 这一轮的语料是残缺的，「无人引用」这个结论没有依据：" + missingRoots.join(", "),
+      `扫描根缺失 ⇒ 这一轮的语料是残缺的，「无人引用」这个结论没有依据：${missingRoots.join(", ")}`,
     ).toEqual([]);
     let vanished = 0;
     const corpus = roots
@@ -105,9 +105,9 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
     const orphaned = names.filter((n) => !new RegExp(`\\b${n}\\b`).test(corpus));
     expect(
       orphaned,
-      "以下符号被 `core/index.ts` 转出但全仓无人引用 —— 转发它只会制造一条「看起来有用」的出口：\n" +
-        "要么给它接上消费方，要么从 barrel 里删掉（规范 §12.16）。" +
-        reader.vanishedNote(vanished),
+      `以下符号被 \`core/index.ts\` 转出但全仓无人引用 —— 转发它只会制造一条「看起来有用」的出口：\n` +
+        `要么给它接上消费方，要么从 barrel 里删掉（规范 §12.16）。${
+        reader.vanishedNote(vanished)}`,
     ).toEqual([]);
   });
 

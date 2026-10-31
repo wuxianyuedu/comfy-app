@@ -452,7 +452,7 @@ function usablePnpm(candidate, { platform, probeRun, host, isFile }) {
  */
 function viaSiblingPs1(candidate, { host, probeRun, isFile }) {
   const ext = path.extname(candidate);
-  const script = (ext ? candidate.slice(0, -ext.length) : candidate) + ".ps1";
+  const script = `${ext ? candidate.slice(0, -ext.length) : candidate}.ps1`;
   if (!isFile(script)) {
     return null;
   }

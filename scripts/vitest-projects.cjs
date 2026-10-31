@@ -197,7 +197,7 @@ function splitTopLevel(body) {
  * @returns {string[] | null} 形状不认识时 `null`
  */
 function literalArray(objText, key, configText) {
-  const at = objText.indexOf(key + ":");
+  const at = objText.indexOf(`${key}:`);
   if (at < 0) {
     return null;
   }
@@ -365,24 +365,24 @@ function globToRe(g) {
       const close = g.indexOf("}", i);
       if (close > 0) {
         out +=
-          "(?:" +
+          `(?:${
           g
             .slice(i + 1, close)
             .split(",")
             .map(escapeRe)
-            .join("|") +
-          ")";
+            .join("|")
+          })`;
         i = close;
         continue;
       }
     }
     out += escapeRe(ch);
   }
-  return new RegExp("^" + out + "$");
+  return new RegExp(`^${out}$`);
 }
 
 function escapeRe(s) {
-  return s.replaceAll(ESCAPE_RE, String.fromCharCode(92) + "$&");
+  return s.replaceAll(ESCAPE_RE, `${String.fromCharCode(92)}$&`);
 }
 
 function matchesAny(rel, globs) {

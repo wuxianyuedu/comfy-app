@@ -799,11 +799,11 @@ function main() {
   const strayTop = topRemoved.filter((name) => !name.includes("/"));
   if (strayTop.length > 0) {
     console.log(
-      `[standalone-clean] 已剔除顶层白名单外条目 ${strayTop.length} 个：` +
-        strayTop.slice(0, 12).join(" / ") +
-        (strayTop.length > 12 ? ` …其余 ${strayTop.length - 12} 个` : "") +
-        "（要留下请同批登记 STANDALONE_ALLOWED_TOPLEVEL 与 check-standalone-contents.cjs，" +
-        "并写清谁在运行期读它）",
+      `[standalone-clean] 已剔除顶层白名单外条目 ${strayTop.length} 个：${
+        strayTop.slice(0, 12).join(" / ")
+        }${strayTop.length > 12 ? ` …其余 ${strayTop.length - 12} 个` : ""
+        }（要留下请同批登记 STANDALONE_ALLOWED_TOPLEVEL 与 check-standalone-contents.cjs，` +
+        `并写清谁在运行期读它）`,
     );
   }
   const straySrc = topRemoved.length - strayTop.length;

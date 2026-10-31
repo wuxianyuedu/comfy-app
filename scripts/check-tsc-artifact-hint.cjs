@@ -149,7 +149,7 @@ function main() {
   }
   const verdict = classifyTscErrors(text);
   if (verdict.artifactOnly) {
-    process.stdout.write(buildHint(verdict) + "\n");
+    process.stdout.write(`${buildHint(verdict)}\n`);
   }
   return 0;
 }

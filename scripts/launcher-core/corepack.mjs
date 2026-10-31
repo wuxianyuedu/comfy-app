@@ -300,7 +300,7 @@ export function preparePnpm({
     return {
       ran: true,
       ok: false,
-      description: `corepack prepare 失败（exit=${result.status ?? "?"}${tail ? "：" + tail : ""}）`,
+      description: `corepack prepare 失败（exit=${result.status ?? "?"}${tail ? `：${tail}` : ""}）`,
     };
   }
   return { ran: true, ok: true, description: `corepack 已重建 pnpm@${version}` };

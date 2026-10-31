@@ -39,7 +39,7 @@ const root = path.join(__dirname, "..");
 const dbPath = path.join(root, "db.sqlite");
 /** 每次操作独立开一个 libsql 客户端；调用方负责 close()。 */
 function openDb() {
-  return createClient({ url: "file:" + dbPath });
+  return createClient({ url: `file:${dbPath}` });
 }
 
 async function clearTempTables() {
@@ -54,7 +54,7 @@ async function clearTempTables() {
     for (const row of result.rows) {
       const t = row.name;
       try {
-        await db.execute('DROP TABLE IF EXISTS "' + t + '"');
+        await db.execute(`DROP TABLE IF EXISTS "${t}"`);
       } catch {
         /* 忽略个别残留表的删除失败 */
       }
@@ -78,9 +78,9 @@ async function healMissingColumn(out) {
   }
   const col = colMatch[1];
   const re = new RegExp(
-    'INSERT\\s+INTO\\s+[`"]__new_(\\w+)[`"]\\s*\\([\\s\\S]*?\\)\\s*SELECT[\\s\\S]*?[`"]' +
-      col +
-      '[`"]',
+    `INSERT\\s+INTO\\s+[\`"]__new_(\\w+)[\`"]\\s*\\([\\s\\S]*?\\)\\s*SELECT[\\s\\S]*?[\`"]${
+      col
+      }[\`"]`,
     "i",
   );
   const tblMatch = out.match(re);
@@ -90,16 +90,16 @@ async function healMissingColumn(out) {
   const table = tblMatch[1];
   const db = openDb();
   try {
-    const result = await db.execute('PRAGMA table_info("' + table + '")');
+    const result = await db.execute(`PRAGMA table_info("${table}")`);
     const cur = new Set(result.rows.map((c) => c.name));
     if (cur.has(col)) {
       return false;
     }
-    await db.execute('ALTER TABLE "' + table + '" ADD COLUMN "' + col + '" text');
+    await db.execute(`ALTER TABLE "${table}" ADD COLUMN "${col}" text`);
   } finally {
     db.close();
   }
-  console.log("[heal] 已为 " + table + " 自动补列 " + col);
+  console.log(`[heal] 已为 ${table} 自动补列 ${col}`);
   return true;
 }
 
@@ -116,14 +116,14 @@ async function healIndexes(out) {
       const idx = m[2];
       const tbl = m[3];
       const cols = m[4];
-      const key = idx + "@" + tbl;
+      const key = `${idx}@${tbl}`;
       if (seen.has(key)) {
         continue;
       } // 跳过 drizzle-kit 重复发出的第二条
       seen.add(key);
       try {
         await db.execute(
-          "CREATE " + unique + 'INDEX IF NOT EXISTS "' + idx + '" ON "' + tbl + '" (' + cols + ")",
+          `CREATE ${unique}INDEX IF NOT EXISTS "${idx}" ON "${tbl}" (${cols})`,
         );
         changed = true;
       } catch {

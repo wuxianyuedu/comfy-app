@@ -117,7 +117,7 @@ function main() {
     process.exit(1);
   }
   gatePass("CHANGELOG 碎片", `${files.length} 个碎片形态正确`, {
-    subject: FRAGMENT_DIR + "/",
+    subject: `${FRAGMENT_DIR}/`,
   });
 }
 

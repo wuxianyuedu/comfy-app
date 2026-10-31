@@ -420,8 +420,8 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
         unclassified,
         `这些判据脚本带 --update 且就地落盘基线，却没被任何一张表点名 —— ` +
           `要么补进 RATCHETS（配一条拒涨用例），要么在 PENDING / RETIRED_RATCHETS / ` +
-          `NOT_A_RATCHET 里写下理由：\n` +
-          unclassified.join("\n"),
+          `NOT_A_RATCHET 里写下理由：\n${
+          unclassified.join("\n")}`,
       ).toEqual([]);
     });
 

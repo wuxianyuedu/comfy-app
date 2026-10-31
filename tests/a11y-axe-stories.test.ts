@@ -359,7 +359,7 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
     ) {
       const os = await import("node:os");
       const fse = await import("node:fs");
-      fse.writeFileSync(os.tmpdir() + "/a11y-axe-candidate.json", actual + "\n", "utf8");
+      fse.writeFileSync(`${os.tmpdir()}/a11y-axe-candidate.json`, `${actual}\n`, "utf8");
     }
 
     const gapLines = capability?.summaryLines() ?? [];

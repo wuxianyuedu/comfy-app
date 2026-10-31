@@ -283,8 +283,7 @@ function main() {
   const result = runAudit({ fixtureFile: FIXTURE });
   if (result.kind === "broken") {
     console.error(
-      `[dep-audit] 判据自身跑不起来：${result.detail}` +
-        (result.command ? `（命令：${result.command}）` : ""),
+      `[dep-audit] 判据自身跑不起来：${result.detail}${result.command ? `（命令：${result.command}）` : ""}`,
     );
     console.error(
       "  这条按红处理：它不是「离线」，是扫描没产出可信结果 —— 静默跳过的判据等于没有判据。",

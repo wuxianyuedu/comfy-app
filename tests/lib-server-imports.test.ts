@@ -154,10 +154,10 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
     const report = unregistered.map((e) => `  ✗ ${e.from}\n      → ${e.to}`).join("\n");
     expect(
       unregistered,
-      "src/lib 是被 server / components / app 共同依赖的地基，新增对 src/server/** 的依赖必须先裁决并登记。\n" +
-        "需要日志：改走中立出口 `@/lib/core/logger`（pino 的薄封装，接口一致，实现仍只有一份）；\n" +
-        "需要别的服务端能力：把被依赖的部分下沉到 lib，或由调用方注入（规范 §12.7 依赖倒置）。\n" +
-        report,
+      `src/lib 是被 server / components / app 共同依赖的地基，新增对 src/server/** 的依赖必须先裁决并登记。\n` +
+        `需要日志：改走中立出口 \`@/lib/core/logger\`（pino 的薄封装，接口一致，实现仍只有一份）；\n` +
+        `需要别的服务端能力：把被依赖的部分下沉到 lib，或由调用方注入（规范 §12.7 依赖倒置）。\n${
+        report}`,
     ).toEqual([]);
   });
 
@@ -168,8 +168,8 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
       .map(([from, to]) => `  ✗ ${from} -> ${to}`);
     expect(
       stale,
-      "以下登记项已不再成立（依赖被消除或目标文件被移动），请从 REGISTERED 中删除：\n" +
-        stale.join("\n"),
+      `以下登记项已不再成立（依赖被消除或目标文件被移动），请从 REGISTERED 中删除：\n${
+        stale.join("\n")}`,
     ).toEqual([]);
   });
 

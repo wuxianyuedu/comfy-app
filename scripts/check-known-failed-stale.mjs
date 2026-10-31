@@ -327,8 +327,8 @@ function main() {
       const problems = [];
       if (redJudge.exitCode !== 0) {
         problems.push(
-          "真红的登记没被判成「还红着」（判据把该放行的拦了 / 量具起不来）：\n" +
-            redJudge.problems.join("\n"),
+          `真红的登记没被判成「还红着」（判据把该放行的拦了 / 量具起不来）：\n${
+            redJudge.problems.join("\n")}`,
         );
       }
       if (greenJudge.exitCode === 0) {
