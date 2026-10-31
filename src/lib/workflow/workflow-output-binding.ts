@@ -108,7 +108,7 @@ export function manualOutputSource(
     return undefined;
   }
   const table = manualMapForMode(paramMap, mode);
-  if (!Object.prototype.hasOwnProperty.call(table, outputIoKey)) {
+  if (!Object.hasOwn(table, outputIoKey)) {
     return undefined;
   }
   return table[outputIoKey] ?? null;
