@@ -12,7 +12,7 @@
  *  另一处 `use-dynamic-workflow-form` 又抄了一遍同一套样板。 */
 import React from "react";
 import { useFilePicker } from "~/components/ui/file-picker";
-import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
+import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { errorMessage } from "~/lib/error-message";
 import { uploadImageFile, uploadMediaFile } from "~/lib/project-canvas/canvas-api";
 

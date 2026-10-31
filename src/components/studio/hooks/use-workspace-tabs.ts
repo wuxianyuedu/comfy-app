@@ -21,7 +21,7 @@ import {
   serializeWorkspaceTabs,
   type WorkspaceTabsState,
 } from "../workspace-tabs";
-import { type WorkspaceView } from "../NavItems";
+import type { WorkspaceView } from "../NavItems";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 

@@ -25,8 +25,8 @@
 import { upperToken } from "~/lib/upper-token";
 import { asRecord } from "~/lib/comfyui/raw";
 import { inferIsMultiline } from "~/lib/comfyui/types";
-import { type RawInputEntry, type RawNodeMeta } from "~/lib/comfyui/workflow-detail-raw";
-import { type WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
+import type { RawInputEntry, RawNodeMeta } from "~/lib/comfyui/workflow-detail-raw";
+import type { WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
 
 export type WorkflowIORawEntry = {
   /** 富化出来的控件默认值（图内 widget 当前值）。同 type，可作兜底基线。 */

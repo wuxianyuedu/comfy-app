@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { ShotFilmStrip, formatShotIndex } from "./ShotFilmStrip";
-import { type Shot } from "~/lib/workshop/types";
+import type { Shot } from "~/lib/workshop/types";
 
 afterEach(() => {
   cleanup();

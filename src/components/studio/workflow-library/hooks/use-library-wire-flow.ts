@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type Connection, type Edge, type Node, type OnConnectEnd } from "@xyflow/react";
+import type { Connection, Edge, Node, OnConnectEnd } from "@xyflow/react";
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { pinAcceptsEntry, type ParamEntry } from "~/lib/workflow/workflow-param-mapping";

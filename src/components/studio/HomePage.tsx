@@ -15,7 +15,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { DocumentFrame } from "./ViewContainer";
 import { LocalComputeCard } from "./LocalComputeCard";
 import { HomeModelOverview } from "./HomeModelOverview";
-import { type WorkspaceView } from "./NavItems";
+import type { WorkspaceView } from "./NavItems";
 
 /* ── 首页 —— Updream 风全屏仪表盘（对齐 Ardot） ─
   深色主题首页，左侧栏导航 + 顶栏 + 极光背景。
