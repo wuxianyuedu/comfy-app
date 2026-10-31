@@ -289,6 +289,46 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
     expect(code).toBe(2);
     expect(seen).toHaveLength(0);
   });
+
+  it("段开关 fixed：不算改动面也照跑（runGit 一次都不调），面清单递空串（ISSUE #2845）", () => {
+    /* 固定结构清单是静态契约，与「这次改了什么」无关 —— 这正是它能独立成一个
+     * CI stage 的前提：PR 三点 diff 拿不到 / 为空，这一格照样有对象可判。 */
+    let gitCalls = 0;
+    const { spawn, seen } = fakeSpawn(0);
+    const code = main({
+      ...silent(),
+      env: { COMFY_AFFECTED_SEGMENT: "fixed", CNB_PULL_REQUEST_TARGET_SHA: "" },
+      ledgerDir: null,
+      runGit: () => {
+        gitCalls += 1;
+        return { ok: false, stdout: "" };
+      },
+      spawn,
+      installed: true,
+    });
+    expect(code).toBe(0);
+    expect(gitCalls).toBe(0);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.env.COMFY_AFFECTED_CHANGED).toBe("");
+    expect(seen[0]!.env.COMFY_AFFECTED_SEGMENT).toBe("fixed");
+  });
+
+  it("段开关认不出的值不在入口拦 —— 由 run-affected-tests 的解析器退 2（口径一处）", () => {
+    /* 入口只认 `fixed` 这一个词的**正向形态**；其他值（含手滑的 `Fixed` / `both`）
+     * 原样递下去，由 `resolveAffectedSegment` 统一说「没看懂」—— 两处各拦一半，
+     * 读数就会分成两套。 */
+    const { spawn, seen } = fakeSpawn(0);
+    const code = main({
+      ...silent(),
+      env: { COMFY_AFFECTED_SEGMENT: "Fixed" },
+      ledgerDir: null,
+      runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
+      spawn,
+      installed: true,
+    });
+    expect(code).toBe(0);
+    expect(seen[0]!.env.COMFY_AFFECTED_SEGMENT).toBe("Fixed");
+  });
 });
 
 /* ── 起跑前的依赖面体检（`scripts/ci-worktree-deps.mjs`）─────────────────────────

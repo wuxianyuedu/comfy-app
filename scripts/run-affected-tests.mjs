@@ -119,6 +119,7 @@
  * 拿不到可信读数」才放行，且必须把「哪几份没校验」印在脸上。
  */
 
+import { planSeparatedLaunches, resolveAffectedSegment } from "./affected-launch-segments.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 /* 「受影响用例」门在 CI 里的良性 stderr 噪音屏蔽（按行判定，见文件头）：本文件只负责
  * 在起 vitest 前解析开关、在两遍 spawn 都把 `isNoiseLine` 透传下去。 */
@@ -207,31 +208,7 @@ import {
 } from "./affected-launch-spawn.mjs";
 export { planLaunches, resolveMaxWorkers, resolveVitestEntry };
 
-/**
- * 把「固定清单（契约 / 结构守护）」与「这个 PR 牵扯到的受影响用例」**分开分块**。
- *
- * 为什么要分开（2026-10-31 的现场）：两者混在同一次 vitest 调用里时，固定清单里那份最吵的
- * a11y 故事测试（`tests/a11y-axe-stories.test.ts`，故意渲染会抛错的 error-boundary /
- * lazy-chunk 故事）的 stderr 噪音会和受影响用例的真红混在一起、把失败原文挤出去（平台只
- * 保留日志尾部）。分开后：
- *   · 每份启动更小（固定清单先跑、受影响用例后跑，受影响用例的失败与收尾账落在日志尾部）；
- *   · 噪音被收进「固定清单」那一段里隔离，且两块各有独立抬头（便于读日志的人分辨哪块红了）。
- *
- * 不改变任何判决：分块策略与 `planLaunches` 完全一致（同一份预算、同一套防丢防重），只是
- * 先按 `FIXED_STRUCTURAL_TESTS` 切两刀、各自分块，再拼回一个带 `kind` 的序列。
- *
- * @param {string[]} files 已含固定清单的完整清单（`collectList()` 的产出）
- * @returns {{kind: 'fixed' | 'affected', files: string[]}[]}
- */
-export function planSeparatedLaunches(files) {
-  const fixed = files.filter((f) => FIXED_STRUCTURAL_TESTS.includes(f));
-  const affected = files.filter((f) => !FIXED_STRUCTURAL_TESTS.includes(f));
-  /** @type {{kind: 'fixed' | 'affected', files: string[]}[]} */
-  const out = [];
-  for (const chunk of planLaunches(fixed)) out.push({ kind: "fixed", files: chunk });
-  for (const chunk of planLaunches(affected)) out.push({ kind: "affected", files: chunk });
-  return out;
-}
+
 /* 并发只有一个出处（ISSUE #2324）：兜底档由这里取，`resolveMaxWorkers` 自己不读核数。 */
 import { resolveCiWorkers } from "./ci-load.mjs";
 import { existsSync } from "node:fs";
@@ -261,6 +238,8 @@ export const SAFE_ARGV_BUDGET = 24_000;
  * 入账（不是松紧量：调它只改变「要不要多花那几十秒」，不改变任何一条断言的判定）。
  */
 const PER_FILE_RERUN_MAX = 8;
+
+
 
 async function main(argv) {
   const dryRun = argv.includes("--dry-run");
@@ -313,20 +292,59 @@ async function main(argv) {
     // 空清单在这里是**明确意图**（全量），所以复用同一条判决链（超时形态仍会隔离复跑）。
     return await runChunk([], { entry, workers, quiet: quietFull });
   }
-  const files = collectList();
-  if (files.length === 0) {
+  const seg = resolveAffectedSegment(process.env.COMFY_AFFECTED_SEGMENT);
+  if (seg.note) {
+    process.stderr.write(`[affected-launch] ${seg.note}\n`);
+  }
+  if (seg.mode === "invalid") {
     process.stderr.write(
-      "[affected-launch] affected 解析没给出清单 —— 宁可阻断，" +
-        "也不让 vitest 不带位置参数跑成全量\n" +
-        "  （要按名字跑全量是另一档：`node scripts/run-affected-tests.mjs --full`）\n",
+      "[affected-launch] 段开关的值没看懂 ⇒ 退 2，不猜（吞掉未知值 = 开关失效也没有读数）\n",
+    );
+    return 2;
+  }
+  /* 本进程实际要跑的那一段清单（ISSUE #2845）：
+   *   · fixed —— **纯固定清单**，不经改动面：拿不到 PR 三点 diff 也照跑（固定清单是
+   *     静态契约，跟「这次改了什么」无关，这正是它能独立成一格的前提）。
+   *   · affected —— collectList() 的面里**剔除固定清单**后的增量面；映射后为空是合法
+   *     形态（纯文档 PR），本格无对象可判，响亮地说一句后按绿收（固定那格独立在跑）。
+   *   · both —— 逐字旧行为。 */
+  let segFiles;
+  if (seg.mode === "fixed") {
+    segFiles = FIXED_STRUCTURAL_TESTS.filter((f) => existsSync(f));
+  } else {
+    const files = collectList();
+    if (files.length === 0) {
+      process.stderr.write(
+        "[affected-launch] affected 解析没给出清单 —— 宁可阻断，" +
+          "也不让 vitest 不带位置参数跑成全量\n" +
+          "  （要按名字跑全量是另一档：`node scripts/run-affected-tests.mjs --full`）\n",
+      );
+      return 1;
+    }
+    segFiles =
+      seg.mode === "affected"
+        ? files.filter((f) => !FIXED_STRUCTURAL_TESTS.includes(f))
+        : files;
+  }
+  if (segFiles.length === 0) {
+    if (seg.mode === "affected") {
+      process.stderr.write(
+        "[affected-launch] 受影响面映射到 0 份用例（改动都没落在任何用例的引用闭包里）" +
+          "⇒ 本格无对象可判，按绿收；固定结构用例那格独立在跑，别把两格读成一格。\n",
+      );
+      return 0;
+    }
+    process.stderr.write(
+      "[affected-launch] 本段清单为空 —— 阻断（空清单若放行，vitest 会不带位置参数跑成全量）\n",
     );
     return 1;
   }
   let chunks;
   try {
     /* 固定清单与受影响用例**分开分块**：固定清单（含最吵的 a11y 故事测试）先跑、受影响用例
-     * 后跑，噪音被收进固定清单那一段里隔离，受影响用例的失败落在日志尾部（平台保留尾部）。 */
-    chunks = planSeparatedLaunches(files);
+     * 后跑，噪音被收进固定清单那一段里隔离，受影响用例的失败落在日志尾部（平台保留尾部）。
+     * 段开关下 `segFiles` 本来就只剩一段，这里天然产出该段的块。 */
+    chunks = planSeparatedLaunches(segFiles);
   } catch (e) {
     process.stderr.write(`[affected-launch] ${e instanceof Error ? e.message : String(e)}\n`);
     return 1;
@@ -335,7 +353,7 @@ async function main(argv) {
    * 全部来自 `collectList()` 与 `planSeparatedLaunches()`，两者都是纯计算。 */
   if (dryRun) {
     process.stdout.write(
-      `[affected-launch] ${files.length} 个用例 / ${chunks.length} 次启动，` +
+      `[affected-launch] ${segFiles.length} 个用例 / ${chunks.length} 次启动，` +
         `最长一块 ${chunks.reduce((m, c) => Math.max(m, c.files.join(" ").length), 0)} 字符\n`,
     );
     return 0;
@@ -368,7 +386,7 @@ async function main(argv) {
   const rawLogd = process.env.LOGD || "";
   const junitDir = rawLogd && existsSync(rawLogd) ? path.resolve(rawLogd) : "";
   if (junitDir) {
-    writeFilesManifest(junitDir, files);
+    writeFilesManifest(junitDir, segFiles);
     process.stderr.write(
       `[affected-launch] 分文件耗时读数落在 ${junitDir}（组 C 账本，随本次跑清理）\n`,
     );
@@ -377,19 +395,19 @@ async function main(argv) {
    * 平台日志里一个文件名都没有，只剩 `Tests N passed`；而那份清单里排在最前面的是
    * **103 份固定清单**，它们才是这次守的到底是什么）。打的是**送进 vitest 的清单**，
    * 不为它多起一次 vitest、也不改任何判据。 */
-  process.stderr.write(fileListReport(files, { quiet }));
+  process.stderr.write(fileListReport(segFiles, { quiet }));
   /* 改动面归因只在**面大到值得说**时才去算：它是给「拆小」用的（见 `scopeAdvice`），
    * 而面小的时候那句话没有任何信息 —— 白算一次还会让每次提交多付约 220ms。
    * 判断用**已经拿到**的清单份数（`files.length - 固定清单份数`），不额外读一次 git。 */
-  const affectedCount = files.filter((f) => !FIXED_STRUCTURAL_TESTS.includes(f)).length;
+  const affectedCount = segFiles.filter((f) => !FIXED_STRUCTURAL_TESTS.includes(f)).length;
   const wantAdvice = affectedCount >= SCOPE_ADVICE_MIN;
   /* 建议在**起 vitest 之前**打：它讲的是「这次的代价」，而一条真断言红会把收尾段
    * 整个截断（实测踩到过）—— 真红的时候恰恰更需要看到这个数。 */
   if (wantAdvice) {
     process.stderr.write(
       scopeAdvice({
-        total: files.length,
-        fixed: files.length - affectedCount,
+        total: segFiles.length,
+        fixed: segFiles.length - affectedCount,
         affected: affectedCount,
         top: collectAttribute(),
       }),
@@ -431,7 +449,7 @@ async function main(argv) {
      * 那一段 —— 读数在第一遍跑完才存在，而「打了哪些用例」那张清单要早于起 vitest
      * （起之前根本没有用时）。两份放在同一屏的两端是刻意的：清单回答「跑了什么」，
      * 这里回答「各自多久」，两句都读完才算读完了这一格。 */
-    process.stderr.write(fileTimingReport(files, { quiet, read: junitReadings() }));
+    process.stderr.write(fileTimingReport(segFiles, { quiet, read: junitReadings() }));
     if (unverified.length > 0) {
       process.stderr.write(unverifiedReport(unverified));
     }
