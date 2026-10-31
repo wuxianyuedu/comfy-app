@@ -58,14 +58,14 @@ export const seriesGenerationRouter = createTRPCRouter({
         .orderBy(asc(episode.episodeNumber));
 
       const rows: Array<{
+        done: number;
         episodeId: string;
         episodeNumber: number;
+        failed: number;
+        pending: number;
+        running: number;
         title: string;
         total: number;
-        done: number;
-        failed: number;
-        running: number;
-        pending: number;
       }> = [];
 
       for (const ep of eps) {
