@@ -118,7 +118,7 @@ export function countLines(message: string, availableWidth = 0): number {
   /* 行尾换行符产生的**末尾空段**不算独立的一行：一条以 `\n` 结尾的消息会被拆出
    * 一个空末段，若按它计数就会多估一整行空白（「只显示一行却占了两行空间」）。
    * 段中间的空段（空行）仍保留——它确实是一行。 */
-  while (segments.length > 1 && segments[segments.length - 1] === "") {
+  while (segments.length > 1 && segments.at(-1) === "") {
     segments.pop();
   }
   if (availableWidth <= 0) {

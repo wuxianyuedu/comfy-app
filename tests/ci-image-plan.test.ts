@@ -289,7 +289,7 @@ describe("tarball：权限位、符号链接、可复现", () => {
   const nameOf = (line: string) => {
     const head = (line.split(" -> ")[0] ?? "").trim();
     const parts = head.split(/\s+/);
-    return parts[parts.length - 1] ?? "";
+    return parts.at(-1) ?? "";
   };
   const lineFor = (text: string, name: string) =>
     text.split(/\r?\n/).find((l) => nameOf(l) === name);

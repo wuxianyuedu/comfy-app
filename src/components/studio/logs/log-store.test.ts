@@ -598,7 +598,7 @@ describe("时间线在上限内不裁剪（分页可翻历史）", () => {
     const { logs } = useLogStore.getState();
     expect(logs).toHaveLength(2002);
     expect(logs[0]?.id).toBe("old-0");
-    expect(logs[logs.length - 1]?.message).toBe("最新一条");
+    expect(logs.at(-1)?.message).toBe("最新一条");
   });
 
   it("显示的上限只由每页大小承担：时间线超过一页时分页接管", () => {
@@ -664,7 +664,7 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
         makeEntry({
           id: "overflow-1",
           message: "溢出的一条",
-          time: before.logs[before.logs.length - 1]!.time + 1,
+          time: before.logs.at(-1)!.time + 1,
           seq: seq + 1,
         }),
       ]),
@@ -683,7 +683,7 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
   it("全批都是重复行：时间线原样返回，revision 不推进", () => {
     fillLong();
     const before = useLogStore.getState();
-    const lastTime = before.logs[before.logs.length - 1]!.time;
+    const lastTime = before.logs.at(-1)!.time;
 
     act(() =>
       useLogStore.getState().appendFileLogs([

@@ -57,7 +57,7 @@ function withFailureLogLine(
     return prev;
   }
   const text = `✗ 生成失败：${reason}`;
-  const last = prev[prev.length - 1];
+  const last = prev.at(-1);
   /* 末行已是同因错误（服务端自己写过 ✗ 生成失败）→ 不重复追加。 */
   if (last?.level === "error" && typeof last.msg === "string" && last.msg.includes(reason)) {
     return prev;
@@ -253,7 +253,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
       if (idle > 20_000 && status === "RUNNING") {
         const now = Date.now();
         setLogs((prev) => {
-          const last = prev[prev.length - 1];
+          const last = prev.at(-1);
           if (
             last &&
             typeof last.msg === "string" &&

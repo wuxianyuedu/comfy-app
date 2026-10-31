@@ -81,7 +81,7 @@ function launcherTargetNames(): Array<string> {
   return [...block.matchAll(/path\.join\(([^)]*)\)/g)]
     .map((m) => {
       const parts = [...(m[1] ?? "").matchAll(/"([^"]+)"/g)].map((q) => q[1] ?? "");
-      const last = parts[parts.length - 1] ?? "";
+      const last = parts.at(-1) ?? "";
       return last.replace(/^src-tauri\//, "").replace(/\/$/, "");
     })
     .filter(Boolean)
