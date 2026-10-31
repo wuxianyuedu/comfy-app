@@ -52,7 +52,7 @@ export function parsePyvenvCfg(content: string): PyvenvConfig {
     const value = line
       .slice(eq + 1)
       .trim()
-      .replace(/^"|"$/g, "");
+      .replaceAll(/^"|"$/g, "");
     if (!value) {
       continue;
     }
