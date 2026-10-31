@@ -312,14 +312,12 @@ export function WorkflowNodeArdot() {
         <PortRowString
           label="positive_prompt"
           type="STRING"
-          value={
-            "1girl, silver hair, intricate white armor, soft cinematic lighting, highly detailed, masterpiece --ar 3:4"
-          }
+          value="1girl, silver hair, intricate white armor, soft cinematic lighting, highly detailed, masterpiece --ar 3:4"
         />
         <PortRowString
           label="negative_prompt"
           type="STRING"
-          value={"lowres, bad anatomy, worst quality, blurry, extra fingers, watermark, text"}
+          value="lowres, bad anatomy, worst quality, blurry, extra fingers, watermark, text"
         />
         <PortRowInt label="seed" type="INT" value="378304737375764" />
 

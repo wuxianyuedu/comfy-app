@@ -45,7 +45,7 @@ export function StoryboardPlanner(props: Props) {
     <div className="flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="u-title">
-          分镜规划{""}
+          分镜规划
           <span className="text-muted-foreground">({shots.length})</span>
         </h3>
         <div className="flex gap-2">
