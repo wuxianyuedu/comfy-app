@@ -77,32 +77,35 @@ function dotenvValueAt(root, key) {
 /**
  * 本检出若是**链接 worktree**，回主检出的根；否则回 `null`。
  *
- * 判据是 `git rev-parse --git-common-dir`：worktree 的 commondir 指向主检出的 `.git`
- * （其父目录即主检出根），而主检出自己的 commondir 就是本根下的 `.git` —— 两者相同
- * ⇒ 不是链接 worktree，不猜。非 git 检出（CI / 干净目录）spawn 非 0 ⇒ 同样 `null`。
+ * 判据是**两次 rev-parse 的差**：`--git-dir`（本检出自己的 git 目录）与
+ * `--git-common-dir`（共享的那份）在主检出里相等，在链接 worktree 里前者指向
+ * 主检出的 worktrees/<名> 子目录 —— 不等 ⇒ 是链接 worktree，主检出根 =
+ * commondir 的父目录。**不**拿根路径去硬拼 git 目录名：worktree / CI 缓存
+ * 检出里那个名字对应的是一个文件而不是目录，那类拼接正是 `git-dir-literal-scan`
+ * 判据存在要拦的形状（scripts/** 除 git-dir.mjs 外禁止；连注释里的形状都拦 ——
+ * 实测 cnb-lpr-1k68pquq6：本文件的注释原样被它点名）。非 git 检出 spawn 非 0 ⇒
+ * 同样 `null`。
  *
  * @param {string} root 本检出根
  * @returns {string | null}
  */
 function mainCheckoutRoot(root) {
   try {
-    const got = spawnSync("git", ["rev-parse", "--git-common-dir"], {
-      cwd: root || process.cwd(),
-      encoding: "utf8",
-    });
-    if (got.status !== 0) {
-      return null;
-    }
-    const common = String(got.stdout ?? "").trim();
-    if (common === "") {
-      return null;
-    }
     const cwd = root || process.cwd();
-    const abs = path.isAbsolute(common) ? common : path.resolve(cwd, common);
-    if (path.resolve(abs) === path.resolve(path.join(cwd, ".git"))) {
+    const rev = (args) => {
+      const got = spawnSync("git", args, { cwd, encoding: "utf8" });
+      return got.status === 0 ? String(got.stdout ?? "").trim() : "";
+    };
+    const own = rev(["rev-parse", "--git-dir"]);
+    const common = rev(["rev-parse", "--git-common-dir"]);
+    if (own === "" || common === "") {
       return null;
     }
-    return path.dirname(abs);
+    const abs = (p) => (path.isAbsolute(p) ? p : path.resolve(cwd, p));
+    if (path.resolve(abs(own)) === path.resolve(abs(common))) {
+      return null;
+    }
+    return path.dirname(abs(common));
   } catch {
     return null;
   }
