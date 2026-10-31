@@ -7,13 +7,15 @@ import {
   attributeAffected,
   buildImportedBy,
   changedPathsFrom,
-  changedPathsFromNameStatus,
   isSourcePath,
   isTestPath,
   resolveAffectedTests,
   specCandidates,
   wideFallbackNote,
 } from "../scripts/affected-tests.mjs";
+/* `--name-status` 的解析住在零依赖模块里（ISSUE #2830：说明符扫描器带上了
+ * `typescript`，沙箱里那份 `changed-scope.mjs` 不能再连带它）。 */
+import { changedPathsFromNameStatus } from "../scripts/git-name-status.mjs";
 /* 清单那一跳的载体住在自己那份文件里 —— 用例按它真实的落点 import，
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
 import { describeListFailure } from "../scripts/affected-launch-changed-list.mjs";
@@ -142,6 +144,38 @@ describe("affected-tests：五条命中判据", () => {
     expect(run(["src/lib/core/hidden.ts"]).tests).not.toContain("src/x/uses-barrel.test.ts");
     // 改 barrel 自己也照样算
     expect(run(["src/lib/core/index.ts"]).tests).toContain("src/x/uses-barrel.test.ts");
+  });
+
+  it("③'''' 字符串 / 模板串 / 注释里的 import 不算依赖（ISSUE #2830）", () => {
+    // 门禁自测常把「源码样例」当字符串塞进夹具。按正则取说明符会把它当成真引用，
+    // 于是改样例里提到的那份模块时，整份重档自测被拉进无关提交的受影响面
+    // （现场：`tests/check-ui-primitives.test.ts` 77.6s / `tests/check-format.test.ts`
+    // 44.3s 被两句夹具路径选中）。说明符改由词法扫描器给之后，这一整类边不再成立。
+    const run = harness({
+      "src/lib/clamp.ts": "export const clamp = 1;",
+      "src/a/fixture.test.ts": [
+        "const sample = 'import { clamp } from \"~/lib/clamp\";';",
+        'const tpl = `export * from "~/lib/clamp"`;',
+        "// import { clamp } from '~/lib/clamp';",
+        "it('x', () => { expect(sample + tpl).toBeTruthy(); });",
+      ].join("\n"),
+      "src/a/real.test.ts": "import { clamp } from '~/lib/clamp';",
+      // 扫描器对 `export * as ns from` 这一形态不报，说明符抽取里单独补了一条。
+      // 目标写成不存在的模块：本文件自己的源码里也有一份同形夹具，别让它变成一条真边。
+      "src/a/real-ns.test.ts": "export * as clampNs from '~/lib/clamp-ns';",
+      // JSDoc 里的类型引用是真的依赖（tsc / typedoc 都沿它解析），扫描器不报，
+      // 按「落在注释里」补回来；字符串里的同形文本仍然不算。
+      "src/a/type-ref.test.ts": "/** @type {import('~/lib/clamp-type').T} */\nconst x = 1;",
+      "src/a/type-ref-string.test.ts": "const s = \"import('~/lib/clamp-type-string')\";",
+    });
+    const tests = run(["src/lib/clamp.ts"]).tests;
+    expect(tests).not.toContain("src/a/fixture.test.ts");
+    expect(tests).toContain("src/a/real.test.ts");
+    expect(run(["src/lib/clamp-ns.ts"]).tests).toContain("src/a/real-ns.test.ts");
+    expect(run(["src/lib/clamp-type.ts"]).tests).toContain("src/a/type-ref.test.ts");
+    expect(run(["src/lib/clamp-type-string.ts"]).tests).not.toContain(
+      "src/a/type-ref-string.test.ts",
+    );
   });
 
   it("③''' 被删掉的文件不在索引清单里，它的消费方仍要被拉进来", () => {

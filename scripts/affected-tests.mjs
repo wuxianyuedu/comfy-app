@@ -60,10 +60,12 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+import ts from "typescript";
+
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 import { selectFixedByFace } from "./fixed-gate-input-faces.mjs";
-import { parseDiffEntries } from "./launcher-core/sync-attribution.mjs";
+import { changedPathsFromNameStatus, normalizeRel } from "./git-name-status.mjs";
 import { stripComments } from "./tw4-scan-core.mjs";
 
 const HERE = import.meta.dirname;
@@ -111,49 +113,6 @@ export function isTestPath(rel) {
   return (rel.startsWith("src/") || rel.startsWith("tests/")) && /\.test\.tsx?$/.test(rel);
 }
 
-/** 仓库相对路径的规范形态：去空白、反斜杠转正斜杠。 */
-/** @param {string} raw @returns {string} */
-function normalizeRel(raw) {
-  return String(raw).trim().replace(/\\/g, "/");
-}
-
-/**
- * `git diff --name-status -M` 的输出 → 改动面。
- *
- * 为什么不用 `--name-only`：改名（`R`）在那一份输出里**只给新路径**，而旧路径才是
- * 「谁按路径消费了它」的线索 —— 用旧路径读文件、又不 import 的用例因此整条漏跑
- * （ISSUE #2226）。`R` 行把新旧两边都收进改动面；`C`（复制）源文件没变，只收新路径。
- * 解析复用 `launcher-core/sync-attribution.mjs` 的 `parseDiffEntries`（运行期陈旧路由
- * 归因也在用它，不另写一份切分）。
- *
- * @param {string} output `git diff --name-status -M` 的原始输出
- * @returns {{paths: string[], renamedFrom: string[]}} `paths` 是改动面（含改名旧路径），
- *   `renamedFrom` 只放 `R` 行的旧路径（读出改名事件用）
- */
-export function changedPathsFromNameStatus(output) {
-  /** @type {string[]} */
-  const paths = [];
-  /** @type {string[]} */
-  const renamedFrom = [];
-  for (const entry of parseDiffEntries(output)) {
-    if (entry.status === "R" && entry.oldPath) {
-      const old = normalizeRel(entry.oldPath);
-      if (old) {
-        paths.push(old);
-        renamedFrom.push(old);
-      }
-    }
-    const next = normalizeRel(entry.path);
-    if (next) {
-      paths.push(next);
-    }
-  }
-  return {
-    paths: [...new Set(paths)],
-    renamedFrom: [...new Set(renamedFrom)],
-  };
-}
-
 /** import 说明符不带扩展名，按候选逐个试（含目录形式的 barrel）。 */
 const EXT_CANDIDATES = [
   "",
@@ -195,12 +154,34 @@ export function specCandidates(spec, fromFile) {
   return EXT_CANDIDATES.map((ext) => base + ext);
 }
 
-/** 说明符抽取：`from` / `import` / `require` / `vi.mock` / `jest.mock` 后的字符串字面量。
- *  可选左括号让动态 `import("x")` 与 `require("x")` 也走同一条。 */
-const SPEC_RE = /(?:\bfrom|\bimport|\brequire|vi\.mock|jest\.mock)\s*\(?\s*["']([^"'\n]+)["']/g;
+/** `vi.mock` / `jest.mock` 的说明符：`preProcessFile` 只认 import/require/export
+ *  这几类语法，测试里的模块替身不在它那份结果里，所以这一条单独补。 */
+const MOCK_RE = /(?:vi|jest)\.mock\s*\(\s*["']([^"'\n]+)["']/g;
+
+/** `export * as ns from "x"`：扫描器对这一形态不报（实测 TS 6.0.3），而它确实是
+ *  一条转出口 —— 漏了就是「闭包算少了」那一侧，单独补一条。 */
+const EXPORT_NS_RE = /\bexport\s+(?:type\s+)?\*\s+as\s+[\w$]+\s+from\s*["']([^"'\n]+)["']/g;
+
+/** JSDoc 里的类型引用 `import("x")`（`@param {import("…").T}` / `@type {import("…")}`）：
+ *  扫描器只按 JS 语法走，注释不在它的结果里；而这类引用**是真的依赖** —— tsc 与
+ *  typedoc 都沿它解析类型（`scripts/lockfile/lock-diff.d.mts` 就是 typedoc 输入面闭包
+ *  里唯一一条靠它进图的文件）。所以按「落在注释里」把它补回来。 */
+const TYPE_IMPORT_RE = /\bimport\s*\(\s*["']([^"'\n]+)["']\s*\)/g;
 
 /**
  * 一份源码静态引用到的模块（候选路径集合，含 barrel 的 `dir/index.*` 形态）。
+ *
+ * 说明符由 TypeScript 的**预处理扫描器**（`ts.preProcessFile`）给出：它按词法走
+ * 文件，字符串与模板串里「长得像 import」的那一段不算引用，静态 / 动态 `import()` /
+ * `require` / `export {…} from` / `export * from` 全覆盖。用正则抓这一段会连
+ * **夹具字符串**一起算成依赖（ISSUE #2830：一份门禁自测把源码样例写成字符串，
+ * 于是改样例里提到的那份模块就把整份重档自测拉进无关提交的受影响面）。
+ *
+ * 扫描器没覆盖的三种形态各补一条规则：`vi.mock` 的模块替身、`export * as ns from`、
+ * 以及 JSDoc 里的类型引用 `import("…")`（前两条跑在**剥注释之后**的文本上，第三条
+ * 反过来只认注释里那一份）。已知边界：字符串里**逐字**写出前两种形态时仍会被算成
+ * 依赖（扫描器管不到它们，剥注释也只剥真的注释）—— 偏「多跑几份」而不是「少跑」，
+ * 全仓实测只出现在自测夹具里。
  *
  * **导出的理由**：`scripts/docs-api-input-closure.mjs` 要算 typedoc 输入面的
  * 传递闭包，而它需要的正是这同一份说明符解析 —— 抄第二份正则就会漂（§12.12 / §12.18），
@@ -212,12 +193,28 @@ const SPEC_RE = /(?:\bfrom|\bimport|\brequire|vi\.mock|jest\.mock)\s*\(?\s*["'](
  */
 export function specifiersOf(text, fromFile) {
   const out = new Set();
-  for (const m of text.matchAll(SPEC_RE)) {
-    const spec = m[1];
-    if (!spec) {
+  for (const file of ts.preProcessFile(text, true, true).importedFiles) {
+    for (const cand of specCandidates(file.fileName, fromFile)) {
+      out.add(cand);
+    }
+  }
+  const code = stripComments(text);
+  for (const re of [MOCK_RE, EXPORT_NS_RE]) {
+    for (const m of code.matchAll(re)) {
+      for (const cand of specCandidates(m[1], fromFile)) {
+        out.add(cand);
+      }
+    }
+  }
+  /* 类型引用只认**注释里**那一份：`stripComments` 保持长度、把注释字符换成空格，
+   * 所以「同一段在剥完注释的文本里变成空白」= 它落在注释里。代码里的动态
+   * `import("…")` 扫描器已经报过，字符串里的同形文本则原样保留、不会命中这一条。 */
+  for (const m of text.matchAll(TYPE_IMPORT_RE)) {
+    const idx = m.index ?? 0;
+    if (code.slice(idx, idx + m[0].length).trim() !== "") {
       continue;
     }
-    for (const cand of specCandidates(spec, fromFile)) {
+    for (const cand of specCandidates(m[1] ?? "", fromFile)) {
       out.add(cand);
     }
   }
