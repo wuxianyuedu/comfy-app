@@ -23,14 +23,14 @@ import type { OptionGroup } from "~/lib/workshop/character-options";
  * 元素滚动重定位全部交给 base-ui Positioner。
  */
 interface AttributeMultiSelectProps {
-  label: string;
+  className?: string;
+  disabled?: boolean;
   groups: Array<OptionGroup>;
-  /** 当前已选中值（源即 Character 对应字段） */
-  value: Array<string>;
+  label: string;
   onChange: (value: Array<string>) => void;
   placeholder?: string;
-  disabled?: boolean;
-  className?: string;
+  /** 当前已选中值（源即 Character 对应字段） */
+  value: Array<string>;
 }
 
 export function AttributeMultiSelect({

@@ -34,9 +34,6 @@ export type BackoffShape =
 export interface BackoffShapeOptions {
   /** `fixed` 的间隔，或 `exponential` 的基数（毫秒）。 */
   baseMs: number;
-  shape: BackoffShape;
-  /** 指数退避的封顶（毫秒）。`fixed` 下忽略。 */
-  maxMs?: number;
   /**
    * 指数退避里 `attempt` 的封顶（默认无）。
    *
@@ -46,6 +43,9 @@ export interface BackoffShapeOptions {
    * 展示时也是有限数）。「最多几次」由调用处的循环边界表达。
    */
   maxAttempt?: number;
+  /** 指数退避的封顶（毫秒）。`fixed` 下忽略。 */
+  maxMs?: number;
+  shape: BackoffShape;
 }
 
 export interface BackoffOptions extends BackoffShapeOptions {

@@ -39,20 +39,20 @@ export interface UseHistoryPanelArgs {
 }
 
 export interface HistoryPanelController {
-  tasks: Array<HistoryTaskRow>;
-  loading: boolean;
-  error: string | null;
-  scope: HistoryScope;
-  filter: HistoryFilter;
-  display: DisplayMode;
   /** 进行中任务数（>0 时轮询开启）。 */
   activeCount: number;
+  display: DisplayMode;
+  error: string | null;
+  filter: HistoryFilter;
   /** 全局记录数；null = 未探测/探测失败，不显示「查看全部」引导。 */
   globalCount: number | null;
-  setScope: (scope: HistoryScope) => void;
-  setFilter: (filter: HistoryFilter) => void;
-  setDisplay: (display: DisplayMode) => void;
+  loading: boolean;
   refresh: () => void;
+  scope: HistoryScope;
+  setDisplay: (display: DisplayMode) => void;
+  setFilter: (filter: HistoryFilter) => void;
+  setScope: (scope: HistoryScope) => void;
+  tasks: Array<HistoryTaskRow>;
 }
 
 export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPanelController {

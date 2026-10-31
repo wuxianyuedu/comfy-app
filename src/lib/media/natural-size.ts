@@ -24,16 +24,16 @@
 
 /** 读自然尺寸需要的最小宿主形状（`HTMLImageElement` / `HTMLVideoElement` 都满足）。 */
 export interface NaturalSizeSource {
-  naturalWidth?: number;
   naturalHeight?: number;
-  videoWidth?: number;
+  naturalWidth?: number;
   videoHeight?: number;
+  videoWidth?: number;
 }
 
 /** 一张媒体的自然尺寸（像素）。两个数都保证是**正**的有限数。 */
 export interface NaturalSize {
-  width: number;
   height: number;
+  width: number;
 }
 
 /**

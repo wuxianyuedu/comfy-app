@@ -50,18 +50,26 @@ export type NodeEnv = "development" | "test" | "production";
  * 运行时特性开关集合。把「是否启用某项能力」收敛到一处，便于排障与灰度。
  */
 export interface FeatureFlags {
-  /** 是否启用孤儿任务回收（reaper）。压测或调试时可临时关闭。 */
-  readonly reaperEnabled: boolean;
   /** 调试模式抽屉的默认开关（用户可在 localStorage 覆盖）。 */
   readonly debugModeDefault: boolean;
+  /** 是否启用孤儿任务回收（reaper）。压测或调试时可临时关闭。 */
+  readonly reaperEnabled: boolean;
 }
 
 /**
  * 应用配置树。进程级单例，所有字段只读。
  */
 export interface AppConfig {
+  /** 本机 ComfyUI 的 REST 基础地址（强制 127.0.0.1，见安全约束）。 */
+  readonly comfyuiBaseUrl: string;
+  /** 本机 ComfyUI 的 WebSocket 地址（由 baseUrl 推导）。 */
+  readonly comfyuiWsUrl: string;
+  /** `DATABASE_URL`（SQLite 文件路径或远程连接串）。 */
+  readonly databaseUrl: string;
   /** 当前环境。 */
   readonly env: NodeEnv;
+  /** 特性开关。 */
+  readonly features: FeatureFlags;
   /** 是否开发环境（快捷判断）。 */
   readonly isDev: boolean;
   /** 是否生产环境。 */
@@ -70,16 +78,8 @@ export interface AppConfig {
   readonly isTest: boolean;
   /** 日志级别（见 `core/logger`）。 */
   readonly logLevel: "debug" | "info" | "warn" | "error";
-  /** `DATABASE_URL`（SQLite 文件路径或远程连接串）。 */
-  readonly databaseUrl: string;
-  /** 本机 ComfyUI 的 REST 基础地址（强制 127.0.0.1，见安全约束）。 */
-  readonly comfyuiBaseUrl: string;
-  /** 本机 ComfyUI 的 WebSocket 地址（由 baseUrl 推导）。 */
-  readonly comfyuiWsUrl: string;
   /** 应用开发服务监听端口，取值来自 .env 的 COMFYAPP_PORT。 */
   readonly port: number;
-  /** 特性开关。 */
-  readonly features: FeatureFlags;
 }
 
 /**

@@ -96,20 +96,20 @@ vi.mock("~/lib/log/log-file-client", () => {
 });
 
 interface Behavior {
-  comfyStart?: { detail: string; ok: boolean };
   /** comfyui.status 返回的 base（非空即「运行中」，供「打开查看」使用）。 */
   comfyBase?: string | null;
-  /** comfyui.status 返回的**已保存**路径（启动动作实际会用的那一条）。 */
-  comfyPath?: string;
   /** comfyEmbeddable 探测结论（决定页签里渲染 iframe 还是可读说明）。 */
   comfyEmbeddable?: { embeddable: boolean; reason: string };
-  /** comfyOpen（在浏览器打开）的返回文案；默认成功。 */
-  comfyOpen?: { detail: string; ok: boolean };
   comfyInstance?: {
     desktopManaged: boolean;
     instanceType: "desktop" | "portable" | "venv" | null;
     pathConfigured: boolean;
   };
+  /** comfyOpen（在浏览器打开）的返回文案；默认成功。 */
+  comfyOpen?: { detail: string; ok: boolean };
+  /** comfyui.status 返回的**已保存**路径（启动动作实际会用的那一条）。 */
+  comfyPath?: string;
+  comfyStart?: { detail: string; ok: boolean };
 }
 
 let behavior: Behavior = {};

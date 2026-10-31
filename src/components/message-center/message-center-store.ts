@@ -18,16 +18,12 @@ import { nextId } from "~/lib/unique-id";
 export type MessageKind = "update" | "restart" | "offline" | "info";
 
 export interface MessageRecord {
+  /** 正文（全屏查看的消息内容，可多行换行） */
+  body: string;
   /** 短 id，幂等去重用 */
   id: string;
   /** 消息类型：更新/重启/断开/其他 */
   kind: MessageKind;
-  /** 一句话标题（状态栏 tooltip / 列表标题行） */
-  title: string;
-  /** 正文（全屏查看的消息内容，可多行换行） */
-  body: string;
-  /** Unix 时间戳（ms） */
-  time: number;
   /** 是否已读（决定状态栏未读计数） */
   read: boolean;
   /**
@@ -41,6 +37,10 @@ export interface MessageRecord {
    * 同源，分组头带上它就能直接和日志目录对号。
    */
   runId: string | null;
+  /** Unix 时间戳（ms） */
+  time: number;
+  /** 一句话标题（状态栏 tooltip / 列表标题行） */
+  title: string;
 }
 
 /** 供 push 传入的载荷（id/time/read 由 store 补全，runId 缺省取当前启动）。 */
@@ -60,12 +60,8 @@ export type NewMessage = Omit<MessageRecord, "id" | "time" | "read" | "runId"> &
 };
 
 export interface MessageCenterState {
-  /** 全屏消息面板是否打开 */
-  open: boolean;
-  /** 最新在前 */
-  messages: Array<MessageRecord>;
-  /** 是否已经从持久化里恢复过（只恢复一次，见 `hydrate`）。 */
-  hydrated: boolean;
+  /** 清空所有消息 */
+  clear: () => void;
   /**
    * 当前是哪一次启动（运行时事实，**不持久化**）。
    *
@@ -75,19 +71,23 @@ export interface MessageCenterState {
    * 分组，不需要每一个都去接一次探活。
    */
   currentRunId: string | null;
-  setOpen: (open: boolean) => void;
-  toggleOpen: () => void;
-  /** 新增一条消息；未读，排到最前。 */
-  push: (m: NewMessage) => void;
-  /** 记下当前是哪一次启动（runId 变化时由探活链路调用）。 */
-  setCurrentRunId: (runId: string | null) => void;
-  markRead: (id: string) => void;
-  markAllRead: () => void;
-  remove: (id: string) => void;
-  /** 清空所有消息 */
-  clear: () => void;
   /** 从持久化里恢复消息（挂载后调一次，见文件末尾的接线说明）。 */
   hydrate: () => void;
+  /** 是否已经从持久化里恢复过（只恢复一次，见 `hydrate`）。 */
+  hydrated: boolean;
+  markAllRead: () => void;
+  markRead: (id: string) => void;
+  /** 最新在前 */
+  messages: Array<MessageRecord>;
+  /** 全屏消息面板是否打开 */
+  open: boolean;
+  /** 新增一条消息；未读，排到最前。 */
+  push: (m: NewMessage) => void;
+  remove: (id: string) => void;
+  /** 记下当前是哪一次启动（runId 变化时由探活链路调用）。 */
+  setCurrentRunId: (runId: string | null) => void;
+  setOpen: (open: boolean) => void;
+  toggleOpen: () => void;
 }
 
 /* id 走全库唯一出口 `~/lib/unique-id` —— 收口前这里自写「时间戳 + 计数器」，

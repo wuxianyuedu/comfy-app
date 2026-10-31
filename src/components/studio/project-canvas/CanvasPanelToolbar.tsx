@@ -10,8 +10,6 @@ export type CanvasPanelType = "materials" | "history" | null;
 interface CanvasPanelToolbarProps {
   /** 当前打开的面板（null = 无） */
   active: CanvasPanelType;
-  /** 用户切换面板时调用 */
-  onSelect: (panel: CanvasPanelType) => void;
   /**
    * 为 true 时：渲染成画布内绝对定位的浮动元素
    *（没有面板打开时用）。
@@ -19,6 +17,8 @@ interface CanvasPanelToolbarProps {
    *  与面板竖向居中并排）。
    */
   floating?: boolean;
+  /** 用户切换面板时调用 */
+  onSelect: (panel: CanvasPanelType) => void;
 }
 
 /**

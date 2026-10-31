@@ -37,6 +37,10 @@ import { useCallback, useMemo, useState } from "react";
 export type ErrorScope = string | null;
 
 export interface ItemErrors {
+  /** 手动清掉某一条（如用户重新打开该行的编辑器）。 */
+  clear: (key: ErrorScope) => void;
+  /** 清掉全部（如整表刷新 / 关闭弹窗）。 */
+  clearAll: () => void;
   /**
    * 取某一条的错误文案；没有则该条不标红。
    *
@@ -53,10 +57,6 @@ export interface ItemErrors {
    * 同时清掉无 key 那档（整表错误在任一条成功后即失效）。
    */
   report: (key: ErrorScope) => (kind: "ok" | "err", detail: string) => void;
-  /** 手动清掉某一条（如用户重新打开该行的编辑器）。 */
-  clear: (key: ErrorScope) => void;
-  /** 清掉全部（如整表刷新 / 关闭弹窗）。 */
-  clearAll: () => void;
 }
 
 /**

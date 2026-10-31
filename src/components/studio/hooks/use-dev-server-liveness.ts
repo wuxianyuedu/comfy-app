@@ -69,49 +69,8 @@ const LAST_RESTART_KEY = "devServer.lastRestartAt";
 const LAST_BOOT_ID_KEY = "devServer.lastBootId";
 
 export interface DevServerLiveness {
-  /** true = 本会话刚检测到一次**真正**重启（bootId 变化），短暂高亮。 */
-  restarting: boolean;
-  /**
-   * **这一份进程对本次页面会话来说是新的**（冷启动或真重启）。
-   *
-   * 与 `restarting` 的差别是「10 秒高亮」与「本次会话的既成事实」：那个会自己
-   * 复位，这个不会。它存在的理由是有一条判据只有它能给 ——「进程换了一个」不能
-   * 看探活失败（显示器关闭 / 后台节流 / 瞬时断网都会失败，那几条已明确不判定
-   * 重启），而整页刷新**不算**进程换新（同一份进程还在服务，刷新只是页面重来）。
-   * 消息中心「应用服务已启动 / 已恢复」那条记录就建在它上面
-   * （见 `~/lib/shell/app-service-message`）。
-   */
-  processIsNew: boolean;
-  /**
-   * 「上一次应用服务为什么结束」——进程死亡那一刻由启动编排落盘、这里在服务
-   * **恢复应答之后**读回（ISSUE #1692）。null = 没有原因可讲 / 还没读到。
-   */
-  lastExit: AppServiceExitNotice | null;
-  /** 最近一次**真正**重启的时刻；本浏览器会话无记录时为 null。 */
-  lastRestartAt: number | null;
-  /** 最近一次探测成功（进程可达）。首帧（尚未探过）为 false。 */
-  probeOk: boolean;
-  /**
-   * 最近一次探测**得到了 404**：进程在应答，但这条探活端点不在编译图里
-   * （陈旧路由表 / Turbopack 会话级路由失效）。
-   *
-   * 与 `probeOk` 的区别是「答了、只是答的是 404」与「没答」——用户能做的动作
-   * 因此不同（重启应用 vs 等它起来），状态栏必须分得开，不能再拿一句
-   * 「连接中」把两者盖成同一件事。
-   */
-  routeTableStale: boolean;
-  /**
-   * **抗抖动后的可达性**（喂给 `deriveDevServerStatus` 的那个事实）。
-   *
-   * 与 `probeOk` 的差别正是 {@link OFFLINE_CONFIRM_FAILURES}：单拍失败不把
-   * 「可达」翻成 false，连续失败到门槛才算。状态栏与消息中心都只看这个值——
-   * 它们要回答的是「服务现在能不能应答」，而不是「刚才那一拍有没有应答」。
-   */
-  reachable: boolean;
   /** 连续失败拍数（未达门槛时说明它正在积累）；探通一次即归零。 */
   consecutiveFailures: number;
-  /** `lastExit` 对应记录的落盘时刻（毫秒）；无记录为 null。 */
-  lastExitAt: number | null;
   /**
    * 当前是哪一次**启动**（launcher 的 runId）；null = 拿不到（纯手工 `pnpm dev`、
    * 端点还没答过、或这次启动没走 launcher）。
@@ -127,6 +86,47 @@ export interface DevServerLiveness {
   /** 本会话是否曾成功探到过该进程：用于把「还没探通」与「曾经通、现在断」
    *  区分开——只有后者才是「应用服务已断开」。 */
   everOnline: boolean;
+  /**
+   * 「上一次应用服务为什么结束」——进程死亡那一刻由启动编排落盘、这里在服务
+   * **恢复应答之后**读回（ISSUE #1692）。null = 没有原因可讲 / 还没读到。
+   */
+  lastExit: AppServiceExitNotice | null;
+  /** `lastExit` 对应记录的落盘时刻（毫秒）；无记录为 null。 */
+  lastExitAt: number | null;
+  /** 最近一次**真正**重启的时刻；本浏览器会话无记录时为 null。 */
+  lastRestartAt: number | null;
+  /** 最近一次探测成功（进程可达）。首帧（尚未探过）为 false。 */
+  probeOk: boolean;
+  /**
+   * **这一份进程对本次页面会话来说是新的**（冷启动或真重启）。
+   *
+   * 与 `restarting` 的差别是「10 秒高亮」与「本次会话的既成事实」：那个会自己
+   * 复位，这个不会。它存在的理由是有一条判据只有它能给 ——「进程换了一个」不能
+   * 看探活失败（显示器关闭 / 后台节流 / 瞬时断网都会失败，那几条已明确不判定
+   * 重启），而整页刷新**不算**进程换新（同一份进程还在服务，刷新只是页面重来）。
+   * 消息中心「应用服务已启动 / 已恢复」那条记录就建在它上面
+   * （见 `~/lib/shell/app-service-message`）。
+   */
+  processIsNew: boolean;
+  /**
+   * **抗抖动后的可达性**（喂给 `deriveDevServerStatus` 的那个事实）。
+   *
+   * 与 `probeOk` 的差别正是 {@link OFFLINE_CONFIRM_FAILURES}：单拍失败不把
+   * 「可达」翻成 false，连续失败到门槛才算。状态栏与消息中心都只看这个值——
+   * 它们要回答的是「服务现在能不能应答」，而不是「刚才那一拍有没有应答」。
+   */
+  reachable: boolean;
+  /** true = 本会话刚检测到一次**真正**重启（bootId 变化），短暂高亮。 */
+  restarting: boolean;
+  /**
+   * 最近一次探测**得到了 404**：进程在应答，但这条探活端点不在编译图里
+   * （陈旧路由表 / Turbopack 会话级路由失效）。
+   *
+   * 与 `probeOk` 的区别是「答了、只是答的是 404」与「没答」——用户能做的动作
+   * 因此不同（重启应用 vs 等它起来），状态栏必须分得开，不能再拿一句
+   * 「连接中」把两者盖成同一件事。
+   */
+  routeTableStale: boolean;
   /**
    * 这一拍之前有多少毫秒**没人在探测**（0 = 紧接上一拍）。
    *

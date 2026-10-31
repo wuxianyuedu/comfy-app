@@ -9,33 +9,10 @@ import { z } from "zod";
 
 /* 一个暴露出来的引脚，形状与 GET /api/workflows/[id] 返回的一致。 */
 export interface WorkflowIOEntry {
-  direction: "input" | "output";
-  /** IO 编辑模式里选的**语义**分桶 —— 不是数据类型。
-   *  取值为 "param" / "widget" / "output"（自定义种类可自由取值）。 */
-  kind: string;
-  nodeId: string;
-  name: string;
-  label?: string;
-  /** ComfyUI 的数据类型：STRING / INT / FLOAT / BOOLEAN / IMAGE / VIDEO … */
-  type?: string;
   defaultValue?: unknown;
-  nodeTitle?: string;
-  multiline?: boolean;
-  /** 把某个由控件支撑的输入标为必填。 */
-  required?: boolean;
-  /** 由 ComfyUI /object_info 解析出的 COMBO 候选项列表。 */
-  options?: Array<string>;
+  direction: "input" | "output";
   /** 用户自定义的展示顺序。 */
   displayOrder?: number;
-  /** seed 类参数的「控件后行为」（fixed / increment / decrement / random），
-   *  与 ComfyUI 的 control_after_generate 对应；仅 seed 类 widget 有意义。 */
-  seedMode?: string;
-  /** 多模式参数覆盖层。键为模式码，值为该模式下的默认值与可见性。
-   *  存在 workflowIO 的 JSON 列内，因此新增模式无需改表结构。
-   *  键名 `modeOverrides` 刻意与 `WorkflowTemplate.modes`（工作流级模式清单）
-   *  区分开 —— 两者都叫 `modes` 时是同一个 JSON 列里的两种含义，读的人分不清，
-   *  所以**只有一个名字**（历史列里那个 `modes` 键由 `parseWorkflowIOMap` 归一）。 */
-  modeOverrides?: Record<string, WorkflowIOModeOverride>;
   /** 宿主（外层封装）节点 id，**仅在「下钻到子工作流内部」勾选时**写入。
    *
    *  `nodeId` 此时是子图内部节点 id（`1670`），它在顶层画布上不存在；而运行期
@@ -44,6 +21,27 @@ export interface WorkflowIOEntry {
    *  子图定义里扫一遍」的巧合兜底 —— 后者在同名内部 id 或定义缺失时会静默失效
    *  （表现为「改了参数没生效」）。顶层勾选的条目没有本字段。 */
   hostNodeId?: string;
+  /** IO 编辑模式里选的**语义**分桶 —— 不是数据类型。
+   *  取值为 "param" / "widget" / "output"（自定义种类可自由取值）。 */
+  kind: string;
+  label?: string;
+  /** 多模式参数覆盖层。键为模式码，值为该模式下的默认值与可见性。
+   *  存在 workflowIO 的 JSON 列内，因此新增模式无需改表结构。
+   *  键名 `modeOverrides` 刻意与 `WorkflowTemplate.modes`（工作流级模式清单）
+   *  区分开 —— 两者都叫 `modes` 时是同一个 JSON 列里的两种含义，读的人分不清，
+   *  所以**只有一个名字**（历史列里那个 `modes` 键由 `parseWorkflowIOMap` 归一）。 */
+  modeOverrides?: Record<string, WorkflowIOModeOverride>;
+  multiline?: boolean;
+  name: string;
+  nodeId: string;
+  nodeTitle?: string;
+  /** 由 ComfyUI /object_info 解析出的 COMBO 候选项列表。 */
+  options?: Array<string>;
+  /** 把某个由控件支撑的输入标为必填。 */
+  required?: boolean;
+  /** seed 类参数的「控件后行为」（fixed / increment / decrement / random），
+   *  与 ComfyUI 的 control_after_generate 对应；仅 seed 类 widget 有意义。 */
+  seedMode?: string;
   /** 本层槽位上**作者写的**业务名（与槽位名不同才有值）。
    *
    *  富化链里它排在通用翻译（`localized`）之后，故不参与显示；但它是判定
@@ -51,19 +49,21 @@ export interface WorkflowIOEntry {
    *  （`value_1`）时，只有它还能说明本层确实有作者命名。没有它，同名条目在
    *  写入时会被当成作者命名固化回库，显示名随即退回别名（ISSUE #349）。 */
   slotLabel?: string;
+  /** ComfyUI 的数据类型：STRING / INT / FLOAT / BOOLEAN / IMAGE / VIDEO … */
+  type?: string;
 }
 
 /** 单个参数在某一个模式下的覆盖项。 */
 export interface WorkflowIOModeOverride {
   /** 覆盖该模式下的默认值；undefined = 不覆盖，回退到通用默认值。 */
   defaultValue?: unknown;
-  /** 该模式下是否显示此参数；undefined = 显示（默认可见）。 */
-  visible?: boolean;
   /** 该模式下是否标记为必填；undefined = 不覆盖，回退到条目级 required。 */
   required?: boolean;
   /** 该模式下 seed 类参数的「控件后行为」（fixed / increment / decrement /
    *  random）；undefined = 不覆盖，回退到条目级 seedMode。 */
   seedMode?: string;
+  /** 该模式下是否显示此参数；undefined = 显示（默认可见）。 */
+  visible?: boolean;
 }
 
 /** 方向 × 种类判别联合：合法的 (direction, kind) 组合只有 `input+param`、

@@ -34,16 +34,16 @@ import type { ExtractSession, ExtractSessionActions } from "./hooks/use-workshop
 
 interface Props {
   characters: Array<Character>;
-  styles: Array<StyleRef>; // available Skill styles
-  onCharactersChange: (c: Array<Character>) => void;
-  /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
-  scriptMarkdown?: string;
   /** 提取会话（busy/progress/日志）已收归工坊 controller，经 props 注入；
    * 未注入（遗留/独立使用场景）时退化为本组件内的局部会话。 */
   extract?: { actions: ExtractSessionActions; session: ExtractSession };
+  onCharactersChange: (c: Array<Character>) => void;
   /** 定妆照会话与生成通道配置（同样收归 controller，经 props 注入）。
    * 未注入时不渲染定妆照区块，遗留/独立使用场景不受影响。 */
   portrait?: CharacterPortraitContext;
+  /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
+  scriptMarkdown?: string;
+  styles: Array<StyleRef>; // available Skill styles
 }
 
 /** 判断导入内容是否为 JSON(角色卡 JSON 走结构化解析,其余按剧本 markdown 解析) */

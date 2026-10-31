@@ -72,11 +72,11 @@ export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
  * `hasApiKey` 是**只读视图字段**：服务端下发时逐条标「这条存过密钥」（与顶层同口径），
  * 供设置页显示「已配置」而不把明文送进浏览器；它不参与写入判定。 */
 export interface RemoteModelEntry {
-  name: string;
-  baseUrl?: string | null;
   apiKey?: string | null;
-  kind?: RemoteModelKind | null;
+  baseUrl?: string | null;
   hasApiKey?: boolean;
+  kind?: RemoteModelKind | null;
+  name: string;
 }
 
 /** `apiKey` 的三态归一（唯一一份口径，`normalizeExtraModels` 与 `splitExtraModels`
@@ -292,33 +292,33 @@ export function resolveTaskTemperature(opts: {
 }
 
 export interface LLMConfig {
-  provider: LLMProviderType;
+  /** remote 提供方的密钥；与 RemoteModelEntry.apiKey 一样只在服务端参与请求 */
+  apiKey?: string | null;
   /** OpenAI-compatible base URL: 本机 Ollama 默认值见 `~/lib/endpoints`
    *  （`OLLAMA_DEFAULT_BASE_URL`），也可以指向任意远端 `https://…/v1`。 */
   baseUrl: string;
-  model: string;
   /** 候选模型（设置页可配置多个）：本地 Ollama 为纯名字；远端条目可带独立 baseUrl / apiKey */
   extraModels?: Array<RemoteModelEntry> | null;
-  /** remote 提供方的密钥；与 RemoteModelEntry.apiKey 一样只在服务端参与请求 */
-  apiKey?: string | null;
+  maxTokens: number;
+  model: string;
+  provider: LLMProviderType;
   /** 全局默认温度（未区分任务类型的调用的 fallback） */
   temperature: number;
   /** 按任务类型覆盖的温度；缺失某 key 时回退到该任务的推荐默认值 */
   temperatureByTask?: Record<TaskType, number> | null;
-  maxTokens: number;
 }
 
 /* 发送给浏览器 / 与浏览器共享的配置形状（apiKey 已脱敏）。 */
 export interface LLMConfigView {
-  provider: LLMProviderType;
   baseUrl: string;
-  model: string;
   /** 候选模型名（条目已归一成名字下发，供工坊内切换；连接参数不下发） */
   extraModels?: Array<string> | null;
+  hasApiKey: boolean;
+  maxTokens: number;
+  model: string;
+  provider: LLMProviderType;
   temperature: number;
   temperatureByTask?: Record<TaskType, number> | null;
-  maxTokens: number;
-  hasApiKey: boolean;
 }
 
 /**
@@ -332,36 +332,36 @@ export type LLMContentPart =
   | { image_url: { url: string }; type: "image_url" };
 
 export interface LLMMessage {
-  role: "system" | "user" | "assistant" | "tool";
   /** 纯文本（历史用法）或多模态内容块数组（带图时用）。两者都合法。 */
   content: string | Array<LLMContentPart>;
+  role: "system" | "user" | "assistant" | "tool";
+  /** 仅 role === "tool" 时需要：标识对应哪个 tool_call。 */
+  tool_call_id?: string;
   /** 仅 role === "assistant" 时可能出现：携带 tool_calls 的消息回灌。 */
   tool_calls?: Array<{
     function: { arguments: string; name: string };
     id: string;
     type: "function";
   }>;
-  /** 仅 role === "tool" 时需要：标识对应哪个 tool_call。 */
-  tool_call_id?: string;
 }
 /** OpenAI function calling 工具定义（OpenAI 兼容 /chat/completions 的 tools 参数）。 */
 export interface LLMTool {
-  type: "function";
   function: {
     description: string;
     name: string;
     parameters?: Record<string, unknown>;
   };
+  type: "function";
 }
 
 /** OpenAI 兼容响应中的 tool_call 条目。 */
 export interface LLMToolCall {
-  id: string;
-  type: "function";
   function: {
     arguments: string;
     name: string;
   };
+  id: string;
+  type: "function";
 }
 
 /** 工坊阶段的 key —— 供按阶段挑选模型 / 提示各阶段能力 */
@@ -375,13 +375,13 @@ export const WORKSHOP_STAGES = /* SAFETY: 类型断言已复核 */ [
 export type WorkshopStage = (typeof WORKSHOP_STAGES)[number]["id"];
 
 export interface LLMRequestOptions {
-  provider?: LLMProviderType;
   baseUrl?: string;
-  model?: string;
-  temperature?: number;
   maxTokens?: number;
+  model?: string;
+  provider?: LLMProviderType;
   /** 调用方指定的任务类型，用于查找 temperatureByTask 覆盖 */
   taskType?: TaskType;
+  temperature?: number;
   /** OpenAI 兼容 function calling 的工具列表（可选，Agent 指挥用）。 */
   tools?: Array<LLMTool>;
   /**

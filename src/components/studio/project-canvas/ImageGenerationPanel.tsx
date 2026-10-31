@@ -37,10 +37,18 @@ import { useCancelTask } from "./hooks/use-cancel-task";
  */
 
 export interface ImageGenerationPanelProps {
+  d: CanvasNodeData;
   /** image / video / picture —— 决定用哪套类型表（video 用 VIDEO_WORKFLOW_TYPES） */
   kind: "image" | "video" | "picture";
-  d: CanvasNodeData;
+  modelTagLib: Array<{ count: number; id: string; name: string }>;
+  onGenerate: () => void;
+  /** 顶部 ResultCard 的「替换」回调（image/video 用；picture 忽略） */
+  onReplaceResult?: () => void;
   patch: (p: Partial<CanvasNodeData>) => void;
+  seededFor: React.MutableRefObject<string | null>;
+  setWfModes: React.Dispatch<React.SetStateAction<WorkflowModesState | null>>;
+  wfIO: WorkflowIOMap | null;
+  wfIOLoading: boolean;
   wfList: Array<{
     id: string;
     modelTags?: Array<string>;
@@ -48,16 +56,8 @@ export interface ImageGenerationPanelProps {
     sourcePath?: string | null;
     taskType?: string | null;
   }>;
-  modelTagLib: Array<{ count: number; id: string; name: string }>;
-  wfIO: WorkflowIOMap | null;
-  wfIOLoading: boolean;
   /** 工作流列表是否仍在加载。为 true 时工作流/模型选择区显示"加载中"而非空态。 */
   wfListLoading?: boolean;
-  seededFor: React.MutableRefObject<string | null>;
-  setWfModes: React.Dispatch<React.SetStateAction<WorkflowModesState | null>>;
-  onGenerate: () => void;
-  /** 顶部 ResultCard 的「替换」回调（image/video 用；picture 忽略） */
-  onReplaceResult?: () => void;
 }
 
 export function ImageGenerationPanel({

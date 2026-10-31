@@ -29,9 +29,9 @@ import { useProjectHome } from "./hooks/use-project-home";
 
 /** 一处「去这个视图继续」的入口。 */
 interface HomeEntry {
+  desc: string;
   id: WorkspaceView;
   label: string;
-  desc: string;
 }
 
 const ENTRIES: Array<HomeEntry> = [
@@ -42,12 +42,12 @@ const ENTRIES: Array<HomeEntry> = [
 ];
 
 export interface ProjectHomePageProps {
-  /** 当前项目名（由 workspace 从本地项目索引读，主页不重复读一份）。 */
-  projectName: string;
   /** 切到项目内的某个页签。 */
   onNavigate: (view: WorkspaceView) => void;
   /** 当前项目 id（活跃项目）—— 供「系列归层」面板把本项目挂到某集。 */
   projectId?: string;
+  /** 当前项目名（由 workspace 从本地项目索引读，主页不重复读一份）。 */
+  projectName: string;
 }
 
 export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectHomePageProps) {

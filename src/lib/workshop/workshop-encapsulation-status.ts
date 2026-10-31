@@ -37,32 +37,32 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 export type EncapsulationControl = "text" | "size" | "image" | "duration" | "number";
 
 export interface EncapsulationEntryStatus {
+  control: EncapsulationControl;
   /** 契约内稳定键（prompt / negative / size / first-frame / reference-image…）。 */
   id: string;
   /** 展示名（size 与模式契约编辑器同一份措辞，见 `modeContractInputLabel`）。 */
   label: string;
-  control: EncapsulationControl;
-  /** 生效落点（IO 端口键）；null = 还没落到任何端口（未配置）。 */
-  targetIoKey: string | null;
   /** 该口在**这一模式**下是否必备（随模式契约配置，见 `ModeContract.required`）。
    *
    *  必备与否只影响「能不能跑」的判据与界面上的一句提示：非必备口没有落点时工坊
    *  照跑（缺的值由工作流图内的默认值兜底），不是「配置没做完」。 */
   required: boolean;
+  /** 生效落点（IO 端口键）；null = 还没落到任何端口（未配置）。 */
+  targetIoKey: string | null;
 }
 
 export interface EncapsulationStatus {
   entries: Array<EncapsulationEntryStatus>;
+  /** 还没落到端口的**全部**口子名（含非必备），供「未配置」清单一览。 */
+  missingLabels: Array<string>;
+  /** 还没落到端口的必备口名（徽标 tooltip / 未配置提示用）。
+   *  未配置的非必备口不算「不能跑」，不在这里 —— 那是提示，不是闸门。 */
+  missingRequired: Array<string>;
   /** **该模式的必备口全部已有落点** → 工坊可直接驱动这条工作流。
    *
    *  必备口随模式契约配置（见 `ModeContract.required`）；没配任何必备口的模式
    *  恒为 ready（没有「缺了它就不能用」的口）。 */
   ready: boolean;
-  /** 还没落到端口的必备口名（徽标 tooltip / 未配置提示用）。
-   *  未配置的非必备口不算「不能跑」，不在这里 —— 那是提示，不是闸门。 */
-  missingRequired: Array<string>;
-  /** 还没落到端口的**全部**口子名（含非必备），供「未配置」清单一览。 */
-  missingLabels: Array<string>;
   resolvedCount: number;
 }
 

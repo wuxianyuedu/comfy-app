@@ -35,13 +35,13 @@ export function shotStatusToNodeStatus(status: Shot["status"]): StrictCanvasNode
 
 /** 一个 Shot 投影到画布节点 data 上的字段补丁（写进带同一 shotId 的节点）。 */
 export interface ShotNodePatch {
-  shotId: string;
   kind: "image" | "video";
-  prompt: string;
   negative: string;
+  prompt: string;
+  resultPath?: string;
+  shotId: string;
   status: StrictCanvasNodeData["status"];
   taskId?: string;
-  resultPath?: string;
 }
 
 /** Shot → 节点补丁。当前阶段镜头图（imageUrl）投影为 image 节点的 resultPath；
@@ -61,8 +61,8 @@ export function shotToNodePatch(shot: Shot): ShotNodePatch {
 /** 画布节点上对某镜头的「编辑面」改动，回写成 Shot 的部分补丁。
  *  只回写 prompt / negative，不回写生成态（那是任务侧的写入面）。 */
 export interface ShotEditPatch {
-  prompt: string;
   negativePrompt: string;
+  prompt: string;
 }
 
 export function nodeEditToShot(patch: { negative: string; prompt: string }): ShotEditPatch {
@@ -138,9 +138,9 @@ export function nodeStatusToShotStatus(status: StrictCanvasNodeData["status"]): 
 
 /** 一次镜头生成态回写的补丁（只覆盖生成态字段，不含编辑面）。 */
 export interface ShotGenerationPatch {
+  imageUrl?: string;
   status: Shot["status"];
   taskId?: string;
-  imageUrl?: string;
 }
 
 /** 从画布镜头节点的 data 提炼生成态补丁。节点 resultPath ↔ Shot imageUrl（与

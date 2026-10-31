@@ -37,13 +37,13 @@ import { type WorkspaceView } from "./NavItems";
 
 export interface RecentProject {
   id: string;
-  name: string;
-  updatedAt: string;
-  thumbnails?: Array<string>;
   /** 项目种类 —— 决定图标与视觉处理 */
   kind?: "canvas" | "generation" | "workflow" | "video";
+  name: string;
   /** Secondary line: e.g. "12 节点", "4 张图", "Wan I2V" */
   subtitle?: string;
+  thumbnails?: Array<string>;
+  updatedAt: string;
 }
 
 /* 卡片类型徽标文案与图标 */
@@ -177,15 +177,15 @@ function ResumeProjectCard({
 }
 
 export interface HomePageProps {
-  onNewProject?: () => void;
-  recentProjects?: Array<RecentProject>;
-  onOpenProject?: (id: string) => void;
-  /** 打开一个画布项目（设为活跃 + 跳到项目主页）。 */
-  onOpenCanvasProject?: (id: string) => void;
   /** 跳到一个工作区视图（模型 / 工作流 / 画布等） */
   onNavigate?: (view: WorkspaceView) => void;
+  onNewProject?: () => void;
+  /** 打开一个画布项目（设为活跃 + 跳到项目主页）。 */
+  onOpenCanvasProject?: (id: string) => void;
+  onOpenProject?: (id: string) => void;
   /** 切到「项目」（works）视图，看全部项目 */
   onShowAllProjects?: () => void;
+  recentProjects?: Array<RecentProject>;
 }
 
 export function HomePage({

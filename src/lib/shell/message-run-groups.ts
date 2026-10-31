@@ -43,19 +43,19 @@ export interface RunScopedMessage {
 
 /** 一组消息 = 一次启动（或「未标记」那一组）。 */
 export interface MessageRunGroup<T extends RunScopedMessage> {
-  /** 组键：这一次启动的 runId；null = 未标记启动。 */
-  runId: string | null;
+  /** 组内条数（= `messages.length`，单列一个字段是为了视图不用再数）。 */
+  count: number;
+  /** 是否正是**当前**这一次启动（`currentRunId` 命中的那一组）。 */
+  isCurrent: boolean;
   /** 组头的语义文案（本次启动 / 上一次启动 / 更早的启动 / 未标记启动）。
    *  只给「该说哪几个字」，时间与条数由视图拼——判据与排版各管一段。 */
   label: string;
-  /** 是否正是**当前**这一次启动（`currentRunId` 命中的那一组）。 */
-  isCurrent: boolean;
-  /** 组内消息，保持传入顺序（调用方传的是最新在前）。 */
-  messages: Array<T>;
   /** 组内最新一条的时刻（组头「这一次启动发生在什么时候」用它）。 */
   latestAt: number;
-  /** 组内条数（= `messages.length`，单列一个字段是为了视图不用再数）。 */
-  count: number;
+  /** 组内消息，保持传入顺序（调用方传的是最新在前）。 */
+  messages: Array<T>;
+  /** 组键：这一次启动的 runId；null = 未标记启动。 */
+  runId: string | null;
 }
 
 /** 「本次启动」——当前这一次，用户正身处其中。 */
@@ -69,10 +69,10 @@ const LABEL_UNMARKED = "未标记启动";
 
 /** 内部草稿：定完 label 再交出去，避免把「先占位再回填」的半成品暴露给调用方。 */
 interface Draft<T extends RunScopedMessage> {
-  runId: string | null;
   isCurrent: boolean;
-  messages: Array<T>;
   latestAt: number;
+  messages: Array<T>;
+  runId: string | null;
 }
 
 /**

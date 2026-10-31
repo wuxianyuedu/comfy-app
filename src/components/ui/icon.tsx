@@ -147,11 +147,11 @@ const ICON_MAP: Record<string, LucideIcon> = {
 const OWN_PROPS = /* SAFETY: 类型断言已复核 */ ["name", "size", "className"] as const;
 
 export interface IconProps extends OmitOwnProps<LucideProps, (typeof OWN_PROPS)[number]> {
+  /** 额外类名（透传给底层的 lucide 组件）。 */
+  className?: string;
   /** 图标键，如 "film"、"sparkles"、"trash"。大小写不敏感。 */
   name?: string | null;
   size?: number;
-  /** 额外类名（透传给底层的 lucide 组件）。 */
-  className?: string;
 }
 
 /** 由字符串键渲染扁平的 lucide 图标。键未知时返回 null。 */

@@ -26,44 +26,35 @@ import {
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 
 export interface WorkflowLibraryDetailActions {
-  use: () => void;
+  download: () => void;
   edit: () => void;
   remove: () => void;
-  download: () => void;
   resync: () => void;
+  use: () => void;
 }
 
 /** 类型 / 模型编辑器的派生数据与动作（规范 17 §17.2 第②层）。 */
 export interface MetaEditorController {
-  /** 当前生效的 mode 集合（缺省回退 [taskType]，兼容旧行）。 */
-  modes: Array<string>;
-  defaultMode: string;
-  /** 已绑定的模型标签名。 */
-  modelTags: Array<string>;
   /** 全部可选模型标签。 */
   allModelTags: Array<{ count: number; id: string; name: string }>;
   busy: boolean;
-  patchModes: (modes: Array<string>, defaultMode: string) => Promise<void>;
+  defaultMode: string;
+  /** 已绑定的模型标签名。 */
+  modelTags: Array<string>;
+  /** 当前生效的 mode 集合（缺省回退 [taskType]，兼容旧行）。 */
+  modes: Array<string>;
   patchModelTags: (names: Array<string>) => Promise<void>;
-  /** 持久化某个 IO 参数的 seed「控件后行为」（fixed/increment/decrement/random）。
-   *  写进 workflowIO 条目并整体落库，预览面板与画布运行时共用。 */
-  patchSeedMode: (ioKey: string, mode: string) => Promise<void>;
+  patchModes: (modes: Array<string>, defaultMode: string) => Promise<void>;
   /** 持久化对外参数落点（预览面板拖圆点改落点 / 断开 / 恢复默认）。
    *  整列写回 `paramMap.source.mode:<模式>`，与编辑器画布同一份形状。 */
   patchParamMap: (next: Record<string, unknown>) => Promise<void>;
+  /** 持久化某个 IO 参数的 seed「控件后行为」（fixed/increment/decrement/random）。
+   *  写进 workflowIO 条目并整体落库，预览面板与画布运行时共用。 */
+  patchSeedMode: (ioKey: string, mode: string) => Promise<void>;
 }
 
 export interface WorkflowLibraryDetailController {
-  /** null = 左侧未选中工作流，视图据此渲染空态。 */
-  workflow: WorkflowRow | null;
-  activeTab: DetailTab;
-  setActiveTab: (tab: DetailTab) => void;
-  /** 画布预览那一份常驻实例是否该挂载（首次访问画布页签之后才为真）。
-   *
-   *  视图据此决定要不要渲染「编辑对外参数 / 实际使用」共用的那棵子树 ——
-   *  默认页签（工坊封装）上不渲染，画布引擎因此不进这一屏。一旦访问过就
-   *  保持挂载（切回其它页签也不卸载），表单值与运行态才不会丢。 */
-  canvasMounted: boolean;
+  actions: WorkflowLibraryDetailActions;
   /** **两个页签共用的当前模式**（画布节点卡片列与工坊封装都按它渲染）。
    *
    *  初值取工作流的默认模式（`resolveWorkflowMode`：defaultMode → modes[0] →
@@ -73,32 +64,41 @@ export interface WorkflowLibraryDetailController {
    *
    *  换工作流时重置回该工作流的默认模式（不把上一条工作流的查看模式带过来）。 */
   activeMode: string | null;
+  activeTab: DetailTab;
+  busyDownload: boolean;
+  busyResync: boolean;
+  canResync: boolean;
+  /** 画布预览那一份常驻实例是否该挂载（首次访问画布页签之后才为真）。
+   *
+   *  视图据此决定要不要渲染「编辑对外参数 / 实际使用」共用的那棵子树 ——
+   *  默认页签（工坊封装）上不渲染，画布引擎因此不进这一屏。一旦访问过就
+   *  保持挂载（切回其它页签也不卸载），表单值与运行态才不会丢。 */
+  canvasMounted: boolean;
+  closeSource: () => void;
+  errorMessage: string | undefined;
+  isLoading: boolean;
+  /** 名字是 ComfyUI 默认技术名（纯小写 + 下划线），改用等宽字体更易读。 */
+  isTechnical: boolean;
+  /** 类型 / 模型编辑器（缺省空实现，调用方可安全忽略）。 */
+  metaEditor: MetaEditorController;
+  missing: boolean;
+  openSource: () => void;
+  /** 模板 paramMap（`source.mode:<模式>` 的对外参数落点），画布节点页签据此
+   *  标出每个对外参数与它落到的那一行。 */
+  paramMap: Record<string, unknown>;
   /** 切换当前模式（**只改查看/测试语境，不落库**）。
    *
    *  落「默认模式」是另一件事（画布节点卡片的模式下拉走 `patchModes`）：用户
    *  在封装页试着切模式跑一次流程测试，不该顺手改掉这条工作流的默认模式。 */
   setActiveMode: (mode: string) => void;
-  sourceOpen: boolean;
-  openSource: () => void;
-  closeSource: () => void;
-  isLoading: boolean;
-  errorMessage: string | undefined;
-  workflowIO: WorkflowIOMap | null;
-  /** 模板 paramMap（`source.mode:<模式>` 的对外参数落点），画布节点页签据此
-   *  标出每个对外参数与它落到的那一行。 */
-  paramMap: Record<string, unknown>;
+  setActiveTab: (tab: DetailTab) => void;
   sourceData: SourceModalData | null;
+  sourceOpen: boolean;
   /** 有可执行图 —— 决定主 CTA 是否可点。 */
   usable: boolean;
-  canResync: boolean;
-  missing: boolean;
-  /** 名字是 ComfyUI 默认技术名（纯小写 + 下划线），改用等宽字体更易读。 */
-  isTechnical: boolean;
-  busyDownload: boolean;
-  busyResync: boolean;
-  /** 类型 / 模型编辑器（缺省空实现，调用方可安全忽略）。 */
-  metaEditor: MetaEditorController;
-  actions: WorkflowLibraryDetailActions;
+  /** null = 左侧未选中工作流，视图据此渲染空态。 */
+  workflow: WorkflowRow | null;
+  workflowIO: WorkflowIOMap | null;
 }
 
 /** 生效模式：用户在这条工作流上切过就用切过的，否则用默认模式解析值。

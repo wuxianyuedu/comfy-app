@@ -72,10 +72,10 @@ export type ValueSourceKind = "json" | "media";
 export interface ValueSource<T> {
   /** 这个源解决什么、真数据从哪来（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
-  /** 这个名字下**有哪些**取值（进 Args 面板的选项）。 */
-  readonly names: ReadonlyArray<string>;
   /** 按名字取值；不认识的名字**抛错** —— 静默回退会让「源名写错了」看不出来。 */
   readonly load: (name: string) => T;
+  /** 这个名字下**有哪些**取值（进 Args 面板的选项）。 */
+  readonly names: ReadonlyArray<string>;
 }
 
 /**

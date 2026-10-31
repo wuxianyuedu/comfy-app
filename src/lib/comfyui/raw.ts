@@ -64,101 +64,101 @@ export function toStringValue(v: unknown): string {
 /** raw UI 格式节点的 inputs[] 条目（ComfyUI 只把「转为输入」的槽位写进来）。
  *  字段值来自外部 JSON，一律 unknown，读取点自行 typeof 守卫。 */
 export interface RawNodeInput {
-  name?: unknown;
-  /** zh-CN 本地化标签（ComfyUI 逐节点保存） */
-  localized_name?: unknown;
-  label?: unknown;
-  type?: unknown;
+  [k: string]: unknown;
   /** 槽位序号（新版 ComfyUI 写入；旧版按数组序） */
   idx?: number;
+  label?: unknown;
   /** raw.links 里的 link id；null 表示该槽位没有接线 */
   link?: number | null;
+  /** zh-CN 本地化标签（ComfyUI 逐节点保存） */
+  localized_name?: unknown;
+  name?: unknown;
+  type?: unknown;
   /** 暴露内部控件的槽位标记（值存于 widgets_values） */
   widget?: { name?: unknown } | null;
-  [k: string]: unknown;
 }
 
 /** raw UI 格式节点的 outputs[] 条目。 */
 export interface RawNodeOutput {
-  name?: unknown;
-  localized_name?: unknown;
-  label?: unknown;
-  type?: unknown;
+  [k: string]: unknown;
   /** 槽位序号（新版 ComfyUI 写入；旧版按数组序） */
   idx?: number;
+  label?: unknown;
   /** 下游 link id 列表 */
   links?: Array<number>;
-  [k: string]: unknown;
+  localized_name?: unknown;
+  name?: unknown;
+  type?: unknown;
 }
 
 export interface RawNode {
+  /** 其余动态字段（color 等），按需 typeof 守卫后读取 */
+  [k: string]: unknown;
+  /** LiteGraph 运行时 flags（如 collapsed / bypass） */
+  flags?: Record<string, unknown>;
   /** 节点 id — ComfyUI 导出为 number，畸形数据可能是 string；统一 String() 后使用 */
   id: number | string;
-  /** 节点类名（raw 格式没有 class_type） */
-  type?: string;
-  /** 画布坐标 [x, y]（LiteGraph 绝对坐标） */
-  pos?: Array<number>;
-  /** 节点盒尺寸 [w, h] */
-  size?: Array<number>;
+  /** 部分工作流的 raw 节点也会显式包含 inputs/outputs（用于嵌套连接） */
+  inputs?: Array<RawNodeInput>;
   /**
    * LiteGraph 执行模式：0=ALWAYS(正常) 1=ON_EVENT 2=NEVER(静音) 3=ON_TRIGGER 4=BYPASS。
    * ComfyUI 前端在导出 prompt 时会剔除 2/4 的节点，4 还要把连线「穿透」过去。
    * 提交前的这步收拾见 `execution-graph.ts`。
    */
   mode?: number;
-  /** 节点控件值的有序数组，含义由 class_type 决定 */
-  widgets_values?: Array<unknown>;
-  /** 部分工作流的 raw 节点也会显式包含 inputs/outputs（用于嵌套连接） */
-  inputs?: Array<RawNodeInput>;
   outputs?: Array<RawNodeOutput>;
+  /** 画布坐标 [x, y]（LiteGraph 绝对坐标） */
+  pos?: Array<number>;
   /** 节点属性，如 title / proxyWidgets */
   properties?: Record<string, unknown>;
+  /** 节点盒尺寸 [w, h] */
+  size?: Array<number>;
   title?: string;
-  /** LiteGraph 运行时 flags（如 collapsed / bypass） */
-  flags?: Record<string, unknown>;
-  /** 其余动态字段（color 等），按需 typeof 守卫后读取 */
-  [k: string]: unknown;
+  /** 节点类名（raw 格式没有 class_type） */
+  type?: string;
+  /** 节点控件值的有序数组，含义由 class_type 决定 */
+  widgets_values?: Array<unknown>;
 }
 
 export interface RawWorkflow {
-  last_node_id?: number;
-  last_link_id?: number;
-  nodes: Array<RawNode>;
-  /** 每条 link 是 [link_id, src_id, src_slot, dst_id, dst_slot, type]（元素动态） */
-  links?: Array<Array<unknown>>;
-  groups?: Array<unknown>;
+  [k: string]: unknown;
   config?: Record<string, unknown>;
-  extra?: Record<string, unknown>;
   /** ComfyUI ≥ v0.7 的子图定义（subgraph wrapper） */
   definitions?: RawDefinitions;
-  [k: string]: unknown;
+  extra?: Record<string, unknown>;
+  groups?: Array<unknown>;
+  last_link_id?: number;
+  last_node_id?: number;
+  /** 每条 link 是 [link_id, src_id, src_slot, dst_id, dst_slot, type]（元素动态） */
+  links?: Array<Array<unknown>>;
+  nodes: Array<RawNode>;
 }
 
 /** ComfyUI v0.7+ 子图定义容器（rawJson.definitions）。 */
 export interface RawDefinitions {
+  [k: string]: unknown;
   /** 子图定义：键为 UUID 或数字序号；wrapper 的 class_type 即对应 UUID */
   subgraphs?: Record<string, RawSubgraphDef>;
-  [k: string]: unknown;
 }
 
 /** 单个子图定义（rawJson.definitions.subgraphs[uid]）。
  *  与顶层 raw 的差异：links 是对象数组（非元组），inputs/outputs 是边界 pin。 */
 export interface RawSubgraphDef {
+  [k: string]: unknown;
+  /** 内部分组框 */
+  groups?: Array<unknown>;
   /** 子图 UUID（与 wrapper 的 class_type 对应；键可能是数字序号） */
   id?: unknown;
+  /** 边界输入 pin 定义 */
+  inputs?: Array<unknown>;
+  /** 对象形式连线：{ id, origin_id, origin_slot, target_id, target_slot, type } */
+  links?: Array<unknown>;
   /** 子图显示名（wrapper 卡片标题） */
   name?: unknown;
   /** 内部节点（与顶层 nodes 同构） */
   nodes?: Array<RawNode>;
-  /** 对象形式连线：{ id, origin_id, origin_slot, target_id, target_slot, type } */
-  links?: Array<unknown>;
-  /** 边界输入 pin 定义 */
-  inputs?: Array<unknown>;
   /** 边界输出 pin 定义 */
   outputs?: Array<unknown>;
-  /** 内部分组框 */
-  groups?: Array<unknown>;
-  [k: string]: unknown;
 }
 
 /* ── 子图定义内部的形状契约（外部输入边界，规范 §5.5）────────────────────
@@ -193,28 +193,28 @@ export const SubgraphPinSchema = z.looseObject({ id: z.string().min(1) });
  * 剥到只剩 `title`，绝不外发给 ComfyUI。
  */
 export interface ApiNodeMeta {
-  title?: string;
-  /** LiteGraph mode，仅在 !== 0 时写入 */
-  mode?: number;
-  /** 纯前端节点标记（Reroute / PrimitiveNode / Note …） */
-  virtual?: boolean;
-  /** PrimitiveNode 的字面量取值，执行期直接内联给下游 */
-  value?: unknown;
   /** 入参名的槽位顺序（bypass 穿透时按槽位匹配） */
   inputOrder?: Array<string>;
   /** 入参名 → 类型（bypass 穿透时按类型匹配） */
   inputTypes?: Record<string, string>;
+  /** LiteGraph mode，仅在 !== 0 时写入 */
+  mode?: number;
   /** 出参槽位 → 类型（bypass 穿透时确定目标类型） */
   outputTypes?: Array<string>;
+  title?: string;
+  /** PrimitiveNode 的字面量取值，执行期直接内联给下游 */
+  value?: unknown;
+  /** 纯前端节点标记（Reroute / PrimitiveNode / Note …） */
+  virtual?: boolean;
 }
 
 export interface ApiWorkflowNode {
-  class_type: string;
-  /** API inputs: 命名参数；数组 [nodeId, slotIdx] 表示连线 */
-  inputs: Record<string, unknown>;
   _meta?: ApiNodeMeta;
   /** 部分导出携带的其余动态字段（如旧 rgthree 导出的 type） */
   [k: string]: unknown;
+  class_type: string;
+  /** API inputs: 命名参数；数组 [nodeId, slotIdx] 表示连线 */
+  inputs: Record<string, unknown>;
 }
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -297,12 +297,12 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
 export type ObjectInfoInputSpec = [unknown, Record<string, unknown>?] | Record<string, unknown>;
 
 export interface ObjectInfoClassDef {
-  input_order?: { optional?: Array<string>; required?: Array<string> };
+  [k: string]: unknown;
   input?: {
     optional?: Record<string, ObjectInfoInputSpec>;
     required?: Record<string, ObjectInfoInputSpec>;
   };
-  [k: string]: unknown;
+  input_order?: { optional?: Array<string>; required?: Array<string> };
 }
 
 /** 把 /object_info 的输入定义规范化为 { type, options }。 */

@@ -40,15 +40,12 @@ import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { useExpansionSet } from "~/components/ui/expansion-set";
 import { Hint } from "~/components/ui/hint";
-import {
-  CONSOLE_PRESETS,
-  type ConsolePreset,
-} from "~/lib/console/console-catalog";
+import { CONSOLE_PRESETS, type ConsolePreset } from "~/lib/console/console-catalog";
 
 export interface ConsolePresetListProps {
-  onFill: (command: string) => void;
   /** 有命令在跑时禁用（避免用户以为点了就会插队执行）。 */
   disabled: boolean;
+  onFill: (command: string) => void;
 }
 
 /**
@@ -67,10 +64,7 @@ function presetHint(preset: ConsolePreset) {
   );
 }
 
-export function ConsolePresetList({
-  onFill,
-  disabled,
-}: ConsolePresetListProps) {
+export function ConsolePresetList({ onFill, disabled }: ConsolePresetListProps) {
   /* 展开集合走唯一出口：键是分组 id，缺键 = 未表态 = 折起
    * （`useExpansionSet` 的既定语义，正是这里要的默认值）。 */
   const groups = useExpansionSet();
@@ -107,19 +101,12 @@ export function ConsolePresetList({
             className="hover:text-ink w-auto flex-1 py-1"
             panelClassName="basis-full flex flex-col gap-0.5 pt-0.5"
             trigger={
-              <span
-                className="min-w-0 flex-1"
-                data-testid={`console-preset-group-${group.id}`}
-              >
-                <span className="text-ink block text-xs font-semibold">
-                  {group.label}
-                </span>
+              <span className="min-w-0 flex-1" data-testid={`console-preset-group-${group.id}`}>
+                <span className="text-ink block text-xs font-semibold">{group.label}</span>
                 {/* 分组说明是**两句以里的常驻文案**（`leading-snug` 折行显示），
                     不截断、也不挂悬停 —— 它已经在屏上读全了。折起时它跟着组名
                     一起留在头上：说明是「这一组是干什么的」的唯一线索。 */}
-                <span className="text-ink-fainter text-2xs block leading-snug">
-                  {group.hint}
-                </span>
+                <span className="text-ink-fainter text-2xs block leading-snug">{group.hint}</span>
               </span>
             }
             trailing={
@@ -144,9 +131,7 @@ export function ConsolePresetList({
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{item.label}</span>
-                    <span className="text-ink-fainter text-3xs block truncate">
-                      {item.desc}
-                    </span>
+                    <span className="text-ink-fainter text-3xs block truncate">{item.desc}</span>
                   </span>
                 </Button>
               </Hint>

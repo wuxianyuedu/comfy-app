@@ -29,12 +29,12 @@ import { zClass } from "~/lib/shell/overlay-z";
  */
 
 export interface ContextMenuItem {
+  danger?: boolean;
+  disabled?: boolean;
+  divider?: boolean;
+  icon?: React.ReactNode;
   id: string;
   label: string;
-  icon?: React.ReactNode;
-  divider?: boolean;
-  disabled?: boolean;
-  danger?: boolean;
 }
 
 const DEFAULT_CONTEXT_MENU: Array<ContextMenuItem> = [
@@ -52,24 +52,24 @@ const DEFAULT_CONTEXT_MENU: Array<ContextMenuItem> = [
 
 export interface CanvasAreaProps {
   children: React.ReactNode;
-  /** 自定义上下文菜单项 */
-  contextItems?: Array<ContextMenuItem>;
-  /** 点上下文菜单项时 */
-  onContextAction?: (id: string) => void;
-  /** Zoom level (0-100) */
-  zoom?: number;
-  /** 缩放变化时 */
-  onZoomChange?: (zoom: number) => void;
-  /** 额外工具栏元素（右侧） */
-  toolbarExtra?: React.ReactNode;
-  /** 显示 minimap 开关 */
-  showMinimap?: boolean;
-  /** minimap 可见状态 */
-  minimapVisible?: boolean;
-  /** minimap 开关切换时 */
-  onMinimapToggle?: (v: boolean) => void;
   /** 画布包裹层的 class 名 */
   className?: string;
+  /** 自定义上下文菜单项 */
+  contextItems?: Array<ContextMenuItem>;
+  /** minimap 可见状态 */
+  minimapVisible?: boolean;
+  /** 点上下文菜单项时 */
+  onContextAction?: (id: string) => void;
+  /** minimap 开关切换时 */
+  onMinimapToggle?: (v: boolean) => void;
+  /** 缩放变化时 */
+  onZoomChange?: (zoom: number) => void;
+  /** 显示 minimap 开关 */
+  showMinimap?: boolean;
+  /** 额外工具栏元素（右侧） */
+  toolbarExtra?: React.ReactNode;
+  /** Zoom level (0-100) */
+  zoom?: number;
 }
 
 export function CanvasArea({

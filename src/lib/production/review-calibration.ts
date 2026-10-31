@@ -30,30 +30,30 @@ export function humanRatingOnScale5(rating: number): number {
 
 /** 单个维度的偏差读数：AI 在该维度上的均分 vs 同样本集人评均分（映射到 1~5）。 */
 export interface DimensionCalibration {
-  /** rubric 维度 key（生图 rubric 的 promptAlignment 等）。 */
-  key: string;
   /** AI 在该维度上的均分（1~5）。 */
   aiAvg: number;
   /** 同一批镜头的人评均分（已映射到 1~5）；这批镜头全都没人评分 → null。 */
   humanAvg: number | null;
+  /** rubric 维度 key（生图 rubric 的 promptAlignment 等）。 */
+  key: string;
   /** 参与该维度聚合的样本数。 */
   samples: number;
 }
 
 /** 校准读数（只读查询的回包形状）。样本 = 同时有 AI 视觉判定与人评分的镜头。 */
 export interface CalibrationReport {
-  /** 样本数（有 AI 判定且有人评分的镜头数）；0 → 其余读数全 null（样本不足，不硬造）。 */
-  samples: number;
   /** AI 维度均分的均值（1~5）。 */
   aiMeanAvg: number | null;
+  /** 判定一致率：AI pass ↔ 人评 ≥ `HUMAN_PASS_THRESHOLD` 的吻合比例（0~1）。 */
+  decisionAgreement: number | null;
   /** 人评均分（0~5 原量纲）。 */
   humanAvg: number | null;
   /** 平均绝对偏差：|AI 均分 − 人评映射分| 的均值（1~5 同量纲）。 */
   mae: number | null;
-  /** 判定一致率：AI pass ↔ 人评 ≥ `HUMAN_PASS_THRESHOLD` 的吻合比例（0~1）。 */
-  decisionAgreement: number | null;
   /** 按维度聚合：每个 rubric 维度的 AI 均分 vs 人评均分（偏差大的维度先调）。 */
   perDimension: Array<DimensionCalibration>;
+  /** 样本数（有 AI 判定且有人评分的镜头数）；0 → 其余读数全 null（样本不足，不硬造）。 */
+  samples: number;
 }
 
 /** 空读数（没样本时的回落，各读数 null 不硬造）。 */

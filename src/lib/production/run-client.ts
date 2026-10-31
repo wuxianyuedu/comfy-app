@@ -13,8 +13,8 @@ import {
 import type { HumanVerdict, ReviewMode, ReviewVerdict } from "~/lib/production/review-types";
 
 export interface RunSnapshot {
-  run: ProductionRun;
   action: RunAction;
+  run: ProductionRun;
 }
 
 const IDLE_SNAPSHOT: RunSnapshot = {
@@ -37,12 +37,12 @@ export async function fetchRunStatus(projectId: string): Promise<RunSnapshot> {
 }
 
 export interface StartRunInput {
-  goal?: string;
   approvalMode?: ApprovalMode;
-  imageWorkflowId?: string;
-  videoWorkflowId?: string;
   /** 生图后自动逐镜评审、不合格自动抽卡重生成（有界重试）。 */
   autoReview?: boolean;
+  goal?: string;
+  imageWorkflowId?: string;
+  videoWorkflowId?: string;
 }
 
 /** 启动 / 重启自主执行（引擎会在服务端 fire-and-forget 推进到下一个停点）。 */
@@ -188,16 +188,16 @@ export async function regenerateShot(
 
 /** 抽卡优选的候选判定（FR-QA-04④ · #2612）：服务端逐张视觉评审后的原值。 */
 export interface AutoselectCandidateScore {
-  taskId: string;
   imageUrl: string | null;
+  taskId: string;
   verdict: ReviewVerdict | null;
 }
 
 export interface AutoselectShotResult {
-  winnerTaskId: string;
-  winnerImageUrl: string;
-  winnerVerdict: ReviewVerdict;
   candidates: Array<AutoselectCandidateScore>;
+  winnerImageUrl: string;
+  winnerTaskId: string;
+  winnerVerdict: ReviewVerdict;
 }
 
 /** 对同一镜头的 2~4 个候选任务做抽卡优选（run.autoselectShot）；回写由调用方

@@ -37,18 +37,18 @@ import {
 } from "../mode-contract-config";
 
 interface ContractInputCatalogProps {
-  /** 本契约已经有的口（判断「已添加」）。 */
-  inputs: ReadonlyArray<string>;
   /** 本契约的自定义口定义。 */
   customInputs: ReadonlyArray<ModeContractCustomInput>;
-  /** 点一个预制口（`reference-image` 由调用方换成下一个参考图槽）。 */
-  onAddPredefined: (type: ModeContractInputType) => void;
+  /** 本契约已经有的口（判断「已添加」）。 */
+  inputs: ReadonlyArray<string>;
   /** 新增一个自定义口（名 + 类型）。 */
   onAddCustom: (label: string, kind: ModeContractCustomKind) => void;
-  /** 改一个自定义口的名字。 */
-  onRenameCustom: (id: ModeContractCustomInput["id"], label: string) => void;
+  /** 点一个预制口（`reference-image` 由调用方换成下一个参考图槽）。 */
+  onAddPredefined: (type: ModeContractInputType) => void;
   /** 从契约里移除一个自定义口（定义一并移除）。 */
   onRemoveCustom: (id: ModeContractCustomInput["id"]) => void;
+  /** 改一个自定义口的名字。 */
+  onRenameCustom: (id: ModeContractCustomInput["id"], label: string) => void;
 }
 
 export function ContractInputCatalog({

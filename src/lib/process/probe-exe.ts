@@ -107,8 +107,8 @@ export type ProbeFailure =
 
 /** 一次探测的结论：`failure` 为 `null` 才是「起得来且退 0」。 */
 export interface ProbeOutcome {
-  ok: boolean;
   failure: ProbeFailure | null;
+  ok: boolean;
 }
 
 /**
@@ -175,6 +175,10 @@ export function probeExecutable(
 export interface FirstRunnableOptions {
   /** 依次试的候选名，顺序即优先级。 */
   candidates: ReadonlyArray<string>;
+  /** 人读的名字（`PowerShell` / `Python`）：只在「探不到」那一句话里出现。 */
+  label: string;
+  /** 注入点：缺省真起进程（单测用它钉两个平台的候选顺序，不必装两套解释器）。 */
+  probe?: (candidate: string, args: Array<string>) => ProbeOutcome;
   /**
    * 每个候选要喂的参数：**必须与真跑那一跳同形**。
    *
@@ -183,12 +187,6 @@ export interface FirstRunnableOptions {
    * 收口（同 `pythonProbeArgs()` 的理由）。
    */
   probeArgs: (candidate: string) => Array<string>;
-  /** 人读的名字（`PowerShell` / `Python`）：只在「探不到」那一句话里出现。 */
-  label: string;
-  /** 这一次探测的预算（缺省 `EXE_PROBE_TIMEOUT_MS`）。 */
-  timeoutMs?: number;
-  /** 注入点：缺省真起进程（单测用它钉两个平台的候选顺序，不必装两套解释器）。 */
-  probe?: (candidate: string, args: Array<string>) => ProbeOutcome;
   /**
    * 探不到时那一行的**第二只眼睛**（缺省不打）。
    *
@@ -198,6 +196,8 @@ export interface FirstRunnableOptions {
    * 直写 console 会绕开脱敏与 ERROR 镜像（`tests/single-logger-channel.test.ts`）。
    */
   report?: (line: string) => void;
+  /** 这一次探测的预算（缺省 `EXE_PROBE_TIMEOUT_MS`）。 */
+  timeoutMs?: number;
 }
 
 /**

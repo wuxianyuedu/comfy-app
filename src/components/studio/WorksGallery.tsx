@@ -54,10 +54,10 @@ function bodySummary(nodeCount: number, edgeCount: number): string {
 }
 
 export interface WorksGalleryProps {
-  /** 「新建创作」按钮触发 —— 项目页保留它作为跳到生成器的入口。 */
-  onOpenTask?: (id: string) => void;
   /** 打开一个项目（设为活跃 + 跳到项目主页）。 */
   onOpenCanvasProject?: (id: string) => void;
+  /** 「新建创作」按钮触发 —— 项目页保留它作为跳到生成器的入口。 */
+  onOpenTask?: (id: string) => void;
 }
 
 export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryProps) {

@@ -21,9 +21,9 @@ import { findLogPathTokens } from "~/lib/log/log-path-tokens";
 
 /** 行文本里识别出的词法分片。`style` 为空 = 按级别默认色渲染。 */
 export interface RowToken {
-  text: string;
   /** 语义样式键（与 ANSI 样式键同一套，视图映射成 className）。 */
   style?: AnsiStyleKey;
+  text: string;
 }
 
 /** 日志级别的徽标配色（视图与测试共用同一份表）。级别是**状态语义**，
@@ -116,8 +116,8 @@ const PATH_STYLE: AnsiStyleKey = "magenta-bright";
 
 /** 行里被命中的一段（半开区间 `[start, end)`）。 */
 interface StyledSpan {
-  start: number;
   end: number;
+  start: number;
   style: AnsiStyleKey;
 }
 
@@ -250,10 +250,10 @@ export const TOKEN_CLASS: Record<AnsiStyleKey, string> = {
 
 /** 选区判定需要的最小 DOM 视图（真实 `Selection` / `window` 都满足它）。 */
 export interface SelectionLike {
-  readonly rangeCount: number;
   readonly anchorNode: Node | null;
   readonly focusNode: Node | null;
   isCollapsed: boolean;
+  readonly rangeCount: number;
 }
 
 /**

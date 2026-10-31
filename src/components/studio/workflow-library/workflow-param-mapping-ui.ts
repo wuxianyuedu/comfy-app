@@ -57,8 +57,8 @@ export const PARAM_OUTPUT_STYLE: ParamClassStyle = {
 };
 
 export interface ParamClassStyle {
-  label: string;
   color: string;
+  label: string;
 }
 
 /** 取分类的展示名与配色（未知分类回落到「参数」）。 */

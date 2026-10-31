@@ -25,31 +25,31 @@ const COMPOSE_SIZE: SizeSpec = { ...DEFAULT_SIZE_SPEC, ratio: "16:9 横屏" };
 const COMPOSE_SCALE = sizeSpecToWxH(COMPOSE_SIZE, "video").replace("x", ":");
 
 export interface CompositionSegment {
-  order: number;
-  shotId: string;
-  scene: string;
-  shotType: string;
-  prompt: string;
-  imageUrl: string | null;
   clipUrl: string | null;
-  durationSec: number;
-  motion: string;
-  transition: string;
   dialogue: string;
+  durationSec: number;
+  imageUrl: string | null;
+  motion: string;
+  order: number;
+  prompt: string;
+  scene: string;
+  shotId: string;
+  shotType: string;
+  transition: string;
 }
 
 export interface CompositionPlan {
-  project: string;
   exportedAt: string;
-  totalShots: number;
-  totalDurationSec: number;
+  project: string;
   segments: Array<CompositionSegment>;
+  totalDurationSec: number;
+  totalShots: number;
 }
 
 export interface RenderResult {
+  note?: string;
   ok: boolean;
   outputPath?: string;
-  note?: string;
 }
 
 /** 由分镜构建有序合成清单（与界面 FinalComposer.exportPlan 对齐）。 */

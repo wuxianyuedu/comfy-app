@@ -38,15 +38,9 @@ export function runLogSourceLabel(source?: WorkflowRunSource): string {
 }
 
 export interface WorkflowRunMeta {
-  taskId: string;
-  workflowId: string;
-  workflowName: string;
-  taskType: string;
-  startedAt: number;
-  /** 发起入口（缺省按 `canvas-node` 处理，兼容早期落库的记录）。 */
-  source?: WorkflowRunSource;
-  /** 终态（done / failed）时由订阅者 patch；running/缺省 = 仍在跑。 */
-  status?: "running" | "done" | "failed";
+  errorMessage?: string;
+  /** 累积的执行步骤日志（重开窗口后由 SSE 回放继续补齐）。 */
+  logs?: Array<TaskLogEntry>;
   /** 最近一次进度百分比（0–100）。
    *
    *  它必须落在这里而不是只留在组件的 `useState` 里：两个页签切走即卸载
@@ -54,9 +48,15 @@ export interface WorkflowRunMeta {
    *  证据 —— 只有它进了登记表，恢复出来的界面才不会从 0% 重新开始。 */
   progress?: number;
   resultUrl?: string;
-  errorMessage?: string;
-  /** 累积的执行步骤日志（重开窗口后由 SSE 回放继续补齐）。 */
-  logs?: Array<TaskLogEntry>;
+  /** 发起入口（缺省按 `canvas-node` 处理，兼容早期落库的记录）。 */
+  source?: WorkflowRunSource;
+  startedAt: number;
+  /** 终态（done / failed）时由订阅者 patch；running/缺省 = 仍在跑。 */
+  status?: "running" | "done" | "failed";
+  taskId: string;
+  taskType: string;
+  workflowId: string;
+  workflowName: string;
 }
 
 const MAX_ENTRIES = 32;
@@ -330,10 +330,10 @@ export function appendWorkflowRunLog(
 /* ── useSyncExternalStore 接线 ─────────────────────────────────────────── */
 
 export interface WorkflowRunStoreSnapshot {
-  version: number;
-  runs: Array<WorkflowRunMeta>;
   /** 最近一次仍在运行（或最近一次）的 taskId，null 表示从未运行。 */
   activeTaskId: string | null;
+  runs: Array<WorkflowRunMeta>;
+  version: number;
 }
 
 let cachedSnapshot: WorkflowRunStoreSnapshot | null = null;

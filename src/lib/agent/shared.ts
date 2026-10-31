@@ -15,15 +15,15 @@ export type AgentMessageLike =
 
 /** 客户端 → 服务端的 Agent 请求体。 */
 export interface AgentChatRequest {
-  messages: Array<AgentMessageLike>;
   draft: WorkshopDraftDto;
+  messages: Array<AgentMessageLike>;
   useTools?: boolean;
 }
 
 /** 服务端返回给客户端的 Agent 响应。 */
 export interface AgentChatResponse {
-  reply?: string;
-  tool_calls?: Array<{ arguments: string; id: string; name: string }>;
   done?: boolean;
   fallback_instruction?: Record<string, unknown>;
+  reply?: string;
+  tool_calls?: Array<{ arguments: string; id: string; name: string }>;
 }

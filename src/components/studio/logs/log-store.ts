@@ -76,41 +76,33 @@ function welcomeEntry(): LogEntry {
 }
 
 export interface LogStoreState {
-  logs: Array<LogEntry>;
+  addEntry: (entry: Omit<LogEntry, "id" | "time" | "seq">) => void;
   /**
-   * 因内存上限（`LOG_STORE_MAX`）被折叠掉的更早日志**累计**条数。上限是刻意
-   * 恢复的（见 appendFileLogs：真新行才推进 revision、截断不推进，满足文件早先
-   * 「将来若恢复上限须恢复身份判据」的约束）。面板据此显示「更早 N 条已折叠」。
-   */
-  droppedTotal: number;
-  filteredLogs: Array<LogEntry>;
-  filter: LogFilter;
-  /** 来源筛选（#262：启动日志与应用运行日志混在一屏，需要能分开看）。 */
-  origin: LogOriginFilter;
-  search: string;
-  isOpen: boolean;
-  counts: LogLevelCounts;
-  /**
-   * 每个来源各自的级别计数（含 `all` 汇总）：面板在级别按钮与来源下拉上各显示
-   * 一份，用户不必先切来源才知道那边有几个警告（见 computeOriginCounts）。
-   */
-  countsByOrigin: LogOriginCounts;
-  /**
-   * 面板渲染一帧所需的全部状态（见 {@link LogPanelSlice}）。
+   * 第 1 页窗口的**锚点**：用户「正在看的那一段」的头一条 id（null = 不锚定）。
    *
-   * 它随时间线或筛选状态变化而整体重建，面板只订阅这一个字段。视图层因此不必
-   * 自己拼装状态、也就不会出现「某条写入路径忘了带视图状态」的漏项——那正是
-   * 「来源切了、计数还停在切之前」这类 bug 的来源。
+   * 为什么需要它：第 1 页取的是时间线的**尾部 200 条**。日志每 2s 轮询一次，
+   * 每来一条新行，这 200 条的窗口就整体前移一格——React 会卸载掉最上面那一条、
+   * 挂上新的最末一条。用户刚在顶部某一行里框住的文本**随节点一起被卸载**，选区
+   * 于是消失（ISSUE #262 复审：「刚选择就刷新把我的选择弄没了」，在真实浏览器里
+   * 实测到的正是这条）。
+   *
+   * 锚定之后，「用户看过的那一段」钉在原地、新行列在它**之后**：DOM 节点不重建，
+   * 选区自然不会被冲掉；想追最新也可以亲手往下滚。
+   *
+   * 重取时机（= 用户「转到最新」）：打开面板 / 点「回到最新」 / 换页 / 切筛选 /
+   * 搜索 / 用户自己滚到底部。
    */
-  header: LogPanelSlice;
-  /** 翻页：当前页（1 起，倒序查看，1 = 最新一页）与每页条数。 */
-  page: number;
-  pageSize: number;
+  anchorId: string | null;
+  appendFileLogs: (entries: Array<LogEntry>) => void;
   /**
-   * 本次运行的开始时间（毫秒）；null = 未知（非 launcher 启动）。
-   * 面板只显示本次运行：行时刻早于它即上一次运行的残留（见 dropStaleEntries）。
+   * 贴底看最新（true，默认）：面板停在「已看过的最新一条」处，新日志在下面累积。
+   * false = 用户手动上滚离开了底部，或自己关掉了自动滚动。
+   *
+   * 它同时决定页脚「回到最新」出口是否出现（selectShouldPinToLatest），
+   * 因此必须与 {@link LogStoreState.setFollowBottom} 一起看在 store 里——
+   * 视图只读它，不再各存一份。
    */
-  sessionStart: number | null;
+  autoScroll: boolean;
   /**
    * 当前提供日志的服务端进程标识（bootId）。
    *
@@ -120,29 +112,24 @@ export interface LogStoreState {
    * （ISSUE #360：「应用服务为什么没启动」现场没有任何可引用的标识）。
    */
   bootId: string | null;
+  clear: () => void;
+  /** 复制当前筛选下的全部日志；返回值 = 是否真的进了剪贴板（反馈归面板，§16.2.4.43）。 */
+  copyAll: () => Promise<boolean>;
+  counts: LogLevelCounts;
   /**
-   * 生成 `logs` 切片的生成号（每次时间线变化 +1）。
-   *
-   * 它是「store 有没有新日志」的判据，而不是时间线末条 seq：时间线按时刻排序，
-   * 一条**迟到但时刻更早**的行会插进中间、末条不变——只看末条会漏掉这种新增。
+   * 每个来源各自的级别计数（含 `all` 汇总）：面板在级别按钮与来源下拉上各显示
+   * 一份，用户不必先切来源才知道那边有几个警告（见 computeOriginCounts）。
    */
-  revision: number;
+  countsByOrigin: LogOriginCounts;
+  download: () => void;
   /**
-   * 「已翻过去的历史」：翻到这一页那一刻，窗口之后本来就有多少条。
-   *
-   * 页脚「有 N 条新的日志」= 窗口之后的条数 − 它（见 selectNewLogCount）——
-   * 否则停在第 2 页会一开口就报「有 200 条新的日志」，而那 200 条是用户自己
-   * 翻过去的。第 1 页恒为 0。
+   * 因内存上限（`LOG_STORE_MAX`）被折叠掉的更早日志**累计**条数。上限是刻意
+   * 恢复的（见 appendFileLogs：真新行才推进 revision、截断不推进，满足文件早先
+   * 「将来若恢复上限须恢复身份判据」的约束）。面板据此显示「更早 N 条已折叠」。
    */
-  viewBaselineAfter: number;
-  /**
-   * 「已读水位」：翻到历史位置那一刻**已经看到**的条目。
-   *
-   * 它是投影计数（`selectNewLogCount`）的输入，回答「我看到的之后又来了几条」。
-   * 同时也决定贴底时滚动到哪里（见 LogPanel 的贴底基线）——两者用同一份水位，
-   * 所以「面板说有几条新的」与「实际滚到哪」永远不会各说各话。
-   */
-  viewSeenIds: ReadonlySet<string>;
+  droppedTotal: number;
+  filter: LogFilter;
+  filteredLogs: Array<LogEntry>;
   /**
    * 「贴底基线」：面板开着且用户贴着底看时，**只追到这里**。
    *
@@ -163,6 +150,64 @@ export interface LogStoreState {
    */
   followResetAt: number;
   /**
+   * 面板渲染一帧所需的全部状态（见 {@link LogPanelSlice}）。
+   *
+   * 它随时间线或筛选状态变化而整体重建，面板只订阅这一个字段。视图层因此不必
+   * 自己拼装状态、也就不会出现「某条写入路径忘了带视图状态」的漏项——那正是
+   * 「来源切了、计数还停在切之前」这类 bug 的来源。
+   */
+  header: LogPanelSlice;
+  isOpen: boolean;
+  /** 用户点击「回到最新」：解绑贴底基线并回到第 1 页（见 jumpToLatest）。 */
+  jumpToLatest: () => void;
+  logs: Array<LogEntry>;
+  /** 来源筛选（#262：启动日志与应用运行日志混在一屏，需要能分开看）。 */
+  origin: LogOriginFilter;
+  /** 翻页：当前页（1 起，倒序查看，1 = 最新一页）与每页条数。 */
+  page: number;
+  pageSize: number;
+  /**
+   * 生成 `logs` 切片的生成号（每次时间线变化 +1）。
+   *
+   * 它是「store 有没有新日志」的判据，而不是时间线末条 seq：时间线按时刻排序，
+   * 一条**迟到但时刻更早**的行会插进中间、末条不变——只看末条会漏掉这种新增。
+   */
+  revision: number;
+  /** 打包整份诊断现场（跑 `current/` + 最近几次 `runs/`，见 log-file-client）。 */
+  saveDiagnostics: () => Promise<SavedLogExport>;
+  /**
+   * 把当前筛选下的**全部日志**保存到本机 `log/exports/`（返回落盘路径）。
+   *
+   * 与 `download` 并存而不是替换：浏览器下载在桌面壳里不一定真的落盘，而排障
+   * 现场要的是「文件确实在、路径说得出」（ISSUE #609 反馈第 3 条）。
+   */
+  saveExport: (label: string) => Promise<SavedLogExport>;
+  search: string;
+  /**
+   * 本次运行的开始时间（毫秒）；null = 未知（非 launcher 启动）。
+   * 面板只显示本次运行：行时刻早于它即上一次运行的残留（见 dropStaleEntries）。
+   */
+  sessionStart: number | null;
+  /** 记录当前服务端进程标识；变化时清掉时间线（跨进程的行不可比）。 */
+  setBootId: (bootId: string | null) => void;
+  setFilter: (f: LogFilter) => void;
+  /** 用户滚到底部/离开底部时由视图上报（见 setFollowBottom）。 */
+  setFollowBottom: (follow: boolean) => void;
+  setIsOpen: (open: boolean) => void;
+  setOrigin: (o: LogOriginFilter) => void;
+  setPage: (page: number) => void;
+  setSearch: (s: string) => void;
+  setSessionStart: (sessionStart: number | null) => void;
+  toggleOpen: () => void;
+  /**
+   * 「已翻过去的历史」：翻到这一页那一刻，窗口之后本来就有多少条。
+   *
+   * 页脚「有 N 条新的日志」= 窗口之后的条数 − 它（见 selectNewLogCount）——
+   * 否则停在第 2 页会一开口就报「有 200 条新的日志」，而那 200 条是用户自己
+   * 翻过去的。第 1 页恒为 0。
+   */
+  viewBaselineAfter: number;
+  /**
    * 「已读水位」的生成号：翻到历史页那一刻的 `revision`。
    *
    * 判据是 `revision` 变化（时间线真的变过）而不是「末条变了」：按时刻排序后，
@@ -178,58 +223,13 @@ export interface LogStoreState {
    */
   viewRevision: number;
   /**
-   * 第 1 页窗口的**锚点**：用户「正在看的那一段」的头一条 id（null = 不锚定）。
+   * 「已读水位」：翻到历史位置那一刻**已经看到**的条目。
    *
-   * 为什么需要它：第 1 页取的是时间线的**尾部 200 条**。日志每 2s 轮询一次，
-   * 每来一条新行，这 200 条的窗口就整体前移一格——React 会卸载掉最上面那一条、
-   * 挂上新的最末一条。用户刚在顶部某一行里框住的文本**随节点一起被卸载**，选区
-   * 于是消失（ISSUE #262 复审：「刚选择就刷新把我的选择弄没了」，在真实浏览器里
-   * 实测到的正是这条）。
-   *
-   * 锚定之后，「用户看过的那一段」钉在原地、新行列在它**之后**：DOM 节点不重建，
-   * 选区自然不会被冲掉；想追最新也可以亲手往下滚。
-   *
-   * 重取时机（= 用户「转到最新」）：打开面板 / 点「回到最新」 / 换页 / 切筛选 /
-   * 搜索 / 用户自己滚到底部。
+   * 它是投影计数（`selectNewLogCount`）的输入，回答「我看到的之后又来了几条」。
+   * 同时也决定贴底时滚动到哪里（见 LogPanel 的贴底基线）——两者用同一份水位，
+   * 所以「面板说有几条新的」与「实际滚到哪」永远不会各说各话。
    */
-  anchorId: string | null;
-  /**
-   * 贴底看最新（true，默认）：面板停在「已看过的最新一条」处，新日志在下面累积。
-   * false = 用户手动上滚离开了底部，或自己关掉了自动滚动。
-   *
-   * 它同时决定页脚「回到最新」出口是否出现（selectShouldPinToLatest），
-   * 因此必须与 {@link LogStoreState.setFollowBottom} 一起看在 store 里——
-   * 视图只读它，不再各存一份。
-   */
-  autoScroll: boolean;
-  /** 用户滚到底部/离开底部时由视图上报（见 setFollowBottom）。 */
-  setFollowBottom: (follow: boolean) => void;
-  /** 用户点击「回到最新」：解绑贴底基线并回到第 1 页（见 jumpToLatest）。 */
-  jumpToLatest: () => void;
-  addEntry: (entry: Omit<LogEntry, "id" | "time" | "seq">) => void;
-  appendFileLogs: (entries: Array<LogEntry>) => void;
-  setSessionStart: (sessionStart: number | null) => void;
-  /** 记录当前服务端进程标识；变化时清掉时间线（跨进程的行不可比）。 */
-  setBootId: (bootId: string | null) => void;
-  setFilter: (f: LogFilter) => void;
-  setOrigin: (o: LogOriginFilter) => void;
-  setSearch: (s: string) => void;
-  setPage: (page: number) => void;
-  setIsOpen: (open: boolean) => void;
-  toggleOpen: () => void;
-  clear: () => void;
-  /** 复制当前筛选下的全部日志；返回值 = 是否真的进了剪贴板（反馈归面板，§16.2.4.43）。 */
-  copyAll: () => Promise<boolean>;
-  download: () => void;
-  /**
-   * 把当前筛选下的**全部日志**保存到本机 `log/exports/`（返回落盘路径）。
-   *
-   * 与 `download` 并存而不是替换：浏览器下载在桌面壳里不一定真的落盘，而排障
-   * 现场要的是「文件确实在、路径说得出」（ISSUE #609 反馈第 3 条）。
-   */
-  saveExport: (label: string) => Promise<SavedLogExport>;
-  /** 打包整份诊断现场（跑 `current/` + 最近几次 `runs/`，见 log-file-client）。 */
-  saveDiagnostics: () => Promise<SavedLogExport>;
+  viewSeenIds: ReadonlySet<string>;
 }
 
 /** 面板渲染一帧需要的全部状态（`LogPanelState` 的别称，视图侧更短的写法）。 */
@@ -243,20 +243,20 @@ export type LogPanelState = LogStoreState;
  * 是为了让「面板读哪些状态」这件事只写一遍、只在一个文件里（视图层零状态拼装）。
  */
 export interface LogPanelSlice {
-  filteredLogs: Array<LogEntry>;
-  filter: LogFilter;
-  origin: LogOriginFilter;
-  search: string;
-  isOpen: boolean;
-  counts: LogLevelCounts;
-  countsByOrigin: LogOriginCounts;
-  page: number;
-  pageSize: number;
-  bootId: string | null;
-  /** 贴底看最新（见 {@link LogStoreState.autoScroll}）。 */
-  autoScroll: boolean;
   /** 第 1 页窗口的锚点（见 {@link LogStoreState.anchorId}）。 */
   anchorId: string | null;
+  /** 贴底看最新（见 {@link LogStoreState.autoScroll}）。 */
+  autoScroll: boolean;
+  bootId: string | null;
+  counts: LogLevelCounts;
+  countsByOrigin: LogOriginCounts;
+  filter: LogFilter;
+  filteredLogs: Array<LogEntry>;
+  isOpen: boolean;
+  origin: LogOriginFilter;
+  page: number;
+  pageSize: number;
+  search: string;
   /** 「已翻过去的历史」条数（见 {@link LogStoreState.viewBaselineAfter}）。 */
   viewBaselineAfter: number;
 }
@@ -335,15 +335,15 @@ function viewOf(state: LogStoreState): LogPanelView {
 
 /** 视图状态（筛选条件 + 页码 + 收缩状态），`applyView` 的入参。 */
 interface LogPanelView {
+  anchorId: string | null;
+  autoScroll: boolean;
+  bootId: string | null;
   filter: LogFilter;
-  origin: LogOriginFilter;
-  search: string;
   isOpen: boolean;
+  origin: LogOriginFilter;
   page: number;
   pageSize: number;
-  bootId: string | null;
-  autoScroll: boolean;
-  anchorId: string | null;
+  search: string;
   viewBaselineAfter: number;
 }
 

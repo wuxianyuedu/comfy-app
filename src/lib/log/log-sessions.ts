@@ -32,6 +32,8 @@
  * **不解析它** —— 形态判据只在服务端一处。
  */
 export interface LogSessionMeta {
+  /** 该次运行异常退出（归档包 `run.json` 的 `crashed`）；`current` 恒为 false。 */
+  crashed: boolean;
   /**
    * 份的 id（也是下拉的 value）：`current/` 的份是文件名
    * （`comfyui-runtime-20261005-093612.log`），归档份是 `<包名>/<文件名>`。
@@ -40,6 +42,10 @@ export interface LogSessionMeta {
    * （同一秒内两次启动的 `-2`、迁移前的旧固定名）不撞成一个 id。
    */
   id: string;
+  /** `current` = 正在写的本次运行；`runs` = 已归档的历史运行包。 */
+  scope: "current" | "runs";
+  /** 该次启动的时刻（毫秒）；迁移前的旧固定名读不出时刻，为 null。 */
+  startedAt: number | null;
   /**
    * 下拉文案（`09-30 19:36:12 · 正常退出 · a1b2c3`，由 `lib/log/log-run-packs`
    * 的 `formatScopedLabel` 拼好）。三段都有必要：同一次运行里多次启动的份只有
@@ -47,12 +53,6 @@ export interface LogSessionMeta {
    * 在看什么）、runId 是跨包 `grep <runId> log/current log/runs/` 的唯一入口。
    */
   title: string;
-  /** 该次启动的时刻（毫秒）；迁移前的旧固定名读不出时刻，为 null。 */
-  startedAt: number | null;
-  /** `current` = 正在写的本次运行；`runs` = 已归档的历史运行包。 */
-  scope: "current" | "runs";
-  /** 该次运行异常退出（归档包 `run.json` 的 `crashed`）；`current` 恒为 false。 */
-  crashed: boolean;
 }
 
 /**
@@ -62,6 +62,10 @@ export interface LogSessionMeta {
  * 出现「服务端改了字段、客户端还在按旧字段读」的静默漂移。
  */
 export interface LogSessionsPayload {
+  /** 选中那一份的正文（超长时取**尾部窗口**，见 `truncated` / `windowed`）。 */
+  content: string;
+  /** 本次返回的正文属于哪一份文件；没有可用会话时为 null。 */
+  selectedId: string | null;
   /**
    * 可选的份（**新→旧，第一项就是最新、也恒是「本次运行」的那一份**），已按上限裁剪。
    *
@@ -71,14 +75,6 @@ export interface LogSessionsPayload {
    * 取的就是 `sessions[0]`，与端点 `selectedId` 的缺省值同端。
    */
   sessions: Array<LogSessionMeta>;
-  /** 本次返回的正文属于哪一份文件；没有可用会话时为 null。 */
-  selectedId: string | null;
-  /** 选中那一份的正文（超长时取**尾部窗口**，见 `truncated` / `windowed`）。 */
-  content: string;
-  /** 正文被截断（界面据此提示只见最近一段）。 */
-  truncated: boolean;
-  /** 服务端只扫了尾部窗口 —— 前面还有没读到的内容。 */
-  windowed: boolean;
   /** 该份文件的字节数（排障与页脚展示）。 */
   size: number;
   /**
@@ -88,4 +84,8 @@ export interface LogSessionsPayload {
    * 几十份（服务被反复重启），下拉列不完 —— 不说的话用户会以为「只启动过这些次」。
    */
   total: number;
+  /** 正文被截断（界面据此提示只见最近一段）。 */
+  truncated: boolean;
+  /** 服务端只扫了尾部窗口 —— 前面还有没读到的内容。 */
+  windowed: boolean;
 }

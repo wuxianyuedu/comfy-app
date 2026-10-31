@@ -43,54 +43,54 @@ export type CharacterPatch = Partial<{
 }>;
 
 export interface SeriesOrganizerController {
-  /** 系列列表。 */
-  seriesList?: Array<Series>;
-  /** 当前选中系列下的季列表。 */
-  seasons?: Array<Season>;
-  /** 当前选中季下的集列表。 */
-  episodes?: Array<Episode>;
-  /** 当前项目归属的集（无归属为 null）。 */
-  currentEp?: Episode | null;
-  /** 当前选中系列下的角色库列表。 */
-  characters?: Array<CharacterEntity>;
-  /** 当前选中集已关联的角色（含定位 role）。 */
-  episodeCharacters?: Array<EpisodeCharacterLink>;
+  assignCurrentProject: (episodeId: string) => void;
   /** 反向：当前正在查看的角色被哪些集引用（FR-SR-03 ②）。 */
   characterEpisodes?: Array<CharacterEpisodeRef>;
-  /** 正在查看引用集的角色 id（null = 没在查看）。 */
-  inspectedCharacterId: string | null;
-
-  seriesId: string | null;
-  seasonId: string | null;
-  episodeId: string | null;
-  selectSeries: (id: string | null) => void;
-  selectSeason: (id: string | null) => void;
-  selectEpisode: (id: string | null) => void;
-
-  createSeries: (title: string) => void;
-  renameSeries: (id: string, title: string) => void;
-  deleteSeries: (id: string) => void;
-  createSeason: (seriesId: string, title: string) => void;
-  renameSeason: (id: string, title: string) => void;
-  deleteSeason: (id: string) => void;
-  createEpisode: (seasonId: string, title: string) => void;
-  renameEpisode: (id: string, title: string) => void;
-  deleteEpisode: (id: string) => void;
-  assignCurrentProject: (episodeId: string) => void;
-
+  /** 当前选中系列下的角色库列表。 */
+  characters?: Array<CharacterEntity>;
+  clearInspectedCharacter: () => void;
   /** 角色库：建 / 改 / 删。 */
   createCharacter: (seriesId: string, name: string) => void;
-  updateCharacter: (id: string, patch: CharacterPatch) => void;
+  createEpisode: (seasonId: string, title: string) => void;
+  createSeason: (seriesId: string, title: string) => void;
+  createSeries: (title: string) => void;
+
+  /** 当前项目归属的集（无归属为 null）。 */
+  currentEp?: Episode | null;
   deleteCharacter: (id: string) => void;
-  /** 集 ↔ 角色关联。 */
-  linkCharacter: (episodeId: string, characterId: string) => void;
-  unlinkCharacter: (episodeId: string, characterId: string) => void;
+  deleteEpisode: (id: string) => void;
+  deleteSeason: (id: string) => void;
+  deleteSeries: (id: string) => void;
+  /** 当前选中集已关联的角色（含定位 role）。 */
+  episodeCharacters?: Array<EpisodeCharacterLink>;
+
+  episodeId: string | null;
+  /** 当前选中季下的集列表。 */
+  episodes?: Array<Episode>;
+  injectToProduction: (projectId: string) => void;
   /** 反向查询：查看某角色被哪些集引用（FR-SR-03 ②）。 */
   inspectCharacterEpisodes: (characterId: string) => void;
-  clearInspectedCharacter: () => void;
+  /** 正在查看引用集的角色 id（null = 没在查看）。 */
+  inspectedCharacterId: string | null;
+  /** 集 ↔ 角色关联。 */
+  linkCharacter: (episodeId: string, characterId: string) => void;
   /** 双向同步：把项目角色提升进系列库 / 把系列库角色注入项目。 */
   promoteFromProduction: (projectId: string) => void;
-  injectToProduction: (projectId: string) => void;
+  renameEpisode: (id: string, title: string) => void;
+  renameSeason: (id: string, title: string) => void;
+  renameSeries: (id: string, title: string) => void;
+
+  seasonId: string | null;
+  /** 当前选中系列下的季列表。 */
+  seasons?: Array<Season>;
+  selectEpisode: (id: string | null) => void;
+  selectSeason: (id: string | null) => void;
+  selectSeries: (id: string | null) => void;
+  seriesId: string | null;
+  /** 系列列表。 */
+  seriesList?: Array<Series>;
+  unlinkCharacter: (episodeId: string, characterId: string) => void;
+  updateCharacter: (id: string, patch: CharacterPatch) => void;
 }
 
 export function useSeriesOrganizer(projectId?: string): SeriesOrganizerController {

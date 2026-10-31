@@ -11,12 +11,12 @@ import { MODE_LABELS, STATUS_BADGE, type ShotListItem } from "./film-studio-conf
 
 interface FilmStudioShotListPanelProps {
   c: FilmStudioController;
-  listShots: Array<ShotListItem>;
-  selectedShotId: string;
   isProjectSource: boolean;
-  onSelectShot: (id: string) => void;
+  listShots: Array<ShotListItem>;
   onAddShot: () => void;
   onReviewShot: (shot: ShotListItem) => void;
+  onSelectShot: (id: string) => void;
+  selectedShotId: string;
 }
 
 export function FilmStudioShotListPanel({

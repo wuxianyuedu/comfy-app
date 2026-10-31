@@ -47,32 +47,6 @@ import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-
  *  这些值是**工坊的业务语义**（镜头图 / 首帧 / 尾帧各是什么），与「落到工作流的
  *  哪一行」是两件事：后者由作者在工作流库里的连线声明。 */
 export interface WorkshopExposedValues {
-  prompt?: string;
-  negativePrompt?: string;
-  /** 尺寸：比例 + 分辨率 或 比例 + 百万像素 + 倍数（见 `lib/size-presets`）。
-   *  本层落到哪个尺寸端口由作者连线决定，值按该端口的形态派（宽高 / 比例标签 /
-   *  百万像素 / 分辨率档 / 对齐倍数）。 */
-  size?: SizeSpecValue;
-  /** 参考图文件名（已上传到 ComfyUI 输入目录）。
-   *  按契约口顺序（`reference-image` / `reference-image-2`…）给值，各自落到作者
-   *  连的那一行；未连线的槽不落。 */
-  referenceImages?: Array<string>;
-  /** 视频：首帧文件名。缺省时回退到 referenceImages[0]。 */
-  firstFrame?: string;
-  /** 视频：尾帧文件名（首尾帧工作流用）。 */
-  lastFrame?: string;
-  /** 视频：时长（秒）。落在作者连到「时长」口、且按秒表达的那个端口上
-   *  （`duration` / `seconds` / `时长`）。 */
-  duration?: number;
-  /** 视频：帧数。落在按帧表达的时长端口上（`length` / `num_frames` / `帧数`）。
-   *
-   *  与 `duration` 是同一个「时长」口的两种落点单位：调用方按 fps 折算好再给
-   *  （见 VideoStudio 的 framesFor），这里不猜 fps。 */
-  frames?: number;
-  /** 采样种子（INT）。落在作者连到「种子」口、指向工作流 seed / noise_seed 端口的
-   *  那一行上。**没连种子口的工作流：这个值落不下去（进 unmatched），仍用其图内
-   *  seed 配置** —— 实际是否可换由工作流决定。「抽卡重生成」= 给一个新的随机 seed。 */
-  seed?: number;
   /** **自定义口**的值（契约口 id → 值，如 `{ "custom-text-1": "水彩" }`）。
    *
    *  预制的几个口各有业务语义（提示词 / 尺寸 / 首帧…），所以各占一个字段；
@@ -80,6 +54,32 @@ export interface WorkshopExposedValues {
    *  在一张表里。值原样下发（文本口是字符串，数字口是数字），落点仍由作者连线
    *  声明（`applyParamMapping` 只认作者画的线）。 */
   custom?: Record<string, string | number>;
+  /** 视频：时长（秒）。落在作者连到「时长」口、且按秒表达的那个端口上
+   *  （`duration` / `seconds` / `时长`）。 */
+  duration?: number;
+  /** 视频：首帧文件名。缺省时回退到 referenceImages[0]。 */
+  firstFrame?: string;
+  /** 视频：帧数。落在按帧表达的时长端口上（`length` / `num_frames` / `帧数`）。
+   *
+   *  与 `duration` 是同一个「时长」口的两种落点单位：调用方按 fps 折算好再给
+   *  （见 VideoStudio 的 framesFor），这里不猜 fps。 */
+  frames?: number;
+  /** 视频：尾帧文件名（首尾帧工作流用）。 */
+  lastFrame?: string;
+  negativePrompt?: string;
+  prompt?: string;
+  /** 参考图文件名（已上传到 ComfyUI 输入目录）。
+   *  按契约口顺序（`reference-image` / `reference-image-2`…）给值，各自落到作者
+   *  连的那一行；未连线的槽不落。 */
+  referenceImages?: Array<string>;
+  /** 采样种子（INT）。落在作者连到「种子」口、指向工作流 seed / noise_seed 端口的
+   *  那一行上。**没连种子口的工作流：这个值落不下去（进 unmatched），仍用其图内
+   *  seed 配置** —— 实际是否可换由工作流决定。「抽卡重生成」= 给一个新的随机 seed。 */
+  seed?: number;
+  /** 尺寸：比例 + 分辨率 或 比例 + 百万像素 + 倍数（见 `lib/size-presets`）。
+   *  本层落到哪个尺寸端口由作者连线决定，值按该端口的形态派（宽高 / 比例标签 /
+   *  百万像素 / 分辨率档 / 对齐倍数）。 */
+  size?: SizeSpecValue;
 }
 
 /** 尺寸表达（结构上与 `lib/size-presets` 的 `SizeSpec` 一致）。
@@ -88,18 +88,18 @@ export interface WorkshopExposedValues {
  *  plain object（工坊表单 / 服务端编排），用结构子集能少一层耦合；规范化由
  *  `normalizeSizeSpec` 在运行期做。 */
 export interface SizeSpecValue {
-  ratio?: unknown;
   clarity?: unknown;
   multiple?: unknown;
+  ratio?: unknown;
 }
 
 /** 一次封装的结果。 */
 export interface EncapsulatedInputs {
-  /** 下发给 generate.generate 的 workflowInputs（**只含作者连过线的口**）。 */
-  workflowInputs: Array<{ name: string; nodeId: string; value: unknown }>;
   /** 用户给了值、但落不到任何端口的口（未连线 / 作者显式断开 / 端口已消失）。
    *  以前这里会按名字猜一个端口兜住，现在如实上报 —— 没连线就是「未配置」。 */
   unmatched: Array<string>;
+  /** 下发给 generate.generate 的 workflowInputs（**只含作者连过线的口**）。 */
+  workflowInputs: Array<{ name: string; nodeId: string; value: unknown }>;
 }
 
 /** 该时长端口按「帧」还是按「秒」表达。

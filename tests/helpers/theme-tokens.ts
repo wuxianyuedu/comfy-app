@@ -281,9 +281,9 @@ export function themeTokens(theme: "light" | "dark", cssText: string): ThemeToke
   const root = postcss.parse(cssText);
 
   interface Entry {
-    value: string;
     layered: boolean;
     order: number;
+    value: string;
   }
   const values = new Map<string, Entry>();
   let order = 0;

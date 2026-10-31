@@ -37,18 +37,18 @@ import { useEffect, useRef } from "react";
 
 /** `mod` 在 macOS 上是 ⌘、其它平台是 Ctrl。 */
 export interface HotkeySpec {
-  /** 主键，大小写不敏感（`"l"` / `"Escape"` / `"s"`）。 */
-  key: string;
-  /** ⌘（macOS）/ Ctrl（其它）—— **优先用这一项**，不要写 `ctrl`。 */
-  mod?: boolean;
-  /** 显式要求 Ctrl（仅当行为**刻意**只在 Ctrl 上成立时用，写明理由）。 */
-  ctrl?: boolean;
-  /** 显式要求 ⌘（同上）。 */
-  meta?: boolean;
-  /** 要求 Shift。 */
-  shift?: boolean;
   /** 要求 Alt。 */
   alt?: boolean;
+  /** 显式要求 Ctrl（仅当行为**刻意**只在 Ctrl 上成立时用，写明理由）。 */
+  ctrl?: boolean;
+  /** 主键，大小写不敏感（`"l"` / `"Escape"` / `"s"`）。 */
+  key: string;
+  /** 显式要求 ⌘（同上）。 */
+  meta?: boolean;
+  /** ⌘（macOS）/ Ctrl（其它）—— **优先用这一项**，不要写 `ctrl`。 */
+  mod?: boolean;
+  /** 要求 Shift。 */
+  shift?: boolean;
 }
 
 export interface UseHotkeyOptions {

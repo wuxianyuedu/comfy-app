@@ -38,8 +38,8 @@ import { cn } from "~/lib/utils";
 
 /** 路径的一段：`key` 为 `null` 表示不可导航（末段常为当前项）。 */
 export interface BreadcrumbSegment {
-  label: string;
   key: string | null;
+  label: string;
 }
 
 /**

@@ -54,21 +54,13 @@ export type ManagedSpawnResult =
   | { child?: never; error: string };
 
 export interface ManagedSpawnOptions {
-  command: string;
   args: Array<string>;
+  command: string;
   cwd?: string;
   env?: NodeJS.ProcessEnv;
-  /** keepAlive 生效时恒忽略；bound 模式下透传给 spawn。 */
-  windowsHide?: boolean;
-  mode: DetachMode;
   /** spawn 找不到可执行文件时是否静默吞掉（默认 false）。 */
   ignoreMissing?: boolean;
-  /** keepAlive 专用：把子进程 stdout / stderr 重定向到这两个按次命名的文件
-   *  （脱离进程树的进程没有管道可读，落文件才能保住启动日志）。
-   *  Windows 经 Start-Process -RedirectStandardOutput/-Error；POSIX 直接把
-   *  文件描述符交给 stdio。两文件必须不同路径。 */
-  redirectStdoutFile?: string;
-  redirectStderrFile?: string;
+  mode: DetachMode;
   /** keepAlive 的两条平台分支的分叉判据。缺省 `process.platform`。
    *
    *  **为什么它是一个入参**：`process.platform` 在 POSIX 宿主上是不可覆盖的
@@ -79,6 +71,14 @@ export interface ManagedSpawnOptions {
    *  五条用例恒红；把判据搬到入参之后，两端机器判的是同一个结论。
    *  注入的是**判据的输入**，不是把假信号发给真进程。 */
   platform?: NodeJS.Platform;
+  redirectStderrFile?: string;
+  /** keepAlive 专用：把子进程 stdout / stderr 重定向到这两个按次命名的文件
+   *  （脱离进程树的进程没有管道可读，落文件才能保住启动日志）。
+   *  Windows 经 Start-Process -RedirectStandardOutput/-Error；POSIX 直接把
+   *  文件描述符交给 stdio。两文件必须不同路径。 */
+  redirectStdoutFile?: string;
+  /** keepAlive 生效时恒忽略；bound 模式下透传给 spawn。 */
+  windowsHide?: boolean;
 }
 
 /** 把单个参数安全地包进 PowerShell 单引号（' 转义为 ''）。 */

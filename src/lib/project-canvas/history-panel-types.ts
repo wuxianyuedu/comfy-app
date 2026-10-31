@@ -24,17 +24,17 @@ export type TaskMediaType = "image" | "video" | "audio";
 
 /** 镜像 /api/tasks（task.list）响应行的前端形状。 */
 export interface HistoryTaskRow {
+  cover: string | null;
+  createdAt: string;
+  error: string | null;
   id: string;
+  mediaType: TaskMediaType;
+  progress: number;
+  projectId: string | null;
+  prompt: string;
+  status: string;
   type: string;
   workflowName: string;
-  status: string;
-  prompt: string;
-  createdAt: string;
-  cover: string | null;
-  mediaType: TaskMediaType;
-  projectId: string | null;
-  progress: number;
-  error: string | null;
 }
 
 export const STATUS_PILL: Record<string, { cls: string; label: string }> = {

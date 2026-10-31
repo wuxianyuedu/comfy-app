@@ -31,21 +31,21 @@ function toastReport(toast: {
 
 /** comfyapp:// 协议未接管的引导状态：为 null 表示尚未发起过导航。 */
 export interface FolderPopover {
-  path: string;
   /** true = 2s 内页面未失焦，视为助手未注册，展示安装引导。 */
   helperMissing: boolean;
+  path: string;
 }
 
 export interface HistoryDetailActions {
-  folderPopover: FolderPopover | null;
-  /** 「打开目录」进行中（防双击）。 */
-  openFolderBusy: boolean;
-  /** 「下载工作流」进行中。 */
-  downloading: boolean;
-  openFolder: (taskId: string) => Promise<void>;
-  downloadWorkflow: (taskId: string) => Promise<void>;
   copyPath: () => void;
   dismissFolderPopover: () => void;
+  /** 「下载工作流」进行中。 */
+  downloading: boolean;
+  downloadWorkflow: (taskId: string) => Promise<void>;
+  folderPopover: FolderPopover | null;
+  openFolder: (taskId: string) => Promise<void>;
+  /** 「打开目录」进行中（防双击）。 */
+  openFolderBusy: boolean;
 }
 
 /**
@@ -53,12 +53,12 @@ export interface HistoryDetailActions {
  * 注入而非直接 import vanillaApi，是为了让逻辑层可脱离网络单测。
  */
 export interface HistoryDetailActionsDeps {
+  fetchWorkflow: (id: string) => Promise<{ workflow?: unknown } | null>;
   openFolder: (id: string) => Promise<{
     absolutePath?: string | null;
     comfyappUrl?: string | null;
     error?: string | null;
   }>;
-  fetchWorkflow: (id: string) => Promise<{ workflow?: unknown } | null>;
 }
 
 export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): HistoryDetailActions {

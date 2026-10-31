@@ -299,14 +299,14 @@ function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
  */
 /** 一个子图 wrapper 的「提升输入 → 内层节点」解析结果。 */
 interface SubgraphTargets {
-  /** 子图定义本体（用于继续下钻嵌套实例）。 */
-  sub: RawSubgraph;
-  /** 定义内部节点（按 id）。 */
-  innerById: Map<string, RawUiNode>;
-  /** 提升引脚名 → 内层节点 id 与其**入参下标**（首条 origin=-10 的边界连线）。 */
-  targetByName: Map<string, { nodeId: string; slot: number }>;
   /** 定义里声明的输入引脚（**按声明顺序**）。 */
   defInputs: Array<SubgraphPin>;
+  /** 定义内部节点（按 id）。 */
+  innerById: Map<string, RawUiNode>;
+  /** 子图定义本体（用于继续下钻嵌套实例）。 */
+  sub: RawSubgraph;
+  /** 提升引脚名 → 内层节点 id 与其**入参下标**（首条 origin=-10 的边界连线）。 */
+  targetByName: Map<string, { nodeId: string; slot: number }>;
 }
 
 /**

@@ -31,9 +31,9 @@ type Row = {
 };
 
 interface Behavior {
-  models: Array<Row>;
   /** 非空时 list 抛错 —— 覆盖错误态 */
   listError?: string;
+  models: Array<Row>;
   /** 非空时 sync 抛错 —— 覆盖静默同步失败 */
   syncError?: string;
 }

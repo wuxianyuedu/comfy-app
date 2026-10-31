@@ -16,10 +16,10 @@ export async function cancelTask(taskId: string): Promise<void> {
 
 /** 任务的权威状态快照（只取终态判定要用的两个字段）。 */
 export interface TaskStatusSnapshot {
-  /** DB 里的权威状态；查不到（行已删 / 网络抖动）时为 null。 */
-  status: string | null;
   /** 失败原因（仅失败态有意义）。 */
   error: string | null;
+  /** DB 里的权威状态；查不到（行已删 / 网络抖动）时为 null。 */
+  status: string | null;
 }
 
 /**
@@ -31,9 +31,7 @@ export interface TaskStatusSnapshot {
  * 自相矛盾的结果（ISSUE #733）。终态帧只应当作**触发器**，结论一律回
  * DB 取；本函数就是那个出口，读不到时返回 null，由调用方决定兜底文案。
  */
-export async function fetchTaskStatus(
-  taskId: string,
-): Promise<TaskStatusSnapshot> {
+export async function fetchTaskStatus(taskId: string): Promise<TaskStatusSnapshot> {
   try {
     const t = await vanillaApi.task.detail.query({ id: taskId });
     return {

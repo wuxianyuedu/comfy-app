@@ -31,10 +31,10 @@ export interface EdgeFocusEndpoints {
 export interface ResolveEdgeFocusArgs {
   /** 一条连线的两个端点（已按当前画布坐标系解析）。 */
   endpoints: EdgeFocusEndpoints;
-  /** 端点 id → 渲染该节点时的实际节点 id。返回 null 表示该端点在当前图里不存在。 */
-  resolveNodeId: (visualNodeId: string) => string | null;
   /** 该「实际节点 id」是否处于选中态。 */
   isSelected: (resolvedNodeId: string) => boolean;
+  /** 端点 id → 渲染该节点时的实际节点 id。返回 null 表示该端点在当前图里不存在。 */
+  resolveNodeId: (visualNodeId: string) => string | null;
 }
 
 export function resolveEdgeFocus({
@@ -119,16 +119,16 @@ export type PortRowTone = "focused" | "related" | "plain" | "dimmed";
 export interface PortRowStyle {
   /** 整行的背景（提亮档给一层极淡的白）。 */
   background?: string;
-  /** 整行透明度（压暗档连标签与端点一起压）。 */
-  opacity?: number;
+  /** 端点光晕是否用强档（提亮档给更强的外发光）。 */
+  dotGlowStrong: boolean;
+  /** 端点直径（px）。 */
+  dotSize: number;
   /** 标签颜色。 */
   labelColor: string;
   /** 标签字重（提亮档加粗半档）。 */
   labelWeight?: number;
-  /** 端点直径（px）。 */
-  dotSize: number;
-  /** 端点光晕是否用强档（提亮档给更强的外发光）。 */
-  dotGlowStrong: boolean;
+  /** 整行透明度（压暗档连标签与端点一起压）。 */
+  opacity?: number;
 }
 
 /** 端口行三档 + 提示档的样式表。端点色相由端口类型决定，这里只管「强弱」。 */
@@ -188,13 +188,6 @@ export function portDotGlow(portColor: string, strong: boolean): string {
 }
 
 export interface PortFocusConnection {
-  /** 源端节点 id；解析不出来（如映射线的参数卡片）时可传 null 或靠 resolveSourceId 过滤。 */
-  source: string | null;
-  target: string | null;
-  /** 源端输出端口名（已含 `out:` 前缀时按原样使用）。 */
-  sourceHandle?: string | null;
-  /** 目标端端口名（端口行 Handle id）。 */
-  targetHandle?: string | null;
   /**
    * 这条线是不是「对外参数 → 宿主节点端口」的映射线。
    *
@@ -203,23 +196,30 @@ export interface PortFocusConnection {
    * 上下游（与连线高亮对映射线的口径一致，见 `use-related-edges-highlight`）。
    */
   paramMap?: boolean;
+  /** 源端节点 id；解析不出来（如映射线的参数卡片）时可传 null 或靠 resolveSourceId 过滤。 */
+  source: string | null;
+  /** 源端输出端口名（已含 `out:` 前缀时按原样使用）。 */
+  sourceHandle?: string | null;
+  target: string | null;
+  /** 目标端端口名（端口行 Handle id）。 */
+  targetHandle?: string | null;
 }
 
 /** 单个节点上各端口行的关注级别（`upstream` 与 `downstream` 不可能同时生效）。 */
 export interface NodePortFocus {
-  upstream: ReadonlySet<string>;
   downstream: ReadonlySet<string>;
   related: ReadonlySet<string>;
+  upstream: ReadonlySet<string>;
 }
 
 export interface ResolvePortFocusArgs {
   connections: ReadonlyArray<PortFocusConnection>;
-  /** 选中节点 id 集合（已按实际节点 id 归一）。 */
-  selectedIds: ReadonlySet<string>;
   /** 源端节点 id 的解析（映射线的参数卡片等合成端点返回 null 表示「不是图上的端口」）。 */
   resolveSourceId?: (visualNodeId: string) => string | null;
   /** 目标端节点 id 的解析（折叠锚点等）。 */
   resolveTargetId?: (visualNodeId: string) => string | null;
+  /** 选中节点 id 集合（已按实际节点 id 归一）。 */
+  selectedIds: ReadonlySet<string>;
 }
 
 /** 端口行的实际 Handle id：输出侧的 `out:` 前缀在这里补全，避免各处各写一遍。 */
@@ -234,9 +234,9 @@ export function portHandleId(side: "source" | "target", name: string): string {
 export type PortFocusRole = "upstream" | "downstream" | "related";
 
 interface PortFocusBucket {
-  upstream: Set<string>;
   downstream: Set<string>;
   related: Set<string>;
+  upstream: Set<string>;
 }
 
 /** 把一次占用记进节点的端口桶。**互斥**：一个端口行只持有一个级别 ——

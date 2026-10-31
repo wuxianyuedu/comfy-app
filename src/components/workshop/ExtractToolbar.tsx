@@ -51,29 +51,29 @@ function logBadgeLabel(kind: ExtractLogEntry["kind"]): string {
 }
 
 interface ExtractToolbarProps {
-  /** 区块标题，如「从剧本提取角色」 */
-  title: string;
+  busy: boolean;
   /** 完整下拉选项值（local::<model> | remote::<model>） */
   channelValue: string;
+  errorText?: string;
+  /** 本次提取的结构化执行日志（模型输入/输出/结果/错误），跑完仍展示 */
+  executionLog?: Array<ExtractLogEntry>;
+  /** 无剧本文本等情况下禁用提取(导入仍可用) */
+  extractDisabled?: boolean;
+  extractDisabledReason?: string;
+  importAccept?: string;
+  /** 传了环节名（character / storyboard）就提供「历史」入口：按需拉取
+   * log/workshop/ 里落盘的历史日志（跨刷新 / 重启可回看）。 */
+  logStage?: GenerationLogStage;
   onChannelValueChange: (value: string) => void;
   onExtract: () => void;
   /** 外部导入文件回调(.md/.txt/.json) */
   onImportFile: (file: File) => void;
-  importAccept?: string;
-  busy: boolean;
   /** 实时提取过程（本地/远端通道时流式回传的模型输出） */
   progressText?: string;
   /** 成功/结果提示 */
   statusText?: string;
-  errorText?: string;
-  /** 本次提取的结构化执行日志（模型输入/输出/结果/错误），跑完仍展示 */
-  executionLog?: Array<ExtractLogEntry>;
-  /** 传了环节名（character / storyboard）就提供「历史」入口：按需拉取
-   * log/workshop/ 里落盘的历史日志（跨刷新 / 重启可回看）。 */
-  logStage?: GenerationLogStage;
-  /** 无剧本文本等情况下禁用提取(导入仍可用) */
-  extractDisabled?: boolean;
-  extractDisabledReason?: string;
+  /** 区块标题，如「从剧本提取角色」 */
+  title: string;
 }
 
 /** 剧本提取区块：分组模型下拉（工具/本地/远端）+ 提取按钮 + 外部导入。

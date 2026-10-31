@@ -80,22 +80,22 @@ import { cn } from "~/lib/utils";
  */
 
 export interface KeyValueItem {
-  /** 标签（键）。纯文本，或已渲染节点（含徽标 / 图标等）。 */
-  key: ReactNode;
-  /** React 列表 key：`key` 是节点或同块里标签重名时必须显式给。 */
-  id?: string;
-  /** 已渲染的值。与 `raw` 二选一。 */
-  value?: ReactNode;
-  /** 原始值，交给 `displayValue` 处理缺值。与 `value` 二选一。 */
-  raw?: unknown;
   /** 值下方的补充说明（仅 `stacked` 渲染；`rows` / `inline` 忽略）。 */
   hint?: ReactNode;
+  /** React 列表 key：`key` 是节点或同块里标签重名时必须显式给。 */
+  id?: string;
   /** 覆盖本行容器的类名（如 `stacked` 里让某项跨列）。 */
   itemClassName?: string;
-  /** 覆盖本行「值」的类名（如给某个值单独上色）。 */
-  valueClassName?: string;
+  /** 标签（键）。纯文本，或已渲染节点（含徽标 / 图标等）。 */
+  key: ReactNode;
+  /** 原始值，交给 `displayValue` 处理缺值。与 `value` 二选一。 */
+  raw?: unknown;
   /** 悬停提示。 */
   title?: string;
+  /** 已渲染的值。与 `raw` 二选一。 */
+  value?: ReactNode;
+  /** 覆盖本行「值」的类名（如给某个值单独上色）。 */
+  valueClassName?: string;
 }
 
 export type KeyValueLayout = "rows" | "stacked" | "inline" | "table";

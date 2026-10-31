@@ -15,12 +15,12 @@ import { patchWorkflow } from "~/lib/workflow/workflow-mutations";
 import type { WorkflowModesState } from "~/components/studio/project-canvas/WorkflowNode";
 
 export interface UseWorkflowModesArgs {
-  workflowId?: string;
   /** 当前模式状态（乐观更新前的快照，用于失败回滚）。 */
   modes: WorkflowModesState | null;
-  setModes: (next: WorkflowModesState) => void;
   /** 保存失败时的节点级报错（写进 d.error + status: "error"）。 */
   onFailed: (reason: string) => void;
+  setModes: (next: WorkflowModesState) => void;
+  workflowId?: string;
 }
 
 export interface WorkflowModesController {

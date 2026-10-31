@@ -31,26 +31,26 @@ import {
 } from "~/components/studio/workflow-form/WorkflowNodeParts";
 
 export interface LibraryHostCardProps {
-  workflowName: string;
-  /** 状态胶囊文案（待开始 / 提交中… / 生成中 n% / 已完成 / 失败）。 */
-  statusLabel: string;
-  running: boolean;
-  /** 运行阶段（决定状态点配色）。 */
-  phaseKind: "idle" | "starting" | "running" | "done" | "failed";
-  modes?: Array<string>;
-  effectiveMode: string | null;
-  taskType: string;
-  effectiveModeLabel: string;
-  onModeChange?: (code: string) => void;
-  /** 宿主卡片的 DOM 引用（落点可达性收集用它，见 `reachableKeys`）。 */
-  hostRef?: RefObject<HTMLDivElement | null>;
-  /** 参数表单（`DynamicWorkflowForm` compact —— 端点由它自己渲染）。 */
-  form: React.ReactNode;
-  /** 工作流的输出行（`splitWorkflowIO` 的结果）。 */
-  outputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
-  inputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
   /** 生成按钮。 */
   actions: React.ReactNode;
+  effectiveMode: string | null;
+  effectiveModeLabel: string;
+  /** 参数表单（`DynamicWorkflowForm` compact —— 端点由它自己渲染）。 */
+  form: React.ReactNode;
+  /** 宿主卡片的 DOM 引用（落点可达性收集用它，见 `reachableKeys`）。 */
+  hostRef?: RefObject<HTMLDivElement | null>;
+  inputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
+  modes?: Array<string>;
+  onModeChange?: (code: string) => void;
+  /** 工作流的输出行（`splitWorkflowIO` 的结果）。 */
+  outputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
+  /** 运行阶段（决定状态点配色）。 */
+  phaseKind: "idle" | "starting" | "running" | "done" | "failed";
+  running: boolean;
+  /** 状态胶囊文案（待开始 / 提交中… / 生成中 n% / 已完成 / 失败）。 */
+  statusLabel: string;
+  taskType: string;
+  workflowName: string;
 }
 
 export function LibraryHostCard({

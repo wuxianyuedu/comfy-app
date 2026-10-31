@@ -3,11 +3,11 @@
 // 保证多轮流程始终可用。
 
 export interface AgentSpec {
-  prompt: string;
+  kind?: "image" | "video";
   negative?: string;
   params?: AgentParams;
+  prompt: string;
   skillHint?: string;
-  kind?: "image" | "video";
 }
 
 export type AgentParams = {
@@ -19,15 +19,15 @@ export type AgentParams = {
 };
 
 export interface ChatMessage {
-  role: "user" | "assistant" | "system";
   content: string;
+  role: "user" | "assistant" | "system";
 }
 
 export interface AgentTurnResult {
-  /** 助手的自然语言回复（一个提问，或一次确认）。 */
-  reply: string;
   /** 有此字段且为真，表示描述已定稿、可以开始生成。 */
   ready: boolean;
+  /** 助手的自然语言回复（一个提问，或一次确认）。 */
+  reply: string;
   /** 最终的结构化描述（仅在就绪时给出）。 */
   spec?: AgentSpec;
 }

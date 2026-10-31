@@ -38,10 +38,6 @@ import { clampInt } from "~/lib/clamp";
 
 /** 判据所需的**事实**（全部由调用方从设置与平台读，本模块不做 IO）。 */
 export interface CpuLimitFacts {
-  /** 设置里的档位；缺省（老设置文件里没有这个键）按 `yield` 处理。 */
-  mode: CpuLimitMode | undefined;
-  /** 目标平台（注入以便用例喂两种平台断言两种形状）。 */
-  platform: NodeJS.Platform;
   /**
    * 当前进程是否处于**桌面壳内**（Tauri）。
    *
@@ -50,6 +46,10 @@ export interface CpuLimitFacts {
    * 那一种场景发明的。这条只影响**默认值**，用户显式选过的档一律照办。
    */
   desktopShell: boolean;
+  /** 设置里的档位；缺省（老设置文件里没有这个键）按 `yield` 处理。 */
+  mode: CpuLimitMode | undefined;
+  /** 目标平台（注入以便用例喂两种平台断言两种形状）。 */
+  platform: NodeJS.Platform;
 }
 
 /** CPU 档位：不动 / 让路（后台优先）/ 限核。 */
@@ -117,10 +117,10 @@ export function resolveCpuLimitMode(facts: CpuLimitFacts): CpuLimitMode {
  *     留一行日志，绝不让它把启动搞挂（见 `apply`）。
  */
 export interface CpuLimitCommand {
-  /** 可执行文件。 */
-  command: string;
   /** 参数数组。 */
   args: Array<string>;
+  /** 可执行文件。 */
+  command: string;
   /** 这一档实际做了什么（写进运行日志的一句话）。 */
   describe: string;
 }

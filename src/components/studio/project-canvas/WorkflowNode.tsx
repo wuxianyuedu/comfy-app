@@ -60,13 +60,25 @@ import {
 export type { WorkflowSourceFilter, WorkflowModesState } from "./workflow-node-types";
 
 export interface WorkflowNodeProps {
-  id: string;
   data: CanvasNodeData;
+  id: string;
+  /** 画布节点会话级模型筛选值（"all" 或某标签名）。 */
+  modelFilter?: string;
+  /** 用户级模型标签库（全局），驱动 chip4 的模型筛选列表。 */
+  modelTagLib?: Array<{ count: number; id: string; name: string }>;
+  onFormChange: (next: Record<string, unknown>) => void;
+  onGenerate: () => void;
+  onModelFilterChange?: (f: string) => void;
+  onModesChange: (modes: Array<string>, defaultMode: string) => void;
+  onPatch: (p: Partial<CanvasNodeData>) => void;
+  onSeedModeChange: (ioKey: string, mode: string) => void;
+  onSelectWorkflow: (v: string) => void;
+  onSourceFilterChange: (f: WorkflowSourceFilter) => void;
+  /** 父级（CanvasNode）持的来源筛选 — 影响 chip2 列表。 */
+  sourceFilter?: WorkflowSourceFilter;
   /** 该工作流暴露的 IO 映射（来自 GET /api/workflows/[id]）。 */
   workflowIO: WorkflowIOMap | null;
   workflowIOLoading: boolean;
-  /** 工作流列表是否仍在加载。为 true 时工作流选择区显示"加载中"而非空态。 */
-  workflowListLoading?: boolean;
   /** 完整工作流列表（含 sourcePath / taskType）。 */
   workflowList: Array<{
     id: string;
@@ -75,22 +87,10 @@ export interface WorkflowNodeProps {
     sourcePath?: string | null;
     taskType?: string;
   }>;
+  /** 工作流列表是否仍在加载。为 true 时工作流选择区显示"加载中"而非空态。 */
+  workflowListLoading?: boolean;
   /** 当前工作流的 modes 配置（来自 /api/workflows/[id] 的 modes/defaultMode）。 */
   workflowModes?: WorkflowModesState | null;
-  /** 父级（CanvasNode）持的来源筛选 — 影响 chip2 列表。 */
-  sourceFilter?: WorkflowSourceFilter;
-  /** 用户级模型标签库（全局），驱动 chip4 的模型筛选列表。 */
-  modelTagLib?: Array<{ count: number; id: string; name: string }>;
-  /** 画布节点会话级模型筛选值（"all" 或某标签名）。 */
-  modelFilter?: string;
-  onPatch: (p: Partial<CanvasNodeData>) => void;
-  onSourceFilterChange: (f: WorkflowSourceFilter) => void;
-  onModelFilterChange?: (f: string) => void;
-  onGenerate: () => void;
-  onSelectWorkflow: (v: string) => void;
-  onFormChange: (next: Record<string, unknown>) => void;
-  onSeedModeChange: (ioKey: string, mode: string) => void;
-  onModesChange: (modes: Array<string>, defaultMode: string) => void;
 }
 
 /* 节点序号 chip 文字色——`bg-overlay-accent-surface`（语义底）上的**装饰**

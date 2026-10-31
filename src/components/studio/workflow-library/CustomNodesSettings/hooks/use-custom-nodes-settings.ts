@@ -42,12 +42,6 @@ const PARSE_LOG_MAX = 2000;
 type RowState = ReturnType<typeof deriveRowState>;
 
 export interface ParentBlock {
-  parent: string;
-  subs: Array<{
-    saved: SummaryPkg | undefined;
-    state: RowState;
-    sub: DiscoveredSubpkg;
-  }>;
   cnt: {
     empty: number;
     error: number;
@@ -56,39 +50,45 @@ export interface ParentBlock {
     outdated: number;
     unimported: number;
   };
+  parent: string;
+  subs: Array<{
+    saved: SummaryPkg | undefined;
+    state: RowState;
+    sub: DiscoveredSubpkg;
+  }>;
   total: number;
 }
 
 /** 自定义节点 / 本地工作流对话框的全部状态、派生数据与操作。
  *  容器与视图组件只消费这个 controller，不自己持有任何逻辑。 */
 export interface CustomNodesSettingsController {
+  byPath: Record<string, SummaryPkg>;
+  consoleRef: RefObject<HTMLDivElement | null>;
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
+  loading: boolean;
+  logs: Array<{ level: string; msg: string }>;
+  logsRef: RefObject<HTMLDivElement | null>;
+  manifestByNode: Record<string, ManifestNodeRaw>;
+  /** 节点预览卡展开集合。 */
+  nodeCardExpansion: ExpansionSet;
+  /** 子包「节点清单」展开集合。 */
+  nodeListExpansion: ExpansionSet;
+  onParseAll: () => Promise<void>;
+  onParseAllParent: (parent: string) => Promise<void>;
+  onParseSingle: (pkgPath: string) => Promise<void>;
   open: boolean;
-  setOpen: Dispatch<SetStateAction<boolean>>;
+  parentBlocks: Array<ParentBlock>;
+  /** 父目录展开集合（`~/components/ui/expansion-set`，规范 16 §16.2.4.17）。 */
+  parentExpansion: ExpansionSet;
+  parsing: boolean;
+  perPkgParsing: Record<string, boolean>;
+  progress: ParseProgress;
+  report: ParseReport | null;
   savedPaths: Array<string>;
   /** 目录配置相关错误（如 ComfyUI 路径未配置）。 */
   saveErr: string | null;
-  loading: boolean;
-  progress: ParseProgress;
-  parsing: boolean;
-  perPkgParsing: Record<string, boolean>;
-  report: ParseReport | null;
+  setOpen: Dispatch<SetStateAction<boolean>>;
   summary: SettingsResp["summary"];
-  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
-  byPath: Record<string, SummaryPkg>;
-  /** 父目录展开集合（`~/components/ui/expansion-set`，规范 16 §16.2.4.17）。 */
-  parentExpansion: ExpansionSet;
-  logs: Array<{ level: string; msg: string }>;
-  consoleRef: RefObject<HTMLDivElement | null>;
-  logsRef: RefObject<HTMLDivElement | null>;
-  manifestByNode: Record<string, ManifestNodeRaw>;
-  /** 子包「节点清单」展开集合。 */
-  nodeListExpansion: ExpansionSet;
-  /** 节点预览卡展开集合。 */
-  nodeCardExpansion: ExpansionSet;
-  onParseAll: () => Promise<void>;
-  onParseSingle: (pkgPath: string) => Promise<void>;
-  onParseAllParent: (parent: string) => Promise<void>;
-  parentBlocks: Array<ParentBlock>;
   totalAcrossParents: {
     loaded: number;
     outdated: number;

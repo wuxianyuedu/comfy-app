@@ -58,13 +58,13 @@ const VIEWER_POPUP_WIDTH = "w-[min(96vw,1400px)]";
 const VIEWER_BODY_HEIGHT = "h-[min(86vh,880px)]";
 
 export interface ImageViewerProps {
-  /** 要查看的图片地址；`null` 时组件不渲染（调用处据此表达「关着」）。 */
-  src: string | null;
   alt?: string;
   /** 弹窗标题；缺省回退到 `alt`，再回退到一句通用文案。 */
   label?: string;
   /** 关闭（Esc / 点遮罩 / 右上角 ✕ 都走它）。 */
   onClose: () => void;
+  /** 要查看的图片地址；`null` 时组件不渲染（调用处据此表达「关着」）。 */
+  src: string | null;
 }
 
 /**
@@ -450,14 +450,14 @@ function firstText(...values: Array<string | undefined>): string | null {
 }
 
 export interface ViewableImageProps {
-  src?: string | null;
   alt?: string;
   /** 缩略图自身的 class（与 `MediaThumbnail` 同义）。 */
   className?: string;
-  /** 查看器标题；缺省用 `alt`。 */
-  label?: string;
   /** 加载失败兜底（透传 `MediaThumbnail`）。 */
   fallback?: MediaFallback;
+  /** 查看器标题；缺省用 `alt`。 */
+  label?: string;
+  src?: string | null;
   /** 缩略图上的提示文案（鼠标悬停）。 */
   title?: string;
 }

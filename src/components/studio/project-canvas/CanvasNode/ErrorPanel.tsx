@@ -31,18 +31,18 @@ function jsonOrString(value: unknown, pretty = false): string {
 }
 
 interface ErrorPanelProps {
-  nodeId: string;
-  kind: CanvasNodeData["kind"];
-  status: CanvasNodeData["status"];
   error: CanvasNodeData["error"];
-  errorStatus: CanvasNodeData["errorStatus"];
   errorContext: CanvasNodeData["errorContext"];
-  validationErrors: CanvasNodeData["validationErrors"];
-  taskId: CanvasNodeData["taskId"];
-  workflowId: CanvasNodeData["workflowId"];
-  workflowName: CanvasNodeData["workflowName"];
+  errorStatus: CanvasNodeData["errorStatus"];
+  kind: CanvasNodeData["kind"];
+  nodeId: string;
   /* 复用上次记录的 payload 重新跑一遍（见 use-generate 的 retryGenerate）。 */
   onRetry: (req: unknown) => void;
+  status: CanvasNodeData["status"];
+  taskId: CanvasNodeData["taskId"];
+  validationErrors: CanvasNodeData["validationErrors"];
+  workflowId: CanvasNodeData["workflowId"];
+  workflowName: CanvasNodeData["workflowName"];
 }
 
 export function ErrorPanel({

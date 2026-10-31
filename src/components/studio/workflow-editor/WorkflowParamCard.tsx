@@ -31,20 +31,8 @@ import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
 import { Hint } from "~/components/ui/hint";
 
 export interface WorkflowParamCardProps {
-  entryId: string;
-  /** 卡片分类：对外**输入**参数用映射层的 `ParamClass`；对外**输出**参数用
-   *  伪分类 `"output"`（输出不参与映射，见 `PARAM_OUTPUT_STYLE`）。两者只影响
-   *  配色与展示名，不影响卡片结构。 */
-  cls: ParamEntry["cls"] | "output";
-  label: string;
-  /** 契约口 id（`prompt` / `size` / `reference-image-2`…）。给了就在名字后面
-   *  以弱化等宽字展示 —— 与「工坊封装」页签同一口径：配置 / 日志 / 代码里用的是
-   *  id，而契约口与适配器口是两套 id，只写中文对不上。 */
-  idLabel?: string;
-  /** 分类中文名（悬停提示用）。 */
-  classLabel: string;
-  hostNodeId: string;
-  width: number;
+  /** 「恢复默认」是否可用。只读消费处不传回调（按钮根本不渲染）。 */
+  canReset: boolean;
   /** 是否允许连线：false 时卡片置灰。
    *
    *  编辑器画布上恒为 true —— 对外参数卡片就是接线面板，**没有模式也要能连**
@@ -55,34 +43,47 @@ export interface WorkflowParamCardProps {
    *  不写任何编辑提示，否则会出现「节点上明明已经选了单图生视频，卡片却说需要
    *  选模式」这种自相矛盾的提示。 */
   canWire: boolean;
-  /** 只读消费（库内卡片列）：不渲染任何编辑提示。 */
-  readOnly?: boolean;
+  /** 分类中文名（悬停提示用）。 */
+  classLabel: string;
+  /** 卡片分类：对外**输入**参数用映射层的 `ParamClass`；对外**输出**参数用
+   *  伪分类 `"output"`（输出不参与映射，见 `PARAM_OUTPUT_STYLE`）。两者只影响
+   *  配色与展示名，不影响卡片结构。 */
+  cls: ParamEntry["cls"] | "output";
+  /** **每一行**输出端口右侧的端点槽位（编辑器 = <Handle>，库里 = 只读圆点）。
+   *
+   *  每颗圆点各带自己的 handle id（见 `ParamOutputPort.handleId`），拖哪颗点就连到
+   *  哪个候选端口。没有模式（返回 null）时该行不渲染端点 = 那个候选连不了。 */
+  endpoint?: (port: ParamOutputPort, index: number) => React.ReactNode;
+  entryId: string;
   /** 页脚说明（一句话说清这个口现在连上了没有、该怎么改）。只读消费不传。 */
   footNote?: string;
-  /** 该对外参数在当前模式下是否**已经落到了**宿主卡片的某一行。
-   *
-   *  只影响页脚的观感（已连 = 静默，未连 = 提示色）；文案由 `footNote` 给 ——
-   *  卡片本体不替消费方拼句子。 */
-  wired?: boolean;
-  /** 「恢复默认」是否可用。只读消费处不传回调（按钮根本不渲染）。 */
-  canReset: boolean;
+  hostNodeId: string;
+  /** 鼠标进出卡片本体时的事件（节点渲染器用 useHoverElevation 生成）。 */
+  hoverEvents?: DOMAttributes<HTMLDivElement>;
+  /** 卡片元素的 ref（节点渲染器用 useHoverElevation 生成）—— 悬浮态由该钩子
+   *  写到 React Flow 的节点外壳上，由 CSS 抬起层级压住连线（ISSUE #400）。
+   *  命名刻意不含端点类关键字：本文件是**画布无关**的视觉本体（见
+   *  workflow-canvas-io-isolation-guard 的守卫）。 */
+  hoverRef?: (element: HTMLDivElement | null) => void;
+  /** 契约口 id（`prompt` / `size` / `reference-image-2`…）。给了就在名字后面
+   *  以弱化等宽字展示 —— 与「工坊封装」页签同一口径：配置 / 日志 / 代码里用的是
+   *  id，而契约口与适配器口是两套 id，只写中文对不上。 */
+  idLabel?: string;
+  label: string;
   onReset?: () => void;
+  /** 点卡片本身 = 选中这个对外参数的口（库里据此高亮它那条线）。 */
+  onSelect?: () => void;
   /** 该口子的**输出端口**（提示词 → STRING…）——一个候选一颗圆点。
    *
    *  由 `paramOutputPorts` 派生：类型是**这个口自己的**（按族 / 按尺寸形态），
    *  连没连线都一样 —— 口子不该因为连到了 `IMAGEUPLOAD` 的装载行就把自己说成
    *  IMAGEUPLOAD。落点那一行的声明类型在行 title 里可查（`targetType`）。 */
   outputPorts: ReadonlyArray<ParamOutputPort>;
-  /** **每一行**输出端口右侧的端点槽位（编辑器 = <Handle>，库里 = 只读圆点）。
-   *
-   *  每颗圆点各带自己的 handle id（见 `ParamOutputPort.handleId`），拖哪颗点就连到
-   *  哪个候选端口。没有模式（返回 null）时该行不渲染端点 = 那个候选连不了。 */
-  endpoint?: (port: ParamOutputPort, index: number) => React.ReactNode;
+  /** 只读消费（库内卡片列）：不渲染任何编辑提示。 */
+  readOnly?: boolean;
   /** 该卡片（或被点选的那条线）当前是否被选中 —— 选中的卡片描边提亮，
    *  让「我选的是这个口」在两处（卡片与线）同时看得出来。 */
   selected?: boolean;
-  /** 点卡片本身 = 选中这个对外参数的口（库里据此高亮它那条线）。 */
-  onSelect?: () => void;
   /** 端点槽位在哪一侧：`"right"`（默认）= 对外输入参数卡片，圆点骑跨卡片**右**缘
    *  （线从卡片出发去宿主参数行）；`"left"` = 对外输出参数卡片，圆点骑跨卡片
    *  **左**缘（线从宿主输出行进来）。
@@ -91,13 +92,12 @@ export interface WorkflowParamCardProps {
    *  输入卡片与输出卡片不会一边贴边、一边内缩 —— 换的只是行内顺序（名字与类型
    *  贴着圆点站）与端点的定位侧。 */
   side?: "right" | "left";
-  /** 卡片元素的 ref（节点渲染器用 useHoverElevation 生成）—— 悬浮态由该钩子
-   *  写到 React Flow 的节点外壳上，由 CSS 抬起层级压住连线（ISSUE #400）。
-   *  命名刻意不含端点类关键字：本文件是**画布无关**的视觉本体（见
-   *  workflow-canvas-io-isolation-guard 的守卫）。 */
-  hoverRef?: (element: HTMLDivElement | null) => void;
-  /** 鼠标进出卡片本体时的事件（节点渲染器用 useHoverElevation 生成）。 */
-  hoverEvents?: DOMAttributes<HTMLDivElement>;
+  width: number;
+  /** 该对外参数在当前模式下是否**已经落到了**宿主卡片的某一行。
+   *
+   *  只影响页脚的观感（已连 = 静默，未连 = 提示色）；文案由 `footNote` 给 ——
+   *  卡片本体不替消费方拼句子。 */
+  wired?: boolean;
 }
 
 /** 输出端口行的悬停提示：这个口叫什么、自己是什么类型、落到哪一行。

@@ -46,18 +46,18 @@ export const STAGE_TITLES: Record<Tab, { desc: string; title: string }> = {
 
 /** 导航副标题 / 前置提示 / 缺失素材共用的进度快照（由 hook 计算后下发）。 */
 export interface StageViewContext {
-  scriptReady: boolean;
   characterCount: number;
+  clipDoneCount: number;
+  imageDoneCount: number;
   sceneCount: number;
+  scriptReady: boolean;
+  shotCount: number;
   /**
    * 镜头目标数 = 各场景 `scene.shotCount` 之和（导入时按它铺占位镜头，见
    * `docs/guides/feature-workshop-flow.md`）。**0 表示剧本还没拆出场景**，
    * 此时「还差几镜」没有可派生的答案，屏面就不给目标，只报已排数。
    */
   shotTarget: number;
-  shotCount: number;
-  imageDoneCount: number;
-  clipDoneCount: number;
 }
 
 export type StageRatios = Record<Tab, number>;
@@ -152,7 +152,8 @@ export function stagePrereq(id: Tab, ctx: StageViewContext): { go: Tab; text: st
 }
 
 export interface MissingItem {
-  label: string;
+  /** 这一项是否可以认为已就绪（决定清单上的完成态与颜色档）。 */
+  done: boolean;
   /**
    * 还差多少；`null` = **这一项没有可派生的目标**。
    *
@@ -162,8 +163,7 @@ export interface MissingItem {
    * 比不报缺口更糟：用户会照着它去凑数。现在无目标可派生时只报已建数。
    */
   gap: number | null;
-  /** 这一项是否可以认为已就绪（决定清单上的完成态与颜色档）。 */
-  done: boolean;
+  label: string;
 }
 
 /**
@@ -196,12 +196,12 @@ export function buildMissingSummary(ctx: StageViewContext): Array<MissingItem> {
 export interface HealthRow {
   id: Tab;
   label: string;
-  /** 窄槽位（分段条）用的两字缩略；要念出全名的地方一律用 `label`。 */
-  shortLabel: string;
-  /** 0~1 完成度，直接来自 computeStageRatios，不在这里二次加工。 */
-  ratio: number;
   /** 这一段还缺不缺东西（用于屏顶只留一处「还差几段」的说法）。 */
   pending: boolean;
+  /** 0~1 完成度，直接来自 computeStageRatios，不在这里二次加工。 */
+  ratio: number;
+  /** 窄槽位（分段条）用的两字缩略；要念出全名的地方一律用 `label`。 */
+  shortLabel: string;
 }
 
 /**

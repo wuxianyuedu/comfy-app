@@ -20,17 +20,17 @@ import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { cn } from "~/lib/utils";
 
 export interface ConsoleOutputProps {
+  /** 空态提示。 */
+  emptyHint: string;
   output: string;
   /** 是否有一条在跑（决定底部的转圈与提示）。 */
   running: boolean;
-  /** 空态提示。 */
-  emptyHint: string;
+  /** 被停止（而不是失败）：图标与文案换一档。 */
+  stopped: boolean;
   /** 结论条（null = 还没结论）。 */
   verdict: string | null;
   /** 结论是否为成功（决定图标与颜色）。 */
   verdictOk: boolean;
-  /** 被停止（而不是失败）：图标与文案换一档。 */
-  stopped: boolean;
 }
 
 export function ConsoleOutput({

@@ -27,14 +27,14 @@ import type { CalibrationReport } from "~/lib/production/review-calibration";
 import { useShotReview } from "./hooks/use-shot-review";
 
 export interface ShotReviewDialogProps {
-  open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 重生成成功后的回调（调用方据此刷新镜头列表）。 */
+  onRegenerated?: () => void;
+  open: boolean;
   /** 所属项目 id（评审 / 重生成的落库锚点）。 */
   projectId: string;
   /** 被评审的镜头（id = 统一项目的 production shot id）。 */
   shot: { id: string; name: string };
-  /** 重生成成功后的回调（调用方据此刷新镜头列表）。 */
-  onRegenerated?: () => void;
 }
 
 export function ShotReviewDialog({

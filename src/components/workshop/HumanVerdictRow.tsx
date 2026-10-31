@@ -52,16 +52,16 @@ function RatingStars({
 }
 
 export interface HumanVerdictRowProps {
-  /** 已落库的人工裁决（展示「人已拍板」状态）；没裁决过 → null。 */
-  verdict: HumanVerdict | null;
-  /** 已落库的人评分（仅镜头场景给）；缺省 = 该场景不显示星评。 */
-  rating?: number | null;
+  /** 弹窗整体在途（AI 评审 / 重生成中）时禁动。 */
+  disabled?: boolean;
   /** 星评变更回调（镜头场景注入 `run.setHumanRating`）；不给 = 不显示星评。 */
   onRatingChange?: (rating: number | null) => Promise<void>;
   /** 裁决提交回调（pass + 一句话理由）。 */
   onSubmit: (pass: boolean, note: string) => Promise<void>;
-  /** 弹窗整体在途（AI 评审 / 重生成中）时禁动。 */
-  disabled?: boolean;
+  /** 已落库的人评分（仅镜头场景给）；缺省 = 该场景不显示星评。 */
+  rating?: number | null;
+  /** 已落库的人工裁决（展示「人已拍板」状态）；没裁决过 → null。 */
+  verdict: HumanVerdict | null;
 }
 
 export function HumanVerdictRow({

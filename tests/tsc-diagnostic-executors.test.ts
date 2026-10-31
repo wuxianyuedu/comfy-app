@@ -29,13 +29,13 @@ const REAL_READERS = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync
 };
 
 interface Entry {
+  baseline: Record<string, number>;
+  executor: { kind: string; label?: string; test?: string; };
   id: string;
+  markers?: Array<string>;
   name: string;
   paths: Array<string>;
-  markers?: Array<string>;
   reader: string;
-  executor: { kind: string; label?: string; test?: string; };
-  baseline: Record<string, number>;
   section: string;
   /** 条目声称**执行者逐条核过**的面（选填；写了就要核，见判据的 ①′）。 */
   verifiedSurfaces?: Array<string>;

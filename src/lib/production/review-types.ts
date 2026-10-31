@@ -16,20 +16,20 @@ import { clamp } from "~/lib/clamp";
 
 /** 单个维度的评分：1~5 分 + 一句话依据（人读，中文）。 */
 export interface ReviewScore {
-  /** 维度分（1~5，越界在归一时夹取）。 */
-  score: number;
   /** 打这个分的一句话依据；模型漏给时为空串。 */
   note: string;
+  /** 维度分（1~5，越界在归一时夹取）。 */
+  score: number;
 }
 
 /** 一次评审判定：过 / 不过 + 缺陷清单 + 改进建议 + 维度评分 + 打分时间。 */
 export interface ReviewVerdict {
-  /** 是否合格。false → 触发抽卡 / 改提示词重生成的入口对用户可见。 */
-  pass: boolean;
   /** 逐条缺陷（人读，中文）。合格时通常为空数组。 */
   issues: Array<string>;
-  /** 改进方向（不合格时给出的一句话建议）。 */
-  suggestion: string;
+  /** 是否合格。false → 触发抽卡 / 改提示词重生成的入口对用户可见。 */
+  pass: boolean;
+  /** 评分所用的 rubric 版本（口径演进后旧分数仍可解释）；未评分时缺省。 */
+  rubricVersion?: string;
   /** ISO 打分时间戳。 */
   scoredAt: string;
   /**
@@ -38,8 +38,8 @@ export interface ReviewVerdict {
    * 给出。分数与 `pass` 判定相互独立：低分但勉强可用可以 pass=true。
    */
   scores?: Record<string, ReviewScore>;
-  /** 评分所用的 rubric 版本（口径演进后旧分数仍可解释）；未评分时缺省。 */
-  rubricVersion?: string;
+  /** 改进方向（不合格时给出的一句话建议）。 */
+  suggestion: string;
 }
 
 /** 实体上保留的历次判定上限（`reviewHistory` 只存**本轮之前**的判定；当前判定在 `review`）。 */
@@ -227,14 +227,14 @@ export function applyReview(
 
 /** `production.scriptReview` 列的形状：当前判定 + 本轮之前的历次判定 + 改写前留档 + 人工裁决。 */
 export interface ScriptReviewState {
-  /** 当前有效判定；没评过 / 列里判定非法 → null。 */
-  review: ReviewVerdict | null;
   /** 本轮之前的历次判定（旧→新，超限裁剪）；曲线 = `[...history, review]`。 */
   history: Array<ReviewVerdict>;
-  /** 改写前的旧剧本全文（旧→新，超限从头裁剪）；缺省 = 还没有过 AI 改写。 */
-  revisions: Array<ScriptRevision>;
   /** 人工裁决（#2480）：`digest` 记裁决时剧本指纹，剧本变过 → 裁决作废。 */
   humanVerdict: HumanVerdict | null;
+  /** 当前有效判定；没评过 / 列里判定非法 → null。 */
+  review: ReviewVerdict | null;
+  /** 改写前的旧剧本全文（旧→新，超限从头裁剪）；缺省 = 还没有过 AI 改写。 */
+  revisions: Array<ScriptRevision>;
 }
 
 /** 一次 AI 改写留档：改写发生的时间 + 改写前的完整剧本。 */
@@ -341,16 +341,16 @@ export function weakScoreEntries(
 
 /** 一次人工裁决：通过 / 否决 + 一句话理由 + 裁决时的实体快照（失效判据）。 */
 export interface HumanVerdict {
-  /** 人拍板的结果：true = 定稿放行；false = 否决（触发重出 / 转人改）。 */
-  pass: boolean;
-  /** 一句话理由（人读，中文；可空——点个按钮不写字也合法）。 */
-  note: string;
   /** ISO 裁决时间戳。 */
   at: string;
-  /** 裁决时的实体 rev（镜头 / 角色侧）；实体此后被改过（rev 变大）→ 裁决作废。 */
-  rev?: number;
   /** 裁决时的剧本指纹（仅剧本侧，`scriptDigestOf`）；剧本此后变过 → 裁决作废。 */
   digest?: string;
+  /** 一句话理由（人读，中文；可空——点个按钮不写字也合法）。 */
+  note: string;
+  /** 人拍板的结果：true = 定稿放行；false = 否决（触发重出 / 转人改）。 */
+  pass: boolean;
+  /** 裁决时的实体 rev（镜头 / 角色侧）；实体此后被改过（rev 变大）→ 裁决作废。 */
+  rev?: number;
 }
 
 /** 宽容解析人工裁决；缺 `pass` 布尔判据 → null（没裁决过 / 脏数据，不硬造）。不抛。 */

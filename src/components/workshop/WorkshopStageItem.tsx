@@ -15,19 +15,19 @@ import { Icon } from "~/components/ui/icon";
 import { cn } from "~/lib/utils";
 
 export interface WorkshopStageItemProps {
+  /** 占位方式由调用处决定（见文件头）。 */
+  className?: string;
+  /** 是否当前所在段（决定 `aria-current` 与选中配色）。 */
+  isCurrent: boolean;
   /** 阶段名（「剧本」「角色卡」…）。 */
   label: string;
-  /** 完成度小字，由 `stageSubtitle` 算好传入 —— 本件不重复判进度。 */
-  subtitle: string;
+  onSelect: () => void;
   /** 序号（1 起）；未完成时直接显示在徽章里。 */
   ordinal: number;
   /** 该段完成度（0~1）。≥1 即换成勾。 */
   ratio: number;
-  /** 是否当前所在段（决定 `aria-current` 与选中配色）。 */
-  isCurrent: boolean;
-  onSelect: () => void;
-  /** 占位方式由调用处决定（见文件头）。 */
-  className?: string;
+  /** 完成度小字，由 `stageSubtitle` 算好传入 —— 本件不重复判进度。 */
+  subtitle: string;
 }
 
 export function WorkshopStageItem({
@@ -67,20 +67,10 @@ export function WorkshopStageItem({
         {done ? <Icon name="check" size={14} /> : ordinal}
       </span>
       <div className="leading-tight">
-        <div
-          className={cn(
-            "text-[13.5px] font-semibold",
-            isCurrent ? "text-primary" : "text-ink",
-          )}
-        >
+        <div className={cn("text-[13.5px] font-semibold", isCurrent ? "text-primary" : "text-ink")}>
           {label}
         </div>
-        <div
-          className={cn(
-            "text-2xs",
-            done ? "text-success-strong" : "text-muted-foreground",
-          )}
-        >
+        <div className={cn("text-2xs", done ? "text-success-strong" : "text-muted-foreground")}>
           {subtitle}
         </div>
       </div>

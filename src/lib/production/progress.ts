@@ -28,8 +28,8 @@ export function isProductionStage(value: unknown): value is ProductionStage {
 
 /** 完成状态：阶段游标 + 成片是否已导出/合成（持久化，修工坊 rendered 只在 React state）。 */
 export interface ProductionProgress {
-  stage: ProductionStage;
   rendered: boolean;
+  stage: ProductionStage;
 }
 
 export const DEFAULT_PRODUCTION_PROGRESS: ProductionProgress = {

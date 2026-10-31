@@ -39,51 +39,51 @@ import {
 export type FilmShotSource = "project" | "script";
 
 export interface FilmStudioController {
-  /* 成片参数（目前为常量，保留 setter 以便后续开放编辑） */
-  title: string;
-  /** 镜头来源（项目镜头 / 剧本自动分镜）与当前活跃项目信息（Phase 5 接入）。 */
-  shotSource: FilmShotSource;
-  setShotSource: (source: FilmShotSource) => void;
   /** 当前活跃统一项目 id（无则 null）。 */
   activeProjectId: string | null;
-  /** 该项目的镜头数（`production.shots.length`；无项目 / 无镜头为 0）。 */
-  projectShotCount: number;
-  /** 该项目镜头的真实列表（左栏渲染，含缩略图 / 状态）。 */
-  projectShots: Array<ShotListItem>;
-  /** 工作流库里可选的视频工作流（逐镜生成用；本地链路唯一来源）。 */
-  videoWorkflows: Array<{ id: string; name: string }>;
-  videoWorkflowId: string;
-  setVideoWorkflowId: (value: string) => void;
-  /** 工作流库里可选的图类工作流（文生视频镜头合成首帧用；可选）。 */
-  imageWorkflows: Array<{ id: string; name: string }>;
-  imageWorkflowId: string;
-  setImageWorkflowId: (value: string) => void;
-  /** 成片画幅（尺寸表达：比例 + 分辨率 / 比例 + 百万像素 + 倍数）。 */
-  size: SizeSpec;
-  /** 预览区展示的帧率。 */
-  fps: number;
-  script: string;
-  setScript: (value: string) => void;
-  subtitleOn: boolean;
-  setSubtitleOn: (value: boolean) => void;
   bgmName: string | null;
-  /** ffmpeg 不可用时的降级提示（逐镜可生成，但无法拼接成片）。 */
-  ffmpegAvailable: boolean;
-  /* 成片状态 */
-  film: Film | null;
-  running: boolean;
-  loading: boolean;
+  cancel: () => Promise<void>;
   /* 动作 */
   create: () => Promise<void>;
   /** 用当前统一项目的镜头一键成片（走 film.createFromProject）。 */
   createFromProject: () => Promise<void>;
+  /** ffmpeg 不可用时的降级提示（逐镜可生成，但无法拼接成片）。 */
+  ffmpegAvailable: boolean;
+  /* 成片状态 */
+  film: Film | null;
+  /** 预览区展示的帧率。 */
+  fps: number;
+  imageWorkflowId: string;
+  /** 工作流库里可选的图类工作流（文生视频镜头合成首帧用；可选）。 */
+  imageWorkflows: Array<{ id: string; name: string }>;
+  loading: boolean;
+  /** 该项目的镜头数（`production.shots.length`；无项目 / 无镜头为 0）。 */
+  projectShotCount: number;
+  /** 该项目镜头的真实列表（左栏渲染，含缩略图 / 状态）。 */
+  projectShots: Array<ShotListItem>;
+  recompose: () => Promise<void>;
   /** 退回某镜（清产出 + rev 自增 + 刷新列表），让自主 run 重做该镜。 */
   redoShot: (shotId: string) => Promise<void>;
   /** 重载项目镜头列表（评审重生成后刷新左栏）。 */
   reloadProjectShots: () => Promise<void>;
-  cancel: () => Promise<void>;
-  recompose: () => Promise<void>;
+  running: boolean;
+  script: string;
+  setImageWorkflowId: (value: string) => void;
+  setScript: (value: string) => void;
+  setShotSource: (source: FilmShotSource) => void;
+  setSubtitleOn: (value: boolean) => void;
+  setVideoWorkflowId: (value: string) => void;
+  /** 镜头来源（项目镜头 / 剧本自动分镜）与当前活跃项目信息（Phase 5 接入）。 */
+  shotSource: FilmShotSource;
+  /** 成片画幅（尺寸表达：比例 + 分辨率 / 比例 + 百万像素 + 倍数）。 */
+  size: SizeSpec;
+  subtitleOn: boolean;
+  /* 成片参数（目前为常量，保留 setter 以便后续开放编辑） */
+  title: string;
   uploadBgmFile: (file: File) => Promise<void>;
+  videoWorkflowId: string;
+  /** 工作流库里可选的视频工作流（逐镜生成用；本地链路唯一来源）。 */
+  videoWorkflows: Array<{ id: string; name: string }>;
 }
 
 /**

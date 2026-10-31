@@ -36,13 +36,13 @@ const RawWorkflowSchema = z.looseObject({
 });
 
 export interface ParsedWorkflow {
-  /** 工作流(RAW)格式原件（逐字落库；格式不认识时为 null）。 */
-  rawJson: unknown;
+  format: "raw";
   /** 节点坐标：RAW 自带 `pos` 时原样取出；没有则 null（由客户端自动布局兜底）。 */
   positions: Record<string, [number, number]> | null;
+  /** 工作流(RAW)格式原件（逐字落库；格式不认识时为 null）。 */
+  rawJson: unknown;
   taskType: string;
   warnings: Array<string>;
-  format: "raw";
 }
 
 /* 读一个本地文件，返回它的文本与 mtime（毫秒）。
@@ -131,11 +131,11 @@ export async function parseWorkflowContent(
 }
 
 export interface ImportedFromFile extends ParsedWorkflow {
-  sourcePath: string;
   sourceChecksum: string;
   /** 文件 mtime，单位是秒（epoch）—— 它存在 SQLite 的 32 位 INT 列里，
    *  因此要保持在 2.1e9 以下，不能用毫秒（会溢出 INT）。 */
   sourceMtime: number;
+  sourcePath: string;
 }
 
 /* 从本地路径做一次性导入：读文件，返回全部规整字段，

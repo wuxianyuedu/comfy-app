@@ -68,14 +68,14 @@ export interface LogStep {
 export interface WorkflowRunScene {
   /** 这个场景解决什么、真机上什么时候会出现。 */
   readonly about: string;
-  /** 登记进 store 的运行名（弹窗头部按它标注这次运行）。 */
-  readonly workflowName: string;
-  /** 步骤序列（时刻由生成器按序算）。 */
-  readonly steps: ReadonlyArray<LogStep>;
-  /** 真机上这条链路里逐帧推进的进度（0–100）；不给则不 patch。 */
-  readonly progress?: number;
   /** 非空则结尾调 `failWorkflowRun(reason)`（横幅 + error 日志行）。 */
   readonly failWith?: string;
+  /** 真机上这条链路里逐帧推进的进度（0–100）；不给则不 patch。 */
+  readonly progress?: number;
+  /** 步骤序列（时刻由生成器按序算）。 */
+  readonly steps: ReadonlyArray<LogStep>;
+  /** 登记进 store 的运行名（弹窗头部按它标注这次运行）。 */
+  readonly workflowName: string;
 }
 
 /* ── 真链路的步骤序列 ──────────────────────────────────────────────────────

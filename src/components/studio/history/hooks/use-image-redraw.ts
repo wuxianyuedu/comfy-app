@@ -27,28 +27,28 @@ export interface ImageRedrawDeps {
   listTemplates: () => Promise<Array<RedrawTemplate>>;
   /** 图片 → ComfyUI input 目录文件名（复用 prepareLocalInputImage）。 */
   prepareImage: (image: string) => Promise<string>;
-  /** 提交生成任务（复用 startLocalGenerate），返回新 taskId。 */
-  submit: (input: GenerateInput) => Promise<string>;
   /** 动作反馈通道（runAsyncAction 形状，调用处接 toast）。 */
   report: (kind: "ok" | "err", detail: string) => void;
+  /** 提交生成任务（复用 startLocalGenerate），返回新 taskId。 */
+  submit: (input: GenerateInput) => Promise<string>;
 }
 
 export interface ImageRedrawController {
-  mode: RedrawMode;
-  setMode: (mode: RedrawMode) => void;
-  templates: Array<RedrawTemplate>;
-  templatesLoading: boolean;
-  selectedTemplateId: string;
-  selectTemplate: (id: string) => void;
-  prompt: string;
-  setPrompt: (prompt: string) => void;
-  mask: string | null;
-  setMask: (mask: string | null) => void;
-  ensureTemplates: () => Promise<void>;
   busy: boolean;
+  ensureTemplates: () => Promise<void>;
+  mask: string | null;
+  mode: RedrawMode;
+  prompt: string;
   resultTaskId: string | null;
   /** 提交重绘 / 放大。originalImageUrl 是产物图的页面内地址。 */
   run: (originalImageUrl: string) => Promise<void>;
+  selectedTemplateId: string;
+  selectTemplate: (id: string) => void;
+  setMask: (mask: string | null) => void;
+  setMode: (mode: RedrawMode) => void;
+  setPrompt: (prompt: string) => void;
+  templates: Array<RedrawTemplate>;
+  templatesLoading: boolean;
 }
 
 export function useImageRedraw(

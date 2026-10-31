@@ -79,10 +79,10 @@
 
 /** 命中一段路径时回的区间（半开区间 `[start, end)`，便于 `slice` 与拼装片段）。 */
 export interface LogPathToken {
-  /** 在原文里的起点（含）。 */
-  start: number;
   /** 在原文里的终点（**不含**）。 */
   end: number;
+  /** 在原文里的起点（含）。 */
+  start: number;
   /** 切干净的路径文本（不含尾部标点 / 开关）。 */
   text: string;
 }

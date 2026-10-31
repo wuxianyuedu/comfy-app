@@ -21,22 +21,22 @@ export type WorkflowCategory = (typeof WORKFLOW_CATEGORIES)[number];
 
 /* ── 图像侧（静态） ── */
 export interface WorkflowTypeDefinition {
-  /** 缩写码，如 T2I / I2V / S2V */
-  code: string;
-  /** 英文全称 */
-  fullName: string;
-  /** 中文描述 */
-  label: string;
   /** 所属一级分类 */
   category: WorkflowCategory;
-  /** 更详细的子分类标签（可选） */
-  subCategory?: string;
+  /** 缩写码，如 T2I / I2V / S2V */
+  code: string;
   /** 简短说明（用于 tooltip / 帮助文案） */
   description: string;
-  /** 是否为「生成模式」（true）还是「后处理模式」（false，如 Upscale/Outpaint） */
-  isGenerative: boolean;
+  /** 英文全称 */
+  fullName: string;
   /** 该类型在 ComfyUI 中常用的节点特征（用于自动推断） */
   hints?: Array<string>;
+  /** 是否为「生成模式」（true）还是「后处理模式」（false，如 Upscale/Outpaint） */
+  isGenerative: boolean;
+  /** 中文描述 */
+  label: string;
+  /** 更详细的子分类标签（可选） */
+  subCategory?: string;
 }
 
 export const IMAGE_WORKFLOW_TYPES: Array<WorkflowTypeDefinition> = [

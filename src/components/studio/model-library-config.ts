@@ -8,23 +8,23 @@ import { displayValue } from "~/lib/display-value";
 // 可脱离 React 直接断言。
 
 export interface ModelRow {
+  fileName: string;
+  fileSize?: number | null;
   id: string;
+  isAvailable: boolean;
   name: string;
   type: string;
-  fileName: string;
-  isAvailable: boolean;
-  fileSize?: number | null;
 }
 
 /** GET /api/models/config 返回的一行（只保留本视图渲染用到的子集）。 */
 export interface FolderConfigRow {
+  count: number;
+  enabled: boolean;
   folder: string;
+  hasConfig: boolean;
+  label: string;
   /** 目录名**就是**模型类型。 */
   type: string;
-  label: string;
-  enabled: boolean;
-  hasConfig: boolean;
-  count: number;
 }
 
 export const ALL_TYPES = "ALL";

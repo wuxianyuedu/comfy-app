@@ -97,9 +97,9 @@ export function libraryEdgeOwner(
 export interface LibraryWire {
   /** 对外参数条目 id（输入侧）或输出口 ioKey（输出侧）。 */
   entryId: string;
+  namespace: "param" | "output";
   /** 输入侧：落点的 ioKey；输出侧：取值那一行的 ioKey。 */
   targetIoKey: string;
-  namespace: "param" | "output";
 }
 
 /** 作者画过的线的描边色。 */
@@ -123,16 +123,8 @@ export const SELECTED_STROKE = "#c4b5fd";
 
 /** 三列节点的首帧布局尺寸（px）。 */
 export interface LibraryNodeSizing {
-  /** 左列卡片宽度。 */
-  paramsWidth: number;
-  /** 右列卡片宽度。 */
-  outputsWidth: number;
-  /** 宿主卡片宽度（与项目画布节点同宽）。 */
-  hostWidth: number;
   /** 三列之间的横向间距 —— 留出走线的空间，线不至于贴着卡片拐出尖角。 */
   columnGap: number;
-  originX: number;
-  originY: number;
   /* ── 两套高度尺寸（不是一个值）────────────────────────────────────────
    * 用户口径（ISSUE #596「全屏时，下方区域有空白却不是画布」）：画布要一直
    * 铺到面板底部，下面那块空白不该出现。
@@ -164,6 +156,14 @@ export interface LibraryNodeSizing {
   envelopeHeight: number;
   /** 背景板的渲染高度（px）：面板可视高度与卡片列高度取大。 */
   fillHeight: number;
+  /** 宿主卡片宽度（与项目画布节点同宽）。 */
+  hostWidth: number;
+  originX: number;
+  originY: number;
+  /** 右列卡片宽度。 */
+  outputsWidth: number;
+  /** 左列卡片宽度。 */
+  paramsWidth: number;
 }
 
 /** 三列节点的布局：左列参数卡片 → 宿主卡片 → 右列输出卡片，横向排开。
@@ -230,6 +230,14 @@ export function libraryBackdropSize(
  *  Flow 的状态里 —— 要么冻在首帧（表单永远停在未播种的那一帧），要么每帧
  *  `setNodes` 刷新它（setNodes → 重渲染 → setNodes 无限循环）。 */
 export interface LibraryNodeContent {
+  host: { host: ReactNode };
+  outputs: {
+    canWire: boolean;
+    cards: LibraryOutputCards;
+    onReset: (ioKey: string) => void;
+    onSelect: (ioKey: string | null) => void;
+    selectedOutputId: string | null;
+  };
   params: {
     canWire: boolean;
     cards: LibraryParamCards;
@@ -238,13 +246,5 @@ export interface LibraryNodeContent {
     onReset: (entryId: string) => void;
     onSelect: (entryId: string | null) => void;
     selectedEntryId: string | null;
-  };
-  host: { host: ReactNode };
-  outputs: {
-    canWire: boolean;
-    cards: LibraryOutputCards;
-    onReset: (ioKey: string) => void;
-    onSelect: (ioKey: string | null) => void;
-    selectedOutputId: string | null;
   };
 }

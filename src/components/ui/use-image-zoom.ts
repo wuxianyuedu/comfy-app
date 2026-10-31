@@ -53,36 +53,36 @@ export function clampZoomScale(value: number): number {
 export interface UseImageZoomOptions {
   /** 图片的自然尺寸；`null` = 还没读到（解码中 / 加载失败）。 */
   naturalSize: NaturalSize | null;
-  /** 可视区布局宽度（px）；`null` = 还没量到。 */
-  viewportWidth: number | null;
-  /** 可视区布局高度（px）；`null` = 还没量到。 */
-  viewportHeight: number | null;
   /** 可视区单边内边距（px）—— 算「适应窗口」时从可视区里扣掉，默认 0。 */
   padding?: number;
+  /** 可视区布局高度（px）；`null` = 还没量到。 */
+  viewportHeight: number | null;
+  /** 可视区布局宽度（px）；`null` = 还没量到。 */
+  viewportWidth: number | null;
 }
 
 export interface ImageZoom {
-  /** 当前缩放档位。 */
-  mode: ImageZoomMode;
-  /** 当前生效倍数（`fit` 档是算出来的适应倍数）。 */
-  scale: number;
-  /** 展示用百分比（整数）。 */
-  percent: number;
+  /** 切到「原始大小」（1:1）。 */
+  actualSize: () => void;
+  /** 切到「适应窗口」。 */
+  fit: () => void;
   /** 算出来的「适应窗口」倍数；量不到尺寸或视口时为 `null`。 */
   fitScale: number | null;
+  /** 当前缩放档位。 */
+  mode: ImageZoomMode;
+  /** 展示用百分比（整数）。 */
+  percent: number;
+  /** 当前生效倍数（`fit` 档是算出来的适应倍数）。 */
+  scale: number;
+  /** 直接给一个倍数（滚轮按比例缩放时用），并切到 `manual` 档。 */
+  scaleTo: (next: number) => void;
+  /** 在「适应窗口」与「原始大小」之间切换（双击画布用）。 */
+  toggleFitActual: () => void;
   /* 下面几个一律声明成**属性箭头类型**（`(): void` 而不是方法签名）：
    * 调用处会直接把它们交给 `onClick`，方法签名会被 `unbound-method` 判为
    * 「脱离对象传递、this 语义不明」。 */
   zoomIn: () => void;
   zoomOut: () => void;
-  /** 切到「适应窗口」。 */
-  fit: () => void;
-  /** 切到「原始大小」（1:1）。 */
-  actualSize: () => void;
-  /** 在「适应窗口」与「原始大小」之间切换（双击画布用）。 */
-  toggleFitActual: () => void;
-  /** 直接给一个倍数（滚轮按比例缩放时用），并切到 `manual` 档。 */
-  scaleTo: (next: number) => void;
 }
 
 /**

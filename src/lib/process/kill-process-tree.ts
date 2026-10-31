@@ -40,8 +40,6 @@ import { execFile, execFileSync, spawn } from "node:child_process";
 
 /** 回收目标的描述。pid <= 0 一律视为「没有可回收目标」，直接返回 ok。 */
 export interface KillProcessTreeOptions {
-  /** 目标进程 PID（通常是 leader）。 */
-  pid: number;
   /** 子进程是否以 detached 方式拉起。仅作为「连 ps 都拿不到 PGID」时的
    *  兜底提示：为 true 且 pid 恰好是组长时仍可尝试 `kill(-pid)`。
    *  **不再是主判据** —— 组长归属由 OS 回答（见文件头）。 */
@@ -52,6 +50,8 @@ export interface KillProcessTreeOptions {
    *  （Windows `/IM <name>`、POSIX `pkill -x <name>`）。`image` 用于目标不是
    *  本进程的直接子进程、只拿得到名字的场景（如外部拉起的 Ollama serve）。 */
   mode?: KillProcessTreeMode;
+  /** 目标进程 PID（通常是 leader）。 */
+  pid: number;
   /** 派发回收命令后是否**等到它真正结束**（默认 false = 只派发）。
    *
    *  服务生命周期不需要等：回收是尽力而为，随后由各自的「探测确认」收口。
@@ -124,12 +124,12 @@ type PosixSignal = "SIGTERM" | "SIGKILL";
 
 /** POSIX 一次回收的**决策**（不含发信号本身）。 */
 interface PosixKillPlan {
-  /** 要发的信号（Windows 侧不用它）。 */
-  sig: PosixSignal;
-  /** 首选目标：负数 = 进程组；null = 不冒组的风险，直接兜底。 */
-  primary: { target: number; via: string } | null;
   /** 首选被拒、或本来就不走组时的兜底目标。 */
   fallback: { target: number; via: string };
+  /** 首选目标：负数 = 进程组；null = 不冒组的风险，直接兜底。 */
+  primary: { target: number; via: string } | null;
+  /** 要发的信号（Windows 侧不用它）。 */
+  sig: PosixSignal;
 }
 
 /**

@@ -52,20 +52,20 @@ import type { DevServerState } from "./dev-server-status";
 
 /** 一条可直接 `push` 的消息文案。 */
 export interface AppServiceMessageText {
-  title: string;
   body: string;
+  title: string;
 }
 
 /* ── 判据：从「上一次看到什么」到「这一次该记什么」 ───────────────────────── */
 
 /** 边沿判据的游标：上一次看到的事实 + 尚未收尾的那一次断开。 */
 export interface AppServiceEventCursor {
-  /** 上一次看到的四态。 */
-  state: DevServerState;
-  /** 上一次看到的「这份进程是新的吗」。 */
-  processIsNew: boolean;
   /** 本次页面会话里观测到的断开时刻；还没断开过为 null。 */
   offlineAt: number | null;
+  /** 上一次看到的「这份进程是新的吗」。 */
+  processIsNew: boolean;
+  /** 上一次看到的四态。 */
+  state: DevServerState;
 }
 
 /** 一次待记录的事件。 */
@@ -84,10 +84,10 @@ export type AppServiceEvent =
     };
 
 export interface AppServiceFacts {
-  /** 本次看到的四态。 */
-  state: DevServerState;
   /** 本次看到的「这份进程对本次页面会话来说是新的吗」。 */
   processIsNew: boolean;
+  /** 本次看到的四态。 */
+  state: DevServerState;
   /**
    * 这一拍之前有多少毫秒**没人在探测**（0 = 紧接上一拍）。
    *
@@ -271,12 +271,12 @@ export function describeAppServiceRouteStale(at: number): AppServiceMessageText 
 export interface AppServiceStartInput {
   /** 本次应答的时刻（新进程已经起来了）。 */
   at: number;
-  /** 本次会话观测到的断开时刻；冷启动为 null。 */
-  offlineAt: number | null;
   /** 上一份进程结束记录的落盘时刻（ISO 串或毫秒）；没有为 null。 */
   exitAt: number | null;
   /** 上一份进程为什么结束；没有为 null。 */
   notice: AppServiceExitNotice | null;
+  /** 本次会话观测到的断开时刻；冷启动为 null。 */
+  offlineAt: number | null;
   /**
    * 上面那一段断开里**没人在探测**的毫秒数（0 = 每一拍都在探）。
    *

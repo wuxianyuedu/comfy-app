@@ -1,7 +1,7 @@
 export interface OutlineItem {
   level: number;
-  text: string;
   line: number;
+  text: string;
 }
 
 /* ── Markdown 归一化(编辑器接收内容的入口)────────────────────────────

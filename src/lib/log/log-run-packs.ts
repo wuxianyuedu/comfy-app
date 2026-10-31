@@ -90,14 +90,14 @@ export function parsePackScopedId(id: string): { fileName: string; packName: str
 
 /** `runs/` 里的一个运行包（读目录与 `run.json` 归 `log-run-packs.server.ts`）。 */
 export interface RunPack {
-  /** 目录名（`<日期>_<时分秒>-<runId>`），字典序即时间序。 */
-  name: string;
-  /** `run.json` 的 `startedAt`（毫秒）；读不到时退回名字里的时刻，再读不到为 null。 */
-  startedAt: number | null;
   /** `run.json` 的 `crashed` —— 崩溃现场恰恰最值得看，界面上要标出来。 */
   crashed: boolean;
   /** 这一包里该来源的份（新→旧）；空数组 = 那次运行没启动过这个服务。 */
   files: Array<PackLogFile>;
+  /** 目录名（`<日期>_<时分秒>-<runId>`），字典序即时间序。 */
+  name: string;
+  /** `run.json` 的 `startedAt`（毫秒）；读不到时退回名字里的时刻，再读不到为 null。 */
+  startedAt: number | null;
 }
 
 /** 包内的一份启动日志。 */
@@ -112,10 +112,10 @@ export interface PackLogFile {
 
 /** 下拉的一项：跨包之后每条都带「它属于哪一次运行」。 */
 export interface RunScopedOption extends LogSessionMeta {
-  /** `current` = 正在写的本次运行；`runs` = 已归档的历史包。 */
-  scope: "current" | "runs";
   /** 该次运行异常退出（`run.json` 的 `crashed`）；`current` 恒为 false。 */
   crashed: boolean;
+  /** `current` = 正在写的本次运行；`runs` = 已归档的历史包。 */
+  scope: "current" | "runs";
 }
 
 /**

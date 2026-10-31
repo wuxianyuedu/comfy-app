@@ -38,18 +38,18 @@ const MAX_SEGMENTS = 4000;
 const CR_RE = /\r/g;
 
 export interface RuntimeLogSourceState {
-  /** 选中会话的正文（已去掉 `\r`）。 */
-  text: string;
+  /** 重新拉取当前会话（「刷新」按钮）。 */
+  refresh: () => Promise<void>;
   /** 正文解析出的带样式片段（视图只渲染它）。 */
   segments: Array<AnsiSegment>;
-  /** 可切换的会话（**新→旧，第一项就是最新**）；不足两条时界面不显示下拉。 */
-  sessions: Array<LogSessionMeta>;
+  /** 切到指定会话并立即重新拉取。 */
+  selectSession: (id: string) => void;
   /** 当前选中会话的 id；没有日志文件时为 null。 */
   sessionId: string | null;
-  /** 选中那一份的正文被服务端截断（界面提示「只看得到最近一段」）。 */
-  truncated: boolean;
-  /** 该份日志过大、服务端只扫了尾部窗口（界面提示「这次启动只显示了一段」）。 */
-  windowed: boolean;
+  /** 可切换的会话（**新→旧，第一项就是最新**）；不足两条时界面不显示下拉。 */
+  sessions: Array<LogSessionMeta>;
+  /** 选中会话的正文（已去掉 `\r`）。 */
+  text: string;
   /**
    * 这个来源一共有几份启动日志（不受下拉上限影响）。
    *
@@ -57,23 +57,23 @@ export interface RuntimeLogSourceState {
    * 一次启动一份文件之后，同一天可能攒几十份，不说的话用户会以为「只启动过这些次」。
    */
   total: number;
-  /** 切到指定会话并立即重新拉取。 */
-  selectSession: (id: string) => void;
-  /** 重新拉取当前会话（「刷新」按钮）。 */
-  refresh: () => Promise<void>;
+  /** 选中那一份的正文被服务端截断（界面提示「只看得到最近一段」）。 */
+  truncated: boolean;
+  /** 该份日志过大、服务端只扫了尾部窗口（界面提示「这次启动只显示了一段」）。 */
+  windowed: boolean;
 }
 
 /** 视图消费的日志来源：来源状态 + 「是否正在跟随本次启动」（由 controller 给）。 */
 export type RuntimeLogController = RuntimeLogSourceState & { active: boolean };
 
 interface Snapshot {
-  text: string;
   segments: Array<AnsiSegment>;
-  sessions: Array<LogSessionMeta>;
   sessionId: string | null;
+  sessions: Array<LogSessionMeta>;
+  text: string;
+  total: number;
   truncated: boolean;
   windowed: boolean;
-  total: number;
 }
 
 const EMPTY_SNAPSHOT: Snapshot = {
@@ -92,7 +92,6 @@ function capSegments(segments: Array<AnsiSegment>): Array<AnsiSegment> {
 }
 
 export interface RuntimeLogSourceOptions {
-  source: RuntimeLogSourceKind;
   /** 正在启动：每秒跟随该次启动的新增输出；否则只在挂载 / 切换 / 刷新时取一次。 */
   active: boolean;
   /**
@@ -101,6 +100,7 @@ export interface RuntimeLogSourceOptions {
    * 重建。
    */
   parse?: (text: string) => Array<AnsiSegment>;
+  source: RuntimeLogSourceKind;
 }
 
 export function useRuntimeLogSource({

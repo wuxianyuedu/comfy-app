@@ -29,16 +29,16 @@ import { cn } from "~/lib/utils";
  * 塞进 chip。
  */
 export interface OptionListItem {
-  /** 选项值（与 `value` 比较判定选中）。 */
-  value: string;
   /** 行文案。 */
   label: string;
-  /** 行右侧的附加内容（计数 / 类型章），可为空。 */
-  suffix?: ReactNode;
   /** 行左侧的装饰（颜色点 / 状态点），可为空。 */
   prefix?: ReactNode;
+  /** 行右侧的附加内容（计数 / 类型章），可为空。 */
+  suffix?: ReactNode;
   /** 行 `title`（悬停提示）。 */
   title?: string;
+  /** 选项值（与 `value` 比较判定选中）。 */
+  value: string;
 }
 
 export function OptionListPopover({

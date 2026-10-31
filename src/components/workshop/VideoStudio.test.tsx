@@ -79,9 +79,9 @@ function makeShot(patch: Partial<Shot> = {}): Shot {
 }
 
 interface RenderOptions {
+  apiChannels?: ApiChannelsView | null;
   shots?: Array<Shot>;
   workflowId?: string;
-  apiChannels?: ApiChannelsView | null;
 }
 
 function renderStudio(options: RenderOptions = {}) {

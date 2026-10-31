@@ -54,8 +54,8 @@ export function logEntryKey(entry: Pick<LogEntry, "time" | "level" | "message">)
  * 并进已落板那一行。两张表都只持有**引用**，与 `current` 同生命周期。
  */
 export interface TimelineIndex {
-  seen: Map<string, LogEntry>;
   sameArrival: Map<string, LogEntry>;
+  seen: Map<string, LogEntry>;
 }
 
 /** 为一条已落板的时间线建索引（O(n)：只在形状变化时调用）。 */

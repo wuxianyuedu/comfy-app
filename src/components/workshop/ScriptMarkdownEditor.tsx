@@ -12,17 +12,17 @@ import { centerLineScrollTop, readLineHeight } from "~/lib/dom-rect";
 import { useHotkey } from "~/components/ui/use-hotkey";
 
 interface ScriptMarkdownEditorProps {
-  title?: string;
-  value: string;
+  onCancel?: () => void;
   onChange: (value: string) => void;
   onSave?: () => void;
-  onCancel?: () => void;
+  title?: string;
+  value: string;
 }
 
 interface HistoryFrame {
-  value: string;
-  selectionStart: number;
   selectionEnd: number;
+  selectionStart: number;
+  value: string;
 }
 
 const MAX_HISTORY = 50;

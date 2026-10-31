@@ -32,9 +32,9 @@ import { pythonCandidates } from "~/lib/process/python-candidates";
 
 type Cb = (...args: Array<unknown>) => void;
 interface FakeChild {
-  proc: Record<string, Array<Cb>>;
-  out: Record<string, Array<Cb>>;
   err: Record<string, Array<Cb>>;
+  out: Record<string, Array<Cb>>;
+  proc: Record<string, Array<Cb>>;
 }
 
 /**
@@ -44,18 +44,18 @@ interface FakeChild {
  *（包括「不存在」）—— 否则同一个断言在解析过一次的机器上会与在干净检出上不同形。
  */
 interface StubFile {
-  /** 文件内容（字符串原文；`undefined` + `missing` 表示没有这个文件）。 */
-  text?: string;
-  size?: number;
-  mtimeMs?: number;
-  /** 存在但读不出来（IO 错），与「不存在」是两档。 */
-  readFails?: boolean;
-  /** 存在但 stat 失败 —— 指纹取不到时调用方**不许**缓存。 */
-  statFails?: boolean;
   /** 连「在不在」都问不出来（挂载点失效 / 权限）—— 路由的 try/catch 就是为这一档写的。
    *  `"silent"` 表示抛的是一个**没有 message** 的 Error，用来判兜底文案那一格。 */
   existsFails?: boolean | "silent";
   missing?: boolean;
+  mtimeMs?: number;
+  /** 存在但读不出来（IO 错），与「不存在」是两档。 */
+  readFails?: boolean;
+  size?: number;
+  /** 存在但 stat 失败 —— 指纹取不到时调用方**不许**缓存。 */
+  statFails?: boolean;
+  /** 文件内容（字符串原文；`undefined` + `missing` 表示没有这个文件）。 */
+  text?: string;
 }
 
 const { spawnMock, userMock, settingsMock, fsState } = vi.hoisted(() => {

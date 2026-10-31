@@ -47,8 +47,6 @@
  * `dispose` 是清理。
  */
 export interface StaleRunGuard {
-  /** 这一轮是否已经作废（卸载、或同一容器上又开了一轮）。 */
-  isStale: () => boolean;
   /**
    * 把这一轮产生的写入提交进去 —— **作了废就整段跳过**。
    *
@@ -59,6 +57,8 @@ export interface StaleRunGuard {
   commit: (write: () => void) => void;
   /** 作废这一轮（effect 清理里去调）。 */
   dispose: () => void;
+  /** 这一轮是否已经作废（卸载、或同一容器上又开了一轮）。 */
+  isStale: () => boolean;
 }
 
 /**

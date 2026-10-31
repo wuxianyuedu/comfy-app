@@ -18,24 +18,24 @@ import { nextId } from "~/lib/unique-id";
 type ToastKind = "success" | "error" | "info" | "loading";
 
 export interface ToastItem {
-  id: string;
-  kind: ToastKind;
-  title: string;
   description?: string;
   /** 自动关闭前的毫秒数；0 = 手动关闭前一直停留 */
   duration?: number;
+  id: string;
+  kind: ToastKind;
+  title: string;
 }
 
 export interface ToastContextValue {
-  toast: (t: Omit<ToastItem, "id">) => string;
-  success: (title: string, description?: string, duration?: number) => string;
+  dismiss: (id: string) => void;
   error: (title: string, description?: string, duration?: number) => string;
   /** `duration` 覆盖默认 3.2s 自动收起时间；用于「这句话是要照着做的」这类提示
    *  （如陈旧实例的「重载一次即恢复」指引）——默认时长会让用户来不及读完。 */
   info: (title: string, description?: string, duration?: number) => string;
   loading: (title: string, description?: string) => string;
+  success: (title: string, description?: string, duration?: number) => string;
+  toast: (t: Omit<ToastItem, "id">) => string;
   update: (id: string, patch: Partial<Omit<ToastItem, "id">>) => void;
-  dismiss: (id: string) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);

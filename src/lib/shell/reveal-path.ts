@@ -38,10 +38,10 @@ import { spawn } from "node:child_process";
 import { errorText } from "~/lib/error-message";
 
 export interface RevealPathResult {
-  /** 是否真的把「打开」指令交给了系统。 */
-  ok: boolean;
   /** 给用户看的说明（成功也带 —— 一句「已在资源管理器定位」是唯一能看到点了有反应的证据）。 */
   detail: string;
+  /** 是否真的把「打开」指令交给了系统。 */
+  ok: boolean;
   /** 实际被定位的路径（空壳时给出，用户能看出「点的是这段文本」）。 */
   revealed?: string;
 }

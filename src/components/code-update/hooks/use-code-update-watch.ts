@@ -50,6 +50,12 @@ export const DEV_RESTART_NOTIFIED_KEY = "comfyapp:dev-restart-notified-bootid";
 export const DEPS_STALE_NOTIFIED_KEY = "comfyapp:deps-stale-notified-state";
 
 export interface UseCodeUpdateWatchArgs {
+  /** 观测到依赖面陈旧时回调（需要「停服务 + `pnpm install`」这个动作）。
+   *
+   *  `state` 给出陈旧的具体形态，供文案分流。**同一形态只上报一次**（跨刷新，
+   *  见 `DEPS_STALE_NOTIFIED_KEY`）；判定为新鲜时去重记录会被清掉，于是下一次
+   *  拉取改动 lockfile 时还能再提示。 */
+  onDepsStale?: (state: DepsFreshnessState) => void;
   /** 观测到 dev server 重启时回调。
    *
    *  · `reason` = 启动器注入的重启原因（`route-404-heal` / `stale-route-table`），
@@ -57,12 +63,6 @@ export interface UseCodeUpdateWatchArgs {
    *  · `detail` = 启动器懒归因产出的人话短句（「本次代码更新改了路由结构…」），
    *    归因失败 / 无归因为 null。 */
   onDevServerRestart?: (reason: string | null, detail: string | null) => void;
-  /** 观测到依赖面陈旧时回调（需要「停服务 + `pnpm install`」这个动作）。
-   *
-   *  `state` 给出陈旧的具体形态，供文案分流。**同一形态只上报一次**（跨刷新，
-   *  见 `DEPS_STALE_NOTIFIED_KEY`）；判定为新鲜时去重记录会被清掉，于是下一次
-   *  拉取改动 lockfile 时还能再提示。 */
-  onDepsStale?: (state: DepsFreshnessState) => void;
 }
 
 export function useCodeUpdateWatch({

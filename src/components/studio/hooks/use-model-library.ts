@@ -22,26 +22,26 @@ import { useTRPC } from "~/trpc/react";
 import { ALL_TYPES, type ModelRow, countByType, filterModels } from "../model-library-config";
 
 export interface ModelLibraryController {
-  models: Array<ModelRow>;
-  /** 列表首次加载中（尚无数据）—— 驱动首屏骨架，不等后台同步。 */
-  loading: boolean;
-  /** 后台同步 / 刷新进行中：不挡首屏，只在筛选行给轻指示。 */
-  refreshing: boolean;
-  /** 搜索关键字。 */
-  q: string;
-  setQ: (q: string) => void;
-  /** 当前类型筛选；ALL_TYPES 表示全部。 */
-  filter: string;
-  setFilter: (filter: string) => void;
-  /** 筛选后的行（视图直接渲染）。 */
-  filtered: Array<ModelRow>;
-  /** 数据里出现过的类型及其数量，驱动筛选 chips。 */
-  typeChips: Array<[string, number]>;
   /** 目录配置弹层开关。 */
   configOpen: boolean;
-  setConfigOpen: (open: boolean) => void;
+  /** 当前类型筛选；ALL_TYPES 表示全部。 */
+  filter: string;
+  /** 筛选后的行（视图直接渲染）。 */
+  filtered: Array<ModelRow>;
+  /** 列表首次加载中（尚无数据）—— 驱动首屏骨架，不等后台同步。 */
+  loading: boolean;
+  models: Array<ModelRow>;
+  /** 搜索关键字。 */
+  q: string;
+  /** 后台同步 / 刷新进行中：不挡首屏，只在筛选行给轻指示。 */
+  refreshing: boolean;
   /** 手动刷新（配置弹层关闭后调用）。 */
   reload: () => void;
+  setConfigOpen: (open: boolean) => void;
+  setFilter: (filter: string) => void;
+  setQ: (q: string) => void;
+  /** 数据里出现过的类型及其数量，驱动筛选 chips。 */
+  typeChips: Array<[string, number]>;
 }
 
 export function useModelLibrary(): ModelLibraryController {

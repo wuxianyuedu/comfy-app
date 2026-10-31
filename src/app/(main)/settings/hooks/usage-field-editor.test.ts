@@ -18,8 +18,8 @@ import { createUsageFieldEditor } from "./usage-field-editor";
 import { makeUsageField, type UsageField } from "~/lib/llm/usage-test-config";
 
 interface State {
-  kind: "chat" | "image" | "video";
   fields: Array<UsageField>;
+  kind: "chat" | "image" | "video";
 }
 
 function useEditor(initial: State) {

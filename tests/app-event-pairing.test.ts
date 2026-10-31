@@ -174,8 +174,8 @@ function sidesOf(
 }
 
 interface PairingRow {
-  event: string;
   emitters: Array<string>;
+  event: string;
   subscribers: Array<string>;
 }
 

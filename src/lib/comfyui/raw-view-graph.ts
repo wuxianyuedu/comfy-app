@@ -75,20 +75,20 @@ const FALLBACK_FULL: Record<string, Array<string>> = {
 };
 
 interface NodeInputSlot {
+  link: number | null;
   name: string;
   type?: string;
-  link: number | null;
 }
 
 interface IndexedNode {
   id: string;
-  type: string;
-  mode: number;
-  virtual: boolean;
-  raw: RawNode;
   /** 按槽位顺序排列，索引即 slot index */
   inputs: Array<NodeInputSlot>;
+  mode: number;
   outputTypes: Array<string>;
+  raw: RawNode;
+  type: string;
+  virtual: boolean;
 }
 
 interface LinkRef {

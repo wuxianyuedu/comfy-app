@@ -27,12 +27,12 @@ import type { ProbeFailure } from "./probe-exe.ts";
 
 /** 「先试哪个名字、`py` 要不要带 `-3`」的**一份**实现，供各宿主直接起进程。 */
 export interface PythonResolution {
+  /** 启动它要带的**宿主参数**（`py` 的 `-3`；非 `py` 为空）。 */
+  args: Array<string>;
   /** 命中的候选名（`python3` / `python` / `py`），用于日志与话术。 */
   command: string;
   /** PATH 上的绝对路径（Windows 上已按磁盘实际大小写改写）。 */
   path: string;
-  /** 启动它要带的**宿主参数**（`py` 的 `-3`；非 `py` 为空）。 */
-  args: Array<string>;
   /** 探针里候选的可读顺序，失败话术要照着它说「试过哪些」。 */
   tried: Array<string>;
 }

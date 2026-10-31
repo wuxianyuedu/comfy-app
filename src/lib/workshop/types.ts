@@ -5,12 +5,12 @@ import { z } from "zod";
 
 /* 整条流水线的项目元数据。 */
 export interface ProjectMeta {
-  title: string;
-  type: ProjectType;
-  tone: string; // e.g. "温暖治愈", "悬疑紧张"
   logline: string; // 一句话的卖点概述
   /** 用 Markdown 写的自由剧本全文（在剧本编辑器里可见）。 */
   scriptMarkdown?: string;
+  title: string;
+  tone: string; // e.g. "温暖治愈", "悬疑紧张"
+  type: ProjectType;
 }
 
 export type ProjectType =
@@ -23,13 +23,13 @@ export type ProjectType =
 
 /* 剧本里的一个场景。 */
 export interface Scene {
-  id: string;
-  heading: string; // 场景标题 e.g. "场景1 · 清晨的咖啡馆"
-  location: string; // 地点
-  time: string; // 时间
   action: string; // 画面/动作描述
   dialogue: string; // 台词/旁白
+  heading: string; // 场景标题 e.g. "场景1 · 清晨的咖啡馆"
+  id: string;
+  location: string; // 地点
   shotCount: number; // suggested number of shots
+  time: string; // 时间
 }
 
 /** 定妆照来源通道：本机 ComfyUI 工作流 / 远端 API 直连 / 外部导入的现成图。 */
@@ -126,12 +126,12 @@ export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
 
 /* 从技能系统取来的风格预设（SkillData 的子集）。 */
 export interface StyleRef {
-  slug: string;
-  name: string;
-  icon: string;
-  promptTemplate: string;
-  negativePrompt?: string;
   defaultParams?: Record<string, unknown>;
+  icon: string;
+  name: string;
+  negativePrompt?: string;
+  promptTemplate: string;
+  slug: string;
 }
 
 // ── 全链路流水线的阶段 ─────────────────────────────────
@@ -147,10 +147,10 @@ export type PipelineStageId =
 export type StageStatus = "locked" | "pending" | "ready" | "done" | "stale";
 
 export interface PipelineStage {
+  count: number; // e.g. scenes / characters / shots / completed shots
   id: PipelineStageId;
   label: string;
   status: StageStatus;
-  count: number; // e.g. scenes / characters / shots / completed shots
   total: number; // total expected items; 0 means not estimable yet
 }
 
@@ -164,16 +164,16 @@ export type AssetKind =
   | "final_video";
 
 export interface Asset {
-  id: string;
-  kind: AssetKind;
-  title: string;
+  createdAt: string;
   /** 可选：关联的实体 id（场景 / 镜头 / 角色）。 */
   entityId?: string;
-  /** 媒体素材的 URL 或路径。 */
-  url?: string;
-  createdAt: string;
+  id: string;
+  kind: AssetKind;
   /** 生成类媒体专用的生成状态。 */
   status?: ShotStatus;
+  title: string;
+  /** 媒体素材的 URL 或路径。 */
+  url?: string;
 }
 
 /* ── 写侧入参契约（外部可控的那一份 Character[] / Shot[]）────────────────

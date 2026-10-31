@@ -12,28 +12,28 @@ import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 
 /** 一次「检测更新」的结果：是否有可用更新及其元信息。 */
 export interface AppUpdateInfo {
+  body?: string;
   currentVersion: string;
+  date?: string;
   /** 远端可用版本；无更新时为 null。 */
   version: string | null;
-  date?: string;
-  body?: string;
 }
 
 export interface AppUpdateCheckResult {
-  ok: boolean;
   /** 是否确有可用更新。 */
   available: boolean;
   /** 可读结果 / 失败原因。 */
   detail: string;
+  ok: boolean;
   /** available 为 true 时附带的更新元信息。 */
   update?: AppUpdateInfo;
 }
 
 export interface AppUpdateInstallResult {
+  detail: string;
   ok: boolean;
   /** 是否已触发安装/重启（Windows 端 install 后应用即退出）。 */
   triggered: boolean;
-  detail: string;
 }
 
 /** 下载进度回调：已下载字节 / 总字节（contentLength 可能为空）。 */

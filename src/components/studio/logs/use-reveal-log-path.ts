@@ -28,10 +28,10 @@ import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 export interface RevealPathFeedback {
   /** 这一刻这一次打开是不是在跑（给按钮的禁用 / 文案用）。 */
   busy: boolean;
-  /** 上一次的结果：成功 / 失败 / 还没试过。 */
-  outcome: "idle" | "done" | "failed";
   /** 上一次失败的说明（成功时为空；由服务端给，可直接显示）。 */
   failure: string;
+  /** 上一次的结果：成功 / 失败 / 还没试过。 */
+  outcome: "idle" | "done" | "failed";
   /** 打开这个路径。 */
   reveal: (path: string) => void;
 }

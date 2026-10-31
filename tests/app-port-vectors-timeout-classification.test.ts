@@ -76,9 +76,9 @@ type ProbeState = "ok" | "timeout" | "missing" | "present-but-nonzero";
 
 /** 一趟取证的返回形状（`measurePythonOnce` 的结果，也是本文件的输入夹具）。 */
 interface Measure {
-  state: "answered" | "timeout" | "missing" | "malformed";
-  python: string | null;
   problems: Array<string>;
+  python: string | null;
+  state: "answered" | "timeout" | "missing" | "malformed";
 }
 
 const answered = (problems: Array<string> = []): Measure => ({

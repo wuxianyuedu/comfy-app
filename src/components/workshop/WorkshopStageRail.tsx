@@ -24,10 +24,10 @@ import {
 import { WorkshopStageItem } from "~/components/workshop/WorkshopStageItem";
 
 interface WorkshopStageRailProps {
-  tab: Tab;
-  stageRatios: StageRatios;
-  viewContext: StageViewContext;
   onTabChange: (tab: Tab) => void;
+  stageRatios: StageRatios;
+  tab: Tab;
+  viewContext: StageViewContext;
 }
 
 export function WorkshopStageRail({

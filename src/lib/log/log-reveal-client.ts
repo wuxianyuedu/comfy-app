@@ -15,8 +15,8 @@ import { vanillaApi } from "~/trpc/vanilla";
 
 /** 打开动作的结果：`detail` 是**已可直接显示**的文案（成功也带，见硬规则 4）。 */
 export interface RevealLogPathOutcome {
-  ok: boolean;
   detail: string;
+  ok: boolean;
 }
 
 /**
@@ -26,9 +26,7 @@ export interface RevealLogPathOutcome {
  * 一次点击，抛出去只会变成一个没人接的 unhandledRejection，用户看到的是
  * 「点了没反应」—— 正是本功能要消灭的那种体验。
  */
-export async function revealLogPath(
-  path: string,
-): Promise<RevealLogPathOutcome> {
+export async function revealLogPath(path: string): Promise<RevealLogPathOutcome> {
   try {
     const result = await vanillaApi.setting.revealPath.mutate({ path });
     return { ok: result.ok === true, detail: result.detail };

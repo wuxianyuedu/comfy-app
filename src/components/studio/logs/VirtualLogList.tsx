@@ -33,27 +33,27 @@ import { layoutRows, LOG_ROW_SINGLE, scrollHeightOf, visibleRange } from "./log-
 export type RenderLogRow<T> = (entry: T, index: number) => ReactNode;
 
 export interface VirtualLogListProps<T> {
-  /** 全部（已裁剪 / 已过滤）的日志条目；本组件只渲染视口内的那一小段。 */
-  entries: ReadonlyArray<T>;
-  /** 取用于折行估高的文本（行高估算依赖它；与 `LogPanel` 的 `entry.message` 同义）。 */
-  getMessage: (entry: T) => string;
-  /** 稳定 id（可选）：展开 / 单行特判用；缺省时按绝对下标。 */
-  getId?: (entry: T) => string | undefined;
-  /** 渲染单行。 */
-  renderRow: RenderLogRow<T>;
-  /** 折行估高（默认 true，与 `LogPanel` 一致：`wrap-break-word whitespace-pre-wrap`）。 */
-  wrap?: boolean;
-  /** 受控的「跟随底部」态；不给则非受控，组件自持。 */
-  following?: boolean;
-  /** 受控模式下跟随态变化回调（用户上滚 → `false`；点回「自动滚动」→ `true`）。 */
-  onFollowingChange?: (following: boolean) => void;
-  /** 「内容变了」的依赖值：变了就在跟随态下重新贴底。由调用处给（条数 / 筛选）。 */
-  watch?: unknown;
-  /** 列表之前、同处滚动容器内的静态内容（如验证错误 / 运行错误横幅）。 */
-  topSlot?: ReactNode;
+  className?: string;
   /** 条目为空时展示的内容（通常是一个居中占位）。 */
   emptySlot?: ReactNode;
-  className?: string;
+  /** 全部（已裁剪 / 已过滤）的日志条目；本组件只渲染视口内的那一小段。 */
+  entries: ReadonlyArray<T>;
+  /** 受控的「跟随底部」态；不给则非受控，组件自持。 */
+  following?: boolean;
+  /** 稳定 id（可选）：展开 / 单行特判用；缺省时按绝对下标。 */
+  getId?: (entry: T) => string | undefined;
+  /** 取用于折行估高的文本（行高估算依赖它；与 `LogPanel` 的 `entry.message` 同义）。 */
+  getMessage: (entry: T) => string;
+  /** 受控模式下跟随态变化回调（用户上滚 → `false`；点回「自动滚动」→ `true`）。 */
+  onFollowingChange?: (following: boolean) => void;
+  /** 渲染单行。 */
+  renderRow: RenderLogRow<T>;
+  /** 列表之前、同处滚动容器内的静态内容（如验证错误 / 运行错误横幅）。 */
+  topSlot?: ReactNode;
+  /** 「内容变了」的依赖值：变了就在跟随态下重新贴底。由调用处给（条数 / 筛选）。 */
+  watch?: unknown;
+  /** 折行估高（默认 true，与 `LogPanel` 一致：`wrap-break-word whitespace-pre-wrap`）。 */
+  wrap?: boolean;
 }
 
 export function VirtualLogList<T>({

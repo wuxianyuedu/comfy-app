@@ -66,16 +66,16 @@ function jsonField<T>(
 
 /** manifest 里单个已解析包的摘要形状(与前端 SummaryPkg 消费契约一致)。 */
 interface ManifestPackageSummary {
+  contentHash: string;
+  errors: Array<unknown>;
+  generatedAt: string | null;
   name: string;
-  path: string;
   nodeCount: number;
   nodeTypes: Array<string>;
-  status: string;
-  errors: Array<unknown>;
-  contentHash: string;
   parsedAt: string | null;
   parsedFileCount: number;
-  generatedAt: string | null;
+  path: string;
+  status: string;
 }
 
 /* 解析自定义节点的扫描根目录。
@@ -109,11 +109,11 @@ function getLocalWorkflowPaths(): Array<string> {
  * 缓存，写入后指纹必变、缓存自然失效。 */
 interface ManifestSummary {
   generatedAt: string | null;
-  totalNodes: number;
-  packages: Array<ManifestPackageSummary>;
   missingPaths: Array<string>;
+  packages: Array<ManifestPackageSummary>;
   parseErrors: Array<unknown>;
   sources: Array<string>;
+  totalNodes: number;
 }
 
 let manifestSummaryCache: {
@@ -326,10 +326,10 @@ async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<un
 
 /** PROGRESS:: 行解析出的进度字段(msg + 可选计数,键由 kvRegex 决定)。 */
 interface DiscoverProgressFields {
-  phase: "scan" | "hash";
-  msg: string;
   discovered?: number;
   done?: number;
+  msg: string;
+  phase: "scan" | "hash";
   total?: number;
 }
 

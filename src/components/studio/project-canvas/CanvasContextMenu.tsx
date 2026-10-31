@@ -23,12 +23,12 @@ import {
 import { NODE_META, type NodeKind } from "~/lib/project-canvas/canvas-types";
 
 interface CanvasContextMenuProps {
-  x: number;
-  y: number;
+  onClose: () => void;
   onPick: (kind: NodeKind) => void;
   /** 放一个纯视觉的 Ardot 风测试节点（无运行时）。 */
   onPickTest: () => void;
-  onClose: () => void;
+  x: number;
+  y: number;
 }
 
 export function CanvasContextMenu({ x, y, onPick, onPickTest, onClose }: CanvasContextMenuProps) {

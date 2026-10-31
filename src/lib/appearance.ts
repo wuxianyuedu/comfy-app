@@ -52,8 +52,8 @@ export const FONT_SCALE_STEPS: Array<AppearanceStep> = [
 ];
 
 export interface AppearancePrefs {
-  radius: string;
   fontScale: string;
+  radius: string;
 }
 
 /** 默认值 = `globals.css` 里 `--radius` / `--font-scale` 的基数（两者必须同批改）。 */

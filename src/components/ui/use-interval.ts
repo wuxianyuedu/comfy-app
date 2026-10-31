@@ -41,6 +41,8 @@ import { startPollTimer } from "~/lib/poll-timer";
  * 这个管「每隔一段时间重复跑」。两者都用定时器，但取消语义与生命周期不同。
  */
 export interface UseIntervalOptions {
+  /** 是否在挂载时立即执行一次（默认 `true`）。 */
+  immediate?: boolean;
   /** 间隔毫秒数；传 `null` / `0` 表示**不轮询**（受控开关）。
    *
    *  也可以给一个**函数**：每拍跑完重新问一次「下一拍等多久」——
@@ -50,8 +52,11 @@ export interface UseIntervalOptions {
    *  重建定时器、计时被反复重置 —— 与 `run` 那一条同坑，只是 `run` 走了 ref
    *  而这里不能（换档本身就得让实现重排）。 */
   ms: number | null | (() => number | null);
-  /** 是否在挂载时立即执行一次（默认 `true`）。 */
-  immediate?: boolean;
+  /**
+   * 轮询动作抛错时的通道；缺省落浏览器控制台（视图层可以这么写，
+   * `src/lib` 里的实现本体不行 —— 见 poll-timer 的对应注释）。
+   */
+  onError?: (err: unknown) => void;
   /**
    * 是否在页面不可见时暂停（默认 `true`）。
    * 暂停期间不发起调用；`visibilitychange` 回到 visible 时**立即补跑一次**
@@ -66,11 +71,6 @@ export interface UseIntervalOptions {
    * 页面在跟新（例如挂着看长任务进度），维持既有语义不越过边界。
    */
   pauseWhenUnfocused?: boolean;
-  /**
-   * 轮询动作抛错时的通道；缺省落浏览器控制台（视图层可以这么写，
-   * `src/lib` 里的实现本体不行 —— 见 poll-timer 的对应注释）。
-   */
-  onError?: (err: unknown) => void;
 }
 
 /** 视图侧默认通道：一次失败一行，不炸轮询循环。 */

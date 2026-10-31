@@ -71,12 +71,6 @@ const COMFY_KEEPALIVE_PROCESS_CHECK_INTERVAL_MS = 5_000;
 
 /** 宿主提供的能力（`lifecycle.ts` 注入；本模块不反向 import 它）。 */
 export interface LaunchHost {
-  /** 启动单飞锁与子进程句柄（HMR 单例）。 */
-  st: {
-    child?: ReturnType<typeof spawn>;
-    childDetached?: boolean;
-    stopRequested?: boolean;
-  };
   /** 写本次启动的 runtime 日志一行。 */
   appendRuntimeLog: (line: string) => void;
   /**
@@ -91,13 +85,19 @@ export interface LaunchHost {
   clearComfyStopping: () => void;
   /** 本地时间戳（保活重定向文件名用）。 */
   localTimestamp: () => string;
-  /** 记下「本次会话开始了」（写 `log/services/comfyui-last-session.json`）。 */
-  markSessionStart: (info: { mode: "keepAlive" | "bound"; pid: number | null }) => void;
   /** 记下「本次会话结束了」。应用自己也一起没了时这一步不会发生 ——
    *  那正是下次启动要反推的情况。 */
   markSessionEnd: (report: ComfyExitReport) => void;
+  /** 记下「本次会话开始了」（写 `log/services/comfyui-last-session.json`）。 */
+  markSessionStart: (info: { mode: "keepAlive" | "bound"; pid: number | null }) => void;
   /** 探测 ComfyUI 是否可达（注入以避免 `本模块 → lifecycle.ts` 的循环依赖）。 */
   probeComfyUi: (timeoutMs?: number) => Promise<string | null>;
+  /** 启动单飞锁与子进程句柄（HMR 单例）。 */
+  st: {
+    child?: ReturnType<typeof spawn>;
+    childDetached?: boolean;
+    stopRequested?: boolean;
+  };
 }
 
 /** 启动编排的上下文：把「怎么记日志」「探到多少事实」显式传下去，让两条

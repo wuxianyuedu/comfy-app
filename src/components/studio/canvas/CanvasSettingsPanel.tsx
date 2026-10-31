@@ -27,10 +27,10 @@ function formatPx(value: number): string {
 }
 
 interface PanelProps {
+  onClose: () => void;
+  reset: () => void;
   settings: CanvasSettings;
   update: (patch: Partial<CanvasSettings>) => void;
-  reset: () => void;
-  onClose: () => void;
 }
 
 export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelProps) {

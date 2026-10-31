@@ -168,8 +168,8 @@ export function tailWindowAppend<T>(items: ReadonlyArray<T>, item: T, size: numb
 
 /** 分块遍历：第 `index` 块在原列表里的位置（左闭右开）。 */
 export interface ChunkRange {
-  start: number;
   end: number;
+  start: number;
   /** 总块数，至少 1（空列表也是「1 块」的空块）。 */
   total: number;
 }

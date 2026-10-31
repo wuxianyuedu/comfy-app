@@ -22,17 +22,17 @@ import { HEADER_ACTION_BTN, type SourceFilter, type TypeFilter } from "./workflo
 import type { ModelTagCount } from "./WorkflowLibraryFilters";
 
 interface WorkflowLibraryHeaderProps {
-  onToggleImport: () => void;
-  sourceFilter: SourceFilter;
-  onSourceFilterChange: (v: SourceFilter) => void;
-  sourceCounts: { all: number; local: number; online: number };
-  typeFilter: TypeFilter;
-  onTypeFilterChange: (v: TypeFilter) => void;
-  typeCounts: { all: number; audio: number; image: number; video: number };
   modelFilter: string;
-  onModelFilterChange: (v: string) => void;
   modelTags: Array<ModelTagCount>;
   onManageModels: () => void;
+  onModelFilterChange: (v: string) => void;
+  onSourceFilterChange: (v: SourceFilter) => void;
+  onToggleImport: () => void;
+  onTypeFilterChange: (v: TypeFilter) => void;
+  sourceCounts: { all: number; local: number; online: number };
+  sourceFilter: SourceFilter;
+  typeCounts: { all: number; audio: number; image: number; video: number };
+  typeFilter: TypeFilter;
 }
 
 export function WorkflowLibraryHeader({

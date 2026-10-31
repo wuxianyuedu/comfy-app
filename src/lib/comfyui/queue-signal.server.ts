@@ -30,10 +30,10 @@ interface Subscription {
 }
 
 interface QueueSignalGlobal {
+  inflight?: boolean;
+  lastSerialized?: string | null;
   listeners?: Set<Subscription>;
   timer?: ReturnType<typeof setInterval> | null;
-  lastSerialized?: string | null;
-  inflight?: boolean;
 }
 
 declare global {

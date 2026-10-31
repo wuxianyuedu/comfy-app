@@ -7,9 +7,9 @@ import { dateBucket } from "./history-utils";
 import { getOrCreate } from "~/lib/collections";
 
 export interface TaskGroup {
+  items: Array<TaskItem>;
   /** 日期桶标题（今天 / 昨天 / yyyy-mm-dd）。 */
   key: string;
-  items: Array<TaskItem>;
 }
 
 /** 筛选：ALL 表示不过滤。 */

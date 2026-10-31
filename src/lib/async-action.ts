@@ -55,10 +55,10 @@ export type ActionReport = (kind: "ok" | "err", detail: string) => void;
 
 /** 一次异步动作的执行结果（给调用处继续用，如回滚 / 刷新）。 */
 export interface ActionResult {
-  /** 动作是否成功（含「返回了失败信封」这一种，见 `toActionResult`）。 */
-  ok: boolean;
   /** 用户可见文案：成功时是成功文案，失败时是失败文案。 */
   detail: string;
+  /** 动作是否成功（含「返回了失败信封」这一种，见 `toActionResult`）。 */
+  ok: boolean;
 }
 
 /**
@@ -79,8 +79,6 @@ export interface ActionResult {
 export type RawActionResult = unknown;
 
 export interface RunAsyncActionOptions {
-  /** 反馈通道（必给 —— 这就是本模块存在的理由）。 */
-  report: ActionReport;
   /**
    * 失败文案的**标题**（详情由 `errorMessage` 从抛出的值里取）。
    *
@@ -91,6 +89,13 @@ export interface RunAsyncActionOptions {
    */
   failureText: string | (() => string);
   /**
+   * 结果信封的**成功判据**。给 `false` 时本模块不再看返回值，
+   * 只按「有没有抛」判定（用于端点在响应体里带 `ok: false` 的落点）。
+   */
+  readResultEnvelope?: boolean;
+  /** 反馈通道（必给 —— 这就是本模块存在的理由）。 */
+  report: ActionReport;
+  /**
    * 成功文案。**不给 = 成功静默**（这是合法的，但要显式写出来：
    * 见 {@link runAsyncAction} 的注释）。
    *
@@ -98,11 +103,6 @@ export interface RunAsyncActionOptions {
    * 参数缺席时这条差别才被真正表达出来。
    */
   successText?: string | ((result: ActionResult) => string);
-  /**
-   * 结果信封的**成功判据**。给 `false` 时本模块不再看返回值，
-   * 只按「有没有抛」判定（用于端点在响应体里带 `ok: false` 的落点）。
-   */
-  readResultEnvelope?: boolean;
 }
 
 /** 取文案：字面量直接用，函数按调用期求值（文案依赖入参时用函数形式）。 */

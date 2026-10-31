@@ -24,10 +24,10 @@ const SCRIPT = path.join(REAL_ROOT, "scripts", "generate-api-docs.mjs");
 
 /** `execFileSync` 非零退出时抛的那件（node 的类型里没有具名导出的形状，就地声明）。 */
 interface SpawnedFailure {
-  status?: number | null;
-  stdout?: string;
-  stderr?: string;
   message?: string;
+  status?: number | null;
+  stderr?: string;
+  stdout?: string;
 }
 
 /** 跑一次入口并交出三件原值（非零退出时 `execFileSync` 会抛，那里带着 stdout/stderr）。 */

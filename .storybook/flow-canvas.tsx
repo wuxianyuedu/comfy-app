@@ -46,15 +46,8 @@ export type FlowNodeSpec = Node;
 export interface CanvasScene {
   /** 这个场景解决什么、真数据长什么样（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
-  readonly nodes: ReadonlyArray<FlowNodeSpec>;
   readonly edges: ReadonlyArray<Edge>;
-  /**
-   * 初始视口（受控）。`zoom` 会真的进转换矩阵 —— 「细网格在 0.3 以下淡出」
-   * 这类判据看的就是它。
-   *
-   * 消费方传 `fit` 时它会**被忽略**（React Flow 自己算一个缩到装得下的视口）。
-   */
-  readonly viewport: { x: number; y: number; zoom: number };
+  readonly nodes: ReadonlyArray<FlowNodeSpec>;
   /**
    * 这一档的**被测对象就是那个缩放**（细网格在阈值下淡出、端点圆点在放大档的
    * 像素尺度、密集负载下现算的标尺步长）。
@@ -64,6 +57,13 @@ export interface CanvasScene {
    * 的消费方要么传 `fit`、要么用带本标记的场景，判据 `tests/storybook-fit-viewport.test.ts`。
    */
   readonly pinZoom?: true;
+  /**
+   * 初始视口（受控）。`zoom` 会真的进转换矩阵 —— 「细网格在 0.3 以下淡出」
+   * 这类判据看的就是它。
+   *
+   * 消费方传 `fit` 时它会**被忽略**（React Flow 自己算一个缩到装得下的视口）。
+   */
+  readonly viewport: { x: number; y: number; zoom: number };
 }
 
 /**

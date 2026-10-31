@@ -23,15 +23,15 @@ import {
  *  `lib/size-presets`），不是 "WxH" 字符串：两条通道各自要的形状由本层现算
  *  （远端要「比例 + 百万像素」、库工作流直接吃尺寸表达）。 */
 export interface PortraitRequest {
-  prompt: string;
   negative?: string;
+  prompt: string;
   size: SizeSpec;
 }
 
 /** 本机链路的进展回调（进度 + 执行日志）。 */
 export interface LocalPortraitHandlers {
-  onProgress?: (pct: number) => void;
   onLog?: (entry: TaskLogEntry) => void;
+  onProgress?: (pct: number) => void;
 }
 
 /** 本地通道生成一张定妆照：按对外参数封装（提示词 / 尺寸，其余走默认值）

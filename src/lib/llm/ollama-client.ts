@@ -9,9 +9,9 @@ import { isRecord } from "~/lib/is-record";
 const PROBE_TIMEOUT_MS = 3000;
 
 export interface OllamaModel {
+  modified_at: string;
   name: string;
   size: number;
-  modified_at: string;
 }
 
 export type OllamaProbe = { models: Array<OllamaModel>; up: true } | { up: false };

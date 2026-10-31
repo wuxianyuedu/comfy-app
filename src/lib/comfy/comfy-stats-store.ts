@@ -62,12 +62,6 @@ export const COMFY_STATS_POLL_MS = 4000;
 
 /** 一份对外读数：视图层只读这三个字段，不自己发请求（规范 17 §17.2 第②层）。 */
 export interface ComfyStatsSnapshot {
-  /** 最近一次读到的指标；尚未返回时为 null。 */
-  stats: ComfyStatsPayload | null;
-  /** ComfyUI 是否在线：读到过好数据，或最近一次观测确认进程还活着（数据可能暂时读不到）。 */
-  online: boolean;
-  /** 处于迟滞容忍期内、显示的是上一次好数据（不闪离线，但需弱化提示）。 */
-  stale: boolean;
   /**
    * 进程级判活的**结论**：此刻算不算「崩了」。
    *
@@ -77,6 +71,12 @@ export interface ComfyStatsSnapshot {
    * 自动重启（有了它才不必再从「连续三次读数都没数据」反推）。
    */
   crashed: boolean;
+  /** ComfyUI 是否在线：读到过好数据，或最近一次观测确认进程还活着（数据可能暂时读不到）。 */
+  online: boolean;
+  /** 处于迟滞容忍期内、显示的是上一次好数据（不闪离线，但需弱化提示）。 */
+  stale: boolean;
+  /** 最近一次读到的指标；尚未返回时为 null。 */
+  stats: ComfyStatsPayload | null;
 }
 
 const OFFLINE_STATS: ComfyStatsPayload = {

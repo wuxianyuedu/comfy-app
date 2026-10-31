@@ -48,27 +48,27 @@ import { Spinner } from "~/components/ui/spinner";
 import { onNextFrame } from "~/lib/next-frame";
 
 export interface ConfirmDialogProps {
-  open: boolean;
-  onClose: () => void;
-  /** Short headline. */
-  title: string;
-  /** 可选的描述文字（支持换行）。 */
-  description?: React.ReactNode;
-  /** 确认按钮文字。 */
-  confirmLabel?: string;
   /** 取消按钮文字。 */
   cancelLabel?: string;
+  /** 确认按钮文字。 */
+  confirmLabel?: string;
   /** 切换破坏性红色按钮变体。 */
   danger?: boolean;
-  /** 为 true 时确认按钮禁用。异步操作很有用。 */
-  pending?: boolean;
-  /** 用户确认时触发。 */
-  onConfirm: () => void;
+  /** 可选的描述文字（支持换行）。 */
+  description?: React.ReactNode;
   /**
    * 可选小图标，显示在标题旁。默认取与 `danger` 变体
    * 匹配的字符；传节点可覆盖。
    */
   icon?: React.ReactNode;
+  onClose: () => void;
+  /** 用户确认时触发。 */
+  onConfirm: () => void;
+  open: boolean;
+  /** 为 true 时确认按钮禁用。异步操作很有用。 */
+  pending?: boolean;
+  /** Short headline. */
+  title: string;
 }
 
 const ICON_WARN = <TriangleAlert size={22} strokeWidth={1.8} />;
@@ -145,10 +145,7 @@ export function ConfirmDialog({
               {accentIcon}
             </div>
             <div className="min-w-0 flex-1">
-              <h2
-                id={titleId}
-                className="text-ink text-[15px] leading-tight font-semibold"
-              >
+              <h2 id={titleId} className="text-ink text-[15px] leading-tight font-semibold">
                 {title}
               </h2>
               {description && (

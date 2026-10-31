@@ -20,17 +20,18 @@ import { vanillaApi } from "~/trpc/vanilla";
 const SNAPSHOT_KEY_SEP = "\u0000";
 
 export interface TagItem {
+  count: number;
   id: string;
   name: string;
-  count: number;
 }
 
 export interface ModelTagsController {
-  tags: Array<TagItem>;
+  addTag: () => Promise<void>;
+  busy: boolean;
+  /** 删除：count>0 时先弹二次确认（删掉会一并解除工作流绑定）。 */
+  deleteTag: (name: string, count: number) => Promise<void>;
   /** 新增框草稿。 */
   draft: string;
-  setDraft: (value: string) => void;
-  busy: boolean;
   /**
    * 按条目挂的错误（规范 16 §16.2.4.33）。
    *
@@ -40,14 +41,13 @@ export interface ModelTagsController {
    * `errors.get(null)` 承载整表级错误（如列表刷新失败）。
    */
   errors: ItemErrors;
-  addTag: () => Promise<void>;
-  /** 删除：count>0 时先弹二次确认（删掉会一并解除工作流绑定）。 */
-  deleteTag: (name: string, count: number) => Promise<void>;
   /**
    * 重命名。成功后本地立即改名（不等父组件刷新，避免「旧名闪一下」），
    * 返回 true 表示成功——调用方据此关闭内联编辑器。
    */
   renameTag: (oldName: string, newName: string) => Promise<boolean>;
+  setDraft: (value: string) => void;
+  tags: Array<TagItem>;
 }
 
 /** 把父组件的快照并入本地列表：只补本地没有的，不覆盖已有的。 */
