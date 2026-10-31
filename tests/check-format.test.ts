@@ -187,20 +187,23 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
   };
 
   test.for(
+    /* 表里的路径只是**分类样例**，一律用不存在的夹具路径（ISSUE #2830）：写成真路径时，
+     * 「按路径引用」那一档会把整份自测算成它们的消费方 —— 改一个 `src/**` 业务文件就拉起
+     * 这 40 多秒的一跑。被测脚本自己（`scripts/check-format.cjs`）照旧写真实路径，那是消费关系。 */
     /* SAFETY: 类型断言已复核 */ [
       ["scripts/check-format.cjs", true],
       ["tests/anything.test.ts", true],
-      ["e2e/smoke.spec.ts", true],
+      ["e2e/fixture.spec.ts", true],
       ["docs/api/assets/main.js", true],
-      ["next.config.js", true],
-      ["vitest.config.ts", true],
+      ["fixture.config.js", true],
+      ["fixture.config.ts", true],
       // 非源码产物（Rust 壳构建输出）豁免；glob 锚在 src-tauri 下，不是「任何 target 目录」
       ["src-tauri/target/release/build/app-x/out/__global-api-script.js", true],
-      ["src-tauri/src/main.rs", false],
+      ["src-tauri/src/fixture-main.rs", false],
       ["src/lib/target/keep.ts", false],
-      ["src/lib/endpoints.ts", false],
-      ["src/components/ui/button.tsx", false],
-      ["src/app/api/health/route.ts", false],
+      ["src/lib/fixture-endpoints.ts", false],
+      ["src/components/ui/fixture-button.tsx", false],
+      ["src/app/api/health/fixture-route.ts", false],
     ] as const,
   )("%s → ignored=%s", ([rel, expected]) => {
     expect(mod.isIgnored(rel)).toBe(expected);
@@ -208,7 +211,7 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
 
   test("`*.config.{ts,js}` 这一类花括号展开只匹配一层目录", () => {
     expect(mod.isIgnored("prettier.config.js")).toBe(true);
-    expect(mod.isIgnored("src/lib/next.config.js")).toBe(false);
+    expect(mod.isIgnored("src/lib/fixture.config.js")).toBe(false);
   });
 });
 
@@ -321,7 +324,7 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
         env: gitSandboxEnv(),
       }).trim();
     } catch (e) {
-      const err = e as { message: string; stderr?: string; };
+      const err = e as { message: string; stderr?: string };
       /* 空串 stderr 也算「没拿到那句话」（git 走 stdout-only 失败形态时就是这样），
        * 所以这里判的是「有没有内容」而不是「是不是 undefined」—— 用 `??` 会把空串端出去。 */
       const why = err.stderr && err.stderr.trim() !== "" ? err.stderr : err.message;

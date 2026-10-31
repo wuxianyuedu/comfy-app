@@ -62,7 +62,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
-import { changedPathsFromNameStatus } from "./affected-tests.mjs";
+import { changedPathsFromNameStatus } from "./git-name-status.mjs";
 import { resolveMergeBaseRef } from "./base-check/git-ref.mjs";
 
 const HERE = import.meta.dirname;

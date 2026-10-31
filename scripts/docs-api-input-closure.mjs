@@ -28,7 +28,7 @@
  * ── 复用什么、不重写什么（§12.18 / 硬规则 27）───────────────────────────
  *
  * 说明符解析复用 `scripts/affected-tests.mjs` 的 `specifiersOf` / `specCandidates`
- * （同一份 `SPEC_RE`、同一套扩展名候选、同一套别名与相对路径口径）。
+ * （同一份 TypeScript 预处理扫描器、同一套扩展名候选、同一套别名与相对路径口径）。
  * 另两处也各有出处，本模块只**引用**：
  *   · glob → 正则：`scripts/vitest-projects.cjs` 已导出的 `globToRe`；
  *   · 收窄面本身：`scripts/check-docs-api.cjs` 的 `INPUT_GLOBS`（配置侧逐字对齐由
