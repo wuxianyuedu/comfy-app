@@ -82,14 +82,14 @@ describe("encryptLlmKey / decryptLlmKey", () => {
 
     // 篡改密文体：GCM 的认证标签必须拦住它，而不是解出乱码。
     const tamperedCt = Buffer.from(parts[2]!, "base64");
-    tamperedCt[0] = tamperedCt[0]! ^ 0xff;
+    tamperedCt[0] = tamperedCt.at(0)! ^ 0xff;
     expect(
       decryptLlmKey(`enc:v1:${parts[0]}:${parts[1]}:${tamperedCt.toString("base64")}`),
     ).toBeNull();
 
     // 篡改 tag 同理。
     const tamperedTag = Buffer.from(parts[1]!, "base64");
-    tamperedTag[0] = tamperedTag[0]! ^ 0xff;
+    tamperedTag[0] = tamperedTag.at(0)! ^ 0xff;
     expect(
       decryptLlmKey(`enc:v1:${parts[0]}:${tamperedTag.toString("base64")}:${parts[2]}`),
     ).toBeNull();
