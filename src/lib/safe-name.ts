@@ -36,7 +36,7 @@ export function safeFileNameSegment(raw: string | null | undefined): string {
   if (!raw) {
     return "";
   }
-  return raw.replace(/[^\w.-]+/g, "_");
+  return raw.replaceAll(/[^\w.-]+/g, "_");
 }
 
 /** 展示名片段：在 ASCII 片段的基础上**额外保留 CJK**（中文/日文/韩文）。
@@ -50,5 +50,5 @@ export function safeDisplayName(raw: string | null | undefined): string {
   }
   /* `\u4e00-\u9fa5` 是「基本汉字区」—— 与全库既有的两处 CJK 判据同口径
    *（收口前 `bgm` 与被删的 `trainer` 各写了一遍这个区间）。 */
-  return raw.replace(/[^\w.\-\u4e00-\u9fa5]+/g, "_");
+  return raw.replaceAll(/[^\w.\-\u4e00-\u9fa5]+/g, "_");
 }
