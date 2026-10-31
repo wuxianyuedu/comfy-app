@@ -430,15 +430,18 @@ function sqliteProxyHost(client: Database.Database) {
     const stmt = client.prepare(sql);
     const bound = params ?? [];
     switch (method) {
-      case "get":
+      case "get": {
         return Promise.resolve({ rows: stmt.raw().get(...bound) });
-      case "run":
+      }
+      case "run": {
         stmt.run(...bound);
         return Promise.resolve({ rows: [] });
+      }
       case "values":
       case "all":
-      default:
+      default: {
         return Promise.resolve({ rows: stmt.raw().all(...bound) });
+      }
     }
   };
 }

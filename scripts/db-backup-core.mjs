@@ -592,9 +592,10 @@ export function applyPendingRestore(root, options = {}) {
  */
 export function restoreNotice(result) {
   switch (result.status) {
-    case "nothing-to-do":
+    case "nothing-to-do": {
       return null;
-    case "restored":
+    }
+    case "restored": {
       return {
         level: "info",
         lines: [
@@ -604,7 +605,8 @@ export function restoreNotice(result) {
               : ""),
         ],
       };
-    default:
+    }
+    default: {
       return {
         level: "warn",
         lines: [
@@ -614,6 +616,7 @@ export function restoreNotice(result) {
             : "启动会继续使用当前数据库。",
         ],
       };
+    }
   }
 }
 

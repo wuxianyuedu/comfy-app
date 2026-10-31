@@ -53,21 +53,26 @@ export function parseArgs(argv) {
     const a = argv[i];
     const next = () => argv[++i] ?? "";
     switch (a) {
-      case "--url":
+      case "--url": {
         opts.url = next();
         break;
-      case "--project":
+      }
+      case "--project": {
         opts.project = next();
         break;
-      case "--idea":
+      }
+      case "--idea": {
         opts.idea = next();
         break;
-      case "--image-workflow":
+      }
+      case "--image-workflow": {
         opts.imageWorkflowId = next();
         break;
-      case "--video-workflow":
+      }
+      case "--video-workflow": {
         opts.videoWorkflowId = next();
         break;
+      }
       case "--approval": {
         const v = next();
         opts.approval = ["auto", "stage", "shot"].includes(v)
@@ -75,27 +80,34 @@ export function parseArgs(argv) {
           : "auto";
         break;
       }
-      case "--auto-review":
+      case "--auto-review": {
         opts.autoReview = true;
         break;
-      case "--poll":
+      }
+      case "--poll": {
         opts.pollMs = Number(next()) || opts.pollMs;
         break;
-      case "--timeout":
+      }
+      case "--timeout": {
         opts.timeoutMs = Number(next()) || opts.timeoutMs;
         break;
-      case "--dry-run":
+      }
+      case "--dry-run": {
         opts.dryRun = true;
         break;
-      case "--json":
+      }
+      case "--json": {
         opts.json = true;
         break;
+      }
       case "--help":
-      case "-h":
+      case "-h": {
         opts.help = true;
         break;
-      default:
+      }
+      default: {
         opts.unknown = [...(opts.unknown ?? []), a];
+      }
     }
   }
   if (!["auto", "stage", "shot"].includes(opts.approval)) {
@@ -168,22 +180,30 @@ export function formatStep(snapshot) {
 /** @param {RunSnapshot["action"]} action @returns {string} */
 function describeAction(action) {
   switch (action?.kind) {
-    case "generate_script":
+    case "generate_script": {
       return "生成剧本";
-    case "extract_characters":
+    }
+    case "extract_characters": {
       return "提取角色";
-    case "plan_storyboard":
+    }
+    case "plan_storyboard": {
       return "规划分镜";
-    case "render_images":
+    }
+    case "render_images": {
       return `逐镜生图(${action.shotIds?.length ?? 0})`;
-    case "render_film":
+    }
+    case "render_film": {
       return "生成视频并合成成片";
-    case "await_approval":
+    }
+    case "await_approval": {
       return "等待确认";
-    case "done":
+    }
+    case "done": {
       return "已完成";
-    default:
+    }
+    default: {
       return "空闲";
+    }
   }
 }
 

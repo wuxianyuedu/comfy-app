@@ -136,14 +136,18 @@ async function healthBodySaysSchemaNotReady(res) {
 /** @param {string} state @returns {string} */
 export function describeProbeState(state) {
   switch (state) {
-    case "ready":
+    case "ready": {
       return "服务已就绪";
-    case "route-404":
+    }
+    case "route-404": {
       return "服务已应答，但 /api/health 不在编译图里（陈旧路由表）";
-    case "schema-not-ready":
+    }
+    case "schema-not-ready": {
       return "服务已应答，但数据库表还没建（/api/health 503，db=empty）";
-    default:
+    }
+    default: {
       return "连不上服务（进程还没监听）";
+    }
   }
 }
 

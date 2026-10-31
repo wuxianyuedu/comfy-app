@@ -276,26 +276,29 @@ export function ensureSchemaBeforeRun(options = {}) {
   const { root = ROOT, forward, ensure = ensureSchemaCurrent } = options;
   const result = ensure(root, forward ? { forward } : {});
   switch (result.state) {
-    case "ready":
+    case "ready": {
       return {
         verdict: "proceed",
         state: result.state,
         reason: "库结构与当前 schema 一致",
       };
-    case "synced":
+    }
+    case "synced": {
       return {
         verdict: "proceed",
         state: result.state,
         reason: "空库已按 schema 建齐（起 Playwright 之前完成）",
       };
-    case "unknown":
+    }
+    case "unknown": {
       /* 判据失效不阻断：拿不到结论 ≠ 库坏了（同 `checkSchemaBeforeRun` 那两处）。 */
       return {
         verdict: "proceed",
         state: result.state,
         reason: `库结构核对拿不到结论（${result.detail ?? "原因未知"}）—— 不阻断`,
       };
-    default:
+    }
+    default: {
       /* `missing`（没建成）/ `stale`（含丢数据语句、启动链路不替你做那个决定）。 */
       return {
         verdict: "abort",
@@ -304,5 +307,6 @@ export function ensureSchemaBeforeRun(options = {}) {
           `数据库没建齐（${result.state}）：${result.detail ?? "原因未知"}。` +
           "这是需要人决定的一步，先执行：pnpm db:push   然后重跑本档。",
       };
+    }
   }
 }
