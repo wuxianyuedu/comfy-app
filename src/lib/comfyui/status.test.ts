@@ -216,12 +216,12 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
   });
 
   it("本进程 bound 子进程优先：不经任何进程表查询即判定在跑", async () => {
-    setBoundChildPidReader(() => 31337);
+    setBoundChildPidReader(() => 31_337);
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
     const snap = await getComfyRuntimeSnapshot({ force: true });
     expect(snap.running).toBe(true);
     expect(snap.source).toBe("bound");
-    expect(snap.pid).toBe(31337);
+    expect(snap.pid).toBe(31_337);
     expect(findPidForMainPyDetailed).not.toHaveBeenCalled();
   });
 
@@ -452,7 +452,7 @@ describe("快照缓存 — 便宜但不失时效", () => {
   });
 
   it("TTL 很短（秒级）：不会长时间沿用旧结论", () => {
-    expect(COMFY_SNAPSHOT_TTL_MS).toBeLessThanOrEqual(3_000);
+    expect(COMFY_SNAPSHOT_TTL_MS).toBeLessThanOrEqual(3000);
   });
 
   it("「启动中」快照的 TTL 比普通 TTL 更短（不缓存）", () => {
@@ -588,7 +588,7 @@ describe("didQueryProcTable — 区分「查过没命中」与「根本没查」
   });
 
   it("本进程 bound 子进程也算查过（它是最强的那条事实）", async () => {
-    setBoundChildPidReader(() => 31337);
+    setBoundChildPidReader(() => 31_337);
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
     const snap = await getComfyRuntimeSnapshot({ force: true });
     expect(snap.didQueryProcTable).toBe(true);

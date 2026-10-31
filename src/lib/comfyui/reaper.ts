@@ -241,7 +241,7 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
   try {
     const base = await resolveComfyBase();
     const q = await fetch(`${base}/queue`, {
-      signal: AbortSignal.timeout(3_000),
+      signal: AbortSignal.timeout(3000),
     });
     if (!q.ok) {
       return null;
@@ -263,7 +263,7 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
     /* 队列空但有 promptId 线索：只有「最近一条历史确实是本次 prompt」才算
      *  在飞（任务刚收尾的竞态窗口），否则视为已死。 */
     const h = await fetch(`${base}/history?max_items=1`, {
-      signal: AbortSignal.timeout(3_000),
+      signal: AbortSignal.timeout(3000),
     });
     if (!h.ok) {
       return null;
@@ -473,7 +473,7 @@ export async function reapStaleRunningTasks(): Promise<void> {
         let verdict: "succeeded" | "failed" | "unknown" = "unknown";
         let reason = "";
         try {
-          const r = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+          const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
           if (r.status === 200) {
             const data = /* SAFETY: 类型断言已复核 */ (await r.json()) as Record<
               string,
@@ -508,7 +508,7 @@ export async function reapStaleRunningTasks(): Promise<void> {
               let inQueue = false;
               try {
                 const q = await fetch(`${base}/queue`, {
-                  signal: AbortSignal.timeout(3_000),
+                  signal: AbortSignal.timeout(3000),
                 });
                 if (q.ok) {
                   const qd = /* SAFETY: 类型断言已复核 */ (await q.json()) as {

@@ -500,7 +500,7 @@ describe("useSettingsPage", () => {
       /* 挂载链在假时钟上跑到落定：首探排在 `setTimeout(…, 0)`，推进 1s 一定跨过它，
        * 而这一秒是**虚拟的**（不占墙钟预算）。 */
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(1_000);
+        await vi.advanceTimersByTimeAsync(1000);
       });
       expect(result.current.ollamaStatus).toBe("down");
       expect(result.current.ollamaStarting).toBe(false);
@@ -533,7 +533,7 @@ describe("useSettingsPage", () => {
         wrapper: makeWrapper(),
       });
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(1_000);
+        await vi.advanceTimersByTimeAsync(1000);
       });
       expect(result.current.ollamaStatus).toBe("down");
 
@@ -544,13 +544,13 @@ describe("useSettingsPage", () => {
       expect(result.current.ollamaStatus).toBe("starting");
 
       // 推进两轮轮询（探测都 down），状态行必须保持 starting
-      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(5000);
       expect(result.current.ollamaStatus).toBe("starting");
       expect(result.current.ollamaStarting).toBe(true);
 
       // 第 3 轮起探测 up → 状态行一次性落到 up
       probeMock.mockResolvedValue({ up: true, models: [] });
-      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(5000);
       await act(async () => {
         await starting;
       });

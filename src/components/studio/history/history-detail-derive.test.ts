@@ -173,7 +173,7 @@ describe("deriveWorkflowParams", () => {
   it("不再过滤 seed / steps 这类键（过滤是为了躲开已删除的生成参数卡）", () => {
     const detail = makeDetail({
       workflowInputs: [
-        { nodeId: "3", name: "seed", value: 317185474948100 },
+        { nodeId: "3", name: "seed", value: 317_185_474_948_100 },
         { nodeId: "4", name: "prefix", value: "a photo of" },
       ],
     });

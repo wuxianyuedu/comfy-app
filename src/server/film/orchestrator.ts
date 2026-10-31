@@ -436,7 +436,7 @@ export async function startFilm(id: string) {
  * 另一个不会跟着改。 */
 const WATCH_POLL_MS = 4000;
 const WATCH_MAX_ITER = 240;
-const WATCH_BUDGET_MIN = Math.round((WATCH_POLL_MS * WATCH_MAX_ITER) / 60000);
+const WATCH_BUDGET_MIN = Math.round((WATCH_POLL_MS * WATCH_MAX_ITER) / 60_000);
 
 /* **监看在飞表**（跨模块实例）。`watchFilm` 是被 `void` 起来的常驻循环，而
  * dev 的热重启不会杀掉旧模块那条 promise 链 —— 旧循环还在跑，本模块的新实例

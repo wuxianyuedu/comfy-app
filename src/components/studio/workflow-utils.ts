@@ -211,7 +211,7 @@ export function renderWidgetValue(value: unknown): string {
      * 此前这里是 `(Math.round(v * 100) / 100).toFixed(2)` + 手写剥零，
      * 即**两层舍入**（先十进制舍、再二进制舍），在边界值上与直接 `toFixed`
      * 给出不同答案。 */
-    if (value >= 10000) {
+    if (value >= 10_000) {
       return String(value);
     }
     return trimFixed(value, 2) ?? displayValue(null);
@@ -263,7 +263,7 @@ export function renderSubgraphWidgetValue(value: unknown): string {
   }
   if (typeof value === "number") {
     /* 与 `renderWidgetValue` 同一档（`~/lib/number-format`）。 */
-    if (value >= 10000) {
+    if (value >= 10_000) {
       return String(value);
     }
     return trimFixed(value, 2) ?? displayValue(null);

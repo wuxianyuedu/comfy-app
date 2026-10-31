@@ -250,7 +250,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
   useInterval(
     () => {
       const idle = Date.now() - lastActivityRef.current;
-      if (idle > 20000 && status === "RUNNING") {
+      if (idle > 20_000 && status === "RUNNING") {
         const now = Date.now();
         setLogs((prev) => {
           const last = prev[prev.length - 1];
@@ -275,7 +275,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
         lastActivityRef.current = now;
       }
     },
-    { ms: taskId ? 10000 : null, immediate: false },
+    { ms: taskId ? 10_000 : null, immediate: false },
   );
 
   const clear = () => {

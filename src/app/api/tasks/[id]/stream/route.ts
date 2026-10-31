@@ -139,7 +139,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
             clearInterval(handles.heartbeat);
           }
         }
-      }, 15000);
+      }, 15_000);
 
       /* 数据库轮询 = SSE 的唯一事件源（P3 §5 ADR §13-3C，D2 定 3s）。
        * 此前它是「emitter 之外的兜底」（取消只写库、外部对账改状态等路径

@@ -159,7 +159,7 @@ describe("POST /api/comfy/ensure", () => {
     probeComfyUi.mockResolvedValueOnce("http://127.0.0.1:8188");
     const { POST } = await import("./route");
     await POST();
-    expect(probeComfyUi.mock.calls[0]?.[0]).toBeLessThan(5_000);
+    expect(probeComfyUi.mock.calls[0]?.[0]).toBeLessThan(5000);
   });
 
   it("必须 force-dynamic：这个端点被缓存等于「启动中」永远不变", async () => {

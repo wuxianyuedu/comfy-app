@@ -47,7 +47,7 @@ async function settle(times = 1): Promise<void> {
 function change(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     seq: 1,
-    at: 1_000,
+    at: 1000,
     kind: "ready",
     detail: "ComfyUI 已就绪",
     ...over,

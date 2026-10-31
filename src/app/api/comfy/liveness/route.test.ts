@@ -52,7 +52,7 @@ describe("GET /api/comfy/liveness", () => {
   it("连上即补发当前快照：崩溃之后才连上来的客户端也能立刻知道", async () => {
     const seen = {
       seq: 7,
-      at: 1_000,
+      at: 1000,
       reason: "异常退出（exit 1）",
       userStopped: false,
     };
@@ -79,7 +79,7 @@ describe("GET /api/comfy/liveness", () => {
     const reader = res.body!.getReader();
     const signal = {
       seq: 1,
-      at: 2_000,
+      at: 2000,
       reason: "被信号终止（SIGKILL）",
       userStopped: false,
     };

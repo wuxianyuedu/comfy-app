@@ -311,7 +311,7 @@ describe("useWorkflowLibrary", () => {
       workflows: [],
       localPending: [],
       tags: [],
-      listDelayMs: LIST_STALL_MS + 2_000,
+      listDelayMs: LIST_STALL_MS + 2000,
     };
 
     const { result } = renderHook(() => useWorkflowLibrary(), {

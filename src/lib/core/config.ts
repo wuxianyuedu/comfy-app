@@ -172,7 +172,7 @@ const configSchema = z.object({
    * 裸地址/裸端口，就会出现「配置兜底值与连接侧/拉起侧各自漂移」的口径分叉
    * （规范 §12.14）。 */
   comfyuiBaseUrl: z.url().default(CONFIG_ENV_DEFAULTS.comfyuiBaseUrl),
-  port: z.coerce.number().int().positive().max(65535).default(CONFIG_ENV_DEFAULTS.port),
+  port: z.coerce.number().int().positive().max(65_535).default(CONFIG_ENV_DEFAULTS.port),
   /* 开关型配置用 envBool() 解析字面量，不用 z.coerce.boolean() —— 后者按 JS
    * 真值判断，`REAPER_ENABLED=false` 会被读成 true（见 envBool 的说明）。 */
   reaperEnabled: envBool("REAPER_ENABLED"),

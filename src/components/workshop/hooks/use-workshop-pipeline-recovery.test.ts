@@ -374,7 +374,7 @@ describe("useWorkshopPipeline generateShot 的可靠性出口", () => {
     vi.useFakeTimers();
     await act(async () => {
       const pending = result.current.generateShot(result.current.shots[0]!);
-      await vi.advanceTimersByTimeAsync(LOCAL_TASK_TIMEOUT_MS + 1_000);
+      await vi.advanceTimersByTimeAsync(LOCAL_TASK_TIMEOUT_MS + 1000);
       await pending;
     });
     vi.useRealTimers();

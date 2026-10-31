@@ -188,24 +188,24 @@ describe("recordSlowQuery：同一路径在一个窗口内只写首条 + 一条�
   });
 
   it("同窗口内重复的慢查询只返回首条，其余不写行（不刷屏）", () => {
-    const first = recordSlowQuery("setting.comfyStatus", 10_457, "query", 1_000);
+    const first = recordSlowQuery("setting.comfyStatus", 10_457, "query", 1000);
     expect(first).toBe("setting.comfyStatus 10457ms");
     for (let i = 0; i < 9; i++) {
-      expect(recordSlowQuery("setting.comfyStatus", 10_500, "query", 1_000 + i)).toBe(null);
+      expect(recordSlowQuery("setting.comfyStatus", 10_500, "query", 1000 + i)).toBe(null);
     }
   });
 
   it("窗口过期后写一条带累计次数的汇总行，并开启新窗口", () => {
-    recordSlowQuery("setting.comfyStatus", 10_457, "query", 1_000);
-    recordSlowQuery("setting.comfyStatus", 10_457, "query", 2_000);
-    recordSlowQuery("setting.comfyStatus", 10_457, "query", 3_000);
+    recordSlowQuery("setting.comfyStatus", 10_457, "query", 1000);
+    recordSlowQuery("setting.comfyStatus", 10_457, "query", 2000);
+    recordSlowQuery("setting.comfyStatus", 10_457, "query", 3000);
     const summary = recordSlowQuery("setting.comfyStatus", 11_000, "query", 200_000);
     expect(summary).toBe("setting.comfyStatus 11000ms（近 60s 内共 3 次）");
   });
 
   it("不同路径 / 不同类型的窗口互相独立", () => {
-    expect(recordSlowQuery("a.b", 2_000, "query", 1_000)).not.toBeNull();
-    expect(recordSlowQuery("a.c", 2_000, "query", 1_000)).not.toBeNull();
-    expect(recordSlowQuery("a.b", 2_000, "mutation", 1_000)).not.toBeNull();
+    expect(recordSlowQuery("a.b", 2000, "query", 1000)).not.toBeNull();
+    expect(recordSlowQuery("a.c", 2000, "query", 1000)).not.toBeNull();
+    expect(recordSlowQuery("a.b", 2000, "mutation", 1000)).not.toBeNull();
   });
 });

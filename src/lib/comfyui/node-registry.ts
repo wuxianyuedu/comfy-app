@@ -185,7 +185,7 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
       F.num("cfg", "CFG", { min: 0, max: 30, step: 0.5, placeholder: "7.0" }),
       F.num("seed", "种子", {
         min: 0,
-        max: 4294967295,
+        max: 4_294_967_295,
         step: 1,
         placeholder: "-1 = 随机",
       }),
@@ -211,7 +211,7 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
       F.num("cfg", "CFG", { min: 0, max: 30, step: 0.5, placeholder: "7.0" }),
       F.num("seed", "种子", {
         min: 0,
-        max: 4294967295,
+        max: 4_294_967_295,
         step: 1,
         placeholder: "-1 = 随机",
       }),

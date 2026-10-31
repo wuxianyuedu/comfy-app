@@ -191,7 +191,7 @@ export async function pollTask(
       return {
         taskId,
         status: "TIMEOUT",
-        error: `轮询超时（${Math.round(timeoutMs / 60000)} 分钟无响应）`,
+        error: `轮询超时（${Math.round(timeoutMs / 60_000)} 分钟无响应）`,
       };
     }
     try {

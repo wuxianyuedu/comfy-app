@@ -47,7 +47,7 @@ describe("值与缺值", () => {
 describe("rows 布局（缺省）", () => {
   it("标签左、值右，值走等宽字体", () => {
     const { container } = render(
-      <KeyValueRows bordered items={[{ key: "Seed", raw: 12345 }]} striped />,
+      <KeyValueRows bordered items={[{ key: "Seed", raw: 12_345 }]} striped />,
     );
     const row = container.querySelector("div > div")!;
     expect(row.textContent).toContain("Seed");

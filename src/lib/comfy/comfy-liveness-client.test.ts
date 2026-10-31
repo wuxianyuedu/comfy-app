@@ -52,7 +52,7 @@ afterEach(() => {
 function signal(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     seq: 1,
-    at: 1_000,
+    at: 1000,
     reason: "异常退出（exit 1）",
     userStopped: false,
     ...over,

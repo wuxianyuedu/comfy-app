@@ -106,7 +106,7 @@ describe("useDevServerLiveness：上一次结束的原因", () => {
       const calls = stubFetch();
       renderHook(() => useDevServerLiveness());
       /* 首探（immediate） + 若干拍：每拍都要 flush 微任务让 fetch 的 promise 落定。 */
-      await vi.advanceTimersByTimeAsync(2_000 * 4 + 100);
+      await vi.advanceTimersByTimeAsync(2000 * 4 + 100);
 
       // 探活跑了很多拍（证明「多拍」这件事真的发生了）。
       expect(calls.serverId).toBeGreaterThan(1);
@@ -242,28 +242,28 @@ describe("useDevServerLiveness：单拍抖动不算断开", () => {
       /* act 包住推进：探测的 promise 链落在定时器推进之外，不包住的话
        * setState 不会在这一步落定（断言读到的是首帧的 false）。 */
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2_100);
+        await vi.advanceTimersByTimeAsync(2100);
       });
       expect(result.current.everOnline).toBe(true);
       expect(result.current.probeOk).toBe(true);
 
       serverOk = false;
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2_100);
+        await vi.advanceTimersByTimeAsync(2100);
       });
       expect(result.current.probeOk).toBe(false);
       expect(result.current.consecutiveFailures).toBe(1);
       expect(result.current.reachable).toBe(true);
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2_100);
+        await vi.advanceTimersByTimeAsync(2100);
       });
       expect(result.current.consecutiveFailures).toBe(OFFLINE_CONFIRM_FAILURES);
       expect(result.current.reachable).toBe(false);
 
       serverOk = true;
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2_100);
+        await vi.advanceTimersByTimeAsync(2100);
       });
       expect(result.current.reachable).toBe(true);
       expect(result.current.consecutiveFailures).toBe(0);
@@ -341,21 +341,21 @@ describe("probeGapMs：这一拍之前没人在探测的那一段", () => {
    * 问过服务的时间。`unprobedMs` 就不让那段时长冒充「服务真的死了这么久」。 */
 
   it("连拍（间隔正好是一拍）算 0：那一拍本来就该走完，不算停表", () => {
-    expect(probeGapMs(1_000, 1_000 + DEV_SERVER_PROBE_MS)).toBe(0);
+    expect(probeGapMs(1000, 1000 + DEV_SERVER_PROBE_MS)).toBe(0);
     /* 定时器略早 / 略晚落都在正常范围里，不能算出「负数停表」。 */
-    expect(probeGapMs(1_000, 1_000 + DEV_SERVER_PROBE_MS - 50)).toBe(0);
+    expect(probeGapMs(1000, 1000 + DEV_SERVER_PROBE_MS - 50)).toBe(0);
   });
 
   it("首拍（没有上一拍）算 0，不编一段停表", () => {
-    expect(probeGapMs(null, 5_000)).toBe(0);
+    expect(probeGapMs(null, 5000)).toBe(0);
   });
 
   it("停表 = 实际间隔扣掉本该走的那一拍（失焦两分钟就很明显）", () => {
-    expect(probeGapMs(1_000, 1_000 + 120_000)).toBe(120_000 - DEV_SERVER_PROBE_MS);
+    expect(probeGapMs(1000, 1000 + 120_000)).toBe(120_000 - DEV_SERVER_PROBE_MS);
   });
 
   it("时钟回拨不产生负值", () => {
-    expect(probeGapMs(10_000, 5_000)).toBe(0);
+    expect(probeGapMs(10_000, 5000)).toBe(0);
   });
 });
 
@@ -384,7 +384,7 @@ describe("useDevServerLiveness：停表那一段供成事实（A 的可信度注
     try {
       const { result } = renderHook(() => useDevServerLiveness());
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2_100);
+        await vi.advanceTimersByTimeAsync(2100);
       });
       const beforeHide = calls.serverId;
       expect(beforeHide).toBeGreaterThan(0);
