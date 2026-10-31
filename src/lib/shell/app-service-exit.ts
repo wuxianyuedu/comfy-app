@@ -107,10 +107,12 @@ function asExitKind(value: unknown): AppServiceExitKind {
     case "shell-self-exited":
     case "shell-terminated":
     case "abandoned":
-    case "sidecar":
+    case "sidecar": {
       return value;
-    default:
+    }
+    default: {
       return "unknown";
+    }
   }
 }
 
@@ -154,13 +156,14 @@ export function describeAppServiceExit(record: AppServiceExitRecord): AppService
    * 因此在这里算一次、由每个分支带上，而不是让七个分支各写一遍。 */
   const detail = summarizeAppServiceExit(record);
   switch (record.kind) {
-    case "abandoned":
+    case "abandoned": {
       return {
         why: "上一次启动被放弃（启动页被关闭），本地服务随之退出",
         action: "这是设计内行为：重新双击启动入口即可，等启动页自动切到主界面",
         detail,
       };
-    case "shell-self-exited":
+    }
+    case "shell-self-exited": {
       return {
         why: "本地服务随桌面壳一起退出了（壳自身以非零码结束）",
         action:
@@ -168,7 +171,8 @@ export function describeAppServiceExit(record: AppServiceExitRecord): AppService
           "否则重新双击一次启动入口，并对照 log/launcher/ 下的日志",
         detail,
       };
-    case "shell-terminated":
+    }
+    case "shell-terminated": {
       return {
         why: "本地服务随桌面壳一起退出了，且壳没有留下任何收尾标记（被强行收走或崩溃）",
         action:
@@ -176,24 +180,28 @@ export function describeAppServiceExit(record: AppServiceExitRecord): AppService
           "若反复发生，把 log/launcher/ 与 log/shell/ 一起带上排查",
         detail,
       };
-    case "sidecar":
+    }
+    case "sidecar": {
       return {
         why: `内嵌的本地服务已终止${record.code === null ? "" : `（退出码 ${record.code}）`}`,
         action: "关掉应用窗口重新启动一次；若反复出现，把 log/nextjs/ 带上排查",
         detail,
       };
-    case "dev-server":
+    }
+    case "dev-server": {
       return {
         why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
         action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
         detail,
       };
-    default:
+    }
+    default: {
       return {
         why: `本地服务已退出${record.code === null ? "" : `（退出码 ${record.code}）`}`,
         action: "重新启动一次应用；若反复出现，把 log/ 下的诊断包带上排查",
         detail,
       };
+    }
   }
 }
 

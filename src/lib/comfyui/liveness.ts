@@ -131,18 +131,23 @@ export const LIVENESS_VERIFY_MS = 0;
  */
 export function livenessIntervalMs(phase: LivenessPhase, elapsedInStartingMs = 0): number {
   switch (phase) {
-    case "verifying":
+    case "verifying": {
       return LIVENESS_VERIFY_MS;
-    case "hidden":
+    }
+    case "hidden": {
       return LIVENESS_HIDDEN_MS;
-    case "starting":
+    }
+    case "starting": {
       return elapsedInStartingMs < LIVENESS_STARTING.fastWindowMs
         ? LIVENESS_STARTING.fastMs
         : LIVENESS_STARTING.slowMs;
-    case "generating":
+    }
+    case "generating": {
       return LIVENESS_GENERATING_MS;
-    case "idle":
+    }
+    case "idle": {
       return LIVENESS_IDLE_MS;
+    }
   }
 }
 

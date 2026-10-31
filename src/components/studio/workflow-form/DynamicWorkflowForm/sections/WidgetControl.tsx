@@ -79,7 +79,7 @@ export function WidgetControl({
       );
     }
 
-    case "text":
+    case "text": {
       return (
         <input
           aria-label={`${label}${requiredHint}`}
@@ -90,6 +90,7 @@ export function WidgetControl({
           value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
         />
       );
+    }
 
     case "int":
     case "float": {
@@ -131,7 +132,7 @@ export function WidgetControl({
       );
     }
 
-    case "switch":
+    case "switch": {
       return (
         <Button
           aria-checked={value === true}
@@ -156,6 +157,7 @@ export function WidgetControl({
           </span>
         </Button>
       );
+    }
 
     case "image": {
       /* 文件名与预览地址都走 `~/lib/media/media-url` 的出口（§16.2.4.32）：
@@ -195,7 +197,7 @@ export function WidgetControl({
       );
     }
 
-    case "select":
+    case "select": {
       return (
         <SelectMenu
           className={`${compact ? "" : "mt-1"} ${
@@ -210,8 +212,10 @@ export function WidgetControl({
           value={typeof value === "string" ? value : ""}
         />
       );
+    }
 
-    default:
+    default: {
       return null;
+    }
   }
 }

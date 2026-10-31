@@ -585,10 +585,12 @@ function sizeValueForPin(
   /* 形状由**子口身份**给出：作者连的是「尺寸 · 宽高比」，值就按比例标签派 ——
    * 端口叫什么名字不参与判定。 */
   switch (entry.cls) {
-    case "size-width":
+    case "size-width": {
       return width;
-    case "size-height":
+    }
+    case "size-height": {
       return height;
+    }
     case "size-aspect": {
       const label = aspectLabelForDims(width, height, raw.options);
       return label ?? undefined;
@@ -619,9 +621,10 @@ function sizeValueForPin(
       const mp = megapixelsForSize(width, height, raw.defaultValue);
       return mp ?? undefined;
     }
-    default:
+    default: {
       /* 落点不是尺寸类端口（工作流的自定义 pin）：原样透传，由工作流自己解释。 */
       return supplied;
+    }
   }
 }
 

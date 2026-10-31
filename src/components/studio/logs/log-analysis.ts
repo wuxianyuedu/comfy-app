@@ -382,15 +382,19 @@ export function isPanelSelfPollingLine(line: string): boolean {
 
 function parseLogLevel(level: string): LogLevel {
   switch (level.toLowerCase()) {
-    case "error":
+    case "error": {
       return "error";
+    }
     case "warn":
-    case "warning":
+    case "warning": {
       return "warn";
-    case "debug":
+    }
+    case "debug": {
       return "debug";
-    default:
+    }
+    default: {
       return "info";
+    }
   }
 }
 

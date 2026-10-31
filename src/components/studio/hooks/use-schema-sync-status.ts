@@ -64,7 +64,7 @@ export type SchemaSyncNotice = {
  */
 export function schemaSyncNotice(status: SchemaSyncStatus): SchemaSyncNotice | null {
   switch (status.phase) {
-    case "syncing":
+    case "syncing": {
       return {
         tone: "info",
         text: "数据库同步中…",
@@ -73,7 +73,8 @@ export function schemaSyncNotice(status: SchemaSyncStatus): SchemaSyncNotice | n
         refreshable: false,
         actionable: false,
       };
-    case "synced":
+    }
+    case "synced": {
       return {
         tone: "ok",
         text: "数据库已同步 · 点此刷新",
@@ -81,6 +82,7 @@ export function schemaSyncNotice(status: SchemaSyncStatus): SchemaSyncNotice | n
         refreshable: true,
         actionable: false,
       };
+    }
     case "missing":
     case "stale": {
       const missing = status.phase === "missing";
@@ -107,8 +109,9 @@ export function schemaSyncNotice(status: SchemaSyncStatus): SchemaSyncNotice | n
         actionable: status.canPush,
       };
     }
-    default:
+    default: {
       return null;
+    }
   }
 }
 

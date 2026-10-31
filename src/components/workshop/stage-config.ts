@@ -93,61 +93,73 @@ export function stageSubtitle(
     return "已完成";
   }
   switch (id) {
-    case "character":
+    case "character": {
       return ctx.characterCount > 0 ? `已建 ${ctx.characterCount} 个` : "待开始";
-    case "storyboard":
+    }
+    case "storyboard": {
       return ctx.shotCount > 0 ? `${ctx.shotCount} 镜` : "待开始";
-    case "shots":
+    }
+    case "shots": {
       return ctx.shotCount > 0 ? `图 ${ctx.imageDoneCount}/${ctx.shotCount}` : "待开始";
-    case "video":
+    }
+    case "video": {
       return ctx.shotCount > 0 ? `片段 ${ctx.clipDoneCount}/${ctx.shotCount}` : "待开始";
-    case "render":
+    }
+    case "render": {
       return ctx.shotCount > 0 ? "可合成" : "待开始";
-    default:
+    }
+    default: {
       return ctx.scriptReady ? "已就绪" : "待开始";
+    }
   }
 }
 
 /** 前置未满足时的温和提示(纯建议,不阻断)。 */
 export function stagePrereq(id: Tab, ctx: StageViewContext): { go: Tab; text: string } | null {
   switch (id) {
-    case "character":
+    case "character": {
       return ctx.scriptReady
         ? null
         : {
             text: "建议先完成「剧本」— 角色卡会自动复用剧本文本提取角色。",
             go: "script",
           };
-    case "storyboard":
+    }
+    case "storyboard": {
       return ctx.scriptReady
         ? null
         : {
             text: "建议先完成「剧本」— 分镜提取依赖剧本文本,角色可自动并入镜头。",
             go: "script",
           };
-    case "shots":
+    }
+    case "shots": {
       return ctx.shotCount > 0
         ? null
         : {
             text: "建议先完成「场景分镜」— 镜头提示词与角色参考会自动带入本阶段。",
             go: "storyboard",
           };
-    case "video":
+    }
+    case "video": {
       return ctx.shotCount > 0
         ? null
         : {
             text: "建议先完成「场景分镜」— 镜头时长与运动设定会自动带入本阶段。",
             go: "storyboard",
           };
-    case "render":
+    }
+    case "render": {
       return ctx.shotCount > 0
         ? null
         : {
             text: "建议先完成「场景分镜」与生成 — 成片时间线直接消费镜头数据。",
             go: "storyboard",
           };
-    default:
+    }
+    default: {
       return null;
+    }
   }
 }
 
