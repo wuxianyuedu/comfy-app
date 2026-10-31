@@ -63,7 +63,13 @@ import {
   runToolchainGate as preflightRunToolchainGate,
   shellStaleWarning,
 } from "./launcher-core/preflight.mjs";
-import { defaultShellExe, resetShellPidFile } from "./launcher-core/shell-ops.mjs";
+import {
+  defaultShellExe,
+  ensureSplashResource as shellOpsEnsureSplash,
+  killShellFromPidFile as shellOpsKillShell,
+  resetShellPidFile,
+  spawnShell as shellOpsSpawnShell,
+} from "./launcher-core/shell-ops.mjs";
 import { startShellStage } from "./launcher-core/shell-stage.mjs";
 import { runStartupGates } from "./launcher-core/startup-gates.mjs";
 import { bootDevServerStage } from "./launcher-core/dev-boot.mjs";
@@ -74,14 +80,11 @@ import {
 } from "./launcher-core/misc-ops.mjs";
 import {
   reapAll as portReapReapAll,
+  reapProcessTree,
   reapStaleSession as portReapReapStale,
   reconcilePort as portReapReconcilePort,
+  scanPorts,
 } from "./launcher-core/port-reap.mjs";
-import {
-  ensureSplashResource as shellOpsEnsureSplash,
-  killShellFromPidFile as shellOpsKillShell,
-  spawnShell as shellOpsSpawnShell,
-} from "./launcher-core/shell-ops.mjs";
 // `COMFY_EXECUTOR` 判据的纯 Node 侧唯一定义（与 executor-host.mjs 共用，ADR §14 D5）
 import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
 import { pruneTimestampedLogs, syncNextCache } from "./launcher-core/worktree.mjs";
@@ -240,8 +243,6 @@ const preflightCtx = {
 // `reapProcessTree` 是纯转发（转 kill-process-tree.ts），无状态 —— 但它是
 // 桌面壳层与收尾路径共用的**唯一整树回收出口**，所以仍从本文件导出（薄包装在
 // 下方 `shellOpsCtx` 里也引用它，同一份实现、不抄第二遍）。
-
-import { reapProcessTree, scanPorts } from "./launcher-core/port-reap.mjs";
 
 export { reapProcessTree, scanPorts };
 

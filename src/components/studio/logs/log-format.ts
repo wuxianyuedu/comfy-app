@@ -11,8 +11,7 @@
  * @module logs/log-format — 日志行的时间与文本格式化（**唯一口径**）
  */
 
-import { formatClock } from "~/lib/time-format";
-import { formatShortDate } from "~/lib/time-format";
+import { formatClock, formatShortDate } from "~/lib/time-format";
 
 /** 两个时刻是否同一天（决定行首是否补月-日）。 */
 export function isSameDay(a: Date, b: Date): boolean {

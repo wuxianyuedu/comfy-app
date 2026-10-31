@@ -21,7 +21,7 @@ import { useMemo } from "react";
 import { SettingsShell } from "~/components/settings/SettingsShell";
 import { Button } from "~/components/ui/button";
 import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
-import type { Section } from "./hooks/use-settings-page";
+import type { Section, ReadySettingsPageController } from "./hooks/use-settings-page";
 
 import { AppUpdateSection } from "./components/AppUpdateSection";
 import { BackupSection } from "./components/BackupSection";
@@ -34,7 +34,6 @@ import { LlmLocalSection } from "./components/LlmLocalSection";
 import { LlmRemoteSection } from "./components/LlmRemoteSection";
 import { UpdateCheckSection } from "./components/UpdateCheckSection";
 import { useRemoteModelDialogs } from "./hooks/use-remote-model-dialogs";
-import type { ReadySettingsPageController } from "./hooks/use-settings-page";
 
 export function SettingsPageView({
   c,

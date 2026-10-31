@@ -20,15 +20,15 @@ import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
 import { StatusDot } from "~/components/ui/status-dot";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { modeLabel } from "./workflow-library-config";
-import { WorkflowNodeOutputsRow } from "~/components/studio/workflow-form/WorkflowNodeParts";
-import { PortHandle } from "~/components/studio/workflow-form/WorkflowPortHandle";
 import {
+  WorkflowNodeOutputsRow,
   WorkflowNodeCardShell,
   WorkflowNodeDivider,
   WorkflowNodeHeader,
   WorkflowNodePill,
   WorkflowStaticChip,
 } from "~/components/studio/workflow-form/WorkflowNodeParts";
+import { PortHandle } from "~/components/studio/workflow-form/WorkflowPortHandle";
 
 export type LibraryHostCardProps = {
   /** 生成按钮。 */
