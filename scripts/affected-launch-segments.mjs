@@ -39,8 +39,12 @@ export function planSeparatedLaunches(files) {
   const affected = files.filter((f) => !FIXED_STRUCTURAL_TESTS.includes(f));
   /** @type {{kind: 'fixed' | 'affected', files: string[]}[]} */
   const out = [];
-  for (const chunk of planLaunches(fixed)) out.push({ kind: "fixed", files: chunk });
-  for (const chunk of planLaunches(affected)) out.push({ kind: "affected", files: chunk });
+  for (const chunk of planLaunches(fixed)) {
+    out.push({ kind: "fixed", files: chunk });
+  }
+  for (const chunk of planLaunches(affected)) {
+    out.push({ kind: "affected", files: chunk });
+  }
   return out;
 }
 

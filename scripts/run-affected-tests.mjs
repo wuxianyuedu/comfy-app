@@ -371,7 +371,9 @@ async function main(argv) {
    * `isNoiseLine` 透传给每一遍 spawn。本地不设该变量 ⇒ `enabled` 为 false，不过滤
    * （开发者排错仍要看这些日志）。判据见 `affected-launch-noise-reporter.mjs`。 */
   const noise = resolveNoiseFilter(process.env.COMFY_AFFECTED_NOISE_FILTER);
-  if (noise.note) process.stderr.write(`[affected-launch] ${noise.note}\n`);
+  if (noise.note) {
+    process.stderr.write(`[affected-launch] ${noise.note}\n`);
+  }
   /* 分文件耗时的落点：钩子 `export` 出来的 `$LOGD`，或平台入口 `ci-affected-tests.mjs`
    * 自己造的一份（同一份布局，随本次跑清理 —— 那一格此前拿不到 junit，复跑面每次都
    * 退回整块，ISSUE #2074）。没有它（人自己跑这一档 / 不在执行者里）就一个字都不加 ——
