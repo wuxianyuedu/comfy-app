@@ -132,7 +132,6 @@ export function FilmStudioPropertyPanel({
         {c.shotSource === "project" ? (
           <p className="text-ink-fainter bg-canvas/60 border-border text-2xs rounded-lg border px-3 py-2 leading-relaxed">
             将使用当前项目的 {c.projectShotCount}
-            {""}
             个镜头逐镜生成成片（镜头提示词与风格由工坊产出）。
             如需增删或改镜头，请回到「工坊」调整后再来成片。
           </p>

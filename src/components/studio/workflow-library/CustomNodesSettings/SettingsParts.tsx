@@ -168,11 +168,10 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
         <StatusDot pulse sizeClass="size-2" state="busy" />
         {progress.phase === "hash" && progress.total > 0 ? (
           <span className="text-ink">
-            🔎 正在处理{""}
+            🔎 正在处理
             <span className="font-mono">
               {progress.done}/{progress.total}
             </span>
-            {""}
             个节点包
             {progress.parent && (
               <span
@@ -186,7 +185,6 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
         ) : progress.phase === "scan" && progress.discovered > 0 ? (
           <span className="text-ink">
             📦 已发现 <span className="font-mono">{progress.discovered}</span>
-            {""}
             个节点包
             <span className="text-muted-foreground text-2xs ml-2">（总数待定，正在扫描…）</span>
           </span>

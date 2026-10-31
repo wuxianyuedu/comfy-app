@@ -194,7 +194,7 @@ export function ProjectOutputsMetadataSheet({
                   </Button>
                 </div>
                 <p className="text-ink-fainter text-2xs mt-2">
-                  文件已保存至{""}
+                  文件已保存至
                   {/* 形状取自布局那一处定义；组件里抄字面量会在搬根那天说错话。 */}
                   <span className="text-ink-muted font-mono">
                     {artifactDirDisplay(selected.id, projectId)}

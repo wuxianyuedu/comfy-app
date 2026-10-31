@@ -199,7 +199,6 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         ) : (
           <p className="text-muted-foreground text-xs">
             未找到自定义节点目录 —— 请先在 设置 → 创作后端 中配置 ComfyUI 安装路径，目录会自动推导为
-            {""}
             <code className="font-mono">&lt;comfyuiPath&gt;/custom_nodes</code>。
           </p>
         )}

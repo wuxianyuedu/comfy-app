@@ -80,7 +80,7 @@ export const Danger: Story = {
     <Demo
       confirmLabel="删除"
       danger
-      description={"项目产物与运行记录会一起删掉，此操作不可撤销。"}
+      description="项目产物与运行记录会一起删掉，此操作不可撤销。"
       title="删除这个项目？"
     />
   ),
