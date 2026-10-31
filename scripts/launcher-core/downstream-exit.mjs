@@ -65,25 +65,25 @@ export function describeDownstreamExit(kind, ctx) {
   if (kind === "shell-self-exited") {
     return (
       `本地服务随桌面壳一起退出（壳自身以非零码结束，exit=${ctx.shellCode ?? "?"}）。` +
-      "壳侧判据：log/launcher/dev-launcher-stderr.log 里的 `exiting with non-zero code`；" +
-      "若附近还有 `another instance of this checkout is running`，说明这次启动只是把已在运行的窗口唤到前台" +
-      "——本次双击没有启动新进程，属于设计内行为。\n" +
-      tail
+      `壳侧判据：log/launcher/dev-launcher-stderr.log 里的 \`exiting with non-zero code\`；` +
+      `若附近还有 \`another instance of this checkout is running\`，说明这次启动只是把已在运行的窗口唤到前台` +
+      `——本次双击没有启动新进程，属于设计内行为。\n${
+      tail}`
     );
   }
   if (kind === "shell-terminated") {
     return (
       `本地服务随桌面壳一起退出（exit=${ctx.shellCode ?? "?"}），且 log/launcher/dev-launcher-stderr.log 里` +
-      "**没有**壳写下的任何收尾标记——说明壳是被强行收走的（另一次启动把它顶掉 / 任务管理器结束了任务 / 壳崩溃）。" +
-      "这次双击等于**从未启动**：请只双击一次启动入口并等启动页自己切到主界面。" +
-      "另请对照 log/shell/shell.log 与 dev-launcher-stderr.log。\n" +
-      tail
+      `**没有**壳写下的任何收尾标记——说明壳是被强行收走的（另一次启动把它顶掉 / 任务管理器结束了任务 / 壳崩溃）。` +
+      `这次双击等于**从未启动**：请只双击一次启动入口并等启动页自己切到主界面。` +
+      `另请对照 log/shell/shell.log 与 dev-launcher-stderr.log。\n${
+      tail}`
     );
   }
   return (
     `Next.js dev server 提前退出（exit=${ctx.devCode ?? "?"}）。` +
-    "壳仍在运行，属 dev server 自身退出（编译失败 / 端口被占 / pnpm 异常）。\n" +
-    tail
+    `壳仍在运行，属 dev server 自身退出（编译失败 / 端口被占 / pnpm 异常）。\n${
+    tail}`
   );
 }
 

@@ -343,10 +343,10 @@ const bySection = fragments.reduce(
   /** @type {Record<string, string[]>} */ ({}),
 );
 console.log(
-  `[merge-changelog] 待并入 ${fragments.length} 个碎片:` +
+  `[merge-changelog] 待并入 ${fragments.length} 个碎片:${
     Object.entries(bySection)
       .map(([s, ns]) => `\n  ${s}: ${ns.join(", ")}`)
-      .join(""),
+      .join("")}`,
 );
 
 /* 锚:**本轮条目里最早的那个提交**。显式给的优先,否则取当前 HEAD —— 碎片是随那次

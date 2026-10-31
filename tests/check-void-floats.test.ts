@@ -156,7 +156,7 @@ void a();`,
       ruleVersion: number;
     };
     json.ruleVersion = 999;
-    writeFileSync(p, JSON.stringify(json, null, 2) + "\n", "utf8");
+    writeFileSync(p, `${JSON.stringify(json, null, 2)}\n`, "utf8");
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toMatch(/基线判据版本不一致/);

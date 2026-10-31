@@ -510,12 +510,12 @@ export function formatReadout(rows, ctx) {
     .slice(0, 3);
   const totalMs = rows.reduce((sum, r) => sum + (r.ms ?? 0), 0);
   lines.push(
-    `耗时：${rows.length} 条探针合计 ${totalMs}ms` +
-      (slowest.length
+    `耗时：${rows.length} 条探针合计 ${totalMs}ms${
+      slowest.length
         ? `，最慢的 ${slowest.length} 条 ${slowest
             .map((r) => `${r.path}=${r.ms}ms`)
             .join(" · ")}`
-        : ""),
+        : ""}`,
   );
   lines.push(
     "读数不做判据：这一格量的是平台怎么给权限，红了不构成任何结论（恒退 0）。" +

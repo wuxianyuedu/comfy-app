@@ -263,15 +263,15 @@ export function imageIdentity({
     );
   } else {
     lines.push(
-      "判读：这台机**没有声明镜像身份**（裸装机形态，不是错误）。" +
-        "要让「环境长自哪一版」可追，装机时把下面两个环境变量钉成机器级：\n" +
-        "        · " +
-        IMAGE_ENV +
-        "=<registry>/<namespace>/<repo>:<版本标签>（**别用 latest**）\n" +
-        "        · " +
-        DIGEST_ENV +
-        "=sha256:…（`docker image inspect --format '{{index .RepoDigests 0}}' <镜像>` 取）\n" +
-        "      口径与「宿主侧怎么用起来」见 docs/standards/13-提交与-code-review.md §13.5.3.4.1。",
+      `判读：这台机**没有声明镜像身份**（裸装机形态，不是错误）。` +
+        `要让「环境长自哪一版」可追，装机时把下面两个环境变量钉成机器级：\n` +
+        `        · ${
+        IMAGE_ENV
+        }=<registry>/<namespace>/<repo>:<版本标签>（**别用 latest**）\n` +
+        `        · ${
+        DIGEST_ENV
+        }=sha256:…（\`docker image inspect --format '{{index .RepoDigests 0}}' <镜像>\` 取）\n` +
+        `      口径与「宿主侧怎么用起来」见 docs/standards/13-提交与-code-review.md §13.5.3.4.1。`,
     );
   }
   if (image !== undefined && image !== null && String(image).trim() !== "" && dig === "missing") {

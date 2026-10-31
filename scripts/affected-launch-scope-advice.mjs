@@ -103,11 +103,11 @@ export function scopeAdvice(input) {
   /** 去掉最大的那一刀之后还剩多少（估算，见上面那条不可加的口径）。 */
   const rest = biggest ? affected - biggest.affected : affected;
   const lines = [
-    `[affected-launch] 改动面这件事：本次 ${total} 份用例（固定 ${fixed} + 受影响 ${affected}）` +
-      (elapsedMs === undefined
+    `[affected-launch] 改动面这件事：本次 ${total} 份用例（固定 ${fixed} + 受影响 ${affected}）${
+      elapsedMs === undefined
         ? "。"
         : `，这一档实测墙钟 ${fmtSec(elapsedMs)}` +
-          " —— 「不改代码」那一档（只加一个 changelog 碎片）约 28s。"),
+          " —— 「不改代码」那一档（只加一个 changelog 碎片）约 28s。"}`,
     "  受影响面是按**反向 import 闭包**算的，所以一个被广泛 import 的文件会把面撑得很大；",
     "  这件事与「这次改动本身难不难」无关 —— 它是**代价**，不是判据，本行不阻断提交。",
   ];
@@ -118,7 +118,7 @@ export function scopeAdvice(input) {
         .slice(0, 3)
         .map(
           (t) =>
-            `    · ${t.file} → 受影响 ${t.affected} 份` + (t === biggest ? "（最大的一刀）" : ""),
+            `    · ${t.file} → 受影响 ${t.affected} 份${t === biggest ? "（最大的一刀）" : ""}`,
         ),
     );
     if (rest > 0) {
@@ -133,5 +133,5 @@ export function scopeAdvice(input) {
     "  真要压并发：`COMFY_PRECOMMIT_MAX_WORKERS=1 git commit …`（只调并发，不碰任何判据）。",
     "  规范 §13.5.8.1 / §13.5.8.2「第六笔账」。",
   );
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }

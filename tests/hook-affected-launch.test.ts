@@ -210,7 +210,7 @@ describe("受影响用例的启动器", () => {
   });
 
   it("单条路径就超预算时点名红，不静默丢掉它", () => {
-    const tooLong = ["src/" + "a".repeat(SAFE_ARGV_BUDGET) + ".test.ts"];
+    const tooLong = [`src/${"a".repeat(SAFE_ARGV_BUDGET)}.test.ts`];
     expect(() => planLaunches(tooLong, SAFE_ARGV_BUDGET)).toThrow(/单个路径就超过命令行长预算/);
   });
 

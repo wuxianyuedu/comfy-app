@@ -33,7 +33,7 @@ function writeModule(
     { length: lines },
     (_, i) => `const ${prefix}_${i} = ${i};`,
   );
-  repo.write(rel, body.join("\n") + "\n");
+  repo.write(rel, `${body.join("\n")}\n`);
 }
 
 /** 把一份实现复制成「孪生」：**逐行相同**，只是换个文件名/头部注释 ——

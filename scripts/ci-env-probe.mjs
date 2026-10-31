@@ -484,10 +484,10 @@ export function envProbe({
     const bad = ps7OnlySyntaxIn(configText);
     if (bad.length > 0) {
       problems.push(
-        "`.cnb.yml` 里有宿主的 Windows PowerShell（5.1）认不了的语法面：\n" +
-          bad.map((l) => `      ${l}`).join("\n") +
-          "\n      —— 它们**不会在解析期报错**，只会在跑到那一步时整段炸。" +
-          "宿主是节点上的默认 powershell（pwsh 7 才认 `?.` / `??`）。",
+        `\`.cnb.yml\` 里有宿主的 Windows PowerShell（5.1）认不了的语法面：\n${
+          bad.map((l) => `      ${l}`).join("\n")
+          }\n      —— 它们**不会在解析期报错**，只会在跑到那一步时整段炸。` +
+          `宿主是节点上的默认 powershell（pwsh 7 才认 \`?.\` / \`??\`）。`,
       );
     } else {
       notes.push("`.cnb.yml` 的 script 块只用宿主 PowerShell 认的语法面");
@@ -593,12 +593,9 @@ export function envProbe({
     notes.push(`${codes}${notTheSwitch}`);
   } else {
     notes.push(
-      `${codes}；chcp 读数 ${encoding.chcpRaw ?? "没量到"}` +
-        (encodingOk
+      `${codes}；chcp 读数 ${encoding.chcpRaw ?? "没量到"}${encodingOk
           ? notTheSwitch
-          : "\n      下一动作：让流水线第一步先跑 " +
-            "`node scripts/ci-console-encoding.mjs --apply`（「工具链自证」的第一步就是它）。" +
-            notTheSwitch),
+          : `\n      下一动作：让流水线第一步先跑 \`node scripts/ci-console-encoding.mjs --apply\`（「工具链自证」的第一步就是它）。${notTheSwitch}`}`,
     );
   }
 
@@ -657,9 +654,9 @@ export function envProbe({
     if (already.ok) {
       notes.push(
         `浏览器落点上已经有那一件（${already.out}）—— ` +
-          "`" +
-          BROWSER_INSTALL_STAGE +
-          "` 会走「已装，跳过下载」，这一格不依赖网络",
+          `\`${
+          BROWSER_INSTALL_STAGE
+          }\` 会走「已装，跳过下载」，这一格不依赖网络`,
       );
     } else {
       /* 配置里那一步会用的根（读不到那条配置 / 那个键时退回「按本步 env」的老口径
@@ -692,38 +689,22 @@ export function envProbe({
           /* 话术里的 stage 名一律取 `BROWSER_INSTALL_STAGE`：读不到配置那一步的根
            * 时，人照着红话去改的那一行必须**就是**这一格读的那一格。名字散在
            * 消息里写死，下一次挪档就会把人指到一个不存在的 stage 上。 */
-          (configuredHost
-            ? "浏览器落点是空的，而 `.cnb.yml` 给 `" +
-              BROWSER_INSTALL_STAGE +
-              "` 配的那个下载根" +
-              `（${configuredHost}）**取不回字节** —— `
-            : "浏览器落点是空的，而**一个下载根都到不了** —— ") +
-            "`" +
-            BROWSER_INSTALL_STAGE +
-            "` 那一步排在倒数第二（E2E 之前），照这个读数它**必然**会在" +
-            "那里失败，而那时前面三十步的预算已经花掉了。\n" +
-            `      实测过的现场：${verdicts[0]?.root ?? "（没有候选）"} → ` +
-            `${verdicts[0]?.verdict ?? "?"}\n` +
-            "      下一动作（前两条在人不在仓）：\n" +
-            (configuredHost
-              ? "        · 把这台节点**真能到**的镜像根换到 `.cnb.yml` 的 `" +
-                BROWSER_INSTALL_STAGE +
-                "` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上 —— 就是上面" +
-                "「下载根探测」那几行里判通的那一个；\n"
-              : "        · 把这台节点**真能到**的镜像根配到 `.cnb.yml` 的 `" +
-                BROWSER_INSTALL_STAGE +
-                "` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上；\n") +
-            "        · 或给节点配内网代理 / 放行镜像域；\n" +
-            "        · 或**预先把 `chromium-headless-shell` 装进节点的落点** —— " +
-            "装过一次之后这一格就再也不碰网络（长期存在的机器上这是最省事的一条）。",
+          `${
+            configuredHost
+              ? `浏览器落点是空的，而 \`.cnb.yml\` 给 \`${BROWSER_INSTALL_STAGE}\` 配的那个下载根（${configuredHost}）**取不回字节** —— `
+              : "浏览器落点是空的，而**一个下载根都到不了** —— "
+          }\`${BROWSER_INSTALL_STAGE}\` 那一步排在倒数第二（E2E 之前），照这个读数它**必然**会在那里失败，而那时前面三十步的预算已经花掉了。\n      实测过的现场：${verdicts[0]?.root ?? "（没有候选）"} → ${verdicts[0]?.verdict ?? "?"}\n      下一动作（前两条在人不在仓）：\n${
+            configuredHost
+              ? `        · 把这台节点**真能到**的镜像根换到 \`.cnb.yml\` 的 \`${BROWSER_INSTALL_STAGE}\` stage 的 \`PLAYWRIGHT_DOWNLOAD_HOST\` 上 —— 就是上面「下载根探测」那几行里判通的那一个；\n`
+              : `        · 把这台节点**真能到**的镜像根配到 \`.cnb.yml\` 的 \`${BROWSER_INSTALL_STAGE}\` stage 的 \`PLAYWRIGHT_DOWNLOAD_HOST\` 上；\n`
+          }        · 或给节点配内网代理 / 放行镜像域；\n        · 或**预先把 \`chromium-headless-shell\` 装进节点的落点** —— 装过一次之后这一格就再也不碰网络（长期存在的机器上这是最省事的一条）。`,
         );
       } else {
         notes.push(
-          `浏览器落点是空的，而${configuredHost ? "配置里那个根" : "下载根"}` +
-            `有 ${reachable.length}/${verdicts.length} 条真取回了字节` +
-            "（`" +
-            BROWSER_INSTALL_STAGE +
-            "` 那一步应该装得成）",
+          `浏览器落点是空的，而${configuredHost ? "配置里那个根" : "下载根"}有 ${reachable.length}/${verdicts.length} 条真取回了字节` +
+            `（\`${
+            BROWSER_INSTALL_STAGE
+            }\` 那一步应该装得成）`,
         );
       }
       if (configuredHost) {
@@ -739,9 +720,9 @@ export function envProbe({
      * 但它要留一条读数，否则这一步会看起来像「浏览器那一格没在判」。 */
     notes.push(
       `浏览器前提探测本身出错：${/** @type {Error} */ (error).message} —— ` +
-        "本步不据此判红（那一格仍归 `" +
-        BROWSER_INSTALL_STAGE +
-        "`）",
+        `本步不据此判红（那一格仍归 \`${
+        BROWSER_INSTALL_STAGE
+        }\`）`,
     );
   }
 
@@ -763,9 +744,8 @@ export function envProbe({
     const ensured = ensureDir(tempRoot);
     if (ensured.ok) {
       notes.push(
-        `临时根 ${tempRoot}` +
-          (ensured.created ? "（原先不存在，这一格刚补出来）" : "（已在）") +
-          `·TMP=${env.TMP ?? "(未设)"}`,
+        `临时根 ${tempRoot}${ensured.created ? "（原先不存在，这一格刚补出来）" : "（已在）"
+          }·TMP=${env.TMP ?? "(未设)"}`,
       );
     } else {
       problems.push(

@@ -164,6 +164,6 @@ if (entry !== "" && path.resolve(entry) === path.resolve(import.meta.filename)) 
   if (process.argv.includes("--json")) {
     process.stdout.write(JSON.stringify({ ok: true, offenders: [] }));
   } else {
-    process.stdout.write(msg + "\n");
+    process.stdout.write(`${msg}\n`);
   }
 }

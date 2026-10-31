@@ -419,10 +419,10 @@ function main(argv = process.argv.slice(2), deps = {}) {
     write(
       `[tracked-secrets] ✓ ${ALL ? "全仓被跟踪文本" : "本次暂存的新增行"}（${scanned} ${
         ALL ? "份文件" : "个文件"
-      }）没有凭据形状。` +
-        (unreadable.length > 0
+      }）没有凭据形状。${
+        unreadable.length > 0
           ? ` 另有 ${unreadable.length} 份读不到 ⇒ 它们**不在**这一格的分母里。\n`
-          : "\n"),
+          : "\n"}`,
     );
     return 0;
   }
@@ -433,7 +433,7 @@ function main(argv = process.argv.slice(2), deps = {}) {
   for (const h of found) {
     write(`  · ${h.file}:${h.line} —— ${h.shape}\n`);
   }
-  write(HOW_TO_FIX + "\n");
+  write(`${HOW_TO_FIX}\n`);
   return 1;
 }
 

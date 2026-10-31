@@ -188,10 +188,10 @@ function analyze({
     }
     const looser = isLooser(e, e.value, got.value);
     problems.push(
-      `${line} ⇒ 源码与账不同步。这次是**${looser ? "变松（放宽判据）" : "变严"}**：` +
-        (looser
+      `${line} ⇒ 源码与账不同步。这次是**${looser ? "变松（放宽判据）" : "变严"}**：${
+        looser
           ? `要放宽就把账一起改成 ${got.value} 并写 movedFrom / movedIssue —— 让它在 diff 里显形，而不是只动源码`
-          : "收紧也要同批改账，否则下一次有人「顺手复原」就没人看得出来"),
+          : "收紧也要同批改账，否则下一次有人「顺手复原」就没人看得出来"}`,
     );
   }
 
@@ -271,9 +271,9 @@ function analyze({
       if (!signed) {
         problems.push(
           `${e.file}#${e.const} 相对主干是**放宽**（${prev.value} → ${e.value}），` +
-            '但账上没有签字 —— 写 "movedFrom": ' +
-            prev.value +
-            ', "movedIssue": "#<issue号>" 再来（放宽判据要有一份说清为什么的单子，不是改个数字）。',
+            `但账上没有签字 —— 写 "movedFrom": ${
+            prev.value
+            }, "movedIssue": "#<issue号>" 再来（放宽判据要有一份说清为什么的单子，不是改个数字）。`,
         );
       }
     }
@@ -392,7 +392,7 @@ function main(argv = process.argv.slice(2)) {
   }
   if (AS_JSON) {
     process.stdout.write(
-      JSON.stringify({ entries: entries.length, problems, notes }, null, 2) + "\n",
+      `${JSON.stringify({ entries: entries.length, problems, notes }, null, 2)}\n`,
     );
     return problems.length && !REPORT_ONLY ? 1 : 0;
   }

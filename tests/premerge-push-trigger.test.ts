@@ -47,9 +47,9 @@ describe("ref 行解析与候选筛选（§13.6.2.1）", () => {
   it("master 本身、tag、以及删除（local 全零）都不是候选", () => {
     const refs = parseRefLines(
       [
-        "refs/heads/master\t" + HEAD + "\trefs/heads/master\t" + UPSTREAM,
-        "refs/tags/v1\t" + HEAD + "\trefs/tags/v1\t" + "0".repeat(40),
-        "(delete)\t" + "0".repeat(40) + "\trefs/heads/feat/gone\t" + HEAD,
+        `refs/heads/master\t${HEAD}\trefs/heads/master\t${UPSTREAM}`,
+        `refs/tags/v1\t${HEAD}\trefs/tags/v1\t${"0".repeat(40)}`,
+        `(delete)\t${"0".repeat(40)}\trefs/heads/feat/gone\t${HEAD}`,
         refLine(),
       ].join("\n"),
     );
@@ -134,7 +134,7 @@ describe("过期判定：什么时候才值得花那 336 秒", () => {
   it("没有目标分支 ref ⇒ 不跑也不拦（推 tag 不该被这一跳卡住）", () => {
     const verdict = decidePremergePush({
       candidates: mergeCandidates(
-        parseRefLines("refs/tags/v1\t" + HEAD + "\trefs/tags/v1\t" + HEAD),
+        parseRefLines(`refs/tags/v1\t${HEAD}\trefs/tags/v1\t${HEAD}`),
       ),
       headSha: HEAD,
       upstreamSha: UPSTREAM,

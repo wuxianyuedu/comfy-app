@@ -5718,7 +5718,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       "}",
       "",
     ].join("\n");
-    const next = src.replace(defName, probe + "function __STRIP_IMPL__(text) {");
+    const next = src.replace(defName, `${probe}function __STRIP_IMPL__(text) {`);
     expect(next, "stripComments 的声明没找到 —— 本用例的前提已变").not.toBe(src);
     repo.write(rel, next);
     /* 两份**内容相同**的文件 + 第三份不同内容的文件。 */

@@ -407,6 +407,6 @@ if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.me
   if (process.argv.includes("--json")) {
     process.stdout.write(JSON.stringify({ ok: true, offenders }));
   } else {
-    process.stdout.write(msg + "\n");
+    process.stdout.write(`${msg}\n`);
   }
 }

@@ -196,11 +196,11 @@ export async function main(argv = process.argv.slice(2)) {
   if (argv.includes("--check")) {
     const where = missing ? "文件不存在" : "内容与工具输出不一致";
     process.stderr.write(
-      `${TAG} ✗ ${where}。差 ${delta.added.length} 增 / ${delta.removed.length} 删：\n` +
+      `${TAG} ✗ ${where}。差 ${delta.added.length} 增 / ${delta.removed.length} 删：\n${
         [...delta.added.map((l) => `  + ${l}`), ...delta.removed.map((l) => `  - ${l}`)]
           .slice(0, 20)
-          .join("\n") +
-        `\n  修法：pnpm qoder:ignore 后把结果一并提交（人别手改产物）。\n`,
+          .join("\n")
+        }\n  修法：pnpm qoder:ignore 后把结果一并提交（人别手改产物）。\n`,
     );
     return 1;
   }

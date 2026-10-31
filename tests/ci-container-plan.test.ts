@@ -127,7 +127,7 @@ const containerFixture = ({ bridge }: { bridge?: Array<string> } = {}) => {
   const vols = bridge ?? ["A", "B"];
   const one = (name: string) => [
     `        - name: ${name}`,
-    "          script: echo " + name,
+    `          script: echo ${name}`,
     "          jobs:",
     `            - name: ${name}`,
     "              image: mcr.microsoft.com/playwright:v1.63.0-noble",

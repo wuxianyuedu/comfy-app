@@ -497,10 +497,10 @@ function deltaLines(d, top, indent = "") {
     return out;
   }
   out.push(
-    `${indent}新增内容 ${d.added.length} 个（gzip 合计 ${kb(d.addedGzip)}，指纹在基线里找不到）` +
-      (d.gone.length
+    `${indent}新增内容 ${d.added.length} 个（gzip 合计 ${kb(d.addedGzip)}，指纹在基线里找不到）${
+      d.gone.length
         ? `；同时消失 ${d.gone.length} 个（合计 ${kb(d.goneGzip)}）⇒ 并排净差 ${delta(d.addedGzip - d.goneGzip)}`
-        : "；基线里没有配对的消失块 ⇒ 这些是真多出来的"),
+        : "；基线里没有配对的消失块 ⇒ 这些是真多出来的"}`,
   );
   out.push(
     `${indent}「新增」按内容指纹算 —— 老块内容小改导致换名也会落在这里；` +
@@ -550,12 +550,12 @@ function main() {
       console.log("  与基线的差异（按内容指纹对齐，诊断用、不参与判定）：");
       if (d.renamed.length) {
         console.log(
-          `    · 同内容换名 ${d.renamed.length} 个（不计变化）：` +
+          `    · 同内容换名 ${d.renamed.length} 个（不计变化）：${
             d.renamed
               .slice(0, 3)
               .map(([a, b]) => `${a} → ${b}`)
-              .join("、") +
-            (d.renamed.length > 3 ? " 等" : ""),
+              .join("、")
+            }${d.renamed.length > 3 ? " 等" : ""}`,
         );
       }
       for (const line of deltaLines(d, 3, "    ")) {
@@ -626,10 +626,10 @@ function main() {
     /* 用的是哪一枚锚点必须打出来：两种锚点的**失效方向不同**（主干那枚一直数得出，
      * HEAD 那枚在 squash 合入后不可达、只能改走日期通道），不写出来就只能事后猜。 */
     console.log(
-      `[bundle-budget] 基线锚点 baselineRev=${String(rev).slice(0, 8)} —— ` +
-        (anchor
+      `[bundle-budget] 基线锚点 baselineRev=${String(rev).slice(0, 8)} —— ${
+        anchor
           ? "取的是主干可达的那一枚（merge-base HEAD origin/master），squash 合入后仍数得出「其后动过几次」"
-          : "本检出问不到 origin/master，退回 HEAD —— 这一枚在 squash 合入后多半不可达，届时判红改走 generatedAt 那条第二归因（ISSUE #2082）"),
+          : "本检出问不到 origin/master，退回 HEAD —— 这一枚在 squash 合入后多半不可达，届时判红改走 generatedAt 那条第二归因（ISSUE #2082）"}`,
     );
     console.log(
       `[bundle-budget] 基线已更新（${path.relative(ROOT, BASELINE)}）：` +
@@ -679,8 +679,8 @@ function main() {
     }
     console.error(
       ENFORCE_TOTALS
-        ? "[bundle-budget] 违规（阻断）：\n  " + problems.join("\n  ")
-        : "[bundle-budget] 读数（不参与判定）：\n  " + problems.join("\n  "),
+        ? `[bundle-budget] 违规（阻断）：\n  ${problems.join("\n  ")}`
+        : `[bundle-budget] 读数（不参与判定）：\n  ${problems.join("\n  ")}`,
     );
     /* 归因先说：判红那一刻读者最该知道的是「这个读数取自哪一版源码」。
      * 缺了它，「涨了 493 字节」的第一反应必然落在「是不是抖动 / 是不是量错了」上，
@@ -709,22 +709,22 @@ function main() {
         "（基线过期 —— 本仓常态是 squash 合入后那枚分支提交不再有 ref 指向，浅克隆是另一种）——\n";
       console.error(
         byDate
-          ? staleHead +
-              `    改按基线日期 ${base.generatedAt} 归因：src/ 侧其后有 ${byDate.count} 次主干提交` +
-              (byDate.recent.length
+          ? `${staleHead
+              }    改按基线日期 ${base.generatedAt} 归因：src/ 侧其后有 ${byDate.count} 次主干提交${
+              byDate.recent.length
                 ? `（${byDate.recent.map((r) => `${r.rev} ${r.title}`).join("；")}）`
-                : "") +
-              "。\n" +
-              (byDate.count > 0
+                : ""
+              }。\n${
+              byDate.count > 0
                 ? "    ⇒ 这批读数取自基线之后的源码，涨幅可能正是那几次改动换来的。" +
                   "**别直接 --update 重记**：先按下面逐文件诊断分清「涨了」与「换了名」，" +
                   "确认这点体积该不该认账；确认之后再带 --allow-increase 重记基线（§13.5.4 例外流程）。"
                 : "    ⇒ src/ 侧其后一次提交都没有，那么这笔上涨**不是**基线之后的源码换来的。" +
-                  "**别直接 --update 重记**：先看下面逐文件诊断（§13.5.4 例外流程）。")
-          : staleHead +
-              "    基线日期那条也量不到（没有 generatedAt / 日期形状不合法 / git 不可用），" +
-              "所以这批读数与基线之间源码动过几次**判断不了**。" +
-              "**别直接 --update 重记**：先按下面逐文件诊断分清「涨了」与「换了名」（§13.5.4 例外流程）。",
+                  "**别直接 --update 重记**：先看下面逐文件诊断（§13.5.4 例外流程）。"}`
+          : `${staleHead
+              }    基线日期那条也量不到（没有 generatedAt / 日期形状不合法 / git 不可用），` +
+              `所以这批读数与基线之间源码动过几次**判断不了**。` +
+              `**别直接 --update 重记**：先按下面逐文件诊断分清「涨了」与「换了名」（§13.5.4 例外流程）。`,
       );
     } else {
       const since = commitsSinceBaseline(state.rev);
@@ -769,12 +769,12 @@ function main() {
       lines.push(...deltaLines(d, 5));
       if (d.renamed.length) {
         lines.push(
-          `  同内容换名 ${d.renamed.length} 个（不计变化）：` +
+          `  同内容换名 ${d.renamed.length} 个（不计变化）：${
             d.renamed
               .slice(0, 3)
               .map(([a, b]) => `${a} → ${b}`)
-              .join("、") +
-            (d.renamed.length > 3 ? " 等" : ""),
+              .join("、")
+            }${d.renamed.length > 3 ? " 等" : ""}`,
         );
       }
       if (d.grown.length) {

@@ -319,15 +319,15 @@ function main() {
 
   if (failed.length === 0) {
     console.log(
-      `[ast-gates] OK —— ${results.length} 条 AST 判据全绿（共享一次解析，${parsed.size / 2} 份文件）` +
-        (skipped.length ? `，另 ${skipped.length} 条未触及扫描面。` : "。"),
+      `[ast-gates] OK —— ${results.length} 条 AST 判据全绿（共享一次解析，${parsed.size / 2} 份文件）${
+        skipped.length ? `，另 ${skipped.length} 条未触及扫描面。` : "。"}`,
     );
     return 0;
   }
 
   console.error(
-    `\n[ast-gates] ${failed.length}/${results.length} 条判据红：` +
-      failed.map((r) => `${r.what}${r.tag}`).join(" · "),
+    `\n[ast-gates] ${failed.length}/${results.length} 条判据红：${
+      failed.map((r) => `${r.what}${r.tag}`).join(" · ")}`,
   );
   /* 收尾段**逐行都带 `[ast-gates]` 前缀**：这一段是聚合档自己的输出，而 `gateLines()`
    * （`tests/ast-gates-aggregate.test.ts` 的对拍）按前缀识别「哪些行属于聚合档」。

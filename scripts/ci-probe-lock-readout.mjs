@@ -450,7 +450,7 @@ export function probeConfig(opts) {
     lines.push(...body(6));
   }
   lines.push(`      timeout: ${timeout}`);
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }
 
 /**

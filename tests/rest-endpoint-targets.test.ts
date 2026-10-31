@@ -198,7 +198,7 @@ const UPSTREAM_SERVICE_ADDRESS: Record<string, string> = {
 
 /** 把地址折成比较用的规范形：丢查询串、丢尾斜杠、段序保持。 */
 function normalizeAddress(literal: string): string {
-  return "/" + endpointSegments(literal).join("/");
+  return `/${endpointSegments(literal).join("/")}`;
 }
 
 /** 登记的粒度是**整条地址**，不是前缀：`/api/trpc` 放行，`/api/trpcx` 不放行。 */

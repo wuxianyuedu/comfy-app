@@ -126,11 +126,11 @@ if (!fs.existsSync(envPath)) {
   }
   fs.writeFileSync(envPath, next, "utf8");
   process.stdout.write(
-    [
+    `${[
       "[env:init] ✓ 已生成 .env（随机密钥 + 本地 OAuth 占位值）。",
       "[env:init]   · GitHub OAuth 要真跑登录流程时，请换成自己的 client id / secret；",
       "[env:init]   · .env 已被 gitignore，凭据不会入库。",
-    ].join("\n") + "\n",
+    ].join("\n")}\n`,
   );
   process.exit(0);
 }
@@ -166,7 +166,7 @@ if (next === current) {
 
 fs.writeFileSync(envPath, next, "utf8");
 process.stdout.write(
-  [
+  `${[
     hadRequired
       ? "[env:init] ✓ 已有 .env，必填项本来就齐 ⇒ 只补缺失的键（不覆盖你的任何配置）。"
       : "[env:init] ✓ 已有 .env 但必填项为空，已就地补齐（其余配置保持不变）。",
@@ -180,13 +180,11 @@ process.stdout.write(
         /* 名字不是密钥，念出来才可核对（`ship` 念的是同一个值）。「取的」与「填的」
          * 是两件事：自动取的那个换机器 / 换会话会变，值得提醒一句。 */
         const picked = devHandleForEnvFile({ root, env: process.env });
-        return (
-          `[env:init]   · 补上缺失的键 ${key}="${picked.name}"（${picked.source}` +
-          (picked.source === "进程环境" ? "" : " ⇒ 自动取的，要固定就改这一行") +
-          "）"
-        );
+        return `[env:init]   · 补上缺失的键 ${key}="${picked.name}"（${picked.source}${
+          picked.source === "进程环境" ? "" : " ⇒ 自动取的，要固定就改这一行"
+        }）`;
       }
       return `[env:init]   · 补上缺失的键 ${key}（值照 .env.example；填你自己的再启动）`;
     }),
-  ].join("\n") + "\n",
+  ].join("\n")}\n`,
 );

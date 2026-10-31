@@ -554,9 +554,9 @@ async function main() {
 
   if (problems.length > 0) {
     console.error(
-      "[a11y-rules] jsx-a11y 的规则开关与台账对不上：\n\n  " +
-        problems.join("\n  ") +
-        "\n\n口径见 docs/standards/06-无障碍访问-a11y.md §6.12。",
+      `[a11y-rules] jsx-a11y 的规则开关与台账对不上：\n\n  ${
+        problems.join("\n  ")
+        }\n\n口径见 docs/standards/06-无障碍访问-a11y.md §6.12。`,
     );
     return 1;
   }

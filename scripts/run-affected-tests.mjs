@@ -814,12 +814,12 @@ export async function runChunk(chunk, deps) {
   if (verdict.kind === "unattributed") {
     process.stderr.write(
       `[affected-launch] ⚠ 第 2 遍仍红，而有 ${verdict.unknown.length} 份文件` +
-        "**拿不到自己的读数**（超过逐文件补跑的上限，或补跑也没落上读数）。\n" +
-        "  这一档不叫「未校验」：未校验是「确认每份都只是超时」，而这里是**分不出**。\n" +
-        "  ⇒ 本组退 2（构成结论，但不是绿，也不是红）。点名：\n" +
-        verdict.unknown.map((f) => `    · ${f}\n`).join("") +
-        "  下一动作：把那几份单独跑一次定性（串行、同一份清单，规范 §13.6.4 那条）；\n" +
-        "  **不要**抬 testTimeout，也**不要** --no-verify。\n",
+        `**拿不到自己的读数**（超过逐文件补跑的上限，或补跑也没落上读数）。\n` +
+        `  这一档不叫「未校验」：未校验是「确认每份都只是超时」，而这里是**分不出**。\n` +
+        `  ⇒ 本组退 2（构成结论，但不是绿，也不是红）。点名：\n${
+        verdict.unknown.map((f) => `    · ${f}\n`).join("")
+        }  下一动作：把那几份单独跑一次定性（串行、同一份清单，规范 §13.6.4 那条）；\n` +
+        `  **不要**抬 testTimeout，也**不要** --no-verify。\n`,
     );
     report({
       outcome: "rerun-unattributed",
@@ -831,17 +831,17 @@ export async function runChunk(chunk, deps) {
 
   if (verdict.kind === "unverified") {
     process.stderr.write(
-      "[affected-launch] **第 2 遍仍然只是超时形态**（连单进程串行都排不上）——\n" +
-        "  这一遍给不出可信读数，所以这批用例本次记为**未校验**：\n" +
-        "    · 它**不是绿**：没有证据说它通过；\n" +
-        "    · 它**也不是红**：失败的是调度，没有任何一条断言报错。\n" +
-        "  提交继续，但「哪些文件没被校验过」会在本组末尾逐条点名。\n" +
-        "  ⚠️ 这一档**不许**当成「已通过」写进提交说明；它等价于「这次没测」。\n" +
-        (settled.settled
+      `[affected-launch] **第 2 遍仍然只是超时形态**（连单进程串行都排不上）——\n` +
+        `  这一遍给不出可信读数，所以这批用例本次记为**未校验**：\n` +
+        `    · 它**不是绿**：没有证据说它通过；\n` +
+        `    · 它**也不是红**：失败的是调度，没有任何一条断言报错。\n` +
+        `  提交继续，但「哪些文件没被校验过」会在本组末尾逐条点名。\n` +
+        `  ⚠️ 这一档**不许**当成「已通过」写进提交说明；它等价于「这次没测」。\n${
+        settled.settled
           ? ""
           : `  （等待没等到回落：每核负载 ${settled.load.toFixed(2)} —— 这是**优化**没兑现，\n` +
-            "    不改变上面的结论。）\n") +
-        "  **不要**抬 testTimeout，也**不要** --no-verify。\n",
+            "    不改变上面的结论。）\n"
+        }  **不要**抬 testTimeout，也**不要** --no-verify。\n`,
     );
     /* 点名的范围必须是**这次真的没拿到可信读数的那些**，而不是整块：整块那份名单会把
      * 第一遍已经绿过的文件也写成「未校验」，而下一个人据此重跑时会在不存在的地方找问题。
@@ -855,11 +855,11 @@ export async function runChunk(chunk, deps) {
     return 0;
   }
   process.stderr.write(
-    "[affected-launch] **第 2 遍**里有文件的失败**不是**调度形态 ⇒ 这不是负载假红，按真红处置。\n" +
-      `  同块里确实还有超时的那 ${verdict.timedOut.length} 份，它们不替这几份挡：\n` +
-      verdict.hardFail.map((f) => `    · ${f}\n`).join("") +
-      "  用 `node scripts/base-check.mjs <这条>` 复算归属（你的 / 别线的），\n" +
-      "  再决定修代码还是登记 —— 不要抬 testTimeout。\n",
+    `[affected-launch] **第 2 遍**里有文件的失败**不是**调度形态 ⇒ 这不是负载假红，按真红处置。\n` +
+      `  同块里确实还有超时的那 ${verdict.timedOut.length} 份，它们不替这几份挡：\n${
+      verdict.hardFail.map((f) => `    · ${f}\n`).join("")
+      }  用 \`node scripts/base-check.mjs <这条>\` 复算归属（你的 / 别线的），\n` +
+      `  再决定修代码还是登记 —— 不要抬 testTimeout。\n`,
   );
   report({
     outcome: "real-red",

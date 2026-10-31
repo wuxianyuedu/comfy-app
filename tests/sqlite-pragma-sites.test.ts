@@ -263,12 +263,12 @@ describe("开机 PRAGMA 撞锁有界重试，当场量出来", () => {
       const desynced = rounds.filter((r) => r.arrived < RACE_PROCS);
       expect(
         threw,
-        `${rounds.length} 轮互撞一次都没抛（其中 ${desynced.length} 轮没等齐 ${RACE_PROCS} 个进程）。` +
-          (desynced.length > 0
+        `${rounds.length} 轮互撞一次都没抛（其中 ${desynced.length} 轮没等齐 ${RACE_PROCS} 个进程）。${
+          desynced.length > 0
             ? ` 没齐的那几轮量到的是「错开起跑」而不是「抢不到锁」—— 先查 tsx 冷启与机器负载` +
               `（到位上限 ${ARRIVAL_DEADLINE_MS}ms；本机冷启实测 7.4s、满载更久），别去放宽下面的断言。`
             : ` 每轮都齐步发令却没人撞锁 —— 那才是「WAL 转换不再互斥」这一前提真的变了，` +
-              `要按 ISSUE #1337 重新定性这条对照，而不是把它删掉。`),
+              `要按 ISSUE #1337 重新定性这条对照，而不是把它删掉。`}`,
       ).toBeGreaterThan(0);
     },
     RACE_CASE_TIMEOUT_MS,
@@ -489,7 +489,7 @@ async function racePragmaBoot(mode: "bare" | "retry"): Promise<RaceRound> {
  */
 async function waitForArrivals(startFile: string, expectCount: number): Promise<number> {
   const dir = path.dirname(startFile);
-  const base = path.basename(startFile) + ".arrived.";
+  const base = `${path.basename(startFile)}.arrived.`;
   const deadline = Date.now() + ARRIVAL_DEADLINE_MS;
   let arrived = 0;
   while (Date.now() < deadline) {

@@ -134,7 +134,7 @@ function main() {
   const liveTotal = live.size;
 
   if (REPORT_ONLY) {
-    console.log(`[gate-repo-boilerplate] 盘点：手搓样板 ${liveTotal} 份。` + note);
+    console.log(`[gate-repo-boilerplate] 盘点：手搓样板 ${liveTotal} 份。${note}`);
     for (const rel of [...live.keys()].sort()) {
       console.log(`  · ${rel}`);
     }
@@ -159,11 +159,11 @@ function main() {
     for (const rel of [...live.keys()].sort()) {
       console.error(`  · ${rel}`);
     }
-    console.error("\n口径见 docs/standards/11-测试与可观测性.md §11.16.1。" + note);
+    console.error(`\n口径见 docs/standards/11-测试与可观测性.md §11.16.1。${note}`);
     return 1;
   }
 
-  console.log(`[gate-repo-boilerplate] OK —— 手搓样板 0 份。` + note);
+  console.log(`[gate-repo-boilerplate] OK —— 手搓样板 0 份。${note}`);
   return 0;
 }
 

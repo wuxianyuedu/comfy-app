@@ -220,15 +220,15 @@ function main(parsed) {
 
   if (Object.keys(current).length > 0) {
     console.error(
-      "[non-null] src 里出现非空断言 `!`(§18 lib 规范 + 类型安全审查 src/lib 报告 Low 段的扩展):\n" +
+      `[non-null] src 里出现非空断言 \`!\`(§18 lib 规范 + 类型安全审查 src/lib 报告 Low 段的扩展):\n${
         Object.entries(current)
           .sort((a, b) => b[1] - a[1])
           .map(([rel, n]) => `  · ${rel}: ${n} 处`)
-          .join("\n") +
-        "\n  修法:改用 type predicate(如 (x): x is T => 判据)/ ?? 兜底 / 显式空值守卫 / `for...of`,\n" +
-        "  让**判据与用法**同一处落地,而不是把「同一件事用两次」写进类型系统。\n" +
-        "  若确属「下标/返回值在结构上必然存在」的合法用法(如正则捕获组),\n" +
-        "  在脚本的 `LEGIT_SITES` 里逐条登记理由 —— 那是这条判据唯一的例外车道。",
+          .join("\n")
+        }\n  修法:改用 type predicate(如 (x): x is T => 判据)/ ?? 兜底 / 显式空值守卫 / \`for...of\`,\n` +
+        `  让**判据与用法**同一处落地,而不是把「同一件事用两次」写进类型系统。\n` +
+        `  若确属「下标/返回值在结构上必然存在」的合法用法(如正则捕获组),\n` +
+        `  在脚本的 \`LEGIT_SITES\` 里逐条登记理由 —— 那是这条判据唯一的例外车道。`,
     );
     process.exit(1);
   }

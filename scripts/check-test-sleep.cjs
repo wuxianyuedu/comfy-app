@@ -366,10 +366,10 @@ function main() {
 
   if (liveTotal === 0) {
     console.log(
-      `[test-sleep] OK —— 裸 sleep 0 处 / 声明豁免 ${exemptTotal} 处。` +
+      `[test-sleep] OK —— 裸 sleep 0 处 / 声明豁免 ${exemptTotal} 处。${
         /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。静默让判据在没读过的
            目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
-        vanishedNote(vanished),
+        vanishedNote(vanished)}`,
     );
     return 0;
   }
@@ -387,12 +387,12 @@ function main() {
   );
   for (const [rel, sites] of [...live.entries()].sort()) {
     console.error(
-      `  · ${rel}: ${sites.length} 处\n` +
+      `  · ${rel}: ${sites.length} 处\n${
         sites
           .slice(0, 6)
           .map((s) => `      ${s.line}: ${s.text}`)
-          .join("\n") +
-        (sites.length > 6 ? `\n      …另有 ${sites.length - 6} 处` : ""),
+          .join("\n")
+        }${sites.length > 6 ? `\n      …另有 ${sites.length - 6} 处` : ""}`,
     );
   }
   console.error("\n口径见 docs/standards/11-测试与可观测性.md §11.14。");

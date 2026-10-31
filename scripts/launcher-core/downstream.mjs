@@ -135,7 +135,7 @@ export async function syncDependencies(ctx, root, deps = {}) {
 
   const invocation = pnpmInvocation(["install"]);
   if (!invocation) {
-    return "pnpm 不在 PATH 上，无法补装依赖（先执行 corepack enable）。\n" + describePnpmMiss();
+    return `pnpm 不在 PATH 上，无法补装依赖（先执行 corepack enable）。\n${describePnpmMiss()}`;
   }
   const result = runSync(invocation.command, invocation.args, {
     cwd: root,

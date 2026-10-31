@@ -178,7 +178,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
   it("已存在且必填项非空时跳过，不动用户内容", () => {
     const example = fs.readFileSync(EXAMPLE, "utf8");
     const filled = example
-      .replace(/^BETTER_AUTH_SECRET=.*$/m, 'BETTER_AUTH_SECRET="' + "a".repeat(64) + '"')
+      .replace(/^BETTER_AUTH_SECRET=.*$/m, `BETTER_AUTH_SECRET="${"a".repeat(64)}"`)
       .replace(/^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_ID="mine"')
       .replace(/^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"');
     const before = filled;
@@ -192,7 +192,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
     const example = fs.readFileSync(EXAMPLE, "utf8");
     // 模拟「早在 #2175 之前生成的 .env」：必填齐、改过日志级别、没有后来新增的那个可选键。
     const mine = example
-      .replace(/^BETTER_AUTH_SECRET=.*$/m, 'BETTER_AUTH_SECRET="' + "b".repeat(64) + '"')
+      .replace(/^BETTER_AUTH_SECRET=.*$/m, `BETTER_AUTH_SECRET="${"b".repeat(64)}"`)
       .replace(/^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_ID="mine"')
       .replace(/^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"')
       .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "")
@@ -220,7 +220,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
   it("负控制：注释形态的可选键不被提升成真值（端口钉回 3100 会打散并行检出）", () => {
     const example = fs.readFileSync(EXAMPLE, "utf8");
     const mine = example
-      .replace(/^BETTER_AUTH_SECRET=.*$/m, 'BETTER_AUTH_SECRET="' + "d".repeat(64) + '"')
+      .replace(/^BETTER_AUTH_SECRET=.*$/m, `BETTER_AUTH_SECRET="${"d".repeat(64)}"`)
       .replace(/^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_ID="mine"')
       .replace(/^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"')
       .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "");

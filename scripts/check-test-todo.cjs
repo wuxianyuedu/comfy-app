@@ -283,18 +283,18 @@ function main() {
 
   if (sites.length === 0) {
     console.log(
-      "[test-todo] OK —— 0 处 `test.todo` 站点" +
-        `（本判据是纯闸门：对象是「下一次有人留一条还没做的用例」；台账在场，${consumers.length} 条登记）。` +
-        note,
+      `[test-todo] OK —— 0 处 \`test.todo\` 站点` +
+        `（本判据是纯闸门：对象是「下一次有人留一条还没做的用例」；台账在场，${consumers.length} 条登记）。${
+        note}`,
     );
     return 0;
   }
 
   if (consumers === null || consumers.length === 0) {
     console.error(
-      (REPORT_ONLY
+      `${REPORT_ONLY
         ? `[test-todo] 盘点：${sites.length} 处站点、无消费方登记（--report 不判失败）`
-        : `[ERROR] 有 ${sites.length} 处 \`test.todo\` 站点，但 ${LEDGER} 里没有消费方`) + "：\n",
+        : `[ERROR] 有 ${sites.length} 处 \`test.todo\` 站点，但 ${LEDGER} 里没有消费方`}：\n`,
     );
     for (const s of sites) {
       console.error(`  · ${s.rel}:${s.line}`);
@@ -312,7 +312,7 @@ function main() {
   }
 
   console.log(
-    `[test-todo] OK —— ${sites.length} 处 todo 站点，消费方 ${consumers.length} 条登记。` + note,
+    `[test-todo] OK —— ${sites.length} 处 todo 站点，消费方 ${consumers.length} 条登记。${note}`,
   );
   return 0;
 }

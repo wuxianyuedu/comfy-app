@@ -648,14 +648,14 @@ async function main(argv) {
    * 「这批用例红了」，下一个人去查用例、查一整天。 */
   if (classifyOutcome(res) === "aborted") {
     process.stderr.write(
-      "[full-suite-run] ✗ " +
+      `[full-suite-run] ✗ ${
         abortedAdvice({
           label: "全量单测 + 覆盖率",
           timeoutMs: FULL_SUITE_TIMEOUT_MS,
-        }) +
-        `        （读数：退出码 ${res.status ?? "信号"}，` +
+        })
+        }        （读数：退出码 ${res.status ?? "信号"}，` +
         `error=${res.error ? String(res.error.code ?? res.error.message) : "无"}）\n` +
-        "        规范：docs/standards/13-提交与-code-review.md §13.5.4\n",
+        `        规范：docs/standards/13-提交与-code-review.md §13.5.4\n`,
     );
     return 1;
   }
@@ -723,12 +723,12 @@ async function main(argv) {
           ? plan.files.map((f) => `    · ${f}\n`).join("")
           : "    · （读不出名单，整档这一跑都没拿到可信读数）\n";
         process.stderr.write(
-          "[full-suite-run] ⚠️ **第 2 遍仍然只是超时形态** —— 这台机器此刻给不出可信读数，\n" +
-            "  本次这些文件记为**未校验**：既不是绿（没有证据说它过），也不是红\n" +
-            "  （失败的是调度，没有一条断言报错）。退 0 放行，**不记账**，逐条点名：\n" +
-            named +
-            "  ⚠️ 这一档**不许**写成「已通过」；它等价于「这次没测」（ISSUE #1747）。\n" +
-            "  **不要**抬 testTimeout，也**不要** --no-verify。\n",
+          `[full-suite-run] ⚠️ **第 2 遍仍然只是超时形态** —— 这台机器此刻给不出可信读数，\n` +
+            `  本次这些文件记为**未校验**：既不是绿（没有证据说它过），也不是红\n` +
+            `  （失败的是调度，没有一条断言报错）。退 0 放行，**不记账**，逐条点名：\n${
+            named
+            }  ⚠️ 这一档**不许**写成「已通过」；它等价于「这次没测」（ISSUE #1747）。\n` +
+            `  **不要**抬 testTimeout，也**不要** --no-verify。\n`,
         );
         return 0;
       }
@@ -744,12 +744,12 @@ async function main(argv) {
     /* **绿了但不记账**：这一跑透传了参数（`--help`、指到单个测试文件），跑的不是整档。
      * 下面那条「✗ 未通过（退出码 0）」是红的话术，拿它打这一拍会自相矛盾。 */
     process.stderr.write(
-      `[full-suite-run] ` +
+      `[full-suite-run] ${
         notWholeTrackNotice({
           label: "全量单测 + 覆盖率",
           command: "pnpm test:coverage:tracked",
           why: isWholeTrackRun(extra).why,
-        }),
+        })}`,
     );
     return 0;
   }

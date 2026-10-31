@@ -228,9 +228,9 @@ for (const abs of collectSourceFiles(path.join(ROOT, "src"))) {
 }
 if (rawPortHits.length > 0) {
   fail(
-    `源码里出现裸 8188 字面量（默认端口必须走 COMFYUI_DEFAULT_PORT，规范 §12.14）：\n  ` +
-      rawPortHits.slice(0, 10).join("\n  ") +
-      (rawPortHits.length > 10 ? `\n  …（其余 ${rawPortHits.length - 10} 处省略）` : ""),
+    `源码里出现裸 8188 字面量（默认端口必须走 COMFYUI_DEFAULT_PORT，规范 §12.14）：\n  ${
+      rawPortHits.slice(0, 10).join("\n  ")
+      }${rawPortHits.length > 10 ? `\n  …（其余 ${rawPortHits.length - 10} 处省略）` : ""}`,
   );
 }
 

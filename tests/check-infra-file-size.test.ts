@@ -34,7 +34,7 @@ function globBaselines(root: string): Array<string> {
 
 /** 造一份 `n` 行的 `.cjs`（阈值 900，取 905 确保越线）。 */
 function writeBig(repo: GateRepo, n = 905): void {
-  repo.write("scripts/big.cjs", "// 拆分候选\n".repeat(n) + "module.exports = 1;\n");
+  repo.write("scripts/big.cjs", `${"// 拆分候选\n".repeat(n)}module.exports = 1;\n`);
 }
 
 describe("check-infra-file-size 硬闸", () => {

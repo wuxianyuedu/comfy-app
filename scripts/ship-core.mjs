@@ -122,9 +122,9 @@ export function decideCreateBranch({
       branch: name,
       reason:
         `${name} 已经存在（${existsLocal ? "本地" : "远端"} ref 查得到）⇒ 不覆盖、不切换：` +
-        "接着那条分支干就先 `git checkout " +
-        name +
-        "` 再跑；要新开一条就换一个名字。",
+        `接着那条分支干就先 \`git checkout ${
+        name
+        }\` 再跑；要新开一条就换一个名字。`,
     };
   }
   if (current && current !== "master" && current !== "HEAD") {

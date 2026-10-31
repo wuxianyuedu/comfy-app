@@ -72,9 +72,9 @@ function runInRepo(args: Array<string> = []): { code: number; output: string } {
  */
 function seedFactsDoc(repo: GateRepo, modules: Array<string>): void {
   const row =
-    `| \`comment.language.asciiOnly\` | ` +
-    modules.map((m) => `\`${m}\``).join("、") +
-    ` | 白名单 | 本行 | 解析本行 |`;
+    `| \`comment.language.asciiOnly\` | ${
+    modules.map((m) => `\`${m}\``).join("、")
+    } | 白名单 | 本行 | 解析本行 |`;
   repo.write("docs/reference-facts.md", `# refs\n\n${row}\n`);
 }
 

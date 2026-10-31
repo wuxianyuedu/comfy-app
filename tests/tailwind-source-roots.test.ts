@@ -182,13 +182,13 @@ describe("源扫描根是显式名单", () => {
     );
     expect(
       forbidden,
-      "正文 / 账本 / 门禁脚本被放进了扫描根 —— 那里每一枚写全的候选名都会变回产物里的死规则：" +
-        forbidden.join(" / "),
+      `正文 / 账本 / 门禁脚本被放进了扫描根 —— 那里每一枚写全的候选名都会变回产物里的死规则：${
+        forbidden.join(" / ")}`,
     ).toEqual([]);
 
     /* 登记表反向：条目对应的根若已从文件里消失，条目要一起删（不留「有登记、没有实物」）。 */
     const stale = Object.keys(SOURCE_ROOTS).filter((rel) => !declared.includes(rel));
-    expect(stale, "这些登记过的根已经不在 globals.css 里了：" + stale.join(" / ")).toEqual([]);
+    expect(stale, `这些登记过的根已经不在 globals.css 里了：${stale.join(" / ")}`).toEqual([]);
   });
 
   it("每一根都承重：摘掉它必须真丢样式，丢的那些必须写在它自己里", () => {
@@ -213,8 +213,8 @@ describe("源扫描根是显式名单", () => {
       expect(
         notSpelledThere,
         `这些选择器只有 ${rel} 会供给，却没在那棵根的文本里找到逐字写法（说明登记理由不成立` +
-          `，或差集其实来自别处）：` +
-          notSpelledThere.map(unescape).join(" / "),
+          `，或差集其实来自别处）：${
+          notSpelledThere.map(unescape).join(" / ")}`,
       ).toEqual([]);
     }
 
@@ -242,8 +242,8 @@ describe("源扫描根是显式名单", () => {
       expect(
         missing,
         `${surface.dir} 与 app 共用同一份 globals.css（${surface.reason}），` +
-          `但这些类没进产物 —— 扫描根里少了这一棵：` +
-          missing.join(" / "),
+          `但这些类没进产物 —— 扫描根里少了这一棵：${
+          missing.join(" / ")}`,
       ).toEqual([]);
     }
   });

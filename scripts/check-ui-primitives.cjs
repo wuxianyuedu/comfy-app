@@ -530,7 +530,7 @@ function total(map) {
 function writeBaseline(files) {
   fs.writeFileSync(
     BASELINE,
-    JSON.stringify(
+    `${JSON.stringify(
       {
         generatedAt: new Date().toISOString().slice(0, 10),
         note:
@@ -548,7 +548,7 @@ function writeBaseline(files) {
       },
       null,
       2,
-    ) + "\n",
+    )}\n`,
   );
 }
 
@@ -558,10 +558,10 @@ function main() {
   const tierBad = tierProblems();
   if (tierBad.length) {
     console.error(
-      "[ui-primitives] 判据分档自检失败（每条 rule id 必须恰好落在一档里）：\n  " +
-        tierBad.join("\n  ") +
-        "\n  改法：在脚本的 RULE_TIERS 里给这条判据登记 CORE（基元层）或 SURFACE（业务面），" +
-        "\n  口径见文件头「分层」一节。",
+      `[ui-primitives] 判据分档自检失败（每条 rule id 必须恰好落在一档里）：\n  ${
+        tierBad.join("\n  ")
+        }\n  改法：在脚本的 RULE_TIERS 里给这条判据登记 CORE（基元层）或 SURFACE（业务面），` +
+        `\n  口径见文件头「分层」一节。`,
     );
     process.exit(1);
   }
@@ -576,16 +576,14 @@ function main() {
     const gate = hardGateHits(now);
     if (gate.length) {
       console.error(
-        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（" +
-          `${HARD_GATE_RULES.size} 条，全部须为 0）。\n  ` +
-          gate.join("\n  ") +
-          "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、" +
-          "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）、" +
-          "不再裸写 <img> / <video>（改用 ~/components/ui/media-thumbnail 的 MediaThumbnail）、" +
-          "不再手写媒体拖拽源（改用 ~/components/ui/media-drag-source 的 useMediaDragSource）、" +
-          "不再自己挂 keydown（改用 ~/components/ui/use-hotkey 的 useHotkey）、" +
-          "不再手写滚动贴底（改用 ~/components/ui/use-scroll-follow 的 useScrollFollow）、" +
-          "不再自己拼表单行（改用 ~/components/ui/form-field 的 FormField）。",
+        `[ui-primitives] 拒绝更新基线：硬闸判据未清零（${HARD_GATE_RULES.size} 条，全部须为 0）。\n  ${gate.join("\n  ")
+          }\n  改法：视图里不再写 \`::-webkit-scrollbar\` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、` +
+          `不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）、` +
+          `不再裸写 <img> / <video>（改用 ~/components/ui/media-thumbnail 的 MediaThumbnail）、` +
+          `不再手写媒体拖拽源（改用 ~/components/ui/media-drag-source 的 useMediaDragSource）、` +
+          `不再自己挂 keydown（改用 ~/components/ui/use-hotkey 的 useHotkey）、` +
+          `不再手写滚动贴底（改用 ~/components/ui/use-scroll-follow 的 useScrollFollow）、` +
+          `不再自己拼表单行（改用 ~/components/ui/form-field 的 FormField）。`,
       );
       process.exit(1);
     }
@@ -750,16 +748,16 @@ function main() {
         .filter((id) => HARD_GATE_RULES.has(id)),
     );
     console.log(
-      `[ui-primitives] 命中分档：` +
+      `[ui-primitives] 命中分档：${
         TIER_ORDER.map((tier) => {
           const ids = [...hitIds].filter((id) => tierOf(id) === tier);
           return `${tier} ${ids.length ? ids.join("/") : "0"}`;
-        }).join(" · "),
+        }).join(" · ")}`,
     );
   }
 
   if (problems.length) {
-    console.error("[ui-primitives] 违规（阻断）：\n  " + problems.join("\n  "));
+    console.error(`[ui-primitives] 违规（阻断）：\n  ${problems.join("\n  ")}`);
     console.error(
       "  规范见 docs/standards/16-shadcn-ui与表单校验.md §16.2.3；\n" +
         "  改法：`<button>` → `<Button>`（~/components/ui/button）、自建 portal → ui/dialog / popover / sheet、\n" +
@@ -812,14 +810,14 @@ function main() {
 
   if (dropped.length) {
     const msg =
-      `[ui-primitives] 检测到 ${dropped.length} 处下降，请收紧基线：\n  ` +
-      dropped.join("\n  ") +
-      "\n  执行 node scripts/check-ui-primitives.cjs --update";
+      `[ui-primitives] 检测到 ${dropped.length} 处下降，请收紧基线：\n  ${
+      dropped.join("\n  ")
+      }\n  执行 node scripts/check-ui-primitives.cjs --update`;
     if (STRICT) {
       console.error(msg);
       process.exit(1);
     }
-    console.log(msg + "（当前非 --strict，仅提示）");
+    console.log(`${msg}（当前非 --strict，仅提示）`);
   }
   console.log("[ui-primitives] OK");
 }

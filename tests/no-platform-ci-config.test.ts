@@ -1923,10 +1923,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     for (const prerequisite of ["每日浏览器安装", "每日生产构建"]) {
       expect(
         daily.indexOf(prerequisite),
-        `「${prerequisite}」必须排在「每日全量E2E」之前 —— ` +
-          (prerequisite === "每日生产构建"
+        `「${prerequisite}」必须排在「每日全量E2E」之前 —— ${
+          prerequisite === "每日生产构建"
             ? "这一格的 webServer 起的是 `pnpm start`，产物来自它"
-            : "缺件时整档会以「每条都报同一个 launch 失败」的形态红"),
+            : "缺件时整档会以「每条都报同一个 launch 失败」的形态红"}`,
       ).toBeLessThan(e2eAt);
     }
     /* 产物前提要**写在配置里**，不能只靠顺序推断：这一格显式声明 `COMFY_E2E_SERVER: start`。

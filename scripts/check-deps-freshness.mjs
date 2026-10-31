@@ -714,7 +714,7 @@ function main() {
   });
   if (process.argv.includes("--json")) {
     process.stdout.write(
-      JSON.stringify(
+      `${JSON.stringify(
         {
           code: result.code,
           remoteChecked: result.remoteChecked,
@@ -735,7 +735,7 @@ function main() {
         },
         null,
         2,
-      ) + "\n",
+      )}\n`,
     );
     return result.code;
   }

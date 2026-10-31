@@ -746,14 +746,14 @@ function main(argv) {
 
   if (contradicted.length > 0) {
     process.stderr.write(
-      `[commit-claims] ${contradicted.length} 处声明与事实矛盾（规范 §11.23）：\n` +
+      `[commit-claims] ${contradicted.length} 处声明与事实矛盾（规范 §11.23）：\n${
         contradicted
           .map(
             ({ a, r }) =>
               `  · ${a.commit.slice(0, 8)}：${r.detail}\n     原句：${r.claim.raw.trim()}`,
           )
-          .join("\n") +
-        "\n",
+          .join("\n")
+        }\n`,
     );
     return 1;
   }

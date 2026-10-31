@@ -176,7 +176,7 @@ export async function buildExecutorHostBundle(targetDir = DEFAULT_TARGET) {
   });
   fs.writeFileSync(
     path.join(targetDir, MANIFEST_REL),
-    JSON.stringify(manifest, null, 2) + "\n",
+    `${JSON.stringify(manifest, null, 2)}\n`,
     "utf8",
   );
   return {

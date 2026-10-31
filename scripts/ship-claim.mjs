@@ -411,11 +411,11 @@ function runClaim(ctx) {
       ...(haveParticipant ? [] : [`打上 ${participant}`]),
     ];
     log(
-      `[ship] --dry-run：` +
-        (planned.length === 0
+      `[ship] --dry-run：${
+        planned.length === 0
           ? `#${number} 已在 ${label} 与 ${participant} 名下 ⇒ 只会补一条「已接单」评论`
-          : `#${number} 将 ${planned.join("、")}，再评论「开发者 ${handle} 已接单，正在开发中。」`) +
-        "；一条都没写。",
+          : `#${number} 将 ${planned.join("、")}，再评论「开发者 ${handle} 已接单，正在开发中。」`
+        }；一条都没写。`,
     );
     return CODE.GREEN;
   }
@@ -565,8 +565,8 @@ function runClaims(ctx) {
     }
   }
   log(
-    `[ship] 你领取中的单子（${label} · state=open）：${rows.length} 张` +
-      (truncated ? `（只看了前 ${pages * pageSize} 张，分页到顶）` : ""),
+    `[ship] 你领取中的单子（${label} · state=open）：${rows.length} 张${
+      truncated ? `（只看了前 ${pages * pageSize} 张，分页到顶）` : ""}`,
   );
   if (rows.length === 0) {
     log("[ship] 没有你领取中的单子。");
