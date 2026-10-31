@@ -88,8 +88,8 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
     try {
       const dataUrl = await readFileAsDataUrl(file);
       patchField(index, { value: dataUrl });
-    } catch (err) {
-      patchField(index, { value: errorText(err, "读取图片失败") });
+    } catch (error) {
+      patchField(index, { value: errorText(error, "读取图片失败") });
     }
   }
   /** 随请求发送的字段行：视频 mode=text 时媒体字段已被隐藏（不渲染也不发送），

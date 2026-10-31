@@ -270,7 +270,7 @@ describe("getView — 取字节的地址组装与失败形状", () => {
 
   it("上游非 2xx 时抛带状态码的 ComfyViewError —— 调用方分相靠这个字段，不靠读消息", async () => {
     viewReply({ status: 404 });
-    const err = await getView("gone.png", "", "input").catch((e: unknown) => e);
+    const err = await getView("gone.png", "", "input").catch((error: unknown) => error);
     expect(err).toBeInstanceOf(ComfyViewError);
     expect(/* SAFETY: 类型断言已复核 */ (err as ComfyViewError).status).toBe(404);
     // 消息保持原样：`executor-finalize` 那类只判「拿不到就抛」的调用方零感知

@@ -299,9 +299,9 @@ export const taskRouter = createTRPCRouter({
       } else {
         fsPromises
           .rm(dir, { recursive: true, force: true })
-          .catch((e: unknown) =>
+          .catch((error: unknown) =>
             logger.warn(
-              `[task.delete] 产物目录没删掉（库行照删）：${dir} — ${errorMessage(e, String(e))}`,
+              `[task.delete] 产物目录没删掉（库行照删）：${dir} — ${errorMessage(error, String(error))}`,
             ),
           );
       }

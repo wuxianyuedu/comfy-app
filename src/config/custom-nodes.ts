@@ -350,8 +350,8 @@ export async function getCustomNodesManifest(
     return /* SAFETY: 类型断言已复核 */ data as {
       nodes: Record<string, ManifestNodeRaw>;
     };
-  } catch (e) {
-    console.error("[custom-nodes] 读取节点清单失败：", errorText(e, "读取自定义节点清单"));
+  } catch (error) {
+    console.error("[custom-nodes] 读取节点清单失败：", errorText(error, "读取自定义节点清单"));
     return null;
   }
 }
@@ -362,9 +362,9 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
   let res: Response;
   try {
     res = await fetch(`${base}/api/custom-nodes/manifest`);
-  } catch (e) {
+  } catch (error) {
     /* 请求压根没出去（离线 / dev server 刚重启 / 端口被回收）。 */
-    const detail = `连不上清单端点（${errorText(e, "读取节点清单")}）`;
+    const detail = `连不上清单端点（${errorText(error, "读取节点清单")}）`;
     recordRegistry({ loaded: false, count: 0, detail });
     console.error(`[custom-nodes] ${detail}`);
     return 0;
@@ -405,8 +405,8 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
      * 确实一个自定义节点都没找到」，与上面的「没拿到清单」是两件事。 */
     recordRegistry({ loaded: true, count, detail: null });
     return count;
-  } catch (e) {
-    const detail = `清单解析失败（${errorText(e, "解析节点清单")}）`;
+  } catch (error) {
+    const detail = `清单解析失败（${errorText(error, "解析节点清单")}）`;
     recordRegistry({ loaded: false, count: 0, detail });
     console.error(`[custom-nodes] ${detail}`);
     return 0;

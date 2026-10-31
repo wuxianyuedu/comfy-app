@@ -461,8 +461,8 @@ export async function getComfyRuntimeSnapshot(
     return st.inflight;
   }
   const task = snapshotOnce()
-    .catch((err: unknown) => {
-      logger.warn(`[comfyui] ${errorText(err, "运行态快照失败")}`);
+    .catch((error: unknown) => {
+      logger.warn(`[comfyui] ${errorText(error, "运行态快照失败")}`);
       // 探测异常不能报成「未运行」：标 unverified 让调用方退回 HTTP 判据。
       return { ...emptySnapshot(), unverified: true };
     })

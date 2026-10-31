@@ -220,8 +220,8 @@ export function useStoryboardPlanner(props: Props) {
       });
       onShotsChange([...shots, ...built]);
       setAiProgress(`已用 AI 生成 ${built.length} 个镜头`);
-    } catch (e: unknown) {
-      setAiError(errorMessage(e, "AI 拆镜失败"));
+    } catch (error: unknown) {
+      setAiError(errorMessage(error, "AI 拆镜失败"));
     }
   }
 
@@ -276,8 +276,8 @@ export function useStoryboardPlanner(props: Props) {
           throw new Error("模型未返回提示词");
         }
         updateShot(shot.id, { prompt: polished });
-      } catch (e: unknown) {
-        polishErrors.report(shot.id)("err", errorMessage(e, "提示词润色失败"));
+      } catch (error: unknown) {
+        polishErrors.report(shot.id)("err", errorMessage(error, "提示词润色失败"));
       }
       /* 忙标记由出口的 `finally` 清。 */
     });

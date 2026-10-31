@@ -392,8 +392,8 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       setDiscoveredByParent(acc.discoveredByParent);
       setByPath(acc.byPath);
       seedParentDefaults(acc.paths);
-    } catch (e) {
-      setSaveErr(errorText(e, "读取配置失败"));
+    } catch (error) {
+      setSaveErr(errorText(error, "读取配置失败"));
     } finally {
       /* 卸载后不再碰任何 state。原写法在 finally 里 `return` —— 那会吞掉
        * try/catch 抛出的任何异常（no-unsafe-finally 拦的正是这个形态）；
@@ -537,8 +537,8 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         }
         await reloadFromServer();
       });
-    } catch (e) {
-      setError_(errorText(e, "解析失败"));
+    } catch (error) {
+      setError_(errorText(error, "解析失败"));
     }
   }
 

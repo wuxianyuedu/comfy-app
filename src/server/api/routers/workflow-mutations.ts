@@ -64,8 +64,8 @@ export const workflowMutationProcedures = {
             preferredTaskType: typeof body.taskType === "string" ? body.taskType : undefined,
             defaultName: typeof body.name === "string" ? body.name : undefined,
           });
-        } catch (e: unknown) {
-          const msg = errorMessage(e, String(e));
+        } catch (error: unknown) {
+          const msg = errorMessage(error, String(error));
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: msg || "本地文件读取失败",
@@ -120,10 +120,10 @@ export const workflowMutationProcedures = {
       let parsed: Awaited<ReturnType<typeof parseWorkflowContent>>;
       try {
         parsed = await parseWorkflowContent(JSON.stringify(body.raw));
-      } catch (e: unknown) {
+      } catch (error: unknown) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: errorMessage(e, "工作流解析失败"),
+          message: errorMessage(error, "工作流解析失败"),
         });
       }
       const rawJson = parsed.rawJson;

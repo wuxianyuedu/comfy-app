@@ -188,7 +188,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
             lv === "error" ? "error" : lv === "warn" ? "warn" : lv === "debug" ? "debug" : "info";
           addEntry({ level, message, source: "tauri" });
         });
-      } catch (err) {
+      } catch (error) {
         /* 不在 Tauri 里运行是**正常形态**（浏览器 / 纯 web），静默即可。
            但「在壳里却监听失败」不是正常形态，最常见的原因是 CSP 的 connect-src
            漏了 `ipc: http://ipc.localhost`（事件监听走 fetch 到 ipc:// 通道，
@@ -199,7 +199,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
         if (isDesktopShell()) {
           addEntry({
             level: "warn",
-            message: `未能订阅壳日志（log:emit）：${String(err)}`,
+            message: `未能订阅壳日志（log:emit）：${String(error)}`,
             source: "system",
           });
         }

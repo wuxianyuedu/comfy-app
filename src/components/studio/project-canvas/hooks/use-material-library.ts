@@ -125,9 +125,9 @@ export function useMaterialLibrary({
           setFolders(result.folders);
           setItems(result.items);
         });
-      } catch (e) {
+      } catch (error) {
         guard.commit(() => {
-          setLoadError(errMsg(e, "读取素材库失败"));
+          setLoadError(errMsg(error, "读取素材库失败"));
           setFolders([]);
           setItems([]);
         });
@@ -163,8 +163,8 @@ export function useMaterialLibrary({
           }
         });
         refresh();
-      } catch (e) {
-        setActionError(errMsg(e, "上传失败"));
+      } catch (error) {
+        setActionError(errMsg(error, "上传失败"));
       }
     },
     [folder, projectId, refresh, uploadBusy],
@@ -179,8 +179,8 @@ export function useMaterialLibrary({
         // 乐观移除，再拉一次校准计数
         setItems((prev) => prev.filter((prev) => prev.id !== item.id));
         refresh();
-      } catch (e) {
-        setActionError(errMsg(e, "删除失败"));
+      } catch (error) {
+        setActionError(errMsg(error, "删除失败"));
       }
     },
     [refresh],

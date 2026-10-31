@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ error: "kind 必须是 image 或 video" }, { status: 400 });
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "API 生成失败"), { status: 502 });
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "API 生成失败"), { status: 502 });
   }
 }

@@ -69,8 +69,8 @@ export async function resolveMediaBytes(src: string, _origin: string): Promise<R
     let res: Response;
     try {
       res = await fetch(src, { signal: AbortSignal.timeout(30_000) });
-    } catch (e) {
-      throw new Error(errorText(e, "拉取参考图失败"), { cause: e });
+    } catch (error) {
+      throw new Error(errorText(error, "拉取参考图失败"), { cause: error });
     }
     if (!res.ok) {
       throw new Error(`拉取参考图失败 (${res.status})`);

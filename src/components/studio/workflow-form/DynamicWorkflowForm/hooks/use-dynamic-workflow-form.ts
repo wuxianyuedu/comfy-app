@@ -346,9 +346,9 @@ export function useDynamicWorkflowForm(
           onProgress: (message) => onUploadProgress?.(message),
         });
         set(target, name);
-      } catch (err) {
-        const message = errorMessage(err, "上传失败");
-        console.error("[DynamicWorkflowForm] upload failed", err);
+      } catch (error) {
+        const message = errorMessage(error, "上传失败");
+        console.error("[DynamicWorkflowForm] upload failed", error);
         setUploadError(message);
         onUploadError?.(message);
       } finally {

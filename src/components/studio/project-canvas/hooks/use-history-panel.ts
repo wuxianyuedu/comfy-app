@@ -93,10 +93,10 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
       try {
         const rows = await fetchHistoryTasks(params);
         guard.commit(() => setTasks(rows));
-      } catch (e) {
+      } catch (error_) {
         /* 错误文案与清空列表都属于「这一轮的结论」，一起过守卫。 */
         guard.commit(() => {
-          setError(errorMessage(e, "读取历史记录失败"));
+          setError(errorMessage(error_, "读取历史记录失败"));
           setTasks([]);
         });
       } finally {

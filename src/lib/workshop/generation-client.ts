@@ -586,14 +586,19 @@ async function postRelay(body: Record<string, unknown>): Promise<RelayResponse> 
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
     });
-  } catch (e: unknown) {
+  } catch (error: unknown) {
     /* AbortSignal.timeout 的到点是 TimeoutError（浏览器主动 abort 是
      * AbortError）：翻译成可行动的中文，别让控制台的英文 DOMException
      * 原样进错误条。 */
-    if (e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError")) {
-      throw new Error("API 通道请求超时（10 分钟无响应），请检查通道地址或稍后重试", { cause: e });
+    if (
+      error instanceof DOMException &&
+      (error.name === "TimeoutError" || error.name === "AbortError")
+    ) {
+      throw new Error("API 通道请求超时（10 分钟无响应），请检查通道地址或稍后重试", {
+        cause: error,
+      });
     }
-    throw e;
+    throw error;
   }
   let data: unknown;
   try {

@@ -141,9 +141,9 @@ export async function connect(): Promise<void> {
             );
           }
         })
-        .catch((err: unknown) => {
-          logger.warn(`[comfyui] ${errorText(err, "自动启动失败")}`);
-          announceToQueuedTasks(errorText(err, "ComfyUI 自动启动失败"), "error");
+        .catch((error: unknown) => {
+          logger.warn(`[comfyui] ${errorText(error, "自动启动失败")}`);
+          announceToQueuedTasks(errorText(error, "ComfyUI 自动启动失败"), "error");
         });
     } else if (!isComfyAutoStartSuppressed()) {
       // 自动启动已在单飞中进行：仅维持调用以保 isComfyStarting 为真，

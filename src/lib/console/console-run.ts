@@ -199,10 +199,10 @@ export function createConsoleRunner(): ConsoleRunner {
           PYTHONUTF8: "1",
         },
       });
-    } catch (e) {
+    } catch (error) {
       onEvent({
         type: "error",
-        message: startFailureMessage(opts.file, invocation, e),
+        message: startFailureMessage(opts.file, invocation, error),
       });
       return {
         runId: opts.runId,

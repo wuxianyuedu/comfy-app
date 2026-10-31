@@ -133,9 +133,9 @@ export async function GET(req: NextRequest) {
       folders,
       items,
     });
-  } catch (e) {
-    logger.error(`[materials] GET failed | ${apiErrorDetail(e, String(e))}`);
-    return NextResponse.json(apiErrorBody(e, "读取素材库失败", { folders: [], items: [] }), {
+  } catch (error) {
+    logger.error(`[materials] GET failed | ${apiErrorDetail(error, String(error))}`);
+    return NextResponse.json(apiErrorBody(error, "读取素材库失败", { folders: [], items: [] }), {
       status: 500,
     });
   }
@@ -228,9 +228,9 @@ export async function POST(req: NextRequest) {
         scope,
       },
     });
-  } catch (e) {
-    logger.error(`[materials] POST failed | ${apiErrorDetail(e, String(e))}`);
-    return NextResponse.json(apiErrorBody(e, "上传失败"), { status: 500 });
+  } catch (error) {
+    logger.error(`[materials] POST failed | ${apiErrorDetail(error, String(error))}`);
+    return NextResponse.json(apiErrorBody(error, "上传失败"), { status: 500 });
   }
 }
 
@@ -276,16 +276,21 @@ export async function DELETE(req: NextRequest) {
 
     try {
       await fs.unlink(target);
-    } catch (e) {
-      if (typeof e === "object" && e !== null && "code" in e && e.code === "ENOENT") {
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "ENOENT"
+      ) {
         // 已经不在了，视作成功（幂等删除）
         return NextResponse.json({ ok: true, alreadyGone: true });
       }
-      throw e;
+      throw error;
     }
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    logger.error(`[materials] DELETE failed | ${apiErrorDetail(e, String(e))}`);
-    return NextResponse.json(apiErrorBody(e, "删除失败"), { status: 500 });
+  } catch (error) {
+    logger.error(`[materials] DELETE failed | ${apiErrorDetail(error, String(error))}`);
+    return NextResponse.json(apiErrorBody(error, "删除失败"), { status: 500 });
   }
 }

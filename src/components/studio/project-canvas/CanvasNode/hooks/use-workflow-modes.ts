@@ -46,10 +46,10 @@ export function useWorkflowModes({
           modes: next.modes,
           defaultMode: next.defaultMode,
         });
-      } catch (err) {
+      } catch (error) {
         // 回滚本地状态，避免出现「僵尸模式章」
         setModes(modes ?? { modes: [], defaultMode: null });
-        onFailed(errorMessage(err, "保存模式失败，请重试"));
+        onFailed(errorMessage(error, "保存模式失败，请重试"));
       }
     },
     [workflowId, modes, setModes, onFailed],

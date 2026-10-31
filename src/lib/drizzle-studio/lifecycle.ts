@@ -204,8 +204,8 @@ export async function ensureDrizzleStudioUp(
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
       });
-    } catch (e) {
-      const detail = errorText(e, "启动 Drizzle Studio 失败");
+    } catch (error) {
+      const detail = errorText(error, "启动 Drizzle Studio 失败");
       note(detail);
       return { ok: false, port, detail };
     }

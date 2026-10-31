@@ -58,8 +58,8 @@ describe("useBusyAction", () => {
         await result.current.run(async () => {
           throw new Error("保存失败");
         });
-      } catch (e) {
-        caught = e;
+      } catch (error) {
+        caught = error;
       }
     });
     expect(caught).toBeInstanceOf(Error);

@@ -31,7 +31,9 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
     onPick: (f) => {
       void uploadImageFile(f)
         .then((name) => patch({ [uploadTo.current]: name, upstreamId: undefined }))
-        .catch((err: unknown) => patch({ error: errorMessage(err, "上传失败"), status: "error" }));
+        .catch((error: unknown) =>
+          patch({ error: errorMessage(error, "上传失败"), status: "error" }),
+        );
     },
   });
 
@@ -50,7 +52,9 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
     onPick: (f) => {
       void uploadMediaFile(f)
         .then(({ name }) => patch({ mediaPath: name, mediaName: f.name, upstreamId: undefined }))
-        .catch((err: unknown) => patch({ error: errorMessage(err, "上传失败"), status: "error" }));
+        .catch((error: unknown) =>
+          patch({ error: errorMessage(error, "上传失败"), status: "error" }),
+        );
     },
   });
 
@@ -68,8 +72,8 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
     try {
       const { name } = await uploadMediaFile(f);
       patch({ mediaPath: name, mediaName: f.name, upstreamId: undefined });
-    } catch (err: unknown) {
-      patch({ error: errorMessage(err, "上传失败"), status: "error" });
+    } catch (error: unknown) {
+      patch({ error: errorMessage(error, "上传失败"), status: "error" });
     }
   };
 

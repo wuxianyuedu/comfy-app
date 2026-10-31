@@ -78,11 +78,11 @@ export function useShotReview(projectId: string, onRegenerated?: () => void): Sh
         try {
           const v = await reviewShot(projectId, shotId);
           guard.commit(() => setVerdict(v));
-        } catch (e) {
+        } catch (error_) {
           // 失败也走守卫：卸载后到达的错误不往界面写。原文交 errorMessage 翻译。
           guard.commit(() => {
             setVerdict(null);
-            setError(e instanceof Error ? e.message : "评审失败");
+            setError(error_ instanceof Error ? error_.message : "评审失败");
           });
         }
       });

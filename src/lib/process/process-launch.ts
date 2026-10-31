@@ -201,8 +201,8 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
         stdio: ["ignore", "pipe", "pipe"],
       });
       return { child };
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : String(e) };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -245,9 +245,9 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
       child.unref();
       closeOpenedFds();
       return { child };
-    } catch (e) {
+    } catch (error) {
       closeOpenedFds();
-      return { error: e instanceof Error ? e.message : String(e) };
+      return { error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -282,8 +282,8 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
       });
       mediator.unref();
       return { child: mediator };
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : String(e) };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -320,7 +320,7 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
     mediator.unref();
     // 中介是立即退出的 powershell；返回它仅供调用方持有引用，pid 不代表目标。
     return { child: mediator };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
   }
 }

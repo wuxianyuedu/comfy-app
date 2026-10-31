@@ -155,10 +155,10 @@ export function useModelAdapters(): ModelAdaptersController {
         kind: "ok",
         text: `已保存 ${selectedModel} 的模式适配器。`,
       });
-    } catch (e) {
+    } catch (error) {
       setMessage({
         kind: "err",
-        text: errorMessage(e, "保存失败"),
+        text: errorMessage(error, "保存失败"),
       });
     }
   }, [selectedModel, draft, saveMutation, saveBusy]);

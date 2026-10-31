@@ -84,15 +84,15 @@ function lazyView<P extends object>(
     () =>
       loader()
         .then((mod) => withViewOpenReport(view, mod))
-        .catch((err: unknown) => {
+        .catch((error: unknown) => {
           /* 刷新的那一跳返回一个永不 settle 的 promise：页面正在被换掉，
            * 让它悬着比立刻抛错更好（抛了会先闪一下 error boundary 再被导航覆盖）；
            * 没触发刷新（不是分块问题 / 本会话已刷过）时照常抛，错误照旧落到
            * error boundary。 */
-          if (reloadOnceForChunkError(err)) {
+          if (reloadOnceForChunkError(error)) {
             return NEVER_SETTLES;
           }
-          throw err;
+          throw error;
         }),
     { ssr: false },
   );

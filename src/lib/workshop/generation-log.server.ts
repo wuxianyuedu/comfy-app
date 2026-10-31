@@ -45,12 +45,12 @@ export async function appendGenerationLogs(
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.appendFile(file, `${lines.join("\n")}\n`, "utf8");
     return lines.length;
-  } catch (e) {
+  } catch (error) {
     // 走唯一日志通道（pino）：脱敏 + ERROR/WARN 镜像进面板可见的 app-runtime。
     log.warn("[workshop-logs] 执行日志落盘失败（不影响生成）", {
       /* 与 `errorText` 同一口径：`String(e)` 对非 Error 抛值产出
        * `[object Object]`，排查时看不出发生了什么。 */
-      err: errorText(e, "写入失败"),
+      err: errorText(error, "写入失败"),
     });
     return 0;
   }

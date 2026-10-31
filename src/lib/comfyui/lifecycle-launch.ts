@@ -772,8 +772,8 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
       // PYTHONUTF8 启用 Python 3.7+ UTF-8 模式。
       env: stdioEnv,
     });
-  } catch (e) {
-    const detail = errorText(e, "启动 ComfyUI 失败");
+  } catch (error) {
+    const detail = errorText(error, "启动 ComfyUI 失败");
     note(detail);
     return { ok: false, base: null, detail };
   }

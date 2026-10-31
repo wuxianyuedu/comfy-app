@@ -202,8 +202,8 @@ export const workflowListProcedures = {
             w.sourceMtime = Math.floor(hit.mtimeMs / 1000);
             diskMtimeByPath.set(pathKey(hit.absPath), hit.mtimeMs);
             renamedFromTo.set(w.id, `${oldName} → ${newName}`);
-          } catch (e: unknown) {
-            const msg = errorMessage(e, String(e));
+          } catch (error: unknown) {
+            const msg = errorMessage(error, String(error));
             logger.warn(`[workflow.list] relink failed for ${w.id}: ${msg}`);
           }
         }

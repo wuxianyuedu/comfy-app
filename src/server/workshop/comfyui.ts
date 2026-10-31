@@ -191,8 +191,8 @@ export async function postComfyPrompt(prompt: unknown): Promise<ComfyPromptResul
       );
     }
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as ComfyPromptResult;
-  } catch (e) {
-    guardNetworkFailure(e);
+  } catch (error) {
+    guardNetworkFailure(error);
   }
 }
 
@@ -206,8 +206,8 @@ export async function getComfyHistory(promptId: string): Promise<Record<string, 
       throw new Error(`ComfyUI /api/history 失败 (${res.status})`);
     }
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, unknown>;
-  } catch (e) {
-    guardNetworkFailure(e);
+  } catch (error) {
+    guardNetworkFailure(error);
   }
 }
 
@@ -229,8 +229,8 @@ export async function getComfyView(
       throw new Error(`ComfyUI /api/view 失败 (${res.status})`);
     }
     return Buffer.from(await res.arrayBuffer());
-  } catch (e) {
-    guardNetworkFailure(e);
+  } catch (error) {
+    guardNetworkFailure(error);
   }
 }
 
@@ -255,8 +255,8 @@ export async function uploadComfyImage(buffer: Buffer, filename: string): Promis
       throw new Error("ComfyUI 上传未返回文件名");
     }
     return data.name;
-  } catch (e) {
-    guardNetworkFailure(e);
+  } catch (error) {
+    guardNetworkFailure(error);
   }
 }
 

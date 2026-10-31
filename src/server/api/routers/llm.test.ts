@@ -67,7 +67,7 @@ const caller = () => createCaller(makeCtx());
 async function codeOf(promise: Promise<unknown>): Promise<string> {
   return promise.then(
     () => "OK",
-    (e: { code?: string }) => e?.code ?? "UNKNOWN",
+    (error: { code?: string }) => error?.code ?? "UNKNOWN",
   );
 }
 

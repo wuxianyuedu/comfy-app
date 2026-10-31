@@ -49,8 +49,11 @@ function moveEntry(
   try {
     fs.renameSync(from, to);
     return { kind: "moved" };
-  } catch (e) {
-    const code = typeof e === "object" && e !== null && "code" in e ? String(e.code) : "UNKNOWN";
+  } catch (error) {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String(error.code)
+        : "UNKNOWN";
     // 两个宿主同时起（Next 与执行器宿主）时这条会撞上：先动的那个已经把名字搬走了
     return code === "ENOENT" ? { kind: "already-gone" } : { kind: "blocked", code };
   }

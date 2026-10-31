@@ -329,8 +329,8 @@ async function upstreamChat(cfg: LLMConfig, body: Record<string, unknown>): Prom
       headers: headersFor(cfg),
       body: JSON.stringify(body),
     });
-  } catch (e) {
-    throw new Error(describeFetchFailure(e, cfg), { cause: e });
+  } catch (error) {
+    throw new Error(describeFetchFailure(error, cfg), { cause: error });
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");

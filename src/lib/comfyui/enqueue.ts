@@ -144,13 +144,13 @@ export async function cancelTask(taskId: string) {
       try {
         await interrupt();
         log(taskId, "warn", "已请求 ComfyUI 中断当前这一轮生成");
-      } catch (err) {
+      } catch (error) {
         /* 中断失败不等于取消失败：状态照收，但要把「这一轮还会跑完」告诉用户，
          * 否则他们看到的就是「按了取消为什么还在出图」却没有任何解释（硬规则 4）。 */
         log(
           taskId,
           "warn",
-          `中断请求失败：ComfyUI 会继续跑完当前这一轮（${errorText(err, "interrupt")}）`,
+          `中断请求失败：ComfyUI 会继续跑完当前这一轮（${errorText(error, "interrupt")}）`,
         );
       }
     } else {

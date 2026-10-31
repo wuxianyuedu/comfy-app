@@ -191,10 +191,10 @@ export function parseExtraJson(
       throw new Error("不是 JSON 对象");
     }
     return { ok: true, extra: parsed };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
-      detail: `额外参数不是有效的 JSON 对象：${errorMessage(e, "解析失败")}`,
+      detail: `额外参数不是有效的 JSON 对象：${errorMessage(error, "解析失败")}`,
     };
   }
 }

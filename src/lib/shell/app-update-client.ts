@@ -70,11 +70,11 @@ export async function checkAppUpdate(): Promise<AppUpdateCheckResult> {
         body: update.body,
       },
     };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
       available: false,
-      detail: `${errorText(e, "检测更新失败")}。请确认已配置更新源与签名公钥。`,
+      detail: `${errorText(error, "检测更新失败")}。请确认已配置更新源与签名公钥。`,
     };
   }
 }
@@ -113,11 +113,11 @@ export async function downloadAndInstallUpdate(
     // Windows 下 install 成功后会退出应用；走到这里说明未自动重启（非 Windows），
     // 成功安装后交由调用方决定是否显式 relaunch。
     return { ok: true, triggered: true, detail: "更新已安装并重启" };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
       triggered: false,
-      detail: errorText(e, "更新失败"),
+      detail: errorText(error, "更新失败"),
     };
   }
 }
@@ -134,10 +134,10 @@ export async function relaunchApp(): Promise<{ detail: string; ok: boolean }> {
     await relaunch();
     // relaunch 成功即触发进程重启，此调用通常不返回。
     return { ok: true, detail: "已触发重启" };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
-      detail: errorText(e, "重启失败"),
+      detail: errorText(error, "重启失败"),
     };
   }
 }

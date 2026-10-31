@@ -226,9 +226,9 @@ export function VideoStudio({
           await pollApiVideo(shot.id, submit.remoteTaskId);
         }
       }
-    } catch (e: unknown) {
+    } catch (error: unknown) {
       patchShot(shot.id, { clipStatus: "failed" });
-      setShotError(shot.id, errorMessage(e, "视频生成失败"));
+      setShotError(shot.id, errorMessage(error, "视频生成失败"));
     }
   }
 
