@@ -50,7 +50,7 @@ import { stripComments } from "./helpers/strip-comments";
 const ROOT = process.cwd();
 const TABLE_FILE = "src/lib/app-events.ts";
 
-interface SourceFile {
+type SourceFile = {
   /** 相对仓库根、正斜杠的路径（断言消息里要能直接点开）。 */
   rel: string;
   /** 已经剥掉注释的源码。 */
@@ -176,7 +176,7 @@ function sidesOf(
   return { emitted, subscribed };
 }
 
-interface PairingRow {
+type PairingRow = {
   emitters: Array<string>;
   event: string;
   subscribers: Array<string>;

@@ -49,7 +49,7 @@ type VirtualConsoleLike = {
   removeAllListeners(event: string): unknown;
 };
 
-export interface JsdomCapabilityGap {
+export type JsdomCapabilityGap = {
   /** 撤拦 ≠ 撤账：这一档的覆盖真正落在哪儿。 */
   coveredBy: string;
   /** jsdom 的原文，**逐字相等**才吞（见文件头第 ① 条）。 */
@@ -87,7 +87,7 @@ export const KNOWN_JSDOM_GAPS: ReadonlyArray<JsdomCapabilityGap> = [
   },
 ];
 
-export interface JsdomCapabilityController {
+export type JsdomCapabilityController = {
   /** 处置一条 `jsdomError`：按白名单吞掉并计数返回 `true`，需要转发返回 `false`。 */
   consume: (error: JsdomErrorLike) => boolean;
   /** 还原 jsdom 原本的 `jsdomError` 监听。 */

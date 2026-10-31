@@ -32,7 +32,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { acquireRepoDrizzle } from "./helpers/repo-drizzle-lock";
 
 /** 一张表的可比结构：列（名/类型/非空/主键）+ 索引名。 */
-interface TableShape {
+type TableShape = {
   cols: string;
   idx: string;
 }

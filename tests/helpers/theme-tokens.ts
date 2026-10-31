@@ -87,7 +87,7 @@ function matchesTheme(selector: string, dark: boolean): boolean {
   });
 }
 
-export interface ThemeTokens {
+export type ThemeTokens = {
   /** 取值：解析完整的自定义属性值；未定义为 `undefined`。 */
   get(name: string): string | undefined;
   /** 该 token 是否在某一态下被声明过。 */
@@ -280,7 +280,7 @@ export function themeTokens(theme: "light" | "dark", cssText: string): ThemeToke
   const dark = theme === "dark";
   const root = postcss.parse(cssText);
 
-  interface Entry {
+  type Entry = {
     layered: boolean;
     order: number;
     value: string;

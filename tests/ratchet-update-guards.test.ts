@@ -41,7 +41,7 @@ import { createGateRepo, type GateRepo, type GateRepoOptions } from "./helpers/g
 import { expectActionableRefusal, ACTIONABLE_REFUSAL } from "./helpers/ratchet-refusal";
 
 /** 一条棘轮的完整描述：脚本、基线落点、夹具输入、以及「怎么再加一条违规」。 */
-interface Ratchet {
+type Ratchet = {
   /** 基线相对**工作区根**的路径（脚本落 scripts/ 时它落在 scripts/ 下）。 */
   baseline: string;
   /** 脚本在工作区里的落点（与 `createGateRepo` 同义，这里显式写出来便于核对基线路径）。 */

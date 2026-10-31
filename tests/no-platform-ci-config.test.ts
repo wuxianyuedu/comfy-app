@@ -397,7 +397,7 @@ const PR_MOVED_TO_DAILY: Array<[string, string, string, string]> = [
  * 三条门槛（确定性 / 快 / 本地可复现）仍只在规范 §13.5.30 由人判，本账不碰。
  */
 type GateTier = "PR" | "push" | "daily" | "retired";
-interface LedgerEntry {
+type LedgerEntry = {
   name: string;
   tier: GateTier;
   note?: string;

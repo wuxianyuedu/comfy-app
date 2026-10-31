@@ -972,7 +972,7 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
  */
 
 /** `get-build-status -v` 的 `data` 那一段（用例只用到 `pipelinesStatus[*].stages[]`）。 */
-interface BuildJson {
+type BuildJson = {
   data: {
     pipelinesStatus: Record<
       string,
@@ -983,7 +983,7 @@ interface BuildJson {
 }
 
 /** 一格（`error` 那一栏只有 `get-build-stage -v` 才给，`get-build-status` 里没有）。 */
-interface StageJson {
+type StageJson = {
   duration?: number;
   error?: string;
   id?: string;

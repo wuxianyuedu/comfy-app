@@ -34,7 +34,7 @@
 import { test as base, expect } from "vitest";
 
 /** 平台维度：这台机器的真平台 + 「切成某个平台跑一段」的能力。 */
-export interface PlatformFixtures {
+export type PlatformFixtures = {
   /**
    * 把 `process.platform` 切成指定值跑一段。
    *
@@ -51,7 +51,7 @@ export interface PlatformFixtures {
 }
 
 /** 宿主形态维度：被测代码问「这个命令能不能起」时，谁回答。 */
-export interface HostFixtures {
+export type HostFixtures = {
   /**
    * POSIX 语义的宿主探针：名单里的路径带执行位且真起得来。
    *

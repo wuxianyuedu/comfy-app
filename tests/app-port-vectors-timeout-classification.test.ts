@@ -75,7 +75,7 @@ const judge = /* SAFETY: 类型断言已复核 */ require("../scripts/check-app-
 type ProbeState = "ok" | "timeout" | "missing" | "present-but-nonzero";
 
 /** 一趟取证的返回形状（`measurePythonOnce` 的结果，也是本文件的输入夹具）。 */
-interface Measure {
+type Measure = {
   problems: Array<string>;
   python: string | null;
   state: "answered" | "timeout" | "missing" | "malformed";

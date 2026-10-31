@@ -162,7 +162,7 @@ describe("真文件系统那一层（跨平台夹具）", () => {
 });
 
 /** 注入用的一条链接（`text` 是它的链接文本；`abs` 不必真存在）。 */
-interface FakeLink {
+type FakeLink = {
   abs: string;
   rel: string;
   text?: string;

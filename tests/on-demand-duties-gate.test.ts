@@ -50,7 +50,7 @@ const { test, expect } = defineGateRepo({
 });
 
 /** 索引里一行的形状（夹具按它造）。 */
-interface DutyRow {
+type DutyRow = {
   executor: string;
   fact: { gate?: string; key?: string; kind: string; script?: string };
   id: string;
