@@ -48,7 +48,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 
 /** 一份一次性克隆：`dir` 是它的工作树根，`dispose()` 注销它。 */
-export interface ProbeTree {
+export type ProbeTree = {
   /** 覆盖进克隆的那些相对路径（带状态前缀）。出问题第一个该看的就是这份清单。 */
   carried: Array<string>;
   dir: string;
@@ -56,7 +56,7 @@ export interface ProbeTree {
 }
 
 /** `git status --porcelain=v1 -z` 的一条记录。 */
-interface StatusEntry {
+type StatusEntry = {
   path: string;
   /** 两格状态码（`??` = 未跟踪） */
   xy: string;
@@ -120,7 +120,7 @@ function git(cwd: string, args: Array<string>): string {
  * 把磁盘弄坏去测，那不可重复 —— 而这一格恰恰是本次改动里最容易悄悄漏掉的一条
  * （现场：第一版的 `sep` 写错，拷贝那一步当场抛，登记就留在了仓库上）。
  */
-export interface ProbeTreeIo {
+export type ProbeTreeIo = {
   copyFile: (src: string, dst: string) => void;
 }
 

@@ -21,7 +21,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
  */
 
 /** 一条段的屏面事实：可访问名（全名）、可见名（缩略）、数值、填充解析出的颜色。 */
-interface SegmentOnScreen {
+type SegmentOnScreen = {
   barWidth: number;
   fill: string;
   labelOverflow: boolean;

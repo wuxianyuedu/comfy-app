@@ -251,7 +251,7 @@ const NOT_STARTED_RE =
  * ⚠️ `code` 单独**不构成判决** —— 「判出越界」与「根本没跑起来」退的是同一个 1，
  * 断言前先过 `expectGateRan()`，看 `ran` / `status` / `spawnError` / `signal`。
  */
-export interface GateRunResult {
+export type GateRunResult = {
   /** 退出码（`status` 取不到时兜 `1` —— **所以它单独不能当判决**，看 `ran`）。 */
   code: number;
   /** 跑成功时是 stdout；失败时是两条流合并（#2287：失败时哪一条有内容没人知道）。 */
@@ -298,7 +298,7 @@ export function expectGateRan(r: GateRunResult): void {
 }
 
 /** 一个临时的「门禁工作区」：`dir` 是它，`write` 往里放文件，`run` 在里面跑那个脚本。 */
-export interface GateRepo {
+export type GateRepo = {
   /** 造一次提交（`add -A` + commit）—— 上手身份与禁签名在本夹具里已配好。 */
   commit: (message: string) => void;
   /** 临时仓库根的绝对路径（脚本的 `cwd`）。 */
@@ -354,7 +354,7 @@ export interface GateRepo {
   write: (rel: string, content: string) => void;
 }
 
-export interface GateRepoOptions {
+export type GateRepoOptions = {
   /**
    * 从源码仓库再拷贝进来的路径（`from` 是相对仓库根，`to` 是工作区相对路径；
    * 目录会递归拷）。`.cjs` / `.mjs` 这类**同级动态导入**的模块只能这么来。
@@ -609,7 +609,7 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
  * 不在 vitest 的 fixture 生命周期里，临时目录没人清 —— 让「收尾」是返回值的一部分，
  * 比在文档里写「记得 rmSync」可靠。
  */
-export interface GateRepoHandle {
+export type GateRepoHandle = {
   dispose: () => void;
   repo: GateRepo;
 }

@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
-interface ExitModule {
+type ExitModule = {
   APP_SERVICE_EXIT_FILE: string;
   appServiceExitPath: (root: string) => string;
   writeAppServiceExit: (root: string, input: Record<string, unknown>) => boolean;

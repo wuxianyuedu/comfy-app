@@ -49,7 +49,7 @@ export const REAL_ROOT = path.resolve(__dirname, "../..");
 
 /** 判据的导出面（`scripts/check-a11y-rules.cjs` 的 `module.exports`）。 */
 /** 判据归一的台账形状（`readLedger` 的产物，也是 `judge` 的入参）。 */
-export interface Ledger {
+export type Ledger = {
   dialect: Array<{ decision: string; keeper: string; rule: string; why: string; }>;
   inlineExemptions: Array<{
     file: string;
@@ -60,7 +60,7 @@ export interface Ledger {
 }
 
 /** `judge()` 的判决结果（bin 形态再把它翻成退出码）。 */
-export interface JudgeVerdict {
+export type JudgeVerdict = {
   /** 生效的 jsx-a11y 规则表（`--report` 那一支要逐条打印它）。 */
   effective: Record<string, unknown>;
   /** 问题清单（空 = 通过）。 */
@@ -69,7 +69,7 @@ export interface JudgeVerdict {
   summary: string;
 }
 
-export interface A11yJudgeModule {
+export type A11yJudgeModule = {
   /** 生效的 jsx-a11y 规则表（规则名 → 档位）。 */
   effectiveRules: () => Promise<Record<string, unknown>>;
   /** 判一份台账，返回问题清单与汇总 —— bin 形态再用它算退出码。 */

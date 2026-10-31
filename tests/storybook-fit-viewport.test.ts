@@ -91,7 +91,7 @@ function pinnedScenes(): Set<string> {
   return pinned;
 }
 
-interface CanvasUsage {
+type CanvasUsage = {
   /** 消费方文件（相对仓库根）。 */
   readonly file: string;
   readonly hasFit: boolean;
