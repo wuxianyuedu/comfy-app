@@ -18,6 +18,35 @@ import { planSeparatedLaunches, resolveAffectedSegment } from "../scripts/affect
 import { runChunk } from "../scripts/run-affected-tests.mjs";
 import { isNoiseLine } from "../scripts/affected-launch-noise-reporter.mjs";
 
+describe("planSeparatedLaunches 的固定段分块帽（ISSUE #2863）", () => {
+  it("超出帽的固定段切成多块，且不丢不重、每块不超帽", () => {
+    const files = FIXED_STRUCTURAL_TESTS.slice(0, 30); // 30 份真固定清单成员 > 帽 24
+    const plan = planSeparatedLaunches(files);
+    const fixedChunks = plan.filter((c) => c.kind === "fixed");
+    expect(fixedChunks.length).toBeGreaterThan(1);
+    for (const c of fixedChunks) expect(c.files.length).toBeLessThanOrEqual(24);
+    expect(fixedChunks.flatMap((c) => c.files).sort()).toEqual([...files].sort());
+  });
+
+  it("帽内（≤24 份）仍是一块 —— 既有形态不因新帽改变", () => {
+    const plan = planSeparatedLaunches(FIXED_STRUCTURAL_TESTS.slice(0, 10));
+    expect(plan.filter((c) => c.kind === "fixed")).toHaveLength(1);
+  });
+
+  it("fixedChunkFiles: 0 显式关帽 ⇒ 回到纯预算分块的旧行为", () => {
+    const files = FIXED_STRUCTURAL_TESTS.slice(0, 30);
+    const plan = planSeparatedLaunches(files, { fixedChunkFiles: 0 });
+    expect(plan.filter((c) => c.kind === "fixed")).toHaveLength(1);
+  });
+
+  it("受影响段不戴帽：合成面再大也按预算一体分块", () => {
+    const synth = Array.from({ length: 30 }, (_, i) => `src/lib/__sep__/x${i}.test.ts`);
+    const plan = planSeparatedLaunches(synth);
+    expect(plan).toHaveLength(1);
+    expect(plan[0]?.kind).toBe("affected");
+  });
+});
+
 describe("resolveAffectedSegment —— 段开关（ISSUE #2845，两段拆两个 CI stage）", () => {
   it("不设 / 空 ⇒ both（本地与既有跑法逐字一致），且不打读数", () => {
     expect(resolveAffectedSegment(undefined)).toEqual({ mode: "both", note: null });
