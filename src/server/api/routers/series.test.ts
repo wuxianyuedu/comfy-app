@@ -79,7 +79,9 @@ async function makeHierarchy(caller = userCaller()) {
 /** 造一个角色库实体（createCharacter 返回 `T | undefined`）。 */
 async function addCharacter(seriesId: string, name = "角色", caller = userCaller()) {
   const ch = await caller.createCharacter({ seriesId, name });
-  if (!ch) throw new Error("seed character failed");
+  if (!ch) {
+    throw new Error("seed character failed");
+  }
   return ch;
 }
 
