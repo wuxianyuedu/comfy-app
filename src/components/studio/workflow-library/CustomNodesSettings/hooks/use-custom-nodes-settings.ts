@@ -17,6 +17,9 @@ import {
 } from "~/config/custom-nodes";
 import { deriveRowState, pathKey } from "../parsing";
 import { useBusyAction } from "~/components/ui/use-busy-action";
+
+/* 三个解析入口（全部 / 单条子包 / 单个父目录）：见 use-parse-actions.ts 头注。 */
+import { createParseActions } from "./use-parse-actions";
 import { errorText } from "~/lib/error-message";
 import { offsetWithin } from "~/lib/dom-rect";
 import { tailWindowAppend } from "~/lib/page-window";
@@ -133,60 +136,6 @@ function parseSettingsBlob(
     byPath: data.byPath || {},
   };
 }
-/**
- * 跨所有已配置父目录的扁平子包列表（从 `useCustomNodesSettings` 拆出，§12.13）。
- *
- * 一个顶层包（如 Anima-Artist-Mixer）即便用户输入的是父 custom_nodes 路径也只显示
- * 一次 —— 不渲染父卡片本身。按父目录分组，使用户能独立折叠/展开每个源目录；每个
- * 子行通过对接到 manifest 的 `byPath` 映射携带自己的 state（loaded / outdated /
- * unimported / error / missing）。
- *
- * 纯函数、不碰 React 状态：调用方的 `useMemo` 只负责记忆化。
- */
-function groupParentBlocks(
-  savedPaths: Array<string>,
-  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>,
-  byPath: Record<string, SummaryPkg>,
-): {
-  parentBlocks: Array<ParentBlock>;
-  totalAcrossParents: {
-    loaded: number;
-    outdated: number;
-    unimported: number;
-    total: number;
-  };
-} {
-  const parentBlocks = savedPaths.map((parent) => {
-    const subs = discoveredByParent[parent] ?? [];
-    const enriched = subs.map((sub) => {
-      const saved = byPath[pathKey(sub.path)];
-      return { sub, saved, state: deriveRowState(sub, saved) };
-    });
-    const cnt = {
-      loaded: 0,
-      outdated: 0,
-      unimported: 0,
-      error: 0,
-      missing: 0,
-      empty: 0,
-    };
-    for (const e of enriched) {
-      cnt[e.state.kind] += 1;
-    }
-    return { parent, subs: enriched, cnt, total: enriched.length };
-  });
-  const totalAcrossParents = parentBlocks.reduce(
-    (acc, b) => ({
-      loaded: acc.loaded + b.cnt.loaded,
-      outdated: acc.outdated + b.cnt.outdated,
-      unimported: acc.unimported + b.cnt.unimported,
-      total: acc.total + b.total,
-    }),
-    { loaded: 0, outdated: 0, unimported: 0, total: 0 },
-  );
-  return { parentBlocks, totalAcrossParents };
-}
-
 async function consumeSettingsStream(
   res: Response,
   sinks: {
@@ -593,27 +542,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     }
   }
 
-  async function onParseAll() {
-    if (savedPaths.length === 0) {
-      setError_("未找到自定义节点目录 —— 请先在设置 → 创作后端 中配置 ComfyUI 安装路径");
-      return;
-    }
-    setReport(null);
-    await parseBusy.run(() => runParse());
-  }
-
-  async function onParseSingle(pkgPath: string) {
-    /* 按子包的忙碌位**不是一个布尔**（一屏多个子行各跑各的），所以它不走
-     *  `useBusyAction` —— 那一条账管的是「一次动作一块界面忙不忙」。 */
-    setPerPkgParsing((parsing) => ({ ...parsing, [pkgPath]: true }));
-    try {
-      await runParse([pkgPath]);
-    } finally {
-      clearPerPkgParsing(pkgPath);
-    }
-  }
-
-  /** 撤下单条子包的解析中标记（按子包维度的忙碌位，见 `onParseSingle`）。 */
+  /** 撤下单条子包的解析中标记（按子包维度的忙碌位，见 `use-parse-actions.ts` 的
+   *  `onParseSingle`）。留在本 hook 里而不是搬过去：它是个 `setState` 包装，
+   *  主 hook 的其它地方也用它，搬走会变成「两个模块互相递状态」。 */
   function clearPerPkgParsing(pkgPath: string) {
     setPerPkgParsing((parsing) => {
       const next = { ...parsing };
@@ -622,22 +553,57 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     });
   }
 
-  /** 一次性重新解析单个已配置父目录下的所有子包。复用同一子集解析路径，只是一次传 N
-   *  个绝对路径。空/缺失目录由解析器自身容忍（记录日志并跳过）。 */
-  async function onParseAllParent(parent: string) {
-    const subs = discoveredByParent[parent] ?? [];
-    const targets = subs.map((sub) => sub.path).filter(Boolean);
-    if (targets.length === 0) {
-      setError_("该目录下没有可解析的子包");
-      return;
-    }
-    await parseBusy.run(() => runParse(targets));
-  }
+  /* 三个解析入口（全部 / 单条子包 / 单个父目录）在 `use-parse-actions.ts`：
+   * 它们只读已配路径与已发现子包、写进度与错误，与本 hook 的状态编排是两件事
+   * （拆分前它们是内联在这里的四段函数，见那个文件头注）。 */
+  const { onParseAll, onParseSingle, onParseAllParent } = createParseActions({
+    savedPaths,
+    discoveredByParent,
+    parseBusy,
+    setError: setError_,
+    setReport,
+    setPerPkgParsing,
+    runParse,
+    clearPerPkgParsing,
+  });
 
-  const { parentBlocks, totalAcrossParents } = useMemo(
-    () => groupParentBlocks(savedPaths, discoveredByParent, byPath),
-    [savedPaths, discoveredByParent, byPath],
-  );
+  // 跨所有已配置父目录的扁平子包列表。一个顶层包（如 Anima-Artist-Mixer）即便用户
+  // 输入的是父 custom_nodes 路径也只显示一次 —— 不渲染父卡片本身。
+  // 按父目录分组，使用户能独立折叠/展开每个源目录。每个子行通过对接到 manifest 的
+  // byPath 映射携带自己的 state（loaded / outdated / unimported / error / missing）。
+  const parentBlocks = useMemo(() => {
+    return savedPaths.map((parent) => {
+      const subs = discoveredByParent[parent] ?? [];
+      const enriched = subs.map((sub) => {
+        const saved = byPath[pathKey(sub.path)];
+        return { sub, saved, state: deriveRowState(sub, saved) };
+      });
+      const cnt = {
+        loaded: 0,
+        outdated: 0,
+        unimported: 0,
+        error: 0,
+        missing: 0,
+        empty: 0,
+      };
+      for (const e of enriched) {
+        cnt[e.state.kind] += 1;
+      }
+      return { parent, subs: enriched, cnt, total: enriched.length };
+    });
+  }, [savedPaths, discoveredByParent, byPath]);
+
+  const totalAcrossParents = useMemo(() => {
+    return parentBlocks.reduce(
+      (acc, b) => ({
+        loaded: acc.loaded + b.cnt.loaded,
+        outdated: acc.outdated + b.cnt.outdated,
+        unimported: acc.unimported + b.cnt.unimported,
+        total: acc.total + b.total,
+      }),
+      { loaded: 0, outdated: 0, unimported: 0, total: 0 },
+    );
+  }, [parentBlocks]);
 
   return {
     open,

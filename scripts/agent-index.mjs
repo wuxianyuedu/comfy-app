@@ -113,7 +113,9 @@ function relay(lines, res) {
     lines.push("   │ （它没有输出）");
     return;
   }
-  for (const line of text.split("\n")) lines.push(`   │ ${line}`);
+  for (const line of text.split("\n")) {
+    lines.push(`   │ ${line}`);
+  }
 }
 
 /**
@@ -173,7 +175,9 @@ export function probeZvec(run = runTool) {
   if (res.missing) {
     return { id: "zg", verdict: "unknown", res, reason: "命令不在 PATH 里" };
   }
-  if (res.code === 0) return { id: "zg", verdict: "ready", res };
+  if (res.code === 0) {
+    return { id: "zg", verdict: "ready", res };
+  }
   if (/not ready/i.test(combined(res))) {
     return { id: "zg", verdict: "not-ready", res };
   }
@@ -193,10 +197,18 @@ export function probeZvec(run = runTool) {
  * @returns {string}
  */
 function show(value, fallback = "（未给）") {
-  if (value === undefined || value === null || value === "") return fallback;
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "string") return value;
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  if (typeof value === "string") {
+    return value;
+  }
   return JSON.stringify(value);
 }
 
@@ -240,10 +252,14 @@ export function renderProbe(probe) {
     /* zvec-grep 的文件数 / 刷新状态只写在它自己的输出里，转出来、不另算。 */
     relay(lines, probe.res);
   }
-  if (probe.reason) lines.push(`   · ${probe.reason}`);
+  if (probe.reason) {
+    lines.push(`   · ${probe.reason}`);
+  }
   if (probe.verdict === "unknown") {
     lines.push(`   · 装法（若它确实没装）：${tool.install} · MCP 面：${tool.mcp}`);
-    if (probe.id === "codegraph") relay(lines, probe.res);
+    if (probe.id === "codegraph") {
+      relay(lines, probe.res);
+    }
   }
   if (probe.verdict === "not-ready") {
     lines.push(`   · 索引目录：${path.join(ROOT, tool.indexDir)}（本机缓存，不入库）`);
@@ -259,7 +275,9 @@ export function renderProbe(probe) {
  */
 export function combineVerdicts(probes) {
   let total = 0;
-  for (const p of probes) total = Math.max(total, VERDICT_CODE[p.verdict]);
+  for (const p of probes) {
+    total = Math.max(total, VERDICT_CODE[p.verdict]);
+  }
   return total;
 }
 
@@ -276,7 +294,9 @@ function report(probes, opts = {}) {
       ? `${TAG} 下面是**重新取一遍**的读数（\`--init\` 之后不沿用建索引前那一份）：`
       : `${TAG} 只读诊断（不改任何索引）—— 状态全部取自两个工具自己的读数：`,
   );
-  for (const p of probes) out.push(...renderProbe(p));
+  for (const p of probes) {
+    out.push(...renderProbe(p));
+  }
   const total = combineVerdicts(probes);
   const state = total === 0 ? "ok" : total === 1 ? "red" : "skip";
   out.push(
@@ -295,7 +315,9 @@ function report(probes, opts = {}) {
         "工具本身不在 PATH 就先按上面那行装法装上。",
     );
   }
-  for (const line of out) process.stdout.write(`${line}\n`);
+  for (const line of out) {
+    process.stdout.write(`${line}\n`);
+  }
   return total;
 }
 
@@ -319,16 +341,15 @@ function initialize(before) {
       }
       continue;
     }
-    const [cmd, args] =
-      p.id === "codegraph"
-        ? ["codegraph", ["init", "--yes"]]
-        : ["zg", ["index"]];
+    const [cmd, args] = p.id === "codegraph" ? ["codegraph", ["init", "--yes"]] : ["zg", ["index"]];
     process.stdout.write(`${TAG} 跑 \`${cmd} ${args.join(" ")}\`：\n`);
     const res = runTool(cmd, args);
     /** @type {string[]} */
     const lines = [];
     relay(lines, res);
-    for (const line of lines) process.stdout.write(`${line}\n`);
+    for (const line of lines) {
+      process.stdout.write(`${line}\n`);
+    }
     if (res.code !== 0) {
       process.stdout.write(
         `${TAG} 它没跑成（退出码 ${res.code ?? "null"}）—— 上面是它自己的原话；` +
@@ -373,9 +394,6 @@ export function main(argv = process.argv.slice(2)) {
   return report(probes);
 }
 
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }

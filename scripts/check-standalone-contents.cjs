@@ -217,6 +217,13 @@ const ALLOWED_SRC_FILES = [
   "lib/process/kill-process-tree.ts",
   "lib/process/executable-resolve.ts",
   "lib/process/platform.ts",
+  /* 上面那两份按职责拆出来的链（`executable-resolve.ts` 越过文件长度硬闸时切的）。
+   * 与 `scripts/standalone-private-inputs.mjs` 的 `RUNTIME_SRC` **必须同批**改：
+   * 剔除侧漏了 = 产物缺件、重编排起不来（表现只是「双击没反应」）；这一侧漏了 =
+   * 构建后检查把合法产物判成违规。判据在两处：本文件的集合与
+   * `tests/dist-artifact-hygiene.test.ts` 的「两侧同源」。 */
+  "lib/process/pnpm-resolve.ts",
+  "lib/process/version-compare.ts",
 ];
 
 /** 该层允许的顶层条目。 */

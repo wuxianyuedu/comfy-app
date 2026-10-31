@@ -728,6 +728,41 @@ export function seedProject(
 }
 
 /**
+ * 种一条生产数据（production 表，id = 项目 id）。FR-SR 双向同步用例用：
+ * 给 `characters` 列预置角色卡，验证 提升 / 注入。其余列一律吃 schema 默认值。
+ */
+export function seedProduction(
+  _tdb: TestDb,
+  input: {
+    id?: string;
+    userId: string;
+    characters?: unknown;
+    name?: string;
+  },
+): Row {
+  const id = input.id ?? `seed-prod-${++seedSeq}`;
+  const at = new Date();
+  insertInto("production", {
+    id,
+    userId: input.userId,
+    title: input.name ?? "未命名项目",
+    type: "short_video",
+    tone: "",
+    logline: "",
+    scriptMarkdown: "",
+    scenes: [],
+    characters: input.characters ?? [],
+    shots: [],
+    progress: {},
+    run: {},
+    scriptReview: {},
+    createdAt: at,
+    updatedAt: at,
+  });
+  return getRow("production", id);
+}
+
+/**
  * 种一条成片。给归属类用例用（`films/<id>.mp4` 的落点名字里就是成片行 id），
  * 其余列一律吃 schema 默认值 —— 这些用例只关心 `userId` 那一格。
  * 与 `filmRepository.create` 的取舍：那条会生成 cuid，路径断言就得先读回 id；

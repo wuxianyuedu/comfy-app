@@ -442,7 +442,9 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
 describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", () => {
   /** 四个写方。（读方在端点侧，不在这里列。） */
   const WRITERS = [
-    "src/lib/comfyui/lifecycle.ts",
+    /* ComfyUI 那一支的实际写盘在手：`lifecycle.ts` 把它按职责拆出去了
+     * （会话标记 + runtime 日志写入器），文件名仍走 `runtime-log-pack.server`。 */
+    "src/lib/comfyui/lifecycle-session-log.ts",
     "src/lib/drizzle-studio/lifecycle.ts",
     "src/app/api/llm/ollama-start/route.ts",
     "src/app/api/llm/ollama-stop/route.ts",

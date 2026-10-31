@@ -34,6 +34,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { normalizeControlFlow } from "./helpers/source-shape";
+
 /**
  * 需要 POSIX 执行语义的用例开关：这条要写一个 `#!/bin/sh` 的假命令、再 `chmod`
  * 出执行位，而 Windows 上 libuv 不解析 shebang、`chmodSync` 也不存执行位 ——
@@ -46,9 +48,11 @@ import { describe, expect, it } from "vitest";
  */
 const needsPosixExec = it.skipIf(process.platform === "win32");
 
-const SCRIPT_SOURCE = readFileSync(
-  path.resolve(__dirname, "../scripts/check-app-port-vectors.cjs"),
-  "utf8",
+/* 形态断言的对象是这个脚本的**控制流**，不是括号 —— 先过归一化，
+ * oxlint `curly` 给单语句体补 `{}` 才不会把断言打成「判据写错了」。 */
+const SCRIPT_SOURCE = normalizeControlFlow(
+  readFileSync(path.resolve(__dirname, "../scripts/check-app-port-vectors.cjs"), "utf8"),
+  "check-app-port-vectors.cjs",
 );
 // 判据脚本是 CJS（`@ts-nocheck`，require 进来是 any），按仓库惯例显式标注返回形状。
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -267,19 +271,15 @@ describe("接线在位：复跑真的会发生，出口真的分两条", () => {
   });
 
   it("catch 里按形态分流：超时返回 timeout 态，真失败返回带 problems 的 answered 态", () => {
-    /* 形态跟 `eslint/curly`（即 `oxlint` 的 `curly: "all"`）走：单语句体也要花括号，
-     * 所以这里认的是「条件在 `if (…)`，`return { state: "timeout"` 在它后面」——
-     * 写死 `) return {` 的那一版会在加花括号的那次批量改动里**静默失配**。 */
-    expect(SCRIPT_SOURCE).toMatch(/if \(isTimeoutLike\(e\)\) \{\s*\n\s*return \{ state: "timeout"/);
+    expect(SCRIPT_SOURCE).toMatch(/if \(isTimeoutLike\(e\)\) return \{ state: "timeout"/);
     expect(SCRIPT_SOURCE).toMatch(/problems: \[\s*\n?\s*`Python 侧自检失败：/);
   });
 
   it("判决结果同时喂两条出口（problems 与 unverified 各走各的）", () => {
     expect(SCRIPT_SOURCE).toMatch(/const verdict = decidePythonVerdict\(first, second\);/);
     expect(SCRIPT_SOURCE).toMatch(/problems\.push\(\.\.\.verdict\.problems\);/);
-    /* 同上：`curly` 之后循环体带花括号，判的仍是「判决结果喂进 unverified 那条出口」。 */
     expect(SCRIPT_SOURCE).toMatch(
-      /for \(const note of verdict\.unverified\) \{\s*\n\s*unverified\.push\(note\);/,
+      /for \(const note of verdict\.unverified\) unverified\.push\(note\);/,
     );
   });
 
@@ -305,6 +305,7 @@ describe("接线在位：复跑真的会发生，出口真的分两条", () => {
   });
 
   it("被 import 时不跑检查（否则用例一 require 就现场取证并可能 process.exit）", () => {
-    expect(SCRIPT_SOURCE).toMatch(/if \(require\.main === module\) \{/);
+    // 归一化之后块括号没了，判的是那个条件本身（括号在不在不影响这条判据）。
+    expect(SCRIPT_SOURCE).toMatch(/if \(require\.main === module\)/);
   });
 });

@@ -4454,27 +4454,39 @@ describe("#2766 --dry-run 底下「只补关」：读面照跑，写面一条不
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
-      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-      if (cmd === "git" && key.includes("@{u}")) return ok("");
-      if (cmd === "git" && key === "remote") return ok("cnb\n");
-      if (cmd === "git" && key.includes("symbolic-ref"))
+      if (cmd === "cnb" && args[0] === "--version") {
+        return ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("@{u}")) {
+        return ok("");
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("cnb\n");
+      }
+      if (cmd === "git" && key.includes("symbolic-ref")) {
         return ok("refs/remotes/cnb/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-      if (cmd === "git" && key.includes("get-url"))
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok("master");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+        return ok("d02ec9");
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull")
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull") {
         return ok(
           JSON.stringify({
             status: 200,
             data: { number: 2069, is_merged: true, title: "fix(a): 那一格 (#2070)" },
           }),
         );
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "update-issue")
-        return ok(
-          JSON.stringify({ status: 200, data: { number: 2070, state: "closed" } }),
-        );
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue")
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "update-issue") {
+        return ok(JSON.stringify({ status: 200, data: { number: 2070, state: "closed" } }));
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue") {
         return ok(
           JSON.stringify({
             status: 200,
@@ -4489,12 +4501,12 @@ describe("#2766 --dry-run 底下「只补关」：读面照跑，写面一条不
             },
           }),
         );
+      }
       return ok("");
     };
     /** 写面那四条命令（读面是 get-issue / get-pull / list-*）。 */
     const WRITE = ["update-issue", "post-issue-comment", "post-issue-labels", "delete-issue-label"];
-    const writes = (list: Array<string>) =>
-      list.filter((c) => WRITE.some((w) => c.includes(w)));
+    const writes = (list: Array<string>) => list.filter((c) => WRITE.some((w) => c.includes(w)));
     return { run, calls, log, writes };
   }
 

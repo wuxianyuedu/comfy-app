@@ -18,6 +18,8 @@ import type { WorkflowRow } from "./workflow-library-config";
 import type { MetaEditorController } from "./hooks/use-workflow-library-detail";
 import { DetailHeader } from "./sections/DetailHeader";
 
+import { normalizeControlFlow } from "../../../../tests/helpers/source-shape";
+
 afterEach(cleanup);
 
 const meta: MetaEditorController = {
@@ -337,15 +339,16 @@ describe("局部加载不许用整列加载界面", () => {
   });
 
   it("`canvasMounted` 由 controller 给，且落在「首次切到画布页签」那一刻", () => {
-    const hook = read("hooks/use-workflow-library-detail.ts");
+    /* 读源断言钉的是**结构**（字段在 controller 上、记录点在切页签那条路上），
+     * 不是括号形态：先过归一化，oxlint `curly` 补 `{}` 不改变这条判据的结论。 */
+    const hook = normalizeControlFlow(read("hooks/use-workflow-library-detail.ts"), "detail.ts");
     /* 契约：controller 上有这个字段。 */
     expect(hook).toMatch(/canvasMounted: boolean;/);
     /* 判据：当前工作流访问过画布页签才为真。 */
     expect(hook).toMatch(/canvasMounted: !!workflow && canvasVisitedFor === workflow\.id/);
-    /* 记录点只在切页签那一条路径上（不是 effect 里 setState）。oxlint curly 切泛形
-     * 后这行是加括号的多行体，正则要跟着钉（顺带防回归到单行无括号）。 */
+    /* 记录点只在切页签那一条路径上（不是 effect 里 setState）。 */
     expect(hook).toMatch(
-      /if \(isCanvasTab\(tab\) && workflow\) \{\s*setCanvasVisitedFor\(workflow\.id\);\s*\}/,
+      /if \(isCanvasTab\(tab\) && workflow\) setCanvasVisitedFor\(workflow\.id\)/,
     );
   });
 });

@@ -25,20 +25,26 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { launcherChainSource } from "./helpers/launcher-source";
+import { normalizeControlFlow } from "./helpers/source-shape";
 
 const ROOT = process.cwd();
-const EXIT_MJS = readFileSync(join(ROOT, "scripts", "app-service-exit.mjs"), "utf8");
+/* 形态断言只看控制流，不看括号：先过归一化，oxlint `curly` 补 `{}` 不改变判据结论
+ * （`normalizeControlFlow` 对 `.rs` / `.ts` 之外的非 JS 家族原样返回，这里只包 JS 家族）。 */
+const EXIT_MJS = normalizeControlFlow(
+  readFileSync(join(ROOT, "scripts", "app-service-exit.mjs"), "utf8"),
+  "app-service-exit.mjs",
+);
 /* 断的是**编排链路**（主文件 + 它顶层静态 import 的 `launcher-core/**`）而不是
  * 单份主文件：`concludeDownstreamExit` 随 R5 拆分搬进了
  * `launcher-core/downstream.mjs`，只读主文件时 `slice` 拿到空串、
  * `not.toContain` 则**静默恒真**（拆分的实现位置不是契约，契约是「收尾那一段
  * 里写不写记录」）。 */
-const LAUNCHER_MJS = launcherChainSource();
+const LAUNCHER_MJS = normalizeControlFlow(launcherChainSource(), "dev-launcher.mjs");
 // 「收尾定性」这一族的判据不在入口文件里（§12.6 R5 的姊妹档盯着入口长度），
 // 而在 launcher-core/downstream-exit.mjs。写入侧的成因取值要看**那个**函数体。
-const DOWNSTREAM_EXIT_MJS = readFileSync(
-  join(ROOT, "scripts", "launcher-core", "downstream-exit.mjs"),
-  "utf8",
+const DOWNSTREAM_EXIT_MJS = normalizeControlFlow(
+  readFileSync(join(ROOT, "scripts", "launcher-core", "downstream-exit.mjs"), "utf8"),
+  "downstream-exit.mjs",
 );
 const EXIT_TS = readFileSync(join(ROOT, "src", "lib", "shell", "app-service-exit.ts"), "utf8");
 const SHELL_LAUNCH_RS = readFileSync(join(ROOT, "src-tauri", "src", "shell_launch.rs"), "utf8");
@@ -133,9 +139,7 @@ describe("应用服务退出记录：跨侧同源", () => {
      * 恢复后读回 null，界面只能回一句把成因猜成「手工 pnpm dev」的兜底。 */
     expect(DOWNSTREAM_EXIT_MJS).toContain("export function runtimeExitRecord(");
     // 判据只认「dev 先退出」：壳先走是用户关窗 / 壳被收走，服务是被带走的。
-    /* 形态跟 `eslint/curly` 走（单语句体也带花括号）：判的仍是「只认 dev 先退出」，
-     * 所以认的是条件 + 紧随其后的 `return null;`，不认它写在一行还是两行。 */
-    expect(DOWNSTREAM_EXIT_MJS).toMatch(/if \(who !== "dev"\) \{\s*\n\s*return null;/);
+    expect(DOWNSTREAM_EXIT_MJS).toContain('if (who !== "dev") return null;');
     // 调用点在常驻段，且排在 `await shutdown(` 之前（写太晚 = 现场已收走）。
     const resident = LAUNCHER_MJS.slice(LAUNCHER_MJS.indexOf("const record = runtimeExitRecord({"));
     expect(resident).toContain("writeAppServiceExit(ROOT, record)");

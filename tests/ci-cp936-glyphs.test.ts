@@ -26,8 +26,12 @@ import {
   normalizeCp936Glyphs,
 } from "../scripts/ci-cp936-glyphs.mjs";
 
+import { normalizeControlFlow } from "./helpers/source-shape";
+
 const ROOT = path.resolve(import.meta.dirname, "..");
-const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
+/* 读源断言的是**控制流**（谁先谁后、有没有这道守卫），不是括号形态：先过归一化，
+ * oxlint `curly` 给单语句体补 `{}` 就不会把这些断言打成「形状变了」。 */
+const read = (rel: string) => normalizeControlFlow(readFileSync(path.join(ROOT, rel), "utf8"), rel);
 
 describe("字形归一化：等义替换", () => {
   it("绿色通过标记换成 CP936 里有的字形（这一格最要紧）", () => {
@@ -227,10 +231,10 @@ describe("转码外壳：接上了归一化", () => {
     expect(source).toContain("describeGlyphReplacements");
     const guards = source.match(/if \(said !== ""\)/g) ?? [];
     expect(guards.length, "两处调用点各要有一个「空串就不发」").toBe(2);
-    /* 认的是「收尾那条调用」，不认它的排版：`eslint/curly` 那批之后它由折行变回单行
-     * （`describeGlyphReplacements([...], "这一跑")`），写死 `(\n` 会在那次批量改动里
-     * **静默失配** —— 而这条判据要守的正是「收尾那一处也走 `write`」。 */
-    const summaryAt = source.search(/describeGlyphReplacements\(\s*\n?\s*\[\.\.\.glyphTotals/);
+    /* 收尾那条调用的**两种形态**都认：参数只有一个且短时格式化器会把它收成一行，
+     * 而这里读的已经是归一化后的文本。钉住的是「收尾那处也走 describeGlyphReplacements」
+     * 这层结构，不是换行在哪 —— 只认 `(\n` 会随格式化器的排版飘。 */
+    const summaryAt = source.indexOf("describeGlyphReplacements([");
     expect(summaryAt, "认不出收尾那条调用；它的形状变了要同批改这里").toBeGreaterThan(-1);
     const summaryChunk = source.slice(summaryAt, summaryAt + 320);
     expect(summaryChunk).toContain("write(summary");

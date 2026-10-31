@@ -546,17 +546,13 @@ export function main(io = {}) {
   const writeLine = io.log ?? ((line) => process.stdout.write(`${line}\n`));
   /* `--json` 那一档**整屏**都是机器可读的：前面那几行 `[重档]` 叙述与 JSON 走同一个
    * stdout，所以叙述行也不许多色号 —— 上色与这一档无关。 */
-  const paintOn =
-    io.log === undefined &&
-    !argv.includes("--json") &&
-    colorEnabled({ env: io.env });
+  const paintOn = io.log === undefined && !argv.includes("--json") && colorEnabled({ env: io.env });
   /**
    * 屏幕上的一行（上色 + 色带）。
    * @param {string} line
    * @param {string} [color] 只给合计那一行用（它自己不带三态前缀）
    */
-  const log = (line, color) =>
-    writeLine(paintLine(line, { enabled: paintOn, color }));
+  const log = (line, color) => writeLine(paintLine(line, { enabled: paintOn, color }));
   const onlyArg = argv.find((a) => a.startsWith("--only="));
   const only = onlyArg ? onlyArg.slice("--only=".length) : null;
   const cwd = io.cwd ?? ROOT;

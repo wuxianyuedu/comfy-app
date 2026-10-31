@@ -221,10 +221,13 @@ export function parseArgs(argv) {
       const tok =
         i + 1 < argv.length && !String(argv[i + 1]).startsWith("-") ? String(argv[++i] ?? "") : "";
       const n = parseIssueNumberToken(tok);
-      if (n === null) out.commentBad.push(tok || "(缺号)");
-      else if (out.comment !== null) {
+      if (n === null) {
+        out.commentBad.push(tok || "(缺号)");
+      } else if (out.comment !== null) {
         out.commentBad.push(`重复的 --comment（前一张 #${out.comment}）`);
-      } else out.comment = n;
+      } else {
+        out.comment = n;
+      }
     } else if (a === "--body-file") {
       out.bodyFile = argv[++i] ?? "";
     } else if (a === "--close-issue") {
@@ -312,10 +315,13 @@ export function parseArgs(argv) {
       } else {
         const tok = a.slice("--comment=".length);
         const n = parseIssueNumberToken(tok);
-        if (n === null) out.commentBad.push(tok || "(缺号)");
-        else if (out.comment !== null) {
+        if (n === null) {
+          out.commentBad.push(tok || "(缺号)");
+        } else if (out.comment !== null) {
           out.commentBad.push(`重复的 --comment（前一张 #${out.comment}）`);
-        } else out.comment = n;
+        } else {
+          out.comment = n;
+        }
       }
     } else if (a.startsWith("--close-issue=")) {
       out.closeIssue = true;

@@ -38,6 +38,16 @@ const PROBE = createProbeTree(REAL_ROOT);
 const REPO_ROOT = PROBE.dir;
 const CHECK = join(REPO_ROOT, "scripts", "check-doc-references.cjs");
 
+/** 「文档怎么引用门禁」那三条判据的分片（它们在 `check-doc-gate-refs.cjs`）。
+ *
+ *  为什么要分成两份读：那一半判的**不是**「硬编码值 / 路径 / 端口」，两半合住一份文件
+ *  时越过了文件长度硬闸；而它的**接入点**仍在 `check-doc-references.cjs` 的 `main` 里。
+ *  于是「函数定义在哪」与「有没有人调它」是两个文件、两条读法 —— 拿哪一份去找另一件
+ *  都会落空，那是判据搬了家、不是判据没了。 */
+function gateRefsSource(): string {
+  return readFileSync(join(REPO_ROOT, "scripts", "check-doc-gate-refs.cjs"), "utf8");
+}
+
 /** 把脚本真正引入的内存态 FACTS 拿来做结构断言（与脚本同源，见 doc-facts.cjs）。 */
 type Fact = {
   key: string;
@@ -119,12 +129,15 @@ afterEach(() => {
       continue;
     }
     const same = now === null || want === null ? now === want : now.equals(want);
-    if (!same) touched.push(abs);
+    if (!same) {
+      touched.push(abs);
+    }
   }
   expect(
     touched,
     "探针不该写真实工作树（ISSUE #2665）：下面这些真实入库文件在本文件跑的过程中被改过 —— " +
-      "写探针要落在克隆里（`REPO_ROOT`），不是 `REAL_ROOT`。\n  " + touched.join("\n  "),
+      "写探针要落在克隆里（`REPO_ROOT`），不是 `REAL_ROOT`。\n  " +
+      touched.join("\n  "),
   ).toEqual([]);
 });
 
@@ -675,9 +688,15 @@ describe("文档不许用「第 N 步」引用门禁步骤（ISSUE #1374）", ()
   }
 
   it("已接入 main 流程（不是定义了却没人调用）", () => {
+    /* 判据本体住在 `check-doc-gate-refs.cjs`（与上文那一半「硬编码值 / 路径 / 端口」
+     * 不是一件事，两份合住一份时越过文件长度硬闸），而**接入点**仍在 `main` 里：
+     * 所以两件事各读一份文件 —— 拿 `check-doc-references.cjs` 去找函数定义会落空，
+     * 那是「它搬了家」而不是「它没接上」。 */
+    expect(gateRefsSource()).toContain("function checkGateStepIndexRefs(problems)");
     const script = readFileSync(CHECK, "utf8");
-    expect(script).toContain("function checkGateStepIndexRefs()");
-    expect(isCalledInMain(script, "checkGateStepIndexRefs()")).toBe(true);
+    /* 接入形态是 `checkGateStepIndexRefs(problems)`：判据把结论 push 进主脚本的
+     * `problems` 数组（探针树里跑的是真脚本，全局变量不存在）。 */
+    expect(isCalledInMain(script, "checkGateStepIndexRefs(problems)")).toBe(true);
   });
 
   it("量具自己没坏：注释掉的调用不算「已接入」", () => {
@@ -829,16 +848,18 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
   }
 
   it("已接入 main 流程（不是定义了却没人调用）", () => {
-    const script = readFileSync(CHECK, "utf8");
-    expect(script).toContain("function checkGateChecklistMatchesHook()");
-    expect(isCalledInMain(script, "checkGateChecklistMatchesHook()")).toBe(true);
+    expect(gateRefsSource()).toContain("function checkGateChecklistMatchesHook(problems)");
+    /* 接入点读主脚本：函数定义在分片、调用在 `main`，两件事读两个文件。 */
+    expect(
+      isCalledInMain(readFileSync(CHECK, "utf8"), "checkGateChecklistMatchesHook(problems)"),
+    ).toBe(true);
   });
 
   it("量具自己没坏：注释掉的调用不算「已接入」", () => {
-    const wired = "function main() {\n  checkGateChecklistMatchesHook();\n}\n";
-    const muted = "function main() {\n  // checkGateChecklistMatchesHook();\n}\n";
-    expect(isCalledInMain(wired, "checkGateChecklistMatchesHook()")).toBe(true);
-    expect(isCalledInMain(muted, "checkGateChecklistMatchesHook()")).toBe(false);
+    const wired = "function main() {\n  checkGateChecklistMatchesHook(problems);\n}\n";
+    const muted = "function main() {\n  // checkGateChecklistMatchesHook(problems);\n}\n";
+    expect(isCalledInMain(wired, "checkGateChecklistMatchesHook(problems)")).toBe(true);
+    expect(isCalledInMain(muted, "checkGateChecklistMatchesHook(problems)")).toBe(false);
   });
 
   it("存量 = 0：钩子 D 组的每一步都在清单里，且 flag 逐字一致", () => {
@@ -928,16 +949,16 @@ describe("门禁的步数也不许写进文档（ISSUE #1407，签字口径 (a)�
   }
 
   it("已接入 main 流程（定义了却没人调用 = 假判据）", () => {
-    const script = readFileSync(CHECK, "utf8");
-    expect(script).toContain("function checkGateStepCounts()");
-    expect(isCalledInMain(script, "checkGateStepCounts()")).toBe(true);
+    expect(gateRefsSource()).toContain("function checkGateStepCounts(problems)");
+    /* 同上：定义在分片、调用在 `main`。 */
+    expect(isCalledInMain(readFileSync(CHECK, "utf8"), "checkGateStepCounts(problems)")).toBe(true);
   });
 
   it("量具自己没坏：注释掉的调用不算「已接入」", () => {
-    const wired = "function main() {\n  checkGateStepCounts();\n}\n";
-    const muted = "function main() {\n  // checkGateStepCounts();\n}\n";
-    expect(isCalledInMain(wired, "checkGateStepCounts()")).toBe(true);
-    expect(isCalledInMain(muted, "checkGateStepCounts()")).toBe(false);
+    const wired = "function main() {\n  checkGateStepCounts(problems);\n}\n";
+    const muted = "function main() {\n  // checkGateStepCounts(problems);\n}\n";
+    expect(isCalledInMain(wired, "checkGateStepCounts(problems)")).toBe(true);
+    expect(isCalledInMain(muted, "checkGateStepCounts(problems)")).toBe(false);
   });
 
   it("存量 = 0：扫描面上每条「裸计数 + 门禁锚点」同行都带纠正词", async () => {

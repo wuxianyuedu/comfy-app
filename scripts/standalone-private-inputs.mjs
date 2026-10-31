@@ -318,6 +318,13 @@ export const RUNTIME_SRC = [
    * 它，缺了同样让整个编排器**加载即断** —— 逐文件放行的语义是「一个都不能少」，
    * 不是「放行了它的父模块就够」。 */
   "lib/process/platform.ts",
+  /* pnpm-resolve.ts / version-compare.ts：从 `executable-resolve.ts` 按职责拆出来的
+   * 两块（它越过文件长度硬闸时切的）。链**照样是一个都不能少**：`shell.mjs` →
+   * `executable-resolve.ts` → `pnpm-resolve.ts` → `version-compare.ts`，缺任何一份
+   * 都是编排器加载即 `ERR_MODULE_NOT_FOUND`（与上面两条同一个理由）。两份同样走
+   * Node 24 的类型擦除，受「只许可擦除语法」约束。 */
+  "lib/process/pnpm-resolve.ts",
+  "lib/process/version-compare.ts",
 ];
 
 /**

@@ -552,7 +552,15 @@ describe("dev/start 在起 Next 之前预检", () => {
     const processDir = path.join(ROOT, "src", "lib", "process");
     const resolveTo = path.join(tmp, "src", "lib", "process");
     fs.mkdirSync(resolveTo, { recursive: true });
-    for (const name of ["executable-resolve.ts", "platform.ts"]) {
+    /* `pnpm-resolve.ts` / `version-compare.ts` 是 `executable-resolve.ts` 按职责
+     * 拆出来的两块（它越过文件长度硬闸时切的），静态 import 关系把它们串成一条链 ——
+     * 「按链抄」这条教训对**链条变长**同样成立。 */
+    for (const name of [
+      "executable-resolve.ts",
+      "platform.ts",
+      "pnpm-resolve.ts",
+      "version-compare.ts",
+    ]) {
       fs.copyFileSync(path.join(processDir, name), path.join(resolveTo, name));
     }
     const r = spawnSync(process.execPath, [path.join(scriptsDir, "dev.mjs")], {

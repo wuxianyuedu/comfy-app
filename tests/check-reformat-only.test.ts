@@ -101,6 +101,17 @@ const { test, expect } = defineGateRepo({
       from: "src/lib/process/platform.ts",
       to: "src/lib/process/platform.ts",
     },
+    /* `executable-resolve.ts` 按职责拆出的两块（它越过文件长度硬闸时切的）：
+     * 前者被它静态 import（pnpm 那一族）、后者又被前者 import —— 同一条**链**，
+     * 少一份临时仓库里的 `shell.mjs` 就在加载阶段 `ERR_MODULE_NOT_FOUND`。 */
+    {
+      from: "src/lib/process/pnpm-resolve.ts",
+      to: "src/lib/process/pnpm-resolve.ts",
+    },
+    {
+      from: "src/lib/process/version-compare.ts",
+      to: "src/lib/process/version-compare.ts",
+    },
   ],
   setup: (repo) => {
     /* 临时仓库也要能解析 oxfmt：真实场景里门禁在**源码仓库**里跑

@@ -76,7 +76,9 @@ export function runAppendIssueComment({
   path: route = "issue",
 }) {
   const wrote = appendComment({ run, log, slug, number, body, mkTmp, route });
-  if (!wrote.bodies) return false;
+  if (!wrote.bodies) {
+    return false;
+  }
   return wrote.bodies.some((c) => c.includes(marker));
 }
 
