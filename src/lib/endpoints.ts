@@ -21,7 +21,7 @@
 export const LOOPBACK_HOST = "127.0.0.1";
 
 /** Ollama 默认监听端口（`ollama serve` 的出厂值）。 */
-export const OLLAMA_DEFAULT_PORT = 11434;
+export const OLLAMA_DEFAULT_PORT = 11_434;
 
 /** Ollama 的 OpenAI 兼容入口（默认 Base URL）。 */
 export const OLLAMA_DEFAULT_BASE_URL = `http://${LOOPBACK_HOST}:${OLLAMA_DEFAULT_PORT}/v1`;

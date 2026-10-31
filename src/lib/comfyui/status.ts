@@ -81,7 +81,7 @@ export type ComfyRuntimeSnapshot = {
 
 /** 快照缓存时长：探针自身很快（见探针设计），缓存只为吸收「连点刷新 /
  *  并发查询」的重复 IO，不做长 TTL——外部实例刚起来时最多等这么久被认出来。 */
-export const COMFY_SNAPSHOT_TTL_MS = 1_500;
+export const COMFY_SNAPSHOT_TTL_MS = 1500;
 
 /** 未绑定端口的快照（「进程在、接口还没就绪」）的缓存时长：比普通 TTL 更短。
  *

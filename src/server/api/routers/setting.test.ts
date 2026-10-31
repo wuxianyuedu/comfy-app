@@ -249,7 +249,7 @@ describe("setting.save", () => {
   it.for(
     /* SAFETY: 类型断言已复核 */ [
       [{ comfyuiPort: -1 }],
-      [{ comfyuiPort: 65536 }],
+      [{ comfyuiPort: 65_536 }],
       [{ comfyuiPort: 1.5 }],
     ] as const,
   )("端口非法 %j → BAD_REQUEST 且一次都不写", async ([input]) => {

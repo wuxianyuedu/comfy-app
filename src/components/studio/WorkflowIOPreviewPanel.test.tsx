@@ -59,7 +59,7 @@ function wrapperSeedEntry(): WorkflowIOParam {
     name: "value_1",
     label: "Seed",
     type: "INT",
-    defaultValue: -944756323327396,
+    defaultValue: -944_756_323_327_396,
     nodeTitle: "Checkpoint settings",
     slotLabel: "Seed",
   };

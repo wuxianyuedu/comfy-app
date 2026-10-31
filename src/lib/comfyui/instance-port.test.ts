@@ -90,9 +90,7 @@ describe("queryInstanceByPath — 直接从配置路径拿事实", () => {
   });
 
   it("main.py 落空但解释器候选命中（comfy-cli / 桌面版起法）", async () => {
-    vi.mocked(launcherCommandCandidates).mockReturnValue([
-      "C:\\Comfy\\python_embeded\\python.exe",
-    ]);
+    vi.mocked(launcherCommandCandidates).mockReturnValue(["C:\\Comfy\\python_embeded\\python.exe"]);
     let call = 0;
     // 第 1 次 = main.py（落空），第 2 次 = 解释器候选（命中）
     vi.mocked(findPidForMainPyDetailed).mockImplementation(async () => {
@@ -155,7 +153,7 @@ describe("baseForLocalPort — 端口 → 地址", () => {
   it("无端口 / 非法端口 → null（调用方继续走探测链路）", () => {
     expect(baseForLocalPort(null)).toBeNull();
     expect(baseForLocalPort(0)).toBeNull();
-    expect(baseForLocalPort(70000)).toBeNull();
+    expect(baseForLocalPort(70_000)).toBeNull();
   });
 
   it("COMFYUI_BASE 指向远端实例时不用本机端口事实", () => {

@@ -38,7 +38,7 @@ const st: BusyGlobal = (globalThis.__comfyBusy_v1 ??= {});
  *
  *  **只对「忙 → 闲」这一向生效**：反向（闲 → 忙）必须立即生效，否则高峰期
  *  的头几秒仍在用 4s 高频探它。 */
-export const COMFY_BUSY_HOLD_MS = 5_000;
+export const COMFY_BUSY_HOLD_MS = 5000;
 
 type BusyState = { busy: boolean; since: number };
 

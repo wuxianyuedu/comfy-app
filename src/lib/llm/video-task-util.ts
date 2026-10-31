@@ -27,7 +27,7 @@ import {
  *  前端据此提供「继续等待」入口再次发起一轮查询（不重复提交、不重复扣费）。 */
 export const VIDEO_POLL_TOTAL_MS = 90_000;
 /** 两轮状态查询之间的间隔。 */
-export const VIDEO_POLL_INTERVAL_MS = 5_000;
+export const VIDEO_POLL_INTERVAL_MS = 5000;
 
 /** 本地 temp 产物根目录（process.cwd()/temp/usage-test，与 /log 同级）。 */
 function localTempRoot(): string {

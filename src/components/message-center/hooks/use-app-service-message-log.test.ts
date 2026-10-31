@@ -235,7 +235,7 @@ describe("useAppServiceMessageLog：启动 / 恢复", () => {
     const base = Date.now();
     vi.useFakeTimers({ toFake: ["Date"] });
     const { rerender } = mount({ state: "online", processIsNew: false });
-    vi.setSystemTime(base + 1_000);
+    vi.setSystemTime(base + 1000);
     rerender({ state: "offline", processIsNew: false });
     vi.setSystemTime(base + 10_000);
     rerender({ state: "online", processIsNew: false });
@@ -259,7 +259,7 @@ describe("useAppServiceMessageLog：启动 / 恢复", () => {
     const base = Date.now();
     vi.useFakeTimers({ toFake: ["Date"] });
     const { rerender } = mount({ state: "online", processIsNew: false });
-    vi.setSystemTime(base + 1_000);
+    vi.setSystemTime(base + 1000);
     rerender({ state: "offline", processIsNew: false });
     vi.setSystemTime(base + 130_000);
     rerender({ state: "online", processIsNew: false, unprobedMs: 60_000 });
@@ -331,7 +331,7 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
     const base = Date.now();
     vi.useFakeTimers({ toFake: ["Date"] });
     const { rerender } = mount({ state: "online", processIsNew: false });
-    vi.setSystemTime(base + 1_000);
+    vi.setSystemTime(base + 1000);
     rerender({ state: "offline", processIsNew: false });
     vi.setSystemTime(base + 10_000);
     rerender({ state: "online", processIsNew: false });
@@ -400,7 +400,7 @@ describe("useAppServiceMessageLog：每条消息盖「启动戳」", () => {
       processIsNew: false,
       currentRunId: "old0001",
     });
-    vi.setSystemTime(base + 1_000);
+    vi.setSystemTime(base + 1000);
     rerender({
       state: "offline",
       processIsNew: false,

@@ -143,7 +143,7 @@ describe("话术：下一个要排障的人得从这一行读出「哪一个候�
     expect(describeProbeFailure({ kind: "nonzero-exit", status: 2, signal: null })).toContain(
       "exit 2",
     );
-    expect(describeProbeFailure({ kind: "timeout", timeoutMs: 20000 })).toContain("没量到");
+    expect(describeProbeFailure({ kind: "timeout", timeoutMs: 20_000 })).toContain("没量到");
   });
 
   it("多个候选时逐个点名，且原因跟在名字后面", () => {
@@ -154,7 +154,7 @@ describe("话术：下一个要排障的人得从这一行读出「哪一个候�
           failure: { kind: "nonzero-exit", status: 2, signal: null },
         },
       ],
-      [{ candidate: "pwsh", failure: { kind: "timeout", timeoutMs: 20000 } }],
+      [{ candidate: "pwsh", failure: { kind: "timeout", timeoutMs: 20_000 } }],
     );
     expect(text).toContain("powershell");
     expect(text).toContain("pwsh");

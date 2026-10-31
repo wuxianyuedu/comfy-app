@@ -24,7 +24,7 @@ const sampleItems: Array<MaterialItem> = [
     folderName: "参考素材",
     kind: "image",
     url: "/files/m-1",
-    size: 20480,
+    size: 20_480,
     updatedAt: "2026-01-01T00:00:00.000Z",
     scope: "project",
   },

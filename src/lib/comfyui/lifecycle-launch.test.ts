@@ -271,7 +271,7 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
     vi.mocked(getComfyRuntimeSnapshot).mockResolvedValue(
       /* SAFETY: 类型断言已复核 */ {
         running: true,
-        pid: 97356,
+        pid: 97_356,
         port: 8188,
         via: "配置路径的实例",
         unverified: false,

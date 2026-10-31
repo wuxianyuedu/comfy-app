@@ -34,7 +34,7 @@ function makePortrait(patch: Partial<CharacterPortrait> = {}): CharacterPortrait
   return {
     url: "/api/generated/t1/a.png",
     source: "local",
-    createdAt: 1_000,
+    createdAt: 1000,
     ...patch,
   };
 }

@@ -150,14 +150,14 @@ describe("路由表不完整（stale）的边沿与文案", () => {
     const first = deriveAppServiceEvent(
       initialAppServiceCursor(),
       { state: "stale", processIsNew: false, unprobedMs: 0 },
-      1_000,
+      1000,
     );
-    expect(first.event).toEqual({ type: "route-stale", at: 1_000 });
+    expect(first.event).toEqual({ type: "route-stale", at: 1000 });
     /* 下一拍仍是 stale：边沿不成立，不再记一条（否则每 2 秒刷一条）。 */
     const second = deriveAppServiceEvent(
       first.cursor,
       { state: "stale", processIsNew: false, unprobedMs: 0 },
-      3_000,
+      3000,
     );
     expect(second.event).toBeNull();
   });
@@ -166,20 +166,20 @@ describe("路由表不完整（stale）的边沿与文案", () => {
     const stale = deriveAppServiceEvent(
       initialAppServiceCursor(),
       { state: "stale", processIsNew: false, unprobedMs: 0 },
-      1_000,
+      1000,
     );
     expect(stale.cursor.offlineAt).toBeNull();
     /* 路由修好后转 online：这是一次「服务一直都在」，不该报恢复。 */
     const back = deriveAppServiceEvent(
       stale.cursor,
       { state: "online", processIsNew: false, unprobedMs: 0 },
-      5_000,
+      5000,
     );
     expect(back.event).toBeNull();
   });
 
   it("文案说清「服务在应答、坏的是路由表」并给出两步出口", () => {
-    const { title, body } = describeAppServiceRouteStale(1_000);
+    const { title, body } = describeAppServiceRouteStale(1000);
     expect(title).toBe("应用服务路由异常");
     /* 「页面还能打开」这一句是这条消息存在的理由：它正是用户容易以为「再等等
        就好」的地方，必须显式点出来，并紧跟「重启应用」这个出口。 */
@@ -192,13 +192,13 @@ describe("路由表不完整（stale）的边沿与文案", () => {
 
 describe("formatOfflineSpan 断开时长", () => {
   it("秒 / 分 / 小时三档都是人能读的写法", () => {
-    expect(formatOfflineSpan(0, 5_000)).toBe("5 秒");
+    expect(formatOfflineSpan(0, 5000)).toBe("5 秒");
     expect(formatOfflineSpan(0, 125_000)).toBe("2 分 05 秒");
     expect(formatOfflineSpan(0, 3_725_000)).toBe("1 小时 02 分 05 秒");
   });
 
   it("负时长（时钟漂移）说成「拿不到」，不写成「-3 秒」", () => {
-    expect(formatOfflineSpan(1_000, 0)).toBeNull();
+    expect(formatOfflineSpan(1000, 0)).toBeNull();
     expect(formatOfflineSpan(Number.NaN, 0)).toBeNull();
   });
 });
@@ -371,7 +371,7 @@ describe("停表那一段的如实标注（A）", () => {
       offlineAt: T0,
       exitAt: null,
       notice: null,
-      unprobedMs: 9_999,
+      unprobedMs: 9999,
     });
     expect(m.body).toContain("持续 2 分 05 秒");
     expect(m.body).not.toContain("没有探测");

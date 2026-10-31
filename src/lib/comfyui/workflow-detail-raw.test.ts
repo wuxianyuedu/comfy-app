@@ -67,7 +67,7 @@ const wrapperWorkflow = /* SAFETY: 类型断言已复核 */ {
                 localized_name: "步数",
               },
             ],
-            widgets_values: [12345, "fixed", 20],
+            widgets_values: [12_345, "fixed", 20],
             outputs: [{ name: "LATENT", type: "LATENT", links: [] }],
           },
         ],
@@ -121,7 +121,7 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
       localized: "步数",
     });
     /* 暴露口的值仍是内部节点的真实控件值（proxyWidgets 配对没被破坏）。 */
-    expect(entries[0]!.widgetValue).toBe(12345);
+    expect(entries[0]!.widgetValue).toBe(12_345);
     expect(entries[1]!.widgetValue).toBe(20);
   });
 
@@ -257,7 +257,7 @@ describe("buildInnerNodeInputs — 子图内部节点输入索引", () => {
     expect(seed!.type).toBe("INT");
     /* widgets_values[0] 属于 seed；seed 家族多占一个
      *  control_after_generate 槽，故 steps 取到下标 2。 */
-    expect(seed!.widgetValue).toBe(12345);
+    expect(seed!.widgetValue).toBe(12_345);
     expect(inner["12"]!.find((input) => input.name === "steps")!.widgetValue).toBe(20);
   });
 

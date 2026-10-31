@@ -59,7 +59,7 @@ function readCapture(path: string): string {
 async function readCaptureWhenFilled(
   filePath: string,
   needle: string,
-  timeoutMs = 3_000,
+  timeoutMs = 3000,
 ): Promise<string> {
   /* 轮询用 `expect.poll`（规范 §11.14）：读的是同一份文件，条件成立即返回。
    * 超时这一档**刻意不抛** —— 老版本的语义是「原样返回，让调用点的断言读成红」，
@@ -189,7 +189,7 @@ describe("转录文件的取最新与轮转（ISSUE #1365）", () => {
     }
     const base = Date.now();
     const older = writePanel(9876, base - 60_000, "上一次运行\n");
-    const newer = writePanel(12345, base, "本次运行\n");
+    const newer = writePanel(12_345, base, "本次运行\n");
     expect(await mod.latestPanelLogFile(tmp)).toBe(newer);
     expect(await mod.latestPanelLogFile(tmp)).not.toBe(older);
   });

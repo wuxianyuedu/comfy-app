@@ -50,7 +50,7 @@ describe("waitForComfyReady", () => {
     vi.stubGlobal("fetch", fetchMock);
     const onProgress = vi.fn();
 
-    await expect(waitForComfyReady({ timeoutMs: 5_000, pollMs: 1, onProgress })).resolves.toEqual({
+    await expect(waitForComfyReady({ timeoutMs: 5000, pollMs: 1, onProgress })).resolves.toEqual({
       ok: true,
     });
     expect(onProgress).toHaveBeenCalledTimes(1);
@@ -64,7 +64,7 @@ describe("waitForComfyReady", () => {
       .mockResolvedValue(jsonRes(503, { ok: false, pending: false, detail: "保活进程已退出" }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const r = await waitForComfyReady({ timeoutMs: 5_000, pollMs: 1 });
+    const r = await waitForComfyReady({ timeoutMs: 5000, pollMs: 1 });
     expect(r).toEqual({ ok: false, pending: false, message: "保活进程已退出" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

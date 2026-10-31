@@ -22,7 +22,7 @@ import { sleep } from "~/lib/with-timeout";
 export const COMFY_READY_TIMEOUT_MS = 180_000;
 
 /** 单次轮询间隔：服务端每次会短等一小会儿，这里再退避一档，避免连打。 */
-export const COMFY_READY_POLL_MS = 2_000;
+export const COMFY_READY_POLL_MS = 2000;
 
 export type ComfyReadyResult = { ok: true } | { message: string; ok: false; pending: boolean };
 

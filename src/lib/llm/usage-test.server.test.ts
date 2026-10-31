@@ -422,7 +422,7 @@ describe("callVideo（提交 + 内置一轮轮询）", () => {
         .mockResolvedValueOnce(jsonResponse({ task_id: "t1" }))
         .mockResolvedValue(jsonResponse({ data: [{ url: "https://v/done.mp4" }] }));
       const p = callVideo(UP, "m", "p", {});
-      await vi.advanceTimersByTimeAsync(6_000);
+      await vi.advanceTimersByTimeAsync(6000);
       await expect(p).resolves.toEqual({
         status: "done",
         url: "https://v/done.mp4",
@@ -437,7 +437,7 @@ describe("callVideo（提交 + 内置一轮轮询）", () => {
     try {
       fetchMock.mockResolvedValue(jsonResponse({ task_id: "t2" }));
       const p = callVideo(UP, "m", "p", {});
-      await vi.advanceTimersByTimeAsync(VIDEO_POLL_TOTAL_MS + 6_000);
+      await vi.advanceTimersByTimeAsync(VIDEO_POLL_TOTAL_MS + 6000);
       await expect(p).resolves.toEqual({ status: "pending", taskId: "t2" });
     } finally {
       vi.useRealTimers();
@@ -470,7 +470,7 @@ describe("queryVideoTask（继续等待，绝不重新提交）", () => {
     try {
       fetchMock.mockResolvedValue(jsonResponse({ data: [{ url: "https://v/x.mp4" }] }));
       const p = queryVideoTask(UP, "m", "t");
-      await vi.advanceTimersByTimeAsync(6_000);
+      await vi.advanceTimersByTimeAsync(6000);
       await expect(p).resolves.toEqual({ done: true, url: "https://v/x.mp4" });
 
       // 只发查询请求：不重新提交、不带 body —— 这是「不重复扣费」的机器判据

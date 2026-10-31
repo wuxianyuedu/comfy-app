@@ -39,7 +39,7 @@ function makeEntry(index: number, overrides: Partial<LogEntry> = {}): LogEntry {
   return {
     id: `e-${index}`,
     seq: index + 1,
-    time: 1_700_000_000_000 + index * 1_000,
+    time: 1_700_000_000_000 + index * 1000,
     level: "info",
     message: `事件 ${index}`,
     source: "system",
@@ -205,7 +205,7 @@ describe("LogPanel 日志面板", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
 
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(9_999, { message: "新来的" })]));
+    act(() => useLogStore.getState().appendFileLogs([makeEntry(9999, { message: "新来的" })]));
     const banner = screen.getByRole("button", { name: /有 1 条新的日志/ });
     await user.click(banner);
 
@@ -656,7 +656,7 @@ describe("LogPanel 日志面板", () => {
      * 别把我拽走」）。 */
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 2 \/ 4 页/)).toBeInTheDocument();
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(9_999, { message: "新来的" })]));
+    act(() => useLogStore.getState().appendFileLogs([makeEntry(9999, { message: "新来的" })]));
     /* 正好来了 1 条新的（页面仍停在第 2 页，因为还没点「回到最新」） */
     expect(screen.getByText(/第 2 \/ 5 页/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /有 1 条新的日志/ })).toBeInTheDocument();

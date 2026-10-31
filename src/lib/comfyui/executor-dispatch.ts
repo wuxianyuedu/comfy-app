@@ -62,7 +62,7 @@ import type { TaskClaimMode, TaskRepoImpl } from "../core/repository-task-impl";
 
 /** 领取节拍。与 host 侧原 `CLAIM_TICK_MS` 同值（2s）：它是「安全网」的节奏，
  *  正常路径靠提交后与收口后的即时 kick，不靠等这一拍。 */
-export const DISPATCH_TICK_MS = 2_000;
+export const DISPATCH_TICK_MS = 2000;
 
 /** 本模块要的那三条仓储能力（结构化最小，方便宿主注入自己的 impl 实例）。 */
 export type DispatchRepo = Pick<

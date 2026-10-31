@@ -22,23 +22,23 @@ beforeEach(() => {
 describe("noteComfyBusy", () => {
   it("闲 → 忙立即生效（高峰期头几秒就该降压）", () => {
     expect(getComfyBusy()).toBe(false);
-    noteComfyBusy(true, 1_000);
+    noteComfyBusy(true, 1000);
     expect(getComfyBusy()).toBe(true);
   });
 
   it("忙 → 闲要过黏滞窗口：出图间隙的反复切换被压平", () => {
-    noteComfyBusy(true, 1_000);
-    noteComfyBusy(false, 1_000 + COMFY_BUSY_HOLD_MS - 1);
+    noteComfyBusy(true, 1000);
+    noteComfyBusy(false, 1000 + COMFY_BUSY_HOLD_MS - 1);
     expect(getComfyBusy()).toBe(true);
-    noteComfyBusy(false, 1_000 + COMFY_BUSY_HOLD_MS);
+    noteComfyBusy(false, 1000 + COMFY_BUSY_HOLD_MS);
     expect(getComfyBusy()).toBe(false);
   });
 
   it("黏滞窗口从「开始忙」起算：连续喂 true 不会把窗口一直往后推", () => {
-    noteComfyBusy(true, 1_000);
-    noteComfyBusy(true, 4_000);
-    noteComfyBusy(true, 5_500);
-    noteComfyBusy(false, 1_000 + COMFY_BUSY_HOLD_MS);
+    noteComfyBusy(true, 1000);
+    noteComfyBusy(true, 4000);
+    noteComfyBusy(true, 5500);
+    noteComfyBusy(false, 1000 + COMFY_BUSY_HOLD_MS);
     expect(getComfyBusy()).toBe(false);
   });
 
@@ -46,8 +46,8 @@ describe("noteComfyBusy", () => {
     const onChange = vi.fn();
     subscribeComfyBusy(onChange);
     noteComfyBusy(false);
-    noteComfyBusy(true, 1_000);
-    noteComfyBusy(true, 1_100);
+    noteComfyBusy(true, 1000);
+    noteComfyBusy(true, 1100);
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 });
@@ -56,9 +56,9 @@ describe("subscribeComfyBusy", () => {
   it("退订即不再收到通知", () => {
     const onChange = vi.fn();
     const off = subscribeComfyBusy(onChange);
-    noteComfyBusy(true, 1_000);
+    noteComfyBusy(true, 1000);
     off();
-    noteComfyBusy(false, 1_000 + COMFY_BUSY_HOLD_MS);
+    noteComfyBusy(false, 1000 + COMFY_BUSY_HOLD_MS);
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 });

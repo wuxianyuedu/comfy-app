@@ -379,7 +379,7 @@ export async function getView(filename: string, subfolder: string, type: string)
 export async function listModels(folder: string): Promise<Array<string>> {
   try {
     const res = await fetch(`${comfyBase()}/api/models/${encodeURIComponent(folder)}`, {
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {
       return [];
@@ -449,7 +449,7 @@ export async function interrupt(): Promise<void> {
   const base = await resolveComfyBase();
   const res = await fetch(`${base}/api/interrupt`, {
     method: "POST",
-    signal: AbortSignal.timeout(5_000),
+    signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) {
     throw new Error(`POST /api/interrupt -> ${res.status}`);

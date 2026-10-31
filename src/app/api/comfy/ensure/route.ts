@@ -31,7 +31,7 @@ export const dynamic = "force-dynamic";
 /** 单次请求内最多等多久。拉起的实例冷加载通常远超这个时长，所以这里只负责
  *  「等一小会儿」，等不到就回 202 让前端继续重试——把等待拆成多次短请求，
  *  用户才能在中途看到「正在启动」而不是一个挂了十几秒的请求。 */
-const ENSURE_WAIT_MS = 8_000;
+const ENSURE_WAIT_MS = 8000;
 
 export async function POST() {
   const user = await requireRequestUser();
@@ -39,7 +39,7 @@ export async function POST() {
     return unauthorizedResponse();
   }
 
-  const up = await probeComfyUi(1_500);
+  const up = await probeComfyUi(1500);
   if (up) {
     return NextResponse.json({
       ok: true,
