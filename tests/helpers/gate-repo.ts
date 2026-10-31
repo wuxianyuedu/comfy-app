@@ -340,10 +340,15 @@ export interface GateRepo {
    * （用来造「沙箱里既没有接缝、也没有 node_modules」那一档 —— 见 `check-format`
    * 的 fail-closed 用例）。这不是顺手开的口子：判据脚本的**环境本身就是被测输入**，
    * 只给一个固定 env 就等于让「没设这个变量」那一档永远测不到。
+   *
+   * `cwd` 是给**「同一个脚本在另一种检出形态里跑」**那一档用的（ISSUE #2785）：
+   * 有些判据的根取的是 `process.cwd()`，而链接工作树与主检出的差别正好长在
+   * 「那个根下面的 `.git` 是目录还是文件」上 —— 不换 cwd 就永远演不出那一形，
+   * 脚本路径留在夹具里（它不需要出现在工作树里，`ROOT` 看的是 cwd）。
    */
   run: (
     args?: Array<string>,
-    overrides?: { env?: Record<string, string | undefined> },
+    overrides?: { env?: Record<string, string | undefined>; cwd?: string },
   ) => GateRunResult;
   /** 在工作区里写一个文件（自动建父目录），`rel` 是仓库相对路径。 */
   write: (rel: string, content: string) => void;
@@ -561,7 +566,7 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
        * `code` / `output` 两格的**值与形状逐字保持原样**（成功 ⇒ stdout；失败 ⇒ 两流合并，
        * 退出码兜 `1`）—— 这上面挂着全仓门禁自测的断言，改它的读法就是改所有门禁自测。 */
       const res = spawnSync(process.execPath, [abs(scriptRel), ...args], {
-        cwd: root,
+        cwd: overrides?.cwd ?? root,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
         env: callEnv,
