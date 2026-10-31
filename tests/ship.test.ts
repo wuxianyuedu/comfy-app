@@ -66,6 +66,7 @@ import {
 } from "../scripts/ship-build.mjs";
 import {
   CODE,
+  classifyPushFailure,
   combineShipCodes,
   decideCleanBranch,
   decideCreateBranch,
@@ -80,6 +81,7 @@ import {
   readPullVerdict,
   resolveUpstream,
 } from "../scripts/ship-core.mjs";
+import { runPushStage } from "../scripts/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
 import { parseArgs, parseIssueNumberToken } from "../scripts/ship-args.mjs";
 import { buildPullBody, capDiffstat, PULL_BODY_LIMIT } from "../scripts/ship-pull-body.mjs";
@@ -515,6 +517,95 @@ describe("decideCreateBranch：名字只能人给，脚本只补动 ref 那一�
       expect(d.act, `名字 ${name} 不该被拿去建分支`).toBe(false);
       expect(d.code).toBe(CODE.RED);
     }
+  });
+});
+
+describe("classifyPushFailure：push 失败按原话分型，不固定猜 premerge（ISSUE #2825）", () => {
+  /* 远端 128 的现场逐字读数（2026-10-31，fix/2823 分支首次 push）：premerge 根本没跑，
+   * 旧话术「多半是 pre-push 的合并前复算没放行」把人引去查一条没执行的门禁。 */
+  const REMOTE_404_STDERR = [
+    "remote: Repository Not Found.",
+    "remote: 仓库不存在。",
+    "remote: ",
+    "remote: trace-id: 271f06a8c6324b9ea1154fa08b1ff7da",
+    "remote: token: d5***********************BH",
+    "fatal: repository 'https://cnb.cool/moon-read/comfy-app-t3/' not found",
+  ].join("\n");
+
+  it("远端 404 现场 ⇒ remote，且不再落「多半是 premerge」那条固定猜测", () => {
+    const got = classifyPushFailure("", REMOTE_404_STDERR);
+    expect(got.kind).toBe("remote");
+    expect(got.note).toContain("凭据");
+    /* 禁的是**误导归因的形状**（固定猜测「多半是…复算没放行」），不是 premerge 这个词
+     * —— remote 话术里「premerge 与本仓门禁都无关」是正确内容，要留着。 */
+    expect(got.note).not.toContain("多半是");
+    expect(got.note).not.toContain("复算没放行");
+  });
+
+  it("无凭据形态（terminal prompts disabled）也归 remote", () => {
+    const got = classifyPushFailure(
+      "",
+      "fatal: could not read Username for 'https://cnb.cool': terminal prompts disabled",
+    );
+    expect(got.kind).toBe("remote");
+  });
+
+  it("钩子拒绝现场 ⇒ hook（premerge 复算红的原话在上面）", () => {
+    const got = classifyPushFailure(
+      "",
+      [
+        "[pre-push] ✗ 合并前复算红了，本次 push 不放行：",
+        "      · tsc --noEmit",
+        "error: failed to push some refs to 'https://cnb.cool/moon-read/comfy-app-t3'",
+      ].join("\n"),
+    );
+    expect(got.kind).toBe("hook");
+    expect(got.note).toContain("pre-push");
+  });
+
+  it("两类特征同时在场 ⇒ 仍判 remote（钩子放行后传输被拒，终止原因是远端）", () => {
+    const got = classifyPushFailure(
+      "",
+      "[pre-push] ✓ 合并前复算全绿\n" + REMOTE_404_STDERR,
+    );
+    expect(got.kind).toBe("remote");
+  });
+
+  it("空 / 没有特征的输出 ⇒ unknown，不编因（unknown 的话术不点名任何一侧）", () => {
+    for (const [out, err] of [
+      ["", ""],
+      [null, undefined],
+      ["", "error: failed to push some refs to 'https://example/x'"],
+    ]) {
+      const got = classifyPushFailure(out, err);
+      expect(got.kind).toBe("unknown");
+      expect(got.note).not.toContain("premerge");
+      expect(got.note).not.toContain("凭据");
+    }
+  });
+
+  it("接线判据：runPushStage 真把分型话术念出来（不再固定说 premerge）", () => {
+    const logs: string[] = [];
+    let pushed = 0;
+    const ctx = {
+      up: { remote: "origin" },
+      branch: "fix/x",
+      root: "/tmp/nowhere",
+      resolveDir: () => null,
+      log: (s: string) => logs.push(s),
+      run: () => {
+        pushed += 1;
+        return { status: 128, stdout: "", stderr: REMOTE_404_STDERR };
+      },
+      relay: () => undefined,
+    };
+    const got = runPushStage(ctx);
+    expect(pushed).toBe(1);
+    expect(got).toEqual({ stop: true, codes: [CODE.RED] });
+    const line = logs.join("\n");
+    expect(line).toContain("push 失败（exit 128）");
+    expect(line).toContain("远端拒了");
+    expect(line).not.toContain("多半是 pre-push");
   });
 });
 
