@@ -111,6 +111,11 @@ import {
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
 import { rerunReport, unverifiedReport } from "../scripts/affected-launch-rerun-report.mjs";
 import { groupShBody, withoutCommentLines } from "./helpers/hook-groups";
+/* 反向断言必须先剥注释再判（ISSUE #2660）：不剥的话「源码里不许出现 X」在 X 被挪进
+ * 一句解释「为什么别这么写」的注释时**静默通过** —— 那是假绿，比误红更贵。
+ * 唯一实现是这个 helper（`tests/strip-comments-single-source.test.ts` 判着别抄第二份），
+ * `trailing: true` 连行尾注释一起去（它头注点名的就是 `// 别写 shell: true` 这一形）。 */
+import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const HOOK_PATH = ".githooks/pre-commit";
@@ -221,13 +226,34 @@ describe("受影响用例的启动器", () => {
   });
 
   it("启动器不经 shell 层：spawn 的是 node 自己，且没有 shell:true", () => {
-    const src = readFileSync(LAUNCHER_PATH, "utf8");
-    expect(src).toContain("spawnSync(");
-    expect(src).toContain("process.execPath");
-    expect(src).not.toMatch(/shell:\s*true/);
-    // 反向：不许退回「把清单交给 pnpm/exec 的 cmd shim」那一条链。
-    expect(src).not.toMatch(/pnpm\s+exec\s+vitest/);
-    expect(src).not.toMatch(/npx\s+vitest/);
+    /* 两处都读，且都剥注释（ISSUE #2660 当场照出来的一件事）：`spawnSync(` 在
+     * `scripts/run-affected-tests.mjs` 里如今**只剩第 18 行那句机制说明**（真身早已随
+     * 「起进程」那一层拆到 `scripts/affected-launch-spawn.mjs:147`），所以原来那条
+     * `toContain("spawnSync(")` 是绿在一段注释上的 —— 更坏的是三条**反向**断言读的也是
+     * 那份已经不 spawn 的文件：今天有人在起进程那一层写 `shell: true`，这一格一个字都不会红。
+     * 剥注释解决「注释里提过也算」，读对文件解决「扫错了对象」，两样都要。 */
+    const src = stripComments(readFileSync(LAUNCHER_PATH, "utf8"), { trailing: true });
+    const spawnLayer = stripComments(readFileSync(SPAWN_LAYER_PATH, "utf8"), { trailing: true });
+    expect(
+      src.length,
+      "剥完注释的启动器不能是空文 —— 空串会让下面所有反向断言恒真（假绿的极型）",
+    ).toBeGreaterThan(0);
+    expect(spawnLayer.length, "起进程那一层不能读成空文（同上）").toBeGreaterThan(0);
+    /* 正向钉在**真起进程的那一层**：入口那一份只剩注释里提过，它不再是这件事的证据。 */
+    expect(spawnLayer).toContain("spawnSync(");
+    expect(spawnLayer).toContain("process.execPath");
+    /* 反向两份都钉：入口与起进程层都不许出现这三种形态。 */
+    for (const [label, text] of [
+      ["入口", src],
+      ["起进程那一层", spawnLayer],
+    ] as const) {
+      expect(text, `${label}：不许经 shell 层起进程`).not.toMatch(/shell:\s*true/);
+      // 反向：不许退回「把清单交给 pnpm/exec 的 cmd shim」那一条链。
+      expect(text, `${label}：不许退回 pnpm exec 那条 cmd shim`).not.toMatch(
+        /pnpm\s+exec\s+vitest/,
+      );
+      expect(text, `${label}：不许用 npx（AGENTS 硬规则 1）`).not.toMatch(/npx\s+vitest/);
+    }
   });
 
   it("钩子的 C 组走这个入口，且不再把清单直接拼成 `pnpm exec vitest run $files`", () => {
@@ -287,7 +313,14 @@ describe("受影响用例的启动器", () => {
  * 4. 复跑**只一次**，且复跑的结果就是该块的结果。
  */
 describe("受影响用例的启动器 —— 负载自适应（超时形态自动隔离复跑）", () => {
-  const src = readFileSync(LAUNCHER_PATH, "utf8");
+  /* 整档反向断言剥注释判（#2660 同上一条的理由）：这一族里「不许出现抬预算的形态」
+   * 是最容易被一句解释性注释假绿掉的。正向那几条（串行旗标在场等）也一并吃剥完的文本 ——
+   * 它们判的是**代码**里真接着这一步，注释里提一句不算接。 */
+  const src = stripComments(readFileSync(LAUNCHER_PATH, "utf8"), { trailing: true });
+  expect(
+    src.length,
+    "剥完注释的启动器源码不能是空文 —— 这一整个 describe 的反向断言都会恒过",
+  ).toBeGreaterThan(0);
 
   it("超时形态的判别式认得本仓库见到过的每一种原文", () => {
     for (const text of [
@@ -1078,7 +1111,10 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
   });
 
   it("覆盖值真的进了 vitest 的命令行（不是只解析不接线）", () => {
-    const src = readFileSync(LAUNCHER_PATH, "utf8");
+    /* 这一对是「正向钉接线 + 反向钉旧写法」。反向那条在原文上判会被一句注释假绿
+     * （#2660），所以两条都吃剥过注释的文本；落空要判，不判就等于没判。 */
+    const src = stripComments(readFileSync(LAUNCHER_PATH, "utf8"), { trailing: true });
+    expect(src.length, "剥完注释不能是空文（否则反向断言恒过）").toBeGreaterThan(0);
     expect(src).toMatch(/--maxWorkers=\$\{workers\}/);
     expect(src).not.toMatch(/--maxWorkers=\$\{MAX_WORKERS\}/);
   });
@@ -1097,7 +1133,14 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
  *   · 「谁都没筛过」的意外空集**仍然阻断** —— 两者绝不许在退出码上同形。
  */
 describe("受影响用例的启动器 —— 显式全量档（--full）", () => {
-  const src = readFileSync(LAUNCHER_PATH, "utf8");
+  /* 整档反向断言（`--full` 不许去写全量新鲜度账那一条）剥注释判：那一族的字面量
+   * 太容易出现在解释性注释里，原文上判会**两头都错**（注释里有 → 假红；被挪进注释 →
+   * 假绿）。见 ISSUE #2660。 */
+  const src = stripComments(readFileSync(LAUNCHER_PATH, "utf8"), { trailing: true });
+  expect(
+    src.length,
+    "剥完注释的启动器不能是空文 —— 这个 describe 里那条反向断言会恒过",
+  ).toBeGreaterThan(0);
 
   it("`--full --dry-run` 走**另一条**分支：真跑一次，输出里没有增量清单的读数", () => {
     /* 按**行为**判，不按源码文本判：文本判据在 `const full = false && argv.includes("--full")`
