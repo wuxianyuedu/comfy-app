@@ -1,6 +1,6 @@
 import type { StatusDotState } from "~/components/ui/status-dot";
 import type { ValidationError } from "~/lib/comfyui/validation";
-import { type RouterOutputs } from "~/trpc/react";
+import type { RouterOutputs } from "~/trpc/react";
 
 export type TaskItem = {
   cover: string | null;

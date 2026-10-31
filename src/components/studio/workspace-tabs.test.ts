@@ -18,7 +18,7 @@ import {
   tabKey,
   type WorkspaceTabsState,
 } from "./workspace-tabs";
-import { type WorkspaceView } from "./NavItems";
+import type { WorkspaceView } from "./NavItems";
 
 const VIEWS: Array<WorkspaceView> = [
   "home",

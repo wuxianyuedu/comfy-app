@@ -8,7 +8,7 @@
  * 生命周期与拆分前内联 JSX 完全一致（隐藏期间状态保留，
  * running/idle 切换时重置）。 */
 import { useMemo, useState } from "react";
-import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
+import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { Hint } from "~/components/ui/hint";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Icon } from "~/components/ui/icon";

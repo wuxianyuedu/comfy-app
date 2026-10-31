@@ -4,11 +4,7 @@
 
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { isRecord } from "~/lib/is-record";
-import {
-  type ApiChannelSaveInput,
-  type ApiChannelsView,
-  type ApiChannelView,
-} from "./api-channel-shared";
+import type { ApiChannelSaveInput, ApiChannelsView, ApiChannelView } from "./api-channel-shared";
 
 /** POST /api/workshop-api/config 的请求体：两个通道各自可选，只补丁改字段。 */
 export type ApiChannelSavePayload = {

@@ -9,11 +9,11 @@
 import { useEffect, useRef, useState } from "react";
 import { reconcileInputValues, type WorkflowIOMap } from "~/components/studio/workflow-io";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
-import {
-  type WorkflowModesState,
-  type WorkflowSourceFilter,
+import type {
+  WorkflowModesState,
+  WorkflowSourceFilter,
 } from "~/components/studio/project-canvas/WorkflowNode";
-import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
+import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { vanillaApi } from "~/trpc/vanilla";
 
 /* ── 跨节点共享的列表请求去重(模块级 in-flight;审查)──

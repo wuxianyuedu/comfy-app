@@ -44,7 +44,7 @@ import {
   typeDisplay,
 } from "~/components/studio/workflow-io";
 import { type CanvasNodeData, NODE_META } from "~/lib/project-canvas/canvas-types";
-import { type WorkflowSourceFilter, type WorkflowModesState } from "./workflow-node-types";
+import type { WorkflowSourceFilter, WorkflowModesState } from "./workflow-node-types";
 import { WorkflowSourceFilterChip } from "./WorkflowSourceFilterChip";
 import { WorkflowModelFilterChip } from "./WorkflowModelFilterChip";
 import { WorkflowPickChip } from "./WorkflowPickChip";

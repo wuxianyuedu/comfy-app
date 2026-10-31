@@ -28,11 +28,11 @@ import {
   type RawSubgraphDef,
 } from "~/lib/comfyui/raw";
 import { inferIsMultiline } from "~/lib/comfyui/types";
-import {
-  type DetailNodeView,
-  type RawInputEntry,
-  type RawNodeMeta,
-  type RawOutputEntry,
+import type {
+  DetailNodeView,
+  RawInputEntry,
+  RawNodeMeta,
+  RawOutputEntry,
 } from "~/lib/comfyui/workflow-detail-raw";
 
 /* IMAGE 输入的缩略图预览。与父级路由保持一致：只把 LoadImage 的上游文件名

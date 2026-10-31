@@ -1,6 +1,6 @@
 import { listModels, comfyBase } from "./comfyui/client";
 import { modelRepository, userModelConfigRepository } from "./core/repository";
-import { type ModelType } from "./model-types";
+import type { ModelType } from "./model-types";
 
 export function baseFromName(name: string): string {
   const lower = name.toLowerCase();

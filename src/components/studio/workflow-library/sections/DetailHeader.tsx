@@ -12,7 +12,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { SourceTag } from "~/components/ui/source-tag";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { modeLabel } from "../workflow-library-config";
-import { type WorkflowRow } from "../workflow-library-config";
+import type { WorkflowRow } from "../workflow-library-config";
 import { ActionButton } from "./DetailControls";
 import { ModelTagPicker } from "./MetaEditor";
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";

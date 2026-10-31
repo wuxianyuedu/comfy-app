@@ -17,7 +17,7 @@
  * 其余拆件：VideoControl.tsx / VideoField.tsx / grouped-controls-presets.ts /
  * SizePresetTableModal.tsx（尺寸表配置）。
  * ───────────────────────────────────────────────────────────────────────── */
-import { type DimensionGroup, type EnrichedWidget, type VideoGroup } from "../workflow-io";
+import type { DimensionGroup, EnrichedWidget, VideoGroup } from "../workflow-io";
 import { DimensionControl } from "./DimensionControl";
 import { VideoControl } from "./VideoControl";
 import { SECTION_ACCENT } from "./DynamicWorkflowForm/constants";

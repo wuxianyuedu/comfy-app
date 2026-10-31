@@ -26,7 +26,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { AppShell } from "./AppShell";
-import { type WorkspaceView } from "./NavItems";
+import type { WorkspaceView } from "./NavItems";
 
 /* jsdom 没有 `matchMedia`，`ui/sidebar` 挂载时就读它（与既有测试同一份桩）。 */
 if (!window.matchMedia) {

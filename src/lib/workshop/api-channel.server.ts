@@ -15,7 +15,7 @@ import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { remoteModelRepository } from "~/lib/core/repository";
-import { type RemoteModeAdapter, type WorkshopInputType } from "~/lib/workshop/model-mode-contract";
+import type { RemoteModeAdapter, WorkshopInputType } from "~/lib/workshop/model-mode-contract";
 
 import {
   callImageGeneration,
