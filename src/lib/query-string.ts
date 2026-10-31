@@ -172,7 +172,7 @@ export function readQueryParam(query: string, key: string): string | null {
 /** 宽容解码：坏转义（`%zz`）原样返回，不抛 —— 查询串来自别处时不该崩。 */
 function decode(value: string): string {
   try {
-    return decodeURIComponent(value.replace(/\+/g, " "));
+    return decodeURIComponent(value.replaceAll("+", " "));
   } catch {
     return value;
   }
