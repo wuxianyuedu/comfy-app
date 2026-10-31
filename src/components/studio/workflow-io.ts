@@ -666,7 +666,7 @@ export function toWorkflowInputsPayload(
     payload.push({
       nodeId: runtimeNodeId(entry),
       name: entry.name,
-      value: value,
+      value,
     });
   }
   return payload;
