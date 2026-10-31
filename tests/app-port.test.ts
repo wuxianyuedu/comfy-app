@@ -24,7 +24,7 @@ import {
  */
 describe("app-port 端口解析", () => {
   it("路径规范化：反斜杠转正斜杠 + 转小写 + resolve", () => {
-    expect(normalizeRootForPort("F:\\AI\\Other\\comfy-app-t3-branch")).toBe(
+    expect(normalizeRootForPort(String.raw`F:\AI\Other\comfy-app-t3-branch`)).toBe(
       "f:/ai/other/comfy-app-t3-branch",
     );
   });
@@ -34,9 +34,9 @@ describe("app-port 端口解析", () => {
   });
 
   it("按检出路径推导的端口落在 3200..3999，且同路径恒定、异路径可分", () => {
-    const a = derivePortFromPath("F:\\AI\\Other\\comfy-app-t3-branch");
+    const a = derivePortFromPath(String.raw`F:\AI\Other\comfy-app-t3-branch`);
     const again = derivePortFromPath("F:/AI/Other/comfy-app-t3-branch");
-    const b = derivePortFromPath("F:\\AI\\Other\\comfy-app-t3-branch2");
+    const b = derivePortFromPath(String.raw`F:\AI\Other\comfy-app-t3-branch2`);
     expect(a).toBe(3305);
     expect(again).toBe(a); // 同一检出（分隔符/大小写差异）必须同一端口
     expect(b).not.toBe(a);
@@ -68,7 +68,7 @@ describe("app-port 端口解析", () => {
     // 回归锁：历史实现无条件 path.resolve()，而它的语义是「相对 cwd 解析」——
     // 在 Linux 上 path.resolve("F:\\AI\\...") 会得到 /workspace/f:/ai/...，
     // 同一检出在不同 cwd / 不同平台推出不同端口，「同一检出恒定同端口」失效。
-    const win = "F:\\AI\\Other\\comfy-app-t3-branch";
+    const win = String.raw`F:\AI\Other\comfy-app-t3-branch`;
     const cwd = process.cwd();
     try {
       process.chdir(os.tmpdir());

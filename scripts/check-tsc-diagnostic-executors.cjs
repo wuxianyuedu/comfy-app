@@ -383,7 +383,7 @@ if (entries) {
         problems.push(`「${e.name}」的 verifiedSurfaces 里 ${face} 重复了`);
       }
       seenFace.add(face);
-      if (!new RegExp(`\\b${face.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(readerSrc)) {
+      if (!new RegExp(`\\b${face.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}\\b`).test(readerSrc)) {
         problems.push(
           `「${e.name}」声称核过的面 \`${face}\` 在 ${e.reader} 里找不到 —— ` +
             "台账的这句话与事实脱钩之后，它只会让人以为有人在守",

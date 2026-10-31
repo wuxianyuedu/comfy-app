@@ -778,7 +778,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
           path.join(rustupHome, "settings.toml"),
           [
             'default_toolchain = "stable-x86_64-pc-windows-msvc"',
-            `cargo_home = "${cargoHome.replaceAll("\\", "\\\\")}"`,
+            `cargo_home = "${cargoHome.replaceAll("\\", String.raw`\\`)}"`,
             'rustup_home = "x"',
             "",
           ].join("\n"),
@@ -799,7 +799,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
         mkdirSync(path.join(fakeUserHome, ".rustup"), { recursive: true });
         writeFileSync(
           path.join(fakeUserHome, ".rustup", "settings.toml"),
-          `cargo_home = "${cargoHome.replaceAll("\\", "\\\\")}"\n`,
+          `cargo_home = "${cargoHome.replaceAll("\\", String.raw`\\`)}"\n`,
         );
         expect(
           findCargoLookup({

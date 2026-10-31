@@ -286,7 +286,7 @@ export function faceMatches(file, pattern) {
   const re = new RegExp(
     `^${p
       .split("*")
-      .map((part) => part.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .map((part) => part.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`))
       .join("[^/]*")}$`,
   );
   return re.test(f);

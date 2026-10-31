@@ -62,7 +62,7 @@ const tmpDirs: Array<string> = [];
  * 现在找不到键就**当场抛**并写明找的是哪个键 —— 依赖可以升，夹具不许悄悄变成空转。
  */
 function driftOneOverride(real: string, key: string): string {
-  const escaped = key.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = key.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   const hit = new RegExp(`^  ${escaped}: (\\S+)$`, "m").exec(real);
   if (!hit?.[1]) {
     throw new Error(
@@ -262,7 +262,7 @@ describe.skipIf(!hasPs)("依赖预检真跑（Windows / 有 PowerShell 时）", 
  * 所以判决既不是纯退出码、输出也看不见 —— 实测 `Object[] ["child-marker-line", 0]`。
  */
 const NOEXEC_MUTATION = {
-  from: 'Cmd = "node"; Args = @("scripts\\check-dependency-audit.mjs")',
+  from: String.raw`Cmd = "node"; Args = @("scripts\check-dependency-audit.mjs")`,
   to: 'Cmd = "node-absent-on-this-machine"; Args = @("--version")',
 };
 
@@ -316,7 +316,7 @@ describe.skipIf(!hasPs)("运行器真跑：判决必须来自子进程真的执�
     // 返回值就只剩退出码一个元素。 stdout 被吞那半由上面 `[dep-audit]` 那条钉。
     const { root } = makeFakeRepo({
       patchGateText: (src) =>
-        src.replace(NOEXEC_MUTATION.from, 'Cmd = "node"; Args = @("scripts\\no-such-gate.mjs")'),
+        src.replace(NOEXEC_MUTATION.from, String.raw`Cmd = "node"; Args = @("scripts\no-such-gate.mjs")`),
     });
     const r = runGate(root);
     expect(r.out).toContain("（退出码 1）");

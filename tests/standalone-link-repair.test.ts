@@ -133,7 +133,7 @@ describe("真文件系统那一层（跨平台夹具）", () => {
     symlinkDir(dir("nothing-here"), dead);
     rmSync(path.join(root, "nothing-here"), { recursive: true, force: true });
 
-    const text = "..\\..\\..\\@libsql+darwin-arm64@0.5.29\\node_modules\\@libsql\\darwin-arm64";
+    const text = String.raw`..\..\..\@libsql+darwin-arm64@0.5.29\node_modules\@libsql\darwin-arm64`;
     expect(siblingVariantInstalled(nm, text)).toBe(true);
 
     // 而「同包一个变体都没装」时，那才是真缺件。
@@ -155,7 +155,7 @@ describe("真文件系统那一层（跨平台夹具）", () => {
     expect(
       siblingVariantInstalled(
         lonelyNm,
-        "..\\..\\..\\gone+variant@1.0.0\\node_modules\\gone\\variant",
+        String.raw`..\..\..\gone+variant@1.0.0\node_modules\gone\variant`,
       ),
     ).toBe(false);
   });
@@ -230,8 +230,8 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
   it("可跟随的链接一次都不重建（「不许扰动 mtime」那条护栏）", () => {
     const { deps, rebuildCalls } = fake({
       links: [
-        { abs: "N/good", rel: "good", text: "..\\r\\node_modules\\good" },
-        { abs: "N/bad", rel: "bad", text: "..\\r\\node_modules\\bad" },
+        { abs: "N/good", rel: "good", text: String.raw`..\r\node_modules\good` },
+        { abs: "N/bad", rel: "bad", text: String.raw`..\r\node_modules\bad` },
       ],
       brokenRels: ["bad"],
     });
@@ -243,10 +243,10 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
 
   it("重建用的是**原链接文本**，不是 resolve 之后的绝对路径", () => {
     const { deps, rebuildCalls } = fake({
-      links: [{ abs: "N/pkg", rel: "pkg", text: "..\\pkg@1.0.0\\node_modules\\pkg" }],
+      links: [{ abs: "N/pkg", rel: "pkg", text: String.raw`..\pkg@1.0.0\node_modules\pkg` }],
     });
     repairUnfollowableLinks("N", deps);
-    expect(rebuildCalls).toEqual([{ abs: "N/pkg", linkText: "..\\pkg@1.0.0\\node_modules\\pkg" }]);
+    expect(rebuildCalls).toEqual([{ abs: "N/pkg", linkText: String.raw`..\pkg@1.0.0\node_modules\pkg` }]);
   });
 
   it("「目标在场但修不好」进 broken 且 targetExists=YES —— 不许与缺件同形", () => {
@@ -255,7 +255,7 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
         {
           abs: "N/promise-limit",
           rel: "promise-limit",
-          text: "..\\promise-limit@2.7.0\\node_modules\\promise-limit",
+          text: String.raw`..\promise-limit@2.7.0\node_modules\promise-limit`,
         },
       ],
       rebuildResult: { ok: false, error: "EPERM (no privilege)" },
@@ -269,7 +269,7 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
 
   it("目标真不在时 targetExists=NO：报的是「修好了也仍不可跟随」这一格", () => {
     const { deps } = fake({
-      links: [{ abs: "N/gone", rel: "gone", text: "..\\nope\\node_modules\\nope" }],
+      links: [{ abs: "N/gone", rel: "gone", text: String.raw`..\nope\node_modules\nope` }],
       targetExists: false,
       rebuildResult: { ok: false, error: "ENOENT (no such file)" },
     });
@@ -293,7 +293,7 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
 
   it("有没修好的链接时，输出逐条点名并说出后果", () => {
     const { deps } = fake({
-      links: [{ abs: "N/pkg", rel: "pkg", text: "..\\x\\node_modules\\pkg" }],
+      links: [{ abs: "N/pkg", rel: "pkg", text: String.raw`..\x\node_modules\pkg` }],
       rebuildResult: { ok: false, error: "EPERM" },
     });
     const out = runLinkRepair("N", deps);
@@ -314,7 +314,7 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
         {
           abs: "N/.pnpm/libsql@0.5.29/node_modules/@libsql/darwin-arm64",
           rel: ".pnpm/libsql@0.5.29/node_modules/@libsql/darwin-arm64",
-          text: "..\\..\\..\\@libsql+darwin-arm64@0.5.29\\node_modules\\@libsql\\darwin-arm64",
+          text: String.raw`..\..\..\@libsql+darwin-arm64@0.5.29\node_modules\@libsql\darwin-arm64`,
         },
       ],
       targetExists: false,
@@ -338,7 +338,7 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
         {
           abs: "N/.pnpm/foo@1.0.0/node_modules/foo",
           rel: ".pnpm/foo@1.0.0/node_modules/foo",
-          text: "..\\..\\..\\foo@1.0.0\\node_modules\\foo",
+          text: String.raw`..\..\..\foo@1.0.0\node_modules\foo`,
         },
       ],
       targetExists: false,

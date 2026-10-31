@@ -115,7 +115,7 @@ export function readConsoleEncoding(ports) {
     return { codePage: null, chcpRaw: null, ansiCodePage: null };
   }
   const run = runImpl ?? defaultRun;
-  const nls = "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage";
+  const nls = String.raw`HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage`;
   const r = run("powershell", [
     "-NoProfile",
     "-NonInteractive",

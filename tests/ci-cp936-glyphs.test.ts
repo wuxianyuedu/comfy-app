@@ -103,14 +103,14 @@ describe("字形归一化：不动不该动的东西", () => {
 describe("字形归一化：emoji 与代理对", () => {
   it("emoji 走 `\\uXXXX` 兜底（CP936 没有四字节区，emoji 同样会变问号）", () => {
     const out = normalizeCp936Glyphs("📂");
-    expect(out.text).toBe("\\u1F4C2");
+    expect(out.text).toBe(String.raw`\u1F4C2`);
   });
 
   it("代理对**不拆**：一个 emoji 出来是一个码位，不是两截", () => {
     /* 拆开的话会得到两个 `\\uD83C` / `\\uDF42` —— 那是半个字符，读不出来。 */
     const out = normalizeCp936Glyphs("📂");
-    expect(out.text).not.toContain("\\uD83C");
-    expect(out.text).not.toContain("\\uDF42");
+    expect(out.text).not.toContain(String.raw`\uD83C`);
+    expect(out.text).not.toContain(String.raw`\uDF42`);
     expect(out.replaced).toHaveLength(1);
   });
 });
@@ -159,7 +159,7 @@ describe("字形归一化：幂等与读数", () => {
     const out = normalizeCp936Glyphs("✓ ⇒ 🐧");
     const line = describeGlyphReplacements(out.replaced);
     expect(line).toContain("U+1F427");
-    expect(line).toContain("\\u1F427");
+    expect(line).toContain(String.raw`\u1F427`);
     expect(line).toContain("有 1 个字符");
     // 兜底那一个单独点名；登记过的两个只留总数，不逐字念出来。
     expect(line).toContain("另有 2 处按登记表换成读得出来的写法");

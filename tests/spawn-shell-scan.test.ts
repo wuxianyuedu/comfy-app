@@ -457,10 +457,10 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
           '#!/bin/sh\nexec node elsewhere "$@"\n# cmd-shim-target=G:/别的检出/根本不存在/x\n',
         "node_modules/.bin/x.cmd": [
           "@SETLOCAL",
-          '@IF EXIST "%~dp0\\node.exe" (',
-          '  "%~dp0\\node.exe"  "%~dp0\\..\\pkg\\bin\\x" %*',
+          String.raw`@IF EXIST "%~dp0\node.exe" (`,
+          String.raw`  "%~dp0\node.exe"  "%~dp0\..\pkg\bin\x" %*`,
           ") ELSE (",
-          '  node  "%~dp0\\..\\pkg\\bin\\x" %*',
+          String.raw`  node  "%~dp0\..\pkg\bin\x" %*`,
           ")",
         ].join("\r\n"),
       },

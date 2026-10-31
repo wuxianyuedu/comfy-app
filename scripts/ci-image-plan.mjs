@@ -215,7 +215,7 @@ export function pickNodeVersion(index, floor) {
 
 /** 把一段字面量转成「按字面匹配」的正则片段（`.cjs`/`.mjs` 里同名实现的同一手法）。 */
 export function escapedRegExp(/** @type {string} */ name) {
-  return String(name).replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return String(name).replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /**
@@ -268,7 +268,7 @@ export function toolingVersionsFromLock(lockText, names) {
     const re = new RegExp(
       "^( +)['\"]?" +
         escapedRegExp(name) +
-        "['\"]?:\\s*\\n(?:\\1\\s+.*\\n)*?\\1\\s+version:\\s*([^\\s(]+)",
+        String.raw`['"]?:\s*\n(?:\1\s+.*\n)*?\1\s+version:\s*([^\s(]+)`,
       "m",
     );
     const m = re.exec(text);

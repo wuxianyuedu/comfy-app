@@ -301,10 +301,10 @@ describe("工具链自证：Rust 那一格的取证（#2549）", () => {
   });
 
   it("Windows 上 `.exe` / `.EXE` 只算一个命中（不区分大小写的文件系统不许读成两个）", () => {
-    const home = "G:\\.cargo";
+    const home = String.raw`G:\.cargo`;
     const text = cargoForensics({
       platform: "win32",
-      env: { PATH: "C:\\Windows", CARGO_HOME: home },
+      env: { PATH: String.raw`C:\Windows`, CARGO_HOME: home },
       isFile: () => true,
     }).join("\n");
     const listed = text.match(/G:\\\.cargo\\bin\\cargo\S*/g) ?? [];
@@ -346,12 +346,12 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
         LOCALAPPDATA: "/home/u/AppData/Local",
         ProgramFiles: "/Program Files",
       },
-      account: "RUNNER\\svc",
+      account: String.raw`RUNNER\svc`,
       existing: (p) => p === lRoot,
       listDirs: (p) => (p === lRoot ? [path.join(p, "Python312")] : []),
     });
     const text = lines.join("\n");
-    expect(text).toContain("执行账号: RUNNER\\svc");
+    expect(text).toContain(String.raw`执行账号: RUNNER\svc`);
     expect(text).toContain("  /a");
     expect(text).toContain("  /b");
     // 位置命中 → 说明「装过、只是这个账号 PATH 里没有」，与「真没装」分开。
@@ -379,11 +379,11 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
     pythonForensics({
       env: {
         // 只用分号当分隔符（Windows 形态）—— 这里的 env 是合成的 PATH，不是本机的。
-        PATH: "C:\\Windows\\system32;D:\\Program Files\\nodejs",
-        LOCALAPPDATA: "C:\\srv\\AppData\\Local",
-        ProgramFiles: "C:\\Program Files",
+        PATH: String.raw`C:\Windows\system32;D:\Program Files\nodejs`,
+        LOCALAPPDATA: String.raw`C:\srv\AppData\Local`,
+        ProgramFiles: String.raw`C:\Program Files`,
       },
-      account: "NT AUTHORITY\\SYSTEM",
+      account: String.raw`NT AUTHORITY\SYSTEM`,
       existing: (p) => {
         probed.push(p);
         return false;
@@ -392,7 +392,7 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
        * 判「是不是 D: 盘的 Users 根」按**归一后的正斜杠形态**，不写字面量：
        * 脚本用平台的 `path.join` 拼，POSIX 宿主上会得到 `D:\/Users` 这种混种形态，
        * 写死会漂（这是判据自身的可移植性，不是被测逻辑的形态）。 */
-      listDirs: (p) => (/^d:\/+users\/?$/i.test(p.replaceAll("\\", "/")) ? ["D:\\Users\\yuedu"] : []),
+      listDirs: (p) => (/^d:\/+users\/?$/i.test(p.replaceAll("\\", "/")) ? [String.raw`D:\Users\yuedu`] : []),
     });
     /* 一律按**归一后的正斜杠形态**断言落点身份 —— 脚本用平台 `path.join` 拼，
      * POSIX 宿主上会出现 `D:\/...` 这类混种分隔符；判的是「探了哪个落点」，
@@ -404,7 +404,7 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
         .toLowerCase();
     const set = new Set(probed.map(norm));
     // 标准落点仍在（不能为了新形态把既有的四个丢了）。
-    expect(set.has(norm("C:\\srv\\AppData\\Local\\Programs\\Python"))).toBe(true);
+    expect(set.has(norm(String.raw`C:\srv\AppData\Local\Programs\Python`))).toBe(true);
     // 这台机 PATH 上出现过的盘符下的同类位置也探了（不是只探 C:）。
     expect(set.has("d:/program files/python")).toBe(true);
     expect(set.has("d:/python")).toBe(true);
@@ -503,8 +503,8 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
      * 在 Linux 上恒空 —— 那样这条用例会随环境静默变绿）。 */
     const cands = wingetCandidates(
       /* PATH 里带 `D:\` —— 盘符靠它反推，与 `pythonInstallRoots` 共用同一份证据。 */
-      { PATH: "D:\\x;", LOCALAPPDATA: "/L", ProgramFiles: "/PF" },
-      (root) => (root === "C:\\Users" ? ["C:\\Users\\other"] : []),
+      { PATH: String.raw`D:\x;`, LOCALAPPDATA: "/L", ProgramFiles: "/PF" },
+      (root) => (root === String.raw`C:\Users` ? [String.raw`C:\Users\other`] : []),
     );
     /* 一律按**归一形态**比：被测实现用平台的 `path.join` 拼，写死分隔符
      * 只在某一侧的宿主上成立（本文件最初写死了，Windows 节点上红）。 */
@@ -515,9 +515,9 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     );
     /* 其他账号那一条要补 `AppData\Local`（MSIX 按用户安装落在那儿）—— 少补这一段
      * 会拼成一条不存在的路径。 */
-    expect(has("C:\\Users\\other\\AppData\\Local\\Microsoft\\WindowsApps\\winget.exe")).toBe(true);
+    expect(has(String.raw`C:\Users\other\AppData\Local\Microsoft\WindowsApps\winget.exe`)).toBe(true);
     /* 盘符从 PATH 反推的 —— `D:` 盘上的程序目录也在候选里（写死 `C:` 就会漏）。 */
-    expect(has("D:\\Program Files\\WindowsApps\\winget.exe")).toBe(true);
+    expect(has(String.raw`D:\Program Files\WindowsApps\winget.exe`)).toBe(true);
     expect(has("/PF/Microsoft/WindowsApps/winget.exe")).toBe(true);
   });
 
@@ -736,13 +736,13 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
   it("逐条打印 PATH，并点名 pnpm* 在各目录的命中", () => {
     const lines = pnpmForensics({
       platform: "win32",
-      env: { PATH: "C:\\Windows;C:\\Program Files\\nodejs" },
+      env: { PATH: String.raw`C:\Windows;C:\Program Files\nodejs` },
       isFile: () => false,
     });
     const text = lines.join("\n");
     // PATH 的两条都要打出来（人是照它判「这个账号看得见什么」的）。
-    expect(text).toContain("C:\\Windows");
-    expect(text).toContain("C:\\Program Files\\nodejs");
+    expect(text).toContain(String.raw`C:\Windows`);
+    expect(text).toContain(String.raw`C:\Program Files\nodejs`);
     // 零命中时要说清「是这个账号 PATH 上没有」，而不是留一片空白。
     expect(text).toContain("一个都没命中");
   });
@@ -753,7 +753,7 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
      * 对 `.PS1` / `.CMD` 的处理一致）。 */
     const lines = pnpmForensics({
       platform: "win32",
-      env: { PATH: "C:\\Program Files\\nodejs" },
+      env: { PATH: String.raw`C:\Program Files\nodejs` },
       isFile: (candidate) => candidate.endsWith("pnpm.CMD"),
     });
     expect(lines.join("\n")).toContain("pnpm.CMD");
@@ -766,12 +766,12 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
      * 上判 Windows 的形态。反向复算：改回 `path.delimiter`，这条当场点名。 */
     const lines = pnpmForensics({
       platform: "win32",
-      env: { PATH: "C:\\Windows;C:\\nodejs" },
+      env: { PATH: String.raw`C:\Windows;C:\nodejs` },
       isFile: () => false,
     });
     const text = lines.join("\n");
-    expect(text).toContain("C:\\Windows");
-    expect(text).toContain("C:\\nodejs");
+    expect(text).toContain(String.raw`C:\Windows`);
+    expect(text).toContain(String.raw`C:\nodejs`);
     // 拆坏之后会留下孤立的 `C` 与 `\Windows` 两行。
     expect(text).not.toMatch(/^ {2}C$/m);
   });
@@ -821,12 +821,12 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
   it("取证里必须打 PATH **原文** —— 只打切出来的条目分不开那三类成因", () => {
     const text = pnpmForensics({
       platform: "win32",
-      env: { PATH: "C:\\Windows;C:\\nodejs" },
+      env: { PATH: String.raw`C:\Windows;C:\nodejs` },
       isFile: () => false,
     }).join("\n");
     expect(text, "读取到的 PATH 原文没有出现在取证里").toContain("PATH 原文");
     // 原文是**一整串**（含分隔符），不是逐条再拼一遍。
-    expect(text).toContain("C:\\Windows;C:\\nodejs");
+    expect(text).toContain(String.raw`C:\Windows;C:\nodejs`);
   });
 
   it("PATH 为空时明说「读到的是空」，不写成「这个账号上没有 pnpm」", () => {
@@ -842,9 +842,9 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
   it("键名是 `Path` 时 Windows 判据照样读到那一串（不因此判成「没装」）", () => {
     /* 判定面与读数面必须是**同一份**读法：两处各读一遍，就会出现「判据读的是
      * `Path`、取证打的却是空的 `PATH`」—— 那正是第 2281 号单里读不出根因的那种日志。 */
-    const env = { Path: "C:\\Windows;C:\\nodejs" };
-    expect(pnpmPathValue({ platform: "win32", env })).toBe("C:\\Windows;C:\\nodejs");
-    expect(pnpmPathEntries({ platform: "win32", env })).toEqual(["C:\\Windows", "C:\\nodejs"]);
+    const env = { Path: String.raw`C:\Windows;C:\nodejs` };
+    expect(pnpmPathValue({ platform: "win32", env })).toBe(String.raw`C:\Windows;C:\nodejs`);
+    expect(pnpmPathEntries({ platform: "win32", env })).toEqual([String.raw`C:\Windows`, String.raw`C:\nodejs`]);
     // POSIX 上 `Path` 与 `PATH` 是两个变量：不许把不敏感那一条套过去。
     expect(pnpmPathValue({ platform: "linux", env })).toBe("");
   });
@@ -1433,7 +1433,7 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
 describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
   it("落点里有 headless shell ⇒ 判过；没有 / 读不到 ⇒ 判不过", async () => {
     const { browserExecutableExists } = await import("../scripts/ci-toolchain-selfcheck.mjs");
-    const root = process.platform === "win32" ? "C:\\x\\ms-playwright" : "/x/ms-playwright";
+    const root = process.platform === "win32" ? String.raw`C:\x\ms-playwright` : "/x/ms-playwright";
     const exe =
       process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
 
@@ -1501,9 +1501,9 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
     expect(
       playwrightBrowsersRoot({
         platform: "win32",
-        env: { LOCALAPPDATA: "D:\\Users\\ci\\AppData\\Local" },
+        env: { LOCALAPPDATA: String.raw`D:\Users\ci\AppData\Local` },
       }),
-    ).toBe(win("D:\\Users\\ci\\AppData\\Local", "ms-playwright"));
+    ).toBe(win(String.raw`D:\Users\ci\AppData\Local`, "ms-playwright"));
     expect(
       playwrightBrowsersRoot({
         platform: "darwin",
@@ -1517,9 +1517,9 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
     expect(
       playwrightBrowsersRoot({
         platform: "win32",
-        env: { PLAYWRIGHT_BROWSERS_PATH: "E:\\pw" },
+        env: { PLAYWRIGHT_BROWSERS_PATH: String.raw`E:\pw` },
       }),
-    ).toBe("E:\\pw");
+    ).toBe(String.raw`E:\pw`);
   });
 
   it("复验真的排在「装」之后，且不过要非零退出（不许提前 return 0）", () => {

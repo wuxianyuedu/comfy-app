@@ -3533,10 +3533,10 @@ describe("parseSlug：https 与 ssh 两种 origin 都要认", () => {
  * 从第一次跑起就没工作过，报的还是一个听起来正当的理由。
  */
 describe("looksNewlineMangled：`pnpm run` 把 argv 里的换行改写成字面量这一格", () => {
-  it("认「没有真换行 + 带字面量 \\n」这一形，其余一律不拦", () => {
+  it(String.raw`认「没有真换行 + 带字面量 \n」这一形，其余一律不拦`, () => {
     // 实测形状：`pnpm ship --message "一行<换行>二行"` 到 node 手里成了一条
     // `一行\n二行`（真换行没了）；`pnpm exec node` 那条路径则保留真换行。
-    expect(looksNewlineMangled("标题\\n\\n正文一段\\n正文二段")).toBe(true);
+    expect(looksNewlineMangled(String.raw`标题\n\n正文一段\n正文二段`)).toBe(true);
     /* 真换行在 ⇒ 不是改写产物（`--message-file` 读出来的、`pnpm exec` 传进来的都是这形）。 */
     expect(looksNewlineMangled("标题\n\n正文")).toBe(false);
     // 普通单行不受影响 —— 判据必须只认那一形，别顺手多拦。
@@ -5896,7 +5896,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       run,
       log: (s: string) => heard.push(s),
       probeCnb: () => true,
-      args: ["--message=标题\\n\\n正文一段\\n正文二段"],
+      args: [String.raw`--message=标题\n\n正文一段\n正文二段`],
     });
     const all = heard.join("\n");
     expect(code).toBe(CODE.RED);

@@ -189,8 +189,8 @@ describe("judgeProduct：骨架齐全 + 可移植（ISSUE #2231 的新判据）"
   it("产物里烤进本机绝对路径 ⇒ 报出来（两种分隔符形态都查）", () => {
     /* 这条不是洁癖：这份副本是要给人读的，而 typedoc 的源码链接 / 搜索索引 /
      * 面包屑里只要有一处烤进了本机路径，读者点开的就不是同一个东西。 */
-    const win = productFixture({ "modules/leak.html": "<p>C:\\repo\\src\\lib\\x.ts</p>" });
-    expect(judgeProduct(win, "C:\\repo", {}).problems.join("\n")).toContain("本机绝对路径");
+    const win = productFixture({ "modules/leak.html": String.raw`<p>C:\repo\src\lib\x.ts</p>` });
+    expect(judgeProduct(win, String.raw`C:\repo`, {}).problems.join("\n")).toContain("本机绝对路径");
     const posix = productFixture({ "modules/leak.html": "<p>/repo/src/lib/x.ts</p>" });
     expect(judgeProduct(posix, "/repo", {}).problems.join("\n")).toContain("本机绝对路径");
   });

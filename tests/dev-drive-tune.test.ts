@@ -26,7 +26,7 @@ type Lever = ReturnType<typeof buildLevers>[number];
 /** 造一份探测结果：只填与本组用例有关的字段，其余留空。 */
 function makeReport(overrides: Partial<Report> = {}): Report {
   const base: Report = {
-    repo: "G:\\repo",
+    repo: String.raw`G:\repo`,
     platform: "win32",
     volume: {
       root: "G:\\",
@@ -47,7 +47,7 @@ function makeReport(overrides: Partial<Report> = {}): Report {
       sparse: false,
     },
     pnpm: {
-      storePath: "G:\\.pnpm-store\\v11",
+      storePath: String.raw`G:\.pnpm-store\v11`,
       sameVolume: true,
       importMethod: null,
     },
@@ -55,25 +55,25 @@ function makeReport(overrides: Partial<Report> = {}): Report {
     cache: {
       temp: {
         envName: "TEMP",
-        path: "G:\\Temp",
+        path: String.raw`G:\Temp`,
         sameVolume: true,
         suggestedSubPath: "Temp",
       },
       cargoHome: {
         envName: "CARGO_HOME",
-        path: "G:\\.cargo",
+        path: String.raw`G:\.cargo`,
         sameVolume: true,
         suggestedSubPath: ".cargo",
       },
       playwright: {
         envName: "PLAYWRIGHT_BROWSERS_PATH",
-        path: "G:\\.cache\\ms-playwright",
+        path: String.raw`G:\.cache\ms-playwright`,
         sameVolume: true,
-        suggestedSubPath: ".cache\\ms-playwright",
+        suggestedSubPath: String.raw`.cache\ms-playwright`,
       },
       npmCache: {
         envName: "npm_config_cache",
-        path: "G:\\.npm-cache",
+        path: String.raw`G:\.npm-cache`,
         sameVolume: true,
         suggestedSubPath: ".npm-cache",
       },
@@ -128,8 +128,8 @@ describe("parseArgs", () => {
 
 describe("卷与文件系统的判据", () => {
   it("Windows 下取所在卷根并统一大写", () => {
-    expect(volumeRootOf("G:\\ComfyAPP\\app", "win32")).toBe("G:\\");
-    expect(volumeRootOf("g:\\x", "win32")).toBe("G:\\");
+    expect(volumeRootOf(String.raw`G:\ComfyAPP\app`, "win32")).toBe("G:\\");
+    expect(volumeRootOf(String.raw`g:\x`, "win32")).toBe("G:\\");
   });
 
   it("非 Windows 一律视为同一卷", () => {
@@ -137,9 +137,9 @@ describe("卷与文件系统的判据", () => {
   });
 
   it("同卷为真、跨卷为假、缺路径为假", () => {
-    expect(isSameVolume("G:\\a", "G:\\b", "win32")).toBe(true);
-    expect(isSameVolume("G:\\a", "C:\\b", "win32")).toBe(false);
-    expect(isSameVolume("", "C:\\b", "win32")).toBe(false);
+    expect(isSameVolume(String.raw`G:\a`, String.raw`G:\b`, "win32")).toBe(true);
+    expect(isSameVolume(String.raw`G:\a`, String.raw`C:\b`, "win32")).toBe(false);
+    expect(isSameVolume("", String.raw`C:\b`, "win32")).toBe(false);
   });
 
   it("文件系统类型归一（大小写不敏感，空值是未知）", () => {
@@ -232,7 +232,7 @@ describe("其余杠杆的状态判定", () => {
 
     const report = makeReport({
       pnpm: {
-        storePath: "C:\\store\\v11",
+        storePath: String.raw`C:\store\v11`,
         sameVolume: false,
         importMethod: null,
       },
@@ -316,7 +316,7 @@ describe("其余杠杆的状态判定", () => {
     const report = makeReport();
     report.cache.cargoHome = {
       envName: "CARGO_HOME",
-      path: "C:\\Users\\me\\.cargo",
+      path: String.raw`C:\Users\me\.cargo`,
       sameVolume: false,
       suggestedSubPath: ".cargo",
     };
@@ -332,13 +332,13 @@ describe("其余杠杆的状态判定", () => {
         {
           name: "node_modules",
           exists: true,
-          realPath: "C:\\nm",
+          realPath: String.raw`C:\nm`,
           sameVolume: false,
         },
         {
           name: ".git",
           exists: true,
-          realPath: "G:\\repo\\.git",
+          realPath: String.raw`G:\repo\.git`,
           sameVolume: true,
         },
       ],
@@ -369,7 +369,7 @@ function makeBench(
     targets: [
       {
         label: "开发卷",
-        dir: "G:\\.workbuddy\\dev-drive-bench",
+        dir: String.raw`G:\.workbuddy\dev-drive-bench`,
         bigWriteMbps: 2900,
         bigReadMbps: 7300,
         smallCreatePerSec: 2553,
@@ -504,7 +504,7 @@ describe("报告与计数", () => {
   it("动作里的命令不得出现 npm / npx 形态（仓库口径：只用 pnpm）", () => {
     const report = makeReport({
       pnpm: {
-        storePath: "C:\\store\\v11",
+        storePath: String.raw`C:\store\v11`,
         sameVolume: false,
         importMethod: null,
       },

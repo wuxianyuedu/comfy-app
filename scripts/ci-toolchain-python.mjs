@@ -141,7 +141,7 @@ function pathDrives(env) {
  * @returns {string[]}
  */
 function userRoots(env) {
-  const roots = new Set(["C:\\Users"]);
+  const roots = new Set([String.raw`C:\Users`]);
   for (const drive of pathDrives(env)) {
     roots.add(path.join(drive, "Users"));
   }

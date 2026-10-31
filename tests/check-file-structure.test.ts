@@ -750,7 +750,7 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
         Cmd: "",
         Name: "app.exe",
       },
-      { Id: 222, Path: "D:\\other\\app.exe", Cmd: "", Name: "app.exe" },
+      { Id: 222, Path: String.raw`D:\other\app.exe`, Cmd: "", Name: "app.exe" },
       { Id: 333, Path: "", Cmd: `other ${root} unrelated`, Name: "app.exe" },
     ]);
     const out = runGuard(guardScript(json));

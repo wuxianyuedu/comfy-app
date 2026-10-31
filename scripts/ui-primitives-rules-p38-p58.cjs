@@ -734,10 +734,10 @@ module.exports = {
       /* 形态：`Omit<` 的基类型是**底层元素 / 组件的属性集**，且第二个参数是
        * 字符串字面量键（`"a" | "b"` 或跨行的 `| "c"`）。 */
       const base =
-        "(?:React\\.)?(?:ComponentProps|HTMLAttributes|InputHTMLAttributes|ImgHTMLAttributes|VideoHTMLAttributes|ButtonHTMLAttributes|AnchorHTMLAttributes|LabelHTMLAttributes|TextareaHTMLAttributes)|LucideProps|[A-Za-z]*Primitive\\.[A-Za-z.]+Props|typeof\\s+\\w+";
-      const oneLine = new RegExp("\\bOmit\\s*<\\s*(?:" + base + ')[^;]{0,200}?,\\s*"[^"]+"', "g");
+        String.raw`(?:React\.)?(?:ComponentProps|HTMLAttributes|InputHTMLAttributes|ImgHTMLAttributes|VideoHTMLAttributes|ButtonHTMLAttributes|AnchorHTMLAttributes|LabelHTMLAttributes|TextareaHTMLAttributes)|LucideProps|[A-Za-z]*Primitive\.[A-Za-z.]+Props|typeof\s+\w+`;
+      const oneLine = new RegExp(String.raw`\bOmit\s*<\s*(?:` + base + String.raw`)[^;]{0,200}?,\s*"[^"]+"`, "g");
       const multiLine = new RegExp(
-        "\\bOmit\\s*<[^;]{0,200}?(?:" + base + ')[^;]{0,300}?\\n\\s*\\|[^;]{0,200}?"[^"]+"',
+        String.raw`\bOmit\s*<[^;]{0,200}?(?:` + base + String.raw`)[^;]{0,300}?\n\s*\|[^;]{0,200}?"[^"]+"`,
         "g",
       );
       return (t2.match(oneLine) || []).length + (t2.match(multiLine) || []).length;

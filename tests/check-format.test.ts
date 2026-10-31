@@ -150,9 +150,9 @@ describe("oxfmt 格式判据（硬闸）", () => {
     repo.write(
       stubRel,
       'process.stdout.write("' +
-        "\\u001b[38;2;244;191;117;1m" +
+        String.raw`\u001b[38;2;244;191;117;1m` +
         "src/lib/fresh.ts" +
-        '\\u001b[0m (1ms)\\n"' +
+        String.raw`\u001b[0m (1ms)\n"` +
         ");\nprocess.exit(1);\n",
     );
     const stub = join(repo.dir, stubRel);

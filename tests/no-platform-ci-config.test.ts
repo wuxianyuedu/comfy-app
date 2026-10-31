@@ -906,7 +906,7 @@ export function pipelineStageNames(text: string, pipelineName: string): Array<st
  */
 export function anchorStageNames(text: string, anchor: string): Array<string> {
   const lines = text.split("\n");
-  const escaped = anchor.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = anchor.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   const def = new RegExp(`^\\.[^:]*:[ \\t]*&${escaped}[ \\t]*$`);
   let start = -1;
   for (let i = 0; i < lines.length; i += 1) {
@@ -945,7 +945,7 @@ export function anchorStageNames(text: string, anchor: string): Array<string> {
  * @param name stage 名
  */
 export function stageKeptAsComment(text: string, name: string): boolean {
-  const escaped = name.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = name.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   return new RegExp(`^[ \t]*#+[ \t]*-[ \t]+name:[ \t]*${escaped}[ \t]*$`, "m").test(text);
 }
 

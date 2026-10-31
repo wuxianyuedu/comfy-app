@@ -129,7 +129,7 @@ describe("resolveGitDir：三种检出形态", () => {
   it("norm() 按平台归一：win32 连大小写一起，posix 只动分隔符", () => {
     const slashed = "C:/Windows/Temp/git-dir-x/repo/.git";
     const upper = "C:/WINDOWS/TEMP/git-dir-x/repo/.git";
-    const backslashed = "C:\\Windows\\Temp\\git-dir-x\\repo\\.git";
+    const backslashed = String.raw`C:\Windows\Temp\git-dir-x\repo\.git`;
     expect(norm(backslashed)).toBe(norm(slashed));
     if (process.platform === "win32") {
       expect(norm(upper)).toBe(norm(slashed));

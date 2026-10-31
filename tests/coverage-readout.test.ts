@@ -56,7 +56,7 @@ describe("coverage-readout", () => {
         branches: { total: 0, covered: 0 },
       },
     };
-    const agg = aggregateForGlob("src/app/\\(main\\)/**", files);
+    const agg = aggregateForGlob(String.raw`src/app/\(main\)/**`, files);
     expect(agg.matched).toBe(1);
   });
 
