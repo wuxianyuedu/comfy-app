@@ -577,7 +577,7 @@ describe("时间线在上限内不裁剪（分页可翻历史）", () => {
         seq: seq + 1 + i,
       }),
     );
-    seq = seq + 10;
+    seq += 10;
     useLogStore.getState().appendFileLogs(fresh);
 
     const { logs, counts } = useLogStore.getState();
