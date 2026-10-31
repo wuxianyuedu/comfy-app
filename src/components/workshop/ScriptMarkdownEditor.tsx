@@ -182,11 +182,11 @@ export function ScriptMarkdownEditor({
         const existing = /^#{1,3}\s/.test(trimmed);
         if (prefix.startsWith("#")) {
           if (existing) {
-            return prefix + " " + trimmed.replace(/^#{1,3}\s*/, "");
+            return `${prefix} ${trimmed.replace(/^#{1,3}\s*/, "")}`;
           }
-          return prefix + " " + trimmed;
+          return `${prefix} ${trimmed}`;
         }
-        return prefix + " " + trimmed;
+        return `${prefix} ${trimmed}`;
       })
       .join("\n");
     const nextValue = value.slice(0, lineStart) + transformed + value.slice(lineEnd);

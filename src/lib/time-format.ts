@@ -153,11 +153,9 @@ export function formatLocalStamp(value: TimeInput, opts: { millis?: boolean } = 
  */
 export function formatCompactStamp(value: TimeInput, opts: { millis?: boolean } = {}): string {
   const d = toDate(value);
-  return (
-    `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}` +
-    `-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}` +
-    (opts.millis ? `-${String(d.getMilliseconds()).padStart(3, "0")}` : "")
-  );
+  return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}${
+    opts.millis ? `-${String(d.getMilliseconds()).padStart(3, "0")}` : ""
+  }`;
 }
 
 /**

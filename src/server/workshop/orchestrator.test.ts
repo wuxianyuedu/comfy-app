@@ -15,7 +15,7 @@ const { store } = vi.hoisted(() => ({
 
 vi.mock("./repository", () => {
   const createSession = vi.fn(async (input: CreateSessionInput = {}) => {
-    const id = "sess_" + Math.random().toString(36).slice(2);
+    const id = `sess_${Math.random().toString(36).slice(2)}`;
     const state: WorkshopSessionState = {
       idea: input.idea ?? "",
       meta: {

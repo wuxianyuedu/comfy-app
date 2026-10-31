@@ -202,7 +202,7 @@ export function WorkflowNodeOutputsRow({
   const oLabel = ioLabel(output, [...inputs, ...outputs]);
   const oType = output.type ?? "*";
   return (
-    <div className="relative" key={output.nodeId + ":" + output.name}>
+    <div className="relative" key={`${output.nodeId}:${output.name}`}>
       {renderHandle && output.ioKey
         ? renderHandle({ id: output.ioKey, dir: "out", type: oType })
         : null}

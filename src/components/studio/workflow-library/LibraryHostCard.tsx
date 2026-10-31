@@ -152,7 +152,7 @@ export function LibraryHostCard({
             {outputs.map((output) => (
               <WorkflowNodeOutputsRow
                 inputs={[...inputs]}
-                key={output.nodeId + ":" + output.name}
+                key={`${output.nodeId}:${output.name}`}
                 output={output}
                 outputs={[...outputs]}
                 renderHandle={({ id, dir, type }) => (

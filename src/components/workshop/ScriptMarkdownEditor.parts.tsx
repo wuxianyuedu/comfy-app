@@ -270,7 +270,7 @@ export function EditorBody({
              * 写在同一个地方（`simpleKeyHandler`），不再与动作混在一个`if` 里。 */
             const tabHandler = simpleKeyHandler(["Tab"], () => {
               const { start, end } = getSelection();
-              const nextValue = value.slice(0, start) + "" + value.slice(end);
+              const nextValue = `${value.slice(0, start)}${value.slice(end)}`;
               emitChange(nextValue);
               pushHistory(nextValue, start + 2, start + 2);
               setTimeout(() => textareaRef.current?.setSelectionRange(start + 2, start + 2), 0);

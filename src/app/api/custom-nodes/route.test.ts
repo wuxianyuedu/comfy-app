@@ -1174,8 +1174,9 @@ function progressWith(
   const hit = events.find((e) => e.type === "progress" && msgOf(e).includes(substr));
   if (!hit) {
     throw new Error(
-      `进度事件里没有含 "${substr}" 的那条，实到的进度：` +
-        JSON.stringify(events.filter((e) => e.type === "progress")),
+      `进度事件里没有含 "${substr}" 的那条，实到的进度：${JSON.stringify(
+        events.filter((e) => e.type === "progress"),
+      )}`,
     );
   }
   return hit;

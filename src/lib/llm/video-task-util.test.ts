@@ -76,7 +76,7 @@ describe("saveMediaToLocalTemp · 路径落点", () => {
     const { saveMediaToLocalTemp } = await import("./video-task-util");
     const dest = await saveMediaToLocalTemp(
       "image",
-      'a<b>c:d"e|f?g*h' + "\u0000" + "i".repeat(200),
+      `a<b>c:d"e|f?g*h` + `\u0000${"i".repeat(200)}`,
       "data:image/png;base64,aGVsbG8=",
     );
     expect(dest).not.toBeNull();

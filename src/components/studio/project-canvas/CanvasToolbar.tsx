@@ -29,7 +29,7 @@ export function CanvasToolbar({ onFitView, onExport, onClear }: CanvasToolbarPro
         导出 JSON
       </Button>
       <Button
-        className={ghostTool + " hover:text-red-700 dark:hover:text-red-300"}
+        className={`${ghostTool} hover:text-red-700 dark:hover:text-red-300`}
         onClick={onClear}
         variant="ghost"
       >

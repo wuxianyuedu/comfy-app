@@ -49,7 +49,7 @@ export function parseIdeaToScenes(
     const isHeading = /^(场景|场|SCENE)\s*\d+/i.test(first);
     const heading = isHeading ? first : `场景${i + 1} · ${first.slice(0, 12)}`;
     const body = isHeading ? lines.slice(1).join("\n") : lines.slice(1).join("\n");
-    const { location, time } = extractMeta(first + " " + body);
+    const { location, time } = extractMeta(`${first} ${body}`);
     return {
       id: uid("scene"),
       heading,

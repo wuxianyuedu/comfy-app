@@ -87,7 +87,7 @@ export const FULL_SCREEN_LAYER_CLASS = `fixed ${TITLE_BAR_TOP_CLASS} right-0 bot
  * **恰好**是内容区高度，多的部分自己滚。浏览器 / dev 形态下 `top-title-bar`
  * 由 `--spacing-title-bar`（`@theme` 全局定义）给出 36px 空档。
  */
-export const FULL_PAGE_CLEARANCE_CLASS = "min-h-0 h-full overflow-y-auto " + TITLE_BAR_TOP_CLASS;
+export const FULL_PAGE_CLEARANCE_CLASS = `min-h-0 h-full overflow-y-auto ${TITLE_BAR_TOP_CLASS}`;
 
 /**
  * 底部状态栏（`BrowserStatusBar`）的让位 class：`bottom-6` = 状态栏的 24px（`h-6`）。

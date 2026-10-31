@@ -196,7 +196,7 @@ export function findListeningPortViaProc(pid: number): number | null {
         return "";
       }
     })();
-    listeners = parseProcNetTcpListeners(tcp + "\n" + tcp6);
+    listeners = parseProcNetTcpListeners(`${tcp}\n${tcp6}`);
   } catch {
     return null;
   }

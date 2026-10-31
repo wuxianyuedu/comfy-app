@@ -235,7 +235,7 @@ async function consumeSettingsStream(
         byPath = ev.byPath ?? {};
       } else if (ev.type === "error") {
         const message = ev.message !== undefined && ev.message.length > 0 ? ev.message : "未知错误";
-        sinks.setSaveErr("扫描失败：" + message);
+        sinks.setSaveErr(`扫描失败：${message}`);
       }
     }
   }
