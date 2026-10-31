@@ -74,7 +74,7 @@ export function clampText(text: string, opts: ClampOptions): string {
   if (text.length <= maxLength) {
     return text;
   }
-  const mark = marker ?? (annotation !== undefined ? `${ELLIPSIS}(${annotation})` : ELLIPSIS);
+  const mark = marker ?? (annotation === undefined ? ELLIPSIS : `${ELLIPSIS}(${annotation})`);
   /* 标记比上限还长时**不留标记**（只裁到上限）—— 否则返回值反而变长。 */
   if (mark.length >= maxLength) {
     return direction === "tail" ? text.slice(text.length - maxLength) : text.slice(0, maxLength);

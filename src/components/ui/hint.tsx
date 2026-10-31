@@ -85,7 +85,7 @@ function Hint({ label, side = "top", accessibleName = false, wrap = false, child
     children.props["aria-label"] === undefined
       ? label
       : null;
-  const target = autoName !== null ? cloneElement(children, { "aria-label": autoName }) : children;
+  const target = autoName === null ? children : cloneElement(children, { "aria-label": autoName });
   const trigger = wrap ? <span className="inline-flex">{target}</span> : target;
 
   return (

@@ -205,15 +205,15 @@ export function parseArgs(argv) {
       } else if (isClaim) {
         /* 第二次 `--claim` 不静默覆盖第一张：那会把「领两张」读成「领最后那张」，
          * 而屏幕上不会有任何提示。记进 bad，由执行层点名后停手。 */
-        if (out.claim !== null) {
-          out.claimBad.push(`重复的 --claim（前一张 #${out.claim}）`);
-        } else {
+        if (out.claim === null) {
           out.claim = n;
+        } else {
+          out.claimBad.push(`重复的 --claim（前一张 #${out.claim}）`);
         }
-      } else if (out.release !== null) {
-        out.releaseBad.push(`重复的 --release（前一张 #${out.release}）`);
-      } else {
+      } else if (out.release === null) {
         out.release = n;
+      } else {
+        out.releaseBad.push(`重复的 --release（前一张 #${out.release}）`);
       }
     } else if (a === "--comment") {
       /* 与 `--claim` 同一条「像不像号」判据；**不需要留痕短名** —— 写一条读数不是
@@ -223,10 +223,10 @@ export function parseArgs(argv) {
       const n = parseIssueNumberToken(tok);
       if (n === null) {
         out.commentBad.push(tok || "(缺号)");
-      } else if (out.comment !== null) {
-        out.commentBad.push(`重复的 --comment（前一张 #${out.comment}）`);
-      } else {
+      } else if (out.comment === null) {
         out.comment = n;
+      } else {
+        out.commentBad.push(`重复的 --comment（前一张 #${out.comment}）`);
       }
     } else if (a === "--body-file") {
       out.bodyFile = argv[++i] ?? "";
@@ -249,12 +249,12 @@ export function parseArgs(argv) {
       const n = parseIssueNumberToken(tok);
       if (n === null) {
         out.asMergedBad.push(tok || "(缺号)");
-      } else if (out.asMerged !== null)
+      } else if (out.asMerged === null)
       /* 第二次不静默覆盖第一条：那会把「凭两条 PR 关」读成「凭最后那条」。 */
       {
-        out.asMergedBad.push(`重复的 --as-merged（前一条 #${out.asMerged}）`);
-      } else {
         out.asMerged = n;
+      } else {
+        out.asMergedBad.push(`重复的 --as-merged（前一条 #${out.asMerged}）`);
       }
     } else if (a === "--clean-branch") {
       out.cleanBranch = true;
@@ -299,15 +299,15 @@ export function parseArgs(argv) {
       } else if (isClaim) {
         /* 第二次 `--claim` 不静默覆盖第一张：那会把「领两张」读成「领最后那张」，
          * 而屏幕上不会有任何提示。记进 bad，由执行层点名后停手。 */
-        if (out.claim !== null) {
-          out.claimBad.push(`重复的 --claim（前一张 #${out.claim}）`);
-        } else {
+        if (out.claim === null) {
           out.claim = n;
+        } else {
+          out.claimBad.push(`重复的 --claim（前一张 #${out.claim}）`);
         }
-      } else if (out.release !== null) {
-        out.releaseBad.push(`重复的 --release（前一张 #${out.release}）`);
-      } else {
+      } else if (out.release === null) {
         out.release = n;
+      } else {
+        out.releaseBad.push(`重复的 --release（前一张 #${out.release}）`);
       }
     } else if (a.startsWith("--comment=") || a.startsWith("--body-file=")) {
       if (a.startsWith("--body-file=")) {
@@ -317,10 +317,10 @@ export function parseArgs(argv) {
         const n = parseIssueNumberToken(tok);
         if (n === null) {
           out.commentBad.push(tok || "(缺号)");
-        } else if (out.comment !== null) {
-          out.commentBad.push(`重复的 --comment（前一张 #${out.comment}）`);
-        } else {
+        } else if (out.comment === null) {
           out.comment = n;
+        } else {
+          out.commentBad.push(`重复的 --comment（前一张 #${out.comment}）`);
         }
       }
     } else if (a.startsWith("--close-issue=")) {

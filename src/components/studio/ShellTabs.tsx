@@ -187,7 +187,7 @@ export function ShellTabs({
        */}
       <div className="relative min-h-0 flex-1">
         {/* 主应用页签（恒挂载，用 CSS 显隐） */}
-        <div className={activeTabId !== MAIN_TAB_ID ? "hidden h-full pb-6" : "h-full pb-6"}>
+        <div className={activeTabId === MAIN_TAB_ID ? "h-full pb-6" : "hidden h-full pb-6"}>
           {children}
         </div>
 

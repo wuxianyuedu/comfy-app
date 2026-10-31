@@ -145,7 +145,7 @@ export function useHotkey(
     if (!enabled) {
       return;
     }
-    const host: Window | Document = target ?? (typeof window !== "undefined" ? window : document);
+    const host: Window | Document = target ?? (typeof window === "undefined" ? document : window);
     const isMac = detectMac();
 
     const onKeyDown = (event: KeyboardEvent) => {

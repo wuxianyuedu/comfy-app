@@ -713,8 +713,8 @@ export function runIssueAction(ctx) {
   const wantsNewIssue = opt.newIssue != null || newIssueBad.length > 0;
   const wantsComment = opt.comment != null || commentBad.length > 0;
   const wanted = [
-    opt.claim != null ? "--claim" : null,
-    opt.release != null ? "--release" : null,
+    opt.claim == null ? null : "--claim",
+    opt.release == null ? null : "--release",
     opt.claims ? "--claims" : null,
     wantsNewIssue ? "--new-issue" : null,
     wantsComment ? "--comment" : null,
@@ -731,9 +731,9 @@ export function runIssueAction(ctx) {
     opt.closeIssue ? "--close-issue" : null,
     opt.cleanBranch ? "--clean-branch" : null,
     opt.branch ? "--branch" : null,
-    opt.message != null ? "--message" : null,
-    opt.messageFile != null ? "--message-file" : null,
-    opt.title != null ? "--title" : null,
+    opt.message == null ? null : "--message",
+    opt.messageFile == null ? null : "--message-file",
+    opt.title == null ? null : "--title",
     opt.adds.length > 0 ? "--add" : null,
     opt.only ? "--only" : null,
   ].filter(Boolean);

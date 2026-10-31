@@ -438,7 +438,7 @@ export function main(io = {}) {
     return code;
   };
 
-  const slug = io.slug !== undefined ? io.slug : resolveRepoSlug(run);
+  const slug = io.slug === undefined ? resolveRepoSlug(run) : io.slug;
   if (!slug) {
     log("[daily-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。");
     return finish(CODE.NO_FACT, "推不出仓库 slug");

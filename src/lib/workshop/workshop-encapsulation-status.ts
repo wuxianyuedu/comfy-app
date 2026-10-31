@@ -185,7 +185,7 @@ export function deriveEncapsulationStatus(args: {
       ? sizeDetermined
         ? (sizeSubTarget() ?? manual ?? null)
         : null
-      : (resolved[slot.id] ?? (manual !== undefined ? manual : null));
+      : (resolved[slot.id] ?? (manual === undefined ? null : manual));
     return {
       id: slot.id,
       label: displayLabel(slot.id, slot.label),

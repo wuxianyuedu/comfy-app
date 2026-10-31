@@ -562,7 +562,14 @@ export function main(rawArgv, env = {}) {
         details: [],
         failure: "取不到构建列表（`cnb` 起不来 / 网络不通 / 返回不是 JSON）—— 判据自身不做重试",
       };
-    } else if (!win.covered) {
+    } else if (win.covered) {
+      source = {
+        list: win.list,
+        details: fetchDailyDetails(run, slug, win.list),
+        failure: null,
+      };
+      coverage = { label: "取数覆盖自证", text: win.note };
+    } else {
       /* 这一格是整个判据最坏的形状在这里：窗口没盖住就往下单念「缺勤」，是把「我没取到」
        * 写成「它没跑」（ISSUE #2392）。所以这里**不进判决**，落成未校验（退 2 不算绿）。 */
       source = {
@@ -570,13 +577,6 @@ export function main(rawArgv, env = {}) {
         details: [],
         failure: `取数没盖住窗口 —— ${win.note}；「窗口内没有派发」这句话在这上面不成立`,
       };
-    } else {
-      source = {
-        list: win.list,
-        details: fetchDailyDetails(run, slug, win.list),
-        failure: null,
-      };
-      coverage = { label: "取数覆盖自证", text: win.note };
     }
   }
   const out = source.failure

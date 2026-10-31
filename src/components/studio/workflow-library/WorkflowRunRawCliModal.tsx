@@ -190,7 +190,7 @@ export function WorkflowRunRawCliModal({
                 comfy-cli 完整输出
               </span>
               <span className="text-ink-faint text-2xs">
-                {!loaded ? "加载中…" : `${lines.length} 行`}
+                {loaded ? `${lines.length} 行` : "加载中…"}
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-2">

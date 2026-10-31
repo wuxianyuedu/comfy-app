@@ -122,12 +122,12 @@ export function renderReport(report) {
       for (const watched of target.watched) {
         if (!watched.known) {
           lines.push(`      ${watched.filter}：认不出对应的引擎进程，不判`);
-        } else if (!watched.present) {
-          lines.push(`      ${watched.filter} → ${watched.process}（${watched.label}）：没在跑`);
-        } else {
+        } else if (watched.present) {
           lines.push(
             `      ${watched.filter} → ${watched.process}（${watched.label}）：在跑，CPU 增量 ${watched.seconds}s`,
           );
+        } else {
+          lines.push(`      ${watched.filter} → ${watched.process}（${watched.label}）：没在跑`);
         }
       }
     }

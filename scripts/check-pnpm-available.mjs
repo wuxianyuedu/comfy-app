@@ -292,9 +292,7 @@ const declaredFloor =
 const floorCollection = collectDependencyFloors(depsRoot);
 if (!declaredFloor) {
   say("[WARN]", "package.json 没有 engines.node —— Node 下限无人声明（见规范 §2.1.8）。");
-} else if (!floorCollection.ok) {
-  say("[WARN]", `Node 下限这条判据没跑起来：${floorCollection.reason}。`);
-} else {
+} else if (floorCollection.ok) {
   const floorVerdict = describeNodeAgainstFloor({
     version: nodeVersion,
     range: declaredFloor,
@@ -323,6 +321,8 @@ if (!declaredFloor) {
       ].join("\n"),
     );
   }
+} else {
+  say("[WARN]", `Node 下限这条判据没跑起来：${floorCollection.reason}。`);
 }
 
 // node_modules：启动器的**另一道**门禁，自检不把它藏起来。

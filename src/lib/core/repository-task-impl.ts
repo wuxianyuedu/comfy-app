@@ -434,7 +434,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
           progress: pct,
           status: "RUNNING",
           claimedAt: claimStamp(),
-          ...(node !== undefined ? { progressNode: node } : {}),
+          ...(node === undefined ? {} : { progressNode: node }),
         })
         .where(writeGuard(taskId))
         .returning({ id: task.id });
@@ -472,9 +472,9 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
           finishedAt: new Date(),
           resultImages: data.resultImages,
           params: data.params,
-          ...(data.workflowSnapshot !== undefined
-            ? { workflowSnapshot: data.workflowSnapshot }
-            : {}),
+          ...(data.workflowSnapshot === undefined
+            ? {}
+            : { workflowSnapshot: data.workflowSnapshot }),
         })
         .where(writeGuard(taskId))
         .returning({ id: task.id });

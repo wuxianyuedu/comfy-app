@@ -86,15 +86,7 @@ export function BreadcrumbPath({
                 </BreadcrumbSeparator>
               )}
               <BreadcrumbItem>
-                {navKey !== null ? (
-                  <Button
-                    className="text-ink-muted hover:text-primary-strong h-auto p-0 text-xs font-normal hover:bg-transparent hover:underline"
-                    onClick={() => onNavigate(navKey)}
-                    variant="ghost"
-                  >
-                    {seg.label}
-                  </Button>
-                ) : (
+                {navKey === null ? (
                   <BreadcrumbPage
                     className={cn(
                       "text-xs",
@@ -103,6 +95,14 @@ export function BreadcrumbPath({
                   >
                     {seg.label}
                   </BreadcrumbPage>
+                ) : (
+                  <Button
+                    className="text-ink-muted hover:text-primary-strong h-auto p-0 text-xs font-normal hover:bg-transparent hover:underline"
+                    onClick={() => onNavigate(navKey)}
+                    variant="ghost"
+                  >
+                    {seg.label}
+                  </Button>
                 )}
               </BreadcrumbItem>
             </React.Fragment>

@@ -91,7 +91,7 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
       {/* 视图说明问号：挂在标题右侧（读者在「这一屏叫什么」的地方顺路看见「还有
           一句解释」）。没有登记的视图不渲染 —— 「没有说明的不显示」。屏内页头不再
           放第二颗：那句话的单一出处是 `viewHelp()`。 */}
-      {help !== undefined ? <HeaderHelp text={help} /> : null}
+      {help === undefined ? null : <HeaderHelp text={help} />}
 
       <div className="ml-auto flex min-w-0 items-center gap-1">
         {/* 本屏动作的落点（`ViewActions`）。放在全局控件之前：本屏的动作与

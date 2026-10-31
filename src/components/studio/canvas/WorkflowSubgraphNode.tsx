@@ -131,7 +131,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
   return (
     <div
       className={`relative flex flex-col rounded-lg border shadow-[0_6px_22px_var(--color-shadow-strong)] ${
-        nodeMode !== 0 ? "bg-transparent" : "bg-node"
+        nodeMode === 0 ? "bg-node" : "bg-transparent"
       }`}
       data-node-id={data.nodeId}
       ref={hoverRef}

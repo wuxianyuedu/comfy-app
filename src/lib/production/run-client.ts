@@ -182,7 +182,7 @@ export async function regenerateShot(
     projectId,
     shotId,
     mode,
-    ...(newPrompt !== undefined ? { newPrompt } : {}),
+    ...(newPrompt === undefined ? {} : { newPrompt }),
   });
 }
 

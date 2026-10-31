@@ -376,12 +376,12 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     const prevRuntime = taskParamsPatched.runtime;
     taskParamsPatched.runtime = {
       ...(typeof prevRuntime === "object" && prevRuntime ? prevRuntime : {}),
-      ...(actualSeed !== undefined ? { seed: actualSeed } : {}),
-      ...(runtime.steps !== undefined ? { steps: runtime.steps } : {}),
-      ...(runtime.cfg !== undefined ? { cfg: runtime.cfg } : {}),
+      ...(actualSeed === undefined ? {} : { seed: actualSeed }),
+      ...(runtime.steps === undefined ? {} : { steps: runtime.steps }),
+      ...(runtime.cfg === undefined ? {} : { cfg: runtime.cfg }),
       ...(runtime.sampler_name ? { sampler_name: runtime.sampler_name } : {}),
       ...(runtime.scheduler ? { scheduler: runtime.scheduler } : {}),
-      ...(runtime.denoise !== undefined ? { denoise: runtime.denoise } : {}),
+      ...(runtime.denoise === undefined ? {} : { denoise: runtime.denoise }),
       ...(runtime.samplerClassType ? { sampler_class: runtime.samplerClassType } : {}),
       ...(runtime.samplerNodeId ? { sampler_node: runtime.samplerNodeId } : {}),
       // 一个工作流可能有多个采样节点：顶层字段只反映主采样器（第一个），完整
@@ -397,13 +397,13 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // workflow 一并写进 Task.workflowSnapshot，使「任务」与「模板当前版本」彻底
   // 解耦、可独立复现。`source: "execution"` 标记这是执行时自动捕获的独立副本。
   const workflowSnapshot =
-    executedWorkflow != null
-      ? {
+    executedWorkflow == null
+      ? undefined
+      : {
           workflow: executedWorkflow,
           capturedAt: new Date().toISOString(),
           source: "execution",
-        }
-      : undefined;
+        };
 
   /* 与 finalizeFailure 共用同一把「DB 终态一次写入」锁：若 reaper 已把
    *  这条任务判过终态，就不再覆盖，避免「执行日志说成功、应用日志说失败」
@@ -443,7 +443,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
       sortIndex: i,
       isCover: i === 0,
       mediaType: s2.mediaType,
-      seed: actualSeed !== undefined ? String(actualSeed) : (reqSeed ?? null),
+      seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
       width: s2.mediaType === "image" ? (reqW ?? null) : null,
       height: s2.mediaType === "image" ? (reqH ?? null) : null,
     })),
@@ -456,7 +456,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     workflowName: taskRow?.workflowName ?? null,
     prompt: taskRow?.prompt ?? null,
     negativePrompt: taskRow?.negativePrompt ?? null,
-    seed: actualSeed !== undefined ? String(actualSeed) : (reqSeed ?? null),
+    seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
     size: sizeStr || null,
     referenceImages:
       /* SAFETY: 类型断言已复核 */ (taskRow?.referenceImages as Array<string> | null) ?? [],

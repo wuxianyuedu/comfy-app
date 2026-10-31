@@ -181,7 +181,7 @@ function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption 
   return {
     id,
     name,
-    ...(taskType !== undefined ? { taskType } : {}),
+    ...(taskType === undefined ? {} : { taskType }),
     category,
     modes,
     modelTags,
@@ -318,12 +318,12 @@ export async function buildLibraryWorkflowInput(
    *  `buildEncapsulatedInputs`）。历史里那一串 "768x1024" 就是这条兼容字段。 */
   const input: GenerateInput = {
     workflow: workflowId,
-    ...(values.prompt !== undefined ? { prompt: values.prompt } : {}),
-    ...(values.negativePrompt !== undefined ? { negative: values.negativePrompt } : {}),
-    ...(values.firstFrame !== undefined ? { firstFrame: values.firstFrame } : {}),
-    ...(values.lastFrame !== undefined ? { lastFrame: values.lastFrame } : {}),
+    ...(values.prompt === undefined ? {} : { prompt: values.prompt }),
+    ...(values.negativePrompt === undefined ? {} : { negative: values.negativePrompt }),
+    ...(values.firstFrame === undefined ? {} : { firstFrame: values.firstFrame }),
+    ...(values.lastFrame === undefined ? {} : { lastFrame: values.lastFrame }),
     // 视频时长：帧数走内置字段，秒数由 workflowInputs 里的时长口落下去。
-    ...(values.frames !== undefined ? { frames: values.frames } : {}),
+    ...(values.frames === undefined ? {} : { frames: values.frames }),
     ...(workflowInputs.length > 0 ? { workflowInputs } : {}),
   };
   return {
@@ -642,7 +642,7 @@ export async function apiGenerateImage(req: {
     ...(req.mode ? { mode: req.mode } : {}),
     ...(req.aspectRatio ? { aspectRatio: req.aspectRatio } : {}),
     ...(req.megapixels ? { megapixels: req.megapixels } : {}),
-    ...(req.multiple !== undefined ? { multiple: req.multiple } : {}),
+    ...(req.multiple === undefined ? {} : { multiple: req.multiple }),
     ...(req.image ? { image: req.image } : {}),
   });
   const url = data && typeof data.url === "string" && data.url ? data.url : null;
@@ -717,7 +717,7 @@ export async function prepareLocalInputImage(image: string): Promise<string> {
   const filename =
     isRecord(data) && typeof data.filename === "string" && data.filename ? data.filename : null;
   if (!res.ok || !filename) {
-    throw new Error(!res.ok ? relayErrorMessage(data, res.status) : "参考图准备失败");
+    throw new Error(res.ok ? "参考图准备失败" : relayErrorMessage(data, res.status));
   }
   return filename;
 }

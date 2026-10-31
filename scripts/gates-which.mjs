@@ -343,7 +343,9 @@ export function main(argv = process.argv.slice(2)) {
 
   /** @type {{ok: true, files: string[], renamedFrom: string[], via: string} | {ok: false, reason: string}} */
   let face;
-  if (changed !== null) {
+  if (changed === null) {
+    face = resolveChangedFiles();
+  } else {
     if (changed.length === 0) {
       process.stderr.write(
         `${TAG} \`--changed\` 后面没有路径 —— 这不是「改动面为空」，是没有给名单（退 2）\n`,
@@ -356,8 +358,6 @@ export function main(argv = process.argv.slice(2)) {
       renamedFrom: [],
       via: "--changed（显式名单；改名旧侧由调用方一并给出）",
     };
-  } else {
-    face = resolveChangedFiles();
   }
   if (!face.ok) {
     process.stderr.write(

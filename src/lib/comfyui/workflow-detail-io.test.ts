@@ -634,7 +634,7 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
             kind: "widget",
             nodeId: "24",
             name: "image",
-            ...(label !== undefined ? { label } : {}),
+            ...(label === undefined ? {} : { label }),
           },
         },
         {
@@ -848,7 +848,7 @@ describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（I
                 kind: "widget",
                 nodeId: "1512",
                 name: "value_1",
-                ...(label !== undefined ? { label } : {}),
+                ...(label === undefined ? {} : { label }),
               },
             },
             {
