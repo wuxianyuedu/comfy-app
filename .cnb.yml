@@ -589,8 +589,10 @@
 .lock-oneshot-unit: &lock_oneshot_unit
   key: oneshot-unit
   cancel-in-progress: true
-# 桌包那一档自己的锁（ISSUE #2503）。它**不与每日档共用**：那一条是 12 格、这一条是
-# 三格，共用一把就等于「手点一次桌包会把当日那一跑的某一格掐掉」—— 而这两件事各自要
+# 桌包那一档自己的锁（ISSUE #2503）。它**不与每日档共用**：两条档各有自己的格子
+# （条数只以这份文件里的 `*daily_gates` 与 `*package_gates` 两个锚点为准，**不在注释里记账数**
+# —— #2878 数到这一行时它写的两个数都已经漂过一轮了），共用一把就等于「手点一次桌包会把
+# 当日那一跑的某一格掐掉」—— 而这两件事各自要
 # 结论。`cancel-in-progress: true` 的语义在这一档上是「同一档连点两次只留最新那一跑」。
 .lock-package: &lock_package
   key: package
@@ -653,9 +655,11 @@
       - "docs/**"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
   - name: API 文档生成与自检
-    # 收窄面（17 条）**不是手抄的**：真相由 `scripts/docs-api-input-closure.mjs` 算出，
-    # 由 `tests/ci-incremental-gates.test.ts` 双向核对 —— 闭包里多出任何一个文件、
-    # 而这里没有它 ⇒ 当场红。别在这里手加一条（那正是 ISSUE #2223 的漏判形态）。
+    # 收窄面**不是手抄的，也不在这里记条数**：算的那一份是
+    # `scripts/docs-api-input-closure.mjs`，核的那一份是 `tests/ci-incremental-gates.test.ts`
+    # —— 闭包里多出任何一个文件、而这里没有它 ⇒ 当场红。别在这里手加一条（那正是
+    # ISSUE #2223 的漏判形态）。要条数就问判据，别抄注释：这一行曾写着「17 条」而那份面是 18 条，
+    # 而判据只比「面 ⇄ 闭包」、不读注释里的数字 —— 谁都不会因此红（ISSUE #2878）。
     # ⚠️ 产物面 `docs/api/**` 不在收窄面里（ISSUE #2231）；这一格不带 `--autofix`：
     # 产物不再进 git，没有「自动修完再提交」的对象，而「自动修 + 再判」正是让
     # 「产物陈旧」在 CI 上隐形的那一格（#2231 的现场：master 上差 9 处而平台报绿）。
@@ -1045,8 +1049,10 @@
   #
   # 为什么要在每日档跑**整档**：本地那一层从 2026-10-19 起不再要求自证（`ciStage`
   # 那一栏，规范 §11.8 / §13.5.23），而 PR 上的 `E2E 关键流程` 只跑 `@critical` 子集 ——
-  # `isWholeTrackRun` 明写子集**不构成整档凭证**。没有这一格，「80 条 spec 今天能不能
+  # `isWholeTrackRun` 明写子集**不构成整档凭证**。没有这一格，「整档 e2e 今天能不能
   # 全过」就从一台有人推代码才判得出来的机器，变成一个谁都不判的空白。
+  # （档里现在有多少条，问 `pnpm exec playwright test --list`，别抄在这里 ——
+  # 这一行曾写「80 条」而 `--list` 报 81，ISSUE #2878。）
   #
   # ⚠️ **不许带任何收窄参数**（`--grep` / 指到单个 spec）：带了就会**绿着不记账**，
   #   而日志与账面看起来与真跑过一模一样 —— 那正是这一族最坏的静默形态。
@@ -1230,10 +1236,10 @@
 # ── 桌包那一档（ISSUE #2503）：装依赖 → 打真安装包 → 发布到常驻目录 ────────────────
 #
 # **为什么是独立一条**：业主口径「每日档另开一条独立流水线真打桌面成品包」，而它不进
-# `.daily-gates` 那张表（12 格里没有它，`COMFYAPP_CI_DAILY_GATES` 一个字没改）。两件事
-# 各自要结论：每日那一条答「master 今天能不能构建出来」，这一条答「今天的安装包在哪儿」。
+# `.daily-gates` 那张表（那张表里只有每日自己的格，`COMFYAPP_CI_DAILY_GATES` 一个字没改）。
+# 两件事各自要结论：每日那一条答「master 今天能不能构建出来」，这一条答「今天的安装包在哪儿」。
 # 并成一条的代价不是「慢」，是**每一格每日档都要为一次 cargo 编译排队**，而且桌包红了
-# 会把每日那 12 格一起 skip 掉 —— 那正是 #2114 / #2274 那族「一格带走一片」的形态。
+# 会把同一跑里排在它后面的每日格一起 skip 掉 —— 那正是 #2114 / #2274 那族「一格带走一片」的形态。
 #
 # **这一档不重抄任何判据**（§12.18 复用优先）：`pnpm tauri build` 的 `beforeBuildCommand`
 # 就是 `node scripts/build-desktop.mjs`，而它内部那条 `pnpm build` 链带着产物级两道防线
