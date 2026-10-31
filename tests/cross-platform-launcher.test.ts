@@ -169,7 +169,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
     // 心跳新鲜但 PID 不存在（写完心跳立刻被杀）同样算死。
     touchHeartbeat(root);
-    writeSession(root, { ...session, launcher_pid: 0x7ffffffe });
+    writeSession(root, { ...session, launcher_pid: 0x7f_ff_ff_fe });
     expect(isSessionOwnerAlive(root)).toBe(false);
 
     clearSession(root);
@@ -183,8 +183,8 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   it("回收上一次的残留：子进程全已不在时只清锚点、不回报", async () => {
     const root = makeTmp();
     writeSession(root, {
-      launcher_pid: 0x7ffffffe,
-      child_pids: [0x7ffffffd, 0x7ffffffa],
+      launcher_pid: 0x7f_ff_ff_fe,
+      child_pids: [0x7f_ff_ff_fd, 0x7f_ff_ff_fa],
       app_port: 3311,
       mode: "web",
       started_at: new Date().toISOString(),
@@ -207,7 +207,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     const pid = child.pid;
     expect(pid).toBeGreaterThan(0);
     writeSession(root, {
-      launcher_pid: 0x7ffffffe,
+      launcher_pid: 0x7f_ff_ff_fe,
       child_pids: [pid!],
       app_port: 3311,
       mode: "web",
@@ -692,7 +692,7 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
     const now = Date.now();
     writePanel(panelDir, "nextjs-panel-1-1.log", "上一次的失败\n", now - 60_000);
     writePanel(panelDir, "nextjs-panel-2-2.log", "本次的失败\n", now);
-    expect(readDiagnosticsTail({ panelDir, panelSince: now - 5_000 })).toContain("本次的失败");
+    expect(readDiagnosticsTail({ panelDir, panelSince: now - 5000 })).toContain("本次的失败");
     expect(readDiagnosticsTail({ panelDir, panelSince: now + 60_000 })).toBe("");
   });
 

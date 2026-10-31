@@ -1118,7 +1118,7 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
     const byName = new Map(parseJunitPhaseCosts(JUNIT_WITH_CASES).map((c) => [c.name, c]));
     expect(byName.get("tests/heavy-load.test.ts")).toEqual({
       name: "tests/heavy-load.test.ts",
-      totalMs: 30500,
+      totalMs: 30_500,
       testsMs: 1500,
       cases: 2,
     });

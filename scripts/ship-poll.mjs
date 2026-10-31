@@ -246,7 +246,7 @@ export async function pollUntilTerminal(ctx) {
       buildState = "unknown";
       break;
     }
-    await sleep(20000);
+    await sleep(20_000);
   }
   return { buildState, buildSn, stop: null };
 }

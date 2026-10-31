@@ -396,7 +396,7 @@ export function gateFirstPassByWallClock({ budget, files, perFileMs, nowMs = Dat
     return { ok: true, remainingMs, estimateMs, note: "" };
   }
   /** @param {number} ms */
-  const fmt = (ms) => `${(Number(ms) / 60000).toFixed(1)}分钟`;
+  const fmt = (ms) => `${(Number(ms) / 60_000).toFixed(1)}分钟`;
   return {
     ok: false,
     remainingMs,
@@ -483,7 +483,7 @@ export function gateRerunByWallClock({ budget, firstPassMs, retryFiles, nowMs = 
  */
 export function wallClockSkipReport({ remainingMs, estimateMs, files }) {
   /** @param {number} ms */
-  const fmt = (ms) => `${(Number(ms) / 60000).toFixed(1)} 分钟`;
+  const fmt = (ms) => `${(Number(ms) / 60_000).toFixed(1)} 分钟`;
   return (
     "[affected-launch] ⚠ **这一格的墙钟预算用完了 ⇒ 第 2 遍不开。**\n" +
     `  剩余 ${remainingMs === null ? "(没设界)" : fmt(remainingMs)}、` +

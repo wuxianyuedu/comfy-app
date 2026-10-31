@@ -74,7 +74,7 @@ function mkRepo(): string {
 /** 构造一条 registry 形状（只留判据真正读的字段）。 */
 function advisory(over: Record<string, unknown> = {}) {
   return {
-    id: 1000001,
+    id: 1_000_001,
     module_name: "demo-pkg",
     severity: "high",
     vulnerable_versions: ">=1.0.0 <1.0.5",

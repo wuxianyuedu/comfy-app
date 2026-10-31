@@ -163,7 +163,7 @@ describe("db:push 的空转档：库已经是这一版 schema 建的就不再起
     expect(state.probeSchemaFresh(tmp, url).state).toBe("unknown");
     // 表在、库里有指纹，但读不到 schema 源
     createSchema(dbFile);
-    state.writeSchemaFingerprint(tmp, url, 12345);
+    state.writeSchemaFingerprint(tmp, url, 12_345);
     expect(state.probeSchemaFresh(tmp, url).state).toBe("unknown");
   });
 

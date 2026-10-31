@@ -75,7 +75,7 @@ function runHost(args: Array<string>, logPath: string) {
 async function waitFor(
   predicate: () => boolean,
   message = "条件未在预算内成立",
-  timeoutMs = 5_000,
+  timeoutMs = 5000,
 ): Promise<void> {
   await expect.poll(predicate, { timeout: timeoutMs, message }).toBe(true);
 }

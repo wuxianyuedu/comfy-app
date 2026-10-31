@@ -118,7 +118,7 @@ function makeZip(files: Array<{ data: Buffer; name: string; }>): Buffer {
     const name = Buffer.from(f.name, "utf8");
     const comp = deflateRawSync(f.data);
     const local = Buffer.alloc(30);
-    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt32LE(0x04_03_4b_50, 0);
     local.writeUInt16LE(20, 4); // 需要的版本
     local.writeUInt16LE(0, 6); // 旗标
     local.writeUInt16LE(8, 8); // deflate
@@ -132,8 +132,8 @@ function makeZip(files: Array<{ data: Buffer; name: string; }>): Buffer {
     locals.push(local, name, comp);
 
     const central = Buffer.alloc(46);
-    central.writeUInt32LE(0x02014b50, 0);
-    central.writeUInt16LE(0x031e, 4); // made by Unix
+    central.writeUInt32LE(0x02_01_4b_50, 0);
+    central.writeUInt16LE(0x03_1e, 4); // made by Unix
     central.writeUInt16LE(20, 6);
     central.writeUInt16LE(0, 8);
     central.writeUInt16LE(8, 10); // deflate
@@ -147,7 +147,7 @@ function makeZip(files: Array<{ data: Buffer; name: string; }>): Buffer {
     central.writeUInt16LE(0, 32);
     central.writeUInt16LE(0, 34);
     central.writeUInt16LE(0, 36);
-    central.writeUInt32LE((0o100644 << 16) >>> 0, 38); // 外部属性（权限位在高 16 位）
+    central.writeUInt32LE((0o10_0644 << 16) >>> 0, 38); // 外部属性（权限位在高 16 位）
     central.writeUInt32LE(offset, 42);
     centrals.push(central, name);
 
@@ -155,7 +155,7 @@ function makeZip(files: Array<{ data: Buffer; name: string; }>): Buffer {
   }
   const centralBuf = Buffer.concat(centrals);
   const eocd = Buffer.alloc(22);
-  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt32LE(0x06_05_4b_50, 0);
   eocd.writeUInt16LE(0, 4);
   eocd.writeUInt16LE(0, 6);
   eocd.writeUInt16LE(files.length, 8);
@@ -172,7 +172,7 @@ function crc32(buf: Buffer): number {
   for (const b of buf) {
     c ^= b;
     for (let k = 0; k < 8; k += 1) {
-      c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+      c = (c >>> 1) ^ (0xed_b8_83_20 & -(c & 1));
     }
   }
   return ~c >>> 0;
@@ -1809,7 +1809,7 @@ describe("工具链自证：下载失败的读数是读数，不是又一句「�
       playwrightInstallHintFacts({
         PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000",
       }).timeoutMs,
-    ).toBe(120000);
+    ).toBe(120_000);
     /* 与 Playwright 自己的算法同口径（`+(v || "0") || NET_DEFAULT_TIMEOUT`）：
      * 这类值会被它当成「没设」，读数里点它们只会把人指错。 */
     for (const raw of ["", "0", "abc"]) {

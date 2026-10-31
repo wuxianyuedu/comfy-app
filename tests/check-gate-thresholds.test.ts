@@ -46,7 +46,7 @@ const baseEntries = (): Array<Entry> => [
   {
     file: "scripts/check-c.cjs",
     const: "PROBE_TIMEOUT_MS",
-    value: 10000,
+    value: 10_000,
     kind: "report",
     strictness: "n/a",
   },
@@ -87,7 +87,7 @@ const run = (
 
 describe("num：源码里的数值分隔写法要归成数字", () => {
   it("`10_000` 与 `0.75` 都读得出来", () => {
-    expect(num("10_000")).toBe(10000);
+    expect(num("10_000")).toBe(10_000);
     expect(num("0.75")).toBe(0.75);
   });
 });

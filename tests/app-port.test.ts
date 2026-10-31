@@ -30,7 +30,7 @@ describe("app-port 端口解析", () => {
   });
 
   it("FNV-1a 32 位对固定输入给出稳定向量（跨语言一致性锚点）", () => {
-    expect(fnv1a32("f:/ai/other/comfy-app-t3-branch")).toBe(0x97ecb3a9);
+    expect(fnv1a32("f:/ai/other/comfy-app-t3-branch")).toBe(0x97_ec_b3_a9);
   });
 
   it("按检出路径推导的端口落在 3200..3999，且同路径恒定、异路径可分", () => {
@@ -298,7 +298,7 @@ describe("parseDotEnvPortValue：整串是十进制整数才算端口（四侧�
 
   it("落点 1..=65535，越界按未配置", () => {
     expect(parseDotEnvPortValue("1")).toBe(1);
-    expect(parseDotEnvPortValue("65535")).toBe(65535);
+    expect(parseDotEnvPortValue("65535")).toBe(65_535);
     expect(parseDotEnvPortValue("0")).toBeNull();
     expect(parseDotEnvPortValue("-1")).toBeNull();
     expect(parseDotEnvPortValue("65536")).toBeNull();

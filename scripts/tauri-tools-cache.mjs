@@ -67,11 +67,11 @@ export const NSIS_PLAN = {
   assets: {
     zip: {
       sha256: "ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8",
-      bytes: 2363925,
+      bytes: 2_363_925,
     },
     dll: {
       sha256: "5ba143b5db4a87d32d6e7802e033330aae56cbceabe0d1e3ba41948385ad4709",
-      bytes: 34304,
+      bytes: 34_304,
     },
   },
   /** dll 在缓存树里的落点（正斜杠写，比较时统一分隔符）。 */

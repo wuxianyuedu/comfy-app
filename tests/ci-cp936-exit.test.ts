@@ -74,7 +74,7 @@ describe("CP936 出口：转码计划（本仓唯一能判「字节是 936 编�
 
   it("脚本按**参数给的那个**代码页取编码器（不是写死的第二个数字）", () => {
     expect(encodeCp936Plan().script).toContain("GetEncoding(936)");
-    expect(encodeCp936Plan(65001).script).toContain("GetEncoding(65001)");
+    expect(encodeCp936Plan(65_001).script).toContain("GetEncoding(65001)");
   });
 
   it("写的是**原始字节**：绕过控制台对象 + 从 stdin 读 + 显式 Flush", () => {

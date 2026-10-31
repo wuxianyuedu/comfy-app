@@ -225,7 +225,7 @@ export async function fetchFact(ctx, subPath, extra = {}) {
         ...(extra.body ? { "Content-Type": "application/json" } : {}),
       },
       ...(extra.body ? { body: extra.body } : {}),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(15_000),
     });
     const body = await res.text();
     return {

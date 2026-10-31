@@ -94,14 +94,14 @@ describe("收的方式与边界", () => {
   it("端口空着 ⇒ 一条进程都不起、也不回收", async () => {
     const listeningPids = vi.fn(async () => []);
     const reap = vi.fn(async () => ({ ok: true }));
-    const result = await reclaimOwnFakePort(18188, { listeningPids, reap });
+    const result = await reclaimOwnFakePort(18_188, { listeningPids, reap });
     expect(result).toEqual({ reclaimed: [], foreign: [], free: true });
     expect(reap).not.toHaveBeenCalled();
   });
 
   it("两条证据都齐 ⇒ 交出那个 PID 回收（**整棵树**走仓里唯一出口）", async () => {
     const reap = vi.fn(async () => ({ ok: true }));
-    const result = await reclaimOwnFakePort(18188, {
+    const result = await reclaimOwnFakePort(18_188, {
       listeningPids: async () => [4242],
       readCmdlines: async (pids) => new Map(pids.map((p) => [p, OUR_CMDLINE])),
       answersFake: async () => true,
@@ -125,7 +125,7 @@ describe("收的方式与边界", () => {
 
   it("认不出的占位者 ⇒ **一个都不收**，但如实报出来是哪几个", async () => {
     const reap = vi.fn(async () => ({ ok: true }));
-    const result = await reclaimOwnFakePort(18188, {
+    const result = await reclaimOwnFakePort(18_188, {
       listeningPids: async () => [7],
       readCmdlines: async (pids) => new Map(pids.map((p) => [p, FOREIGN_CMDLINE])),
       answersFake: async () => true,
@@ -137,7 +137,7 @@ describe("收的方式与边界", () => {
 
   it("命令行走形之后才付那次 `/system_stats` 探测（不相关的占位者不必被 fetch）", async () => {
     const answersFake = vi.fn(async () => true);
-    await reclaimOwnFakePort(18188, {
+    await reclaimOwnFakePort(18_188, {
       listeningPids: async () => [1, 2],
       readCmdlines: async () =>
         new Map([

@@ -409,7 +409,7 @@ export function playwrightInstallHints(out, facts = {}) {
  * 在 Playwright 里（`+(PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT || "0") ||
  * NET_DEFAULT_TIMEOUT`），本仓不重实现它 —— 这里只拿它当那条线的位置。
  */
-export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30000;
+export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
 
 /**
  * 「这一跑里已经做过的动作」—— {@link playwrightInstallHints} 的话术据此分岔。

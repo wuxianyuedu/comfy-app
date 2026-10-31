@@ -105,7 +105,7 @@ function pollRound(): void {
       seq += 1;
       useLogStore
         .getState()
-        .appendFileLogs(makeEntries(perSource, seq * 1_000_000, 1_700_000_000_000 + seq * 1_000));
+        .appendFileLogs(makeEntries(perSource, seq * 1_000_000, 1_700_000_000_000 + seq * 1000));
     }
   };
   useLogStore.setState({ logs: [], filteredLogs: [], revision: 0 });

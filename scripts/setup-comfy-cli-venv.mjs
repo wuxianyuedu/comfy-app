@@ -248,7 +248,7 @@ function upgradeCheckDue(force) {
   if (Number.isNaN(last)) {
     return true;
   }
-  return Date.now() - last >= UpgradeCheckIntervalHours * 3600_000;
+  return Date.now() - last >= UpgradeCheckIntervalHours * 3_600_000;
 }
 
 /** 在 PATH 上找可用的基础 Python（python / python3 / py 启动器）。 */
