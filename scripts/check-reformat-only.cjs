@@ -578,10 +578,14 @@ async function main() {
   /* **合并提交豁免**：合并会把上游整批（含它们在别处做的格式化）一次性带进来，
    *  「拆成两次提交」在这里不是可选动作 —— 上游的形态已经定死在历史里，本地
    *  无法把一次 merge 的重排与行为改动分开。判据取 `MERGE_HEAD` 是否存在：
-   *  pre-commit 在合并提交对象生成**之前**运行，此时 `.git/MERGE_HEAD` 由
+   *  pre-commit 在合并提交对象生成**之前**运行，此时 `MERGE_HEAD` 由
    *  `git merge` 写入、合并完成后删除，正是「本次提交是合并提交」的唯一事实源。
-   *  仅当**没有**走 `--range`（CI 盘点按范围判，与合并现场无关）时豁免。 */
-  const mergeHeadPresent = fs.existsSync(path.join(ROOT, ".git", "MERGE_HEAD"));
+   *  仅当**没有**走 `--range`（CI 盘点按范围判，与合并现场无关）时豁免。
+   * ⚠️ 取法必须走 `git-dir.mjs` 的 `hasInProgressMerge`，**不许**硬拼 `<根>/.git/MERGE_HEAD`：
+   *  链接工作树里 `.git` 是个文件而不是目录，拼出来的路径永远读不到 —— 于是这一档豁免
+   *  在那种检出里**永不点火**（ISSUE #2785；同一形状在 `check-format.cjs` 里已经收口过一次）。 */
+  const { hasInProgressMerge } = require("./git-dir.mjs");
+  const mergeHeadPresent = hasInProgressMerge(ROOT);
   if (!process.argv.includes("--range") && mergeHeadPresent) {
     gateSkip("格式化提交分离", "合并提交（MERGE_HEAD 存在），「格式化与行为改动分离」不适用");
     return;
