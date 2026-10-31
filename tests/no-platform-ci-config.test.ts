@@ -386,17 +386,25 @@ const PR_MOVED_TO_DAILY: Array<[string, string, string, string]> = [
 ];
 
 /**
- * 「每日」那一跑里应当与 PR 那一跑**逐字同形**的几格（定时名 → PR 名）。
+ * **同一份实现长在另一条流水线上**的那几格（另一档的名字 → PR 的名字），比的是逐字同形。
  *
  * 名字不同是刻意的（按名字取块的解析器会撞车），所以「同一件事」只能由 script 相同来保证。
+ * 左边不一定是「每日」那一档：`安装依赖` 是 push 档（`master 合并复核`）的那一格 ——
+ * 这条判据管的是「一条链被几条流水线各抄一份」这个形状，不管抄到第几条都得对账。
  *
  * ⚠️ 这一列**只留两边都还在的**。`Python 可用性` 与 `浏览器安装` 在 2026-10-19 撤出了
  * PR 清单（见上面 `PR_MOVED_TO_DAILY`），拿一个不存在的 PR 块来比相同性，得到的不是
  * 「两边漂了」而是「一边根本不在场」—— 那种红会教会人忽略红。它们由那条判据接住。
  */
-const DAILY_SCRIPT_MIRRORS: Array<[string, string]> = [
+const CROSS_LANE_SCRIPT_MIRRORS: Array<[string, string]> = [
   // 多行块也在内：这一格是 `script: |` 的三行体，只比第一行会漏掉「第二行改了」这种漂移。
   ["每日安装依赖", "Install dependencies"],
+  /* push 档那一格与 PR 档的**三样都必须一字不差**（命令行 / env / timeout，见下面那条判据），
+   * 所以它这里**没有**任何例外：`COMFY_CI_SLOT` 两侧都置着 —— 「不接槽」的理由是
+   * 「这一档后面背着 `next build`」（ISSUE #2081），而 push 清单里没有构建格（ISSUE #2851）。
+   * `DAILY_ENV_ONLY_ON_PR` 里给这一档登记一行豁免（那张表按**左边那个名字**取豁免键），
+   * 只动一边会被这条判据报成一堆行的差。 */
+  ["安装依赖", "Install dependencies"],
   /* 浏览器那一格比的不只是命令行：它背着**两行 env**（下载根 + 连接超时），那是四次
    * 取证读数换来的（`cnb-gt1-1k513ill4` 那一族）。只比命令行的话，「一边改了根、
    * 另一边没改」会逐字通过，而红只在第二天 02:00 出现 —— 比这个正是最贵的一种漂。
@@ -407,6 +415,11 @@ const DAILY_SCRIPT_MIRRORS: Array<[string, string]> = [
 
 /**
  * 两格 env 之间**唯一被登记过的差别**：`每日安装依赖` 那一格不接槽（ISSUE #2081）。
+ *
+ * ⚠️ 键是**按左边那个格子名**取的，所以「哪一格可以少这行」这件事一张表说得清：
+ * 今天只有每日那一格在表里。push 档的 `安装依赖` **不在** —— 它与 PR 逐字相同、两侧都置着，
+ * 因为「不接槽」那条理由的主语是「这一档后面有没有 `next build`」，不是档名
+ * （push 清单里没有构建格，ISSUE #2851）。
  *
  * ⚠️ 这份名单**不是**「这几个键允许随便漂」，它钉的是一个更窄的形状：
  *  · 名单里的键，PR 那一侧必须**正好置着一行** `KEY: "1"`；
@@ -481,6 +494,32 @@ function executableScriptLines(text: string, name: string): Array<string> {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line !== "" && !line.startsWith("#"));
+}
+
+/**
+ * 「这一格会在作业里真构建」的命令形态。
+ *
+ * 为什么要有这一张表：接槽把作业的 `node_modules` 整棵接成**指向项目根之外**的 junction，
+ * 而 Turbopack 对这一条有硬要求 —— 每日那一档因此按策略不接（ISSUE #2081 的 13.8s 死法）。
+ * push 那一档接槽的全部依据就是「它清单里没有构建格」（ISSUE #2851），所以这句话必须有
+ * 执行者：往那份清单里加一格构建的人，要当场被这一条拦住，而不是等那一跑 13.8s 就死、
+ * 后面整片 `skipped` 那天再来查为什么。
+ */
+const BUILD_CONSUMER_MARKERS: Array<string> = [
+  "ci-daily-build.mjs",
+  "build-desktop.mjs",
+  "next build",
+];
+
+/** 从「格名 → 该格真正执行的命令行」里挑出含构建消费者的那几格（名字原样回，红时指得出人）。 */
+function stagesWithBuildConsumer(scripts: Map<string, Array<string>>): Array<string> {
+  const out: Array<string> = [];
+  for (const [name, lines] of scripts) {
+    if (lines.some((line) => BUILD_CONSUMER_MARKERS.some((marker) => line.includes(marker)))) {
+      out.push(name);
+    }
+  }
+  return out;
 }
 
 /**
@@ -1529,6 +1568,21 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       declared,
       "「覆盖率上报」不该出现在 push 清单里 —— push 档没有产出 lcov.info 的格子，它在那里只会静默跳过",
     ).not.toContain("覆盖率上报");
+
+    /* 接槽的安全前提（ISSUE #2851）：这一档后面**不许有会真构建的格子**。
+     * `安装依赖` 那一格置着 `COMFY_CI_SLOT: "1"`，而接槽形态下 Turbopack 拒指向项目根之外的
+     * `node_modules` 链（每日档那次是 13.8s 就死 + 后面四格整片 `skipped`，ISSUE #2081）。
+     * 「push 清单里没有构建格」过去只是 #2851 单子与配置注释里的一句话 —— 它现在是判据：
+     * 往这份清单里加构建格的人要当场被拦住，而不是等那一跑死了再查为什么。 */
+    const withBuild = stagesWithBuildConsumer(
+      new Map(declared.map((n) => [n, executableScriptLines(text, n)])),
+    );
+    expect(
+      withBuild,
+      `push 清单里出现了会真构建的格子（${withBuild.join(" / ")}），而「安装依赖」那一格置着 ` +
+        '`COMFY_CI_SLOT`：先摘那一行并同批把它登记进 `DAILY_ENV_ONLY_ON_PR`，' +
+        "或先证明 #2521 的 `turbopackAdditionalRoots` 在这一档上跑得通（它在有构建格的档上一次都没被执行过）",
+    ).toEqual([]);
   });
 
   it("定时 / 手点 / API 三个触发口跑的是同一份清单，而按钮与事件键两两对上", () => {
@@ -2620,7 +2674,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     }
   });
 
-  it("定时那一跑的前提格：安装与 Python 必须先于单测，且 script 与 PR 那格逐字相同", () => {
+  it("定时那一跑的前提格：安装、Python、库表都必须排在单测之前", () => {
     const text = readRegisteredConfig();
     const order = registeredDailyGateOrder(text);
     const suite = order.indexOf("每日单元测试");
@@ -2640,35 +2694,58 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       order.indexOf("每日同步数据库表结构"),
       "「每日同步数据库表结构」必须排在「每日单元测试」之前 —— 没库时读库的用例报的是「连不上」",
     ).toBeLessThan(suite);
-    /* 两跑之间**不许各漂一份**：这些格子的名字带「每日」前缀（不共用名字是为了让
-     * 按名字取块的解析器不撞车），所以「同一件事」这件事只能由 script 逐字相同来保证。
-     * 比的是**真正会执行的那些行**：块脚本里的 `#` 注释与空行不算 —— 两格各自要解释的
-     * 事情不一样（PR 那一格背着一整段「为什么这一步是前提」），把散文也要求逐字相同
-     * 只会逼人删解释，而漂移恰恰藏在命令行里。 */
-    for (const [daily, pr] of DAILY_SCRIPT_MIRRORS) {
-      const dailyScript = executableScriptLines(text, daily);
+  });
+
+  /**
+   * 「同一份实现长在几条流水线上」的对账（`CROSS_LANE_SCRIPT_MIRRORS`）。
+   *
+   * 比三样，一样都不能少：
+   *  · **命令行** —— 取「真正会执行的那些行」：块脚本里的 `#` 注释与空行不算，两格各自要
+   *    解释的事情本来就该不同（PR 那一格背着一整段「为什么这一步是前提」），把散文也要求
+   *    逐字相同只会逼人删解释，而漂移恰恰藏在命令行里；
+   *  · **env 赋值** —— 同一份脚本两侧各配一份 env，就是两条流水线各自判两件事；
+   *  · **`timeout`** —— 它是那条链上唯一「改了不会被任何一行命令读出来」的一行。
+   *    `.cnb.yml` 里「三份副本必须逐字相同」那两段注释一直声称 timeout 在比对面里，
+   *    而它此前**不在** —— 那句话现在才有执行者（ISSUE #2851 同批补上）。
+   */
+  it("跨档同形格：命令行 / env / timeout 三样逐字相同，唯一的 env 例外是登记过的那一行", () => {
+    const text = readRegisteredConfig();
+    const timeouts = stageTimeouts(text);
+    for (const [lane, pr] of CROSS_LANE_SCRIPT_MIRRORS) {
+      const laneScript = executableScriptLines(text, lane);
       const prScript = executableScriptLines(text, pr);
-      const dailyEnv = stageEnvAssignments(text, daily);
+      const laneEnv = stageEnvAssignments(text, lane);
       const prEnv = stageEnvAssignments(text, pr);
-      expect([...dailyScript, ...dailyEnv], `定时那一跑里找不到「${daily}」的 script`).toBeTruthy();
+      expect(
+        [...laneScript, ...laneEnv],
+        `「${lane}」这一格取不到 script/env —— 它被删了、改了名，还是整块没了`,
+      ).toBeTruthy();
       expect(
         [...prScript, ...prEnv],
         `PR 那一跑里找不到「${pr}」的 script —— 镜像判据两边都要取得到，否则它是空转`,
       ).toBeTruthy();
       /* 例外那一半先按**形状**判（名单里的键必须只在 PR 侧、且必须是「置着」的形状），
        * 再把那几行剥掉 —— 剩下的仍然走同一条逐字相同。顺序要紧：先判形状，
-       * 「每日那一格被人补回了开关」才会被读成那句，而不是被 toEqual 报成一堆行的差。 */
-      const onlyOnPr = DAILY_ENV_ONLY_ON_PR[daily] ?? [];
+       * 「那一格被人补回了开关」才会被读成那句，而不是被 toEqual 报成一堆行的差。 */
+      const onlyOnPr = DAILY_ENV_ONLY_ON_PR[lane] ?? [];
       expect(
-        checkPrOnlyEnvExceptions(dailyEnv, prEnv, onlyOnPr),
-        `${daily} 与 ${pr} 之间的 PR-only env 例外形状不成立`,
+        checkPrOnlyEnvExceptions(laneEnv, prEnv, onlyOnPr),
+        `${lane} 与 ${pr} 之间的 PR-only env 例外形状不成立`,
       ).toBeNull();
       expect(
-        [...dailyScript, ...dropPrOnlyEnvLines(dailyEnv, onlyOnPr)],
-        `「${daily}」与 PR 那一格的**命令行与 env 赋值**不再逐字相同 —— 判据是同一份脚本、` +
+        [...laneScript, ...dropPrOnlyEnvLines(laneEnv, onlyOnPr)],
+        `「${lane}」与 PR 那一格的**命令行与 env 赋值**不再逐字相同 —— 判据是同一份脚本、` +
           "取字节的根也是同一个，改一边不改另一边就是两条流水线各自漂（§12.12 的孪生形态，" +
-          "只是它长在配置里）。唯一的例外登记在 DAILY_ENV_ONLY_ON_PR，它只豁免那一行",
+          "只是它长在配置里）。登记在 DAILY_ENV_ONLY_ON_PR 的那几行是唯一放开的差别，其余一字不动",
       ).toEqual([...prScript, ...dropPrOnlyEnvLines(prEnv, onlyOnPr)]);
+      /* `timeout` 单独一条断言，不塞进上面那个数组：混在一起时红报出来是「一堆行的差」，
+       * 读的人要自己找哪一行是预算；分开报，红字直接说出漂的是墙钟还是命令行。 */
+      expect(
+        timeouts.get(lane) ?? "(没写)",
+        `「${lane}」的 timeout 与 PR 那一格「${pr}」不是同一个数（现在：${
+          timeouts.get(lane) ?? "(没写)"
+        } ⇄ ${timeouts.get(pr) ?? "(没写)"}）—— 墙钟是那条链上唯一改了不会被命令行读出来的一行`,
+      ).toBe(timeouts.get(pr) ?? "(没写)");
     }
   });
 
@@ -2709,6 +2786,39 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(envAssignmentKey('  COMFY_CI_SLOT: "1"')).toBe("COMFY_CI_SLOT");
   });
 
+  it("「这一档有没有构建格」那张表不是空转：正例点得出格名，现役写法不误伤", () => {
+    /* 正例：构建那一跳以三种形态出现过（专用入口 / `pnpm build` 的字面 / 桌包脚本），
+     * 每一种都要被认出来 —— 认不出来的那张表，等于给 push 档留了一条「加了构建格而没人红」的门。 */
+    expect(
+      stagesWithBuildConsumer(
+        new Map([
+          ["每日生产构建", ["node scripts/ci-cp936-exit.mjs -- node scripts/ci-daily-build.mjs"]],
+        ]),
+      ),
+    ).toEqual(["每日生产构建"]);
+    expect(
+      stagesWithBuildConsumer(new Map([["构建", ["pnpm run next build"]]])),
+    ).toEqual(["构建"]);
+    expect(
+      stagesWithBuildConsumer(new Map([["桌包", ["node tools/build/build-desktop.mjs --release"]]])),
+    ).toEqual(["桌包"]);
+    /* 反例：现役 push 清单里那几格的样子（安装 / typedoc / 文档对账 / 读 git 的脚本）。
+     * 其中 `安装依赖` 那一行含 `ci-install-deps.mjs` —— 名字里带 "install"，别把它读成构建。 */
+    expect(
+      stagesWithBuildConsumer(
+        new Map([
+          ["合并形态复核", ["node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit"]],
+          ["安装依赖", ["node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs"]],
+          [
+            "API 文档生成与自检",
+            ["node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs"],
+          ],
+          ["工作区出处", ["node scripts/ci-cp936-exit.mjs -- node scripts/ci-workspace-provenance.mjs"]],
+        ]),
+      ),
+    ).toEqual([]);
+  });
+
   it("从 PR 撤下来的环境格，每一格在每日那一跑里都有同名执行者（撤拦 ≠ 撤账）", () => {
     /* 2026-10-19 的口径：只判**节点**的那几格不必每个 PR 都判（`工具链自证` 13.8s /
      * `Python 可用性` 2.8s / `Python 探针读数` 3.0s / `浏览器安装` 3.0s，逐格读数来自
@@ -2731,7 +2841,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       expect(
         prOrder,
         `「${former}」又回到 PR 清单里了 —— 那意味着它同时是两份执行者，` +
-          "`DAILY_SCRIPT_MIRRORS` 必须同批把它加回相同性判据，两处不能各说一套",
+          "`CROSS_LANE_SCRIPT_MIRRORS` 必须同批把它加回相同性判据，两处不能各说一套",
       ).not.toContain(former);
       expect(
         dailyOrder,
