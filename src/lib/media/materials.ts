@@ -190,7 +190,7 @@ export async function canWriteMaterialScope(userId: string, scope: string): Prom
 
 /* ── 读取 ── */
 
-export interface MaterialItem {
+export type MaterialItem = {
   folder: string;
   folderName: string;
   /** 稳定 id：`scope/folder/name`，前端删除时原样回传即可。 */
@@ -203,7 +203,7 @@ export interface MaterialItem {
   updatedAt: string;
   /** 浏览器可直接消费的 URL（走 /api/generated 读盘）。 */
   url: string;
-}
+};
 
 /** 列出单个 scope/folder 下的素材。目录不存在时返回空数组（不是错误）。 */
 export async function listFolderItems(scope: string, folder: string): Promise<Array<MaterialItem>> {

@@ -53,10 +53,10 @@ export function logEntryKey(entry: Pick<LogEntry, "time" | "level" | "message">)
  * `arrivalKey → LogEntry` 是「同一秒内同级别同正文」的副本表，用于把后到来源
  * 并进已落板那一行。两张表都只持有**引用**，与 `current` 同生命周期。
  */
-export interface TimelineIndex {
+export type TimelineIndex = {
   sameArrival: Map<string, LogEntry>;
   seen: Map<string, LogEntry>;
-}
+};
 
 /** 为一条已落板的时间线建索引（O(n)：只在形状变化时调用）。 */
 export function buildTimelineIndex(entries: ReadonlyArray<LogEntry>): TimelineIndex {

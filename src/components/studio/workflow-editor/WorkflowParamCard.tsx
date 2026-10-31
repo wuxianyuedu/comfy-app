@@ -30,7 +30,7 @@ import {
 import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
 import { Hint } from "~/components/ui/hint";
 
-export interface WorkflowParamCardProps {
+export type WorkflowParamCardProps = {
   /** 「恢复默认」是否可用。只读消费处不传回调（按钮根本不渲染）。 */
   canReset: boolean;
   /** 是否允许连线：false 时卡片置灰。
@@ -98,7 +98,7 @@ export interface WorkflowParamCardProps {
    *  只影响页脚的观感（已连 = 静默，未连 = 提示色）；文案由 `footNote` 给 ——
    *  卡片本体不替消费方拼句子。 */
   wired?: boolean;
-}
+};
 
 /** 输出端口行的悬停提示：这个口叫什么、自己是什么类型、落到哪一行。
  *

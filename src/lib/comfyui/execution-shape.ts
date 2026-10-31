@@ -12,10 +12,10 @@
  */
 
 /** 一条工作流模板里与「可执行形态」相关的列（其余列无关）。 */
-export interface ExecutionShapes {
+export type ExecutionShapes = {
   /** 工作流(RAW)格式列（可空）。 */
   rawJson?: unknown;
-}
+};
 
 /** 该值是不是一份「有内容」的 RAW 工作流原件（对象，且带非空 `nodes` 数组）。
  *

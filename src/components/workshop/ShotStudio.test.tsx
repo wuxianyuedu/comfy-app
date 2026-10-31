@@ -110,11 +110,11 @@ function buildResult(patch: Partial<LibraryWorkflowBuildResult> = {}): LibraryWo
   };
 }
 
-interface RenderOptions {
+type RenderOptions = {
   apiChannels?: ApiChannelsView | null;
   shots?: Array<Shot>;
   workflowId?: string;
-}
+};
 
 function renderStudio(options: RenderOptions = {}) {
   const onShotsChange = vi.fn();

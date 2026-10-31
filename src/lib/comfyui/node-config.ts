@@ -16,7 +16,7 @@ import type { FieldType } from "./field-types";
 export type { FieldType };
 
 /** 编辑器参数行定义（旧的「参数编辑器」FieldDef，现仅作字段规格复用）。 */
-export interface FieldDef {
+export type FieldDef = {
   group?: string; // section grouping
   hidden?: boolean; // don't show in editor (e.g. internal wiring)
   key: string; // input key in ComfyUI inputs object
@@ -32,20 +32,20 @@ export interface FieldDef {
   placeholder?: string;
   step?: number;
   type: FieldType;
-}
+};
 
 /* ── 端口规格（来自自定义节点的 manifest） ── */
-export interface PortSpec {
+export type PortSpec = {
   default?: unknown; // default value (for value chip / placeholder)
   name: string; // input/output name
   options?: Array<string>; // for COMBO
   required: boolean;
   type: string; // e.g. "FLOAT" | "IMAGE" | "COMBO" ...
   widget?: FieldType; // editor widget (absent for pure connection ports)
-}
+};
 
 /* ── 节点类型注册表 —— 把 class_type 映射到展示信息与字段规格 ── */
-export interface NodeTypeConfig {
+export type NodeTypeConfig = {
   category:
     | "input"
     | "process"
@@ -71,4 +71,4 @@ export interface NodeTypeConfig {
   outputsSpec?: Array<PortSpec>;
   rawCategory?: string; // original ComfyUI category string
   width: number; // node card width in px
-}
+};

@@ -23,7 +23,7 @@ import { LoadingSkeleton } from "./sections/LoadingSkeleton";
 import { WidgetInputRow } from "./sections/WidgetInputRow";
 import { SECTION_ACCENT } from "./constants";
 
-interface DynamicWorkflowFormViewProps {
+type DynamicWorkflowFormViewProps = {
   /** 画布节点版式：更紧凑的间距 + 单列。 */
   compact: boolean;
   controller: DynamicWorkflowFormController;
@@ -46,7 +46,7 @@ interface DynamicWorkflowFormViewProps {
   /** IO 编辑态：行内 👁 切换参数在 visibilityMode 模式下的可见性。 */
   visibilityMode?: string | null;
   workflowId?: string;
-}
+};
 
 export function DynamicWorkflowFormView({
   controller,

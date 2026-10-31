@@ -34,7 +34,7 @@ export function shotStatusToNodeStatus(status: Shot["status"]): StrictCanvasNode
 }
 
 /** 一个 Shot 投影到画布节点 data 上的字段补丁（写进带同一 shotId 的节点）。 */
-export interface ShotNodePatch {
+export type ShotNodePatch = {
   kind: "image" | "video";
   negative: string;
   prompt: string;
@@ -42,7 +42,7 @@ export interface ShotNodePatch {
   shotId: string;
   status: StrictCanvasNodeData["status"];
   taskId?: string;
-}
+};
 
 /** Shot → 节点补丁。当前阶段镜头图（imageUrl）投影为 image 节点的 resultPath；
  *  视频片段（clipUrl）在 Phase 3c 接入视频节点，这里先只映镜头图。 */
@@ -60,10 +60,10 @@ export function shotToNodePatch(shot: Shot): ShotNodePatch {
 
 /** 画布节点上对某镜头的「编辑面」改动，回写成 Shot 的部分补丁。
  *  只回写 prompt / negative，不回写生成态（那是任务侧的写入面）。 */
-export interface ShotEditPatch {
+export type ShotEditPatch = {
   negativePrompt: string;
   prompt: string;
-}
+};
 
 export function nodeEditToShot(patch: { negative: string; prompt: string }): ShotEditPatch {
   return { prompt: patch.prompt, negativePrompt: patch.negative };
@@ -89,9 +89,9 @@ export function planShotSync(
 }
 
 /** 带 shotId 锚的最小节点形状（画布节点结构上满足；避免耦合 ReactFlow 完整类型）。 */
-export interface ShotAnchoredNode {
+export type ShotAnchoredNode = {
   data?: { shotId?: string } & Record<string, unknown>;
-}
+};
 
 /** 把 shot 补丁按 `data.shotId` 合并到已有节点：命中则合并补丁，非镜头节点或无匹配
  *  原样返回。纯函数，供画布物化镜头节点用（Phase 3c）——新建节点需要视口坐标，由
@@ -137,11 +137,11 @@ export function nodeStatusToShotStatus(status: StrictCanvasNodeData["status"]): 
 }
 
 /** 一次镜头生成态回写的补丁（只覆盖生成态字段，不含编辑面）。 */
-export interface ShotGenerationPatch {
+export type ShotGenerationPatch = {
   imageUrl?: string;
   status: Shot["status"];
   taskId?: string;
-}
+};
 
 /** 从画布镜头节点的 data 提炼生成态补丁。节点 resultPath ↔ Shot imageUrl（与
  *  shotToNodePatch 同口径）：仅 done 且有结果时才写 url，避免运行中清空已有 url。 */

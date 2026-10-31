@@ -32,7 +32,7 @@ export type EnsureDecision =
   /** 可以拉起。 */
   | { kind: "launch" };
 
-export interface EnsureFacts {
+export type EnsureFacts = {
   /** 设置里是否开启自动启动。 */
   autoStart: boolean;
   /** 设置里的 ComfyUI 路径（空串视为未配置）。 */
@@ -43,7 +43,7 @@ export interface EnsureFacts {
   manualStop: boolean;
   /** 探测到的可达 base（不可达为 null）。 */
   upBase: string | null;
-}
+};
 
 /**
  * 自动启动路径的判决表。
@@ -83,7 +83,7 @@ export function resolveLaunchPolicy(exitKillComfyui: boolean | undefined): Launc
 }
 
 /** spawn 参数计算所需的已探明事实。 */
-export interface SpawnArgsFacts {
+export type SpawnArgsFacts = {
   /** 解析出的基础参数（解释器 + main.py + 用户额外参数之外的部分）。 */
   baseArgs: Array<string>;
   /** 默认端口常量（由调用方从 app-settings 注入，避免本模块依赖配置层）。 */
@@ -92,7 +92,7 @@ export interface SpawnArgsFacts {
   effectivePort: number | undefined;
   /** 桌面实例带来的附加参数。 */
   extraArgs: Array<string>;
-}
+};
 
 /**
  * 组装实际 spawn 的参数。
@@ -117,7 +117,7 @@ export function buildSpawnArgs(facts: SpawnArgsFacts): Array<string> {
 }
 
 /** 保活模式下「进程存在性检查」的节流判决所需事实。 */
-export interface ProcessCheckFacts {
+export type ProcessCheckFacts = {
   /** 宽限期（解释器冷启动也要时间）。 */
   graceMs: number;
   /** 两次查询之间的最小间隔。 */
@@ -126,7 +126,7 @@ export interface ProcessCheckFacts {
   sinceLastCheckMs: number;
   /** 距 spawn 的毫秒数。 */
   sinceSpawnMs: number;
-}
+};
 
 /**
  * 保活模式该不该在这一轮去查进程表。
@@ -214,14 +214,14 @@ export function diagnoseComfyStartupFailure(outputLines: Array<string>): string 
 }
 
 /** 停止流程的收尾判决所需事实（`stopComfyUiProcess`）。 */
-export interface StopFacts {
+export type StopFacts = {
   /** 是否握有本进程拉起的子进程句柄。 */
   hasChild: boolean;
   /** 依据句柄或进程表定位到的 PID。 */
   pid: number | null;
   /** 目标是否仍在响应探测。 */
   stillUp: boolean;
-}
+};
 
 export type StopDecision =
   /** 杀进程树（平台机制由 `~/lib/process/kill-process-tree` 选）。 */
@@ -373,7 +373,7 @@ export function withEmbedClearanceFlag(args: Array<string>): Array<string> {
  */
 
 /** 运行状态结论所需的**纯事实**（生命周期状态由调用方翻成布尔后传入）。 */
-export interface ComfyStatusFacts {
+export type ComfyStatusFacts = {
   /** 兜底 PID（本进程握着的子进程句柄；快照里没有时用它）。 */
   fallbackPid?: number | undefined;
   /** 「探明没在跑」是否仍在黏滞期内（见 COMFY_NOT_RUNNING_HOLD_MS）。 */
@@ -397,9 +397,9 @@ export interface ComfyStatusFacts {
   startingWindow: boolean;
   /** 用户刚点过关闭、进程树尚未确认退出。 */
   stopping: boolean;
-}
+};
 
-export interface ComfyStatusVerdict {
+export type ComfyStatusVerdict = {
   base: string | null;
   pid?: number | undefined;
   port?: number | null;
@@ -409,7 +409,7 @@ export interface ComfyStatusVerdict {
   stopping: boolean;
   up: boolean;
   via?: string | null;
-}
+};
 
 /** 两份事实 → 一条状态结论（纯组装，无 IO、无全局状态）。 */
 export function deriveComfyUiStatus(facts: ComfyStatusFacts): ComfyStatusVerdict {

@@ -52,10 +52,10 @@ describe("matchesNeedle", () => {
   });
 });
 
-interface Group {
+type Group = {
   options: Array<string>;
   title: string;
-}
+};
 
 const GROUPS: Array<Group> = [
   { title: "中式", options: ["唐装", "汉服", "旗袍"] },

@@ -20,12 +20,12 @@ import { uniqueStamp } from "~/lib/unique-id";
 import { importOutputAsInput } from "~/lib/project-canvas/canvas-api";
 import { isCanvasNode, type CanvasNodeType } from "~/lib/project-canvas/canvas-types";
 
-export interface UseCanvasConnectionsArgs {
+export type UseCanvasConnectionsArgs = {
   edgesRef: { current: Array<Edge> };
   nodesRef: { current: Array<CanvasNodeType> };
   setEdges: Dispatch<SetStateAction<Array<Edge>>>;
   setNodes: Dispatch<SetStateAction<Array<CanvasNodeType>>>;
-}
+};
 
 export function useCanvasConnections({
   nodesRef,

@@ -460,7 +460,7 @@ export async function interrupt(): Promise<void> {
  * ComfyUI 系统状态：返回 GPU（devices）与系统内存（system）容量与占用，
  * 底部状态栏据此显示显存/内存占用；进程离线时返回 null（调用方降级展示）。 */
 /** 折叠成状态栏关心的聚合视图，保留原始字段便于扩展 */
-export interface ComfySystemStats {
+export type ComfySystemStats = {
   /** GPU 型号（取第一块可用 GPU）；无 GPU 时为 undefined */
   gpuName?: string;
   online: boolean;
@@ -478,19 +478,19 @@ export interface ComfySystemStats {
   vramTotal: number;
   /** 显存占用（字节）：vram_total - vram_free 推导 */
   vramUsed: number;
-}
+};
 
 /** 从 `/system_stats.devices` 中挑出真正在用的 GPU。
  *  ComfyUI 的 devices 首项未必是 GPU——CPU/纯 CPU 后端会把 type="cpu" 设备排前，
  *  其 vram_* 恒为 0，直接取 devices[0] 会让显存占用恒读成 0%。这里先过滤出
  *  显存容量 >0 的 GPU，取不到才回退到首项（调用方据此判定纯 CPU 并隐藏占用条）。 */
-interface ComfyDevice {
+type ComfyDevice = {
   name?: string;
   type?: string;
   vram_free?: number;
   vram_total?: number;
   vram_used?: number;
-}
+};
 
 function pickGpu(devices: Array<ComfyDevice> | undefined): ComfyDevice | undefined {
   if (!Array.isArray(devices) || devices.length === 0) {

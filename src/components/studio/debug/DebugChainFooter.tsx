@@ -29,14 +29,14 @@ import { Button } from "~/components/ui/button";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { errorMessage } from "~/lib/error-message";
 
-export interface RenderChainModule {
+export type RenderChainModule = {
   /** 完整相对路径（相对项目根，如 src/components/xxx.tsx） */
   file: string;
   /** 标签短名（卡片上显示） */
   label: string;
   /** 分组：canvas=画布级（画布容器/编排/状态层），node=节点级（节点渲染组件/工具）。默认 node。 */
   scope?: "canvas" | "node";
-}
+};
 
 const PILL_STYLE: CSSProperties = {
   /* 原生 `<button>` 的默认外观在这里一律还原给药丸样式 —— 换语义不带视觉变化。
@@ -56,14 +56,14 @@ const PILL_STYLE: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-interface SourcePayload {
+type SourcePayload = {
   /** 绝对路径（正斜杠盘符格式），供 vscode://file/ 协议打开 */
   absolutePath: string;
   content: string;
   file: string;
   modifiedAt: string;
   size: number;
-}
+};
 
 export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule> }) {
   const debugMode = useDebugStore((state) => state.debugMode);

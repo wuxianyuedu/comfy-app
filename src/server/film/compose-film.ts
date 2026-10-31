@@ -29,12 +29,12 @@ import { appendFilmLog } from "./film-log";
 
 // ── 回写：成片合成完成 → 统一项目逐镜 clip + 完成状态（Phase 5 / §6.3 + §7）──
 /** 合成成片里一个镜头的结果（用于把逐镜视频回写进统一项目的对应 Shot）。 */
-export interface FilmShotClip {
+export type FilmShotClip = {
   /** 关联的统一镜头 id（production.shots[].id）；自由建片的镜头为 null（跳过）。 */
   shotId: string | null;
   status: ShotStatus;
   videoPath: string | null;
-}
+};
 
 /** 把「从项目建的片」合成完成后的结果，回写进来源统一项目：
  *   1) 逐镜视频 —— 按 `shotId` 命中 `production.shots` 里的对应 Shot，写入 clipUrl / clipStatus；

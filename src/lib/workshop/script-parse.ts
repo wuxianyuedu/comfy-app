@@ -29,7 +29,7 @@ import { isRecord } from "~/lib/is-record";
 // ─────────────────────────────────────────────────────────────
 
 /** 从剧本提取 / 外部导入的角色卡草稿(写入前重算提示词) */
-export interface ParsedCharacterDraft {
+export type ParsedCharacterDraft = {
   ageGender: string;
   appearance: string;
   costume: string;
@@ -41,19 +41,19 @@ export interface ParsedCharacterDraft {
   skillSlug?: string;
   styleTags: Array<string>;
   temperament: string;
-}
+};
 
 /** 分镜条目:写入 Shot 前的中间态(含已校验的景别) */
-export interface ShotEntry {
+export type ShotEntry = {
   characterNames: Array<string>;
   description: string;
   dialogue: string;
   sceneHeading: string;
   shotType: ShotType;
-}
+};
 
 /** 「工具」通道从剧本 markdown 解析出的镜头草稿 */
-export interface ParsedShotDraft {
+export type ParsedShotDraft = {
   characterNames: Array<string>;
   description: string;
   dialogue: string;
@@ -62,7 +62,7 @@ export interface ParsedShotDraft {
   location: string;
   sceneHeading: string;
   time: string;
-}
+};
 
 /**
  * 兼容用的别名：清单本身在 `~/lib/workshop/types` 的 `SHOT_TYPES`（唯一出处）。
@@ -183,14 +183,14 @@ export function matchCharacterNames(text: string, names: Array<string>): Array<s
 // ① 工具通道:分镜拆分(场景标题行 + Δ动作行 + Vx台词行)
 // ─────────────────────────────────────────────────────────────
 
-export interface SceneHeadingInfo {
+export type SceneHeadingInfo = {
   /** 原始标题文本(去掉行首 markdown # 与空白),用作 Shot.sceneHeading */
   heading: string;
   /** 场景标记:内 / 外 / INT / EXT(已从 tail 中剥出) */
   marker: string;
   /** 标记之后的剩余文本,用于提取地点/时间 */
   tail: string;
-}
+};
 
 /**
  * 场景标题行识别,支持三类:
@@ -293,13 +293,13 @@ export function parseShotDrafts(
   markdown: string,
   knownCharacterNames: Array<string> = [],
 ): Array<ParsedShotDraft> {
-  interface Block {
+  type Block = {
     heading: string;
     items: Array<{ description: string; dialogue: Array<string> }>;
     leadingDialogue: Array<string>;
     location: string;
     time: string;
-  }
+  };
   const blocks: Array<Block> = [];
   let cur: Block | null = null;
 

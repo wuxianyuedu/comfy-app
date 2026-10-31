@@ -39,7 +39,7 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
 
 /** 回收目标的描述。pid <= 0 一律视为「没有可回收目标」，直接返回 ok。 */
-export interface KillProcessTreeOptions {
+export type KillProcessTreeOptions = {
   /** 子进程是否以 detached 方式拉起。仅作为「连 ps 都拿不到 PGID」时的
    *  兜底提示：为 true 且 pid 恰好是组长时仍可尝试 `kill(-pid)`。
    *  **不再是主判据** —— 组长归属由 OS 回答（见文件头）。 */
@@ -60,16 +60,16 @@ export interface KillProcessTreeOptions {
    *  **打印了命令、退出码 0、目标进程却还在**（命令行入口
    *  `scripts/reap-process.mjs` 正是这种形态）。 */
   wait?: boolean;
-}
+};
 
 /** 回收模式（见 `KillProcessTreeOptions.mode`）。 */
 export type KillProcessTreeMode = "tree" | "image";
 
-export interface KillProcessTreeResult {
+export type KillProcessTreeResult = {
   ok: boolean;
   /** 实际使用的命令 / 信号，便于写进运行日志与断言。 */
   via: string;
-}
+};
 
 /** 当前平台是否是 Windows（进程树机制的分叉点）。 */
 export function isWindowsPlatform(platform: NodeJS.Platform = process.platform): boolean {
@@ -123,14 +123,14 @@ function readPgidSync(pid: number): number | null {
 type PosixSignal = "SIGTERM" | "SIGKILL";
 
 /** POSIX 一次回收的**决策**（不含发信号本身）。 */
-interface PosixKillPlan {
+type PosixKillPlan = {
   /** 首选被拒、或本来就不走组时的兜底目标。 */
   fallback: { target: number; via: string };
   /** 首选目标：负数 = 进程组；null = 不冒组的风险，直接兜底。 */
   primary: { target: number; via: string } | null;
   /** 要发的信号（Windows 侧不用它）。 */
   sig: PosixSignal;
-}
+};
 
 /**
  * 「该向谁发信号」这张表**唯一的定义处**。
@@ -234,14 +234,14 @@ function executePosixPlan(plan: PosixKillPlan): {
  * 而**回调到本模块**才能让 Windows 与 POSIX 走同一份判据与日志（`via`）。
  * 壳主线程把句柄以原始整数转交过来（`CommandChild` 非 Send，不能跨线程移动）。
  */
-export interface KillHostedChildOptions {
+export type KillHostedChildOptions = {
   /** 供 shell 插件按 id 寻址的任意整数（壳侧通常传 `CommandChild::pid()`）。 */
   handle: number;
   /** 句柄的真实形态由宿主注入：不同 tauri 版本里 `CommandChild::kill` 的
    *  调用形态不同（`self` / `&mut self`），因此变换由壳侧提供、本模块只负责
    *  调用与记账。 */
   kill: () => void;
-}
+};
 
 /** 按**映像名**回收整棵树（目标不是本进程直接子进程、只拿得到名字时用）。
  *

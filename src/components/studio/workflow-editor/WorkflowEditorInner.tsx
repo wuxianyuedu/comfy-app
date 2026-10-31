@@ -115,11 +115,11 @@ export function WorkflowEditorInner({
   );
 }
 
-interface WFStoresHelper {
+type WFStoresHelper = {
   io: ReturnType<typeof createIOEditStore>;
   rgthree: ReturnType<typeof createRgthreeGroupsStore>;
   viewer: ReturnType<typeof createNodeJsonViewerStore>;
-}
+};
 
 /* 内层：全部既有逻辑。经 useIOEditApi/useRgthreeApi/useViewerApi 直读直写
  * store（hook 在 <WFStoresProvider> 之下才合法，故体逻辑用 *Api 访问）。 */

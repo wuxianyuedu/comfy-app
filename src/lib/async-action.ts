@@ -54,12 +54,12 @@ import { errorMessage } from "~/lib/error-message";
 export type ActionReport = (kind: "ok" | "err", detail: string) => void;
 
 /** 一次异步动作的执行结果（给调用处继续用，如回滚 / 刷新）。 */
-export interface ActionResult {
+export type ActionResult = {
   /** 用户可见文案：成功时是成功文案，失败时是失败文案。 */
   detail: string;
   /** 动作是否成功（含「返回了失败信封」这一种，见 `toActionResult`）。 */
   ok: boolean;
-}
+};
 
 /**
  * 动作返回的原始形状 —— 各来源的并集。
@@ -78,7 +78,7 @@ export interface ActionResult {
  * 的调用处都被迫写一次类型断言 —— 那是一层不带来任何检查的噪声。 */
 export type RawActionResult = unknown;
 
-export interface RunAsyncActionOptions {
+export type RunAsyncActionOptions = {
   /**
    * 失败文案的**标题**（详情由 `errorMessage` 从抛出的值里取）。
    *
@@ -103,7 +103,7 @@ export interface RunAsyncActionOptions {
    * 参数缺席时这条差别才被真正表达出来。
    */
   successText?: string | ((result: ActionResult) => string);
-}
+};
 
 /** 取文案：字面量直接用，函数按调用期求值（文案依赖入参时用函数形式）。 */
 function text(value: string | (() => string)): string {

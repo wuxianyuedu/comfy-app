@@ -23,26 +23,26 @@ import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 /** 「磁盘与库不一致」的四个手动同步标记。在线行（没有 `sourcePath`）这四项
  *  都为 null/false。 */
-interface DiskSyncFlags {
+type DiskSyncFlags = {
   /** `diskMtimeSec > sourceMtimeSec` —— 磁盘上的文件在上次导入之后被改过。 */
   diskDirty: boolean;
   /** 来源文件在磁盘上已不存在。 */
   diskMissing: boolean;
   diskMtimeSec: number | null;
   sourceMtimeSec: number | null;
-}
+};
 
 /** 可执行性标记：`hasRaw` 是「RAW 原件列有没有内容」，`usable` 由它推出。 */
-interface ExecutionFlags {
+type ExecutionFlags = {
   hasRaw: boolean;
   usable: boolean;
-}
+};
 
 /** 列表里的一条工作流（已导入、落库的那些）。
  *
  *  「本地待导入」占位行的形状刻意与它同构（`WorkflowListPendingRow`），
  *  让前端的合并不必做额外适配。 */
-export interface WorkflowListRow extends DiskSyncFlags, ExecutionFlags {
+export type WorkflowListRow = {
   /** 落库时间。**是 `Date`**（superjson 保真，见文件头）。 */
   createdAt: Date;
   /** 默认模式码；必须出现在 `modes` 里。 */
@@ -76,4 +76,5 @@ export interface WorkflowListRow extends DiskSyncFlags, ExecutionFlags {
   typeLabel: string;
   /** 用户维护的对外 IO。 */
   workflowIO: WorkflowIOMap;
-}
+} & DiskSyncFlags &
+  ExecutionFlags;

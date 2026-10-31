@@ -45,12 +45,12 @@ export const CONTRACT_MODE_GROUPS: Array<{
  * 由 `mode-contract-config.test.ts` 双向比对守住（漏项是这张表的失效模式：
  * 某个模式从导航上静默消失，界面其它地方都不会说）。
  */
-export interface ContractModeTreeGroup {
+export type ContractModeTreeGroup = {
   category: "image" | "video" | "audio";
   label: string;
   /** 挂在这一组下的模式（顺序即渲染顺序）。 */
   modes: typeof CONTRACT_MODES;
-}
+};
 
 /** 导航树（按 `CONTRACT_MODE_GROUPS` 的顺序，跳过空组）。 */
 export function contractModeTree(): Array<ContractModeTreeGroup> {

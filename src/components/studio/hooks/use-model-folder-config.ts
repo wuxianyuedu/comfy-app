@@ -21,7 +21,7 @@ import { type FolderConfigRow, splitFolders } from "../model-library-config";
 /** 「还没有答案」时复用的空列表 —— 引用必须稳定，理由见 hook 内那一行。 */
 const EMPTY_FOLDERS: Array<FolderConfigRow> = [];
 
-export interface ModelFolderConfigController {
+export type ModelFolderConfigController = {
   add: (folder: string) => Promise<void>;
   availableRows: Array<FolderConfigRow>;
   comfyReachable: boolean;
@@ -43,7 +43,7 @@ export interface ModelFolderConfigController {
   setQ: (q: string) => void;
   toggle: (folder: string, enabled: boolean) => Promise<void>;
   totalCount: number;
-}
+};
 
 export function useModelFolderConfig(): ModelFolderConfigController {
   const trpc = useTRPC();

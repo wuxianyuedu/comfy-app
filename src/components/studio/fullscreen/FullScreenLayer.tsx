@@ -20,7 +20,7 @@ import type { ReactNode } from "react";
 
 import { fullScreenLayerClass } from "~/lib/full-screen-layer";
 
-interface FullScreenLayerProps {
+type FullScreenLayerProps = {
   /** 无障碍名称（读屏器播报的面板标题）。 */
   "aria-label"?: string;
   /** 遮罩式面板标记模态，配合 role="dialog" 由读屏器播报。 */
@@ -33,7 +33,7 @@ interface FullScreenLayerProps {
   /** z-index 的 tailwind 工具类。取自浮层刻度表（规范 16 §16.2.5）：
    *  常规全屏视图用 `${zClass("modal")}`，调试类视图可下探到 `Z.base`。 */
   zClass: string;
-}
+};
 
 /** 全屏视图的根容器：铺满标题行下方的内容区，不盖住页签。 */
 export function FullScreenLayer({

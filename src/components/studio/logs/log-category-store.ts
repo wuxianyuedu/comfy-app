@@ -43,14 +43,14 @@ function readEnabled(): CategoryEnabled {
   return base;
 }
 
-export interface LogCategoryState {
+export type LogCategoryState = {
   /** 每个分类的开关状态（true = 在面板显示）。 */
   enabled: CategoryEnabled;
   /** 某分类当前是否开启（避免调用方直接读 `enabled[c]` 再判 undefined）。 */
   isEnabled: (category: LogCategoryFilter) => boolean;
   /** 切换某个分类的显示开关；副作用是把新状态写回 localStorage。 */
   setEnabled: (category: LogCategoryFilter, value: boolean) => void;
-}
+};
 
 export const useLogCategoryStore = create<LogCategoryState>((set, get) => ({
   enabled: readEnabled(),

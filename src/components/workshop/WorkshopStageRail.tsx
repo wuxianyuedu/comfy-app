@@ -23,12 +23,12 @@ import {
 } from "~/components/workshop/stage-config";
 import { WorkshopStageItem } from "~/components/workshop/WorkshopStageItem";
 
-interface WorkshopStageRailProps {
+type WorkshopStageRailProps = {
   onTabChange: (tab: Tab) => void;
   stageRatios: StageRatios;
   tab: Tab;
   viewContext: StageViewContext;
-}
+};
 
 export function WorkshopStageRail({
   tab,

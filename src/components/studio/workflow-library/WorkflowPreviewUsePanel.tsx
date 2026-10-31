@@ -13,7 +13,7 @@ import type { WorkflowIOMap } from "../workflow-io";
 import { WorkflowRunLogButton } from "./WorkflowRunLogButton";
 import { modeLabel } from "./workflow-library-config";
 
-interface Props {
+type Props = {
   canRun: boolean;
   effectiveMode: string | null;
   effectiveModeLabel: string;
@@ -39,7 +39,7 @@ interface Props {
   workflowId: string;
   workflowIO: WorkflowIOMap | null;
   workflowName: string;
-}
+};
 
 export function WorkflowPreviewUsePanel({
   workflowId,

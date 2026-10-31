@@ -42,14 +42,14 @@ import type React from "react";
 export const MEDIA_DRAG_MIME = "application/x-comfyapp-media";
 
 /** 落点（`use-canvas-drop`）期望收到的载荷。 */
-export interface MediaDragPayload {
+export type MediaDragPayload = {
   displayName: string;
   /** image / video 才有对应节点；audio 与 doc 目前无载体（落点会给提示）。 */
   mediaType: "image" | "video" | "audio" | "doc";
   url: string;
-}
+};
 
-export interface MediaDragSourceArgs {
+export type MediaDragSourceArgs = {
   /** 调用处自己额外的「可拖」判据，与出口的判据**都**要过。 */
   canDrag?: boolean;
   /** 调用处原本给这个元素的类名（光标类由出口追加）。 */
@@ -60,13 +60,13 @@ export interface MediaDragSourceArgs {
   kind: MediaDragPayload["mediaType"];
   /** 媒体 URL；为空时不可拖（拖了也只会丢投）。 */
   url?: string | null;
-}
+};
 
-export interface MediaDragSourceProps {
+export type MediaDragSourceProps = {
   className: string;
   draggable: boolean;
   onDragStart: (event: React.DragEvent<HTMLElement>) => void;
-}
+};
 
 /** 从 URL 取「给人看的文件名」——最后一段路径，查询串与锚点先剥掉。 */
 export function displayNameFromUrl(url: string): string {

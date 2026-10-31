@@ -298,7 +298,7 @@ function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
  * `inputs[]` 与定义 `inputs[]` 按**名字**对齐（顺序可能不同）。
  */
 /** 一个子图 wrapper 的「提升输入 → 内层节点」解析结果。 */
-interface SubgraphTargets {
+type SubgraphTargets = {
   /** 定义里声明的输入引脚（**按声明顺序**）。 */
   defInputs: Array<SubgraphPin>;
   /** 定义内部节点（按 id）。 */
@@ -307,7 +307,7 @@ interface SubgraphTargets {
   sub: RawSubgraph;
   /** 提升引脚名 → 内层节点 id 与其**入参下标**（首条 origin=-10 的边界连线）。 */
   targetByName: Map<string, { nodeId: string; slot: number }>;
-}
+};
 
 /**
  * 解析一个子图 wrapper 的提升输入映射（宿主值 → 内层节点的落点）。

@@ -45,7 +45,7 @@
 // 的纯函数模块）。
 
 /** 一个元素的盒子（相对视口的矩形 + 内容尺寸）。 */
-export interface ElementBox {
+export type ElementBox = {
   bottom: number;
   clientHeight: number;
   /** **布局尺寸**（`clientWidth` / `clientHeight`，不含滚动条、取整）。 */
@@ -62,7 +62,7 @@ export interface ElementBox {
   scrollWidth: number;
   top: number;
   width: number;
-}
+};
 
 const EMPTY_RECT: DOMRect = {
   x: 0,
@@ -203,7 +203,7 @@ export function centerLineScrollTop(
 }
 
 /** base-ui 虚拟锚点需要的矩形形状（`getBoundingClientRect` 的返回形状子集）。 */
-export interface AnchorRect {
+export type AnchorRect = {
   bottom: number;
   height: number;
   left: number;
@@ -212,7 +212,7 @@ export interface AnchorRect {
   width: number;
   x: number;
   y: number;
-}
+};
 
 /**
  * 把 `DOMRect` 归一成**可以冻存的**锚点矩形。

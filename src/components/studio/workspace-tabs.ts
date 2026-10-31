@@ -23,18 +23,18 @@ import { isProjectTab, isTransientView, type WorkspaceView } from "./NavItems";
 /** 首页视图 id —— 固定页签，不可关闭。 */
 export const HOME_VIEW: WorkspaceView = "home";
 
-export interface ViewTab {
+export type ViewTab = {
   /** 页签身份：(视图, 项目) 二元组的稳定编码。 */
   key: string;
   /** 全局视图（首页 / 模型 / 队列…）为 null。 */
   projectId: string | null;
   view: WorkspaceView;
-}
+};
 
-export interface WorkspaceTabsState {
+export type WorkspaceTabsState = {
   activeKey: string;
   tabs: Array<ViewTab>;
-}
+};
 
 /** 页签身份的唯一编码处 —— 别在调用点各拼一遍分隔符。 */
 export function tabKey(view: WorkspaceView, projectId: string | null): string {

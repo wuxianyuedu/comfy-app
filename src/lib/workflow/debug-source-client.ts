@@ -6,14 +6,14 @@
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { withQuery } from "~/lib/query-string";
 
-export interface DebugSourcePayload {
+export type DebugSourcePayload = {
   /** 绝对路径（正斜杠盘符格式），供 vscode://file/ 协议打开 */
   absolutePath: string;
   content: string;
   file: string;
   modifiedAt: string;
   size: number;
-}
+};
 
 /** 读取某模块的源码文本。文件不存在 / 非白名单时抛带服务端文案的错误。 */
 export async function fetchDebugSource(file: string): Promise<DebugSourcePayload> {

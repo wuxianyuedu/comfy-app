@@ -17,7 +17,7 @@ import { nextId } from "~/lib/unique-id";
 
 export type MessageKind = "update" | "restart" | "offline" | "info";
 
-export interface MessageRecord {
+export type MessageRecord = {
   /** 正文（全屏查看的消息内容，可多行换行） */
   body: string;
   /** 短 id，幂等去重用 */
@@ -41,7 +41,7 @@ export interface MessageRecord {
   time: number;
   /** 一句话标题（状态栏 tooltip / 列表标题行） */
   title: string;
-}
+};
 
 /** 供 push 传入的载荷（id/time/read 由 store 补全，runId 缺省取当前启动）。 */
 export type NewMessage = Omit<MessageRecord, "id" | "time" | "read" | "runId"> & {
@@ -59,7 +59,7 @@ export type NewMessage = Omit<MessageRecord, "id" | "time" | "read" | "runId"> &
   time?: number;
 };
 
-export interface MessageCenterState {
+export type MessageCenterState = {
   /** 清空所有消息 */
   clear: () => void;
   /**
@@ -88,7 +88,7 @@ export interface MessageCenterState {
   setCurrentRunId: (runId: string | null) => void;
   setOpen: (open: boolean) => void;
   toggleOpen: () => void;
-}
+};
 
 /* id 走全库唯一出口 `~/lib/unique-id` —— 收口前这里自写「时间戳 + 计数器」，
  * 而且计数器**取模回绕**（`(msgSeq + 1) % 1_000_000`）：转一圈之后同一毫秒内

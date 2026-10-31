@@ -13,7 +13,7 @@ import { isRecord } from "~/lib/is-record";
 export type ApiChannelKind = "image" | "video";
 
 /* 浏览器看到的「每通道配置」（已脱敏；apiKey 从不离开服务端）。 */
-export interface ApiChannelView {
+export type ApiChannelView = {
   baseUrl: string;
   /* 配好了 baseUrl（视频还要配到可用的端点）→ 该通道可用。 */
   configured: boolean;
@@ -21,27 +21,27 @@ export interface ApiChannelView {
   model: string;
   /* 追加到 baseUrl 后面的请求路径，例如 "/images/generations"。 */
   path: string;
-}
+};
 
 /* 两个通道的脱敏视图，按通道种类作键。 */
 export type ApiChannelsView = Record<ApiChannelKind, ApiChannelView>;
 
 /* 配置保存接口接受的局部通道配置。 */
-export interface ApiChannelSaveInput {
+export type ApiChannelSaveInput = {
   /* 不传表示保留已存的密钥；传空串表示清除它。 */
   apiKey?: string;
   baseUrl?: string;
   model?: string;
   path?: string;
-}
+};
 
 /* 服务端落库的嵌套通道配置（存于 data/workshop-api-settings.json）。 */
-export interface ApiChannelStored {
+export type ApiChannelStored = {
   apiKey: string;
   baseUrl: string;
   model: string;
   path: string;
-}
+};
 
 const MAX_EXTRACT_DEPTH = 8;
 /* 超过这个长度的「像 URL 的值」几乎肯定不是 URL
@@ -148,10 +148,10 @@ export function guessMediaKind(pathOrUrl: string): "image" | "video" | "other" {
 }
 
 /* 已完成任务的一个落盘产物文件（来自 SSE 的 `done` 帧）。 */
-export interface SavedOutput {
+export type SavedOutput = {
   kind: "image" | "video" | "other";
   url: string;
-}
+};
 
 /**
  * 把任务的 `done.images` 载荷（unknown[]）归一成「URL + 类型」对。

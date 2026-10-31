@@ -7,22 +7,22 @@
  */
 
 /** `model.configList` 返回的目录行里，本模块用到的那几项。 */
-export interface OverviewFolder {
+export type OverviewFolder = {
   count: number;
   folder: string;
   label: string;
-}
+};
 
 /** 概览里的一类模型。 */
-export interface ModelOverviewGroup {
+export type ModelOverviewGroup = {
   count: number;
   /** 目录名（计数口径的身份）。 */
   folder: string;
   /** 展示名（与模型目录配置弹层同一个出处 `folderMeta`）。 */
   label: string;
-}
+};
 
-export interface ModelOverviewState {
+export type ModelOverviewState = {
   /** 有多少个目录一个模型都没有 —— 用一句话交代，而不是不声不响地少列。 */
   emptyFolderCount: number;
   /** 取数失败时给一句可见说明（硬规则 4：失败路径要有用户可见出口）。 */
@@ -32,7 +32,7 @@ export interface ModelOverviewState {
   loading: boolean;
   /** 本机可用模型的总数。 */
   total: number;
-}
+};
 
 export function deriveModelOverview(input: {
   folders: Array<OverviewFolder> | undefined;

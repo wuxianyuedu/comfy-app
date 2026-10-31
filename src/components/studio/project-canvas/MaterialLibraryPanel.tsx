@@ -27,13 +27,13 @@ type DisplayMode = "grid" | "list";
 
 /* ── Component ───────────────────────────────────────────── */
 
-interface MaterialLibraryPanelProps {
+type MaterialLibraryPanelProps = {
   onClose: () => void;
   /** 把素材投放到画布（由 ProjectCanvas 实现建节点）。 */
   onUse?: (item: MaterialItem) => void;
   /** 当前画布项目 id；为空时只能看到共享素材，上传会被禁用。 */
   projectId?: string | null;
-}
+};
 
 /**
  * 素材库面板 —— 纯展示层（规范 17 §17.2 第③层）。

@@ -38,7 +38,7 @@ vi.mock("../../ToastProvider", () => ({
 }));
 
 /** 可控的「服务端」行为。 */
-interface Behavior {
+type Behavior = {
   /** 非空时 workflow.delete 抛错 —— 覆盖 §17.5.4 的动作错误通道 */
   deleteError?: string;
   /** workflow.list 延迟多少毫秒才 resolve，模拟后端扫描卡住。 */
@@ -50,7 +50,7 @@ interface Behavior {
   /** 非空时 workflow.update 抛错 —— 覆盖动作错误通道 */
   updateError?: string;
   workflows: Array<Record<string, unknown>>;
-}
+};
 
 let behavior: Behavior = { workflows: [], localPending: [], tags: [] };
 let listCalls = 0;

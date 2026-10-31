@@ -17,7 +17,7 @@ import type { useBusyAction } from "~/components/ui/use-busy-action";
 import type { DiscoveredSubpkg } from "../types";
 
 /** 这三个入口读/写的那些东西（由主 hook 原样传下来）。 */
-export interface ParseActionsDeps {
+export type ParseActionsDeps = {
   clearPerPkgParsing: (pkgPath: string) => void;
   discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
   parseBusy: ReturnType<typeof useBusyAction>;
@@ -26,7 +26,7 @@ export interface ParseActionsDeps {
   setError: (msg: string | null) => void;
   setPerPkgParsing: Dispatch<SetStateAction<Record<string, boolean>>>;
   setReport: (report: null) => void;
-}
+};
 
 export function createParseActions({
   savedPaths,

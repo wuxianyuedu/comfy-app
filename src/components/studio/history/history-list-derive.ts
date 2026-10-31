@@ -6,11 +6,11 @@ import type { FilterKey, SortKey, TaskItem } from "./history-types";
 import { dateBucket } from "./history-utils";
 import { getOrCreate } from "~/lib/collections";
 
-export interface TaskGroup {
+export type TaskGroup = {
   items: Array<TaskItem>;
   /** 日期桶标题（今天 / 昨天 / yyyy-mm-dd）。 */
   key: string;
-}
+};
 
 /** 筛选：ALL 表示不过滤。 */
 export function filterTasks(tasks: Array<TaskItem>, filter: FilterKey): Array<TaskItem> {

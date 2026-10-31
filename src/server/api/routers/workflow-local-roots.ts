@@ -56,7 +56,7 @@ function pendingId(absPath: string): string {
  * 同一份 payload 里出现两种形状（一处 `Date` 一处 ISO 串、一处权威类型一处
  * 泛对象）时，视图读任何一行都得先判形状 —— 那正是 #1460 要消掉的东西。
  * 两处都是 `Date`（superjson 过线保真）与 `WorkflowParamMap`（同一份读边界）。 */
-interface LocalPendingRow {
+type LocalPendingRow = {
   createdAt: Date;
   defaultMode: string | null;
   hasRaw: boolean;
@@ -79,7 +79,7 @@ interface LocalPendingRow {
   typeLabel: string;
   usable: boolean;
   workflowIO: WorkflowIOMap;
-}
+};
 
 /* 按 `localWorkflows.pathKey` 的同一口径归一化绝对路径。 */
 function pathKey(p: string): string {

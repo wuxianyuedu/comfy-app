@@ -49,14 +49,14 @@ export const videoTaskRowSchema = z.object({
 export type VideoTaskRow = z.infer<typeof videoTaskRowSchema>;
 
 /** 视图消费的行（只留它真会读的几样）。 */
-export interface VideoTask {
+export type VideoTask = {
   error: string | null;
   id: string;
   prompt: string;
   status: string;
   video: string | null;
   workflowName: string;
-}
+};
 
 /**
  * 把 tRPC 响应里的行收窄成 `VideoTask[]`，**非法行整行丢弃**。

@@ -158,7 +158,7 @@ const ProjectCanvas = lazyView("canvas", () =>
 );
 
 /** 页面侧交给视图栈的全部接线 —— 每一屏要用什么都在这里，栈自己不取数。 */
-export interface WorkspaceViewStackProps {
+export type WorkspaceViewStackProps = {
   /** 当前页签 key。 */
   activeKey: string;
   /** 活跃项目 id —— 项目类视图与「项目优先闸门」判据。 */
@@ -191,7 +191,7 @@ export interface WorkspaceViewStackProps {
   settingsSection: string | null;
   /** 打开的页签（顺序即叠放顺序；`ViewTab.key` 当 React key 与锚点）。 */
   tabs: Array<ViewTab>;
-}
+};
 
 export function WorkspaceViewStack({
   tabs,

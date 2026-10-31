@@ -33,12 +33,12 @@ const TAKE = 80;
 /** 有任务在跑时的轮询间隔。 */
 const POLL_MS = 4000;
 
-export interface UseHistoryPanelArgs {
+export type UseHistoryPanelArgs = {
   /** 当前画布项目 id；有值时默认只看本项目记录。 */
   projectId?: string | null;
-}
+};
 
-export interface HistoryPanelController {
+export type HistoryPanelController = {
   /** 进行中任务数（>0 时轮询开启）。 */
   activeCount: number;
   display: DisplayMode;
@@ -53,7 +53,7 @@ export interface HistoryPanelController {
   setFilter: (filter: HistoryFilter) => void;
   setScope: (scope: HistoryScope) => void;
   tasks: Array<HistoryTaskRow>;
-}
+};
 
 export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPanelController {
   const [filter, setFilter] = useState<HistoryFilter>("all");

@@ -53,11 +53,11 @@ import type { TaskLogEntry } from "~/lib/workshop/generation-client";
  * 这件事在类型上就写清楚 —— 手抄 `t: 1` / `t: 2` 会让「同一毫秒 vs 相邻毫秒」
  * 这一维（面板计数的次键）变成随手指定的。
  */
-export interface LogStep {
+export type LogStep = {
   readonly level: TaskLogEntry["level"];
   readonly msg: string;
   readonly src?: string;
-}
+};
 
 /**
  * 一个运行场景：给**这次运行是什么**，让 store 自己建出那批日志。
@@ -65,7 +65,7 @@ export interface LogStep {
  * `steps` 是链路会打的步骤；`failWith` 非空时结尾走 `failWorkflowRun()`
  * （横幅 + error 行一起落）。
  */
-export interface WorkflowRunScene {
+export type WorkflowRunScene = {
   /** 这个场景解决什么、真机上什么时候会出现。 */
   readonly about: string;
   /** 非空则结尾调 `failWorkflowRun(reason)`（横幅 + error 日志行）。 */
@@ -76,7 +76,7 @@ export interface WorkflowRunScene {
   readonly steps: ReadonlyArray<LogStep>;
   /** 登记进 store 的运行名（弹窗头部按它标注这次运行）。 */
   readonly workflowName: string;
-}
+};
 
 /* ── 真链路的步骤序列 ──────────────────────────────────────────────────────
  *

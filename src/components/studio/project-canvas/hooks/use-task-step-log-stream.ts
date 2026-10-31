@@ -35,7 +35,7 @@ import {
 
 /** `/api/tasks/[id]/stream` 的 SSE 帧的运行时形状 —— 只含本面板消费的字段。
  *  `JSON.parse` 产出 `unknown`；下面逐个收窄字段后再用。 */
-interface SseFrame {
+type SseFrame = {
   entry?: unknown;
   error?: unknown;
   progress?: unknown;
@@ -43,7 +43,7 @@ interface SseFrame {
   type?: unknown;
   validationErrors?: unknown;
   workflowName?: unknown;
-}
+};
 
 /** 把失败原因补成一条 error 日志行（横幅之外，时间线里也看得见，#378）。
  *  纯函数 + 显式 next：去重在 updater 之外完成，避免在 setState updater 里做副作用
@@ -81,7 +81,7 @@ function appendFailureLogLine(
   setLogs((prev) => withFailureLogLine(prev, reason, t));
 }
 
-export interface TaskStepLogStream {
+export type TaskStepLogStream = {
   /** 清空当前任务的日志（连带跨卸载缓存）。 */
   clear: () => void;
   connected: boolean;
@@ -92,7 +92,7 @@ export interface TaskStepLogStream {
   setError: (value: string | null) => void;
   status: string | null;
   validationErrors: Array<ValidationError> | null;
-}
+};
 
 export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
   const [logs, setLogs] = useState<Array<StepLogEntry>>([]);

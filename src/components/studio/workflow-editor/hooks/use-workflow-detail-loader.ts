@@ -11,16 +11,16 @@ import type { WorkflowDetail, WorkflowIOParam } from "~/components/studio/workfl
  *  满足禁止 any 的约束，同时保留失败态的错误读取。 */
 type WorkflowDetailResponse = WorkflowDetail & { error?: string };
 
-interface WorkflowSubgraphStackEntry {
+type WorkflowSubgraphStackEntry = {
   name: string;
   nodeId: string;
   uid: string;
-}
+};
 
-interface CacheEnvelope {
+type CacheEnvelope = {
   d: WorkflowDetail;
   t: number;
-}
+};
 
 /* 缓存 schema 版本后缀。每当 workflow.detailFull / subgraph 响应结构变化时就
  *  提升此后缀，使旧的 sessionStorage 条目失效（每次 fetch 都会 purge 旧命名空间，
@@ -79,7 +79,7 @@ function writeCache(key: string, data: WorkflowDetail): void {
   }
 }
 
-export interface WorkflowDetailLoaderArgs {
+export type WorkflowDetailLoaderArgs = {
   detail: WorkflowDetail | null;
   detailRef: RefObject<WorkflowDetail | null>;
   latestRequestIdRef: RefObject<number>;
@@ -101,7 +101,7 @@ export interface WorkflowDetailLoaderArgs {
       | ((prev: Record<string, WorkflowIOParam>) => Record<string, WorkflowIOParam>),
   ) => void;
   workflowId: string;
-}
+};
 
 /**
  * 持有工作流详情加载 + 子图下钻/返回导航的逻辑。

@@ -11,7 +11,7 @@
  * 发出侧即编译不过（此前服务端 `send(obj: unknown)` 与前端 interface 零约束）。
  */
 
-export interface PkgReport {
+export type PkgReport = {
   errors: Array<{ error: string; file: string }>;
   exists: boolean;
   name: string;
@@ -19,9 +19,9 @@ export interface PkgReport {
   nodeTypes: Array<string>;
   path: string;
   status: "ok" | "missing" | "error" | "empty";
-}
+};
 
-export interface ParseReport {
+export type ParseReport = {
   /** 增量解析时新增节点数（全量报告缺省为 undefined）。 */
   addedNodes?: number;
   errorCount: number;
@@ -32,9 +32,9 @@ export interface ParseReport {
   parseErrors?: Array<{ error: string; file: string }>;
   pathCount: number;
   totalNodes: number;
-}
+};
 
-export interface DiscoveredSubpkg {
+export type DiscoveredSubpkg = {
   contentHash: string;
   exists: boolean;
   fileCount: number;
@@ -45,11 +45,11 @@ export interface DiscoveredSubpkg {
   path: string;
   sizeBytes: number;
   status: "ok" | "missing" | "empty";
-}
+};
 
 /** 清单里一个包的摘要（服务端产出、前端与 SSE 共用）。generatedAt 允许 null
  *  （清单里旧条目可能没有时间戳）。 */
-export interface SummaryPkg {
+export type SummaryPkg = {
   contentHash?: string;
   errors: Array<unknown>;
   generatedAt?: string | null;
@@ -60,9 +60,9 @@ export interface SummaryPkg {
   parsedFileCount?: number;
   path: string;
   status: string;
-}
+};
 
-export interface SettingsResp {
+export type SettingsResp = {
   /** 归一化绝对路径（正斜杠、小写）→ 已加载的 SummaryPkg，让 UI 能把发现的
    *  子包与清单对齐，并用 contentHash 识别「已加载但已过期」。 */
   byPath: Record<string, SummaryPkg>;
@@ -77,7 +77,7 @@ export interface SettingsResp {
     sources: Array<string>;
     totalNodes: number;
   } | null;
-}
+};
 
 /** 设置/探测流的一行 ndjson 事件（`/api/custom-nodes` 探测端点发出）。按 `type`
  *  判别；`phase` 只取上线会出现的三态（不含 UI 初值 `""`）。 */

@@ -13,7 +13,7 @@
  * • <CanvasSettingsPanel> —— 由该按钮打开的右侧抽屉。
  */
 
-export interface CanvasSettings {
+export type CanvasSettings = {
   /** 调试 —— 统一的「调试模式」开关。
    * 打开时，画布底部会多出一个独立的执行日志面板（GlobalStepLogPanel），
    * 且每条日志都带上调用方来源（"文件:行"）。
@@ -44,7 +44,7 @@ export interface CanvasSettings {
 
   /** 画布 (Canvas chrome) */
   showRulers: boolean;
-}
+};
 
 export const DEFAULT_CANVAS_SETTINGS: CanvasSettings = {
   gridMinorAlpha: 0.22,

@@ -34,7 +34,7 @@ import { beginStaleRun } from "~/lib/stale-run";
 /** run 在跑时刷新项目状态的周期（run 推进阶段后会改 production，主页要跟上）。 */
 const ACTIVE_REFRESH_MS = 5000;
 
-export interface ProjectHomeController {
+export type ProjectHomeController = {
   /** 顶栏那一句（「下一步：镜头生图」这类）。 */
   headline: string;
   /** 首次取数完成前为真（视图据此显示加载态而不是「还没开始」）。 */
@@ -47,7 +47,7 @@ export interface ProjectHomeController {
   refresh: () => Promise<void>;
   /** AI 自主成片的控制器（与工坊 / 画布同一份 run）。 */
   run: AgentRunController;
-}
+};
 
 export function useProjectHome(): ProjectHomeController {
   const [projectId] = useState(() => getActiveId() ?? "");

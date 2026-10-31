@@ -68,7 +68,7 @@ export const RESTART_RECENT_MS = 10_000;
 const LAST_RESTART_KEY = "devServer.lastRestartAt";
 const LAST_BOOT_ID_KEY = "devServer.lastBootId";
 
-export interface DevServerLiveness {
+export type DevServerLiveness = {
   /** 连续失败拍数（未达门槛时说明它正在积累）；探通一次即归零。 */
   consecutiveFailures: number;
   /**
@@ -139,7 +139,7 @@ export interface DevServerLiveness {
    * 事实，不替它决定「多长才值得说」。
    */
   unprobedMs: number;
-}
+};
 
 /**
  * 「上一拍发起 → 这一拍发起」之间有多少毫秒是**没人在探测**的。

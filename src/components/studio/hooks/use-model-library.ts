@@ -21,7 +21,7 @@ import { useTRPC } from "~/trpc/react";
 
 import { ALL_TYPES, type ModelRow, countByType, filterModels } from "../model-library-config";
 
-export interface ModelLibraryController {
+export type ModelLibraryController = {
   /** 目录配置弹层开关。 */
   configOpen: boolean;
   /** 当前类型筛选；ALL_TYPES 表示全部。 */
@@ -42,7 +42,7 @@ export interface ModelLibraryController {
   setQ: (q: string) => void;
   /** 数据里出现过的类型及其数量，驱动筛选 chips。 */
   typeChips: Array<[string, number]>;
-}
+};
 
 export function useModelLibrary(): ModelLibraryController {
   const trpc = useTRPC();

@@ -24,7 +24,7 @@ const SEARCH_DEBOUNCE_MS = 250;
 
 export type MaterialScope = "project" | "cross";
 
-export interface MaterialLibraryController {
+export type MaterialLibraryController = {
   /** 面包屑路径段，每段可点击返回该级。 */
   breadcrumbSegments: Array<{ key: string | null; label: string }>;
   enterFolder: (folder: string | null) => void;
@@ -50,12 +50,12 @@ export interface MaterialLibraryController {
   showItems: boolean;
   upload: (files: FileList | null) => Promise<void>;
   uploading: boolean;
-}
+};
 
-export interface UseMaterialLibraryOptions {
+export type UseMaterialLibraryOptions = {
   /** 当前画布项目 id；为空时只能看共享素材，上传会被禁用。 */
   projectId?: string | null;
-}
+};
 
 /** 把 unknown 抛值捞成中文消息——失败路径始终有可读文案（硬规则）。 */
 function errMsg(e: unknown, fallback: string): string {

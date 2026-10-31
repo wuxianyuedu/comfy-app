@@ -21,12 +21,12 @@ export const BUILD_ID_ENDPOINT = "/api/dev/build-id";
 /** 读取构建标识的短超时；取不到就当作「无法判定」，绝不阻塞任何交互。 */
 export const BUILD_ID_TIMEOUT_MS = 2500;
 
-export interface CodeUpdateSignal {
+export type CodeUpdateSignal = {
   /** 页面加载时的构建标识就已经落后于当前构建。 */
   pageOlderThanBuild: boolean;
   /** 页面加载后模块被替换过（热更新 / 实时重载）。 */
   updatedSinceLoad: boolean;
-}
+};
 
 /** 是否应认定「本会话跑过一段代码更新」。 */
 export function hasCodeUpdated(signal: CodeUpdateSignal): boolean {
@@ -92,7 +92,7 @@ export type DepsFreshnessState =
   | "unresolved";
 
 /** 构建标识的读取结果：字段为 null = 这一次没读到（服务端未就绪 / 接口不可达）。 */
-export interface BuildIdProbe {
+export type BuildIdProbe = {
   /** 进程启动标识；单独解析出来用于区分「重启」与「仅源码变」。 */
   bootId: string | null;
   buildId: string | null;
@@ -105,7 +105,7 @@ export interface BuildIdProbe {
   restartDetail: string | null;
   /** 启动器自愈重启 dev server 时注入的原因（如 route-404-heal）；无则 null。 */
   restartReason: string | null;
-}
+};
 
 /** 读一次构建标识；任何失败都退化为全 null，绝不抛出、绝不阻塞交互。 */
 export async function fetchBuildId(): Promise<BuildIdProbe> {

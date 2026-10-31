@@ -27,16 +27,16 @@ export function viewportCenter(): XYPosition {
 }
 
 /** 落点信息：拖放时的指针位置，或右键菜单的位置（**屏幕**坐标）。 */
-export interface DropPoint {
+export type DropPoint = {
   x: number;
   y: number;
-}
+};
 
 /** 画布节点落地所需的上下文（由调用处从 React Flow 取，出口自己不持 ref）。 */
-export interface CanvasPlacementContext {
+export type CanvasPlacementContext = {
   /** `useReactFlow().screenToFlowPosition` —— 屏幕坐标 → 画布坐标。 */
   screenToFlowPosition: (point: XYPosition) => XYPosition;
-}
+};
 
 /**
  * 把一个画布节点放进项目画布 —— **全库唯一的入口**（规范 16 §16.2.4.38）。

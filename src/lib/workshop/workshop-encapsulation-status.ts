@@ -36,7 +36,7 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
  *  时长是秒数选择。`number` 是自定义口的「数字」类型（普通数值输入框）。 */
 export type EncapsulationControl = "text" | "size" | "image" | "duration" | "number";
 
-export interface EncapsulationEntryStatus {
+export type EncapsulationEntryStatus = {
   control: EncapsulationControl;
   /** 契约内稳定键（prompt / negative / size / first-frame / reference-image…）。 */
   id: string;
@@ -49,9 +49,9 @@ export interface EncapsulationEntryStatus {
   required: boolean;
   /** 生效落点（IO 端口键）；null = 还没落到任何端口（未配置）。 */
   targetIoKey: string | null;
-}
+};
 
-export interface EncapsulationStatus {
+export type EncapsulationStatus = {
   entries: Array<EncapsulationEntryStatus>;
   /** 还没落到端口的**全部**口子名（含非必备），供「未配置」清单一览。 */
   missingLabels: Array<string>;
@@ -64,7 +64,7 @@ export interface EncapsulationStatus {
    *  恒为 ready（没有「缺了它就不能用」的口）。 */
   ready: boolean;
   resolvedCount: number;
-}
+};
 
 /** 契约口 → 工坊控件形态（没有生效契约时的回落路径；自定义口一律来自契约，
  *  所以这里只处理预制口）。 */

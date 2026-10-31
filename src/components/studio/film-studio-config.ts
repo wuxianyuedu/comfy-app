@@ -16,7 +16,7 @@ import type { FilmStatus, ShotStatus } from "~/lib/film/film-status";
 
 export type ShotMode = "txt2img" | "img2video" | "transition";
 
-export interface FilmShot {
+export type FilmShot = {
   duration: number | null;
   heading: string | null;
   id: string;
@@ -25,9 +25,9 @@ export interface FilmShot {
   prompt: string;
   status: ShotStatus;
   videoPath: string | null;
-}
+};
 
-export interface Film {
+export type Film = {
   bgmName: string | null;
   error: string | null;
   finalVideo: string | null;
@@ -46,10 +46,10 @@ export interface Film {
   subtitleOn: boolean;
   title: string;
   type: string;
-}
+};
 
 /** 时间轴编辑器的镜头条目（当前为设计稿样例数据，未接后端）。 */
-export interface ShotListItem {
+export type ShotListItem = {
   duration: string;
   id: string;
   mode: ShotMode;
@@ -58,7 +58,7 @@ export interface ShotListItem {
   status: ShotStatus;
   /** 该镜已产出的首帧 / 图（项目真实镜头有则显缩略图）。 */
   thumbnailUrl?: string;
-}
+};
 
 /** production 的镜头状态（idle/queued/running/done/failed/stale）→ 成片列表大写态。 */
 function shotStatusToFilmStatus(status: unknown): ShotStatus {
@@ -101,13 +101,13 @@ export function productionShotsToShotList(shots: Array<unknown>): Array<ShotList
 }
 
 /** 时间轴上的一段素材条。 */
-export interface TimelineClip {
+export type TimelineClip = {
   colorClass: string;
   id: string;
   label: string;
   textColorClass: string;
   width: number /* px proportion */;
-}
+};
 
 /* ── 表单默认值（原组件内的 useState 初始值）── */
 

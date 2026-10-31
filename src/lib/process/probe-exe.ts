@@ -106,10 +106,10 @@ export type ProbeFailure =
   | { kind: "timeout"; timeoutMs: number };
 
 /** 一次探测的结论：`failure` 为 `null` 才是「起得来且退 0」。 */
-export interface ProbeOutcome {
+export type ProbeOutcome = {
   failure: ProbeFailure | null;
   ok: boolean;
-}
+};
 
 /**
  * 一次探测的预算（毫秒）。
@@ -172,7 +172,7 @@ export function probeExecutable(
 }
 
 /** `firstRunnable()` 的入参（候选表 + 每个候选要喂的参数 + 探测预算）。 */
-export interface FirstRunnableOptions {
+export type FirstRunnableOptions = {
   /** 依次试的候选名，顺序即优先级。 */
   candidates: ReadonlyArray<string>;
   /** 人读的名字（`PowerShell` / `Python`）：只在「探不到」那一句话里出现。 */
@@ -198,7 +198,7 @@ export interface FirstRunnableOptions {
   report?: (line: string) => void;
   /** 这一次探测的预算（缺省 `EXE_PROBE_TIMEOUT_MS`）。 */
   timeoutMs?: number;
-}
+};
 
 /**
  * `firstRunnable().hit ?? ""`，并在探不到时**打印一行「哪个候选、什么原因」**。
@@ -239,11 +239,11 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
 }
 
 /** 一个「试过但没成」的候选（日志与话术里要用它，别把探针喂的参数抄第二遍）。 */
-export interface ProbedCandidate {
+export type ProbedCandidate = {
   /** 探测里用的那个名字（`powershell` / `python3` / …）。 */
   candidate: string;
   failure: ProbeFailure;
-}
+};
 
 /**
  * 把一条 `missed` 摊平成话术用的形状。

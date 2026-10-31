@@ -475,14 +475,14 @@ export async function completeLLMStructured<T>(
  * 兼容 OpenAI / Ollama / LM Studio / vLLM —— 它们都实现 OpenAI 的
  * `tools` 参数与 tool_calls 回包结构。
  */
-export interface CompleteToolsResult {
+export type CompleteToolsResult = {
   content: string;
   toolCalls: Array<{
     function: { arguments: string; name: string };
     id: string;
     type: "function";
   }>;
-}
+};
 
 export async function completeLLMTools(
   cfg: LLMConfig,

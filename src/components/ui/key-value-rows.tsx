@@ -79,7 +79,7 @@ import { cn } from "~/lib/utils";
  * 留在调用处的派生函数里（如 `history-detail-derive` 的 `deriveParamRows`）。
  */
 
-export interface KeyValueItem {
+export type KeyValueItem = {
   /** 值下方的补充说明（仅 `stacked` 渲染；`rows` / `inline` 忽略）。 */
   hint?: ReactNode;
   /** React 列表 key：`key` 是节点或同块里标签重名时必须显式给。 */
@@ -96,7 +96,7 @@ export interface KeyValueItem {
   value?: ReactNode;
   /** 覆盖本行「值」的类名（如给某个值单独上色）。 */
   valueClassName?: string;
-}
+};
 
 export type KeyValueLayout = "rows" | "stacked" | "inline" | "table";
 

@@ -12,10 +12,10 @@ import {
 } from "~/lib/production/run-types";
 import type { HumanVerdict, ReviewMode, ReviewVerdict } from "~/lib/production/review-types";
 
-export interface RunSnapshot {
+export type RunSnapshot = {
   action: RunAction;
   run: ProductionRun;
-}
+};
 
 const IDLE_SNAPSHOT: RunSnapshot = {
   run: normalizeProductionRun(null),
@@ -36,14 +36,14 @@ export async function fetchRunStatus(projectId: string): Promise<RunSnapshot> {
   return toSnapshot(res);
 }
 
-export interface StartRunInput {
+export type StartRunInput = {
   approvalMode?: ApprovalMode;
   /** 生图后自动逐镜评审、不合格自动抽卡重生成（有界重试）。 */
   autoReview?: boolean;
   goal?: string;
   imageWorkflowId?: string;
   videoWorkflowId?: string;
-}
+};
 
 /** 启动 / 重启自主执行（引擎会在服务端 fire-and-forget 推进到下一个停点）。 */
 export async function startRun(projectId: string, input: StartRunInput): Promise<RunSnapshot> {
@@ -187,18 +187,18 @@ export async function regenerateShot(
 }
 
 /** 抽卡优选的候选判定（FR-QA-04④ · #2612）：服务端逐张视觉评审后的原值。 */
-export interface AutoselectCandidateScore {
+export type AutoselectCandidateScore = {
   imageUrl: string | null;
   taskId: string;
   verdict: ReviewVerdict | null;
-}
+};
 
-export interface AutoselectShotResult {
+export type AutoselectShotResult = {
   candidates: Array<AutoselectCandidateScore>;
   winnerImageUrl: string;
   winnerTaskId: string;
   winnerVerdict: ReviewVerdict;
-}
+};
 
 /** 对同一镜头的 2~4 个候选任务做抽卡优选（run.autoselectShot）；回写由调用方
  *  经镜头草稿完成（字段所有权见 #2615）。 */

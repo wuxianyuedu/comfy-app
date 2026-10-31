@@ -21,13 +21,13 @@ import { beginStaleRun } from "~/lib/stale-run";
 import type { Dispatch, SetStateAction } from "react";
 import { fetchTaskImages, type TaskGalleryImage } from "~/lib/media/task-images-client";
 
-export interface UseContentAssetGalleryArgs {
+export type UseContentAssetGalleryArgs = {
   /** 只有 picture 节点启用相册；movie / text 不拉。 */
   enabled: boolean;
   taskId?: string | null;
-}
+};
 
-export interface ContentAssetGallery {
+export type ContentAssetGallery = {
   /** 多图时的图片列表（长度 > 1），单图 / 无图为 null。 */
   images: Array<TaskGalleryImage> | null;
   index: number;
@@ -35,7 +35,7 @@ export interface ContentAssetGallery {
   /** 传函数式更新：翻页要基于「上一张」算，视图里直接 `(i) => (i + 1) % n`。 */
   setIndex: Dispatch<SetStateAction<number>>;
   setOpen: (open: boolean) => void;
-}
+};
 
 export function useContentAssetGallery({
   taskId,

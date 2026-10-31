@@ -20,13 +20,13 @@ import { parseParamMapping, serializeParamMapping } from "~/lib/workflow/workflo
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 /** 一条连线动作：把某个对外参数在这个模式下连到 `ioKey`（`null` = 断开）。 */
-export interface ParamWireEdit {
+export type ParamWireEdit = {
   entryId: string;
   /** 目标落点的 ioKey；`null` = 该模式下显式断开。 */
   ioKey: string | null;
   /** 该次编辑归属的模式码。没有模式时无法落库（见下）。 */
   mode: string | null;
-}
+};
 
 /** 这条连线动作是否可落库（两端都成立）。
  *
@@ -117,13 +117,13 @@ export function clearWireEdit(
 export const DROP_TOLERANCE = 12;
 
 /** 只保留矩形需要的最小字段（DOMRect 之外也便于单测传普通对象）。 */
-export interface DOMRectLike {
+export type DOMRectLike = {
   bottom: number;
   height: number;
   left: number;
   right: number;
   top: number;
-}
+};
 
 /** 拖线落点解析：一次拖拽在某个位置松开时，命中的宿主落点 ioKey（`null` = 没落上）。
  *

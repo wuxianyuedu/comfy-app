@@ -15,15 +15,15 @@ import { tailWindow } from "~/lib/page-window";
 import { clamp } from "~/lib/clamp";
 
 /** 单个维度的评分：1~5 分 + 一句话依据（人读，中文）。 */
-export interface ReviewScore {
+export type ReviewScore = {
   /** 打这个分的一句话依据；模型漏给时为空串。 */
   note: string;
   /** 维度分（1~5，越界在归一时夹取）。 */
   score: number;
-}
+};
 
 /** 一次评审判定：过 / 不过 + 缺陷清单 + 改进建议 + 维度评分 + 打分时间。 */
-export interface ReviewVerdict {
+export type ReviewVerdict = {
   /** 逐条缺陷（人读，中文）。合格时通常为空数组。 */
   issues: Array<string>;
   /** 是否合格。false → 触发抽卡 / 改提示词重生成的入口对用户可见。 */
@@ -40,7 +40,7 @@ export interface ReviewVerdict {
   scores?: Record<string, ReviewScore>;
   /** 改进方向（不合格时给出的一句话建议）。 */
   suggestion: string;
-}
+};
 
 /** 实体上保留的历次判定上限（`reviewHistory` 只存**本轮之前**的判定；当前判定在 `review`）。 */
 export const REVIEW_HISTORY_LIMIT = 9;
@@ -226,7 +226,7 @@ export function applyReview(
 // 上面实体那套「review + reviewHistory」的语义在这里用列形状复刻。
 
 /** `production.scriptReview` 列的形状：当前判定 + 本轮之前的历次判定 + 改写前留档 + 人工裁决。 */
-export interface ScriptReviewState {
+export type ScriptReviewState = {
   /** 本轮之前的历次判定（旧→新，超限裁剪）；曲线 = `[...history, review]`。 */
   history: Array<ReviewVerdict>;
   /** 人工裁决（#2480）：`digest` 记裁决时剧本指纹，剧本变过 → 裁决作废。 */
@@ -235,15 +235,15 @@ export interface ScriptReviewState {
   review: ReviewVerdict | null;
   /** 改写前的旧剧本全文（旧→新，超限从头裁剪）；缺省 = 还没有过 AI 改写。 */
   revisions: Array<ScriptRevision>;
-}
+};
 
 /** 一次 AI 改写留档：改写发生的时间 + 改写前的完整剧本。 */
-export interface ScriptRevision {
+export type ScriptRevision = {
   /** ISO 时间戳（改写发生时）。 */
   at: string;
   /** 改写前的完整剧本 Markdown。 */
   markdown: string;
-}
+};
 
 /** 宽容读取 `production.scriptReview` 列（未知 JSON → 形状）；缺省/畸形不抛，回落「没评过」。 */
 export function normalizeScriptReviewState(raw: unknown): ScriptReviewState {
@@ -340,7 +340,7 @@ export function weakScoreEntries(
 // 剧本指纹变了）→ 旧裁决不再作数，回到 AI 评审循环。
 
 /** 一次人工裁决：通过 / 否决 + 一句话理由 + 裁决时的实体快照（失效判据）。 */
-export interface HumanVerdict {
+export type HumanVerdict = {
   /** ISO 裁决时间戳。 */
   at: string;
   /** 裁决时的剧本指纹（仅剧本侧，`scriptDigestOf`）；剧本此后变过 → 裁决作废。 */
@@ -351,7 +351,7 @@ export interface HumanVerdict {
   pass: boolean;
   /** 裁决时的实体 rev（镜头 / 角色侧）；实体此后被改过（rev 变大）→ 裁决作废。 */
   rev?: number;
-}
+};
 
 /** 宽容解析人工裁决；缺 `pass` 布尔判据 → null（没裁决过 / 脏数据，不硬造）。不抛。 */
 export function normalizeHumanVerdict(raw: unknown): HumanVerdict | null {

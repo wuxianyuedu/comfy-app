@@ -29,7 +29,7 @@ export const SCHEMA_SYNC_IDLE_MS = 30_000;
 /** 与 `scripts/db-schema-state.mjs` 的 `ensureSchemaCurrent` 返回值一一对应。 */
 export type SchemaSyncPhase = "syncing" | "ready" | "synced" | "missing" | "stale" | "unknown";
 
-export interface SchemaSyncStatus {
+export type SchemaSyncStatus = {
   /** 执行件（`scripts/db-sync.mjs`）在不在：桌包载荷刻意不带它（那里没有
    * drizzle-kit），`false` 时 missing / stale 回落成「跑 pnpm db:push」的
    * 纯提示，不给一个点了必然失败的按钮。 */
@@ -37,10 +37,10 @@ export interface SchemaSyncStatus {
   /** 失败原因（`stale` / `missing` 时有），给提示的 tooltip 用。 */
   detail: string | null;
   phase: SchemaSyncPhase;
-}
+};
 
 /** 状态栏那一格该说什么（纯函数，组件只管把 tone 映射成颜色）。 */
-export interface SchemaSyncNotice {
+export type SchemaSyncNotice = {
   /** `stale` / `missing` 且本机有执行件：渲染成「立即同步」按钮（点击后仍要
    * 过确认弹窗 —— 那批变更会丢数据，按钮只是发起、不是授权）。 */
   actionable: boolean;
@@ -49,7 +49,7 @@ export interface SchemaSyncNotice {
   text: string;
   title: string;
   tone: "info" | "ok" | "error";
-}
+};
 
 /**
  * 相位 → 提示内容。返回 `null` = **不占位**。

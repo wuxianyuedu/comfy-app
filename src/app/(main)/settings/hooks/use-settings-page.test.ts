@@ -137,7 +137,7 @@ const LLM: LlmConfig = {
   apiKey: null,
 };
 
-interface Behavior {
+type Behavior = {
   /** comfyui.status 返回的 base（非空即「运行中」，供「打开查看」使用）。 */
   comfyBase?: string | null;
   comfyInstance?: {
@@ -155,7 +155,7 @@ interface Behavior {
   settings?: Settings;
   /** setting.get 失败时抛出的文案（模拟服务端报错）。 */
   settingsError?: string;
-}
+};
 
 /** 永不 settle 的 promise：让某个端点「一直不返回」。
  *  写 `() => undefined` 而不是 `() => {}`：后者会被 eslint 的 no-empty-function 拦下。 */

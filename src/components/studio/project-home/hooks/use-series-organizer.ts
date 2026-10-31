@@ -42,7 +42,7 @@ export type CharacterPatch = Partial<{
   temperament: string;
 }>;
 
-export interface SeriesOrganizerController {
+export type SeriesOrganizerController = {
   assignCurrentProject: (episodeId: string) => void;
   /** 反向：当前正在查看的角色被哪些集引用（FR-SR-03 ②）。 */
   characterEpisodes?: Array<CharacterEpisodeRef>;
@@ -91,7 +91,7 @@ export interface SeriesOrganizerController {
   seriesList?: Array<Series>;
   unlinkCharacter: (episodeId: string, characterId: string) => void;
   updateCharacter: (id: string, patch: CharacterPatch) => void;
-}
+};
 
 export function useSeriesOrganizer(projectId?: string): SeriesOrganizerController {
   const trpc = useTRPC();

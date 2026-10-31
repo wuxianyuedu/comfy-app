@@ -4,7 +4,7 @@
  * BrowserStatusBar 只关心「读到的 stats 与是否在线」。
  */
 
-export interface ComfyStatsPayload {
+export type ComfyStatsPayload = {
   gpuName?: string;
   online: boolean;
   /** 进程级判活：ComfyUI 进程还活着（`online:false` 但此项为 true = 在跑、
@@ -18,7 +18,7 @@ export interface ComfyStatsPayload {
   vramFree: number;
   vramTotal: number;
   vramUsed: number;
-}
+};
 
 /** 拉取一次系统指标；请求失败（路由不可达等）也返回 online:false 便于降级。 */
 export async function fetchComfyStats(): Promise<ComfyStatsPayload> {

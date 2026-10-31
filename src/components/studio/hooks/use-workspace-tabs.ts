@@ -66,7 +66,7 @@ function writeTabsState(state: WorkspaceTabsState): void {
   sessionStorage.setItem(WS_TABS_KEY, serializeWorkspaceTabs(state));
 }
 
-export interface WorkspaceTabsController {
+export type WorkspaceTabsController = {
   /** 当前页签 key。 */
   activeKey: string;
   /** 页签条上点关闭。 */
@@ -79,7 +79,7 @@ export interface WorkspaceTabsController {
   tabs: WorkspaceTabsState["tabs"];
   /** 当前视图 —— 组件里那一大段 `switch (viewMode)` 的判据来源。 */
   viewMode: WorkspaceView;
-}
+};
 
 export function useWorkspaceTabs(): WorkspaceTabsController {
   const [tabsState, setTabsState] = useState<WorkspaceTabsState>(initialWorkspaceTabs);

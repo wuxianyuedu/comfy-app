@@ -17,7 +17,7 @@ export type NodeKind =
 /* 某个模型在它节点界面上暴露哪些参数。
  * 不同模型 → 不同参数集。节点只渲染这里列出的参数、并按列出的顺序排列，
  * 因此换模型会动态更新表单。 */
-export interface ModelParamSchema {
+export type ModelParamSchema = {
   cfg?: boolean;
   duration?: boolean; // 视频时长（秒）
   fps?: boolean; // video
@@ -28,7 +28,7 @@ export interface ModelParamSchema {
   seed?: boolean;
   size?: boolean; // 图片分辨率，或视频分辨率
   steps?: boolean;
-}
+};
 
 /**
  * 画布逻辑节点的**严格字段声明**（不含索引签名）。
@@ -51,7 +51,7 @@ export interface ModelParamSchema {
  *
  * 不使用「裸索引签名放在声明体里 + 靠人自觉」：那正是本次要修掉的状态。
  */
-export interface StrictCanvasNodeData {
+export type StrictCanvasNodeData = {
   // agent node
   agentHistory: Array<{ content: string; role: "user" | "assistant" }>;
   agentReady?: boolean;
@@ -168,7 +168,7 @@ export interface StrictCanvasNodeData {
   /** 为这个工作流的输出自动派生的下游节点（只创建一次）。 */
   workflowSinkId?: string;
   workflowTaskType?: string;
-}
+};
 
 /** ReactFlow 要求 `data` 可索引；这是**唯一**允许挂索引签名的地方。 */
 export type CanvasNodeData = StrictCanvasNodeData & Record<string, unknown>;

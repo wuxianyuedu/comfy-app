@@ -13,16 +13,16 @@ import { runAsyncAction } from "~/lib/async-action";
 import type { GenerateInput } from "~/lib/workflow/workflow-generate-input";
 
 /** 工作流库里可选的模板（重绘 / 放大都靠它，只展示 id / 名字 / 类型）。 */
-export interface RedrawTemplate {
+export type RedrawTemplate = {
   id: string;
   name: string;
   taskType: string | null;
-}
+};
 
 /** 重绘模式：放大 = 原图整张重出；局部重绘 = 原图 + 蒙版。 */
 export type RedrawMode = "upscale" | "inpaint";
 
-export interface ImageRedrawDeps {
+export type ImageRedrawDeps = {
   /** 工作流库模板清单（调用方接 trpc workflow.list）。 */
   listTemplates: () => Promise<Array<RedrawTemplate>>;
   /** 图片 → ComfyUI input 目录文件名（复用 prepareLocalInputImage）。 */
@@ -31,9 +31,9 @@ export interface ImageRedrawDeps {
   report: (kind: "ok" | "err", detail: string) => void;
   /** 提交生成任务（复用 startLocalGenerate），返回新 taskId。 */
   submit: (input: GenerateInput) => Promise<string>;
-}
+};
 
-export interface ImageRedrawController {
+export type ImageRedrawController = {
   busy: boolean;
   ensureTemplates: () => Promise<void>;
   mask: string | null;
@@ -49,7 +49,7 @@ export interface ImageRedrawController {
   setPrompt: (prompt: string) => void;
   templates: Array<RedrawTemplate>;
   templatesLoading: boolean;
-}
+};
 
 export function useImageRedraw(
   deps: ImageRedrawDeps,

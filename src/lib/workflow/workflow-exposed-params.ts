@@ -74,14 +74,14 @@ export type ExposedParamClass =
    *  —— 用其图内自带的 seed 配置，实际是否可换由工作流决定。 */
   | "seed";
 
-export interface ExposedParamDef {
+export type ExposedParamDef = {
   cls: ExposedParamClass;
   /** 契约内的稳定 id，直接作为映射表的键（`source.mode:<模式>` 的值域）。
    *  多张参考图时第二张起带序号（`reference-image-2`），仍是同一类。 */
   id: string;
   /** 对外展示名（与具体工作流无关）。 */
   label: string;
-}
+};
 
 /** 统一对外参数的**基础名**。
  *

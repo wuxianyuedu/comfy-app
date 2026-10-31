@@ -71,7 +71,7 @@ export type EnrichedWidget = WorkflowIOEntry & {
   ioKey: string;
 };
 
-export interface DimensionGroup {
+export type DimensionGroup = {
   /** ResolutionSelector 风格的成对项 —— 渲染「比例 + 像素」快捷选择器，
    *  直接写进那两个暴露出来的 widget。 */
   aspect?: EnrichedWidget;
@@ -84,15 +84,15 @@ export interface DimensionGroup {
   multiple?: EnrichedWidget;
   /** 常规的 W/H 成对项 —— 渲染「比例 + 清晰度」选择器。 */
   width?: EnrichedWidget;
-}
+};
 
-export interface VideoGroup {
+export type VideoGroup = {
   aspect?: EnrichedWidget;
   groupId: string;
   kind: "video";
   length?: EnrichedWidget;
   quality?: EnrichedWidget;
-}
+};
 
 export type InferredGroup = DimensionGroup | VideoGroup;
 
@@ -127,13 +127,13 @@ export const DIM_RATIO_PRESETS: [
  *  **档位目录只有一个出处**：`lib/size-presets` 的 `SIZE_CLARITY_PRESETS`。
  *  这里保留 studio 视图一直在用的形状（`kind` + `label` + `totalPixels`）做一层
  *  再导出，避免同一份档位表在视图层再抄一遍（抄一份就必然漂移）。 */
-export interface DimClarityPreset {
+export type DimClarityPreset = {
   kind: ClarityKind;
   /** 弹层芯片上显示的标签（如 "1k"、"1M"）。 */
   label: string;
   /** 百万像素的种类：总像素数（宽 × 高）。 */
   totalPixels?: number;
-}
+};
 
 const dimClarityPresetOf = (preset: (typeof SIZE_CLARITY_PRESETS)[number]): DimClarityPreset => ({
   kind: preset.kind,

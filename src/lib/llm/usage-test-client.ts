@@ -11,7 +11,7 @@ import type { RemoteModelKind } from "~/lib/llm/types";
 
 export type UsageTestKind = RemoteModelKind;
 
-export interface UsageTestInput {
+export type UsageTestInput = {
   /** 留空 = 用该条目已保存密钥（再回落全局密钥） */
   apiKey?: string;
   /** 接口地址（弹窗内可改；留空回落条目已保存值 / 全局值） */
@@ -26,9 +26,9 @@ export interface UsageTestInput {
   prompt: string;
   /** 图片：尺寸，如 1024x1024 */
   size?: string;
-}
+};
 
-export interface UsageTestResult {
+export type UsageTestResult = {
   /** chat：助手的回复文本 */
   chatText?: string;
   detail: string;
@@ -44,7 +44,7 @@ export interface UsageTestResult {
   taskId?: string;
   /** video：已完成时返回视频地址 */
   videoUrl?: string;
-}
+};
 
 export async function testModelUsage(input: UsageTestInput): Promise<UsageTestResult> {
   const res = await fetch("/api/llm/test-usage", {
@@ -61,13 +61,13 @@ export async function testModelUsage(input: UsageTestInput): Promise<UsageTestRe
 
 /** 「继续等待」异步视频任务的入参：复用该条目的连接参数 + 已提交的任务 ID。
  *  与 UsageTestInput 的区别是只查既有任务，不再提交，绝不重复扣费。 */
-export interface UsageTaskQueryInput {
+export type UsageTaskQueryInput = {
   apiKey?: string;
   baseUrl: string;
   name: string;
   path: string;
   taskId: string;
-}
+};
 
 /** 解析单个 tRPC/fetch 结果对象为 UsageTestResult 的公共收尾。 */
 function parseUsageTestResult(res: Response, json: Record<string, unknown>): UsageTestResult {

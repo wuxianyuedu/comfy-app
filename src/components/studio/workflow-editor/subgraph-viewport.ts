@@ -17,39 +17,39 @@
 /** 参与包围盒计算的节点最小结构。`wfNode` / `wfSubgraph` 节点与纯数据对象都能满足。 */
 import { clamp } from "~/lib/clamp";
 
-export interface FitBoundsNode {
+export type FitBoundsNode = {
   height?: number;
   id?: string;
   measured?: { height?: number; width?: number };
   position: { x: number; y: number };
   style?: { height?: number | string; width?: number | string };
   width?: number;
-}
+};
 
-export interface Bounds {
+export type Bounds = {
   maxX: number;
   maxY: number;
   minX: number;
   minY: number;
-}
+};
 
-export interface ViewportRect {
+export type ViewportRect = {
   height: number;
   width: number;
-}
+};
 
-export interface ViewportPadding {
+export type ViewportPadding = {
   /** 左右各留出的比例，0.12 → 内容占 76% 宽。 */
   x: number;
   /** 上下各留出的比例。 */
   y: number;
-}
+};
 
-export interface FitViewport {
+export type FitViewport = {
   x: number;
   y: number;
   zoom: number;
-}
+};
 
 export const DEFAULT_VIEWPORT_PADDING: ViewportPadding = { x: 0.12, y: 0.12 };
 /** 缩放上限：单节点子图不该被放到撑满屏幕。 */
@@ -164,7 +164,7 @@ export function computeFitViewport(
  * 用法：构造一次，然后在每帧调用 `next()`；返回该帧应当下发的包围盒，
  * 以及是否还需要继续（false 表示已收敛或到达护栏）。
  */
-export interface FitSettleStepper {
+export type FitSettleStepper = {
   /** 推进一帧：`sample()` 返回当前这一帧真实量到的节点。 */
   next(sample: () => ReadonlyArray<FitBoundsNode>): {
     bounds: Bounds | null;
@@ -172,16 +172,16 @@ export interface FitSettleStepper {
   };
   /** 已推进的帧数（含首次采样）。 */
   rounds(): number;
-}
+};
 
-export interface FitSettleOptions {
+export type FitSettleOptions = {
   /** 参与包围盒的节点都没量到尺寸时的兜底尺寸。 */
   fallbackSize: { height: number; width: number };
   /** 帧数护栏，避免测量始终不稳时无限重算。 */
   maxAttempts: number;
   /** 连续多少帧范围不再扩大就认为收敛。 */
   settleRounds: number;
-}
+};
 
 export function createFitSettleStepper(options: FitSettleOptions): FitSettleStepper {
   let lastSpan = -1;
@@ -226,14 +226,14 @@ export function createFitSettleStepper(options: FitSettleOptions): FitSettleStep
  * `markPending(key)` 在排程时登记，`markSettled(key)` 才在真正下发视口后调用。
  * 同一 key 的 pending 状态允许被重复排程（帧被取消后重排），不会吃掉这次聚焦。
  */
-export interface FitOnceScheduler {
+export type FitOnceScheduler = {
   /** 这份图是否已经**下发**过自动聚焦（是 → 无需再排程）。 */
   isSettled(key: string): boolean;
   /** 排程这次聚焦：登记 pending。返回 false 表示这份图已下发过，调用方应放弃。 */
   markPending(key: string): boolean;
   /** 真正下发视口后调用：把这份图记为已聚焦（并清掉 pending）。 */
   markSettled(key: string): void;
-}
+};
 
 export function createFitOnceScheduler(): FitOnceScheduler {
   const settled = new Set<string>();

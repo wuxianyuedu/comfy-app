@@ -30,7 +30,7 @@ function jsonOrString(value: unknown, pretty = false): string {
   }
 }
 
-interface ErrorPanelProps {
+type ErrorPanelProps = {
   error: CanvasNodeData["error"];
   errorContext: CanvasNodeData["errorContext"];
   errorStatus: CanvasNodeData["errorStatus"];
@@ -43,7 +43,7 @@ interface ErrorPanelProps {
   validationErrors: CanvasNodeData["validationErrors"];
   workflowId: CanvasNodeData["workflowId"];
   workflowName: CanvasNodeData["workflowName"];
-}
+};
 
 export function ErrorPanel({
   nodeId,

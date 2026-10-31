@@ -29,7 +29,7 @@ type Folder = {
   type: string;
 };
 
-interface Behavior {
+type Behavior = {
   comfyReachable?: boolean;
   /** 非空时 configDelete 抛错 */
   deleteError?: string;
@@ -40,7 +40,7 @@ interface Behavior {
   saveError?: string;
   /** 非空时 sync 抛错 */
   syncError?: string;
-}
+};
 
 let behavior: Behavior = { folders: [], comfyReachable: true };
 const saveInputs: Array<{ enabled: boolean; folder: string }> = [];

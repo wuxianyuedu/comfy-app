@@ -28,7 +28,7 @@ import { cn } from "~/lib/utils";
  * （计数、类型章、颜色点）。两者语义不同，硬合会把 combobox 的 a11y 契约
  * 塞进 chip。
  */
-export interface OptionListItem {
+export type OptionListItem = {
   /** 行文案。 */
   label: string;
   /** 行左侧的装饰（颜色点 / 状态点），可为空。 */
@@ -39,7 +39,7 @@ export interface OptionListItem {
   title?: string;
   /** 选项值（与 `value` 比较判定选中）。 */
   value: string;
-}
+};
 
 export function OptionListPopover({
   value,

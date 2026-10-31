@@ -42,7 +42,7 @@ export type LivenessPhase =
   | "verifying";
 
 /** 分类所需的**事实**（全部由调用方从已有状态里读，本模块不做 IO）。 */
-export interface LivenessFacts {
+export type LivenessFacts = {
   /** 队列里有活儿（本应用在跑 / ComfyUI 自己排着队）。 */
   busy: boolean;
   /** 窗口不可见（页面隐藏 / 桌面壳失焦）。 */
@@ -53,7 +53,7 @@ export interface LivenessFacts {
   up: boolean;
   /** 刚收到进程退出事件、正在做那次单次复核。 */
   verifying: boolean;
-}
+};
 
 /**
  * 此刻该按哪个阶段给频率。

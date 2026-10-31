@@ -74,7 +74,7 @@ import { gridLineColor } from "../canvas/workflow-canvas-grid";
  * 同档（0.14），色相则完全走同一个 `--color-canvas-grid-line`。 */
 const LIBRARY_GRID_LINE_ALPHA = 0.14;
 
-export interface WorkflowLibraryCanvasProps {
+export type WorkflowLibraryCanvasProps = {
   /** 是否允许连线（有模式 + 上层给了落库回调）。 */
   canWire: boolean;
   /** 契约口清单（`modeContractEntries`）—— 卡片头按它取名，与「工坊封装」
@@ -99,7 +99,7 @@ export interface WorkflowLibraryCanvasProps {
   paramCards: LibraryParamCards;
   selectedEntryId: string | null;
   selectedOutputId: string | null;
-}
+};
 
 /** 节点类型注册表：**模块级常量**（§2.11 —— 内联会在每次 render 重建整棵 DOM）。 */
 const NODE_TYPES = {

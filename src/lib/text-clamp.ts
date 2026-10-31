@@ -32,7 +32,7 @@ export const ELLIPSIS = "…";
 /** 截断方向。 */
 export type ClampDirection = "head" | "tail";
 
-export interface ClampOptions {
+export type ClampOptions = {
   /**
    * 标记的**圆括号内容**（如 `"truncated"` / `"truncated, 原始 12345 字符"`）。
    *
@@ -57,7 +57,7 @@ export interface ClampOptions {
   marker?: string;
   /** 上限（字符数）。必填 —— 本条账的判据就是「上限必须显式」。 */
   maxLength: number;
-}
+};
 
 /**
  * 超出 `maxLength` 时截断，否则原样返回。

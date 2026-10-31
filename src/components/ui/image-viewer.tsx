@@ -57,7 +57,7 @@ const VIEWPORT_PADDING = 16;
 const VIEWER_POPUP_WIDTH = "w-[min(96vw,1400px)]";
 const VIEWER_BODY_HEIGHT = "h-[min(86vh,880px)]";
 
-export interface ImageViewerProps {
+export type ImageViewerProps = {
   alt?: string;
   /** 弹窗标题；缺省回退到 `alt`，再回退到一句通用文案。 */
   label?: string;
@@ -65,7 +65,7 @@ export interface ImageViewerProps {
   onClose: () => void;
   /** 要查看的图片地址；`null` 时组件不渲染（调用处据此表达「关着」）。 */
   src: string | null;
-}
+};
 
 /**
  * 受控的图片查看器。渲染时 `src` 必须有值 —— 需要「关着」的调用处传 `null`。
@@ -449,7 +449,7 @@ function firstText(...values: Array<string | undefined>): string | null {
   return values.find((value) => (value ?? "").trim() !== "") ?? null;
 }
 
-export interface ViewableImageProps {
+export type ViewableImageProps = {
   alt?: string;
   /** 缩略图自身的 class（与 `MediaThumbnail` 同义）。 */
   className?: string;
@@ -460,7 +460,7 @@ export interface ViewableImageProps {
   src?: string | null;
   /** 缩略图上的提示文案（鼠标悬停）。 */
   title?: string;
-}
+};
 
 /**
  * 缩略图 + 点开查看的组合形态：把原来的 `MediaThumbnail` 换成它即可获得

@@ -22,10 +22,10 @@ import { HumanVerdictRow } from "./HumanVerdictRow";
 import { ReviewVerdictDialogButton } from "./ReviewVerdictDialogButton";
 import { useScriptReview } from "./hooks/use-script-review";
 
-export interface ScriptReviewButtonProps {
+export type ScriptReviewButtonProps = {
   /** 定向改写成功后把新剧本交回编辑器 / 预览（人机接力：人可接着手改）。 */
   onScriptRevised: (markdown: string) => void;
-}
+};
 
 export function ScriptReviewButton({ onScriptRevised }: ScriptReviewButtonProps) {
   const [projectId] = useState<string>(() => getActiveId() ?? "");

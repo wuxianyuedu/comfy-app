@@ -9,7 +9,7 @@ import { deriveDevServerStatus, type DevServerStatus } from "~/lib/shell/dev-ser
 
 import { useDevServerLiveness } from "./use-dev-server-liveness";
 
-export interface DevServerStatusViewModel extends DevServerStatus {
+export type DevServerStatusViewModel = {
   /**
    * 当前是哪一次**启动**（launcher 的 runId）。
    *
@@ -42,7 +42,7 @@ export interface DevServerStatusViewModel extends DevServerStatus {
    * `~/lib/shell/app-service-message` 的 `describeAppServiceStart`）。
    */
   unprobedMs: number;
-}
+} & DevServerStatus;
 
 export function useDevServerStatus(): DevServerStatusViewModel {
   const {

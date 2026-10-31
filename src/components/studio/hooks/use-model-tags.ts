@@ -19,13 +19,13 @@ import { vanillaApi } from "~/trpc/vanilla";
 /** 快照去重 key 的分隔符：标签名不含 \u0000，用它拼不会撞车。 */
 const SNAPSHOT_KEY_SEP = "\u0000";
 
-export interface TagItem {
+export type TagItem = {
   count: number;
   id: string;
   name: string;
-}
+};
 
-export interface ModelTagsController {
+export type ModelTagsController = {
   addTag: () => Promise<void>;
   busy: boolean;
   /** 删除：count>0 时先弹二次确认（删掉会一并解除工作流绑定）。 */
@@ -48,7 +48,7 @@ export interface ModelTagsController {
   renameTag: (oldName: string, newName: string) => Promise<boolean>;
   setDraft: (value: string) => void;
   tags: Array<TagItem>;
-}
+};
 
 /** 把父组件的快照并入本地列表：只补本地没有的，不覆盖已有的。 */
 export function mergeTagSnapshots(local: Array<TagItem>, snapshot: Array<TagItem>): Array<TagItem> {
@@ -57,12 +57,12 @@ export function mergeTagSnapshots(local: Array<TagItem>, snapshot: Array<TagItem
   return fresh.length > 0 ? [...fresh, ...local] : local;
 }
 
-export interface UseModelTagsOptions {
+export type UseModelTagsOptions = {
   /** 父组件的缓存快照（首次渲染的种子值）。 */
   initialTags: Array<TagItem>;
   /** 任一写操作成功后回调，让父组件刷新自己的列表。 */
   onChanged?: () => void;
-}
+};
 
 export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): ModelTagsController {
   const [tags, setTags] = useState<Array<TagItem>>(initialTags);

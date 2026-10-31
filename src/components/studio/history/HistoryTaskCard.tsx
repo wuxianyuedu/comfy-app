@@ -7,7 +7,7 @@ import { clampPct } from "~/lib/progress";
 import type { TaskItem } from "./history-types";
 import { QUEUED_STATUS_STYLE, STATUS_STYLE, timeAgo } from "./history-utils";
 
-interface HistoryTaskCardProps {
+type HistoryTaskCardProps = {
   onCancel: (id: string) => void;
   onOpenDetail: (id: string) => void;
   onRemove: (id: string) => void;
@@ -17,7 +17,7 @@ interface HistoryTaskCardProps {
   /** 重试请求是否进行中（按钮禁用态）。 */
   retrying: boolean;
   task: TaskItem;
-}
+};
 
 /** 历史记录列表中的单条任务卡片（缩略图 + 状态 + 错误 + 操作按钮）。 */
 export function HistoryTaskCard({

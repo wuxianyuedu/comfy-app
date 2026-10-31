@@ -21,7 +21,7 @@ import { EmptyState } from "~/components/ui/empty-state";
 import { StatusDot } from "~/components/ui/status-dot";
 import { ListBadge } from "~/components/ui/list-badge";
 
-interface WorkflowLibraryListProps {
+type WorkflowLibraryListProps = {
   /** 拖入 JSON 导入：整片列表侧栏就是投放区，这里接管高亮与投放事件
    * （与导入面板共用同一个文件漏斗，见 useWorkflowImport）。 */
   dragActive?: boolean;
@@ -50,7 +50,7 @@ interface WorkflowLibraryListProps {
   /** 拉取超过预期时长仍未返回（服务在响应但查询没回来）。 */
   stalled?: boolean;
   workflows: Array<WorkflowRow>;
-}
+};
 
 /**
  * 左侧工作流列表：搜索 + 可滚动条目。选中项高亮，右侧详情面板联动。

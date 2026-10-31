@@ -27,14 +27,14 @@ type HoverHandlers = Pick<DOMAttributes<HTMLElement>, "onMouseEnter" | "onMouseL
 /** React Flow 外壳的类名。CSS 选择器与它对齐（见 globals.css）。 */
 const NODE_WRAPPER_SELECTOR = ".react-flow__node";
 
-export interface HoverElevation {
+export type HoverElevation = {
   /** 鼠标是否正指在本节点上（由本钩子写进 React Flow 外壳的 `data-hovered`）。 */
   hovered: boolean;
   /** 需要展开到节点元素上的事件处理器。 */
   hoverHandlers: HoverHandlers;
   /** 挂到节点元素上的 ref —— 用来定位 React Flow 外壳。 */
   hoverRef: (element: HTMLElement | null) => void;
-}
+};
 
 /** 给节点接上「悬浮即置顶」的能力。
  *

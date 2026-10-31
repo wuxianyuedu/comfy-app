@@ -37,7 +37,7 @@ export function runLogSourceLabel(source?: WorkflowRunSource): string {
   return "画布节点 · 就地运行";
 }
 
-export interface WorkflowRunMeta {
+export type WorkflowRunMeta = {
   errorMessage?: string;
   /** 累积的执行步骤日志（重开窗口后由 SSE 回放继续补齐）。 */
   logs?: Array<TaskLogEntry>;
@@ -57,7 +57,7 @@ export interface WorkflowRunMeta {
   taskType: string;
   workflowId: string;
   workflowName: string;
-}
+};
 
 const MAX_ENTRIES = 32;
 const MAX_LOGS = 300;
@@ -329,12 +329,12 @@ export function appendWorkflowRunLog(
 
 /* ── useSyncExternalStore 接线 ─────────────────────────────────────────── */
 
-export interface WorkflowRunStoreSnapshot {
+export type WorkflowRunStoreSnapshot = {
   /** 最近一次仍在运行（或最近一次）的 taskId，null 表示从未运行。 */
   activeTaskId: string | null;
   runs: Array<WorkflowRunMeta>;
   version: number;
-}
+};
 
 let cachedSnapshot: WorkflowRunStoreSnapshot | null = null;
 

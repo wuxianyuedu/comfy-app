@@ -25,7 +25,7 @@ import { revealLogPath } from "~/lib/log/log-reveal-client";
 import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 
 /** 一条路径的打开结果（只保留要显示的那两件）。 */
-export interface RevealPathFeedback {
+export type RevealPathFeedback = {
   /** 这一刻这一次打开是不是在跑（给按钮的禁用 / 文案用）。 */
   busy: boolean;
   /** 上一次失败的说明（成功时为空；由服务端给，可直接显示）。 */
@@ -34,7 +34,7 @@ export interface RevealPathFeedback {
   outcome: "idle" | "done" | "failed";
   /** 打开这个路径。 */
   reveal: (path: string) => void;
-}
+};
 
 /**
  * 一行日志里一个路径的打开动作。

@@ -53,7 +53,7 @@ export type ManagedSpawnResult =
   | { child: ChildProcess; error?: never }
   | { child?: never; error: string };
 
-export interface ManagedSpawnOptions {
+export type ManagedSpawnOptions = {
   args: Array<string>;
   command: string;
   cwd?: string;
@@ -79,7 +79,7 @@ export interface ManagedSpawnOptions {
   redirectStdoutFile?: string;
   /** keepAlive 生效时恒忽略；bound 模式下透传给 spawn。 */
   windowsHide?: boolean;
-}
+};
 
 /** 把单个参数安全地包进 PowerShell 单引号（' 转义为 ''）。 */
 export function escapePwshSingle(s: string): string {
@@ -128,11 +128,11 @@ export function decodePowerShellOutput(buf: Buffer): string {
 }
 
 /** 等 Windows keepAlive 的 powershell 中介退出并收集其 stderr。 */
-export interface DetachMediatorOutcome {
+export type DetachMediatorOutcome = {
   /** 中介退出码；超时未退出为 null（调用方按「未知，继续外部探测」处理）。 */
   code: number | null;
   stderr: string;
-}
+};
 
 /**
  * 中介句柄**真正被读到的那两样**（不是整包 `ChildProcess`）。
@@ -143,12 +143,12 @@ export interface DetachMediatorOutcome {
  * —— 那种cast 会把「调用点到底喂了什么」这一格重新变成 tsc 看不见的地方
  *（台账 F13 那一族的成因）。真的 `ChildProcess` 天然满足这个形状。
  */
-export interface DetachMediatorHandle {
+export type DetachMediatorHandle = {
   once(event: "exit", listener: (code: number | null) => void): unknown;
   stderr?: {
     on(event: "data", listener: (chunk: Buffer) => void): unknown;
   } | null;
-}
+};
 
 /**
  * 等 Windows keepAlive 的 powershell 中介退出，带出它的 stderr。

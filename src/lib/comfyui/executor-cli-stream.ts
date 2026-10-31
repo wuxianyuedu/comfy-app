@@ -179,7 +179,7 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
   return `工作流校验未通过（comfy-cli 对照服务端校验）：${message}`;
 }
 
-export interface EnvelopeParserDeps {
+export type EnvelopeParserDeps = {
   /** 收到 envelope 事件时收口（ok = envelope.ok；env = 原文）。 */
   finish: (ok: boolean, env: unknown) => void;
   /** 面板日志。 */
@@ -218,14 +218,14 @@ export interface EnvelopeParserDeps {
   taskId: string;
   /** 可注入的 trace（默认全局 trace）。 */
   trace?: TraceFn;
-}
+};
 
 /** stdout 解析器：喂 chunk 的回调 + 未消费尾部（进程退出时落 trace 用）。 */
-export interface CliEnvelopeParser {
+export type CliEnvelopeParser = {
   /** 尚未成行的 stdout 残留（close 时落 trace，不丢现场）。 */
   leftover: () => string;
   sink: (chunk: Buffer | string) => void;
-}
+};
 
 /**
  * 「面向节点的日志行」里那一段 `[id] 中文名（ClassType）` 的唯一算法。
@@ -414,23 +414,23 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
   };
 }
 
-export interface StderrSinkDeps {
+export type StderrSinkDeps = {
   /** 面板日志。 */
   log: LogFn;
   /** 完整原始行（不截断）收集：供前端「查看完整输出」入口。 */
   rawCli?: (taskId: string, line: string) => void;
   taskId: string;
   trace?: TraceFn;
-}
+};
 
 /** stderr 汇总态：调用方在 close 时读 `summary()` 落 tail。 */
-export interface StderrSink {
+export type StderrSink = {
   /** 噪声行数（Python Deprecation/Syntax 警告）。 */
   noisyWarningLines: () => number;
   /** 完整 stderr 原文（不截断，close 时 tail 用）。 */
   raw: () => string;
   sink: (chunk: Buffer | string) => void;
-}
+};
 
 const NOISY_WARNING_RE = /DeprecationWarning|SyntaxWarning: invalid escape sequence/i;
 
@@ -479,7 +479,7 @@ export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
  * `settle` 由调用方注入（幂等守卫 + 清 guard + 摘 cliProcs 表）。
  */
 
-export interface CliFinisherDeps {
+export type CliFinisherDeps = {
   /** 成功收口。**注入**而不是直接 import `executor-finalize`：那个模块经
    *  `core/repository` 拖进 DB / `.env`，会让本模块无法脱离环境单测。 */
   complete: (taskId: string, promptId: string) => void;
@@ -499,7 +499,7 @@ export interface CliFinisherDeps {
   /** 幂等收口守卫：第一次返回 true（并做好清理），重复调用返回 false。 */
   settle: () => boolean;
   taskId: string;
-}
+};
 
 export type CliFinisher = (ok: boolean, env: unknown) => void;
 

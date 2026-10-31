@@ -43,7 +43,7 @@ import type { ReactNode } from "react";
 /** 一个节点在被摆上真画布时所需要的最小形状（与业务侧同一份 `Node` 类型）。 */
 export type FlowNodeSpec = Node;
 
-export interface CanvasScene {
+export type CanvasScene = {
   /** 这个场景解决什么、真数据长什么样（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
   readonly edges: ReadonlyArray<Edge>;
@@ -64,7 +64,7 @@ export interface CanvasScene {
    * 消费方传 `fit` 时它会**被忽略**（React Flow 自己算一个缩到装得下的视口）。
    */
   readonly viewport: { x: number; y: number; zoom: number };
-}
+};
 
 /**
  * 画布铺底的尺寸：够摆一张卡片与它周围的留白，又不至于把侧栏挤走。

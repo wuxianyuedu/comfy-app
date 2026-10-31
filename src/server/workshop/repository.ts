@@ -127,7 +127,7 @@ function summarize(row: WorkshopSession): WorkshopSessionSummary {
   };
 }
 
-export interface CreateSessionInput {
+export type CreateSessionInput = {
   idea?: string;
   logline?: string;
   /** 可选：绑定界面侧**既有**项目（proj_* = production.id）。缺省新建一对
@@ -137,7 +137,7 @@ export interface CreateSessionInput {
   tone?: string;
   type?: string;
   userId?: string | null;
-}
+};
 
 export async function createSession(input: CreateSessionInput = {}): Promise<string> {
   const id = createId();

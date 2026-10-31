@@ -37,7 +37,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * （`log-virtual` 的 `pinPlan` / `pinScrollTop`），语义是「钉住已读水位」而不是
  * 「滚到最底」—— 两者不是同一件事，别把它改成本 hook 的调用方。
  */
-export interface UseScrollFollowOptions {
+export type UseScrollFollowOptions = {
   /**
    * 滚动容器。**由调用处用 `useRef` 建好传进来**，而不是由本 hook 返回 ——
    * `react-hooks/refs` 会把「含 `useRef` 的 hook 的返回值」整体判成 ref 敏感，
@@ -64,16 +64,16 @@ export interface UseScrollFollowOptions {
    * 用户永远滚不上去。
    */
   watch: unknown;
-}
+};
 
-export interface ScrollFollow {
+export type ScrollFollow = {
   /** 当前是否仍在跟随底部。`false` 时调用处必须给出「回到最新」的入口。 */
   following: boolean;
   /** 立刻回到最新（界面上的「回到最新」/「恢复自动滚动」按钮调它）。 */
   jumpToLatest: () => void;
   /** 摊到滚动容器上的 `onScroll` —— 由它判定用户有没有接管滚动。 */
   onScroll: () => void;
-}
+};
 
 /** 离底多少像素内仍算「还在跟随」——全库唯一一处定义。 */
 export const NEAR_BOTTOM_PX = 32;

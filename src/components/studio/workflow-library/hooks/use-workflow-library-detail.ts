@@ -25,16 +25,16 @@ import {
 } from "../workflow-library-config";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 
-export interface WorkflowLibraryDetailActions {
+export type WorkflowLibraryDetailActions = {
   download: () => void;
   edit: () => void;
   remove: () => void;
   resync: () => void;
   use: () => void;
-}
+};
 
 /** 类型 / 模型编辑器的派生数据与动作（规范 17 §17.2 第②层）。 */
-export interface MetaEditorController {
+export type MetaEditorController = {
   /** 全部可选模型标签。 */
   allModelTags: Array<{ count: number; id: string; name: string }>;
   busy: boolean;
@@ -51,9 +51,9 @@ export interface MetaEditorController {
   /** 持久化某个 IO 参数的 seed「控件后行为」（fixed/increment/decrement/random）。
    *  写进 workflowIO 条目并整体落库，预览面板与画布运行时共用。 */
   patchSeedMode: (ioKey: string, mode: string) => Promise<void>;
-}
+};
 
-export interface WorkflowLibraryDetailController {
+export type WorkflowLibraryDetailController = {
   actions: WorkflowLibraryDetailActions;
   /** **两个页签共用的当前模式**（画布节点卡片列与工坊封装都按它渲染）。
    *
@@ -99,7 +99,7 @@ export interface WorkflowLibraryDetailController {
   /** null = 左侧未选中工作流，视图据此渲染空态。 */
   workflow: WorkflowRow | null;
   workflowIO: WorkflowIOMap | null;
-}
+};
 
 /** 生效模式：用户在这条工作流上切过就用切过的，否则用默认模式解析值。
  *

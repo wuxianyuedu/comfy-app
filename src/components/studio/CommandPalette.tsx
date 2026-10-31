@@ -11,14 +11,14 @@ import {
 
 import { globalNavItems, projectTabs, type WorkspaceView } from "./NavItems";
 
-export interface CommandPaletteProps {
+export type CommandPaletteProps = {
   /** 当前视图（保留入参：以后按视图给命令排序 / 高亮用，与侧栏同一份数据源）。 */
   active: WorkspaceView;
   onOpenChange: (open: boolean) => void;
   /** 选中某条命令时回调（这里用来切换视图）。 */
   onSelect: (view: WorkspaceView) => void;
   open: boolean;
-}
+};
 
 /**
  * 全局命令面板（⌘/Ctrl+K）。

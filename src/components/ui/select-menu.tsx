@@ -67,7 +67,7 @@ import React, { useMemo } from "react";
 import { cn } from "~/lib/utils";
 import { useOverlayBoundary } from "~/components/ui/use-overlay-boundary";
 
-interface SelectMenuProps {
+type SelectMenuProps = {
   "aria-describedby"?: string;
   "aria-invalid"?: boolean | "true" | "false";
   "aria-label"?: string;
@@ -120,7 +120,7 @@ interface SelectMenuProps {
   popoverMinWidth?: number;
   title?: string;
   value: string;
-}
+};
 
 /* 触发器：与 PR 之前 Popover+Trigger 版本逐字对齐的深色样式。
  * 基础里**没有** `w-full`：默认宽度由调用处决定（`w-full` 用在需要铺满

@@ -29,7 +29,7 @@ export type ComfyProbe = () => Promise<string | null>;
 /** 判死：返回 true 表示进程已确定不会起来（保活进程未出现 / 子进程消失）。 */
 export type ComfyDeadCheck = () => Promise<boolean>;
 
-export interface WaitForComfyReadyOpts {
+export type WaitForComfyReadyOpts = {
   /** 硬超时绝对时间戳（null = 不设硬超时，一直等）。 */
   deadline: number | null;
   /** 每次轮询前的早退理由；返回非 null 立即结束（用户手动关闭 / 子进程消失）。 */
@@ -48,13 +48,13 @@ export interface WaitForComfyReadyOpts {
   readyDetail?: string;
   /** 超时未就绪时的可行动文案（**唯一一处**，两条路径共用）。 */
   timeoutDetail: string;
-}
+};
 
-export interface WaitReadyResult {
+export type WaitReadyResult = {
   base: string | null;
   detail: string;
   ok: boolean;
-}
+};
 
 /**
  * 单一等待循环：拉起之后「等到就绪 / 等到判死 / 等到超时」。
@@ -107,14 +107,14 @@ export async function waitForComfyReady(opts: WaitForComfyReadyOpts): Promise<Wa
 
 /* ── 事件回调（可测的具名纯函数）────────────────────────────────────── */
 
-export interface OutputSinkDeps {
+export type OutputSinkDeps = {
   /** 把一行原文追加进运行日志（带 `[out]` / `[err]` 前缀）。 */
   appendRuntimeLog: (line: string) => void;
   /** 单行截断上限（默认 500，与既有行为一致）。 */
   maxLineChars?: number;
   /** 留底一行（供进程秒退时提取可行动报错）。 */
   pushRecent: (text: string) => void;
-}
+};
 
 /**
  * 构造 stdout/stderr 的 `data` 回调。
@@ -141,10 +141,10 @@ export function createOutputSink(deps: OutputSinkDeps): (chunk: Buffer | string)
 }
 
 /** 行留底账本：按行累积、超出 `maxLines` 丢弃最旧。 */
-export interface RecentOutputLedger {
+export type RecentOutputLedger = {
   lines: Array<string>;
   push: (text: string) => void;
-}
+};
 
 /** 留底账本（默认上限 60 行，与既有行为一致）。 */
 export function createRecentOutputLedger(maxLines = 60): RecentOutputLedger {
@@ -166,7 +166,7 @@ export function createRecentOutputLedger(maxLines = 60): RecentOutputLedger {
   };
 }
 
-export interface ChildExitDeps {
+export type ChildExitDeps = {
   /** 写运行日志（`[exit] ...` 那两行落这里，与 `[out]/[err]` 同一个文件，
    *  这样「它退出前最后说了什么」与「为什么退出」挨在一起）。 */
   appendRuntimeLog: (line: string) => void;
@@ -185,7 +185,7 @@ export interface ChildExitDeps {
    * 原语（ISSUE #570 第 6 项），而原语里的句子此前固定说「ComfyUI 进程退出」，
    * 于是 Studio 的崩溃被记在了 ComfyUI 名下（ISSUE #2435）。 */
   subject: string;
-}
+};
 
 /**
  * 构造 `child.on("exit")` 回调：判「为什么退出」→ 落横幅 + `[exit]` 两行 → 清句柄。

@@ -14,9 +14,9 @@ import type { Character } from "~/lib/workshop/types";
 import { ReviewVerdictDialogButton } from "./ReviewVerdictDialogButton";
 import { useCharacterReview } from "./hooks/use-character-review";
 
-export interface CharacterReviewButtonProps {
+export type CharacterReviewButtonProps = {
   character: Character;
-}
+};
 
 export function CharacterReviewButton({ character }: CharacterReviewButtonProps) {
   const [projectId] = useState<string>(() => getActiveId() ?? "");

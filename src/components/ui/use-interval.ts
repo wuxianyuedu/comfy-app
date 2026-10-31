@@ -40,7 +40,7 @@ import { startPollTimer } from "~/lib/poll-timer";
  * 与 `useFlashState`（一次性定时器）的分工：那个管「按一下亮一会儿」，
  * 这个管「每隔一段时间重复跑」。两者都用定时器，但取消语义与生命周期不同。
  */
-export interface UseIntervalOptions {
+export type UseIntervalOptions = {
   /** 是否在挂载时立即执行一次（默认 `true`）。 */
   immediate?: boolean;
   /** 间隔毫秒数；传 `null` / `0` 表示**不轮询**（受控开关）。
@@ -71,7 +71,7 @@ export interface UseIntervalOptions {
    * 页面在跟新（例如挂着看长任务进度），维持既有语义不越过边界。
    */
   pauseWhenUnfocused?: boolean;
-}
+};
 
 /** 视图侧默认通道：一次失败一行，不炸轮询循环。 */
 function reportPollError(err: unknown): void {

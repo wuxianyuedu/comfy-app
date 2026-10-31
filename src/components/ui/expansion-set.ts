@@ -37,7 +37,7 @@ import { useCallback, useMemo, useState } from "react";
 /** 展开集合（键 → 是否展开）。缺键表示「从未表态」，由调用处决定默认。 */
 export type ExpansionMap = Record<string, boolean>;
 
-export interface ExpansionSet {
+export type ExpansionSet = {
   /** 全收起。 */
   collapseAll: () => void;
   /**
@@ -66,7 +66,7 @@ export interface ExpansionSet {
   set: (key: string, open: boolean) => void;
   /** 切换一项（未表态 → 展开；已展开 → 收起）。 */
   toggle: (key: string) => void;
-}
+};
 
 /**
  * 展开集合的状态出口。

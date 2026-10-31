@@ -30,7 +30,7 @@ export const stackedStringRow = (inp: RawInputMeta): boolean => {
   );
 };
 
-interface SubgraphWidgetStackedStringProps {
+type SubgraphWidgetStackedStringProps = {
   /** 定尺寸节点（导入配置带显式尺寸）时 textarea 接入 flex 链填满剩余高度。 */
   hasSize: boolean;
   hostNodeId?: string;
@@ -38,7 +38,7 @@ interface SubgraphWidgetStackedStringProps {
   io: IOEditContextValue | null;
   label: string;
   nodeId: string;
-}
+};
 
 export function SubgraphWidgetStackedString({
   inp,

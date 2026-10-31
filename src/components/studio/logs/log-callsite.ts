@@ -17,14 +17,14 @@
  */
 
 /** 一帧调用栈解析出的位置（`path` 已剥协议前缀，`lineNo` 仅数字时保留）。 */
-interface StackFrame {
+type StackFrame = {
   /** 行号（非数字时为空串）。 */
   lineNo: string;
   /** 位置段解析出的路径（已做前缀清理）。 */
   path: string;
   /** 原始行（判 `node_modules` / 框架特征时看它）。 */
   raw: string;
-}
+};
 
 /**
  * 面板自身那一族模块的帧：栈顶永远是这些包装 / 采集函数，必须跳过。

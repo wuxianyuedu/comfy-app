@@ -18,14 +18,14 @@ import { resolveAgentTool, type AgentToolHandlers } from "~/lib/agent/executor";
 export type { AgentToolHandlers };
 
 /** 一条工具执行记录（Agent 浮层「工作过程」面板的展示数据）。 */
-export interface AgentToolRun {
+export type AgentToolRun = {
   argSummary: string;
   detail?: string;
   id: string;
   status: "running" | "done" | "error";
   summary: string;
   toolName: string;
-}
+};
 
 /** Agent 一帧对话消息（用户 / 助手 / 工具记录）。 */
 export type AgentPanelMessage =
@@ -36,7 +36,7 @@ export type AgentPanelMessage =
 export type WorkshopAgentToolHandlers = AgentToolHandlers;
 
 /** Agent hook 返回给视图的 controller。 */
-export interface WorkshopAgentController {
+export type WorkshopAgentController = {
   busy: boolean;
   clearToolRuns: () => void;
   closeAgent: () => void;
@@ -48,7 +48,7 @@ export interface WorkshopAgentController {
   send: () => Promise<void>;
   setInput: (value: string) => void;
   toolRuns: Array<AgentToolRun>;
-}
+};
 
 /* 对话条目与工具运行记录的 id 走全库唯一出口（规范 16 §16.2.4.36）——
  * 收口前这里是两份逐字同形的「时间戳 + 自己的模块级计数器」。 */

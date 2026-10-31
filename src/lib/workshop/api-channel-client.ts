@@ -11,10 +11,10 @@ import {
 } from "./api-channel-shared";
 
 /** POST /api/workshop-api/config 的请求体：两个通道各自可选，只补丁改字段。 */
-export interface ApiChannelSavePayload {
+export type ApiChannelSavePayload = {
   image?: ApiChannelSaveInput;
   video?: ApiChannelSaveInput;
-}
+};
 
 const SAVE_ENDPOINT = "/api/workshop-api/config";
 

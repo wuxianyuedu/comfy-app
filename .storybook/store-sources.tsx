@@ -36,10 +36,10 @@ import { parseFileLogs, useLogStore, type LogEntry } from "~/components/studio/l
  * 通道**自己的格式**——启动链路写 `[HH:MM:SS]`、应用服务与运行期写 ISO 时刻带
  * 级别段。三个正则各不相同，所以一段原文**不能**同时冒充三条通道。
  */
-export interface OriginBlock {
+export type OriginBlock = {
   readonly origin: NonNullable<LogEntry["origin"]>;
   readonly text: string;
-}
+};
 
 /**
  * 一个 store 场景：给若干段**真格式的日志原文**，让 store 自己解析入库。
@@ -49,12 +49,12 @@ export interface OriginBlock {
  * 最容易糊弄过去的地方：把三通道的行抄成一种格式、全按一个 origin 入库，
  * 画布上「来源」那一列会整列同名，而来源分桶的计数也就没有被真的验过。
  */
-export interface LogStoreScene {
+export type LogStoreScene = {
   /** 这个场景解决什么、真数据长什么样（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
   /** 按通道分块的原文（每块一个真实来源通道）。 */
   readonly blocks: ReadonlyArray<OriginBlock>;
-}
+};
 
 /* ── 真格式的日志原文 ──────────────────────────────────────────────────────
  *

@@ -130,7 +130,7 @@ async function resolveCurrentLog(source: string): Promise<string> {
   return DEV_LAUNCHER_LOG;
 }
 
-interface Slice {
+type Slice = {
   /**
    * 当前提供本响应的应用服务进程标识。客户端存下它，下一轮轮询比对——
    * 它同时承担两件事：
@@ -159,7 +159,7 @@ interface Slice {
   sessionStart: number | null;
   /** 文件当前总字节数：客户端下一轮的增量读取游标。 */
   size: number;
-}
+};
 
 /**
  * 增量读取一段日志：

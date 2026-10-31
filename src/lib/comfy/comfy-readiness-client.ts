@@ -26,12 +26,12 @@ export const COMFY_READY_POLL_MS = 2_000;
 
 export type ComfyReadyResult = { ok: true } | { message: string; ok: false; pending: boolean };
 
-interface EnsureBody {
+type EnsureBody = {
   detail?: unknown;
   error?: unknown;
   ok?: unknown;
   pending?: unknown;
-}
+};
 
 /** 从 ensure 响应体里取可读文案：`detail` → `{error}` 字符串 → `{error:{message}}`。 */
 export function readComfyErrorMessage(body: unknown, fallback: string): string {

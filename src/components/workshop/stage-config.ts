@@ -45,7 +45,7 @@ export const STAGE_TITLES: Record<Tab, { desc: string; title: string }> = {
 };
 
 /** 导航副标题 / 前置提示 / 缺失素材共用的进度快照（由 hook 计算后下发）。 */
-export interface StageViewContext {
+export type StageViewContext = {
   characterCount: number;
   clipDoneCount: number;
   imageDoneCount: number;
@@ -58,7 +58,7 @@ export interface StageViewContext {
    * 此时「还差几镜」没有可派生的答案，屏面就不给目标，只报已排数。
    */
   shotTarget: number;
-}
+};
 
 export type StageRatios = Record<Tab, number>;
 
@@ -151,7 +151,7 @@ export function stagePrereq(id: Tab, ctx: StageViewContext): { go: Tab; text: st
   }
 }
 
-export interface MissingItem {
+export type MissingItem = {
   /** 这一项是否可以认为已就绪（决定清单上的完成态与颜色档）。 */
   done: boolean;
   /**
@@ -164,7 +164,7 @@ export interface MissingItem {
    */
   gap: number | null;
   label: string;
-}
+};
 
 /**
  * 右侧「缺失素材 / 下一步」清单。判据全部来自 `StageViewContext` 的真实计数，
@@ -193,7 +193,7 @@ export function buildMissingSummary(ctx: StageViewContext): Array<MissingItem> {
 }
 
 /** 健康度快照的一行：一段阶段在屏顶分段条上的表达。 */
-export interface HealthRow {
+export type HealthRow = {
   id: Tab;
   label: string;
   /** 这一段还缺不缺东西（用于屏顶只留一处「还差几段」的说法）。 */
@@ -202,7 +202,7 @@ export interface HealthRow {
   ratio: number;
   /** 窄槽位（分段条）用的两字缩略；要念出全名的地方一律用 `label`。 */
   shortLabel: string;
-}
+};
 
 /**
  * 屏顶分段健康度条的数据源。

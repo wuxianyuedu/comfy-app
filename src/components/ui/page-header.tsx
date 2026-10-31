@@ -61,7 +61,7 @@ import { cn } from "~/lib/utils";
  *   「标题」是数据不是屏名，但字阶档与副说明这两件仍然该走这里。
  */
 
-export interface PageHeaderProps {
+export type PageHeaderProps = {
   /** 右侧动作组（按钮 / 筛选）。整组不收缩。 */
   actions?: ReactNode;
   /**
@@ -122,7 +122,7 @@ export interface PageHeaderProps {
    * 用于 `FilmStudioTopBar` 那类「项目名 + · 视图名」的组合。
    */
   titleSuffix?: ReactNode;
-}
+};
 
 export function PageHeader({
   title,

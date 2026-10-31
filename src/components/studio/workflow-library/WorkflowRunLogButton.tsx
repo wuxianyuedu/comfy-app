@@ -20,7 +20,7 @@ import {
   type WorkflowRunSource,
 } from "~/lib/workflow/workflow-run-store";
 
-export interface WorkflowRunLogButtonProps {
+export type WorkflowRunLogButtonProps = {
   /** 没跑过也渲染入口：详情头部那扇门位置固定，随时点得开（弹窗里显示空态
    *  「运行生成后此处会显示执行步骤日志」）。缺省 false = 有运行记录才出现。 */
   alwaysVisible?: boolean;
@@ -34,7 +34,7 @@ export interface WorkflowRunLogButtonProps {
   taskId?: string | null;
   /** 只看当前工作流的运行记录。 */
   workflowId: string;
-}
+};
 
 export function WorkflowRunLogButton({
   workflowId,

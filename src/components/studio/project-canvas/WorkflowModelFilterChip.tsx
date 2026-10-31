@@ -5,11 +5,11 @@
  */
 import { OptionListPopover } from "~/components/ui/option-list-popover";
 
-interface WorkflowModelFilterChipProps {
+type WorkflowModelFilterChipProps = {
   onChange: (v: string) => void;
   tags: Array<{ count: number; id: string; name: string }>;
   value: string;
-}
+};
 
 export function WorkflowModelFilterChip({ value, tags, onChange }: WorkflowModelFilterChipProps) {
   const label = value === "all" ? "全部模型" : value;

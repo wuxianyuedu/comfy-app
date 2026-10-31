@@ -80,11 +80,11 @@ export function deriveTaskOrigin(detail: TaskDetail | null): TaskOrigin {
 
 /** 一行「工坊参数」（模式契约的一个对外口 + 该次任务落在它上面的值）。
  *  `value` 为 `undefined` 表示这个口本次没给值——仍占一行（契约配了几个口就显示几个）。 */
-export interface WorkshopParamRow {
+export type WorkshopParamRow = {
   id: string;
   label: string;
   value: unknown;
-}
+};
 
 /** 契约口 id → params 顶层键的别名。工坊对外值落库时用的是 generate 入参名，
  *  与契约口 id 不完全同名（first-frame ↔ firstFrame、duration ↔ frames…）。 */
@@ -109,11 +109,11 @@ const SIZE_PIN_NAMES = new Set([
   "resolution",
 ]);
 
-interface RawWorkflowInput {
+type RawWorkflowInput = {
   name: string;
   nodeId?: string;
   value: unknown;
-}
+};
 
 /** 解析一个契约口在本次任务里的值：顶层 params（含别名）→ 尺寸口按 size 族 pin
  *  聚合 → 同名 workflowInputs pin 兜底。都取不到返回 `undefined`（不臆造）。 */
@@ -163,14 +163,14 @@ export function deriveWorkshopParams(
 }
 
 /** 一行「工作流参数」（下发给工作流的 IO 端口）。 */
-export interface WorkflowParamRow {
+export type WorkflowParamRow = {
   id: string;
   /** 展示名：工作流 IO 的作者标签，查不到时回退 `name`。 */
   label: string;
   /** 原始 pin 名（`workflowInputs[].name`）。 */
   name: string;
   value: unknown;
-}
+};
 
 /**
  * pin 名 → 可读名：按 `nodeId::widget::name` 在工作流 IO 里查作者标签。

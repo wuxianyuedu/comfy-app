@@ -14,12 +14,12 @@ import { placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
 
 type ScreenToFlowFn = Parameters<typeof placeCanvasNode>[0]["flow"]["screenToFlowPosition"];
 
-interface UseCanvasMenuArgs {
+type UseCanvasMenuArgs = {
   menu: { x: number; y: number } | null;
   screenToFlowPosition: ScreenToFlowFn;
   setMenu: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
   setNodes: Dispatch<SetStateAction<Array<CanvasNodeType>>>;
-}
+};
 
 export function useCanvasMenu({
   menu,

@@ -32,7 +32,7 @@ import { beginStaleRun } from "~/lib/stale-run";
 
 const RUN_POLL_MS = 2500;
 
-export interface AgentRunController {
+export type AgentRunController = {
   action: RunAction;
   approvalMode: ApprovalMode;
   approve: () => Promise<void>;
@@ -50,7 +50,7 @@ export interface AgentRunController {
   setAutoReview: (value: boolean) => void;
   setGoal: (value: string) => void;
   start: () => Promise<void>;
-}
+};
 
 export function useAgentRun(): AgentRunController {
   const [projectId] = useState<string>(() => getActiveId() ?? "");

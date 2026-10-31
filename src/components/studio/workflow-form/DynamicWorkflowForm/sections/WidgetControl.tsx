@@ -18,7 +18,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { mediaPreviewUrl, mediaReferenceFilename } from "~/lib/media/media-url";
 import { inputCls } from "../constants";
 
-interface WidgetControlProps {
+type WidgetControlProps = {
   compact: boolean;
   disabled: boolean;
   entry: EnrichedWidget;
@@ -33,7 +33,7 @@ interface WidgetControlProps {
   /** 该行正在上传（image 行显示「上传中…」）。 */
   uploading: boolean;
   value: unknown;
-}
+};
 
 export function WidgetControl({
   entry,

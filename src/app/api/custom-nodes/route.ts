@@ -65,7 +65,7 @@ function jsonField<T>(
 }
 
 /** manifest 里单个已解析包的摘要形状(与前端 SummaryPkg 消费契约一致)。 */
-interface ManifestPackageSummary {
+type ManifestPackageSummary = {
   contentHash: string;
   errors: Array<unknown>;
   generatedAt: string | null;
@@ -76,7 +76,7 @@ interface ManifestPackageSummary {
   parsedFileCount: number;
   path: string;
   status: string;
-}
+};
 
 /* 解析自定义节点的扫描根目录。
  *  主路径：设置里配置的 ComfyUI 安装根下的 `custom_nodes` 目录（自动推导）。
@@ -107,14 +107,14 @@ function getLocalWorkflowPaths(): Array<string> {
 /* manifest 摘要的短路缓存：GET 每次都读 + 解析整份 manifest（自定义节点包一多
  * 就是几百 KB），而文件只在 parse / 流式解析收尾时被写 —— 按 (size, mtime) 指纹
  * 缓存，写入后指纹必变、缓存自然失效。 */
-interface ManifestSummary {
+type ManifestSummary = {
   generatedAt: string | null;
   missingPaths: Array<string>;
   packages: Array<ManifestPackageSummary>;
   parseErrors: Array<unknown>;
   sources: Array<string>;
   totalNodes: number;
-}
+};
 
 let manifestSummaryCache: {
   stamp: string;
@@ -325,13 +325,13 @@ async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<un
  */
 
 /** PROGRESS:: 行解析出的进度字段(msg + 可选计数,键由 kvRegex 决定)。 */
-interface DiscoverProgressFields {
+type DiscoverProgressFields = {
   discovered?: number;
   done?: number;
   msg: string;
   phase: "scan" | "hash";
   total?: number;
-}
+};
 
 function runDiscoverStreaming(
   parent: string,

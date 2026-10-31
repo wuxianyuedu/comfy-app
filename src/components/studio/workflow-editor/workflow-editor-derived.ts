@@ -15,11 +15,11 @@ export type RawNodeMeta = {
   widgets_values: Array<unknown>;
 };
 
-export interface WorkflowDerivedData {
+export type WorkflowDerivedData = {
   outSlotNameById: Record<string, Array<string>>;
   rawMetaById: Record<string, RawNodeMeta>;
   scopeDetail: WorkflowDetail | null;
-}
+};
 
 /**
  * 工作流编辑器画布的派生查表：

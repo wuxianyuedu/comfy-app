@@ -25,16 +25,16 @@ import type { ComfyQueueStatus } from "./queue-status-types";
 const QUEUE_EVENTS_POLL_MS = 2000;
 
 export type Listener = () => void;
-interface Subscription {
+type Subscription = {
   onChange: Listener;
-}
+};
 
-interface QueueSignalGlobal {
+type QueueSignalGlobal = {
   inflight?: boolean;
   lastSerialized?: string | null;
   listeners?: Set<Subscription>;
   timer?: ReturnType<typeof setInterval> | null;
-}
+};
 
 declare global {
   var __comfyQueueSignal_v1: QueueSignalGlobal | undefined;

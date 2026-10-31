@@ -31,7 +31,7 @@ export type BackoffShape =
   /** 指数退避 + 上限：适合「对端可能长时间不可用，别一直砸它」。 */
   | "exponential";
 
-export interface BackoffShapeOptions {
+export type BackoffShapeOptions = {
   /** `fixed` 的间隔，或 `exponential` 的基数（毫秒）。 */
   baseMs: number;
   /**
@@ -46,12 +46,12 @@ export interface BackoffShapeOptions {
   /** 指数退避的封顶（毫秒）。`fixed` 下忽略。 */
   maxMs?: number;
   shape: BackoffShape;
-}
+};
 
-export interface BackoffOptions extends BackoffShapeOptions {
+export type BackoffOptions = {
   /** 第几次（**从 0 起**）。 */
   attempt: number;
-}
+} & BackoffShapeOptions;
 
 /**
  * 算这一次的等待时长（毫秒）。**纯函数** —— 不 sleep、不循环。

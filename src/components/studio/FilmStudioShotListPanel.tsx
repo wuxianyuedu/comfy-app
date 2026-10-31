@@ -9,7 +9,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import type { FilmStudioController } from "./hooks/use-film-studio";
 import { MODE_LABELS, STATUS_BADGE, type ShotListItem } from "./film-studio-config";
 
-interface FilmStudioShotListPanelProps {
+type FilmStudioShotListPanelProps = {
   c: FilmStudioController;
   isProjectSource: boolean;
   listShots: Array<ShotListItem>;
@@ -17,7 +17,7 @@ interface FilmStudioShotListPanelProps {
   onReviewShot: (shot: ShotListItem) => void;
   onSelectShot: (id: string) => void;
   selectedShotId: string;
-}
+};
 
 export function FilmStudioShotListPanel({
   c,

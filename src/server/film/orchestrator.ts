@@ -39,16 +39,16 @@ import type { ShotStatus } from "~/lib/film/film-status";
 import { appendFilmLog } from "./film-log";
 import { composeFilm } from "./compose-film";
 
-export interface FilmShotInput {
+export type FilmShotInput = {
   heading?: string;
   negative?: string;
   order: number;
   prompt: string;
   /** 关联的统一镜头 id（Phase 5 逐镜回写用）；自由建片（剧本自解析）时无来源，留空。 */
   shotId?: string;
-}
+};
 
-export interface CreateFilmInput {
+export type CreateFilmInput = {
   bgmName?: string | null;
   fps?: number;
   framesPerShot?: number;
@@ -65,7 +65,7 @@ export interface CreateFilmInput {
   userId: string;
   /** 逐镜生成用的**工作流库视频工作流 id**（本地链路唯一来源，内置模板已移除）。 */
   videoWorkflowId?: string | null;
-}
+};
 
 const FILM_NEGATIVE =
   "low quality, blurry, deformed, watermark, text, distorted, extra limbs, bad anatomy";
@@ -275,7 +275,7 @@ export async function createFilm(input: CreateFilmInput) {
   return { id: filmId, shots: shots.length };
 }
 
-export interface CreateFilmFromProjectInput {
+export type CreateFilmFromProjectInput = {
   bgmName?: string | null;
   fps?: number;
   framesPerShot?: number;
@@ -290,7 +290,7 @@ export interface CreateFilmFromProjectInput {
   userId: string;
   /** 逐镜生成用的工作流库视频工作流 id（本地链路唯一来源）。 */
   videoWorkflowId?: string | null;
-}
+};
 
 /** 从统一项目的 `production.shots` 直接建片（Phase 5 接入，设计 §6.3）：
  *  工坊已产出的镜头不再走「自建剧本 → LLM 平行分镜」，而是逐条映射为成片镜头。

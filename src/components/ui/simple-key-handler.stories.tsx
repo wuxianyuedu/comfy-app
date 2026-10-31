@@ -24,11 +24,11 @@ const meta = {
 
 export default meta;
 
-interface SimpleKeyHandlerProps {
+type SimpleKeyHandlerProps = {
   ignoreRepeat?: boolean;
   keys: ReadonlyArray<string>;
   preventDefault?: boolean;
-}
+};
 
 type Story = StoryObj<typeof meta>;
 

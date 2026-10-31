@@ -14,10 +14,10 @@
 
 type Entry<T> = { expiresAt: number; value: T };
 
-interface CacheStore {
+type CacheStore = {
   map: Map<string, Entry<unknown>>;
   max: number;
-}
+};
 
 const MAX_ENTRIES = 256;
 

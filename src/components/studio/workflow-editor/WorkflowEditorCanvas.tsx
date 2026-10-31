@@ -86,7 +86,7 @@ const DEFAULT_EDGE_OPTIONS = {
   },
 };
 
-export interface WorkflowEditorCanvasProps {
+export type WorkflowEditorCanvasProps = {
   canvasSettings: CanvasSettings;
   canvasSettingsHydrated: boolean;
   edges: Array<Edge>;
@@ -111,7 +111,7 @@ export interface WorkflowEditorCanvasProps {
   setEdges: (updater: (edges: Array<Edge>) => Array<Edge>) => void;
   /** 写回节点表：同一帧里把「相关端口行」标记写进节点 data（见 hook 注释）。 */
   setNodes: (updater: (nodes: Array<Node>) => Array<Node>) => void;
-}
+};
 
 export function WorkflowEditorCanvas({
   nodes,

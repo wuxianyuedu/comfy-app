@@ -16,12 +16,12 @@ import { enterCommit } from "~/components/ui/use-enter-commit";
 import { textHandler } from "~/lib/form-props";
 import { createProject, listProjects, setActive } from "~/lib/project-canvas/canvas-store";
 
-interface ProjectGateProps {
+type ProjectGateProps = {
   /** 新建或选择项目后回调：上层据此刷新活跃项目 id 并渲染目标视图。 */
   onEnter: () => void;
   /** 放弃进入，返回工作区首页。 */
   onExit: () => void;
-}
+};
 
 export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
   const [name, setName] = useState("");

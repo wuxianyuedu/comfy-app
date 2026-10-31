@@ -50,12 +50,12 @@ import { isWindows } from "./platform.ts";
 
 type SpawnSyncError = NodeJS.ErrnoException | null | undefined;
 /** 「这个候选在这台机器上到底起不起得来」的那一次 OS 交互。 */
-export interface UsabilityProbe {
+export type UsabilityProbe = {
   /** 执行位检查：抛错即「没有执行权限」（默认真 `fs.accessSync(X_OK)`）。 */
   access(candidate: string): void;
   /** 起一次确认：返回 libuv 给的错误码，`null` = 起得来（默认真 `spawnSync`）。 */
   spawn(candidate: string, args: Array<string>): string | null;
-}
+};
 
 /** 探针这一次「起一次确认」的超时预算（毫秒）。
  *
@@ -113,7 +113,7 @@ export const realUsabilityProbe: UsabilityProbe = {
 };
 
 /** `whichCommand` / `usableCommand` 共用的选项（`env`、`platform`、`probe` 可注入，便于单测）。 */
-export interface WhichCommandOptions {
+export type WhichCommandOptions = {
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
   platform?: NodeJS.Platform;
   /**
@@ -145,16 +145,16 @@ export interface WhichCommandOptions {
    * 成立」会被读成同一条缓存，换 probeArgs 的用例请先 `clearWhichCommandCache()`。
    */
   probeArgs?: Array<string>;
-}
+};
 
 /** 「这个候选能不能被 spawn」的结论。`prefixArgs` 是启动它所需的宿主参数
  *  （shim 换成 PowerShell 时非空），`reason` 只在 `ok: false` 时有值。 */
-export interface CommandUsability {
+export type CommandUsability = {
   command: string;
   ok: boolean;
   prefixArgs: Array<string>;
   reason: string | null;
-}
+};
 
 /* 是否是 Windows —— 定义搬到 `./platform.ts`，这里只 **re-export**（既有调用点不用动）。
  *

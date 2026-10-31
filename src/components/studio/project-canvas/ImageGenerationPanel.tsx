@@ -36,7 +36,7 @@ import { useCancelTask } from "./hooks/use-cancel-task";
  * Task.logs JSON + SSE /stream）已就绪。
  */
 
-export interface ImageGenerationPanelProps {
+export type ImageGenerationPanelProps = {
   d: CanvasNodeData;
   /** image / video / picture —— 决定用哪套类型表（video 用 VIDEO_WORKFLOW_TYPES） */
   kind: "image" | "video" | "picture";
@@ -58,7 +58,7 @@ export interface ImageGenerationPanelProps {
   }>;
   /** 工作流列表是否仍在加载。为 true 时工作流/模型选择区显示"加载中"而非空态。 */
   wfListLoading?: boolean;
-}
+};
 
 export function ImageGenerationPanel({
   kind,

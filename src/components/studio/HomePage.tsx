@@ -35,7 +35,7 @@ import { type WorkspaceView } from "./NavItems";
   └────┴──────────────────────────────────────────┘
 */
 
-export interface RecentProject {
+export type RecentProject = {
   id: string;
   /** 项目种类 —— 决定图标与视觉处理 */
   kind?: "canvas" | "generation" | "workflow" | "video";
@@ -44,7 +44,7 @@ export interface RecentProject {
   subtitle?: string;
   thumbnails?: Array<string>;
   updatedAt: string;
-}
+};
 
 /* 卡片类型徽标文案与图标 */
 /* 项目类别色 + 图标。
@@ -176,7 +176,7 @@ function ResumeProjectCard({
   );
 }
 
-export interface HomePageProps {
+export type HomePageProps = {
   /** 跳到一个工作区视图（模型 / 工作流 / 画布等） */
   onNavigate?: (view: WorkspaceView) => void;
   onNewProject?: () => void;
@@ -186,7 +186,7 @@ export interface HomePageProps {
   /** 切到「项目」（works）视图，看全部项目 */
   onShowAllProjects?: () => void;
   recentProjects?: Array<RecentProject>;
-}
+};
 
 export function HomePage({
   onNewProject,

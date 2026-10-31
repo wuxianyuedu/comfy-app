@@ -23,14 +23,14 @@
 import { buildQueryString } from "~/lib/query-string";
 
 /** ComfyUI 侧的文件引用（`LoadImage` 的 `filename` / `subfolder` / `type` 三元组）。 */
-export interface ComfyMediaRef {
+export type ComfyMediaRef = {
   /** 文件名（可含子目录前缀，视本应用上传口径而定）。 */
   filename: string;
   /** ComfyUI 的子目录；缺省表示根目录。 */
   subfolder?: string | null;
   /** ComfyUI 的文件类别：`input`（用户上传）/ `output`（生成产物）/ `temp`。 */
   type?: string | null;
-}
+};
 
 /** `/api/images` —— 经本应用代理读 ComfyUI 的媒体文件。 */
 const IMAGES_ENDPOINT = "/api/images";

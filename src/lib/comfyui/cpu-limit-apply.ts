@@ -24,12 +24,12 @@ import { execFile } from "node:child_process";
 import { cpuLimitCommands, type resolveCpuLimitMode } from "./cpu-limit";
 
 /** 施加结果的形状：给调用方写日志 / 给用例断言（纯数据，无副作用）。 */
-export interface CpuLimitOutcome {
+export type CpuLimitOutcome = {
   /** 生效档位（`off` 表示什么都不做）。 */
   mode: ReturnType<typeof resolveCpuLimitMode>;
   /** 每条命令的执行结论（命令不存在 / 权限不足 / 超时都在这里）。 */
   results: Array<{ describe: string; detail: string; ok: boolean }>;
-}
+};
 
 /** 一条命令的执行：stderr 也收进来（`renice` 的「权限不足」只在 stderr 上）。 */
 function runCommand(

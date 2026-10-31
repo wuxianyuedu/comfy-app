@@ -65,7 +65,7 @@ export type WorkspaceView =
   | "model-adapters"
   | "mode-contract";
 
-export interface NavItem {
+export type NavItem = {
   /** 这个视图的工作是否已上线（驱动 cursor / opacity） */
   enabled?: boolean;
   icon: React.ReactNode;
@@ -112,7 +112,7 @@ export interface NavItem {
    * `pageHeaderTitle()` 统一取值 —— 视图里不再出现裸字面量。
    */
   viewLabel?: string;
-}
+};
 
 /** 侧栏项统一使用的图标描边 + 尺寸。 */
 const ICON_PROPS = {

@@ -28,7 +28,7 @@ import { inferIsMultiline } from "~/lib/comfyui/types";
 import { type RawInputEntry, type RawNodeMeta } from "~/lib/comfyui/workflow-detail-raw";
 import { type WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
 
-export interface WorkflowIORawEntry {
+export type WorkflowIORawEntry = {
   /** 富化出来的控件默认值（图内 widget 当前值）。同 type，可作兜底基线。 */
   defaultValue?: unknown;
   direction: "input" | "output";
@@ -60,9 +60,9 @@ export interface WorkflowIORawEntry {
    *  这里留底，`enrichWorkflowIO` 把它当兜底基线 —— 见 fix 4：类型固化，
    *  不再每次 GET 都依赖 object_info 重算，ComfyUI 离线重开也不退化成纯文本。 */
   type?: string;
-}
+};
 
-export interface WorkflowIOEnrichParams {
+export type WorkflowIOEnrichParams = {
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
@@ -85,7 +85,7 @@ export interface WorkflowIOEnrichParams {
   rawInputsById: Record<string, Array<RawInputEntry>>;
   rawNodeMeta: Array<RawNodeMeta>;
   workflowIORaw: Record<string, WorkflowIORawEntry>;
-}
+};
 
 /** 从 "16:9 (Widescreen)" / "16:9" 抽宽高比；抽不出返回 null。 */
 function optionRatio(label: string): number | null {
@@ -131,7 +131,7 @@ function reconcileOptionValue(value: unknown, options: Array<string> | undefined
   );
 }
 
-export interface WorkflowIOEntry {
+export type WorkflowIOEntry = {
   defaultValue?: unknown;
   direction: "input" | "output";
   displayOrder?: number;
@@ -164,7 +164,7 @@ export interface WorkflowIOEntry {
    *  时，只有这里有。 */
   slotLabel?: string;
   type: string;
-}
+};
 /** 保存 IO 映射时把类型 / 默认值**固化**进库（fix 4 的根治）。
  *
  *  离线可用：只用 API graph 的字面量，不查 object_info。图里某个 widget 的当前

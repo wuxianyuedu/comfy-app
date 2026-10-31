@@ -42,7 +42,7 @@ import { type OpenableView } from "./ViewTabStrip";
 import { type WorkspaceView } from "./NavItems";
 import { Button } from "~/components/ui/button";
 
-interface ShellTabsProps {
+type ShellTabsProps = {
   /** 当前视图页签 key。 */
   activeViewKey?: string;
   /** 主应用页签的内容（即 workspace 整套界面）。 */
@@ -62,7 +62,7 @@ interface ShellTabsProps {
    * 只渲染 iframe 页签，主应用是唯一的「主应用」页签。
    */
   viewTabs?: Array<ViewTab>;
-}
+};
 
 /**
  * 无法内嵌时在**页签内**渲染的说明。

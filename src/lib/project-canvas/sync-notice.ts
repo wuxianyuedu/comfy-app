@@ -36,13 +36,13 @@ import { emitAppEvent } from "~/lib/app-events";
 import { errorCode, errorText, rawErrorDetail } from "~/lib/error-message";
 
 /** 一条「这份画布没能进服务端」的记录。 */
-export interface SyncNotice {
+export type SyncNotice = {
   /** 已经过 `errorText` 翻译的详情（含动作前缀，可直接给人读）。 */
   detail: string;
   projectId: string;
   /** 拒收时那条画布的名字 —— 用户认得出的是名字，不是 `proj_1727…` 这种 id。 */
   projectName: string;
-}
+};
 
 /**
  * 「重试也不会成功」的 tRPC 码集合。

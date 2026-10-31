@@ -53,7 +53,7 @@ const DEFAULT_TEST_DURATION = 5;
 /** 该口没连到工作流时的一句提示（值仍可填，只是不参与下发）。 */
 const UNWIRED_HINT = "未连到端口，用工作流默认值";
 
-interface EncapsulationTestFormProps {
+type EncapsulationTestFormProps = {
   canRun: boolean;
   /** 该模式的契约口清单（`status.entries`：含落点 / 必备信息，但**不过滤**）。 */
   entries: Array<EncapsulationEntryStatus>;
@@ -64,7 +64,7 @@ interface EncapsulationTestFormProps {
   scene: SizeScene;
   /** 上传本地图片到 ComfyUI 输入目录，返回文件名（IO 在 hooks 层）。 */
   uploadImage: (file: File) => Promise<string>;
-}
+};
 
 export function EncapsulationTestForm({
   entries,

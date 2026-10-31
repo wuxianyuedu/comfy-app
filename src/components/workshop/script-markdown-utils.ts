@@ -1,8 +1,8 @@
-export interface OutlineItem {
+export type OutlineItem = {
   level: number;
   line: number;
   text: string;
-}
+};
 
 /* ── Markdown 归一化(编辑器接收内容的入口)────────────────────────────
  * 针对导入 markdown 剧本后常见的空行/换行异常:

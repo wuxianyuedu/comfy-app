@@ -20,13 +20,13 @@ import {
 } from "./flow-focus-endpoints";
 import { NODE_PORT_FOCUS_ACTIVE_KEY, readPortFocusRole } from "./hooks/use-related-edges-highlight";
 
-interface FlowNodePinRowsProps {
+type FlowNodePinRowsProps = {
   data: WorkflowNodeData;
   io: IOEditContextValue | null;
   outputs: Array<[string, string]>;
   rawMeta: Record<string, RawInputMeta>;
   uniqueConnEntries: Array<[string, unknown]>;
-}
+};
 
 export function FlowNodePinRows({
   data,

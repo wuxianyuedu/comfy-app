@@ -45,7 +45,7 @@ import {
 } from "../queue-monitor-config";
 
 /** 正在跑那条的展示卡（数值都已算成字符串或百分比，视图只渲染）。 */
-export interface RunningCardView {
+export type RunningCardView = {
   elapsedText: string;
   id: string;
   modelText: string;
@@ -53,9 +53,9 @@ export interface RunningCardView {
   progressPct: number;
   remainingText: string;
   workflowName: string;
-}
+};
 
-export interface QueueMonitorController {
+export type QueueMonitorController = {
   cancel: (id: string, label: string) => Promise<void>;
   closeLog: () => void;
   copyForReprint: (row: QueueRow) => Promise<void>;
@@ -84,7 +84,7 @@ export interface QueueMonitorController {
   /** 本应用排队 + ComfyUI 自己排队，与状态栏那格同一算法；离线时退回
    * 「库里在跑 + 排队的行数」（`/api/comfy/queue` 读不到，不能报 0）。 */
   waitingCount: number;
-}
+};
 
 /** 队列与运行的全部逻辑。容器与视图只消费这一份 controller。 */
 export function useQueueMonitor(): QueueMonitorController {

@@ -47,7 +47,7 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Spinner } from "~/components/ui/spinner";
 import { onNextFrame } from "~/lib/next-frame";
 
-export interface ConfirmDialogProps {
+export type ConfirmDialogProps = {
   /** 取消按钮文字。 */
   cancelLabel?: string;
   /** 确认按钮文字。 */
@@ -69,7 +69,7 @@ export interface ConfirmDialogProps {
   pending?: boolean;
   /** Short headline. */
   title: string;
-}
+};
 
 const ICON_WARN = <TriangleAlert size={22} strokeWidth={1.8} />;
 

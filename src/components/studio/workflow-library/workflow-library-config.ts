@@ -23,14 +23,14 @@ import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 export const HEADER_ACTION_BTN = "shrink-0 gap-1.5 px-3";
 
 /** 服务端 list 返回的本地工作流根目录摘要（只取前端判据用得到的字段）。 */
-export interface LocalWorkflowRoot {
+export type LocalWorkflowRoot = {
   absPath: string;
   /** 该根下扫到的工作流文件数 */
   count: number;
   /** 读取该根时的错误（权限 / 不是目录等），服务端在无法访问时给出 */
   error?: string;
   exists: boolean;
-}
+};
 
 /** 列表为空时的「为什么是空」判据（本地工作流目录侧）。
  *  本地侧没有可疑之处（根在、也有文件）时返回 null，空态用默认引导文案。
@@ -52,7 +52,7 @@ export function deriveLocalRootsHint(
   return null;
 }
 
-export interface WorkflowRow {
+export type WorkflowRow = {
   /** 落库时间。**是 `Date` 不是字符串**：`workflow.list` 走 tRPC，
    *  `src/server/api/trpc.ts` 挂着 `transformer: superjson` —— `Date` 过线
    *  保持 `Date`（同类错配 `ModelRow.createdAt` 已修）。 */
@@ -120,7 +120,7 @@ export interface WorkflowRow {
   /** 用户维护的对外 IO，由 GET /api/workflows 下发。
    *  没有图谱预览时用它在库里渲染卡片。 */
   workflowIO?: WorkflowIOMap;
-}
+};
 
 /** 解析「这条工作流可执行吗、RAW 原件在不在」。
  *
@@ -172,13 +172,13 @@ export type SourceFilter = "all" | "local" | "online";
 export type TypeFilter = "all" | "image" | "video" | "audio";
 
 /** 本地待载入项（磁盘扫描到但还没入库的工作流）。 */
-export interface PendingRow {
+export type PendingRow = {
   id: string;
   name: string;
   pendingMtime?: number;
   pendingSize?: number;
   sourcePath: string;
-}
+};
 
 /** `source` 字段是服务端可选回填的，缺失时按有无 sourcePath 判定。
  *
@@ -238,18 +238,18 @@ export function filterPending(
   return pending.filter((row) => matchesNeedle(needle, row.name));
 }
 
-export interface SourceCounts {
+export type SourceCounts = {
   all: number;
   local: number;
   online: number;
-}
+};
 
-export interface TypeCounts {
+export type TypeCounts = {
   all: number;
   audio: number;
   image: number;
   video: number;
-}
+};
 
 /** 来源页签计数。待载入项全部计入 local（它们本来就来自磁盘）。 */
 export function countBySource(

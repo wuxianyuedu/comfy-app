@@ -199,12 +199,12 @@ export function blocksTitleBar(className: string): boolean {
  * 它据此翻转，气泡改从下方展开，既不越界也不与 chrome 争层级。 */
 
 /** 视口矩形（`getBoundingClientRect` 的坐标系，原点在视口左上角）。 */
-export interface ViewportRect {
+export type ViewportRect = {
   height: number;
   width: number;
   x: number;
   y: number;
-}
+};
 
 /**
  * 算出锚定浮层可用的**碰撞边界** —— 有标题行时把顶上那条让出去，否则就是整个视口。

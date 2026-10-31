@@ -135,14 +135,14 @@ const RUNNING_TICK_CAP = 5;
  *  （现场是同一任务的三条失败原因、相隔 7s 递增）。
  *  因此把 handle 与在途守卫**都**挂在 globalThis 上：
  *  无论热重载多少次，每个进程里只有一个回收器。 */
-interface ReaperGlobal {
+type ReaperGlobal = {
   handle: ReturnType<typeof setInterval> | null;
   /** 「这一轮见到 RUNNING 且无 promptId」的登记处，下一轮仍在才判孤儿（见
    *  `reapStaleRunningTasks` 的两轮观察）。全局名从 v1 升到 v2：HMR 期间残留的
    *  旧对象没有这个字段，`??=` 不会补，判据会静默失效。 */
   noPromptSeen: Set<string>;
   reaping: Set<string>;
-}
+};
 
 declare global {
   var __comfyReaper_v2: ReaperGlobal | undefined;

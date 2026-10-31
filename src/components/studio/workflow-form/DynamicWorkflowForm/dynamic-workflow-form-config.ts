@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import type { ControlKind, EnrichedWidget, WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { WorkflowIODropPosition } from "~/components/studio/workflow-types";
 
-export interface DynamicWorkflowFormProps {
+export type DynamicWorkflowFormProps = {
   /** 更紧的间距 + 单列，适配 300px 宽的画布节点。 */
   compact?: boolean;
   disabled?: boolean;
@@ -75,7 +75,7 @@ export interface DynamicWorkflowFormProps {
    *  这个偏好扛过重新加载。省略则回落到按浏览器的
    *  全局 key。 */
   workflowId?: string;
-}
+};
 /** ComfyUI 里渲染成可连接端口行而不是通用
  *  widget 行的类型，好让它们保持画布的单行 33h 布局（由
  *  `WirePortRows` 注入 SeedModeButton）。

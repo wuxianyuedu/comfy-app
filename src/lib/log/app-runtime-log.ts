@@ -53,14 +53,14 @@ const LEVEL_TAG: Record<AppLogLevel, string> = {
   debug: "DEBUG",
 };
 
-export interface AppRuntimeLogger {
+export type AppRuntimeLogger = {
   /** 派生子日志器，命名空间拼接为 `parent:child`。 */
   child(ns: string): AppRuntimeLogger;
   debug(msg: string, fields?: Record<string, unknown>): void;
   error(msg: string, fields?: Record<string, unknown>): void;
   info(msg: string, fields?: Record<string, unknown>): void;
   warn(msg: string, fields?: Record<string, unknown>): void;
-}
+};
 
 function stringify(fields?: Record<string, unknown>): string {
   if (!fields || Object.keys(fields).length === 0) {

@@ -77,7 +77,7 @@ import {
 
 import { useMessageCenterStore, type NewMessage } from "../message-center-store";
 
-export interface AppServiceMessageLogInput {
+export type AppServiceMessageLogInput = {
   /** 当前是哪一次启动（runId）；null = 拿不到（手工 `pnpm dev` 等）。 */
   currentRunId: string | null;
   /** 这一份进程对本次页面会话来说是新的（冷启动 / 真重启；刷新不算）。 */
@@ -93,7 +93,7 @@ export interface AppServiceMessageLogInput {
    * `~/lib/shell/app-service-message` 的 `unprobedMs`）。
    */
   unprobedMs: number;
-}
+};
 
 /** 卸载守卫：`fetchAppServiceExit` 是异步的，卸载后它仍可能回来。 */
 type StoppedFlag = { readonly current: boolean };

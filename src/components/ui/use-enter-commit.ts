@@ -32,11 +32,11 @@
  */
 
 /** `onCommit` / `onCancel` 拿到的键事件（够表达「让这个框失焦」这类动作）。 */
-export interface EnterCommitEvent {
+export type EnterCommitEvent = {
   currentTarget: { blur: () => void };
-}
+};
 
-export interface EnterCommitOptions {
+export type EnterCommitOptions = {
   /**
    * 是否要求「不带 Shift 才提交」。默认 `true` ——
    * 带 Shift 的 Enter 是换行（多行输入框的通行约定）；
@@ -59,22 +59,22 @@ export interface EnterCommitOptions {
   /** 按下 Enter（无 Shift）时调用。收到的是那个键事件 ——
    *  需要 `currentTarget.blur()`（把落盘交给 `onBlur`）时用得到。 */
   onCommit: (event: EnterCommitEvent) => void;
-}
+};
 
 /** `onKeyDown` 事件的**最小形状**（React 的 `KeyboardEvent<HTMLInputElement>`
  *  结构上满足它 —— 只读这四个字段，所以用例可以手造事件）。 */
-export interface EnterCommitKeyEvent {
+export type EnterCommitKeyEvent = {
   currentTarget: EnterCommitEvent["currentTarget"];
   key: string;
   nativeEvent: { isComposing?: boolean; keyCode?: number };
   preventDefault: () => void;
   shiftKey: boolean;
-}
+};
 
 /** `onKeyDown` 属性的最小形状。 */
-export interface EnterCommitHandlers {
+export type EnterCommitHandlers = {
   onKeyDown: (event: EnterCommitKeyEvent) => void;
-}
+};
 
 /** Enter 提交 / Esc 取消的键位判据（纯函数，便于单测与复用）。 */
 export function isCommitKey(
