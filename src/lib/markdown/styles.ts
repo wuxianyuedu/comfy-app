@@ -156,7 +156,7 @@ function openTag(name: string, rule: StyleRule, rest: string): string {
  * DOMPurify 的序列化结果，属性值里的 `>` 已转义成 `&gt;`，因此不会截断。
  */
 export function applyElementStyles(html: string): string {
-  return html.replace(OPEN_TAG, (whole, nameRaw: string, attrs: string) => {
+  return html.replaceAll(OPEN_TAG, (whole, nameRaw: string, attrs: string) => {
     const ruleEntry = MARKDOWN_ELEMENT_STYLES[nameRaw.toLowerCase()];
     if (!ruleEntry) {
       return whole;
