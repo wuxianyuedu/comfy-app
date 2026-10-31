@@ -22,6 +22,19 @@ import { normalizeControlFlow } from "../../../../tests/helpers/source-shape";
 
 afterEach(cleanup);
 
+/**
+ * 取出含 `needle` 的那个 JSX 开标签原文。
+ *
+ * JSX 属性顺序由 oxlint `perfectionist/sort-jsx-props` 机械排序，而这里要钉的是
+ * 「同一个标签上有这些属性 / 这串类名」，与属性先后无关 —— 直接对整份源码写
+ * `A[\s\S]{0,80}B` 会把「排过序」读成「契约破了」（判据钉语义不钉行形状）。
+ */
+function tagContaining(src: string, needle: string): string {
+  const at = src.indexOf(needle);
+  expect(at, `源码里找不到 ${needle}`).toBeGreaterThan(-1);
+  return src.slice(src.lastIndexOf("<", at), src.indexOf(">", at) + 1);
+}
+
 const meta: MetaEditorController = {
   modes: ["T2I"],
   defaultMode: "T2I",
@@ -134,8 +147,13 @@ describe("左右分栏：详情面板能窄于内容最小宽度", () => {
     /* react-resizable-panels v4：数值 = 像素、字符串 = 百分比。#981 的 bug 正是
      * 写成数值（defaultSize={24} → 24px、maxSize={45} → 45px，列表被夹到 45px）。
      * 这里钉死两件事：① 三处尺寸都是字符串百分比；② 不再残留任何数值形式。 */
-    expect(library).toMatch(/defaultSize="24"\s+minSize="16"\s+maxSize="45"/);
-    expect(library).toMatch(/defaultSize="76"\s+minSize="40"/);
+    const listPanel = tagContaining(library, 'defaultSize="24"');
+    expect(listPanel.startsWith("<ResizablePanel")).toBe(true);
+    expect(listPanel).toContain('minSize="16"');
+    expect(listPanel).toContain('maxSize="45"');
+    const detailPanel = tagContaining(library, 'defaultSize="76"');
+    expect(detailPanel.startsWith("<ResizablePanel")).toBe(true);
+    expect(detailPanel).toContain('minSize="40"');
     expect(library).not.toMatch(/defaultSize=\{\d+\}/);
     expect(library).not.toMatch(/(?:min|max)Size=\{\d+\}/);
     /* 详情面板仍可窄于内容最小宽度（小屏不裁右侧）。 */
@@ -271,8 +289,8 @@ describe("页头：筛选菜单水平排列（ISSUE #716）", () => {
     const filters = read("WorkflowLibraryFilters.tsx");
 
     /* 组容器：一行到底。 */
-    expect(filters).toMatch(
-      /workflow-library-filter-row[\s\S]{0,80}flex flex-nowrap items-center gap-2/,
+    expect(tagContaining(filters, 'data-testid="workflow-library-filter-row"')).toContain(
+      "flex flex-nowrap items-center gap-2",
     );
     expect(filters).not.toMatch(/flex flex-wrap items-center gap-2/);
 
@@ -286,7 +304,9 @@ describe("页头：筛选菜单水平排列（ISSUE #716）", () => {
     /* 根容器换行：排不下时整组落到第二行，而不是把某个下拉挤变形。 */
     expect(header).toMatch(/flex flex-wrap items-center gap-x-3 gap-y-2/);
     /* 筛选是一组：组内不换行（组之间才换行）。 */
-    expect(header).toMatch(/workflow-library-header-filters[\s\S]{0,80}flex shrink-0 flex-nowrap/);
+    expect(tagContaining(header, 'data-testid="workflow-library-header-filters"')).toContain(
+      "flex shrink-0 flex-nowrap",
+    );
     /* 动作组不许被压（规范 03 §3.8.1）。 */
     expect(header).toMatch(/ml-auto flex shrink-0 flex-wrap items-center gap-2/);
 
