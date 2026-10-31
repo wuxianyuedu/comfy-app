@@ -373,7 +373,7 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
        * null，导致所有依赖 object_info 的 COMBO 选项解析静默失败（下拉退化
        * 成文本框）。放宽到 20s；object_info 有 5 分钟缓存，慢请求仅 5 分钟
        * 发生一次，放宽不影响常态响应。 */
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) {
       return null;

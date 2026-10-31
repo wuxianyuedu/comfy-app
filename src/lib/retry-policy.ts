@@ -81,7 +81,7 @@ export function backoffDelayMs(opts: BackoffOptions): number {
 export const WS_RECONNECT = /* SAFETY: 类型断言已复核 */ {
   shape: "exponential",
   baseMs: 1000,
-  maxMs: 15000,
+  maxMs: 15_000,
   /** `2 ** 8 = 256` → 1s × 256 = 256s 远超封顶，再涨没有意义。 */
   maxAttempt: 8,
 } as const satisfies BackoffShapeOptions;

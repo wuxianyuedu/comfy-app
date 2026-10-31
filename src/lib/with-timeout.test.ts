@@ -1,10 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  TimeoutError,
-  sleep,
-  withTimeout,
-  withTimeoutResult,
-} from "./with-timeout";
+import { TimeoutError, sleep, withTimeout, withTimeoutResult } from "./with-timeout";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -32,9 +27,9 @@ describe("withTimeout", () => {
 
   it("默认文案带量纲换算（秒）与 label", async () => {
     vi.useFakeTimers();
-    const p = withTimeout(never(), 25000, { label: "工作流加载" });
+    const p = withTimeout(never(), 25_000, { label: "工作流加载" });
     const assertion = expect(p).rejects.toThrow("工作流加载超时（25s）");
-    await vi.advanceTimersByTimeAsync(25000);
+    await vi.advanceTimersByTimeAsync(25_000);
     await assertion;
   });
 
@@ -54,9 +49,7 @@ describe("withTimeout", () => {
 
   it("失败路径也会清掉定时器", async () => {
     vi.useFakeTimers();
-    await withTimeout(Promise.reject(new Error("boom")), 60_000).catch(
-      () => undefined,
-    );
+    await withTimeout(Promise.reject(new Error("boom")), 60_000).catch(() => undefined);
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -113,9 +106,7 @@ describe("withTimeout", () => {
 
 describe("withTimeoutResult", () => {
   it("按时完成给原结果", async () => {
-    await expect(
-      withTimeoutResult(Promise.resolve(7), 1000, null),
-    ).resolves.toBe(7);
+    await expect(withTimeoutResult(Promise.resolve(7), 1000, null)).resolves.toBe(7);
   });
 
   it("超时给兜底值而不抛", async () => {

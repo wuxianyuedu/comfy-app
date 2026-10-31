@@ -38,7 +38,7 @@ import { useWorkflowImport } from "./use-workflow-import";
 
 /** 列表首次拉取超过这个时长仍未返回，就认为「等太久了」：视图据此把
  *  「加载中」换成可重试的提示，而不是让用户对着空列表猜（见 hook 内注释）。 */
-export const LIST_STALL_MS = 8_000;
+export const LIST_STALL_MS = 8000;
 
 export type WorkflowLibraryController = {
   /* 错误：动作失败（不会自动消失） */

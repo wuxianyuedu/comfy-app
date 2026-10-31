@@ -67,7 +67,7 @@ export type EnsureResult = {
  *  之后限频复查 —— 防止把「正在启动」误判为「没起来」，也避免每轮轮询
  *  都扫一次进程表。 */
 const COMFY_KEEPALIVE_GRACE_MS = 15_000;
-const COMFY_KEEPALIVE_PROCESS_CHECK_INTERVAL_MS = 5_000;
+const COMFY_KEEPALIVE_PROCESS_CHECK_INTERVAL_MS = 5000;
 
 /** 宿主提供的能力（`lifecycle.ts` 注入；本模块不反向 import 它）。 */
 export type LaunchHost = {
@@ -163,7 +163,7 @@ function applyCpuLimitAsync(input: {
 
 /** 保活路径的 PID 反查重试：初查 + 最多几次复查（间隔见下）。 */
 const KEEPALIVE_CPU_PID_ATTEMPTS = 6;
-const KEEPALIVE_CPU_PID_INTERVAL_MS = 2_000;
+const KEEPALIVE_CPU_PID_INTERVAL_MS = 2000;
 
 /**
  * 保活路径专属：按 `main.py` 反查到 ComfyUI 进程 PID，再施加 CPU 档位。

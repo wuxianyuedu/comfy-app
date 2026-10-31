@@ -59,10 +59,10 @@ function drainOne(): void {
 }
 
 /** 空闲回调的最长等待：页面一直忙（首屏数据在飞）也至多这么久就开始预热。 */
-const IDLE_TIMEOUT_MS = 2_000;
+const IDLE_TIMEOUT_MS = 2000;
 
 /** 宿主没有 `requestIdleCallback`（老浏览器 / 测试环境）时的退化延迟。 */
-const IDLE_FALLBACK_DELAY_MS = 1_000;
+const IDLE_FALLBACK_DELAY_MS = 1000;
 
 /** 浏览器空闲回调；宿主没有这个 API 时退化成定时器。 */
 function scheduleIdle(run: () => void): void {

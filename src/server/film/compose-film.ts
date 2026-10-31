@@ -106,7 +106,7 @@ export async function isFFmpegAvailable(): Promise<boolean> {
 function runFFmpeg(
   args: Array<string>,
   cwd?: string,
-  timeout = 120000,
+  timeout = 120_000,
 ): Promise<{ code: number; stderr: string }> {
   const bin = process.env.FFMPEG_BIN ?? "ffmpeg";
   const cp = spawn(/*turbopackIgnore: true*/ bin, args, { cwd });

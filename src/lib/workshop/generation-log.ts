@@ -34,7 +34,7 @@ export type GenerationLogEntry = {
 
 /** 单行正文 / 摘要的落盘上限：超长截断，防单条日志撑爆文件与读取。 */
 export const MAX_LOG_SUMMARY_CHARS = 600;
-export const MAX_LOG_DETAIL_CHARS = 12000;
+export const MAX_LOG_DETAIL_CHARS = 12_000;
 
 function isGenerationLogStage(v: unknown): v is GenerationLogStage {
   return (

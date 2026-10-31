@@ -139,7 +139,7 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
     );
 
     const pending = mod.synthesizeFirstFrame(opts);
-    await vi.advanceTimersByTimeAsync(2_000);
+    await vi.advanceTimersByTimeAsync(2000);
 
     await expect(pending).resolves.toBe("ff_ff-task.png");
     expect(mocks.progress).toHaveBeenCalledTimes(2);

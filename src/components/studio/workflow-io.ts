@@ -251,7 +251,7 @@ export function numericBounds(e: WorkflowIOEntry): {
   const name = `${e.name} ${e.label ?? ""}`.toLowerCase();
   const isFloat = upperToken(e.type) === "FLOAT";
   if (/seed|noise_seed/.test(name)) {
-    return { min: 0, max: 4294967295, step: 1, decimalPlaces: 0 };
+    return { min: 0, max: 4_294_967_295, step: 1, decimalPlaces: 0 };
   }
   if (name.includes("steps")) {
     return { min: 1, max: 200, step: 1, decimalPlaces: 0 };

@@ -112,7 +112,7 @@ export async function traceComfyQueue(taskId: string | null): Promise<void> {
   try {
     base = await resolveComfyBase();
     const r = await fetch(`${base}/queue`, {
-      signal: AbortSignal.timeout(3_000),
+      signal: AbortSignal.timeout(3000),
     });
     if (!r.ok) {
       trace("http", taskId, `/queue 探测失败 HTTP ${r.status}`, { base });

@@ -104,7 +104,7 @@ export function toBase64(bytes: Uint8Array): string {
   /* 浏览器：分块 `btoa`，避免 `String.fromCharCode(...bytes)` 在大数组上
    * 触发「参数过多」的 RangeError（24MB 上限的图片轻松越过该阈值）。 */
   let binary = "";
-  const CHUNK = 0x8000;
+  const CHUNK = 0x80_00;
   for (let i = 0; i < bytes.length; i += CHUNK) {
     binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
   }

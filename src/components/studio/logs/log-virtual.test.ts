@@ -236,7 +236,7 @@ describe("贴底该不该动", () => {
   });
 
   it("用户已把位置滚到别处 → 不动（滚到底看最新不被按回顶部）", () => {
-    expect(pinPlan({ ...base, scrollTop: 53482 })).toBeNull();
+    expect(pinPlan({ ...base, scrollTop: 53_482 })).toBeNull();
   });
 
   it("容差 1px：浏览器取整造成的分毫差不算「用户接管」", () => {

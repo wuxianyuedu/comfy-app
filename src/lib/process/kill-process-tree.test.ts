@@ -110,11 +110,11 @@ describe("killProcessTree 平台分支", () => {
     // 这条**不切平台**：它问的是「在本机这个平台上，`killProcessTree` 走的是哪条
     // 分支」，两端各自的答案就是判据本身（切了反而在自问自答）。
     if (!isWindowsPlatform()) {
-      const r = await killProcessTree({ pid: 999999 });
+      const r = await killProcessTree({ pid: 999_999 });
       expect(r.via).not.toContain("taskkill");
       return;
     }
-    const r = await killProcessTree({ pid: 999999 });
+    const r = await killProcessTree({ pid: 999_999 });
     expect(r.via).toContain("/T");
     expect(r.via).toContain("/F");
   });

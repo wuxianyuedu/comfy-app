@@ -273,7 +273,7 @@ describe("resolveMediaDataUrl", () => {
 
 describe("readUpstreamJson / 字段守卫", () => {
   it("上游回非 JSON 时给出状态码与被截断的片段（长响应不许整包进错误）", async () => {
-    const long = `<html>${"x".repeat(4_000)}</html>`;
+    const long = `<html>${"x".repeat(4000)}</html>`;
     const message = await readUpstreamJson(new Response(long, { status: 502 })).then(
       () => "",
       (e: unknown) => (e instanceof Error ? e.message : String(e)),
@@ -281,7 +281,7 @@ describe("readUpstreamJson / 字段守卫", () => {
     expect(message).toContain("上游返回非 JSON (502)");
     /* 片段是有界的：拿整包 HTML 当错误消息会顺着日志与界面文案一路扩散。
      * 长度单独断一句，而不是靠 `toThrow(正则)` 蒙过去。 */
-    expect(message.length).toBeLessThan(1_000);
+    expect(message.length).toBeLessThan(1000);
     expect(message.length).toBeLessThan(long.length);
   });
 

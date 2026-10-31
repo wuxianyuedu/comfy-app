@@ -105,7 +105,7 @@ export function dateBucket(iso: string): string {
   if (task === today) {
     return "今天";
   }
-  if (task === today - 86400000) {
+  if (task === today - 86_400_000) {
     return "昨天";
   }
   return formatDate(date);

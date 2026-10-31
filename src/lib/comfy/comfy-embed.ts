@@ -245,7 +245,7 @@ export function shouldUseBrowserTab(isDesktop: boolean): boolean {
  */
 
 /** 探测用的超时：ComfyUI 在环回地址上应答是毫秒级，1.5s 足够。 */
-export const EMBED_PROBE_TIMEOUT_MS = 1_500;
+export const EMBED_PROBE_TIMEOUT_MS = 1500;
 
 /**
  * 探一次 `base` 是否可以由 `hostOrigin` 内嵌。
