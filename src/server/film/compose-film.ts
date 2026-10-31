@@ -51,9 +51,8 @@ export async function syncFilmToProject(
     return;
   }
   const progress = normalizeProductionProgress(row.progress);
-  const rawShots = Array.isArray(row.shots)
-    ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>)
-    : [];
+  /* SAFETY: 类型断言已复核 */
+  const rawShots = Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [];
 
   // 按 shotId 索引成片结果（只取有 videoPath 的镜头回写 clip）。
   const clipByShotId = new Map<string, FilmShotClip>();

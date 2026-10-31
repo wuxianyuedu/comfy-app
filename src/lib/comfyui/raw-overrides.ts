@@ -173,10 +173,11 @@ function seedWidgetSlot(node: RawUiNode): number {
     }
     const w = inp.widget;
     const wname =
+      /* SAFETY: 类型断言已复核 */
       typeof w === "string"
         ? w
         : w != null && typeof w === "object"
-          ? /* SAFETY: 类型断言已复核 */ ((w as JsonRecord).name ?? inp.name)
+          ? ((w as JsonRecord).name ?? inp.name)
           : inp.name;
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
       return slot;
@@ -194,10 +195,11 @@ function seedWidgetName(node: RawUiNode): string | null {
     }
     const w = inp.widget;
     const wname =
+      /* SAFETY: 类型断言已复核 */
       typeof w === "string"
         ? w
         : w != null && typeof w === "object"
-          ? /* SAFETY: 类型断言已复核 */ ((w as JsonRecord).name ?? inp.name)
+          ? ((w as JsonRecord).name ?? inp.name)
           : inp.name;
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
       return typeof inp.name === "string" ? inp.name : String(wname);
@@ -584,10 +586,11 @@ function mapInputSlotToWidgetSlot(node: RawUiNode, inputIndex: number): number {
     }
     slot++;
     const wname =
+      /* SAFETY: 类型断言已复核 */
       typeof inp.widget === "string"
         ? inp.widget
         : inp.widget != null && typeof inp.widget === "object"
-          ? /* SAFETY: 类型断言已复核 */ ((inp.widget as JsonRecord).name ?? inp.name)
+          ? ((inp.widget as JsonRecord).name ?? inp.name)
           : inp.name;
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
       slot++;

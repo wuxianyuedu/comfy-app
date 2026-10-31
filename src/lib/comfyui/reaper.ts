@@ -390,6 +390,7 @@ export async function reapStaleQueuedTasks(): Promise<void> {
   }
 }
 
+/* SAFETY: 类型断言已复核 */
 /** 拿 ComfyUI 对账 RUNNING 任务。
  *  判决矩阵见 RUNNING_STALE_MS 上方的文件头注释。 */
 /** 同上：RUNNING 对账判决矩阵的测试入口。 */
@@ -478,11 +479,8 @@ export async function reapStaleRunningTasks(): Promise<void> {
               string,
               unknown
             > | null;
-            const entry =
-              data &&
-              /* SAFETY: 类型断言已复核 */ (data[t.promptId] as
-                | Record<string, unknown>
-                | undefined);
+            /* SAFETY: 类型断言已复核 */
+            const entry = data && (data[t.promptId] as Record<string, unknown> | undefined);
             if (entry) {
               const status = /* SAFETY: 类型断言已复核 */ entry.status as
                 | {

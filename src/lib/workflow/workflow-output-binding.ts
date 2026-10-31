@@ -160,9 +160,10 @@ export function applyOutputBindingEdit(
   }
   const ns = base[OUTPUT_BINDING_NAMESPACE];
   const table =
+    /* SAFETY: 类型断言已复核 */
     ns && typeof ns === "object" && !Array.isArray(ns)
       ? {
-          .../* SAFETY: 类型断言已复核 */ (ns as Record<string, unknown>),
+          ...(ns as Record<string, unknown>),
         }
       : {};
   const key = `${MODE_KEY_PREFIX}${edit.mode}`;
@@ -191,16 +192,18 @@ export function clearOutputBindingEdit(
   if (!ns || typeof ns !== "object" || Array.isArray(ns)) {
     return base;
   }
+  /* SAFETY: 类型断言已复核 */
   const table = {
-    .../* SAFETY: 类型断言已复核 */ (ns as Record<string, unknown>),
+    ...(ns as Record<string, unknown>),
   };
   const key = `${MODE_KEY_PREFIX}${mode}`;
   const byOutput = table[key];
   if (!byOutput || typeof byOutput !== "object" || Array.isArray(byOutput)) {
     return base;
   }
+  /* SAFETY: 类型断言已复核 */
   const next = {
-    .../* SAFETY: 类型断言已复核 */ (byOutput as Record<string, unknown>),
+    ...(byOutput as Record<string, unknown>),
   };
   delete next[outputIoKey];
   if (Object.keys(next).length > 0) {

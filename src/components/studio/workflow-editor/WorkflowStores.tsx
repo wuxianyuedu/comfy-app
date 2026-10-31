@@ -548,9 +548,8 @@ export function createNodeJsonViewerStore(
         return null;
       }
       const entry: unknown = detail.graph[nodeId];
-      return entry && typeof entry === "object"
-        ? /* SAFETY: 类型断言已复核 */ (entry as Record<string, unknown>)
-        : null;
+      /* SAFETY: 类型断言已复核 */
+      return entry && typeof entry === "object" ? (entry as Record<string, unknown>) : null;
     },
 
     getNodeView: (nodeId) => {
@@ -560,9 +559,8 @@ export function createNodeJsonViewerStore(
       }
       const rawEntry: unknown = detail.graph?.[nodeId];
       const entry =
-        rawEntry && typeof rawEntry === "object"
-          ? /* SAFETY: 类型断言已复核 */ (rawEntry as Record<string, unknown>)
-          : null;
+        /* SAFETY: 类型断言已复核 */
+        rawEntry && typeof rawEntry === "object" ? (rawEntry as Record<string, unknown>) : null;
       let rawNodesSource: Array<Record<string, unknown>> | null = null;
       const isSubView = subgraphStackLength > 0 && subgraphRawContext;
       if (isSubView) {

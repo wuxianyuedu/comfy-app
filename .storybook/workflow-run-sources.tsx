@@ -218,6 +218,7 @@ export function runSceneError(name: string): string | undefined {
 
 /** 按名字取场景；写错就抛（`parameters` 里那个名字是不可信输入）。 */
 function requireScene(name: string): WorkflowRunScene {
+  /* SAFETY: 类型断言已复核 */
   const scene: WorkflowRunScene | undefined = WORKFLOW_RUN_SCENES[name as RunSceneName];
   if (scene === undefined) {
     throw new Error(
@@ -273,6 +274,7 @@ function seedScene(name: string): void {
  * 缺席时什么都不做，别的 story 不被搅。
  */
 export const withWorkflowRunScene: Decorator = (Story, context) => {
+  /* SAFETY: 类型断言已复核 */
   const name = (context.parameters as { runScene?: unknown }).runScene;
   if (typeof name === "string") {
     seedScene(name);

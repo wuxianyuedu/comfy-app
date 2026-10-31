@@ -114,9 +114,8 @@ function materializeProductionShots(
   screenToFlowPosition: PlaceFlowFn,
 ): Array<CanvasNodeType> {
   const shots =
-    prod && Array.isArray(prod.shots)
-      ? /* SAFETY: 类型断言已复核 */ (prod.shots as Array<Shot>)
-      : [];
+    /* SAFETY: 类型断言已复核 */
+    prod && Array.isArray(prod.shots) ? (prod.shots as Array<Shot>) : [];
   if (shots.length === 0) {
     return nodes;
   }

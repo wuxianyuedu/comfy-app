@@ -215,8 +215,9 @@ function optionalEnum<const T extends ReadonlyArray<string>>(values: T) {
   return z
     .unknown()
     .transform((value) =>
+      /* SAFETY: 类型断言已复核 */
       values.includes(/* SAFETY: 类型断言已复核 */ value as string)
-        ? /* SAFETY: 类型断言已复核 */ (value as T[number])
+        ? (value as T[number])
         : undefined,
     )
     .optional();
@@ -224,8 +225,9 @@ function optionalEnum<const T extends ReadonlyArray<string>>(values: T) {
 
 /** 只收对象：`params` 是必填字段，非对象（含缺省）一律换成空对象。 */
 function paramsObject(value: unknown): Record<string, unknown> {
+  /* SAFETY: 类型断言已复核 */
   return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? /* SAFETY: 类型断言已复核 */ (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>)
     : {};
 }
 

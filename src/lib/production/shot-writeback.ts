@@ -25,7 +25,8 @@ import { fireAndForget } from "~/lib/async-action";
 import type { Shot } from "~/lib/workshop/types";
 
 function asShots(raw: unknown): Array<Shot> {
-  return Array.isArray(raw) ? /* SAFETY: 类型断言已复核 */ (raw as Array<Shot>) : [];
+  /* SAFETY: 类型断言已复核 */
+  return Array.isArray(raw) ? (raw as Array<Shot>) : [];
 }
 
 /** 把某镜头的生成态补丁回写进该项目（草稿 + 两张服务端镜像）。静默失败、不阻塞画布。 */

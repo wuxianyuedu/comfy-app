@@ -71,8 +71,9 @@ async function describeRunning(): Promise<ComfyRunningTask | null> {
    * cli 那条进度事件源拿不到 `class_type`（raw 图不在手上），此时为 null——与
    * 内存版的旧行为一致，不是新缺口。 */
   const node =
+    /* SAFETY: 类型断言已复核 */
     row.progressNode && typeof row.progressNode === "object"
-      ? /* SAFETY: 类型断言已复核 */ (row.progressNode as {
+      ? (row.progressNode as {
           classType?: unknown;
         })
       : null;

@@ -207,9 +207,8 @@ export function useSettingsRemoteModels(input: {
           : { ...base, [task]: Number(raw) };
       patchLlm({
         temperatureByTask:
-          Object.keys(next).length > 0
-            ? /* SAFETY: 类型断言已复核 */ (next as Record<TaskType, number>)
-            : undefined,
+          /* SAFETY: 类型断言已复核 */
+          Object.keys(next).length > 0 ? (next as Record<TaskType, number>) : undefined,
       });
     },
     [llmDraft, patchLlm],

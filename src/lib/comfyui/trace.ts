@@ -190,9 +190,8 @@ export function historyTraceSummary(
   hist: Record<string, unknown> | null | undefined,
 ): HistoryVerdict {
   const entry =
-    hist && promptId
-      ? /* SAFETY: 类型断言已复核 */ (hist[promptId] as Record<string, unknown> | undefined)
-      : undefined;
+    /* SAFETY: 类型断言已复核 */
+    hist && promptId ? (hist[promptId] as Record<string, unknown> | undefined) : undefined;
   if (!entry) {
     return { found: false, outputNodeCount: 0 };
   }
@@ -238,9 +237,8 @@ export function historyOutputKeys(
   promptId: string,
 ): Array<{ nodeId: string; keys: Array<string> }> {
   const entry =
-    hist && promptId
-      ? /* SAFETY: 类型断言已复核 */ (hist[promptId] as Record<string, unknown> | undefined)
-      : undefined;
+    /* SAFETY: 类型断言已复核 */
+    hist && promptId ? (hist[promptId] as Record<string, unknown> | undefined) : undefined;
   const outputs = entry?.outputs;
   if (!outputs || typeof outputs !== "object") {
     return [];

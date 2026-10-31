@@ -41,7 +41,8 @@ function paramsOf(detail: TaskDetail | null): Record<string, unknown> {
 /** 取 params.workflowInputs，非数组时给空数组。 */
 export function workflowInputsOf<T extends { name: string }>(detail: TaskDetail | null): Array<T> {
   const raw: unknown = paramsOf(detail).workflowInputs;
-  return Array.isArray(raw) ? /* SAFETY: 类型断言已复核 */ (raw as Array<T>) : [];
+  /* SAFETY: 类型断言已复核 */
+  return Array.isArray(raw) ? (raw as Array<T>) : [];
 }
 
 /**
