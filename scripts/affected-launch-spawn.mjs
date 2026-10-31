@@ -98,20 +98,49 @@ export function resolveMaxWorkers(raw, fallback) {
  * 抓下来之后仍要**原样回吐**（`process.stdout.write`），否则日志里就看不见失败原因了 ——
  * 那正是 `run-affected` 当初被造出来要避免的形态（「跑的是 0 个用例、原因读不出」）。
  *
- * @returns {{status: number|null, output: string}}
+ * ## 为什么带 `timeout`（2026-10-30 的现场）
+ *
+ * 早先这一跳**没有任何上界**：`spawnSync` 不给 `timeout`，于是一次改动面膨胀就能让它
+ * 一直跑到 node / 平台把它掐掉为止。而掐掉时的那一跑**一条读数都不剩** ——
+ * 实测 `cnb-l0u-1k66agmv9`（PR #2760）：808 份、`--maxWorkers=1`，跑满
+ * **3240104ms（54.0 分钟）** 被平台的 `timeout of 3240000ms exceeded` 掐断，
+ * 日志里连一个用例名都没有（`--reporter=dot` 在第一份跑完之前只往同一行打点，
+ * 而平台保留的是日志**尾部**）。所以那一格既不是某条用例红，也不是某条断言超时 ——
+ * 是「这一遍根本装不下」。
+ *
+ * `timeout` 那一档必须与既有判决链对齐：掐断之后 `res.status` 是 `null`、
+ * `res.signal` 是 `SIGTERM`，而 `signal` **要一起回吐**，否则 `classifyFirstPass`
+ * 会把「没跑完」读成「跑完了但退出码怪」——那是另一回事（§13.6.2：没判 ≠ 红）。
+ *
+ * @param {string} entry vitest 入口
+ * @param {string[]} args 交给它的参数
+ * @param {{timeoutMs?: number}} [options] `timeoutMs` 缺省**不设界**（与这一格存在之前
+ *   逐字同形）：界由调用点按现场预算决定，不在这一层拍一个常数。
+ * @returns {{status: number|null, signal?: string|null, timedOut?: boolean, output: string}}
  */
-export function spawnVitest(entry, args) {
+export function spawnVitest(entry, args, options = {}) {
+  const { timeoutMs } = options;
   const res = spawnSync(process.execPath, [entry, ...args], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeout: timeoutMs } : {}),
   });
   const output = `${res.stdout ?? ""}${res.stderr ?? ""}`;
   process.stdout.write(res.stdout ?? "");
   process.stderr.write(res.stderr ?? "");
-  if (res.error) {
+  /* `ETIMEDOUT` 是 `spawnSync` 掐断自己子进程时给出的 `error.code` —— 它是**没跑完**的
+   * 证据，不是「跑起来失败」的证据，所以在这里标成 `timedOut` 而不是 `throw`
+   * （真起不来的是 `ENOENT` / `EACCES` 那一族，照旧抛）。 */
+  const timedOut = res.error?.code === "ETIMEDOUT";
+  if (res.error && !timedOut) {
     throw res.error;
   }
-  return { status: res.status, output };
+  return {
+    status: timedOut ? null : res.status,
+    signal: res.signal ?? null,
+    ...(timedOut ? { timedOut: true } : {}),
+    output,
+  };
 }
 
 /**

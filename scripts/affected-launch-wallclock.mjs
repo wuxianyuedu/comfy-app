@@ -348,6 +348,73 @@ export function resolveWallClockMs(raw) {
 }
 
 /**
+ * 第一遍**开不开得起** —— 界要落在第一遍之前，而不只是落在第二遍之前。
+ *
+ * ## 为什么必须有这一格（2026-10-30 的现场）
+ *
+ * 上面那几格都只划在「**还开不开下一遍**」，前提是「第一遍总会跑完」。那个前提在
+ * 改动面大到一个量级时会失效，而失效的形态**没有任何一处会说话**：
+ *
+ * | 读数（build `cnb-l0u-1k66agmv9`，PR #2760） | 值 |
+ * | -- | -- |
+ * | 改动面 | 1158 个文件（`curly` 批量化，7194 处 `--fix`） |
+ * | 受影响清单 | **808 份 / 11443 条**（固定 106 + 受影响 702） |
+ * | 首跑并发（`ci-load.mjs` 按现场核数折算） | 1 |
+ * | `受影响用例` 那一格 | **3240104ms ≈ 54.0 分钟**，`timeout of 3240000ms exceeded` |
+ * | 那一屏日志里的用例名 | **0 个**（`--reporter=dot` 在第一份跑完之前只往同一行打点，
+ *   而平台保留的是日志**尾部**） |
+ *
+ * 也就是说这一跑里连「跑了哪些、卡在哪一份」都读不回来 —— 它既不是某条用例红，
+ * 也不是某条断言超时，而是**这一格根本装不下这次改动面**。而 `STAGE_WALL_CLOCK_MS`
+ * （25 分钟）当时在这里一次都没生效过：它的判点在第一遍之后，而第一遍自己就吃了 54 分钟。
+ *
+ * ## 判据只有一条，且不含任何常数界
+ *
+ * 「按首跑并发折算的单份单价 × 份数」是否塞得进**剩余预算**。单价不是拍的常数 ——
+ * 它由调用点按 `affected-launch-per-file-cost.mjs` 那套「已跑过的块 / 已跑过的份」现算
+ * （同一份口径：`affordablePerFileCount` 也用它）；拿不到单价时**不拦**（`ok: true`）：
+ * 「不知道」不等于「跑不完」，拿一个猜的数去拦会把正常提交挡在门口。
+ *
+ * ⚠️ 它**不新增结论档**：拦下来就是「没判」（退 2），与 `budgetAllows` 那两档同一口径 ——
+ * 没跑 ≠ 绿，也不等于红（§13.6.2）。
+ *
+ * @param {{budget?: {deadline: number, budgetMs: number} | null,
+ *   files: number, perFileMs: number, nowMs?: number}} 入参
+ *   `files` = 这一遍要跑的份数；`perFileMs` = 单份的实测单价（≤0 / 不给 ⇒ 不拦）
+ * @returns {{ok: boolean, remainingMs: number | null, estimateMs: number, note: string}}
+ *   `estimateMs` = 这一遍的估时；`note` 是要打到 stderr 的正文（空串 = 不用说话）
+ */
+export function gateFirstPassByWallClock({ budget, files, perFileMs, nowMs = Date.now() }) {
+  const remainingMs = remainingWallClockMs(budget, nowMs);
+  /* 没有界 / 没有单价 / 没有份数 ⇒ 这一格不说话。三个都是「不知道」，而不知道
+   * 不构成阻断的理由（同 `ci-install-deps.mjs` 那两条安全边界的一条取向）。 */
+  if (remainingMs === null || !(perFileMs > 0) || !(files > 0)) {
+    return { ok: true, remainingMs, estimateMs: 0, note: "" };
+  }
+  const estimateMs = perFileMs * files;
+  if (estimateMs <= remainingMs) {
+    return { ok: true, remainingMs, estimateMs, note: "" };
+  }
+  /** @param {number} ms */
+  const fmt = (ms) => `${(Number(ms) / 60000).toFixed(1)}分钟`;
+  return {
+    ok: false,
+    remainingMs,
+    estimateMs,
+    note:
+      "[affected-launch] 这一遍**开不起**：改动面 " +
+      `${files} 份 × 单份 ${(perFileMs / 1000).toFixed(1)}s ≈ ${fmt(estimateMs)}，` +
+      `而剩余预算只有 ${fmt(remainingMs)} ⇒\n` +
+      "  一份都不开。这不是红，也不是绿 ⇒ 按**未判定**收（退 2，§13.6.2）。\n" +
+      "  「合不进来」与「这次改动难不难」无关 —— 是反向 import 闭包把少数几个被广泛\n" +
+      "  import 的文件放大成了几百份。下一动作有两个，都不改判据：\n" +
+      "  ① 把改动拆开：一次 PR 一批（规范 §13.5.8.1 / §13.5.8.2「第七笔账」）；\n" +
+      "  ② 真要一次跑完就按名字要全量 —— `node scripts/run-affected-tests.mjs --full`\n" +
+      "     （那是 `每日单元测试` 的量级，不是这一格）。\n",
+  };
+}
+
+/**
  * `runChunk` 那一段「界落在哪一侧」的**整份判决**（判点 + 那句「开的是什么」的话术）。
  *
  * 为什么要收成一处：这一段在 `runChunk` 里长成了「两个 `if` + 两个跨函数的变量」——

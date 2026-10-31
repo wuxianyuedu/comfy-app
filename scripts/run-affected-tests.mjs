@@ -162,6 +162,7 @@ import {
  * 重试本身就成了消耗，直到那一格被平台掐掉、连「未判定」都说不出（ISSUE #2364）。 */
 import {
   affordablePerFileCount,
+  gateFirstPassByWallClock,
   gateRerunByWallClock,
   perFileBudgetStopReport,
   remainingWallClockMs,
@@ -400,6 +401,10 @@ async function main(argv) {
     }
     process.stderr.write(rerunReport(attempts, { budgetMs: RETRY_BUDGET_MS }));
   };
+  /* 已跑完各块的实测账（份数与墙钟）：第二块起用它现算单份单价，喂给第一遍判点
+   * （`gateFirstPassByWallClock`）—— 见循环里 `perFileMs` 那一段。 */
+  let doneFiles = 0;
+  let doneMs = 0;
   for (const [index, chunk] of chunks.entries()) {
     if (chunks.length > 1) {
       process.stderr.write(
@@ -410,6 +415,13 @@ async function main(argv) {
     // 并发跟着 `resolveMaxWorkers` 走（含 `COMFY_PRECOMMIT_MAX_WORKERS` 那一档）；
     // 「超时形态 ⇒ 等待 + 隔离复跑 ⇒ 按第二遍的形态定论」的判决链在 `runChunk` 里，
     // 见其文档与文件头那节。
+    /* 单份单价：**已跑完各块**的墙钟 ÷ 那些块的份数（同一条口径喂给 `runChunk` 的
+     * 第一遍判点与 `affordablePerFileCount` 的补跑判点 —— 两处各算一份会漂）。
+     * 第一块还没有历史 ⇒ 0 ⇒ 第一遍不拦（`gateFirstPassByWallClock` 那一段写着理由：
+     * 「不知道」不等于「跑不完」）。第二块起，同一台机、同一份并发下的这份单价就是**刚测
+     * 出来的事实**，用它判「剩下这几块还开不起来」才不含猜的成分。 */
+    const perFileMs = doneFiles > 0 && doneMs > 0 ? Math.round(doneMs / doneFiles) : 0;
+    const chunkStartedAt = Date.now();
     const code = await runChunk(chunk, {
       entry,
       workers,
@@ -418,9 +430,16 @@ async function main(argv) {
       chunkId: index,
       waitBudget,
       stageBudget,
+      perFileMs,
       onUnverified: (files) => unverified.push(...files),
       onAttempt: (record) => attempts.push(record),
     });
+    /* 只记跑完的块（`code === 0`）：红的 / 没判的那些块墙钟不代表「正常单价」，混进来
+     * 会把下一次估算带歪（超时形态的一遍本来就会吃满它自己的预算）。 */
+    if (code === 0) {
+      doneMs += Date.now() - chunkStartedAt;
+      doneFiles += chunk.length;
+    }
     if (code !== 0) {
       flush();
       return code;
@@ -461,7 +480,11 @@ async function main(argv) {
  *   `quiet` 只换 reporter（日志预算，见 `affected-launch-log-budget.mjs`）——**两遍都带**
  *   同一个值，缺省 `false` = 默认 reporter（今天的形状）。
  *   `waitBudget` 是多块之间**共享**的等待截止时刻（默认单块自己一份，供调用点收成一份）。
- *   `stageBudget` 是同形状的**墙钟**截止时刻，只管「还开不开下一遍 / 下一份」（ISSUE #2364）。
+ *   `stageBudget` 是同形状的**墙钟**截止时刻，管「还开不开下一遍 / 下一份」，也管
+ *   「**第一遍自己开不开得起**」（ISSUE #2364 的续，见 `gateFirstPassByWallClock`）。
+ *   `perFileMs` 是单份的实测单价（调用点按「已跑完各块的墙钟 ÷ 那些块的份数」给）；
+ *   不给（第一块、或还没跑过任何一块）就**不拦第一遍** —— 拿一个猜的数去拦会把正常提交
+ *   挡在门口（与 `budgetAllows` 的 `probePerFileMs` 同一取向）。
  *   `onAttempt` 每块一条判决记录，只喂收尾那份账（`rerunReport`），**不参与退出码**。
  * @returns {Promise<number>}
  */
@@ -478,22 +501,76 @@ export async function runChunk(chunk, deps) {
      * 的话，复跑那一遍会退回默认 reporter，而它恰恰是打印量最大的那一遍
      * （同一批用例在更差的条件下再跑一次，失败明细翻倍）。 */
     quiet = false,
+    /* 单份的实测单价（见上面 `@param` 里那一段）。缺省 0 = 还没有单价 ⇒ 第一遍不拦。 */
+    perFileMs = 0,
   } = deps;
   /* reporter：平台那一格 quiet（日志预算），本地默认**一个字都不加** —— 见
    * `affected-launch-log-budget.mjs` 的头注（那一段记着 102400 字节的截断现场）。 */
   const reporters = reporterArgs(quiet);
   /* 首跑墙钟：下一遍开不开得起只能由刚跑完的这一遍说话（常数界在机器空时过严、
    * 机器满时过松，ISSUE #2364）。 */
+  /* 界也要落在**第一遍之前**（ISSUE #2364 的续，2026-10-30 的现场）：上面那几格都只
+   * 划在「还开不开下一遍」，前提是「第一遍总会跑完」。改动面大到一个量级时那个前提就
+   * 失效了 —— 实测 `cnb-l0u-1k66agmv9`（PR #2760）首跑并发 1、808 份吃了 54 分钟被平台
+   * 掐断，而 `STAGE_WALL_CLOCK_MS` 一次都没生效过（它的判点在那之后）。那一跑里连一个
+   * 用例名都没留下（`--reporter=dot` 在第一份跑完之前只往同一行打点，平台保留的是尾部）。
+   *
+   * 单价从**已跑完的块**取（`deps.perFileMs`，调用点按「实测墙钟 ÷ 已跑份数」给）——
+   * 拿不到就不拦：「不知道」不等于「跑不完」，拿一个猜的数去拦会把正常提交挡在门口。
+   * 拦下来是**没判**（退 2），不是红也不是绿（§13.6.2）。 */
+  const firstGate = gateFirstPassByWallClock({
+    budget: deps.stageBudget,
+    files: chunk.length,
+    perFileMs,
+  });
+  if (!firstGate.ok) {
+    process.stderr.write(firstGate.note);
+    report({ outcome: "budget-skipped" });
+    return 2;
+  }
+  /* 第一遍的**上界**：拿剩余预算当 `timeout`，掐断之后由下面那条「没跑完」出口说话。
+   * 这一条与上面那个份数判点是**两件事**、各自成立：
+   *   · 份数判点答「按实测单价，这一遍合不进来吗」—— 有单价时才说话（第二块起）；
+   *   · 这一条答「就算估错了，也不许把整格跑成零读数」—— 第一块起就有，且不需要单价。
+   * 两者都落在「没判」这一档（退 2），不是红也不是绿（§13.6.2）。 */
+  const firstPassTimeoutMs = remainingWallClockMs(deps.stageBudget);
+  /* `ResidualReserveMs`：给掐断之后的收尾（日志回吐、记账、`BeforeEnd`）留出的余量 ——
+   * 不留的话「掐断」与「收尾」会撞在同一个 deadline 上，那一屏又只剩半句。 */
+  const FIRST_PASS_TIMEOUT_RESERVE_MS = 30_000;
+  /* 第三参数 `firstPassOptions` 带的是第一遍的 `timeout`（真实现见 `spawnVitest` 的
+   * `options.timeoutMs`）。它单独一个变量，是为了让**实参数组本身**仍留在
+   * `spawn(entry, [ … ])` 那个形状里 —— `tests/hook-affected-launch.test.ts` 按那个形状
+   * 提取「传给 vitest 的实参」，把 options 折进数组里会让那条判据静默取不到调用点。 */
+  const firstPassOptions =
+    firstPassTimeoutMs === null
+      ? undefined
+      : { timeoutMs: Math.max(1, firstPassTimeoutMs - FIRST_PASS_TIMEOUT_RESERVE_MS) };
   const firstPassStartedAt = Date.now();
-  const res = spawn(entry, [
-    "run",
-    ...reporters,
-    ...junitReportArgs(junitDir, chunkId, 1, {
-      withDefaultReporter: reporters.length === 0,
-    }),
-    `--maxWorkers=${workers}`,
-    ...chunk,
-  ]);
+  const res = spawn(
+    entry,
+    [
+      "run",
+      ...reporters,
+      ...junitReportArgs(junitDir, chunkId, 1, {
+        withDefaultReporter: reporters.length === 0,
+      }),
+      `--maxWorkers=${workers}`,
+      ...chunk,
+    ],
+    firstPassOptions,
+  );
+  /* 被自己那一刀掐断（而不是被平台掐）：这是一份**可读**的收场，而不是空屏。 */
+  if (res.timedOut) {
+    process.stderr.write(
+      "[affected-launch] 第 1 遍**没跑完**：墙钟预算用尽，本块 " +
+        `${chunk.length} 个用例被中途掐断（剩余预算 ${Math.round((firstPassTimeoutMs ?? 0) / 60000)} 分钟）\n` +
+        "  ⇒ 按**未判定**收（退 2）：这不是红，也不是绿 —— 这一遍没有任何一条断言给出结论。\n" +
+        "  下一动作：把改动拆开（规范 §13.5.8.1），或按名字要全量 " +
+        "`node scripts/run-affected-tests.mjs --full`。\n",
+    );
+    report({ outcome: "budget-killed" });
+    return 2;
+  }
   // 界要落在哪一侧只能由刚跑完的这一遍说话（常数界在机器空时过严、机器满时过松）。
   const firstPassMs = Date.now() - firstPassStartedAt;
   if (res.status === 0) {
