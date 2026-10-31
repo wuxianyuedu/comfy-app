@@ -26,9 +26,16 @@ vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal()),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+vi.mock("~/lib/comfyui/executor-continuation", () => ({
+  kickQueue: vi.fn(),
+}));
+vi.mock("~/lib/comfyui/executor-mode", () => ({
+  resolveExecutorClaim: vi.fn(() => "inline" as const),
+}));
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { seriesRouter } from "./series";
+import { seriesGenerationRouter } from "./series-generation";
 import * as schema from "~/server/db/schema";
 import {
   getTestDb,
@@ -39,11 +46,13 @@ import {
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(seriesRouter);
+const createGenCaller = createCallerFactory(seriesGenerationRouter);
 const tdb = getTestDb();
 const tdbDb = tdb as unknown as LibSQLDatabase<typeof schema>;
 const userCaller = () => createCaller(makeCtx());
 const otherCaller = () =>
   createCaller(makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }));
+const genCaller = () => createGenCaller(makeCtx());
 
 /** 断言非空的种子 helper（create 类 procedure 返回 `T | undefined`）。 */
 async function addSeries(caller = userCaller(), title = "S") {
@@ -356,5 +365,124 @@ describe("production ↔ 系列库 双向同步（提升 / 注入）", () => {
     await expect(userCaller().injectToProduction({ projectId: "p4" })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
+  });
+});
+
+describe("FR-SR-04 整季生成进度与批量提交", () => {
+  it("seasonGenerationProgress 按集聚合 总/完成/失败/未完成", async () => {
+    const { se, ep } = await makeHierarchy();
+    const pid = "p-frsr04-prog";
+    await tdbDb.insert(schema.production).values({
+      id: pid,
+      userId: "user-a",
+      shots: [{ id: "sh1" }, { id: "sh2" }, { id: "sh3" }],
+    });
+    await tdbDb.update(schema.episode).set({ projectId: pid }).where(eq(schema.episode.id, ep.id));
+    await tdbDb.insert(schema.task).values([
+      {
+        id: "t-su",
+        userId: "user-a",
+        type: "IMG",
+        prompt: "",
+        params: {},
+        workflowName: "wt",
+        status: "SUCCEEDED",
+        projectId: pid,
+        shotId: "sh1",
+      },
+      {
+        id: "t-fa",
+        userId: "user-a",
+        type: "IMG",
+        prompt: "",
+        params: {},
+        workflowName: "wt",
+        status: "FAILED",
+        projectId: pid,
+        shotId: "sh2",
+      },
+    ]);
+    const prog = await genCaller().seasonGenerationProgress({ seasonId: se.id });
+    expect(prog.length).toBe(1);
+    expect(prog[0]).toMatchObject({
+      episodeId: ep.id,
+      total: 3,
+      done: 1,
+      failed: 1,
+      running: 0,
+      pending: 1,
+    });
+  });
+
+  it("seasonGenerationProgress 他人季 → FORBIDDEN", async () => {
+    const s = await addSeries(otherCaller(), "别人的系列");
+    const se = await addSeason(s.id, otherCaller());
+    await expect(genCaller().seasonGenerationProgress({ seasonId: se.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+
+  it("batchGenerateSeason 幂等：已 SUCCEEDED 的镜不重排，只入队未完成镜", async () => {
+    const { se, ep } = await makeHierarchy();
+    const pid = "p-frsr04-batch";
+    await tdbDb.insert(schema.production).values({
+      id: pid,
+      userId: "user-a",
+      shots: [{ id: "sh1" }, { id: "sh2" }],
+    });
+    await tdbDb.update(schema.episode).set({ projectId: pid }).where(eq(schema.episode.id, ep.id));
+    await tdbDb.insert(schema.task).values({
+      id: "t-done",
+      userId: "user-a",
+      type: "IMG",
+      prompt: "",
+      params: {},
+      workflowName: "wt",
+      status: "SUCCEEDED",
+      projectId: pid,
+      shotId: "sh1",
+    });
+    await tdbDb.insert(schema.workflowTemplate).values({
+      id: "wt-frsr04",
+      userId: "user-a",
+      name: "默认工作流",
+      taskType: "IMG",
+      rawJson: { nodes: [] },
+    });
+    const res = await genCaller().batchGenerateSeason({
+      seasonId: se.id,
+      workflowId: "wt-frsr04",
+    });
+    expect(res).toEqual({ enqueued: 1, skipped: 1 });
+    const tasks = await tdbDb.select().from(schema.task).where(eq(schema.task.projectId, pid));
+    expect(tasks.length).toBe(2);
+  });
+
+  it("batchGenerateSeason 不存在的工作流 → NOT_FOUND", async () => {
+    const { se, ep } = await makeHierarchy();
+    const pid = "p-frsr04-nf";
+    await tdbDb.insert(schema.production).values({
+      id: pid,
+      userId: "user-a",
+      shots: [{ id: "sh1" }],
+    });
+    await tdbDb.update(schema.episode).set({ projectId: pid }).where(eq(schema.episode.id, ep.id));
+    await expect(
+      genCaller().batchGenerateSeason({
+        seasonId: se.id,
+        workflowId: "nope",
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("batchGenerateSeason 他人季 → FORBIDDEN", async () => {
+    const s = await addSeries(otherCaller(), "别人的系列");
+    const se = await addSeason(s.id, otherCaller());
+    await expect(
+      genCaller().batchGenerateSeason({
+        seasonId: se.id,
+        workflowId: "nope",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
