@@ -161,15 +161,19 @@ async function main() {
   /** 每类事实 → 「它还在不在」的判据。 */
   const factExists = (fact) => {
     switch (fact?.kind) {
-      case "freshness-track":
+      case "freshness-track": {
         return tracks.includes(fact.key);
-      case "gate-not-in-all":
+      }
+      case "gate-not-in-all": {
         return gates.notInAll.has(fact.gate);
-      case "gate-in-all":
+      }
+      case "gate-in-all": {
         return gates.all.has(fact.gate);
-      case "on-demand-ledger":
+      }
+      case "on-demand-ledger": {
         return onDemand.includes(fact.script);
-      case "base-check-chained":
+      }
+      case "base-check-chained": {
         /* 事实从 `scripts/base-check/chained-steps.mjs` 的 `CHAINED_STEPS` 现算
          * （成员写成 `{ script: "…" }`）—— 不在这里抄第二份清单（同 `qualityGateModes`）。 */
         return [
@@ -179,8 +183,10 @@ async function main() {
         ]
           .map((m) => m[1])
           .includes(fact.script);
-      default:
+      }
+      default: {
         return false;
+      }
     }
   };
 
@@ -220,18 +226,24 @@ async function main() {
 /** 「事实键」的规范写法（`kind` + 标识），用于双向集合比较。 */
 function factKey(fact) {
   switch (fact?.kind) {
-    case "freshness-track":
+    case "freshness-track": {
       return `freshness-track:${fact.key}`;
-    case "gate-not-in-all":
+    }
+    case "gate-not-in-all": {
       return `gate-not-in-all:${fact.gate}`;
-    case "gate-in-all":
+    }
+    case "gate-in-all": {
       return `gate-in-all:${fact.gate}`;
-    case "on-demand-ledger":
+    }
+    case "on-demand-ledger": {
       return `on-demand-ledger:${fact.script}`;
-    case "base-check-chained":
+    }
+    case "base-check-chained": {
       return `base-check-chained:${fact.script}`;
-    default:
+    }
+    default: {
       return `unknown:${JSON.stringify(fact)}`;
+    }
   }
 }
 
