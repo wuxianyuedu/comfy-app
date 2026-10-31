@@ -54,7 +54,7 @@ export function compareText(left: string, right: string): number {
  * 想要字典序用 {@link uniqueSorted}；按字段去重用 {@link uniqueBy}。
  */
 export function unique<T>(values: ReadonlyArray<T>): Array<T> {
-  return Array.from(new Set(values));
+  return [...new Set(values)];
 }
 
 /**
@@ -69,7 +69,7 @@ export function uniqueSorted(
   values: ReadonlyArray<string>,
   compare: (left: string, right: string) => number = compareText,
 ): Array<string> {
-  return Array.from(new Set(values)).sort(compare);
+  return [...new Set(values)].sort(compare);
 }
 
 /**
