@@ -93,7 +93,9 @@ function auditFiles(): Array<string> {
 let retiredCache: Array<string> | null = null;
 
 function retiredBaselineNames(): Array<string> {
-  if (retiredCache) return retiredCache;
+  if (retiredCache) {
+    return retiredCache;
+  }
   let out;
   try {
     out = execFileSync(
@@ -117,8 +119,12 @@ function retiredBaselineNames(): Array<string> {
   const names = new Set<string>();
   for (const raw of out.split("\n")) {
     const rel = raw.trim();
-    if (!rel) continue;
-    if (!/^scripts\/\.[^/]*baseline[^/]*\.json$/.test(rel)) continue;
+    if (!rel) {
+      continue;
+    }
+    if (!/^scripts\/\.[^/]*baseline[^/]*\.json$/.test(rel)) {
+      continue;
+    }
     names.add(path.basename(rel));
   }
   retiredCache = [...names].sort();
@@ -148,12 +154,14 @@ function citedBaselineNames(line: string): Array<string> {
   const out = new Set<string>();
   for (const m of line.matchAll(/(\.?[A-Za-z0-9_-]*baseline[A-Za-z0-9_-]*\.json)/g)) {
     const name = m[1];
-    if (name) out.add(name.startsWith(".") ? name : `.${name}`);
+    if (name) {
+      out.add(name.startsWith(".") ? name : `.${name}`);
+    }
   }
   return [...out];
 }
 
-type Finding = { file: string; line: number; baseline: string; text: string };
+type Finding = { baseline: string; file: string; line: number; text: string };
 
 /**
  * 判据本体：出现「已删基线 + 该行没有历史口径」。
@@ -168,9 +176,13 @@ function findRetiredBaselineClaims(
   const found: Array<Finding> = [];
   for (const { rel, text } of files) {
     text.split(/\r?\n/).forEach((line, i) => {
-      if (HISTORICAL_MARKERS.some((m) => line.includes(m))) return;
+      if (HISTORICAL_MARKERS.some((m) => line.includes(m))) {
+        return;
+      }
       for (const name of citedBaselineNames(line)) {
-        if (!retired.has(name)) continue;
+        if (!retired.has(name)) {
+          continue;
+        }
         found.push({
           file: rel,
           line: i + 1,

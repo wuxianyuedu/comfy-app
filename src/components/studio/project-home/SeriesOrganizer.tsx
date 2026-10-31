@@ -16,10 +16,10 @@ import { cn } from "~/lib/utils";
 import { useSeriesOrganizer } from "./hooks/use-series-organizer";
 import { SeriesCharacterLibrary } from "./SeriesCharacterLibrary";
 
-interface SeriesOrganizerProps {
+type SeriesOrganizerProps = {
   /** 当前项目 id（来自 workspace 的活跃项目）。提供时展示「本项目归属」并支持一键归入某集。 */
   projectId?: string;
-}
+};
 
 export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
   const c = useSeriesOrganizer(projectId);
@@ -58,11 +58,11 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
         <div className="flex flex-col gap-1.5">
           {c.seriesList?.map((s) => (
             <div
-              key={s.id}
               className={cn(
                 "group flex items-center gap-2 rounded-lg border px-2 py-1.5",
                 c.seriesId === s.id ? "border-border-strong bg-surface-2" : "border-border",
               )}
+              key={s.id}
             >
               <input
                 className="flex-1 bg-transparent text-sm outline-none"
@@ -74,16 +74,16 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 }}
               />
               <Button
-                variant="ghost"
                 className="h-7 px-2 text-xs"
                 onClick={() => c.selectSeries(c.seriesId === s.id ? null : s.id)}
+                variant="ghost"
               >
                 {c.seriesId === s.id ? "收起" : "展开"}
               </Button>
               <Button
-                variant="ghost"
                 className="text-destructive h-7 px-2 text-xs"
                 onClick={() => c.deleteSeries(s.id)}
+                variant="ghost"
               >
                 删除
               </Button>
@@ -93,18 +93,18 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
         <div className="flex items-center gap-2">
           <input
             className="border-border bg-surface-1 flex-1 rounded-lg border px-2 py-1 text-sm outline-none"
+            onChange={textHandler(setNewSeries)}
             placeholder="新系列名称"
             value={newSeries}
-            onChange={textHandler(setNewSeries)}
           />
           <Button
-            variant="primary-solid"
             className="h-8"
             disabled={!newSeries.trim() || c.seriesList === undefined}
             onClick={() => {
               c.createSeries(newSeries.trim());
               setNewSeries("");
             }}
+            variant="primary-solid"
           >
             新建系列
           </Button>
@@ -118,11 +118,11 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
           <div className="flex flex-col gap-1.5">
             {c.seasons?.map((se) => (
               <div
-                key={se.id}
                 className={cn(
                   "group flex items-center gap-2 rounded-lg border px-2 py-1.5",
                   c.seasonId === se.id ? "border-border-strong bg-surface-2" : "border-border",
                 )}
+                key={se.id}
               >
                 <span className="text-ink-faint w-6 text-xs">S{se.seasonNumber}</span>
                 <input
@@ -135,16 +135,16 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                   }}
                 />
                 <Button
-                  variant="ghost"
                   className="h-7 px-2 text-xs"
                   onClick={() => c.selectSeason(c.seasonId === se.id ? null : se.id)}
+                  variant="ghost"
                 >
                   {c.seasonId === se.id ? "收起" : "展开"}
                 </Button>
                 <Button
-                  variant="ghost"
                   className="text-destructive h-7 px-2 text-xs"
                   onClick={() => c.deleteSeason(se.id)}
+                  variant="ghost"
                 >
                   删除
                 </Button>
@@ -154,19 +154,21 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
           <div className="flex items-center gap-2">
             <input
               className="border-border bg-surface-1 flex-1 rounded-lg border px-2 py-1 text-sm outline-none"
+              onChange={textHandler(setNewSeason)}
               placeholder="新季名称（可空）"
               value={newSeason}
-              onChange={textHandler(setNewSeason)}
             />
             <Button
-              variant="primary-solid"
               className="h-8"
               disabled={c.seasons === undefined}
               onClick={() => {
-                if (!c.seriesId) return;
+                if (!c.seriesId) {
+                  return;
+                }
                 c.createSeason(c.seriesId, newSeason.trim());
                 setNewSeason("");
               }}
+              variant="primary-solid"
             >
               新建季
             </Button>
@@ -181,11 +183,11 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
           <div className="flex flex-col gap-1.5">
             {c.episodes?.map((e) => (
               <div
-                key={e.id}
                 className={cn(
                   "group flex items-center gap-2 rounded-lg border px-2 py-1.5",
                   c.episodeId === e.id ? "border-border-strong bg-surface-2" : "border-border",
                 )}
+                key={e.id}
               >
                 <span className="text-ink-faint w-6 text-xs">E{e.episodeNumber}</span>
                 <input
@@ -210,17 +212,17 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 })()}
                 {projectId && (
                   <Button
-                    variant="ghost"
                     className="h-7 px-2 text-xs"
                     onClick={() => c.selectEpisode(c.episodeId === e.id ? null : e.id)}
+                    variant="ghost"
                   >
                     {c.episodeId === e.id ? "已选" : "选定"}
                   </Button>
                 )}
                 <Button
-                  variant="ghost"
                   className="text-destructive h-7 px-2 text-xs"
                   onClick={() => c.deleteEpisode(e.id)}
+                  variant="ghost"
                 >
                   删除
                 </Button>
@@ -230,30 +232,34 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
           <div className="flex items-center gap-2">
             <input
               className="border-border bg-surface-1 flex-1 rounded-lg border px-2 py-1 text-sm outline-none"
+              onChange={textHandler(setNewEpisode)}
               placeholder="新集标题（可空）"
               value={newEpisode}
-              onChange={textHandler(setNewEpisode)}
             />
             <Button
-              variant="primary-solid"
               className="h-8"
               disabled={c.episodes === undefined}
               onClick={() => {
-                if (!c.seasonId) return;
+                if (!c.seasonId) {
+                  return;
+                }
                 c.createEpisode(c.seasonId, newEpisode.trim());
                 setNewEpisode("");
               }}
+              variant="primary-solid"
             >
               新建集
             </Button>
           </div>
           {projectId && c.episodeId && (
             <Button
-              variant="primary-solid"
               className="mt-1 h-8"
               onClick={() => {
-                if (c.episodeId) c.assignCurrentProject(c.episodeId);
+                if (c.episodeId) {
+                  c.assignCurrentProject(c.episodeId);
+                }
               }}
+              variant="primary-solid"
             >
               把当前项目归入此集
             </Button>

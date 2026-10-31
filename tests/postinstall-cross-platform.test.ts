@@ -38,7 +38,9 @@ const postinstall = pkg.scripts.postinstall ?? "";
 
 const tmpDirs: Array<string> = [];
 afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tmpDirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** 造一个最小「检出」：把入口脚本与它的定位前提放进去（入口按自身位置找仓库根）。 */
@@ -105,8 +107,8 @@ describe("postinstall 的入口真跑（模拟 Windows 宿主：不经 shell）"
   /** 不经任何 shell 直接起 node —— 与 pnpm 在 Windows 上的执行语义一致。 */
   function runEntry(cwd: string): {
     status: number | null;
-    stdout: string;
     stderr: string;
+    stdout: string;
   } {
     const r = execFileSync(process.execPath, [path.join(cwd, "scripts", "install-git-hooks.mjs")], {
       cwd,

@@ -36,41 +36,45 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
  *  时长是秒数选择。`number` 是自定义口的「数字」类型（普通数值输入框）。 */
 export type EncapsulationControl = "text" | "size" | "image" | "duration" | "number";
 
-export interface EncapsulationEntryStatus {
+export type EncapsulationEntryStatus = {
+  control: EncapsulationControl;
   /** 契约内稳定键（prompt / negative / size / first-frame / reference-image…）。 */
   id: string;
   /** 展示名（size 与模式契约编辑器同一份措辞，见 `modeContractInputLabel`）。 */
   label: string;
-  control: EncapsulationControl;
-  /** 生效落点（IO 端口键）；null = 还没落到任何端口（未配置）。 */
-  targetIoKey: string | null;
   /** 该口在**这一模式**下是否必备（随模式契约配置，见 `ModeContract.required`）。
    *
    *  必备与否只影响「能不能跑」的判据与界面上的一句提示：非必备口没有落点时工坊
    *  照跑（缺的值由工作流图内的默认值兜底），不是「配置没做完」。 */
   required: boolean;
-}
+  /** 生效落点（IO 端口键）；null = 还没落到任何端口（未配置）。 */
+  targetIoKey: string | null;
+};
 
-export interface EncapsulationStatus {
+export type EncapsulationStatus = {
   entries: Array<EncapsulationEntryStatus>;
+  /** 还没落到端口的**全部**口子名（含非必备），供「未配置」清单一览。 */
+  missingLabels: Array<string>;
+  /** 还没落到端口的必备口名（徽标 tooltip / 未配置提示用）。
+   *  未配置的非必备口不算「不能跑」，不在这里 —— 那是提示，不是闸门。 */
+  missingRequired: Array<string>;
   /** **该模式的必备口全部已有落点** → 工坊可直接驱动这条工作流。
    *
    *  必备口随模式契约配置（见 `ModeContract.required`）；没配任何必备口的模式
    *  恒为 ready（没有「缺了它就不能用」的口）。 */
   ready: boolean;
-  /** 还没落到端口的必备口名（徽标 tooltip / 未配置提示用）。
-   *  未配置的非必备口不算「不能跑」，不在这里 —— 那是提示，不是闸门。 */
-  missingRequired: Array<string>;
-  /** 还没落到端口的**全部**口子名（含非必备），供「未配置」清单一览。 */
-  missingLabels: Array<string>;
   resolvedCount: number;
-}
+};
 
 /** 契约口 → 工坊控件形态（没有生效契约时的回落路径；自定义口一律来自契约，
  *  所以这里只处理预制口）。 */
 function controlFor(id: string): EncapsulationControl {
-  if (id === "size") return "size";
-  if (id === "duration") return "duration";
+  if (id === "size") {
+    return "size";
+  }
+  if (id === "duration") {
+    return "duration";
+  }
   if (id.startsWith("reference-image") || id === "first-frame" || id === "last-frame") {
     return "image";
   }
@@ -88,7 +92,9 @@ function controlFor(id: string): EncapsulationControl {
  *  **自定义口是唯一的例外**：预制口的措辞有统一出处，自定义口没有 —— 它的名字
  *  只存在契约里，按「类」取会张冠李戴（把 `custom-text-1` 显示成「提示词」）。 */
 function displayLabel(id: string, contractLabel?: string): string {
-  if (exposedCustomKindOf(id) && contractLabel) return contractLabel;
+  if (exposedCustomKindOf(id) && contractLabel) {
+    return contractLabel;
+  }
   return exposedParamDisplayLabel(id);
 }
 
@@ -100,14 +106,14 @@ function displayLabel(id: string, contractLabel?: string): string {
  *  requiredInputs：该模式的**必备口**（同样可配置，见 `ModeContract.required`）。
  *  未传时回落内置默认（提示词）。「能不能用」= 这些口是否都有落点。 */
 export function deriveEncapsulationStatus(args: {
-  io: WorkflowIOMap | null | undefined;
-  paramMap: Record<string, unknown> | null | undefined;
-  mode: string | null | undefined;
   contractEntries?: Array<{
+    control: EncapsulationControl;
     id: string;
     label: string;
-    control: EncapsulationControl;
   }>;
+  io: WorkflowIOMap | null | undefined;
+  mode: string | null | undefined;
+  paramMap: Record<string, unknown> | null | undefined;
   requiredInputs?: ReadonlyArray<string>;
 }): EncapsulationStatus {
   const { io, paramMap, mode, contractEntries, requiredInputs } = args;
@@ -128,9 +134,9 @@ export function deriveEncapsulationStatus(args: {
    * 但「未配置」恰恰要在这里现形（否则用户看不到缺了什么、也不知道为什么
    * 工坊驱动不了）。按契约清单补齐缺失口（落点 null）。 */
   const canonical: Array<{
+    control: EncapsulationControl;
     id: string;
     label: string;
-    control: EncapsulationControl;
   }> =
     contractEntries ??
     exposedParamsForMode(mode ?? null).map((d) => ({
@@ -153,7 +159,9 @@ export function deriveEncapsulationStatus(args: {
   const sizeSubTarget = (): string | null => {
     for (const id of SIZE_SUB_IDS) {
       const hit = sizeWired[id];
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
     return null;
   };

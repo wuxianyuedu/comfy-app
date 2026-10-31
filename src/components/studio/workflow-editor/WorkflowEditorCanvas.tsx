@@ -53,9 +53,13 @@ export function isEdgeHandleCullingNoise(args: {
   targetId: string | null;
 }): boolean {
   const { message, mountedNodeIds, sourceId, targetId } = args;
-  if (!message.startsWith(EDGE_HANDLE_ERROR)) return false;
+  if (!message.startsWith(EDGE_HANDLE_ERROR)) {
+    return false;
+  }
   /* 端点信息缺失（边引用的节点已被删）→ 交给 React Flow 自己处理。 */
-  if (!sourceId || !targetId) return false;
+  if (!sourceId || !targetId) {
+    return false;
+  }
   /* 两端都挂载还报错 ⇒ 是真的找不到 handle，必须暴露。 */
   return !mountedNodeIds.has(sourceId) || !mountedNodeIds.has(targetId);
 }
@@ -82,32 +86,32 @@ const DEFAULT_EDGE_OPTIONS = {
   },
 };
 
-export interface WorkflowEditorCanvasProps {
-  nodes: Array<Node>;
-  edges: Array<Edge>;
-  onNodesChange: OnNodesChange<Node>;
-  onEdgesChange: OnEdgesChange<Edge>;
-  onNodeDragStop: (e: unknown, node: Node) => void;
+export type WorkflowEditorCanvasProps = {
   canvasSettings: CanvasSettings;
   canvasSettingsHydrated: boolean;
-  onMiniMapJump: (event: React.MouseEvent, position: { x: number; y: number }) => void;
-  onOpenSettings: () => void;
-  /** 「重新居中」：把视口移回有节点的位置（纯视口动作，不改节点布局）。 */
-  onRecenter: () => void;
+  edges: Array<Edge>;
+  /** 连线合法性闸门：无模式 / 落点不是宿主节点端口一律拒绝。 */
+  isValidConnection?: (connection: Connection | Edge) => boolean;
+  nodes: Array<Node>;
+  /** 画布上新增一条连线（对外参数卡片 → 宿主节点端口）。 */
+  onConnect?: (connection: Connection) => void;
   /** 惰性激活被点击边的 deletable/reconnectable（见
    *  下面的 defaultEdgeOptions）。 */
   onEdgeClick?: (event: React.MouseEvent, edge: Edge) => void;
-  /** 画布上新增一条连线（对外参数卡片 → 宿主节点端口）。 */
-  onConnect?: (connection: Connection) => void;
-  /** 连线合法性闸门：无模式 / 落点不是宿主节点端口一律拒绝。 */
-  isValidConnection?: (connection: Connection | Edge) => boolean;
+  onEdgesChange: OnEdgesChange<Edge>;
   /** 删除连线（映射线 = 该对外参数在当前模式下断开）。 */
   onEdgesDelete?: (edges: Array<Edge>) => void;
+  onMiniMapJump: (event: React.MouseEvent, position: { x: number; y: number }) => void;
+  onNodeDragStop: (e: unknown, node: Node) => void;
+  onNodesChange: OnNodesChange<Node>;
+  onOpenSettings: () => void;
+  /** 「重新居中」：把视口移回有节点的位置（纯视口动作，不改节点布局）。 */
+  onRecenter: () => void;
   /** 写回连线表：选中节点后由本画布把「相关连线」标记写进 edges（见 hook 注释）。 */
   setEdges: (updater: (edges: Array<Edge>) => Array<Edge>) => void;
   /** 写回节点表：同一帧里把「相关端口行」标记写进节点 data（见 hook 注释）。 */
   setNodes: (updater: (nodes: Array<Node>) => Array<Node>) => void;
-}
+};
 
 export function WorkflowEditorCanvas({
   nodes,
@@ -160,7 +164,9 @@ export function WorkflowEditorCanvas({
       const edge = edgeLookup.get(id);
       const mounted = new Set<string>();
       nodeLookup.forEach((internal, nodeId) => {
-        if (internal.internals.handleBounds) mounted.add(nodeId);
+        if (internal.internals.handleBounds) {
+          mounted.add(nodeId);
+        }
       });
       if (
         isEdgeHandleCullingNoise({
@@ -179,17 +185,25 @@ export function WorkflowEditorCanvas({
 
   return (
     <ReactFlow
-      nodes={nodes}
+      defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
       edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onNodeDragStop={onNodeDragStop}
-      onEdgeClick={onEdgeClick}
-      onConnect={onConnect}
-      isValidConnection={isValidConnection}
-      onEdgesDelete={onEdgesDelete}
-      nodeTypes={workflowNodeTypes}
       edgeTypes={workflowEdgeTypes}
+      isValidConnection={isValidConnection}
+      maxZoom={canvasSettingsHydrated ? canvasSettings.maxZoom : 2}
+      /* 这里**故意不设** `fitView` —— 初始视口由上面
+       *  的 useEffect 自己驱动，好让
+       *  我们能强制最小缩放 0.35。没有这个下限，
+       *  DaSiWa Wan 2.2 模板（130 节点，包围盒约 7000 px 宽）
+       *  会 fitView 到约 0.15x，每个备注都读不清。
+       *  fitViewOptions={{ padding: 0.3 }}
+       *  → 见上面的 useEffect；紧凑的 0.10 + 0.35 缩放下限。 */
+      minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
+      nodes={nodes}
+      nodeTypes={workflowNodeTypes}
+      onConnect={onConnect}
+      onEdgeClick={onEdgeClick}
+      onEdgesChange={onEdgesChange}
+      onEdgesDelete={onEdgesDelete}
       /* 过滤视口裁剪造成的 error#008 假告警（ISSUE #374）—— 见 handleError。 */
       onError={handleError}
       /* 商业级性能 —— 只挂载与视口
@@ -203,16 +217,8 @@ export function WorkflowEditorCanvas({
        *（最小缩放下限 0.35）—— 裁剪用的是每个节点首次绘制后
        *  的实测尺寸，所以初始 fit 不受影响。 */
       onlyRenderVisibleElements
-      /* 这里**故意不设** `fitView` —— 初始视口由上面
-       *  的 useEffect 自己驱动，好让
-       *  我们能强制最小缩放 0.35。没有这个下限，
-       *  DaSiWa Wan 2.2 模板（130 节点，包围盒约 7000 px 宽）
-       *  会 fitView 到约 0.15x，每个备注都读不清。
-       *  fitViewOptions={{ padding: 0.3 }}
-       *  → 见上面的 useEffect；紧凑的 0.10 + 0.35 缩放下限。 */
-      minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
-      maxZoom={canvasSettingsHydrated ? canvasSettings.maxZoom : 2}
-      defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+      onNodeDragStop={onNodeDragStop}
+      onNodesChange={onNodesChange}
       proOptions={{ hideAttribution: true }}
     >
       {/* 网格底纹 —— 20px 小格，每 10 格一条更重的线。
@@ -222,8 +228,8 @@ export function WorkflowEditorCanvas({
        *  坐标 X / Y。见 <CanvasRulers>。 */}
       <CanvasRulers settings={canvasSettings} />
       <ZoomIndicator
-        minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
         maxZoom={canvasSettingsHydrated ? canvasSettings.maxZoom : 2}
+        minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
       />
       {/* 齿轮按钮打开右侧画布设置面板
        *  （网格透明度、标尺开关等）。它与缩放指示器
@@ -241,15 +247,15 @@ export function WorkflowEditorCanvas({
       <Controls showInteractive={false} />
       {canvasSettings.showMiniMap && (
         <MiniMap
-          pannable
-          zoomable
           ariaLabel="小地图：拖动或点击切换主画布焦点"
-          onClick={onMiniMapJump}
-          nodeColor={miniMapNodeColor}
           /* maskColor 是「小地图里非视口区域」的遮罩：必须跟随主题。
              写死 rgba(0,0,0,0.78) 时 Light 下整张缩略图被压成一块黑，
              与浅色画布割裂。改为引用 token——浅色用浅遮罩、深色保持近黑。 */
           maskColor="var(--color-canvas-minimap-mask)"
+          nodeColor={miniMapNodeColor}
+          onClick={onMiniMapJump}
+          pannable
+          zoomable
         />
       )}
     </ReactFlow>

@@ -43,9 +43,12 @@ export function normalizeExecutorMode(raw) {
   const value = String(raw ?? "")
     .trim()
     .toLowerCase();
-  if (value === "host") return { mode: "host", unknown: null };
-  if (value === "" || value === "inline")
+  if (value === "host") {
+    return { mode: "host", unknown: null };
+  }
+  if (value === "" || value === "inline") {
     return { mode: "inline", unknown: null };
+  }
   return { mode: "inline", unknown: value };
 }
 
@@ -69,14 +72,14 @@ export function readExecutorEnvRaw({
   envFilePath = path.join(ROOT, ".env"),
 } = {}) {
   const fromProc = procEnv[EXECUTOR_ENV_KEY];
-  if (fromProc !== undefined) return String(fromProc);
+  if (fromProc !== undefined) {
+    return String(fromProc);
+  }
   try {
-    if (!fs.existsSync(envFilePath)) return "";
-    return (
-      parseEnvFile(fs.readFileSync(envFilePath, "utf-8")).get(
-        EXECUTOR_ENV_KEY,
-      ) ?? ""
-    );
+    if (!fs.existsSync(envFilePath)) {
+      return "";
+    }
+    return parseEnvFile(fs.readFileSync(envFilePath, "utf-8")).get(EXECUTOR_ENV_KEY) ?? "";
   } catch {
     // 读不到 .env 不致命：按「未设」处理，与 host 侧 DATABASE_URL 那条同形。
     return "";

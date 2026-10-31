@@ -35,16 +35,16 @@ import { cn } from "~/lib/utils";
 import { AnsiLogText } from "./AnsiLogText";
 import type { RuntimeLogController } from "./use-runtime-log-source";
 
-export interface RuntimeLogBoxProps {
+export type RuntimeLogBoxProps = {
+  /** 外框的补充 class（各分区与上方元素之间的间距不同）。 */
+  className?: string;
+  /** 空态提示（引导用户点启动按钮或刷新）。 */
+  emptyHint: ReactNode;
   /** 日志文件名（标题里显示，如 `comfyui-runtime.log`）。 */
   fileName: string;
   /** 日志来源：正文 / 片段 / 会话列表 / 选中项 / 跟随态 / 刷新动作。 */
   log: RuntimeLogController;
-  /** 空态提示（引导用户点启动按钮或刷新）。 */
-  emptyHint: ReactNode;
-  /** 外框的补充 class（各分区与上方元素之间的间距不同）。 */
-  className?: string;
-}
+};
 
 export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLogBoxProps) {
   const [fullscreen, setFullscreen] = useState(false);
@@ -60,68 +60,68 @@ export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLo
       {!fullscreen && (
         <div className={cn("border-border bg-surface-1 mb-4 rounded-xl border", className)}>
           <LogToolbar
-            variant="inline"
-            title={title}
-            log={log}
             follow={follow}
+            log={log}
             onFollowChange={setFollow}
+            title={title}
             trailing={
               <Hint label="全屏查看">
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setFullscreen(true)}
                   aria-label="全屏查看"
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                  onClick={() => setFullscreen(true)}
+                  size="icon-sm"
+                  variant="ghost"
                 >
                   <Maximize2 data-icon="inline-start" size={14} />
                 </Button>
               </Hint>
             }
+            variant="inline"
           />
           <LogBody
-            log={log}
-            follow={follow}
-            onFollowChange={setFollow}
-            emptyHint={emptyHint}
             className="border-border-subtle mx-3 mb-3 max-h-44 rounded-lg border px-3 py-2"
+            emptyHint={emptyHint}
+            follow={follow}
+            log={log}
+            onFollowChange={setFollow}
           />
           <LogHint log={log} />
         </div>
       )}
 
       <FullScreenDialog
-        open={fullscreen}
-        onOpenChange={setFullscreen}
-        label={title}
         className="bg-bg"
+        label={title}
+        onOpenChange={setFullscreen}
+        open={fullscreen}
       >
         <LogToolbar
-          variant="full"
-          title={title}
-          log={log}
           follow={follow}
+          log={log}
           onFollowChange={setFollow}
+          title={title}
           trailing={
             <Hint label="退出全屏">
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setFullscreen(false)}
                 aria-label="退出全屏"
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                onClick={() => setFullscreen(false)}
+                size="icon-sm"
+                variant="ghost"
               >
                 <Minimize2 data-icon="inline-start" size={16} />
               </Button>
             </Hint>
           }
+          variant="full"
         />
         <LogBody
-          log={log}
-          follow={follow}
-          onFollowChange={setFollow}
-          emptyHint={emptyHint}
           className="border-border-subtle flex-1 border-t px-4 py-3 text-xs"
+          emptyHint={emptyHint}
+          follow={follow}
+          log={log}
+          onFollowChange={setFollow}
         />
         <LogHint log={log} />
       </FullScreenDialog>
@@ -143,12 +143,12 @@ function LogToolbar({
   onFollowChange,
   trailing,
 }: {
-  variant: "inline" | "full";
-  title: string;
-  log: RuntimeLogController;
   follow: boolean;
+  log: RuntimeLogController;
   onFollowChange: (next: boolean) => void;
+  title: string;
   trailing: ReactNode;
+  variant: "inline" | "full";
 }) {
   const full = variant === "full";
   return (
@@ -171,7 +171,7 @@ function LogToolbar({
         </span>
         {log.active && (
           <span className="text-success-strong text-3xs inline-flex shrink-0 items-center gap-1.5 font-normal">
-            <StatusDot state="up" sizeClass="size-1.5" pulse />
+            <StatusDot pulse sizeClass="size-1.5" state="up" />
             跟随中
           </span>
         )}
@@ -180,31 +180,31 @@ function LogToolbar({
         {/* 只有一次启动时不给下拉：一个选不出别的东西的下拉只是噪声。 */}
         {log.sessions.length > 1 && (
           <SelectMenu
-            value={log.sessionId ?? ""}
-            onChange={log.selectSession}
-            options={log.sessions.map((s) => s.id)}
+            aria-label="切换要查看的启动"
+            className="text-2xs max-w-55"
             /* 文案用服务端给的 `title`：它已含「时刻 · 退出形态 · runId」
              * （由端点的 `formatRunLabel` 拼好）。视图不再自己格式化一遍 ——
              * 两边各拼一次必然有一边先漂（§12.12）。 */
             labels={Object.fromEntries(log.sessions.map((s) => [s.id, s.title]))}
-            aria-label="切换要查看的启动"
-            className="text-2xs max-w-55"
+            onChange={log.selectSession}
+            options={log.sessions.map((s) => s.id)}
+            value={log.sessionId ?? ""}
           />
         )}
         {!follow && (
           <Button
-            size="xs"
-            onClick={() => onFollowChange(true)}
             className="text-2xs h-auto rounded px-2 py-0.5 font-medium"
+            onClick={() => onFollowChange(true)}
+            size="xs"
           >
             恢复自动滚动
           </Button>
         )}
         <Button
-          variant="outline"
-          size="xs"
-          onClick={() => void log.refresh()}
           className="text-muted-foreground text-2xs h-auto rounded px-2 py-0.5"
+          onClick={() => void log.refresh()}
+          size="xs"
+          variant="outline"
         >
           刷新
         </Button>
@@ -227,11 +227,11 @@ function LogBody({
   emptyHint,
   className,
 }: {
-  log: RuntimeLogController;
-  follow: boolean;
-  onFollowChange: (next: boolean) => void;
-  emptyHint: ReactNode;
   className: string;
+  emptyHint: ReactNode;
+  follow: boolean;
+  log: RuntimeLogController;
+  onFollowChange: (next: boolean) => void;
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const scroller = useScrollFollow({
@@ -243,9 +243,9 @@ function LogBody({
 
   return (
     <div
-      ref={scrollerRef}
-      onScroll={scroller.onScroll}
       className={`bg-canvas-deep text-ink-field custom-scrollbar text-2xs overflow-y-auto font-mono leading-relaxed ${className}`}
+      onScroll={scroller.onScroll}
+      ref={scrollerRef}
     >
       {log.text ? (
         <span className="break-all whitespace-pre-wrap">
@@ -266,12 +266,16 @@ function LogBody({
  */
 function LogHint({ log }: { log: RuntimeLogController }) {
   const parts: Array<string> = [];
-  if (log.truncated) parts.push("该次启动的输出过长，只显示最近一段。");
+  if (log.truncated) {
+    parts.push("该次启动的输出过长，只显示最近一段。");
+  }
   /* 列表被上限裁过：说清「还有更早的」而不是让用户以为「只启动过这些次」。
    * 一次启动一份文件之后同一天可能攒几十份，这条提示比过去更常出现。 */
   if (log.sessions.length < log.total) {
     parts.push(`该服务一共启动过 ${log.total} 次，下拉只列最近 ${log.sessions.length} 次。`);
   }
-  if (parts.length === 0) return null;
+  if (parts.length === 0) {
+    return null;
+  }
   return <p className="text-ink-fainter text-2xs px-3 pb-2 leading-relaxed">{parts.join("")}</p>;
 }

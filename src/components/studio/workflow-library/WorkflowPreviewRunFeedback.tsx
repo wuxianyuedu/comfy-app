@@ -11,21 +11,21 @@ import { ProgressBar } from "~/components/ui/progress-bar";
 
 import type { Phase } from "./hooks/use-generation-runner";
 
-interface Props {
-  phase: Phase;
-  pct: number;
+type Props = {
+  missingLabels: Array<string>;
   /** 正在执行的节点名（SSE 帧里带的 label；没有时显示工作流整体进度）。 */
   nodeLabel: string | null;
+  onDismissUploadNotice: () => void;
+  pct: number;
+  phase: Phase;
   resultUrl: string | null;
-  workflowName: string;
-  viewMode: "edit" | "use";
   running: boolean;
-  missingLabels: Array<string>;
   /** 素材上传的可见出口：ComfyUI 未运行 / 正在启动 / 启动超时都落在这里。
    *  上传位自身没有错误区，只记 console 用户看不到任何原因（ISSUE #345）。 */
   uploadNotice: string | null;
-  onDismissUploadNotice: () => void;
-}
+  viewMode: "edit" | "use";
+  workflowName: string;
+};
 
 export function WorkflowPreviewRunFeedback({
   phase,
@@ -43,18 +43,18 @@ export function WorkflowPreviewRunFeedback({
     <>
       {/* ── 进度条（两种模式通用，running 时显示） ── */}
       {phase.kind === "running" && (
-        <div className="w-95" aria-live="polite">
+        <div aria-live="polite" className="w-95">
           <ProgressBar
-            value={pct}
+            className="text-2xs"
+            fillClassName="u-gradient-brand duration-300"
             label={
               <>
                 {nodeLabel ? `正在执行 ${nodeLabel}` : "正在执行工作流"}
                 {phase.node ? `（${phase.node.value}/${phase.node.max}）` : ""}
               </>
             }
-            className="text-2xs"
             trackClassName="bg-surface-2 h-1.5"
-            fillClassName="u-gradient-brand duration-300"
+            value={pct}
           />
         </div>
       )}
@@ -67,10 +67,10 @@ export function WorkflowPreviewRunFeedback({
           {/* 缩略图盒子只有 380px 宽，看细节得点开通用查看器
               （原始大小 / 缩放 / 拖拽平移，见 `ui/image-viewer`）。 */}
           <ViewableImage
-            src={resultUrl}
             alt="运行结果"
-            label={`${workflowName} · 运行结果`}
             className="border-border w-full rounded-xl border"
+            label={`${workflowName} · 运行结果`}
+            src={resultUrl}
           />
         </div>
       )}
@@ -86,18 +86,18 @@ export function WorkflowPreviewRunFeedback({
       {/* ── 素材上传提示 ── */}
       {uploadNotice && (
         <div
+          aria-live="polite"
           className="border-warning/25 bg-warning/10 text-warning-strong text-2xs w-95 rounded-lg border px-3 py-2 leading-relaxed"
           role="status"
-          aria-live="polite"
         >
           <div className="flex items-start justify-between gap-2">
             <span className="min-w-0 flex-1">{uploadNotice}</span>
             <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={onDismissUploadNotice}
-              className="text-warning-strong shrink-0 rounded"
               aria-label="关闭上传提示"
+              className="text-warning-strong shrink-0 rounded"
+              onClick={onDismissUploadNotice}
+              size="icon-xs"
+              variant="ghost"
             >
               ✕
             </Button>

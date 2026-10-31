@@ -4,22 +4,20 @@
 
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { isRecord } from "~/lib/is-record";
-import {
-  type ApiChannelSaveInput,
-  type ApiChannelsView,
-  type ApiChannelView,
-} from "./api-channel-shared";
+import type { ApiChannelSaveInput, ApiChannelsView, ApiChannelView } from "./api-channel-shared";
 
 /** POST /api/workshop-api/config 的请求体：两个通道各自可选，只补丁改字段。 */
-export interface ApiChannelSavePayload {
+export type ApiChannelSavePayload = {
   image?: ApiChannelSaveInput;
   video?: ApiChannelSaveInput;
-}
+};
 
 const SAVE_ENDPOINT = "/api/workshop-api/config";
 
 function isChannelView(v: unknown): v is ApiChannelView {
-  if (!isRecord(v)) return false;
+  if (!isRecord(v)) {
+    return false;
+  }
   return (
     typeof v.configured === "boolean" &&
     typeof v.baseUrl === "string" &&
@@ -65,10 +63,12 @@ export async function saveApiChannels(payload: ApiChannelSavePayload): Promise<A
 
   /* 非法 JSON 按空对象处理（后端 500 可能返回非 JSON）—— 读法收在出口里。 */
   const data = /* SAFETY: 类型断言已复核 */ (await readJsonBody(res)) as {
-    error?: unknown;
     channels?: unknown;
+    error?: unknown;
   };
-  if (!res.ok) throw new Error(readApiErrorMessage(data) ?? "保存失败");
+  if (!res.ok) {
+    throw new Error(readApiErrorMessage(data) ?? "保存失败");
+  }
   if (!isChannelsView(data.channels)) {
     throw new Error("保存失败：服务端返回的通道配置格式不正确");
   }

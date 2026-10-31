@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseAnsiSegments, parseOllamaLogText, stripAnsi } from "./log-ansi";
 
 describe("stripAnsi", () => {
-  it("剥掉 SGR 颜色序列与 \\r，保留正文", () => {
+  it(String.raw`剥掉 SGR 颜色序列与 \r，保留正文`, () => {
     expect(stripAnsi("\x1b[31merror\x1b[0m\r\n")).toBe("error\n");
   });
 
@@ -14,17 +14,12 @@ describe("stripAnsi", () => {
 
 describe("parseAnsiSegments", () => {
   it("无序列文本原样返回单片段", () => {
-    expect(parseAnsiSegments("plain log line")).toEqual([
-      { text: "plain log line" },
-    ]);
+    expect(parseAnsiSegments("plain log line")).toEqual([{ text: "plain log line" }]);
   });
 
   it("颜色序列解析为带样式片段", () => {
     const segs = parseAnsiSegments("\x1b[31mERROR\x1b[0m done");
-    expect(segs).toEqual([
-      { text: "ERROR", styles: ["red"] },
-      { text: " done" },
-    ]);
+    expect(segs).toEqual([{ text: "ERROR", styles: ["red"] }, { text: " done" }]);
   });
 
   it("样式跨片段延续，0m 复位", () => {
@@ -49,11 +44,7 @@ describe("parseAnsiSegments", () => {
   it("22/39/49 分别复位 bold、前景、背景", () => {
     const segs = parseAnsiSegments("\x1b[1;31mX\x1b[22mY\x1b[39mZ");
     /* 22 只复位 bold，39 才复位前景色 */
-    expect(segs.map((s) => s.styles)).toEqual([
-      ["red", "bold"],
-      ["red"],
-      undefined,
-    ]);
+    expect(segs.map((s) => s.styles)).toEqual([["red", "bold"], ["red"], undefined]);
   });
 
   it("38;5;n / 38;2;r;g;b 不误染后续文本", () => {
@@ -62,7 +53,7 @@ describe("parseAnsiSegments", () => {
     expect(segs.at(-1)).toEqual({ text: "|tail" });
   });
 
-  it("空参数 \\x1b[m 等价复位", () => {
+  it(String.raw`空参数 \x1b[m 等价复位`, () => {
     const segs = parseAnsiSegments("\x1b[31ma\x1b[mb");
     expect(segs).toEqual([{ text: "a", styles: ["red"] }, { text: "b" }]);
   });
@@ -85,22 +76,14 @@ describe("parseOllamaLogText（logrus 纯文本语义上色）", () => {
   });
 
   it("level=ERROR 行标红；无 level= 的行走原样解析", () => {
-    const segments = parseOllamaLogText(
-      '[err] level=ERROR msg="boom"\nplain line without level',
-    );
-    expect(segments.find((s) => s.styles?.includes("red"))?.text).toBe(
-      "level=ERROR",
-    );
+    const segments = parseOllamaLogText('[err] level=ERROR msg="boom"\nplain line without level');
+    expect(segments.find((s) => s.styles?.includes("red"))?.text).toBe("level=ERROR");
     expect(segments.some((s) => s.text.includes("plain line"))).toBe(true);
   });
 
   it("level=WARN 黄色；行间保留换行", () => {
-    const segments = parseOllamaLogText(
-      'level=WARN msg="a"\nlevel=WARN msg="b"',
-    );
-    expect(segments.filter((s) => s.styles?.includes("yellow"))).toHaveLength(
-      2,
-    );
+    const segments = parseOllamaLogText('level=WARN msg="a"\nlevel=WARN msg="b"');
+    expect(segments.filter((s) => s.styles?.includes("yellow"))).toHaveLength(2);
     expect(segments.filter((s) => s.text === "\n")).toHaveLength(1);
   });
 });

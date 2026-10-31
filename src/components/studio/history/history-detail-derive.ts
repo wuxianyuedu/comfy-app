@@ -23,7 +23,9 @@ import type { TaskDetail } from "./history-types";
  * 各有一份逐字相同的三元 —— 收进这里，改一处即可。
  */
 export function kvValueText(value: unknown): string {
-  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
   return JSON.stringify(value);
 }
 
@@ -39,7 +41,8 @@ function paramsOf(detail: TaskDetail | null): Record<string, unknown> {
 /** 取 params.workflowInputs，非数组时给空数组。 */
 export function workflowInputsOf<T extends { name: string }>(detail: TaskDetail | null): Array<T> {
   const raw: unknown = paramsOf(detail).workflowInputs;
-  return Array.isArray(raw) ? /* SAFETY: 类型断言已复核 */ (raw as Array<T>) : [];
+  /* SAFETY: 类型断言已复核 */
+  return Array.isArray(raw) ? (raw as Array<T>) : [];
 }
 
 /**
@@ -77,11 +80,11 @@ export function deriveTaskOrigin(detail: TaskDetail | null): TaskOrigin {
 
 /** 一行「工坊参数」（模式契约的一个对外口 + 该次任务落在它上面的值）。
  *  `value` 为 `undefined` 表示这个口本次没给值——仍占一行（契约配了几个口就显示几个）。 */
-export interface WorkshopParamRow {
+export type WorkshopParamRow = {
   id: string;
   label: string;
   value: unknown;
-}
+};
 
 /** 契约口 id → params 顶层键的别名。工坊对外值落库时用的是 generate 入参名，
  *  与契约口 id 不完全同名（first-frame ↔ firstFrame、duration ↔ frames…）。 */
@@ -106,11 +109,11 @@ const SIZE_PIN_NAMES = new Set([
   "resolution",
 ]);
 
-interface RawWorkflowInput {
-  nodeId?: string;
+type RawWorkflowInput = {
   name: string;
+  nodeId?: string;
   value: unknown;
-}
+};
 
 /** 解析一个契约口在本次任务里的值：顶层 params（含别名）→ 尺寸口按 size 族 pin
  *  聚合 → 同名 workflowInputs pin 兜底。都取不到返回 `undefined`（不臆造）。 */
@@ -122,16 +125,22 @@ function resolvePortValue(
 ): unknown {
   const keys = PORT_TO_PARAM_KEYS[portId] ?? [portId];
   for (const key of keys) {
-    if (!isBlank(params[key])) return params[key];
+    if (!isBlank(params[key])) {
+      return params[key];
+    }
   }
   if (portId === "size") {
     const parts = inputs
       .filter((input) => SIZE_PIN_NAMES.has(input.name))
       .map((input) => `${resolveParamLabel(input, io)} ${kvValueText(input.value)}`);
-    if (parts.length > 0) return parts.join(" · ");
+    if (parts.length > 0) {
+      return parts.join(" · ");
+    }
   }
   const pin = inputs.find((input) => input.name === portId);
-  if (pin && !isBlank(pin.value)) return pin.value;
+  if (pin && !isBlank(pin.value)) {
+    return pin.value;
+  }
   return undefined;
 }
 
@@ -154,14 +163,14 @@ export function deriveWorkshopParams(
 }
 
 /** 一行「工作流参数」（下发给工作流的 IO 端口）。 */
-export interface WorkflowParamRow {
+export type WorkflowParamRow = {
   id: string;
-  /** 原始 pin 名（`workflowInputs[].name`）。 */
-  name: string;
   /** 展示名：工作流 IO 的作者标签，查不到时回退 `name`。 */
   label: string;
+  /** 原始 pin 名（`workflowInputs[].name`）。 */
+  name: string;
   value: unknown;
-}
+};
 
 /**
  * pin 名 → 可读名：按 `nodeId::widget::name` 在工作流 IO 里查作者标签。
@@ -174,7 +183,7 @@ export interface WorkflowParamRow {
  * 如实显示 pin 名。
  */
 export function resolveParamLabel(
-  input: { nodeId?: string; name: string },
+  input: { name: string; nodeId?: string },
   io: WorkflowIOMap | null | undefined,
 ): string {
   const entry = findIoEntry(io, input.nodeId, input.name);
@@ -188,14 +197,20 @@ function findIoEntry(
   nodeId: string | undefined,
   name: string,
 ): { label?: string } | null {
-  if (!io) return null;
+  if (!io) {
+    return null;
+  }
   if (nodeId) {
     const exact = io[`${nodeId}::widget::${name}`] ?? io[`${nodeId}::input::${name}`];
-    if (exact) return exact;
+    if (exact) {
+      return exact;
+    }
   }
   const suffix = `::widget::${name}`;
   for (const [key, entry] of Object.entries(io)) {
-    if (key.endsWith(suffix)) return entry;
+    if (key.endsWith(suffix)) {
+      return entry;
+    }
   }
   return null;
 }
@@ -211,14 +226,14 @@ export function deriveWorkflowParams(
   detail: TaskDetail | null,
   io: WorkflowIOMap | null | undefined,
 ): {
+  hasAny: boolean;
   rows: Array<WorkflowParamRow>;
   topLevelEntries: Array<[string, unknown]>;
-  hasAny: boolean;
 } {
   const params = paramsOf(detail);
   const rows = workflowInputsOf<{
-    nodeId?: string;
     name: string;
+    nodeId?: string;
     value: unknown;
   }>(detail).map((input, index) => ({
     id: `${input.nodeId ?? "?"}:${input.name}:${index}`,

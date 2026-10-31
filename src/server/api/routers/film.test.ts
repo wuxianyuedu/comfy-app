@@ -79,7 +79,7 @@ const caller = () => createCaller(makeCtx());
 async function codeOf(promise: Promise<unknown>): Promise<string> {
   return promise.then(
     () => "OK",
-    (e: { code?: string }) => e?.code ?? "UNKNOWN",
+    (error: { code?: string }) => error?.code ?? "UNKNOWN",
   );
 }
 
@@ -129,9 +129,7 @@ describe("film.cancel / start / compose —— 拒绝必须发生在副作用之
   });
 
   it("自己的成片：取消真的落到仓储", async () => {
-    const mark = vi
-      .spyOn(filmRepository, "markCancelled")
-      .mockResolvedValue(undefined);
+    const mark = vi.spyOn(filmRepository, "markCancelled").mockResolvedValue(undefined);
     await expect(caller().cancel({ id: "film-a" })).resolves.toEqual({
       ok: true,
     });
@@ -177,20 +175,16 @@ describe("film.create / createFromProject —— 上下文只能来自会话", (
 
   it("没给画幅时透传 `FILM_COMPOSE_SIZE` 那份常量，不在路由里硬编码尺寸", async () => {
     await caller().create({ title: "T", script: "S", type: "short_video" });
-    expect(orchestrator.createFilm.mock.calls[0]?.[0]?.size).toBe(
-      FILM_COMPOSE_SIZE,
-    );
+    expect(orchestrator.createFilm.mock.calls[0]?.[0]?.size).toBe(FILM_COMPOSE_SIZE);
   });
 
   it("从项目建片同样只传会话用户；项目归属判定在编排层（orchestrator.test.ts 已判）", async () => {
     seedProject(tdb, { id: "proj-a", userId: "user-a", name: "我的画布" });
     await caller().createFromProject({ projectId: "proj-a" });
-    expect(orchestrator.createFilmFromProject.mock.calls[0]?.[0]).toMatchObject(
-      {
-        userId: "user-a",
-        projectId: "proj-a",
-      },
-    );
+    expect(orchestrator.createFilmFromProject.mock.calls[0]?.[0]).toMatchObject({
+      userId: "user-a",
+      projectId: "proj-a",
+    });
   });
 
   it("标题超 200 字 / 空剧本 → BAD_REQUEST（不落到编排层）", async () => {
@@ -203,11 +197,9 @@ describe("film.create / createFromProject —— 上下文只能来自会话", (
         }),
       ),
     ).toBe("BAD_REQUEST");
-    expect(
-      await codeOf(
-        caller().create({ title: "T", script: "", type: "short_video" }),
-      ),
-    ).toBe("BAD_REQUEST");
+    expect(await codeOf(caller().create({ title: "T", script: "", type: "short_video" }))).toBe(
+      "BAD_REQUEST",
+    );
     expect(orchestrator.createFilm).not.toHaveBeenCalled();
   });
 });

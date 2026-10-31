@@ -12,21 +12,21 @@ import { ModelLibrary } from "./ModelLibrary";
  * 从而断言组件数据态流转（loading→data / loading→error），而不是
  * vi.mock("~/trpc/vanilla") 那种永不 resolve 的 pending 冒烟。 */
 
-interface ModelRow {
-  id: string;
-  name: string;
+type ModelRow = {
   fileName: string;
-  type: string;
-  isAvailable: boolean;
   fileSize?: number | null;
-}
-interface Behavior {
-  models: Array<ModelRow>;
-  /** 非空时 list 抛错 → 覆盖组件错误态 */
-  listError?: string;
+  id: string;
+  isAvailable: boolean;
+  name: string;
+  type: string;
+};
+type Behavior = {
   /** 弹层里那条连接状态行的数据源（缺省 true = 历史行为）。 */
   comfyReachable?: boolean;
-}
+  /** 非空时 list 抛错 → 覆盖组件错误态 */
+  listError?: string;
+  models: Array<ModelRow>;
+};
 
 /** 由调用方在 beforeAll 里替换，各用例通过 setBehavior 改值。 */
 let behavior: Behavior = { models: [] };

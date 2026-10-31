@@ -38,7 +38,7 @@ function sections(pad: string) {
   return /* SAFETY: 类型断言已复核 */ Object.fromEntries(
     SETTINGS_SECTIONS.map((item) => [
       item.id,
-      <p key={item.id} className={`text-ink text-sm ${pad}`}>
+      <p className={`text-ink text-sm ${pad}`} key={item.id}>
         这一节的正文（<code className="font-mono">{item.id}</code>）
       </p>,
     ]),
@@ -47,7 +47,7 @@ function sections(pad: string) {
 
 function Demo({ initial = "llmLocal", pad = "" }: { initial?: Section; pad?: string }) {
   const [section, setSection] = useState<Section>(initial);
-  return <SettingsShell section={section} onSelect={setSection} sections={sections(pad)} />;
+  return <SettingsShell onSelect={setSection} section={section} sections={sections(pad)} />;
 }
 
 /** 默认选中「本地模型」—— 高亮落在树的第一段第一条上，各节都很短（一屏装得下）。 */
@@ -70,9 +70,9 @@ export const Long: Story = {
 export const LoadingFallback: Story = {
   render: () => (
     <SettingsShell
-      section="llmLocal"
-      onSelect={noop}
       fallback={<p className="text-ink-muted text-sm">正在读取设置…（三态占位）</p>}
+      onSelect={noop}
+      section="llmLocal"
     />
   ),
 };

@@ -45,10 +45,10 @@ function Demo({
   disabled,
   hideExtraBadge,
 }: {
-  initialModes: Array<string>;
-  initialDefault: string;
   disabled?: boolean;
   hideExtraBadge?: boolean;
+  initialDefault: string;
+  initialModes: Array<string>;
 }) {
   const [modes, setModes] = useState(initialModes);
   const [defaultMode, setDefaultMode] = useState(initialDefault);
@@ -57,14 +57,14 @@ function Demo({
       <div className="flex items-center gap-3 rounded-lg border p-3">
         <span className="text-sm font-medium">角色一致性 · 三视图</span>
         <MultiModeSelect
-          modes={modes}
           defaultMode={defaultMode}
+          disabled={disabled}
+          hideExtraBadge={hideExtraBadge}
+          modes={modes}
           onChange={(next, nextDefault) => {
             setModes(next);
             setDefaultMode(nextDefault);
           }}
-          disabled={disabled}
-          hideExtraBadge={hideExtraBadge}
         />
       </div>
       <pre className="rounded-lg border p-3 font-mono text-xs">
@@ -79,19 +79,19 @@ function Demo({
 
 /** 单个模式：不出现 `+N` 徽标。 */
 export const SingleMode: Story = {
-  render: () => <Demo initialModes={["T2I"]} initialDefault="T2I" />,
+  render: () => <Demo initialDefault="T2I" initialModes={["T2I"]} />,
 };
 
 /** 多个模式：chip 主色按**默认模式**的分类给，附加模式折成 `+N` 徽标
  *  —— 主 chip 与徽标并排的形态只有这一档看得到。 */
 export const MultipleModes: Story = {
-  render: () => <Demo initialModes={["T2I", "I2I", "I2V", "T2V"]} initialDefault="I2V" />,
+  render: () => <Demo initialDefault="I2V" initialModes={["T2I", "I2I", "I2V", "T2V"]} />,
 };
 
 /** `hideExtraBadge`：调用处（如详情页）自己把全部模式列在上方时，`+N`
  *  就成了冗余 —— popover 仍可从主 chip 打开，只是徽标不画。 */
 export const HideExtraBadge: Story = {
-  render: () => <Demo initialModes={["T2I", "I2I", "I2V"]} initialDefault="T2I" hideExtraBadge />,
+  render: () => <Demo hideExtraBadge initialDefault="T2I" initialModes={["T2I", "I2I", "I2V"]} />,
 };
 
 /** 三种分类的主色：chip 主色按**默认模式所属分类**取语义 token
@@ -100,14 +100,14 @@ export const HideExtraBadge: Story = {
 export const DefaultModeAccent: Story = {
   render: () => (
     <div className="flex flex-col gap-4">
-      <Demo initialModes={["T2I", "I2I"]} initialDefault="T2I" />
-      <Demo initialModes={["I2V", "T2I"]} initialDefault="I2V" />
-      <Demo initialModes={["T2A", "T2I"]} initialDefault="T2A" />
+      <Demo initialDefault="T2I" initialModes={["T2I", "I2I"]} />
+      <Demo initialDefault="I2V" initialModes={["I2V", "T2I"]} />
+      <Demo initialDefault="T2A" initialModes={["T2A", "T2I"]} />
     </div>
   ),
 };
 
 /** 禁用：工作流正在运行时不能改模式 —— chip 不可点、也不出 popover。 */
 export const Disabled: Story = {
-  render: () => <Demo initialModes={["T2I", "I2I"]} initialDefault="T2I" disabled />,
+  render: () => <Demo disabled initialDefault="T2I" initialModes={["T2I", "I2I"]} />,
 };

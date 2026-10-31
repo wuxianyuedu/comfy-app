@@ -71,13 +71,13 @@ export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
  *
  * `hasApiKey` 是**只读视图字段**：服务端下发时逐条标「这条存过密钥」（与顶层同口径），
  * 供设置页显示「已配置」而不把明文送进浏览器；它不参与写入判定。 */
-export interface RemoteModelEntry {
-  name: string;
-  baseUrl?: string | null;
+export type RemoteModelEntry = {
   apiKey?: string | null;
-  kind?: RemoteModelKind | null;
+  baseUrl?: string | null;
   hasApiKey?: boolean;
-}
+  kind?: RemoteModelKind | null;
+  name: string;
+};
 
 /** `apiKey` 的三态归一（唯一一份口径，`normalizeExtraModels` 与 `splitExtraModels`
  *  都吃它 —— 这两处此前各写一份「不是非空字符串就折成 null」，而那正是把
@@ -86,8 +86,12 @@ export interface RemoteModelEntry {
  *  缺键 / `undefined` / 其它类型 → `undefined`（不提供意见，保留库里既有）。 */
 export function normalizeEntryApiKey(rec: Record<string, unknown>): string | null | undefined {
   const v: unknown = rec.apiKey;
-  if (typeof v === "string") return v.trim() === "" ? null : v.trim();
-  if (v === null) return null;
+  if (typeof v === "string") {
+    return v.trim() === "" ? null : v.trim();
+  }
+  if (v === null) {
+    return null;
+  }
   return undefined;
 }
 
@@ -111,10 +115,14 @@ export type RawExtraModel = string | RemoteModelEntry;
  * 返回 `null` = 这一枚不是条目（不是对象、没有名字、名字全空白）。
  */
 function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
-  if (typeof item !== "object" || item === null) return null;
+  if (typeof item !== "object" || item === null) {
+    return null;
+  }
   const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
   const name = typeof rec.name === "string" ? rec.name.trim() : "";
-  if (name === "") return null;
+  if (name === "") {
+    return null;
+  }
   const kind: unknown = rec.kind;
   const apiKey = normalizeEntryApiKey(rec);
   return {
@@ -122,26 +130,33 @@ function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
     baseUrl: typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== "" ? rec.baseUrl : null,
     // 三态：`undefined` 时**不挂这个键**（「不提供意见」不能被写成「清空」）
     ...(apiKey === undefined ? {} : { apiKey }),
+    /* SAFETY: 类型断言已复核 */
     kind:
       typeof kind === "string" &&
       /* SAFETY: 类型断言已复核 */ (REMOTE_MODEL_KINDS as ReadonlyArray<string>).includes(kind)
-        ? /* SAFETY: 类型断言已复核 */ (kind as RemoteModelKind)
+        ? (kind as RemoteModelKind)
         : null,
   };
 }
 
 /** 把 DB / 请求载荷里的 extraModels 归一化成条目数组（丢弃无名与空白项）。 */
 export function normalizeExtraModels(raw: unknown): Array<RemoteModelEntry> {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const out: Array<RemoteModelEntry> = [];
   for (const item of raw) {
     if (typeof item === "string") {
       // 字符串形态只带了名字，对连接参数**不提供意见**（挂 null 会被读成「清空」）
-      if (item.trim() !== "") out.push({ name: item, baseUrl: null, kind: null });
+      if (item.trim() !== "") {
+        out.push({ name: item, baseUrl: null, kind: null });
+      }
       continue;
     }
     const entry = normalizeExtraModelItem(item);
-    if (entry) out.push(entry);
+    if (entry) {
+      out.push(entry);
+    }
   }
   return out;
 }
@@ -152,12 +167,12 @@ export function extraModelName(entry: RawExtraModel): string {
 }
 
 /** option C 的拆分结果：本地 ollama 候选（纯名字，无 apiKey）与远端独立模型分开。 */
-export interface ExtraModelSplit {
+export type ExtraModelSplit = {
   /** 本地 Ollama 候选模型名（无 apiKey）。 */
   localNames: Array<string>;
   /** 远端独立模型条目（可带独立 baseUrl / apiKey）。 */
   remoteEntries: Array<RemoteModelEntry>;
-}
+};
 
 /**
  * 把 DB / 请求里的候选列表按「类型」拆成本地与远端两堆：
@@ -167,17 +182,23 @@ export interface ExtraModelSplit {
 export function splitExtraModels(raw: unknown): ExtraModelSplit {
   const localNames: Array<string> = [];
   const remoteEntries: Array<RemoteModelEntry> = [];
-  if (!Array.isArray(raw)) return { localNames, remoteEntries };
+  if (!Array.isArray(raw)) {
+    return { localNames, remoteEntries };
+  }
   for (const item of raw) {
     if (typeof item === "string") {
       const n = item.trim();
-      if (n !== "" && !localNames.includes(n)) localNames.push(n);
+      if (n !== "" && !localNames.includes(n)) {
+        localNames.push(n);
+      }
       continue;
     }
     /* 对象那一支的归一与读取侧同一次实现（见 `normalizeExtraModelItem`）——
      * 这里多出来的只有「按名字去重」与「字符串归本地候选」这两条分派规则。 */
     const entry = normalizeExtraModelItem(item);
-    if (!entry || remoteEntries.some((e) => e.name === entry.name)) continue;
+    if (!entry || remoteEntries.some((e) => e.name === entry.name)) {
+      continue;
+    }
     remoteEntries.push(entry);
   }
   return { localNames, remoteEntries };
@@ -201,7 +222,9 @@ export function isMisplacedLocalOllama(
   e: { apiKey?: string | null; baseUrl?: string | null },
   llmBaseUrl: string | null | undefined,
 ): boolean {
-  if (e.apiKey) return false; // 带独立密钥 = 真远端
+  if (e.apiKey) {
+    return false;
+  } // 带独立密钥 = 真远端
   const effective = e.baseUrl?.trim() ? e.baseUrl : (llmBaseUrl ?? "");
   return isLoopbackBaseUrl(effective);
 }
@@ -218,7 +241,9 @@ export function foldRemoteToLocal(
   const remotes: Array<RemoteModelEntry> = [];
   for (const e of remoteEntries) {
     if (isMisplacedLocalOllama(e, llmBaseUrl)) {
-      if (!locals.includes(e.name)) locals.push(e.name);
+      if (!locals.includes(e.name)) {
+        locals.push(e.name);
+      }
     } else {
       remotes.push(e);
     }
@@ -248,47 +273,53 @@ export function effectiveProviderType(
  *   该任务的用户覆盖值 → 调用方显式指定的温度 → 该任务推荐默认 → 全局默认。
  */
 export function resolveTaskTemperature(opts: {
-  taskType?: TaskType;
   explicitTemperature?: number | null;
-  overrides?: Record<TaskType, number> | null;
   fallback: number;
+  overrides?: Record<TaskType, number> | null;
+  taskType?: TaskType;
 }): number {
   const { taskType, explicitTemperature, overrides, fallback } = opts;
-  if (taskType && overrides?.[taskType] != null) return overrides[taskType];
-  if (explicitTemperature != null) return explicitTemperature;
-  if (taskType) return TASK_TYPES[taskType].defaultTemperature;
+  if (taskType && overrides?.[taskType] != null) {
+    return overrides[taskType];
+  }
+  if (explicitTemperature != null) {
+    return explicitTemperature;
+  }
+  if (taskType) {
+    return TASK_TYPES[taskType].defaultTemperature;
+  }
   return fallback;
 }
 
-export interface LLMConfig {
-  provider: LLMProviderType;
+export type LLMConfig = {
+  /** remote 提供方的密钥；与 RemoteModelEntry.apiKey 一样只在服务端参与请求 */
+  apiKey?: string | null;
   /** OpenAI-compatible base URL: 本机 Ollama 默认值见 `~/lib/endpoints`
    *  （`OLLAMA_DEFAULT_BASE_URL`），也可以指向任意远端 `https://…/v1`。 */
   baseUrl: string;
-  model: string;
   /** 候选模型（设置页可配置多个）：本地 Ollama 为纯名字；远端条目可带独立 baseUrl / apiKey */
   extraModels?: Array<RemoteModelEntry> | null;
-  /** remote 提供方的密钥；与 RemoteModelEntry.apiKey 一样只在服务端参与请求 */
-  apiKey?: string | null;
+  maxTokens: number;
+  model: string;
+  provider: LLMProviderType;
   /** 全局默认温度（未区分任务类型的调用的 fallback） */
   temperature: number;
   /** 按任务类型覆盖的温度；缺失某 key 时回退到该任务的推荐默认值 */
   temperatureByTask?: Record<TaskType, number> | null;
-  maxTokens: number;
-}
+};
 
 /* 发送给浏览器 / 与浏览器共享的配置形状（apiKey 已脱敏）。 */
-export interface LLMConfigView {
-  provider: LLMProviderType;
+export type LLMConfigView = {
   baseUrl: string;
-  model: string;
   /** 候选模型名（条目已归一成名字下发，供工坊内切换；连接参数不下发） */
   extraModels?: Array<string> | null;
+  hasApiKey: boolean;
+  maxTokens: number;
+  model: string;
+  provider: LLMProviderType;
   temperature: number;
   temperatureByTask?: Record<TaskType, number> | null;
-  maxTokens: number;
-  hasApiKey: boolean;
-}
+};
 
 /**
  * 多模态消息内容块（P8-2 视觉评审地基）：文本块 + 图块。OpenAI 兼容接口用 content
@@ -297,41 +328,41 @@ export interface LLMConfigView {
  * 与 `data:` base64；本地 Ollama 可直接喂 `http://localhost:…` 的图，远端模型喂公网可达址。
  */
 export type LLMContentPart =
-  | { type: "text"; text: string }
-  | { type: "image_url"; image_url: { url: string } };
+  | { text: string; type: "text" }
+  | { image_url: { url: string }; type: "image_url" };
 
-export interface LLMMessage {
-  role: "system" | "user" | "assistant" | "tool";
+export type LLMMessage = {
   /** 纯文本（历史用法）或多模态内容块数组（带图时用）。两者都合法。 */
   content: string | Array<LLMContentPart>;
-  /** 仅 role === "assistant" 时可能出现：携带 tool_calls 的消息回灌。 */
-  tool_calls?: Array<{
-    id: string;
-    type: "function";
-    function: { name: string; arguments: string };
-  }>;
+  role: "system" | "user" | "assistant" | "tool";
   /** 仅 role === "tool" 时需要：标识对应哪个 tool_call。 */
   tool_call_id?: string;
-}
+  /** 仅 role === "assistant" 时可能出现：携带 tool_calls 的消息回灌。 */
+  tool_calls?: Array<{
+    function: { arguments: string; name: string };
+    id: string;
+    type: "function";
+  }>;
+};
 /** OpenAI function calling 工具定义（OpenAI 兼容 /chat/completions 的 tools 参数）。 */
-export interface LLMTool {
-  type: "function";
+export type LLMTool = {
   function: {
-    name: string;
     description: string;
+    name: string;
     parameters?: Record<string, unknown>;
   };
-}
+  type: "function";
+};
 
 /** OpenAI 兼容响应中的 tool_call 条目。 */
-export interface LLMToolCall {
+export type LLMToolCall = {
+  function: {
+    arguments: string;
+    name: string;
+  };
   id: string;
   type: "function";
-  function: {
-    name: string;
-    arguments: string;
-  };
-}
+};
 
 /** 工坊阶段的 key —— 供按阶段挑选模型 / 提示各阶段能力 */
 export const WORKSHOP_STAGES = /* SAFETY: 类型断言已复核 */ [
@@ -343,14 +374,14 @@ export const WORKSHOP_STAGES = /* SAFETY: 类型断言已复核 */ [
 
 export type WorkshopStage = (typeof WORKSHOP_STAGES)[number]["id"];
 
-export interface LLMRequestOptions {
-  provider?: LLMProviderType;
+export type LLMRequestOptions = {
   baseUrl?: string;
-  model?: string;
-  temperature?: number;
   maxTokens?: number;
+  model?: string;
+  provider?: LLMProviderType;
   /** 调用方指定的任务类型，用于查找 temperatureByTask 覆盖 */
   taskType?: TaskType;
+  temperature?: number;
   /** OpenAI 兼容 function calling 的工具列表（可选，Agent 指挥用）。 */
   tools?: Array<LLMTool>;
   /**
@@ -359,7 +390,7 @@ export interface LLMRequestOptions {
    * 因此给它一个独立指定通道，缺省不强行要求用户配置。
    */
   visionModel?: string;
-}
+};
 
 /**
  * 选视觉评审模型名（P8-2）：优先级 = 调用方显式指定 → 远端候选里 `kind=image` 的那条
@@ -371,8 +402,12 @@ export function pickVisionModelName(
   override?: { visionModel?: string | null },
 ): string {
   const explicit = override?.visionModel?.trim();
-  if (explicit) return explicit;
+  if (explicit) {
+    return explicit;
+  }
   const imageEntry = cfg.extraModels?.find((e) => e.kind === "image");
-  if (imageEntry) return imageEntry.name;
+  if (imageEntry) {
+    return imageEntry.name;
+  }
   return cfg.model;
 }

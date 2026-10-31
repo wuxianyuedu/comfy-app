@@ -78,6 +78,7 @@ import {
   affordablePerFileCount,
   budgetAllows,
   estimateSerialRerunMs,
+  gateFirstPassByWallClock,
   gateRerunByWallClock,
   perFileBudgetStopReport,
   PLATFORM_STAGE_KILL_MS,
@@ -134,7 +135,7 @@ const SPAWN_LAYER_PATH = "scripts/affected-launch-spawn.mjs";
  * 所以**每一处**调用 `runChunk` 的用例都必须走它（或走下面那份委托它的 `runCapturing`），
  * 「不许有漏掉的调用点」由本文件末尾那条判据钉住（针尖的构造方式见它里面的说明）。
  */
-async function captureStderr<T>(fn: () => Promise<T>): Promise<{ value: T; text: string }> {
+async function captureStderr<T>(fn: () => Promise<T>): Promise<{ text: string; value: T; }> {
   const chunks: Array<string> = [];
   const realWrite = process.stderr.write.bind(process.stderr);
   process.stderr.write = (s: string | Uint8Array) => {
@@ -359,7 +360,14 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
      *     一行提醒，不是并发旋钮，把它算进来会让这条判据变成「谁在提示语里提到并发谁就
      *     红」，而真正的退化（复跑另给一个更大的并发）照样能从实参那一段看出来。
      * 「只许一处」本身不放松：全文件仍只有一处实参带并发旋钮。 */
-    const spawnSites = [...src.matchAll(/spawn\(\s*entry,\s*\[([\s\S]*?)\]\s*\)/g)].map(
+    /* 提取形态跟着**调用形状**走，不许写死一种排版：
+     *   · oxfmt 会在实参变长时把它整段折行（`spawn(entry, [ … ], options)` ⇒ 多行）；
+     *   · 2026-10-30 起第一遍还多一个第三参数（那个 `timeout`，PR #2760 的现场：无上界
+     *     的那一遍被平台掐断、零读数）。
+     * 所以这里认「`spawn(` 之后到第一个 `]` 为止」那一段，**两端都放宽**到任意空白。
+     * 写死 `entry, [` 紧邻或写死 `] )` 都会在那次改动里**静默匹配不到** —— 而「提取
+     * 落空」有自己的提防（下面那条 `toBeGreaterThanOrEqual(2)` 会当场红），两者一起才拦得住。 */
+    const spawnSites = [...src.matchAll(/spawn\([\s\S]*?entry,\s*\[([\s\S]*?)\]/g)].map(
       (m) => m[1] ?? "",
     );
     expect(
@@ -423,7 +431,9 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
   it("输出被抓在手里再原样回吐 —— 不抓就分不出「真断言红」与「机器太满」", () => {
     // 判决依赖输出内容，所以失败那一档不能再是 stdio:"inherit"。
     const spawnSrc = readFileSync(SPAWN_LAYER_PATH, "utf8");
-    const spawn = /function spawnVitest\(entry, args\) \{[\s\S]*?\n\}/.exec(spawnSrc)?.[0];
+    /* 签名带上第三个参数（`options`，2026-10-30 起第一遍那个 `timeout` 从这儿进）——
+     * 匹配形态跟着签名走，别让它变成一条「改签名就静默失效」的判据。 */
+    const spawn = /function spawnVitest\(entry, args, options[\s\S]*?\n\}/.exec(spawnSrc)?.[0];
     expect(spawn, "spawnVitest 还在吗？").toBeTruthy();
     expect(spawn).toContain('encoding: "utf8"');
     expect(spawn).toMatch(/process\.stdout\.write/);
@@ -665,14 +675,14 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   const CHUNK = ["tests/a.test.ts", "tests/b.test.ts"];
 
   /** 一次假 spawn 的结果（与 launcher 里 `spawnVitest` 的返回形状同构）。 */
-  type SpawnResult = { status: number | null; output: string };
+  type SpawnResult = { output: string; status: number | null; };
   /** 一次假 spawn 的调用记录。 */
-  type SpawnCall = { entry: string; args: Array<string> };
+  type SpawnCall = { args: Array<string>; entry: string; };
 
   /** 造一个假 spawn：按调用次序回放预设的结果。 */
   function fakeSpawn(results: Array<SpawnResult>): {
-    spawn: (entry: string, args: Array<string>) => SpawnResult;
     calls: Array<SpawnCall>;
+    spawn: (entry: string, args: Array<string>) => SpawnResult;
   } {
     const calls: Array<SpawnCall> = [];
     const spawn = (entry: string, args: Array<string>): SpawnResult => {
@@ -715,16 +725,16 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
    */
   async function runCapturing(deps: {
     entry: string;
-    workers?: number;
-    spawn?: (entry: string, args: Array<string>) => SpawnResult;
+    onAttempt?: (record: { outcome: string; settled?: boolean; waitedMs?: number; }) => void;
+    onUnverified?: (files: Array<string>) => void;
     settle?: () => Promise<{
-      settled: boolean;
       load: number;
+      settled: boolean;
       waitedMs: number;
     }>;
+    spawn?: (entry: string, args: Array<string>) => SpawnResult;
     waitBudget?: { deadline: number };
-    onUnverified?: (files: Array<string>) => void;
-    onAttempt?: (record: { outcome: string; waitedMs?: number; settled?: boolean }) => void;
+    workers?: number;
   }): Promise<{ code: number; text: string }> {
     /* 委托给模块级那一份：抓取的**机制**只许有一处，各写一份就会漂成
      * 「有的调用点抓得到、有的抓不到」（§12.12 / §12.18）。 */
@@ -809,7 +819,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   });
 
   it("未校验那一格与「负载有没有回落」解耦 —— 等待没兑现不改变结论", async () => {
-    const settled: { settled: boolean; load: number; waitedMs: number } = {
+    const settled: { load: number; settled: boolean; waitedMs: number } = {
       settled: true,
       load: 0.2,
       waitedMs: 0,
@@ -1246,7 +1256,7 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
 
   it("runChunk 真的把这两段拼进两次 spawn，清单仍在最后", async () => {
     const dir = tempDir();
-    const calls: Array<{ entry: string; args: Array<string> }> = [];
+    const calls: Array<{ args: Array<string>; entry: string; }> = [];
     await captureStderr(() =>
       runChunk(["tests/a.test.ts"], {
         entry: "vitest.mjs",
@@ -1592,7 +1602,7 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
     );
 
   /** 按次序回放结果的假 spawn，同时把每次的清单记下来（补跑发生过没有要看它）。 */
-  function scripted(results: Array<{ status: number; output: string }>) {
+  function scripted(results: Array<{ output: string; status: number; }>) {
     const lists: Array<Array<string>> = [];
     return {
       lists,
@@ -1801,7 +1811,7 @@ describe("第 1 遍就没跑起来（装载 / 运行时级错误）", () => {
 
   /** 起一次 `runChunk` 并把 stderr 收在手里（与上面那节同一个抓取通道）。 */
   async function runWith(
-    results: Array<{ status: number; output: string }>,
+    results: Array<{ output: string; status: number; }>,
     extra: Partial<Parameters<typeof runChunk>[1]> = {},
   ) {
     const calls: Array<Array<string>> = [];
@@ -2375,5 +2385,69 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
     });
     expect(b.deadline).toBe(1_000 + STAGE_WALL_CLOCK_MS);
     expect(b.budgetMs).toBe(STAGE_WALL_CLOCK_MS);
+  });
+});
+
+/* 第一遍自己的上界（2026-10-30 的现场，PR #2760）。
+ *
+ * 上面那一整组判点都只划在「还开不开下一遍」，前提是「第一遍总会跑完」。实测
+ * `cnb-l0u-1k66agmv9` 把这个前提证伪了：808 份 / 并发 1 的第一遍吃了 54 分钟被平台掐断，
+ * 而 `STAGE_WALL_CLOCK_MS`（25 分钟）一次都没生效（它的判点在那之后）。最坏的一层是
+ * 那一屏**一条用例名都没有** —— `--reporter=dot` 在第一份跑完之前只往同一行打点，
+ * 平台保留的又是日志尾部。所以这一组钉的不是「跑得快些」，是「装不下的那一遍要当场说出
+ * 来、且仍按未判定收」。 */
+describe("墙钟判点：第一遍自己开不开得起（PR #2760 的现场）", () => {
+  const MIN = 60_000;
+
+  it("按「份数 × 单份实测单价」判，不是按一个份数常数判", () => {
+    /* 常数界的形态在仓里已经有过一次教训（`DEFAULT_MAX_WORKERS = 4`）：它与「这台机此刻
+     * 跑一份要多久」没有关系。这里喂同一条现场读数（808 份吃满 3240000ms ⇒ 单份约 4.0s），
+     * 换预算看判决跟着变 —— 判的是这一次的事实，不是清单长度本身。 */
+    const perFileMs = Math.round(PLATFORM_STAGE_KILL_MS / 808);
+    const tight = gateFirstPassByWallClock({
+      budget: { deadline: STAGE_WALL_CLOCK_MS, budgetMs: STAGE_WALL_CLOCK_MS },
+      files: 808,
+      perFileMs,
+      nowMs: 0,
+    });
+    expect(tight.ok, "808 份在 25 分钟预算里合不进来").toBe(false);
+    expect(tight.note).toContain("开不起");
+    /* 同一份清单、宽得多的预算 ⇒ 放行（所以它不是「份数超了某个数就拦」）。 */
+    expect(
+      gateFirstPassByWallClock({
+        budget: { deadline: 120 * MIN, budgetMs: 120 * MIN },
+        files: 808,
+        perFileMs,
+        nowMs: 0,
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("没有单价 / 没有份数 / 没有界 ⇒ 一个字都不说（「不知道」不构成阻断理由）", () => {
+    const budget = { deadline: STAGE_WALL_CLOCK_MS, budgetMs: STAGE_WALL_CLOCK_MS };
+    for (const input of [
+      { budget, files: 808, perFileMs: 0, nowMs: 0 },
+      { budget, files: 0, perFileMs: 1_000, nowMs: 0 },
+      { budget: null, files: 808, perFileMs: 1_000, nowMs: 0 },
+    ]) {
+      const got = gateFirstPassByWallClock(input);
+      expect(got.ok, JSON.stringify(input)).toBe(true);
+      expect(got.note).toBe("");
+    }
+  });
+
+  it("拦下来那句话要给两条下一动作，且不许把它说成「红」", () => {
+    const got = gateFirstPassByWallClock({
+      budget: { deadline: MIN, budgetMs: STAGE_WALL_CLOCK_MS },
+      files: 100,
+      perFileMs: 5_000,
+      nowMs: 0,
+    });
+    expect(got.ok).toBe(false);
+    /* 退 2 是「没判」，不是「判出失败」—— 一句话读错就在这一格。 */
+    expect(got.note).toContain("未判定");
+    expect(got.note).toContain("退 2");
+    expect(got.note).toContain("拆开");
+    expect(got.note).toContain("--full");
   });
 });

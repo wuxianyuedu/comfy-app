@@ -17,7 +17,7 @@ export const STAGE_DEFS = /* SAFETY: 类型断言已复核 */ [
 
 export type Tab = (typeof STAGE_DEFS)[number]["id"];
 
-export const STAGE_TITLES: Record<Tab, { title: string; desc: string }> = {
+export const STAGE_TITLES: Record<Tab, { desc: string; title: string }> = {
   script: {
     title: "剧本",
     desc: "编写或导入完整剧本，为后续角色提取、分镜规划与全流程生成提供基础。",
@@ -45,20 +45,20 @@ export const STAGE_TITLES: Record<Tab, { title: string; desc: string }> = {
 };
 
 /** 导航副标题 / 前置提示 / 缺失素材共用的进度快照（由 hook 计算后下发）。 */
-export interface StageViewContext {
-  scriptReady: boolean;
+export type StageViewContext = {
   characterCount: number;
+  clipDoneCount: number;
+  imageDoneCount: number;
   sceneCount: number;
+  scriptReady: boolean;
+  shotCount: number;
   /**
    * 镜头目标数 = 各场景 `scene.shotCount` 之和（导入时按它铺占位镜头，见
    * `docs/guides/feature-workshop-flow.md`）。**0 表示剧本还没拆出场景**，
    * 此时「还差几镜」没有可派生的答案，屏面就不给目标，只报已排数。
    */
   shotTarget: number;
-  shotCount: number;
-  imageDoneCount: number;
-  clipDoneCount: number;
-}
+};
 
 export type StageRatios = Record<Tab, number>;
 
@@ -86,69 +86,86 @@ export function stageSubtitle(
   ratios: StageRatios,
   ctx: StageViewContext,
 ): string {
-  if (id === current) return "进行中";
-  if (ratios[id] >= 1) return "已完成";
+  if (id === current) {
+    return "进行中";
+  }
+  if (ratios[id] >= 1) {
+    return "已完成";
+  }
   switch (id) {
-    case "character":
+    case "character": {
       return ctx.characterCount > 0 ? `已建 ${ctx.characterCount} 个` : "待开始";
-    case "storyboard":
+    }
+    case "storyboard": {
       return ctx.shotCount > 0 ? `${ctx.shotCount} 镜` : "待开始";
-    case "shots":
+    }
+    case "shots": {
       return ctx.shotCount > 0 ? `图 ${ctx.imageDoneCount}/${ctx.shotCount}` : "待开始";
-    case "video":
+    }
+    case "video": {
       return ctx.shotCount > 0 ? `片段 ${ctx.clipDoneCount}/${ctx.shotCount}` : "待开始";
-    case "render":
+    }
+    case "render": {
       return ctx.shotCount > 0 ? "可合成" : "待开始";
-    default:
+    }
+    default: {
       return ctx.scriptReady ? "已就绪" : "待开始";
+    }
   }
 }
 
 /** 前置未满足时的温和提示(纯建议,不阻断)。 */
-export function stagePrereq(id: Tab, ctx: StageViewContext): { text: string; go: Tab } | null {
+export function stagePrereq(id: Tab, ctx: StageViewContext): { go: Tab; text: string } | null {
   switch (id) {
-    case "character":
+    case "character": {
       return ctx.scriptReady
         ? null
         : {
             text: "建议先完成「剧本」— 角色卡会自动复用剧本文本提取角色。",
             go: "script",
           };
-    case "storyboard":
+    }
+    case "storyboard": {
       return ctx.scriptReady
         ? null
         : {
             text: "建议先完成「剧本」— 分镜提取依赖剧本文本,角色可自动并入镜头。",
             go: "script",
           };
-    case "shots":
+    }
+    case "shots": {
       return ctx.shotCount > 0
         ? null
         : {
             text: "建议先完成「场景分镜」— 镜头提示词与角色参考会自动带入本阶段。",
             go: "storyboard",
           };
-    case "video":
+    }
+    case "video": {
       return ctx.shotCount > 0
         ? null
         : {
             text: "建议先完成「场景分镜」— 镜头时长与运动设定会自动带入本阶段。",
             go: "storyboard",
           };
-    case "render":
+    }
+    case "render": {
       return ctx.shotCount > 0
         ? null
         : {
             text: "建议先完成「场景分镜」与生成 — 成片时间线直接消费镜头数据。",
             go: "storyboard",
           };
-    default:
+    }
+    default: {
       return null;
+    }
   }
 }
 
-export interface MissingItem {
-  label: string;
+export type MissingItem = {
+  /** 这一项是否可以认为已就绪（决定清单上的完成态与颜色档）。 */
+  done: boolean;
   /**
    * 还差多少；`null` = **这一项没有可派生的目标**。
    *
@@ -158,9 +175,8 @@ export interface MissingItem {
    * 比不报缺口更糟：用户会照着它去凑数。现在无目标可派生时只报已建数。
    */
   gap: number | null;
-  /** 这一项是否可以认为已就绪（决定清单上的完成态与颜色档）。 */
-  done: boolean;
-}
+  label: string;
+};
 
 /**
  * 右侧「缺失素材 / 下一步」清单。判据全部来自 `StageViewContext` 的真实计数，
@@ -189,16 +205,16 @@ export function buildMissingSummary(ctx: StageViewContext): Array<MissingItem> {
 }
 
 /** 健康度快照的一行：一段阶段在屏顶分段条上的表达。 */
-export interface HealthRow {
+export type HealthRow = {
   id: Tab;
   label: string;
-  /** 窄槽位（分段条）用的两字缩略；要念出全名的地方一律用 `label`。 */
-  shortLabel: string;
-  /** 0~1 完成度，直接来自 computeStageRatios，不在这里二次加工。 */
-  ratio: number;
   /** 这一段还缺不缺东西（用于屏顶只留一处「还差几段」的说法）。 */
   pending: boolean;
-}
+  /** 0~1 完成度，直接来自 computeStageRatios，不在这里二次加工。 */
+  ratio: number;
+  /** 窄槽位（分段条）用的两字缩略；要念出全名的地方一律用 `label`。 */
+  shortLabel: string;
+};
 
 /**
  * 屏顶分段健康度条的数据源。

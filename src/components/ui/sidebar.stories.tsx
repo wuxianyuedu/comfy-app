@@ -100,13 +100,13 @@ function Shell({
   defaultOpen = true,
 }: {
   collapsible?: "offcanvas" | "icon" | "none";
-  variant?: "sidebar" | "floating" | "inset";
-  side?: "left" | "right";
   defaultOpen?: boolean;
+  side?: "left" | "right";
+  variant?: "sidebar" | "floating" | "inset";
 }) {
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
-      <Sidebar collapsible={collapsible} variant={variant} side={side}>
+      <Sidebar collapsible={collapsible} side={side} variant={variant}>
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -236,7 +236,7 @@ export const CollapsibleNone: Story = {
 export const VariantFloating: Story = {
   render: () => (
     <div className="h-128">
-      <Shell variant="floating" collapsible="icon" />
+      <Shell collapsible="icon" variant="floating" />
     </div>
   ),
 };
@@ -244,7 +244,7 @@ export const VariantFloating: Story = {
 export const VariantInset: Story = {
   render: () => (
     <div className="h-128">
-      <Shell variant="inset" collapsible="icon" />
+      <Shell collapsible="icon" variant="inset" />
     </div>
   ),
 };
@@ -254,7 +254,7 @@ export const VariantInset: Story = {
 export const SideRight: Story = {
   render: () => (
     <div className="h-128">
-      <Shell side="right" collapsible="icon" />
+      <Shell collapsible="icon" side="right" />
     </div>
   ),
 };
@@ -275,7 +275,7 @@ export const DefaultCollapsed: Story = {
 export const MenuButtonAxes: Story = {
   render: () => (
     <SidebarProvider>
-      <Sidebar collapsible="none" className="w-64">
+      <Sidebar className="w-64" collapsible="none">
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupContent>
@@ -283,7 +283,7 @@ export const MenuButtonAxes: Story = {
                 {MENU_BUTTON_VARIANTS.map((variant) =>
                   MENU_BUTTON_SIZES.map((size) => (
                     <SidebarMenuItem key={`${variant}-${size}`}>
-                      <SidebarMenuButton variant={variant} size={size}>
+                      <SidebarMenuButton size={size} variant={variant}>
                         <Home />
                         <span>
                           {variant} / {size}

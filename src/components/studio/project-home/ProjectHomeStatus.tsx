@@ -17,35 +17,33 @@ import { Button } from "~/components/ui/button";
 import type { WorkspaceView } from "../NavItems";
 import type { ProjectOverview } from "~/lib/production/project-home";
 
-export interface ProjectHomeStatusProps {
-  overview: ProjectOverview;
+export type ProjectHomeStatusProps = {
   /** 首次取数完成前为真：计数显示占位符而不是 0（「还没读到」≠「一个都没有」）。 */
   loading: boolean;
   onNavigate: (view: WorkspaceView) => void;
-}
+  overview: ProjectOverview;
+};
 
 /** 阶段行的图标：完成 → 勾、当前 → 转圈、未开始 → 空圈。 */
-function StageIcon({ done, current }: { done: boolean; current: boolean }) {
+function StageIcon({ done, current }: { current: boolean; done: boolean }) {
   if (done) {
-    return <Check size={13} className="text-success-strong" aria-hidden />;
+    return <Check aria-hidden className="text-success-strong" size={13} />;
   }
   if (current) {
     /* 转圈走基元（P3 硬闸：自写 `animate-spin` 不许出现在视图里）。 */
     return <Spinner className="text-primary size-3.25" />;
   }
-  return <Circle size={13} className="text-ink-fainter" aria-hidden />;
+  return <Circle aria-hidden className="text-ink-fainter" size={13} />;
 }
 
 function stageStateText(done: boolean, current: boolean): string {
-  if (done) return "已完成";
+  if (done) {
+    return "已完成";
+  }
   return current ? "进行中" : "未开始";
 }
 
-export function ProjectHomeStatus({
-  overview,
-  loading,
-  onNavigate,
-}: ProjectHomeStatusProps) {
+export function ProjectHomeStatus({ overview, loading, onNavigate }: ProjectHomeStatusProps) {
   /* 计数在「还没读到」时给占位符：`displayValue(null)` 给 `—`。
    * 直接写 0 会让用户在打开主页的一瞬间读到「剧本 0 字 / 0 镜」，而那是假的。 */
   const raw = (value: number): number | null => (loading ? null : value);
@@ -56,22 +54,20 @@ export function ProjectHomeStatus({
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="u-title">制作阶段</h2>
           <span className="text-ink-faint text-2xs tabular-nums">
-            {loading
-              ? ""
-              : `${overview.doneCount} / ${overview.totalCount} 完成`}
+            {loading ? "" : `${overview.doneCount} / ${overview.totalCount} 完成`}
           </span>
         </div>
 
         <ul className="flex flex-col gap-1.5">
           {overview.stages.map((stage) => (
             <li
-              key={stage.id}
               className={cn(
                 "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px]",
                 stage.current && "bg-primary/8",
               )}
+              key={stage.id}
             >
-              <StageIcon done={stage.done} current={stage.current} />
+              <StageIcon current={stage.current} done={stage.done} />
               <span
                 className={cn(
                   "min-w-0 flex-1 truncate",
@@ -96,17 +92,11 @@ export function ProjectHomeStatus({
       <section className="border-border bg-panel flex flex-col gap-2 rounded-2xl border p-4">
         <h2 className="u-title">素材进度</h2>
         <KeyValueRows
-          layout="rows"
           bordered
-          striped
           items={[
             {
               key: "剧本",
-              value: loading
-                ? displayValue(null)
-                : overview.hasScript
-                  ? "已就绪"
-                  : "未开始",
+              value: loading ? displayValue(null) : overview.hasScript ? "已就绪" : "未开始",
             },
             { key: "角色", raw: raw(overview.characterCount) },
             { key: "镜头", raw: raw(overview.shotCount) },
@@ -114,18 +104,16 @@ export function ProjectHomeStatus({
             { key: "视频片段", raw: raw(overview.clipDoneCount) },
             {
               key: "成片",
-              value: loading
-                ? displayValue(null)
-                : overview.filmRendered
-                  ? "已合成"
-                  : "未合成",
+              value: loading ? displayValue(null) : overview.filmRendered ? "已合成" : "未合成",
             },
           ]}
+          layout="rows"
+          striped
         />
         <Button
-          variant="link"
-          onClick={() => onNavigate("workshop")}
           className="text-ink-muted hover:text-ink-strong text-2xs h-auto self-start p-0"
+          onClick={() => onNavigate("workshop")}
+          variant="link"
         >
           去工坊继续 →
         </Button>

@@ -24,10 +24,13 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await readJsonRecord(req);
-  if (isErrorResponse(body)) return body;
+  if (isErrorResponse(body)) {
+    return body;
+  }
 
+  /* SAFETY: 类型断言已复核 */
   const rawMessages = Array.isArray(body.messages)
-    ? /* SAFETY: 类型断言已复核 */ (body.messages as Array<Record<string, unknown>>)
+    ? (body.messages as Array<Record<string, unknown>>)
     : [];
   if (rawMessages.length === 0) {
     return NextResponse.json({ error: "messages 不能为空" }, { status: 400 });
@@ -42,8 +45,8 @@ export async function POST(req: NextRequest) {
   try {
     const result = await handleAgentChat(request);
     return NextResponse.json(result);
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "Agent 处理请求失败"), {
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "Agent 处理请求失败"), {
       status: 502,
     });
   }

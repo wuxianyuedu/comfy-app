@@ -47,7 +47,13 @@
  * **也不许只写一端** —— `tests/app-event-pairing.test.ts` 要求这一行的每一条
  * 都既有派发方又有订阅方（认字面量，也认 `export const X = "…"` 常量的间接写法）。
  */
-export interface AppEvents {
+export type AppEvents = {
+  /** 某个画布节点产出了结果，读侧据此把输出喂给下游。 */
+  "canvas:produce": {
+    id: string;
+    resultMediaType?: string;
+    resultPath: string;
+  };
   /** 画布仓库（项目索引 / 激活项）发生增删改后广播。载荷：无。 */
   "comfyapp:canvas-store-changed": undefined;
   /**
@@ -58,28 +64,6 @@ export interface AppEvents {
    * 那些页面上没有提示器 —— 只靠事件的读侧必然漏掉那一次。
    */
   "comfyapp:canvas-sync-changed": undefined;
-  /** 某个画布节点产出了结果，读侧据此把输出喂给下游。 */
-  "canvas:produce": {
-    id: string;
-    resultPath: string;
-    resultMediaType?: string;
-  };
-  /**
-   * 请求工作区切到某个视图。载荷：视图 id（`WorkspaceView`）。
-   *
-   * 为什么用事件而不是 props：触发方（工坊右栏的「资源库」卡）与持有视图状态的
-   * 容器（`app/workspace/page.tsx`）之间隔着 `WorkshopPipeline` / `WorkshopAside`
-   * 两层，为一条「跳过去」的链接穿三层 props 不划算；订阅侧也只有一处。
-   *
-   * `section` 是可选的目标分区 id，**只在 `view === "settings"` 时有意义**：
-   * 设置是一页到底的分区目录，光切到「设置」只会落在默认（或上次）分区 ——
-   * 从别处跳过来的入口（如 ComfyUI 页的「去设置里配置」）要的是「直接停在
-   * 创作后端那一节」，光有 `view` 表达不了。
-   *
-   * 载荷刻意写成 `string` 而不是 import `WorkspaceView` / `Section`：本模块在
-   * `src/lib`，不得反向依赖视图层（§18 硬规则 22）—— 合法性由订阅侧按已有枚举收敛。
-   */
-  "workspace:navigate": { view: string; section?: string };
   /**
    * 自定义节点注册表被重新灌入（画布挂载时那一次、以及每次解析收尾后的那一次）。
    * 载荷：无 —— 结论本身可查（`~/config/custom-nodes` 的
@@ -95,7 +79,23 @@ export interface AppEvents {
    * 记的就是它。现在订阅侧在 `~/components/studio/canvas/use-custom-nodes-registry`。
    */
   "comfyapp:custom-nodes-updated": undefined;
-}
+  /**
+   * 请求工作区切到某个视图。载荷：视图 id（`WorkspaceView`）。
+   *
+   * 为什么用事件而不是 props：触发方（工坊右栏的「资源库」卡）与持有视图状态的
+   * 容器（`app/workspace/page.tsx`）之间隔着 `WorkshopPipeline` / `WorkshopAside`
+   * 两层，为一条「跳过去」的链接穿三层 props 不划算；订阅侧也只有一处。
+   *
+   * `section` 是可选的目标分区 id，**只在 `view === "settings"` 时有意义**：
+   * 设置是一页到底的分区目录，光切到「设置」只会落在默认（或上次）分区 ——
+   * 从别处跳过来的入口（如 ComfyUI 页的「去设置里配置」）要的是「直接停在
+   * 创作后端那一节」，光有 `view` 表达不了。
+   *
+   * 载荷刻意写成 `string` 而不是 import `WorkspaceView` / `Section`：本模块在
+   * `src/lib`，不得反向依赖视图层（§18 硬规则 22）—— 合法性由订阅侧按已有枚举收敛。
+   */
+  "workspace:navigate": { section?: string; view: string };
+};
 
 /** 应用事件名的联合类型。 */
 export type AppEventName = keyof AppEvents;
@@ -124,7 +124,9 @@ export function emitAppEvent<K extends AppEventName>(
   name: K,
   ...payload: AppEvents[K] extends undefined ? [] : [AppEvents[K]]
 ): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") {
+    return;
+  }
   const detail = payload[0];
   window.dispatchEvent(detail === undefined ? new Event(name) : new CustomEvent(name, { detail }));
 }
@@ -157,7 +159,9 @@ export function subscribeAppEvent<K extends AppEventName>(
   name: K,
   handler: (payload: AppEvents[K]) => void,
 ): () => void {
-  if (typeof window === "undefined") return noop;
+  if (typeof window === "undefined") {
+    return noop;
+  }
   const listener = (event: Event) => {
     handler(
       /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (event as CustomEvent)

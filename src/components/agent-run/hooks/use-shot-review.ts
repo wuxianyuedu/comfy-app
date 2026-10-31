@@ -18,49 +18,40 @@ import {
   setHumanRating,
   setHumanVerdict,
 } from "~/lib/production/run-client";
-import type {
-  HumanVerdict,
-  ReviewMode,
-  ReviewVerdict,
-} from "~/lib/production/review-types";
+import type { HumanVerdict, ReviewMode, ReviewVerdict } from "~/lib/production/review-types";
 import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";
 
-export interface ShotReviewController {
-  /** 最近一次评审判定（未评 / 已重置 → null）。 */
-  verdict: ReviewVerdict | null;
-  /** 评审在途。 */
-  reviewing: boolean;
-  /** 重生成在途。 */
-  regenerating: boolean;
+export type ShotReviewController = {
   /** 评审失败文案（就地展示，不外抛）。 */
   error: string;
-  /** 评审指定镜头（结果写进 `verdict`，服务端同时落库到 `shot.review`）。 */
-  review: (shotId: string) => Promise<void>;
-  /** 不合格后的重生成：gacha=同提示词换种子，reprompt=据评审意见改写提示词。 */
-  regenerate: (shotId: string, mode: ReviewMode) => Promise<void>;
-  /** 人工裁决（#2480，优先于 AI）：落库后回显 + 通知调用方刷新。 */
-  submitVerdict: (shotId: string, pass: boolean, note: string) => Promise<void>;
   /** 人工裁决结果（本次会话内提交过的；切换镜头即清）。 */
   humanVerdict: HumanVerdict | null;
-  /** 人评分（0~5，null = 清除）。 */
-  setRating: (shotId: string, rating: number | null) => Promise<void>;
+  /** 不合格后的重生成：gacha=同提示词换种子，reprompt=据评审意见改写提示词。 */
+  regenerate: (shotId: string, mode: ReviewMode) => Promise<void>;
+  /** 重生成在途。 */
+  regenerating: boolean;
   /** 清空当前判定（弹窗切换目标镜头时调用）。 */
   reset: () => void;
-}
+  /** 评审指定镜头（结果写进 `verdict`，服务端同时落库到 `shot.review`）。 */
+  review: (shotId: string) => Promise<void>;
+  /** 评审在途。 */
+  reviewing: boolean;
+  /** 人评分（0~5，null = 清除）。 */
+  setRating: (shotId: string, rating: number | null) => Promise<void>;
+  /** 人工裁决（#2480，优先于 AI）：落库后回显 + 通知调用方刷新。 */
+  submitVerdict: (shotId: string, pass: boolean, note: string) => Promise<void>;
+  /** 最近一次评审判定（未评 / 已重置 → null）。 */
+  verdict: ReviewVerdict | null;
+};
 
 const REGEN_SUCCESS: Record<ReviewMode, string> = {
   gacha: "已抽卡：镜头已退回，将在下次执行时换种子重出",
   reprompt: "已改提示词：镜头已退回，将用新提示词重出",
 };
 
-export function useShotReview(
-  projectId: string,
-  onRegenerated?: () => void,
-): ShotReviewController {
+export function useShotReview(projectId: string, onRegenerated?: () => void): ShotReviewController {
   const [verdict, setVerdict] = useState<ReviewVerdict | null>(null);
-  const [humanVerdict, setHumanVerdictState] = useState<HumanVerdict | null>(
-    null,
-  );
+  const [humanVerdict, setHumanVerdictState] = useState<HumanVerdict | null>(null);
   const [error, setError] = useState("");
   const reviewBusy = useBusyAction();
   const regenBusy = useBusyAction();
@@ -76,7 +67,9 @@ export function useShotReview(
 
   const review = useCallback(
     async (shotId: string) => {
-      if (!projectId) return;
+      if (!projectId) {
+        return;
+      }
       guardRef.current.dispose();
       const guard = beginStaleRun();
       guardRef.current = guard;
@@ -85,11 +78,11 @@ export function useShotReview(
         try {
           const v = await reviewShot(projectId, shotId);
           guard.commit(() => setVerdict(v));
-        } catch (e) {
+        } catch (error_) {
           // 失败也走守卫：卸载后到达的错误不往界面写。原文交 errorMessage 翻译。
           guard.commit(() => {
             setVerdict(null);
-            setError(e instanceof Error ? e.message : "评审失败");
+            setError(error_ instanceof Error ? error_.message : "评审失败");
           });
         }
       });
@@ -99,15 +92,20 @@ export function useShotReview(
 
   const report: ActionReport = useCallback(
     (kind, detail) => {
-      if (kind === "ok") toast.success(detail);
-      else toast.error(detail);
+      if (kind === "ok") {
+        toast.success(detail);
+      } else {
+        toast.error(detail);
+      }
     },
     [toast],
   );
 
   const regenerate = useCallback(
     async (shotId: string, mode: ReviewMode) => {
-      if (!projectId) return;
+      if (!projectId) {
+        return;
+      }
       const result = await regenBusy.run(() =>
         runAsyncAction(
           async () => {
@@ -121,26 +119,21 @@ export function useShotReview(
           },
         ),
       );
-      if (result.ok) onRegenerated?.();
+      if (result.ok) {
+        onRegenerated?.();
+      }
     },
     [projectId, regenBusy, report, onRegenerated],
   );
 
   const submitVerdict = useCallback(
     async (shotId: string, pass: boolean, note: string) => {
-      if (!projectId) return;
-      const saved = await setHumanVerdict(
-        projectId,
-        "shot",
-        shotId,
-        pass,
-        note,
-      );
+      if (!projectId) {
+        return;
+      }
+      const saved = await setHumanVerdict(projectId, "shot", shotId, pass, note);
       setHumanVerdictState(saved);
-      report(
-        "ok",
-        pass ? "已人工通过：该镜定稿放行" : "已人工否决：将重出这一镜",
-      );
+      report("ok", pass ? "已人工通过：该镜定稿放行" : "已人工否决：将重出这一镜");
       onRegenerated?.();
     },
     [projectId, report, onRegenerated],
@@ -148,7 +141,9 @@ export function useShotReview(
 
   const setRating = useCallback(
     async (shotId: string, rating: number | null) => {
-      if (!projectId) return;
+      if (!projectId) {
+        return;
+      }
       await setHumanRating(projectId, shotId, rating);
     },
     [projectId],

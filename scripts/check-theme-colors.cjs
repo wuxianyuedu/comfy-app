@@ -86,9 +86,7 @@ const REPORT_ONLY = ARGS.has("--report");
 const SCAN_DIR = "src";
 const SOURCE_EXT = /\.(ts|tsx)$/;
 const isTestFile = (rel) =>
-  /\.test\.[cm]?[jt]sx?$/.test(rel) ||
-  /\.snap$/.test(rel) ||
-  rel.includes("/__tests__/");
+  /\.test\.[cm]?[jt]sx?$/.test(rel) || /\.snap$/.test(rel) || rel.includes("/__tests__/");
 
 /* ── 写死色值的识别 ──────────────────────────────────────── */
 
@@ -117,8 +115,7 @@ const FUNC_COLOR_RE = /rgba?\s*\(/g;
  * 两侧因此都在 `tests/check-theme-colors.test.ts` 钉住（短色值必须红、
  * ISSUE 号必须绿），口径见规范 03 §3.6.2 末段。
  */
-const COLOR_CONTEXT_RE =
-  /(?:bg|text|border|fill|stroke|color|background|COLOR)[^#]*$/i;
+const COLOR_CONTEXT_RE = /(?:bg|text|border|fill|stroke|color|background|COLOR)[^#]*$/i;
 
 /**
  * 去掉 `//` 行注释与 `/* … *\/` 块注释（保留行数，便于报行号）。
@@ -140,7 +137,9 @@ function stripComments(text) {
       if (ch === "\n") {
         inLine = false;
         out += ch;
-      } else out += " ";
+      } else {
+        out += " ";
+      }
       i++;
       continue;
     }
@@ -161,7 +160,9 @@ function stripComments(text) {
         i += 2;
         continue;
       }
-      if (ch === inStr) inStr = null;
+      if (ch === inStr) {
+        inStr = null;
+      }
       out += ch;
       i++;
       continue;
@@ -200,14 +201,16 @@ function colorHitsInLine(line) {
     const v = m[0];
     // 3~4 位短写法（`#f00`）只在「有颜色语境」时才收：`#346` 这类 ISSUE 引用
     // 恰好也是 3 位合法 hex 字符，无差别收会把每一处 `ISSUE #NNN` 报成漏改。
-    if (v.length <= 5 && !COLOR_CONTEXT_RE.test(line.slice(0, m.index))) continue;
+    if (v.length <= 5 && !COLOR_CONTEXT_RE.test(line.slice(0, m.index))) {
+      continue;
+    }
     hits.push(v);
   }
-  for (const m of line.matchAll(FUNC_COLOR_RE))
+  for (const m of line.matchAll(FUNC_COLOR_RE)) {
     hits.push(m[0].replace(/\s*\($/, "("));
+  }
   return hits;
 }
-
 
 /** 全部豁免落点索引：rel → [entry…]。 */
 const EXEMPT_INDEX = new Map();
@@ -241,19 +244,24 @@ function scopeResolver(text) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const decl = line.match(DECL_RE);
-    if (depth === 0 && decl) current = decl[1];
+    if (depth === 0 && decl) {
+      current = decl[1];
+    }
     scopeAtLine[i] = current;
     let opened = false;
     for (const ch of line) {
       if (ch === "{" || ch === "(" || ch === "[") {
         depth++;
         opened = true;
-      } else if (ch === "}" || ch === ")" || ch === "]")
+      } else if (ch === "}" || ch === ")" || ch === "]") {
         depth = Math.max(0, depth - 1);
+      }
     }
     /* 只有「开过括号并配平」才算这次声明结束；`export const X = 1;` 这种
      * 单行声明由下一个声明的出现自然切换，不必在这里清空。 */
-    if (depth === 0 && opened) current = null;
+    if (depth === 0 && opened) {
+      current = null;
+    }
   }
   return scopeAtLine;
 }
@@ -261,10 +269,10 @@ function scopeResolver(text) {
 /** 命中集合：rel → { wholeFile | exports[], lines[] }。 */
 function classifyFile(rel) {
   const entries = EXEMPT_INDEX.get(rel) ?? [];
-  if (entries.length === 0) return null;
-  const wholeFile = entries.some(
-    (e) => (e.exports ?? []).length === 0 && !e.lines,
-  );
+  if (entries.length === 0) {
+    return null;
+  }
+  const wholeFile = entries.some((e) => (e.exports ?? []).length === 0 && !e.lines);
   const names = new Set(entries.flatMap((e) => e.exports ?? []));
   const lines = new Set(entries.flatMap((e) => e.lines ?? []));
   return { wholeFile, names, lines };
@@ -335,10 +343,7 @@ const CSS_VAR_DECL_RE = /^\s*(--color-[\w-]+)\s*:/gm;
  * 那种正则会在 `globals.css` 的说明注释里命中 103 处散文引用，
  * 全是「这个名字被 shake 是因为没人用」的正确形态（同 §12.18 别造误报机）。
  */
-const COMPOSED_NAME_RES = [
-  /--color-[a-z0-9-]*\$\{/,
-  /["'`]--color-[a-z0-9-]*["'`]\s*\+/,
-];
+const COMPOSED_NAME_RES = [/--color-[a-z0-9-]*\$\{/, /["'`]--color-[a-z0-9-]*["'`]\s*\+/];
 
 /**
  * ⑤ **跨面相等主张** —— 用「与 `--color-primary` / `--color-accent` 同值」这类句子
@@ -416,14 +421,17 @@ const BARE_VAR_CLASS_RES = [/-\(\s*--color-[\w-]+\s*\)/];
 const FALLBACK_ON_DEFINED_RES =
   /var\(\s*(--color-[\w-]+)\s*,\s*(?:#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|hwb\(|lab\(|lch\(|oklab\(|oklch\(|color-mix\()/g;
 
-
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name === ".next") continue;
+      if (e.name === "node_modules" || e.name === ".next") {
+        continue;
+      }
       walk(p, out);
-    } else out.push(p);
+    } else {
+      out.push(p);
+    }
   }
   return out;
 }
@@ -449,14 +457,20 @@ const decorativeFallbacks = [];
  */
 const declaredColorVars = new Set();
 for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
-  if (!/\.css$/.test(abs)) continue;
+  if (!/\.css$/.test(abs)) {
+    continue;
+  }
   const css = stripComments(fs.readFileSync(abs, "utf8"));
-  for (const m of css.matchAll(CSS_VAR_DECL_RE)) declaredColorVars.add(m[1]);
+  for (const m of css.matchAll(CSS_VAR_DECL_RE)) {
+    declaredColorVars.add(m[1]);
+  }
 }
 
 for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
   const r = rel(abs);
-  if (!SOURCE_EXT.test(r) || isTestFile(r)) continue;
+  if (!SOURCE_EXT.test(r) || isTestFile(r)) {
+    continue;
+  }
   const text = fs.readFileSync(abs, "utf8");
   if (!colorHitsInLine(text).length && !/[^\x00-\x7F]/.test(text)) {
     /* 没有色值就没得报；中文只用于豁免清单命中时的说明，跳过纯 ASCII 快路。 */
@@ -469,14 +483,11 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
 
   for (let i = 0; i < lines.length; i++) {
     const hits = colorHitsInLine(codeLines[i]);
-    if (!hits.length) continue;
+    if (!hits.length) {
+      continue;
+    }
     const lineNo = i + 1;
-    if (
-      cl &&
-      (cl.wholeFile ||
-        cl.lines.has(lineNo) ||
-        (scopes[i] && cl.names.has(scopes[i])))
-    ) {
+    if (cl && (cl.wholeFile || cl.lines.has(lineNo) || (scopes[i] && cl.names.has(scopes[i])))) {
       exempted.push({
         file: r,
         line: lineNo,
@@ -497,7 +508,9 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
    * `m[2] === ","` 表示这行带兜底值 —— 渲染确定，但那是「装饰性 indirection」（④）。 */
   for (let i = 0; i < codeLines.length; i++) {
     for (const m of codeLines[i].matchAll(COLOR_VAR_REF_RE)) {
-      if (declaredColorVars.has(m[1])) continue;
+      if (declaredColorVars.has(m[1])) {
+        continue;
+      }
       ghosts.push({
         file: r,
         line: i + 1,
@@ -518,7 +531,9 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
     }
     /* ⑦ 已定义 token 上的装饰性兜底：与 ④ 互补 —— 没定义的那半在幽灵循环里已经报了。 */
     for (const m of codeLines[i].matchAll(FALLBACK_ON_DEFINED_RES)) {
-      if (!declaredColorVars.has(m[1])) continue;
+      if (!declaredColorVars.has(m[1])) {
+        continue;
+      }
       decorativeFallbacks.push({
         file: r,
         line: i + 1,
@@ -555,9 +570,7 @@ for (const v of violations) {
 }
 
 /** 未豁免计数（按文件）：rel -> 处数。 */
-const counted = Object.fromEntries(
-  [...byFile].map(([f, list]) => [f, list.length]),
-);
+const counted = Object.fromEntries([...byFile].map(([f, list]) => [f, list.length]));
 
 const exemptByFile = new Map();
 for (const e of exempted) {
@@ -580,13 +593,10 @@ const totalExemptHits = exempted.reduce((n, e) => n + e.hits, 0);
  */
 const filesWithExemptHits = new Set(exempted.map((e) => e.file));
 const unusedExempts = [...EXEMPT_TABLES, ...EXEMPT_FIXED_DARK].filter(
-  (e) =>
-    fs.existsSync(path.join(ROOT, e.file)) && !filesWithExemptHits.has(e.file),
+  (e) => fs.existsSync(path.join(ROOT, e.file)) && !filesWithExemptHits.has(e.file),
 );
 for (const e of unusedExempts) {
-  console.warn(
-    `[theme-colors] ⚠️ 豁免一处都没命中（负债，删掉它）：${e.file} —— ${e.reason}`,
-  );
+  console.warn(`[theme-colors] ⚠️ 豁免一处都没命中（负债，删掉它）：${e.file} —— ${e.reason}`);
 }
 if (unusedExempts.length > 0 && !REPORT_ONLY) {
   console.error(
@@ -600,10 +610,10 @@ if (unusedExempts.length > 0 && !REPORT_ONLY) {
 /* ── 幽灵 token（硬闸，不进基线）──────────────────────────── */
 
 function printGhosts() {
-  if (!ghosts.length) return;
-  console.log(
-    "[theme-colors] 引用了从未定义的 --color-*（字面 var() 查无此名）：",
-  );
+  if (!ghosts.length) {
+    return;
+  }
+  console.log("[theme-colors] 引用了从未定义的 --color-*（字面 var() 查无此名）：");
   for (const g of ghosts) {
     console.log(
       `  ✗ ${g.file}:${g.line} — ${g.name}${g.fallback ? "（带兜底 = 装饰性 indirection：兜底永远生效，这行其实不随主题）" : "（无兜底 = 静默退成初值）"}｜${g.text}`,
@@ -612,10 +622,10 @@ function printGhosts() {
 }
 
 function printComposed() {
-  if (!composed.length) return;
-  console.log(
-    "[theme-colors] token 名是拼出来的（幽灵判据看不见、Tailwind 会 shake 掉它）：",
-  );
+  if (!composed.length) {
+    return;
+  }
+  console.log("[theme-colors] token 名是拼出来的（幽灵判据看不见、Tailwind 会 shake 掉它）：");
   for (const c of composed) {
     console.log(`  ✗ ${c.file}:${c.line} ｜${c.text}`);
   }
@@ -623,7 +633,9 @@ function printComposed() {
 
 /** 打印跨面相等主张（⑤）：注释与本脚本豁免理由里的「与品牌 token 同值」类句子。 */
 function printEqualityClaims() {
-  if (!equalityClaims.length) return;
+  if (!equalityClaims.length) {
+    return;
+  }
   console.log(
     "[theme-colors] 用「与品牌 token 同值」这类主张给裸色值背书（改了 token 它不会红）：",
   );
@@ -634,10 +646,10 @@ function printEqualityClaims() {
 
 /** 打印「属性前缀 + 裸 CSS 变量」（⑥）。 */
 function printBareVarClasses() {
-  if (!bareVarClasses.length) return;
-  console.log(
-    "[theme-colors] Tailwind 里用属性前缀直接吃裸 CSS 变量（bg-(--color-…) 这一族）：",
-  );
+  if (!bareVarClasses.length) {
+    return;
+  }
+  console.log("[theme-colors] Tailwind 里用属性前缀直接吃裸 CSS 变量（bg-(--color-…) 这一族）：");
   for (const c of bareVarClasses) {
     console.log(`  ✗ ${c.file}:${c.line} ｜${c.text}`);
   }
@@ -645,20 +657,20 @@ function printBareVarClasses() {
 
 /** 打印「已定义 token 上的装饰性兜底」（⑦）—— ④ 看不见这一半。 */
 function printDecorativeFallbacks() {
-  if (!decorativeFallbacks.length) return;
-  console.log(
-    "[theme-colors] var(--color-…) 带兜底、而那颗 token 其实有定义（兜底永远取不到）：",
-  );
+  if (!decorativeFallbacks.length) {
+    return;
+  }
+  console.log("[theme-colors] var(--color-…) 带兜底、而那颗 token 其实有定义（兜底永远取不到）：");
   for (const c of decorativeFallbacks) {
-    console.log(
-      `  ✗ ${c.file}:${c.line} — ${c.name} ｜${c.text}`,
-    );
+    console.log(`  ✗ ${c.file}:${c.line} — ${c.name} ｜${c.text}`);
   }
 }
 
 /** 打印豁免清单（让人一眼看出「哪些是被有意放行的」）。 */
 function printExemptions() {
-  if (!exemptByFile.size) return;
+  if (!exemptByFile.size) {
+    return;
+  }
   console.log("[theme-colors] 已显式豁免（规范 §3.6.1 例外，不再进入报告）：");
   for (const [f, n] of [...exemptByFile].sort((a, b) => b[1] - a[1])) {
     const entry = EXEMPT_INDEX.get(f)[0];
@@ -668,16 +680,18 @@ function printExemptions() {
 
 /** 打印未豁免命中（按处数降序）。 */
 function printViolations() {
-  if (!byFile.size) return;
+  if (!byFile.size) {
+    return;
+  }
   console.log("[theme-colors] 未豁免命中（按规范 §3.6.1 须 token 化）：");
-  for (const [f, list] of [...byFile].sort(
-    (a, b) => b[1].length - a[1].length,
-  )) {
+  for (const [f, list] of [...byFile].sort((a, b) => b[1].length - a[1].length)) {
     console.log(`  ✗ ${f}（${list.length} 处）`);
     for (const v of list.slice(0, 5)) {
       console.log(`      L${v.line}: ${v.hits}  ${v.text.slice(0, 90)}`);
     }
-    if (list.length > 5) console.log(`      … 另 ${list.length - 5} 处`);
+    if (list.length > 5) {
+      console.log(`      … 另 ${list.length - 5} 处`);
+    }
   }
 }
 
@@ -797,6 +811,4 @@ if (totalCounted > 0) {
 }
 
 printViolations();
-console.log(
-  `[theme-colors] 通过 ✓（未豁免 0 处；豁免 ${totalExemptHits} 处不参与判定）`,
-);
+console.log(`[theme-colors] 通过 ✓（未豁免 0 处；豁免 ${totalExemptHits} 处不参与判定）`);

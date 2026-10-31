@@ -29,15 +29,13 @@ describe("parseProcNetTcpListeners", () => {
       "   1: 0100007F:1F90 0100007F:C350 01 00000000:00000000 00:00000000 00000000     0        0 111111111 1 0000000000000000 100 0 0 10 0",
     ].join("\n");
     const map = parseProcNetTcpListeners(content);
-    expect(map.get("447711453")).toBe(34567);
+    expect(map.get("447711453")).toBe(34_567);
     expect(map.has("111111111")).toBe(false);
   });
 
   it("容忍表头缺失 / 空行 / 字段不足的脏输入", () => {
     expect(parseProcNetTcpListeners("")).toEqual(new Map());
-    expect(parseProcNetTcpListeners("garbage line\n\n   \n")).toEqual(
-      new Map(),
-    );
+    expect(parseProcNetTcpListeners("garbage line\n\n   \n")).toEqual(new Map());
   });
 
   it("IPv6 行（local_address 更长）同样能取到端口", () => {
@@ -57,7 +55,7 @@ describe.runIf(process.platform === "linux")("findListeningPortViaProc", () => {
   it("真起监听 socket：能按 pid 的 fd 交集拿到端口", async () => {
     const srv = net.createServer((s) => s.end());
     // 端口取一个高位随机值，避免与本机其他服务冲突
-    const want = 30000 + Math.floor(Math.random() * 20000);
+    const want = 30_000 + Math.floor(Math.random() * 20_000);
     await new Promise<void>((r) => srv.listen(want, "127.0.0.1", () => r()));
     try {
       expect(findListeningPortViaProc(process.pid)).toBe(want);
@@ -67,11 +65,11 @@ describe.runIf(process.platform === "linux")("findListeningPortViaProc", () => {
   });
 
   it("进程未监听 / 不存在时返回 null（不抛错，由调用方给出口）", () => {
-    expect(findListeningPortViaProc(999999)).toBeNull();
+    expect(findListeningPortViaProc(999_999)).toBeNull();
   });
 
   it("socketInodesOfPid 对不存在的 pid 返回空集", () => {
-    expect(socketInodesOfPid(999999).size).toBe(0);
+    expect(socketInodesOfPid(999_999).size).toBe(0);
   });
 });
 
@@ -91,14 +89,11 @@ describe("Windows 命令行探测的口径", () => {
     // 他人 PID 的行不得被算成它的端口
     expect(parseNetstatListeningPort(content, 1234)).toBeNull();
     // 非 LISTENING（ESTABLISHED 的 50000）不算监听端口
-    expect(
-      parseNetstatListeningPort(content.split("\r\n")[2]!, 4242),
-    ).toBeNull();
+    expect(parseNetstatListeningPort(content.split("\r\n")[2]!, 4242)).toBeNull();
   });
 
   it("IPv6 行的端口按「最后一个冒号」切（不是第一个）", () => {
-    const content =
-      "  TCP    [::1]:8190              [::]:0                 LISTENING       7777";
+    const content = "  TCP    [::1]:8190              [::]:0                 LISTENING       7777";
     expect(parseNetstatListeningPort(content, 7777)).toBe(8190);
   });
 

@@ -12,13 +12,13 @@ import { PORT_ROW_TONES, portDotGlow, resolvePortRowTone } from "./flow-focus-en
 import { NODE_PORT_FOCUS_ACTIVE_KEY, readPortFocusRole } from "./hooks/use-related-edges-highlight";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
 
-interface FlowNodeWidgetRowsProps {
+type FlowNodeWidgetRowsProps = {
   data: WorkflowNodeData;
+  hasSize: boolean;
   io: IOEditContextValue | null;
   rawMeta: Record<string, RawInputMeta>;
   visibleWidgetEntries: Array<[string, unknown]>;
-  hasSize: boolean;
-}
+};
 
 export function FlowNodeWidgetRows({
   data,
@@ -78,17 +78,17 @@ export function FlowNodeWidgetRows({
 
         return (
           <div
-            // 附加 idx，好让 ComfyUI 的数字槽输入（"1"、"2" …）
-            // 不跨行撞车。
-            key={`${k}-${idx}`}
-            data-input-key={k}
-            data-input-type={inputType}
             className={
               isStringWidget
                 ? "group text-2xs relative flex min-h-0 flex-1 flex-col gap-1.5 py-1.5 pr-2 pl-5"
                 : // min-h-5.5 h-auto lets long labels wrap.
                   "group text-2xs relative flex h-auto min-h-5.5 items-center gap-1.5 py-0.5 pr-2 pl-5"
             }
+            data-input-key={k}
+            data-input-type={inputType}
+            // 附加 idx，好让 ComfyUI 的数字槽输入（"1"、"2" …）
+            // 不跨行撞车。
+            key={`${k}-${idx}`}
             /* 相关行提亮背景、无关行整行压暗（与 FlowNodePinRows 同一张表）。 */
             style={{ background: tone.background, opacity: tone.opacity }}
           >
@@ -97,11 +97,10 @@ export function FlowNodeWidgetRows({
                 端点保持**完全透明** —— 直接可见的紫点曾经被当成渲染 bug，所以
                 这里沿用「没连线就不显示圆点」的观感，只保留连线能力。 */}
             <Handle
-              type="target"
-              position={Position.Left}
+              className="size-2.5! rounded-full! border!"
               id={k}
               isConnectable
-              className="size-2.5! rounded-full! border!"
+              position={Position.Left}
               style={{
                 left: 5,
                 background: typeCol,
@@ -114,6 +113,7 @@ export function FlowNodeWidgetRows({
                 borderColor: isConn || isBoundary ? "var(--color-canvas)" : "transparent",
               }}
               title={`${k} (${inputType})`}
+              type="target"
             />
 
             {isStringWidget ? (
@@ -206,7 +206,7 @@ export function FlowNodeWidgetRows({
             {isStringWidget && (
               <div className="flex min-w-0 flex-1 flex-col">
                 {stringText.length > 0 ? (
-                  <StringTextarea value={stringText} hasSize={hasSize} />
+                  <StringTextarea hasSize={hasSize} value={stringText} />
                 ) : (
                   <div
                     className="border-border-strong bg-canvas-deep text-ink-fainter text-2xs rounded border px-2 py-1.5 leading-snug"

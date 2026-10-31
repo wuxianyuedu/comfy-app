@@ -88,7 +88,7 @@ function resolveRelative(spec: string, from: string, tracked: Set<string>): stri
   const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), spec));
   for (const ext of MODULE_EXTS) {
     const candidate = base + ext;
-    if (tracked.has(candidate)) return candidate;
+    if (tracked.has(candidate)) {return candidate;}
   }
   return null;
 }
@@ -146,13 +146,13 @@ describe("输入面登记的形状", () => {
     const unresolved: Array<string> = [];
     for (const entry of INPUT_FACES) {
       for (const spec of importSpecifiersOf(entry.test)) {
-        if (!spec.startsWith(".")) continue;
+        if (!spec.startsWith(".")) {continue;}
         const rel = resolveRelative(spec, entry.test, tracked);
         if (rel === null) {
           unresolved.push(`${entry.test} :: ${spec}`);
           continue;
         }
-        if (!faceHits(entry, [rel])) gaps.push(`${entry.test} :: ${spec} → ${rel}`);
+        if (!faceHits(entry, [rel])) {gaps.push(`${entry.test} :: ${spec} → ${rel}`);}
       }
     }
     expect(

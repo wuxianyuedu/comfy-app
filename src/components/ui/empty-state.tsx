@@ -53,21 +53,21 @@ import { cn } from "~/lib/utils";
  */
 export type EmptyStateVariant = "page" | "error" | "hint" | "panel";
 
-export interface EmptyStateProps {
-  /** 主文案：一句话说明当前是什么状态（如「未找到匹配的工作流」）。 */
-  title?: string;
+export type EmptyStateProps = {
+  /** 操作区（按钮等），居中渲染在主文案下方。 */
+  action?: ReactNode;
+  className?: string;
   /** 补充说明：为什么是空的 / 下一步做什么（规范 10.5）。 */
   description?: ReactNode;
   /** 图标：传 lucide 组件（按 `size` 渲染）或已渲染节点。 */
   icon?: LucideIcon | ReactNode;
-  /** 形态（见组件注释）。 */
-  variant?: EmptyStateVariant;
-  /** 操作区（按钮等），居中渲染在主文案下方。 */
-  action?: ReactNode;
   /** `page` 形态的最小高度类，默认 `min-h-55`。 */
   minHeightClass?: string;
-  className?: string;
-}
+  /** 主文案：一句话说明当前是什么状态（如「未找到匹配的工作流」）。 */
+  title?: string;
+  /** 形态（见组件注释）。 */
+  variant?: EmptyStateVariant;
+};
 
 /**
  * 图标形参的判据：`React.forwardRef` 产物也带 `$$typeof`，而它同时有 `render`；
@@ -118,9 +118,9 @@ export function EmptyState({
      * `typeof icon === "function"` 的判据接不住它。 */
     const Icon = icon;
     renderedIcon = panel ? (
-      <Icon size={32} strokeWidth={1.5} aria-hidden className="opacity-30" />
+      <Icon aria-hidden className="opacity-30" size={32} strokeWidth={1.5} />
     ) : (
-      <Icon size={32} aria-hidden />
+      <Icon aria-hidden size={32} />
     );
   } else if (icon) {
     renderedIcon = icon;

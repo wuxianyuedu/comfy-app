@@ -25,21 +25,16 @@ import {
   type SizeScene,
 } from "~/lib/media/size-presets";
 
-export interface SizePresetTableController {
-  /** 当前生效的尺寸表（用户改过的覆盖默认表）。 */
-  table: SizePresetTable;
-  /** 改一格：场景 + 比例行 + 分辨率档。 */
-  setDims: (
-    scene: SizeScene,
-    ratioLabel: string,
-    tier: ResolutionTier,
-    size: SizeDims,
-  ) => void;
-  /** 把某场景整表恢复默认（另一个场景不受影响）。 */
-  resetScene: (scene: SizeScene) => void;
+export type SizePresetTableController = {
   /** 该场景相对默认值是否被改过。 */
   isModified: (scene: SizeScene) => boolean;
-}
+  /** 把某场景整表恢复默认（另一个场景不受影响）。 */
+  resetScene: (scene: SizeScene) => void;
+  /** 改一格：场景 + 比例行 + 分辨率档。 */
+  setDims: (scene: SizeScene, ratioLabel: string, tier: ResolutionTier, size: SizeDims) => void;
+  /** 当前生效的尺寸表（用户改过的覆盖默认表）。 */
+  table: SizePresetTable;
+};
 
 export function useSizePresetTable(): SizePresetTableController {
   const table = useSyncExternalStore(
@@ -49,24 +44,14 @@ export function useSizePresetTable(): SizePresetTableController {
   );
 
   const setDims = useCallback(
-    (
-      scene: SizeScene,
-      ratioLabel: string,
-      tier: ResolutionTier,
-      size: SizeDims,
-    ) => setSizePresetDims(scene, ratioLabel, tier, size),
+    (scene: SizeScene, ratioLabel: string, tier: ResolutionTier, size: SizeDims) =>
+      setSizePresetDims(scene, ratioLabel, tier, size),
     [],
   );
 
-  const resetScene = useCallback(
-    (scene: SizeScene) => resetSizePresetScene(scene),
-    [],
-  );
+  const resetScene = useCallback((scene: SizeScene) => resetSizePresetScene(scene), []);
 
-  const isModified = useCallback(
-    (scene: SizeScene) => sceneIsModified(scene, table),
-    [table],
-  );
+  const isModified = useCallback((scene: SizeScene) => sceneIsModified(scene, table), [table]);
 
   return { table, setDims, resetScene, isModified };
 }

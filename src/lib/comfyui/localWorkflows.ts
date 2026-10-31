@@ -26,43 +26,45 @@ import { normalizeSlashes } from "~/lib/path-display";
 
 import { compareText, uniqueBy } from "~/lib/ordered-set";
 
-export interface LocalWorkflowFile {
+export type LocalWorkflowFile = {
   /** 绝对、归一化后的文件系统路径（小写 + 正斜杠，便于 Windows 盘符比较）。 */
   absPath: string;
+  mtimeMs: number;
   /** 仅文件名（在待处理卡片上用作友好的默认值）。 */
   name: string;
   /** 扫描器看到的**原始**路径字符串（保留下来，让 UI 显示的就是用户当初输入的
    *  内容，而不是重新解析后的版本）。 */
   rawPath: string;
-  size: number;
-  mtimeMs: number;
-  /** 这个文件来自哪个配置好的 LOCAL_WORKFLOWS_PATH 根目录。
-   *  API 层据此给每一行盖上 `sourceRoot`，客户端才能按前缀匹配。
-   *  值等于该根目录的 `rawPath`（逐字，与用户在对话框里输入的一致）。 */
-  rootRawPath: string;
   /** 解析后的绝对根路径（输入本身就是绝对路径时等于 `rawPath`；
    *  相对路径按 CWD 解析）。API 层用它对各工作流的 `sourcePath`
    *  做**忽略大小写**的前缀检查。 */
   rootAbsPath: string;
-}
+  /** 这个文件来自哪个配置好的 LOCAL_WORKFLOWS_PATH 根目录。
+   *  API 层据此给每一行盖上 `sourceRoot`，客户端才能按前缀匹配。
+   *  值等于该根目录的 `rawPath`（逐字，与用户在对话框里输入的一致）。 */
+  rootRawPath: string;
+  size: number;
+};
 
-export interface ScannedRoot {
-  /** 配置的根目录（逐字），用于显示。 */
-  rawPath: string;
+export type ScannedRoot = {
   /** 归一化后的绝对路径；用户本来就输入绝对路径时等于 `rawPath`。
    *  用于 Windows 上忽略大小写的比较。 */
   absPath: string;
+  error?: string;
   exists: boolean;
   /** 逐文件的扫描结果。根目录不存在、或里面没有 `.json` / `.workflow` 时为空。
    *  **从不**抛错 —— 扫描失败经 `error`（可选字符串）上报。 */
   files: Array<LocalWorkflowFile>;
-  error?: string;
-}
+  /** 配置的根目录（逐字），用于显示。 */
+  rawPath: string;
+};
 
 /** 与服务端其余部分用同一种方式归一化绝对路径：反斜杠 → 正斜杠、转小写。
  *  与 customNodes.ts 的 `pathKey` 同口径，Windows 盘符大小写因此不会对不上。 */
 function pathKey(p: string): string {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   try {
     return normalizeSlashes(path.resolve(p)).toLowerCase();
   } catch {
@@ -92,7 +94,9 @@ async function statMany(paths: Array<string>): Promise<Array<fs.Stats | null>> {
     while (cursor < paths.length) {
       const index = cursor++;
       const target = paths[index];
-      if (target === undefined) continue;
+      if (target === undefined) {
+        continue;
+      }
       try {
         out[index] = await fs.promises.stat(target);
       } catch {
@@ -127,14 +131,14 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
   let rootStat: fs.Stats;
   try {
     rootStat = await fs.promises.stat(abs);
-  } catch (e) {
-    const code = /* SAFETY: 类型断言已复核 */ (e as NodeJS.ErrnoException | undefined)?.code;
+  } catch (error) {
+    const code = /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException | undefined)?.code;
     if (code === "ENOENT") {
       return { rawPath: rawDir, absPath: abs, exists: false, files: [] };
     }
     // e 为 unknown：`(e as Error)?.message ?? String(e)` 与旧 `e?.message ?? String(e)`
     // 的运行时语义逐字一致（node fs 抛的都是 Error 实例）。
-    const msg = /* SAFETY: 类型断言已复核 */ (e as Error | undefined)?.message ?? String(e);
+    const msg = /* SAFETY: 类型断言已复核 */ (error as Error | undefined)?.message ?? String(error);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -178,11 +182,17 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
     for (const ent of entries) {
       const fullPath = path.join(dir, ent.name);
       if (ent.isDirectory()) {
-        if (recursive) await visit(fullPath);
+        if (recursive) {
+          await visit(fullPath);
+        }
         continue;
       }
-      if (!ent.isFile()) continue;
-      if (!/\.(json|workflow)$/i.test(ent.name)) continue;
+      if (!ent.isFile()) {
+        continue;
+      }
+      if (!/\.(json|workflow)$/i.test(ent.name)) {
+        continue;
+      }
       pending.push(fullPath);
     }
 
@@ -190,7 +200,9 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
     for (let index = 0; index < pending.length; index++) {
       const st = stats[index];
       const fullPath = pending[index];
-      if (!st || fullPath === undefined) continue;
+      if (!st || fullPath === undefined) {
+        continue;
+      }
       out.push({
         absPath: path.resolve(fullPath),
         name: path.basename(fullPath),
@@ -203,8 +215,8 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
   };
   try {
     await visit(abs);
-  } catch (e) {
-    const msg = /* SAFETY: 类型断言已复核 */ (e as Error | undefined)?.message ?? String(e);
+  } catch (error) {
+    const msg = /* SAFETY: 类型断言已复核 */ (error as Error | undefined)?.message ?? String(error);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -226,7 +238,7 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
 export async function scanLocalWorkflowRoots(
   rawPaths: Array<string>,
   opts: { recursive?: boolean } = {},
-): Promise<{ roots: Array<ScannedRoot>; allFiles: Array<LocalWorkflowFile> }> {
+): Promise<{ allFiles: Array<LocalWorkflowFile>; roots: Array<ScannedRoot> }> {
   const recursive = !!opts.recursive;
   const allFiles: Array<LocalWorkflowFile> = [];
   const trimmedPaths = rawPaths.map((raw) => raw.trim()).filter((trimmed) => trimmed.length > 0);
@@ -240,7 +252,9 @@ export async function scanLocalWorkflowRoots(
     roots.flatMap((r) => r.files),
     (f) => (f.absPath ? pathKey(f.absPath) : null),
   )) {
-    if (!file.absPath) continue;
+    if (!file.absPath) {
+      continue;
+    }
     allFiles.push(file);
   }
 
@@ -270,7 +284,7 @@ export async function scanLocalWorkflowRoots(
  * `checksumCache`），命中时连文件都不打开 —— 这曾是本接口稳定 1s+ 的主因。
  * ───────────────────────────────────────────────────────────────────────── */
 
-export interface LocalChecksumEntry {
+export type LocalChecksumEntry = {
   /** 磁盘文件的绝对路径。 */
   absPath: string;
   /** sha1(text).slice(0,16) —— 与 `WorkflowTemplate.sourceChecksum` 同值。 */
@@ -278,7 +292,7 @@ export interface LocalChecksumEntry {
   /** 文件 mtime（毫秒时间戳，取自扫描器的 `statSync`）。调用方在多个文件
    *  checksum 相同时用它断开（少见但确实可能）；它同时是 checksum 记忆的键。 */
   mtimeMs: number;
-}
+};
 
 /** checksum 的 mtime+size 记忆表。
  *
@@ -297,7 +311,7 @@ export interface LocalChecksumEntry {
  *  容量有上限：文件被删 / 改名后旧键会留在表里，不设界就是慢性泄漏。 */
 const CHECKSUM_CACHE_MAX = 512;
 
-type ChecksumMemo = { mtimeMs: number; size: number; checksum: string };
+type ChecksumMemo = { checksum: string; mtimeMs: number; size: number };
 
 declare global {
   var __localWorkflowChecksums_v1: Map<string, ChecksumMemo> | undefined;
@@ -315,7 +329,9 @@ function rememberChecksum(key: string, memo: ChecksumMemo): void {
   cache.set(key, memo);
   while (cache.size > CHECKSUM_CACHE_MAX) {
     const oldest = cache.keys().next().value;
-    if (oldest === undefined) break;
+    if (oldest === undefined) {
+      break;
+    }
     cache.delete(oldest);
   }
 }
@@ -378,7 +394,9 @@ export async function scanLocalWorkflowChecksums(
       const file = allFiles.at(cursor);
       cursor += 1;
 
-      if (!file?.absPath) continue;
+      if (!file?.absPath) {
+        continue;
+      }
 
       const result = await checksumOfFile(file.absPath, file.size, file.mtimeMs);
 

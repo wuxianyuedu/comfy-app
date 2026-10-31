@@ -19,10 +19,10 @@ import { defaultData, type CanvasNodeType, type NodeKind } from "~/lib/project-c
 import { useToast } from "~/components/studio/ToastProvider";
 import { MEDIA_DRAG_MIME, type MediaDragPayload } from "~/components/ui/media-drag-source";
 
-export interface UseCanvasDropArgs {
+export type UseCanvasDropArgs = {
   screenToFlowPosition: (p: XYPosition) => XYPosition;
   setNodes: Dispatch<SetStateAction<Array<CanvasNodeType>>>;
-}
+};
 
 /** 落点载荷 = 源端交给 `mediaDragSourceProps` 的形状 + 落地坐标。 */
 export type MediaDropPayload = MediaDragPayload & {
@@ -98,7 +98,9 @@ export function useCanvasDrop({ screenToFlowPosition, setNodes }: UseCanvasDropA
   const onCanvasDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       const raw = e.dataTransfer.getData(MEDIA_DRAG_MIME);
-      if (!raw) return; // 非本应用拖拽（如外部文件），忽略
+      if (!raw) {
+        return;
+      } // 非本应用拖拽（如外部文件），忽略
       e.preventDefault();
       let payload: MediaDropPayload;
       try {

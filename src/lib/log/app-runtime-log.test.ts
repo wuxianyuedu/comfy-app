@@ -3,11 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
-import {
-  LAUNCH_STAMP_ENV,
-  parseLaunchStamp,
-  runtimeLogFileName,
-} from "~/lib/log/runtime-log-file";
+import { LAUNCH_STAMP_ENV, parseLaunchStamp, runtimeLogFileName } from "~/lib/log/runtime-log-file";
 
 /**
  * `writerFor()` 那一路只回答「本次运行是哪一份文件」。真 `openRuntimeLogWriter`
@@ -122,14 +118,15 @@ describe("app-runtime-log 本次运行那一份（不传 file，走 writerFor）
   });
 
   afterEach(() => {
-    if (prevLaunchStamp === undefined) delete process.env[LAUNCH_STAMP_ENV];
-    else process.env[LAUNCH_STAMP_ENV] = prevLaunchStamp;
+    if (prevLaunchStamp === undefined) {
+      delete process.env[LAUNCH_STAMP_ENV];
+    } else {
+      process.env[LAUNCH_STAMP_ENV] = prevLaunchStamp;
+    }
   });
 
   /** 每轮取一份**新模块实例**：`writer` 是模块级单例，不复位就再也测不到「首开」。 */
-  async function freshLogger(): Promise<
-    ReturnType<typeof createAppRuntimeLogger>
-  > {
+  async function freshLogger(): Promise<ReturnType<typeof createAppRuntimeLogger>> {
     vi.resetModules();
     const mod = await import("~/lib/log/app-runtime-log");
     return mod.createAppRuntimeLogger("app");
@@ -137,7 +134,9 @@ describe("app-runtime-log 本次运行那一份（不传 file，走 writerFor）
 
   it("launcher 透传了名字戳 ⇒ 续写 launcher 那一份，且先轮转再开", async () => {
     const at = parseLaunchStamp(STAMP);
-    if (!at) throw new Error("夹具：名字戳形态必须可解");
+    if (!at) {
+      throw new Error("夹具：名字戳形态必须可解");
+    }
     process.env[LAUNCH_STAMP_ENV] = STAMP;
 
     const log = await freshLogger();
@@ -146,15 +145,10 @@ describe("app-runtime-log 本次运行那一份（不传 file，走 writerFor）
     expect(packProbe.pruneRuntimeLogFiles).toHaveBeenCalledTimes(1);
     /* `reuse` 的名字按 `runtimeLogFileName` 现算，不写字符串：两个进程要落在同一份上，
      * 靠的就是这一处与 launcher 那一份同源；写死字符串会在命名规则改动时假绿。 */
-    expect(packProbe.openRuntimeLogWriter).toHaveBeenCalledWith(
-      "app-runtime",
-      at,
-      undefined,
-      { reuse: runtimeLogFileName("app-runtime", at) },
-    );
-    expect(fs.readFileSync(openedFile, "utf-8")).toContain(
-      "[INFO] [app] 第一行",
-    );
+    expect(packProbe.openRuntimeLogWriter).toHaveBeenCalledWith("app-runtime", at, undefined, {
+      reuse: runtimeLogFileName("app-runtime", at),
+    });
+    expect(fs.readFileSync(openedFile, "utf-8")).toContain("[INFO] [app] 第一行");
   });
 
   it("句柄定下来之后不再变：第二次写不重开、也不重跑轮转", async () => {
@@ -180,8 +174,6 @@ describe("app-runtime-log 本次运行那一份（不传 file，走 writerFor）
     /* 只给 source：`at` / `dir` / `options` 全部留给 openRuntimeLogWriter 的默认值 ——
      * 自己拼名字的后果是写进一份「谁都认不出、也不在轮转清单里」的文件。 */
     expect(packProbe.openRuntimeLogWriter).toHaveBeenCalledWith("app-runtime");
-    expect(fs.readFileSync(openedFile, "utf-8")).toContain(
-      "[INFO] [app] 非双击链路",
-    );
+    expect(fs.readFileSync(openedFile, "utf-8")).toContain("[INFO] [app] 非双击链路");
   });
 });

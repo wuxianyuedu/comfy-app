@@ -27,17 +27,15 @@ function BackupRow({
   disabled,
   onRestore,
 }: {
-  entry: BackupEntry;
-  pending: boolean;
   disabled: boolean;
+  entry: BackupEntry;
   onRestore: (name: string) => void;
+  pending: boolean;
 }) {
   const size = fmtBytes(entry.size);
   return (
     <div className="border-border bg-surface-1 flex items-center gap-3 rounded-lg border px-3 py-2">
-      <span className="text-ink/80 min-w-0 flex-1 truncate font-mono text-xs">
-        {entry.name}
-      </span>
+      <span className="text-ink/80 min-w-0 flex-1 truncate font-mono text-xs">{entry.name}</span>
       <span className="text-muted-foreground shrink-0 text-xs">
         {/* 缺值占位符走 `~/lib/display-value`（规范 16 §16.2.3 的 P8）：
             名字形态认不出时刻时 `at` 是 null —— 那与「读到了 0 时刻」是两件事，
@@ -46,11 +44,11 @@ function BackupRow({
         {size === null ? "" : ` · ${size}`}
       </span>
       <Button
-        variant={pending ? "primary-solid" : "outline"}
-        size="xs"
+        className="h-auto shrink-0 rounded px-2 py-0.5 text-xs"
         disabled={disabled || pending}
         onClick={() => onRestore(entry.name)}
-        className="h-auto shrink-0 rounded px-2 py-0.5 text-xs"
+        size="xs"
+        variant={pending ? "primary-solid" : "outline"}
       >
         {pending ? "已登记" : "用这一份恢复"}
       </Button>
@@ -83,18 +81,16 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
         <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
           自动备份只在
           <strong className="text-ink/80">会丢结构的同步之前</strong>
-          发生一次（<code className="text-ink/80">
-            pnpm db:push
-          </code> 那条带{" "}
-          <code className="text-ink/80">--force</code> 的路，会跑删列 /
-          重建表）。日常启动不带 <code className="text-ink/80">--force</code>
+          发生一次（<code className="text-ink/80">pnpm db:push</code> 那条带{" "}
+          <code className="text-ink/80">--force</code> 的路，会跑删列 / 重建表）。日常启动不带{" "}
+          <code className="text-ink/80">--force</code>
           ，只应用建表 / 建索引 / 加列，不会丢数据，因此不备份。
         </p>
         <div className="flex items-center gap-3">
           <StatusButton
+            disabled={c.backupBusy || c.restoreBusy}
             onClick={() => void c.createBackupNow()}
             variant="primary-solid"
-            disabled={c.backupBusy || c.restoreBusy}
           >
             {c.backupBusy ? "备份中…" : "立即备份"}
           </StatusButton>
@@ -110,8 +106,7 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
           ：点按钮只是登记一份待恢复的备份，
           <strong className="text-ink/80">真正换文件发生在下次启动</strong>
           （那时应用没在跑）。运行期有多个进程同时持有这个库，就地覆盖{" "}
-          <code className="text-ink/80">db.sqlite</code>{" "}
-          等于在别人握着句柄时换掉文件。
+          <code className="text-ink/80">db.sqlite</code> 等于在别人握着句柄时换掉文件。
         </p>
         <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
           换文件之前会
@@ -137,11 +132,11 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
           <div className="flex flex-col gap-2">
             {c.backups.map((entry) => (
               <BackupRow
-                key={entry.name}
-                entry={entry}
-                pending={c.pendingRestore?.file === entry.name}
                 disabled={c.restoreBusy || c.backupBusy}
+                entry={entry}
+                key={entry.name}
                 onRestore={setConfirming}
+                pending={c.pendingRestore?.file === entry.name}
               />
             ))}
           </div>
@@ -152,27 +147,26 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
         {confirming !== null && (
           <div className="border-destructive/30 bg-destructive/10 mt-3 rounded-lg border px-3 py-2 text-sm">
             <p className="text-danger-strong mb-2">
-              确认登记从 <code>{confirming}</code>{" "}
-              恢复？下次启动时它会覆盖当前数据库。
+              确认登记从 <code>{confirming}</code> 恢复？下次启动时它会覆盖当前数据库。
             </p>
             <div className="flex gap-2">
               <Button
-                variant="destructive"
-                size="xs"
                 className="h-auto rounded px-3 py-1 text-xs"
                 onClick={() => {
                   const name = confirming;
                   setConfirming(null);
                   void c.restoreFrom(name);
                 }}
+                size="xs"
+                variant="destructive"
               >
                 确认登记
               </Button>
               <Button
-                variant="outline"
-                size="xs"
                 className="h-auto rounded px-3 py-1 text-xs"
                 onClick={() => setConfirming(null)}
+                size="xs"
+                variant="outline"
               >
                 取消
               </Button>

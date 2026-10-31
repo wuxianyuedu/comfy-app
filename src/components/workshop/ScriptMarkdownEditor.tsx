@@ -11,19 +11,19 @@ import { zClass } from "~/lib/shell/overlay-z";
 import { centerLineScrollTop, readLineHeight } from "~/lib/dom-rect";
 import { useHotkey } from "~/components/ui/use-hotkey";
 
-interface ScriptMarkdownEditorProps {
-  title?: string;
-  value: string;
+type ScriptMarkdownEditorProps = {
+  onCancel?: () => void;
   onChange: (value: string) => void;
   onSave?: () => void;
-  onCancel?: () => void;
-}
-
-interface HistoryFrame {
+  title?: string;
   value: string;
-  selectionStart: number;
+};
+
+type HistoryFrame = {
   selectionEnd: number;
-}
+  selectionStart: number;
+  value: string;
+};
 
 const MAX_HISTORY = 50;
 
@@ -60,10 +60,14 @@ export function ScriptMarkdownEditor({
   // 去行尾空白等,见 normalizeMarkdown)。编辑器内部编辑不经此路径,避免干扰
   // 用户输入(如行尾补空格)。lastEmittedRef 相等说明是编辑器自己发出的内容。
   React.useEffect(() => {
-    if (value === lastEmittedRef.current) return;
+    if (value === lastEmittedRef.current) {
+      return;
+    }
     const normalized = normalizeMarkdown(value);
     lastEmittedRef.current = normalized;
-    if (normalized === value) return;
+    if (normalized === value) {
+      return;
+    }
     pendingHistoryBaseRef.current = normalized;
     emitChange(normalized);
   }, [value, emitChange]);
@@ -72,7 +76,9 @@ export function ScriptMarkdownEditor({
   const previewHtml = React.useMemo(() => markdownToHtml(value), [value]);
 
   function pushHistory(nextValue: string, start: number, end: number) {
-    if (historyLockRef.current) return;
+    if (historyLockRef.current) {
+      return;
+    }
     const pendingBase = pendingHistoryBaseRef.current;
     if (pendingBase !== null) {
       // 外部内容刚被归一化:用归一化文本替换撤销历史基帧,避免 Ctrl+Z
@@ -92,7 +98,9 @@ export function ScriptMarkdownEditor({
     setHistory((prev) => {
       const sliced = prev.slice(0, historyIndex + 1);
       const next = [...sliced, { value: nextValue, selectionStart: start, selectionEnd: end }];
-      if (next.length > MAX_HISTORY) next.shift();
+      if (next.length > MAX_HISTORY) {
+        next.shift();
+      }
       return next;
     });
     setHistoryIndex((idx) => Math.min(idx + 1, MAX_HISTORY - 1));
@@ -101,9 +109,13 @@ export function ScriptMarkdownEditor({
   const restoreHistory = React.useCallback(
     (delta: number) => {
       const nextIndex = historyIndex + delta;
-      if (nextIndex < 0 || nextIndex >= history.length) return;
+      if (nextIndex < 0 || nextIndex >= history.length) {
+        return;
+      }
       const frame = history[nextIndex];
-      if (!frame) return;
+      if (!frame) {
+        return;
+      }
       historyLockRef.current = true;
       emitChange(frame.value);
       setHistoryIndex(nextIndex);
@@ -119,9 +131,11 @@ export function ScriptMarkdownEditor({
     [history, historyIndex, emitChange],
   );
 
-  function getSelection(): { start: number; end: number; text: string } {
+  function getSelection(): { end: number; start: number; text: string } {
     const el = textareaRef.current;
-    if (!el) return { start: value.length, end: value.length, text: "" };
+    if (!el) {
+      return { start: value.length, end: value.length, text: "" };
+    }
     return {
       start: el.selectionStart,
       end: el.selectionEnd,
@@ -131,7 +145,9 @@ export function ScriptMarkdownEditor({
 
   function replaceSelection(replacement: string, cursorOffset?: number, selectionLength?: number) {
     const el = textareaRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const { start, end } = getSelection();
     const nextValue = value.slice(0, start) + replacement + value.slice(end);
     const nextStart = start + (cursorOffset ?? replacement.length);
@@ -152,7 +168,9 @@ export function ScriptMarkdownEditor({
 
   function insertAtLineStart(prefix: string) {
     const el = textareaRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const { start, end } = getSelection();
     const lineStart = getLineStart(value, start);
     const lineEnd = getLineEnd(value, end);
@@ -164,11 +182,11 @@ export function ScriptMarkdownEditor({
         const existing = /^#{1,3}\s/.test(trimmed);
         if (prefix.startsWith("#")) {
           if (existing) {
-            return prefix + " " + trimmed.replace(/^#{1,3}\s*/, "");
+            return `${prefix} ${trimmed.replace(/^#{1,3}\s*/, "")}`;
           }
-          return prefix + " " + trimmed;
+          return `${prefix} ${trimmed}`;
         }
-        return prefix + " " + trimmed;
+        return `${prefix} ${trimmed}`;
       })
       .join("\n");
     const nextValue = value.slice(0, lineStart) + transformed + value.slice(lineEnd);
@@ -184,7 +202,9 @@ export function ScriptMarkdownEditor({
 
   function insertList(ordered: boolean) {
     const el = textareaRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const { start, end } = getSelection();
     const lineStart = getLineStart(value, start);
     const lineEnd = getLineEnd(value, end);
@@ -229,14 +249,18 @@ export function ScriptMarkdownEditor({
     emitChange(value); // ensure focus sync
     setTimeout(() => {
       const el = textareaRef.current;
-      if (!el) return;
+      if (!el) {
+        return;
+      }
       el.focus();
       el.setSelectionRange(position, position);
       /* 行高估算与居中滚动收在 `~/lib/dom-rect`（规范 16 §16.2.4.41）：
        * 此前是就地写的 `el.scrollHeight / lines.length` —— 行数为 0 时给出
        * `Infinity`，会把 `scrollTo({ top: Infinity })` 交给浏览器。 */
       const lineHeight = readLineHeight(el, lines.length);
-      if (lineHeight === null) return;
+      if (lineHeight === null) {
+        return;
+      }
       el.scrollTo({
         top: centerLineScrollTop(line, lineHeight, el.clientHeight),
         behavior: "smooth",
@@ -269,7 +293,7 @@ export function ScriptMarkdownEditor({
   return (
     /* 全屏编辑弹层:底部 padding-bottom 6(24px) 为全局常驻的 BrowserStatusBar
        (fixed bottom-0 z-[100] h-6) 让位,避免底部「取消/保存」按钮被它盖住(ISSUE #35)。 */
-    <FullScreenLayer zClass={zClass("modal")} className="bg-canvas flex flex-col pb-6">
+    <FullScreenLayer className="bg-canvas flex flex-col pb-6" zClass={zClass("modal")}>
       {/* Header */}
       <header className="border-border flex h-14 items-center justify-between border-b px-5">
         <div className="flex items-center gap-3">
@@ -279,11 +303,11 @@ export function ScriptMarkdownEditor({
           <h2 className="text-ink-bright u-title">{title}</h2>
         </div>
         <Button
-          variant="ghost"
-          size="icon"
-          onClick={onCancel}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-lg"
           aria-label="关闭"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-lg"
+          onClick={onCancel}
+          size="icon"
+          variant="ghost"
         >
           <X data-icon="inline-start" size={18} />
         </Button>
@@ -292,36 +316,36 @@ export function ScriptMarkdownEditor({
       {/* Toolbar */}
       <EditorToolbar
         insertAtLineStart={insertAtLineStart}
-        wrapSelection={wrapSelection}
-        insertList={insertList}
-        insertLink={insertLink}
         insertImage={insertImage}
+        insertLink={insertLink}
+        insertList={insertList}
         insertTable={insertTable}
+        onTogglePreview={() => setShowPreview((prev) => !prev)}
         restoreHistory={restoreHistory}
         showPreview={showPreview}
-        onTogglePreview={() => setShowPreview((prev) => !prev)}
+        wrapSelection={wrapSelection}
       />
 
       {/* Body */}
       <div className="flex min-h-0 flex-1">
         {/* Outline sidebar */}
-        <OutlineSidebar outline={outline} onJump={jumpToLine} />
+        <OutlineSidebar onJump={jumpToLine} outline={outline} />
 
         {/* Editor area:单列布局 —— 编辑态直接显示 markdown 源(全宽),
             右上「预览」按钮按需切换到整区渲染视图,再点返回编辑。 */}
         <EditorBody
-          textareaRef={textareaRef}
-          value={value}
-          showPreview={showPreview}
-          previewHtml={previewHtml}
           emitChange={emitChange}
-          pushHistory={pushHistory}
           getSelection={getSelection}
           onChange={(next, start, end) => {
             emitChange(next);
             selectionRef.current = { start, end };
             pushHistory(next, start, end);
           }}
+          previewHtml={previewHtml}
+          pushHistory={pushHistory}
+          showPreview={showPreview}
+          textareaRef={textareaRef}
+          value={value}
         />
       </div>
 
@@ -331,18 +355,18 @@ export function ScriptMarkdownEditor({
           {value.split("\n").filter((line) => line.trim()).length} 行 · {value.trim().length} 字符
         </span>
         <Button
-          variant="outline"
-          size="xs"
-          onClick={onCancel}
           className="border-border text-ink-strong hover:bg-subtle h-auto rounded-lg px-5 py-2"
+          onClick={onCancel}
+          size="xs"
+          variant="outline"
         >
           取消
         </Button>
         <Button
-          variant="primary-solid"
-          size="xs"
-          onClick={onSave}
           className="h-auto rounded-lg px-5 py-2"
+          onClick={onSave}
+          size="xs"
+          variant="primary-solid"
         >
           保存
         </Button>

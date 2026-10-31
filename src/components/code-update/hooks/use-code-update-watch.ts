@@ -29,11 +29,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
-import {
-  readStorageItem,
-  removeStorageItem,
-  writeStorageItem,
-} from "~/lib/browser-storage";
+import { readStorageItem, removeStorageItem, writeStorageItem } from "~/lib/browser-storage";
 
 import {
   fetchBuildId,
@@ -53,7 +49,13 @@ export const DEV_RESTART_NOTIFIED_KEY = "comfyapp:dev-restart-notified-bootid";
 /** 记录「最近一次已就哪种依赖面陈旧提示过」的键（跨刷新去重，按 `depsState`）。 */
 export const DEPS_STALE_NOTIFIED_KEY = "comfyapp:deps-stale-notified-state";
 
-export interface UseCodeUpdateWatchArgs {
+export type UseCodeUpdateWatchArgs = {
+  /** 观测到依赖面陈旧时回调（需要「停服务 + `pnpm install`」这个动作）。
+   *
+   *  `state` 给出陈旧的具体形态，供文案分流。**同一形态只上报一次**（跨刷新，
+   *  见 `DEPS_STALE_NOTIFIED_KEY`）；判定为新鲜时去重记录会被清掉，于是下一次
+   *  拉取改动 lockfile 时还能再提示。 */
+  onDepsStale?: (state: DepsFreshnessState) => void;
   /** 观测到 dev server 重启时回调。
    *
    *  · `reason` = 启动器注入的重启原因（`route-404-heal` / `stale-route-table`），
@@ -61,13 +63,7 @@ export interface UseCodeUpdateWatchArgs {
    *  · `detail` = 启动器懒归因产出的人话短句（「本次代码更新改了路由结构…」），
    *    归因失败 / 无归因为 null。 */
   onDevServerRestart?: (reason: string | null, detail: string | null) => void;
-  /** 观测到依赖面陈旧时回调（需要「停服务 + `pnpm install`」这个动作）。
-   *
-   *  `state` 给出陈旧的具体形态，供文案分流。**同一形态只上报一次**（跨刷新，
-   *  见 `DEPS_STALE_NOTIFIED_KEY`）；判定为新鲜时去重记录会被清掉，于是下一次
-   *  拉取改动 lockfile 时还能再提示。 */
-  onDepsStale?: (state: DepsFreshnessState) => void;
-}
+};
 
 export function useCodeUpdateWatch({
   onDevServerRestart,
@@ -103,7 +99,9 @@ export function useCodeUpdateWatch({
   /** 就某次重启（按 bootId 去重）通知一次。 */
   const notifyRestart = useCallback(
     (bootId: string, reason: string | null, detail: string | null) => {
-      if (readStorageItem(DEV_RESTART_NOTIFIED_KEY) === bootId) return;
+      if (readStorageItem(DEV_RESTART_NOTIFIED_KEY) === bootId) {
+        return;
+      }
       writeStorageItem(DEV_RESTART_NOTIFIED_KEY, bootId);
       onRestartRef.current?.(reason, detail);
     },
@@ -111,39 +109,38 @@ export function useCodeUpdateWatch({
   );
 
   /** 依赖面陈旧：按 `depsState` 跨刷新去重，判定为新鲜时清掉记录（见 args 的说明）。 */
-  const reportDepsStale = useCallback(
-    (stale: boolean | null, state: DepsFreshnessState | null) => {
-      if (stale === false) {
-        removeStorageItem(DEPS_STALE_NOTIFIED_KEY);
-        return;
-      }
-      /* `stale === true` 却拿不到形态（老端点 / 半截响应）时不提示：文案分不了流，
-       * 说一句「依赖陈旧」而不指哪一档，用户照着做的动作会不确定。 */
-      if (stale !== true || state === null) return;
-      if (readStorageItem(DEPS_STALE_NOTIFIED_KEY) === state) return;
-      writeStorageItem(DEPS_STALE_NOTIFIED_KEY, state);
-      onDepsStaleRef.current?.(state);
-    },
-    [],
-  );
+  const reportDepsStale = useCallback((stale: boolean | null, state: DepsFreshnessState | null) => {
+    if (stale === false) {
+      removeStorageItem(DEPS_STALE_NOTIFIED_KEY);
+      return;
+    }
+    /* `stale === true` 却拿不到形态（老端点 / 半截响应）时不提示：文案分不了流，
+     * 说一句「依赖陈旧」而不指哪一档，用户照着做的动作会不确定。 */
+    if (stale !== true || state === null) {
+      return;
+    }
+    if (readStorageItem(DEPS_STALE_NOTIFIED_KEY) === state) {
+      return;
+    }
+    writeStorageItem(DEPS_STALE_NOTIFIED_KEY, state);
+    onDepsStaleRef.current?.(state);
+  }, []);
 
   const probe = useCallback(async () => {
-    const {
-      buildId,
-      bootId,
-      restartReason,
-      restartDetail,
-      depsStale,
-      depsState,
-    } = await fetchBuildId();
-    if (stoppedRef.current) return;
+    const { buildId, bootId, restartReason, restartDetail, depsStale, depsState } =
+      await fetchBuildId();
+    if (stoppedRef.current) {
+      return;
+    }
 
     /* 依赖面这条与构建标识无关（它不随重启变、也不随源码 mtime 变），且**首探就该
      * 判**（冷启动也会撞上「拉了新代码没重装」）—— 因此放在所有标识分支之前，
      * 不跟着 `buildId === null` 的早退一起被跳过。 */
     reportDepsStale(depsStale, depsState);
 
-    if (buildId === null) return;
+    if (buildId === null) {
+      return;
+    }
 
     /* 首次探测：既建立对比基准，也是「页面加载时那一版」的记录。 */
     if (loadedAtRef.current === null) {
@@ -152,8 +149,9 @@ export function useCodeUpdateWatch({
       lastBootIdRef.current = bootId;
       /* ③ 一上来就带重启原因 = 这个进程是启动器自愈重启起来的（重启发生在页面
        *    加载之前，bootId 变化在页面这边看不到），补一条留底通知。 */
-      if (bootId && restartReason)
+      if (bootId && restartReason) {
         notifyRestart(bootId, restartReason, restartDetail);
+      }
       return;
     }
 
@@ -171,8 +169,9 @@ export function useCodeUpdateWatch({
      *    根本没失败过（进程换得比一拍还快）。 */
     if (isBootIdChange(lastBootIdRef.current, bootId)) {
       lastBootIdRef.current = bootId;
-      if (bootId && restartReason)
+      if (bootId && restartReason) {
         notifyRestart(bootId, restartReason, restartDetail);
+      }
       reportCodeUpdatedSinceLoad();
       return;
     }

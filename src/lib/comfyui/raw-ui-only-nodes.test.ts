@@ -68,7 +68,7 @@ describe("stripUiOnlyNodes —— 提交前剔除纯 UI 节点", () => {
     expect(removed).toBe(1);
     const subs = /* SAFETY: 类型断言已复核 */ (
       out.definitions as {
-        subgraphs: Record<string, { nodes: Array<MiniNode>; links: Array<{ id: number }> }>;
+        subgraphs: Record<string, { links: Array<{ id: number }>; nodes: Array<MiniNode> }>;
       }
     ).subgraphs;
     expect(subs["0"]!.nodes.map((n) => n.id)).toEqual(["1671"]);

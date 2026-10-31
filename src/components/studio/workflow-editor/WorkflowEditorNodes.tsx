@@ -8,11 +8,7 @@ import { renderMarkdown } from "~/lib/markdown";
 import { WorkflowEdge } from "~/components/studio/canvas/WorkflowEdge";
 import { FlowNode } from "../canvas/WorkflowNode";
 import { WorkflowSubgraphNode } from "../canvas/WorkflowSubgraphNode";
-import type {
-  WorkflowGroupData,
-  WorkflowIoPortData,
-  WorkflowNoteData,
-} from "../workflow-types";
+import type { WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData } from "../workflow-types";
 import { NODE_TITLE_H, lightenHex, hexToRgba, mixHex } from "../workflow-utils";
 import { useCssColorToken } from "../hooks/use-css-color-token";
 
@@ -42,9 +38,7 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
   const draggable = !!data.draggable;
   return (
     <div
-      className={
-        "relative h-full w-full rounded-md " + (draggable ? "cursor-move" : "")
-      }
+      className={`relative h-full w-full rounded-md ${draggable ? "cursor-move" : ""}`}
       style={{
         background: fill,
         border: `1.5px solid ${border}`,
@@ -127,9 +121,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
   /* 边界 pin 实体（definitions.subgraphs[uid].inputs/outputs）没有内部节点标题
    * —— 它们就是封装节点直接暴露出来的端口。此时 `parentNodeTitle` 是空串，
    * tooltip 就只剩端口标签 + 类型。 */
-  const hoverLabel = data.parentNodeTitle
-    ? `${data.parentNodeTitle} · ${data.title}`
-    : data.title;
+  const hoverLabel = data.parentNodeTitle ? `${data.parentNodeTitle} · ${data.title}` : data.title;
   return (
     <div
       /* 输入面板的标签右对齐，名字紧贴右边的 handle 圆点（`noise_seed  ●`、
@@ -158,10 +150,10 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
           `buildEdges` 里的边能解析出稳定的句柄名。 */}
       {!isInput || isBoth ? (
         <Handle
-          type="target"
-          position={Position.Left}
           id="out"
+          position={Position.Left}
           style={{ background: dotColor, left: -4 }}
+          type="target"
         />
       ) : null}
       <span
@@ -187,10 +179,10 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
       ) : null}
       {isInput || isBoth ? (
         <Handle
-          type="source"
-          position={Position.Right}
           id="in"
+          position={Position.Right}
           style={{ background: dotColor, right: -4 }}
+          type="source"
         />
       ) : null}
     </div>
@@ -271,8 +263,8 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
       )}
       <div
         className="wf-markdown text-2xs min-h-0 flex-1 overflow-auto p-2"
-        style={{ color: "var(--color-ink-bright)", lineHeight: 1.5 }}
         dangerouslySetInnerHTML={{ __html: html }}
+        style={{ color: "var(--color-ink-bright)", lineHeight: 1.5 }}
       />
     </div>
   );

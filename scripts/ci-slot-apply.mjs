@@ -176,9 +176,7 @@ export function materializeSlotInputs(input) {
  */
 export function runJobLifecycle(io = {}) {
   const jobRoot = io.jobRoot ?? ROOT;
-  const spawn =
-    io.spawn ??
-    ((exe, args, opts) => ({ status: spawnSync(exe, args, opts).status }));
+  const spawn = io.spawn ?? ((exe, args, opts) => ({ status: spawnSync(exe, args, opts).status }));
   const res = spawn(process.execPath, [JOB_HOOK_SCRIPT], {
     cwd: jobRoot,
     stdio: "inherit",
@@ -210,7 +208,9 @@ export function clearJobLink(jobRoot) {
   } catch {
     return false;
   }
-  if (!stat.isSymbolicLink()) return false;
+  if (!stat.isSymbolicLink()) {
+    return false;
+  }
   unlinkDependencies(link);
   return true;
 }
@@ -334,9 +334,13 @@ export function statfsFreeBytes(target) {
       return Number.isFinite(bytes) ? bytes : null;
     } catch (err) {
       const code = errCode(err);
-      if (code !== "ENOENT" && code !== "ENOTDIR") return null;
+      if (code !== "ENOENT" && code !== "ENOTDIR") {
+        return null;
+      }
       const parent = path.dirname(dir);
-      if (parent === dir) return null;
+      if (parent === dir) {
+        return null;
+      }
       dir = parent;
     }
   }
@@ -446,7 +450,9 @@ export function pruneSlots(io) {
       }
       continue;
     }
-    if (index < budget) continue;
+    if (index < budget) {
+      continue;
+    }
     const fresh = item.lastUsed === null || now - item.lastUsed < ttlMs;
     if (fresh) {
       held.push(item.key);
@@ -526,9 +532,7 @@ export function applySlot(io = {}) {
     : { treePresent: false, fingerprint: null, unreadable: false };
   /* 读不动 ⇒ 既不接也不重装：这一跑没省到时间是小事，把别人正在用的树删了是事故。 */
   if (state.unreadable) {
-    log(
-      "[缓存槽] 槽里有指纹文件但这一趟读不动 ⇒ 不判「键变了」、不接、不删（退回普通装）",
-    );
+    log("[缓存槽] 槽里有指纹文件但这一趟读不动 ⇒ 不判「键变了」、不接、不删（退回普通装）");
     return {
       handled: false,
       action: "no-cache",
@@ -640,10 +644,7 @@ export function applySlot(io = {}) {
   }
 }
 
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   applySlot();
   process.exit(0);
 }

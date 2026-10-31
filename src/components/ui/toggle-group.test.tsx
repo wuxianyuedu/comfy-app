@@ -7,7 +7,7 @@ afterEach(cleanup);
 
 function renderPair() {
   render(
-    <ToggleGroup value={["b"]} multiple={false} aria-label="测试分段控件">
+    <ToggleGroup aria-label="测试分段控件" multiple={false} value={["b"]}>
       <ToggleGroupItem value="a">甲</ToggleGroupItem>
       <ToggleGroupItem value="b">乙</ToggleGroupItem>
     </ToggleGroup>,
@@ -23,9 +23,7 @@ function renderPair() {
 describe("ToggleGroupItem 的选中档", () => {
   it("描边 + 字重挂在 pressed 档上（不与悬停撞），且抬层不被邻项盖住", () => {
     for (const item of renderPair()) {
-      const pressed = (item.className.match(/data-pressed:\S+/g) ?? []).join(
-        " ",
-      );
+      const pressed = (item.className.match(/data-pressed:\S+/g) ?? []).join(" ");
       expect(pressed).toContain("ring-1");
       expect(pressed).toContain("ring-primary/45");
       expect(pressed).toContain("font-semibold");
@@ -41,7 +39,9 @@ describe("ToggleGroupItem 的选中档", () => {
 
   it("选中语义照旧由基元持有：aria-pressed 跟着 value 走", () => {
     const [a, b] = renderPair();
-    if (!a || !b) throw new Error("只渲染出两个 item");
+    if (!a || !b) {
+      throw new Error("只渲染出两个 item");
+    }
     expect(a).toHaveAttribute("aria-pressed", "false");
     expect(b).toHaveAttribute("aria-pressed", "true");
   });

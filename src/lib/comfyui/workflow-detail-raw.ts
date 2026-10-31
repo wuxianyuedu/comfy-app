@@ -42,11 +42,15 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): Array<RawNodeMeta> {
   const rawNodeMeta: Array<RawNodeMeta> = [];
   if (raw && Array.isArray(raw.nodes)) {
     for (const rn of raw.nodes) {
-      if (!rn || rn.type === "Note" || rn.type === "MarkdownNote") continue;
+      if (!rn || rn.type === "Note" || rn.type === "MarkdownNote") {
+        continue;
+      }
       const outputs: Array<RawOutputEntry> = [];
       if (Array.isArray(rn.outputs)) {
         for (const o of rn.outputs) {
-          if (!o || typeof o.name !== "string") continue;
+          if (!o || typeof o.name !== "string") {
+            continue;
+          }
           outputs.push({
             name: o.name,
             localized: typeof o.localized_name === "string" ? o.localized_name : undefined,
@@ -88,7 +92,9 @@ export function buildNodeTypeMap(raw: RawWorkflow | null): Record<string, string
   const nodeTypeById: Record<string, string> = {};
   if (raw && Array.isArray(raw.nodes)) {
     for (const n of raw.nodes) {
-      if (n?.id != null) nodeTypeById[String(n.id)] = typeof n.type === "string" ? n.type : "";
+      if (n?.id != null) {
+        nodeTypeById[String(n.id)] = typeof n.type === "string" ? n.type : "";
+      }
     }
   }
   return nodeTypeById;
@@ -109,20 +115,30 @@ export function buildInnerNodeInputs(
 ): Record<string, Array<RawInputEntry>> {
   const innerInputsById: Record<string, Array<RawInputEntry>> = {};
   const subgraphs = raw?.definitions?.subgraphs;
-  if (!subgraphs) return innerInputsById;
+  if (!subgraphs) {
+    return innerInputsById;
+  }
   for (const subKey of Object.keys(subgraphs)) {
     const subDef = subgraphs[subKey];
-    if (!subDef || !Array.isArray(subDef.nodes)) continue;
+    if (!subDef || !Array.isArray(subDef.nodes)) {
+      continue;
+    }
     for (const node of subDef.nodes) {
-      if (node?.id == null) continue;
+      if (node?.id == null) {
+        continue;
+      }
       const inputs = Array.isArray(node.inputs) ? node.inputs : [];
-      if (inputs.length === 0) continue;
+      if (inputs.length === 0) {
+        continue;
+      }
       const widgetValues: Array<unknown> = Array.isArray(node.widgets_values)
         ? node.widgets_values
         : [];
       const list: Array<RawInputEntry> = [];
       for (const inp of inputs) {
-        if (!inp || typeof inp.name !== "string") continue;
+        if (!inp || typeof inp.name !== "string") {
+          continue;
+        }
         const widgetName =
           inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
         const entry: RawInputEntry = {
@@ -137,10 +153,14 @@ export function buildInnerNodeInputs(
           /* 内部节点的值按「inputs[] 中控件出现顺序」对齐 widgets_values，
            *  seed 家族多占一个 control_after_generate 槽位（与顶层解析同口径）。 */
           const slot = list.reduce((count, prev) => {
-            if (!prev.widget) return count;
+            if (!prev.widget) {
+              return count;
+            }
             return prev.name === "seed" || prev.name === "noise_seed" ? count + 2 : count + 1;
           }, 0);
-          if (slot < widgetValues.length) entry.widgetValue = widgetValues[slot];
+          if (slot < widgetValues.length) {
+            entry.widgetValue = widgetValues[slot];
+          }
         }
         list.push(entry);
       }
@@ -169,11 +189,8 @@ export function buildRawView(
     const rawViewNodes: Array<DetailNodeView> = Object.entries(rawGraph).map(([nodeId, n]) => {
       /* 与旧 `n?.class_type || (n?.type as string) || "?"` 语义逐值等价
        *  （`a || b` ≡ `a ? a : b`）：class_type/type 为空串时同样回退。 */
-      const classType: string = n?.class_type
-        ? n.class_type
-        : n?.type
-          ? /* SAFETY: 类型断言已复核 */ (n.type as string)
-          : "?";
+      /* SAFETY: 类型断言已复核 */
+      const classType: string = n?.class_type ? n.class_type : n?.type ? (n.type as string) : "?";
       const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
       let resolvedTitle: string | undefined;
       if (isUuidClass && raw?.definitions?.subgraphs) {
@@ -181,7 +198,9 @@ export function buildRawView(
         let def = subs[classType];
         if (!def) {
           const matchKey = Object.keys(subs).find((key) => subs[key]?.id === classType);
-          if (matchKey) def = subs[matchKey];
+          if (matchKey) {
+            def = subs[matchKey];
+          }
         }
         if (def && typeof def.name === "string" && def.name.trim()) {
           resolvedTitle = def.name.trim();

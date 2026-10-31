@@ -181,7 +181,7 @@ describe("自动启动失败后停止重试（ISSUE #335）", () => {
     vi.mocked(getSettingsSync).mockReturnValue(
       /* SAFETY: 类型断言已复核 */ autoStartSettings as never,
     );
-    return ensureComfyUiReady({ timeoutMs: 5_000 });
+    return ensureComfyUiReady({ timeoutMs: 5000 });
   };
 
   it("失败后自动路径不再拉起进程，直接回报上次失败详情", async () => {
@@ -288,7 +288,7 @@ describe("getComfyUiStatus — 状态三态组合", () => {
     );
     vi.mocked(spawnManaged).mockReturnValue(
       /* SAFETY: 类型断言已复核 */ {
-        child: { pid: 98765 },
+        child: { pid: 98_765 },
         error: undefined,
       } as never,
     );
@@ -331,7 +331,7 @@ describe("getComfyUiStatus — 状态三态组合", () => {
     );
     vi.mocked(spawnManaged).mockReturnValue(
       /* SAFETY: 类型断言已复核 */ {
-        child: { pid: 98765 },
+        child: { pid: 98_765 },
         error: undefined,
       } as never,
     );
@@ -345,11 +345,11 @@ describe("getComfyUiStatus — 状态三态组合", () => {
     const base = Date.now();
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
-      vi.setSystemTime(base + 4_000);
+      vi.setSystemTime(base + 4000);
       expect((await getComfyUiStatus({ force: true })).starting).toBe(true);
 
       // 第二轮正是旧实现给自己续命的那一轮：它把窗口推到 +9s 之后的 12s。
-      vi.setSystemTime(base + 9_000);
+      vi.setSystemTime(base + 9000);
       await getComfyUiStatus({ force: true });
 
       vi.setSystemTime(base + 14_000);
@@ -610,7 +610,7 @@ describe("getComfyUiStatus 的 TTL 缓存（#346）", () => {
     );
     vi.mocked(spawnManaged).mockReturnValue(
       /* SAFETY: 类型断言已复核 */ {
-        child: { pid: 98766 },
+        child: { pid: 98_766 },
         error: undefined,
       } as never,
     );
@@ -813,7 +813,7 @@ describe("启动等待期不闪回「未运行」（ISSUE #442）", () => {
     );
     vi.mocked(spawnManaged).mockReturnValue(
       /* SAFETY: 类型断言已复核 */ {
-        child: { pid: 98765 },
+        child: { pid: 98_765 },
         error: undefined,
       } as never,
     );
@@ -886,7 +886,7 @@ describe("已有实例在跑但 HTTP 暂未响应：不重复拉起，等待接�
   });
 
   it("入口探测 null + 快照确认进程在跑：不 spawn，等实例应答后接管成功", async () => {
-    mainPyPid = 97356; // 快照判活：进程表命中 main.py
+    mainPyPid = 97_356; // 快照判活：进程表命中 main.py
     const { probeComfyBase } = await import("./client");
     vi.mocked(probeComfyBase)
       .mockResolvedValueOnce(null) // 入口那次：实例正忙，超时
@@ -901,14 +901,16 @@ describe("已有实例在跑但 HTTP 暂未响应：不重复拉起，等待接�
   });
 
   it("等待期间快照连续确认进程消失：如实报失败，不冒领就绪", async () => {
-    mainPyPid = 97356; // 入口快照：进程在
+    mainPyPid = 97_356; // 入口快照：进程在
     const { probeComfyBase } = await import("./client");
     // 入口那次探测（第 1 次）返回 null 且**不动进程表**——快照必须仍看到进程在，
     // 才会走进接管等待；从等待循环的第 1 次探测（第 2 次调用）起进程消失。
     let probeCalls = 0;
     vi.mocked(probeComfyBase).mockImplementation(async () => {
       probeCalls += 1;
-      if (probeCalls >= 2) mainPyPid = null;
+      if (probeCalls >= 2) {
+        mainPyPid = null;
+      }
       return null;
     });
 

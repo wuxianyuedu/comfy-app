@@ -48,16 +48,16 @@ function channelProvider(channel: ExtractChannel): "local" | "remote" {
 }
 
 export function useStoryboardExtractFlow(input: {
-  shots: Array<Shot>;
-  scenes: Array<Scene>;
   characters: Array<Character>;
-  styles: Array<StyleRef>;
-  onShotsChange: (s: Array<Shot>) => void;
-  onCharactersChange?: (c: Array<Character>) => void;
-  scriptMarkdown?: string;
-  extract?: { session: ExtractSession; actions: ExtractSessionActions };
   config: LLMConfigView | null;
+  extract?: { actions: ExtractSessionActions; session: ExtractSession };
+  onCharactersChange?: (c: Array<Character>) => void;
+  onShotsChange: (s: Array<Shot>) => void;
   openSettings: () => void;
+  scenes: Array<Scene>;
+  scriptMarkdown?: string;
+  shots: Array<Shot>;
+  styles: Array<StyleRef>;
 }) {
   const {
     shots,
@@ -167,10 +167,10 @@ export function useStoryboardExtractFlow(input: {
       }
       appendLog(makeExtractLog("result", `解析出 ${entries.length} 个分镜，准备写入`));
       appendShots(entries);
-    } catch (e: unknown) {
-      appendLog(makeExtractLog("error", errorMessage(e, "提取失败")));
+    } catch (error: unknown) {
+      appendLog(makeExtractLog("error", errorMessage(error, "提取失败")));
       setExtractState({
-        error: `${errorMessage(e, "提取失败")} 可重试,或调整脚本后重跑。`,
+        error: `${errorMessage(error, "提取失败")} 可重试,或调整脚本后重跑。`,
       });
     } finally {
       setExtractState({ busy: false });
@@ -185,7 +185,9 @@ export function useStoryboardExtractFlow(input: {
        * 而「读失败」与「文件为空」在它们那里压成同一个结果。 */
       const text = await readFileAsText(file);
       const trimmed = text.trim();
-      if (!trimmed) throw new Error("文件内容为空");
+      if (!trimmed) {
+        throw new Error("文件内容为空");
+      }
       if (looksLikeJson(trimmed)) {
         let entries: Array<ShotEntry>;
         try {
@@ -217,8 +219,8 @@ export function useStoryboardExtractFlow(input: {
         throw new Error("未在文件中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行");
       }
       appendShots(drafts.map(draftToShotEntry));
-    } catch (e: unknown) {
-      setExtractState({ error: errorMessage(e, "导入失败") });
+    } catch (error: unknown) {
+      setExtractState({ error: errorMessage(error, "导入失败") });
     } finally {
       setExtractState({ busy: false });
     }

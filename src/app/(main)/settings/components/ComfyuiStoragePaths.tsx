@@ -23,57 +23,38 @@ import {
 } from "../comfyui-storage-paths-config";
 
 /** 一个目录行：路径（斜杠统一，便于逐字对照盘符）+ 存在性标注。 */
-function StorageDirLine({
-  dir,
-  shared,
-}: {
-  dir: StoragePathRow["dirs"][number];
-  shared: boolean;
-}) {
+function StorageDirLine({ dir, shared }: { dir: StoragePathRow["dirs"][number]; shared: boolean }) {
   const shown = normalizeSlashes(dir.path);
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <span
         className="text-ink/85 font-mono text-xs break-all"
-        title={dir.path}
         data-testid={`storage-dir-${shared ? "shared" : "primary"}`}
+        title={dir.path}
       >
         {shown}
       </span>
-      {dir.source && (
-        <span className="text-muted-foreground text-2xs">
-          （来自 {dir.source}）
-        </span>
-      )}
-      {!dir.exists && (
-        <span className="text-muted-foreground text-2xs">· 目录不存在</span>
-      )}
+      {dir.source && <span className="text-muted-foreground text-2xs">（来自 {dir.source}）</span>}
+      {!dir.exists && <span className="text-muted-foreground text-2xs">· 目录不存在</span>}
     </li>
   );
 }
 
-export function ComfyuiStoragePaths({
-  storage,
-}: {
-  storage: DesktopStoragePaths | null;
-}) {
+export function ComfyuiStoragePaths({ storage }: { storage: DesktopStoragePaths | null }) {
   // 非桌面实例：没有「实例目录」这回事（它的目录由启动参数逐次决定）。
-  if (!storage) return null;
+  if (!storage) {
+    return null;
+  }
 
   return (
-    <section
-      className="border-border mb-4 border-t pt-3"
-      aria-label="实例目录（只读）"
-    >
+    <section aria-label="实例目录（只读）" className="border-border mb-4 border-t pt-3">
       <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
         <h3 className="text-ink text-sm font-medium">实例目录（只读）</h3>
-        <span className="text-muted-foreground text-xs">
-          模型 / 输入 / 输出指向哪些盘符
-        </span>
+        <span className="text-muted-foreground text-xs">模型 / 输入 / 输出指向哪些盘符</span>
       </div>
       <dl className="flex flex-col gap-2">
         {buildStorageRows(storage).map((row) => (
-          <div key={row.key} className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-0.5" key={row.key}>
             <dt className="text-muted-foreground text-xs">{row.label}</dt>
             <dd>
               {row.dirs.length === 0 ? (
@@ -81,11 +62,7 @@ export function ComfyuiStoragePaths({
               ) : (
                 <ul className="flex flex-col gap-0.5">
                   {row.dirs.map((dir) => (
-                    <StorageDirLine
-                      key={dir.path}
-                      dir={dir}
-                      shared={row.key.endsWith("shared")}
-                    />
+                    <StorageDirLine dir={dir} key={dir.path} shared={row.key.endsWith("shared")} />
                   ))}
                 </ul>
               )}
@@ -93,9 +70,7 @@ export function ComfyuiStoragePaths({
           </div>
         ))}
       </dl>
-      <p className="text-muted-foreground mt-2 text-xs">
-        {describeStorageHint(storage)}
-      </p>
+      <p className="text-muted-foreground mt-2 text-xs">{describeStorageHint(storage)}</p>
     </section>
   );
 }

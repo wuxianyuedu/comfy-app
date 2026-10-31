@@ -73,10 +73,10 @@ describe("/api/logs/export", () => {
     const res = await post({ label: "app-runtime", content: "第一行\n第二行" });
     expect(res.status).toBe(200);
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      bytes: number;
       ok: boolean;
       path: string;
       relativePath: string;
-      bytes: number;
     };
     expect(data.ok).toBe(true);
     expect(data.relativePath.startsWith("exports/")).toBe(true);

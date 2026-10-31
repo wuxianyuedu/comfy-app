@@ -39,8 +39,8 @@ export type SnapshotEntry = Buffer | null;
  */
 export type ProbeIo = {
   read: (abs: string) => SnapshotEntry;
-  write: (abs: string, bytes: Buffer) => void;
   remove: (abs: string) => void;
+  write: (abs: string, bytes: Buffer) => void;
 };
 
 /** Windows 上刚被子进程读过的文件会短暂占用，实测 `writeFileSync` 会连抛 `UNKNOWN`。 */
@@ -53,7 +53,9 @@ export const realProbeIo: ProbeIo = {
     for (let i = 0; i < WRITE_ATTEMPTS; i += 1) {
       try {
         writeFileSync(abs, bytes);
-        if (readFileSync(abs).equals(bytes)) return;
+        if (readFileSync(abs).equals(bytes)) {
+          return;
+        }
         last = "写回后读回的内容与快照不一致";
       } catch (e) {
         last = /* SAFETY: 类型断言已复核 */ (e as Error).message;
@@ -70,7 +72,9 @@ export function snapshotPaths(
   io: ProbeIo = realProbeIo,
 ): Map<string, SnapshotEntry> {
   const snap = new Map<string, SnapshotEntry>();
-  for (const abs of absList) snap.set(abs, io.read(abs));
+  for (const abs of absList) {
+    snap.set(abs, io.read(abs));
+  }
   return snap;
 }
 
@@ -88,9 +92,9 @@ export function restoreToSnapshot(
   snapshot: ReadonlyMap<string, SnapshotEntry>,
   io: ProbeIo = realProbeIo,
 ): {
+  failed: Array<{ abs: string; why: string }>;
   restored: Array<string>;
   unchanged: Array<string>;
-  failed: Array<{ abs: string; why: string }>;
 } {
   const restored: Array<string> = [];
   const unchanged: Array<string> = [];
@@ -111,8 +115,11 @@ export function restoreToSnapshot(
       continue;
     }
     try {
-      if (want === null) io.remove(abs);
-      else io.write(abs, want);
+      if (want === null) {
+        io.remove(abs);
+      } else {
+        io.write(abs, want);
+      }
       restored.push(abs);
     } catch (e) {
       failed.push({ abs, why: /* SAFETY: 类型断言已复核 */ (e as Error).message });
@@ -123,6 +130,8 @@ export function restoreToSnapshot(
 
 /** 字节级比较（`null` 只与 `null` 相等 —— 「本来不存在」与「空文件」是两种状态）。 */
 export function sameBytes(a: SnapshotEntry, b: SnapshotEntry): boolean {
-  if (a === null || b === null) return a === b;
+  if (a === null || b === null) {
+    return a === b;
+  }
   return a.equals(b);
 }

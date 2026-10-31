@@ -65,7 +65,9 @@ const { execFileSync, spawnSync } = require("node:child_process");
 // 判据模块是 ESM，.cjs 只能动态 import()，故声明为惰性句柄、由 main 先加载。
 let runPnpmSync = null;
 async function loadShell() {
-  if (runPnpmSync) return runPnpmSync;
+  if (runPnpmSync) {
+    return runPnpmSync;
+  }
   try {
     ({ runPnpmSync } = await import("./launcher-core/shell.mjs"));
   } catch (e) {
@@ -132,7 +134,9 @@ function migrationDeclaration(revRange) {
     .split("\0")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (!commits.length) return { declared: false, commits: 0 };
+  if (!commits.length) {
+    return { declared: false, commits: 0 };
+  }
   return { declared: commits.every((b) => MIGRATION_RE.test(b)), commits: commits.length };
 }
 
@@ -181,20 +185,20 @@ function perCommitShape(range, limit) {
     }
     const parent = parents[0];
     const patch = gitOrEmpty(["diff", "--no-color", "--unified=0", `${parent}..${rev}`]);
-    if (!patch.trim()) continue;
+    if (!patch.trim()) {
+      continue;
+    }
     const files = collectChangedFiles(patch);
-    const pairs = collectPairs(files, parent, (f) =>
-      gitOrEmpty(["show", `${rev}:${f.after}`]),
-    );
+    const pairs = collectPairs(files, parent, (f) => gitOrEmpty(["show", `${rev}:${f.after}`]));
     const reformatOnly = classifyReformatOnly(pairs);
     commits.push({ rev, files: files.length, reformatOnly: reformatOnly.size });
     const clean =
-      reformatOnly.size < limit ||
-      (files.length > 0 && reformatOnly.size === files.length);
-    if (!clean)
+      reformatOnly.size < limit || (files.length > 0 && reformatOnly.size === files.length);
+    if (!clean) {
       offenders.push(
         `${rev.slice(0, 8)}(${files.length} 个源文件里 ${reformatOnly.size} 个纯格式化)`,
       );
+    }
   }
   return { commits, ok: commits.length > 0 && offenders.length === 0, offenders };
 }
@@ -262,11 +266,17 @@ function gitOrEmpty(args) {
 function collectChangedFiles(patch) {
   const out = [];
   for (const line of patch.split("\n")) {
-    if (!line.startsWith("diff --git ")) continue;
+    if (!line.startsWith("diff --git ")) {
+      continue;
+    }
     const m = /^diff --git a\/(.+?) b\/(.+)$/.exec(line);
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     const [, before, after] = m;
-    if (!SOURCE_RE.test(after)) continue;
+    if (!SOURCE_RE.test(after)) {
+      continue;
+    }
     out.push({ before, after });
   }
   return out;
@@ -335,7 +345,9 @@ let runner = undefined;
  * 内的 prettier;一路到根都没有时退回 `pnpm exec prettier`。
  */
 function resolveRunner() {
-  if (runner !== undefined) return runner;
+  if (runner !== undefined) {
+    return runner;
+  }
 
   // oxfmt 入口的接缝(与 check-format.cjs 同口径):用例在临时仓库里跑,
   // 那里的 cwd 没有 node_modules,不给这条缝就只能撞「找不到格式化器」。
@@ -350,7 +362,9 @@ function resolveRunner() {
   for (;;) {
     candidates.push(dir);
     const parent = path.dirname(dir);
-    if (parent === dir) break;
+    if (parent === dir) {
+      break;
+    }
     dir = parent;
   }
 
@@ -361,14 +375,18 @@ function resolveRunner() {
       // 包的 `exports` 字段挡住(子路径不导出)。
       const pkg = require.resolve("oxfmt/package.json", { paths: [base] });
       const entry = path.join(path.dirname(pkg), "bin", "oxfmt");
-      if (!fs.existsSync(entry)) throw new Error("oxfmt entry missing");
+      if (!fs.existsSync(entry)) {
+        throw new Error("oxfmt entry missing");
+      }
       runner = { kind: "entry", entry, cwd: base };
       break;
     } catch {
       /* 换下一个基准目录 */
     }
   }
-  if (runner === null) runner = { kind: "pnpm", cwd: HERE };
+  if (runner === null) {
+    runner = { kind: "pnpm", cwd: HERE };
+  }
   return runner;
 }
 
@@ -399,9 +417,7 @@ function runOxfmt(args, cwd, input) {
     });
   }
   if (typeof runPnpmSync !== "function") {
-    throw new Error(
-      "pnpm 形态判据未加载(runPnpmSync 不可用)—— 调用方需先 await loadShell()",
-    );
+    throw new Error("pnpm 形态判据未加载(runPnpmSync 不可用)—— 调用方需先 await loadShell()");
   }
   return runPnpmSync([...head, ...args], {
     cwd,
@@ -427,7 +443,9 @@ function collectRewritten(entries, dir, before) {
   const out = new Map();
   for (const { file } of entries) {
     const after = fs.readFileSync(path.join(dir, file), "utf8");
-    if (after !== before.get(file)) out.set(file, after);
+    if (after !== before.get(file)) {
+      out.set(file, after);
+    }
   }
   return out;
 }
@@ -490,8 +508,9 @@ function formatOne(text, file) {
     fs.writeFileSync(target, text.replace(/\r\n/g, "\n"));
     const { cwd } = runnerPrefix();
     const res = runOxfmt([dir], cwd);
-    if (res.error || res.status !== 0 || typeof res.status !== "number")
+    if (res.error || res.status !== 0 || typeof res.status !== "number") {
       return null;
+    }
     return fs.readFileSync(target, "utf8");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -522,9 +541,15 @@ function classifyReformatOnly(entries) {
     // 一次 stdin,而 stdin 的答案是确定的「原样」(ISSUE #1610 的那 13s)。
     const known = ok && settled.has(e.file);
     let formatted = known ? rewritten.get(e.file) : undefined;
-    if (!known) formatted = formatOne(e.before, e.file) ?? undefined;
-    if (formatted === undefined) continue;
-    if (norm(formatted) === norm(e.after)) reformatOnly.add(e.file);
+    if (!known) {
+      formatted = formatOne(e.before, e.file) ?? undefined;
+    }
+    if (formatted === undefined) {
+      continue;
+    }
+    if (norm(formatted) === norm(e.after)) {
+      reformatOnly.add(e.file);
+    }
   }
   return reformatOnly;
 }
@@ -540,7 +565,9 @@ function collectPairs(files, beforeRev, readAfter) {
   for (const f of files) {
     const before = gitOrEmpty(["show", `${beforeRev}:${f.after}`]);
     const after = readAfter(f);
-    if (!before || !after) continue;
+    if (!before || !after) {
+      continue;
+    }
     out.push({ file: f.after, before, after });
   }
   return out;
@@ -556,10 +583,7 @@ async function main() {
    *  仅当**没有**走 `--range`（CI 盘点按范围判，与合并现场无关）时豁免。 */
   const mergeHeadPresent = fs.existsSync(path.join(ROOT, ".git", "MERGE_HEAD"));
   if (!process.argv.includes("--range") && mergeHeadPresent) {
-    gateSkip(
-      "格式化提交分离",
-      "合并提交（MERGE_HEAD 存在），「格式化与行为改动分离」不适用",
-    );
+    gateSkip("格式化提交分离", "合并提交（MERGE_HEAD 存在），「格式化与行为改动分离」不适用");
     return;
   }
 
@@ -582,29 +606,17 @@ async function main() {
    * pre-commit 在提交对象生成之前运行,`HEAD~1..HEAD` 指向的是上一次提交 ——
    * 判它等于本次提交完全没被检查(见文件头)。`git diff --cached` 正是「本次将要
    * 提交的内容」,且它的 diff 基线是 HEAD,与 `git show HEAD:<path>` 天然对齐。 */
-  const staged = range
-    ? ""
-    : gitOrEmpty(["diff", "--cached", "--no-color", "--unified=0"]);
+  const staged = range ? "" : gitOrEmpty(["diff", "--cached", "--no-color", "--unified=0"]);
 
   if (!range && !staged.trim()) {
     /* 没有暂存改动:回落到「判 HEAD 这一次提交」(本地事后复盘 / CI 之外的用法)。
      * 此时基准是 HEAD~1,与改动前版本一致。 */
     const [afterRev, beforeRev] = ["HEAD", "HEAD~1"];
-    if (
-      gitOrEmpty(["rev-parse", "--verify", "--quiet", beforeRev]).trim() === ""
-    ) {
-      gateSkip(
-        "格式化提交分离",
-        `无可比父提交（${beforeRev} 不存在，首次提交或浅克隆）`,
-      );
+    if (gitOrEmpty(["rev-parse", "--verify", "--quiet", beforeRev]).trim() === "") {
+      gateSkip("格式化提交分离", `无可比父提交（${beforeRev} 不存在，首次提交或浅克隆）`);
       return;
     }
-    const patch = gitOrEmpty([
-      "diff",
-      "--no-color",
-      "--unified=0",
-      `${beforeRev}..${afterRev}`,
-    ]);
+    const patch = gitOrEmpty(["diff", "--no-color", "--unified=0", `${beforeRev}..${afterRev}`]);
     if (!patch.trim()) {
       gateSkip("格式化提交分离", "本次提交没有文件改动");
       return;
@@ -633,28 +645,15 @@ async function main() {
 
   /* `--range <before>..<after>` 的两侧:改动前的内容从 `before` 取,改动后的
    * 从 `after` 取。暂存区口径下两者都是 `HEAD`(改动后在 index 里,见下)。 */
-  const [rangeBefore, rangeAfter] = range
-    ? range.split("..")
-    : ["HEAD", "HEAD"];
+  const [rangeBefore, rangeAfter] = range ? range.split("..") : ["HEAD", "HEAD"];
 
-  if (
-    range &&
-    gitOrEmpty(["rev-parse", "--verify", "--quiet", rangeBefore]).trim() === ""
-  ) {
-    gateSkip(
-      "格式化提交分离",
-      `无可比父提交（${rangeBefore} 不存在，首次提交或浅克隆）`,
-    );
+  if (range && gitOrEmpty(["rev-parse", "--verify", "--quiet", rangeBefore]).trim() === "") {
+    gateSkip("格式化提交分离", `无可比父提交（${rangeBefore} 不存在，首次提交或浅克隆）`);
     return;
   }
 
   const patch = range
-    ? gitOrEmpty([
-        "diff",
-        "--no-color",
-        "--unified=0",
-        `${rangeBefore}..${rangeAfter}`,
-      ])
+    ? gitOrEmpty(["diff", "--no-color", "--unified=0", `${rangeBefore}..${rangeAfter}`])
     : staged;
 
   if (!patch.trim()) {
@@ -765,14 +764,13 @@ function report(files, reformatOnly, limit, migration, perCommit) {
     }
     return 0;
   }
-  gatePass(
-    "格式化提交分离",
-    `本次改动 ${files.length} 个源文件，没有纯格式化的`,
-  );
+  gatePass("格式化提交分离", `本次改动 ${files.length} 个源文件，没有纯格式化的`);
   return 0;
 }
 
-if (require.main === module) main();
+if (require.main === module) {
+  main();
+}
 
 /**
  * 供测试直接引用。

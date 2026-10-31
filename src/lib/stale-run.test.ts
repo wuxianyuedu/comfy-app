@@ -67,7 +67,9 @@ describe("beginStaleRun", () => {
     const guard = beginStaleRun();
     const seen: Array<string> = [];
     const step = () => {
-      if (guard.isStale()) return;
+      if (guard.isStale()) {
+        return;
+      }
       seen.push("继续");
     };
     step();

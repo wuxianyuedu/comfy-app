@@ -46,14 +46,20 @@ export function resolveNodePackage(
   properties?: Record<string, unknown>,
 ): string {
   const fromManifest = getCustomNodePackage(classType);
-  if (fromManifest) return fromManifest;
+  if (fromManifest) {
+    return fromManifest;
+  }
   const fromHeuristic = KNOWN_PACKAGE_HEURISTIC[classType];
-  if (fromHeuristic) return fromHeuristic;
+  if (fromHeuristic) {
+    return fromHeuristic;
+  }
   const cnr = properties?.cnr_id;
   if (typeof cnr === "string" && cnr.length > 0 && cnr !== "comfy-core") {
     return cnr;
   }
-  if (classType.includes("(rgthree)")) return "rgthree-comfy";
+  if (classType.includes("(rgthree)")) {
+    return "rgthree-comfy";
+  }
   return "ComfyUI";
 }
 
@@ -70,17 +76,25 @@ export function extractNoteTitle(text: string, fallback?: string): string {
     // 剥掉 ComfyUI 给某些转换流程烤进去的 "Note:" / "Note : " 前缀，
     // 免得渲染出来的标题栏回显成 "Note: Note: X"。
     raw = raw.replace(/^Note\s*[:：]\s*/i, "").trim();
-    if (raw) return raw;
+    if (raw) {
+      return raw;
+    }
   }
-  if (!text) return "";
+  if (!text) {
+    return "";
+  }
   const lines = text.split(/\r?\n/);
   for (const line of lines) {
     const match = /^#{1,3}\s+(.+?)\s*$/.exec(line);
-    if (match) return match[1]!;
+    if (match) {
+      return match[1]!;
+    }
   }
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed) return clampText(trimmed, { maxLength: TITLE_MAX });
+    if (trimmed) {
+      return clampText(trimmed, { maxLength: TITLE_MAX });
+    }
   }
   return "";
 }
@@ -185,15 +199,21 @@ export function renderWidgetValue(value: unknown): string {
   /* 缺值占位符只有一处定义（`~/lib/display-value`）—— 本函数负责的是
    * 「有值时怎么渲染」（布尔成 ✓/✕、小数去尾零…），「没有值时显示什么」
    * 不在这里再写一遍。 */
-  if (value === undefined || value === null) return displayValue(null);
-  if (typeof value === "boolean") return value ? "✓" : "✕";
+  if (value === undefined || value === null) {
+    return displayValue(null);
+  }
+  if (typeof value === "boolean") {
+    return value ? "✓" : "✕";
+  }
   if (typeof value === "number") {
     /* 小数保留两位；整数不带小数点；去尾零（1.00 → 1）——
      * 这三件事各有出口（`~/lib/number-format`，规范 16 §16.2.4.54）。
      * 此前这里是 `(Math.round(v * 100) / 100).toFixed(2)` + 手写剥零，
      * 即**两层舍入**（先十进制舍、再二进制舍），在边界值上与直接 `toFixed`
      * 给出不同答案。 */
-    if (value >= 10000) return String(value);
+    if (value >= 10_000) {
+      return String(value);
+    }
     return trimFixed(value, 2) ?? displayValue(null);
   }
   if (typeof value === "string") {
@@ -204,8 +224,12 @@ export function renderWidgetValue(value: unknown): string {
      *  无论节点多宽都只会显示 "DaSiWa_Wan22_…"。 */
     return value;
   }
-  if (Array.isArray(value)) return "[…]";
-  if (typeof value === "object") return "{…}";
+  if (Array.isArray(value)) {
+    return "[…]";
+  }
+  if (typeof value === "object") {
+    return "{…}";
+  }
   // 剩余只可能是 bigint / symbol / function —— 均带自有 toString，与
   // String(value) 运行时一致（显式收窄以满足 no-base-to-string）。
   return /* SAFETY: 类型断言已复核 */ (value as { toString(): string }).toString();
@@ -220,7 +244,9 @@ export function renderWidgetValue(value: unknown): string {
  *  现在类型信息交给行首的端口圆点与类型徽章，值只有「亮 / 略暗」两档。 */
 export function valueCellColor(value: unknown, connected = false): string {
   /* 空值不是「值」，仍单独压弱一档 —— 与有没有连线无关。 */
-  if (value === undefined || value === null) return "var(--color-ink-faintest)";
+  if (value === undefined || value === null) {
+    return "var(--color-ink-faintest)";
+  }
   return connected ? "var(--color-widget-value-dim)" : "var(--color-widget-value)";
 }
 
@@ -229,11 +255,17 @@ export function valueCellColor(value: unknown, connected = false): string {
  *  `name`（与 `localized_name`）挑定了。这里只需按 JS 类型分色；
  *  父卡片上的单元格直接展示 ComfyUI 存下来的原始配对值。 */
 export function renderSubgraphWidgetValue(value: unknown): string {
-  if (value === undefined || value === null) return displayValue(null);
-  if (typeof value === "boolean") return value ? "✓" : "✕";
+  if (value === undefined || value === null) {
+    return displayValue(null);
+  }
+  if (typeof value === "boolean") {
+    return value ? "✓" : "✕";
+  }
   if (typeof value === "number") {
     /* 与 `renderWidgetValue` 同一档（`~/lib/number-format`）。 */
-    if (value >= 10000) return String(value);
+    if (value >= 10_000) {
+      return String(value);
+    }
     return trimFixed(value, 2) ?? displayValue(null);
   }
   if (typeof value === "string") {
@@ -244,9 +276,15 @@ export function renderSubgraphWidgetValue(value: unknown): string {
      *  完整文本仍能从 <span> 的 `title` 属性拿到。 */
     return value;
   }
-  if (Array.isArray(value)) return "[…]";
-  if (typeof value === "object") return "{…}";
-  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) {
+    return "[…]";
+  }
+  if (typeof value === "object") {
+    return "{…}";
+  }
+  if (value === null || value === undefined) {
+    return "";
+  }
   if (
     typeof value === "string" ||
     typeof value === "number" ||
@@ -269,9 +307,13 @@ export function renderSubgraphWidgetValue(value: unknown): string {
  *  现在完整描述会渲染出来，并由 widget 标签 span 上的 CSS 换行。）
  *  「Note: keep this secret」这类带冒号的普通句子同样原样保留。 */
 export function sanitizeComboLabel(label: string | undefined | null): string {
-  if (!label) return "";
+  if (!label) {
+    return "";
+  }
   const colon = label.indexOf(":");
-  if (colon <= 0 || colon === label.length - 1) return label.trim();
+  if (colon <= 0 || colon === label.length - 1) {
+    return label.trim();
+  }
   const tail = label.slice(colon + 1);
   /* 只有当尾部看起来像**多选项 COMBO 清单**时才剥：尾部还含 `=` 或 `|`，
    * 且**不是** BOOLEAN 描述（`true =` / `false =` 标记）。BOOLEAN 描述要保留，
@@ -287,25 +329,30 @@ export function sanitizeComboLabel(label: string | undefined | null): string {
  * 纯装饰：一个半透明填充、带彩色边框与标题芯片的矩形。它不带端口、
  * 也不拦截指针事件，因此落在真实图节点之后，点击直接穿过去。 */
 export function colorToRgba(hex: string, alpha: number): string {
-  const red = parseInt(hex.slice(1, 3), 16);
-  const green = parseInt(hex.slice(3, 5), 16);
-  const blue = parseInt(hex.slice(5, 7), 16);
+  const red = Number.parseInt(hex.slice(1, 3), 16);
+  const green = Number.parseInt(hex.slice(3, 5), 16);
+  const blue = Number.parseInt(hex.slice(5, 7), 16);
   return `rgba(${red},${green},${blue},${alpha})`;
 }
 
 /** 把 #rgb / #rrggbb 颜色解析成 rgba() 字符串；输入畸形时回落到中性石板色。 */
 export function hexToRgba(hex: string, alpha: number): string {
   let hexValue = (hex || "").trim();
-  if (hexValue.startsWith("#")) hexValue = hexValue.slice(1);
-  if (hexValue.length === 3)
+  if (hexValue.startsWith("#")) {
+    hexValue = hexValue.slice(1);
+  }
+  if (hexValue.length === 3) {
     hexValue = hexValue
       .split("")
       .map((char) => char + char)
       .join("");
-  if (hexValue.length < 6) return `rgba(120,120,135,${alpha})`;
-  const red = parseInt(hexValue.slice(0, 2), 16);
-  const green = parseInt(hexValue.slice(2, 4), 16);
-  const blue = parseInt(hexValue.slice(4, 6), 16);
+  }
+  if (hexValue.length < 6) {
+    return `rgba(120,120,135,${alpha})`;
+  }
+  const red = Number.parseInt(hexValue.slice(0, 2), 16);
+  const green = Number.parseInt(hexValue.slice(2, 4), 16);
+  const blue = Number.parseInt(hexValue.slice(4, 6), 16);
   return `rgba(${red},${green},${blue},${alpha})`;
 }
 
@@ -313,16 +360,21 @@ export function hexToRgba(hex: string, alpha: number): string {
  *  也能给出可读的标题芯片。 */
 export function lightenHex(hex: string, amt: number): string {
   let hexValue = (hex || "").trim();
-  if (hexValue.startsWith("#")) hexValue = hexValue.slice(1);
-  if (hexValue.length === 3)
+  if (hexValue.startsWith("#")) {
+    hexValue = hexValue.slice(1);
+  }
+  if (hexValue.length === 3) {
     hexValue = hexValue
       .split("")
       .map((char) => char + char)
       .join("");
-  if (hexValue.length < 6) return hex;
-  let red = parseInt(hexValue.slice(0, 2), 16);
-  let green = parseInt(hexValue.slice(2, 4), 16);
-  let blue = parseInt(hexValue.slice(4, 6), 16);
+  }
+  if (hexValue.length < 6) {
+    return hex;
+  }
+  let red = Number.parseInt(hexValue.slice(0, 2), 16);
+  let green = Number.parseInt(hexValue.slice(2, 4), 16);
+  let blue = Number.parseInt(hexValue.slice(4, 6), 16);
   red = Math.round(red + (255 - red) * amt);
   green = Math.round(green + (255 - green) * amt);
   blue = Math.round(blue + (255 - blue) * amt);
@@ -332,17 +384,22 @@ export function lightenHex(hex: string, amt: number): string {
 /** 把 #rgb / #rrggbb 解析成 [r,g,b]；输入畸形时回落到中性石板色。 */
 export function parseHex(hex: string): [number, number, number] {
   let hexValue = (hex || "").trim();
-  if (hexValue.startsWith("#")) hexValue = hexValue.slice(1);
-  if (hexValue.length === 3)
+  if (hexValue.startsWith("#")) {
+    hexValue = hexValue.slice(1);
+  }
+  if (hexValue.length === 3) {
     hexValue = hexValue
       .split("")
       .map((char) => char + char)
       .join("");
-  if (hexValue.length < 6 || /[^0-9a-fA-F]/.test(hexValue)) return [120, 120, 135];
+  }
+  if (hexValue.length < 6 || /[^0-9a-fA-F]/.test(hexValue)) {
+    return [120, 120, 135];
+  }
   return [
-    parseInt(hexValue.slice(0, 2), 16),
-    parseInt(hexValue.slice(2, 4), 16),
-    parseInt(hexValue.slice(4, 6), 16),
+    Number.parseInt(hexValue.slice(0, 2), 16),
+    Number.parseInt(hexValue.slice(2, 4), 16),
+    Number.parseInt(hexValue.slice(4, 6), 16),
   ];
 }
 
@@ -398,13 +455,19 @@ export function computeKahnLayout(
   }
   for (const [id, raw] of Object.entries(graph)) {
     const inputs = asRecord(asRecord(raw)?.inputs);
-    if (!inputs) continue;
+    if (!inputs) {
+      continue;
+    }
     for (const value of Object.values(inputs)) {
       const srcId = linkTargetId(value);
-      if (!srcId) continue;
+      if (!srcId) {
+        continue;
+      }
       const ownIncoming = incoming[id];
       const srcOut = outAdj[srcId];
-      if (!ownIncoming || !srcOut) continue;
+      if (!ownIncoming || !srcOut) {
+        continue;
+      }
       ownIncoming.add(srcId);
       srcOut.add(id);
     }
@@ -419,22 +482,32 @@ export function computeKahnLayout(
   }
   while (queue.length > 0) {
     const id = queue.shift();
-    if (id === undefined) break;
+    if (id === undefined) {
+      break;
+    }
     const ownLevel = level[id] ?? 0;
     for (const nxt of outAdj[id] ?? []) {
       level[nxt] = Math.max(level[nxt] ?? 0, ownLevel + 1);
       remaining.set(nxt, (remaining.get(nxt) ?? 0) - 1);
-      if ((remaining.get(nxt) ?? 0) === 0) queue.push(nxt);
+      if ((remaining.get(nxt) ?? 0) === 0) {
+        queue.push(nxt);
+      }
     }
   }
-  for (const node of realNodes) if (!(node.id in level)) level[node.id] = 0;
+  for (const node of realNodes) {
+    if (!(node.id in level)) {
+      level[node.id] = 0;
+    }
+  }
 
   const byLevel: Record<number, Array<string>> = {};
   for (const node of realNodes) {
     const lv = level[node.id] ?? 0;
     (byLevel[lv] ||= []).push(node.id);
   }
-  for (const arr of Object.values(byLevel)) arr.sort();
+  for (const arr of Object.values(byLevel)) {
+    arr.sort();
+  }
 
   const pos: Record<string, { x: number; y: number }> = {};
   for (const node of realNodes) {
@@ -451,30 +524,44 @@ export function buildEdges(
   _nodes: Array<Node>,
   outSlotNameById?: Record<string, Array<string>>,
 ): Array<Edge> {
-  if (!detail) return [];
+  if (!detail) {
+    return [];
+  }
   // 只有真实的图节点才带边；分组框 / 便签永远不会。
   const known = new Set(detail.nodes.map((node) => node.id));
   const nodesById: Record<string, ComfyGraphNode> = {};
-  for (const node of detail.nodes) nodesById[node.id] = node;
+  for (const node of detail.nodes) {
+    nodesById[node.id] = node;
+  }
 
   /* 每个节点的原始 outputs[] —— 当某个 class 不在静态 `inferOutputTypeAll`
    * 表里时，Flow 节点回落的也是这里。存成 map，让下面的逐边查找保持 O(1)。 */
   const rawOutById = new Map<string, Array<RawOutputMeta>>();
   for (const rawNode of detail.rawNodes ?? []) {
-    if (!rawNode?.id) continue;
+    if (!rawNode?.id) {
+      continue;
+    }
     rawOutById.set(rawNode.id, Array.isArray(rawNode.outputs) ? rawNode.outputs : []);
   }
 
   const edges: Array<Edge> = [];
   let i = 0;
   for (const [nodeId, raw] of Object.entries(detail.graph ?? {})) {
-    if (!raw || typeof raw !== "object") continue;
+    if (!raw || typeof raw !== "object") {
+      continue;
+    }
     const inputs = asRecord(raw.inputs);
-    if (!inputs) continue;
+    if (!inputs) {
+      continue;
+    }
     for (const [inputName, value] of Object.entries(inputs)) {
-      if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
+      if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") {
+        continue;
+      }
       const srcId = value[0];
-      if (!known.has(srcId) || !known.has(nodeId)) continue;
+      if (!known.has(srcId) || !known.has(nodeId)) {
+        continue;
+      }
       const srcSlot = Number(value[1] ?? 0);
       const srcClass = nodesById[srcId]?.class_type;
       const type =
@@ -536,7 +623,9 @@ export function buildEdges(
   if (detail.boundaryLinks) {
     const bp = detail.boundaryPins;
     const lookupPin = (pinId: string): { type: string } | null => {
-      if (!bp) return null;
+      if (!bp) {
+        return null;
+      }
       return (
         bp.inputs.find((item) => item.id === pinId) ??
         bp.outputs.find((item) => item.id === pinId) ??
@@ -582,11 +671,15 @@ export function buildEdges(
 export function buildInputSources(
   inputs: Record<string, unknown> | undefined,
   nodesById: Record<string, ComfyGraphNode>,
-): Record<string, { id: string; title: string; slot: number; classType?: string }> {
-  const out: Record<string, { id: string; title: string; slot: number; classType?: string }> = {};
-  if (!inputs) return out;
+): Record<string, { classType?: string; id: string; slot: number; title: string }> {
+  const out: Record<string, { classType?: string; id: string; slot: number; title: string }> = {};
+  if (!inputs) {
+    return out;
+  }
   for (const [key, value] of Object.entries(inputs)) {
-    if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
+    if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") {
+      continue;
+    }
     const src = nodesById[value[0]];
     out[key] = {
       id: value[0],
@@ -611,10 +704,10 @@ export function buildConnectedOutputs(
   rawMetaById: Record<
     string,
     {
-      widgets_values: Array<unknown>;
-      outputs: Array<RawOutputMeta>;
       flags?: Record<string, unknown>;
+      outputs: Array<RawOutputMeta>;
       properties?: Record<string, unknown>;
+      widgets_values: Array<unknown>;
     }
   >,
   outSlotNameById?: Record<string, Array<string>>,
@@ -623,11 +716,15 @@ export function buildConnectedOutputs(
   for (const raw of Object.values(detail.graph ?? {})) {
     const inp = asRecord(asRecord(raw)?.inputs) ?? {};
     for (const value of Object.values(inp)) {
-      if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
+      if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") {
+        continue;
+      }
       const srcId = value[0];
       const slot = Number(value[1] ?? 0);
       const node = nodesById[srcId];
-      if (!node) continue;
+      if (!node) {
+        continue;
+      }
       const slotNames = outSlotNameById?.[srcId];
       const staticOuts = Object.keys(inferOutputTypeAll(node.class_type));
       const rawOuts = rawMetaById[srcId]?.outputs ?? [];
@@ -638,7 +735,9 @@ export function buildConnectedOutputs(
         /* `at()` 越界即 `undefined`，与上面的 `slot < length` 是同一判据。 */
         name = staticOuts.at(slot) ?? rawOuts.at(slot)?.name ?? null;
       }
-      if (!name) continue;
+      if (!name) {
+        continue;
+      }
       map[srcId] ??= new Set();
       map[srcId].add(name);
     }
@@ -661,9 +760,9 @@ export function inferSourceOutNames(
   rawMetaById: Record<
     string,
     {
-      widgets_values: Array<unknown>;
-      outputs: Array<RawOutputMeta>;
       flags?: Record<string, unknown>;
+      outputs: Array<RawOutputMeta>;
+      widgets_values: Array<unknown>;
     }
   >,
 ): Record<string, Array<string>> {
@@ -685,12 +784,18 @@ export function inferSourceOutNames(
     for (const consumerRaw of Object.values(detail.graph ?? {})) {
       const inp = asRecord(asRecord(consumerRaw)?.inputs) ?? {};
       for (const [inputKey, value] of Object.entries(inp)) {
-        if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
-        if (value[0] !== nodeId) continue;
+        if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") {
+          continue;
+        }
+        if (value[0] !== nodeId) {
+          continue;
+        }
         const slot = Number(value[1] ?? 0);
         const stripped = inputKey.replace(/_\d+$/g, "");
         bySlot[slot] ??= [];
-        if (!bySlot[slot].includes(stripped)) bySlot[slot].push(stripped);
+        if (!bySlot[slot].includes(stripped)) {
+          bySlot[slot].push(stripped);
+        }
       }
     }
     const slotCount = Math.max(1, ...Object.keys(bySlot).map(Number), 0);
@@ -699,7 +804,9 @@ export function inferSourceOutNames(
       const candidates = bySlot[i] ?? [];
       slotNames.push(candidates[0] ?? `out${i + 1}`);
     }
-    if (slotNames.length > 0) out[nodeId] = slotNames;
+    if (slotNames.length > 0) {
+      out[nodeId] = slotNames;
+    }
   }
   return out;
 }
@@ -707,7 +814,9 @@ export function inferSourceOutNames(
 /* 按包围盒包含关系算出每个分组的嵌套深度。分组深度 = 有多少个其它分组
  * 直接或间接地包含它 —— 子框据此画在父框**之上**，嵌套分组才读得对。 */
 export function computeGroupDepths(groups: Array<WorkflowGroup>): Record<string, number> {
-  if (groups.length === 0) return {};
+  if (groups.length === 0) {
+    return {};
+  }
   const inside = (inner: WorkflowGroup, outer: WorkflowGroup) => {
     const [ix, iy, iw, ih] = inner.bounding;
     const [ox, oy, ow, oh] = outer.bounding;
@@ -725,7 +834,9 @@ export function computeGroupDepths(groups: Array<WorkflowGroup>): Record<string,
     let best: WorkflowGroup | null = null;
     let bestArea = Infinity;
     for (const candidate of groups) {
-      if (candidate.id === group.id) continue;
+      if (candidate.id === group.id) {
+        continue;
+      }
       if (inside(group, candidate)) {
         const area = candidate.bounding[2] * candidate.bounding[3];
         if (area < bestArea) {

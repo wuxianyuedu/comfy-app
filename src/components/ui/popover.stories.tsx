@@ -38,9 +38,9 @@ export const Default: Story = {
       <PopoverContent className="w-72">
         <div className="flex flex-col gap-3">
           <Label htmlFor="popover-width">宽度</Label>
-          <Input id="popover-width" defaultValue="1024" />
+          <Input defaultValue="1024" id="popover-width" />
           <Label htmlFor="popover-height">高度</Label>
-          <Input id="popover-height" defaultValue="1024" />
+          <Input defaultValue="1024" id="popover-height" />
         </div>
       </PopoverContent>
     </Popover>
@@ -55,10 +55,10 @@ export const Sides: Story = {
       {
         /* SAFETY: 类型断言已复核 */ (["top", "right", "bottom", "left"] as const).map((side) => (
           <Popover key={side}>
-            <PopoverTrigger render={<Button variant="outline" size="sm" />}>
+            <PopoverTrigger render={<Button size="sm" variant="outline" />}>
               side={side}
             </PopoverTrigger>
-            <PopoverContent side={side} className="w-40">
+            <PopoverContent className="w-40" side={side}>
               <p className="text-sm">开在 {side} 这一侧</p>
             </PopoverContent>
           </Popover>
@@ -78,7 +78,7 @@ export const Controlled: Story = {
 function ControlledDemo() {
   const [open, setOpen] = React.useState(false);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger render={<Button variant="outline" />}>
         {open ? "点外面关闭" : "受控打开"}
       </PopoverTrigger>

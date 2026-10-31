@@ -88,10 +88,15 @@ function judgeCoverage(diskRel, tiers) {
     for (const t of tiers) {
       const included = matchesAny(rel, t.include);
       const excluded = matchesAny(rel, t.exclude);
-      if (included && !excluded) hits.push(t.name);
+      if (included && !excluded) {
+        hits.push(t.name);
+      }
     }
-    if (hits.length === 0) dead.push(rel);
-    else if (hits.length > 1) overlap.push({ rel, tiers: hits });
+    if (hits.length === 0) {
+      dead.push(rel);
+    } else if (hits.length > 1) {
+      overlap.push({ rel, tiers: hits });
+    }
   }
   return { dead, overlap };
 }
@@ -141,10 +146,7 @@ function main() {
     exclude: g.exclude,
   }));
   const { dead, overlap } = judgeCoverage(listed, tierList);
-  const globCount = tierList.reduce(
-    (n, t) => n + t.include.length + t.exclude.length,
-    0,
-  );
+  const globCount = tierList.reduce((n, t) => n + t.include.length + t.exclude.length, 0);
   const problems = dead.length + overlap.length;
 
   if (problems === 0) {
@@ -175,9 +177,7 @@ function main() {
   }
   for (const o of overlap) {
     emit(`  · ${o.rel}  [重叠：${o.tiers.join(" + ")}]`);
-    emit(
-      `      两个档都接住了它 —— 同一条用例会被收集两遍（或 glob 写重了）。`,
-    );
+    emit(`      两个档都接住了它 —— 同一条用例会被收集两遍（或 glob 写重了）。`);
   }
   emit(
     "\n修法：" +

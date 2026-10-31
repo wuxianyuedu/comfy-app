@@ -8,18 +8,18 @@ import { inferSourceOutNames } from "../workflow-utils";
  *  properties 字典都是不透明的 raw-JSON 负载，保持 `unknown`（此前
  *  是 `any`；消费方本来就当它们不透明处理）。 */
 export type RawNodeMeta = {
-  widgets_values: Array<unknown>;
-  outputs: Array<RawOutputMeta>;
   flags: Record<string, unknown>;
-  properties: Record<string, unknown>;
   mode: number;
+  outputs: Array<RawOutputMeta>;
+  properties: Record<string, unknown>;
+  widgets_values: Array<unknown>;
 };
 
-export interface WorkflowDerivedData {
+export type WorkflowDerivedData = {
+  outSlotNameById: Record<string, Array<string>>;
   rawMetaById: Record<string, RawNodeMeta>;
   scopeDetail: WorkflowDetail | null;
-  outSlotNameById: Record<string, Array<string>>;
-}
+};
 
 /**
  * 工作流编辑器画布的派生查表：
@@ -51,13 +51,17 @@ export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowD
    *  通过展开保留。RAW 视图下已在 `detail.positions` 镜像的 raw-id 拖拽覆盖
    *  会叠加在最上层，使 RAW 视图的手动拖拽无需重新拉取即生效。 */
   const scopeDetail: WorkflowDetail | null = useMemo(() => {
-    if (!detail) return null;
+    if (!detail) {
+      return null;
+    }
     if (detail.rawView) {
       const rawIds = new Set(detail.rawView.nodes.map((node) => node.id));
       const overrides: Record<string, [number, number]> = {};
       const dp = detail.positions ?? {};
       for (const [k, position] of Object.entries(dp)) {
-        if (position && rawIds.has(k)) overrides[k] = position;
+        if (position && rawIds.has(k)) {
+          overrides[k] = position;
+        }
       }
       return {
         ...detail,
@@ -70,9 +74,13 @@ export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowD
   }, [detail]);
 
   const outSlotNameById: Record<string, Array<string>> = useMemo(() => {
-    if (!scopeDetail) return {};
+    if (!scopeDetail) {
+      return {};
+    }
     const nodesById: Record<string, ComfyGraphNode> = {};
-    for (const n of scopeDetail.nodes) nodesById[n.id] = n;
+    for (const n of scopeDetail.nodes) {
+      nodesById[n.id] = n;
+    }
     return inferSourceOutNames(scopeDetail, nodesById, rawMetaById);
   }, [scopeDetail, rawMetaById]);
 

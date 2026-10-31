@@ -42,18 +42,18 @@ const ROOT = path.resolve(__dirname, "..");
 const ENTRY = path.join(ROOT, "scripts", "ci-daily-failure-issue.mjs");
 
 /** 构建列表那一项（这一层只用得到四个字段）。 */
-type ListBuild = { sn: string; event: string; createTime: string; status: string };
+type ListBuild = { createTime: string; event: string; sn: string; status: string };
 
 type StageRow = { id: string; name: string; status: string };
 
 /** `get-build-status -v` 那份读数的最小形状（`classifyBuildOutcome()` 认的就是它）。 */
 type DetailJson = {
   data: {
-    status: string;
     pipelinesStatus: Record<
       string,
-      { id: string; name: string; status: string; stages: Array<StageRow> }
+      { id: string; name: string; stages: Array<StageRow>; status: string; }
     >;
+    status: string;
   };
 };
 
@@ -63,7 +63,7 @@ type Verdict = "green" | "failed" | "cancelled" | "running";
  * `pickPreviousDaily()` 的返回是判别联合（要么挑到、要么给一句为什么挑不到）。
  * 这里要的只是「读哪个字段」的形状，不是再写一套判决 —— 一次 `as`，字段全在这。
  */
-type PickedLike = { sn?: string; none?: string; outcome?: { state: string } };
+type PickedLike = { none?: string; outcome?: { state: string }; sn?: string; };
 const asPicked = (p: unknown): PickedLike => /* SAFETY: 类型断言已复核 */ p as PickedLike;
 
 /** 建单标题（去重键只认格名那一段，构建号 / 事件 / 时刻只给读者看 — ISSUE #2399）。 */
@@ -308,8 +308,9 @@ describe("决定写不写：②去重键是「格名」，不是整条标题", (
     const day1 = titleOf("每日单元测试", "cnb-aaa-111", "2026-10-24T11:40:05.000Z");
     const day2 = titleOf("每日单元测试", "cnb-bbb-222", "2026-10-25T16:00:22.000Z");
     expect(day2).not.toBe(day1);
-    for (const want of ["cnb-bbb-222", "crontab: 0 0 * * *", "2026-10-25T16:00:22.000Z"])
+    for (const want of ["cnb-bbb-222", "crontab: 0 0 * * *", "2026-10-25T16:00:22.000Z"]) {
       expect(day2).toContain(want);
+    }
     expect(day2).toContain(titleKey("每日单元测试"));
     const act = decideAction({
       state: "failed",
@@ -320,8 +321,9 @@ describe("决定写不写：②去重键是「格名」，不是整条标题", (
   });
 
   it("去重键里不含构建号 / 事件 / 时刻（它们只能进标题）", () => {
-    for (const part of ["cnb-", "crontab", "T11:40"])
+    for (const part of ["cnb-", "crontab", "T11:40"]) {
       expect(titleKey("每日单元测试")).not.toContain(part);
+    }
   });
 
   it("换了另一格红 ⇒ 新建一张（一格一单，不往别人的单上记）", () => {
@@ -380,7 +382,7 @@ describe("正文只含读数，不含因果", () => {
 
 describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
   /** 写一份离线读数，返回它的路径与目录（每份用例自带目录，别往仓库里落东西）。 */
-  function fixture(list: Array<ListBuild>, details: Array<{ sn: string; json: DetailJson }>) {
+  function fixture(list: Array<ListBuild>, details: Array<{ json: DetailJson; sn: string; }>) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "daily-failure-issue-"));
     const file = path.join(dir, "read.json");
     fs.writeFileSync(file, JSON.stringify({ list, details }), "utf8");
@@ -471,9 +473,15 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
           stderr: "",
           error: null,
         });
-        if (key.includes("get-build-logs")) return json([build("sn-live")]);
-        if (key.includes("get-build-status")) return json(detail("failed").data);
-        if (key.includes("list-issues")) return json([]);
+        if (key.includes("get-build-logs")) {
+          return json([build("sn-live")]);
+        }
+        if (key.includes("get-build-status")) {
+          return json(detail("failed").data);
+        }
+        if (key.includes("list-issues")) {
+          return json([]);
+        }
         return json({});
       },
     });
@@ -520,10 +528,10 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
 
   /** 一整条假平台：列表按页答，详情按 sn 答，写命令记下来。 */
   function fakePlatform(input: {
-    pages: Record<number, Array<ListBuild> | null>;
+    comments?: Array<string>;
     detailsBySn: Record<string, Verdict>;
     openIssues: Array<{ number: number; title: string }>;
-    comments?: Array<string>;
+    pages: Record<number, Array<ListBuild> | null>;
   }) {
     /** @type {string[]} */
     const calls: Array<string> = [];
@@ -540,17 +548,21 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
         const at = args.indexOf("--page");
         const n = Number(args[at + 1] ?? "1");
         const rows = input.pages[n];
-        if (rows === null || rows === undefined)
+        if (rows === null || rows === undefined) {
           return { status: 1, stdout: "", stderr: "boom", error: null };
+        }
         return json({ total: rows.length, data: rows });
       }
       if (key.includes("get-build-status")) {
         const sn = String(args[args.indexOf("--sn") + 1] ?? "");
         return json(detail(input.detailsBySn[sn] ?? "running").data);
       }
-      if (key.includes("list-issues")) return json(input.openIssues);
-      if (key.includes("list-issue-comments"))
+      if (key.includes("list-issues")) {
+        return json(input.openIssues);
+      }
+      if (key.includes("list-issue-comments")) {
         return json((input.comments ?? ["sn-prev"]).map((body) => ({ body })));
+      }
       return json({});
     };
     return { run, calls };
@@ -600,7 +612,9 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
   it("翻到上界仍盖不住窗口 ⇒ 一个字都不写，且那句是「没盖住」而不是「没有红」", () => {
     const live = build("sn-live");
     const pages: Record<number, Array<ListBuild> | null> = {};
-    for (let p = 1; p <= 20; p += 1) pages[p] = pageRows(60, 0.1, 8, [live]);
+    for (let p = 1; p <= 20; p += 1) {
+      pages[p] = pageRows(60, 0.1, 8, [live]);
+    }
     const { run, calls } = fakePlatform({
       pages,
       detailsBySn: { "sn-live": "running" },
@@ -730,7 +744,7 @@ describe("升级判不判：门限可注入，读不出不构成结论", () => {
       account: readBundleAccount(null),
       streak: noStreak,
     });
-    for (const j of [suspended, none, unknown]) expect(j.fired).toBe(false);
+    for (const j of [suspended, none, unknown]) {expect(j.fired).toBe(false);}
     expect(suspended.reason).toContain("#2634");
     expect(none.reason).toContain("没有违规读数");
     expect(unknown.reason).toContain("不构成结论");
@@ -826,7 +840,7 @@ describe("判决行与判据那一侧对账（改词要两边一起改）", () =
       "utf8",
     );
     for (const marker of Object.values(BUNDLE_GATE_MARKERS))
-      expect(src, `判据那侧没有这句判决行：${marker}`).toContain(marker);
+      {expect(src, `判据那侧没有这句判决行：${marker}`).toContain(marker);}
   });
 });
 
@@ -837,12 +851,12 @@ describe("判决行与判据那一侧对账（改词要两边一起改）", () =
  * 用例喂的是同一份平台形状，测的是「哪几跑算看过」与「什么时候必须放弃结论」。
  */
 describe("连续红天数：逐日回看，读不出不是 0", () => {
-  type FakeDay = { text: string; status?: string };
+  type FakeDay = { status?: string; text: string; };
 
   /** 假平台：列表按页答（`null` = 那一页取不到），逐格详情按 sn 答。 */
   function fakePlatform(input: {
-    page: (n: number) => Array<ListBuild> | null;
     days: Record<string, FakeDay>;
+    page: (n: number) => Array<ListBuild> | null;
   }) {
     const calls: Array<string> = [];
     const run = (_cmd: string, args: Array<string>) => {
@@ -857,7 +871,7 @@ describe("连续红天数：逐日回看，读不出不是 0", () => {
       if (key.includes("get-build-logs")) {
         const at = args.indexOf("--page");
         const rows = input.page(Number(args[at + 1] ?? "1"));
-        if (rows === null) return { status: 1, stdout: "", stderr: "boom", error: null };
+        if (rows === null) {return { status: 1, stdout: "", stderr: "boom", error: null };}
         return json({ total: rows.length, data: rows });
       }
       if (key.includes("get-build-status")) {

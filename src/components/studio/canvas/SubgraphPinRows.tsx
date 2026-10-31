@@ -11,13 +11,13 @@ import { portColor } from "~/lib/comfyui/types";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { RawInputMeta, RawOutputMeta } from "../workflow-types";
 
-interface SubgraphPinRowsProps {
+type SubgraphPinRowsProps = {
   connInputs: Array<{ inp: RawInputMeta; label: string }>;
-  outputs: Array<{ out: RawOutputMeta; display: string }>;
+  hostNodeId?: string;
   io: IOEditContextValue | null;
   nodeId: string;
-  hostNodeId?: string;
-}
+  outputs: Array<{ display: string; out: RawOutputMeta }>;
+};
 
 export function SubgraphPinRows({
   connInputs,
@@ -29,7 +29,9 @@ export function SubgraphPinRows({
   /* 顶部 PINS 行：每个声明的输入端口与每个输出端口各占一行，
    *  左右拉链式成对、行高 22px（与普通 WorkflowNode 相同）。 */
   const pinRows = Math.max(connInputs.length, outputs.length);
-  if (pinRows === 0) return null;
+  if (pinRows === 0) {
+    return null;
+  }
 
   return (
     <div
@@ -51,28 +53,28 @@ export function SubgraphPinRows({
         const outDisplay = outEntry?.display ?? "";
         return (
           <div
-            key={`subpin-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
             /* 长的边界端口标签换行到
              *                    *  多行换行，而不是被裁到 22px。完整理由见 WorkflowNode 内联分支
              *                    *  的注释。 */
             className="text-2xs relative flex h-auto min-h-5.5 items-center py-0.5 pr-5 pl-5"
             data-sub-pin-input={inName}
             data-sub-pin-output={outName}
+            key={`subpin-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
           >
             {inEntry && (
               <>
                 <Handle
-                  type="target"
-                  position={Position.Left}
+                  className="border-port-surface! size-2.5! rounded-full! border!"
                   id={inName}
                   isConnectable={false}
-                  className="border-port-surface! size-2.5! rounded-full! border!"
+                  position={Position.Left}
                   style={{
                     left: 5,
                     background: inCol,
                     boxShadow: `0 0 6px ${inCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
                   }}
                   title={`${inLabel} (${inType})`}
+                  type="target"
                 />
                 {/* 已经从父工作流接进线来的子图边界输入（或本身
                  *  就是哨兵边界连线）取值来自上游 —— 它们
@@ -120,11 +122,10 @@ export function SubgraphPinRows({
                  *  （error#008），画布上表现为「输出没有连线」。
                  *  IO 编辑模式下改用「缩到几乎不可见」代替「不渲染」。 */}
                 <Handle
-                  type="source"
-                  position={Position.Right}
+                  className="border-port-surface! rounded-full! border!"
                   id={`out:${outName}`}
                   isConnectable={false}
-                  className="border-port-surface! rounded-full! border!"
+                  position={Position.Right}
                   style={{
                     background: outCol,
                     boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
@@ -136,6 +137,7 @@ export function SubgraphPinRows({
                       : { width: 10, height: 10, right: 5 }),
                   }}
                   title={`${outDisplay} (${outType})`}
+                  type="source"
                 />
               </>
             )}

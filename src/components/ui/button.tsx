@@ -1,6 +1,6 @@
 /* ui-customized: 覆盖前先看 docs/standards/16 §16.8（本文件在 shadcn 官方版之上有改动） */
 import Link from "next/link";
-import { type ComponentProps } from "react";
+import type { ComponentProps } from "react";
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 
@@ -90,15 +90,14 @@ function Button({
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
   return (
     <ButtonPrimitive
-      data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      data-slot="button"
       {...props}
     />
   );
 }
 
-type ButtonLinkProps = ComponentProps<typeof Link> &
-  VariantProps<typeof buttonVariants>;
+type ButtonLinkProps = ComponentProps<typeof Link> & VariantProps<typeof buttonVariants>;
 
 /**
  * ButtonLink — 渲染为 next/link 的按钮（shadcn base-ui Button 无 asChild，
@@ -112,11 +111,7 @@ function ButtonLink({
   ...props
 }: ButtonLinkProps) {
   return (
-    <Link
-      href={href}
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
+    <Link className={cn(buttonVariants({ variant, size, className }))} href={href} {...props} />
   );
 }
 

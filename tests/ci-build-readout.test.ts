@@ -352,10 +352,10 @@ describe("入口：三档各退各的码", () => {
     cmd: string,
     args: Array<string>,
   ) => {
-    status: number;
-    stdout: string;
-    stderr: string;
     error: string | null;
+    status: number;
+    stderr: string;
+    stdout: string;
   } {
     return (_cmd, args) => {
       if (args[1] === "get-build-status") {
@@ -864,7 +864,9 @@ describe("formatOutcome：前缀可注入（ship 的 --diagnose 复用同一份�
       prefix: "[ship]",
     });
     expect(lines.length).toBeGreaterThan(0);
-    for (const line of lines) expect(line.startsWith("[ship]")).toBe(true);
+    for (const line of lines) {
+      expect(line.startsWith("[ship]")).toBe(true);
+    }
   });
 });
 
@@ -933,7 +935,9 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
     const idle = structuredClone(RUNNING_BUILD);
     const stage = idle.data.pipelinesStatus["b1-001"]?.stages?.[1];
     expect(stage, "夹具形状变了（找不到第二格）").toBeTruthy();
-    if (stage) stage.status = "pending";
+    if (stage) {
+      stage.status = "pending";
+    }
     const text = formatOutcome(classifyBuildOutcome(idle), {
       sn: "b1",
       json: idle,
@@ -970,21 +974,21 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
 /** `get-build-status -v` 的 `data` 那一段（用例只用到 `pipelinesStatus[*].stages[]`）。 */
 interface BuildJson {
   data: {
-    status?: string;
     pipelinesStatus: Record<
       string,
-      { id?: string; name?: string; status?: string; stages: Array<StageJson> }
+      { id?: string; name?: string; stages: Array<StageJson>; status?: string; }
     >;
+    status?: string;
   };
 }
 
 /** 一格（`error` 那一栏只有 `get-build-stage -v` 才给，`get-build-status` 里没有）。 */
 interface StageJson {
+  duration?: number;
+  error?: string;
   id?: string;
   name?: string;
   status?: string;
-  duration?: number;
-  error?: string;
 }
 
 /** 取 `prepare` 那一格 —— 这一族样本里它是主角（唯一有读数的那一格）。 */
@@ -992,7 +996,9 @@ function prepareStage(json: BuildJson, key = "cnb-9qi-1k5qojle1-001"): StageJson
   /* `noUncheckedIndexedAccess` 在本仓开着。样本是我们自己造的形状，取不到就是样本坏了 ——
      抛出比静默给出 `undefined` 更早暴露，且与「生产代码 0 处 `!`」那条判据不冲突。 */
   const stage = json.data.pipelinesStatus[key]?.stages[0];
-  if (!stage) throw new Error(`样本里没有 ${key} 的第一格`);
+  if (!stage) {
+    throw new Error(`样本里没有 ${key} 的第一格`);
+  }
   return stage;
 }
 

@@ -45,7 +45,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /** 一次异步动作的执行态句柄。 */
-export interface BusyAction {
+export type BusyAction = {
   /** 这一刻忙不忙（给 `disabled` / 转圈 / 文案用）。 */
   busy: boolean;
   /**
@@ -58,7 +58,7 @@ export interface BusyAction {
   run: <T>(action: () => Promise<T>) => Promise<T>;
   /** 手动置忙 / 复位（给「分两段、中间还要等别的 promise」的落点）。 */
   set: (next: boolean) => void;
-}
+};
 
 /**
  * 一块界面的忙碌位。
@@ -92,7 +92,9 @@ export function useBusyAction(initial = false): BusyAction {
     };
   }, []);
   const set = useCallback((next: boolean) => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) {
+      return;
+    }
     setBusy(next);
   }, []);
   const run = useCallback(

@@ -46,8 +46,7 @@ export function useSettingsLoadStatus() {
   /* 多查询同批失败时，优先展示「更靠近根因」的那条：两份都没拿到时按
    * settings → llm 顺序取第一条非空错误（都是 undefined 时交 fallback）。 */
   const failedError =
-    (settingsQ.isError ? settingsQ.error : undefined) ??
-    (llmQ.isError ? llmQ.error : undefined);
+    (settingsQ.isError ? settingsQ.error : undefined) ?? (llmQ.isError ? llmQ.error : undefined);
 
   const errorText = queryFailed ? errorMessage(failedError, "未知错误") : "";
 
@@ -65,7 +64,9 @@ export function useSettingsLoadStatus() {
    * 同一错误文案只记一次（ref 去重；重试后仍是同一错误不刷屏）。 */
   const loggedErrorRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!queryFailed || errorText === loggedErrorRef.current) return;
+    if (!queryFailed || errorText === loggedErrorRef.current) {
+      return;
+    }
     loggedErrorRef.current = errorText;
     void postAppRuntimeLog("settings", "error", `设置加载失败 ${errorText}`, {
       query: failedQueries,

@@ -38,53 +38,53 @@ import {
 /** 成片镜头来源：统一项目的镜头（工坊产出），或自由文本剧本自动分镜。 */
 export type FilmShotSource = "project" | "script";
 
-export interface FilmStudioController {
-  /* 成片参数（目前为常量，保留 setter 以便后续开放编辑） */
-  title: string;
-  /** 镜头来源（项目镜头 / 剧本自动分镜）与当前活跃项目信息（Phase 5 接入）。 */
-  shotSource: FilmShotSource;
-  setShotSource: (source: FilmShotSource) => void;
+export type FilmStudioController = {
   /** 当前活跃统一项目 id（无则 null）。 */
   activeProjectId: string | null;
-  /** 该项目的镜头数（`production.shots.length`；无项目 / 无镜头为 0）。 */
-  projectShotCount: number;
-  /** 该项目镜头的真实列表（左栏渲染，含缩略图 / 状态）。 */
-  projectShots: Array<ShotListItem>;
-  /** 工作流库里可选的视频工作流（逐镜生成用；本地链路唯一来源）。 */
-  videoWorkflows: Array<{ id: string; name: string }>;
-  videoWorkflowId: string;
-  setVideoWorkflowId: (value: string) => void;
-  /** 工作流库里可选的图类工作流（文生视频镜头合成首帧用；可选）。 */
-  imageWorkflows: Array<{ id: string; name: string }>;
-  imageWorkflowId: string;
-  setImageWorkflowId: (value: string) => void;
-  /** 成片画幅（尺寸表达：比例 + 分辨率 / 比例 + 百万像素 + 倍数）。 */
-  size: SizeSpec;
-  /** 预览区展示的帧率。 */
-  fps: number;
-  script: string;
-  setScript: (value: string) => void;
-  subtitleOn: boolean;
-  setSubtitleOn: (value: boolean) => void;
   bgmName: string | null;
-  /** ffmpeg 不可用时的降级提示（逐镜可生成，但无法拼接成片）。 */
-  ffmpegAvailable: boolean;
-  /* 成片状态 */
-  film: Film | null;
-  running: boolean;
-  loading: boolean;
+  cancel: () => Promise<void>;
   /* 动作 */
   create: () => Promise<void>;
   /** 用当前统一项目的镜头一键成片（走 film.createFromProject）。 */
   createFromProject: () => Promise<void>;
+  /** ffmpeg 不可用时的降级提示（逐镜可生成，但无法拼接成片）。 */
+  ffmpegAvailable: boolean;
+  /* 成片状态 */
+  film: Film | null;
+  /** 预览区展示的帧率。 */
+  fps: number;
+  imageWorkflowId: string;
+  /** 工作流库里可选的图类工作流（文生视频镜头合成首帧用；可选）。 */
+  imageWorkflows: Array<{ id: string; name: string }>;
+  loading: boolean;
+  /** 该项目的镜头数（`production.shots.length`；无项目 / 无镜头为 0）。 */
+  projectShotCount: number;
+  /** 该项目镜头的真实列表（左栏渲染，含缩略图 / 状态）。 */
+  projectShots: Array<ShotListItem>;
+  recompose: () => Promise<void>;
   /** 退回某镜（清产出 + rev 自增 + 刷新列表），让自主 run 重做该镜。 */
   redoShot: (shotId: string) => Promise<void>;
   /** 重载项目镜头列表（评审重生成后刷新左栏）。 */
   reloadProjectShots: () => Promise<void>;
-  cancel: () => Promise<void>;
-  recompose: () => Promise<void>;
+  running: boolean;
+  script: string;
+  setImageWorkflowId: (value: string) => void;
+  setScript: (value: string) => void;
+  setShotSource: (source: FilmShotSource) => void;
+  setSubtitleOn: (value: boolean) => void;
+  setVideoWorkflowId: (value: string) => void;
+  /** 镜头来源（项目镜头 / 剧本自动分镜）与当前活跃项目信息（Phase 5 接入）。 */
+  shotSource: FilmShotSource;
+  /** 成片画幅（尺寸表达：比例 + 分辨率 / 比例 + 百万像素 + 倍数）。 */
+  size: SizeSpec;
+  subtitleOn: boolean;
+  /* 成片参数（目前为常量，保留 setter 以便后续开放编辑） */
+  title: string;
   uploadBgmFile: (file: File) => Promise<void>;
-}
+  videoWorkflowId: string;
+  /** 工作流库里可选的视频工作流（逐镜生成用；本地链路唯一来源）。 */
+  videoWorkflows: Array<{ id: string; name: string }>;
+};
 
 /**
  * 拉取成片详情并在进行中时启动轮询。
@@ -139,8 +139,8 @@ export function useFilmStudio(): FilmStudioController {
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）：两个动作此前复位都写在动作之后。 */
   const actionBusy = useBusyAction();
   /** 未消费的技能列表：先取回来用于后续开放风格选择，暂不渲染。 */
-  const [, setSkills] = useState<Array<{ slug: string; name: string }>>([]);
-  const [, setRecent] = useState<Array<{ id: string; title: string; status: string }>>([]);
+  const [, setSkills] = useState<Array<{ name: string; slug: string }>>([]);
+  const [, setRecent] = useState<Array<{ id: string; status: string; title: string }>>([]);
 
   /* 拉一次详情。轮询本身由 `useInterval` 按「是否在跑」驱动，这里不再自己
    * 起停定时器（规范 16 §16.2.4.15）—— 此前 `fetchDetail` 里 `??= setInterval`
@@ -175,9 +175,13 @@ export function useFilmStudio(): FilmStudioController {
           const wfRows = Array.isArray(rawWorkflows) ? rawWorkflows : [];
           const pick = (category: "video" | "image") =>
             wfRows.flatMap((raw) => {
-              if (typeof raw !== "object" || raw === null) return [];
+              if (typeof raw !== "object" || raw === null) {
+                return [];
+              }
               const wf = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
-              if (typeof wf.id !== "string" || typeof wf.name !== "string") return [];
+              if (typeof wf.id !== "string" || typeof wf.name !== "string") {
+                return [];
+              }
               return wf.typeCategory === category ? [{ id: wf.id, name: wf.name }] : [];
             });
           // skill.list 返回 `{...record, tags}` 行（router 的 spread 丢了索引签名），
@@ -216,18 +220,24 @@ export function useFilmStudio(): FilmStudioController {
     setProjectShots(list);
     setProjectShotCount(list.length);
     // 用户未手动选过来源、且项目确有镜头 → 默认走项目镜头。
-    if (list.length > 0 && !sourceChosenRef.current) setShotSourceState("project");
+    if (list.length > 0 && !sourceChosenRef.current) {
+      setShotSourceState("project");
+    }
   }, []);
 
   const fetchProjectShots = useCallback(async (): Promise<Array<ShotListItem>> => {
-    if (!activeProjectId) return [];
+    if (!activeProjectId) {
+      return [];
+    }
     const prod = await fetchProduction(activeProjectId);
     const raw = prod && Array.isArray(prod.shots) ? prod.shots : [];
     return productionShotsToShotList(raw);
   }, [activeProjectId]);
 
   useEffect(() => {
-    if (!activeProjectId) return;
+    if (!activeProjectId) {
+      return;
+    }
     const guard = beginStaleRun();
     void (async () => {
       const list = await fetchProjectShots();
@@ -243,7 +253,9 @@ export function useFilmStudio(): FilmStudioController {
   /** 单镜「退回让 AI 重做」：写回项目 + 刷新左栏列表（画布/工坊镜头行的退回入口共用）。 */
   const redoShot = useCallback(
     async (shotId: string) => {
-      if (!activeProjectId) return;
+      if (!activeProjectId) {
+        return;
+      }
       await requestShotRedo(activeProjectId, shotId);
       await reloadProjectShots();
     },
@@ -340,7 +352,9 @@ export function useFilmStudio(): FilmStudioController {
   ]);
 
   const cancel = useCallback(async () => {
-    if (!film) return;
+    if (!film) {
+      return;
+    }
     await runAsyncAction(
       async () => {
         await vanillaApi.film.cancel.mutate({ id: film.id });
@@ -351,7 +365,9 @@ export function useFilmStudio(): FilmStudioController {
   }, [film, fetchDetail, reportInfo]);
 
   const recompose = useCallback(async () => {
-    if (!film) return;
+    if (!film) {
+      return;
+    }
     /* 成功静默：合成本身要几分钟，界面有进度与产物，多一句 toast 反而是噪声。 */
     await actionBusy.run(() =>
       runAsyncAction(
@@ -394,7 +410,9 @@ export function useFilmStudio(): FilmStudioController {
   const pollId = film?.id ?? null;
   useInterval(
     () => {
-      if (pollId) void fetchDetail(pollId);
+      if (pollId) {
+        void fetchDetail(pollId);
+      }
     },
     { ms: running ? FILM_POLL_MS : null, immediate: false },
   );

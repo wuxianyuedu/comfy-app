@@ -118,9 +118,14 @@ function countFiles(dir) {
       return;
     }
     for (const ent of ents) {
-      if (ent.isSymbolicLink()) continue;
-      if (ent.isDirectory()) rec(path.join(cur, ent.name));
-      else if (ent.isFile()) n += 1;
+      if (ent.isSymbolicLink()) {
+        continue;
+      }
+      if (ent.isDirectory()) {
+        rec(path.join(cur, ent.name));
+      } else if (ent.isFile()) {
+        n += 1;
+      }
     }
   };
   rec(dir);
@@ -147,10 +152,12 @@ export function judgeRun(run, { after, startedAt }) {
     const sig = run.signal ? ` / signal ${run.signal}` : "";
     return { ok: false, reason: `typedoc exit code ${run.status}${sig}` };
   }
-  if (!after.exists)
+  if (!after.exists) {
     return { ok: false, reason: `output dir missing after run` };
-  if (after.files === 0)
+  }
+  if (after.files === 0) {
     return { ok: false, reason: `output dir is empty after run` };
+  }
   if (after.probeMtimeMs === null) {
     return { ok: false, reason: `${PROBE_REL} missing after run` };
   }
@@ -186,7 +193,9 @@ async function spawnTypedoc(entry, outDir, root) {
     const lines = [];
     const keep = (buf) => {
       lines.push(...String(buf).split(/\r?\n/));
-      if (lines.length > 400) lines.splice(0, lines.length - 400);
+      if (lines.length > 400) {
+        lines.splice(0, lines.length - 400);
+      }
     };
     child.stdout?.on("data", (b) => {
       process.stdout.write(b);
@@ -202,12 +211,8 @@ async function spawnTypedoc(entry, outDir, root) {
         .filter(Boolean)
         .slice(-LOG_TAIL_LINES)
         .join("\n");
-    child.on("error", (error) =>
-      resolve({ status: null, signal: null, error, log: tail() }),
-    );
-    child.on("close", (status, signal) =>
-      resolve({ status, signal, error: null, log: tail() }),
-    );
+    child.on("error", (error) => resolve({ status: null, signal: null, error, log: tail() }));
+    child.on("close", (status, signal) => resolve({ status, signal, error: null, log: tail() }));
   });
 }
 
@@ -266,9 +271,7 @@ export async function runTypedoc({
     const verdict = judgeRun(run, { after, startedAt });
     last = { attempt, run, before, after, verdict };
     if (verdict.ok) {
-      onProgress(
-        `attempt ${attempt}/${total} ok: ${after.files} files -> ${outDir}`,
-      );
+      onProgress(`attempt ${attempt}/${total} ok: ${after.files} files -> ${outDir}`);
       return {
         ok: true,
         outDir,

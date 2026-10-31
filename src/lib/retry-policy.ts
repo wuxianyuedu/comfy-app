@@ -31,12 +31,9 @@ export type BackoffShape =
   /** 指数退避 + 上限：适合「对端可能长时间不可用，别一直砸它」。 */
   | "exponential";
 
-export interface BackoffShapeOptions {
+export type BackoffShapeOptions = {
   /** `fixed` 的间隔，或 `exponential` 的基数（毫秒）。 */
   baseMs: number;
-  shape: BackoffShape;
-  /** 指数退避的封顶（毫秒）。`fixed` 下忽略。 */
-  maxMs?: number;
   /**
    * 指数退避里 `attempt` 的封顶（默认无）。
    *
@@ -46,12 +43,15 @@ export interface BackoffShapeOptions {
    * 展示时也是有限数）。「最多几次」由调用处的循环边界表达。
    */
   maxAttempt?: number;
-}
+  /** 指数退避的封顶（毫秒）。`fixed` 下忽略。 */
+  maxMs?: number;
+  shape: BackoffShape;
+};
 
-export interface BackoffOptions extends BackoffShapeOptions {
+export type BackoffOptions = {
   /** 第几次（**从 0 起**）。 */
   attempt: number;
-}
+} & BackoffShapeOptions;
 
 /**
  * 算这一次的等待时长（毫秒）。**纯函数** —— 不 sleep、不循环。
@@ -64,7 +64,9 @@ export interface BackoffOptions extends BackoffShapeOptions {
 export function backoffDelayMs(opts: BackoffOptions): number {
   const { attempt, baseMs, shape, maxMs, maxAttempt } = opts;
   const n = Math.max(0, attempt);
-  if (shape === "fixed") return baseMs;
+  if (shape === "fixed") {
+    return baseMs;
+  }
   const capped = maxAttempt === undefined ? n : Math.min(n, maxAttempt);
   return Math.min(baseMs * 2 ** capped, maxMs ?? Number.POSITIVE_INFINITY);
 }
@@ -79,7 +81,7 @@ export function backoffDelayMs(opts: BackoffOptions): number {
 export const WS_RECONNECT = /* SAFETY: 类型断言已复核 */ {
   shape: "exponential",
   baseMs: 1000,
-  maxMs: 15000,
+  maxMs: 15_000,
   /** `2 ** 8 = 256` → 1s × 256 = 256s 远超封顶，再涨没有意义。 */
   maxAttempt: 8,
 } as const satisfies BackoffShapeOptions;

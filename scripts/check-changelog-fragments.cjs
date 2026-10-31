@@ -36,14 +36,7 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const FRAGMENT_DIR = "changelog.d";
 /** 允许的段落标题 —— Keep a Changelog 的固定段落集(规范 §13.10.4)。 */
-const SECTIONS = [
-  "Added",
-  "Changed",
-  "Deprecated",
-  "Removed",
-  "Fixed",
-  "Security",
-];
+const SECTIONS = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"];
 /** 碎片文件名:`<issue号>-<slug>.md`;issue 号允许 `#` 前缀,slug 用小写字母数字与连字符。 */
 const FILE_RE = /^#?(\d+)-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
 /** 非「一条变更」的文件:目录说明文档不参与形态校验。 */
@@ -53,7 +46,9 @@ const problems = [];
 
 function readDirSafe(relDir) {
   const abs = path.join(ROOT, relDir);
-  if (!fs.existsSync(abs)) return null;
+  if (!fs.existsSync(abs)) {
+    return null;
+  }
   return fs.readdirSync(abs, { withFileTypes: true });
 }
 
@@ -99,10 +94,7 @@ function main() {
     // 但一旦存在就必须自洽,避免「目录建了一半」的静默状态。
     // ⚠️ 这是 **skip 不是 pass**:没判过的目录与「判过且干净」在屏幕上必须分得开
     // (ISSUE #2506 —— 从前两者都打成一行绿色,读者只能靠猜)。
-    gateSkip(
-      "CHANGELOG 碎片",
-      `未启用碎片目录 ${FRAGMENT_DIR}/（规范 13.10.5）`,
-    );
+    gateSkip("CHANGELOG 碎片", `未启用碎片目录 ${FRAGMENT_DIR}/（规范 13.10.5）`);
     return;
   }
 
@@ -112,7 +104,9 @@ function main() {
   for (const f of files) {
     const text = fs.readFileSync(path.join(ROOT, FRAGMENT_DIR, f.name), "utf8");
     const p = checkFragment(f.name, text);
-    if (p) problems.push(...p);
+    if (p) {
+      problems.push(...p);
+    }
   }
 
   if (problems.length > 0) {
@@ -136,4 +130,6 @@ module.exports = {
   IGNORED_FILES,
 };
 
-if (require.main === module) main();
+if (require.main === module) {
+  main();
+}

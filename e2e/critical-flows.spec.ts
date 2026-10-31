@@ -44,7 +44,9 @@ async function stubBackend(page: Page) {
     /* 一律回空的 JSON 数组：不卡住、也不冒充数据。 */
     let handled = false;
     for (const procedure of ["setting.get", "comfyui.status", "workflow.list", "task.list"]) {
-      if (url.includes(procedure)) handled = true;
+      if (url.includes(procedure)) {
+        handled = true;
+      }
     }
     if (!handled) {
       await route.continue();
@@ -90,7 +92,9 @@ test.describe("登录链路 @critical", () => {
       .poll(
         async () => {
           const url = page.url();
-          if (!url.endsWith("/login")) return "navigated";
+          if (!url.endsWith("/login")) {
+            return "navigated";
+          }
           const body = await page.locator("body").innerText();
           return /提交中|加载中|请稍候|创建并登录/.test(body) ? "submitted" : "idle";
         },
@@ -231,7 +235,9 @@ test.describe("工作区链路 @critical", () => {
        （改完立刻还原）。这条比原来严：老写法在 flex 落点只会红，不会告诉你为什么。 */
     const sizeWithoutFlex = await spinner.evaluate((el) => {
       const parent = el.parentElement;
-      if (parent === null) throw new Error("spinner 没有父节点，判据落点漂了");
+      if (parent === null) {
+        throw new Error("spinner 没有父节点，判据落点漂了");
+      }
       const previous = parent.style.display;
       parent.style.display = "block";
       const style = getComputedStyle(/* SAFETY: 类型断言已复核 */ el as SVGElement);
@@ -239,8 +245,11 @@ test.describe("工作区链路 @critical", () => {
         width: Number.parseFloat(style.width),
         height: Number.parseFloat(style.height),
       };
-      if (previous === "") parent.style.removeProperty("display");
-      else parent.style.display = previous;
+      if (previous === "") {
+        parent.style.removeProperty("display");
+      } else {
+        parent.style.display = previous;
+      }
       return box;
     });
     expect(
@@ -537,7 +546,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
      *     `getByTitle` 是对的，别顺手一起换。
      */
     /** 弹层矩形的四元组（`settleBox` 的返回形状）。 */
-    type Box = { x: number; y: number; width: number; height: number };
+    type Box = { height: number; width: number; x: number; y: number; };
 
     /** 相邻两次量到同一矩形即视为落定（与动画时长解耦）。 */
     function sameBox(a: Box | null, b: Box | null): boolean {
@@ -576,7 +585,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
           { timeout: 5_000 },
         )
         .toBe(true);
-      if (box === null) throw new Error("弹层几何始终量不到，无法判定可点性");
+      if (box === null) {
+        throw new Error("弹层几何始终量不到，无法判定可点性");
+      }
       return box;
     }
 
@@ -810,7 +821,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
         let best: Text | null = null;
         for (let n = walker.nextNode(); n; n = walker.nextNode()) {
           const text = /* SAFETY: 类型断言已复核 */ n as Text;
-          if (!best || text.length > best.length) best = text;
+          if (!best || text.length > best.length) {
+            best = text;
+          }
         }
         const node = best!;
         const range = document.createRange();
@@ -1016,7 +1029,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
           ] as Array<HTMLElement>;
           return nodes.map((n) => n.scrollWidth - n.clientWidth);
         });
-        for (const px of overflow) expect(px).toBeLessThanOrEqual(1);
+        for (const px of overflow) {
+          expect(px).toBeLessThanOrEqual(1);
+        }
       }
 
       /* ② 级别色：警告黄、错误红，且两者**不同色**（同一处不能两色齐发）。
@@ -1244,7 +1259,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
         .poll(async () => {
           const { dropdown, footer } = await readTotalsInOneTurn();
           /* 两侧都读到才算数（一个还没渲染完时不要判「不等」）。 */
-          if (!dropdown || !footer) return "pending";
+          if (!dropdown || !footer) {
+            return "pending";
+          }
           return dropdown === footer ? "equal" : `${dropdown}≠${footer}`;
         })
         .toBe("equal");
@@ -1528,7 +1545,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
     /* 计次与桩**分开挂**：同一个 URL 只能有一个处理器（后注册的先被调用，再挂一条
        会把这条整个遮蔽 —— 实测计数恒 0），而路由位已经被 `stubTrpc` 占了。 */
     page.on("request", (req) => {
-      if (req.url().includes("comfyOpen")) calls.open += 1;
+      if (req.url().includes("comfyOpen")) {
+        calls.open += 1;
+      }
     });
     await stubTrpc(page, {
       /* base 取替身自己的地址（`fake-comfyui-endpoint.mjs` 是唯一落点）：写死 8188 时，

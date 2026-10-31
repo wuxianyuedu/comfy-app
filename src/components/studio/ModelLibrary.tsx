@@ -42,9 +42,9 @@ export function ModelLibrary() {
 
   return (
     <DocumentFrame
-      width="wide"
-      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       backdrop={<AuroraBackground />}
+      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
+      width="wide"
     >
       {/* 页头的名字走 `pageHeaderTitle("models")` —— 与侧栏 / 页签同一个出处
           （注册表 `NavItems.tsx`）。此前这里是裸字面量「模型库」，而注册表里
@@ -57,9 +57,9 @@ export function ModelLibrary() {
           （`sm:w-64` → `w-56`），免得把全局控件挤到换行。 */}
       <ViewActions>
         <Button
-          variant="outline"
-          onClick={() => c.setConfigOpen(true)}
           className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary-strong gap-1.5"
+          onClick={() => c.setConfigOpen(true)}
+          variant="outline"
         >
           <Icon data-icon="inline-start" name="settings" size={16} />
           模型目录配置
@@ -70,13 +70,13 @@ export function ModelLibrary() {
             基元的 h-8，与顶栏其余控件同档。 */}
         <InputGroup className="w-40 shrink-0 sm:w-56">
           <InputGroupAddon>
-            <Icon name="search" aria-hidden className="opacity-60" />
+            <Icon aria-hidden className="opacity-60" name="search" />
           </InputGroupAddon>
           <InputGroupInput
-            value={c.q}
-            onChange={textHandler(c.setQ)}
             aria-label="搜索模型名称"
+            onChange={textHandler(c.setQ)}
             placeholder="搜索模型名称…"
+            value={c.q}
           />
         </InputGroup>
       </ViewActions>
@@ -85,9 +85,9 @@ export function ModelLibrary() {
           「全部 (0)」，点它什么也不会发生，而下方空态已经在说同一件事。 */}
       {(c.loading || c.models.length > 0) && (
         <div
-          role="radiogroup"
           aria-label="按类型筛选模型"
           className="mb-5 flex flex-wrap items-center gap-2"
+          role="radiogroup"
         >
           {c.loading ? (
             /* 首屏骨架的档位占位：与真实 chip 同高同圆角，避免「全部 (0)」
@@ -100,13 +100,13 @@ export function ModelLibrary() {
             </>
           ) : (
             <>
-              <SelectChip selected={c.filter === ALL_TYPES} onClick={() => c.setFilter(ALL_TYPES)}>
+              <SelectChip onClick={() => c.setFilter(ALL_TYPES)} selected={c.filter === ALL_TYPES}>
                 {`全部 (${c.models.length})`}
               </SelectChip>
               {c.typeChips.map(([t, count]) => {
                 const meta = folderMeta(t);
                 return (
-                  <SelectChip key={t} selected={c.filter === t} onClick={() => c.setFilter(t)}>
+                  <SelectChip key={t} onClick={() => c.setFilter(t)} selected={c.filter === t}>
                     {`${meta.label} (${count})`}
                   </SelectChip>
                 );
@@ -128,23 +128,23 @@ export function ModelLibrary() {
         <ModelListSkeleton />
       ) : c.filtered.length === 0 ? (
         <EmptyState
-          title="模型库还没有内容"
-          description="没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。"
-          minHeightClass="min-h-75"
           action={
             /* 空态里唯一能解决问题的那一颗 → 实心档。此前是软底 `primary`，
                与它下面那句说明同色阶，读起来像又一条描述而不是出口。
                不再补 `mt-4`：`EmptyState` 的 EmptyContent 已经给了 mt-3，
                两处叠加会把说明与按钮之间撑成 28px。 */
             <Button
-              variant="primary-solid"
-              onClick={() => c.setConfigOpen(true)}
               className="h-auto gap-1.5 px-4 py-2"
+              onClick={() => c.setConfigOpen(true)}
+              variant="primary-solid"
             >
               <Icon data-icon="inline-start" name="settings" size={16} />
               去配置目录
             </Button>
           }
+          description="没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。"
+          minHeightClass="min-h-75"
+          title="模型库还没有内容"
         />
       ) : (
         // 紧凑列表 —— 每行是 [类型药丸][文件名][大小]。
@@ -183,16 +183,16 @@ const MODEL_ROW_H = 37; // px，单行（truncate 不换行）：py-2 + text-sm 
 function ModelListSkeleton({ rows = 8 }: { rows?: number }) {
   return (
     <div
-      role="status"
       aria-label="正在加载模型列表"
       className={`border-border-subtle bg-card ${EMBEDDED_SCROLL_MAX_HEIGHT} overflow-auto rounded-xl border`}
+      role="status"
     >
       {Array.from({ length: rows }, (_, i) => (
         <div
-          key={i}
           className={`flex items-center gap-3 px-3 py-2 ${
             i === rows - 1 ? "" : "border-border-subtle border-b"
           }`}
+          key={i}
         >
           <Skeleton className="h-5 w-14 shrink-0" />
           <Skeleton className="h-4 flex-1" style={{ maxWidth: `${64 - i * 5}%` }} />
@@ -223,10 +223,10 @@ function ModelList({ items }: { items: Array<ModelRow> }) {
 
   return (
     <div
-      ref={setScrollEl}
-      role="list"
       aria-label="模型文件列表"
       className={`border-border-subtle bg-card ${EMBEDDED_SCROLL_MAX_HEIGHT} overflow-auto rounded-xl border`}
+      ref={setScrollEl}
+      role="list"
     >
       {measured ? (
         <div
@@ -238,12 +238,14 @@ function ModelList({ items }: { items: Array<ModelRow> }) {
         >
           {virtualizer.getVirtualItems().map((vi) => {
             const m = items[vi.index];
-            if (!m) return null;
+            if (!m) {
+              return null;
+            }
             return (
               <ModelRowLine
+                isLast={vi.index === items.length - 1}
                 key={vi.key}
                 model={m}
-                isLast={vi.index === items.length - 1}
                 style={{
                   position: "absolute",
                   top: 0,
@@ -258,7 +260,7 @@ function ModelList({ items }: { items: Array<ModelRow> }) {
         </div>
       ) : (
         items.map((m, idx) => (
-          <ModelRowLine key={m.id} model={m} isLast={idx === items.length - 1} />
+          <ModelRowLine isLast={idx === items.length - 1} key={m.id} model={m} />
         ))
       )}
     </div>
@@ -270,18 +272,18 @@ function ModelRowLine({
   isLast,
   style,
 }: {
-  model: ModelRow;
   isLast: boolean;
+  model: ModelRow;
   style?: CSSProperties;
 }) {
   const meta = folderMeta(model.type);
   return (
     <div
-      role="listitem"
-      style={style}
       className={`group hover:bg-subtle flex items-center gap-3 px-3 py-2 transition-colors ${
         isLast ? "" : "border-border-subtle border-b"
       }`}
+      role="listitem"
+      style={style}
     >
       <span className={`text-2xs shrink-0 rounded-md px-2 py-0.5 font-medium ${meta.color}`}>
         {meta.label}
@@ -325,12 +327,12 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
  一个**兄弟 div** 单独接`onClick`（与全库其余弹窗的「外层带 onClick +
  内层 stopPropagation」又是一种写法），Esc 没接、焦点不锁也不归还。 */
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
         aria-label="模型库"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"
+        showCloseButton={false}
       >
         <div
           className={`border-border bg-panel relative flex ${OVERLAY_MAX_HEIGHT} w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/50`}
@@ -339,7 +341,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
           <div className="border-border-subtle flex items-start justify-between border-b px-5 py-4">
             <div>
               <h2 className="text-ink flex items-center gap-2 text-base font-semibold">
-                <Icon name="foldertree" size={18} className="text-primary-strong" />
+                <Icon className="text-primary-strong" name="foldertree" size={18} />
                 模型目录配置
               </h2>
               <p className="text-ink-muted mt-0.5 text-xs">
@@ -349,11 +351,11 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               </p>
             </div>
             <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onClose}
-              className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright rounded-lg"
               aria-label="关闭"
+              className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright rounded-lg"
+              onClick={onClose}
+              size="icon-sm"
+              variant="ghost"
             >
               <Icon data-icon="inline-start" name="close" size={18} />
             </Button>
@@ -377,11 +379,11 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               {c.err && <span className="text-destructive">{c.err}</span>}
             </div>
             <Button
-              variant="outline"
-              size="xs"
-              onClick={() => void c.rescan()}
-              disabled={c.scanning}
               className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-1.5"
+              disabled={c.scanning}
+              onClick={() => void c.rescan()}
+              size="xs"
+              variant="outline"
             >
               {c.scanning ? (
                 <Spinner className="size-3.5" />
@@ -395,17 +397,17 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
           {/* search + filter */}
           <div className="flex items-center gap-3 px-5 py-3">
             <Input
-              value={c.q}
-              onChange={textHandler(c.setQ)}
               aria-label="搜索目录名"
-              placeholder="搜索目录名…"
               className="bg-subtle flex-1"
+              onChange={textHandler(c.setQ)}
+              placeholder="搜索目录名…"
+              value={c.q}
             />
             <FieldLabel className="text-ink-faint flex shrink-0 cursor-pointer items-center gap-2 text-xs">
               <Checkbox
                 checked={c.onlyEnabled}
-                onCheckedChange={(checked) => c.setOnlyEnabled(checked === true)}
                 className="border-border-strong bg-surface-2 text-primary-strong focus:ring-primary/40 size-3.5 rounded"
+                onCheckedChange={(checked) => c.setOnlyEnabled(checked === true)}
               />
               仅显示已启用
             </FieldLabel>
@@ -437,10 +439,10 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                       {c.enabledRows.map((row) => (
                         <FolderConfigRow
                           key={row.folder}
-                          row={row}
-                          onToggle={c.toggle}
                           onAdd={c.add}
                           onDelete={c.remove}
+                          onToggle={c.toggle}
+                          row={row}
                         />
                       ))}
                     </div>
@@ -459,10 +461,10 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                       {c.availableRows.map((row) => (
                         <FolderConfigRow
                           key={row.folder}
-                          row={row}
-                          onToggle={c.toggle}
                           onAdd={c.add}
                           onDelete={c.remove}
+                          onToggle={c.toggle}
+                          row={row}
                         />
                       ))}
                     </div>
@@ -489,10 +491,10 @@ function FolderConfigRow({
   onAdd,
   onDelete,
 }: {
-  row: FolderConfigRowData;
-  onToggle: (folder: string, enabled: boolean) => void;
   onAdd: (folder: string) => void;
   onDelete: (folder: string) => void;
+  onToggle: (folder: string, enabled: boolean) => void;
+  row: FolderConfigRowData;
 }) {
   const primaryMeta = folderMeta(row.type);
 
@@ -523,19 +525,19 @@ function FolderConfigRow({
         <div className="flex shrink-0 items-center gap-2">
           {row.enabled ? (
             <Button
-              variant="success"
-              size="xs"
-              onClick={toggleEnabled}
               className="h-auto rounded-lg px-3 py-1.5"
+              onClick={toggleEnabled}
+              size="xs"
+              variant="success"
             >
               已启用
             </Button>
           ) : (
             <Button
-              variant="primary"
-              size="xs"
-              onClick={enableFromAvailable}
               className="h-auto gap-1 rounded-lg px-3 py-1.5"
+              onClick={enableFromAvailable}
+              size="xs"
+              variant="primary"
             >
               <Icon data-icon="inline-start" name="plus" size={12} />
               启用
@@ -544,10 +546,10 @@ function FolderConfigRow({
           {row.hasConfig && (
             <Hint label="删除配置（不再扫描）">
               <Button
-                variant="ghost"
-                size="xs"
-                onClick={remove}
                 className="text-ink-muted hover:bg-surface-2 hover:text-ink-strong h-auto rounded-md px-2 py-1"
+                onClick={remove}
+                size="xs"
+                variant="ghost"
               >
                 删除
               </Button>

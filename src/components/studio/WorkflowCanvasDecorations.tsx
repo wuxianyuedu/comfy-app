@@ -62,36 +62,36 @@ export function CanvasGrid({
     <>
       {settings.showGrid && showFineLines && (
         <Background
-          id={GRID_MINOR_LAYER_ID}
-          variant={BackgroundVariant.Lines}
+          color={gridLineColor(settings.gridMinorAlpha * minorAlpha)}
           /* 间距 / 线宽 / 透明度现在绑定到用户的画布设置，
            *  不再是硬编码的 10 / 1 / 0.22。
            *  会乘上一个「随缩放淡出」的系数，让线在任何缩放档下都可读
            *（此前缩放 0.5 时透明度直接是 0）。 */
           gap={settings.gridGap}
+          id={GRID_MINOR_LAYER_ID}
           lineWidth={settings.gridMinorLineWidth}
-          color={gridLineColor(settings.gridMinorAlpha * minorAlpha)}
+          variant={BackgroundVariant.Lines}
         />
       )}
       {/* 底色层：**唯一一个恒常渲染**的网格层（它自己就是画布的底色）。
           细线在主参考线之前渲染（都会被后画的层盖在上方），顺序不影响观感。 */}
       <Background
+        bgColor={CANVAS_BG}
+        color="transparent"
+        gap={1e6}
         id={GRID_BASE_LAYER_ID}
         variant={BackgroundVariant.Dots}
-        gap={1e6}
-        color="transparent"
-        bgColor={CANVAS_BG}
       />
       {settings.showGrid && (
         /* 主参考线恒落在 `gridGap * 10` 处，保持用户预期的 1:10 比例；
          *  可调的只有它们的透明度与线宽。 */
         <Background
-          id={GRID_MAJOR_LAYER_ID}
-          variant={BackgroundVariant.Lines}
-          gap={settings.gridGap * GRID_MAJOR_EVERY}
-          lineWidth={settings.gridMajorLineWidth}
-          color={gridLineColor(settings.gridMajorAlpha)}
           bgColor="transparent"
+          color={gridLineColor(settings.gridMajorAlpha)}
+          gap={settings.gridGap * GRID_MAJOR_EVERY}
+          id={GRID_MAJOR_LAYER_ID}
+          lineWidth={settings.gridMajorLineWidth}
+          variant={BackgroundVariant.Lines}
         />
       )}
     </>
@@ -126,8 +126,8 @@ export function ZoomIndicator({
   minZoom = DEFAULT_CANVAS_SETTINGS.minZoom,
   maxZoom = DEFAULT_CANVAS_SETTINGS.maxZoom,
 }: {
-  minZoom?: number;
   maxZoom?: number;
+  minZoom?: number;
 } = {}) {
   const zoom = useStore((state) => state.transform[2]);
   const rf = useReactFlow();
@@ -135,9 +135,9 @@ export function ZoomIndicator({
   const [draft, setDraft] = useState("");
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{
+    moved: boolean;
     startY: number;
     startZoom: number;
-    moved: boolean;
   } | null>(null);
   const justDraggedRef = useRef(false);
   // 拖拽缩放期间挂到 window 的监听器；卸载时若拖拽尚未结束（鼠标按住未松手）
@@ -169,15 +169,19 @@ export function ZoomIndicator({
   };
 
   const commit = () => {
-    const n = parseInt(draft, 10);
-    if (!Number.isNaN(n) && n > 0) applyZoom(n / 100);
+    const n = Number.parseInt(draft, 10);
+    if (!Number.isNaN(n) && n > 0) {
+      applyZoom(n / 100);
+    }
     setEditing(false);
   };
 
   // 微调：按住后上下拖拽，连续改变缩放。向上放大、向下缩小；
   // 用乘法（对数）映射，让每像素位移在任何缩放档下手感一致。
   const onScrubStart = (e: React.MouseEvent) => {
-    if (editing) return;
+    if (editing) {
+      return;
+    }
     e.preventDefault();
     justDraggedRef.current = false;
     dragRef.current = { startY: e.clientY, startZoom: zoom, moved: false };
@@ -185,9 +189,13 @@ export function ZoomIndicator({
 
     const onMove = (ev: MouseEvent) => {
       const st = dragRef.current;
-      if (!st) return;
+      if (!st) {
+        return;
+      }
       const dy = st.startY - ev.clientY; // up = positive
-      if (Math.abs(dy) > 4) st.moved = true;
+      if (Math.abs(dy) > 4) {
+        st.moved = true;
+      }
       applyZoom(st.startZoom * Math.exp(dy / 220));
     };
     const onUp = () => {
@@ -197,8 +205,11 @@ export function ZoomIndicator({
       const st = dragRef.current;
       dragRef.current = null;
       setDragging(false);
-      if (st?.moved) justDraggedRef.current = true;
-      else if (st) beginEdit();
+      if (st?.moved) {
+        justDraggedRef.current = true;
+      } else if (st) {
+        beginEdit();
+      }
     };
     scrubListenersRef.current = { onMove, onUp };
     window.addEventListener("mousemove", onMove);
@@ -209,18 +220,18 @@ export function ZoomIndicator({
     return (
       <input
         autoFocus
-        value={draft}
         inputMode="numeric"
-        onChange={textHandler(setDraft, digitsOnly)}
         onBlur={commit}
+        onChange={textHandler(setDraft, digitsOnly)}
+        value={draft}
         {...enterCommit({
           onCommit: commit,
           /* Esc 关掉编辑态即可 —— 草稿在下次进入编辑时由 `beginEdit()` 重置，
            * 所以这里不需要显式回退原值。 */
           onCancel: () => setEditing(false),
         })}
-        title="输入缩放百分比后回车"
         className="bg-panel text-ink-bright z-base border-primary/60 text-2xs absolute top-3 right-3 h-7 w-16 rounded-md border px-2 text-right font-medium tabular-nums shadow-lg outline-none"
+        title="输入缩放百分比后回车"
       />
     );
   }
@@ -228,8 +239,9 @@ export function ZoomIndicator({
   return (
     <Hint label="点击输入缩放倍数，或按住上下拖动调整">
       <Button
-        variant="outline"
-        onMouseDown={onScrubStart}
+        className={`border-border-strong bg-panel text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg select-none hover:border-white/25 ${
+          dragging ? "border-primary-400/50 cursor-grabbing" : "cursor-ns-resize"
+        }`}
         onClick={() => {
           if (justDraggedRef.current) {
             justDraggedRef.current = false;
@@ -237,9 +249,8 @@ export function ZoomIndicator({
           }
           beginEdit();
         }}
-        className={`border-border-strong bg-panel text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg select-none hover:border-white/25 ${
-          dragging ? "border-primary-400/50 cursor-grabbing" : "cursor-ns-resize"
-        }`}
+        onMouseDown={onScrubStart}
+        variant="outline"
       >
         {pct}%
       </Button>
@@ -265,23 +276,28 @@ export function CanvasRulers({
   const labelStep = useMemo(() => {
     const base = settings.gridGap * GRID_MAJOR_EVERY; // 100
     let s = base;
-    while (s * zoom < 48) s *= 2;
+    while (s * zoom < 48) {
+      s *= 2;
+    }
     return s;
   }, [zoom, settings.gridGap]);
 
   // 每条可见的主竖线的世界 X → 屏幕 X。
   const xLabels = useMemo(() => {
-    if (zoom <= 0.01 || !width)
+    if (zoom <= 0.01 || !width) {
       return /* SAFETY: 类型断言已复核 */ [] as Array<{
-        world: number;
         screen: number;
+        world: number;
       }>;
+    }
     const start = Math.floor(-tx / zoom / labelStep) * labelStep;
     const end = Math.ceil((width - tx) / zoom / labelStep) * labelStep;
-    const out: Array<{ world: number; screen: number }> = [];
+    const out: Array<{ screen: number; world: number }> = [];
     for (let x = start; x <= end + 0.5; x += labelStep) {
       const sx = x * zoom + tx;
-      if (sx < -4 || sx > width + 4) continue;
+      if (sx < -4 || sx > width + 4) {
+        continue;
+      }
       out.push({ world: x, screen: sx });
     }
     return out;
@@ -289,23 +305,28 @@ export function CanvasRulers({
 
   // 每条可见的主横线的世界 Y → 屏幕 Y。
   const yLabels = useMemo(() => {
-    if (zoom <= 0.01 || !height)
+    if (zoom <= 0.01 || !height) {
       return /* SAFETY: 类型断言已复核 */ [] as Array<{
-        world: number;
         screen: number;
+        world: number;
       }>;
+    }
     const start = Math.floor(-ty / zoom / labelStep) * labelStep;
     const end = Math.ceil((height - ty) / zoom / labelStep) * labelStep;
-    const out: Array<{ world: number; screen: number }> = [];
+    const out: Array<{ screen: number; world: number }> = [];
     for (let y = start; y <= end + 0.5; y += labelStep) {
       const sy = y * zoom + ty;
-      if (sy < -4 || sy > height + 4) continue;
+      if (sy < -4 || sy > height + 4) {
+        continue;
+      }
       out.push({ world: y, screen: sy });
     }
     return out;
   }, [ty, zoom, height, labelStep]);
 
-  if (!settings.showRulers) return null;
+  if (!settings.showRulers) {
+    return null;
+  }
 
   // 用 Unicode 负号统一排版（既有控件值用的是普通 `-`；
   // 标尺用 `−`，因为它的字号更大，负坐标下这点差异看得出来）。
@@ -315,12 +336,12 @@ export function CanvasRulers({
     "pointer-events-none absolute select-none whitespace-nowrap text-3xs font-medium tabular-nums tracking-tight";
 
   return (
-    <div className="z-base pointer-events-none absolute inset-0" aria-hidden>
+    <div aria-hidden className="z-base pointer-events-none absolute inset-0">
       {/* 上边 —— X 坐标 */}
       {xLabels.map(({ world, screen }) => (
         <div
-          key={`rt-${world}`}
           className={labelBase}
+          key={`rt-${world}`}
           style={{
             left: screen,
             top: 2,
@@ -336,8 +357,8 @@ export function CanvasRulers({
        *  左下角按钮簇不盖住最左侧的标签） */}
       {xLabels.map(({ world, screen }) => (
         <div
-          key={`rb-${world}`}
           className={labelBase}
+          key={`rb-${world}`}
           style={{
             left: screen,
             bottom: 2,
@@ -352,8 +373,8 @@ export function CanvasRulers({
       {/* 左边 —— Y 坐标 */}
       {yLabels.map(({ world, screen }) => (
         <div
-          key={`rl-${world}`}
           className={labelBase}
+          key={`rl-${world}`}
           style={{
             top: screen,
             left: 3,
@@ -368,8 +389,8 @@ export function CanvasRulers({
       {/* 右边 —— Y 坐标 */}
       {yLabels.map(({ world, screen }) => (
         <div
-          key={`rr-${world}`}
           className={labelBase}
+          key={`rr-${world}`}
           style={{
             top: screen,
             right: 3,

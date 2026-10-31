@@ -27,18 +27,18 @@ import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { zClass } from "~/lib/shell/overlay-z";
 
-interface HistoryDetailModalProps {
-  detailId: string | null;
+type HistoryDetailModalProps = {
   detail: TaskDetail | null;
+  detailId: string | null;
   detailLoading: boolean;
-  /** 本任务所用工作流的 IO 定义：参数可读名从它的`label` 查（任务行里只存了
-   * pin 名）。工作流已被删除时是空表，参数名如实回落 pin 名。 */
-  workflowIO: WorkflowIOMap;
   /** 模式契约注册表（只含用户改过的模式）：工坊参数按「任务模式 + 生效契约」枚举。
    * 为 null 时回落内置默认契约。 */
   modeContracts?: ReadonlyArray<ModeContract> | null;
   onClose: () => void;
-}
+  /** 本任务所用工作流的 IO 定义：参数可读名从它的`label` 查（任务行里只存了
+   * pin 名）。工作流已被删除时是空表，参数名如实回落 pin 名。 */
+  workflowIO: WorkflowIOMap;
+};
 
 /**
  * 历史任务详情弹窗 —— 纯展示层（规范 17 §17.2 第③层）。
@@ -70,7 +70,9 @@ export function HistoryDetailModal({
   const redrawReport: ActionReport = (kind, detail) =>
     kind === "ok" ? toast.success(detail) : toast.error(detail);
 
-  if (!detailId) return null;
+  if (!detailId) {
+    return null;
+  }
   // 局部 const 让闭包 / IIFE 内的空值窄化在 TS 中稳定成立。
   const current = detail;
   /* 按来源分块：工坊发起的任务多摆一块「工坊参数」（工坊对外值），工作流直接
@@ -99,12 +101,12 @@ export function HistoryDetailModal({
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写`onClick` 关闭，Esc 没接、焦点不锁也不归还。 */
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
         aria-label="任务详情"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"
+        showCloseButton={false}
       >
         <div
           className={`border-border bg-node flex ${OVERLAY_MAX_HEIGHT} w-full max-w-3xl flex-col overflow-hidden rounded-2xl border`}
@@ -117,14 +119,16 @@ export function HistoryDetailModal({
                 wrap
               >
                 <Button
-                  variant="outline"
-                  size="xs"
+                  className="border-border text-ink-strong hover:border-border-strong hover:text-ink text-2xs h-auto gap-1.5 rounded-md px-2.5 py-1"
                   disabled={!current?.id || actions.openFolderBusy}
                   onClick={() => {
-                    if (!current?.id) return;
+                    if (!current?.id) {
+                      return;
+                    }
                     void actions.openFolder(current.id);
                   }}
-                  className="border-border text-ink-strong hover:border-border-strong hover:text-ink text-2xs h-auto gap-1.5 rounded-md px-2.5 py-1"
+                  size="xs"
+                  variant="outline"
                 >
                   <Folder data-icon="inline-start" size={12} />
                   打开目录
@@ -143,11 +147,11 @@ export function HistoryDetailModal({
                       📂 在资源管理器中打开
                     </span>
                     <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={actions.dismissFolderPopover}
-                      className="text-ink-muted hover:text-ink-bright"
                       aria-label="关闭"
+                      className="text-ink-muted hover:text-ink-bright"
+                      onClick={actions.dismissFolderPopover}
+                      size="icon-xs"
+                      variant="ghost"
                     >
                       <X data-icon="inline-start" size={12} />
                     </Button>
@@ -167,7 +171,7 @@ export function HistoryDetailModal({
                       </code>
                       {""}
                       协议（仅本机、无需管理员）， 或直接{""}
-                      <a href="/api/helper/install" className="hover:text-warning-strong underline">
+                      <a className="hover:text-warning-strong underline" href="/api/helper/install">
                         下载安装脚本
                       </a>
                       。
@@ -182,10 +186,10 @@ export function HistoryDetailModal({
                   </code>
                   <div className="mt-2 flex flex-wrap justify-end gap-2">
                     <Button
-                      variant="success"
-                      size="xs"
-                      onClick={() => actions.copyPath()}
                       className="text-2xs h-auto rounded-md px-2.5 py-1"
+                      onClick={() => actions.copyPath()}
+                      size="xs"
+                      variant="success"
                     >
                       📋 复制路径
                     </Button>
@@ -199,14 +203,16 @@ export function HistoryDetailModal({
                     wrap
                   >
                     <Button
-                      variant="outline"
-                      size="xs"
+                      className="border-border text-ink-strong hover:border-border-strong hover:text-ink text-2xs h-auto rounded-md px-2.5 py-1"
                       disabled={actions.downloading}
                       onClick={() => {
-                        if (!current?.id) return;
+                        if (!current?.id) {
+                          return;
+                        }
                         void actions.downloadWorkflow(current.id);
                       }}
-                      className="border-border text-ink-strong hover:border-border-strong hover:text-ink text-2xs h-auto rounded-md px-2.5 py-1"
+                      size="xs"
+                      variant="outline"
                     >
                       下载工作流
                     </Button>
@@ -220,11 +226,11 @@ export function HistoryDetailModal({
                 </div>
               )}
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onClose}
-                className="text-ink-muted hover:text-ink-bright"
                 aria-label="关闭"
+                className="text-ink-muted hover:text-ink-bright"
+                onClick={onClose}
+                size="icon-sm"
+                variant="ghost"
               >
                 <X data-icon="inline-start" size={16} />
               </Button>
@@ -239,8 +245,8 @@ export function HistoryDetailModal({
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     {current.images.map((img, index) => (
                       <div
-                        key={img.localPath}
                         className="group border-border-subtle relative overflow-hidden rounded-xl border"
+                        key={img.localPath}
                       >
                         {/* 任务详情里的每一张产物都可以点开看大图（原始大小 /
  缩放 / 拖拽平移）—— 缩略图是方形的`object-cover`，
@@ -248,24 +254,24 @@ export function HistoryDetailModal({
  渲染（`ViewableImage` 的查看器只服务图片）。 */}
                         {isVideo(img.localPath) ? (
                           <MediaThumbnail
-                            src={img.localPath}
                             alt=""
-                            className="aspect-square w-full object-cover"
                             autoPlay
+                            className="aspect-square w-full object-cover"
                             loop
+                            src={img.localPath}
                           />
                         ) : (
                           <ViewableImage
-                            src={img.localPath}
                             alt="任务产物"
-                            label={`任务产物 ${index + 1}`}
                             className="aspect-square w-full object-cover"
+                            label={`任务产物 ${index + 1}`}
+                            src={img.localPath}
                           />
                         )}
                         <a
-                          href={img.localPath}
-                          download
                           className="bg-surface-2 text-ink hover:bg-surface-2 text-2xs absolute top-2 right-2 rounded px-2 py-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                          download
+                          href={img.localPath}
                         >
                           {isVideo(img.localPath) ? "下载视频" : "下载"}
                         </a>
@@ -290,10 +296,10 @@ export function HistoryDetailModal({
                 {firstImage && !isVideo(firstImage.localPath) && (
                   <Disclosure trigger={<span className="u-title text-sm">放大 / 局部重绘</span>}>
                     <ImageRedrawPanel
-                      prompt={current?.prompt ?? ""}
-                      projectId={current?.projectId ?? null}
-                      parentTaskId={current?.id ?? ""}
                       imageUrl={firstImage.localPath}
+                      parentTaskId={current?.id ?? ""}
+                      projectId={current?.projectId ?? null}
+                      prompt={current?.prompt ?? ""}
                       toastReport={redrawReport}
                     />
                   </Disclosure>
@@ -317,9 +323,7 @@ export function HistoryDetailModal({
                   <div>
                     <p className="text-ink-faint mb-1 text-xs font-semibold">工坊参数</p>
                     <KeyValueRows
-                      layout="table"
                       className="mb-2"
-                      keyClassName="text-ink-muted"
                       items={workshopParams.map((row) => ({
                         id: row.id,
                         key: row.label,
@@ -331,6 +335,8 @@ export function HistoryDetailModal({
                           ),
                         title: row.label,
                       }))}
+                      keyClassName="text-ink-muted"
+                      layout="table"
                     />
                   </div>
                 )}
@@ -341,9 +347,7 @@ export function HistoryDetailModal({
 
                     {paramRows.length > 0 && (
                       <KeyValueRows
-                        layout="table"
                         className="mb-2"
-                        keyClassName="text-primary-strong"
                         items={paramRows.map((row) => ({
                           id: row.id,
                           /* 显示工作流 IO 的作者标签（「宽高比」而不是
@@ -354,13 +358,15 @@ export function HistoryDetailModal({
  用的是程序名，作者改的名字对不上。 */
                           title: `${row.label}（${row.name}）`,
                         }))}
+                        keyClassName="text-primary-strong"
+                        layout="table"
                       />
                     )}
 
                     {topLevelEntries.length > 0 && (
                       <Disclosure
-                        marker="caret"
                         className="border-border-subtle bg-canvas-deep text-ink-muted hover:text-ink-strong text-2xs rounded-lg border px-3 py-1.5"
+                        marker="caret"
                         trigger={`原始 JSON · ${
                           topLevelEntries.length + (paramRows.length ? 1 : 0)
                         } 个字段`}

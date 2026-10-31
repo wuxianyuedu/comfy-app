@@ -23,15 +23,7 @@ import { create } from "zustand";
 /** 页签 id 常量：主应用页签不可关闭。 */
 export const MAIN_TAB_ID = "main";
 
-export interface ShellTab {
-  /** 唯一 id（主应用为 "main"；其余建议显式传稳定 id 如 "comfyui"，否则按 label+url 派生）。 */
-  id: string;
-  /** 页签标题（页签栏显示）。 */
-  label: string;
-  /** 页签内容地址：主应用为 null（由 children 渲染），其余为待内嵌 URL。 */
-  url: string | null;
-  /** 是否可关闭（主应用页签恒为 false）。 */
-  closable: boolean;
+export type ShellTab = {
   /**
    * 无法内嵌时的**页签内**说明（成因 + 修复动作）。
    *
@@ -49,25 +41,33 @@ export interface ShellTab {
    * 「有错误页、没地址」，于是只能再来一轮猜测。
    */
   blockedUrl?: string | null;
-}
+  /** 是否可关闭（主应用页签恒为 false）。 */
+  closable: boolean;
+  /** 唯一 id（主应用为 "main"；其余建议显式传稳定 id 如 "comfyui"，否则按 label+url 派生）。 */
+  id: string;
+  /** 页签标题（页签栏显示）。 */
+  label: string;
+  /** 页签内容地址：主应用为 null（由 children 渲染），其余为待内嵌 URL。 */
+  url: string | null;
+};
 
-export interface ShellTabsState {
-  /** 已打开的页签；恒含主应用页签且排在最前。 */
-  tabs: Array<ShellTab>;
-  /** 当前激活页签 id。 */
-  activeTabId: string;
-  /** 新增（或激活已存在的同名）页签并激活。 */
-  openTab: (tab: Omit<ShellTab, "id"> & { id?: string }) => void;
+export type ShellTabsState = {
   /** 激活指定页签。 */
   activateTab: (id: string) => void;
+  /** 当前激活页签 id。 */
+  activeTabId: string;
   /** 关闭指定页签；不可关闭主应用页签。 */
   closeTab: (id: string) => void;
+  /** 新增（或激活已存在的同名）页签并激活。 */
+  openTab: (tab: Omit<ShellTab, "id"> & { id?: string }) => void;
+  /** 已打开的页签；恒含主应用页签且排在最前。 */
+  tabs: Array<ShellTab>;
   /** 更新指定页签标题 / 地址。 */
   updateTab: (
     id: string,
     patch: Partial<Pick<ShellTab, "label" | "url" | "blockedReason" | "blockedUrl">>,
   ) => void;
-}
+};
 
 const MAIN_TAB: ShellTab = {
   id: MAIN_TAB_ID,
@@ -77,9 +77,13 @@ const MAIN_TAB: ShellTab = {
 };
 
 function resolveTabId(tab: Omit<ShellTab, "id"> & { id?: string }): string {
-  if (tab.id) return tab.id;
+  if (tab.id) {
+    return tab.id;
+  }
   // 无显式 id 时按 type + url 保证唯一（同 URL 不会叠出重复页签）。
-  if (tab.url) return `${tab.label}:${tab.url}`;
+  if (tab.url) {
+    return `${tab.label}:${tab.url}`;
+  }
   return `${tab.label}:${Date.now()}`;
 }
 
@@ -124,9 +128,13 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
 
   closeTab: (id) =>
     set((state) => {
-      if (id === MAIN_TAB_ID) return state;
+      if (id === MAIN_TAB_ID) {
+        return state;
+      }
       const idx = state.tabs.findIndex((t) => t.id === id);
-      if (idx === -1) return state;
+      if (idx === -1) {
+        return state;
+      }
       const tabs = state.tabs.filter((t) => t.id !== id);
       // 关闭当前激活页签时，回退到相邻页签（或主应用）。
       const activeTabId =

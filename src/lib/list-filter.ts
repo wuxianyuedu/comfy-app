@@ -42,7 +42,9 @@ export function normalizeNeedle(raw: string): string {
  *  `haystack` 由调用处给：它决定「这一行有哪些字段可搜」。**不要**在调用处
  *  再写 `toLowerCase()` —— 归一化只在本模块做一次。 */
 export function matchesNeedle(needle: string, haystack: string): boolean {
-  if (!needle) return true;
+  if (!needle) {
+    return true;
+  }
   /* 两侧都折小写。**只折 haystack 是不够的**：`needle` 由调用处传进来，
    * 而调用处漏掉归一化正是这条账的成因（`AttributeMultiSelect` 只 `trim()`）。
    * 这里把 `needle` 再折一次是幂等的（`normalizeNeedle` 是幂等函数），
@@ -83,14 +85,18 @@ export function filterGroups<G extends { title: string }, K extends keyof G>(
   /** 单条是否命中。默认对 `String(item)` 子串匹配（小写化在出口内做）。 */
   hit?: (item: ItemOf<G, K>) => boolean,
 ): Array<G> {
-  if (!needle) return groups;
+  if (!needle) {
+    return groups;
+  }
   const out: Array<G> = [];
   for (const group of groups) {
     const all =
       /* SAFETY: 类型断言已复核 */ (group[field] as Array<ItemOf<G, K>> | undefined) ?? [];
     const keep = hit ?? ((item: ItemOf<G, K>) => matchesNeedle(needle, String(item)));
     const kept = all.filter(keep);
-    if (kept.length === 0) continue;
+    if (kept.length === 0) {
+      continue;
+    }
     out.push({ ...group, [field]: kept });
   }
   return out;

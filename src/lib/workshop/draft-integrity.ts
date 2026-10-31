@@ -40,25 +40,25 @@ export type DraftElementKind = "scene" | "character" | "shot";
 
 /** 一份草稿的可判形状。三类都收 `readonly unknown[]`：
  *  判据**故意**不知道元素是什么类型 —— 它要回答的正是「这一项配不配那个类型」。 */
-export interface DraftElements {
-  scenes: ReadonlyArray<unknown>;
+export type DraftElements = {
   characters: ReadonlyArray<unknown>;
+  scenes: ReadonlyArray<unknown>;
   shots: ReadonlyArray<unknown>;
-}
+};
 
 /** 一处形状问题。`index` 是它在原数组里的下标（**不重排、不删除**，回写时按它定位）。 */
-export interface DraftElementIssue {
-  kind: DraftElementKind;
-  index: number;
-  /** 元素自带的 id；读不到（正是问题之一）时为 null。 */
-  id: string | null;
-  /** 人类可读的定位：`角色 #3「小美」` 这一档，界面直接显示。 */
-  label: string;
+export type DraftElementIssue = {
   /** 出问题的字段名（整条不是对象时为 null）。 */
   field: string | null;
+  /** 元素自带的 id；读不到（正是问题之一）时为 null。 */
+  id: string | null;
+  index: number;
+  kind: DraftElementKind;
+  /** 人类可读的定位：`角色 #3「小美」` 这一档，界面直接显示。 */
+  label: string;
   /** 怎么说都不为过的原因 —— 界面上「需要修复」后面跟的就是它。 */
   reason: string;
-}
+};
 
 /** 三类的中文名。**刻意不写「跳到哪个页签」** —— 页签是视图层的知识
  *  （`Tab` 定义在 `components/workshop/stage-config`），lib 反向 import 视图层
@@ -85,15 +85,15 @@ function notAnObject(value: unknown): boolean {
 }
 
 /** 单条元素的检查表：返回问题原因，或 null 表示这一条站得住。 */
-interface ElementCheck {
-  /** 元素自带的 id 字段名（三类都是 `id`，抽出来是为了 label 与「id 本身就没了」）。 */
-  idOf(source: Record<string, unknown>): string | null;
+type ElementCheck = {
   fields: Array<{
     key: string;
     ok: (value: unknown) => boolean;
     reason: string;
   }>;
-}
+  /** 元素自带的 id 字段名（三类都是 `id`，抽出来是为了 label 与「id 本身就没了」）。 */
+  idOf(source: Record<string, unknown>): string | null;
+};
 
 /**
  * 三类元素各自的判据。每条 `reason` 都写着**下游哪一处会出事** —— 没有出事点的字段
@@ -197,7 +197,9 @@ function auditOne(kind: DraftElementKind, index: number, value: unknown): Array<
   const label = id ? `${noun} #${String(index + 1)}「${id}」` : `${noun} #${String(index + 1)}`;
   const issues: Array<DraftElementIssue> = [];
   for (const field of check.fields) {
-    if (field.ok(source[field.key])) continue;
+    if (field.ok(source[field.key])) {
+      continue;
+    }
     issues.push({
       kind,
       index,
@@ -238,7 +240,9 @@ export function countAffectedElements(
     character: new Set(),
     shot: new Set(),
   };
-  for (const issue of issues) byKind[issue.kind].add(issue.index);
+  for (const issue of issues) {
+    byKind[issue.kind].add(issue.index);
+  }
   return {
     scene: byKind.scene.size,
     character: byKind.character.size,
@@ -248,7 +252,9 @@ export function countAffectedElements(
 
 /** 那句要出现在界面上的话。没有问题时返回 null，调用方直接不渲染。 */
 export function describeDraftIssues(issues: ReadonlyArray<DraftElementIssue>): string | null {
-  if (issues.length === 0) return null;
+  if (issues.length === 0) {
+    return null;
+  }
   const counts = countAffectedElements(issues);
   const parts = /* SAFETY: 类型断言已复核 */ (["scene", "character", "shot"] as const)
     .filter((kind) => counts[kind] > 0)

@@ -9,11 +9,11 @@
 import { useEffect, useRef, useState } from "react";
 import { reconcileInputValues, type WorkflowIOMap } from "~/components/studio/workflow-io";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
-import {
-  type WorkflowModesState,
-  type WorkflowSourceFilter,
+import type {
+  WorkflowModesState,
+  WorkflowSourceFilter,
 } from "~/components/studio/project-canvas/WorkflowNode";
-import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
+import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { vanillaApi } from "~/trpc/vanilla";
 
 /* ── 跨节点共享的列表请求去重(模块级 in-flight;审查)──
@@ -22,21 +22,21 @@ import { vanillaApi } from "~/trpc/vanilla";
  *  刻意不做 TTL 缓存:新建工作流后,后挂载的节点必须看到最新列表。 */
 type WfListItem = {
   id: string;
-  name: string;
-  taskType?: string;
-  sourcePath?: string | null;
   modelTags?: Array<string>;
+  name: string;
+  sourcePath?: string | null;
+  taskType?: string;
 };
-type TagLibItem = { id: string; name: string; count: number };
+type TagLibItem = { count: number; id: string; name: string };
 let sharedListsInflight: Promise<{
-  wfList: Array<WfListItem>;
   modelTagLib: Array<TagLibItem>;
+  wfList: Array<WfListItem>;
 }> | null = null;
 
-export interface UseWorkflowIoArgs {
+export type UseWorkflowIoArgs = {
   d: CanvasNodeData;
   patch: (p: Partial<CanvasNodeData>) => void;
-}
+};
 
 export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
   /* ── 已上传的工作流列表（给 workflow 节点用） ── */
@@ -53,26 +53,31 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
   // 画布节点内的会话级模型筛选（不写 patch，仅当前节点 lifespan 生效）
   const [modelFilter, setModelFilter] = useState<string>("all");
   useEffect(() => {
-    if (d.kind !== "workflow" && d.kind !== "image" && d.kind !== "video" && d.kind !== "picture")
+    if (d.kind !== "workflow" && d.kind !== "image" && d.kind !== "video" && d.kind !== "picture") {
       return;
+    }
     /* 审查修复:跨节点共享列表去重。画布上 N 个 image/workflow 节点
      *  挂载时会各自拉 workflow.list + workflowModel.list(2N 次相同请求)——
      *  模块级 in-flight 去重让并发挂载只发 2 次,且不做 TTL 缓存(不会把
      *  新建工作流的变更挡在过期列表外)。 */
     let alive = true;
-    const apply = (data: { wfList: Array<WfListItem>; modelTagLib: Array<TagLibItem> }) => {
-      if (!alive) return;
+    const apply = (data: { modelTagLib: Array<TagLibItem>; wfList: Array<WfListItem> }) => {
+      if (!alive) {
+        return;
+      }
       setWfList(data.wfList);
       setModelTagLib(data.modelTagLib);
       setWfListLoading(false);
     };
     if (sharedListsInflight) {
       sharedListsInflight.then(apply).catch(() => {
-        if (alive) setWfListLoading(false);
+        if (alive) {
+          setWfListLoading(false);
+        }
       });
     } else {
       const p = (async () => {
-        const data: { wfList: Array<WfListItem>; modelTagLib: Array<TagLibItem> } = {
+        const data: { modelTagLib: Array<TagLibItem>; wfList: Array<WfListItem> } = {
           wfList: [],
           modelTagLib: [],
         };
@@ -80,16 +85,21 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           vanillaApi.workflow.list.query({}),
           vanillaApi.workflowModel.list.query(),
         ]);
-        if (wfRes.status === "fulfilled") data.wfList = wfRes.value.workflows ?? [];
-        if (tagRes.status === "fulfilled" && tagRes.value && Array.isArray(tagRes.value.tags))
+        if (wfRes.status === "fulfilled") {
+          data.wfList = wfRes.value.workflows ?? [];
+        }
+        if (tagRes.status === "fulfilled" && tagRes.value && Array.isArray(tagRes.value.tags)) {
           data.modelTagLib = tagRes.value.tags;
+        }
         return data;
       })();
       sharedListsInflight = p;
       p.then((data) => {
         apply(data);
       }).catch(() => {
-        if (alive) setWfListLoading(false);
+        if (alive) {
+          setWfListLoading(false);
+        }
       });
       void p.finally(() => {
         sharedListsInflight = null;
@@ -129,11 +139,14 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     if (
       (d.kind !== "workflow" && d.kind !== "image" && d.kind !== "video" && d.kind !== "picture") ||
       !d.workflowId
-    )
+    ) {
       return;
+    }
     let alive = true;
     const t = setTimeout(() => {
-      if (!d.workflowId) return;
+      if (!d.workflowId) {
+        return;
+      }
       setWfIOLoading(true);
       /* `detailFull` 而非 `detail`：运行期表单与画布节点同样要的是**富化后**的
        *  workflowIO（type / defaultValue / label / nodeTitle / classType 都由
@@ -144,7 +157,9 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
       void vanillaApi.workflow.detailFull
         .query({ id: d.workflowId })
         .then((tpl) => {
-          if (!alive || !tpl) return;
+          if (!alive || !tpl) {
+            return;
+          }
           setWfIO(tpl.workflowIO ?? null);
           const paramMap =
             /* SAFETY: 类型断言已复核 */ (tpl.paramMap as Record<string, unknown>) ?? null;
@@ -169,10 +184,14 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           setWfModes({ modes, defaultMode });
         })
         .catch(() => {
-          if (alive) setWfIO(null);
+          if (alive) {
+            setWfIO(null);
+          }
         })
         .finally(() => {
-          if (alive) setWfIOLoading(false);
+          if (alive) {
+            setWfIOLoading(false);
+          }
         });
     }, 0);
     return () => {
@@ -193,9 +212,12 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     if (
       (d.kind !== "workflow" && d.kind !== "image" && d.kind !== "video" && d.kind !== "picture") ||
       !wfIO
-    )
+    ) {
       return;
-    if (seededFor.current === d.workflowId) return;
+    }
+    if (seededFor.current === d.workflowId) {
+      return;
+    }
     seededFor.current = d.workflowId ?? null;
     const reconciled = reconcileInputValues(wfIO, d.workflowInputs ?? {});
     patch({ workflowInputs: reconciled });
@@ -211,19 +233,29 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
    *  复用 WorkflowNode 同款过滤谓词（sourceFilter + modelFilter）。wfList 为空
    *  视为「仍在加载」而非「被过滤」，避免挂载瞬间误清空已选工作流。 */
   useEffect(() => {
-    if ((d.kind !== "workflow" && d.kind !== "picture") || !d.workflowId) return;
-    if (wfList.length === 0) return;
+    if ((d.kind !== "workflow" && d.kind !== "picture") || !d.workflowId) {
+      return;
+    }
+    if (wfList.length === 0) {
+      return;
+    }
     // 延出 effect 体（React 19 规则：effect 内不得
     // 同步 setState）。
     const t = setTimeout(() => {
       const stillVisible = wfList
         .filter((workflow) => {
-          if (sourceFilter === "all") return true;
-          if (sourceFilter === "local") return Boolean(workflow.sourcePath);
+          if (sourceFilter === "all") {
+            return true;
+          }
+          if (sourceFilter === "local") {
+            return Boolean(workflow.sourcePath);
+          }
           return !workflow.sourcePath;
         })
         .filter((workflow) => {
-          if (modelFilter === "all") return true;
+          if (modelFilter === "all") {
+            return true;
+          }
           return (workflow.modelTags ?? []).includes(modelFilter);
         })
         .some((workflow) => workflow.id === d.workflowId);

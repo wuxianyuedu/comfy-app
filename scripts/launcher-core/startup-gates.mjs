@@ -45,8 +45,9 @@ export async function runStartupGates(ctx, target) {
 
   // 0) 上一次的孤儿回收（必须在起新进程之前：否则新旧实例抢同一端口）
   const reaped = await ctx.reapStaleSession(root);
-  if (reaped)
+  if (reaped) {
     log(`回收上一次运行遗留的进程树：PID ${reaped.join(", ")}`, "WARN");
+  }
 
   // 1) 预检：环境文件（与 dev.mjs / start.mjs 同判据）+ 工具链
   const envProblem = ctx.checkEnvFile(root);
@@ -64,7 +65,9 @@ export async function runStartupGates(ctx, target) {
   //      只念不改：不写文件、不改退码。启动是人人都会碰到的时刻，而 `env:init`
   //      此前没有任何时刻提醒人去跑它 —— 不经过 `pnpm ship` 的人永远看不到。
   const envHint = ctx.envInitHint(root);
-  if (envHint) log(`环境配置提醒：${envHint}`, "WARN");
+  if (envHint) {
+    log(`环境配置提醒：${envHint}`, "WARN");
+  }
 
   const gateProblem = ctx.runToolchainGate(root);
   if (gateProblem) {
@@ -115,10 +118,7 @@ export async function runStartupGates(ctx, target) {
 
   // 2) 端口（单一事实源：app-port.mjs，绝不在这里重算）
   const port = portOrNull ?? ctx.resolveAppPort(root);
-  log(
-    `使用端口 ${port}（.env 显式值优先，否则按检出路径推导，见 §1.1）`,
-    "INFO",
-  );
+  log(`使用端口 ${port}（.env 显式值优先，否则按检出路径推导，见 §1.1）`, "INFO");
   status("port-check", 0.05, "正在检查端口占用…");
   return { ok: true, port };
 }

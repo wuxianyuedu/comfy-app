@@ -36,12 +36,7 @@ import { Badge } from "~/components/ui/badge";
  * 语义色一律走 token（规范 03 §3.6.2），调用处不写 `bg-emerald-500/12`
  * 这类字面量。
  */
-export type ListBadgeTone =
-  | "neutral"
-  | "success"
-  | "warning"
-  | "danger"
-  | "primary";
+export type ListBadgeTone = "neutral" | "success" | "warning" | "danger" | "primary";
 
 export function ListBadge({
   children,
@@ -50,22 +45,22 @@ export function ListBadge({
   className,
 }: {
   children: React.ReactNode;
-  /** 语义档；缺省中性（`bg-subtle` + `text-ink-faint`）。 */
-  tone?: ListBadgeTone;
+  className?: string;
   /** 悬停说明。文案通常比徽标本身长得多（「未配置：提示词口未落到端口」），
    *  这正是把长文案收进 tooltip、只留短标记的原因。 */
   title?: string;
-  className?: string;
+  /** 语义档；缺省中性（`bg-subtle` + `text-ink-faint`）。 */
+  tone?: ListBadgeTone;
 }) {
   return (
     <Badge
-      size="xs"
-      tone={tone}
-      title={title}
       /* list-badge 视觉契约：**无边框**。Badge cva 的 tone 会带
        * border-X/30，这里用 border-transparent 顶掉（tailwind-merge
        * 后传者胜）；px-1 / py-px / text-4xs / rounded 由 size=xs 给。 */
       className={`border-transparent ${className ?? ""}`}
+      size="xs"
+      title={title}
+      tone={tone}
     >
       {children}
     </Badge>

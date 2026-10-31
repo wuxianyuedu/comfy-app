@@ -7,13 +7,13 @@ import { asRecord } from "~/lib/is-record";
 import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 
 /** 与 use-workshop-pipeline 中 localStorage WorkshopDraft 对齐的线上结构。 */
-export interface WorkshopDraftDto {
-  meta: ProjectMeta;
-  scriptMarkdown: string;
-  scenes: Array<Scene>;
+export type WorkshopDraftDto = {
   characters: Array<Character>;
+  meta: ProjectMeta;
+  scenes: Array<Scene>;
+  scriptMarkdown: string;
   shots: Array<Shot>;
-}
+};
 
 /** 未知值 → 草稿线上结构：逐字段校验类型，损坏字段回退空值（不抛）。
  *
@@ -36,13 +36,12 @@ export function parseDraftDto(raw: unknown): WorkshopDraftDto {
       scriptMarkdown: typeof meta.scriptMarkdown === "string" ? meta.scriptMarkdown : undefined,
     },
     scriptMarkdown: typeof obj.scriptMarkdown === "string" ? obj.scriptMarkdown : "",
-    scenes: Array.isArray(obj.scenes)
-      ? /* SAFETY: 类型断言已复核 */ (obj.scenes as Array<Scene>)
-      : [],
-    characters: Array.isArray(obj.characters)
-      ? /* SAFETY: 类型断言已复核 */ (obj.characters as Array<Character>)
-      : [],
-    shots: Array.isArray(obj.shots) ? /* SAFETY: 类型断言已复核 */ (obj.shots as Array<Shot>) : [],
+    /* SAFETY: 类型断言已复核 */
+    scenes: Array.isArray(obj.scenes) ? (obj.scenes as Array<Scene>) : [],
+    /* SAFETY: 类型断言已复核 */
+    characters: Array.isArray(obj.characters) ? (obj.characters as Array<Character>) : [],
+    /* SAFETY: 类型断言已复核 */
+    shots: Array.isArray(obj.shots) ? (obj.shots as Array<Shot>) : [],
   };
 }
 

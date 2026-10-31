@@ -11,30 +11,23 @@ import { Button } from "~/components/ui/button";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { setImageFeedback } from "~/lib/history-detail-actions";
 
-export interface ImageFeedbackRowProps {
+export type ImageFeedbackRowProps = {
   image: {
-    id: string;
     humanRating: number | null;
+    id: string;
     isFavorite: boolean;
   };
-}
+};
 
 export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
-  const [rating, setRatingState] = useState<number | null>(
-    image.humanRating ?? null,
-  );
+  const [rating, setRatingState] = useState<number | null>(image.humanRating ?? null);
   const [fav, setFav] = useState(image.isFavorite);
   const [error, setError] = useState("");
 
   // 反馈通道（~/lib/async-action 的形状）：成功清掉行内错误块，失败落一句话。
-  const report: ActionReport = (kind, detail) =>
-    setError(kind === "err" ? detail : "");
+  const report: ActionReport = (kind, detail) => setError(kind === "err" ? detail : "");
 
-  const save = async (
-    nextRating: number | null,
-    nextFav: boolean,
-    rollback: () => void,
-  ) => {
+  const save = async (nextRating: number | null, nextFav: boolean, rollback: () => void) => {
     const result = await runAsyncAction(
       () =>
         setImageFeedback(image.id, {
@@ -43,7 +36,9 @@ export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
         }),
       { report, failureText: "保存失败", readResultEnvelope: false },
     );
-    if (!result.ok) rollback();
+    if (!result.ok) {
+      rollback();
+    }
   };
 
   const pickRating = (star: number) => {
@@ -65,41 +60,39 @@ export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
       <div className="flex items-center">
         {[1, 2, 3, 4, 5].map((star) => (
           <Button
+            aria-label={`${star} 星`}
+            className="size-5"
             key={star}
+            onClick={() => pickRating(star)}
+            size="icon-sm"
             type="button"
             variant="ghost"
-            size="icon-sm"
-            aria-label={`${star} 星`}
-            onClick={() => pickRating(star)}
-            className="size-5"
           >
             <Star
-              data-icon="inline-start"
-              size={11}
               className={
                 rating !== null && star <= rating
                   ? "fill-warning text-warning"
                   : "text-ink-faintest"
               }
+              data-icon="inline-start"
+              size={11}
             />
           </Button>
         ))}
-        {rating !== null && (
-          <span className="text-ink-faintest text-2xs">{rating}</span>
-        )}
+        {rating !== null && <span className="text-ink-faintest text-2xs">{rating}</span>}
       </div>
       <Button
+        aria-label={fav ? "取消收藏" : "收藏"}
+        className="size-5"
+        onClick={toggleFav}
+        size="icon-sm"
         type="button"
         variant="ghost"
-        size="icon-sm"
-        aria-label={fav ? "取消收藏" : "收藏"}
-        onClick={toggleFav}
-        className="size-5"
       >
         <Bookmark
+          className={fav ? "fill-primary text-primary" : "text-ink-faintest"}
           data-icon="inline-start"
           size={12}
-          className={fav ? "fill-primary text-primary" : "text-ink-faintest"}
         />
       </Button>
       {error && <span className="text-destructive text-2xs">{error}</span>}

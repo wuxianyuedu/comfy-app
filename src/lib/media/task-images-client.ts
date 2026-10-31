@@ -21,11 +21,11 @@
 import { z } from "zod";
 import { vanillaApi } from "~/trpc/vanilla";
 
-export interface TaskGalleryImage {
+export type TaskGalleryImage = {
   id: string;
-  localPath: string;
   isCover: boolean;
-}
+  localPath: string;
+};
 
 /**
  * 服务端 `taskImage` 关系行里**本客户端真正依赖的那几列**。

@@ -86,7 +86,9 @@ function literalPrefixOf(re: RegExp): string | null {
     /* 转义符把下一个字符当**字面量**（`\/` 是斜杠、`\.` 是点），不是通配。 */
     if (ch === "\\") {
       const next = src[i + 1];
-      if (next === undefined) break;
+      if (next === undefined) {
+        break;
+      }
       out += next;
       i += 1;
       continue;
@@ -97,7 +99,9 @@ function literalPrefixOf(re: RegExp): string | null {
     }
     out += ch;
   }
-  if (!sawWildcard) return out;
+  if (!sawWildcard) {
+    return out;
+  }
   const cut = out.lastIndexOf("/");
   return cut < 0 ? null : out.slice(0, cut);
 }
@@ -120,10 +124,16 @@ const filesUnderCache = new Map<string, Array<string>>();
  */
 function filesMatchedBy(re: RegExp): Array<string> {
   const prefix = literalPrefixOf(re);
-  if (prefix === null || prefix === "") return [];
+  if (prefix === null || prefix === "") {
+    return [];
+  }
   const abs = path.join(process.cwd(), prefix);
-  if (!fs.existsSync(abs)) return [];
-  if (fs.statSync(abs).isFile()) return re.test(prefix) ? [prefix] : [];
+  if (!fs.existsSync(abs)) {
+    return [];
+  }
+  if (fs.statSync(abs).isFile()) {
+    return re.test(prefix) ? [prefix] : [];
+  }
   let listed = filesUnderCache.get(prefix);
   if (listed === undefined) {
     listed = filesUnder(prefix);
@@ -352,8 +362,8 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     expect([...(gate?.globs ?? [])].sort()).toEqual([".storybook/**", "src/**"]);
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fmt = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
-      isScanned: (rel: string) => boolean;
       IGNORE_GLOBS: ReadonlyArray<string>;
+      isScanned: (rel: string) => boolean;
     };
     for (const rel of ["src/lib/a.ts", "src/app/b.tsx", ".storybook/preview.tsx"]) {
       expect(fmt.isScanned(rel), `判据面应当包含 ${rel}`).toBe(true);

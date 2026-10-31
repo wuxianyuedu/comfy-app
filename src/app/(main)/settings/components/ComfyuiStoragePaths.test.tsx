@@ -11,24 +11,22 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
 import { ComfyuiStoragePaths } from "./ComfyuiStoragePaths";
 
-function storageOf(
-  overrides: Partial<DesktopStoragePaths> = {},
-): DesktopStoragePaths {
+function storageOf(overrides: Partial<DesktopStoragePaths> = {}): DesktopStoragePaths {
   const dir = (path: string, source: string | null = null, exists = true) => ({
     path,
     exists,
     source,
   });
   return {
-    instanceRoot: "D:\\installs\\ComfyUI2",
-    baseDir: "D:\\installs\\ComfyUI2\\ComfyUI",
+    instanceRoot: String.raw`D:\installs\ComfyUI2`,
+    baseDir: String.raw`D:\installs\ComfyUI2\ComfyUI`,
     extraModelPathsFile: null,
-    modelDir: dir("D:\\installs\\ComfyUI2\\ComfyUI\\models"),
-    sharedModelDirs: [dir("D:\\shared\\models", "comfyui_shared")],
-    inputDir: dir("D:\\shared\\in", "--input-directory", false),
+    modelDir: dir(String.raw`D:\installs\ComfyUI2\ComfyUI\models`),
+    sharedModelDirs: [dir(String.raw`D:\shared\models`, "comfyui_shared")],
+    inputDir: dir(String.raw`D:\shared\in`, "--input-directory", false),
     sharedInputDirs: [],
-    outputDir: dir("D:\\installs\\ComfyUI2\\ComfyUI\\output"),
-    sharedOutputDirs: [dir("D:\\shared\\output", "comfyui_shared")],
+    outputDir: dir(String.raw`D:\installs\ComfyUI2\ComfyUI\output`),
+    sharedOutputDirs: [dir(String.raw`D:\shared\output`, "comfyui_shared")],
     ...overrides,
   };
 }
@@ -53,9 +51,9 @@ describe("ComfyuiStoragePaths", () => {
     ]) {
       expect(screen.getByText(label)).toBeTruthy();
     }
-    expect(
-      screen.getByTitle("D:\\installs\\ComfyUI2\\ComfyUI\\models").textContent,
-    ).toBe("D:/installs/ComfyUI2/ComfyUI/models");
+    expect(screen.getByTitle(String.raw`D:\installs\ComfyUI2\ComfyUI\models`).textContent).toBe(
+      "D:/installs/ComfyUI2/ComfyUI/models",
+    );
   });
 
   it("覆盖来源与「目录不存在」都有标注", () => {

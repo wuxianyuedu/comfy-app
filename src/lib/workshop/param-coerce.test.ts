@@ -37,7 +37,7 @@ describe("paramNumber", () => {
   it("解析失败 / 非有限值落回缺省", () => {
     expect(paramNumber("", 28)).toBe(28);
     expect(paramNumber("abc", 28)).toBe(28);
-    expect(paramNumber(NaN, 28)).toBe(28);
+    expect(paramNumber(Number.NaN, 28)).toBe(28);
     expect(paramNumber(Infinity, 28)).toBe(28);
     expect(paramNumber({ value: 7 }, 28)).toBe(28);
     expect(paramNumber([7], 28)).toBe(28);

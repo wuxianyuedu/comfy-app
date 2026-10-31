@@ -18,63 +18,75 @@ import { Hint } from "~/components/ui/hint";
  *  skipped→warning（跳过 = 待办）、error→destructive（失败）。 */
 function logBadge(kind: ExtractLogEntry["kind"]): string {
   switch (kind) {
-    case "init":
+    case "init": {
       return "bg-primary-soft text-primary";
-    case "request":
+    }
+    case "request": {
       return "bg-info/15 text-info-strong";
-    case "output":
+    }
+    case "output": {
       return "bg-success/15 text-success-strong";
-    case "result":
+    }
+    case "result": {
       return "bg-success/15 text-success-strong";
-    case "skipped":
+    }
+    case "skipped": {
       return "bg-warning/15 text-warning-strong";
-    case "error":
+    }
+    case "error": {
       return "bg-destructive/15 text-destructive";
+    }
   }
 }
 
 function logBadgeLabel(kind: ExtractLogEntry["kind"]): string {
   switch (kind) {
-    case "init":
+    case "init": {
       return "开始";
-    case "request":
+    }
+    case "request": {
       return "模型输入";
-    case "output":
+    }
+    case "output": {
       return "模型输出";
-    case "result":
+    }
+    case "result": {
       return "完成";
-    case "skipped":
+    }
+    case "skipped": {
       return "跳过";
-    case "error":
+    }
+    case "error": {
       return "错误";
+    }
   }
 }
 
-interface ExtractToolbarProps {
-  /** 区块标题，如「从剧本提取角色」 */
-  title: string;
+type ExtractToolbarProps = {
+  busy: boolean;
   /** 完整下拉选项值（local::<model> | remote::<model>） */
   channelValue: string;
+  errorText?: string;
+  /** 本次提取的结构化执行日志（模型输入/输出/结果/错误），跑完仍展示 */
+  executionLog?: Array<ExtractLogEntry>;
+  /** 无剧本文本等情况下禁用提取(导入仍可用) */
+  extractDisabled?: boolean;
+  extractDisabledReason?: string;
+  importAccept?: string;
+  /** 传了环节名（character / storyboard）就提供「历史」入口：按需拉取
+   * log/workshop/ 里落盘的历史日志（跨刷新 / 重启可回看）。 */
+  logStage?: GenerationLogStage;
   onChannelValueChange: (value: string) => void;
   onExtract: () => void;
   /** 外部导入文件回调(.md/.txt/.json) */
   onImportFile: (file: File) => void;
-  importAccept?: string;
-  busy: boolean;
   /** 实时提取过程（本地/远端通道时流式回传的模型输出） */
   progressText?: string;
   /** 成功/结果提示 */
   statusText?: string;
-  errorText?: string;
-  /** 本次提取的结构化执行日志（模型输入/输出/结果/错误），跑完仍展示 */
-  executionLog?: Array<ExtractLogEntry>;
-  /** 传了环节名（character / storyboard）就提供「历史」入口：按需拉取
-   * log/workshop/ 里落盘的历史日志（跨刷新 / 重启可回看）。 */
-  logStage?: GenerationLogStage;
-  /** 无剧本文本等情况下禁用提取(导入仍可用) */
-  extractDisabled?: boolean;
-  extractDisabledReason?: string;
-}
+  /** 区块标题，如「从剧本提取角色」 */
+  title: string;
+};
 
 /** 剧本提取区块：分组模型下拉（工具/本地/远端）+ 提取按钮 + 外部导入。
  * 选完模型点「提取」即开始；模型通道的提取过程实时展示在下方。 */
@@ -104,9 +116,13 @@ export function ExtractToolbar({
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [history, setHistory] = React.useState<Array<PersistableGenerationLog> | null>(null);
   const loadHistory = () => {
-    if (!logStage) return;
+    if (!logStage) {
+      return;
+    }
     setHistoryOpen(true);
-    if (history) return;
+    if (history) {
+      return;
+    }
     void fetchGenerationLogs(logStage, 100).then(setHistory);
   };
 
@@ -116,24 +132,24 @@ export function ExtractToolbar({
         <span className="text-primary flex items-center text-xs font-medium">{title}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <ExtractModelSelect value={channelValue} onChange={onChannelValueChange} />
+        <ExtractModelSelect onChange={onChannelValueChange} value={channelValue} />
         <Hint label={extractDisabled ? extractDisabledReason : undefined} wrap>
           <Button
-            variant="primary-solid"
-            size="xs"
-            onClick={onExtract}
-            disabled={busy || extractDisabled}
             className="h-auto rounded-lg px-3 py-1.5"
+            disabled={busy || extractDisabled}
+            onClick={onExtract}
+            size="xs"
+            variant="primary-solid"
           >
             {busy ? "提取中…" : "提取"}
           </Button>
         </Hint>
         <Button
-          variant="outline"
-          size="xs"
-          onClick={importPicker.open}
-          disabled={busy}
           className="border-border text-primary hover:bg-subtle h-auto rounded-lg px-3 py-1.5"
+          disabled={busy}
+          onClick={importPicker.open}
+          size="xs"
+          variant="outline"
         >
           外部导入
         </Button>
@@ -142,9 +158,9 @@ export function ExtractToolbar({
       {/* 实时流式输出（提取中单独展示，便于跟随 token 累积） */}
       {busy && progressText && (
         <Disclosure
+          className="text-primary bg-bg/60 text-2xs mt-2 rounded-lg px-3 py-2"
           defaultOpen
           marker="caret"
-          className="text-primary bg-bg/60 text-2xs mt-2 rounded-lg px-3 py-2"
           trigger="提取过程"
         >
           <pre className="text-muted-foreground text-2xs mt-1 max-h-40 overflow-y-auto leading-relaxed break-all whitespace-pre-wrap">
@@ -173,14 +189,14 @@ export function ExtractToolbar({
         <div className="border-border bg-bg/40 mt-2 rounded-lg border px-3 py-2">
           <div className="text-primary text-2xs flex items-center gap-2 font-medium">
             <Disclosure
-              open={busy ? true : undefined}
               marker="caret"
+              open={busy ? true : undefined}
               panelClassName="text-2xs"
               trigger={`执行日志（${executionLog.length} 条）`}
             >
               <ul className="mt-2 flex flex-col gap-2">
                 {executionLog.map((entry, i) => (
-                  <li key={`${entry.ts}-${i}`} className="bg-surface rounded-lg px-2.5 py-2">
+                  <li className="bg-surface rounded-lg px-2.5 py-2" key={`${entry.ts}-${i}`}>
                     <div className="flex items-center gap-2">
                       <span
                         className={`text-3xs rounded px-1.5 py-0.5 font-medium ${logBadge(entry.kind)}`}
@@ -205,9 +221,9 @@ export function ExtractToolbar({
             </Disclosure>
             {logStage && (
               <Button
-                variant="link"
-                onClick={() => loadHistory()}
                 className="text-muted-foreground hover:text-primary text-3xs h-auto shrink-0 p-0 font-normal underline underline-offset-2"
+                onClick={() => loadHistory()}
+                variant="link"
               >
                 历史
               </Button>
@@ -225,7 +241,7 @@ export function ExtractToolbar({
               ) : (
                 <ul className="mt-1.5 flex max-h-48 flex-col gap-1.5 overflow-y-auto">
                   {history.map((entry, i) => (
-                    <li key={`${entry.ts}-${i}`} className="bg-surface rounded-lg px-2.5 py-2">
+                    <li className="bg-surface rounded-lg px-2.5 py-2" key={`${entry.ts}-${i}`}>
                       <div className="flex items-center gap-2">
                         <span className="bg-primary-soft text-primary text-3xs rounded px-1.5 py-0.5 font-medium">
                           {entry.kind}

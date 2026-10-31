@@ -17,39 +17,39 @@
 /** 参与包围盒计算的节点最小结构。`wfNode` / `wfSubgraph` 节点与纯数据对象都能满足。 */
 import { clamp } from "~/lib/clamp";
 
-export interface FitBoundsNode {
-  id?: string;
-  position: { x: number; y: number };
-  measured?: { width?: number; height?: number };
-  width?: number;
+export type FitBoundsNode = {
   height?: number;
-  style?: { width?: number | string; height?: number | string };
-}
+  id?: string;
+  measured?: { height?: number; width?: number };
+  position: { x: number; y: number };
+  style?: { height?: number | string; width?: number | string };
+  width?: number;
+};
 
-export interface Bounds {
-  minX: number;
+export type Bounds = {
   maxX: number;
-  minY: number;
   maxY: number;
-}
+  minX: number;
+  minY: number;
+};
 
-export interface ViewportRect {
-  width: number;
+export type ViewportRect = {
   height: number;
-}
+  width: number;
+};
 
-export interface ViewportPadding {
+export type ViewportPadding = {
   /** 左右各留出的比例，0.12 → 内容占 76% 宽。 */
   x: number;
   /** 上下各留出的比例。 */
   y: number;
-}
+};
 
-export interface FitViewport {
+export type FitViewport = {
   x: number;
   y: number;
   zoom: number;
-}
+};
 
 export const DEFAULT_VIEWPORT_PADDING: ViewportPadding = { x: 0.12, y: 0.12 };
 /** 缩放上限：单节点子图不该被放到撑满屏幕。 */
@@ -74,7 +74,7 @@ function toFiniteNumber(value: unknown): number | null {
  */
 export function normalizeBounds(
   nodes: ReadonlyArray<FitBoundsNode>,
-  fallbackSize: { width: number; height: number },
+  fallbackSize: { height: number; width: number },
 ): Bounds | null {
   let minX = Infinity;
   let maxX = -Infinity;
@@ -93,15 +93,27 @@ export function normalizeBounds(
 
     const x = node.position.x;
     const y = node.position.y;
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      continue;
+    }
 
-    if (x < minX) minX = x;
-    if (x + width > maxX) maxX = x + width;
-    if (y < minY) minY = y;
-    if (y + height > maxY) maxY = y + height;
+    if (x < minX) {
+      minX = x;
+    }
+    if (x + width > maxX) {
+      maxX = x + width;
+    }
+    if (y < minY) {
+      minY = y;
+    }
+    if (y + height > maxY) {
+      maxY = y + height;
+    }
   }
 
-  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return null;
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+    return null;
+  }
   return { minX, maxX, minY, maxY };
 }
 
@@ -113,12 +125,14 @@ export function computeFitViewport(
   bounds: Bounds | null,
   container: ViewportRect,
   options?: {
-    padding?: ViewportPadding;
-    minZoom?: number;
     maxZoom?: number;
+    minZoom?: number;
+    padding?: ViewportPadding;
   },
 ): FitViewport | null {
-  if (!bounds) return null;
+  if (!bounds) {
+    return null;
+  }
   const padding = options?.padding ?? DEFAULT_VIEWPORT_PADDING;
   const minZoom = options?.minZoom ?? DEFAULT_MIN_FIT_ZOOM;
   const maxZoom = options?.maxZoom ?? DEFAULT_MAX_FIT_ZOOM;
@@ -150,7 +164,7 @@ export function computeFitViewport(
  * 用法：构造一次，然后在每帧调用 `next()`；返回该帧应当下发的包围盒，
  * 以及是否还需要继续（false 表示已收敛或到达护栏）。
  */
-export interface FitSettleStepper {
+export type FitSettleStepper = {
   /** 推进一帧：`sample()` 返回当前这一帧真实量到的节点。 */
   next(sample: () => ReadonlyArray<FitBoundsNode>): {
     bounds: Bounds | null;
@@ -158,16 +172,16 @@ export interface FitSettleStepper {
   };
   /** 已推进的帧数（含首次采样）。 */
   rounds(): number;
-}
+};
 
-export interface FitSettleOptions {
+export type FitSettleOptions = {
   /** 参与包围盒的节点都没量到尺寸时的兜底尺寸。 */
-  fallbackSize: { width: number; height: number };
-  /** 连续多少帧范围不再扩大就认为收敛。 */
-  settleRounds: number;
+  fallbackSize: { height: number; width: number };
   /** 帧数护栏，避免测量始终不稳时无限重算。 */
   maxAttempts: number;
-}
+  /** 连续多少帧范围不再扩大就认为收敛。 */
+  settleRounds: number;
+};
 
 export function createFitSettleStepper(options: FitSettleOptions): FitSettleStepper {
   let lastSpan = -1;
@@ -212,14 +226,14 @@ export function createFitSettleStepper(options: FitSettleOptions): FitSettleStep
  * `markPending(key)` 在排程时登记，`markSettled(key)` 才在真正下发视口后调用。
  * 同一 key 的 pending 状态允许被重复排程（帧被取消后重排），不会吃掉这次聚焦。
  */
-export interface FitOnceScheduler {
+export type FitOnceScheduler = {
   /** 这份图是否已经**下发**过自动聚焦（是 → 无需再排程）。 */
   isSettled(key: string): boolean;
   /** 排程这次聚焦：登记 pending。返回 false 表示这份图已下发过，调用方应放弃。 */
   markPending(key: string): boolean;
   /** 真正下发视口后调用：把这份图记为已聚焦（并清掉 pending）。 */
   markSettled(key: string): void;
-}
+};
 
 export function createFitOnceScheduler(): FitOnceScheduler {
   const settled = new Set<string>();
@@ -227,7 +241,9 @@ export function createFitOnceScheduler(): FitOnceScheduler {
   return {
     isSettled: (key) => settled.has(key),
     markPending: (key) => {
-      if (settled.has(key)) return false;
+      if (settled.has(key)) {
+        return false;
+      }
       pending.add(key);
       return true;
     },

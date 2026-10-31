@@ -27,7 +27,7 @@
  * `node <vitest入口> run --maxWorkers=4 <files…>`（`run-affected-tests.mjs`），
  * **没有 `--reporter=json`、没有 `--outputFile`**。也就是说：
  *
- *   写 `ctx.task.meta.xxx = …` 而没有人带 `--reporter=json` 去跑 —— 
+ *   写 `ctx.task.meta.xxx = …` 而没有人带 `--reporter=json` 去跑 ——
  *   那些数据落进**空气**，一个字都不会被任何人看见，而表面上代码写得像
  *   「已经登记了」。这与 §11.13.1 / §11.18.3.1 / §11.21.3 是同一族：
  *   **判据在场 ≠ 判据在跑** —— 这次「判据」是一份写进 task 的元数据。
@@ -53,11 +53,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -105,8 +101,11 @@ function maskNonCode(src) {
     const ch = src[i];
     const next = src[i + 1];
     if (mode === "line") {
-      if (ch === "\n") mode = "code";
-      else out[i] = " ";
+      if (ch === "\n") {
+        mode = "code";
+      } else {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -117,7 +116,9 @@ function maskNonCode(src) {
         i += 2;
         mode = "code";
       } else {
-        if (ch !== "\n") out[i] = " ";
+        if (ch !== "\n") {
+          out[i] = " ";
+        }
         i += 1;
       }
       continue;
@@ -130,8 +131,11 @@ function maskNonCode(src) {
         i += 2;
         continue;
       }
-      if (ch === quote) mode = "code";
-      else out[i] = " ";
+      if (ch === quote) {
+        mode = "code";
+      } else {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -157,7 +161,9 @@ function maskNonCode(src) {
         i += 2;
         continue;
       }
-      if (ch !== "\n") out[i] = " ";
+      if (ch !== "\n") {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -193,12 +199,15 @@ function maskNonCode(src) {
       continue;
     }
     if (stack.at(-1) === "interp") {
-      if (ch === "{") braceDepth += 1;
-      else if (ch === "}") {
+      if (ch === "{") {
+        braceDepth += 1;
+      } else if (ch === "}") {
         if (braceDepth === 0) {
           stack.pop();
           mode = "tmpl";
-        } else braceDepth -= 1;
+        } else {
+          braceDepth -= 1;
+        }
       }
     }
     i += 1;
@@ -250,7 +259,9 @@ function readLedger() {
  */
 function scanFile(abs) {
   const raw = readForScan(abs);
-  if (raw === null) return null;
+  if (raw === null) {
+    return null;
+  }
   const masked = maskNonCode(raw);
   const hitLines = [];
   for (const m of masked.matchAll(TASK_META_SITE_RE)) {
@@ -270,7 +281,9 @@ function main() {
       vanished += 1;
       continue;
     }
-    for (const line of hitLines) sites.push({ rel, line });
+    for (const line of hitLines) {
+      sites.push({ rel, line });
+    }
   }
   /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。 */
   const note = vanishedNote(vanished);
@@ -299,10 +312,11 @@ function main() {
     console.error(
       (REPORT_ONLY
         ? `[task-meta] 盘点：${sites.length} 处站点、无消费方登记（--report 不判失败）`
-        : `[ERROR] 有 ${sites.length} 处 \`task.meta\` 站点，但 ${LEDGER} 里没有消费方`) +
-        "：\n",
+        : `[ERROR] 有 ${sites.length} 处 \`task.meta\` 站点，但 ${LEDGER} 里没有消费方`) + "：\n",
     );
-    for (const s of sites) console.error(`  · ${s.rel}:${s.line}`);
+    for (const s of sites) {
+      console.error(`  · ${s.rel}:${s.line}`);
+    }
     console.error(
       "\n`task.meta` 是**唯一**能从 CLI 那侧读到的通道（实测自定义键原样落进\n" +
         "`--reporter=json` 的报告、绿的用例也带），但门禁链跑 vitest 的参数里\n" +
@@ -326,6 +340,8 @@ function main() {
 
 /* 只有作为脚本运行才执行并定退出码；被 `require` 时（判据自测要进程内调
    `scanFile`）不许把宿主进程一起带走。 */
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}
 
 module.exports = { scanFile };

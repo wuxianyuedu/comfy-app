@@ -54,13 +54,7 @@ export const DoneVersusRunning: Story = {
   render: (args) => (
     <div className="flex flex-col gap-2">
       <WorkshopStageItem {...args} label="剧本" ordinal={1} ratio={1} />
-      <WorkshopStageItem
-        {...args}
-        label="角色卡"
-        ordinal={2}
-        ratio={0.4}
-        isCurrent
-      />
+      <WorkshopStageItem {...args} isCurrent label="角色卡" ordinal={2} ratio={0.4} />
       <WorkshopStageItem {...args} label="场景分镜" ordinal={3} ratio={0} />
     </div>
   ),
@@ -76,37 +70,33 @@ export const BothLayouts: Story = {
   render: (args) => (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-ink-muted mb-2 text-[11px]">
-          横向（阶段条，flex-1）
-        </p>
+        <p className="text-ink-muted mb-2 text-[11px]">横向（阶段条，flex-1）</p>
         <div className="flex items-stretch gap-2">
           {STAGE_DEFS.map((stage, i) => (
             <WorkshopStageItem
               key={stage.id}
               {...args}
+              className="flex-1"
+              isCurrent={i === 2}
               label={stage.label}
               ordinal={i + 1}
               ratio={i < 2 ? 1 : i === 2 ? 0.5 : 0}
-              isCurrent={i === 2}
-              className="flex-1"
             />
           ))}
         </div>
       </div>
       <div>
-        <p className="text-ink-muted mb-2 text-[11px]">
-          竖向（阶段轨道，w-full）
-        </p>
+        <p className="text-ink-muted mb-2 text-[11px]">竖向（阶段轨道，w-full）</p>
         <div className="flex w-64 flex-col gap-2">
           {STAGE_DEFS.map((stage, i) => (
             <WorkshopStageItem
               key={stage.id}
               {...args}
+              className="w-full"
+              isCurrent={i === 2}
               label={stage.label}
               ordinal={i + 1}
               ratio={i < 2 ? 1 : i === 2 ? 0.5 : 0}
-              isCurrent={i === 2}
-              className="w-full"
             />
           ))}
         </div>

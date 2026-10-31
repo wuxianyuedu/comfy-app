@@ -15,24 +15,24 @@ import { Icon } from "~/components/ui/icon";
 import { SelectMenu } from "~/components/ui/select-menu";
 import type { SourceFilter, TypeFilter } from "./workflow-library-config";
 
-export interface ModelTagCount {
+export type ModelTagCount = {
+  count: number;
   id: string;
   name: string;
-  count: number;
-}
+};
 
-interface WorkflowLibraryFiltersProps {
-  sourceFilter: SourceFilter;
-  onSourceFilterChange: (v: SourceFilter) => void;
-  sourceCounts: { all: number; local: number; online: number };
-  typeFilter: TypeFilter;
-  onTypeFilterChange: (v: TypeFilter) => void;
-  typeCounts: { all: number; image: number; video: number; audio: number };
+type WorkflowLibraryFiltersProps = {
   modelFilter: string;
-  onModelFilterChange: (v: string) => void;
   modelTags: Array<ModelTagCount>;
   onManageModels: () => void;
-}
+  onModelFilterChange: (v: string) => void;
+  onSourceFilterChange: (v: SourceFilter) => void;
+  onTypeFilterChange: (v: TypeFilter) => void;
+  sourceCounts: { all: number; local: number; online: number };
+  sourceFilter: SourceFilter;
+  typeCounts: { all: number; audio: number; image: number; video: number };
+  typeFilter: TypeFilter;
+};
 
 const SOURCE_OPTIONS = /* SAFETY: 类型断言已复核 */ ["all", "local", "online"] as const;
 const SOURCE_LABELS: Record<SourceFilter, string> = {
@@ -81,13 +81,9 @@ export function WorkflowLibraryFilters({
   onManageModels,
 }: WorkflowLibraryFiltersProps) {
   return (
-    <div data-testid="workflow-library-filter-row" className="flex flex-nowrap items-center gap-2">
+    <div className="flex flex-nowrap items-center gap-2" data-testid="workflow-library-filter-row">
       <SelectMenu
-        value={sourceFilter}
-        onChange={(v) => onSourceFilterChange(/* SAFETY: 类型断言已复核 */ v as SourceFilter)}
-        options={[...SOURCE_OPTIONS]}
         className={TRIGGER_CLS}
-        popoverMinWidth={150}
         labels={Object.fromEntries(
           SOURCE_OPTIONS.map((key) => [
             key,
@@ -105,14 +101,14 @@ export function WorkflowLibraryFilters({
             </span>,
           ]),
         )}
+        onChange={(v) => onSourceFilterChange(/* SAFETY: 类型断言已复核 */ v as SourceFilter)}
+        options={[...SOURCE_OPTIONS]}
+        popoverMinWidth={150}
+        value={sourceFilter}
       />
 
       <SelectMenu
-        value={typeFilter}
-        onChange={(v) => onTypeFilterChange(/* SAFETY: 类型断言已复核 */ v as TypeFilter)}
-        options={[...TYPE_OPTIONS]}
         className={TRIGGER_CLS}
-        popoverMinWidth={140}
         labels={Object.fromEntries(
           TYPE_OPTIONS.map((key) => [
             key,
@@ -132,15 +128,14 @@ export function WorkflowLibraryFilters({
             </span>,
           ]),
         )}
+        onChange={(v) => onTypeFilterChange(/* SAFETY: 类型断言已复核 */ v as TypeFilter)}
+        options={[...TYPE_OPTIONS]}
+        popoverMinWidth={140}
+        value={typeFilter}
       />
 
       <SelectMenu
-        value={modelFilter}
-        onChange={(v) => onModelFilterChange(v)}
-        options={["all", ...modelTags.map((tag) => tag.name)]}
         className={TRIGGER_CLS}
-        popoverMinWidth={160}
-        placeholder="全部模型"
         labels={{
           all: (
             <span className="flex items-center justify-between gap-2">
@@ -158,15 +153,20 @@ export function WorkflowLibraryFilters({
             ]),
           ),
         }}
+        onChange={(v) => onModelFilterChange(v)}
+        options={["all", ...modelTags.map((tag) => tag.name)]}
+        placeholder="全部模型"
+        popoverMinWidth={160}
+        value={modelFilter}
       />
 
       <Hint label="管理模型标签库">
         <Button
-          variant="outline"
-          onClick={onManageModels}
           className="border-border-strong text-ink-strong hover:bg-subtle h-auto shrink-0 gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap"
+          onClick={onManageModels}
+          variant="outline"
         >
-          <Icon data-icon="inline-start" name="tag" className="size-3.5" />
+          <Icon className="size-3.5" data-icon="inline-start" name="tag" />
           管理模型
         </Button>
       </Hint>

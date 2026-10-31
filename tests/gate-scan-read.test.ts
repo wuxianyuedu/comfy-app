@@ -61,14 +61,14 @@ const READER_PATH = fileURLToPath(new URL("../scripts/gate-scan-read.cjs", impor
 const SCRIPTS_DIR = fileURLToPath(new URL("../scripts", import.meta.url));
 
 type ScanReader = {
-  readForScan: (abs: string) => string | null;
   readdirForScan: (dir: string) => Array<Dirent> | null;
+  readForScan: (abs: string) => string | null;
+  vanishedNote: (count: number) => string;
   walkForScan: (
     dir: string,
     fileRe: RegExp,
     opts?: { skipDirs?: Set<string>; skipHiddenDirs?: boolean },
   ) => Array<string>;
-  vanishedNote: (count: number) => string;
 };
 
 const reader = /* SAFETY: 类型断言已复核 */ requireCjs(READER_PATH) as ScanReader;
@@ -255,12 +255,15 @@ function enumeratesRepoRoot(src: string): boolean {
   if (
     /\b(readdir\w*|walk\w*|collect\w*)\s*\(\s*"\."\s*[,)]/.test(src) ||
     /\)\s*\(\s*"\."\s*\)/.test(src)
-  )
+  ) {
     return true;
+  }
   /* ② `path.join(ROOT)` / `path.join(ROOT, "")` —— 不带子目录名即仓库根本身。
      ⚠️ 刻意**不**认 `path.join(ROOT, <变量>)`：那是各处遍历的通用骨架（`SCAN_DIR`
      的值在另一个常量里），按它判会把 22 份扫 `src/` 的判据全扫进来。 */
-  if (/path\.join\(\s*ROOT\s*(,\s*""\s*)?\)/.test(src)) return true;
+  if (/path\.join\(\s*ROOT\s*(,\s*""\s*)?\)/.test(src)) {
+    return true;
+  }
   return false;
 }
 
@@ -347,8 +350,8 @@ describe("立案现场回归 —— 从仓库根递归的判据撞上并发删�
     } catch (err) {
       const e = /* SAFETY: 类型断言已复核 */ err as {
         status?: number;
-        stdout?: string;
         stderr?: string;
+        stdout?: string;
       };
       code = typeof e.status === "number" ? e.status : 1;
       output = `${e.stdout ?? ""}${e.stderr ?? ""}`;

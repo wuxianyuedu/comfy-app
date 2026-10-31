@@ -21,7 +21,7 @@ import {
   serializeWorkspaceTabs,
   type WorkspaceTabsState,
 } from "../workspace-tabs";
-import { type WorkspaceView } from "../NavItems";
+import type { WorkspaceView } from "../NavItems";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 
@@ -49,31 +49,37 @@ export const WORKSPACE_VIEWS: Array<WorkspaceView> = [
 ];
 
 function readTabsState(): WorkspaceTabsState | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined") {
+    return null;
+  }
   const raw = sessionStorage.getItem(WS_TABS_KEY);
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   return parseWorkspaceTabs(raw, WORKSPACE_VIEWS);
 }
 
 function writeTabsState(state: WorkspaceTabsState): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") {
+    return;
+  }
   sessionStorage.setItem(WS_TABS_KEY, serializeWorkspaceTabs(state));
 }
 
-export interface WorkspaceTabsController {
-  /** 页签列表（渲染页签条用）。 */
-  tabs: WorkspaceTabsState["tabs"];
+export type WorkspaceTabsController = {
   /** 当前页签 key。 */
   activeKey: string;
-  /** 当前视图 —— 组件里那一大段 `switch (viewMode)` 的判据来源。 */
-  viewMode: WorkspaceView;
+  /** 页签条上点关闭。 */
+  closeTab: (key: string) => void;
   /** 打开/聚焦一个视图页签（侧栏、首页入口、应用事件都走这里）。 */
   navigateTo: (view: WorkspaceView) => void;
   /** 页签条上点某一页。 */
   selectTab: (key: string) => void;
-  /** 页签条上点关闭。 */
-  closeTab: (key: string) => void;
-}
+  /** 页签列表（渲染页签条用）。 */
+  tabs: WorkspaceTabsState["tabs"];
+  /** 当前视图 —— 组件里那一大段 `switch (viewMode)` 的判据来源。 */
+  viewMode: WorkspaceView;
+};
 
 export function useWorkspaceTabs(): WorkspaceTabsController {
   const [tabsState, setTabsState] = useState<WorkspaceTabsState>(initialWorkspaceTabs);
@@ -105,7 +111,9 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
   useEffect(() => {
     /* 对账完成前一律不落盘（机制见上）：否则挂载这一轮会先把初始态（只有首页
        一页）写进 sessionStorage，把用户存好的列表冲掉，随后才读到空。 */
-    if (!hydrated) return;
+    if (!hydrated) {
+      return;
+    }
     writeTabsState(tabsState);
   }, [tabsState, hydrated]);
 

@@ -10,15 +10,17 @@ export function RgthreeFastGroupsBypasserBody({
   matchTitle,
   groups,
 }: {
-  matchTitle: string;
   groups: Array<WorkflowGroup>;
+  matchTitle: string;
 }) {
   const ctx = useRgthreeGroups();
   /* useRgthreeGroups 在 store 未挂载时抛错；但该组件只会在编辑器内渲染，
    * 始终在 <WFStoresProvider> 之下，故可直接使用，无需 null 守卫。 */
   /* 归一化（trim + 折小写）走 `~/lib/list-filter`（规范 16 §16.2.4.16）。 */
   const needle = normalizeNeedle(matchTitle);
-  if (!needle) return null;
+  if (!needle) {
+    return null;
+  }
   const matches = groups
     .filter((group) => matchesNeedle(needle, group.title || ""))
     .slice()
@@ -27,7 +29,9 @@ export function RgthreeFastGroupsBypasserBody({
      * 让 `"apple" < "Zebra"`，码位序让 `"Zebra" < "apple"`），
      * 收口前两种混用。 */
     .sort((left, right) => compareText(left.title, right.title));
-  if (matches.length === 0) return null;
+  if (matches.length === 0) {
+    return null;
+  }
   const pad = Math.max(2, String(matches.length).length);
   return (
     <div className="flex flex-col gap-0.5 px-1 pb-1">
@@ -37,8 +41,8 @@ export function RgthreeFastGroupsBypasserBody({
         const bypass = ctx.getBypass(group.id);
         return (
           <div
-            key={group.id}
             className="group text-2xs relative flex h-5.5 items-center gap-1.5 pr-2 pl-2"
+            key={group.id}
           >
             <span
               className={`text-2xs min-w-0 shrink truncate text-left ${
@@ -66,15 +70,14 @@ export function RgthreeFastGroupsBypasserBody({
              *  外观逐条留在 `style` 里（§16.2.4.2 第 9 条：验收标准是渲染结果不变）。
              *  指针事件照旧拦截，好让 ReactFlow 的拖拽处理器看不到这次点击。 */}
             <Toggle
-              pressed={bypass}
-              onPressedChange={() => ctx.setBypass(group.id, !bypass)}
-              title={bypass ? "点击取消旁路" : "点击旁路此 group"}
-              onPointerDown={(event) => event.stopPropagation()}
-              onMouseDown={(event) => event.stopPropagation()}
               /* 覆盖串要在 `variant` 之后由 `cn()` 合并 —— tailwind-merge 同一属性
                * 后面的类赢，所以底色 / 圆角 / 内边距 / 悬停底都由这里接管
                *（§16.2.4.2 第 5 条：基元默认值「成套 + 讲顺序」地覆盖）。 */
               className="border-0 bg-transparent p-0 hover:bg-transparent"
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPressedChange={() => ctx.setBypass(group.id, !bypass)}
+              pressed={bypass}
               style={{
                 marginLeft: 6,
                 width: 26,
@@ -87,6 +90,7 @@ export function RgthreeFastGroupsBypasserBody({
                 flex: "0 0 auto",
                 transition: "background 120ms",
               }}
+              title={bypass ? "点击取消旁路" : "点击旁路此 group"}
             >
               <span
                 style={{
@@ -126,7 +130,9 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
        *（规范 16 §16.2.4.54），此前这里是手写的一份。 */
       return trimmed(v, 2) ?? undefined;
     }
-    if (typeof v === "string" && v.length > 0 && v !== "undefined") return v;
+    if (typeof v === "string" && v.length > 0 && v !== "undefined") {
+      return v;
+    }
     return undefined;
   };
 
@@ -136,12 +142,18 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
   const loras: Array<PowerLoraWidget> = /* SAFETY: 类型断言已复核 */ (
     (widgets ?? []) as Array<PowerLoraWidget>
   ).filter((widget) => {
-    if (widget === null || widget === undefined) return false;
+    if (widget === null || widget === undefined) {
+      return false;
+    }
     if (typeof widget !== "object" || Array.isArray(widget)) {
       return typeof widget === "string" && widget.length > 0; // bare lora filename
     }
-    if (Object.keys(widget).length === 0) return false; // {} placeholder
-    if (widget.type === "PowerLoraLoaderHeaderWidget") return false; // header widget
+    if (Object.keys(widget).length === 0) {
+      return false;
+    } // {} placeholder
+    if (widget.type === "PowerLoraLoaderHeaderWidget") {
+      return false;
+    } // header widget
     return true; // real lora tuple
   });
 
@@ -197,19 +209,18 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
           const isObj = typeof widget === "object" && !Array.isArray(widget);
           const rec = isObj ? widget : undefined;
           const name =
+            /* SAFETY: 类型断言已复核 */
             typeof widget === "string"
               ? widget
-              : /* SAFETY: 类型断言已复核 */ (((rec?.name ?? rec?.lora_name ?? rec?.model_name) as
-                  | string
-                  | undefined) ?? "");
+              : (((rec?.name ?? rec?.lora_name ?? rec?.model_name) as string | undefined) ?? "");
           const modelStr = isObj
             ? fmtStrength(rec?.model_strength ?? rec?.model_str ?? rec?.strength)
             : undefined;
           const clipStr = isObj ? fmtStrength(rec?.clip_strength ?? rec?.clip_str) : undefined;
           return (
             <div
-              key={`pll-r-${index}`}
               className="text-2xs flex items-center gap-2 rounded px-1.5 py-0.75"
+              key={`pll-r-${index}`}
               style={{ background: "var(--color-subtle)" }}
             >
               <span
@@ -281,8 +292,8 @@ export function RgthreeLabelBody({
   text,
   properties,
 }: {
-  text: string;
   properties: Record<string, unknown>;
+  text: string;
 }) {
   const p = properties ?? {};
   const fontSize = typeof p.fontSize === "number" ? p.fontSize : 24;

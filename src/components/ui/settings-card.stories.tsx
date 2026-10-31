@@ -32,9 +32,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   render: (args) => (
     <SettingsCard {...args} className="w-120">
-      <p className="text-ink-muted mb-3 text-sm">
-        这些目录只读展示，改动需编辑仓库根的 .env。
-      </p>
+      <p className="text-ink-muted mb-3 text-sm">这些目录只读展示，改动需编辑仓库根的 .env。</p>
       <dl className="grid grid-cols-[6rem_1fr] gap-2 text-sm">
         <dt className="text-ink-muted">模型</dt>
         <dd className="truncate font-mono text-xs">D:/ComfyUI/models</dd>
@@ -49,11 +47,11 @@ export const Default: Story = {
  *  的一部分，本件只管外框那一层。 */
 export const WithActions: Story = {
   render: (args) => (
-    <SettingsCard {...args} title="外观" className="w-120">
+    <SettingsCard {...args} className="w-120" title="外观">
       <div className="flex flex-col gap-3">
-        <Input defaultValue="深色" aria-label="主题" />
+        <Input aria-label="主题" defaultValue="深色" />
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm">
+          <Button size="sm" variant="ghost">
             重置
           </Button>
           <Button size="sm">保存</Button>

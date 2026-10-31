@@ -52,24 +52,26 @@ export const HOOK = path.join(ROOT, ".githooks", "pre-commit");
  */
 export function resolveUpstreamRef(cwd = ROOT) {
   /** @param {string} ref */
-  const tryRef = (ref) =>
-    git(["rev-parse", "--verify", "--quiet", ref], cwd).ok;
-  const upstream = git(
-    ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
-    cwd,
-  );
+  const tryRef = (ref) => git(["rev-parse", "--verify", "--quiet", ref], cwd).ok;
+  const upstream = git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], cwd);
   if (upstream.ok && upstream.stdout && tryRef(upstream.stdout)) {
     return upstream.stdout;
   }
   const remotes = git(["remote"], cwd);
   if (remotes.ok) {
     for (const remote of remotes.stdout.split("\n").map((s) => s.trim())) {
-      if (!remote) continue;
+      if (!remote) {
+        continue;
+      }
       const ref = `${remote}/master`;
-      if (tryRef(ref)) return ref;
+      if (tryRef(ref)) {
+        return ref;
+      }
     }
   }
-  if (tryRef("master")) return "master";
+  if (tryRef("master")) {
+    return "master";
+  }
   return null;
 }
 
@@ -95,17 +97,22 @@ export function resolveUpstreamRef(cwd = ROOT) {
  */
 export function resolveMergeBaseRef(cwd = ROOT) {
   /** @param {string} ref */
-  const tryRef = (ref) =>
-    git(["rev-parse", "--verify", "--quiet", ref], cwd).ok;
+  const tryRef = (ref) => git(["rev-parse", "--verify", "--quiet", ref], cwd).ok;
   const remotes = git(["remote"], cwd);
   if (remotes.ok) {
     for (const remote of remotes.stdout.split("\n").map((s) => s.trim())) {
-      if (!remote) continue;
+      if (!remote) {
+        continue;
+      }
       const ref = `${remote}/master`;
-      if (tryRef(ref)) return ref;
+      if (tryRef(ref)) {
+        return ref;
+      }
     }
   }
-  if (tryRef("master")) return "master";
+  if (tryRef("master")) {
+    return "master";
+  }
   return null;
 }
 
@@ -185,7 +192,9 @@ export const GIT_ENV_DENY = [
  */
 export function cleanGitEnv() {
   const env = { ...process.env };
-  for (const key of GIT_ENV_DENY) delete env[key];
+  for (const key of GIT_ENV_DENY) {
+    delete env[key];
+  }
   return env;
 }
 

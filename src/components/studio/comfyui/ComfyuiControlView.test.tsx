@@ -27,8 +27,7 @@ const { emitAppEventMock, emitCalls } = vi.hoisted(() => {
   };
 });
 vi.mock("~/lib/app-events", async () => {
-  const actual =
-    await vi.importActual<Record<string, unknown>>("~/lib/app-events");
+  const actual = await vi.importActual<Record<string, unknown>>("~/lib/app-events");
   return { ...actual, emitAppEvent: emitAppEventMock };
 });
 
@@ -39,9 +38,7 @@ beforeEach(() => {
   emitCalls.length = 0;
 });
 
-function controller(
-  over: Partial<ComfyuiControlController> = {},
-): ComfyuiControlController {
+function controller(over: Partial<ComfyuiControlController> = {}): ComfyuiControlController {
   return {
     status: null,
     instance: {
@@ -82,7 +79,7 @@ const running = {
   base: "http://127.0.0.1:8188",
   port: 8188,
   via: "配置路径的实例",
-  path: "D:\\ComfyUI",
+  path: String.raw`D:\ComfyUI`,
 };
 
 describe("ComfyuiControlView", () => {
@@ -131,7 +128,7 @@ describe("ComfyuiControlView", () => {
             base: null,
             port: 0,
             via: null,
-            path: "D:\\ComfyUI",
+            path: String.raw`D:\ComfyUI`,
           },
         })}
       />,
@@ -155,9 +152,7 @@ describe("ComfyuiControlView", () => {
     );
     expect(screen.getByRole("button", { name: "启动 ComfyUI" })).toBeDisabled();
     expect(screen.getByText(/还没配置 ComfyUI 路径/)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /去设置里配置/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /去设置里配置/ })).toBeInTheDocument();
   });
 
   it("点「去设置里配置」带上目标分区：直接停在「创作后端」那一节", () => {
@@ -184,7 +179,7 @@ describe("ComfyuiControlView", () => {
   it("页上写明将按哪条已保存路径启动（本页无草稿，这条是唯一的事实出口）", () => {
     render(<ComfyuiControlView c={controller({ status: running })} />);
     const line = screen.getByTestId("comfyui-start-path");
-    expect(line.textContent).toContain("D:\\ComfyUI");
+    expect(line.textContent).toContain(String.raw`D:\ComfyUI`);
     /* 明写「已保存」这一层语义：用户刚在设置页改了路径没保存时，这里显示的
        仍是旧路径，那句「改完要点保存」就是给他看的。 */
     expect(line.textContent).toContain("已保存");
@@ -218,9 +213,7 @@ describe("ComfyuiControlView", () => {
 
   it("启动日志框在页上（硬规则 4 的用户可见出口）", () => {
     render(<ComfyuiControlView c={controller()} />);
-    expect(
-      screen.getByText("启动日志（comfyui-runtime.log）"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("启动日志（comfyui-runtime.log）")).toBeInTheDocument();
     expect(screen.getByText(/暂无日志/)).toBeInTheDocument();
   });
 });

@@ -29,24 +29,23 @@ const ratios = computeStageRatios(ctx, false);
 const ACTIVE: Tab = "storyboard";
 const activeIndex = STAGE_DEFS.findIndex((stage) => stage.id === ACTIVE);
 const doneIndex = STAGE_DEFS.findIndex((stage) => ratios[stage.id] >= 1);
-const pendingIndex = STAGE_DEFS.findIndex(
-  (stage) => ratios[stage.id] < 1 && stage.id !== ACTIVE,
-);
+const pendingIndex = STAGE_DEFS.findIndex((stage) => ratios[stage.id] < 1 && stage.id !== ACTIVE);
 
 function renderRail() {
   const { container } = render(
     <WorkshopStageRail
-      tab={ACTIVE}
-      stageRatios={ratios}
-      viewContext={ctx}
       onTabChange={() => undefined}
+      stageRatios={ratios}
+      tab={ACTIVE}
+      viewContext={ctx}
     />,
   );
   const nav = container.querySelector<HTMLElement>("nav");
-  if (nav === null) throw new Error("阶段轨道没有渲染出 <nav> 元素");
+  if (nav === null) {
+    throw new Error("阶段轨道没有渲染出 <nav> 元素");
+  }
   const buttons = screen.getAllByRole("button");
-  const badge = (index: number) =>
-    buttons[index]?.querySelector<HTMLElement>("span");
+  const badge = (index: number) => buttons[index]?.querySelector<HTMLElement>("span");
   const sub = (index: number) =>
     buttons[index]?.querySelector<HTMLElement>("div > div:nth-child(2)");
   return { nav, buttons, badge, sub };
@@ -76,9 +75,7 @@ describe("WorkshopStageRail 的结构", () => {
     const { buttons, sub, badge } = renderRail();
     buttons.forEach((button, index) => {
       const stage = STAGE_DEFS[index];
-      expect(button.querySelector("div > div:nth-child(1)")?.textContent).toBe(
-        stage?.label,
-      );
+      expect(button.querySelector("div > div:nth-child(1)")?.textContent).toBe(stage?.label);
       expect(sub(index)?.textContent).toBe(
         stageSubtitle(stage?.id ?? "script", ACTIVE, ratios, ctx),
       );
@@ -91,10 +88,7 @@ describe("WorkshopStageRail 的结构", () => {
     expect(badge(doneIndex)?.className).toContain("bg-success/80");
     expect(badge(pendingIndex)?.textContent).toBe(String(pendingIndex + 1));
     expect(badge(activeIndex)?.className).toContain("bg-primary");
-    for (const cls of [
-      badge(doneIndex)?.className ?? "",
-      badge(pendingIndex)?.className ?? "",
-    ]) {
+    for (const cls of [badge(doneIndex)?.className ?? "", badge(pendingIndex)?.className ?? ""]) {
       expect(cls).toContain("size-9");
       expect(cls).not.toMatch(/\bh-9\b|\bw-9\b/);
     }

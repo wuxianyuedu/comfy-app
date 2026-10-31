@@ -63,7 +63,7 @@ import KNOWN from "../scripts/.a11y-axe-known.json";
 
 import { installJsdomCapabilityGate } from "./helpers/jsdom-capability";
 
-type Finding = { component: string; rule: string; nodes: number };
+type Finding = { component: string; nodes: number; rule: string; };
 
 /** 一个故事的渲染函数（CSF3 的 `render`：吃 args、出节点）。 */
 type StoryFn = (args: Record<string, unknown>) => ReactNode;
@@ -71,17 +71,17 @@ type StoryFn = (args: Record<string, unknown>) => ReactNode;
 type ArgTypes = Record<string, { defaultValue?: unknown } | undefined>;
 
 type MetaShape = {
-  title?: string;
-  component?: unknown;
   args?: Record<string, unknown>;
-  render?: StoryFn;
   argTypes?: ArgTypes;
+  component?: unknown;
+  render?: StoryFn;
+  title?: string;
 };
 
 type StoryShape = {
   args?: Record<string, unknown>;
-  render?: StoryFn;
   argTypes?: ArgTypes;
+  render?: StoryFn;
 };
 
 type StoryModule = { default?: MetaShape } & Record<string, unknown>;
@@ -216,8 +216,12 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
       const meta: MetaShape = mod.default ?? {};
       const Comp = meta.component;
       for (const [storyName, raw] of Object.entries(mod)) {
-        if (storyName === "default") continue;
-        if (!raw || typeof raw !== "object") continue;
+        if (storyName === "default") {
+          continue;
+        }
+        if (!raw || typeof raw !== "object") {
+          continue;
+        }
         const story = /* SAFETY: 类型断言已复核 */ raw as StoryShape;
         const key = `${component} > ${storyName}`;
         /* `argTypes[x].defaultValue` 在 Storybook 里由 argsEnhancers 折进 args。
@@ -322,8 +326,8 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
       KNOWN.unrenderable,
     );
     const actualPairs = /* SAFETY: 类型断言已复核 */ JSON.parse(actual) as {
-      violations: Array<{ component: string; rule: string }>;
       unrenderable: Array<string>;
+      violations: Array<{ component: string; rule: string }>;
     };
     const registeredPairs = /* SAFETY: 类型断言已复核 */ JSON.parse(
       registered,

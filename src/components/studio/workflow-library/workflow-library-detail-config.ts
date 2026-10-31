@@ -30,41 +30,43 @@ export type DetailTab = (typeof DETAIL_TABS)[number]["key"];
 /** 打开一条工作流时的默认页签 —— 取表里的第一项（最轻的那个，见上）。 */
 export const DEFAULT_DETAIL_TAB: DetailTab = DETAIL_TABS[0].key;
 
-export interface WorkflowLibraryDetailProps {
-  workflow: WorkflowRow | null;
+export type WorkflowLibraryDetailProps = {
   /** 用户级全局模型标签库（用于类型/模型编辑器）。 */
-  allModelTags?: Array<{ id: string; name: string; count: number }>;
-  /** 持久化类型（modes + defaultMode）。 */
-  onPatchModes?: (id: string, modes: Array<string>, defaultMode: string) => Promise<void>;
-  /** 持久化模型标签绑定。 */
-  onPatchModelTags?: (id: string, names: Array<string>) => Promise<void>;
-  /** 整体落库 workflowIO（预览面板的 seed「控件后行为」等参数级配置）。 */
-  onPatchWorkflowIO?: (id: string, workflowIO: Record<string, unknown>) => Promise<void>;
-  /** 整体落库 paramMap（预览面板拖圆点改对外参数落点）。 */
-  onPatchParamMap?: (id: string, paramMap: Record<string, unknown>) => Promise<void>;
-  onUse: (id: string, meta?: { name: string; taskType: string }) => void;
-  onEdit: (id: string) => void;
-  onDelete: (id: string, name: string) => void;
-  onDownload: (id: string, name: string) => void;
-  onResync: (id: string, name: string) => void;
+  allModelTags?: Array<{ count: number; id: string; name: string }>;
   /** 「这一条在下载 / 在同步吗」的判据（由父级的 `useItemAction` 给，
    *  规范 16 §16.2.4.40）—— 详情面板不再自己拿 id 去比。 */
   isBundleBusy: (id: string) => boolean;
   isResyncBusy: (id: string) => boolean;
-}
+  onDelete: (id: string, name: string) => void;
+  onDownload: (id: string, name: string) => void;
+  onEdit: (id: string) => void;
+  /** 持久化模型标签绑定。 */
+  onPatchModelTags?: (id: string, names: Array<string>) => Promise<void>;
+  /** 持久化类型（modes + defaultMode）。 */
+  onPatchModes?: (id: string, modes: Array<string>, defaultMode: string) => Promise<void>;
+  /** 整体落库 paramMap（预览面板拖圆点改对外参数落点）。 */
+  onPatchParamMap?: (id: string, paramMap: Record<string, unknown>) => Promise<void>;
+  /** 整体落库 workflowIO（预览面板的 seed「控件后行为」等参数级配置）。 */
+  onPatchWorkflowIO?: (id: string, workflowIO: Record<string, unknown>) => Promise<void>;
+  onResync: (id: string, name: string) => void;
+  onUse: (id: string, meta?: { name: string; taskType: string }) => void;
+  workflow: WorkflowRow | null;
+};
 
 /** 详情接口里本面板用到的模板片段 —— 显式收窄，便于单测与复用。 */
-export interface DetailTemplate {
-  rawJson?: unknown;
-  workflowIO?: unknown;
+export type DetailTemplate = {
   /** 工作流模板的 paramMap 列（含 `source.mode:<模式>` 的对外参数落点覆盖）。
    *  仅在类型层描述线上返回的 Json 列；库画布据此标出对外参数与落点归属。 */
   paramMap?: unknown;
-}
+  rawJson?: unknown;
+  workflowIO?: unknown;
+};
 
 /** workflowIO 在旧数据里可能存成数组或非对象，这里收紧成 Map 或 null。 */
 export function normalizeWorkflowIO(raw: unknown): WorkflowIOMap | null {
-  if (!raw || Array.isArray(raw) || typeof raw !== "object") return null;
+  if (!raw || Array.isArray(raw) || typeof raw !== "object") {
+    return null;
+  }
   return /* SAFETY: 类型断言已复核 */ raw as WorkflowIOMap;
 }
 
@@ -74,7 +76,9 @@ export function buildSourceData(
   workflow: WorkflowRow,
   template: DetailTemplate | null | undefined,
 ): SourceModalData | null {
-  if (!template) return null;
+  if (!template) {
+    return null;
+  }
   return {
     name: workflow.name,
     source: template.rawJson ?? null,
@@ -91,6 +95,8 @@ export function buildSourceData(
  *
  *  未选中工作流时不算加载（空态由视图渲染）。 */
 export function isDetailLoadingFor(workflowId: string | null, settledId: string | null): boolean {
-  if (!workflowId) return false;
+  if (!workflowId) {
+    return false;
+  }
   return settledId !== workflowId;
 }

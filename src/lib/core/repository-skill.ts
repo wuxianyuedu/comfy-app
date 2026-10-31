@@ -10,20 +10,20 @@ import { DrizzleRepository } from "./repository-base";
 import { eq, and, like, or, asc, desc, count } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
 
-export interface SkillSeed {
-  name: string;
-  slug: string;
+export type SkillSeed = {
+  category: string;
+  coverUrl?: string;
+  defaultParams?: Record<string, unknown>;
   description: string;
   icon: string;
-  category: string;
-  promptTemplate: string;
+  name: string;
   negativePrompt?: string;
-  defaultParams?: Record<string, unknown>;
+  promptTemplate: string;
   recommendedModel?: string;
-  tags: Array<string>;
-  coverUrl?: string;
+  slug: string;
   sortOrder: number;
-}
+  tags: Array<string>;
+};
 
 export class SkillRepository extends DrizzleRepository<Skill> {
   constructor() {
@@ -32,7 +32,9 @@ export class SkillRepository extends DrizzleRepository<Skill> {
 
   async ensureBuiltIns(seeds: Array<SkillSeed>): Promise<void> {
     const [row] = await db.select({ v: count() }).from(skill).where(eq(skill.isBuiltIn, true));
-    if ((row?.v ?? 0) > 0) return;
+    if ((row?.v ?? 0) > 0) {
+      return;
+    }
     await db.insert(skill).values(
       seeds.map((s) => ({
         name: s.name,
@@ -55,13 +57,16 @@ export class SkillRepository extends DrizzleRepository<Skill> {
 
   async list(opts: {
     category?: string | null;
-    q?: string;
     includeInactive?: boolean;
+    q?: string;
   }): Promise<Array<Skill>> {
     const conditions = [];
-    if (!opts.includeInactive) conditions.push(eq(skill.isActive, true));
-    if (opts.category && opts.category !== "all")
+    if (!opts.includeInactive) {
+      conditions.push(eq(skill.isActive, true));
+    }
+    if (opts.category && opts.category !== "all") {
       conditions.push(eq(skill.category, opts.category));
+    }
     if (opts.q) {
       conditions.push(
         or(
@@ -93,16 +98,16 @@ export class SkillRepository extends DrizzleRepository<Skill> {
   }
 
   async createUserSkill(input: {
-    name: string;
-    slug: string;
+    category: string;
+    coverUrl?: string | null;
+    defaultParams?: unknown;
     description: string;
     icon: string;
-    category: string;
-    promptTemplate: string;
+    name: string;
     negativePrompt?: string | null;
-    defaultParams?: unknown;
+    promptTemplate: string;
     recommendedModel?: string | null;
-    coverUrl?: string | null;
+    slug: string;
     sortOrder: number;
     tags: Array<string>;
   }): Promise<Skill> {

@@ -40,8 +40,12 @@ export function useLogPanel<T>(selector: (state: LogStoreState) => T): T {
 
 /** unknown 抛值 → 可读文本（Error 带堆栈；对象取 message；其余 JSON/String 兜底）。 */
 export function describeGlobalError(reason: unknown): string {
-  if (reason instanceof Error) return `${reason.name}: ${reason.message}\n${reason.stack ?? ""}`;
-  if (typeof reason === "string") return reason;
+  if (reason instanceof Error) {
+    return `${reason.name}: ${reason.message}\n${reason.stack ?? ""}`;
+  }
+  if (typeof reason === "string") {
+    return reason;
+  }
   if (
     typeof reason === "object" &&
     reason !== null &&
@@ -105,7 +109,9 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
 
   // ── 拦截 console.*，好让日志出现在面板里 ──
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") {
+      return;
+    }
 
     const originals = /* SAFETY: 类型断言已复核 */ {
       log: console.log,
@@ -164,7 +170,9 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
 
   // ── 监听 Tauri 后端日志事件（可选；浏览器里是空操作） ──
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") {
+      return;
+    }
     let unlisten: (() => void) | undefined;
 
     const setup = async () => {
@@ -173,12 +181,14 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
         unlisten = await listen<{ level: string; message: string }>("log:emit", (event) => {
           const lv = event.payload?.level ?? "info";
           const message = event.payload?.message ?? "";
-          if (!message) return;
+          if (!message) {
+            return;
+          }
           const level: LogLevel =
             lv === "error" ? "error" : lv === "warn" ? "warn" : lv === "debug" ? "debug" : "info";
           addEntry({ level, message, source: "tauri" });
         });
-      } catch (err) {
+      } catch (error) {
         /* 不在 Tauri 里运行是**正常形态**（浏览器 / 纯 web），静默即可。
            但「在壳里却监听失败」不是正常形态，最常见的原因是 CSP 的 connect-src
            漏了 `ipc: http://ipc.localhost`（事件监听走 fetch 到 ipc:// 通道，
@@ -189,7 +199,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
         if (isDesktopShell()) {
           addEntry({
             level: "warn",
-            message: `未能订阅壳日志（log:emit）：${String(err)}`,
+            message: `未能订阅壳日志（log:emit）：${String(error)}`,
             source: "system",
           });
         }
@@ -202,7 +212,9 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
 
   // ── 全局未捕获错误与未处理 rejection → 面板（来源："system"） ──
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") {
+      return;
+    }
 
     const onError = (event: ErrorEvent) => {
       const message = describeGlobalError(event.error ?? event.message);
@@ -266,13 +278,17 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const poll = useCallback(async () => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") {
+      return;
+    }
 
     const pollSource = async (source: PollSource) => {
       try {
         const offset = offsetsRef.current[source] ?? 0;
         const data = await fetchFileLogSlice(source, offset, bootIdRef.current);
-        if (!data || !mountedRef.current) return;
+        if (!data || !mountedRef.current) {
+          return;
+        }
 
         /* 服务端进程换过了（真重启 / 另一实例接管端口）：时间线里已有的行属于
          * 上一个进程，与本次会话没有可比性。清空时间线、重置全部游标，本轮从
@@ -282,13 +298,19 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
         if (typeof data.bootId === "string" && data.bootId !== "") {
           if (bootIdRef.current !== "" && data.bootId !== bootIdRef.current) {
             forceReread = true;
-            for (const key of POLL_SOURCES) offsetsRef.current[key] = 0;
+            for (const key of POLL_SOURCES) {
+              offsetsRef.current[key] = 0;
+            }
           }
           bootIdRef.current = data.bootId;
           setBootId(data.bootId);
         }
-        if (data.mismatch) forceReread = true;
-        if (forceReread) offsetsRef.current[source] = 0;
+        if (data.mismatch) {
+          forceReread = true;
+        }
+        if (forceReread) {
+          offsetsRef.current[source] = 0;
+        }
 
         /* 裸文本行（读不到时间戳）按解析当时的时刻落板；钳到本地当前时刻，
          * 保证面板时间线不会被未来的时间戳顶穿。 */
@@ -351,13 +373,17 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
      * 可感差别。各源已在 pollSource 内自行 try/catch（网络失败只记一次「不可达」），
      * 单源出错不会中断整轮；`roundBusyRef` 另给一条背压闸 —— 一轮超过间隔时原来会
      * 直接叠出第二轮（六路变十二路），现在跳过这一拍。 */
-    if (roundBusyRef.current) return;
+    if (roundBusyRef.current) {
+      return;
+    }
     roundBusyRef.current = true;
     try {
       for (const source of POLL_SOURCES) {
         /* 卸载即停：剩下的来源不必再问（已发出的那一发由 pollSource 自查
          * `mountedRef`）。 */
-        if (!mountedRef.current) return;
+        if (!mountedRef.current) {
+          return;
+        }
         await pollSource(source);
       }
     } finally {

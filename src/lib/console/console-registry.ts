@@ -15,20 +15,20 @@ import { createConsoleRunner, type ConsoleRunner } from "./console-run";
 import { MAX_HISTORY_ENTRIES } from "./console-limits";
 
 /** 已完成的一条运行（界面「本次会话跑过什么」的条目）。 */
-export interface ConsoleHistoryEntry {
-  runId: string;
+export type ConsoleHistoryEntry = {
   command: string;
+  durationMs: number;
   /** 退出码；null = 没拿到（被信号掐掉 / 起不来）。 */
   exitCode: number | null;
-  killed: boolean;
-  durationMs: number;
   finishedAt: number;
-}
+  killed: boolean;
+  runId: string;
+};
 
-export interface ConsoleSlot {
-  runner: ConsoleRunner;
+export type ConsoleSlot = {
   history: Array<ConsoleHistoryEntry>;
-}
+  runner: ConsoleRunner;
+};
 
 /** 单例挂载点。键名带语义版本：`history` 的形状变化时要换名字。 */
 const SLOT_KEY = "__comfyappConsoleSlot_v1";

@@ -27,10 +27,10 @@ import { normalizeSlashes } from "~/lib/path-display";
 
 /** pyvenv.cfg 里我们关心的字段：基础解释器所在目录与可执行文件全路径。 */
 export type PyvenvConfig = {
-  /** `home`：基础解释器所在目录。 */
-  home: string | null;
   /** `executable`：基础解释器全路径。 */
   executable: string | null;
+  /** `home`：基础解释器所在目录。 */
+  home: string | null;
 };
 
 /**
@@ -41,17 +41,26 @@ export function parsePyvenvCfg(content: string): PyvenvConfig {
   const out: PyvenvConfig = { home: null, executable: null };
   for (const rawLine of (content ?? "").split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
     const eq = line.indexOf("=");
-    if (eq <= 0) continue;
+    if (eq <= 0) {
+      continue;
+    }
     const key = line.slice(0, eq).trim().toLowerCase();
     const value = line
       .slice(eq + 1)
       .trim()
       .replace(/^"|"$/g, "");
-    if (!value) continue;
-    if (key === "home") out.home = value;
-    else if (key === "executable") out.executable = value;
+    if (!value) {
+      continue;
+    }
+    if (key === "home") {
+      out.home = value;
+    } else if (key === "executable") {
+      out.executable = value;
+    }
   }
   return out;
 }
@@ -72,10 +81,14 @@ export function pythonPathsFromPyvenv(
     out.push(cfg.executable);
   }
   if (cfg.home) {
-    for (const n of names) out.push(path.join(cfg.home, n));
+    for (const n of names) {
+      out.push(path.join(cfg.home, n));
+    }
     // uv 托管目录里解释器常带 `install\` 一层（如
     // cpython-3.12.8-.../install/python.exe），补上这条常见形态。
-    for (const n of names) out.push(path.join(cfg.home, "install", n));
+    for (const n of names) {
+      out.push(path.join(cfg.home, "install", n));
+    }
   }
   return out;
 }
@@ -83,10 +96,10 @@ export function pythonPathsFromPyvenv(
 /** 本模块只关心这几个环境变量，用一个窄结构体承接，便于单测注入完整的
  *  「空环境」（Next 生成的 ProcessEnv 把所有键当必填，直接传 {} 通不过类型检查）。 */
 export type PythonEnvVars = {
-  /** uv 解释器托管目录（显式指定时优先于平台默认位置）。 */
-  UV_PYTHON_INSTALL_DIR?: string | undefined;
   /** Windows：`%LOCALAPPDATA%`。 */
   LOCALAPPDATA?: string | undefined;
+  /** uv 解释器托管目录（显式指定时优先于平台默认位置）。 */
+  UV_PYTHON_INSTALL_DIR?: string | undefined;
   /* POSIX 侧的基准目录由 `$XDG_DATA_HOME` 决定。 */
   XDG_DATA_HOME?: string | undefined;
 };
@@ -113,12 +126,12 @@ export type PythonCandidate = {
 export function collectComfyPythonCandidates(
   installRoot: string,
   deps: {
-    exists?: (p: string) => boolean;
-    readFile?: (p: string) => string;
-    readdir?: (p: string) => Array<string>;
     env?: PythonEnvVars;
-    platform?: NodeJS.Platform;
+    exists?: (p: string) => boolean;
     homedir?: string;
+    platform?: NodeJS.Platform;
+    readdir?: (p: string) => Array<string>;
+    readFile?: (p: string) => string;
   } = {},
 ): Array<PythonCandidate> {
   const exists = deps.exists ?? ((p: string) => fs.existsSync(p));
@@ -153,9 +166,13 @@ export function collectComfyPythonCandidates(
   const out: Array<PythonCandidate> = [];
   const seen = new Set<string>();
   const push = (exe: string, via: string): void => {
-    if (!exe) return;
+    if (!exe) {
+      return;
+    }
     const key = normalizeSlashes(exe).toLowerCase();
-    if (seen.has(key)) return;
+    if (seen.has(key)) {
+      return;
+    }
     seen.add(key);
     out.push({ exe, via });
   };
@@ -173,20 +190,26 @@ export function collectComfyPythonCandidates(
   ];
   for (const envRoot of envRoots) {
     const cfgPath = path.join(envRoot, "pyvenv.cfg");
-    if (!exists(/*turbopackIgnore: true*/ cfgPath)) continue;
+    if (!exists(/*turbopackIgnore: true*/ cfgPath)) {
+      continue;
+    }
     const cfg = parsePyvenvCfg(readFile(cfgPath));
     const via = `${path.basename(envRoot)} 的 pyvenv.cfg`;
     for (const exe of pythonPathsFromPyvenv(cfg, platform)) {
       // home 只给出目录时可能并不真的存在该解释器，过滤掉不存在项，
       // 免得把一堆无意义的路径喂给进程表查询（查询本身不便宜）。
-      if (exists(/*turbopackIgnore: true*/ exe)) push(exe, via);
+      if (exists(/*turbopackIgnore: true*/ exe)) {
+        push(exe, via);
+      }
     }
   }
 
   // ② uv 托管目录：枚举各 cpython-* 环境下的解释器。
   for (const dir of uvPythonDirs(env, platform, home)) {
     for (const entry of readdir(/*turbopackIgnore: true*/ dir)) {
-      if (!/^cpython-/i.test(entry)) continue;
+      if (!/^cpython-/i.test(entry)) {
+        continue;
+      }
       const envDir = path.join(dir, entry);
       // 形态 A：<env>/python.exe；形态 B：<env>/install/python.exe。
       for (const rel of platform === "win32"
@@ -217,7 +240,9 @@ export function uvPythonDirs(
 ): Array<string> {
   const dirs: Array<string> = [];
   const add = (d: string | undefined): void => {
-    if (d && !dirs.includes(d)) dirs.push(d);
+    if (d && !dirs.includes(d)) {
+      dirs.push(d);
+    }
   };
   add(env.UV_PYTHON_INSTALL_DIR);
   if (platform === "win32") {

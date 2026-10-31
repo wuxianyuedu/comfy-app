@@ -47,12 +47,12 @@ function makeHandlers(): WorkflowRunHandlers {
 
 /** 登记一条运行（用例只关心恢复读到的形状）。 */
 function register(over: {
-  taskId?: string;
-  source?: WorkflowRunSource;
-  status?: "running" | "done" | "failed";
+  errorMessage?: string;
   progress?: number;
   resultUrl?: string;
-  errorMessage?: string;
+  source?: WorkflowRunSource;
+  status?: "running" | "done" | "failed";
+  taskId?: string;
 }) {
   registerWorkflowRun({
     taskId: over.taskId ?? "t1",

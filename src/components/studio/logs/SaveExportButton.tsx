@@ -12,7 +12,7 @@ import { useLogPanel } from "./LogProvider";
 const SAVED_FLASH_MS = 8000;
 
 /* 「未亮起」的空载荷：模块级常量，身份稳定（见 `useFlashLatch`）。 */
-const EMPTY_SAVED: { savedPath: string | null; failed: boolean } = {
+const EMPTY_SAVED: { failed: boolean; savedPath: string | null } = {
   savedPath: null,
   failed: false,
 };
@@ -61,27 +61,22 @@ export function SaveExportButton({
 
   return (
     <span className="flex items-center gap-1">
-      <Hint
-        label={`保存当前筛选的全部日志到本机 log/exports/（${scopeLabel} · ${total} 条）`}
-      >
+      <Hint label={`保存当前筛选的全部日志到本机 log/exports/（${scopeLabel} · ${total} 条）`}>
         <Button
-          variant="ghost"
-          size="icon"
-          onClick={onSave}
           aria-label="保存当前筛选的全部日志到本地文件"
           className={`hover:bg-subtle hover:text-ink rounded-md ${
             failed ? "text-danger-strong" : "text-ink-muted"
           }`}
+          onClick={onSave}
+          size="icon"
+          variant="ghost"
         >
           <HardDriveDownload size={16} />
         </Button>
       </Hint>
       {/* 路径就是这次保存的「回执」：没有它，用户只能自己去猜文件在哪。 */}
       {savedPath && (
-        <span
-          className="text-ink-fainter text-2xs max-w-56 truncate"
-          title={savedPath}
-        >
+        <span className="text-ink-fainter text-2xs max-w-56 truncate" title={savedPath}>
           已保存 {savedPath}
         </span>
       )}

@@ -56,36 +56,36 @@ export function WorkflowLibraryDetailView({
   return (
     <div className="bg-panel-deep flex h-full flex-col overflow-hidden">
       <DetailHeader
-        workflow={workflow}
-        usable={usable}
-        canResync={canResync}
-        missing={missing}
-        isTechnical={isTechnical}
         busyDownload={busyDownload}
         busyResync={busyResync}
-        onEdit={actions.edit}
-        onResync={actions.resync}
-        onDownload={actions.download}
-        onDelete={actions.remove}
-        onOpenSource={openSource}
-        onUse={actions.use}
+        canResync={canResync}
+        isTechnical={isTechnical}
         meta={metaEditor}
+        missing={missing}
+        onDelete={actions.remove}
+        onDownload={actions.download}
+        onEdit={actions.edit}
+        onOpenSource={openSource}
+        onResync={actions.resync}
+        onUse={actions.use}
+        usable={usable}
+        workflow={workflow}
       />
 
       <Tabs
-        value={activeTab}
-        onValueChange={(value) => setActiveTab(/* SAFETY: 类型断言已复核 */ value as DetailTab)}
         className="min-h-0 flex-1 gap-0"
+        onValueChange={(value) => setActiveTab(/* SAFETY: 类型断言已复核 */ value as DetailTab)}
+        value={activeTab}
       >
         <TabsList
-          variant="line"
           className="border-border-subtle h-auto w-full justify-start gap-1 rounded-none border-b px-4"
+          variant="line"
         >
           {DETAIL_TABS.map((tab) => (
             <TabsTrigger
+              className="detail-tab-trigger h-auto flex-none rounded-none px-3 py-2.5 text-xs font-medium"
               key={tab.key}
               value={tab.key}
-              className="detail-tab-trigger h-auto flex-none rounded-none px-3 py-2.5 text-xs font-medium"
             >
               {tab.label}
             </TabsTrigger>
@@ -105,20 +105,12 @@ export function WorkflowLibraryDetailView({
             也不卸载），表单值与运行态才不丢。 */}
         {canvasMounted && (
           <div
-            hidden={activeTab !== "canvas" && activeTab !== "use"}
             className="min-h-0 flex-1 overflow-y-auto p-5"
+            hidden={activeTab !== "canvas" && activeTab !== "use"}
           >
             <DetailBody
-              workflow={workflow}
-              tab={activeTab === "use" ? "use" : "canvas"}
-              isLoading={isLoading}
-              workflowIO={workflowIO}
-              paramMap={paramMap}
-              sourceData={sourceData}
-              usable={usable}
-              onEdit={actions.edit}
               activeMode={activeMode}
-              onActiveModeChange={setActiveMode}
+              isLoading={isLoading}
               meta={{
                 modes: metaEditor.modes,
                 defaultMode: metaEditor.defaultMode,
@@ -130,28 +122,28 @@ export function WorkflowLibraryDetailView({
                   void metaEditor.patchModes(metaEditor.modes, code);
                 },
               }}
+              onActiveModeChange={setActiveMode}
+              onEdit={actions.edit}
+              onPatchParamMap={(next) => metaEditor.patchParamMap(next)}
               onSeedModeChange={(ioKey, mode) => {
                 void metaEditor.patchSeedMode(ioKey, mode);
               }}
-              onPatchParamMap={(next) => metaEditor.patchParamMap(next)}
+              paramMap={paramMap}
+              sourceData={sourceData}
+              tab={activeTab === "use" ? "use" : "canvas"}
+              usable={usable}
+              workflow={workflow}
+              workflowIO={workflowIO}
             />
           </div>
         )}
 
         {
           /* SAFETY: 类型断言已复核 */ (["params", "source"] as const).map((tab) => (
-            <TabsContent key={tab} value={tab} className="min-h-0 flex-1 overflow-y-auto p-5">
+            <TabsContent className="min-h-0 flex-1 overflow-y-auto p-5" key={tab} value={tab}>
               <DetailBody
-                workflow={workflow}
-                tab={tab}
-                isLoading={isLoading}
-                workflowIO={workflowIO}
-                paramMap={paramMap}
-                sourceData={sourceData}
-                usable={usable}
-                onEdit={actions.edit}
                 activeMode={activeMode}
-                onActiveModeChange={setActiveMode}
+                isLoading={isLoading}
                 meta={{
                   modes: metaEditor.modes,
                   defaultMode: metaEditor.defaultMode,
@@ -160,10 +152,18 @@ export function WorkflowLibraryDetailView({
                     void metaEditor.patchModes(metaEditor.modes, code);
                   },
                 }}
+                onActiveModeChange={setActiveMode}
+                onEdit={actions.edit}
+                onPatchParamMap={(next) => metaEditor.patchParamMap(next)}
                 onSeedModeChange={(ioKey, mode) => {
                   void metaEditor.patchSeedMode(ioKey, mode);
                 }}
-                onPatchParamMap={(next) => metaEditor.patchParamMap(next)}
+                paramMap={paramMap}
+                sourceData={sourceData}
+                tab={tab}
+                usable={usable}
+                workflow={workflow}
+                workflowIO={workflowIO}
               />
             </TabsContent>
           ))
@@ -173,8 +173,8 @@ export function WorkflowLibraryDetailView({
       {sourceOpen && (
         <SourceModal
           data={sourceData}
-          loading={isLoading}
           error={errorMessage}
+          loading={isLoading}
           onClose={closeSource}
         />
       )}

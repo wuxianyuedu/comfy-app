@@ -9,12 +9,12 @@ import { Button } from "~/components/ui/button";
 
 const BRUSH_SIZES = /* SAFETY: 类型断言已复核 */ [8, 20, 40] as const;
 
-export interface MaskCanvasProps {
+export type MaskCanvasProps = {
+  disabled?: boolean;
+  onChange: (dataUrl: string | null) => void;
   /** 当前蒙版（PNG dataURL）；外部清空（重置）时传 null 触发重绘底色。 */
   value: string | null;
-  onChange: (dataUrl: string | null) => void;
-  disabled?: boolean;
-}
+};
 
 export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -24,7 +24,9 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
 
   const paintBase = useCallback((canvas: HTMLCanvasElement) => {
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }, []);
@@ -32,13 +34,19 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
   // 底色只画一次 + 外部清空（value 从非 null 变 null）时重画。
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    if (value === null) paintBase(canvas);
+    if (!canvas) {
+      return;
+    }
+    if (value === null) {
+      paintBase(canvas);
+    }
   }, [value, paintBase]);
 
   const pointOf = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas) return null;
+    if (!canvas) {
+      return null;
+    }
     const rect = canvas.getBoundingClientRect();
     return {
       x: ((event.clientX - rect.left) / rect.width) * canvas.width,
@@ -49,7 +57,9 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
   const strokeTo = (point: { x: number; y: number }) => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
+    if (!canvas || !ctx) {
+      return;
+    }
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = brush;
     ctx.lineCap = "round";
@@ -65,63 +75,76 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
   return (
     <div className="flex flex-col gap-2">
       <canvas
-        ref={canvasRef}
-        width={288}
-        height={288}
         aria-label="重绘蒙版画布（白色为要重绘的区域）"
-        className={
-          "border-border-strong bg-panel-deep touch-none rounded-lg border " +
-          (disabled ? "opacity-50" : "cursor-crosshair")
-        }
+        className={`border-border-strong bg-panel-deep touch-none rounded-lg border ${
+          disabled ? "opacity-50" : "cursor-crosshair"
+        }`}
+        height={288}
         onPointerDown={(e) => {
-          if (disabled) return;
+          if (disabled) {
+            return;
+          }
           e.currentTarget.setPointerCapture(e.pointerId);
           drawingRef.current = true;
           const point = pointOf(e);
-          if (point) strokeTo(point);
+          if (point) {
+            strokeTo(point);
+          }
         }}
         onPointerMove={(e) => {
-          if (!drawingRef.current || disabled) return;
+          if (!drawingRef.current || disabled) {
+            return;
+          }
           const point = pointOf(e);
-          if (point) strokeTo(point);
+          if (point) {
+            strokeTo(point);
+          }
         }}
         onPointerUp={() => {
-          if (!drawingRef.current) return;
+          if (!drawingRef.current) {
+            return;
+          }
           drawingRef.current = false;
           lastPointRef.current = null;
           const canvas = canvasRef.current;
-          if (canvas) onChange(canvas.toDataURL("image/png"));
+          if (canvas) {
+            onChange(canvas.toDataURL("image/png"));
+          }
         }}
+        ref={canvasRef}
+        width={288}
       />
       <div className="flex items-center gap-2">
         <span className="text-ink-faint text-2xs">画笔</span>
         {BRUSH_SIZES.map((size) => (
           <Button
+            aria-label={`${size} 像素画笔`}
+            className="text-2xs h-6 px-2"
+            disabled={disabled}
             key={size}
+            onClick={() => setBrush(size)}
+            size="sm"
             type="button"
             variant={brush === size ? "secondary" : "ghost"}
-            size="sm"
-            disabled={disabled}
-            aria-label={`${size} 像素画笔`}
-            onClick={() => setBrush(size)}
-            className="text-2xs h-6 px-2"
           >
             {size}
           </Button>
         ))}
         <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
           aria-label="清空蒙版"
+          className="text-2xs h-6 px-2"
+          disabled={disabled}
           onClick={() => {
             const canvas = canvasRef.current;
-            if (!canvas) return;
+            if (!canvas) {
+              return;
+            }
             paintBase(canvas);
             onChange(null);
           }}
-          className="text-2xs h-6 px-2"
+          size="sm"
+          type="button"
+          variant="ghost"
         >
           清空
         </Button>

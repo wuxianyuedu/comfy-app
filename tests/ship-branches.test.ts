@@ -22,10 +22,10 @@ import { main } from "../scripts/ship.mjs";
 const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
 
 type FakeResult = {
-  status: number;
-  stdout: string;
-  stderr: string;
   error: string | null;
+  status: number;
+  stderr: string;
+  stdout: string;
 };
 
 /** 一条 PR 记录的最小形状（字段按平台原样：`head.ref` 带 `refs/heads/` 前缀）。 */
@@ -133,7 +133,7 @@ describe("fetchPullsForBranches：取不到就是取不到", () => {
 });
 
 /** `main()` 那一层需要的最小 io（形状同 `tests/ship.test.ts` 的 `issueMainIo`）。 */
-function branchesMainIo(opts: { pulls: Array<unknown>; branchList: string }) {
+function branchesMainIo(opts: { branchList: string; pulls: Array<unknown>; }) {
   const calls: Array<string> = [];
   const log: Array<string> = [];
   const ok = (stdout: string): FakeResult => ({
@@ -145,19 +145,36 @@ function branchesMainIo(opts: { pulls: Array<unknown>; branchList: string }) {
   const run = (cmd: string, args: Array<string>): FakeResult => {
     calls.push([cmd, ...args].join(" "));
     const key = args.join(" ");
-    if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-    if (cmd === "git" && key.includes("@{u}")) return ok("cnb/master");
-    if (cmd === "git" && key === "remote") return ok("cnb\n");
-    if (cmd === "git" && key.includes("symbolic-ref")) return ok("refs/remotes/cnb/master");
-    if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
-    if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-    if (cmd === "git" && key.includes("get-url"))
+    if (cmd === "cnb" && args[0] === "--version") {
+      return ok("1.15.25");
+    }
+    if (cmd === "git" && key.includes("@{u}")) {
+      return ok("cnb/master");
+    }
+    if (cmd === "git" && key === "remote") {
+      return ok("cnb\n");
+    }
+    if (cmd === "git" && key.includes("symbolic-ref")) {
+      return ok("refs/remotes/cnb/master");
+    }
+    if (cmd === "git" && key.includes("--abbrev-ref")) {
+      return ok("master");
+    }
+    if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+      return ok("d02ec9");
+    }
+    if (cmd === "git" && key.includes("get-url")) {
       return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-    if (cmd === "git" && key.includes("for-each-ref")) return ok(opts.branchList);
-    if (cmd === "git" && key.includes("ls-remote --heads"))
+    }
+    if (cmd === "git" && key.includes("for-each-ref")) {
+      return ok(opts.branchList);
+    }
+    if (cmd === "git" && key.includes("ls-remote --heads")) {
       return ok("aaa\trefs/heads/fix/landed\n");
-    if (cmd === "cnb" && args[0] === "pulls" && args[1] === "list-pulls")
+    }
+    if (cmd === "cnb" && args[0] === "pulls" && args[1] === "list-pulls") {
       return ok(JSON.stringify({ data: opts.pulls }));
+    }
     return ok("");
   };
   return { run, calls, log };

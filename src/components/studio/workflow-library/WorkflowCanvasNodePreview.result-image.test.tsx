@@ -69,15 +69,15 @@ const io: WorkflowIOMap = {
 function renderPreview(viewMode: "edit" | "use") {
   return render(
     <WorkflowCanvasNodePreview
-      workflowId="wf-1"
-      workflowName="测试工作流"
-      taskType="t2i"
-      workflowIO={io}
-      paramMap={{}}
-      usable
       defaultMode="T2I"
-      viewMode={viewMode}
       onPatchParamMap={vi.fn()}
+      paramMap={{}}
+      taskType="t2i"
+      usable
+      viewMode={viewMode}
+      workflowId="wf-1"
+      workflowIO={io}
+      workflowName="测试工作流"
     />,
   );
 }

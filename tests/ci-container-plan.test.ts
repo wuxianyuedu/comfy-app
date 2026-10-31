@@ -275,18 +275,24 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
       /** @type {number | null} */
       let envKeyIndent = null;
       for (const raw of String(block).split("\n")) {
-        if (raw.trim() === "") continue;
+        if (raw.trim() === "") {
+          continue;
+        }
         const indent = raw.length - raw.trimStart().length;
         const body = raw.trim();
         /* stage 块尾会带上**下一个 stage 之前那一段注释**（`stageBlock()` 只按缩进与
          * 顶格键收尾），它不属于本项的任何一层 —— 跳过，否则深度判据会对着注释开火。 */
-        if (body.startsWith("#")) continue;
+        if (body.startsWith("#")) {
+          continue;
+        }
         if (body.startsWith("- name:")) {
           keyIndent = indent + 2;
           envKeyIndent = null;
           continue;
         }
-        if (keyIndent === null) continue;
+        if (keyIndent === null) {
+          continue;
+        }
         /* 列表项（`volumes:` 的 `- <卷名>:<路径>`）：它比 `volumes:` 深一层，
          * 是**合法**的更深层键 —— 只有当 `env` 正在收键时越过它才算挂错层。 */
         if (body.startsWith("- ")) {
@@ -301,7 +307,9 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
          * ⚠️ 这一支必须排在「比项自己的键更浅 ⇒ 结束」**之前**：挂错层时它们的缩进
          * 恰好等于项自己那一层，先判「结束」会悄悄放过去。 */
         if (envKeyIndent !== null) {
-          if (indent >= envKeyIndent) continue;
+          if (indent >= envKeyIndent) {
+            continue;
+          }
           offenders.push(`${name}：${body.slice(0, 30)}（缩进 ${indent}，该在 ${envKeyIndent}）`);
           envKeyIndent = null;
           continue;
@@ -315,12 +323,15 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
           /* `env:` 的键与项自己的键**同一层**（这是 YAML 的形态：`env:` 深一层，
            * 它的键再深一层 —— 正好落在项自己的键那一层上）。 */
           envKeyIndent = keyIndent;
-          if (indent !== keyIndent)
+          if (indent !== keyIndent) {
             offenders.push(`${name}：env:（缩进 ${indent}，该在 ${keyIndent}）`);
+          }
           continue;
         }
         /* 不在 `env` 里：`timeout` 该在 `keyIndent` 那一层。 */
-        if (body.startsWith("timeout:") && indent !== keyIndent) offenders.push(`${name}：${body}`);
+        if (body.startsWith("timeout:") && indent !== keyIndent) {
+          offenders.push(`${name}：${body}`);
+        }
       }
     }
     expect(
@@ -369,7 +380,9 @@ describe("解析器的两处细节：注释与卷写法", () => {
   it("读数是人读的三行，且断桥那一档**点名**（不是一句「有问题」）", () => {
     const lines = describePlan(CNB);
     expect(lines[0]).toContain("self-hosted");
-    if (plan(CNB).containers.length > 0) expect(lines.join("\n")).toContain(BROWSERS_VOLUME);
+    if (plan(CNB).containers.length > 0) {
+      expect(lines.join("\n")).toContain(BROWSERS_VOLUME);
+    }
     const broken = describePlan(containerFixture({ bridge: [] }));
     expect(broken.join("\n")).toContain("重下");
     /* 点名到格：两格都要出现，不是一句「有格没挂卷」。 */

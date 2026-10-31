@@ -16,7 +16,7 @@ vi.mock("./launch-path", () => ({ resolveComfyLaunchPlan: vi.fn() }));
 vi.mock("./instance-kind", () => ({
   classifyComfyInstall: vi.fn(() => ({
     kind: "portable",
-    instanceRoot: "C:\\Comfy",
+    instanceRoot: String.raw`C:\Comfy`,
     instanceIdFile: null,
   })),
 }));
@@ -39,10 +39,10 @@ import { collectComfyPythonCandidates } from "./env-python";
 import { readRegisteredLauncher, launcherCommandCandidates } from "./status";
 
 const plan = {
-  cmd: "C:\\Comfy\\python_embeded\\python.exe",
+  cmd: String.raw`C:\Comfy\python_embeded\python.exe`,
   baseArgs: ["-s"],
-  cwd: "C:\\Comfy",
-  mainPy: "C:\\Comfy\\main.py",
+  cwd: String.raw`C:\Comfy`,
+  mainPy: String.raw`C:\Comfy\main.py`,
 };
 
 beforeEach(() => {
@@ -66,7 +66,7 @@ describe("queryInstanceByPath — 直接从配置路径拿事实", () => {
       failed: false,
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8190);
-    const q = await queryInstanceByPath("C:\\Comfy");
+    const q = await queryInstanceByPath(String.raw`C:\Comfy`);
     expect(q).toMatchObject({
       running: true,
       pid: 4242,
@@ -84,14 +84,14 @@ describe("queryInstanceByPath — 直接从配置路径拿事实", () => {
       failed: false,
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(null);
-    const q = await queryInstanceByPath("C:\\Comfy");
+    const q = await queryInstanceByPath(String.raw`C:\Comfy`);
     expect(q.running).toBe(true);
     expect(q.port).toBeNull();
   });
 
   it("main.py 落空但解释器候选命中（comfy-cli / 桌面版起法）", async () => {
     vi.mocked(launcherCommandCandidates).mockReturnValue([
-      "C:\\Comfy\\python_embeded\\python.exe",
+      String.raw`C:\Comfy\python_embeded\python.exe`,
     ]);
     let call = 0;
     // 第 1 次 = main.py（落空），第 2 次 = 解释器候选（命中）
@@ -102,14 +102,14 @@ describe("queryInstanceByPath — 直接从配置路径拿事实", () => {
         : { pid: 900, failed: false }; // 解释器候选命中
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
-    const q = await queryInstanceByPath("C:\\Comfy");
+    const q = await queryInstanceByPath(String.raw`C:\Comfy`);
     expect(q).toMatchObject({ running: true, pid: 900, source: "process" });
   });
 
   it("setup 登记的启动器优先于环境反查候选（先声明的判据优先）", async () => {
-    vi.mocked(readRegisteredLauncher).mockReturnValue("C:\\uv\\python.exe");
+    vi.mocked(readRegisteredLauncher).mockReturnValue(String.raw`C:\uv\python.exe`);
     vi.mocked(collectComfyPythonCandidates).mockReturnValue([
-      { exe: "C:\\uv\\other\\python.exe", via: "实例环境的解释器" },
+      { exe: String.raw`C:\uv\other\python.exe`, via: "实例环境的解释器" },
     ]);
     let call = 0;
     vi.mocked(findPidForMainPyDetailed).mockImplementation(async () => {
@@ -119,13 +119,13 @@ describe("queryInstanceByPath — 直接从配置路径拿事实", () => {
         : { pid: 555, failed: false }; // 候选命中
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
-    const q = await queryInstanceByPath("C:\\Comfy");
+    const q = await queryInstanceByPath(String.raw`C:\Comfy`);
     expect(q.source).toBe("launcher");
     expect(q.via).toBe("setup 中登记的启动器");
   });
 
   it("查过但一条都没命中 → running=false 且 unverified=false（确认不在跑）", async () => {
-    const q = await queryInstanceByPath("C:\\Comfy");
+    const q = await queryInstanceByPath(String.raw`C:\Comfy`);
     expect(q.running).toBe(false);
     expect(q.unverified).toBe(false);
   });
@@ -135,7 +135,7 @@ describe("queryInstanceByPath — 直接从配置路径拿事实", () => {
       pid: null,
       failed: true,
     });
-    const q = await queryInstanceByPath("C:\\Comfy");
+    const q = await queryInstanceByPath(String.raw`C:\Comfy`);
     expect(q.running).toBe(false);
     expect(q.unverified).toBe(true);
   });
@@ -155,7 +155,7 @@ describe("baseForLocalPort — 端口 → 地址", () => {
   it("无端口 / 非法端口 → null（调用方继续走探测链路）", () => {
     expect(baseForLocalPort(null)).toBeNull();
     expect(baseForLocalPort(0)).toBeNull();
-    expect(baseForLocalPort(70000)).toBeNull();
+    expect(baseForLocalPort(70_000)).toBeNull();
   });
 
   it("COMFYUI_BASE 指向远端实例时不用本机端口事实", () => {

@@ -32,26 +32,33 @@ const ROOT = path.resolve(__dirname, "..");
  * 用「含 PYTHONUNBUFFERED」当选择器是错的（ComfyUI 那一份没有这个键），
  * 第一版就是这么判的、直接把另一条链路判成「找不到」。
  */
-function pythonEnvKeys(rel: string): { name: string; keys: Array<string> } {
+function pythonEnvKeys(rel: string): { keys: Array<string>; name: string; } {
   const src = stripComments(readFileSync(path.join(ROOT, rel), "utf8")).replace(/\r\n/g, "\n");
-  const found: Array<{ name: string; keys: Array<string> }> = [];
+  const found: Array<{ keys: Array<string>; name: string; }> = [];
   const head = /(?:^|[\s,(])(env|stdioEnv|childEnv)\s*:\s*\{/g;
   let m: RegExpExecArray | null;
   while ((m = head.exec(src))) {
     const start = src.indexOf("{", m.index);
-    if (start < 0) continue;
+    if (start < 0) {
+      continue;
+    }
     let depth = 0;
     let i = start;
     for (; i < src.length; i++) {
-      if (src[i] === "{") depth++;
-      else if (src[i] === "}") {
+      if (src[i] === "{") {
+        depth++;
+      } else if (src[i] === "}") {
         depth--;
-        if (depth === 0) break;
+        if (depth === 0) {
+          break;
+        }
       }
     }
     const body = src.slice(start + 1, i);
     const keys = [...body.matchAll(/([A-Z][A-Z0-9_]*)\s*:/g)].map((k) => k[1]!);
-    if (keys.some((k) => k.startsWith("PYTHON"))) found.push({ name: m[1]!, keys });
+    if (keys.some((k) => k.startsWith("PYTHON"))) {
+      found.push({ name: m[1]!, keys });
+    }
   }
   expect(
     found.length,

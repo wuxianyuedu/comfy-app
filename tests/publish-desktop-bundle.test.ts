@@ -52,7 +52,9 @@ function tmpDir(tag: string): string {
 }
 
 afterEach(() => {
-  for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of made.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** 一份「打出过成品」的工作区：bundle 根下两份安装包 + 一份非安装包（不许被收走）。 */
@@ -164,10 +166,10 @@ describe("轮转（留 N 份）", () => {
 describe("发布那一跑（main）", () => {
   /** 跑一次发布，返回退出码 + 日志 + 落点。 */
   function runPublish(opts: {
-    repo?: string;
-    root?: string;
     argv?: Array<string>;
     env?: Record<string, string>;
+    repo?: string;
+    root?: string;
     runStore?: () => { status: number; stdout?: string };
   }) {
     const log: Array<string> = [];

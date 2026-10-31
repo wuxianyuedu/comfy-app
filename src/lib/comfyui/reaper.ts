@@ -41,11 +41,11 @@ export type TaskRepoForReaper = Pick<
 >;
 
 export type ReaperDeps = {
-  taskRepo: TaskRepoForReaper;
   /** 本进程扫哪一归属片（P3 §5 ADR §6 的灰度互斥）：Next 侧缺省 `'inline'`
    *  （NULL 归 inline，与全 NULL 的现存行集等价、零行为变化）；executor host
    *  boot 时注入 `'host'`，只收自己那份孤儿。 */
   owner: TaskClaimMode;
+  taskRepo: TaskRepoForReaper;
 };
 let depsOverride: Partial<ReaperDeps> = {};
 
@@ -65,14 +65,16 @@ export function configureReaper(next: Partial<ReaperDeps>): void {
  *  **unhandled rejection**（实测 `scripts/executor-host.mjs` 加载本模块
  *  即炸两条），既不体面也污染退出路径。 */
 async function resolveTaskRepo(): Promise<TaskRepoForReaper | null> {
-  if (depsOverride.taskRepo) return depsOverride.taskRepo;
+  if (depsOverride.taskRepo) {
+    return depsOverride.taskRepo;
+  }
   try {
     return await loadRealTaskRepo();
-  } catch (err) {
+  } catch (error) {
     if (!warnedUnconfigured) {
       warnedUnconfigured = true;
       logger.warn(
-        `[comfyui] reaper 未注入 taskRepo 且 Next barrel 不可达（预期于纯 Node 宿主 boot 注入前），本轮跳过：${errorText(err, "loadRealTaskRepo")}`,
+        `[comfyui] reaper 未注入 taskRepo 且 Next barrel 不可达（预期于纯 Node 宿主 boot 注入前），本轮跳过：${errorText(error, "loadRealTaskRepo")}`,
       );
     }
     return null;
@@ -133,14 +135,14 @@ const RUNNING_TICK_CAP = 5;
  *  （现场是同一任务的三条失败原因、相隔 7s 递增）。
  *  因此把 handle 与在途守卫**都**挂在 globalThis 上：
  *  无论热重载多少次，每个进程里只有一个回收器。 */
-interface ReaperGlobal {
+type ReaperGlobal = {
   handle: ReturnType<typeof setInterval> | null;
-  reaping: Set<string>;
   /** 「这一轮见到 RUNNING 且无 promptId」的登记处，下一轮仍在才判孤儿（见
    *  `reapStaleRunningTasks` 的两轮观察）。全局名从 v1 升到 v2：HMR 期间残留的
    *  旧对象没有这个字段，`??=` 不会补，判据会静默失效。 */
   noPromptSeen: Set<string>;
-}
+  reaping: Set<string>;
+};
 
 declare global {
   var __comfyReaper_v2: ReaperGlobal | undefined;
@@ -201,10 +203,14 @@ export function isTaskClaimedInProcess(
  *  这正是本次要修的跨次运行失败原因不一致。加锁后谁先认领谁赢，两处一致。 */
 function claimTerminal(taskId: string): boolean {
   const s = state();
-  if (s.settled.has(taskId)) return false;
+  if (s.settled.has(taskId)) {
+    return false;
+  }
   s.settled.add(taskId);
   const t = s.timers.get(taskId);
-  if (t) clearTimeout(t);
+  if (t) {
+    clearTimeout(t);
+  }
   s.timers.delete(taskId);
   return true;
 }
@@ -235,25 +241,33 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
   try {
     const base = await resolveComfyBase();
     const q = await fetch(`${base}/queue`, {
-      signal: AbortSignal.timeout(3_000),
+      signal: AbortSignal.timeout(3000),
     });
-    if (!q.ok) return null;
+    if (!q.ok) {
+      return null;
+    }
     const qd = /* SAFETY: 类型断言已复核 */ (await q.json()) as {
-      queue_running?: Array<{ prompt_id?: string }>;
       queue_pending?: Array<{ prompt_id?: string }>;
+      queue_running?: Array<{ prompt_id?: string }>;
     } | null;
     const all = [...(qd?.queue_running ?? []), ...(qd?.queue_pending ?? [])];
     /* 队列非空 → 本应用（MAX_CONCURRENCY=1）必有任务在跑。raw 路径的
      *  comfy-cli 自己生成 client_id，无法反查属于哪个 taskId，因此无法区分
      *  时一律不杀。 */
-    if (all.length > 0) return true;
-    if (!hintPromptId) return false;
+    if (all.length > 0) {
+      return true;
+    }
+    if (!hintPromptId) {
+      return false;
+    }
     /* 队列空但有 promptId 线索：只有「最近一条历史确实是本次 prompt」才算
      *  在飞（任务刚收尾的竞态窗口），否则视为已死。 */
     const h = await fetch(`${base}/history?max_items=1`, {
-      signal: AbortSignal.timeout(3_000),
+      signal: AbortSignal.timeout(3000),
     });
-    if (!h.ok) return null;
+    if (!h.ok) {
+      return null;
+    }
     const hd = /* SAFETY: 类型断言已复核 */ (await h.json()) as Record<string, unknown> | null;
     return !!hd && Object.prototype.hasOwnProperty.call(hd, hintPromptId);
   } catch {
@@ -267,13 +281,17 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
 export async function reapStaleQueuedTasks(): Promise<void> {
   // 顶部一次性 resolve：下游 closure 沿用旧名（`taskRepository`），call site 不动。
   const taskRepository = await resolveTaskRepo();
-  if (!taskRepository) return;
+  if (!taskRepository) {
+    return;
+  }
   try {
     const cutoff = new Date(Date.now() - STALE_MS);
     /* 不再传 `owner`：判据本身就是「不属于任何已知归属片」（ISSUE #1204），带分片
      *  参数会把它伪装成「本片内的孤儿扫描」，而本片内的 `QUEUED` 行归领取循环管。 */
     const stale = await taskRepository.listStaleUnownedQueued(cutoff, 20);
-    if (stale.length === 0) return;
+    if (stale.length === 0) {
+      return;
+    }
     const s = state();
     /* 外部证据每个 tick 只探一次（不按行重复请求：20 行 × 2 次请求 = 40 次）。
      *  探测本身只在「进程内无认领足迹」的行才会被用到，见下方判决。 */
@@ -282,7 +300,9 @@ export async function reapStaleQueuedTasks(): Promise<void> {
       /* 进程内守卫：若另一个（并发的）回收节拍已经认领了这个任务，就跳过 ——
        *  免得重复记 FAILED 日志。DB 的 `status: QUEUED` 查询不是原子的，
        *  同一毫秒内触发的两个节拍可能同时捞到同一行。 */
-      if (reaperState.reaping.has(t.id)) continue;
+      if (reaperState.reaping.has(t.id)) {
+        continue;
+      }
       reaperState.reaping.add(t.id);
       try {
         const ageSec = Math.round((Date.now() - t.createdAt.getTime()) / 1000);
@@ -365,22 +385,27 @@ export async function reapStaleQueuedTasks(): Promise<void> {
         `[comfyui] reaper: marked ${stale.length} dead-letter QUEUED task(s) as FAILED (older than ${STALE_MS / 1000}s, no promptId, claimedBy 不属于任何归属片)`,
       );
     }
-  } catch (err) {
-    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "reapStaleQueuedTasks 失败")}`);
+  } catch (error) {
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(error, "reapStaleQueuedTasks 失败")}`);
   }
 }
 
+/* SAFETY: 类型断言已复核 */
 /** 拿 ComfyUI 对账 RUNNING 任务。
  *  判决矩阵见 RUNNING_STALE_MS 上方的文件头注释。 */
 /** 同上：RUNNING 对账判决矩阵的测试入口。 */
 export async function reapStaleRunningTasks(): Promise<void> {
   const taskRepository = await resolveTaskRepo();
-  if (!taskRepository) return;
+  if (!taskRepository) {
+    return;
+  }
   const owner = depsOverride.owner ?? "inline";
   try {
     const cutoff = new Date(Date.now() - RUNNING_STALE_MS);
     const stale = await taskRepository.listStaleRunning(cutoff, RUNNING_TICK_CAP, owner);
-    if (stale.length === 0) return;
+    if (stale.length === 0) {
+      return;
+    }
     const base = await resolveComfyBase();
     const s = state();
     /* 本轮见到的「RUNNING 且无 promptId」行；循环结束后整体替换登记表。 */
@@ -390,7 +415,9 @@ export async function reapStaleRunningTasks(): Promise<void> {
         /* ISSUE #1184：这一族行以前被 SQL 的 `promptId IS NOT NULL` 直接挡在
          * 两条 sweeper 之外 —— 宿主在那段窗口崩溃就永久卡「生成中」。
          * 本进程还认领它（内存队列 / cli 句柄 / 已起步）= 正常执行中，不插手。 */
-        if (isTaskClaimedInProcess(s, (id) => cliProcs.has(id), t.id)) continue;
+        if (isTaskClaimedInProcess(s, (id) => cliProcs.has(id), t.id)) {
+          continue;
+        }
         /* 「刚领取、还没来得及 spawn comfy-cli」的行长得一模一样，所以要**连续
          * 两轮**都见到才判孤儿：两轮之间隔 REAPER_MS(30s)，而
          * `claimNextQueued → enqueueJob` 落内存足迹是亚秒级，中间窗口不会被误杀。 */
@@ -404,11 +431,15 @@ export async function reapStaleRunningTasks(): Promise<void> {
           continue;
         }
         reaperState.noPromptSeen.delete(t.id);
-        if (reaperState.reaping.has(t.id)) continue;
+        if (reaperState.reaping.has(t.id)) {
+          continue;
+        }
         reaperState.reaping.add(t.id);
         try {
           const ageSec = Math.round((Date.now() - t.createdAt.getTime()) / 1000);
-          if (!claimTerminal(t.id)) continue;
+          if (!claimTerminal(t.id)) {
+            continue;
+          }
           const reason = `任务被领取后 ${ageSec}s 仍未回传 prompt_id，且连续两轮都无人认领它（执行宿主可能已崩溃）— 请重新执行`;
           const outcome = await taskRepository.finalizeFailure(t.id, reason);
           if (outcome !== "written") {
@@ -424,36 +455,37 @@ export async function reapStaleRunningTasks(): Promise<void> {
         }
         continue;
       }
-      if (reaperState.reaping.has(t.id)) continue;
+      if (reaperState.reaping.has(t.id)) {
+        continue;
+      }
       /* 若该 prompt 仍被当前 dev server 进程的 in-memory runner 监控
        * （comfy-cli / WS 正在等待结果，`promptToTask` 中仍有映射），说明
        * 进程并未真正重启、任务仍在正常执行，reaper 不应插手 —— 正常监控
        * 路径会负责收口。只有 dev server 真正冷重启（内存状态丢失、无人再
        * 认领该 prompt）时才交给本 reaper 对账，避免误判正在执行的任务为
        * FAILED orphan。 */
-      if (s.promptToTask.get(t.promptId) === t.id) continue;
+      if (s.promptToTask.get(t.promptId) === t.id) {
+        continue;
+      }
       reaperState.reaping.add(t.id);
       try {
         const url = `${base}/history/${encodeURIComponent(t.promptId)}`;
         let verdict: "succeeded" | "failed" | "unknown" = "unknown";
         let reason = "";
         try {
-          const r = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+          const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
           if (r.status === 200) {
             const data = /* SAFETY: 类型断言已复核 */ (await r.json()) as Record<
               string,
               unknown
             > | null;
-            const entry =
-              data &&
-              /* SAFETY: 类型断言已复核 */ (data[t.promptId] as
-                | Record<string, unknown>
-                | undefined);
+            /* SAFETY: 类型断言已复核 */
+            const entry = data && (data[t.promptId] as Record<string, unknown> | undefined);
             if (entry) {
               const status = /* SAFETY: 类型断言已复核 */ entry.status as
                 | {
-                    executed?: unknown;
                     errored?: unknown;
+                    executed?: unknown;
                     messages?: unknown;
                   }
                 | undefined;
@@ -476,12 +508,12 @@ export async function reapStaleRunningTasks(): Promise<void> {
               let inQueue = false;
               try {
                 const q = await fetch(`${base}/queue`, {
-                  signal: AbortSignal.timeout(3_000),
+                  signal: AbortSignal.timeout(3000),
                 });
                 if (q.ok) {
                   const qd = /* SAFETY: 类型断言已复核 */ (await q.json()) as {
-                    queue_running?: Array<{ prompt_id?: string }>;
                     queue_pending?: Array<{ prompt_id?: string }>;
+                    queue_running?: Array<{ prompt_id?: string }>;
                   } | null;
                   const all = [...(qd?.queue_running ?? []), ...(qd?.queue_pending ?? [])];
                   inQueue = all.some((all) => all?.prompt_id === t.promptId);
@@ -504,9 +536,9 @@ export async function reapStaleRunningTasks(): Promise<void> {
             verdict = "unknown";
             reason = `ComfyUI /history 返回 ${r.status} — 下次重试`;
           }
-        } catch (netErr) {
+        } catch (error) {
           verdict = "unknown";
-          reason = `ComfyUI 不可达：${netErr instanceof Error ? netErr.message : "network"} — 下次重试`;
+          reason = `ComfyUI 不可达：${error instanceof Error ? error.message : "network"} — 下次重试`;
         }
         if (verdict === "unknown") {
           log(t.id, "warn", `reaper(running): ${reason}`);
@@ -547,14 +579,16 @@ export async function reapStaleRunningTasks(): Promise<void> {
     logger.warn(
       `[comfyui] reaper(running): checked ${stale.length} stale RUNNING task(s) (older than ${RUNNING_STALE_MS / 1000}s)`,
     );
-  } catch (err) {
-    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "reapStaleRunningTasks 失败")}`);
+  } catch (error) {
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(error, "reapStaleRunningTasks 失败")}`);
   }
 }
 
 /** 单轮回收：表还没建好就整轮跳过，而不是让 sqlite 的错误浮出。 */
 function sweepOnce(): void {
-  if (!isSchemaReady()) return;
+  if (!isSchemaReady()) {
+    return;
+  }
   void reapStaleQueuedTasks();
   void reapStaleRunningTasks();
 }
@@ -568,7 +602,9 @@ function sweepOnce(): void {
  * 幂等：`reaperState.handle` 已在就直接返回（dev 的 HMR / 重复调用安全）。
  */
 export function startReaper(): void {
-  if (reaperState.handle) return; // 跨 HMR 重载的单例
+  if (reaperState.handle) {
+    return;
+  } // 跨 HMR 重载的单例
   /* 起表时先跑一次：刚重启的 dev server 便能**立刻**收拾掉上一段生命周期
    * 遗留下的任务，而不是等到 30 秒之后。
    *
@@ -607,7 +643,9 @@ export function startReaper(): void {
  * 是**缺地基**（硬规则 24）。幂等：没起过就什么都不做。
  */
 export function stopReaper(): void {
-  if (!reaperState.handle) return;
+  if (!reaperState.handle) {
+    return;
+  }
   clearInterval(reaperState.handle);
   reaperState.handle = null;
   /* 在途守卫一并清掉：下一个实例不该继承上一轮的「正在回收」标记，

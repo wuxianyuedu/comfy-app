@@ -54,8 +54,8 @@ export function describeDevServerRestart(
   reason: string | null,
   detail: string | null = null,
 ): {
-  title: string;
   body: string;
+  title: string;
 } {
   if (reason === "route-404-heal") {
     /* 运行期自愈：故障发生时页面**已经在跑**，所以页面自己连着的是被换掉的那个
@@ -104,8 +104,8 @@ export function describeDevServerRestart(
  * 后者会把用户留在「它说修好了，可数据还是加载不出来」的状态里。
  */
 export function describeDepsStale(state: DepsFreshnessState): {
-  title: string;
   body: string;
+  title: string;
 } {
   return {
     title: "依赖与代码不一致，需重装依赖",
@@ -158,8 +158,12 @@ const HEAL_PAIR_KINDS: ReadonlyArray<MessageKind> = ["offline", "restart"];
 function dropHealPairFromCenter(now: number): void {
   const store = useMessageCenterStore.getState();
   for (const message of store.messages) {
-    if (!HEAL_PAIR_KINDS.includes(message.kind)) continue;
-    if (now - message.time > SELF_HEAL_MERGE_WINDOW_MS) continue;
+    if (!HEAL_PAIR_KINDS.includes(message.kind)) {
+      continue;
+    }
+    if (now - message.time > SELF_HEAL_MERGE_WINDOW_MS) {
+      continue;
+    }
     store.remove(message.id);
   }
 }
@@ -171,7 +175,9 @@ export function CodeUpdateWatcher() {
     onDevServerRestart: (reason, detail) => {
       /* 只对启动器发起的自愈做合并（见文件头）；用户手动重启那一族没有 reason，
        * 它的「断开 → 恢复」是要留的记录。 */
-      if (reason !== null) dropHealPairFromCenter(Date.now());
+      if (reason !== null) {
+        dropHealPairFromCenter(Date.now());
+      }
       const { title, body } = describeDevServerRestart(reason, detail);
       toast.info(title, `${body}（可到消息中心查看）`, 8000);
       useMessageCenterStore.getState().push({

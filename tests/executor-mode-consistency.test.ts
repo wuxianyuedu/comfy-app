@@ -43,7 +43,7 @@ const TS_SIDE = path.join(ROOT, "src", "lib", "comfyui", "executor-mode.ts");
 
 const vectors = /* SAFETY: 类型断言已复核 */ (
   JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS_FILE), "utf8")) as {
-    vectors: Array<{ raw: string; mode: string; unknown: string | null }>;
+    vectors: Array<{ mode: string; raw: string; unknown: string | null }>;
   }
 ).vectors;
 
@@ -72,8 +72,12 @@ afterEach(() => {
 });
 
 afterAll(() => {
-  if (original !== undefined) process.env[EXECUTOR_ENV_KEY] = original;
-  for (const dir of tmpDirs) fs.rmSync(dir, { force: true, recursive: true });
+  if (original !== undefined) {
+    process.env[EXECUTOR_ENV_KEY] = original;
+  }
+  for (const dir of tmpDirs) {
+    fs.rmSync(dir, { force: true, recursive: true });
+  }
 });
 
 describe("两侧对同一组向量给出同一判决", () => {

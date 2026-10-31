@@ -36,7 +36,9 @@ const PAGE_HTML = fs.readFileSync(path.join(ROOT, PAGE_REL), "utf8");
 /** 从页面里取出内联 `<script>` 的正文（页面只有这一段）。 */
 function pageScript(html: string): string {
   const match = /<script>([\s\S]*?)<\/script>/.exec(html);
-  if (!match?.[1]) throw new Error(`${PAGE_REL} 里找不到内联 <script>`);
+  if (!match?.[1]) {
+    throw new Error(`${PAGE_REL} 里找不到内联 <script>`);
+  }
   return match[1];
 }
 
@@ -57,11 +59,11 @@ interface SplashInternals {
  * 分支）——日志正文由用例自己喂进去，测的是渲染那一侧。
  */
 function bootSplash(): {
-  scroll: HTMLElement;
-  setScrollTop: (value: number) => void;
-  renderLog: (text: string) => void;
   latestVisible: () => boolean;
   openPanel: () => void;
+  renderLog: (text: string) => void;
+  scroll: HTMLElement;
+  setScrollTop: (value: number) => void;
 } {
   document.documentElement.innerHTML = PAGE_HTML;
 

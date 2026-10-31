@@ -42,10 +42,10 @@ import { describe, expect, it, TestRunner } from "vitest";
  * 注入时就过不了类型 —— 而那正是这层接缝唯一的形状约束）。放在模块层是因为
  * 不止一组假执行者要用它（后面的 `describe` 各自那份是局部收窄，不冲突）。 */
 type FakeResult = {
-  status: number;
-  stdout: string;
-  stderr: string;
   error: string | null;
+  status: number;
+  stderr: string;
+  stdout: string;
 };
 
 /** `check-deps-freshness.mjs --json` 的「一致」读数（阶段 0 读它，见 ISSUE #2390）。 */
@@ -66,6 +66,7 @@ import {
 } from "../scripts/ship-build.mjs";
 import {
   CODE,
+  classifyPushFailure,
   combineShipCodes,
   decideCleanBranch,
   decideCreateBranch,
@@ -80,6 +81,7 @@ import {
   readPullVerdict,
   resolveUpstream,
 } from "../scripts/ship-core.mjs";
+import { runPushStage } from "../scripts/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
 import { parseArgs, parseIssueNumberToken } from "../scripts/ship-args.mjs";
 import { buildPullBody, capDiffstat, PULL_BODY_LIMIT } from "../scripts/ship-pull-body.mjs";
@@ -518,6 +520,95 @@ describe("decideCreateBranch：名字只能人给，脚本只补动 ref 那一�
   });
 });
 
+describe("classifyPushFailure：push 失败按原话分型，不固定猜 premerge（ISSUE #2825）", () => {
+  /* 远端 128 的现场逐字读数（2026-10-31，fix/2823 分支首次 push）：premerge 根本没跑，
+   * 旧话术「多半是 pre-push 的合并前复算没放行」把人引去查一条没执行的门禁。 */
+  const REMOTE_404_STDERR = [
+    "remote: Repository Not Found.",
+    "remote: 仓库不存在。",
+    "remote: ",
+    "remote: trace-id: 271f06a8c6324b9ea1154fa08b1ff7da",
+    "remote: token: d5***********************BH",
+    "fatal: repository 'https://cnb.cool/moon-read/comfy-app-t3/' not found",
+  ].join("\n");
+
+  it("远端 404 现场 ⇒ remote，且不再落「多半是 premerge」那条固定猜测", () => {
+    const got = classifyPushFailure("", REMOTE_404_STDERR);
+    expect(got.kind).toBe("remote");
+    expect(got.note).toContain("凭据");
+    /* 禁的是**误导归因的形状**（固定猜测「多半是…复算没放行」），不是 premerge 这个词
+     * —— remote 话术里「premerge 与本仓门禁都无关」是正确内容，要留着。 */
+    expect(got.note).not.toContain("多半是");
+    expect(got.note).not.toContain("复算没放行");
+  });
+
+  it("无凭据形态（terminal prompts disabled）也归 remote", () => {
+    const got = classifyPushFailure(
+      "",
+      "fatal: could not read Username for 'https://cnb.cool': terminal prompts disabled",
+    );
+    expect(got.kind).toBe("remote");
+  });
+
+  it("钩子拒绝现场 ⇒ hook（premerge 复算红的原话在上面）", () => {
+    const got = classifyPushFailure(
+      "",
+      [
+        "[pre-push] ✗ 合并前复算红了，本次 push 不放行：",
+        "      · tsc --noEmit",
+        "error: failed to push some refs to 'https://cnb.cool/moon-read/comfy-app-t3'",
+      ].join("\n"),
+    );
+    expect(got.kind).toBe("hook");
+    expect(got.note).toContain("pre-push");
+  });
+
+  it("两类特征同时在场 ⇒ 仍判 remote（钩子放行后传输被拒，终止原因是远端）", () => {
+    const got = classifyPushFailure(
+      "",
+      "[pre-push] ✓ 合并前复算全绿\n" + REMOTE_404_STDERR,
+    );
+    expect(got.kind).toBe("remote");
+  });
+
+  it("空 / 没有特征的输出 ⇒ unknown，不编因（unknown 的话术不点名任何一侧）", () => {
+    for (const [out, err] of [
+      ["", ""],
+      [null, undefined],
+      ["", "error: failed to push some refs to 'https://example/x'"],
+    ]) {
+      const got = classifyPushFailure(out, err);
+      expect(got.kind).toBe("unknown");
+      expect(got.note).not.toContain("premerge");
+      expect(got.note).not.toContain("凭据");
+    }
+  });
+
+  it("接线判据：runPushStage 真把分型话术念出来（不再固定说 premerge）", () => {
+    const logs: string[] = [];
+    let pushed = 0;
+    const ctx = {
+      up: { remote: "origin" },
+      branch: "fix/x",
+      root: "/tmp/nowhere",
+      resolveDir: () => null,
+      log: (s: string) => logs.push(s),
+      run: () => {
+        pushed += 1;
+        return { status: 128, stdout: "", stderr: REMOTE_404_STDERR };
+      },
+      relay: () => undefined,
+    };
+    const got = runPushStage(ctx);
+    expect(pushed).toBe(1);
+    expect(got).toEqual({ stop: true, codes: [CODE.RED] });
+    const line = logs.join("\n");
+    expect(line).toContain("push 失败（exit 128）");
+    expect(line).toContain("远端拒了");
+    expect(line).not.toContain("多半是 pre-push");
+  });
+});
+
 describe("decideCleanBranch：只跟在验真的合并之后，且只删这一次那一条", () => {
   it("没给 --clean-branch ⇒ 这一格根本不存在", () => {
     const d = decideCleanBranch({
@@ -566,14 +657,14 @@ describe("decideCleanBranch：只跟在验真的合并之后，且只删这一�
 describe("closeIssues：回执不算结论，独立回读三件原值才算", () => {
   /** 按 cnb 的子命令答；`calls` 记录每一次伸手。 */
   function io(opts: {
-    update?: string | null;
-    state?: string;
-    stateReason?: string | null;
-    closedAt?: string | null;
     body?: string;
-    merged?: Array<{ number: number; is_merged: boolean; title: string }>;
+    closedAt?: string | null;
+    merged?: Array<{ is_merged: boolean; number: number; title: string }>;
     /** `--as-merged` 那条凭据 PR 的回读形状（ISSUE #2491）：`null` = 取不到（非 JSON）。 */
     pull?: { is_merged?: boolean; title?: string } | null;
+    state?: string;
+    stateReason?: string | null;
+    update?: string | null;
   }) {
     const calls: Array<string> = [];
     const log: Array<string> = [];
@@ -582,8 +673,9 @@ describe("closeIssues：回执不算结论，独立回读三件原值才算", ()
     const run = (_cmd: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
       if (args[0] === "pulls" && args[1] === "get-pull") {
-        if (opts.pull === null || opts.pull === undefined)
+        if (opts.pull === null || opts.pull === undefined) {
           return { status: 0, stdout: "", stderr: "", error: null };
+        }
         return {
           status: 0,
           stdout: json({ number: 2487, ...opts.pull }),
@@ -600,7 +692,9 @@ describe("closeIssues：回执不算结论，独立回读三件原值才算", ()
         };
       }
       if (args[0] === "issues" && args[1] === "update-issue") {
-        if (opts.update === null) return { status: 0, stdout: "boom", stderr: "", error: null };
+        if (opts.update === null) {
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        }
         return {
           status: 0,
           stdout: opts.update ?? json({ number: 2070, state: "closed" }),
@@ -1002,8 +1096,9 @@ describe("#2491 --as-merged：凭据由人点名，合并与否仍由平台回�
     const log: Array<string> = [];
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
-      if (cmd === "cnb" && args[0] === "--version")
+      if (cmd === "cnb" && args[0] === "--version") {
         return { status: 0, stdout: "1.15.25", stderr: "", error: null };
+      }
       return { status: 0, stdout: "", stderr: "", error: null };
     };
     const code = await main({
@@ -1131,7 +1226,9 @@ describe("#2199 findMergedPullProofs：只认 is_merged，先剥尾数再找号"
     const calls: Array<string> = [];
     const run = (_c: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
-      if (opts.fail) return { status: 9, stdout: "", stderr: "", error: null };
+      if (opts.fail) {
+        return { status: 9, stdout: "", stderr: "", error: null };
+      }
       const page = Number(args[args.indexOf("--page") + 1]);
       const data = pages[page - 1] ?? [];
       return {
@@ -1224,10 +1321,10 @@ function fragRoot(files: Record<string, string>) {
 
 describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问一次事实", () => {
   type FakeResult = {
-    status: number;
-    stdout: string;
-    stderr: string;
     error: string | null;
+    status: number;
+    stderr: string;
+    stdout: string;
   };
 
   /**
@@ -1236,11 +1333,11 @@ describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问�
    */
   function gitIo(
     opts: {
-      remoteStillThere?: boolean;
-      lsRemoteFails?: boolean;
-      localStillThere?: boolean;
-      pushStatus?: number;
       branchStatus?: number;
+      localStillThere?: boolean;
+      lsRemoteFails?: boolean;
+      pushStatus?: number;
+      remoteStillThere?: boolean;
     } = {},
   ) {
     const calls: Array<string> = [];
@@ -1254,14 +1351,24 @@ describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问�
     const run = (_cmd: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
       const key = args.join(" ");
-      if (key.startsWith("rev-parse --short")) return ok("dead123");
-      if (key.startsWith("push cnb --delete")) return ok("", opts.pushStatus ?? 0);
+      if (key.startsWith("rev-parse --short")) {
+        return ok("dead123");
+      }
+      if (key.startsWith("push cnb --delete")) {
+        return ok("", opts.pushStatus ?? 0);
+      }
       if (key.startsWith("ls-remote --heads")) {
-        if (opts.lsRemoteFails) return ok("", 128);
+        if (opts.lsRemoteFails) {
+          return ok("", 128);
+        }
         return ok(opts.remoteStillThere ? "abc123\trefs/heads/feat/x" : "", 0);
       }
-      if (key.startsWith("branch -D")) return ok("", opts.branchStatus ?? 0);
-      if (key.startsWith("show-ref --verify")) return ok("", opts.localStillThere ? 0 : 1);
+      if (key.startsWith("branch -D")) {
+        return ok("", opts.branchStatus ?? 0);
+      }
+      if (key.startsWith("show-ref --verify")) {
+        return ok("", opts.localStillThere ? 0 : 1);
+      }
       return ok("");
     };
     return { run, calls, log };
@@ -1723,20 +1830,20 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
    */
   function issueIo(
     opts: {
-      state?: string;
-      labels?: Array<string>;
-      comments?: Array<string>;
-      getIssueFails?: boolean;
-      postCommentFails?: boolean;
       commentListFails?: boolean;
-      /** 平台落评论时把末尾那个换行收掉（实测口径，ISSUE #2719 的 ⑤）。 */
-      stripCommentTail?: boolean;
       /** 平台落下来的正文被别人改过（回读只剩「形似」，用于负控制）。 */
       commentRewrite?: (text: string) => string;
-      writeExtraHandler?: string | null;
+      comments?: Array<string>;
+      getIssueFails?: boolean;
+      labels?: Array<string>;
       listFails?: boolean;
       listRows?: Array<{ number: number; priority: string; title: string }>;
       pages?: Array<Array<{ number: number; priority: string; title: string }>>;
+      postCommentFails?: boolean;
+      state?: string;
+      /** 平台落评论时把末尾那个换行收掉（实测口径，ISSUE #2719 的 ⑤）。 */
+      stripCommentTail?: boolean;
+      writeExtraHandler?: string | null;
     } = {},
   ) {
     let state = opts.state ?? "open";
@@ -1762,7 +1869,9 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         };
       }
       if (args[0] === "issues" && args[1] === "get-issue") {
-        if (opts.getIssueFails) return { status: 0, stdout: "boom", stderr: "", error: null };
+        if (opts.getIssueFails) {
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        }
         return {
           status: 0,
           stdout: json({
@@ -1778,9 +1887,13 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       }
       if (args[0] === "issues" && args[1] === "post-issue-labels") {
         const name = arg(args, "--labels");
-        if (name) labels.push(name);
+        if (name) {
+          labels.push(name);
+        }
         // 竞态夹具：另一个会话在我之后也把它的处理人标签打了上来。
-        if (opts.writeExtraHandler) labels.push(`处理人:${opts.writeExtraHandler}`);
+        if (opts.writeExtraHandler) {
+          labels.push(`处理人:${opts.writeExtraHandler}`);
+        }
         return { status: 0, stdout: json({}), stderr: "", error: null };
       }
       if (args[0] === "issues" && args[1] === "delete-issue-label") {
@@ -1789,14 +1902,18 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         return { status: 0, stdout: json({}), stderr: "", error: null };
       }
       if (args[0] === "issues" && args[1] === "post-issue-comment") {
-        if (opts.postCommentFails) return { status: 0, stdout: "boom", stderr: "", error: null };
+        if (opts.postCommentFails) {
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        }
         const text = fs.readFileSync(arg(args, "--body-file"), "utf8");
         const stored = opts.stripCommentTail ? text.replace(/\r?\n$/, "") : text;
         comments.unshift(opts.commentRewrite ? opts.commentRewrite(stored) : stored);
         return { status: 0, stdout: json({}), stderr: "", error: null };
       }
       if (args[0] === "issues" && args[1] === "list-issue-comments") {
-        if (opts.commentListFails) return { status: 0, stdout: "boom", stderr: "", error: null };
+        if (opts.commentListFails) {
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        }
         return {
           status: 0,
           stdout: json(comments.map((body) => ({ body }))),
@@ -1805,7 +1922,9 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         };
       }
       if (args[0] === "issues" && args[1] === "list-issues") {
-        if (opts.listFails) return { status: 0, stdout: "boom", stderr: "", error: null };
+        if (opts.listFails) {
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        }
         const page = Number(arg(args, "--page") || "1");
         const rows = opts.pages ? (opts.pages[page - 1] ?? []) : (opts.listRows ?? []);
         return {
@@ -2701,7 +2820,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
 });
 
 describe("reapCheckoutInstances：只收 via port 那批，session 那一档不归它收", () => {
-  type Live = { running?: boolean; pids?: Array<number>; via?: string | null };
+  type Live = { pids?: Array<number>; running?: boolean; via?: string | null };
 
   /** 「判据 + 执行者」的替身：`before` 是收尾那一格第一次读到的形状。 */
   function io(before: Live | null | Error, after: Live | null | Error, reapStatus = 0) {
@@ -2710,8 +2829,12 @@ describe("reapCheckoutInstances：只收 via port 那批，session 那一档不�
     let n = 0;
     const read = async (_root: string): Promise<Live> => {
       const one = n++ === 0 ? before : after;
-      if (one instanceof Error) throw one;
-      if (one === null) throw new Error("判据返回了空形状");
+      if (one instanceof Error) {
+        throw one;
+      }
+      if (one === null) {
+        throw new Error("判据返回了空形状");
+      }
       return one;
     };
     const run = (_cmd: string, args: Array<string>) => {
@@ -2852,10 +2975,10 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
    * 所以「签名没变」还要配「此刻没有一格在飞」才叫停滞
    * （下面「有一格在飞」与「所有格都已落定」那两条是这一判的正反钉子）。 */
   type FakeResult = {
-    status: number;
-    stdout: string;
-    stderr: string;
     error: string | null;
+    status: number;
+    stderr: string;
+    stdout: string;
   };
   const SHA = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
   const ok = (stdout: string): FakeResult => ({
@@ -2866,18 +2989,18 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
   });
 
   function io(opts: {
-    /** 每次 get-build-status 的 data.status；用完后重复最后一个。 */
-    statuses?: Array<string>;
-    /** 每次的 pipeline 计数（"0-1" 这种 `完成-总`），与 statuses 同长。 */
-    progress?: Array<string>;
-    /** 每次的 stage 计数（"12/33" 这种 `完成/总`）；不给就造不出 stages 字段。 */
-    stageProgress?: Array<string>;
+    /** `pulls get-pull` 回读的 blocked_on。 */
+    blockedOn?: string;
     /** false = 列表里没有这条 sha（平台还没开跑）。 */
     found?: boolean;
     /** `pulls get-pull` 回读的 mergeable_state；不给则这一问回空（读不到）。 */
     mergeableState?: string;
-    /** `pulls get-pull` 回读的 blocked_on。 */
-    blockedOn?: string;
+    /** 每次的 pipeline 计数（"0-1" 这种 `完成-总`），与 statuses 同长。 */
+    progress?: Array<string>;
+    /** 每次的 stage 计数（"12/33" 这种 `完成/总`）；不给就造不出 stages 字段。 */
+    stageProgress?: Array<string>;
+    /** 每次 get-build-status 的 data.status；用完后重复最后一个。 */
+    statuses?: Array<string>;
   }) {
     const log: Array<string> = [];
     const calls: Array<string> = [];
@@ -2919,24 +3042,24 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
         const pipelinesStatus: Record<
           string,
           {
-            status: string;
             stages?: Array<{
-              status: string;
               duration: number;
-              name: string;
               id: string;
+              name: string;
+              status: string;
             }>;
+            status: string;
           }
         > = {};
         for (let p = 0; p < Number(total); p += 1) {
           const pipeline: {
-            status: string;
             stages?: Array<{
-              status: string;
               duration: number;
-              name: string;
               id: string;
+              name: string;
+              status: string;
             }>;
+            status: string;
           } = { status: p < Number(done) ? "success" : "running" };
           pipelinesStatus[`p${p}`] = pipeline;
           if (stage) {
@@ -2944,10 +3067,10 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
              * 里面几十格）。运行中那一格的 `duration` 是占位 0 —— 平台按格缓冲。 */
             const [sDone, sTotal] = stage.split("/");
             const stages: Array<{
-              status: string;
               duration: number;
-              name: string;
               id: string;
+              name: string;
+              status: string;
             }> = [];
             for (let s = 0; s < Number(sTotal); s += 1) {
               stages.push({
@@ -3227,10 +3350,10 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
 
 describe("被取消的那一跑：结论是「没有结论」，不是「CI 红」（ISSUE #2158 第 2 条）", () => {
   type FakeResult = {
-    status: number;
-    stdout: string;
-    stderr: string;
     error: string | null;
+    status: number;
+    stderr: string;
+    stdout: string;
   };
   const SHA = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
   const ok = (stdout: string): FakeResult => ({
@@ -3740,7 +3863,9 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       diagnose: true,
     })) {
       const m = /^cnb (\w+) ([\w-]+)/.exec(line);
-      if (m) planned.add(`${m[1]} ${m[2]}`);
+      if (m) {
+        planned.add(`${m[1]} ${m[2]}`);
+      }
     }
     // 前置断言：提取本身要真的抓到东西（正则写漂会让两侧都成空集、于是恒绿）。
     expect(called.size, "从源码里一条 cnb 调用都没抽到 ⇒ 提取正则坏了").toBeGreaterThan(0);
@@ -3863,17 +3988,22 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     ].join("\n");
 
   /** 直调 `createOrReusePull` 的量具：记下每一次命令，以及交给 `mkTmp` 的那份正文。 */
-  function pullHarness(env: { stat?: string; postPull?: FakeResult } = {}) {
+  function pullHarness(env: { postPull?: FakeResult; stat?: string; } = {}) {
     const calls: Array<string> = [];
     const bodies: Array<string> = [];
     const heard: Array<string> = [];
     const run = (cmd: string, args: Array<string>): FakeResult => {
       const key = args.join(" ");
       calls.push(`${cmd} ${key}`);
-      if (cmd === "cnb" && key.includes("list-pulls")) return ok('{"status":200,"data":[]}');
-      if (cmd === "cnb" && key.includes("post-pull"))
+      if (cmd === "cnb" && key.includes("list-pulls")) {
+        return ok('{"status":200,"data":[]}');
+      }
+      if (cmd === "cnb" && key.includes("post-pull")) {
         return env.postPull ?? ok('{"status":201,"data":{"number":3002}}');
-      if (cmd === "git" && key.startsWith("diff --stat")) return ok(env.stat ?? "");
+      }
+      if (cmd === "git" && key.startsWith("diff --stat")) {
+        return ok(env.stat ?? "");
+      }
       return ok("");
     };
     const io = {
@@ -4005,10 +4135,12 @@ describe("ship 阶段 0：`.env` 缺键的读数与启动器同一份实现（IS
     const logs: Array<string> = [];
     const run = (cmd: string, args: Array<string>): FakeResult => {
       const key = args.join(" ");
-      if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD")
+      if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD") {
         return { status: 0, stdout: "feat/x\n", stderr: "", error: null };
-      if (cmd === "git" && key === "rev-parse HEAD")
+      }
+      if (cmd === "git" && key === "rev-parse HEAD") {
         return { status: 0, stdout: "abc1234\n", stderr: "", error: null };
+      }
       return { status: 0, stdout: "", stderr: "", error: null };
     };
     try {
@@ -4036,8 +4168,11 @@ describe("ship 阶段 0：`.env` 缺键的读数与启动器同一份实现（IS
       expect(res.codes).toContain(CODE.NOT_RUN);
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
-      if (savedSkip === undefined) delete process.env.SKIP_ENV_VALIDATION;
-      else process.env.SKIP_ENV_VALIDATION = savedSkip;
+      if (savedSkip === undefined) {
+        delete process.env.SKIP_ENV_VALIDATION;
+      } else {
+        process.env.SKIP_ENV_VALIDATION = savedSkip;
+      }
     }
   });
 });
@@ -4064,7 +4199,9 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   });
 
   it("干净 ⇒ clean", () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     expect(
       readFreshnessState(
         json({
@@ -4079,7 +4216,9 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   });
 
   it("远端漂移 ⇒ drift（唯一该念成「红了」的那一档）", () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     expect(
       readFreshnessState(
         json({
@@ -4094,7 +4233,9 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   });
 
   it("依赖没装 ⇒ no-install（不是漂移，更不是「跑不了门禁」）", () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     expect(
       readFreshnessState(
         json({
@@ -4109,7 +4250,9 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   });
 
   it("没装 + 远端也改过依赖 ⇒ drift：先 pull 再装才是完整动作", () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     // 只说「没装」会让人在旧基线上装一套旧依赖，出口漏掉前半步。
     expect(
       readFreshnessState(
@@ -4125,7 +4268,9 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   });
 
   it("envBroken 压过其余（环境不可信时红与绿都不构成结论）", () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     expect(
       readFreshnessState(
         json({
@@ -4140,7 +4285,9 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   });
 
   it("负控制：起不来 / 形状对不上 ⇒ unknown，既不念「红了」也不念「没问题」", () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     expect(readFreshnessState({ status: 1, stdout: "", stderr: "", error: null })).toBe("unknown");
     expect(
       readFreshnessState({
@@ -4166,18 +4313,23 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
     const logs: Array<string> = [];
     const run = (cmd: string, args: Array<string>): FakeResult => {
       const key = args.join(" ");
-      if (cmd === "node" && key.includes("check-deps-freshness")) return fresh;
-      if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD")
+      if (cmd === "node" && key.includes("check-deps-freshness")) {
+        return fresh;
+      }
+      if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD") {
         return { status: 0, stdout: "feat/x\n", stderr: "", error: null };
-      if (cmd === "git" && key === "rev-parse HEAD")
+      }
+      if (cmd === "git" && key === "rev-parse HEAD") {
         return { status: 0, stdout: "abc1234\n", stderr: "", error: null };
-      if (cmd === "git" && key.includes("status --porcelain -- changelog.d"))
+      }
+      if (cmd === "git" && key.includes("status --porcelain -- changelog.d")) {
         return {
           status: 0,
           stdout: "?? changelog.d/2390-x.md\n",
           stderr: "",
           error: null,
         };
+      }
       return { status: 0, stdout: "", stderr: "", error: null };
     };
     return { run, logs };
@@ -4204,7 +4356,9 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
   }
 
   it("依赖没装 ⇒ 落 2 并念「还没装」，而不是「红」，且后面的阶段照跑", async () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     const { res, text } = await stage({
       status: 1,
       stdout: JSON.stringify({
@@ -4229,7 +4383,9 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
   });
 
   it("真漂移 ⇒ 保持 1 且停在阶段 0（该拦的仍然拦）", async () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     const { res, text } = await stage({
       status: 1,
       stdout: JSON.stringify({
@@ -4248,7 +4404,9 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
   });
 
   it("envBroken ⇒ 2，出口指向 git 读数而不是 `pnpm install`", async () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     const { res, text } = await stage({
       status: 2,
       stdout: JSON.stringify({
@@ -4269,7 +4427,9 @@ describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只�
   });
 
   it("判据起不来（读数是空的）⇒ 2，既不念「红了」也不念「没问题」", async () => {
-    if (!ranThisCase()) return;
+    if (!ranThisCase()) {
+      return;
+    }
     const { res, text } = await stage({
       status: -1,
       stdout: "",
@@ -4297,16 +4457,30 @@ describe("main() 的单子动作：独立于主流程，在 master 上、没碎�
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
-      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-      if (cmd === "git" && key.includes("@{u}")) return ok("");
-      if (cmd === "git" && key === "remote") return ok("cnb\n");
-      if (cmd === "git" && key.includes("symbolic-ref")) return ok("refs/remotes/cnb/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-      if (cmd === "git" && key.includes("get-url"))
+      if (cmd === "cnb" && args[0] === "--version") {
+        return ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("@{u}")) {
+        return ok("");
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("cnb\n");
+      }
+      if (cmd === "git" && key.includes("symbolic-ref")) {
+        return ok("refs/remotes/cnb/master");
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok("master");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+        return ok("d02ec9");
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "list-issues")
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "list-issues") {
         return ok(JSON.stringify({ status: 200, data: rows }));
+      }
       return ok("");
     };
     return { run, calls, log };
@@ -4371,27 +4545,39 @@ describe("#2766 --dry-run 底下「只补关」：读面照跑，写面一条不
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
-      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-      if (cmd === "git" && key.includes("@{u}")) return ok("");
-      if (cmd === "git" && key === "remote") return ok("cnb\n");
-      if (cmd === "git" && key.includes("symbolic-ref"))
+      if (cmd === "cnb" && args[0] === "--version") {
+        return ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("@{u}")) {
+        return ok("");
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("cnb\n");
+      }
+      if (cmd === "git" && key.includes("symbolic-ref")) {
         return ok("refs/remotes/cnb/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-      if (cmd === "git" && key.includes("get-url"))
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok("master");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+        return ok("d02ec9");
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull")
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull") {
         return ok(
           JSON.stringify({
             status: 200,
             data: { number: 2069, is_merged: true, title: "fix(a): 那一格 (#2070)" },
           }),
         );
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "update-issue")
-        return ok(
-          JSON.stringify({ status: 200, data: { number: 2070, state: "closed" } }),
-        );
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue")
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "update-issue") {
+        return ok(JSON.stringify({ status: 200, data: { number: 2070, state: "closed" } }));
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue") {
         return ok(
           JSON.stringify({
             status: 200,
@@ -4406,12 +4592,12 @@ describe("#2766 --dry-run 底下「只补关」：读面照跑，写面一条不
             },
           }),
         );
+      }
       return ok("");
     };
     /** 写面那四条命令（读面是 get-issue / get-pull / list-*）。 */
     const WRITE = ["update-issue", "post-issue-comment", "post-issue-labels", "delete-issue-label"];
-    const writes = (list: Array<string>) =>
-      list.filter((c) => WRITE.some((w) => c.includes(w)));
+    const writes = (list: Array<string>) => list.filter((c) => WRITE.some((w) => c.includes(w)));
     return { run, calls, log, writes };
   }
 
@@ -4508,9 +4694,9 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
 
   function diagnoseIo(opts: {
     build?: unknown;
-    stage?: unknown;
     builds?: Array<unknown>;
     headSha?: string;
+    stage?: unknown;
   }) {
     const calls: Array<string> = [];
     const log: Array<string> = [];
@@ -4523,22 +4709,39 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
-      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-      if (cmd === "git" && key.includes("@{u}")) return ok("");
-      if (cmd === "git" && key === "remote") return ok("origin\n");
-      if (cmd === "git" && key.includes("symbolic-ref")) return ok("refs/remotes/origin/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("feat/x");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-      if (cmd === "git" && key.includes("get-url"))
+      if (cmd === "cnb" && args[0] === "--version") {
+        return ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("@{u}")) {
+        return ok("");
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("origin\n");
+      }
+      if (cmd === "git" && key.includes("symbolic-ref")) {
+        return ok("refs/remotes/origin/master");
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok("feat/x");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+        return ok("d02ec9");
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-      if (cmd === "git" && key.includes("rev-parse HEAD"))
+      }
+      if (cmd === "git" && key.includes("rev-parse HEAD")) {
         return ok(opts.headSha ?? "d02ec96364d5f3713b77c91b0d3fe789878f1747");
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs") {
         return ok(JSON.stringify({ status: 200, data: opts.builds ?? [] }));
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status") {
         return ok(JSON.stringify(opts.build ?? null));
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-stage")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-stage") {
         return ok(JSON.stringify(opts.stage ?? {}));
+      }
       return ok("");
     };
     return { run, calls, log };
@@ -4635,7 +4838,7 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
  * 标题对不上 ⇒ 1（公开状态不是请求的那件事）。
  */
 describe("--new-issue：一步建单并回读", () => {
-  function newIssueIo(opts: { created?: unknown; readback?: unknown; labelsOk?: boolean }) {
+  function newIssueIo(opts: { created?: unknown; labelsOk?: boolean; readback?: unknown; }) {
     const calls: Array<string> = [];
     const log: Array<string> = [];
     const ok = (stdout: string): FakeResult => ({
@@ -4647,19 +4850,34 @@ describe("--new-issue：一步建单并回读", () => {
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
-      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-      if (cmd === "git" && key.includes("@{u}")) return ok("");
-      if (cmd === "git" && key === "remote") return ok("origin\n");
-      if (cmd === "git" && key.includes("symbolic-ref")) return ok("refs/remotes/origin/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-      if (cmd === "git" && key.includes("get-url"))
+      if (cmd === "cnb" && args[0] === "--version") {
+        return ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("@{u}")) {
+        return ok("");
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("origin\n");
+      }
+      if (cmd === "git" && key.includes("symbolic-ref")) {
+        return ok("refs/remotes/origin/master");
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok("master");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+        return ok("d02ec9");
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "create-issue")
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "create-issue") {
         return ok(JSON.stringify(opts.created ?? { data: { number: 2222 } }));
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "post-issue-labels")
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "post-issue-labels") {
         return ok(opts.labelsOk === false ? "{}" : "{}");
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue")
+      }
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue") {
         return ok(
           JSON.stringify(
             opts.readback ?? {
@@ -4673,6 +4891,7 @@ describe("--new-issue：一步建单并回读", () => {
             },
           ),
         );
+      }
       return ok("");
     };
     return { run, calls, log };
@@ -4923,41 +5142,41 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
    * `Property 'branch' does not exist on type '{}'`）。
    */
   type FakeResult = {
-    status: number;
-    stdout: string;
-    stderr: string;
     error: string | null;
+    status: number;
+    stderr: string;
+    stdout: string;
   };
 
   /** 现场形状。 */
   type FakeEnv = {
-    branch?: string;
-    frags?: Array<string>;
-    cnbMissing?: boolean;
-    /** 假 `git commit` 往 **stderr** 写的话（钩子的输出面）。 */
-    commitStderr?: string;
-    commitStatus?: number;
-    /** 本次要暂存的文件（触发真提交那一支）。 */
-    dirty?: Array<string>;
-    /** 直接覆盖 `git status --porcelain` 的返回（喂非默认形状，见 #2073 那格）。 */
-    porcelain?: string;
-    /** 这条分支相对上游基线**已提交**的碎片（第二次跑那一向）。 */
-    branchFrags?: Array<string>;
-    /** HEAD 的上游（`git rev-parse --abbrev-ref --symbolic-full-name @{u}`）。 */
-    upstream?: string | null;
     /** 那条上游引用在不在本地（验不验得过）。false = `rev-parse --verify` 退非 0。 */
     baseExists?: boolean;
+    branch?: string;
+    /** 这条分支相对上游基线**已提交**的碎片（第二次跑那一向）。 */
+    branchFrags?: Array<string>;
+    /** 这条分支相对主干**自己带进来的**提交 subject（`log --no-merges --reverse`）。 */
+    branchSubjects?: Array<string>;
+    /** 答齐全链（轮询 / 合并 / 清理）那几跳 —— 默认关，见 `fake()` 里那段注释。 */
+    chain?: boolean;
+    cnbMissing?: boolean;
+    commitStatus?: number;
+    /** 假 `git commit` 往 **stderr** 写的话（钩子的输出面）。 */
+    commitStderr?: string;
+    /** 本次要暂存的文件（触发真提交那一支）。 */
+    dirty?: Array<string>;
+    frags?: Array<string>;
+    /** 当前顶端那一笔的 subject（`log -1 --pretty=%s`）—— 默认给一个合并节点形状。 */
+    headSubject?: string;
+    /** 直接覆盖 `git status --porcelain` 的返回（喂非默认形状，见 #2073 那格）。 */
+    porcelain?: string;
+    /** `show-ref --verify` 查得到那个 ref（--branch 那一跳的「名字已被占用」形态）。 */
+    refExists?: boolean;
     /** 远端默认分支的符号引用（`git symbolic-ref refs/remotes/<远端>/HEAD`）。
      *  `null` = 这台克隆没有它（那样就只能推 `<远端>/master`，且要读得出是推的）。 */
     remoteHead?: string | null;
-    /** 这条分支相对主干**自己带进来的**提交 subject（`log --no-merges --reverse`）。 */
-    branchSubjects?: Array<string>;
-    /** `show-ref --verify` 查得到那个 ref（--branch 那一跳的「名字已被占用」形态）。 */
-    refExists?: boolean;
-    /** 答齐全链（轮询 / 合并 / 清理）那几跳 —— 默认关，见 `fake()` 里那段注释。 */
-    chain?: boolean;
-    /** 当前顶端那一笔的 subject（`log -1 --pretty=%s`）—— 默认给一个合并节点形状。 */
-    headSubject?: string;
+    /** HEAD 的上游（`git rev-parse --abbrev-ref --symbolic-full-name @{u}`）。 */
+    upstream?: string | null;
   };
 
   /**
@@ -4986,73 +5205,104 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       /* ⚠️ 必须排在下面那条通用 `--abbrev-ref` **之前**：HEAD 那一查与上游那一查
        * 共用同一个前缀，顺序反了上游查询会拿到分支名，于是「远端解析」这一格
        * 判的是夹具自己的形状。 */
-      if (cmd === "git" && key.includes("@{u}"))
+      if (cmd === "git" && key.includes("@{u}")) {
         return ok(env.upstream === null ? "" : (env.upstream ?? "cnb/master"));
+      }
       /* 主干那一条有本地可读的权威事实：远端的 `HEAD` 符号引用。
        * 夹具默认给出（与真实克隆一致），`remoteHead: null` 那一格专门演「没有它」。 */
-      if (cmd === "git" && key.includes("symbolic-ref"))
+      if (cmd === "git" && key.includes("symbolic-ref")) {
         return env.remoteHead === null
           ? { status: 1, stdout: "", stderr: "", error: null }
           : ok(env.remoteHead ?? "refs/remotes/cnb/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok(branch);
-      if (cmd === "git" && key === "remote") return ok("cnb\n");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet"))
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok(branch);
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("cnb\n");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
         return env.baseExists === false
           ? { status: 1, stdout: "", stderr: "", error: null }
           : ok("d02ec96364d5f3713b77c91b0d3fe789878f1747");
+      }
       /* `show-ref --verify --quiet <ref>`：git 的语义是**查不到退 1**。默认答「查不到」，
        * 因为这一格在 --branch 那一跳判的是「这个名字有没有被占用」—— 拿通用兜底的
        * 退 0 当默认值，等于让夹具自己担保「名字都撞车了」，于是建分支那一格永远走不到。 */
-      if (cmd === "git" && key.startsWith("show-ref --verify --quiet"))
+      if (cmd === "git" && key.startsWith("show-ref --verify --quiet")) {
         return env.refExists
           ? ok("9b1bade9cafe9b5a4d76e0c0d0bfb1d1a3a4f9b2")
           : { status: 1, stdout: "", stderr: "", error: null };
-      if (cmd === "git" && key.includes("rev-parse HEAD"))
+      }
+      if (cmd === "git" && key.includes("rev-parse HEAD")) {
         return ok("d02ec96364d5f3713b77c91b0d3fe789878f1747");
+      }
       // ⚠️ 顺序要紧：碎片那一查也是 `status --porcelain`，只是多一个 `-- changelog.d`。
-      if (cmd === "git" && key.includes("status --porcelain -- changelog.d"))
+      if (cmd === "git" && key.includes("status --porcelain -- changelog.d")) {
         return ok(frags.map((f) => `?? ${f}`).join("\n"));
-      if (cmd === "git" && key.includes("status --porcelain"))
+      }
+      if (cmd === "git" && key.includes("status --porcelain")) {
         return ok(env.porcelain ?? dirty.map((f) => `M  ${f}`).join("\n"));
+      }
       /* 分支相对上游**已提交**的碎片（同一条分支上第二次跑就靠这一格不为空）。
        * 这里**不**按某个写死的基线名命中 —— 命中基线名等于替被测代码担保「它选的
        * 那条引用是对的」。改为照 git 的语义答：拿 HEAD 自己这条分支的远端副本当基线
        * 就是自己比自己 ⇒ 结果必空，这正是那条缺陷的现场。 */
       if (cmd === "git" && key.includes("diff --name-only") && key.includes("...HEAD")) {
         const base = key.replace("diff --name-only ", "").split("...")[0] ?? "";
-        if (base === `cnb/${branch}`) return ok("");
+        if (base === `cnb/${branch}`) {
+          return ok("");
+        }
         return ok((env.branchFrags ?? []).join("\n"));
       }
       /* 标题的取数面（`deriveTitle` 那一格）：`--no-merges --reverse` 给的是这条分支
        * **自己带进来的**那些提交，`log -1` 给的是当前顶端那一笔。默认把后者设成一个
        * 合并节点、前者设成主体那一笔 —— 缺陷正是拿后者当标题（#2057 在主干上留下的
        * 那行 `Merge branch 'master' into …` 就是这么来的）。 */
-      if (cmd === "git" && key.includes("log --no-merges"))
+      if (cmd === "git" && key.includes("log --no-merges")) {
         return ok((env.branchSubjects ?? ["fix(x): 主体的那一笔"]).join("\n"));
-      if (cmd === "git" && key.includes("log -1 --pretty=%s"))
+      }
+      if (cmd === "git" && key.includes("log -1 --pretty=%s")) {
         return ok(env.headSubject ?? "Merge branch 'master' into fix/x");
-      if (cmd === "git" && key.startsWith("commit"))
+      }
+      if (cmd === "git" && key.startsWith("commit")) {
         return {
           status: env.commitStatus ?? 0,
           stdout: "",
           stderr: env.commitStderr ?? "",
           error: null,
         };
-      if (cmd === "git" && key.includes("get-url"))
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
+      }
       /* 依赖新鲜度那一格读的是**判据自己的 `--json` 原值**（ISSUE #2390），
        * 所以夹具要答那份形状：只回一句 "OK" 会被读成「读数不完整」（`unknown` ⇒ 落 2）。 */
-      if (cmd === "node" && key.includes("check-deps-freshness")) return ok(FRESH_OK);
+      if (cmd === "node" && key.includes("check-deps-freshness")) {
+        return ok(FRESH_OK);
+      }
       /* ── 整链形状（`chain: true` 才答）───────────────────────────
        * 默认不答，是为了不惊动已有那些用例：它们中好几条判的正是「建 PR 那一跳的
        * 各种失败出口」，一旦 list-pulls 有了可解析的响应就会改走「复用」那条支路。 */
-      if (!env.chain) return ok("");
-      if (cmd === "git" && key.startsWith("rev-parse --short")) return ok("edda13b6");
-      if (cmd === "git" && key.startsWith("cat-file -e")) return ok("");
-      if (cmd === "git" && key.startsWith("push cnb --delete")) return ok("");
-      if (cmd === "git" && key.startsWith("ls-remote --heads")) return ok("");
-      if (cmd === "git" && key.startsWith("branch -D")) return ok("");
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs")
+      if (!env.chain) {
+        return ok("");
+      }
+      if (cmd === "git" && key.startsWith("rev-parse --short")) {
+        return ok("edda13b6");
+      }
+      if (cmd === "git" && key.startsWith("cat-file -e")) {
+        return ok("");
+      }
+      if (cmd === "git" && key.startsWith("push cnb --delete")) {
+        return ok("");
+      }
+      if (cmd === "git" && key.startsWith("ls-remote --heads")) {
+        return ok("");
+      }
+      if (cmd === "git" && key.startsWith("branch -D")) {
+        return ok("");
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs") {
         return ok(
           JSON.stringify({
             status: 200,
@@ -5068,9 +5318,11 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
             },
           }),
         );
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status") {
         return ok(JSON.stringify({ status: 200, data: { status: "success" } }));
-      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "list-pulls")
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "list-pulls") {
         return ok(
           JSON.stringify({
             status: 200,
@@ -5083,7 +5335,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
             ],
           }),
         );
-      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull")
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull") {
         return ok(
           JSON.stringify({
             status: 200,
@@ -5094,7 +5347,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
             },
           }),
         );
-      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "merge-pull")
+      }
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "merge-pull") {
         return ok(
           JSON.stringify({
             status: 200,
@@ -5104,6 +5358,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
             },
           }),
         );
+      }
       return ok("");
     };
     return { run, calls };
@@ -5658,7 +5913,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
    * `push` 那一段会读 `comfy-premerge-proof.json`，读不到就压上 `NOT_RUN` —— 开发机上它
    * 在（真推送过），CI 节点上没有，于是凡「断言走到 PR / 合并那一段的结论」的格子都会
    * **本地绿、节点红**（实测 #2064 第一条就这样）。凡要断退出码的走完整链的格子，都用这一份。 */
-  function proofRoot(tag: string): { tmpRoot: string; gitDir: string } {
+  function proofRoot(tag: string): { gitDir: string; tmpRoot: string; } {
     const tmpRoot = mkdtempSync(path.join(os.tmpdir(), `ship-${tag}-`));
     const gitDir = path.join(tmpRoot, "gitdir");
     fs.mkdirSync(gitDir, { recursive: true });
@@ -6165,8 +6420,8 @@ describe("stallReadout：慢、没推进、没派发起来 是三件事（#2304�
  */
 describe("--rerun-ci：空提交要说出自己的意图，否则 D0 把它读成「取不到面」", () => {
   type RunCall = {
-    cmd: string;
     args: Array<string>;
+    cmd: string;
     opts?: { env?: Record<string, string> };
   };
 
@@ -6175,13 +6430,16 @@ describe("--rerun-ci：空提交要说出自己的意图，否则 D0 把它读�
     const log: Array<string> = [];
     const run = (cmd: string, args: Array<string>, opts?: { env?: Record<string, string> }) => {
       seen.push({ cmd, args, opts });
-      if (args[0] === "commit")
+      if (args[0] === "commit") {
         return {
           status: env.commitStatus ?? 0,
           stdout: "",
           stderr: env.commitStatus ? "no changes added to commit" : "",
         };
-      if (args[0] === "rev-parse") return { status: 0, stdout: "abc123\n", stderr: "" };
+      }
+      if (args[0] === "rev-parse") {
+        return { status: 0, stdout: "abc123\n", stderr: "" };
+      }
       return { status: 0, stdout: "", stderr: "" };
     };
     const code = runRerunCiStage({
@@ -6293,9 +6551,9 @@ describe("--stage-log：只读取某一格的日志正文（绿跑也能用）",
 
   function stageIo(opts: {
     build?: unknown;
-    stage?: unknown;
     builds?: Array<unknown>;
     headSha?: string;
+    stage?: unknown;
   }) {
     const calls: Array<string> = [];
     const log: Array<string> = [];
@@ -6308,22 +6566,39 @@ describe("--stage-log：只读取某一格的日志正文（绿跑也能用）",
     const run = (cmd: string, args: Array<string>): FakeResult => {
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
-      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
-      if (cmd === "git" && key.includes("@{u}")) return ok("");
-      if (cmd === "git" && key === "remote") return ok("origin\n");
-      if (cmd === "git" && key.includes("symbolic-ref")) return ok("refs/remotes/origin/master");
-      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("feat/x");
-      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
-      if (cmd === "git" && key.includes("get-url"))
+      if (cmd === "cnb" && args[0] === "--version") {
+        return ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("@{u}")) {
+        return ok("");
+      }
+      if (cmd === "git" && key === "remote") {
+        return ok("origin\n");
+      }
+      if (cmd === "git" && key.includes("symbolic-ref")) {
+        return ok("refs/remotes/origin/master");
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) {
+        return ok("feat/x");
+      }
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) {
+        return ok("d02ec9");
+      }
+      if (cmd === "git" && key.includes("get-url")) {
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
-      if (cmd === "git" && key.includes("rev-parse HEAD"))
+      }
+      if (cmd === "git" && key.includes("rev-parse HEAD")) {
         return ok(opts.headSha ?? "d02ec96364d5f3713b77c91b0d3fe789878f1747");
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs") {
         return ok(JSON.stringify({ status: 200, data: opts.builds ?? [] }));
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-status") {
         return ok(JSON.stringify(opts.build ?? null));
-      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-stage")
+      }
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-stage") {
         return ok(JSON.stringify(opts.stage ?? {}));
+      }
       return ok("");
     };
     return { run, calls, log };

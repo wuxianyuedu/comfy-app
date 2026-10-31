@@ -48,8 +48,12 @@ export default function WorkspacePage() {
     () =>
       subscribeAppEvent("workspace:navigate", ({ view, section }) => {
         const target = WORKSPACE_VIEWS.find((candidate) => candidate === view);
-        if (!target) return;
-        if (target === "settings" && section) setPendingSettingsSection(section);
+        if (!target) {
+          return;
+        }
+        if (target === "settings" && section) {
+          setPendingSettingsSection(section);
+        }
         navigateTo(target);
       }),
     [navigateTo],
@@ -170,7 +174,9 @@ export default function WorkspacePage() {
     (view: WorkspaceView) => {
       // 接受任何已注册的 WorkspaceView id；"home" 就是当前视图，
       // 所以再点它是个空操作。
-      if (view === "home") return;
+      if (view === "home") {
+        return;
+      }
       navigateTo(view);
     },
     [navigateTo],
@@ -252,13 +258,13 @@ export default function WorkspacePage() {
 
   return (
     <ShellTabs
-      viewTabs={viewTabs}
       activeViewKey={activeViewKey}
-      projectNameOf={projectNameOf}
-      onSelectViewTab={selectViewTab}
       onCloseViewTab={closeViewTabByKey}
-      openableViews={openableViews}
       onOpenView={navigateTo}
+      onSelectViewTab={selectViewTab}
+      openableViews={openableViews}
+      projectNameOf={projectNameOf}
+      viewTabs={viewTabs}
     >
       <>
         {/* 日志/Toast Provider 与底部状态栏已全局挂载（根布局），此处不再重复包裹 */}
@@ -267,52 +273,51 @@ export default function WorkspacePage() {
             顶栏 / 其余视图用 64px 自绘竖排导航条」两套形态，属历史遗留。 */}
         <AppShell
           active={viewMode}
-          onSelect={handleNavSelect}
-          onOpenSettings={openSettings}
-          projects={sidebarProjects}
           activeProjectId={activeProjectId}
-          onOpenProject={handleOpenServerProject}
-          onShowAllProjects={handleShowAllProjects}
-          onNewProject={handleNewProject}
-          viewTabs={viewTabs}
           activeViewKey={activeViewKey}
-          projectNameOf={projectNameOf}
-          onSelectViewTab={selectViewTab}
           onCloseViewTab={closeViewTabByKey}
-          openableViews={openableViews}
+          onNewProject={handleNewProject}
+          onOpenProject={handleOpenServerProject}
+          onOpenSettings={openSettings}
           onOpenView={navigateTo}
+          onSelect={handleNavSelect}
+          onSelectViewTab={selectViewTab}
+          onShowAllProjects={handleShowAllProjects}
+          openableViews={openableViews}
+          projectNameOf={projectNameOf}
+          projects={sidebarProjects}
+          viewTabs={viewTabs}
         >
           {/* 常驻视图栈：打开的每一页都**保持挂载**，用 CSS 显隐切换 ——
               这就是页签的意义（切走不卸载、切回不重开）。实现在
               `WorkspaceViewStack`（那里有懒加载声明与逐屏渲染分支）。 */}
           <WorkspaceViewStack
-            tabs={viewTabs}
             activeKey={activeViewKey}
-            activeView={viewMode}
             activeProjectId={activeProjectId}
-            recentProjects={recentProjects}
-            onEnterProject={refreshActiveProject}
-            onExitProject={() => navigateTo("home")}
-            onNewProject={handleNewProject}
-            onOpenProject={handleOpenProject}
-            onOpenCanvasProject={handleOpenCanvasProject}
-            onNavigate={handleNavSelect}
-            onHomeNavigate={handleHomeNavigate}
-            onShowAllProjects={handleShowAllProjects}
-            onOpenComfyui={openComfyui}
-            onUseWorkflow={handleUseWorkflow}
+            activeView={viewMode}
             canvasSeedNew={canvasSeedNew}
             onConsumeCanvasSeed={() => setCanvasSeedNew(false)}
-            pendingCanvasWorkflow={pendingCanvasWorkflow}
             onConsumePendingWorkflow={() => setPendingCanvasWorkflow(null)}
-            settingsSection={pendingSettingsSection}
             onConsumeSettingsSection={consumeSettingsSection}
+            onEnterProject={refreshActiveProject}
+            onExitProject={() => navigateTo("home")}
+            onHomeNavigate={handleHomeNavigate}
+            onNavigate={handleNavSelect}
+            onNewProject={handleNewProject}
+            onOpenCanvasProject={handleOpenCanvasProject}
+            onOpenComfyui={openComfyui}
+            onOpenProject={handleOpenProject}
+            onShowAllProjects={handleShowAllProjects}
+            onUseWorkflow={handleUseWorkflow}
+            pendingCanvasWorkflow={pendingCanvasWorkflow}
+            recentProjects={recentProjects}
+            settingsSection={pendingSettingsSection}
+            tabs={viewTabs}
           />
         </AppShell>
 
         {/* 视频队列弹窗：两个视图分支此前各挂一份同构实例，合并为一处。 */}
         <VideoQueueModal
-          open={videoQueueOpen}
           onClose={() => setVideoQueueOpen(false)}
           onOpenTask={() => {
             setVideoQueueOpen(false);
@@ -322,6 +327,7 @@ export default function WorkspacePage() {
             // 为不可达回调接整套详情取数不划算，切到历史视图就是等价在役入口。
             navigateTo("history");
           }}
+          open={videoQueueOpen}
         />
       </>
     </ShellTabs>

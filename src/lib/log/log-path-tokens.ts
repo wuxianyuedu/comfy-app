@@ -78,14 +78,14 @@
  */
 
 /** 命中一段路径时回的区间（半开区间 `[start, end)`，便于 `slice` 与拼装片段）。 */
-export interface LogPathToken {
-  /** 在原文里的起点（含）。 */
-  start: number;
+export type LogPathToken = {
   /** 在原文里的终点（**不含**）。 */
   end: number;
+  /** 在原文里的起点（含）。 */
+  start: number;
   /** 切干净的路径文本（不含尾部标点 / 开关）。 */
   text: string;
-}
+};
 
 /**
  * 行尾允许被丢掉、且**不属于路径**的标点。
@@ -118,9 +118,15 @@ const UNC_RE = /^\\\\[^\\/]+[\\/]/;
  * 而真实日志里 `1769 / 0 / 3` 这种分片写法并不少见 —— 不认比认错好。
  */
 function looksLikeAbsolutePath(text: string): boolean {
-  if (UNC_RE.test(text)) return true;
-  if (WIN_DRIVE_RE.test(text)) return true;
-  if (!text.startsWith("/")) return false;
+  if (UNC_RE.test(text)) {
+    return true;
+  }
+  if (WIN_DRIVE_RE.test(text)) {
+    return true;
+  }
+  if (!text.startsWith("/")) {
+    return false;
+  }
   const rest = text.slice(1);
   return rest.length > 0 && !rest.startsWith("/") && rest.includes("/");
 }
@@ -128,7 +134,11 @@ function looksLikeAbsolutePath(text: string): boolean {
 /** 统计文本里某个字符出现的次数（括号配平判据用）。 */
 function countChar(text: string, ch: string): number {
   let n = 0;
-  for (const c of text) if (c === ch) n += 1;
+  for (const c of text) {
+    if (c === ch) {
+      n += 1;
+    }
+  }
   return n;
 }
 
@@ -183,7 +193,9 @@ const FRAMEWORK_URL_NAMESPACE_RE = /^\/_(?:next|nextjs)\//;
  */
 function isUrlNotDiskPath(text: string, at: number): boolean {
   const candidate = text.slice(at);
-  if (FRAMEWORK_URL_NAMESPACE_RE.test(candidate)) return true;
+  if (FRAMEWORK_URL_NAMESPACE_RE.test(candidate)) {
+    return true;
+  }
   return URL_AFTER_VERB_RE.test(text.slice(0, at));
 }
 
@@ -210,7 +222,9 @@ function trimCandidate(raw: string): string {
         text = text.slice(0, -1);
       }
     }
-    if (text === before) return text;
+    if (text === before) {
+      return text;
+    }
   }
 }
 
@@ -233,7 +247,9 @@ function trimFlagTail(raw: string): string {
     const trimmed = text
       .replace(/\s+-{1,2}[A-Za-z][\w-]*(?:=[\w.,:/-]*|\s+[^-\s][^\s]*)?$/, "")
       .replace(/[ \t]+$/, "");
-    if (trimmed === text) return text;
+    if (trimmed === text) {
+      return text;
+    }
     text = trimmed;
   }
 }
@@ -255,14 +271,30 @@ function allowsSpacesAt(text: string, start: number): boolean {
  * 中文吃进候选（代码点比较在 `ch <= " "` 那一条之外由「非 ASCII 一律 false」兜住）。
  */
 function isPathChar(ch: string): boolean {
-  if (ch === "\\" || ch === "/") return true;
-  if (ch === ":") return true;
-  if (ch === "." || ch === "-" || ch === "_") return true;
-  if (ch <= " ") return false;
-  if (ch >= "0" && ch <= "9") return true;
-  if (ch >= "A" && ch <= "Z") return true;
-  if (ch >= "a" && ch <= "z") return true;
-  if (ch >= "\u0080") return false;
+  if (ch === "\\" || ch === "/") {
+    return true;
+  }
+  if (ch === ":") {
+    return true;
+  }
+  if (ch === "." || ch === "-" || ch === "_") {
+    return true;
+  }
+  if (ch <= " ") {
+    return false;
+  }
+  if (ch >= "0" && ch <= "9") {
+    return true;
+  }
+  if (ch >= "A" && ch <= "Z") {
+    return true;
+  }
+  if (ch >= "a" && ch <= "z") {
+    return true;
+  }
+  if (ch >= "\u0080") {
+    return false;
+  }
   return "@+%$#~!()[]{}&=*".includes(ch);
 }
 
@@ -274,7 +306,9 @@ function isPathChar(ch: string): boolean {
  * 会让「谁来判形态」这件事无处安放。
  */
 function inCandidate(ch: string, spacesInside: boolean): boolean {
-  if (ch === " ") return spacesInside;
+  if (ch === " ") {
+    return spacesInside;
+  }
   return isPathChar(ch);
 }
 
@@ -289,11 +323,15 @@ function inCandidate(ch: string, spacesInside: boolean): boolean {
  * 都由它挡住。
  */
 function leftJoinsWord(text: string, at: number): boolean {
-  if (at <= 0) return false;
+  if (at <= 0) {
+    return false;
+  }
   /* `charAt` 而不是 `text[i]`：越界回空串，`isPathChar("")` 为 false，
    * 于是「左邻不存在」与「左邻是空格」归入同一档而**不需要非空断言**。 */
   const prev = text.charAt(at - 1);
-  if (prev === " " || prev === "\t") return false;
+  if (prev === " " || prev === "\t") {
+    return false;
+  }
   return isPathChar(prev);
 }
 
@@ -309,15 +347,21 @@ function pathStartAt(text: string, at: number): number {
     return text[at + 1] === "\\" ? at : -1;
   }
   if (ch !== "/") {
-    if (!/[A-Za-z]/.test(ch)) return -1;
+    if (!/[A-Za-z]/.test(ch)) {
+      return -1;
+    }
     /* 盘符形态：`X:\` / `X:/`。左侧紧贴词字符说明这个是词的一部分
      * （`abc:/` 不是盘符）—— 直接跳过。 */
-    if (leftJoinsWord(text, at)) return -1;
+    if (leftJoinsWord(text, at)) {
+      return -1;
+    }
     return WIN_DRIVE_RE.test(text.slice(at, at + 3)) ? at : -1;
   }
   /* `/` 起段：左侧紧贴词字符 → 这是 URL 或相对路径的中段，不是新段起点
    * （`https://x/y` 只该从行里那段完整形态起判，不该切出 `/y`）。 */
-  if (leftJoinsWord(text, at)) return -1;
+  if (leftJoinsWord(text, at)) {
+    return -1;
+  }
   return at;
 }
 

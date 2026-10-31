@@ -41,16 +41,16 @@
 import { withTimeoutResult } from "~/lib/with-timeout";
 
 /** 一次「服务端已知的运行态变化」：序列 + 时刻 + 来源 + 说明。 */
-export interface ComfyStateChange {
-  /** 单调纪元：每变一次 +1。客户端据此判「这是不是我没见过的那一次」。 */
-  seq: number;
+export type ComfyStateChange = {
   /** 变化发生的时刻（毫秒）。 */
   at: number;
-  /** 什么变了（见 `ComfyStateChangeKind`）。 */
-  kind: ComfyStateChangeKind;
   /** 中文一句话，可直接进日志或状态行（不复用状态行的四态文案，避免两处文案漂）。 */
   detail: string;
-}
+  /** 什么变了（见 `ComfyStateChangeKind`）。 */
+  kind: ComfyStateChangeKind;
+  /** 单调纪元：每变一次 +1。客户端据此判「这是不是我没见过的那一次」。 */
+  seq: number;
+};
 
 /** 变化来源。用途只有一个：诊断与断言 —— 判决本身对客户端是同形的。 */
 export type ComfyStateChangeKind =
@@ -73,14 +73,14 @@ export type Listener = () => void;
  * 另一个订阅者从此收不到通知（静默失效）。同一个坑与 `liveness-signal` /
  * `comfy-stats-store` 同款，三处都刻意用包装。
  */
-interface Subscription {
+type Subscription = {
   onChange: Listener;
-}
+};
 
 type WatchGlobal = {
-  seq?: number;
   last?: ComfyStateChange | null;
   listeners?: Set<Subscription>;
+  seq?: number;
 };
 
 declare global {
@@ -124,8 +124,8 @@ export function noteComfyStateChange(
 
 /** 此刻的纪元与最近一次变化（首次连上的客户端据此判定现状）。 */
 export function getComfyStateChange(): {
-  seq: number;
   last: ComfyStateChange | null;
+  seq: number;
 } {
   return { seq: st.seq ?? 0, last: st.last ?? null };
 }
@@ -156,7 +156,9 @@ export function waitForComfyStateChange(
 ): Promise<ComfyStateChange | null> {
   const current = st.seq ?? 0;
   const last = st.last ?? null;
-  if (last !== null && current > since) return Promise.resolve(last);
+  if (last !== null && current > since) {
+    return Promise.resolve(last);
+  }
   /* 「等一次通知、超时给 null」= 一次赛跑，出口**只有一处**
    * （`~/lib/with-timeout` 的 `withTimeoutResult`，§16.2.4.62 的 P58 硬闸）：
    * 自写 `setTimeout` + `clearTimeout` + 在回调里结算 Promise 正是它要消灭的

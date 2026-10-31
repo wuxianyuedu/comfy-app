@@ -16,17 +16,17 @@ import { runAsyncAction } from "~/lib/async-action";
 import { errorText } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
 import { fixed } from "~/lib/number-format";
-import { type RouterInputs, type RouterOutputs } from "~/trpc/react";
+import type { RouterInputs, RouterOutputs } from "~/trpc/react";
 import { isRawWorkflowJson } from "~/lib/workflow/workflow-format";
-import { type MutateAsyncLike } from "./use-workflow-actions";
+import type { MutateAsyncLike } from "./use-workflow-actions";
 
-export interface UseWorkflowImportArgs {
+export type UseWorkflowImportArgs = {
   createMut: MutateAsyncLike<
     RouterInputs["workflow"]["create"],
     RouterOutputs["workflow"]["create"]
   >;
   load: () => Promise<void> | void;
-}
+};
 
 /** 拖放投放区：只认带 `Files` 的拖动（否则文本选择拖动也会点亮高亮）。
  *  计数器抵消子元素冒泡产生的 leave —— 没有它，光标掠过子元素时高亮会闪。
@@ -39,19 +39,27 @@ function useDropZone(
   const [active, setActive] = useState(false);
 
   const onDragOver = useCallback((event: DragEvent<HTMLElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) return;
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
   }, []);
   const onDragEnter = useCallback((event: DragEvent<HTMLElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) return;
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
     counterRef.current += 1;
     setActive(true);
   }, []);
   const onDragLeave = useCallback((event: DragEvent<HTMLElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) return;
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
     counterRef.current = Math.max(0, counterRef.current - 1);
-    if (counterRef.current === 0) setActive(false);
+    if (counterRef.current === 0) {
+      setActive(false);
+    }
   }, []);
   const onDrop = useCallback(
     (event: DragEvent<HTMLElement>) => {
@@ -60,7 +68,9 @@ function useDropZone(
       setActive(false);
       const files = Array.from(event.dataTransfer.files ?? []);
       const [first] = files;
-      if (!first) return;
+      if (!first) {
+        return;
+      }
       if (files.length > 1) {
         onError(`一次只能拖入一个文件（收到了 ${files.length} 个）`);
         return;
@@ -97,12 +107,16 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   const dropErrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
-      if (dropErrTimerRef.current) clearTimeout(dropErrTimerRef.current);
+      if (dropErrTimerRef.current) {
+        clearTimeout(dropErrTimerRef.current);
+      }
     };
   }, []);
   const showFileError = useCallback((message: string) => {
     setDropErr(message);
-    if (dropErrTimerRef.current) clearTimeout(dropErrTimerRef.current);
+    if (dropErrTimerRef.current) {
+      clearTimeout(dropErrTimerRef.current);
+    }
     dropErrTimerRef.current = setTimeout(() => setDropErr(null), 4000);
   }, []);
 
@@ -136,7 +150,9 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
             defaultMode: importDefaultMode,
             raw: parsed,
           });
-          if (Array.isArray(d.warnings)) setImportWarn(d.warnings);
+          if (Array.isArray(d.warnings)) {
+            setImportWarn(d.warnings);
+          }
           setShowImport(false);
           setImportName("");
           setImportJson("");
@@ -146,7 +162,9 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         },
         {
           report: (kind, detail) => {
-            if (kind === "err") setImportErr(detail);
+            if (kind === "err") {
+              setImportErr(detail);
+            }
           },
           failureText: "导入失败",
         },
@@ -172,8 +190,8 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         /* 读取本身也收在唯一出口里（§16.2.4.27）：为什么用 `file.text()`
          * 不用手搓 `FileReader`、失败怎么表达，口径只有一处。 */
         text = await readFileAsText(file);
-      } catch (e: unknown) {
-        showFileError(errorText(e, "无法读取文件"));
+      } catch (error: unknown) {
+        showFileError(errorText(error, "无法读取文件"));
         return;
       }
       let parsed: unknown;
@@ -205,9 +223,8 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       try {
         let suggested = "T2I";
         const obj = /* SAFETY: 类型断言已复核 */ parsed as Record<string, unknown>;
-        const nodes = Array.isArray(obj.nodes)
-          ? /* SAFETY: 类型断言已复核 */ (obj.nodes as Array<unknown>)
-          : [];
+        /* SAFETY: 类型断言已复核 */
+        const nodes = Array.isArray(obj.nodes) ? (obj.nodes as Array<unknown>) : [];
         for (const n of nodes) {
           const t =
             n && typeof n === "object"

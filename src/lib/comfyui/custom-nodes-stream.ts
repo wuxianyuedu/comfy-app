@@ -11,112 +11,112 @@
  * 发出侧即编译不过（此前服务端 `send(obj: unknown)` 与前端 interface 零约束）。
  */
 
-export interface PkgReport {
-  path: string;
-  name: string;
+export type PkgReport = {
+  errors: Array<{ error: string; file: string }>;
   exists: boolean;
-  status: "ok" | "missing" | "error" | "empty";
+  name: string;
   nodeCount: number;
   nodeTypes: Array<string>;
-  errors: Array<{ file: string; error: string }>;
-}
+  path: string;
+  status: "ok" | "missing" | "error" | "empty";
+};
 
-export interface ParseReport {
-  generatedAt: string;
-  totalNodes: number;
-  pathCount: number;
-  errorCount: number;
-  packages: Array<PkgReport>;
-  parseErrors?: Array<{ file: string; error: string }>;
-  /** 增量解析报告携带的模式标记（全量报告缺省为 undefined）。 */
-  mode?: "subset" | "full";
+export type ParseReport = {
   /** 增量解析时新增节点数（全量报告缺省为 undefined）。 */
   addedNodes?: number;
-}
+  errorCount: number;
+  generatedAt: string;
+  /** 增量解析报告携带的模式标记（全量报告缺省为 undefined）。 */
+  mode?: "subset" | "full";
+  packages: Array<PkgReport>;
+  parseErrors?: Array<{ error: string; file: string }>;
+  pathCount: number;
+  totalNodes: number;
+};
 
-export interface DiscoveredSubpkg {
-  path: string;
-  name: string;
-  parent: string;
-  exists: boolean;
-  isLeaf: boolean;
-  fileCount: number;
-  packageFileCount: number;
-  sizeBytes: number;
+export type DiscoveredSubpkg = {
   contentHash: string;
+  exists: boolean;
+  fileCount: number;
+  isLeaf: boolean;
+  name: string;
+  packageFileCount: number;
+  parent: string;
+  path: string;
+  sizeBytes: number;
   status: "ok" | "missing" | "empty";
-}
+};
 
 /** 清单里一个包的摘要（服务端产出、前端与 SSE 共用）。generatedAt 允许 null
  *  （清单里旧条目可能没有时间戳）。 */
-export interface SummaryPkg {
+export type SummaryPkg = {
+  contentHash?: string;
+  errors: Array<unknown>;
+  generatedAt?: string | null;
   name: string;
-  path: string;
-  status: string;
   nodeCount: number;
   nodeTypes: Array<string>;
-  errors: Array<unknown>;
-  contentHash?: string;
   parsedAt?: string | null;
   parsedFileCount?: number;
-  generatedAt?: string | null;
-}
+  path: string;
+  status: string;
+};
 
-export interface SettingsResp {
-  settings: { paths: Array<string>; localWorkflowPaths: Array<string> };
-  summary: {
-    generatedAt: string | null;
-    totalNodes: number;
-    packages: Array<SummaryPkg>;
-    missingPaths: Array<string>;
-    parseErrors: Array<{ file: string; error: string }>;
-    sources: Array<string>;
-  } | null;
-  lastReport: ParseReport | null;
-  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
+export type SettingsResp = {
   /** 归一化绝对路径（正斜杠、小写）→ 已加载的 SummaryPkg，让 UI 能把发现的
    *  子包与清单对齐，并用 contentHash 识别「已加载但已过期」。 */
   byPath: Record<string, SummaryPkg>;
-}
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
+  lastReport: ParseReport | null;
+  settings: { localWorkflowPaths: Array<string>; paths: Array<string> };
+  summary: {
+    generatedAt: string | null;
+    missingPaths: Array<string>;
+    packages: Array<SummaryPkg>;
+    parseErrors: Array<{ error: string; file: string }>;
+    sources: Array<string>;
+    totalNodes: number;
+  } | null;
+};
 
 /** 设置/探测流的一行 ndjson 事件（`/api/custom-nodes` 探测端点发出）。按 `type`
  *  判别；`phase` 只取上线会出现的三态（不含 UI 初值 `""`）。 */
 export type SettingsStreamEvent =
-  | { type: "discover_start"; parents?: Array<string>; total?: number }
+  | { parents?: Array<string>; total?: number; type: "discover_start" }
   | {
-      type: "progress";
+      discovered?: number;
+      done?: number;
+      msg?: string;
       parent?: string;
       phase?: "queue" | "scan" | "hash";
-      msg?: string;
-      discovered?: number;
       total?: number;
-      done?: number;
+      type: "progress";
     }
   | {
-      type: "discover_done";
-      parent?: string;
-      packages?: Array<DiscoveredSubpkg>;
       cached?: boolean;
+      packages?: Array<DiscoveredSubpkg>;
+      parent?: string;
+      type: "discover_done";
     }
   | {
-      type: "summary";
-      summary?: SettingsResp["summary"];
-      lastReport?: ParseReport | null;
       byPath?: Record<string, SummaryPkg>;
-      settings?: { paths: Array<string>; localWorkflowPaths: Array<string> };
+      lastReport?: ParseReport | null;
+      settings?: { localWorkflowPaths: Array<string>; paths: Array<string> };
+      summary?: SettingsResp["summary"];
+      type: "summary";
     }
-  | { type: "error"; message?: string }
+  | { message?: string; type: "error" }
   | { type: "done" };
 
 /** 解析日志流的一行 ndjson 事件（`/api/custom-nodes` 解析端点发出）。 */
 export type ParseStreamEvent =
-  | { type: "log"; level?: string; msg?: string }
+  | { level?: string; msg?: string; type: "log" }
   | {
-      type: "done";
-      report?: ParseReport | null;
-      ok?: boolean;
-      /** 解析进程 stderr 摘要（失败诊断用）。 */
-      stderr?: string;
       /** 解析进程退出码（诊断用；进程未正常退出时为 null）。 */
       exitCode?: number | null;
+      ok?: boolean;
+      report?: ParseReport | null;
+      /** 解析进程 stderr 摘要（失败诊断用）。 */
+      stderr?: string;
+      type: "done";
     };

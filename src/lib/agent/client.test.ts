@@ -143,7 +143,7 @@ describe("sendAgentMessage", () => {
   });
 
   it("请求体按线上协议序列化", async () => {
-    const seen: { url: string; init?: RequestInit } = { url: "" };
+    const seen: { init?: RequestInit; url: string } = { url: "" };
     mockFetch(() => new Response("{}", { status: 200 }));
     vi.mocked(fetch).mockImplementation((url: string | URL | Request, init) => {
       seen.url = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;

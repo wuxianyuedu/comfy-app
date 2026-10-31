@@ -31,31 +31,31 @@ import fs from "node:fs";
 import { formatDurationMs } from "~/lib/time-format";
 import type { PidLookup } from "./proc-detect";
 
-export interface ComfyExitFacts {
+export type ComfyExitFacts = {
   /** 退出码（`exit` / `close` 事件的第一个参数）。 */
   code: number | null;
+  /** 会话模式 —— 决定「拿不到退出码」这句话该怎么讲。
+   *  `studio` 是 Drizzle Studio（它复用同一套退出原语，见 lifecycle-wait）。 */
+  mode: "keepAlive" | "bound" | "cli" | "studio";
+  /** 已知 pid（保活模式由监督器记住）。 */
+  pid: number | null;
   /** 终止信号（第二个参数）。**Windows 上绝大多数情况是 null** —— Node 在
    *  Windows 只在少数路径能报出信号，被 `taskkill /F` 杀掉就是 null。 */
   signal: string | null;
   /** 用户点了「关闭 ComfyUI」（与「自己挂了」分开讲）。 */
   stopRequested: boolean;
-  /** 已知 pid（保活模式由监督器记住）。 */
-  pid: number | null;
   /** 进程存活时长（毫秒）；未知为 null。 */
   uptimeMs: number | null;
-  /** 会话模式 —— 决定「拿不到退出码」这句话该怎么讲。
-   *  `studio` 是 Drizzle Studio（它复用同一套退出原语，见 lifecycle-wait）。 */
-  mode: "keepAlive" | "bound" | "cli" | "studio";
-}
+};
 
-export interface ComfyExitReport {
-  /** 一句话结论（进 `[exit]` 行与会话横幅）。 */
-  reason: string;
-  /** 结构化明细（key=value，便于事后 grep 与贴给别人看）。 */
-  detail: string;
+export type ComfyExitReport = {
   /** 值得额外做的动作（null = 不需要）。 */
   advice: string | null;
-}
+  /** 结构化明细（key=value，便于事后 grep 与贴给别人看）。 */
+  detail: string;
+  /** 一句话结论（进 `[exit]` 行与会话横幅）。 */
+  reason: string;
+};
 
 /** 时长 → `1h02m` / `3m20s` / `42s`（日志里读着顺即可，不做精度承诺）。
  *  档位定义在 `~/lib/time-format`（同一件事只有一处），这里只补本模块的话术：
@@ -142,26 +142,26 @@ export function describeComfyExit(facts: ComfyExitFacts): ComfyExitReport {
 
 /* ── 保活模式的退出监督 ─────────────────────────────────────────────── */
 
-export interface ComfyExitWatcherDeps {
+export type ComfyExitWatcherDeps = {
+  clearTimer?: (handle: ReturnType<typeof setInterval>) => void;
   /** 查「跑着 main.py 的进程」的 pid；区分「真的查不到」(`failed=false`) 与
    *  「查询本身失败」(`failed=true`，如 PowerShell 超时)。后者证据不足，
    *  监督器不得当作「进程消失」。 */
   findPid: () => Promise<PidLookup>;
-  /** 确定退出时回调一次（之后监督器自停）。 */
-  onExit: (facts: { pid: number | null; uptimeMs: number | null }) => void;
-  /** 用户是否已请求关闭（主动关就不报「莫名退出」）。 */
-  isStopped: () => boolean;
   /** 轮询间隔（默认 10s：这是「事后发现」，不需要启动期那种 2s 密度）。 */
   intervalMs?: number;
-  /** 注入时钟（测试用）。 */
-  now?: () => number;
+  /** 用户是否已请求关闭（主动关就不报「莫名退出」）。 */
+  isStopped: () => boolean;
   /** 连续多少次查不到才判死（默认 2，与启动期同口径 —— 单次查询在冷启动高负载
    *  下可能超时误报）。 */
   missThreshold?: number;
+  /** 注入时钟（测试用）。 */
+  now?: () => number;
+  /** 确定退出时回调一次（之后监督器自停）。 */
+  onExit: (facts: { pid: number | null; uptimeMs: number | null }) => void;
   /** 定时器工厂（测试传入可控实现）。 */
   setTimer?: (fn: () => void, ms: number) => ReturnType<typeof setInterval>;
-  clearTimer?: (handle: ReturnType<typeof setInterval>) => void;
-}
+};
 
 /**
  * 轮询进程表，发现「跑着 main.py 的进程」消失时报一次退出。
@@ -188,13 +188,17 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
   let missCount = 0;
 
   const stop = () => {
-    if (stopped) return;
+    if (stopped) {
+      return;
+    }
     stopped = true;
     clearTimer(handle);
   };
 
   const tick = async () => {
-    if (stopped) return;
+    if (stopped) {
+      return;
+    }
     /* 主动关闭：监督器的职责到此为止，不报「莫名退出」（那条退出记录由关闭
      * 路径自己落）。 */
     if (deps.isStopped()) {
@@ -202,20 +206,28 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
       return;
     }
     const lookup = await deps.findPid().catch(() => ({ pid: null, failed: true }));
-    if (stopped) return;
+    if (stopped) {
+      return;
+    }
 
     /* 查询失败（PowerShell 超时 / 命令起不来）：证据不足，**不能**当作「进程消失」。
      * findPidForMainPyDetailed 把「真的查不到」与「查询本身失败」分开；机器忙
      * （ComfyUI 出图）时进程表查询经常超时，把失败误判成死亡会让用户看到假的
      * 「进程消失」（保活进程其实还活着）。这一轮既不计入 miss、也不复位已见标记。 */
-    if (lookup.failed) return;
+    if (lookup.failed) {
+      return;
+    }
 
     if (lookup.pid === null) {
       /* 还没第一次见到它 → 可能是「拉起失败」而不是「退出」：那种情况启动等待
        * 循环会自己报错，这里不抢答。 */
-      if (startedAt === null) return;
+      if (startedAt === null) {
+        return;
+      }
       missCount += 1;
-      if (missCount < missThreshold) return;
+      if (missCount < missThreshold) {
+        return;
+      }
       stop();
       deps.onExit({
         pid: seenPid,
@@ -251,14 +263,14 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
 }
 
 /** 一次会话的落盘标记（`log/services/comfyui-last-session.json`）。 */
-export interface ComfySessionMark {
-  pid: number | null;
-  mode: ComfyExitFacts["mode"];
-  /** 会话开始时刻（ISO）。 */
-  startedAt: string;
+export type ComfySessionMark = {
   /** 退出记录；null = **有开始没结束**。 */
   exited: { at: string; reason: string } | null;
-}
+  mode: ComfyExitFacts["mode"];
+  pid: number | null;
+  /** 会话开始时刻（ISO）。 */
+  startedAt: string;
+};
 
 /**
  * 对账：上一次会话是不是「有开始没结束」。
@@ -276,13 +288,17 @@ export function describeStaleSession(
 ): string | null {
   /* `mark?.exited !== null` 同时覆盖「没有标记」（undefined ≠ null）与「已结束」
    * 两种该闭嘴的情况。 */
-  if (mark?.exited !== null) return null;
+  if (mark?.exited !== null) {
+    return null;
+  }
   /* 保活模式：ComfyUI 本来就要跨过应用退出活着，正常关应用时也不会有人给它补
    * `exited` —— 于是「有开始没结束」是**常态**，与「应用/系统先没了」在这条判据
    * 上无法区分。只有当上次那个实例**现在确实不在了**才说明它是真没了，那才值得
    * 提示；还活着 = 保活移交，闭嘴（否则每次重启都会误报一次「强制关机 / 任务
    * 管理器结束进程」）。 */
-  if (mark.mode === "keepAlive" && comfyUp) return null;
+  if (mark.mode === "keepAlive" && comfyUp) {
+    return null;
+  }
   return (
     `上一次 ComfyUI 会话（pid=${mark.pid ?? "未知"}，${mark.mode} 模式）` +
     `开始于 ${mark.startedAt}，却没有退出记录 —— 说明应用或系统在它之前就结束了` +
@@ -304,7 +320,9 @@ export function describeStaleSession(
  */
 function readTailLines(filePath: string, maxLines = 40, maxLineLen = 600): Array<string> {
   try {
-    if (!fs.existsSync(filePath)) return [];
+    if (!fs.existsSync(filePath)) {
+      return [];
+    }
     const buf = fs.readFileSync(filePath);
     const text =
       buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe
@@ -331,13 +349,13 @@ function readTailLines(filePath: string, maxLines = 40, maxLineLen = 600): Array
  * 但崩溃前的真实输出在重定向文件里，一并带进面板（见 `keepAliveLogs`）。
  */
 export function reportKeepAliveExit(opts: {
-  facts: { pid: number | null; uptimeMs: number | null };
-  stopRequested: boolean;
   appendRuntimeLog: (line: string) => void;
-  log: (msg: string) => void;
+  facts: { pid: number | null; uptimeMs: number | null };
   /** 本次会话保活拉起时重定向到的 stdout / stderr 文件；传入则把其末尾带进
    *  `[exit][out]` / `[exit][err]`，让崩溃原因直接出现在面板里（不必翻文件）。 */
-  keepAliveLogs?: { out?: string; err?: string };
+  keepAliveLogs?: { err?: string; out?: string };
+  log: (msg: string) => void;
+  stopRequested: boolean;
 }): ComfyExitReport {
   const report = describeComfyExit({
     code: null,
@@ -360,9 +378,13 @@ export function reportKeepAliveExit(opts: {
   ];
   let headerWritten = false;
   for (const [kind, file] of tailFiles) {
-    if (!file) continue;
+    if (!file) {
+      continue;
+    }
     const tail = readTailLines(file);
-    if (tail.length === 0) continue;
+    if (tail.length === 0) {
+      continue;
+    }
     if (!headerWritten) {
       opts.appendRuntimeLog(
         "[exit] ComfyUI 最后输出（崩溃 / 退出原因通常在此；完整内容见对应的 comfyui-keepalive-*.log）：",

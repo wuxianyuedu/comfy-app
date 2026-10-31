@@ -129,7 +129,9 @@ describe("ComfyUI reaper 启动路径（ADR §14 D3：宿主显式起、模块�
           stack.push(full);
           continue;
         }
-        if (!/\.test\.tsx?$/.test(entry.name)) continue;
+        if (!/\.test\.tsx?$/.test(entry.name)) {
+          continue;
+        }
         files.push(full);
       }
     }

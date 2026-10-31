@@ -30,7 +30,7 @@ export const States: Story = {
   render: () => (
     <div className="flex flex-col gap-2">
       {STATES.map((state) => (
-        <span key={state} className="text-ink-muted flex items-center gap-2 text-xs">
+        <span className="text-ink-muted flex items-center gap-2 text-xs" key={state}>
           <StatusDot state={state} />
           {state}
         </span>
@@ -43,9 +43,9 @@ export const States: Story = {
 export const SizesAndPulse: Story = {
   render: () => (
     <div className="flex items-center gap-4">
-      <StatusDot state="up" sizeClass="size-1.5" />
+      <StatusDot sizeClass="size-1.5" state="up" />
       <StatusDot state="up" />
-      <StatusDot state="busy" sizeClass="size-3" pulse />
+      <StatusDot pulse sizeClass="size-3" state="busy" />
     </div>
   ),
 };

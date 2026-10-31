@@ -48,11 +48,17 @@ function ToastDemo() {
   const fire = (kind: string) => {
     void import("sonner").then(({ toast }) => {
       const text = `这是一条 ${kind} 消息`;
-      if (kind === "success") toast.success(text);
-      else if (kind === "info") toast.info(text);
-      else if (kind === "warning") toast.warning(text);
-      else if (kind === "error") toast.error(text);
-      else toast(text);
+      if (kind === "success") {
+        toast.success(text);
+      } else if (kind === "info") {
+        toast.info(text);
+      } else if (kind === "warning") {
+        toast.warning(text);
+      } else if (kind === "error") {
+        toast.error(text);
+      } else {
+        toast(text);
+      }
     });
   };
   return (
@@ -60,12 +66,7 @@ function ToastDemo() {
       <Toaster />
       <div className="flex flex-wrap gap-2">
         {["default", "success", "info", "warning", "error"].map((kind) => (
-          <Button
-            key={kind}
-            size="sm"
-            variant="outline"
-            onClick={() => fire(kind)}
-          >
+          <Button key={kind} onClick={() => fire(kind)} size="sm" variant="outline">
             {kind}
           </Button>
         ))}
@@ -88,8 +89,6 @@ function DescriptionDemo() {
     <div className="flex flex-col gap-3">
       <Toaster />
       <Button
-        size="sm"
-        variant="outline"
         onClick={() => {
           void import("sonner").then(({ toast }) => {
             toast.error("读取工作流失败", {
@@ -97,6 +96,8 @@ function DescriptionDemo() {
             });
           });
         }}
+        size="sm"
+        variant="outline"
       >
         弹一条带描述的
       </Button>
@@ -115,8 +116,6 @@ function LoadingDemo() {
     <div className="flex flex-col gap-3">
       <Toaster />
       <Button
-        size="sm"
-        variant="outline"
         onClick={() => {
           void import("sonner").then(({ toast }) => {
             toast.loading("正在导出…", { id: "export" });
@@ -125,6 +124,8 @@ function LoadingDemo() {
             }, 1500);
           });
         }}
+        size="sm"
+        variant="outline"
       >
         导出（转圈 → 成功）
       </Button>

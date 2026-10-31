@@ -68,32 +68,28 @@ function NodeCardSample({
   actionLabel,
   withHandle = false,
 }: {
-  title: string;
-  pill: React.ReactNode;
   actionLabel: string;
+  pill: React.ReactNode;
+  title: string;
   withHandle?: boolean;
 }) {
   return (
     <WorkflowNodeCardShell>
-      <WorkflowNodeHeader
-        title={title}
-        titleTitle={`工作流 · ${title}`}
-        right={pill}
-      />
+      <WorkflowNodeHeader right={pill} title={title} titleTitle={`工作流 · ${title}`} />
       <WorkflowNodeDivider />
       <div className="pt-1.5">
         {OUTPUTS.map((output) => (
           <WorkflowNodeOutputsRow
+            inputs={[]}
             key={output.ioKey}
             output={output}
-            inputs={[]}
             outputs={OUTPUTS}
             renderHandle={
               withHandle
                 ? ({ id, type }) => (
                     <span
-                      key={id}
                       className="bg-primary absolute top-1/2 right-0 size-2.5 translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white/20"
+                      key={id}
                       title={`输出端点 · ${type}`}
                     />
                   )
@@ -148,27 +144,21 @@ export const BothSites: Story = {
   render: (args) => (
     <div className="flex flex-wrap items-start gap-8">
       <div className="flex flex-col gap-1.5">
-        <span className="text-ink-muted font-mono text-[11px]">
-          工作流库（无端点 · 状态胶囊）
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">工作流库（无端点 · 状态胶囊）</span>
         <NodeCardSample
           {...args}
-          title="角色一致性 · 三视图"
-          pill={
-            <span className="text-ink-muted text-[10px]">已发布 · 27 节点</span>
-          }
           actionLabel="使用此工作流"
+          pill={<span className="text-ink-muted text-[10px]">已发布 · 27 节点</span>}
+          title="角色一致性 · 三视图"
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <span className="text-ink-muted font-mono text-[11px]">
-          项目画布（有端点 · 序号胶囊）
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">项目画布（有端点 · 序号胶囊）</span>
         <NodeCardSample
           {...args}
-          title="角色一致性 · 三视图"
-          pill={<span className="text-ink-muted text-[10px]">#3</span>}
           actionLabel="运行工作流"
+          pill={<span className="text-ink-muted text-[10px]">#3</span>}
+          title="角色一致性 · 三视图"
           withHandle
         />
       </div>
@@ -186,18 +176,16 @@ export const IndividualParts: Story = {
   render: () => (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <span className="text-ink-muted font-mono text-[11px]">
-          头部 + 胶囊
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">头部 + 胶囊</span>
         <div className="border-border-strong bg-card w-95 rounded-[14px] border">
           <WorkflowNodeHeader
-            title="首帧 → 逐镜生成"
             right={
               <WorkflowNodePill title="本机工作流">
                 <span className="bg-status-online size-1.5 rounded-full" />
                 <span className="text-ink-bright text-[10px]">本机</span>
               </WorkflowNodePill>
             }
+            title="首帧 → 逐镜生成"
           />
         </div>
       </div>
@@ -206,24 +194,16 @@ export const IndividualParts: Story = {
         <div className="flex items-center gap-2">
           <WorkflowStaticChip>SDXL</WorkflowStaticChip>
           <WorkflowStaticChip>27 节点</WorkflowStaticChip>
-          <WorkflowStaticChip title="没有任务类型标记">
-            未分类
-          </WorkflowStaticChip>
+          <WorkflowStaticChip title="没有任务类型标记">未分类</WorkflowStaticChip>
         </div>
       </div>
       <div className="flex flex-col gap-2">
-        <span className="text-ink-muted font-mono text-[11px]">
-          底部按钮（常态 / 禁用）
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">底部按钮（常态 / 禁用）</span>
         <div className="w-95 overflow-hidden rounded-[14px] border">
           <WorkflowNodeActionButton label="运行工作流" />
         </div>
         <div className="w-95 overflow-hidden rounded-[14px] border">
-          <WorkflowNodeActionButton
-            label="运行工作流"
-            disabled
-            hint="工作流还没解析出参数"
-          />
+          <WorkflowNodeActionButton disabled hint="工作流还没解析出参数" label="运行工作流" />
         </div>
       </div>
     </div>

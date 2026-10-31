@@ -23,17 +23,13 @@ const IMPORT_LABEL_CLASS = "text-ink-soft mb-1 text-xs font-medium";
 
 type ImportState = ReturnType<typeof useWorkflowImport>;
 
-interface WorkflowImportPanelProps {
-  state: ImportState;
+type WorkflowImportPanelProps = {
   onClose: () => void;
   onImport: () => void;
-}
+  state: ImportState;
+};
 
-export function WorkflowImportPanel({
-  state,
-  onClose,
-  onImport,
-}: WorkflowImportPanelProps) {
+export function WorkflowImportPanel({ state, onClose, onImport }: WorkflowImportPanelProps) {
   const {
     importName,
     setImportName,
@@ -60,10 +56,7 @@ export function WorkflowImportPanel({
   /* 「选择文件」入口：隐藏 input 的持有与触发收进`ui/file-picker`
    * （此前这里自己拿 ref、自己复位`value`，同一套样板全库 9 份）。
    * 文件本身仍交给同一个漏斗处理（§17.6.4：ref 留在视图层）。 */
-  const pickerProps = useMemo(
-    () => ({ "aria-label": "选择工作流 JSON 文件" }),
-    [],
-  );
+  const pickerProps = useMemo(() => ({ "aria-label": "选择工作流 JSON 文件" }), []);
   const importPicker = useFilePicker({
     accept: ".json,.workflow,application/json",
     onPick: (file) => void handlePickedFile(file),
@@ -72,24 +65,22 @@ export function WorkflowImportPanel({
 
   return (
     <div
-      onDragOver={onPanelDragOver}
-      onDragEnter={onPanelDragEnter}
-      onDragLeave={onPanelDragLeave}
-      onDrop={onPanelDrop}
       className={`border-border-strong bg-subtle mb-6 rounded-2xl border p-5 transition-colors ${
         panelDragActive ? "border-primary/70 bg-primary/5" : ""
       }`}
+      onDragEnter={onPanelDragEnter}
+      onDragLeave={onPanelDragLeave}
+      onDragOver={onPanelDragOver}
+      onDrop={onPanelDrop}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-ink-bright text-sm font-semibold">
-          导入 ComfyUI 工作流
-        </h2>
-        <Hint label="关闭" accessibleName>
+        <h2 className="text-ink-bright text-sm font-semibold">导入 ComfyUI 工作流</h2>
+        <Hint accessibleName label="关闭">
           <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onClose}
             className="text-ink-muted hover:text-ink-soft"
+            onClick={onClose}
+            size="icon-sm"
+            variant="ghost"
           >
             ✕
           </Button>
@@ -104,31 +95,23 @@ export function WorkflowImportPanel({
 
       {/* 通用：名字 + 模式 */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_220px]">
-        <FormField
-          label="工作流名称"
-          id="workflow-import-name"
-          labelClassName={IMPORT_LABEL_CLASS}
-        >
+        <FormField id="workflow-import-name" label="工作流名称" labelClassName={IMPORT_LABEL_CLASS}>
           {(a11y) => (
             <input
               {...a11y}
-              value={importName}
+              className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted focus:border-primary/40 w-full rounded-lg border px-3 py-2 text-sm outline-none"
               onChange={textHandler(setImportName)}
               placeholder="例如：胶片人像 _v2（留空则用文件名）"
-              className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted focus:border-primary/40 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+              value={importName}
             />
           )}
         </FormField>
-        <FormField
-          label="模式"
-          id="workflow-import-mode"
-          labelClassName={IMPORT_LABEL_CLASS}
-        >
+        <FormField id="workflow-import-mode" label="模式" labelClassName={IMPORT_LABEL_CLASS}>
           {(field) => (
             <MultiModeSelect
               {...field}
-              modes={importModes}
               defaultMode={importDefaultMode}
+              modes={importModes}
               onChange={(ms, def) => {
                 setImportModes(ms);
                 setImportDefaultMode(def);
@@ -143,24 +126,22 @@ export function WorkflowImportPanel({
         <span className="text-ink-muted text-xs">工作流格式（RAW）</span>
         <span className="group text-ink-muted relative inline-flex items-center gap-1.5 text-xs">
           <Button
-            variant="outline"
-            size="icon-xs"
-            onClick={() => setShowHelpTip((value) => !value)}
-            aria-label="导入格式说明"
             aria-expanded={showHelpTip}
+            aria-label="导入格式说明"
             className="border-border-strong bg-subtle text-ink-soft hover:border-primary/40 hover:text-primary text-2xs size-5 rounded-full"
+            onClick={() => setShowHelpTip((value) => !value)}
+            size="icon-xs"
+            variant="outline"
           >
             ?
           </Button>
           <span
             className={`border-border-strong bg-panel text-ink-soft z-popup absolute top-full left-0 mt-2 w-72 rounded-lg border p-2.5 text-xs leading-relaxed shadow-xl transition-opacity ${
-              showHelpTip
-                ? "opacity-100"
-                : "pointer-events-none opacity-0 group-hover:opacity-100"
+              showHelpTip ? "opacity-100" : "pointer-events-none opacity-0 group-hover:opacity-100"
             }`}
           >
-            ComfyUI → 菜单 →「导出(工作流格式)」。API 格式不受支持 ——
-            转成可执行图由 ComfyUI 自己在运行时完成。
+            ComfyUI → 菜单 →「导出(工作流格式)」。API 格式不受支持 —— 转成可执行图由 ComfyUI
+            自己在运行时完成。
           </span>
         </span>
       </div>
@@ -172,10 +153,10 @@ export function WorkflowImportPanel({
           拖到面板任意位置，或
         </span>
         <Button
-          variant="outline"
-          size="xs"
-          onClick={importPicker.open}
           className="border-border-strong bg-subtle text-ink-soft hover:border-primary/40 hover:text-primary h-auto rounded-lg px-3 py-1.5"
+          onClick={importPicker.open}
+          size="xs"
+          variant="outline"
         >
           选择文件…
         </Button>
@@ -184,19 +165,17 @@ export function WorkflowImportPanel({
 
       <div className="mt-3">
         <Textarea
-          value={importJson}
-          onChange={textHandler(setImportJson)}
-          rows={8}
-          placeholder='{"last_node_id": 11,"nodes": [{"id": 11,"type":"KSampler","pos": [400, 300],"widgets_values": [...] }],"links": [...] }'
           className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted resize-none font-mono text-xs"
+          onChange={textHandler(setImportJson)}
+          placeholder='{"last_node_id": 11,"nodes": [{"id": 11,"type":"KSampler","pos": [400, 300],"widgets_values": [...] }],"links": [...] }'
+          rows={8}
+          value={importJson}
         />
       </div>
 
       {/* 文件入口（拖入 / 选择）失败的可读原因，与粘贴路径的 importErr 分开两条。 */}
       {dropErr && <p className="text-destructive mt-2 text-xs">⚠ {dropErr}</p>}
-      {importErr && (
-        <p className="text-destructive mt-2 text-xs">{importErr}</p>
-      )}
+      {importErr && <p className="text-destructive mt-2 text-xs">{importErr}</p>}
       {importWarn.length > 0 && (
         <div className="border-warning/30 bg-warning/6 text-warning-strong mt-2 rounded-md border p-2 text-xs">
           <p className="font-medium">导入提示：</p>
@@ -209,17 +188,17 @@ export function WorkflowImportPanel({
       )}
       <div className="mt-3 flex justify-end gap-2">
         <Button
-          variant="outline"
-          onClick={onClose}
           className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-lg px-4 py-2"
+          onClick={onClose}
+          variant="outline"
         >
           取消
         </Button>
         <Button
-          variant="primary-solid"
-          onClick={onImport}
-          disabled={importing}
           className="h-auto rounded-lg px-4 py-2"
+          disabled={importing}
+          onClick={onImport}
+          variant="primary-solid"
         >
           {importing ? "导入中…" : "确认导入"}
         </Button>

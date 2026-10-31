@@ -31,11 +31,11 @@ import { customNodesManifestPath } from "~/lib/comfyui/custom-nodes-manifest.ser
 import { pythonCandidates } from "~/lib/process/python-candidates";
 
 type Cb = (...args: Array<unknown>) => void;
-interface FakeChild {
-  proc: Record<string, Array<Cb>>;
-  out: Record<string, Array<Cb>>;
+type FakeChild = {
   err: Record<string, Array<Cb>>;
-}
+  out: Record<string, Array<Cb>>;
+  proc: Record<string, Array<Cb>>;
+};
 
 /**
  * 假文件系统的登记表（只覆盖下面这两个路径，其余转调真 `node:fs`）。
@@ -43,20 +43,20 @@ interface FakeChild {
  * 路径是开发机上「解析过一次就会长出来」的那两个，所以每条用例都**显式**登记自己那一档
  *（包括「不存在」）—— 否则同一个断言在解析过一次的机器上会与在干净检出上不同形。
  */
-interface StubFile {
-  /** 文件内容（字符串原文；`undefined` + `missing` 表示没有这个文件）。 */
-  text?: string;
-  size?: number;
-  mtimeMs?: number;
-  /** 存在但读不出来（IO 错），与「不存在」是两档。 */
-  readFails?: boolean;
-  /** 存在但 stat 失败 —— 指纹取不到时调用方**不许**缓存。 */
-  statFails?: boolean;
+type StubFile = {
   /** 连「在不在」都问不出来（挂载点失效 / 权限）—— 路由的 try/catch 就是为这一档写的。
    *  `"silent"` 表示抛的是一个**没有 message** 的 Error，用来判兜底文案那一格。 */
   existsFails?: boolean | "silent";
   missing?: boolean;
-}
+  mtimeMs?: number;
+  /** 存在但读不出来（IO 错），与「不存在」是两档。 */
+  readFails?: boolean;
+  size?: number;
+  /** 存在但 stat 失败 —— 指纹取不到时调用方**不许**缓存。 */
+  statFails?: boolean;
+  /** 文件内容（字符串原文；`undefined` + `missing` 表示没有这个文件）。 */
+  text?: string;
+};
 
 const { spawnMock, userMock, settingsMock, fsState } = vi.hoisted(() => {
   const files = new Map<string, StubFile>();
@@ -101,7 +101,9 @@ vi.mock("node:fs", async (importOriginal) => {
         /* 「在不在」都问不出来（挂载点失效 / 权限）是路由那层 try/catch 存在的理由，
          * 所以这一档要能造出来 —— 不能让假 fs 只会返回布尔值。 */
         if (hit.existsFails) {
-          if (hit.existsFails === "silent") throw new Error("");
+          if (hit.existsFails === "silent") {
+            throw new Error("");
+          }
           throw Object.assign(new Error(`EACCES: permission denied, ${keyOf(p)}`), {
             code: "EACCES",
           });
@@ -133,7 +135,9 @@ vi.mock("node:fs", async (importOriginal) => {
     statSync: (p: PathLike): unknown => {
       const k = keyOf(p);
       const hit = fsState.files.get(k);
-      if (!hit) return /* SAFETY: 类型断言已复核 */ (real.statSync as (a: unknown) => unknown)(p);
+      if (!hit) {
+        return /* SAFETY: 类型断言已复核 */ (real.statSync as (a: unknown) => unknown)(p);
+      }
       if (hit.missing || hit.statFails) {
         const e = /* SAFETY: 类型断言已复核 */ new Error(
           hit.missing
@@ -189,7 +193,11 @@ function installFakeChild() {
      * 「这个解释器不行」，三个候选轮完返回空批 —— 用例因此不必等真实超时
      *（DISCOVER_TIMEOUT_MS × 3）。 */
     setTimeout(() => {
-      if (nextStdout) for (const cb of child.out.data ?? []) cb(nextStdout);
+      if (nextStdout) {
+        for (const cb of child.out.data ?? []) {
+          cb(nextStdout);
+        }
+      }
       emitClose(child, 0);
     }, 0);
     return handle;
@@ -198,7 +206,9 @@ function installFakeChild() {
 
 /** 驱动假子进程收尾（discover 那条 await 它，不发 close 就永远挂着）。 */
 function emitClose(child: FakeChild, code: number) {
-  for (const cb of child.proc.close ?? []) cb(code);
+  for (const cb of child.proc.close ?? []) {
+    cb(code);
+  }
 }
 
 async function post(body: unknown) {
@@ -286,8 +296,8 @@ describe("POST /api/custom-nodes —— 鉴权与请求体", () => {
     });
     expect(res.status).toBe(200);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      paths: Array<string>;
       localWorkflowPaths: Array<string>;
+      paths: Array<string>;
     };
     expect(body.paths).toEqual(["C:/ComfyUI/custom_nodes"]);
     expect(body.localWorkflowPaths).toEqual(["C:/ComfyUI/workflows"]);
@@ -380,8 +390,8 @@ describe("POST parse —— argv 注入闸门（台账 A6）", () => {
     const res = await post({ action: "parse" });
     expect(res.status).toBe(400);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
-      ok: boolean;
       error: string;
+      ok: boolean;
     };
     expect(body.ok).toBe(false);
     expect(body.error).toContain("CUSTOM_NODES_PATH");
@@ -462,7 +472,9 @@ describe("POST parse —— 解释器退避与收尾归属（台账 A14）", () 
     /* 逐候选对账，而不是只盯 `calls[2]`：位置由判据给，写死下标就等于在这里
      * 又抄一份顺序（POSIX 上根本没有 `py` 这一档，那条断言会莫名其妙地空过）。 */
     for (const [command, args] of spawnMock.mock.calls) {
-      if (String(command) !== "py") continue;
+      if (String(command) !== "py") {
+        continue;
+      }
       expect(/* SAFETY: 类型断言已复核 */ (args as Array<string>)[0]).toBe("-3");
     }
   });
@@ -582,7 +594,9 @@ function readsOf(p: string): number {
 
 /** GET 的一次往返（流式形态会被读到底，返回按行解析出来的事件）。 */
 async function getEvents(): Promise<Array<Record<string, unknown>>> {
-  if (!armed) coldRoot();
+  if (!armed) {
+    coldRoot();
+  }
   const res = await GET();
   expect(res.status).toBe(200);
   expect(res.headers.get("content-type")).toContain("ndjson");
@@ -624,7 +638,9 @@ function scriptDiscover(
     children.push(child);
     setTimeout(() => {
       for (const cb of child.out.data ?? []) {
-        for (const line of lines) cb(Buffer.from(`${line}\n`));
+        for (const line of lines) {
+          cb(Buffer.from(`${line}\n`));
+        }
       }
       emitClose(child, opts.code ?? 0);
     }, 0);
@@ -666,7 +682,9 @@ async function summaryOf(): Promise<Record<string, unknown> | null> {
  * 就等于「测过了」而流式那一档一个字都没判。
  */
 async function payloadOf(): Promise<Record<string, unknown>> {
-  if (!armed) coldRoot();
+  if (!armed) {
+    coldRoot();
+  }
   const res = await GET();
   expect(res.status).toBe(200);
   if ((res.headers.get("content-type") ?? "").includes("ndjson")) {
@@ -738,8 +756,8 @@ describe("GET 摘要：清单的六种坏法", () => {
     const summary = eventOf(events, "summary");
     expect(summary.summary).toBeNull();
     const settings = /* SAFETY: 类型断言已复核 */ summary.settings as {
-      paths: Array<string>;
       localWorkflowPaths: Array<string>;
+      paths: Array<string>;
     };
     // 两个伴随字段都得指向**同一个安装根**（对话框靠它们在同一屏里配对显示）。
     expect(settings.paths).toEqual([parent]);
@@ -1067,14 +1085,14 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
  * 就是「第 N 个子进程是谁、argv 落在哪个候选上」。
  */
 type ChildPlan = {
-  /** 逐行吐（自动补 `\n`），与 `scriptDiscover` 同义。 */
-  lines?: Array<string>;
   /** 逐 chunk 原样吐（**不**补换行）—— 用来造「一行被切断」。 */
   chunks?: Array<string>;
+  closeCode?: number | null;
   errChunks?: Array<string>;
   /** 异步 `error` 事件（真机上缺解释器就是这一形）。给了它默认不再发 close。 */
   error?: { code: string; message?: string };
-  closeCode?: number | null;
+  /** 逐行吐（自动补 `\n`），与 `scriptDiscover` 同义。 */
+  lines?: Array<string>;
   /** 显式要求发 close（配合 `error` 用）。 */
   noClose?: boolean;
 };
@@ -1099,13 +1117,21 @@ function queueChild(plan: ChildPlan): void {
     };
     children.push(child);
     const fire = (bag: Record<string, Array<Cb>>, ev: string, arg: unknown): void => {
-      for (const cb of bag[ev] ?? []) cb(arg);
+      for (const cb of bag[ev] ?? []) {
+        cb(arg);
+      }
     };
     /* 延后一拍：注册必须先于触发（与被测代码同步挂监听这一段配对）。 */
     setTimeout(() => {
-      for (const c of plan.chunks ?? []) fire(child.out, "data", Buffer.from(c));
-      for (const l of plan.lines ?? []) fire(child.out, "data", Buffer.from(`${l}\n`));
-      for (const e of plan.errChunks ?? []) fire(child.err, "data", Buffer.from(e));
+      for (const c of plan.chunks ?? []) {
+        fire(child.out, "data", Buffer.from(c));
+      }
+      for (const l of plan.lines ?? []) {
+        fire(child.out, "data", Buffer.from(`${l}\n`));
+      }
+      for (const e of plan.errChunks ?? []) {
+        fire(child.err, "data", Buffer.from(e));
+      }
       if (plan.error) {
         fire(
           child.proc,
@@ -1148,8 +1174,9 @@ function progressWith(
   const hit = events.find((e) => e.type === "progress" && msgOf(e).includes(substr));
   if (!hit) {
     throw new Error(
-      `进度事件里没有含 "${substr}" 的那条，实到的进度：` +
-        JSON.stringify(events.filter((e) => e.type === "progress")),
+      `进度事件里没有含 "${substr}" 的那条，实到的进度：${JSON.stringify(
+        events.filter((e) => e.type === "progress"),
+      )}`,
     );
   }
   return hit;

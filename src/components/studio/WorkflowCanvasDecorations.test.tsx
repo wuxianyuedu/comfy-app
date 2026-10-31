@@ -110,12 +110,13 @@ describe("网格线颜色出口", () => {
     const svgs = Array.from(container.querySelectorAll("svg.react-flow__background"));
     for (const svg of svgs) {
       const mine = Array.from(svg.querySelectorAll("pattern")).some((p) => p.id.endsWith(layerId));
-      if (mine)
+      if (mine) {
         return (
           svg
             .getAttribute("style")
             ?.match(/--xy-background-pattern-color-props:\s*([^;]+);/)?.[1] ?? ""
         );
+      }
     }
     return "";
   }

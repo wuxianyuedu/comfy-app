@@ -21,11 +21,15 @@ const listeners = new Set<() => void>();
 let observer: MutationObserver | null = null;
 
 function ensureObserver(): void {
-  if (observer || typeof window === "undefined") return;
+  if (observer || typeof window === "undefined") {
+    return;
+  }
   observer = new MutationObserver(() => {
     /* 主题 class 已落到 <html>：缓存里的 token 值全部作废，重新读。 */
     tokenCache.clear();
-    for (const listener of listeners) listener();
+    for (const listener of listeners) {
+      listener();
+    }
   });
   observer.observe(document.documentElement, {
     attributes: true,
@@ -47,11 +51,13 @@ const tokenCache = new Map<string, string | null>();
 
 /** 读取 `--color-*` 的解析值并归一成 `#rrggbb`；读不到时返回 null。 */
 export function readCssColorToken(name: string): string | null {
-  if (typeof window === "undefined") return null;
-  if (tokenCache.has(name)) return tokenCache.get(name) ?? null;
-  const raw = getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
+  if (typeof window === "undefined") {
+    return null;
+  }
+  if (tokenCache.has(name)) {
+    return tokenCache.get(name) ?? null;
+  }
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const value = normalizeCssColor(raw);
   tokenCache.set(name, value);
   return value;
@@ -63,7 +69,9 @@ export function readCssColorToken(name: string): string | null {
  * 形状不认识时返回 null，由调用方决定兜底。
  */
 export function normalizeCssColor(value: string): string | null {
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
   const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value);
   const digits = hex?.[1];
   if (digits) {
@@ -94,10 +102,7 @@ export function normalizeCssColor(value: string): string | null {
 export function useCssColorToken(name: string, fallback: string): string {
   /* getSnapshot 必须返回**原始值**（字符串）—— React 用 Object.is 比较，字符串
    *  天然稳定，所以即便每次 render 新建闭包也不会触发多余渲染。 */
-  const getSnapshot = useCallback(
-    () => readCssColorToken(name) ?? fallback,
-    [name, fallback],
-  );
+  const getSnapshot = useCallback(() => readCssColorToken(name) ?? fallback, [name, fallback]);
   const getServerSnapshot = useCallback(() => fallback, [fallback]);
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

@@ -51,10 +51,10 @@ function renderPopover(overrides?: { onDismiss?: () => void }) {
   const onDismiss = overrides?.onDismiss ?? vi.fn();
   render(
     <NodeJsonPopover
-      request={REQUEST}
       getJson={() => JSON_ENTRY}
       getView={() => null}
       onDismiss={onDismiss}
+      request={REQUEST}
     />,
   );
   return { onDismiss };
@@ -75,9 +75,7 @@ describe("节点 JSON 浮层", () => {
     expect(screen.getByText("#41")).toBeInTheDocument();
     expect(screen.getByText("CLIPTextEncode")).toBeInTheDocument();
     /* 正文按 JSON 序列化渲染（含字段名即证明拿到了条目）。 */
-    expect(
-      screen.getByText(/"class_type": "CLIPTextEncode"/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/"class_type": "CLIPTextEncode"/)).toBeInTheDocument();
   });
 
   it("浮层由 Positioner 定位（锚点定位，不是视口居中的弹窗）", () => {
@@ -119,9 +117,10 @@ describe("节点 JSON 浮层", () => {
     renderPopover();
 
     fireEvent.click(screen.getByRole("tab", { name: "执行 · 节点条目" }));
-    expect(
-      screen.getByRole("tab", { name: "执行 · 节点条目" }),
-    ).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "执行 · 节点条目" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(screen.getByRole("tab", { name: "RAW · 节点视图" })).toHaveAttribute(
       "aria-selected",
       "false",

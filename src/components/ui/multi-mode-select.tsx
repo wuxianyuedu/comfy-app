@@ -83,18 +83,18 @@ const CATEGORY_ACCENT: Record<WorkflowCategory, string> = {
   audio: "bg-warning",
 };
 
-interface MultiModeSelectProps {
-  /** 全部已选模式码（defaultMode ⊆ modes）。空数组 → 空 chip。 */
-  modes: Array<string>;
+type MultiModeSelectProps = {
+  className?: string;
   /** 默认模式码（defaultMode 必须 ∈ `modes`）。 */
   defaultMode: string;
-  onChange: (modes: Array<string>, defaultMode: string) => void;
-  className?: string;
   disabled?: boolean;
   /** 隐藏右侧的「+N」徽标：调用方（如详情页）自行把全部模式列在上方，
    *  徽标就成了冗余。popover 仍可从主 chip 打开。 */
   hideExtraBadge?: boolean;
-}
+  /** 全部已选模式码（defaultMode ⊆ modes）。空数组 → 空 chip。 */
+  modes: Array<string>;
+  onChange: (modes: Array<string>, defaultMode: string) => void;
+};
 
 const POPOVER_MAX_H = 360;
 
@@ -187,29 +187,29 @@ export function MultiModeSelect({
   const plusN = Math.max(0, modes.length - 1);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover onOpenChange={setOpen} open={open}>
       <span
         className={`inline-flex items-center gap-1 ${disabled ? "pointer-events-none opacity-50" : ""}`}
       >
         {/* 主 chip —— 点击它打开浮层 */}
         <PopoverTrigger
-          title={`当前 ${modes.length} 种模式 · 点击管理`}
           render={
             <Button
-              variant="ghost"
-              disabled={disabled}
               className={`text-2xs h-auto gap-1 rounded-md px-2 py-0.5 font-medium hover:brightness-110 ${accent.pill} ${accent.text} ${className}`}
+              disabled={disabled}
+              variant="ghost"
             />
           }
+          title={`当前 ${modes.length} 种模式 · 点击管理`}
         >
           <span>{modes.length === 0 ? "选择模式" : mainLabel}</span>
-          <svg className="shrink-0" width="10" height="10" viewBox="0 0 12 12" fill="none">
+          <svg className="shrink-0" fill="none" height="10" viewBox="0 0 12 12" width="10">
             <path
               d="M3 4.5L6 7.5L9 4.5"
               stroke="currentColor"
-              strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
+              strokeWidth="1.5"
             />
           </svg>
         </PopoverTrigger>
@@ -217,10 +217,10 @@ export function MultiModeSelect({
         {/* +N pill —— 点击它也打开同一个浮层 */}
         {plusN > 0 && !hideExtraBadge && (
           <Button
-            variant="ghost"
+            className="text-ink-faint bg-primary-500/10 hover:bg-primary-500/20 hover:text-primary-strong text-2xs h-auto rounded-md px-1.5 py-0.5 font-medium"
             onClick={() => setOpen(true)}
             title={`还有 ${plusN} 种其他模式，点击管理`}
-            className="text-ink-faint bg-primary-500/10 hover:bg-primary-500/20 hover:text-primary-strong text-2xs h-auto rounded-md px-1.5 py-0.5 font-medium"
+            variant="ghost"
           >
             +{plusN}
           </Button>
@@ -228,20 +228,20 @@ export function MultiModeSelect({
       </span>
 
       <PopoverContent
-        role="dialog"
         align="start"
-        sideOffset={4}
         aria-label="工作流模式编辑器"
         className="border-border-strong bg-card w-[min(92vw,320px)] gap-0 overflow-hidden rounded-xl p-0 shadow-2xl shadow-black/5 dark:shadow-black/40"
+        role="dialog"
+        sideOffset={4}
       >
         {/* search */}
         <div className="border-border-subtle border-b p-2">
           <input
             autoFocus
-            type="text"
-            placeholder="搜索模式（标签 / 缩写）…"
-            value={query}
             onChange={textHandler(setQuery)}
+            placeholder="搜索模式（标签 / 缩写）…"
+            type="text"
+            value={query}
             {...enterCommit({ onCommit: handleSave })}
             className="bg-subtle text-ink-bright placeholder:text-ink-fainter focus:bg-surface-2 focus:ring-primary-500/30 w-full rounded-md px-2.5 py-1.5 text-sm transition-colors outline-none focus:ring-1"
           />
@@ -257,14 +257,14 @@ export function MultiModeSelect({
               const isActive = activeTab === cat;
               return (
                 <Button
-                  key={cat}
-                  variant="ghost"
-                  onClick={() => setActiveTab(cat)}
                   className={`relative h-auto flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold ${
                     isActive
                       ? `${CATEGORY_TEXT[cat]} bg-surface-2 hover:bg-surface-2`
                       : "text-ink-muted hover:text-ink-strong"
                   }`}
+                  key={cat}
+                  onClick={() => setActiveTab(cat)}
+                  variant="ghost"
                 >
                   {CATEGORY_LABEL[cat]}
                   {selCount > 0 && (
@@ -282,7 +282,7 @@ export function MultiModeSelect({
         </div>
 
         {/* 列表 —— 只列当前页签分类下的项 */}
-        <div style={{ maxHeight: POPOVER_MAX_H }} className="overflow-y-auto py-1">
+        <div className="overflow-y-auto py-1" style={{ maxHeight: POPOVER_MAX_H }}>
           {items.length === 0 ? (
             <div className="text-ink-muted px-3 py-4 text-center text-xs">
               {query.trim() ? "没有匹配的模式" : `${CATEGORY_LABEL[activeTab]}暂无模式`}
@@ -298,12 +298,12 @@ export function MultiModeSelect({
                  * 的 `inlineExemptions` 登记（守它的是 `check-click-keyboard.cjs`）。 */
                 /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 键出口是 simpleKeyHandler 的属性展开，规则读不到 */
                 <div
-                  key={item.code}
                   className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${
                     isSelected
                       ? "bg-primary-500/10 text-primary-strong"
                       : "text-ink-strong hover:bg-subtle"
                   }`}
+                  key={item.code}
                   /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`）——
                    * 因此**必须**自带键盘等价物：ARIA 的 `checkbox` 角色承诺
                    * 「Space 可切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」。
@@ -312,9 +312,9 @@ export function MultiModeSelect({
                    * `event.key === " "` —— 那正是这条账要消除的形态。 */
                   onClick={() => toggle(item.code)}
                   {...simpleKeyHandler(["Space", "Enter"], () => toggle(item.code))}
-                  tabIndex={0}
-                  role="checkbox"
                   aria-checked={isSelected}
+                  role="checkbox"
+                  tabIndex={0}
                 >
                   {/* checkbox: 每个被选中的模式都显示勾选标记 */}
                   <span
@@ -325,13 +325,13 @@ export function MultiModeSelect({
                     }`}
                   >
                     {isSelected && (
-                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                      <svg fill="none" height="10" viewBox="0 0 12 12" width="10">
                         <path
                           d="M2.5 6l2.5 2.5L9.5 3.5"
                           stroke="currentColor"
-                          strokeWidth="1.5"
                           strokeLinecap="round"
                           strokeLinejoin="round"
+                          strokeWidth="1.5"
                         />
                       </svg>
                     )}
@@ -339,18 +339,20 @@ export function MultiModeSelect({
                   <span className="flex-1 truncate text-sm font-medium">{item.label}</span>
                   {/* 默认模式标记：点星星把该模式设为默认（未选中会顺带勾上） */}
                   <Button
-                    variant="ghost"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      if (!draft.has(item.code)) toggle(item.code);
-                      setDraftDefault(item.code);
-                    }}
-                    title={isDraftDefault ? "当前默认模式" : "设为默认模式"}
                     className={`text-3xs h-auto shrink-0 rounded px-1 py-0.5 font-medium ${
                       isDraftDefault
                         ? "bg-primary-500/25 text-primary-strong hover:bg-primary-500/25"
                         : "text-ink-muted hover:bg-surface-2 hover:text-ink-strong"
                     }`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (!draft.has(item.code)) {
+                        toggle(item.code);
+                      }
+                      setDraftDefault(item.code);
+                    }}
+                    title={isDraftDefault ? "当前默认模式" : "设为默认模式"}
+                    variant="ghost"
                   >
                     {isDraftDefault ? "★ 默认" : "☆ 默认"}
                   </Button>
@@ -366,17 +368,17 @@ export function MultiModeSelect({
         {/* footer */}
         <div className="border-border-subtle flex items-center gap-2 border-t p-2">
           <Button
-            variant="secondary"
-            onClick={() => setOpen(false)}
             className="h-auto flex-1 rounded-md px-3 py-1.5 text-sm"
+            onClick={() => setOpen(false)}
+            variant="secondary"
           >
             取消
           </Button>
           <Button
-            variant="primary-solid"
-            onClick={handleSave}
-            disabled={draft.size === 0}
             className="h-auto flex-1 rounded-md px-3 py-1.5 text-sm font-semibold"
+            disabled={draft.size === 0}
+            onClick={handleSave}
+            variant="primary-solid"
           >
             保存（{draft.size}）
           </Button>

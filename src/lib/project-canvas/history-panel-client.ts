@@ -33,19 +33,23 @@ export const historyTaskRowSchema = z.object({
 
 /** 把 tRPC 响应里的行数组收窄成 HistoryTaskRow[]；非法行丢弃。 */
 function parseHistoryRows(raw: unknown): Array<HistoryTaskRow> {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const out: Array<HistoryTaskRow> = [];
   for (const item of raw) {
     const parsed = historyTaskRowSchema.safeParse(item);
-    if (parsed.success) out.push(parsed.data);
+    if (parsed.success) {
+      out.push(parsed.data);
+    }
   }
   return out;
 }
 
 export type HistoryListParams = {
-  take?: number;
-  projectId?: string;
   media?: "image" | "video" | "audio";
+  projectId?: string;
+  take?: number;
 };
 
 /** 拉取任务列表。响应行的 mediaType 由服务端 inferMediaType 给出，

@@ -86,11 +86,11 @@ export const ALLOWED_URL_SCHEMES: ReadonlyArray<string> = [
 ];
 
 /** 消毒配置：喂给 `DOMPurify.sanitize` 的第三个参数。 */
-export interface SanitizeConfig {
-  USE_PROFILES: { html: true };
-  FORBID_TAGS: Array<string>;
+export type SanitizeConfig = {
   FORBID_ATTR: Array<string>;
-}
+  FORBID_TAGS: Array<string>;
+  USE_PROFILES: { html: true };
+};
 
 /** 配置的**唯一出口**。调用方不要就地拼一份自己的。 */
 export function createSanitizeConfig(): SanitizeConfig {
@@ -117,6 +117,8 @@ export function isAllowedUrl(value: string): boolean {
   const schemeEnd = normalized.indexOf(":");
   const scheme = schemeEnd === -1 ? "" : normalized.slice(0, schemeEnd + 1);
   /* scheme 里含 `/` 说明 `:` 出现在路径之中（`/a:b`），那仍是相对路径。 */
-  if (scheme.includes("/")) return ALLOWED_URL_SCHEMES.includes("");
+  if (scheme.includes("/")) {
+    return ALLOWED_URL_SCHEMES.includes("");
+  }
   return ALLOWED_URL_SCHEMES.includes(scheme);
 }

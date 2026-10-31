@@ -42,15 +42,12 @@ import {
  * 一次运行的订阅回调。**第一个参数永远是 taskId**：恢复路径下调用方手里
  * 没有它（那是上一次挂载的事），而日志累积与状态 patch 都要按它落。
  */
-export interface WorkflowRunHandlers {
-  onProgress: (taskId: string, pct: number, node?: TaskProgressNode) => void;
+export type WorkflowRunHandlers = {
   onLog: (taskId: string, entry: TaskLogEntry) => void;
   onOutput: (taskId: string, output: SavedOutput) => void;
-  onSettled: (
-    taskId: string,
-    result: { ok: boolean; message?: string },
-  ) => void;
-}
+  onProgress: (taskId: string, pct: number, node?: TaskProgressNode) => void;
+  onSettled: (taskId: string, result: { message?: string; ok: boolean }) => void;
+};
 
 /**
  * 订阅一次运行的 SSE，并把**进度 / 产物 / 终态**同步进运行登记表。
@@ -62,17 +59,16 @@ export interface WorkflowRunHandlers {
  * 返回值是取消订阅的函数（丢给 effect 的 cleanup，切页签即断连接；下次切回
  * 来会重新订阅，历史帧由服务端回放补齐，日志按 `(t, msg)` 去重）。
  */
-export function watchWorkflowRun(
-  taskId: string,
-  handlers: WorkflowRunHandlers,
-): () => void {
+export function watchWorkflowRun(taskId: string, handlers: WorkflowRunHandlers): () => void {
   /* 进度是高频的（SSE 每帧一次），而这里要落 store 的 patch **并且**再转给
    * 调用处的 handlers —— 不节流的话上面两个订阅者都会被刷（规范 16
    * §16.2.4.68）。闸门按 taskId 分，重连后不会与上一轮的窗口混在一起。 */
   const gate = createThrottleGate();
   return watchTask(taskId, {
     onProgress: (pct, node) => {
-      if (!gate.allow(taskId)) return;
+      if (!gate.allow(taskId)) {
+        return;
+      }
       patchWorkflowRun(taskId, { progress: pct });
       handlers.onProgress(taskId, pct, node);
     },
@@ -88,19 +84,22 @@ export function watchWorkflowRun(
       gate.reset(taskId);
       /* 失败一律走 `failWorkflowRun`（状态 + 原因 + 一条 error 日志行）：
        * 两条订阅路径若各写一份，就会出现「发起那次有错误日志行、恢复那次没有」。 */
-      if (result.ok) patchWorkflowRun(taskId, { status: "done" });
-      else failWorkflowRun(taskId, result.message ?? "生成失败");
+      if (result.ok) {
+        patchWorkflowRun(taskId, { status: "done" });
+      } else {
+        failWorkflowRun(taskId, result.message ?? "生成失败");
+      }
       handlers.onSettled(taskId, result);
     },
   });
 }
 
-export interface UseWorkflowRunResumeArgs {
-  workflowId: string;
+export type UseWorkflowRunResumeArgs = {
+  handlers: WorkflowRunHandlers;
   /** 恢复哪个入口发起的运行（画布节点 / 工坊封装各自独立）。 */
   source: WorkflowRunSource;
-  handlers: WorkflowRunHandlers;
-}
+  workflowId: string;
+};
 
 /**
  * 挂载时从运行登记表恢复本入口最近一次运行的视角（见文件头）。
@@ -120,11 +119,15 @@ export function useWorkflowRunResume({
 
   const resumedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (resumedRef.current === workflowId) return;
+    if (resumedRef.current === workflowId) {
+      return;
+    }
     resumedRef.current = workflowId;
 
     const run = latestRunForWorkflow(workflowId, source);
-    if (!run) return;
+    if (!run) {
+      return;
+    }
 
     /* 恢复路径也要**同步登记表**：done / failed 的恢复不该反过来改写状态，
      * 只有「还在跑」那一支要继续写（进度与终态由 watchWorkflowRun 负责）。 */
@@ -150,13 +153,10 @@ export function useWorkflowRunResume({
      * 「生成中」视角，而不是等下一个进度帧才知道有这么一次运行。 */
     handlersRef.current.onProgress(run.taskId, run.progress ?? 0);
     return watchWorkflowRun(run.taskId, {
-      onProgress: (taskId, pct, node) =>
-        handlersRef.current.onProgress(taskId, pct, node),
+      onProgress: (taskId, pct, node) => handlersRef.current.onProgress(taskId, pct, node),
       onLog: (taskId, entry) => handlersRef.current.onLog(taskId, entry),
-      onOutput: (taskId, output) =>
-        handlersRef.current.onOutput(taskId, output),
-      onSettled: (taskId, result) =>
-        handlersRef.current.onSettled(taskId, result),
+      onOutput: (taskId, output) => handlersRef.current.onOutput(taskId, output),
+      onSettled: (taskId, result) => handlersRef.current.onSettled(taskId, result),
     });
   }, [workflowId, source]);
 }

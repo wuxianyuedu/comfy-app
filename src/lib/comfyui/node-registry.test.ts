@@ -11,20 +11,18 @@
  */
 import { describe, expect, it } from "vitest";
 import { CUSTOM_NODE_TYPES } from "~/config/custom-nodes";
-import {
-  NODE_TYPE_REGISTRY,
-  getNodeConfig,
-  getAllNodeTypes,
-} from "./node-registry";
+import { NODE_TYPE_REGISTRY, getNodeConfig, getAllNodeTypes } from "./node-registry";
 
 /** 一个 emoji / 符号「干净」的判据：没有任何括号、控制字符或代理项残留。 */
 function isCleanIcon(icon: string): boolean {
-  if (icon.length === 0) return true;
-  if (/[{}()[]\]]/.test(icon)) return false;
+  if (icon.length === 0) {
+    return true;
+  }
+  if (/[{}()[]\]]/.test(icon)) {
+    return false;
+  }
   // 未配对的代理项：期望不会有，出现即为「码点写错」。
-  return !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(
-    icon,
-  );
+  return !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(icon);
 }
 
 describe("NODE_TYPE_REGISTRY 的数据契约", () => {
@@ -42,15 +40,9 @@ describe("NODE_TYPE_REGISTRY 的数据契约", () => {
     expect(Array.isArray(cfg.defaultFields)).toBe(true);
   });
 
-  it.for(entries)(
-    "%s 的 icon 是干净的符号（没有多余括号/破损码点）",
-    ([, cfg]) => {
-      expect(
-        isCleanIcon(cfg.icon ?? ""),
-        `icon=${JSON.stringify(cfg.icon)}`,
-      ).toBe(true);
-    },
-  );
+  it.for(entries)("%s 的 icon 是干净的符号（没有多余括号/破损码点）", ([, cfg]) => {
+    expect(isCleanIcon(cfg.icon ?? ""), `icon=${JSON.stringify(cfg.icon)}`).toBe(true);
+  });
 
   it.for(entries)("%s 的 defaultFields 每项都有 key/label/type", ([, cfg]) => {
     for (const f of cfg.defaultFields) {
@@ -63,9 +55,7 @@ describe("NODE_TYPE_REGISTRY 的数据契约", () => {
 
 describe("getNodeConfig — 三级回落", () => {
   it("已知内置节点返回注册表里的那条", () => {
-    expect(getNodeConfig("CheckpointLoaderSimple")).toBe(
-      NODE_TYPE_REGISTRY.CheckpointLoaderSimple,
-    );
+    expect(getNodeConfig("CheckpointLoaderSimple")).toBe(NODE_TYPE_REGISTRY.CheckpointLoaderSimple);
   });
 
   it("自定义节点优先于内置表（manifest 可覆盖同名 class_type）", () => {
@@ -83,9 +73,7 @@ describe("getNodeConfig — 三级回落", () => {
   });
 
   it("兜底记录的 icon 不含多余括号（实测曾多一个 `}`）", () => {
-    expect(isCleanIcon(getNodeConfig("TotallyUnknownNode").icon ?? "")).toBe(
-      true,
-    );
+    expect(isCleanIcon(getNodeConfig("TotallyUnknownNode").icon ?? "")).toBe(true);
   });
 });
 
@@ -102,10 +90,7 @@ describe("getAllNodeTypes — 调用时重算，新建自定义节点无需重�
   });
 
   it("返回的是去重后的键清单（长度等于两张表键的并集）", () => {
-    const union = new Set([
-      ...Object.keys(NODE_TYPE_REGISTRY),
-      ...Object.keys(CUSTOM_NODE_TYPES),
-    ]);
+    const union = new Set([...Object.keys(NODE_TYPE_REGISTRY), ...Object.keys(CUSTOM_NODE_TYPES)]);
     expect(new Set(getAllNodeTypes()).size).toBe(getAllNodeTypes().length);
     expect(getAllNodeTypes().length).toBe(union.size);
   });

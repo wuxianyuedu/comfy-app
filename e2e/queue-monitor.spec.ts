@@ -63,9 +63,7 @@ async function headingCount(section: ReturnType<typeof waitingSection>) {
 }
 
 test.describe("队列与运行屏 @critical", () => {
-  test("「排队中（N）」里的数与铺出来的行数一致（含 0 的空态）", async ({
-    page,
-  }) => {
+  test("「排队中（N）」里的数与铺出来的行数一致（含 0 的空态）", async ({ page }) => {
     await openQueue(page);
 
     /* 只有这一段带计数：跑动中是单张卡、最近结果的标题不带数。所以这里判的是
@@ -83,27 +81,16 @@ test.describe("队列与运行屏 @critical", () => {
   test("跑动中最多一张卡（多个 RUNNING 也不许叠成两屏）", async ({ page }) => {
     await openQueue(page);
     const cards = await runningSection(page).locator("article").count();
-    expect(
-      cards,
-      "跑动中铺了多张卡：同一时刻只该有一处在跑的那张被表达",
-    ).toBeLessThanOrEqual(1);
+    expect(cards, "跑动中铺了多张卡：同一时刻只该有一处在跑的那张被表达").toBeLessThanOrEqual(1);
   });
 
-  test("三段按「跑动中 → 排队中 → 最近结果」的顺序铺，且各有一段自己的名字", async ({
-    page,
-  }) => {
+  test("三段按「跑动中 → 排队中 → 最近结果」的顺序铺，且各有一段自己的名字", async ({ page }) => {
     await openQueue(page);
 
     const ids = await page
       .locator("main section[aria-labelledby]")
-      .evaluateAll((nodes) =>
-        nodes.map((n) => n.getAttribute("aria-labelledby")),
-      );
-    expect(ids).toEqual([
-      "queue-running-heading",
-      "queue-waiting-heading",
-      "queue-recent-heading",
-    ]);
+      .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("aria-labelledby")));
+    expect(ids).toEqual(["queue-running-heading", "queue-waiting-heading", "queue-recent-heading"]);
   });
 
   /**
@@ -117,9 +104,7 @@ test.describe("队列与运行屏 @critical", () => {
    * 数据形状专门造得能区分方向：三条的 `createdAt` 与名字一一对应
    * （`最早` → 最旧），`tasks` 数组按**后提交在前**排（与真服务端同序）。
    */
-  test("位次按先入先出：后端倒序回、界面把最早提交的排第 1", async ({
-    page,
-  }) => {
+  test("位次按先入先出：后端倒序回、界面把最早提交的排第 1", async ({ page }) => {
     await stubTrpc(page, {
       "task.list": {
         tasks: [
@@ -140,9 +125,7 @@ test.describe("队列与运行屏 @critical", () => {
     const rows = await waitingSection(page)
       .locator("li")
       .evaluateAll((nodes) => nodes.map((n) => n.textContent ?? ""));
-    expect(rows.map((t) => /第 (\d+) 位/.exec(t)?.[1] ?? "?").join(",")).toBe(
-      "1,2,3",
-    );
+    expect(rows.map((t) => /第 (\d+) 位/.exec(t)?.[1] ?? "?").join(",")).toBe("1,2,3");
     /* 最早提交的在最前面（方向反了时这里是「最后提交的」）。 */
     expect(rows[0]).toContain("最早提交的");
     expect(rows[0]).toContain("第 1 位");
@@ -153,7 +136,9 @@ test.describe("队列与运行屏 @critical", () => {
   test("每 2 秒的重读真的在发请求（不是一次性快照）", async ({ page }) => {
     let listCalls = 0;
     page.on("request", (req) => {
-      if (req.url().includes("task.list")) listCalls += 1;
+      if (req.url().includes("task.list")) {
+        listCalls += 1;
+      }
     });
 
     await openQueue(page);

@@ -24,7 +24,7 @@ const sampleItems: Array<MaterialItem> = [
     folderName: "参考素材",
     kind: "image",
     url: "/files/m-1",
-    size: 20480,
+    size: 20_480,
     updatedAt: "2026-01-01T00:00:00.000Z",
     scope: "project",
   },
@@ -45,7 +45,7 @@ describe("MaterialLibraryPanel", () => {
     });
     const onUse = vi.fn();
     const onClose = vi.fn();
-    render(<MaterialLibraryPanel onClose={onClose} projectId="p-1" onUse={onUse} />);
+    render(<MaterialLibraryPanel onClose={onClose} onUse={onUse} projectId="p-1" />);
 
     // 首屏停在分类列表（folder === null），此时只渲染分类卡片
     expect(await screen.findByText("参考素材")).toBeInTheDocument();
@@ -108,7 +108,9 @@ describe("MaterialLibraryPanel 作用域切换（ISSUE #1925）", () => {
         .sort()
         .join(" ");
     expect(shape(tabs[0]!)).toBe(shape(tabs[1]!));
-    for (const tab of tabs) expect(tab.className).not.toContain("border-b-2");
+    for (const tab of tabs) {
+      expect(tab.className).not.toContain("border-b-2");
+    }
   });
 });
 

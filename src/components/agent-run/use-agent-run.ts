@@ -32,31 +32,29 @@ import { beginStaleRun } from "~/lib/stale-run";
 
 const RUN_POLL_MS = 2500;
 
-export interface AgentRunController {
-  projectId: string;
-  run: ProductionRun;
+export type AgentRunController = {
   action: RunAction;
-  busy: boolean;
-  error: string;
-  goal: string;
-  setGoal: (value: string) => void;
   approvalMode: ApprovalMode;
-  setApprovalMode: (value: ApprovalMode) => void;
+  approve: () => Promise<void>;
   /** 生图后自动逐镜评审、不合格自动抽卡重生成（有界重试）。 */
   autoReview: boolean;
-  setAutoReview: (value: boolean) => void;
-  start: () => Promise<void>;
-  pause: () => Promise<void>;
-  resume: () => Promise<void>;
-  approve: () => Promise<void>;
+  busy: boolean;
   cancel: () => Promise<void>;
-}
+  error: string;
+  goal: string;
+  pause: () => Promise<void>;
+  projectId: string;
+  resume: () => Promise<void>;
+  run: ProductionRun;
+  setApprovalMode: (value: ApprovalMode) => void;
+  setAutoReview: (value: boolean) => void;
+  setGoal: (value: string) => void;
+  start: () => Promise<void>;
+};
 
 export function useAgentRun(): AgentRunController {
   const [projectId] = useState<string>(() => getActiveId() ?? "");
-  const [run, setRun] = useState<ProductionRun>(() =>
-    normalizeProductionRun(null),
-  );
+  const [run, setRun] = useState<ProductionRun>(() => normalizeProductionRun(null));
   const [action, setAction] = useState<RunAction>({ kind: "idle" });
   const busyAction = useBusyAction();
   const [error, setError] = useState("");
@@ -71,7 +69,9 @@ export function useAgentRun(): AgentRunController {
 
   // 挂载拉一次；轮询在 useInterval 里独立驱动。
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId) {
+      return;
+    }
     const guard = beginStaleRun();
     void (async () => {
       try {
@@ -87,7 +87,9 @@ export function useAgentRun(): AgentRunController {
   const active = run.status === "running" || run.status === "awaiting_approval";
   useInterval(
     () => {
-      if (!projectId) return;
+      if (!projectId) {
+        return;
+      }
       void fetchRunStatus(projectId)
         .then(apply)
         .catch(() => undefined);
@@ -96,7 +98,9 @@ export function useAgentRun(): AgentRunController {
   );
 
   const report: ActionReport = useCallback((kind, detail) => {
-    if (kind === "err") setError(detail);
+    if (kind === "err") {
+      setError(detail);
+    }
   }, []);
 
   const act = useCallback(

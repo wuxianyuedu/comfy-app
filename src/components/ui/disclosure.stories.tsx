@@ -55,10 +55,10 @@ export const Markers: Story = {
   render: () => (
     <div className="flex w-120 flex-col gap-3">
       {MARKERS.map((marker) => (
-        <div key={marker} className="rounded-lg border p-3">
+        <div className="rounded-lg border p-3" key={marker}>
           <Disclosure
-            marker={marker}
             defaultOpen={marker !== "none"}
+            marker={marker}
             trigger={
               marker === "none" ? (
                 <>
@@ -88,11 +88,11 @@ function ControlledDemo() {
   return (
     <div className="flex w-120 flex-col gap-3 rounded-lg border p-3">
       <div className="flex items-center gap-2">
-        <Button size="xs" variant="outline" onClick={() => setOpen((o) => !o)}>
+        <Button onClick={() => setOpen((o) => !o)} size="xs" variant="outline">
           外部按钮切换（当前 {open ? "展开" : "折叠"}）
         </Button>
       </div>
-      <Disclosure open={open} onOpenChange={setOpen} trigger="受控的折叠区">
+      <Disclosure onOpenChange={setOpen} open={open} trigger="受控的折叠区">
         <p className="text-ink-muted pt-2 text-sm">上面那个按钮与这行标题改的是同一份状态。</p>
       </Disclosure>
     </div>
@@ -107,9 +107,6 @@ export const WithLeadingTrailing: Story = {
   render: () => (
     <div className="w-xl rounded-lg border p-3">
       <Disclosure
-        rootClassName="flex flex-wrap items-center gap-2"
-        panelClassName="basis-full"
-        trigger="服务器返回的错误详情"
         leading={
           <>
             <Button size="xs" variant="ghost">
@@ -120,7 +117,10 @@ export const WithLeadingTrailing: Story = {
             </Button>
           </>
         }
+        panelClassName="basis-full"
+        rootClassName="flex flex-wrap items-center gap-2"
         trailing={<span className="text-ink-muted text-xs">14:02:31</span>}
+        trigger="服务器返回的错误详情"
       >
         <pre className="text-ink-muted basis-full pt-2 font-mono text-xs whitespace-pre-wrap">
           {`TypeError: Cannot read properties of undefined (reading 'subscribe')\n  at CommandInput (command.tsx:78)`}

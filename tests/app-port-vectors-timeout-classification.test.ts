@@ -34,6 +34,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { normalizeControlFlow } from "./helpers/source-shape";
+
 /**
  * 需要 POSIX 执行语义的用例开关：这条要写一个 `#!/bin/sh` 的假命令、再 `chmod`
  * 出执行位，而 Windows 上 libuv 不解析 shebang、`chmodSync` 也不存执行位 ——
@@ -46,19 +48,21 @@ import { describe, expect, it } from "vitest";
  */
 const needsPosixExec = it.skipIf(process.platform === "win32");
 
-const SCRIPT_SOURCE = readFileSync(
-  path.resolve(__dirname, "../scripts/check-app-port-vectors.cjs"),
-  "utf8",
+/* 形态断言的对象是这个脚本的**控制流**，不是括号 —— 先过归一化，
+ * oxlint `curly` 给单语句体补 `{}` 才不会把断言打成「判据写错了」。 */
+const SCRIPT_SOURCE = normalizeControlFlow(
+  readFileSync(path.resolve(__dirname, "../scripts/check-app-port-vectors.cjs"), "utf8"),
+  "check-app-port-vectors.cjs",
 );
 // 判据脚本是 CJS（`@ts-nocheck`，require 进来是 any），按仓库惯例显式标注返回形状。
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const judge = /* SAFETY: 类型断言已复核 */ require("../scripts/check-app-port-vectors.cjs") as {
-  isTimeoutLike: (e: unknown) => boolean;
-  probeCommand: (cmd: string, args: Array<string>) => ProbeState;
   decidePythonVerdict: (
     first: Measure,
     second: Measure | null,
   ) => { problems: Array<string>; unverified: Array<string> };
+  isTimeoutLike: (e: unknown) => boolean;
+  probeCommand: (cmd: string, args: Array<string>) => ProbeState;
 };
 
 /**
@@ -72,9 +76,9 @@ type ProbeState = "ok" | "timeout" | "missing" | "present-but-nonzero";
 
 /** 一趟取证的返回形状（`measurePythonOnce` 的结果，也是本文件的输入夹具）。 */
 interface Measure {
-  state: "answered" | "timeout" | "missing" | "malformed";
-  python: string | null;
   problems: Array<string>;
+  python: string | null;
+  state: "answered" | "timeout" | "missing" | "malformed";
 }
 
 const answered = (problems: Array<string> = []): Measure => ({
@@ -167,7 +171,9 @@ describe("命令探测分四态，不许糊成布尔", () => {
   it("真的存在的解释器仍是 ok（四态没有把正常路径收窄）", () => {
     // python3 不在 PATH 上时这一格不成立 —— 那是机器的形状，不是判据的形状，
     // 所以只在探到 ok 时断言，没探到就跳过。
-    if (judge.probeCommand("python3", ["--version"]) !== "ok") return;
+    if (judge.probeCommand("python3", ["--version"]) !== "ok") {
+      return;
+    }
     expect(judge.probeCommand("python3", ["--version"])).toBe("ok");
   });
 });
@@ -299,6 +305,7 @@ describe("接线在位：复跑真的会发生，出口真的分两条", () => {
   });
 
   it("被 import 时不跑检查（否则用例一 require 就现场取证并可能 process.exit）", () => {
-    expect(SCRIPT_SOURCE).toMatch(/if \(require\.main === module\) \{/);
+    // 归一化之后块括号没了，判的是那个条件本身（括号在不在不影响这条判据）。
+    expect(SCRIPT_SOURCE).toMatch(/if \(require\.main === module\)/);
   });
 });

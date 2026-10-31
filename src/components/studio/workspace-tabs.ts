@@ -23,18 +23,18 @@ import { isProjectTab, isTransientView, type WorkspaceView } from "./NavItems";
 /** 首页视图 id —— 固定页签，不可关闭。 */
 export const HOME_VIEW: WorkspaceView = "home";
 
-export interface ViewTab {
+export type ViewTab = {
   /** 页签身份：(视图, 项目) 二元组的稳定编码。 */
   key: string;
-  view: WorkspaceView;
   /** 全局视图（首页 / 模型 / 队列…）为 null。 */
   projectId: string | null;
-}
+  view: WorkspaceView;
+};
 
-export interface WorkspaceTabsState {
-  tabs: Array<ViewTab>;
+export type WorkspaceTabsState = {
   activeKey: string;
-}
+  tabs: Array<ViewTab>;
+};
 
 /** 页签身份的唯一编码处 —— 别在调用点各拼一遍分隔符。 */
 export function tabKey(view: WorkspaceView, projectId: string | null): string {
@@ -51,7 +51,9 @@ export function homeTab(): ViewTab {
  * 收在一处意味着两处不会一处放行一处白屏）。
  */
 export function makeTab(view: WorkspaceView, projectId: string | null): ViewTab | null {
-  if (isProjectTab(view) && !projectId) return null;
+  if (isProjectTab(view) && !projectId) {
+    return null;
+  }
   const bound = isProjectTab(view) ? projectId : null;
   return { key: tabKey(view, bound), view, projectId: bound };
 }
@@ -109,7 +111,9 @@ export function openViewTab(
   projectId: string | null,
 ): WorkspaceTabsState {
   const tab = makeTab(view, projectId);
-  if (!tab) return state;
+  if (!tab) {
+    return state;
+  }
   if (findTab(state.tabs, tab.key)) {
     // 聚焦已有页：也要走一次剔除 —— 从"设置"切到另一页时,
     // 被切走的那一页正是靠这里退场的（它不会走"新建页"那条分支）。
@@ -126,7 +130,9 @@ export function openViewTab(
  * 不许把 activeKey 指到空白）。
  */
 export function focusViewTab(state: WorkspaceTabsState, key: string): WorkspaceTabsState {
-  if (!findTab(state.tabs, key)) return state;
+  if (!findTab(state.tabs, key)) {
+    return state;
+  }
   return activated(state.tabs, key);
 }
 
@@ -138,9 +144,13 @@ export function focusViewTab(state: WorkspaceTabsState, key: string): WorkspaceT
  */
 export function closeViewTab(state: WorkspaceTabsState, key: string): WorkspaceTabsState {
   const index = state.tabs.findIndex((tab) => tab.key === key);
-  if (index < 0) return state;
+  if (index < 0) {
+    return state;
+  }
   const target = state.tabs[index];
-  if (!target || !isTabClosable(target)) return state;
+  if (!target || !isTabClosable(target)) {
+    return state;
+  }
 
   const tabs = [...state.tabs.slice(0, index), ...state.tabs.slice(index + 1)];
   if (state.activeKey !== key) {
@@ -162,7 +172,9 @@ export function closeViewTab(state: WorkspaceTabsState, key: string): WorkspaceT
  */
 export function dropProjectTabs(state: WorkspaceTabsState, projectId: string): WorkspaceTabsState {
   const kept = state.tabs.filter((tab) => tab.projectId === null || tab.projectId !== projectId);
-  if (kept.length === state.tabs.length) return state;
+  if (kept.length === state.tabs.length) {
+    return state;
+  }
   const activeStillThere = kept.some((tab) => tab.key === state.activeKey);
   return {
     tabs: withHomeFirst(kept),
@@ -206,14 +218,18 @@ export function parseWorkspaceTabs(
   raw: string | null,
   knownViews: ReadonlyArray<WorkspaceView>,
 ): WorkspaceTabsState | null {
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
     return null;
   }
-  if (typeof parsed !== "object" || parsed === null) return null;
+  if (typeof parsed !== "object" || parsed === null) {
+    return null;
+  }
   const record = /* SAFETY: 类型断言已复核 */ parsed as {
     activeKey?: unknown;
     tabs?: unknown;
@@ -223,20 +239,29 @@ export function parseWorkspaceTabs(
   }
   const tabs: Array<ViewTab> = [];
   for (const entry of record.tabs) {
-    if (!Array.isArray(entry) || entry.length < 2) return null;
+    if (!Array.isArray(entry) || entry.length < 2) {
+      return null;
+    }
     const [view, projectId] = /* SAFETY: 类型断言已复核 */ entry as [unknown, unknown];
     if (
       typeof view !== "string" ||
       !knownViews.includes(/* SAFETY: 类型断言已复核 */ view as WorkspaceView)
-    )
+    ) {
       return null;
-    if (projectId !== null && typeof projectId !== "string") return null;
+    }
+    if (projectId !== null && typeof projectId !== "string") {
+      return null;
+    }
     const tab = makeTab(/* SAFETY: 类型断言已复核 */ view as WorkspaceView, projectId);
     // 造不出来（项目类视图丢了项目 id）或键重复 ⇒ 整份不可信。
-    if (!tab || tabs.some((existing) => existing.key === tab.key)) return null;
+    if (!tab || tabs.some((existing) => existing.key === tab.key)) {
+      return null;
+    }
     tabs.push(tab);
   }
   const normalized = withHomeFirst(tabs);
-  if (!normalized.some((tab) => tab.key === record.activeKey)) return null;
+  if (!normalized.some((tab) => tab.key === record.activeKey)) {
+    return null;
+  }
   return { tabs: normalized, activeKey: record.activeKey };
 }

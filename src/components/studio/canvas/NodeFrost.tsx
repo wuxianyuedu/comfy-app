@@ -11,12 +11,12 @@ export const PSEUDO_FROST_NOISE_URL =
  * 自然重排，不必做任何布局上的小动作。每个色块各用自己的 `filter: blur(Npx)`，
  * 于是即使父级缩放施加了 CSS `transform: scale(...)`，轮廓仍然是柔和的。 */
 export const PSEUDO_FROST_BLOBS: Array<{
+  alphaKey: "primary" | "secondary" | "cool" | "warm" | "shadow";
+  blurPx: number;
+  h: string;
   left: string;
   top: string;
   w: string;
-  h: string;
-  alphaKey: "primary" | "secondary" | "cool" | "warm" | "shadow";
-  blurPx: number;
 }> = [
   {
     left: "6%",
@@ -50,7 +50,9 @@ export const PSEUDO_FROST_BLOBS: Array<{
  * 禁用态偏灰、绕过态偏粉紫；冷 / 暖 / 阴影三个通道保持不变，
  * 因此无论哪种模式，面板读起来都是一块连贯的玻璃面。 */
 export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
-  if (!modeColor) return null;
+  if (!modeColor) {
+    return null;
+  }
   const palette = pseudoFrostPalette(modeColor);
   return (
     <div
@@ -60,8 +62,8 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
     >
       {PSEUDO_FROST_BLOBS.map((blob, idx) => (
         <div
-          key={`blob-${idx}`}
           className="absolute rounded-full"
+          key={`blob-${idx}`}
           style={{
             left: blob.left,
             top: blob.top,
@@ -108,11 +110,13 @@ export function NodeFrost({
   color,
   nodeMode,
 }: {
-  zoom: number;
   color: string | null;
   nodeMode: number;
+  zoom: number;
 }) {
-  if (!color || nodeMode === 0) return null;
+  if (!color || nodeMode === 0) {
+    return null;
+  }
   // 让屏幕占位不小于节点 zoom=1 时的尺寸。
   const scale = Math.max(1, 1 / Math.max(zoom, 0.01));
   const blur = 6 / scale; // 不论缩放多少，屏幕上的模糊都保持在约 6px
@@ -147,7 +151,7 @@ export function NodeFrost({
  * ------------------------------------------------------------------------- */
 export function FrostLayer({ color, nodeMode }: { color: string | null; nodeMode: number }) {
   const zoom = useStore((state) => state.transform[2]);
-  return <NodeFrost zoom={zoom} color={color} nodeMode={nodeMode} />;
+  return <NodeFrost color={color} nodeMode={nodeMode} zoom={zoom} />;
 }
 
 /* ---------------------------------------------------------------------------

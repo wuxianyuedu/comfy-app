@@ -20,20 +20,20 @@ import type { ReactNode } from "react";
 
 import { fullScreenLayerClass } from "~/lib/full-screen-layer";
 
-interface FullScreenLayerProps {
-  /** z-index 的 tailwind 工具类。取自浮层刻度表（规范 16 §16.2.5）：
-   *  常规全屏视图用 `${zClass("modal")}`，调试类视图可下探到 `Z.base`。 */
-  zClass: string;
+type FullScreenLayerProps = {
+  /** 无障碍名称（读屏器播报的面板标题）。 */
+  "aria-label"?: string;
+  /** 遮罩式面板标记模态，配合 role="dialog" 由读屏器播报。 */
+  "aria-modal"?: boolean | "true" | "false";
+  children: ReactNode;
   /** 该视图自身的布局 class（`flex flex-col` / `bg-bg` 等）。 */
   className?: string;
   /** 语义角色（遮罩式全屏面板如消息中心用 `dialog`）。 */
   role?: string;
-  /** 遮罩式面板标记模态，配合 role="dialog" 由读屏器播报。 */
-  "aria-modal"?: boolean | "true" | "false";
-  /** 无障碍名称（读屏器播报的面板标题）。 */
-  "aria-label"?: string;
-  children: ReactNode;
-}
+  /** z-index 的 tailwind 工具类。取自浮层刻度表（规范 16 §16.2.5）：
+   *  常规全屏视图用 `${zClass("modal")}`，调试类视图可下探到 `Z.base`。 */
+  zClass: string;
+};
 
 /** 全屏视图的根容器：铺满标题行下方的内容区，不盖住页签。 */
 export function FullScreenLayer({
@@ -46,10 +46,10 @@ export function FullScreenLayer({
 }: FullScreenLayerProps) {
   return (
     <div
+      aria-label={ariaLabel}
+      aria-modal={ariaModal}
       className={fullScreenLayerClass(zClass, className)}
       role={role}
-      aria-modal={ariaModal}
-      aria-label={ariaLabel}
     >
       {children}
     </div>

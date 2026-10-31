@@ -57,7 +57,9 @@ export function ConsoleView() {
   const running = c.phase === "running";
 
   const submit = useCallback(() => {
-    if (c.canRun) c.run();
+    if (c.canRun) {
+      c.run();
+    }
   }, [c]);
 
   /* 回车提交走全库唯一出口（`ui/use-enter-commit`）：它同时判掉「输入法组字
@@ -70,9 +72,9 @@ export function ConsoleView() {
        内容是等宽的日志行与命令，不是成篇的文字。压到 `wide`（1200px）意味着宽屏上
        左右各留一大块空，而面板正需要那点宽度（ISSUE #1902）。 */
     <DocumentFrame
-      width="full"
-      className="px-4 pt-4 pb-8 sm:px-8 sm:pt-5 sm:pb-12"
       backdrop={<AuroraBackground />}
+      className="px-4 pt-4 pb-8 sm:px-8 sm:pt-5 sm:pb-12"
+      width="full"
     >
       {/* ── 页头：与历史 / 队列 / 模型库同一形状，收在 `ui/page-header` ── */}
       <PageHeader srTitle={pageHeaderTitle("console")} />
@@ -82,14 +84,14 @@ export function ConsoleView() {
       <ViewActions>
         <Hint label="清空输出（保留跑过的命令）">
           <Button
-            variant="outline"
-            size="xs"
-            onClick={c.clear}
-            disabled={running}
             aria-label="清空输出"
             className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+            disabled={running}
+            onClick={c.clear}
+            size="xs"
+            variant="outline"
           >
-            <Eraser size={13} aria-hidden />
+            <Eraser aria-hidden size={13} />
             清屏
           </Button>
         </Hint>
@@ -105,66 +107,53 @@ export function ConsoleView() {
             `overflow-hidden`，于是最后几组命令被裁掉且滚不到。 */}
         <aside className="border-border-subtle flex max-h-[45%] min-h-0 shrink-0 flex-col border-b lg:max-h-none lg:w-60 lg:border-r lg:border-b-0">
           <div className="text-ink-faint text-2xs border-border-subtle flex h-9 shrink-0 items-center gap-1.5 border-b px-3 font-medium">
-            <Terminal size={13} aria-hidden />
+            <Terminal aria-hidden size={13} />
             常用命令（点击填入）
           </div>
-          <ConsolePresetList onFill={c.fill} disabled={running} />
+          <ConsolePresetList disabled={running} onFill={c.fill} />
         </aside>
 
         {/* 右：输出 + 输入 */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <ConsoleOutput
+            emptyHint="在左侧选择一条常用命令，或直接在下面输入；按回车执行"
             output={c.output}
             running={running}
+            stopped={c.phase === "stopped"}
             verdict={c.verdict || null}
             verdictOk={c.verdictOk}
-            stopped={c.phase === "stopped"}
-            emptyHint="在左侧选择一条常用命令，或直接在下面输入；按回车执行"
           />
 
           {/* 输入行 */}
           <div className="border-border bg-bg flex shrink-0 flex-col gap-2 border-t px-4 py-3">
             <div className="flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                className="text-primary-strong shrink-0 font-mono text-sm"
-              >
+              <span aria-hidden="true" className="text-primary-strong shrink-0 font-mono text-sm">
                 $
               </span>
               <Input
-                value={c.command}
                 onChange={textHandler(c.setCommand)}
+                value={c.command}
                 {...enter}
-                maxLength={c.maxCommandChars}
-                disabled={running}
                 aria-label="要执行的命令"
+                className={cn("h-8 font-mono text-[12.5px]", "disabled:opacity-70")}
+                disabled={running}
+                maxLength={c.maxCommandChars}
                 placeholder={
-                  running
-                    ? `正在运行：${c.runningCommand ?? ""}`
-                    : "pnpm exec tsc --noEmit"
+                  running ? `正在运行：${c.runningCommand ?? ""}` : "pnpm exec tsc --noEmit"
                 }
-                className={cn(
-                  "h-8 font-mono text-[12.5px]",
-                  "disabled:opacity-70",
-                )}
               />
               {running ? (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={c.stop}
-                  className="shrink-0"
-                >
+                <Button className="shrink-0" onClick={c.stop} size="sm" variant="danger">
                   <Square data-icon="inline-start" size={13} />
                   停止
                 </Button>
               ) : (
                 <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={submit}
-                  disabled={!c.canRun}
                   className="shrink-0"
+                  disabled={!c.canRun}
+                  onClick={submit}
+                  size="sm"
+                  variant="primary"
                 >
                   <Play data-icon="inline-start" size={13} />
                   运行
@@ -182,10 +171,10 @@ export function ConsoleView() {
                 </span>
                 {c.syntaxWarning && (
                   <span
-                    data-testid="console-syntax-warning"
                     className="text-warning-strong flex items-start gap-1.5 leading-snug"
+                    data-testid="console-syntax-warning"
                   >
-                    <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                    <AlertTriangle className="mt-0.5 shrink-0" size={12} />
                     <span>{c.syntaxWarning}</span>
                   </span>
                 )}
@@ -207,15 +196,15 @@ export function ConsoleView() {
                     label={`${item.command} —— ${item.verdict}`}
                   >
                     <Button
-                      variant="ghost"
-                      disabled={running}
-                      onClick={() => c.fill(item.command)}
                       className={cn(
                         "text-2xs h-auto max-w-64 rounded px-2 py-0.5 font-mono font-normal",
                         item.ok
                           ? "bg-success/10 text-success-strong hover:bg-success/20"
                           : "bg-subtle text-ink-muted hover:text-ink",
                       )}
+                      disabled={running}
+                      onClick={() => c.fill(item.command)}
+                      variant="ghost"
                     >
                       {item.command}
                     </Button>

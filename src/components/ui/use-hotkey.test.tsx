@@ -21,10 +21,10 @@ afterEach(cleanup);
 function key(
   k: string,
   mods: {
+    alt?: boolean;
     ctrl?: boolean;
     meta?: boolean;
     shift?: boolean;
-    alt?: boolean;
   } = {},
 ) {
   return /* SAFETY: 类型断言已复核 */ {
@@ -113,9 +113,9 @@ function Probe({
   filterInput = true,
   spec = /* SAFETY: 类型断言已复核 */ { key: "l", mod: true } as const,
 }: {
-  onHit: () => void;
   enabled?: boolean;
   filterInput?: boolean;
+  onHit: () => void;
   spec?: { key: string; mod?: boolean; shift?: boolean };
 }) {
   useHotkey(spec, onHit, { enabled, filterInput });
@@ -132,7 +132,7 @@ describe("注册与清理", () => {
 
   it("enabled 为 false 时**不注册**（而不是注册了再 early return）", () => {
     const onHit = vi.fn();
-    render(<Probe onHit={onHit} enabled={false} />);
+    render(<Probe enabled={false} onHit={onHit} />);
     fireEvent.keyDown(window, { key: "l", ctrlKey: true });
     expect(onHit).not.toHaveBeenCalled();
   });
@@ -168,7 +168,7 @@ describe("input 过滤（json-viewer 那处的缺陷）", () => {
 
   it("filterInput: false 时输入框里也命中（全屏编辑器就是要这样）", () => {
     const onHit = vi.fn();
-    const { getByTestId } = render(<Probe onHit={onHit} filterInput={false} />);
+    const { getByTestId } = render(<Probe filterInput={false} onHit={onHit} />);
     fireEvent.keyDown(getByTestId("field"), { key: "l", ctrlKey: true });
     expect(onHit).toHaveBeenCalledTimes(1);
   });

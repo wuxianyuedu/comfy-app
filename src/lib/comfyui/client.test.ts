@@ -43,10 +43,10 @@ import { resolveComfyLaunchPlan } from "./launch-path";
 import { logger } from "~/lib/core/logger";
 
 const plan = {
-  cmd: "D:\\Comfy\\ComfyUI\\.venv\\Scripts\\python.exe",
-  baseArgs: ["-s", "D:\\Comfy\\ComfyUI\\main.py"],
-  cwd: "D:\\Comfy\\ComfyUI",
-  mainPy: "D:\\Comfy\\ComfyUI\\main.py",
+  cmd: String.raw`D:\Comfy\ComfyUI\.venv\Scripts\python.exe`,
+  baseArgs: ["-s", String.raw`D:\Comfy\ComfyUI\main.py`],
+  cwd: String.raw`D:\Comfy\ComfyUI`,
+  mainPy: String.raw`D:\Comfy\ComfyUI\main.py`,
 };
 
 /** 只让指定端口应答 `/system_stats`，其余连接一律拒绝。 */
@@ -66,7 +66,7 @@ beforeEach(() => {
   resetProbeMissLog();
   vi.mocked(getSettingsSync).mockReturnValue(
     /* SAFETY: 类型断言已复核 */ {
-      comfyuiPath: "D:\\Comfy",
+      comfyuiPath: String.raw`D:\Comfy`,
       comfyuiPort: 8188,
     } as never,
   );
@@ -244,9 +244,13 @@ describe("getView — 取字节的地址组装与失败形状", () => {
     const seen: Array<string> = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/api/view") return new Response("{}", { status: 200 });
+      if (url.pathname !== "/api/view") {
+        return new Response("{}", { status: 200 });
+      }
       seen.push(url.search);
-      if (reply.status !== 200) return new Response("nope", { status: reply.status });
+      if (reply.status !== 200) {
+        return new Response("nope", { status: reply.status });
+      }
       return new Response(new Uint8Array(reply.bytes ?? [1, 2, 3]), {
         status: 200,
       });
@@ -266,7 +270,7 @@ describe("getView — 取字节的地址组装与失败形状", () => {
 
   it("上游非 2xx 时抛带状态码的 ComfyViewError —— 调用方分相靠这个字段，不靠读消息", async () => {
     viewReply({ status: 404 });
-    const err = await getView("gone.png", "", "input").catch((e: unknown) => e);
+    const err = await getView("gone.png", "", "input").catch((error: unknown) => error);
     expect(err).toBeInstanceOf(ComfyViewError);
     expect(/* SAFETY: 类型断言已复核 */ (err as ComfyViewError).status).toBe(404);
     // 消息保持原样：`executor-finalize` 那类只判「拿不到就抛」的调用方零感知

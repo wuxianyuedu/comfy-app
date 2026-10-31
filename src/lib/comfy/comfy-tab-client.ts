@@ -26,16 +26,16 @@ import { vanillaApi } from "~/trpc/vanilla";
 
 /** 打开 ComfyUI 的结果：`target` 说明最终形态，`detail` 可直接展示。 */
 export type OpenComfyTabResult = {
-  /** 最终形态：内嵌页签 / 页签内阻止说明（两者都在应用内，不弹窗）。 */
-  target: "embed" | "blocked";
-  /** 内嵌时可用的 URL（`target === "embed"` 时非空）。 */
-  embedUrl: string | null;
-  /** 可直接展示给用户的说明（含不可嵌时的修复动作）。 */
-  detail: string;
   /** 运行中的 ComfyUI 地址。不可嵌时也**必须**带上：它是用户能自己验证、
    *  复制到浏览器打开的唯一定位信息（ISSUE #310 第三次现场只剩一个「已阻止
    *  此内容」，没有地址就没人能判断到底是哪一层拦的）。 */
   base: string;
+  /** 可直接展示给用户的说明（含不可嵌时的修复动作）。 */
+  detail: string;
+  /** 内嵌时可用的 URL（`target === "embed"` 时非空）。 */
+  embedUrl: string | null;
+  /** 最终形态：内嵌页签 / 页签内阻止说明（两者都在应用内，不弹窗）。 */
+  target: "embed" | "blocked";
 };
 
 /**
@@ -44,10 +44,7 @@ export type OpenComfyTabResult = {
  * @param base        运行中 ComfyUI 的地址（设置页状态里已探好的 base）
  * @param hostOrigin  应用自身的源（`window.location.origin`）
  */
-export async function openComfyTab(
-  base: string,
-  hostOrigin: string,
-): Promise<OpenComfyTabResult> {
+export async function openComfyTab(base: string, hostOrigin: string): Promise<OpenComfyTabResult> {
   const verdict = await vanillaApi.setting.comfyEmbeddable
     .query({ base, hostOrigin })
     .catch(() => ({

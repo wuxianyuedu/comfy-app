@@ -57,7 +57,9 @@ describe("hasBrowserStorage", () => {
       expect(writeStorageItem(KEY, "x")).toBe(false);
       expect(removeStorageItem(KEY)).toBe(false);
     } finally {
-      if (original) Object.defineProperty(window, "localStorage", original);
+      if (original) {
+        Object.defineProperty(window, "localStorage", original);
+      }
     }
   });
 });
@@ -202,7 +204,9 @@ describe("writeCookieItem", () => {
     try {
       expect(writeCookieItem("k", "v", 10)).toBe(false);
     } finally {
-      if (original) Object.defineProperty(globalThis, "document", original);
+      if (original) {
+        Object.defineProperty(globalThis, "document", original);
+      }
     }
   });
 
@@ -218,7 +222,9 @@ describe("writeCookieItem", () => {
     try {
       expect(writeCookieItem("k", "v", 10)).toBe(false);
     } finally {
-      if (original) Object.defineProperty(document, "cookie", original);
+      if (original) {
+        Object.defineProperty(document, "cookie", original);
+      }
     }
   });
 });

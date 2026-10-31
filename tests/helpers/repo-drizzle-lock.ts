@@ -41,7 +41,9 @@ function ownerText(): string {
 /** owner 进程还活着吗？读不出 owner 时按「活着」处理（宁可等，不误夺别人的锁）。 */
 function ownerAlive(): boolean {
   const pid = Number.parseInt(ownerText(), 10);
-  if (!Number.isInteger(pid) || pid <= 0) return true;
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return true;
+  }
   try {
     process.kill(pid, 0);
     return true;
@@ -70,7 +72,9 @@ export async function acquireRepoDrizzle(label: string): Promise<() => void> {
       };
     } catch (error) {
       const code = /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code;
-      if (code !== "EEXIST") throw error;
+      if (code !== "EEXIST") {
+        throw error;
+      }
       if (!ownerAlive()) {
         // 主家已经没了：夺过来重试一次（只认 ESRCH，不认「等太久了」）。
         reclaimed += 1;

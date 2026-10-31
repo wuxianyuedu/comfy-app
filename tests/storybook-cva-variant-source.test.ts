@@ -50,7 +50,9 @@ function collectStories(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "node_modules") continue;
+      if (entry.name === "node_modules") {
+        continue;
+      }
       collectStories(full, out);
     } else if (entry.name.endsWith(".stories.tsx")) {
       out.push(full);
@@ -89,7 +91,9 @@ function parse(file: string) {
 /** 有对应组件源码、且组件真的用 cva 定义了变体轴的那批故事。 */
 const PAIRABLE = STORIES.flatMap((story) => {
   const component = componentSourceOf(story);
-  if (component === null) return [];
+  if (component === null) {
+    return [];
+  }
   const axes = [...cvaVariantAxes(parse(component)).keys()];
   return axes.length === 0 ? [] : [{ story, component, axes }];
 });
@@ -162,7 +166,9 @@ describe("故事文件的枚举来源（ISSUE #1381）", () => {
       const derived = new Map(derivedAxisNames(source));
       for (const axis of axes) {
         const arrayName = refs.get(axis);
-        if (arrayName === undefined) continue; // 上一段判据的事
+        if (arrayName === undefined) {
+          continue;
+        } // 上一段判据的事
         const listed = literalArray(arrayName, source);
         expect(
           listed,

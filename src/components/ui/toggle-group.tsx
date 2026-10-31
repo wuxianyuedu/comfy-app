@@ -4,15 +4,15 @@
 import * as React from "react";
 import { Toggle as TogglePrimitive } from "@base-ui/react/toggle";
 import { ToggleGroup as ToggleGroupPrimitive } from "@base-ui/react/toggle-group";
-import { type VariantProps } from "class-variance-authority";
+import type { VariantProps } from "class-variance-authority";
 import { cn } from "~/lib/utils";
 
 import { toggleVariants } from "~/components/ui/toggle";
 
 const ToggleGroupContext = React.createContext<
   VariantProps<typeof toggleVariants> & {
-    spacing?: number;
     orientation?: "horizontal" | "vertical";
+    spacing?: number;
   }
 >({
   size: "default",
@@ -31,25 +31,25 @@ function ToggleGroup({
   ...props
 }: ToggleGroupPrimitive.Props &
   VariantProps<typeof toggleVariants> & {
-    spacing?: number;
     orientation?: "horizontal" | "vertical";
+    spacing?: number;
   }) {
   return (
     <ToggleGroupPrimitive
-      data-slot="toggle-group"
-      data-variant={variant}
-      data-size={size}
-      data-spacing={spacing}
+      className={cn(
+        "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] rounded-lg data-vertical:flex-col data-vertical:items-stretch data-[size=sm]:rounded-[min(var(--radius-md),10px)]",
+        className,
+      )}
       data-orientation={orientation}
+      data-size={size}
+      data-slot="toggle-group"
+      data-spacing={spacing}
+      data-variant={variant}
       style={
         /* SAFETY: 类型断言已复核 */ {
           "--gap": spacing,
         } as React.CSSProperties
       }
-      className={cn(
-        "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] rounded-lg data-vertical:flex-col data-vertical:items-stretch data-[size=sm]:rounded-[min(var(--radius-md),10px)]",
-        className,
-      )}
       {...props}
     >
       <ToggleGroupContext.Provider value={{ variant, size, spacing, orientation }}>
@@ -70,10 +70,6 @@ function ToggleGroupItem({
 
   return (
     <TogglePrimitive
-      data-slot="toggle-group-item"
-      data-variant={context.variant ?? variant}
-      data-size={context.size ?? size}
-      data-spacing={context.spacing}
       className={cn(
         /* **选中档在本基元里补足「描边 + 字重 + 抬层」，而不是只靠底色**：
          * `toggleVariants()` 的悬停档与选中档是同一个值（`hover:bg-muted` 与
@@ -90,6 +86,10 @@ function ToggleGroupItem({
         }),
         className,
       )}
+      data-size={context.size ?? size}
+      data-slot="toggle-group-item"
+      data-spacing={context.spacing}
+      data-variant={context.variant ?? variant}
       {...props}
     >
       {children}

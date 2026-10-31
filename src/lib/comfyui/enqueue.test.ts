@@ -74,7 +74,7 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
   let seq = 0;
 
   function setup(
-    row: { status: string; promptId: string | null } | null,
+    row: { promptId: string | null; status: string } | null,
     options: {
       cancelOutcome?: TaskWriteOutcome;
       /** true = 本进程握着该任务的 comfy-cli 子进程（正在执行）。 */
@@ -93,8 +93,11 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     runnerState.configureRunner({ taskRepo: repo, log: runnerLog });
     vi.mocked(client.interrupt).mockReset().mockResolvedValue(undefined);
     const kill = vi.fn();
-    if (inFlight) cli.cliProcs.set(taskId, /* SAFETY: 类型断言已复核 */ { kill } as never);
-    else cli.cliProcs.delete(taskId);
+    if (inFlight) {
+      cli.cliProcs.set(taskId, /* SAFETY: 类型断言已复核 */ { kill } as never);
+    } else {
+      cli.cliProcs.delete(taskId);
+    }
     return { taskId, repo, kill };
   }
 

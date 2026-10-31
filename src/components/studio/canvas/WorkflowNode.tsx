@@ -37,10 +37,10 @@ import type { WorkflowNodeData } from "../workflow-types";
 
 /** 节点角色配色定义（assignedRole → 标签 + 强调色）。 */
 export const PORT_ROLES: Array<{
+  bg: string;
+  color: string;
   key: string;
   label: string;
-  color: string;
-  bg: string;
 }> = [
   {
     key: "positiveNode",
@@ -141,8 +141,8 @@ export const FlowNode = React.memo(function FlowNode({
   return (
     <div
       className="relative flex flex-col rounded-lg border shadow-[0_4px_20px_var(--color-shadow-strong)]"
-      ref={hoverRef}
       data-node-id={data.nodeId}
+      ref={hoverRef}
       {...hoverHandlers}
       style={{
         // 宽度在有 ComfyUI 保存的 `size.w` 时跟随它；高度交给
@@ -177,13 +177,13 @@ export const FlowNode = React.memo(function FlowNode({
       {!isLabel && (
         <FlowNodeHeader
           data={data}
-          role={role}
+          displayTitle={displayTitle}
           io={io}
-          outputs={entries.outputs}
           isCollapsed={isCollapsed}
           onToggleCollapsed={() => setUserCollapsed((value) => !value)}
+          outputs={entries.outputs}
           palette={palette}
-          displayTitle={displayTitle}
+          role={role}
         />
       )}
 
@@ -203,9 +203,9 @@ export const FlowNode = React.memo(function FlowNode({
         <FlowNodePinRows
           data={data}
           io={io}
+          outputs={entries.outputs}
           rawMeta={entries.rawMeta}
           uniqueConnEntries={entries.uniqueConnEntries}
-          outputs={entries.outputs}
         />
       )}
 
@@ -214,10 +214,10 @@ export const FlowNode = React.memo(function FlowNode({
       {!isCollapsed && entries.visibleWidgetEntries.length > 0 && !isPowerLoraLoader && (
         <FlowNodeWidgetRows
           data={data}
+          hasSize={hasSize}
           io={io}
           rawMeta={entries.rawMeta}
           visibleWidgetEntries={entries.visibleWidgetEntries}
-          hasSize={hasSize}
         />
       )}
 
@@ -226,8 +226,8 @@ export const FlowNode = React.memo(function FlowNode({
       {data.classType === "Fast Groups Bypasser (rgthree)" &&
         typeof data.properties?.matchTitle === "string" && (
           <RgthreeFastGroupsBypasserBody
-            matchTitle={data.properties.matchTitle}
             groups={data.groups ?? []}
+            matchTitle={data.properties.matchTitle}
           />
         )}
 
@@ -239,7 +239,7 @@ export const FlowNode = React.memo(function FlowNode({
 
       {/* rgthree Label 运行时主体 —— 按 `properties` 里的样式
        *  绘制标题，铺满这张（无头部的）卡片。 */}
-      {isLabel && <RgthreeLabelBody text={data.title} properties={data.properties ?? {}} />}
+      {isLabel && <RgthreeLabelBody properties={data.properties ?? {}} text={data.title} />}
 
       {/* IMAGE 输入的内联缩略图预览 —— 每个带
        *  `preview: true` 的 rawInput（LoadImage 家族）都在卡片体
@@ -247,7 +247,7 @@ export const FlowNode = React.memo(function FlowNode({
       {!isCollapsed && entries.imagePreviewEntries.length > 0 && (
         <div className="flex flex-col gap-2 px-2 pt-1 pb-2">
           {entries.imagePreviewEntries.map((entry) => (
-            <WorkflowImagePreview key={entry.name} entry={entry} />
+            <WorkflowImagePreview entry={entry} key={entry.name} />
           ))}
         </div>
       )}
@@ -261,23 +261,23 @@ export const FlowNode = React.memo(function FlowNode({
        *  连线锚点能力保留（避免既有 fallback 边断开），视觉上不再出现。 */}
       {entries.uniqueConnEntries.length === 0 && entries.uniqueWidgetEntries.length === 0 && (
         <Handle
-          type="target"
-          position={Position.Left}
+          className="size-2.5! border-0!"
           id="__default_in"
           isConnectable={false}
-          className="size-2.5! border-0!"
+          position={Position.Left}
           style={{ left: -5, opacity: 0, pointerEvents: "none" }}
+          type="target"
         />
       )}
 
       {/* 通用源句柄 —— 始终存在但不可见，好让解析不出精确
        *  "out:<name>" 句柄的边仍能锚定。 */}
       <Handle
-        type="source"
-        position={Position.Right}
         id="out"
         isConnectable={false}
+        position={Position.Right}
         style={{ opacity: 0, right: -5 }}
+        type="source"
       />
 
       {/* ComfyUI 原生左下角底栏：包来源 + frontend_only

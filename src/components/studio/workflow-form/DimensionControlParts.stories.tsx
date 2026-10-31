@@ -111,17 +111,17 @@ export const ModeOverrides: Story = {
     <div className="flex flex-col gap-4">
       {
         /* SAFETY: 类型断言已复核 */ ([null, "turbo", "draft"] as const).map((mode) => (
-          <div key={String(mode)} className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1" key={String(mode)}>
             <span className="text-ink-muted font-mono text-[11px]">
               mode = {mode ?? "（条目级）"}
             </span>
             <div className="bg-canvas border-border-strong w-80 rounded-lg border p-2">
               <RequiredChips
-                pins={[WIDTH, STEPS]}
                 mode={mode}
-                visibilityMode={mode}
                 onRequiredChange={() => undefined}
                 onVisibilityChange={() => undefined}
+                pins={[WIDTH, STEPS]}
+                visibilityMode={mode}
               />
             </div>
           </div>
@@ -140,10 +140,10 @@ export const SizeTableFooters: Story = {
     <div className="flex flex-col gap-6">
       {
         /* SAFETY: 类型断言已复核 */ (["image", "video"] as const).map((scene) => (
-          <div key={scene} className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1" key={scene}>
             <span className="text-ink-muted font-mono text-[11px]">scene = {scene}</span>
             <div className="border-border-strong w-96 rounded-lg border p-2">
-              <SizeTableFooter scene={scene} onOpen={() => undefined} />
+              <SizeTableFooter onOpen={() => undefined} scene={scene} />
             </div>
           </div>
         ))

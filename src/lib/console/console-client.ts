@@ -18,30 +18,30 @@ import { MAX_OUTPUT_CHARS } from "./console-limits";
 /** 客户端看到的一条命令事件（与路由发的帧一一对应）。 */
 export type ConsoleClientEvent =
   | {
-      type: "start";
-      runId: string;
       command: string;
       cwd: string;
+      runId: string;
       startedAt: number;
+      type: "start";
     }
-  | { type: "out"; stream: "stdout" | "stderr"; text: string }
+  | { stream: "stdout" | "stderr"; text: string; type: "out" }
   | {
-      type: "exit";
       code: number | null;
-      signal: string | null;
-      killed: boolean;
-      truncatedNote: string | null;
       durationMs: number;
+      killed: boolean;
+      signal: string | null;
+      truncatedNote: string | null;
+      type: "exit";
     }
-  | { type: "error"; message: string };
+  | { message: string; type: "error" };
 
-export interface RunConsoleOptions {
+export type RunConsoleOptions = {
   command: string;
   /** 每收到一帧回调一次（**按到达顺序**，调用方不要在这里做重排）。 */
   onEvent: (event: ConsoleClientEvent) => void;
   /** 中止（用户点「停止」/ 关界面）：会断开请求，服务端据此回收整棵进程树。 */
   signal?: AbortSignal;
-}
+};
 
 /** 一次请求的结局：跑完 / 被拒 / 断了，三种都要能区分（界面文案不同）。 */
 export type RunConsoleOutcome =
@@ -52,10 +52,14 @@ export type RunConsoleOutcome =
 
 /** 把一帧 `data:` 载荷收窄成事件；认不出的形状返回 null（静默丢，不猜）。 */
 export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
-  if (!isRecord(payload)) return null;
+  if (!isRecord(payload)) {
+    return null;
+  }
   switch (payload.type) {
-    case "start":
-      if (typeof payload.runId !== "string") return null;
+    case "start": {
+      if (typeof payload.runId !== "string") {
+        return null;
+      }
       return {
         type: "start",
         runId: payload.runId,
@@ -63,15 +67,18 @@ export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
         cwd: typeof payload.cwd === "string" ? payload.cwd : "",
         startedAt: typeof payload.startedAt === "number" ? payload.startedAt : Date.now(),
       };
+    }
     case "out": {
-      if (typeof payload.text !== "string") return null;
+      if (typeof payload.text !== "string") {
+        return null;
+      }
       return {
         type: "out",
         stream: payload.stream === "stderr" ? "stderr" : "stdout",
         text: payload.text,
       };
     }
-    case "exit":
+    case "exit": {
       return {
         type: "exit",
         code: typeof payload.code === "number" ? payload.code : null,
@@ -80,13 +87,16 @@ export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
         truncatedNote: typeof payload.truncatedNote === "string" ? payload.truncatedNote : null,
         durationMs: typeof payload.durationMs === "number" ? payload.durationMs : 0,
       };
-    case "error":
+    }
+    case "error": {
       return {
         type: "error",
         message: typeof payload.message === "string" ? payload.message : "命令执行失败",
       };
-    default:
+    }
+    default: {
       return null;
+    }
   }
 }
 
@@ -101,13 +111,19 @@ export function consumeSseChunk(buffer: string, onFrame: (payload: unknown) => v
   let rest = buffer;
   for (;;) {
     const idx = rest.indexOf("\n\n");
-    if (idx < 0) return rest;
+    if (idx < 0) {
+      return rest;
+    }
     const frame = rest.slice(0, idx);
     rest = rest.slice(idx + 2);
     for (const line of frame.split("\n")) {
-      if (!line.startsWith("data:")) continue;
+      if (!line.startsWith("data:")) {
+        continue;
+      }
       const body = line.slice("data:".length).trim();
-      if (!body) continue;
+      if (!body) {
+        continue;
+      }
       try {
         onFrame(/* SAFETY: 类型断言已复核 */ JSON.parse(body) as unknown);
       } catch {
@@ -141,20 +157,24 @@ export async function runConsoleCommand(opts: RunConsoleOptions): Promise<RunCon
       signal: opts.signal,
       cache: "no-store",
     });
-  } catch (e) {
-    if (isAbortError(e)) return { kind: "aborted" };
+  } catch (error) {
+    if (isAbortError(error)) {
+      return { kind: "aborted" };
+    }
     /* 走全库唯一的错误文案出口（`~/lib/error-message`）：它会把浏览器抛的
      * `Failed to fetch` / `NetworkError` 翻成「网络请求失败，请检查应用服务
      * 是否正在运行」。**不要**原样透传 —— ISSUE #1327 的现场截图里，面板结论条
      * 就只写着 `Failed to fetch`，用户看不出「是应用服务没起来」还是「我命令写错了」。 */
-    return { kind: "failed", reason: errorMessage(e, "请求失败") };
+    return { kind: "failed", reason: errorMessage(error, "请求失败") };
   }
 
   if (!res.ok) {
     const reason = readApiError(await readJsonBody(res)) ?? `服务端拒绝执行（HTTP ${res.status}）`;
     return { kind: "rejected", reason };
   }
-  if (!res.body) return { kind: "failed", reason: "服务端没有返回输出流" };
+  if (!res.body) {
+    return { kind: "failed", reason: "服务端没有返回输出流" };
+  }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -162,11 +182,15 @@ export async function runConsoleCommand(opts: RunConsoleOptions): Promise<RunCon
   try {
     for (;;) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
       buffer += decoder.decode(value, { stream: true });
       buffer = consumeSseChunk(buffer, (payload) => {
         const event = parseConsoleFrame(payload);
-        if (event) opts.onEvent(event);
+        if (event) {
+          opts.onEvent(event);
+        }
       });
     }
     // 冲刷不完整帧：服务端正常关闭时不会留半帧，但断流时会 —— 丢了它等于
@@ -175,14 +199,18 @@ export async function runConsoleCommand(opts: RunConsoleOptions): Promise<RunCon
     if (buffer.trim()) {
       consumeSseChunk(`${buffer}\n\n`, (payload) => {
         const event = parseConsoleFrame(payload);
-        if (event) opts.onEvent(event);
+        if (event) {
+          opts.onEvent(event);
+        }
       });
     }
     return { kind: "ok" };
-  } catch (e) {
-    if (isAbortError(e)) return { kind: "aborted" };
+  } catch (error) {
+    if (isAbortError(error)) {
+      return { kind: "aborted" };
+    }
     // 同上：读流中途断掉（服务重启 / 连接被掐）同样是网络层故障，不该把浏览器原文甩出来。
-    return { kind: "failed", reason: errorMessage(e, "读取输出流失败") };
+    return { kind: "failed", reason: errorMessage(error, "读取输出流失败") };
   }
 }
 
@@ -193,6 +221,8 @@ export async function runConsoleCommand(opts: RunConsoleOptions): Promise<RunCon
  * 超出从**头部**裁（尾部才是结论 —— 与「日志看尾巴」同一判据）。
  */
 export function clampOutput(text: string): string {
-  if (text.length <= MAX_OUTPUT_CHARS) return text;
+  if (text.length <= MAX_OUTPUT_CHARS) {
+    return text;
+  }
   return `…（更早的输出已裁剪）\n${text.slice(text.length - MAX_OUTPUT_CHARS)}`;
 }

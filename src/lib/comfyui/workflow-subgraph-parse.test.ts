@@ -271,10 +271,10 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
 
   /** 复刻 ISSUE 报文的内层节点：`model`/`negative` 是纯连接口，`seed` 是控件槽。 */
   function makeConsumerSub(opts: {
-    targetSlot: number;
-    seedIdx: number;
     /** seed 在 raw `inputs[]` 里的数组位置（缺省 = 紧跟两个纯连接口之后）。 */
     seedArrayIndex?: number;
+    seedIdx: number;
+    targetSlot: number;
   }): RawSubgraphDef {
     /* 前两行是纯连接口，中间补若干占位槽 —— 让「控件序号空间」与「数组位置
      * 空间」在下标上真的错开，测试才有区分度。 */

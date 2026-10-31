@@ -66,7 +66,7 @@ describe("livenessIntervalMs", () => {
 
   it("启动等待：10s 内 400ms，之后降到 1s", () => {
     expect(livenessIntervalMs("starting", 0)).toBe(LIVENESS_STARTING.fastMs);
-    expect(livenessIntervalMs("starting", 9_999)).toBe(LIVENESS_STARTING.fastMs);
+    expect(livenessIntervalMs("starting", 9999)).toBe(LIVENESS_STARTING.fastMs);
     expect(livenessIntervalMs("starting", 10_000)).toBe(LIVENESS_STARTING.slowMs);
   });
 

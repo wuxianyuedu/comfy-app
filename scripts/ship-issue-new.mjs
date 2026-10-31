@@ -30,11 +30,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { isExplicitSource } from "./dev-handle.mjs";
-import {
-  appendComment,
-  sameCommentBody,
-  stripTrailingNewline,
-} from "./ship-comment.mjs";
+import { appendComment, sameCommentBody, stripTrailingNewline } from "./ship-comment.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import {
@@ -80,7 +76,9 @@ export function runAppendIssueComment({
   path: route = "issue",
 }) {
   const wrote = appendComment({ run, log, slug, number, body, mkTmp, route });
-  if (!wrote.bodies) return false;
+  if (!wrote.bodies) {
+    return false;
+  }
   return wrote.bodies.some((c) => c.includes(marker));
 }
 
@@ -128,9 +126,7 @@ export function runIssueComment({
     return CODE.NOT_RUN;
   }
   if (read.raw.trim() === "") {
-    log(
-      `[ship] 正文文件是空的：${read.where} ⇒ 不写一条只有署名的评论（那是噪音，不是读数）。`,
-    );
+    log(`[ship] 正文文件是空的：${read.where} ⇒ 不写一条只有署名的评论（那是噪音，不是读数）。`);
     return CODE.NOT_RUN;
   }
   if (dryRun) {
@@ -334,9 +330,7 @@ export function runNewIssue({
     log(
       `[ship] --dry-run：将创建「${plan.title}」（正文 ${bodyFile}，长度 ${read.text.length} 字，` +
         `优先级 ${plan.priority ?? "平台默认"}）` +
-        (label
-          ? `，再按 ${label}，最后 get-issue 回读`
-          : "，不回读标签（未配留痕）") +
+        (label ? `，再按 ${label}，最后 get-issue 回读` : "，不回读标签（未配留痕）") +
         "；一条都没写。",
     );
     return CODE.GREEN;
@@ -358,11 +352,8 @@ export function runNewIssue({
     ...(plan.priority ? ["--priority", plan.priority] : []),
     "-v",
   ]);
-  const d =
-    got && got.json && typeof got.json === "object" ? got.json.data : null;
-  const number = Number(
-    d && typeof d === "object" ? (d.number ?? d?.issue?.number) : NaN,
-  );
+  const d = got && got.json && typeof got.json === "object" ? got.json.data : null;
+  const number = Number(d && typeof d === "object" ? (d.number ?? d?.issue?.number) : NaN);
   if (!Number.isInteger(number) || number <= 0) {
     log(
       "[ship] 建单的回执里没有可用的单号 ⇒ 不念「已建成」。" +
@@ -404,10 +395,7 @@ export function runNewIssue({
    * 只管**这个名稳不稳**。把「取的」念成「这次不带标签」会与下一行回读互相推翻，
    * 还给人一条错误指令（名字不空，标签已经在了）。 */
   const landed =
-    label &&
-    labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(
-      String(handle).trim(),
-    );
+    label && labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(String(handle).trim());
   if (label && !landed && explicitHandle) {
     /* 你填的却没落地 ⇒ 不念「留痕已补上」（ISSUE #2355）。 */
     log(

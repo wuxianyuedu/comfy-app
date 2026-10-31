@@ -9,9 +9,7 @@ import { nextId } from "~/lib/unique-id";
 /** 「实际使用」测试弹窗的一条额外请求体字段。key 是请求体里的字段名
  *（如 mode / first_frame / image），value 为输入内容——文本、数字或图片。
  * 图片既可以是远端 URL，也可以是本地上传后转成的 data:image URL。 */
-export interface UsageField {
-  key: string;
-  value: string;
+export type UsageField = {
   /**
    * 行的**稳定标识**，只给 React 当 `key` 用。
    *
@@ -26,7 +24,9 @@ export interface UsageField {
    * 请求体里不会多出这个字段。
    */
   id: string;
-}
+  key: string;
+  value: string;
+};
 
 /** 视频生成常见的 mode 预设（Agnes 等：text / keyframe / reference）。
  * 仅为快捷选项——选中后仍可在输入框里自由改，适配其它模型的其它取值。 */
@@ -137,7 +137,9 @@ export function usageFieldsToJson(fields: Array<UsageField>): string {
   for (const f of fields) {
     const key = f.key.trim();
     const value = f.value.trim();
-    if (!key || value === "") continue;
+    if (!key || value === "") {
+      continue;
+    }
     let parsed: unknown;
     let isLiteral = false;
     try {
@@ -174,14 +176,18 @@ export function usageFieldsToJson(fields: Array<UsageField>): string {
  *  「是 URL 就尝试」，交由 <img onError> 兜底优雅降级。 */
 export function isPreviewableUrl(value: string): boolean {
   const v = value.trim();
-  if (!v) return false;
+  if (!v) {
+    return false;
+  }
   return /^data:image\//i.test(v) || /^https?:\/\//i.test(v);
 }
 
 /** 判断某行值是否可当作图片预览（data:image 或 http(s) 图片地址）。 */
 export function looksLikeImage(value: string): boolean {
   const v = value.trim();
-  if (!v) return false;
+  if (!v) {
+    return false;
+  }
   return (
     /^data:image\//i.test(v) || /^(https?:\/\/).+\.(png|jpe?g|webp|gif|avif|bmp)([?#].*)?$/i.test(v)
   );
@@ -205,8 +211,8 @@ export function sanitizeModeValue(value: string): string {
  *  key → 界面按钮文案说明；点对应「＋」即自动补一行该字段名的行。
  *  视频 reference / keyframe 必用的 images / first_frame 等都在列，命中即加。 */
 export const USAGE_FIELD_PRESETS: ReadonlyArray<{
-  key: string;
   hint: string;
+  key: string;
 }> = [
   { key: "seed", hint: "随机种子" },
   { key: "duration", hint: "时长(秒)" },
@@ -238,7 +244,9 @@ export function mediaExtensionFromUrl(url: string, fallback: "png" | "mp4"): str
     const m = /^data:image\/([a-zA-Z0-9.+-]+)/.exec(u);
     if (m?.[1]) {
       const ext = m[1].toLowerCase().replace("jpeg", "jpg").replace("svg+xml", "svg");
-      if (/^[a-z0-9]{1,8}$/.test(ext)) return ext;
+      if (/^[a-z0-9]{1,8}$/.test(ext)) {
+        return ext;
+      }
     }
     return fallback;
   }
@@ -247,7 +255,9 @@ export function mediaExtensionFromUrl(url: string, fallback: "png" | "mp4"): str
     const dot = pathPart.lastIndexOf(".");
     if (dot >= 0 && dot < pathPart.length - 1) {
       const ext = pathPart.slice(dot + 1).toLowerCase();
-      if (/^[a-z0-9]{1,8}$/.test(ext)) return ext;
+      if (/^[a-z0-9]{1,8}$/.test(ext)) {
+        return ext;
+      }
     }
   }
   return fallback;
@@ -263,12 +273,12 @@ export function mediaDefaultExt(kind: string): "png" | "mp4" {
  *  ① REST 风格 {base}{pathDir}/{taskId}（如 /v1/videos/{id}）
  *  ② Agnes 系 {origin}/agnesapi?video_id={id}&model_name={model}
  *  由调用方逐个尝试，读到媒体 URL 即视为完成。纯字符串拼装，可单测。 */
-export interface VideoPollUrl {
-  /** REST 风格：任务 ID 直接拼在端点目录后 */
-  rest: string;
+export type VideoPollUrl = {
   /** Agnes 系带签名查询串；origin 解析失败时为 null（跳过该候选） */
   agnes: string | null;
-}
+  /** REST 风格：任务 ID 直接拼在端点目录后 */
+  rest: string;
+};
 
 /** 端点路径的目录部分（/videos/generations → /videos），用于任务轮询拼接。 */
 export function videoEndpointDir(path: string): string {

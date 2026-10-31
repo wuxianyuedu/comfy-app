@@ -48,7 +48,9 @@ function wireClientToRealRoute(
       /* 只给 `url` 一个字段就够：路由读的就是它。
        * 不构造 `Request` 是为了不让这一格依赖 jsdom 那侧有没有 fetch 家族的全局。 */
       const res = await GET(/* SAFETY: 类型断言已复核 */ { url: href } as unknown as Request);
-      if (res.status !== 200) return res;
+      if (res.status !== 200) {
+        return res;
+      }
       const frame = /* SAFETY: 类型断言已复核 */ (await res.clone().json()) as Record<
         string,
         unknown
@@ -73,7 +75,9 @@ async function settle(times = 2): Promise<void> {
 async function settleUntil(condition: () => boolean, rounds = 50): Promise<boolean> {
   for (let i = 0; i < rounds; i += 1) {
     await settle(1);
-    if (condition()) return true;
+    if (condition()) {
+      return true;
+    }
   }
   return false;
 }

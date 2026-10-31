@@ -349,9 +349,9 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
     const user = msgs[1]!;
     expect(user.role).toBe("user");
     const content = /* SAFETY: 类型断言已复核 */ user.content as Array<{
-      type: string;
-      text?: string;
       image_url?: { url: string };
+      text?: string;
+      type: string;
     }>;
     expect(Array.isArray(content)).toBe(true);
     // 首块是文本上下文（含提示词与景别）
@@ -370,7 +370,7 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
       prompt: "x",
       shotType: "",
       characterNames: [],
-    })[1]!.content as Array<{ type: string; image_url?: { url: string } }>;
+    })[1]!.content as Array<{ image_url?: { url: string }; type: string }>;
     const imageUrls = content.filter((p) => p.type === "image_url").map((p) => p.image_url!.url);
     expect(imageUrls).toEqual(["/shot.png"]);
   });

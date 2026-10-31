@@ -98,7 +98,9 @@ function callerLoc(): string {
   try {
     const stack = new Error().stack;
 
-    if (!stack) return "";
+    if (!stack) {
+      return "";
+    }
 
     const lines = stack.split("\n");
 
@@ -182,7 +184,9 @@ function touchAndEvict<V>(map: Map<string, V>, taskId: string, value: V, maxTask
   map.set(taskId, value);
   while (map.size > maxTasks) {
     const oldest = map.keys().next().value;
-    if (oldest === undefined) break;
+    if (oldest === undefined) {
+      break;
+    }
     map.delete(oldest);
   }
 }
@@ -196,7 +200,9 @@ export function log(taskId: string, level: LogEntry["level"], msg: string): LogE
 
   arr.push(entry);
 
-  if (arr.length > LOGS_MAX_LINES) arr.splice(0, arr.length - LOGS_MAX_LINES);
+  if (arr.length > LOGS_MAX_LINES) {
+    arr.splice(0, arr.length - LOGS_MAX_LINES);
+  }
 
   touchAndEvict(store.logs, taskId, arr, LOGS_MAX_TASKS);
 
@@ -228,7 +234,9 @@ export function logWhileQueued(taskId: string, level: LogEntry["level"], msg: st
    * 落过一次库，丢的只是「领取时保留」这份冗余，不是现场）。 */
   if (store.queuedEntries.size > LOGS_MAX_TASKS) {
     const oldest = store.queuedEntries.keys().next().value;
-    if (oldest !== undefined) store.queuedEntries.delete(oldest);
+    if (oldest !== undefined) {
+      store.queuedEntries.delete(oldest);
+    }
   }
 }
 
@@ -277,7 +285,9 @@ const persistTimers = new Map<
 export function cancelPersistLogs(taskId: string): void {
   const pending = persistTimers.get(taskId);
 
-  if (!pending) return;
+  if (!pending) {
+    return;
+  }
 
   clearTimeout(pending.debounce);
 
@@ -287,7 +297,9 @@ export function cancelPersistLogs(taskId: string): void {
 }
 
 export function schedulePersistLogs(taskId: string) {
-  if (!taskId) return;
+  if (!taskId) {
+    return;
+  }
 
   const existing = persistTimers.get(taskId);
 
@@ -351,10 +363,14 @@ export function schedulePersistLogs(taskId: string) {
  */
 export function claimSettle(taskId: string): boolean {
   const s = state();
-  if (s.settled.has(taskId)) return false;
+  if (s.settled.has(taskId)) {
+    return false;
+  }
   s.settled.add(taskId);
   const t = s.timers.get(taskId);
-  if (t) clearTimeout(t);
+  if (t) {
+    clearTimeout(t);
+  }
   s.timers.delete(taskId);
   return true;
 }
@@ -364,7 +380,9 @@ export function claimSettle(taskId: string): boolean {
  *  语义与 `claimSettle` 平行，但锁的是「DB 终态」而不是「收口流程」。 */
 export function claimFinalize(taskId: string): boolean {
   const s = state();
-  if (s.finalized.has(taskId)) return false;
+  if (s.finalized.has(taskId)) {
+    return false;
+  }
   s.finalized.add(taskId);
   return true;
 }
@@ -428,7 +446,9 @@ export function forgetTaskFootprint(taskId: string, promptId?: string): void {
     s.promptToTask.delete(promptId);
   }
   for (const [known, owner] of s.promptToTask) {
-    if (owner === taskId) s.promptToTask.delete(known);
+    if (owner === taskId) {
+      s.promptToTask.delete(known);
+    }
   }
 }
 
@@ -469,14 +489,14 @@ export function forgetTaskClaimEntirely(taskId: string): void {
  * 背整个 `taskRepository` 或 pino 的全部面。
  */
 export type RunnerDeps = {
+  log: {
+    warn(msg: string): void;
+  };
   taskRepo: {
     replaceLogs(taskId: string, entries: Array<LogEntry>): Promise<void>;
     /** comfy-cli 完整原文整包落库（P3 §5 ADR §14 D1 的 4-B2）：「查看完整输出」
      *  这个排障入口此前只有执行进程自己看得见。 */
     replaceRawCli(taskId: string, lines: Array<string>): Promise<void>;
-  };
-  log: {
-    warn(msg: string): void;
   };
 };
 
@@ -535,8 +555,8 @@ export async function persistLogs(taskId: string) {
   try {
     const { taskRepo } = await resolveDeps();
     await taskRepo.replaceLogs(taskId, arr);
-  } catch (e) {
-    const message = `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(e, "unknown")}`;
+  } catch (error) {
+    const message = `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(error, "unknown")}`;
     // 兜底 warn：若 resolveDeps 已经拉起了 log，走注入侧；否则再试一次 dynamic
     // import。这一句本身在纯 Node + 未 configure 的失败路径下也会抛（server-only），
     // 但那时上面 catch 里已经没有别的兜底手段可依赖了（logger 都没起来），
@@ -548,7 +568,7 @@ export async function persistLogs(taskId: string) {
     } catch {
       // 完全无法落库 + 无法 warn：让 caller 通过 unhandled rejection 感知，
       // 不吞掉。
-      throw e;
+      throw error;
     }
   }
 }
@@ -561,7 +581,9 @@ export const RAW_CLI_MAX_LINES = 5000;
 
 /** 追加一行 comfy-cli 完整原文（不截断），供前端「查看完整输出」按需拉取。 */
 export function appendRawCli(taskId: string, line: string): void {
-  if (!taskId) return;
+  if (!taskId) {
+    return;
+  }
   const store = state();
   const arr = store.rawCli.get(taskId) ?? [];
   arr.push(line);
@@ -586,17 +608,19 @@ function getRawCli(taskId: string): Array<string> {
  *  失败的处理与 `persistLogs` 同形：排障入口少一份原文，不该把收口链路整段回滚。 */
 export async function persistRawCli(taskId: string): Promise<void> {
   const lines = getRawCli(taskId);
-  if (lines.length === 0) return;
+  if (lines.length === 0) {
+    return;
+  }
   try {
     const { taskRepo } = await resolveDeps();
     await taskRepo.replaceRawCli(taskId, lines);
-  } catch (e) {
-    const message = `[comfyui] persistRawCli(${taskId}) 落库失败：${errorText(e, "unknown")}`;
+  } catch (error) {
+    const message = `[comfyui] persistRawCli(${taskId}) 落库失败：${errorText(error, "unknown")}`;
     try {
       const { log: hostLog } = await resolveDeps();
       hostLog.warn(message);
     } catch {
-      throw e;
+      throw error;
     }
   }
 }

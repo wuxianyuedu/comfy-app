@@ -24,7 +24,7 @@ const mockedRefresh = vi.mocked(refreshCustomNodes);
 
 /** 造一个 ndjson 响应（设置流 / 解析流共用）。 */
 function ndjson(events: Array<unknown>): Response {
-  const body = events.map((e) => JSON.stringify(e)).join("\n") + "\n";
+  const body = `${events.map((e) => JSON.stringify(e)).join("\n")}\n`;
   return new Response(body, {
     status: 200,
     headers: { "content-type": "application/x-ndjson" },

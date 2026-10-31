@@ -11,13 +11,13 @@
  */
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 
-interface DeleteWorkflowModalProps {
-  pendingDelete: { id: string; name: string } | null;
+type DeleteWorkflowModalProps = {
   deleting: boolean;
-  onConfirm: (id: string) => void;
   /** Escape / 取消按钮 — unconditional close. */
   onCancel: () => void;
-}
+  onConfirm: (id: string) => void;
+  pendingDelete: { id: string; name: string } | null;
+};
 
 export function DeleteWorkflowModal({
   pendingDelete,
@@ -27,23 +27,21 @@ export function DeleteWorkflowModal({
 }: DeleteWorkflowModalProps) {
   return (
     <ConfirmDialog
-      open={pendingDelete !== null}
+      cancelLabel="取消"
+      confirmLabel="确认删除"
+      danger
+      description={pendingDelete ? `确认删除「${pendingDelete.name}」？此操作不可撤销。` : ""}
       /* 确认中不许关：与旧实现「`deleting` 期间遮罩点击被阻断」同义 ——
          请求已经发出，中途撤掉弹窗会让结果无处落地。 */
       onClose={() => {
-        if (!deleting) onCancel();
+        if (!deleting) {
+          onCancel();
+        }
       }}
-      danger
-      title="删除工作流"
-      description={
-        pendingDelete
-          ? `确认删除「${pendingDelete.name}」？此操作不可撤销。`
-          : ""
-      }
-      confirmLabel="确认删除"
-      cancelLabel="取消"
-      pending={deleting}
       onConfirm={() => pendingDelete && onConfirm(pendingDelete.id)}
+      open={pendingDelete !== null}
+      pending={deleting}
+      title="删除工作流"
     />
   );
 }

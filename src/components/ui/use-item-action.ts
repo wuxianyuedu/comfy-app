@@ -53,13 +53,15 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 export type ItemActionScope = string | null;
 
-export interface ItemAction {
-  /** 当前在忙的那一条（`null` = 没有动作在跑）。 */
-  busyId: ItemActionScope;
-  /** 读取用的判据：`busyId === id`（视图里不再自己写这个比较）。 */
-  isBusy: (id: ItemActionScope) => boolean;
+export type ItemAction = {
   /** 是否**有任何**动作在跑（决定「全部重试」这类整表动作能不能点）。 */
   anyBusy: boolean;
+  /** 当前在忙的那一条（`null` = 没有动作在跑）。 */
+  busyId: ItemActionScope;
+  /** 手动清忙标记（如动作被外部取消）。正常路径不必调。 */
+  clear: () => void;
+  /** 读取用的判据：`busyId === id`（视图里不再自己写这个比较）。 */
+  isBusy: (id: ItemActionScope) => boolean;
   /**
    * 跑一次**针对某一条**的动作。
    *
@@ -73,9 +75,7 @@ export interface ItemAction {
    * 调用处本来也不会去读它（那条路根本不发请求）。
    */
   run: <T>(id: ItemActionScope, action: () => Promise<T>) => Promise<T | undefined>;
-  /** 手动清忙标记（如动作被外部取消）。正常路径不必调。 */
-  clear: () => void;
-}
+};
 
 /**
  * 「一屏多条目、一次只忙一条」的执行态。
@@ -108,7 +108,9 @@ export function useItemAction(keys?: ReadonlyArray<string>): ItemAction {
     async <T>(id: ItemActionScope, action: () => Promise<T>): Promise<T | undefined> => {
       const key = scopeKey(id);
       /* 同一条重复点：直接忽略（不发第二次请求，也不动忙标记）。 */
-      if (runningRef.current.has(key)) return undefined;
+      if (runningRef.current.has(key)) {
+        return undefined;
+      }
       runningRef.current.add(key);
       setBusyId(id);
       try {

@@ -25,16 +25,16 @@ import { revealLogPath } from "~/lib/log/log-reveal-client";
 import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 
 /** 一条路径的打开结果（只保留要显示的那两件）。 */
-export interface RevealPathFeedback {
+export type RevealPathFeedback = {
   /** 这一刻这一次打开是不是在跑（给按钮的禁用 / 文案用）。 */
   busy: boolean;
-  /** 上一次的结果：成功 / 失败 / 还没试过。 */
-  outcome: "idle" | "done" | "failed";
   /** 上一次失败的说明（成功时为空；由服务端给，可直接显示）。 */
   failure: string;
+  /** 上一次的结果：成功 / 失败 / 还没试过。 */
+  outcome: "idle" | "done" | "failed";
   /** 打开这个路径。 */
   reveal: (path: string) => void;
-}
+};
 
 /**
  * 一行日志里一个路径的打开动作。
@@ -52,7 +52,9 @@ export function useRevealLogPath(
 
   const reveal = useCallback(
     (target: string) => {
-      if (!lock.tryEnter()) return;
+      if (!lock.tryEnter()) {
+        return;
+      }
       setBusy(true);
       setOutcome("idle");
       setFailure("");
@@ -61,7 +63,9 @@ export function useRevealLogPath(
           /* 成败都改口（§16.2.4.43）：只在成功时改口同样是撒谎的另一半 ——
            * 用户连点几次都没反应，会以为按钮坏了。 */
           setOutcome(result.ok ? "done" : "failed");
-          if (!result.ok) setFailure(result.detail);
+          if (!result.ok) {
+            setFailure(result.detail);
+          }
           onOutcome?.(result.ok ? "done" : "failed");
         })
         .finally(() => {

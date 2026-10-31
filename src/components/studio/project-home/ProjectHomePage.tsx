@@ -28,11 +28,11 @@ import { SeriesOrganizer } from "./SeriesOrganizer";
 import { useProjectHome } from "./hooks/use-project-home";
 
 /** 一处「去这个视图继续」的入口。 */
-interface HomeEntry {
+type HomeEntry = {
+  desc: string;
   id: WorkspaceView;
   label: string;
-  desc: string;
-}
+};
 
 const ENTRIES: Array<HomeEntry> = [
   { id: "workshop", label: "全链路工坊", desc: "剧本 → 分镜 → 成片" },
@@ -41,14 +41,14 @@ const ENTRIES: Array<HomeEntry> = [
   { id: "film", label: "成片", desc: "时间线与合成" },
 ];
 
-export interface ProjectHomePageProps {
-  /** 当前项目名（由 workspace 从本地项目索引读，主页不重复读一份）。 */
-  projectName: string;
+export type ProjectHomePageProps = {
   /** 切到项目内的某个页签。 */
   onNavigate: (view: WorkspaceView) => void;
   /** 当前项目 id（活跃项目）—— 供「系列归层」面板把本项目挂到某集。 */
   projectId?: string;
-}
+  /** 当前项目名（由 workspace 从本地项目索引读，主页不重复读一份）。 */
+  projectName: string;
+};
 
 export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectHomePageProps) {
   const controller = useProjectHome();
@@ -56,9 +56,9 @@ export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectH
 
   return (
     <DocumentFrame
-      width="narrow"
-      className="flex flex-col gap-6 px-8 py-10"
       backdrop={<AuroraBackground />}
+      className="flex flex-col gap-6 px-8 py-10"
+      width="narrow"
     >
       {/* ── 项目标识 + 一句话进展 ─────────────────────────── */}
       <header className="flex flex-col gap-2">
@@ -68,14 +68,14 @@ export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectH
 
       {/* ── 总进度：一条，口径 = 六个完成阶段的等权平均 ────── */}
       <ProgressBar
-        value={loading ? null : overview.progressPct}
-        label="项目进度"
         ariaLabel="项目整体完成度"
+        label="项目进度"
         trackClassName="h-1.5"
+        value={loading ? null : overview.progressPct}
       />
 
       {/* ── 状态卡：阶段条 + 计数 ─────────────────────────── */}
-      <ProjectHomeStatus overview={overview} loading={loading} onNavigate={onNavigate} />
+      <ProjectHomeStatus loading={loading} onNavigate={onNavigate} overview={overview} />
 
       {/* ── AI 自主成片：与工坊 / 画布同一份 run 的操纵台 ──── */}
       <section className="flex flex-col gap-2">
@@ -97,13 +97,13 @@ export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectH
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {ENTRIES.map((entry) => (
             <Button
-              key={entry.id}
-              variant="ghost"
-              onClick={() => onNavigate(entry.id)}
               className={cn(
                 "border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2",
                 "flex h-auto flex-col items-start gap-1 rounded-2xl border p-4 text-left font-normal",
               )}
+              key={entry.id}
+              onClick={() => onNavigate(entry.id)}
+              variant="ghost"
             >
               <span className="text-ink-bright text-sm font-medium">{entry.label}</span>
               <span className="text-ink-muted text-xs">{entry.desc}</span>

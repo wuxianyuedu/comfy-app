@@ -54,12 +54,12 @@ import { errorMessage } from "~/lib/error-message";
 export type ActionReport = (kind: "ok" | "err", detail: string) => void;
 
 /** 一次异步动作的执行结果（给调用处继续用，如回滚 / 刷新）。 */
-export interface ActionResult {
-  /** 动作是否成功（含「返回了失败信封」这一种，见 `toActionResult`）。 */
-  ok: boolean;
+export type ActionResult = {
   /** 用户可见文案：成功时是成功文案，失败时是失败文案。 */
   detail: string;
-}
+  /** 动作是否成功（含「返回了失败信封」这一种，见 `toActionResult`）。 */
+  ok: boolean;
+};
 
 /**
  * 动作返回的原始形状 —— 各来源的并集。
@@ -78,9 +78,7 @@ export interface ActionResult {
  * 的调用处都被迫写一次类型断言 —— 那是一层不带来任何检查的噪声。 */
 export type RawActionResult = unknown;
 
-export interface RunAsyncActionOptions {
-  /** 反馈通道（必给 —— 这就是本模块存在的理由）。 */
-  report: ActionReport;
+export type RunAsyncActionOptions = {
   /**
    * 失败文案的**标题**（详情由 `errorMessage` 从抛出的值里取）。
    *
@@ -91,6 +89,13 @@ export interface RunAsyncActionOptions {
    */
   failureText: string | (() => string);
   /**
+   * 结果信封的**成功判据**。给 `false` 时本模块不再看返回值，
+   * 只按「有没有抛」判定（用于端点在响应体里带 `ok: false` 的落点）。
+   */
+  readResultEnvelope?: boolean;
+  /** 反馈通道（必给 —— 这就是本模块存在的理由）。 */
+  report: ActionReport;
+  /**
    * 成功文案。**不给 = 成功静默**（这是合法的，但要显式写出来：
    * 见 {@link runAsyncAction} 的注释）。
    *
@@ -98,12 +103,7 @@ export interface RunAsyncActionOptions {
    * 参数缺席时这条差别才被真正表达出来。
    */
   successText?: string | ((result: ActionResult) => string);
-  /**
-   * 结果信封的**成功判据**。给 `false` 时本模块不再看返回值，
-   * 只按「有没有抛」判定（用于端点在响应体里带 `ok: false` 的落点）。
-   */
-  readResultEnvelope?: boolean;
-}
+};
 
 /** 取文案：字面量直接用，函数按调用期求值（文案依赖入参时用函数形式）。 */
 function text(value: string | (() => string)): string {
@@ -121,8 +121,12 @@ function text(value: string | (() => string)): string {
  * 所以两份仍然分开：合成一份会让「外部动作」这个概念漏进通用动作层。
  */
 export function toActionResult(raw: RawActionResult, fallbackDetail: string): ActionResult {
-  if (raw === true) return { ok: true, detail: fallbackDetail };
-  if (raw === false) return { ok: false, detail: fallbackDetail };
+  if (raw === true) {
+    return { ok: true, detail: fallbackDetail };
+  }
+  if (raw === false) {
+    return { ok: false, detail: fallbackDetail };
+  }
   if (raw === null || raw === undefined) {
     /* `void` 返回值：tRPC 这类「不抛就是成功」的端点。 */
     return { ok: true, detail: fallbackDetail };
@@ -130,10 +134,10 @@ export function toActionResult(raw: RawActionResult, fallbackDetail: string): Ac
   /* 普通对象（业务返回值）按「不抛即成功」读；只有真的带了 `ok` /
    * `triggered` 字段时才按信封判 —— 与 `void` 同口径。 */
   const envelope = /* SAFETY: 类型断言已复核 */ raw as {
-    ok?: boolean;
-    triggered?: boolean;
     detail?: string | null;
     error?: string | null;
+    ok?: boolean;
+    triggered?: boolean;
   };
   const ok = envelope.ok ?? envelope.triggered ?? true;
   const detail = envelope.detail ?? envelope.error ?? fallbackDetail;
@@ -179,7 +183,9 @@ export async function runAsyncAction(
         typeof successText === "function"
           ? successText({ ok: true, detail: "" })
           : (successText ?? "");
-      if (detail) report("ok", detail);
+      if (detail) {
+        report("ok", detail);
+      }
       return { ok: true, detail };
     }
     /* 信封的成功判据在这里读一次：`{ok:false}` / `{triggered:false}`
@@ -192,7 +198,9 @@ export async function runAsyncAction(
        * `detail` 是端点自己探出来的结论，调用处不该把它抄一遍。 */
       const detail =
         typeof successText === "function" ? successText(result) : (successText ?? result.detail);
-      if (detail) report("ok", detail);
+      if (detail) {
+        report("ok", detail);
+      }
       return { ok: true, detail: detail ?? "" };
     }
     /* 服务端给了 `detail` / `error` 就用它（它比标题更能说明原因），
@@ -242,9 +250,9 @@ export async function runAsyncAction(
  * `onError` 自己的日志路径去暴露，本处只保证"最后一道防线不再漏"。
  */
 export function fireAndForget(task: Promise<unknown>, onError: (e: unknown) => void): void {
-  task.catch((e) => {
+  task.catch((error) => {
     try {
-      onError(e);
+      onError(error);
     } catch {
       /* onError 内抛就不再向外冒，见上方文档。 */
     }

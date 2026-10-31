@@ -18,14 +18,14 @@ import { useModelTags, type TagItem } from "./hooks/use-model-tags";
 const TAG_ICON_COLOR = "text-fuchsia-700 dark:text-fuchsia-300";
 // p71-allow:end
 
-interface ModelTagManagerProps {
+type ModelTagManagerProps = {
   /** 初始标签（来自父级缓存的标签库列表）。 */
   initialTags: Array<TagItem>;
   /** 任何创建 / 删除之后调用，好让父级刷新列表。 */
   onChanged: () => void;
   /** 用户关闭对话框时调用。 */
   onClose: () => void;
-}
+};
 
 /** 管理用户级工作流模型标签库的弹窗。
  *  标签在用户的所有工作流之间共享（如 "z-image"、
@@ -51,7 +51,9 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
   const commitEdit = useCallback(
     (_id: string, oldName: string) => {
       void c.renameTag(oldName, editingDraft).then((ok) => {
-        if (ok) cancelEdit();
+        if (ok) {
+          cancelEdit();
+        }
       });
     },
     [c, editingDraft, cancelEdit],
@@ -60,27 +62,27 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘遮罩
      + `role`/`aria-modal` 手写，Esc 没接、焦点不锁也不归还。 */
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
         aria-label="管理模型标签"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-md"
+        showCloseButton={false}
       >
         <div className="border-border-strong bg-panel w-full max-w-md rounded-2xl border p-5 shadow-2xl shadow-black/20 dark:shadow-black/50">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-ink-bright flex items-center gap-2 text-base font-semibold">
-              <Icon name="tag" className={`size-4 ${TAG_ICON_COLOR}`} />
+              <Icon className={`size-4 ${TAG_ICON_COLOR}`} name="tag" />
               模型标签库
             </h3>
             <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onClose}
-              className="text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg"
               aria-label="关闭"
+              className="text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg"
+              onClick={onClose}
+              size="icon-sm"
+              variant="ghost"
             >
-              <Icon data-icon="inline-start" name="x" className="size-4" />
+              <Icon className="size-4" data-icon="inline-start" name="x" />
             </Button>
           </div>
 
@@ -92,18 +94,18 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
 
           <div className="mb-4 flex gap-2">
             <input
-              value={c.draft}
               onChange={textHandler(c.setDraft)}
+              value={c.draft}
               {...enterCommit({ onCommit: () => void c.addTag() })}
-              placeholder="新增模型名，如 z-image / wan2.2"
               className="border-border-strong bg-canvas-deep text-ink-bright placeholder:text-ink-muted min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-fuchsia-500/50"
+              placeholder="新增模型名，如 z-image / wan2.2"
             />
             <Button
-              variant="primary-solid"
-              size="sm"
-              onClick={() => void c.addTag()}
-              disabled={c.busy || !c.draft.trim()}
               className="h-auto rounded-lg px-3 py-2"
+              disabled={c.busy || !c.draft.trim()}
+              onClick={() => void c.addTag()}
+              size="sm"
+              variant="primary-solid"
             >
               {c.busy ? "…" : "添加"}
             </Button>
@@ -124,7 +126,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                * 只有这一行标红，用户不必回忆上一条消息说的是哪一行。 */
               const rowError = c.errors.get(tag.name);
               return (
-                <div key={tag.id} className="border-border-strong bg-subtle rounded-lg border">
+                <div className="border-border-strong bg-subtle rounded-lg border" key={tag.id}>
                   {rowError && (
                     <div className="border-danger/30 text-danger-strong text-2xs border-b px-3 py-1">
                       {rowError}
@@ -134,14 +136,15 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                     {isEditing ? (
                       <input
                         autoFocus
-                        value={editingDraft}
                         maxLength={64}
-                        onFocus={(event) => event.currentTarget.select()}
                         onChange={(event) => setEditingDraft(event.target.value)}
+                        onFocus={(event) => event.currentTarget.select()}
+                        value={editingDraft}
                         {...enterCommit({
                           onCommit: () => void commitEdit(tag.id, tag.name),
                           onCancel: cancelEdit,
                         })}
+                        className="bg-canvas-deep text-ink-bright border-primary/50 focus:border-primary min-w-0 flex-1 rounded-md border px-2 py-0.5 text-sm outline-none"
                         // 注意：刻意不设 onBlur → 提交。若用户以别的方式
                         // 退出编辑（点外部、关闭对话框），
                         // 本地状态会前进但不会发送重命名。
@@ -149,7 +152,6 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                         // 否则两次提交会竞速（例如 Enter + blur 都触发，
                         // 第二个看到一个已重命名的标签而报 404）。
                         onBlur={() => cancelEdit()}
-                        className="bg-canvas-deep text-ink-bright border-primary/50 focus:border-primary min-w-0 flex-1 rounded-md border px-2 py-0.5 text-sm outline-none"
                       />
                     ) : (
                       /* 改名此前只有「双击」这一条路径 —— 双击是鼠标专属手势，
@@ -158,12 +160,12 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                        *  作为快捷方式，同时补上焦点与 Enter/F2 —— F2 是各平台通用
                        *  的「重命名」键，Enter 是 `role="button"` 的默认激活键。 */
                       <span
+                        onDoubleClick={() => beginEdit(tag.id, tag.name)}
                         role="button"
                         tabIndex={0}
-                        onDoubleClick={() => beginEdit(tag.id, tag.name)}
                         {...simpleKeyHandler(["Enter", "F2"], () => beginEdit(tag.id, tag.name))}
-                        title="双击（或 Enter / F2）重命名"
                         className="text-ink-bright hover:bg-subtle hover:text-ink-bright focus-visible:ring-primary/40 cursor-text truncate rounded-sm px-0.5 text-sm select-none focus-visible:ring-2 focus-visible:outline-none"
+                        title="双击（或 Enter / F2）重命名"
                       >
                         {tag.name}
                       </span>
@@ -181,14 +183,14 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                         wrap
                       >
                         <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={() => void c.deleteTag(tag.name, tag.count)}
-                          disabled={isEditing}
-                          className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
                           aria-label={`删除 ${tag.name}`}
+                          className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
+                          disabled={isEditing}
+                          onClick={() => void c.deleteTag(tag.name, tag.count)}
+                          size="icon-xs"
+                          variant="ghost"
                         >
-                          <Icon data-icon="inline-start" name="trash" className="size-3.5" />
+                          <Icon className="size-3.5" data-icon="inline-start" name="trash" />
                         </Button>
                       </Hint>
                     </div>

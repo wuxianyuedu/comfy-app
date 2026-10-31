@@ -54,13 +54,13 @@ export const Default: Story = {
           打开查看
         </StatusButton>
         <StatusButton
+          className="text-muted-foreground hover:text-ink"
           onClick={() => undefined}
           variant="outline"
-          className="text-muted-foreground hover:text-ink"
         >
           在浏览器打开
         </StatusButton>
-        <StatusButton onClick={() => undefined} variant="primary" disabled>
+        <StatusButton disabled onClick={() => undefined} variant="primary">
           启动 ComfyUI
         </StatusButton>
         <StatusButton onClick={() => undefined} variant="primary-solid">
@@ -85,16 +85,16 @@ export const Narrow: Story = {
           打开查看
         </StatusButton>
         <StatusButton
+          className="text-muted-foreground hover:text-ink"
           onClick={() => undefined}
           variant="outline"
-          className="text-muted-foreground hover:text-ink"
         >
           在浏览器打开
         </StatusButton>
-        <StatusButton onClick={() => undefined} variant="primary-solid" disabled>
+        <StatusButton disabled onClick={() => undefined} variant="primary-solid">
           启动中…
         </StatusButton>
-        <StatusButton onClick={() => undefined} variant="primary" disabled>
+        <StatusButton disabled onClick={() => undefined} variant="primary">
           关闭 ComfyUI
         </StatusButton>
       </div>
@@ -120,19 +120,19 @@ export const States: Story = {
           ] as const
         ).map(([state, text, action]) => (
           <div
-            key={state}
             className={`border-border bg-surface-2 w-160 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
+            key={state}
           >
             <StatusDot state={state} />
             <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>{text}</span>
             <div className={STATUS_ACTIONS_CLASS}>
-              <StatusButton onClick={() => undefined} variant="primary" disabled={state === "busy"}>
+              <StatusButton disabled={state === "busy"} onClick={() => undefined} variant="primary">
                 打开查看
               </StatusButton>
               <StatusButton
+                disabled={state === "busy"}
                 onClick={() => undefined}
                 variant="primary-solid"
-                disabled={state === "busy"}
               >
                 {action}
               </StatusButton>

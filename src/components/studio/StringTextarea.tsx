@@ -7,14 +7,16 @@ export function StringTextarea({
   mono,
   hasSize,
 }: {
-  value: string;
-  mono?: boolean;
   hasSize: boolean;
+  mono?: boolean;
+  value: string;
 }) {
   const ref = React.useRef<HTMLTextAreaElement>(null);
   React.useLayoutEffect(() => {
     const ta = ref.current;
-    if (!ta) return;
+    if (!ta) {
+      return;
+    }
     if (!hasSize) {
       // 内容自适应高度：textarea 自己决定高度，以内容封顶。
       // 不设 96px 上限：多行提示词必须完整
@@ -22,22 +24,20 @@ export function StringTextarea({
       // 先置 `auto`，好让浏览器能在取值变化后算出新的
       // scrollHeight。
       ta.style.height = "auto";
-      ta.style.height = ta.scrollHeight + "px";
+      ta.style.height = `${ta.scrollHeight}px`;
     }
     // hasSize：高度归 flex 链所有（父级的 `flex-1` +
     // `min-h-0`）；不动 textarea 的内联样式，让 CSS 胜出。
   }, [value, hasSize]);
   return (
     <Textarea
-      ref={ref}
-      readOnly
-      value={value}
-      rows={1}
+      className={`border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal text-2xs block w-full resize-none rounded border px-2 py-1.5 leading-snug focus-visible:ring-0${
+        mono ? " font-mono" : ""
+      }`}
       onFocus={(event) => event.currentTarget.blur()}
-      className={
-        "border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal text-2xs block w-full resize-none rounded border px-2 py-1.5 leading-snug focus-visible:ring-0" +
-        (mono ? " font-mono" : "")
-      }
+      readOnly
+      ref={ref}
+      rows={1}
       style={{
         /* `width: 100%` 占住行内 flexbox 给我们的每个像素。
          * `flex: 1 1 0` + `minHeight: 0` 在 hasSize 路径上接入行的 flex 链
@@ -58,6 +58,7 @@ export function StringTextarea({
         overflowY: "auto",
       }}
       title={value}
+      value={value}
     />
   );
 }

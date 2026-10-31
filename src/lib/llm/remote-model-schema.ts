@@ -69,16 +69,16 @@ export const remoteModelEntrySchema = z.object({
  *     显式清空由编辑侧的 `clearApiKey` 表达，它不在这里 —— 那是勾选框的意图，
  *     不是草稿字段能算出来的事。
  */
-export interface RemoteModelDraftEntry {
-  name: string;
-  baseUrl?: string | null;
+export type RemoteModelDraftEntry = {
   /** `undefined` = 这次不给意见（保留库里既有），不是「清空」。 */
   apiKey?: string;
-  /** `null` 只在编辑侧有意义：清掉用途这一档（草稿桥接出来的一定是具体值）。 */
-  kind?: RemoteModelKind | null;
+  baseUrl?: string | null;
   /** 仅编辑侧有意义：清掉这条的独立密钥。 */
   clearApiKey?: boolean;
-}
+  /** `null` 只在编辑侧有意义：清掉用途这一档（草稿桥接出来的一定是具体值）。 */
+  kind?: RemoteModelKind | null;
+  name: string;
+};
 
 export function remoteModelEntryFromDraft(draft: RemoteModelFieldValues): RemoteModelDraftEntry {
   const baseUrl = draft.baseUrl.trim();
@@ -105,12 +105,18 @@ export function validateRemoteModelFields(
     apiKey: typeof values.apiKey === "string" ? values.apiKey : "",
     kind: isKind(values.kind) ? values.kind : "chat",
   });
-  if (parsed.success) return {};
+  if (parsed.success) {
+    return {};
+  }
   const out: Partial<Record<keyof RemoteModelFieldValues, string>> = {};
   for (const issue of parsed.error.issues) {
     const key = issue.path[0];
-    if (typeof key !== "string") continue;
-    if (out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues]) continue;
+    if (typeof key !== "string") {
+      continue;
+    }
+    if (out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues]) {
+      continue;
+    }
     out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues] = issue.message;
   }
   return out;

@@ -53,10 +53,10 @@ export function logEntryKey(entry: Pick<LogEntry, "time" | "level" | "message">)
  * `arrivalKey → LogEntry` 是「同一秒内同级别同正文」的副本表，用于把后到来源
  * 并进已落板那一行。两张表都只持有**引用**，与 `current` 同生命周期。
  */
-export interface TimelineIndex {
-  seen: Map<string, LogEntry>;
+export type TimelineIndex = {
   sameArrival: Map<string, LogEntry>;
-}
+  seen: Map<string, LogEntry>;
+};
 
 /** 为一条已落板的时间线建索引（O(n)：只在形状变化时调用）。 */
 export function buildTimelineIndex(entries: ReadonlyArray<LogEntry>): TimelineIndex {
@@ -66,7 +66,9 @@ export function buildTimelineIndex(entries: ReadonlyArray<LogEntry>): TimelineIn
     seen.set(entryKey(entry), entry);
     /* 同毫秒同正文的副本行（`seq` 只差几个数）视为同一条日志的另一次读取。 */
     const near = arrivalKey(entry);
-    if (!sameArrival.has(near)) sameArrival.set(near, entry);
+    if (!sameArrival.has(near)) {
+      sameArrival.set(near, entry);
+    }
   }
   return { seen, sameArrival };
 }
@@ -93,7 +95,9 @@ export function trimTimelineIndex(
 ): void {
   for (const entry of droppedEntries) {
     const key = entryKey(entry);
-    if (index.seen.get(key) === entry) index.seen.delete(key);
+    if (index.seen.get(key) === entry) {
+      index.seen.delete(key);
+    }
     const near = arrivalKey(entry);
     if (index.sameArrival.get(near) === entry) {
       index.sameArrival.delete(near);
@@ -133,7 +137,9 @@ const timelineIndexCache = new WeakMap<Array<LogEntry>, TimelineIndex>();
 /** 取（或惰性建）某份时间线的索引 —— 热路径的唯一入口。 */
 export function indexOfTimeline(entries: Array<LogEntry>): TimelineIndex {
   const cached = timelineIndexCache.get(entries);
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
   const built = buildTimelineIndex(entries);
   timelineIndexCache.set(entries, built);
   return built;
@@ -169,10 +175,14 @@ export function rememberTimelineIndex(entries: Array<LogEntry>, index: TimelineI
  * 之前就已经是最终形态——这正是「索引可以跨轮复用」成立的前提。
  */
 export function mergeTimeline(current: Array<LogEntry>, fresh: Array<LogEntry>): Array<LogEntry> {
-  if (fresh.length === 0) return current;
+  if (fresh.length === 0) {
+    return current;
+  }
   const { logs, index } = mergeTimelineIndexed(current, fresh, indexOfTimeline(current));
   /* 合并产出的是新数组：把索引挂在它名下，下一轮就不必再建一次表。 */
-  if (logs !== current) rememberTimelineIndex(logs, index);
+  if (logs !== current) {
+    rememberTimelineIndex(logs, index);
+  }
   return logs;
 }
 
@@ -180,14 +190,18 @@ export function mergeTimelineIndexed(
   current: Array<LogEntry>,
   fresh: Array<LogEntry>,
   index: TimelineIndex,
-): { logs: Array<LogEntry>; index: TimelineIndex } {
-  if (fresh.length === 0) return { logs: current, index };
+): { index: TimelineIndex; logs: Array<LogEntry> } {
+  if (fresh.length === 0) {
+    return { logs: current, index };
+  }
   const { seen, sameArrival } = index;
   const added: Array<LogEntry> = [];
   let changed = false;
   for (const entry of fresh) {
     const key = entryKey(entry);
-    if (seen.has(key)) continue;
+    if (seen.has(key)) {
+      continue;
+    }
     /* 已经有一条「同一毫秒写下的同一段正文」在板上：并进它的 origin，
      * 不再单独落一份。 */
     const existing = sameArrival.get(arrivalKey(entry));
@@ -288,6 +302,8 @@ export function dropStaleEntries(
   entries: Array<LogEntry>,
   cutoffMs: number | null | undefined,
 ): Array<LogEntry> {
-  if (cutoffMs === null || cutoffMs === undefined) return entries;
+  if (cutoffMs === null || cutoffMs === undefined) {
+    return entries;
+  }
   return entries.filter((entry) => !isSessionScopedOrigin(entry.origin) || entry.time >= cutoffMs);
 }

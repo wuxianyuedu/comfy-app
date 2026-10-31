@@ -31,22 +31,12 @@ import {
   findCvaVariantAccess,
   literalArray,
 } from "./storybook-checks/cva-variant-source.mjs";
-import {
-  NO_STORY_REASON,
-  uiCoverage,
-} from "./storybook-checks/coverage-ledger.mjs";
-import {
-  missingRequiredArgs,
-  storySurfaces,
-} from "./storybook-checks/story-surface.mjs";
+import { NO_STORY_REASON, uiCoverage } from "./storybook-checks/coverage-ledger.mjs";
+import { missingRequiredArgs, storySurfaces } from "./storybook-checks/story-surface.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const COMPONENTS = path.join(ROOT, "src", "components");
-const COVERAGE_BASELINE = path.join(
-  ROOT,
-  "scripts",
-  ".storybook-coverage-baseline.json",
-);
+const COVERAGE_BASELINE = path.join(ROOT, "scripts", ".storybook-coverage-baseline.json");
 
 /**
  * @param {string} dir
@@ -57,7 +47,9 @@ function collectStories(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "node_modules") continue;
+      if (entry.name === "node_modules") {
+        continue;
+      }
       collectStories(full, out);
     } else if (entry.name.endsWith(".stories.tsx")) {
       out.push(full);
@@ -103,9 +95,7 @@ const rel = (p) => path.relative(ROOT, p).split(path.sep).join("/");
  */
 function coverageViolations() {
   if (!existsSync(COVERAGE_BASELINE)) {
-    return [
-      "缺少基线 " + rel(COVERAGE_BASELINE) + " —— 棘轮没有起点，先补它再提交",
-    ];
+    return ["缺少基线 " + rel(COVERAGE_BASELINE) + " —— 棘轮没有起点，先补它再提交"];
   }
   const baseline = JSON.parse(readFileSync(COVERAGE_BASELINE, "utf8"));
   const stat = uiCoverage({ componentsRoot: COMPONENTS });
@@ -144,14 +134,10 @@ function coverageViolations() {
   // 理由表必须与磁盘对得上：指向不存在的文件 = 过期条目；
   // 已经有 story 却还留着 = 它会静默放行「下一个人把它改回去」。
   for (const name of stat.unknownSkip) {
-    out.push(
-      "NO_STORY_REASON 里的 " + name + " 在 ui/ 下不存在（改名 / 搬走了？）",
-    );
+    out.push("NO_STORY_REASON 里的 " + name + " 在 ui/ 下不存在（改名 / 搬走了？）");
   }
   for (const name of stat.staleSkip) {
-    out.push(
-      "NO_STORY_REASON 里的 " + name + " 已经有 story 了 —— 删掉这条理由",
-    );
+    out.push("NO_STORY_REASON 里的 " + name + " 已经有 story 了 —— 删掉这条理由");
   }
   /* 理由表空了**不再是违规**，但仍要说清为什么。
    *
@@ -242,11 +228,10 @@ function surfaceViolations(changedFiles) {
   const changed = new Set(changedFiles);
   let argsChecked = 0;
   for (const story of stat.stories) {
-    if (!changed.has(story.file)) continue;
-    const missing = missingRequiredArgs(
-      path.join(ROOT, story.file),
-      new Set(story.args),
-    );
+    if (!changed.has(story.file)) {
+      continue;
+    }
+    const missing = missingRequiredArgs(path.join(ROOT, story.file), new Set(story.args));
     if (missing.length === 0) {
       argsChecked += 1;
       continue;
@@ -293,25 +278,18 @@ function surfaceViolations(changedFiles) {
  * @returns {string[]}
  */
 function changedStoryFiles() {
-  if (!process.argv.includes("--changed")) return [];
+  if (!process.argv.includes("--changed")) {
+    return [];
+  }
   const result = spawnSync(
     "git",
-    [
-      "-c",
-      "core.quotePath=false",
-      "diff",
-      "--cached",
-      "--name-only",
-      "--diff-filter=ACM",
-    ],
+    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
     { cwd: ROOT, encoding: "utf8" },
   );
   if (result.error !== undefined || result.status !== 0) {
     /* 拿不到清单时退回空：这一档是**增量**层，读不到就退成盘点 ——
        但要说出来，不能静默（静默的判据比没有判据更糟）。 */
-    process.stderr.write(
-      "[storybook] 读不到暂存区清单，本次只盘点、不判必填 props 那一档\n",
-    );
+    process.stderr.write("[storybook] 读不到暂存区清单，本次只盘点、不判必填 props 那一档\n");
     return [];
   }
   return String(result.stdout ?? "")
@@ -365,9 +343,13 @@ function main() {
 
     // ③④ 逐轴比对档位
     const component = componentSourceOf(story);
-    if (component === null) continue;
+    if (component === null) {
+      continue;
+    }
     const axes = [...cvaVariantAxes(parse(component)).keys()];
-    if (axes.length === 0) continue;
+    if (axes.length === 0) {
+      continue;
+    }
     checkedPairs += 1;
 
     const refs = controlOptionsByAxis(storySource);
@@ -382,9 +364,7 @@ function main() {
       }
       const listed = literalArray(arrayName, storySource);
       if (listed === null) {
-        violations.push(
-          `${rel(story)} 的 ${arrayName} 不是字面量数组，判据读不到它的成员`,
-        );
+        violations.push(`${rel(story)} 的 ${arrayName} 不是字面量数组，判据读不到它的成员`);
         continue;
       }
       /* 一个组件文件里可以有**多处** `cva()`，而它们的轴名可能同名
@@ -417,12 +397,8 @@ function main() {
             (described === undefined
               ? "（该文件里这一轴一处都没有）"
               : `（最接近的是 ${described.binding}` +
-                (described.miss.length > 0
-                  ? `：缺 ${described.miss.join(" / ")}`
-                  : "") +
-                (described.ex.length > 0
-                  ? `：多 ${described.ex.join(" / ")}`
-                  : "") +
+                (described.miss.length > 0 ? `：缺 ${described.miss.join(" / ")}` : "") +
+                (described.ex.length > 0 ? `：多 ${described.ex.join(" / ")}` : "") +
                 "）"),
         );
       }
@@ -452,7 +428,9 @@ function main() {
       `[storybook] ${violations.length} 处违规（枚举来源见规范 16 §16.2.3.2，` +
         "组件覆盖率见 docs/guide-storybook.md）\n\n",
     );
-    for (const v of violations) process.stderr.write(`  ✗ ${v}\n`);
+    for (const v of violations) {
+      process.stderr.write(`  ✗ ${v}\n`);
+    }
     process.stderr.write(
       "\n写法样板见 src/components/ui/button.stories.tsx 与 docs/guide-storybook.md。\n",
     );

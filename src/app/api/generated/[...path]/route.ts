@@ -58,7 +58,9 @@ export async function GET(
   { params }: { params: Promise<{ path?: Array<string> }> },
 ): Promise<Response> {
   const user = await requireRequestUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  if (!user) {
+    return new Response("Unauthorized", { status: 401 });
+  }
 
   const { path: segments } = await params;
   if (!segments || segments.length === 0) {
@@ -95,7 +97,9 @@ export async function GET(
   let size: number;
   try {
     const st = await fs.stat(abs);
-    if (!st.isFile()) return new Response("Not found", { status: 404 });
+    if (!st.isFile()) {
+      return new Response("Not found", { status: 404 });
+    }
     size = st.size;
   } catch {
     return new Response("Not found", { status: 404 });
@@ -131,10 +135,14 @@ export async function GET(
        * 的字节回，并把窗口一起收窄 —— `Content-Range` 承诺 6 个字节而 body 只有 2 个，
        * 比回 404 更坏：客户端会按承诺的长度去拼文件，拼出一个坏产物。
        * 一个字节都没读到则是「这一格现在没有那段东西」，按不存在处理。 */
-      if (bytesRead === 0 && buf.length > 0) return new Response("Not found", { status: 404 });
+      if (bytesRead === 0 && buf.length > 0) {
+        return new Response("Not found", { status: 404 });
+      }
       if (bytesRead !== buf.length) {
         buf = buf.subarray(0, bytesRead);
-        if (window) effectiveWindow = { start, endInclusive: start + bytesRead - 1 };
+        if (window) {
+          effectiveWindow = { start, endInclusive: start + bytesRead - 1 };
+        }
       }
     } finally {
       // 句柄必须关：Windows 上不关的那一份会把产物锁住，同名重生成当场失败

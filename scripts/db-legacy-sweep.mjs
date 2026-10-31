@@ -36,10 +36,14 @@ const EPOCH_MS = /^\d{1,17}$/;
  * @returns {string | null}
  */
 export function epochMsToIso(value) {
-  if (typeof value !== "string" || !EPOCH_MS.test(value)) return null;
+  if (typeof value !== "string" || !EPOCH_MS.test(value)) {
+    return null;
+  }
   const ms = Number(value);
   const date = new Date(ms);
-  if (Number.isNaN(date.getTime())) return null;
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
   return date.toISOString();
 }
 
@@ -72,9 +76,7 @@ export function sweepLegacyTimestamps(
   }
   try {
     const hasProject = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='project'",
-      )
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='project'")
       .get();
     if (!hasProject) {
       forward("[db:sweep] 还没有 project 表，跳过\n");
@@ -98,7 +100,9 @@ export function sweepLegacyTimestamps(
       const id = String(row.id ?? "");
       for (const column of pick) {
         const raw = row[column];
-        if (typeof raw !== "string" || raw === "") continue;
+        if (typeof raw !== "string" || raw === "") {
+          continue;
+        }
         const iso = epochMsToIso(raw);
         if (iso) {
           updates.push({ id, column, iso });
@@ -116,10 +120,7 @@ export function sweepLegacyTimestamps(
     } else {
       /** @type {Map<string, ReturnType<DatabaseSync["prepare"]>>} */
       const stmt = new Map(
-        pick.map((column) => [
-          column,
-          db.prepare(`UPDATE project SET ${column} = ? WHERE id = ?`),
-        ]),
+        pick.map((column) => [column, db.prepare(`UPDATE project SET ${column} = ? WHERE id = ?`)]),
       );
       db.exec("BEGIN");
       try {
@@ -133,15 +134,11 @@ export function sweepLegacyTimestamps(
       }
       summary.rows = new Set(updates.map((u) => u.id)).size;
       summary.columns = updates.length;
-      forward(
-        `[db:sweep] ✓ 归一 ${summary.rows} 行的裸毫秒时间戳（共 ${summary.columns} 列）\n`,
-      );
+      forward(`[db:sweep] ✓ 归一 ${summary.rows} 行的裸毫秒时间戳（共 ${summary.columns} 列）\n`);
     }
 
     for (const line of summary.skipped) {
-      forward(
-        `[db:sweep] ⚠ 时间列里有解析不了的值，原样保留待人工确认：${line}\n`,
-      );
+      forward(`[db:sweep] ⚠ 时间列里有解析不了的值，原样保留待人工确认：${line}\n`);
     }
     return summary;
   } finally {
@@ -164,13 +161,9 @@ export function sweepLegacyTimestamps(
 {
   const path = await import("node:path");
   const invokedDirectly =
-    process.argv[1] &&
-    path.resolve(process.argv[1]) === path.resolve(import.meta.filename);
+    process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename);
   if (invokedDirectly) {
-    const root = path.resolve(
-      import.meta.dirname,
-      "..",
-    );
+    const root = path.resolve(import.meta.dirname, "..");
     const url = process.env.DATABASE_URL ?? "file:./db.sqlite";
     const raw = url.startsWith("file:") ? url.slice("file:".length) : url;
     sweepLegacyTimestamps(path.resolve(root, raw));

@@ -99,8 +99,9 @@ export function LogFilterBar({
           装不下时如实换行、窄到极致时按钮保持 `min-w-fit` 不被切字
           （ISSUE #262 要的「标签不出现省略号」仍由**按钮自己**的 `min-w-fit` 保）。 */}
       <ToggleGroup
+        aria-label="日志级别筛选"
+        className="ml-3 min-w-fit flex-1 basis-0 gap-1"
         multiple={false}
-        value={[filter]}
         onValueChange={(vals) => {
           const next = vals[0];
           if (
@@ -115,13 +116,10 @@ export function LogFilterBar({
             setFilter(next);
           }
         }}
-        aria-label="日志级别筛选"
-        className="ml-3 min-w-fit flex-1 basis-0 gap-1"
+        value={[filter]}
       >
         {FILTER_LABELS.map((option) => (
           <ToggleGroupItem
-            key={option.value}
-            value={option.value}
             /* `min-w-fit` 取的是**内容固有宽度**：`min-w-0` 会让容器压到能
              * 忽略固有宽度、于是「警告」被切成 `警…`（ISSUE #262）。
              * 它是这一组的**内容下限**，上面容器的 `min-w-fit` 与它同源 ——
@@ -137,7 +135,9 @@ export function LogFilterBar({
             className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-xs leading-none transition-colors ${LEVEL_LABEL_STYLES[option.value]} ${
               option.value === filter ? FILTER_SELECTED_ITEM_STYLES : ""
             }`}
+            key={option.value}
             title={`当前来源的${option.label}：${originCounts[option.value]} 条（该来源共 ${originCounts.all} 条 · 警告 ${originCounts.warn} · 错误 ${originCounts.error}）`}
+            value={option.value}
           >
             <span className="whitespace-nowrap">{option.label}</span>
             <CountChip value={originCounts[option.value]} />
@@ -154,20 +154,20 @@ export function LogFilterBar({
       {/* 搜索框可收缩（`shrink` + `min-w`）：行头窄到放不下时它先让位，
           而不是去挤筛选器的标签。`w-56` 是它舒展时的宽度。 */}
       <div className="relative flex w-56 min-w-24 shrink items-center">
-        <Search size={14} className="text-ink-fainter pointer-events-none absolute left-2.5" />
+        <Search className="text-ink-fainter pointer-events-none absolute left-2.5" size={14} />
         <Input
-          type="text"
-          value={search}
+          className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus-visible:border-primary-500/40 focus-visible:ring-primary/30 h-8 rounded-lg pr-7 pl-8 text-sm"
           onChange={textHandler(setSearch)}
           placeholder="搜索日志（支持命中高亮）..."
-          className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus-visible:border-primary-500/40 focus-visible:ring-primary/30 h-8 rounded-lg pr-7 pl-8 text-sm"
+          type="text"
+          value={search}
         />
         {search && (
           <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => setSearch("")}
             className="text-ink-muted hover:text-ink absolute right-2"
+            onClick={() => setSearch("")}
+            size="icon-xs"
+            variant="ghost"
           >
             ×
           </Button>

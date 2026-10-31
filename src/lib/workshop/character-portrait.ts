@@ -20,12 +20,12 @@ export const PORTRAIT_SOURCE_LABELS: Record<PortraitSource, string> = {
 };
 
 /** 定妆照生成过程的一条日志（进度 / 结果 / 错误），供界面折叠展示。 */
-export interface PortraitLogEntry {
-  /** 生成时间戳（ms），界面按它显示时刻 */
-  ts: number;
+export type PortraitLogEntry = {
   level: "info" | "success" | "error";
   text: string;
-}
+  /** 生成时间戳（ms），界面按它显示时刻 */
+  ts: number;
+};
 
 export function makePortraitLog(level: PortraitLogEntry["level"], text: string): PortraitLogEntry {
   return { ts: Date.now(), level, text };
@@ -47,10 +47,14 @@ function isPortraitSource(value: unknown): value is PortraitSource {
 /** 单条候选的归一化：形状不合法（没有可用 url）时返回 null，
  *  使一张坏数据不会炸掉整块界面。旧草稿缺字段按导入来源兜底。 */
 export function normalizePortrait(raw: unknown): CharacterPortrait | null {
-  if (typeof raw !== "object" || raw === null) return null;
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
   const candidate = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   const url = candidate.url;
-  if (typeof url !== "string" || !url) return null;
+  if (typeof url !== "string" || !url) {
+    return null;
+  }
   const createdAt = candidate.createdAt;
   return {
     url,
@@ -66,11 +70,15 @@ export function normalizePortrait(raw: unknown): CharacterPortrait | null {
 /** 角色当前的候选列表（按时间倒序，最新在前；脏数据被剔除）。 */
 export function portraitCandidates(character: Character): Array<CharacterPortrait> {
   const raw = character.portraits;
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const out: Array<CharacterPortrait> = [];
   for (const entry of raw) {
     const candidate = normalizePortrait(entry);
-    if (candidate) out.push(candidate);
+    if (candidate) {
+      out.push(candidate);
+    }
   }
   return out.sort((left, right) => right.createdAt - left.createdAt);
 }
@@ -103,7 +111,10 @@ export function withoutPortraitCandidate(character: Character, url: string): Cha
   const portraits = portraitCandidates(character).filter((item) => item.url !== url);
   const next = { ...character, portraits };
   const portraitUrl = character.portraitUrl === url ? portraits[0]?.url : character.portraitUrl;
-  if (portraitUrl) next.portraitUrl = portraitUrl;
-  else delete next.portraitUrl;
+  if (portraitUrl) {
+    next.portraitUrl = portraitUrl;
+  } else {
+    delete next.portraitUrl;
+  }
   return next;
 }

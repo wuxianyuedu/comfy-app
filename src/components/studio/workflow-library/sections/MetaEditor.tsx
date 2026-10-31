@@ -22,9 +22,7 @@ import { enterCommit } from "~/components/ui/use-enter-commit";
 
 export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Set<string>>(
-    () => new Set(meta.modelTags),
-  );
+  const [draft, setDraft] = useState<Set<string>>(() => new Set(meta.modelTags));
   const [newName, setNewName] = useState("");
 
   // 只在关 → 开的跃迁上重置草稿，好让编辑中的重渲染
@@ -38,10 +36,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
     setPrevOpen(false);
   }
 
-  const knownNames = useMemo(
-    () => meta.allModelTags.map((tag) => tag.name),
-    [meta.allModelTags],
-  );
+  const knownNames = useMemo(() => meta.allModelTags.map((tag) => tag.name), [meta.allModelTags]);
   // 草稿里可能有尚未入库的新名字 —— 一并展示，避免已勾选项消失。
   const options = useMemo(() => {
     const set = new Set([...knownNames, ...draft]);
@@ -51,8 +46,11 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
   const toggle = (name: string) => {
     setDraft((prev) => {
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
       return next;
     });
   };
@@ -62,32 +60,24 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
     await meta.patchModelTags(Array.from(draft));
   };
 
-  const label =
-    meta.modelTags.length > 0 ? meta.modelTags.join("、") : "选择模型";
+  const label = meta.modelTags.length > 0 ? meta.modelTags.join("、") : "选择模型";
 
   return (
     <>
       <Hint label={`${label}（点击管理模型标签绑定）`}>
         <Button
-          variant="outline"
-          size="xs"
-          onClick={() => setOpen((value) => !value)}
           className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink text-2xs inline-flex h-auto max-w-65 gap-1.5 rounded-lg px-2.5 py-1.5"
+          onClick={() => setOpen((value) => !value)}
+          size="xs"
+          variant="outline"
         >
           <span className="truncate">{label}</span>
-          <span
-            className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-          >
-            ▾
-          </span>
+          <span className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
         </Button>
       </Hint>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent
-          showCloseButton={false}
-          className="bg-card border-border w-80 gap-0 p-3"
-        >
+      <Dialog onOpenChange={setOpen} open={open}>
+        <DialogContent className="bg-card border-border w-80 gap-0 p-3" showCloseButton={false}>
           <DialogHeader className="mb-2 gap-0">
             <DialogTitle className="text-ink-bright text-xs font-medium">
               绑定模型标签（{draft.size}）
@@ -106,15 +96,15 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
               const selected = draft.has(name);
               return (
                 <Button
-                  key={name}
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => toggle(name)}
                   className={`flex h-auto items-center gap-2 rounded-md px-2 py-1.5 text-left ${
                     selected
                       ? "bg-primary/15 text-primary-strong hover:bg-primary/20"
                       : "text-ink-strong hover:bg-subtle font-normal"
                   }`}
+                  key={name}
+                  onClick={() => toggle(name)}
+                  size="xs"
+                  variant="ghost"
                 >
                   <span
                     className={`flex size-3.5 shrink-0 items-center justify-center rounded border ${
@@ -132,8 +122,8 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
           </div>
           <div className="mb-2 flex gap-1.5">
             <input
-              value={newName}
               onChange={textHandler(setNewName)}
+              value={newName}
               {...enterCommit({
                 onCommit: () => {
                   const name = newName.trim();
@@ -143,24 +133,24 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                   }
                 },
               })}
-              placeholder="新增标签，如 z-image"
               className="border-border bg-subtle text-ink-bright placeholder:text-ink-muted focus:border-primary/40 h-7 min-w-0 flex-1 rounded-md border px-2 text-xs focus:outline-none"
+              placeholder="新增标签，如 z-image"
             />
           </div>
           <DialogFooter className="mx-0 mb-0 gap-2 rounded-none border-0 bg-transparent p-0 sm:flex-row">
             <Button
+              className="bg-subtle text-ink-strong hover:bg-surface-2 h-auto flex-1 rounded-md px-3 py-1.5 text-xs transition-colors"
+              onClick={() => setOpen(false)}
               type="button"
               variant="secondary"
-              onClick={() => setOpen(false)}
-              className="bg-subtle text-ink-strong hover:bg-surface-2 h-auto flex-1 rounded-md px-3 py-1.5 text-xs transition-colors"
             >
               取消
             </Button>
             <Button
+              className="h-auto flex-1 rounded-md px-3 py-1.5 text-xs font-semibold"
+              onClick={() => void save()}
               type="button"
               variant="primary-solid"
-              onClick={() => void save()}
-              className="h-auto flex-1 rounded-md px-3 py-1.5 text-xs font-semibold"
             >
               保存
             </Button>

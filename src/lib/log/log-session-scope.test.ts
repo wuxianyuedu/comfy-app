@@ -50,7 +50,7 @@ describe("fileMtimeMs", () => {
 
 describe("clampLogTime", () => {
   it("钳进 [0, now]：读不到时间的边界行不污染时间线", () => {
-    const now = BASE + 1_000;
+    const now = BASE + 1000;
     expect(clampLogTime(BASE, now)).toBe(BASE);
     expect(clampLogTime(now + 60_000, now)).toBe(now);
     expect(clampLogTime(-1, now)).toBe(0);

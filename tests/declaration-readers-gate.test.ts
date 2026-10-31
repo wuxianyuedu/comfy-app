@@ -70,13 +70,13 @@ function carriers(n = 8): Array<Record<string, unknown>> {
 }
 
 type Fixture = {
-  ledger?: unknown;
-  hook?: string;
+  files?: Record<string, string>;
   /** 固定清单那份数据模块的内容（默认给一条 tests/fixed.test.ts）。 */
   fixedList?: string;
+  hook?: string;
+  ledger?: unknown;
   /** `package.json` 的内容；默认给一份带 `check:claims` 的（供 npm-script 那一格）。 */
   pkg?: string;
-  files?: Record<string, string>;
 };
 
 const DEFAULT_HOOK =
@@ -126,7 +126,7 @@ function gate(fx: Fixture): { ok: boolean; output: string } {
       }),
     };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }

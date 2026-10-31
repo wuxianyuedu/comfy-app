@@ -5,19 +5,16 @@
 // （startLocalGenerate）注进 useImageRedraw 的逻辑层——视图组件
 // （ImageRedrawPanel）不直接触碰网络出口（S2 硬闸的面）。
 import { vanillaApi } from "~/trpc/vanilla";
-import {
-  prepareLocalInputImage,
-  startLocalGenerate,
-} from "~/lib/workshop/generation-client";
+import { prepareLocalInputImage, startLocalGenerate } from "~/lib/workshop/generation-client";
 import type { ActionReport } from "~/lib/async-action";
 
 import { useImageRedraw, type ImageRedrawController } from "./use-image-redraw";
 
-export interface ImageRedrawClientInput {
-  prompt: string;
-  projectId?: string | null;
+export type ImageRedrawClientInput = {
   parentTaskId: string;
-}
+  projectId?: string | null;
+  prompt: string;
+};
 
 /** 视图层唯一入口：给提示词 / 归属 / 反馈通道，拿回完整控制器。 */
 export function useImageRedrawClient(

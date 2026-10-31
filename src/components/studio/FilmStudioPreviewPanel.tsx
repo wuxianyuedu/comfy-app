@@ -9,11 +9,11 @@ import type { FilmStudioController } from "./hooks/use-film-studio";
 import { STAGE_LABEL } from "./film-studio-config";
 import { sizeSpecSummary } from "~/lib/media/size-presets";
 
-interface FilmStudioPreviewPanelProps {
+type FilmStudioPreviewPanelProps = {
   c: FilmStudioController;
   isPlaying: boolean;
   onTogglePlay: () => void;
-}
+};
 
 export function FilmStudioPreviewPanel({
   c,
@@ -30,28 +30,28 @@ export function FilmStudioPreviewPanel({
       {/* Play overlay */}
       <Hint label={isPlaying ? "暂停" : "播放"}>
         <Button
-          variant="ghost"
-          onClick={onTogglePlay}
           className="border-border-strong flex size-16 items-center justify-center rounded-full border bg-black/45 text-white shadow-lg shadow-black/6 transition-all hover:scale-105 hover:bg-black/55 active:scale-95 dark:shadow-black/30"
+          onClick={onTogglePlay}
+          variant="ghost"
         >
           {isPlaying ? (
             <svg
               data-icon="inline-start"
-              width="28"
+              fill="currentColor"
               height="28"
               viewBox="0 0 24 24"
-              fill="currentColor"
+              width="28"
             >
-              <rect x="6" y="4" width="4" height="16" rx="1" />
-              <rect x="14" y="4" width="4" height="16" rx="1" />
+              <rect height="16" rx="1" width="4" x="6" y="4" />
+              <rect height="16" rx="1" width="4" x="14" y="4" />
             </svg>
           ) : (
             <svg
               data-icon="inline-start"
-              width="28"
+              fill="currentColor"
               height="28"
               viewBox="0 0 24 24"
-              fill="currentColor"
+              width="28"
             >
               <path d="M8 5v14l11-7z" />
             </svg>
@@ -63,15 +63,13 @@ export function FilmStudioPreviewPanel({
       {c.film && c.running && (
         <div className="absolute right-0 bottom-0 left-0 bg-black/75 px-4 py-2.5">
           <ProgressBar
-            value={c.film.progress}
-            label={
-              <span className="text-ink-bright font-medium">
-                {STAGE_LABEL[c.film.status]}
-              </span>
-            }
             className="mb-1.5 text-xs"
-            trackClassName="bg-surface-2 h-1.5"
             fillClassName="u-gradient-brand"
+            label={
+              <span className="text-ink-bright font-medium">{STAGE_LABEL[c.film.status]}</span>
+            }
+            trackClassName="bg-surface-2 h-1.5"
+            value={c.film.progress}
           />
         </div>
       )}
@@ -79,10 +77,10 @@ export function FilmStudioPreviewPanel({
       {/* 成片播放器（完成后） */}
       {c.film?.status === "DONE" && c.film.finalVideo && (
         <MediaThumbnail
-          src={c.film.finalVideo}
-          controls
           autoPlay
           className="absolute inset-0 h-full w-full bg-black object-contain"
+          controls
+          src={c.film.finalVideo}
         />
       )}
     </div>

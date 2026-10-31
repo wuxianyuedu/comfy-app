@@ -12,21 +12,22 @@ import { Handle, Position, useNodeId } from "@xyflow/react";
  * 边框上，一半露在节点外，与工作流画布完全一致。 */
 const PORT_STROKE = "#4D4D59";
 const PORT_IMG = new Set(["IMAGE", "MASK"]);
-const PORT_VID = new Set([
-  "VIDEO",
-  "VHS_FILENAMES",
-  "VHS_VIDEOINFO",
-  "VHS_AUDIO",
-  "AUDIO",
-]);
+const PORT_VID = new Set(["VIDEO", "VHS_FILENAMES", "VHS_VIDEOINFO", "VHS_AUDIO", "AUDIO"]);
 
 function portColorFor(type?: string): string {
   const t = upperToken(type);
-  if (PORT_IMG.has(t)) return "#7C5CFC";
-  if (PORT_VID.has(t)) return "#FF5CA8";
-  if (t === "STRING" || t === "INT" || t === "FLOAT" || t === "NUMBER")
+  if (PORT_IMG.has(t)) {
+    return "#7C5CFC";
+  }
+  if (PORT_VID.has(t)) {
+    return "#FF5CA8";
+  }
+  if (t === "STRING" || t === "INT" || t === "FLOAT" || t === "NUMBER") {
     return "#9A9AAD";
-  if (t === "BOOLEAN" || t === "BOOL") return "#67E89D";
+  }
+  if (t === "BOOLEAN" || t === "BOOL") {
+    return "#67E89D";
+  }
   return "#5BC6FF";
 }
 
@@ -64,14 +65,15 @@ const KNOWN_CHIP_TYPES = new Set([
   "*",
 ]);
 
-export function normalizeTypeChip(
-  raw: string | undefined,
-  fallback = "INT",
-): string {
+export function normalizeTypeChip(raw: string | undefined, fallback = "INT"): string {
   const rawTrimmed = (raw ?? "").trim();
   const t = rawTrimmed.toUpperCase();
-  if (t.length === 0) return fallback;
-  if (KNOWN_CHIP_TYPES.has(t)) return t;
+  if (t.length === 0) {
+    return fallback;
+  }
+  if (KNOWN_CHIP_TYPES.has(t)) {
+    return t;
+  }
   /* 未在白名单里的自定义类型：只有明显非类型值的脏数据（如 control_after_generate
    *  漏进来的 "fixed" / "randomize" 小写枚举）才回退，其余原样展示。 */
   return rawTrimmed === t ? fallback : t;
@@ -79,8 +81,8 @@ export function normalizeTypeChip(
 
 export function portChipStyle(type?: string): {
   background: string;
-  color: string;
   border?: string;
+  color: string;
 } {
   const t = normalizeTypeChip(type);
   /* 底色是**表面**（随主题），只有文字是类型色（类型色例外，见 globals.css
@@ -88,18 +90,20 @@ export function portChipStyle(type?: string): {
      chip 是「深底 + 深类型字」，叠在浅色面板上整块读不出来（ISSUE #609
      「浅色下预览 IO 这些看不清」——红框圈的就是它）。两态化后浅色拿极浅
      紫 / 粉 / 中性底，深色观感不变。 */
-  if (PORT_IMG.has(t))
+  if (PORT_IMG.has(t)) {
     return {
       background: "var(--color-chip-type-image-bg)",
       color: "#7C5CFC",
       border: "1px solid color-mix(in srgb, #7C5CFC 40%, transparent)",
     };
-  if (PORT_VID.has(t))
+  }
+  if (PORT_VID.has(t)) {
     return {
       background: "var(--color-chip-type-video-bg)",
       color: "#FF5CA8",
       border: "1px solid color-mix(in srgb, #FF5CA8 40%, transparent)",
     };
+  }
   return { background: "var(--color-border-strong)", color: "#9A9AAD" };
 }
 
@@ -112,13 +116,13 @@ export function PortHandle({
   type,
   style: extraStyle,
 }: {
-  id: string;
   dir: "in" | "out";
-  type?: string;
+  id: string;
   /** 覆盖 / 并入默认定位（如定高行用 { top: 14 }）。
    *  Ardot v2 锚点默认值仍然生效，除非
    *  在这里覆盖。 */
   style?: React.CSSProperties;
+  type?: string;
 }) {
   /* React Flow 的 <Handle> 只能在自定义 Node 内渲染——它内部靠 useNodeId
    * 取宿主节点 id，拿不到就抛 error#010（"No node id found"）。IO 预览
@@ -156,16 +160,16 @@ export function PortHandle({
    *  圆点锁在标签行中线，按整行 50% 量就会把线画到圆点下方十几像素处，表现为
    *  「线没有连接到端点上」）。 */
   if (!nodeId) {
-    return <span aria-hidden style={dotStyle} data-port-dot={id} />;
+    return <span aria-hidden data-port-dot={id} style={dotStyle} />;
   }
 
   return (
     <Handle
-      type={dir === "in" ? "target" : "source"}
-      position={dir === "in" ? Position.Left : Position.Right}
-      id={id}
-      style={dotStyle}
       data-port-dot={id}
+      id={id}
+      position={dir === "in" ? Position.Left : Position.Right}
+      style={dotStyle}
+      type={dir === "in" ? "target" : "source"}
     />
   );
 }

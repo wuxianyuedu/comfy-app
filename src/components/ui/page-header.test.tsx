@@ -29,7 +29,7 @@ describe("PageHeader（屏级页头）", () => {
   });
 
   it("传了 description 时它走已定档的那一句（text-sm + text-ink-muted）", () => {
-    render(<PageHeader title="历史记录" description="所有生成任务与执行日志，按时间倒序排列。" />);
+    render(<PageHeader description="所有生成任务与执行日志，按时间倒序排列。" title="历史记录" />);
     const line = screen.getByText("所有生成任务与执行日志，按时间倒序排列。");
     expect(line.tagName).toBe("P");
     expect(line.className).toContain("text-sm");
@@ -38,7 +38,7 @@ describe("PageHeader（屏级页头）", () => {
 
   it("动作组整组不收缩；同时它缺席时页头不渲染空壳容器", () => {
     const { container } = render(
-      <PageHeader title="队列" actions={<button type="button">刷新</button>} />,
+      <PageHeader actions={<button type="button">刷新</button>} title="队列" />,
     );
     const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
     const group = /* SAFETY: 类型断言已复核 */ header?.lastElementChild as HTMLElement;
@@ -86,9 +86,9 @@ describe("PageHeader（屏级页头）", () => {
   it("没有可见标题时说明钮并进右侧动作组（不孤零零贴在页头最左边）", () => {
     const { container } = render(
       <PageHeader
-        srTitle="队列"
-        help="每 2 秒读一次本机后端。"
         actions={<button type="button">刷新</button>}
+        help="每 2 秒读一次本机后端。"
+        srTitle="队列"
       />,
     );
     const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
@@ -100,7 +100,7 @@ describe("PageHeader（屏级页头）", () => {
   });
 
   it("有可见标题时说明钮跟着标题走（读者在「这屏叫什么」处顺路看见它）", () => {
-    const { container } = render(<PageHeader title="队列" help="每 2 秒读一次本机后端。" />);
+    const { container } = render(<PageHeader help="每 2 秒读一次本机后端。" title="队列" />);
     const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
     /* 只有一个子元素（标题那一列），说明钮在它里面。 */
     expect(header?.children).toHaveLength(1);
@@ -114,7 +114,7 @@ describe("PageHeader（屏级页头）", () => {
   });
 
   it("`help` 把那句解释收成悬浮按钮，不占标题区那一行", () => {
-    const { container } = render(<PageHeader srTitle="队列" help="每 2 秒读一次本机后端。" />);
+    const { container } = render(<PageHeader help="每 2 秒读一次本机后端。" srTitle="队列" />);
     /* 正文里没有常驻的那一行 —— 这正是 ISSUE #1693 要的「说明的直接显示也去掉」。 */
     expect(container.querySelectorAll("p")).toHaveLength(0);
     const trigger = screen.getByRole("button", { name: "说明" });
@@ -124,9 +124,9 @@ describe("PageHeader（屏级页头）", () => {
   it("`description` 常驻优先：同时传时不渲染悬浮按钮（同一句话不说两遍）", () => {
     render(
       <PageHeader
-        title="历史"
         description="所有生成任务与执行日志，按时间倒序排列。"
         help="所有生成任务与执行日志，按时间倒序排列。"
+        title="历史"
       />,
     );
     expect(screen.queryByRole("button", { name: "说明" })).toBeNull();

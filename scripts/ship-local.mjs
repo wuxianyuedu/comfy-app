@@ -24,7 +24,7 @@
  * @typedef {(cmd: string, args: string[], opts?: {env?: Record<string,string>}) => {status: number, stdout: string, stderr?: string, error?: string | null}} PlatformRun
  */
 
-import { CODE, looksNewlineMangled, readProof } from "./ship-core.mjs";
+import { CODE, classifyPushFailure, looksNewlineMangled, readProof } from "./ship-core.mjs";
 import { safeRead, short } from "./ship-exec.mjs";
 /* 「这一笔是刻意的空提交」不靠猜索引 —— 由被触发的两条 D0 判据认这个说出来的旗标
  * （唯一生产者就是下面这一格，口径在 `intentional-empty-commit.mjs`，ISSUE #2354）。 */
@@ -49,7 +49,9 @@ export function parsePorcelain(stdout) {
   /** @type {string[]} */
   const untracked = [];
   for (const raw of String(stdout).split("\n")) {
-    if (!raw) continue;
+    if (!raw) {
+      continue;
+    }
     const x = raw[0]; // 索引状态
     const y = raw[1]; // 工作树状态
     if (x === "?") {
@@ -57,9 +59,13 @@ export function parsePorcelain(stdout) {
       continue;
     }
     // X 是索引里的真实状态（非空格、非未跟踪、非忽略）⇒ 已暂存。
-    if (x !== " " && x !== "!") staged.push(raw.slice(3));
+    if (x !== " " && x !== "!") {
+      staged.push(raw.slice(3));
+    }
     // Y 是工作树里的真实改动（非空格、非忽略）⇒ 未暂存（已修改）。
-    if (y !== " " && y !== "!") unstagedModified.push(raw.slice(3));
+    if (y !== " " && y !== "!") {
+      unstagedModified.push(raw.slice(3));
+    }
   }
   return { staged, unstagedModified, untracked };
 }
@@ -80,22 +86,17 @@ export function parsePorcelain(stdout) {
  * @returns {{stop: boolean, codes: number[]}}
  */
 export function runCommitStage(ctx) {
-  const { opt, root, staged, unstagedModified, untracked, log, run, relay } =
-    ctx;
+  const { opt, root, staged, unstagedModified, untracked, log, run, relay } = ctx;
   const msg = opt.messageFile ? safeRead(root, opt.messageFile) : opt.message;
   if (staged.length + unstagedModified.length + untracked.length > 0) {
     if (!msg) {
-      log(
-        "[ship] 有改动但没给 --message ⇒ 停。提交信息是判断（症状/读数/因果），脚本不代写。",
-      );
+      log("[ship] 有改动但没给 --message ⇒ 停。提交信息是判断（症状/读数/因果），脚本不代写。");
       return { stop: true, codes: [CODE.RED] };
     }
     /* 排在 `git add` **之前**：既然这条信息不能原样进历史，就不要先把暂存面改了
      * 再退回去 —— 那一手会让「这次提交包含什么」被一次不会发生的提交动过。 */
     if (looksNewlineMangled(msg)) {
-      log(
-        "[ship] `--message` 里没有真换行、却带着字面量 \\n ⇒ 这条信息已被 `pnpm run` 压成一行。",
-      );
+      log("[ship] `--message` 里没有真换行、却带着字面量 \\n ⇒ 这条信息已被 `pnpm run` 压成一行。");
       log(
         "[ship] 按原样提交只会得到一整行 subject，而 PR 标题取的就是它（实测那样一份被平台拒）。",
       );
@@ -105,7 +106,9 @@ export function runCommitStage(ctx) {
       );
       return { stop: true, codes: [CODE.RED] };
     }
-    for (const a of opt.adds) run("git", ["add", "--", a]);
+    for (const a of opt.adds) {
+      run("git", ["add", "--", a]);
+    }
     /* 提交信息走 argv 直传，**不落文件**：`spawnSync` 这一跳不经 shell，git 拿到的
      * 就是数组里那一串字面量（引号、多行都不再被解释），没有 `-F` 那一套「写个临时
      * 文件、提交完还得删干净」的泄漏面（AGENTS 硬规则 12 把 `COMMIT_EDITMSG` 落进
@@ -156,9 +159,8 @@ export function runPushStage(ctx) {
   const ps = run("git", ["push", "-u", up.remote, branch]);
   relay(ps);
   if (ps.status !== 0) {
-    log(
-      `[ship] push 失败（exit ${ps.status}）⇒ 多半是 pre-push 的合并前复算没放行。`,
-    );
+    /* 分型按 push 原话（ISSUE #2825）：远端 128 与钩子拒绝的修法完全不同，不再固定猜 premerge。 */
+    log(`[ship] push 失败（exit ${ps.status}）⇒ ${classifyPushFailure(ps.stdout, ps.stderr).note}`);
     return { stop: true, codes: [CODE.RED] };
   }
   const codes = [];
@@ -170,14 +172,10 @@ export function runPushStage(ctx) {
       `[ship] ✓ 合并前证明：head ${short(proof.headSha)} · 上游 ${short(proof.upstreamSha)} · ${proof.verifiedAt || "?"}`,
     );
     if (Array.isArray(proof.baselineRed) && proof.baselineRed.length > 0) {
-      log(
-        `[ship]   其中 ${proof.baselineRed.length} 条是主干自带的红（已放行，见 §13.6.2）`,
-      );
+      log(`[ship]   其中 ${proof.baselineRed.length} 条是主干自带的红（已放行，见 §13.6.2）`);
     }
   } else {
-    log(
-      "[ship] 没读到合并前证明（HEAD 与上游都没动，或钩子未接上）⇒ 这一格**没有**结论。",
-    );
+    log("[ship] 没读到合并前证明（HEAD 与上游都没动，或钩子未接上）⇒ 这一格**没有**结论。");
     codes.push(CODE.NOT_RUN);
   }
   codes.push(CODE.GREEN);
@@ -219,9 +217,7 @@ export function runRerunCiStage(ctx) {
   const env = { [EMPTY_COMMIT_ENV]: "1" };
   if (opt.dryRun) {
     log("[ship] [dry-run] 将执行：");
-    log(
-      `[ship]   ${EMPTY_COMMIT_ENV}=1 git commit --allow-empty --message="${msg}"`,
-    );
+    log(`[ship]   ${EMPTY_COMMIT_ENV}=1 git commit --allow-empty --message="${msg}"`);
     log(`[ship]   git push -u ${up.remote} ${branch}`);
     log(
       `[ship]   （带这个旗标是因为 D0 里有两步读当场暂存区：空索引本来是「取不到判决面」，` +
@@ -229,11 +225,7 @@ export function runRerunCiStage(ctx) {
     );
     return CODE.GREEN;
   }
-  const cm = run(
-    "git",
-    ["commit", "--allow-empty", `--message=${msg}`],
-    { env },
-  );
+  const cm = run("git", ["commit", "--allow-empty", `--message=${msg}`], { env });
   relay(cm);
   if (cm.status !== 0) {
     log(`[ship] 空提交失败（exit ${cm.status}）。`);
@@ -242,9 +234,8 @@ export function runRerunCiStage(ctx) {
   const ps = run("git", ["push", "-u", up.remote, branch]);
   relay(ps);
   if (ps.status !== 0) {
-    log(
-      `[ship] push 失败（exit ${ps.status}）⇒ 多半是 pre-push 的合并前复算没放行。`,
-    );
+    /* 同上（ISSUE #2825）：rerun 那一跳也不固定猜 premerge，按原话分型。 */
+    log(`[ship] push 失败（exit ${ps.status}）⇒ ${classifyPushFailure(ps.stdout, ps.stderr).note}`);
     return CODE.RED;
   }
   const sha = run("git", ["rev-parse", "HEAD"]).stdout.trim();

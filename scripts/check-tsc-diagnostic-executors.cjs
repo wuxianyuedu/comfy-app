@@ -59,11 +59,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -89,15 +85,7 @@ const READERS_LEDGER = path.join(__dirname, ".declaration-readers.json");
  * 类型不收」）：立案那 19 条里有 12 条正是新鲜度内核那三处 JSDoc。
  */
 const SCAN_DIRS = ["src", "scripts", "tests"];
-const SCAN_EXTS = new Set([
-  ".ts",
-  ".tsx",
-  ".mts",
-  ".cts",
-  ".mjs",
-  ".cjs",
-  ".js",
-]);
+const SCAN_EXTS = new Set([".ts", ".tsx", ".mts", ".cts", ".mjs", ".cjs", ".js"]);
 
 /**
  * 台账条目的**下限** —— 它不是「正确值」，是**静默降级的地板**（同 §11.23.3 的
@@ -225,7 +213,9 @@ function collectFiles(dir, out) {
  */
 function scanDeclarationSites() {
   const files = [];
-  for (const d of SCAN_DIRS) collectFiles(path.join(ROOT, d), files);
+  for (const d of SCAN_DIRS) {
+    collectFiles(path.join(ROOT, d), files);
+  }
   const counts = new Map();
   for (const full of files) {
     const src = readForScan(full);
@@ -264,7 +254,9 @@ if (entries) {
       );
       continue;
     }
-    if (seen.has(e.id)) problems.push(`台账里 id 重复：${e.id}`);
+    if (seen.has(e.id)) {
+      problems.push(`台账里 id 重复：${e.id}`);
+    }
     seen.add(e.id);
 
     /* ③ 声明的落点仍然存在，且仍然真的有声明行 ——
@@ -280,7 +272,9 @@ if (entries) {
       }
       for (const marker of e.markers ?? []) {
         const full = path.join(ROOT, rel);
-        if (!fs.existsSync(full)) continue;
+        if (!fs.existsSync(full)) {
+          continue;
+        }
         if (!fs.readFileSync(full, "utf8").includes(marker)) {
           problems.push(
             `「${e.name}」登记的关键词 \`${marker}\` 在 ${rel} 里已经找不到了 —— ` +
@@ -294,9 +288,7 @@ if (entries) {
      * 否则它只在「碰到它时」才跑，那不是执行者。 */
     const ex = e.executor;
     if (ex.kind !== "fixed-test" && ex.kind !== "hook-step") {
-      problems.push(
-        `「${e.name}」的 executor.kind 只能是 fixed-test / hook-step`,
-      );
+      problems.push(`「${e.name}」的 executor.kind 只能是 fixed-test / hook-step`);
     }
 
     /* **零增量**：新写一处声明就必须同批登记台账。
@@ -313,9 +305,7 @@ if (entries) {
       const now = counts.get(rel) ?? 0;
       if (UPDATE) {
         if (now > e.baseline[rel]) {
-          bloated.push(
-            `${e.id}.baseline["${rel}"]：${e.baseline[rel]} → ${now}`,
-          );
+          bloated.push(`${e.id}.baseline["${rel}"]：${e.baseline[rel]} → ${now}`);
         } else {
           e.baseline[rel] = now;
         }
@@ -364,7 +354,9 @@ if (entries) {
    * 只判「台账这句话在源码里找得到落点」—— 与 §13.5.14 的判据口径同族。 */
   for (const e of entries) {
     const faces = e.verifiedSurfaces;
-    if (faces === undefined) continue;
+    if (faces === undefined) {
+      continue;
+    }
     if (!Array.isArray(faces) || faces.length === 0) {
       problems.push(
         `「${e.name}」的 verifiedSurfaces 必须是非空数组（写了就要核，空数组与没写等价）`,
@@ -378,8 +370,7 @@ if (entries) {
       readerSrc = fs.readFileSync(readerPath, "utf8");
     } catch (err) {
       problems.push(
-        `「${e.name}」的 reader（${e.reader}）读不到（${err.message}）——` +
-          "核验面没有落点可对",
+        `「${e.name}」的 reader（${e.reader}）读不到（${err.message}）——` + "核验面没有落点可对",
       );
       continue;
     }
@@ -421,7 +412,9 @@ if (entries) {
     } else {
       const byId = new Map(carriers.map((c) => [c.id, c]));
       for (const e of entries) {
-        if (!e?.id) continue;
+        if (!e?.id) {
+          continue;
+        }
         const peer = byId.get(e.id);
         if (!peer) {
           problems.push(
@@ -483,7 +476,9 @@ if (UPDATE) {
   }
   for (const e of doc.entries) {
     const fresh = entries.find((x) => x.id === e.id);
-    if (fresh) e.baseline = fresh.baseline;
+    if (fresh) {
+      e.baseline = fresh.baseline;
+    }
   }
   fs.writeFileSync(LEDGER, JSON.stringify(doc, null, 2) + "\n");
   process.stdout.write(

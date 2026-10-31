@@ -3,7 +3,7 @@
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { createTRPCClient, type TRPCLink } from "@trpc/client";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
-import { type inferRouterInputs, type inferRouterOutputs } from "@trpc/server";
+import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 
 import type { AppRouter } from "~/server/api/root";
@@ -79,7 +79,7 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
+      <TRPCProvider queryClient={queryClient} trpcClient={trpcClient}>
         {props.children}
       </TRPCProvider>
     </QueryClientProvider>

@@ -199,7 +199,9 @@ describe("runAsyncAction", () => {
       },
       { report, failureText: "更新失败" },
     );
-    if (!r.ok) rolledBack = true;
+    if (!r.ok) {
+      rolledBack = true;
+    }
     expect(rolledBack).toBe(true);
     expect(r.detail).toBe("boom");
   });

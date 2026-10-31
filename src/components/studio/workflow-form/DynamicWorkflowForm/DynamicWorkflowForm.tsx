@@ -22,22 +22,22 @@ export function DynamicWorkflowForm(props: DynamicWorkflowFormProps) {
 
   return (
     <DynamicWorkflowFormView
-      controller={controller}
-      loading={props.loading ?? false}
-      disabled={props.disabled ?? false}
       compact={props.compact ?? false}
-      showOutputs={props.showOutputs ?? true}
+      controller={controller}
+      disabled={props.disabled ?? false}
       emptyHint={props.emptyHint}
-      workflowId={props.workflowId}
-      seedModes={props.seedModes}
-      onSeedModeChange={props.onSeedModeChange}
-      onLabelChange={props.onLabelChange}
-      onRequiredChange={props.onRequiredChange}
-      visibilityMode={props.visibilityMode}
-      onVisibilityChange={props.onVisibilityChange}
-      onReorder={props.onReorder}
+      loading={props.loading ?? false}
       mode={props.mode}
+      onLabelChange={props.onLabelChange}
+      onReorder={props.onReorder}
+      onRequiredChange={props.onRequiredChange}
+      onSeedModeChange={props.onSeedModeChange}
+      onVisibilityChange={props.onVisibilityChange}
       rowTrailing={props.rowTrailing}
+      seedModes={props.seedModes}
+      showOutputs={props.showOutputs ?? true}
+      visibilityMode={props.visibilityMode}
+      workflowId={props.workflowId}
     />
   );
 }

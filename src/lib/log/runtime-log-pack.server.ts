@@ -47,21 +47,23 @@ const MAX_ORDINAL = 100;
 export function allocateRuntimeLogFile(source: RuntimeLogSource, dir: string, at: Date): string {
   for (let ordinal = 1; ordinal <= MAX_ORDINAL; ordinal += 1) {
     const file = path.join(dir, runtimeLogFileName(source, at, ordinal));
-    if (!fs.existsSync(/*turbopackIgnore: true*/ file)) return file;
+    if (!fs.existsSync(/*turbopackIgnore: true*/ file)) {
+      return file;
+    }
   }
   /* 同一秒里上百次启动：退到毫秒级补一个唯一名，而不是覆盖别人的现场。 */
   return path.join(dir, `${source}-${at.getTime()}.log`);
 }
 
 /** 一份 runtime 日志文件的描述（面板下拉的一项）。 */
-export interface RuntimeLogFileEntry {
-  /** 文件名（也是下拉的 value）。 */
-  name: string;
+export type RuntimeLogFileEntry = {
   /** 绝对路径。 */
   file: string;
+  /** 文件名（也是下拉的 value）。 */
+  name: string;
   /** 启动时刻（毫秒）；旧固定名为 null（它没有时刻）。 */
   startedAt: number | null;
-}
+};
 
 /**
  * 列某个来源在 `log/current/services/` 下的**全部**单次文件（新→旧）。
@@ -107,13 +109,17 @@ function toRuntimeLogEntries(
 ): Array<RuntimeLogFileEntry> {
   const out: Array<RuntimeLogFileEntry> = [];
   for (const name of names) {
-    if (!name.endsWith(".log")) continue;
+    if (!name.endsWith(".log")) {
+      continue;
+    }
     if (name === legacyRuntimeLogFileName(source)) {
       out.push({ name, file: path.join(dir, name), startedAt: null });
       continue;
     }
     const parsed = parseRuntimeLogFileName(name);
-    if (parsed?.source !== source) continue;
+    if (parsed?.source !== source) {
+      continue;
+    }
     out.push({
       name,
       file: path.join(dir, name),
@@ -125,8 +131,12 @@ function toRuntimeLogEntries(
     if (a.startedAt === null && b.startedAt === null) {
       return a.name.localeCompare(b.name);
     }
-    if (a.startedAt === null) return -1;
-    if (b.startedAt === null) return 1;
+    if (a.startedAt === null) {
+      return -1;
+    }
+    if (b.startedAt === null) {
+      return 1;
+    }
     return a.startedAt - b.startedAt;
   });
 }
@@ -157,15 +167,15 @@ export async function latestRuntimeLogFile(
 }
 
 /** 写入器：一行一行追加进**本次启动那一份**文件。 */
-export interface RuntimeLogWriter {
+export type RuntimeLogWriter = {
   /** 落盘路径（诊断/排障要能说出来它在哪）。 */
   file: string;
   /** 追加一行（调用方给的是正文，换行与本模块的落盘把守由本模块补）。 */
   write(line: string): void;
-}
+};
 
 /** {@link openRuntimeLogWriter} 的可选形态（只为「续写已有那一份」而存在）。 */
-export interface OpenRuntimeLogWriterOptions {
+export type OpenRuntimeLogWriterOptions = {
   /**
    * 续写 `dir` 下这一份**已经存在**的文件（给**基名**，如
    * `app-runtime-20261010-053059.log`），而不是按 `at` 另开一份。
@@ -180,7 +190,7 @@ export interface OpenRuntimeLogWriterOptions {
    * 面重新打开一次（本文件头注的那条理由）。
    */
   reuse?: string;
-}
+};
 
 /**
  * 开一次启动的写入器：挑一个不重名的文件、建目录、把句柄定下来。

@@ -9,13 +9,13 @@ import fs from "node:fs";
 import path from "node:path";
 
 export type ComfyLaunchPlan = {
-  cmd: string;
   baseArgs: Array<string>;
+  cmd: string;
   cwd: string;
-  mainPy: string;
   /** 所选解释器的 site-packages 里是否找到了 torch（依赖齐备的标志）。
    *  false = 没找到——启动大概率因缺依赖秒退，调用方可据此提前提示。 */
   hasDeps?: boolean;
+  mainPy: string;
 };
 
 /**
@@ -51,7 +51,9 @@ function findInterpreterIn(pyDir: string, exists: (p: string) => boolean): strin
   for (const names of Object.values(INTERPRETER_NAMES)) {
     for (const name of names) {
       const candidate = path.join(pyDir, name);
-      if (exists(/*turbopackIgnore: true*/ candidate)) return candidate;
+      if (exists(/*turbopackIgnore: true*/ candidate)) {
+        return candidate;
+      }
     }
   }
   return null;
@@ -95,7 +97,9 @@ export function sitePackagesDirs(envRoot: string, exists: (p: string) => boolean
   for (const minor of PYTHON_MINOR_CANDIDATES) {
     const sp = path.join(envRoot, "lib", `python${minor}`, "site-packages");
     // 只收实际存在的，免得把一堆猜测路径喂给下游（判 torch 时还要再 exists 一次）。
-    if (exists(/*turbopackIgnore: true*/ sp)) out.push(sp);
+    if (exists(/*turbopackIgnore: true*/ sp)) {
+      out.push(sp);
+    }
   }
   return out;
 }
@@ -137,9 +141,13 @@ export function resolveComfyLaunchPlan(
   // 枚举「源码根」候选：配置根本身直接有 main.py，或 <root>/ComfyUI/main.py。
   const hasMain = (dir: string) => exists(/*turbopackIgnore: true*/ path.join(dir, "main.py"));
   const sourceRoots: Array<string> = [];
-  if (hasMain(root)) sourceRoots.push(root);
+  if (hasMain(root)) {
+    sourceRoots.push(root);
+  }
   const comfySub = path.join(root, "ComfyUI");
-  if (hasMain(comfySub)) sourceRoots.push(comfySub);
+  if (hasMain(comfySub)) {
+    sourceRoots.push(comfySub);
+  }
   if (sourceRoots.length === 0) {
     return {
       error:
@@ -179,11 +187,13 @@ export function resolveComfyLaunchPlan(
         ];
     const present = pyDirs
       .map((pyDir) => ({ pyDir, py: findInterpreterIn(pyDir, exists) }))
-      .filter((c): c is { pyDir: string; py: string } => c.py !== null);
+      .filter((c): c is { py: string; pyDir: string } => c.py !== null);
     /* 取首项与「这个源码根下有没有解释器」是同一个判据：写 `length === 0`
      * 再在下面用 `present[0]!` 会把它判两遍。 */
     const [firstPresent] = present;
-    if (!firstPresent) continue;
+    if (!firstPresent) {
+      continue;
+    }
     // 两段选择：优先挑「装了 torch」的解释器——依赖装在哪个环境随安装方式
     // 漂移（老桌面在 standalone-env，vendor / 新版桌面在 ComfyUI/.venv，便携在
     // python_embeded，Linux 在 .venv），固定优先级会选中空壳解释器（No module

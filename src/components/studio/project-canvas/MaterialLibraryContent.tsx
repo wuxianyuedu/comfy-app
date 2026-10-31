@@ -45,9 +45,15 @@ const FOLDER_ICON_TINT =
 // p71-allow:end
 
 function KindIcon({ kind }: { kind: string }) {
-  if (kind === "image") return <ImageIcon size={18} strokeWidth={1.8} />;
-  if (kind === "video") return <Video size={18} strokeWidth={1.8} />;
-  if (kind === "audio") return <Music size={18} strokeWidth={1.8} />;
+  if (kind === "image") {
+    return <ImageIcon size={18} strokeWidth={1.8} />;
+  }
+  if (kind === "video") {
+    return <Video size={18} strokeWidth={1.8} />;
+  }
+  if (kind === "audio") {
+    return <Music size={18} strokeWidth={1.8} />;
+  }
   return <FileText size={18} strokeWidth={1.8} />;
 }
 
@@ -62,19 +68,18 @@ export function MaterialLibraryContent({
   c: MaterialLibraryController;
   /** 显示密度（网格/列表）：纯视觉偏好，由父组件持有。 */
   display: "grid" | "list";
-  onUse?: (item: MaterialItem) => void;
-  onOpenUploadPicker: () => void;
+  /** 分类（文件夹）网格形态下的列数，同上。 */
+  folderColsClass?: string;
   /**
    * 网格形态下的列数。**默认值是画布抽屉（360px 宽）的口径**——本组件因此
    * 在窄栏与整页两种容器里都能用，而条目 / 骨架 / 空态四态仍只有一份实现。
    * 传断点类（如 `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`）即可按容器拉宽。
    */
   gridColsClass?: string;
-  /** 分类（文件夹）网格形态下的列数，同上。 */
-  folderColsClass?: string;
+  onOpenUploadPicker: () => void;
+  onUse?: (item: MaterialItem) => void;
 }) {
-  const { folders, items, loading, showItems, searching, enterFolder, remove } =
-    c;
+  const { folders, items, loading, showItems, searching, enterFolder, remove } = c;
 
   return (
     <div className="min-w-0 flex-1 overflow-y-auto px-2 pb-4">
@@ -82,7 +87,7 @@ export function MaterialLibraryContent({
         /* Skeleton */
         <div className="flex-col gap-1 px-2 pt-1">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={`skeleton-${i}`} className="flex items-center gap-3 py-2">
+            <div className="flex items-center gap-3 py-2" key={`skeleton-${i}`}>
               <Skeleton className="bg-subtle size-9 shrink-0 rounded-lg" />
               <Skeleton className="bg-subtle h-3 flex-1 rounded" />
             </div>
@@ -94,11 +99,7 @@ export function MaterialLibraryContent({
           <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
             {/* 文件夹图标 */}
             <div className="border-border-strong bg-subtle mb-5 flex size-20 items-center justify-center rounded-2xl border">
-              <Folder
-                size={40}
-                strokeWidth={1.2}
-                className="text-ink-fainter"
-              />
+              <Folder className="text-ink-fainter" size={40} strokeWidth={1.2} />
             </div>
             <p className="text-ink-soft text-sm font-medium">
               {searching ? "没有匹配的素材" : "暂无内容"}
@@ -106,9 +107,9 @@ export function MaterialLibraryContent({
             {!searching && (
               <div className="text-ink-fainter mt-4 flex-col gap-2 text-xs">
                 <Button
-                  variant="ghost"
-                  onClick={onOpenUploadPicker}
                   className="hover:text-primary-strong flex h-auto items-center gap-2 font-normal hover:bg-transparent"
+                  onClick={onOpenUploadPicker}
+                  variant="ghost"
                 >
                   <Plus data-icon="inline-start" size={14} />
                   点击 + 或右键菜单创建内容
@@ -137,9 +138,9 @@ export function MaterialLibraryContent({
                 <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
                   {item.kind === "image" || item.kind === "video" ? (
                     <MediaThumb
-                      src={item.url}
                       alt={item.name}
                       className="h-full w-full object-cover"
+                      src={item.url}
                     />
                   ) : (
                     <div
@@ -149,33 +150,27 @@ export function MaterialLibraryContent({
                     </div>
                   )}
                 </div>
-                <p className="text-ink-soft text-2xs truncate px-2 py-1.5">
-                  {item.name}
-                </p>
+                <p className="text-ink-soft text-2xs truncate px-2 py-1.5">{item.name}</p>
                 {/* hover 操作 */}
                 <div className="absolute top-1 right-1 hidden gap-1 group-hover:flex">
                   {onUse && (
-                    <Hint label="加入画布" accessibleName>
+                    <Hint accessibleName label="加入画布">
                       <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => onUse(item)}
                         className="text-ink-soft rounded bg-black/70 hover:bg-black/60 hover:text-white"
+                        onClick={() => onUse(item)}
+                        size="icon-xs"
+                        variant="ghost"
                       >
-                        <Plus
-                          data-icon="inline-start"
-                          size={12}
-                          strokeWidth={2.5}
-                        />
+                        <Plus data-icon="inline-start" size={12} strokeWidth={2.5} />
                       </Button>
                     </Hint>
                   )}
-                  <Hint label="删除" accessibleName>
+                  <Hint accessibleName label="删除">
                     <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => void remove(item)}
                       className="text-ink-soft hover:text-destructive rounded bg-black/70 hover:bg-black/60"
+                      onClick={() => void remove(item)}
+                      size="icon-xs"
+                      variant="ghost"
                     >
                       <Trash2 data-icon="inline-start" size={12} />
                     </Button>
@@ -201,9 +196,9 @@ export function MaterialLibraryContent({
                 {item.kind === "image" || item.kind === "video" ? (
                   <div className="bg-canvas-deep size-9 shrink-0 overflow-hidden rounded-lg">
                     <MediaThumb
-                      src={item.url}
                       alt={item.name}
                       className="h-full w-full object-cover"
+                      src={item.url}
                     />
                   </div>
                 ) : (
@@ -214,9 +209,7 @@ export function MaterialLibraryContent({
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-ink-bright truncate text-sm">
-                    {item.name}
-                  </p>
+                  <p className="text-ink-bright truncate text-sm">{item.name}</p>
                   <p className="text-ink-fainter text-2xs mt-0.5">
                     {searching ? `${item.folderName} ·` : ""}
                     {displayValue(fmtBytes(item.size))}
@@ -224,36 +217,32 @@ export function MaterialLibraryContent({
                 </div>
                 <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">
                   {onUse && (
-                    <Hint label="加入画布" accessibleName>
+                    <Hint accessibleName label="加入画布">
                       <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => onUse(item)}
                         className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
+                        onClick={() => onUse(item)}
+                        size="icon-sm"
+                        variant="ghost"
                       >
-                        <Plus
-                          data-icon="inline-start"
-                          size={13}
-                          strokeWidth={2.5}
-                        />
+                        <Plus data-icon="inline-start" size={13} strokeWidth={2.5} />
                       </Button>
                     </Hint>
                   )}
                   <a
-                    href={item.url}
+                    className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
                     download={item.name}
                     draggable={false}
-                    className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
+                    href={item.url}
                     title="下载"
                   >
                     <Download size={13} />
                   </a>
-                  <Hint label="删除" accessibleName>
+                  <Hint accessibleName label="删除">
                     <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => void remove(item)}
                       className="text-ink-muted hover:bg-subtle hover:text-destructive rounded-md"
+                      onClick={() => void remove(item)}
+                      size="icon-sm"
+                      variant="ghost"
                     >
                       <Trash2 data-icon="inline-start" size={13} />
                     </Button>
@@ -268,10 +257,10 @@ export function MaterialLibraryContent({
         <div className={`grid ${folderColsClass} gap-2 px-1 pt-1`}>
           {folders.map((folder) => (
             <Button
-              key={folder.id}
-              variant="ghost"
-              onClick={() => enterFolder(folder.id)}
               className="border-border-strong bg-subtle hover:bg-surface-2 hover:border-ink-fainter group flex h-auto flex-col items-center gap-2 rounded-lg border py-4 font-normal transition-colors"
+              key={folder.id}
+              onClick={() => enterFolder(folder.id)}
+              variant="ghost"
             >
               <div
                 className={`flex size-12 items-center justify-center rounded-xl ${FOLDER_ICON_TINT}`}
@@ -282,9 +271,7 @@ export function MaterialLibraryContent({
                 {folder.name}
               </span>
               {folder.count > 0 && (
-                <span className="text-ink-fainter text-3xs tabular-nums">
-                  {folder.count}
-                </span>
+                <span className="text-ink-fainter text-3xs tabular-nums">{folder.count}</span>
               )}
             </Button>
           ))}
@@ -293,27 +280,25 @@ export function MaterialLibraryContent({
         <div className="flex flex-col gap-0.5">
           {folders.map((folder) => (
             <Button
-              key={folder.id}
-              variant="ghost"
-              onClick={() => enterFolder(folder.id)}
               className="hover:bg-subtle group flex h-auto w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left font-normal transition-colors"
+              key={folder.id}
+              onClick={() => enterFolder(folder.id)}
+              variant="ghost"
             >
               <div
                 className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${FOLDER_ICON_TINT}`}
               >
                 <Folder size={18} strokeWidth={1.8} />
               </div>
-              <span className="text-ink-bright min-w-0 flex-1 truncate text-sm">
-                {folder.name}
-              </span>
+              <span className="text-ink-bright min-w-0 flex-1 truncate text-sm">{folder.name}</span>
               <span className="text-ink-fainter text-2xs shrink-0 tabular-nums">
                 {folder.count > 0 ? folder.count : ""}
               </span>
               <ChevronRight
+                className="text-ink-fainter group-hover:text-ink-muted shrink-0"
                 data-icon="inline-start"
                 size={12}
                 strokeWidth={2.5}
-                className="text-ink-fainter group-hover:text-ink-muted shrink-0"
               />
             </Button>
           ))}

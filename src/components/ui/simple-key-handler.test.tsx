@@ -59,9 +59,7 @@ describe("simpleKeyHandler", () => {
   it("`preventDefault: false` 时只观察不拦截", () => {
     const action = vi.fn();
     const event = ev("Tab");
-    simpleKeyHandler(["Tab"], action, { preventDefault: false }).onKeyDown(
-      event,
-    );
+    simpleKeyHandler(["Tab"], action, { preventDefault: false }).onKeyDown(event);
     expect(action).toHaveBeenCalledTimes(1);
     expect(event.preventDefault).not.toHaveBeenCalled();
   });
@@ -79,9 +77,9 @@ describe("simpleKeyHandler", () => {
     const onActivate = vi.fn();
     render(
       <div
+        data-testid="tab"
         role="tab"
         tabIndex={0}
-        data-testid="tab"
         {...simpleKeyHandler(["Space", "Enter"], () => {
           onActivate();
         })}

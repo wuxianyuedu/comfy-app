@@ -45,7 +45,7 @@ function getLocalWorkflowRoots(): Array<string> {
 
 /* 给「磁盘上有、但还没导入过」的文件生成的稳定、确定的占位 id。 */
 function pendingId(absPath: string): string {
-  return "pending-" + hash("sha1", absPath, "hex").slice(0, 12);
+  return `pending-${hash("sha1", absPath, "hex").slice(0, 12)}`;
 }
 
 /* 追加到 `list` 里的「本地待导入」占位行的形状。
@@ -56,34 +56,36 @@ function pendingId(absPath: string): string {
  * 同一份 payload 里出现两种形状（一处 `Date` 一处 ISO 串、一处权威类型一处
  * 泛对象）时，视图读任何一行都得先判形状 —— 那正是 #1460 要消掉的东西。
  * 两处都是 `Date`（superjson 过线保真）与 `WorkflowParamMap`（同一份读边界）。 */
-interface LocalPendingRow {
-  id: string;
-  name: string;
-  taskType: string;
-  modes: Array<string>;
-  defaultMode: string | null;
+type LocalPendingRow = {
   createdAt: Date;
+  defaultMode: string | null;
+  hasRaw: boolean;
+  id: string;
+  isGenerative: boolean;
+  modelTags: Array<string>;
+  modes: Array<string>;
+  name: string;
   paramMap: WorkflowParamMap;
+  pending: boolean;
+  pendingMtime: number;
+  pendingSize: number;
+  preview: WorkflowPreview;
+  source: "local-pending";
   sourcePath: string;
   sourceRoot: string | undefined;
-  source: "local-pending";
-  typeLabel: string;
+  taskType: string;
   typeCategory: string;
   typeDescription: string;
-  isGenerative: boolean;
-  hasRaw: boolean;
+  typeLabel: string;
   usable: boolean;
-  preview: WorkflowPreview;
   workflowIO: WorkflowIOMap;
-  modelTags: Array<string>;
-  pending: boolean;
-  pendingSize: number;
-  pendingMtime: number;
-}
+};
 
 /* 按 `localWorkflows.pathKey` 的同一口径归一化绝对路径。 */
 function pathKey(p: string): string {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   try {
     return normalizeSlashes(path.resolve(p).toLowerCase()).replace(/\/+$/, "");
   } catch {
@@ -94,18 +96,26 @@ function pathKey(p: string): string {
 /* 找出「`absPath` 是 `filePath` 路径前缀」的那个已配置根目录。 */
 function findRootFor(
   filePath: string,
-  roots: Array<{ rawPath: string; absPath: string }>,
+  roots: Array<{ absPath: string; rawPath: string }>,
 ): string | undefined {
-  if (!filePath || roots.length === 0) return undefined;
+  if (!filePath || roots.length === 0) {
+    return undefined;
+  }
   const target = pathKey(filePath);
-  if (!target) return undefined;
+  if (!target) {
+    return undefined;
+  }
   let best: { len: number; raw: string } | undefined;
   for (const r of roots) {
     const rk = pathKey(r.absPath);
-    if (!rk) continue;
+    if (!rk) {
+      continue;
+    }
     const exact = target === rk;
-    const child = target.startsWith(rk + "/");
-    if (!exact && !child) continue;
+    const child = target.startsWith(`${rk}/`);
+    if (!exact && !child) {
+      continue;
+    }
     if (!best || rk.length > best.len) {
       best = { len: rk.length, raw: r.rawPath };
     }
@@ -140,7 +150,7 @@ function isWithinAllowedLocalWorkflowRoot(absPath: string): boolean {
   const key = normalizePathKey(absPath);
   return getAllowedLocalWorkflowRoots().some((root) => {
     const rk = normalizePathKey(root);
-    return key === rk || key.startsWith(rk + "/");
+    return key === rk || key.startsWith(`${rk}/`);
   });
 }
 

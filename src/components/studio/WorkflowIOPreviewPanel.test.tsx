@@ -1,11 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { WorkflowIoPreviewPanel } from "./WorkflowIOPreviewPanel";
 import {
   WFStoresProvider,
@@ -65,7 +59,7 @@ function wrapperSeedEntry(): WorkflowIOParam {
     name: "value_1",
     label: "Seed",
     type: "INT",
-    defaultValue: -944756323327396,
+    defaultValue: -944_756_323_327_396,
     nodeTitle: "Checkpoint settings",
     slotLabel: "Seed",
   };
@@ -102,7 +96,9 @@ function makeStores(io: IOMap): WFStores {
 
 function seedRowLabel(): string | null {
   for (const row of document.querySelectorAll("[data-io-key]")) {
-    if (row.getAttribute("data-io-key") !== "1512::widget::value_1") continue;
+    if (row.getAttribute("data-io-key") !== "1512::widget::value_1") {
+      continue;
+    }
     return row.querySelector("span.flex-1")?.textContent ?? null;
   }
   return null;
@@ -114,12 +110,7 @@ function seedRowLabel(): string | null {
  * drop 之间隔着若干次 React 重渲（拖拽高亮、插入指示线都会改状态），`drop`
  * 拿到的处理器闭包未必是起手那一次渲染的。只有让事件各自 dispatch 一遍，
  * 才能命中「闭包里的被拖行已过期」这条路径。 */
-function nativeDrag(
-  target: Element,
-  type: string,
-  ioKey: string,
-  clientY = 5,
-): void {
+function nativeDrag(target: Element, type: string, ioKey: string, clientY = 5): void {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, "dataTransfer", {
     value: {
@@ -136,7 +127,9 @@ function nativeDrag(
 /** 行锚点：`data-io-key` 挂在真实行上（参数行与端口行同源）。 */
 function rowFor(ioKey: string): HTMLElement {
   const row = document.querySelector<HTMLElement>(`[data-io-key="${ioKey}"]`);
-  if (!row) throw new Error(`找不到行 ${ioKey}`);
+  if (!row) {
+    throw new Error(`找不到行 ${ioKey}`);
+  }
   return row;
 }
 
@@ -153,9 +146,7 @@ function dragOnto(fromKey: string, toKey: string, after = false): void {
 }
 
 function orderOf(io: IOMap): Record<string, number | undefined> {
-  return Object.fromEntries(
-    Object.entries(io).map(([key, entry]) => [key, entry.displayOrder]),
-  );
+  return Object.fromEntries(Object.entries(io).map(([key, entry]) => [key, entry.displayOrder]));
 }
 
 function renderPanel(io: IOMap) {
@@ -164,12 +155,12 @@ function renderPanel(io: IOMap) {
   const view = render(
     <WFStoresProvider stores={stores}>
       <WorkflowIoPreviewPanel
-        workflowIO={io}
+        defaultMode="i2v"
         detailIOMap={io}
         modes={["i2v", "flf2v"]}
-        defaultMode="i2v"
-        onModesChange={noop}
         onClose={noop}
+        onModesChange={noop}
+        workflowIO={io}
       />
     </WFStoresProvider>,
   );
@@ -178,12 +169,12 @@ function renderPanel(io: IOMap) {
     view.rerender(
       <WFStoresProvider stores={stores}>
         <WorkflowIoPreviewPanel
-          workflowIO={stores.io.getState().workflowIO}
+          defaultMode="i2v"
           detailIOMap={io}
           modes={["i2v", "flf2v"]}
-          defaultMode="i2v"
-          onModesChange={noop}
           onClose={noop}
+          onModesChange={noop}
+          workflowIO={stores.io.getState().workflowIO}
         />
       </WFStoresProvider>,
     );
@@ -237,23 +228,9 @@ describe("WorkflowIOPreviewPanel — 拖拽调整参数顺序（ISSUE #349）", 
      * drop 落在第三行的下半区（clientY 15）→ 插到第三行之后。 */
     const fromRow = rowFor("1::widget::first");
     const toRow = rowFor("1::widget::third");
-    nativeDrag(
-      fromRow.querySelector("span") ?? fromRow,
-      "dragstart",
-      "1::widget::first",
-    );
-    nativeDrag(
-      toRow.querySelector("span") ?? toRow,
-      "dragover",
-      "1::widget::third",
-      15,
-    );
-    nativeDrag(
-      toRow.querySelector("span") ?? toRow,
-      "drop",
-      "1::widget::third",
-      15,
-    );
+    nativeDrag(fromRow.querySelector("span") ?? fromRow, "dragstart", "1::widget::first");
+    nativeDrag(toRow.querySelector("span") ?? toRow, "dragover", "1::widget::third", 15);
+    nativeDrag(toRow.querySelector("span") ?? toRow, "drop", "1::widget::third", 15);
     act(refresh);
 
     expect(orderOf(stores.io.getState().workflowIO)).toEqual({
@@ -290,12 +267,12 @@ describe("WorkflowIOPreviewPanel — seed 行取名（ISSUE #349）", () => {
     const view = render(
       <WFStoresProvider stores={stores}>
         <WorkflowIoPreviewPanel
-          workflowIO={io}
+          defaultMode="i2v"
           detailIOMap={io}
           modes={["i2v", "flf2v"]}
-          defaultMode="i2v"
-          onModesChange={noop}
           onClose={noop}
+          onModesChange={noop}
+          workflowIO={io}
         />
       </WFStoresProvider>,
     );
@@ -304,11 +281,7 @@ describe("WorkflowIOPreviewPanel — seed 行取名（ISSUE #349）", () => {
     /* 点开「控件后行为」并选「递增值」——这一步把 seedMode 写进当前模式的
      * 覆盖层，行随之按模式派生拷贝（{...entry, seedMode}）。 */
     await act(async () => {
-      fireEvent.click(
-        document.querySelector(
-          '[title="控件后行为 · CONTROL AFTER GENERATE"]',
-        )!,
-      );
+      fireEvent.click(document.querySelector('[title="控件后行为 · CONTROL AFTER GENERATE"]')!);
     });
     await act(async () => {
       fireEvent.click(screen.getAllByText("递增值")[0]!);
@@ -318,20 +291,19 @@ describe("WorkflowIOPreviewPanel — seed 行取名（ISSUE #349）", () => {
       view.rerender(
         <WFStoresProvider stores={stores}>
           <WorkflowIoPreviewPanel
-            workflowIO={stores.io.getState().workflowIO}
+            defaultMode="i2v"
             detailIOMap={io}
             modes={["i2v", "flf2v"]}
-            defaultMode="i2v"
-            onModesChange={noop}
             onClose={noop}
+            onModesChange={noop}
+            workflowIO={stores.io.getState().workflowIO}
           />
         </WFStoresProvider>,
       );
     });
 
     expect(
-      stores.io.getState().workflowIO["1512::widget::value_1"]?.modeOverrides
-        ?.i2v?.seedMode,
+      stores.io.getState().workflowIO["1512::widget::value_1"]?.modeOverrides?.i2v?.seedMode,
     ).toBe("increment");
     expect(seedRowLabel()).toBe("Seed");
   });

@@ -68,50 +68,9 @@ export const RESTART_RECENT_MS = 10_000;
 const LAST_RESTART_KEY = "devServer.lastRestartAt";
 const LAST_BOOT_ID_KEY = "devServer.lastBootId";
 
-export interface DevServerLiveness {
-  /** true = 本会话刚检测到一次**真正**重启（bootId 变化），短暂高亮。 */
-  restarting: boolean;
-  /**
-   * **这一份进程对本次页面会话来说是新的**（冷启动或真重启）。
-   *
-   * 与 `restarting` 的差别是「10 秒高亮」与「本次会话的既成事实」：那个会自己
-   * 复位，这个不会。它存在的理由是有一条判据只有它能给 ——「进程换了一个」不能
-   * 看探活失败（显示器关闭 / 后台节流 / 瞬时断网都会失败，那几条已明确不判定
-   * 重启），而整页刷新**不算**进程换新（同一份进程还在服务，刷新只是页面重来）。
-   * 消息中心「应用服务已启动 / 已恢复」那条记录就建在它上面
-   * （见 `~/lib/shell/app-service-message`）。
-   */
-  processIsNew: boolean;
-  /**
-   * 「上一次应用服务为什么结束」——进程死亡那一刻由启动编排落盘、这里在服务
-   * **恢复应答之后**读回（ISSUE #1692）。null = 没有原因可讲 / 还没读到。
-   */
-  lastExit: AppServiceExitNotice | null;
-  /** 最近一次**真正**重启的时刻；本浏览器会话无记录时为 null。 */
-  lastRestartAt: number | null;
-  /** 最近一次探测成功（进程可达）。首帧（尚未探过）为 false。 */
-  probeOk: boolean;
-  /**
-   * 最近一次探测**得到了 404**：进程在应答，但这条探活端点不在编译图里
-   * （陈旧路由表 / Turbopack 会话级路由失效）。
-   *
-   * 与 `probeOk` 的区别是「答了、只是答的是 404」与「没答」——用户能做的动作
-   * 因此不同（重启应用 vs 等它起来），状态栏必须分得开，不能再拿一句
-   * 「连接中」把两者盖成同一件事。
-   */
-  routeTableStale: boolean;
-  /**
-   * **抗抖动后的可达性**（喂给 `deriveDevServerStatus` 的那个事实）。
-   *
-   * 与 `probeOk` 的差别正是 {@link OFFLINE_CONFIRM_FAILURES}：单拍失败不把
-   * 「可达」翻成 false，连续失败到门槛才算。状态栏与消息中心都只看这个值——
-   * 它们要回答的是「服务现在能不能应答」，而不是「刚才那一拍有没有应答」。
-   */
-  reachable: boolean;
+export type DevServerLiveness = {
   /** 连续失败拍数（未达门槛时说明它正在积累）；探通一次即归零。 */
   consecutiveFailures: number;
-  /** `lastExit` 对应记录的落盘时刻（毫秒）；无记录为 null。 */
-  lastExitAt: number | null;
   /**
    * 当前是哪一次**启动**（launcher 的 runId）；null = 拿不到（纯手工 `pnpm dev`、
    * 端点还没答过、或这次启动没走 launcher）。
@@ -128,6 +87,47 @@ export interface DevServerLiveness {
    *  区分开——只有后者才是「应用服务已断开」。 */
   everOnline: boolean;
   /**
+   * 「上一次应用服务为什么结束」——进程死亡那一刻由启动编排落盘、这里在服务
+   * **恢复应答之后**读回（ISSUE #1692）。null = 没有原因可讲 / 还没读到。
+   */
+  lastExit: AppServiceExitNotice | null;
+  /** `lastExit` 对应记录的落盘时刻（毫秒）；无记录为 null。 */
+  lastExitAt: number | null;
+  /** 最近一次**真正**重启的时刻；本浏览器会话无记录时为 null。 */
+  lastRestartAt: number | null;
+  /** 最近一次探测成功（进程可达）。首帧（尚未探过）为 false。 */
+  probeOk: boolean;
+  /**
+   * **这一份进程对本次页面会话来说是新的**（冷启动或真重启）。
+   *
+   * 与 `restarting` 的差别是「10 秒高亮」与「本次会话的既成事实」：那个会自己
+   * 复位，这个不会。它存在的理由是有一条判据只有它能给 ——「进程换了一个」不能
+   * 看探活失败（显示器关闭 / 后台节流 / 瞬时断网都会失败，那几条已明确不判定
+   * 重启），而整页刷新**不算**进程换新（同一份进程还在服务，刷新只是页面重来）。
+   * 消息中心「应用服务已启动 / 已恢复」那条记录就建在它上面
+   * （见 `~/lib/shell/app-service-message`）。
+   */
+  processIsNew: boolean;
+  /**
+   * **抗抖动后的可达性**（喂给 `deriveDevServerStatus` 的那个事实）。
+   *
+   * 与 `probeOk` 的差别正是 {@link OFFLINE_CONFIRM_FAILURES}：单拍失败不把
+   * 「可达」翻成 false，连续失败到门槛才算。状态栏与消息中心都只看这个值——
+   * 它们要回答的是「服务现在能不能应答」，而不是「刚才那一拍有没有应答」。
+   */
+  reachable: boolean;
+  /** true = 本会话刚检测到一次**真正**重启（bootId 变化），短暂高亮。 */
+  restarting: boolean;
+  /**
+   * 最近一次探测**得到了 404**：进程在应答，但这条探活端点不在编译图里
+   * （陈旧路由表 / Turbopack 会话级路由失效）。
+   *
+   * 与 `probeOk` 的区别是「答了、只是答的是 404」与「没答」——用户能做的动作
+   * 因此不同（重启应用 vs 等它起来），状态栏必须分得开，不能再拿一句
+   * 「连接中」把两者盖成同一件事。
+   */
+  routeTableStale: boolean;
+  /**
    * 这一拍之前有多少毫秒**没人在探测**（0 = 紧接上一拍）。
    *
    * 为什么要有这个事实：探活会因窗口失焦 / 页面进后台而**暂停**（本 hook 用
@@ -139,7 +139,7 @@ export interface DevServerLiveness {
    * 事实，不替它决定「多长才值得说」。
    */
   unprobedMs: number;
-}
+};
 
 /**
  * 「上一拍发起 → 这一拍发起」之间有多少毫秒是**没人在探测**的。
@@ -152,14 +152,16 @@ export interface DevServerLiveness {
  * 慢了」记成停表（超时那一拍尤其明显）。发起时刻与定时器的节拍是同一件事。
  */
 export function probeGapMs(previousStartedAt: number | null, startedAt: number): number {
-  if (previousStartedAt === null) return 0;
+  if (previousStartedAt === null) {
+    return 0;
+  }
   return Math.max(0, startedAt - previousStartedAt - DEV_SERVER_PROBE_MS);
 }
 
 function readSessionNumber(key: string): number | null {
   try {
     const raw = sessionStorage.getItem(key);
-    const n = raw === null ? NaN : Number(raw);
+    const n = raw === null ? Number.NaN : Number(raw);
     return Number.isFinite(n) ? n : null;
   } catch {
     return null;
@@ -183,12 +185,12 @@ function writeSession(key: string, value: string): void {
 }
 
 type ProbeResult =
-  | { ok: true; bootId: string; runId: string | null }
+  | { bootId: string; ok: true; runId: string | null }
   /** 服务**应答了**，但这条端点不在编译图里（404 = 陈旧路由表的签名，
    *  与启动器 `classifyProbe` 的 `route-404` 同一判据）。 */
-  | { ok: false; bootId: null; runId: null; routeTableStale: true }
+  | { bootId: null; ok: false; routeTableStale: true; runId: null }
   /** 网络层失败 / 非 404 的错误码：服务此刻不可达（或答不上来）。 */
-  | { ok: false; bootId: null; runId: null; routeTableStale: false };
+  | { bootId: null; ok: false; routeTableStale: false; runId: null };
 
 /** 单次探测：读取 dev server 当前 bootId 与**本次启动**的 runId。
  *
@@ -211,13 +213,14 @@ async function probeBootId(): Promise<ProbeResult> {
       cache: "no-store",
       signal: AbortSignal.timeout(2500),
     });
-    if (!res.ok)
+    if (!res.ok) {
       return {
         ok: false,
         bootId: null,
         runId: null,
         routeTableStale: res.status === 404,
       };
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       bootId?: unknown;
       runId?: unknown;
@@ -290,17 +293,23 @@ export function useDevServerLiveness(): DevServerLiveness {
     setUnprobedMs(probeGapMs(lastProbeStartedAtRef.current, startedAt));
     lastProbeStartedAtRef.current = startedAt;
     const result = await probeBootId();
-    if (stoppedRef.current) return;
+    if (stoppedRef.current) {
+      return;
+    }
 
     /* 连通性先落：无论后续是否判定重启，视图都要知道此刻进程可不可达。 */
     setProbeOk(result.ok);
     setRouteTableStale(!result.ok && result.routeTableStale);
     setConsecutiveFailures(result.ok ? 0 : (n) => n + 1);
-    if (result.ok) setEverOnline(true);
+    if (result.ok) {
+      setEverOnline(true);
+    }
     /* 启动标识只认成功那一拍：与 `setProbeOk` 同一批落，于是「服务刚恢复」的
      * 下一个渲染里拿到的已经是**新一次启动**的 runId —— 恢复那条消息因此盖在
      * 新组而不是旧组（若分成两次请求就会盖错）。 */
-    if (result.ok) setCurrentRunId(result.runId);
+    if (result.ok) {
+      setCurrentRunId(result.runId);
+    }
 
     if (result.ok) {
       const bootId = result.bootId;
@@ -315,9 +324,13 @@ export function useDevServerLiveness(): DevServerLiveness {
         /* 短暂置「刚重启」高亮，随后自动复位。 */
         setRestarting(true);
         setProcessIsNew(true);
-        if (recentTimerRef.current) clearTimeout(recentTimerRef.current);
+        if (recentTimerRef.current) {
+          clearTimeout(recentTimerRef.current);
+        }
         recentTimerRef.current = setTimeout(() => {
-          if (!stoppedRef.current) setRestarting(false);
+          if (!stoppedRef.current) {
+            setRestarting(false);
+          }
         }, RESTART_RECENT_MS);
       } else if (prevBootId === null) {
         /* 首探且**没有任何基准**（sessionStorage 里也没有）：这是一次冷启动，
@@ -339,7 +352,9 @@ export function useDevServerLiveness(): DevServerLiveness {
       if (exitFetchedForBootIdRef.current !== bootId) {
         exitFetchedForBootIdRef.current = bootId;
         const probe = await fetchAppServiceExit();
-        if (stoppedRef.current) return;
+        if (stoppedRef.current) {
+          return;
+        }
         const record = probe.record;
         /* 只认「说的是上一次运行」的记录：记录带着结束那一次的 runId，与当前
          * 进程的 runId 一致就说明它描写的不是过去那一次（判据见 lib）。 */
@@ -365,7 +380,9 @@ export function useDevServerLiveness(): DevServerLiveness {
     stoppedRef.current = false;
     return () => {
       stoppedRef.current = true;
-      if (recentTimerRef.current) clearTimeout(recentTimerRef.current);
+      if (recentTimerRef.current) {
+        clearTimeout(recentTimerRef.current);
+      }
     };
   }, []);
 

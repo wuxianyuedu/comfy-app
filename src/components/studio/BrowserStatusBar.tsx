@@ -10,10 +10,7 @@ import { MessageCenterButton } from "~/components/message-center/MessageCenterBu
 import { useAppServiceMessageLog } from "~/components/message-center/hooks/use-app-service-message-log";
 import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyReadiness } from "./hooks/use-comfy-readiness";
-import {
-  STALE_RESOURCE_NOTE,
-  selectVisibleResourceMetrics,
-} from "./comfy-resource-metrics";
+import { STALE_RESOURCE_NOTE, selectVisibleResourceMetrics } from "./comfy-resource-metrics";
 import { useDevServerStatus } from "./hooks/use-dev-server-status";
 import type { AppServiceExitNotice } from "~/lib/shell/app-service-exit";
 import {
@@ -24,17 +21,9 @@ import {
 } from "./hooks/use-schema-sync-status";
 import { useSchemaSyncPush } from "./hooks/use-schema-sync-push";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
-import {
-  comfyQueueNotice,
-  useComfyQueue,
-  type ComfyQueueView,
-} from "./hooks/use-comfy-queue";
+import { comfyQueueNotice, useComfyQueue, type ComfyQueueView } from "./hooks/use-comfy-queue";
 import { Hint } from "~/components/ui/hint";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { fmtBytes } from "~/lib/format-bytes";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { StatusDot } from "~/components/ui/status-dot";
@@ -102,18 +91,15 @@ function UsageItem({
   pct,
 }: {
   label: string;
-  title: string;
-  used: number;
-  total: number;
   pct: number;
+  title: string;
+  total: number;
+  used: number;
 }) {
   return (
     <KeyValueRows
-      layout="inline"
       className="text-ink-soft hidden items-center gap-1 tabular-nums sm:flex"
       itemClassName="gap-1"
-      keyClassName="text-ink-muted"
-      valueClassName="text-ink-bright"
       items={[
         {
           key: label,
@@ -126,6 +112,9 @@ function UsageItem({
           ),
         },
       ]}
+      keyClassName="text-ink-muted"
+      layout="inline"
+      valueClassName="text-ink-bright"
     />
   );
 }
@@ -151,16 +140,18 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
   const notice = schemaSyncNotice(status);
   const { push, pushing } = useSchemaSyncPush();
   const [confirming, setConfirming] = useState(false);
-  if (notice === null) return null;
+  if (notice === null) {
+    return null;
+  }
 
   const tone = SCHEMA_TONE_CLASS[notice.tone];
   if (notice.refreshable) {
     return (
       <Hint label={notice.title}>
         <Button
-          variant="ghost"
           className={`text-2xs h-auto shrink-0 gap-0 rounded px-1 py-0 hover:underline ${tone}`}
           onClick={() => window.location.reload()}
+          variant="ghost"
         >
           {notice.text}
         </Button>
@@ -172,27 +163,27 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
       <>
         <Hint label={notice.title}>
           <Button
-            variant="ghost"
-            disabled={pushing}
             className={`text-2xs h-auto shrink-0 gap-1 rounded px-1 py-0 hover:underline ${tone}`}
+            disabled={pushing}
             onClick={() => setConfirming(true)}
+            variant="ghost"
           >
             {notice.text}
             <span className="text-ink-fainter">· 点击同步</span>
           </Button>
         </Hint>
         <ConfirmDialog
-          open={confirming}
+          confirmLabel="同步"
+          danger
+          description={`${notice.title}\n\n这批变更含「会丢数据」的语句（删列 / 重建表），执行后那些数据无法找回。确认这些数据可以丢弃后再继续。`}
           onClose={() => setConfirming(false)}
           onConfirm={() => {
             setConfirming(false);
             void push();
           }}
+          open={confirming}
           pending={pushing}
-          danger
           title="立即执行数据库同步？"
-          confirmLabel="同步"
-          description={`${notice.title}\n\n这批变更含「会丢数据」的语句（删列 / 重建表），执行后那些数据无法找回。确认这些数据可以丢弃后再继续。`}
         />
       </>
     );
@@ -214,17 +205,19 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
  */
 function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
   const notice = comfyQueueNotice(view);
-  if (notice === null) return null;
+  if (notice === null) {
+    return null;
+  }
   const detailLines = notice.title.split("\n");
   return (
     <Popover>
       <PopoverTrigger className="text-ink-soft hover:bg-subtle inline-flex max-w-40 cursor-pointer items-center gap-1 rounded px-1 py-0.5 tabular-nums">
         <span className="truncate">{notice.text}</span>
       </PopoverTrigger>
-      <PopoverContent side="top" align="start" className="w-80 text-xs">
+      <PopoverContent align="start" className="w-80 text-xs" side="top">
         <div className="flex flex-col gap-1">
           {detailLines.map((line, i) => (
-            <span key={i} className="text-ink-soft leading-relaxed">
+            <span className="text-ink-soft leading-relaxed" key={i}>
               {line}
             </span>
           ))}
@@ -245,12 +238,10 @@ function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
  * 排版上只放**一句原因**（`why`），把「这一次具体是什么结束的」与「现在该做什么」
  * 留给 `title`：这一格是弹性的、旁边还有排队信息要共存，完整三句会把它们挤掉。
  */
-function DevServerExitItem({
-  notice,
-}: {
-  notice: AppServiceExitNotice | null;
-}) {
-  if (notice === null) return null;
+function DevServerExitItem({ notice }: { notice: AppServiceExitNotice | null }) {
+  if (notice === null) {
+    return null;
+  }
   return (
     <span
       className="text-destructive/90 max-w-60 shrink-0 truncate"
@@ -308,21 +299,20 @@ export function BrowserStatusBar() {
 
   const tone = fpsTone(fps);
 
-  if (activeTabId !== MAIN_TAB_ID) return null;
+  if (activeTabId !== MAIN_TAB_ID) {
+    return null;
+  }
 
   return (
     <div
-      className="border-border bg-panel/95 text-ink-muted z-toast text-2xs fixed right-0 bottom-0 left-0 flex h-6 items-center gap-3 border-t px-3 backdrop-blur-sm"
       aria-label="底部状态栏"
+      className="border-border bg-panel/95 text-ink-muted z-toast text-2xs fixed right-0 bottom-0 left-0 flex h-6 items-center gap-3 border-t px-3 backdrop-blur-sm"
     >
       {/* ── 第 1 区：地址栏（固定宽度） ── */}
       <div className="flex w-42.5 shrink-0 items-center gap-1.5">
-        <Lock size={11} className="text-success-strong shrink-0" />
+        <Lock className="text-success-strong shrink-0" size={11} />
         <span className="text-ink-fainter shrink-0">安全</span>
-        <span
-          className="text-ink-soft truncate"
-          title={host ? `${host}${pathname}` : pathname}
-        >
+        <span className="text-ink-soft truncate" title={host ? `${host}${pathname}` : pathname}>
           {host ? `${host}${pathname}` : pathname}
         </span>
       </div>
@@ -345,18 +335,16 @@ export function BrowserStatusBar() {
       >
         {/* 三档资源的标签、口径 title 与「缺值整档隐藏」的判据都在
            `comfy-resource-metrics`（首页算力卡读同一份），这里只负责行内排版。 */}
-        {selectVisibleResourceMetrics({ cudaVram, smiVram, ram }).map(
-          ({ descriptor, bar }) => (
-            <UsageItem
-              key={descriptor.key}
-              label={descriptor.label}
-              title={descriptor.title}
-              used={bar.used}
-              total={bar.total}
-              pct={bar.pct}
-            />
-          ),
-        )}
+        {selectVisibleResourceMetrics({ cudaVram, smiVram, ram }).map(({ descriptor, bar }) => (
+          <UsageItem
+            key={descriptor.key}
+            label={descriptor.label}
+            pct={bar.pct}
+            title={descriptor.title}
+            total={bar.total}
+            used={bar.used}
+          />
+        ))}
 
         {/* 降级提示 */}
         {degradedNote && (
@@ -376,13 +364,8 @@ export function BrowserStatusBar() {
           className="hidden items-center gap-1 md:flex"
           title="全应用实时帧率：≥50 流畅，30~49 轻微掉帧，<30 明显卡顿"
         >
-          <span
-            aria-hidden
-            className={`inline-block size-1.5 rounded-full ${fpsDotColor[tone]}`}
-          />
-          <span className={`tabular-nums ${fpsTextColor[tone]}`}>
-            {displayValue(fps)}
-          </span>
+          <span aria-hidden className={`inline-block size-1.5 rounded-full ${fpsDotColor[tone]}`} />
+          <span className={`tabular-nums ${fpsTextColor[tone]}`}>{displayValue(fps)}</span>
           <span className="text-ink-soft">FPS</span>
         </span>
 
@@ -390,18 +373,15 @@ export function BrowserStatusBar() {
 
         {/* 纯图标按钮（只有图标与可选的错误计数徽标，没有可见文字）：按 ui/hint 的契约
             传 accessibleName，让提示文案同时成为 aria-label —— 否则读屏只报一颗匿名按钮。 */}
-        <Hint
-          label={`日志面板 (${isOpen ? "开" : "关"}) — Ctrl+Shift+L`}
-          accessibleName
-        >
+        <Hint accessibleName label={`日志面板 (${isOpen ? "开" : "关"}) — Ctrl+Shift+L`}>
           <Button
-            variant="ghost"
-            onClick={toggleOpen}
             className={`text-2xs flex h-auto gap-1 rounded px-1.5 py-0.5 ${
               isOpen
                 ? "bg-primary/20 text-primary-strong hover:bg-primary/25"
                 : "text-ink-muted hover:bg-subtle hover:text-ink"
             }`}
+            onClick={toggleOpen}
+            variant="ghost"
           >
             <FileText data-icon="inline-start" size={12} />
             {counts.error > 0 && (
@@ -413,6 +393,7 @@ export function BrowserStatusBar() {
         </Hint>
 
         <span
+          aria-label={devServer.label}
           className={`flex items-center gap-1 ${
             devServer.state === "online"
               ? "text-success-strong"
@@ -420,26 +401,21 @@ export function BrowserStatusBar() {
                 ? "text-ink-soft"
                 : "text-destructive"
           }`}
-          title={devServer.title}
-          aria-label={devServer.label}
           data-dev-server={devServer.state}
+          title={devServer.title}
         >
           <StatusDot
-            state={
-              devServer.state === "online"
-                ? "up"
-                : devServer.state === "starting"
-                  ? "busy"
-                  : "down"
-            }
-            sizeClass="size-1.5"
-            pulse={devServer.state === "starting"}
             className={
               devServer.state === "online"
                 ? "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_80%,transparent)]"
                 : devServer.state === "starting"
                   ? "bg-ink-fainter"
                   : "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-danger)_80%,transparent)]"
+            }
+            pulse={devServer.state === "starting"}
+            sizeClass="size-1.5"
+            state={
+              devServer.state === "online" ? "up" : devServer.state === "starting" ? "busy" : "down"
             }
           />
           <span className="hidden sm:inline">{devServer.label}</span>

@@ -10,24 +10,21 @@
 import type { ApiWorkflowNode } from "~/lib/comfyui/raw";
 
 /** rawInputsById / raw_inputs 的单条输入元数据（镜像客户端 RawInputMeta）。 */
-export interface RawInputEntry {
-  name: string;
-  label?: string;
-  localized?: string;
-  type: string;
-  isConnection: boolean;
-  /** 哨兵边界线（子图暴露输入/输出）标记，画布渲染 Handle 用 */
-  isBoundary?: boolean;
-  widget?: { name: string };
-  widgetValue?: unknown;
-  multiline?: boolean;
-  imageRef?: { filename: string; subfolder: string; type: string };
-  preview?: boolean;
+export type RawInputEntry = {
   /** wrapper 解析的内部暂存字段：代理目标 (class, field)，COMBO 解析后删除 */
   __comboClass?: string;
   __comboField?: string;
   /** COMBO 候选列表（object_info 解析成功时写入，随 detail 下发） */
   comboOptions?: Array<string>;
+  imageRef?: { filename: string; subfolder: string; type: string };
+  /** 哨兵边界线（子图暴露输入/输出）标记，画布渲染 Handle 用 */
+  isBoundary?: boolean;
+  isConnection: boolean;
+  label?: string;
+  localized?: string;
+  multiline?: boolean;
+  name: string;
+  preview?: boolean;
   /** 子工作流封装节点暴露口背后的「内部真实字段」。
    *
    *  wrapper 的 `inputs[]` 里那一条是本层生成的别名槽位（ComfyUI 为
@@ -37,53 +34,56 @@ export interface RawInputEntry {
    *  这里把解析结果随条目下发，让富化（workflow-detail-io）能在别名之外
    *  找到真实字段名与它的 label / localized。 */
   proxyField?: {
-    nodeId: string;
     field: string;
     label?: string;
     localized?: string;
+    nodeId: string;
   };
-}
+  type: string;
+  widget?: { name: string };
+  widgetValue?: unknown;
+};
 
 /** outputs[] 单条元数据（镜像客户端 RawOutputMeta；isBoundary 仅子图路径写入）。 */
-export interface RawOutputEntry {
-  name: string;
-  localized?: string;
-  label?: string;
-  type: string;
-  links: Array<number>;
+export type RawOutputEntry = {
   isBoundary?: boolean;
-}
+  label?: string;
+  links: Array<number>;
+  localized?: string;
+  name: string;
+  type: string;
+};
 
 /** sparse raw-node 元数据（detail.rawNodes / subgraph rawNodeMeta）。 */
-export interface RawNodeMeta {
-  id: string;
-  widgets_values: Array<unknown>;
-  outputs: Array<RawOutputEntry>;
+export type RawNodeMeta = {
   flags: Record<string, unknown>;
+  id: string;
+  mode: number;
+  outputs: Array<RawOutputEntry>;
   /** 自定义节点 properties（rgthree Fast Groups Bypasser 等）；子图路径未采集 */
   properties?: Record<string, unknown>;
-  mode: number;
-}
+  widgets_values: Array<unknown>;
+};
 
 /** detail.nodes / rawView.nodes / 子图 nodes 的条目形状（镜像客户端 ComfyGraphNode）。 */
-export interface DetailNodeView {
-  id: string;
+export type DetailNodeView = {
+  boundary_input?: { name: string; type: string; value: unknown } | null;
+  boundary_output?: { name: string; type: string } | null;
   class_type: string;
-  title: string;
+  connects_from?: string | null;
+  connects_to?: string | null;
+  id: string;
+  is_input_endpoint?: boolean;
+  is_output_endpoint?: boolean;
   is_subgraph: boolean;
   raw_inputs: Array<RawInputEntry>;
   size?: [number, number];
-  is_input_endpoint?: boolean;
-  is_output_endpoint?: boolean;
-  boundary_input?: { name: string; type: string; value: unknown } | null;
-  boundary_output?: { name: string; type: string } | null;
-  connects_to?: string | null;
-  connects_from?: string | null;
-}
+  title: string;
+};
 
 /** RAW 视图数据包（从 rawJson 派生、保留 subgraph wrapper）。 */
-export interface RawViewPacket {
+export type RawViewPacket = {
+  graph: Record<string, ApiWorkflowNode>;
   nodes: Array<DetailNodeView>;
   positions: Record<string, [number, number]>;
-  graph: Record<string, ApiWorkflowNode>;
-}
+};

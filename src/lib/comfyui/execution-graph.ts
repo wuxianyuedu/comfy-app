@@ -45,13 +45,13 @@ export function isVirtualNodeType(type: string): boolean {
   return VIRTUAL_NODE_TYPES.has(type);
 }
 
-export interface ExecutionPrep {
+export type ExecutionPrep = {
+  /** 因上游被静音而彻底断链、只能丢弃的入参数量 */
+  droppedInputs: number;
   graph: Record<string, ApiWorkflowNode>;
   /** 被剔除的节点 id（bypass / 静音 / 纯前端节点） */
   removed: Array<string>;
-  /** 因上游被静音而彻底断链、只能丢弃的入参数量 */
-  droppedInputs: number;
-}
+};
 
 /** 判断一个 input 值是否为连线引用 `[nodeId, slot]`（且目标节点真实存在）。 */
 function isLinkRef(v: unknown, graph: Record<string, unknown>): v is [string | number, number] {
@@ -70,18 +70,20 @@ type ResolvedOrigin = { kind: "link"; value: [string, number] } | { kind: "value
 export function prepareGraphForExecution(input: Record<string, unknown>): ExecutionPrep {
   /* 存库 graph 来自 JSON：先把每个节点一次性收窄成稳定视图（值仍逐字透传），
    * 后续 walk / 剔除逻辑都读写视图，不再到处 unknown。 */
-  interface PrepEntry {
+  type PrepEntry = {
     /** 运行时恒为 string；保持原值逐字透传（断言仅在编译期） */
     classType: string;
     inputs: Record<string, unknown>;
     meta: Record<string, unknown>;
-  }
+  };
   const graph: Record<string, PrepEntry> = {};
 
   const removed: Array<string> = [];
   for (const [id, n] of Object.entries(input ?? {})) {
     const rec = asRecord(n);
-    if (!rec) continue;
+    if (!rec) {
+      continue;
+    }
     const meta = asRecord(rec._meta) ?? {};
     graph[id] = {
       classType: /* SAFETY: 类型断言已复核 */ rec.class_type as string,
@@ -102,17 +104,27 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
 
   /** 沿着被剔除的节点向上游走，直到落到一个真正会执行的节点。 */
   function walk(originId: string, originSlot: number, depth: number): ResolvedOrigin | null {
-    if (depth > 64) return null; // 环保护
+    if (depth > 64) {
+      return null;
+    } // 环保护
     const node = graph[originId];
-    if (!node) return null;
-    if (!inactive.has(originId)) return { kind: "link", value: [originId, originSlot] };
+    if (!node) {
+      return null;
+    }
+    if (!inactive.has(originId)) {
+      return { kind: "link", value: [originId, originSlot] };
+    }
 
     const meta = node.meta;
     // 静音节点不透传：下游这一路直接断掉（与 ComfyUI 行为一致）。
-    if (Number(meta.mode ?? NODE_MODE_ALWAYS) === NODE_MODE_NEVER) return null;
+    if (Number(meta.mode ?? NODE_MODE_ALWAYS) === NODE_MODE_NEVER) {
+      return null;
+    }
     // PrimitiveNode：把字面量直接内联给下游。
     const literal = meta.value;
-    if (literal !== undefined) return { kind: "value", value: literal };
+    if (literal !== undefined) {
+      return { kind: "value", value: literal };
+    }
 
     const orderRaw = meta.inputOrder;
     const order: Array<string> = Array.isArray(orderRaw)
@@ -134,7 +146,9 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
       seen.add(sameSlot);
     }
     for (const nm of order) {
-      if (seen.has(nm)) continue;
+      if (seen.has(nm)) {
+        continue;
+      }
       candidates.push(nm);
       seen.add(nm);
     }
@@ -142,11 +156,18 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
     for (const nm of candidates) {
       const value = node.inputs[nm];
 
-      if (!isLinkRef(value, graph)) continue;
+      if (!isLinkRef(value, graph)) {
+        continue;
+      }
 
       const typeOfNm = types[nm];
-      if (wanted && typeof typeOfNm === "string" && typeOfNm.toUpperCase() !== wanted.toUpperCase())
+      if (
+        wanted &&
+        typeof typeOfNm === "string" &&
+        typeOfNm.toUpperCase() !== wanted.toUpperCase()
+      ) {
         continue;
+      }
 
       return walk(String(value[0]), Number(value[1]), depth + 1);
     }

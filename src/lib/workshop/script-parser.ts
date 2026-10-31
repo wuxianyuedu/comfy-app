@@ -18,7 +18,9 @@ export function parseIdeaToScenes(
   meta: Pick<ProjectMeta, "title" | "type" | "tone" | "logline">,
 ): Array<Scene> {
   const text = raw.trim();
-  if (!text) return [];
+  if (!text) {
+    return [];
+  }
 
   // 单句短想法 → 用简单的三幕模板扩写
   const hasStructure = /\n\s*\n/.test(text) || /场景\d|场\s*\d|SCENE/i.test(text);
@@ -47,7 +49,7 @@ export function parseIdeaToScenes(
     const isHeading = /^(场景|场|SCENE)\s*\d+/i.test(first);
     const heading = isHeading ? first : `场景${i + 1} · ${first.slice(0, 12)}`;
     const body = isHeading ? lines.slice(1).join("\n") : lines.slice(1).join("\n");
-    const { location, time } = extractMeta(first + " " + body);
+    const { location, time } = extractMeta(`${first} ${body}`);
     return {
       id: uid("scene"),
       heading,
@@ -125,9 +127,15 @@ function extractMeta(text: string): { location: string; time: string } {
 
 function estimateShots(text: string): number {
   const len = text.length;
-  if (len < 40) return 1;
-  if (len < 100) return 2;
-  if (len < 200) return 3;
+  if (len < 40) {
+    return 1;
+  }
+  if (len < 100) {
+    return 2;
+  }
+  if (len < 200) {
+    return 3;
+  }
   return 4;
 }
 

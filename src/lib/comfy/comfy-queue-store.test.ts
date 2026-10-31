@@ -34,7 +34,9 @@ class FakeEventSource {
 
   close(): void {
     this.closed = true;
-    if (FakeEventSource.last === this) FakeEventSource.last = null;
+    if (FakeEventSource.last === this) {
+      FakeEventSource.last = null;
+    }
   }
 
   emit(data: string): void {
@@ -74,7 +76,7 @@ const RUNNING = {
   taskId: "task-1",
   workflowName: "文生图",
   model: "sd_xl_base_1.0.safetensors",
-  startedAt: 1_000,
+  startedAt: 1000,
   progress: 40,
   nodeType: "KSampler",
 };
@@ -275,7 +277,7 @@ describe("comfy-queue-store", () => {
         comfy: { running: 0, pending: 0 },
         running: {
           taskId: "task-2",
-          startedAt: 5_000,
+          startedAt: 5000,
           workflowName: 1,
           model: 2,
           nodeType: 3,
@@ -291,7 +293,7 @@ describe("comfy-queue-store", () => {
       taskId: "task-2",
       workflowName: null,
       model: null,
-      startedAt: 5_000,
+      startedAt: 5000,
       progress: 0,
       nodeType: null,
     });

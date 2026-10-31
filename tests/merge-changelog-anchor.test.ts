@@ -33,11 +33,11 @@ function fixture(
   changelog: string,
   fragments: Record<string, string>,
 ): {
-  root: string;
-  run: (args?: Array<string>) => { ok: boolean; output: string };
-  read: (rel: string) => string;
   exists: (rel: string) => boolean;
   head: string;
+  read: (rel: string) => string;
+  root: string;
+  run: (args?: Array<string>) => { ok: boolean; output: string };
 } {
   const root = mkdtempSync(path.join(tmpdir(), "merge-changelog-"));
   tempDirs.push(root);
@@ -82,7 +82,7 @@ function fixture(
           ),
         };
       } catch (err) {
-        const e = /* SAFETY: 类型断言已复核 */ err as { stdout?: string; stderr?: string };
+        const e = /* SAFETY: 类型断言已复核 */ err as { stderr?: string; stdout?: string; };
         return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
       }
     },
@@ -99,7 +99,9 @@ function fixture(
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /**

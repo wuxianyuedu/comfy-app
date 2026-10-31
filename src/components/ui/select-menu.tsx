@@ -67,15 +67,27 @@ import React, { useMemo } from "react";
 import { cn } from "~/lib/utils";
 import { useOverlayBoundary } from "~/components/ui/use-overlay-boundary";
 
-interface SelectMenuProps {
-  value: string;
-  onChange: (value: string) => void;
-  options: Array<string>;
-  /** 选项值 → 显示文案的映射；缺省时回退到原始值。 */
-  labels?: Record<string, React.ReactNode>;
-  placeholder?: string;
-  disabled?: boolean;
+type SelectMenuProps = {
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean | "true" | "false";
+  "aria-label"?: string;
+  "aria-labelledby"?: string;
+  /**
+   * 自动加宽浮层以容纳最长的选项标签。
+   *  只测量字符串 / 数字标签 —— 富 ReactNode 标签（如徽标、图标）会被跳过。默认 true。
+   */
+  autoFitFromOptions?: boolean;
   className?: string;
+  disabled?: boolean;
+  /**
+   * 可选页脚，渲染在浮层底部（可滚动的选项列表之外）——
+   *  用于分组空态提示：无论有多少选项，它都必须始终可见。
+   */
+  footer?: React.ReactNode;
+  /**
+   * 触发器取**固定宽度**（铺满容器）而不是「随内容自适应」。缺省是自适应。
+   */
+  fullWidth?: boolean;
   /**
    * a11y 转发口 · 挂在 Trigger（真正可交互的按钮元素）上。
    * `<FormField>` 的 render prop 会 spread `{ id, "aria-describedby",
@@ -84,11 +96,16 @@ interface SelectMenuProps {
    * `title` 也一并转（虽然不推荐用它替代 Tooltip · 存量调用点保留行为）。
    */
   id?: string;
-  "aria-label"?: string;
-  "aria-labelledby"?: string;
-  "aria-describedby"?: string;
-  "aria-invalid"?: boolean | "true" | "false";
-  title?: string;
+  /** 选项值 → 显示文案的映射；缺省时回退到原始值。 */
+  labels?: Record<string, React.ReactNode>;
+  onChange: (value: string) => void;
+  /**
+   * 浮层打开 / 关闭时调用。打开状态由 base-ui Select 内部持有；
+   *  调用方借此在列表即将可见时惰性加载选项。
+   */
+  onOpenChange?: (open: boolean) => void;
+  options: Array<string>;
+  placeholder?: string;
   /**
    * 浮层最小宽度（px），默认 480 —— 装饰较丰富的行
    *（圆点 + 名称 + 任务类型 + 本机/在线徽标）在窄触发器里也能舒展；
@@ -101,26 +118,9 @@ interface SelectMenuProps {
    *  上限封顶 720，免得单个异常长的字符串把浮层顶出屏幕。
    */
   popoverMinWidth?: number;
-  /**
-   * 触发器取**固定宽度**（铺满容器）而不是「随内容自适应」。缺省是自适应。
-   */
-  fullWidth?: boolean;
-  /**
-   * 自动加宽浮层以容纳最长的选项标签。
-   *  只测量字符串 / 数字标签 —— 富 ReactNode 标签（如徽标、图标）会被跳过。默认 true。
-   */
-  autoFitFromOptions?: boolean;
-  /**
-   * 可选页脚，渲染在浮层底部（可滚动的选项列表之外）——
-   *  用于分组空态提示：无论有多少选项，它都必须始终可见。
-   */
-  footer?: React.ReactNode;
-  /**
-   * 浮层打开 / 关闭时调用。打开状态由 base-ui Select 内部持有；
-   *  调用方借此在列表即将可见时惰性加载选项。
-   */
-  onOpenChange?: (open: boolean) => void;
-}
+  title?: string;
+  value: string;
+};
 
 /* 触发器：与 PR 之前 Popover+Trigger 版本逐字对齐的深色样式。
  * 基础里**没有** `w-full`：默认宽度由调用处决定（`w-full` 用在需要铺满
@@ -175,12 +175,16 @@ export function SelectMenu({
   /* 浮层可用区域：视口减去应用级标题行（壳态）—— 见 `useOverlayBoundary`。 */
   const boundary = useOverlayBoundary();
   const effectiveMinWidth = useMemo(() => {
-    if (!autoFitFromOptions) return popoverMinWidth;
+    if (!autoFitFromOptions) {
+      return popoverMinWidth;
+    }
     let longest = 0;
     for (const opt of options) {
       const node = labels?.[opt];
       const text = typeof node === "string" || typeof node === "number" ? String(node) : opt;
-      if (text.length > longest) longest = text.length;
+      if (text.length > longest) {
+        longest = text.length;
+      }
     }
     const approx = longest * POPOVER_PER_CHAR_PX + POPOVER_AUTO_HEADROOM;
     const bounded = Math.max(POPOVER_AUTO_MIN, approx);
@@ -198,24 +202,26 @@ export function SelectMenu({
 
   return (
     <SelectPrimitive.Root
+      disabled={disabled}
+      onOpenChange={(next) => onOpenChange?.(next)}
+      onValueChange={(next) => {
+        if (typeof next === "string") {
+          onChange(next);
+        }
+      }}
       /* base-ui Select 的 value 允许 null 表示「未选」；空串不当 null 处理，
        * 显式转 null 让 placeholder 正常显示（与旧实现的行为一致：`value=""`
        * 时 trigger 显示 placeholder）。 */
       value={value || null}
-      onValueChange={(next) => {
-        if (typeof next === "string") onChange(next);
-      }}
-      onOpenChange={(next) => onOpenChange?.(next)}
-      disabled={disabled}
     >
       <SelectPrimitive.Trigger
-        id={id}
-        aria-label={ariaLabel}
-        aria-labelledby={ariaLabelledby}
         aria-describedby={ariaDescribedby}
         aria-invalid={ariaInvalid}
-        title={title}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledby}
         className={cn(TRIGGER_BASE, fullWidth && "w-full", className)}
+        id={id}
+        title={title}
       >
         <SelectPrimitive.Value className="flex min-w-0 flex-1 items-center truncate">
           {display}
@@ -232,7 +238,6 @@ export function SelectMenu({
       <SelectPrimitive.Portal>
         <SelectPrimitive.Positioner
           align="start"
-          sideOffset={4}
           /* base-ui Select 的 `alignItemWithTrigger` **默认为 true**：弹层会把
              「已选项」对齐到触发器上，于是弹层位置随选中项上下移动 —— 选中末尾项
              时弹层被顶到视口上方、前半截出屏（用户实测）。显式关掉后弹层恒从
@@ -240,17 +245,18 @@ export function SelectMenu({
           alignItemWithTrigger={false}
           className="z-popup isolate outline-none"
           collisionBoundary={boundary ?? undefined}
+          sideOffset={4}
         >
           <SelectPrimitive.Popup
-            data-align-trigger={false}
             className={cn(CONTENT_BASE)}
+            data-align-trigger={false}
             style={{
               width: `min(${effectiveMinWidth}px, 92vw)`,
             }}
           >
             <SelectPrimitive.List className={LIST_BASE}>
               {options.map((opt) => (
-                <SelectPrimitive.Item key={opt} value={opt} className={ITEM_BASE}>
+                <SelectPrimitive.Item className={ITEM_BASE} key={opt} value={opt}>
                   <SelectPrimitive.ItemText>{labels?.[opt] ?? opt}</SelectPrimitive.ItemText>
                 </SelectPrimitive.Item>
               ))}

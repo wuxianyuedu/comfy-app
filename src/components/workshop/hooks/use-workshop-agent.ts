@@ -18,37 +18,37 @@ import { resolveAgentTool, type AgentToolHandlers } from "~/lib/agent/executor";
 export type { AgentToolHandlers };
 
 /** 一条工具执行记录（Agent 浮层「工作过程」面板的展示数据）。 */
-export interface AgentToolRun {
-  id: string;
-  toolName: string;
-  status: "running" | "done" | "error";
-  summary: string;
+export type AgentToolRun = {
   argSummary: string;
   detail?: string;
-}
+  id: string;
+  status: "running" | "done" | "error";
+  summary: string;
+  toolName: string;
+};
 
 /** Agent 一帧对话消息（用户 / 助手 / 工具记录）。 */
 export type AgentPanelMessage =
-  | { id: string; role: "user" | "assistant"; content: string }
+  | { content: string; id: string; role: "user" | "assistant" }
   | { id: string; role: "tool-run"; run: AgentToolRun };
 
 /** 工坊 Agent 需要调用 controller 的操作（由 WorkshopPipeline 注入）。 */
 export type WorkshopAgentToolHandlers = AgentToolHandlers;
 
 /** Agent hook 返回给视图的 controller。 */
-export interface WorkshopAgentController {
-  open: boolean;
-  messages: Array<AgentPanelMessage>;
-  input: string;
+export type WorkshopAgentController = {
   busy: boolean;
-  error: string;
-  toolRuns: Array<AgentToolRun>;
-  openAgent: () => void;
-  closeAgent: () => void;
-  setInput: (value: string) => void;
-  send: () => Promise<void>;
   clearToolRuns: () => void;
-}
+  closeAgent: () => void;
+  error: string;
+  input: string;
+  messages: Array<AgentPanelMessage>;
+  open: boolean;
+  openAgent: () => void;
+  send: () => Promise<void>;
+  setInput: (value: string) => void;
+  toolRuns: Array<AgentToolRun>;
+};
 
 /* 对话条目与工具运行记录的 id 走全库唯一出口（规范 16 §16.2.4.36）——
  * 收口前这里是两份逐字同形的「时间戳 + 自己的模块级计数器」。 */
@@ -116,7 +116,7 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
 
   /** 把工具调用解析并执行（纯逻辑经 executor 模块）。 */
   const executeOneTool = React.useCallback(
-    async (call: { id: string; name: string; arguments: string }) => {
+    async (call: { arguments: string; id: string; name: string }) => {
       const runId = toolRunId();
       const tool = resolveAgentTool(call.name, call.arguments, handlersRef.current);
       const run: AgentToolRun = {
@@ -142,8 +142,8 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
             ...(result.detail ? { detail: result.detail } : {}),
           }),
         } satisfies AgentMessageLike;
-      } catch (err: unknown) {
-        const msg = errorMessage(err, "工具执行失败");
+      } catch (error_: unknown) {
+        const msg = errorMessage(error_, "工具执行失败");
         patchToolRun(runId, { status: "error", detail: msg });
         return {
           role: /* SAFETY: 类型断言已复核 */ "tool" as const,
@@ -158,7 +158,9 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
   /** 核心 send：把用户消息送入 Agent 循环直至模型回复。 */
   const send = React.useCallback(async () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy) {
+      return;
+    }
 
     setInput("");
     setError("");

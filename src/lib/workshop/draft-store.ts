@@ -14,20 +14,20 @@ import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 export const DEFAULT_META: ProjectMeta = emptyProject();
 
 /** 自动保存的工坊状态（恢复时逐字段校验类型，损坏则按全新状态继续）。 */
-export interface WorkshopDraft {
-  meta: ProjectMeta;
-  scriptMarkdown: string;
-  scenes: Array<Scene>;
+export type WorkshopDraft = {
   characters: Array<Character>;
+  meta: ProjectMeta;
+  scenes: Array<Scene>;
+  scriptMarkdown: string;
   shots: Array<Shot>;
-  /** 工坊「生图」阶段选定用来生成的「工作流库工作流」id（ISSUE #145）。
-   *  仅本地持久化（服务端镜像不含此字段）。 */
-  workflowId: string;
   /** 工坊「视频」阶段选定的「工作流库工作流」id。
    *  字段与生图分开 —— 两类工作流的对外参数口径不同（生图无首帧、视频有），
    *  共用一个 id 会互相串味。 */
   videoWorkflowId: string;
-}
+  /** 工坊「生图」阶段选定用来生成的「工作流库工作流」id（ISSUE #145）。
+   *  仅本地持久化（服务端镜像不含此字段）。 */
+  workflowId: string;
+};
 
 /** 全新空草稿（新项目 / 解析失败时的初值）。 */
 export function emptyWorkshopDraft(): WorkshopDraft {
@@ -53,7 +53,9 @@ function draftKeyFor(id: string): string {
  *  `~/lib/workshop/draft-integrity` 的 `auditDraftElements` 在消费侧判、在工坊界面
  *  报（台账 F13″）—— 这一扇门与那扇门共用一份判据，不各写一遍。 */
 function parseDraft(raw: string | null): WorkshopDraft {
-  if (!raw) return emptyWorkshopDraft();
+  if (!raw) {
+    return emptyWorkshopDraft();
+  }
   try {
     const draft = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Partial<WorkshopDraft>;
     return {

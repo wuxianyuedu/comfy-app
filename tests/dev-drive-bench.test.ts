@@ -18,21 +18,21 @@ import {
 
 /** 实测结果里的一侧。 */
 type Target = {
-  label: string;
-  dir: string;
-  bigWriteMbps: number | null;
   bigReadMbps: number | null;
+  bigWriteMbps: number | null;
+  cpuTop: Array<{ name: string; seconds: number }>;
+  dir: string;
+  elapsedMs: number;
+  label: string;
   smallCreatePerSec: number | null;
   smallReadPerSec: number | null;
-  elapsedMs: number;
-  cpuTop: Array<{ name: string; seconds: number }>;
   watched: Array<{
     filter: string;
-    process: string;
+    known: boolean;
     label: string;
     present: boolean;
+    process: string;
     seconds: number;
-    known: boolean;
   }>;
 };
 

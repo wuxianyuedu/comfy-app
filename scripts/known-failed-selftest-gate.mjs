@@ -81,15 +81,13 @@ export const GATE_SCRIPT = "scripts/check-known-failed-stale.mjs";
 export function stagedFiles() {
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
    * 的文件头「口径 ④」）。 */
-  const out = spawnSync(
-    "git",
-    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
-    {
-      cwd: ROOT,
-      encoding: "utf8",
-    },
-  );
-  if (out.status !== 0) return [];
+  const out = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (out.status !== 0) {
+    return [];
+  }
   return out.stdout.split(/\r?\n/).filter(Boolean);
 }
 
@@ -148,11 +146,11 @@ export function runGate({ staged, selfTest }) {
 
 /** 真跑自证（端到端：造探针 → 起 vitest → 读证据 → 判两侧）。 */
 function runSelfTest() {
-  const r = spawnSync(
-    process.execPath,
-    [path.join(ROOT, GATE_SCRIPT), "--self-test"],
-    { cwd: ROOT, encoding: "utf8", maxBuffer: 64 << 20 },
-  );
+  const r = spawnSync(process.execPath, [path.join(ROOT, GATE_SCRIPT), "--self-test"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 64 << 20,
+  });
   if (r.error) {
     return {
       status: null,
@@ -191,12 +189,13 @@ export function resolveFace(argv, { readStaged = stagedFiles } = {}) {
     if (!baseRef) {
       return {
         ok: false,
-        reason:
-          "`--base` 要一条基线（用法：`--base <ref>`）—— 拿不到基线就没有判决面",
+        reason: "`--base` 要一条基线（用法：`--base <ref>`）—— 拿不到基线就没有判决面",
       };
     }
     const got = changedFilesForBaseRef(baseRef, { cwd: ROOT });
-    if (!got.ok) return { ok: false, reason: got.reason };
+    if (!got.ok) {
+      return { ok: false, reason: got.reason };
+    }
     /* ⚠️ **空清单在这里是「成功测得没有改动」**，不是「取不到面」—— 基线取到了、
      *   diff 跑成功了、结果是空，那就是「这次什么都没改」⇒ 没有可判的内容 ⇒ 绿。
      *   （把它读成「不知道」会让 master 上的本地复算永远退 2 —— 那正是
@@ -215,11 +214,13 @@ export function resolveFace(argv, { readStaged = stagedFiles } = {}) {
    * 是**答案**而不是「取不到输入面」—— 走下面既有的「没碰到机制 ⇒ 说一句话」那一档）。
    * 不一致（旗标在而索引非空）也当场念出来，不留「设了旗标没人知道被忽略」的现场。 */
   const intent = intentionalEmptyCommit({ stagedCount: files.length });
-  if (intent.voidNote)
+  if (intent.voidNote) {
     process.stderr.write(`[known-failed-selftest] ⚠ ${intent.voidNote}\n`);
+  }
   if (files.length === 0) {
-    if (intent.note)
+    if (intent.note) {
       process.stderr.write(`[known-failed-selftest] ${intent.note}\n`);
+    }
     if (intent.applies) {
       return { ok: true, files: [], via: "刻意空提交（没碰任何文件）" };
     }
@@ -276,10 +277,6 @@ export function main(argv = process.argv.slice(2)) {
   return 0;
 }
 
-if (
-  process.argv[1] &&
-  fs.realpathSync(process.argv[1]) ===
-    fs.realpathSync(import.meta.filename)
-) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(import.meta.filename)) {
   process.exit(main());
 }

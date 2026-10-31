@@ -12,25 +12,21 @@ describe("adviseOnError", () => {
   it("显存不足：两处旧词表各自给一句，收口后只有一句", () => {
     /* 收口前历史卡说「降低 batch size / 分辨率」、画布面板说「拆成更小的
      * 批次 / 关闭其他任务」—— 同一句报错在两处给出不同建议。 */
-    const advice = adviseOnError(
-      "CUDA out of memory. Tried to allocate 2.00 GiB",
-    );
+    const advice = adviseOnError("CUDA out of memory. Tried to allocate 2.00 GiB");
     expect(advice).toBeTruthy();
     expect(advice).toContain("批次");
   });
 
   it("模型缺失：连 ckpt 的短写法也认（旧词表互相漏项之一）", () => {
     expect(adviseOnError("ckpt not found")).toContain("models/checkpoints");
-    expect(adviseOnError("Cannot find model: a.safetensors")).toContain(
-      "models/checkpoints",
-    );
+    expect(adviseOnError("Cannot find model: a.safetensors")).toContain("models/checkpoints");
   });
 
   it("comfy-cli 解释器缺失：建议指向设置页，而不是让用户建 venv（ISSUE #1239）", () => {
     // 报错原文带着 Windows 绝对路径，规则必须排在通用「模型缺失 / not found」之前，
     // 否则会被按子串误抢成一句与成因无关的建议。
     const advice = adviseOnError(
-      "未找到 comfy-cli Python 解释器：D:\\apps\\ComfyAPP\\static\\python-venv\\comfy-cli\\Scripts\\python.exe",
+      String.raw`未找到 comfy-cli Python 解释器：D:\apps\ComfyAPP\static\python-venv\comfy-cli\Scripts\python.exe`,
     );
     expect(advice).toContain("设置");
     expect(advice).toContain("comfy-cli 解释器");
@@ -62,8 +58,7 @@ describe("adviseOnError", () => {
   });
 
   it("wrapper 子图缺失优先于「模型缺失」判定（规则顺序即优先级）", () => {
-    const text =
-      "Node 7 not found: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d not installed";
+    const text = "Node 7 not found: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d not installed";
     const advice = adviseOnError(text);
     expect(advice).toContain("wrapper 子图");
     expect(advice).toContain("1a2b3c4d");
@@ -71,9 +66,7 @@ describe("adviseOnError", () => {
 
   it("UUID 命中但报错不是「找不到」时，回落到其它规则或 null", () => {
     /* UUID 规则自己返回空串 —— 判据是「UUID 且 not found/installed」。 */
-    const advice = adviseOnError(
-      "Traceback 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-    );
+    const advice = adviseOnError("Traceback 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d");
     expect(advice).toBeNull();
   });
 
@@ -85,9 +78,7 @@ describe("adviseOnError", () => {
   });
 
   it("UUID 命中且确实「找不到」时才给建议（另一支：UUID + not installed）", () => {
-    const advice = adviseOnError(
-      "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d not installed",
-    );
+    const advice = adviseOnError("1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d not installed");
     expect(advice).toContain("wrapper 子图");
   });
 

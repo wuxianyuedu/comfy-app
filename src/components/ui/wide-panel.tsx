@@ -42,7 +42,9 @@ const WIDE_PANELS = new Map<string, boolean>();
 const WIDE_LISTENERS = new Set<() => void>();
 
 function notify() {
-  for (const l of WIDE_LISTENERS) l();
+  for (const l of WIDE_LISTENERS) {
+    l();
+  }
 }
 
 function storageKey(id: string): string {
@@ -53,7 +55,9 @@ function storageKey(id: string): string {
 function readWide(id: string, fallback: boolean): boolean {
   /* 先看内存（同会话内的 `setItem` 立即生效，不依赖 storage 事件的时机）。 */
   const cached = WIDE_PANELS.get(id);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    return cached;
+  }
   /* 配额满 / 隐私模式 / storage 被禁用：本会话仍然生效，只是丢了记忆。
    * 「能不能用 storage」与「读失败怎么办」收在 `~/lib/browser-storage`
    *（§16.2.4.28）。 */
@@ -77,18 +81,18 @@ const subscribe = (cb: () => void) => {
   };
 };
 
-export interface WidePanel {
-  /** 当前是否处于加宽档。 */
-  wide: boolean;
-  /** 在窄 / 宽之间切换（并记忆）。 */
-  toggle: () => void;
+export type WidePanel = {
   /** 显式设置（供「恢复默认」这类动作）。 */
   set: (wide: boolean) => void;
-  /** 当前档位对应的宽度类 —— 直接交给 `popupClassName` / `className`。 */
-  widthClass: string;
+  /** 在窄 / 宽之间切换（并记忆）。 */
+  toggle: () => void;
   /** 触发钮的文案（`aria-label` / `title` 共用，避免两处写不一样）。 */
   toggleLabel: string;
-}
+  /** 当前是否处于加宽档。 */
+  wide: boolean;
+  /** 当前档位对应的宽度类 —— 直接交给 `popupClassName` / `className`。 */
+  widthClass: string;
+};
 
 /**
  * 面板加宽档的出口。
@@ -124,10 +128,7 @@ export function useWidePanel(
     [id],
   );
 
-  const toggle = useCallback(
-    () => set(!readWide(id, defaultWide)),
-    [id, defaultWide, set],
-  );
+  const toggle = useCallback(() => set(!readWide(id, defaultWide)), [id, defaultWide, set]);
 
   return {
     wide,
@@ -148,20 +149,14 @@ export function useWidePanel(
  * 外观（尺寸、圆角、hover）仍由调用处经 `className` 给 —— 与
  * §16.2.4.2 第 9 条一致：验收标准是渲染结果不变。
  */
-export function WidePanelToggle({
-  panel,
-  className,
-}: {
-  panel: WidePanel;
-  className?: string;
-}) {
+export function WidePanelToggle({ panel, className }: { className?: string; panel: WidePanel }) {
   return (
     <Button
-      variant="ghost"
-      onClick={panel.toggle}
-      title={panel.toggleLabel}
       aria-label={panel.toggleLabel}
       className={className}
+      onClick={panel.toggle}
+      title={panel.toggleLabel}
+      variant="ghost"
     >
       {panel.wide ? (
         <Minimize2 data-icon="inline-start" size={16} />

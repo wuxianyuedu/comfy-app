@@ -61,7 +61,8 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
     /* 「按块给 origin」是这一层最容易糊弄过去的地方：把三通道的行抄成一种格式、
        全按一个 origin 入库，画布上「来源」那一列会整列同名，而分桶与计数
        等于没有被验过。 */
-    expect(store).toContain("interface OriginBlock");
+    /* 声明形态归 lint 规则管（`interface` / `type =` 都算），这里只钉「这块类型在」。 */
+    expect(store).toMatch(/export (?:interface|type) OriginBlock\b/);
     expect(store).toContain("readonly origin:");
     expect(store).toContain("readonly blocks: ReadonlyArray<OriginBlock>");
     expect(store, "每块各自解析：`blocks.flatMap` 里要带 block.origin").toMatch(

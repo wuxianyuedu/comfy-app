@@ -13,17 +13,15 @@ import { reviewCharacter } from "~/lib/production/run-client";
 import type { ReviewVerdict } from "~/lib/production/review-types";
 import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";
 
-export interface CharacterReviewController {
-  verdict: ReviewVerdict | null;
-  reviewing: boolean;
+export type CharacterReviewController = {
   error: string;
-  review: (characterId: string) => Promise<void>;
   reset: () => void;
-}
+  review: (characterId: string) => Promise<void>;
+  reviewing: boolean;
+  verdict: ReviewVerdict | null;
+};
 
-export function useCharacterReview(
-  projectId: string,
-): CharacterReviewController {
+export function useCharacterReview(projectId: string): CharacterReviewController {
   const [verdict, setVerdict] = useState<ReviewVerdict | null>(null);
   const [error, setError] = useState("");
   const reviewBusy = useBusyAction();
@@ -36,7 +34,9 @@ export function useCharacterReview(
 
   const review = useCallback(
     async (characterId: string) => {
-      if (!projectId) return;
+      if (!projectId) {
+        return;
+      }
       guardRef.current.dispose();
       const guard = beginStaleRun();
       guardRef.current = guard;
@@ -45,10 +45,10 @@ export function useCharacterReview(
         try {
           const v = await reviewCharacter(projectId, characterId);
           guard.commit(() => setVerdict(v));
-        } catch (e) {
+        } catch (error_) {
           guard.commit(() => {
             setVerdict(null);
-            setError(e instanceof Error ? e.message : "评审失败");
+            setError(error_ instanceof Error ? error_.message : "评审失败");
           });
         }
       });

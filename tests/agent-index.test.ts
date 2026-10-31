@@ -26,10 +26,10 @@ const SCRIPT = join(process.cwd(), "scripts", "agent-index.mjs");
 
 /** 一次命令的读数形状（与 `runTool` 的返回值同形）。 */
 type RunResult = {
-  missing: boolean;
   code: number | null;
-  stdout: string;
+  missing: boolean;
   stderr: string;
+  stdout: string;
 };
 
 function fakeRun(result: RunResult) {
@@ -47,8 +47,8 @@ function run(args: Array<string> = []) {
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: typeof e.status === "number" ? e.status : 1,

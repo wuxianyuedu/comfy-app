@@ -85,10 +85,10 @@ function DialogDemo() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)}>
+      <Button onClick={() => setOpen(true)} variant="outline">
         打开命令面板（⌘K）
       </Button>
-      <CommandDialog open={open} onOpenChange={setOpen}>
+      <CommandDialog onOpenChange={setOpen} open={open}>
         <CommandInput placeholder="搜索要执行的命令…" />
         <CommandList>
           <CommandEmpty>没有匹配的命令</CommandEmpty>

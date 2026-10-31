@@ -58,7 +58,7 @@ function crossHostModules(): Array<string> {
 }
 
 /** 在**真 Node 进程**里加载一个模块（不注册任何 loader）。 */
-function loadInRealNode(absPath: string): { ok: boolean; message: string } {
+function loadInRealNode(absPath: string): { message: string; ok: boolean; } {
   const r = spawnSync(
     process.execPath,
     [
@@ -68,7 +68,9 @@ function loadInRealNode(absPath: string): { ok: boolean; message: string } {
     ],
     { encoding: "utf8", cwd: ROOT, env: { ...process.env, NODE_ENV: "test" } },
   );
-  if (r.status === 0) return { ok: true, message: "" };
+  if (r.status === 0) {
+    return { ok: true, message: "" };
+  }
   const message = `${r.stderr ?? ""}${r.stdout ?? ""}`.trim();
   return { ok: false, message: message || `(无输出，退出码 ${r.status})` };
 }
@@ -87,7 +89,9 @@ describe("跨宿主地基层模块在真 Node 里加载得起来", () => {
     const failures: Array<string> = [];
     for (const rel of crossHostModules()) {
       const r = loadInRealNode(path.join(ROOT, rel));
-      if (r.ok) continue;
+      if (r.ok) {
+        continue;
+      }
       failures.push(
         `${rel}\n` +
           r.message

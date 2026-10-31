@@ -22,8 +22,8 @@ export const Default: Story = {};
 export const Both: Story = {
   render: () => (
     <div className="flex items-center gap-2">
-      <SourceTag source="workflow.json" local />
-      <SourceTag source="workflow.json" local={false} />
+      <SourceTag local source="workflow.json" />
+      <SourceTag local={false} source="workflow.json" />
     </div>
   ),
 };

@@ -94,7 +94,9 @@ export function scriptOf(argv) {
   for (const raw of argv) {
     const token = String(raw ?? "").replace(/\\/g, "/");
     const m = /(?:^|\/)scripts\/([^/]+\.(?:mjs|cjs))$/.exec(token);
-    if (m?.[1]) return `scripts/${m[1]}`;
+    if (m?.[1]) {
+      return `scripts/${m[1]}`;
+    }
   }
   return null;
 }
@@ -162,16 +164,12 @@ export function classifyHeavySteps(changed, deps = {}) {
  */
 export function affectedTests(changed, deps = {}) {
   const spawn = deps.spawn ?? spawnSync;
-  const res = spawn(
-    process.execPath,
-    ["scripts/affected-tests.mjs", "--changed-stdin", "--json"],
-    {
-      cwd: ROOT,
-      encoding: "utf8",
-      input: changed.join("\n"),
-      stdio: ["pipe", "pipe", "pipe"],
-    },
-  );
+  const res = spawn(process.execPath, ["scripts/affected-tests.mjs", "--changed-stdin", "--json"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    input: changed.join("\n"),
+    stdio: ["pipe", "pipe", "pipe"],
+  });
   const stdout = String(res.stdout ?? "");
   const stderr = String(res.stderr ?? "");
   if (res.status !== 0 || stdout.trim() === "") {
@@ -224,13 +222,9 @@ function gatesSection(changed) {
           : "（改动面一条都没碰到登记过的收窄面）"),
     );
     if (cls.skippable.length > 0) {
-      lines.push(
-        `      - 按收窄面可跳过：${names(cls.skippable)}`,
-      );
+      lines.push(`      - 按收窄面可跳过：${names(cls.skippable)}`);
     }
-    lines.push(
-      `      - 没有收窄面、任何改动都可能让它们红：${names(cls.noFace)}`,
-    );
+    lines.push(`      - 没有收窄面、任何改动都可能让它们红：${names(cls.noFace)}`);
   }
 
   const gateKeys = Object.entries(GATES);
@@ -250,7 +244,9 @@ function gatesSection(changed) {
   lines.push(
     `  · 平台 ifModify 收窄（ci-incremental-gates 的 ${platform.length} 条登记）：` +
       `会跑 ${willRun.length} 条；可跳过 ${willSkip.length} 条` +
-      (willSkip.length > 0 ? `\n      会跑：${willRun.join(" / ") || "无"}\n      可跳过：${willSkip.join(" / ")}` : ""),
+      (willSkip.length > 0
+        ? `\n      会跑：${willRun.join(" / ") || "无"}\n      可跳过：${willSkip.join(" / ")}`
+        : ""),
   );
   return { lines, ok: cls.totalSteps > 0 };
 }
@@ -273,15 +269,15 @@ function testsSection(changed) {
     return { lines, ok: false };
   }
   const { mode, tests, reasons } = got.result;
-  const extra = tests.filter(
-    (t) => !FIXED_STRUCTURAL_TESTS.includes(t),
-  ).length;
+  const extra = tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t)).length;
   const lines = [
     `${TAG} 用例（来自 scripts/affected-tests.mjs 的判决链）`,
     `  · 模式 ${mode}${mode === "all" ? "（放弃收窄：只跑固定清单，不是全量）" : "（增量面）"}` +
       ` · 共 ${tests.length} 份（固定清单 ${tests.length - extra} + 受影响 ${extra}）`,
   ];
-  if (typeof reasons.__note === "string") lines.push(`  · 说明：${reasons.__note}`);
+  if (typeof reasons.__note === "string") {
+    lines.push(`  · 说明：${reasons.__note}`);
+  }
   if (typeof reasons.__faceSkipped === "string") {
     lines.push(`  · 固定清单按输入面跳过：${reasons.__faceSkipped.split(" ").join(" / ")}`);
   }
@@ -304,12 +300,13 @@ function docsSection(changed) {
     `${TAG} 规范（AGENTS.md「强制先读规范文档的改动范围」的机器可读副本：scripts/doc-reading-map.mjs）`,
   ];
   if (matched.length === 0) {
-    lines.push("  · 按路径一行都没命中 —— 表里没有为这批文件登记必读章节（不等于没有约定，下面那两条仍要对照）");
+    lines.push(
+      "  · 按路径一行都没命中 —— 表里没有为这批文件登记必读章节（不等于没有约定，下面那两条仍要对照）",
+    );
   }
   for (const entry of matched) {
     lines.push(
-      `  · ${entry.scope} → ${entry.doc} ${entry.spec}` +
-        (entry.when ? `（${entry.when}）` : ""),
+      `  · ${entry.scope} → ${entry.doc} ${entry.spec}` + (entry.when ? `（${entry.when}）` : ""),
     );
   }
   if (actionOnly.length > 0) {
@@ -395,9 +392,6 @@ export function main(argv = process.argv.slice(2)) {
   return gates.ok && tests.ok ? 0 : 2;
 }
 
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }

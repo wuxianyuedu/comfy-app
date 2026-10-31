@@ -18,11 +18,9 @@ type AvatarSize = NonNullable<React.ComponentProps<typeof Avatar>["size"]>;
 const SIZES: Array<AvatarSize> = ["default", "sm", "lg"];
 
 /** 无色数据 URL：透明底 + 只描边的椭圆「头像」。 */
-const PORTRAIT =
-  "data:image/svg+xml;utf8," +
-  encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="none" stroke="gray" stroke-width="4"><circle cx="32" cy="24" r="11"/><path d="M12 56a20 20 0 0 1 40 0"/></svg>',
-  );
+const PORTRAIT = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="none" stroke="gray" stroke-width="4"><circle cx="32" cy="24" r="11"/><path d="M12 56a20 20 0 0 1 40 0"/></svg>',
+)}`;
 
 const meta = {
   title: "UI/Avatar",
@@ -63,11 +61,11 @@ export const WithImage: Story = {
   render: (args) => (
     <div className="flex items-center gap-3">
       <Avatar {...args}>
-        <AvatarImage src={PORTRAIT} alt="月读" />
+        <AvatarImage alt="月读" src={PORTRAIT} />
         <AvatarFallback>月</AvatarFallback>
       </Avatar>
       <Avatar {...args}>
-        <AvatarImage src="/not-a-real-image.png" alt="加载失败" />
+        <AvatarImage alt="加载失败" src="/not-a-real-image.png" />
         <AvatarFallback>失败</AvatarFallback>
       </Avatar>
     </div>

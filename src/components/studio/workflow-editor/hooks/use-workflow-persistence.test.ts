@@ -84,7 +84,9 @@ function readWrittenPositions(setDetail: ReturnType<typeof vi.fn>, detail: Workf
   const updater = /* SAFETY: 类型断言已复核 */ setDetail.mock.calls.at(-1)?.[0] as
     | ((prev: WorkflowDetail | null) => WorkflowDetail | null)
     | undefined;
-  if (!updater) return undefined;
+  if (!updater) {
+    return undefined;
+  }
   return updater(detail)?.positions;
 }
 

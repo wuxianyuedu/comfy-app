@@ -20,11 +20,11 @@ import {
 import { findLogPathTokens } from "~/lib/log/log-path-tokens";
 
 /** 行文本里识别出的词法分片。`style` 为空 = 按级别默认色渲染。 */
-export interface RowToken {
-  text: string;
+export type RowToken = {
   /** 语义样式键（与 ANSI 样式键同一套，视图映射成 className）。 */
   style?: AnsiStyleKey;
-}
+  text: string;
+};
 
 /** 日志级别的徽标配色（视图与测试共用同一份表）。级别是**状态语义**，
  *  走项目语义 token（§4.11.1 / P71）：info→`--color-info`、warn→
@@ -115,16 +115,18 @@ const TOKEN_STYLES: Array<{ pattern: RegExp; style: AnsiStyleKey }> = [
 const PATH_STYLE: AnsiStyleKey = "magenta-bright";
 
 /** 行里被命中的一段（半开区间 `[start, end)`）。 */
-interface StyledSpan {
-  start: number;
+type StyledSpan = {
   end: number;
+  start: number;
   style: AnsiStyleKey;
-}
+};
 
 /** 一段命中文本 → 它的语义样式键；不命中任何一档回 `undefined`（按级别默认色渲染）。 */
 function styleOfToken(text: string): AnsiStyleKey | undefined {
   for (const token of TOKEN_STYLES) {
-    if (token.pattern.test(text)) return token.style;
+    if (token.pattern.test(text)) {
+      return token.style;
+    }
   }
   return undefined;
 }
@@ -146,9 +148,13 @@ function styledSpans(text: string): Array<StyledSpan> {
     const start = match.index;
     const end = start + match[0].length;
     const style = styleOfToken(match[0]);
-    if (style === undefined) continue;
+    if (style === undefined) {
+      continue;
+    }
     const inside = spans.some((span) => start < span.end && end > span.start);
-    if (inside) continue;
+    if (inside) {
+      continue;
+    }
     spans.push({ start, end, style });
   }
   return spans.sort((a, b) => a.start - b.start);
@@ -167,14 +173,18 @@ export function tokenizeRow(text: string): Array<RowToken> {
   for (const span of styledSpans(text)) {
     /* 同一段文本可能被两档同时命中（路径里带 `[OK]` 之类）；已消费的区间跳过，
      * 不把同一段文字画两遍。 */
-    if (span.start < cursor) continue;
+    if (span.start < cursor) {
+      continue;
+    }
     if (span.start > cursor) {
       parts.push({ text: text.slice(cursor, span.start) });
     }
     parts.push({ text: text.slice(span.start, span.end), style: span.style });
     cursor = span.end;
   }
-  if (cursor < text.length) parts.push({ text: text.slice(cursor) });
+  if (cursor < text.length) {
+    parts.push({ text: text.slice(cursor) });
+  }
   return parts;
 }
 
@@ -239,12 +249,12 @@ export const TOKEN_CLASS: Record<AnsiStyleKey, string> = {
 /* ── 行内文本选区判定（「日志一直在动、选不中想复制的行」的另一半）────── */
 
 /** 选区判定需要的最小 DOM 视图（真实 `Selection` / `window` 都满足它）。 */
-export interface SelectionLike {
-  readonly rangeCount: number;
+export type SelectionLike = {
   readonly anchorNode: Node | null;
   readonly focusNode: Node | null;
   isCollapsed: boolean;
-}
+  readonly rangeCount: number;
+};
 
 /**
  * 日志行的文本容器标记。视图在每个 `LogRow` 的消息元素上打这个属性，
@@ -287,9 +297,8 @@ export function selectionInsideLogs(selection: SelectionLike | null): boolean {
 
 function nodeIsLogText(node: Node): boolean {
   const element =
-    node.nodeType === 1
-      ? /* SAFETY: 类型断言已复核 */ (node as Element)
-      : (node.parentElement ?? null);
+    /* SAFETY: 类型断言已复核 */
+    node.nodeType === 1 ? (node as Element) : (node.parentElement ?? null);
   return Boolean(
     element?.closest?.(`[${LOG_ROW_TEXT_ATTRIBUTE}]`) ??
     element?.parentElement?.closest?.(`[${LOG_ROW_TEXT_ATTRIBUTE}]`),

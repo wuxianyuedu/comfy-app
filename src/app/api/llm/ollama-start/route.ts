@@ -95,7 +95,9 @@ async function probeOllamaPort(): Promise<boolean> {
  * Ollama 默认装在 %LOCALAPPDATA%\Programs\Ollama\ollama.exe。
  */
 async function resolveOllamaExe(): Promise<string> {
-  if (process.platform !== "win32") return "ollama";
+  if (process.platform !== "win32") {
+    return "ollama";
+  }
   const candidates = /* SAFETY: 类型断言已复核 */ [
     process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Programs\\Ollama\\ollama.exe` : null,
     process.env.ProgramFiles ? `${process.env.ProgramFiles}\\Ollama\\ollama.exe` : null,
@@ -106,7 +108,9 @@ async function resolveOllamaExe(): Promise<string> {
   const fs = await import("node:fs");
   for (const c of candidates) {
     try {
-      if (fs.existsSync(c)) return c;
+      if (fs.existsSync(c)) {
+        return c;
+      }
     } catch {
       // 忽略 —— 继续探测下一个候选
     }
@@ -120,7 +124,9 @@ async function resolveOllamaExe(): Promise<string> {
  * （sc query ollama 输出 STATE : 4 RUNNING 表示服务在运行）。
  */
 async function ollamaServiceRunning(): Promise<boolean> {
-  if (process.platform !== "win32") return false;
+  if (process.platform !== "win32") {
+    return false;
+  }
   try {
     const { execFile } = await import("node:child_process");
     const { promisify } = await import("node:util");
@@ -145,7 +151,7 @@ async function ollamaServiceRunning(): Promise<boolean> {
 async function spawnOllamaServe(
   exe: string,
   keepAlive: boolean,
-): Promise<{ ok: boolean; detail: string }> {
+): Promise<{ detail: string; ok: boolean }> {
   if (keepAlive) {
     appendOllamaLog(`[keepAlive-spawn] cmd=${exe} args=${JSON.stringify(["serve"])}`);
     const launched = spawnManaged({
@@ -205,21 +211,25 @@ async function spawnOllamaServe(
         maxLength: INLINE_STDERR_MAX,
         marker: "",
       });
-      if (text) appendOllamaLog(`[out] ${text}`);
+      if (text) {
+        appendOllamaLog(`[out] ${text}`);
+      }
     });
     child.stderr?.on("data", (d: Buffer) => {
       const text = clampText(d.toString("utf8").trimEnd(), {
         maxLength: INLINE_STDERR_MAX,
         marker: "",
       });
-      if (text) appendOllamaLog(`[err] ${text}`);
+      if (text) {
+        appendOllamaLog(`[err] ${text}`);
+      }
     });
 
     /* 观察期内的三种信号谁先到算谁：**秒退 / spawn 失败 → 启动失败**，
      * **观察期到仍未退出 → 启动成功**。后者正是「与时间赛跑、超时给兜底值」
      * 那一档 —— 交给 `withTimeoutResult`，定时器与重入判据都由出口管。 */
     return withTimeoutResult(
-      new Promise<{ ok: boolean; detail: string }>((settle) => {
+      new Promise<{ detail: string; ok: boolean }>((settle) => {
         // spawn 找不到可执行文件时触发（异步 error 事件）
         child.on("error", (err) => {
           const hint = ollamaFailureHint(err);
@@ -250,7 +260,9 @@ async function spawnOllamaServe(
  * 就绪探测：检查 11434 端口是否开始接受连接。
  */
 export async function GET(_req: NextRequest) {
-  if (!(await requireRequestUser())) return unauthorizedResponse();
+  if (!(await requireRequestUser())) {
+    return unauthorizedResponse();
+  }
   const ready = await probeOllamaPort();
   return NextResponse.json({ ready });
 }
@@ -269,7 +281,9 @@ export async function GET(_req: NextRequest) {
  * 6. 启动过程与 stdout/stderr 写入 log/services/ollama-runtime.log（设置页可查看）
  */
 export async function POST(_req: NextRequest) {
-  if (!(await requireRequestUser())) return unauthorizedResponse();
+  if (!(await requireRequestUser())) {
+    return unauthorizedResponse();
+  }
 
   // ── 已在运行就直接返回 ──
   if (await probeOllamaPort()) {
@@ -316,8 +330,8 @@ export async function POST(_req: NextRequest) {
       return NextResponse.json({ ok: true, detail: result.detail });
     }
     return NextResponse.json({ error: result.detail }, { status: 500 });
-  } catch (e) {
-    const hint = ollamaFailureHint(e);
+  } catch (error) {
+    const hint = ollamaFailureHint(error);
     appendOllamaLog(`[err] 启动失败：${hint}`);
     return NextResponse.json({ error: `启动 Ollama 失败：${hint}` }, { status: 500 });
   } finally {

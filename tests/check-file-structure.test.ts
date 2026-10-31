@@ -96,8 +96,8 @@ function runWith(args: Array<string>): { code: number; output: string } {
   } catch (err) {
     const e = /* SAFETY: 类型断言已复核 */ err as {
       status?: number;
-      stdout?: string;
       stderr?: string;
+      stdout?: string;
     };
     return {
       code: typeof e.status === "number" ? e.status : 1,
@@ -1179,8 +1179,9 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     let bodyEnd = -1;
     for (let i = bodyStart; i < rust.length; i += 1) {
       const ch = rust[i];
-      if (ch === "{") depth += 1;
-      else if (ch === "}") {
+      if (ch === "{") {
+        depth += 1;
+      } else if (ch === "}") {
         depth -= 1;
         if (depth === 0) {
           bodyEnd = i;
@@ -1290,23 +1291,25 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
   ];
 
   const splashWindow = (): {
+    decorations?: boolean;
+    height: number;
     label?: string;
     width: number;
-    height: number;
-    decorations?: boolean;
   } => {
     const conf = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(CONF, "utf8")) as {
       app: {
         windows: Array<{
+          decorations?: boolean;
+          height: number;
           label?: string;
           width: number;
-          height: number;
-          decorations?: boolean;
         }>;
       };
     };
     const win = conf.app.windows.find((w) => w.label === "splash") ?? conf.app.windows[0];
-    if (!win) throw new Error("tauri.conf.json 里没有窗口配置");
+    if (!win) {
+      throw new Error("tauri.conf.json 里没有窗口配置");
+    }
     return win;
   };
 
@@ -1315,7 +1318,9 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     const m = new RegExp(
       `const ${name}: \\(f64, f64\\) = \\((\\d+(?:\\.\\d+)?), (\\d+(?:\\.\\d+)?)\\);`,
     ).exec(rust);
-    if (!m) throw new Error(`lib.rs 里没有常量 ${name}`);
+    if (!m) {
+      throw new Error(`lib.rs 里没有常量 ${name}`);
+    }
     return [Number(m[1]), Number(m[2])];
   };
 
@@ -1432,7 +1437,9 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(new Set(texts).size).toBe(1);
     const html = texts[0];
     expect(html).toBeDefined();
-    if (!html) return;
+    if (!html) {
+      return;
+    }
     // 页面只报「紧凑 / 展开」，尺寸常量只在壳里一份（避免两处常量漂移）
     expect(html).toContain("set_splash_compact");
     expect(html).not.toContain(".card.wide");

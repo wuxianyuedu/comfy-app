@@ -68,9 +68,9 @@ function markersFor(stderrText: string): {
 
 /** 直接调 `downstreamExitKind` 判决表（纯函数，无副作用）。 */
 function decide(input: {
-  shellExited: boolean;
   abandoned: boolean;
   shellCrashed: boolean;
+  shellExited: boolean;
 }): string {
   const script = `
     import { downstreamExitKind } from ${JSON.stringify(pathToFileURL(CRITERIA).href)};

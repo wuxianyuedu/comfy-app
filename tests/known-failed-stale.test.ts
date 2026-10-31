@@ -314,7 +314,7 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
  * 只接一条就会把夹具自己的话术留在报告里 —— 读的人分不清那是夹具的结论还是真跑的结论
  * （同一件事在 `tests/hook-affected-launch.test.ts` 里由一条判据钉着，这里按同一条口径做）。
  */
-function captureStreams<T>(fn: () => T): { value: T; text: string } {
+function captureStreams<T>(fn: () => T): { text: string; value: T; } {
   const chunks: Array<string> = [];
   const originalWrite = process.stderr.write.bind(process.stderr);
   const originalLog = console.log;
@@ -349,7 +349,9 @@ describe("自证档的判决面（ISSUE #2265）", () => {
       readStaged: ambientReaderForbidden,
     });
     expect(got.ok, JSON.stringify(got)).toBe(false);
-    if (got.ok) return;
+    if (got.ok) {
+      return;
+    }
     expect(got.reason).toContain("暂存区是空的");
   });
 
@@ -386,11 +388,16 @@ describe("自证档的判决面（ISSUE #2265）", () => {
         resolveFace(["--staged"], { readStaged: ambientReaderForbidden }),
       ).value;
     } finally {
-      if (saved === undefined) delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
-      else process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = saved;
+      if (saved === undefined) {
+        delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
+      } else {
+        process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = saved;
+      }
     }
     expect(got.ok, JSON.stringify(got)).toBe(true);
-    if (!got.ok) return;
+    if (!got.ok) {
+      return;
+    }
     expect(got.files).toEqual([]);
     expect(got.via).toContain("刻意空提交");
   });
@@ -407,8 +414,11 @@ describe("自证档的判决面（ISSUE #2265）", () => {
       code = ran.value;
       out = ran.text;
     } finally {
-      if (saved === undefined) delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
-      else process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = saved;
+      if (saved === undefined) {
+        delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
+      } else {
+        process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = saved;
+      }
     }
     expect(out).toContain("旗标作废");
     // 旗标不改变这一档的结论：没碰到机制 ⇒ 0，判决面照旧是那份清单。
@@ -422,7 +432,9 @@ describe("自证档的判决面（ISSUE #2265）", () => {
      * 把它读成「不知道」会让 master 上的本地复算永远退 2 —— 那正是
      * 「降档不许被读成全套过了」的忌讳。 */
     expect(got.ok).toBe(true);
-    if (!got.ok) return;
+    if (!got.ok) {
+      return;
+    }
     expect(got.files).toEqual([]);
     expect(got.via).toContain("基线");
   });
@@ -430,14 +442,18 @@ describe("自证档的判决面（ISSUE #2265）", () => {
   it("`--base` 形态：基线给不出来 ⇒ 这一条**没判**", () => {
     const got = resolveFace(["--base", "no-such-ref-xyz"]);
     expect(got.ok).toBe(false);
-    if (got.ok) return;
+    if (got.ok) {
+      return;
+    }
     expect(got.reason).toContain("diff 没跑起来");
   });
 
   it("`--base` 形态：没给基线 ⇒ 这一条**没判**", () => {
     const got = resolveFace(["--base"]);
     expect(got.ok).toBe(false);
-    if (got.ok) return;
+    if (got.ok) {
+      return;
+    }
     expect(got.reason).toContain("要一条基线");
   });
 

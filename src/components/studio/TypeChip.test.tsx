@@ -53,7 +53,7 @@ describe("TypeChip", () => {
 
   it('tone="none" 一个颜色类都不加（颜色整个交给行内样式）', () => {
     render(
-      <TypeChip tone="none" style={{ background: "rgb(1 2 3 / 10%)" }}>
+      <TypeChip style={{ background: "rgb(1 2 3 / 10%)" }} tone="none">
         VEC
       </TypeChip>,
     );

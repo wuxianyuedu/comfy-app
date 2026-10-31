@@ -20,24 +20,24 @@ export const WORKFLOW_CATEGORIES = /* SAFETY: 类型断言已复核 */ [
 export type WorkflowCategory = (typeof WORKFLOW_CATEGORIES)[number];
 
 /* ── 图像侧（静态） ── */
-export interface WorkflowTypeDefinition {
-  /** 缩写码，如 T2I / I2V / S2V */
-  code: string;
-  /** 英文全称 */
-  fullName: string;
-  /** 中文描述 */
-  label: string;
+export type WorkflowTypeDefinition = {
   /** 所属一级分类 */
   category: WorkflowCategory;
-  /** 更详细的子分类标签（可选） */
-  subCategory?: string;
+  /** 缩写码，如 T2I / I2V / S2V */
+  code: string;
   /** 简短说明（用于 tooltip / 帮助文案） */
   description: string;
-  /** 是否为「生成模式」（true）还是「后处理模式」（false，如 Upscale/Outpaint） */
-  isGenerative: boolean;
+  /** 英文全称 */
+  fullName: string;
   /** 该类型在 ComfyUI 中常用的节点特征（用于自动推断） */
   hints?: Array<string>;
-}
+  /** 是否为「生成模式」（true）还是「后处理模式」（false，如 Upscale/Outpaint） */
+  isGenerative: boolean;
+  /** 中文描述 */
+  label: string;
+  /** 更详细的子分类标签（可选） */
+  subCategory?: string;
+};
 
 export const IMAGE_WORKFLOW_TYPES: Array<WorkflowTypeDefinition> = [
   {
@@ -422,7 +422,9 @@ const RETIRED_CODE_ALIASES = new Map<string, string>([["fl2v", "FLF2V"]]);
  */
 export function normalizeTaskType(raw: string): string {
   const trimmed = raw.trim();
-  if (!trimmed) return trimmed;
+  if (!trimmed) {
+    return trimmed;
+  }
   const lower = trimmed.toLowerCase();
   return CODE_BY_LOWER.get(lower) ?? RETIRED_CODE_ALIASES.get(lower) ?? trimmed;
 }
@@ -433,17 +435,21 @@ export function normalizeTaskType(raw: string): string {
  *  优先级：声明的 defaultMode（且必须仍在 modes 里）→ modes[0] → taskType。
  *  都为空 = 该工作流确实没有模式（此时才谈得上「未声明模式」）。 */
 export function resolveWorkflowMode(args: {
-  modes?: ReadonlyArray<string> | null;
   defaultMode?: string | null;
+  modes?: ReadonlyArray<string> | null;
   taskType?: string | null;
 }): string | null {
   const modes = (args.modes ?? []).filter(
     (mode): mode is string => typeof mode === "string" && mode.length > 0,
   );
   const declared = args.defaultMode;
-  if (declared && (modes.length === 0 || modes.includes(declared))) return declared;
+  if (declared && (modes.length === 0 || modes.includes(declared))) {
+    return declared;
+  }
   const [firstMode] = modes;
-  if (firstMode) return firstMode;
+  if (firstMode) {
+    return firstMode;
+  }
   if (typeof args.taskType === "string" && args.taskType) {
     return normalizeTaskType(args.taskType);
   }

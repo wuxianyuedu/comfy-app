@@ -27,7 +27,7 @@ const stub = vi.hoisted(() => {
       running: false,
       unverified: false,
       didQueryProcTable: true,
-    } as { running: boolean; unverified: boolean; didQueryProcTable: boolean },
+    } as { didQueryProcTable: boolean; running: boolean; unverified: boolean },
   };
   return {
     state,

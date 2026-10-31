@@ -62,8 +62,7 @@ export const NAV_AUTO_COLLAPSE_MAX_PX = NAV_EXPANDED_MIN_PX - 1;
 export const NAV_AUTO_COLLAPSE_QUERY = `(max-width: ${NAV_AUTO_COLLAPSE_MAX_PX}px)`;
 
 /** 收起确实换出了多少宽度 —— 漂移断言用它反证这笔账的方向没写反。 */
-export const NAV_COLLAPSE_SAVED_PX =
-  NAV_WIDTH_EXPANDED_PX - NAV_WIDTH_COLLAPSED_PX;
+export const NAV_COLLAPSE_SAVED_PX = NAV_WIDTH_EXPANDED_PX - NAV_WIDTH_COLLAPSED_PX;
 
 /**
  * 收起态与内容区下限能不能同时成立（收起后中间列仍 ≥ 下限）。
@@ -83,7 +82,7 @@ export const NAV_COLLAPSE_LEAVES_VIEWPORT_PX =
  * 一次显式表态：用户点开关那一刻的目标状态，以及**当时的跨越次数**。
  * 跨越次数不等，就说明这条表态是「上一档窗宽」留下的，已经过期。
  */
-export type RailChoice = { open: boolean; atCrossing: number };
+export type RailChoice = { atCrossing: number; open: boolean };
 
 /**
  * 谁说了算，三档优先：
@@ -101,15 +100,17 @@ export type RailChoice = { open: boolean; atCrossing: number };
  * 宽窗生效 —— 拿记忆去否决当次的窄窗让位，等于让偏好挡住布局纪律。
  */
 export function resolveRailCollapsed(input: {
-  narrow: boolean;
-  crossings: number;
   choice: RailChoice | null;
+  crossings: number;
+  narrow: boolean;
   preferredOpen?: boolean;
 }): boolean {
   const { narrow, crossings, choice, preferredOpen = true } = input;
   if (choice !== null && choice.atCrossing === crossings) {
     return !choice.open;
   }
-  if (narrow) return true;
+  if (narrow) {
+    return true;
+  }
   return !preferredOpen;
 }

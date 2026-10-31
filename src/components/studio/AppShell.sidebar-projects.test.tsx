@@ -57,13 +57,13 @@ function renderShell() {
   const { container } = render(
     <AppShell
       active="home"
-      onSelect={vi.fn()}
-      onOpenSettings={vi.fn()}
-      projects={PROJECTS}
       activeProjectId="proj_a"
-      onOpenProject={onOpenProject}
-      onShowAllProjects={vi.fn()}
       onNewProject={vi.fn()}
+      onOpenProject={onOpenProject}
+      onOpenSettings={vi.fn()}
+      onSelect={vi.fn()}
+      onShowAllProjects={vi.fn()}
+      projects={PROJECTS}
     >
       <div />
     </AppShell>,

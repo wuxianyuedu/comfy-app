@@ -13,20 +13,20 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 interface RuntimeExitInput {
-  who: "dev" | "shell" | "signal";
   devCode: number | null;
   devSignal?: string | null;
   port?: number | null;
   runId?: string | null;
+  who: "dev" | "shell" | "signal";
 }
 /** 判据函数的返回形状（.mjs 侧的 JSDoc 对 .ts 消费方不可见，这里显式声明一次）。 */
 type RuntimeExitRecord = {
-  kind: string;
   code: number | null;
-  signal: string | null;
-  reason: string;
+  kind: string;
   port: number | null;
+  reason: string;
   runId: string | null;
+  signal: string | null;
 };
 
 const { runtimeExitRecord } = /* SAFETY: 类型断言已复核 */ (await import(

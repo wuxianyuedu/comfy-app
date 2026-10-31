@@ -57,7 +57,7 @@ export const settingRouter = createTRPCRouter({
   save: authedProcedure
     .input(
       z.object({
-        comfyuiPort: z.number().int().min(0).max(65535).optional(),
+        comfyuiPort: z.number().int().min(0).max(65_535).optional(),
         comfyuiPath: z.string().optional(),
         comfyuiExtraArgs: z.string().optional(),
         /** comfy-cli 的 Python 解释器（桌包不随包 Python，用户自备后在这里指路径）。 */
@@ -77,7 +77,9 @@ export const settingRouter = createTRPCRouter({
       await saveSettings(input);
       // 用户显式（重新）开启自动启动 = 授权自动拉起：清掉上次「手动关闭
       // 后不自动启动」的闩锁，让自动启动恢复生效（ISSUE #290）。
-      if (input.comfyuiAutoStart === true) clearComfyManualStop();
+      if (input.comfyuiAutoStart === true) {
+        clearComfyManualStop();
+      }
       // 改「安装路径 / 启动参数」是把上次「启动失败」的成因改掉了：清掉
       // 「失败后不再重试」的闩锁，让自动启动重新尝试（否则用户修好了路径，
       // 却因为老闩锁一直不重试，还得再手动点一次启动）（ISSUE #335）。
@@ -151,7 +153,7 @@ export const settingRouter = createTRPCRouter({
   comfyStart: authedProcedure
     .input(
       z.object({
-        timeoutMs: z.number().int().min(5000).max(600000).optional(),
+        timeoutMs: z.number().int().min(5000).max(600_000).optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -320,14 +322,18 @@ function projectScopedProbe(): (candidate: string) => boolean {
     root = null;
   }
   return (candidate: string) => {
-    if (root === null) return false;
+    if (root === null) {
+      return false;
+    }
     let real: string;
     try {
       real = realpathSync(resolvePath(candidate));
     } catch {
       return false;
     }
-    if (real === root) return true;
+    if (real === root) {
+      return true;
+    }
     const rel = relativePath(root, real);
     return rel !== "" && !rel.startsWith("..") && !isAbsolutePath(rel);
   };

@@ -26,7 +26,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { AppShell } from "./AppShell";
-import { type WorkspaceView } from "./NavItems";
+import type { WorkspaceView } from "./NavItems";
 
 /* jsdom 没有 `matchMedia`，`ui/sidebar` 挂载时就读它（与既有测试同一份桩）。 */
 if (!window.matchMedia) {
@@ -59,13 +59,13 @@ function renderShell(active: WorkspaceView = "workshop") {
   render(
     <AppShell
       active={active}
-      onSelect={onSelect}
-      onOpenSettings={vi.fn()}
-      projects={[]}
       activeProjectId="p1"
-      onOpenProject={vi.fn()}
-      onShowAllProjects={vi.fn()}
       onNewProject={vi.fn()}
+      onOpenProject={vi.fn()}
+      onOpenSettings={vi.fn()}
+      onSelect={onSelect}
+      onShowAllProjects={vi.fn()}
+      projects={[]}
     >
       <div />
     </AppShell>,
@@ -108,10 +108,7 @@ describe("侧栏的模型适配 / 模式契约入口", () => {
        侧栏那条路会开弹窗、工坊 / 工作流库那两条路会切页签 —— 同一个功能两种
        「开没开」的真相，正是这一刀要消掉的形状。运行时判据抓不到「外壳里多挂了一份
        当前没点开的弹窗」。 */
-    const source = readFileSync(
-      path.resolve(import.meta.dirname, "AppShell.tsx"),
-      "utf8",
-    );
+    const source = readFileSync(path.resolve(import.meta.dirname, "AppShell.tsx"), "utf8");
     for (const retired of [
       "ModelAdaptersView",
       "ModeContractView",
@@ -133,20 +130,14 @@ describe("设置不在侧栏（ISSUE #1784：入口收归顶栏应用菜单）",
   });
 
   it("侧栏底部那枚「设置」也不在了（三处入口收成一处）", () => {
-    const source = readFileSync(
-      path.resolve(import.meta.dirname, "AppShell.tsx"),
-      "utf8",
-    );
+    const source = readFileSync(path.resolve(import.meta.dirname, "AppShell.tsx"), "utf8");
     /* 运行时判据抓不到「这里原本有个按钮、现在只是没渲染」——判源码文本更贴题：
        `SidebarFooter` 一旦回来，八成也会把底部那颗按钮带回来。 */
     expect(source).not.toContain("SidebarFooter");
   });
 
   it("撤的是入口不是能力：`onOpenSettings` 仍然传给顶栏", () => {
-    const source = readFileSync(
-      path.resolve(import.meta.dirname, "AppShell.tsx"),
-      "utf8",
-    );
+    const source = readFileSync(path.resolve(import.meta.dirname, "AppShell.tsx"), "utf8");
     expect(source).toContain("onOpenSettings={onOpenSettings}");
   });
 });

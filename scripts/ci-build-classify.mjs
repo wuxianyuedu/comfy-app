@@ -41,13 +41,7 @@ const FAILED_STATES = new Set(["error", "failed", "failure"]);
 const CANCELLED_STATES = new Set(["cancel", "cancelled", "canceled"]);
 
 /** 「还在跑」族（**构建级** `data.status` 的那几个词，与逐格的 `start` 不是同一维）。 */
-const RUNNING_STATES = new Set([
-  "running",
-  "pending",
-  "queued",
-  "waiting",
-  "created",
-]);
+const RUNNING_STATES = new Set(["running", "pending", "queued", "waiting", "created"]);
 
 /**
  * 认「这一格属于这条流水线的工作」的两条形状：本仓配置的 `stage-N`，以及 `prepare`。
@@ -89,11 +83,15 @@ const CONFIGURED_STAGE_ID = /^(stage-\d+|prepare)$/;
 export function classifyStages(stages) {
   /** @type {{failed: StageRef[], cancelled: StageRef[], skipped: StageRef[], configured: StageRef[]}} */
   const out = { failed: [], cancelled: [], skipped: [], configured: [] };
-  if (!Array.isArray(stages)) return out;
+  if (!Array.isArray(stages)) {
+    return out;
+  }
   /** @type {StageRef[]} */
   const all = [];
   stages.forEach((s, index) => {
-    if (!s || typeof s !== "object") return;
+    if (!s || typeof s !== "object") {
+      return;
+    }
     const status = typeof s.status === "string" ? s.status.toLowerCase() : "";
     all.push({
       id: String(s.id ?? ""),
@@ -119,9 +117,13 @@ export function classifyStages(stages) {
     /* 「error 但原话是被终止」的那一格也进 `cancelled`：它在读数上属于取消这一边，
      * 差别只在平台那个状态词 —— 念的时候要让人看得见原话（`status=error`），
      * 不然就变成「本仓悄悄改写了平台的结论」。 */
-    if (cause.kind === "cancelled") out.cancelled.push(ref);
-    else if (cause.kind === "failed") out.failed.push(ref);
-    else if (ref.status === "skipped") out.skipped.push(ref);
+    if (cause.kind === "cancelled") {
+      out.cancelled.push(ref);
+    } else if (cause.kind === "failed") {
+      out.failed.push(ref);
+    } else if (ref.status === "skipped") {
+      out.skipped.push(ref);
+    }
   }
   return out;
 }
@@ -175,8 +177,7 @@ const TERMINATED_MARKERS = [
  *   `kind` 只说这一格属于哪一边；`reason` 是平台原话（拿不到就 null，**不代写**）
  */
 export function cancelledCause(stage) {
-  const status =
-    typeof stage?.status === "string" ? stage.status.toLowerCase() : "";
+  const status = typeof stage?.status === "string" ? stage.status.toLowerCase() : "";
   const error = typeof stage?.error === "string" ? stage.error.trim() : "";
   /** 平台原话里有没有「被终止」这个形状，以及被谁（`got lock: <流水线 id>`）。 */
   let holder = null;
@@ -189,7 +190,9 @@ export function cancelledCause(stage) {
     /* 锁 key 里没有 `cnb-` 前缀，而抢锁的是**某一条流水线**：`got lock` 的原话里
        永远带着那条流水线的 id 或构建号（实测两种都出现过），优先认 `cnb-` 打头的那个。 */
     const snHit = error.match(/\b(cnb-[\w-]+?-\d{3,})\b/);
-    if (snHit && snHit[1]) holder = pipelineSn(snHit[1]);
+    if (snHit && snHit[1]) {
+      holder = pipelineSn(snHit[1]);
+    }
     byLock = true;
   }
   if (!byLock) {
@@ -279,7 +282,9 @@ export function classifyBuildOutcome(json) {
       : {};
   for (const key of Object.keys(table)) {
     const p = table[key];
-    if (!p || typeof p !== "object") continue;
+    if (!p || typeof p !== "object") {
+      continue;
+    }
     const c = classifyStages(p.stages);
     const pipeline = {
       id: String(p.id ?? key),
@@ -311,22 +316,26 @@ export function classifyBuildOutcome(json) {
   const reasons = [];
   for (const ref of configured) {
     const cause = cancelledCause(ref);
-    if (cause.kind !== "cancelled") continue;
+    if (cause.kind !== "cancelled") {
+      continue;
+    }
     reasons.push({
       stage: ref.name || ref.id,
       reason: cause.reason ?? "",
       holder: cause.holder,
       sn: cause.sn,
-      kind: CANCELLED_STATES.has(ref.status)
-        ? "stage-cancel"
-        : "stage-terminated",
+      kind: CANCELLED_STATES.has(ref.status) ? "stage-cancel" : "stage-terminated",
     });
   }
   for (const p of pipelines) {
-    if (!CANCELLED_STATES.has(p.status)) continue;
+    if (!CANCELLED_STATES.has(p.status)) {
+      continue;
+    }
     /* 流水线级 cancel 而逐格没给出取消格（那几格压根没跑成 cancel）：这不常见，
      * 但正是「一格都没跑到」的另一半证据，念出来而不是让构建级 `error` 顶替它。 */
-    if (reasons.some((r) => r.kind !== "pipeline-cancel")) continue;
+    if (reasons.some((r) => r.kind !== "pipeline-cancel")) {
+      continue;
+    }
     reasons.push({
       stage: p.name || p.id,
       reason: "",
@@ -335,11 +344,7 @@ export function classifyBuildOutcome(json) {
       kind: "pipeline-cancel",
     });
   }
-  if (
-    reasons.length === 0 &&
-    failed.length === 0 &&
-    CANCELLED_STATES.has(low)
-  ) {
+  if (reasons.length === 0 && failed.length === 0 && CANCELLED_STATES.has(low)) {
     /* 构建级就说 cancel、而逐格一个读数都没有（老构建 / 形状变了）：仍要念出它，
      * 只是把「原话取不到」如实标成空串，不拿构建级那个词冒充平台原话。 */
     reasons.push({
@@ -396,9 +401,13 @@ export function downstreamSkipped(outcome) {
     /* 被终止的那一跑可能**一格都没跑到 cancel**（prepare 期就被顶掉：`stage-0` 是 skipped）——
      * 那时 `cancelled` 是空的，而「下面这些格根本没跑」这句话恰恰是最该说的（ISSUE #2406）。
      * 起点取 `prepare` 的序号：它之后的所有 skipped 都是被它带下去的。 */
-    if (outcome.state !== "cancelled") return [];
+    if (outcome.state !== "cancelled") {
+      return [];
+    }
     const from = outcome.configured.find((s) => s.id === "prepare");
-    if (!from) return [];
+    if (!from) {
+      return [];
+    }
     return outcome.skipped.filter((s) => s.index > from.index);
   }
   const from = Math.min(...blockers.map((s) => s.index));
@@ -424,9 +433,7 @@ const STAGE_IN_FLIGHT_STATES = new Set(["start", "running", "processing"]);
  * @returns {boolean}
  */
 export function stageInFlight(status) {
-  return STAGE_IN_FLIGHT_STATES.has(
-    typeof status === "string" ? status.toLowerCase() : "",
-  );
+  return STAGE_IN_FLIGHT_STATES.has(typeof status === "string" ? status.toLowerCase() : "");
 }
 
 /**
@@ -457,14 +464,13 @@ export function findStageMatches(outcome, ref) {
   for (const pipeline of outcome.pipelines) {
     for (const stage of pipeline.configured) {
       const name = stage.name.trim().toLowerCase();
-      if (
-        stage.id.toLowerCase() === want ||
-        (name !== "" && name === want)
-      ) {
+      if (stage.id.toLowerCase() === want || (name !== "" && name === want)) {
         hits.push({ pipeline, stage });
         continue;
       }
-      if (want === "") continue;
+      if (want === "") {
+        continue;
+      }
       /* 候选只用于「念回去让人改正点名」：格名包含所给词、或所给词包含格名，都算相近。 */
       if (
         (name !== "" && (name.includes(want) || want.includes(name))) ||

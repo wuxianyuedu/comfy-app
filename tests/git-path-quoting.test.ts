@@ -116,7 +116,9 @@ describe("改动面：机器把非 ASCII 路径转义加引号时仍给出原样
 
     const got = changedFilesForBaseRef("HEAD~1", { cwd: dir });
     expect(got.ok, JSON.stringify(got)).toBe(true);
-    if (!got.ok) return;
+    if (!got.ok) {
+      return;
+    }
     /* 转义过的形态是 `"docs/standards/15-\351\231\204\345\275\225.md"` —— 它与真实路径
      * 对不上，于是「改了文档源、镜像没同批带上」在平台上永远判不出来。 */
     expect(got.files).toContain(CN_SOURCE);
@@ -167,7 +169,7 @@ const PATH_FLAG_TOKENS = /* SAFETY: 类型断言已复核 */ [
  * 登记项是「文件 + 处数」的粒度（与条件性 skip 那套登记同型）：处数对不上就红 ——
  * 偷偷多一处没登记会红，登记了却已经修好也要红（豁免是负债，不是赦免名单）。
  */
-const EXEMPT: Array<{ file: string; count: number; why: string }> = [
+const EXEMPT: Array<{ count: number; file: string; why: string }> = [
   {
     file: "scripts/check-known-failed-stale.mjs",
     count: 1,
@@ -216,8 +218,11 @@ function scriptFiles(dir: string, found: Array<string> = []): Array<string> {
       continue;
     }
     const abs = path.join(dir, entry.name);
-    if (entry.isDirectory()) scriptFiles(abs, found);
-    else if (/\.(mjs|cjs|js)$/.test(entry.name)) found.push(abs);
+    if (entry.isDirectory()) {
+      scriptFiles(abs, found);
+    } else if (/\.(mjs|cjs|js)$/.test(entry.name)) {
+      found.push(abs);
+    }
   }
   return found;
 }
@@ -231,7 +236,9 @@ describe("静态：读 git 路径的调用必须带守卫（防复发）", () =>
       /* 剥注释再扫：注释里正当会出现 `--name-only` 这类字样（那是散文，不是调用）。 */
       const source = stripComments(readFileSync(abs, "utf8"));
       const bad = unguardedSites(source);
-      if (bad.length === 0) continue;
+      if (bad.length === 0) {
+        continue;
+      }
       if (exempt) {
         /* 豁免只覆盖**登记的那几处**：多出来的调用仍然要拦。 */
         if (bad.length !== exempt.count) {

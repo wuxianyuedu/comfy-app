@@ -48,7 +48,7 @@ function makeFile(name: string): File {
 
 describe("FilePicker", () => {
   it("默认隐藏，accept / multiple 透传", () => {
-    render(<FilePicker onPick={noop} accept="image/*" multiple />);
+    render(<FilePicker accept="image/*" multiple onPick={noop} />);
     const input = fileInput();
     expect(input.className).toContain("hidden");
     expect(input.accept).toBe("image/*");
@@ -57,7 +57,7 @@ describe("FilePicker", () => {
 
   it("选中文件后回调：同时给出 file 与整份 FileList（多选要整份）", () => {
     const onPick = vi.fn();
-    render(<FilePicker onPick={onPick} multiple />);
+    render(<FilePicker multiple onPick={onPick} />);
     const A = makeFile("a.png");
     const B = makeFile("b.png");
     pick(fileInput(), A, B);
@@ -97,7 +97,7 @@ describe("FilePicker", () => {
   });
 
   it("inputProps 透传（`aria-label` 这类无障碍属性要能传进去）", () => {
-    render(<FilePicker onPick={noop} inputProps={{ "aria-label": "选择文件" }} />);
+    render(<FilePicker inputProps={{ "aria-label": "选择文件" }} onPick={noop} />);
     expect(screen.getByLabelText("选择文件")).toBeTruthy();
   });
 });
@@ -151,7 +151,7 @@ describe("FilePickerButton（声明式）", () => {
 
   it("按钮样式与文案透传（调用方仍能控制外观）", () => {
     render(
-      <FilePickerButton onPick={noop} className="custom-class">
+      <FilePickerButton className="custom-class" onPick={noop}>
         导入
       </FilePickerButton>,
     );
@@ -168,7 +168,7 @@ describe("FilePicker 与 handleRef", () => {
       return (
         <>
           <button onClick={() => ref.current?.open()}>开</button>
-          <FilePicker onPick={noop} handleRef={ref} />
+          <FilePicker handleRef={ref} onPick={noop} />
         </>
       );
     }

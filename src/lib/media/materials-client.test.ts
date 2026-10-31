@@ -15,8 +15,8 @@ function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 400): Respon
 
 /** 记录调用参数：URL 与 init 都按可选处理，避免 vi.fn() 的零元组签名报错。 */
 function callArgs(fetchMock: ReturnType<typeof vi.fn>): {
-  url: string;
   init?: RequestInit;
+  url: string;
 } {
   const first = fetchMock.mock.calls[0] ?? [];
   return {

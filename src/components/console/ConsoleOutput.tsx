@@ -19,19 +19,19 @@ import { Spinner } from "~/components/ui/spinner";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { cn } from "~/lib/utils";
 
-export interface ConsoleOutputProps {
+export type ConsoleOutputProps = {
+  /** 空态提示。 */
+  emptyHint: string;
   output: string;
   /** 是否有一条在跑（决定底部的转圈与提示）。 */
   running: boolean;
-  /** 空态提示。 */
-  emptyHint: string;
+  /** 被停止（而不是失败）：图标与文案换一档。 */
+  stopped: boolean;
   /** 结论条（null = 还没结论）。 */
   verdict: string | null;
   /** 结论是否为成功（决定图标与颜色）。 */
   verdictOk: boolean;
-  /** 被停止（而不是失败）：图标与文案换一档。 */
-  stopped: boolean;
-}
+};
 
 export function ConsoleOutput({
   output,
@@ -53,12 +53,12 @@ export function ConsoleOutput({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div
-        ref={scrollerRef}
-        onScroll={follow.onScroll}
-        className="bg-canvas-deep custom-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-3"
-        role="log"
-        aria-live="polite"
         aria-label="控制台输出"
+        aria-live="polite"
+        className="bg-canvas-deep custom-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-3"
+        onScroll={follow.onScroll}
+        ref={scrollerRef}
+        role="log"
       >
         {output ? (
           <pre className="text-ink-strong font-mono text-[12.5px] leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap">
@@ -66,12 +66,12 @@ export function ConsoleOutput({
           </pre>
         ) : running ? (
           <EmptyState
-            variant="panel"
             icon={<Spinner className="size-5 opacity-60" />}
             title="命令已提交，等待输出…"
+            variant="panel"
           />
         ) : (
-          <EmptyState variant="panel" icon={Terminal} title={emptyHint} />
+          <EmptyState icon={Terminal} title={emptyHint} variant="panel" />
         )}
       </div>
 
@@ -80,7 +80,6 @@ export function ConsoleOutput({
           是判不出成败的。 */}
       {verdict && (
         <div
-          data-testid="console-verdict"
           className={cn(
             "flex shrink-0 items-center gap-2 border-t px-4 py-2 text-[12.5px]",
             stopped
@@ -89,6 +88,7 @@ export function ConsoleOutput({
                 ? "border-border bg-success/10 text-success-strong"
                 : "border-border bg-destructive/10 text-danger-strong",
           )}
+          data-testid="console-verdict"
         >
           {stopped ? (
             <AlertTriangle size={14} />

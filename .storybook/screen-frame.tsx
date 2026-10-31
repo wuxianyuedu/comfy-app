@@ -67,9 +67,10 @@ import { defaultData, type CanvasNodeType, type NodeKind } from "~/lib/project-c
  * 工作台加一层 mock（那正是这一批在防的事）。
  */
 /** 一个真项目：名字与节点数据都是真形状（节点类型用 `canvas-types` 的真 kind）。 */
-export interface ProjectScene {
+export type ProjectScene = {
   /** 这个场景解决什么（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
+  readonly edges?: ReadonlyArray<Edge>;
   readonly name: string;
   /**
    * 摆在画布上的节点（可选）。给了它就是「打开一个**有内容**的项目」那一档：
@@ -81,8 +82,7 @@ export interface ProjectScene {
    * 退化成另一种形态。
    */
   readonly nodes?: ReadonlyArray<CanvasNodeType>;
-  readonly edges?: ReadonlyArray<Edge>;
-}
+};
 
 /**
  * 造一批真形状的业务节点 —— 走 `placeCanvasNode()`（建节点的**唯一出口**）。
@@ -99,9 +99,9 @@ export function canvasNodes(
   specs: ReadonlyArray<{
     id: string;
     kind: NodeKind;
+    prompt?: string;
     x: number;
     y: number;
-    prompt?: string;
   }>,
 ): Array<CanvasNodeType> {
   return specs.reduce<Array<CanvasNodeType>>(
@@ -218,6 +218,7 @@ export type ProjectSceneName = keyof typeof PROJECT_SCENES;
 
 /** 取一个场景；名字不认识时**抛错**（与值源 / 画布场景同一条口径）。 */
 export function projectScene(name: string): ProjectScene {
+  /* SAFETY: 类型断言已复核 */
   const scene: ProjectScene | undefined = PROJECT_SCENES[name as ProjectSceneName];
   if (scene === undefined) {
     throw new Error(
@@ -237,7 +238,9 @@ export function projectScene(name: string): ProjectScene {
  */
 export function seedProject(scene: ProjectScene): CanvasProject {
   for (const existing of listProjects()) {
-    if (existing.name === scene.name) deleteProject(existing.id);
+    if (existing.name === scene.name) {
+      deleteProject(existing.id);
+    }
   }
   const created = createProject(scene.name);
   /* 场景给了节点/连线就落进去（`upsertProject` 与生产代码的自动保存同一条路）。
@@ -260,8 +263,8 @@ export function seedProject(scene: ProjectScene): CanvasProject {
  * `findNextAvailableName()` 不会把它们挤成一个。
  */
 export function seedProjects(spec: {
-  primary: ProjectScene;
   extraNames: ReadonlyArray<string>;
+  primary: ProjectScene;
 }): Array<CanvasProject> {
   const created = [seedProject(spec.primary)];
   for (const name of spec.extraNames) {
@@ -290,11 +293,11 @@ export function StorybookScreenFrame({
   projects,
   activeView = "works",
 }: {
+  activeView?: Parameters<typeof AppShell>[0]["active"];
   /** 真视图（必须是真的 —— 见文件头的第一条口径）。 */
   children?: ReactNode;
   /** 侧栏分组里列出的项目（真 `CanvasProject[]`）。 */
   projects: ReadonlyArray<CanvasProject>;
-  activeView?: Parameters<typeof AppShell>[0]["active"];
 }) {
   const sidebarProjects = projects.map((project) => ({
     id: project.id,
@@ -306,13 +309,13 @@ export function StorybookScreenFrame({
     <div className="bg-bg h-[720px] w-full overflow-hidden">
       <AppShell
         active={activeView}
-        onSelect={() => undefined}
-        onOpenSettings={() => undefined}
-        projects={sidebarProjects}
         activeProjectId={activeProjectId}
-        onOpenProject={() => undefined}
-        onShowAllProjects={() => undefined}
         onNewProject={() => undefined}
+        onOpenProject={() => undefined}
+        onOpenSettings={() => undefined}
+        onSelect={() => undefined}
+        onShowAllProjects={() => undefined}
+        projects={sidebarProjects}
       >
         {children ?? <WorksGallery />}
       </AppShell>
@@ -368,13 +371,15 @@ export function StorybookDocumentFrame({ children }: { children?: ReactNode }) {
  * 这条边界写在这是为了下一个人不必再查一遍。
  */
 export function useSeededProjects(spec: {
-  primary: ProjectScene;
   extraNames: ReadonlyArray<string>;
+  primary: ProjectScene;
 }): Array<CanvasProject> {
   const [projects] = useState<Array<CanvasProject>>(() => seedProjects(spec));
   useEffect(() => {
     return () => {
-      for (const project of projects) deleteProject(project.id);
+      for (const project of projects) {
+        deleteProject(project.id);
+      }
     };
   }, [projects]);
   return projects;

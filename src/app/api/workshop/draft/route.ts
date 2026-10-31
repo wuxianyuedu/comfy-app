@@ -8,10 +8,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";
-import {
-  parseDraftDto,
-  draftHasContent,
-} from "~/lib/workshop/draft-sync-shared";
+import { parseDraftDto, draftHasContent } from "~/lib/workshop/draft-sync-shared";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import {
   deleteDraft,
@@ -29,13 +26,17 @@ const UNAUTHORIZED = () => unauthorizedResponse();
 
 function projectIdFrom(q: string | null): string | null {
   const trimmed = q?.trim();
-  if (trimmed) return trimmed;
+  if (trimmed) {
+    return trimmed;
+  }
   return null;
 }
 
 export async function GET(req: NextRequest) {
   const user = await requireRequestUser();
-  if (!user) return UNAUTHORIZED();
+  if (!user) {
+    return UNAUTHORIZED();
+  }
   const project = projectIdFrom(req.nextUrl.searchParams.get("project"));
   try {
     // 不带 project → 返回该用户全部服务端项目摘要（本地索引被清空时用来重建）。
@@ -48,8 +49,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ exists: false });
     }
     return NextResponse.json({ exists: true, draft });
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "读取服务端草稿失败"), {
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "读取服务端草稿失败"), {
       status: 500,
     });
   }
@@ -57,12 +58,15 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const user = await requireRequestUser();
-  if (!user) return UNAUTHORIZED();
+  if (!user) {
+    return UNAUTHORIZED();
+  }
 
   const body = await readJsonRecord(req);
-  if (isErrorResponse(body)) return body;
-  const project =
-    typeof body.project === "string" && body.project ? body.project : null;
+  if (isErrorResponse(body)) {
+    return body;
+  }
+  const project = typeof body.project === "string" && body.project ? body.project : null;
   if (!project) {
     return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
   }
@@ -70,8 +74,8 @@ export async function PUT(req: NextRequest) {
   try {
     await upsertDraft(project, draft, user.id);
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "保存服务端草稿失败"), {
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "保存服务端草稿失败"), {
       status: 500,
     });
   }
@@ -79,7 +83,9 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const user = await requireRequestUser();
-  if (!user) return UNAUTHORIZED();
+  if (!user) {
+    return UNAUTHORIZED();
+  }
   const project = projectIdFrom(req.nextUrl.searchParams.get("project"));
   if (!project) {
     return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
@@ -87,8 +93,8 @@ export async function DELETE(req: NextRequest) {
   try {
     await deleteDraft(project);
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "删除服务端草稿失败"), {
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "删除服务端草稿失败"), {
       status: 500,
     });
   }

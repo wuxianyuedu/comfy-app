@@ -73,23 +73,23 @@ import {
 export type WorkflowDetailIOEntry = IOParamSlot & Omit<WorkflowIOEntry, "direction" | "kind">;
 
 /** ComfyUI group frames 的下发形状（镜像客户端 WorkflowGroup，bypass 恒写入）。 */
-export interface WorkflowDetailGroup {
+export type WorkflowDetailGroup = {
+  bounding: [number, number, number, number];
+  bypass: boolean;
+  color: string;
   id: string;
   title: string;
-  bounding: [number, number, number, number];
-  color: string;
-  bypass: boolean;
-}
+};
 
 /** Note / MarkdownNote 注记的下发形状（镜像客户端 WorkflowNote）。 */
-export interface WorkflowDetailNote {
+export type WorkflowDetailNote = {
+  color: string;
   id: string;
-  title: string;
-  text: string;
   pos: [number, number];
   size: [number, number];
-  color: string;
-}
+  text: string;
+  title: string;
+};
 
 /** 详情转换所需的行类型（整行，含 `rawJson` / `positions` 两个大字段）。
  *  单独起名是为了让 `buildWorkflowDetailJson` 的参数可读——
@@ -102,49 +102,49 @@ type WorkflowDetailTemplateRow = NonNullable<
  *  与客户端 components/studio/wf-types.ts 里的 `WorkflowDetail` 接口对应。
  *  有些字段只出现在子图变体上。
  *  subgraph variant. */
-export interface WorkflowDetailFull {
-  id: string;
-  name: string;
-  taskType: string;
+export type WorkflowDetailFull = {
   /** 该工作流可运行的全部模式码（从 JSON 字符串列解析）。
    *  子图变体不带这个字段。改名 `availableModes` 以与 `WorkflowIOParam.modeOverrides`
    *  （按模式码的覆盖层）区分 —— 两者同名 `modes` 是历史命名地雷。 */
   availableModes?: Array<string>;
-  defaultMode?: string | null;
-  graph: Record<string, ApiWorkflowNode>;
-  /** 导入时的原始 RAW（UI 格式）JSON。 */
-  rawJson?: unknown;
-  nodes: Array<DetailNodeView>;
-  /** 从 rawJson 重新推导出的 RAW 视图包（nodes / positions / graph）。 */
-  rawView?: RawViewPacket | null;
-  /** `paramMap` JSON 列。形状的唯一出处是 `WorkflowParamMap` —— 这里声明成
-   *  「一层 key → string」曾与运行时不符（库里是按模式归拢的三层结构），且没有
-   *  任何消费点按它读（`buildWorkflowDetailJson` 此前靠 `as` 洗白）。 */
-  paramMap: WorkflowParamMap;
-  workflowIO: Record<string, WorkflowDetailIOEntry>;
-  positions: Record<string, [number, number]> | null;
-  groups: Array<WorkflowDetailGroup>;
-  notes: Array<WorkflowDetailNote>;
-  rawNodes: Array<RawNodeMeta>;
-  format: string;
-  hasRaw?: boolean;
-  usable?: boolean;
-  sourcePath?: string | null;
-  sourceOutdated?: boolean;
-  sourceMissing?: boolean;
-  source?: "local" | "online";
-  /** 子图变体：顶层工作流的 id。 */
-  parentId?: string;
-  /** 子图变体：请求的子图 UUID。 */
-  subgraphUid?: string;
+  /** 子图变体：哨兵连线 ↔ pin/槽位 的配对。 */
+  boundaryLinks?: Array<BoundaryLink>;
   /** 子图变体：边界 pin 实体。 */
   boundaryPins?: {
     inputs: Array<BoundaryPin>;
     outputs: Array<BoundaryPin>;
   };
-  /** 子图变体：哨兵连线 ↔ pin/槽位 的配对。 */
-  boundaryLinks?: Array<BoundaryLink>;
-}
+  defaultMode?: string | null;
+  format: string;
+  graph: Record<string, ApiWorkflowNode>;
+  groups: Array<WorkflowDetailGroup>;
+  hasRaw?: boolean;
+  id: string;
+  name: string;
+  nodes: Array<DetailNodeView>;
+  notes: Array<WorkflowDetailNote>;
+  /** `paramMap` JSON 列。形状的唯一出处是 `WorkflowParamMap` —— 这里声明成
+   *  「一层 key → string」曾与运行时不符（库里是按模式归拢的三层结构），且没有
+   *  任何消费点按它读（`buildWorkflowDetailJson` 此前靠 `as` 洗白）。 */
+  paramMap: WorkflowParamMap;
+  /** 子图变体：顶层工作流的 id。 */
+  parentId?: string;
+  positions: Record<string, [number, number]> | null;
+  /** 导入时的原始 RAW（UI 格式）JSON。 */
+  rawJson?: unknown;
+  rawNodes: Array<RawNodeMeta>;
+  /** 从 rawJson 重新推导出的 RAW 视图包（nodes / positions / graph）。 */
+  rawView?: RawViewPacket | null;
+  source?: "local" | "online";
+  sourceMissing?: boolean;
+  sourceOutdated?: boolean;
+  sourcePath?: string | null;
+  /** 子图变体：请求的子图 UUID。 */
+  subgraphUid?: string;
+  taskType: string;
+  usable?: boolean;
+  workflowIO: Record<string, WorkflowDetailIOEntry>;
+};
 
 /** 把已读出的工作流行转换成下发给客户端的序列化 JSON。
  *
@@ -156,7 +156,6 @@ export interface WorkflowDetailFull {
  *  `sourcePath` / `sourceChanged` / `sourceMissing` 由调用方（re-import 判定）
  *  算好后传入 —— 本函数只管转换，不碰磁盘。 */
 async function buildWorkflowDetailJson(input: {
-  tpl: WorkflowDetailTemplateRow;
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
@@ -167,9 +166,10 @@ async function buildWorkflowDetailJson(input: {
     classType: string | undefined,
     field: string,
   ) => Promise<boolean | undefined>;
-  sourcePath: string | null;
-  sourceOutdated: boolean;
   sourceMissing: boolean;
+  sourceOutdated: boolean;
+  sourcePath: string | null;
+  tpl: WorkflowDetailTemplateRow;
 }): Promise<string> {
   const {
     tpl,
@@ -243,11 +243,8 @@ async function buildWorkflowDetailJson(input: {
     // 而不是被认成 `is_subgraph: true` 去用紧凑的 WorkflowSubgraphNode。
     // （与旧 `n?.class_type || (n?.type as string) || "?"` 逐值等价：
     //  `a || b` ≡ `a ? a : b`，空串同样回退。）
-    const classType: string = n.class_type
-      ? n.class_type
-      : n.type
-        ? /* SAFETY: 类型断言已复核 */ (n.type as string)
-        : "?";
+    /* SAFETY: 类型断言已复核 */
+    const classType: string = n.class_type ? n.class_type : n.type ? (n.type as string) : "?";
     const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
     /* 子图封装节点（class_type === UUID）的显示名取自
      *  raw.definitions.subgraphs[uid].name。与子图路由的 `sub` 解析器同一套
@@ -261,7 +258,9 @@ async function buildWorkflowDetailJson(input: {
       let def = subs[classType];
       if (!def) {
         const matchKey = Object.keys(subs).find((key) => subs[key]?.id === classType);
-        if (matchKey) def = subs[matchKey];
+        if (matchKey) {
+          def = subs[matchKey];
+        }
       }
       if (def && typeof def.name === "string" && def.name.trim()) {
         resolvedTitle = def.name.trim();
@@ -296,7 +295,9 @@ async function buildWorkflowDetailJson(input: {
   ) as Record<string, WorkflowIORawEntry>;
 
   const nodeTitleById: Record<string, string> = {};
-  for (const n of nodes) nodeTitleById[n.id] = n.title ?? n.class_type;
+  for (const n of nodes) {
+    nodeTitleById[n.id] = n.title ?? n.class_type;
+  }
 
   /* ── workflowIO ENRICHMENT ──
    * 落库的勾选只记录「哪个 pin 被暴露」（`direction` / `kind` / `nodeId` /
@@ -343,7 +344,9 @@ async function buildWorkflowDetailJson(input: {
   if (raw && Array.isArray(raw.groups)) {
     raw.groups.forEach((g: unknown, idx: number) => {
       const rec = asRecord(g);
-      if (!rec) return;
+      if (!rec) {
+        return;
+      }
       const bounds: Array<unknown> =
         Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
       groups.push({
@@ -370,7 +373,9 @@ async function buildWorkflowDetailJson(input: {
   const notes: Array<WorkflowDetailNote> = [];
   if (raw && Array.isArray(raw.nodes)) {
     raw.nodes.forEach((n) => {
-      if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) return;
+      if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) {
+        return;
+      }
       const pos = Array.isArray(n.pos) && n.pos.length >= 2 ? n.pos : [0, 0];
       const size = Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
       const wv = Array.isArray(n.widgets_values) ? n.widgets_values[0] : "";
@@ -524,7 +529,9 @@ export async function buildWorkflowDetailFull(
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
-  if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  if (!tpl) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  }
 
   /* ── 自动同步（可选，默认关）──
    *  设置 `autoSyncLocalWorkflow` 开启时，「进详情」等价于「点同步」：检出到磁盘
@@ -606,7 +613,9 @@ export async function buildSubgraphDetail(
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
-  if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  if (!tpl) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  }
 
   const raw = asRawWorkflow(tpl.rawJson);
   if (!raw?.definitions?.subgraphs) {
@@ -623,7 +632,9 @@ export async function buildSubgraphDetail(
   if (!sub) {
     // 退回按 .id 字段匹配
     const matchUid = Object.keys(subgraphs).find((key) => subgraphs[key]?.id === uid);
-    if (matchUid) sub = subgraphs[matchUid];
+    if (matchUid) {
+      sub = subgraphs[matchUid];
+    }
   }
   if (!sub) {
     throw new TRPCError({
@@ -654,7 +665,9 @@ export async function buildSubgraphDetail(
     for (const [nodeId, entries] of Object.entries(sg.rawInputsById)) {
       const classType = sg.graph[nodeId]?.class_type;
       for (const entry of entries) {
-        if (entry.type !== "STRING" || entry.multiline) continue;
+        if (entry.type !== "STRING" || entry.multiline) {
+          continue;
+        }
         if (
           inferIsMultiline(await multilineForClassField(classType, entry.name), entry.widgetValue)
         ) {
@@ -671,10 +684,14 @@ export async function buildSubgraphDetail(
     for (const n of sg.nodes) {
       for (const inp of n.raw_inputs ?? []) {
         const authorLabel = sg.proxyAuthorLabels[`${n.id}::${inp.name}`];
-        if (!authorLabel) continue;
+        if (!authorLabel) {
+          continue;
+        }
         /* 只对「本层槽位名与作者名不同」的暴露口打标；`field` 用槽位名本身，
          *  让富化按本层名字回查得中（顶层 `innerInputsById` 的键就是槽位名）。 */
-        if (inp.name === authorLabel) continue;
+        if (inp.name === authorLabel) {
+          continue;
+        }
         inp.label = authorLabel;
         inp.proxyField ??= { nodeId: "", field: inp.name, label: authorLabel };
       }

@@ -16,39 +16,36 @@ import type { FieldType } from "./field-types";
 export type { FieldType };
 
 /** 编辑器参数行定义（旧的「参数编辑器」FieldDef，现仅作字段规格复用）。 */
-export interface FieldDef {
+export type FieldDef = {
+  group?: string; // section grouping
+  hidden?: boolean; // don't show in editor (e.g. internal wiring)
   key: string; // input key in ComfyUI inputs object
   label: string; // display name
-  type: FieldType;
-  options?: Array<string>; // for select type
-  placeholder?: string;
-  multiline?: boolean; // for text type
-  hidden?: boolean; // don't show in editor (e.g. internal wiring)
-  group?: string; // section grouping
+  max?: number;
   /* 数值上下界（与 ComfyUI INPUT_TYPES 的 min/max/step 对齐）。 */
   min?: number;
-  max?: number;
-  step?: number;
   /* 文件下拉框对应的模型目录（checkpoints / loras / vae 等）。设置它、
    *  并给出匹配的文件列表时，编辑器会渲染真正的文件 <select> 控件。 */
   modelFolder?: string;
-}
+  multiline?: boolean; // for text type
+  options?: Array<string>; // for select type
+  placeholder?: string;
+  step?: number;
+  type: FieldType;
+};
 
 /* ── 端口规格（来自自定义节点的 manifest） ── */
-export interface PortSpec {
+export type PortSpec = {
+  default?: unknown; // default value (for value chip / placeholder)
   name: string; // input/output name
+  options?: Array<string>; // for COMBO
+  required: boolean;
   type: string; // e.g. "FLOAT" | "IMAGE" | "COMBO" ...
   widget?: FieldType; // editor widget (absent for pure connection ports)
-  options?: Array<string>; // for COMBO
-  default?: unknown; // default value (for value chip / placeholder)
-  required: boolean;
-}
+};
 
 /* ── 节点类型注册表 —— 把 class_type 映射到展示信息与字段规格 ── */
-export interface NodeTypeConfig {
-  label: string; // default Chinese label
-  color: string; // accent color (CSS var or hex)
-  icon?: string; // emoji or unicode symbol (for non-emoji env)
+export type NodeTypeConfig = {
   category:
     | "input"
     | "process"
@@ -58,17 +55,20 @@ export interface NodeTypeConfig {
     | "latent"
     | "image"
     | "custom";
-  defaultFields: Array<FieldDef>;
-  width: number; // node card width in px
-  height: number; // min height
+  color: string; // accent color (CSS var or hex)
   /* 自定义节点支持（从 customNodes manifest 填充） */
   custom?: boolean;
-  rawCategory?: string; // original ComfyUI category string
-  inputsSpec?: Array<PortSpec>;
-  outputsSpec?: Array<PortSpec>;
-  /** OUTPUT_NODE === true：终端节点（后端仍执行，只是不向下游传值）。 */
-  outputNode?: boolean;
+  defaultFields: Array<FieldDef>;
+  description?: string;
   /** properties.frontend_only === true：纯前端节点（后端不执行）。与 outputNode 是两回事。 */
   frontendOnly?: boolean;
-  description?: string;
-}
+  height: number; // min height
+  icon?: string; // emoji or unicode symbol (for non-emoji env)
+  inputsSpec?: Array<PortSpec>;
+  label: string; // default Chinese label
+  /** OUTPUT_NODE === true：终端节点（后端仍执行，只是不向下游传值）。 */
+  outputNode?: boolean;
+  outputsSpec?: Array<PortSpec>;
+  rawCategory?: string; // original ComfyUI category string
+  width: number; // node card width in px
+};

@@ -43,8 +43,7 @@ export const STATUS_ROW_CLASS = "flex flex-wrap items-center gap-x-3 gap-y-2";
 export const STATUS_TEXT_CLASS = "min-w-0 flex-1 basis-40 truncate text-sm";
 
 /** 按钮组：整体不许被压扁（内层按钮各自也带 `shrink-0`）。 */
-export const STATUS_ACTIONS_CLASS =
-  "flex shrink-0 flex-wrap items-center gap-2";
+export const STATUS_ACTIONS_CLASS = "flex shrink-0 flex-wrap items-center gap-2";
 
 /**
  * 按钮**任何状态下都必须带上**的类：不许换行、不许被 flex 压扁。
@@ -63,11 +62,7 @@ export const STATUS_BUTTON_BASE = "shrink-0 whitespace-nowrap leading-none";
  * @param extra 该按钮自己的补充类（如 `ml-auto`、配色覆盖）
  */
 export function statusButtonClass(extra = ""): string {
-  return [
-    STATUS_BUTTON_BASE,
-    "rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
-    extra,
-  ]
+  return [STATUS_BUTTON_BASE, "rounded-lg px-4 py-2 text-sm font-semibold transition-colors", extra]
     .filter(Boolean)
     .map((part) => part.trim())
     .join(" ");
@@ -109,20 +104,18 @@ export function StatusButton({
   className,
   variant = "primary",
 }: {
-  onClick: () => void;
-  disabled?: boolean;
   children: React.ReactNode;
   className?: string;
+  disabled?: boolean;
+  onClick: () => void;
   variant?: React.ComponentProps<typeof Button>["variant"];
 }) {
   return (
     <Button
-      variant={variant}
-      onClick={onClick}
+      className={statusButtonClass(`h-auto rounded-lg px-4 py-2 font-semibold ${className ?? ""}`)}
       disabled={disabled}
-      className={statusButtonClass(
-        `h-auto rounded-lg px-4 py-2 font-semibold ${className ?? ""}`,
-      )}
+      onClick={onClick}
+      variant={variant}
     >
       {children}
     </Button>

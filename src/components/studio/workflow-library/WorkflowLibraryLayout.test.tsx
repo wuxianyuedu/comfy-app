@@ -18,7 +18,22 @@ import type { WorkflowRow } from "./workflow-library-config";
 import type { MetaEditorController } from "./hooks/use-workflow-library-detail";
 import { DetailHeader } from "./sections/DetailHeader";
 
+import { normalizeControlFlow } from "../../../../tests/helpers/source-shape";
+
 afterEach(cleanup);
+
+/**
+ * 取出含 `needle` 的那个 JSX 开标签原文。
+ *
+ * JSX 属性顺序由 oxlint `perfectionist/sort-jsx-props` 机械排序，而这里要钉的是
+ * 「同一个标签上有这些属性 / 这串类名」，与属性先后无关 —— 直接对整份源码写
+ * `A[\s\S]{0,80}B` 会把「排过序」读成「契约破了」（判据钉语义不钉行形状）。
+ */
+function tagContaining(src: string, needle: string): string {
+  const at = src.indexOf(needle);
+  expect(at, `源码里找不到 ${needle}`).toBeGreaterThan(-1);
+  return src.slice(src.lastIndexOf("<", at), src.indexOf(">", at) + 1);
+}
 
 const meta: MetaEditorController = {
   modes: ["T2I"],
@@ -60,20 +75,20 @@ function headerRow(over: Partial<WorkflowRow> = {}): WorkflowRow {
 function renderHeader() {
   render(
     <DetailHeader
-      workflow={headerRow()}
-      usable
-      canResync={false}
-      missing={false}
-      isTechnical={false}
       busyDownload={false}
       busyResync={false}
+      canResync={false}
+      isTechnical={false}
       meta={meta}
-      onEdit={vi.fn()}
-      onResync={vi.fn()}
-      onDownload={vi.fn()}
+      missing={false}
       onDelete={vi.fn()}
+      onDownload={vi.fn()}
+      onEdit={vi.fn()}
       onOpenSource={vi.fn()}
+      onResync={vi.fn()}
       onUse={vi.fn()}
+      usable
+      workflow={headerRow()}
     />,
   );
 }
@@ -96,9 +111,7 @@ describe("详情头部：窄屏不丢按钮", () => {
 
   it("标题区有可读下限（压缩压力交给它，标题截断而不是把按钮挤出去）", () => {
     renderHeader();
-    expect(screen.getByTestId("detail-title-block").className).toContain(
-      "min-w-45",
-    );
+    expect(screen.getByTestId("detail-title-block").className).toContain("min-w-45");
   });
 });
 
@@ -107,9 +120,7 @@ describe("详情头部：执行日志入口已下沉到各页签", () => {
   const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
 
   it("详情头部不再集中放置统一入口（入口分散到画布节点 / 工坊封装页签）", () => {
-    expect(read("sections/DetailHeader.tsx")).not.toContain(
-      "WorkflowRunLogButton",
-    );
+    expect(read("sections/DetailHeader.tsx")).not.toContain("WorkflowRunLogButton");
   });
 
   it("画布节点页签有独立入口，且带 canvas-node 来源过滤", () => {
@@ -136,8 +147,13 @@ describe("左右分栏：详情面板能窄于内容最小宽度", () => {
     /* react-resizable-panels v4：数值 = 像素、字符串 = 百分比。#981 的 bug 正是
      * 写成数值（defaultSize={24} → 24px、maxSize={45} → 45px，列表被夹到 45px）。
      * 这里钉死两件事：① 三处尺寸都是字符串百分比；② 不再残留任何数值形式。 */
-    expect(library).toMatch(/defaultSize="24"\s+minSize="16"\s+maxSize="45"/);
-    expect(library).toMatch(/defaultSize="76"\s+minSize="40"/);
+    const listPanel = tagContaining(library, 'defaultSize="24"');
+    expect(listPanel.startsWith("<ResizablePanel")).toBe(true);
+    expect(listPanel).toContain('minSize="16"');
+    expect(listPanel).toContain('maxSize="45"');
+    const detailPanel = tagContaining(library, 'defaultSize="76"');
+    expect(detailPanel.startsWith("<ResizablePanel")).toBe(true);
+    expect(detailPanel).toContain('minSize="40"');
     expect(library).not.toMatch(/defaultSize=\{\d+\}/);
     expect(library).not.toMatch(/(?:min|max)Size=\{\d+\}/);
     /* 详情面板仍可窄于内容最小宽度（小屏不裁右侧）。 */
@@ -179,9 +195,7 @@ describe("画布页签：画布铺到面板底部（ISSUE #596）", () => {
       /flex h-full min-h-0 w-full flex-col items-center gap-3/,
     );
     /* 页签面板把高度传下去（缺 `h-full` 则整条链断在第一层）。 */
-    expect(read("sections/DetailBody.tsx")).toMatch(
-      /flex h-full min-h-105 flex-col/,
-    );
+    expect(read("sections/DetailBody.tsx")).toMatch(/flex h-full min-h-105 flex-col/);
   });
 
   it("三列之上垫了一层背景板，且它的尺寸由视口与内容取大", () => {
@@ -192,12 +206,8 @@ describe("画布页签：画布铺到面板底部（ISSUE #596）", () => {
 
     const graph = read("workflow-library-wire-graph.ts");
     /* 取大，缺一边都会退回空白：比视口矮（高度）或比三列窄（右列被挤出视野）。 */
-    expect(graph).toMatch(
-      /Math\.max\(content\.height,\s*clamp\(viewport\.height\)\)/,
-    );
-    expect(graph).toMatch(
-      /Math\.max\(content\.width,\s*clamp\(viewport\.width\)\)/,
-    );
+    expect(graph).toMatch(/Math\.max\(content\.height,\s*clamp\(viewport\.height\)\)/);
+    expect(graph).toMatch(/Math\.max\(content\.width,\s*clamp\(viewport\.width\)\)/);
   });
 });
 
@@ -210,15 +220,10 @@ describe("工坊封装页签：模式可切换 / 必填可分 / 不再有手动�
   it("第 1 条：不再显示「手动 / 自动」落点（相关字段也一并删了）", () => {
     /* 落点现在**只**来自作者画的线（没有第二条来源），「手动落点」这句话已经
      *  没有区分能力，留着只会让用户以为还有别的落点来源。 */
-    expect(read("sections/WorkshopEncapsulationPanel.tsx")).not.toContain(
-      "手动落点",
-    );
+    expect(read("sections/WorkshopEncapsulationPanel.tsx")).not.toContain("手动落点");
     /* 状态派生的类型上也不再有这个字段（不是只把渲染删掉）。 */
     const status = readFileSync(
-      path.resolve(
-        __dirname,
-        "../../../lib/workshop/workshop-encapsulation-status.ts",
-      ),
+      path.resolve(__dirname, "../../../lib/workshop/workshop-encapsulation-status.ts"),
       "utf8",
     );
     expect(status).not.toMatch(/^\s*manual: boolean;/m);
@@ -237,9 +242,7 @@ describe("工坊封装页签：模式可切换 / 必填可分 / 不再有手动�
        「必填 / 可选」读的正是「没落点会不会挡住运行」，再挂一个同义徽标就是把
        同一份事实换个说法说第二遍。判据先去掉注释 —— 把「为什么删掉它」写进
        注释不该让计数停在原地（同 §16.2.4.12 的 P9 口径）。 */
-    const code = panel
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^\s*\/\/.*$/gm, "");
+    const code = panel.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(code).not.toContain("可选 · 未落点");
     expect(code).not.toContain("必备 · 未落点");
     /* 例外只留「必填口没落点」：那不是复述，是缺件状态。 */
@@ -255,9 +258,7 @@ describe("工坊封装页签：模式可切换 / 必填可分 / 不再有手动�
     expect(panel).toMatch(/modes\.length > 1/);
     /* 模式由详情层下发（两个页签共用同一份当前模式）。 */
     expect(read("sections/DetailBody.tsx")).toMatch(/mode=\{activeMode\}/);
-    expect(read("WorkflowLibraryDetailView.tsx")).toContain(
-      "activeMode={activeMode}",
-    );
+    expect(read("WorkflowLibraryDetailView.tsx")).toContain("activeMode={activeMode}");
   });
 
   it("第 4 条：首帧 fit 落地前画布不可见（不在错误缩放上画一帧）", () => {
@@ -288,8 +289,8 @@ describe("页头：筛选菜单水平排列（ISSUE #716）", () => {
     const filters = read("WorkflowLibraryFilters.tsx");
 
     /* 组容器：一行到底。 */
-    expect(filters).toMatch(
-      /workflow-library-filter-row[\s\S]{0,80}flex flex-nowrap items-center gap-2/,
+    expect(tagContaining(filters, 'data-testid="workflow-library-filter-row"')).toContain(
+      "flex flex-nowrap items-center gap-2",
     );
     expect(filters).not.toMatch(/flex flex-wrap items-center gap-2/);
 
@@ -303,13 +304,11 @@ describe("页头：筛选菜单水平排列（ISSUE #716）", () => {
     /* 根容器换行：排不下时整组落到第二行，而不是把某个下拉挤变形。 */
     expect(header).toMatch(/flex flex-wrap items-center gap-x-3 gap-y-2/);
     /* 筛选是一组：组内不换行（组之间才换行）。 */
-    expect(header).toMatch(
-      /workflow-library-header-filters[\s\S]{0,80}flex shrink-0 flex-nowrap/,
+    expect(tagContaining(header, 'data-testid="workflow-library-header-filters"')).toContain(
+      "flex shrink-0 flex-nowrap",
     );
     /* 动作组不许被压（规范 03 §3.8.1）。 */
-    expect(header).toMatch(
-      /ml-auto flex shrink-0 flex-wrap items-center gap-2/,
-    );
+    expect(header).toMatch(/ml-auto flex shrink-0 flex-wrap items-center gap-2/);
 
     /* 屏名不再有可见标题（ISSUE #1847 / #1693）：顶栏与页签常驻写着「工作流库」，
      * 屏内再写一遍是同一个名字出现两次。名字仍从注册表取（`pageHeaderTitle`），
@@ -345,12 +344,9 @@ describe("局部加载不许用整列加载界面", () => {
     /* 常驻形态的回归：`<WorkflowCanvasEditor …>` 不出现在**任何**条件之外
      *  —— 逐个匹配点都必须在 `editingId &&` 里。取反的写法是把条件那一段剥掉
      *  再看还剩不剩裸的 `<WorkflowCanvasEditor`。 */
-    expect(
-      library.replace(
-        /\{c\.editingId && \(\s*<WorkflowCanvasEditor/g,
-        "<GATED",
-      ),
-    ).not.toMatch(/<WorkflowCanvasEditor\s+workflowId=/);
+    expect(library.replace(/\{c\.editingId && \(\s*<WorkflowCanvasEditor/g, "<GATED")).not.toMatch(
+      /<WorkflowCanvasEditor\s+workflowId=/,
+    );
     /* 编辑器自身仍带 `open` 契约（组件 API 不变）。 */
     expect(library).toMatch(/<WorkflowCanvasEditor[\s\S]{0,180}\bopen\b/);
   });
@@ -359,19 +355,17 @@ describe("局部加载不许用整列加载界面", () => {
     const view = read("WorkflowLibraryDetailView.tsx");
     /* 常驻实例套在 `canvasMounted &&` 里，而不是只有 `hidden`。 */
     expect(view).toMatch(/\{canvasMounted && \(/);
-    expect(view).toMatch(
-      /hidden=\{activeTab !== "canvas" && activeTab !== "use"\}/,
-    );
+    expect(view).toMatch(/hidden=\{activeTab !== "canvas" && activeTab !== "use"\}/);
   });
 
   it("`canvasMounted` 由 controller 给，且落在「首次切到画布页签」那一刻", () => {
-    const hook = read("hooks/use-workflow-library-detail.ts");
+    /* 读源断言钉的是**结构**（字段在 controller 上、记录点在切页签那条路上），
+     * 不是括号形态：先过归一化，oxlint `curly` 补 `{}` 不改变这条判据的结论。 */
+    const hook = normalizeControlFlow(read("hooks/use-workflow-library-detail.ts"), "detail.ts");
     /* 契约：controller 上有这个字段。 */
     expect(hook).toMatch(/canvasMounted: boolean;/);
     /* 判据：当前工作流访问过画布页签才为真。 */
-    expect(hook).toMatch(
-      /canvasMounted: !!workflow && canvasVisitedFor === workflow\.id/,
-    );
+    expect(hook).toMatch(/canvasMounted: !!workflow && canvasVisitedFor === workflow\.id/);
     /* 记录点只在切页签那一条路径上（不是 effect 里 setState）。 */
     expect(hook).toMatch(
       /if \(isCanvasTab\(tab\) && workflow\) setCanvasVisitedFor\(workflow\.id\)/,

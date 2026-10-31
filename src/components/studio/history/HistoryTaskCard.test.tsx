@@ -25,19 +25,17 @@ const task: TaskItem = {
   cover: null,
 };
 
-function renderCard(
-  overrides: Partial<Parameters<typeof HistoryTaskCard>[0]> = {},
-) {
+function renderCard(overrides: Partial<Parameters<typeof HistoryTaskCard>[0]> = {}) {
   const onOpenDetail = vi.fn();
   render(
     <HistoryTaskCard
-      task={task}
+      onCancel={vi.fn()}
+      onOpenDetail={onOpenDetail}
+      onRemove={vi.fn()}
+      onRetry={vi.fn()}
       progress={0}
       retrying={false}
-      onOpenDetail={onOpenDetail}
-      onCancel={vi.fn()}
-      onRetry={vi.fn()}
-      onRemove={vi.fn()}
+      task={task}
       {...overrides}
     />,
   );

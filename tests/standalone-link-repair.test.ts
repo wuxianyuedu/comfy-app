@@ -177,13 +177,13 @@ interface FakeLink {
  * @param input.targetExists 目标在不在（默认在 —— 这才是本条发现ing的形状）
  */
 function fake(input: {
-  links: Array<FakeLink>;
   brokenRels?: Array<string>;
-  rebuildResult?: { ok: boolean; error: string };
-  targetExists?: boolean;
   dirExists?: boolean;
-  throwOnReadText?: boolean;
+  links: Array<FakeLink>;
+  rebuildResult?: { error: string; ok: boolean; };
   siblingInstalled?: boolean;
+  targetExists?: boolean;
+  throwOnReadText?: boolean;
 }) {
   const links = input.links;
   const brokenRels = new Set(input.brokenRels ?? links.map((l) => l.rel));
@@ -200,8 +200,12 @@ function fake(input: {
     },
     follow: (abs: string) => {
       const l = links.find((x) => x.abs === abs);
-      if (!l) return /* SAFETY: 类型断言已复核 */ "broken" as const;
-      if (nowFollowable.has(abs)) return /* SAFETY: 类型断言已复核 */ "follow" as const;
+      if (!l) {
+        return /* SAFETY: 类型断言已复核 */ "broken" as const;
+      }
+      if (nowFollowable.has(abs)) {
+        return /* SAFETY: 类型断言已复核 */ "follow" as const;
+      }
       return brokenRels.has(l.rel)
         ? /* SAFETY: 类型断言已复核 */ ("broken" as const)
         : /* SAFETY: 类型断言已复核 */ ("follow" as const);
@@ -209,7 +213,9 @@ function fake(input: {
     rebuild: (abs: string, linkText: string) => {
       rebuildCalls.push({ abs, linkText });
       const r = input.rebuildResult ?? { ok: true, error: "" };
-      if (r.ok) nowFollowable.add(abs);
+      if (r.ok) {
+        nowFollowable.add(abs);
+      }
       return r;
     },
     exists: (_p: string) => input.targetExists ?? true,
@@ -358,7 +364,9 @@ describe("接线在位", () => {
       "scripts/check-standalone-contents.cjs",
       "scripts/smoke-executor-host-standalone.mjs",
     ].map((s) => build.indexOf(s));
-    for (const idx of order) expect(idx).toBeGreaterThanOrEqual(0);
+    for (const idx of order) {
+      expect(idx).toBeGreaterThanOrEqual(0);
+    }
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 

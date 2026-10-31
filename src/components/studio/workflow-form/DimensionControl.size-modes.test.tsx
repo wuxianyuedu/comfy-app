@@ -7,13 +7,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import type { EnrichedWidget } from "../workflow-io";
 import { DimensionControl } from "./DimensionControl";
@@ -52,9 +46,9 @@ function renderSize(width: number, height: number) {
           defaultValue: height,
         }),
       }}
-      values={{}}
       set={() => undefined}
       setMany={() => undefined}
+      values={{}}
     />,
   );
   fireEvent.click(container.querySelector('[aria-label="选择比例与像素"]')!);
@@ -65,16 +59,20 @@ function renderSize(width: number, height: number) {
    * role 更稳、也不被未来 base-ui 语义微调打断。
    * 注意:PopoverContent 走 Portal 挂到 `document.body`、不在 `container`
    * 里 —— 必须从 document 或 `screen` 拿,与旧 `screen.queryAllByRole` 等价。 */
-  return Array.from(
-    document.querySelectorAll<HTMLElement>("[data-slot=toggle-group-item]"),
-  ).map((el) => el.textContent ?? "");
+  return Array.from(document.querySelectorAll<HTMLElement>("[data-slot=toggle-group-item]")).map(
+    (el) => el.textContent ?? "",
+  );
 }
 
 describe("尺寸控件的两类表达", () => {
   it("「像素」里同时给出「分辨率」与「百万像素」两个子类", () => {
     const labels = renderSize(1024, 576);
-    for (const tier of ["1k", "2k", "4k"]) expect(labels).toContain(tier);
-    for (const tier of ["1M", "2M", "4M"]) expect(labels).toContain(tier);
+    for (const tier of ["1k", "2k", "4k"]) {
+      expect(labels).toContain(tier);
+    }
+    for (const tier of ["1M", "2M", "4M"]) {
+      expect(labels).toContain(tier);
+    }
     expect(screen.getByText("分辨率")).toBeTruthy();
     expect(screen.getByText("百万像素")).toBeTruthy();
   });
@@ -87,8 +85,9 @@ describe("尺寸控件的两类表达", () => {
   it("百万像素档出现「倍数」，候选为 8/16/32/64", () => {
     /* 1856×1088 = 16:9 下 2M 档经 64 对齐后的宽高 → 回读落在百万像素 2M。 */
     const labels = renderSize(1856, 1088);
-    for (const multiple of ["8", "16", "32", "64"])
+    for (const multiple of ["8", "16", "32", "64"]) {
       expect(labels).toContain(multiple);
+    }
     expect(screen.getByText("倍数")).toBeTruthy();
   });
 

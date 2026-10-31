@@ -33,7 +33,9 @@ let cache: WorkshopApiSettings | null = null;
 
 /** 读取配置（进程内缓存）。 */
 export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
-  if (cache) return cache;
+  if (cache) {
+    return cache;
+  }
   let stored: Partial<WorkshopApiSettings> = {};
   try {
     stored = /* SAFETY: 类型断言已复核 */ JSON.parse(
@@ -51,7 +53,9 @@ export type { ApiImageRequest, ApiVideoSubmitRequest, ApiVideoSubmitResult };
 /** 调用 OpenAI 兼容 images/generations 端点，返回可用 URL（远程或 data URL）。 */
 export async function generateImageViaApi(req: ApiImageRequest): Promise<string> {
   const channel = getWorkshopApiSettingsSync().image;
-  if (!channel.baseUrl) throw new Error("API 生图通道未配置：请先填写 Base URL 与 API Key");
+  if (!channel.baseUrl) {
+    throw new Error("API 生图通道未配置：请先填写 Base URL 与 API Key");
+  }
   return callImageGeneration(req, channel, () => null);
 }
 
@@ -63,7 +67,7 @@ export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<Api
 /** 轮询一次异步视频任务。 */
 export async function pollVideoViaApi(
   remoteTaskId: string,
-): Promise<{ url?: string; pending: boolean }> {
+): Promise<{ pending: boolean; url?: string }> {
   return callVideoPoll(remoteTaskId, getWorkshopApiSettingsSync().video);
 }
 
@@ -71,9 +75,13 @@ export async function pollVideoViaApi(
 export async function resolveMediaDataUrl(ref: string): Promise<string> {
   /* 「已经是内联 media 吗」与「怎么拼 data URL」各只有一处定义
    *（`~/lib/media/data-url`，规范 16 §16.2.4.56）。 */
-  if (isInlineMedia(ref)) return ref;
+  if (isInlineMedia(ref)) {
+    return ref;
+  }
   const res = await fetch(ref, { signal: AbortSignal.timeout(30_000) });
-  if (!res.ok) throw new Error(`解析媒体失败 (${res.status})`);
+  if (!res.ok) {
+    throw new Error(`解析媒体失败 (${res.status})`);
+  }
   const buf = Buffer.from(await res.arrayBuffer());
   const mime = res.headers.get("content-type") ?? "image/png";
   return toDataUrl(buf, mime);

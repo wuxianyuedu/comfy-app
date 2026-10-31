@@ -158,13 +158,13 @@ export function SelectChip(rawProps: SelectChipProps) {
   return (
     <Button
       {...rest}
+      aria-checked={selected}
+      className={cn(selectChipVariants({ shape, className: rest.className }))}
+      role="radio"
       /* 这三件由本件**写死**：它们正是 `OWN_PROPS` 里被摘掉的那几项 ——
        * 调用处传了也不生效，所以从类型上就不给传（免得写出「传了却没反应」）。 */
       type={rest.type ?? "button"}
-      role="radio"
-      aria-checked={selected}
       variant="ghost"
-      className={cn(selectChipVariants({ shape, className: rest.className }))}
     />
   );
 }

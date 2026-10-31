@@ -87,7 +87,9 @@ export function rebuildShotPrompts(
 }
 
 function extractRemoteTaskId(clipUrl: string | undefined): string | null {
-  if (!clipUrl) return null;
+  if (!clipUrl) {
+    return null;
+  }
   return clipUrl.startsWith("task:") ? clipUrl.slice("task:".length) : null;
 }
 
@@ -95,7 +97,9 @@ function extractRemoteTaskId(clipUrl: string | undefined): string | null {
 
 async function load(id: string): Promise<WorkshopSessionState> {
   const state = await repo.getSession(id);
-  if (!state) throw new Error(`工坊会话不存在：${id}`);
+  if (!state) {
+    throw new Error(`工坊会话不存在：${id}`);
+  }
   return state;
 }
 
@@ -138,7 +142,9 @@ export async function setIdea(id: string, idea: string) {
 
 export async function generateScript(id: string) {
   const state = await load(id);
-  if (!state.idea.trim()) throw new Error("请先设置 idea（灵感 / 梗概）再生成脚本");
+  if (!state.idea.trim()) {
+    throw new Error("请先设置 idea（灵感 / 梗概）再生成脚本");
+  }
   const cfg = await getWorkshopLLMConfig();
   const script = await completeWorkshopLLM(cfg, buildScriptMessages(state.idea, state.meta));
   const scenes = parseIdeaToScenes(script, {
@@ -178,7 +184,9 @@ export async function setScript(id: string, markdown: string, parse = true) {
 
 export async function extractCharacters(id: string) {
   const state = await load(id);
-  if (!state.meta.scriptMarkdown?.trim()) throw new Error("请先生成 / 设置脚本再提取角色");
+  if (!state.meta.scriptMarkdown?.trim()) {
+    throw new Error("请先生成 / 设置脚本再提取角色");
+  }
   const cfg = await getWorkshopLLMConfig();
   const text = await completeWorkshopLLM(
     cfg,
@@ -204,7 +212,9 @@ export async function setCharacters(id: string, characters: Array<Character>) {
 
 export async function buildStoryboard(id: string) {
   const state = await load(id);
-  if (!state.meta.scriptMarkdown?.trim()) throw new Error("请先生成 / 设置脚本再拆分分镜");
+  if (!state.meta.scriptMarkdown?.trim()) {
+    throw new Error("请先生成 / 设置脚本再拆分分镜");
+  }
   const names = state.characters.map((c) => c.name);
   const cfg = await getWorkshopLLMConfig();
   const text = await completeWorkshopLLM(
@@ -233,15 +243,15 @@ export async function setStoryboard(id: string, shots: Array<Shot>) {
 
 // ── 阶段 4：生图 ───────────────────────────────────────────────
 
-export interface GenerateImageInput {
-  shotId?: string;
-  characterId?: string;
+export type GenerateImageInput = {
   channel?: "api" | "comfyui";
+  characterId?: string;
+  shotId?: string;
   /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见 `lib/size-presets`）。
    *  缺省各通道按自己的默认档走。调用方（MCP）若仍按老口径给 "1024x1024"，
    *  由边界用 `toSizeSpec` 归一。 */
   size?: SizeSpec;
-}
+};
 
 export async function generateImage(id: string, input: GenerateImageInput) {
   const state = await load(id);
@@ -295,20 +305,22 @@ export async function generateImage(id: string, input: GenerateImageInput) {
 
 // ── 阶段 5：生视频 ─────────────────────────────────────────────
 
-export interface SubmitVideoInput {
-  shotId: string;
+export type SubmitVideoInput = {
   channel?: "api" | "comfyui";
-  prompt?: string;
-  negative?: string;
-  frames?: number;
   fps?: number;
+  frames?: number;
+  negative?: string;
+  prompt?: string;
+  shotId: string;
   useFirstFrame?: boolean;
-}
+};
 
 export async function submitVideo(id: string, input: SubmitVideoInput) {
   const state = await load(id);
   const shot = state.shots.find((s) => s.id === input.shotId);
-  if (!shot) throw new Error(`镜头不存在：${input.shotId}`);
+  if (!shot) {
+    throw new Error(`镜头不存在：${input.shotId}`);
+  }
   if (input.channel === "comfyui") {
     let imageDataUrl: string | undefined;
     if (input.useFirstFrame && shot.imageUrl) {
@@ -352,7 +364,9 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
 export async function pollVideo(id: string, shotId: string) {
   const state = await load(id);
   const shot = state.shots.find((s) => s.id === shotId);
-  if (!shot) throw new Error(`镜头不存在：${shotId}`);
+  if (!shot) {
+    throw new Error(`镜头不存在：${shotId}`);
+  }
   const taskId = extractRemoteTaskId(shot.clipUrl);
   if (!taskId) {
     return {
@@ -372,17 +386,17 @@ export async function pollVideo(id: string, shotId: string) {
 
 // ── 阶段 6：成片合成 ─────────────────────────────────────────────
 
-export interface ComposeFinalInput {
+export type ComposeFinalInput = {
   render?: boolean;
   title?: string;
-}
+};
 
-export interface ComposeFinalResult {
+export type ComposeFinalResult = {
+  outputPath?: string;
   plan: CompositionPlan;
   planPath: string;
-  outputPath?: string;
   renderNote?: string;
-}
+};
 
 /** 把分镜按序合成为成片：写出合成清单（JSON），可选 ffmpeg 渲染成 mp4。 */
 export async function composeFinal(
@@ -396,7 +410,9 @@ export async function composeFinal(
   let renderNote: string | undefined;
   if (input.render) {
     const r = await renderComposition(plan, `${id}-final`);
-    if (r.ok && r.outputPath) outputPath = r.outputPath;
+    if (r.ok && r.outputPath) {
+      outputPath = r.outputPath;
+    }
     renderNote = r.note;
   }
   state.stage = "final_edit";

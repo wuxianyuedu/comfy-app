@@ -46,13 +46,13 @@ const TARGET_VERB: Record<ExternalTarget, string> = {
  * `detail`），归一成这一份之后，调用点不必再记得「这个动作读哪个字段」——
  * 那正是三族写法各自记错的地方。
  */
-export interface ExternalOpenResult {
-  /** 动作是否真的发出去了（不代表外部程序一定成功，见 `detail`）。 */
-  ok: boolean;
+export type ExternalOpenResult = {
   /** 给用户看的说明。**成功也带** —— 一句「已交给系统浏览器」是用户唯一
    *  能确认「点了有反应」的证据（硬规则 4：失败路径必须有可见出口）。 */
   detail: string;
-}
+  /** 动作是否真的发出去了（不代表外部程序一定成功，见 `detail`）。 */
+  ok: boolean;
+};
 
 /** 本机目录打开助手（`comfyapp://` 协议）的接管状态。 */
 export type FolderHelperState = "unknown" | "handled" | "missing";
@@ -65,16 +65,14 @@ export type FolderHelperState = "unknown" | "handled" | "missing";
  * 概念），改它们的代价大于在这里收一次。
  */
 export function toExternalResult(raw: {
-  ok?: boolean;
-  triggered?: boolean;
   detail?: string | null;
   error?: string | null;
+  ok?: boolean;
+  triggered?: boolean;
 }): ExternalOpenResult {
   const ok = raw.ok ?? raw.triggered ?? false;
   const detail =
-    raw.detail ??
-    raw.error ??
-    (ok ? "已交给外部程序" : "外部动作未能发起，请重试或手动处理");
+    raw.detail ?? raw.error ?? (ok ? "已交给外部程序" : "外部动作未能发起，请重试或手动处理");
   return { ok, detail };
 }
 
@@ -93,14 +91,18 @@ export function externalFailureText(target: ExternalTarget): string {
  */
 export function emptyTargetText(target: ExternalTarget): string {
   switch (target) {
-    case "folder":
+    case "folder": {
       return "没有可打开的目录";
-    case "update":
+    }
+    case "update": {
       return "没有可安装的更新";
-    case "relaunch":
+    }
+    case "relaunch": {
       return "桌面壳未运行，无法重启应用";
-    default:
+    }
+    default: {
       return "没有可打开的资源地址";
+    }
   }
 }
 
@@ -126,18 +128,22 @@ export function detectFolderHelper(
 ): { settle: () => Promise<FolderHelperState> } {
   let handled = false;
   const onBlur = () => {
-    if (handled) return;
+    if (handled) {
+      return;
+    }
     handled = true;
     onHandled?.();
-    if (typeof window !== "undefined")
+    if (typeof window !== "undefined") {
       window.removeEventListener("blur", onBlur);
+    }
   };
   if (typeof window !== "undefined") {
     window.addEventListener("blur", onBlur);
     // 兜底：即使 settle 从未被调用，超时后也移除监听器，避免泄漏（规范 §8.5）。
     setTimeout(() => {
-      if (typeof window !== "undefined")
+      if (typeof window !== "undefined") {
         window.removeEventListener("blur", onBlur);
+      }
     }, windowMs);
   }
   return {

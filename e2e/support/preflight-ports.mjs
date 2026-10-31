@@ -69,7 +69,9 @@ export function probePortOccupied(port, options = {}) {
     let settled = false;
     /** @param {boolean} occupied */
     const done = (occupied) => {
-      if (settled) return;
+      if (settled) {
+        return;
+      }
       settled = true;
       socket.destroy();
       resolve(occupied);
@@ -123,12 +125,20 @@ export function encodePreflight(result) {
  * @returns {PreflightResult | null}
  */
 export function decodePreflight(raw) {
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   try {
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return null;
-    if (typeof parsed.appOccupied !== "boolean") return null;
-    if (typeof parsed.fakeOccupied !== "boolean") return null;
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    if (typeof parsed.appOccupied !== "boolean") {
+      return null;
+    }
+    if (typeof parsed.fakeOccupied !== "boolean") {
+      return null;
+    }
     return {
       appOccupied: parsed.appOccupied,
       fakeOccupied: parsed.fakeOccupied,
@@ -227,8 +237,6 @@ export function isFakeServerCmdline(cmdline) {
  */
 export function pickOwnFakePids(pids, evidence) {
   return pids.filter(
-    (pid) =>
-      isFakeServerCmdline(evidence.cmdlineOf(pid)) &&
-      evidence.answersFake(pid),
+    (pid) => isFakeServerCmdline(evidence.cmdlineOf(pid)) && evidence.answersFake(pid),
   );
 }

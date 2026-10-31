@@ -36,10 +36,6 @@ import { test as base, expect } from "vitest";
 /** 平台维度：这台机器的真平台 + 「切成某个平台跑一段」的能力。 */
 export interface PlatformFixtures {
   /**
-   * 真实平台。**只读**，由宿主决定；判据要的是「这台机器上这条能不能跑」。
-   */
-  realPlatform: NodeJS.Platform;
-  /**
    * 把 `process.platform` 切成指定值跑一段。
    *
    * 返回值是「恢复」函数，但调用点**不要自己调** —— `onTestFinished` 已经挂了。
@@ -48,6 +44,10 @@ export interface PlatformFixtures {
   asPlatform: (value: NodeJS.Platform) => void;
   /** 这台机器是不是 Windows（`realPlatform` 的派生，避免各处重打 `=== "win32"`）。 */
   onWindows: boolean;
+  /**
+   * 真实平台。**只读**，由宿主决定；判据要的是「这台机器上这条能不能跑」。
+   */
+  realPlatform: NodeJS.Platform;
 }
 
 /** 宿主形态维度：被测代码问「这个命令能不能起」时，谁回答。 */
@@ -99,7 +99,9 @@ export const test = base.extend<PlatformFixtures & HostFixtures>({
      * throw 也一样（这正是用它替代手写 try/finally 的那个收益）。 */
     const original = Object.getOwnPropertyDescriptor(process, "platform");
     const restore = () => {
-      if (original) Object.defineProperty(process, "platform", original);
+      if (original) {
+        Object.defineProperty(process, "platform", original);
+      }
     };
     const becomes = (value: NodeJS.Platform) => {
       Object.defineProperty(process, "platform", {

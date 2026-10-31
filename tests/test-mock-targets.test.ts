@@ -56,10 +56,15 @@ function stripComments(text: string): string {
 function testFiles(dir: string): Array<string> {
   const out: Array<string> = [];
   for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (item.name === "node_modules" || item.name.startsWith(".")) continue;
+    if (item.name === "node_modules" || item.name.startsWith(".")) {
+      continue;
+    }
     const full = path.join(dir, item.name);
-    if (item.isDirectory()) out.push(...testFiles(full));
-    else if (/\.test\.tsx?$/.test(item.name)) out.push(full);
+    if (item.isDirectory()) {
+      out.push(...testFiles(full));
+    } else if (/\.test\.tsx?$/.test(item.name)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -76,7 +81,9 @@ describe("vi.mock 说明符必须解析到真实模块（死 mock 门禁）", ()
         let match: RegExpExecArray | null;
         while ((match = re.exec(text))) {
           const specifier = match[1]!;
-          if (!specifier.startsWith(".") && !specifier.startsWith("~/")) continue;
+          if (!specifier.startsWith(".") && !specifier.startsWith("~/")) {
+            continue;
+          }
           total += 1;
           const base = specifier.startsWith("~/")
             ? path.join(REPO_ROOT, "src", specifier.slice(2))

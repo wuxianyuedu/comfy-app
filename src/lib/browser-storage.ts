@@ -34,7 +34,9 @@
  *  只判 window 的写法会在这里炸（历史上有三处是这样）。
  *  访问 `localStorage` 本身可能抛（Safari 隐私模式），所以整段包在 try 里。 */
 export function hasBrowserStorage(): boolean {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined") {
+    return false;
+  }
   try {
     return typeof window.localStorage !== "undefined" && window.localStorage !== null;
   } catch {
@@ -50,7 +52,9 @@ export function hasBrowserStorage(): boolean {
  * 需要区分时用 `hasBrowserStorage()` 单独判。
  */
 export function readStorageItem(key: string): string | null {
-  if (!hasBrowserStorage()) return null;
+  if (!hasBrowserStorage()) {
+    return null;
+  }
   try {
     return window.localStorage.getItem(key);
   } catch {
@@ -65,7 +69,9 @@ export function readStorageItem(key: string): string | null {
  * 没记住」），不需要它的调用处直接丢弃返回值 —— 与 `copyText` 同款。
  */
 export function writeStorageItem(key: string, value: string): boolean {
-  if (!hasBrowserStorage()) return false;
+  if (!hasBrowserStorage()) {
+    return false;
+  }
   try {
     window.localStorage.setItem(key, value);
     return true;
@@ -77,7 +83,9 @@ export function writeStorageItem(key: string, value: string): boolean {
 
 /** 删掉一个键；没有浏览器 / 删失败**静默**（口径同上）。 */
 export function removeStorageItem(key: string): boolean {
-  if (!hasBrowserStorage()) return false;
+  if (!hasBrowserStorage()) {
+    return false;
+  }
   try {
     window.localStorage.removeItem(key);
     return true;
@@ -99,7 +107,9 @@ export function removeStorageItem(key: string): boolean {
  */
 export function readStorageJson<T>(key: string, fallback: T, parse?: (raw: string) => T): T {
   const raw = readStorageItem(key);
-  if (raw === null) return fallback;
+  if (raw === null) {
+    return fallback;
+  }
   if (parse) {
     try {
       return parse(raw);
@@ -139,7 +149,9 @@ export function writeStorageJson(key: string, value: unknown): boolean {
  * 等真有第二个消费方时再按那时的形状加。
  */
 export function writeCookieItem(name: string, value: string, maxAgeSeconds: number): boolean {
-  if (typeof document === "undefined") return false;
+  if (typeof document === "undefined") {
+    return false;
+  }
   try {
     document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}`;
     return true;

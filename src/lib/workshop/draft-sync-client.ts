@@ -12,7 +12,9 @@ import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 export async function fetchServerDraft(projectId: string): Promise<WorkshopDraftDto | null> {
   try {
     const res = await fetch(withQuery("/api/workshop/draft", { project: projectId }));
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     const data: unknown = await res.json();
     if (
       typeof data === "object" &&

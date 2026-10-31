@@ -19,9 +19,9 @@ export class ErrorBoundary extends React.Component<
     fallback?: React.ReactNode | ((error: Error | null) => React.ReactNode | null | undefined);
     onError?: (error: Error, info: React.ErrorInfo) => void;
   },
-  { hasError: boolean; error: Error | null }
+  { error: Error | null; hasError: boolean }
 > {
-  state: { hasError: boolean; error: Error | null } = {
+  state: { error: Error | null; hasError: boolean } = {
     hasError: false,
     error: null,
   };
@@ -48,7 +48,9 @@ export class ErrorBoundary extends React.Component<
         const node = /* SAFETY: 类型断言已复核 */ (
           custom as (error: Error | null) => React.ReactNode
         )(this.state.error);
-        if (node !== null && node !== undefined) return node;
+        if (node !== null && node !== undefined) {
+          return node;
+        }
       } else if (custom) {
         return custom;
       }
@@ -56,9 +58,9 @@ export class ErrorBoundary extends React.Component<
         <div className="border-destructive/25 bg-destructive/5 flex flex-col items-center justify-center gap-3 rounded-2xl border px-6 py-12 text-center">
           <p className="text-danger-strong text-sm font-semibold">组件渲染出错</p>
           <button
-            type="button"
-            onClick={() => this.setState({ hasError: false, error: null })}
             className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+            onClick={() => this.setState({ hasError: false, error: null })}
+            type="button"
           >
             重试
           </button>

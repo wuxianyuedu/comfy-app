@@ -15,7 +15,7 @@ import { resetComfyStateClientForTest, subscribeComfyStateChanges } from "./comf
 const fetches: Array<string> = [];
 
 /** 装一个「按脚本逐次回答」的 fetch 替身。 */
-function stubFetch(answers: Array<{ status: number; body?: unknown }>): () => number {
+function stubFetch(answers: Array<{ body?: unknown; status: number }>): () => number {
   let i = 0;
   vi.stubGlobal(
     "fetch",
@@ -47,7 +47,7 @@ async function settle(times = 1): Promise<void> {
 function change(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     seq: 1,
-    at: 1_000,
+    at: 1000,
     kind: "ready",
     detail: "ComfyUI 已就绪",
     ...over,

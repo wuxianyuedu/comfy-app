@@ -80,19 +80,11 @@ export const REDACT_PATHS = /* SAFETY: 类型断言已复核 */ [
   "phoneNumber",
 ] as const;
 
-export interface PinoLoggerOptions {
+export type PinoLoggerOptions = {
   /** 日志目标流。显式传入时走 JSON 直写（不经 pino-pretty worker transport），便于测试/定制输出。 */
   destination?: DestinationStream;
   /** 覆盖日志级别；缺省读 `LOG_LEVEL`，再回退 info。 */
   level?: string;
-  /**
-   * 绑定的命名空间（pino 的 `bindings.ns`）。
-   *
-   * 核心层入口**不带 `server-only`**（它被纯 Node 宿主与 Next 服务端同时加载），
-   * 它不能把命名空间塞进 `every log call` 的对象里，否则同一条日志的字段形状
-   * 会随调用方漂移。绑定一次、处处带上，是 pino 的标准做法（`log.child({ ns })`）。
-   */
-  ns?: string;
   /**
    * 覆盖 ERROR 镜像的落盘目标（app-runtime 通道）。
    *
@@ -102,7 +94,15 @@ export interface PinoLoggerOptions {
    * 并写入 6 行，其中含被断言的「密钥原文」标记行）。
    */
   mirror?: { error(msg: string, fields?: Record<string, unknown>): void };
-}
+  /**
+   * 绑定的命名空间（pino 的 `bindings.ns`）。
+   *
+   * 核心层入口**不带 `server-only`**（它被纯 Node 宿主与 Next 服务端同时加载），
+   * 它不能把命名空间塞进 `every log call` 的对象里，否则同一条日志的字段形状
+   * 会随调用方漂移。绑定一次、处处带上，是 pino 的标准做法（`log.child({ ns })`）。
+   */
+  ns?: string;
+};
 
 /**
  * 镜像的目标：显式传入者优先；**未传时在测试进程里直接空转**。
@@ -115,9 +115,13 @@ export interface PinoLoggerOptions {
  * 这么做的），所以这里对测试进程关掉默认落盘不损失任何判据，只堵住污染。
  */
 function resolveMirrorTarget(mirror?: PinoLoggerOptions["mirror"]) {
-  if (mirror) return mirror;
+  if (mirror) {
+    return mirror;
+  }
   // `process.env.VITEST` 由 vitest 自己设置（不用 NODE_ENV：本仓库另有它用）。
-  if (process.env.VITEST) return { error: () => undefined };
+  if (process.env.VITEST) {
+    return { error: () => undefined };
+  }
   return appRuntimeLog;
 }
 
@@ -159,10 +163,14 @@ export function createPinoLogger(opts: PinoLoggerOptions = {}) {
   };
 
   // 显式指定目标流：JSON 直写，用于契约测试捕获输出（不启 worker transport）。
-  if (destination) return pino(base, destination);
+  if (destination) {
+    return pino(base, destination);
+  }
 
   // 生产：JSON 直写 stdout（采集端解析）。
-  if (process.env.NODE_ENV === "production") return pino(base);
+  if (process.env.NODE_ENV === "production") {
+    return pino(base);
+  }
 
   // 本地开发：pino-pretty 美化。
   return pino({
@@ -229,9 +237,8 @@ function renderServerLogEntry(
   const stringArg = typeof first === "string" ? first : undefined;
   const secondString = typeof second === "string" ? second : undefined;
   const payload =
-    first && typeof first === "object"
-      ? /* SAFETY: 类型断言已复核 */ (first as Record<string, unknown>)
-      : undefined;
+    /* SAFETY: 类型断言已复核 */
+    first && typeof first === "object" ? (first as Record<string, unknown>) : undefined;
 
   // 空串按「没取到」处理：`??` 只挡 null/undefined，挡不住 ""（会写出空行）
   const firstNonEmpty = (...candidates: Array<string | undefined>) =>
@@ -267,9 +274,13 @@ function renderServerLogEntry(
  * （见 `renderServerLogEntry` 的 ISSUE #1696 说明），因此不能在这里顺手返回。
  */
 function renderServerLogMessage(payload?: Record<string, unknown>): string {
-  if (!payload) return "";
+  if (!payload) {
+    return "";
+  }
   const raw = payload.msg ?? payload.message;
-  if (typeof raw === "string" && raw.length > 0) return raw;
+  if (typeof raw === "string" && raw.length > 0) {
+    return raw;
+  }
   const err = /* SAFETY: 类型断言已复核 */ payload.err as { message?: unknown } | undefined;
   if (err && typeof err.message === "string" && err.message.length > 0) {
     return err.message;
@@ -296,14 +307,14 @@ function renderFieldKeyList(payload?: Record<string, unknown>): string {
  * 显式包装成「命名空间拼接」的语义（`a:b`），与旧接口逐字一致 —— 调用方
  * （各 repository、workshop 生成日志等）无需改动。
  */
-export interface Logger {
-  debug(msg: string, fields?: Record<string, unknown>): void;
-  info(msg: string, fields?: Record<string, unknown>): void;
-  warn(msg: string, fields?: Record<string, unknown>): void;
-  error(msg: string, fields?: Record<string, unknown>): void;
+export type Logger = {
   /** 派生子日志器，命名空间拼接为 `parent:child`。 */
   child(ns: string): Logger;
-}
+  debug(msg: string, fields?: Record<string, unknown>): void;
+  error(msg: string, fields?: Record<string, unknown>): void;
+  info(msg: string, fields?: Record<string, unknown>): void;
+  warn(msg: string, fields?: Record<string, unknown>): void;
+};
 
 /** 绑定名放在 `ns` 字段（pino 的 `bindings` 会带上它，便于采集端按命名空间过滤）。 */
 function wrap(inner: PinoLogger): Logger {

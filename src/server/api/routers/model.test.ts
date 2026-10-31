@@ -61,7 +61,7 @@ const asUser = (id: string) => createCaller(makeCtx({ user: makeUser({ id }) }))
 async function codeOf(promise: Promise<unknown>): Promise<string> {
   return promise.then(
     () => "OK",
-    (e: { code?: string }) => e?.code ?? "UNKNOWN",
+    (error: { code?: string }) => error?.code ?? "UNKNOWN",
   );
 }
 

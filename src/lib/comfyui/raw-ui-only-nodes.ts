@@ -34,7 +34,9 @@ export const UI_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
 
 /** Read a string field off an unknown payload（非 string → undefined）。 */
 function strField(o: unknown, key: string): string | undefined {
-  if (o == null || typeof o !== "object") return undefined;
+  if (o == null || typeof o !== "object") {
+    return undefined;
+  }
   const v = /* SAFETY: 类型断言已复核 */ (o as Record<string, unknown>)[key];
   return typeof v === "string" ? v : undefined;
 }
@@ -81,7 +83,9 @@ function pickOutUiOnlyNodes(nodes: Array<unknown>): {
  */
 function dropLinksTo(container: Record<string, unknown>, removedIds: Set<string>): void {
   const links = container.links;
-  if (!Array.isArray(links)) return;
+  if (!Array.isArray(links)) {
+    return;
+  }
   container.links = links.filter((link) => {
     if (Array.isArray(link)) {
       return !removedIds.has(idOf(link[1])) && !removedIds.has(idOf(link[3]));
@@ -130,9 +134,13 @@ export function stripUiOnlyNodes(raw: Record<string, unknown>): {
       ? Object.values(subs)
       : [];
   for (const sub of list) {
-    if (sub == null || typeof sub !== "object") continue;
+    if (sub == null || typeof sub !== "object") {
+      continue;
+    }
     const def = /* SAFETY: 类型断言已复核 */ sub as Record<string, unknown>;
-    if (!Array.isArray(def.nodes)) continue;
+    if (!Array.isArray(def.nodes)) {
+      continue;
+    }
     const inner = pickOutUiOnlyNodes(def.nodes);
     if (inner.removedIds.size > 0) {
       def.nodes = inner.kept;

@@ -24,33 +24,33 @@ const COMPOSE_SIZE: SizeSpec = { ...DEFAULT_SIZE_SPEC, ratio: "16:9 横屏" };
 /** ffmpeg 的 `scale` 过滤器用 `W:H` 写法（不是 WxH）。 */
 const COMPOSE_SCALE = sizeSpecToWxH(COMPOSE_SIZE, "video").replace("x", ":");
 
-export interface CompositionSegment {
-  order: number;
-  shotId: string;
-  scene: string;
-  shotType: string;
-  prompt: string;
-  imageUrl: string | null;
+export type CompositionSegment = {
   clipUrl: string | null;
-  durationSec: number;
-  motion: string;
-  transition: string;
   dialogue: string;
-}
+  durationSec: number;
+  imageUrl: string | null;
+  motion: string;
+  order: number;
+  prompt: string;
+  scene: string;
+  shotId: string;
+  shotType: string;
+  transition: string;
+};
 
-export interface CompositionPlan {
-  project: string;
+export type CompositionPlan = {
   exportedAt: string;
-  totalShots: number;
-  totalDurationSec: number;
+  project: string;
   segments: Array<CompositionSegment>;
-}
+  totalDurationSec: number;
+  totalShots: number;
+};
 
-export interface RenderResult {
+export type RenderResult = {
+  note?: string;
   ok: boolean;
   outputPath?: string;
-  note?: string;
-}
+};
 
 /** 由分镜构建有序合成清单（与界面 FinalComposer.exportPlan 对齐）。 */
 export function buildCompositionPlan(title: string, shots: Array<Shot>): CompositionPlan {
@@ -89,9 +89,15 @@ export async function writeCompositionPlan(
 }
 
 function localPathOf(ref: string | null): string | null {
-  if (!ref) return null;
-  if (ref.startsWith("file://")) return ref.slice("file://".length);
-  if (/^https?:\/\//i.test(ref)) return null; // 远程引用暂不处理
+  if (!ref) {
+    return null;
+  }
+  if (ref.startsWith("file://")) {
+    return ref.slice("file://".length);
+  }
+  if (/^https?:\/\//i.test(ref)) {
+    return null;
+  } // 远程引用暂不处理
   return ref;
 }
 
@@ -124,7 +130,9 @@ export async function renderComposition(
     const clip = localPathOf(s.clipUrl);
     const img = localPathOf(s.imageUrl);
     const src = clip ?? img;
-    if (!src) continue;
+    if (!src) {
+      continue;
+    }
     const tmp = path.join(tmpDir, `seg-${s.order}.mp4`);
     const scale = `scale=${COMPOSE_SCALE}`;
     const args = clip
@@ -179,7 +187,7 @@ export async function renderComposition(
   const listFile = path.join(tmpDir, "list.txt");
   await fs.writeFile(
     listFile,
-    segs.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n"),
+    segs.map((p) => `file '${p.replace(/'/g, String.raw`'\''`)}'`).join("\n"),
     "utf-8",
   );
   const out = path.join(COMPOSE_DIR, `${outputName}.mp4`);
@@ -187,11 +195,11 @@ export async function renderComposition(
     await execFileP(ff, ["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", out], {
       timeout: 300_000,
     });
-  } catch (e) {
+  } catch (error) {
     await fs.rm(tmpDir, { recursive: true, force: true });
     return {
       ok: false,
-      note: errorText(e, "ffmpeg 合成失败"),
+      note: errorText(error, "ffmpeg 合成失败"),
     };
   }
   await fs.rm(tmpDir, { recursive: true, force: true });

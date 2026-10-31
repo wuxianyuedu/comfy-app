@@ -39,7 +39,9 @@ const SCRIPT_REL = "scripts/check-test-it-each.cjs";
 
 const handles: Array<GateRepoHandle> = [];
 afterEach(() => {
-  while (handles.length > 0) handles.pop()?.dispose();
+  while (handles.length > 0) {
+    handles.pop()?.dispose();
+  }
 });
 
 /** 建一个工作区（`afterEach` 收尾），并把那份脚本换成用例指定的子进程源码。 */

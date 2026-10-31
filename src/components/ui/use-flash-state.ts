@@ -25,14 +25,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /** 默认亮起时长：1.5s —— 够看清「已复制」三个字，又不至于挡住下一次点击。 */
 export const DEFAULT_FLASH_MS = 1500;
 
-export interface FlashState {
-  /** 当前是否处于亮起态。 */
-  on: boolean;
+export type FlashState = {
   /** 亮起并起一个定时器，到点自动复位（重复调用会清掉上一个定时器）。 */
   flash: () => void;
+  /** 当前是否处于亮起态。 */
+  on: boolean;
   /** 立即复位，不等待定时器（如用户手动关闭提示）。 */
   reset: () => void;
-}
+};
 
 /**
  * 用法：

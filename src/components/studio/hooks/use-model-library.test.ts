@@ -21,26 +21,26 @@ import { useModelLibrary } from "./use-model-library";
 import { ALL_TYPES } from "../model-library-config";
 
 type Row = {
+  createdAt: string;
+  fileName: string;
+  fileSize?: number | null;
   id: string;
+  isAvailable: boolean;
   name: string;
   type: string;
-  fileName: string;
-  isAvailable: boolean;
-  fileSize?: number | null;
-  createdAt: string;
 };
 
-interface Behavior {
-  models: Array<Row>;
+type Behavior = {
   /** 非空时 list 抛错 —— 覆盖错误态 */
   listError?: string;
+  models: Array<Row>;
   /** 非空时 sync 抛错 —— 覆盖静默同步失败 */
   syncError?: string;
-}
+};
 
 let behavior: Behavior = { models: [] };
 /** 记录 list 收到的入参，用于断言筛选真的传到了后端 */
-const listInputs: Array<{ type?: string; q?: string } | undefined> = [];
+const listInputs: Array<{ q?: string; type?: string } | undefined> = [];
 /** 记录 sync 被调用的次数 —— 断言「挂载时同步一次」不会随重渲染复发。 */
 let syncCalls = 0;
 
@@ -332,7 +332,9 @@ describe("useModelLibrary 卸载后不再 setState", () => {
       // sleep-ok: 等一个「不会发生的事」——放行后不得再出现更新调度读取。
       await new Promise((r) => setTimeout(r, 150));
     } finally {
-      if (realWindow) Object.defineProperty(globalThis, "window", realWindow);
+      if (realWindow) {
+        Object.defineProperty(globalThis, "window", realWindow);
+      }
     }
 
     /* 判据：**回包之后**不得再出现更新调度读取。

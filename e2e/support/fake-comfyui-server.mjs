@@ -28,10 +28,7 @@ import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import { WebSocketServer } from "ws";
 
-import {
-  resolveFakeComfyuiHost,
-  resolveFakeComfyuiPort,
-} from "./fake-comfyui-endpoint.mjs";
+import { resolveFakeComfyuiHost, resolveFakeComfyuiPort } from "./fake-comfyui-endpoint.mjs";
 
 /* 端口 / 地址由端点模块给（**默认不是 8188**，见该文件头的 ISSUE #1756 取向）：
  * 替身与真件分居两个端口，本机开着真 ComfyUI 也能跑 e2e。 */
@@ -42,7 +39,9 @@ const CORS = process.env.E2E_FAKE_COMFY_CORS !== "0";
 /** 回环地址判定（对应 ComfyUI 的 `is_loopback`）。
  * @param {string} hostname @returns {boolean} */
 function isLoopback(hostname) {
-  if (!hostname) return false;
+  if (!hostname) {
+    return false;
+  }
   return (
     hostname === "127.0.0.1" ||
     hostname === "localhost" ||
@@ -61,20 +60,30 @@ function isLoopback(hostname) {
  * ComfyUI 不一致，测试随之失去意义。
  * @param {import("node:http").IncomingMessage} req @returns {boolean} */
 function isCrossOriginRequest(req) {
-  if (req.headers["sec-fetch-site"] === "cross-site") return true;
+  if (req.headers["sec-fetch-site"] === "cross-site") {
+    return true;
+  }
   const host = req.headers.host;
   const origin = req.headers.origin;
-  if (!host || !origin) return false;
+  if (!host || !origin) {
+    return false;
+  }
 
   let hostCompare = host.toLowerCase();
   const parsed = new URL(origin);
   let originCompare = parsed.host.toLowerCase();
 
   const [hostHostname = ""] = hostCompare.split(":");
-  if (!isLoopback(hostHostname)) return false;
+  if (!isLoopback(hostHostname)) {
+    return false;
+  }
 
-  if (!parsed.port) hostCompare = hostHostname;
-  if (!hostCompare.includes(":")) originCompare = parsed.hostname;
+  if (!parsed.port) {
+    hostCompare = hostHostname;
+  }
+  if (!hostCompare.includes(":")) {
+    originCompare = parsed.hostname;
+  }
 
   return hostCompare !== originCompare;
 }
@@ -100,9 +109,7 @@ const history = new Map();
  *  字节内容只要是一个**合法 PNG 头**（`src/lib/media/*` 的探测按魔数走）。 */
 const PNG_BYTES = Buffer.concat([
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  Buffer.from(
-    `e2e-fake-png:${createHash("sha1").update("fake-comfyui").digest("hex")}`,
-  ),
+  Buffer.from(`e2e-fake-png:${createHash("sha1").update("fake-comfyui").digest("hex")}`),
 ]);
 
 /** 收完请求体（替身只看 JSON，不判长度上限）。
@@ -172,11 +179,7 @@ async function handle(req, res, headers, path) {
   if (path === "/e2e/record-history" && req.method === "POST") {
     const body = await readBody(req);
     try {
-      const {
-        prompt_id: promptId,
-        node_id: nodeId,
-        filename,
-      } = JSON.parse(body);
+      const { prompt_id: promptId, node_id: nodeId, filename } = JSON.parse(body);
       history.set(promptId, {
         status: { status_str: "success", completed: true, messages: [] },
         outputs: {
@@ -230,7 +233,9 @@ const server = createServer((req, res) => {
    *  而不是被字面量推出来的 `{ "content-type": string }`（那个形状再加键就报 TS7053）。
    * @type {Record<string, string>} */
   const headers = { "content-type": "application/json; charset=utf-8" };
-  if (CORS) headers["access-control-allow-origin"] = "*";
+  if (CORS) {
+    headers["access-control-allow-origin"] = "*";
+  }
 
   /* 解构给默认值而不是按下标取：`split("?")[0]` 在 `noUncheckedIndexedAccess` 下是
    * `string | undefined`，而 `handle(…)` 的形参已是 `string`（这一格是补完形参之后**新冒出来的**，
@@ -286,9 +291,7 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 server.listen(PORT, HOST, () => {
-  process.stdout.write(
-    `[fake-comfyui] listening on http://${HOST}:${PORT} cors=${CORS}\n`,
-  );
+  process.stdout.write(`[fake-comfyui] listening on http://${HOST}:${PORT} cors=${CORS}\n`);
 });
 
 process.on("SIGTERM", () => server.close(() => process.exit(0)));

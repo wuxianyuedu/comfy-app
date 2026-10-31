@@ -35,8 +35,12 @@ type FormValues = {
 
 /** 一份真校验：端口必须是数字。校验器是真的（不是手捏的 `errors` 对象）。 */
 function validatePort(value: string): string | true {
-  if (value.trim() === "") return "端口不能为空";
-  if (!/^\d+$/.test(value.trim())) return "端口只能是数字";
+  if (value.trim() === "") {
+    return "端口不能为空";
+  }
+  if (!/^\d+$/.test(value.trim())) {
+    return "端口只能是数字";
+  }
   return true;
 }
 
@@ -71,9 +75,7 @@ function RhfFormSample({ defaultName, defaultPort }: StoryArgs) {
               <FormControl>
                 <Input placeholder="例如 角色一致性 · 三视图" {...field} />
               </FormControl>
-              <FormDescription>
-                同名会被覆盖，保存在工作流库里。
-              </FormDescription>
+              <FormDescription>同名会被覆盖，保存在工作流库里。</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -81,7 +83,6 @@ function RhfFormSample({ defaultName, defaultPort }: StoryArgs) {
         <FormField
           control={form.control}
           name="port"
-          rules={{ validate: validatePort }}
           render={({ field }) => (
             <FormItem>
               <FormLabel>应用端口</FormLabel>
@@ -91,6 +92,7 @@ function RhfFormSample({ defaultName, defaultPort }: StoryArgs) {
               <FormMessage />
             </FormItem>
           )}
+          rules={{ validate: validatePort }}
         />
       </form>
     </Form>
@@ -118,7 +120,6 @@ function InvalidFormSample() {
         <FormField
           control={form.control}
           name="name"
-          rules={{ required: "名称不能为空" }}
           render={({ field }) => (
             <FormItem>
               <FormLabel>工作流名称</FormLabel>
@@ -128,11 +129,11 @@ function InvalidFormSample() {
               <FormMessage />
             </FormItem>
           )}
+          rules={{ required: "名称不能为空" }}
         />
         <FormField
           control={form.control}
           name="port"
-          rules={{ validate: validatePort }}
           render={({ field }) => (
             <FormItem>
               <FormLabel>应用端口</FormLabel>
@@ -143,8 +144,9 @@ function InvalidFormSample() {
               <FormMessage />
             </FormItem>
           )}
+          rules={{ validate: validatePort }}
         />
-        <Button type="submit" className="w-fit">
+        <Button className="w-fit" type="submit">
           提交
         </Button>
       </form>

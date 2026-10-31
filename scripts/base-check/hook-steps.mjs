@@ -12,13 +12,7 @@ import process from "node:process";
 
 import { pnpmInvocation } from "../launcher-core/shell.mjs";
 import { chainedSteps } from "./chained-steps.mjs";
-import {
-  cleanGitEnv,
-  git,
-  HOOK,
-  resolveMergeBaseRef,
-  ROOT,
-} from "./git-ref.mjs";
+import { cleanGitEnv, git, HOOK, resolveMergeBaseRef, ROOT } from "./git-ref.mjs";
 
 /**
  * 把一个「门禁命令」参数数组规范化成 `{ label, argv }`。
@@ -120,7 +114,9 @@ export function resolveGateCommand(input, hookPath = HOOK) {
 export function resolveMergeBatch(input = [], hookPath = HOOK) {
   if (input.length > 0) {
     const one = resolveGateCommand(input, hookPath);
-    if (!one.ok) return one;
+    if (!one.ok) {
+      return one;
+    }
     return { ok: true, commands: [{ argv: one.argv, label: one.label }] };
   }
   const steps = [...groupSteps(hookPath), ...readHookSteps(hookPath)];
@@ -208,7 +204,9 @@ export function groupSteps(hookPath = HOOK) {
   for (const m of text.matchAll(re)) {
     const label = m[1];
     const command = m[2];
-    if (!label || !command) continue;
+    if (!label || !command) {
+      continue;
+    }
     out.push({ label, argv: tokenize(command) });
   }
   return out;
@@ -266,11 +264,17 @@ export const CHANGED_SCOPED = [
  */
 export function mayDecideOnCleanSnapshot(argv) {
   const joined = argv.join(" ");
-  if (argv.some((a) => a === "--staged" || a === "--changed")) return false;
+  if (argv.some((a) => a === "--staged" || a === "--changed")) {
+    return false;
+  }
   /** 只对「本次改了什么」作答的步骤（它们的判决依赖暂存区，干净快照里没有）。 */
-  if (CHANGED_SCOPED.some((p) => joined.includes(p))) return false;
+  if (CHANGED_SCOPED.some((p) => joined.includes(p))) {
+    return false;
+  }
   /** `base-check` 自己：复算里再复算会递归。 */
-  if (argv.some((a) => a.endsWith("base-check.mjs"))) return false;
+  if (argv.some((a) => a.endsWith("base-check.mjs"))) {
+    return false;
+  }
   return true;
 }
 
@@ -293,10 +297,14 @@ export function readHookSteps(hookPath = HOOK) {
   const steps = [];
   for (const line of text.split("\n")) {
     const m = line.match(/^\s*run\s+"([^"]+)"\s+(.+?)\s*$/);
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     const label = m[1];
     const command = m[2];
-    if (label === undefined || command === undefined) continue;
+    if (label === undefined || command === undefined) {
+      continue;
+    }
     // 命令里可能带行内注释（`--strict` 之后跟 `# …`）—— 去掉注释再分词。
     const bare = command.replace(/\s+#.*$/, "").trim();
     steps.push({ label, argv: tokenize(bare) });
@@ -326,13 +334,19 @@ export function localTierLabels(hookPath = HOOK) {
   }
   const lines = text.split("\n");
   const start = lines.findIndex((l) => /^run_group\s+D0\b/.test(l));
-  if (start < 0) return new Set();
+  if (start < 0) {
+    return new Set();
+  }
   const out = new Set();
   for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i] ?? "";
-    if (line.startsWith("'")) break; // D0 那个 `sh -c '…'` 的收尾引号
+    if (line.startsWith("'")) {
+      break;
+    } // D0 那个 `sh -c '…'` 的收尾引号
     const m = line.match(/^\s*run\s+"([^"]+)"/);
-    if (m && m[1] !== undefined) out.add(m[1]);
+    if (m && m[1] !== undefined) {
+      out.add(m[1]);
+    }
   }
   return out;
 }
@@ -353,8 +367,11 @@ export function tokenize(line) {
   let quote = null;
   for (const ch of line) {
     if (quote) {
-      if (ch === quote) quote = null;
-      else cur += ch;
+      if (ch === quote) {
+        quote = null;
+      } else {
+        cur += ch;
+      }
       continue;
     }
     if (ch === '"' || ch === "'") {
@@ -370,7 +387,9 @@ export function tokenize(line) {
     }
     cur += ch;
   }
-  if (cur) out.push(cur);
+  if (cur) {
+    out.push(cur);
+  }
   return out;
 }
 
@@ -381,7 +400,9 @@ export function tokenize(line) {
  * @returns {{code: number, output: string}}
  */
 export function normalizeRun(r) {
-  if (r.error) return { code: 127, output: String(r.error.message) };
+  if (r.error) {
+    return { code: 127, output: String(r.error.message) };
+  }
   const output = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   return { code: r.status ?? -1, output };
 }
@@ -403,12 +424,11 @@ export function normalizeRun(r) {
  */
 export function commandTargetState(argv, cwd) {
   const [cmd, first] = argv;
-  if (cmd !== "node" || !first || first.startsWith("-"))
+  if (cmd !== "node" || !first || first.startsWith("-")) {
     return { kind: "unknown" };
+  }
   const target = path.resolve(cwd, first);
-  return fs.existsSync(target)
-    ? { kind: "ok" }
-    : { kind: "missing", target: first };
+  return fs.existsSync(target) ? { kind: "ok" } : { kind: "missing", target: first };
 }
 
 /**
@@ -429,7 +449,9 @@ export function commandTargetState(argv, cwd) {
  */
 function resolveGateInvocation(argv) {
   const [cmd, ...rest] = argv;
-  if (cmd === undefined) return null;
+  if (cmd === undefined) {
+    return null;
+  }
   if (cmd === "pnpm") {
     return pnpmInvocation(rest, { env: process.env });
   }
@@ -466,9 +488,7 @@ export function runGate(argv, cwd) {
      * 与「命令拼不出来/跑不起来」同档 —— 照旧不构成证据。 */
     return {
       code: 127,
-      output:
-        `[base-check] PATH 上找不到可用的 ${argv[0]} ` +
-        "（自查：pnpm check:toolchain）",
+      output: `[base-check] PATH 上找不到可用的 ${argv[0]} ` + "（自查：pnpm check:toolchain）",
     };
   }
   const r = spawnSync(invocation.command, invocation.args, {

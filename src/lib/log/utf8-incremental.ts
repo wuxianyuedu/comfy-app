@@ -26,10 +26,18 @@
 
 /** 一个码位在 UTF-8 下的字节数（看**首字节**的前导 1 的个数）。 */
 function expectedLength(lead: number): number {
-  if (lead < 0x80) return 1; // 0xxxxxxx ASCII
-  if ((lead & 0xe0) === 0xc0) return 2; // 110xxxxx
-  if ((lead & 0xf0) === 0xe0) return 3; // 1110xxxx（中文在此）
-  if ((lead & 0xf8) === 0xf0) return 4; // 11110xxx（emoji）
+  if (lead < 0x80) {
+    return 1;
+  } // 0xxxxxxx ASCII
+  if ((lead & 0xe0) === 0xc0) {
+    return 2;
+  } // 110xxxxx
+  if ((lead & 0xf0) === 0xe0) {
+    return 3;
+  } // 1110xxxx（中文在此）
+  if ((lead & 0xf8) === 0xf0) {
+    return 4;
+  } // 11110xxx（emoji）
   /* 0x80~0xBF 是续字节、不该出现在这里；0xF8+ 不是合法 UTF-8 首字节。
    * 两者都按 1 处理：让它们原样交给解码器（会变成替换字符，但**归因正确** ——
    * 那是输入本来就坏，不是我们切坏的）。 */
@@ -44,7 +52,9 @@ function expectedLength(lead: number): number {
  */
 export function incompleteTailLength(buf: Uint8Array): number {
   const n = buf.length;
-  if (n === 0) return 0;
+  if (n === 0) {
+    return 0;
+  }
   /* 从末尾往回找首字节，最多回看 3 个（UTF-8 最长 4 字节）。
    * 全是续字节（0x80~0xBF）时说明切在了字符中间，回看会走到 lead 上。 */
   const maxBack = Math.min(4, n);
@@ -54,8 +64,12 @@ export function incompleteTailLength(buf: Uint8Array): number {
     /* `idx` 由 `back <= min(4, n)` 保证在界内，但**不写 `!`**：非空断言是本仓
      * 的硬闸（脚本 check-non-null-assertions），而这里一个显式守卫的成本与一个
      * `!` 相当、却把「为什么它一定在」写在了判据里。 */
-    if (byte === undefined) break;
-    if ((byte & 0xc0) === 0x80) continue; // 续字节，继续往回找
+    if (byte === undefined) {
+      break;
+    }
+    if ((byte & 0xc0) === 0x80) {
+      continue;
+    } // 续字节，继续往回找
     const need = expectedLength(byte);
     /* need > back 表示「这个字符还差几个字节没到」——本段末尾那 `back`
      * 个字节（含这个首字节）整块留给下一轮。 */
@@ -67,12 +81,12 @@ export function incompleteTailLength(buf: Uint8Array): number {
 }
 
 /** 一次增量解码的结果：可立即渲染的文本 + 留给下一轮的残余字节。 */
-export interface IncrementalDecode {
-  /** 本段能确定解出的文本（不含被截断的尾字符）。 */
-  text: string;
+export type IncrementalDecode = {
   /** 上一轮遗留 + 本轮末尾被截断的字节，**下一轮拼接时传回来**。 */
   carry: Uint8Array;
-}
+  /** 本段能确定解出的文本（不含被截断的尾字符）。 */
+  text: string;
+};
 
 /**
  * 把「上一轮的残余」与「本轮新读到的字节」拼起来解，并把新的残缺尾巴留下。
@@ -89,8 +103,7 @@ export interface IncrementalDecode {
 export function decodeIncremental(
   carry: Uint8Array,
   next: Uint8Array,
-  decode: (bytes: Uint8Array) => string = (b) =>
-    new TextDecoder("utf-8").decode(b),
+  decode: (bytes: Uint8Array) => string = (b) => new TextDecoder("utf-8").decode(b),
 ): IncrementalDecode {
   const merged = carry.length === 0 ? next : concatBytes(carry, next);
   const cut = merged.length - incompleteTailLength(merged);

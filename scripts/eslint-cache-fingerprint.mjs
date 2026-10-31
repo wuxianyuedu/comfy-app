@@ -186,7 +186,9 @@ function main() {
       check,
       log: (line) => process.stdout.write(`${line}\n`),
     });
-    if (!result.changed) process.stdout.write("[eslint-cache] 依赖指纹未变，缓存保留。\n");
+    if (!result.changed) {
+      process.stdout.write("[eslint-cache] 依赖指纹未变，缓存保留。\n");
+    }
   } catch {
     // 自查入口也不给调用方制造失败：这条判据的失效应表现为「缓存没被清」，
     // 而不是「install 挂了」。
@@ -195,4 +197,6 @@ function main() {
 }
 
 // 被 import 时不做任何事（`tests/*` 直接调函数）；只有作为入口才跑 main。
-if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) main();
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
+  main();
+}

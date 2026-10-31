@@ -84,7 +84,7 @@ async function setTheme(page: Page, dark: boolean): Promise<void> {
 async function readToken(
   page: Page,
   name: string,
-): Promise<{ raw: string; fill: string; stroke: string }> {
+): Promise<{ fill: string; raw: string; stroke: string }> {
   return page.evaluate((n) => {
     const raw = getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -121,7 +121,7 @@ async function readSurface(page: Page, cls: string): Promise<string> {
  * 最后一型是实测撞出来的：拿 `/^rgba?\(/` 去断 `color-mix()` 的结果，
  * 会得到一条「没解析」的红 —— 而值其实是对的。所以断言比**分量**，不比字符串。
  */
-type Color = { r: number; g: number; b: number; a: number };
+type Color = { a: number; b: number; g: number; r: number; };
 
 function parseColor(css: string): Color {
   const t = css.trim();
@@ -203,8 +203,12 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       const bad: Array<string> = [];
       for (const name of CONSUMED_TOKENS) {
         const v = await readToken(page, name);
-        if (!v.raw) bad.push(`${label} ${name} 声明值为空（被 shake 或名字不对）`);
-        if (!v.fill.startsWith("rgb")) bad.push(`${label} ${name} fill 未解析：${v.fill}`);
+        if (!v.raw) {
+          bad.push(`${label} ${name} 声明值为空（被 shake 或名字不对）`);
+        }
+        if (!v.fill.startsWith("rgb")) {
+          bad.push(`${label} ${name} fill 未解析：${v.fill}`);
+        }
       }
       expect(bad, `${label}档有 token 解析失败`).toEqual([]);
     }
@@ -269,7 +273,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       /* 与 `gridLineColor()` 同一套取整口径：α 换算成百分数，不丢一位小数。 */
       const percent = Math.round(alpha * 1000) / 10;
       const expr = `color-mix(in srgb, var(--color-canvas-grid-line) ${percent}%, transparent)`;
-      const seen: Record<"light" | "dark", { stroke: string; color: Color; ratio: number }> =
+      const seen: Record<"light" | "dark", { color: Color; ratio: number; stroke: string; }> =
         /* SAFETY: 类型断言已复核 */ {} as never;
 
       for (const dark of [false, true]) {
@@ -408,8 +412,11 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
               } catch {
                 continue;
               }
-              for (const r of Array.from(rules ?? []))
-                if (r.cssText?.includes("--xy-background-pattern-color-props")) n++;
+              for (const r of Array.from(rules ?? [])) {
+                if (r.cssText?.includes("--xy-background-pattern-color-props")) {
+                  n++;
+                }
+              }
             }
             return n;
           }),
@@ -463,7 +470,9 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
     const inBothScopes = await page.evaluate((e) => {
       const read = (hostClass: string): string => {
         const host = document.createElement("div");
-        if (hostClass) host.className = hostClass;
+        if (hostClass) {
+          host.className = hostClass;
+        }
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute(
           "style",
@@ -484,7 +493,9 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       `[二次代入负控制] 内层 token 缺失 → 裸作用域 stroke=${inBothScopes.detached} / .react-flow 内 stroke=${inBothScopes.inReactFlow}（两种都无声）`,
     );
     for (const [scope, stroke] of Object.entries(inBothScopes)) {
-      if (stroke === "none") continue; // 线消失：同样是「没画出我们的色相」
+      if (stroke === "none") {
+        continue;
+      } // 线消失：同样是「没画出我们的色相」
       const c = parseColor(stroke);
       expect(
         [Math.round(c.r), Math.round(c.g), Math.round(c.b)],

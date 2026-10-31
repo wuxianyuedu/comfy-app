@@ -69,9 +69,9 @@ const GREEN_STAGES = [
 
 /** 平台一份 stage 记录里我们要造的那几栏。 */
 interface StageFixture {
+  duration: number;
   name: string;
   status: string;
-  duration: number;
 }
 
 /**
@@ -356,9 +356,9 @@ describe("daily-attendance：命令行那一跳", () => {
  * 列表项（`createTime` 允许缺 —— 有一条用例判的就是「认不出时刻」这一格）。
  */
 type PageRow = {
-  sn: string;
-  event: string;
   createTime?: string;
+  event: string;
+  sn: string;
   status: string;
 };
 
@@ -444,7 +444,9 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
 
   it("每页都只盖 10 小时 ⇒ 撞页数上界，covered=false（不是「窗口内没有」）", () => {
     const pages: Record<number, Array<PageRow> | null> = {};
-    for (let p = 1; p <= FETCH_MAX_PAGES + 2; p += 1) pages[p] = pageRows(1, 10);
+    for (let p = 1; p <= FETCH_MAX_PAGES + 2; p += 1) {
+      pages[p] = pageRows(1, 10);
+    }
     const { run } = pagerByPage(pages);
     const win = fetchBuildsCoveringWindow({
       run,
@@ -516,7 +518,9 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
 
   it("在线那一跳：条数够而时间不够 ⇒ 退「未校验」而不是退「缺勤」（假缺勤的负控制）", () => {
     const pages: Record<number, Array<PageRow> | null> = {};
-    for (let p = 1; p <= FETCH_MAX_PAGES; p += 1) pages[p] = pageRows(1, 10);
+    for (let p = 1; p <= FETCH_MAX_PAGES; p += 1) {
+      pages[p] = pageRows(1, 10);
+    }
     const { run, calls } = pagerByPage(pages);
     const heard: Array<string> = [];
     const log = (s: string) => heard.push(s);

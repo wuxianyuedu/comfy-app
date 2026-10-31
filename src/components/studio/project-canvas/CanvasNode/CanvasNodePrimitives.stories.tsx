@@ -55,7 +55,7 @@ export const StatusBadges: Story = {
   render: () => (
     <div className="flex flex-wrap items-center gap-3">
       {STATUSES.map((status) => (
-        <div key={status} className="flex items-center gap-2">
+        <div className="flex items-center gap-2" key={status}>
           <span className="text-ink-muted font-mono text-[11px]">
             {status} → {STATUS_BADGE_KEY[status]}
           </span>
@@ -74,7 +74,7 @@ export const StatusDots: Story = {
   render: () => (
     <div className="flex flex-wrap items-center gap-4">
       {STATUSES.map((status) => (
-        <div key={status} className="flex items-center gap-2">
+        <div className="flex items-center gap-2" key={status}>
           <StatusDot status={status} />
           <span className="text-ink-soft text-xs">{STATUS_LABEL[status]}</span>
         </div>

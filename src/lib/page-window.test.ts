@@ -33,12 +33,12 @@ describe("page-window —— 倒序分页", () => {
   it("页码为 Infinity 钳到末页；NaN 才是「算不出来」落回第 1 页", () => {
     /* 两者语义不同：`Infinity` 是「明确超出范围」，`NaN` 是「算不出来」。 */
     expect(tailPages(items, Infinity, 3).page).toBe(4);
-    expect(tailPages(items, NaN, 3).page).toBe(1);
+    expect(tailPages(items, Number.NaN, 3).page).toBe(1);
     expect(tailPages(items, -Infinity, 3).page).toBe(1);
   });
 
   it("页码为 NaN 时仍给出第 1 页的内容（不是空窗口）", () => {
-    expect(tailPages(items, NaN, 3).entries).toEqual([8, 9, 10]);
+    expect(tailPages(items, Number.NaN, 3).entries).toEqual([8, 9, 10]);
   });
 
   it("空列表是「1 页、0 条」，不是 0 页", () => {
@@ -48,7 +48,7 @@ describe("page-window —— 倒序分页", () => {
   });
 
   it("pageSize 为 0 / 负数 / NaN 都不会给出 Infinity 页", () => {
-    for (const size of [0, -3, NaN]) {
+    for (const size of [0, -3, Number.NaN]) {
       const r = tailPages(items, 1, size);
       expect(Number.isFinite(r.totalPages)).toBe(true);
       expect(r.totalPages).toBe(items.length);
@@ -106,7 +106,7 @@ describe("page-window —— 尾部窗口", () => {
   it("N 为 0 / 负数 / NaN 时按 1 条处理（不是空 / 整表）", () => {
     expect(tailWindow(items, 0)).toEqual([10]);
     expect(tailWindow(items, -2)).toEqual([10]);
-    expect(tailWindow(items, NaN)).toEqual([10]);
+    expect(tailWindow(items, Number.NaN)).toEqual([10]);
   });
 });
 
@@ -142,7 +142,7 @@ describe("page-window —— 尾部窗口的增量追加", () => {
      * 也不要把内存上限悄悄取消掉（`safeSize` 的口径，与 `tailWindow` 同源）。 */
     expect(tailWindowAppend([], 3, 0)).toEqual([3]);
     expect(tailWindowAppend([], 3, -5)).toEqual([3]);
-    expect(tailWindowAppend([], 3, NaN)).toEqual([3]);
+    expect(tailWindowAppend([], 3, Number.NaN)).toEqual([3]);
     /* `Infinity` 也落到 1 条（`Number.isFinite(Infinity)` 为 false）——「没有上限」
      * 这个意图在本模块没有表达方式，调用处想留整表就别传 size。 */
     expect(tailWindowAppend([], 3, Infinity)).toEqual([3]);
@@ -152,7 +152,7 @@ describe("page-window —— 尾部窗口的增量追加", () => {
     /* 判据要按**整段序列**比，不能拿中途的窗口当起点：某一刻的 `[1,2]`
      * 是「上限 2 时攒下来的」，而 `[1,2,3]` 是「上限 3 时攒下来的」——
      * 两个窗口拿同一个 size 去追加，本就该得出不同结果。 */
-    for (const size of [0, -3, 1, 2, 5, NaN, Infinity]) {
+    for (const size of [0, -3, 1, 2, 5, Number.NaN, Infinity]) {
       let fast: Array<number> = [];
       let slow: Array<number> = [];
       for (let i = 0; i < 10; i++) {
@@ -165,7 +165,9 @@ describe("page-window —— 尾部窗口的增量追加", () => {
 
   it("封顶后长度恒定（不会一边 shift 一边长胖）", () => {
     let logs: Array<number> = [];
-    for (let i = 0; i < 100; i++) logs = tailWindowAppend(logs, i, 10);
+    for (let i = 0; i < 100; i++) {
+      logs = tailWindowAppend(logs, i, 10);
+    }
     expect(logs).toHaveLength(10);
     expect(logs).toEqual([90, 91, 92, 93, 94, 95, 96, 97, 98, 99]);
   });
@@ -187,7 +189,7 @@ describe("page-window —— 平行分块", () => {
   });
 
   it("块号为 NaN 时按第 0 块处理；Infinity 钳到末块（与页码同一口径）", () => {
-    expect(chunkRange(10, 4, NaN).start).toBe(0);
+    expect(chunkRange(10, 4, Number.NaN).start).toBe(0);
     expect(chunkRange(10, 4, Infinity).start).toBe(8);
     /* 不钳的话 `i * s` 是 Infinity，`slice(Infinity, Infinity)` 静默给空。 */
     expect(chunkRange(10, 4, Infinity).end).toBe(10);
@@ -200,12 +202,12 @@ describe("page-window —— 平行分块", () => {
 
   it("负数 / 非有限条目数当 0 处理（不会出现负的 end 或 Infinity 块）", () => {
     expect(chunkRange(-5, 4, 0)).toEqual({ start: 0, end: 0, total: 1 });
-    expect(chunkRange(NaN, 4, 0)).toEqual({ start: 0, end: 0, total: 1 });
+    expect(chunkRange(Number.NaN, 4, 0)).toEqual({ start: 0, end: 0, total: 1 });
     expect(chunkRange(Infinity, 4, 0)).toEqual({ start: 0, end: 0, total: 1 });
   });
 
   it("片长为 0 / 负数 / NaN 时按 1 处理（不会出现 Infinity 块）", () => {
-    for (const size of [0, -1, NaN]) {
+    for (const size of [0, -1, Number.NaN]) {
       const r = chunkRange(3, size, 0);
       expect(r.total).toBe(3);
       expect(r).toEqual({ start: 0, end: 1, total: 3 });

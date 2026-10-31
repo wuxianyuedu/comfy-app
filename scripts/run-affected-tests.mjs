@@ -120,6 +120,9 @@
  */
 
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
+/* 「受影响用例」门在 CI 里的良性 stderr 噪音屏蔽（按行判定，见文件头）：本文件只负责
+ * 在起 vitest 前解析开关、在两遍 spawn 都把 `isNoiseLine` 透传下去。 */
+import { isNoiseLine, resolveNoiseFilter } from "./affected-launch-noise-reporter.mjs";
 /* 「改动面 ⇒ 清单」那一跳住在自己那份文件里 —— 与话术层、复跑面同一刀，理由写在那份文件头：
  * 机制层再塞第五件事就会长到读不动，而读不动的那一层失效形态是「判据恒绿」。
  * 判决链仍只有 `scripts/affected-tests.mjs` 那一份（ISSUE #2240：换的只是**载体**，
@@ -162,6 +165,7 @@ import {
  * 重试本身就成了消耗，直到那一格被平台掐掉、连「未判定」都说不出（ISSUE #2364）。 */
 import {
   affordablePerFileCount,
+  gateFirstPassByWallClock,
   gateRerunByWallClock,
   perFileBudgetStopReport,
   remainingWallClockMs,
@@ -202,6 +206,32 @@ import {
   spawnVitest,
 } from "./affected-launch-spawn.mjs";
 export { planLaunches, resolveMaxWorkers, resolveVitestEntry };
+
+/**
+ * 把「固定清单（契约 / 结构守护）」与「这个 PR 牵扯到的受影响用例」**分开分块**。
+ *
+ * 为什么要分开（2026-10-31 的现场）：两者混在同一次 vitest 调用里时，固定清单里那份最吵的
+ * a11y 故事测试（`tests/a11y-axe-stories.test.ts`，故意渲染会抛错的 error-boundary /
+ * lazy-chunk 故事）的 stderr 噪音会和受影响用例的真红混在一起、把失败原文挤出去（平台只
+ * 保留日志尾部）。分开后：
+ *   · 每份启动更小（固定清单先跑、受影响用例后跑，受影响用例的失败与收尾账落在日志尾部）；
+ *   · 噪音被收进「固定清单」那一段里隔离，且两块各有独立抬头（便于读日志的人分辨哪块红了）。
+ *
+ * 不改变任何判决：分块策略与 `planLaunches` 完全一致（同一份预算、同一套防丢防重），只是
+ * 先按 `FIXED_STRUCTURAL_TESTS` 切两刀、各自分块，再拼回一个带 `kind` 的序列。
+ *
+ * @param {string[]} files 已含固定清单的完整清单（`collectList()` 的产出）
+ * @returns {{kind: 'fixed' | 'affected', files: string[]}[]}
+ */
+export function planSeparatedLaunches(files) {
+  const fixed = files.filter((f) => FIXED_STRUCTURAL_TESTS.includes(f));
+  const affected = files.filter((f) => !FIXED_STRUCTURAL_TESTS.includes(f));
+  /** @type {{kind: 'fixed' | 'affected', files: string[]}[]} */
+  const out = [];
+  for (const chunk of planLaunches(fixed)) out.push({ kind: "fixed", files: chunk });
+  for (const chunk of planLaunches(affected)) out.push({ kind: "affected", files: chunk });
+  return out;
+}
 /* 并发只有一个出处（ISSUE #2324）：兜底档由这里取，`resolveMaxWorkers` 自己不读核数。 */
 import { resolveCiWorkers } from "./ci-load.mjs";
 import { existsSync } from "node:fs";
@@ -266,7 +296,9 @@ async function main(argv) {
       process.env.COMFY_PRECOMMIT_MAX_WORKERS,
       resolveCiWorkers().workers,
     );
-    if (note) process.stderr.write(`[affected-launch] ${note}\n`);
+    if (note) {
+      process.stderr.write(`[affected-launch] ${note}\n`);
+    }
     const quietFull = announceQuiet(process.env.COMFY_AFFECTED_QUIET, (t) =>
       process.stderr.write(t),
     );
@@ -292,17 +324,19 @@ async function main(argv) {
   }
   let chunks;
   try {
-    chunks = planLaunches(files);
+    /* 固定清单与受影响用例**分开分块**：固定清单（含最吵的 a11y 故事测试）先跑、受影响用例
+     * 后跑，噪音被收进固定清单那一段里隔离，受影响用例的失败落在日志尾部（平台保留尾部）。 */
+    chunks = planSeparatedLaunches(files);
   } catch (e) {
     process.stderr.write(`[affected-launch] ${e instanceof Error ? e.message : String(e)}\n`);
     return 1;
   }
   /* 同上：读数档不碰 `node_modules`。它要的信息（清单份数 / 启动次数 / 最长一块）
-   * 全部来自 `collectList()` 与 `planLaunches()`，两者都是纯计算。 */
+   * 全部来自 `collectList()` 与 `planSeparatedLaunches()`，两者都是纯计算。 */
   if (dryRun) {
     process.stdout.write(
       `[affected-launch] ${files.length} 个用例 / ${chunks.length} 次启动，` +
-        `最长一块 ${chunks.reduce((m, c) => Math.max(m, c.join(" ").length), 0)} 字符\n`,
+        `最长一块 ${chunks.reduce((m, c) => Math.max(m, c.files.join(" ").length), 0)} 字符\n`,
     );
     return 0;
   }
@@ -311,8 +345,15 @@ async function main(argv) {
     process.env.COMFY_PRECOMMIT_MAX_WORKERS,
     resolveCiWorkers().workers,
   );
-  if (note) process.stderr.write(`[affected-launch] ${note}\n`);
+  if (note) {
+    process.stderr.write(`[affected-launch] ${note}\n`);
+  }
   const quiet = announceQuiet(process.env.COMFY_AFFECTED_QUIET, (t) => process.stderr.write(t));
+  /* CI 里的良性 stderr 噪音屏蔽（`COMFY_AFFECTED_NOISE_FILTER=1`）：解析开关，把
+   * `isNoiseLine` 透传给每一遍 spawn。本地不设该变量 ⇒ `enabled` 为 false，不过滤
+   * （开发者排错仍要看这些日志）。判据见 `affected-launch-noise-reporter.mjs`。 */
+  const noise = resolveNoiseFilter(process.env.COMFY_AFFECTED_NOISE_FILTER);
+  if (noise.note) process.stderr.write(`[affected-launch] ${noise.note}\n`);
   /* 分文件耗时的落点：钩子 `export` 出来的 `$LOGD`，或平台入口 `ci-affected-tests.mjs`
    * 自己造的一份（同一份布局，随本次跑清理 —— 那一格此前拿不到 junit，复跑面每次都
    * 退回整块，ISSUE #2074）。没有它（人自己跑这一档 / 不在执行者里）就一个字都不加 ——
@@ -360,7 +401,9 @@ async function main(argv) {
   const waitBudget = { deadline: Date.now() + RETRY_BUDGET_MS };
   /* 跑也要有界：整次一份、跨块共享，与上面那份等待预算同形状（只管开不开下一遍）。 */
   const wallClock = resolveWallClockMs(process.env.COMFY_AFFECTED_WALL_CLOCK_MS);
-  if (wallClock.note) process.stderr.write(`[affected-launch] ${wallClock.note}\n`);
+  if (wallClock.note) {
+    process.stderr.write(`[affected-launch] ${wallClock.note}\n`);
+  }
   const stageBudget = wallClockBudget({ budgetMs: wallClock.budgetMs });
   /** 这一档「没拿到可信读数」的文件（未校验 ≠ 绿，结束时要点名）。 */
   const unverified = [];
@@ -389,20 +432,34 @@ async function main(argv) {
      * （起之前根本没有用时）。两份放在同一屏的两端是刻意的：清单回答「跑了什么」，
      * 这里回答「各自多久」，两句都读完才算读完了这一格。 */
     process.stderr.write(fileTimingReport(files, { quiet, read: junitReadings() }));
-    if (unverified.length > 0) process.stderr.write(unverifiedReport(unverified));
+    if (unverified.length > 0) {
+      process.stderr.write(unverifiedReport(unverified));
+    }
     process.stderr.write(rerunReport(attempts, { budgetMs: RETRY_BUDGET_MS }));
   };
+  /* 已跑完各块的实测账（份数与墙钟）：第二块起用它现算单份单价，喂给第一遍判点
+   * （`gateFirstPassByWallClock`）—— 见循环里 `perFileMs` 那一段。 */
+  let doneFiles = 0;
+  let doneMs = 0;
   for (const [index, chunk] of chunks.entries()) {
+    const tag = chunk.kind === "fixed" ? "固定清单" : "受影响用例";
     if (chunks.length > 1) {
       process.stderr.write(
-        `[affected-launch] 第 ${index + 1}/${chunks.length} 块，` +
-          `${chunk.length} 个用例（命令行长预算 ${SAFE_ARGV_BUDGET} 字符）\n`,
+        `[affected-launch] 第 ${index + 1}/${chunks.length} 块（${tag}），` +
+          `${chunk.files.length} 个用例（命令行长预算 ${SAFE_ARGV_BUDGET} 字符）\n`,
       );
     }
     // 并发跟着 `resolveMaxWorkers` 走（含 `COMFY_PRECOMMIT_MAX_WORKERS` 那一档）；
     // 「超时形态 ⇒ 等待 + 隔离复跑 ⇒ 按第二遍的形态定论」的判决链在 `runChunk` 里，
     // 见其文档与文件头那节。
-    const code = await runChunk(chunk, {
+    /* 单份单价：**已跑完各块**的墙钟 ÷ 那些块的份数（同一条口径喂给 `runChunk` 的
+     * 第一遍判点与 `affordablePerFileCount` 的补跑判点 —— 两处各算一份会漂）。
+     * 第一块还没有历史 ⇒ 0 ⇒ 第一遍不拦（`gateFirstPassByWallClock` 那一段写着理由：
+     * 「不知道」不等于「跑不完」）。第二块起，同一台机、同一份并发下的这份单价就是**刚测
+     * 出来的事实**，用它判「剩下这几块还开不起来」才不含猜的成分。 */
+    const perFileMs = doneFiles > 0 && doneMs > 0 ? Math.round(doneMs / doneFiles) : 0;
+    const chunkStartedAt = Date.now();
+    const code = await runChunk(chunk.files, {
       entry,
       workers,
       quiet,
@@ -410,9 +467,17 @@ async function main(argv) {
       chunkId: index,
       waitBudget,
       stageBudget,
+      perFileMs,
+      filterLine: noise.enabled ? isNoiseLine : undefined,
       onUnverified: (files) => unverified.push(...files),
       onAttempt: (record) => attempts.push(record),
     });
+    /* 只记跑完的块（`code === 0`）：红的 / 没判的那些块墙钟不代表「正常单价」，混进来
+     * 会把下一次估算带歪（超时形态的一遍本来就会吃满它自己的预算）。 */
+    if (code === 0) {
+      doneMs += Date.now() - chunkStartedAt;
+      doneFiles += chunk.files.length;
+    }
     if (code !== 0) {
       flush();
       return code;
@@ -443,7 +508,10 @@ async function main(argv) {
  *
  * @param {string[]} chunk 本块的用例路径
  * @param {{entry: string, workers?: number, quiet?: boolean, junitDir?: string, chunkId?: number,
- *          spawn?: (entry: string, args: string[]) => {status: number|null, output: string}, settle?: () => Promise<{settled: boolean, load: number, waitedMs: number}>, waitBudget?: {deadline: number}, stageBudget?: {deadline: number, budgetMs: number}, onUnverified?: (files: string[]) => void, onAttempt?: (record: {outcome: string, waitedMs?: number, settled?: boolean}) => void}} deps
+ *          spawn?: (entry: string, args: string[]) => {status: number|null, output: string}, settle?: () => Promise<{settled: boolean, load: number, waitedMs: number}>, waitBudget?: {deadline: number}, stageBudget?: {deadline: number, budgetMs: number}, onUnverified?: (files: string[]) => void, onAttempt?: (record: {outcome: string, waitedMs?: number, settled?: boolean}) => void, filterLine?: (line: string) => boolean}} deps
+ *   `filterLine` 是「受影响用例」门在 CI 里屏蔽良性 stderr 噪音用的（见
+ *   `affected-launch-noise-reporter.mjs`）：给的话，两遍 spawn 抓到的输出在回吐前按行过它、
+ *   命中即丢。本地不设 `COMFY_AFFECTED_NOISE_FILTER` 时不被传进来。
  *   `workers` **默认取自唯一出处** `ci-load.mjs`（`resolveCiWorkers().workers`）——
  *   这一层**只读它当首跑的并发**，复跑一律 `--no-file-parallelism`（降负载那一半）。
  *   以前这里默认一条本地常数 `DEFAULT_MAX_WORKERS = 4`，与 `vitest.config.ts` 的 8
@@ -453,7 +521,11 @@ async function main(argv) {
  *   `quiet` 只换 reporter（日志预算，见 `affected-launch-log-budget.mjs`）——**两遍都带**
  *   同一个值，缺省 `false` = 默认 reporter（今天的形状）。
  *   `waitBudget` 是多块之间**共享**的等待截止时刻（默认单块自己一份，供调用点收成一份）。
- *   `stageBudget` 是同形状的**墙钟**截止时刻，只管「还开不开下一遍 / 下一份」（ISSUE #2364）。
+ *   `stageBudget` 是同形状的**墙钟**截止时刻，管「还开不开下一遍 / 下一份」，也管
+ *   「**第一遍自己开不开得起**」（ISSUE #2364 的续，见 `gateFirstPassByWallClock`）。
+ *   `perFileMs` 是单份的实测单价（调用点按「已跑完各块的墙钟 ÷ 那些块的份数」给）；
+ *   不给（第一块、或还没跑过任何一块）就**不拦第一遍** —— 拿一个猜的数去拦会把正常提交
+ *   挡在门口（与 `budgetAllows` 的 `probePerFileMs` 同一取向）。
  *   `onAttempt` 每块一条判决记录，只喂收尾那份账（`rerunReport`），**不参与退出码**。
  * @returns {Promise<number>}
  */
@@ -470,22 +542,86 @@ export async function runChunk(chunk, deps) {
      * 的话，复跑那一遍会退回默认 reporter，而它恰恰是打印量最大的那一遍
      * （同一批用例在更差的条件下再跑一次，失败明细翻倍）。 */
     quiet = false,
+    /* 单份的实测单价（见上面 `@param` 里那一段）。缺省 0 = 还没有单价 ⇒ 第一遍不拦。 */
+    perFileMs = 0,
+    /* CI 里的良性 stderr 噪音屏蔽（`COMFY_AFFECTED_NOISE_FILTER=1` ⇒ `isNoiseLine`）：
+     * 透传给两遍 spawn，在 `spawnVitest` 回吐前按行滤掉噪音（见
+     * `affected-launch-noise-reporter.mjs`）。本地不设该变量 ⇒ undefined，不过滤。 */
+    filterLine = undefined,
   } = deps;
   /* reporter：平台那一格 quiet（日志预算），本地默认**一个字都不加** —— 见
    * `affected-launch-log-budget.mjs` 的头注（那一段记着 102400 字节的截断现场）。 */
   const reporters = reporterArgs(quiet);
   /* 首跑墙钟：下一遍开不开得起只能由刚跑完的这一遍说话（常数界在机器空时过严、
    * 机器满时过松，ISSUE #2364）。 */
+  /* 界也要落在**第一遍之前**（ISSUE #2364 的续，2026-10-30 的现场）：上面那几格都只
+   * 划在「还开不开下一遍」，前提是「第一遍总会跑完」。改动面大到一个量级时那个前提就
+   * 失效了 —— 实测 `cnb-l0u-1k66agmv9`（PR #2760）首跑并发 1、808 份吃了 54 分钟被平台
+   * 掐断，而 `STAGE_WALL_CLOCK_MS` 一次都没生效过（它的判点在那之后）。那一跑里连一个
+   * 用例名都没留下（`--reporter=dot` 在第一份跑完之前只往同一行打点，平台保留的是尾部）。
+   *
+   * 单价从**已跑完的块**取（`deps.perFileMs`，调用点按「实测墙钟 ÷ 已跑份数」给）——
+   * 拿不到就不拦：「不知道」不等于「跑不完」，拿一个猜的数去拦会把正常提交挡在门口。
+   * 拦下来是**没判**（退 2），不是红也不是绿（§13.6.2）。 */
+  const firstGate = gateFirstPassByWallClock({
+    budget: deps.stageBudget,
+    files: chunk.length,
+    perFileMs,
+  });
+  if (!firstGate.ok) {
+    process.stderr.write(firstGate.note);
+    report({ outcome: "budget-skipped" });
+    return 2;
+  }
+  /* 第一遍的**上界**：拿剩余预算当 `timeout`，掐断之后由下面那条「没跑完」出口说话。
+   * 这一条与上面那个份数判点是**两件事**、各自成立：
+   *   · 份数判点答「按实测单价，这一遍合不进来吗」—— 有单价时才说话（第二块起）；
+   *   · 这一条答「就算估错了，也不许把整格跑成零读数」—— 第一块起就有，且不需要单价。
+   * 两者都落在「没判」这一档（退 2），不是红也不是绿（§13.6.2）。 */
+  const firstPassTimeoutMs = remainingWallClockMs(deps.stageBudget);
+  /* `ResidualReserveMs`：给掐断之后的收尾（日志回吐、记账、`BeforeEnd`）留出的余量 ——
+   * 不留的话「掐断」与「收尾」会撞在同一个 deadline 上，那一屏又只剩半句。 */
+  const FIRST_PASS_TIMEOUT_RESERVE_MS = 30_000;
+  /* 第三参数 `firstPassOptions` 带的是第一遍的 `timeout`（真实现见 `spawnVitest` 的
+   * `options.timeoutMs`）。它单独一个变量，是为了让**实参数组本身**仍留在
+   * `spawn(entry, [ … ])` 那个形状里 —— `tests/hook-affected-launch.test.ts` 按那个形状
+   * 提取「传给 vitest 的实参」，把 options 折进数组里会让那条判据静默取不到调用点。 */
+  const firstPassBase =
+    firstPassTimeoutMs === null
+      ? undefined
+      : { timeoutMs: Math.max(1, firstPassTimeoutMs - FIRST_PASS_TIMEOUT_RESERVE_MS) };
+  /* 噪音屏蔽（`COMFY_AFFECTED_NOISE_FILTER=1`）：把 `filterLine` 透传给首遍 spawn 的第三
+   * 参数。它落在 `spawn(entry, [ … ])` 的实参数组**之后**，不改那个数组的形状
+   * （`tests/hook-affected-launch.test.ts` 按那个形状提取「传给 vitest 的实参」）。 */
+  const firstPassOptions = filterLine
+    ? { ...(firstPassBase ?? {}), filterLine }
+    : firstPassBase;
   const firstPassStartedAt = Date.now();
-  const res = spawn(entry, [
-    "run",
-    ...reporters,
-    ...junitReportArgs(junitDir, chunkId, 1, {
-      withDefaultReporter: reporters.length === 0,
-    }),
-    `--maxWorkers=${workers}`,
-    ...chunk,
-  ]);
+  const res = spawn(
+    entry,
+    [
+      "run",
+      ...reporters,
+      ...junitReportArgs(junitDir, chunkId, 1, {
+        withDefaultReporter: reporters.length === 0,
+      }),
+      `--maxWorkers=${workers}`,
+      ...chunk,
+    ],
+    firstPassOptions,
+  );
+  /* 被自己那一刀掐断（而不是被平台掐）：这是一份**可读**的收场，而不是空屏。 */
+  if (res.timedOut) {
+    process.stderr.write(
+      "[affected-launch] 第 1 遍**没跑完**：墙钟预算用尽，本块 " +
+        `${chunk.length} 个用例被中途掐断（剩余预算 ${Math.round((firstPassTimeoutMs ?? 0) / 60000)} 分钟）\n` +
+        "  ⇒ 按**未判定**收（退 2）：这不是红，也不是绿 —— 这一遍没有任何一条断言给出结论。\n" +
+        "  下一动作：把改动拆开（规范 §13.5.8.1），或按名字要全量 " +
+        "`node scripts/run-affected-tests.mjs --full`。\n",
+    );
+    report({ outcome: "budget-killed" });
+    return 2;
+  }
   // 界要落在哪一侧只能由刚跑完的这一遍说话（常数界在机器空时过严、机器满时过松）。
   const firstPassMs = Date.now() - firstPassStartedAt;
   if (res.status === 0) {
@@ -529,7 +665,9 @@ export async function runChunk(chunk, deps) {
     firstPassMs,
     retryFiles: scope.files.length,
   });
-  if (gate.note !== "") process.stderr.write(gate.note);
+  if (gate.note !== "") {
+    process.stderr.write(gate.note);
+  }
   if (!gate.ok) {
     process.stderr.write(wallClockSkipReport({ ...gate, files: scope.files }));
     report({ outcome: "budget-skipped" });
@@ -564,15 +702,19 @@ export async function runChunk(chunk, deps) {
     readSuites: () => readRetrySuiteFailures({ junitDir, chunkId, read: deps.readJunit }),
     isTimeout: isTimeoutShaped,
   });
-  const retry = spawn(entry, [
-    "run",
-    ...reporters,
-    ...junitReportArgs(junitDir, chunkId, 2, {
-      withDefaultReporter: reporters.length === 0,
-    }),
-    "--no-file-parallelism",
-    ...retryFiles,
-  ]);
+  const retry = spawn(
+    entry,
+    [
+      "run",
+      ...reporters,
+      ...junitReportArgs(junitDir, chunkId, 2, {
+        withDefaultReporter: reporters.length === 0,
+      }),
+      "--no-file-parallelism",
+      ...retryFiles,
+    ],
+    filterLine ? { filterLine } : undefined,
+  );
   if (retry.status === 0) {
     process.stderr.write(
       "[affected-launch] **第 2 遍**全绿 ⇒ 刚才那次是**负载假红**（这一步不构成放行依据，\n" +

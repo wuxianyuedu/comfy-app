@@ -3,7 +3,7 @@
 import React from "react";
 
 import { Button } from "~/components/ui/button";
-import { type OmitOwnProps } from "~/lib/dom-props";
+import type { OmitOwnProps } from "~/lib/dom-props";
 
 /**
  * 「隐藏 `<input type="file">` + 谁来点它」的唯一出口。
@@ -22,7 +22,16 @@ import { type OmitOwnProps } from "~/lib/dom-props";
  *     改一处「要不要支持多选」要改四个地方。
  */
 
-export interface FilePickerProps {
+export type FilePickerProps = {
+  /** 透传给 `<input>` 的 `accept`，把系统文件对话框筛成期望类型。 */
+  accept?: string;
+  /** 额外透传给 `<input>` 的属性（如 `id`，供 `<label htmlFor>` 关联）。 */
+  inputProps?: OmitOwnProps<
+    React.InputHTMLAttributes<HTMLInputElement>,
+    "type" | "accept" | "multiple" | "onChange" | "className"
+  >;
+  /** 是否允许一次选多个。默认单选。 */
+  multiple?: boolean;
   /**
    * 选中文件后的回调。用户取消时不会被调用。
    *
@@ -32,21 +41,12 @@ export interface FilePickerProps {
    * 那正是此前 9 份实现里各写一遍、且有两处忘了判空的地方。
    */
   onPick: (file: File, files: FileList) => void;
-  /** 透传给 `<input>` 的 `accept`，把系统文件对话框筛成期望类型。 */
-  accept?: string;
-  /** 是否允许一次选多个。默认单选。 */
-  multiple?: boolean;
-  /** 额外透传给 `<input>` 的属性（如 `id`，供 `<label htmlFor>` 关联）。 */
-  inputProps?: OmitOwnProps<
-    React.InputHTMLAttributes<HTMLInputElement>,
-    "type" | "accept" | "multiple" | "onChange" | "className"
-  >;
-}
+};
 
-export interface FilePickerHandle {
+export type FilePickerHandle = {
   /** 打开系统文件对话框。 */
   open: () => void;
-}
+};
 
 /**
  * 命令式用法：`open()` 挂在任意既有按钮上，`Input` 挂在本组件树里。
@@ -62,12 +62,7 @@ export interface FilePickerHandle {
  * `Input` 用 `useMemo` 固定身份：它在 JSX 里是组件位置，每次渲染重建会让
  * React 卸载再挂载 input（正在进行的文件对话框会被打断）。
  */
-export function useFilePicker({
-  onPick,
-  accept,
-  multiple,
-  inputProps,
-}: FilePickerProps) {
+export function useFilePicker({ onPick, accept, multiple, inputProps }: FilePickerProps) {
   const handleRef = React.useRef<FilePickerHandle | null>(null);
 
   /* `open` 必须身份稳定：调用方会把它放进 `onClick` 甚至依赖数组。 */
@@ -78,11 +73,11 @@ export function useFilePicker({
       function PickerInput() {
         return (
           <FilePicker
-            onPick={onPick}
             accept={accept}
-            multiple={multiple}
-            inputProps={inputProps}
             handleRef={handleRef}
+            inputProps={inputProps}
+            multiple={multiple}
+            onPick={onPick}
           />
         );
       },
@@ -121,17 +116,19 @@ export function FilePicker({
     const picked = files && files.length > 0 ? files : null;
     event.target.value = "";
     const first = picked?.[0];
-    if (first) onPick(first, picked);
+    if (first) {
+      onPick(first, picked);
+    }
   };
 
   return (
     <input
+      accept={accept}
+      className="hidden"
+      multiple={multiple}
+      onChange={handleChange}
       ref={inputRef}
       type="file"
-      accept={accept}
-      multiple={multiple}
-      className="hidden"
-      onChange={handleChange}
       {...inputProps}
     />
   );
@@ -163,11 +160,11 @@ export function FilePickerButton({
         {children}
       </Button>
       <FilePicker
-        onPick={onPick}
         accept={accept}
-        multiple={multiple}
-        inputProps={inputProps}
         handleRef={handleRef}
+        inputProps={inputProps}
+        multiple={multiple}
+        onPick={onPick}
       />
     </>
   );

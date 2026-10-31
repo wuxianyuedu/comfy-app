@@ -24,22 +24,16 @@
  *   · **落点唯一**：一个提供者只有一个落点。需要多个落点就多挂一层提供者
  *     （现在没有这样的需求，所以不做，别先造）。
  */
-import {
-  createContext,
-  useContext,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { cn } from "~/lib/utils";
 
-interface SlotOutletContextValue {
+type SlotOutletContextValue = {
   /** 落点节点；`null` = 现在没有落点。 */
   node: HTMLElement | null;
   setNode: (node: HTMLElement | null) => void;
-}
+};
 
 const SlotOutletContext = createContext<SlotOutletContextValue | null>(null);
 
@@ -47,9 +41,7 @@ const SlotOutletContext = createContext<SlotOutletContextValue | null>(null);
 export function SlotOutletProvider({ children }: { children: ReactNode }) {
   const [node, setNode] = useState<HTMLElement | null>(null);
   return (
-    <SlotOutletContext.Provider value={{ node, setNode }}>
-      {children}
-    </SlotOutletContext.Provider>
+    <SlotOutletContext.Provider value={{ node, setNode }}>{children}</SlotOutletContext.Provider>
   );
 }
 
@@ -59,9 +51,9 @@ export function SlotOutlet({ className }: { className?: string }) {
   /* `ref` 回调而不是 `useEffect` 读 ref：节点挂上/卸下都走它，且不在渲染期读 DOM。 */
   return (
     <div
-      ref={ctx?.setNode}
-      data-slot="slot-outlet"
       className={cn("flex min-w-0 items-center", className)}
+      data-slot="slot-outlet"
+      ref={ctx?.setNode}
     />
   );
 }
@@ -72,13 +64,7 @@ export function SlotOutlet({ className }: { className?: string }) {
  * `fallback` 传 `null` 用于「没有落点就干脆不显示」的场景（如页签切换时，
  * 非当前页的内容本来就不该出现在任何地方）。
  */
-export function SlotContent({
-  children,
-  fallback,
-}: {
-  children: ReactNode;
-  fallback?: ReactNode;
-}) {
+export function SlotContent({ children, fallback }: { children: ReactNode; fallback?: ReactNode }) {
   const ctx = useContext(SlotOutletContext);
   const node = ctx?.node ?? null;
   const mounted = useSyncExternalStore(
@@ -87,6 +73,8 @@ export function SlotContent({
     () => false,
   );
 
-  if (node && mounted) return createPortal(children, node);
+  if (node && mounted) {
+    return createPortal(children, node);
+  }
   return <>{fallback ?? children}</>;
 }

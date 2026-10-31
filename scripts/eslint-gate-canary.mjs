@@ -131,7 +131,9 @@ function runEslint(files) {
     [ESLINT_BIN, "--format", "json", "--no-warn-ignored", ...cliRules, ...files],
     { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );
-  if (res.error) throw new Error(`eslint 起不来：${res.error.message}`);
+  if (res.error) {
+    throw new Error(`eslint 起不来：${res.error.message}`);
+  }
   const text = (res.stdout ?? "").trim();
   let parsed;
   try {
@@ -176,7 +178,9 @@ function main() {
     const tsSet = SABOTAGE ? [inTs ?? firstTs] : TS_SAMPLES;
     const scriptSet = SABOTAGE ? (inScripts ? SCRIPTS_SAMPLES : []) : SCRIPTS_SAMPLES;
 
-    for (const dir of dirs) fs.mkdirSync(dir, { recursive: true });
+    for (const dir of dirs) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
 
     const tsFiles = [];
     for (const s of tsSet) {
@@ -211,7 +215,9 @@ function main() {
     for (const f of [...tsFiles, ...scriptFiles]) {
       const rules = byFile.get(path.resolve(f.abs));
       if (!rules || !rules.has(f.rule)) {
-        misses.push(`${f.name}：期望命中 ${f.rule}，实际命中 ${rules ? [...rules].join(", ") || "（无）" : "（文件不在输出里 —— 规则面没覆盖到样本目录）"}`);
+        misses.push(
+          `${f.name}：期望命中 ${f.rule}，实际命中 ${rules ? [...rules].join(", ") || "（无）" : "（文件不在输出里 —— 规则面没覆盖到样本目录）"}`,
+        );
       }
     }
 
@@ -227,12 +233,20 @@ function main() {
     const total = tsFiles.length + scriptFiles.length;
     if (misses.length > 0) {
       console.error(`[eslint-canary] ✗ ${misses.length}/${total} 条对照没守住：`);
-      for (const m of misses) console.error(`  · ${m}`);
-      console.error("[eslint-canary] 读数含义：上面的规则**现在不会拦下它本该拦的东西** —— 全仓 0 警不能当成「这些规则在工作」。");
+      for (const m of misses) {
+        console.error(`  · ${m}`);
+      }
+      console.error(
+        "[eslint-canary] 读数含义：上面的规则**现在不会拦下它本该拦的东西** —— 全仓 0 警不能当成「这些规则在工作」。",
+      );
       return 1;
     }
-    console.log(`[eslint-canary] ✓ ${total} 条阳性对照全部命中 + 反向/阴性对照干净（samples=${total}）`);
-    for (const f of [...tsFiles, ...scriptFiles]) console.log(`  · ${f.name} → ${f.rule}`);
+    console.log(
+      `[eslint-canary] ✓ ${total} 条阳性对照全部命中 + 反向/阴性对照干净（samples=${total}）`,
+    );
+    for (const f of [...tsFiles, ...scriptFiles]) {
+      console.log(`  · ${f.name} → ${f.rule}`);
+    }
     return 0;
   } finally {
     for (const dir of dirs) {

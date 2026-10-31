@@ -6,14 +6,14 @@
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { withQuery } from "~/lib/query-string";
 
-export interface DebugSourcePayload {
-  file: string;
+export type DebugSourcePayload = {
   /** 绝对路径（正斜杠盘符格式），供 vscode://file/ 协议打开 */
   absolutePath: string;
   content: string;
-  size: number;
+  file: string;
   modifiedAt: string;
-}
+  size: number;
+};
 
 /** 读取某模块的源码文本。文件不存在 / 非白名单时抛带服务端文案的错误。 */
 export async function fetchDebugSource(file: string): Promise<DebugSourcePayload> {
@@ -23,6 +23,8 @@ export async function fetchDebugSource(file: string): Promise<DebugSourcePayload
   /* 读法收在一处（规范 16 §16.2.4.35）：这里此前在 `unknown` 上直接取
    * `body?.error`（服务端回结构化信封时读不到），且 `res.json()` 各调一遍。 */
   const body = await readJsonBody(res);
-  if (!res.ok) throw new Error(readApiError(body) ?? `HTTP ${res.status}`);
+  if (!res.ok) {
+    throw new Error(readApiError(body) ?? `HTTP ${res.status}`);
+  }
   return /* SAFETY: 类型断言已复核 */ body as DebugSourcePayload;
 }

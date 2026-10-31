@@ -25,23 +25,23 @@ import { errorMessage } from "~/lib/error-message";
 import { withTimeoutResult, sleep } from "~/lib/with-timeout";
 import { Button } from "~/components/ui/button";
 
-interface Props {
+type Props = {
+  apiChannels: ApiChannelsView | null;
+  /** 取消一个进行中的本机视频任务（控制器统一出口）。 */
+  onCancelShot: (shot: Shot) => void;
+  onNextStage: () => void;
+  /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
+  onNotice: (message: string) => void;
+  onOpenModelAdapters: () => void;
+  onPrevStage: () => void;
+  onShotsChange: React.Dispatch<React.SetStateAction<Array<Shot>>>;
+  /** 当前项目 id（空串 = 尚无活跃项目）：与镜头号一起写进任务行做归属。 */
+  projectId: string;
   shots: Array<Shot>;
   /** 选定的视频工作流 id：本地通道的唯一可执行来源（内置模板已移除）。
    * 按封装口径暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
   workflowId: string;
-  /** 当前项目 id（空串 = 尚无活跃项目）：与镜头号一起写进任务行做归属。 */
-  projectId: string;
-  apiChannels: ApiChannelsView | null;
-  onOpenModelAdapters: () => void;
-  onShotsChange: React.Dispatch<React.SetStateAction<Array<Shot>>>;
-  /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
-  onNotice: (message: string) => void;
-  /** 取消一个进行中的本机视频任务（控制器统一出口）。 */
-  onCancelShot: (shot: Shot) => void;
-  onPrevStage: () => void;
-  onNextStage: () => void;
-}
+};
 
 type Channel = "local" | "api";
 
@@ -92,8 +92,11 @@ export function VideoStudio({
   function setShotError(id: string, message: string | undefined) {
     setErrors((prev) => {
       const next = { ...prev };
-      if (message) next[id] = message;
-      else delete next[id];
+      if (message) {
+        next[id] = message;
+      } else {
+        delete next[id];
+      }
       return next;
     });
   }
@@ -111,14 +114,18 @@ export function VideoStudio({
           onProgress: (p) => reportProgress(shotId, p),
           onOutput: (out) => {
             // 优先取视频输出；非图片的额外产出（gif / 其他）照样落地。
-            if (out.kind !== "image") patchShot(shotId, { clipUrl: out.url });
+            if (out.kind !== "image") {
+              patchShot(shotId, { clipUrl: out.url });
+            }
           },
           onSettled: (r) => {
             /* 落定即写终值：节流窗口会在边界上丢掉最后一次读数，
              * 进度条停在 97% 而任务已完成的现场就是这么来的。 */
             flushProgress(shotId, 100);
             patchShot(shotId, { clipStatus: r.ok ? "done" : "failed" });
-            if (!r.ok) setShotError(shotId, r.message ?? "视频生成失败");
+            if (!r.ok) {
+              setShotError(shotId, r.message ?? "视频生成失败");
+            }
             resolve();
           },
         });
@@ -193,7 +200,9 @@ export function VideoStudio({
         /* 没落到任何端口的口本次不生效（工作流用图内默认值）—— 静默就是
          * 「改了没反应」（规范 10 §10.3.1），走控制器提示条说清楚。 */
         const unmatchedWarning = describeUnmatchedInputs(built.unmatched);
-        if (unmatchedWarning) onNotice(unmatchedWarning);
+        if (unmatchedWarning) {
+          onNotice(unmatchedWarning);
+        }
         const input: GenerateInput = built.input;
 
         const taskId = await startLocalGenerate(
@@ -217,18 +226,22 @@ export function VideoStudio({
           await pollApiVideo(shot.id, submit.remoteTaskId);
         }
       }
-    } catch (e: unknown) {
+    } catch (error: unknown) {
       patchShot(shot.id, { clipStatus: "failed" });
-      setShotError(shot.id, errorMessage(e, "视频生成失败"));
+      setShotError(shot.id, errorMessage(error, "视频生成失败"));
     }
   }
 
   async function generateBatch() {
-    if (pending.length === 0) return;
+    if (pending.length === 0) {
+      return;
+    }
     await batch.run(() =>
       /* 有界并发（见 WORKSHOP_BATCH_CONCURRENCY）：同镜头生图批量。 */
       runWithConcurrency([...pending], WORKSHOP_BATCH_CONCURRENCY, async (shot) => {
-        if (shot.clipUrl || shot.clipStatus === "running") return;
+        if (shot.clipUrl || shot.clipStatus === "running") {
+          return;
+        }
         await generateClip(shot);
       }),
     );
@@ -237,40 +250,40 @@ export function VideoStudio({
   return (
     <div className="flex flex-col gap-4">
       <ChannelSwitch
-        channel={channel}
-        onChannelChange={setChannel}
         apiChannels={apiChannels}
         apiReady={apiReady}
-        workflowSelected={!!workflowId}
-        fps={fps}
-        onFpsChange={setFps}
         batchRunning={batch.busy}
-        pendingCount={pending.length}
+        channel={channel}
+        fps={fps}
+        onChannelChange={setChannel}
+        onFpsChange={setFps}
         onGenerateBatch={() => void generateBatch()}
         onNextStage={onNextStage}
         onOpenModelAdapters={onOpenModelAdapters}
+        pendingCount={pending.length}
+        workflowSelected={!!workflowId}
       />
 
       {shots.length === 0 ? (
         <EmptyState
-          variant="hint"
-          description="暂无镜头数据。请先完成「场景分镜」— 镜头时长与运动强度会自动带入本阶段。"
           className="py-10 text-sm"
+          description="暂无镜头数据。请先完成「场景分镜」— 镜头时长与运动强度会自动带入本阶段。"
+          variant="hint"
         />
       ) : (
         <div className="flex flex-col gap-3">
           {shots.map((shot) => (
             <ShotCard
-              key={shot.id}
-              shot={shot}
-              progress={progress[shot.id] ?? 0}
-              error={errors[shot.id]}
-              channel={channel}
               apiReady={apiReady}
+              channel={channel}
+              error={errors[shot.id]}
               fps={fps}
-              onPatch={(p) => patchShot(shot.id, p)}
-              onGenerate={() => void generateClip(shot)}
+              key={shot.id}
               onCancel={() => void onCancelShot(shot)}
+              onGenerate={() => void generateClip(shot)}
+              onPatch={(p) => patchShot(shot.id, p)}
+              progress={progress[shot.id] ?? 0}
+              shot={shot}
             />
           ))}
         </div>
@@ -284,10 +297,10 @@ export function VideoStudio({
       )}
       {shots.length > 0 && (
         <Button
-          variant="secondary"
-          size="xs"
-          onClick={onPrevStage}
           className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
+          onClick={onPrevStage}
+          size="xs"
+          variant="secondary"
         >
           ← 回镜头生图
         </Button>

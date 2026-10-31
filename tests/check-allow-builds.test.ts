@@ -267,7 +267,7 @@ test("动了 pnpm-workspace.yaml（名单自己）也算命中依赖面", ({ rep
 });
 
 /** D 组步骤：两空格缩进的 `run "<标签>" <命令>`，行首锚定只认真调用。 */
-function dGroupSteps(hookText: string): Array<{ label: string; cmd: string }> {
+function dGroupSteps(hookText: string): Array<{ cmd: string; label: string; }> {
   const re = /^ {2}run "([^"]+)" (.+)$/gm;
   return [...hookText.matchAll(re)].map((m) => ({
     label: m[1] ?? "",
@@ -279,10 +279,14 @@ function dGroupSteps(hookText: string): Array<{ label: string; cmd: string }> {
 function readChecklistCommands(): Set<string> {
   const text = readFileSync(CHECKLIST_DOC, "utf8");
   const start = text.indexOf("本地提交前必须通过");
-  if (start < 0) return new Set();
+  if (start < 0) {
+    return new Set();
+  }
   const rest = text.slice(start);
   const close = rest.indexOf("```");
-  if (close < 0) return new Set();
+  if (close < 0) {
+    return new Set();
+  }
   return new Set(
     rest
       .slice(0, close)

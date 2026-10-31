@@ -35,33 +35,35 @@ const RawWorkflowSchema = z.looseObject({
   nodes: z.array(z.looseObject({ type: z.string() })).min(1),
 });
 
-export interface ParsedWorkflow {
-  /** 工作流(RAW)格式原件（逐字落库；格式不认识时为 null）。 */
-  rawJson: unknown;
+export type ParsedWorkflow = {
+  format: "raw";
   /** 节点坐标：RAW 自带 `pos` 时原样取出；没有则 null（由客户端自动布局兜底）。 */
   positions: Record<string, [number, number]> | null;
+  /** 工作流(RAW)格式原件（逐字落库；格式不认识时为 null）。 */
+  rawJson: unknown;
   taskType: string;
   warnings: Array<string>;
-  format: "raw";
-}
+};
 
 /* 读一个本地文件，返回它的文本与 mtime（毫秒）。
  * 路径缺失或不可读时抛出带可读说明的错误。 */
-export async function readLocalFile(absPath: string): Promise<{ text: string; mtimeMs: number }> {
+export async function readLocalFile(absPath: string): Promise<{ mtimeMs: number; text: string }> {
   let stat;
   try {
     stat = await fs.stat(absPath);
-  } catch (e: unknown) {
+  } catch (error: unknown) {
     /* 只取 `code` 判「文件不存在」这一档；文案一律由 `errorText` 产出
      *（它带网络层翻译，`String(e)` 那一路会把非 Error 抛值渲染成
      * `[object Object]`）。 */
-    const err = /* SAFETY: 类型断言已复核 */ (typeof e === "object" && e !== null ? e : {}) as {
+    const err = /* SAFETY: 类型断言已复核 */ (
+      typeof error === "object" && error !== null ? error : {}
+    ) as {
       code?: string;
     };
     if (err.code === "ENOENT") {
-      throw new Error("本地文件不存在", { cause: e });
+      throw new Error("本地文件不存在", { cause: error });
     }
-    throw new Error(errorText(e, "无法读取本地文件"), { cause: e });
+    throw new Error(errorText(error, "无法读取本地文件"), { cause: error });
   }
   const text = await fs.readFile(absPath, "utf-8");
   return { text, mtimeMs: stat.mtimeMs };
@@ -80,8 +82,8 @@ export function checksum(text: string): string {
 export async function parseWorkflowContent(
   content: string,
   opts: {
-    preferredTaskType?: string;
     defaultName?: string;
+    preferredTaskType?: string;
   } = {},
 ): Promise<ParsedWorkflow> {
   let candidate: unknown;
@@ -130,21 +132,21 @@ export async function parseWorkflowContent(
   return { rawJson, positions, taskType, warnings, format: "raw" };
 }
 
-export interface ImportedFromFile extends ParsedWorkflow {
-  sourcePath: string;
+export type ImportedFromFile = {
   sourceChecksum: string;
   /** 文件 mtime，单位是秒（epoch）—— 它存在 SQLite 的 32 位 INT 列里，
    *  因此要保持在 2.1e9 以下，不能用毫秒（会溢出 INT）。 */
   sourceMtime: number;
-}
+  sourcePath: string;
+} & ParsedWorkflow;
 
 /* 从本地路径做一次性导入：读文件，返回全部规整字段，
  * 以及要写进 WorkflowTemplate 行的追踪元数据。 */
 export async function importFromLocalPath(
   absPath: string,
   opts: {
-    preferredTaskType?: string;
     defaultName?: string;
+    preferredTaskType?: string;
   } = {},
 ): Promise<ImportedFromFile> {
   const { text, mtimeMs } = await readLocalFile(absPath);
@@ -157,23 +159,23 @@ export async function importFromLocalPath(
   };
 }
 
-export interface ReimportResult {
+export type ReimportResult = {
   /* 文件已从磁盘上消失 —— 调用方应给出「源文件缺失」的提示 */
   missing?: boolean;
   /* 文件还在，但 mtime 与上次导入一致（快路径，不重新解析） */
   unchanged?: boolean;
   /* 文件变了 → 重新解析出的字段，要写回数据库 */
   update?: {
-    rawJson: unknown;
-    positions: Record<string, [number, number]> | null;
     /* 重导入**不碰**这一列（磁盘文件里没有「作者画的线」），恒为 null ——
      *  类型按权威形状声明，不写一份自己的窄声明。 */
     paramMap: WorkflowParamMap | null;
-    taskType: string;
+    positions: Record<string, [number, number]> | null;
+    rawJson: unknown;
     sourceChecksum: string;
     sourceMtime: number;
+    taskType: string;
   };
-}
+};
 
 /**
  * 重新读取此前导入过的工作流的源文件，判断有没有变化、变化了什么。
@@ -190,21 +192,23 @@ export interface ReimportResult {
  * taskType（旧逻辑会重新推断并覆盖用户已手动设置的值），传 `existingTaskType`
  * 透传过来 —— 用户的显式选择优先级最高。 */
 export async function reimportFromSource(tpl: {
-  sourcePath: string;
-  sourceMtime?: number | null;
-  sourceChecksum?: string | null;
   /** 已存在的 taskType（用户在 UI 里手动设过的）。透传给 parseWorkflowContent
    *  作为 preferredTaskType，避免重导入时把空值回写覆盖。 */
   existingTaskType?: string | null;
+  sourceChecksum?: string | null;
+  sourceMtime?: number | null;
+  sourcePath: string;
 }): Promise<ReimportResult> {
   let stat;
   try {
     stat = await fs.stat(tpl.sourcePath);
-  } catch (e: unknown) {
-    const err = /* SAFETY: 类型断言已复核 */ e as {
+  } catch (error: unknown) {
+    const err = /* SAFETY: 类型断言已复核 */ error as {
       code?: string;
     } | null;
-    if (err?.code === "ENOENT") return { missing: true };
+    if (err?.code === "ENOENT") {
+      return { missing: true };
+    }
     return { missing: true };
   }
 

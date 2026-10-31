@@ -91,7 +91,9 @@ describe("createProbeTree —— 一次性克隆带进工作树的脏，且不�
   it("dispose 之后：登记与临时目录都没了（不留在仓库上）", () => {
     /* 用守卫而不是 `!`：上一条没建成就是本文件的 bug，这里要**带着那句话**失败，
      * 而不是拿一个断言把 null 抹掉（抹掉之后 `dir` 是 undefined，测试会以另一种形态红）。 */
-    if (!tree) throw new Error("上一条没建出克隆，这条就没有可验的对象");
+    if (!tree) {
+      throw new Error("上一条没建出克隆，这条就没有可验的对象");
+    }
     const dir = tree.dir;
     /* 比较一律用**规范化后的完整路径**：`git worktree list` 在 Windows 上打的是
      * `G:/Temp/...` 形，而 Node 给的是反斜杠形。也不要拿 "tree" 这种子串去认 ——

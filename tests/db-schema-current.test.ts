@@ -31,13 +31,13 @@ let dbFile: string;
 let databaseUrl: string;
 
 type PushResult = {
-  converged: boolean;
   alreadyCurrent: boolean;
-  invocationFailed: boolean;
   blockedByTty: boolean;
+  converged: boolean;
   error: Error | null;
-  firstOutput: string;
   finalOutput: string;
+  firstOutput: string;
+  invocationFailed: boolean;
 };
 
 /** drizzle-kit 被 TTY 挡下时的真实输出形态（含它接在后面的报错堆栈）。 */
@@ -88,8 +88,8 @@ Error: Interactive prompts require a TTY terminal (process.stdin.isTTY or proces
 `;
 
 function pushStub(options: {
-  dryOutput: string;
   applyChanges?: () => void;
+  dryOutput: string;
 }): (root: string, opts?: Record<string, unknown>) => PushResult {
   return (_root, opts) => {
     if (opts?.force !== true) {

@@ -22,14 +22,12 @@ import { HumanVerdictRow } from "./HumanVerdictRow";
 import { ReviewVerdictDialogButton } from "./ReviewVerdictDialogButton";
 import { useScriptReview } from "./hooks/use-script-review";
 
-export interface ScriptReviewButtonProps {
+export type ScriptReviewButtonProps = {
   /** 定向改写成功后把新剧本交回编辑器 / 预览（人机接力：人可接着手改）。 */
   onScriptRevised: (markdown: string) => void;
-}
+};
 
-export function ScriptReviewButton({
-  onScriptRevised,
-}: ScriptReviewButtonProps) {
+export function ScriptReviewButton({ onScriptRevised }: ScriptReviewButtonProps) {
   const [projectId] = useState<string>(() => getActiveId() ?? "");
   const review = useScriptReview(projectId, onScriptRevised);
   const toast = useToast();
@@ -43,23 +41,7 @@ export function ScriptReviewButton({
 
   return (
     <ReviewVerdictDialogButton
-      label="AI 评审这份剧本"
-      title="剧本评审"
-      description="由 AI 按评分量表给这份剧本打分；不合格可「按意见改写」定向打磨，旧版自动留档。"
       busyText={review.revising ? "正在按意见改写…" : "正在评审…"}
-      dimensionLabels={dimensionLabels}
-      footerExtra={
-        <HumanVerdictRow
-          verdict={scriptVerdict}
-          onSubmit={async (pass, note) => {
-            const saved = await setScriptHumanVerdict(projectId, pass, note);
-            setScriptVerdict(saved);
-            toast.success(
-              pass ? "已人工通过：剧本定稿" : "已人工否决：请修改后再评",
-            );
-          }}
-        />
-      }
       controller={{
         verdict: review.verdict,
         history: review.history,
@@ -68,6 +50,20 @@ export function ScriptReviewButton({
         review: () => review.review(),
         revise: () => review.revise(),
       }}
+      description="由 AI 按评分量表给这份剧本打分；不合格可「按意见改写」定向打磨，旧版自动留档。"
+      dimensionLabels={dimensionLabels}
+      footerExtra={
+        <HumanVerdictRow
+          onSubmit={async (pass, note) => {
+            const saved = await setScriptHumanVerdict(projectId, pass, note);
+            setScriptVerdict(saved);
+            toast.success(pass ? "已人工通过：剧本定稿" : "已人工否决：请修改后再评");
+          }}
+          verdict={scriptVerdict}
+        />
+      }
+      label="AI 评审这份剧本"
+      title="剧本评审"
     />
   );
 }

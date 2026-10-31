@@ -34,10 +34,10 @@
 
 /** 解析链端口 + origin + 来源的形状（生成的那份 JSON 与这里逐字段对齐）。 */
 export type AppOriginOverride = {
-  /** 解析链端口（应用实际监听的端口）。 */
-  APP_DEV_PORT: number;
   /** 真 tRPC 链路指向的应用 origin。 */
   APP_DEV_ORIGIN: string;
+  /** 解析链端口（应用实际监听的端口）。 */
+  APP_DEV_PORT: number;
   /** 上面那个值是怎么来的（`env` / `derived` / `fallback` / `default`）。 */
   APP_DEV_PORT_SOURCE: string;
 };

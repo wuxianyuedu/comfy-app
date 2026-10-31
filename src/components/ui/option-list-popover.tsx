@@ -28,18 +28,18 @@ import { cn } from "~/lib/utils";
  * （计数、类型章、颜色点）。两者语义不同，硬合会把 combobox 的 a11y 契约
  * 塞进 chip。
  */
-export interface OptionListItem {
-  /** 选项值（与 `value` 比较判定选中）。 */
-  value: string;
+export type OptionListItem = {
   /** 行文案。 */
   label: string;
-  /** 行右侧的附加内容（计数 / 类型章），可为空。 */
-  suffix?: ReactNode;
   /** 行左侧的装饰（颜色点 / 状态点），可为空。 */
   prefix?: ReactNode;
+  /** 行右侧的附加内容（计数 / 类型章），可为空。 */
+  suffix?: ReactNode;
   /** 行 `title`（悬停提示）。 */
   title?: string;
-}
+  /** 选项值（与 `value` 比较判定选中）。 */
+  value: string;
+};
 
 export function OptionListPopover({
   value,
@@ -63,18 +63,18 @@ export function OptionListPopover({
   disabled,
   align = "start",
 }: {
-  value: string;
+  align?: "start" | "center" | "end";
+  contentClassName?: string;
+  disabled?: boolean;
+  emptyHint?: ReactNode;
   items: Array<OptionListItem>;
+  listClassName?: string;
+  onOpenChange?: (open: boolean) => void;
   onSelect: (value: string) => void;
   trigger: ReactNode;
-  contentClassName?: string;
   triggerClassName?: string;
   triggerTitle?: string;
-  listClassName?: string;
-  emptyHint?: ReactNode;
-  onOpenChange?: (open: boolean) => void;
-  disabled?: boolean;
-  align?: "start" | "center" | "end";
+  value: string;
 }) {
   const [open, setOpen] = useState(false);
   /* 内部 state 与外部回调一起用：外部只想「被通知」时（如画布变换后关闭）
@@ -85,15 +85,15 @@ export function OptionListPopover({
   };
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover onOpenChange={handleOpenChange} open={open}>
       <PopoverTrigger
-        type="button"
-        disabled={disabled}
-        title={triggerTitle}
         className={cn(
           "group/popover-trigger nodrag nopan flex items-center gap-1.5",
           triggerClassName,
         )}
+        disabled={disabled}
+        title={triggerTitle}
+        type="button"
       >
         {trigger}
         {/* 展开指示：两个形态由 `group-aria-expanded` 切换 —— 与
@@ -123,21 +123,21 @@ export function OptionListPopover({
           const selected = item.value === value;
           return (
             <Button
-              key={item.value}
-              variant="ghost"
-              role="option"
               aria-selected={selected}
-              title={item.title}
-              onClick={() => {
-                onSelect(item.value);
-                setOpen(false);
-              }}
               className={cn(
                 "text-2xs flex h-auto w-full items-center gap-2 rounded-none px-3 py-1.5 text-left font-normal transition-colors",
                 selected
                   ? "bg-primary-500/20 text-primary-strong"
                   : "text-ink-soft hover:bg-subtle",
               )}
+              key={item.value}
+              onClick={() => {
+                onSelect(item.value);
+                setOpen(false);
+              }}
+              role="option"
+              title={item.title}
+              variant="ghost"
             >
               {item.prefix}
               <span className="min-w-0 flex-1 truncate">{item.label}</span>

@@ -47,16 +47,12 @@ function readAppOriginEnv(): Record<string, string> {
   const file = path.join(here, "generated", "app-origin.json");
   let parsed = null;
   try {
-    const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Record<
-      string,
-      unknown
-    >;
+    /* SAFETY: 类型断言已复核 */
+    const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
     parsed = parseOverride({
       APP_DEV_PORT: raw[APP_ORIGIN_ENV_KEYS.APP_DEV_PORT] ?? raw.APP_DEV_PORT,
-      APP_DEV_ORIGIN:
-        raw[APP_ORIGIN_ENV_KEYS.APP_DEV_ORIGIN] ?? raw.APP_DEV_ORIGIN,
-      APP_DEV_PORT_SOURCE:
-        raw[APP_ORIGIN_ENV_KEYS.APP_DEV_PORT_SOURCE] ?? raw.APP_DEV_PORT_SOURCE,
+      APP_DEV_ORIGIN: raw[APP_ORIGIN_ENV_KEYS.APP_DEV_ORIGIN] ?? raw.APP_DEV_ORIGIN,
+      APP_DEV_PORT_SOURCE: raw[APP_ORIGIN_ENV_KEYS.APP_DEV_PORT_SOURCE] ?? raw.APP_DEV_PORT_SOURCE,
     });
   } catch {
     /* 文件不在 / 读不动：两种情况都退回缺省。 */
@@ -98,10 +94,7 @@ const config: StorybookConfig = {
    * `/storybook-assets/` 前缀下）。
    *
    * 静态产物落仓库根的 storybook-static/（已 gitignore），不进 next build 的图。 */
-  staticDirs: [
-    "../public",
-    { from: "../.storybook/assets", to: "/storybook-assets" },
-  ],
+  staticDirs: ["../public", { from: "../.storybook/assets", to: "/storybook-assets" }],
   typescript: {
     // 类型正确性由仓库的 `tsc --noEmit` 统一保证，故事文件也在 tsconfig 的
     // include 里 —— 这里不重复做一次 react-docgen 的宽松检查。

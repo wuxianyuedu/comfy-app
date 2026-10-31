@@ -34,7 +34,7 @@ describe("extractNoteTitle", () => {
   it("无标题时取首个非空行并截断", () => {
     expect(extractNoteTitle("  hello  ")).toBe("hello");
     const long = "a".repeat(40);
-    expect(extractNoteTitle(long)).toBe("a".repeat(30) + "…");
+    expect(extractNoteTitle(long)).toBe(`${"a".repeat(30)}…`);
   });
 
   it("fallback 优先，并剥离 Note: 前缀", () => {

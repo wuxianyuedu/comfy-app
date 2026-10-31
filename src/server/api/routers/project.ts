@@ -76,9 +76,15 @@ export const projectRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "项目不存在" });
       }
       const patch: Record<string, unknown> = {};
-      if (input.name !== undefined) patch.name = input.name;
-      if (input.nodes !== undefined) patch.nodes = input.nodes;
-      if (input.edges !== undefined) patch.edges = input.edges;
+      if (input.name !== undefined) {
+        patch.name = input.name;
+      }
+      if (input.nodes !== undefined) {
+        patch.nodes = input.nodes;
+      }
+      if (input.edges !== undefined) {
+        patch.edges = input.edges;
+      }
       return projectRepository.update(input.projectId, patch);
     }),
 

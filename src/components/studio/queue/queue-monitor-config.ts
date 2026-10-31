@@ -24,11 +24,11 @@ export const QUEUED_WINDOW = 50;
 export const RECENT_WINDOW = 8;
 
 /** 三个桶：跑动中 / 排队中 / 最近结果。 */
-export interface QueueBuckets {
-  running: Array<QueueRow>;
+export type QueueBuckets = {
   queued: Array<QueueRow>;
   recent: Array<QueueRow>;
-}
+  running: Array<QueueRow>;
+};
 
 /**
  * 按状态分桶。
@@ -75,7 +75,7 @@ export function bucketQueueRows(rows: ReadonlyArray<QueueRow>): QueueBuckets {
  */
 export function queuedWithPosition(
   queued: ReadonlyArray<QueueRow>,
-): Array<{ row: QueueRow; position: number }> {
+): Array<{ position: number; row: QueueRow }> {
   const total = queued.length;
   return queued
     .map((row, index) => ({ row, position: total - index }))
@@ -97,14 +97,18 @@ export function recentWithin(rows: ReadonlyArray<QueueRow>): Array<QueueRow> {
  * 宁缺毋滥：这一屏的数字是用户决定「要不要再提交一条」的依据。
  */
 export function estimateRemainingMs(elapsedMs: number, progressPct: number): number | null {
-  if (progressPct <= 0 || progressPct >= 100) return null;
+  if (progressPct <= 0 || progressPct >= 100) {
+    return null;
+  }
   const total = elapsedMs / (progressPct / 100);
   return Math.max(0, Math.round(total - elapsedMs));
 }
 
 /** 「剩余」那一格：算不出就明说在估算，不留空也不给假数。 */
 export function remainingText(remainingMs: number | null): string {
-  if (remainingMs === null) return "估算中";
+  if (remainingMs === null) {
+    return "估算中";
+  }
   return `约 ${formatElapsed(remainingMs)}`;
 }
 
@@ -115,7 +119,9 @@ export function remainingText(remainingMs: number | null): string {
  * `00:00` 会让人以为刚开跑，那是两种完全不同的状态。
  */
 export function runningElapsedText(elapsedMs: number | null): string {
-  if (elapsedMs === null) return "尚未开跑";
+  if (elapsedMs === null) {
+    return "尚未开跑";
+  }
   return formatElapsed(elapsedMs);
 }
 
@@ -126,7 +132,7 @@ export function runningElapsedText(elapsedMs: number | null): string {
  * 离线但列表里还有任务时不说这句 —— 那种情形列表照常铺开，只在顶部放一条横幅
  * （见 `offlineBannerText`），整页被空态替换正是「状态闪一下」观感的放大器。
  */
-export function offlineEmptyText(): { title: string; description: string } {
+export function offlineEmptyText(): { description: string; title: string } {
   return {
     title: "ComfyUI 未运行",
     description: "队列里的任务不会开始。启动后端后这一屏会自动接上，不用手动刷新。",
@@ -137,7 +143,7 @@ export function offlineEmptyText(): { title: string; description: string } {
  * 离线横幅（列表还在时顶部的提示条）：只说「现在不会开始 + 连上会自动接上」，
  * 不报排队数 —— 排队数在页头和列表里都看得见，横幅再报一遍是同一件事说两遍。
  */
-export function offlineBannerText(): { title: string; description: string } {
+export function offlineBannerText(): { description: string; title: string } {
   return {
     title: "ComfyUI 未连接",
     description: "队列里的任务暂时不会开始；连接恢复后这一屏自动接上，不用手动刷新。",
@@ -154,7 +160,7 @@ export function offlineBannerText(): { title: string; description: string } {
 export function runningHintText(
   online: boolean,
   waitingCount: number,
-): { title: string; description: string } {
+): { description: string; title: string } {
   if (!online) {
     return {
       title: "没有在跑的任务",

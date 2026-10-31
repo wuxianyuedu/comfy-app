@@ -27,31 +27,23 @@ export function LlmRemoteSection({
 }) {
   /* 远程模型按用途分组展示（文本 / 图片 / 视频）；kind 缺省的历史条目
    * 按文本模型归组。行内不再重复用途标签 —— 分组本身就是用途。 */
-  function remoteModelGroup(
-    kind: RemoteModelKind,
-    title: string,
-    emptyHint: string,
-  ) {
-    const entries = c.remoteModelList.filter(
-      (entry) => (entry.kind ?? "chat") === kind,
-    );
+  function remoteModelGroup(kind: RemoteModelKind, title: string, emptyHint: string) {
+    const entries = c.remoteModelList.filter((entry) => (entry.kind ?? "chat") === kind);
     return (
       /* 分组头是一行**轻量区头**（标题 + 计数 + 右端动作），不是一个各自套着
          边框的卡中卡 —— 三个空分组此前各画一圈边框 + 16px 内距，只为装一行
          「还没有…」和一颗按钮，一屏里长出三个几乎全空的盒子（视觉上比
          「这里面有什么」更响）。现在分组由**一行区头 + 一组行**构成，
          空分组只剩那一行提示，边框留给真正的条目。 */
-      <section className="mb-5" aria-label={title}>
+      <section aria-label={title} className="mb-5">
         <div className="border-border-subtle mb-2 flex items-center gap-2 border-b pb-1.5">
           <h3 className="u-title">{title}</h3>
-          <span className="text-ink-fainter text-2xs tabular-nums">
-            {entries.length}
-          </span>
+          <span className="text-ink-fainter text-2xs tabular-nums">{entries.length}</span>
           <Button
-            variant="outline"
-            size="xs"
-            onClick={() => d.openAddDialog(kind)}
             className="text-muted-foreground hover:text-ink text-2xs ml-auto h-auto rounded-md px-2 py-1"
+            onClick={() => d.openAddDialog(kind)}
+            size="xs"
+            variant="outline"
           >
             ＋ 添加模型
           </Button>
@@ -59,66 +51,58 @@ export function LlmRemoteSection({
         {entries.length > 0 ? (
           <div className="flex flex-col gap-1.5">
             {entries.map((entry) => {
-              const thisProbe =
-                d.rowProbe?.name === entry.name ? d.rowProbe : null;
+              const thisProbe = d.rowProbe?.name === entry.name ? d.rowProbe : null;
               const rowMsg = thisProbe ? thisProbe.msg : null;
               return (
-                <div key={entry.name} className="flex-col gap-1">
+                <div className="flex-col gap-1" key={entry.name}>
                   <div className="border-border flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                     <span className="min-w-0 flex-1 truncate">
                       <span className="text-ink">{entry.name}</span>
                       {entry.baseUrl && (
-                        <span className="text-muted-foreground text-3xs ml-2">
-                          独立接口
-                        </span>
+                        <span className="text-muted-foreground text-3xs ml-2">独立接口</span>
                       )}
                       {entry.apiKey && (
-                        <span className="text-muted-foreground text-3xs ml-1.5">
-                          独立密钥
-                        </span>
+                        <span className="text-muted-foreground text-3xs ml-1.5">独立密钥</span>
                       )}
                     </span>
-                    <Hint
-                      label="按该条目配置探测接口连通性（不生成、不耗额度）"
-                      wrap
-                    >
+                    <Hint label="按该条目配置探测接口连通性（不生成、不耗额度）" wrap>
                       <Button
-                        variant="outline"
-                        size="xs"
+                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
                         disabled={!!thisProbe?.running}
                         onClick={() => void d.runEntryConnectionTest(entry)}
-                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
+                        size="xs"
+                        variant="outline"
                       >
                         {thisProbe?.running ? "连接测试中…" : "测试连接"}
                       </Button>
                     </Hint>
                     <Hint label="按实际用法发起一次真实生成调用（参数可在弹窗内自定义）">
                       <Button
-                        variant="outline"
-                        size="xs"
-                        onClick={() => d.openUsageTest(kind, entry)}
                         className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
+                        onClick={() => d.openUsageTest(kind, entry)}
+                        size="xs"
+                        variant="outline"
                       >
                         测试生成
                       </Button>
                     </Hint>
                     <Hint label="编辑接口地址 / 密钥 / 名称">
                       <Button
-                        variant="outline"
-                        size="xs"
-                        onClick={() => d.openEditDialog(entry)}
                         className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
+                        onClick={() => d.openEditDialog(entry)}
+                        size="xs"
+                        variant="outline"
                       >
                         编辑
                       </Button>
                     </Hint>
                     <Hint label="移除该模型（即时保存）">
                       <Button
-                        variant="ghost"
-                        size="icon-xs"
                         aria-label={`移除模型 ${entry.name}`}
-                        onClick={() => void c.removeRemoteModel(entry.name)}
                         className="text-muted-foreground hover:text-danger-strong"
+                        onClick={() => void c.removeRemoteModel(entry.name)}
+                        size="icon-xs"
+                        variant="ghost"
                       >
                         ✕
                       </Button>

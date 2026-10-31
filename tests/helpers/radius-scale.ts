@@ -33,7 +33,9 @@ export function parseDerivations(css: string): Map<string, RadiusDerivation> {
   for (const m of css.matchAll(
     /^\s*(--radius-[a-z0-9]+)\s*:\s*(?:var\(--radius\)|calc\(var\(--radius\)\s*(?:(\*)\s*([0-9.]+)|([+-])\s*([0-9.]+)px)\))\s*;/gm,
   )) {
-    if (!m[1]) continue;
+    if (!m[1]) {
+      continue;
+    }
     if (m[2] === "*") {
       derivations.set(m[1], {
         coef: Number.parseFloat(m[3] ?? "1"),

@@ -16,37 +16,37 @@ import {
 
 /** 生产数据里的角色卡（JSON 列，形状见 `src/lib/workshop/types.ts` 的 `Character`）。 */
 type ProductionCharacter = {
-  id?: string;
-  name?: string;
   ageGender?: string;
   appearance?: string;
   costume?: string;
-  personality?: string;
-  temperament?: string;
-  styleTags?: Array<unknown>;
-  skillSlug?: string | null;
-  positivePrompt?: string;
+  id?: string;
+  name?: string;
   negativePrompt?: string;
   params?: unknown;
-  portraitUrl?: string | null;
+  personality?: string;
   portraits?: Array<unknown>;
+  portraitUrl?: string | null;
+  positivePrompt?: string;
+  skillSlug?: string | null;
+  styleTags?: Array<unknown>;
+  temperament?: string;
 };
 
 /** 把生产数据里的角色卡映射成系列角色库实体的可写字段（FR-SR-03：引用而非拷贝）。 */
 function productionCharacterToLibrary(pc: ProductionCharacter): {
-  name: string;
   ageGender: string;
   appearance: string;
   costume: string;
-  personality: string;
-  temperament: string;
-  styleTags: Array<unknown>;
-  skillSlug: string | null;
-  positivePrompt: string;
+  name: string;
   negativePrompt: string;
   params: unknown;
-  portraitUrl: string | null;
+  personality: string;
   portraits: Array<unknown>;
+  portraitUrl: string | null;
+  positivePrompt: string;
+  skillSlug: string | null;
+  styleTags: Array<unknown>;
+  temperament: string;
 } {
   return {
     name: pc.name ?? "",
@@ -67,20 +67,20 @@ function productionCharacterToLibrary(pc: ProductionCharacter): {
 
 /** 系列角色库实体 → 生产数据角色卡（注入时落回 `production.characters`）。 */
 function libraryCharacterToProduction(c: {
-  id: string;
-  name: string;
   ageGender: string;
   appearance: string;
   costume: string;
-  personality: string;
-  temperament: string;
-  styleTags: unknown;
-  skillSlug: string | null;
-  positivePrompt: string;
+  id: string;
+  name: string;
   negativePrompt: string;
   params: unknown;
-  portraitUrl: string | null;
+  personality: string;
   portraits: unknown;
+  portraitUrl: string | null;
+  positivePrompt: string;
+  skillSlug: string | null;
+  styleTags: unknown;
+  temperament: string;
 }): Record<string, unknown> {
   return {
     id: c.id,
@@ -104,7 +104,9 @@ function libraryCharacterToProduction(c: {
 async function assertCharacterOwner(ctx: Ctx, id: string) {
   const rows = await ctx.db.select().from(character).where(eq(character.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "角色不存在" });
+  if (!row) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "角色不存在" });
+  }
   await assertSeriesOwner(ctx, row.seriesId);
   return row;
 }
@@ -142,7 +144,9 @@ async function assertSeriesOwner(ctx: Ctx, id: string) {
 async function assertSeasonOwner(ctx: Ctx, id: string) {
   const rows = await ctx.db.select().from(season).where(eq(season.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "季不存在" });
+  if (!row) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "季不存在" });
+  }
   await assertSeriesOwner(ctx, row.seriesId);
   return row;
 }
@@ -151,7 +155,9 @@ async function assertSeasonOwner(ctx: Ctx, id: string) {
 async function assertEpisodeOwner(ctx: Ctx, id: string) {
   const rows = await ctx.db.select().from(episode).where(eq(episode.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "集不存在" });
+  if (!row) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "集不存在" });
+  }
   await assertSeasonOwner(ctx, row.seasonId);
   return row;
 }
@@ -203,10 +209,18 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertSeriesOwner(ctx, input.id);
       const patch: Partial<typeof series.$inferInsert> = {};
-      if (input.title !== undefined) patch.title = input.title;
-      if (input.description !== undefined) patch.description = input.description;
-      if (input.coverUrl !== undefined) patch.coverUrl = input.coverUrl;
-      if (input.styleSlug !== undefined) patch.styleSlug = input.styleSlug;
+      if (input.title !== undefined) {
+        patch.title = input.title;
+      }
+      if (input.description !== undefined) {
+        patch.description = input.description;
+      }
+      if (input.coverUrl !== undefined) {
+        patch.coverUrl = input.coverUrl;
+      }
+      if (input.styleSlug !== undefined) {
+        patch.styleSlug = input.styleSlug;
+      }
       await ctx.db.update(series).set(patch).where(eq(series.id, input.id));
       return (await ctx.db.select().from(series).where(eq(series.id, input.id)).limit(1))[0];
     }),
@@ -264,8 +278,12 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertSeasonOwner(ctx, input.id);
       const patch: Partial<typeof season.$inferInsert> = {};
-      if (input.seasonNumber !== undefined) patch.seasonNumber = input.seasonNumber;
-      if (input.title !== undefined) patch.title = input.title;
+      if (input.seasonNumber !== undefined) {
+        patch.seasonNumber = input.seasonNumber;
+      }
+      if (input.title !== undefined) {
+        patch.title = input.title;
+      }
       await ctx.db.update(season).set(patch).where(eq(season.id, input.id));
       return (await ctx.db.select().from(season).where(eq(season.id, input.id)).limit(1))[0];
     }),
@@ -335,12 +353,24 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertEpisodeOwner(ctx, input.id);
       const patch: Partial<typeof episode.$inferInsert> = {};
-      if (input.projectId !== undefined) patch.projectId = input.projectId;
-      if (input.episodeNumber !== undefined) patch.episodeNumber = input.episodeNumber;
-      if (input.title !== undefined) patch.title = input.title;
-      if (input.synopsis !== undefined) patch.synopsis = input.synopsis;
-      if (input.targetDurationSec !== undefined) patch.targetDurationSec = input.targetDurationSec;
-      if (input.status !== undefined) patch.status = input.status;
+      if (input.projectId !== undefined) {
+        patch.projectId = input.projectId;
+      }
+      if (input.episodeNumber !== undefined) {
+        patch.episodeNumber = input.episodeNumber;
+      }
+      if (input.title !== undefined) {
+        patch.title = input.title;
+      }
+      if (input.synopsis !== undefined) {
+        patch.synopsis = input.synopsis;
+      }
+      if (input.targetDurationSec !== undefined) {
+        patch.targetDurationSec = input.targetDurationSec;
+      }
+      if (input.status !== undefined) {
+        patch.status = input.status;
+      }
       await ctx.db.update(episode).set(patch).where(eq(episode.id, input.id));
       return (await ctx.db.select().from(episode).where(eq(episode.id, input.id)).limit(1))[0];
     }),
@@ -362,11 +392,17 @@ export const seriesRouter = createTRPCRouter({
         .from(episode)
         .where(eq(episode.projectId, input.projectId))
         .limit(1);
-      if (!ep) return null;
+      if (!ep) {
+        return null;
+      }
       const [se] = await ctx.db.select().from(season).where(eq(season.id, ep.seasonId)).limit(1);
-      if (!se) return null;
+      if (!se) {
+        return null;
+      }
       const owner = await loadSeries(ctx, se.seriesId);
-      if (owner?.userId !== ctx.user.id) return null;
+      if (owner?.userId !== ctx.user.id) {
+        return null;
+      }
       return ep;
     }),
 
@@ -384,7 +420,9 @@ export const seriesRouter = createTRPCRouter({
         .from(episode)
         .where(eq(episode.id, input.episodeId))
         .limit(1);
-      if (!ep) throw new TRPCError({ code: "NOT_FOUND", message: "集不存在" });
+      if (!ep) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "集不存在" });
+      }
       await assertSeasonOwner(ctx, ep.seasonId);
       const [row] = await ctx.db
         .update(episode)
@@ -473,19 +511,45 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertCharacterOwner(ctx, input.id);
       const patch: Partial<typeof character.$inferInsert> = {};
-      if (input.name !== undefined) patch.name = input.name;
-      if (input.ageGender !== undefined) patch.ageGender = input.ageGender;
-      if (input.appearance !== undefined) patch.appearance = input.appearance;
-      if (input.costume !== undefined) patch.costume = input.costume;
-      if (input.personality !== undefined) patch.personality = input.personality;
-      if (input.temperament !== undefined) patch.temperament = input.temperament;
-      if (input.styleTags !== undefined) patch.styleTags = input.styleTags;
-      if (input.skillSlug !== undefined) patch.skillSlug = input.skillSlug ?? null;
-      if (input.positivePrompt !== undefined) patch.positivePrompt = input.positivePrompt;
-      if (input.negativePrompt !== undefined) patch.negativePrompt = input.negativePrompt;
-      if (input.params !== undefined) patch.params = input.params;
-      if (input.portraitUrl !== undefined) patch.portraitUrl = input.portraitUrl ?? null;
-      if (input.portraits !== undefined) patch.portraits = input.portraits;
+      if (input.name !== undefined) {
+        patch.name = input.name;
+      }
+      if (input.ageGender !== undefined) {
+        patch.ageGender = input.ageGender;
+      }
+      if (input.appearance !== undefined) {
+        patch.appearance = input.appearance;
+      }
+      if (input.costume !== undefined) {
+        patch.costume = input.costume;
+      }
+      if (input.personality !== undefined) {
+        patch.personality = input.personality;
+      }
+      if (input.temperament !== undefined) {
+        patch.temperament = input.temperament;
+      }
+      if (input.styleTags !== undefined) {
+        patch.styleTags = input.styleTags;
+      }
+      if (input.skillSlug !== undefined) {
+        patch.skillSlug = input.skillSlug ?? null;
+      }
+      if (input.positivePrompt !== undefined) {
+        patch.positivePrompt = input.positivePrompt;
+      }
+      if (input.negativePrompt !== undefined) {
+        patch.negativePrompt = input.negativePrompt;
+      }
+      if (input.params !== undefined) {
+        patch.params = input.params;
+      }
+      if (input.portraitUrl !== undefined) {
+        patch.portraitUrl = input.portraitUrl ?? null;
+      }
+      if (input.portraits !== undefined) {
+        patch.portraits = input.portraits;
+      }
       await ctx.db.update(character).set(patch).where(eq(character.id, input.id));
       return (await ctx.db.select().from(character).where(eq(character.id, input.id)).limit(1))[0];
     }),
@@ -642,7 +706,9 @@ export const seriesRouter = createTRPCRouter({
       const linkedIds = new Set<string>();
       for (const pc of prodChars) {
         const name = pc?.name ?? "";
-        if (!name) continue;
+        if (!name) {
+          continue;
+        }
         const [existing] = await ctx.db
           .select()
           .from(character)
@@ -717,7 +783,9 @@ export const seriesRouter = createTRPCRouter({
       const byName = new Map<string, Record<string, unknown>>();
       for (const c of prodChars) {
         const n = typeof c?.name === "string" ? c.name : "";
-        if (n) byName.set(n, c);
+        if (n) {
+          byName.set(n, c);
+        }
       }
       let injected = 0;
       let merged = 0;

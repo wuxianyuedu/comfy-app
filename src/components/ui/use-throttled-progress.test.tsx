@@ -81,7 +81,7 @@ describe("useThrottledProgress（单值）", () => {
 
   it("非有限数一律不写（NaN 不该变成假读数）", () => {
     const { result } = renderHook(() => useThrottledProgress(5));
-    act(() => result.current.report(NaN));
+    act(() => result.current.report(Number.NaN));
     expect(result.current.value).toBe(5);
     act(() => result.current.report(Infinity));
     expect(result.current.value).toBe(5);
@@ -90,7 +90,7 @@ describe("useThrottledProgress（单值）", () => {
   it("flush 收到非有限数时不写（只解除节流）", () => {
     const { result } = renderHook(() => useThrottledProgress(0));
     act(() => result.current.report(3));
-    act(() => result.current.flush(NaN));
+    act(() => result.current.flush(Number.NaN));
     expect(result.current.value).toBe(3);
   });
 
@@ -189,7 +189,7 @@ describe("useThrottledProgressMap（按条目）", () => {
 
   it("非有限值在 report 那一支就被拦下（不进窗口）", () => {
     const { result } = renderHook(() => useThrottledProgressMap());
-    act(() => result.current.report("a", NaN));
+    act(() => result.current.report("a", Number.NaN));
     act(() => result.current.report("a", Infinity));
     expect(result.current.progress).toEqual({});
   });
@@ -197,7 +197,7 @@ describe("useThrottledProgressMap（按条目）", () => {
   it("flush 收到非有限数时不写", () => {
     const { result } = renderHook(() => useThrottledProgressMap());
     act(() => result.current.report("a", 10));
-    act(() => result.current.flush("a", NaN));
+    act(() => result.current.flush("a", Number.NaN));
     expect(result.current.progress.a).toBe(10);
   });
 

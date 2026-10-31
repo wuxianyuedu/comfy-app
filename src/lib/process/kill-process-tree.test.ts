@@ -58,7 +58,9 @@ function descendantPids(root: number): Array<number> {
     const [pidStr, ppidStr] = line.trim().split(/\s+/);
     const pid = Number(pidStr);
     const ppid = Number(ppidStr);
-    if (!Number.isInteger(pid) || !Number.isInteger(ppid)) continue;
+    if (!Number.isInteger(pid) || !Number.isInteger(ppid)) {
+      continue;
+    }
     const arr = byParent.get(ppid) ?? [];
     arr.push(pid);
     byParent.set(ppid, arr);
@@ -67,7 +69,9 @@ function descendantPids(root: number): Array<number> {
   const stack = [...(byParent.get(root) ?? [])];
   while (stack.length) {
     const p = stack.pop()!;
-    if (acc.includes(p)) continue;
+    if (acc.includes(p)) {
+      continue;
+    }
     acc.push(p);
     stack.push(...(byParent.get(p) ?? []));
   }
@@ -106,11 +110,11 @@ describe("killProcessTree 平台分支", () => {
     // 这条**不切平台**：它问的是「在本机这个平台上，`killProcessTree` 走的是哪条
     // 分支」，两端各自的答案就是判据本身（切了反而在自问自答）。
     if (!isWindowsPlatform()) {
-      const r = await killProcessTree({ pid: 999999 });
+      const r = await killProcessTree({ pid: 999_999 });
       expect(r.via).not.toContain("taskkill");
       return;
     }
-    const r = await killProcessTree({ pid: 999999 });
+    const r = await killProcessTree({ pid: 999_999 });
     expect(r.via).toContain("/T");
     expect(r.via).toContain("/F");
   });

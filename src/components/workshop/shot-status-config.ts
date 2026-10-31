@@ -11,7 +11,7 @@
  *   · 配色给胶片带底部那一根 1px 状态条 —— 那里没有徽标容器，只能自己上 token。
  * 两者都按 `Shot["status"]` 穷举，新增一档会当场在类型上红。
  */
-import { type Shot } from "~/lib/workshop/types";
+import type { Shot } from "~/lib/workshop/types";
 
 export const SHOT_STATUS_LABEL: Record<Shot["status"], string> = {
   idle: "待生成",
@@ -37,11 +37,11 @@ export const SHOT_STATUS_BAR_CLASS: Record<Shot["status"], string> = {
 };
 
 /** 胶片带一帧的完整展示输入。 */
-export interface ShotFrameView {
-  status: Shot["status"];
-  label: string;
+export type ShotFrameView = {
   barClass: string;
-}
+  label: string;
+  status: Shot["status"];
+};
 
 export function shotFrameView(status: Shot["status"]): ShotFrameView {
   return {

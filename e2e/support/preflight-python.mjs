@@ -27,10 +27,7 @@
 import { spawnSync } from "node:child_process";
 
 import { whichCommand } from "../../src/lib/process/executable-resolve.ts";
-import {
-  pythonCandidates,
-  pythonProbeArgs,
-} from "../../src/lib/process/python-candidates.ts";
+import { pythonCandidates, pythonProbeArgs } from "../../src/lib/process/python-candidates.ts";
 import { resolvePython } from "../../src/lib/process/python-resolve.ts";
 
 /** 承载这一份判决的环境变量键（`e2e-run.mjs` 写、`playwright.config.ts` 读）。 */
@@ -153,11 +150,17 @@ export function encodePythonPreflight(result) {
  * @returns {{verdict: string, interpreter: string | null} | null}
  */
 export function decodePythonPreflight(raw) {
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   try {
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return null;
-    if (parsed.verdict !== "ready" && parsed.verdict !== "missing") return null;
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    if (parsed.verdict !== "ready" && parsed.verdict !== "missing") {
+      return null;
+    }
     return {
       verdict: parsed.verdict,
       interpreter: parsed.interpreter ?? null,
@@ -181,8 +184,7 @@ export function decodePythonPreflight(raw) {
 function bareSpawnDefault(command, args) {
   const r = spawnSync(command, args, { stdio: "ignore", windowsHide: true });
   /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。 */
-  const code = /** @type {NodeJS.ErrnoException | null | undefined} */ (r.error)
-    ?.code;
+  const code = /** @type {NodeJS.ErrnoException | null | undefined} */ (r.error)?.code;
   return code ?? null;
 }
 
@@ -193,7 +195,11 @@ function bareSpawnDefault(command, args) {
  *          bareSpawn?: (command: string, args: string[]) => string | null}} input
  * @returns {string[]}
  */
-export function pythonEvidence({ env = process.env, platform = process.platform, bareSpawn = bareSpawnDefault } = {}) {
+export function pythonEvidence({
+  env = process.env,
+  platform = process.platform,
+  bareSpawn = bareSpawnDefault,
+} = {}) {
   const lines = ["[e2e]   两条链的结论（排障用）："];
   /* ① 裸名字那一链（`findPython` 的语义）。
    *
@@ -201,11 +207,17 @@ export function pythonEvidence({ env = process.env, platform = process.platform,
    * 出来的是普通对象 —— 键名按 OS 存的写法来（Windows 常存成 `Path`）。
    * 于是「把 env 复制一份再传下去」会让 `env.PATH` 变成 `undefined`，逐目录扫于是
    * 扫一个空 PATH。这一行就是那一格的读数：**PATH 条目几条 / 见到的键是什么写法**。 */
-  const pathEntries = String(env.PATH ?? "").split(platform === "win32" ? ";" : ":").filter(Boolean);
+  const pathEntries = String(env.PATH ?? "")
+    .split(platform === "win32" ? ";" : ":")
+    .filter(Boolean);
   lines.push(
     `[e2e]     env 里的 PATH：${pathEntries.length} 条` +
       (pathEntries.length === 0
-        ? `（键写成 ${Object.keys(env).filter((k) => k.toLowerCase() === "path").join(" / ") || "一个都没有"}）`
+        ? `（键写成 ${
+            Object.keys(env)
+              .filter((k) => k.toLowerCase() === "path")
+              .join(" / ") || "一个都没有"
+          }）`
         : ""),
   );
   for (const name of pythonCandidates(platform)) {
