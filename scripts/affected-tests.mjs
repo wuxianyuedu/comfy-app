@@ -60,6 +60,8 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+import ts from "typescript";
+
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 import { selectFixedByFace } from "./fixed-gate-input-faces.mjs";
@@ -195,12 +197,27 @@ export function specCandidates(spec, fromFile) {
   return EXT_CANDIDATES.map((ext) => base + ext);
 }
 
-/** 说明符抽取：`from` / `import` / `require` / `vi.mock` / `jest.mock` 后的字符串字面量。
- *  可选左括号让动态 `import("x")` 与 `require("x")` 也走同一条。 */
-const SPEC_RE = /(?:\bfrom|\bimport|\brequire|vi\.mock|jest\.mock)\s*\(?\s*["']([^"'\n]+)["']/g;
+/** `vi.mock` / `jest.mock` 的说明符：`preProcessFile` 只认 import/require/export
+ *  这几类语法，测试里的模块替身不在它那份结果里，所以这一条单独补。 */
+const MOCK_RE = /(?:vi|jest)\.mock\s*\(\s*["']([^"'\n]+)["']/g;
+
+/** `export * as ns from "x"`：扫描器对这一形态不报（实测 TS 6.0.3），而它确实是
+ *  一条转出口 —— 漏了就是「闭包算少了」那一侧，单独补一条。 */
+const EXPORT_NS_RE = /\bexport\s+(?:type\s+)?\*\s+as\s+[\w$]+\s+from\s*["']([^"'\n]+)["']/g;
 
 /**
  * 一份源码静态引用到的模块（候选路径集合，含 barrel 的 `dir/index.*` 形态）。
+ *
+ * 说明符由 TypeScript 的**预处理扫描器**（`ts.preProcessFile`）给出：它按词法走
+ * 文件，字符串与模板串里「长得像 import」的那一段不算引用，静态 / 动态 `import()` /
+ * `require` / `export {…} from` / `export * from` 全覆盖。用正则抓这一段会连
+ * **夹具字符串**一起算成依赖（ISSUE #2830：一份门禁自测把源码样例写成字符串，
+ * 于是改样例里提到的那份模块就把整份重档自测拉进无关提交的受影响面）。
+ *
+ * 扫描器没覆盖的两种形态各补一条正则，跑在**剥注释之后**的文本上：`vi.mock` 的
+ * 模块替身、`export * as ns from`。已知边界：字符串里**逐字**写出这两种形态时仍会被
+ * 算成依赖（扫描器管不到它们）—— 偏「多跑几份」而不是「少跑」，全仓实测只出现在
+ * 自测夹具里。
  *
  * **导出的理由**：`scripts/docs-api-input-closure.mjs` 要算 typedoc 输入面的
  * 传递闭包，而它需要的正是这同一份说明符解析 —— 抄第二份正则就会漂（§12.12 / §12.18），
@@ -212,13 +229,17 @@ const SPEC_RE = /(?:\bfrom|\bimport|\brequire|vi\.mock|jest\.mock)\s*\(?\s*["'](
  */
 export function specifiersOf(text, fromFile) {
   const out = new Set();
-  for (const m of text.matchAll(SPEC_RE)) {
-    const spec = m[1];
-    if (!spec) {
-      continue;
-    }
-    for (const cand of specCandidates(spec, fromFile)) {
+  for (const file of ts.preProcessFile(text, true, true).importedFiles) {
+    for (const cand of specCandidates(file.fileName, fromFile)) {
       out.add(cand);
+    }
+  }
+  const code = stripComments(text);
+  for (const re of [MOCK_RE, EXPORT_NS_RE]) {
+    for (const m of code.matchAll(re)) {
+      for (const cand of specCandidates(m[1], fromFile)) {
+        out.add(cand);
+      }
     }
   }
   return out;
