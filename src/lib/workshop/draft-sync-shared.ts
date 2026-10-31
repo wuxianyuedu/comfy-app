@@ -36,13 +36,12 @@ export function parseDraftDto(raw: unknown): WorkshopDraftDto {
       scriptMarkdown: typeof meta.scriptMarkdown === "string" ? meta.scriptMarkdown : undefined,
     },
     scriptMarkdown: typeof obj.scriptMarkdown === "string" ? obj.scriptMarkdown : "",
-    scenes: Array.isArray(obj.scenes)
-      ? /* SAFETY: 类型断言已复核 */ (obj.scenes as Array<Scene>)
-      : [],
-    characters: Array.isArray(obj.characters)
-      ? /* SAFETY: 类型断言已复核 */ (obj.characters as Array<Character>)
-      : [],
-    shots: Array.isArray(obj.shots) ? /* SAFETY: 类型断言已复核 */ (obj.shots as Array<Shot>) : [],
+    /* SAFETY: 类型断言已复核 */
+    scenes: Array.isArray(obj.scenes) ? (obj.scenes as Array<Scene>) : [],
+    /* SAFETY: 类型断言已复核 */
+    characters: Array.isArray(obj.characters) ? (obj.characters as Array<Character>) : [],
+    /* SAFETY: 类型断言已复核 */
+    shots: Array.isArray(obj.shots) ? (obj.shots as Array<Shot>) : [],
   };
 }
 

@@ -297,9 +297,8 @@ export function selectionInsideLogs(selection: SelectionLike | null): boolean {
 
 function nodeIsLogText(node: Node): boolean {
   const element =
-    node.nodeType === 1
-      ? /* SAFETY: 类型断言已复核 */ (node as Element)
-      : (node.parentElement ?? null);
+    /* SAFETY: 类型断言已复核 */
+    node.nodeType === 1 ? (node as Element) : (node.parentElement ?? null);
   return Boolean(
     element?.closest?.(`[${LOG_ROW_TEXT_ATTRIBUTE}]`) ??
     element?.parentElement?.closest?.(`[${LOG_ROW_TEXT_ATTRIBUTE}]`),

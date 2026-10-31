@@ -235,8 +235,9 @@ export function useWorkflowLibraryDetail(
    * 稿（它直读 DB 列，没有富化改写），缺省空对象。 */
   const paramMap = useMemo<Record<string, unknown>>(() => {
     const raw = template?.paramMap;
+    /* SAFETY: 类型断言已复核 */
     return raw && typeof raw === "object" && !Array.isArray(raw)
-      ? /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>)
+      ? (raw as Record<string, unknown>)
       : {};
   }, [template]);
 

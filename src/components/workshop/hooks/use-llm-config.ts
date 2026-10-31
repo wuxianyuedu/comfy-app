@@ -44,10 +44,11 @@ function toModelNames(raw: unknown): Array<string> {
       if (name === "") {
         continue;
       }
+      /* SAFETY: 类型断言已复核 */
       const kind =
         typeof rec.kind === "string" &&
         REMOTE_MODEL_KINDS.includes(/* SAFETY: 类型断言已复核 */ rec.kind as RemoteModelKind)
-          ? /* SAFETY: 类型断言已复核 */ (rec.kind as RemoteModelKind)
+          ? (rec.kind as RemoteModelKind)
           : null;
       if (!isChatModel(kind)) {
         continue;

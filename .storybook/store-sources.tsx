@@ -384,6 +384,7 @@ function seedScene(name: string): void {
 export function sceneEntries(name: string): Array<LogEntry> {
   /* `parameters` 里那个名字是不可信输入（story 里手写的字符串），所以按
      `string` 查、查不到就抛 —— 与值源的 `load()` 同一条口径。 */
+  /* SAFETY: 类型断言已复核 */
   const scene: LogStoreScene | undefined = LOG_STORE_SCENES[name as SceneName];
   if (scene === undefined) {
     throw new Error(
@@ -421,6 +422,7 @@ export function sceneEntries(name: string): Array<LogEntry> {
  * 缺席时**什么都不做**：别的 story（用真实 store 的那些）不该被搅。
  */
 export const withStoreScene: Decorator = (Story, context) => {
+  /* SAFETY: 类型断言已复核 */
   const name = (context.parameters as { storeScene?: unknown }).storeScene;
   if (typeof name === "string") {
     seedScene(name);

@@ -217,8 +217,9 @@ export const workflowListProcedures = {
         const def = getWorkflowType(normalizeTaskType(list.taskType));
         const rawView = asRawWorkflow(list.rawJson);
         const graphObj =
+          /* SAFETY: 类型断言已复核 */
           rawView && Array.isArray(rawView.nodes)
-            ? /* SAFETY: 类型断言已复核 */ (rawView as unknown as Record<string, unknown>)
+            ? (rawView as unknown as Record<string, unknown>)
             : null;
         const exec = executionShapeOf(list);
 

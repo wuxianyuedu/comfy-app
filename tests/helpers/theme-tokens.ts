@@ -38,9 +38,8 @@ const require = createRequire(import.meta.url);
 const twModule = /* SAFETY: 类型断言已复核 */ require("@tailwindcss/postcss") as {
   default?: () => postcss.AcceptedPlugin;
 };
-const tailwind =
-  twModule.default ??
-  /* SAFETY: 类型断言已复核 */ (twModule as unknown as () => postcss.AcceptedPlugin);
+/* SAFETY: 类型断言已复核 */
+const tailwind = twModule.default ?? (twModule as unknown as () => postcss.AcceptedPlugin);
 
 const GLOBALS_CSS = path.resolve(__dirname, "../../src/app/globals.css");
 

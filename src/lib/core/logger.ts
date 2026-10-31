@@ -237,9 +237,8 @@ function renderServerLogEntry(
   const stringArg = typeof first === "string" ? first : undefined;
   const secondString = typeof second === "string" ? second : undefined;
   const payload =
-    first && typeof first === "object"
-      ? /* SAFETY: 类型断言已复核 */ (first as Record<string, unknown>)
-      : undefined;
+    /* SAFETY: 类型断言已复核 */
+    first && typeof first === "object" ? (first as Record<string, unknown>) : undefined;
 
   // 空串按「没取到」处理：`??` 只挡 null/undefined，挡不住 ""（会写出空行）
   const firstNonEmpty = (...candidates: Array<string | undefined>) =>

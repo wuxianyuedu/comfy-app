@@ -41,18 +41,22 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
     }
     const node = /* SAFETY: 类型断言已复核 */ nodeOut as Record<string, unknown>;
     if (Array.isArray(node.images)) {
-      images.push(.../* SAFETY: 类型断言已复核 */ (node.images as Array<CollectedOutputFile>));
+      /* SAFETY: 类型断言已复核 */
+      images.push(...(node.images as Array<CollectedOutputFile>));
     }
     if (Array.isArray(node.videos)) {
-      videos.push(.../* SAFETY: 类型断言已复核 */ (node.videos as Array<CollectedOutputFile>));
+      /* SAFETY: 类型断言已复核 */
+      videos.push(...(node.videos as Array<CollectedOutputFile>));
     }
     // VHS_VideoCombine 把文件发在 `gifs` 下（实际是 mp4/gif/webm）。
     if (Array.isArray(node.gifs)) {
-      videos.push(.../* SAFETY: 类型断言已复核 */ (node.gifs as Array<CollectedOutputFile>));
+      /* SAFETY: 类型断言已复核 */
+      videos.push(...(node.gifs as Array<CollectedOutputFile>));
     }
     // SaveAudio 与 AudioComposite 把文件发在 `audios` 下。
     if (Array.isArray(node.audios)) {
-      audios.push(.../* SAFETY: 类型断言已复核 */ (node.audios as Array<CollectedOutputFile>));
+      /* SAFETY: 类型断言已复核 */
+      audios.push(...(node.audios as Array<CollectedOutputFile>));
     }
     // ShowText / 任意文本输出节点：保留渲染文本（无文件）.
     if (typeof node.text === "string" && node.text.trim()) {
@@ -81,7 +85,8 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
               "string",
         )
       ) {
-        others.push(.../* SAFETY: 类型断言已复核 */ (v as Array<CollectedOutputFile>));
+        /* SAFETY: 类型断言已复核 */
+        others.push(...(v as Array<CollectedOutputFile>));
       }
     }
   }

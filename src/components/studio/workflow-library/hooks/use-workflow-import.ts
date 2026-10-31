@@ -223,9 +223,8 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       try {
         let suggested = "T2I";
         const obj = /* SAFETY: 类型断言已复核 */ parsed as Record<string, unknown>;
-        const nodes = Array.isArray(obj.nodes)
-          ? /* SAFETY: 类型断言已复核 */ (obj.nodes as Array<unknown>)
-          : [];
+        /* SAFETY: 类型断言已复核 */
+        const nodes = Array.isArray(obj.nodes) ? (obj.nodes as Array<unknown>) : [];
         for (const n of nodes) {
           const t =
             n && typeof n === "object"

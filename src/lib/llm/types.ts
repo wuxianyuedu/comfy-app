@@ -130,10 +130,11 @@ function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
     baseUrl: typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== "" ? rec.baseUrl : null,
     // 三态：`undefined` 时**不挂这个键**（「不提供意见」不能被写成「清空」）
     ...(apiKey === undefined ? {} : { apiKey }),
+    /* SAFETY: 类型断言已复核 */
     kind:
       typeof kind === "string" &&
       /* SAFETY: 类型断言已复核 */ (REMOTE_MODEL_KINDS as ReadonlyArray<string>).includes(kind)
-        ? /* SAFETY: 类型断言已复核 */ (kind as RemoteModelKind)
+        ? (kind as RemoteModelKind)
         : null,
   };
 }

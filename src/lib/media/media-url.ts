@@ -120,13 +120,14 @@ export function mediaPreviewUrl(reference: unknown): string | null {
 
   // 对象 / 数组：拍平成 ComfyMediaRef。
   if (typeof reference === "object") {
+    /* SAFETY: 类型断言已复核 */
     const ref = Array.isArray(reference)
       ? {
           filename: /* SAFETY: 类型断言已复核 */ (reference as Array<unknown>)[0] ?? null,
           subfolder: /* SAFETY: 类型断言已复核 */ (reference as Array<unknown>)[1] ?? null,
           type: /* SAFETY: 类型断言已复核 */ (reference as Array<unknown>)[2] ?? null,
         }
-      : /* SAFETY: 类型断言已复核 */ (reference as {
+      : (reference as {
           filename?: unknown;
           subfolder?: unknown;
           type?: unknown;

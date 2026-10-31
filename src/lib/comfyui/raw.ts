@@ -40,7 +40,8 @@ export { asRecord } from "~/lib/is-record";
 /** DB Json 列 / JSON.parse 产物 → RawWorkflow 视图。根不是普通对象时返回
  *  null（下游均有 `Array.isArray(raw.nodes)` 类守卫，路径与旧代码等价）。 */
 export function asRawWorkflow(v: unknown): RawWorkflow | null {
-  return isPlainRecord(v) ? /* SAFETY: 类型断言已复核 */ (v as RawWorkflow) : null;
+  /* SAFETY: 类型断言已复核 */
+  return isPlainRecord(v) ? (v as RawWorkflow) : null;
 }
 
 /** `String(v)` 的类型收窄等价：值全部来自 JSON 反序列化产物（无 symbol /

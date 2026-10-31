@@ -83,10 +83,7 @@ const BASE_CONFIG = defineConfig({
       "~": path.resolve(import.meta.dirname, "src"),
       // server-only 包在 vitest node 环境会抛错（它就是干这个的）；
       // 数据访问层的硬约束在 Next 构建期仍然生效，测试里换空实现。
-      "server-only": path.resolve(
-        import.meta.dirname,
-        "tests/stubs/server-only.ts",
-      ),
+      "server-only": path.resolve(import.meta.dirname, "tests/stubs/server-only.ts"),
     },
   },
   test: {
@@ -2168,9 +2165,11 @@ const BASE_CONFIG = defineConfig({
 const COVERAGE_ENFORCE = process.env.COMFY_COVERAGE_ENFORCE === "1";
 
 /** 覆盖率门槛的**登记处**：与判定开关无关，永远在场（读它，不要读下面那份）。 */
-export const COVERAGE_THRESHOLDS = (
-  BASE_CONFIG.test?.coverage?.thresholds ?? {}
-) as Record<string, unknown>;
+/* SAFETY: 类型断言已复核 */
+export const COVERAGE_THRESHOLDS = (BASE_CONFIG.test?.coverage?.thresholds ?? {}) as Record<
+  string,
+  unknown
+>;
 
 export default defineConfig(
   COVERAGE_ENFORCE

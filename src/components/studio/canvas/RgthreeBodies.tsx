@@ -209,11 +209,10 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
           const isObj = typeof widget === "object" && !Array.isArray(widget);
           const rec = isObj ? widget : undefined;
           const name =
+            /* SAFETY: 类型断言已复核 */
             typeof widget === "string"
               ? widget
-              : /* SAFETY: 类型断言已复核 */ (((rec?.name ?? rec?.lora_name ?? rec?.model_name) as
-                  | string
-                  | undefined) ?? "");
+              : (((rec?.name ?? rec?.lora_name ?? rec?.model_name) as string | undefined) ?? "");
           const modelStr = isObj
             ? fmtStrength(rec?.model_strength ?? rec?.model_str ?? rec?.strength)
             : undefined;

@@ -297,8 +297,8 @@ export interface CreateFilmFromProjectInput {
  *  镜头的 prompt / negative 已是工坊定稿（含风格），这里不二次加工；顺序按镜号 index。 */
 export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
   const row = await productionRepository.getForUser(input.userId, input.projectId);
-  const rawShots =
-    row && Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>) : [];
+  /* SAFETY: 类型断言已复核 */
+  const rawShots = row && Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [];
   const shots = [...rawShots].sort((a, b) => a.index - b.index);
   if (!shots.length) {
     throw new Error("该项目还没有镜头，请先在工坊产出镜头再成片");
