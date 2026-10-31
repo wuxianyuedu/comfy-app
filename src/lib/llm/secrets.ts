@@ -41,7 +41,7 @@ function loadOrCreateKey(): Buffer {
     if (!existsSync(KEY_FILE)) {
       mkdirSync(join(process.cwd(), "data"), { recursive: true });
       // 文件里放一个随机口令，由它派生 AES 密钥；不直接存密钥字节。
-      const fileKey = randomUUID().replace(/-/g, "") + randomBytes(16).toString("hex");
+      const fileKey = randomUUID().replaceAll("-", "") + randomBytes(16).toString("hex");
       writeFileSync(KEY_FILE, fileKey, { encoding: "utf8", mode: 0o600 });
     }
     cachedKey = deriveKey(readFileSync(KEY_FILE, "utf8").trim());
