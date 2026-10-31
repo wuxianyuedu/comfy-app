@@ -68,7 +68,7 @@ describe("WindowTitleBar", () => {
     /* 标题行的直接子元素按顺序：先拖拽空白区（`flex-1`，把按钮顶到右端），
        再是三个按钮所在的控件容器。少了前者，`items-stretch` 的 flex 行会把
        `shrink-0` 的按钮放在 flex-start —— 就是用户看到的左上角。 */
-    const children = Array.from(bar?.children ?? []);
+    const children = [...(bar?.children ?? [])];
     expect(children).toHaveLength(2);
     const [spacer, controls] = /* SAFETY: 类型断言已复核 */ children as [HTMLElement, HTMLElement];
     expect(spacer.className).toContain("flex-1");

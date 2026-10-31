@@ -41,7 +41,7 @@ export function groupByDate(tasks: Array<TaskItem>): Array<TaskGroup> {
   for (const task of tasks) {
     getOrCreate(bucketMap, dateBucket(task.createdAt), () => []).push(task);
   }
-  return Array.from(bucketMap.entries()).map(([key, items]) => ({
+  return [...bucketMap.entries()].map(([key, items]) => ({
     key,
     items,
   }));

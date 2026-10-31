@@ -189,5 +189,5 @@ export function renderDriftReport(diff, opts = {}) {
     lines.push("  若仍被判为不一致，可在项目根执行 pnpm install 让两者对齐。");
     return lines;
   }
-  return lines.concat(body);
+  return [...lines, ...body];
 }

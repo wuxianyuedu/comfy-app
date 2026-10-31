@@ -23,7 +23,6 @@ export function RgthreeFastGroupsBypasserBody({
   }
   const matches = groups
     .filter((group) => matchesNeedle(needle, group.title || ""))
-    .slice()
     /* 「按当前区域设置排序」走 `~/lib/ordered-set`（规范 16 §16.2.4.55）——
      * 它与 `<` / 不带比较器的 `.sort()` 是**两种判据**（`localeCompare`
      * 让 `"apple" < "Zebra"`，码位序让 `"Zebra" < "apple"`），

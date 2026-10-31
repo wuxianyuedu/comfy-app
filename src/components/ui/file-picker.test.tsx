@@ -65,7 +65,10 @@ describe("FilePicker", () => {
     expect(onPick).toHaveBeenCalledTimes(1);
     const call = /* SAFETY: 类型断言已复核 */ onPick.mock.calls[0] as [File, FileList];
     expect(call[0]).toBe(A);
-    expect(Array.from(call[1])).toEqual([A, B]);
+    /* 夹具是类数组（`{...files, length, item}`），没有 `Symbol.iterator`，不能直接展开。 */
+    expect(call[1].length).toBe(2);
+    expect(call[1][0]).toBe(A);
+    expect(call[1][1]).toBe(B);
   });
 
   it("**选完复位 value**：不清时连选同一个文件不会触发 change", () => {

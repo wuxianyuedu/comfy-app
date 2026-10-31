@@ -51,7 +51,7 @@ export function countByType(models: Array<ModelRow>): Array<[string, number]> {
   for (const m of models) {
     counts.set(m.type, (counts.get(m.type) ?? 0) + 1);
   }
-  return Array.from(counts.entries()).sort(
+  return [...counts.entries()].sort(
     /* 数量降序 → 类型名字典序；「按当前区域设置排序」走 `~/lib/ordered-set`
      *（规范 16 §16.2.4.55）。 */
     (left, right) => right[1] - left[1] || compareText(left[0], right[0]),

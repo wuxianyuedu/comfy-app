@@ -29,7 +29,7 @@ describe("值与缺值", () => {
         ]}
       />,
     );
-    const texts = Array.from(container.querySelectorAll("span")).map((s) => s.textContent);
+    const texts = [...container.querySelectorAll("span")].map((s) => s.textContent);
     expect(texts.filter((s) => s === "—")).toHaveLength(3);
     /* `0` 是真实值，照常显示（与 displayValue 的口径一致）。 */
     expect(texts).toContain("0");

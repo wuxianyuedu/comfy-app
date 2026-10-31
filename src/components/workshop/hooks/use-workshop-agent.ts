@@ -88,19 +88,19 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
   const pushMsg = React.useCallback((msg: AgentPanelMessage) => {
     setMessages((prev) =>
       prev.length >= AGENT_MESSAGE_MAX
-        ? prev.slice(-AGENT_MESSAGE_MAX + 1).concat(msg)
-        : prev.concat(msg),
+        ? [...prev.slice(-AGENT_MESSAGE_MAX + 1), msg]
+        : [...prev, msg],
     );
   }, []);
 
   const pushToolRun = React.useCallback((run: AgentToolRun) => {
     setToolRuns((prev) =>
       prev.length >= AGENT_TOOLRUN_MAX
-        ? prev.slice(-AGENT_TOOLRUN_MAX + 1).concat(run)
-        : prev.concat(run),
+        ? [...prev.slice(-AGENT_TOOLRUN_MAX + 1), run]
+        : [...prev, run],
     );
     setMessages((prev) => {
-      const next = prev.concat({ id: run.id, role: "tool-run", run });
+      const next: Array<AgentPanelMessage> = [...prev, { id: run.id, role: "tool-run", run }];
       return next.length > AGENT_MESSAGE_MAX ? next.slice(-AGENT_MESSAGE_MAX) : next;
     });
   }, []);

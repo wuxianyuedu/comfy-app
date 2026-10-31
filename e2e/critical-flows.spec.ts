@@ -1023,10 +1023,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         expect(box!.width).toBeGreaterThanOrEqual(56);
 
         const overflow = await button.evaluate((el) => {
-          const nodes = /* SAFETY: 类型断言已复核 */ [
-            el,
-            ...Array.from(el.children),
-          ] as Array<HTMLElement>;
+          const nodes = /* SAFETY: 类型断言已复核 */ [el, ...el.children] as Array<HTMLElement>;
           return nodes.map((n) => n.scrollWidth - n.clientWidth);
         });
         for (const px of overflow) {
@@ -1072,7 +1069,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
           const ctx = canvas.getContext("2d")!;
           ctx.fillStyle = getComputedStyle(count).color;
           ctx.fillRect(0, 0, 1, 1);
-          return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3));
+          return [...ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)];
         });
       expect(countColor).not.toEqual([wr, wg, wb]);
 
@@ -1145,7 +1142,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         .poll(async () =>
           Number(
             await consoleOption.evaluate((el) => {
-              const nodes = Array.from(el.querySelectorAll(".sr-only"));
+              const nodes = [...el.querySelectorAll('.sr-only')];
               const summary =
                 nodes.map((n) => n.textContent?.trim() ?? "").find((t) => /^\d+ 条/.test(t)) ?? "";
               return /^(\d+) 条/.exec(summary)?.[1] ?? "0";
@@ -1181,7 +1178,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         optionOf(label).evaluate((el) => {
           /* 选项里的 `sr-only` 有好几处（四列各自的「N 警告」也在其中），
            * 只有那个**以数字开头**的才是整行的纯文本摘要。 */
-          const nodes = Array.from(el.querySelectorAll(".sr-only"));
+          const nodes = [...el.querySelectorAll('.sr-only')];
           const summary = nodes
             .map((n) => n.textContent?.trim() ?? "")
             .find((t) => /^\d+ 条/.test(t));
@@ -1190,7 +1187,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       /** 摘要里的「全部 / 信息 / 警告 / 错误」四个数（不读自绘的列）。 */
       const levelsOf = async (label: string) =>
         optionOf(label).evaluate((el) => {
-          const nodes = Array.from(el.querySelectorAll(".sr-only"));
+          const nodes = [...el.querySelectorAll('.sr-only')];
           const summary =
             nodes.map((n) => n.textContent?.trim() ?? "").find((t) => /^\d+ 条/.test(t)) ?? "";
           const num = (re: RegExp) => Number(re.exec(summary)?.[1] ?? "0");
@@ -1239,15 +1236,15 @@ test.describe("应用页签与全屏视图 @critical", () => {
         page.evaluate(() => {
           const num = (text: string | null | undefined, re: RegExp) =>
             re.exec(text ?? "")?.[1] ?? "";
-          const option = Array.from(document.querySelectorAll('[role="option"]')).find((el) =>
+          const option = [...document.querySelectorAll('[role="option"]')].find((el) =>
             el.textContent?.includes("全部来源（按条去重）"),
           );
-          const summary = Array.from(option?.querySelectorAll(".sr-only") ?? [])
+          const summary = [...option?.querySelectorAll('.sr-only') ?? []]
             .map((n) => n.textContent?.trim() ?? "")
             .find((t) => /^\d+ 条/.test(t));
           /* 页脚那句「… · 面板共保留 N 条」。这个数只在页脚出现一处，直接取
              最内层命中它的节点即可（祖先会连着把整行文本都带进来，正则仍能取到）。 */
-          const footer = Array.from(document.querySelectorAll("span, div, p")).find((el) =>
+          const footer = [...document.querySelectorAll('span, div, p')].find((el) =>
             /面板共保留 \d+ 条/.test(el.textContent ?? ""),
           );
           return {

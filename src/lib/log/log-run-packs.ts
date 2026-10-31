@@ -148,7 +148,7 @@ export function buildRunScopedOptions(
 ): { sessions: Array<RunScopedOption>; total: number } {
   const out: Array<RunScopedOption> = [];
   /* 本次运行：倒序（最新那次启动在最上面，与整条列表同向）。 */
-  for (const file of current.slice().reverse()) {
+  for (const file of [...current].reverse()) {
     out.push({
       id: file.name,
       title: formatScopedLabel(file.title, "本次运行", null),
@@ -226,5 +226,5 @@ export function formatFileTime(startedAt: number | null): string {
  * 比较器走 `~/lib/ordered-set` 的唯一出口（§16.2.4.57 P51）。
  */
 export function sortPackNames(names: Array<string>): Array<string> {
-  return names.slice().sort(compareText);
+  return [...names].sort(compareText);
 }

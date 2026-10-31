@@ -40,7 +40,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
   // 草稿里可能有尚未入库的新名字 —— 一并展示，避免已勾选项消失。
   const options = useMemo(() => {
     const set = new Set([...knownNames, ...draft]);
-    return Array.from(set);
+    return [...set];
   }, [knownNames, draft]);
 
   const toggle = (name: string) => {
@@ -57,7 +57,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
 
   const save = async () => {
     setOpen(false);
-    await meta.patchModelTags(Array.from(draft));
+    await meta.patchModelTags([...draft]);
   };
 
   const label = meta.modelTags.length > 0 ? meta.modelTags.join("、") : "选择模型";
