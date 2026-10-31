@@ -27,8 +27,7 @@ import {
   type ConsoleClientEvent,
 } from "~/lib/console/console-client";
 import { shellSyntaxWarning } from "~/lib/console/console-catalog";
-import { MAX_COMMAND_CHARS } from "~/lib/console/console-limits";
-import { MAX_HISTORY_ENTRIES } from "~/lib/console/console-limits";
+import { MAX_COMMAND_CHARS, MAX_HISTORY_ENTRIES } from "~/lib/console/console-limits";
 import { fixed } from "~/lib/number-format";
 
 /** 一条**已跑过**的命令（本次会话的历史；只在内存里）。 */

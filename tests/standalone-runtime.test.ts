@@ -14,6 +14,7 @@
  */
 import { DatabaseSync } from "node:sqlite";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -22,7 +23,6 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";

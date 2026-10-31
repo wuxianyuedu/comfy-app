@@ -20,11 +20,10 @@
  * 判它等于判自己的量具 —— 与 `tests/test-concurrency-gate.test.ts` 同一取舍。
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 /* `vi.spyOn(fs, …)` 要的是可写对象 ⇒ 必须 default 导入
    （`import * as fs` 在 vitest 5 下是冻结命名空间，spy 会以
    `Cannot redefine property: readdirSync` 当场炸掉 —— 先例见 `tests/db-backup.test.ts`）。 */
-import fs from "node:fs";
+import fs, { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";

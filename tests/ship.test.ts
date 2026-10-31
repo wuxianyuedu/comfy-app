@@ -81,12 +81,13 @@ import {
   readPullVerdict,
   resolveUpstream,
 } from "../scripts/ship-core.mjs";
-import { runPushStage } from "../scripts/ship-local.mjs";
+import { runPushStage, runRerunCiStage } from "../scripts/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
 import { parseArgs, parseIssueNumberToken } from "../scripts/ship-args.mjs";
 import { buildPullBody, capDiffstat, PULL_BODY_LIMIT } from "../scripts/ship-pull-body.mjs";
 import {
   claimNumbersFromTitle,
+  closeIssues,
   decideCloseIssue,
   fetchPullMergeProof,
   findMergedPullProofs,
@@ -118,14 +119,12 @@ import {
 } from "../scripts/ship-claim.mjs";
 import { cleanBranch, createOrReusePull, reportVerdict } from "../scripts/ship-platform.mjs";
 import { pollUntilTerminal } from "../scripts/ship-poll.mjs";
-import { closeIssues } from "../scripts/ship-close.mjs";
 import { readIssueBody, runAppendIssueComment, runIssueComment } from "../scripts/ship-issue-new.mjs";
 import { sameCommentBody, stripTrailingNewline } from "../scripts/ship-comment.mjs";
 import { decideReap, instanceReading, reapCheckoutInstances } from "../scripts/ship-reap.mjs";
 import { runPreflightStage } from "../scripts/ship-preflight.mjs";
 import { DIAGNOSE_STALL_MINUTES, stallReadout } from "../scripts/ship-diagnose.mjs";
 import { main } from "../scripts/ship.mjs";
-import { runRerunCiStage } from "../scripts/ship-local.mjs";
 import { EMPTY_COMMIT_ENV } from "../scripts/intentional-empty-commit.mjs";
 
 /** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
