@@ -188,7 +188,7 @@ function SettingsLoadError({ errorText, onRetry }: { errorText: string; onRetry:
           trigger={
             <>
               <ChevronRight
-                className={`transition-transform group-aria-expanded/disclosure:rotate-90`}
+                className="transition-transform group-aria-expanded/disclosure:rotate-90"
                 size={13}
               />
               完整错误
@@ -201,9 +201,8 @@ function SettingsLoadError({ errorText, onRetry }: { errorText: string; onRetry:
         </Disclosure>
         <div className="text-muted-foreground mt-4 flex flex-col gap-1 text-xs">
           <p>
-            本次失败已写入日志面板（按{""}
+            本次失败已写入日志面板（按
             <kbd className="border-border rounded border px-1 font-mono">Ctrl+Shift+L</kbd>
-            {""}
             打开，筛选「错误」可快速定位）。
           </p>
           <p>

@@ -159,7 +159,7 @@ export function CharacterDesigner({
     <div className="flex-col gap-4" {...exitReminderSignal(characters.length > 0)}>
       <div className="flex items-center justify-between">
         <h3 className="u-title">
-          角色设计{""}
+          角色设计
           <span className="text-muted-foreground">({characters.length})</span>
         </h3>
         <div className="flex gap-2">
