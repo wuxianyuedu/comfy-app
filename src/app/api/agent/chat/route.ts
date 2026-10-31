@@ -28,8 +28,9 @@ export async function POST(req: NextRequest) {
     return body;
   }
 
+  /* SAFETY: 类型断言已复核 */
   const rawMessages = Array.isArray(body.messages)
-    ? /* SAFETY: 类型断言已复核 */ (body.messages as Array<Record<string, unknown>>)
+    ? (body.messages as Array<Record<string, unknown>>)
     : [];
   if (rawMessages.length === 0) {
     return NextResponse.json({ error: "messages 不能为空" }, { status: 400 });

@@ -250,11 +250,12 @@ export const workflowMutationProcedures = {
         /* 重置是「删除覆盖」这一件事本身，与写入互斥：同时传 positions 时
          *  以重置为准，否则刚清掉的键又被写回来，按钮看起来时灵时不灵。 */
         patch.positions = undefined;
+        /* SAFETY: 类型断言已复核 */
         const cur =
           existing.positions &&
           typeof existing.positions === "object" &&
           !Array.isArray(existing.positions)
-            ? /* SAFETY: 类型断言已复核 */ (existing.positions as Record<string, unknown>)
+            ? (existing.positions as Record<string, unknown>)
             : {};
         const next: Record<string, unknown> = {};
         if (scope) {
@@ -303,8 +304,9 @@ export const workflowMutationProcedures = {
         input.positions !== undefined && input.resetPositionsScope === undefined;
       if (writePositions || groups !== undefined || notes !== undefined) {
         nextRawJson = nextRawJson ? { ...nextRawJson } : {};
+        /* SAFETY: 类型断言已复核 */
         const nodes = Array.isArray(nextRawJson.nodes)
-          ? [.../* SAFETY: 类型断言已复核 */ (nextRawJson.nodes as Array<unknown>)]
+          ? [...(nextRawJson.nodes as Array<unknown>)]
           : [];
         if (writePositions) {
           const posMap = /* SAFETY: 类型断言已复核 */ input.positions as Record<
@@ -341,18 +343,17 @@ export const workflowMutationProcedures = {
           if (mergePositions) {
             // 合并进已有的 positions 列（从子图 / RAW 视图拖单个键时，
             // 不能把另一个命名空间一起抹掉）。
+            /* SAFETY: 类型断言已复核 */
             const cur =
               existing.positions &&
               typeof existing.positions === "object" &&
               !Array.isArray(existing.positions)
-                ? /* SAFETY: 类型断言已复核 */ (existing.positions as Record<
-                    string,
-                    [number, number]
-                  >)
+                ? (existing.positions as Record<string, [number, number]>)
                 : {};
+            /* SAFETY: 类型断言已复核 */
             patch.positions = {
               ...cur,
-              .../* SAFETY: 类型断言已复核 */ (input.positions as Record<string, [number, number]>),
+              ...(input.positions as Record<string, [number, number]>),
             };
           } else {
             patch.positions = input.positions;

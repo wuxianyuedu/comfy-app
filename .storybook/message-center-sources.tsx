@@ -333,6 +333,7 @@ export function sceneMessages(name: string): Array<{
   title: string;
   body: string;
 }> {
+  /* SAFETY: 类型断言已复核 */
   const scene: MessageScene | undefined = MESSAGE_SCENES[name as SceneName];
   if (scene === undefined) {
     throw new Error(
@@ -353,6 +354,7 @@ export function sceneMessages(name: string): Array<{
  * 幂等：`clear()` 先跑，所以 StrictMode 的双调用得到同一个末态。
  */
 function seedMessageScene(name: string): MessageScene {
+  /* SAFETY: 类型断言已复核 */
   const scene: MessageScene | undefined = MESSAGE_SCENES[name as SceneName];
   if (scene === undefined) {
     throw new Error(
@@ -392,6 +394,7 @@ function seedMessageScene(name: string): MessageScene {
  * 「按钮在真状态栏里长什么样」那几档要的）。
  */
 export const withMessageScene: Decorator = (Story, context) => {
+  /* SAFETY: 类型断言已复核 */
   const name = (context.parameters as { messageScene?: unknown }).messageScene;
   if (typeof name === "string") {
     seedMessageScene(name);

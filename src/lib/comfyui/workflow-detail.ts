@@ -243,11 +243,8 @@ async function buildWorkflowDetailJson(input: {
     // 而不是被认成 `is_subgraph: true` 去用紧凑的 WorkflowSubgraphNode。
     // （与旧 `n?.class_type || (n?.type as string) || "?"` 逐值等价：
     //  `a || b` ≡ `a ? a : b`，空串同样回退。）
-    const classType: string = n.class_type
-      ? n.class_type
-      : n.type
-        ? /* SAFETY: 类型断言已复核 */ (n.type as string)
-        : "?";
+    /* SAFETY: 类型断言已复核 */
+    const classType: string = n.class_type ? n.class_type : n.type ? (n.type as string) : "?";
     const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
     /* 子图封装节点（class_type === UUID）的显示名取自
      *  raw.definitions.subgraphs[uid].name。与子图路由的 `sub` 解析器同一套

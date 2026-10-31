@@ -103,9 +103,8 @@ function CountColumn({
  * 索引里去渲染 `undefined`。
  */
 function asOriginFilter(value: unknown): LogOriginFilter {
-  return typeof value === "string" && value in ORIGIN_TEXT
-    ? /* SAFETY: 类型断言已复核 */ (value as LogOriginFilter)
-    : "all";
+  /* SAFETY: 类型断言已复核 */
+  return typeof value === "string" && value in ORIGIN_TEXT ? (value as LogOriginFilter) : "all";
 }
 
 /** 下拉候选列表的列宽（列标题与各行共用，列与列才对得上）。 */

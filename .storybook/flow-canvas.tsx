@@ -315,6 +315,7 @@ export type CanvasSceneName = keyof typeof CANVAS_SCENES;
  * 与值源的 `load()` 同一条口径）。
  */
 export function canvasScene(name: string): CanvasScene {
+  /* SAFETY: 类型断言已复核 */
   const scene: CanvasScene | undefined = CANVAS_SCENES[name as CanvasSceneName];
   if (scene === undefined) {
     throw new Error(`画布场景里没有叫「${name}」的那种。现有的：${CANVAS_SCENE_NAMES.join(" / ")}`);

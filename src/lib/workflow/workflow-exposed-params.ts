@@ -239,7 +239,8 @@ const EXPOSED_CUSTOM_ID_RE = /^custom-(text|image|number)-(\d+)$/;
 /** 自定义口 id 的类型；不是自定义口返回 null。 */
 export function exposedCustomKindOf(id: string): ExposedCustomKind | null {
   const matched = EXPOSED_CUSTOM_ID_RE.exec(id);
-  return matched ? /* SAFETY: 类型断言已复核 */ (matched[1] as ExposedCustomKind) : null;
+  /* SAFETY: 类型断言已复核 */
+  return matched ? (matched[1] as ExposedCustomKind) : null;
 }
 
 /** 自定义口类型 → 复用的对外参数类（见上方注释）。 */

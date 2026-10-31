@@ -590,7 +590,8 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
         .where(eq(task.id, taskId))
         .limit(1);
       const value = rows[0]?.rawCli;
-      return Array.isArray(value) ? /* SAFETY: 类型断言已复核 */ (value as Array<string>) : null;
+      /* SAFETY: 类型断言已复核 */
+      return Array.isArray(value) ? (value as Array<string>) : null;
     },
   };
 }

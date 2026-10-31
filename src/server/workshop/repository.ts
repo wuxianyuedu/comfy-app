@@ -96,13 +96,12 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
       logline: row.logline,
       scriptMarkdown: row.scriptMarkdown,
     },
-    scenes: Array.isArray(row.scenes)
-      ? /* SAFETY: 类型断言已复核 */ (row.scenes as Array<Scene>)
-      : [],
-    characters: Array.isArray(row.characters)
-      ? /* SAFETY: 类型断言已复核 */ (row.characters as Array<Character>)
-      : [],
-    shots: Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>) : [],
+    /* SAFETY: 类型断言已复核 */
+    scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
+    /* SAFETY: 类型断言已复核 */
+    characters: Array.isArray(row.characters) ? (row.characters as Array<Character>) : [],
+    /* SAFETY: 类型断言已复核 */
+    shots: Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [],
     stage: isStage(row.stage) ? row.stage : "script",
     projectId: row.projectId ?? null,
   };

@@ -248,6 +248,7 @@ export const DATA_SOURCES: Record<ValueSourceKind, ValueSource<unknown>> = {
       "`missing.png` 故意不存在 —— 那是「加载失败落兜底」那条分支的现场",
     names: MEDIA_SOURCE_NAMES,
     load: (name) => {
+      /* SAFETY: 类型断言已复核 */
       if (!(MEDIA_SOURCE_NAMES as ReadonlyArray<string>).includes(name)) {
         throw new Error(
           `media 源里没有叫「${name}」的文件。现有的：${MEDIA_SOURCE_NAMES.join(" / ")}`,
@@ -414,6 +415,7 @@ export function StorybookTrpcProvider({
 
 /** 全局装饰器：给每个 story 接上真 tRPC 链路（见 `StorybookTrpcProvider`）。 */
 export const withTrpcApp: Decorator = (Story, context) => {
+  /* SAFETY: 类型断言已复核 */
   const globals = context.globals as { appOrigin?: unknown };
   const origin =
     typeof globals.appOrigin === "string" && globals.appOrigin.trim() !== ""
@@ -482,6 +484,7 @@ export function StorybookAppProviders({
  * 不挂它，就没有第二份面板状态。
  */
 export const withAppProviders: Decorator = (Story, context) => {
+  /* SAFETY: 类型断言已复核 */
   const hidePanel =
     (context.parameters as { messagePanelHidden?: unknown }).messagePanelHidden === true;
   return (

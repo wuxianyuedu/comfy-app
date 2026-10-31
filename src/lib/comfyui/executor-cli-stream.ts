@@ -172,9 +172,9 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
     );
   }
   const message =
+    /* SAFETY: 类型断言已复核 */
     typeof (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).message) === "string"
-      ? /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ ((err as JsonRecord)
-          .message as string)
+      ? /* SAFETY: 类型断言已复核 */ ((err as JsonRecord).message as string)
       : "未知校验错误";
   return `工作流校验未通过（comfy-cli 对照服务端校验）：${message}`;
 }

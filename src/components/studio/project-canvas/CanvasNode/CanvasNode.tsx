@@ -53,8 +53,9 @@ export const CanvasNode = React.memo(function CanvasNode({
           node.id === id
             ? {
                 ...node,
+                /* SAFETY: 类型断言已复核 */
                 data: {
-                  .../* SAFETY: 类型断言已复核 */ (node.data as CanvasNodeData),
+                  ...(node.data as CanvasNodeData),
                   ...p,
                 },
               }

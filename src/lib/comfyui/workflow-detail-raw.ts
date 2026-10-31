@@ -189,11 +189,8 @@ export function buildRawView(
     const rawViewNodes: Array<DetailNodeView> = Object.entries(rawGraph).map(([nodeId, n]) => {
       /* 与旧 `n?.class_type || (n?.type as string) || "?"` 语义逐值等价
        *  （`a || b` ≡ `a ? a : b`）：class_type/type 为空串时同样回退。 */
-      const classType: string = n?.class_type
-        ? n.class_type
-        : n?.type
-          ? /* SAFETY: 类型断言已复核 */ (n.type as string)
-          : "?";
+      /* SAFETY: 类型断言已复核 */
+      const classType: string = n?.class_type ? n.class_type : n?.type ? (n.type as string) : "?";
       const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
       let resolvedTitle: string | undefined;
       if (isUuidClass && raw?.definitions?.subgraphs) {

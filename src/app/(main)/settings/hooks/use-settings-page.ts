@@ -92,9 +92,8 @@ function writeSettingsCache(value: { llm?: QueryLlmConfig; settings?: Settings }
 
 /** 目标分区（来自跳转载荷）的合法性收敛：不在白名单里就当作没给。 */
 function readInitialSection(raw: string | null | undefined): Section | null {
-  return SETTINGS_SECTIONS.some((item) => item.id === raw)
-    ? /* SAFETY: 类型断言已复核 */ (raw as Section)
-    : null;
+  /* SAFETY: 类型断言已复核 */
+  return SETTINGS_SECTIONS.some((item) => item.id === raw) ? (raw as Section) : null;
 }
 
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */

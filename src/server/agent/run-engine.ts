@@ -263,9 +263,8 @@ async function execImages(
       error: "缺少图类工作流（imageWorkflowId），无法逐镜生图",
     };
   }
-  const shots = Array.isArray(row.shots)
-    ? /* SAFETY: 类型断言已复核 */ (row.shots as Array<Shot>)
-    : [];
+  /* SAFETY: 类型断言已复核 */
+  const shots = Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [];
   const want = new Set(shotIds);
   const next: Array<Shot> = [];
   for (const shot of shots) {

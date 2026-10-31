@@ -75,9 +75,8 @@ function mergeScene(fallback: SceneResolutionTable, raw: unknown): SceneResoluti
 
 function mergeTable(raw: unknown): SizePresetTable {
   const record =
-    raw && typeof raw === "object"
-      ? /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>)
-      : {};
+    /* SAFETY: 类型断言已复核 */
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   return {
     image: mergeScene(DEFAULT_SIZE_PRESET_TABLE.image, record.image),
     video: mergeScene(DEFAULT_SIZE_PRESET_TABLE.video, record.video),
