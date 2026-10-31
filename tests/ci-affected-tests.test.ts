@@ -316,11 +316,13 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
   it("段开关认不出的值不在入口拦 —— 由 run-affected-tests 的解析器退 2（口径一处）", () => {
     /* 入口只认 `fixed` 这一个词的**正向形态**；其他值（含手滑的 `Fixed` / `both`）
      * 原样递下去，由 `resolveAffectedSegment` 统一说「没看懂」—— 两处各拦一半，
-     * 读数就会分成两套。 */
+     * 读数就会分成两套。⚠️ 面解析那一路要给**确定性注入**（TARGET_SHA + runGit）：
+     * 不给的话它去真调 git，本地全量检出绿、CI 工作区形态退 2 —— 用例就变成
+     * 「在哪台机上跑决定红绿」（实测 cnb-u3i-1k68kgpbv 就红在这一格）。 */
     const { spawn, seen } = fakeSpawn(0);
     const code = main({
       ...silent(),
-      env: { COMFY_AFFECTED_SEGMENT: "Fixed" },
+      env: { COMFY_AFFECTED_SEGMENT: "Fixed", CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       ledgerDir: null,
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
       spawn,
