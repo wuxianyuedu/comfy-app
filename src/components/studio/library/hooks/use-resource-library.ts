@@ -22,10 +22,10 @@ export interface ResourceLibraryController {
   library: MaterialLibraryController;
   /** 当前活跃项目 id；null = 还没有项目（页面据此给引导）。 */
   projectId: string | null;
-  /** 所有分类的素材总数（各分类 count 之和）。 */
-  totalCount: number;
   /** 切「本项目 / 跨项目」。 */
   setScope: (scope: MaterialScope) => void;
+  /** 所有分类的素材总数（各分类 count 之和）。 */
+  totalCount: number;
 }
 
 /**
@@ -54,15 +54,9 @@ export function useResourceLibrary(): ResourceLibraryController {
 
   /* 「跨项目」聚合没有活跃项目也成立（它就是所有项目 + 共享的合集），
    * 所以只在「本项目」档下把项目缺失当成前置未满足 —— 判据交给视图。 */
-  const setScope = useCallback(
-    (scope: MaterialScope) => library.setScope(scope),
-    [library],
-  );
+  const setScope = useCallback((scope: MaterialScope) => library.setScope(scope), [library]);
 
-  const totalCount = library.folders.reduce(
-    (sum, folder) => sum + folder.count,
-    0,
-  );
+  const totalCount = library.folders.reduce((sum, folder) => sum + folder.count, 0);
 
   return { library, projectId, totalCount, setScope };
 }

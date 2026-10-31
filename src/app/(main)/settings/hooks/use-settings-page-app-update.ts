@@ -24,20 +24,20 @@ import {
 
 /** 自更新分区的完整视图态（原 `SettingsPageController["appUpdate"]` 内联形状）。 */
 export interface AppUpdateView {
-  /** 是否在桌面壳内（决定「检测更新」是否可用）。 */
-  inShell: boolean;
-  /** 一次操作的进行态；idle 表示空闲。 */
-  busy: "idle" | "checking" | "installing";
   /** 最近一次检测是否发现可用更新。 */
   available: boolean;
-  /** 可用的远端版本号（available 时非空）。 */
-  version: string | null;
+  /** 一次操作的进行态；idle 表示空闲。 */
+  busy: "idle" | "checking" | "installing";
   /** 当前本地版本号（可用时从检测结果读取）。 */
   currentVersion: string | null;
+  /** 是否在桌面壳内（决定「检测更新」是否可用）。 */
+  inShell: boolean;
   /** 最近一次检测/安装的可读结果或提示。 */
   message: string | null;
   /** 下载进度（bytes，total 可能为空），installing 时非空。 */
   progress: { downloaded: number; total?: number } | null;
+  /** 可用的远端版本号（available 时非空）。 */
+  version: string | null;
 }
 
 export interface UseSettingsAppUpdate {

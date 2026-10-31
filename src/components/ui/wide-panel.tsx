@@ -82,16 +82,16 @@ const subscribe = (cb: () => void) => {
 };
 
 export interface WidePanel {
-  /** 当前是否处于加宽档。 */
-  wide: boolean;
-  /** 在窄 / 宽之间切换（并记忆）。 */
-  toggle: () => void;
   /** 显式设置（供「恢复默认」这类动作）。 */
   set: (wide: boolean) => void;
-  /** 当前档位对应的宽度类 —— 直接交给 `popupClassName` / `className`。 */
-  widthClass: string;
+  /** 在窄 / 宽之间切换（并记忆）。 */
+  toggle: () => void;
   /** 触发钮的文案（`aria-label` / `title` 共用，避免两处写不一样）。 */
   toggleLabel: string;
+  /** 当前是否处于加宽档。 */
+  wide: boolean;
+  /** 当前档位对应的宽度类 —— 直接交给 `popupClassName` / `className`。 */
+  widthClass: string;
 }
 
 /**

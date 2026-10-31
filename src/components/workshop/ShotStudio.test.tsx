@@ -111,9 +111,9 @@ function buildResult(patch: Partial<LibraryWorkflowBuildResult> = {}): LibraryWo
 }
 
 interface RenderOptions {
+  apiChannels?: ApiChannelsView | null;
   shots?: Array<Shot>;
   workflowId?: string;
-  apiChannels?: ApiChannelsView | null;
 }
 
 function renderStudio(options: RenderOptions = {}) {

@@ -56,10 +56,10 @@ type BoundaryPin = NonNullable<WorkflowDetail["boundaryPins"]>["inputs"][number]
 
 export interface BuildInitialNodesCtx {
   detail: WorkflowDetail | null;
-  scopeDetail: WorkflowDetail | null;
-  rawMetaById: Record<string, RawNodeMeta>;
-  outSlotNameById: Record<string, Array<string>>;
-  paramMap: Record<string, unknown>;
+  /** 当前视图的宿主（外层封装）节点 id —— 仅当视图是「下钻后的子工作流内部」
+   *  时传入。本层节点都是子图内部节点，勾选时把它一并带上，运行期据此还原
+   *  comfy-cli 展开后的 `host:inner` 拼接 id（见 IoRef.hostNodeId）。 */
+  hostNodeId?: string;
   onEnterSubgraph?: (
     id: string,
     classType: string,
@@ -67,10 +67,10 @@ export interface BuildInitialNodesCtx {
     /** 本层视图的宿主链，嵌套下钻时与当前节点的 id 拼成新的宿主链。 */
     parentHostId?: string,
   ) => void;
-  /** 当前视图的宿主（外层封装）节点 id —— 仅当视图是「下钻后的子工作流内部」
-   *  时传入。本层节点都是子图内部节点，勾选时把它一并带上，运行期据此还原
-   *  comfy-cli 展开后的 `host:inner` 拼接 id（见 IoRef.hostNodeId）。 */
-  hostNodeId?: string;
+  outSlotNameById: Record<string, Array<string>>;
+  paramMap: Record<string, unknown>;
+  rawMetaById: Record<string, RawNodeMeta>;
+  scopeDetail: WorkflowDetail | null;
 }
 
 /**

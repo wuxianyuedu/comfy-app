@@ -140,10 +140,10 @@ describe("driveFilmRun（假 request 驱动轮询状态机）", () => {
 
   it("打印引擎执行日志（run.log 新增条目，去重）", async () => {
     interface Step {
-      ts: string;
+      detail: string;
       kind: string;
       ok: boolean;
-      detail: string;
+      ts: string;
     }
     const withLog = (status: string, log: Array<Step>) => ({
       run: { status, log },

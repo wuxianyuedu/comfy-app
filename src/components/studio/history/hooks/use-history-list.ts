@@ -41,42 +41,42 @@ import { useTRPC } from "~/trpc/react";
 const EMPTY_WORKFLOW_IO: WorkflowIOMap = {};
 
 export interface HistoryListController {
-  tasks: Array<TaskItem>;
-  loading: boolean;
-  filter: FilterKey;
-  sort: SortKey;
+  cancel: (id: string) => Promise<void>;
+  canLoadMore: boolean;
+  closeDetail: () => void;
   /** 各状态计数，key 为 FilterKey 或任务 status。 */
   counts: Record<string, number>;
-  /** 当前可见的日期分组（已按 displayCount 裁剪）。 */
-  visibleGroups: Array<{ items: Array<TaskItem>; key: string }>;
-  visibleTotal: number;
-  filteredCount: number;
-  canLoadMore: boolean;
+  detail: TaskDetail | null;
+  detailId: string | null;
+  detailLoading: boolean;
   /** 空态文案（区分「一条都没有」与「当前筛选下没有」）。 */
   empty: { hint: string; title: string };
-  /** 进行中任务的模拟进度 Map。 */
-  progressMap: Record<string, number>;
-  retryingId: string | null;
+  filter: FilterKey;
+  filteredCount: number;
   /** 「这一条在重试吗」的判据（收在 `useItemAction` 里，视图不再自己比较）。 */
   isRetrying: (id: string) => boolean;
-  detailId: string | null;
-  detail: TaskDetail | null;
-  detailLoading: boolean;
-  /** 本任务所用工作流的 IO 定义（参数可读名从它的 `label` 查）。
-   *  工作流已被删除 / 查询未回来时是空表，参数名如实回落 pin 名。 */
-  workflowIO: WorkflowIOMap;
+  loading: boolean;
+  loadMore: () => void;
   /** 模式契约注册表（只含用户改过的模式）：详情弹窗按它 + 任务模式枚举工坊对外口。
    *  未加载 / 失败时为 null，工坊参数回落内置默认契约。 */
   modeContracts: ReadonlyArray<ModeContract> | null;
-  setSort: (sort: SortKey) => void;
-  switchFilter: (filter: FilterKey) => void;
-  loadMore: () => void;
-  refresh: () => void;
   openDetail: (id: string) => void;
-  closeDetail: () => void;
-  cancel: (id: string) => Promise<void>;
+  /** 进行中任务的模拟进度 Map。 */
+  progressMap: Record<string, number>;
+  refresh: () => void;
   remove: (id: string) => Promise<void>;
   retry: (task: TaskItem) => Promise<void>;
+  retryingId: string | null;
+  setSort: (sort: SortKey) => void;
+  sort: SortKey;
+  switchFilter: (filter: FilterKey) => void;
+  tasks: Array<TaskItem>;
+  /** 当前可见的日期分组（已按 displayCount 裁剪）。 */
+  visibleGroups: Array<{ items: Array<TaskItem>; key: string }>;
+  visibleTotal: number;
+  /** 本任务所用工作流的 IO 定义（参数可读名从它的 `label` 查）。
+   *  工作流已被删除 / 查询未回来时是空表，参数名如实回落 pin 名。 */
+  workflowIO: WorkflowIOMap;
 }
 
 /**

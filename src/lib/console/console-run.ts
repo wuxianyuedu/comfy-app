@@ -68,19 +68,19 @@ export type ConsoleEvent =
 
 /** 一次执行的收尾事实（供运行日志与界面共用）。 */
 export interface ConsoleRunResult {
-  runId: string;
   command: string;
+  durationMs: number;
   exitCode: number | null;
   killed: boolean;
-  durationMs: number;
+  runId: string;
 }
 
 export interface StartRunOptions {
-  runId: string;
-  command: string;
-  file: string;
   args: Array<string>;
+  command: string;
   cwd: string;
+  file: string;
+  runId: string;
   /** 看门狗上限（毫秒）。超时走 `killProcessTree` 掐整棵树。 */
   timeoutMs: number;
 }
@@ -89,10 +89,10 @@ export interface StartRunOptions {
 export interface ConsoleRunner {
   /** 当前是否有命令在跑；忙时回「是谁、跑了多久」（界面据此禁用输入）。 */
   busy: () => { command: string; runId: string; startedAt: number } | null;
-  /** 起一条命令，逐事件推给 `onEvent`。返回收尾事实。 */
-  run: (opts: StartRunOptions, onEvent: (event: ConsoleEvent) => void) => Promise<ConsoleRunResult>;
   /** 取消当前命令（杀整棵树）。没有在跑的命令时返回 false。 */
   cancel: () => Promise<boolean>;
+  /** 起一条命令，逐事件推给 `onEvent`。返回收尾事实。 */
+  run: (opts: StartRunOptions, onEvent: (event: ConsoleEvent) => void) => Promise<ConsoleRunResult>;
 }
 
 /**

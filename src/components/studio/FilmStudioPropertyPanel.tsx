@@ -17,10 +17,10 @@ import { formatShotDuration, type ShotListItem } from "./film-studio-config";
 
 interface FilmStudioPropertyPanelProps {
   c: FilmStudioController;
-  selectedShot: ShotListItem;
-  selectedShotId: string;
   /** 回写本地样例时间轴的镜头字段（名称 / 时长）。 */
   onPatchShot: (id: string, patch: Partial<ShotListItem>) => void;
+  selectedShot: ShotListItem;
+  selectedShotId: string;
 }
 
 export function FilmStudioPropertyPanel({

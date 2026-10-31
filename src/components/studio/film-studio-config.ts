@@ -17,47 +17,47 @@ import type { FilmStatus, ShotStatus } from "~/lib/film/film-status";
 export type ShotMode = "txt2img" | "img2video" | "transition";
 
 export interface FilmShot {
+  duration: number | null;
+  heading: string | null;
   id: string;
   order: number;
-  heading: string | null;
+  progress: number;
   prompt: string;
   status: ShotStatus;
-  progress: number;
   videoPath: string | null;
-  duration: number | null;
 }
 
 export interface Film {
+  bgmName: string | null;
+  error: string | null;
+  finalVideo: string | null;
+  fps: number;
+  framesPerShot: number;
   id: string;
-  title: string;
+  logs: Array<{ level: string; msg: string; t: number }> | null;
+  progress: number;
   script: string;
-  type: string;
-  styleSlug: string | null;
+  shots: Array<FilmShot>;
   /** 成片画幅：库存的是**尺寸表达 JSON**（`lib/size-presets` 的 `SizeSpec`）；
    *  老行里是 "1280x720" 字符串 —— 展示/消费前用 `toSizeSpec` 归一。 */
   size: string;
-  fps: number;
-  framesPerShot: number;
-  subtitleOn: boolean;
-  bgmName: string | null;
   status: FilmStatus;
-  progress: number;
-  finalVideo: string | null;
-  error: string | null;
-  logs: Array<{ level: string; msg: string; t: number }> | null;
-  shots: Array<FilmShot>;
+  styleSlug: string | null;
+  subtitleOn: boolean;
+  title: string;
+  type: string;
 }
 
 /** 时间轴编辑器的镜头条目（当前为设计稿样例数据，未接后端）。 */
 export interface ShotListItem {
-  id: string;
-  name: string;
   duration: string;
+  id: string;
   mode: ShotMode;
+  name: string;
+  selected?: boolean;
   status: ShotStatus;
   /** 该镜已产出的首帧 / 图（项目真实镜头有则显缩略图）。 */
   thumbnailUrl?: string;
-  selected?: boolean;
 }
 
 /** production 的镜头状态（idle/queued/running/done/failed/stale）→ 成片列表大写态。 */
@@ -102,11 +102,11 @@ export function productionShotsToShotList(shots: Array<unknown>): Array<ShotList
 
 /** 时间轴上的一段素材条。 */
 export interface TimelineClip {
+  colorClass: string;
   id: string;
   label: string;
-  width: number /* px proportion */;
-  colorClass: string;
   textColorClass: string;
+  width: number /* px proportion */;
 }
 
 /* ── 表单默认值（原组件内的 useState 初始值）── */

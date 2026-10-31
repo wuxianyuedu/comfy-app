@@ -18,25 +18,25 @@
 
 /** 预设命令的一个分组（界面上按组分块展示）。 */
 export interface ConsolePresetGroup {
-  /** 分组机器名（也是 React key）。 */
-  id: string;
-  /** 分组标题。 */
-  label: string;
   /** 一句话说明这一组是干什么的（分组标题下方的灰字）。 */
   hint: string;
+  /** 分组机器名（也是 React key）。 */
+  id: string;
   items: Array<ConsolePreset>;
+  /** 分组标题。 */
+  label: string;
 }
 
 /** 一条预设命令。 */
 export interface ConsolePreset {
-  /** 预设机器名（界面上「填入」按钮的 key）。 */
-  id: string;
-  /** 展示名。 */
-  label: string;
   /** 要填进输入框的完整命令行（**就是**用户会敲的那行文本）。 */
   command: string;
   /** 这条命令做什么、什么时候用它。 */
   desc: string;
+  /** 预设机器名（界面上「填入」按钮的 key）。 */
+  id: string;
+  /** 展示名。 */
+  label: string;
 }
 
 /**

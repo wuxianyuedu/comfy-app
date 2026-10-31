@@ -94,9 +94,9 @@ function pinnedScenes(): Set<string> {
 interface CanvasUsage {
   /** 消费方文件（相对仓库根）。 */
   readonly file: string;
+  readonly hasFit: boolean;
   /** 这个 `<StorybookFlowCanvas>` 传了 `nodeTypes`（自定义渲染器，高度未知）。 */
   readonly hasNodeTypes: boolean;
-  readonly hasFit: boolean;
   /** `scene={… canvasScene("名字") …}` 里的场景名（读不到就是 null）。 */
   readonly sceneName: string | null;
 }

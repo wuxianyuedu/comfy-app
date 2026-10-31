@@ -20,15 +20,15 @@ import {
 } from "~/lib/workshop/types";
 
 interface Props {
-  shots: Array<Shot>;
-  title: string;
-  /** 镜头列表所有者回调（时长 / 转场 / 运动编辑）。 */
-  onShotsChange: (shots: Array<Shot>) => void;
-  /** Raised when the user exports the composition plan (合成清单已导出，非成片). */
-  onRendered: () => void;
-  rendered: boolean;
   /** 跳到「成片」视图（真出 MP4）。由父组件注入（内部走 workspace:navigate 广播）。 */
   onComposeFilm?: () => void;
+  /** Raised when the user exports the composition plan (合成清单已导出，非成片). */
+  onRendered: () => void;
+  /** 镜头列表所有者回调（时长 / 转场 / 运动编辑）。 */
+  onShotsChange: (shots: Array<Shot>) => void;
+  rendered: boolean;
+  shots: Array<Shot>;
+  title: string;
 }
 
 const TRANSITIONS: Array<Transition> = ["cut", "dissolve", "fade"];
@@ -36,8 +36,8 @@ const MOTIONS: Array<MotionLevel> = ["low", "medium", "high"];
 
 /** 顺序播放预览中的一个时间线条目。 */
 interface TimelineEntry {
-  shot: Shot;
   duration: number;
+  shot: Shot;
 }
 
 const MOTION_PROMPTS: Record<MotionLevel, string> = {

@@ -43,14 +43,14 @@ export type LivenessPhase =
 
 /** 分类所需的**事实**（全部由调用方从已有状态里读，本模块不做 IO）。 */
 export interface LivenessFacts {
-  /** HTTP 这一拍回答了吗（`/system_stats` 连上即算，含 CUDA OOM 的 500，见 probe.ts）。 */
-  up: boolean;
-  /** 进程在跑（进程级快照），但 HTTP 还没就绪 —— 即「正在启动」。 */
-  starting: boolean;
   /** 队列里有活儿（本应用在跑 / ComfyUI 自己排着队）。 */
   busy: boolean;
   /** 窗口不可见（页面隐藏 / 桌面壳失焦）。 */
   hidden: boolean;
+  /** 进程在跑（进程级快照），但 HTTP 还没就绪 —— 即「正在启动」。 */
+  starting: boolean;
+  /** HTTP 这一拍回答了吗（`/system_stats` 连上即算，含 CUDA OOM 的 500，见 probe.ts）。 */
+  up: boolean;
   /** 刚收到进程退出事件、正在做那次单次复核。 */
   verifying: boolean;
 }

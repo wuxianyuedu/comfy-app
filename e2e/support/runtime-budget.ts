@@ -83,10 +83,10 @@ export const DISCARD_ROUNDS = 4;
 
 /** 一次导航的读数（毫秒，相对 `navigationStart`）。 */
 export interface NavigationSample {
-  /** `navigation` 时序的 `loadEventEnd`。 */
-  loadEventEnd: number;
   /** `paint` 时序里 `first-contentful-paint` 的 `startTime`。 */
   firstContentfulPaint: number;
+  /** `navigation` 时序的 `loadEventEnd`。 */
+  loadEventEnd: number;
 }
 
 /**

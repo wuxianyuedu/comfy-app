@@ -57,8 +57,8 @@ export const MIN_SIZE = 64;
 export const MAX_SIZE = 4096;
 
 export interface SizeDims {
-  width: number;
   height: number;
+  width: number;
 }
 
 /** 单场景的「比例 → 各分辨率档的宽高」表。 */
@@ -358,10 +358,10 @@ export interface SizeClarityPreset {
   kind: ClarityKind;
   /** 显示名（"1k" / "2M"），也是 `SizeSpec.clarity` 的取值。 */
   label: string;
-  /** 分辨率档：档位名。 */
-  tier?: ResolutionTier;
   /** 百万像素档：总像素档位（1 = 1M）。 */
   megapixels?: number;
+  /** 分辨率档：档位名。 */
+  tier?: ResolutionTier;
 }
 
 /** 清晰度档位目录。类型是非空数组，同 {@link SIZE_RATIO_PRESETS}
@@ -468,14 +468,14 @@ export function megapixelTierOfLabel(label: string): number | null {
  * 不是第二种表达）。 */
 
 export interface SizeSpec {
-  /** 比例预设 label（`SIZE_RATIO_PRESETS[].label`，如 "16:9 横屏" / "3:4"）。 */
-  ratio: string;
   /** 清晰度标签：档位表里的（`SIZE_CLARITY_PRESETS[].label`，如 "1k" / "2M"），
    *  或**任意百万像素值**（如 `"2.5M"` —— 界面上的步进器写出来的就是它：
    *  百万像素在端口上是 FLOAT，1M/2M/4M 只是常用档位，不是值域边界）。 */
   clarity: string;
   /** 百万像素档的宽高对齐倍数；分辨率档不读它（宽高由场景表给定）。 */
   multiple: AlignMultiple;
+  /** 比例预设 label（`SIZE_RATIO_PRESETS[].label`，如 "16:9 横屏" / "3:4"）。 */
+  ratio: string;
 }
 
 /** 默认尺寸：竖屏 1k（3:4，图片场景表 → 768×1024）。 */

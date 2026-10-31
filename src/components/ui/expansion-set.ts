@@ -38,10 +38,8 @@ import { useCallback, useMemo, useState } from "react";
 export type ExpansionMap = Record<string, boolean>;
 
 export interface ExpansionSet {
-  /** 当前展开集合。直接用 `Record` 是为了让调用处可以整体交给别的 `map` 用。 */
-  map: ExpansionMap;
-  /** 某一项是否展开（缺键 = 未表态 = 折叠）。 */
-  isExpanded: (key: string) => boolean;
+  /** 全收起。 */
+  collapseAll: () => void;
   /**
    * 该键**有没有被表过态**（无论展开还是收起）。
    *
@@ -50,10 +48,12 @@ export interface ExpansionSet {
    * 恰恰要区分它们 —— 这是 `in` 与取值两种判据，不是一个。
    */
   hasKey: (key: string) => boolean;
-  /** 切换一项（未表态 → 展开；已展开 → 收起）。 */
-  toggle: (key: string) => void;
-  /** 显式设置一项。 */
-  set: (key: string, open: boolean) => void;
+  /** 某一项是否展开（缺键 = 未表态 = 折叠）。 */
+  isExpanded: (key: string) => boolean;
+  /** 当前展开集合。直接用 `Record` 是为了让调用处可以整体交给别的 `map` 用。 */
+  map: ExpansionMap;
+  /** 整体替换（全展开 / 全收起 / 从持久化恢复）。 */
+  replace: (next: ExpansionMap) => void;
   /**
    * 为**尚未表态**的键补默认值，不覆盖已有的表态。
    *
@@ -62,10 +62,10 @@ export interface ExpansionSet {
    * 不是「补默认」）。
    */
   seedDefaults: (keys: ReadonlyArray<string>, open?: boolean) => void;
-  /** 整体替换（全展开 / 全收起 / 从持久化恢复）。 */
-  replace: (next: ExpansionMap) => void;
-  /** 全收起。 */
-  collapseAll: () => void;
+  /** 显式设置一项。 */
+  set: (key: string, open: boolean) => void;
+  /** 切换一项（未表态 → 展开；已展开 → 收起）。 */
+  toggle: (key: string) => void;
 }
 
 /**

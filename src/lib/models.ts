@@ -48,11 +48,11 @@ async function isComfyReachable(): Promise<boolean> {
 }
 
 interface ScannedFile {
-  folder: string;
-  fileName: string;
-  type: ModelType;
-  name: string;
   baseModel: string;
+  fileName: string;
+  folder: string;
+  name: string;
+  type: ModelType;
 }
 
 /* 把磁盘上的 ComfyUI 模型同步进本项目的注册表。

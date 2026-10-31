@@ -28,26 +28,26 @@ import type { ActionReport } from "~/lib/async-action";
 
 /** 一份可选备份（与服务端 `listBackupEntries` 的形状同源）。 */
 export interface BackupEntry {
-  name: string;
-  size: number;
   /** 文件名里的时刻（毫秒）；形态认不出时 null。 */
   at: number | null;
+  name: string;
+  size: number;
 }
 
 /** 待恢复标记（写入后到下次启动之间一直有效）。 */
 export interface PendingRestore {
-  file: string;
   at: string | null;
+  file: string;
 }
 
 export interface UseSettingsBackup {
+  backupBusy: boolean;
   backups: Array<BackupEntry>;
-  pending: PendingRestore | null;
+  createBackupNow: () => Promise<void>;
   /** 备份清单首次加载完成前为 true（视图据此避免把「还没读到」当「一份都没有」）。 */
   loading: boolean;
-  backupBusy: boolean;
+  pending: PendingRestore | null;
   restoreBusy: boolean;
-  createBackupNow: () => Promise<void>;
   restoreFrom: (name: string) => Promise<void>;
 }
 

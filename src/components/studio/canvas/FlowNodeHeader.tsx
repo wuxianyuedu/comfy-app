@@ -10,21 +10,21 @@ import type { NodePalette } from "./workflow-node-palette";
 import { Hint } from "~/components/ui/hint";
 
 export interface FlowNodeRole {
+  bg: string;
+  color: string;
   key: string;
   label: string;
-  color: string;
-  bg: string;
 }
 
 interface FlowNodeHeaderProps {
   data: WorkflowNodeData;
-  role?: FlowNodeRole;
+  displayTitle: string;
   io: IOEditContextValue | null;
-  outputs: Array<[string, string]>;
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
+  outputs: Array<[string, string]>;
   palette: Pick<NodePalette, "headerBg" | "titleColor" | "dotBg">;
-  displayTitle: string;
+  role?: FlowNodeRole;
 }
 
 export function FlowNodeHeader({

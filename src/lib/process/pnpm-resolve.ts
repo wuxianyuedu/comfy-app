@@ -45,27 +45,27 @@ function isFile(candidate: string): boolean {
 
 /** `pnpmInvocation()` 的结论。 */
 export interface PnpmInvocation {
-  /** 真正要 spawn 的可执行文件（可能是 PowerShell 宿主）。 */
-  command: string;
   /** 完整参数（宿主参数在前）。 */
   args: Array<string>;
   /** PATH 上选中的候选（`.ps1` 回退时是那个脚本，不是宿主）。 */
   candidate: string;
+  /** 真正要 spawn 的可执行文件（可能是 PowerShell 宿主）。 */
+  command: string;
+  /** 那些条目里 `pnpm<后缀>` 真的落在盘上的（只看「名字在不在」，`.ps1` 无条件在列）。 */
+  onDisk: Array<string>;
+  /** 解释器宿主（PowerShell）的绝对路径；POSIX 上恒为 `null`。失败结论要能分清
+   *  「没装 pnpm」与「宿主没找到」—— 那两句指向完全不同的下一步（ISSUE #2281）。 */
+  osHost: string | null;
+  /** 按**目标平台**分隔符切出来的 PATH 条目（空串已滤掉）。 */
+  pathEntries: Array<string>;
+  /** PATH 原文——**就是 `env` 里那一串**，不是本判据解析出来的那几段。 */
+  pathRaw: string;
   /** 这一跳是不是**经宿主（PowerShell）**起的 —— 排障时「为什么多了一层」的答案。
    *
    *  判据是「真正要 spawn 的那个可执行文件是不是宿主」，**不是**「它等不等于
    *  `candidate`」：走包真身 JS 入口时 `command` 是 `process.execPath`、`candidate`
    *  是落点目录，两者本来就不相等，而那条路上一个宿主也没有（ISSUE #2562）。 */
   viaHost: boolean;
-  /** PATH 原文——**就是 `env` 里那一串**，不是本判据解析出来的那几段。 */
-  pathRaw: string;
-  /** 按**目标平台**分隔符切出来的 PATH 条目（空串已滤掉）。 */
-  pathEntries: Array<string>;
-  /** 那些条目里 `pnpm<后缀>` 真的落在盘上的（只看「名字在不在」，`.ps1` 无条件在列）。 */
-  onDisk: Array<string>;
-  /** 解释器宿主（PowerShell）的绝对路径；POSIX 上恒为 `null`。失败结论要能分清
-   *  「没装 pnpm」与「宿主没找到」—— 那两句指向完全不同的下一步（ISSUE #2281）。 */
-  osHost: string | null;
 }
 
 /** 把 `pnpm <args…>` 解析成「这台机器上真能跑起来」的命令形态。
@@ -312,10 +312,10 @@ export function pnpmJsInvocation({
 }
 
 export interface ResolvedInvocation {
-  /** 真正要 spawn 的可执行文件（可能是绝对路径或 PowerShell 宿主）。 */
-  command: string;
   /** 完整参数（宿主参数在前）。 */
   args: Array<string>;
+  /** 真正要 spawn 的可执行文件（可能是绝对路径或 PowerShell 宿主）。 */
+  command: string;
   /** 是否在 PATH 上找到了这个命令（`false` = 交回原样，让 spawn 报它那一句错）。 */
   resolved: boolean;
 }

@@ -10,9 +10,9 @@ import { toDisplayPath } from "~/lib/path-display";
 const LOG_DIR = path.join(process.cwd(), "log");
 
 interface LogFileInfo {
+  mtimeMs: number;
   name: string;
   relativePath: string;
-  mtimeMs: number;
   size: number;
 }
 

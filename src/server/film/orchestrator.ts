@@ -40,31 +40,31 @@ import { appendFilmLog } from "./film-log";
 import { composeFilm } from "./compose-film";
 
 export interface FilmShotInput {
+  heading?: string;
+  negative?: string;
   order: number;
+  prompt: string;
   /** 关联的统一镜头 id（Phase 5 逐镜回写用）；自由建片（剧本自解析）时无来源，留空。 */
   shotId?: string;
-  heading?: string;
-  prompt: string;
-  negative?: string;
 }
 
 export interface CreateFilmInput {
-  userId: string;
-  title: string;
+  bgmName?: string | null;
+  fps?: number;
+  framesPerShot?: number;
+  /** 文生视频镜头合成首帧用的**图类工作流 id**；镜头自带首帧时不需要。 */
+  imageWorkflowId?: string | null;
   script: string;
-  type?: string;
-  styleSlug?: string | null;
   /** 成片画幅（尺寸表达：比例 + 分辨率 / 比例 + 百万像素 + 倍数）。缺省走视频
    *  场景 16:9 1k；仍传 "1280x720" 这类老字符串时由 `toSizeSpec` 归一。 */
   size?: unknown;
-  fps?: number;
-  framesPerShot?: number;
+  styleSlug?: string | null;
   subtitleOn?: boolean;
-  bgmName?: string | null;
+  title: string;
+  type?: string;
+  userId: string;
   /** 逐镜生成用的**工作流库视频工作流 id**（本地链路唯一来源，内置模板已移除）。 */
   videoWorkflowId?: string | null;
-  /** 文生视频镜头合成首帧用的**图类工作流 id**；镜头自带首帧时不需要。 */
-  imageWorkflowId?: string | null;
 }
 
 const FILM_NEGATIVE =
@@ -276,20 +276,20 @@ export async function createFilm(input: CreateFilmInput) {
 }
 
 export interface CreateFilmFromProjectInput {
-  userId: string;
-  /** 统一项目 id（proj_*）；镜头取自该项目的 production.shots。 */
-  projectId: string;
-  /** 逐镜生成用的工作流库视频工作流 id（本地链路唯一来源）。 */
-  videoWorkflowId?: string | null;
-  /** 文生视频镜头合成首帧用的图类工作流 id。 */
-  imageWorkflowId?: string | null;
-  title?: string;
-  type?: string;
-  size?: unknown;
+  bgmName?: string | null;
   fps?: number;
   framesPerShot?: number;
+  /** 文生视频镜头合成首帧用的图类工作流 id。 */
+  imageWorkflowId?: string | null;
+  /** 统一项目 id（proj_*）；镜头取自该项目的 production.shots。 */
+  projectId: string;
+  size?: unknown;
   subtitleOn?: boolean;
-  bgmName?: string | null;
+  title?: string;
+  type?: string;
+  userId: string;
+  /** 逐镜生成用的工作流库视频工作流 id（本地链路唯一来源）。 */
+  videoWorkflowId?: string | null;
 }
 
 /** 从统一项目的 `production.shots` 直接建片（Phase 5 接入，设计 §6.3）：

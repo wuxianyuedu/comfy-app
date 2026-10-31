@@ -23,9 +23,9 @@ const SCRIPT = path.join(REAL_ROOT, "scripts", "check-eslint-exemptions.cjs");
 
 /** `verify` 的最小形状（本文件只喂它自己造的读数，不依赖 eslint 的消息类型）。 */
 interface FakeMessage {
-  ruleId?: string | null;
   fatal?: boolean;
   message?: string;
+  ruleId?: string | null;
 }
 interface FakeLinter {
   verify: (code: string, config: unknown, opts: { filename: string }) => FakeMessage[];
@@ -33,7 +33,19 @@ interface FakeLinter {
 
 /** 判据的导出面（与 `scripts/check-eslint-exemptions.cjs` 的 `module.exports` 对齐）。 */
 interface JudgeModule {
+  FILE_LEVEL_EXEMPTIONS: { removalCriterion: string; ruleId: string; }[];
   isGlobEntry: (entry: string) => boolean;
+  judge: (input: JudgeInput) => {
+    entries: number;
+    failed: { file: string; why: string }[];
+    removalCriterion: string;
+    ruleId: string;
+    scanned: number;
+    stale: string[];
+    state: "pass" | "stale" | "inconclusive";
+    unresolvable: string[];
+    violating: number;
+  };
   readFileLevelExemptions: (
     config: { files?: string | string[]; rules?: Record<string, unknown> }[],
     ruleId: string,
@@ -49,28 +61,16 @@ interface JudgeModule {
     scanned: number;
     violating: string[];
   };
-  judge: (input: JudgeInput) => {
-    entries: number;
-    failed: { file: string; why: string }[];
-    removalCriterion: string;
-    ruleId: string;
-    scanned: number;
-    stale: string[];
-    state: "pass" | "stale" | "inconclusive";
-    unresolvable: string[];
-    violating: number;
-  };
-  FILE_LEVEL_EXEMPTIONS: { removalCriterion: string; ruleId: string; }[];
 }
 
 interface JudgeInput {
-  ruleId: string;
-  removalCriterion: string;
   entries: string[];
-  violating: string[];
   failed: { file: string; why: string }[];
-  scanned: number;
   mentionedAnywhere: boolean;
+  removalCriterion: string;
+  ruleId: string;
+  scanned: number;
+  violating: string[];
 }
 
 /* 与 `tests/helpers/a11y-effective-config.ts` 同一形状：`.cjs` 判据用 `createRequire` 拿，

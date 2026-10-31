@@ -10,10 +10,10 @@ import { Button } from "~/components/ui/button";
 const BRUSH_SIZES = /* SAFETY: 类型断言已复核 */ [8, 20, 40] as const;
 
 export interface MaskCanvasProps {
+  disabled?: boolean;
+  onChange: (dataUrl: string | null) => void;
   /** 当前蒙版（PNG dataURL）；外部清空（重置）时传 null 触发重绘底色。 */
   value: string | null;
-  onChange: (dataUrl: string | null) => void;
-  disabled?: boolean;
 }
 
 export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {

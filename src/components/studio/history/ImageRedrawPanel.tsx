@@ -23,13 +23,13 @@ import { MaskCanvas } from "./MaskCanvas";
 import { useImageRedrawClient } from "./hooks/use-image-redraw-client";
 
 export interface ImageRedrawPanelProps {
-  /** 原任务的提示词（预填，可改）。 */
-  prompt: string;
-  projectId?: string | null;
-  /** 原任务 id（parentId 追溯）。 */
-  parentTaskId: string;
   /** 产物图的页面内地址（历史详情当前选中的那张）。 */
   imageUrl: string;
+  /** 原任务 id（parentId 追溯）。 */
+  parentTaskId: string;
+  projectId?: string | null;
+  /** 原任务的提示词（预填，可改）。 */
+  prompt: string;
   /** 动作反馈通道（调用方接 toast）。 */
   toastReport: ActionReport;
 }

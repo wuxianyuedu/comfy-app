@@ -33,14 +33,14 @@ export const TYPE_CHIP: Record<string, string> = {
 
 /** 拆分件自己声明 props 形状（窄接口），不 import 父组件的 controller。 */
 export interface ProjectOutputsMetadataSheetProps {
-  selected: ProjectOutputItem | null;
-  projectId: string | null;
   /** 复制动作的反馈位（父组件的 useFlashState / 失败位）。 */
   copyFailed: boolean;
   copySucceeded: boolean;
+  onClose: () => void;
   onCopy: () => void;
   onExport: () => void;
-  onClose: () => void;
+  projectId: string | null;
+  selected: ProjectOutputItem | null;
 }
 
 export function ProjectOutputsMetadataSheet({
@@ -59,10 +59,7 @@ export function ProjectOutputsMetadataSheet({
  与设置页两个抽屉（已迁`ui/sheet`）是同一件事的两套写法。
  遮罩与面板都由基元 Portal，顶部让出标题行的硬判据（ISSUE #310）
  收在`dialogBackdropClass()` 里。 */}
-      <Sheet
-        open={selected !== null}
-        onOpenChange={(next) => !next && onClose()}
-      >
+      <Sheet open={selected !== null} onOpenChange={(next) => !next && onClose()}>
         <SheetContent
           side="right"
           aria-label={`产出 #${selected?.id.slice(-4) ?? ""}`}
@@ -96,9 +93,7 @@ export function ProjectOutputsMetadataSheet({
               <div className="min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
                 {/* reference images */}
                 <section>
-                  <p className="text-ink-soft mb-2 text-xs font-semibold">
-                    参考图
-                  </p>
+                  <p className="text-ink-soft mb-2 text-xs font-semibold">参考图</p>
                   {selected.referenceImages.length ? (
                     <div className="grid grid-cols-4 gap-2">
                       {selected.referenceImages.map((image, index) => (
@@ -116,9 +111,7 @@ export function ProjectOutputsMetadataSheet({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-ink-fainter text-2xs">
-                      本次生成无参考图（纯文生图）。
-                    </p>
+                    <p className="text-ink-fainter text-2xs">本次生成无参考图（纯文生图）。</p>
                   )}
                   <p className="text-ink-fainter text-2xs mt-1.5">
                     参考图随产出一起保存到项目目录，复现时可一键还原。
@@ -128,18 +121,14 @@ export function ProjectOutputsMetadataSheet({
                 {/* prompts */}
                 <section className="flex flex-col gap-2">
                   <div>
-                    <p className="text-ink-soft mb-1 text-xs font-semibold">
-                      正向提示词
-                    </p>
+                    <p className="text-ink-soft mb-1 text-xs font-semibold">正向提示词</p>
                     <div className="border-border-strong bg-subtle text-ink-soft max-h-28 overflow-y-auto rounded-lg border p-2.5 text-xs leading-relaxed whitespace-pre-wrap">
                       {displayValue(selected.prompt)}
                     </div>
                   </div>
                   {selected.negativePrompt && (
                     <div>
-                      <p className="text-ink-soft mb-1 text-xs font-semibold">
-                        反向提示词
-                      </p>
+                      <p className="text-ink-soft mb-1 text-xs font-semibold">反向提示词</p>
                       <div className="border-border-strong bg-subtle text-ink-muted max-h-24 overflow-y-auto rounded-lg border p-2.5 text-xs leading-relaxed whitespace-pre-wrap">
                         {selected.negativePrompt}
                       </div>
@@ -149,9 +138,7 @@ export function ProjectOutputsMetadataSheet({
 
                 {/* params table */}
                 <section>
-                  <p className="text-ink-soft mb-2 text-xs font-semibold">
-                    参数
-                  </p>
+                  <p className="text-ink-soft mb-2 text-xs font-semibold">参数</p>
                   {/* 「取到没有」由`displayValue` 定义（P8），行布局由
 `KeyValueRows` 定义（P17）—— 此前这一块两件事各写一遍，
  值自己怎么成文本（`steps` /`cfg` 是数字、`timeAgo` 已是
@@ -177,9 +164,7 @@ export function ProjectOutputsMetadataSheet({
 
                 {/* source */}
                 <section>
-                  <p className="text-ink-soft mb-1 text-xs font-semibold">
-                    来源
-                  </p>
+                  <p className="text-ink-soft mb-1 text-xs font-semibold">来源</p>
                   <p className="text-ink-soft text-xs">
                     工作流：{displayValue(selected.workflowName)}
                   </p>
@@ -189,22 +174,14 @@ export function ProjectOutputsMetadataSheet({
               {/* footer actions */}
               <div className="border-border-strong border-t p-4">
                 <div className="flex gap-2">
-                  <Hint
-                    label={
-                      copyFailed ? copyFailureText() : "复制元数据到剪贴板"
-                    }
-                  >
+                  <Hint label={copyFailed ? copyFailureText() : "复制元数据到剪贴板"}>
                     <Button
                       variant="primary-solid"
                       size="sm"
                       onClick={onCopy}
                       className="h-auto flex-1 rounded-lg px-3 py-2 text-xs"
                     >
-                      {copyFailed
-                        ? "复制失败"
-                        : copySucceeded
-                          ? "已复制 ✓"
-                          : "复制元数据"}
+                      {copyFailed ? "复制失败" : copySucceeded ? "已复制 ✓" : "复制元数据"}
                     </Button>
                   </Hint>
                   <Button

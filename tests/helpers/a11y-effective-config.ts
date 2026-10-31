@@ -61,29 +61,29 @@ export interface Ledger {
 
 /** `judge()` 的判决结果（bin 形态再把它翻成退出码）。 */
 export interface JudgeVerdict {
+  /** 生效的 jsx-a11y 规则表（`--report` 那一支要逐条打印它）。 */
+  effective: Record<string, unknown>;
   /** 问题清单（空 = 通过）。 */
   problems: Array<string>;
   /** 那句一行汇总。 */
   summary: string;
-  /** 生效的 jsx-a11y 规则表（`--report` 那一支要逐条打印它）。 */
-  effective: Record<string, unknown>;
 }
 
 export interface A11yJudgeModule {
-  /** 判一份台账，返回问题清单与汇总 —— bin 形态再用它算退出码。 */
-  judge: (ledger: Ledger) => Promise<JudgeVerdict>;
-  /** 读一份台账文件并归一到 `Ledger`（读不到 = 空台账，`--ledger` 的路径由调用方给）。 */
-  readLedger: (ledgerPath: string) => Ledger;
-  /** 规则档位的归一（`"error"` 与 `["error"]` 同义、`["error", 5]` 不同）。 */
-  normalize: (setting: unknown) => string;
-  /** 读一次真的 `eslint.config.js`（扁平配置数组）。 */
-  loadEslintConfig: () => Promise<Array<unknown>>;
   /** 生效的 jsx-a11y 规则表（规则名 → 档位）。 */
   effectiveRules: () => Promise<Record<string, unknown>>;
+  /** 判一份台账，返回问题清单与汇总 —— bin 形态再用它算退出码。 */
+  judge: (ledger: Ledger) => Promise<JudgeVerdict>;
+  /** 读一次真的 `eslint.config.js`（扁平配置数组）。 */
+  loadEslintConfig: () => Promise<Array<unknown>>;
+  /** 规则档位的归一（`"error"` 与 `["error"]` 同义、`["error", 5]` 不同）。 */
+  normalize: (setting: unknown) => string;
   /** 官方 recommended 的有效集合（去 off，带每条 options）。 */
   officialRecommended: () => Promise<Record<string, unknown>>;
   /** 插件全部规则 + 废弃标记。 */
   officialRuleMap: () => Promise<Map<string, { deprecated: boolean }>>;
+  /** 读一份台账文件并归一到 `Ledger`（读不到 = 空台账，`--ledger` 的路径由调用方给）。 */
+  readLedger: (ledgerPath: string) => Ledger;
   /** 官方两份配置都没提到的规则名。 */
   rulesInNeitherConfig: () => Promise<Array<string>>;
   /** 本脚本对外公开的面（键 = 上面的函数名），用来核「导出面 ⇄ 执行者」。 */

@@ -42,14 +42,14 @@ import { withTimeoutResult } from "~/lib/with-timeout";
 
 /** 一次「服务端已知的运行态变化」：序列 + 时刻 + 来源 + 说明。 */
 export interface ComfyStateChange {
-  /** 单调纪元：每变一次 +1。客户端据此判「这是不是我没见过的那一次」。 */
-  seq: number;
   /** 变化发生的时刻（毫秒）。 */
   at: number;
-  /** 什么变了（见 `ComfyStateChangeKind`）。 */
-  kind: ComfyStateChangeKind;
   /** 中文一句话，可直接进日志或状态行（不复用状态行的四态文案，避免两处文案漂）。 */
   detail: string;
+  /** 什么变了（见 `ComfyStateChangeKind`）。 */
+  kind: ComfyStateChangeKind;
+  /** 单调纪元：每变一次 +1。客户端据此判「这是不是我没见过的那一次」。 */
+  seq: number;
 }
 
 /** 变化来源。用途只有一个：诊断与断言 —— 判决本身对客户端是同形的。 */

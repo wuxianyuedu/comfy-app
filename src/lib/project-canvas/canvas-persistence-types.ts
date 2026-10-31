@@ -21,19 +21,19 @@ import type { CanvasNodeData } from "./canvas-types";
 
 /** 持久化里的一个节点（结构上兼容 ReactFlow 的 `Node`）。 */
 export interface PersistedNode {
+  [key: string]: unknown;
+  data: CanvasNodeData;
   id: string;
+  position: { x: number; y: number };
   /** ReactFlow 的节点类型名（`canvasNode` / `workflowArdot`）——取联合字面量
    *  而不是 `string`：读取侧要把值交回 `CanvasNodeType`，写成 `string` 接不住。 */
   type: "canvasNode" | "workflowArdot";
-  position: { x: number; y: number };
-  data: CanvasNodeData;
-  [key: string]: unknown;
 }
 
 /** 持久化里的一条边（结构上兼容 ReactFlow 的 `Edge`）。 */
 export interface PersistedEdge {
+  [key: string]: unknown;
   id: string;
   source: string;
   target: string;
-  [key: string]: unknown;
 }

@@ -35,33 +35,33 @@ const LazyWorkflowCanvasNodePreview = React.lazy(() =>
 );
 
 interface DetailBodyProps {
-  workflow: WorkflowRow;
-  /** 本面板承载的页签 —— 每个页签各自一个面板（`ui/tabs` 的 Panel）。 */
-  tab: DetailTab;
-  isLoading: boolean;
-  workflowIO: WorkflowIOMap | null;
-  /** 模板 paramMap（对外参数落点），画布节点页签据此标出对外参数与落点。 */
-  paramMap: Record<string, unknown>;
-  sourceData: SourceModalData | null;
-  usable: boolean;
   /** **两个页签共用的当前模式**（详情层持有，见 `WorkflowLibraryDetailController`
    *  的 `activeMode`）：画布卡片列与工坊封装按同一个模式渲染，用户在两处切换的
    *  是同一件事。 */
   activeMode: string | null;
-  /** 切换当前模式（只改查看 / 测试语境，不落库）。 */
-  onActiveModeChange: (mode: string) => void;
-  /** 在编辑器中打开当前工作流。 */
-  onEdit: () => void;
+  isLoading: boolean;
   /** 多模式工作流的模式切换（画布预览节点的类型 chip 可点选默认模式）。 */
   meta?: {
     defaultMode: string;
     modes: Array<string>;
     onModeChange: (code: string) => void;
   };
-  /** seed 类参数的「控件后行为」持久化（画布预览节点与 IO 编辑一致）。 */
-  onSeedModeChange?: (ioKey: string, mode: string) => void;
+  /** 切换当前模式（只改查看 / 测试语境，不落库）。 */
+  onActiveModeChange: (mode: string) => void;
+  /** 在编辑器中打开当前工作流。 */
+  onEdit: () => void;
   /** 对外参数落点持久化（画布预览拖圆点改落点）。 */
   onPatchParamMap?: (next: Record<string, unknown>) => Promise<void>;
+  /** seed 类参数的「控件后行为」持久化（画布预览节点与 IO 编辑一致）。 */
+  onSeedModeChange?: (ioKey: string, mode: string) => void;
+  /** 模板 paramMap（对外参数落点），画布节点页签据此标出对外参数与落点。 */
+  paramMap: Record<string, unknown>;
+  sourceData: SourceModalData | null;
+  /** 本面板承载的页签 —— 每个页签各自一个面板（`ui/tabs` 的 Panel）。 */
+  tab: DetailTab;
+  usable: boolean;
+  workflow: WorkflowRow;
+  workflowIO: WorkflowIOMap | null;
 }
 
 export function DetailBody({

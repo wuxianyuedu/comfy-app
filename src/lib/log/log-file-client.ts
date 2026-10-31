@@ -12,9 +12,14 @@ import { LOG_SLICE_ENDPOINT } from "./panel-self-poll";
 import type { LogSessionsPayload } from "./log-sessions";
 
 export interface FileLogSlice {
+  /**
+   * 服务端进程标识。客户端存下它，下一轮带上比对；不一致即「应用服务真重启过」，
+   * 面板据此重置时间线与游标（否则重启前后的行会混成一条线）。
+   */
+  bootId?: string;
   content: string;
-  /** 文件当前总字节数（下一轮增量读取的游标）。 */
-  size: number;
+  /** true = 本轮请求带的服务进程标识与响应不一致（详见 route.ts）。 */
+  mismatch?: boolean;
   /** 本次返回内容在文件中的起点。 */
   offset: number;
   /**
@@ -22,13 +27,8 @@ export interface FileLogSlice {
    * null = 读不到锚点（非双击链路启动），面板此时不做时间线截断。
    */
   sessionStart?: number | null;
-  /**
-   * 服务端进程标识。客户端存下它，下一轮带上比对；不一致即「应用服务真重启过」，
-   * 面板据此重置时间线与游标（否则重启前后的行会混成一条线）。
-   */
-  bootId?: string;
-  /** true = 本轮请求带的服务进程标识与响应不一致（详见 route.ts）。 */
-  mismatch?: boolean;
+  /** 文件当前总字节数（下一轮增量读取的游标）。 */
+  size: number;
 }
 
 export type LogSourceKind =
@@ -118,9 +118,9 @@ export async function fetchLogSessions(
 
 /** 列出 log/ 下的归档日志文件（供「历史日志」选择）。 */
 export interface LogFileInfo {
+  mtimeMs: number;
   name: string;
   relativePath: string;
-  mtimeMs: number;
   size: number;
 }
 
@@ -131,11 +131,11 @@ export interface LogFileInfo {
 
 /** 导出的结果：成功时给出服务端写下的**绝对路径**与相对 `log/` 的路径。 */
 export interface SavedLogExport {
+  bytes?: number;
+  error?: string;
   ok: boolean;
   path?: string;
   relativePath?: string;
-  bytes?: number;
-  error?: string;
 }
 
 /**

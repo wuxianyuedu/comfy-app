@@ -10,10 +10,10 @@
 import { vanillaApi } from "~/trpc/vanilla";
 
 export interface OpenFolderResult {
-  opened: boolean;
-  comfyappUrl?: string | null;
   absolutePath?: string | null;
+  comfyappUrl?: string | null;
   error?: string | null;
+  opened: boolean;
 }
 
 /** 打开任务输出目录：失败路径分「目录未生成」与其它错误两种，由 hook 决定提示文案。 */

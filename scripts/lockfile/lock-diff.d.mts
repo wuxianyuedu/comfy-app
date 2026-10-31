@@ -13,38 +13,38 @@ export interface LockSection {
 }
 
 export interface ParsedLockfile {
-  sections: Map<string, LockSection>;
-  importer: Map<string, Map<string, Map<string, DepEntry>>>;
   duplicates: Array<string>;
+  importer: Map<string, Map<string, Map<string, DepEntry>>>;
   lockfileVersion: string;
+  sections: Map<string, LockSection>;
 }
 
 export interface FieldChange {
-  key: string;
-  value?: string;
   from?: string;
+  key: string;
   to?: string;
+  value?: string;
 }
 
 export interface DepChange {
-  name: string;
-  value?: DepEntry;
-  specifier?: string;
-  fromSpecifier?: string;
   from?: string;
+  fromSpecifier?: string;
+  name: string;
+  specifier?: string;
   to?: string;
+  value?: DepEntry;
 }
 
 export interface FlatDiff {
   added: Array<FieldChange>;
-  removed: Array<FieldChange>;
   changed: Array<FieldChange>;
+  removed: Array<FieldChange>;
 }
 
 export interface GroupDiff {
   added: Array<DepChange>;
-  removed: Array<DepChange>;
   changed: Array<DepChange>;
+  removed: Array<DepChange>;
 }
 
 export interface EntryDiff {
@@ -53,12 +53,12 @@ export interface EntryDiff {
 }
 
 export interface LockDiff {
-  lockfileVersion: string;
   duplicates: { new: Array<string>; old: Array<string>; };
-  settings: FlatDiff;
-  overrides: FlatDiff;
   importers: Record<string, Record<string, GroupDiff>>;
+  lockfileVersion: string;
+  overrides: FlatDiff;
   packages: EntryDiff;
+  settings: FlatDiff;
   snapshots: EntryDiff;
 }
 

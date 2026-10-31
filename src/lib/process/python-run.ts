@@ -19,8 +19,8 @@ import { pythonCandidates, pythonProbeArgs } from "./python-candidates";
 
 /** 退避链上的一次尝试：解释器候选名 + 该候选所需的完整参数（脚本及其参数在后）。 */
 export interface PythonAttempt {
-  command: string;
   args: Array<string>;
+  command: string;
 }
 
 /**

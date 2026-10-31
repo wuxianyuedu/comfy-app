@@ -14,14 +14,14 @@ import type { ReviewVerdict } from "~/lib/production/review-types";
 import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";
 
 export interface ScriptReviewController {
-  verdict: ReviewVerdict | null;
+  error: string;
   /** 完整分数曲线（旧→新含本轮）；还没评过 → 空数组。 */
   history: Array<ReviewVerdict>;
-  reviewing: boolean;
-  revising: boolean;
-  error: string;
   review: () => Promise<void>;
+  reviewing: boolean;
   revise: () => Promise<void>;
+  revising: boolean;
+  verdict: ReviewVerdict | null;
 }
 
 export function useScriptReview(

@@ -42,10 +42,10 @@ import { useCallback, useState } from "react";
  * effect 里（不搬走、不复制）。
  */
 export interface RefreshTicket {
-  /** 票号：放进取数 effect 的依赖数组。调用处**不该**读它的数值。 */
-  ticket: number;
   /** 换一张新票（effect 依赖它 → 重跑一次取数）。 */
   refresh: () => void;
+  /** 票号：放进取数 effect 的依赖数组。调用处**不该**读它的数值。 */
+  ticket: number;
 }
 
 /**

@@ -30,14 +30,14 @@ type Folder = {
 };
 
 interface Behavior {
-  folders: Array<Folder>;
   comfyReachable?: boolean;
+  /** 非空时 configDelete 抛错 */
+  deleteError?: string;
+  folders: Array<Folder>;
   /** 非空时 configList 抛错 */
   listError?: string;
   /** 非空时 configSave 抛错 */
   saveError?: string;
-  /** 非空时 configDelete 抛错 */
-  deleteError?: string;
   /** 非空时 sync 抛错 */
   syncError?: string;
 }

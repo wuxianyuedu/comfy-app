@@ -52,8 +52,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export const PROGRESS_THROTTLE_MS = 100;
 
 export interface ThrottledProgress {
-  /** 最近一次落进 state 的读数（首帧前为 `initial`）。 */
-  value: number;
+  /** 立刻写入并解除节流（任务落定时调 —— 终值不允许被窗口吃掉）。 */
+  flush: (value: number) => void;
   /**
    * 节流后的写入器 —— 直接交给 `onProgress`。
    *
@@ -61,10 +61,10 @@ export interface ThrottledProgress {
    * 中间值没有意义，丢掉不损失信息）。
    */
   report: (value: number) => void;
-  /** 立刻写入并解除节流（任务落定时调 —— 终值不允许被窗口吃掉）。 */
-  flush: (value: number) => void;
   /** 复位（开始新一轮任务前调，回到 `initial`）。 */
   reset: () => void;
+  /** 最近一次落进 state 的读数（首帧前为 `initial`）。 */
+  value: number;
 }
 
 /**
@@ -162,14 +162,14 @@ export function useThrottledProgress(
  * 返回的 `progress` 是 `Record`，调用处的读法（`progress[shot.id] ?? 0`）不变。
  */
 export interface ThrottledProgressMap {
+  /** 清掉某一条（或不传 `key` 时清全部）。 */
+  clear: (key?: string) => void;
+  /** 立刻写入并解除该条目的节流（落定时调）。 */
+  flush: (key: string, value: number) => void;
   /** 各条目最近一次落进 state 的读数。 */
   progress: Record<string, number>;
   /** 节流后的写入器 —— 直接交给 `onProgress`。 */
   report: (key: string, value: number) => void;
-  /** 立刻写入并解除该条目的节流（落定时调）。 */
-  flush: (key: string, value: number) => void;
-  /** 清掉某一条（或不传 `key` 时清全部）。 */
-  clear: (key?: string) => void;
 }
 
 /**

@@ -102,15 +102,15 @@ function encryptInput(
  * 每一格都是**三态**：缺键 = 不动，`undefined` 同义；显式给值才覆盖。
  */
 export interface LlmConfigPatch {
-  provider?: string;
+  apiKey?: string | null;
   baseUrl?: string;
-  model?: string;
   /** 候选模型：旧纯名字字符串 / 新条目对象（远端条目可带独立 baseUrl、apiKey） */
   extraModels?: Array<RawExtraModel> | null;
-  apiKey?: string | null;
+  maxTokens?: number;
+  model?: string;
+  provider?: string;
   temperature?: number;
   temperatureByTask?: unknown;
-  maxTokens?: number;
 }
 
 export class LlmConfigRepository {

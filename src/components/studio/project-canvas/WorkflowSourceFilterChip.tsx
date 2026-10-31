@@ -9,8 +9,8 @@ import { OptionListPopover } from "~/components/ui/option-list-popover";
 import type { WorkflowSourceFilter } from "./workflow-node-types";
 
 interface WorkflowSourceFilterChipProps {
-  value: WorkflowSourceFilter;
   onChange: (v: WorkflowSourceFilter) => void;
+  value: WorkflowSourceFilter;
 }
 
 const OPTIONS: Array<{

@@ -11,10 +11,10 @@ import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import { OptionListPopover } from "~/components/ui/option-list-popover";
 
 interface WorkflowModePickChipProps {
-  modes: Array<string>;
   defaultMode: string | null;
-  onChange: (modes: Array<string>, defaultMode: string) => void;
   disabled?: boolean;
+  modes: Array<string>;
+  onChange: (modes: Array<string>, defaultMode: string) => void;
 }
 
 /* transform 订阅收敛（商业级性能）。

@@ -84,16 +84,16 @@ const CATEGORY_ACCENT: Record<WorkflowCategory, string> = {
 };
 
 interface MultiModeSelectProps {
-  /** 全部已选模式码（defaultMode ⊆ modes）。空数组 → 空 chip。 */
-  modes: Array<string>;
+  className?: string;
   /** 默认模式码（defaultMode 必须 ∈ `modes`）。 */
   defaultMode: string;
-  onChange: (modes: Array<string>, defaultMode: string) => void;
-  className?: string;
   disabled?: boolean;
   /** 隐藏右侧的「+N」徽标：调用方（如详情页）自行把全部模式列在上方，
    *  徽标就成了冗余。popover 仍可从主 chip 打开。 */
   hideExtraBadge?: boolean;
+  /** 全部已选模式码（defaultMode ⊆ modes）。空数组 → 空 chip。 */
+  modes: Array<string>;
+  onChange: (modes: Array<string>, defaultMode: string) => void;
 }
 
 const POPOVER_MAX_H = 360;

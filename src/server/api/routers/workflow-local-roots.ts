@@ -57,28 +57,28 @@ function pendingId(absPath: string): string {
  * 泛对象）时，视图读任何一行都得先判形状 —— 那正是 #1460 要消掉的东西。
  * 两处都是 `Date`（superjson 过线保真）与 `WorkflowParamMap`（同一份读边界）。 */
 interface LocalPendingRow {
-  id: string;
-  name: string;
-  taskType: string;
-  modes: Array<string>;
-  defaultMode: string | null;
   createdAt: Date;
+  defaultMode: string | null;
+  hasRaw: boolean;
+  id: string;
+  isGenerative: boolean;
+  modelTags: Array<string>;
+  modes: Array<string>;
+  name: string;
   paramMap: WorkflowParamMap;
+  pending: boolean;
+  pendingMtime: number;
+  pendingSize: number;
+  preview: WorkflowPreview;
+  source: "local-pending";
   sourcePath: string;
   sourceRoot: string | undefined;
-  source: "local-pending";
-  typeLabel: string;
+  taskType: string;
   typeCategory: string;
   typeDescription: string;
-  isGenerative: boolean;
-  hasRaw: boolean;
+  typeLabel: string;
   usable: boolean;
-  preview: WorkflowPreview;
   workflowIO: WorkflowIOMap;
-  modelTags: Array<string>;
-  pending: boolean;
-  pendingSize: number;
-  pendingMtime: number;
 }
 
 /* 按 `localWorkflows.pathKey` 的同一口径归一化绝对路径。 */

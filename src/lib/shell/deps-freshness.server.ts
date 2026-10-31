@@ -35,12 +35,12 @@ import type { DepsFreshnessState } from "./code-update-since-load";
 
 /** 依赖面新鲜度的判定结果。 */
 export interface DepsFreshness {
+  /** 解析不到的包名；仅 `state === "unresolved"` 时非空（供文案点名）。 */
+  missing: Array<string>;
   /** 是否需要「停服务 + 重装依赖」这一动作。 */
   stale: boolean;
   /** 陈旧的形态（供文案分流），取值与客户端共用一个定义。 */
   state: DepsFreshnessState;
-  /** 解析不到的包名；仅 `state === "unresolved"` 时非空（供文案点名）。 */
-  missing: Array<string>;
 }
 
 /**

@@ -22,12 +22,12 @@ import { loadModeContracts } from "./mode-contract.server";
 
 /** 一次工作流库执行的入参：提示词 / 尺寸 / 参考图等对外参数 + 任务归属。 */
 export interface RunWorkflowInput {
-  userId: string;
-  /** 工作流库工作流 id（`WorkflowTemplate.id`）。 */
-  workflowId: string;
   /** 任务归属画布 / 工坊项目。 */
   projectId?: string | null;
+  userId: string;
   values: WorkshopExposedValues;
+  /** 工作流库工作流 id（`WorkflowTemplate.id`）。 */
+  workflowId: string;
 }
 
 /** 按工作流的默认模式（缺省回退 taskType / modes[0]）组装对外参数。

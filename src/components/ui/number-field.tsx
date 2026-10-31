@@ -21,22 +21,22 @@ import { fixed } from "~/lib/number-format";
  * 没法打字）；blur 或点 +/- 时才把草稿 clamp 成合法值提交。
  */
 interface NumberFieldProps {
-  /** 当前数值 */
-  value: number;
-  /** 用新的（已 clamp 的）值调用 */
-  onChange: (v: number) => void;
-  /** 允许的最小值（默认 0） */
-  min?: number;
-  /** 允许的最大值（默认 9999） */
-  max?: number;
-  /** 步进增 / 减量（默认 1） */
-  step?: number;
-  /** 显示的小数位（默认 0 = 整数） */
-  decimalPlaces?: number;
   /** 外层容器的额外 CSS 类 */
   className?: string;
+  /** 显示的小数位（默认 0 = 整数） */
+  decimalPlaces?: number;
   /** 字段是否禁用 */
   disabled?: boolean;
+  /** 允许的最大值（默认 9999） */
+  max?: number;
+  /** 允许的最小值（默认 0） */
+  min?: number;
+  /** 用新的（已 clamp 的）值调用 */
+  onChange: (v: number) => void;
+  /** 步进增 / 减量（默认 1） */
+  step?: number;
+  /** 当前数值 */
+  value: number;
 }
 
 export function NumberField({

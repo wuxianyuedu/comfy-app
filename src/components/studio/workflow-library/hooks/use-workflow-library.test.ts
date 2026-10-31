@@ -39,17 +39,17 @@ vi.mock("../../ToastProvider", () => ({
 
 /** 可控的「服务端」行为。 */
 interface Behavior {
-  workflows: Array<Record<string, unknown>>;
-  localPending: Array<Record<string, unknown>>;
-  tags: Array<{ count: number; id: string; name: string }>;
-  /** 非空时 workflow.list 抛错 —— 覆盖加载错误通道 */
-  listError?: string;
-  /** 非空时 workflow.update 抛错 —— 覆盖动作错误通道 */
-  updateError?: string;
   /** 非空时 workflow.delete 抛错 —— 覆盖 §17.5.4 的动作错误通道 */
   deleteError?: string;
   /** workflow.list 延迟多少毫秒才 resolve，模拟后端扫描卡住。 */
   listDelayMs?: number;
+  /** 非空时 workflow.list 抛错 —— 覆盖加载错误通道 */
+  listError?: string;
+  localPending: Array<Record<string, unknown>>;
+  tags: Array<{ count: number; id: string; name: string }>;
+  /** 非空时 workflow.update 抛错 —— 覆盖动作错误通道 */
+  updateError?: string;
+  workflows: Array<Record<string, unknown>>;
 }
 
 let behavior: Behavior = { workflows: [], localPending: [], tags: [] };

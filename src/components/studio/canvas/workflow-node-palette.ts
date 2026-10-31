@@ -22,10 +22,10 @@ const DISABLED_COLOR = "#6b7280";
  */
 export interface NodePaletteBase {
   body: string;
-  header: string;
   borderFallback: string;
-  titleFallback: string;
   dotFallback: string;
+  header: string;
+  titleFallback: string;
 }
 
 /** 浅色底色 —— 应用 `@theme` 块里的默认值。 */
@@ -51,14 +51,14 @@ export const DARK_PALETTE_BASE: NodePaletteBase = {
 };
 
 export interface NodePalette {
-  nodeMode: number;
-  modeColor: string | null;
+  dotBg: string;
   effectiveColor: string | undefined;
   headerBg: string;
+  modeColor: string | null;
   nodeBg: string;
   nodeBorder: string;
+  nodeMode: number;
   titleColor: string;
-  dotBg: string;
 }
 
 /**
@@ -75,13 +75,10 @@ export function computeNodePalette(
   base: NodePaletteBase = DARK_PALETTE_BASE,
 ): NodePalette {
   const nodeMode = data.mode ?? 0;
-  const modeColor =
-    nodeMode === 4 ? BYPASS_COLOR : nodeMode === 2 ? DISABLED_COLOR : null;
+  const modeColor = nodeMode === 4 ? BYPASS_COLOR : nodeMode === 2 ? DISABLED_COLOR : null;
   const effectiveColor = modeColor ?? role?.color;
 
-  const headerBg = effectiveColor
-    ? mixHex(base.body, effectiveColor, 0.22)
-    : base.header;
+  const headerBg = effectiveColor ? mixHex(base.body, effectiveColor, 0.22) : base.header;
   // 卡片体：只 ~8% 着色，让角色身份是个提示而不是铺满。模式
   // 节点保留半透明着色，好让真正的背景模糊接上。
   const nodeBg = modeColor
@@ -89,12 +86,8 @@ export function computeNodePalette(
     : role?.color
       ? mixHex(base.body, role.color, 0.08)
       : base.body;
-  const nodeBorder = effectiveColor
-    ? mixHex(base.body, effectiveColor, 0.55)
-    : base.borderFallback;
-  const titleColor = modeColor
-    ? lightenHex(modeColor, 0.3)
-    : (role?.color ?? base.titleFallback);
+  const nodeBorder = effectiveColor ? mixHex(base.body, effectiveColor, 0.55) : base.borderFallback;
+  const titleColor = modeColor ? lightenHex(modeColor, 0.3) : (role?.color ?? base.titleFallback);
   const dotBg = effectiveColor ?? base.dotFallback;
 
   return {
@@ -117,9 +110,9 @@ export function computeNodePalette(
  * 交给主题，药丸在两种模式下都读得出来，与 `--color-port-surface` 同一判断。
  */
 export interface AnchorCylinderTheme {
-  gradient: string;
   border: string;
   boxShadow: string;
+  gradient: string;
 }
 
 /** 浅色：金属圆柱读作带深色包边的中灰药丸。 */
@@ -139,10 +132,6 @@ export const DARK_ANCHOR_CYLINDER: AnchorCylinderTheme = {
 };
 
 /** 由 `next-themes` 的 `resolvedTheme` 解析锚点主题。 */
-export function resolveAnchorCylinder(
-  resolvedTheme: string | undefined,
-): AnchorCylinderTheme {
-  return resolvedTheme === "light"
-    ? LIGHT_ANCHOR_CYLINDER
-    : DARK_ANCHOR_CYLINDER;
+export function resolveAnchorCylinder(resolvedTheme: string | undefined): AnchorCylinderTheme {
+  return resolvedTheme === "light" ? LIGHT_ANCHOR_CYLINDER : DARK_ANCHOR_CYLINDER;
 }

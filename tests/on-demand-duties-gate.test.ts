@@ -52,11 +52,11 @@ const { test, expect } = defineGateRepo({
 
 /** 索引里一行的形状（夹具按它造）。 */
 interface DutyRow {
+  executor: string;
+  fact: { gate?: string; key?: string; kind: string; script?: string };
   id: string;
   name: string;
   notInHook: string;
-  fact: { gate?: string; key?: string; kind: string; script?: string };
-  executor: string;
 }
 
 /** 一份「最小但双向都成立」的索引：六条按需档（下限是 5，留一格余量）。 */

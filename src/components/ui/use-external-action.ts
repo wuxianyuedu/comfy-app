@@ -46,13 +46,13 @@ import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
  * 本 hook 只负责「什么时候报、报什么」。
  */
 export interface ExternalActionOptions {
-  /** 动作目标类别（决定失败文案里的动词，`~/lib/external-open`）。 */
-  target: ExternalTarget;
   /**
    * 反馈通道。`kind` 为 `"ok"` / `"err"`，`detail` 是**已经归一化并翻译过**的
    * 可读文案 —— 调用处直接渲染即可，不必再判一次。
    */
   report: (kind: "ok" | "err", detail: string) => void;
+  /** 动作目标类别（决定失败文案里的动词，`~/lib/external-open`）。 */
+  target: ExternalTarget;
 }
 
 export interface ExternalActionResult {

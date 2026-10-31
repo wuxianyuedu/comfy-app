@@ -43,11 +43,11 @@ const OLLAMA_START_POLL_TIMES = OLLAMA_READY.maxAttempts;
 const OLLAMA_START_POLL_INTERVAL_MS = OLLAMA_READY.baseMs;
 
 export interface UseSettingsOllama {
-  ollamaStatus: OllamaStatus;
+  ollamaLog: RuntimeLogController & { active: boolean };
   ollamaModels: Array<OllamaModel>;
   ollamaStarting: boolean;
+  ollamaStatus: OllamaStatus;
   ollamaStopping: boolean;
-  ollamaLog: RuntimeLogController & { active: boolean };
   startOllama: () => Promise<void>;
   stopOllama: () => Promise<void>;
 }

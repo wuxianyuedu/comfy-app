@@ -51,8 +51,8 @@ export type ReviewKind = "shot" | "character";
 
 /** 一次剧本评审的产出：判定 + 完整分数曲线（旧→新，含本轮；FR-QA-07「每轮分数可回看」）。 */
 export interface ScriptReviewOutcome {
-  verdict: ReviewVerdict;
   history: Array<ReviewVerdict>;
+  verdict: ReviewVerdict;
 }
 
 const KIND_LABEL: Record<ReviewKind, string> = {
@@ -297,16 +297,16 @@ export async function reviewShotImage(
 
 /** 单个候选的评分记录；verdict 为 null = 该候选没有产物可评（跳过）。 */
 export interface AutoselectCandidate {
-  taskId: string;
   imageUrl: string | null;
+  taskId: string;
   verdict: ReviewVerdict | null;
 }
 
 export interface AutoselectResult {
-  winnerTaskId: string;
-  winnerImageUrl: string;
-  winnerVerdict: ReviewVerdict;
   candidates: Array<AutoselectCandidate>;
+  winnerImageUrl: string;
+  winnerTaskId: string;
+  winnerVerdict: ReviewVerdict;
 }
 
 /**

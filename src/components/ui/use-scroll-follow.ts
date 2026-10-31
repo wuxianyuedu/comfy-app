@@ -46,16 +46,6 @@ export interface UseScrollFollowOptions {
    */
   containerRef: React.RefObject<HTMLDivElement | null>;
   /**
-   * 「内容变了没有」的依赖值：变了就（在跟随态下）重新贴底。
-   *
-   * 传什么由调用处决定（日志条数 / 文本 / 消息数组的引用）。**不要**为了
-   * 让它「更灵敏」而传一个每次渲染都新建的对象 —— 那等于每帧都贴底，
-   * 用户永远滚不上去。
-   */
-  watch: unknown;
-  /** 离底多少像素内仍算「还在跟随」。缺省 `NEAR_BOTTOM_PX`。 */
-  thresholdPx?: number;
-  /**
    * 完全受控的跟随态。给了它，hook 不再自持状态 —— 用于**同一份跟随态要跨
    * 多个实例共享**的落点（`RuntimeLogBox` 的小窗口与全屏各挂一个滚动容器，
    * 切进去时应仍是「已暂停」）。不给则非受控，hook 自己管。
@@ -64,15 +54,25 @@ export interface UseScrollFollowOptions {
   /** 受控模式下跟随态的变化回调（用户上滚 → `false`；用户点「回到最新」→
    *  `true`）。非受控模式忽略。 */
   onFollowingChange?: (following: boolean) => void;
+  /** 离底多少像素内仍算「还在跟随」。缺省 `NEAR_BOTTOM_PX`。 */
+  thresholdPx?: number;
+  /**
+   * 「内容变了没有」的依赖值：变了就（在跟随态下）重新贴底。
+   *
+   * 传什么由调用处决定（日志条数 / 文本 / 消息数组的引用）。**不要**为了
+   * 让它「更灵敏」而传一个每次渲染都新建的对象 —— 那等于每帧都贴底，
+   * 用户永远滚不上去。
+   */
+  watch: unknown;
 }
 
 export interface ScrollFollow {
-  /** 摊到滚动容器上的 `onScroll` —— 由它判定用户有没有接管滚动。 */
-  onScroll: () => void;
   /** 当前是否仍在跟随底部。`false` 时调用处必须给出「回到最新」的入口。 */
   following: boolean;
   /** 立刻回到最新（界面上的「回到最新」/「恢复自动滚动」按钮调它）。 */
   jumpToLatest: () => void;
+  /** 摊到滚动容器上的 `onScroll` —— 由它判定用户有没有接管滚动。 */
+  onScroll: () => void;
 }
 
 /** 离底多少像素内仍算「还在跟随」——全库唯一一处定义。 */

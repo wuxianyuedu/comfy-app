@@ -150,8 +150,8 @@ export interface WhichCommandOptions {
 /** 「这个候选能不能被 spawn」的结论。`prefixArgs` 是启动它所需的宿主参数
  *  （shim 换成 PowerShell 时非空），`reason` 只在 `ok: false` 时有值。 */
 export interface CommandUsability {
-  ok: boolean;
   command: string;
+  ok: boolean;
   prefixArgs: Array<string>;
   reason: string | null;
 }

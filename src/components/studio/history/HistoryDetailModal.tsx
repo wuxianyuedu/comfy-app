@@ -28,16 +28,16 @@ import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { zClass } from "~/lib/shell/overlay-z";
 
 interface HistoryDetailModalProps {
-  detailId: string | null;
   detail: TaskDetail | null;
+  detailId: string | null;
   detailLoading: boolean;
-  /** 本任务所用工作流的 IO 定义：参数可读名从它的`label` 查（任务行里只存了
-   * pin 名）。工作流已被删除时是空表，参数名如实回落 pin 名。 */
-  workflowIO: WorkflowIOMap;
   /** 模式契约注册表（只含用户改过的模式）：工坊参数按「任务模式 + 生效契约」枚举。
    * 为 null 时回落内置默认契约。 */
   modeContracts?: ReadonlyArray<ModeContract> | null;
   onClose: () => void;
+  /** 本任务所用工作流的 IO 定义：参数可读名从它的`label` 查（任务行里只存了
+   * pin 名）。工作流已被删除时是空表，参数名如实回落 pin 名。 */
+  workflowIO: WorkflowIOMap;
 }
 
 /**

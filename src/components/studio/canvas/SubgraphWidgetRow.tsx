@@ -20,11 +20,11 @@ import type { RawInputMeta } from "../workflow-types";
 type ComboInputMeta = RawInputMeta & { comboOptions?: unknown };
 
 interface SubgraphWidgetRowProps {
-  inp: RawInputMeta;
-  label: string;
-  io: IOEditContextValue | null;
-  nodeId: string;
   hostNodeId?: string;
+  inp: RawInputMeta;
+  io: IOEditContextValue | null;
+  label: string;
+  nodeId: string;
 }
 
 export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: SubgraphWidgetRowProps) {

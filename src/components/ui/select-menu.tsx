@@ -68,14 +68,26 @@ import { cn } from "~/lib/utils";
 import { useOverlayBoundary } from "~/components/ui/use-overlay-boundary";
 
 interface SelectMenuProps {
-  value: string;
-  onChange: (value: string) => void;
-  options: Array<string>;
-  /** 选项值 → 显示文案的映射；缺省时回退到原始值。 */
-  labels?: Record<string, React.ReactNode>;
-  placeholder?: string;
-  disabled?: boolean;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean | "true" | "false";
+  "aria-label"?: string;
+  "aria-labelledby"?: string;
+  /**
+   * 自动加宽浮层以容纳最长的选项标签。
+   *  只测量字符串 / 数字标签 —— 富 ReactNode 标签（如徽标、图标）会被跳过。默认 true。
+   */
+  autoFitFromOptions?: boolean;
   className?: string;
+  disabled?: boolean;
+  /**
+   * 可选页脚，渲染在浮层底部（可滚动的选项列表之外）——
+   *  用于分组空态提示：无论有多少选项，它都必须始终可见。
+   */
+  footer?: React.ReactNode;
+  /**
+   * 触发器取**固定宽度**（铺满容器）而不是「随内容自适应」。缺省是自适应。
+   */
+  fullWidth?: boolean;
   /**
    * a11y 转发口 · 挂在 Trigger（真正可交互的按钮元素）上。
    * `<FormField>` 的 render prop 会 spread `{ id, "aria-describedby",
@@ -84,11 +96,16 @@ interface SelectMenuProps {
    * `title` 也一并转（虽然不推荐用它替代 Tooltip · 存量调用点保留行为）。
    */
   id?: string;
-  "aria-label"?: string;
-  "aria-labelledby"?: string;
-  "aria-describedby"?: string;
-  "aria-invalid"?: boolean | "true" | "false";
-  title?: string;
+  /** 选项值 → 显示文案的映射；缺省时回退到原始值。 */
+  labels?: Record<string, React.ReactNode>;
+  onChange: (value: string) => void;
+  /**
+   * 浮层打开 / 关闭时调用。打开状态由 base-ui Select 内部持有；
+   *  调用方借此在列表即将可见时惰性加载选项。
+   */
+  onOpenChange?: (open: boolean) => void;
+  options: Array<string>;
+  placeholder?: string;
   /**
    * 浮层最小宽度（px），默认 480 —— 装饰较丰富的行
    *（圆点 + 名称 + 任务类型 + 本机/在线徽标）在窄触发器里也能舒展；
@@ -101,25 +118,8 @@ interface SelectMenuProps {
    *  上限封顶 720，免得单个异常长的字符串把浮层顶出屏幕。
    */
   popoverMinWidth?: number;
-  /**
-   * 触发器取**固定宽度**（铺满容器）而不是「随内容自适应」。缺省是自适应。
-   */
-  fullWidth?: boolean;
-  /**
-   * 自动加宽浮层以容纳最长的选项标签。
-   *  只测量字符串 / 数字标签 —— 富 ReactNode 标签（如徽标、图标）会被跳过。默认 true。
-   */
-  autoFitFromOptions?: boolean;
-  /**
-   * 可选页脚，渲染在浮层底部（可滚动的选项列表之外）——
-   *  用于分组空态提示：无论有多少选项，它都必须始终可见。
-   */
-  footer?: React.ReactNode;
-  /**
-   * 浮层打开 / 关闭时调用。打开状态由 base-ui Select 内部持有；
-   *  调用方借此在列表即将可见时惰性加载选项。
-   */
-  onOpenChange?: (open: boolean) => void;
+  title?: string;
+  value: string;
 }
 
 /* 触发器：与 PR 之前 Popover+Trigger 版本逐字对齐的深色样式。

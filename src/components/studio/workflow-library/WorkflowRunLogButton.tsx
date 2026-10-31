@@ -21,19 +21,19 @@ import {
 } from "~/lib/workflow/workflow-run-store";
 
 export interface WorkflowRunLogButtonProps {
-  /** 只看当前工作流的运行记录。 */
-  workflowId: string;
-  /** 指定要展示状态摘要的那次运行（缺省取最近一次）。 */
-  taskId?: string | null;
+  /** 没跑过也渲染入口：详情头部那扇门位置固定，随时点得开（弹窗里显示空态
+   *  「运行生成后此处会显示执行步骤日志」）。缺省 false = 有运行记录才出现。 */
+  alwaysVisible?: boolean;
+  onOpen: () => void;
   /** 是否在跑（带呼吸点）。缺省时按运行登记表自动判定 —— 详情头部不绑定
    *  任何页签的运行，自己判才不会漏掉呼吸点。 */
   running?: boolean;
   /** 可选：只看某个来源的运行（缺省不限）。 */
   source?: WorkflowRunSource;
-  /** 没跑过也渲染入口：详情头部那扇门位置固定，随时点得开（弹窗里显示空态
-   *  「运行生成后此处会显示执行步骤日志」）。缺省 false = 有运行记录才出现。 */
-  alwaysVisible?: boolean;
-  onOpen: () => void;
+  /** 指定要展示状态摘要的那次运行（缺省取最近一次）。 */
+  taskId?: string | null;
+  /** 只看当前工作流的运行记录。 */
+  workflowId: string;
 }
 
 export function WorkflowRunLogButton({

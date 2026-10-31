@@ -9,10 +9,10 @@ import type { GenerationLogStage } from "./generation-log";
 
 /** 一条待落盘的执行日志（与界面条目同形：ts / kind / summary / detail?）。 */
 export interface PersistableGenerationLog {
-  ts: number | string;
+  detail?: string;
   kind: string;
   summary: string;
-  detail?: string;
+  ts: number | string;
 }
 
 const LOGS_ENDPOINT = "/api/workshop/logs";

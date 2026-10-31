@@ -26,8 +26,8 @@ import { useEffect, useState } from "react";
  * 判据（二选一的分支、像素级夹取）用的。
  */
 export interface ViewportSize {
-  width: number;
   height: number;
+  width: number;
 }
 
 export function useViewportSize(): ViewportSize | null {
@@ -38,9 +38,7 @@ export function useViewportSize(): ViewportSize | null {
   useEffect(() => {
     const measure = () => {
       setSize((prev) =>
-        prev !== null &&
-        prev.width === window.innerWidth &&
-        prev.height === window.innerHeight
+        prev !== null && prev.width === window.innerWidth && prev.height === window.innerHeight
           ? /* 取值没变就返回原引用 —— `resize` 在高频拖动窗口时每帧都发，
              * 不判等会让整棵树按帧重渲染。 */
             prev

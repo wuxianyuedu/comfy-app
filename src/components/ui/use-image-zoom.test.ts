@@ -23,9 +23,9 @@ const LANDSCAPE = { width: 1600, height: 1200 };
 
 interface ProbeProps {
   natural: { height: number; width: number } | null;
-  viewportWidth: number | null;
-  viewportHeight: number | null;
   padding?: number;
+  viewportHeight: number | null;
+  viewportWidth: number | null;
 }
 
 const INITIAL: ProbeProps = {

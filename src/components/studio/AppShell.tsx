@@ -68,15 +68,6 @@ function ProjectGlyph() {
 export interface AppShellProps {
   /** 当前视图（决定侧栏高亮与顶部标题）。 */
   active: WorkspaceView;
-  /** 切换视图。 */
-  onSelect: (view: WorkspaceView) => void;
-  /** 打开设置 —— 切到 `settings` **视图页签**（与历史 / 队列 / 控制台同一套），
-   *  不再是 workspace 上的一层浮层，也不跳 `/settings` 路由：组件树因此不卸载。 */
-  onOpenSettings: () => void;
-  /** 首帧侧栏展开态。由服务端读 `sidebar_state` cookie 传来（见 `ui/sidebar` 里那段说明）；不传按展开。 */
-  defaultSidebarOpen?: boolean;
-  /** 底部「项目」分组列出的项目（来自 canvas-store）。 */
-  projects: Array<SidebarProject>;
   /** 当前活跃项目 id。
    *
    *  ⚠️ 它是**存储里那一格活跃 id**，不等于「用户此刻在这个项目里」—— 两者
@@ -84,24 +75,33 @@ export interface AppShellProps {
    *  持有活跃 id，但那一屏上没有任何项目内容，把 id 直接当高亮判据会让分组里
    *  某一项**看起来被选中、而它对应的内容一处都没显示**（ISSUE #1691 第 2 条）。 */
   activeProjectId: string | null;
-  /** 点开某个项目 → 进入项目界面（画布为其默认页签）。 */
-  onOpenProject: (id: string) => void;
-  /** 「查看全部」→ 项目网格落地页（works）。 */
-  onShowAllProjects: () => void;
-  /** 新建项目 → 建一条 proj_* 并进画布。 */
-  onNewProject: () => void;
+  activeViewKey?: string;
   /** 主内容。各视图只往这里塞东西，外壳细节（侧栏 / 顶栏 / 滚动容器）不归它们管。 */
   children: ReactNode /**
    * 视图页签（浏览器 / dev 形态下由外壳渲染在内容列最顶端的栏，位于 TopBar 之上）。
    * 不传时外壳行为与从前一致。
    */;
-  viewTabs?: Array<ViewTab>;
-  activeViewKey?: string;
-  projectNameOf?: (projectId: string | null) => string | null | undefined;
-  onSelectViewTab?: (key: string) => void;
+  /** 首帧侧栏展开态。由服务端读 `sidebar_state` cookie 传来（见 `ui/sidebar` 里那段说明）；不传按展开。 */
+  defaultSidebarOpen?: boolean;
   onCloseViewTab?: (key: string) => void;
-  openableViews?: Array<OpenableView>;
+  /** 新建项目 → 建一条 proj_* 并进画布。 */
+  onNewProject: () => void;
+  /** 点开某个项目 → 进入项目界面（画布为其默认页签）。 */
+  onOpenProject: (id: string) => void;
+  /** 打开设置 —— 切到 `settings` **视图页签**（与历史 / 队列 / 控制台同一套），
+   *  不再是 workspace 上的一层浮层，也不跳 `/settings` 路由：组件树因此不卸载。 */
+  onOpenSettings: () => void;
   onOpenView?: (view: WorkspaceView) => void;
+  /** 切换视图。 */
+  onSelect: (view: WorkspaceView) => void;
+  onSelectViewTab?: (key: string) => void;
+  /** 「查看全部」→ 项目网格落地页（works）。 */
+  onShowAllProjects: () => void;
+  openableViews?: Array<OpenableView>;
+  projectNameOf?: (projectId: string | null) => string | null | undefined;
+  /** 底部「项目」分组列出的项目（来自 canvas-store）。 */
+  projects: Array<SidebarProject>;
+  viewTabs?: Array<ViewTab>;
 }
 
 /**

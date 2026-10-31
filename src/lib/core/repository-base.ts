@@ -54,16 +54,16 @@ export interface Identifiable {
  * 而非直接依赖 Drizzle 客户端。
  */
 export interface Repository<T extends Identifiable> {
-  /** 按主键取单条；不存在返回 `null`。 */
-  findById(id: string): Promise<T | null>;
-  /** 取全部（**不保证顺序**；需要稳定顺序时在子类里 `orderBy`）。 */
-  findAll(): Promise<Array<T>>;
   /** 插入一条。 */
   create(entity: T): Promise<T>;
-  /** 部分更新（仅覆盖传入字段）。 */
-  update(id: string, patch: Partial<T>): Promise<T>;
   /** 删除；不存在静默忽略。 */
   delete(id: string): Promise<void>;
+  /** 取全部（**不保证顺序**；需要稳定顺序时在子类里 `orderBy`）。 */
+  findAll(): Promise<Array<T>>;
+  /** 按主键取单条；不存在返回 `null`。 */
+  findById(id: string): Promise<T | null>;
+  /** 部分更新（仅覆盖传入字段）。 */
+  update(id: string, patch: Partial<T>): Promise<T>;
 }
 
 /**

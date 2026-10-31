@@ -23,9 +23,9 @@ import { NODE_PORT_FOCUS_ACTIVE_KEY, readPortFocusRole } from "./hooks/use-relat
 interface FlowNodePinRowsProps {
   data: WorkflowNodeData;
   io: IOEditContextValue | null;
+  outputs: Array<[string, string]>;
   rawMeta: Record<string, RawInputMeta>;
   uniqueConnEntries: Array<[string, unknown]>;
-  outputs: Array<[string, string]>;
 }
 
 export function FlowNodePinRows({

@@ -984,11 +984,11 @@ interface BuildJson {
 
 /** 一格（`error` 那一栏只有 `get-build-stage -v` 才给，`get-build-status` 里没有）。 */
 interface StageJson {
+  duration?: number;
+  error?: string;
   id?: string;
   name?: string;
   status?: string;
-  duration?: number;
-  error?: string;
 }
 
 /** 取 `prepare` 那一格 —— 这一族样本里它是主角（唯一有读数的那一格）。 */

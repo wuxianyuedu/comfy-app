@@ -36,12 +36,12 @@ import {
 /** `/api/tasks/[id]/stream` 的 SSE 帧的运行时形状 —— 只含本面板消费的字段。
  *  `JSON.parse` 产出 `unknown`；下面逐个收窄字段后再用。 */
 interface SseFrame {
-  type?: unknown;
   entry?: unknown;
-  validationErrors?: unknown;
-  status?: unknown;
-  progress?: unknown;
   error?: unknown;
+  progress?: unknown;
+  status?: unknown;
+  type?: unknown;
+  validationErrors?: unknown;
   workflowName?: unknown;
 }
 
@@ -82,16 +82,16 @@ function appendFailureLogLine(
 }
 
 export interface TaskStepLogStream {
-  logs: Array<StepLogEntry>;
-  validationErrors: Array<ValidationError> | null;
-  status: string | null;
-  progress: number;
-  error: string | null;
-  connected: boolean;
-  /** 供外部（如取消任务失败回调）写入错误横幅文案。 */
-  setError: (value: string | null) => void;
   /** 清空当前任务的日志（连带跨卸载缓存）。 */
   clear: () => void;
+  connected: boolean;
+  error: string | null;
+  logs: Array<StepLogEntry>;
+  progress: number;
+  /** 供外部（如取消任务失败回调）写入错误横幅文案。 */
+  setError: (value: string | null) => void;
+  status: string | null;
+  validationErrors: Array<ValidationError> | null;
 }
 
 export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {

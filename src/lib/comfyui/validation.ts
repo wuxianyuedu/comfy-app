@@ -55,14 +55,14 @@ export function parseValidationErrorsJson(raw: unknown): Array<ValidationError> 
 }
 
 export interface ValidationError {
-  /** ComfyUI 的节点 id，字符串形式（与图的键一致）。 */
-  nodeId: string;
   /** 节点 class_type，例如 "KSampler"；未知时为空串。 */
   classType: string;
   /** 出错的输入字段名；节点级（非输入）错误时为空串。 */
   field: string;
   /** Human-readable reason. Never empty — falls back to "配置错误". */
   message: string;
+  /** ComfyUI 的节点 id，字符串形式（与图的键一致）。 */
+  nodeId: string;
 }
 
 /** 把 ComfyUI 的 `node_errors` 摊平成 `ValidationError[]`。

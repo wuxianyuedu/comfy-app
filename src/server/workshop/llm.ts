@@ -11,11 +11,11 @@ import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 export interface WorkshopLLMConfig {
-  baseUrl: string;
-  model: string;
   apiKey: string | null;
-  temperature: number;
+  baseUrl: string;
   maxTokens: number;
+  model: string;
+  temperature: number;
 }
 
 function envDefaults(): WorkshopLLMConfig {

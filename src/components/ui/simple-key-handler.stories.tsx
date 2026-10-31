@@ -25,8 +25,8 @@ const meta = {
 export default meta;
 
 interface SimpleKeyHandlerProps {
-  keys: ReadonlyArray<string>;
   ignoreRepeat?: boolean;
+  keys: ReadonlyArray<string>;
   preventDefault?: boolean;
 }
 

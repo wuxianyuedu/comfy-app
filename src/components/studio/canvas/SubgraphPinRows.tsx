@@ -13,10 +13,10 @@ import type { RawInputMeta, RawOutputMeta } from "../workflow-types";
 
 interface SubgraphPinRowsProps {
   connInputs: Array<{ inp: RawInputMeta; label: string }>;
-  outputs: Array<{ display: string; out: RawOutputMeta }>;
+  hostNodeId?: string;
   io: IOEditContextValue | null;
   nodeId: string;
-  hostNodeId?: string;
+  outputs: Array<{ display: string; out: RawOutputMeta }>;
 }
 
 export function SubgraphPinRows({

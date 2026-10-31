@@ -15,9 +15,9 @@ import { withQuery } from "~/lib/query-string";
 import { errorMessage } from "~/lib/error-message";
 
 export interface RemoteModelCatalog {
-  ok: boolean;
-  models: Array<string>;
   detail: string;
+  models: Array<string>;
+  ok: boolean;
 }
 
 async function getModels(

@@ -14,10 +14,10 @@ import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
 
 interface FlowNodeWidgetRowsProps {
   data: WorkflowNodeData;
+  hasSize: boolean;
   io: IOEditContextValue | null;
   rawMeta: Record<string, RawInputMeta>;
   visibleWidgetEntries: Array<[string, unknown]>;
-  hasSize: boolean;
 }
 
 export function FlowNodeWidgetRows({

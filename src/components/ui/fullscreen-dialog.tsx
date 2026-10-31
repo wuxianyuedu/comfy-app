@@ -27,15 +27,15 @@ import { FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS } from "~/lib/full-screen-laye
 import { dialogBackdropClass } from "~/components/ui/dialog-overlay";
 
 export interface FullScreenDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** 无障碍名称：渲染成只读屏器可见的标题，并自动接到弹窗的 `aria-labelledby`。 */
-  label: string;
-  /** 面板内定位层的 z-index 工具类，须高于它要盖住的那层浮层（默认 `z-100`）。 */
-  zClass?: string;
+  children: ReactNode;
   /** 该视图自身的布局 class（`bg-bg` 之外的补充）。 */
   className?: string;
-  children: ReactNode;
+  /** 无障碍名称：渲染成只读屏器可见的标题，并自动接到弹窗的 `aria-labelledby`。 */
+  label: string;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  /** 面板内定位层的 z-index 工具类，须高于它要盖住的那层浮层（默认 `z-100`）。 */
+  zClass?: string;
 }
 
 export function FullScreenDialog({
@@ -51,11 +51,7 @@ export function FullScreenDialog({
         默认「点弹窗外即关闭」，于是用户点标题栏（想拖动窗口的肌肉记忆）
         会把整个全屏视图关掉（用户实测反馈）。全屏视图只该由显式出口
         （退出按钮 / Esc）关闭，故禁掉指针关闭，Esc 不受影响。 */
-    <DialogPrimitive.Root
-      open={open}
-      onOpenChange={onOpenChange}
-      disablePointerDismissal
-    >
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange} disablePointerDismissal>
       <DialogPrimitive.Portal>
         {/* 遮罩与 `ui/dialog` / `ui/sheet` **同一份**（`dialog-overlay.ts` 的
             默认档）：它同时满足「让出标题行」的硬判据（ISSUE #310），另写一份必然
@@ -72,9 +68,7 @@ export function FullScreenDialog({
             className,
           )}
         >
-          <DialogPrimitive.Title className="sr-only">
-            {label}
-          </DialogPrimitive.Title>
+          <DialogPrimitive.Title className="sr-only">{label}</DialogPrimitive.Title>
           {children}
         </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>

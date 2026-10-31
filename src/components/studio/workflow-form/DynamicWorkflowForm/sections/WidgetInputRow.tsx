@@ -22,38 +22,38 @@ import { Hint } from "~/components/ui/hint";
 import { TypeChip } from "~/components/studio/TypeChip";
 
 interface WidgetInputRowProps {
-  entry: EnrichedWidget;
   /** 全量 pin —— ioLabel() 靠它在标签撞名时回退到原始 name，保持可辨识。 */
   allPins: ReadonlyArray<WorkflowIOEntry>;
-  value: unknown;
   compact: boolean;
-  disabled: boolean;
-  /** 该行是当前上传目标且上传进行中。 */
-  uploading: boolean;
-  seedMode?: string;
-  onSeedModeChange?: (mode: string) => void;
-  onValueChange: (value: unknown) => void;
-  onPickFile: () => void;
-  /** 该行用户刚选过图时的本地预览地址（data URL）；无则回退到按值算的 ComfyUI 代理地址。 */
-  previewSrc?: string;
-  onLabelChange?: (label: string) => void;
-  onRequiredChange?: (required: boolean) => void;
-  /** IO 编辑态：该参数在当前模式下的可见性（undefined = 不渲染 👁）。 */
-  visible?: boolean;
-  onVisibilityChange?: (visible: boolean) => void;
   /** 当前模式下被隐藏（IO 编辑预览置灰呈现，眼睛可恢复）。 */
   dimmed?: boolean;
-  /** 挂左侧可连接端点（画布节点用），圆心骑跨卡片左缘。 */
-  withHandle?: boolean;
+  disabled: boolean;
+  entry: EnrichedWidget;
   /** 左侧端点的 handle id。
    *
    *  画布上 handle id 必须**全局唯一**：同一个 pin 名出现在两个节点上时（自定义
    *  节点重复命名很常见），边会接到同名 handle 的第一处 —— 表现就是「线连到了
    *  别的节点上」。缺省仍用 ioKey（画布未富化时它就是唯一键）。 */
   handleId?: string;
+  onLabelChange?: (label: string) => void;
+  onPickFile: () => void;
+  onRequiredChange?: (required: boolean) => void;
+  onSeedModeChange?: (mode: string) => void;
+  onValueChange: (value: unknown) => void;
+  onVisibilityChange?: (visible: boolean) => void;
+  /** 该行用户刚选过图时的本地预览地址（data URL）；无则回退到按值算的 ComfyUI 代理地址。 */
+  previewSrc?: string;
+  seedMode?: string;
   /** 行尾附加的只读徽标（工作流库画布节点用它标出该参数连到的「对外参数」）。
    *  缺省不渲染——画布 / 表单等等价场景不受影响。 */
   trailing?: ReactNode;
+  /** 该行是当前上传目标且上传进行中。 */
+  uploading: boolean;
+  value: unknown;
+  /** IO 编辑态：该参数在当前模式下的可见性（undefined = 不渲染 👁）。 */
+  visible?: boolean;
+  /** 挂左侧可连接端点（画布节点用），圆心骑跨卡片左缘。 */
+  withHandle?: boolean;
 }
 
 export function WidgetInputRow({

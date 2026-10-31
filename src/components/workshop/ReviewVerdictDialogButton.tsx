@@ -86,31 +86,31 @@ function HistoryCurve({ history }: { history: Array<ReviewVerdict> }) {
 
 /** 评审弹窗骨架消费的判定面与动作（由各壳的 hook 装配）。 */
 export interface ReviewVerdictController {
-  verdict: ReviewVerdict | null;
-  /** 完整分数曲线（旧→新含本轮）；不给 = 该场景不展示曲线。 */
-  history?: Array<ReviewVerdict>;
   /** 评审 / 改写任一在途（busy 时弹窗与按钮整体禁动）。 */
   busy: boolean;
   error: string;
+  /** 完整分数曲线（旧→新含本轮）；不给 = 该场景不展示曲线。 */
+  history?: Array<ReviewVerdict>;
   /** 评审动作：打开弹窗时与「重新评审」按钮都会调它。 */
   review: () => Promise<void>;
   /** 定向改写动作；不给则不渲染「按意见改写」。 */
   revise?: () => Promise<void>;
+  verdict: ReviewVerdict | null;
 }
 
 export interface ReviewVerdictDialogButtonProps {
-  /** 入口按钮的 Hint / aria-label（如「AI 评审这张角色卡」）。 */
-  label: string;
-  title: string;
-  description: string;
   /** 在途文案（场景有改写时可传「正在按意见改写…」）。 */
   busyText: string;
   controller: ReviewVerdictController;
+  description: string;
   /** 分数条的维度 key → 人读名（带 rubric 的场景注入；不给就展示原 key）。 */
   dimensionLabels?: ReadonlyMap<string, string>;
   /** 人工裁决插槽（#2480）：场景要给「人拍板」入口时传 `HumanVerdictRow`
    *  （渲染在动作按钮上方）；不给 = 该场景没有人工裁决（如角色卡）。 */
   footerExtra?: ReactNode;
+  /** 入口按钮的 Hint / aria-label（如「AI 评审这张角色卡」）。 */
+  label: string;
+  title: string;
 }
 
 const EMPTY_LABELS: ReadonlyMap<string, string> = new Map();

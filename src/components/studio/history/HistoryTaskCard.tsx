@@ -8,15 +8,15 @@ import type { TaskItem } from "./history-types";
 import { QUEUED_STATUS_STYLE, STATUS_STYLE, timeAgo } from "./history-utils";
 
 interface HistoryTaskCardProps {
-  task: TaskItem;
+  onCancel: (id: string) => void;
+  onOpenDetail: (id: string) => void;
+  onRemove: (id: string) => void;
+  onRetry: (task: TaskItem) => void;
   /** 进行中任务的模拟进度（0-100）。 */
   progress: number;
   /** 重试请求是否进行中（按钮禁用态）。 */
   retrying: boolean;
-  onOpenDetail: (id: string) => void;
-  onCancel: (id: string) => void;
-  onRetry: (task: TaskItem) => void;
-  onRemove: (id: string) => void;
+  task: TaskItem;
 }
 
 /** 历史记录列表中的单条任务卡片（缩略图 + 状态 + 错误 + 操作按钮）。 */
@@ -108,9 +108,7 @@ export function HistoryTaskCard({
           className="h-auto min-w-0 flex-1 cursor-pointer justify-start rounded-xl p-0 text-left font-normal whitespace-normal hover:bg-transparent"
         >
           <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`text-2xs rounded-full px-2 py-0.5 font-medium ${st.pillCls}`}
-            >
+            <span className={`text-2xs rounded-full px-2 py-0.5 font-medium ${st.pillCls}`}>
               {st.label}
             </span>
             {st.showProgress && (
@@ -118,12 +116,8 @@ export function HistoryTaskCard({
                 {clampPct(progress)}%
               </span>
             )}
-            <span className="text-ink-muted truncate text-xs">
-              {task.workflowName}
-            </span>
-            <span className="text-ink-fainter shrink-0 text-xs">
-              · {timeAgo(task.createdAt)}
-            </span>
+            <span className="text-ink-muted truncate text-xs">{task.workflowName}</span>
+            <span className="text-ink-fainter shrink-0 text-xs">· {timeAgo(task.createdAt)}</span>
           </div>
           <span className="text-ink-strong mt-1 line-clamp-1 block text-sm">
             {task.prompt || "（无提示词）"}

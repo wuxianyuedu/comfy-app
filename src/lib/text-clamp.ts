@@ -33,8 +33,14 @@ export const ELLIPSIS = "…";
 export type ClampDirection = "head" | "tail";
 
 export interface ClampOptions {
-  /** 上限（字符数）。必填 —— 本条账的判据就是「上限必须显式」。 */
-  maxLength: number;
+  /**
+   * 标记的**圆括号内容**（如 `"truncated"` / `"truncated, 原始 12345 字符"`）。
+   *
+   * 与 {@link marker} 二选一：给了它，标记即由出口拼成 `…(内容)`；
+   * 没给则用 {@link marker}（默认 `…`）。给诊断通道用 ——
+   * 「被切了多少」是排查时最想知道的那一个数，而它只能由调用处算出来。
+   */
+  annotation?: string;
   /**
    * 保留哪一头（默认 `"head"`）。
    *
@@ -49,14 +55,8 @@ export interface ClampOptions {
    * 一般不该用它：不标记的截断会让用户把腰斩内容当成全部。
    */
   marker?: string;
-  /**
-   * 标记的**圆括号内容**（如 `"truncated"` / `"truncated, 原始 12345 字符"`）。
-   *
-   * 与 {@link marker} 二选一：给了它，标记即由出口拼成 `…(内容)`；
-   * 没给则用 {@link marker}（默认 `…`）。给诊断通道用 ——
-   * 「被切了多少」是排查时最想知道的那一个数，而它只能由调用处算出来。
-   */
-  annotation?: string;
+  /** 上限（字符数）。必填 —— 本条账的判据就是「上限必须显式」。 */
+  maxLength: number;
 }
 
 /**

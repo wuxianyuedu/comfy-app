@@ -30,12 +30,12 @@ import {
 import { useSyncRefusalNotice } from "./use-sync-refusal-notice";
 
 export interface UseProjectPersistenceParams {
-  projectId: string | null;
-  nodes: Array<CanvasNodeType>;
   edges: Array<Edge>;
-  projectName: string;
   /** 项目是否已完成首次加载（!hydrating）；false 时不触发持久化。 */
   loaded: boolean;
+  nodes: Array<CanvasNodeType>;
+  projectId: string | null;
+  projectName: string;
 }
 
 export function useProjectPersistence({

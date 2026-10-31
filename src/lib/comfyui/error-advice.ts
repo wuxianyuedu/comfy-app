@@ -44,8 +44,8 @@ export const ERROR_AUTO_EXPAND_RE =
 
 /** 一条建议规则：先命中先返回（顺序即优先级）。 */
 interface AdviceRule {
-  pattern: RegExp;
   advice: (error: string) => string;
+  pattern: RegExp;
 }
 
 /* 顺序即优先级。三条刻意排在最前：

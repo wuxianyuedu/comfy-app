@@ -70,9 +70,9 @@ export function normalizeEndpointPath(raw: string): string {
 export interface ResolvedUpstream {
   /** 去掉尾斜杠的连接基址。 */
   base: string;
+  headers: Record<string, string>;
   /** 根相对的端点路径（空串 = 直接用 base）。 */
   path: string;
-  headers: Record<string, string>;
 }
 
 /** 连接参数解析（**两个路由同一口径**，解析顺序改了只有这一处）：

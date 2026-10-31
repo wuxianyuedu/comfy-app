@@ -65,13 +65,13 @@ function toPx(value: string, unit: string): number {
 export interface TextTiers {
   /** 渲染 px → 档名（多个档同名值时保留第一个，仅用于报错话术）。 */
   byPx: Map<number, string>;
-  /** 当前在用的全部档名（已按 t-shirt 形状筛过）。 */
-  names: Array<string>;
   /**
    * 档名 → **配对行高比值**（`text-<名>` 会连带锁 `line-height`）。
    * 不在表里 = 这一档没有配对，行高走继承（项目自加的 `2xs` / `3xs` 就是刻意如此）。
    */
   lineRatios: Map<string, number>;
+  /** 当前在用的全部档名（已按 t-shirt 形状筛过）。 */
+  names: Array<string>;
 }
 
 /**

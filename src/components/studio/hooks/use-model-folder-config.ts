@@ -22,27 +22,27 @@ import { type FolderConfigRow, splitFolders } from "../model-library-config";
 const EMPTY_FOLDERS: Array<FolderConfigRow> = [];
 
 export interface ModelFolderConfigController {
-  folders: Array<FolderConfigRow>;
+  add: (folder: string) => Promise<void>;
+  availableRows: Array<FolderConfigRow>;
   comfyReachable: boolean;
-  loading: boolean;
-  /** 扫描中（全量重新扫描 ComfyUI 目录）。 */
-  scanning: boolean;
-  /** 最近一次操作的错误文案；null 表示无错误。 */
-  err: string | null;
-  /** 目录关键字。 */
-  q: string;
-  setQ: (q: string) => void;
-  /** 「仅显示已启用」开关。 */
-  onlyEnabled: boolean;
-  setOnlyEnabled: (value: boolean) => void;
   /** 筛选后的已启用 / 可添加两组。 */
   enabledRows: Array<FolderConfigRow>;
-  availableRows: Array<FolderConfigRow>;
-  totalCount: number;
-  toggle: (folder: string, enabled: boolean) => Promise<void>;
-  add: (folder: string) => Promise<void>;
+  /** 最近一次操作的错误文案；null 表示无错误。 */
+  err: string | null;
+  folders: Array<FolderConfigRow>;
+  loading: boolean;
+  /** 「仅显示已启用」开关。 */
+  onlyEnabled: boolean;
+  /** 目录关键字。 */
+  q: string;
   remove: (folder: string) => Promise<void>;
   rescan: () => Promise<void>;
+  /** 扫描中（全量重新扫描 ComfyUI 目录）。 */
+  scanning: boolean;
+  setOnlyEnabled: (value: boolean) => void;
+  setQ: (q: string) => void;
+  toggle: (folder: string, enabled: boolean) => Promise<void>;
+  totalCount: number;
 }
 
 export function useModelFolderConfig(): ModelFolderConfigController {

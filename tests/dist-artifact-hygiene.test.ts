@@ -273,19 +273,19 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
  * 该脚本在 `require.main !== module` 时不会 `process.exit`（见文件尾的守卫）。
  */
 interface CheckerExports {
+  ALLOWED_SRC_FILES: Array<string>;
+  allowedTopLevelFor: (label: string) => Array<string>;
+  checkDir: (dir: string, label: string) => boolean;
+  collectFiles: (dir: string, followLinks: boolean) => Array<string>;
   FORBIDDEN: Array<[string, RegExp]>;
-  REQUIRED_RUNTIME_FILES: Array<string>;
+  isAllowedSrcPath: (rel: string) => boolean;
+  missingRequiredRuntimeFiles: (dir: string) => Array<string>;
   REQUIRED_HOST_FILES: Array<string>;
   REQUIRED_PAYLOAD_FILES: Array<string>;
+  REQUIRED_RUNTIME_FILES: Array<string>;
   RUNTIME_DIR: string;
   STANDALONE_ALLOWED_TOPLEVEL: Array<string>;
   STATIC_ALLOWED_TOPLEVEL: Array<string>;
-  ALLOWED_SRC_FILES: Array<string>;
-  allowedTopLevelFor: (label: string) => Array<string>;
-  isAllowedSrcPath: (rel: string) => boolean;
-  collectFiles: (dir: string, followLinks: boolean) => Array<string>;
-  missingRequiredRuntimeFiles: (dir: string) => Array<string>;
-  checkDir: (dir: string, label: string) => boolean;
 }
 
 function checkerExports(): CheckerExports {

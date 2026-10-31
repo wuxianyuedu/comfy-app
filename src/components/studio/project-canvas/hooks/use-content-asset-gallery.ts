@@ -22,19 +22,19 @@ import type { Dispatch, SetStateAction } from "react";
 import { fetchTaskImages, type TaskGalleryImage } from "~/lib/media/task-images-client";
 
 export interface UseContentAssetGalleryArgs {
-  taskId?: string | null;
   /** 只有 picture 节点启用相册；movie / text 不拉。 */
   enabled: boolean;
+  taskId?: string | null;
 }
 
 export interface ContentAssetGallery {
   /** 多图时的图片列表（长度 > 1），单图 / 无图为 null。 */
   images: Array<TaskGalleryImage> | null;
-  open: boolean;
   index: number;
-  setOpen: (open: boolean) => void;
+  open: boolean;
   /** 传函数式更新：翻页要基于「上一张」算，视图里直接 `(i) => (i + 1) % n`。 */
   setIndex: Dispatch<SetStateAction<number>>;
+  setOpen: (open: boolean) => void;
 }
 
 export function useContentAssetGallery({

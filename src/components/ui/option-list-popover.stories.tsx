@@ -39,17 +39,17 @@ function ChipTrigger({ label, count }: { count: number; label: string }) {
  * `render` 给，后者是空实现（见文件头「三条口径」第 3 条）。
  */
 interface StoryArgs {
-  value: string;
-  items: Array<OptionListItem>;
-  triggerLabel: string;
-  triggerCount: number;
-  triggerTitle?: string;
-  triggerClassName?: string;
-  contentClassName?: string;
-  listClassName?: string;
-  emptyHint?: React.ReactNode;
   align?: "start" | "center" | "end";
+  contentClassName?: string;
   disabled?: boolean;
+  emptyHint?: React.ReactNode;
+  items: Array<OptionListItem>;
+  listClassName?: string;
+  triggerClassName?: string;
+  triggerCount: number;
+  triggerLabel: string;
+  triggerTitle?: string;
+  value: string;
 }
 
 /** 适配件：把 Args 里那几项拼成一个真触发器，并补上选中回调。 */

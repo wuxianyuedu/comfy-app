@@ -8,10 +8,10 @@ import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 
 /** 与 use-workshop-pipeline 中 localStorage WorkshopDraft 对齐的线上结构。 */
 export interface WorkshopDraftDto {
-  meta: ProjectMeta;
-  scriptMarkdown: string;
-  scenes: Array<Scene>;
   characters: Array<Character>;
+  meta: ProjectMeta;
+  scenes: Array<Scene>;
+  scriptMarkdown: string;
   shots: Array<Shot>;
 }
 

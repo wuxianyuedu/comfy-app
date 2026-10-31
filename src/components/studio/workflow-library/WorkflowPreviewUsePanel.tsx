@@ -14,31 +14,31 @@ import { WorkflowRunLogButton } from "./WorkflowRunLogButton";
 import { modeLabel } from "./workflow-library-config";
 
 interface Props {
-  workflowId: string;
-  workflowName: string;
-  workflowIO: WorkflowIOMap | null;
+  canRun: boolean;
   effectiveMode: string | null;
-  taskType: string;
+  effectiveModeLabel: string;
+  logViewTaskId: string | null;
+  /** 缺参提示人性化后的展示标签（pos text 等，不是 ioKey）。 */
+  missingLabels: Array<string>;
   /** 多模式工作流：提供时右上角变成模式切换下拉。 */
   modes?: Array<string>;
   onModeChange?: (code: string) => void;
-  effectiveModeLabel: string;
-  values: Record<string, unknown>;
-  onValuesChange: (
-    next: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>),
-  ) => void;
-  seedModes: Record<string, string>;
+  onOpenLog: () => void;
   onSeedModeChange?: (ioKey: string, mode: string) => void;
   /** 素材上传的可见出口：ComfyUI 未运行 / 正在启动 / 启动超时都落在这里。 */
   onUploadNotice: (message: string) => void;
-  running: boolean;
-  canRun: boolean;
-  run: () => void;
+  onValuesChange: (
+    next: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>),
+  ) => void;
   pct: number;
-  /** 缺参提示人性化后的展示标签（pos text 等，不是 ioKey）。 */
-  missingLabels: Array<string>;
-  logViewTaskId: string | null;
-  onOpenLog: () => void;
+  run: () => void;
+  running: boolean;
+  seedModes: Record<string, string>;
+  taskType: string;
+  values: Record<string, unknown>;
+  workflowId: string;
+  workflowIO: WorkflowIOMap | null;
+  workflowName: string;
 }
 
 export function WorkflowPreviewUsePanel({

@@ -18,24 +18,24 @@
 import { clamp } from "~/lib/clamp";
 
 export interface FitBoundsNode {
-  id?: string;
-  position: { x: number; y: number };
-  measured?: { height?: number; width?: number };
-  width?: number;
   height?: number;
+  id?: string;
+  measured?: { height?: number; width?: number };
+  position: { x: number; y: number };
   style?: { height?: number | string; width?: number | string };
+  width?: number;
 }
 
 export interface Bounds {
-  minX: number;
   maxX: number;
-  minY: number;
   maxY: number;
+  minX: number;
+  minY: number;
 }
 
 export interface ViewportRect {
-  width: number;
   height: number;
+  width: number;
 }
 
 export interface ViewportPadding {
@@ -177,10 +177,10 @@ export interface FitSettleStepper {
 export interface FitSettleOptions {
   /** 参与包围盒的节点都没量到尺寸时的兜底尺寸。 */
   fallbackSize: { height: number; width: number };
-  /** 连续多少帧范围不再扩大就认为收敛。 */
-  settleRounds: number;
   /** 帧数护栏，避免测量始终不稳时无限重算。 */
   maxAttempts: number;
+  /** 连续多少帧范围不再扩大就认为收敛。 */
+  settleRounds: number;
 }
 
 export function createFitSettleStepper(options: FitSettleOptions): FitSettleStepper {

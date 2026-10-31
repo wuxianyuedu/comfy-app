@@ -180,15 +180,10 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
 }
 
 export interface EnvelopeParserDeps {
-  taskId: string;
-  /** 面板日志。 */
-  log: LogFn;
-  /** 已应用 overrides / 剔除 UI 节点的最终工作流（校验错误定位用）。 */
-  patched?: Record<string, unknown>;
   /** 收到 envelope 事件时收口（ok = envelope.ok；env = 原文）。 */
   finish: (ok: boolean, env: unknown) => void;
-  /** 记下 prompt_id（写库 + 建立 prompt→task 索引由调用方做）。 */
-  onPromptId: (promptId: string) => void;
+  /** 面板日志。 */
+  log: LogFn;
   /** 进度百分比（已从 completed/total 换算）；`node` 是事件自带的当前节点信息。
    *
    *  两类事件的形状不一样，是实测出来的（真出图那一轮，见 ADR §24）：
@@ -213,18 +208,23 @@ export interface EnvelopeParserDeps {
       value: number;
     },
   ) => void;
-  /** 可注入的 trace（默认全局 trace）。 */
-  trace?: TraceFn;
+  /** 记下 prompt_id（写库 + 建立 prompt→task 索引由调用方做）。 */
+  onPromptId: (promptId: string) => void;
+  /** 已应用 overrides / 剔除 UI 节点的最终工作流（校验错误定位用）。 */
+  patched?: Record<string, unknown>;
   /** 完整原始行（不截断）收集：供前端「查看完整输出」入口。默认不收集
    *  （测试不传），生产由 executor-cli 注入 runner-state 的 appendRawCli。 */
   rawCli?: (taskId: string, line: string) => void;
+  taskId: string;
+  /** 可注入的 trace（默认全局 trace）。 */
+  trace?: TraceFn;
 }
 
 /** stdout 解析器：喂 chunk 的回调 + 未消费尾部（进程退出时落 trace 用）。 */
 export interface CliEnvelopeParser {
-  sink: (chunk: Buffer | string) => void;
   /** 尚未成行的 stdout 残留（close 时落 trace，不丢现场）。 */
   leftover: () => string;
+  sink: (chunk: Buffer | string) => void;
 }
 
 /**
@@ -415,21 +415,21 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
 }
 
 export interface StderrSinkDeps {
-  taskId: string;
   /** 面板日志。 */
   log: LogFn;
-  trace?: TraceFn;
   /** 完整原始行（不截断）收集：供前端「查看完整输出」入口。 */
   rawCli?: (taskId: string, line: string) => void;
+  taskId: string;
+  trace?: TraceFn;
 }
 
 /** stderr 汇总态：调用方在 close 时读 `summary()` 落 tail。 */
 export interface StderrSink {
-  sink: (chunk: Buffer | string) => void;
-  /** 完整 stderr 原文（不截断，close 时 tail 用）。 */
-  raw: () => string;
   /** 噪声行数（Python Deprecation/Syntax 警告）。 */
   noisyWarningLines: () => number;
+  /** 完整 stderr 原文（不截断，close 时 tail 用）。 */
+  raw: () => string;
+  sink: (chunk: Buffer | string) => void;
 }
 
 const NOISY_WARNING_RE = /DeprecationWarning|SyntaxWarning: invalid escape sequence/i;
@@ -480,15 +480,6 @@ export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
  */
 
 export interface CliFinisherDeps {
-  taskId: string;
-  /** 面板日志。 */
-  log: LogFn;
-  /** 已应用 overrides / 剔除 UI 节点的最终工作流（定位错误节点用）。 */
-  patched?: Record<string, unknown>;
-  /** 幂等收口守卫：第一次返回 true（并做好清理），重复调用返回 false。 */
-  settle: () => boolean;
-  /** 当前 promptId（可能在收口前才拿到，故为取值函数）。 */
-  promptId: () => string | null;
   /** 成功收口。**注入**而不是直接 import `executor-finalize`：那个模块经
    *  `core/repository` 拖进 DB / `.env`，会让本模块无法脱离环境单测。 */
   complete: (taskId: string, promptId: string) => void;
@@ -499,6 +490,15 @@ export interface CliFinisherDeps {
     detail: string,
     validationErrors?: Array<ValidationError>,
   ) => void;
+  /** 面板日志。 */
+  log: LogFn;
+  /** 已应用 overrides / 剔除 UI 节点的最终工作流（定位错误节点用）。 */
+  patched?: Record<string, unknown>;
+  /** 当前 promptId（可能在收口前才拿到，故为取值函数）。 */
+  promptId: () => string | null;
+  /** 幂等收口守卫：第一次返回 true（并做好清理），重复调用返回 false。 */
+  settle: () => boolean;
+  taskId: string;
 }
 
 export type CliFinisher = (ok: boolean, env: unknown) => void;

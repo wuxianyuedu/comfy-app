@@ -30,21 +30,21 @@ import { outputPortLabel } from "./workflow-library-param-cards";
 const CARD_WIDTH = 200;
 
 export interface WorkflowOutputParamCardColumnProps {
+  /** 是否允许拖改（有模式、且上层给了落库回调时才为真）。 */
+  canWire?: boolean;
+  /** 端点槽位：消费方注入 `<Handle>`（库里那层）或只读圆点。 */
+  endpoint?: (port: { handleId: string; name: string; type: string }) => ReactNode;
+  /** 该输出口在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
+  isManual?: (ioKey: string) => boolean;
+  onReset?: (ioKey: string) => void;
+  onSelect?: (ioKey: string | null) => void;
   /** 工作流对外暴露的输出（`workflowIO` 里 `direction: "output"` 的那些）。 */
   outputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
   /** 输出口 ioKey → 当前取值的那一行 ioKey（`null` = 悬空 / 作者断开）。
    *  由 `deriveLibraryOutputCards` 派生；缺省时每个口取值于它自己那一行。 */
   resolved?: Record<string, string | null>;
-  /** 是否允许拖改（有模式、且上层给了落库回调时才为真）。 */
-  canWire?: boolean;
   /** 作者手里正选中的输出口。 */
   selectedOutputId?: string | null;
-  onSelect?: (ioKey: string | null) => void;
-  /** 该输出口在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
-  isManual?: (ioKey: string) => boolean;
-  onReset?: (ioKey: string) => void;
-  /** 端点槽位：消费方注入 `<Handle>`（库里那层）或只读圆点。 */
-  endpoint?: (port: { handleId: string; name: string; type: string }) => ReactNode;
 }
 
 export function WorkflowOutputParamCardColumn({

@@ -10,8 +10,6 @@ import { nextId } from "~/lib/unique-id";
  *（如 mode / first_frame / image），value 为输入内容——文本、数字或图片。
  * 图片既可以是远端 URL，也可以是本地上传后转成的 data:image URL。 */
 export interface UsageField {
-  key: string;
-  value: string;
   /**
    * 行的**稳定标识**，只给 React 当 `key` 用。
    *
@@ -26,6 +24,8 @@ export interface UsageField {
    * 请求体里不会多出这个字段。
    */
   id: string;
+  key: string;
+  value: string;
 }
 
 /** 视频生成常见的 mode 预设（Agnes 等：text / keyframe / reference）。
@@ -274,10 +274,10 @@ export function mediaDefaultExt(kind: string): "png" | "mp4" {
  *  ② Agnes 系 {origin}/agnesapi?video_id={id}&model_name={model}
  *  由调用方逐个尝试，读到媒体 URL 即视为完成。纯字符串拼装，可单测。 */
 export interface VideoPollUrl {
-  /** REST 风格：任务 ID 直接拼在端点目录后 */
-  rest: string;
   /** Agnes 系带签名查询串；origin 解析失败时为 null（跳过该候选） */
   agnes: string | null;
+  /** REST 风格：任务 ID 直接拼在端点目录后 */
+  rest: string;
 }
 
 /** 端点路径的目录部分（/videos/generations → /videos），用于任务轮询拼接。 */

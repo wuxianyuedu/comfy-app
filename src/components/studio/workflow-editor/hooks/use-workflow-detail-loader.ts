@@ -12,14 +12,14 @@ import type { WorkflowDetail, WorkflowIOParam } from "~/components/studio/workfl
 type WorkflowDetailResponse = WorkflowDetail & { error?: string };
 
 interface WorkflowSubgraphStackEntry {
-  uid: string;
   name: string;
   nodeId: string;
+  uid: string;
 }
 
 interface CacheEnvelope {
-  t: number;
   d: WorkflowDetail;
+  t: number;
 }
 
 /* 缓存 schema 版本后缀。每当 workflow.detailFull / subgraph 响应结构变化时就
@@ -80,27 +80,27 @@ function writeCache(key: string, data: WorkflowDetail): void {
 }
 
 export interface WorkflowDetailLoaderArgs {
-  workflowId: string;
   detail: WorkflowDetail | null;
   detailRef: RefObject<WorkflowDetail | null>;
   latestRequestIdRef: RefObject<number>;
   setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
-  setLoading: Dispatch<SetStateAction<boolean>>;
   setError: Dispatch<SetStateAction<string>>;
+  setLoading: Dispatch<SetStateAction<boolean>>;
   setParamMap: Dispatch<SetStateAction<Record<string, unknown>>>;
+  setRootWorkflowName: Dispatch<SetStateAction<string>>;
+  /** 非致命的下钻错误：保持**父**图可见（不闪一下工作流库）。 */
+  setSubgraphError: Dispatch<SetStateAction<string>>;
+  setSubgraphLoading: Dispatch<SetStateAction<boolean>>;
+  setSubgraphRawContext: Dispatch<
+    SetStateAction<{ parentRawJson: unknown; subUid: string } | null>
+  >;
+  setSubgraphStack: Dispatch<SetStateAction<Array<WorkflowSubgraphStackEntry>>>;
   setWorkflowIO: (
     updater:
       | Record<string, WorkflowIOParam>
       | ((prev: Record<string, WorkflowIOParam>) => Record<string, WorkflowIOParam>),
   ) => void;
-  setSubgraphStack: Dispatch<SetStateAction<Array<WorkflowSubgraphStackEntry>>>;
-  setRootWorkflowName: Dispatch<SetStateAction<string>>;
-  setSubgraphLoading: Dispatch<SetStateAction<boolean>>;
-  setSubgraphRawContext: Dispatch<
-    SetStateAction<{ parentRawJson: unknown; subUid: string } | null>
-  >;
-  /** 非致命的下钻错误：保持**父**图可见（不闪一下工作流库）。 */
-  setSubgraphError: Dispatch<SetStateAction<string>>;
+  workflowId: string;
 }
 
 /**

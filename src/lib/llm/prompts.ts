@@ -168,9 +168,9 @@ export function buildStoryboardMessages(
 }
 
 export interface RawShot {
-  shotType: ShotType;
-  description: string;
   characterNames: Array<string>;
+  description: string;
+  shotType: ShotType;
 }
 
 export function parseStoryboard(text: string): Array<RawShot> {
@@ -196,12 +196,12 @@ export function parseStoryboard(text: string): Array<RawShot> {
 
 /** 评审时的创作上下文（判断内容是否贴合项目意图）。字段都可能是空串，构建时兜底。 */
 export interface ContentReviewContext {
-  title: string;
-  type: string;
-  tone: string;
   logline: string;
   /** 剧本节选（判一致性用），已由调用方裁剪长度。 */
   scriptExcerpt: string;
+  title: string;
+  tone: string;
+  type: string;
 }
 
 export const REVIEW_SYSTEM = `你是严格的 AI 生成内容质检评审。用户会给出创作上下文（项目类型 / 基调 / 梗概 / 剧本节选）与一条待评审内容（分镜镜头或角色卡的文本）。判断它是否合格：
@@ -321,9 +321,9 @@ export const SCRIPT_REVISION_SYSTEM = `你是剧本打磨助手。用户会给�
  */
 export interface ScriptRevisionFeedback {
   issues: Array<string>;
-  suggestion: string;
   /** 低分维度：key + 分 + 打分依据；未评分（旧判定）时为空数组。 */
   lowScores: Array<{ key: string; note: string; score: number }>;
+  suggestion: string;
 }
 
 /** 组装「按评审意见定向改写剧本」的消息。`sourceText` 是完整剧本 Markdown（调用方裁长）。 */
@@ -384,6 +384,8 @@ export const SHOT_IMAGE_REVIEW_SYSTEM = `你是严格的 AI 生图质检评审�
 
 /** 视觉评审输入：图（镜头图 + 角色定妆照）+ 该镜的文本上下文。 */
 export interface ShotImageReviewInput {
+  /** 出场角色名（用于角色一致性对照说明）。 */
+  characterNames: Array<string>;
   /** 镜头产物图 URL（HTTP / data: base64）。 */
   imageUrl: string;
   /** 该镜出场角色的生效定妆照 URL（可能为空数组）。 */
@@ -392,8 +394,6 @@ export interface ShotImageReviewInput {
   prompt: string;
   /** 景别（如「中景」「特写」）。 */
   shotType: string;
-  /** 出场角色名（用于角色一致性对照说明）。 */
-  characterNames: Array<string>;
 }
 
 /**

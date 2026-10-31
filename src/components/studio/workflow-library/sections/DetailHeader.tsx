@@ -19,21 +19,21 @@ import type { MetaEditorController } from "../hooks/use-workflow-library-detail"
 import { zClass } from "~/lib/shell/overlay-z";
 
 interface DetailHeaderProps {
-  workflow: WorkflowRow;
-  usable: boolean;
-  canResync: boolean;
-  missing: boolean;
-  isTechnical: boolean;
   busyDownload: boolean;
   busyResync: boolean;
+  canResync: boolean;
+  isTechnical: boolean;
   /** 类型 / 模型编辑器（含多模式与模型标签），渲染在头部内。 */
   meta: MetaEditorController;
-  onEdit: () => void;
-  onResync: () => void;
-  onDownload: () => void;
+  missing: boolean;
   onDelete: () => void;
+  onDownload: () => void;
+  onEdit: () => void;
   onOpenSource: () => void;
+  onResync: () => void;
   onUse: () => void;
+  usable: boolean;
+  workflow: WorkflowRow;
 }
 
 export function DetailHeader({

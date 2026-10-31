@@ -11,18 +11,18 @@ import { eq, and, like, or, asc, desc, count } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
 
 export interface SkillSeed {
-  name: string;
-  slug: string;
+  category: string;
+  coverUrl?: string;
+  defaultParams?: Record<string, unknown>;
   description: string;
   icon: string;
-  category: string;
-  promptTemplate: string;
+  name: string;
   negativePrompt?: string;
-  defaultParams?: Record<string, unknown>;
+  promptTemplate: string;
   recommendedModel?: string;
-  tags: Array<string>;
-  coverUrl?: string;
+  slug: string;
   sortOrder: number;
+  tags: Array<string>;
 }
 
 export class SkillRepository extends DrizzleRepository<Skill> {

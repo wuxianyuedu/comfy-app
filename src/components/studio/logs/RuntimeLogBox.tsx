@@ -36,14 +36,14 @@ import { AnsiLogText } from "./AnsiLogText";
 import type { RuntimeLogController } from "./use-runtime-log-source";
 
 export interface RuntimeLogBoxProps {
+  /** 外框的补充 class（各分区与上方元素之间的间距不同）。 */
+  className?: string;
+  /** 空态提示（引导用户点启动按钮或刷新）。 */
+  emptyHint: ReactNode;
   /** 日志文件名（标题里显示，如 `comfyui-runtime.log`）。 */
   fileName: string;
   /** 日志来源：正文 / 片段 / 会话列表 / 选中项 / 跟随态 / 刷新动作。 */
   log: RuntimeLogController;
-  /** 空态提示（引导用户点启动按钮或刷新）。 */
-  emptyHint: ReactNode;
-  /** 外框的补充 class（各分区与上方元素之间的间距不同）。 */
-  className?: string;
 }
 
 export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLogBoxProps) {

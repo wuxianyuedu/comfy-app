@@ -6,9 +6,9 @@ import { errorMessage } from "~/lib/error-message";
 
 export interface ChatArgs {
   messages: Array<LLMMessage>;
-  opts?: LLMRequestOptions;
   /** 每收到一个流式 token 就回调一次（仅流式模式）。 */
   onToken?: (token: string) => void;
+  opts?: LLMRequestOptions;
   signal?: AbortSignal;
 }
 
@@ -120,10 +120,10 @@ export async function completeChat({ messages, opts }: ChatArgs): Promise<string
 }
 
 export interface RemoteProbeResult {
-  ok: boolean;
   detail: string;
   /** 服务端模型清单（/models 拉取成功时返回），供「添加模型」弹窗点选。 */
   models?: Array<string>;
+  ok: boolean;
 }
 
 /**

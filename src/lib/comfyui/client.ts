@@ -461,23 +461,23 @@ export async function interrupt(): Promise<void> {
  * 底部状态栏据此显示显存/内存占用；进程离线时返回 null（调用方降级展示）。 */
 /** 折叠成状态栏关心的聚合视图，保留原始字段便于扩展 */
 export interface ComfySystemStats {
-  online: boolean;
   /** GPU 型号（取第一块可用 GPU）；无 GPU 时为 undefined */
   gpuName?: string;
-  /** 显存占用（字节）：vram_total - vram_free 推导 */
-  vramUsed: number;
-  /** 显存总量（字节） */
-  vramTotal: number;
-  /** 显存剩余可用（字节）：ComfyUI 上报的 vram_free 原值 */
-  vramFree: number;
-  /** nvidia-smi 物理专用显存占用（字节）；不适用/查询失败为 undefined */
-  smiVramUsed?: number;
-  /** nvidia-smi 物理专用显存总量（字节）；不适用/查询失败为 undefined */
-  smiVramTotal?: number;
-  /** 系统内存占用（字节） */
-  ramUsed: number;
+  online: boolean;
   /** 系统内存总量（字节） */
   ramTotal: number;
+  /** 系统内存占用（字节） */
+  ramUsed: number;
+  /** nvidia-smi 物理专用显存总量（字节）；不适用/查询失败为 undefined */
+  smiVramTotal?: number;
+  /** nvidia-smi 物理专用显存占用（字节）；不适用/查询失败为 undefined */
+  smiVramUsed?: number;
+  /** 显存剩余可用（字节）：ComfyUI 上报的 vram_free 原值 */
+  vramFree: number;
+  /** 显存总量（字节） */
+  vramTotal: number;
+  /** 显存占用（字节）：vram_total - vram_free 推导 */
+  vramUsed: number;
 }
 
 /** 从 `/system_stats.devices` 中挑出真正在用的 GPU。
@@ -487,9 +487,9 @@ export interface ComfySystemStats {
 interface ComfyDevice {
   name?: string;
   type?: string;
+  vram_free?: number;
   vram_total?: number;
   vram_used?: number;
-  vram_free?: number;
 }
 
 function pickGpu(devices: Array<ComfyDevice> | undefined): ComfyDevice | undefined {

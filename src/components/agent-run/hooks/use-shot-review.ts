@@ -22,26 +22,26 @@ import type { HumanVerdict, ReviewMode, ReviewVerdict } from "~/lib/production/r
 import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";
 
 export interface ShotReviewController {
-  /** 最近一次评审判定（未评 / 已重置 → null）。 */
-  verdict: ReviewVerdict | null;
-  /** 评审在途。 */
-  reviewing: boolean;
-  /** 重生成在途。 */
-  regenerating: boolean;
   /** 评审失败文案（就地展示，不外抛）。 */
   error: string;
-  /** 评审指定镜头（结果写进 `verdict`，服务端同时落库到 `shot.review`）。 */
-  review: (shotId: string) => Promise<void>;
-  /** 不合格后的重生成：gacha=同提示词换种子，reprompt=据评审意见改写提示词。 */
-  regenerate: (shotId: string, mode: ReviewMode) => Promise<void>;
-  /** 人工裁决（#2480，优先于 AI）：落库后回显 + 通知调用方刷新。 */
-  submitVerdict: (shotId: string, pass: boolean, note: string) => Promise<void>;
   /** 人工裁决结果（本次会话内提交过的；切换镜头即清）。 */
   humanVerdict: HumanVerdict | null;
-  /** 人评分（0~5，null = 清除）。 */
-  setRating: (shotId: string, rating: number | null) => Promise<void>;
+  /** 不合格后的重生成：gacha=同提示词换种子，reprompt=据评审意见改写提示词。 */
+  regenerate: (shotId: string, mode: ReviewMode) => Promise<void>;
+  /** 重生成在途。 */
+  regenerating: boolean;
   /** 清空当前判定（弹窗切换目标镜头时调用）。 */
   reset: () => void;
+  /** 评审指定镜头（结果写进 `verdict`，服务端同时落库到 `shot.review`）。 */
+  review: (shotId: string) => Promise<void>;
+  /** 评审在途。 */
+  reviewing: boolean;
+  /** 人评分（0~5，null = 清除）。 */
+  setRating: (shotId: string, rating: number | null) => Promise<void>;
+  /** 人工裁决（#2480，优先于 AI）：落库后回显 + 通知调用方刷新。 */
+  submitVerdict: (shotId: string, pass: boolean, note: string) => Promise<void>;
+  /** 最近一次评审判定（未评 / 已重置 → null）。 */
+  verdict: ReviewVerdict | null;
 }
 
 const REGEN_SUCCESS: Record<ReviewMode, string> = {

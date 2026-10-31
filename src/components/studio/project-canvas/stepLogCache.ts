@@ -39,27 +39,27 @@ import { tailWindow } from "~/lib/page-window";
  * 只多一个**纯界面**扩展：`client?: boolean` 标记「浏览器自己推的」条目
  *（订阅状态、卡死检测告警 …），好让它们以低饱和斜体渲染。 */
 export interface StepLogEntry {
-  t: number;
+  client?: boolean;
   level: "info" | "progress" | "warn" | "error" | "success";
   msg: string;
-  client?: boolean;
   /** 调用方来源（"文件:行"），从服务端 LogEntry 镜像过来；
    *  只在调试开关打开时渲染。 */
   src?: string;
+  t: number;
 }
 
 export interface StepLogPanelState {
   /** 该 taskId 的面板首次打开以来推入的全部日志条目。 */
   logs: Array<StepLogEntry>;
+  /** 触发该任务的画布节点 id，用于日志面板按 #1/#2… 短序号筛选。 */
+  nodeId?: string;
+  status?: string;
   /** 最近一次看到的结构化失败（来自 pollTask 的 `d.validationErrors`，
    *  或 SSE 的 `state` 事件）。任务仍在跑、或从未标记失败时为 null。 */
   validationErrors: Array<ValidationError> | null;
   /* 任务级元数据，好让任务切换下拉框显示「工作流名 · 状态」，
    *  而不是一串被截断的 id。由 GlobalStepLogPanel 在每次 SSE `state` 事件时填充。 */
   workflowName?: string;
-  status?: string;
-  /** 触发该任务的画布节点 id，用于日志面板按 #1/#2… 短序号筛选。 */
-  nodeId?: string;
 }
 
 const MAX_ENTRIES = 256;

@@ -21,10 +21,10 @@ import { importOutputAsInput } from "~/lib/project-canvas/canvas-api";
 import { isCanvasNode, type CanvasNodeType } from "~/lib/project-canvas/canvas-types";
 
 export interface UseCanvasConnectionsArgs {
-  nodesRef: { current: Array<CanvasNodeType> };
   edgesRef: { current: Array<Edge> };
-  setNodes: Dispatch<SetStateAction<Array<CanvasNodeType>>>;
+  nodesRef: { current: Array<CanvasNodeType> };
   setEdges: Dispatch<SetStateAction<Array<Edge>>>;
+  setNodes: Dispatch<SetStateAction<Array<CanvasNodeType>>>;
 }
 
 export function useCanvasConnections({

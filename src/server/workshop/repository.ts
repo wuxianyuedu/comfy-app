@@ -128,15 +128,15 @@ function summarize(row: WorkshopSession): WorkshopSessionSummary {
 }
 
 export interface CreateSessionInput {
-  title?: string;
-  type?: string;
-  tone?: string;
-  logline?: string;
   idea?: string;
-  userId?: string | null;
+  logline?: string;
   /** 可选：绑定界面侧**既有**项目（proj_* = production.id）。缺省新建一对
    *  project + production 行；给了就必须存在且归属一致（桥的口径，#2482）。 */
   projectId?: string | null;
+  title?: string;
+  tone?: string;
+  type?: string;
+  userId?: string | null;
 }
 
 export async function createSession(input: CreateSessionInput = {}): Promise<string> {

@@ -14,23 +14,17 @@ import { Button } from "~/components/ui/button";
 import { textHandler } from "~/lib/form-props";
 
 export interface SeedAdvancedFieldProps {
+  disabled?: boolean;
+  onChange: (value: string) => void;
   /** 种子输入框的原始字符串；空串 = 自动随机。 */
   value: string;
-  onChange: (value: string) => void;
-  disabled?: boolean;
 }
 
-export function SeedAdvancedField({
-  value,
-  onChange,
-  disabled,
-}: SeedAdvancedFieldProps) {
+export function SeedAdvancedField({ value, onChange, disabled }: SeedAdvancedFieldProps) {
   return (
     <Disclosure
       marker="chevron"
-      trigger={
-        <span className="text-muted-foreground text-xs font-medium">高级</span>
-      }
+      trigger={<span className="text-muted-foreground text-xs font-medium">高级</span>}
       className="px-1 py-0.5"
       panelClassName="mt-1"
     >

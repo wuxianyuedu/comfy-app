@@ -30,38 +30,38 @@ import { isRecord } from "~/lib/is-record";
 
 /** 从剧本提取 / 外部导入的角色卡草稿(写入前重算提示词) */
 export interface ParsedCharacterDraft {
-  name: string;
   ageGender: string;
   appearance: string;
   costume: string;
-  personality: string;
-  temperament: string;
-  styleTags: Array<string>;
-  /** 角色卡 JSON 导入时可携带;工具解析产生的草稿为 undefined */
-  skillSlug?: string;
+  name: string;
   /** 角色卡 JSON 导入时可携带;工具解析产生的草稿为 undefined */
   params?: Record<string, unknown>;
+  personality: string;
+  /** 角色卡 JSON 导入时可携带;工具解析产生的草稿为 undefined */
+  skillSlug?: string;
+  styleTags: Array<string>;
+  temperament: string;
 }
 
 /** 分镜条目:写入 Shot 前的中间态(含已校验的景别) */
 export interface ShotEntry {
+  characterNames: Array<string>;
+  description: string;
+  dialogue: string;
   sceneHeading: string;
   shotType: ShotType;
-  description: string;
-  characterNames: Array<string>;
-  dialogue: string;
 }
 
 /** 「工具」通道从剧本 markdown 解析出的镜头草稿 */
 export interface ParsedShotDraft {
-  sceneHeading: string;
-  location: string;
-  time: string;
+  characterNames: Array<string>;
   description: string;
   dialogue: string;
-  characterNames: Array<string>;
   /** 是否为该场景的第一镜(组件层用于给开场镜默认远景) */
   firstInScene: boolean;
+  location: string;
+  sceneHeading: string;
+  time: string;
 }
 
 /**
@@ -295,10 +295,10 @@ export function parseShotDrafts(
 ): Array<ParsedShotDraft> {
   interface Block {
     heading: string;
-    location: string;
-    time: string;
     items: Array<{ description: string; dialogue: Array<string> }>;
     leadingDialogue: Array<string>;
+    location: string;
+    time: string;
   }
   const blocks: Array<Block> = [];
   let cur: Block | null = null;

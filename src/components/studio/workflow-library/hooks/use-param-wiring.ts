@@ -22,27 +22,6 @@ import {
 } from "~/lib/workflow/workflow-param-wiring";
 
 export interface ParamWiringController {
-  /** 当前生效模式；没有模式时编辑无从归属，写入是空操作。 */
-  mode: string | null;
-  /** 这个对外参数在当前模式下是否被作者改过（含显式断开）。 */
-  isManual: (entryId: string) => boolean;
-  /** 拖线落上：把某个对外参数连到 ioKey（写入后立即回读）。 */
-  connect: (entryId: string, ioKey: string) => void;
-  /** 断开：该对外参数在这个模式下显式断线（不再落任何端口）。 */
-  disconnect: (entryId: string) => void;
-  /** 恢复默认：撤销该对外参数在当前模式下的手工线。 */
-  resetToAuto: (entryId: string) => void;
-  /** 一次撤销**多个**条目的手工线（尺寸卡头一次撤六行形态）。
-   *
-   *  必须是一次计算 + 一次落库：逐个调 `resetToAuto` 时每一次都基于同一份**旧**
-   *  值算新表，后一次会把前一次的删除覆盖回去 —— 表现就是「重置清不掉」
-   *  （用户口径：尺寸那三项线变成固定连线，重置也清不掉）。 */
-  resetMany: (entryIds: ReadonlyArray<string>) => void;
-  /** **生效的 paramMap** = 已落库的那一份叠上本轮本地改动。
-   *
-   *  卡片列与连线必须都读这一份：只读落库那份的话，用户刚拖出来的线要等一次
-   *  PATCH 往返（失败时永远不）才显示，「拖了没反应」与「拖坏了」看起来一模一样。 */
-  effectiveParamMap: Record<string, unknown>;
   /** 提交一份**完整** paramMap：先写本地 overlay（立刻回读），再落库。
    *
    *  左列（`connect` / `disconnect` / `resetToAuto`）已内建这套编排；右列的输出
@@ -50,15 +29,36 @@ export interface ParamWiringController {
    *  份 overlay，输出线才会像输入线一样「拖完立刻画出来」，而不必等一次 PATCH +
    *  查询重拉（约 2s）才把线显示出来。 */
   commitParamMap: (next: Record<string, unknown>) => void;
+  /** 拖线落上：把某个对外参数连到 ioKey（写入后立即回读）。 */
+  connect: (entryId: string, ioKey: string) => void;
+  /** 断开：该对外参数在这个模式下显式断线（不再落任何端口）。 */
+  disconnect: (entryId: string) => void;
+  /** **生效的 paramMap** = 已落库的那一份叠上本轮本地改动。
+   *
+   *  卡片列与连线必须都读这一份：只读落库那份的话，用户刚拖出来的线要等一次
+   *  PATCH 往返（失败时永远不）才显示，「拖了没反应」与「拖坏了」看起来一模一样。 */
+  effectiveParamMap: Record<string, unknown>;
+  /** 这个对外参数在当前模式下是否被作者改过（含显式断开）。 */
+  isManual: (entryId: string) => boolean;
+  /** 当前生效模式；没有模式时编辑无从归属，写入是空操作。 */
+  mode: string | null;
+  /** 一次撤销**多个**条目的手工线（尺寸卡头一次撤六行形态）。
+   *
+   *  必须是一次计算 + 一次落库：逐个调 `resetToAuto` 时每一次都基于同一份**旧**
+   *  值算新表，后一次会把前一次的删除覆盖回去 —— 表现就是「重置清不掉」
+   *  （用户口径：尺寸那三项线变成固定连线，重置也清不掉）。 */
+  resetMany: (entryIds: ReadonlyArray<string>) => void;
+  /** 恢复默认：撤销该对外参数在当前模式下的手工线。 */
+  resetToAuto: (entryId: string) => void;
 }
 
 export interface UseParamWiringArgs {
-  /** 工作流模板的 paramMap 原始列（外部事实源，GET 恢复 / 保存回写）。 */
-  paramMap: Record<string, unknown>;
   /** 当前生效模式（`resolveWorkflowMode` 给出的那个）。 */
   mode: string | null | undefined;
   /** 落库回调（父级持有 workflowId 与 tRPC mutation）。 */
   onPatchParamMap?: (next: Record<string, unknown>) => void | Promise<void>;
+  /** 工作流模板的 paramMap 原始列（外部事实源，GET 恢复 / 保存回写）。 */
+  paramMap: Record<string, unknown>;
 }
 
 export function useParamWiring({

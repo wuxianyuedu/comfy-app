@@ -23,6 +23,15 @@ import { type OmitOwnProps } from "~/lib/dom-props";
  */
 
 export interface FilePickerProps {
+  /** 透传给 `<input>` 的 `accept`，把系统文件对话框筛成期望类型。 */
+  accept?: string;
+  /** 额外透传给 `<input>` 的属性（如 `id`，供 `<label htmlFor>` 关联）。 */
+  inputProps?: OmitOwnProps<
+    React.InputHTMLAttributes<HTMLInputElement>,
+    "type" | "accept" | "multiple" | "onChange" | "className"
+  >;
+  /** 是否允许一次选多个。默认单选。 */
+  multiple?: boolean;
   /**
    * 选中文件后的回调。用户取消时不会被调用。
    *
@@ -32,15 +41,6 @@ export interface FilePickerProps {
    * 那正是此前 9 份实现里各写一遍、且有两处忘了判空的地方。
    */
   onPick: (file: File, files: FileList) => void;
-  /** 透传给 `<input>` 的 `accept`，把系统文件对话框筛成期望类型。 */
-  accept?: string;
-  /** 是否允许一次选多个。默认单选。 */
-  multiple?: boolean;
-  /** 额外透传给 `<input>` 的属性（如 `id`，供 `<label htmlFor>` 关联）。 */
-  inputProps?: OmitOwnProps<
-    React.InputHTMLAttributes<HTMLInputElement>,
-    "type" | "accept" | "multiple" | "onChange" | "className"
-  >;
 }
 
 export interface FilePickerHandle {

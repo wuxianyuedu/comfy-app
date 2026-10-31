@@ -34,27 +34,27 @@ import type { PidLookup } from "./proc-detect";
 export interface ComfyExitFacts {
   /** 退出码（`exit` / `close` 事件的第一个参数）。 */
   code: number | null;
+  /** 会话模式 —— 决定「拿不到退出码」这句话该怎么讲。
+   *  `studio` 是 Drizzle Studio（它复用同一套退出原语，见 lifecycle-wait）。 */
+  mode: "keepAlive" | "bound" | "cli" | "studio";
+  /** 已知 pid（保活模式由监督器记住）。 */
+  pid: number | null;
   /** 终止信号（第二个参数）。**Windows 上绝大多数情况是 null** —— Node 在
    *  Windows 只在少数路径能报出信号，被 `taskkill /F` 杀掉就是 null。 */
   signal: string | null;
   /** 用户点了「关闭 ComfyUI」（与「自己挂了」分开讲）。 */
   stopRequested: boolean;
-  /** 已知 pid（保活模式由监督器记住）。 */
-  pid: number | null;
   /** 进程存活时长（毫秒）；未知为 null。 */
   uptimeMs: number | null;
-  /** 会话模式 —— 决定「拿不到退出码」这句话该怎么讲。
-   *  `studio` 是 Drizzle Studio（它复用同一套退出原语，见 lifecycle-wait）。 */
-  mode: "keepAlive" | "bound" | "cli" | "studio";
 }
 
 export interface ComfyExitReport {
-  /** 一句话结论（进 `[exit]` 行与会话横幅）。 */
-  reason: string;
-  /** 结构化明细（key=value，便于事后 grep 与贴给别人看）。 */
-  detail: string;
   /** 值得额外做的动作（null = 不需要）。 */
   advice: string | null;
+  /** 结构化明细（key=value，便于事后 grep 与贴给别人看）。 */
+  detail: string;
+  /** 一句话结论（进 `[exit]` 行与会话横幅）。 */
+  reason: string;
 }
 
 /** 时长 → `1h02m` / `3m20s` / `42s`（日志里读着顺即可，不做精度承诺）。
@@ -143,24 +143,24 @@ export function describeComfyExit(facts: ComfyExitFacts): ComfyExitReport {
 /* ── 保活模式的退出监督 ─────────────────────────────────────────────── */
 
 export interface ComfyExitWatcherDeps {
+  clearTimer?: (handle: ReturnType<typeof setInterval>) => void;
   /** 查「跑着 main.py 的进程」的 pid；区分「真的查不到」(`failed=false`) 与
    *  「查询本身失败」(`failed=true`，如 PowerShell 超时)。后者证据不足，
    *  监督器不得当作「进程消失」。 */
   findPid: () => Promise<PidLookup>;
-  /** 确定退出时回调一次（之后监督器自停）。 */
-  onExit: (facts: { pid: number | null; uptimeMs: number | null }) => void;
-  /** 用户是否已请求关闭（主动关就不报「莫名退出」）。 */
-  isStopped: () => boolean;
   /** 轮询间隔（默认 10s：这是「事后发现」，不需要启动期那种 2s 密度）。 */
   intervalMs?: number;
-  /** 注入时钟（测试用）。 */
-  now?: () => number;
+  /** 用户是否已请求关闭（主动关就不报「莫名退出」）。 */
+  isStopped: () => boolean;
   /** 连续多少次查不到才判死（默认 2，与启动期同口径 —— 单次查询在冷启动高负载
    *  下可能超时误报）。 */
   missThreshold?: number;
+  /** 注入时钟（测试用）。 */
+  now?: () => number;
+  /** 确定退出时回调一次（之后监督器自停）。 */
+  onExit: (facts: { pid: number | null; uptimeMs: number | null }) => void;
   /** 定时器工厂（测试传入可控实现）。 */
   setTimer?: (fn: () => void, ms: number) => ReturnType<typeof setInterval>;
-  clearTimer?: (handle: ReturnType<typeof setInterval>) => void;
 }
 
 /**
@@ -264,12 +264,12 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
 
 /** 一次会话的落盘标记（`log/services/comfyui-last-session.json`）。 */
 export interface ComfySessionMark {
-  pid: number | null;
-  mode: ComfyExitFacts["mode"];
-  /** 会话开始时刻（ISO）。 */
-  startedAt: string;
   /** 退出记录；null = **有开始没结束**。 */
   exited: { at: string; reason: string } | null;
+  mode: ComfyExitFacts["mode"];
+  pid: number | null;
+  /** 会话开始时刻（ISO）。 */
+  startedAt: string;
 }
 
 /**

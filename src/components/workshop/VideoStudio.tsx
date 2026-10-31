@@ -26,21 +26,21 @@ import { withTimeoutResult, sleep } from "~/lib/with-timeout";
 import { Button } from "~/components/ui/button";
 
 interface Props {
+  apiChannels: ApiChannelsView | null;
+  /** 取消一个进行中的本机视频任务（控制器统一出口）。 */
+  onCancelShot: (shot: Shot) => void;
+  onNextStage: () => void;
+  /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
+  onNotice: (message: string) => void;
+  onOpenModelAdapters: () => void;
+  onPrevStage: () => void;
+  onShotsChange: React.Dispatch<React.SetStateAction<Array<Shot>>>;
+  /** 当前项目 id（空串 = 尚无活跃项目）：与镜头号一起写进任务行做归属。 */
+  projectId: string;
   shots: Array<Shot>;
   /** 选定的视频工作流 id：本地通道的唯一可执行来源（内置模板已移除）。
    * 按封装口径暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
   workflowId: string;
-  /** 当前项目 id（空串 = 尚无活跃项目）：与镜头号一起写进任务行做归属。 */
-  projectId: string;
-  apiChannels: ApiChannelsView | null;
-  onOpenModelAdapters: () => void;
-  onShotsChange: React.Dispatch<React.SetStateAction<Array<Shot>>>;
-  /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
-  onNotice: (message: string) => void;
-  /** 取消一个进行中的本机视频任务（控制器统一出口）。 */
-  onCancelShot: (shot: Shot) => void;
-  onPrevStage: () => void;
-  onNextStage: () => void;
 }
 
 type Channel = "local" | "api";

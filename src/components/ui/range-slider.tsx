@@ -51,20 +51,20 @@ import { Slider } from "~/components/ui/slider";
  * 快照漂移、不是回归，用 `pnpm exec vitest run -u` 更新。
  */
 export interface RangeSliderProps {
-  /** 当前值（受控）。 */
-  value: number;
-  min: number;
-  max: number;
-  step?: number;
-  /** 取新值（已换算成 number）。 */
-  onChange: (value: number) => void;
-  /** 轨道额外类名（shadcn Slider 是 `data-horizontal:w-full`，一般不用给）。 */
-  className?: string;
-  /** DOM id（给 label `htmlFor` / Playwright 定位用）。 */
-  id?: string;
-  disabled?: boolean;
   "aria-label"?: string;
   "aria-labelledby"?: string;
+  /** 轨道额外类名（shadcn Slider 是 `data-horizontal:w-full`，一般不用给）。 */
+  className?: string;
+  disabled?: boolean;
+  /** DOM id（给 label `htmlFor` / Playwright 定位用）。 */
+  id?: string;
+  max: number;
+  min: number;
+  /** 取新值（已换算成 number）。 */
+  onChange: (value: number) => void;
+  step?: number;
+  /** 当前值（受控）。 */
+  value: number;
 }
 
 export function RangeSlider({

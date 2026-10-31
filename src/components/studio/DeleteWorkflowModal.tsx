@@ -12,11 +12,11 @@
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 
 interface DeleteWorkflowModalProps {
-  pendingDelete: { id: string; name: string } | null;
   deleting: boolean;
-  onConfirm: (id: string) => void;
   /** Escape / 取消按钮 — unconditional close. */
   onCancel: () => void;
+  onConfirm: (id: string) => void;
+  pendingDelete: { id: string; name: string } | null;
 }
 
 export function DeleteWorkflowModal({

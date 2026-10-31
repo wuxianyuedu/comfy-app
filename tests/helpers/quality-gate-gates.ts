@@ -20,10 +20,10 @@
 
 /** 一条门禁在某一侧的形状。 */
 export interface GateEntry {
-  /** 门禁名（两侧应当一致）。 */
-  name: string;
   /** 入口脚本体现在 `args` 里出现的那些路径（`../scripts/x.mjs` 形态，未归一化）。 */
   args: Array<string>;
+  /** 门禁名（两侧应当一致）。 */
+  name: string;
   /** 只在该侧**显式点名**时才跑（`.mjs` 的 `run: false` / `.ps1` 的 `Run = $false`）。 */
   onDemand: boolean;
 }

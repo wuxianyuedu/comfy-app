@@ -35,12 +35,12 @@ import { useTaskLogStream } from "./hooks/use-task-log-stream";
 
 /** 打开日志弹窗要的最小任务信息（由 controller 从 `task.list` 行 / 跑动中卡收窄）。 */
 export interface QueueTaskLogTarget {
-  id: string;
-  workflowName: string | null;
-  /** 打开那一刻的行状态；排队中开跑 / 终态由流内的 progress / settled 更新。 */
-  status: string;
   /** 行上的失败原因（有就随错误卡一起展示）。 */
   error?: string | null;
+  id: string;
+  /** 打开那一刻的行状态；排队中开跑 / 终态由流内的 progress / settled 更新。 */
+  status: string;
+  workflowName: string | null;
 }
 
 /* 弹窗宽度档与工作流库执行日志同密度（时刻 + 级别 + 正文）；写`w-*` 的理由见

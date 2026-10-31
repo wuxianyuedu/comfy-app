@@ -13,19 +13,19 @@ import { ModelLibrary } from "./ModelLibrary";
  * vi.mock("~/trpc/vanilla") 那种永不 resolve 的 pending 冒烟。 */
 
 interface ModelRow {
-  id: string;
-  name: string;
   fileName: string;
-  type: string;
-  isAvailable: boolean;
   fileSize?: number | null;
+  id: string;
+  isAvailable: boolean;
+  name: string;
+  type: string;
 }
 interface Behavior {
-  models: Array<ModelRow>;
-  /** 非空时 list 抛错 → 覆盖组件错误态 */
-  listError?: string;
   /** 弹层里那条连接状态行的数据源（缺省 true = 历史行为）。 */
   comfyReachable?: boolean;
+  /** 非空时 list 抛错 → 覆盖组件错误态 */
+  listError?: string;
+  models: Array<ModelRow>;
 }
 
 /** 由调用方在 beforeAll 里替换，各用例通过 setBehavior 改值。 */

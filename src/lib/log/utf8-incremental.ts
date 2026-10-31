@@ -82,10 +82,10 @@ export function incompleteTailLength(buf: Uint8Array): number {
 
 /** 一次增量解码的结果：可立即渲染的文本 + 留给下一轮的残余字节。 */
 export interface IncrementalDecode {
-  /** 本段能确定解出的文本（不含被截断的尾字符）。 */
-  text: string;
   /** 上一轮遗留 + 本轮末尾被截断的字节，**下一轮拼接时传回来**。 */
   carry: Uint8Array;
+  /** 本段能确定解出的文本（不含被截断的尾字符）。 */
+  text: string;
 }
 
 /**

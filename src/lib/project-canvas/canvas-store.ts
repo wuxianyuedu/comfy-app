@@ -21,14 +21,14 @@ import {
 import { vanillaApi } from "~/trpc/vanilla";
 
 export interface CanvasProject {
+  edges: Array<PersistedEdge>;
   id: string;
   name: string;
-  updatedAt: number;
   /* 形状取 `Persisted*` 而不是 `@xyflow/react` 的 `Node` / `Edge`（规范 §12.19）：
    * 本模块只做 localStorage 读写，不该为了两个类型把画布引擎钉进静态图 ——
    * 入口 `src/app/workspace/page.tsx` 静态 import 它（见 canvas-types 里的说明）。 */
   nodes: Array<PersistedNode>;
-  edges: Array<PersistedEdge>;
+  updatedAt: number;
 }
 
 const INDEX_KEY = "comfyapp.canvas.projects.v1";
@@ -171,12 +171,12 @@ export function deleteProject(id: string): void {
 
 /** 服务端 `project` 表的一行（`project.list` 的出口形状）。 */
 export interface ServerProjectRow {
+  edges?: unknown;
   id: string;
   name: string;
+  nodes?: unknown;
   /** tRPC 走 SuperJSON 给 Date，REST 那路给 ISO 串 */
   updatedAt: string | Date;
-  nodes?: unknown;
-  edges?: unknown;
 }
 
 /**
@@ -544,13 +544,13 @@ export function getActiveId(): string | null {
 export type ProjectOrigin = "server" | "local" | "both";
 
 export interface ProjectListEntry {
+  edges: CanvasProject["edges"];
   id: string;
   name: string;
+  nodes: CanvasProject["nodes"];
+  origin: ProjectOrigin;
   /** 毫秒时间戳（本地索引与 `fetchServerProjects` 归一后的同一口径）。 */
   updatedAt: number;
-  nodes: CanvasProject["nodes"];
-  edges: CanvasProject["edges"];
-  origin: ProjectOrigin;
 }
 
 /**

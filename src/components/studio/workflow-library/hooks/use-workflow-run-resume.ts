@@ -43,9 +43,9 @@ import {
  * 没有它（那是上一次挂载的事），而日志累积与状态 patch 都要按它落。
  */
 export interface WorkflowRunHandlers {
-  onProgress: (taskId: string, pct: number, node?: TaskProgressNode) => void;
   onLog: (taskId: string, entry: TaskLogEntry) => void;
   onOutput: (taskId: string, output: SavedOutput) => void;
+  onProgress: (taskId: string, pct: number, node?: TaskProgressNode) => void;
   onSettled: (taskId: string, result: { message?: string; ok: boolean }) => void;
 }
 
@@ -95,10 +95,10 @@ export function watchWorkflowRun(taskId: string, handlers: WorkflowRunHandlers):
 }
 
 export interface UseWorkflowRunResumeArgs {
-  workflowId: string;
+  handlers: WorkflowRunHandlers;
   /** 恢复哪个入口发起的运行（画布节点 / 工坊封装各自独立）。 */
   source: WorkflowRunSource;
-  handlers: WorkflowRunHandlers;
+  workflowId: string;
 }
 
 /**

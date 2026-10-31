@@ -10,40 +10,40 @@ import { useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
 
 export interface ProjectOutputImage {
+  height: number | null;
   id: string;
+  isCover: boolean;
   localPath: string;
   mediaType: string;
   seed: string | null;
   width: number | null;
-  height: number | null;
-  isCover: boolean;
 }
 
 export interface ProjectOutputItem {
-  id: string;
-  type: string;
-  status: string;
-  workflowName: string | null;
-  prompt: string | null;
-  negativePrompt: string | null;
-  seed: string | null;
-  size: string | null;
-  sampler: string | null;
-  steps: number | null;
   cfg: number | null;
   checkpoint: string | null;
-  referenceImages: Array<string>;
+  createdAt: string;
+  id: string;
+  images: Array<ProjectOutputImage>;
+  negativePrompt: string | null;
   /** 来源任务（#2483 FR-QA-09）：重绘 / 放大的产物指回原任务；NULL = 常规提交。 */
   parentId: string | null;
-  createdAt: string;
-  images: Array<ProjectOutputImage>;
+  prompt: string | null;
+  referenceImages: Array<string>;
+  sampler: string | null;
+  seed: string | null;
+  size: string | null;
+  status: string;
+  steps: number | null;
+  type: string;
+  workflowName: string | null;
 }
 
 export interface ProjectOutputsController {
-  outputs: Array<ProjectOutputItem>;
   loading: boolean;
-  refetching: boolean;
+  outputs: Array<ProjectOutputItem>;
   refetch: () => void;
+  refetching: boolean;
 }
 
 export function useProjectOutputs(projectId: string | null): ProjectOutputsController {

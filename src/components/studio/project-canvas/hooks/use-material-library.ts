@@ -25,31 +25,31 @@ const SEARCH_DEBOUNCE_MS = 250;
 export type MaterialScope = "project" | "cross";
 
 export interface MaterialLibraryController {
-  scope: MaterialScope;
-  folder: string | null;
-  search: string;
-  folders: Array<MaterialFolder>;
-  items: Array<MaterialItem>;
-  loading: boolean;
-  uploading: boolean;
+  /** 面包屑路径段，每段可点击返回该级。 */
+  breadcrumbSegments: Array<{ key: string | null; label: string }>;
+  enterFolder: (folder: string | null) => void;
   /**
    * 当前要展示的错误文案；null 表示无错误。
    * 动作错误优先于拉取错误——否则一次后台刷新会把刚报出来的
    * 「上传失败」悄悄吞掉（用户看到提示条闪一下就没了）。
    */
   error: string | null;
+  folder: string | null;
+  folders: Array<MaterialFolder>;
+  items: Array<MaterialItem>;
+  loading: boolean;
+  refresh: () => void;
+  remove: (item: MaterialItem) => Promise<void>;
+  scope: MaterialScope;
+  search: string;
   /** 是否处于搜索态。 */
   searching: boolean;
-  /** 展示条目视图的条件：搜索中，或已进入某分类。 */
-  showItems: boolean;
-  /** 面包屑路径段，每段可点击返回该级。 */
-  breadcrumbSegments: Array<{ key: string | null; label: string }>;
   setScope: (scope: MaterialScope) => void;
   setSearch: (value: string) => void;
-  enterFolder: (folder: string | null) => void;
+  /** 展示条目视图的条件：搜索中，或已进入某分类。 */
+  showItems: boolean;
   upload: (files: FileList | null) => Promise<void>;
-  remove: (item: MaterialItem) => Promise<void>;
-  refresh: () => void;
+  uploading: boolean;
 }
 
 export interface UseMaterialLibraryOptions {

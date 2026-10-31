@@ -67,18 +67,18 @@ function writeTabsState(state: WorkspaceTabsState): void {
 }
 
 export interface WorkspaceTabsController {
-  /** 页签列表（渲染页签条用）。 */
-  tabs: WorkspaceTabsState["tabs"];
   /** 当前页签 key。 */
   activeKey: string;
-  /** 当前视图 —— 组件里那一大段 `switch (viewMode)` 的判据来源。 */
-  viewMode: WorkspaceView;
+  /** 页签条上点关闭。 */
+  closeTab: (key: string) => void;
   /** 打开/聚焦一个视图页签（侧栏、首页入口、应用事件都走这里）。 */
   navigateTo: (view: WorkspaceView) => void;
   /** 页签条上点某一页。 */
   selectTab: (key: string) => void;
-  /** 页签条上点关闭。 */
-  closeTab: (key: string) => void;
+  /** 页签列表（渲染页签条用）。 */
+  tabs: WorkspaceTabsState["tabs"];
+  /** 当前视图 —— 组件里那一大段 `switch (viewMode)` 的判据来源。 */
+  viewMode: WorkspaceView;
 }
 
 export function useWorkspaceTabs(): WorkspaceTabsController {

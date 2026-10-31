@@ -29,10 +29,10 @@ type DisplayMode = "grid" | "list";
 
 interface MaterialLibraryPanelProps {
   onClose: () => void;
-  /** 当前画布项目 id；为空时只能看到共享素材，上传会被禁用。 */
-  projectId?: string | null;
   /** 把素材投放到画布（由 ProjectCanvas 实现建节点）。 */
   onUse?: (item: MaterialItem) => void;
+  /** 当前画布项目 id；为空时只能看到共享素材，上传会被禁用。 */
+  projectId?: string | null;
 }
 
 /**

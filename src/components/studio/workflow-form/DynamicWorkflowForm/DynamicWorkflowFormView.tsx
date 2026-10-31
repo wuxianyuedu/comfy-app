@@ -24,28 +24,28 @@ import { WidgetInputRow } from "./sections/WidgetInputRow";
 import { SECTION_ACCENT } from "./constants";
 
 interface DynamicWorkflowFormViewProps {
-  controller: DynamicWorkflowFormController;
-  loading: boolean;
-  disabled: boolean;
   /** 画布节点版式：更紧凑的间距 + 单列。 */
   compact: boolean;
-  showOutputs: boolean;
+  controller: DynamicWorkflowFormController;
+  disabled: boolean;
   emptyHint?: ReactNode;
-  workflowId?: string;
-  seedModes?: Record<string, string>;
-  onSeedModeChange?: (ioKey: string, mode: string) => void;
-  onLabelChange?: (ioKey: string, label: string) => void;
-  onRequiredChange?: (ioKey: string, required: boolean) => void;
-  /** IO 编辑态：行内 👁 切换参数在 visibilityMode 模式下的可见性。 */
-  visibilityMode?: string | null;
+  loading: boolean;
   /** 多模式：当前模式码。传入后 renderRow 按该模式解析 required / seedMode
    * （resolveEntryRequired / resolveEntrySeedMode），使行内「必填/可选」与
    * seed 递增递减显示的是该模式的覆盖值。不传 = 按条目全局值（兼容旧场景）。 */
   mode?: string | null;
-  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  onLabelChange?: (ioKey: string, label: string) => void;
   onReorder?: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
+  onRequiredChange?: (ioKey: string, required: boolean) => void;
+  onSeedModeChange?: (ioKey: string, mode: string) => void;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
   /** 行尾附加的只读徽标（工作流库画布节点用它标出每个参数连到的「对外参数」）。 */
   rowTrailing?: (entry: EnrichedWidget) => ReactNode;
+  seedModes?: Record<string, string>;
+  showOutputs: boolean;
+  /** IO 编辑态：行内 👁 切换参数在 visibilityMode 模式下的可见性。 */
+  visibilityMode?: string | null;
+  workflowId?: string;
 }
 
 export function DynamicWorkflowFormView({
