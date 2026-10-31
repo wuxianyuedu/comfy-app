@@ -38,22 +38,30 @@ const STATUS_BADGE: Record<RunStatus, "default" | "secondary" | "destructive" | 
 
 function actionLabel(action: RunAction): string {
   switch (action.kind) {
-    case "generate_script":
+    case "generate_script": {
       return "生成剧本";
-    case "extract_characters":
+    }
+    case "extract_characters": {
       return "提取角色";
-    case "plan_storyboard":
+    }
+    case "plan_storyboard": {
       return "规划分镜";
-    case "render_images":
+    }
+    case "render_images": {
       return `逐镜生图（${action.shotIds.length} 个镜头）`;
-    case "render_film":
+    }
+    case "render_film": {
       return "生成视频并合成成片";
-    case "await_approval":
+    }
+    case "await_approval": {
       return "等待你确认这一步";
-    case "done":
+    }
+    case "done": {
       return "全部完成";
-    default:
+    }
+    default: {
       return "待启动";
+    }
   }
 }
 

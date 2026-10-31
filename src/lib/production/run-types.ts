@@ -326,15 +326,19 @@ export type RunAction =
  */
 export function planNextRunAction(view: ProductionRunView, run: ProductionRun): RunAction {
   switch (run.status) {
-    case "awaiting_approval":
+    case "awaiting_approval": {
       return { kind: "await_approval", stage: run.awaitingStage ?? run.stage };
-    case "running":
+    }
+    case "running": {
       break;
-    case "done":
+    }
+    case "done": {
       return { kind: "done" };
-    default:
+    }
+    default: {
       // idle / paused / failed / cancelled → 引擎不动作。
       return { kind: "idle" };
+    }
   }
   if (!view.hasScript) {
     return { kind: "generate_script" };
@@ -445,7 +449,8 @@ export function markActionProcessed(
       }
       return next;
     }
-    default:
+    default: {
       return next;
+    }
   }
 }

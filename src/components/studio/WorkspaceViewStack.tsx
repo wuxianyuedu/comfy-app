@@ -240,7 +240,7 @@ export function WorkspaceViewStack({
       return <ProjectGate onEnter={onEnterProject} onExit={onExitProject} />;
     }
     switch (view) {
-      case "project":
+      case "project": {
         return (
           <ProjectHomePage
             onNavigate={onNavigate}
@@ -248,25 +248,31 @@ export function WorkspaceViewStack({
             projectName={recentProjects.find((p) => p.id === activeProjectId)?.name ?? "未命名项目"}
           />
         );
+      }
 
-      case "works":
+      case "works": {
         return (
           <WorksGallery onOpenCanvasProject={onOpenCanvasProject} onOpenTask={onOpenProject} />
         );
+      }
 
-      case "models":
+      case "models": {
         return <ModelLibrary />;
+      }
 
-      case "history":
+      case "history": {
         return <HistoryList onOpenTask={onOpenProject} />;
+      }
 
-      case "queue":
+      case "queue": {
         return <QueueMonitor onOpenComfyui={onOpenComfyui} />;
+      }
 
-      case "comfyui":
+      case "comfyui": {
         return <ComfyuiControl />;
+      }
 
-      case "settings":
+      case "settings": {
         return (
           <SettingsView
             fillHeight
@@ -274,14 +280,17 @@ export function WorkspaceViewStack({
             onConsumeSection={onConsumeSettingsSection}
           />
         );
+      }
 
-      case "model-adapters":
+      case "model-adapters": {
         return <ModelAdaptersView />;
+      }
 
-      case "mode-contract":
+      case "mode-contract": {
         return <ModeContractView />;
+      }
 
-      case "canvas":
+      case "canvas": {
         return (
           <ProjectCanvas
             onConsumePending={onConsumePendingWorkflow}
@@ -290,27 +299,35 @@ export function WorkspaceViewStack({
             seedNew={canvasSeedNew}
           />
         );
+      }
 
-      case "film":
+      case "film": {
         return <FilmStudio />;
+      }
 
-      case "workflows":
+      case "workflows": {
         return <WorkflowLibrary onUse={onUseWorkflow} />;
+      }
 
-      case "console":
+      case "console": {
         return <ConsoleView />;
+      }
 
-      case "outputs":
+      case "outputs": {
         return <ProjectOutputs />;
+      }
 
-      case "library":
+      case "library": {
         return <ResourceLibrary />;
+      }
 
-      case "workshop":
+      case "workshop": {
         return <WorkshopPipeline />;
+      }
 
-      default:
+      default: {
         return null;
+      }
     }
   };
 

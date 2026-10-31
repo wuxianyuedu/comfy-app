@@ -20,16 +20,20 @@ import type { StrictCanvasNodeData } from "~/lib/project-canvas/canvas-types";
 export function shotStatusToNodeStatus(status: Shot["status"]): StrictCanvasNodeData["status"] {
   switch (status) {
     case "running":
-    case "queued":
+    case "queued": {
       return "running";
-    case "done":
+    }
+    case "done": {
       return "done";
-    case "failed":
+    }
+    case "failed": {
       return "error";
+    }
     case "stale":
     case "idle":
-    default:
+    default: {
       return "idle";
+    }
   }
 }
 
@@ -124,15 +128,19 @@ export function applyShotPatches<T extends ShotAnchoredNode>(
  *  节点词表更窄（idle/running/done/error），逐一对回：done→done、error→failed。 */
 export function nodeStatusToShotStatus(status: StrictCanvasNodeData["status"]): Shot["status"] {
   switch (status) {
-    case "running":
+    case "running": {
       return "running";
-    case "done":
+    }
+    case "done": {
       return "done";
-    case "error":
+    }
+    case "error": {
       return "failed";
+    }
     case "idle":
-    default:
+    default: {
       return "idle";
+    }
   }
 }
 

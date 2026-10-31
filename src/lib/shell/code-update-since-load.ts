@@ -154,9 +154,11 @@ function asDepsFreshnessState(value: unknown): DepsFreshnessState | null {
     case "fresh":
     case "drift":
     case "no-install":
-    case "unresolved":
+    case "unresolved": {
       return value;
-    default:
+    }
+    default: {
       return null;
+    }
   }
 }

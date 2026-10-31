@@ -91,14 +91,18 @@ export function externalFailureText(target: ExternalTarget): string {
  */
 export function emptyTargetText(target: ExternalTarget): string {
   switch (target) {
-    case "folder":
+    case "folder": {
       return "没有可打开的目录";
-    case "update":
+    }
+    case "update": {
       return "没有可安装的更新";
-    case "relaunch":
+    }
+    case "relaunch": {
       return "桌面壳未运行，无法重启应用";
-    default:
+    }
+    default: {
       return "没有可打开的资源地址";
+    }
   }
 }
 

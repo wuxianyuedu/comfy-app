@@ -56,7 +56,7 @@ export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
     return null;
   }
   switch (payload.type) {
-    case "start":
+    case "start": {
       if (typeof payload.runId !== "string") {
         return null;
       }
@@ -67,6 +67,7 @@ export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
         cwd: typeof payload.cwd === "string" ? payload.cwd : "",
         startedAt: typeof payload.startedAt === "number" ? payload.startedAt : Date.now(),
       };
+    }
     case "out": {
       if (typeof payload.text !== "string") {
         return null;
@@ -77,7 +78,7 @@ export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
         text: payload.text,
       };
     }
-    case "exit":
+    case "exit": {
       return {
         type: "exit",
         code: typeof payload.code === "number" ? payload.code : null,
@@ -86,13 +87,16 @@ export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
         truncatedNote: typeof payload.truncatedNote === "string" ? payload.truncatedNote : null,
         durationMs: typeof payload.durationMs === "number" ? payload.durationMs : 0,
       };
-    case "error":
+    }
+    case "error": {
       return {
         type: "error",
         message: typeof payload.message === "string" ? payload.message : "命令执行失败",
       };
-    default:
+    }
+    default: {
       return null;
+    }
   }
 }
 

@@ -18,35 +18,47 @@ import { Hint } from "~/components/ui/hint";
  *  skipped→warning（跳过 = 待办）、error→destructive（失败）。 */
 function logBadge(kind: ExtractLogEntry["kind"]): string {
   switch (kind) {
-    case "init":
+    case "init": {
       return "bg-primary-soft text-primary";
-    case "request":
+    }
+    case "request": {
       return "bg-info/15 text-info-strong";
-    case "output":
+    }
+    case "output": {
       return "bg-success/15 text-success-strong";
-    case "result":
+    }
+    case "result": {
       return "bg-success/15 text-success-strong";
-    case "skipped":
+    }
+    case "skipped": {
       return "bg-warning/15 text-warning-strong";
-    case "error":
+    }
+    case "error": {
       return "bg-destructive/15 text-destructive";
+    }
   }
 }
 
 function logBadgeLabel(kind: ExtractLogEntry["kind"]): string {
   switch (kind) {
-    case "init":
+    case "init": {
       return "开始";
-    case "request":
+    }
+    case "request": {
       return "模型输入";
-    case "output":
+    }
+    case "output": {
       return "模型输出";
-    case "result":
+    }
+    case "result": {
       return "完成";
-    case "skipped":
+    }
+    case "skipped": {
       return "跳过";
-    case "error":
+    }
+    case "error": {
       return "错误";
+    }
   }
 }
 

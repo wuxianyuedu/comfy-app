@@ -62,24 +62,33 @@ type ExecResult = {
 /** 动作 kind → 日志里的动作名。 */
 function actionLabel(action: RunAction): string {
   switch (action.kind) {
-    case "generate_script":
+    case "generate_script": {
       return "生成剧本";
-    case "review_script":
+    }
+    case "review_script": {
       return "剧本评审";
-    case "revise_script":
+    }
+    case "revise_script": {
       return "按评审意见改写剧本";
-    case "extract_characters":
+    }
+    case "extract_characters": {
       return "提取角色";
-    case "plan_storyboard":
+    }
+    case "plan_storyboard": {
       return "规划分镜";
-    case "render_images":
+    }
+    case "render_images": {
       return `逐镜生图（${action.shotIds.length} 个）`;
-    case "review_shots":
+    }
+    case "review_shots": {
       return `逐镜评审（${action.shotIds.length} 个）`;
-    case "render_film":
+    }
+    case "render_film": {
       return "生成视频并合成成片";
-    default:
+    }
+    default: {
       return action.kind;
+    }
   }
 }
 
@@ -88,19 +97,25 @@ function gateStageFor(action: RunAction): ProductionStage | null {
   switch (action.kind) {
     case "generate_script":
     case "review_script":
-    case "revise_script":
+    case "revise_script": {
       return "script";
-    case "extract_characters":
+    }
+    case "extract_characters": {
       return "character";
-    case "plan_storyboard":
+    }
+    case "plan_storyboard": {
       return "storyboard";
+    }
     case "render_images":
-    case "review_shots":
+    case "review_shots": {
       return "shots";
-    case "render_film":
+    }
+    case "render_film": {
       return "render";
-    default:
+    }
+    default: {
       return null;
+    }
   }
 }
 
@@ -557,30 +572,38 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
 
       let res: ExecResult = { ok: true };
       switch (action.kind) {
-        case "generate_script":
+        case "generate_script": {
           res = await execScript(userId, projectId, run, row);
           break;
-        case "review_script":
+        }
+        case "review_script": {
           res = await execReviewScript(userId, projectId, run, row);
           break;
-        case "revise_script":
+        }
+        case "revise_script": {
           res = await execReviseScript(userId, projectId, run);
           break;
-        case "extract_characters":
+        }
+        case "extract_characters": {
           res = await execCharacters(userId, projectId, row);
           break;
-        case "plan_storyboard":
+        }
+        case "plan_storyboard": {
           res = await execStoryboard(userId, projectId, run, row);
           break;
-        case "render_images":
+        }
+        case "render_images": {
           res = await execImages(userId, projectId, run, row, view, action.shotIds);
           break;
-        case "review_shots":
+        }
+        case "review_shots": {
           res = await execReviewShots(userId, projectId, run, view, action.shotIds);
           break;
-        case "render_film":
+        }
+        case "render_film": {
           res = await execFilm(userId, projectId, run);
           break;
+        }
       }
 
       if (res.run) {
