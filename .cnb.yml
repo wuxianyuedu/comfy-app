@@ -1801,6 +1801,12 @@
     # 它没生效时的表现不是报错，是「日志又超长」，所以必须读得回来。
     env:
       COMFY_AFFECTED_QUIET: "1"
+      # 良性 stderr 噪音屏蔽（2026-10-31）：被测源码自己打出、但已知无害的日志
+      # （ECONNREFUSED/:3000、canvas-sync 重试、a11y 故意渲染的 error-boundary/lazy-chunk
+      # 故事）在回吐给平台前按行滤掉，免得它们把 102400 字节的日志预算吃光、把失败原文
+      # 挤出去。不影响任何断言判定与超时指纹（判据见
+      # `scripts/affected-launch-noise-reporter.mjs`）。本地默认关，开发者照常看全量日志。
+      COMFY_AFFECTED_NOISE_FILTER: "1"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-affected-tests.mjs
     timeout: 45m
 
